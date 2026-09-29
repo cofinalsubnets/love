@@ -732,6 +732,18 @@
    (cvt ty r) (ty @ 'char [['sx1 r]] 'short [['sx2 r]] 'int [['sx4 r]]
                     'uchar [['zx1 r]] 'ushort [['zx2 r]] 'uint [['zx4 r]]
                     'bool [['cmp r 0] ['set 'ne r]])
+   ; a store narrows on its own: an int store needs no cvt before it (the value's cvt is for the
+   ; expression's answer), and an integer cast at least as wide as the stored type, over a plain
+   ; integer variable, truncates only what the store truncates
+   (stcvt? ty) (elem ty '(char uchar short ushort int uint))
+   ints9 '(char uchar short ushort int uint long ulong llong ullong)
+   (stnar g env ty e)
+    (e @ ('cast t ('var _))
+          (: vt (rotty g env <>>e)
+             (? (elem t ints9 && elem vt ints9 && elem ty ints9 &&
+                 !(pair? g t || pair? g vt) && tsz g ty <= tsz g t && !(abl? g 'stnar))
+                <>>e e))
+         e)
    ; the double lane: a 'double value lives in f0, always a 64-bit double in the register; only
    ; memory differs -- a float slot is 4 bytes, so a load widens and a store narrows (fldf/fstf)
    (flo? ty) (ty = 'double || ty = 'float)
@@ -1593,7 +1605,16 @@
        ('deref X)
         ; frame-direct: a constant-indexed element is a static (r4, off) face
         (: fdc (afd g env e)
+           ; *p++ on a register-homed pointer: the home steps first and the face reads one step
+           ; back, so the old value needs no copy (p's step and any other read of p are unsequenced)
+           pp9 (X @ ('post ('var nm) k)
+                     (: en (vent g env nm)
+                        (? (two? en && <en = 'regv && ptr? <>>en && !(gvarr? <>(<>>en)) &&
+                            !(abl? g 'pinc))
+                           (: d (k * tsz g <>(<>>en)) (? (fits32 d) [<>en <>(<>>en) d]))))
+                     ())
            (? (two? fdc) (mkm <>fdc 'r4 <fdc ())
+              (two? pp9) (mkm <>pp9 <pp9 (0 - pp9 2) [['add <pp9 <pp9 (pp9 2)]])
               ; ptr ± const folds the scaled constant into the face's offset (p[1] is one load).
               ; static only: a var whose vent type is a plain pointer (a VLA pointee scales at runtime)
               (: pv (X @ ('bin op a b && elem op '(+ -))
@@ -2022,7 +2043,9 @@
         (: r (clval g env e)                  ; clval already walked the pointer
            (? (bad? r) 'bad (loadval g r wnt)))
        ('asn dst rhs)
-        (: rv (? (<dst = 'var) (vent g env <>dst) 'bad)
+        (: dq9 (peep g 'drop9 ())           ; a statement drops the answer: an asn on its right still wants its own
+           _ (pin g 'drop9 ())
+           rv (? (<dst = 'var) (vent g env <>dst) 'bad)
            fd (sfd g env dst)
            (? (two? rv && <rv = 'regv && fhomable? <>>rv)   ; store into an xmm home: off the protocol
                (: r (cgexpr g env rhs ())
@@ -2142,13 +2165,15 @@
               fdd
                (: b (vmb lv0) o (vmo lv0)
                   ty (vty lv0)
-                  r (cgexpr g env rhs ())
+                  r (cgexpr g env (stnar g env ty rhs) ())
                   (? (bad? r) (rfree g b, 'bad)
-                     (? (!(flo? (vty r)) && !(two? (cvt ty 'r0)) &&
+                     (? (!(flo? (vty r)) && (!(two? (cvt ty 'r0)) || (stcvt? ty && !(abl? g 'stnar))) &&
                          vreg r != 'r0 && !(rpeq? g (vreg r) b))
                         (: fs (vfs lv0 + vfs r + [[(stop ty) b o (vreg r)]])
                            _ (rfree g b)
-                           (mkv ty (vreg r) fs))
+                           ; the answer takes its cvt after the store, and a statement drops it
+                           (? (two? (cvt ty 'r0) && !dq9) (mkv ty 'r0 (tor0 g (mkv ty (vreg r) fs) + cvt ty 'r0))
+                              (mkv ty (vreg r) fs)))
                         (: fs (vfs lv0 + asintt g r ty + cvt ty 'r0 +
                                [[(stop ty) b o 'r0]])
                            _ (rfree g b)
@@ -2156,19 +2181,20 @@
               ; the address parks in a pool register past a call-free rhs; a call on the right would clobber the park, so it keeps the shuttle
               (: lv (matv g lv0)
                  aR (? (callish? rhs) () (ralloc g))
-                 r (cgexpr g env rhs ())
+                 r (cgexpr g env (stnar g env (vty lv) rhs) ())
                  (? (bad? r) ((? aR (rfree g aR) ()), 'bad)
                     (: ty (vty lv)
                        (? aR
                           ; a register-riding value stores itself (no r0 bridge)
-                          (? (!(flo? (vty r)) && !(two? (cvt ty 'r0)) &&
+                          (? (!(flo? (vty r)) && (!(two? (cvt ty 'r0)) || (stcvt? ty && !(abl? g 'stnar))) &&
                               vreg r != 'r0 && !(rpeq? g (vreg r) aR))
                              (: fs (vfs lv +
                                     [['mov aR 'r0]] +
                                     vfs r +
                                     [[(stop ty) aR 0 (vreg r)]])
                                 _ (rfree g aR)
-                                (mkv ty (vreg r) fs))
+                                (? (two? (cvt ty 'r0) && !dq9) (mkv ty 'r0 (tor0 g (mkv ty (vreg r) fs) + cvt ty 'r0))
+                                   (mkv ty (vreg r) fs)))
                              (: fs (vfs lv +
                                     [['mov aR 'r0]] +
                                     asintt g r ty +
@@ -2504,7 +2530,7 @@
        ('sexpr items ve ty)
         (: il0 (g 'inlining)
            _ (pin g 'inlining ((il0 || 0) + 1))
-           pre ((g 'sxpre) g env items ())
+           pre (g 'sxpre g env items ())
            _ (pin g 'inlining il0)
            (? (bad? pre) 'bad
               !(two? ve) (mkv ty 'r0 <pre)                   ; void: the statements alone
@@ -2963,16 +2989,22 @@
                 (mkv rt (vreg xv) (vfs xv + [[iop (vreg xv) c]]))
                 (: rd (wnt || rdst g (vreg xv))
                    (mkv rt rd (vfs xv + [['mov rd (vreg xv)] [iop rd c]])))))))
-   (cgrvar g env x w ce ng)                         ; the register-count rotate: mirror of the variable shift
+   (cgrvar g env x w ce ng wnt)                     ; the register-count rotate: mirror of the variable shift
     (: xv (cgexpr g env x ())
        (? (bad? xv) 'bad
           (: cv (cgexpr g env ce ())
+             ra (vreg xv)
              (? (bad? cv) 'bad
                 (: rt (w @ 32 'uint 'ulong)
                    vop (w @ 32 'rorv4 'rorv)
-                   af (tor0 g xv)
-                   bf (tor0 g cv)
-                   (mkv rt 'r0 (af + cshut g bf + (ng ? '((neg r1))) + [[vop 'r0 'r1]])))))))
+                   (? (!(elem ra '(r0 r1 r2 r3)) && !(callish? ce) && !(abl? g 'shv2))
+                      (: bf (tor0 g cv)
+                         rd (? (wr? g ra) ra (: w9 (wnt || rdst g ra) (? (w9 = 'r1) (rdst g ra) w9)))
+                         (mkv rt rd (vfs xv + bf + ['(mov r1 r0)] + (ng ? '((neg r1))) +
+                                     (? (rd = ra) () [['mov rd ra]]) + [[vop rd 'r1]])))
+                      (: af (tor0 g xv)
+                         bf (tor0 g cv)
+                         (mkv rt 'r0 (af + cshut g bf + (ng ? '((neg r1))) + [[vop 'r0 'r1]])))))))))
    (cgror g env L R wnt)                            ; -> tuple | 'bad | 'no (the general lane stands)
     (? !(rot4? g) 'no
        (: a (two? L && <L = 'bin && elem <>L '(shl shr) ? L)
@@ -2990,10 +3022,39 @@
                                 (? (ks + kl = w && 0 < ks && ks < w)
                                    (cgrimm g env x w ks wnt) 'no)
                                (charm? ks || charm? kl) 'no
-                               (rotc? g w cl cs) (cgrvar g env x w cs ())   ; rotr: ror by the shr count
-                               (rotc? g w cs cl) (cgrvar g env x w cl 1)    ; rotl: ror by the negated shl count
+                               (rotc? g w cl cs) (cgrvar g env x w cs () wnt)   ; rotr: ror by the shr count
+                               (rotc? g w cs cl) (cgrvar g env x w cl 1 wnt)    ; rotl: ror by the negated shl count
                                'no)))))))))
+   ; a little-endian byte gather -- (T)p[0] | (T)p[1] << 8 | .. over consecutive bytes of one
+   ; unsigned char pointer -- is one unaligned load where the machine takes one (x64, a64)
+   (gather g env e)
+    (? (!(x64? g || a64? g) || abl? g 'gath) ()
+       (: (orl x) (x @ ('bin '| a b) (orl a + orl b) [x])
+          (unc x) (x @ ('cast _ y) (unc y) x)
+          (kn x) (: k (knum g x) (? (two? k && charm? <k) <k ()))
+          ; a term -> [base byte shift type] | ()
+          (trm x)
+           (: sy (x @ ('bin 'shl y2 kx) (: s (kn kx) (? (charm? s) [y2 s] ())) [x 0])
+              (? !(two? sy) ()
+                 (: y <sy ct (y @ ('cast t _) t ()) d (unc y)
+                    (? !(two? d && <d = 'deref && rotty g env d = 'uchar) ()
+                       (: A <>d
+                          bk (A @ ('bin '+ b9 kx) (: k (kn kx) (? (charm? k) [b9 k] ()))
+                                  ('bin '+ kx b9) (: k (kn kx) (? (charm? k) [b9 k] ()))
+                                  [A 0])
+                          (? (two? bk) [<bk <>bk <>sy ct] ()))))))
+          ts (map trm (orl e))
+          n #ts
+          (? (!(elem n '(2 4 8)) || !(foldl (\ a t (a && two? t)) 1 ts)) ()
+             (: B <<ts T (ts 0 3)
+                (fit t) (<t = B && <<t = 'var && t 2 = 8 * <>t && t 3 = T)
+                (? (!(foldl (\ a t (a && fit t)) 1 ts) || !(elem T ints9) || pair? g T ||
+                    tsz g T < n || !(sort (map (t \ <>t) ts) = jot n)) ()
+                   ['cast T ['deref ['cast ['ptr (n @ 2 'ushort 4 'uint 'ulong)] B]]])))))
    (cgbin g env e wnt)
+    (: gz9 (? (<>e = '|) (gather g env e) ())
+       (? gz9 (cgexpr g env gz9 wnt) (cgbin0 g env e wnt)))
+   (cgbin0 g env e wnt)
     (: op <>e
        lhs <>>e rhs <>>>e
        ; lazy left-then-right: the left parks before the right evaluates. the destination die aims a load-shaped left
@@ -3047,7 +3108,15 @@
                      (: rd (wnt || rdst g (vreg a))    ; a borrowed home shifts a copy (no 3-address shift)
                         (mkv rt rd (vfs a + [['mov rd (vreg a)] [iop rd <kc]] + nar rd))))
                  (: b (cgexpr g env rhs ())
+                    ra (vreg a)
                     (? (bad? b) 'bad
+                       ; a left already in a register that a call-free count leaves alone shifts there,
+                       ; two-address, as the constant lane does: only the count takes the protocol
+                       (!(elem ra '(r0 r1 r2 r3)) && !(callish? rhs) && !(abl? g 'shv2))
+                        (: bf (tor0 g b)
+                           rd (? (wr? g ra) ra (: w9 (wnt || rdst g ra) (? (w9 = 'r1) (rdst g ra) w9)))
+                           (mkv rt rd (vfs a + bf + ['(mov r1 r0)] + (? (rd = ra) () [['mov rd ra]]) +
+                                       [[vop rd 'r1]] + nar rd)))
                        (: af (tor0 g a)
                           bf (tor0 g b)
                           (mkv rt 'r0 (af + cshut g bf + [[vop 'r0 'r1]] + nar 'r0)))))))
@@ -5213,7 +5282,7 @@
           (? (rs = 'bar)
               (? (retx? f) (rd != 'r0)
                  (elem <f '(call callr)) (elem rd (doors g 0))
-                 (<f = 'jmp && !(46 = ((show <>f) 0))) (elem rd (doors g 1))
+                 (<f = 'jmp && !(46 = (show <>f 0))) (elem rd (doors g 1))
                  ())
              (elem rd <rs) ()
              (elem rd <>rs) 1
@@ -5391,7 +5460,7 @@
                      (pin seen <>f 1, go >l wl))
                  (<f = 'align) (go >l wl)          ; a loop head's pad: no register effect
                  (elem <f '(jmp jmp8))
-                  (? (46 = ((show <>f) 0)) (next (<>f . wl))
+                  (? (46 = (show <>f 0)) (next (<>f . wl))
                      ; a tail jump to a function: an exit reading its arguments -- the door set alone dies (dies?'s law)
                      (elem rd (doors g 1)) (next wl)
                      ())
@@ -5478,7 +5547,7 @@
                         M1 (filter (\ e (e 0 = a 0 && (7 < e 1 - a 1 || e 1 - a 1 < -7))) M)
                         (f . go >l (? (nom? (f 3)) ([(a 0) (a 1) (f 3)] . M1) M1) A))
                     (: rd (rdsp g f)
-                       (? (rd = 'bar || elem op mw) (f . go >l () (? (rd = 'bar) () ((foldl (\ k x (kill <k (k 1) x)) [() A] <>rd) 1)))
+                       (? (rd = 'bar || elem op mw) (f . go >l () (? (rd = 'bar) () (foldl (\ k x (kill <k (k 1) x)) [() A] <>rd 1)))
                           ; a base made by lea/add/sub off another, or a register copy, roots at that one
                           (: D (f 1)
                              bs (? (elem op '(lea add sub) && nom? D && nom? (f 2) && charm? (f 3) && nelem (f 2) fr)
@@ -6253,7 +6322,7 @@
                         (48 <= dx <= 57)
                          (: ix (dx - 48)
                             (? (ix < #al)
-                               (: sub ((al ix) md) (? (bad? sub) 'bad (go (i + (? md 3 2)) (acc + sub))))
+                               (: sub (al ix md) (? (bad? sub) 'bad (go (i + (? md 3 2)) (acc + sub))))
                                'bad))
                         'bad))
                  'bad)))
@@ -6369,7 +6438,7 @@
                     (? !(two? l) (rev acc)
                        (: e2 <l k <>e2
                           (? (elem <e2 '(m k)) (assign >l fr (k . acc))
-                             (two? k) (? (<>k < #acc) (: r9 ((rev acc) <>k) (assign >l fr (r9 . acc))) 'bad)
+                             (two? k) (? (<>k < #acc) (: r9 (rev acc <>k) (assign >l fr (r9 . acc))) 'bad)
                              (k = 'pick)
                               (? (two? fr) (assign >l >fr (<fr . acc)) 'bad)
                              (assign >l fr (k . acc)))))
@@ -6473,6 +6542,9 @@
        items <><>>>f
        dcl {} tak {} n9 {} liv {} crs {} spa {}
        crh {} rdc {} rdt {} sqm {}
+       ; a label's live set, laid when the backward walk passes it: a goto that finds one is forward
+       ; and reads just that; a goto that finds none may loop, and marks its label for pmx
+       lab {} bwd {}
        ; a hard call: one no splice can erase. economics only -- a wrapped home survives any emitted call
        (nhcl l) (? !(two? l) 0 (nhc <l + nhcl >l))
        (soft? nm) (two? (g 'inl nm))                 ; an inline candidate; the armed shadow covers a declined splice
@@ -6510,7 +6582,7 @@
                      pmx body w8 tc9))
                 ('switch ce items2) ((nhc ce * w) + pmxl items2 w tc9)   ; fallthrough: arms sum (conservative)
                 (('case || 'dflt) . _) 0
-                ('goto . _) 99
+                ('goto nm) (? (peep bwd nm ()) 99 ((peep lab nm 'no) == 'no) 99 0)
                 ('asm . _) 99
                 0))
        (nhc e) (? !(two? e) 0
@@ -6683,7 +6755,8 @@
                  a3 (two? stp ? <(erd stp a2 0) a2)
                  (ust body a3))
              ('switch ce items) (ustl items <(erd ce acc 0))
-             (('goto || 'asm) . _) (sun acc univ)
+             ('goto nm) (: o (peep lab nm 'no) (sun acc (? (o == 'no) univ o)))
+             ('asm . _) (sun acc univ)
              acc)
        (ustl l acc) (? !(two? l) acc (ustl >l (ust <l acc)))
        (ustp ps acc) (? !(two? ps) acc (ustp >ps <(erd <>><ps acc 0)))
@@ -6796,8 +6869,10 @@
                   sq (tick ()) _ (spn sq out) out)
               ('brk . _) (: sq (tick ()) _ (spn sq brk) brk)
               ('cont . _) (: sq (tick ()) _ (spn sq cnt) cnt)
-              ('goto . _) (: sq (tick ()) _ (spn sq univ) univ)   ; any target: everything
-              ('lbl . _) (: sq (tick ()) _ (spn sq out) out)
+              ('goto nm) (: o (peep lab nm 'no)
+                            s9 (? (o !== 'no) o (: _ (pin bwd nm 1) univ))   ; a target not yet passed: everything
+                            sq (tick ()) _ (spn sq s9) s9)
+              ('lbl nm) (: sq (tick ()) _ (spn sq out) _ (? (abl? g 'glab) () (pin lab nm out)) out)
               ('asm . _) (: sq (tick ()) _ (rec sq univ w9 (? (1 < w9) w9 0) w9) univ)   ; homing is off anyway (hasasm)
               (: sq (tick ()) _ (spn sq out) out)))   ; nop tdef
        ; -- run: the counter descends from the prepass total; pre and lst disagreeing misses zero,
@@ -6955,7 +7030,8 @@
                            <<>>pe = 'num && charm? <><>>pe)
                           (siop9 <>>sv <><>>pe) ())
                     (? sk (atstat sv 'r1 (b \ o \ [[sk b o <><>>pe]]))
-                       (: r (cgexpr g env pe ())
+                       (: _ (? (<pe = 'asn && !(abl? g 'stnar)) (pin g 'drop9 1) ())
+                          r (cgexpr g env pe ())
                           (? (bad? r) 'bad (vdrop g r)))))))
           ('nop . _) ()
           ('tdef . _) ()                            ; a block-scope _Static_assert (already checked at parse)
@@ -8235,12 +8311,28 @@
            wm9 (av9 17 && !(a64? g || t32? g || rv64? g))   ; d128 material on x64, whose mul/div pin rax:rdx
            wd9 (wm9 && 2 < av9 18)             ; a nested park would starve: the wide kit owns the file
            dp9 (? wm9 5 3)                     ; else a take leaves the file two deeper, one park's draw
+           ; a param holds its arrival only while it ranks among the seats: the locals that outrank it
+           ; by ulloc's own key, live at once, would otherwise want more seats than the file has
+           spa9 (av9 5) sqm9 (av9 9) tak9 (av9 14) nsq (av9 13)
+           ltc (: (go i acc)
+                  (? (nsq < i) acc
+                     (: e2 (sqm9 i) nm2 <e2
+                        (? (two? e2 && elem nm2 uv && !(tak9 nm2) && !(fhomable? <>e2 || d128? <>e2) &&
+                            2 <= peep rdc9 nm2 0 && two? (spa9 nm2))
+                           (go (i + 1) ([(peep rdc9 nm2 0) <(spa9 nm2) <>(spa9 nm2)] . acc))
+                           (go (i + 1) acc))))
+                  (go 1 ()))
+           nst9 (#tpool + #(cspool g))
+           ; the most of them live at any one start
+           (crowd l) (foldl (\ m s (: n #(filter (t \ t 1 <= s 1 && s 1 <= t 2) l) (? (m < n) n m))) 0 l)
+           (outrun? nm) (: tc (peep rdc9 nm 0)
+                           (!(abl? g 'prank) && nst9 <= crowd (filter (t \ tc < <t) ltc)))
            (homefold g params 0 [() () () #tpool]
             (\ a4 gpi p9
               (: nm <p9 pty <>p9
                  A (argr g gpi)
                  nv (a4 3)                       ; the file's running depth (homes and rides drain it)
-                 ok (lf9 && !wd9 && elem nm uv && peep crh9 nm 0 <= 2 &&
+                 ok (lf9 && !wd9 && elem nm uv && peep crh9 nm 0 <= 2 && !(outrun? nm) &&
                      (!wm9 || 64 <= peep rdt9 nm 0))  ; beside the wide kit only a hot param takes a seat
                  ; a bool's entry cvt defs through set, which qclob? cannot tell from a clobber: a bool quad vacates
                  qb9 (pty = 'bool && elem A '(r0 r1 r2 r3))

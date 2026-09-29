@@ -210,7 +210,7 @@
        t (? (#path < 2) 49 (path 1))
        sel (? (#path < 2) "" (ww-dec path 2 #path 0))
        term (? (#q < 2) () (: a (ww-answer q "search") (? (string? a) a (ww-dec q 1 #q 0))))
-       s ((cite 'dns 'dial) <hp (hp 1))
+       s (cite 'dns 'dial <hp (hp 1))
        (? !(hot? s) [1 ("www: no answer from " + url)]
           (: _ (say s (sel + (? (string? term) ("\t" + term) "") + "\r\n")) _ (flush s)
              b (slurp s) _ (close s)
@@ -227,10 +227,10 @@
    ; of its SubjectPublicKeyInfo a line in ~/.love/gemini_hosts -- the key, so a renewed
    ; certificate over it still holds; an older line without the prefix is a whole
    ; certificate's hash, and holds as that. a changed one is refused and says how to take it
-   (ww-pinfile _) ((cite 'tls 'pin-path) "gemini_hosts")
+   (ww-pinfile _) (cite 'tls 'pin-path "gemini_hosts")
    (ww-pin key fp cfp)
     (: path (ww-pinfile 0)
-       old ((cite 'tls 'pin-of) path key)
+       old (cite 'tls 'pin-of path key)
        (? (string? old) (? (old = fp || old = cfp) ()
                            ("the key of " + key + " has changed: it was " + old + ", now " + fp
                             + "; delete its line in " + path + " to take the new one"))
@@ -268,12 +268,12 @@
     (: p (ww-split url) hp (ww-hostport url 1965) q (p 3)
        a (ww-answer q "input")
        u (? (string? a) (ww-join [(p 0) (p 1) (p 2) ("?" + ww-penc a '(45 46 95 126)) ""]) (ww-nofrag url))
-       t ((cite 'tls 'tls-open) <hp (hp 1) 'pin-only)
+       t (cite 'tls 'tls-open <hp (hp 1) 'pin-only)
        (? (string? t) [1 ("www: " + t)]
           (: bad (ww-pin (<hp + ":" + show (hp 1)) ("spki:" + sha256 (t 'spki)) (sha256 (t 'cert)))
-             (? (string? bad) (((cite 'tls 'tls-close) t), [1 ("www: " + bad)])
-                (: _ ((cite 'tls 'tls-say) t (u + "\r\n"))
-                   b ((cite 'tls 'tls-slurp) t) _ (close (t 's))
+             (? (string? bad) ((cite 'tls 'tls-close t), [1 ("www: " + bad)])
+                (: _ (cite 'tls 'tls-say t (u + "\r\n"))
+                   b (cite 'tls 'tls-slurp t) _ (close (t 's))
                    k (wg-find b "\r\n" 0)
                    hd (? (k < 0) "" (snip b 0 k)) body (? (k < 0) "" (snip b (k + 2) #b))
                    code (? (2 <= #hd) (unum (snip hd 0 2)) ())
@@ -297,7 +297,7 @@
    ; a body as it came -> utf-8 text, or () for a gzip that does not open: the content
    ; coding undone, then a latin-1 page (by its header, else its own <meta>) re-spelled
    (ww-body ct ce b)
-    (: z (? (string? ce && wg-lower ce = "gzip") ((cite 'gz 'gz-unzip) b) [1 b])
+    (: z (? (string? ce && wg-lower ce = "gzip") (cite 'gz 'gz-unzip b) [1 b])
        (? (atom? z) ()
           (: t <>z cs (: c (ww-cs ct) (? #c c (ww-cs (snip t 0 (min #t 4096)))))
              (? (elem cs ww-latins) (ww-latin t) t))))
@@ -337,7 +337,7 @@
    (ww-lay g w)
     (: url (g 1) k (g 2) body (g 3)
        (? (k = 'text) [(lines body) () () ()]
-          (: p ((cite 'lapiz 'ttpage) ((cite 'lapiz 'htread) body) w)
+          (: p (cite 'lapiz 'ttpage (cite 'lapiz 'htread body) w)
              base (ww-base url body)
              [(lines <p) (map (ww-abs base) (p 1)) (p 2) (p 3)])))
    ; s from i to n with each %XX back to its byte, and a + a space when plus?
@@ -350,7 +350,7 @@
        (go i))
    ; a fragment's name: the # off and each %XX back to its byte, the way an id is spelled
    (ww-unpct s) (ww-dec s 1 #s 0)
-   (ww-qenc s) ((cite 'lapiz 'hpe) s)      ; typed text as a form sends it
+   (ww-qenc s) (cite 'lapiz 'hpe s)      ; typed text as a form sends it
    ; the line a named place was laid on, or -1
    (ww-place st nm) ((: (g l) (? (atom? l) -1 (<(<l) = nm) <>(<l) (g >l))) (st 'anchors))
    (ww-anchor st fr) (ww-place st (ww-unpct fr))
@@ -427,7 +427,7 @@
                          (ww-marks p))
              (? (atom? due) 0
                 (: n #due
-                   _ (map (i \ (: u (ww-resolve base ((due i) 1))
+                   _ (map (i \ (: u (ww-resolve base (due i 1))
                                   _ (pgmsg st ("fetching picture " + show (i + 1) + " of " + show n + " ..."))
                                   _ (puts (pgframe st)) _ (flush out)
                                   (pin c u (ww-picture (ww-fetch (g 1) u 4)))))
@@ -518,7 +518,7 @@
        _ (pins st 'url (g 1) 'page g 'lw (pgwidth st))
        _ (ww-load st (ww-lay g (pgwidth st)))
        _ (pins st 'cur 0 'hi "")
-       fr ((ww-split (g 1)) 4)
+       fr (ww-split (g 1) 4)
        ln (? (0 <= top) -1 (0 < #fr) (ww-anchor st fr) (ww-main st))
        _ (? (0 <= ln) (pgline! st ln) (pggo st (? (0 <= top) top 0)))
        (pgmsg st (? (200 <= (g 4) < 300) (g 1) ((g 1) + " answered " + show (g 4)))))
@@ -537,7 +537,7 @@
              off (? (0 < k) (ls (k - 1) - top) 0)
              _ (ww-load st (ww-lay g w))
              _ (pin st 'lw w)
-             (pgline! st (? (0 < k) ((st 'links) (k - 1) - off) (0 < nl) ((top * st 'nl) // nl) 0)))))
+             (pgline! st (? (0 < k) (st 'links (k - 1) - off) (0 < nl) ((top * st 'nl) // nl) 0)))))
 
    ; -- the face -----------------------------------------------------------------
    (ww-do st)

@@ -56,8 +56,8 @@
    ; the nav line every page wears: up to the directory, across to the file's
    ; other reading. alt is `(href text), or () where there is no other reading.
    ; a path is the request's, so it is escaped for html and an href percent-encoded
-   (sv-q s) ((cite 'kiosko 'hesc) s)
-   (sv-href s) (sv-q ((cite 'kiosko 'penc) s))
+   (sv-q s) (cite 'kiosko 'hesc s)
+   (sv-href s) (sv-q (cite 'kiosko 'penc s))
    (sv-nav path alt)
    ("<p class=\"srcnav\"><a href=\"" + sv-href (phead path) + "\">" + sv-q (phead path) + "</a> &middot; "
     + sv-q path
@@ -188,7 +188,7 @@ tree is served. this binary drives the page's build; no love is compiled for it.
    ; the verb, and the seat (kiosko's shape): `love web ..` on the artifact, or
    ; this file named on a command line, and neither needs a script
    door (udoor 'web (urun web-main) sv-usage 1 1)
-   _ ((cite 'verbs 'enlist) 'web door ())
+   _ (cite 'verbs 'enlist 'web door ())
    s (cite 'verbs 'fire ["serve" "serve.l"])
    _ (two? s && quit (door >s)))
 ) ; module serve

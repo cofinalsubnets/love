@@ -100,7 +100,7 @@
        host <as
        port (? (two? >as) (: n (uport <>as) (? n n (udie 2 ("telnet: not a port: " + <>as)))) 23)
        _ (say err ("Trying " + host + "...\n"), flush err)
-       s ((cite 'dns 'dial) host port)
+       s (cite 'dns 'dial host port)
        _ (? s 0 (udie 1 ("telnet: cannot connect to " + host + " port " + show port)))
        _ (say err ("Connected to " + host + ".\nEscape character is '^]'.\n"), flush err)
        tty? (two? (tty 0))
@@ -208,7 +208,7 @@
        bv (uoptv t 98)
        bk (? (string? bv) ((: (g i) (? (#bv <= i) -1 (bv i = 58) i (g (i + 1)))) 0) -1)
        addr (? (string? bv) (? (bk < 0) bv (snip bv 0 bk)) ())
-       _ (? !addr 0 (two? ((cite 'dns 'dns-quad) addr)) 0 (udie 2 ("telnetd: -b takes a dotted quad, not " + addr)))
+       _ (? !addr 0 (two? (cite 'dns 'dns-quad addr)) 0 (udie 2 ("telnetd: -b takes a dotted quad, not " + addr)))
        pv (uoptv t 112)
        port (? (string? pv) (portof pv) (0 <= bk) (portof (snip bv (bk + 1) #bv)) 23)
        l (? !addr (listen port) (listen ['tcp addr port]))
@@ -237,7 +237,7 @@
           (t = 6) (nm + v)
           (nm + "\t" + v)))
    ; a dotted quad's reverse name, in-addr.arpa's
-   (ns-rev q) (: a (<((cite 'dns 'dns-quad) q)) (o k) (show (a >> k & 255))
+   (ns-rev q) (: a (<(cite 'dns 'dns-quad q)) (o k) (show (a >> k & 255))
                  (o 0 + "." + o 8 + "." + o 16 + "." + o 24 + ".in-addr.arpa"))
    (nslookup-main as)
     (: D (cite 'dns)
@@ -252,23 +252,23 @@
        tys (map (x \ (: t (ns-assoc (wg-lower (x 1)) ns-types) (? !t (bad (x 2)) t)))
                 (filter (x \ <x = "type" || <x = "query") kvs))
        port (: ps (filter (x \ <x = "port") kvs)
-               (? (atom? ps) 53 (: n (uport ((last ps) 1)) (? n n (bad ((last ps) 2))))))
+               (? (atom? ps) 53 (: n (uport (last ps 1)) (? n n (bad (last ps 2))))))
        _ (map (x \ ? (elem <x '("type" "query" "port")) 0 (bad (x 2))) kvs)
        host <ops
-       quad? (two? ((D 'dns-quad) host))
+       quad? (two? (D 'dns-quad host))
        ; what is asked: the flag's type, else a quad's PTR, else A and AAAA
        ask (? (two? tys) [(last tys)] quad? [12] [1 28])
        qname (? (quad? && elem 12 ask) (ns-rev host) host)
        ; the servers: SERVER as a quad or a name, else resolv.conf's in order
        sv (? (two? >ops)
-              (: a (? (two? ((D 'dns-quad) <>ops)) ((D 'dns-quad) <>ops) ((D 'resolve) <>ops))
+              (: a (? (two? (D 'dns-quad <>ops)) (D 'dns-quad <>ops) (D 'resolve <>ops))
                  (? (two? a) [(<a . port)] (udie 1 ("nslookup: can't resolve server " + <>ops))))
-              (map (s \ <s . port) ((D 'dns-servers) "/etc/resolv.conf")))
+              (map (s \ <s . port) (D 'dns-servers "/etc/resolv.conf")))
        ; one type asked of the servers in turn -> [server records-answer], or () from none
        (one t l) (? (atom? l) ()
-                    (: id ((D 'dns-id) 0) s <l
-                       r ((D 'dns-raw) <s >s ((D 'dns-qedns) id qname t) 2500)
-                       (? (string? r) [s ((D 'dns-records) r id)] (one t >l))))
+                    (: id (D 'dns-id 0) s <l
+                       r (D 'dns-raw <s >s (D 'dns-qedns id qname t) 2500)
+                       (? (string? r) [s (D 'dns-records r id)] (one t >l))))
        rs (map (t \ one t sv) ask)
        got (filter two? rs)
        _ (? (atom? got) (udie 1 ";; connection timed out; no servers could be reached") 0)
@@ -315,7 +315,7 @@
        (num c d lo) (: v (uoptv t c)
                        (? !v d (: n (unum v) (? (charm? n && lo <= n) n (udie 2 (nm + ": bad -" + string c + " " + v))))))
        host <ops
-       six (? six? 1 (peep t 52 0) 0 (peep t 54 0) 1 (((cite 'dns) 'dns-colon?) host))
+       six (? six? 1 (peep t 52 0) 0 (peep t 54 0) 1 (cite 'dns 'dns-colon? host))
        count (num 99 () 1)
        size (num 115 56 0)
        cap (? six 1452 1464)                          ; one datagram on a 1500-byte link
@@ -324,9 +324,9 @@
        wait (: v (uoptv t 87) (? !v 10000 (: m (ping-ms v) (? (charm? m) m (udie 2 (nm + ": bad -W " + v))))))
        quiet (peep t 113 0)
        D (cite 'dns)
-       ad (? six ((D 'resolve6) host)
-             (two? ((D 'dns-quad) host)) (map (D 'dns-show) ((D 'dns-quad) host))
-             (map (D 'dns-show) ((D 'resolve) host)))
+       ad (? six (D 'resolve6 host)
+             (two? (D 'dns-quad host)) (map (D 'dns-show) (D 'dns-quad host))
+             (map (D 'dns-show) (D 'resolve host)))
        _ (? (two? ad) 0 (udie 1 (nm + ": bad address '" + host + "'")))
        ip <ad
        p (bind [(? six 'icmp6 'icmp) 'ttl])
@@ -411,10 +411,10 @@
        names? !(peep t 110 0)
        host <ops
        D (cite 'dns)
-       six (? six? 1 (peep t 52 0) 0 (peep t 54 0) 1 ((D 'dns-colon?) host))
-       ad (? six ((D 'resolve6) host)
-             (two? ((D 'dns-quad) host)) (map (D 'dns-show) ((D 'dns-quad) host))
-             (map (D 'dns-show) ((D 'resolve) host)))
+       six (? six? 1 (peep t 52 0) 0 (peep t 54 0) 1 (D 'dns-colon? host))
+       ad (? six (D 'resolve6 host)
+             (two? (D 'dns-quad host)) (map (D 'dns-show) (D 'dns-quad host))
+             (map (D 'dns-show) (D 'resolve host)))
        _ (? (two? ad) 0 (udie 1 (nm + ": bad address '" + host + "'")))
        ip <ad
        p (bind [(? six 'icmp6 'icmp) 'errs])
@@ -428,14 +428,14 @@
                 + catmap (i \ string (i & 255)) ^32)
        ; a router's name, once each: its PTR off the first nameserver, else its address
        names (tablet 0)
-       ns (: s ((D 'dns-servers) "/etc/resolv.conf") (? (two? s) <s ()))
+       ns (: s (D 'dns-servers "/etc/resolv.conf") (? (two? s) <s ()))
        (name a)
         (? (!names? || six || !ns) a
            (: c (names a)
               (? !!c c
-                 (: id ((D 'dns-id) 0)
-                    r ((D 'dns-raw) <ns >ns ((D 'dns-qedns) id (ns-rev a) 12) 1000)
-                    rs (? (string? r) ((D 'dns-records) r id) ())
+                 (: id (D 'dns-id 0)
+                    r (D 'dns-raw <ns >ns (D 'dns-qedns id (ns-rev a) 12) 1000)
+                    rs (? (string? r) (D 'dns-records r id) ())
                     ptr (? (two? rs) (filter (x \ x 1 = 12) (rs 2)) ())
                     v (? (two? ptr) (<ptr 2) a)
                     _ (pin names a v)
@@ -498,6 +498,6 @@
        port (? !ps 80 (: n (uport ps) (? n n (udie 2 ("httpd: not a port: " + ps)))))
        root (: h (uoptv t 104) (? (string? h) h "."))
        _ (? (two? (readdir root)) 0 (udie 1 ("httpd: not a directory: " + root)))
-       r ((cite 'kiosko 'serve) root [ip port] !(peep t 118 0) ())
+       r (cite 'kiosko 'serve root [ip port] !(peep t 118 0) ())
        (? (nom? r) (udie 1 ("httpd: cannot listen on " + ip + ":" + show port + " -- " + show r)) 0)))
 ) ; module 'kore

@@ -234,9 +234,9 @@
 (: g (slop-new 23 80 (wheel 11))
    _ (drive g (h \ ((h 'wtop) < -67)))
    t0 (g 't)
-   k0 (peep ((g 'field) t0 (g 'wtop)) [0 0] 0)         ; the skin's top-left cell, where we are
-   k1 (peep ((g 'field) t0 ((g 'wtop) + 1)) [0 0] 0)   ; ..and one row of drift along
-   k2 (peep ((g 'field) t0 (g 'wtop)) [1 0] 0)         ; the cell below it, undrifted
+   k0 (peep (g 'field t0 (g 'wtop)) [0 0] 0)           ; the skin's top-left half-cell, where we are
+   k1 (peep (g 'field t0 ((g 'wtop) + 1)) [0 0] 0)     ; ..and one row of drift along
+   k2 (peep (g 'field t0 (g 'wtop)) [2 0] 0)           ; a cell below it, undrifted
  (test
   !(k0 = k1)                                     ; a scroll moves the skin
   (|(k1 - k2) < 0.000001)))                      ; by exactly one row of it
@@ -469,7 +469,7 @@
 (: g (slop-new 21 40 (wheel 3))
    sg (slop-post g)
    x <sg w <>sg
-   row ((split "\r\n" (slop-frame g)) w)                 ; on the screen from the start
+   row (split "\r\n" (slop-frame g) w)                   ; on the screen from the start
    (has? s p) (: n #p (go i) (? (i + n > #s) 0 (snip s i (i + n) = p) 1 (go (i + 1))) (go 0))
  (test (7 = w) (2 < |(x - slop-road g w)) ('("¶" 137) = slop-turf g w x)
        !('("¶" 137) = slop-turf g w (x + 1)) !('("¶" 137) = slop-turf g (w + 1) x)

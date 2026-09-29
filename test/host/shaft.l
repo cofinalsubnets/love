@@ -57,7 +57,7 @@
        (!(ledge-under? lay 1 (e 0) (e 1))) (ledge-under? lay 0 (e 0) (e 1))
        (: e2 (ring-pt (<ladders 0) walk-q) (ledge-under? lay 1 (e2 0) (e2 1)))
        (all (f \ !(ledge-under? lay f 0.0 0.0)) rings) (ledge-under? lay 0 0.0 0.0)
-       (show lay = show ((shaft-new 80 48 (wheel 5)) 'lay))))
+       (show lay = show (shaft-new 80 48 (wheel 5) 'lay))))
 
 ; --- walking: k steps the way you face, j back, a key a frame; h and l turn, all the way
 ; --- round; a wall stops you ---

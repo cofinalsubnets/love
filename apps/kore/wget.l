@@ -78,14 +78,14 @@
    (wg-ask-how tls? host port path more how)
     (: req ("GET " + path + " HTTP/1.1\r\nHost: " + host + "\r\nUser-Agent: love-wget\r\nAccept: */*\r\n" + more + "Connection: close\r\n\r\n")
        raw (? tls?
-              (: t ((cite 'tls 'tls-open) host port how)
+              (: t (cite 'tls 'tls-open host port how)
                  (? (string? t) ['why t]
                     !(tablet? t) ()
-                    (: _ ((cite 'tls 'tls-say) t req)
-                       r ((cite 'tls 'tls-slurp) t)
+                    (: _ (cite 'tls 'tls-say t req)
+                       r (cite 'tls 'tls-slurp t)
                        _ (close (t 's))
                        r)))
-              (: s ((cite 'dns 'dial) host port)
+              (: s (cite 'dns 'dial host port)
                  (? !(hot? s) ()
                     (: _ (say s req) _ (flush s) r (slurp s) _ (close s) r))))
        (? (two? raw) (raw 1)                                   ; the tls refusal, said
@@ -134,7 +134,7 @@
           (elem 'fetch (names ()))
            (: nm (? (string? dest) dest (wg-name url))
               (? (nm = "-") (say err "wget: -O - is not a door on this machine\n", 3)
-                 (: c ((ev 'fetch) url nm)
+                 (: c (ev 'fetch url nm)
                     (? (charm? c && c = 0) (? quiet 0 (say err ("wget: fetched -> " + nm + "\n")), 0)
                        (say err ("wget: cannot fetch " + url + (charm? c ? (" (errno " + show (0 - c) + ")") "") + "\n"), 4)))))
           (: f (wg-fetch url 8 quiet how)

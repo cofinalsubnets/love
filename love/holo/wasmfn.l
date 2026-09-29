@@ -313,7 +313,7 @@
            (hd ? ('((loop)) + body + '((end))) body))
        (within x ks ctx)
         (? (two? ks) ('((block)) + within x >ks (('block . <ks) . ctx) + '((end)) + tree <ks ctx)
-           ((bs x) 0 + term x ctx))
+           (bs x 0 + term x ctx))
        (branch x y ctx) (? (n <= y) '((unreachable)) (needs-br? x y) (br-to x y ctx) (tree y ctx))
        (term x ctx)
         (: b (bs x) nx (x + 1)
@@ -353,8 +353,8 @@
        tyof (: t {} _ (map (i \ pin t (ars i) i) (jot #ars)) t)
        (ty n) (peep tyof n ())
        env (: t {} ni #imps
-              _ (map (\ i (pin t (nom ((imps i) 1)) ['fn i ((imps i) 2)])) (jot ni))   ; a call names it by nom
-              _ (map (i \ pin t ((fns i) 0) ['fn (i + ni) ((fns i) 1)]) (jot #fns))
+              _ (map (\ i (pin t (nom (imps i 1)) ['fn i (imps i 2)])) (jot ni))   ; a call names it by nom
+              _ (map (i \ pin t (fns i 0) ['fn (i + ni) (fns i 1)]) (jot #fns))
               t)
        (idx name) (: e (peep env name ()) (? (atom? e) (scare 'wasm-noname name) (e 1)))
        n (#imps + #fns)
@@ -493,11 +493,11 @@
        (rd i forms) (map (\ f (? (two? f && <f = 'label) (w-symap f (ren2 i)) f)) forms)   ; the definition alone
        (r2 i x) (peep (ren2 i) x x)
        ;; 3. the functions, in tu order and stream order
-       fns (catmap (\ i (map (\ fn ((r2 i <fn) . >fn)) ((parts i) 0))) ^ntu)
-       als (catmap (\ i (map (\ a [(r2 i (a 0)) (r2 i (a 1))]) ((parts i) 10))) ^ntu)   ; (alias . name) pairs
-       (dl k) (map (\ i (rd i ((parts i) k))) ^ntu)                 ; one data lane across the tus
+       fns (catmap (\ i (map (\ fn ((r2 i <fn) . >fn)) (parts i 0))) ^ntu)
+       als (catmap (\ i (map (\ a [(r2 i (a 0)) (r2 i (a 1))]) (parts i 10))) ^ntu)   ; (alias . name) pairs
+       (dl k) (map (\ i (rd i (parts i k))) ^ntu)                 ; one data lane across the tus
        d1 (dl 4)  d4 (dl 5)  d5 (dl 6)  d8 (dl 8)  d9 (dl 9)
-       d7 (map (\ i (map (\ x [(x 0) (rd i (x 1)) (x 2)]) ((parts i) 7))) ^ntu)
+       d7 (map (\ i (map (\ x [(x 0) (rd i (x 1)) (x 2)]) (parts i 7))) ^ntu)
        ;; 4. the data, section-major across the tus: rodata, data, love_nifs, .love.image, then
        ;;    the named sections grouped by name, then every bss. a lane the ELF linker brackets
        ;;    (love_nifs, love_rela, every named section) gets its __start_/__stop_ pair here.
@@ -550,7 +550,7 @@
        imps (filter (\ x (elem x owed)) allowed)
        ni #imps
        _ (map (i \ pin syms (imps i) ['fn i]) (jot ni))
-       _ (map (i \ pin syms ((fns i) 0) ['fn (i + ni)]) (jot #fns))
+       _ (map (i \ pin syms (fns i 0) ['fn (i + ni)]) (jot #fns))
        _ (map (\ a (pin syms (a 0) (peep syms (a 1) ()))) (als + als))   ; twice: an alias of an alias
        ;; 6. the data image, its pointers resolved. symidx is the module's own numbering (a
        ;; funcidx, what the export section wants); symval is the ADDRESS a data word holds,
@@ -587,6 +587,6 @@
         'globals [['i64 1 [['i64.const sp0]]]]
         'exports ((map (\ s [s 'func (symidx (nom s))]) exports) + '(("mem" memory 0)))
         'data [(base . string img)]
-        'names (map (i \ [i (show (imps i))]) ^ni + map (i \ [(i + ni) (show ((fns i) 0))]) (jot #fns))
+        'names (map (i \ [i (show (imps i))]) ^ni + map (i \ [(i + ni) (show (fns i 0))]) (jot #fns))
         'start -1}))
 ) ; module 'holo

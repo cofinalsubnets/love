@@ -238,7 +238,7 @@
        ; no terminal is not a refusal: it is batch, which is what a pipe wants and
        ; what the gate reads. -b asks for the same face where there is a terminal.
        (? (b? || (atom? ws))
-          (tp-batch st (? (0 < n) n 1) d ((cite 'grid 'screen) 1))
+          (tp-batch st (? (0 < n) n 1) d (cite 'grid 'screen 1))
           (tp-ride st n d))))
 
 ) ; module 'kore

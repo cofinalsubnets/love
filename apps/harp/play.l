@@ -260,8 +260,8 @@
                "-g" (go >>l (pin o 'gain (harp-atof <>l)) ps)
                "-p" (go >l (pin o 'print 1) ps)
                "-s" (go >>l (pin o 'scores (<>l . peep o 'scores ())) ps)
-               "--check" (: ls ((cite 'score 'score-file) <>l)
-                            (? ls ((cite 'score 'score-check) ls 1)
+               "--check" (: ls (cite 'score 'score-file <>l)
+                            (? ls (cite 'score 'score-check ls 1)
                                (say err ("harp: cannot read " + <>l + "\n"), 1)))
                ("-h" || "--help") (puts (harp-usage + "\n"), flush out, 0)
                ("-v" || "--version")
@@ -297,4 +297,4 @@
 
 ; the seat: fire only when this file is the program on the real command line.
 (: s (cite 'verbs 'fire ["harp" "play.l"])
-   (two? s ? (quit ((cite 'play 'harp-main) >s))))
+   (two? s ? (quit (cite 'play 'harp-main >s))))

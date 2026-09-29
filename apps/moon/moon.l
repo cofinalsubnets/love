@@ -95,17 +95,35 @@
    ; include/ and lib/, what the Makefile ships -- as an in-memory table, key the
    ; nest-relative path, value the bytes. nothing is written anywhere; () when there is
    ; nothing to carry (love0), and the owed-nest diagnostic stands.
+   ; the slice leads the archive (tools/selfpack.l lays it so), so it is streamed -- gz.l's
+   ; gz-pull under tar.l's walk -- and the read stops at the first file past it, rather than
+   ; inflating the tree. where those doors are not aboard the whole archive is read as before
+   (msub nom) (: rel (strip1 nom) sub (? (starts? rel mtree) (snip rel #mtree #rel) "")
+                 (? (starts? sub "include/" || starts? sub "lib/") sub ()))
    (mblob _)
     (: gz (source-gz "x")
-       u (string? gz && gzbody gz)
+       pull (cite 'gz 'gz-pull)   walk (cite 'tar 'tar-walk)
+       (? !(string? gz) ()
+          !(lit? pull && lit? walk) (mblob-whole gz)
+          (: next (cite 'gz 'gz-next)   body (cite 'tar 'tar-body)
+             t {0 0}                                   ; fed a slice at a time, so the walk's stop stops the inflate
+             g (pull (\ _ (: o (peep t 0 0) (? (#gz <= o) "" (: _ (pin t 0 (o + 65536)) (snip gz o (min #gz (o + 65536))))))))
+             s (cite 'tar 'tar-src (\ _ (next g)))
+             a {}   seen {0 0}
+             _ (walk s (\ e b (: sub (msub (e 'nom))
+                                  (? !sub (? (peep seen 0 0) 'stop 1)
+                                     (: ps {0 ()}
+                                        _ (? (e 'kind = 'file)
+                                             (: _ (body s b (x \ pin ps 0 (x . peep ps 0 ())))
+                                                l (peep ps 0 ())
+                                                (pin a sub (? (two? l) (cats (rev l)) ""))))
+                                        _ (pin seen 0 1)
+                                        1)))))
+             a)))
+   (mblob-whole gz)
+    (: u (gzbody gz)
        (? !(string? u) ()
-          (foldl (\ a e
-                   (: rel (strip1 <e)
-                      (? !(starts? rel mtree) a
-                         (: sub (snip rel #mtree #rel)
-                            (? (!(starts? sub "include/") && !(starts? sub "lib/")) a
-                               (pin a sub <>e))))))
-                 {} (tarfiles u))))
+          (foldl (\ a e (: sub (msub <e) (? sub (pin a sub <>e) a))) {} (tarfiles u))))
    ; the first three of a name list, comma-joined, with a count of the rest --
    ; a diagnostic wants a taste, not the whole bag
    (mfew ns)
@@ -1206,6 +1224,6 @@
 (: E (cite 'verbs 'enlist)
    _ (E 'mooncc moon-run ['self])
    _ (E 'cc moon-run ['self])
-   s ((cite 'verbs 'fire) ["mooncc" "mooncc.l" "moon.l"])
+   s (cite 'verbs 'fire ["mooncc" "mooncc.l" "moon.l"])
    (two? s && moon-main >s))
 ) ; module 'moon

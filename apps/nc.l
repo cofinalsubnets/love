@@ -38,7 +38,7 @@
 (: (nc-main as)
  (: (die m) (udie 1 ("nc: " + m))
     t (tablet 0)
-    ops ((uopt as t '(105 111 112 113 115 119) () ()) 2)
+    ops (uopt as t '(105 111 112 113 115 119) () () 2)
     usage "usage: nc [-CdkNnUuvz] [-i SECS] [-o FILE] [-q SECS] [-w SECS] {HOST PORT.. | -l [[-s] ADDR] [-p] PORT | -U [-l] PATH}"
     (portof s) (: n (uport s) (? n n (die ("not a port: " + s))))
     ; a flag's duration in ms, -1 when absent or negative

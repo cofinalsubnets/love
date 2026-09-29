@@ -67,7 +67,7 @@
               ; pi, or 'nf (not a break), or 'uh (glue or kern that is no break)
               pi (? (y <= 2) (: _ (add 1 (S 'pd + p 'height)) _ (pin S 'pd (p 'depth)) 'nf)
                     (y = 10) (? (prev 'type < 9) 0 'uh)
-                    (y = 11) (: t (? (p 'link = ()) 12 ((p 'link) 'type)) (? (t = 10) 0 'uh))
+                    (y = 11) (: t (? (p 'link = ()) 12 (p 'link 'type)) (? (t = 10) 0 'uh))
                     (y = 12) (p 'penalty)
                     'nf)
               (? (pi = 'nf) (: _ (settle 0) (go p (p 'link)))

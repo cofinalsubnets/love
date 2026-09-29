@@ -188,7 +188,7 @@
    (uls-grid es tty? w down? pre)
     (: cs (map (\ e ((pre e + uls-name e tty?) . (#(pre e) + swidth <e))) es)
        (go l) (? (atom? l) () (say out <l, put out 10, go >l))
-       (go ((cite 'grid 'lay) cs w down?)))
+       (go (cite 'grid 'lay cs w down?)))
    (uls-wide rs k) (foldl (\ w r (: n #(r k) (? (w < n) n w))) 0 rs)
    ; the widths come from `ws` and not from `rs`. GNU sizes the command-line block's
    ; columns over EVERY operand, directories included -- even though a directory
@@ -241,7 +241,7 @@
                (cw = "always" || cw = "yes" || cw = "force") 1
                (cw = "never" || cw = "no" || cw = "none") 0
                (udie 2 ("ls: invalid argument '" + cw + "' for '--color'")))
-       w ((cite 'grid 'screen) 1)
+       w (cite 'grid 'screen 1)
        grid? (? l? 0 o1? 0 (x? || c? || tty?) 1 0)
        down? !x?
        (tf st) (? (peep t 117 0) (ust-at st 9) (peep t 99 0) (ust-at st 10) (st 3))

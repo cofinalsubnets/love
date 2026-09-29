@@ -20,7 +20,7 @@
 (test
  (elem 'rune (cite ()))                ; the registry lists it
  (elem 'deriv (keys (cite 'rune)))      ; keys introspects the layer
- (1 = ((cite 'rune 'cnorm) (3 /// 3)))      ; the opaque accessor reaches a member
+ (1 = (cite 'rune 'cnorm (3 /// 3)))        ; the opaque accessor reaches a member
  (lit? (cite 'rune))                      ; presence: the accessor is a closure
  !(cite 'ruin))                        ; a missing module answers ()
 
@@ -311,8 +311,8 @@
  ((pconst 3 (4 /// 2)) = (pconst 3 2))             ; an integer-valued coin enters demoted
  ((pdet [qd1 qd2]) = (pconst 2 1))               ; det diag(1/2 2) = 1: q entries, integer det
  ((poly qp - poly qp) = (poly ()))           ; the coin face rides the same ring
- ((3 /// 2) = ((pfn qp '(x y z)) 1 1 0))           ; compiled: 1/2 + 1 = 3/2
- ((4 /// 1) = ((pfn qp '(x y z)) 2 3 0)))          ; a mixed evaluation lands a coin: (4 /// 1), not 4
+ ((3 /// 2) = (pfn qp '(x y z) 1 1 0))             ; compiled: 1/2 + 1 = 3/2
+ ((4 /// 1) = (pfn qp '(x y z) 2 3 0)))            ; a mixed evaluation lands a coin: (4 /// 1), not 4
 
 ; --- the poly coin: polynomials first-class under + - * and ! ---------------
 ; the zero polynomial is the coin over (); ! reads "is the zero polynomial"

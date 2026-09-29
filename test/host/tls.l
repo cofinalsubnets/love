@@ -181,7 +181,7 @@
    ked (leaf-key vder-ed) kec (leaf-key vder-ec) krsa (leaf-key vder-rsa)
    _ (test ((hex vsig-m) = "20202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020544c5320312e332c20736572766572204365727469666963617465566572696679003af65a7a89bdcfc5de8bc7d6ec78f66b56664c5e4c14686f96334567219f1d65")
            (<ked = 'ed25519) (<kec = 'p256) (<krsa = 'rsa)
-           (((krsa 1) 1) = 65537)
+           ((krsa 1 1) = 65537)
            ; the spki is the der of the key alone, inside the certificate
            (0 < #(ked 2)) (<(der (ked 2) 0 #(ked 2)) = 48)
            ((cv-ok? ked 2055 vsig-ed vsig-m) = 1)
@@ -234,7 +234,7 @@
        crt2 (? (mode = 'nocert) "" crt)
        tr1 (ch + sh + ee + crt2)
        seed (? (mode = 'otherkey) (bytes 32 (i \ i)) hs-seed)
-       sig0 ((cite 'ssh 'ed-sign) seed ((cite 'ssh 'ed-pub) seed) (cv-msg (sha tr1)))
+       sig0 (cite 'ssh 'ed-sign seed (cite 'ssh 'ed-pub seed) (cv-msg (sha tr1)))
        sig (? (mode = 'badsig) (vflip sig0 3) sig0)
        cv (? (mode = 'nocv) "" (hs-msg 15 (u16 2055 + u16 #sig + sig)))
        fv0 (hmac (hkdf-label shs "finished" "" 32) (sha (tr1 + cv)))
@@ -258,9 +258,11 @@
        got (catch s)
        _ (close l)
        [body got (? (tablet? t) (t 'spki) t)])
-   ok (hs-run 7481 'honest 'none)
+   ; a port block of this process's own: two runs at once, a gate's and a hand's, never meet
+   pb (20000 + 16 * (getpid 0 % 2000))
+   ok (hs-run (pb + 1) 'honest 'none)
    _ (test (<ok = "the stub says hi") (<(ok 1) = 22) ((ok 2) = (ked 2)))
-   _ (map (m \ (: r (hs-run (7482 + m 1) <m 'none)
+   _ (map (m \ (: r (hs-run (pb + 2 + m 1) <m 'none)
                   (test !(<r) ((r 1) = [21 (u8 2 + u8 (m 2))]) (string? (r 2)))))
           [['badsig 0 51] ['otherkey 1 51] ['nocv 2 51] ['badfin 3 51] ['nocert 4 51]])
    ; the trust, with HOME and SSL_CERT_FILE the test's own
@@ -270,16 +272,16 @@
    _ (setenv "HOME" hdir)
    _ (setenv "SSL_CERT_FILE" ((cwd 0) + "/test/host/tlschain/roote.pem"))
    (pinfile l) (: q (open (hdir + "/.love/tls_pins") "w") _ (say q l) (close q))
-   un (hs-run 7487 'honest 'verify)
-   _ (pinfile ("# a comment\n127.0.0.1:7491 " + spki-pin (ked 2) + "\n"))
-   pn (hs-run 7491 'honest 'verify)
-   _ (pinfile ("127.0.0.1:7492 spki:" + sha256 "another key" + "\n"))
-   wp (hs-run 7492 'honest 'verify)
+   un (hs-run (pb + 7) 'honest 'verify)
+   _ (pinfile ("# a comment\n127.0.0.1:" + show (pb + 11) + " " + spki-pin (ked 2) + "\n"))
+   pn (hs-run (pb + 11) 'honest 'verify)
+   _ (pinfile ("127.0.0.1:" + show (pb + 12) + " spki:" + sha256 "another key" + "\n"))
+   wp (hs-run (pb + 12) 'honest 'verify)
    _ (setenv "HOME" (? (string? home0) home0 ""))
    _ (setenv "SSL_CERT_FILE" (? (string? cf0) cf0 ""))
    _ (hark ["rm" "-rf" hdir])
    _ (test !(<un) ((un 1) = [21 (u8 2 + u8 48)])
-           (0 <= str-at (un 2) "not trusted" 0) (0 <= str-at (un 2) "127.0.0.1:7487 spki:" 0)
+           (0 <= str-at (un 2) "not trusted" 0) (0 <= str-at (un 2) ("127.0.0.1:" + show (pb + 7) + " spki:") 0)
            (<pn = "the stub says hi")
            !(<wp) ((wp 1) = [21 (u8 2 + u8 42)]) (0 <= str-at (wp 2) "not the one pinned" 0))
    0)
@@ -289,6 +291,7 @@
 ; each dial verifies. the same server is refused under the host's own bundle, and a leaf that
 ; names another host is refused by name
 (: os? (two? (stat "/usr/bin/openssl"))
+   pb (20000 + 16 * (getpid 0 % 2000))
    odir ((cwd 0) + "/out/.tlsv-" + show (getpid 0))
    (osh c) (hark ["sh" "-c" ("exec 2>/dev/null; cd " + odir + " && " + c)])
    (oleaf nm arg san)
@@ -299,8 +302,10 @@
    (orun nm port)
     (: p (tether ["openssl" "s_server" "-quiet" "-tls1_3" "-naccept" "1" "-www" "-accept" ("127.0.0.1:" + show port)
                   "-key" (odir + "/" + nm + ".key") "-cert" (odir + "/" + nm + ".pem")])
-       _ (rest 500)
-       t (tls-open "127.0.0.1" port 'verify)
+       ; the server listens when it is ready, not after a fixed wait: under load it is slow
+       (open k) (: t (tls-open "127.0.0.1" port 'verify)
+                   (? (k < 40 && string? t && 0 <= str-at t "cannot connect" 0) (: _ (rest 250) (open (k + 1))) t))
+       t (open 0)
        b (? (tablet? t) (: _ (tls-say t "GET / HTTP/1.0\r\n\r\n") b (tls-slurp t) _ (close (t 's)) b) t)
        _ (? (tablet? t) 0 (still <p 15))
        _ (waitfor <p)
@@ -317,9 +322,9 @@
            _ (oleaf "rsa" "rsa:2048" "IP:127.0.0.1")
            _ (oleaf "other" "ec -pkeyopt ec_paramgen_curve:P-256" "DNS:other.test")
            _ (setenv "SSL_CERT_FILE" (odir + "/root.pem"))
-           e (orun "ed" 7488) p (orun "ec" 7489) q (orun "p384" 7493) r (orun "rsa" 7490) o (orun "other" 7494)
+           e (orun "ed" (pb + 8)) p (orun "ec" (pb + 9)) q (orun "p384" (pb + 13)) r (orun "rsa" (pb + 10)) o (orun "other" (pb + 14))
            _ (setenv "SSL_CERT_FILE" "/nonexistent/bundle.pem")
-           n (orun "rsa" 7495)
+           n (orun "rsa" (pb + 15))
            _ (setenv "SSL_CERT_FILE" (? (string? cf0) cf0 ""))
            _ (hark ["rm" "-rf" odir])
            (test (has e "TLSv1.3") (has p "TLSv1.3") (has q "TLSv1.3") (has r "TLSv1.3")
@@ -382,6 +387,30 @@
    _ (test (all (n \ !(tablet? (x509 (snip ir 0 n)))) ^#ir)
            (all (i \ (: x (x509 (tc-flip ir i)) (atom? x || tablet? x))) ^#ir)))
 
+;; --- name constraints: a root, or an issuer, vouches only for its own names ----------------
+(: nc-roots (map (n \ x509 (tc-ld n)) ["rootn" "rootp" "rootm" "rootd"])
+   (nc host l) (chain-ok? (map tc-ld l) nc-roots host tc-now)
+   rn (x509 (tc-ld "rootn"))
+   _ (test (#(rn 'ncp) = 2) (#(rn 'nce) = 1)                      ; sb.test and 10/8; not bad.sb.test
+           ((nc "a.sb.test" ["leafn"]) = 1) ((nc "10.1.2.3" ["leafn"]) = 1)
+           (tc-has (nc "a.sb.test" ["leafno"]) "\"rootn\": the name evil.test is outside the names it may vouch for")
+           (tc-has (nc "x.bad.sb.test" ["leafnx"]) "the name x.bad.sb.test is among the names it may not vouch for")
+           (tc-has (nc "a.sb.test" ["leafnw"]) "the name *.sb.test is among")    ; the wildcard reaches bad.sb.test
+           ((nc "a.ok.sb.test" ["leafnw2"]) = 1)
+           (tc-has (nc "a.sb.test" ["leafni"]) "the name 192.168.1.1 is outside")
+           ((nc "a.in.test" ["leafin" "intern"]) = 1)                        ; an issuer's own constraint
+           (tc-has (nc "in.test" ["leafia" "intern"]) "\"intern\": the name in.test is outside")
+           ((nc "good.test" ["leafm"]) = 1)                                  ; email bears on no server name
+           (tc-has (nc "good.test" ["leafd"]) "a kind of name not checked here")))
+
+;; --- the tree's roots: mozilla's, the last home, and carried in the binary for a host with none --
+(: t (carried-roots 0) f (uread tree-roots)
+   ds (? (string? t) (pem-ders t) ()) xs (filter tablet? (map x509 ds))
+   _ (test (string? t) (two? f) (<>f = t)                          ; the carried copy is the tree's
+           (100 < #xs) (#xs = #ds)                                 ; every root reads
+           (all (x \ (x 'ca) = 1) xs)
+           (elem ("/proc/src/" + tree-roots) root-homes)))
+
 ;; --- the roots: SSL_CERT_FILE names the bundle, read once; the host's own reads whole ----
 (: e0 (getenv "SSL_CERT_FILE")
    _ (setenv "SSL_CERT_FILE" "test/host/tlschain/roote.pem")
@@ -391,7 +420,7 @@
    _ (setenv "SSL_CERT_FILE" (? (string? e0) e0 ""))
    hb (filter (p \ two? (stat p)) root-homes)
    hn (? (two? hb) (: t (uread <hb) ds (pem-ders <>t) [#ds #(filter tablet? (map x509 ds))]) [1 1])
-   _ (test (<r1 = "test/host/tlschain/roote.pem") (#(r1 1) = 1) (((r1 1) 0) 'subject = (x509 (tc-ld "roote")) 'subject)
+   _ (test (<r1 = "test/host/tlschain/roote.pem") (#(r1 1) = 1) (r1 1 0 'subject = (x509 (tc-ld "roote")) 'subject)
            ((r2 1) = (r1 1))                                       ; the same list: read once
            ((r3 1) = ())
            (0 < <hn) (<hn = hn 1)))

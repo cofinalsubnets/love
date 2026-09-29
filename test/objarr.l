@@ -120,7 +120,7 @@
  ('world = peep oa-q 1 0)
  ((100 2) = peep oa-bn 0 0)                  ; full bignum, not truncated to z
  ; currying: a partial collector is a function; completing it builds the array
- ("@('a 'b)" = show ((array 2) 'a 'b))
+ ("@('a 'b)" = show (array 2 'a 'b))
  ; (array 0) -> empty rank-1 array, no elements to collect; it prints @()
  ("@()" = show (array 0))
  ; round-trips: numeric array result prints as the terse @(…) sugar

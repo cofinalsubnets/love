@@ -60,7 +60,8 @@ struct inf_code { uint16_t cnt[16], sym[288], *tab; unsigned root; };
 // the kernel's 64 KiB boot one, where kmain inflates the source blob into its initrd.
 struct inf_tabs {
  uint16_t ltab[1 << LROOT], dtab[1 << DROOT], ctab[1 << CROOT];
- struct inf_code lit, dst, cl; };
+ struct inf_code lit, dst, cl;
+ const uint8_t *dic; uintptr_t nd; };            // the preset dictionary behind the output, nd 0 for none
 
 static void inf_build(struct inf_code *c, const uint8_t *lens, unsigned nsym,
                       uint16_t *tab, unsigned root) {
@@ -131,7 +132,12 @@ static int inf_fast_run(const uint8_t *in, uintptr_t n, uintptr_t *ipp, uint64_t
   if (sy > 29) { r = -1; break; }
   x = gz_dext[sy];
   d = gz_dbase[sy] + (uintptr_t) (bb & (((uint64_t) 1 << x) - 1)), bb >>= x, bc -= x;
-  if (d > (uintptr_t) (op - out)) { r = -1; break; }   // a reach before the start
+  if (d > (uintptr_t) (op - out)) {             // a reach before the start: the dictionary's, or none
+   uintptr_t o = (uintptr_t) (op - out), h = d - o < l ? d - o : l, k;
+   if (d > o + t->nd) { r = -1; break; }
+   memcpy(op, t->dic + t->nd - (d - o), h);
+   for (k = h; k < l; k++) op[k] = op[k - d];
+   op += l; continue; }
   { uint8_t *dp = op, *sp = op - d, *de = op + l;
 #if ai_wideld
     if (d >= 8) for (; dp < de; dp += 8, sp += 8) ai_st64(dp, ai_ld64(sp));
@@ -147,12 +153,15 @@ static int inf_fast_run(const uint8_t *in, uintptr_t n, uintptr_t *ipp, uint64_t
 // -1 where the twin answers (), -2 where the output outruns cap. out may be NULL, and
 // then nothing is stored and the answer is only how long the stream inflates to --
 // which is exact, because nothing the buffer holds ever reaches a branch.
-static int64_t inf_run(const uint8_t *in, uintptr_t n, uint8_t *out, uintptr_t cap) {
+// dic is the nd bytes that come before the output, a preset dictionary (nd 0 for none)
+static int64_t inf_rund(const uint8_t *in, uintptr_t n, uint8_t *out, uintptr_t cap,
+                        const uint8_t *dic, uintptr_t nd) {
  uintptr_t ip = 0, op = 0;
  uint64_t bb = 0;
  unsigned bc = 0, last, typ, i;
  uint8_t lens[320];
  struct inf_tabs t;
+ t.dic = dic, t.nd = nd;
 
 // one unaligned load where there is room. the byte loop below is the same act and
 // eight times the work; the arithmetic is libdeflate's -- absorb what fits, step by the
@@ -239,9 +248,13 @@ static int64_t inf_run(const uint8_t *in, uintptr_t n, uint8_t *out, uintptr_t c
    if (sy > 29) return -1;
    d = gz_dbase[sy];
    if (gz_dext[sy]) { TAKE(gz_dext[sy], x); d += x; }
-   if (d > op) return -1;                        // a reach before the start
+   if (d > op + nd) return -1;                   // a reach before the start
    if (op + l > cap) return -2;
-   if (out) {
+   if (out && d > op) {                          // into the dictionary, and maybe out again
+    uintptr_t h = d - op < l ? d - op : l;
+    memcpy(out + op, dic + nd - (d - op), h);
+    for (uintptr_t k = h; k < l; k++) out[op + k] = out[op + k - d]; }
+   else if (out) {
     // deflate lets a run overlap its own source -- dist 1 len 100 is a hundred of one
     // byte -- so the bytes go out in order and read each other back as they go, which is
     // right at every distance. eight or more apart, no byte of a word is read back inside
@@ -261,6 +274,8 @@ static int64_t inf_run(const uint8_t *in, uintptr_t n, uint8_t *out, uintptr_t c
 #undef TAKE
 #undef SYM
 }
+static int64_t inf_run(const uint8_t *in, uintptr_t n, uint8_t *out, uintptr_t cap) {
+ return inf_rund(in, n, out, cap, 0, 0); }
 
 // str0 collects, so the stream is re-read off the stack after it: a C local's pointer
 // into the heap is stale across the bump. tls.c pays the same toll.
@@ -268,6 +283,9 @@ static int64_t inf_run(const uint8_t *in, uintptr_t n, uint8_t *out, uintptr_t c
 // source blob into its initrd through this. same law as inf_run, exported.
 intptr_t ai_inflate_raw(const unsigned char *in, uintptr_t n, unsigned char *out, uintptr_t cap) {
  return (intptr_t) inf_run(in, n, out, cap); }
+intptr_t ai_inflate_dict(const unsigned char *in, uintptr_t n, unsigned char *out, uintptr_t cap,
+                         const unsigned char *dic, uintptr_t nd) {
+ return (intptr_t) inf_rund(in, n, out, cap, dic, nd); }
 
 // the output is one string in the heap, so a stream inflating past this answers 1 and
 // is not grown into
@@ -353,54 +371,65 @@ static int inf_sym1(const struct inf_code *c, unsigned root, uint64_t *bb, uint3
  if (*bc < u) return -1;                         // eof, and the code runs past it
  return *bb >>= u, *bc -= u, 1; }
 
-// the fast lane of IM_SYM: while eight input bytes remain, one wide load tops the buffer to 56
-// bits, and a literal/length, its extra, a distance and its extra are 48 at most, so no pair
-// waits. inf_run's shape. 1 at the block's end, 0 short of input, -1 malformed, -2 too big.
-// the load leaves bits above bc from a byte ip has not passed; they go before a feed returns
+// the fast lane of IM_SYM, inf_fast_run's shape: a literal is 15 bits at most, so the buffer is
+// topped only when it holds fewer, and before a length is taken to the 48 its pair may take,
+// one wide load serving several literals while eight input bytes remain. the output grows
+// ahead of the lane, 266 bytes of room at a time, so a match copies whole words and may run
+// over into room a later byte takes; a reach behind this feed reads the ring a byte at a
+// time. a code past its table's root leaves the lane untaken, so the loop makes no call.
+// 1 at the block's end, 0 short of input, table or room, -1 malformed. the load leaves
+// bits above bc from a byte ip has not passed; they go before a feed returns
 static int inf_fast(struct inf_st *S, const uint8_t *in, uintptr_t n, uintptr_t *ipp,
                     uint64_t *bbp, uint32_t *bcp, struct inf_acc *A) {
+ const uint8_t *ip = in + *ipp, *ie = in + n - 8;
+ const uint16_t *lt = S->t.ltab, *dt = S->t.dtab;
  uint64_t bb = *bbp;
- uint32_t bc = *bcp;
- uintptr_t ip = *ipp;
+ uintptr_t bc = *bcp, e, f, sy, x, l, d, before = S->tot - A->n;   // before: every byte out ahead of A
  int r = 0;
- const struct inf_code *lc = &S->t.lit, *dc = &S->t.dst;
-#define FSYM(c, root, sy) do { unsigned u_; uint16_t e_ = (c)->tab[bb & ((1u << (root)) - 1)]; \
-   if (e_) (sy) = e_ >> 4, u_ = e_ & 15; \
-   else { int w_ = inf_walk(c, bb); if (w_ < 0) { r = -1; goto out; } (sy) = (unsigned) w_ >> 4, u_ = w_ & 15; } \
-   bb >>= u_, bc -= u_; } while (0)
- while (ip + 8 <= n) {
-  unsigned sy, l, d, x;
-  bb |= LD64(in + ip) << bc, ip += 7 - (bc >> 3), bc |= 56;
-  FSYM(lc, LROOT, sy);
-  if (sy < 256) {
-   if (A->n >= A->cap && !inf_room(A, 1)) { r = -2; goto out; }
-   A->b[A->n++] = (uint8_t) sy, S->tot++; continue; }
-  if (sy == 256) { r = 1; break; }
-  if (sy > 285) { r = -1; goto out; }
-  sy -= 257, x = gz_lext[sy];
-  l = gz_lbase[sy] + (unsigned) (bb & ((1u << x) - 1)), bb >>= x, bc -= x;
-  FSYM(dc, DROOT, sy);
-  if (sy > 29) { r = -1; goto out; }
-  x = gz_dext[sy];
-  d = gz_dbase[sy] + (unsigned) (bb & ((1u << x) - 1)), bb >>= x, bc -= x;
-  if (d > S->tot) { r = -1; goto out; }
-  if (A->n + l > A->cap && !inf_room(A, l)) { r = -2; goto out; }
-  uint8_t *dp = A->b + A->n;
-  uintptr_t k = 0;
-  if (d <= A->n) {
+ for (;;) {
+  if (A->cap - A->n < 266 && !inf_room(A, 266)) break;   // near the cap: the slow path says exactly
+  uint8_t *b = A->b, *op = b + A->n, *oe = b + A->cap - 266;
+  while (op <= oe) {
+   if (bc < 15) {
+    if (ip > ie) goto stop;
+    bb |= LD64(ip) << bc, ip += 7 - (bc >> 3), bc |= 56; }
+   if (!(e = lt[bb & ((1u << LROOT) - 1)])) goto stop;
+   sy = e >> 4;
+   if (sy < 256) { bb >>= e & 15, bc -= e & 15, *op++ = (uint8_t) sy; continue; }
+   if (sy == 256) { bb >>= e & 15, bc -= e & 15, r = 1; goto stop; }
+   if (sy > 285) { r = -1; goto stop; }
+   if (bc < 48) {                                // the pair, still unread, to top up for
+    if (ip > ie) goto stop;
+    bb |= LD64(ip) << bc, ip += 7 - (bc >> 3), bc |= 56; }
+   x = gz_lext[sy - 257];
+   if (!(f = dt[(bb >> ((e & 15) + x)) & ((1u << DROOT) - 1)])) goto stop;
+   bb >>= e & 15, bc -= e & 15;
+   l = gz_lbase[sy - 257] + (uintptr_t) (bb & (((uint64_t) 1 << x) - 1)), bb >>= x, bc -= x;
+   bb >>= f & 15, bc -= f & 15, sy = f >> 4;
+   if (sy > 29) { r = -1; goto stop; }
+   x = gz_dext[sy];
+   d = gz_dbase[sy] + (uintptr_t) (bb & (((uint64_t) 1 << x) - 1)), bb >>= x, bc -= x;
+   uintptr_t o = (uintptr_t) (op - b);
+   if (d > before + o) { r = -1; goto stop; }    // a reach before the start
+   uint8_t *dp = op, *sp = op - d, *de = op + l;
+   if (d > o)                                     // behind this feed's output: the ring
+    for (uintptr_t j = o; dp < de; dp++, j++)
+     *dp = d <= j ? b[j - d] : S->hist[(S->hp - (d - j)) & (IS_HIST - 1)];
 #if ai_wideld
-   if (d >= 8) for (; k + 8 <= l; k += 8) ai_st64(dp + k, ai_ld64(dp + k - d));
+   else if (d >= 8) for (; dp < de; dp += 8, sp += 8) ai_st64(dp, ai_ld64(sp));
+   else if (d == 1) { uint64_t v = 0x0101010101010101ull * *sp;   // a run of one byte
+    for (; dp < de; dp += 8) ai_st64(dp, v); }
 #endif
-   for (; k < l; k++) dp[k] = dp[k - d]; }
-  else for (uintptr_t j = A->n; k < l; k++, j++)
-   dp[k] = d <= j ? A->b[j - d] : S->hist[(S->hp - (d - j)) & (IS_HIST - 1)];
-  A->n += l, S->tot += l; }
-out:
+   else for (; dp < de; dp++, sp++) *dp = *sp;
+   op += l; }
+  S->tot = before + (uintptr_t) (op - b), A->n = (uintptr_t) (op - b);
+  continue;
+ stop:
+  S->tot = before + (uintptr_t) (op - b), A->n = (uintptr_t) (op - b);
+  break; }
  if (bc < 64) bb &= ((uint64_t) 1 << bc) - 1;   // what is past bc is ip's byte, read again next
- *bbp = bb, *bcp = bc, *ipp = ip;
- return r;
-#undef FSYM
-}
+ *bbp = bb, *bcp = (uint32_t) bc, *ipp = (uintptr_t) (ip - in);
+ return r; }
 
 // the machine: 1 the stream ended, 0 it wants more, -1 malformed, -2 past INF_MAX
 static int inf_step(struct inf_st *S, const uint8_t *in, uintptr_t n, int eof, uintptr_t *ipp, struct inf_acc *A) {
@@ -715,7 +744,8 @@ struct df_ar {
  uint32_t *head, *prev, *tok, *fl, *fd,
           *hc, *keys, *w, *sy, *pa, *rlb, *fc,
           *codl, *codd, *codc, *fixcl, *fixcd;
- uint8_t *lenl, *lend, *lenc, *fixll, *fixld, *cl; };
+ uint8_t *lenl, *lend, *lenc, *fixll, *fixld, *cl;
+ unsigned chain, lazy; };                                       // the twin's 32 and greedy; the image lane digs
 #define DF_ARENA (384u << 10)
 static void df_carve(uint8_t *m, struct df_ar *a) {
  uint8_t *p = m;
@@ -739,10 +769,10 @@ static void df_ins(const uint8_t *s, uintptr_t n, uintptr_t i, uint32_t *head, u
 
 // gz-find: down the chain, nearest wins a tie, a full-limit match taken at once
 static void df_find(const uint8_t *s, uintptr_t n, uintptr_t i, const uint32_t *head,
-                    const uint32_t *prev, unsigned *rl, unsigned *rd) {
+                    const uint32_t *prev, unsigned chain, unsigned *rl, unsigned *rd) {
  unsigned lim = (n - i) < 258 ? (unsigned) (n - i) : 258;
  uint32_t k = head[DF_HASH(s, i)];
- int d = DF_CHAIN;
+ unsigned d = chain;
  unsigned bl = 0, bd = 0;
  while (k && d) {
   uintptr_t p = k - 1, dist = i - p;
@@ -764,21 +794,29 @@ static uintptr_t df_block(const uint8_t *s, uintptr_t n, uintptr_t i, struct df_
  int last;
  memset(a->fl, 0, 286 * sizeof *a->fl);
  memset(a->fd, 0, 30 * sizeof *a->fd);
+ unsigned cl = 0, cd = 0, held = 0;                              // lazy: the match found one on
  while (i < n && k < DF_TOKMAX) {
-  unsigned l = 0, d = 0;
-  if (i + 3 <= n) df_find(s, n, i, a->head, a->prev, &l, &d);
+  unsigned l = 0, d = 0, in = 0;
+  if (held) l = cl, d = cd, held = 0;
+  else if (i + 3 <= n) df_find(s, n, i, a->head, a->prev, a->chain, &l, &d);
   if (l == 3 && d > DF_TOOFAR) l = 0;                           // a far three is a loss
+  if (a->lazy && l >= 3 && l < 258 && i + 4 <= n) {             // a longer one a byte on wins it
+   if (!in) df_ins(s, n, i, a->head, a->prev), in = 1;
+   df_find(s, n, i + 1, a->head, a->prev, a->chain, &cl, &cd);
+   if (cl == 3 && cd > DF_TOOFAR) cl = 0;
+   if (cl > l) held = 1, l = 0; }
   if (l < 3) {
    unsigned c = s[i];
    a->tok[k++] = c; a->fl[c]++;
-   df_ins(s, n, i, a->head, a->prev); i++; }
+   if (!in) df_ins(s, n, i, a->head, a->prev);
+   i++; }
   else {
    unsigned lc = df_lcode(l), dc = df_dcode(d), q;
    a->tok[k++] = 256u + ((uint32_t) lc << 23) + ((uint32_t) dc << 18)
                + ((uint32_t) (l - gz_lbase[lc]) << 13) + (d - gz_dbase[dc]);
    a->fl[257 + lc]++; a->fd[dc]++;
    xb += gz_lext[lc] + gz_dext[dc];
-   for (q = 0; q < l; q++) df_ins(s, n, i + q, a->head, a->prev);
+   for (q = in; q < l; q++) df_ins(s, n, i + q, a->head, a->prev);
    i += l; } }
  last = n <= i;
  a->fl[256]++;                                                  // end-of-block, always sent
@@ -817,12 +855,14 @@ static uintptr_t df_block(const uint8_t *s, uintptr_t n, uintptr_t i, struct df_
   df_wtoks(t, a->tok, k, a->codl, a->lenl, a->codd, a->lend); }
  return i; }
 
-static int64_t df_go(const uint8_t *s, uintptr_t n, uint8_t *out, uintptr_t cap, uint8_t *m) {
+// s[0..i0) is the preset dictionary: in the window, never sent
+static int64_t df_go(const uint8_t *s, uintptr_t i0, uintptr_t n, uint8_t *out, uintptr_t cap, uint8_t *m, int best) {
  struct df_ar a;
  struct df_sink t;
- uintptr_t i = 0;
+ uintptr_t i = i0;
  unsigned j;
  df_carve(m, &a);
+ a.chain = best ? 4096 : DF_CHAIN, a.lazy = !!best;
  memset(a.head, 0, 32768 * sizeof *a.head);
  memset(a.prev, 0, 32768 * sizeof *a.prev);
  for (j = 0; j < 288; j++) a.fixll[j] = j < 144 ? 8 : j < 256 ? 9 : j < 280 ? 7 : 8;
@@ -830,6 +870,7 @@ static int64_t df_go(const uint8_t *s, uintptr_t n, uint8_t *out, uintptr_t cap,
  df_hcodes(a.fixll, 288, 9, a.fixcl);
  df_hcodes(a.fixld, 30, 5, a.fixcd);
  t.out = out; t.op = 0; t.cap = cap; t.acc = 0; t.nb = 0; t.err = 0;
+ for (uintptr_t q = 0; q < i0; q++) df_ins(s, n, q, a.head, a.prev);
  do i = df_block(s, n, i, &t, &a); while (i < n && !t.err);
  df_align(&t);
  return t.err ? -2 : (int64_t) t.op; }
@@ -844,6 +885,7 @@ static uint8_t *df_arena(struct ai *g, int *alloced) {
  return (uint8_t*) p; }
 
 // the image lane: deflate raw bytes into the caller's buffer, one pass, no love stack.
+// it is no twin: a lazy parse down a 4096 chain, zlib -9's, a bake-time cost for bytes.
 // its arena is always its own -- df_arena may hand back the major pool's spare half, and
 // a dump is walking a compacted heap that owns it.
 intptr_t ai_deflate_raw(struct ai *g, unsigned char const *in, uintptr_t n,
@@ -851,8 +893,17 @@ intptr_t ai_deflate_raw(struct ai *g, unsigned char const *in, uintptr_t n,
  uint8_t *m = ai_alloc(NULL, DF_ARENA);
  int64_t got;
  if (!m) return -1;
- got = df_go(in, n, out, cap, m);
+ got = df_go(in, 0, n, out, cap, m, 1);
  ai_alloc(m, 0);
+ return (intptr_t) got; }
+// ..and against a preset dictionary, which the inflater is handed as ai_inflate_dict's dic
+intptr_t ai_deflate_dict(struct ai *g, unsigned char const *in, uintptr_t n,
+                         unsigned char const *dic, uintptr_t nd, unsigned char *out, uintptr_t cap) {
+ uint8_t *m = ai_alloc(NULL, DF_ARENA), *s = m ? ai_alloc(NULL, nd + n) : NULL;
+ int64_t got = -1;
+ if (s) memcpy(s, dic, nd), memcpy(s + nd, in, n), got = df_go(s, nd, nd + n, out, cap, m, 1);
+ if (s) ai_alloc(s, 0);
+ if (m) ai_alloc(m, 0);
  return (intptr_t) got; }
 
 ai_noinline static struct ai *host_deflate(struct ai *g) {
@@ -863,21 +914,39 @@ ai_noinline static struct ai *host_deflate(struct ai *g) {
  if (!strp(sw)) { g->sp[0] = ZeroPoint; return g; }
  m = df_arena(g, &alloced);
  if (!m) { g->sp[0] = ZeroPoint; return g; }
- want = df_go((const uint8_t*) txt(sw), len(sw), 0, (uintptr_t) -1, m);
+ want = df_go((const uint8_t*) txt(sw), 0, len(sw), 0, (uintptr_t) -1, m, 0);
  if (alloced) ai_alloc(m, 0);
  if (want < 0) { g->sp[0] = ZeroPoint; return g; }
  if (!ai_ok(g = str0(g, (uintptr_t) want))) return g;
  m = df_arena(g, &alloced);
  if (!m) { g->sp[1] = ZeroPoint, g->sp += 1; return g; }
- got = df_go((const uint8_t*) txt(g->sp[1]), len(g->sp[1]),
-             (uint8_t*) txt(g->sp[0]), (uintptr_t) want, m);
+ got = df_go((const uint8_t*) txt(g->sp[1]), 0, len(g->sp[1]),
+             (uint8_t*) txt(g->sp[0]), (uintptr_t) want, m, 0);
  if (alloced) ai_alloc(m, 0);
  g->sp[1] = got != want ? ZeroPoint : g->sp[0];
  return g->sp++, g; }
 
+// (deflate-best s) -> the raw stream | (): the image lane's coder, no twin of the love one --
+// a lazy parse down a 4096 chain, zlib -9's, for bytes that are written once and read often
+// (the dist tarball, gzip -9). the parse is dear, so it runs once, into a buffer at
+// deflate's own bound (stored blocks: five bytes a block over the input), then the string
+ai_noinline static struct ai *host_deflate_best(struct ai *g) {
+ word sw = g->sp[0];
+ if (!strp(sw)) return g->sp[0] = ZeroPoint, g;
+ uintptr_t n = len(sw), cap = n + n / 1024 + 64;
+ uint8_t *out = ai_alloc(NULL, cap);
+ intptr_t got = out ? ai_deflate_raw(g, (const uint8_t*) txt(sw), n, out, cap) : -1;
+ if (got < 0) { if (out) ai_alloc(out, 0); return g->sp[0] = ZeroPoint, g; }
+ if (ai_ok(g = str0(g, (uintptr_t) got))) memcpy(txt(g->sp[0]), out, (uintptr_t) got), g->sp[1] = g->sp[0], g->sp++;
+ ai_alloc(out, 0);
+ return g; }
+
 static LvmWrap(lvm_deflate, host_deflate)
+static LvmWrap(lvm_deflate_best, host_deflate_best)
 
 // one operand, so the run is {impl, ret0} -- love/nifs.l states the law and lvm_cur
 // curries once unconditionally, which at arity one hands the body an operand too many.
-static union u const nif_deflate[] = {{lvm_deflate}, {lvm_ret0}};
+static union u const nif_deflate[] = {{lvm_deflate}, {lvm_ret0}},
+                     nif_deflate_best[] = {{lvm_deflate_best}, {lvm_ret0}};
 LvNif("deflate", nif_deflate, NULL);
+LvNif("deflate-best", nif_deflate_best, NULL);

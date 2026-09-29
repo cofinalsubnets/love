@@ -78,7 +78,7 @@
        (? (atom? r) ()
           (: s <>r
              (? !(man-gz? s) s
-                (: u ((cite 'gz 'gz-unzip) s) (? (two? u) <>u ()))))))
+                (: u (cite 'gz 'gz-unzip s) (? (two? u) <>u ()))))))
    ; `.so man1/other.1` is the whole of a redirect page
    (man-so s)
     (: l (filter (x \ (#x && !(man-pre? x ".\\\""))) (lines s))
@@ -121,7 +121,7 @@
                       (: s2 (? p2 (: t (man-text p2) (? t t s)) s)
                          (? (man-mdoc? s2)
                              [0 ("man: " + nm + " is an mdoc page, which is not read yet")]
-                            [1 (? p2 p2 p) ((cite 'lapiz 'rf->tty) s2 w)]))))))))
+                            [1 (? p2 p2 p) (cite 'lapiz 'rf->tty s2 w)]))))))))
    (man-moan m) (say err m, put err 10, 1)
    ; a leading operand is the section only if it LOOKS like one -- a digit, then up to three
    ; more -- and only if a name follows it. `man 411toppm` names a page, and taking its

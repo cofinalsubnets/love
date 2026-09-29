@@ -319,7 +319,7 @@
           (c && c = 111 && px = 'f3) (xx 'movdqu)  (c && c = 127 && px = 'f3) (xxs 'movdqu)
           (c && px = '66 && nom? (dc-p66 c)) (xx (dc-p66 c))
           (c && px = '66 && two? (dc-pshift c))                                       ; the shifts by an immediate
-           (: r (dc-modrm s k2 p 16 16) mn ((dc-pshift c) (r 3))
+           (: r (dc-modrm s k2 p 16 16) mn (dc-pshift c (r 3))
               (nom? mn ? (finx (r 0 + 1) [(op1 mn 0 [(r 2) ['im (dc-at s (r 0))]])]) (bad 0)))
           (c && c = 112 && (ate || px = '66))                                 ; pshufd / pshufhw / pshuflw ib
            (: r (dc-modrm s k2 p 16 16) (finx (r 0 + 1) [(op1 (px @ '66 'pshufd 'f3 'pshufhw 'pshuflw) 0 [(r 1) (r 2) ['im (dc-at s (r 0))]])]))

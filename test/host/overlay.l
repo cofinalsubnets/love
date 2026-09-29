@@ -48,15 +48,15 @@
            (two? (chk1 lux-dom sg2 '(: (g1 r) (zfoc r)))))         ; a rect in the zipper seat: flagged
 
  ; leg 3: uu, baked -- define, certify, compute
- _ ((uu 'defn) 'boot-add '(pi m nat (pi n nat nat))
-               '(lam m (lam n (nat_rect (lam q nat) n (lam k (lam r (succ r))) m))))
+ _ (uu 'defn 'boot-add '(pi m nat (pi n nat nat))
+             '(lam m (lam n (nat_rect (lam q nat) n (lam k (lam r (succ r))) m))))
  _ (test (3 = (uu 'vof) () '(boot-add 2 1))
            (5 = (uu 'vof) () '(boot-add 2 3))))
 
 ; the kernel refuses through the help cell -- install the escape (test/uu.l's
 ; own tail move; the kernel span rightly bakes no global help), probe, uninstall
 (hear (\ p e (: h (peep (uu 'HELPC) () 0) (h ? (h p e) 0))))
-(test ('rejected = ((uu 'rejects) (z \ (uu 'defn) 'boot-bad 'nat '(lam x x)))))
+(test ('rejected = (uu 'rejects (z \ (uu 'defn) 'boot-bad 'nat '(lam x x)))))
 (hear 0)
 
 ; leg 4: load the whole uu corpus (kernel + the StackSet model + its theorems,
@@ -70,7 +70,7 @@
    (encz z) ['zmk <z (encl <>z) (encl <>>z)]
    (decl v) (: (go vv acc) (two? vv ? (go (vv 2) (vv 1 . acc)) (rev acc))
               (go (v 2) ()))
-   (decz v) (zmk (v 1) (decl ((v 2) 1)) (decl ((v 2) 2)))
+   (decz v) (zmk (v 1) (decl (v 2 1)) (decl (v 2 2)))
  z0 (zmk 5 [2] [7 9])
  z1 (zmk 5 () [7 9])
  _ (test
@@ -84,7 +84,7 @@
     (<(zfocdn z0) = vof 0 ['zfoc ['zfocdn (encz z0)]])
     (zrow (zmaster z0) = decl (vof 0 ['zrow ['zmaster (encz z0)]]))
     ; delete, through the model's Maybe (ii2 carries the survivor)
-    (zdel 5 z0 = decz ((vof 0 ['zdel 5 (encz z0)]) 1))
+    (zdel 5 z0 = decz (vof 0 ['zdel 5 (encz z0)] 1))
     (zswapup z0 = decz (vof 0 ['zswapup (encz z0)]))))
 
 ; leg 5: the seeded fuzz -- the whole op vocabulary, random walks through
@@ -98,14 +98,14 @@
    (encz z) ['zmk <z (encl <>z) (encl <>>z)]
    (decl v) (: (go vv acc) (two? vv ? (go (vv 2) (vv 1 . acc)) (rev acc))
               (go (v 2) ()))
-   (decz v) (zmk (v 1) (decl ((v 2) 1)) (decl ((v 2) 2)))
+   (decz v) (zmk (v 1) (decl (v 2 1)) (decl (v 2 2)))
    (mstep r w t) (? (r = 0) (vof 0 ['zins w t])
                     (r = 1) (vof 0 ['zfocup t])
                     (r = 2) (vof 0 ['zfocdn t])
                     (r = 3) (vof 0 ['zswapup t])
                     (r = 4) (vof 0 ['zswapdn t])
                     (r = 5) (vof 0 ['zmaster t])
-                    ((vof 0 ['zdel w t]) 1))
+                    (vof 0 ['zdel w t] 1))
    (cstep r w z) (? (r = 0) (zins w z)
                     (r = 1) (zfocup z)
                     (r = 2) (zfocdn z)
@@ -156,9 +156,9 @@
                  ps ><(w2-find nm cforms)
                  ks <>sg
                  res (w2-mty (w2-rk nm (sg 2)))
-                 ((uu 'defn) <>(assoc nm amap)
-                   (w2-pi ps ks ['paths res (w2-gen nm . ps) (mname nm . ps)])
-                   (w2-lams ps ['idpath (mname nm . ps)]))))
+                 (uu 'defn <>(assoc nm amap)
+                  (w2-pi ps ks ['paths res (w2-gen nm . ps) (mname nm . ps)])
+                  (w2-lams ps ['idpath (mname nm . ps)]))))
         w2-want)
  (puts "overlay stage 4: 10 idpath bridges -- the compiled ops ARE the proved model"))
 
@@ -168,14 +168,14 @@
    (encz z) ['zmk <z (encl <>z) (encl <>>z)]
    (decl v) (: (go vv acc) (two? vv ? (go (vv 2) (vv 1 . acc)) (rev acc))
               (go (v 2) ()))
-   (decz v) (zmk (v 1) (decl ((v 2) 1)) (decl ((v 2) 2)))
+   (decz v) (zmk (v 1) (decl (v 2 1)) (decl (v 2 2)))
    (mstep r w t) (? (r = 0) (vof 0 ['gen-zins w t])
                     (r = 1) (vof 0 ['gen-zfocup t])
                     (r = 2) (vof 0 ['gen-zfocdn t])
                     (r = 3) (vof 0 ['gen-zswapup t])
                     (r = 4) (vof 0 ['gen-zswapdn t])
                     (r = 5) (vof 0 ['gen-zmaster t])
-                    ((vof 0 ['gen-zdel w t]) 1))
+                    (vof 0 ['gen-zdel w t] 1))
    (cstep r w z) (? (r = 0) (zins w z)
                     (r = 1) (zfocup z)
                     (r = 2) (zfocdn z)

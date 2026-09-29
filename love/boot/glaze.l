@@ -52,8 +52,8 @@
    (reach tgt r k) ['ld r (greg tgt 'g) ((reach-offset 0) + (8 * k))]   ; 0 chain 1 str 2 map 3 nom 4 mint 5 gem 6 cask 7 drive 8 resume 9 cur 10 unc 11 gap
    mapmix 0x9e3779b97f4a7c15                                       ; = love.c's map hash multiplier, for the inline probe
    (hasm tgt ir) (: f (glazeasm 'f) ((lit? f ? f (cite 'holo 'assemble)) tgt ir))   ; the pinned assembler, else the module's
-   (asmx ir) ((hasm 'x64 ir) 'bytes)                                          ; assemble neutral IR -> flat bytes, x86
-   (asmt tgt ir) ((hasm tgt ir) 'bytes)                                       ; ... target-aware (the loop/float lanes that run on both arches)
+   (asmx ir) (hasm 'x64 ir 'bytes)                                          ; assemble neutral IR -> flat bytes, x86
+   (asmt tgt ir) (hasm tgt ir 'bytes)                                       ; ... target-aware (the loop/float lanes that run on both arches)
    ; the map probe: map in r0, tagged key in r10, ends branched to hit (match) / miss (gap).
    ; holo r7..r10 are x86 r8..r11
    mprobe-ir ['(ld r7 r0 8) '(ld r8 r7 16) '(shr r8 1) '(dec r8) '(add r7 r7 24)    ; r8=backing; r9=cap; >>1; --(=mask); r8=&slots
@@ -362,6 +362,7 @@
    ; words of the globals amble can name, word -> nom, filled at the first ask -- guts is not
    ; there yet when this file bakes
    aopix {}
+   probebox {}                                                            ; slot 0 set: amble answers 1 where it would compile, and emits nothing
    (aopw x)
     (: _ (? (#(keys aopix) = 0)
             (: nf (cite 'guts 'nifop) gv (cite 'guts 'gv)
@@ -572,7 +573,8 @@
                       'restart)
                (say err ("why: " + show why + "  " + snip (show s) 0 (min 160 #(show s)) + "\n")))
             0)
-       (? ok
+       (? (ok && peep probebox 0 0) 1
+          ok
           (: _ (getenv "LOVE_AMBLE_TRACE" ? (puts ("amble: " + show s + "\n")) 0)   ; the compile trace: names every ambled source
              ng (1 + #gn + #cn + nq + (lit? eqv ? 1 0) + nin)   ; extras = [() | globals | siblings | quotes | = | inner entries] (+ op values, chain-only):
                                                                 ; heap values riding the nifx chain into GC-walked slots; () is the empty mint, not li 1
@@ -844,7 +846,7 @@
    ; --- the general tail-recursive counted loop, n loop vars ------------------------------------
    ; (\ n ((: (go v0..vk) (? TEST (go U0..Uk) RESULT)) I0..Ik)), up to 3 loop vars raw in the loopregs
    ; bank, n the tagged Sp[0]. every Uj is pushed before any reg is popped, so updates read the old values
-   (lvreg tgt j) ((loopregs tgt) j)               ; loop var j -> its abstract register
+   (lvreg tgt j) (loopregs tgt j)               ; loop var j -> its abstract register
    (loopcode-n n vars updates test result inits tgt)
     ; nvld: n from Sp[0] (fxvir, guarded), a loop var from its register
     (: A (greg tgt 'acc)
@@ -1363,7 +1365,7 @@
        ord (efn . filter (f \ !(<f = entry)) parse)                      ; the entry first, so H_entry sits right after the outer
        valt (hasl eb)                                                                 ; a value-typed entry (its body conses) takes the value epilogue
        info (map (f \ [<f (f 1) (f 2) #(f 1)]) parse)                   ; (name params body arity), for the interprocedural string fixpoint
-       smap0 (map (f \ <f . filter (j \ suse? (f 2) ((f 1) j)) (rangeL 0 (f 3))) info)   ; per-fn direct string params (peep/tally/pin)
+       smap0 (map (f \ <f . filter (j \ suse? (f 2) (f 1 j)) (rangeL 0 (f 3))) info)   ; per-fn direct string params (peep/tally/pin)
        smask (gsm entry (smfix info smap0))                                            ; the entry's string params at the fixpoint -> raw pointer, kind-guarded
        mmask (filter (j \ muse? eb (eps j)) (rangeL 0 k))                         ; entry map params (mpeep/mpin)
        bufmask (filter (j \ buse? eb (eps j)) (rangeL 0 k))                       ; entry cask params (pin)
@@ -1371,7 +1373,7 @@
        pmask (filter (j \ nuse? eb (eps j) && !(elem j cmask)) (rangeL 0 k))   ; entry point keys -> raw, nom|mint-guarded; a chain-used param is never a point
        outer (mkouterir tgt k entry k valt smask mmask bufmask cmask pmask)
        Hs (foldl (\ a f (bcat [a (mkhir tgt syms <f (f 1) (f 2))])) () ord)
-       (nif (emit ((assemble tgt (bcat [outer Hs])) 'bytes)) deopt k))
+       (nif (emit (assemble tgt (bcat [outer Hs]) 'bytes)) deopt k))
 )
 ; auto -- rebind `ev` so a qualifying closure compiles to native with no verb and no annotation, =/show-identical to
 ; its source; anything else falls through to the base interpreter. every recognizer is exact-arity: (+ x 1 2) is a tower.
@@ -2343,7 +2345,7 @@
                                   D #chain M #invs N #fvars
                                   (? !(two? chain && elem cmpop '(< <= > >=) && 0 < N && (M + N) < 7 && D < 7) form
                                      (: cnames (map cap chain) dims (map caup chain)
-                                        margs ((last chain) 2)
+                                        margs (last chain 2)
                                         invd (map (iv \ margs (posof iv recps 0)) invs)
                                         glam ['\ '_ form]        ; faithful interp nest (deopt fallback / =-show)
                                         ng (jitfgridn glam cnames dims invs invd fvars updates testexpr cmpop bound lim arch)
@@ -2442,6 +2444,7 @@
        _ (pin (G 'glazeasm) 'f asm)
        _ (pin (G 'glazeasm) 'at (cite 'holo 'assemble-at))
        gvbox (G 'gvbox)                                                     ; auto.l's canon reads globals through ala's gv, pinned here on the first closure
+       probebox (G 'probebox)
        (hit x) (pin fires () (1 + peep fires () 0), x)
        ; grp-ok?: autogroup's recognizer over the defs jitgroupirx compiles. jgir-ok? only says the ops exist -- a body past
        ; the grammar reaches cggir, whose ? chain ends in a silent () that emits no code
@@ -2454,9 +2457,11 @@
        (gdefs-ok? gds) (all (gd \ opnd-ok? ><gd >gd) gds)                             ; ... and per def body, over that def's own params
        ; e = the bytecode entry (deopt target), s = the surface (\ frame.. body), a = arity, gv = ala's folded global resolver,
        ; farq = the letrec-local predicate (a farq name is wire-resolved: never gv it, the book namesake is stale), lams = the scope's
-       ; lambda siblings ((name . cell)..; entry 0 declines), nm = the letrec name being bound (0 anonymous), ti/ta = ev.l's uninterned iop/apx markers, inl = the inner-closure record amble's site reads
-       (natjit e s a gv farq lams nm ti ta inl)
+       ; lambda siblings ((name . cell)..; entry 0 declines), nm = the letrec name being bound (0 anonymous), ti/ta = ev.l's uninterned iop/apx markers, inl = the inner-closure record amble's site reads,
+       ; rt = the top scope of the form being compiled, where a compile waiting on a sibling not yet built is deferred to (0: compile now or never)
+       (natjit e s a gv farq lams nm ti ta inl rt)
         (: _ (? (peep gvbox 0 0) 0 (pin gvbox 0 gv))
+           _ (pin probebox 0 0)
            ps (init >s)  body (last >s)                                                ; the frame [imps args] + the surface body
            (? !(all nom? ps) e                                                       ; a frame that is not all points (a pattern binder) declines every lane
               (two? s && two? >>s && exprn ps body)                                   ; the leaf: >=1 param, a body in the grammar
@@ -2483,7 +2488,27 @@
                              (hit (jitgroupirx agdefs osym arch e))
                              (: aj (njit-amble s a e gv farq lams nm ti ta inl arch)                 ; amble, the last lane: 0 on decline
                                 (? aj (hit aj)
-                                   (getenv "LOVE_AMBLE_TRACE2" && puts ("amble-DECLINE: " + show s + "\n"), e))))))))))))
+                                   (defer e s a gv farq lams nm ti ta inl rt))))))))))))
+       ; a decline that a sibling not yet built may have caused: amble asked again as though every
+       ; sibling were (entry 1), and if that would compile, a cell of a native's shape stands in
+       ; (defercell) and the compile waits for the end of the form, where deferpatch lays it in. it
+       ; sees the siblings as they are by then, and itself as it was here
+       (defer e s a gv farq lams nm ti ta inl rt)
+        (: (no _) (getenv "LOVE_AMBLE_TRACE2" && puts ("amble-DECLINE: " + show s + "\n"), e)
+           (unbuilt? p) (: c (peep >p 0 0) (<p != nm && charm? <c))
+           (? !(rt && any unbuilt? lams) (no 0)
+              (: ns (: (go t x) (? (nom? x) (pin t x 1) (two? x) (go (go t <x) >x) t) (go {} s))   ; the names the body spells
+                 (wait? p) (unbuilt? p && peep ns <p 0)
+                 fk (map (p \ (? (wait? p) (<p . {0 (1 . >(peep >p 0 0))}) p)) lams)
+                 ok (? (any wait? lams)
+                       (: _ (pin probebox 0 1)  r (njit-amble s a e gv farq fk nm ti ta inl arch)  _ (pin probebox 0 0)  r)
+                       0)
+                 (? !ok (no 0)
+                    (: L (defercell e a)
+                       sc (assoc nm lams)
+                       lz (map (p \ (? (two? sc && p == sc) (<p . {0 (peep >p 0 0)}) p)) lams)
+                       _ (pin rt 'defer ((\ _ (deferpatch L (natjit e s a gv farq lz nm ti ta inl 0))) . peep rt 'defer ()))
+                       L)))))
        natjit)                                                            ; the inner : answers the closure; its aliases stay private
    (fired? n) (n < peep fires () 0))                                       ; did the hook fire since count n?
 

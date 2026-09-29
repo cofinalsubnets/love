@@ -16,6 +16,7 @@
 ;   (tls-dial host port)       resolve, connect, shake hands, verify -> a session | ()
 ;   (tls-open host port how)   the same -> a session | why not, a string. how: 'verify, or
 ;                              'pin-only (the caller holds the pin: gemini), or 'none
+;   (tls-open-as host port sni how)   the same, sni the name said and checked
 ;   (tls-say t s)              send s as application data
 ;   (tls-hear t)               the next run of application data as it arrives, () at the close
 ;   (tls-slurp t)              every byte of application data the peer sends, to its close
@@ -241,14 +242,16 @@
    ; --- the handshake, whole ---
    (tls-dial host port) (: r (tls-open host port 'verify) (? (tablet? r) r ()))
    ; how: 'verify (the chain to a root, or a pin), 'pin-only (the caller pins: gemini), 'none
-   (tls-open host port how)
+   (tls-open host port how) (tls-open-as host port host how)
+   ; ..naming sni to the server, and checking the certificate against it, not host
+   (tls-open-as host port sni how)
     (: s (dial host port)
        (? !(hot? s) ("cannot connect to " + host + ":" + show port)
           (: t (tablet 16)
              _ (pin t 's s) _ (pin t 'pend "") _ (pin t 'hbuf "") _ (pin t 'tr "")
              _ (pin t 'cseq 0) _ (pin t 'sseq 0)
              priv (rnd 32)
-             ch (client-hello host (x25519-pub priv) (rnd 32))
+             ch (client-hello sni (x25519-pub priv) (rnd 32))
              _ (pin t 'tr ch)
              _ (wr t (u8 22 + u16 769 + u16 #ch + ch))
              r (rdrec t)
@@ -292,7 +295,7 @@
                                 (<m = 13) (pin t 'creq (snip <>m 1 (1 + <>m 0)), flight 0)
                                 (flight 0)))
                          fin (flight 0)
-                         why (? (atom? fin) () (trust-why host port (t 'chain) (t 'spki) how))
+                         why (? (atom? fin) () (trust-why sni port (t 'chain) (t 'spki) how))
                          (? (atom? fin) (quit-why t "the handshake failed")
                             (string? why) (: _ (alert t (? (0 <= str-at why "pinned" 0) 42 48) why) (quit-why t why))
                             (: ; the client finished is over the transcript through the server's

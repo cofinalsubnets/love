@@ -138,3 +138,6 @@ i = (0 ~ 1)                  ; a ~ b = (twin a b), the complex builder
 ; compound data are summed over their parts and the truth value is the sign.
 (? '(1 -0.5) 'yea 'nae) ; yea
 (? '(1 -1.5) 'yea 'nae) ; nae
+```
+
+@AGENTS.md

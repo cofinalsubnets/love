@@ -378,7 +378,7 @@
    (lamform v) (: nm (nifnom v) r (? (string? nm) (nifn v (name nm)) (call-cc (\ k (: C {'k k 'D {} 'B {} 'R {} 'busy () 'memo {} 'F {} 'want {} 'pre {} 'obj {} 'objs () 'letE {} 'thene 0}
                                     (rename (cites (tie C (? (partp v) (rfn C (fbase v) . map (rk C) (pargs v)) (rlam C (unw v))))))))))
                  (? (== r 0) (: g (glob v) (? (!== g ()) g 0)) r))
-   (fail C) ((C 'k) 0)
+   (fail C) (C 'k 0)
    ; e lies past p, short of t -- within the thread, whose words past p span counts
    (over p t e) (: (go q n) (? (n < 1) 0 (== q e) 1 (== q t) 0 (go (seek 1 q) (n - 1))) (go p (span p)))
    (push C n S) (: s (mint 0) _ (pin (C 'D) s n) (s . S))
@@ -879,11 +879,11 @@
 ; --- the u-floor's door: a whole file in and out, and the exit every tool leaves by.
 ; open and close are 'posix's, so they are cited; a module borrows them itself ---
 (: ; a path -> (1 text) when it opens, () when it does not
-   (uread p) ((cite 'posix 'open) p "r" @ q
-              (? (hot? q) (: t (slurp q) _ ((cite 'posix 'close) q) [1 t]) ()))
+   (uread p) (cite 'posix 'open p "r" @ q
+              (? (hot? q) (: t (slurp q) _ (cite 'posix 'close q) [1 t]) ()))
    ; a path + text -> 1 when it lands, () when it will not open
-   (uwrite p t) ((cite 'posix 'open) p "w" @ q
-                 (? (hot? q) (say q t, ((cite 'posix 'close) q), 1) ()))
+   (uwrite p t) (cite 'posix 'open p "w" @ q
+                 (? (hot? q) (say q t, (cite 'posix 'close q), 1) ()))
    ; a main answers its status as a charm, or leaves from deep inside by scaring 'leave
    ; with it. urun is the driver both come back through, so a caller in the same image
    ; gets a charm instead of a dead process. nothing unwinds through a scare, so a port
@@ -2744,7 +2744,7 @@
    (recomp ns) (: c (refirst ns)
                   [(recompm ns) (reanch ns)
                    (? !c ()
-                      (: sc ((cite 'scan 'scanner) ())      ; at compile time: never at a
+                      (: sc (cite 'scan 'scanner ())      ; at compile time: never at a
                          (\ s i n (: j (sc s c i)          ; module binding, which bakes
                                      (j < 0 ? n j)))))])
    ; -- the budget, and the one shape that needs it -------------------------------
@@ -3033,7 +3033,7 @@
    (vlist ks) (: ns (map string ks)
                  G (cite 'grid)
                  (? (two? (tty 1))
-                    (each ((G 'lay) (map (n \ (n . #n)) ns) ((G 'screen) 1) 1)
+                    (each (G 'lay (map (n \ (n . #n)) ns) (G 'screen 1) 1)
                           (l \ (puts l, putc 10)))
                     (each ns (n \ (puts n, putc 10)))))
    ; `love verbs` -- the names this artifact answers to. sorted: a tablet's key order is
@@ -3746,7 +3746,7 @@
             (: (cli-leave c) (scare 'cli-leave c)
                ; a kind test, not a match on (): a refusal answers a nom, and a nom is truthy
                ; open is posix's, and a seat without it answers () here rather than at the bake
-               (load1 p) (: q ((cite 'posix 'open) p "r")
+               (load1 p) (: q (cite 'posix 'open p "r")
                             (? (hot? q) (reads q) (say err $ "love: cannot open " + p + "\n", cli-leave 1)))
                (eval1 s) (: m (nom 0)                           ; a fresh nom: the unfinished shape, ==-safe
                   (rdl x acc) (sound x @ 'torn      m           ; every top-level datum off the string, in order
@@ -3835,7 +3835,7 @@
  ; `love` is a verb like every other program this binary carries, which is what lets a shell
  ; with no seat to exec reach the repl by name. last in the letrec: the closure takes its free
  ; names as they stand.
- _ ((cite 'verbs 'enlist) 'love
+ _ (cite 'verbs 'enlist 'love
      (as \ (two? as ? (cli-rail (. "love" as)) (shell 0)))
      [('exec . (as \ (two? as && (<as = "bake" || <as = "wake"))))])
 ) ; module cli

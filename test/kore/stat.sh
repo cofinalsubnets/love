@@ -2,8 +2,8 @@
 # test/kore/stat.sh -- stat, du, date, id, mktemp, chown
 . "$(dirname "$0")/common.sh"
 
-# TZ=UTC: this love has no tz database (localtime IS gmtime), so `date` and stat's
-# %y are UTC and only UTC. GNU reads TZ, so the oracle has to be told.
+# TZ=UTC: stat's %y is UTC and only UTC, and GNU reads TZ, so the oracle has to be
+# told. date reads TZ as GNU does; its zones are checked below with TZ set per zone.
 export TZ=UTC
 dt=$ho/.kore-dt
 rm -rf "$dt"; mkdir -p "$dt/a/b" "$dt/c"
@@ -148,6 +148,19 @@ for s in 0 1 1000000000 1700000000 1234567890 951782400 2147483647 4102444800; d
 done
 LC_ALL=C date -u -r "$dt/f1" '+%Y-%m-%d %H:%M:%S' > "$g"
 korerun date -u -r "$dt/f1" '+%Y-%m-%d %H:%M:%S' > "$o"; same "date -r FILE"
+# date's zones: TZif files (both hemispheres, half and three-quarter hours, and past the
+# last transition, where the footer rule speaks), posix rules, an empty TZ. a zone the
+# host lacks is skipped; a posix rule is only asked after 1970, where glibc applies it
+for z in America/New_York Australia/Sydney Europe/London America/St_Johns Asia/Kolkata \
+         Pacific/Chatham "" "JST-9" "<+0330>-3:30" "EST5EDT,M3.2.0,M11.1.0" \
+         "NZST-12NZDT,M9.5.0,M4.1.0/3" "CET-1CEST,J60/2,J300/3"; do
+  case $z in */*) [ -f "/usr/share/zoneinfo/$z" ] || continue ;; esac
+  for s in 0 1000000000 1710053940 1710054060 1730613600 1730617200 2250000000 4102444800 -100000000; do
+    case $z,$s in *,*,-*) continue ;; esac
+    TZ=$z LC_ALL=C date -d @$s '+%F %T %Z %z' > "$g"; TZ=$z korerun date -d @$s '+%F %T %Z %z' > "$o"
+    same "TZ='$z' date -d @$s"
+  done
+done
 [ "$(korerun date '+%Y')" = "$(date -u '+%Y')" ] || fail "kore date (now)"
 # id: the numeric and named faces byte-identical, groups included -- the supplementary
 # list is read out of /etc/group here (no getgroups, no NSS), so it is a real check
@@ -233,4 +246,4 @@ if [ -n "$G2" ]; then
   done
   rm -rf "$CH"
 fi
-echo "kore: stat/du/date/id/mktemp/chown (GNU-identical, the tree sums, the UTC clock) ok"
+echo "kore: stat/du/date/id/mktemp/chown (GNU-identical, the tree sums, date's zones) ok"

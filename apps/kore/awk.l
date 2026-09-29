@@ -1003,7 +1003,7 @@
    (aw-fldv E k)
     (: fl (E 'flds)
        v (fl == 'none ? 'nope (peep fl k 'nope))
-       (v !== 'nope ? v ((aw-raws E) (k - 1))))
+       (v !== 'nope ? v (aw-raws E (k - 1))))
    (aw-rebuild E)
     (: ofs (aw-sv E (peep (aw-g E) "OFS" " "))
        n (aw-nf E) o (jug 0)
@@ -1029,7 +1029,7 @@
           (: fl (E 'flds)
              v (fl == 'none ? 'nope (peep fl k 'nope))
              (v !== 'nope ? v
-                (: c (aw-mk ((aw-raws E) (k - 1)))
+                (: c (aw-mk (aw-raws E (k - 1)))
                    (pin (aw-fl E) k c, c))))))
    ; $0 as text: aw-str and aw-pv both answer a strnum's own spelling, so the
    ; record needs no cooking where only its letters are wanted

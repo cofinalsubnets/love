@@ -237,7 +237,7 @@
     (: b (peep s 'b "")   o (peep s 'o 0)
        (? (n <= #b - o) (: _ (pin s 'o (o + n)) (snip b o (o + n)))
           (: (fill acc have) (? (n <= have) acc
-                                (: p ((peep s 'rd ()) 0) (? (#p = 0) acc (fill (p . acc) (have + #p)))))
+                                (: p (peep s 'rd () 0) (? (#p = 0) acc (fill (p . acc) (have + #p)))))
              all (cats (snip b o #b . rev (fill () (#b - o))))
              (? (#all <= n) (: _ (pins s 'b "" 'o 0) all)
                 (: _ (pins s 'b all 'o n) (snip all 0 n))))))
@@ -250,13 +250,13 @@
        (? (n <= have) (: _ (wr (snip b o (o + n))) _ (pin s 'o (o + n)) n)
           (: _ (? (0 < have) (wr (snip b o #b)) 0)
              _ (pins s 'b "" 'o 0)
-             (go k) (: p ((peep s 'rd ()) 0)
+             (go k) (: p (peep s 'rd () 0)
                        (? (#p = 0) (n - k)
                           (#p < k) (: _ (wr p) (go (k - #p)))
                           (: _ (wr (snip p 0 k)) _ (pins s 'b p 'o k) n)))
              (go (n - have)))))
    (tar-rd s) (\ _ (: b (peep s 'b "")   o (peep s 'o 0)
-                     (? (o < #b) (: _ (pins s 'b "" 'o 0) (snip b o #b)) ((peep s 'rd ()) 0))))
+                     (? (o < #b) (: _ (pins s 'b "" 'o 0) (snip b o #b)) (peep s 'rd () 0))))
    ; the members as they come off s: (f e b) for each, e the entry with its 'size and no
    ; 'body, b its body -- (tar-body s b wr) pours it, and what f leaves is read past. f
    ; answers 1 to go on, anything else to stop. an archive ends at its zero block, so a
@@ -454,13 +454,13 @@
 
    ; --- the codecs: 'z 'j 'J, and () for a bare tar ---------------------------------
    (tarc-zip z a) (z @ 'z (gz-zip a "" 0)
-                       'j ((tarc-lazy 'bz2 'bz2-pack "bzip2") a 9)
-                       'J ((tarc-lazy 'xz 'xz-pack "xz") a 8388608 'crc64)
+                       'j (tarc-lazy 'bz2 'bz2-pack "bzip2" a 9)
+                       'J (tarc-lazy 'xz 'xz-pack "xz" a 8388608 'crc64)
                        a)
    (tarc-unzip z b)                    ; -> (1 bytes) | ()
     (z @ 'z (gz-unzip b)
-         'j (: v ((tarc-lazy 'bz2 'bz2-unpack "bzip2") b) (two? v && v))
-         'J (: v ((tarc-lazy 'xz 'xz-unpack "xz") b) (two? v && v))
+         'j (: v (tarc-lazy 'bz2 'bz2-unpack "bzip2" b) (two? v && v))
+         'J (: v (tarc-lazy 'xz 'xz-unpack "xz" b) (two? v && v))
          [1 b])
    (tarc-sniff b)
     (? (2 <= #b && b 0 = 31 && b 1 = 139) 'z
@@ -620,7 +620,7 @@
              [src (\ _ (: _ (drain src) (two? (peep g 'ans ())))) z])
           (z = 'J || z = 'j)
           (: m (? (z = 'J) 'xz 'bz2)
-             g ((tarc-lazy m (? (z = 'J) 'xz-pull 'bz2-pull) (tarc-zname z)) (tar-rd raw))
+             g (tarc-lazy m (? (z = 'J) 'xz-pull 'bz2-pull) (tarc-zname z) (tar-rd raw))
              next (cite m (? (z = 'J) 'xz-next 'bz2-next))
              src (tar-src (\ _ (next g)))
              [src (\ _ (: _ (drain src) (two? (peep g 'ans ())))) z])
@@ -632,7 +632,7 @@
    (tarc-end t sf w)
     (: a (tarc-arch t)
        _ (w = 'stop && tarc-die ("cannot write under " + peep t 'C "."))
-       _ (!((sf 1) 0) && tarc-die (a + ": not a " + tarc-zname (sf 2) + " stream, or its check disagrees"))
+       _ (!(sf 1 0) && tarc-die (a + ": not a " + tarc-zname (sf 2) + " stream, or its check disagrees"))
        _ (!(two? w) && tarc-die (a + ": not a tar archive, or it is truncated"))
        (tarc-unseen t))
    ; x and t walk the members as they come: a body is poured to its file or to stdout and

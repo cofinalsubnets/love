@@ -93,7 +93,7 @@
    a >pr
    (test (<pr = 'ok) (<a = 'seq)
            (<(a 1) = 'and)
-           (<((a 1) 1) = 'pipe)
+           (<(a 1 1) = 'pipe)
            (<(a 2) = 'bg)))
 (: pr (sh-parse >(sh-lex "a | b"))
    a >pr
@@ -588,8 +588,8 @@
 ; under the word (tr with no operands: its own usage, status 2). -p is PATH's rule
 ; alone, and an empty PATH finds nothing (127); -g is PATH first, ours in its gaps.
 ; lushflags carries the choice into a child shell, and a flag word on its own line
-; overrides it. gregarious is the default.
-(test (1 = sh-envflag 0))
+; overrides it. autonomous is the default.
+(test (0 = sh-envflag 0))
 (: r (hark ["out/love" "out/lush" "-c" "PATH=/nonexistent; printf abc | tr a-c A-C; echo; tr 2>/dev/null; echo st=$?"])
    (test ("ABC\nst=2\n" = >r)))
 ; (under -p even echo is PATH's, so the status crosses a variable and PATH comes back)
@@ -608,7 +608,7 @@
              PATH=$d:$PATH; tr 2>/dev/null; echo st=$?; rm -r $d"])
    (test ("st=2\ntheirs\nst=2\n" = >r)))
 ; `set --autonomous` and its kin move a running shell, and the word verdicts move with it
-(: r (hark ["out/love" "out/lush" "-c"
+(: r (hark ["out/love" "out/lush" "-g" "-c"
             "export d=/tmp/lush-t-setm; mkdir -p $d; printf '#!/bin/sh\\necho theirs\\n' > $d/tr; chmod 755 $d/tr
              PATH=$d:$PATH; tr; set --autonomous; tr 2>/dev/null; echo st=$?; set --gregarious; tr
              set --precarious; p=$PATH; PATH=/nonexistent; tr 2>/dev/null; s=$?; PATH=$p; echo st=$s; rm -r $d"])
@@ -785,7 +785,7 @@
 ;; interpreter line names it; a foreign path or shebang still execs. the script rides
 ;; its interpreter line into cli-line, so it sees the same command line either way
 (: seat (sh-seat ())
-   (put p t) (: h (open p "w") _ (say h t) _ (close h) ((cite 'posix 'chmod) p 493))
+   (put p t) (: h (open p "w") _ (say h t) _ (close h) (cite 'posix 'chmod p 493))
    ours "/tmp/lush-t-ours.l" sh "/tmp/lush-t-sh.l"
    _ (put ours ("#!" + seat + "\n(puts (show (cup cmdline)), puts \"\\n\")\n"))
    _ (put sh "#!/bin/sh\necho sh\n")

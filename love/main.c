@@ -568,7 +568,7 @@ int main(int argc, char const **argv) {
   if (!g && !bake && !(noimg && *noimg)) {
    uintptr_t t0 = ai_clock(), blen = 0;
    void const *bimg = NULL;
-   if (ai_baked_pick(&bimg, &blen) && (g = ai_image_load(bimg, blen, 1)))
+   if (ai_baked_pick(&bimg, &blen) && (g = ai_image_load(bimg, blen, 2)))
     woke_ms = ai_clock() - t0,
     image_load_path = "<baked>"; }                                     // a loaded image is the booted state: skip the egg warm
   if (!g) g = ai_ini();
