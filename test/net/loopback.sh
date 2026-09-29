@@ -4,8 +4,8 @@
 # real binary: a server task and a client over TCP 127.0.0.1, full-duplex, and
 # asserts each side received exactly what the other sent. This exercises every
 # Stage-1 socket nif (connect/listen/accept/shutdown) plus the two .l pump loops
-# and their teardown. both sides pass -N; a second round checks that without it neither
-# side half-closes, and a third that -q quits anyway.
+# and their teardown. both sides pass -N; the rounds after check that without it neither
+# side half-closes, that -q quits anyway, and that -w quits when idle.
 #
 #   sh test/net/loopback.sh <love-binary> [port]
 #
@@ -18,8 +18,8 @@ PORT="${2:-7390}"
 AK="apps/nc.l"   # prel is baked into the egg -- no -l love/boot/prel.l preload
 
 tmp="$(mktemp -d "${TMPDIR:-/tmp}/nc.XXXXXX")"
-cli=
-trap 'kill "$srv" $cli 2>/dev/null; rm -rf "$tmp"' EXIT
+cli= feed=
+trap 'kill "$srv" $cli $feed 2>/dev/null; rm -rf "$tmp"' EXIT
 
 printf 'CLIENT-SAYS-HI\nsecond line from the client\n' > "$tmp/cli_in"
 printf 'SERVER-SAYS-HELLO\nsecond line from the server\n' > "$tmp/srv_in"
@@ -115,6 +115,34 @@ wait "$cli"; crc=$?
 [ "$crc" -eq 0 ] || { echo "nettest: FAIL (-q: client exit $crc)"; cat "$tmp/cli_err"; fail=1; }
 wait "$srv"; src=$?
 [ "$src" -eq 0 ] || { echo "nettest: FAIL (-q: server exit $src)"; cat "$tmp/srv_err"; fail=1; }
+
+# -w 1: chunks 0.6 s apart keep the connection alive, then a second of nothing ends it
+# though stdin is still open; the server sees the client go
+PORT=$((PORT + 1))
+"$AI" "$AK" -l "$PORT" < /dev/null > "$tmp/srv_got4" 2> "$tmp/srv_err" &
+srv=$!
+i=0
+while ! ready; do
+  i=$((i + 1))
+  if [ "$i" -gt 200 ]; then echo "nettest: FAIL (server never listened on $PORT)"; cat "$tmp/srv_err"; exit 1; fi
+  sleep 0.05 2>/dev/null || sleep 1
+done
+mkfifo "$tmp/feed"
+{ echo a; sleep 0.6; echo b; sleep 0.6; echo c; sleep 5; } > "$tmp/feed" 2> /dev/null &
+feed=$!
+"$AI" "$AK" -w 1 127.0.0.1 "$PORT" < "$tmp/feed" > /dev/null 2> "$tmp/cli_err" &
+cli=$!
+i=0
+while kill -0 "$srv" 2>/dev/null; do
+  i=$((i + 1))
+  if [ "$i" -gt 70 ]; then echo "nettest: FAIL (-w 1: the client never went idle)"; kill "$cli" "$srv" 2>/dev/null; fail=1; break; fi
+  sleep 0.05 2>/dev/null || sleep 1
+done
+wait "$cli"; crc=$?
+[ "$crc" -eq 0 ] || { echo "nettest: FAIL (-w: client exit $crc)"; cat "$tmp/cli_err"; fail=1; }
+kill "$feed" 2>/dev/null
+printf 'a\nb\nc\n' > "$tmp/abc"
+cmp -s "$tmp/abc" "$tmp/srv_got4" || { echo "nettest: FAIL (-w: server got $(tr '\n' ' ' < "$tmp/srv_got4"))"; fail=1; }
 
 [ "$fail" -eq 0 ] && echo "nettest: PASS"
 exit "$fail"
