@@ -151,4 +151,35 @@
  (gz-inflate bomb-big 0 = 'big)
  (gz-unzip bomb-z = 'big))
 
+; --- the container streamed --- gz-unzipf reads a piece at a time and writes as it inflates:
+; every cut answers the member, the stamp and the name; members that follow are read on; the
+; tail that is no member is 'trail; torn, a wrong crc and a declined writer say so; and the
+; whole-input lane a build without inflate-feed takes answers the same
+(: (gzf-cut s k) (: n #s (go i) (? (n <= i) () ((snip s i (min n (i + k))) . go (i + k))) (go 0))
+   (gzf-rd ps) (: t {0 ps} (\ _ (: l (peep t 0 ()) (? (two? l) (: _ (pin t 0 >l) <l) ""))))
+   (gzf-wr t) (\ a b [1 (\ o (pin t 0 (o . peep t 0 ())))])
+   (gzf-run s k) (: t {0 ()}   u (gz-unzipf (gzf-rd (gzf-cut s k)) (gzf-wr t))
+                    [u (cats (rev (peep t 0 ())))])
+   (gzf-all f xs) (foldl (\ a x (a && f x)) 1 xs)
+   gzf-a (gz-zip gz-text "a.txt" 7)
+   gzf-b (gz-zip "delta\n" "" 0)
+   gzf-ks [1 5 64 100000]
+   (gzf-ok s k out) (: r (gzf-run s k) u <r
+                       ((two? u) & (<u = 1) & (u 1 = 7) & (u 2 = "a.txt") & (u 3 = #out) & (r 1 = out) ? 1 0))
+   gzf-w (: t {0 ()}   u (gz-unzipw (gzf-rd [gzf-a]) (gzf-wr t)) [u (cats (rev (peep t 0 ())))])
+   gzf-n {0 0}
+   gzf-bu (gz-unzipf (gzf-rd (gzf-cut bomb-z 65536)) (\ a b [1 (\ o (pin gzf-n 0 (peep gzf-n 0 0 + #o)))])))
+(test
+ (gzf-all (\ k (gzf-ok gzf-a k gz-text)) gzf-ks)
+ (gzf-all (\ k (gzf-ok (gzf-a + gzf-b) k (gz-text + "delta\n"))) gzf-ks)
+ (gzf-all (\ k (: r (gzf-run (gzf-a + "junk") k) ((<(<r) = 'trail) & (r 1 = gz-text) ? 1 0))) gzf-ks)
+ (gzf-all (\ k (<(gzf-run (snip gzf-a 0 (#gzf-a - 3)) k) = ())) gzf-ks)
+ (<(gzf-run (snip gzf-a 0 (#gzf-a - 8) + "\x01\x02\x03\x04" + snip gzf-a (#gzf-a - 4) #gzf-a) 64) = ())
+ (<(gzf-run "hello, not a gzip" 5) = 'nogz)
+ (gz-unzipf (gzf-rd [gzf-a]) (\ a b ()) = 'no)
+ (gzf-w = gzf-run gzf-a 64)
+ ; the ceiling is the heap's: streamed, the 1.1 GiB bomb goes out whole (its crc is not its own)
+ (gzf-bu = ())
+ (peep gzf-n 0 0 = (1 + 258 * (1 + 8 * 558835))))
+
 (puts "gz: ok") (putc 10)
