@@ -531,6 +531,11 @@ enum ai_status ai_fin(struct ai*);
 struct ai_image_bad { uintptr_t q[3 * 2]; int n, why; };
 // the running stack is ballast: its objects ride into the blob and the load side resets sp/ip
 void *ai_image_save(struct ai*, uintptr_t *outlen, struct ai_image_bad*);
+// a bake's choices: chunk, the words a stream chunk runs to (0 the default); hot, nhot word
+// ranges [a, b) of this heap's own layout that a profile saw touched, laid first -- an object
+// in more ranges ahead of one in fewer
+struct ai_image_opt { uintptr_t chunk; uint64_t const *hot; uintptr_t nhot; };
+void *ai_image_save2(struct ai*, uintptr_t *outlen, struct ai_image_bad*, struct ai_image_opt const*);
 struct ai
  *ai_image_load(void const *buf, uintptr_t len, int kept);   // kept: buf outlives the session; 2: and the image may wake lazily
 // a lazy image's pool given up (a major's copy done, a session's end): its pages open, its state gone
