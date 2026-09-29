@@ -35,7 +35,7 @@
          slop-step slop-push slop-key slop-tick slop-frame slop-flood slop-bar slop-bar-fit slop-road slop-turf slop-post
          slop-tune slop-song-speed slop-song-edge slop-song-vol slop-song-wave
          slop-song-new slop-song-feed song-wave-of frame-due?
-         slop-shore slop-sand slop-wet? slop-drift slop-pal)
+         slop-shore slop-sand slop-wet? slop-drift slop-pal slop-ramp-pen slop-under slop-face)
 (borrow 'rove)
 ; the song wants harp's cycle algebra and play's voices -- vnum, venv, mixdown and pack.
 ; borrowing harp shadows prel's rev and every with the pattern ones, so the list
@@ -48,15 +48,17 @@
 (? (cite 'posix) (borrow 'posix) ())
 (:
  ; the skin: four drifting sine waves (three linear, one radial ripple) sampled over a
- ; grid of r by c by galaxy broadcasting, C doing every cell -- a cuttlefish's
+ ; grid of r by c cells by galaxy broadcasting, C doing every sample -- a cuttlefish's
  ; chromatophores. (slop-drift r c) builds the grid once and answers field(t dy), a tray
- ; of the whole grid dy rows down the pattern, so a caller can nail the skin to a world
- ; that scrolls under it. (r 1) + (1 c) broadcasts to (r c); cy doubles y so the ripple is
- ; round in cell aspect. the net of the four waves lands in [-4, 4]
+ ; of 2r by c dy rows down the pattern: two samples a cell, its upper half at [2y x] and
+ ; its lower at [2y+1 x], each at its half's middle, for a `▀` over a background. a caller
+ ; nails the skin to a world that scrolls under it by dy. (2r 1) + (1 c) broadcasts to
+ ; (2r c); cy doubles y so the ripple is round in cell aspect. the net of the four waves
+ ; lands in [-4, 4]
  (slop-drift r c) (:
-   ycol (star-tray [r 1] ^r)
+   ycol (star-tray [(2 * r) 1] ^(2 * r))
    xrow (star-tray [1 c] ^c)
-   y2 (ycol * 1.0 + xrow * 0.0)
+   y2 (ycol * 0.5 + 0.25 + xrow * 0.0)
    x2 (ycol * 0.0 + xrow * 1.0)
    cx (x2 - c / 2.0)
    (field t dy) (: yy (y2 + (dy * 1.0))
@@ -67,11 +69,23 @@
                   sin ((x2 + yy) * 0.06 + t * 0.4) +
                   sin (rr * 0.11 - t)))
    field)
- ; a ramp pre-rendered as SGR background runs, so a frame is pure lookup; the cell is the
- ; caller's, which lets it collapse a run of equal cells into a single pen
- (slop-pal rs) (: (pen n) (string 27 + "[48;5;" + show n + "m")
-                  (dab t i l) (? !l t (pin t i (pen <l), dab t (i + 1) >l))
-                  (dab {0 (pen <rs)} 0 rs))
+ ; the skin read as ground, the floors' as well as slop's: a ramp's step at skin value v,
+ ; its steps spread over [-span, span]
+ (slop-ramp-pen rp span v) (: m (#rp - 1)
+                              n (int (((v + span) * #rp) / (2.0 * span)))
+                              (rp (? (n < 0) 0 (m < n) m n)))
+ ; the pen under what stands on cell (x y): its lower half's, pen taking a skin value
+ (slop-under k pen x y) (pen (peep k [(2 * y + 1) x] 0.0))
+ ; the skin at cell (x y) as a face, in either mode: gl () is a `▀`, the upper half's pen
+ ; over the lower's; a glyph wears the lower half's pen alone
+ (slop-face k pen x y gl)
+  (? (gl = ()) ["▀" [(pen (peep k [(2 * y) x] 0.0)) (slop-under k pen x y)]]
+     [gl (slop-under k pen x y)])
+ ; a ramp pre-rendered as SGR pens, [foreground background] a step, so a frame is pure
+ ; lookup; the cell is the caller's, which lets it collapse a run of equal cells
+ (slop-pal rs) (: (pen b n) (string 27 + "[" + show b + ";5;" + show n + "m")
+                  (dab t i l) (? !l t (pin t i [(pen 38 <l) (pen 48 <l)], dab t (i + 1) >l))
+                  (dab {} 0 rs))
  ; the slop's 24: gold up through yellow and cream, over into pink, and back --
  ; the ends meet, so the shimmer never seams
  slop-ramp [220 226 227 228 229 230 224 218 217 211 212 206
@@ -244,23 +258,29 @@
  ; glyph; a reset goes out at every crossing so neither bleeds into the other. the
  ; slop's front row wears surf, which is what tells a shore from a silhouette
  surf (esc + "[38;5;231m~" + esc + "[39m")
+ ; a slop cell is a `▀`, its upper half's step the pen and its lower's the ground; under
+ ; surf, or you sunk, the lower half alone. pens go out only where they change: f and b
+ ; are the steps in force, -1 for none, and a turf hue rides f as -2 - hue
  (wet-line g w i k px sunk)
   (: j (jug 0)
-     (go x wet p f)
+     (go x wet f b)
       (? (x < (g 'c))
          (? (slop-wet? g w x)
-            (: n (int (peep k [i x] 0))
-               _ (!wet && say j (esc + "[0m"))
-               _ (!wet || n != p ? (say j (pal n)))
-               _ (say j (? (x = px) sunk (w = slop-shore g x) surf " "))
-             (go (x + 1) 1 n -1))
+            (: t (int (peep k [(2 * i) x] 0)) u (int (peep k [(2 * i + 1) x] 0))
+               _ (? wet 0 (say j (esc + "[0m")))
+               f0 (? wet f -1) b0 (? wet b -1)
+               _ (? (u = b0) 0 (say j (pal u 1)))
+               (? ((x = px) || (w = slop-shore g x))
+                  (: _ (say j (? (x = px) sunk surf)) (go (x + 1) 1 -1 u))
+                  (: _ (? (t = f0) 0 (say j (pal t 0))) _ (say j "▀") (go (x + 1) 1 t u))))
             (: cell (slop-turf g w x)
                gl (x = px ? 64 <cell)
                hue (x = px ? 231 <>cell)
                _ (? wet (say j (esc + "[0m")) ())
-               _ (hue != f ? (say j (esc + "[38;5;" + show hue + "m")))
+               f0 (? wet -1 f)
+               _ (? ((-2 - hue) = f0) 0 (say j (esc + "[38;5;" + show hue + "m")))
                _ (say j (string gl))
-             (go (x + 1) 0 -1 hue)))
+             (go (x + 1) 0 (-2 - hue) -1)))
          ())
      _ (go 0 0 -1 -1)
    (slurp j))
@@ -289,9 +309,13 @@
  (slop-flood g t) (:
    j (jug 0) r (g 'r) c (g 'c)
    k (((g 'field t (g 'wtop) + 4.001) * 2.9) // 1)
-   (row i q p) (q < c ? (: n (int (peep k [i q] 0))
-                         (n != p && say j (pal n), say j " ", row i (q + 1) n)))
-   (rows i) (i < r ? (row i 0 -1, say j (esc + "[0m\r\n"), rows (i + 1)))
+   (row i q f b) (? (q < c)
+                    (: t (int (peep k [(2 * i) q] 0)) u (int (peep k [(2 * i + 1) q] 0))
+                       _ (? (t = f) 0 (say j (pal t 0)))
+                       _ (? (u = b) 0 (say j (pal u 1)))
+                       _ (say j "▀")
+                       (row i (q + 1) t u)))
+   (rows i) (i < r ? (row i 0 -1 -1, say j (esc + "[0m\r\n"), rows (i + 1)))
    _ (say j (esc + "[H"))
    _ (rows 0)
    _ (say j (slop-bar-fit g + esc + "[K"))

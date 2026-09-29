@@ -199,14 +199,14 @@
    g)
 
  ; --- the frame: concrete, the floor's stains, the lines, the wrecks, the rats ------
- (ramp-pen rp v) (: m (#rp - 1)
-                    n (int (((v + 3.0) * #rp) / 6.0))
-                    (rp (? (n < 0) 0 (m < n) m n)))
+ (ramp-pen rp v) (cite 'slop 'slop-ramp-pen rp 3.0 v)
  (garage-face g) (: d (g 'd) w (d 'w) sk (d 'skin)
    ents ((g 'p) . g 'ms)
    spot (foldl (\ t e (pin t (e 'x + w * e 'y) e)) {} ents)
    wrecks (foldl (\ t c (foldl (\ t2 cl (pin t2 <cl [(cl 1) (cl 2)])) t (car-cells c w))) {} (d 'cars))
-   (ground-pen rp x y) (ramp-pen rp (peep sk [y x] 0.0))
+   ; the floor is slop's skin as half blocks; what stands on it stands on the lower half
+   (ground-pen rp x y) (cite 'slop 'slop-under sk (ramp-pen rp) x y)
+   (floor-face rp x y) (cite 'slop 'slop-face sk (ramp-pen rp) x y ())
    ; what a mob stands on, and a line and a wreck lie on: the floor, or the bed
    (under t x y) (t = 5 ? (ground-pen bed-ramp x y) (ground-pen floor-ramp x y))
    (\ i (: e (spot i) x (i % w) y (i // w) t (peep (d 't) i 0)
@@ -214,9 +214,9 @@
               (t @ 0 [ground-glyph wall-pen]
                    2 [ground-glyph column-pen]
                    3 [ground-glyph pilaster-pen]
-                   1 [ground-glyph (ground-pen floor-ramp x y)]
+                   1 (floor-face floor-ramp x y)
                    4 [line-glyph [line-pen (ground-pen floor-ramp x y)]]
-                   5 [ground-glyph (ground-pen bed-ramp x y)]
+                   5 (floor-face bed-ramp x y)
                    6 (: c (wrecks i) [<c [<>c (ground-pen floor-ramp x y)]])
                    '(32 0))))))
  (garage-bar g) (fill w-bar ["the garage" (g 'tn)])
