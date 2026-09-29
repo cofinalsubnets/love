@@ -3,9 +3,9 @@
 ;
 ;   out/love apps/crow.l [-y] [prompt ..]     one prompt, or a > loop on stdin
 ;
-; wants ANTHROPIC_API_KEY. the answer streams: text prints as it comes. the tls client
-; does not verify the peer, so the key rides a channel that stops a passive wire, not
-; an active one.
+; wants ANTHROPIC_API_KEY. the answer streams: text prints as it comes. tls checks the
+; handshake but not the certificate (no chain, no name), so the key rides a channel that
+; stops a passive wire, not an active one.
 (borrow 'posix)
 (borrow 'json)
 
