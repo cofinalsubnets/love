@@ -106,6 +106,7 @@
    ;   'note s        something the user should know  'wire s     the socket, while it is open
    ;   'tool name in  a tool call begins -> a handle  'ask h      may it run? -> 1 | 0
    ;   'done h r      it ran, r [ok? text]            'yes        run without asking
+   ;   'bash h cmd    run cmd for tool h -> its output and exit status
 
    ; a streamed answer -> [stop blocks]; [() err] on an error event. a tool's input arrives
    ; as json pieces in js, read whole at its block's stop
@@ -157,8 +158,10 @@
        (go acc) (: c (see q) (? (c < 0) acc (: _ (unsee q c) (go (acc + chug q)))))
        t (go "")
        _ (close q)
-       (reap _) (: s (gather p) (? (two? s) <s (nom? s) -1 (: _ (rest 5) (reap 0))))
-       (t + "[exit " + show (? (charm? p && 0 <= p) (reap 0) -1) + "]"))
+       (t + "[exit " + show (reap p) + "]"))
+   ; a child's exit status, waited for without blocking; -1 when there is none
+   (reap p) (? !(charm? p && 0 <= p) -1
+               (: s (gather p) (? (two? s) <s (nom? s) -1 (: _ (rest 5) (reap p)))))
 
    ; the text an edit would leave, or [0 why]
    (edited s old new)
@@ -177,14 +180,14 @@
     (: t (filter (\ x (x "name" = name)) crow-tools)
        (two? t && tablet? in && !(two? (filter (\ k !(string? (in k))) (<t "input_schema" "required")))))
 
-   ; a tool call -> [ok? text]
-   (run name in)
+   ; a tool call -> [ok? text]. the face runs bash, so the screen can show it running
+   (run f h name in)
     (? !(valid? name in) [0 ("no such tool, or its input is missing a field: " + name)]
        (name @
         "read_file"  (: s (slurp-file (in "path")) (? (string? s) [1 (clip s)] [0 ("cannot read " + in "path")]))
         "write_file" (? (spit-file (in "path") (in "content")) [1 ("wrote " + in "path")] [0 ("cannot write " + in "path")])
         "edit_file"  (edit (in "path") (in "old_text") (in "new_text"))
-        "bash"       [1 (clip (sh-out (in "command")))]))
+        "bash"       [1 (clip ((f 'bash) h (in "command")))]))
 
    (brief name in)
     (? !(valid? name in) "(malformed input)"
@@ -196,8 +199,8 @@
    (answer f b)
     (: name (b "name") in (b "input")
        h ((f 'tool) name in)
-       r (? !(valid? name in) (run name in)
-            (f 'yes || name = "read_file" || ((f 'ask) h) = 1) (run name in)
+       r (? !(valid? name in) (run f h name in)
+            (f 'yes || name = "read_file" || ((f 'ask) h) = 1) (run f h name in)
             [0 "the user declined"])
        _ ((f 'done) h r)
        t {"type" "tool_result" "tool_use_id" (b "id") "content" (r 1)}
@@ -242,7 +245,8 @@
      'wire (\ s 0)
      'tool (\ name in (puts ("  " + name + " " + brief name in + "\n")))
      'ask (\ h (? (ask "  run? [y/N] ") 1 0))
-     'done (\ h r 0)}
+     'done (\ h r 0)
+     'bash (\ h cmd (sh-out cmd))}
    (repl key f msgs)
     (: _ (puts "> ") _ (flush out) l (line 0)
        (? !(string? l) 0
@@ -286,6 +290,33 @@
         "write_file" (: s (slurp-file (in "path")) (diffs (string? s ? s "") (in "content") 16))
         ()))
 
+   ; --- a command on a pty, its screen live in its block ---
+   crow-pty-rows 24
+   ; the child's bytes into the screen, its queries answered, the painter cued per gulp
+   (pump c b m s)
+    (: bf (cask 8192)
+       (go _) (: ch (see m)
+                 (? (ch < 0) 0
+                    (: _ (scribe s ch)
+                       (drain _) (: n (swig m bf) (? (charm? n && 0 < n) (: _ (scribe s (snip bf 0 n)) (drain 0)) 0))
+                       _ (drain 0)
+                       rep (reply s)
+                       _ (? rep (: _ (say m (foldl (\ a x (a + string x)) "" rep)) (flush m)) 0)
+                       _ (pin b 'v (b 'v + 1))
+                       _ (soil c)
+                       (go 0))))
+       (go 0))
+   ; the used rows run from the oldest held in history (negative) to the cursor's
+   (scr-span s) (: w (gaze s 2) k (gaze s 0) cr (k // w)
+                   [(0 - (gaze s 9)) (k % w = 0 ? (cr - 1) cr)])
+   ; the last n used rows, painted as limn paints a pane
+   (scr-rows s n)
+    (: sp (scr-span s) hi (sp 1) lo (max <sp (hi - n + 1)) w (gaze s 2)
+       (map (\ i (: j (jug 0) _ ((cite 'limn 'limn-row) j s w i 0 -1 0) (slurp j + esc + "[0m")))
+            (map (\ d (lo + d)) ^(max 0 (hi - lo + 1)))))
+   ; everything the command wrote, as text, for the model
+   (scr-text s) (: w (gaze s 2) (copied s (0 - ((gaze s 9) * w)) (gaze s 0)))
+
    ; a block's lines at width w, cached on the block by [w its version]
    (label s) (sgr "1;35" s)
    (blines b w)
@@ -302,12 +333,14 @@
      'note [(sgr "2;3" ("      ⋯ " + b 'text))]
      'tool (: st (b 'st)
               mark (st @ 'ask (sgr "1;33" "[y/n]") 'run (sgr "33" "running…")
-                         'ok (sgr "32" "✓") 'err (sgr "31" "✗") "")
+                         'ok (sgr "32" "✓") 'err (sgr "31" "✗") 'cut (sgr "2" "stopped") "")
               head (" " + (sgr "1" ("▸ " + b 'name)) + " " + (sgr "2" (b 'brief)) + "  " + mark)
               out (peep b 'out "")
               tail (b 'name @
-                    "bash" (: ls (filter (\ l (0 < #l)) (lines out)) n #ls
-                              (map (\ l (sgr "2" ("   ┆ " + l))) (8 < n ? (drop (n - 8) ls) ls)))
+                    "bash" (? (peep b 'scr () != ())
+                              (map (\ l ((sgr "2" "   ┆ ") + l)) (scr-rows (b 'scr) 12))
+                              (: ls (filter (\ l (0 < #l)) (lines out)) n #ls
+                                 (map (\ l (sgr "2" ("   ┆ " + l))) (8 < n ? (drop (n - 8) ls) ls))))
                     "read_file" (? (st = 'ok) [(sgr "2" ("   " + show #(lines out) + " lines"))] ())
                     (? (st = 'err) [(sgr "31" ("   " + out))] ()))
               (head . (peep b 'pre () + tail)))
@@ -358,7 +391,22 @@
                   a (wait 0)
                   _ (pins b 'st 'run 'v (b 'v + 1)) _ (pin c 'asking ()) _ (soil c)
                   a))
-     'done (\ b r (pins b 'st (<r ? 'ok 'err) 'out (r 1) 'v (b 'v + 1), soil c))}
+     'done (\ b r (pins b 'st (<r ? 'ok 'err) 'out (r 1) 'v (b 'v + 1), soil c))
+     ; on a pty of its own, its screen in the block as it runs; the pipe when no pty opens
+     'bash (\ b cmd (: w (max 20 (c 'cols - 8)) r crow-pty-rows
+                       _ (setenv "TERM" "xterm-256color")
+                       md (tether ["sh" "-c" cmd])
+                       (? (atom? md) (sh-out cmd)
+                          (: pid <md m >md
+                             s (screen (cask (screen () r w)) r w)
+                             _ (settty m r w)
+                             _ (pins b 'scr s 'v (b 'v + 1))
+                             _ (pins c 'kid pid 'kidm m)
+                             _ (pump c b m s)
+                             code (reap pid)
+                             _ (close m)
+                             _ (pins c 'kid () 'kidm ())
+                             (scr-text s + "\n[exit " + show code + "]")))))}
 
    ; a line sent: its block, and the turn as a task of its own
    (send c s)
@@ -372,6 +420,10 @@
    (halt c)
     (: s (c 'sock) t (c 'busy)
        _ (? (hot? s) (close s) 0)
+       _ (? (c 'kid != ()) (still (c 'kid) 15) 0)             ; a running command dies with its turn
+       _ (? (hot? (c 'kidm)) (close (c 'kidm)) 0)
+       _ (map (\ b (? (b 'k = 'tool && (b 'st = 'run || b 'st = 'ask)) (pins b 'st 'cut 'v (b 'v + 1)) 0))
+              (c 'blocks))
        _ (? (t != ()) (freeze t) 0)
        _ (pins c 'busy () 'sock () 'asking ())
        (push c {'k 'note 'text "interrupted"}))
