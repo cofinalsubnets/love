@@ -97,7 +97,9 @@ static int inf_walk(const struct inf_code *c, uint64_t bb, unsigned *used) {
 // -1 where the twin answers (), -2 where the output outruns cap. out may be NULL, and
 // then nothing is stored and the answer is only how long the stream inflates to --
 // which is exact, because nothing the buffer holds ever reaches a branch.
-static int64_t inf_run(const uint8_t *in, uintptr_t n, uint8_t *out, uintptr_t cap) {
+// dic is the nd bytes that come before the output, a preset dictionary (nd 0 for none)
+static int64_t inf_rund(const uint8_t *in, uintptr_t n, uint8_t *out, uintptr_t cap,
+                        const uint8_t *dic, uintptr_t nd) {
  uintptr_t ip = 0, op = 0;
  uint64_t bb = 0;
  unsigned bc = 0, last, typ, i;
@@ -185,9 +187,13 @@ static int64_t inf_run(const uint8_t *in, uintptr_t n, uint8_t *out, uintptr_t c
    if (sy > 29) return -1;
    d = gz_dbase[sy];
    if (gz_dext[sy]) { TAKE(gz_dext[sy], x); d += x; }
-   if (d > op) return -1;                        // a reach before the start
+   if (d > op + nd) return -1;                   // a reach before the start
    if (op + l > cap) return -2;
-   if (out) {
+   if (out && d > op) {                          // into the dictionary, and maybe out again
+    uintptr_t h = d - op < l ? d - op : l;
+    memcpy(out + op, dic + nd - (d - op), h);
+    for (uintptr_t k = h; k < l; k++) out[op + k] = out[op + k - d]; }
+   else if (out) {
     // deflate lets a run overlap its own source -- dist 1 len 100 is a hundred of one
     // byte -- so the bytes go out in order and read each other back as they go, which is
     // right at every distance. eight or more apart, no byte of a word is read back inside
@@ -207,6 +213,8 @@ static int64_t inf_run(const uint8_t *in, uintptr_t n, uint8_t *out, uintptr_t c
 #undef TAKE
 #undef SYM
 }
+static int64_t inf_run(const uint8_t *in, uintptr_t n, uint8_t *out, uintptr_t cap) {
+ return inf_rund(in, n, out, cap, 0, 0); }
 
 // str0 collects, so the stream is re-read off the stack after it: a C local's pointer
 // into the heap is stale across the bump. tls.c pays the same toll.
@@ -214,6 +222,9 @@ static int64_t inf_run(const uint8_t *in, uintptr_t n, uint8_t *out, uintptr_t c
 // source blob into its initrd through this. same law as inf_run, exported.
 intptr_t ai_inflate_raw(const unsigned char *in, uintptr_t n, unsigned char *out, uintptr_t cap) {
  return (intptr_t) inf_run(in, n, out, cap); }
+intptr_t ai_inflate_dict(const unsigned char *in, uintptr_t n, unsigned char *out, uintptr_t cap,
+                         const unsigned char *dic, uintptr_t nd) {
+ return (intptr_t) inf_rund(in, n, out, cap, dic, nd); }
 
 static ai_inline struct ai *host_inflate(struct ai *g) {
  word sw = g->sp[0], nw = g->sp[1];
@@ -396,7 +407,8 @@ struct df_ar {
  uint32_t *head, *prev, *tok, *fl, *fd,
           *hc, *keys, *w, *sy, *pa, *rlb, *fc,
           *codl, *codd, *codc, *fixcl, *fixcd;
- uint8_t *lenl, *lend, *lenc, *fixll, *fixld, *cl; };
+ uint8_t *lenl, *lend, *lenc, *fixll, *fixld, *cl;
+ unsigned chain, lazy; };                                       // the twin's 32 and greedy; the image lane digs
 #define DF_ARENA (384u << 10)
 static void df_carve(uint8_t *m, struct df_ar *a) {
  uint8_t *p = m;
@@ -420,10 +432,10 @@ static void df_ins(const uint8_t *s, uintptr_t n, uintptr_t i, uint32_t *head, u
 
 // gz-find: down the chain, nearest wins a tie, a full-limit match taken at once
 static void df_find(const uint8_t *s, uintptr_t n, uintptr_t i, const uint32_t *head,
-                    const uint32_t *prev, unsigned *rl, unsigned *rd) {
+                    const uint32_t *prev, unsigned chain, unsigned *rl, unsigned *rd) {
  unsigned lim = (n - i) < 258 ? (unsigned) (n - i) : 258;
  uint32_t k = head[DF_HASH(s, i)];
- int d = DF_CHAIN;
+ unsigned d = chain;
  unsigned bl = 0, bd = 0;
  while (k && d) {
   uintptr_t p = k - 1, dist = i - p;
@@ -445,21 +457,29 @@ static uintptr_t df_block(const uint8_t *s, uintptr_t n, uintptr_t i, struct df_
  int last;
  memset(a->fl, 0, 286 * sizeof *a->fl);
  memset(a->fd, 0, 30 * sizeof *a->fd);
+ unsigned cl = 0, cd = 0, held = 0;                              // lazy: the match found one on
  while (i < n && k < DF_TOKMAX) {
-  unsigned l = 0, d = 0;
-  if (i + 3 <= n) df_find(s, n, i, a->head, a->prev, &l, &d);
+  unsigned l = 0, d = 0, in = 0;
+  if (held) l = cl, d = cd, held = 0;
+  else if (i + 3 <= n) df_find(s, n, i, a->head, a->prev, a->chain, &l, &d);
   if (l == 3 && d > DF_TOOFAR) l = 0;                           // a far three is a loss
+  if (a->lazy && l >= 3 && l < 258 && i + 4 <= n) {             // a longer one a byte on wins it
+   if (!in) df_ins(s, n, i, a->head, a->prev), in = 1;
+   df_find(s, n, i + 1, a->head, a->prev, a->chain, &cl, &cd);
+   if (cl == 3 && cd > DF_TOOFAR) cl = 0;
+   if (cl > l) held = 1, l = 0; }
   if (l < 3) {
    unsigned c = s[i];
    a->tok[k++] = c; a->fl[c]++;
-   df_ins(s, n, i, a->head, a->prev); i++; }
+   if (!in) df_ins(s, n, i, a->head, a->prev);
+   i++; }
   else {
    unsigned lc = df_lcode(l), dc = df_dcode(d), q;
    a->tok[k++] = 256u + ((uint32_t) lc << 23) + ((uint32_t) dc << 18)
                + ((uint32_t) (l - gz_lbase[lc]) << 13) + (d - gz_dbase[dc]);
    a->fl[257 + lc]++; a->fd[dc]++;
    xb += gz_lext[lc] + gz_dext[dc];
-   for (q = 0; q < l; q++) df_ins(s, n, i + q, a->head, a->prev);
+   for (q = in; q < l; q++) df_ins(s, n, i + q, a->head, a->prev);
    i += l; } }
  last = n <= i;
  a->fl[256]++;                                                  // end-of-block, always sent
@@ -498,12 +518,14 @@ static uintptr_t df_block(const uint8_t *s, uintptr_t n, uintptr_t i, struct df_
   df_wtoks(t, a->tok, k, a->codl, a->lenl, a->codd, a->lend); }
  return i; }
 
-static int64_t df_go(const uint8_t *s, uintptr_t n, uint8_t *out, uintptr_t cap, uint8_t *m) {
+// s[0..i0) is the preset dictionary: in the window, never sent
+static int64_t df_go(const uint8_t *s, uintptr_t i0, uintptr_t n, uint8_t *out, uintptr_t cap, uint8_t *m, int best) {
  struct df_ar a;
  struct df_sink t;
- uintptr_t i = 0;
+ uintptr_t i = i0;
  unsigned j;
  df_carve(m, &a);
+ a.chain = best ? 4096 : DF_CHAIN, a.lazy = !!best;
  memset(a.head, 0, 32768 * sizeof *a.head);
  memset(a.prev, 0, 32768 * sizeof *a.prev);
  for (j = 0; j < 288; j++) a.fixll[j] = j < 144 ? 8 : j < 256 ? 9 : j < 280 ? 7 : 8;
@@ -511,6 +533,7 @@ static int64_t df_go(const uint8_t *s, uintptr_t n, uint8_t *out, uintptr_t cap,
  df_hcodes(a.fixll, 288, 9, a.fixcl);
  df_hcodes(a.fixld, 30, 5, a.fixcd);
  t.out = out; t.op = 0; t.cap = cap; t.acc = 0; t.nb = 0; t.err = 0;
+ for (uintptr_t q = 0; q < i0; q++) df_ins(s, n, q, a.head, a.prev);
  do i = df_block(s, n, i, &t, &a); while (i < n && !t.err);
  df_align(&t);
  return t.err ? -2 : (int64_t) t.op; }
@@ -525,6 +548,7 @@ static uint8_t *df_arena(struct ai *g, int *alloced) {
  return (uint8_t*) p; }
 
 // the image lane: deflate raw bytes into the caller's buffer, one pass, no love stack.
+// it is no twin: a lazy parse down a 4096 chain, zlib -9's, a bake-time cost for bytes.
 // its arena is always its own -- df_arena may hand back the major pool's spare half, and
 // a dump is walking a compacted heap that owns it.
 intptr_t ai_deflate_raw(struct ai *g, unsigned char const *in, uintptr_t n,
@@ -532,8 +556,17 @@ intptr_t ai_deflate_raw(struct ai *g, unsigned char const *in, uintptr_t n,
  uint8_t *m = ai_alloc(NULL, DF_ARENA);
  int64_t got;
  if (!m) return -1;
- got = df_go(in, n, out, cap, m);
+ got = df_go(in, 0, n, out, cap, m, 1);
  ai_alloc(m, 0);
+ return (intptr_t) got; }
+// ..and against a preset dictionary, which the inflater is handed as ai_inflate_dict's dic
+intptr_t ai_deflate_dict(struct ai *g, unsigned char const *in, uintptr_t n,
+                         unsigned char const *dic, uintptr_t nd, unsigned char *out, uintptr_t cap) {
+ uint8_t *m = ai_alloc(NULL, DF_ARENA), *s = m ? ai_alloc(NULL, nd + n) : NULL;
+ int64_t got = -1;
+ if (s) memcpy(s, dic, nd), memcpy(s + nd, in, n), got = df_go(s, nd, nd + n, out, cap, m, 1);
+ if (s) ai_alloc(s, 0);
+ if (m) ai_alloc(m, 0);
  return (intptr_t) got; }
 
 ai_noinline static struct ai *host_deflate(struct ai *g) {
@@ -544,14 +577,14 @@ ai_noinline static struct ai *host_deflate(struct ai *g) {
  if (!strp(sw)) { g->sp[0] = ZeroPoint; return g; }
  m = df_arena(g, &alloced);
  if (!m) { g->sp[0] = ZeroPoint; return g; }
- want = df_go((const uint8_t*) txt(sw), len(sw), 0, (uintptr_t) -1, m);
+ want = df_go((const uint8_t*) txt(sw), 0, len(sw), 0, (uintptr_t) -1, m, 0);
  if (alloced) ai_alloc(m, 0);
  if (want < 0) { g->sp[0] = ZeroPoint; return g; }
  if (!ai_ok(g = str0(g, (uintptr_t) want))) return g;
  m = df_arena(g, &alloced);
  if (!m) { g->sp[1] = ZeroPoint, g->sp += 1; return g; }
- got = df_go((const uint8_t*) txt(g->sp[1]), len(g->sp[1]),
-             (uint8_t*) txt(g->sp[0]), (uintptr_t) want, m);
+ got = df_go((const uint8_t*) txt(g->sp[1]), 0, len(g->sp[1]),
+             (uint8_t*) txt(g->sp[0]), (uintptr_t) want, m, 0);
  if (alloced) ai_alloc(m, 0);
  g->sp[1] = got != want ? ZeroPoint : g->sp[0];
  return g->sp++, g; }

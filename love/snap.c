@@ -175,11 +175,12 @@ static intptr_t image_imm_index(word v) {
 // the image is binary-specific: its indices and kept absolutes mean anything only in the
 // binary that dumped it. two guards reject a mismatch -> NULL -> normal boot: `arch`, and
 // `anchor`, the gap between two of the binary's own symbols, which a cross-arch or stale
-// build lays out differently. the code segment leads with [raw length, chunks] so it
-// describes itself -- the header says how many bytes are stored, these two what they hold:
-// nch chunks' [raw offset, deflated offset] pairs and their bytes, or with none the raw blobs.
-#define CodeSegHead (2 * sizeof(uint64_t))
+// build lays out differently. the code segment leads with [raw length, chunks, dictionary
+// length, its deflated length] so it describes itself: then nch chunks' [raw offset, deflated
+// offset] pairs, the dictionary and the chunks deflated against it -- or with no chunks the raw blobs.
+#define CodeSegHead (4 * sizeof(uint64_t))
 #define CodeZChunk ((uintptr_t) 64 << 10)
+#define CodeDict ((uintptr_t) 32 << 10)
 // the root table is sized from the core itself: symbols, tasks, then every WORD of v0..end,
 // in this target's word. the enc and dec loops take their bound from here too, so the table's
 // length and the count written into it cannot be spelled in two units and disagree.
@@ -907,6 +908,49 @@ static word *img_build(struct ai *g, struct image_hdr *Ho, struct ai_image_bad *
  H.nroot = nr;
  return Why(0), *Ho = H, *outnw = nw, blob; }
 
+// the chunks' preset dictionary: the 256-byte spans whose 8-byte shapes the most chunks share,
+// taken greedily, each span's shapes spent once it is in, the best nearest the chunk.
+// a count is by chunk, a span's score by distinct shape. answers the length, 0 for none
+#define CdBits 20
+#define CdSpan 256u
+static uint32_t cd_hash(char const *p) { uint64_t v; memcpy(&v, p, 8); return (uint32_t) ((v * 0x9e3779b97f4a7c15ull) >> (64 - CdBits)); }
+static uint64_t cd_score(char const *p, uint32_t const *cnt, uint32_t *stamp, uint32_t st) {
+ uint64_t a = 0;
+ for (unsigned j = 0; j + 8 <= CdSpan; j++) { uint32_t h = cd_hash(p + j); if (stamp[h] != st) stamp[h] = st, a += cnt[h]; }
+ return a; }
+static void cd_sift(uint64_t *hp, uintptr_t n, uintptr_t i) {
+ for (;;) { uintptr_t l = 2 * i + 1, r = l + 1, m = i;
+  if (l < n && hp[l] > hp[m]) m = l;
+  if (r < n && hp[r] > hp[m]) m = r;
+  if (m == i) return;
+  uint64_t t = hp[i]; hp[i] = hp[m], hp[m] = t, i = m; } }
+static uintptr_t img_code_dict(char const *c, uintptr_t n, unsigned char *dic) {
+ uintptr_t ns = n >= 4 * CodeDict ? (n - CdSpan) / (CdSpan / 2) + 1 : 0, nh = 0, got = 0;
+ if (ns >> 24) ns = (uintptr_t) 1 << 24;                        // a span's index rides under its score
+ uint32_t *cnt = ns ? ai_alloc(NULL, 2 * sizeof(uint32_t) << CdBits) : NULL, *stamp = cnt + (1u << CdBits), st = 0;
+ uint64_t *hp = cnt ? ai_alloc(NULL, ns * sizeof *hp) : NULL;
+ if (!hp) { if (cnt) ai_alloc(cnt, 0); return 0; }
+ memset(cnt, 0, 2 * sizeof(uint32_t) << CdBits);
+ for (uintptr_t a = 0; a + 8 <= n; a += CodeZChunk) {
+  uintptr_t e = a + CodeZChunk < n - 7 ? a + CodeZChunk : n - 7;
+  st++;
+  for (uintptr_t i = a; i < e; i++) { uint32_t h = cd_hash(c + i); if (stamp[h] != st) stamp[h] = st, cnt[h]++; } }
+ for (uintptr_t k = 0; k < ns; k++) hp[nh++] = cd_score(c + k * (CdSpan / 2), cnt, stamp, ++st) << 24 | k;
+ for (uintptr_t i = nh / 2; i--; ) cd_sift(hp, nh, i);
+ while (nh && got + CdSpan <= CodeDict) {
+  uintptr_t k = hp[0] & ((1u << 24) - 1);
+  uint64_t sc = cd_score(c + k * (CdSpan / 2), cnt, stamp, ++st), kid = nh > 1 ? hp[1] : 0;
+  if (nh > 2 && hp[2] > kid) kid = hp[2];
+  hp[0] = sc << 24 | k;                                        // rescored: still the best, or back in the heap
+  if (hp[0] < kid) { cd_sift(hp, nh, 0); continue; }
+  hp[0] = hp[--nh], cd_sift(hp, nh, 0);
+  if (!sc) break;
+  char const *p = c + k * (CdSpan / 2);
+  got += CdSpan, memcpy(dic + CodeDict - got, p, CdSpan);
+  for (unsigned j = 0; j + 8 <= CdSpan; j++) cnt[cd_hash(p + j)] = 0; }
+ ai_alloc(hp, 0), ai_alloc(cnt, 0);
+ return memmove(dic, dic + CodeDict - got, got), got; }
+
 // ..and the wire: {header, dictionary, token stream}, ai_alloc'd. fills H.nstream.
 static void *img_wire(struct ai *g, struct image_hdr *H, word const *blob, uintptr_t nw, char const *cseg, uintptr_t *outlen) {
  uintptr_t bytes = nw * sizeof(word);
@@ -929,27 +973,32 @@ static void *img_wire(struct ai *g, struct image_hdr *H, word const *blob, uintp
  H->nstream = ns;
  // the code segment ships as chunks deflated apart, whole blobs and about CodeZChunk raw
  // apiece, so a wake inflates only the chunks whose natives run. thousands of blobs share
- // prologue and epilogue shapes, and a chunk is past deflate's window, so the parts make
- // about what the whole did. a segment that would not shrink is stored raw, nch 0
- uintptr_t craw = H->ncode, cstore = 0, nch = 0;
- unsigned char *cz = NULL;
+ // prologue and epilogue shapes, which a chunk finds in the preset dictionary
+ // they all share. a segment that would not shrink is stored raw, nch 0
+ uintptr_t craw = H->ncode, cstore = 0, nch = 0, dn = 0, dnz = 0;
+ unsigned char *cz = NULL, *dic = craw ? ai_alloc(NULL, 2 * CodeDict + 64) : NULL, *dz = NULL;
  if (craw) {
+  if (dic) dz = dic + CodeDict;
   uintptr_t hd = 2 * sizeof(uintptr_t), zn = 0, ncap = craw / CodeZChunk + 2;
+  intptr_t dg = dz && (dn = img_code_dict(cseg, craw, dic)) ? ai_deflate_raw(g, dic, dn, dz, CodeDict + 64) : 0;
+  if (dg <= 0) dn = 0; else dnz = (uintptr_t) dg;
   uint64_t *tab = ai_alloc(NULL, 2 * ncap * sizeof(uint64_t));
   if (tab && (cz = ai_alloc(NULL, craw)))
    for (uintptr_t a = 0, b; a < craw; a = b) {
     for (b = a; b < craw && b - a < CodeZChunk; )
      b += (hd + ((uintptr_t const*)(cseg + b))[0] + 1 + 15) & ~(uintptr_t) 15;
-    intptr_t got = nch < ncap && b <= craw ? ai_deflate_raw(g, (unsigned char const*) cseg + a, b - a, cz + zn, craw - zn) : -1;
+    intptr_t got = nch < ncap && b <= craw
+                 ? ai_deflate_dict(g, (unsigned char const*) cseg + a, b - a, dic, dn, cz + zn, craw - zn) : -1;
     if (got <= 0) { nch = 0; break; }
     tab[2 * nch] = a, tab[2 * nch + 1] = zn, nch++, zn += (uintptr_t) got; }
-  unsigned char *t = nch && 16 * nch + zn < craw ? ai_alloc(NULL, 16 * nch + zn) : NULL;   // the table, then the chunks
-  if (t) memcpy(t, tab, 16 * nch), memcpy(t + 16 * nch, cz, zn);
-  else nch = 0;
+  unsigned char *t = nch && 16 * nch + dnz + zn < craw ? ai_alloc(NULL, 16 * nch + dnz + zn) : NULL;   // the table, the dictionary, the chunks
+  if (t) memcpy(t, tab, 16 * nch), memcpy(t + 16 * nch, dz, dnz), memcpy(t + 16 * nch + dnz, cz, zn);
+  else nch = 0, dn = dnz = 0;
   if (cz) ai_alloc(cz, 0);
   if (tab) ai_alloc(tab, 0);
+  if (dic) ai_alloc(dic, 0);
   cz = t;
-  cstore = CodeSegHead + (nch ? 16 * nch + zn : craw);
+  cstore = CodeSegHead + (nch ? 16 * nch + dnz + zn : craw);
   H->ncode = cstore; }
  uintptr_t total = sizeof *H + db + ns + cstore;
  char *buf = ai_alloc(NULL, total);
@@ -959,7 +1008,7 @@ static void *img_wire(struct ai *g, struct image_hdr *H, word const *blob, uintp
  img_stream((unsigned char*)(buf + sizeof *H + db), blob, nw, d->key, d->tk);
  if (craw) {
   char *p = buf + sizeof *H + db + ns;
-  ((uint64_t*) p)[0] = craw, ((uint64_t*) p)[1] = nch;
+  ((uint64_t*) p)[0] = craw, ((uint64_t*) p)[1] = nch, ((uint64_t*) p)[2] = dn, ((uint64_t*) p)[3] = dnz;
   memcpy(p + CodeSegHead, cz ? (char const*) cz : cseg, cstore - CodeSegHead); }
  if (cz) ai_alloc(cz, 0);
  ai_alloc(d, 0);
@@ -1072,13 +1121,13 @@ static struct ai *img_wake(void const *buf, uintptr_t len, int kept) {
  int lazy = 0;
  if (H.ncode) {
   unsigned char const *p = (unsigned char const*) buf + sizeof H + db + ns;
-  uint64_t craw, nch;
+  uint64_t craw, nch, nd, ndz;
   if (H.ncode < CodeSegHead) goto no;
-  memcpy(&craw, p, 8), memcpy(&nch, p + 8, 8);
+  memcpy(&craw, p, 8), memcpy(&nch, p + 8, 8), memcpy(&nd, p + 16, 8), memcpy(&ndz, p + 24, 8);
   if (!nch) code = craw == H.ncode - CodeSegHead ? code_adopt(g, (char const*) p + CodeSegHead, craw) : NULL;
-  else if (nch <= (H.ncode - CodeSegHead) / 16)
-   code = code_lazy(g, craw, p + CodeSegHead + 16 * nch, H.ncode - CodeSegHead - 16 * nch,
-                    p + CodeSegHead, nch, kept), lazy = kept;
+  else if (nch <= (H.ncode - CodeSegHead) / 16 && ndz <= H.ncode - CodeSegHead - 16 * nch && nd <= CodeDict)
+   code = code_lazy(g, craw, p + CodeSegHead + 16 * nch + ndz, H.ncode - CodeSegHead - 16 * nch - ndz,
+                    p + CodeSegHead, nch, p + CodeSegHead + 16 * nch, ndz, nd, kept), lazy = kept;
   if (!code) goto no; }
  if (!img_walk(base, nw, code, lazy)) goto no;
  uintptr_t nv = LvImgRoots - 2;                                          // same struct/binary (anchor-checked) -> same layout
