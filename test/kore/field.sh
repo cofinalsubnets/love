@@ -74,4 +74,9 @@ for c in "-d: -f2 --complement" "-d: -f1,3 --output-delimiter=-" "-d: -f2- --com
 done
 cut -z -d: -f2 "$C.z" > "$g"; korerun cut -z -d: -f2 "$C.z" > "$o"; same "cut -z"
 rm -f "$C" "$C.z"
+# tr -t cuts SET1 to SET2's length where tr pads SET2 with its last
+for c in "-t abc xy" "abc xy" "-t a-z A-C" "-ts ab xy"; do
+  # shellcheck disable=SC2086
+  printf 'aabbccdd\n' | tr $c > "$g"; printf 'aabbccdd\n' | korerun tr $c > "$o"; same "tr $c"
+done
 echo "kore: field tools (cut/tr/nl/rev GNU-identical) ok"

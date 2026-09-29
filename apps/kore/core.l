@@ -1204,24 +1204,26 @@
    ; the flags cluster: -c (or -C) reads SET1 as its complement, -d deletes, -s
    ; squeezes. a dash word that is none of them is refused and not read as a set --
    ; `tr -c a-z .` used to translate the literal set "-c". `--` ends the walk.
-   (tr-flags a c? d? s?)
-    (? (atom? a) [c? d? s? a]
-       (<a = "--") [c? d? s? >a]
+   ; -> [c? d? s? rest t?]; -t cuts SET1 to SET2's length, where it pads SET2
+   (tr-flags a c? d? s? t?)
+    (? (atom? a) [c? d? s? a t?]
+       (<a = "--") [c? d? s? >a t?]
        (: w <a n #w
-          (? (2 > n || w 0 != 45) [c? d? s? a]
-             (: (cl k C D S)
-                 (n <= k ? (tr-flags >a C D S)
-                  (w k @ (99 || 67) (cl (k + 1) 1 D S)
-                         100 (cl (k + 1) C 1 S)
-                         115 (cl (k + 1) C D 1)
+          (? (2 > n || w 0 != 45) [c? d? s? a t?]
+             (: (cl k C D S T)
+                 (n <= k ? (tr-flags >a C D S T)
+                  (w k @ (99 || 67) (cl (k + 1) 1 D S T)
+                         100 (cl (k + 1) C 1 S T)
+                         115 (cl (k + 1) C D 1 T)
+                         116 (cl (k + 1) C D S 1)
                          (udie 2 ("tr: unknown option " + w))))
-                (cl 1 c? d? s?)))))
+                (cl 1 c? d? s? t?)))))
    (tr-main as)
-    (: fp (tr-flags as 0 0 0)
-       c? <fp d? <>fp s? <>>fp rest <>>>fp
-       _ (? (two? rest) () (udie 2 "usage: tr [-cds] SET1 [SET2]"))
-       one (uset <rest)
+    (: fp (tr-flags as 0 0 0 0)
+       c? <fp d? <>fp s? <>>fp rest <>>>fp t? (fp 4)
+       _ (? (two? rest) () (udie 2 "usage: tr [-cdst] SET1 [SET2]"))
        two (? (two? >rest) (uset <>rest) ())
+       one (: o (uset <rest) (? (t? && two? two) (take #two o) o))
        (mem ls) (: t {}
                    (go m) (two? m ? (pin t <m 1, go >m) t)
                    (go ls))

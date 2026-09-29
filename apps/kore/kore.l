@@ -875,7 +875,7 @@
     'basename "usage: basename NAME [SUFFIX] | basename [-az] [-s SUFFIX] NAME.."
     'dirname "usage: dirname [-z] NAME.."
     'cut "usage: cut -f LIST [-d C] [-s] | cut -c LIST | cut -b LIST  [--complement] [--output-delimiter=S] [-z]"
-    'tr "usage: tr [-cCds] SET1 [SET2]"
+    'tr "usage: tr [-cCdst] SET1 [SET2]"
     'nl "usage: nl [FILE..]"
     'rev "usage: rev [FILE..]"
     'fold "usage: fold [-w N] [-s] [-b] [FILE..]"
