@@ -184,14 +184,16 @@
                               (sort ns)))))
      ; this session's name: BEE_NAME, else the working directory's last part; two hex digits
      ; follow when that is taken by a live session
+     ; BEE_AS is exactly the session to act as, live or not: a bee's own MCP server, run by
+     ; its claude child, speaks as that bee
      bee-name
-      (: e (getenv "BEE_NAME")
+      (: e (getenv "BEE_NAME") as (getenv "BEE_AS")
          ps ((cite 'kore 'usplit) 47 bee-cwd)
          b0 (? (string? e && 0 < #e) e (two? ps && 0 < #(ps (#ps - 1))) (ps (#ps - 1)) "bee")
          (free? nm) (: c (card-of nm) !(tablet? c && alive? (card-pid c)))
          (try k) (: nm (b0 + "-" + hex2 ((getpid 0 + clock 0 + 37 * k) % 256))
                     (? (free? nm) nm (try (k + 1))))
-         (? (string? e && 0 < #e && free? e) e (try 0)))
+         (? (string? as && 0 < #as) as (string? e && 0 < #e && free? e) e (try 0)))
      bee-cell {'state () 'since 0}
      ; the card rewritten whole, through a rename
      (card! state)
@@ -1308,6 +1310,78 @@
      bee-branch (: k (find bee-env "git branch: " 0)
                     (? (k < 0) "" (: e (find bee-env "\n" k) (snip bee-env (k + 12) (e < 0 ? #bee-env e)))))
      (joinw ws) (foldl (\ a w (a + " " + w)) <ws >ws)
+     ; --- the MCP server: `love bee --mcp`, JSON-RPC 2.0 one message a line, what a claude
+     ; child runs to reach its bee and the hive. the ports are arguments, so a test drives a
+     ; whole conversation without a child. an id is presence, not truth: requests count from 0 ---
+     (line-of p) (: (go acc) (see p @ -1 (? (two? acc) (string (rev acc))) 10 (string (rev acc)) c (go (c . acc)))
+                    (go ()))
+     mcp-shared ["list_sessions" "send_message" "queue_row"]
+     mcp-tools
+      ({"name" "approve"
+        "description" "Ask this bee's user whether a tool may run: Claude Code's permission prompt, answered from bee's screen."
+        "inputSchema" {"type" "object"
+                       "properties" {"tool_name" {"type" "string"} "input" {"type" "object"}
+                                     "tool_use_id" {"type" "string"}}
+                       "required" ["tool_name"]}}
+       . map (\ t {"name" (t "name") "description" (t "description") "inputSchema" (t "input_schema")})
+             (filter (\ t (elem (t "name") mcp-shared)) bee-tools))
+     ; how long an ask waits for the screen, in seconds: BEE_ASK_WAIT, else ten minutes
+     ask-limit (: w (getenv "BEE_ASK_WAIT") (? (string? w && 0 < #w) (digits w) 600))
+     ; "y", "n", or () when no answer came in time
+     (ask-wait p n)
+      (: s (slurp-file p)
+         (? (string? s && 0 < #s) (? (s 0 = 121 || s 0 = 89) "y" "n")
+            (n <= 0) ()
+            (: _ (rest 200) (ask-wait p (n - 1)))))
+     ; claude's permission prompt -> [ok? text], the text claude's own {behavior ..} answer. under
+     ; BEE_YES it allows; else it drops the ask in this bee's cell, asks/ID.ask, and waits for the
+     ; screen to write asks/ID.answer
+     (mcp-approve a)
+      (: tn (peep a "tool_name" ()) inp (peep a "input" ())
+         (allow _) [1 (json-show {"behavior" "allow" "updatedInput" (tablet? inp ? inp {})})]
+         (deny why) [1 (json-show {"behavior" "deny" "message" why})]
+         (? !(string? tn) [0 "approve wants tool_name"]
+            (getenv "BEE_YES" = "1") (allow 0)
+            (: d (cell-of bee-name + "/asks") _ (mkdirs d)
+               id (show (clock 0) + "-" + hex2 (clock 0 % 256))
+               _ (spit-file (d + "/." + id) (json-show {"tool_name" tn "input" (tablet? inp ? inp {})}))
+               _ (rename (d + "/." + id) (d + "/" + id + ".ask"))
+               ans (ask-wait (d + "/" + id + ".answer") (ask-limit * 5))
+               _ (unlink (d + "/" + id + ".ask")) _ (unlink (d + "/" + id + ".answer"))
+               (? (ans = "y") (allow 0)
+                  (deny (? (ans = ()) "no answer came from bee's screen" "the user declined"))))))
+     (mcp-call nm a)
+      (? (nm = "approve") (mcp-approve a)
+         (elem nm mcp-shared) (run (plain 1) () nm a)
+         [0 ("no tool " + nm)])
+     (mcp-serve inp outp)
+      (: (send m) (: _ (say outp (json-show (pin m "jsonrpc" "2.0"))) _ (say outp "\n") (flush outp))
+         (reply id r) (send {"id" id "result" r})
+         (fail id code msg) (send {"id" id "error" {"code" code "message" msg}})
+         (one m)
+          (: id (peep m "id" ()) meth (peep m "method" ()) ps (peep m "params" ())
+             (? !(string? meth) (? (() = id) 0 (fail id -32600 "a request names its method"))
+                (meth @
+                 "initialize"
+                  (reply id {"protocolVersion" (: v (? (tablet? ps) (peep ps "protocolVersion" ()) ())
+                                                  (string? v ? v "2025-06-18"))
+                             "capabilities" {"tools" {}}
+                             "serverInfo" {"name" "bee" "version" love-version}})
+                 "ping" (reply id {})
+                 "tools/list" (reply id {"tools" mcp-tools})
+                 "tools/call"
+                  (? !(tablet? ps && string? (peep ps "name" ())) (fail id -32602 "tools/call wants a name")
+                     (: a (peep ps "arguments" ())
+                        r (mcp-call (ps "name") (tablet? a ? a {}))
+                        (reply id {"content" [{"type" "text" "text" (r 1)}] "isError" (<r ? json-false json-true)})))
+                 (? (() = id) 0 (fail id -32601 ("no method " + meth))))))
+         (go _) (: l (line-of inp)
+                   (? !(string? l) 0
+                      (: j (? (0 < #l) (json-read l) ())
+                         _ (? (two? j && tablet? (j 1)) (one (j 1)) 0)
+                         (go 0))))
+         (go 0))
+
      ; --list, --send, --spawn and --stop speak to the hive from a shell and settle nowhere;
      ; a sender there is BEE_NAME, else cli- and the user
      (bee-cli as yes)
@@ -1336,14 +1410,15 @@
      (serve-first key f p)
       (? (0 < #p) (: _ (state! "busy") m (turn key f [(user p)]) _ (state! "idle") (serve key f (two? m ? m ())))
          (serve key f ()))
-     bee-flags ["-y" "--plain" "--serve"]
+     bee-flags ["-y" "--plain" "--serve" "--mcp"]
      (bee-go as)
       (: key (getenv bee-key-env)
          yes (elem "-y" as)
          pl (elem "--plain" as)
          sv (elem "--serve" as)
          words (filter (\ w !(elem w bee-flags)) as)
-         (? (two? words && elem <words ["--list" "--send" "--spawn" "--stop"]) (bee-cli words yes)
+         (? (elem "--mcp" as) (: _ (mcp-serve in out) 0)             ; a claude child's own server
+            (two? words && elem <words ["--list" "--send" "--spawn" "--stop"]) (bee-cli words yes)
             (atom? bee-at) (say err ("bee: cannot read the url " + bee-url + "\n"), 1)
             (#bee-model = 0) (say err "bee: name the model, (model NAME) in ~/.love/etc/bee.l\n", 1)
             (!bee-local? && !(string? key && 0 < #key)) (say err ("bee: set " + bee-key-env + "\n"), 1)

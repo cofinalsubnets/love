@@ -351,6 +351,43 @@
       (0 = <st))
    0)
 
+; --- bee --mcp: the server a claude child runs, one JSON-RPC message a line -----------------
+; initialize answers request 0 (an id is presence, not truth); the initialized notification
+; gets no answer; tools/list names approve and the hive tools; approve allows under BEE_YES and
+; denies when no screen answers; a bad line is dropped, an unknown method and a nameless call
+; are JSON-RPC errors
+(: cr-m2 (cr-dir "mcp" "")
+   (msgs ls) (foldl (\ a m (a + (string? m ? m (json-show m)) + "\n")) "" ls)
+   _ (cr-put cr-m2 "in" (msgs [{"jsonrpc" "2.0" "id" 0 "method" "initialize"
+                                "params" {"protocolVersion" "2025-06-18" "capabilities" {} "clientInfo" {"name" "t"}}}
+                               {"jsonrpc" "2.0" "method" "notifications/initialized"}
+                               {"jsonrpc" "2.0" "id" 1 "method" "tools/list"}
+                               {"jsonrpc" "2.0" "id" 2 "method" "tools/call"
+                                "params" {"name" "approve" "arguments" {"tool_name" "Bash" "input" {"command" "ls"}}}}
+                               {"jsonrpc" "2.0" "id" 3 "method" "tools/call" "params" {"name" "list_sessions" "arguments" {}}}
+                               "{this is not json"
+                               {"jsonrpc" "2.0" "id" 4 "method" "resources/list"}
+                               {"jsonrpc" "2.0" "id" 5 "method" "tools/call" "params" {}}]))
+   r (cr-run cr-m2 "BEE_AS=hub-bee BEE_YES=1" ("--mcp < '" + cr-m2 + "/in'"))
+   out (filter (\ l (0 < #l)) (lines (r 1)))
+   byid (foldl (\ t l (: j (json-read l) (? (two? j && tablet? (j 1)) (pin t (show ((j 1) "id")) (j 1)) t))) {} out)
+   (res k) ((byid k) "result")
+   (text k) ((res k) "content" 0 "text")
+   _ (cr-put cr-m2 "in2" (msgs [{"jsonrpc" "2.0" "id" 7 "method" "tools/call"
+                                 "params" {"name" "approve" "arguments" {"tool_name" "Write" "input" {}}}}]))
+   r2 (cr-run cr-m2 "BEE_AS=hub-bee BEE_ASK_WAIT=1" ("--mcp < '" + cr-m2 + "/in2'"))
+   _ (test
+      (0 = <r) (6 = #out)                                      ; 7 lines in, the notification and the bad line unanswered
+      ("2025-06-18" = (res "0") "protocolVersion") ("bee" = (res "0") "serverInfo" "name")
+      (tablet? ((res "0") "capabilities" "tools"))
+      (: ns (map (\ t (t "name")) ((res "1") "tools")) (elem "approve" ns && elem "send_message" ns && elem "queue_row" ns))
+      (cr-in (text "2") "\"behavior\":\"allow\"") (cr-in (text "2") "\"command\":\"ls\"")
+      (json-false = (res "2") "isError")
+      (cr-in (text "3") "no bee sessions are running")
+      (-32601 = (byid "4") "error" "code") (-32602 = (byid "5") "error" "code")
+      (cr-in (r2 1) "behavior") (cr-in (r2 1) "deny") (cr-in (r2 1) "no answer came"))  ; raw, so escaped
+   0)
+
 ; --- what bee will not do ---------------------------------------------------------------
 ; plain http off this machine is refused before any dial; a model that says no is told;
 ; a remote endpoint wants its key before anything is sent
