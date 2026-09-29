@@ -133,4 +133,22 @@
  ("first\n" = (peep <(<(>tgz-back)) 'body ()))
  (5000 = #(peep <(>(<(>tgz-back))) 'body ())))
 
+; --- the ceiling --- the inflated bytes are one string in the heap, so a stream that
+; inflates past 1 GiB is refused with a word and never grown into. a fixed-code stream of
+; one zero then 258-byte copies at distance one: 13 bytes carry eight of them, so 7 MB
+; says 1.1 GiB. the counting pass that finds it out is cheap
+(: (bomb-rep s k) (? (k = 0) "" (k % 2 = 1) (s + bomb-rep s (k - 1))
+                     (: h (bomb-rep s (k // 2)) (h + h)))
+   bomb-u "\xa3\x60\x14\x8c\x82\x51\x30\x0a\x46\xc1\x28\x18\x05"
+   (bomb k) ("\x63\x18\x05" + bomb-rep bomb-u k + "\x00")
+   bomb-small (bomb 2)
+   bomb-big (bomb 558835)
+   bomb-z ("\x1f\x8b\x08\x00\x00\x00\x00\x00\x00\x03" + bomb-big + "\x00\x00\x00\x00\x33\x36\xc0\x44"))
+(test
+ (#(<(>(gz-inflate bomb-small 0))) = 4387)          ; 1 + 17 copies of 258
+ (inflate bomb-big 0 = 1)
+ (inflate bomb-big 100 = 1)                         ; a hint that lies low is not believed
+ (gz-inflate bomb-big 0 = 'big)
+ (gz-unzip bomb-z = 'big))
+
 (puts "gz: ok") (putc 10)

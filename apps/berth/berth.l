@@ -29,7 +29,8 @@
 ; bracketed and goes to the pane as `pasted` lays it, and while the focused pane asks for
 ; the mouse the outer terminal is asked too -- a press on another pane moves the focus
 ; there, the rest is laid into the pane's own report, and the wheel it leaves unasked
-; scrolls its history.
+; scrolls its history. an outer terminal that answers kitty's graphics query gets a pane's
+; pictures themselves (limn-pics) instead of their ▀ blocks.
 ;
 ; the clip is the harbour's: one register, vi's shape, that every vi buffer on the
 ; wharf yanks into and puts from, so a yank in one pane is a put in another. copy
@@ -169,13 +170,17 @@
  ; nothing is erased between frames, and nothing needs to be: panes and bars
  ; tile the wharf exactly (apps/berth/wharf.l's standing law), so every cell is written
  ; every frame and no stale glyph can survive a layout change.
+ ; with pictures on (pics), every placement goes first and the ones still in view come back
  (hframe hb)
-  (: j (jug 0)
-     _ (say j "\e[?25l")
+  (: j (jug 0) pk (peep hb 'pics 0)
+     _ (say j (pk ? "\e[?25l\e_Ga=d,d=a,q=2\e\\" "\e[?25l"))
      _ (map (b \ (: p (hpane hb (wharf-id b))
                     (? (wharf-show? b && two? p)
-                       (limn-rows j (peep (hbox p) () 0) (wharf-rows b) (wharf-cols b)
-                                    (wharf-row b) (wharf-col b) 0 -1)
+                       (: s (peep (hbox p) () 0)
+                          _ (limn-rows j s (wharf-rows b) (wharf-cols b) (wharf-row b) (wharf-col b) 0 -1 pk)
+                          (? pk (limn-pics j s (wharf-rows b) (wharf-cols b) (wharf-row b) (wharf-col b)
+                                           (wharf-id b) (hb 'sent))
+                             0))
                        0)))
             (hb 'lay))
      _ (hbars j hb)
@@ -293,8 +298,17 @@
                                    (? ((b = 126) && ([126 49 48 50 91 27] = take 6 a2)) (drop 6 a2) (go a2)))))
                  (string (rev (go ()))))
  (hsend hb t) (: (go i) (? (i < #t) (: _ (hfeed hb (t i)) (go (i + 1))) 0) (go 0))
+ ; an APC's body, to its ST: the one berth reads is the answer to its kitty query, which
+ ; turns the pictures on
+ (hapc hb) (: (go acc) (: b (see in)
+                          (? (b < 0) acc
+                             (b = 27) (: b2 (see in) (? (b2 = 92) acc (go (acc + string b + string b2))))
+                             (go (acc + string b))))
+              t (go "")
+              (? (t = "Gi=31;OK") (: _ (pin hb 'pics 1) (hsoil hb)) 0))
  (hseq hb) (: b1 (see in)
-              (? !(b1 = 91) (: _ (hfeed hb 27) (? (-1 < b1) (hfeed hb b1) 0))
+              (? (b1 = 95) (hapc hb)
+                 !(b1 = 91) (: _ (hfeed hb 27) (? (-1 < b1) (hfeed hb b1) 0))
                  (: (csi acc) (: b (see in) (? ((b < 0) || ((63 < b) && (b < 127))) [acc b] (csi (acc + string b))))
                     q (csi "") a <q f <>q
                     (? (f < 0) (hsend hb ("\e[" + a))
@@ -303,6 +317,7 @@
                        ((f = 126) && (a = "5;2")) (hpeer hb (hhalf hb))
                        ((f = 126) && (a = "6;2")) (hpeer hb (0 - hhalf hb))
                        ((f = 126) && (a = "200")) (hpasted hb (hbracket 0))
+                       ((f = 99) && (0 < #a) && ((a 0) = 63)) 0            ; the DA answer the query drew out
                        (hsend hb ("\e[" + a + string f))))))
 
  ; --- keys: raw stdin pours onto the focused pane, C-a first. a stage takes the
@@ -379,18 +394,23 @@
  ; the caller's, a thunk answering the pane a prefix split ties up ---
  (harbour r c) (: hb {}
                   (pins hb 'plan () 'focus () 'next 1 'rows r 'cols c 'panes {}
-                        'more () 'dirt {1} 'jobs () 'lay () 'clip {},
+                        'more () 'dirt {1} 'jobs () 'lay () 'clip {} 'sent {} 'pics 0,
                    hb))
 
  ; --- sail: the harbour on the tty, raw and on the alternate screen, keys pumped
  ; and frames painted until the last berth empties; the tty as it was after ---
  (hsail hb) (: _ (raw 1)
                _ (say out "\e[?1049h\e[2J\e[?1006h\e[?2004h")   ; the mouse's reports as ?1006's, pastes bracketed
+               ; does the outer terminal take kitty's pictures? a 1x1 query, and DA behind it so
+               ; a terminal that ignores APC still answers something. asked only where a child
+               ; has the keys: a stage's reader would take the answer for keys
+               _ (? (hpty? (hpane hb (hb 'focus))) (say out "\e_Gi=31,s=1,v=1,a=q,t=d,f=24;AAAA\e\\\e[c") 0)
                _ (flush out)
                up (twirl (_ \ oars hb) 0)
                (hswim hb 1,                 ; ... until the last berth empties
                 map (t \ landed? t ? (catch t) (freeze t)) (hb 'jobs),
                 landed? up ? (catch up) (freeze up),
+                say out ((peep hb 'pics 0) ? "\e_Ga=d,d=A,q=2\e\\" ""),       ; every picture sent, freed
                 say out "\e[0m\e[?25h\e[?1003l\e[?1002l\e[?1000l\e[?1006l\e[?2004l\e[?1049l",
                 flush out,
                 raw 0,

@@ -1,7 +1,8 @@
 // love/lib/bz2.c -- bzip2, both directions. the whole stream is here: its blocks are laid on
 // bit boundaries, so there is no byte-aligned container for apps/bz2.l to hold.
 //   (bz2e s level)   bytes -> a .bz2 stream, level 1..9 the block in 100k | ()
-//   (bz2d s)         every .bz2 stream in s -> their bytes | 1 format, 2 corrupt, 3 end, 4 check
+//   (bz2d s)         every .bz2 stream in s -> their bytes | 1 format, 2 corrupt, 3 end, 4 check,
+//                    5 past BZ_OUTMAX
 // the coder is bzip2's pipeline: runs of four, the rotations sorted by prefix doubling,
 // move-to-front with the zero runs in RUNA/RUNB, and 2..6 huffman tables refined four times.
 #ifndef BZ_STANDALONE
@@ -17,15 +18,17 @@
 #define BZ_MAXLEN 17                             // the coder's; a decoder takes up to 20
 #define BZ_MAXSEL (2 + 900000 / BZ_GSIZE)
 #define BZ_FAST 10                               // the decode table's root, in bits
+#define BZ_OUTMAX ((uintptr_t) 1 << 30)          // the output is one heap string: no further
 
 static void bz_crcs(uint32_t *t) {               // CRC-32/BZIP2: cksum's msb-first register
  for (uint32_t i = 0; i < 256; i++) t[i] = crc_msb(0, (uint8_t) i); }
 
 // --- a growing byte sink, msb-first bits -----------------------------------------------------
-struct bz_w { uint8_t *p; uintptr_t n, cap; uint64_t acc; unsigned k; int bad; };
+struct bz_w { uint8_t *p; uintptr_t n, cap; uint64_t acc; unsigned k; int bad, big; };
 
 static void bw_byte(struct bz_w *w, uint8_t b) {
  if (w->n == w->cap) {
+  if (w->n >= BZ_OUTMAX) { w->bad = w->big = 1; return; }
   uintptr_t c = w->cap ? w->cap * 2 : 4096;
   uint8_t *q = w->bad ? NULL : ai_alloc(NULL, c);
   if (!q) { w->bad = 1; return; }
@@ -434,7 +437,8 @@ ai_noinline static struct ai *host_bz2d(struct ai *g) {
  if (!strp(sw)) { g->sp[0] = ZeroPoint; return g; }
  struct bz_w w = {0};
  int rc = bz_dec((const uint8_t*) txt(sw), len(sw), &w);
- if (rc > 0) g->sp[0] = putcharm(rc);
+ if (w.big) g->sp[0] = putcharm(5);
+ else if (rc > 0) g->sp[0] = putcharm(rc);
  else if (rc < 0) g->sp[0] = ZeroPoint;
  else if (ai_ok(g = str0(g, w.n))) {
   if (w.n) memcpy(txt(g->sp[0]), w.p, w.n);

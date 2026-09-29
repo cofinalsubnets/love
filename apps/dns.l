@@ -35,7 +35,7 @@
 (module (dns dial resolve dns-show
          dns-answers dns-ask dns-conf dns-query dns-servers
          dns-hosts dns-labels resolve-in dns-quad
-         dns-qtype dns-qedns dns-raw dns-name dns-records dns-v6
+         dns-qtype dns-qedns dns-raw dns-id dns-match? dns-name dns-records dns-v6
          resolve6 resolve6-in dns-hosts6 dns-colon? dns-walk6)
 (borrow 'posix)
 (borrow 'bytes)
@@ -143,15 +143,38 @@
              (? (p0 < 0) () (go (rdbe r 6 2) (p0 + 4))))))
 
    ; --- one question to one nameserver ------------------------------------------
+   ; a query id: two bytes of /dev/urandom. no entropy is a scare, never a guessable id
+   (dns-id _)
+    (: q (open "/dev/urandom" "r")
+       _ (? (nom? q) (scare 'no-entropy q) 0)
+       (byte _) (: c (see q) (? (c < 0) (close q, scare 'no-entropy "/dev/urandom") c))
+       hi (byte 0) lo (byte 0)
+       (close q, hi * 256 + lo))
+
+   ; is r an answer to query q: the qr bit, q's id, and q's one question byte for byte.
+   ; the question stops where q's name and its type and class do, before any edns record
+   (dns-match? q r)
+    (: e (dns-skip q 12 #q)
+       qe (e + 4)
+       (0 < e && qe <= #r && 0 < (r 2 & 128) && rdbe r 4 2 = 1
+        && snip r 0 2 = snip q 0 2 && snip r 12 qe = snip q 12 qe))
+
    ; a packet to a server -> its answer's bytes, () on none within `ms`. the three-task
    ; park is the header note: receiver on the socket, watchdog on the clock, caller in
    ; catch. the server is named by address and port: resolv.conf has no port syntax and
    ; every line it yields means 53, but a stub on another port is a real thing to want
-   ; and the walk carries the pair either way.
+   ; and the walk carries the pair either way. the socket is bound to port 0, so the
+   ; kernel picks its ephemeral port; a datagram from anyone but the server, or one that
+   ; is not an answer to q, is dropped and the receiver waits on within the deadline
    (dns-raw ns port q ms)
     (bind ['udp 0] @ (p && hot? p)
-     (: _ (send p [(dns-show ns) port] q)
-        r (twirl (_ \ (recv p)) ())
+     (: from [(dns-show ns) port]
+        (take _) (: d (recv p)
+                    (? !(two? d) ()
+                       (<d = from && dns-match? q <>d) d
+                       (take 0)))
+        _ (send p from q)
+        r (twirl take ())
         w (twirl (_ \ (rest ms, freeze r)) ())
         d (catch r)
       (freeze w,
@@ -159,7 +182,7 @@
        two? d ? <>d)))
    ; -> the addresses, () on no answer
    (dns-ask ns port h ms)
-    (: id (clock 0 & 65535)
+    (: id (dns-id 0)
        q (dns-query id h)
        r (? (string? q) (dns-raw ns port q ms) ())
        (? (string? r) (dns-answers r id) ()))
@@ -284,7 +307,7 @@
      (dns-walk su h))
    ; the same walk asking aaaa, its answers v6 text
    (dns-walk6 ((a . u) . su) h)
-    (: id (clock 0 & 65535)
+    (: id (dns-id 0)
        r (dns-raw a u (dns-qedns id h 28) dns-ms)
        ((? (string? r) (dns-records r id) ()) @
         'torn (scare 'torn ['dns h])

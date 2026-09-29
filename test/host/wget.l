@@ -32,8 +32,31 @@
    got (: p (open out1 "r") (hot? p ? (: s (slurp p) _ (close p) s) ()))
    rc404 (wget ["-q" "-O" (root + "/none") ("http://127.0.0.1:" + show port + "/absent.bin")])
    rcbad (wget ["-q" "-O" (root + "/none") "ftp://nowhere/x"])
+   ; -O - in a process of its own, against kiosko in another (a hark waits out its child,
+   ; so an in-process server would never be served): stdout is the body and only the body,
+   ; loud or quiet, through a redirect too; a fetch that fails writes nothing there
+   _ (mkdir (sroot + "/sub") 493)
+   page "<p>the sub page</p>\n"
+   _ (: p (open (sroot + "/sub/index.html") "w") _ (say p page) (close p))
+   love <cmdline
+   hp 7435
+   hs (tether [love "kore" "httpd" "-p" (show hp) "-h" sroot])
+   _ (rest 400)
+   hbase ("http://127.0.0.1:" + show hp)
+   (wo args) (hark ([love "kore" "wget"] + args))
+   (wq args) (hark ["sh" "-c" (foldl (a \ w \ a + " '" + w + "'") ("'" + love + "' kore wget") args + " 2>/dev/null")])
+   so (wq ["-O" "-" (hbase + "/blob.bin")])                           ; not -q: its words are err's, dropped
+   sq (wo ["-q" "-O" "-" (hbase + "/blob.bin")])
+   sr (wo ["-q" "-O" "-" (hbase + "/sub")])                           ; 301 to /sub/, its index
+   s404 (wq ["-O" "-" (hbase + "/absent.bin")])                    ; its complaint is err's, dropped
+   sdead (wq ["-O" "-" "http://127.0.0.1:7436/x"])                   ; nobody listens there
+   _ (still <hs 15)
+   (reap pid) (: g (gather pid) (? (two? g || nom? g) g (rest 2, reap pid)))
+   _ (reap <hs)
    _ (hark ["rm" "-rf" root])
    (test
+    (so = (0 . blob)) (sq = (0 . blob)) (sr = (0 . page))
+    (s404 = (8 . "")) (sdead = (1 . ""))
     (0 = rc) (got = blob)                                              ; the bytes came back whole
     (8 = rc404)                                                        ; a server's no is wget's 8
     (1 = rcbad)                                                        ; not a url

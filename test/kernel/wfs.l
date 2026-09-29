@@ -45,6 +45,11 @@
    ('erofs = unlink "apps/json.l")
    ('erofs = rename "apps/json.l" (d + "/j"))
    ('erofs = chmod "apps/json.l" 384)
+   ('erofs = rename "/proc" (d + "/q"))       ; nor carried off by a move above it
+   ('erofs = rename "/proc/vt" (d + "/vt"))   ; a special row stays where its name is
+   ('erofs = rename "/dev" (d + "/dev"))
+   ('erofs = rename f "/proc/lift")            ; and is not replaced under a move
+   ('erofs = rmdir "/proc")
    ('eexist = mkdir "/usr/bin" 493)      ; a baked prefix is a directory too
    ('enotdir = mkdir (f + "/x") 493)       ; under a file
    ('enoent = mkdir "/hole/x" 493)         ; under a hole

@@ -64,7 +64,7 @@ enum {              // flag bits: the console's modes
 enum { cb_mice = cb_mx10 | cb_mbtn | cb_mdrag | cb_many };
 
 enum { cb_outn = 64 };  // the reply queue's capacity (cb_reply's buffer size)
-enum { cb_mousen = 24 };  // a mouse report's longest (cb_mouse's buffer size)
+enum { cb_mousen = 36 };  // a mouse report's longest: ESC [ < and three 10-digit fields, 2 ; and M
 
 struct cb {
   uint32_t wpos, spos;        // the write cursor, and DECSC's saved one
@@ -95,11 +95,14 @@ struct cb {
   // twin: a grid's room after the history, where the main grid waits out the alternate screen
   uint32_t hl, hh, hn, view, twin;
   int32_t sel0, sel1;  // the selection: cells [sel0, sel1) as glass counts them, none when equal
+  uint32_t pgen;       // the last picture's gen
   struct cb_cell cb[]; };
 
 // the store, after the cells: 128 slots (0 unused), the 256 sixel registers, then the
 // pixels, xrgb with the top byte 0xff where a pixel was set -- the rest is the cell's bg
-struct cb_img { uint32_t off, w, h, live, id; };   // id: a kitty image's, 0 for none
+// id: a kitty image's, 0 for none. gen: a serial new with every picture, kept across a regrid,
+// which is what lets a reader (limn passing a picture on) tell one it has already sent
+struct cb_img { uint32_t off, w, h, live, id, gen; };
 enum { cb_nimg = 128, cb_shead = cb_nimg * sizeof(struct cb_img) + 256 * 4 };
 // the bytes a screen of rows x cols needs, header, cells and a store of sn bytes
 #define cb_size(rows, cols, sn) \

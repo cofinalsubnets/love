@@ -348,6 +348,7 @@ struct ai *gen_major(struct ai *g, uintptr_t req0, bool *tight) {
 // copy and every value stays where it is: the major, the image, or the binary.
 struct ai *gen_grow(struct ai *g, uintptr_t len1) {
  if (g->hp != g->end) __builtin_trap();
+ if (len1 > ai_words_max) return encode(g, ai_status_scare);
  struct ai *h = ai_alloc(NULL, len1 * sizeof(word));
  if (!h) return encode(g, ai_status_scare);
  uintptr_t sh = (uintptr_t) (ptr(g) + g->len - g->sp);
@@ -363,6 +364,7 @@ struct ai *gen_grow(struct ai *g, uintptr_t len1) {
 // the GC entry: a minor unless the rem set missed or the major lacks headroom -- then a
 // major. afterwards the nursery grows on copy overhead and shrinks only to the budget.
 ai_noinline struct ai *ai_please(struct ai *g, uintptr_t req0) {
+ if (req0 > ai_words_max) return encode(g, ai_status_scare);   // no heap holds it: refuse before any sum
  uintptr_t seen_young = (uintptr_t)(g->hp - g->end),
            major_free = (uintptr_t)((g->major_base + g->major_len) - g->major_hp);
  // a major: forced by a rem-set miss (or a please asking for one) or by the major lacking

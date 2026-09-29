@@ -88,6 +88,18 @@
              _ (slurp >r) st <(waitfor <r)
              (test (st = 0) ((got (dir + "/o/src/sub/blob")) = blob)))
         0)
+   ; --- pre-auth amplification: an oversized packet or an overlong version line is
+   ; dropped without buffering (rfc 4253 6.1 and 4.2), and a good login still follows ---
+   (eaten c) (: _ (await c) b (see c) (b = -1 ? 1 (chug c, eaten c)))   ; 1 once the server closes us
+   big (bytes 4 (i \ i = 0 ? 127 255))                                  ; a claimed packet length of 0x7fffffff
+   over (: c (connect ['tcp "127.0.0.1" port])
+            _ (say c ("SSH-2.0-probe\r\n" + big + bytes 4096 (\ 65))) _ (flush c)
+            r (eaten c) _ (close c) r)
+   long (: c (connect ['tcp "127.0.0.1" port])
+            _ (say c (bytes 512 (\ 88))) _ (flush c)                    ; 512 bytes, no crlf: past the 255 cap
+            r (eaten c) _ (close c) r)
+   z (run "id" ["-T" (user + "@127.0.0.1") "echo alive-$((6*7))"])
+   _ (test over long (has? <z "alive-42") (z 1 = 0))
    _ (still <srv 15)
    log (slurp >srv)
    _ (waitfor <srv)

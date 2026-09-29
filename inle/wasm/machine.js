@@ -17,7 +17,8 @@
 // again when it exits, so `sh -c "tower; sh"` is a game and then a shell), data-ram the
 // RAM in MiB, data-cols the most columns worth reading, which is what settles how large a
 // glyph is drawn. a query string names the same four (?boot=tower) and wins where it
-// does: the attributes are the page's and the link is the reader's.
+// does: the attributes are the page's and the link is the reader's. a link's module or
+// image is taken only off this page's own origin; its boot line runs aboard as it stands.
 //
 // the machine takes its RAM at boot and never gives it back, so a default is a promise
 // about what runs on it. 1024 is what the tower wants, measured: at 256 the walk answers a
@@ -25,7 +26,7 @@
 // the same 1024 and ooms under 768, so one number covers both.
 import { ctl_n, ring_n, ring_at, shared_n, scan_at, scan_n, c_sh, c_st,
          point_at, point_n, c_ph, c_pt, paste_at, paste_n, c_xh, c_xt,
-         horn_at, horn_n, c_rate, c_wrote, c_played, c_live } from './cpu.mjs';
+         horn_at, horn_n, c_rate, c_wrote, c_played, c_live, pageurl } from './cpu.mjs';
 
 // --- the glass: a canvas as REAL pixels ------------------------------------------------
 // the backing store is the element's own box times a ratio settled here, and
@@ -241,6 +242,19 @@ export async function loveMachine(root) {
   // rendering can only disagree with the first. what is left for the page to say is the
   // machine failing to start or stopping, which the canvas cannot show.
   const halt = t => { status.textContent = t; status.hidden = false; canvas.hidden = true; };
+  // a question for the reader, answered by a click: the text, two buttons. -> true for
+  // the first. one at a time; a later one waits its turn.
+  let asked = Promise.resolve();
+  const offer = (text, yes, no) => asked = asked.then(() => new Promise(done => {
+    const box = document.createElement('div'), p = document.createElement('p');
+    box.className = 'ask'; p.textContent = text; box.append(p);
+    const row = document.createElement('p');
+    for (const [label, v] of [[yes, true], [no, false]]) {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'chip'; b.textContent = label;
+      b.addEventListener('click', () => { box.remove(); done(v); });
+      row.append(b); }
+    box.append(row); root.append(box); }));
 
   if (!memory64()) return halt('this browser has no wasm memory64; the machine cannot boot here.');
   // a browser hands a page the memory the machine runs on only from a SECURE origin --
@@ -255,8 +269,13 @@ export async function loveMachine(root) {
     return halt('the machine cannot run on this page: it arrived without the two headers that give it its memory, and the helper that adds them could not be installed. reloading once usually mends it.');
 
   const link = new URLSearchParams(location.search);
-  const at = (k, d) => link.get(k) ?? root.dataset[k] ?? d;
   const url = p => new URL(p, import.meta.url);
+  // a link's module or image is taken only off this origin; elsewhere it is the page's own
+  const local = (k, v) => {
+    if (v === null || !(k === 'wasm' || k === 'image') || pageurl(v, location.href)) return v;
+    console.warn(`the link's ${k} is not this page's origin: ignored`);
+    return null; };
+  const at = (k, d) => local(k, link.get(k)) ?? root.dataset[k] ?? d;
 
   // the ring: Int32 [0] the reader's head, [1] the writer's tail, [2] the wake count,
   // [3] a lift request (unused here), [4] a resize request and [5] [6] [7] its size,
@@ -298,8 +317,12 @@ export async function loveMachine(root) {
   // a hardware key, off either element: the bytes a serial terminal sends -- but for the
   // clipboard's chords, ctrl+shift+C or cmd+C to copy the console's selection and
   // ctrl+shift+V or cmd+V to paste, which the browser's own paste event then carries in
-  let copied = '';
+  // the clipboard is written only in a gesture's wake: the chord and the copy event are
+  // one, and a selection that came back is taken at once only when the reader's own
+  // release sent it, a moment ago. anything else is kept for the chord.
+  let copied = '', released = -1e9;
   const copy = () => { if (copied) navigator.clipboard?.writeText(copied).catch(() => {}); };
+  const fresh = () => performance.now() - released < 1000 && (navigator.userActivation?.isActive ?? true);
   const chord = (e, k) => e.code === k && ((e.ctrlKey && e.shiftKey) || e.metaKey);
   const onkey = e => {
     if (chord(e, 'KeyC')) { e.preventDefault(); copy(); return; }
@@ -373,14 +396,17 @@ export async function loveMachine(root) {
     if (canvas.width !== m.w || canvas.height !== m.h) canvas.width = m.w, canvas.height = m.h;
     ctx.putImageData(new ImageData(new Uint8ClampedArray(m.frame), m.w, m.h), 0, 0);
     if (!woke) { woke = true; status.hidden = true; } };
-  // a file the machine asked carried out (a path written to /proc/lift aboard) is
-  // handed to the browser as a download under its own name
+  // a file the machine asked carried out (a path written to /proc/lift aboard) is offered,
+  // named and sized, and becomes a download under its own name only on the reader's click
   const lifted = (m) => {
     if (m.error) { console.warn('lift ' + m.lift + ': errno ' + m.error); return; }
-    const a = document.createElement('a'), url = URL.createObjectURL(new Blob([m.bytes], { type: 'application/octet-stream' }));
-    a.href = url; a.download = m.lift.split('/').pop() || 'lift';
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 10000); };
+    const name = m.lift.split('/').pop() || 'lift';
+    offer(`the machine offers a file: ${name}, ${m.bytes.length} bytes.`, 'save', 'dismiss').then(yes => {
+      if (!yes) return;
+      const a = document.createElement('a'), url = URL.createObjectURL(new Blob([m.bytes], { type: 'application/octet-stream' }));
+      a.href = url; a.download = name;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10000); }); };
   // a selection the console made comes back as text: it is the clipboard's at once where
   // the browser lets a page write it after a gesture, and kept for the copy chord and the
   // browser's own copy event besides
@@ -396,7 +422,7 @@ export async function loveMachine(root) {
     e.preventDefault(); });
   cpu.onmessage = ({ data: m }) => {
     if (m.frame) { latest = m; if (!due) due = requestAnimationFrame(draw); }
-    else if (m.copy !== undefined) { copied = m.copy; copy(); }
+    else if (m.copy !== undefined) { copied = m.copy; if (fresh()) copy(); }
     else if (m.lift !== undefined) lifted(m);
     else if (m.fault) halt('the machine faulted: ' + m.fault); };
   cpu.onerror = e => halt('the machine stopped: ' + e.message);
@@ -433,7 +459,7 @@ export async function loveMachine(root) {
     (e.pointerType === 'touch' ? canvas : keys).focus({ preventScroll: true });
     canvas.setPointerCapture?.(e.pointerId);
     send(0, button(e.button), e); });
-  canvas.addEventListener('pointerup', e => send(1, button(e.button), e));
+  canvas.addEventListener('pointerup', e => { released = performance.now(); send(1, button(e.button), e); });
   canvas.addEventListener('pointermove', e => {
     const c = cell(e);
     if (!c || c.join() === over) return;

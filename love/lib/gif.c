@@ -10,7 +10,7 @@
 struct gf {
  const uint8_t *s; uintptr_t n, o;          // the gif, the image descriptor's offset
  int sw, sh, fx, fy, fw, fh, inter, ncol;   // screen, image box, interlaced, palette size
- const uint8_t *pal; uintptr_t data; };      // palette, first byte past it (the code size)
+ uintptr_t pal, data; };                    // palette's offset in s, first byte past it (the code size)
 
 static int gf_le16(const uint8_t *p) { return p[0] | p[1] << 8; }
 
@@ -25,9 +25,9 @@ static int gf_open(struct gf *g, const uint8_t *s, uintptr_t n, intptr_t o) {
  g->fw = gf_le16(d + 5), g->fh = gf_le16(d + 7), g->inter = d[9] >> 6 & 1;
  g->data = g->o + 10, g->pal = 0, g->ncol = 0;
  if (d[9] & 0x80) {
-  g->ncol = 2 << (d[9] & 7), g->pal = s + g->data, g->data += 3 * (uintptr_t) g->ncol; }
- else if (s[10] & 0x80) g->ncol = 2 << (s[10] & 7), g->pal = s + 13;
- if (g->pal && g->pal + 3 * g->ncol > s + n) g->ncol = 0;
+  g->ncol = 2 << (d[9] & 7), g->pal = g->data, g->data += 3 * (uintptr_t) g->ncol; }
+ else if (s[10] & 0x80) g->ncol = 2 << (s[10] & 7), g->pal = 13;
+ if (g->pal + 3 * (uintptr_t) g->ncol > n) g->ncol = 0;
  return g->data < n ? 0 : 2; }
 
 // the image's codes, lsb first across its sub-blocks, each index handed to put
@@ -69,7 +69,9 @@ static void gf_paint(struct gf *g, uint8_t *cv, int trans) {
    int ix = stack[k], px = g->fx + x, py = g->fy + y;
    if (ix != trans && px < g->sw && py < g->sh) {
     uint8_t *o = cv + 4 * ((uintptr_t) py * (uintptr_t) g->sw + (uintptr_t) px);
-    if (ix < g->ncol) o[0] = g->pal[3 * ix], o[1] = g->pal[3 * ix + 1], o[2] = g->pal[3 * ix + 2];
+    if (ix < g->ncol) {
+     const uint8_t *c = g->s + g->pal + 3 * (uintptr_t) ix;
+     o[0] = c[0], o[1] = c[1], o[2] = c[2]; }
     else o[0] = o[1] = o[2] = 0;
     o[3] = 255; }
    if (++x == g->fw) {

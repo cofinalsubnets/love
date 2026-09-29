@@ -197,7 +197,7 @@ static int jpeg_args(struct ai *g) {
  for (int k = 0; k < 4; k++) if (k != 2 && !oddp(g->sp[k])) return 0;
  intptr_t w = getcharm(g->sp[0]), h = getcharm(g->sp[1]), q = getcharm(g->sp[3]);
  return w >= 1 && w <= 65535 && h >= 1 && h <= 65535 && q >= 1 && q <= 100
-     && strp(g->sp[2]) && len(g->sp[2]) == (uintptr_t) w * (uintptr_t) h * 4; }
+     && strp(g->sp[2]) && len(g->sp[2]) == (uint64_t) w * (uint64_t) h * 4; }
 
 ai_noinline static struct ai *host_jpeg(struct ai *g) {
  if (!jpeg_args(g)) return g->sp[3] = ZeroPoint, g->sp += 3, g;
@@ -225,7 +225,8 @@ struct jd_comp { int id, h, v, tq, td, ta, pred; uintptr_t bw, bh, cw, ch, off; 
 struct jd {
  const uint8_t *s; uintptr_t n, pos;
  uint8_t *base;                  // the scratch, null until it is laid
- uint32_t acc; int bits, marker, bad;
+ uint32_t acc; int bits, marker, bad, dry;
+ uintptr_t fed;                  // zero bytes fed past the scan's data
  uint16_t q[4][64];              // natural order
  struct jd_huff dc[4], ac[4];
  struct jd_comp c[3];
@@ -234,11 +235,15 @@ struct jd {
  int ns, sc[3], ss, se, ah, al; };
 
 
+// scans past this many are ignored; a real progressive file has about ten
+#define JD_MAXSCANS 1000
+
 // entropy bytes, msb first into acc; a marker (or the end) feeds zeros
 static void jd_fill(struct jd *d) {
  while (d->bits <= 24) {
   int b = 0;
-  if (!d->marker && d->pos < d->n) {
+  if (d->marker || d->pos >= d->n) d->fed++;
+  else {
    b = d->s[d->pos];
    if (b != 0xff) d->pos++;
    else {
@@ -247,6 +252,9 @@ static void jd_fill(struct jd *d) {
     else if (c == 0xff) { d->pos++; continue; }
     else d->marker = 1, b = 0; } }
   d->acc |= (uint32_t) b << (24 - d->bits), d->bits += 8; } }
+
+// the scan has read well past its data: what is left would decode from nothing
+static int jd_dry(struct jd *d) { return d->dry || d->fed * 8 > (uintptr_t) d->bits + 64; }
 
 static int jd_get(struct jd *d, int n) {
  if (!n) return 0;
@@ -303,7 +311,7 @@ static void jd_block(struct jd *d, struct jd_comp *c, int16_t *b) {
   if (d->ah) { if (jd_get(d, 1)) b[0] = (int16_t) (b[0] | 1 << d->al); return; }
   int t = jd_decode(d, dc);
   if (t < 0 || t > 11) { d->bad = 1; return; }
-  c->pred += jd_extend(jd_get(d, t), t), b[0] = (int16_t) (c->pred * (1 << d->al));
+  c->pred += jd_extend(jd_get(d, t), t), b[0] = (int16_t) ((unsigned) c->pred << d->al);
   return; }
  if (!d->ah) {                                   // ac, first
   if (d->eobrun) { d->eobrun--; return; }
@@ -335,25 +343,28 @@ static void jd_block(struct jd *d, struct jd_comp *c, int16_t *b) {
    else if (!r) { *p = (int16_t) s; k++; break; }
    else r--; } } }
 
-// past the RSTn a restart interval ends on; a marker that isn't one stays for the caller
+// past the RSTn a restart interval ends on; a marker that isn't one stays for the caller,
+// and the scan is dry from here
 static void jd_restart(struct jd *d) {
- d->acc = 0, d->bits = 0, d->marker = 0, d->eobrun = 0;
+ d->acc = 0, d->bits = 0, d->marker = 0, d->eobrun = 0, d->fed = 0;
  for (int i = 0; i < d->nc; i++) d->c[i].pred = 0;
  while (d->pos + 1 < d->n) {
   int a = d->s[d->pos], m = d->s[d->pos + 1];
   if (a == 0xff && m >= 0xd0 && m <= 0xd7) { d->pos += 2; return; }
-  if (a == 0xff && m && m != 0xff) return;
-  d->pos++; } }
+  if (a == 0xff && m && m != 0xff) break;
+  d->pos++; }
+ d->dry = 1; }
 
 static void jd_scan(struct jd *d) {
  struct jd_comp *one = &d->c[d->sc[0]];
  uintptr_t mx = d->ns == 1 ? (one->cw + 7) / 8 : d->mcux,
            my = d->ns == 1 ? (one->ch + 7) / 8 : d->mcuy, todo = (uintptr_t) d->ri;
- d->acc = 0, d->bits = 0, d->marker = 0, d->eobrun = 0;
+ d->acc = 0, d->bits = 0, d->marker = 0, d->eobrun = 0, d->fed = 0, d->dry = 0;
  for (int i = 0; i < d->nc; i++) d->c[i].pred = 0;
  for (uintptr_t y = 0; y < my && !d->bad; y++)
-  for (uintptr_t x = 0; x < mx && !d->bad; x++) {
+  for (uintptr_t x = 0; x < mx && !d->bad; x++, todo--) {
    if (d->ri && !todo) jd_restart(d), todo = (uintptr_t) d->ri;
+   if (jd_dry(d)) { d->bad = !d->ri; continue; }   // a restart may bring more
    if (d->ns == 1) jd_block(d, one, jd_coef(d, one, x, y));
    else
     for (int i = 0; i < d->ns; i++) {
@@ -361,8 +372,7 @@ static void jd_scan(struct jd *d) {
      for (int v = 0; v < c->v; v++)
       for (int h = 0; h < c->h; h++)
        jd_block(d, c, jd_coef(d, c, x * (uintptr_t) c->h + (uintptr_t) h,
-                                    y * (uintptr_t) c->v + (uintptr_t) v)); }
-   todo--; }
+                                    y * (uintptr_t) c->v + (uintptr_t) v)); } }
  d->bad = 0;                                     // what decoded is kept
  while (d->pos + 1 < d->n) {                     // on to the next marker
   int a = d->s[d->pos], m = d->s[d->pos + 1];
@@ -462,6 +472,7 @@ static int jd_walk(struct jd *d, int head) {
   else if (m == 0xdc) return 3;
   else if (m == 0xda) {
    if (head) return 4;
+   if (d->scans >= JD_MAXSCANS) return 0;
    if ((why = jd_sos(d, p, n))) return why;
    jd_scan(d), d->scans++; }
   if (why) return why; } }

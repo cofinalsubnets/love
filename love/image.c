@@ -236,7 +236,7 @@ int image_bake(struct ai *g, char const *out, int bare) {
 // FIXME extend LvmCall macro to handle this.
 static lvm(lvm_bake) {
  Pack(g);
- word r = strp(g->sp[0]) && !image_put(g) ? putcharm(1) : ai_zero;
+ word r = cstrp(g->sp[0]) && !image_put(g) ? putcharm(1) : ai_zero;
  Unpack(g);
  Sp[0] = r;
  ai_musttail return Next(1); }

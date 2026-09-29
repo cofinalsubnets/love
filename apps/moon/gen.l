@@ -566,6 +566,7 @@
    fsetn '((set ne r0) (set p r1) (or r0 r0 r1))
    (negrel op) (op @ 'eq 'ne 'ne 'eq 'lt 'ge 'ge 'lt 'le 'gt 'le)   ; negated: branch-if-false
    (tsz g ty) (tysz (wsize g) (g 'stag) ty)
+   (tal g ty) (tyalign (wsize g) (g 'stag) ty)
    ; a member's (offset ty) off a struct type, | 'bad
    (fmem g ty name)
     (? !(stru? ty) 'bad
@@ -1515,12 +1516,21 @@
                   _ (pin g 'off (peep g 'off 0 + n))
                   _ (pin g 'slots ([off n] . g 'slots))
                   off)
+   ; ..one aligned for a type that asks more than the word: the frame base holds 16 (8 under
+   ; AAPCS32), so a cell's offset rounds to the ask up to that; past it no fixed offset can
+   (naslot g n a)
+    (: fb (? (t32? g) 8 16) a2 (min a fb)
+       (? (a2 <= 8) (nslot g n)
+          (: e (aup (peep g 'off 0 + n) a2) off (0 - e)
+             _ (pin g 'off e)
+             _ (pin g 'slots ([off n] . g 'slots))
+             off)))
    ; the object under a frame offset, off the slot map -- () when no cell claims it
    (obj9 sl x) (? !(charm? x) ()
                   (: (go l) (two? l ?
                              (: o <l (<o <= x && x < <o + <>o ? o (go >l))))
                      (go sl)))
-   (ntmp g ty) (nslot g $ aup (tsz g ty) 8)
+   (ntmp g ty) (naslot g (aup (tsz g ty) 8) (tal g ty))
    ; the store-immediate op for (ty, k) | (), the vi fold's license (x64 only). st sign-extends
    ; imm32, the narrow forms truncate
    (fitsw? v) (-2147483648 <= v <= 4294967295)      ; sits in a 32-bit word under either signedness
@@ -6104,7 +6114,7 @@
               ty <>p
               init <>>p
               ; a `register T v asm("reg")` local naming a register the asm surface cannot
-              (? (two? >>>p && (: r9 (gas-regname (gtgt g) <>>>p) !(nom? r9 && asmreg? g r9)))
+              (? (two? >>>p && <>>>p && (: r9 (gas-regname (gtgt g) <>>>p) !(nom? r9 && asmreg? g r9)))
                   (nolane g ("no lane for a register variable in " + <>>>p + ontgt g))
                  (gvarr? ty)
                   (? (two? init)
@@ -6113,7 +6123,7 @@
                       (nolane g ("no lane for a variable-length array" + ontgt g))
                      (vone ps env2 acc p ty))
                  (: span (aup (tsz g ty) 8)
-              off (nslot g span)
+              off (naslot g span (max (tal g ty) (? (4 < #p) (p 4) 0)))   ; a record's fifth slot: its own ask
               hreg (? (g 'inlining) ()                   ; a statement expression's decl takes no seat
                       !(lhomable? ty || fhomable? ty || (d128? ty && w128? g)) ()
                       (: sq (1 + peep g 'dseq 0)
@@ -6122,7 +6132,7 @@
                          lht (g 'lhome)
                          (? lht (lht sq) ())))
               ; a register variable's pin rides the env entry's fourth slot for cgasm
-              apin (? (two? >>>p) (gas-regname (gtgt g) <>>>p) ())
+              apin (? (two? >>>p && <>>>p) (gas-regname (gtgt g) <>>>p) ())
               ; a d128's home is a pair (lo hi) off the cs pool -- ulloc packs two seats
               env3 (([<p (? (two? hreg) ['regw hreg] hreg ['reg hreg] off) ty] + (? (nom? apin) [apin] ())) . env2)
               ; a callee-saved home stays off g 'homes: no call wrap, no sib peel, and ezarg must not read its unwritten shadow
@@ -6187,6 +6197,7 @@
               name <p ty <>p init <>>p
               lbl (nlab g (g 'fn + "."))             ; `fn.N` -- the `.` bars any C-identifier collision
               _ (pin (g 'glob) lbl [lbl ty init])   ; a local data label (internal linkage): g 'statics,
+              _ (? (4 < #p) (pin (g 'aligns) lbl (p 4)) 0)   ; its own aligned ask
               _ (pin g 'statics (lbl . g 'statics))      ; not g 'globs -- a static is never an exported symbol
               (one >ps ([name ['glob lbl] ty] . env2))))
        _ (stq g)                                     ; the statement tick (alive numbers sdecls too)
@@ -7642,6 +7653,43 @@
    ; reach -- a label, a case -- stays; a ?: prunes only where ty types both arms alike, and
    ; keeps that type by a cast
    (lbl? x) (? (atom? x) () (elem <x '(lbl case dflt)) 1 (lbl? <x || lbl? >x))
+   ; a local asking more alignment than the frame base holds (16, 8 under AAPCS32) lives in a
+   ; char block of its size plus the ask, reached through a pointer rounded up to the ask: its
+   ; later uses read through that pointer, and an initializer builds in a compound literal and
+   ; is copied in. the block's own uses stop past a declaration that shadows the name
+   (oalign g f)
+    (: fb (? (t32? g) 8 16)
+       (ask p) (max (tal g <>p) (? (4 < #p) (p 4) 0))
+       (big? p) (!(gvarr? <>p) && fb < ask p)
+       (shadow? it x) (? (two? it && <it = 'decl) (any (q \ <q = x) <>it) 0)
+       (sub x xp e)
+        (? (atom? e) e
+           (e = ['var x]) ['deref ['var xp]]
+           (: (go l) (? (atom? l) l
+                        (: h (sub x xp <l) (? (shadow? <l x) (h . >l) (h . go >l))))
+              (go e)))
+       (nm1 g) (: k (peep g 'aln 0) _ (pin g 'aln (k + 1)) (show k))
+       (one p rest)                                   ; -> (items rest') for one big record
+        (: x <p ty <>p init <>>p a (ask p) sz (tsz g ty) k (nm1 g)
+           xb (x + ".alb" + k) xp (x + ".alp" + k)
+           adr ['cast ['ptr ty] ['bin '& ['bin '+ ['cast 'ulong ['var xb]] ['num (a - 1)]] ['num (0 - a)]]]
+           ini (? (atom? init) ()
+                  (!(arr? ty) || !(elem <init '(init str))) [['expr ['asn ['deref ['var xp]] (? (elem <init '(init str)) ['clit ty init] init)]]]
+                  ; an array moves as a one-member struct of its bytes: struct assignment copies inline
+                  (: st ['struct (x + ".als" + k)]
+                     _ (pin (g 'stag) <>st [[[".m" 0 ty]] sz a])
+                     [['expr ['asn ['deref ['cast ['ptr st] ['var xp]]]
+                                    ['deref ['cast ['ptr st] ['addr ['clit ty init]]]]]]]))
+           [([['decl [[xb ['arr 'char (sz + a)] ()]]] ['decl [[xp ['ptr ty] adr]]]] + ini)
+            (sub x xp rest)])
+       (items l)
+        (? (atom? l) l
+           (: it (rec <l) ps (? (two? it && <it = 'decl) <>it ())
+              (? (two? >ps && any big? ps) (items ((map (q \ ['decl [q]]) ps) + >l))   ; a record a decl
+                 (two? ps && big? <ps) (: r (one <ps >l) (<r + items <>r))
+                 (it . items >l))))
+       (rec e) (? (atom? e) e (<e = 'blk) ['blk (items <>e)] (map rec e))
+       (? (two? (f 3) && <(f 3) = 'blk) ([<f <>f <>>f (rec (f 3))] + >>>>f) f))
    (dprune w64 ty x)
     (? (atom? x) x
        (x @ ('cond c a b)
@@ -7769,7 +7817,7 @@
         (kprop g ([<f <>f <>>f] + (['blk (sub items)] . >>>>f)))))
 
    (cgfn g f)                                       ; ('fn name params ('blk items)) -> forms | 'bad
-    (: f (kprop g (respell (ainl g f)))
+    (: f (kprop g (respell (oalign g (ainl g f))))
        params <>>f
        _ (fnreset g)                                 ; the whole per-fn pin record wiped (one roster)
        ; v6-M has no fpu: f0/f1/f15 are three frame cells, and soften rewrites every f-op onto them
@@ -8384,7 +8432,9 @@
               ; a refusal is neither 'r nor 'd: the 'd walk reports it, 'r steps past in silence
               roq (!(bad? bytes) && ro? <gs bytes)
               ; an aligned(N) global pads within the stream (the .o's header carries the max N); the two packed streams take none
-              an (? (elem want '("love_nifs" ".love.image")) 0 (peep (g 'aligns) <gs 0))
+              ; ..and so does a type that asks more than the stream's word
+              an (? (elem want '("love_nifs" ".love.image")) 0
+                    (max (peep (g 'aligns) <gs 0) (: ta (tal g ty) (? (8 < ta) ta 0))))
               ; the cause rides a pin: callers thread a bare 'bad through (bad? x) joins, and a gripe is not one
               (? (zm = 'r && !roq) (globs >gs want zm acc)
                  (zm = 'd && roq) (globs >gs want zm acc)

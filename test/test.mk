@@ -1275,6 +1275,8 @@ test_kernel_wasm: host
 	@$(gsh) $(R)/test/gate/glass.sh $(NODE) $(R)/out/love.wasm out/wasm/love.image out/wasm/glass.log $m
 	@echo TEST test/gate/glass.mjs "(the page's half of the grid, asked without a page)"
 	@$(NODE) $(R)/test/gate/glass.mjs || { echo "FAIL test_kernel_wasm"; exit 1; }
+	@echo TEST test/gate/wall.mjs "(what a link and a guest may ask of the page, asked without a page)"
+	@$(NODE) $(R)/test/gate/wall.mjs || { echo "FAIL test_kernel_wasm"; exit 1; }
 	@echo TEST test/gate/worklet.mjs "(the page's speaker, asked without a page)"
 	@$(NODE) $(R)/test/gate/worklet.mjs || { echo "FAIL test_kernel_wasm"; exit 1; }
 	@echo TEST test/gate/echo.mjs "(a keystroke reaches the glass, not just the guest)"
@@ -1305,12 +1307,14 @@ test_kernel_wasm: host
 	   || { tail -5 out/wasm/deaf.log; echo "FAIL test_kernel_wasm (a dead speaker stopped the machine)"; exit 1; }
 	@echo "  deaf: ok -- the ring fills, nobody empties it, and the walk goes on"
 	@echo TEST test/kernel/lift.l "(the lift: a path written to /proc/lift, and the file lands outside)"
-	@rm -f lifted.txt out/wasm/lifted.txt; INLE_RAM=256 $(NODE) $(R)/inle/wasm/inle.mjs --image out/wasm/love.image \
-	   $(R)/out/love.wasm test/kernel/lift.l < /dev/null > out/wasm/lift.log 2>&1; \
-	 mv -f lifted.txt out/wasm/lifted.txt 2>/dev/null; \
+	@rm -f out/wasm/lifted.txt; INLE_RAM=256 $(NODE) $(R)/inle/wasm/inle.mjs --lifts out/wasm \
+	   --image out/wasm/love.image $(R)/out/love.wasm test/kernel/lift.l < /dev/null > out/wasm/lift.log 2>&1; \
 	 grep -q "lift asked" out/wasm/lift.log && grep -q "carried out of the machine, whole" out/wasm/lifted.txt \
 	   || { tail -5 out/wasm/lift.log; echo "FAIL test_kernel_wasm (the lift did not land)"; exit 1; }
 	@echo "  lift: ok -- the file came out under its own name"
+	@echo TEST test/gate/seatwall.sh "(what the seat refuses a guest: host files past --origin, lifts nobody asked for)"
+	@$(gsh) $(R)/test/gate/seatwall.sh $(NODE) $(R)/out/love.wasm out/wasm/love.image out/wasm/seatwall \
+	   || { echo "FAIL test_kernel_wasm (the seat's wall)"; exit 1; }
 	@echo TEST test/kernel/pkcheck.l "(harp's pack: the two arms answer the same bytes HERE)"
 	@$(NODE) $(R)/inle/wasm/inle.mjs --image out/wasm/love.image $(R)/out/love.wasm \
 	   test/kernel/pkcheck.l < /dev/null > out/wasm/pack.log 2>&1; \
@@ -1376,11 +1380,10 @@ else
 test_seedwasm: host
 	@$(MAKE) -s wasm
 	@echo TEST "love seed x64 (the wasm seat, nothing under it)"
-	@rm -f love-x64 out/wasm/love-x64
-	@INLE_RAM=1024 $(NODE) $(R)/inle/wasm/inle.mjs \
+	@rm -f out/wasm/love-x64
+	@INLE_RAM=1024 $(NODE) $(R)/inle/wasm/inle.mjs --lifts out/wasm \
 	   --image out/wasm/love.image $(R)/out/love.wasm seed x64 /s \
 	   < /dev/null > out/wasm/seed.log 2>&1; \
-	 mv -f love-x64 out/wasm/love-x64 2>/dev/null; \
 	 grep -q "a raw egg for x64" out/wasm/seed.log \
 	   && grep -q "carried out of the machine" out/wasm/seed.log && test -s out/wasm/love-x64 \
 	   || { tail -20 out/wasm/seed.log; echo "FAIL test_seedwasm"; exit 1; }

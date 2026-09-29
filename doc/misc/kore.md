@@ -680,12 +680,11 @@ and without waiting on its carrier, then set raw 8N1 with no flow control at `-s
 its own. Bytes pass as they are both ways; ^X leaves unless `-X`, `-t` milliseconds of quiet
 leave too, and the line's settings go back as they were. `-d` is refused by name.
 
-`httpd [-fv] [-p PORT] [-h DIR]` is kiosko under busybox's name and flags: the port
+`httpd [-fv] [-p [IP:]PORT] [-h DIR]` is kiosko under busybox's name and flags: the port
 defaults to 80 and the directory to `.`, and `-v` logs each request. `-f` is accepted and
-always in force, because it never runs in the background. kiosko listens on every address,
-so `-p IP:PORT` with a specific address is refused rather than silently served more widely;
-`0.0.0.0:PORT` and `:PORT` are taken. Busybox's other flags (`-c -u -r -m -e -d -i`) are
-refused by name.
+always in force, because it never runs in the background. A bare `PORT` (or `:PORT`)
+listens on 127.0.0.1 only; `IP:PORT` names the address, and `0.0.0.0:PORT` or `*:PORT`
+serves every one. Busybox's other flags (`-c -u -r -m -e -d -i`) are refused by name.
 
 `nslookup [-type=T] [-port=N] HOST [SERVER]` asks a nameserver directly and prints what it
 says, laid out as busybox's nslookup lays it. The server is SERVER (a dotted quad or a name)

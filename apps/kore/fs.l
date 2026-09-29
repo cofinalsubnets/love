@@ -1548,8 +1548,9 @@ EXEC 01;32
        (tell m) (? v? (say err ("shred: " + m + "\n"), flush err) 0)
        (no f m) (say err ("shred: " + f + ": " + m + "\n"), flush err, 0)
        rnd (open "/dev/urandom" "r")
+       _ (? (nom? rnd) (udie 1 ("shred: /dev/urandom: " + uerrno rnd)) 0)   ; no entropy stops, never zeros
        buf (cask 65536)
-       (fillr k) (: g (swig rnd buf) (? (charm? g && 0 < g) (? (k <= g) (snip (string buf) 0 k) ((snip (string buf) 0 g) + fillr (k - g))) (string (cask k))))
+       (fillr k) (: g (swig rnd buf) (? (charm? g && 0 < g) (? (k <= g) (snip (string buf) 0 k) ((snip (string buf) 0 g) + fillr (k - g))) (udie 1 "shred: /dev/urandom: read failed")))
        (pass f n pat)                  ; -> 1 | 0, n bytes of the pattern (or random) laid over f
         (: fd (openfd f 4)
            (? (nom? fd) (no f ("failed to open for writing: " + uerrno fd))

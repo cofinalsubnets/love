@@ -295,12 +295,12 @@ kill $R $D
    _ (: p (open (root + "/index.html") "w") _ (say p "<p>served</p>") (close p))
    (waitfor pid) (: s (gather pid) (? (two? s) s (nom? s) s (rest 2, waitfor pid)))
    (run args) (: r (tether (love . "kore" . "httpd" . args)) t (slurp >r) [t <(waitfor <r)])
-   ; the refusals, each by name and before any socket
-   a (run ["-p" "127.0.0.1:8080" "-h" root])
+   ; the refusals, each by name
+   a (run ["-p" "nohost:8080" "-h" root])
    b (run ["-c" "/etc/httpd.conf"])
    c (run ["-h" (root + "/none")])
    d (run ["extra"])
-   _ (test (0 <= (K 'wg-find) <a "-p takes a port, not 127.0.0.1:8080" 0) (a 1 = 2)
+   _ (test (0 <= (K 'wg-find) <a "httpd: cannot listen on nohost:8080" 0) (a 1 = 1)
            (0 <= (K 'wg-find) <b "httpd: -c is not supported" 0) (b 1 = 2)
            (0 <= (K 'wg-find) <c "httpd: not a directory" 0) (c 1 = 1)
            (0 <= (K 'wg-find) <d "usage: httpd" 0) (d 1 = 2))
@@ -313,6 +313,14 @@ kill $R $D
    _ (test (two? g) (<g = 200) (g 2 = "<p>served</p>"))
    _ (still <srv 15)
    _ (waitfor <srv)
+   ; a bare port is loopback's alone: 127.0.0.2 reaches every address on linux, not 127.0.0.1
+   p2 7438
+   srv2 (tether [love "kore" "httpd" "-f" "-p" (show p2) "-h" root])
+   (try2 k) (: r ((K 'wg-once) 0 "127.0.0.1" p2 "/") (? (two? r) r (k < 1) r (rest 50, try2 (k - 1))))
+   g2 (try2 100)
+   _ (test (two? g2) (<g2 = 200) (atom? ((K 'wg-once) 0 "127.0.0.2" p2 "/")))
+   _ (still <srv2 15)
+   _ (waitfor <srv2)
    0)
 
 (hark ["rm" "-rf" net-dir net-root])

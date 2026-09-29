@@ -624,6 +624,7 @@
    _ (scribe s "\e[?1006h")
    _ (test ("\e[<0;4;3M" = mouse s 0 2 3 0) ("\e[<2;4;3m" = mouse s 2 2 3 1)
            ("\e[<35;10;5M" = mouse s 3 4 9 2) ("\e[<80;1;1M" = mouse s 80 0 0 0))
+   _ (test ("\e[<4294967232;4294967295;4294967295M" = mouse s 4294967232 4294967294 4294967294 0))   ; the widest
    _ (scribe s "\e[?1000l")
    _ (test ("" = mouse s 0 2 3 0))                        ; one tracking off is all of it
    _ (scribe s "\e[?1006l\e[?9h")
@@ -697,6 +698,19 @@
    _ (test ([-5 -3] = sel t) ("ab" = copied t -5 -3))
    _ (scribe t "\e[3J")                                 ; the history cleared, the selection too
    _ (test ([0 0] = sel t)))
+
+; --- 28. a picture read back out: its size, its gen, and its pixels as base64 rgba ---
+(: (slot s i) (glass s i 0 >> 16 & 127)
+   s (mkscr 4 10)
+   _ (scribe s "\e_Ga=T,f=24,s=2,v=2,i=7,q=2;/wAA/wAA/wAA/wAA\e\\")   ; a 2x2 red
+   k (slot s 0)
+   _ (test (2 = picture s k 0) (2 = picture s k 1) (1 = picture s k 2)
+           ("/wAA//8AAP//AAD//wAA/w==" = picture s k 3)            ; ff 00 00 ff, four times
+           !(picture s (k + 1) 0) !(picture s 0 0) !(picture s k 4))
+   _ (scribe s "\e[3;1H\e_Ga=T,f=32,s=1,v=1,q=2;AAD/AA==\e\\")      ; another: a new gen
+   _ (test (2 = picture s (slot s 20) 2))
+   t (regrid s (cask (screen () 4 12)) 4 12)             ; a regrid keeps the gen
+   _ (test (1 = picture t (slot t 0) 2)))
 
 ; --- 18. ris: back to the floor ---
 (: s (mkscr 3 8)

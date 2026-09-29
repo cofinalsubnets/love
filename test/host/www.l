@@ -27,6 +27,15 @@
            ["g#s/./x" "http://a/b/c/g#s/./x"] ["g#s/../x" "http://a/b/c/g#s/../x"] ["http:g" "http:g"]])
    ; a scheme is case-blind and comes back lower; a host with no path takes the root
    _ (test (res "HTTPS://h" "x" = "https://h/x") (res "http://h/a/b" "HTTP://k/../z" = "http://k/z"))
+   ; where a server may send us: up to https, http to http, gemini to gemini, never elsewhere
+   _ (: hop (K 'ww-hop?)
+        (test (hop "http://a/" "https://b/") (hop "http://a/" "http://b/") (hop "https://a/" "https://b/")
+              (hop "gemini://a/" "gemini://b/")
+              !(hop "https://a/" "http://b/") !(hop "http://a/" "file:///etc/passwd")
+              !(hop "https://a/" "gopher://b/") !(hop "gemini://a/" "https://b/")
+              !(hop "http://a/" "gemini://b/") !(hop "http://a/" "ftp://b/")))
+   ; ..and what a peer said is echoed without its controls
+   _ (test ((K 'wg-plain) ("a" + string 27 + "]0;x" + string 7 + "b\tc\n" + string 127 + string 0) = "a]0;xb\tc\n"))
    ; what a person types
    _ (test ((K 'ww-arg) "example.com/a" = "https://example.com/a")
            ((K 'ww-arg) "http://x" = "http://x"))
@@ -55,6 +64,18 @@
                                 (g k)))
                     0)) 0)
    at ("http://127.0.0.1:" + show port)
+   ; a server that sends every request to file: -- www does not follow it
+   p3 7446
+   l3 (listen p3)
+   (w3head c acc) (? (ends? acc "\r\n\r\n") acc (: ch (see c) (? (ch < 0) acc (w3head c (acc + string ch)))))
+   srv3 (twirl (\ _ ((: (g k) (: _ (await l3)
+                                 c (accept l3)
+                                 _ (hot? c ? ((: _ (w3head c "") (say c "HTTP/1.1 302 Found\r\nLocation: file:///etc/passwd\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"))
+                                              , flush c, close c) ())
+                                 (g k)))
+                     0)) 0)
+   gf (get ("http://127.0.0.1:" + show p3 + "/") 8)
+   _ (test (<gf = 1) (0 <= (K 'wg-find) <>gf "file:///etc/passwd, which is not followed" 0))
    ga (get (at + "/a.html") 8)
    ; the redirect is followed, and the page answers where it ended: its links resolve there
    gs (get (at + "/sub") 8)
@@ -217,8 +238,15 @@
         l8 (s8 'links 0)
         _ ((K 'ww-pictures) s8)
         pic ((s8 'imgs) ("file://" + sroot + "/dot.jpg"))
+        ; ..and a file: picture on an http page is not read
+        _ (wput "/r.html" ("<p>see <img src=\"file://" + sroot + "/dot.png\" alt=\"dot\"></p>"))
+        s9 (wnew 60 20)
+        _ (wland s9 (get (at + "/r.html") 8))
+        _ ((K 'ww-pictures) s9)
+        rp ((s9 'imgs) ("file://" + sroot + "/dot.png"))
         (test (two? pic) (pic 0 = 8) (pic 1 = 6) (#(pic 2) = 8 * 6 * 4)
-              (s8 'links 0 = l8 + 3) (#(filter cells? (s8 'ls)) = 3)))
+              (s8 'links 0 = l8 + 3) (#(filter cells? (s8 'ls)) = 3)
+              (rp = 'none)))
    ; less's keys still reach less
    _ (wkeys st "G")
    _ (test (0 <= st 'top))

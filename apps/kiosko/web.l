@@ -1,6 +1,6 @@
 ; apps/kiosko/web.l -- `love web`: the tree, in a browser, painted on the way out.
 ;
-;   love web [-p port] [-n] [DIR]          DIR defaults to the working directory
+;   love web [-p [ip:]port] [-n] [DIR]     DIR defaults to the working directory
 ;
 ; kiosko already serves a directory and lists what it holds. what this adds is one
 ; hook, and three answers through it:
@@ -55,9 +55,13 @@
 
    ; the nav line every page wears: up to the directory, across to the file's
    ; other reading. alt is `(href text), or () where there is no other reading.
+   ; a path is the request's, so it is escaped for html and an href percent-encoded
+   (sv-q s) ((cite 'kiosko 'hesc) s)
+   (sv-href s) (sv-q ((cite 'kiosko 'penc) s))
    (sv-nav path alt)
-   ("<p class=\"srcnav\"><a href=\"" + phead path + "\">" + phead path + "</a> &middot; " + path
-    + (two? alt ? (" &middot; <a href=\"" + <alt + "\">" + <>alt + "</a>") "") + "</p>\n")
+   ("<p class=\"srcnav\"><a href=\"" + sv-href (phead path) + "\">" + sv-q (phead path) + "</a> &middot; "
+    + sv-q path
+    + (two? alt ? (" &middot; <a href=\"" + sv-href <alt + "\">" + sv-q <>alt + "</a>") "") + "</p>\n")
    (sv-page path body alt) (hw-page path '("/hue.css") "/" (sv-nav path alt + body))
 
    ; one markdown file: lapiz reads it, shows it, the same template holds it
@@ -110,8 +114,9 @@
                           (sv-page p (hw-body p <>r) [(p + ".md") "the header, as a document"]))))]))))
 
    sv-usage "love web -- the tree in a browser, painted on the way out
-usage: love web [-p PORT] [-n] [DIR]
-  -p, --port PORT   the port to listen on (default 8080)
+usage: love web [-p [IP:]PORT] [-n] [DIR]
+  -p, --port PORT   the port to listen on (default 8080), on 127.0.0.1 alone; IP:PORT
+                    names the address, 0.0.0.0:PORT every one
   -n, --no-build    serve DIR as it is
   DIR               the tree to serve (default .)
 a .l is painted, a .md rendered, and x.l.md is x.l's header as a document. the github
@@ -158,7 +163,11 @@ tree is served. this binary drives the page's build; no love is compiled for it.
       _ (nil? sy ? 0 (sv-die 2 ("unknown option " + sy)))
       _ (two? >rest ? (sv-die 2 ("one tree at a time, not " + <>rest)) 0)
       pt (uoptv t 112)
-      port (: v (uport pt) (? !pt 8080 v v (sv-die 2 ("not a port: " + pt))))
+      ; [IP:]PORT, loopback unless an address is named
+      k (? (string? pt) ((: (g i) (? (i < 0) -1 (pt i = 58) i (g (i - 1)))) (#pt - 1)) -1)
+      ip (? (k < 1) "127.0.0.1" (snip pt 0 k))
+      pn (? (string? pt) (snip pt (k + 1) #pt) ())
+      port (: v (uport pn) (? !pn 8080 v v (sv-die 2 ("not a port: " + pt))))
       dir0 (two? rest ? <rest ".")
       build? (peep t 110 0 ? 0 1)
       ; the tree: DIR itself, the nest laid under it before, or laid there now.
@@ -170,9 +179,10 @@ tree is served. this binary drives the page's build; no love is compiled for it.
       _ (build? && sv-tree? dir ? (sv-build dir) 0)
       serve5 (cite 'kiosko 'serve5)
       _ (nil? serve5 ? (udie 1 "web: no kiosko aboard"))
-      _ (sv-tree? dir ? (say err ("web: " + dir + " -- the page is http://127.0.0.1:" + show port
+      _ (sv-tree? dir ? (say err ("web: " + dir + " -- the page is http://" + ip + ":" + show port
                                   + "/, the machine\n")) 0)
-      _ (serve5 dir port 0 () (sv-make dir box) ? 0 (udie 1 ("web: cannot listen on :" + show port)))
+      _ (: r (serve5 dir [ip port] 0 () (sv-make dir box))
+           (nom? r ? (udie 1 ("web: cannot listen on " + ip + ":" + show port + " -- " + show r))))
       0)
 
    ; the verb, and the seat (kiosko's shape): `love web ..` on the artifact, or
