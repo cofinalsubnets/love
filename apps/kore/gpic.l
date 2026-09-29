@@ -457,6 +457,13 @@
 
    ; -- places and positions ---------------------------------------------------------
    (gp-corner-name s) (peep gp-corners s ())
+   ; .v2 .vertex 2 .mid1 .midpoint 3 -> ['v 2] ['mid 3], the number () when it is to follow
+   (gp-vx-name s)
+    (: n #s (lead i) (? (i < n && gp-alpha? (s i)) (lead (i + 1)) i)
+       k (lead 0) w (snip s 0 k) ds (snip s k n)
+       kind (? (elem w ["v" "ver" "vertex"]) 'v (elem w ["mid" "midpoint"]) 'mid ())
+       (? (kind = () || !(0 = #ds || (: (all i) (? (#ds <= i) 1 (gp-dig? (ds i)) (all (i + 1)) 0) (all 0)))) ()
+          [kind (? (0 = #ds) () (int (gem ds)))]))
    ; a value as a position: an object's is its centre, a path's its start, a move's its end
    (gp-pos g v)
     (? !(tablet? v) v (v 'ty = 'move) (v 'en) (elem (v 'ty) ['line 'spline 'polygon]) (v 'st) (gp-corner g v 'c))
@@ -508,6 +515,10 @@
                   (? (q = ()) (gp-err g ("there is no label '" + d + "' in the block")) (dots q (j + 1))))
               (gp-corner-name d != ()) [(gp-corner g p (gp-corner-name d)) (j + 1)]
               (elem d ["x" "y" "ht" "height" "wid" "width" "rad" "radius" "diam" "diameter"]) [p j]
+              (gp-vx-name d != ())
+               (: vx (gp-vx-name d)
+                  (? (vx 1 != ()) [(gp-corner g p vx) (j + 1)]
+                     (gp-prim g (j + 1) @ [e k] [(gp-corner g p [(<vx) (int e)]) k] (gp-syn g (j + 1)))))
               (gp-syn g j)))
        (? (k = 'label)
            (: p (gp-label g v) (? (p = ()) (gp-err g ("there is no place '" + v + "'")) (dots p (i + 1))))
@@ -571,7 +582,13 @@
             'ne [dx dy] 'nw [(0 - dx) dy] 'se [dx (0 - dy)] 'sw [(0 - dx) (0 - dy)]
             [0.0 0.0]))
    ; a position's every corner is itself
-   (gp-corner g o c) (? (tablet? o) (gp-corner-of g o c) o)
+   (gp-corner g o c) (? (tablet? o) (? (two? c) (gp-vertex g o c) (gp-corner-of g o c)) o)
+   ; a polygon's nth vertex, or the middle of its nth side
+   (gp-vertex g o c)
+    (: ps (peep o 'pts ()) n #ps k (c 1)
+       (? (o 'ty != 'polygon || k < 1 || n < k) (gp-err g "no such vertex")
+          (<c = 'v) (ps (k - 1))
+          (gp-mid (ps (k - 1)) (ps (k % n)))))
    (gp-corner-of g o c)
     (: ty (o 'ty)
        (? (elem ty ['box 'text 'block 'circle 'ellipse])
@@ -586,7 +603,7 @@
           (ty = 'move) (o 'en)
           (elem ty ['line 'spline 'polygon])
            (: s (o 'st) e (o 'en)
-              (c @ 'end e 'c (gp-mid s e)
+              (c @ 'end e 'c (? (ty = 'polygon) (o 'c) (gp-mid s e))
                    'n (? (e 1 > s 1) e s) 's (? (e 1 < s 1) e s)
                    'e (? (<e > <s) e s) 'w (? (<e < <s) e s)
                    s))
@@ -760,6 +777,7 @@
    ; a with path's offset from the centre: a corner, or into a block's labels
    (gp-with-off g o ps round)
     (? (atom? >ps && gp-corner-name <ps != ()) (gp-off round (o 'w) (o 'h) (gp-corner-name <ps))
+       (atom? >ps && gp-vx-name <ps != ()) (gp-sub (gp-corner g o (gp-vx-name <ps)) (o 'c))
        (o 'ty = 'block)
         (: q (peep (o 'labels) <ps ())
            _ (? (q = ()) (gp-err g ("there is no label '" + <ps + "' in the block")) 0)
@@ -807,12 +825,21 @@
        en (<(rev pts))
        kind (? (ty = 'arrow) 'line ty)
        o {'ty kind 'kw ty 'pts pts 'st st 'en en 'segs segs}
+       ; a polygon's centre is its corners' mean
+       _ (? (ty = 'polygon) (: n #pts (pin o 'c [(+(map (p \ <p) pts) / n) (+(map (p \ p 1) pts) / n)])) 0)
        _ (gp-common g sp o)
-       ah (peep sp 'ah (? (ty = 'arrow) 2 0))
+       ah (? (ty = 'polygon) 0 (peep sp 'ah (? (ty = 'arrow) 2 0)))
        _ (pins o 'ah ah 'aht (peep sp 'ht (gp-var g "arrowht")) 'awid (peep sp 'wid (gp-var g "arrowwid"))
                'asolid (gp-var g "arrowhead" != 0 && !(g 'nflag)))
        _ (? (ty = 'move) (pin o 'invis 1) 0)
-       _ (? (peep sp 'at () != ()) (: m (gp-mid st en) (gp-shift o (gp-sub (sp 'at) m))) 0)
+       ; at puts a path's start there, with a corner of it there (or here)
+       wv (peep sp 'with ()) to (peep sp 'at (fr 'here))
+       _ (? (wv != () && string? <wv)
+             (: c (? (gp-vx-name <wv != ()) (gp-vx-name <wv) (gp-corner-name <wv))
+                (gp-shift o (gp-sub to (gp-corner g o c))))
+            (wv != ()) (gp-shift o (gp-sub to (gp-add st wv)))
+            (peep sp 'at () != ()) (gp-shift o (gp-sub to st))
+            0)
        _ (? (ty = 'move) 0 (gp-chop g sp o))
        _ (gp-add-obj g o)
        _ (pin fr 'here (o 'en))
@@ -1046,66 +1073,109 @@
     (? (g 'nflag) (gp-o g ("\\h'" + gp-in (gp-X g p) + "-(\\w'.'u/2u)'\\v'" + gp-in (gp-Y g p) + "+0.04m'.\n.sp -1\n"))
        (gp-draw g p ("l " + gp-d g p p)))
    (gp-visible? o) !(o 'invis)
+   ; aligned text on a path is turned along it, by postscript around the strings
+   (gp-turned g o)
+    (: st (peep o 'st ()) en (peep o 'en ())
+       (!(g 'nflag) && peep o 'aligned 0 && elem (o 'ty) ['line 'spline 'arc] && st != en))
+   (gp-ps g s) (gp-o g (".if \\n(0p \\{\\\n" + s + "\n.sp -1\n.\\}\n"))
    (gp-text-at g o c)
-    (: ts (o 'txt) n #ts
+    (: ts (o 'txt) n #ts turn (gp-turned g o)
        (? (n = 0) 0
           (: _ (gp-thick g -1.0)
-             (map (k \ (: t (ts k) s (t 's)
+             _ (? turn
+                  (: d (gp-sub (o 'en) (o 'st))
+                     (gp-ps g (gp-at-p g c + "\\X'ps: exec gsave currentpoint 2 copy translate "
+                               + gp-f (-1.0 * atan2 (d 1) <d * 180 / gp-pi) 4 + " rotate neg exch neg exch translate'")))
+                  0)
+             _ (map (k \ (: t (ts k) s (t 's)
                           h (? (peep t 'ljust 0) ("\\h'" + gp-in (gp-X g c) + "'")
                                (peep t 'rjust 0) ("\\h'" + gp-in (gp-X g c) + "-\\w'" + s + "'u'")
                                ("\\h'" + gp-in (gp-X g c) + "-(\\w'" + s + "'u/2u)'"))
                           vv ("\\v'" + gp-in (gp-Y g c) + "-(" + show (n - 1) + "v/2u)+" + show k + "v+0.22m"
                               + (? (peep t 'above 0) "-.5v" (peep t 'below 0) "+.5v" "") + "'")
                           (gp-o g (".lf " + show (t 'ln) + "\n" + h + vv + s + "\n.sp -1\n"))))
-                  (gp-said ts)))))
+                  (gp-said ts))
+             (? turn (gp-ps g "\\X'ps: exec grestore'") 0))))
    ; the strings of a text that are said: an empty one keeps its place and draws nothing
    (gp-said ts) (filter (k \ 0 < #(ts k 's)) ^#ts)
    (gp-text-pos g o)
     (: ty (o 'ty)
-       (? (ty = 'move) (o 'en) (elem ty ['line 'spline 'polygon]) (gp-mid (o 'st) (o 'en))
+       (? (ty = 'move) (o 'en) (elem ty ['line 'spline]) (gp-mid (o 'st) (o 'en))
           (o 'c)))
    ; an arrowhead with its tip at p, pointing along u
    ; an arrowhead with its tip at p, pointing along u: solid, filled in the stroke's colour
    ; under a hairline, or two strokes whose tip stands back a quarter of the line's width
-   (gp-head g o p u)
+   ; with an outline colour a solid head is filled in it, and all but the last let it go
+   (gp-head g o p u last) (gp-head2 g o p u last (gp-retreat o))
+   ; ..an open one's tip already k back
+   (gp-head2 g o p u last k)
     (: l (gp-len u) e (? (l = 0) [1.0 0.0] (gp-mul u (1.0 / l)))
        b (gp-sub p (gp-mul e (o 'aht)))
        nrm [(-1.0 * e 1) (<e)]
        hw (o 'awid / 2)
+       c (gp-colour g o 1)
        (? (o 'asolid)
            (: v1 (gp-sub b (gp-mul nrm hw)) v2 (gp-add b (gp-mul nrm hw))
-              _ (gp-fillto g 1.0)
+              _ (? (c != ()) (gp-col-on g c c) (gp-fillto g 1.0))
               _ (gp-draw g p ("P " + gp-ds g [p v1 v2]))
               _ (gp-thick g 0.1)
-              (gp-draw g p ("p " + gp-ds g [p v1 v2])))
-          (: k (gp-retreat o) p2 (gp-sub p (gp-mul e k)) b2 (gp-sub b (gp-mul e k))
+              _ (gp-draw g p ("p " + gp-ds g [p v1 v2]))
+              (? (c != () && !last) (gp-col-off g c c) 0))
+          (: p2 (gp-sub p (gp-mul e k)) b2 (gp-sub b (gp-mul e k))
              v1 (gp-sub b2 (gp-mul nrm hw)) v2 (gp-add b2 (gp-mul nrm hw))
              _ (gp-thick g (o 'thick))
              _ (gp-draw g v2 ("l " + gp-d g v2 p2))
              (gp-draw g v1 ("l " + gp-d g v1 p2)))))
    ; how far an open head's tip stands back: a quarter of the line's width
    (gp-retreat o) (: t (o 'thick) ((? (t < 0) 1.0 t) / 288))
+   ; colours: a shaded fill is .fcolor's, an outline .gcolor's, each set before the thing
+   ; is drawn and let go after; a path takes only its outline's. without groff's
+   ; extensions there are none
+   (gp-colour g o)
+    (? (g 'nflag || g 'mode = 'tex) [() ()] [(peep o 'shaded ()) (peep o 'outline ())])
+   (gp-col-on g f c) (: _ (? (f != ()) (gp-o g (".fcolor " + f + "\n")) 0) (? (c != ()) (gp-o g (".gcolor " + c + "\n")) 0))
+   (gp-col-off g f c) (: _ (? (f != ()) (gp-o g ".fcolor\n") 0) (? (c != ()) (gp-o g ".gcolor\n") 0))
+   ; filled: by a shaded colour, else by a gray
+   (gp-fill? g o) (!(g 'nflag) && (o 'fill != () || gp-colour g o 0 != ()))
+   (gp-fill-set g o) (? (gp-colour g o 0 != ()) 0 (gp-fillto g (o 'fill)))
    (gp-tr-obj g o)
-    (: ty (o 'ty)
+    (: ty (o 'ty) fc (gp-colour g o) f <fc c (fc 1)
+       path (elem ty ['line 'spline 'arc])
+       ; a path's heads bring their own colour and the path's rides the last of them
+       heads (path && c != () && peep o 'asolid 0 && peep o 'ah 0 != 0 && gp-visible? o)
+       _ (? (g 'mode = 'tex || elem ty ['troff 'block 'move]) 0
+            path (: _ (gp-col-on g () c) (? heads (gp-col-off g () c) 0))
+            (gp-col-on g f c))
        _ (? (g 'mode = 'tex) (gp-tx-obj g o)
           (ty = 'troff) (gp-o g (".lf " + show (o 'ln) + "\n" + o 'line + "\n"))
           (ty = 'block) (map (x \ gp-tr-obj g x) (o 'objs))
-          (ty = 'box) (? (0 < peep o 'rad 0.0 && !(g 'nflag && 0)) (gp-tr-rbox g o) (gp-tr-box g o))
+          (ty = 'box) (? (0 < peep o 'rad 0.0) (gp-tr-rbox g o) (gp-tr-box g o))
+          (ty = 'polygon) (gp-tr-poly g o (o 'pts) 0)
           (ty = 'circle) (gp-tr-round g o "c" ("c " + gp-in (2 * o 'r * g 'sf)))
           (ty = 'ellipse) (gp-tr-round g o "e" ("e " + gp-in (o 'w * g 'sf) + " " + gp-in (o 'h * g 'sf)))
           (ty = 'arc) (gp-tr-arc g o)
           (elem ty ['line 'spline]) (? (gp-headless? g o) 0 (gp-tr-line g o))
           0)
-       (? (ty = 'troff || g 'mode = 'tex) 0 (gp-text-at g o (gp-text-pos g o))))
-   (gp-tr-box g o)
-    (: c (o 'c) x (o 'w / 2) y (o 'h / 2)
-       se (gp-add c [x (0 - y)]) ne (gp-add c [x y]) nw (gp-add c [(0 - x) y]) sw (gp-add c [(0 - x) (0 - y)])
-       vs [se ne nw sw]
-       _ (? (o 'fill != () && !(g 'nflag)) (: _ (gp-fillto g (o 'fill)) (gp-draw g se ("P " + gp-ds g vs))) 0)
-       (? !(gp-visible? o) 0
+       _ (? (g 'mode = 'tex || elem ty ['troff 'block 'move 'text]) 0
+            path (? (c != ()) (gp-col-off g (? heads c ()) c) 0)
+            (gp-col-off g f c))
+       _ (? (ty = 'troff || g 'mode = 'tex) 0 (gp-text-at g o (gp-text-pos g o)))
+       (? (ty = 'text && g 'mode != 'tex) (gp-col-off g f c) 0))
+   ; a box's corners from its south-east round: xslanted moves the top along, yslanted
+   ; the right side up
+   (gp-box-vs o)
+    (: c (o 'c) x (o 'w / 2) y (o 'h / 2) xs (peep o 'xsl 0.0) ys (peep o 'ysl 0.0)
+       [(gp-add c [x (ys - y)]) (gp-add c [(x + xs) (y + ys)]) (gp-add c [(xs - x) y]) (gp-add c [(0 - x) (0 - y)])])
+   (gp-tr-box g o) (gp-tr-poly g o (gp-box-vs o) 1)
+   ; a closed path: filled (if it may be, drawn or not), then stroked whole, or side by
+   ; side from the last corner to the first and on round
+   (gp-tr-poly g o vs fill-invis)
+    (: v0 <vs vis (gp-visible? o)
+       _ (? (gp-fill? g o && (vis || fill-invis)) (: _ (gp-fill-set g o) (gp-draw g v0 ("P " + gp-ds g vs))) 0)
+       (? !vis 0
           (: _ (gp-thick g (o 'thick))
-             (? (o 'lt = 'solid && !(g 'nflag)) (gp-draw g se ("p " + gp-ds g vs))
-                (map (e \ gp-seg g o <e <>e) [[sw se] [se ne] [ne nw] [nw sw]])))))
+             (? (o 'lt = 'solid && !(g 'nflag)) (gp-draw g v0 ("p " + gp-ds g vs))
+                (: (go prev l) (? (atom? l) 0 (gp-seg g o prev <l, go <l >l)) (go (<(rev vs)) vs))))))
    ; a box with round corners: filled as four discs and two bands, drawn as four quarter
    ; arcs and the four straights between them
    (gp-tr-rbox g o)
@@ -1114,8 +1184,8 @@
        hw (w / 2 - r) hh (h / 2 - r)
        ne (gp-add c [hw hh]) nw (gp-add c [(0 - hw) hh]) sw (gp-add c [(0 - hw) (0 - hh)]) se (gp-add c [hw (0 - hh)])
        (disc p) (gp-draw g [(<p - r) (p 1)] ("C " + gp-in (2 * r * g 'sf)))
-       _ (? (o 'fill != () && !(g 'nflag))
-             (: _ (gp-fillto g (o 'fill))
+       _ (? (gp-fill? g o)
+             (: _ (gp-fill-set g o)
                 _ (disc ne) _ (gp-thick g 1.0) _ (disc nw) _ (disc sw) _ (disc se)
                 _ (gp-draw g [x1 (ne 1)] ("P " + gp-ds g [[x1 (ne 1)] [x0 (ne 1)] [x0 (se 1)] [x1 (se 1)]]))
                 (gp-draw g [(<ne) y1] ("P " + gp-ds g [[(<ne) y1] [(<nw) y1] [(<nw) y0] [(<ne) y0]])))
@@ -1133,12 +1203,63 @@
    (gp-tr-round g o f cmd)
     (: c (o 'c) at ("\\h'" + gp-in (gp-X g c - o 'w / 2 * g 'sf) + "'\\v'" + gp-in (gp-Y g c) + "'")
        (draw cmd) (gp-o g (at + "\\D'" + cmd + "'\n.sp -1\n"))
-       _ (? (o 'fill != () && !(g 'nflag)) (: _ (gp-fillto g (o 'fill)) (draw (upper f + snip cmd 1 #cmd))) 0)
-       (? !(gp-visible? o) 0 (: _ (gp-thick g (o 'thick)) (draw cmd))))
+       _ (? (gp-fill? g o) (: _ (gp-fill-set g o) (draw (upper f + snip cmd 1 #cmd))) 0)
+       ; a circle takes its thickness once filled, drawn or not
+       _ (? (f = "c" && gp-fill? g o) (gp-thick g (o 'thick)) 0)
+       bits (? (f = "c") (gp-curve-bits g o) ['solid])
+       (? !(gp-visible? o) 0
+          (: _ (gp-thick g (o 'thick))
+             (? (<bits = 'solid) (draw cmd) (gp-tr-bits g o bits)))))
+   ; a dashed or dotted round thing as its pieces -> ['dash [[a b] ..]] (each a counter-
+   ; clockwise run of angle), ['dot [a ..]], or ['solid]. a circle's dashes sit on 4k
+   ; even angles from 0, its dots on 4 in each quarter it fits; an arc is dashed and
+   ; dotted along its length as a line is
+   (gp-curve-bits g o) (gp-curve-bits2 g o (peep o 'st ()) (peep o 'en ()))
+   ; ..an arc's between two points on it, taken counter-clockwise from the one it turns
+   ; from that way
+   (gp-curve-bits2 g o st en)
+    (: lt (o 'lt) r (o 'r) w (gp-dw g o) tau (2 * gp-pi)
+       (? (lt = 'solid || r <= 0) ['solid]
+          (o 'ty = 'circle)
+           (? (lt = 'dashed)
+               (: n (4 * (int (tau * r / (8 * w)) + 1)) d (w / r) step (tau / n)
+                  (? (d * n >= tau) ['solid] ['dash (map (k \ [(k * step - d / 2) (k * step + d / 2)]) ^n)]))
+              (: m (4 * int (tau * r / (4 * w))) n (? (m = 0) 2 m)
+                 ['dot (map (k \ k * (tau / n)) ^n)]))
+          (: c (o 'c) p (? (o 'cw) en st) q (? (o 'cw) st en)
+             a0 (atan2 (p 1 - c 1) (<p - <c)) a1 (atan2 (q 1 - c 1) (<q - <c))
+             sw0 ((a1 - a0) % tau) sw (? (sw0 <= 0) (sw0 + tau) sw0)
+             l (r * sw)
+             (? (lt = 'dashed)
+                 (: n (int ((l - w) / (2 * w) + 0.5)) d (w / r) gap ((sw - d) / n)
+                    (? (l <= w || n < 1) ['solid]
+                       ['dash (map (k \ (: s (a0 + k * gap) [s (s + d)])) ^(n + 1))]))
+                (: n (max 1 (int (l / w + 0.5)))
+                   ['dot (map (k \ a0 + k * sw / n) ^(n + 1))])))))
+   (gp-on-circle o a) (: c (o 'c) r (o 'r) [(<c + r * cos a) (c 1 + r * sin a)])
+   ; the pieces in troff: each dash an arc, each dot a dot
+   (gp-tr-bits g o bits)
+    (: c (o 'c)
+       (<bits @ 'dash (map (ab \ (: s (gp-on-circle o <ab) e (gp-on-circle o (ab 1))
+                                     (gp-draw g s ("a " + gp-d g s c + " " + gp-d g c e)))) (bits 1))
+                'dot (map (a \ gp-dot g (gp-on-circle o a)) (bits 1))
+                0))
+   ; ..and in TeX: tpic arcs, and dots as small discs as wide as the pen
+   (gp-tx-bits g o bits)
+    (: c (o 'c) rr (show (gp-mi (o 'r * g 'sf)))
+       t (o 'thick) dr (show (int ((? (t < 0) t t) / 72.0 * 1000.0 / 2 + 0.5)))
+       (<bits @ 'dash (: _ (gp-pen g t)
+                        (map (ab \ (: a1 (-1.0 * ab 1) a2 (-1.0 * <ab)
+                                      (gp-sp g ("ar " + gp-tx-xy g c + " " + rr + " " + rr + " " + gp-f a1 6 + " " + gp-f a2 6))))
+                             (bits 1)))
+                'dot (map (a \ (: _ (gp-sp g "sh 1") (gp-sp g ("ia " + gp-tx-xy g (gp-on-circle o a) + " " + dr + " " + dr + " 0 6.28319"))))
+                          (bits 1))
+                0))
    ; an arc's head points from the arc's point its own length back round, and the arc
    ; stops there
-   (gp-arc-base o p fwd)
-    (: c (o 'c) r (o 'r) d (o 'aht / r)
+   (gp-arc-base o p fwd) (gp-arc-back o p fwd (o 'aht))
+   (gp-arc-back o p fwd len)
+    (: c (o 'c) r (o 'r) d (len / r)
        a (atan2 (p 1 - c 1) (<p - <c)) b (? fwd (a - d) (a + d))
        [(<c + r * cos b) (c 1 + r * sin b)])
    (gp-tr-arc g o)
@@ -1147,12 +1268,20 @@
           st (o 'st) en (o 'en)
           bs (? (ah & 1) (gp-arc-base o st !ccw) st)
           be (? (ah & 2) (gp-arc-base o en ccw) en)
-          _ (? (ah & 1) (gp-head g o st (gp-sub st bs)) 0)
-          _ (? (ah & 2) (gp-head g o en (gp-sub en be)) 0)
-          s (? (o 'asolid) bs st) e (? (o 'asolid) be en)
+          ; an open head's tip stands back along the arc, and a straight joins it to
+          ; where the arc stops
+          (head p b last fwd)
+           (? (o 'asolid) (gp-head g o p (gp-sub p b) last)
+              (: t (gp-arc-back o p fwd (gp-retreat o))
+                 _ (gp-head2 g o t (gp-sub t b) last 0.0)
+                 (gp-draw g t ("l " + gp-d g t b))))
+          _ (? (ah & 1) (head st bs (ah = 1) !ccw) 0)
+          _ (? (ah & 2) (head en be 1 ccw) 0)
+          s bs e be
           a (? ccw s e) b (? ccw e s)
           _ (gp-thick g (o 'thick))
-          (gp-draw g a ("a " + gp-d g a c + " " + gp-d g c b))))
+          bits (gp-curve-bits2 g o s e)
+          (? (<bits = 'solid) (gp-draw g a ("a " + gp-d g a c + " " + gp-d g c b)) (gp-tr-bits g o bits))))
    ; a head on an end with no length has no way to point: said, and the path not drawn
    (gp-headless? g o)
     (: ps (o 'pts) n #ps ah (peep o 'ah 0)
@@ -1166,8 +1295,8 @@
        p0 (ps 0) p1 (ps 1) q1 (ps (n - 2)) q0 (ps (n - 1))
        (unit p q) (: v (gp-sub p q) l (gp-len v) (? (l = 0) [1.0 0.0] (gp-mul v (1.0 / l))))
        (base p q) (gp-sub p (gp-mul (unit p q) (o 'aht)))
-       _ (? (vis && (ah & 1)) (gp-head g o p0 (gp-sub p0 p1)) 0)
-       _ (? (vis && (ah & 2)) (gp-head g o q0 (gp-sub q0 q1)) 0)
+       _ (? (vis && (ah & 1)) (gp-head g o p0 (gp-sub p0 p1) (ah = 1)) 0)
+       _ (? (vis && (ah & 2)) (gp-head g o q0 (gp-sub q0 q1) 1) 0)
        ; the line stops at a solid head's base (a spline a tenth of the way in), at an
        ; open one's tip
        (back p q) (gp-sub p (gp-mul (unit p q) (? (o 'asolid) (? spl (o 'aht / 10) (o 'aht)) (gp-retreat o))))
@@ -1226,16 +1355,23 @@
     (: lt (o 'lt)
        (? (lt = 'dashed) ("da " + gp-3 (gp-dw g o)) (lt = 'dotted) ("dt " + gp-3 (gp-dw g o)) "fp"))
    (gp-tx-obj g o)
-    (: ty (o 'ty) vis (gp-visible? o) fill (o 'fill != ())
+    (: ty (o 'ty) vis (gp-visible? o) fill (o 'fill != () && peep o 'shaded () = ())
        _ (? (ty = 'troff) (gp-o g (o 'line + "%\n"))
             (ty = 'block) (map (x \ gp-tx-obj g x) (o 'objs))
+            (ty = 'box && 0 < peep o 'rad 0.0) (gp-tx-rbox g o)
             (ty = 'box)
-             (: c (o 'c) x (o 'w / 2) y (o 'h / 2)
-                se (gp-add c [x (0 - y)]) ne (gp-add c [x y]) nw (gp-add c [(0 - x) y]) sw (gp-add c [(0 - x) (0 - y)])
+             (: vs (gp-box-vs o) sw (vs 3)
                 (? (vis || fill)
                     (: _ (? fill (gp-shade g (o 'fill)) 0) _ (gp-pen g (o 'thick))
-                       (gp-tx-path g [sw se ne nw sw] (? vis (gp-tx-end g o) "ip")))
+                       (gp-tx-path g [sw (vs 0) (vs 1) (vs 2) sw] (? vis (gp-tx-end g o) "ip")))
                    0))
+            (ty = 'polygon)
+             (? vis
+                 (: ps (o 'pts) l <(rev ps)
+                    _ (? fill (gp-shade g (o 'fill)) 0) _ (gp-pen g (o 'thick))
+                    (gp-tx-path g (l . ps) (gp-tx-end g o)))
+                0)
+            (ty = 'circle && vis && !fill && gp-curve-bits g o 0 != 'solid) (gp-tx-bits g o (gp-curve-bits g o))
             (ty = 'circle || ty = 'ellipse)
              (? (vis || fill)
                  (: _ (? fill (gp-shade g (o 'fill)) 0) _ (gp-pen g (o 'thick))
@@ -1246,6 +1382,33 @@
             (elem ty ['line 'spline]) (? (vis && !(gp-headless? g o)) (gp-tx-line g o) 0)
             0)
        (? (ty = 'troff) 0 (gp-tx-text g o (gp-text-pos g o))))
+   ; a round-cornered box: filled as four discs and two bands (under a 1pt pen), drawn as
+   ; four quarter arcs and four straights
+   (gp-tx-rbox g o)
+    (: c (o 'c) w (o 'w) h (o 'h) r (min (o 'rad) (min (w / 2) (h / 2)))
+       x0 (<c - w / 2) x1 (<c + w / 2) y0 (c 1 - h / 2) y1 (c 1 + h / 2)
+       hw (w / 2 - r) hh (h / 2 - r) fill (o 'fill != () && peep o 'shaded () = ()) vis (gp-visible? o)
+       ne (gp-add c [hw hh]) nw (gp-add c [(0 - hw) hh]) sw (gp-add c [(0 - hw) (0 - hh)]) se (gp-add c [hw (0 - hh)])
+       rr (show (gp-mi (r * g 'sf)))
+       (disc p) (: _ (gp-shade g (o 'fill)) (gp-sp g ("ia " + gp-tx-xy g p + " " + rr + " " + rr + " 0 6.28319")))
+       (band vs) (: _ (gp-shade g (o 'fill)) _ (gp-pen g 1.0) (gp-tx-path g (<(rev vs) . vs) "ip"))
+       _ (? fill
+             (: _ (disc ne) _ (disc nw) _ (disc sw) _ (disc se)
+                _ (band [[x1 (ne 1)] [x0 (ne 1)] [x0 (se 1)] [x1 (se 1)]])
+                (band [[(<ne) y1] [(<nw) y1] [(<nw) y0] [(<ne) y0]]))
+             0)
+       (arc s m e) (: a1 (gp-tx-ang g m e) a2 (gp-tx-ang g m s)
+                      a3 (: (up a) (? (a < a1) (up (a + 2 * gp-pi)) a) (up a2))
+                      (gp-sp g ("ar " + gp-tx-xy g m + " " + rr + " " + rr + " " + gp-f a1 6 + " " + gp-f a3 6)))
+       (? !vis 0
+          (: _ (gp-pen g (o 'thick))
+             _ (arc [x0 (y0 + r)] [(x0 + r) (y0 + r)] [(x0 + r) y0])
+             _ (arc [(x0 + r) y1] [(x0 + r) (y1 - r)] [x0 (y1 - r)])
+             _ (arc [x1 (y1 - r)] [(x1 - r) (y1 - r)] [(x1 - r) y1])
+             _ (arc [(x1 - r) y0] [(x1 - r) (y0 + r)] [x1 (y0 + r)])
+             (map (e \ gp-tx-path g e "fp")
+                  [[[x0 (y0 + r)] [x0 (y1 - r)]] [[(x0 + r) y1] [(x1 - r) y1]]
+                   [[x1 (y1 - r)] [x1 (y0 + r)]] [[(x1 - r) y0] [(x0 + r) y0]]]))))
    (gp-tx-text g o c)
     (: ts (o 'txt) n #ts
        (map (k \ (: t (ts k) s (t 's)
@@ -1264,15 +1427,23 @@
        st (o 'st) en (o 'en)
        bs (? (ah & 1) (gp-arc-base o st !ccw) st)
        be (? (ah & 2) (gp-arc-base o en ccw) en)
-       _ (? (ah & 1) (gp-tx-head g o st (gp-sub st bs)) 0)
-       _ (? (ah & 2) (gp-tx-head g o en (gp-sub en be)) 0)
-       s (? (o 'asolid) bs st) e (? (o 'asolid) be en)
+       (head p b fwd)
+        (? (o 'asolid) (gp-tx-head g o p (gp-sub p b))
+           (: t (gp-arc-back o p fwd (gp-retreat o))
+              _ (gp-tx-head2 g o t (gp-sub t b) 0.0)
+              (gp-tx-path g [t b] "fp")))
+       _ (? (ah & 1) (head st bs !ccw) 0)
+       _ (? (ah & 2) (head en be ccw) 0)
+       s bs e be
        a1 (gp-tx-ang g c (? ccw e s)) a2 (gp-tx-ang g c (? ccw s e))
        a3 (: (up a) (? (a < a1) (up (a + 2 * gp-pi)) a) (up a2))
-       _ (gp-pen g (o 'thick))
-       (gp-sp g ("ar " + gp-tx-xy g c + " " + show (gp-mi (o 'r * g 'sf)) + " " + show (gp-mi (o 'r * g 'sf))
-                 + " " + gp-f a1 6 + " " + gp-f a3 6)))
-   (gp-tx-head g o p u)
+       bits (gp-curve-bits2 g o s e)
+       (? (<bits != 'solid) (gp-tx-bits g o bits)
+          (: _ (gp-pen g (o 'thick))
+             (gp-sp g ("ar " + gp-tx-xy g c + " " + show (gp-mi (o 'r * g 'sf)) + " " + show (gp-mi (o 'r * g 'sf))
+                       + " " + gp-f a1 6 + " " + gp-f a3 6)))))
+   (gp-tx-head g o p u) (gp-tx-head2 g o p u (gp-retreat o))
+   (gp-tx-head2 g o p u k)
     (: l (gp-len u) e (? (l = 0) [1.0 0.0] (gp-mul u (1.0 / l)))
        b (gp-sub p (gp-mul e (o 'aht)))
        nrm [(-1.0 * e 1) (<e)]
@@ -1281,7 +1452,7 @@
            (: v1 (gp-sub b (gp-mul nrm hw)) v2 (gp-add b (gp-mul nrm hw))
               _ (gp-shade g 1.0) _ (gp-pen-n g 1)
               (gp-tx-path g [v2 p v1 v2] "fp"))
-          (: k (gp-retreat o) p2 (gp-sub p (gp-mul e k)) b2 (gp-sub b (gp-mul e k))
+          (: p2 (gp-sub p (gp-mul e k)) b2 (gp-sub b (gp-mul e k))
              v1 (gp-sub b2 (gp-mul nrm hw)) v2 (gp-add b2 (gp-mul nrm hw))
              _ (gp-pen g (o 'thick))
              _ (gp-tx-path g [v2 p2] "fp")
