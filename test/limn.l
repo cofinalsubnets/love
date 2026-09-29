@@ -176,13 +176,15 @@
                 (one = two) (1 = tally (keys laid2))
                 (gone = "\e[4;5H\e[2X")))
 
-; --- a VS16-widened lead (?2027): its two cells erased, and the cursor stepped two past
-;     it whatever width the outer terminal draws it ---
-   _ (: s (mkscr 1 6)
-        _ (scribe s "\e[?2027h\u{2764}\u{fe0f}x\u{4e16}")
-        f (paint s 1 6 0 0)
+; --- a lead VS16 or a ZWJ sequence widened (?2027): its two cells erased, and the cursor
+;     stepped two past it whatever width the outer terminal draws it ---
+   _ (: s (mkscr 1 10)
+        fam "\u{1f468}\u{200d}\u{1f469}\u{200d}\u{1f467}"
+        _ (scribe s ("\e[?2027h\u{2764}\u{fe0f}x\u{4e16}" + fam + "y"))
+        f (paint s 1 10 0 0)
         _ (test (sub? f "\e[2X\e7\u{2764}\u{fe0f}\e8\e[2Cx" 0)
-                (sub? f "x\u{4e16}" 0)))                  ; a plain wide char as before
+                (sub? f "x\u{4e16}" 0)                    ; a plain wide char as before
+                (sub? f ("\e[2X\e7" + fam + "\e8\e[2Cy") 0)))
 
 ; --- a selected cell wears the reverse face ---
    _ (: s (mkscr 1 4)

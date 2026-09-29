@@ -663,5 +663,5 @@
           (!pl && two? (tty 1)) (tui key yes)
           (repl key (plain yes) ())))
 
-   _ (crow-main >argv)
+   _ (: s (crow-main >argv) (quit (charm? s ? s 0)))
    0)

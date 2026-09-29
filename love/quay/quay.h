@@ -30,7 +30,7 @@ enum { cb_lead = 1, cb_tail = 2 };  // the width field: a wide char's two halves
 // a grapheme cluster: a base and up to three combining marks, in a pool the header holds.
 // a mark joins the cell before the cursor; a slot is free while its base is 0, and one no
 // cell names is taken back when the pool is full
-enum { cb_nclu = 128, cb_clun = 4 };
+enum { cb_nclu = 128, cb_clun = 10 };
 #define cb_clu0 0x110000u
 
 enum {              // face bits, the glyph word's top byte

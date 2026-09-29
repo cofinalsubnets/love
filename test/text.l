@@ -41,6 +41,21 @@
       (scut "a日本語é" 4 = "a日") (scut "a日本語é" 3 = "a日") (scut "a日本語é" 99 = "a日本語é")
       (scut "e\xcc\x81x" 1 = "e\xcc\x81") (scut "日" 1 = "")))
 
+; 'text's grapheme clusters, quay's under ?2027: a ZWJ sequence, a skin tone, a flag and a
+; VS16-widened character are two columns each; a ZWJ between letters joins nothing after it
+(: gcnext (cite 'text 'gcnext) gcwidth (cite 'text 'gcwidth) sgwidth (cite 'text 'sgwidth)
+   cpxp? (cite 'text 'cpxp?) cpvs? (cite 'text 'cpvs?) swidth (cite 'text 'swidth)
+   fam "\u{1f468}\u{200d}\u{1f469}\u{200d}\u{1f467}"
+   (test
+      (gcnext (fam + "x") 0 = 18) (gcwidth fam 0 = 2) (gcnext "x" 0 = 1)
+      (gcnext "\u{1f44d}\u{1f3fd}y" 0 = 8) (gcwidth "\u{1f44d}\u{1f3fd}" 0 = 2)
+      (gcnext "\u{1f1eb}\u{1f1f7}\u{1f1e9}" 0 = 8) (gcwidth "\u{1f1e9}" 0 = 1)
+      (gcnext "a\u{200d}b" 0 = 4) (gcwidth "a\u{200d}b" 0 = 1)
+      (gcwidth "\u{2764}\u{fe0f}" 0 = 2) (gcwidth "\u{2764}" 0 = 1) (gcwidth "a\u{fe0f}" 0 = 1)
+      (gcwidth "\u{2764}\u{200d}\u{1f525}" 0 = 2) (gcnext "e\xcc\x81f" 0 = 3) (gcwidth "\t" 0 = 0)
+      (sgwidth (fam + "x\u{1f1eb}\u{1f1f7}\u{1f1e9}") = 6) (swidth (fam + "x") = 7) (sgwidth "" = 0)
+      (cpxp? 128512) !(cpxp? 127995) !(cpxp? 65) (cpvs? 10084) !(cpvs? 128512)))
+
 ; cli's field measures ride 'text: a column is a column however many bytes wear it
 (: edwide (cite 'cli 'edwide) edcut (cite 'cli 'edcut) edfit (cite 'cli 'edfit)
    (test

@@ -92,6 +92,11 @@ if command -v xz >/dev/null 2>&1; then
     korerun xz -dc "$ho/.arcg.xz" > "$o"; cmp -s "$ho/.arc1" "$o" || fail "kore unxz of xz $p"
   done
   xz -dc "$ho/.arc1.xz" > "$o" 2>/dev/null; cmp -s "$ho/.arc1" "$o" || fail "xz -d of kore's xz"
+  # blocks with their sizes in the header (xz -T2 --block-size), and noise LZMA2 stores whole
+  xz -T2 --block-size=100000 -c "$ho/.arcb" > "$ho/.arcm.xz"
+  korerun xz -dc "$ho/.arcm.xz" > "$o"; cmp -s "$ho/.arcb" "$o" || fail "kore unxz of xz's blocks"
+  head -c 300000 /dev/urandom > "$ho/.arcr"; xz -c "$ho/.arcr" > "$ho/.arcr.xz"
+  korerun xz -dc "$ho/.arcr.xz" > "$o"; cmp -s "$ho/.arcr" "$o" || fail "kore unxz of stored chunks"
   xz -t "$ho/.arc0.xz" || fail "xz -t of kore's empty stream"
   korerun xz -c "$ho/.arcb" | xz -dc > "$o"; cmp -s "$ho/.arcb" "$o" || fail "xz -d of kore's xz, 600 KiB"
   xz -c "$ho/.arcb" | korerun xz -dc > "$o"; cmp -s "$ho/.arcb" "$o" || fail "kore unxz of xz's, 600 KiB"
@@ -111,6 +116,9 @@ korerun bunzip2 -c < "$ho/.arc1.bz2" > "$o"; cmp -s "$ho/.arc1" "$o" || fail "ko
 korerun bzip2 -c "$ho/.arc0" > "$ho/.arc0.bz2"
 [ "$(wc -c < "$ho/.arc0.bz2")" -eq 14 ] || fail "kore bzip2: an empty input is a 14-byte stream"
 korerun bzcat "$ho/.arc0.bz2" > "$o"; [ ! -s "$o" ] || fail "kore bzcat of the empty stream"
+korerun bzip2 -c "$ho/.arcb" > "$ho/.arcb.bz2"
+n=$(wc -c < "$ho/.arcb.bz2"); head -c $((n - 30)) "$ho/.arcb.bz2" | korerun bzcat > /dev/null 2> "$g"; r=$?
+[ $r -eq 2 ] && grep -q 'ends unexpectedly' "$g" || fail "kore bzcat of a torn stream (rc $r)"
 dd if="$ho/.arc1.bz2" of="$ho/.arct.bz2" bs=1 count=20 2>/dev/null
 korerun bzip2 -t "$ho/.arct.bz2" 2> "$ho/.arct.say"; r=$?
 [ $r -eq 2 ] || fail "kore bzip2 -t of a torn stream (rc $r)"
@@ -257,14 +265,20 @@ if command -v xz >/dev/null 2>&1; then
   big xz --format=lzma -0 > "$B/z.lzma"
   korerun unlzma -c "$B/z.lzma" > /dev/null 2> "$o"; r=$?
   [ $r -eq 1 ] && grep -q 'Memory usage limit' "$o" || fail "kore unlzma of a sizeless 1100 MiB (rc $r)"
+  # .xz streams a chunk at a time under a 64 MiB heap, through unxz and tar J alike
   big xz -0 -T1 > "$B/z.xz"
-  korerun unxz -c "$B/z.xz" > /dev/null 2> "$o"; r=$?
-  [ $r -eq 1 ] && grep -q 'Memory usage limit' "$o" || fail "kore unxz of 1100 MiB (rc $r)"
+  LOVE_BUDGET_MB=64 LOVE_NO_IMAGE= "$m" kore unxz -c "$B/z.xz" 2> "$o" | wc -c > "$g"
+  [ "$(tr -d ' ' < "$g")" = 1153433600 ] || { cat "$o"; fail "kore unxz of 1100 MiB did not stream: $(cat "$g") bytes"; }
+  LOVE_BUDGET_MB=64 LOVE_NO_IMAGE= "$m" kore tar tJf "$B/z.xz" > "$g" 2> "$o"; r=$?
+  [ $r -eq 0 ] && [ ! -s "$g" ] || { cat "$o"; fail "kore tar tJf of 1100 MiB of zeros did not stream (rc $r)"; }
 fi
 if command -v bzip2 >/dev/null 2>&1; then
+  # .bz2 a block at a time, through bunzip2 and tar j alike
   big bzip2 -1 > "$B/z.bz2"
-  korerun bunzip2 -c "$B/z.bz2" > /dev/null 2> "$o"; r=$?
-  [ $r -eq 2 ] && grep -q 'past 1 GiB' "$o" || fail "kore bunzip2 of 1100 MiB (rc $r)"
+  LOVE_BUDGET_MB=64 LOVE_NO_IMAGE= "$m" kore bunzip2 -c "$B/z.bz2" 2> "$o" | wc -c > "$g"
+  [ "$(tr -d ' ' < "$g")" = 1153433600 ] || { cat "$o"; fail "kore bunzip2 of 1100 MiB did not stream: $(cat "$g") bytes"; }
+  LOVE_BUDGET_MB=64 LOVE_NO_IMAGE= "$m" kore tar tjf "$B/z.bz2" > "$g" 2> "$o"; r=$?
+  [ $r -eq 0 ] && [ ! -s "$g" ] || { cat "$o"; fail "kore tar tjf of 1100 MiB of zeros did not stream (rc $r)"; }
 fi
 rm -rf "$B"
 echo "kore: gzip/gunzip/zcat/xz/unxz/bzip2/bunzip2/tar/cpio under kore's door ok"
