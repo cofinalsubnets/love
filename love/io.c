@@ -34,8 +34,8 @@ static struct ai
  *noop_flush(struct ai *g),
  *p0chars(struct ai *g, char const *s),
  *p0onto(struct ai *g, char const *s),
- *p0read1(struct ai *g, uintptr_t d),
- *p0reads(struct ai *g, uintptr_t d),
+ *p0read1(struct ai *g, uintptr_t d, uintptr_t n),
+ *p0reads(struct ai *g, uintptr_t d, uintptr_t n),
  *p1text(struct ai *g, char const *s),
  *qtop(struct ai *g),
  *readtext(struct ai *g, char const *s),
@@ -443,6 +443,8 @@ lvm(lvm_fputs) {
 static struct ai*gfputbn(struct ai *g, intptr_t n, uint8_t b, struct ai_io *o);
 lvm(lvm_fputbn) {
  if (*task_io(g) != ZeroPoint) Sp[0] = io_route(g, Sp[0]);
+ if (!charmp(Sp[2]) || getcharm(Sp[2]) < 2 || getcharm(Sp[2]) > 36) {   // a base the digits spell
+  Sp[2] = ZeroPoint; ai_musttail return Nextp(1, 2); }
  if (iop(Sp[0])) {
    Pack(g);
    g = gfputbn(g, getcharm(Sp[1]), getcharm(Sp[2]), (struct ai_io*) Sp[0]);
@@ -857,31 +859,35 @@ static ai_inline struct ai *ioread1sym(struct ai*g, uintptr_t d, int c) {
 // the sigil surface is p1's, and p1.l + egg.l are held to this subset so p0 can read them.
 // control flow on the C stack, values on g->sp, so no love value sits in a C local across
 // an allocation. a reader of a subset, not a validator: enforcement is the differential
-// (test/host/rdiff.l). nesting rides the C stack, so p0 is depth-bounded (~100k hosted).
-static struct ai *p0read1(struct ai *g, uintptr_t d);
+// (test/host/rdiff.l). nesting rides the C stack, so n counts it and past p0_deep
+// the read scares rather than running the stack out.
+#define p0_deep 1024
+static struct ai *p0read1(struct ai *g, uintptr_t d, uintptr_t n);
 
 // a list: read datums until `)`, then fold n of them off the stack. the tail is
 // ZeroPoint, not zero -- reader lists are ()-terminated (the zero-ontology), and
 // zero is the fixnum 0, which the printer shows the same way.
-static struct ai *p0reads(struct ai *g, uintptr_t d) {
+static struct ai *p0reads(struct ai *g, uintptr_t d, uintptr_t deep) {
+ if (deep >= p0_deep) return encode(g, ai_status_scare);
  uintptr_t n = 0;
  for (int c; ai_ok(g); n++) {
   if ((c = p0skip(g, d)) == ')') { p0pop(g, d); break; }
   if (c == EOF) return encode(g, ai_status_more);               // unclosed list
-  g = p0read1(g, d); }
+  g = p0read1(g, d, deep + 1); }
  if (!ai_ok(g)) return g;
  for (g = ai_push(g, 1, ZeroPoint); ai_ok(g) && n--; g = gxr(g));
  return g; }                                            // () folds zero times -> ZeroPoint
 
-static struct ai *p0read1(struct ai *g, uintptr_t d) {
+static struct ai *p0read1(struct ai *g, uintptr_t d, uintptr_t n) {
  int c = p0skip(g, d);
  p0pop(g, d);
  switch (c) {
-  case '(': return p0reads(g, d);
+  case '(': return p0reads(g, d, n);
   case ')': case EOF: return encode(ai_core_of(g), ai_status_eof);  // stray ) / no datum
   case '"': return ioread1str(g, d);
   case '\'':                                            // quote: 'x = (\ x)
-   g = p0read1(g, d);
+   if (n >= p0_deep) return encode(g, ai_status_scare);
+   g = p0read1(g, d, n + 1);
    if (ai_code_of(g) == ai_status_eof)                  // quote with no operand
     g = encode(ai_core_of(g), ai_status_more);
    g = gxr(ai_push(g, 1, ZeroPoint));                   // (d . ())
@@ -897,7 +903,7 @@ static struct ai *p0read1(struct ai *g, uintptr_t d) {
 // ret (make vmret).
 ai_noinline static struct ai *p0text(struct ai *g) {
  uintptr_t const d = topof(g) - g->sp;                // the cursor's depth, and the rollback point
- g = p0read1(g, d);
+ g = p0read1(g, d, 0);
  if (ai_ok(g)) return gxl(g);                         // (datum . residue), over the text slot
  enum ai_status const st = ai_code_of(g);             // no datum: which nothing?
  if (st != ai_status_eof && st != ai_status_more) return g;   // a real failure (oom) propagates
@@ -942,7 +948,7 @@ static struct ai *p0onto(struct ai *g, char const *s) {
  uintptr_t const d = topof(g) - g->sp;               // the cursor, pushed under the datums
  uintptr_t n = 0;
  for (;; n++) {
-  g = p0read1(g, d);
+  g = p0read1(g, d, 0);
   if (ai_ok(g)) continue;
   if (ai_code_of(g) != ai_status_eof) return g;      // more: an unfinished shape
   g = ai_core_of(g);
