@@ -14,7 +14,7 @@
 ;   known_hosts  hashed names (ssh-keygen -H's lines), [host]:port, name lists and case,
 ;            @revoked, another key type, @cert-authority skipped.
 ;   clean    banner and disconnect text: controls, c1 and malformed utf-8 dropped.
-;   verdict  another key type asked about on the terminal: yes, no, none, and =yes.
+;   verdict  the host key under each StrictHostKeyChecking: ask, accept-new, yes, no.
 ;   strict   strict kex ends on an ignore before newkeys; sequence numbers never wrap.
 ;
 ; the transport runs against a live sshd, which no gate stands up; see apps/ssh/ssh.l.
@@ -149,24 +149,41 @@ fW2MNFrwA/N0XZFA==
  ((ssh-clean "\xe2\x80") = ""))
 
 ; --- verdict ------------------------------------------------------------------------
-; a host known only under another key type is asked about on the terminal: yes adds the
-; key, no or no terminal refuses, and StrictHostKeyChecking=yes refuses without asking
+; the host key's verdict under each StrictHostKeyChecking. ask (the default) asks about an
+; unknown host and one known under another type: yes adds, no or no terminal refuses.
+; accept-new adds an unknown host unasked, yes refuses it unasked, no skips the check
 (: ssht-kv (cite 'ssh-cli 'kh-verdict)
-   ssht-opts (\ s a (: o (tablet 4) (pins o 'strict s 'ask a, o)))
+   ssht-opts (\ k (: o (tablet 4) (pin o 'shk k, o)))
    ssht-asked (tablet 2)
-   ssht-ask (\ ans m (pin ssht-asked 'n (peep ssht-asked 'n 0 + 1), ans))
-   ssht-v (\ o nm ask (: q (open ssht-khp "w") _ (say q ("host.example ecdsa-sha2-nistp256 " + ssht-E + "\n")) _ (close q)
-                         (ssht-kv "ssh" o ssht-khp nm (b64d ssht-A) "SHA256:x" ask)))
-   ssht-no "WARNING: the host key for host.example is known as ecdsa-sha2-nistp256 in ")
+   ssht-ask (\ ans m (pin ssht-asked 'n (peep ssht-asked 'n 0 + 1), pin ssht-asked 'm m, ans))
+   ssht-v (\ k nm ask (: q (open ssht-khp "w") _ (say q ("host.example ecdsa-sha2-nistp256 " + ssht-E + "\n")) _ (close q)
+                         (ssht-kv "ssh" (ssht-opts k) ssht-khp nm (b64d ssht-A) "SHA256:x" ask)))
+   ssht-n (\ _ (peep ssht-asked 'n 0))
+   ssht-pre (\ p r (string? r && snip r 0 #p = p))
+   ssht-other "WARNING: the host key for host.example is known as ecdsa-sha2-nistp256 in "
+   ssht-q "The authenticity of host 'new.example' can't be established.\nED25519 key fingerprint is SHA256:x.\n")
 (test
- (: r (ssht-v (ssht-opts 1 1) "host.example" (ssht-ask ())) (string? r && snip r 0 #ssht-no = ssht-no))
- ((ssht-v (ssht-opts 1 1) "host.example" (ssht-ask "yes")) = 'add)
- (string? (ssht-v (ssht-opts 1 1) "host.example" (ssht-ask "no")))
- ((ssht-asked 'n) = 3)
- (string? (ssht-v (ssht-opts 1 0) "host.example" (ssht-ask "yes")))
- ((ssht-asked 'n) = 3)
- ((ssht-v (ssht-opts 0 1) "host.example" (ssht-ask "yes")) = 'go)
- ((ssht-v (ssht-opts 1 1) "other.example" (ssht-ask "yes")) = 'add))
+ ; another key type: asked under ask and accept-new, refused unasked under yes
+ (ssht-pre ssht-other (ssht-v "ask" "host.example" (ssht-ask ())))
+ ((ssht-v "ask" "host.example" (ssht-ask "yes")) = 'add)
+ (ssht-pre ssht-other (ssht-v "ask" "host.example" (ssht-ask "no")))
+ ((ssht-v "accept-new" "host.example" (ssht-ask "yes")) = 'add)
+ ((ssht-n 0) = 4)
+ (ssht-pre ssht-other (ssht-v "yes" "host.example" (ssht-ask "yes")))
+ ((ssht-n 0) = 4)
+ ; an unknown host: asked under ask, added unasked under accept-new, refused unasked under yes
+ ((ssht-v "ask" "new.example" (ssht-ask "yes")) = 'add)
+ (ssht-pre ssht-q (ssht-asked 'm))
+ ((ssht-v "ask" "new.example" (ssht-ask "no")) = "Host key verification failed.")
+ ((ssht-v "ask" "new.example" (ssht-ask ())) = "Host key verification failed.")
+ ((ssht-n 0) = 7)
+ ((ssht-v "accept-new" "new.example" (ssht-ask "no")) = 'add)
+ (ssht-pre "No ssh-ed25519 host key is known for new.example" (ssht-v "yes" "new.example" (ssht-ask "yes")))
+ ((ssht-n 0) = 7)
+ ; no check at all
+ ((ssht-v "no" "host.example" (ssht-ask "no")) = 'go)
+ ((ssht-v "no" "new.example" (ssht-ask "no")) = 'go)
+ ((ssht-n 0) = 7))
 
 ; --- strict ---------------------------------------------------------------------------
 ; a pipe as the transport, framed by ssh-send and read by ssh-next: under strict kex an
@@ -188,6 +205,6 @@ fW2MNFrwA/N0XZFA==
 (test_fin (),
  puts "apps/ssh: ok -- sha512 (fips 180-4), ed25519 (rfc 8032 7.1), mpint + base64,
 aes (fips 197, sp 800-38a), a locked key (bcrypt_pbkdf + aes256-ctr),
-known_hosts, banner text, the other-type prompt, strict kex and sequence wrap
+known_hosts, banner text, the host key prompts, strict kex and sequence wrap
 ",
  0)

@@ -185,8 +185,7 @@
     (: argv (sd-argv me cmd)
        pt (ch 'pty)
        (? (two? pt)
-          (: _ (setenv "TERM" (pt 0))
-             r (tether argv)
+          (: r (tetherenv argv [("TERM=" + pt 0)])       ; the child's TERM alone, never the server's
              (? (atom? r) ("cannot start " + <argv + " (" + show r + ")")
                 (: m >r
                    (settty m (pt 1) (pt 2),

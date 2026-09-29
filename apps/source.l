@@ -468,7 +468,7 @@
        (? (charm? v) v 0))
    (nest-read p) (uread p @ [1 s] (s + "") ())
    ; the tools a symlink to love serves by its own name, the argv[0] door
-   nest-tools ["lush" "kore" "sb" "cook" "libra" "mooncc" "ain"]
+   nest-tools ["lush" "kore" "sb" "cook" "libra" "mooncc"]
    ; lux is a script over love, so it is written beside it, not linked: the modules the
    ; Makefile cats, off the source this binary carries, so the wm and its love never skew
    nest-luxfiles ["core" "layout" "wire" "ewmh" "manage" "keys" "config" "lux"]

@@ -9,7 +9,7 @@
 ;   ping6 [-q] [-c N] [-i S] [-W S] [-s N] HOST   the same over ipv6 (ping -6)
 ;   traceroute [-46nI] [-f F] [-m M] [-q N] [-w S] HOST   the routers on the way (traceroute6)
 ;
-; telnet is nc (apps/ain.l) with the protocol's options answered (RFC 854, 855): it lets the
+; telnet is nc (apps/nc.l) with the protocol's options answered (RFC 854, 855): it lets the
 ; server echo and suppress go-ahead, offers to suppress go-ahead itself, refuses every other
 ; option either way, and skips subnegotiation. on a terminal it follows the server's echo:
 ; while the server echoes, the terminal is raw and each key goes as it is typed (character
@@ -98,7 +98,7 @@
     (: _ (? (0 < #as < 3) 0 (udie 2 tn-usage))
        _ (: w (uoptstray as as) (? !w 0 (udie 2 ("telnet: unknown option " + w))))
        host <as
-       port (? (two? >as) (: n (unum <>as) (? (charm? n && 0 < n < 65536) n (udie 2 ("telnet: not a port: " + <>as)))) 23)
+       port (? (two? >as) (: n (uport <>as) (? n n (udie 2 ("telnet: not a port: " + <>as)))) 23)
        _ (say err ("Trying " + host + "...\n"), flush err)
        s ((cite 'dns 'dial) host port)
        _ (? s 0 (udie 1 ("telnet: cannot connect to " + host + " port " + show port)))
@@ -203,7 +203,7 @@
             (? !u 0 (udie 2 ("telnetd: -" + string u + " is not supported\n" + td-usage))))
        _ (? (two? (o 2)) (udie 2 td-usage) 0)
        login (: l (uoptv t 108) (? (string? l) l "/bin/login"))
-       (portof s) (: n (unum s) (? (charm? n && 0 < n < 65536) n (udie 2 ("telnetd: not a port: " + s))))
+       (portof s) (: n (uport s) (? n n (udie 2 ("telnetd: not a port: " + s))))
        ; -b ADDR[:PORT], a quad; -p PORT
        bv (uoptv t 98)
        bk (? (string? bv) ((: (g i) (? (#bv <= i) -1 (bv i = 58) i (g (i + 1)))) 0) -1)
@@ -252,7 +252,7 @@
        tys (map (x \ (: t (ns-assoc (wg-lower (x 1)) ns-types) (? !t (bad (x 2)) t)))
                 (filter (x \ <x = "type" || <x = "query") kvs))
        port (: ps (filter (x \ <x = "port") kvs)
-               (? (atom? ps) 53 (: n (unum ((last ps) 1)) (? (charm? n && 0 < n < 65536) n (bad ((last ps) 2))))))
+               (? (atom? ps) 53 (: n (uport ((last ps) 1)) (? n n (bad ((last ps) 2))))))
        _ (map (x \ ? (elem <x '("type" "query" "port")) 0 (bad (x 2))) kvs)
        host <ops
        quad? (two? ((D 'dns-quad) host))
@@ -495,7 +495,7 @@
        k (? (string? pv) ((: (g i) (? (i < 0) -1 (pv i = 58) i (g (i - 1)))) (#pv - 1)) -1)
        ip (: h (? (k < 0) "" (snip pv 0 k)) (? (h = "") "127.0.0.1" (h = "*") "0.0.0.0" h))
        ps (? (string? pv) (snip pv (k + 1) #pv) ())
-       port (? !ps 80 (: n (unum ps) (? (charm? n && 0 < n < 65536) n (udie 2 ("httpd: not a port: " + ps)))))
+       port (? !ps 80 (: n (uport ps) (? n n (udie 2 ("httpd: not a port: " + ps)))))
        root (: h (uoptv t 104) (? (string? h) h "."))
        _ (? (two? (readdir root)) 0 (udie 1 ("httpd: not a directory: " + root)))
        r ((cite 'kiosko 'serve) root [ip port] !(peep t 118 0) ())

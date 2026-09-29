@@ -51,6 +51,22 @@
         _ (settty >r 30 100)
         t (slurp >r) [t <(waitfor <r)])
    _ (test (has? <c "/dev/pts/") (has? <c "30 100") (c 1 = 0))
+   ; a pty's TERM is its own session's: the client's xterm-test reaches the pty session,
+   ; and a pipe session after it does not find it in the server's environment
+   tt (: r (tetherenv (love . "kore" . "ssh" . "-p" . show port . "-i" . (dir + "/id")
+                            . "-o" . "StrictHostKeyChecking=no" . ["-t" (user + "@127.0.0.1") "echo \"<$TERM>\""])
+                      ["TERM=xterm-test"])
+         t (slurp >r) [t <(waitfor <r)])
+   tp (run "id" ["-T" (user + "@127.0.0.1") "echo \"[$TERM]\""])
+   _ (test (has? <tt "<xterm-test>") (tt 1 = 0) (has? <tp "[") !(has? <tp "xterm-test") (tp 1 = 0))
+   ; tetherenv sets each K=V in the child alone; () inherits, and what is not K=V is a misuse
+   _ (setenv "FOO" "parent")
+   (echofoo env) (: r (tetherenv ["sh" "-c" "echo \"<$FOO>\""] env) t (slurp >r) [t <(waitfor <r)])
+   f1 (echofoo ["FOO=bar" "BAZ=1"])
+   f2 (echofoo ())
+   _ (test (has? <f1 "<bar>") (f1 1 = 0) (has? <f2 "<parent>") ((getenv "FOO") = "parent")
+           ('badarg = tetherenv ["true"] ["NOEQ"]) ('badarg = tetherenv ["true"] ["=x"])
+           ('badarg = tetherenv ["true"] "FOO=bar") ('badarg = tetherenv ["true"] ["FOO=b\0ar"]))
    ; the refusals
    d (run "bad" ["-T" (user + "@127.0.0.1") "true"])
    e (run "id" ["-T" "nobody-here@127.0.0.1" "true"])

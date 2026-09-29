@@ -293,6 +293,12 @@
           ;; SSE
           16 (xx (px @ 'none 'movups '66 'movupd 'f3 'movss 'movsd))
           17 (xxs (px @ 'none 'movups '66 'movupd 'f3 'movss 'movsd))
+          ;; the half moves: a register pair is movhlps/movlhps, memory the low or high 8 bytes
+          (c && (c = 18 || c = 22) && (px = 'none || px = '66))
+           (: reg? (dc-at s k2 >> 6 = 3) lo (c = 18)
+              (xx (? (px = '66) (lo ? 'movlpd 'movhpd) reg? (lo ? 'movhlps 'movlhps) (lo ? 'movlps 'movhps))))
+          (c && (c = 19 || c = 23) && (px = 'none || px = '66) && dc-at s k2 >> 6 != 3)
+           (xxs (? (px = '66) (c = 19 ? 'movlpd 'movhpd) (c = 19 ? 'movlps 'movhps)))
           (c && c = 18 && px = 'none) (: r (dc-modrm s k2 p 16 16) (finx (r 0) [(op1 (<(r 2) = 'rg ? 'movhlps 'movlps) 0 [(r 1) (r 2)])]))
           (c && c = 20 && (px = 'none || px = '66)) (xx (lane "unpckl"))
           40 (xx (px = '66 ? 'movapd 'movaps))  41 (xxs (px = '66 ? 'movapd 'movaps))

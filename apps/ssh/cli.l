@@ -3,6 +3,7 @@
 ; the image, kore reaches both as (cite 'ssh-cli ..).
 ;
 ;   ssh [-p port] [-i identity] [-l user] [-t | -T] [-o option=value] [user@]host [command ..]
+;       -o UserKnownHostsFile=path, -o StrictHostKeyChecking=ask|accept-new|yes|no
 ;   sshd [-Deq] [-p port] [-h host_key_file] [-o AuthorizedKeysFile=path]
 ;   scp [-pqrO] [-P port] [-i identity] [-o option=value] source .. target
 (module (ssh-cli ssh-main sshd-main scp-main kh-name kh-check kh-verdict)
@@ -19,13 +20,16 @@
    (cl-opts _)
     (: home (cl-env "HOME" "") o (tablet 8)
        (pins o 'port 22 'user (cl-env "USER" "") 'key (home + "/.ssh/id_ed25519")
-               'kh (home + "/.ssh/known_hosts") 'strict 1 'ask 1 'pty -1,
+               'kh (home + "/.ssh/known_hosts") 'shk "ask" 'pty -1,
         o))
    (cl-opt prog o kv)
     (: i (: (go i) (? (#kv <= i) i (kv i = 61) i (go (i + 1))) (go 0))
        k (snip kv 0 i) v (snip kv (i + 1) #kv)
        (? (k = "UserKnownHostsFile") (pin o 'kh v)
-          (k = "StrictHostKeyChecking") (pins o 'strict (v != "no") 'ask (v != "yes"))   ; yes never asks
+          (k = "StrictHostKeyChecking")                    ; ask (the default), accept-new, yes, no
+           (: w (v = "off" ? "no" v)
+              (elem w ["ask" "accept-new" "yes" "no"] ? (pin o 'shk w)
+                 (cl-die prog ("unsupported StrictHostKeyChecking value " + v))))
           (cl-die prog ("unsupported option " + k))))
    ; known_hosts as openssh reads it. a name list holds plain names, [host]:port and
    ; |1|salt|hash (hmac-sha1 of the name keyed by the salt); wildcards and ! are not read
@@ -81,25 +85,28 @@
    ; the offered host key against known_hosts -> 'go, 'add (a new host, or one known under
    ; another type and confirmed on the terminal) | the refusal. (ask prompt) -> a line | ()
    (kh-verdict prog o path name key fpr ask)
-    (? !(o 'strict) 'go
-       (: r (kh-check path name key) v <r at (path + ":" + show (r 1))
-          _ (r 3 = 1 ? (say err (prog + ": " + path + " has a @cert-authority line for " + name
-                                 + "; certificates are not read, so it is skipped\n")) 0)
-          (? (v = 'ok) 'go
-             (v = 'revoked) ("WARNING: REVOKED HOST KEY DETECTED! the ssh-ed25519 host key for "
-                             + name + " is marked as revoked in " + at + ". Host key verification failed.")
-             (v = 'bad) ("WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED! the host key for "
-                         + name + " is " + fpr + ", which does not match " + at + ". Host key verification failed.")
-             (v = 'other)
-              (: a (o 'ask ? (ask ("The authenticity of host '" + name + "' can't be established.\n"
-                                   + "ED25519 key fingerprint is " + fpr + ".\n"
-                                   + "Warning: keys of a different type are already known for this host: "
-                                   + r 2 + " in " + at + ".\n"
-                                   + "Are you sure you want to continue connecting (yes/no)? ")) ())
-                 (a = "yes" ? 'add
+    (: shk (o 'shk)
+       (asks q) (shk = "yes" ? () (ask ("The authenticity of host '" + name + "' can't be established.\n"
+                                         + "ED25519 key fingerprint is " + fpr + ".\n" + q
+                                         + "Are you sure you want to continue connecting (yes/no)? ")))
+       (? (shk = "no") 'go
+          (: r (kh-check path name key) v <r at (path + ":" + show (r 1))
+             _ (r 3 = 1 ? (say err (prog + ": " + path + " has a @cert-authority line for " + name
+                                    + "; certificates are not read, so it is skipped\n")) 0)
+             (? (v = 'ok) 'go
+                (v = 'revoked) ("WARNING: REVOKED HOST KEY DETECTED! the ssh-ed25519 host key for "
+                                + name + " is marked as revoked in " + at + ". Host key verification failed.")
+                (v = 'bad) ("WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED! the host key for "
+                            + name + " is " + fpr + ", which does not match " + at + ". Host key verification failed.")
+                (v = 'other)
+                 (asks ("Warning: keys of a different type are already known for this host: "
+                        + r 2 + " in " + at + ".\n") = "yes" ? 'add
                     ("WARNING: the host key for " + name + " is known as " + r 2 + " in " + at
-                     + ", and the host offered ssh-ed25519 " + fpr + ". Host key verification failed.")))
-             'add)))
+                     + ", and the host offered ssh-ed25519 " + fpr + ". Host key verification failed."))
+                (shk = "accept-new") 'add
+                (shk = "yes") ("No ssh-ed25519 host key is known for " + name
+                               + " and you have requested strict checking. Host key verification failed.")
+                (asks "" = "yes" ? 'add "Host key verification failed.")))))
    (cl-login prog o host)
     (: t (ssh-dial host (o 'port))
        _ (? (string? t) (cl-die prog t) 0)
@@ -132,7 +139,7 @@
               (pin o 'dest a, ? (two? r) (pin o 'cmd (join " " r)) 0, o))))
     o (parse as (cl-opts 0))
     dest (o 'dest)
-    _ (? (string? dest) 0 (cl-die "ssh" "usage: ssh [-p port] [-i identity] [-l user] [-t|-T] [user@]host [command]"))
+    _ (? (string? dest) 0 (cl-die "ssh" "usage: ssh [-p port] [-i identity] [-l user] [-t|-T] [-o option=value] [user@]host [command]"))
     at (split dest 64)
     host (two? >at ? <>at <at)
     _ (? (two? >at) (pin o 'user <at) 0)
@@ -163,8 +170,8 @@
      (? (atom? as) 0
         (: a <as r >as
            (? (a = "-p" && two? r)
-               (: n (unum <r)
-                  (charm? n && 0 < n && n < 65536 ? (pin o 'port n) (die ("bad port " + <r)),
+               (: n (uport <r)
+                  (n ? (pin o 'port n) (die ("bad port " + <r)),
                    parse >r))
               (a = "-h" && two? r) (pin o 'hk <r, parse >r)
               (a = "-o" && two? r) (opt <r, parse >r)

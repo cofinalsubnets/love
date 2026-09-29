@@ -2298,7 +2298,7 @@ void kmain(void) {
    "(map (\\ n (? (elem n (names ())) () (ev [': [n 'x] ()])))"
    "     '(hardlink spawn spawnmap fork exec herald wait still"
    "       getpid getuid seal ttyfg setpg umask rusage rlimit setrlimit glean pipe fdopen dup dup2 connect listen"
-   "       bind accept recv send hark tty))");
+   "       bind accept recv send farend hark tty))");
   // then the kore cat through the stream shell: the line is seatless here, so every member's
   // own seat sits out and the whole userland lands. built off /proc/src, korelist being the
   // baked roster. egg lane only: re-loading over a woken image re-pins every sealed verb.

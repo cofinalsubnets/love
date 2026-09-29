@@ -60,7 +60,8 @@ enum {              // flag bits: the console's modes
   cb_mdrag  = 2048, // mouse (?1002): and moves while a button is held
   cb_many   = 4096, // mouse (?1003): and every move
   cb_msgr   = 8192, // mouse reports as CSI < b ; x ; y M/m (?1006), else CSI M and three bytes
-  cb_paste  = 16384 };// bracketed paste (?2004): a seat wraps what it pastes in CSI 200~ .. 201~
+  cb_paste  = 16384, // bracketed paste (?2004): a seat wraps what it pastes in CSI 200~ .. 201~
+  cb_gc     = 32768 };// grapheme clusters (?2027): VS16 gives an emoji style two cells
 enum { cb_mice = cb_mx10 | cb_mbtn | cb_mdrag | cb_many };
 
 enum { cb_outn = 64 };  // the reply queue's capacity (cb_reply's buffer size)
@@ -72,7 +73,7 @@ struct cb {
   uint32_t cur_fg, cur_bg, def_fg, def_bg;  // the pen, and what a default colour means
   uint32_t sfg, sbg;  // the saved pen (DECSC), with sface
   uint8_t cur_face, sface, esc;  // esc: escape-parser state
-  uint16_t pv[8]; uint8_t pn;  // pv/pn: collected CSI parameters
+  uint16_t pv[8]; uint8_t pn, ci;  // pv/pn: collected CSI parameters, ci its intermediate
   uint16_t top, bot;  // the scroll region, inclusive rows
   uint8_t out[cb_outn], on;  // the reply queue (DSR/DA answers ride home here)
   uint32_t ucp; uint8_t un;  // utf-8 in flight: the codepoint, continuations to come
