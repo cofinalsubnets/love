@@ -83,7 +83,7 @@
              'stair (mid <(d 'rooms)))
    _ (dput d <(d 'stair) <>(d 'stair) 2)
    ; ..and a second stair in another room, where the floor has one to spare
-   _ (? (2 < #(d 'rooms)) (: s2 (mid ((d 'rooms) 1)) (dput d <s2 <>s2 2)))
+   _ (? (2 < #(d 'rooms)) (: s2 (mid (d 'rooms 1)) (dput d <s2 <>s2 2)))
    (d . peep sb () 0))
 
  ; a list dealt out in a random order, and the first n of one

@@ -166,7 +166,7 @@
    (uls-grid es tty? w down?)
     (: cs (map (\ e ((uls-name e tty?) . swidth <e)) es)
        (go l) (? (atom? l) () (say out <l, put out 10, go >l))
-       (go ((cite 'grid 'lay) cs w down?)))
+       (go (cite 'grid 'lay cs w down?)))
    (uls-wide rs k) (foldl (\ w r (: n #(r k) (? (w < n) n w))) 0 rs)
    ; the widths come from `ws` and not from `rs`. GNU sizes the command-line block's
    ; columns over EVERY operand, directories included -- even though a directory
@@ -208,7 +208,7 @@
        c? (peep t 67 0) x? (peep t 120 0) o1? (peep t 49 0)
        now ((clock 0) // 1000)
        tty? (two? (tty 1))                  ; colour only onto a terminal
-       w ((cite 'grid 'screen) 1)
+       w (cite 'grid 'screen 1)
        grid? (? l? 0 o1? 0 (x? || c? || tty?) 1 0)
        down? !x?
        fs (? (two? ops) ops '("."))

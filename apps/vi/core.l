@@ -256,7 +256,7 @@
     (: g (vlang st)
        (? !(nom? g) ()
           (: lx (vlex st g)
-             rs <(lx (st 'lines r) ((vcarry st g lx) r) 1)
+             rs <(lx (st 'lines r) (vcarry st g lx r) 1)
              (go l acc) (? !(two? l) (rev acc)
                            (: h <l
                               (go >l ((<h = 'string || <h = 'comment) ? ([<>h <>>h] . acc) acc))))
@@ -275,7 +275,7 @@
    ; the mate of the delimiter at (r c): rows are scanned whole, outward, and only
    ; this pair's own two characters count, so a ( inside [] is nesting and a [ is not
    (vmate st r c o cl)
-    (: ch ((st 'lines r) c) fwd (ch = o) nl (vnl st)
+    (: ch (st 'lines r c) fwd (ch = o) nl (vnl st)
        (rowd i) (: d (vdelims st i o cl) (fwd ? d (rev d)))
        (past l) (? !(two? l) () (<<l = c) >l (past >l))
        (go i l d)

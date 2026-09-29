@@ -1,0 +1,14 @@
+.PS
+x = 1.5
+y = .3
+z = 1
+define m30 { move dashed 0.05 cw }
+arc left 0.5 then right 0.3 shaded "red"
+x = 1.5 % 1 - 1 * (1.5)
+circle xslanted 0.2 color "red"
+if 0.2 / 3 > (0.1) / 0.15 / 0.1 then { line thick 2 <- }
+z = .3
+for i = 1 to 1.5 by 0.5 do { circle thick 0.5 "a" above }
+spline left x sprintf("%.2f", 1.5 - 2 + 0.1 % 1) <->
+m30
+.PE

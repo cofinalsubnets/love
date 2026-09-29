@@ -103,7 +103,7 @@
    hush       (\ b e ())
    ; one event per cycle, the whole cycle wide
    (pure v)   (\ b e (map (s \ qfq <s @ c [c (c + qone) <s >s v]) (cycles b e)))
-   (stack ps) (\ b e (cmap (p \ ((pat p) b e)) ps))
+   (stack ps) (\ b e (cmap (p \ (pat p b e)) ps))
 
    ; one pattern per cycle, and each one advances a cycle only when its turn comes:
    ; that offset is the whole difference between slowcat and a stack of shifts.

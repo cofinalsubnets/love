@@ -45,6 +45,8 @@
 ;   kore telnet HOST [PORT]          a remote terminal (apps/kore/net.l), telnetd its server;
 ;                                    httpd, kiosko under busybox's flags, nslookup, ping, ping6
 ;   kore ssh|sshd|scp ..             the ssh client and server, and scp over them (apps/ssh/cli.l)
+;   kore openssl x509|s_client|verify|dgst|rand|base64|version ..   openssl's read-only half
+;                                    (apps/kore/openssl.l, over the tls stack)
 ;   kore gzip|gunzip|zcat [-cdfkl..]  the RFC 1952 container (apps/gz.l), xz|unxz|xzcat the .xz
 ;                                    one (apps/xz.l, love/lib/xz.c's LZMA2), bzip2|bunzip2|bzcat
 ;                                    (apps/bz2.l, love/lib/bz2.c); tar and cpio the
@@ -66,10 +68,10 @@
 ; every path answers a charm through core.l's urun, so an in-image caller lives through a
 ; tool that would have quit -- the SEAT below is the one site that quits, and a main here
 ; leaves deep through `udie`.
-(module (kore kore-main wget-main wg-digits wg-find wg-lower wg-url wg-resolve wg-header wg-unchunk wg-once wg-fetch wg-name
+(module (kore kore-main wget-main openssl-main wg-digits wg-find wg-lower wg-url wg-resolve wg-header wg-unchunk wg-once wg-fetch wg-name
         www-main ww-split ww-resolve ww-arg ww-get ww-lay ww-dump ww-new ww-show ww-step ww-body ww-fit
         ww-art ww-splice ww-marks ww-pictures ww-hop? wg-plain
-        pic-main pic-cat pic-convert pic-pixelize pic-blocky pic-sample pic-sixel pic-kitty pic-kits pic-near pic-ans pic-type pic-ask pic-heard picless-main pic-kind pic-size pic-decode pic-frames pic-art pic-view pic-deep lens-pics
+        pic-main gpic-main gp-run pic-cat pic-convert pic-pixelize pic-blocky pic-sample pic-sixel pic-kitty pic-kits pic-near pic-ans pic-type pic-ask pic-heard picless-main pic-kind pic-size pic-decode pic-frames pic-art pic-view pic-deep lens-pics
         pv-new pv-step pv-frame pv-tick pv-keys pv-view
         telnet-main telnetd-main td-new td-chunk td-esc httpd-main tn-new tn-byte tn-send tn-echo? nslookup-main ping-main ping6-main ping-ms ping-t traceroute-main traceroute6-main tr-mark
         diff-main as-main ar-main ld-main nm-main ed-main ex-main
@@ -783,6 +785,7 @@
             'bc bc-main 'dc dc-main
             'patch patch-main
             'wget wget-main
+            'openssl openssl-main   ; certificates, digests and a tls peer, openssl 3's spelling
             'grep grep-main 'sed sed-main
             ; the two old spellings, GNU's own shims: -E and -F said by name
             'egrep (as \ (grep-main ("-E" . as))) 'fgrep (as \ (grep-main ("-F" . as)))
@@ -962,6 +965,7 @@
     'less "usage: less [-Nise] [+N|+/PAT] [FILE..]"
     'more "usage: more [-Nise] [+N|+/PAT] [FILE..]"
     'wget "usage: wget [-q] [--no-check-certificate] [-O FILE] URL"
+    'openssl "usage: openssl x509|s_client|verify|dgst|rand|base64|version [ARGS..]"
     'bc "usage: bc [-l] [-q] [FILE..]
   -l  the math library (e l a s c j), and scale = 20
   -q  accepted: nothing is printed at start with or without it"
@@ -1015,7 +1019,7 @@
     'html2text "usage: html2text [-w COLS] [FILE..]"
     'markdown "usage: markdown [-t html|roff|text|dvi] [-w COLS] [FILE..]"
     'www "usage: www [-w COLS] URL|FILE"
-    'pic "usage: pic [-w COLS] [-h ROWS] [FILE..]"
+    'pic "usage: pic [cat|less|convert|pixelize] [-g MODE] [-w COLS] [-h ROWS] FILE.. | pic [-nCSU] [-t [-cz]] [FILE..]"
     'picless "usage: picless FILE.."
     'telnet "usage: telnet HOST [PORT]"
     'telnetd "usage: telnetd [-FK] [-p PORT] [-b ADDR[:PORT]] [-l LOGIN] [-f ISSUE]"
@@ -1082,6 +1086,7 @@ every tool answers --help and --version, and -h where the letter is free
   diff OLD NEW       unified diff, patience hunks (0 same / 1 differ / 2 trouble)
   nc HOST PORT       netcat; nc -l PORT listens, nc -z scans
   ssh [user@]HOST    the ssh client; sshd [-p PORT] serves this user (apps/ssh)
+  openssl CMD ..     x509 s_client verify dgst rand base64: openssl's read-only half
   scp SRC.. DEST     copies over ssh, [user@]host:path on one side (rcp's protocol)
   make [FILE] [T..]  the build tool (Cards.l / Cookfile / Makefile)
   as TGT IN OUT      assemble IR forms from IN (x64|a64) into ELF OUT

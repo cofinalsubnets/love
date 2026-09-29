@@ -92,7 +92,7 @@
    (a64-addsub-imm op d a imm)                              ; a negative immediate flips the op (add<->sub, adds<->subs)
       (: pos  (? (imm < 0) (0 - imm) imm)
          fop  (? (imm < 0) (? (op = 'add) 'sub (op = 'sub) 'add (op = 'adds) 'subs 'adds) op)
-         base ((peep a64-alu fop 0) 1)                   ; the (flipped) op's immediate base word (slot 1 of its alu row)
+         base (peep a64-alu fop 0 1)                   ; the (flipped) op's immediate base word (slot 1 of its alu row)
          (? (pos <= 4095) (alu-rri base d a pos)
             ((pos <= 16777215) && elem fop '(add sub))     ; hi12 shifted (LSL #12, bit 22), then the low tail off d
              (catall [(alu-rri (base | 0x400000) d a (pos >> 12))                    ; (the S-forms stay single: a split

@@ -1114,8 +1114,8 @@
    (kmake ir twin arity)
     (: h (cite 'holo) g (cite 'glaze)
        (? (!h || !g || nelem love-arch '(x64 a64)) twin
-          (: bs (peep ((h 'assemble) love-arch (ir love-arch)) 'bytes 0)
-             ((g 'nif) (cask bs) twin arity))))
+          (: bs (peep (h 'assemble love-arch (ir love-arch)) 'bytes 0)
+             (g 'nif (cask bs) twin arity))))
    kbox (tablet 0)
    (kernel nm ir twin arity)
     (: k (peep kbox nm 'none)
@@ -1220,7 +1220,7 @@
                _ (say out ln) _ (put out 10)
                (pin t 'i (i + 1)))),
          1)
-       (ulines "nl" dot ((uflags "nl" as () "") 1)))
+       (ulines "nl" dot (uflags "nl" as () "" 1)))
 
    ; -- rev: every line back to front --
    (rev-main as)
@@ -1340,7 +1340,7 @@
        wv (uoptv t 99)
        w (? (string? wv)
             (: n (unum wv) (? (charm? n && 0 < n) n (udie 1 ("column: invalid columns argument: '" + wv + "'"))))
-            ((cite 'grid 'screen) 1))
+            (cite 'grid 'screen 1))
        osep (: v (uoptv t 111) (? (string? v) v "  "))
        box (tablet 1) _ (pin box 'l ())
        st (ulines "column" (\ ln _ ((? (0 < #ln) (pin box 'l (ln . box 'l)) 0), 1)) (o 2))

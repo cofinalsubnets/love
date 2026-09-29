@@ -39,7 +39,7 @@
 
    (url? u) ((7 <= tally u) && (snip u 0 7 = "http://"))
    ; "http://host[:port]/path" -> (host port path) | ()
-   (url-split u) (: w ((cite 'kore 'wg-url) u) (? (w && !<w) >w ()))   ; wget's split, http only
+   (url-split u) (: w (cite 'kore 'wg-url u) (? (w && !<w) >w ()))   ; wget's split, http only
 
    ; one get -> (status body) | (). () is a dead socket or an unreadable
    ; response; a 404 is a perfectly good answer and comes back as (404 ..), so

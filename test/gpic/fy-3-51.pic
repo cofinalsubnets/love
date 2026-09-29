@@ -1,0 +1,11 @@
+.PS
+x = 1.5
+y = 0.3
+z = 1
+define m51 { box wid 0.1 ht 0.75 }
+move dotted dotted
+line sprintf("%-6.2f|", -0.7 / max(2, 1.5)) above thick 0.5 outline "green"
+arrow <- dashed sprintf("%+g", cos((1))) rjust
+spline
+m51
+.PE

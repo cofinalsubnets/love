@@ -206,13 +206,13 @@
    (sc-isdir? p) (: st (stat p) (two? st ? (st 2 & 61440 = 16384) 0))
    (sc-base p) (: q (1 < #p && p (#p - 1) = 47 ? (snip p 0 (#p - 1)) p)
                   (last (split q 47)))
-   (sc-z io) ((io 'wr) (string 0))
+   (sc-z io) (io 'wr (string 0))
    ; the peer's answer to a step -> 1, or [code message] (1 a warning, 2 fatal)
    (sc-ack io)
-    (: b ((io 'rd) 1)
+    (: b (io 'rd 1)
        (? !(string? b) [2 "lost connection"]
           (b 0 = 0) 1
-          (: l ((io 'line) 0) [(b 0) (string? l ? (snip l 0 (#l - 1)) "")])))
+          (: l (io 'line 0) [(b 0) (string? l ? (snip l 0 (#l - 1)) "")])))
    (sc-bad r) (say err ("scp: " + r 1 + "\n"), flush err, 1)
 
    ; --- the source: files, and with rec directories, as C/D/E lines -> errors ---
@@ -224,17 +224,17 @@
           (st 2 & 61440 = 16384)
            (? !rec ((io 'err) (path + ": not a regular file"), 1)
               (: t0 (sc-times io st pres)
-                 _ ((io 'wr) ("D" + sc-oct (st 2 & 4095) + " 0 " + name + "\n"))
+                 _ (io 'wr ("D" + sc-oct (st 2 & 4095) + " 0 " + name + "\n"))
                  r (sc-ack io)
                  (? (r != 1) (sc-bad r)
                     (: n (net (map (e \ sc-put io (path + "/" + e) e rec pres) (sort (readdir path))))
-                       _ ((io 'wr) "E\n")
+                       _ (io 'wr "E\n")
                        r2 (sc-ack io)
                        (r2 = 1 ? n (n + sc-bad r2))))))
           (: q (open path "r")
              (? !(hot? q) ((io 'err) (path + ": " + show q), 1)
                 (: t0 (sc-times io st pres)
-                   _ ((io 'wr) ("C" + sc-oct (st 2 & 4095) + " " + show (st 0) + " " + name + "\n"))
+                   _ (io 'wr ("C" + sc-oct (st 2 & 4095) + " " + show (st 0) + " " + name + "\n"))
                    r (sc-ack io)
                    (? (r != 1) (close q, sc-bad r)
                       (: _ (sc-copy q io) _ (close q) _ (sc-z io)
@@ -246,10 +246,10 @@
 
    ; --- the sink: into target, a directory or (one file, not rec) a name -> errors ---
    ; the bytes of a file, n of them, written to q as they come
-   (sc-recv io q n) (? (n < 1) 0 (: b ((io 'rd) (min n 32768))
+   (sc-recv io q n) (? (n < 1) 0 (: b (io 'rd (min n 32768))
                                     (? !(string? b) 0 ((hot? q ? (say q b) 0), sc-recv io q (n - #b)))))
    (sc-take io dir asdir rec pres tm errs)
-    (: l ((io 'line) 0)
+    (: l (io 'line 0)
        (? !(string? l) errs
           (: k (l 0) body (snip l 1 (#l - 1))
              f (split body 32)
@@ -272,10 +272,10 @@
                        (: q (open dest "w")
                           _ (sc-z io)
                           _ (sc-recv io q size)
-                          _ ((io 'rd) 1)
+                          _ (io 'rd 1)
                           ok (hot? q)
                           _ (ok ? (close q, chmod dest mode, ? (two? tm) (utime dest (<tm * 1000)) 0) 0)
-                          _ (ok ? (sc-z io) ((io 'wr) (string 1 + "scp: " + dest + ": cannot write\n")))
+                          _ (ok ? (sc-z io) (io 'wr (string 1 + "scp: " + dest + ": cannot write\n")))
                           (sc-take io dir asdir rec pres () (ok ? errs (errs + 1))))))
                 ((io 'wr) (string 2 + "scp: protocol error\n"), errs + 1)))))
    (sc-sink io target rec pres)

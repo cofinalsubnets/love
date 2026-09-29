@@ -444,7 +444,7 @@
    ; a lit cell that moves: the count's pen, or a star's dice
    (fmod a m) (: r (a % m) (r < 0 ? (r + m) r))
    (flow gh y) [<gh (water-flow (fmod (y - ft) 3))]
-   (ember k gl x y) [gl ((ember-pens k) ((ft // 2 + dice x y sd 4) % 4))]
+   (ember k gl x y) [gl (ember-pens k ((ft // 2 + dice x y sd 4) % 4))]
    (twinkle gh x y) (dice x y (sd + ft) 9 @ 0 [<gh star-bright] 1 [<gh star-dim] gh)
    tint (peep d 'tint ())                             ; heaven's, a colour to a platform
    ov (peep d 'over ())                               ; the vale's: a face laid over a lit cell, or ()

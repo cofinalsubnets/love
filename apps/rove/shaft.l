@@ -242,7 +242,7 @@
    side ((iw = 1) + (iw = 3))
    ds (sw - r)
    (light c f) (: dy (yh - (f * floor-h + light-h)) r2 (ds * ds + dy * dy)
-                  bl ((tb 'blinks) f) hr (halo-r2 * bl)
+                  bl (tb 'blinks f) hr (halo-r2 * bl)
                   lv (floor (3.0 * (1.0 - r2 / (hr + 0.000001))) + 1)   ; 3 by the lamp, 1 at the halo's edge
                   (halo c k) (over c (side * (r2 < hr) * (lv = k)) (peep (flashes (k - 1)) c 0))
                   c2 (0.0 < bl ? (foldl halo c [1 2 3]) c)

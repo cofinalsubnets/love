@@ -14,6 +14,14 @@ test/uu.l, the ported section only (from "UniMath Foundations PartA")
   uu's surface with the original names.
 
 
+--- data ---
+
+apps/tls/roots.pem
+  Mozilla's CA certificate program: the roots trusted for serving tls, as extracted
+  from NSS's certdata.txt by curl (https://curl.se/docs/caextract.html), verbatim.
+  Mozilla Public License 2.0. https://www.mozilla.org/MPL/2.0/
+
+
 --- fonts ---
 
 love/quay/cga_8x8.c

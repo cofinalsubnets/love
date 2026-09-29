@@ -1605,7 +1605,16 @@
        ('deref X)
         ; frame-direct: a constant-indexed element is a static (r4, off) face
         (: fdc (afd g env e)
+           ; *p++ on a register-homed pointer: the home steps first and the face reads one step
+           ; back, so the old value needs no copy (p's step and any other read of p are unsequenced)
+           pp9 (X @ ('post ('var nm) k)
+                     (: en (vent g env nm)
+                        (? (two? en && <en = 'regv && ptr? <>>en && !(gvarr? <>(<>>en)) &&
+                            !(abl? g 'pinc))
+                           (: d (k * tsz g <>(<>>en)) (? (fits32 d) [<>en <>(<>>en) d]))))
+                     ())
            (? (two? fdc) (mkm <>fdc 'r4 <fdc ())
+              (two? pp9) (mkm <>pp9 <pp9 (0 - pp9 2) [['add <pp9 <pp9 (pp9 2)]])
               ; ptr ± const folds the scaled constant into the face's offset (p[1] is one load).
               ; static only: a var whose vent type is a plain pointer (a VLA pointee scales at runtime)
               (: pv (X @ ('bin op a b && elem op '(+ -))
@@ -2521,7 +2530,7 @@
        ('sexpr items ve ty)
         (: il0 (g 'inlining)
            _ (pin g 'inlining ((il0 || 0) + 1))
-           pre ((g 'sxpre) g env items ())
+           pre (g 'sxpre g env items ())
            _ (pin g 'inlining il0)
            (? (bad? pre) 'bad
               !(two? ve) (mkv ty 'r0 <pre)                   ; void: the statements alone
@@ -3016,7 +3025,36 @@
                                (rotc? g w cl cs) (cgrvar g env x w cs () wnt)   ; rotr: ror by the shr count
                                (rotc? g w cs cl) (cgrvar g env x w cl 1 wnt)    ; rotl: ror by the negated shl count
                                'no)))))))))
+   ; a little-endian byte gather -- (T)p[0] | (T)p[1] << 8 | .. over consecutive bytes of one
+   ; unsigned char pointer -- is one unaligned load where the machine takes one (x64, a64)
+   (gather g env e)
+    (? (!(x64? g || a64? g) || abl? g 'gath) ()
+       (: (orl x) (x @ ('bin '| a b) (orl a + orl b) [x])
+          (unc x) (x @ ('cast _ y) (unc y) x)
+          (kn x) (: k (knum g x) (? (two? k && charm? <k) <k ()))
+          ; a term -> [base byte shift type] | ()
+          (trm x)
+           (: sy (x @ ('bin 'shl y2 kx) (: s (kn kx) (? (charm? s) [y2 s] ())) [x 0])
+              (? !(two? sy) ()
+                 (: y <sy ct (y @ ('cast t _) t ()) d (unc y)
+                    (? !(two? d && <d = 'deref && rotty g env d = 'uchar) ()
+                       (: A <>d
+                          bk (A @ ('bin '+ b9 kx) (: k (kn kx) (? (charm? k) [b9 k] ()))
+                                  ('bin '+ kx b9) (: k (kn kx) (? (charm? k) [b9 k] ()))
+                                  [A 0])
+                          (? (two? bk) [<bk <>bk <>sy ct] ()))))))
+          ts (map trm (orl e))
+          n #ts
+          (? (!(elem n '(2 4 8)) || !(foldl (\ a t (a && two? t)) 1 ts)) ()
+             (: B <<ts T (ts 0 3)
+                (fit t) (<t = B && <<t = 'var && t 2 = 8 * <>t && t 3 = T)
+                (? (!(foldl (\ a t (a && fit t)) 1 ts) || !(elem T ints9) || pair? g T ||
+                    tsz g T < n || !(sort (map (t \ <>t) ts) = jot n)) ()
+                   ['cast T ['deref ['cast ['ptr (n @ 2 'ushort 4 'uint 'ulong)] B]]])))))
    (cgbin g env e wnt)
+    (: gz9 (? (<>e = '|) (gather g env e) ())
+       (? gz9 (cgexpr g env gz9 wnt) (cgbin0 g env e wnt)))
+   (cgbin0 g env e wnt)
     (: op <>e
        lhs <>>e rhs <>>>e
        ; lazy left-then-right: the left parks before the right evaluates. the destination die aims a load-shaped left
@@ -5244,7 +5282,7 @@
           (? (rs = 'bar)
               (? (retx? f) (rd != 'r0)
                  (elem <f '(call callr)) (elem rd (doors g 0))
-                 (<f = 'jmp && !(46 = ((show <>f) 0))) (elem rd (doors g 1))
+                 (<f = 'jmp && !(46 = (show <>f 0))) (elem rd (doors g 1))
                  ())
              (elem rd <rs) ()
              (elem rd <>rs) 1
@@ -5422,7 +5460,7 @@
                      (pin seen <>f 1, go >l wl))
                  (<f = 'align) (go >l wl)          ; a loop head's pad: no register effect
                  (elem <f '(jmp jmp8))
-                  (? (46 = ((show <>f) 0)) (next (<>f . wl))
+                  (? (46 = (show <>f 0)) (next (<>f . wl))
                      ; a tail jump to a function: an exit reading its arguments -- the door set alone dies (dies?'s law)
                      (elem rd (doors g 1)) (next wl)
                      ())
@@ -5509,7 +5547,7 @@
                         M1 (filter (\ e (e 0 = a 0 && (7 < e 1 - a 1 || e 1 - a 1 < -7))) M)
                         (f . go >l (? (nom? (f 3)) ([(a 0) (a 1) (f 3)] . M1) M1) A))
                     (: rd (rdsp g f)
-                       (? (rd = 'bar || elem op mw) (f . go >l () (? (rd = 'bar) () ((foldl (\ k x (kill <k (k 1) x)) [() A] <>rd) 1)))
+                       (? (rd = 'bar || elem op mw) (f . go >l () (? (rd = 'bar) () (foldl (\ k x (kill <k (k 1) x)) [() A] <>rd 1)))
                           ; a base made by lea/add/sub off another, or a register copy, roots at that one
                           (: D (f 1)
                              bs (? (elem op '(lea add sub) && nom? D && nom? (f 2) && charm? (f 3) && nelem (f 2) fr)
@@ -6284,7 +6322,7 @@
                         (48 <= dx <= 57)
                          (: ix (dx - 48)
                             (? (ix < #al)
-                               (: sub ((al ix) md) (? (bad? sub) 'bad (go (i + (? md 3 2)) (acc + sub))))
+                               (: sub (al ix md) (? (bad? sub) 'bad (go (i + (? md 3 2)) (acc + sub))))
                                'bad))
                         'bad))
                  'bad)))
@@ -6400,7 +6438,7 @@
                     (? !(two? l) (rev acc)
                        (: e2 <l k <>e2
                           (? (elem <e2 '(m k)) (assign >l fr (k . acc))
-                             (two? k) (? (<>k < #acc) (: r9 ((rev acc) <>k) (assign >l fr (r9 . acc))) 'bad)
+                             (two? k) (? (<>k < #acc) (: r9 (rev acc <>k) (assign >l fr (r9 . acc))) 'bad)
                              (k = 'pick)
                               (? (two? fr) (assign >l >fr (<fr . acc)) 'bad)
                              (assign >l fr (k . acc)))))

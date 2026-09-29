@@ -89,7 +89,7 @@
  (daylight hr) (: v (sin (pi * (hr - 6.0) / 12.0)) (v < 0.0 ? 0.0 v))
  (sky-pen hr) (sky-pens (int hr))
  ; the day's own mean, warmest mid-afternoon and coldest at three
- (grass-temp g) (: t0 ((g 'tdays) (grass-day g))
+ (grass-temp g) (: t0 (g 'tdays (grass-day g))
                    (t0 + 12.0 * sin (pi * (grass-hour g - 9.0) / 12.0)))
  (compass deg) (points ((int ((deg + 11.25) / 22.5)) % 16))
  ; the wind's push along the screen: it blows FROM its heading, and east is right
@@ -169,7 +169,7 @@
    gust (1.0 + 0.3 * sin (t * 1.7) + 0.2 * sin (t * 4.3 + 1.0) + 0.15 * sin (t * 0.37))
    _ (pins g 'h h 'fr fr 'wt wt 'wind wind 'head head 'gust gust)
    hr (grass-hour g) dl (daylight hr) temp (grass-temp g)
-   cover ((g 'covers) day)
+   cover (g 'covers day)
    sun (dl * (1.0 - 0.6 * cover))              ; what reaches the ground
    ; the water: each tick a blade throws against the sky's thirst -- a chance in a
    ; thousand -- and loses a drop when it hits; the night gives some back a little at a
@@ -183,7 +183,7 @@
    _ (fall ? (pins g 'dewday day 'msg "the dew falls"))
    ; once a day, at the day's own hour, the song: the cue is raised here and taken by
    ; whoever feeds the horn
-   _ ((g 'songs) day <= hr && g 'sang != day ? (pins g 'sang day 'cue 1))
+   _ (g 'songs day <= hr && g 'sang != day ? (pins g 'sang day 'cue 1))
    ; growth wants water, warmth and light
    tf (: q ((temp - 72.0) / 32.0) v (1.0 - q * q) (v < 0.0 ? 0.0 v))
    (grow hy) (0.075 * clamp ((hy - 10.0) / 80.0) 0.0 1.0 * tf * (0.2 + 0.8 * sun) * dh)
@@ -252,7 +252,7 @@
  ; through the whole of it. where two overlap the deeper one shows
  ; ..a cloud steps by whole columns, so the layout holds until one steps: it is kept under
  ; the columns the clouds stand on
- (grass-clouds g) (: n (3 + int (((g 'covers) (grass-day g)) * 10.0)) drift (g 'drift)
+ (grass-clouds g) (: n (3 + int ((g 'covers (grass-day g)) * 10.0)) drift (g 'drift)
    key (map (cl \ int (cl 'x0 + drift)) (first-n n (g 'clouds)))
    kept (g 'cm)
    (? (two? kept && kept 0 = key) (kept 1)
@@ -332,7 +332,7 @@
    ; a cell: on the dirt its own; a blade's, with the sky's ground where it asks; the sky's
    (cell x y cells) (: i (x + c * y) o (peep ov i ())
      (? (base < y) (dirt-cell x y i)
-        (two? o) [(o 0) (o 1) (o 2 < 0 ? ((peep cells x ()) 2) (o 2))]
+        (two? o) [(o 0) (o 1) (o 2 < 0 ? (peep cells x () 2) (o 2))]
         (peep cells x ())))
    ; a row is painted to the screen's edge, so it wants no erase after it: under a
    ; pending wrap an erase takes the very glyph that raised it, and the last column
@@ -397,7 +397,7 @@
   (filter two? (map (\ x (: at (st + int (spc * qnum (evwb x - qi c)))
                            v (mkvoice at (evv x) song-rate)
                          (two? v ? [at v])))
-                    (filter onset? ((s 'tune) (qi c) (qi (c + 1))))))
+                    (filter onset? (s 'tune (qi c) (qi (c + 1))))))
  ; one chunk out the horn, for the wind that blows now. the write is also the clock: the
  ; card takes a chunk at the rate it plays one, so the frame loop that feeds it needs no
  ; rest of its own
@@ -416,7 +416,7 @@
      _ (? (s 'chimes && s 'mode = 'chimes && two? (s 'set) && #(s 'vs) < s 'cap
            && roll sb 1000 < int (chime-rate wind * 1000.0 / 30.0))
           (: at (base + roll sb song-chunk)
-             nt ((s 'set) (roll sb #(s 'set)))
+             nt (s 'set (roll sb #(s 'set)))
              v (mkvoice at {'s "chime" 'note nt 'gain (0.1 + roll sb 25 / 100.0)
                              'pan (roll sb 100 / 100.0) 'legato chime-ring} song-rate)
              (pin s 'vs (cat (s 'vs) [[at v]]))))

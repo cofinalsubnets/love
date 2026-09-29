@@ -188,12 +188,12 @@
    mdchar   (tag (p \ ['text (string <p)]) (one chr?))
    ; the leaves are values; the cycle (span -> strong/em/link -> inls -> span) rides
    ; eta-expanded parsers, so a member is reached at call time and not while the layer builds.
-   (mdstrong s y n) ((tag (p \ ['strong <p]) (seqs [(skip (lit "**")) (pack (mdinls "**")) (skip (lit "**"))])) s y n)
-   (mdem s y n)     ((tag (p \ ['em <p]) (seqs [(skip (lit "*")) (pack (mdinls "*")) (skip (lit "*"))])) s y n)
+   (mdstrong s y n) (tag (p \ ['strong <p]) (seqs [(skip (lit "**")) (pack (mdinls "**")) (skip (lit "**"))]) s y n)
+   (mdem s y n)     (tag (p \ ['em <p]) (seqs [(skip (lit "*")) (pack (mdinls "*")) (skip (lit "*"))]) s y n)
    (mdlink s y n)   ((tag (p \ ['link <p <>p])
                           (seqs [(skip (lit "[")) (pack (mdinls "]")) (skip (lit "]"))
                                  (skip (lit "(")) (span (!= 41)) (skip (lit ")"))])) s y n)
-   (mdspan s y n)   ((alts [mdesc mdcode mdstrong mdem mdimg mdlink mdtext mdchar]) s y n)
+   (mdspan s y n)   (alts [mdesc mdcode mdstrong mdem mdimg mdlink mdtext mdchar] s y n)
    (mdinls stop) (pmap mrg (many (seq (notp (lit stop)) mdspan)))   ; spans up to a closer
    mdinl        (runp (pmap mrg (many mdspan))))
 
@@ -263,7 +263,7 @@
    d-body    (seqs [(skip defmark) (span nonl?) eol])
    d-item    (tag (p \ [(mdinl <p) (mdinl <>p)]) (seq d-term d-body))
    b-deflist (tag (p \ ['deflist p]) (many1 d-item))
-   (b-para s y n)  ((tag (p \ ['para (mdinl (join " " p))]) (many1 p-line)) s y n)
+   (b-para s y n)  (tag (p \ ['para (mdinl (join " " p))]) (many1 p-line) s y n)
    ; the last resort, and what makes mdread TOTAL: `starter` claims more lines than the
    ; blocks it names can parse (a `--- text ---` that is not a rule, a `:   ` body with no
    ; term over it) and `p-line` refuses them too, so without this the block loop stops and
@@ -628,13 +628,13 @@
                 (seqs [(skip (lit "<img src=\"")) (span (!= 34)) (skip (lit "\" alt=\""))
                        (span (!= 34)) (skip (lit "\">"))]))
    ; the inline cycle (htinl -> strong/em/link -> htinl) rides eta-expanded parsers
-   (hstrong s y n) ((tag (p \ ['strong <p]) (wrapt "strong" (pack htinl))) s y n)
-   (hem s y n)     ((tag (p \ ['em <p]) (wrapt "em" (pack htinl))) s y n)
+   (hstrong s y n) (tag (p \ ['strong <p]) (wrapt "strong" (pack htinl)) s y n)
+   (hem s y n)     (tag (p \ ['em <p]) (wrapt "em" (pack htinl)) s y n)
    ; ..the href is entity-decoded by running the same two text leaves over it
    (hlink s y n)   ((tag (p \ ['link <>p (plain (runp (many (alts [hent htext])) <p))])
                          (seqs [(skip (lit "<a href=\"")) (span (!= 34)) (skip (lit "\">"))
                                 (pack htinl) (skip (lit "</a>"))])) s y n)
-   (htinl s y n)   ((pmap mrg (many (alts [hent hcode hstrong hem hmark himgp hlink htext]))) s y n)
+   (htinl s y n)   (pmap mrg (many (alts [hent hcode hstrong hem hmark himgp hlink htext])) s y n)
 
    (hlev n)  (tag (p \ ['head n <p]) (wrapt ("h" + show n) (pack htinl)))
    hlang     (seqs [(skip (lit " class=\"language-")) (span (!= 34)) (skip (lit "\""))])
@@ -684,9 +684,9 @@
    h-loose (tag (p \ ['para <p])
                 (pack (pmap mrg (many1 (alts [hent hcode hstrong hem hmark himgp hlink htext])))))
    ; quote recurses into the block loop, so it sits with it and stays eta-expanded
-   (h-quote s y n) ((tag (p \ ['quote <p]) (wrapt "blockquote" (pack (many h-block)))) s y n)
+   (h-quote s y n) (tag (p \ ['quote <p]) (wrapt "blockquote" (pack (many h-block))) s y n)
    (h-block s y n)
-    ((seqs [hws (alts [h-rule h-head h-fence h-quote h-ul h-ol h-dl h-table h-meta h-para h-loose h-lone])]) s y n)
+    (seqs [hws (alts [h-rule h-head h-fence h-quote h-ul h-ol h-dl h-table h-meta h-para h-loose h-lone])] s y n)
    (htread t) (bmrg (runp (seqs [(many h-block) hws]) (htscrub t))))
 
 ; ---------------------------------------------------------------- a table, laid out
@@ -940,10 +940,10 @@
    ; the closer is optional because a font runs to one in roff and a page may leave it to the
    ; end of the line; `rinls` stops at either, so `opt` is the whole of the difference.
    (rfont o t) (tag (p \ [t <p]) (seqs [(skip (lit o)) (pack rinls) (skip (opt rclose))]))
-   (rstrong s y n) ((rfont "\\fB" 'strong) s y n)
-   (rem s y n)     ((rfont "\\fI" 'em) s y n)
-   (rspan s y n)   ((alts [resc rcode rstrong rem rtext rchar]) s y n)
-   (rinls s y n)   ((pmap mrg (many (seq (notp rclose) rspan))) s y n)
+   (rstrong s y n) (rfont "\\fB" 'strong s y n)
+   (rem s y n)     (rfont "\\fI" 'em s y n)
+   (rspan s y n)   (alts [resc rcode rstrong rem rtext rchar] s y n)
+   (rinls s y n)   (pmap mrg (many (seq (notp rclose) rspan)) s y n)
    rfinl   (mrg * runp (many rspan))
    rplain  (plain * mrg * runp (many (alts [resc rtext rchar]))))   ; escapes only, no fonts
 
@@ -1022,7 +1022,7 @@
    (r-rs s y n) ((tag (p \ ['quote p])
                       (seqs [(skip (lit ".RS")) (skip (span nonl?)) (skip (lit "\n"))
                              (many r-block) (skip (lit ".RE")) (skip (span nonl?)) (skip (lit "\n"))])) s y n)
-   (r-block s y n) ((alts [r-blank r-br r-th r-sh r-ss r-pp r-ex r-rs r-ul r-ol r-dl r-para r-lone]) s y n)
+   (r-block s y n) (alts [r-blank r-br r-th r-sh r-ss r-pp r-ex r-rs r-ul r-ol r-dl r-para r-lone] s y n)
    rfread (bmrg * runp (many r-block) * rfscrub))   ; the scrub runs first: see above
 
 ; ---------------------------------------------------------------- a terminal, shown

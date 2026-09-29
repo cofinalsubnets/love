@@ -1,0 +1,14 @@
+.PS
+x = 0.15
+y = 2
+z = 1
+define m13 { line then down }
+circle wid 0.5 thick 2
+if (y) != x then { circle ht 0.3 }
+circle yslanted -0.1
+ellipse fill
+for i = 1 to 3 by 0.5 do { y = -atan2(z, y); line color "green" shaded "red" thick 0.5 }
+for i = 1 to 1.5 by *2 do { left; ellipse ht 0.1 }
+z = 0.2
+m13
+.PE
