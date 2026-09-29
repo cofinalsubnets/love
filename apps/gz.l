@@ -8,6 +8,7 @@
 ;   (gz-zip s nom stamp)   -> a .gz member; nom "" for no name, stamp 0 for no time
 ;   (gz-unzip s)           -> (1 bytes) | () | 'big
 ;   (gz-head s)            -> (1 stamp name body-seat) | (), the header walked
+;   (gz-pull rd)           -> g, a reader: (gz-next g) the next piece inflated, "" at the end
 ;   (gz-unzipf rd mk)      -> (1 stamp name n seat) | ('trail ..) | 'nogz | 'no | () | 'big
 ;                             the members streamed: rd _ is the next piece ("" the end), mk
 ;                             (stamp name) -> (1 w), w the writer the bytes go through, or ()
@@ -773,40 +774,60 @@
                 r (gz-crc32 out = crc && #out = isize & 4294967295 && [1 out])))))
 
    ; --- the container, streamed ---------------------------------------------
-   ; a member at a time off rd, out through the writer mk hands back for the first header,
-   ; so nothing holds a whole member: the header is read as far as it runs, the body fed
-   ; as it comes with the crc carried on, and the trailer checked where the stream ends.
-   ; members that follow are read on, as gzip reads `cat a.gz b.gz`; bytes behind the last
-   ; that are no member answer 'trail with the rest. 'nogz is a first header that is not
-   ; one, 'no a writer mk declined, () torn or a crc wrong -- what came out before came
-   ; out. a build without inflate-feed reads the whole input and answers through gz-unzip.
+   ; (gz-pull rd) is a reader over the members: (gz-next g) answers the next piece inflated,
+   ; "" once the stream is done, and then g's 'ans says how it ended. nothing holds a whole
+   ; member: the header is read as far as it runs, the body fed as it comes with the crc
+   ; carried on, and each trailer checked where its member ends. members that follow are read
+   ; on, as gzip reads `cat a.gz b.gz`; bytes behind the last that are no member are 'trail.
+   ; 'ans: (1 stamp name n seat) of the first header and every byte out | ('trail ..) |
+   ; 'nogz a first header that is not one | () torn or a crc wrong | 'big
+   (gz-pull rd) {'rd rd 'buf "" 'mode 'head 'first 1 'tot 0}
+   (gz-fin g a) (: _ (pins g 'mode 'end 'ans a) "")
+   (gz-more g k)                                 ; buf grown to k bytes, or as far as the input goes
+    (: b (peep g 'buf "")
+       (? (k <= #b) b (: p ((peep g 'rd ()) 0) (? (#p = 0) b (: _ (pin g 'buf (b + p)) (gz-more g k))))))
+   (gz-headin g)                                 ; -> the header whole off buf | () where none can be
+    (: b (peep g 'buf "")   h (gz-head b)
+       (? h h
+          (3 <= #b && !(b 0 = 31 && b 1 = 139 && b 2 = 8)) ()
+          (: p ((peep g 'rd ()) 0) (? (#p = 0) () (: _ (pin g 'buf (b + p)) (gz-headin g))))))
+   (gz-next g)
+    (: m (peep g 'mode 'end)
+       (? (m = 'end) ""
+          (m = 'head)
+           (: h (gz-headin g)   b (peep g 'buf "")   hd (peep g 'hd ())
+              (? !h (? (peep g 'first 0) (gz-fin g 'nogz)
+                       (#(gz-more g 1) = 0) (gz-fin g [1 (hd 0) (hd 1) (peep g 'tot 0) (hd 2)])
+                       (gz-fin g ['trail (hd 0) (hd 1) (peep g 'tot 0) (hd 2)]))
+                 (: _ (? (peep g 'first 0) (pins g 'hd [(h 1) (h 2) (h 3)] 'first 0))
+                    _ (pins g 'st (inflate-new 0) 'crc 0 'n 0 'buf (snip b (h 3) #b) 'mode 'body)
+                    (gz-next g))))
+          (m = 'body)
+           (: b (peep g 'buf "")
+              r (inflate-feed (peep g 'st ()) (? (#b = 0) ((peep g 'rd ()) 0) b))
+              _ (pin g 'buf "")
+              (? (two? r) (: o <r
+                             _ (pins g 'crc (crc32-on (peep g 'crc 0) o) 'n (peep g 'n 0 + #o) 'buf >r 'mode 'trail)
+                             (? (#o = 0) (gz-next g) o))
+                 (string? r) (: _ (pins g 'crc (crc32-on (peep g 'crc 0) r) 'n (peep g 'n 0 + #r))
+                                (? (#r = 0) (gz-next g) r))
+                 (gz-fin g (? (r = 1) 'big ()))))
+          (: t (gz-more g 8)   n (peep g 'n 0)        ; the trailer
+             (? (#t < 8 || !(rdle t 0 4 = peep g 'crc 0) || !(rdle t 4 4 = n & 4294967295)) (gz-fin g ())
+                (: _ (pins g 'buf (snip t 8 #t) 'tot (peep g 'tot 0 + n) 'mode 'head)
+                   (gz-next g))))))
+   ; the same members written out: mk (stamp name) of the first header answers (1 w), w
+   ; the writer every piece goes through, or () for 'no. what came out before a failure
+   ; came out. a build without inflate-feed reads the whole input and answers through gz-unzip
    (gz-unzipf rd mk)
     (? !(gz-nif 3 gz-feedprobe) (gz-unzipw rd mk)
-       (: (head b)                               ; -> (b h), h () where no header can be
-           (: h (gz-head b)
-              (? h [b h]
-                 (3 <= #b && !(b 0 = 31 && b 1 = 139 && b 2 = 8)) [b ()]
-                 (: p (rd 0) (? (#p = 0) [b ()] (head (b + p))))))
-          (more b k) (? (k <= #b) b (: p (rd 0) (? (#p = 0) b (more (b + p) k))))
-          (body st wr p crc n)                   ; -> (crc n rest) | () | 'big
-           (: r (inflate-feed st (? (#p = 0) (rd 0) p))
-              (? (two? r) (: o <r _ (wr o) [(crc32-on crc o) (n + #o) >r])
-                 (string? r) (: _ (wr r) (body st wr "" (crc32-on crc r) (n + #r)))
-                 (r = 1) 'big
-                 ()))
-          (member b first w hd tot)                ; w the writer, hd the first header's (stamp name)
-           (: hb (head b)   h (hb 1)
-              (? !h (? first 'nogz (#(more <hb 1) = 0) [1 (hd 0) (hd 1) tot (hd 2)] ['trail (hd 0) (hd 1) tot (hd 2)])
-                 (: hd2 (? first [(h 1) (h 2) (h 3)] hd)
-                    m (? first (mk (h 1) (h 2)) [1 w])
-                    (? !(two? m) 'no
-                       (: r (body (inflate-new 0) <>m (snip <hb (h 3) #<hb) 0 0)
-                          (? (r = 'big) 'big
-                             !r ()
-                             (: t (more (r 2) 8)
-                                (? (#t < 8 || !(rdle t 0 4 = <r) || !(rdle t 4 4 = (r 1) & 4294967295)) ()
-                                   (member (snip t 8 #t) 0 <>m hd2 (tot + r 1))))))))))
-          (member "" 1 () () 0)))
+       (: g (gz-pull rd)   p (gz-next g)   hd (peep g 'hd ())
+          (? !(two? hd) (peep g 'ans ())
+             (: m (mk (hd 0) (hd 1))
+                (? !(two? m) 'no
+                   (: w <>m
+                      (go p) (? (#p = 0) (peep g 'ans ()) (: _ (w p) (go (gz-next g))))
+                      (go p)))))))
    (gz-unzipw rd mk)
     (: (all a) (: p (rd 0) (? (#p = 0) a (all (p . a))))
        s (cats (rev (all ())))   h (gz-head s)   u (h && gz-unzip s)

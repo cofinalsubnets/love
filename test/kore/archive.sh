@@ -56,6 +56,10 @@ printf 'x\n' > "$ho/.arcd/one.txt"; printf 'y\n' > "$ho/.arcd/sub/two.txt"
 # the cd'd subshells want $K, the ABSOLUTE love: korerun's $m is relative to $PWD
 ( cd "$ho" && "$K" kore tar czf .arc.tgz .arcd ) || fail "kore tar czf"
 korerun tar tzf "$ho/.arc.tgz" > "$o" 2>&1 || fail "kore tar tzf"
+korerun tar tvzf "$ho/.arc.tgz" | grep -q ' 2 .*\.arcd/one\.txt$' || fail "kore tar tvzf: the size off the header"
+n=$(wc -c < "$ho/.arc.tgz"); head -c $((n / 2)) "$ho/.arc.tgz" > "$ho/.arch.tgz"
+korerun tar tzf "$ho/.arch.tgz" > /dev/null 2> "$g"; r=$?
+[ $r -eq 2 ] && grep -q 'not a gzip stream' "$g" || fail "kore tar tzf of a torn .tgz (rc $r)"
 grep -q 'one\.txt' "$o" || fail "kore tar: the verb fell through to the usage screen"
 ( cd "$ho" && "$K" kore find .arcd | "$K" kore cpio -o --quiet > .arc.cpio ) || fail "kore cpio -o"
 korerun cpio -t < "$ho/.arc.cpio" > "$o" 2>/dev/null || fail "kore cpio -t"
@@ -226,7 +230,28 @@ if command -v gzip >/dev/null 2>&1; then
   big gzip -1 > "$B/z.gz"
   LOVE_BUDGET_MB=64 LOVE_NO_IMAGE= "$m" kore gunzip -c "$B/z.gz" 2> "$o" | wc -c > "$g"
   [ "$(tr -d ' ' < "$g")" = 1153433600 ] || { cat "$o"; fail "kore gunzip of 1100 MiB did not stream: $(cat "$g") bytes"; }
-  korerun tar tzf "$B/z.gz" > /dev/null 2>&1 && fail "kore tar z of 1100 MiB was taken"
+  # ..and so does tar: zeros are an archive that ends at its first block, and the rest of
+  # the gzip stream is read to its crc all the same
+  LOVE_BUDGET_MB=64 LOVE_NO_IMAGE= "$m" kore tar tzf "$B/z.gz" > "$g" 2> "$o"; r=$?
+  [ $r -eq 0 ] && [ ! -s "$g" ] || { cat "$o"; fail "kore tar tzf of 1100 MiB of zeros did not stream (rc $r)"; }
+  # a member bigger than the heap is poured to its file: 300 MiB under 64 MiB
+  mkdir -p "$B/t" "$B/x"; dd if=/dev/zero bs=1048576 count=300 2>/dev/null > "$B/t/big"; printf 'tail\n' > "$B/t/small"
+  ( cd "$B" && "$K" kore tar czf big.tgz t ) || fail "kore tar czf of a 300 MiB member"
+  rm -rf "$B/t"
+  LOVE_BUDGET_MB=64 LOVE_NO_IMAGE= "$m" kore tar xzf "$B/big.tgz" -C "$B/x" 2> "$o" || { cat "$o"; fail "kore tar xzf of a 300 MiB member did not stream"; }
+  [ "$(wc -c < "$B/x/t/big" | tr -d ' ')" = 314572800 ] && [ "$(cat "$B/x/t/small")" = tail ] \
+    || fail "kore tar xzf of a 300 MiB member: the files are not whole"
+  # ..and cpio -i the same, off an archive the system cpio packs
+  if command -v cpio >/dev/null 2>&1; then
+    ( cd "$B/x" && find t | cpio -o -H newc --quiet > "$B/big.cpio" ) || fail "cpio -o of a 300 MiB member"
+    mkdir -p "$B/c"
+    ( cd "$B/c" && LOVE_BUDGET_MB=64 LOVE_NO_IMAGE= "$K" kore cpio -i -d --quiet < "$B/big.cpio" ) 2> "$o" \
+      || { cat "$o"; fail "kore cpio -i of a 300 MiB member did not stream"; }
+    cmp -s "$B/x/t/big" "$B/c/t/big" && cmp -s "$B/x/t/small" "$B/c/t/small" \
+      || fail "kore cpio -i of a 300 MiB member: the files are not whole"
+    head -c 1000 "$B/big.cpio" | korerun cpio -t > /dev/null 2> "$o"; r=$?
+    [ $r -eq 1 ] && grep -q 'premature end' "$o" || fail "kore cpio -t of a torn archive (rc $r)"
+  fi
 fi
 if command -v xz >/dev/null 2>&1; then
   big xz --format=lzma -0 > "$B/z.lzma"
