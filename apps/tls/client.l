@@ -78,8 +78,10 @@
        (le-bytes (ladder (le-num kk) uu)))
    (x25519-pub k) (x25519 k (bytes 32 (i \ (i = 0 ? 9 0))))
 
-   (rnd n) (: q (open "/dev/urandom" "r")
-              b (bytes n (i \ see q))
+   (rnd n) (: q (open "/dev/urandom" "r")                ; no entropy is a scare, never a constant
+              _ (? (nom? q) (scare 'no-entropy q) 0)
+              (byte i) (: c (see q) (? (c < 0) (close q, scare 'no-entropy "/dev/urandom") c))
+              b (bytes n byte)
               (close q, b))
 
    ; --- the aead: RFC 8439's, the poly key block zero of the stream; or aes-gcm's nifs ---
@@ -103,13 +105,14 @@
 
    ; --- the wire: exact reads over the socket, a run kept between records ---
    (rd t n)
-    (: (go pend) (? (n <= #pend) pend
-                    (: c (see (t 's))
-                       (? (c = -1) ()
-                          (go (pend + string c + chug (t 's))))))
-       pend (go (t 'pend))
-       (? !(string? pend) ()
-          (pin t 'pend (snip pend n #pend), [1 (snip pend 0 n)])))
+    (: (go acc have) (? (n <= have) (join "" (rev acc))       ; chunks kept in a list, joined once -- no per-read recopy
+                        (: c (see (t 's))
+                           (? (c = -1) ()
+                              (: piece (string c + chug (t 's)) (go (piece . acc) (have + #piece))))))
+       p (t 'pend)
+       got (go (0 < #p ? [p] ()) #p)
+       (? !(string? got) ()
+          (pin t 'pend (snip got n #got), [1 (snip got 0 n)])))
    (rdrec t)                                                           ; -> (type body) | ()
     (: h (rd t 5)
        (? (atom? h) ()
