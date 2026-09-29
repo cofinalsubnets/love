@@ -87,7 +87,9 @@ Sessions working in parallel often share one branch, and merge into it one at a 
 **sb**
 :   Every ledger under **queue/** in the *hub*: the nest named by **SB_HUB**, else the working directory when it holds a **.sb/**. Read it with **sb -C** *hub* **ledger queue/***name*, and take **--id** as *old*. Write **sb -C** *hub* **ledger queue/***name* **--was** *old* *file*. A ledger keeps every entry it ever held, with its writer, under **--log**, and it never travels in **sync**: sessions that share a queue name one hub.
 
-bee quotes each queue in the system prompt as it stood at start, and tells the model to follow the rules, to read the queue fresh before acting on it, and to write only its own row. When a write fails, someone wrote first: re-read and redo. A row names its session. The model reaches a bee session with **send_message**, and asks the user to relay to any other.
+bee quotes each queue in the system prompt as it stood at start, and tells the model to follow the rules and to read the queue fresh before acting on it. A row names its session. The model reaches a bee session with **send_message**, and asks the user to relay to any other.
+
+The model writes a queue only through **queue_row**, never by hand; a small model given the text to edit once replaced a whole queue with its one row. The tool reads the queue and changes exactly one line: the bee's own row, keyed by its session name, in the header's format *position session branch gated-on gated-head state*, with an optional note after **#**. The model gives the state (**waiting**, **gating**, **green**, **folded-into-***N*, or **left**, which removes the row) and whichever other fields change, and the rest keep their values. A bee with no row joins at the bottom, one past the highest position. The write is a compare-and-swap, retried from a fresh read when someone wrote first. Only the bee named on the **leader** line may pass **session** to edit another's row, or **base** to move the base line (*branch* *sha*) when it lands; anyone else is refused.
 
 A bee watches the queues for its rows. On the full screen and when serving, it reads every queue again every **(queue-watch** *n***)** seconds (20 unless set, 0 for never). A change that concerns its rows comes to it as a message from **queue-watch**:
 
@@ -96,7 +98,7 @@ A bee watches the queues for its rows. On the full screen and when serving, it r
 - a row folding into it, or a folded row moving;
 - a new leader.
 
-Its own edits to its own rows say nothing.
+The leader hears every row, with or without one of its own: each join, move and leaving. Its own edits to its own rows say nothing.
 
 The model is also given the queue's operating checks, learned running one. Each is meant to be checked mechanically, not just stated:
 

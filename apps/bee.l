@@ -118,7 +118,19 @@
               "dir" (prop "the directory it works in") "prompt" (prop "what it should do first")}
              ["name" "dir" "prompt"])
        (tool "stop_bee" "Stop a bee this machine is running, by name."
-             {"name" (prop "the session's name")} ["name"])]
+             {"name" (prop "the session's name")} ["name"])
+       (tool "queue_row" ("Write your row in a merge queue -- the only way to write one; never edit a "
+                          + "queue by hand. It reads the queue, sets exactly your row (joining at the "
+                          + "bottom if you have none, leaving it when state is left) and writes back by "
+                          + "compare-and-swap. Fields you omit keep their value. The leader may also pass "
+                          + "session to edit another's row, or base to move the base line when it lands.")
+             {"queue" (prop "refs/queue/NAME for git, or queue/NAME for an sb ledger in the hub")
+              "state" (prop "waiting, gating (write it with the head before the gate starts), green (every lane passed on that head), folded-into-N, or left")
+              "branch" (prop "your branch") "gated_on" (prop "the sha your branch was merged with")
+              "gated_head" (prop "the sha you are gating") "note" (prop "a short note: what the row carries, which lanes")
+              "session" (prop "leader only: the row's session, when not yours")
+              "base" (prop "leader only: the new sha for the base line")}
+             ["queue" "state"])]
 
      ; --- the project's own instructions ---
      ; from / down to the working directory, each directory's AGENTS.md and then its CLAUDE.md:
@@ -448,7 +460,17 @@
                 (a + b)))
          ln (? (q-line old "leader" != q-line new "leader")
                [("the leader is now " + (: l (q-line new "leader") (snip l 7 #l)))] ())
-         (? (two? mine) (catmap one (sort mine) + ln) ()))
+         ; the leader hears every row: joins, moves and leavings, all but its own edits
+         lead? (q-leader new = bee-name)
+         (all p)
+          (: o (peep ro p ()) n (peep rn p ())
+             (? (two? n && n 1 = bee-name) () (two? o && o 1 = bee-name) ()
+                !(two? o) [("row " + p + " joined: " + q-say n)]
+                !(two? n) [("row " + p + " left: " + o 1 + "'s " + o 2 + " at " + o 4)]
+                (show o != show n) [("row " + p + " moved: " + q-say n + " (was " + o 4 + ", " + o 5 + ")")]
+                ()))
+         every (sort (keys (foldl (\ t k (pin t k 1)) (foldl (\ t k (pin t k 1)) {} (keys ro)) (keys rn))))
+         (? (two? mine || lead?) (catmap one (sort mine) + (lead? ? (catmap all every) ()) + ln) ()))
      bee-qseen (foldl (\ t s (pin t <s (s 1))) {} (q-sections bee-queues))
      (watch-tick _)
       (: now (q-sections (lush-out bee-qcmd))
@@ -462,6 +484,73 @@
                      (foldl (\ a t (a + t)) "" news + "read it fresh before acting on it."))
             0))
      (watch _) (? (0 < bee-qwatch) (: _ (rest (bee-qwatch * 1000)) _ (watch-tick 0) (watch 0)) 0)
+
+     ; --- queue rows: the one way a bee writes a queue. it reads the queue, changes exactly one
+     ; line in the header's format -- its own row, or as the leader another's row or the base
+     ; line -- and writes back by compare-and-swap, reading again when someone wrote first. the
+     ; model names fields; it never edits the text, which a small model overwrote whole ---
+     (chomp s) (: n #s (? (0 < n && s (n - 1) = 10) (snip s 0 (n - 1)) s))
+     (q-git? q) (starts? q "refs/queue/")
+     (q-hub _) (: h (getenv "SB_HUB") (? (string? h && 0 < #h) h "."))
+     ; [id text], id "none" for a queue not made yet
+     (q-read q)
+      (? (q-git? q)
+         (: id (chomp (lush-out ("git rev-parse --verify -q " + sq q)))
+            (? (0 < #id) [id (lush-out ("git cat-file -p " + sq q))] ["none" ""]))
+         (: id (chomp (lush-out ("sb -C " + sq (q-hub 0) + " ledger " + sq q + " --id")))
+            [(0 < #id ? id "none") (? (id = "none" || #id = 0) "" (lush-out ("sb -C " + sq (q-hub 0) + " ledger " + sq q)))]))
+     ; -> 1 when it landed on old, 0 when someone wrote first
+     (q-put q old text)
+      (: tmp (bee-hive + "/.queue-" + bee-name) _ (mkdirs bee-hive) _ (spit-file tmp text)
+         r (? (q-git? q)
+              (: nw (chomp (lush-out ("git hash-object -w " + sq tmp)))
+                 (lush-out ("git update-ref " + sq q + " " + nw + (old = "none" ? " ''" (" " + old)) + " && echo landed")))
+              (lush-out ("sb -C " + sq (q-hub 0) + " ledger " + sq q + " --was " + old + " " + sq tmp + " && echo landed")))
+         _ (unlink tmp)
+         (0 <= find r "landed" 0))
+     (q-row? l) (: w (words l) (5 < #w && 0 < #<w && 48 <= <w 0 <= 57))
+     (q-note l) (: k (find l "  # " 0) (? (k < 0) "" (snip l (k + 4) #l)))
+     (q-leader text) (: l (q-line text "leader") (? (0 < #l) (snip l 7 #l) ""))
+     (field in k d) (: v (peep in k ()) (? (string? v && 0 < #v) v d))
+     ; the text with who's row set from the input, or its row gone when state is left -> [text line why]
+     (q-edit text who in)
+      (: ls (lines text)
+         at (: (go l i) (? (atom? l) -1 (q-row? <l && (words <l) 1 = who) i (go >l (i + 1)))
+               (go ls 0))
+         st (in "state")
+         old (? (0 <= at) (words (ls at)) ())
+         pos (? (two? old) <old
+                (show (1 + foldl (\ a l (? (q-row? l) (max a (digits <(words l))) a)) 0 ls)))
+         (pick k i) (field in k (? (two? old) (old i) "-"))
+         note (field in "note" (? (0 <= at) (q-note (ls at)) ""))
+         line (pos + " " + who + " " + pick "branch" 2 + " " + pick "gated_on" 3 + " " + pick "gated_head" 4
+               + " " + st + (0 < #note ? ("  # " + note) ""))
+         (body xs) (foldl (\ a l (a + l + "\n")) "" xs)
+         (? (st = "left") (? (at < 0) [text "" ("no row for " + who)]
+                             [(body (filter (\ l !(q-row? l && (words l) 1 = who)) ls)) "" ""])
+            (0 <= at) [(body (map (\ i (i = at ? line (ls i))) ^#ls)) line ""]
+            [(body (ls + [line])) line ""]))
+     ; the base line -- `<branch> <sha>`, neither a row nor the leader's -- moved to sha
+     (q-base text sha)
+      (: ls (lines text)
+         (is? l) (: w (words l) (#w = 2 && !(q-row? l) && <w != "leader" && 0 < #<w && <w 0 != 35))
+         (? !(two? (filter is? ls)) [text "no base line"]
+            [(foldl (\ a l (a + (is? l ? (<(words l) + " " + sha) l) + "\n")) "" ls) ""]))
+     ; the tool: -> [ok? text]
+     (queue-row in)
+      (: q (in "queue") who (field in "session" bee-name)
+         (try n)
+          (: rd (q-read q) old <rd text (rd 1) lead (q-leader text)
+             (? (old = "none") [0 ("no queue " + q + " to join")]
+                (who != bee-name && lead != bee-name) [0 ("only the leader, " + lead + ", edits another's row")]
+                (field in "base" "" != "" && lead != bee-name) [0 ("only the leader, " + lead + ", moves the base line")]
+                (: b (? (field in "base" "" = "") [text ""] (q-base text (in "base")))
+                   e (? (0 < #(b 1)) [text "" (b 1)] (q-edit <b who in))
+                   (? (0 < #(e 2)) [0 (e 2)]
+                      (q-put q old <e) [1 (? (0 < #(e 1)) ("row now: " + e 1) ("the change is in " + q))]
+                      (n <= 0) [0 (q + " kept moving under the write; read it and try again")]
+                      (: _ (rest 200) (try (n - 1)))))))
+         (try 5))
      bee-talk
       (paras
        ["## other sessions"
@@ -492,19 +581,21 @@
            ("Sessions working in parallel share a branch, and merges into it go one at a time through a "
             + "queue that moves only by compare-and-swap: a git ref under refs/queue/, or an sb ledger "
             + "under queue/ in a shared nest. Its header holds the rules, the leader and a row per merge; "
-            + "follow them. Write only your own row, unless you are the leader and its rules let you. Read "
-            + "it fresh before acting on it, and when a write fails someone wrote first: re-read and redo.")
-           ("- git: read `git cat-file -p refs/queue/NAME` and note `git rev-parse refs/queue/NAME` as OLD; "
-            + "write the edited copy with `git hash-object -w FILE`, then `git update-ref refs/queue/NAME NEW OLD`.")
-           ("- sb: read `sb -C HUB ledger queue/NAME` and note `sb -C HUB ledger queue/NAME --id` as OLD; "
-            + "write with `sb -C HUB ledger queue/NAME --was OLD FILE`, which exits 1 when it has moved on. "
-            + "HUB is the nest named below. `--log` shows every entry and who wrote it.")
+            + "follow them. Read it fresh before acting on it: `git cat-file -p refs/queue/NAME`, or "
+            + "`sb -C HUB ledger queue/NAME` for a ledger in the hub named below.")
+           ("Write it only with queue_row, never by hand: it sets exactly your row -- joining, moving its "
+            + "state and head, leaving -- and does the compare-and-swap for you, so no one else's row or "
+            + "the header can be lost. A row is green only when every lane passed on exactly its head; "
+            + "never say a row is green unless queue_row wrote it so. As the leader you may pass session to "
+            + "edit another's row (dropping a gone session's, writing a fold) and base to move the base line "
+            + "when you land.")
            ("A row names its session. Reach a bee session with send_message; a name list_sessions does "
             + "not show belongs to another kind of agent, so tell the user what to relay. After a change "
             + "that moves other rows, message their owners with what moved.")
            ("While you have a row, a message from queue-watch says when the row yours stacks on "
             + "moves or leaves, a row folds into yours, or the leader changes. Read the queue fresh, "
-            + "then act: re-merge onto the new head and re-gate, add a fold's lanes to your union.")
+            + "then act: re-merge onto the new head and re-gate, add a fold's lanes to your union. As "
+            + "the leader you hear every row: each join, move and leaving.")
            "Operating it -- check each of these, don't just state it:"
            ("- the landed tree is the gated tree. before a landing, `git merge-tree --write-tree BRANCH HEAD` "
             + "must print the gated head's own tree; after it, BRANCH^{tree} must equal that. on sb, the "
@@ -804,7 +895,8 @@
                          (? (#e = 0) [1 (in "name" + " is running in " + in "dir"
                                          + (f 'yes ? "" ", reading only") + "; send_message reaches it")]
                             [0 e]))
-          "stop_bee" [1 (stop-bee (in "name"))]))
+          "stop_bee" [1 (stop-bee (in "name"))]
+          "queue_row" (queue-row in)))
 
      ; a tool as the transcript names it: the shell by its own name
      (shown name) (name = "shell" ? <bee-shell name)
@@ -818,10 +910,12 @@
                  ("check_job" || "stop_job") (in "id")
                  "spawn_bee" (in "name" + " in " + in "dir")
                  "stop_bee" (in "name")
+                 "queue_row" (in "queue" + " " + (: s (peep in "session" ()) (string? s ? (s + " ") ""))
+                              + in "state" + (: h (peep in "gated_head" ()) (string? h ? (" " + h) "")))
                  (in "path")))
      ; the tools that run without asking: they read, speak only to another bee, or look at
      ; or stop a job this bee started
-     bee-free ["read_file" "list_sessions" "send_message" "check_job" "stop_job"]
+     bee-free ["read_file" "list_sessions" "send_message" "check_job" "stop_job" "queue_row"]
 
      ; one tool_use block -> its tool_result, asking first unless yes or a read
      (answer f b)
@@ -984,7 +1078,7 @@
      ; a tool as the screen names it
      (title name) (name @ "read_file" "Read" "write_file" "Write" "edit_file" "Update" "shell" <bee-shell
                           "list_sessions" "Hive" "send_message" "Message" "start_job" "Job"
-                          "check_job" "Check" "stop_job" "Stop" "spawn_bee" "Spawn" "stop_bee" "Stop"
+                          "check_job" "Check" "stop_job" "Stop" "spawn_bee" "Spawn" "stop_bee" "Stop" "queue_row" "Queue"
                           name)
 
      bee-spin ["·" "✢" "✳" "✶" "✻" "✽" "✻" "✶" "✳" "✢"]
