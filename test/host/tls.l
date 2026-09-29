@@ -344,6 +344,20 @@
    _ (test (all (n \ !(tablet? (x509 (snip ir 0 n)))) ^#ir)
            (all (i \ (: x (x509 (tc-flip ir i)) (atom? x || tablet? x))) ^#ir)))
 
+;; --- the roots: SSL_CERT_FILE names the bundle, read once; the host's own reads whole ----
+(: e0 (getenv "SSL_CERT_FILE")
+   _ (setenv "SSL_CERT_FILE" "test/host/tlschain/roote.pem")
+   r1 (tls-roots 0) r2 (tls-roots 0)
+   _ (setenv "SSL_CERT_FILE" "test/host/tlschain/none.pem")
+   r3 (tls-roots 0)
+   _ (setenv "SSL_CERT_FILE" (? (string? e0) e0 ""))
+   hb (filter (p \ two? (stat p)) root-homes)
+   hn (? (two? hb) (: t (uread <hb) ds (pem-ders <>t) [#ds #(filter tablet? (map x509 ds))]) [1 1])
+   _ (test (<r1 = "test/host/tlschain/roote.pem") (#(r1 1) = 1) (((r1 1) 0) 'subject = (x509 (tc-ld "roote")) 'subject)
+           ((r2 1) = (r1 1))                                       ; the same list: read once
+           ((r3 1) = ())
+           (0 < <hn) (<hn = hn 1)))
+
 ; the harness greps for this line, and that is the point: a reader stop exits 0
 ; with the asserts above never read, so only reaching here proves the file ran.
 (test_fin (),

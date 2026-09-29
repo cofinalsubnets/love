@@ -11,6 +11,7 @@
 ;   (chain-ok? ders roots host now)   1, or the reason it is not, a string naming the
 ;                            check and the certificate; roots are x509s, now seconds
 ;   (pem-ders text)          the der of every CERTIFICATE block in a pem text
+;   (tls-roots _)            [bundle-path anchors], the host's roots read once a process
 ;
 ; CertificateVerify schemes: ed25519 (0x0807), ecdsa p-256/sha-256 (0x0403), ecdsa
 ; p-384/sha-384 (0x0503), rsa-pss/sha-256 (0x0804), rsa-pss/sha-384 (0x0805). a chain's own
@@ -22,6 +23,7 @@
 (module 'tls
 (borrow 'bytes)
 (borrow 'cal)
+(borrow 'posix)
 (:
    (vsha s) (unhex (sha256 s))
    (vsha384 s) (unhex (sha384 s))
@@ -379,6 +381,27 @@
        q (quad-bytes h)
        (? (string? q) (? (elem q (x 'ips)) 1 0)
           (any (d \ dns-match? d h) (x 'dns) ? 1 0)))
+
+   ; --- the roots: the host's bundle, read once a process ---
+   ; SSL_CERT_FILE, else the first of the linux and bsd homes that reads; inle and wasm have
+   ; none of these, and there a dial finds no root and says so
+   root-homes ["/etc/ssl/certs/ca-certificates.crt" "/etc/ssl/cert.pem"
+               "/etc/pki/tls/certs/ca-bundle.crt" "/usr/local/share/certs/ca-root-nss.crt"]
+   roots-box {}
+   (root-file _)
+    (: e (getenv "SSL_CERT_FILE")
+       (? (string? e && 0 < #e) e
+          (: l (filter (p \ two? (stat p)) root-homes) (? (two? l) <l ()))))
+   ; the anchors, x509s, for the bundle in force -> [path anchors] ; () anchors when none reads
+   (tls-roots _)
+    (: p (root-file 0)
+       (? !(string? p) [() ()]
+          (: c (roots-box p)
+             (? (two? c) [p <c]
+                (: r (uread p)
+                   xs (? (two? r) (filter tablet? (map x509 (pem-ders <>r))) ())
+                   _ (pin roots-box p [xs])
+                   [p xs])))))
 
    ; --- the path: leaf, issuers, an anchor ---
    chain-depth 8
