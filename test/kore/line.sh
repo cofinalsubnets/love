@@ -108,14 +108,15 @@ rm -rf "$L"
 # tail -f: what is added after the tail comes out as it lands, a last line with no newline
 # too; -F follows the name through a replacement, a file that appears and a truncation
 T=$ho/.tailf; rm -rf "$T"; mkdir "$T"; printf '1\n2\n3\n' > "$T/f"
-# the binary itself, not korerun: a function backgrounds a subshell and the kill stops there
-LOVE_NO_IMAGE= "$m" kore tail -n 2 -f -s 0.1 "$T/f" > "$T/o1" 2>&1 & tp=$!
-sleep 0.5; echo 4 >> "$T/f"; sleep 0.4; printf 'five' >> "$T/f"; sleep 0.4; kill $tp; wait $tp 2> /dev/null
+# the tail names its own pid: under the tool shell $! is a fork, not the tail
+MT=$PWD/$m
+LOVE_NO_IMAGE= /bin/sh -c 'echo $$ > "$1.pid"; exec "$0" kore tail -n 2 -f -s 0.1 "$1"' "$MT" "$T/f" > "$T/o1" 2>&1 &
+sleep 0.5; echo 4 >> "$T/f"; sleep 0.4; printf 'five' >> "$T/f"; sleep 0.4; kill "$(cat "$T/f.pid")"; wait
 [ "$(cat "$T/o1")" = "$(printf '2\n3\n4\nfive')" ] || fail "kore tail -f: $(tr '\n' '|' < "$T/o1")"
 printf 'a\n' > "$T/g"
-LOVE_NO_IMAGE= "$m" kore tail -F -s 0.1 -n 1 "$T/g" > "$T/o2" 2> /dev/null & tp=$!
+LOVE_NO_IMAGE= /bin/sh -c 'echo $$ > "$1.pid"; exec "$0" kore tail -F -s 0.1 -n 1 "$1"' "$MT" "$T/g" > "$T/o2" 2> /dev/null &
 sleep 0.4; echo b >> "$T/g"; sleep 0.3; echo new > "$T/g2"; mv "$T/g2" "$T/g"; sleep 0.4
-: > "$T/g"; echo c >> "$T/g"; sleep 0.4; kill $tp; wait $tp 2> /dev/null
+: > "$T/g"; echo c >> "$T/g"; sleep 0.4; kill "$(cat "$T/g.pid")"; wait
 [ "$(tr '\n' '|' < "$T/o2")" = "a|b|new|c|" ] || fail "kore tail -F: $(tr '\n' '|' < "$T/o2")"
 rm -rf "$T"
 # seq's fractions, exact and with FIRST's and INCR's decimals, negatives that are not
@@ -139,7 +140,7 @@ rm -f "$W" "$W.j" "$W.t"
 TI=$ho/.teei; M2=$PWD/$m; rm -f "$TI.f"; mkfifo "$TI.f"
 ( k=0; while [ $k -lt 50 ]; do
     for p in $(pgrep -x love); do
-      tr '\0' ' ' < /proc/$p/cmdline 2>/dev/null | grep -q "kore tee -i $TI" && { grep SigIgn /proc/$p/status; kill $p; exit 0; }
+      tr '\0' ' ' 2>/dev/null < /proc/$p/cmdline | grep -q "kore tee -i $TI" && { grep SigIgn /proc/$p/status; kill $p; exit 0; }
     done; k=$((k + 1)); sleep 0.1
   done ) > "$TI.m" &
 # a real process of its own: the tool shell runs kore's tools aboard
