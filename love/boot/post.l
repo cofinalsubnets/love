@@ -3023,7 +3023,7 @@
                               (rev acc)))
     (flow p) ()))
 
-(: no (nom 0) eofsym (nom 0)
+(: no (nom 0) eofsym (nom 0) edpasted {}   ; edpasted: a bracketed paste's bytes (edpaste)
 
    ; a seat door, or (): the freestanding seats carry none of these
    (want n) (elem n (names ()) ? (ev n) ())
@@ -3108,6 +3108,17 @@
    (eddown t) (t 'd @- t (ad . ud) (splitc (\ lz rr (pins t 'u (revcat (t 'l) (t 'r) . t 'u) 'l lz 'r rr 'd ud)) () (edn (t 'l)) ad))
    (edput t c) (pin t 'l (c . t 'l))                       ; insert at the cursor
    (ednl t) (pins t 'u (rev (t 'l) . t 'u) 'l ())           ; break the line at the cursor
+   ; pasted bytes in at the cursor: a line break breaks the line (a crlf once), a tab
+   ; stays, and every other control goes
+   (edpin t l)
+    (: (go l prev) (? (atom? l) t
+                      (: c <l
+                         _ (? (c = 10 && prev = 13) 0
+                              (c = 10 || c = 13) (ednl t)
+                              (c = 9 || (32 <= c && c != 127)) (edput t c)
+                              0)
+                         (go >l c)))
+       (go l 0))
    (edclear t) (pins t 'u () 'l () 'r () 'd ())
    (edchars t) (joinln (revcat (t 'u) (revcat (t 'l) (t 'r) . t 'd)))   ; the whole buffer, one charlist
    edempty? (nil? * edchars)
@@ -3149,6 +3160,7 @@
            (5 || -6) (took edend)
            -10 (took edtop)
            -11 (took edbot)
+           -13 (edit (b \ edpin b (peep edpasted () ())))
            (-8 && two? (t 'u)) (took edup)
            (-9 && two? (t 'd)) (took eddown)
            (pin t 'ev (c @ 13 10 c)))))
@@ -3184,6 +3196,16 @@
                   y (ednum p 0)
                   _ (pins edtap-at 'x (<x - 1) 'y (<y - 1))
                   (<>y = 77 ? -12 0))               ; M is the press, m the release
+   ; a bracketed paste (ESC [ 200 ~ .. ESC [ 201 ~) is the key -13, its bytes waiting in
+   ; edpasted; any other ESC [ 2 is a miss
+   (edpaste p) (: a (see p) b (see p) f (see p)
+                  (? !(a = 48 && b = 48 && f = 126) 0
+                     (: (go acc) (: c (see p)
+                                    (? (c < 0) acc
+                                       (: q (c . acc)
+                                          (? (c = 126 && [126 49 48 50 91 27] = take 6 q) (drop 6 q) (go q)))))
+                        _ (pin edpasted () (rev (go ())))
+                        -13)))
    (edcsi p) (: c (see p) e (peep arrow c 0)
                (? (e != 0) e
                   (c @ 49 (see p @ 126 -5  59 (see p, peep modarrow (see p) 0)  0)
@@ -3191,6 +3213,7 @@
                        (52 || 56) (see p, -6)
                        51 (see p, -4)
                        60 (edmouse p)
+                       50 (edpaste p)
                        0)))
    (edkey p) (: c (see p)
                (? (c = -1) -7
@@ -3222,6 +3245,7 @@
    ; buffer ('row) -- move up that many first, and all motion is relative, so terminal
    ; scrolling never desyncs us. pl is the prompt's column, shared by the topmost line only.
    (csi n f) (putc 27, putc 91, putn n, putc f)   ; ESC [ n f -- the one cursor verb
+   (edbelow t) (: n (peep t 'below 0) (0 < n ? (csi n 66) ()))   ; down past the buffer's rows
    ; the buffer on a screen w wide: the cursor's row and column and the row the last character
    ; sits on, rows counted from the buffer's first. a line that ends on the margin leaves the
    ; cursor pending there, so a line of n from column s covers (s + n - 1) // w + 1 rows
@@ -3472,7 +3496,7 @@
               -9 (downhist t, loop ())
               3 (puts "^C\n", edempty? t ? eofsym (edline (t 'hu) (t 'hd)))
               (loop ())))
-        (loop ()))
+        (edbr loop))
    ; evaluate a single parsed datum cooperatively.
    (do_eval v)
      (: pid (twirl ev v)
@@ -3507,12 +3531,15 @@
        _ (hear prev)
      r)
 
+   ; the terminal brackets pastes only while a line is edited, so a program run after it
+   ; never sees the brackets
+   (edbr f) (: _ (puts "\e[?2004h") r (f ()) _ (puts "\e[?2004l", flush out) r)
    ; (edraw ip pr) -- read one line off port `ip`, with in-line editing: the charlist, or eofsym
-   (edraw ip pr) (:- (loop ())
+   (edraw ip pr) (:- (edbr loop)
     pl (puts pr, edwide pr) t (ednew ())
     (loop _) (edrender pl t,
               edstep t (edkey ip),
-              t 'ev @- (loop ()) (-7 || 4) eofsym 10 (putc 10, revcat (t 'l) (t 'r))))
+              t 'ev @- (loop ()) (-7 || 4) eofsym 10 (edbelow t, putc 10, edchars t)))
 
    ; the shell line reader: edraw + command history + tab completion
    (edlnc ip pr hist comp)
@@ -3527,7 +3554,7 @@
            edstep t (edkey ip),
            (t 'ev @ 0 (loop i draft)
               (-7 || 4) 'eof
-              10 (: ln (putc 10, revcat (t 'l) (t 'r))
+              10 (: ln (edbelow t, putc 10, edchars t)
                     nh (!ln ? hist (take 100 (ln . hist)))
                   (ln . nh))
               3 (puts "^C\n", () . hist)   ; ^C: abandon the line, hist untouched
@@ -3542,7 +3569,7 @@
               -8 (recall i (i >= hn ? i (i + 1)) draft)   ; up: older
               -9 (recall i (0 >= i  ? i (i - 1)) draft)    ; down: newer
               (loop i draft)))
-        (loop 0 ()))
+        (edbr (_ \ loop 0 ())))
    (edln ip pr hist) (edlnc ip pr hist ())
 )
 
