@@ -50,7 +50,7 @@
     (? (32 <= c && c < 127) [(J 'cur) c]
        (: w (peep (J 'where) c ())
           (? (w != ()) w
-             (: p0 ((J 'planes) (J 'cur))
+             (: p0 (J 'planes (J 'cur))
                 p (? (two? (p0 'free)) p0 (: q (plane J) _ (pin J 'cur (q 'n)) q))
                 s <(p 'free) _ (pin p 'free >(p 'free))
                 _ (glyph (p 't) s c) _ (pin (p 'cp) s c)
@@ -145,9 +145,9 @@
    (glyph-of J f s)
     (: k (f * 256 + s) g (peep (J 'gc) k ())
        (? (g != ()) g
-          (: pl ((J 'planes) ((f - 1) // NS)) tf (pl 't)
-             c (? (32 <= s && s < 127) s ((pl 'cp) s))
-             g2 [(utf8 c) (max 0 (wcwidth c)) ((J 'stys) ((f - 1) % NS)) (tf 'wd <((tf 'ci) s))]
+          (: pl (J 'planes ((f - 1) // NS)) tf (pl 't)
+             c (? (32 <= s && s < 127) s (pl 'cp s))
+             g2 [(utf8 c) (max 0 (wcwidth c)) (J 'stys ((f - 1) % NS)) (tf 'wd <(tf 'ci s))]
              _ (pin (J 'gc) k g2)
              g2)))
    ; a line's text: each glyph at its cell, an attribute closed at every space

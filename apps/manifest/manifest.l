@@ -73,7 +73,7 @@
  (cell! sh n s) (#s ? (pin (sh 0) n s) (pull (sh 0) n 0),
                  pin sh 1 {},
                  sh)
- (cell sh n) ((sh 0) n)
+ (cell sh n) (sh 0 n)
 
  ; --- worth: demand-evaluate, memoize. the formula becomes a lambda over
  ; its deps and is applied to their worths (cells recurse; labels are their

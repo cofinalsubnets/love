@@ -231,7 +231,7 @@
    r (cr-run cr-j "BEE_NAME=jobber" "-y 'run and stop a job'")
    h (cr-heard 0)
    (res k) (: u (filter (\ m (m "role" = "user" && !(string? (m "content")))) (cr-body (h k) "messages"))
-              ((u (#u - 1)) "content" 0 "content"))
+              (u (#u - 1) "content" 0 "content"))
    wt (cr-j + "/wt")
    _ (mkdir wt 493)
    _ (cr-put wt ".bee.l" ("(api anthropic)\n(url \"" + cr-url + "/v1/messages\")\n(model claude-mock)\n"))

@@ -32,7 +32,7 @@
      header (cite 'kore 'wg-header)
      digits (cite 'kore 'wg-digits)
 
-     bee-salt ((cite 'salt 'salt) 'bee)
+     bee-salt (cite 'salt 'salt 'bee)
      (word w) (string? w ? w (show w))
      (setting k d) (: v (peep bee-salt k ()) (two? v ? (word <v) d))
      (slurp-file p) (: f (open p "r") (? (hot? f) (: s (slurp f) _ (close f) s)))
@@ -44,7 +44,7 @@
      bee-model (setting 'model (bee-oai? ? "" "claude-opus-5"))
      bee-url (setting 'url (bee-oai? ? "https://api.openai.com/v1/chat/completions"
                                          "https://api.anthropic.com/v1/messages"))
-     bee-at ((cite 'kore 'wg-url) bee-url)                   ; [tls? host port path] | ()
+     bee-at (cite 'kore 'wg-url bee-url)                   ; [tls? host port path] | ()
      bee-host (? (two? bee-at) (bee-at 1) "")
      bee-key-env (setting 'key-env (bee-oai? ? "OPENAI_API_KEY" "ANTHROPIC_API_KEY"))
      bee-max (: m (peep bee-salt 'max-tokens ()) (? (two? m) <m (bee-oai? ? () 64000)))
@@ -79,7 +79,7 @@
      bee-ours? (<bee-shell = "lush")
      ; lush's verbs lead only in its autonomous mode; gregarious (its default) puts PATH first
      bee-verbs-lead? (bee-ours? && (elem "-a" bee-shell || elem "--autonomous" bee-shell))
-     bee-self ((cite 'posix 'selfpath) 0)
+     bee-self (cite 'posix 'selfpath 0)
      (shell-argv cmd) ((bee-ours? ? (bee-self . bee-shell) bee-shell) + ["-c" cmd])
      bee-shname (foldl (\ a w (a + " " + w)) <bee-shell >bee-shell)
      bee-verbs (foldl (\ a v (a + " " + v)) "" (sort (map show (keys (cite 'verbs 'tab)))))
@@ -127,7 +127,7 @@
      bee-cwd (: d (getenv "PWD") (? (string? d && 0 < #d) d "."))
      ; "" for the root, then "/home", "/home/gwen" .. the working directory
      bee-dirs (foldl (\ a p (a + [(a (#a - 1) + "/" + p)]))
-                      [""] (filter (\ p (0 < #p)) ((cite 'kore 'usplit) 47 bee-cwd)))
+                      [""] (filter (\ p (0 < #p)) (cite 'kore 'usplit 47 bee-cwd)))
      (instr-in d) (filter two? (map (\ f (: p (d + "/" + f) s (slurp-file p) (? (string? s) [p s])))
                                     ["AGENTS.md" "CLAUDE.md"]))
      bee-instr (catmap instr-in bee-dirs)
@@ -142,7 +142,7 @@
                    (? (string? r && 0 < #r) r (string? h) (h + "/.love/run/hive") "/tmp/bee-hive"))
      (cell-of nm) (bee-hive + "/" + nm)
      (mkdirs p) (foldl (\ a s (: d (a + "/" + s) _ (mkdir d 448) d)) ""
-                       (filter (\ s (0 < #s)) ((cite 'kore 'usplit) 47 p)))
+                       (filter (\ s (0 < #s)) (cite 'kore 'usplit 47 p)))
      (hex2 n) (string [("0123456789abcdef" (n // 16)) ("0123456789abcdef" (n % 16))])
      (alive? p) (charm? p && 0 < p && !(nom? (still p 0)))
      ; a card as a tablet, "name" included; () when there is none
@@ -174,7 +174,7 @@
      ; follow when that is taken by a live session
      bee-name
       (: e (getenv "BEE_NAME")
-         ps ((cite 'kore 'usplit) 47 bee-cwd)
+         ps (cite 'kore 'usplit 47 bee-cwd)
          b0 (? (string? e && 0 < #e) e (two? ps && 0 < #(ps (#ps - 1))) (ps (#ps - 1)) "bee")
          (free? nm) (: c (card-of nm) !(tablet? c && alive? (card-pid c)))
          (try k) (: nm (b0 + "-" + hex2 ((getpid 0 + clock 0 + 37 * k) % 256))
@@ -584,7 +584,7 @@
       (: tls? <bee-at keyed (string? key && 0 < #key) port (bee-at 2)
          (? (!tls? && !bee-local?) {'code "plain http reaches this machine alone"}
             (tls? && keyed && !(lit? topen)) {'code "this binary's tls cannot verify a certificate"}
-            (: t (? !tls? ((cite 'dns 'dial) bee-host port)
+            (: t (? !tls? (cite 'dns 'dial bee-host port)
                     (lit? topen) (topen bee-host port 'verify)
                     (dial bee-host port))
                up (? tls? (tablet? t) (hot? t))
@@ -638,10 +638,10 @@
                     "content_block_start" (pin bs i (e "content_block"), go stop)
                     "content_block_delta"
                      (d "type" @
-                      "text_delta" (: x (d "text") _ ((f 'text) x)
+                      "text_delta" (: x (d "text") _ (f 'text x)
                                       (pin b "text" (peep b "text" "" + x), go stop))
                       "input_json_delta" (pin js i (peep js i "" + d "partial_json"), go stop)
-                      "thinking_delta" (: x (d "thinking") _ ((f 'think) x)
+                      "thinking_delta" (: x (d "thinking") _ (f 'think x)
                                           (pin b "thinking" (peep b "thinking" "" + x), go stop))
                       "signature_delta" (pin b "signature" (peep b "signature" "" + d "signature"), go stop)
                       (go stop))
@@ -655,11 +655,11 @@
                         _ (? (tablet? u)
                              (: _ (pin tk 'in (num u "input_tokens" + num u "cache_creation_input_tokens"
                                                + num u "cache_read_input_tokens"))
-                                ((f 'usage) (tk 'in + num u "output_tokens")))
+                                (f 'usage (tk 'in + num u "output_tokens")))
                              0)
                         (go stop))
                     "message_delta"
-                     (: u (e "usage") _ (? (tablet? u) ((f 'usage) (tk 'in + num u "output_tokens")) 0)
+                     (: u (e "usage") _ (? (tablet? u) (f 'usage (tk 'in + num u "output_tokens")) 0)
                         (go (e "delta" "stop_reason")))
                     "message_stop" (go stop)
                     "error" [() (e "error")]
@@ -700,7 +700,7 @@
      ; reasoning run or a text one, and a turn from one to the other breaks it
      (stream-oai f r)
       (: txt {"type" "text" "text" ""} calls (tablet 4) js (tablet 4) st {'in 0}
-         (into k) (? (st 'in = k) 0 (: _ (? (st 'in != 0) ((f 'break) 0) 0) (pin st 'in k)))
+         (into k) (? (st 'in = k) 0 (: _ (? (st 'in != 0) (f 'break 0) 0) (pin st 'in k)))
          (call i tc)
           (: b (: b0 (peep calls i ())
                   (? (tablet? b0) b0
@@ -720,15 +720,15 @@
                 (tablet? (e "error")) [() (e "error")]
                 (: ch (e "choices") c (? (two? ch) <ch) d (? (tablet? c) (c "delta"))
                    rz (? (tablet? d) (: a (d "reasoning") (? (string? a) a (d "reasoning_content"))))
-                   _ (? (string? rz && 0 < #rz) (: _ (into 'think) ((f 'think) rz)) 0)
+                   _ (? (string? rz && 0 < #rz) (: _ (into 'think) (f 'think rz)) 0)
                    x (? (tablet? d) (d "content"))
                    _ (? (string? x && 0 < #x)
-                        (: _ (into 'text) _ ((f 'text) x) (pin txt "text" (txt "text" + x)))
+                        (: _ (into 'text) _ (f 'text x) (pin txt "text" (txt "text" + x)))
                         0)
                    tcs (? (tablet? d) (d "tool_calls"))
                    _ (? (two? tcs) (: _ (into 0) (map (\ tc (call (peep tc "index" 0) tc)) tcs)) 0)
                    us (e "usage")                              ; the last chunk's, asked for by stream_options
-                   _ (? (tablet? us) ((f 'usage) (num us "prompt_tokens" + num us "completion_tokens")) 0)
+                   _ (? (tablet? us) (f 'usage (num us "prompt_tokens" + num us "completion_tokens")) 0)
                    fr (? (tablet? c) (c "finish_reason"))
                    (go (? (string? fr)
                           (fr @ "tool_calls" "tool_use" "stop" "end_turn" "length" "max_tokens"
@@ -791,7 +791,7 @@
           "read_file"  (: s (slurp-file (in "path")) (? (string? s) [1 (clip s)] [0 ("cannot read " + in "path")]))
           "write_file" (? (spit-file (in "path") (in "content")) [1 ("wrote " + in "path")] [0 ("cannot write " + in "path")])
           "edit_file"  (edit (in "path") (in "old_text") (in "new_text"))
-          "shell"      [1 (clip ((f 'shell) h (in "command")))]
+          "shell"      [1 (clip (f 'shell h (in "command")))]
           "list_sessions" [1 (sessions-text 0)]
           "send_message" (: e (post (in "to") (in "text"))
                             (? (#e = 0) [1 ("sent to " + in "to")] [0 e]))
@@ -826,11 +826,11 @@
      ; one tool_use block -> its tool_result, asking first unless yes or a read
      (answer f b)
       (: name (b "name") in (b "input")
-         h ((f 'tool) name in)
+         h (f 'tool name in)
          r (? !(valid? name in) (run f h name in)
-              (f 'yes || elem name bee-free || ((f 'ask) h) = 1) (run f h name in)
+              (f 'yes || elem name bee-free || (f 'ask h) = 1) (run f h name in)
               [0 "the user declined"])
-         _ ((f 'done) h r)
+         _ (f 'done h r)
          t {"type" "tool_result" "tool_use_id" (b "id") "content" (r 1)}
          (? <r t (pin t "is_error" json-true)))
 
@@ -838,7 +838,7 @@
      (with-mail f msgs)
       (: ms (take-mail 0)
          (? !(two? ms) msgs
-            (: _ (map (\ m ((f 'mail) <m (m 1))) ms)
+            (: _ (map (\ m (f 'mail <m (m 1))) ms)
                u <msgs c (u "content") t {"type" "text" "text" (mail-text ms)}
                ({"role" "user" "content" (? (string? c) [{"type" "text" "text" c} t] (c + [t]))} . >msgs))))
      ; a user turn to its end -> the messages after it, or () when the wire failed. mail
@@ -852,8 +852,8 @@
             !(r 'code = 200)
              (: j (json-read (drain r)) _ (close (sock r))
                 ((f 'note) (show (r 'code) + " " + (two? j ? (json-show (j 1 "error")) "")), ()))
-            (: _ ((f 'wire) (sock r))
-               s (? bee-oai? (stream-oai f r) (stream f r)) _ (close (sock r)) _ ((f 'wire) ())
+            (: _ (f 'wire (sock r))
+               s (? bee-oai? (stream-oai f r) (stream f r)) _ (close (sock r)) _ (f 'wire ())
                stop <s blocks (s 1)
                (? !(string? stop)
                    ((f 'note) (tablet? blocks ? (json-show blocks) "the stream broke off"), ())
@@ -917,7 +917,7 @@
 
      ; a unified diff, coloured, at most n lines
      (diffs a b n)
-      (: ls (lines ((cite 'kore 'udiff) "a" "b" a b))
+      (: ls (lines (cite 'kore 'udiff "a" "b" a b))
          body (drop 2 ls)                                 ; the --- +++ pair says nothing here
          (paint l) (? (#l = 0) l
                       (l 0 = 43) (sgr "32" l) (l 0 = 45) (sgr "31" l) (l 0 = 64) (sgr "36" l)
@@ -955,7 +955,7 @@
      ; the last n used rows, painted as limn paints a pane
      (scr-rows s n)
       (: sp (scr-span s) hi (sp 1) lo (max <sp (hi - n + 1)) w (gaze s 2)
-         (map (\ i (: j (jug 0) _ ((cite 'limn 'limn-row) j s w i 0 -1 0) (slurp j + esc + "[0m")))
+         (map (\ i (: j (jug 0) _ (cite 'limn 'limn-row j s w i 0 -1 0) (slurp j + esc + "[0m")))
               (map (\ d (lo + d)) ^(max 0 (hi - lo + 1)))))
      ; everything the command wrote, as text, for the model
      (scr-text s) (: w (gaze s 2) (copied s (0 - ((gaze s 9) * w)) (gaze s 0)))
@@ -1017,7 +1017,7 @@
                  (boxed bee-ink (map (\ i (bee-face i + "   " + t i)) ^4) (min w 72)))
        'you (: ls (catmap (\ l (wrap l (w - 4))) (lines (b 'text)))
                (map (\ l (sgr "2" l)) (("> " + <ls) . map (\ l ("  " + l)) >ls)))
-       'bee (: md (map unindent (lines ((cite 'lapiz 'md->tty) (b 'text) (w + 2))))
+       'bee (: md (map unindent (lines (cite 'lapiz 'md->tty (b 'text) (w + 2))))
                 ls (two? md ? md [""])
                 (("⏺ " + trim <ls) . >ls))
        'note (hang [(sgr "2;3" (b 'text))])
@@ -1076,7 +1076,7 @@
          rows (map (\ l (edfit l w " ")) (win + pad + [spin] + box))
          cr (h - 1 - bh + #(e 'u) - top)
          cc (5 + edcol e)
-         ((cite 'tui 'tui-fresh) c h [w h] () rows (edfit stat w " ") cr cc))
+         (cite 'tui 'tui-fresh c h [w h] () rows (edfit stat w " ") cr cc))
 
      ; the tui face: the turn's reports become blocks
      (tface c)
@@ -1235,7 +1235,7 @@
      (serve key f msgs)
       (: ms (take-mail 0)
          (? (two? ms)
-            (: _ (map (\ m ((f 'mail) <m (m 1))) ms) _ (state! "busy")
+            (: _ (map (\ m (f 'mail <m (m 1))) ms) _ (state! "busy")
                m (turn key f ((user (mail-text ms)) . msgs)) _ (state! "idle")
                (serve key f (two? m ? m msgs)))
             (: _ (rest 1000) (serve key f msgs))))

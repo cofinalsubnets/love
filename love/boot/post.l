@@ -2744,7 +2744,7 @@
    (recomp ns) (: c (refirst ns)
                   [(recompm ns) (reanch ns)
                    (? !c ()
-                      (: sc ((cite 'scan 'scanner) ())      ; at compile time: never at a
+                      (: sc (cite 'scan 'scanner ())      ; at compile time: never at a
                          (\ s i n (: j (sc s c i)          ; module binding, which bakes
                                      (j < 0 ? n j)))))])
    ; -- the budget, and the one shape that needs it -------------------------------
@@ -3033,7 +3033,7 @@
    (vlist ks) (: ns (map string ks)
                  G (cite 'grid)
                  (? (two? (tty 1))
-                    (each ((G 'lay) (map (n \ (n . #n)) ns) ((G 'screen) 1) 1)
+                    (each (G 'lay (map (n \ (n . #n)) ns) (G 'screen 1) 1)
                           (l \ (puts l, putc 10)))
                     (each ns (n \ (puts n, putc 10)))))
    ; `love verbs` -- the names this artifact answers to. sorted: a tablet's key order is
@@ -3734,7 +3734,7 @@
             (: (cli-leave c) (scare 'cli-leave c)
                ; a kind test, not a match on (): a refusal answers a nom, and a nom is truthy
                ; open is posix's, and a seat without it answers () here rather than at the bake
-               (load1 p) (: q ((cite 'posix 'open) p "r")
+               (load1 p) (: q (cite 'posix 'open p "r")
                             (? (hot? q) (reads q) (say err $ "love: cannot open " + p + "\n", cli-leave 1)))
                (eval1 s) (: m (nom 0)                           ; a fresh nom: the unfinished shape, ==-safe
                   (rdl x acc) (sound x @ 'torn      m           ; every top-level datum off the string, in order
@@ -3823,7 +3823,7 @@
  ; `love` is a verb like every other program this binary carries, which is what lets a shell
  ; with no seat to exec reach the repl by name. last in the letrec: the closure takes its free
  ; names as they stand.
- _ ((cite 'verbs 'enlist) 'love
+ _ (cite 'verbs 'enlist 'love
      (as \ (two? as ? (cli-rail (. "love" as)) (shell 0)))
      [('exec . (as \ (two? as && (<as = "bake" || <as = "wake"))))])
 ) ; module cli

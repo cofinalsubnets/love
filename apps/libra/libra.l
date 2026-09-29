@@ -150,7 +150,7 @@
                 (? !(0 < #body)
                     (say err (<fs + ": no header comment\n"),
                      libra-doc-files >fs surf (bad + 1))
-                   (say out (surf = 'md ? md ((cite 'lapiz (surf = 'ht ? 'md->ht 'md->rf)) md)),
+                   (say out (surf = 'md ? md (cite 'lapiz (surf = 'ht ? 'md->ht 'md->rf) md)),
                     libra-doc-files >fs surf bad))))))
    (libra-doc fs surf)
     (surf = 'md ? 0 (borrow 'lapiz),
@@ -190,8 +190,8 @@
 ; on the artifact, the seat fires libra-main iff this file sits in the program
 ; seat of the real command line. body-having, so nothing leaks.
 (: door (udoor 'libra libra-main libra-help 1 1)
-   _ ((cite 'verbs 'enlist) 'libra door ['self])
-   s ((cite 'verbs 'fire) ["libra" "libra.l"])
+   _ (cite 'verbs 'enlist 'libra door ['self])
+   s (cite 'verbs 'fire ["libra" "libra.l"])
    ; quit, never return: the shebang's -l makes this a preload, so a path that
    ; merely answers leaves cli holding our arguments and loads the first as a
    ; program. the seat miss does return -- that arm is (borrow 'libra).

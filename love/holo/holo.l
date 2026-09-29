@@ -217,8 +217,8 @@
    ;; linker reaches in. --
    backends (tablet 0)
    (defbackend name be) (pin backends name be)
-   (lower-with be ins)         ((peep be 'lower 0) ins)
-   (patch-with be k t s w aux) ((peep be 'patch 0) k t s w aux)
+   (lower-with be ins)         (peep be 'lower 0 ins)
+   (patch-with be k t s w aux) (peep be 'patch 0 k t s w aux)
    ;; the linker's door onto the same encoders. a rel relocation keeps its addend in the
    ;; field and the aux the encoding hides (a movw/movt's Rd) there too, so this takes the
    ;; field's bytes back and answers the re-encode -- the bit scatter stays in the backend

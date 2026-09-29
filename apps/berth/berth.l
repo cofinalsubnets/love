@@ -133,7 +133,7 @@
  ; at the pane's size, which the frame is asked for as w h
  (berth-stage show step over?) {'show show 'step step 'over? over?}
  (hshow p) (: s (peep (hbox p) () 0)
-              (scribe s ((hstage p) 'show (gaze s 2) (gaze s 1))))
+              (scribe s (hstage p 'show (gaze s 2) (gaze s 1))))
  (hopen-stage sg r c) (: s (screen (cask (screen () r c)) r c)
                          p [{s} () () sg]
                          _ (hshow p)
@@ -247,7 +247,7 @@
                      hrelay hb,
                      hpty? p ? (hmoor hb id) 0))
  ; the prefix's split: a fresh pane off the harbour's 'more, a thunk answering one
- (hsplit hb d) (: p ((hb 'more) ()) (two? p ? (hberth hb d 50 p) 0))
+ (hsplit hb d) (: p (hb 'more ()) (two? p ? (hberth hb d 50 p) 0))
 
  (hsteer hb d) (: id (wharf-steer (hb 'lay) (hb 'focus) d)
                   (id = hb 'focus ? 0 (pin hb 'focus id, hsoil hb)))
@@ -385,7 +385,7 @@
  ; (a lone ESC is a key); a stage gets edkey's keys, as on cli's stage, or its own
  ; reader's; and the user's eof leaves it
  (oars hb) (: p (hpane hb (hb 'focus))
-              ch (? (two? p && !(hpty? p)) ((peep (hstage p) 'key edkey) in) (see in))
+              ch (? (two? p && !(hpty? p)) (peep (hstage p) 'key edkey in) (see in))
               (? (ch = -1) (hfeed hb 4)                 ; veof follows the user's own eof
                  (ch = -7) (hshut hb (hb 'focus))
                  (: _ (? (ch = 1) (hkey hb)

@@ -1328,7 +1328,7 @@
 ; is the full C argv, never rebound, so the read is the same in both load orders; inside the
 ; multi-call `kore` nothing matches and kore's dispatcher calls cook-main itself.
 ; cook-main reads bare here: the module's layer holds this file's binds and is still the head.
-(: _ ((cite 'verbs 'enlist) 'cook (urun cook-main) ())
+(: _ (cite 'verbs 'enlist 'cook (urun cook-main) ())
    s (cite 'verbs 'fire ["cook" "cook.l"])
    (? (two? s) (quit (urun cook-main >s)) ()))
 

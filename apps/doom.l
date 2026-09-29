@@ -233,7 +233,7 @@
        mod (nest + "/out/doom/love.wasm")
        (fail s) (say err ("doom: " + s + "\n"), 1)
        (enter _) (: _ (note ("booting " + mod))
-                    e ((ev 'kexec) mod "sh -c 'doom; sh'")
+                    e (ev 'kexec mod "sh -c 'doom; sh'")
                     (fail ("cannot boot " + mod + " (" + show e + ")")))
        (? !(elem 'kexec (names ())) (fail "this machine cannot boot what it builds")
           (two? (stat mod)) (enter 0)

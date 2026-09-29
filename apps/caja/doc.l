@@ -135,7 +135,7 @@
     (: cols #aligns
        hrow (map (c \ ['f bf] . inl-toks bf c + [['f rm]]) head)
        brows (map (r \ map (c \ inl-toks rm c) r) rows)
-       (wd toks) ((cp-hbox J rm () toks) 'width)
+       (wd toks) (cp-hbox J rm () toks 'width)
        ws (map (k \ foldl max 0 (map (r \ wd (r k)) (hrow . brows))) ^cols)
        sep (12 * pt)
        (row r) ['hbox () ([['kern ind]]
@@ -147,7 +147,7 @@
    (blocks J ind doc) (cats (map (b \ block J ind b) doc))
    (block J ind b)
     (b 0 @
-     'meta (: kv (b 1) (get k) (: e (filter (p \ p 0 = k) kv) (? (two? e) ((e 0) 1) ""))
+     'meta (: kv (b 1) (get k) (: e (filter (p \ p 0 = k) kv) (? (two? e) (e 0 1) ""))
               t (get 'title) sec (get 'section)
               (? (#t = 0) [] (head 1 [['text (? (#sec = 0) t (t + "(" + sec + ")"))]] ind)))
      'head (head (b 1) (b 2) ind)

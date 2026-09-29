@@ -108,7 +108,7 @@
           (: next (cite 'gz 'gz-next)   body (cite 'tar 'tar-body)
              t {0 0}                                   ; fed a slice at a time, so the walk's stop stops the inflate
              g (pull (\ _ (: o (peep t 0 0) (? (#gz <= o) "" (: _ (pin t 0 (o + 65536)) (snip gz o (min #gz (o + 65536))))))))
-             s ((cite 'tar 'tar-src) (\ _ (next g)))
+             s (cite 'tar 'tar-src (\ _ (next g)))
              a {}   seen {0 0}
              _ (walk s (\ e b (: sub (msub (e 'nom))
                                   (? !sub (? (peep seen 0 0) 'stop 1)
@@ -1224,6 +1224,6 @@
 (: E (cite 'verbs 'enlist)
    _ (E 'mooncc moon-run ['self])
    _ (E 'cc moon-run ['self])
-   s ((cite 'verbs 'fire) ["mooncc" "mooncc.l" "moon.l"])
+   s (cite 'verbs 'fire ["mooncc" "mooncc.l" "moon.l"])
    (two? s && moon-main >s))
 ) ; module 'moon

@@ -364,10 +364,10 @@ no file, or a bare -, is the filter: stdin -> stdout"
                  (xzc-moan t ("--check=" + w + ": Unsupported integrity check type"), ()))
        (fmt f) (elem f '("auto" "xz" "lzma" "alone") ? 1
                   (xzc-moan t ("--format=" + f + ": not here (auto, xz, lzma)"), ()))
-       (last ks) ((cite 'cli 'uoptlast) as ks xzc-vals xzc-longs)
+       (last ks) (cite 'cli 'uoptlast as ks xzc-vals xzc-longs)
        u (tablet 0)
-       r ((cite 'cli 'uoptp) as u xzc-vals () xzc-longs)
-       bad (two? r ? ((cite 'cli 'uoptun) u "cdzktqvfehVCSTF0123456789") ())
+       r (cite 'cli 'uoptp as u xzc-vals () xzc-longs)
+       bad (two? r ? (cite 'cli 'uoptun u "cdzktqvfehVCSTF0123456789") ())
        (? (atom? r)
            (: w <(rev as)
               (xzc-moan t (w 1 = 45 ? ("option '" + w + "' requires an argument")

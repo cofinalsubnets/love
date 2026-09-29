@@ -119,11 +119,11 @@
              [fmt n (take (n * (fmt // 8)) bytes)])))                            ; the value alone, its padding dropped
    (x-atoms-of bytes) (? (#bytes < 4) ()                                         ; group 4 le bytes -> a 32-bit atom/window list
                          (u32 bytes 0 . x-atoms-of (drop 4 bytes)))
-   (x-getprop-atoms s win prop) (x-atoms-of ((x-getprop s win prop) 2))
+   (x-getprop-atoms s win prop) (x-atoms-of (x-getprop s win prop 2))
    (x-has-atom s win propnm valnm) (: at (x-getprop-atoms s win (x-intern s propnm)) va (x-intern s valnm)   ; isInProperty
                                       (any (a \ a = va) at))
    (x-getclass s win)                                                            ; wm_class (atom 67) = "instance\0class\0"; the class is the 2nd
-    (: bytes ((x-getprop s win 67) 2)
+    (: bytes (x-getprop s win 67 2)
        (go l seen acc) (? !(two? l) acc                                          ; walk past the first NUL, then collect to the next
                           (<l = 0) (seen ? acc (go >l 1 acc))
                           (go >l seen (seen ? (acc + string <l) acc)))
