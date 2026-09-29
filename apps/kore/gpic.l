@@ -78,7 +78,15 @@
                  _ (pin s 'i (s 'i + 1))
                  (? (c = 10) (pins s 'bol 1 'ln (s 'ln + 1)) (pin s 'bol 0)))
    ; the line a token is on: the picture's, under any expansion
-   (gp-line g) (: (go l) (? (atom? l) 0 (<l 'k = 'file) (<l 'ln) (go >l)) (go (g 'srcs)))
+   (gp-line g) (: (go l) (? (atom? l) 0 (peep <l 'fixln 0 != 0) (<l 'fixln) (<l 'k = 'file) (<l 'ln) (go >l)) (go (g 'srcs)))
+   ; the line a body's tokens are on: groff has read on to the token after the statement,
+   ; so the next line's when only blanks stand between
+   (gp-body-line g)
+    (: s (gp-top g)
+       (? (!(tablet? s) || s 'k != 'file) (gp-line g)
+          (: (go k) (: c (gp-at s k) (? (gp-blank? c) (go (k + 1)) (c = 92 && gp-at s (k + 1) = 10) (go (k + 2)) c))
+             (? (go 0 = 10) (s 'ln + 1) (s 'ln)))))
+   (gp-push-body g t k) (: s (gp-src ("\n" + t + "\n") k 0) _ (pin s 'fixln (gp-body-line g)) _ (gp-push g s) s)
 
    (gp-dig? c) (48 <= c <= 57)
    (gp-alpha? c) ((65 <= c <= 90) || (97 <= c <= 122) || c = 95)
@@ -722,7 +730,9 @@
           (v = "dotted") (opt (e \ pins sp 'dotted 1 'dw e))
           (elem v ["invis" "invisible"]) (pin sp 'invis 1, i + 1)
           (v = "solid") (i + 1)
-          (elem v ["fill" "filled"]) (opt (e \ pin sp 'fill (? (e = ()) (gp-var g "fillval") e)))
+          ; a bare fill anywhere is fillval, whatever amounts are said
+          (elem v ["fill" "filled"]) (opt (e \ (? (e = ()) (pins sp 'fill (gp-var g "fillval") 'filldflt 1)
+                                                  (peep sp 'filldflt 0) 0 (pin sp 'fill e))))
           (elem v ["thick" "thickness"]) (ex (e \ pin sp 'thick e))
           (v = "same") (pin sp 'same 1, i + 1)
           (v = "cw") (pin sp 'cw 1, i + 1)
@@ -956,12 +966,14 @@
            (gp-expr g (i + 1) @ [e j]
              (? (gp-k g j = 'ifb)
                  (: b (gp-v g j) t (? (e != 0) <b <>b)
-                    _ (? (string? t) (gp-push g (gp-src ("\n" + t + "\n") 'text 0)) 0)
+                    _ (? (string? t) (gp-push-body g t 'text) 0)
                     (j + 1))
                 (gp-syn g j))
              (gp-syn g (i + 1)))
           (k = 'sh) (gp-sh g v, i + 1)
-          (: r (gp-object g i) (? (two? r) (r 1) (pin g 'between 1, gp-syn g i)))))
+          ; a name could have begun an assignment or a label, so groff errs a token on
+          (: r (gp-object g i)
+             (? (two? r) (r 1) (elem k ['word 'label]) (gp-syn g (i + 1)) (pin g 'between 1, gp-syn g i)))))
    (gp-assign g nm e local?)
     (? local?
         (: f (gp-find-var g nm)
@@ -1007,7 +1019,7 @@
        f {'var v 'to (r2 0) 'by (r3 0) 'mul mul}
        _ (gp-setvar g v (r1 0))
        ok (? (mul && r3 0 <= 0) 0 (gp-for-ok f (r1 0)))
-       _ (? ok (: s (gp-src ("\n" + gp-v g k + "\n") 'for 0) _ (pin s 'for f) (gp-push g s)) 0)
+       _ (? ok (: s (gp-push-body g (gp-v g k) 'for) (pin s 'for f)) 0)
        (k + 1))
    ; an object -> [object next] | ()
    (gp-object g i)
@@ -1057,7 +1069,7 @@
    (gp-dw g o) (: w (o 'dw) (? (w = ()) (gp-var g "dashwid") w))
    (gp-dash g o a b)
     (: v (gp-sub b a) l (gp-len v) w (gp-dw g o)
-       (? (l <= w) (gp-draw g a ("l " + gp-d g a b))
+       (? (l <= 2 * w) (gp-draw g a ("l " + gp-d g a b))
           (: n (int ((l - w) / (2 * w) + 0.5))
              dv (gp-mul v (w / l)) gap ((l - w) / n)
              gv (gp-mul v (gap / l))
@@ -1067,7 +1079,8 @@
    (gp-dots g o a b)
     (: v (gp-sub b a) l (gp-len v) w (gp-dw g o)
        n (max 1 (int (l / w + 0.5))) gap (l / n) e (? (l = 0) [0.0 0.0] (gp-mul v (1.0 / l)))
-       (map (k \ gp-dot g (gp-add a (gp-mul e (k * gap)))) ^(n + 1)))
+       ; a side of no length has one dot
+       (? (l = 0) (gp-dot g a) (map (k \ gp-dot g (gp-add a (gp-mul e (k * gap)))) ^(n + 1))))
    ; a dot: a line of no length, or without groff's extensions a period
    (gp-dot g p)
     (? (g 'nflag) (gp-o g ("\\h'" + gp-in (gp-X g p) + "-(\\w'.'u/2u)'\\v'" + gp-in (gp-Y g p) + "+0.04m'.\n.sp -1\n"))
@@ -1159,7 +1172,14 @@
        _ (? (g 'mode = 'tex || elem ty ['troff 'block 'move 'text]) 0
             path (? (c != ()) (gp-col-off g (? heads c ()) c) 0)
             (gp-col-off g f c))
+       ; an object's strings take its outline's colour, and a path's its fill's too; a
+       ; text's strings are it
+       said (two? (gp-said (peep o 'txt ())))
+       tf (? (elem ty ['box 'circle 'ellipse 'polygon 'block]) () f) tc c
+       wrap (said && ty != 'text && (tf != () || tc != ()))
+       _ (? wrap (gp-col-on g tf tc) 0)
        _ (? (ty = 'troff || g 'mode = 'tex) 0 (gp-text-at g o (gp-text-pos g o)))
+       _ (? wrap (gp-col-off g tf tc) 0)
        (? (ty = 'text && g 'mode != 'tex) (gp-col-off g f c) 0))
    ; a box's corners from its south-east round: xslanted moves the top along, yslanted
    ; the right side up
@@ -1232,7 +1252,7 @@
              l (r * sw)
              (? (lt = 'dashed)
                  (: n (int ((l - w) / (2 * w) + 0.5)) d (w / r) gap ((sw - d) / n)
-                    (? (l <= w || n < 1) ['solid]
+                    (? (l <= 2 * w || n < 1) ['dash [[a0 (a0 + sw)]]]
                        ['dash (map (k \ (: s (a0 + k * gap) [s (s + d)])) ^(n + 1))]))
                 (: n (max 1 (int (l / w + 0.5)))
                    ['dot (map (k \ a0 + k * sw / n) ^(n + 1))])))))
@@ -1355,26 +1375,26 @@
     (: lt (o 'lt)
        (? (lt = 'dashed) ("da " + gp-3 (gp-dw g o)) (lt = 'dotted) ("dt " + gp-3 (gp-dw g o)) "fp"))
    (gp-tx-obj g o)
-    (: ty (o 'ty) vis (gp-visible? o) fill (o 'fill != () && peep o 'shaded () = ())
+    (: ty (o 'ty) vis (gp-visible? o) fill (o 'fill != () || peep o 'shaded () != ()) gray (o 'fill != () && peep o 'shaded () = ())
        _ (? (ty = 'troff) (gp-o g (o 'line + "%\n"))
             (ty = 'block) (map (x \ gp-tx-obj g x) (o 'objs))
             (ty = 'box && 0 < peep o 'rad 0.0) (gp-tx-rbox g o)
             (ty = 'box)
              (: vs (gp-box-vs o) sw (vs 3)
                 (? (vis || fill)
-                    (: _ (? fill (gp-shade g (o 'fill)) 0) _ (gp-pen g (o 'thick))
+                    (: _ (? gray (gp-shade g (o 'fill)) 0) _ (gp-pen g (o 'thick))
                        (gp-tx-path g [sw (vs 0) (vs 1) (vs 2) sw] (? vis (gp-tx-end g o) "ip")))
                    0))
             (ty = 'polygon)
              (? vis
                  (: ps (o 'pts) l <(rev ps)
-                    _ (? fill (gp-shade g (o 'fill)) 0) _ (gp-pen g (o 'thick))
+                    _ (? gray (gp-shade g (o 'fill)) 0) _ (gp-pen g (o 'thick))
                     (gp-tx-path g (l . ps) (gp-tx-end g o)))
                 0)
             (ty = 'circle && vis && !fill && gp-curve-bits g o 0 != 'solid) (gp-tx-bits g o (gp-curve-bits g o))
             (ty = 'circle || ty = 'ellipse)
-             (? (vis || fill)
-                 (: _ (? fill (gp-shade g (o 'fill)) 0) _ (gp-pen g (o 'thick))
+             (? (vis || gray)
+                 (: _ (? gray (gp-shade g (o 'fill)) 0) _ (gp-pen g (o 'thick))
                     (gp-sp g ((? vis "ar " "ia ") + gp-tx-xy g (o 'c) + " " + show (gp-mi (o 'w / 2 * g 'sf))
                               + " " + show (gp-mi (o 'h / 2 * g 'sf)) + " 0 6.28319")))
                 0)

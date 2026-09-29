@@ -6,7 +6,8 @@
 # the cases not yet climbed: counted and named, never failing the gate. the chem-* cases
 # are groff chem's output and copy groff's chem.pic, which the run finds beside groff; where
 # it is missing they are left out. fz-* are random pictures, kept once they came out the same.
-# with -v, the first lines of each difference are shown.
+# every run is capped (2 GB, 20 s), one at a time: a runaway picture is a failure, not a
+# machine brought down. with -v, the first lines of each difference are shown.
 #
 # skips where groff's pic is missing; takes the love binary as $1.
 love=${1:-out/love}
@@ -30,8 +31,8 @@ run() {
     [ -f "$f" ] || continue
     n=$(basename "$f" .pic)
     [ "$n" = chem ] && continue
-    (cd "$w/c" && "$ref" $2 "$n.pic" > "$w/a" 2> /dev/null; echo "exit=$?" >> "$w/a")
-    (cd "$w/c" && "$L" pic $2 "$n.pic" > "$w/b" 2> /dev/null; echo "exit=$?" >> "$w/b")
+    (cd "$w/c" && ulimit -v 2000000 && timeout 20 "$ref" $2 "$n.pic" > "$w/a" 2> /dev/null; echo "exit=$?" >> "$w/a")
+    (cd "$w/c" && ulimit -v 2000000 && timeout 20 "$L" pic $2 "$n.pic" > "$w/b" 2> /dev/null; echo "exit=$?" >> "$w/b")
     if cmp -s "$w/a" "$w/b"; then echo "ok $n"
     else
       echo "differs $n"
