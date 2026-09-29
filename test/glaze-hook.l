@@ -168,6 +168,12 @@
     (: n (peep fires () 0)
        f (ev '(: (g h m) (? (< m 1) 0 (+ (% (h m) 4096) (+ (// (h m) 10) (g h (- m 1))))) g))
        (fired? n && (6504 = (f (x \ 1000 - (x * (x * x))) 12))))
+    ; --- a helper above the sibling it calls compiles at the end of its form, into the cell its
+    ;     callers already hold
+    (: n (peep fires () 0)
+       _ (ev '(module (gzh gzh-sum) (: (gzh-sum l acc) (? (two? l) (gzh-sum >l (acc + gzh-sq <l)) acc) (gzh-sq x) (x * x))))
+       f (cite 'gzh 'gzh-sum)
+       (fired? n && nat? f && (14 = (f [1 2 3] 0))))
    )
 (: _ (puts "glaze-hook: ok -- the natjit creation hook (leaf, float, loop, capture, self, =, transparency)
 ") 0)

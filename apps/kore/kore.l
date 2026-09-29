@@ -99,16 +99,20 @@
 (borrow 'holo) ; the assembler module: elf64, arbytes, ld-syms, at -- as/ar/ld/nm read it
 (borrow 'posix)
 (:
-   ; diff: two files -> unified hunks on out; the classic exit triple
+   ; diff: two files -> unified hunks on out, -u taken as that; -q only says whether they
+   ; differ; the classic exit triple
    (diff-main as)
-    (? (atom? >as) (udie 2 "usage: kore diff OLD NEW")
-       (: fa <as fb <>as
-          ta (uread fa) tb (uread fb)
-          _ (? (two? ta) () (udie 2 ("diff: cannot open " + fa)))
-          _ (? (two? tb) () (udie 2 ("diff: cannot open " + fb)))
-          d (udiff fa fb <>ta <>tb)
-          (? !d 0
-             (puts d, flush out, 1))))
+    (: fo (uflags "diff" as () "qu")
+       ops (fo 1)
+       (? !(two? ops && two? >ops && atom? >>ops) (udie 2 "usage: diff [-qu] OLD NEW")
+          (: fa <ops fb <>ops
+             ta (uread fa) tb (uread fb)
+             _ (? (two? ta) () (udie 2 ("diff: cannot open " + fa)))
+             _ (? (two? tb) () (udie 2 ("diff: cannot open " + fb)))
+             d (udiff fa fb <>ta <>tb)
+             (? !d 0
+                (<fo 113) (say out ("Files " + fa + " and " + fb + " differ\n"), flush out, 1)
+                (puts d, flush out, 1)))))
 
    ; as: IR forms -> a runnable ELF (love/holo/elf.l over the baked holo book)
    (as-main as)
@@ -825,13 +829,13 @@
     'ar "usage: ar rcs OUT MEMBER..  |  ar t OUT"
     'ld "usage: ld [-pie] [-t x64|a64|rv64] [-Ttext ADDR] [--readme F] A.o.. -o OUT"
     'objcopy "usage: objcopy -O binary|ihex IN OUT"
-    'cat "usage: cat [FILE..]"
+    'cat "usage: cat [-AbeEnstTuv] [FILE..]"
     'tac "usage: tac [-br] [-s SEP] [FILE..]"
-    'head "usage: head [-n N] [-c N] [-N] [FILE..]"
-    'tail "usage: tail [-n N] [-c N] [-N] [FILE..]"
+    'head "usage: head [-qv] [-n N] [-c N] [-N] [FILE..]"
+    'tail "usage: tail [-qv] [-n N] [-c N] [-N] [FILE..]"
     'wc "usage: wc [-lwmc] [FILE..]"
     'sort "usage: sort [-bfnrsu] [-k SPEC].. [-t C] [FILE..]"
-    'uniq "usage: uniq [-c] [FILE]"
+    'uniq "usage: uniq [-cdiu] [-f N] [-s N] [INPUT [OUTPUT]]"
     'shuf "usage: shuf [-rz] [-n N] [-o F] [FILE]  |  shuf -e [ARG..]  |  shuf -i LO-HI"
     'tee "usage: tee [-a] [FILE..]"
     'seq "usage: seq [FIRST [INCR]] LAST"
@@ -895,16 +899,16 @@
     'hexedit "usage: hexedit [-r] FILE"
     'ls "usage: ls [-aACdlrtx1] [FILE..]"
     'dir "usage: dir [-aACdlrtx1] [FILE..]"
-    'cp "usage: cp [-f] [-p] [-r] SRC.. DST"
-    'mv "usage: mv [-f] SRC.. DST"
-    'rm "usage: rm [-r] [-f] FILE.."
-    'mkdir "usage: mkdir [-p] DIR.."
-    'rmdir "usage: rmdir DIR.."
-    'ln "usage: ln [-s] [-f] TARGET LINKNAME"
-    'touch "usage: touch FILE.."
+    'cp "usage: cp [-afinpPLrRuv] [-t DIR] SRC.. DST"
+    'mv "usage: mv [-finuv] [-t DIR] SRC.. DST"
+    'rm "usage: rm [-dfirRv] FILE.."
+    'mkdir "usage: mkdir [-pv] [-m MODE] DIR.."
+    'rmdir "usage: rmdir [-pv] DIR.."
+    'ln "usage: ln [-fnsTv] TARGET [LINK] | ln [-fnsv] TARGET.. DIR"
+    'touch "usage: touch [-c] [-r FILE] [-d @SECONDS] FILE.."
     'lift "usage: lift FILE   -- carry FILE out of the machine: the page's downloads, the runner's directory"
     'pwd "usage: pwd"
-    'chmod "usage: chmod OCTAL FILE.."
+    'chmod "usage: chmod [-Rf] MODE FILE.."
     'install "usage: install [-D] [-m OCTAL] [-s] SRC DST  |  install -d DIR.."
     'readlink "usage: readlink [-f] PATH"
     'realpath "usage: realpath [-e|-m|-s] PATH.."

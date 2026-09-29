@@ -459,7 +459,7 @@ void cb_store(struct cb *c, uint32_t sn) {
   if (!c->sn) return;
   struct cb_img *im = cb_imgs(c);
   uint32_t *pal = cb_pal(c);
-  for (uint32_t k = 0; k < cb_nimg; k++) im[k] = (struct cb_img) { 0, 0, 0, 0, 0 };
+  for (uint32_t k = 0; k < cb_nimg; k++) im[k] = (struct cb_img) { 0, 0, 0, 0, 0, 0 };
   c->kopen = 0, c->kslot = 0;
   for (uint32_t k = 0; k < 256; k++) pal[k] = 0; }
 
@@ -627,7 +627,7 @@ static void cb_six_open(struct cb *c) {
   uint32_t h = stride ? room / stride : 0;
   if (h > 256u * c->ch) h = 256u * c->ch;
   if (k == cb_nimg || h < 6) return;
-  cb_imgs(c)[k] = (struct cb_img) { c->stop, stride, h, 0, 0 };
+  cb_imgs(c)[k] = (struct cb_img) { c->stop, stride, h, 0, 0, 0 };
   c->sslot = (uint16_t) k, c->sx = c->sy = c->sw = c->sh = 0, c->sreg = 0, c->srep = 1, c->sm = 0; }
 
 // a colour off HLS, sixel's hue wheel putting blue at 0, red at 120 and green at 240;
@@ -835,7 +835,7 @@ static void cb_kit_begin(struct cb *c) {
   if (!png && (!c->ks || !c->kv || c->ks > 65536u || c->kv > 65536u)) return cb_kit_reply(c, 0, "EINVAL:size");
   uint32_t const k = cb_kit_slot(c, png ? 1u : c->ks * c->kv);
   if (!k) return cb_kit_reply(c, 0, "ENOSPC:store full");
-  cb_imgs(c)[k] = (struct cb_img) { c->stop, png ? 0u : c->ks, png ? 0u : c->kv, 0, c->ki };
+  cb_imgs(c)[k] = (struct cb_img) { c->stop, png ? 0u : c->ks, png ? 0u : c->kv, 0, c->ki, 0 };
   c->kslot = k, c->kpix = 0, c->kpx = 0, c->kbyte = 0, c->kopen = 1; }
 
 static void cb_kit_byte(struct cb *c, uint32_t b) {

@@ -362,6 +362,7 @@
    ; words of the globals amble can name, word -> nom, filled at the first ask -- guts is not
    ; there yet when this file bakes
    aopix {}
+   probebox {}                                                            ; slot 0 set: amble answers 1 where it would compile, and emits nothing
    (aopw x)
     (: _ (? (#(keys aopix) = 0)
             (: nf (cite 'guts 'nifop) gv (cite 'guts 'gv)
@@ -572,7 +573,8 @@
                       'restart)
                (say err ("why: " + show why + "  " + snip (show s) 0 (min 160 #(show s)) + "\n")))
             0)
-       (? ok
+       (? (ok && peep probebox 0 0) 1
+          ok
           (: _ (getenv "LOVE_AMBLE_TRACE" ? (puts ("amble: " + show s + "\n")) 0)   ; the compile trace: names every ambled source
              ng (1 + #gn + #cn + nq + (lit? eqv ? 1 0) + nin)   ; extras = [() | globals | siblings | quotes | = | inner entries] (+ op values, chain-only):
                                                                 ; heap values riding the nifx chain into GC-walked slots; () is the empty mint, not li 1
@@ -2442,6 +2444,7 @@
        _ (pin (G 'glazeasm) 'f asm)
        _ (pin (G 'glazeasm) 'at (cite 'holo 'assemble-at))
        gvbox (G 'gvbox)                                                     ; auto.l's canon reads globals through ala's gv, pinned here on the first closure
+       probebox (G 'probebox)
        (hit x) (pin fires () (1 + peep fires () 0), x)
        ; grp-ok?: autogroup's recognizer over the defs jitgroupirx compiles. jgir-ok? only says the ops exist -- a body past
        ; the grammar reaches cggir, whose ? chain ends in a silent () that emits no code
@@ -2454,9 +2457,11 @@
        (gdefs-ok? gds) (all (gd \ opnd-ok? ><gd >gd) gds)                             ; ... and per def body, over that def's own params
        ; e = the bytecode entry (deopt target), s = the surface (\ frame.. body), a = arity, gv = ala's folded global resolver,
        ; farq = the letrec-local predicate (a farq name is wire-resolved: never gv it, the book namesake is stale), lams = the scope's
-       ; lambda siblings ((name . cell)..; entry 0 declines), nm = the letrec name being bound (0 anonymous), ti/ta = ev.l's uninterned iop/apx markers, inl = the inner-closure record amble's site reads
-       (natjit e s a gv farq lams nm ti ta inl)
+       ; lambda siblings ((name . cell)..; entry 0 declines), nm = the letrec name being bound (0 anonymous), ti/ta = ev.l's uninterned iop/apx markers, inl = the inner-closure record amble's site reads,
+       ; rt = the top scope of the form being compiled, where a compile waiting on a sibling not yet built is deferred to (0: compile now or never)
+       (natjit e s a gv farq lams nm ti ta inl rt)
         (: _ (? (peep gvbox 0 0) 0 (pin gvbox 0 gv))
+           _ (pin probebox 0 0)
            ps (init >s)  body (last >s)                                                ; the frame [imps args] + the surface body
            (? !(all nom? ps) e                                                       ; a frame that is not all points (a pattern binder) declines every lane
               (two? s && two? >>s && exprn ps body)                                   ; the leaf: >=1 param, a body in the grammar
@@ -2483,7 +2488,27 @@
                              (hit (jitgroupirx agdefs osym arch e))
                              (: aj (njit-amble s a e gv farq lams nm ti ta inl arch)                 ; amble, the last lane: 0 on decline
                                 (? aj (hit aj)
-                                   (getenv "LOVE_AMBLE_TRACE2" && puts ("amble-DECLINE: " + show s + "\n"), e))))))))))))
+                                   (defer e s a gv farq lams nm ti ta inl rt))))))))))))
+       ; a decline that a sibling not yet built may have caused: amble asked again as though every
+       ; sibling were (entry 1), and if that would compile, a cell of a native's shape stands in
+       ; (defercell) and the compile waits for the end of the form, where deferpatch lays it in. it
+       ; sees the siblings as they are by then, and itself as it was here
+       (defer e s a gv farq lams nm ti ta inl rt)
+        (: (no _) (getenv "LOVE_AMBLE_TRACE2" && puts ("amble-DECLINE: " + show s + "\n"), e)
+           (unbuilt? p) (: c (peep >p 0 0) (<p != nm && charm? <c))
+           (? !(rt && any unbuilt? lams) (no 0)
+              (: ns (: (go t x) (? (nom? x) (pin t x 1) (two? x) (go (go t <x) >x) t) (go {} s))   ; the names the body spells
+                 (wait? p) (unbuilt? p && peep ns <p 0)
+                 fk (map (p \ (? (wait? p) (<p . {0 (1 . >(peep >p 0 0))}) p)) lams)
+                 ok (? (any wait? lams)
+                       (: _ (pin probebox 0 1)  r (njit-amble s a e gv farq fk nm ti ta inl arch)  _ (pin probebox 0 0)  r)
+                       0)
+                 (? !ok (no 0)
+                    (: L (defercell e a)
+                       sc (assoc nm lams)
+                       lz (map (p \ (? (two? sc && p == sc) (<p . {0 (peep >p 0 0)}) p)) lams)
+                       _ (pin rt 'defer ((\ _ (deferpatch L (natjit e s a gv farq lz nm ti ta inl 0))) . peep rt 'defer ()))
+                       L)))))
        natjit)                                                            ; the inner : answers the closure; its aliases stay private
    (fired? n) (n < peep fires () 0))                                       ; did the hook fire since count n?
 

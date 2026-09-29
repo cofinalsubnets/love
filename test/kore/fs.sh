@@ -192,4 +192,48 @@ if command -v dircolors >/dev/null 2>&1; then
   dircolors -p > "$g"; korerun dircolors -p > "$o"; same "dircolors -p"
   COLORTERM=truecolor TERM=dumb dircolors -b > "$g"; COLORTERM=truecolor TERM=dumb korerun dircolors -b > "$o"; same "dircolors under COLORTERM"
 fi
+# the flag walk: a stranger letter or a flag after an operand refuses before anything is
+# done -- read as operands, `rm -i x` removed x and `cp -a s d` counted -a a source
+F=$ho/.fsflags; rm -rf "$F"; mkdir "$F"; printf 'keep\n' > "$F/x"
+for c in "rm -x $F/x" "rm $F/x -f" "cp -Z $F/x $F/y" "mv -Z $F/x $F/y" "ln -Z $F/x $F/y" "mkdir -Z $F/y" "rmdir -Z $F" "touch -Z $F/y"; do
+  # shellcheck disable=SC2086
+  korerun $c > /dev/null 2>&1; r=$?; [ $r -eq 2 ] && [ -f "$F/x" ] && [ ! -e "$F/y" ] || fail "kore $c must refuse (rc $r)"
+done
+# chmod: symbolic modes as GNU's, on a file and a directory; a word that is no mode
+# changes nothing -- read as octal, u+x left a 644 file 540
+for st in 644 755 4750 1777 0; do
+  for md in u+x go-w a=rX u=rwx,g=rx,o= +x =r o+t g+s ug=rw o=u g=u-w u+rw,go-rwx 750 +X =; do
+    for k in f d; do
+      rm -rf "$F/a" "$F/b"; if [ $k = f ]; then : > "$F/a"; : > "$F/b"; else mkdir "$F/a" "$F/b"; fi
+      chmod "$st" "$F/a" "$F/b"; chmod -- "$md" "$F/a"; korerun chmod -- "$md" "$F/b"
+      [ "$(stat -c %a "$F/a")" = "$(stat -c %a "$F/b")" ] || fail "kore chmod $md on a $st $k: $(stat -c %a "$F/b"), GNU $(stat -c %a "$F/a")"
+    done
+  done
+done
+chmod 644 "$F/x"; korerun chmod u+q "$F/x" 2> /dev/null; r=$?
+[ $r -eq 1 ] && [ "$(stat -c %a "$F/x")" = 644 ] || fail "kore chmod of no mode (rc $r, $(stat -c %a "$F/x"))"
+mkdir -p "$F/t/s" "$F/out"; chmod 755 "$F/out"; ln -s ../../out "$F/t/s/l"
+korerun chmod -R go-rwx "$F/t" && [ "$(stat -c %a "$F/t/s")" = 700 ] && [ "$(stat -c %a "$F/out")" = 755 ] || fail "kore chmod -R through a link"
+# rm -r never walks through a link: a link to a directory goes, what it points at stays
+printf 'p\n' > "$F/out/precious"
+korerun rm -r "$F/t" && [ ! -e "$F/t" ] && [ -f "$F/out/precious" ] || fail "kore rm -r through a link"
+ln -s out "$F/lo"; korerun rm -r "$F/lo" && [ ! -e "$F/lo" ] && [ -f "$F/out/precious" ] || fail "kore rm -r of a link to a directory"
+: > "$F/i1"; : > "$F/i2"; printf 'n\ny\n' | korerun rm -i "$F/i1" "$F/i2" 2> /dev/null
+[ -e "$F/i1" ] && [ ! -e "$F/i2" ] || fail "kore rm -i"
+korerun rm -r "$F/." > /dev/null 2>&1; [ -d "$F/out" ] || fail "kore rm -r ."
+mkdir "$F/e"; korerun rm -d "$F/e" && [ ! -e "$F/e" ] || fail "kore rm -d"
+# cp -a keeps the mode, the time and a link as a link; -n leaves what is there
+mkdir "$F/s"; printf 'hi\n' > "$F/s/f"; chmod 640 "$F/s/f"; ln -s f "$F/s/l"; touch -d @1000000000 "$F/s/f"
+korerun cp -a "$F/s" "$F/d" && [ "$(stat -c '%a %Y' "$F/d/f")" = "640 1000000000" ] && [ "$(readlink "$F/d/l")" = f ] || fail "kore cp -a"
+printf 'new\n' > "$F/n1"; printf 'old\n' > "$F/n2"; korerun cp -n "$F/n1" "$F/n2"; [ "$(cat "$F/n2")" = old ] || fail "kore cp -n"
+korerun cp -t "$F/d" "$F/n1" && [ -f "$F/d/n1" ] || fail "kore cp -t"
+# ln into a directory, and -sfn over a link to one
+mkdir "$F/ld"; korerun ln -s ../n1 "$F/ld" && [ "$(readlink "$F/ld/n1")" = ../n1 ] || fail "kore ln TARGET DIR"
+ln -s s "$F/ls"; korerun ln -sfn n2 "$F/ls" && [ "$(readlink "$F/ls")" = n2 ] || fail "kore ln -sfn"
+korerun mkdir -m 700 "$F/m7" && [ "$(stat -c %a "$F/m7")" = 700 ] || fail "kore mkdir -m"
+korerun mkdir -p "$F/p/q/r" && korerun rmdir -p "$F/p/q/r" 2> /dev/null; [ ! -e "$F/p" ] || fail "kore rmdir -p"
+korerun touch -c "$F/nothere"; [ ! -e "$F/nothere" ] || fail "kore touch -c"
+korerun touch -r "$F/s/f" "$F/tr" && [ "$(stat -c %Y "$F/tr")" = 1000000000 ] || fail "kore touch -r"
+korerun touch -d @1234567890 "$F/tr" && [ "$(stat -c %Y "$F/tr")" = 1234567890 ] || fail "kore touch -d @"
+rm -rf "$F"
 echo "kore: fs tools (mkdir/cp/mv/ln/touch/chmod/ls/pwd/rm/rmdir/install/cmp/readlink/realpath/link/test/chgrp/truncate/pathchk/mountpoint/shred/dircolors) ok"
