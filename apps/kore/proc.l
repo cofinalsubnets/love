@@ -27,23 +27,34 @@
                               _ (setenv (snip s 0 i) (snip s (i + 1) #s))
                               (setp >a))
                          a)))
-       ; the options come first: -i empties the environment, -u NAME drops one --
-       ; a non-string value unsets (love/main.c's setenv shape); then the assignments
+       ; the options come first: -i empties the environment, -u NAME drops one -- a
+       ; non-string value unsets (love/main.c's setenv shape); -0 ends each listed with a
+       ; NUL, -C DIR runs the command there, -S STRING splits STRING into words, the
+       ; shebang's way (env -S 'cmd a b'); then the assignments
+       st {'nul 0 'dir ()}
        (unset-all e) (? (atom? e) 0 (: k <e i (eqat k) _ (setenv (? i (snip k 0 i) k) ()) (unset-all >e)))
        (opts a) (? (atom? a) a
-                  (<a = "-i") (unset-all (environ 0), opts >a)
-                  (<a = "-u") (? (two? >a) (setenv <>a (), opts >>a) (udie 1 "env: -u needs a name"))
+                  (<a = "-i" || <a = "-" || <a = "--ignore-environment") (unset-all (environ 0), opts >a)
+                  (<a = "-u") (? (two? >a) (setenv <>a (), opts >>a) (udie 125 "env: -u needs a name"))
+                  (<a = "-0" || <a = "--null") (pin st 'nul 1, opts >a)
+                  (<a = "-C") (? (two? >a) (pin st 'dir <>a, opts >>a) (udie 125 "env: -C needs a directory"))
+                  (starts? <a "--chdir=") (pin st 'dir (snip <a 8 #<a), opts >a)
+                  (<a = "-S") (? (two? >a) (opts (words <>a + >>a)) (udie 125 "env: -S needs a string"))
+                  (2 < #<a && starts? <a "-S") (opts (words (snip <a 2 #<a) + >a))
+                  (starts? <a "--split-string=") (opts (words (snip <a 15 #<a) + >a))
                   (<a = "--") >a
                   (1 < #<a && <a 0 = 45) (udie 125 ("env: unknown option " + <a))
                   a)
        rest (setp (opts as))
+       _ (? (st 'dir) (? (two? rest) (? (chdir (st 'dir)) (udie 125 ("env: cannot change directory to '" + st 'dir + "'")) 0)
+                         (udie 125 "env: must specify command with --chdir (-C)")) 0)
        (? (two? rest)
           (: p (spawn rest)
              (? (nom? p) (udie 127 ("env: cannot run " + <rest))
                 (: w (wait p) _ (flush out) w)))
           (: (pr e) (? (atom? e) (flush out, 0)
-                       (say out <e, put out 10, pr >e))
-             (pr (environ 0)))))
+                       (say out <e, put out (? (st 'nul) 0 10), pr >e))
+             (pr (rev (environ 0))))))   ; environ answers last first
 
    ; -- sleep: the durations, summed --
    (sleep-main as)
@@ -352,7 +363,7 @@
      (? (atom? as)
        (: (pr e) (? (atom? e) (flush out, 0)
                     (say out <e, put out nl, pr >e))
-          (pr (environ 0)))
+          (pr (rev (environ 0))))   ; environ answers last first
        (: (one w ok) (: v (getenv w)
                         (? (string? v) (say out v, put out nl, ok) 0))
           (go a ok) (? (two? a) (go >a (one <a ok)) (flush out, (? ok 0 1)))

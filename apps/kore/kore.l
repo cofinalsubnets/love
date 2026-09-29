@@ -967,7 +967,7 @@
     'vi "usage: vi [FILE]"
     'ed ed-usage
     'ex ex-usage
-    'env "usage: env [-i] [-u NAME].. [NAME=VALUE].. [CMD [ARG..]]"
+    'env "usage: env [-0i] [-u NAME].. [-C DIR] [-S STRING] [NAME=VALUE].. [CMD [ARG..]]"
     'nohup "usage: nohup CMD [ARG..]"
     'nice "usage: nice [-n N] [CMD [ARG..]]"
     'renice "usage: renice [-n|--relative] PRIORITY [-p|-g|-u] ID.."

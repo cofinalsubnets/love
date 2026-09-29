@@ -221,4 +221,12 @@ korerun fsync -d "$ho/.kore-fsync" "$ho/.kore-nosuch" 2>/dev/null; r=$?; [ $r -e
 sleep 30 & kp=$!; korerun kill -s KILL $kp; wait $kp; r=$?; [ $r -eq 137 ] || fail "kore kill -s KILL ($r)"
 sleep 30 & kp=$!; korerun kill -SIGTERM $kp; wait $kp; r=$?; [ $r -eq 143 ] || fail "kore kill -SIGTERM ($r)"
 korerun kill -x 1 > /dev/null 2>&1; r=$?; [ $r -eq 1 ] || fail "kore kill -x ($r)"
+# env lists in the environment's own order (it said it last first); -0, -C DIR, -S STRING
+# split into words, and -C with no command refused; printenv's order too
+[ "$(env -i A=1 B=2 C=3)" = "$(korerun env -i A=1 B=2 C=3)" ] || fail "kore env's order"
+[ "$(env -i A=1 B=2 LOVE_NO_IMAGE= printenv)" = "$(env -i A=1 B=2 LOVE_NO_IMAGE= "$m" kore printenv)" ] || fail "kore printenv's order"
+env -0 -i A=1 B=2 > "$g"; korerun env -0 -i A=1 B=2 > "$o"; same "env -0"
+[ "$(korerun env -C / pwd)" = / ] || fail "kore env -C"
+[ "$(korerun env -S 'echo a  b' c)" = "a b c" ] || fail "kore env -S"
+korerun env -C / > /dev/null 2>&1; r=$?; [ $r -eq 125 ] || fail "kore env -C with no command ($r)"
 echo "kore: process tools (env/printenv/sleep/kill/xargs/whoami/groups/arch/nproc/nohup/nice/renice/stty/who/users/hostid/dnsdomainname/setsid/watch/pinky/ts/usleep/reset/fsync) ok"
