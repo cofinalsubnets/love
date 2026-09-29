@@ -5,7 +5,8 @@
 # troff, -n and -t -- and stdout and the exit status must agree. test/gpic/open/*.pic are
 # the cases not yet climbed: counted and named, never failing the gate. the chem-* cases
 # are groff chem's output and copy groff's chem.pic, which the run finds beside groff; where
-# it is missing they are left out. with -v, the first lines of each difference are shown.
+# it is missing they are left out. fz-* are random pictures, kept once they came out the same.
+# with -v, the first lines of each difference are shown.
 #
 # skips where groff's pic is missing; takes the love binary as $1.
 love=${1:-out/love}
