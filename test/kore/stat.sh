@@ -196,9 +196,12 @@ done
 rm -rf "$U"
 # df's -T (a left-aligned Type column), -H in powers of 1000, -t and -x by type (glued,
 # repeated, long), against GNU on this machine's own mounts
+# the used and free figures move while the box writes, so a row is held to what does not:
+# its name, its size or type, and where it is mounted; the header whole
+dfst() { awk 'NR == 1 { print; next } { print $1, $2, $NF }'; }
 for c in "-T /" "-H /" "-hT /" "-t tmpfs" "-x tmpfs -x btrfs" "--print-type /" "--si /" "--type=tmpfs" "-ttmpfs"; do
   # shellcheck disable=SC2086
-  df $c > "$g" 2>&1; korerun df $c > "$o" 2>&1; same "df $c"
+  df $c 2>&1 | dfst > "$g"; korerun df $c 2>&1 | dfst > "$o"; same "df $c"
 done
 # mktemp's --suffix (after the random run), --tmpdir= and bare, --dry-run: by the name's shape
 MT=$PWD/$ho/.mkt; rm -rf "$MT"; mkdir "$MT"
