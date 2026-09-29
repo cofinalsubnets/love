@@ -125,6 +125,14 @@ for c in "5" "5 -1 1" "-5 -2" "0 0.5 2" "1 0.1 1.3" "0.5 3" "1 0.5 2.25" "-1.5 0
   # shellcheck disable=SC2086
   seq $c > "$g" 2>&1; korerun seq $c > "$o" 2>&1; same "seq $c"
 done
+# wc -L: the widest line in columns -- a tab to its stop, a return ending a line, CJK two
+# wide, a last line with no newline -- alone, among the others, and the total the widest
+W=$ho/.wcl; printf 'short\na much longer line here\n\ttab\nx\r\n\346\227\245\346\234\254\350\252\236\n' > "$W"; printf 'no newline at all but long' > "$W.j"; printf 'ab\tc\t\tx\ny\n' > "$W.t"
+for c in "-L $W" "-L $W.j" "-L $W.t" "-lL $W" "-L $W $W.j" "-clwmL $W" "-Lc $W.j"; do
+  # shellcheck disable=SC2086
+  LC_ALL=C.UTF-8 wc $c > "$g"; korerun wc $c > "$o"; same "wc $c"
+done
+rm -f "$W" "$W.j" "$W.t"
 echo "kore: line tools (sort/uniq/head/tail/wc/cat/tac/shuf/seq/echo/basename/tee GNU-identical) ok"
 
 # sort's and ls's own flag matrices are subjects of their own (sort.sh, ls.sh): each

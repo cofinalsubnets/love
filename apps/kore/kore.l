@@ -859,7 +859,7 @@
     'tac "usage: tac [-br] [-s SEP] [FILE..]"
     'head "usage: head [-qv] [-n N] [-c N] [-N] [FILE..]"
     'tail "usage: tail [-fFqv] [-s SECS] [-n N] [-c N] [-N] [FILE..]"
-    'wc "usage: wc [-lwmc] [FILE..]"
+    'wc "usage: wc [-lwmcL] [FILE..]"
     'sort "usage: sort [-bcCfhmnrsuVz] [-k KEY].. [-t C] [-o FILE] [FILE..]"
     'uniq "usage: uniq [-cdiu] [-f N] [-s N] [INPUT [OUTPUT]]"
     'shuf "usage: shuf [-rz] [-n N] [-o F] [FILE]  |  shuf -e [ARG..]  |  shuf -i LO-HI"

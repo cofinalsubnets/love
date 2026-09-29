@@ -397,21 +397,35 @@
    ; -- wc: lines, words, characters, bytes (flags pick; bare wc reads lines words bytes) --
    (wc-main as)
     ; the flags cluster, as GNU's do: -lw is the two of them and not a filename
-    (: (fl a l w m c)
-        (atom? a ? [l w m c a]
+    (: (fl a l w m c x)
+        (atom? a ? [l w m c x a]
          (: g <a n #g
-          (2 > n || g 0 != 45 ? [l w m c a]
-           (:- (cl 1 l w m c) (cl k L W M C)
-            (n <= k ? (fl >a L W M C)
-             (g k @ 108 (cl (k + 1) 1 W M C)
-                    119 (cl (k + 1) L 1 M C)
-                    109 (cl (k + 1) L W 1 C)
-                    99 (cl (k + 1) L W M 1)
-                    [l w m c a])))))) ; an unknown charm: the word is not ours
-       p (fl as 0 0 0 0)
-       none !(<p || <>p || <>>p || <>>>p)
-       l? (? none 1 <p) w? (? none 1 <>p) m? <>>p c? (? none 1 <>>>p)
-       fs (ustray "wc" as <>>>>p)
+          (2 > n || g 0 != 45 ? [l w m c x a]
+           (:- (cl 1 l w m c x) (cl k L W M C X)
+            (n <= k ? (fl >a L W M C X)
+             (g k @ 108 (cl (k + 1) 1 W M C X)
+                    119 (cl (k + 1) L 1 M C X)
+                    109 (cl (k + 1) L W 1 C X)
+                    99 (cl (k + 1) L W M 1 X)
+                    76 (cl (k + 1) L W M C 1)
+                    [l w m c x a])))))) ; an unknown charm: the word is not ours
+       p (fl as 0 0 0 0 0)
+       none !(<p || <>p || <>>p || <>>>p || p 4)
+       l? (? none 1 <p) w? (? none 1 <>p) m? <>>p c? (? none 1 <>>>p) x? (p 4)
+       fs (ustray "wc" as (p 5))
+       ; -L: the widest line in columns, GNU's way -- a tab to the next stop of 8, a
+       ; newline, return or form feed ends one, a character its display width. the
+       ; state [col widest] runs across gulps
+       (xcnt st h) (? !x? st
+                      (: n #h
+                         (go i col top) (? (n <= i) [col top]
+                                           (: b (h i)
+                                              (? (b = 10 || b = 13 || b = 12) (go (i + 1) 0 (max top col))
+                                                 (b = 9) (go (i + 1) (col + 8 - col % 8) top)
+                                                 (b < 32 || b = 127) (go (i + 1) col top)
+                                                 (b < 128) (go (i + 1) (col + 1) top)
+                                                 (: j (cpnext h i) (go j (col + swidth (snip h i j)) top)))))
+                         (go 0 <st <>st)))
        (c3 x) <>>x (c4 x) <>>>x
        ; a row is (name (l w b m)), name () for stdin. counted a gulp at a time --
        ; nothing here needs the text, only the numbers off it
@@ -421,23 +435,25 @@
        _ (ureachm (f \ (say err ("wc: cannot open " + f), put err 10,
                           pin st 'ok 0, 0))
                   (\ f first rd
-                     (: (go acc ma) (: h (urd-gulp rd) (? #h (go (cnt acc h) (mcnt ma h)) [acc ma]))
-                        r (go ucount0 ucharc0)
-                        c (ucount-say <r + [<<>r])
+                     (: (go acc ma xa) (: h (urd-gulp rd) (? #h (go (cnt acc h) (mcnt ma h) (xcnt xa h)) [acc ma xa]))
+                        r (go ucount0 ucharc0 [0 0])
+                        c (ucount-say <r + [<<>r (max (<(r 2)) (<>(r 2)))])
                         _ (pin st 'rows ([(? (two? fs) f ()) c] . st 'rows))
                         1))
                   fs)
        rows (rev (st 'rows)) ok (peep st 'ok 0)
        (sum sel a acc) (? (two? a) (sum sel >a (acc + sel <><a)) acc)
        tl (sum cap rows 0) tw (sum caup rows 0) tb (sum c3 rows 0) tm (sum c4 rows 0)
+       tx (foldl (\ m r (max m (<>r 4))) 0 rows)                    ; -L's total is the widest
        ; the GNU face: pad every column to the byte total's width, even where the
        ; bytes are not printed (`wc -lw` of a 3001-byte file wears width 4).
        ; one count over one input wears none -- `wc -l f` is "1 f", never "   1 f".
        ; a one-digit byte count hides this, which is every fixture until .gs1.
-       wdt (? (!!l? + !!w? + !!m? + !!c? = 1 && atom? >rows)
+       wdt (? (!!l? + !!w? + !!m? + !!c? + !!x? = 1 && atom? >rows)
               1 #(show tb))
-       ; GNU's column order: lines words characters bytes
-       (fmt cnt) (: a (? c? [(upad wdt (show (c3 cnt)))] ())
+       ; GNU's column order: lines words characters bytes, the widest line
+       (fmt cnt) (: a (? x? [(upad wdt (show (cnt 4)))] ())
+                    a (? c? (upad wdt (show (c3 cnt)) . a) a)
                     a (? m? (upad wdt (show (c4 cnt)) . a) a)
                     a (? w? (upad wdt (show <>cnt) . a) a)
                     a (? l? (upad wdt (show <cnt) . a) a)
@@ -450,7 +466,7 @@
                       emit >rs)))
        _ (emit rows)
        _ (two? rows && two? >rows ?
-          (say out (fmt [tl tw tb tm]), say out " total", put out 10))
+          (say out (fmt [tl tw tb tm tx]), say out " total", put out 10))
        _ (flush out) (? ok 0 1))
 
    ; -- sort ----------------------------------------------------------------------
