@@ -16,6 +16,7 @@
 ;   (queue-watch N)       seconds between readings of the merge queues; 20, and 0 for never
 ;   (backend claude-code) a `claude -p` child thinks and runs the tools, bee the harness; api else
 ;   (claude-model NAME)   the model that child runs; claude's own default when unset
+;   (mem-floor GB) (heavy-max N)   no heavy lock below GB available; N heavy locks at once, 2
 ; the answer streams: text prints as it comes. a key goes out only over tls, and only to a
 ; peer tls-open verified: its chain to a root the host trusts, and its name.
 (module (bee bee-main)
@@ -121,6 +122,18 @@
              ["name" "dir" "prompt"])
        (tool "stop_bee" "Stop a bee this machine is running, by name."
              {"name" (prop "the session's name")} ["name"])
+       (tool "lock_acquire" ("Take a machine-wide lock before heavy or shared work: kind exclusive for one "
+                             + "holder of a named resource (an out/ directory), kind heavy for the few heavy "
+                             + "lanes the machine allows at once above its memory floor (a slow gate, a clean "
+                             + "build). It answers at once, granted or queued; a queued one is mailed to you "
+                             + "from lock-NAME when it is yours. Release it when done.")
+             {"name" (prop "the resource: a path, or heavy") "kind" (prop "exclusive or heavy")
+              "note" (prop "what you will run under it")}
+             ["name"])
+       (tool "lock_release" "Release a lock you hold, or drop your queued ticket for it."
+             {"name" (prop "the lock's name")} ["name"])
+       (tool "lock_list" "The machine's locks: who holds what, who waits, memory available and load."
+             {} [])
        (tool "queue_row" ("Write your row in a merge queue -- the only way to write one; never edit a "
                           + "queue by hand. It reads the queue, sets exactly your row (joining at the "
                           + "bottom if you have none, leaving it when state is left) and writes back by "
@@ -557,6 +570,68 @@
                       (n <= 0) [0 (q + " kept moving under the write; read it and try again")]
                       (: _ (rest 200) (try (n - 1)))))))
          (try 5))
+
+     ; --- locks: the machine's shared resources -- one make per out/, a few heavy lanes and none
+     ; below the memory floor -- through apps/locks.l. a lock lives as long as its holder's pid:
+     ; this bee's own, the one on its card, even when its `bee --mcp` child asks for it. acquire
+     ; answers at once; a queued one is asked again every 5 s (asking again keeps its place) and
+     ; its grant mailed from lock-NAME, so nothing blocks a turn ---
+     (lk nm) (cite 'locks nm)
+     (locks? _) (lit? (lk 'locks-acquire))
+     bee-locks {}                                          ; name -> [kind note], still queued
+     bee-floor (: v (peep bee-salt 'mem-floor ()) (? (two? v && charm? <v) <v ()))
+     bee-hmax (: v (peep bee-salt 'heavy-max ()) (? (two? v && charm? <v) <v 2))
+     ; the holder's pid: this bee's own, read off its card when a child speaks as it
+     (lock-pid _) (: c (card-of bee-name) p (? (tablet? c) (card-pid c) 0) (? (alive? p) p (getpid 0)))
+     (lock-ask nm kind note)
+      ((lk 'locks-acquire) ((lk 'locks-root) 0) nm (kind = "heavy" ? 'heavy 'exclusive) (lock-pid 0) note bee-floor bee-hmax)
+     (lock-say r nm)
+      (? ((peep r "granted" 0) = 1) ("granted " + nm)
+         (: h (peep r "holder" ()) hs (peep r "holders" ())
+            by (? (tablet? h) (show (peep h "pid" "?") + ": " + peep h "note" "")
+                  (two? hs) (foldl (\ a x (a + (0 < #a ? ", " "") + show (peep x "pid" "?") + ": " + peep x "note" "")) "" hs)
+                  "?")
+            ("queued for " + nm + ": position " + show (peep r "position" "?") + ", held by " + by
+             + (: g (peep r "mem_gb" ()) (? (g = ()) "" (", " + show g + " GB available")))
+             + "; a message from lock-" + nm + " comes when it is yours")))
+     (lock-acquire in)
+      (? !(locks? 0) [0 "locks are not in this binary"]
+         (: nm (in "name") kind (field in "kind" "exclusive") note (field in "note" "")
+            (? !(elem kind ["exclusive" "heavy"]) [0 "kind is exclusive or heavy"]
+               (: r (lock-ask nm kind note)
+                  (? !(tablet? r) [0 ("the lock answered " + show r)]
+                     (: _ (? ((peep r "granted" 0) = 1) (pull bee-locks nm 0) (pin bee-locks nm [kind note]))
+                        [1 (lock-say r nm)]))))))
+     (lock-release in)
+      (? !(locks? 0) [0 "locks are not in this binary"]
+         (: nm (in "name") q (peep bee-locks nm ())
+            kind (field in "kind" (? (two? q) <q (nm = "heavy" ? "heavy" "exclusive")))
+            r ((lk 'locks-release) ((lk 'locks-root) 0) nm (kind = "heavy" ? 'heavy 'exclusive) (lock-pid 0))
+            _ (pull bee-locks nm 0)
+            (? (r = 1) [1 ("released " + nm)] [0 ("this session holds nothing named " + nm)])))
+     (lock-list _)
+      (? !(locks? 0) [0 "locks are not in this binary"]
+         (: t ((lk 'locks-list) ((lk 'locks-root) 0))
+            (who h) (show (peep h "pid" "?") + " (" + peep h "note" "" + ")")
+            ex (peep t "exclusive" ()) hv (peep t "heavy" ()) wt (peep t "waiting" ())
+            [1 (foldl (\ a l (a + l + "\n")) ""
+                      ((map (\ e (<e + ": " + who (e 1))) (two? ex ? ex ()))
+                       + [("heavy: " + (two? hv ? (foldl (\ a h (a + " " + who h)) "" hv) " none"))
+                          ("waiting: " + (two? wt ? (foldl (\ a h (a + " " + who h)) "" wt) " none"))
+                          ("memory " + show (peep t "mem_gb" "?") + " GB available, load " + peep t "load" "?")]))]))
+     ; every 5 s, this session's queued locks asked again; a grant is mailed and forgotten
+     (lock-poll _)
+      (: _ (rest 5000)
+         _ (? (locks? 0)
+              (map (\ nm (: q (bee-locks nm) r (lock-ask nm <q (q 1))
+                            (? (tablet? r && (peep r "granted" 0) = 1)
+                               (: _ (pull bee-locks nm 0)
+                                  (post-as ("lock-" + nm) bee-name
+                                           ("lock " + nm + " is granted to you: go ahead, and lock_release it when done")))
+                               0)))
+                   (keys bee-locks))
+              0)
+         (lock-poll 0))
      bee-talk
       (paras
        ["## other sessions"
@@ -902,7 +977,10 @@
                                          + (f 'yes ? "" ", reading only") + "; send_message reaches it")]
                             [0 e]))
           "stop_bee" [1 (stop-bee (in "name"))]
-          "queue_row" (queue-row in)))
+          "queue_row" (queue-row in)
+          "lock_acquire" (lock-acquire in)
+          "lock_release" (lock-release in)
+          "lock_list" (lock-list 0)))
 
      ; a tool as the transcript names it: the shell by its own name
      (shown name) (name = "shell" ? <bee-shell name)
@@ -916,12 +994,15 @@
                  ("check_job" || "stop_job") (in "id")
                  "spawn_bee" (in "name" + " in " + in "dir")
                  "stop_bee" (in "name")
+                 "lock_acquire" (in "name" + " " + field in "kind" "exclusive")
+                 "lock_release" (in "name")
+                 "lock_list" ""
                  "queue_row" (in "queue" + " " + (: s (peep in "session" ()) (string? s ? (s + " ") ""))
                               + in "state" + (: h (peep in "gated_head" ()) (string? h ? (" " + h) "")))
                  (in "path")))
      ; the tools that run without asking: they read, speak only to another bee, or look at
      ; or stop a job this bee started
-     bee-free ["read_file" "list_sessions" "send_message" "check_job" "stop_job" "queue_row"]
+     bee-free ["read_file" "list_sessions" "send_message" "check_job" "stop_job" "queue_row" "lock_list" "lock_release"]
 
      ; one tool_use block -> its tool_result, asking first unless yes or a read
      (answer f b)
@@ -1086,7 +1167,7 @@
      ; a tool as the screen names it
      (title name) (name @ "read_file" "Read" "write_file" "Write" "edit_file" "Update" "shell" <bee-shell
                           "list_sessions" "Hive" "send_message" "Message" "start_job" "Job"
-                          "check_job" "Check" "stop_job" "Stop" "spawn_bee" "Spawn" "stop_bee" "Stop" "queue_row" "Queue"
+                          "check_job" "Check" "stop_job" "Stop" "spawn_bee" "Spawn" "stop_bee" "Stop" "queue_row" "Queue" "lock_acquire" "Lock" "lock_release" "Unlock" "lock_list" "Locks"
                           name)
 
      bee-spin ["·" "✢" "✳" "✶" "✻" "✽" "✻" "✶" "✳" "✢"]
@@ -1302,6 +1383,7 @@
             'sock () 'over 0 'key key 'yes yes 'rows 24 'cols 80}
          _ (pin c 'face (tface c))
          _ (twirl (\ _ (watch 0)) 0)                       ; the queues, mailed here when they move
+         _ (twirl (\ _ (lock-poll 0)) 0)                   ; queued locks, mailed here when granted
          _ (push c {'k 'hello})
          _ (tide c)
          _ (raw 1)
@@ -1323,6 +1405,7 @@
      bee-branch (: k (find bee-env "git branch: " 0)
                     (? (k < 0) "" (: e (find bee-env "\n" k) (snip bee-env (k + 12) (e < 0 ? #bee-env e)))))
      (joinw ws) (foldl (\ a w (a + " " + w)) <ws >ws)
+     (index-of xs x) (: (go l i) (? (atom? l) -1 (<l = x) i (go >l (i + 1))) (go xs 0))
      ; --- the claude-code backend, (backend claude-code): a long-lived `claude -p` child in
      ; stream-json both ways does the thinking and runs its own tools, and bee is the harness --
      ; it draws the child's events on the same doors, answers its permission asks from the screen
@@ -1461,7 +1544,7 @@
      ; whole conversation without a child. an id is presence, not truth: requests count from 0 ---
      (line-of p) (: (go acc) (see p @ -1 (? (two? acc) (string (rev acc))) 10 (string (rev acc)) c (go (c . acc)))
                     (go ()))
-     mcp-shared ["list_sessions" "send_message" "queue_row"]
+     mcp-shared ["list_sessions" "send_message" "queue_row" "lock_acquire" "lock_release" "lock_list"]
      mcp-tools
       ({"name" "approve"
         "description" "Ask this bee's user whether a tool may run: Claude Code's permission prompt, answered from bee's screen."
@@ -1528,6 +1611,7 @@
                       (: j (? (0 < #l) (json-read l) ())
                          _ (? (two? j && tablet? (j 1)) (one (j 1)) 0)
                          (go 0))))
+         _ (twirl (\ _ (lock-poll 0)) 0)                   ; a claude child's queued locks, mailed to its bee
          (go 0))
 
      ; --list, --send, --spawn and --stop speak to the hive from a shell and settle nowhere;
@@ -1543,6 +1627,18 @@
           "--spawn" (? (#as < 4) (say err "usage: love bee --spawn NAME DIR [-y] PROMPT ..\n", 2)
                        (say1 (spawn-bee <>as <>>as (joinw >>>as) yes)
                              (<>as + " is serving" + (yes ? "" ", reading only"))))
+          ; --lock [--heavy] [--out DIR] -- CMD ..: the command under an exclusive lock on its out/
+          ; (./out when there is one) and, with --heavy, a heavy ticket; waits for both, runs,
+          ; releases whatever way it ends, and answers the command's status
+          "--lock"
+           (: dd (: k (index-of as "--") (? (k < 0) () (drop (k + 1) as)))
+              od (: k (index-of as "--out") (? (0 <= k && k + 1 < #as) (as (k + 1)) ""))
+              out (? (0 < #od) (od 0 = 47 ? od (bee-cwd + "/" + od))
+                     (two? (stat (bee-cwd + "/out"))) (bee-cwd + "/out") "")
+              reqs ((0 < #out ? [[out 'exclusive]] ()) + (elem "--heavy" as ? [["heavy" 'heavy]] ()))
+              (? !(two? dd) (say err "usage: love bee --lock [--heavy] [--out DIR] -- CMD ..\n", 2)
+                 !(locks? 0) (say err "bee: locks are not in this binary\n", 1)
+                 ((lk 'locks-run) ((lk 'locks-root) 0) reqs (joinw dd) bee-floor bee-hmax dd)))
           "--stop" (? (#as < 2) (say err "usage: love bee --stop NAME\n", 2)
                       (: e (stop-bee <>as) (? (starts? e "stopped") (: _ (puts (e + "\n")) 0) (say err ("bee: " + e + "\n"), 1))))
           2))
@@ -1566,6 +1662,7 @@
          sv (elem "--serve" as)
          words (filter (\ w !(elem w bee-flags)) as)
          (? (elem "--mcp" as) (: _ (mcp-serve in out) 0)             ; a claude child's own server
+            (two? as && <as = "--lock") (bee-cli as yes)              ; its command's words stay as given
             (two? words && elem <words ["--list" "--send" "--spawn" "--stop"]) (bee-cli words yes)
             ; the api backend wants its endpoint, model and key; claude brings its own
             (!bee-cc? && atom? bee-at) (say err ("bee: cannot read the url " + bee-url + "\n"), 1)
@@ -1574,7 +1671,7 @@
             ; settled for the run, so other sessions can find it and write to it
             (: _ (settle bee-branch)
                _ (pin bee-cc 'yes yes)
-               _ (? sv (twirl (\ _ (watch 0)) 0) 0)
+               _ (? sv (: _ (twirl (\ _ (watch 0)) 0) (twirl (\ _ (lock-poll 0)) 0)) 0)
                r (? sv (serve-first key (plain yes) (: p (getenv "BEE_PROMPT")
                                                     (? (string? p && 0 < #p) p (two? words) (joinw words) "")))
                     (two? words) (: _ (state! "busy") _ (turn key (plain yes) [(user (joinw words))]) 0)

@@ -388,6 +388,49 @@
       (cr-in (r2 1) "behavior") (cr-in (r2 1) "deny") (cr-in (r2 1) "no answer came"))  ; raw, so escaped
    0)
 
+; --- locks through bee, apps/locks.l played by test/host/locks-stub.l ----------------------
+; acquire answers at once, granted or queued with who holds it; list and release read the
+; module's tablets; bee passes its settings' floor and pool; --lock runs a command and answers
+; its status; a binary without the module says so
+(: cr-l2 (cr-dir "locks" "(mem-floor 6)\n(heavy-max 3)\n")
+   stub (cr-home + "/test/host/locks-stub.l")
+   lg (cr-l2 + "/acquires")
+   (msgs ls) (foldl (\ a m (a + json-show m + "\n")) "" ls)
+   (call id nm a) {"jsonrpc" "2.0" "id" id "method" "tools/call" "params" {"name" nm "arguments" a}}
+   _ (cr-put cr-l2 "in" (msgs [(call 1 "lock_acquire" {"name" "out-x"})
+                               (call 2 "lock_acquire" {"name" "busy" "kind" "heavy" "note" "slow gate"})
+                               (call 3 "lock_list" {})
+                               (call 4 "lock_release" {"name" "nothing"})
+                               (call 5 "lock_release" {"name" "out-x"})]))
+   (run-with pre args)
+    (: pp (pipe 0) nul (openfd "/dev/null" 0)
+       cmd ("cd '" + cr-l2 + "' && exec env HOME='" + cr-l2 + "' BEE_AS=locker LOCKS_STUB_LOG='" + lg + "' '"
+            + cr-love + "' " + pre + " '" + cr-app + "' " + args)
+       p (spawnio ["sh" "-c" cmd] nul >pp >pp [<pp] -1 0)
+       _ (close >pp) _ (close nul)
+       q (fdopen <pp) (go a) (: c (see q) (? (c < 0) a (: _ (unsee q c) (go (a + chug q)))))
+       o (go "") _ (close q)
+       [(cr-reap p) o])
+   r (run-with ("-l '" + stub + "'") ("--mcp < '" + cr-l2 + "/in'"))
+   byid (foldl (\ t l (: j (json-read l) (? (two? j && tablet? (j 1)) (pin t (show ((j 1) "id")) (j 1)) t)))
+               {} (filter (\ l (0 < #l)) (lines (r 1))))
+   (text k) ((byid k) "result" "content" 0 "text")
+   (err? k) ((byid k) "result" "isError" = json-true)
+   logged (: s (cr-get lg) (string? s ? s ""))
+   lr (run-with ("-l '" + stub + "'") "--lock --heavy -- sh -c 'exit 3'")
+   bare (: _ (cr-put cr-l2 "in2" (msgs [(call 9 "lock_list" {})])) (run-with "" ("--mcp < '" + cr-l2 + "/in2'")))
+   _ (test
+      (cr-in (text "1") "granted out-x")
+      (cr-in (text "2") "queued for busy: position 2, held by 4242: make test_slow, 12 GB available")
+      (cr-in (text "3") "out--x: 4242 (make)") (cr-in (text "3") "heavy:  4242 (test_slow)")
+      (cr-in (text "3") "memory 12 GB available, load 3.10")
+      (err? "4") (cr-in (text "4") "holds nothing named nothing")
+      (cr-in (text "5") "released out-x")
+      (cr-in logged "busy heavy ") (cr-in logged " 6 3")             ; the kind as a symbol, floor 6, pool 3
+      (3 = <lr)                                                    ; --lock answers the command's status
+      (cr-in (bare 1) "locks are not in this binary"))
+   0)
+
 ; --- the claude-code backend, against a claude played here ---------------------------------
 ; a fake claude on PATH records its argv and each line it is sent, and answers every line with
 ; one turn of stream-json: text in pieces, a Bash call and its result, a result with a cost
