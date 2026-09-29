@@ -81,5 +81,17 @@ try c -t: -k1,1 -k2,2n
 try c -t: -k3
 try c -t: -u -k1,1
 
+# -h by the unit first, -V by runs, both as keys too; -c -C -cu, their status and -c's
+# sentence; long names; -m over a sorted input; -z; -o onto its own input
+printf '10K\n2M\n1500K\n3\n1.5G\n512\n0\n1k\n-2K\n' > "$w/h"; printf 'v1.10\nv1.9\nv1.2.3\nv1.2\nfoo-2.0\nfoo-10.1\n1.0\n1.0.1\n' > "$w/v"
+printf 'b\na\nc\na\n' > "$w/u"; printf 'a\nb\nc\n' > "$w/s"; printf 'x 3\ny 10K\nz 2M\n' > "$w/kh"
+try h -h; try h -hr; try v -V; try v -Vr; try kh -k2h; try kh -k2,2h -r; try s -c; try u -C; try u --reverse; try s -m; try u -n --unique
+for c in -c -cu; do
+  ran=$((ran + 1)); "$m" sort $c < "$w/u" > "$w/mine" 2>&1; rc=$?; sort $c < "$w/u" > "$w/theirs" 2>&1; grc=$?
+  [ "$rc" = "$grc" ] && cmp -s "$w/mine" "$w/theirs" || { echo "FAIL sort $c: exit $rc, GNU $grc"; fail=$((fail + 1)); }
+done
+ran=$((ran + 1)); printf 'b\0a\0c\0' | "$m" sort -z | od -c > "$w/mine"; printf 'b\0a\0c\0' | sort -z | od -c > "$w/theirs"
+cmp -s "$w/mine" "$w/theirs" || { echo "FAIL sort -z"; fail=$((fail + 1)); }
+ran=$((ran + 1)); cp "$w/u" "$w/o"; "$m" sort -o "$w/o" "$w/o"; sort "$w/u" | cmp -s - "$w/o" || { echo "FAIL sort -o onto its input"; fail=$((fail + 1)); }
 echo "kore sort: $ran rows, $fail failed"
 [ "$fail" = 0 ]

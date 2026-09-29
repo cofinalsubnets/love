@@ -460,8 +460,8 @@
    ; uses those INSTEAD of the global ones, which is GNU's rule and not an addition to
    ; them. equal keys fall to the last-resort compare -- the whole line, bytewise --
    ; unless -s or -u, neither of which wants it.
-   ; absent, and said so rather than half-done: -k's .CHAR offsets, -c/-C, -o, -z,
-   ; and the -M -h -V -R orderings.
+   ; absent, and said so rather than half-done: -k's .CHAR offsets and the -M -g -R
+   ; orderings. a key is [F M b f n r h V], its letters' flags after its fields.
    (usort-blank? c) (c = 32 || c = 9)
    ; a line's fields as [start end] pairs. under the DEFAULT separator the blanks
    ; BEFORE a run belong to the run -- GNU's rule, and the whole reason -b exists;
@@ -531,65 +531,62 @@
                   (sk i) (? (n <= i || !(usort-blank? (ln i))) i (sk (i + 1)))
                   (snip ln (sk 0) n))
             ln)
-       (? n? (usort-num t) f? (usort-up t) t))
+       (? n? (usort-num t) (k 6) (usort-hnum t) (k 7) (usort-ver t) f? (usort-up t) t))
+   ; -h reads a number with its unit, and orders by the unit first, as GNU's: 1M above
+   ; 1500K. the reading is -n's, of the rank before the digits
+   (usort-hnum s)
+    (: p (usort-num s) n #s
+       (sk i) (? (n <= i || !(usort-blank? (s i) || s i = 45 || s i = 46 || 48 <= s i <= 57)) i (sk (i + 1)))
+       u (: i (sk 0) (? (i < n) (findsub "KMGTPEZY" (string (? (s i = 107) 75 (s i)))) -1))
+       (? (!#(p 1) && !#(p 2)) p [(p 0) (show (u + 1) + zpad 40 (p 1)) (p 2)]))
+   ; -V reads runs: text, number, text, number.. so 1.10 comes after 1.9
+   (usort-ver s)
+    (: n #s
+       (dig? i) (48 <= s i <= 57)
+       (run i d) (? (n <= i || !(dig? i = d)) i (run (i + 1) d))
+       (go i d acc) (? (n <= i) (rev acc)
+                       (: j (run i d) v (snip s i j) (go j !d ((? d (unum v) v) . acc))))
+       (go 0 0 ()))
+   (usort-numk? k) (k 4 || k 6)
    (usort-cmp1 ka kb k)                        ; two readings under key k -> -1 | 0 | 1
-    (: c (k 4 ? (usort-cmpnum ka kb) (usort-cmpstr ka kb)) (k 5 ? -c c))
+    (: c (usort-numk? k ? (usort-cmpnum ka kb) (usort-cmpstr ka kb)) (k 5 ? -c c))
    (sort-main as)
     (: (sdie m) (udie 2 ("sort: " + m))
-       ; the flag walk is sort's own: -k takes a value AND stacks, -t takes a charm
-       ; that may be glued or not, and uopt stacks only what `reps` names.
-       ; every arm below sits inside the ONE `?`. a `(:` here reads `(w = "--")` as a
-       ; BINDING -- a define whose head is a call pattern -- and silently shadows w with
-       ; a two-parameter function, which is how the first draft of this walk answered a
-       ; closure where the file list belonged.
-       (fl a b? f? n? r? s? u? sep ks fs)
-        (? (atom? a) [b? f? n? r? s? u? sep (rev ks) (rev fs)]
-           (: w <a
-              (val g) (: v (snip w 2 #w)
-                         (? #v [v >a]
-                            (two? >a) [<>a >>a]
-                            (sdie (g + " wants a value"))))
-              ; the letters glue: -nr is two of them
-              (ltr j B F N R S U)
-               (? (#w <= j) (fl >a B F N R S U sep ks fs)
-                  ((w j) @
-                   98  (ltr (j + 1) 1 F N R S U)
-                   102 (ltr (j + 1) B 1 N R S U)
-                   110 (ltr (j + 1) B F 1 R S U)
-                   114 (ltr (j + 1) B F N 1 S U)
-                   115 (ltr (j + 1) B F N R 1 U)
-                   117 (ltr (j + 1) B F N R S 1)
-                   c   (sdie ("unknown option -- " + string c))))
-              (? (w = "--") [b? f? n? r? s? u? sep (rev ks) (rev fs + >a)]
-                 (#w < 2 || w 0 != 45) (fl >a b? f? n? r? s? u? sep ks (w . fs))
-                 (w = "-k") (: pv (val "-k") (fl <>pv b? f? n? r? s? u? sep (<pv . ks) fs))
-                 (#w > 2 && w 1 = 107)
-                    (fl >a b? f? n? r? s? u? sep (snip w 2 #w . ks) fs)
-                 (w = "-t") (: pv (val "-t")
-                               v <pv
-                               _ (? #v () (sdie "-t wants a separator"))
-                               (fl <>pv b? f? n? r? s? u? (v 0) ks fs))
-                 (#w > 2 && w 1 = 116) (fl >a b? f? n? r? s? u? (w 2) ks fs)
-                 (ltr 1 b? f? n? r? s? u?))))
-       p (fl as 0 0 0 0 0 0 () () ())
-       b? <p f? <>p n? <>>p r? (p 3) s? (p 4) u? (p 5) sep (p 6) kt (p 7) fs (p 8)
+       ; the flags in gnu order, a flag free to follow a file: -k takes a value and
+       ; stacks, -t a separator glued or not, -o a file; the long names ride the same keys
+       t (tablet 0)
+       o (uoptp as t '(107 116 111) '(107)
+                {"reverse" 114 "numeric-sort" 110 "human-numeric-sort" 104 "version-sort" 86
+                 "unique" 117 "stable" 115 "ignore-case" 102 "ignore-leading-blanks" 98 "check" 99
+                 "zero-terminated" 122 "merge" 109 "output" 111 "key" 107 "field-separator" 116})
+       _ (? (two? o) () (sdie "an option wants a value"))
+       _ (: c (uoptbad as t "bcCfhkmnorstuVz") (? !c () (sdie ("unknown option -- " + string c))))
+       _ (: w (o 3) (? !w () (sdie ("unknown option " + w))))
+       (fl c) (peep t c 0)
+       b? (fl 98) f? (fl 102) n? (fl 110) r? (fl 114) s? (fl 115) u? (fl 117) h? (fl 104) V? (fl 86)
+       c? (fl 99) C? (fl 67) z? (fl 122)
+       sep (: v (uoptv t 116) (? !v () !#v (sdie "-t wants a separator") (v 0)))
+       kt (o 1) fs (o 2)
+       of (uoptv t 111)
        ; a key spec: F[,M] with the ordering letters glued to either number
        (kspec s)
         (: n #s
            (num i) (: (go j) (? (n <= j || !(48 <= (s j) <= 57)) j (go (j + 1))) (go i))
-           (opt i B F N R)                     ; the letters trailing a number
-            (? (n <= i || (s i = 44)) [i B F N R]
+           (opt i B F N R H V)                 ; the letters trailing a number
+            (? (n <= i || (s i = 44)) [i B F N R H V]
                ((s i) @
-                98  (opt (i + 1) 1 F N R)
-                102 (opt (i + 1) B 1 N R)
-                110 (opt (i + 1) B F 1 R)
-                114 (opt (i + 1) B F N 1)
+                98  (opt (i + 1) 1 F N R H V)
+                102 (opt (i + 1) B 1 N R H V)
+                110 (opt (i + 1) B F 1 R H V)
+                114 (opt (i + 1) B F N 1 H V)
+                104 (opt (i + 1) B F N R 1 V)
+                86  (opt (i + 1) B F N R H 1)
                 c   (sdie ("unknown key letter -- " + string c))))
            e1 (num 0)
            _ (? (e1 < 1) (sdie ("bad key -- " + s)) ())
            f (uatoi (snip s 0 e1))
-           o1 (opt e1 0 0 0 0)
-           (? (#s <= <o1) [f 0 (o1 1) (o1 2) (o1 3) (o1 4)]
+           o1 (opt e1 0 0 0 0 0 0)
+           (? (#s <= <o1) [f 0 (o1 1) (o1 2) (o1 3) (o1 4) (o1 5) (o1 6)]
               (: rest (snip s (<o1 + 1) n)
                  nr #rest
                  (num2 j) (? (nr <= j || !(48 <= rest j <= 57)) j (num2 (j + 1)))
@@ -597,13 +594,15 @@
                  _ (e2 < 1 && sdie ("bad key -- " + s))
                  m (uatoi (snip rest 0 e2))
                  ; the second half's letters count for the whole key too, GNU-style
-                 (opt2 i B F N R)
-                  (nr <= i ? [B F N R]
+                 (opt2 i B F N R H V)
+                  (nr <= i ? [B F N R H V]
                      (rest i @
-                      98  (opt2 (i + 1) 1 F N R)
-                      102 (opt2 (i + 1) B 1 N R)
-                      110 (opt2 (i + 1) B F 1 R)
-                      114 (opt2 (i + 1) B F N 1)
+                      98  (opt2 (i + 1) 1 F N R H V)
+                      102 (opt2 (i + 1) B 1 N R H V)
+                      110 (opt2 (i + 1) B F 1 R H V)
+                      114 (opt2 (i + 1) B F N 1 H V)
+                      104 (opt2 (i + 1) B F N R 1 V)
+                      86  (opt2 (i + 1) B F N R H 1)
                       c   (sdie ("unknown key letter -- " + string c))))
                  ; the two halves do NOT carry the same letters. n/r/f on either
                  ; half order the whole key, but `b` names a POSITION: on the start
@@ -612,19 +611,23 @@
                  ; and folding them together silently sorted `-k1,1b` on the wrong key.
                  ; the end spec's b is read and dropped -- trailing blanks are not
                  ; modelled here, and inventing a meaning for it would be worse.
-                 o2 (opt2 e2 0 (o1 2) (o1 3) (o1 4))
-                 [f m (o1 1) (o2 1) (o2 2) (o2 3)])))
+                 o2 (opt2 e2 0 (o1 2) (o1 3) (o1 4) (o1 5) (o1 6))
+                 [f m (o1 1) (o2 1) (o2 2) (o2 3) (o2 4) (o2 5)])))
        ; a key with no letters of its own takes the global ones; one with any letter
        ; takes only its own. that is GNU's rule, and it is why -k2,2 -n is not -k2,2n.
-       (glob k) (k 2 || k 3 || k 4 || k 5 ? k [<k <>k b? f? n? r?])
-       keys (? (two? kt) (map (glob * kspec) kt) [[0 0 b? f? n? r?]])
+       (glob k) (k 2 || k 3 || k 4 || k 5 || k 6 || k 7 ? k [<k <>k b? f? n? r? h? V?])
+       keys (? (two? kt) (map (glob * kspec) kt) [[0 0 b? f? n? r? h? V?]])
        ; the lines off the reading floor: prel's `lines` walks a charm at a time and
        ; costs more than the sort does. a miss has said its piece; sort still leaves
-       (rd fs) (: box (tablet 0)
-                  (dot ln term?) (pin box 'l (ln . box 'l), 1)
-                  st (ulines "sort" dot fs)
-                  _ (st @ 0 0 (uleave 2))
-                  (rev (box 'l)))
+       ; -z's records end with a NUL, read whole and cut
+       (rd fs) (? z? (: t (cats (map (f \ (? (f = "-") (slurp in) (: r (uread f) (? (two? r) <>r (sdie ("cannot read: " + f)))))) (? (two? fs) fs ["-"])))
+                        ps (usplit 0 t)
+                        (? (two? ps && <(rev ps) = "") (rev >(rev ps)) ps))
+                  (: box (tablet 0)
+                     (dot ln term?) (pin box 'l (ln . box 'l), 1)
+                     st (ulines "sort" dot fs)
+                     _ (st @ 0 0 (uleave 2))
+                     (rev (box 'l))))
        ; the comparison: every key in turn, then the last-resort whole-line compare.
        ; -r is already inside each key (glob hands it down), so it must NOT also
        ; reverse the output -- doing both is the identity, and the first draft of this
@@ -651,13 +654,13 @@
        ls (rd fs)
        ; no key and no letter is byte order, and that is prel's `sort` -- the C lane,
        ; stable, and the whole line is the key so -r is the reverse; -u still dedupes
-       plain? ((atom? kt) && !b? && !f? && !n?)
+       plain? ((atom? kt) && !b? && !f? && !n? && !h? && !V?)
        ; the keyed C lane: prel's sort orders lists lexicographically, exactly (bigs)
        ; and stably, so a line decorated [reading.. tiebreak] sorts under every key at
        ; once. one direction has to serve the lot -- a numeric reading reverses by
        ; negation, a text cannot -- so the text keys and the last resort pick it, and a
        ; text key against the grain takes the merge lane below instead.
-       tkeys (filter (\ k !(k 4)) keys)
+       tkeys (filter (\ k !(usort-numk? k)) keys)
        dir (? (two? tkeys) (<tkeys 5) (!(s? || u?)) r? 0)
        clane? (foldl (\ a k (a && (k 5 = dir))) 1 tkeys &&
                ((s? || u?) || r? = dir))
@@ -674,7 +677,7 @@
                          fr (? neg (ncomp fp) fp)
                          (? flip [(0 - sc) (0 - v) (ncomp fr)] [sc v fr]))
        (creading ln k) (: r (usort-keyof ln k sep)
-                          (? (k 4) (ntrip r (k 5 != dir)) r))
+                          (? (usort-numk? k) (ntrip r (k 5 != dir)) r))
        (cdeco l) (: (go l i acc)
                      (atom? l ? (rev acc)
                       (go >l (i + 1)
@@ -688,12 +691,25 @@
                     (? (atom? l) (rev acc)
                        (go >l (k + 1) ([k <l (map (key \ usort-keyof <l key sep) keys)] . acc)))
                    (go l 0 ()))
-       s1 (? plain? (: s0 (sort ls) (? r? (rev s0) s0))
-             clane? (: s0 (map clast (sort (cdeco ls))) (? dir (rev s0) s0))
-             (map (p \ p 1)
-                  (sortby (x \ y \ cmp x y @ 0 (<x <= <y) c (c < 0)) (deco ls))))
-       _ (say out (unlines (? u? (map (p \ p 1) (ded (deco s1))) s1)))
-       _ (flush out) 0)
+       ; -c and -C: is it sorted already -- the first line out of order said (-c) and 1,
+       ; under -u a line equal to the one before it out of order too
+       (check _) (: (go l k) (? (atom? l || atom? >l) 0
+                                (: c (cmp <l <>l)
+                                   (? (0 < c || (u? && c = 0))
+                                      (: _ (? c? (say err ("sort: " + (? (two? fs) <fs "-") + ":" + show (k + 1) + ": disorder: " + (<>l 1) + "\n")) 0)
+                                         _ (flush err) 1)
+                                      (go >l (k + 1)))))
+                    (go (deco ls) 1))
+       ; -o's file opens after the reading, so it may be one of the inputs, as GNU allows
+       (emit s1) (: q (? of (: q (open of "w") (? (hot? q) q (sdie ("cannot create " + of)))) out)
+                    _ (say q (? z? (cats (map (l \ l + string 0) s1)) (unlines s1)))
+                    _ (flush q) _ (? of (close q) 0) 0)
+       (? (c? || C?) (check 0)
+          (: s1 (? plain? (: s0 (sort ls) (? r? (rev s0) s0))
+                   clane? (: s0 (map clast (sort (cdeco ls))) (? dir (rev s0) s0))
+                   (map (p \ p 1)
+                        (sortby (x \ y \ cmp x y @ 0 (<x <= <y) c (c < 0)) (deco ls))))
+             (emit (? u? (map (p \ p 1) (ded (deco s1))) s1)))))
 
    ; -- uniq: adjacent runs to their firsts; -c wears the run count, width 7; -d says only
    ; the runs of two or more, -u only the lone lines; -i, -f N and -s N compare past N
