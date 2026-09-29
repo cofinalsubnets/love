@@ -161,7 +161,7 @@
                [o c v] (? (os-tag v = 4 && os-tag c = 1) [(os-oidof o) (os-body c = string 255 ? 1 0) (os-body v)] ())
                ())
    (os-der-in txt)                            ; pem or der text -> the first certificate's der | ()
-    (: ds ((os-tls 'pem-ders) txt)
+    (: ds (os-tls 'pem-ders txt)
        (? (two? ds) <ds
           (: t (os-tlv txt 0 #txt) (? (two? t && 0 < #txt && txt 0 = 48) (snip txt 0 (t 2)) ()))))
    (os-pem d) ("-----BEGIN CERTIFICATE-----\n" + ubwrap 64 (ubenc ub64set 6 d) + "-----END CERTIFICATE-----\n")
@@ -381,7 +381,7 @@
          "-startdate" ("notBefore=" + os-time (x 'nb) + "\n")
          "-enddate" ("notAfter=" + os-time (x 'na) + "\n")
          "-serial" ("serial=" + os-up (b2hex (x 'serial)) + "\n")
-         "-fingerprint" (: m (peep st 'md (os-md "-sha1")) (m 1 + " Fingerprint=" + os-up (os-colon (hex2b ((m 2) (x 'der)))) + "\n"))
+         "-fingerprint" (: m (peep st 'md (os-md "-sha1")) (m 1 + " Fingerprint=" + os-up (os-colon (hex2b (m 2 (x 'der)))) + "\n"))
          "-pubkey" ("-----BEGIN PUBLIC KEY-----\n" + ubwrap 64 (ubenc ub64set 6 (x 'spki)) + "-----END PUBLIC KEY-----\n")
          "-ext"
           (: want (map (n \ peep os-extshort n n) (split "," (st "-ext")))
@@ -416,7 +416,7 @@
                [1 s])))
    (os-now _) (clock 0 // 1000)
    ; a file's certificates as x509s, read by the tls module's reader
-   (os-x509s txt) (filter tablet? (map (os-tls 'x509) ((os-tls 'pem-ders) txt)))
+   (os-x509s txt) (filter tablet? (map (os-tls 'x509) (os-tls 'pem-ders txt)))
 
    ; --- verify ---
    (os-verify as)
@@ -433,13 +433,13 @@
        caf (peep st "-CAfile" ()) unf (peep st "-untrusted" ())
        ct (? (string? caf) (os-slurp caf) ())
        ut (? (string? unf) (os-slurp unf) "")
-       roots (? (string? caf) (? (string? ct) (os-x509s ct) ()) (((os-tls 'tls-roots) 0) 1))
-       pool (? (string? ut) ((os-tls 'pem-ders) ut) ())
+       roots (? (string? caf) (? (string? ct) (os-x509s ct) ()) (os-tls 'tls-roots 0 1))
+       pool (? (string? ut) (os-tls 'pem-ders ut) ())
        (one f)
         (: nm (f = "-" ? "stdin" f)
            t (os-slurp f)
            d (? (string? t) (os-der-in t) ())
-           r (? (string? d) ((os-tls 'chain-fail) (d . pool) roots () (os-now 0)) ())
+           r (? (string? d) (os-tls 'chain-fail (d . pool) roots () (os-now 0)) ())
            (? !(string? t) (say err ("Could not open file or uri for loading certificate from " + nm + "\n"), 0)
               !(string? d) (say err ("Could not find certificate from " + nm + "\n"), 0)
               (r = 1) (say out (nm + ": OK\n"), 1)
@@ -565,13 +565,13 @@
              sni (peep st "-servername" host)
              brief (st "-brief") quiet (brief || st "-quiet")
              _ (? quiet 0 (say err ("Connecting to " + host + "\n"), flush err))
-             t ((os-tls 'tls-open-as) host port sni 'none)
+             t (os-tls 'tls-open-as host port sni 'none)
              (? !(tablet? t) (say err ("s_client: " + (? (string? t) t "no connection") + "\nconnect:errno=1\n"), 1)
                 (os-session t st brief quiet)))))
    (os-session t st brief quiet)
     (: ders (t 'chain)
        xs (map os-cert ders)
-       rv ((os-tls 'chain-fail) ders (((os-tls 'tls-roots) 0) 1) () (os-now 0))
+       rv (os-tls 'chain-fail ders (os-tls 'tls-roots 0 1) () (os-now 0))
        code (? (rv = 1) [0 "ok"] (os-vcode <rv (rv 1) (rv 2)))
        fk (? (rv = 1) -1 (rv 1))
        (dn x) (? (tablet? x) (os-dn (x 'subject)) "?")
@@ -606,7 +606,7 @@
                             + "Negotiated TLS1.3 group: X25519\n---\n"
                             + (0 = <code ? "Verification: OK\n" ("Verification error: " + code 1 + "\n")) + "---\n"
                             + "New, TLSv1.3, Cipher is " + cipher + "\nProtocol: TLSv1.3\n"
-                            + (? (tablet? leaf) ("Server public key is " + show ((os-keyof leaf) 1) + " bit\n") "")
+                            + (? (tablet? leaf) ("Server public key is " + show (os-keyof leaf 1) + " bit\n") "")
                             + "Verify return code: " + show <code + " (" + code 1 + ")\n---\n")))
              _ (flush out)
              (os-pump t))))

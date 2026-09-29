@@ -41,7 +41,7 @@
    ; a cursor over a payload: a tablet of the run and an index, read forward
    (cur s) (: c (tablet 2) (pin c 's s, pin c 'i 0, c))
    (g-skip c n) (: i (c 'i) (pin c 'i (i + n), i))
-   (g-u8 c) ((c 's) (g-skip c 1))
+   (g-u8 c) (c 's (g-skip c 1))
    (g-u32 c) (be32 (c 's) (g-skip c 4))
    (g-str c) (: n (g-u32 c) i (g-skip c n) (snip (c 's) i (i + n)))
    (g-names c) (: s (g-str c) (#s = 0 ? () (split s 44)))

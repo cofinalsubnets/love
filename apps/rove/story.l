@@ -187,7 +187,7 @@
    spot (foldl (\ t id (: th (lvl 'things id) (pin t [(th 'x) (th 'y)] th))) {} (keys (lvl 'things)))
    (cell x y) (? (x = g 'x && y = g 'y) ["@" 228 -1]
                  (peep spot [x y] 0) (: th (spot [x y]) [(th 'gl) (th 'fg) (th 'bg)])
-                 !(y < lvl 'h && x < #((lvl 'rows) y)) [" " -1 -1]        ; past the map: nothing
+                 !(y < lvl 'h && x < #(lvl 'rows y)) [" " -1 -1]        ; past the map: nothing
                  (: k (kind-of lvl (tile lvl x y)) [(k 'gl) (k 'fg) (k 'bg)]))
    (row y) (:- (go 0 () "")
     (go x p acc) (x >= w ? acc

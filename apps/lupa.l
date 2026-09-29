@@ -53,7 +53,7 @@
       'mode (two? t ? 'asm 'hex) 'syn 'att 'in 'map 'cmd (ednew ()) 'msg "" 'dirty 0 'over 0
       'nib -1 'elf e 'find "" 'h 24})
  (elfed? d) (tablet? (d 'elf))
- (lupa-byte d i) (: v (peep (d 'edits) i -1) (v < 0 ? ((d 'bytes) i) v))
+ (lupa-byte d i) (: v (peep (d 'edits) i -1) (v < 0 ? (d 'bytes i) v))
  (range a b) (map (i \ a + i) (jot (b - a)))
  (slice d a b) (string (map (i \ lupa-byte d i) (range a b)))
  (patched d) (slice d 0 (d 'n))
@@ -135,7 +135,7 @@
  ;; --- the command line: w q q! wq g / -----------------------------------------------------
  (hexnum s) (foldl (a \ c \ a < 0 || hexv c < 0 ? -1 (a * 16 + hexv c)) 0 (chars s))
  (parse-addr d s)
-  (: sym (elfed? d ? (peep ((d 'elf) 'names) s -1) -1)
+  (: sym (elfed? d ? (peep (d 'elf 'names) s -1) -1)
      (? (sym >= 0) (offset d sym)
         (#s > 2 && s 0 = 48 && (s 1 = 120 || s 1 = 88)) (: v (hexnum (snip s 2 #s)) (v < 0 ? -1 (offset d v)))
         (: v (hexnum s) (v < 0 ? -1 (offset d v)))))
@@ -160,7 +160,7 @@
               (106 || -9) (hexmode ? (row-move d 16) (step-insn d 1))
               6 (page d h 1)   2 (page d h -1)
               4 (page d h 1)   21 (page d h -1)
-              (103 || -5) (goto d (elfed? d && !hexmode ? ((d 'elf) 'toff) 0))
+              (103 || -5) (goto d (elfed? d && !hexmode ? (d 'elf 'toff) 0))
               (71 || -6) (goto d (d 'n - 1))
               (100 || 9) (pins d 'mode (hexmode ? 'asm 'hex) 'nib -1)
               115 (pin d 'syn (d 'syn = 'att ? 'intel 'att))

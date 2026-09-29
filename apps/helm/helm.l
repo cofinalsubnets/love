@@ -198,6 +198,6 @@ usage: helm [-c CONF] [-s SOCK] [-q]     supervise (pid 1 lays the machine first
 ; four files, and a `-l apps/helm/helm.l` that seated would start supervising in
 ; the middle of loading itself.
 (: door (udoor 'helm (urun helm-main) helm-usage 1 1)
-   _ ((cite 'verbs 'enlist) 'helm door ())
+   _ (cite 'verbs 'enlist 'helm door ())
    s (cite 'verbs 'fire ["helm"])
    (two? s ? (quit (door >s)))))

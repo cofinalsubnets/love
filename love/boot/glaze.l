@@ -52,8 +52,8 @@
    (reach tgt r k) ['ld r (greg tgt 'g) ((reach-offset 0) + (8 * k))]   ; 0 chain 1 str 2 map 3 nom 4 mint 5 gem 6 cask 7 drive 8 resume 9 cur 10 unc 11 gap
    mapmix 0x9e3779b97f4a7c15                                       ; = love.c's map hash multiplier, for the inline probe
    (hasm tgt ir) (: f (glazeasm 'f) ((lit? f ? f (cite 'holo 'assemble)) tgt ir))   ; the pinned assembler, else the module's
-   (asmx ir) ((hasm 'x64 ir) 'bytes)                                          ; assemble neutral IR -> flat bytes, x86
-   (asmt tgt ir) ((hasm tgt ir) 'bytes)                                       ; ... target-aware (the loop/float lanes that run on both arches)
+   (asmx ir) (hasm 'x64 ir 'bytes)                                          ; assemble neutral IR -> flat bytes, x86
+   (asmt tgt ir) (hasm tgt ir 'bytes)                                       ; ... target-aware (the loop/float lanes that run on both arches)
    ; the map probe: map in r0, tagged key in r10, ends branched to hit (match) / miss (gap).
    ; holo r7..r10 are x86 r8..r11
    mprobe-ir ['(ld r7 r0 8) '(ld r8 r7 16) '(shr r8 1) '(dec r8) '(add r7 r7 24)    ; r8=backing; r9=cap; >>1; --(=mask); r8=&slots
@@ -846,7 +846,7 @@
    ; --- the general tail-recursive counted loop, n loop vars ------------------------------------
    ; (\ n ((: (go v0..vk) (? TEST (go U0..Uk) RESULT)) I0..Ik)), up to 3 loop vars raw in the loopregs
    ; bank, n the tagged Sp[0]. every Uj is pushed before any reg is popped, so updates read the old values
-   (lvreg tgt j) ((loopregs tgt) j)               ; loop var j -> its abstract register
+   (lvreg tgt j) (loopregs tgt j)               ; loop var j -> its abstract register
    (loopcode-n n vars updates test result inits tgt)
     ; nvld: n from Sp[0] (fxvir, guarded), a loop var from its register
     (: A (greg tgt 'acc)
@@ -1365,7 +1365,7 @@
        ord (efn . filter (f \ !(<f = entry)) parse)                      ; the entry first, so H_entry sits right after the outer
        valt (hasl eb)                                                                 ; a value-typed entry (its body conses) takes the value epilogue
        info (map (f \ [<f (f 1) (f 2) #(f 1)]) parse)                   ; (name params body arity), for the interprocedural string fixpoint
-       smap0 (map (f \ <f . filter (j \ suse? (f 2) ((f 1) j)) (rangeL 0 (f 3))) info)   ; per-fn direct string params (peep/tally/pin)
+       smap0 (map (f \ <f . filter (j \ suse? (f 2) (f 1 j)) (rangeL 0 (f 3))) info)   ; per-fn direct string params (peep/tally/pin)
        smask (gsm entry (smfix info smap0))                                            ; the entry's string params at the fixpoint -> raw pointer, kind-guarded
        mmask (filter (j \ muse? eb (eps j)) (rangeL 0 k))                         ; entry map params (mpeep/mpin)
        bufmask (filter (j \ buse? eb (eps j)) (rangeL 0 k))                       ; entry cask params (pin)
@@ -1373,7 +1373,7 @@
        pmask (filter (j \ nuse? eb (eps j) && !(elem j cmask)) (rangeL 0 k))   ; entry point keys -> raw, nom|mint-guarded; a chain-used param is never a point
        outer (mkouterir tgt k entry k valt smask mmask bufmask cmask pmask)
        Hs (foldl (\ a f (bcat [a (mkhir tgt syms <f (f 1) (f 2))])) () ord)
-       (nif (emit ((assemble tgt (bcat [outer Hs])) 'bytes)) deopt k))
+       (nif (emit (assemble tgt (bcat [outer Hs]) 'bytes)) deopt k))
 )
 ; auto -- rebind `ev` so a qualifying closure compiles to native with no verb and no annotation, =/show-identical to
 ; its source; anything else falls through to the base interpreter. every recognizer is exact-arity: (+ x 1 2) is a tower.
@@ -2345,7 +2345,7 @@
                                   D #chain M #invs N #fvars
                                   (? !(two? chain && elem cmpop '(< <= > >=) && 0 < N && (M + N) < 7 && D < 7) form
                                      (: cnames (map cap chain) dims (map caup chain)
-                                        margs ((last chain) 2)
+                                        margs (last chain 2)
                                         invd (map (iv \ margs (posof iv recps 0)) invs)
                                         glam ['\ '_ form]        ; faithful interp nest (deopt fallback / =-show)
                                         ng (jitfgridn glam cnames dims invs invd fvars updates testexpr cmpop bound lim arch)

@@ -20,7 +20,7 @@
    (bz2-more g)                        ; the buffer topped up past bz2-hold and a piece, or the end said
     (: want (max bz2-hold (#(g 'buf) + 65536))
        (fill acc have) (? (want <= have) acc
-                          (: p ((g 'rd) 0) (? (#p = 0) (: _ (pin g 'eof 1) acc) (fill (p . acc) (have + #p)))))
+                          (: p (g 'rd 0) (? (#p = 0) (: _ (pin g 'eof 1) acc) (fill (p . acc) (have + #p)))))
        ps (fill () #(g 'buf))
        (? (two? ps) (pin g 'buf (cats (g 'buf . rev ps))) (pin g 'eof 1)))
    (bz2-next g)
@@ -145,17 +145,17 @@ no file, or a bare -, is the filter: stdin -> stdout"
               "license" 76 "small" 115 "repetitive-fast" 115 "repetitive-best" 115}
    (bzc-opts as t)                     ; -> (1 files) | () for a bad flag
     (: u (tablet 0)
-       r ((cite 'cli 'uoptp) as u () () bzc-longs)
-       bad ((cite 'cli 'uoptun) u "cdzkftqvhVLs123456789")
+       r (cite 'cli 'uoptp as u () () bzc-longs)
+       bad (cite 'cli 'uoptun u "cdzkftqvhVLs123456789")
        (? (r 3) (bzc-say t ("Bad flag `" + r 3 + "'"), ())
           bad (: w <(filter (w \ 1 < #w && w 0 = 45 && w 1 != 45 && elem bad w) as)
                  (bzc-say t ("Bad flag `" + w + "'"), ()))
           (: _ (each (chars "ckfqvhVs") (c \ peep u c 0 && pin t (intern (string c)) 1))
              _ (? (peep u 76 0) (pin t 'V 1))
              _ (? (peep u 116 0) (pin t 't 1))
-             dir ((cite 'cli 'uoptlast) as [100 122 116] () bzc-longs)
+             dir (cite 'cli 'uoptlast as [100 122 116] () bzc-longs)
              _ (? dir (pin t 'd (dir = 122 ? 0 1)))
-             lv ((cite 'cli 'uoptlast) as "123456789" () bzc-longs)
+             lv (cite 'cli 'uoptlast as "123456789" () bzc-longs)
              _ (? lv (pin t 'lvl (lv - 48)))
              [1 (r 2)])))
 

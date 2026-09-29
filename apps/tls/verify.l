@@ -407,7 +407,7 @@
    ; address a within base b, an address and its mask of the same family
    (ip-in? b a) (: k #a (? (#b != 2 * k) 0 (all (i \ (a i & b (k + i)) = (b i & b (k + i))) ^k)))
    (nm-of x) ((map (d \ [130 d]) (x 'dns)) + (map (a \ [135 a]) (x 'ips)))
-   (nm-show n) (? (<n = 130) (n 1) (#(n 1) = 4) (join "." (map (i \ show ((n 1) i)) ^4)) "an ipv6 address")
+   (nm-show n) (? (<n = 130) (n 1) (#(n 1) = 4) (join "." (map (i \ show (n 1 i)) ^4)) "an ipv6 address")
    ; one name against x's constraints -> () when x may vouch for it, else why not. a wildcard
    ; reaches every name one label down, so an excluded name there is reached
    (nc-why x nm)

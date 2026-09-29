@@ -451,7 +451,7 @@
    ; (object order, then header order) -- the one order layout and emit both walk.
    (ld-nlanes objs home)
     (: seen {}
-       (nhome ob l) ((peep (peep ob 'secs 0) <(peep (peep ob 'lanes 0) l ()) ()) 4)
+       (nhome ob l) (peep (peep ob 'secs 0) <(peep (peep ob 'lanes 0) l ()) () 4)
        (go os acc)
         (? (atom? os) (rev acc)
            (: ob <os

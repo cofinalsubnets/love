@@ -795,12 +795,12 @@
    (gz-fin g a) (: _ (pins g 'mode 'end 'ans a) "")
    (gz-more g k)                                 ; buf grown to k bytes, or as far as the input goes
     (: b (peep g 'buf "")
-       (? (k <= #b) b (: p ((peep g 'rd ()) 0) (? (#p = 0) b (: _ (pin g 'buf (b + p)) (gz-more g k))))))
+       (? (k <= #b) b (: p (peep g 'rd () 0) (? (#p = 0) b (: _ (pin g 'buf (b + p)) (gz-more g k))))))
    (gz-headin g)                                 ; -> the header whole off buf | () where none can be
     (: b (peep g 'buf "")   h (gz-head b)
        (? h h
           (3 <= #b && !(b 0 = 31 && b 1 = 139 && b 2 = 8)) ()
-          (: p ((peep g 'rd ()) 0) (? (#p = 0) () (: _ (pin g 'buf (b + p)) (gz-headin g))))))
+          (: p (peep g 'rd () 0) (? (#p = 0) () (: _ (pin g 'buf (b + p)) (gz-headin g))))))
    (gz-next g)
     (: m (peep g 'mode 'end)
        (? (m = 'end) ""
@@ -814,7 +814,7 @@
                     (gz-next g))))
           (m = 'body)
            (: b (peep g 'buf "")
-              r (inflate-feed (peep g 'st ()) (? (#b = 0) ((peep g 'rd ()) 0) b))
+              r (inflate-feed (peep g 'st ()) (? (#b = 0) (peep g 'rd () 0) b))
               _ (pin g 'buf "")
               (? (two? r) (: o <r
                              _ (pins g 'crc (crc32-on (peep g 'crc 0) o) 'n (peep g 'n 0 + #o) 'buf >r 'mode 'trail)
@@ -1064,13 +1064,13 @@ no file, or a bare -, is the filter: stdin -> stdout"
    gzc-flags "cdfklnNqrtvhV"
    (gzc-opts as t)                     ; -> (1 files) | ()  -- () is a bad option
     (: u (tablet 0)
-       r ((cite 'cli 'uoptp) as u [83] () gzc-longs)
-       bad (? (two? r) ((cite 'cli 'uoptun) u (gzc-flags + "S0123456789")) ())
+       r (cite 'cli 'uoptp as u [83] () gzc-longs)
+       bad (? (two? r) (cite 'cli 'uoptun u (gzc-flags + "S0123456789")) ())
        (? !(two? r) (: w <(rev as) (gzc-moan t ((w 1 = 45 ? "--suffix" "-S") + " wants a suffix"), ()))
           (r 3) (gzc-moan t ("unknown option " + r 3), ())
           bad (gzc-moan t ("unknown option -" + string bad), ())
           (: _ (each (chars gzc-flags) (c \ peep u c 0 && pin t (intern (string c)) 1))
-             lv ((cite 'cli 'uoptlast) as "123456789" [83] gzc-longs)
+             lv (cite 'cli 'uoptlast as "123456789" [83] gzc-longs)
              _ (? lv (pin t 'lvl (lv - 48)))
              v (peep u 83 ())
              _ (? (two? v) (pin t 'suf <>v))

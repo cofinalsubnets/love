@@ -281,7 +281,7 @@
  ; water reads the skin further along, by the clock (wt, seconds), until it is off
  (ramp-pen rp v) (cite 'slop 'slop-ramp-pen rp ramp-span v)
  (apartment-face g) (: d (g 'd) w (d 'w) sk (d 'skin)
-   wet (g 'desert ? sk ((d 'flow) (d 'phase + water-rate * g 'wt) 0.0))
+   wet (g 'desert ? sk (d 'flow (d 'phase + water-rate * g 'wt) 0.0))
    ents (filter tablet? ((g 'p) . (g 'npc) . g 'ms))
    spot (foldl (\ t e (pin t (e 'x + w * e 'y) e)) {} ents)
    (ramp-of t) (t @ 1 grass-ramp 2 sand-ramp 3 path-ramp 4 water-ramp 5 bed-ramp 8 (g 'desert ? bed-ramp water-ramp) ())

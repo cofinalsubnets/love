@@ -2530,7 +2530,7 @@
        ('sexpr items ve ty)
         (: il0 (g 'inlining)
            _ (pin g 'inlining ((il0 || 0) + 1))
-           pre ((g 'sxpre) g env items ())
+           pre (g 'sxpre g env items ())
            _ (pin g 'inlining il0)
            (? (bad? pre) 'bad
               !(two? ve) (mkv ty 'r0 <pre)                   ; void: the statements alone
@@ -5282,7 +5282,7 @@
           (? (rs = 'bar)
               (? (retx? f) (rd != 'r0)
                  (elem <f '(call callr)) (elem rd (doors g 0))
-                 (<f = 'jmp && !(46 = ((show <>f) 0))) (elem rd (doors g 1))
+                 (<f = 'jmp && !(46 = (show <>f 0))) (elem rd (doors g 1))
                  ())
              (elem rd <rs) ()
              (elem rd <>rs) 1
@@ -5460,7 +5460,7 @@
                      (pin seen <>f 1, go >l wl))
                  (<f = 'align) (go >l wl)          ; a loop head's pad: no register effect
                  (elem <f '(jmp jmp8))
-                  (? (46 = ((show <>f) 0)) (next (<>f . wl))
+                  (? (46 = (show <>f 0)) (next (<>f . wl))
                      ; a tail jump to a function: an exit reading its arguments -- the door set alone dies (dies?'s law)
                      (elem rd (doors g 1)) (next wl)
                      ())
@@ -5547,7 +5547,7 @@
                         M1 (filter (\ e (e 0 = a 0 && (7 < e 1 - a 1 || e 1 - a 1 < -7))) M)
                         (f . go >l (? (nom? (f 3)) ([(a 0) (a 1) (f 3)] . M1) M1) A))
                     (: rd (rdsp g f)
-                       (? (rd = 'bar || elem op mw) (f . go >l () (? (rd = 'bar) () ((foldl (\ k x (kill <k (k 1) x)) [() A] <>rd) 1)))
+                       (? (rd = 'bar || elem op mw) (f . go >l () (? (rd = 'bar) () (foldl (\ k x (kill <k (k 1) x)) [() A] <>rd 1)))
                           ; a base made by lea/add/sub off another, or a register copy, roots at that one
                           (: D (f 1)
                              bs (? (elem op '(lea add sub) && nom? D && nom? (f 2) && charm? (f 3) && nelem (f 2) fr)
@@ -6322,7 +6322,7 @@
                         (48 <= dx <= 57)
                          (: ix (dx - 48)
                             (? (ix < #al)
-                               (: sub ((al ix) md) (? (bad? sub) 'bad (go (i + (? md 3 2)) (acc + sub))))
+                               (: sub (al ix md) (? (bad? sub) 'bad (go (i + (? md 3 2)) (acc + sub))))
                                'bad))
                         'bad))
                  'bad)))
@@ -6438,7 +6438,7 @@
                     (? !(two? l) (rev acc)
                        (: e2 <l k <>e2
                           (? (elem <e2 '(m k)) (assign >l fr (k . acc))
-                             (two? k) (? (<>k < #acc) (: r9 ((rev acc) <>k) (assign >l fr (r9 . acc))) 'bad)
+                             (two? k) (? (<>k < #acc) (: r9 (rev acc <>k) (assign >l fr (r9 . acc))) 'bad)
                              (k = 'pick)
                               (? (two? fr) (assign >l >fr (<fr . acc)) 'bad)
                              (assign >l fr (k . acc)))))

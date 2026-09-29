@@ -86,7 +86,7 @@
    dr (d 'door)
    p {'x <dr 'y (<>dr - 1) 'gl 64 'hue me-pen}
    g {'d d 'p p 'pl pl 'ms () 'msg "" 'tn 0 'over 0 'sign () 'ask ()}
-   _ (pin g 'sign (open-ttl . ((src 'nest-lines) pl + open-foot)))
+   _ (pin g 'sign (open-ttl . (src 'nest-lines pl + open-foot)))
    g)
 
  ; --- the questions: a sign with choices, and the digit that answers it ---------------
@@ -95,12 +95,12 @@
    (? (pl 'verdict = 'same) (note g w-same)
       (ask g 'perch perch-ttl
            [("there: " + when (pl 'theirs) + ", this build: " + when (pl 'mine))
-            ((src 'nest-verdict) pl)
+            (src 'nest-verdict pl)
             ""
             (choice-line 1 "lay this build here")
             (choice-line 2 "leave it as it is")])))
  (ask-door g) (ask g 'door door-ttl
-                   ((src 'nest-lines) (g 'pl)
+                   (src 'nest-lines (g 'pl)
                     + [""
                        (choice-line 1 "do it")
                        (choice-line 2 "leave with nothing changed")
@@ -118,10 +118,10 @@
            ())
       ()))
  ; a shelf bumped: its tool's link on or off. one that is love's already has nothing to do
- (toggle g k) (: t ((g 'pl 'tools) k)
+ (toggle g k) (: t (g 'pl 'tools k)
    (? (t 'was = "love") (note g (fill w-already [(t 'nm)]))
       (pin t 'act (t 'act = 'link ? 'keep 'link),
-       note g ((src 'nest-tool-line) (g 'pl) t))))
+       note g (src 'nest-tool-line (g 'pl) t))))
 
  ; --- a turn: a question takes a digit, a sign any key, else a step --------------------
  (roost-stride g mv) (: p (g 'p) d (g 'd) nx (p 'x + <mv) ny (p 'y + <>mv) t (dat d nx ny)
@@ -143,8 +143,8 @@
    (perch _) (? (pl 'lay = 'lay) [perch-glyph [new-pen ground]]
                 (pl 'verdict = 'fresh) [bare-glyph [keep-pen ground]]
                 [perch-glyph [old-pen ground]])
-   (shelf x) (: k (d 'shelves x) t ((pl 'tools) k)
-                [((d 'glyphs) k)
+   (shelf x) (: k (d 'shelves x) t (pl 'tools k)
+                [(d 'glyphs k)
                  [(? (t 'act = 'link || t 'was = "love") link-pen keep-pen) ground]])
    (\ i (: x (i % w) t (peep (d 't) i 0)
            (? (i = at) ["@" [(legible me-pen ground) ground]]

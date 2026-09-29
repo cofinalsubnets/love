@@ -309,7 +309,7 @@
    ; the last visible source line -- the tail of the window, or the buffer's end
    (pglast st)
     (: b (pgbody st) top (st 'top) k (top + b)
-       r ((pgfrom st) (? (st 'nr < k) ((st 'nr - top) - 1) (b - 1)))
+       r (pgfrom st (? (st 'nr < k) ((st 'nr - top) - 1) (b - 1)))
        (? (two? r) (<>r + 1) (st 'nl)))
    (pgstat st)
     (: b (pgbody st) nl (st 'nl)
@@ -466,7 +466,7 @@
        _ (? (two? ws) 0 (udie 1 "hexedit: needs a terminal"))
        n #<>r
        st {'pos 0 'top 0 'lo 0 'undo () 'msg "" 'd <>r}
-       (buf i) ((st 'd) i)
+       (buf i) (st 'd i)
        (set! i v) (: d (st 'd) (pin st 'd (snip d 0 i + string v + snip d (i + 1) #d)))
        e (string 27)
        nl (: t (radix (max n 1) 16) #t)
