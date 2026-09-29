@@ -52,14 +52,20 @@
           _ (pin e 'nom (top + "/" + tar-get e 'nom ""))
           (sp-take >es top (e . acc))))
 
-   ; the root leads, top follows wearing its mode, then STAMP, then the rest re-homes
-   ; under top. shared by both passes, so their digests are comparable.
+   ; the root leads, top follows wearing its mode, then STAMP, then moon's toolchain slice
+   ; (include/ and lib/, what apps/moon/moon.l's mblob reads when there is no nest), then
+   ; the rest, each re-homed under top: a nestless compile stops reading past the slice
+   ; instead of inflating the tree for it. shared by both passes, so their digests compare.
+   (sp-slice? e) (: n (tar-get e 'nom "")
+                    (starts? n "apps/moon/include/" || starts? n "apps/moon/lib/"
+                     || n = "apps/moon/include" || n = "apps/moon/lib"))
    (sp-lev es top stamp build)
     (: root <es
        te (tar-entry top 'dir "")
        _ (pin te 'mode (tar-get root 'mode 493))
        se (tar-entry "STAMP" 'file (build + "\n"))
-       (tar-level (root . te . sp-take (se . >es) top ()) stamp))
+       rest (filter sp-slice? >es + filter (e \ !(sp-slice? e)) >es)
+       (tar-level (root . te . sp-take (se . rest) top ()) stamp))
 
    ; the cut that reads: pack, hash, and write when the content actually moved.
    (sp-cut arch side top stamp build rules)
