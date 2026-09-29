@@ -30,7 +30,8 @@
 ; the mouse the outer terminal is asked too -- a press on another pane moves the focus
 ; there, the rest is laid into the pane's own report, and the wheel it leaves unasked
 ; scrolls its history. an outer terminal that answers kitty's graphics query gets a pane's
-; pictures themselves (limn-pics) instead of their ▀ blocks.
+; pictures themselves (limn-pics) instead of their ▀ blocks, and one that says it draws
+; sixels (a 4 in its DA) gets them as sixels (limn-sixes).
 ;
 ; the clip is the harbour's: one register, vi's shape, that every vi buffer on the
 ; wharf yanks into and puts from, so a yank in one pane is a put in another. copy
@@ -170,19 +171,40 @@
  ; nothing is erased between frames, and nothing needs to be: panes and bars
  ; tile the wharf exactly (apps/berth/wharf.l's standing law), so every cell is written
  ; every frame and no stale glyph can survive a layout change.
- ; with pictures on (pics), every placement goes first and the ones still in view come back
+ ; with kitty's pictures on (pics 1), every placement goes first and the ones still in view
+ ; come back. sixels (pics 2) sit in the text layer: a pane's go out again only when what it
+ ; shows of them moves, the cells the old ones covered erased before anything is painted,
+ ; and never on the outer terminal's last row, which a sixel reaching would scroll
  (hframe hb)
   (: j (jug 0) pk (peep hb 'pics 0)
-     _ (say j (pk ? "\e[?25l\e_Ga=d,d=a,q=2\e\\" "\e[?25l"))
-     _ (map (b \ (: p (hpane hb (wharf-id b))
-                    (? (wharf-show? b && two? p)
-                       (: s (peep (hbox p) () 0)
-                          _ (limn-rows j s (wharf-rows b) (wharf-cols b) (wharf-row b) (wharf-col b) 0 -1 pk)
-                          (? pk (limn-pics j s (wharf-rows b) (wharf-cols b) (wharf-row b) (wharf-col b)
-                                           (wharf-id b) (hb 'sent))
-                             0))
-                       0)))
-            (hb 'lay))
+     shown (filter (b \ (wharf-show? b && two? (hpane hb (wharf-id b)))) (hb 'lay))
+     old (peep hb 'six {}) now {}
+     ; a shown pane's sixel entry: [sig ps rr laid], sig what they hang on, rr the rows
+     ; they may take, laid the sixels sent, by what they show
+     (placed b) (: s (peep (hbox (hpane hb (wharf-id b))) () 0)
+                   rr (max 0 (min (wharf-rows b) (((hb 'rows) - 1) - wharf-row b)))
+                   ps (limn-placed s rr (wharf-cols b))
+                   [[(wharf-row b) (wharf-col b) (hb 'rows) (hb 'cols) ps] ps rr {}])
+     _ (? (pk = 2) (map (b \ (pin now (wharf-id b) (placed b))) shown) 0)
+     _ (say j (pk = 1 ? "\e[?25l\e_Ga=d,d=a,q=2\e\\" "\e[?25l"))
+     _ (map (id \ (: o (old id) n (peep now id ()) sg <o
+                     (? (two? n && (<n = sg)) 0 (limn-unsix j (o 1) (sg 0) (sg 1)))))
+            (keys old))
+     _ (map (b \ (: id (wharf-id b) s (peep (hbox (hpane hb id)) () 0) r (wharf-rows b) c (wharf-cols b)
+                    row0 (wharf-row b) col0 (wharf-col b)
+                    (? (pk = 2)
+                       (: n (now id) o (peep old id ()) rr (n 2) op (peep hb 'opx ())
+                          _ (limn-rows j s rr c row0 col0 0 -1 2)
+                          _ (limn-rows j s r c row0 col0 rr -1 0)
+                          (? (two? o && (<o = <n)) (pin now id [<n (n 1) rr (o 3)])
+                             (: laid {}
+                                _ (limn-sixes j s (n 1) row0 col0 (? (two? op) <op (gaze s 6)) (? (two? op) <>op (gaze s 7))
+                                              (? (two? o) (o 3) {}) laid)
+                                (pin now id [<n (n 1) rr laid]))))
+                       (: _ (limn-rows j s r c row0 col0 0 -1 pk)
+                          (? (pk = 1) (limn-pics j s r c row0 col0 id (hb 'sent)) 0)))))
+            shown)
+     _ (? (pk = 2) (pin hb 'six now) 0)
      _ (hbars j hb)
      _ (: p (hpane hb (hb 'focus)) b (hfind (hb 'lay) (hb 'focus))
           (? (two? p && two? b)
@@ -317,7 +339,12 @@
                        ((f = 126) && (a = "5;2")) (hpeer hb (hhalf hb))
                        ((f = 126) && (a = "6;2")) (hpeer hb (0 - hhalf hb))
                        ((f = 126) && (a = "200")) (hpasted hb (hbracket 0))
-                       ((f = 99) && (0 < #a) && ((a 0) = 63)) 0            ; the DA answer the query drew out
+                       ; the DA answer the query drew out: a 4 is sixels, where kitty said nothing
+                       ((f = 99) && (0 < #a) && ((a 0) = 63))
+                        (? (((peep hb 'pics 0) = 0) && (elem 4 (hnums a))) (: _ (pin hb 'pics 2) (hsoil hb)) 0)
+                       ; its cell's size in pixels, which a sixel is drawn in
+                       ((f = 116) && (0 < #a) && ((a 0) = 54))
+                        (: ns (hnums ("?" + a)) (? (#ns = 3) (: _ (pin hb 'opx [(ns 2) (ns 1)]) (hsoil hb)) 0))
                        (hsend hb ("\e[" + a + string f))))))
 
  ; --- keys: raw stdin pours onto the focused pane, C-a first. a stage takes the
@@ -394,23 +421,24 @@
  ; the caller's, a thunk answering the pane a prefix split ties up ---
  (harbour r c) (: hb {}
                   (pins hb 'plan () 'focus () 'next 1 'rows r 'cols c 'panes {}
-                        'more () 'dirt {1} 'jobs () 'lay () 'clip {} 'sent {} 'pics 0,
+                        'more () 'dirt {1} 'jobs () 'lay () 'clip {} 'sent {} 'pics 0 'six {} 'opx (),
                    hb))
 
  ; --- sail: the harbour on the tty, raw and on the alternate screen, keys pumped
  ; and frames painted until the last berth empties; the tty as it was after ---
  (hsail hb) (: _ (raw 1)
                _ (say out "\e[?1049h\e[2J\e[?1006h\e[?2004h")   ; the mouse's reports as ?1006's, pastes bracketed
-               ; does the outer terminal take kitty's pictures? a 1x1 query, and DA behind it so
-               ; a terminal that ignores APC still answers something. asked only where a child
-               ; has the keys: a stage's reader would take the answer for keys
-               _ (? (hpty? (hpane hb (hb 'focus))) (say out "\e_Gi=31,s=1,v=1,a=q,t=d,f=24;AAAA\e\\\e[c") 0)
+               ; does the outer terminal take kitty's pictures? a 1x1 query, then its cell's
+               ; size, and DA behind them so a terminal that ignores APC still answers something
+               ; (and says whether it draws sixels). asked only where a child has the keys: a
+               ; stage's reader would take the answers for keys
+               _ (? (hpty? (hpane hb (hb 'focus))) (say out "\e_Gi=31,s=1,v=1,a=q,t=d,f=24;AAAA\e\\\e[16t\e[c") 0)
                _ (flush out)
                up (twirl (_ \ oars hb) 0)
                (hswim hb 1,                 ; ... until the last berth empties
                 map (t \ landed? t ? (catch t) (freeze t)) (hb 'jobs),
                 landed? up ? (catch up) (freeze up),
-                say out ((peep hb 'pics 0) ? "\e_Ga=d,d=A,q=2\e\\" ""),       ; every picture sent, freed
+                say out ((peep hb 'pics 0) = 1 ? "\e_Ga=d,d=A,q=2\e\\" ""),   ; every picture sent, freed
                 say out "\e[0m\e[?25h\e[?1003l\e[?1002l\e[?1000l\e[?1006l\e[?2004l\e[?1049l",
                 flush out,
                 raw 0,
