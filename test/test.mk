@@ -376,7 +376,7 @@ korerun = $m kore
 # stands alone -- `make test_kore_sed` -- which is most of why the split is worth having.
 kore_parts = laws diff toolchain line sort ls grep field column encode fs sed proc \
   procfs sh fork awk find record sum expr bc stat time patch pager top lapiz archive \
-  misc ed prop-seams prop-door prop-status
+  misc ed openssl prop-seams prop-door prop-status
 test_kore: host
 	@for p in $(kore_parts); do $(gsh) test/kore/$$p.sh $(ho) $m || exit 1; done
 $(kore_parts:%=test_kore_%): test_kore_%: host
