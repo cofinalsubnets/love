@@ -12,22 +12,22 @@
 ; firmware as pflash. there is no third door, so anything else is a refusal.
 
 (borrow 'posix)
-(: (sub-at s i t j) (? (j >= #t) 1                           ; does t occur in s at index i?
+(: (sub-at s i t j) (j >= #t ? 1                           ; does t occur in s at index i?
        (s (i + j) = t j ? (sub-at s i t (j + 1)) 0))
    (bol s i)  (? (i < 1) 0 (10 = peep s (i - 1) 0) i (bol s (i - 1)))
    (eol s i)  (? (i >= #s) i (10 = peep s i 0) i (eol s (i + 1)))
-   (lineof s t) (: i (findsub s t) (i < 0 ? "" (snip s (bol s i) (eol s i)))))
+   (lineof s t) (findsub s t @ i (i < 0 ? "" (snip s (bol s i) (eol s i)))))
 
 (: a    >argv
    iso  <a
    ovmf <>a
-   arch (: x >>a (two? x ? <x "x64"))                    ; optional 3rd arg; x64 by default
+   arch (>>a @ x (two? x ? <x "x64"))                    ; optional 3rd arg; x64 by default
    ; optional 4th arg: a line the serial output must also contain -- test_disk's
    ; second boot demands "disk: fat kept across the reset" on top of the summary.
-   need (: x >>>a (two? x ? <x ""))
+   need (>>>a @ x (two? x ? <x ""))
    ; a .elf boots direct: qemu's own loader reads the PVH note and enters our
    ; bring-up stub (mkboot.l) -- nothing downloaded, nothing vendored.
-   elf? (: n #iso (n > 4 && sub-at iso (n - 4) ".elf" 0))
+   elf? (#iso @ n (n > 4 && sub-at iso (n - 4) ".elf" 0))
    ; a directory is an esp: qemu fakes a FAT volume over it and the firmware
    ; runs efi/boot/bootx64.efi -- ours, the uefi door. (stat's mode is at 2;
    ; s_ifdir is 0040000 under the 0170000 type mask.)
@@ -39,10 +39,10 @@
    ; out through PSCI / SBI and -no-reboot below turns that into the exit.
    ; KTEST_A64_HOST names an arm box (ssh, qemu, /dev/kvm) the a64 elf lane boots on under
    ; kvm instead of tcg here, ~100s
-   far  (: h (getenv "KTEST_A64_HOST") (arch = "a64" && elf? && string? h && 0 < #h ? h ()))
-   mach (? (arch = "a64")
+   far  (getenv "KTEST_A64_HOST" @ h (arch = "a64" && elf? && string? h && 0 < #h ? h ()))
+   mach (arch @ "a64"
            ["-M" "virt,gic-version=2" "-cpu" (far ? "host" "cortex-a72") "-semihosting"]
-           (arch = "rv64")
+           "rv64"
            ["-M" "virt"]
            ["-M" "q35" "-device" "isa-debug-exit,iobase=0xf4,iosize=0x04"
             ; the sound card, silent: test/horn.l drives src/inle/hda.c against it
@@ -71,7 +71,7 @@
    ; Blt() and its gop answers a mode with no address, which is no framebuffer
    ; at all. ramfb's lands in ordinary ram, so the console paints at memory
    ; speed and the lane costs nothing.
-   gfx  (? (arch = "a64") ["-device" "ramfb"] ())
+   gfx  (arch = "a64" ? ["-device" "ramfb"] ())
    media (? elf? ["-kernel" iso "-append" "test/kernel/all.l"]
             dir? (fw + below4g + gfx + ["-drive" ("format=raw,file=fat:rw:" + iso)])
             (scare 'ktest-media iso))
@@ -94,8 +94,8 @@
    ; speak version 2, the one blk.c drives.
    disk (iso + ".disk")
    _    (hark ["truncate" "-s" "35840000" disk])
-   dargs (: d ["-drive" ("file=" + disk + ",if=none,format=raw,id=d0")]
-            (? mmio?
+   dargs (["-drive" ("file=" + disk + ",if=none,format=raw,id=d0")] @ d
+            (mmio? ?
                (d + ["-device" "virtio-blk-device,drive=d0"
                      "-global" "virtio-mmio.force-legacy=false"])
                (d + ["-device" "virtio-blk-pci,drive=d0"])))
@@ -104,10 +104,10 @@
          + ["-serial" "stdio" "-display" "none" "-no-reboot"] + media)
    ; far: the elf and its disk go to a scratch dir there, the same line runs in it, and the
    ; dir goes after. paths are the basenames, so nothing of this tree's layout crosses
-   r    (? far
+   r    (far ?
            (: d ("/tmp/ktest-" + show (getpid 0))
-              b (: k (foldl (\ a i (iso i = 47 ? (i + 1) a)) 0 (jot #iso)) (snip iso k #iso))
-              rel (map (\ x (? (x = iso) b
+              b (foldl (\ a i (iso i = 47 ? (i + 1) a)) 0 (jot #iso) @ k (snip iso k #iso))
+              rel (map (x \ (? (x = iso) b
                                 (sub-at x 0 "file=" 0) ("file=" + b + ".disk" + snip x (5 + #disk) #x)
                                 x))
                        qemu)

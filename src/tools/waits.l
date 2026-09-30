@@ -96,7 +96,7 @@
                 (go i acc)
                  (? (n <= i) (rev acc)
                     (idc? (s i))
-                     (: j (end i)
+                     (end i @ j
                         (go j (j < n && s j = 40 ? (snip s i j . acc) acc)))
                     (go (i + 1) acc))
                 (go 0 ()))
@@ -110,7 +110,7 @@
    ; the `{` half is load-bearing. the runtime puts the first statement on the
    ; header line (`static lvm(lvm_yield_sw_mono) { uintptr_t my_wake = ..;`), so
    ; a bare "ends in a semicolon means prototype" test throws away the scheduler.
-   (header? s) (: n #s (top? s && (inch? s 123 || !(s (n - 1) = 59))))
+   (header? s) (#s @ n (top? s && (inch? s 123 || !(s (n - 1) = 59))))
    ; ..and the other half declares. a prototype names a function and calls none:
    ; `static void wait_one(int fd, int events, uintptr_t ms);` is a wait's spelling,
    ; not a wait. the seam between the runtime's TUs is a block of these, so a scan
@@ -150,14 +150,14 @@
        src (slurp port)
        _ (close port)
        (go ls n fn acc)
-        (? (atom? ls) (rev acc)
+        (atom? ls ? (rev acc)
            (: line (uncomment (rtrim <ls))
               hdr (header? line)
               fn2 (hdr ? (hdr-name line) fn)
               ; a definition line names its own function, and that is not a call
               hits (impl? fn2 || proto? line ? ()
                     (filter (c \ hook? c && !(hdr && c = fn2)) (calls line)))
-              acc2 (foldl (\ a c (: e [path fn2 c n]
+              acc2 (foldl (\ a c ([path fn2 c n] @ e
                                     (seen? (map key a) (key e) ? a (e . a))))
                           acc hits)
               (go >ls (n + 1) fn2 acc2)))
@@ -179,14 +179,14 @@
    rkeys (map key roster)
    extra (filter (e \ !(seen? rkeys (key e))) found)
    stale (filter (r \ !(seen? fkeys (key r))) roster)
-   (? (two? extra || two? stale)
-      ((? (two? extra)
+   (two? extra || two? stale ?
+      ((two? extra ?
           (say out "waits: ", putbn out (llen extra) 10,
            say out " call site(s) reach a wait hook and are NOT on the roster:\n",
            each extra showx,
            say out "  -- if this wait is right, put it on the roster in src/tools/waits.l with its reason.\n")
           0),
-       (? (two? stale)
+       (two? stale ?
             (say out "waits: ", putbn out (llen stale) 10,
              say out " roster entry(s) have no call site (stale -- delete them):\n",
              each stale show3)

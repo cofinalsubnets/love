@@ -15,16 +15,16 @@
    uul "test/uu.l"
 
    (rdf p) (uread p @ [1 t] t ())
-   (dir? p) (: st (stat p) (atom? st ? 0 (61440 & <>>st = 16384)))
-   (sfx-v? s) (: n #s (2 < n && s (n - 2) = 46 && s (n - 1) = 118))
+   (dir? p) (stat p @ st (atom? st ? 0 (61440 & <>>st = 16384)))
+   (sfx-v? s) (#s @ n (2 < n && s (n - 2) = 46 && s (n - 1) = 118))
    (vnamec? c) (alnum? c || c = 95 || c = 39)            ; [a-za-z0-9_']
    (unamec? c) (alnum? c || c = 95 || c = 45)            ; [a-za-z0-9_-]
    (blank? c) (c = 32 || c = 9 || c = 13)
 
    ; every *.v under p, then one flat sort so the visit order is the path order
    (vfiles p acc)
-    (: (go m acc) (? (atom? m) acc
-                     (: e (p + "/" + <m)
+    (: (go m acc) (atom? m ? acc
+                     (p + "/" + <m @ e
                         (go >m (? (dir? e) (vfiles e acc) (sfx-v? e) (e . acc) acc))))
        (go (readdir p) acc))
 
@@ -34,8 +34,8 @@
                                 (i + j < n) (s (i + j) = kw j ? (go (j + 1)) ())
                                 ())
                       (go 0))
-   (kw-end s n i) (: (try m) (? (atom? m) ()
-                                (: e (pfx? s n i <m) (charm? e ? e (try >m))))
+   (kw-end s n i) (: (try m) (atom? m ? ()
+                                (pfx? s n i <m @ e (charm? e ? e (try >m))))
                      (try kws))
 
    ; one .v: harvest names, first-file wins in pub, answer this file's distinct count
@@ -47,14 +47,14 @@
        ; after the keyword the reference \s+ crosses newlines too
        (wsn i) (i < n && (blank? (s i) || s i = 10) ? (wsn (i + 1)) i)
        (line i cnt)                                     ; i at a line start
-        (? (n <= i) cnt
+        (n <= i ? cnt
            (: j (ws i) e (kw-end s n j)
-              (? (!e || n <= e || !(blank? (s e) || s e = 10)) (line (eol j) cnt)
+              ((!e || n <= e || !(blank? (s e) || s e = 10)) ? (line (eol j) cnt)
                  (: a (wsn e) b (name-end a)
-                    (? (b = a) (line (eol j) cnt)
+                    (b = a ? (line (eol j) cnt)
                        (: nm (nom (snip s a b))
-                          _ (? (peep pubT nm 0) 0 (pin pubT nm file))
-                          (? (peep seen nm 0) (line (eol j) cnt)
+                          _ (peep pubT nm 0 ? 0 (pin pubT nm file))
+                          (peep seen nm 0 ? (line (eol j) cnt)
                              (pin seen nm 1, line (eol j) (cnt + 1)))))))))
        (line 0 0))
 
@@ -68,36 +68,36 @@
                      (go 0))
        (name-end i) (i < n && unamec? (s i) ? (name-end (i + 1)) i)
        (go i acc)
-        (? (n <= i) (rev acc)
+        (n <= i ? (rev acc)
            (? !(s i = 40) (go (i + 1) acc)
-              (: e (: a (lit? (i + 1) "defn ") (? (charm? a) a
-                       (: b (lit? (i + 1) "defq ") (? (charm? b) b
+              (: e (lit? (i + 1) "defn " @ a (charm? a ? a
+                       (lit? (i + 1) "defq " @ b (charm? b ? b
                           (lit? (i + 1) "axm ")))))
                  (? !(charm? e) (go (i + 1) acc)
-                    (: b (name-end e)
-                       (? (b = e) (go (i + 1) acc)
+                    (name-end e @ b
+                       (b = e ? (go (i + 1) acc)
                           (go b (snip s e b . acc))))))))
        (go 0 ()))
 
-   (pad3 v) (: t (show v) (? (#t = 1) ("  " + t) (#t = 2) (" " + t) t))
+   (pad3 v) (show v @ t (? (#t = 1) ("  " + t) (#t = 2) (" " + t) t))
 
    ; stable insertion by count, descending -- ties keep first-seen order
    ; <><l and <>p are accessor chains, not the link operator
    (ins p l) (? (atom? l) [p] (<><l < <>p) (p . l) (<l . ins p >l))
 
-   _ (? (dir? unimath) 0
+   _ (dir? unimath ? 0
         (puts "uuparity: UniMath not installed, audit skipped\n", quit 0))
 
    pubT {}
    ; (file . distinct) per file, walked in flat path order; file = the short name
    tot (: (go m acc)
-           (? (atom? m) (rev acc)
+           (atom? m ? (rev acc)
               (: full <m
                  short (snip full (#unimath + 1) #full)
                  (go >m ([short (scan-v (rdf full) pubT short)] . acc))))
           (go (sort (vfiles unimath ())) ()))
    ; the preamble ctors and notations that are names in uu.l's object language
-   _ (map (x \ (: nm (nom x) (? (peep pubT nm 0) 0 (pin pubT nm "Foundations/Preamble.v"))))
+   _ (map (x \ (nom x @ nm (peep pubT nm 0 ? 0 (pin pubT nm "Foundations/Preamble.v"))))
           '("tpair" "pr1" "pr2" "idpath" "ii1" "ii2" "tt" "succ"
             "total2" "paths" "coprod" "nat" "bool" "unit" "empty" "UU"))
 
@@ -112,16 +112,16 @@
              + show #impostors + " impostors\n")
    ; coverage per file: counts over matched (dups counted), first-seen order, then sorted
    cov (: (go m acc)
-           (? (atom? m) acc
+           (atom? m ? acc
               (: f (peep pubT (nom <m) 0)
                  hit (assoc f acc)
-                 (go >m (? (two? hit) (map (p \ (<p = f ? [f (<>p + 1)] p)) acc)
+                 (go >m (two? hit ? (map (p \ (<p = f ? [f (<>p + 1)] p)) acc)
                            (acc + [[f 1]])))))
           (go matched ()))
    _ (map (p \ (: f <p c <>p t (assoc f tot)
                   (puts $ "  " + pad3 c + "/" + pad3 (two? t ? <>t "?") + " " + f + "\n")))
           (foldl (\ a p (ins p a)) () cov))
-   _ (? (two? impostors)
+   _ (two? impostors ?
         (puts "IMPOSTORS (unpublished names without uu- prefix):\n",
          map (x \ puts ("  " + x + "\n")) impostors,
          quit 1)

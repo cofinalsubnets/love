@@ -31,16 +31,16 @@
    (pre? t p) (: m #p
                  (go i) (? (m <= i) 1 (#t <= i) () (t i = p i) (go (i + 1)) ())
                  (go 0))
-   (esc? c set) (: b (bytes set) (elem c b))
+   (esc? c set) (bytes set @ b (elem c b))
    ; a keyword as vim reads one: | and \ carry meaning in a syn keyword line
-   (kwesc t) (foldl (\ a c (a + (? (esc? c "|\\") ("\\" + string c) (string c))))
+   (kwesc t) (foldl (\ a c (a + (esc? c "|\\" ? ("\\" + string c) (string c))))
                     "" (bytes t))
    ; a byte inside a [...] collection, and inside the "..." that delimits it
-   (clesc t) (foldl (\ a c (a + (? (esc? c "]^-\\\"") ("\\" + string c) (string c))))
+   (clesc t) (foldl (\ a c (a + (esc? c "]^-\\\"" ? ("\\" + string c) (string c))))
                     "" (bytes t))
 
    ; --- the groups: Love<Class>, straight off the table ------------------------
-   (cap1 t) (: c (t 0) (string (97 <= c <= 122 ? (c - 32) c) + snip t 1 #t))
+   (cap1 t) (t 0 @ c (string (97 <= c <= 122 ? (c - 32) c) + snip t 1 #t))
    (grp r) ("Love" + (cap1 (string (hue-cls r))))
 
    ; --- the vocabulary ---------------------------------------------------------
@@ -63,7 +63,7 @@
          put err 10, quit 1))
    wtab (: seen {}
            (go l t)
-            (? (atom? l) t
+            (atom? l ? t
                (: r <l
                   ws (filter (w \ !(seen w) && !(pre? w "hue-")) (hue-words (hue-arg r)))
                   _ (each ws (w \ pin seen w 1))
@@ -82,20 +82,20 @@
    sig  (clesc hue-sigils)
    (vim r)
     (: g (grp r) tag (hue-tag r) a (hue-arg r)
-       (? (tag = 'eol)
+       (tag @ 'eol
            (each a (o \ line ("syn match " + g + " \"" + o + ".*$\" contains=LoveTodo")))
-          (tag = 'span)
+          'span
            (: q (string a) e (string (hue-rule r 2))
               (line ("syn region " + g + " start='" + q + "' skip='" + e + e + e + e
                      + "\\|" + e + e + q + "' end='" + q + "'")))
-          (tag = 'mark)
+          'mark
            (line ("syn match " + g + " \"" + string a + "[^" + stop + "]*\""))
           ; sep: one byte standing alone, and a tag of its own because both
           ; readings reach a tag through its first row, so a second row under
           ; one tag would be read by neither
-          (tag = 'sep)
+          'sep
            (line ("syn match " + g + " \"" + string a + "\""))
-          (tag = 'num)
+          'num
            ; hex first: `0x1f` would otherwise take the plain-integer match on its
            ; leading 0 and leave the rest bare, which is a worse lie than no colour
            (line ("syn match " + g + " \"\\<-\\?0[xX]\\x\\+\\>\""),
@@ -103,13 +103,13 @@
             line ("syn match " + g + " \"\\<-\\?\\d\\+\\.\\d*\\([eE][-+]\\?\\d\\+\\)\\?\\>\""),
             line ("syn match " + g + " \"\\<-\\?\\.\\d\\+\\([eE][-+]\\?\\d\\+\\)\\?\\>\""),
             line ("syn match " + g + " \"\\<-\\?\\d\\+[eE][-+]\\?\\d\\+\\>\""))
-          (tag = 'word) (kwlines g (wtab (hue-cls r)))
-          (tag = 'punct)
+          'word (kwlines g (wtab (hue-cls r)))
+          'punct
            ; the valence law as vim reads it: a punct run leads a token (the
            ; lookbehind), and it is monadic when the full run touches a datum
            ; start. the excluded set carries the sigil chars themselves so a
            ; greedy run cannot backtrack and split itself.
-           (? (a = 'glued)
+           (a = 'glued ?
                (line ("syn match " + g + " \"[A-Za-z0-9_]\\@<![" + sig
                       + "]\\+\\ze[^ \\t),;" + sig + "]\""))
               (line ("syn match " + g + " \"[A-Za-z0-9_]\\@<![" + sig + "]\\+\"")))
@@ -130,7 +130,7 @@
             (magenta     purple1       darkmagenta  darkviolet))
    (levline i l k)
     (line ("    hi def LoveLevel" + show i + " ctermfg=" + string (l k)
-           + (: p (13 - #(string (l k))) (: (sp j) (j < 1 ? "" (" " + (sp (j - 1)))) (sp p)))
+           + ((13 - #(string (l k))) @ p (: (sp j) (j < 1 ? "" (" " + (sp (j - 1)))) (sp p)))
            + "guifg=" + string (l (k + 1))))
    (levels-of k) (: (go l i) (atom? l ? () (levline i <l k, go >l (i + 1))) (go levels 0))
 
@@ -195,7 +195,7 @@
    _ (line "endif")
    _ (blank ())
    _ (line "if g:love_rainbow")
-   _ (: (go i) (? (9 < i) ()
+   _ (: (go i) (9 < i ? ()
                   (line $ "  syn region LoveList" + show i + " matchgroup=LoveLevel" + show i
                           + brkpairs + " contains=@LoveListCluster,LoveList"
                           + show (i < 9 ? (i + 1) 0),
