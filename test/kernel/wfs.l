@@ -1,20 +1,10 @@
-; The writable tree, inle's rung 2: create, mkdir, rmdir, unlink,
-; rename, chdir/cwd -- plus chmod and utime, which kore's cp and touch ride -- and
-; the environment (getenv setenv environ), a tablet in the kernel's boot text. The
-; shapes are doc/misc/posix.md's and the host's exactly: an effect answers () ok |
-; an errno nom | 'badarg misuse; a value answers the value | () | a nom | 'badarg.
-; test/fs.l holds sibling laws against the real tree.
-;
-; kernel only -- test/kernel/all.l's roster, never $t: on the host these paths are the real
-; filesystem. Everything made here is unmade at the foot, so the corpus behind
-; reads the tree as this file found it.
-;
-; the `:` has a body -- the assert itself -- so the helpers stay local; and each
-; law is its own assert argument, since assert maps over its args and a `do` would
-; report only the last one.
+; test/kernel/wfs.l -- the writable tree on inle: create, mkdir, rmdir, unlink, rename,
+; chdir/cwd, chmod, utime, and the environment. the shapes are the host's exactly: an effect
+; answers () | an errno nom | 'badarg, a value the value | () | a nom | 'badarg. kernel only;
+; everything made here is unmade at the foot. each law is its own assert argument.
 
-(: (rd p) (: q (open p "r") (? (port? q) (: s (slurp q) _ (close q) s) ()))
-   (wr p s) (: q (open p "w") (? (port? q) (say q s, close q, 1) 0))
+(: (rd p) (open p "r" @ q (port? q ? (slurp q @ s (close q, s))))
+   (wr p s) (open p "w" @ q (port? q ? (say q s, close q, 1) 0))
    d "/tmp/l-wfs"
    f (d + "/a")
    e (d + "/e")
@@ -27,7 +17,7 @@
    (1600000000000 < <>(stat f))                 ; born wearing the clock's date
    (32768 = 61440 & <>>(stat f))
    (elem "a" (readdir d))
-   (: q (open (d + "/b") "a") (port? q ? (close q, 1) 0))
+   (open (d + "/b") "a" @ q (port? q ? (close q, 1) 0))
    (two? (stat (d + "/b")))
    !(port? (open "/no-such-dir/x" "w"))      ; an absent parent refuses
    ; -- unlink: the entry leaves the tree; absence and misuse answer the host's way --
@@ -75,7 +65,7 @@
    !(rename (d + "/dd") (d + "/ee"))
    ("1" = rd (d + "/ee/x"))
    (stat (d + "/dd") = 'enoent)
-   ('einval = (rename d (d + "/in")))        ; a real einval: the name parts it from 'badarg
+   ('einval = rename d (d + "/in"))        ; a real einval: the name parts it from 'badarg
    ; -- chdir/cwd: the cwd is a kernel string; /home is the boot seat and the corpus
    ; stands at the tree's top --
    ("/proc/src" = cwd 0)

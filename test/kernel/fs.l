@@ -1,27 +1,13 @@
-; The file nifs, inle's rung 1: stat, readdir, lseek and the raw-fd
-; lane under them -- and the wall clock, which is what makes an mtime a date. The
-; shapes are doc/misc/posix.md's and the host's, exactly: (size ms mode ns) and a list of
-; entry strings, because kore reads these and a divergence would be silent where an
-; absence is loud (test/init.l holds the same laws against the real tree).
-;
-; the initrd is flat -- rows for "src/apps/json.l" and none for "src/apps/kore" --
-; so a directory is a prefix some path lies under, and the entries are the distinct next
-; components of those paths. That is why the root lists "src" once and never a path.
-; the archive DOES carry directory members; ai_ustar_member takes typeflag 0 and 2 and
-; not 5, so they are skipped and every directory here is synthesized.
-;
-; kernel only -- test/kernel/all.l's roster, never $t: on the host these paths are
-; the real tree.
-; It runs after ramfs.l, which owns src/apps/json.l's bytes; the write laws here take
-; src/apps/dns.l instead (a file the boot never loads) and put it back.
-;
-; the `:` has a body -- the test itself -- so the helpers stay local; and each
-; law is its own assert argument, since test maps over its args and a `do` would
-; report only the last one.
+; test/kernel/fs.l -- the file nifs on inle: stat, readdir, lseek, raw fds, and the wall clock.
+; the shapes are the host's exactly, since kore reads them and a divergence would be silent.
+; the initrd is flat, so a directory is a prefix some path lies under, synthesized every time.
+; kernel only (test/kernel/all.l's roster). runs after ramfs.l, so the write laws use
+; src/apps/dns.l, which the boot never loads, and put it back. each law is its own assert
+; argument: a `do` would report only the last.
 
 (: f "src/apps/json.l" d "src/apps" g "/tmp/l-fs-dns.l"
-   (rd p) (: q (open p "r") s (slurp q) _ (close q) s)
-   (wr p s) (: q (open p "w") (say q s, close q))
+   (rd p) (: q (open p "r") s (slurp q) (close q, s))
+   (wr p s) (open p "w" @ q (say q s, close q))
    st (stat f)
    sz #(rd f)
    orig (rd "src/apps/dns.l")
@@ -31,8 +17,8 @@
    now (stat g)
    _ (wr g orig)
    back (stat g)
-   _ (unlink g)
- (test
+   (unlink g,
+    test
    ; stat answers the four fields, and the size is the bytes a read hands over
    (two? st)
    (sz = <st)
@@ -44,7 +30,7 @@
    (16384 = 61440 & <>>(stat d))
    (1600000000000 < <>(stat d))
    ; absence is the real (), never an empty tray of fields
-   ((stat (d + "/no-such-thing.l")) = 'enoent)
+   (stat (d + "/no-such-thing.l") = 'enoent)
    !(charm? (stat (d + "/no-such-thing.l")))
    ; readdir hands over the baked names as strings
    (elem "json.l" (readdir d))
@@ -59,42 +45,42 @@
    (() = readdir "/home")
    (elem "home" (readdir "/"))
    (elem "tmp" (readdir "/"))
-   !(elem "src" (readdir "/"))
+   (nelem "src" (readdir "/"))
    ; the machine's own files (src/inle/rootfs/) stand at the root, no file of the tree
    (elem "etc" (readdir "/"))
-   !(elem "etc" (readdir "/proc/src"))
+   (nelem "etc" (readdir "/proc/src"))
    (0 < tally (rd "/etc/profile"))
-   !(elem f (readdir "/proc/src"))              ; components, never whole paths
+   (nelem f (readdir "/proc/src"))              ; components, never whole paths
    ; a file is no directory, and neither is a prefix nothing lies under
-   ((readdir f) = 'enotdir)
-   ((readdir (d + "/nope")) = 'enoent)
+   (readdir f = 'enotdir)
+   (readdir (d + "/nope") = 'enoent)
    ; lseek rides the raw openfd lane: end is the size, set and cur the arithmetic
-   (: fd (openfd f 0)
-      (sz = lseek fd 0 2 && 1 = lseek fd 1 0 && 3 = lseek fd 2 1
-          && !(close fd)))
-   ('ebadf = (lseek -1 0 0))                   ; a bad fd is its nom, never a seek
-   ('enoent = (openfd (d + "/no-such-thing.l") 0))  ; and so is an absent path
+   (openfd f 0 @ fd
+        (sz = lseek fd 0 2 && 1 = lseek fd 1 0 && 3 = lseek fd 2 1
+            && !(close fd)))
+   ('ebadf = lseek -1 0 0)                   ; a bad fd is its nom, never a seek
+   ('enoent = openfd (d + "/no-such-thing.l") 0)  ; and so is an absent path
    ; a whence no seat knows is the row's 'einval and moves nothing -- read as SET
    ; it would have seeked to 0 and called that success
-   (: fd (openfd f 0)
-      (2 = lseek fd 2 0 && 'einval = lseek fd 0 7 && 'einval = lseek fd 0 -3
-          && 2 = lseek fd 0 1 && !(close fd)))
+   (openfd f 0 @ fd
+        (2 = lseek fd 2 0 && 'einval = lseek fd 0 7 && 'einval = lseek fd 0 -3
+            && 2 = lseek fd 0 1 && !(close fd)))
    ; stat takes a charm as an fd, which is fstat under another name: the same
    ; tuple the path answers, and nothing for a row that is not there
-   (: fd (openfd f 0) r (stat fd = stat f) _ (close fd) r)
-   ((stat 4096) = 'ebadf) !(charm? (stat 4096))
+   (: fd (openfd f 0) r (stat fd = stat f) (close fd, r))
+   (stat 4096 = 'ebadf) !(charm? (stat 4096))
    ; and stat reads a row's KIND off the fd: a file, and a directory, which opens
    ; read-only by POSIX's own rule and answers as the tree it is
-   (: fd (openfd f 0) s (stat fd) _ (close fd) (32768 = 61440 & <>>s))
-   (: fd (openfd d 0) s (stat fd) _ (close fd) (16384 = 61440 & <>>s))
+   (: fd (openfd f 0) s (stat fd) (close fd, (32768 = 61440 & <>>s)))
+   (: fd (openfd d 0) s (stat fd) (close fd, (16384 = 61440 & <>>s)))
    ; close wears the errno convention: a stranger row is 'ebadf, and so is the
    ; second close of a real one -- the row is gone, which is what the answer says
    (: fd (openfd f 0) a (close fd) b (close fd) (!a && 'ebadf = b))
-   ('ebadf = (close 4096))
+   ('ebadf = close 4096)
    !(close -1)                                 ; closing nothing still answers ok
    ; the raw-fd lane reads the ramfs byte for byte where the port lane does, gulp
    ; boundaries and all -- one file is longer than a single gulp
-   (: fd (openfd f 0) a (slurp fd) _ (close fd) (a = rd f && sz = #a))
+   (: fd (openfd f 0) a (slurp fd) (close fd, (a = rd f && sz = #a)))
    ; a write moves the size, and the date with it: stat reads the copy's stamp once
    ; there is a copy, the bake's until then
    (3 = <now)
@@ -108,5 +94,5 @@
 
 ; the tree's tls roots ride the initrd: where no host bundle is, src/apps/tls/verify.l reads
 ; them here, under /proc/src
-(: r (: q (open "src/apps/tls/roots.pem" "r") s (slurp q) _ (close q) s)
+(: r (: q (open "src/apps/tls/roots.pem" "r") s (slurp q) (close q, s))
  (test (100 < #(filter (l \ l = "-----BEGIN CERTIFICATE-----") (split "\n" r)))))

@@ -1,18 +1,8 @@
-; test/kernel/all.l -- the kernel corpus, driven off the ramfs.
-;
-; the initrd is the source blob, so every member is a file this machine can open:
-; the driver spells the roster below and hands each member to `reads`, the same
-; stream shell the host's stdin runner uses. the BOOT CMDLINE names this file --
-; src/tools/ktest.l's -append, or love.cmd beside love.elf where firmware carries no
-; command line -- and naming another replaces it; an empty line drops to the console
-; shell. that is the whole of the kernel's corpus wiring: no baked string, no
-; second filesystem.
-;
-; THE ROSTER IS AN ORDERING, NOT A SET. 00-init, spec and uu go first exactly as
-; common.mk's `t` front-loads them: a locale sort puts uukind* before uu.l and
-; would run those laws against an unloaded kernel. the kernel half is a dependency
-; order too -- kore0.l pins `quit` for every member behind it, and each crew file
-; lands before the laws that ask about it.
+; test/kernel/all.l -- the kernel corpus, fed off the ramfs through `reads`. the boot cmdline
+; names this file (ktest.l's -append, or love.cmd beside love.elf); an empty line drops to the
+; console shell. the roster is an ordering, not a set: 00-init, spec and uu first as common.mk's
+; `t` has them (a locale sort would run uukind* before uu.l), and each kernel file after
+; what it depends on (kore0.l pins `quit`).
 
 ; the optional layers the corpus asserts on, and only it: a booting kernel wants no
 ; random stream, no rationals and no unifier, so they are `borrow`d here rather
@@ -28,16 +18,16 @@
 ; the roster is spelled from the tree's top, which is where the corpus runs: every
 ; member's relative path is a row under /proc/src
 (chdir "/proc/src")
-(: (feed p) (: q (open p "r")
-                 (? (port? q) (: _ (reads q) (close q)) (scare 'no-corpus-member p)))
+(: (feed p) (open p "r" @ q
+                 (port? q ? (reads q, close q) (scare 'no-corpus-member p)))
    ; the host corpus is common.mk's `t`, held back exactly where `t` holds back --
    ; the three front-loads and the two glaze lanes -- plus zz-fin.l, which is the summary
    ; and rides at the foot. NOTHING ELSE: a file a seat cannot run guards itself, in its
    ; own text where the reason is readable (run.l is one whole `(? hosted ..)`), never in
    ; a roster over here that goes stale without saying so.
    apart '("00-init.l" "spec.l" "uu.l" "glaze-x86.l" "glaze-hook.l" "zz-fin.l")
-   (law? n) (: k #n (2 < k && ".l" = snip n (k - 2) k && !(elem n apart)))
-   host (map (\ n ("test/" + n)) (filter law? (sort (readdir "test"))))
+   (law? n) (#n @ k (2 < k && ".l" = snip n (k - 2) k && nelem n apart))
+   host (map (n \ ("test/" + n)) (filter law? (sort (readdir "test"))))
    roster (["test/00-init.l" "test/spec.l" "test/uu.l"] + host +
            ["test/kernel/ramfs.l" "test/kernel/fs.l" "test/kernel/wfs.l"
             "test/kernel/kore0.l"

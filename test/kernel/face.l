@@ -4,12 +4,12 @@
 ; two code points, which the built-in cp437 face lacks, draw from it. the cursor goes
 ; first, as in ink.l: a blinking cell would make the count a coin flip.
 (borrow 'face)
-(: (fin l) (? (two? >l) (fin >l) <l)
+(: (fin l) (two? >l ? (fin >l) <l)
    full (fin argv = "full")
-   (row d) (cats (map (\ _ (? full "F" "0")) (jot d)))
-   (line cp d) (cp + ":" + cats (map (\ r (row d)) (jot 16)))
-   f (face-hex ((line "4E16" 4) + "\n" + (line "0100" 2) + "\n"))
+   (row d) (cats (map (_ \ (full ? "F" "0")) (jot d)))
+   (line cp d) (cp + ":" + cats (map (r \ (row d)) (jot 16)))
+   f (face-hex (line "4E16" 4 + "\n" + line "0100" 2 + "\n"))
    q (open "/proc/vt/face" "w")
-   _ (? (hot? q) (say q f, close q) (puts "face: no /proc/vt/face\n"))
-   _ (puts $ (string 27) + "[?25l" + "\u{4e16}\u{100}\n")
-   (rest 2000))
+   ((hot? q ? (say q f, close q) (puts "face: no /proc/vt/face\n")),
+    (puts $ (string 27) + "[?25l" + "\u{4e16}\u{100}\n"),
+    rest 2000))

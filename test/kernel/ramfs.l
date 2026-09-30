@@ -1,26 +1,14 @@
-; The ramfs, inle's rung 0. The initrd is .rodata -- the
-; artifact's own source blob, inflated and walked as a tar into one {path, bytes,
-; len} row per file -- and reads come straight off it; the first write copies the
-; blob into the kernel heap and the file reads from the copy ever after. So: a
-; baked path opens and reads, an unbaked one answers the zero point for a read (a
-; write CREATES since rung 2), and a write is visible to the next open, because
-; the copy is per file and not per fd.
-;
-; kernel only -- test/kernel/all.l's roster, never $t: on the host `open` is the real
-; filesystem and these laws would write the tree. The scratch is a real baked row on
-; purpose: /etc/profile, the machine's own (src/inle/rootfs/), which this boot never reads
-; -- the tree's rows under /proc/src refuse every write -- and the laws put its bytes
-; back.
-;
-; the `:` has a body -- the test itself -- so the helpers stay local; and each
-; law is its own assert argument, since test maps over its args and a `do` would
-; report only the last one.
+; test/kernel/ramfs.l -- the ramfs: reads come straight off the initrd, the first write copies a
+; file into the heap and later opens read the copy (per file, not per fd), and an unbaked path
+; reads as the zero point. kernel only: on the host these laws would write the tree. the scratch
+; is /etc/profile, which this boot never reads, and its bytes are put back. each law is its own
+; assert argument: a `do` would report only the last.
 
 (: f "/etc/profile"
    ; slurp a path, closing behind -- () when it would not open, so presence rides
    ; `port?` and never the emptiness of what was read.
-   (rd p) (: q (open p "r") (? (port? q) (: s (slurp q) _ (close q) s) ()))
-   (wr p s m) (: q (open p m) (? (port? q) (say q s, close q, 1) 0))
+   (rd p) (open p "r" @ q (port? q ? (slurp q @ s (close q, s))))
+   (wr p s m) (open p m @ q (port? q ? (say q s, close q, 1) 0))
    orig (rd f)
  (test
    ; a baked path opens, and carries the bytes the archive put in the row
@@ -31,7 +19,7 @@
    ; an unbaked path is absent for a read; a write creates it now (rung 2 --
    ; wfs.l holds those laws), so here it is unmade the moment it is proved
    !(port? (open "/tmp/no-such-thing.l" "r"))
-   (: q (open "/tmp/no-such-thing.l" "w")
+   (open "/tmp/no-such-thing.l" "w" @ q
       (port? q && (close q, !(unlink "/tmp/no-such-thing.l"))))
    ; the write copies the blob out of .rodata, and the next open sees it
    (wr f "hi" "w")
@@ -65,8 +53,8 @@
 ; counters -- both filled at the open, off state the syscall under it cannot see, so
 ; the law that matters is that a read arrives at all and wears the shape. `key value`
 ; lines, and the first key names the file.
-(: (rd p) (: q (open p "r") (? (port? q) (: s (slurp q) _ (close q) s) ()))
-   (wr p s) (: q (open p "w") (? (port? q) (say q s, close q, 1) 0))
+(: (rd p) (open p "r" @ q (port? q ? (slurp q @ s (close q, s))))
+   (wr p s) (open p "w" @ q (port? q ? (say q s, close q, 1) 0))
  (test
    ("ram-words " = snip (rd "/proc/meminfo") 0 10)
    ("pool-words " = snip (rd "/proc/gauge") 0 11)
@@ -74,7 +62,7 @@
    ; `cmdline` is (. "love" bootargv), so the file opens on that word whatever the
    ; line after it, and ends the way a line does
    ("love" = snip (rd "/proc/cmdline") 0 4)
-   (: c (rd "/proc/cmdline") (10 = c (#c - 1)))
+   (rd "/proc/cmdline" @ c (10 = c (#c - 1)))
    !(wr "/proc/cmdline" "no")
    ; nobody's to set: the ramfs never reads its own mode bits, so 0444 is a label and
    ; the refusal has to be the open's
@@ -91,20 +79,20 @@
 ; /dev/{null,zero}. neither holds a byte: null IS the source table's empty slot, whose
 ; law is already "writes discard, reads answer the end", and zero is that slot with a
 ; read door that fills. the table rows exist only so stat and dents can see them.
-(: (rd p) (: q (open p "r") (? (port? q) (: s (slurp q) _ (close q) s) ()))
-   (wr p s) (: q (open p "w") (? (port? q) (say q s, close q, 1) 0))
+(: (rd p) (open p "r" @ q (port? q ? (slurp q @ s (close q, s))))
+   (wr p s) (open p "w" @ q (port? q ? (say q s, close q, 1) 0))
  (test
    ("" = rd "/dev/null")
    (wr "/dev/null" "into the hole")
    ("" = rd "/dev/null")                       ; and it kept none of it
    ; zero has NO END, so it is read a byte at a time and never slurped
-   (: q (open "/dev/zero" "r") a (see q) _ (close q) (0 = a))))
+   (: q (open "/dev/zero" "r") a (see q) (close q, (0 = a)))))
 
 ; symlinks, first class: k_walk follows one at EVERY component, so a directory can be a
 ; link. the machine's own compat names are three of them -- /bin, /sbin and /usr/sbin all
 ; name /usr/bin -- and a link made here answers the same way.
-(: (rd p) (: q (open p "r") (? (port? q) (: s (slurp q) _ (close q) s) ()))
-   (wr p s) (: q (open p "w") (? (port? q) (say q s, close q, 1) 0))
+(: (rd p) (open p "r" @ q (port? q ? (slurp q @ s (close q, s))))
+   (wr p s) (open p "w" @ q (port? q ? (say q s, close q, 1) 0))
  (test
    ; one directory, four doors: written through the real name, read back through each
    ; link -- which is what following one MID-path buys and the leaf-only walk could not.

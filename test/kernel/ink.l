@@ -4,12 +4,11 @@
 ; names a glyph scale -- a new grid under that same text, through /proc/vt/scale (kmain's
 ; k_vt_rescale). the same glyphs at twice the scale are four times the ink, which is
 ; the law test/gate/ink.l reads back. the rest outlives one dump (cpu.mjs, once a second).
-(: (fin l) (? (two? >l) (fin >l) <l)      ; the last word: the two seats spell argv differently
+(: (fin l) (two? >l ? (fin >l) <l)      ; the last word: the two seats spell argv differently
    s (fin argv)
-   scale (? (0 < #s && 47 < (s 0) && (s 0) < 58) s ())
-   _ (puts $ (string 27) + "[?25l" + "ink carries over\n")
-   _ (? scale
-        (: q (open "/proc/vt/scale" "w")
-           (? (hot? q) (say q scale, close q) (puts "ink: no /proc/vt/scale\n")))
-        ())
-   (rest 2000))
+   scale (0 < #s && 47 < s 0 && s 0 < 58 ? s)
+   ((puts $ (string 27) + "[?25l" + "ink carries over\n"),
+    (scale ?
+       (open "/proc/vt/scale" "w" @ q
+          (hot? q ? (say q scale, close q) (puts "ink: no /proc/vt/scale\n")))),
+    rest 2000))

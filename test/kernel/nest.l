@@ -10,8 +10,8 @@
    _ (flush out)
    st (cite 'doom 'run-in nest ["cook" "wasm" "LOVE=love" "LUSHFLAGS=-a" "LOVE_ARMED=1"])
    q (two? (stat mod) && open mod "r")
-   n (hot? q ? (: s (slurp q) (close q, #s)) 0)
-   _ (puts ("nest: cook wasm answered " + show st + ", "
-            + (0 < n ? ("the module stands (" + show n + " bytes)") "the module is missing") + "\n"))
-   _ (flush out)
-   (reset))
+   n (hot? q ? (slurp q @ s (close q, #s)) 0)
+   (puts ("nest: cook wasm answered " + show st + ", "
+          + (0 < n ? ("the module stands (" + show n + " bytes)") "the module is missing") + "\n"),
+    flush out,
+    reset))

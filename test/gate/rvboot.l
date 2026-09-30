@@ -14,21 +14,21 @@
 (reads (open "src/love/holo/rv64.l" "r"))
 (borrow 'holo)
 
-(: (rvg-die m) (: _ (say err ("rvboot: " + m + "\n")) (quit 1))
-   (rvg-read p) (: q (open p "r")
-                   (? q (: s (slurp q) _ (close q) [p (s + "")])
+(: (rvg-die m) (say err ("rvboot: " + m + "\n"), quit 1)
+   (rvg-read p) (open p "r" @ q
+                   (q ? (slurp q @ s (close q, [p (s + "")]))
                       (rvg-die ("cannot read " + p))))
 
    rvg-base 0x80200000                  ; where OpenSBI hands a kernel the hart
 
    (rvg-main av)
-    (? (4 <= tally av)
+    (4 <= tally av ?
        (: srcs (map rvg-read [<av <>av <>>av])
           dst (av 3)
           ; ldkern answers (header . pieces), which ld-write is what lays down
           k (ldkern 'rv64 "rvboot" rvg-base 0 srcs)
-          _ (ld-write dst (<k . >k))
-          (say out ("RVBOOT\t" + (av 3) + "\n")))
+          (ld-write dst (<k . >k),
+           say out ("RVBOOT\t" + av 3 + "\n")))
        (rvg-die "usage: rvboot.l BOOT.o DTB.o GATE.o OUT.elf"))
 
    (rvg-main >argv))
