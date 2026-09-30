@@ -1204,14 +1204,9 @@
    ; a bare -j: what this machine can carry, cores and memory. half the cores plus one, since the
    ; wall stops paying for width well before the last core while every worker costs a whole
    ; mooncc heap; bounded by MemAvailable at 512 MB a job, since one TU peaks near 350 MB, and
-   ; the smaller of the two wins. no /proc (the BSDs) answers 1.
+   ; the smaller of the two wins. MemAvailable is linux's word; elsewhere the cores alone decide.
    (jobauto _)
-   (: (rows p w) (: ls (jobfile p)
-                    (? !(two? ls) 0
-                       (foldl (\ a l (: k #w
-                                        ((k <= tally l) && (snip l 0 k = w) ? (a + 1) a)))
-                              0 ls)))
-      cpus (rows "/proc/cpuinfo" "processor")
+   (: cpus (sysconf () @ (_ _ c . _) (charm? c ? c 0) 0)   ; the online count
       mls (jobfile "/proc/meminfo")
       free (? !(two? mls) 0
               (foldl (\ a l ((13 <= tally l) && (snip l 0 13 = "MemAvailable:")

@@ -939,6 +939,22 @@ ai_noinline static struct ai *host_posix_uname(struct ai *g) {
 static lvm(lvm_posix_uname) {
  LvmCall(g, host_posix_uname) }
 
+// (sysconf _) -> (pagesize cpus-conf cpus-online phys-pages avphys-pages): sysconf(3)'s
+// answers, each a number or () where the kernel gives none
+ai_noinline static struct ai *host_posix_sysconf(struct ai *g) {
+ int const k[] = { _SC_AVPHYS_PAGES, _SC_PHYS_PAGES, _SC_NPROCESSORS_ONLN,
+                   _SC_NPROCESSORS_CONF, _SC_PAGESIZE };                   // last first
+ g->sp[0] = ZeroPoint;
+ for (int i = 0; i < 5; i++) {
+  long v = sysconf(k[i]);
+  if (!ai_ok(g = ai_have(g, Width(struct ai_chain)))) return g;
+  struct ai_chain *w = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
+                                 v < 0 ? ZeroPoint : putcharm(v), g->sp[0]);
+  g->sp[0] = word(w); }
+ return g; }
+static lvm(lvm_posix_sysconf) {
+ LvmCall(g, host_posix_sysconf) }
+
 static ai_inline word host_posix_lseek(struct ai *g, word fdw, word offw, word whw) {
  if (!charmp(fdw) || !charmp(offw) || !charmp(whw)) return ai_badarg(g);
  intptr_t w = getcharm(whw);
@@ -962,6 +978,7 @@ static union u const
   nif_cwd[]     = {{lvm_cwd}, {lvm_ret0}},
   nif_selfpath[] = {{lvm_selfpath}, {lvm_ret0}},
   nif_uname[]   = {{lvm_posix_uname}, {lvm_ret0}},
+  nif_sysconf[] = {{lvm_posix_sysconf}, {lvm_ret0}},
   nif_pipe[]    = {{lvm_pipe}, {lvm_ret0}},
   nif_openfd[]  = {{lvm_cur}, {.x = putcharm(2)}, {lvm_openfd}, {lvm_ret0}},
   nif_spawnio[] = {{lvm_cur}, {.x = putcharm(7)}, {lvm_spawnio}, {lvm_ret0}},
@@ -1012,6 +1029,7 @@ LvNif("chdir", nif_chdir, "posix");
 LvNif("cwd", nif_cwd, "posix");
 LvNif("selfpath", nif_selfpath, "posix");
 LvNif("uname", nif_uname, "posix");
+LvNif("sysconf", nif_sysconf, "posix");
 LvNif("pipe", nif_pipe, NULL);
 LvNif("openfd", nif_openfd, "posix");
 LvNif("spawnio", nif_spawnio, NULL);

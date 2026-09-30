@@ -12,5 +12,8 @@
 #define KERN_PROC_PATHNAME 12
 #define CTL_HW              6
 #define HW_MACHINE          1
+#define HW_NCPU             3
+#define HW_PHYSMEM          5     /* freebsd: an unsigned long */
+#define HW_PHYSMEM64       13     /* netbsd: an int64; its HW_PHYSMEM is 32-bit */
 int sysctl(int const*, unsigned int, void*, size_t*, void const*, size_t);
 #endif
