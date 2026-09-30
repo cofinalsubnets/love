@@ -1,9 +1,6 @@
 ; src/apps/kore/text.l -- the shared text layer: lines/unlines, the list<->text bridge every
-; line tool rides (diff's udiff, the coming wc/head/tail). the convention: a line is a
-; string without its newline, and `unlines` terminates every line, so the round trip is
-; exact only on a newline-terminated text. a missing final newline is data -- every GNU
-; line tool preserves it -- so a tool whose output can carry the source's last line asks
-; `nl-end?` of its input and `chomp`s when the answer is no.
+; line tool rides. a line is a string without its newline, and `unlines` terminates every
+; line, so a missing final newline is data: a tool asks `nl-end?` and `chomp`s to keep it.
 ;
 ; loads before diff.l in the gate: udiff captures `lines` at its define.
 (module 'kore
@@ -19,11 +16,11 @@
    ; and rides through say as the no-op it is
    (unlines ls)
     (: o (jug 0)
-       (go m) (two? m ? (: _ (say o <m) _ (put o 10) (go >m)) (slurp o))
+       (go m) (two? m ? (say o <m, put o 10, go >m) (slurp o))
        (go ls))
    ; the two that put back what `unlines` cannot know: did this text end in a newline,
    ; and drop one if it is there. an empty text ends in nothing, so it answers 0 and
    ; chomps to itself -- neither is a special case anywhere above.
-   (nl-end? s) (: n #s (0 < n && s (n - 1) = 10))
-   (chomp t) (: n #t (nl-end? t ? (snip t 0 (n - 1)) t)))
+   (nl-end? s) (#s @ n (0 < n && s (n - 1) = 10))
+   (chomp t) (#t @ n (nl-end? t ? (snip t 0 (n - 1)) t)))
 ) ; module 'kore
