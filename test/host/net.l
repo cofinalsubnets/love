@@ -43,13 +43,13 @@
    ; echo, waits for it taken, greets, reads a line, answers it and closes, and leaves
    ; what it read in a file
    love <cmdline
-   port 7436
+   port (test-free 0)
    dir net-dir
    _ (hark ["rm" "-rf" dir]) _ (mkdir dir 493)
    sfile (dir + "/srv.l")
    _ (: p (open sfile "w")
         _ (say p ("(borrow 'posix)
-(: l (listen " + show port + ") c (accept l) got (jug 0)
+(: l (listen " + show port + ") _ (close (open \"" + dir + "/up\" \"w\")) c (accept l) got (jug 0)
    (rd n) (? (n < 1) 0 (: b (see c) (? (b < 0) 0 (: _ (put got b) (rd (n - 1))))))
    (line _) (: b (see c) (? (b < 0) 0 (: _ (put got b) (? (b = 10) 0 (line 0)))))
    _ (say c (string 255 + string 251 + string 1)) _ (flush c)
@@ -64,7 +64,7 @@
         (close p))
    (waitfor pid) (: s (gather pid) (? (two? s) s (nom? s) s (rest 2, waitfor pid)))
    srv (tether [love sfile])
-   _ (rest 300)                                   ; its listen, before our connect
+   _ (test-until (\ s !(two? s)) (\ _ (stat (dir + "/up"))))   ; its listen, before our connect
    r (tether [love "kore" "telnet" "127.0.0.1" (show port)])
    _ (test (two? r))
    m >r
@@ -109,10 +109,10 @@
            (ch ("a" + string 255 + string 250 + "\x1f\x00\x50\x00\x18" + string 255 + string 240 + "b") = ["ab" ""])
            (K 'td-esc ("q" + string 255) = "q" + string 255 + string 255))
    love <cmdline
-   port 7454
+   port (test-free 0)
    (waitfor pid) (: s (gather pid) (? (two? s) s (nom? s) s (rest 2, waitfor pid)))
    srv (tether [love "kore" "telnetd" "-p" (show port) "-b" "127.0.0.1" "-l" "/bin/sh" "-f" "/dev/null"])
-   _ (rest 300)
+   _ (test-up port)
    r (tether [love "kore" "telnet" "127.0.0.1" (show port)])
    m >r
    _ (rest 500)                                  ; the options settled, the shell's prompt up
@@ -124,7 +124,7 @@
    _ (waitfor <srv)
    (test (0 <= (K 'wg-find) txt "td-42" 0)
          (0 <= (K 'wg-find) txt "Connection closed by foreign host." 0) (<st2 = 0)
-         (0 <= (K 'wg-find) log "no login: whoever reaches port 7454 runs /bin/sh" 0)))
+         (0 <= (K 'wg-find) log ("no login: whoever reaches port " + show port + " runs /bin/sh") 0)))
 
 ; -- microcom ------------------------------------------------------------------------------
 ; the serial line is a pty whose far end is a sleeping sh, its path off sh's tty; microcom
@@ -165,10 +165,11 @@
    dir net-dir
    _ (hark ["rm" "-rf" dir]) _ (mkdir dir 493)
    nfile (dir + "/ns.l")
+   np (: q (test-bind 0) _ (close (q 1)) <q)      ; a udp port of ours, its socket gone
    _ (: p (open nfile "w")
-        _ (say p "(borrow 'posix)
+        _ (say p ("(borrow 'posix)
 (borrow 'bytes)
-(: p (bind ['udp 7441])
+(: p (bind ['udp " + show np + "]) _ (close (open \"" + nfile + ".up\" \"w\"))
    (b16 v) (wrbe v 2)
    (one _) (: d (recv p) q <>d
               nx (q 13 = 110) e (? nx 25 22) t (q e * 256 + q (e + 1))
@@ -180,18 +181,18 @@
    _ (map one ^4)
    _ (rest 50)
    0)
-")
+"))
         (close p))
    (waitfor pid) (: s (gather pid) (? (two? s) s (nom? s) s (rest 2, waitfor pid)))
    (run args) (: r (tether (love . "kore" . args)) t (slurp >r) [t <(waitfor <r)])
    (has? t s) (0 <= (K 'wg-find) t s 0)
    srv (tether [love nfile])
-   _ (rest 300)                                   ; its bind, before our queries
-   a (run ["nslookup" "-port=7441" "box.test" "127.0.0.1"])
-   b (run ["nslookup" "-port=7441" "nosuch.test" "127.0.0.1"])
+   _ (test-until (\ s !(two? s)) (\ _ (stat (nfile + ".up"))))   ; its bind, before our queries
+   a (run ["nslookup" ("-port=" + show np) "box.test" "127.0.0.1"])
+   b (run ["nslookup" ("-port=" + show np) "nosuch.test" "127.0.0.1"])
    _ (slurp >srv) _ (waitfor <srv)
    c (run ["nslookup" "-type=bogus" "box.test"])
-   _ (test (has? <a "Address:\t127.0.0.1:7441") (has? <a "Name:\tbox.test") (has? <a "Address: 10.1.2.3")
+   _ (test (has? <a ("Address:\t127.0.0.1:" + show np)) (has? <a "Name:\tbox.test") (has? <a "Address: 10.1.2.3")
            !(has? <a "can't find") (a 1 = 0)
            (has? <b "** server can't find nosuch.test: NXDOMAIN") (b 1 = 1)
            (has? <c "nslookup: unknown option -type=bogus") (c 1 = 2))
@@ -305,7 +306,7 @@ kill $R $D
            (0 <= (K 'wg-find) <c "httpd: not a directory" 0) (c 1 = 1)
            (0 <= (K 'wg-find) <d "usage: httpd" 0) (d 1 = 2))
    ; a page off -h on -p, fetched by wget's round trip; -f taken, 0.0.0.0: and :PORT too
-   port 7437
+   port (test-free 0)
    (fetch _) (K 'wg-once 0 "127.0.0.1" port "/")
    (try k) (: r (fetch 0) (? (two? r) r (k < 1) r (rest 50, try (k - 1))))
    srv (tether [love "kore" "httpd" "-f" "-p" ("0.0.0.0:" + show port) "-h" root])
@@ -314,7 +315,7 @@ kill $R $D
    _ (still <srv 15)
    _ (waitfor <srv)
    ; a bare port is loopback's alone: 127.0.0.2 reaches every address on linux, not 127.0.0.1
-   p2 7438
+   p2 (test-free 0)
    srv2 (tether [love "kore" "httpd" "-f" "-p" (show p2) "-h" root])
    (try2 k) (: r (K 'wg-once 0 "127.0.0.1" p2 "/") (? (two? r) r (k < 1) r (rest 50, try2 (k - 1))))
    g2 (try2 100)

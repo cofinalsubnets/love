@@ -38,8 +38,9 @@
    nblob #(readdir ".sb/blob")
    _ (chdir home)
    ; --- kiosko over the origin's .sb/, in a task ---
-   port 7433
-   l (listen port)
+   pl (test-listen 0)
+   port <pl
+   l (pl 1)
    srv (twirl (\ _ ((: (g k) (: _ (await l)
                                 c (accept l)
                                 _ (hot? c ? (cite 'kiosko 'serve1 oroot () c, close c))
