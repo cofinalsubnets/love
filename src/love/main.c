@@ -111,7 +111,7 @@ ai_noinline static struct ai *host_harkstart(struct ai *g, int tee) {
  if (pipe(ep)) { int e = errno; close(op[0]); close(op[1]);
   g = host_harkst(g, -1, 0, tee);
   return ai_push(g, 1, ai_err(g, e)); }
- fcntl(ep[1], F_SETFD, FD_CLOEXEC);
+ fcntl(op[0], F_SETFD, FD_CLOEXEC), fcntl(ep[0], F_SETFD, FD_CLOEXEC), fcntl(ep[1], F_SETFD, FD_CLOEXEC);
  fflush(stdout);
  pid_t pid = fork();
  if (pid < 0) { int e = errno;
