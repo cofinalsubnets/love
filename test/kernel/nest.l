@@ -14,4 +14,4 @@
    (puts ("nest: cook wasm answered " + show st + ", "
           + (0 < n ? ("the module stands (" + show n + " bytes)") "the module is missing") + "\n"),
     flush out,
-    reset))
+    reset ()))
