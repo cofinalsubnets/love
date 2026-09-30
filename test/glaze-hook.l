@@ -30,7 +30,7 @@
     (: n (peep fires () 0)  fib (ev '(: f (\ m ((: (go i a b) (? (< i m) (go (+ i 1) b (+ a b)) a)) 0 0 1)) f))
        ((55 = (fib 10)) && fired? n                                                              ; the hook owned the loop; fib(10)=55
         && (fib 20 = ((\ m ((: (go i a b) (? (i < m) (go (i + 1) b (a + b)) a)) 0 0 1)) 20))     ; == the interpreter
-        && (fib 100 = ((\ m ((: (go i a b) (? (i < m) (go (i + 1) b (a + b)) a)) 0 0 1)) 100)))) ; ... and past fixnum: cf-deopt's bignum matrix path == interp
+        && (fib 100 = ((\ m ((: (go i a b) (? (i < m) (go (i + 1) b (a + b)) a)) 0 0 1)) 100)))) ; ... and past fixnum, deopted to its thread
     ; --- an embedded capturing closure: native captured closure, transparent ---
     (: mk (ev '(\ y (\ x (+ x y))))  a5 (mk 5)           ; inner (\ x (+ x y)) is the embedded one
        ((15 = (a5 10)) && ('(6 7 8) = (map a5 '(1 2 3)))   ; native captured closure, composes

@@ -16,7 +16,7 @@
  (ev '(:
    ; keep this list up to date
    m '(cellread seal-hook stack setstack lib enter leave gv trim peek poke pick place seek stem span
-       dis disp discell opname opnames nifop spin lamform nifnom yield ci-vt to-vt macros boxfix boxfix-es bodyless? bpr breads boxfix-core boxset cellbinds dsug lambp lp ln w wl mkcs hashtx feels apx iop letc opfixed gone numfn nfa nfq nfnest powg fpow ipow tray atype asum aprod alen a-coll a-dim a-emax a-rank a-shape a-type pureset operators seqx sortsplit lidx ldel packp _)
+       dis disp discell opname opnames nifop spin lamthr lamform threadir nifnom yield ci-vt to-vt macros boxfix boxfix-es bodyless? bpr breads boxfix-core boxset cellbinds dsug lambp lp ln w wl mkcs hashtx feels apx iop letc opfixed gone numfn nfa nfq nfnest powg fpow ipow tray atype asum aprod alen a-coll a-dim a-emax a-rank a-shape a-type pureset operators seqx sortsplit lidx ldel packp _)
    n (filter (\ k (? (nom? k) (= "lvm_" (snip (string k) 0 4)))) (keys book))
    M (lib ())
    ; the module may already exist: a def row can name it in C (love/love.h's LvNif), and
@@ -30,8 +30,8 @@
    _ (each m p)
    _ (each n p)
    ; what a baked run may still cite: the bounded byte doors (love/mem.c) and the glaze's
-   ; reads of ev.l -- none reaches a word by address or writes a cell
-   kept '(peepw pinw peepv pinv gv nifop letc opfixed)
+   ; reads of ev.l and post.l -- none reaches a word by address or writes a cell
+   kept '(peepw pinw peepv pinv gv nifop letc opfixed threadir)
    _ (? keep 0 (each (filter (\ k (? (elem k kept) 0 1)) (keys F)) (\ k (pull F k k))))
    ; raw code addresses: the natives read them through g->reach, not these
    _ (? keep 0 (each '(calloutdrive calloutresume) (\ k (pull book k k))))

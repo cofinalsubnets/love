@@ -334,7 +334,7 @@
 ; function, or 0 when the thread is not one ev writes (a nif's body, a continuation). a
 ; symbolic run of the stack machine: every value pushed is a slot, a fresh mint whose node
 ; says how it was made, and the nodes render as source once the run is done.
-(: lamform (:
+(: lamthr (:
    cur (pick 0 (+)) ret0 (pick 1 cap) unc (pick 0 (+ 1)) gcache {}
    ; the load runs, a spec per load: a an arg operand, q a quote operand, a number an
    ; immediate arg, (q v) an immediate quote. the flag says the last load carries the apply
@@ -406,13 +406,15 @@
                          (? (== t st || (e && over p t e)) ['j t S] (run C t S st)))
        (== op lvm_cond) (branch C <S (seek 2 p) (peek 1 p) >S st)
        (== op lvm_argcond) (branch C (S (peek 1 p)) (seek 3 p) (peek 2 p) S st)
-       (== op lvm_argtwocond) (branch C ['o 'two? [(S (peek 1 p))]] (seek 3 p) (peek 2 p) S st)
-       (== op lvm_index) (run C (seek 2 p) (push C ['g (peek 1 p)] S) st)
+       (== op lvm_argtwocond) (: _ (want? C 'two?) (branch C ['o 'two? [(S (peek 1 p))]] (seek 3 p) (peek 2 p) S st))
+       (== op lvm_index) (: _ (want? C 0) (run C (seek 2 p) (push C ['g (peek 1 p)] S) st))
        (: f (peep fus op ())
-        (? f (run C (seek 2 p) (push C ['o f [(S (peek 1 p))]] S) st)
+        (? f (: _ (want? C f) (run C (seek 2 p) (push C ['o f [(S (peek 1 p))]] S) st))
            (: n (nops op)
-            (? (two? n) (run C (seek 1 p) (push C ['o <n (tk >n S)] (dp >n S)) st)
+            (? (two? n) (: _ (want? C <n) (run C (seek 1 p) (push C ['o <n (tk >n S)] (dp >n S)) st))
                (fail C)))))))
+   ; a reading told which ops it wants fails at the first it does not: a slot read or another op
+   (want? C n) (: v (peep C 'ops 0) (? (!v || elem n v) 0 (fail C)))
    ; a cond: the then arm first, which finds the join if there is one; the else arm runs to it
    (branch C t a e S st) (: th (C 'thene) _ (pin C 'thene e) r1 (run C a S st) _ (pin C 'thene th)
     (? (<r1 = 'j) (: J (r1 1) _ (pin C 'thene 0) r2 (run C e S J) _ (pin C 'thene th)
@@ -692,7 +694,28 @@
     (? (two? bs) (: z (rp y) ds (catmap (\ c [(N c) c]) bs)
                   (? (== <z ':) (': . ds + >z) (': . ds + [z])))
        y))
-   lamform))
+   ; threadir -- the run alone, for a compiler: a thread entry read as [arity node], the node
+   ; its body answers over its frame: ['p i] the ith param, ['k v] a quote, ['o name args] a
+   ; book op, ['a f args] an apply, ['c t then else] a cond, ['g n] a slot. 0 for a nif, a
+   ; non-function or a thread the run cannot read. a slot read twice is its node twice. ops
+   ; is 0 to read any thread, or the op names a caller can use: any other ends the reading
+   (threadir v ops) (: e (unw v)
+                 (? (!(fn? e) || string? (nifnom e)) 0
+                   (call-cc (\ k (: C {'k k 'D {} 'thene 0 'ops ops}
+                                    S0 (map (\ _ (mint 0)) (jot (arity e)))
+                                    r (run C (entry e) S0 ())
+                                    (? (<r = 'r) [#S0 (tnode C S0 (r 1))] 0))))))
+   (tnode C ps x) (: (ix m l i) (? (two? l) (? (== m <l) i (ix m >l (1 + i))) -1)
+                     (go x) (? (mint? x) (: d (peep (C 'D) x C) (? (== d C) ['p (ix x ps 0)] (go d)))
+                               (x @ ('k v) x
+                                    ('g n) x
+                                    ('o n as) ['o n (map go as)]
+                                    ('a f as) ['a (go f) (map go as)]
+                                    ('c _ t a b) ['c (go t) (go a) (go b)]
+                                    (fail C)))
+                     (go x))
+   [lamform threadir]))
+(: lamform (lamthr 0)  threadir (lamthr 1))
 
 (: px (:
   ; every eager binding sits in this outer `:`. where boxfix engages (any forward

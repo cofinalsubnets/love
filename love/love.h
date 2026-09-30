@@ -1140,8 +1140,10 @@ void code_free(struct ai *g, char *code), code_fin(struct ai *g);
 int code_in(struct ai *g, uintptr_t v);
 // the instruction table (love/snap.c): an instruction word <-> its index; a negative index is
 // not an instruction, address 0 no such index. ai_nif_cell draws the line against a nif's run.
-intptr_t ai_op_index(intptr_t ap), ai_op_resolve(intptr_t i);
+intptr_t ai_op_index(intptr_t ap), ai_op_resolve(intptr_t i), ai_def_index(intptr_t x);
 int ai_nif_cell(union u const *k);
+// the once-laid tables (love.c): ai_once fills them before the first g, 0 when it could not
+int ai_once(void), ai_ops_fill(void);
 size_t code_len(char *code);
 // the reach (g->reach): what a native reaches through g instead of carrying -- the emitter's `reach` law names them the same
 enum { ReachChain, ReachStr, ReachMap, ReachNom, ReachMint, ReachGem, ReachCask, ReachDrive, ReachResume, ReachCur, ReachUnc, ReachGap };

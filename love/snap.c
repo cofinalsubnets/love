@@ -121,17 +121,34 @@ static ai_inline intptr_t image_host_x(uintptr_t k) {                // slice en
  ai_knifs_slice(&ks);
  return ks[k - nh].v.x; }
 
+// the op index: every code address the tables below name, as (address, kind:index) word
+// pairs in an open-addressed table, laid kind by kind and index by index -- so the first row
+// a probe meets at an address is the one the tables' own order meets first. filled once by
+// ai_once before the first g (ai_ops_fill), read-only after
+enum { OpExtra, OpDef, OpFn, OpHost };
+#define OpKindShift (sizeof(word) * 8 - 2)
+#define OpMask(k) (1u << (k))
+static word *op_rows;
+static uintptr_t op_bits;              // the table holds 1 << op_bits rows
+static ai_inline uintptr_t op_home(intptr_t a) {
+ return (uintptr_t) a * (uintptr_t) 0x9e3779b97f4a7c15u >> (sizeof(uintptr_t) * 8 - op_bits); }
+// the first row at a whose kind the mask admits, -1 for none
+static intptr_t op_seek(intptr_t a, unsigned mask) {
+ uintptr_t m = ((uintptr_t) 1 << op_bits) - 1;
+ for (uintptr_t r = op_home(a); op_rows[2 * r]; r = (r + 1) & m)
+  if (op_rows[2 * r] == (word) a && mask >> ((uintptr_t) op_rows[2 * r + 1] >> OpKindShift) & 1)
+   return (intptr_t) r;
+ return -1; }
+static ai_inline uintptr_t op_kind(intptr_t r) { return (uintptr_t) op_rows[2 * r + 1] >> OpKindShift; }
+static ai_inline uintptr_t op_idx(intptr_t r) { return (uintptr_t) op_rows[2 * r + 1] & (((uintptr_t) 1 << OpKindShift) - 1); }
+
 // bidirectional lvm_* table: index <-> address. supplemental table 0..E-1, ai_def1 E.., then
 // the host slice last so existing indices keep their meaning.
 static intptr_t image_ap_index(intptr_t ap) {
- for (uintptr_t i = 0; i < countof(image_extra_aps); i++)
-  if ((intptr_t) image_extra_aps[i] == ap) return (intptr_t) i;
- for (uintptr_t j = 0; j < ai_def1_n; j++)
-  if (ai_def1[j].v.x == ap) return (intptr_t)(countof(image_extra_aps) + j);
- for (uintptr_t k = 0, n = image_nhost(); k < n; k++)
-  if (image_host_x(k) == ap)
-   return (intptr_t)(countof(image_extra_aps) + ai_def1_n + k);
- return -1; }
+ intptr_t r = op_seek(ap, OpMask(OpExtra) | OpMask(OpDef) | OpMask(OpHost));
+ if (r < 0) return -1;
+ uintptr_t k = op_kind(r), i = op_idx(r), e = countof(image_extra_aps);
+ return (intptr_t) (k == OpExtra ? i : k == OpDef ? e + i : e + ai_def1_n + i); }
 
 static ai_inline intptr_t image_ap_resolve(intptr_t idx) {
  uintptr_t e = countof(image_extra_aps), d = ai_def1_n;
@@ -145,14 +162,8 @@ static ai_inline intptr_t image_ap_resolve(intptr_t idx) {
 static intptr_t image_fn_slot(word const *cell) {
  return (intptr_t) (cell[0] == (word) lvm_cur ? cell[2] : cell[0]); }
 static intptr_t image_fn_index(intptr_t v) {
- for (uintptr_t j = 0; j < ai_def1_n; j++) {
-  if (!ai_nif_cell(ai_def1[j].v.k)) continue;   // an instruction row carries .ap, no cell to read
-  word const *c = (word const*) ai_def1[j].v.k;
-  if (image_fn_slot(c) == v) return (intptr_t) j; }
- for (uintptr_t k = 0, n = image_nhost(); k < n; k++) {
-  word const *c = (word const*) image_host_x(k);
-  if (image_fn_slot(c) == v) return (intptr_t)(ai_def1_n + k); }
- return -1; }
+ intptr_t r = op_seek(v, OpMask(OpFn));
+ return r < 0 ? -1 : (intptr_t) op_idx(r); }
 static intptr_t image_fn_resolve(intptr_t j) {
  uintptr_t d = ai_def1_n;
  if (j < (intptr_t) d) return ai_nif_cell(ai_def1[j].v.k)
@@ -342,13 +353,17 @@ intptr_t ai_op_index(intptr_t ap) {
  // is what a peek there lives with.
  if (oddp(ap)) return -1;
 #endif
- for (uintptr_t i = 0; i < countof(image_extra_aps); i++)
-  if ((intptr_t) image_extra_aps[i] == ap) return (intptr_t) i;
- if (!ai_nif_cell((union u const*) ap))      // a nif's run is that nif's value: not an instruction
-  for (uintptr_t j = 0; j < ai_def1_n; j++)
-   if (ai_def1[j].v.x == ap) return (intptr_t)(countof(image_extra_aps) + j);
- intptr_t i = image_fn_index(ap);            // the host slice is nif cells too, so it is not asked
- return i < 0 ? -1 : (intptr_t) ImageNLvm + i; }
+ // a nif's run is that nif's value, not an instruction; the host slice is nif cells too, so
+ // it is not asked
+ intptr_t r = op_seek(ap, OpMask(OpExtra) | OpMask(OpFn)
+                          | (ai_nif_cell((union u const*) ap) ? 0 : OpMask(OpDef)));
+ if (r < 0) return -1;
+ uintptr_t k = op_kind(r), i = op_idx(r);
+ return (intptr_t) (k == OpExtra ? i : k == OpDef ? countof(image_extra_aps) + i : ImageNLvm + i); }
+// a def1 row's index by its value, -1 for none: the printer names a nif by its row
+intptr_t ai_def_index(intptr_t x) {
+ intptr_t r = op_seek(x, OpMask(OpDef));
+ return r < 0 ? -1 : (intptr_t) op_idx(r); }
 intptr_t ai_op_resolve(intptr_t i) {
  if (i < 0) return 0;
  if ((uintptr_t) i < ImageNLvm) return image_ap_resolve(i);
@@ -507,6 +522,25 @@ static void img_sort(struct img_ord const *o, uintptr_t n) {
  for (uintptr_t k = n; k > 1; ) { img_ord_swap(o, 0, --k); img_ord_sift(o, 0, k); } }
 static int img_lt_word(struct img_ord const *o, uintptr_t i, uintptr_t j) {
  return o->a[i] < o->a[j]; }
+static void op_put(intptr_t a, uintptr_t kind, uintptr_t i) {
+ uintptr_t m = ((uintptr_t) 1 << op_bits) - 1, r = op_home(a);
+ if (!a) return;                                 // an empty row reads as 0
+ while (op_rows[2 * r]) r = (r + 1) & m;
+ op_rows[2 * r] = (word) a, op_rows[2 * r + 1] = (word) (kind << OpKindShift | i); }
+// the op index, laid once (love.c's ai_once): 0 when there is no room for it
+int ai_ops_fill(void) {
+ uintptr_t e = countof(image_extra_aps), d = ai_def1_n, nh = image_nhost(), n = e + 2 * d + 2 * nh;
+ for (op_bits = 4; ((uintptr_t) 1 << op_bits) < 2 * n; op_bits++);      // at most half full
+ if (!(op_rows = ai_alloc(NULL, ((uintptr_t) 2 << op_bits) * sizeof(word)))) return 0;
+ memset(op_rows, 0, ((uintptr_t) 2 << op_bits) * sizeof(word));
+ for (uintptr_t i = 0; i < e; i++) op_put((intptr_t) image_extra_aps[i], OpExtra, i);
+ for (uintptr_t j = 0; j < d; j++) op_put(ai_def1[j].v.x, OpDef, j);
+ for (uintptr_t j = 0; j < d; j++)
+  if (ai_nif_cell(ai_def1[j].v.k))              // an instruction row carries .ap, no cell to read
+   op_put(image_fn_slot((word const*) ai_def1[j].v.k), OpFn, j);
+ for (uintptr_t k = 0; k < nh; k++) op_put(image_fn_slot((word const*) image_host_x(k)), OpFn, d + k);
+ for (uintptr_t k = 0; k < nh; k++) op_put(image_host_x(k), OpHost, k);
+ return 1; }
 // the commonest words of the blob, most frequent first -- the byte seats take the head of
 // that order and the wide ones the rest, so nothing here knows where the line is. exact,
 // with a total tie-break: two machines baking one tree must choose the same words or the
@@ -1450,4 +1484,4 @@ no:
  return ai_fin(g), NULL; }
 
 struct ai *ai_image_load(void const *buf, uintptr_t len, int kept) {
- return img_wake(buf, len, kept); }
+ return ai_once() ? img_wake(buf, len, kept) : NULL; }
