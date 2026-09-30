@@ -1,29 +1,18 @@
-; src/apps/moon/lib/mksys.l -- lay sys.o, the raw seam's hand-written machine tail (rung 4):
-; the five functions C cannot say. everything else in the gcc-free link is C compiled
-; by mooncc (all of moonlibc/); these are the register-exact leaves under it:
+; src/apps/moon/lib/mksys.l -- lay sys.o, the raw seam's hand-written machine tail: the
+; functions C cannot say. everything else in the gcc-free link is C compiled by mooncc; these are
+; the register-exact leaves under it:
 ;   __ai_sys(n,a,b,c,d,e,f)  the 7-slot syscall trampoline (moonlibc calls nothing else)
 ;   __sigsetjmp / siglongjmp our own jmp_buf inside the glibc-sized 25-long buffer:
-;                            [0..5] rbx rbp r12 r13 r14 r15, [6] rsp, [7] rip,
-;                            [8] the signal mask (rt_sigprocmask saves/restores it --
-;                            love.c's fault barrier is sigsetjmp(env,1), the mask is load-bearing)
+;                            [0..5] rbx rbp r12 r13 r14 r15, [6] rsp, [7] rip, [8] the signal
+;                            mask (love.c's fault barrier is sigsetjmp(env,1): the mask is load-bearing)
 ;   __ai_sigret              the sa_restorer tail (rt_sigreturn) moonlibc's sigaction installs
-; (sqrt stays in C -- src/apps/moon/lib/moonlibc/math/am.c's am_sqrt, OURS and IEEE-exact; a thing
-; C can say has no place here.) three targets, one layer: (mksys-x64 dst) lays x64,
-; (mksys-a64 dst) a64, (mksys-rv64 dst) rv64 -- all seed mksys-as, which
-; picks the arch's IR table. the x64 lane serves two kernels from one object
-; the tail is OS-blind -- cf cleared
-; before the insn, and a carry answer (freebsd's error convention) parked
-; below linux's band as -(errno+4096), so impl.h's __ai_call reads one law --
-; and the sigprocmask leaves branch on __ai_osv (os.c's probe) between
-; rt_sigprocmask 14 (4 args, 8-byte set, SIG_* 0/2) and sigprocmask 340
-; (3 args, 16-byte set, SIG_* 1/3). (mksys-freebsd dst) survives as an alias.
-; (the scaffold is shared; the payloads are irreducibly per-ISA). runs after
-; src/love/holo/{elf,obj}.l in a cat (the mooncc prefix layers; the assembler itself
-; rides the baked holo book):
-;   { cat src/apps/kore/{text,core,asbook}.l src/love/holo/{elf,obj}.l src/apps/moon/lib/mksys.l;
-;     echo '(mksys-x64 "out/.../sys.o")'; } | out/love
-; register vocabulary is holo's: r0=rax r1=rcx r2=rdx r3=rbx r4=rbp r5=rsi r6=rdi
-; r7=r8 r8=r9 r9=r10 r10=r11 r11=r12 r12=r13 r13=r14 r14=r15.
+; (mksys-x64 dst), (mksys-a64 dst), (mksys-rv64 dst) all seed mksys-as, which picks the arch's IR
+; table. the x64 object serves linux and freebsd: cf cleared before the insn and a carry answer
+; parked below linux's band as -(errno+4096), so impl.h's __ai_call reads one law; the sigprocmask
+; leaves branch on __ai_osv between rt_sigprocmask 14 and sigprocmask 340.
+; the Makefile cats this after kore's text/u/asbook and holo's elf/obj (out/.mksys-cat.l).
+; holo registers: r0=rax r1=rcx r2=rdx r3=rbx r4=rbp r5=rsi r6=rdi r7=r8 r8=r9 r9=r10 r10=r11
+; r11=r12 r12=r13 r13=r14 r14=r15.
 (module 'moon
 (borrow 'holo) ; objelf, the relocatable writer
 (: (mksys-x64 dst) (mksys-as 'x64 dst)
@@ -474,7 +463,7 @@
          (ret)
 
          (label __ai_nbsvc))
-          + (nb-tab 511 ()))       ; 512 stubs: 0 .. 511
+          + nb-tab 511 ())       ; 512 stubs: 0 .. 511
 
          ; the rv64 lane: the same four leaves on the same asm-generic table
          ; (rt_sigprocmask 135, rt_sigreturn 139; ecall preserves every register
