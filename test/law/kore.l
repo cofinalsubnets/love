@@ -26,19 +26,19 @@
 ; the projections must spell the inputs back -- minimal and valid, every draw ---
 (: (lcslen a b)
     (: ax (dindex a) bx (dindex b) n #a m #b
-       t (tablet 0)
-       (get i j) (? (i < 1 || j < 1) 0 (peep t (i * 4096 + j) 0))
-       (goj i j) (? (m < j) ()
-                    (: v (? (ax (i - 1) = bx (j - 1)) (1 + get (i - 1) (j - 1))
-                            (: u (get (i - 1) j) w (get i (j - 1)) (u < w ? w u)))
-                       _ (pin t (i * 4096 + j) v)
-                       (goj i (j + 1))))
-       (goi i) (? (n < i) (get n m) (goj i 1, goi (i + 1)))
+       t {}
+       (get i j) (i < 1 || j < 1 ? 0 (peep t (i * 4096 + j) 0))
+       (goj i j) (m < j ? ()
+                    ((ax (i - 1) = bx (j - 1) ? (1 + get (i - 1) (j - 1))
+                        (: u (get (i - 1) j) w (get i (j - 1)) (u < w ? w u))) @ v
+                     (pin t (i * 4096 + j) v,
+                      goj i (j + 1))))
+       (goi i) (n < i ? (get n m) (goj i 1, goi (i + 1)))
        (goi 1))
-   (rlist i st acc) (? (i < 1) [acc st]                     ; a random list over the alphabet 1..4; answers (list state)
-                       (: r (random st 4) (rlist (i - 1) >r ((1 + <r) . acc))))
+   (rlist i st acc) (i < 1 ? [acc st]                       ; a random list over the alphabet 1..4; answers (list state)
+                       (random st 4 @ r (rlist (i - 1) >r ((1 + <r) . acc))))
    (fz i st)
-    (? (i < 1) 'ok
+    (i < 1 ? 'ok
        (: r1 (random st 8) r2 (random >r1 8)
           la (rlist <r1 >r2 ())
           lb (rlist <r2 <>la ())
@@ -52,7 +52,7 @@
 
 ; --- patience: the same script contract, anchored -- the projections hold verbatim,
 ; minimality is traded (never below myers), and the unique-in-both lines land as keeps ---
-(: (keeps s) (map caup (filter (\ o (<o = 'keep)) s))
+(: (keeps s) (map caup (filter (o \ <o = 'keep) s))
    A '(a b c a b b a) B '(c b a b a c)
    s (patience A B)                                             ; no unique-both line here ...
    mv (patience '(h1 b1 b2 h2 c1 c2) '(h2 c1 c2 h1 b1 b2))      ; a moved block, all lines unique
@@ -73,10 +73,10 @@
 
 ; --- the patience fuzz: a wider alphabet (so anchors actually occur), projections per
 ; draw, and the trade law dcost(patience) >= dcost(myers) held against the myers core ---
-(: (rlist2 i st acc) (? (i < 1) [acc st]
-                        (: r (random st 12) (rlist2 (i - 1) >r ((1 + <r) . acc))))
+(: (rlist2 i st acc) (i < 1 ? [acc st]
+                        (random st 12 @ r (rlist2 (i - 1) >r ((1 + <r) . acc))))
    (fzp i st)
-    (? (i < 1) 'ok
+    (i < 1 ? 'ok
        (: r1 (random st 11) r2 (random >r1 11)
           la (rlist2 <r1 >r2 ())
           lb (rlist2 <r2 <>la ())
@@ -348,15 +348,15 @@
 ; loudly rather than corrupting a line split somewhere quiet.
 (: sc (cite 'scan 'scanner ())
    tw (cite 'scan 'walk)
-   (mk o n k) (? (n <= 0) (slurp o) (put o (97 + (k % 5)), mk o (n - 1) (k * 7 + 3)))
+   (mk o n k) (n <= 0 ? (slurp o) (put o (97 + (k % 5)), mk o (n - 1) (k * 7 + 3)))
    (agree s c i) (sc s c i = (tw s c i))
    (sweep n)                                     ; every length past the word step ...
-    (? (n > 24) 1
+    (n > 24 ? 1
        (: s (mk (jug 0) n 1)
-          (over i) (? (i > n + 1) 1              ; ... every start, one past the end too
-                      ((foldl (\ a c (? (agree s c i) a 0)) 1 '(97 98 99 100 101 122))
-                       && (over (i + 1))))
-          ((over 0) && (sweep (n + 1)))))
+          (over i) (i > n + 1 ? 1                ; ... every start, one past the end too
+                      (foldl (a \ c \ agree s c i ? a 0) 1 '(97 98 99 100 101 122)
+                       && over (i + 1)))
+          (over 0 && sweep (n + 1))))
    big (mk (jug 0) 5000 9)
    (test
       (sweep 0)
@@ -371,20 +371,20 @@
 ; once. kb64 is hand-written machine code, so this is its a64 gate too -- the register
 ; roles differ there.
 (: kx xlat kb (kb64 0)
-   (mk o n k) (? (n <= 0) (slurp o) (put o (k % 256), mk o (n - 1) (k * 7 + 3)))
+   (mk o n k) (n <= 0 ? (slurp o) (put o (k % 256), mk o (n - 1) (k * 7 + 3)))
    ; a-z up, digits dropped, 32 and 128..255 squeezed, the rest through
-   tbl (ktable (\ c (? (97 <= c <= 122) [(c - 32) 1]
+   tbl (ktable (c \ (? (97 <= c <= 122) [(c - 32) 1]
                        (48 <= c <= 57) [c 0]
-                       ((c = 32) || (127 < c)) [c 2]
+                       (c = 32 || 127 < c) [c 2]
                        [c 1])))
    (xagree s) (: d1 (cask (#s + 1)) d2 (cask (#s + 1))
                  k1 (kx s tbl d1) k2 (kxlat-walk s tbl d2)
-                 ((k1 = k2) && (snip d1 0 k1 = snip d2 0 k2)))
+                 (k1 = k2 && (snip d1 0 k1 = snip d2 0 k2)))
    (bagree s) (: m (4 + 4 * ((#s + 2) // 3))
                  d1 (cask m) d2 (cask m)
                  k1 (kb s ub64set d1) k2 (kb64-walk s ub64set d2)
-                 ((k1 = k2) && (snip d1 0 k1 = snip d2 0 k2)))
-   (sweep n) (? (n > 40) 1 (: s (mk (jug 0) n (n + 1)) ((xagree s) && (bagree s) && (sweep (n + 1)))))
+                 (k1 = k2 && (snip d1 0 k1 = snip d2 0 k2)))
+   (sweep n) (n > 40 ? 1 (mk (jug 0) n (n + 1) @ s (xagree s && bagree s && sweep (n + 1))))
    big (mk (jug 0) 5000 9)
    same (mk (jug 0) 300 0)                                    ; one byte: the squeeze's longest run
    (test
@@ -395,8 +395,8 @@
       (ubenc ub64set 6 "hello" = "aGVsbG8=")))
 
 ; --- the regex floor (src/apps/kore/re.l): the BRE faces, held by hand ---
-(: (ok p s) (: r (rebre p) (two? r && rehas <>r s))
-   (no p s) (: r (rebre p) (two? r && !(rehas <>r s)))
+(: (ok p s) (rebre p @ r (two? r && rehas <>r s))
+   (no p s) (rebre p @ r (two? r && !(rehas <>r s)))
    (bad p) !(two? (rebre p))
    (test
       (ok "" "anything") (ok "" "")                            ; the empty pattern matches every line
@@ -450,8 +450,8 @@
       ; the POSIX classes past ascii, and -i by gnulib's fold
       (ok "^[[:alpha:]]*$" "naïve") (ok "[[:alpha:]]" "日") (no "[[:digit:]]" "٣")
       (ok "[[:punct:]]" "—") (no "[[:punct:]]" " ") (ok "[[:space:]]" " ") (ok "[^[:alpha:]]" "—")
-      (: (iok p s) (: r (rebre p) (two? r && rehas (refold <>r) s))
-         (ino p s) (: r (rebre p) (two? r && !(rehas (refold <>r) s)))
+      (: (iok p s) (rebre p @ r (two? r && rehas (refold <>r) s))
+         (ino p s) (rebre p @ r (two? r && !(rehas (refold <>r) s)))
          (test (iok "é" "É") (iok "s" "ſ") (iok "ſ" "S") (ino "k" "\xe2\x84\xaa") (ino "i" "İ")
                (iok "σ" "ς") (iok "[à-é]" "É") (ino "[^é]" "É") (iok "[[:upper:]]" "a")
                (iok "[[:upper:]]" "日") (iok "ᲀ" "В") (ino "В" "ᲀ") (iok "[a-z]" "ſ")))
@@ -483,8 +483,8 @@
 ; --- the ERE door: the same nodes, the backslashes moved. these laws are the
 ; claim that one parser serves two dialects -- each pair here has a BRE twin
 ; above wearing different ink, and the two must agree on the tree ---
-(: (eok p s) (: r (reere p) (two? r && rehas <>r s))
-   (eno p s) (: r (reere p) (two? r && !(rehas <>r s)))
+(: (eok p s) (reere p @ r (two? r && rehas <>r s))
+   (eno p s) (reere p @ r (two? r && !(rehas <>r s)))
    (ebad p) !(two? (reere p))
    (test
       (eok "a|b" "b") (eno "a|b" "c") (eok "(a|x)b" "xb")
@@ -503,44 +503,44 @@
 ; sets of node lists, no backtracking anywhere) against the engine's greedy
 ; backtracker, over seeded random patterns and subjects. anchors sit out (a
 ; derivative has no position); the hand laws above hold them instead ---
-(: (dnul nd) (: t <nd
-                (? (t = 'grp) (dnulq <>>nd)
-                   (t = 'alt) (any dnulq <>nd)      ; nullable if any branch is
-                   (t = 'rep) (<>>nd < 1 || dnul <>nd)
-                   ()))
-   (dnulq ns) (? (two? ns) (dnul <ns && dnulq >ns) 1)
-   (dhit nd c) (: h (any (r \ (? (string? r) (cite 'text 'cpis r c) (<r <= c <= <>r))) <>>nd)
-                  (? <>nd !h h))
+(: (dnul nd) (<nd @ t
+              (? (t = 'grp) (dnulq <>>nd)
+                 (t = 'alt) (any dnulq <>nd)        ; nullable if any branch is
+                 (t = 'rep) (<>>nd < 1 || dnul <>nd)
+                 ()))
+   (dnulq ns) (two? ns ? (dnul <ns && dnulq >ns) 1)
+   (dhit nd c) (any (r \ string? r ? (cite 'text 'cpis r c) (<r <= c <= <>r)) <>>nd @ h
+                (<>nd ? !h h))
    ; one node's derivative by charm c -> a list of alternative node lists
-   (dn nd c) (: t <nd
-                (? (t = 'chr) (? (c = <>nd) '(()) ())
-                   (t = 'any) '(())
-                   (t = 'cls) (? (dhit nd c) '(()) ())
-                   (t = 'grp) (dl <>>nd c)
-                   ; the derivative of an alternation is the union of its branches'
-                   ; -- the one place the set-of-alternatives oracle costs nothing,
-                   ; where the backtracker had to order them
-                   (t = 'alt) (catmap (\ b (dl b c)) <>nd)
-                   (: a <>nd lo <>>nd hi <>>>nd
-                      (? (hi && hi < 1) ()
-                         (: lo2 (0 < lo ? (lo - 1) 0) hi2 (hi ? (hi - 1) ())
-                            (map (\ u (u + [['rep a lo2 hi2]])) (dn a c)))))))
+   (dn nd c) (<nd @ t
+              (? (t = 'chr) (c = <>nd ? '(()))
+                 (t = 'any) '(())
+                 (t = 'cls) (dhit nd c ? '(()))
+                 (t = 'grp) (dl <>>nd c)
+                 ; the derivative of an alternation is the union of its branches'
+                 ; -- the one place the set-of-alternatives oracle costs nothing,
+                 ; where the backtracker had to order them
+                 (t = 'alt) (catmap (b \ dl b c) <>nd)
+                 (: a <>nd lo <>>nd hi <>>>nd
+                    (hi && hi < 1 ? ()
+                       (: lo2 (0 < lo ? (lo - 1) 0) hi2 (hi ? (hi - 1) ())
+                          (map (u \ u + [['rep a lo2 hi2]]) (dn a c)))))))
    ; a node list's derivative: the head's, and past a nullable head the tail's
-   (dl ns c) (? !(two? ns) ()
-                (: d1 (map (\ u (u + >ns)) (dn <ns c))
-                   (? (dnul <ns) (d1 + (dl >ns c)) d1)))
+   (dl ns c) (two? ns ?
+                (map (u \ u + >ns) (dn <ns c) @ d1
+                 (dnul <ns ? (d1 + (dl >ns c)) d1)))
    (dstep alts c) (: (dd xs acc) (? !(two? xs) acc
                                     (elem <xs acc) (dd >xs acc)
                                     (dd >xs (<xs . acc)))
-                     (dd (catmap (\ u (dl u c)) alts) ()))
+                     (dd (catmap (u \ dl u c) alts) ()))
    ; contains-match by derivatives: from every start, hit as soon as some
    ; alternative goes nullable (the prefix face rehas wears)
    (dhas ns s)
     (: n #s
        (walk alts j) (? (any dnulq alts) 1
                         (n <= j) ()
-                        (: a2 (dstep alts (s j))
-                           (two? a2 ? (walk a2 (j + 1)) ())))
+                        (dstep alts (s j) @ a2
+                         (two? a2 ? (walk a2 (j + 1)) ())))
        (cite i) (? (walk [ns] i) 1 (i < n) (cite (i + 1)) ())
        (cite 0))
    ; the draws: 1..4 tokens make a pattern, 0..6 charms of abc a subject
@@ -550,27 +550,27 @@
    toks '("a" "b" "c" "." "a*" ".*" "[ab]" "[^a]" "[a-c]" "b\\+" "c\\?" "\\(ab\\)*"
           "\\(a\\|b\\)" "a\\|b" "\\(a\\|bc\\)*" "b\\{2\\}" "a\\{1,2\\}" "[[:alpha:]]")
    ntok 18
-   (rpat k st acc) (? (k < 1) [acc st]
-                      (: r (random st ntok) (rpat (k - 1) >r (acc + toks <r))))
-   (rsub k st acc) (? (k < 1) [acc st]
-                      (: r (random st 3) (rsub (k - 1) >r (acc + (["a" "b" "c"] <r)))))
+   (rpat k st acc) (k < 1 ? [acc st]
+                      (random st ntok @ r (rpat (k - 1) >r (acc + toks <r))))
+   (rsub k st acc) (k < 1 ? [acc st]
+                      (random st 3 @ r (rsub (k - 1) >r (acc + (["a" "b" "c"] <r)))))
    (fzr i st)
-    (? (i < 1) 'ok
+    (i < 1 ? 'ok
        (: r1 (random st 4) r2 (random >r1 7)
           pp (rpat (1 + <r1) >r2 "")
           ss (rsub <r2 <>pp "")
           r (rebre <pp)
-          (? !(two? r) (fzr i <>ss)                            ; an out-of-dialect draw redraws
-             (: e (? (rehas <>r <ss) 1 0)
-                o (? (dhas <>r <ss) 1 0)
-                (? (e = o) (fzr (i - 1) <>ss)
+          (!(two? r) ? (fzr i <>ss)                            ; an out-of-dialect draw redraws
+             (: e (rehas <>r <ss ? 1 0)
+                o (dhas <>r <ss ? 1 0)
+                (e = o ? (fzr (i - 1) <>ss)
                    ['broke <pp <ss])))))
    r (fzr 200 (wheel 13))
    (test (r = 'ok)))
 
 ; --- the sed floor (src/apps/kore/sed.l): the substitution walk to its GNU face,
 ; and the script parser's shapes -- what parses, what refuses ---
-(: (sub p r s g?) (: b (rebre p) <>(usub (recomp <>b) r s g?))
+(: (sub p r s g?) (rebre p @ b <>(usub (recomp <>b) r s g?))
    (sp s) (sparse s ())                                          ; the BRE door, the default
    (test
       (sub "b" "X" "abc" () = "aXc") (sub "z" "X" "abc" () = "abc")
@@ -690,21 +690,21 @@
       (aw-lex "/a/" = '((ere "a") (eof "")))
       (aw-lex "f(" = '((fname "f") (op "(") (eof "")))         ; a glued ( makes a call
       ; and the shapes the parser owes the evaluator
-      (aw-program (aw-lex "{print}") (tablet 0) () = '((item () ((print () ())))))
-      (aw-program (aw-lex "BEGIN{x=1}") (tablet 0) () = '((begin ((expr (assign "=" (var "x") (num 1)))))))
-      (aw-program (aw-lex "/a/,/b/{}") (tablet 0) () = '((range (ere "a") (ere "b") ())))))
+      (aw-program (aw-lex "{print}") {} () = '((item () ((print () ())))))
+      (aw-program (aw-lex "BEGIN{x=1}") {} () = '((begin ((expr (assign "=" (var "x") (num 1)))))))
+      (aw-program (aw-lex "/a/,/b/{}") {} () = '((range (ere "a") (ere "b") ())))))
 
 ; --- the pager (src/apps/kore/less.l): every key below drives the pure engine, one
 ; byte at a time, and reads the tablet back -- no tty, no port, no file ---
-(: (pg-bytes s) (: n #s (go i acc) (? (i < 0) acc (go (i - 1) (s i . acc))) (go (n - 1) ()))
+(: (pg-bytes s) (: n #s (go i acc) (i < 0 ? acc (go (i - 1) (s i . acc))) (go (n - 1) ()))
    (pg-mk ls w h fl)
-    (: t (tablet 0)
-       _ (foldl (\ a c (pin t c 1)) 0 (pg-bytes fl))
+    (: t {}
+       _ (foldl (a \ c \ pin t c 1) 0 (pg-bytes fl))
        st (pgnew t w h)
-       _ (pgload st ls "t")
-       st)
+       (pgload st ls "t",
+        st))
    (pg-run ls w h fl keys)                      ; the state after the keys
-    (: st (pg-mk ls w h fl) _ (foldl (\ a c (pgstep st c)) 0 (pg-bytes keys)) st)
+    (pg-mk ls w h fl @ st (foldl (a \ c \ pgstep st c) 0 (pg-bytes keys), st))
    (pg-top ls w h fl keys) (pg-run ls w h fl keys 'top)
    ten '("l1" "l2" "l3" "l4" "l5" "l6" "l7" "l8" "l9" "l10")
    caps '("a" "b" "c" "d" "e" "f" "ALPHA" "h" "i" "j")
@@ -779,8 +779,8 @@
       (pgframe (pg-mk '("ab" "cd" "ef") 20 3 "") = "\e[Hab\e[K\r\ncd\e[K\r\n\e[7mt  1-2/3  66%\e[0m\e[K\e[3;14H")
       (pgframe (pg-mk '("ab") 20 3 "") = "\e[Hab\e[K\r\n~\e[K\r\n\e[7m< 1-1/1  100%  (END)\e[0m\e[K\e[3;21H")
       (pgmark "\e" "[1]" "a [1]x [11] [1]" = "a \e[7m[1]\e[27mx [11] \e[7m[1]\e[27m")
-      (: st (pg-mk '("see [2]b") 20 3 "") _ (pin st 'hi "[2]")
-         (0 <= wg-find (pgframe st) "see \e[7m[2]\e[27mb" 0))
+      (pg-mk '("see [2]b") 20 3 "" @ st (pin st 'hi "[2]",
+                                         0 <= wg-find (pgframe st) "see \e[7m[2]\e[27mb" 0))
       (pgstat (pg-mk '("ab") 20 3 "") = "t  1-1/1  100%  (END)")
       (pgstat (pg-mk ten 20 5 "") = "t  1-4/10  40%")
       ; and what a search paints on the rows it found
@@ -788,17 +788,17 @@
 
 ; the : commands name the next file and leave the read to the face, and they
 ; refuse to walk off either end of the operand list
-(: t (tablet 0)
+(: t {}
    st (pgnew t 20 5)
-   _ (pgload st '("x") "a.txt")
-   _ (pins st 'files '("a.txt" "b.txt") 'fi 0)
-   _ (pgstep st 58) _ (pgstep st 110)
-   _ (test (st 'fi = 1) (st 'doe = '("b.txt")))
-   _ (pin st 'doe ())
-   _ (pgstep st 58) _ (pgstep st 110)
-   _ (test (st 'fi = 1) !(st 'doe) (st 'msg = "no next file"))
-   _ (pgstep st 58) _ (pgstep st 112)
-   (test (st 'fi = 0) (st 'doe = '("a.txt"))))
+   (pgload st '("x") "a.txt",
+    pins st 'files '("a.txt" "b.txt") 'fi 0,
+    pgstep st 58, pgstep st 110,
+    (test (st 'fi = 1) (st 'doe = '("b.txt"))),
+    pin st 'doe (),
+    pgstep st 58, pgstep st 110,
+    (test (st 'fi = 1) !(st 'doe) (st 'msg = "no next file")),
+    pgstep st 58, pgstep st 112,
+    (test (st 'fi = 0) (st 'doe = '("a.txt")))))
 
 ; --- the bc floor (src/apps/kore/bc.l): the number tower and every scale rule in it,
 ; the base writer, the numeral reader, the grammar's shapes, and a seeded fuzz over
@@ -807,7 +807,7 @@
    (sho b n) (pin st 'obase b, bc-show st n)
    (nod s) <(bc-expr (bc-lex s))
    (stm s) <(bc-stmt (bc-lex s))
-   (refuses? th) (trap (\ _ (th 0, 0)) () (\ a b 1))
+   (refuses? th) (trap (_ \ (th 0, 0)) () (a \ b \ 1))
    (test
       ; the scale rules, one line each -- the table at the head of bc.l
       (bn-add [15 1] [15 1] = [30 1])                        ; + and - keep the wider
@@ -878,10 +878,10 @@
       (stm "return 1*2" = '(ret (bin "*" (num "1") (num "2"))))
       (stm "return" = '(ret ()))
       ; ... and what it refuses
-      (refuses? (\ _ (bc-lex "@")))
-      (refuses? (\ _ (bc-expr (bc-lex "(1"))))
-      (refuses? (\ _ (bc-expr (bc-lex "1+"))))
-      (refuses? (\ _ (bc-stmt (bc-lex "while 1"))))))
+      (refuses? (_ \ bc-lex "@"))
+      (refuses? (_ \ bc-expr (bc-lex "(1")))
+      (refuses? (_ \ bc-expr (bc-lex "1+")))
+      (refuses? (_ \ bc-stmt (bc-lex "while 1")))))
 
 ; --- the bc algebra over a seeded draw: the writer and the reader are inverse, the
 ; sum does not care about order, the remainder is smaller than what it divided by, and
@@ -889,9 +889,9 @@
 (: st (bc-state 0)
    _ (pin st 'obase 10)
    (rnum s) (: a (random s 100000) b (random >a 5) c (random >b 2)
-               [[(? <c (0 - <a) <a) <b] >c])
+               [[(<c ? (0 - <a) <a) <b] >c])
    (fz i s)
-    (? (i < 1) 'ok
+    (i < 1 ? 'ok
        (: p (rnum s) q (rnum <>p) g (random <>q 8)
           a <p b <q sc <g
           n [(abs <a) <>a]
@@ -902,8 +902,8 @@
                  && bn-cmp (bn-add a b) (bn-add b a) = 0
                  && bn-cmp (bn-mul sc a b) (bn-mul sc b a) = 0
                  && (<b = 0 ? 1
-                       (: r0 (bn-mod 0 ai bi)
-                          (0 < bn-cmp [(abs <b) 0] [(abs <r0) 0])))
+                       (bn-mod 0 ai bi @ r0
+                        (0 < bn-cmp [(abs <b) 0] [(abs <r0) 0])))
                  && !(0 < bn-cmp (bn-mul 99 rt rt) n)
                  && (0 < bn-cmp (bn-mul 99 up up) n)
                  && (<n = 0 ? 1 (bc-numeral (bc-show st n) 10 = n)))

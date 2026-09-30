@@ -2,9 +2,9 @@
 ; host uses libm; precision is ~1 ulp so identities don't need a slop band
 ; except where two errors compound (e.g. (sine pi) is ~1e-16, not exactly 0).
 
-(: (near? a b eps) (((? (a < b) (b - a) (a - b)) - 0) < eps)
-   (near a b)       (near? a b (? word 1e-12 1e-5))   ; f32 reals (wasm) need a looser eps
-   (very-near a b)  (near? a b (? word 1e-15 1e-5))
+(: (near? a b eps) (((a < b ? (b - a) (a - b)) - 0) < eps)
+   (near a b)       (near? a b (word ? 1e-12 1e-5))   ; f32 reals (wasm) need a looser eps
+   (very-near a b)  (near? a b (word ? 1e-15 1e-5))
 
    (test
     ; --- pi from boot.l, basic identities ---
@@ -74,7 +74,7 @@
     ; --- generic over bignums: the operand widens full-magnitude (g_big_to_flo) ---
     (1125899906842624.0 = (1 / 2) 1267650600228229401496703205376) ; sqrt(2^100) = 2^50
     (gem? (2.0 1267650600228229401496703205376))                     ; bignum^2.0 -> float
-    (? word (1e300 < 1e20 2) 1)                                    ; 2^1e20, f64 only -- 1e300 is inf in f32
+    (word ? (1e300 < 1e20 2) 1)                                    ; 2^1e20, f64 only -- 1e300 is inf in f32
 
     ; --- power elementwise over arrays (numpy broadcast); float lane -> r ---
     (gem-tray = tier (2.0 (star-tray '(2) '(2 3))))                ; array^2.0 -> float array

@@ -9,14 +9,14 @@
 ; install a help that answers 'apcap scares with (capped k); anything else
 ; falls through to whatever was installed before (nil pre-help.l: const-1).
 (: apcap-t0 (heard ()))
-(hear (\ a b (a @ 'apcap ['capped b] (apcap-t0 a b))))
+(hear (a \ b \ a @ 'apcap ['capped b] (apcap-t0 a b)))
 (test
  ; a bignum compose count saturates to maxcharm, far above the cap -> scares
- (: r ((100 2) (+ 1)) ('capped = <r && (1048576 < <>r)))
+ (((100 2) (+ 1)) @ r ('capped = <r && (1048576 < <>r)))
  ; 2 ** 2^100 would be the boom: ~2^100 result bits top the word budget
- (: r ((100 2) 2) ('capped = <r))
+ (((100 2) 2) @ r ('capped = <r))
  ; ... and via a huge negative exponent (the reciprocal still runs ipow)
- (: r ((0 - (100 2)) 2) ('capped = <r))
+ (((0 - (100 2)) 2) @ r ('capped = <r))
  ; growthless bases run free at the same exponent: +-1, 0, and any gem
  (1 = 100 2 1) (0 = 100 2 0) (1 = 100 2 -1) (1.0 = 100 2 1.0)
  (1048576 < 25 2 2.0)      ; a gem base never scares -- it just rides to inf

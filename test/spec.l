@@ -18,7 +18,7 @@
 ; a body-having `:` is one scope; an empty special form reads its head (the zero point).
 (test
  (3 = (: a 1 b 2 (a + b)))                       ; `:` binds in source order; the last form is the result
- (7 = ((\ x y (x + y)) 3 4))                     ; `\ args.. body` -- a lambda, auto-curried
+ (7 = ((x \ y \ x + y) 3 4))                     ; `\ args.. body` -- a lambda, auto-curried
  ('(1 2) = (\ (1 2)))                            ; one operand: `\` is quote, so 'x is just (\ x)
  ('big = (? 0 'a (1 < 2) 'big 'else)))           ; `?` -- t/result pairs, then a final else
 (: (twice f x) (f (f x)) (test (12 = (twice (+ 1) 10))))
@@ -47,12 +47,12 @@
  !0 !"" !@0 !() !0.0 !(0 ~ 0)                    ; zero / empty -> false
  !-5 !-3.9 !(-3 ~ 4) !(0 ~ -1)                   ; <= 0 in the total order -> false (complex by re then im)
  !!5 !!"x" !!'a !!cap !!(3 ~ 4) !!(3 ~ -4)       ; positive / nonempty -> true (a twin gem by its re)
- !!(tablet 0) !!{} (1 = $(tablet 0)) (2 = #{1 2 3 4})   ; a tablet is a lookup lambda and nets 1 like one,
+ !!{} !!{} (1 = ${}) (2 = #{1 2 3 4})                   ; a tablet is a lookup lambda and nets 1 like one,
  (1 = ${1 2 3 4}) (1 = ${0})                     ; empty or not; tally counts the keys, $ never does
  !'(() ()) !'(0 0) !'((0) (())) (0 = $'(() () ()))               ; a chain of nothings is nothing, recursively
  !'(-5) !@(-3 -4) !'(-2 1) !!'(0 1)                              ; negatives net <= 0 at every rank; -2+1 < 0 < 0+1
  (3 = $'(1 () 2)) (6 = $'(1 2 3)) (7 = $@(3 4))                  ; $ sums the nets, then clamps once
- (? word (: n ((53 2) + 1) m ((53 2) + 3) (n = $n && m = $m)) 1) ; $ is the identity on a green charm, exactly -- past 2^53 the net's double would round it
+ (word ? (: n ((53 2) + 1) m ((53 2) + 3) (n = $n && m = $m)) 1) ; $ is the identity on a green charm, exactly -- past 2^53 the net's double would round it
  (3 = $(. 1 2)) !!(. 0 2) (6 = $(1 . 2 . 3))                     ; every link nets car + cdr, so a dotted tail counts too
  (0 = $[(3 ~ 4) (-3 ~ 4)]) ![(0 ~ 5) -1]                         ; phases sum as vectors, then gate the total once
  !i !(0 ~ -1) !(0 ~ 8) (0 = $i)                                  ; ...and a pure phase is blue: a field automorphism swaps
@@ -68,8 +68,8 @@
  (star? 5) (star? -3.5) (star? (2 ~ 3)) (star? (62 2))        ; a star is a self-netting scalar: charm, sun, float, complex
  !(star? @(1 2 3)) (star? (net @(1 2 3)))                   ; a tray is not a star -- it nets down to a scalar star (net is a fresh sum)
  !(star? "x") !(star? 'a) !(star? '(1 2))                    ; text/symbol/list are not stars -- they net to something else
- (? (charm? 5) (star? 5) 1)                                  ; a charm is a star, by spec (net = self)
- (charm? 5) !(charm? 3.5) !(charm? @(1 2 3)) !(charm? 'a) (? (charm? 5) (star? 5) 1)   ; a charm (charm?) is the word-sized star, and every charm is a star
+ (charm? 5 ? (star? 5) 1)                                    ; a charm is a star, by spec (net = self)
+ (charm? 5) !(charm? 3.5) !(charm? @(1 2 3)) !(charm? 'a) (charm? 5 ? (star? 5) 1)     ; a charm (charm?) is the word-sized star, and every charm is a star
  (tray? @(1 2 3)) (tray? @("a" "b"))                      ; a tray is an array of any element kind (numbers or objects)
  (galaxy? @(1 2 3)) !(galaxy? @("a" "b"))                   ; a galaxy is a numeric tray (a tray of stars); a tray of strings is not
  (galaxy? (array '(2) (200 2) (200 2)))                    ; a tray of bigs is a galaxy -- bignum cells are stars (keyed on cells, not the O code)
@@ -92,7 +92,7 @@
  !(hot? {}) !(hot? cap) !(hot? 5) !(hot? "s")    ; maps/functions/data are not hots
  (lit? (cask 4)) (lit? cap) (lit? {}) !(lit? '(1)) !(lit? "s") !(lit? 5) !(lit? ())  ; lit? = the top region (map/fn/hot); not data leaves (chains/text/numbers) nor the floor
  (1 = $cap) (1 = $out) (1 = $(tap 0))            ; tops and ports net 1: present, drained or not
- (charm? (: p (twirl (x \ x) 0) _ (catch p) p))  ; a task id is a number, not a handle
+ (charm? (twirl (x \ x) 0 @ p (catch p, p)))     ; a task id is a number, not a handle
  ((64 2) = 2 * (63 2))                           ; charm overflow -> exact big ((k b) = b**k)
  (5.0 = (abs (3 ~ 4))) ((2.0 ~ 3.0) = 2 + 3 * i))  ; mixed arithmetic widens to the higher tier
 
@@ -105,8 +105,8 @@
                  (ok 'zz && ok 0 && ok "" && ok ()))
    bad (elem 'love-image (names ()) ? ()
           (filter (n \ !(q-bit? n)) (filter (n \ q-nom? n && !!(ev n)) (names ()))))
-   _ (two? bad ? (puts ("bit-law offenders: " + show bad + "\n"), 0) 0)   ; name them: the
-   (test (atom? bad)))                                           ; seat that fails is not always this one
+   (two? bad ? (puts ("bit-law offenders: " + show bad + "\n"), 0) 0,     ; name them: the
+    (test (atom? bad))))                                         ; seat that fails is not always this one
 (hear test-strict)
 
 ; --- arithmetic --- + - * / // % infix; charm fast path, overflow grows charm->sun->big;
@@ -130,35 +130,35 @@
  (7 = ((7 // 3) * 3) + (7 % 3))
  (2 = 4 / 2) (charm? (4 / 2)) (-2 = -5 // 2)
  (-5 = ((- 0) 5)) (0.25 = ((/ 1) 4)) ((-1 ~ -2) = ((- 0) (1 ~ 2))) ; the sections are the monadics
- !(charm? (2 * 2305843009213693952)) (gem? (1 / 0)) (? word (1e308 < 1 / 0) 1) (() = 0 / 0)
+ !(charm? (2 * 2305843009213693952)) (gem? (1 / 0)) (word ? (1e308 < 1 / 0) 1) (() = 0 / 0)
  (infinity = 1 / 0) ("infinity" = show (1 / 0)) ("-infinity" = show (-1 / 0))
- (? word ("1.7976931348623157e308" = show 1.7976931348623157e308) 1)  ; the whole finite range prints digits -- only true infinity wears infinity
+ (word ? ("1.7976931348623157e308" = show 1.7976931348623157e308) 1)  ; the whole finite range prints digits -- only true infinity wears infinity
  ; the printer is shortest-roundtrip (exact Steele & White), so (read (show x)) = x for every
  ; finite gem. the word guard: these faces are the double tier's -- a 32-bit ai_flo_t's differ
- (? word ("0.30000000000000004" = show (0.1 + 0.2)) 1) ("0.3" = show 0.3)
- (? word ("5e-324" = show 5e-324) 1) (? word ("1e23" = show 1e23) 1)
+ (word ? ("0.30000000000000004" = show (0.1 + 0.2)) 1) ("0.3" = show 0.3)
+ (word ? ("5e-324" = show 5e-324) 1) (word ? ("1e23" = show 1e23) 1)
  ; ..and the read side is correctly rounded too (am_strtod, no glibc): neighbors stay distinct
- (? word !(0.3 = 0.30000000000000004) 1) (? word (0.5 = 0.49999999999999999999) 1)
+ (word ? !(0.3 = 0.30000000000000004) 1) (word ? (0.5 = 0.49999999999999999999) 1)
  ; ..and C99's hex lane rides the same reader, exact by construction (the significand is already
  ; binary); the rows that catch a slip are the subnormal floor and the exact tie under it
- (? word (0x1p4 = 16.0) 1) (? word (0x1.8p1 = 3.0) 1) (? word (-0x1p-1 = -0.5) 1)
- (? word (0x1p-1074 = 5e-324) 1) (? word (0x1p-1075 = 0.0) 1)
- (? word (0x1.8p-1075 = 5e-324) 1)                      ; past the tie, it rounds up
- (? word (0x1.fffffffffffffp+1023 = 1.7976931348623157e308) 1)
+ (word ? (0x1p4 = 16.0) 1) (word ? (0x1.8p1 = 3.0) 1) (word ? (-0x1p-1 = -0.5) 1)
+ (word ? (0x1p-1074 = 5e-324) 1) (word ? (0x1p-1075 = 0.0) 1)
+ (word ? (0x1.8p-1075 = 5e-324) 1)                      ; past the tie, it rounds up
+ (word ? (0x1.fffffffffffffp+1023 = 1.7976931348623157e308) 1)
  (0x10 = 16) (nom? '0x)                    ; 0x10 is the integer lane; a bare 0x a symbol
  (0 / 0 = 0 / 0) !(0 / 0) (0 = $(0 / 0))       ; reflexive, false, and nets nothing
  (nom? 'inf) (nom? 'nan)                       ; the short spellings stay free names: `infinity`
  !(nom? 'infinity) (gem? 'infinity)            ; is the one the reader spends, and it reads a value
  ; ..and the nothing in an array too, bits still NaN: peep and show give (), it nets nothing
  ; so `?` reads it false, and = holds reflexively over it
- (: t (@(0.0) / @(0.0)) (t = t && () = peep t 0 0 && "@(())" = show t
+ ((@(0.0) / @(0.0)) @ t (t = t && () = peep t 0 0 && "@(())" = show t
                            && !t && t != @(0.0)))
  ; bignum // and % ride Knuth-D long division; `show` on a big divides too, so it checks the lane
  (1267650591354675262013 = 100 2 // 1000000007) (976371285 = 100 2 % 1000000007)
  (100 2 = 200 2 // 100 2) ("1267650600228229401496703205376" = show (100 2))
  (-2 = 1 ^ -1) (15 = 8 | 4 | 2 | 1) (16 = 64 >> 2) (16 = 2 << 3)
- ((3 * (200 2)) = (<< 3 200)) (0 = (<< 0 500))   ; the count is exact -- never masked to the word
- ((63 2) = (<< 1 63)) ((64 2) = (<< 1 64))       ; ..and << promotes where it used to wrap the sign
+ ((3 * (200 2)) = (3 << 200)) (0 = (0 << 500))   ; the count is exact -- never masked to the word
+ ((63 2) = (1 << 63)) ((64 2) = (1 << 64))       ; ..and << promotes where it used to wrap the sign
  (-1 = -1 >> 1) (-4 = -8 >> 1)               ; >> is arithmetic: it sign-extends
  (0 = 5 >> 64) (-1 = -5 >> 64)               ; ..past the width it lands on the sign, not the value
  (2 = 8 << -2)                                 ; a negative count turns the shift round
@@ -196,14 +196,14 @@
  ((x \ y \ x) != (x \ y \ y))
  ((x \ x) != (x \ y))
  ((x \ x + 1) != (x \ x + 2))
- (: g (a \ b \ a + b) (g 1 = g 1 && g 1 != g 2))   ; closures: equal iff captures match
+ ((a \ b \ a + b) @ g (g 1 = g 1 && g 1 != g 2))   ; closures: equal iff captures match
  ((+ 1) = (+ 1))
  ((+ 1.5) = (+ 1.5))
  ((+ 1.5) != (+ 2.5))
  ('(1.5) = '(1.5))
  ('(1.5) != '(2.5))
- (42 = (\ x x) 42)
- ?(\ _ 1) ?(\ _ 0))
+ (42 = (x \ x) 42)
+ ?(_ \ 1) ?(_ \ 0))
 (hear test-strict)
 
 ; --- reduction --- `=` stops at alpha (above); `ev` goes further -- it reduces. these are the
@@ -211,15 +211,15 @@
 ; the calculus, the line here says the binary computes exactly this. eta stays unbridged (its de
 ; Bruijn reduct shifts).
 (test
- (5 = (\ x x) 5)                               ; beta_id: (\ x x) a ~> a
- (1 = ((\ _ 1) 9))                             ; beta_const: (\ _ 1) a ~> 1 (drops its arg)
- (5 = ((\ x x) ((\ x x) 5)))                   ; beta_nested: (\ x x) ((\ x x) a) ~>* a
- (10 = ((\ q ((\ i (: q 7 (i + q))) q)) 3))    ; capture-avoiding: a : binder shadowing the arg does not capture it (i stays 3, local q 7)
- (8  = ((\ q ((\ i (: i 5 (i + q))) q)) 3))    ; a : rebinding the lambda param shadows it -- the subst drops, not lands on the binder
- (99 = ((\ tuple (tuple 1 2 3)) (\ a b c 99))) ; a binder shadows a same-spelled macro: the macro must not fire (tuple is a prel macro)
- (5  = (: let (\ x 5) (let 9)))                ; likewise for a : binder named like a macro
- (43 = ((\ p (: p (p + 1) p)) 42))             ; a : value binding shadows its name only after its right side is
- (2  = (: v 1 (: v (v + 1) v))))               ; evaluated, so that side reads the outer binding, a param or an enclosing :
+ (5 = (x \ x) 5)                               ; beta_id: (\ x x) a ~> a
+ (1 = ((_ \ 1) 9))                             ; beta_const: (\ _ 1) a ~> 1 (drops its arg)
+ (5 = ((x \ x) ((x \ x) 5)))                   ; beta_nested: (\ x x) ((\ x x) a) ~>* a
+ (10 = ((q \ (i \ 7 @ q (i + q)) q) 3))        ; capture-avoiding: a : binder shadowing the arg does not capture it (i stays 3, local q 7)
+ (8  = ((q \ (i \ 5 @ i (i + q)) q) 3))        ; a : rebinding the lambda param shadows it -- the subst drops, not lands on the binder
+ (99 = ((tuple \ tuple 1 2 3) (a \ b \ c \ 99))) ; a binder shadows a same-spelled macro: the macro must not fire (tuple is a prel macro)
+ (5  = ((x \ 5) @ let (let 9)))                ; likewise for a : binder named like a macro
+ (43 = ((p \ (: p (p + 1) p)) 42))             ; a : value binding shadows its name only after its right side is
+ (2  = (1 @ v (: v (v + 1) v))))               ; evaluated, so that side reads the outer binding, a param or an enclosing :
 
 ; --- string answers a string --- the one total coercion. four kinds the nif spells itself: a
 ; charm is its byte (not its digits -- (string 10) is a newline), a nom its spelling, a charlist
@@ -233,8 +233,8 @@
     ("1.5" = string 1.5) ("-2.5" = string -2.5)                            ; ..the rest coerce
     (str? 1.5) (str? i) (str? (100 2)) (str? @(1 2 3)) (str? {1 2}) (str? cap) (str? out)
     (str? ()) (str? 0) (str? 'x) (str? "s") (str? @(0 0))                  ; incl. every falsy shape
-    (: s "x" (s = string s))                                           ; a string is the only identity
-    (: g 1.5 (g != string g))
+    ("x" @ s (s = string s))                                           ; a string is the only identity
+    (1.5 @ g (g != string g))
     ("1.5" = 2 string 1.5)))                                        ; ..so it is idempotent
 
 ; --- + and * are generic --- `+` adds numbers, concatenates strings, appends lists; `-` numeric
@@ -255,12 +255,12 @@
  ((1 ~ 2) = () + (1 ~ 2)) ("@(1 2 3)" = show (() + @(1 2 3))) (() = () + ())   ; string/number/complex/array pass through
  ('(1 2) = 'ef + '(1 2)) (5 = 'ef + 5) (5 = 65 + 'ef + -60)                    ; a name is the identity against every band,
  ("@(1 2)" = show ('ef + @(1 2))) ("@(1 2)" = show (@(1 2) + 'ef))             ; ..either side, a tray included
- ((\ x x) = () + (\ x x)) (2 = (((\ x x) + (\ x x)) (\ n (n + 1)) 0))          ; the top lane too: () + hot = hot, and
+ ((x \ x) = () + (x \ x)) (2 = (((x \ x) + (x \ x)) (n \ n + 1) 0))            ; the top lane too: () + hot = hot, and
  ("ababab" = "ab" * 3) (() = 'xy * 2) ('(1 2 1 2) = '(1 2) * 2) !("ab" * "cd") ; a name is absent under *; + on two hots is church add (id+id acts as 2)
  ("ababab" = "ab" * -3) !("ab" * 2.5) !('(1 2) * 0)                            ; a count acts by |magnitude| when exact (the one hom
  (() = () * 5) (() = 5 * ()) (() = "ab" * ()) (() = () * "ab")                 ; over the sign crossing); an inexact count is no count.
  (() = '(1 2) * mint 0) (() = () * ()) (() = () * @(1 2 3))                    ; () is the zero and the zero annihilates * (the
- ("" = "ab" * 0) (() = () * (\ x x))                                           ; semiring law; 1 is the identity); the number 0 still counts: 0 copies = the kind's empty
+ ("" = "ab" * 0) (() = () * (x \ x))                                           ; semiring law; 1 is the identity); the number 0 still counts: 0 copies = the kind's empty
  !("ab" * (3 ~ 4))                                                             ; ..and a complex is no count either, like the gem
  ("ab" * 3 = "ab" + "ab" + "ab")                                               ; the tie, the whole reason * is `repeated +`:
  ('(1) * 3 = '(1) + '(1) + '(1)))                                              ;   s*n is s+s+..+s, in each lane that repeats
@@ -336,18 +336,18 @@
  (2.0 = re (2 ~ 3)) (i < 1) !(1 < i) ("(0.0 ~ 1.0)" = show i)
  (0.0 = (peep (arg (1 ~ @(1 0))) 1 0)))          ; arg broadcasts -- (arg (1 ~ x)) = atan, elementwise
 (test
- (: v (array 2 (1 ~ 2) (3 ~ 4)) (twin-tray = tier v && (1 ~ 2) = peep v 0 0 && (4 ~ 6) = net v
-    && (2 ~ 4) = peep (v + v) 0 0 && (2 ~ 4) = peep ((2 ~ 0) * v) 0 0 && !(v < v)
-    && $v = $(net v) && "@((1.0 ~ 2.0) (3.0 ~ 4.0))" = show v))
+ (array 2 (1 ~ 2) (3 ~ 4) @ v (twin-tray = tier v && (1 ~ 2) = peep v 0 0 && (4 ~ 6) = net v
+  && (2 ~ 4) = peep (v + v) 0 0 && (2 ~ 4) = peep ((2 ~ 0) * v) 0 0 && !(v < v)
+  && $v = $(net v) && "@((1.0 ~ 2.0) (3.0 ~ 4.0))" = show v))
  ; phases sum as vectors to (0 ~ 8) either way; the twin gem is read by its real part alone --
  ; $ clamps re, never |z| -- so a sum with no real component measures 0 however large
  (0 = $(array 2 (3 ~ 4) (-3 ~ 4))) (0 = $[(3 ~ 4) (-3 ~ 4)])
  (3 = $(array 2 (3 ~ 4) (0 ~ 0))) ((0.0 ~ 8.0) = (net (array 2 (3 ~ 4) (-3 ~ 4)))))
 (test
- (: m (twin (star-tray '(2 2) '(1 2 3 4)) (star-tray '(2 2) '(5 6 7 8)))
-    (aall (re m = star-tray '(2 2) '(1 2 3 4)) && aall (im m = star-tray '(2 2) '(5 6 7 8))
-        && aall (m = twin (re m) (im m)) && '(2 2) = shape (re m)       ; the parts rebuild the whole
-        && gem-tray = tier (re m) && gem-tray = tier (im m)))
+ (twin (star-tray '(2 2) '(1 2 3 4)) (star-tray '(2 2) '(5 6 7 8)) @ m
+  (aall (re m = star-tray '(2 2) '(1 2 3 4)) && aall (im m = star-tray '(2 2) '(5 6 7 8))
+      && aall (m = twin (re m) (im m)) && '(2 2) = shape (re m)         ; the parts rebuild the whole
+      && gem-tray = tier (re m) && gem-tray = tier (im m)))
  (aall ((re @(1 2 3)) = @(1 2 3))) (star-tray = (tier (re @(1 2 3))))     ; a real tray is its own re,
  (aall ((im @(1 2 3)) = @(0 0 0))) (star-tray = (tier (im @(1.5 2.5))))   ; and its im is 0, shaped
  ("@()" = show (re (twin-tray '(0) 0))) ("@()" = show (im @()))           ; an empty tray stays a tray
@@ -397,11 +397,11 @@
  (@(8 9) = (@(3 4) + ((200 2) + 5)))              ; a big truncates into the cell (2^200 = 0 mod 2^w)
  (star-tray = (tier (@(3 4) + (200 2))))          ; ...and the result never leaves the tray band
  (sun? (3 + (200 2)))                             ; where the star lane grows exact instead
- (: o (array '(2) (200 2) (200 2))                ; ...as does an object tray: boxed cells, not limbs
-    (aall (o = ((o + (array '(2) 1 1)) - (array '(2) 1 1)))))   ; exact round trip at 2^200
- (? word ("@(infinity infinity)" = show (@(1.0e308 1.0e308) * @(10.0 10.0))) 1)    ; a gem-tray saturates, never wraps
- (? word (@(-9223372036854775808 0) = (@(9223372036854775807 0) + @(1 0))) 1)   ; max+1 -> min
- (? word (@(9223372036854775807 0) = (@(-9223372036854775808 0) - @(1 0))) 1)   ; ...min-1 -> max
+ (array '(2) (200 2) (200 2) @ o                  ; ...as does an object tray: boxed cells, not limbs
+  (aall (o = ((o + (array '(2) 1 1)) - (array '(2) 1 1)))))     ; exact round trip at 2^200
+ (word ? ("@(infinity infinity)" = show (@(1.0e308 1.0e308) * @(10.0 10.0))) 1)    ; a gem-tray saturates, never wraps
+ (word ? (@(-9223372036854775808 0) = (@(9223372036854775807 0) + @(1 0))) 1)   ; max+1 -> min
+ (word ? (@(9223372036854775807 0) = (@(-9223372036854775808 0) - @(1 0))) 1)   ; ...min-1 -> max
  ; the bitwise five broadcast too -- the word lane, elementwise
  (@(240 19) = (@(255 16) ^ @(15 3))) (@(15 0) = (@(255 16) & @(15 3))) (@(12 6) = (@(8 4) | @(4 2)))
  (@(8 16 24) = (@(1 2 3) << 3)) (@(4 -4) = (@(8 -8) >> 1))       ; >> stays arithmetic per cell
@@ -409,14 +409,14 @@
  !(@(5 6) | ())                                                  ; ...and a numeric lane answers () on it
  (() = (@(1.5 2.5) ^ @(1 1)))                                    ; a gem tray is not the word lane: refuses
  (() = ((array '(2) (200 2) (200 2)) & @(255 255)))              ; ...nor an object tray: boxed cells, not words
- (: m @(1 3 5 7 9) (aall (@(0 1 1 1 0) = ((m > 2) & (m < 8)))))  ; masks combine: the everyday customer
- (: M (inner (star-tray '(2 3) '(1 2 3 4 5 6)) (star-tray '(3 2) '(7 8 9 10 11 12)))  ; 2x2 matmul
-    (('(2 2) = (shape M)) && (154 = (peep M '(1 1) 0)))) !(inner @(1 2 3) @(1 2))
+ (@(1 3 5 7 9) @ m (aall (@(0 1 1 1 0) = ((m > 2) & (m < 8)))))  ; masks combine: the everyday customer
+ (inner (star-tray '(2 3) '(1 2 3 4 5 6)) (star-tray '(3 2) '(7 8 9 10 11 12)) @ M    ; 2x2 matmul
+  (('(2 2) = (shape M)) && 154 = (peep M '(1 1) 0))) !(inner @(1 2 3) @(1 2))
  ; a tray is immutable, so pin answers a fresh one -- one slot replaced, the rest copied
- (@(1 9 3) = (pin @(1 2 3) 1 9)) (: v @(1 2 3) _ (pin v 1 9) (@(1 2 3) = v))
+ (@(1 9 3) = (pin @(1 2 3) 1 9)) (@(1 2 3) @ v (pin v 1 9, @(1 2 3) = v))
  (@(7.0 2.5) = (pin @(1.5 2.5) 0 7))                       ; the value converts to the tray's tier, as the ctor's fill does
  (@(1 2 3) = (pin @(1 2 3) 1 'x)) (@(1 2 3) = (pin @(1 2 3) 9 5))   ; ...so a non-number into a numeric tray, or a miss, is the no-op
- (: m (star-tray '(2 2) '(1 2 3 4)) (9 = (peep (pin m '(1 0) 9) '(1 0) 0))))   ; the shape-list key writes where it reads
+ (star-tray '(2 2) '(1 2 3 4) @ m (9 = (peep (pin m '(1 0) 9) '(1 0) 0))))     ; the shape-list key writes where it reads
 
 ; --- chains & lists --- link builds the chain; cap/cup the two projections (caap..cuuup the
 ; compounds); (long? n l) asks the arity -- at least n links, one walk, where `two?` per step
@@ -441,9 +441,9 @@
  !('(7 8 9) 3) !('(7 8 9) -4) !('(7 8 9) 'x) !('(7 8 9) ())        ; out of range, and every non-index operand, is ()
  ('(1 2 3 4) = ('(1 2) '(3 4))) (('(1 2) '(3 4)) = '(1 2) + '(3 4))              ; a chain juxtaposes: the append, agreeing with +
  ('(1 2 3 4 5) = ('(1 2) '(3 4) '(5)))                                           ; ... and it curries, as text does
- ('(1 X 3) = (pin '(1 2 3) 1 'X)) (: l '(1 2 3) _ (pin l 1 'X) ('(1 2 3) = l))   ; pin answers a fresh spine; the original is untouched
+ ('(1 X 3) = (pin '(1 2 3) 1 'X)) ('(1 2 3) @ l (pin l 1 'X, '(1 2 3) = l))      ; pin answers a fresh spine; the original is untouched
  ('(1 2 3) = (pin '(1 2 3) 3 'X)) ('(1 2 3) = (pin '(1 2 3) -1 'X))              ; out of range is the no-op (from-the-end is apply's alone)
- (: p (pin (. 1 2) 0 'X) ('X = <p && 2 = >p))                                 ; ... the tail is whatever was there: an improper one rides too
+ (pin (. 1 2) 0 'X @ p ('X = <p && 2 = >p))                                   ; ... the tail is whatever was there: an improper one rides too
  (294 = $'(a b c)) (3 = #'(a b c)))         ; net sums spellings; tally counts the spine
 
 ; --- strings, symbols & mints --- a symbol is an identifier: interned by its name, or anonymous
@@ -459,7 +459,7 @@
 ; operand takes the default action, const-1. a chain reads the same way, by element (see chains).
 ; a missing read answers the zero point under the floor handler welp (no warning surfaced)
 (hear welp)
-(test (: z zz-never-pinned (!(nom? z) && !z && z = (:) && "()" = show z)))     ; absence: the zero point, wearing ()
+(test (zz-never-pinned @ z (!(nom? z) && !z && z = (:) && "()" = show z)))     ; absence: the zero point, wearing ()
 (hear test-strict)
 (test
  (() = (:)) !(nom? ()) !(name? ()) !(mint? ()) (0 != ()) (() = (intern "")) (0 = $()) !() !!$'x
@@ -471,14 +471,14 @@
     (mint? m && !(name? m) && name? s && !(mint? s)))
  (!(mint? 'x) && !(mint? "x") && !(mint? 0) && !(mint? '(1 2)))
  ("" = string (mint 0) && "" = string ())                                   ; the anonymous ones spell empty
- (: m (mint 0) (m = m 5)) ('xyz = ('xyz 1))                                         ; a point applied answers itself, named or not
- ((mint 0) != (mint 0)) (: m (mint 0) (m = m))                                      ; distinct always; itself only
+ (mint 0 @ m (m = m 5)) ('xyz = ('xyz 1))                                           ; a point applied answers itself, named or not
+ ((mint 0) != (mint 0)) (mint 0 @ m (m = m))                                        ; distinct always; itself only
  (nom? (nom "x")) (name? (nom "x")) !(mint? (nom "x")) (name? 'x) !(two? (nom "x")) ; `nom` answers an interned symbol: nom? and name?, an atom, never a chain
  ('x = (nom "x")) ('x = (nom 'x)) ('x = (2 nom "x"))                                ; nom interns: an idempotent projection to the kind
  ((mint 0) < 'x)                                                                    ; within the symbol band: an anonymous one below a spelled one
  ((mint 0) < 0)                                                                     ; the blue floor: every symbol sits below the numbers (true-blue)
- (: a (mint 0) b (mint 0) t (tablet 0) _ (pin t a 1) _ (pin t b 2)
-    (1 = t a && 2 = t b && 2 = #t))             ; distinct mints are distinct map keys
+ (: a (mint 0) b (mint 0) t {} (pin t a 1, pin t b 2,
+                                        1 = t a && 2 = t b && 2 = #t)) ; distinct mints are distinct map keys
  (97 = ("abc" 0)) (294 = $"abc") (3 = #"abc") (4 = $3.9) (0 = $-3.9) (7 = $@(3 4)) (5 = (abs -5)) (5.0 = (abs @(3 4)))
  !(string 0) !!(string 1) (1 = #(string 0))          ; a NUL nets nothing: the chain of nothings reaches the bytes, and (string 0) is one of them
  !(snip ("a" + 0) 1 2) (97 = $("a" + 0))        ; ... an all-NUL text is nothing, and the NUL byte appends for free
@@ -491,7 +491,7 @@
  ("" = (puts "")) (0 = (puts 0))                                                           ; ..and an empty operand writes nothing, answering itself
  ("abcd" = ("ab" "cd")) ("abcdef" = ("ab" "cd" "ef")) (: a "ab" b "cd" ((a b) = (a + b)))  ; juxtaposition joins text, curried, no literal needed
  !("abc" -1) !("abc" -3) !("abc" 3)                                                        ; a negative index is out of range, the same as one past the end
- ("aXcd" = (pin "abcd" 1 88)) (: s "abcd" _ (pin s 1 88) ("abcd" = s))                     ; pin answers a fresh text; the original is untouched
+ ("aXcd" = (pin "abcd" 1 88)) ("abcd" @ s (pin s 1 88, "abcd" = s))                        ; pin answers a fresh text; the original is untouched
  ("abcd" = (pin "abcd" 9 88)) ("abcd" = (pin "abcd" -1 88)) ("abcd" = (pin "abcd" 1 'x))   ; out of range / a non-byte is the no-op (from-the-end is apply's alone)
  ("ab" = ("ab" "")) ("ab" = ("" "ab")) ("" = ("" "")) ("abcd" = ("ab" 'cd)) !("ab" '(1 2)) ; "" is the unit; a point is text; a non-text operand is ()
  ('asdf = (intern "asdf")) !((mint 0) = (mint 0)) ("asdf" = (string 'asdf))
@@ -511,19 +511,19 @@
 ; way; only the mutable kinds show the pin to a second holder. a rank-0 scalar is the one thing
 ; peep reads that pin does not write: peep at 0 answers the scalar, so there is no cell.
 (test
- (50 = (peep (pin (tablet 0) 5 50) 5 0)) (99 = (peep (pin "abc" 1 99) 1 0))    ; the pin law, mutable and not
+ (50 = (peep (pin {} 5 50) 5 0)) (99 = (peep (pin "abc" 1 99) 1 0))            ; the pin law, mutable and not
  (9 = (peep (pin '(1 2 3) 2 9) 2 0)) (9 = (peep (pin @(1 2 3) 0 9) 0 0))
  (5 = (pin 5 0 1)) (1.5 = (pin 1.5 0 1))         ; ...and the scalar exception: nothing to write
- (: b {0} (tablet? b && 1 = $b && 0 = peep b () 9 && (pin b () 7, 7 = b ())))
+ ({0} @ b (tablet? b && 1 = $b && 0 = peep b () 9 && (pin b () 7, 7 = b ())))
  (tablet? {}) (0 = #{}) (? {})                    ; {} is the empty map: 0 keys, and truthy (a lambda nets 1)
- (: t {1 10 2 20} (20 = peep t 2 0 && 20 = t 2 && 99 = peep t 9 99))
+ ({1 10 2 20} @ t (20 = peep t 2 0 && 20 = t 2 && 99 = peep t 9 99))
  (: t {1 0} s (mint 0) (!(s = peep t 1 s) && s = peep t 9 s))              ; peep as the total presence test: a pinned 0 is present, an absent key is not
- (50 = (peep (pin (tablet 0) 5 50) 5 0)) (: t {1 10 2 20} _ (pull t 1 0) (1 = #t))
+ (50 = (peep (pin {} 5 50) 5 0)) ({1 10 2 20} @ t (pull t 1 0, 1 = #t))
  (: t {1 10 2 20} v (pull t 2 0) (20 = v && 1 = #t && 99 = peep t 2 99 && -1 = pull t 9 -1))   ; pull: value or default, removes the key
- ('(1 2) = (sort (keys {1 10 2 20}))) ((dig 'k) = (dig 'k)) (tablet? (tablet 0)) !(tablet? 5)
- ({1 10} != {1 10}) (: t {1 10} (t = t))         ; mutable -> identity =
- (: t (tablet 0) r (pins t 1 10 2 20) (r = t && 10 = t 1 && 20 = t 2 && 2 = #t))  ; pins: multi-pin onto a live tablet, returns it (the mutable twin of {..})
- (: t (pins (tablet 0) 1 10 2) (10 = t 1 && 1 = #t)))          ; an odd trailing key is dropped
+ ('(1 2) = (sort (keys {1 10 2 20}))) ((dig 'k) = (dig 'k)) (tablet? {}) !(tablet? 5)
+ ({1 10} != {1 10}) ({1 10} @ t (t = t))         ; mutable -> identity =
+ (: t {} r (pins t 1 10 2 20) (r = t && 10 = t 1 && 20 = t 2 && 2 = #t))          ; pins: multi-pin onto a live tablet, returns it (the mutable twin of {..})
+ (pins {} 1 10 2 @ t (10 = t 1 && 1 = #t)))                    ; an odd trailing key is dropped
 
 ; --- the empty spellings (the nothing surface) --- each kind's empty by its sigil: () the chain
 ; (the zero point, distinct from the number 0), "" the string, @() the array, {} the map, (0 ~ 0)
@@ -543,13 +543,13 @@
 ; lane `string` wears for a charlist -- the bulk way in, so a byte blob never needs a string to
 ; ride); peep/pin a byte 0..255; `$` nets the charms (a zeroed cask is nothing); pour; identity =.
 (test
- (: b (cask 3) _ (pin b 0 65) (65 = peep b 0 0)) (0 = $(cask 4)) (4 = #(cask 4))
- !(cask 3) (65 = (: b (cask 1) _ (pin b 0 65) $b))  ; zeroed -> nothing; bytes are charms (lockstep at bufs)
- (: b (cask 1) _ (pin b 0 257) (1 = (peep b 0 0))) (: b (cask 4) _ (pour b 0 "ABCD" 0 4) (68 = (peep b 3 0)))
- (: b (cask 1) _ (pin b 0 "x") (0 = (peep b 0 -1)))  ; a byte pin takes a charm: anything else writes nothing
- (: b (cask 1) (b = pin b 0 65))                     ; ...and a cask has a cell, so the pin is in place: the same buffer answers
- (: b (cask '(200 65 0 255)) (4 = #b && 200 = peep b 0 0 && 255 = peep b 3 0))   ; the charlist lane: high bytes and an embedded NUL ride
- (: b (cask '(65 66)) ("AB" = string b))            ; ... and it reads back as those bytes (identity equality, so compare content)
+ (cask 3 @ b (pin b 0 65, 65 = peep b 0 0)) (0 = $(cask 4)) (4 = #(cask 4))
+ !(cask 3) (65 = (cask 1 @ b (pin b 0 65, $b)))     ; zeroed -> nothing; bytes are charms (lockstep at bufs)
+ (cask 1 @ b (pin b 0 257, 1 = (peep b 0 0))) (cask 4 @ b (pour b 0 "ABCD" 0 4, 68 = (peep b 3 0)))
+ (cask 1 @ b (pin b 0 "x", 0 = (peep b 0 -1)))       ; a byte pin takes a charm: anything else writes nothing
+ (cask 1 @ b (b = pin b 0 65))                       ; ...and a cask has a cell, so the pin is in place: the same buffer answers
+ (cask '(200 65 0 255) @ b (4 = #b && 200 = peep b 0 0 && 255 = peep b 3 0))     ; the charlist lane: high bytes and an embedded NUL ride
+ (cask '(65 66) @ b ("AB" = string b))              ; ... and it reads back as those bytes (identity equality, so compare content)
  ("" = (cask ())) ("" = (cask 0))                   ; no empty cask: both empties are ""
  ((cask 2) != (cask 2)))
 
@@ -593,24 +593,24 @@
 ; clauses drop; in a file the chain needs its outer parens, a repl line is one expression.
 ; in anger: test/operator.l, test/infixop.l.
 (test
- ('(1 (\ x) 3) = [1 ''x 3]) ('(1 2 3 4) = (: xs '(2 3) ('(1) + xs + '(4))))
+ ('(1 (\ x) 3) = [1 ''x 3]) ('(1 2 3 4) = ('(2 3) @ xs ('(1) + xs + '(4))))
  (532 = $"hello") (5 = (tally "hello")) (42 = $42) (1 = !0) (0 = !5) !!5
  (i = (0 ~ 1)) ((2 ~ 3) = (twin 2 3)) ('~x = '(mono (~ x))) (~5 = (conj 5)) (5 = #"hello") (lit? dot)
  ("(# x)" = (show (opfix '(# x)))) ('! = (caup '(a ! b)))                      ; a monadic-only sigil has no row, so opfix hands the plain symbol to the function (cmp via show: internal forms stay 0-tailed); quotes stay data
  (: was (grip 2 '^ -60) t (opfix '(a ^= b)) back (grip 2 '^ was)               ; a spaced sigil is one whole
     (back = -60 && t = '(^= a b)))                                             ;   name: ^'s row never splits ^=
- (6 = ((\ x' (x' + 1)) 5)) (nom? 'ab') (7 = (: n' 7 n'))                       ; the prime: x' is a name (binder, symbol, let); leading ' is still quote
- (5 = --5) (5 = ++5) (-5 = ---5) (: x 5 (-5 = -x))                             ; + and - are runs: --5 is -(-5), -x is negate x -- symmetric with !!5 / !x
+ (6 = ((x' \ x' + 1) 5)) (nom? 'ab') (7 = (7 @ n' n'))                         ; the prime: x' is a name (binder, symbol, let); leading ' is still quote
+ (5 = --5) (5 = ++5) (-5 = ---5) (5 @ x (-5 = -x))                             ; + and - are runs: --5 is -(-5), -x is negate x -- symmetric with !!5 / !x
  (-3 = -3) (-0.5 = -.5) (5 = (2 - -3))                                         ; ...and a digit or . after them still starts a numeral (the whole exception)
- ([1 2 3] = (list 1 2 3)) ([] = (list)) (1 = ({'a 1} 'a))                      ; the opener carries the wrap: [ is list, { is the map
- ([[1 2] [3 4]] = (list (list 1 2) (list 3 4))) (-[1 2] = -(list 1 2))         ; ...to any depth, and it glues like a form does
+ ([1 2 3] = [1 2 3]) ([] = (list)) (1 = ({'a 1} 'a))                           ; the opener carries the wrap: [ is list, { is the map
+ ([[1 2] [3 4]] = [[1 2] [3 4]]) (-[1 2] = -[1 2])                             ; ...to any depth, and it glues like a form does
  ((show <(sound "{'a 1}")) = (show '(hash 'a 1)))                              ; a hash compares by identity, so the law is on the form
  (@[1 2 3] = @(1 2 3)) (1 = ({'a 1} 'a))                                       ; a constructor sigil renames the opener's wrap
  ('(\ (list a b)) = <(sound "'[a b]"))                                         ; ...but ' is not one: it quotes the form
- (3 = 1 + 2) (7 = 1 + 2 * 3) (1 < 2 ? 'big) ('small = (? (2 < 1) 'big 'small)) ; ? is dyadic: infix takes one arm ((< 1 2) binds first at 40), an else arm is the prefix cond
+ (3 = 1 + 2) (7 = 1 + 2 * 3) (1 < 2 ? 'big) ('small = (2 < 1 ? 'big 'small))   ; ? is dyadic: infix takes one arm ((< 1 2) binds first at 40), an else arm is the prefix cond
  (-4 = 1 - 2 - 3) (1 = 8 / 4 / 2)                                              ; the left hand: ((1 - 2) - 3), ((8 / 4) / 2)
- (: was (grip 2 '<+> -60) t (opfix '(a <+> b <+> c)) _ (grip 2 '<+> was)       ; the grip door,
-    (was = () && t = '(<+> (<+> a b) c)))                                      ;   restored inside the form: the next one reparses
+ (: was (grip 2 '<+> -60) t (opfix '(a <+> b <+> c)) (grip 2 '<+> was,         ; the grip door,
+                                                      was = () && t = '(<+> (<+> a b) c))) ;   restored inside the form: the next one reparses
  ('(1 2 3) = 1 . 2 . '(3))                                                     ; ... while a right-handed band still folds right
  ((1 . 2) = (. 1 2)) ("(1 . 2)" = (show (1 . 2)))                              ; `.` is . under its other name --
  ((1 . 2) @ (a . b) (a = 1 && b = 2) _ 0)                                      ;   valid in a pattern too, and
@@ -618,8 +618,8 @@
  ((1 . 2 . 3) = (1 . 2 . 3)) (3 = tally '(1 . 2))                              ;   the pair reads and prints, but a
                                                                      ;   quoted one is data: a 3-list
  (3 = abs -3) (66 = (2 + 3 4))                   ; application binds tighter than infix: (= 3 (abs -3)), (+ 2 (3 4))
- (1 = (3 != 4)) (0 = (3 != 3)) (: t (opfix '(a != b && c)) (t = '(&& (!= a b) c)))  ; != is a plain
- (: was (grip 2 '! ()) _ (grip 2 '! was) (was = ()))  ; dyad at the comparison band, and ! -- glued-lane
+ (1 = (3 != 4)) (0 = (3 != 3)) (opfix '(a != b && c) @ t (t = '(&& (!= a b) c)))    ; != is a plain
+ (grip 2 '! () @ was (grip 2 '! was, was = ()))       ; dyad at the comparison band, and ! -- glued-lane
  ("(! x)" = (show (opfix '(! x)))) ((!) = nil?)     ; and nothing else -- carries no row:
  (1 = (! 0)) (0 = (! 5)) (1 = (! ""))            ;   the walk hands the symbol to an ordinary function
  (197 = ($"ab" + 2))                             ; one binds tightest: (+ ($ "ab") 2)
@@ -628,7 +628,7 @@
  (6 = +'(1 2 3)) (-1 = +'(-2 1)) (24 = *'(1 2 3 4))     ; +/ and */ -- the net, unclamped
  (5 = |-5) (-3 = -(1 + 2)) (0.25 = /4) (1 = ?7) (0 = ?"")
  (3 = (1 + 2)) (1 = ((< 5) 9))                            ; spaced head = prefix call; the section
- (0 = (: mr '(to 0) (<mr = 'lin))) (3 = (:(1 + 2)))       ; head fuses ((<mr = 'lin)=(= (cap mr) 'lin)); : cannot factor, so it falls back
+ (0 = ('(to 0) @ mr (<mr = 'lin))) (3 = (:(1 + 2)))       ; head fuses ((<mr = 'lin)=(= (cap mr) 'lin)); : cannot factor, so it falls back
  ('(mono (< x)) = (caup <(sound '(40 102 32 60 120 41)))) ; the emission, data-lane
  (7 = (+ 1 2, + 3 4)) (3 = (1 ,, 3, )) (7 = (, 6 7))      ; the comma layer: clauses in sequence, the last answers; empties drop
  (12 = (foldl (+) 0 '(3 4 5))))
@@ -685,18 +685,18 @@
 (test
  (3 = (ev '(+ 1 2))) (lit? ev) (41 = call-cc (k \ k 41)) (42 = 1 + call-cc (k \ 41))
  ('(boom 7) = trap (_ \ scare 'boom 7) () (a \ b \ [a b])) (3 = (trap (+ 1) 2 welp))
- (: t (tablet 0) _ (pin t 0 'held)                            ; mind: c fires, f's value answers
+ (: t {} _ (pin t 0 'held)                                    ; mind: c fires, f's value answers
     v (mind (_ \ 'value) () (_ \ pin t 0 'freed))
     (v = 'value && t 0 = 'freed))
- (: t (tablet 0) _ (pin t 0 'held)                            ; ..and on the raised path too,
-    r (trap (_ \ mind (_ \ scare 'boom 7) () (_ \ pin t 0 'freed)) () (\ a b a))
+ (: t {} _ (pin t 0 'held)                                    ; ..and on the raised path too,
+    r (trap (_ \ mind (_ \ scare 'boom 7) () (_ \ pin t 0 'freed)) () (a \ b \ a))
     (r = 'boom && t 0 = 'freed))                              ; ..the condition riding on outward
- (42 = (: p (twirl (x \ do (rest 0) (x + 1)) 41) (catch p))) (0 = (catch 99999)) (landed? 99999)
+ (42 = (twirl (x \ do (rest 0) (x + 1)) 41 @ p (catch p))) (0 = (catch 99999)) (landed? 99999)
  !(myself ())                                                 ; nobody twirled the root task
- (: p (twirl (_ \ myself ()) ()) (p = (catch p)))             ; ..a child knows the id twirl gave it
+ (twirl (_ \ myself ()) () @ p (p = (catch p)))               ; ..a child knows the id twirl gave it
  !(rest 0) ((rand 10) < 10) (gem? (randf 0))
  (lit? scare)
- (: st (wheel 7) (<(random st 0) = <(random st 0))))             ; the functional layer is reproducible
+ (wheel 7 @ st (<(random st 0) = <(random st 0))))               ; the functional layer is reproducible
 ; a missing name reads the zero point under the floor handler welp (no warning surfaced)
 (hear welp)
 (test ((:) = not-in-the-book) !not-in-the-book)     ; a nom not in the book
@@ -728,17 +728,17 @@
 ; ordinary. `read` rides sound (one form, evaled); `reads` and `forms` walk a flowing port, evaling
 ; and collecting; `dot` prints x to out and returns it.
 (test
- (string? (show out)) ("hi" = slurp (tap '(104 105))) (: o (jug 0) _ (print o 42) ("42" = slurp o))
- (: a (jug 0) b (jug 0) _ (say a "a") _ (say b "b") ("a" = slurp a && "b" = slurp b))           ; two jugs are two sinks
+ (string? (show out)) ("hi" = slurp (tap '(104 105))) (jug 0 @ o (print o 42, "42" = slurp o))
+ (: a (jug 0) b (jug 0) (say a "a", say b "b", "a" = slurp a && "b" = slurp b))                 ; two jugs are two sinks
  (1 = <(sound '(49))) !(sound ()) ('torn = sound '(40))
- (: r (sound '(49 32 50)) (2 = <(sound >r)))         ; the residue reads the next datum
- (: r (sound '(40 41)) (two? r && !<r))              ; ...and the datum () is still a datum
- (: r (sound (flow (tap '(40 49 32 50 41)))) ('(1 2) = <r))   ; a port reads as the charlist it is
- (: r (sound (tap '(40 49 32 50 41))) ('(1 2) = <r))          ; ...and sound lifts one itself
+ (sound '(49 32 50) @ r (2 = <(sound >r)))           ; the residue reads the next datum
+ (sound '(40 41) @ r (two? r && !<r))                ; ...and the datum () is still a datum
+ (sound (flow (tap '(40 49 32 50 41))) @ r ('(1 2) = <r))     ; a port reads as the charlist it is
+ (sound (tap '(40 49 32 50 41)) @ r ('(1 2) = <r))            ; ...and sound lifts one itself
  (: p (tap '(49 32 50)) r (sound p) (2 = <(sound >r)))        ; the residue carries the rest of the port
- (: r (sound "(1 2) 3") ('(1 2) = <r && 3 = <(sound >r)))            ; a string is spread at the door
+ (sound "(1 2) 3" @ r ('(1 2) = <r && 3 = <(sound >r)))              ; a string is spread at the door
  !(sound "") ('torn = sound "(1") !(sound 42)                        ; ...and reads the same three ways
- (: c (tablet 0) th (once (u \ (: k (peep c 0 0) _ (pin c 0 (k + 1)) k)))
+ (: c {} th (once (u \ peep c 0 0 @ k (pin c 0 (k + 1), k)))
     ((th ()) = th () && 1 = peep c 0 0))            ; a promise forces once and remembers
  ('(mono (# (a))) = <(sound '(35 40 97 41))))       ; #(a) is the glued tally run
 
@@ -752,7 +752,7 @@
 ; src/love/boot/egg.l's list and internal, so nothing here asserts them.
 (: hatched (elem 'born (names ())))
 (hear welp)
-(test (lit? ev) (? hatched (charm? born) 1))
+(test (lit? ev) (hatched ? (charm? born) 1))
 (hear test-strict)
 
 ; --- modules --- one layer per load, the registry, and `borrow` the loader -- all the runtime's.
@@ -797,7 +797,7 @@
   (42 = cite 'spec-mod 'smv) (100 = cite 'spec-mod 'smw) ; the reopen read 41 and extended
   (42 = (cite 'spec-mod 'smf 1))                         ; smf folded smv at its compile: 41
   (smv-out = elem 'smv (names ()))                    ; no leak: the walk is as it was
-  !(elem 'sma (names ()))                             ; the anonymous layer leaks nothing
+  (nelem 'sma (names ()))                             ; the anonymous layer leaks nothing
   (tablet? ma)))                                         ; the scratch layer answers its tablet
 ; use splices a module `module` made -- two forms, and they have to be: a group is compiled whole,
 ; so a read of smv beside the use that splices it is addressed before the splice has run.
@@ -806,8 +806,8 @@
 ; a module's forms eval one by one, never as one application chain: a form whose answer is a
 ; function must not be applied to the next form's answer -- smt stays empty. the probe is a form of
 ; its own because smf2's body compiles in the module's layer, where a sibling smt is unaddressable.
-(: smt (tablet 0))
-(: mq (module () (: (smf2 x) (pin smt 'called 1)) (: smq2 2))
+(: smt {})
+((module () (: (smf2 x) (pin smt 'called 1)) (: smq2 2)) @ mq
  (test !(smt 'called)                                  ; nothing applied smf2
          (elem 'smq2 (keys mq))))                     ; ..and both forms landed
 

@@ -18,9 +18,9 @@
    (sgn64 u) (u >= H64 ? (u - M64) u)                 ; the answer node hands back is signed
    (pow2 k) ((: (go i a) (i = k ? a (go (i + 1) (2 * a)))) 0 1)
 
-   RS (tablet 0)                                      ; the boxed RNG, fuzz.l's shape
+   RS {}                                              ; the boxed RNG, fuzz.l's shape
    (rseed s) (pin RS 0 (wheel s))
-   (rnd n) (: r (random (peep RS 0 0) n) _ (pin RS 0 >r) <r)
+   (rnd n) (random (peep RS 0 0) n @ r (pin RS 0 >r, <r))
    (rint a b) (a + rnd (b - a + 1))
    (pick l) (l (rnd #l))
    (coin _) (rnd 2)
@@ -74,13 +74,13 @@
           (elem op shifts)             (pin rf d (shift op (peep rf d 0) (ins 2)))
           (elem op unas)               (pin rf d (una op (peep rf d 0)))
           (scare ("wasmfuzz: the model has no arm for " + show op))))
-   (run prog x) (: rf (foldl step (pin (tablet 0) 'r0 (mask64 x)) prog)
-                   (sgn64 (peep rf 'r0 0)))
+   (run prog x) (foldl step (pin {} 'r0 (mask64 x)) prog @ rf
+                 (sgn64 (peep rf 'r0 0)))
 
    ; r1..r7 are loaded before anything reads them: an undefined register is the generator's
    ; bug, not the lowering's, and it would read as a disagreement all the same.
    (gen-prog n)
-    (: pre (map (\ r ['li r (imm 0)]) >regs)
+    (: pre (map (r \ ['li r (imm 0)]) >regs)
        body ((: (go i a) (i = n ? (rev a) (go (i + 1) (gen-op 0 . a)))) 0 ())
        (pre + body + [['mov 'r0 (pick regs)] ['ret]]))
 
@@ -88,23 +88,23 @@
    N (ev && #ev > 0 ? (int ev) 120)
    sd (getenv "FUZZ_SEED")
    _ (rseed (sd && #sd > 0 ? (int sd) 20250910))
-   progs (map (\ _ (gen-prog (rint 4 14))) ^N)
+   progs (map (_ \ gen-prog (rint 4 14)) ^N)
    ; three inputs per program: both word ends and one ordinary value, so a lowering that
    ; only breaks on a sign bit has somewhere to show
    args [(0 - H64) (0 - 1) (0 - 12345678901234567) 7 4294967296 (H64 - 1)]
 
    m {'types '(((i64) (i64)))
-      'funcs (map (\ p (: f (wasm-fn p 1 {}) [0 <f >f])) progs)
+      'funcs (map (p \ wasm-fn p 1 {} @ f [0 <f >f]) progs)
       'memory '(1 4)
-      'exports (map (\ i [("f" + show i) 'func i]) ^N)}
+      'exports (map (i \ [("f" + show i) 'func i]) ^N)}
    _ (wasm-write "out/.wasmfuzz.wasm" m)
 
    ; the expectations, as json for the runner: name, argument, the answer the model says
    (row i x) ("{\"name\":\"f" + show i + "\",\"arg\":\"" + show x
               + "\",\"want\":\"" + show (run (progs i) x) + "\"}")
-   rows (cats (map (\ i (map (\ x (row i x)) args)) ^N))
+   rows (cats (map (i \ map (x \ row i x) args) ^N))
    q (open "out/.wasmfuzz.json" "w")
-   _ (say q ("[" + (foldl (\ a r (a = "" ? r (a + "," + r))) "" rows) + "]\n"))
-   _ (close q)
-   (puts ("wasmfuzz: " + show N + " programs, " + show #rows + " calls, "
-          + show #(wasm-emit m) + " bytes\n")))
+   (say q ("[" + (foldl (a \ r \ a = "" ? r (a + "," + r)) "" rows) + "]\n"),
+    close q,
+    (puts ("wasmfuzz: " + show N + " programs, " + show #rows + " calls, "
+           + show #(wasm-emit m) + " bytes\n"))))

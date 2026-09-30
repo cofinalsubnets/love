@@ -3,7 +3,7 @@
 (: civil (cite 'cal 'civil) epoch-days (cite 'cal 'epoch-days)
    wday (cite 'cal 'wday) mdays (cite 'cal 'mdays)
    mon3 (cite 'cal 'mon3) monl (cite 'cal 'monl) wd3 (cite 'cal 'wd3) wdl (cite 'cal 'wdl)
-   (rt z) (: c (civil z) (epoch-days <c <>c <>>c = z))
+   (rt z) (civil z @ c (epoch-days <c <>c <>>c = z))
    (test
       (civil 0 = '(1970 1 1)) (civil 1 = '(1970 1 2)) (civil -1 = '(1969 12 31))
       (civil 19675 = '(2023 11 14)) (civil 20682 = '(2026 8 17))

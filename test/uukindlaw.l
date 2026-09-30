@@ -13,9 +13,9 @@
 (test (elem 'vof (names ())))
 (:
    (uk-jj a b) (vof 0 ['kjoin a b])                      ; kjoin a b, run in the kernel
-   (uk-all f)  (foldl (\ acc x (acc && f x)) 1 uk-codes) ; forall over the carrier
-   (uk-all2 f) (uk-all (\ a (uk-all (\ b (f a b)))))
-   (uk-all3 f) (uk-all (\ a (uk-all (\ b (uk-all (\ c (f a b c)))))))
+   (uk-all f)  (foldl (acc \ x \ acc && f x) 1 uk-codes) ; forall over the carrier
+   (uk-all2 f) (uk-all (a \ uk-all (b \ f a b)))
+   (uk-all3 f) (uk-all (a \ uk-all (b \ uk-all (c \ f a b c))))
    ; the codes by name, read back out of the kernel: uukind.l emits one defn per
    ; kind, so nothing here recovers a code by its position in the carrier
    uk-bot (vof 0 'ukbot) uk-top (vof 0 'uktop)
@@ -23,11 +23,11 @@
 
 (test
  ; --- a bounded join-semilattice, exhaustively over uk-codes ---
- (uk-all  (\ a     (uk-jj a a = a)))                                      ; idempotent
- (uk-all2 (\ a b   (uk-jj a b = uk-jj b a)))                              ; commutative
- (uk-all3 (\ a b c (uk-jj (uk-jj a b) c = uk-jj a (uk-jj b c))))          ; associative
- (uk-all  (\ a ((uk-jj uk-bot a = a) && (uk-jj a uk-bot = a))))           ; bot the identity
- (uk-all  (\ a ((uk-jj uk-top a = uk-top) && (uk-jj a uk-top = uk-top)))) ; top absorbs
+ (uk-all  (a \ uk-jj a a = a))                                            ; idempotent
+ (uk-all2 (a \ b \ uk-jj a b = uk-jj b a))                                ; commutative
+ (uk-all3 (a \ b \ c \ uk-jj (uk-jj a b) c = uk-jj a (uk-jj b c)))        ; associative
+ (uk-all  (a \ (uk-jj uk-bot a = a) && (uk-jj a uk-bot = a)))             ; bot the identity
+ (uk-all  (a \ (uk-jj uk-top a = uk-top) && (uk-jj a uk-top = uk-top)))   ; top absorbs
  ; --- str (the last code) is the incomparable branch: it joins up to top against
  ;     any numeric, so it is not the spine's max (that is the whole point of str) ---
  (vof 0 '(numq ukstr) = vof 0 'false)   ; str is not numeric

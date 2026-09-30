@@ -6,9 +6,9 @@
 ; corpus is ONE scope, so splicing it here is what lets every later file spell `open`
 ; plainly -- and it must come before the fallbacks, which read what is in scope. a seat
 ; without posix has no such module, and those fallbacks still cover it.
-(? (cite 'posix) (borrow 'posix) ())
-(map (\ n (? (elem n (names ())) () (ev [': [n 'x] ()]))) '(quit close run getenv))
-(? (elem 'open (names ())) () (ev '(: (open x y) ())))
+(cite 'posix ? (borrow 'posix))
+(map (n \ elem n (names ()) ? () (ev [': [n 'x] ()])) '(quit close run getenv))
+(elem 'open (names ()) ? () (ev '(: (open x y) ())))
 
 ; the reader under test -- the socket. every print->read
 ; differential in the tree reads through this one binding (test/roundtrip.l,
@@ -32,18 +32,18 @@
      (putc 27)
      (puts reset))
 
-   test_state (tablet 0)
+   test_state {}
    (test_set k v) (pin test_state k v)
    (test_get k) (peep test_state k 0)
    ; a failed test records and carries on, so one run shows every failure -- zz-fin.l
    ; prints the list and quits 1. a runner that does not end in zz-fin.l owes a
    ; (test_fin ()) of its own before it claims ok, or its failures exit 0 in silence.
-   (test_fin u) (: f (test_get 'fail)
-                   (? (two? f)
-                      (do (puts "FAILED:") (putc 10)
-                          (each f (\ x (do (puts "  ") (putx x) (putc 10))))
-                          (quit 1))
-                      0))
+   (test_fin u) (test_get 'fail @ f
+                 (? (two? f)
+                    (do (puts "FAILED:") (putc 10)
+                        (each f (x \ do (puts "  ") (putx x) (putc 10)))
+                        (quit 1))
+                    0))
    ; word: a full 64-bit-word build (native, kernel) -- which is also where reals
    ; are f64, libm is glibc's, a filesystem exists, and the RNG runs full-width.
    ; false only on the 32-bit wasm shim; gates the asserts that need any of those.
@@ -57,32 +57,32 @@
    files !(love-os = 'wasm)
    ; (f 0) with stdout sent nowhere: the editor paints the terminal and asks it questions,
    ; whose answers would land on the command line after the run
-   (test-mute f) (? !(hosted && elem 'openfd (names ())) (f 0)
-                    (: _ (flush out) s (dup 1) n (openfd "/dev/null" 1) _ (dup2 n 1, close n)
-                       (mind f () (\ _ (flush out, dup2 s 1, close s))))))
+   (test-mute f) (!(hosted && elem 'openfd (names ())) ? (f 0)
+                    (: _ (flush out) s (dup 1) n (openfd "/dev/null" 1) ((dup2 n 1, close n),
+                                                                         mind f () (_ \ (flush out, dup2 s 1, close s))))))
 ; ports of this run's own: two runs at once, a gate's and a hand's, never share one. a
 ; process takes its ports in turn from a block its pid picks, never one twice, and steps
 ; past any already taken; a server another process opens is ready when it answers, not
 ; after a fixed nap
-(: (test-next u) (: k (test_get 'port) _ (test_set 'port (k + 1)) (20000 + 64 * (getpid 0 % 600) + k))
-   (test-seat f) (: (try n) (: p (test-next 0) s (f p) (? (!(nom? s) || n <= 0) [p s] (try (n - 1))))
+(: (test-next u) (test_get 'port @ k (test_set 'port (k + 1), 20000 + 64 * (getpid 0 % 600) + k))
+   (test-seat f) (: (try n) (: p (test-next 0) s (f p) (!(nom? s) || n <= 0 ? [p s] (try (n - 1))))
                     (try 63))
    (test-listen u) (test-seat listen)                       ; [port listener]
-   (test-bind u) (test-seat (\ p (bind ['udp p])))         ; [port socket]
-   (test-free u) (: q (test-listen 0) _ (close (q 1)) <q)   ; a port nothing listens on, yet
+   (test-bind u) (test-seat (p \ bind ['udp p]))           ; [port socket]
+   (test-free u) (test-listen 0 @ q (close (q 1), <q))      ; a port nothing listens on, yet
    ; f again, a quarter second apart for up to ten, while (busy? answer) says not yet
-   (test-until busy? f) (: (go n) (: r (f 0) (? (n < 40 && busy? r) (: _ (rest 250) (go (n + 1))) r))
+   (test-until busy? f) (: (go n) (f 0 @ r (n < 40 && busy? r ? (rest 250, go (n + 1)) r))
                            (go 0))
    ; a server that takes many connections is up when one lands on loopback at port p
-   (test-up p) (test-until nom? (\ _ (: c (connect ['tcp "127.0.0.1" p]) (? (nom? c) c (close c))))))
+   (test-up p) (test-until nom? (_ \ connect ['tcp "127.0.0.1" p] @ c (nom? c ? c (close c)))))
 
-(:: 'test (\ l
-(:
- (report x v) (do
-  (test_set 'count (1 + test_get 'count))
-   (? v (term_text green_dot)
-    (do (term_text red_x)
-       (test_set 'fail (x . (? (two? (test_get 'fail)) (test_get 'fail) ()))))))
- ('do . map (\ l [report ['\ l] l]) l))))
+(:: 'test (l \
+               (:
+                (report x v) (do
+                 (test_set 'count (1 + test_get 'count))
+                  (v ? (term_text green_dot)
+                   (do (term_text red_x)
+                      (test_set 'fail (x . (two? (test_get 'fail) ? (test_get 'fail)))))))
+                ('do . map (l \ [report ['\ l] l]) l))))
 
 (hear test-strict)

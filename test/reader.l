@@ -10,7 +10,7 @@
 ; this is the acceptance test for a reader rewritten in love (p0/p1): every law must
 ; survive that flip byte for byte, so a case deliberately allowed to change is edited
 ; here first, or the differential cannot tell the two apart.
-(: (rdr s) (: r (sound s) (two? r ? <r r)))
+(: (rdr s) (sound s @ r (two? r ? <r r)))
 
 ; --- the read protocol ---------------------------------------------------------
 ; `sound` takes TEXT -- a string, or the charlist a previous read left -- and
@@ -23,21 +23,21 @@
 ; and the residue is a charlist whichever went in: the string is spread once at
 ; the door, so the two doors meet after the first datum and never diverge.
 (test
- (: r (sound '(49)) (two? r && 1 = <r && !>r))                 ; a datum, nothing after
+ (sound '(49) @ r (two? r && 1 = <r && !>r))                   ; a datum, nothing after
  !(sound ())                                          ; a clean end -- the blue floor
  ('torn = sound '(40))                              ; the text ran out inside a shape
- (: r (sound '(49 32 50))                             ; ...and the residue reads the next
-    (1 = <r && 2 = <(sound >r)))
- (: r (sound '(40 41)) (two? r && !<r)))                ; the datum () is still a datum
+ (sound '(49 32 50) @ r                               ; ...and the residue reads the next
+  (1 = <r && 2 = <(sound >r)))
+ (sound '(40 41) @ r (two? r && !<r)))                  ; the datum () is still a datum
 
 ; --- the string door -----------------------------------------------------------
 ; text is a string or a charlist and the reader spreads the first itself -- every
 ; caller had been writing that spread by hand. an empty string is a clean end, and
 ; a value with no text in it (a number, a name) has no datum in it either.
 (test
- (: r (sound "(1 2) 3")
-    ('(1 2) = <r && 3 = <(sound >r)))                  ; ...and the residue resumes
- (: r (sound "1") (two? r && 1 = <r))
+ (sound "(1 2) 3" @ r
+  ('(1 2) = <r && 3 = <(sound >r)))                    ; ...and the residue resumes
+ (sound "1" @ r (two? r && 1 = <r))
  !(sound "")                                          ; empty text: a clean end, not torn
  ('torn = sound "(1")
  !(sound 42) !(sound 'notaport)                       ; nothing to read is a clean end
@@ -53,10 +53,10 @@
 ; remembering would lose the byte between -- a misread, never a crash. the sweep below
 ; runs every reader lane through that sieve and demands the string's answer back.
 (: (rdr-all x)                                      ; every datum of a text, in order
-   (: (go cl acc) (: r (sound cl)
-                     (? (two? r)      (go >r (<r . acc))
-                        (r = 'torn) 'torn
-                        (rev acc)))
+   (: (go cl acc) (sound cl @ r
+                   (? (two? r)      (go >r (<r . acc))
+                      (r = 'torn) 'torn
+                      (rev acc)))
       (go x ()))
    (rdr-doors s) (: cl (map s (jot #s))             ; string, charlist and port agree
                     d (rdr-all s)

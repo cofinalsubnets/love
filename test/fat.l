@@ -8,8 +8,8 @@
 
 ; the device: 70000 sectors in one cask. rd answers fresh strings, wr pours.
 (: img (cask (70000 * 512))
-   (mkdev im) [(\ lba n (: b (cask (n * 512)) _ (pour b 0 im (lba * 512) (n * 512)) (string b)))
-               (\ lba s (pour im (lba * 512) s 0 #s, (#s // 512)))
+   (mkdev im) [(lba \ n \ cask (n * 512) @ b (pour b 0 im (lba * 512) (n * 512), string b))
+               (lba \ s \ (pour im (lba * 512) s 0 #s, (#s // 512)))
                (#im // 512)]
    dev (mkdev img))
 
@@ -39,7 +39,7 @@
  ('(1 0 32) = (fat-stat f "empty")))
 
 ; replace: longer, then shorter; the size follows, the old chain is freed
-(: big ((: (go i acc) (? (i < 200) (go (i + 1) (acc + "0123456789")) acc)) 0 ""))
+(: big ((: (go i acc) (i < 200 ? (go (i + 1) (acc + "0123456789")) acc)) 0 ""))
 (test
  (1 = (fat-write f "hello.txt" big))                  ; 2000 bytes: a real chain
  (2000 = <>(fat-stat f "hello.txt"))
@@ -82,21 +82,21 @@
 ; --- the other side of the format: mtools reads what we wrote, we read what it
 ; wrote. guarded on mdir being installed (the hdd lane already leans on it).
 (: (lines* s) (: n #s
-                 (go i w acc) (? (n <= i) (rev (? #w (w . acc) acc))
-                                 (? (s i = 10) (go (i + 1) "" (w . acc))
+                 (go i w acc) (n <= i ? (rev (#w ? (w . acc) acc))
+                                 (s i = 10 ? (go (i + 1) "" (w . acc))
                                     (go (i + 1) (w + string [(s i)]) acc)))
                  (go 0 "" ()))
-   have-mtools (: r (hark '("sh" "-c" "command -v mdir >/dev/null && echo yes"))
-                  ((! <r) && (0 < #>r)))
+   have-mtools (hark '("sh" "-c" "command -v mdir >/dev/null && echo yes") @ r
+                (! <r && 0 < #>r))
    _ (? have-mtools
         (: ip "out/.fat-probe.img"
-           _ (: p (open ip "w") _ (say p (string img)) (close p))
+           _ (open ip "w" @ p (say p (string img), close p))
            md (hark ["mdir" "-i" ip "-b" "::/"])
            mt (hark ["mtype" "-i" ip "::/limine.conf"])
            lp "out/.fat-probe.txt"
-           _ (: p (open lp "w") _ (say p "from the host side") (close p))
+           _ (open lp "w" @ p (say p "from the host side", close p))
            mc (hark ["mcopy" "-i" ip lp "::/fromhost.txt"])
-           s (: q (open ip "r") t (slurp q) _ (close q) t)
+           s (: q (open ip "r") t (slurp q) (close q, t))
            im2 (cask #s)
            _ (pour im2 0 s 0 #s)
            f3 (fat-mount (mkdev im2))
@@ -117,9 +117,9 @@
    _ (fat-mkfs lp-dev)
    s0 (string lp-im)
    rsvd (rdle s0 14 2) fatsz (rdle s0 36 4) cb (512 * s0 13)
-   body ((: (go i acc) (? (i < 4 * cb) (go (i + 1) (acc + "x")) acc)) 0 "")
+   body ((: (go i acc) (i < 4 * cb ? (go (i + 1) (acc + "x")) acc)) 0 "")
    _ (fat-write (fat-mount lp-dev) "loop.txt" body)
-   (set cl v) (each [rsvd (rsvd + fatsz)] (\ sec (pour lp-im (sec * 512 + 4 * cl) (wrle v 4) 0 4)))
+   (set cl v) (each [rsvd (rsvd + fatsz)] (sec \ pour lp-im (sec * 512 + 4 * cl) (wrle v 4) 0 4))
    _ (set 4 3)
    r1 (fat-read (fat-mount lp-dev) "loop.txt")
    _ (set 2 2)

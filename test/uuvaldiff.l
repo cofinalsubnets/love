@@ -1,19 +1,9 @@
-; test/uuvaldiff.l -- the differential that binds test/uuval.l's model to the
-; implementation. the model proves the tower's shape (retraction, idempotence,
-; factorisation) and carries no arithmetic theorem on purpose; this file runs the
-; other half -- love's own saturate/bit/nil?/ceil beside the model's vsat/vbit/
-; vnil/vceil over an encoding of test/law.l's corpus, so a wrong zadd, a wrong
-; fold, or a wrong ceil reddens `make test` even though no proof could see it.
-;
-; the encoding is structural where love's values are: a pair becomes the model's
-; link (ii2 over a tpair, both limbs at the height below), an atom becomes a
-; leaf carrying its measure. the leaf measure is read off love's own net -- that
-; primitive is the one thing this lane cannot second-guess, the same standing gap
-; uuwm has with the C runtime under src/apps/lux/core.l. what is under test is
-; everything above it: the fold over links, re, ceil, the clamp and the bit.
-;
-; the model's reals are the half-integers, so a measure that is neither whole nor
-; a half is off the corpus and says so (uuval-not-a-half) rather than going quiet.
+; test/uuvaldiff.l -- the differential binding test/uuval.l's model to the implementation.
+; the model proves the tower's shape and no arithmetic; this runs love's saturate/bit/
+; nil?/ceil beside vsat/vbit/vnil/vceil over test/law.l's corpus, encoded structurally
+; (a pair a link, an atom a leaf carrying its measure), so a wrong fold or ceil reddens
+; `make test`. the leaf measure is love's own net, the one primitive this cannot check.
+; a measure neither whole nor a half is off the model and says so (uuval-not-a-half).
 (test (elem 'vof (names ())))
 
 ; a body-less `:` -- the uv2-* vocabulary leaks; none shadows a nif.
@@ -34,19 +24,19 @@
           (g = 0.5) ['tpair (uv2-zed f) 'true]
           (scare 'uuval-not-a-half d)))
    (uv2-msr n)
-    (: iv (im n)                                          ; () off the complex band
-       ['tpair (uv2-rea (uv2-twice n))
-               (uv2-rea (= iv () ? 0 (uv2-twice iv)))])
+    (im n @ iv                                            ; () off the complex band
+     ['tpair (uv2-rea (uv2-twice n))
+             (uv2-rea (= iv () ? 0 (uv2-twice iv)))])
    ; a leaf wears its tag: () is the unit atom, everything else its measure
    (uv2-atm x) (= x () ? ['ii1 'tt] ['ii2 (uv2-msr (net x))])
-   (uv2-ht x) (? (two? x) (1 + (uv2-max (uv2-ht <x) (uv2-ht >x))) 0)
+   (uv2-ht x) (two? x ? (1 + (uv2-max (uv2-ht <x) (uv2-ht >x))) 0)
    ; the tree at a given height bound: a leaf spells the same at every height, so
    ; the shallow limb of a pair costs nothing to raise
    (uv2-tre x d)
     (? (two? x) ['ii2 ['tpair (uv2-tre <x (d - 1)) (uv2-tre >x (d - 1))]]
        (d = 0)  (uv2-atm x)
        ['ii1 (uv2-atm x)])
-   (uv2-enc x) (: d (uv2-ht x) ['tpair d (uv2-tre x d)])
+   (uv2-enc x) (uv2-ht x @ d ['tpair d (uv2-tre x d)])
    (uv2-unz v) (v @ ['i1 n] n ['i2 n] ((0 - n) - 1) (scare 'uuval-not-an-int v))
    ; the four model lanes, each run in the kernel over the encoded value
    (uv2-sat x)  (vof 0 ['vsat (uv2-enc x)])
@@ -59,10 +49,10 @@
 
    ; test/law.l's corpus, minus the values whose measure is not a half-integer
    uv2-corpus
-    (list 0 1 2 5 -1 -5 2.5 -2.5 0.0 () "" "a" "ab" 'sym 'x cap
-          '(1 2) '(-2 1) '(2.5 -1) '((1 2) (3)) '(1 (2 (3 (4))))
-          (twin 3 4) (twin -1 2) (twin 0 3) @() @(1 2) @(1 2 3)
-          (7 /// 2) (-7 /// 2) {} {'a 1} ^3 ^^2)
+    [0 1 2 5 -1 -5 2.5 -2.5 0.0 () "" "a" "ab" 'sym 'x cap
+     '(1 2) '(-2 1) '(2.5 -1) '((1 2) (3)) '(1 (2 (3 (4))))
+     (twin 3 4) (twin -1 2) (twin 0 3) @() @(1 2) @(1 2 3)
+     (7 /// 2) (-7 /// 2) {} {'a 1} ^3 ^^2]
 
    ; a row holds when all four lanes agree; a miss names the value and the lane
    (uv2-row x)
@@ -74,11 +64,11 @@
                                      [1 x 'satc]
        ())
    (uv2-run l)
-    (? (atom? l) 1
-       (: b (uv2-row <l)
-          (? (two? b)
-             (: _ (puts ("uuval differential FAILED: " + show <>b + " on " + show >>b + "\n")) 0)
-             (uv2-run >l)))))
+    (atom? l ? 1
+       (uv2-row <l @ b
+        (? (two? b)
+           (puts ("uuval differential FAILED: " + show <>b + " on " + show >>b + "\n"), 0)
+           (uv2-run >l)))))
 
 (test
  ; the four lanes agree with love over the whole corpus
@@ -108,20 +98,20 @@
 (:
    (uv3-add x y) (vof 0 ['vsat ['vadd (uv2-enc x) (uv2-enc y)]])
    (uv3-mul x y) (vof 0 ['vsat ['vmul (uv2-enc x) (uv2-enc y)]])
-   uv3-corpus (list () 0 1 2 5 -1 -3 '(1 2) '(-2 1) '(1) '(3) (. 1 2))
+   uv3-corpus [() 0 1 2 5 -1 -3 '(1 2) '(-2 1) '(1) '(3) (. 1 2)]
    (uv3-row x y)
     (? (! (uv3-add x y = saturate (x + y)))  [x '+ y]
        (! (uv3-mul x y = saturate (x * y)))  [x '* y]
        ())
    (uv3-col x l)
-    (? (atom? l) 1
-       (: b (uv3-row x <l)
-          (? (two? b)
-             (: _ (puts ("uuvalband differential FAILED: " + show <b + " " + show <>b
-                         + " " + show >>b + "\n")) 0)
-             (uv3-col x >l))))
+    (atom? l ? 1
+       (uv3-row x <l @ b
+        (? (two? b)
+           ((puts ("uuvalband differential FAILED: " + show <b + " " + show <>b
+                   + " " + show >>b + "\n")), 0)
+           (uv3-col x >l))))
    (uv3-run l)
-    (? (atom? l) 1 (? (uv3-col <l uv3-corpus) (uv3-run >l) 0)))
+    (atom? l ? 1 (uv3-col <l uv3-corpus ? (uv3-run >l) 0)))
 
 (test
  ; every ordered pair, both operations

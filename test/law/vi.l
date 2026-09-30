@@ -9,7 +9,7 @@
 ; the 27-element list shape), and answers the state; the helpers read it back.
 (borrow 'vi) ; the editor's engine just registered module 'vi in this cat
 
-(: (bytes s) (: n #s (go i acc) (? (i < 0) acc (go (i - 1) (s i . acc))) (go (n - 1) ()))
+(: (bytes s) (: n #s (go i acc) (i < 0 ? acc (go (i - 1) (s i . acc))) (go (n - 1) ()))
    (vgo ls ks) (vfeed (vnew ls "t") (bytes ks))
    (vgol ls ks) (vfeed (vnew ls "t.l") (bytes ks))   ; the same, in a .l buffer
    (vgob ls bs) (vfeed (vnew ls "t") bs)
@@ -265,7 +265,7 @@
       (st? (vgo '("   ") "*") 'msg = "no word under the cursor")
       ; a name full of BRE metacharacters is spelled out, not read as a pattern
       (at (vgo '("a.c" "abc" "a.c") "*") = '(2 0)))
-   (view ls ks h) (: st (vgo ls ks) _ (pin st 'h h) _ (vframe st) st)
+   (view ls ks h) (vgo ls ks @ st (pin st 'h h, vframe st, st))
    _ (test
       (at (vfeed (view '("a" "b" "c" "d") "G" 4) (bytes "H")) = '(1 0))
       (at (vfeed (view '("a" "b" "c" "d") "gg" 4) (bytes "L")) = '(2 0))
@@ -327,10 +327,10 @@
       (st? (vgob '("a") ((bytes "x:q!") + [CR])) 'quit = 1)
       (st? (vgob '("a") ((bytes ":w") + [CR])) 'dow = '("t"))
       (st? (vgob '("a") ((bytes ":w other") + [CR])) 'dow = '("other"))
-      (: q (vgob '("a") ((bytes "x:wq") + [CR]))
-         ((q 'dow = '("t")) && (q 'quit = 1)))
-      (: q (vgob '("a") (bytes "xZZ"))
-         ((q 'dow = '("t")) && (q 'quit = 1)))
+      (vgob '("a") ((bytes "x:wq") + [CR]) @ q
+       ((q 'dow = '("t")) && (q 'quit = 1)))
+      (vgob '("a") (bytes "xZZ") @ q
+       ((q 'dow = '("t")) && (q 'quit = 1)))
       ; the split requests: a fresh buffer, or a file, beside or under
       (st? (vgob '("a") ((bytes ":vs") + [CR])) 'dos = '(beside ""))
       (st? (vgob '("a") ((bytes ":sp other") + [CR])) 'dos = '(stack "other"))
@@ -341,7 +341,7 @@
 ; --- the ends, an operator takes it charwise with both ends in or by lines, and
 ; --- escape or the same key again leaves; the frame reverses the selection ---
    (has? h n) (:- (go 0) (go i) (? (#h < i + #n) 0 (n = snip h i (i + #n)) 1 (go (i + 1))))
-   (vmini ls ks) (: st (vgo ls ks) _ (pin st 'w 8) _ (pin st 'h 4) (vframe st))
+   (vmini ls ks) (vgo ls ks @ st (pin st 'w 8, pin st 'h 4, vframe st))
    _ (test
       (st? (vgo '("abc") "v") 'mode = 'v)
       (st? (vgo '("abc") "v") 'va = '(0 0))
@@ -370,14 +370,14 @@
       (lns (vgo '("abc") "vix") = '("bc"))
       (st? (vgo '("abc" "abc") "v/b\r") 'mode = 'v)               ; a search comes back to it
       (st? (vgo '("abc" "abc") "v/b\ry") 'reg = '(chr "ab"))
-      (: f (vmini '("abc") "vl") (has? f "\e[7mab\e[0m"))
-      (: q (vgo '("abc") "vl") _ (pins q 'w 40 'h 4) (has? (vlay q 1) "-- VISUAL --"))
-      (: q (vgo '("abc") "Vl") _ (pins q 'w 40 'h 4) (has? (vlay q 1) "-- VISUAL LINE --"))
-      (: f (vmini '("abc" "") "Vj") (has? f "\e[7m \e[0m"))     ; an empty line still shows
-      (: f (vmini '("abc") "vl\e") (!(has? f "\e[7m"))))
+      (vmini '("abc") "vl" @ f (has? f "\e[7mab\e[0m"))
+      (vgo '("abc") "vl" @ q (pins q 'w 40 'h 4, has? (vlay q 1) "-- VISUAL --"))
+      (vgo '("abc") "Vl" @ q (pins q 'w 40 'h 4, has? (vlay q 1) "-- VISUAL LINE --"))
+      (vmini '("abc" "") "Vj" @ f (has? f "\e[7m \e[0m"))       ; an empty line still shows
+      (vmini '("abc") "vl\e" @ f (!(has? f "\e[7m"))))
 
 ; --- the frame: escapes exact on a tiny screen ---
-   (mini ls ks) (: st (vgo ls ks) _ (pin st 'w 8) _ (pin st 'h 4) (vframe st))
+   (mini ls ks) (vgo ls ks @ st (pin st 'w 8, pin st 'h 4, vframe st))
    E$ (string 27)
    _ (test
       (mini '("ab") "" = (E$ + ("[H" + ("ab" + (E$ + ("[K\r\n" + ("~" + (E$ + ("[K\r\n" + ("~" + (E$ + ("[K\r\n" + ("t  1,1" + (E$ + ("[K" + (E$ + "[1;1H"))))))))))))))))
@@ -392,24 +392,24 @@
 ;     only the rows that differ from the ones the last frame put there, each
 ;     placed absolutely. the whole thing rides the terminal's synchronised-output
 ;     bracket, so a scroll lands in one piece rather than line by line ---------
-   (small ls ks) (: st (vgo ls ks) _ (pin st 'w 16) _ (pin st 'h 4) st)
+   (small ls ks) (vgo ls ks @ st (pin st 'w 16, pin st 'h 4, st))
    (hlon st) (pin st 'pens (hues-pens hue-theme ()), pin st 'hl 1, st)
    SY (E$ + "[?2026h") YS (E$ + "[?2026l")
    (place r s) (E$ + "[" + show r + ";1H" + s + E$ + "[K")
    _ (test
       ; the first refresh lays the whole screen, the way vframe does
-      (: st (small '("ab") "")
-         (vfresh st = (SY + E$ + "[H" + "ab" + E$ + "[K\r\n" + "~" + E$ + "[K\r\n" + "~" + E$ + "[K\r\n"
-                + place 4 "t  1,1" + E$ + "[1;1H" + YS)))
+      (small '("ab") "" @ st
+       (vfresh st = (SY + E$ + "[H" + "ab" + E$ + "[K\r\n" + "~" + E$ + "[K\r\n" + "~" + E$ + "[K\r\n"
+              + place 4 "t  1,1" + E$ + "[1;1H" + YS)))
       ; the same state again is the cursor and nothing else at all
-      (: st (small '("ab") "") _ (vfresh st)
-         (vfresh st = (SY + E$ + "[1;1H" + YS)))
+      (small '("ab") "" @ st (vfresh st,
+                              vfresh st = (SY + E$ + "[1;1H" + YS)))
       ; a motion inside the screen moves the cursor and the row,col it reports
-      (: st (small '("ab") "") _ (vfresh st) _ (vstep st 108)
-         (vfresh st = (SY + place 4 "t  1,2" + E$ + "[1;2H" + YS)))
+      (small '("ab") "" @ st (vfresh st, vstep st 108,
+                              vfresh st = (SY + place 4 "t  1,2" + E$ + "[1;2H" + YS)))
       ; an edit places the one row it changed, and the status that noticed
-      (: st (small '("ab" "cd") "") _ (vfresh st) _ (vfeed st (bytes "jx"))
-         (vfresh st = (SY + place 2 "d" + place 4 "t [+]  2,1" + E$ + "[2;1H" + YS)))
+      (small '("ab" "cd") "" @ st (vfresh st, vfeed st (bytes "jx"),
+                                   vfresh st = (SY + place 2 "d" + place 4 "t [+]  2,1" + E$ + "[2;1H" + YS)))
       ; a scroll is a new set of rows, so it is a whole screen again
       (: st (small '("a" "b" "c" "d" "e") "") _ (vfresh st) _ (vfeed st (bytes "G"))
          f (vfresh st)
@@ -431,42 +431,42 @@
       (: st (hlon (small '("(map f)" "(g 1)") "")) _ (vfresh st)
          r0 (st 'hlrow 0)
          ; [[text carry from to] painted]: the key is what it was painted from
-         ((<r0 = ["(map f)" 0 0 7 'l]) && (0 < #<>r0)))
+         (<r0 = ["(map f)" 0 0 7 'l] && 0 < #<>r0))
       ; the cache is keyed by SCREEN row, so it is the height of the view and
       ; never the height of the file
-      (: st (hlon (small '("a" "b" "c" "d" "e" "f") "")) _ (vfresh st) _ (vfeed st (bytes "G"))
-         _ (vfresh st)
-         (3 = #(keys (st 'hlrow)))))
+      (hlon (small '("a" "b" "c" "d" "e" "f") "") @ st (vfresh st, vfeed st (bytes "G"),
+                                                        vfresh st,
+                                                        3 = #(keys (st 'hlrow)))))
 
 ; --- long lines: the view slides sideways, and :set wrap folds them instead ---
-   (box ls w h) (: st (vnew ls "t") _ (pins st 'w w 'h h) _ (vframe st) st)
-   (see st ks) (vfeed st (? (string? ks) (bytes ks) ks), vframe st, st)
+   (box ls w h) (vnew ls "t" @ st (pins st 'w w 'h h, vframe st, st))
+   (see st ks) (vfeed st (string? ks ? (bytes ks) ks), vframe st, st)
    (body st) <(vlay st)
    _ (test
       ; nowrap is the default: 'left slides so the cursor shows, and stops at
       ; the line's end rather than running off into blank columns
-      (: st (see (box '("abcdefghij") 8 4) "$")
-         ((st 'left = 2) && (body st = '("cdefghij" "~" "~"))))
-      (: st (see (see (box '("abcdefghij") 8 4) "$") "0")
-         ((st 'left = 0) && (body st = '("abcdefgh" "~" "~"))))
+      (see (box '("abcdefghij") 8 4) "$" @ st
+       ((st 'left = 2) && (body st = '("cdefghij" "~" "~"))))
+      (see (see (box '("abcdefghij") 8 4) "$") "0" @ st
+       ((st 'left = 0) && (body st = '("abcdefgh" "~" "~"))))
       ; and comes home when the cursor lands on a short line
-      (: st (see (see (box '("abcdefghij" "x") 8 4) "$") "j")
-         ((st 'left = 0) && (body st = '("abcdefgh" "x" "~"))))
+      (see (see (box '("abcdefghij" "x") 8 4) "$") "j" @ st
+       ((st 'left = 0) && (body st = '("abcdefgh" "x" "~"))))
       ; :set wrap folds the line onto as many screen rows as it needs
-      (: st (see (box '("abcdefghij") 8 4) ":set wrap\r")
-         ((st 'msg = "wrap") && (body st = '("abcdefgh" "ij" "~"))))
+      (see (box '("abcdefghij") 8 4) ":set wrap\r" @ st
+       ((st 'msg = "wrap") && (body st = '("abcdefgh" "ij" "~"))))
       ; the cursor follows it onto the second row
       (: st (see (see (box '("abcdefghij") 8 4) ":set wrap\r") "$")
          L (vlay st)
-         ((<>>L = 2) && (<>>>L = 2)))
+         (<>>L = 2 && <>>>L = 2))
       ; a line taller than the whole view: the corner carries a segment offset
       (: st (see (see (box '("abcdefghijklmnopqrst") 4 4) ":set wrap\r") "$")
          L (vlay st)
          (((st 'top = 0) && (st 'tops = 2)) &&
-          ((body st = '("ijkl" "mnop" "qrst")) && ((<>>L = 3) && (<>>>L = 4)))))
+          ((body st = '("ijkl" "mnop" "qrst")) && (<>>L = 3 && <>>>L = 4))))
       ; :set nowrap puts it back, and no other word is an option
-      (: st (see (see (box '("abcdefghij") 8 4) ":set wrap\r") ":set nowrap\r")
-         ((st 'msg = "nowrap") && (body st = '("abcdefgh" "~" "~"))))
+      (see (see (box '("abcdefghij") 8 4) ":set wrap\r") ":set nowrap\r" @ st
+       ((st 'msg = "nowrap") && (body st = '("abcdefgh" "~" "~"))))
       (st? (vgob '("a") ((bytes ":set frobs") + [CR])) 'msg = "not an option: frobs"))
    ; H M L and the pages count SCREEN rows, so a folded line shortens their reach
    _ (test
@@ -489,12 +489,12 @@
       (st? (vgob '("a") ((bytes ":e ") + [CR])) 'doe = '("t")))
    _ (test
       ; the swap starts the file over -- and re-decides the paint from the new name
-      (: q (vgo '("a" "b") "jx") _ (vload q '("x" "y" "z") "n.l")
-         ((lns q = '("x" "y" "z")) &&
-          (at q = '(0 0)) &&
-          !(q 'dirty) && !(q 'undo) && q 'hl))
-      (: q (vgo '("a") "") _ (pin q 'hl 1) _ (vload q '("z") "n.txt") !(q 'hl))
-      (: q (vgo '("a") "") _ (vload q () "e.l") (lns q = '(""))))             ; an empty read is one empty line
+      (vgo '("a" "b") "jx" @ q (vload q '("x" "y" "z") "n.l",
+                                ((lns q = '("x" "y" "z")) &&
+                                 (at q = '(0 0)) &&
+                                 !(q 'dirty) && !(q 'undo) && q 'hl)))
+      (vgo '("a") "" @ q (pin q 'hl 1, vload q '("z") "n.txt", !(q 'hl)))
+      (vgo '("a") "" @ q (vload q () "e.l", lns q = '(""))))                  ; an empty read is one empty line
 
 ; --- libra ⚖ on the buffer: :lint weighs what you are looking at. one scanner
 ;     (src/apps/libra/lint.l) under libra's faces and this one ---------------------------
@@ -504,8 +504,8 @@
       (st? (ex '("(: a 1") "lint") 'msg = "1 warning: 1,1 unclosed (")
       (at (ex '("(: a 1") "lint") = '(0 0))                  ; and it goes there
       ; an unclosed opener reports where it opened, so the jump lands on the cause
-      (: q (ex '("(f x)" "(: a 1" "(g y)") "lint")
-         ((at q = '(1 0)) && (q 'msg = "1 warning: 2,1 unclosed ("))))
+      (ex '("(f x)" "(: a 1" "(g y)") "lint" @ q
+       ((at q = '(1 0)) && (q 'msg = "1 warning: 2,1 unclosed ("))))
 
 ; --- the ex language: addresses, then the commands that read a range ---
 ; every line below goes in through the same `:` the hand does, so what is lawed
@@ -559,7 +559,7 @@
       (st? (ex '("ab") "s/q/X/") 'msg = "not found: q")
       (st? (ex '("ab") "s/a/X/") 'msg = "1 line changed")
       ; a fresh :s pattern is the last search, which is where n picks it up
-      (: q (ex '("ab" "cd" "ab") "s/ab/zz/") (q 'pattx = "ab")))
+      (ex '("ab" "cd" "ab") "s/ab/zz/" @ q (q 'pattx = "ab")))
 
    _ (test
       ; :g and :v -- the body runs from the last row up, so a delete never
@@ -571,9 +571,9 @@
       (st? (ex ab5 "g/zz/d") 'msg = "not found: zz")
       (lns (ex ab5 "g/zz/d") = ab5)
       ; one u puts the whole global back
-      (: q (ex ab5 "g/[bd]/d") _ (vfeed q (bytes "u")) (lns q = ab5))
-      (: q (ex '("a1" "b2" "a3") "g/a/s/[0-9]/X/") _ (vfeed q (bytes "u"))
-         (lns q = '("a1" "b2" "a3"))))
+      (ex ab5 "g/[bd]/d" @ q (vfeed q (bytes "u"), lns q = ab5))
+      (ex '("a1" "b2" "a3") "g/a/s/[0-9]/X/" @ q (vfeed q (bytes "u"),
+                                                  lns q = '("a1" "b2" "a3"))))
 
    _ (test
       ; the file half still answers, now through the one dispatch
@@ -603,8 +603,8 @@
       (st? (ex '("a") "") 'msg = ""))
 
 ; --- the status line clips from the left: its tail is the news ---------------
-   (miniw ls ks m) (: st (vgo ls ks) _ (vmsg st m) _ (pin st 'w 8) _ (pin st 'h 4)
-                      (vframe st))
+   (miniw ls ks m) (vgo ls ks @ st (vmsg st m, pin st 'w 8, pin st 'h 4,
+                                    vframe st))
    (frame3 tail) (E$ + "[H" + "ab" + E$ + "[K\r\n" + "~" + E$ + "[K\r\n" + "~" + E$ + "[K\r\n"
                      + tail + E$ + "[K" + E$ + "[1;1H")
    _ (test
@@ -616,29 +616,29 @@
 
 ; --- the cursor sits where you are typing: on the status line in ex and search -
    _ (test
-      (: f (mini '("ab") ":") (snip f (#f - 6) #f = (E$ + "[4;2H")))
-      (: f (mini '("ab") ":wq") (snip f (#f - 6) #f = (E$ + "[4;4H")))
-      (: f (mini '("ab") "/x") (snip f (#f - 6) #f = (E$ + "[4;3H")))
-      (: f (mini '("ab") "") (snip f (#f - 6) #f = (E$ + "[1;1H"))))
+      (mini '("ab") ":" @ f (snip f (#f - 6) #f = (E$ + "[4;2H")))
+      (mini '("ab") ":wq" @ f (snip f (#f - 6) #f = (E$ + "[4;4H")))
+      (mini '("ab") "/x" @ f (snip f (#f - 6) #f = (E$ + "[4;3H")))
+      (mini '("ab") "" @ f (snip f (#f - 6) #f = (E$ + "[1;1H"))))
 
 ; --- the syntax paint (src/apps/vi/hue.l): classes, the carry, and the one law
 ; that keeps every exact-frame assertion above honest --------------------------
    hbk (hue-book ())
-   hlx (\ s in keep (hue-lex hbk s in keep))
-   (klass s) (map (\ r <r) <(hue-lex hbk s 0 1))
+   hlx (s \ in \ keep \ hue-lex hbk s in keep)
+   (klass s) (map (r \ <r) <(hue-lex hbk s 0 1))
    (runs s in) <(hue-lex hbk s in 1)
    ; strip SGR and only SGR: \e[<digits;>m goes, \e[H and \e[K and \e[r;cH stay,
    ; because those are the frame's own geometry and the whole point is that the
    ; paint did not touch it
    (bare s)
     (: n #s
-       (dig? c) (((48 <= c) && (c <= 57)) || (c = 59))
+       (dig? c) ((48 <= c && c <= 57) || c = 59)
        (go i acc)
         (? (n <= i) acc
-           ((s i = 27) && ((i + 1) < n) && (s (i + 1) = 91))
-            (: (sk j) (? ((j < n) && dig? (s j)) (sk (j + 1)) j)
+           ((s i = 27) && (i + 1) < n && (s (i + 1) = 91))
+            (: (sk j) (j < n && dig? (s j) ? (sk (j + 1)) j)
                k (sk (i + 2))
-               (? ((k < n) && (s k = 109)) (go (k + 1) acc)
+               (k < n && (s k = 109) ? (go (k + 1) acc)
                   (go (i + 1) (acc + string (s i)))))
            (go (i + 1) (acc + string (s i))))
        (go 0 ""))
@@ -684,14 +684,14 @@
       (runs "a ; b" 1 = '((string 0 5)))            ; and it stays open to the end
       ; keep () is the same walk with its answers dropped -- one lexer, provably
       (: a (hue-lex hbk "\"x" 0 1) b (hue-lex hbk "\"x" 0 ())
-         ((<>a = <>b) && !(two? <b))))
+         (<>a = <>b && !(two? <b))))
 
 ; --- the word lanes are asked, not listed. only the three special forms are
 ;     written out, and they are the grammar rather than the book ---------------
    _ (test
-      (: ls (map hue-arg (hue-tagged 'word))
-         ((#(filter nom? ls) = 3) &&                ; macros values names
-          (#(filter two? ls) = 1)))                 ; the forms, and nothing else
+      (map hue-arg (hue-tagged 'word) @ ls
+       ((#(filter nom? ls) = 3) &&                  ; macros values names
+        (#(filter two? ls) = 1)))                   ; the forms, and nothing else
       (0 < #(hue-words 'macros))
       (0 < #(hue-words 'values))
       (0 < #(hue-words 'names))
@@ -701,38 +701,38 @@
       (elem "&&" (hue-words 'macros))                   ; not filtered: a sigil macro is a macro
       (elem "tau" (hue-words 'values))
       (elem "map" (hue-words 'names))
-      !(elem "+" (hue-words 'names))                    ; a bare operator belongs to the punct lanes
-      !(elem "$" (hue-words 'values))
+      (nelem "+" (hue-words 'names))                    ; a bare operator belongs to the punct lanes
+      (nelem "$" (hue-words 'values))
       ; sorted, because the generator freezes them into a diff-gated file
-      (: w (hue-words 'names) (w = (sort w)))
+      (hue-words 'names @ w (w = (sort w)))
       ; the stability law. both book lanes are positive tests -- a name does
       ; something or is something -- so session data (argv, cmdline, `parsed`,
       ; which is bound only when love was handed a file) falls out of both, and
       ; the generated syntax file cannot depend on how the generator was started.
-      (all (\ w (lit? (ev (intern w)))) (hue-words 'names))
-      (all (\ w !(lit? (ev (intern w)))) (hue-words 'values))
-      !(elem "argv" (hue-words 'names))
-      !(elem "argv" (hue-words 'values))
+      (all (w \ lit? (ev (intern w))) (hue-words 'names))
+      (all (w \ !(lit? (ev (intern w)))) (hue-words 'values))
+      (nelem "argv" (hue-words 'names))
+      (nelem "argv" (hue-words 'values))
       ; earlier row wins in the one tablet, exactly as the table reads top-down
-      (: b (hue-book ()) (b "assert" = 'macro && (b "tau" = 'const) &&
-                          (b "map" = 'book))))
+      (hue-book () @ b (b "assert" = 'macro && (b "tau" = 'const) &&
+                        (b "map" = 'book))))
 
 ; --- the pens: molokayo, and every class has one -----------------------------
    _ (test
       (hue-pen '(Comment 59 "#75715E" ()) () = "\e[38;5;59m")
       (hue-pen '(Statement 161 "#F92672" (bold)) () = "\e[1;38;5;161m")
       (hue-pen '(Statement 161 "#F92672" (bold)) 1 = "\e[1;38;2;249;38;114m")
-      (: ps (hue-pens hue-theme ()) (all (\ c (string? (ps (hue-cls c)))) hue-classes))
-      (: ps (hues-pens hue-theme ()) (all (\ c (string? (ps (hue-cls c)))) hues-classes))
-      (all (\ r (any (\ c (hue-grp c = <r)) hue-classes || any (\ c (hue-grp c = <r)) hues-classes))
+      (hue-pens hue-theme () @ ps (all (c \ string? (ps (hue-cls c))) hue-classes))
+      (hues-pens hue-theme () @ ps (all (c \ string? (ps (hue-cls c))) hues-classes))
+      (all (r \ any (c \ hue-grp c = <r) hue-classes || any (c \ hue-grp c = <r) hues-classes)
            hue-theme))
 
 ; --- paint invariance: colour adds colour and moves nothing. this is what keeps
 ;     every byte-exact frame law above meaningful once the paint exists -------
    (twin ls ks) (: a (vgo ls ks) b (vgo ls ks)
-                   _ (pin a 'w 30) _ (pin a 'h 5) _ (pin b 'w 30) _ (pin b 'h 5)
-                   _ (hlon b)
-                   (bare (vframe b) = vframe a))
+                   (pin a 'w 30, pin a 'h 5, pin b 'w 30, pin b 'h 5,
+                    hlon b,
+                    bare (vframe b) = vframe a))
    _ (test
       (twin '("(map (+ 1) '(1 2 3)) ; hi" "(: x 2)") "")
       (twin '("(: css \"a" "b\" 1)") "j")
@@ -742,7 +742,7 @@
 
 ; --- the other languages (src/apps/vi/hues.l): the name picks the lexer, else a #!
 ;     naming a shell, and each answers hue-lex's shape, the carry included ----
-   (hk g s in) (map (\ r <r) <(hues-lexer g s in 1))
+   (hk g s in) (map (r \ <r) <(hues-lexer g s in 1))
    (hc g ls) (hue-carry (hues-lexer g) ls)
    _ (test
       (hues-lang "a/b.c" "" = 'c)
@@ -791,7 +791,7 @@
       (<(hues-lexer 'make "\ttest -s $$t" 0 1) = '((func 1 5) (var 9 12)))
       (hk 'make "x.o: CFLAGS=1" 0 = '(func)))
    _ (test
-      (map (\ f (hues-lang f "")) ["x.md" "x.json" "x.s" "x.S" "x.asm" "x.diff" "x.patch" "x.awk"
+      (map (f \ hues-lang f "") ["x.md" "x.json" "x.s" "x.S" "x.asm" "x.diff" "x.patch" "x.awk"
                                    "love.1" "x.man" "x.mjs" "Cookfile"]
        = '(md json asm asm asm diff diff awk roff roff js make))
       (hues-lang "run" "#!/usr/bin/awk -f" = 'awk))
@@ -839,76 +839,76 @@
       (hk 'md "````" ['fence 96 3 'c 0] = '(pre)))         ; a longer run closes too
    ; paint invariance again, off the .l lexer: colour is added and nothing moves
    (twinf ls nm) (: a (vnew ls nm) b (vnew ls nm)
-                    _ (pin a 'w 30) _ (pin a 'h 5) _ (pin a 'hl ())
-                    _ (pin b 'w 30) _ (pin b 'h 5) _ (hlon b)
-                    ((bare (vframe b) = vframe a) && !(vframe b = vframe a)))
-   _ (test
-      (twinf '("int x; /* a" "b */ char *s = \"q\";") "t.c")
-      (twinf '("<p class=\"a\">x &lt; y</p>") "t.html")
-      (twinf '("if true; then echo $x; fi") "t.sh")
-      (twinf '("all: x.o" "\tcc -o $@ $^") "Makefile")
-      (twinf '("p { color: red }") "t.css")
-      (twinf '("{\"a\": 1}") "t.json")
-      (twinf '("@@ -1 +1 @@" "-a" "+b") "t.diff")
-      (twinf '(".SH NAME" "love \\- a lisp") "t.1")
-      (twinf '("main: movq %rsp, %rbp") "t.s")
-      (twinf '("# t" "```c" "int x;" "```") "t.md")
-      (twinf '("{ print $1 }") "t.awk")
-      ; % reads c's strings as the paint does: the quoted ) is not a mate
-      (at (vfeed (vnew '("f(\")\", x)") "t.c") (bytes "%")) = '(0 8))
-      (at (vgo '("f(\")\", x)") "%") = '(0 3)))
+                    (pin a 'w 30, pin a 'h 5, pin a 'hl (),
+                     pin b 'w 30, pin b 'h 5, hlon b,
+                     (bare (vframe b) = vframe a) && !(vframe b = vframe a)))
+   ((test
+     (twinf '("int x; /* a" "b */ char *s = \"q\";") "t.c")
+     (twinf '("<p class=\"a\">x &lt; y</p>") "t.html")
+     (twinf '("if true; then echo $x; fi") "t.sh")
+     (twinf '("all: x.o" "\tcc -o $@ $^") "Makefile")
+     (twinf '("p { color: red }") "t.css")
+     (twinf '("{\"a\": 1}") "t.json")
+     (twinf '("@@ -1 +1 @@" "-a" "+b") "t.diff")
+     (twinf '(".SH NAME" "love \\- a lisp") "t.1")
+     (twinf '("main: movq %rsp, %rbp") "t.s")
+     (twinf '("# t" "```c" "int x;" "```") "t.md")
+     (twinf '("{ print $1 }") "t.awk")
+     ; % reads c's strings as the paint does: the quoted ) is not a mate
+     (at (vfeed (vnew '("f(\")\", x)") "t.c") (bytes "%")) = '(0 8))
+     (at (vgo '("f(\")\", x)") "%") = '(0 3))),
 
-; --- born on for a language hues-lang names, off for everything else (which is
-;     why "t" above is plain), and :hl flips it -------------------------------
-   _ (test
-      !(st? (vnew '("a") "t") 'hl)
-      !(st? (vnew '("a") "") 'hl)
-      !(st? (vnew '("a") "l") 'hl)
-      !(st? (vnew '("a") "x.txt") 'hl)
-      (st? (vnew '("a") "x.l") 'hl)
-      (st? (vnew '("a") "src/apps/vi/hue.l") 'hl)
-      (st? (vnew '("a") "x.c") 'hl)
-      (st? (vnew '("a") "Makefile") 'hl)
-      (st? (vnew '("#!/bin/sh") "run") 'hl)
-      (st? (vgob '("a") ((bytes ":hl") + [CR])) 'hl)
-      !(st? (vgob '("a") ((bytes ":hl") + [CR] + (bytes ":hl") + [CR])) 'hl))
+    ; --- born on for a language hues-lang names, off for everything else (which is
+    ;     why "t" above is plain), and :hl flips it -------------------------------
+    (test
+     !(st? (vnew '("a") "t") 'hl)
+     !(st? (vnew '("a") "") 'hl)
+     !(st? (vnew '("a") "l") 'hl)
+     !(st? (vnew '("a") "x.txt") 'hl)
+     (st? (vnew '("a") "x.l") 'hl)
+     (st? (vnew '("a") "src/apps/vi/hue.l") 'hl)
+     (st? (vnew '("a") "x.c") 'hl)
+     (st? (vnew '("a") "Makefile") 'hl)
+     (st? (vnew '("#!/bin/sh") "run") 'hl)
+     (st? (vgob '("a") ((bytes ":hl") + [CR])) 'hl)
+     !(st? (vgob '("a") ((bytes ":hl") + [CR] + (bytes ":hl") + [CR])) 'hl)),
 
-; --- characters, not bytes: the cursor sits on a character's first byte, every
-; motion steps whole ones, and the screen counts columns -- a wide one takes two.
-; "a日本b" is a(0) 日(1) 本(4) b(7), eight bytes and six columns
-   _ (test
-      (at (vgo '("a日本b") "l") = '(0 1)) (at (vgo '("a日本b") "ll") = '(0 4))
-      (at (vgo '("a日本b") "$") = '(0 7)) (at (vgo '("a日本b") "$h") = '(0 4))
-      (at (vgo '("a日本b") "9l") = '(0 7))                   ; the fence is a character
-      (lns (vgo '("a日本b") "lx") = '("a本b"))
-      (lns (vgo '("a日本b") "l2x") = '("ab"))
-      (lns (vgo '("a日本b") "llX") = '("a本b"))
-      (lns (vgo '("a日本b") "ld$") = '("a"))                  ; $ takes its character whole
-      (lns (vgo '("a日本b") "vld") = '("本b"))
-      (lns (vgo '("a日本b") "lr中") = '("a中本b"))             ; a multibyte argument waits for its tail
-      (lns (vgo '("a日本b") "l2r.") = '("a..b"))
-      (at (vgo '("a日本b") "f本") = '(0 4)) (at (vgo '("a日本b") "t本") = '(0 1))
-      (at (vgo '("a日本b") "$F日") = '(0 1)) (at (vgo '("a日本b") "$T日") = '(0 4))
-      (at (vgo '("a日本b") "f本;") = '(0 4))
-      (at (vgo '("日本 語") "w") = '(0 7)) (at (vgo '("日本 語") "e") = '(0 3))
-      (at (vgo '("café au") "w") = '(0 6))                    ; é is a letter, not punctuation
-      (at (vgo '("日本語" "abcdef") "$j") = '(1 4))           ; the goal is a screen column
-      (at (vgo '("abcdef" "日本語") "4lj") = '(1 6))
-      (at (vgo '("abcdef" "日本語") "3lj") = '(1 3))          ; a column inside 本 lands on it
-      (lns (vgo '("") "i日\e") = '("日")) (at (vgo '("") "i日\e") = '(0 0))
-      (lns (vgob '("a日") [65 BS 27]) = '("a"))              ; backspace takes a character
-      (lns (vgo '("日b") "ax\e") = '("日xb"))                 ; a appends after the character
-      (lns (vgo '("日b") "ylp") = '("日日b")) (at (vgo '("日b") "ylp") = '(0 3))
-      (: st (see (box '("a日本b") 4 4) "")
-         (body st = '("a日" "~" "~")))                        ; 本 would cross the margin
-      (: st (see (box '("a日本b") 4 4) "$")
-         L (vlay st)
-         ((st 'left = 2) && (body st = '(" 本b" "~" "~")) && (<>>>L = 4)))
-      (: st (see (box '("日本語日") 5 4) ":set wrap\r")
-         (body st = '("日本" "語日" "~")))
-      (: st (see (see (box '("日本語日") 5 4) ":set wrap\r") "$")
-         L (vlay st)
-         ((<>>L = 2) && (<>>>L = 3))))
+    ; --- characters, not bytes: the cursor sits on a character's first byte, every
+    ; motion steps whole ones, and the screen counts columns -- a wide one takes two.
+    ; "a日本b" is a(0) 日(1) 本(4) b(7), eight bytes and six columns
+    (test
+     (at (vgo '("a日本b") "l") = '(0 1)) (at (vgo '("a日本b") "ll") = '(0 4))
+     (at (vgo '("a日本b") "$") = '(0 7)) (at (vgo '("a日本b") "$h") = '(0 4))
+     (at (vgo '("a日本b") "9l") = '(0 7))                    ; the fence is a character
+     (lns (vgo '("a日本b") "lx") = '("a本b"))
+     (lns (vgo '("a日本b") "l2x") = '("ab"))
+     (lns (vgo '("a日本b") "llX") = '("a本b"))
+     (lns (vgo '("a日本b") "ld$") = '("a"))                   ; $ takes its character whole
+     (lns (vgo '("a日本b") "vld") = '("本b"))
+     (lns (vgo '("a日本b") "lr中") = '("a中本b"))              ; a multibyte argument waits for its tail
+     (lns (vgo '("a日本b") "l2r.") = '("a..b"))
+     (at (vgo '("a日本b") "f本") = '(0 4)) (at (vgo '("a日本b") "t本") = '(0 1))
+     (at (vgo '("a日本b") "$F日") = '(0 1)) (at (vgo '("a日本b") "$T日") = '(0 4))
+     (at (vgo '("a日本b") "f本;") = '(0 4))
+     (at (vgo '("日本 語") "w") = '(0 7)) (at (vgo '("日本 語") "e") = '(0 3))
+     (at (vgo '("café au") "w") = '(0 6))                     ; é is a letter, not punctuation
+     (at (vgo '("日本語" "abcdef") "$j") = '(1 4))            ; the goal is a screen column
+     (at (vgo '("abcdef" "日本語") "4lj") = '(1 6))
+     (at (vgo '("abcdef" "日本語") "3lj") = '(1 3))           ; a column inside 本 lands on it
+     (lns (vgo '("") "i日\e") = '("日")) (at (vgo '("") "i日\e") = '(0 0))
+     (lns (vgob '("a日") [65 BS 27]) = '("a"))               ; backspace takes a character
+     (lns (vgo '("日b") "ax\e") = '("日xb"))                  ; a appends after the character
+     (lns (vgo '("日b") "ylp") = '("日日b")) (at (vgo '("日b") "ylp") = '(0 3))
+     (see (box '("a日本b") 4 4) "" @ st
+      (body st = '("a日" "~" "~")))                           ; 本 would cross the margin
+     (: st (see (box '("a日本b") 4 4) "$")
+        L (vlay st)
+        ((st 'left = 2) && (body st = '(" 本b" "~" "~")) && <>>>L = 4))
+     (see (box '("日本語日") 5 4) ":set wrap\r" @ st
+      (body st = '("日本" "語日" "~")))
+     (: st (see (see (box '("日本語日") 5 4) ":set wrap\r") "$")
+        L (vlay st)
+        (<>>L = 2 && <>>>L = 3))),
 
-   _ (test_fin ())                                    ; no zz-fin here: quit before claiming ok
-   _ (say err "test/law/vi: motions + words + finds + insert + operators + registers + undo + search + ex + frames + hue + hues ok") _ (put err 10) 0)
+    test_fin (),                                      ; no zz-fin here: quit before claiming ok
+    say err "test/law/vi: motions + words + finds + insert + operators + registers + undo + search + ex + frames + hue + hues ok", put err 10, 0))

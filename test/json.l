@@ -6,7 +6,7 @@
 
 (borrow "src/apps/json.l")
 
-(: (json-rt s) (: r (json-read s) (? (two? r) (json-show <>r) 'no-parse)))
+(: (json-rt s) (json-read s @ r (two? r ? (json-show <>r) 'no-parse)))
 
 ; presence rides out of band: (1 value) or () -- null, 0, "", [] and {} are all
 ; legitimate documents and every one of them is nothing
@@ -18,10 +18,10 @@
 
 ; null is the named coin, [] is plain (), and the two never collide
 (test
- (: r (json-read "null") (json-null? <>r))
- (: r (json-read "[]") (() = <>r))
+ (json-read "null" @ r (json-null? <>r))
+ (json-read "[]" @ r (() = <>r))
  ("null" = (json-show json-null)) ("[]" = (json-show ()))
- !json-null !json-false (? json-true 1 0)         ; blue where json is false-ish
+ !json-null !json-false (json-true ? 1 0)         ; blue where json is false-ish
  !(json-null = json-false) !(json-null = ()) !(() = json-false)
  ("true" = (json-show (json-bool 1))) ("false" = (json-show (json-bool 0))))
 
@@ -30,8 +30,8 @@
  ("[5]" = (json-rt "[5]"))                        ; the one-element array survives
  ("[[],{}]" = (json-rt "[[],{}]"))
  ("[1,\"x\",true,false,null,[]]" = (json-rt "[1,\"x\",true,false,null,[]]"))
- ("{}" = (json-show (tablet 0)))
- (: t (tablet 0) _ (pin t "diagnostics" ()) ("{\"diagnostics\":[]}" = (json-show t))))
+ ("{}" = (json-show {}))
+ ({} @ t (pin t "diagnostics" (), "{\"diagnostics\":[]}" = (json-show t))))
 
 ; the celestial ladder stays exact; what json cannot say becomes null
 (test
@@ -42,7 +42,7 @@
 ; strings: the named escapes both ways, \uxxxx surrogates rejoined to utf-8
 (test
  ("\"a\\nb\"" = (json-show "a\nb"))
- (: r (json-read "\"a\\nb\"") ("a\nb" = <>r))
+ (json-read "\"a\\nb\"" @ r ("a\nb" = <>r))
  ("\"𝄞\"" = (json-rt "\"\\uD834\\uDD1E\""))
  ("\"𝄞\"" = (json-rt "\"𝄞\"")))                    ; already-utf-8 rides untouched
 
@@ -54,6 +54,6 @@
     v <>r
     p (v "params")
     (two? r && () = (p "diagnostics") && "file:///x.l" = (p "uri")
-        && (: r2 (json-read (json-show v)) (two? r2 && (() = ((<>r2 "params") "diagnostics")))))))
+        && (json-read (json-show v) @ r2 (two? r2 && () = ((<>r2 "params") "diagnostics"))))))
 
 (test_fin ())

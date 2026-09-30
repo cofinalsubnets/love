@@ -12,18 +12,18 @@
 ;   -echild         no children remain -- a negative charm (nil?-true), distinct from ()
 ; spawn/glean/wait/still are the OS's own, and inle has no processes: skip the whole
 ; file where there is no kernel underneath (hosted, test/00-init.l), as run.l does.
-(? hosted (do
+(hosted ? (do
   (: (glean-until n)                                   ; glean, paced, to a (pid . status) pair (or steps out)
-       (: ev (glean 0) (? (two? ev) ev (n < 1) () (rest 2, glean-until (n - 1))))
+       (glean 0 @ ev (? (two? ev) ev (n < 1) () (rest 2, glean-until (n - 1))))
      _ (test
          ; spawn is non-blocking: a real live pid, the child runs on
-         (: p (spawn ["sleep" "5"])
-            (charm? p && 0 < p
-                ; a child alive, none exited -> glean is the real () (not charm 0), nil?-true
-             && glean 0 = () && !(glean 0) && !(charm? (glean 0))
-                ; kill it (bao's `still`), then glean the zombie -> (pid . 128+sig)
-             && (: _ (still p 9) r (glean-until 200)
-                   (two? r && <r = p && >r = 137))))
+         (spawn ["sleep" "5"] @ p
+          (charm? p && 0 < p
+              ; a child alive, none exited -> glean is the real () (not charm 0), nil?-true
+           && glean 0 = () && !(glean 0) && !(charm? (glean 0))
+              ; kill it (bao's `still`), then glean the zombie -> (pid . 128+sig)
+           && (: _ (still p 9) r (glean-until 200)
+                 (two? r && <r = p && >r = 137))))
          ; no children left -> 'echild: a nom, truthy, and not the () above
          ('echild = (glean 0)) (nom? (glean 0)) !!(glean 0) !((glean 0) = ())
          ; the blocking foreground wait: spawn then wait -> the child's exit status
@@ -41,7 +41,7 @@
      _ (mkdir d 493)                                  ; EEXIST from a prior run is fine
      _ (unlink f)                                     ; a clean slate, tolerated if absent
      ; write 5 bytes through the port lane, then measure with stat
-     _ (: p (open f "w") (say p "hello", flush p, close p))
+     _ (open f "w" @ p (say p "hello", flush p, close p))
      st (stat f)
      (test
       ; stat: (size mtime mode) -- 5 bytes, an mtime on the (clock t) ms scale, a file mode
@@ -52,26 +52,26 @@
       (16384 = 61440 & <>>(stat d))
       ((stat (f + "-absent")) = 'enoent) !(charm? (stat (f + "-absent")))
       ; readdir: our one entry, as a string; a missing dir is its nom
-      (: l (readdir d) (two? l && "x" = <l && atom? >l))
+      (readdir d @ l (two? l && "x" = <l && atom? >l))
       ((readdir (d + "-absent")) = 'enoent)
       ; lseek rides the raw openfd lane: end is the size, set returns the offset
-      (: fd (openfd f 0)
-         (5 = lseek fd 0 2 && 1 = lseek fd 1 0 && 3 = lseek fd 2 1
-          && !(close fd)))
+      (openfd f 0 @ fd
+       (5 = lseek fd 0 2 && 1 = lseek fd 1 0 && 3 = lseek fd 2 1
+        && !(close fd)))
       ('ebadf = (lseek -1 0 0))                     ; a bad fd is its nom
       ; a whence no seat knows is the row's 'einval and moves nothing -- read as SET
       ; it would have seeked to 0 and called that success
-      (: fd (openfd f 0)
-         (2 = lseek fd 2 0 && 'einval = lseek fd 0 7 && 'einval = lseek fd 0 -3
-          && 2 = lseek fd 0 1 && !(close fd)))
+      (openfd f 0 @ fd
+       (2 = lseek fd 2 0 && 'einval = lseek fd 0 7 && 'einval = lseek fd 0 -3
+        && 2 = lseek fd 0 1 && !(close fd)))
       ; stat takes a charm as an fd, which is fstat under another name: the same
       ; tuple the path answers, and nothing for a row that is not there
-      (: fd (openfd f 0) r (stat fd = stat f) _ (close fd) r)
+      (: fd (openfd f 0) r (stat fd = stat f) (close fd, r))
       ((stat 4096) = 'ebadf) !(charm? (stat 4096))
       ; and stat reads a row's kind off the fd: a file, and a directory, which
       ; opens read-only by POSIX's own rule
-      (: fd (openfd f 0) s (stat fd) _ (close fd) (32768 = 61440 & <>>s))
-      (: fd (openfd d 0) s (stat fd) _ (close fd) (16384 = 61440 & <>>s))
+      (: fd (openfd f 0) s (stat fd) (close fd, 32768 = 61440 & <>>s))
+      (: fd (openfd d 0) s (stat fd) (close fd, 16384 = 61440 & <>>s))
       ; close wears the errno convention: a stranger row is 'ebadf, and so is the
       ; second close of a real one -- the row is gone, which is what it says
       (: fd (openfd f 0) a (close fd) b (close fd) (!a && 'ebadf = b))
@@ -86,8 +86,8 @@
   ; row -- and the answers are the port arm's, so the two spellings compose.
   (: pp (pipe 0) rfd <pp wfd >pp
      _ (say wfd "through the door") _ (put wfd 33) _ (close wfd)
-     s (slurp rfd) _ (close rfd)
-     (test ("through the door!" = s)))
+     s (slurp rfd) (close rfd,
+                    (test ("through the door!" = s))))
 
   ; see draws one byte, chug takes what the row still has in hand, and both answer
   ; the empty end -- see is the door that tells a quiet row from an ended one, so it
@@ -99,17 +99,17 @@
      _ (close wfd)
      e (see rfd)
      y (chug rfd)
-     _ (close rfd)
-     (test (97 = a) ("bcdef" = x) (-1 = e) ("" = y)))
+     (close rfd,
+      (test (97 = a) ("bcdef" = x) (-1 = e) ("" = y))))
 
   ; a file reads the same bytes both ways, gulp boundaries and all
   (: d "out/.fd-lane-probe" f (d + "/x")
      _ (mkdir d 493)
-     _ (: p (open f "w") (say p ("abcdefgh" * 2000), close p))
+     _ (open f "w" @ p (say p ("abcdefgh" * 2000), close p))
      fd (openfd f 0) a (slurp fd) _ (close fd)
-     p (open f "r") b (slurp p) _ (close p)
-     _ (unlink f)
-     (test (a = b) (16000 = #a)))
+     p (open f "r") b (slurp p) (close p,
+                                 unlink f,
+                                 (test (a = b) (16000 = #a))))
 
   ; a row that is not there swallows and reads as the end: a closed seat's output
   ; must not fault a task that cannot know it is closed
