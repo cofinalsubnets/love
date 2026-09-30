@@ -1455,7 +1455,7 @@
          pi (pipe 0) po (pipe 0) ef (openfd (d + "/claude.err") 2)
          p (spawnio argv <pi >po ef (open-fds 0) -1 0)
          (close <pi, close >po, (0 <= ef ? (close ef) 0),
-          (!(charm? p && 0 < p) ? (: _ (close >pi) (close <po) 0)
+          (!(charm? p && 0 < p) ? (close >pi, close <po, 0)
              (pins bee-cc 'pid p 'w (fdopen >pi) 'q (fdopen <po) 'sid sid 'live 1,
               pins bee-cell 'claude sid,
               card! (bee-cell 'state),
