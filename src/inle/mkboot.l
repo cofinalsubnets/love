@@ -1,27 +1,19 @@
-; src/inle/mkboot.l -- lay boot.o, the kernel's BRING-UP: the code that runs before there is a C environment to run in. mkvec.l's
-; sibling and mksys.l's class -- register-exact leaves C cannot say.
+; src/inle/mkboot.l -- lay boot.o, the kernel's bring-up: the register-exact code that runs before
+; there is a C environment (mkvec.l's sibling).
 ;
-;   (lay-boot dst "x64")   the PVH note qemu reads to find the 32-bit entry,
-;                             the page tables + GDT, the long-mode ladder, khop
-;   (lay-boot dst "a64")  the translation tables, MAIR/TCR/TTBR, the MMU
-;                             switch, the hop into the mapped world, khop
+;   (lay-boot dst "x64")   the PVH note, the page tables + GDT, the long-mode ladder, khop
+;   (lay-boot dst "a64")   the translation tables, MAIR/TCR/TTBR, the MMU switch, the hop, khop
 ;   (lay-boot dst "rv64")  the one sv39 root, satp, sstatus.FS, khop
 ;
-; the link is FLAT on every arch (the projection: vaddr = paddr at the kernel base), so a label's
-; running address, its linked address, and the address a page table wants to hold
-; are ONE number. `la` (x86 rip-relative lea; a64 adrp+add) answers it, and a
-; field can name it whole -- the PVH note's entry word, the GDT register's base,
-; the ljmp's target. `lia` (x86 movabs; a64 an inline literal) stays only
-; where an absolute is wanted for its own sake: the hop that takes the first
-; fetch after the MMU comes on, where a pc-relative branch would ride a broken
-; map instead of failing on it, and the stack it lands on.
-;
-; runs after src/love/holo/{elf,obj}.l in a (borrow 'holo) cat, with the target's
-; backend text joined (a frontend bakes holo with the NATIVE backend only);
-; the Makefile drives it. register vocabulary is holo's -- x86: r0=rax
-; r1=rcx r2=rdx r3=rbx r5=rsi r6=rdi; a64: rN = xN.
+; the link is flat on every arch (vaddr = paddr at the kernel base), so a label's running, linked
+; and page-table address are one number and `la` answers it. `lia` (an absolute) stays only where
+; wanted for its own sake: the first fetch after the MMU comes on, where a pc-relative branch would
+; ride a broken map instead of failing on it, and the stack it lands on.
+; runs after src/love/holo/{elf,obj}.l in a (borrow 'holo) cat with the target's backend joined;
+; the Makefile drives it. registers are holo's -- x86: r0=rax r1=rcx r2=rdx r3=rbx r5=rsi r6=rdi;
+; a64: rN = xN.
 (:
-   (b-rep n x) (n >= 1 ? (x . (b-rep (n - 1) x)))
+   (b-rep n x) (n >= 1 ? (x . b-rep (n - 1) x))
    (b-zeros n) (b-rep n 0)
 
    (b-abs32 lbl ad) [['fix 4 'abs32 lbl ad]]     ; a 4-byte physical address
@@ -48,22 +40,22 @@
    i-inc-ecx        '(65)                                    ; 41           inc %ecx
    i-rdmsr          '(15 50)                                 ; 0f 32        rdmsr
    i-wrmsr          '(15 48)                                 ; 0f 30        wrmsr
-   (i-edi-sym l a)  (191 . (b-abs32 l a))                   ; bf id        mov $sym, %edi
-   (i-eax-sym l a)  (184 . (b-abs32 l a))                   ; b8 id        mov $sym, %eax
-   (i-ecx-imm v)    (185 . (le32 v))                        ; b9 id        mov $imm, %ecx
+   (i-edi-sym l a)  (191 . b-abs32 l a)                     ; bf id        mov $sym, %edi
+   (i-eax-sym l a)  (184 . b-abs32 l a)                     ; b8 id        mov $sym, %eax
+   (i-ecx-imm v)    (185 . le32 v)                          ; b9 id        mov $imm, %ecx
    (i-shl-eax n)    [193 224 n]                              ; c1 e0 ib     shl $n, %eax
-   (i-or-eax v)     (13 . (le32 v))                         ; 0d id        or $imm32, %eax
+   (i-or-eax v)     (13 . le32 v)                           ; 0d id        or $imm32, %eax
    (i-or-eax8 v)    [131 200 v]                              ; 83 c8 ib     or $imm8, %eax
-   (i-add-eax v)    (5 . (le32 v))                          ; 05 id        add $imm32, %eax
-   (i-cmp-ecx v)    ([129 249] + (le32 v))                   ; 81 f9 id     cmp $imm32, %ecx
+   (i-add-eax v)    (5 . le32 v)                            ; 05 id        add $imm32, %eax
+   (i-cmp-ecx v)    ([129 249] + le32 v)                     ; 81 f9 id     cmp $imm32, %ecx
    (i-jne lbl)      [15 133 ['fix 4 'rel32 lbl 0]]           ; 0f 85 cd     jne rel32
-   (i-st-edi d)     ([137 135] + (le32 d))                   ; 89 87 disp32 mov %eax, d(%edi)
-   (i-sti-edi d l a) (([199 135] + (le32 d)) + (b-abs32 l a))   ; c7 87 disp32 id  movl $sym, d(%edi)
-   (i-stimm-edi d v) (([199 135] + (le32 d)) + (le32 v))        ; c7 87 disp32 id  movl $imm, d(%edi)
-   (i-lgdt l a)     ([15 1 21] + (b-abs32 l a))              ; 0f 01 15 id  lgdt sym
-   (i-ldcr n)       [15 32 (192 | (n << 3))]                 ; 0f 20 /r     mov %crN, %eax
-   (i-stcr n)       [15 34 (192 | (n << 3))]                 ; 0f 22 /r     mov %eax, %crN
-   (i-ljmp l a)     ((234 . (b-abs32 l a)) + '(8 0))        ; ea off32 sel16  ljmp $0x08, $sym
+   (i-st-edi d)     ([137 135] + le32 d)                     ; 89 87 disp32 mov %eax, d(%edi)
+   (i-sti-edi d l a) ([199 135] + le32 d + b-abs32 l a)         ; c7 87 disp32 id  movl $sym, d(%edi)
+   (i-stimm-edi d v) ([199 135] + le32 d + le32 v)              ; c7 87 disp32 id  movl $imm, d(%edi)
+   (i-lgdt l a)     ([15 1 21] + b-abs32 l a)                ; 0f 01 15 id  lgdt sym
+   (i-ldcr n)       [15 32 (192 | n << 3)]                   ; 0f 20 /r     mov %crN, %eax
+   (i-stcr n)       [15 34 (192 | n << 3)]                   ; 0f 22 /r     mov %eax, %crN
+   (i-ljmp l a)     ((234 . b-abs32 l a) + '(8 0))          ; ea off32 sel16  ljmp $0x08, $sym
    (i32 bs) ['raw bs]                                        ; one 32-bit instruction, one form
 
    ;; -- x64 ------------------------------------------------------------
@@ -71,7 +63,7 @@
    ;; the LOADER consults, not advisory metadata, so link.l places it like
    ;; progbits instead of dropping it (dropping it would strand the kernel).
    x-note
-    ([['raw ((le32 4) + (le32 4) + (le32 18))]]      ; namesz 4, descsz 4, XEN_ELFNOTE_PHYS32_ENTRY
+    ([['raw (le32 4 + le32 4 + le32 18)]]            ; namesz 4, descsz 4, XEN_ELFNOTE_PHYS32_ENTRY
      + [['raw '(88 101 110 0)]]                      ; "Xen\0"
      + [['raw (b-abs32 'pvh32 0)]])                  ; the PHYSICAL address of the 32-bit entry
 
@@ -115,7 +107,7 @@
      ;; window keeps X: the kernel image and the framebuffer are read through it.
      + [(i32 (i-edi-sym 'pml4 0)) (i32 (i-eax-sym 'pdpt_id 3))
         (i32 i-st-edi0) (i32 (i-st-edi (256 * 8)))
-        (i32 (i-stimm-edi ((256 * 8) + 4) 0x80000000))]
+        (i32 (i-stimm-edi (256 * 8 + 4) 0x80000000))]
      ;; the long-mode ladder: GDT, CR4.PAE, CR3, EFER.LME, CR0.PG|PE, far jump
      + [(i32 (i-lgdt 'gdtreg 0))
         (i32 (i-ldcr 4)) (i32 (i-or-eax8 0x20)) (i32 (i-stcr 4))      ; CR4.PAE
@@ -286,7 +278,7 @@
    ;; window alone -- the hhdm is how the kernel reaches ram (kboot.hhdm), and NOT
    ;; being able to fetch through it is the whole reason a second window is worth
    ;; its entries. x86 says this with NX at PML4[256], a64 with the XN pair.
-   (r-pte i x) ((i << 28) | (x ? 0xEF 0xE7))
+   (r-pte i x) (i << 28 | (x ? 0xEF 0xE7))
    r-boot-text
     ('((label rvboot)
        ;; SBI hands over a0 = this hart's id and a1 = the device tree. a1 is the
@@ -294,7 +286,7 @@
        (mov r13 r1)
        (la r0 rv_root))
      + (foldl (\ a i (a + [['li 'r2 (r-pte i 1)] ['st 'r0 (i * 8) 'r2]
-                           ['li 'r2 (r-pte i 0)] ['st 'r0 (2048 + (i * 8)) 'r2]]))
+                           ['li 'r2 (r-pte i 0)] ['st 'r0 (2048 + i * 8) 'r2]]))
               () ^4)
      + '(;; satp: mode 8 (sv39) over the root's PPN, then the fence that makes the
          ;; map current. the pc is inside the identity window, so the fetch after
@@ -339,7 +331,7 @@
    ;; file bytes today and the loader hands the whole span over.
    (lay-boot dst arch) (write-bytes dst (lay-boot-bytes arch))
    (lay-boot-bytes arch)
-    (? (arch = "x64")
+    (arch @ "x64"
        (objsecs 'x64
                 [[".note.pvh"  7 2 4    x-note]
                  [".boot"      1 3 4096 x-boot]
@@ -349,7 +341,7 @@
                 ()                       ; the ELF entry is kmain's; the PVH entry rides the note
                 () ()
                 '("pvh32" "pvh64" "khop"))
-       (arch = "a64")
+       "a64"
        (objsecs 'a64
                 [[".boot"      1 3 4096 a-boot]
                  [".boot.text" 1 6 16   a-boot-text]
@@ -358,7 +350,7 @@
                 '("a64boot")             ; kproject.l names it as the ELF entry
                 () ()
                 '("khop"))
-       (arch = "rv64")
+       "rv64"
        ;; the stub before the tables, which is the other way round from both lanes
        ;; above: this door is entered at the ADDRESS a kernel was loaded to and not
        ;; at the symbol an ELF header names -- qemu's virt hands SBI the load base,

@@ -1,20 +1,17 @@
 ; src/inle/mkvec.l -- lay vec.o, the kernel's interrupt tail: the exception and IRQ entry points,
-; register-exact leaves C cannot say. mksys.l is the precedent and the shape is the same --
-; one scaffold, a payload per ISA -- but this one is generated rather than transcribed, the
-; 32 x86 stubs and the 16 a64 vector slots having been .macro/.rept loops in GAS.
+; register-exact leaves C cannot say. mksys.l's shape, one scaffold with a payload per ISA, and
+; generated rather than transcribed.
 ;
-;   (lay-vec dst "x64")   the IDT, the ISR tables, exc_stub_0..31, the three
-;                            IRQ handlers, archinit (IDT + PIC + PIT), k_reset/k_halt
-;   (lay-vec dst "a64")  the 2 KiB-aligned 16 x 0x80 vector table, the IRQ
-;                            save/restore path, the fault report path
+;   (lay-vec dst "x64")   the IDT, the ISR tables, exc_stub_0..31, the three IRQ handlers,
+;                         archinit (IDT + PIC + PIT), k_reset/k_halt
+;   (lay-vec dst "a64")   the 2 KiB-aligned 16 x 0x80 vector table, the IRQ save/restore path,
+;                         the fault report path
 ;   (lay-vec dst "rv64")  the one direct-mode trap entry: save, k_trap, restore, sret
 ;
-; runs after src/love/holo/{elf,obj}.l in a (borrow 'holo) cat; the Makefile drives it. register
-; vocabulary is holo's -- x86: r0=rax r1=rcx r2=rdx r3=rbx r4=rbp r5=rsi r6=rdi r7..r14=
-; r8..r15; a64: rN = xN; riscv: r0..r7 = a0..a7, r8..r12 = t0..t4, lr = ra.
-; x86 port i/o is register-contracted (dx the port, al the datum),
-; so every `out 0x21, al` becomes a `li r2 <port>` then `outb` -- one instruction more than
-; GAS's immediate form, and the same bus traffic.
+; runs after src/love/holo/{elf,obj}.l in a (borrow 'holo) cat; the Makefile drives it. registers
+; are holo's -- x86: r0=rax r1=rcx r2=rdx r3=rbx r4=rbp r5=rsi r6=rdi r7..r14=r8..r15; a64:
+; rN = xN; riscv: r0..r7 = a0..a7, r8..r12 = t0..t4, lr = ra. x86 port i/o is register-contracted
+; (dx the port, al the datum), so every `out` is a `li r2 <port>` then `outb`.
 (:
    ;; the four list helpers the loops want: `iota` answers an array, these are lists
    (v-upto n)  (:- (go 0) (go i) (n > i ? (i . go (i + 1))))
@@ -34,7 +31,7 @@
    ;; ..and the xmm file, low halves: compiled C keeps doubles in xmm registers across
    ;; statements now, and a handler's own C may spend any of them. 128 bytes under the gp
    ;; frame keeps sp 16-byte aligned; the frame pointer for k_exception steps over them.
-   x-fregs (map (i \ (name ("f" + show i))) (v-upto 16))
+   x-fregs (map (i \ name ("f" + show i)) (v-upto 16))
    x-fsave ([['sub 'sp 'sp 128]] + v-mapi (\ i r ['stsd 'sp (8 * i) r]) x-fregs)
    x-fload (v-mapi (\ i r ['ldsd r 'sp (8 * i)]) x-fregs + [['add 'sp 'sp 128]])
    ;; an EOI to the primary PIC. the port rides dx, the datum al.
@@ -55,13 +52,13 @@
                k_reset          ; 34: IRQ2
                k_reset          ; 35: IRQ3
                uart_isr)        ; 36: IRQ4  COM1
-           + (v-rep 11 'k_reset))                       ; 37..47: a stray IRQ reboots
+           + v-rep 11 'k_reset)                         ; 37..47: a stray IRQ reboots
    x-trap 0x8f                                        ; present, DPL 0, 64-bit TRAP gate
    x-intr 0x8e                                        ; ..and INTERRUPT gate (clears IF on entry)
    x-types ([x-trap x-trap x-intr]                    ; 0 #DE, 1 #DB, 2 NMI
-            + (v-rep 29 x-trap)                         ; 3..31
+            + v-rep 29 x-trap                           ; 3..31
             + [x-intr x-intr x-trap x-trap x-intr]    ; 32 PIT, 33 PS/2, 34, 35, 36 COM1
-            + (v-rep 11 x-trap))                        ; 37..47
+            + v-rep 11 x-trap)                          ; 37..47
 
    ;; the two lockstep tables, then the two LIDT operands. an entry is an 8-byte absolute
    ;; pointer, so a relocation in the .o. laid as .data and not .rodata: under the fused -pie
@@ -194,7 +191,7 @@
    a-save '(r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14 r15 r16 r17 r18 fp lr)
    ;; ..then the d-file, all 32 low halves: compiled C keeps doubles in d17..d31 across
    ;; statements now, and k_irq's own C may spend any of them. 176 + 256 keeps the alignment
-   a-fregs (map (i \ (name ("f" + show i))) (v-upto 32))
+   a-fregs (map (i \ name ("f" + show i)) (v-upto 32))
    a-frame 432
    (a-slot-off i) (8 * i)
    a-push (v-mapi (\ i r ['st 'sp (a-slot-off i) r]) a-save + v-mapi (\ i r ['stsd 'sp (176 + 8 * i) r]) a-fregs)
@@ -233,13 +230,13 @@
    ;; is 128 bytes; then f0..f19, the float file compiled C spends (fa0..fa7, ft0..ft11),
    ;; since doubles live in it across statements. 288 keeps sp 16-aligned.
    r-save '(lr r8 r9 r10 r11 r12 r0 r1 r2 r3 r4 r5 r6 r7)
-   r-fregs (map (i \ (name ("f" + show i))) (v-upto 20))
+   r-fregs (map (i \ name ("f" + show i)) (v-upto 20))
    r-frame 288
    ;; sd/ld of the two unnamed registers against sp, as words: S-form splits the offset
    ;; 11:5 / 4:0, I-form carries it whole.
-   (r-sd rs2 off) (le32 (((off >> 5) << 25) | (rs2 << 20) | (2 << 15) | (3 << 12)
-                         | ((off & 31) << 7) | 0x23))
-   (r-ld rd off)  (le32 ((off << 20) | (2 << 15) | (3 << 12) | (rd << 7) | 0x03))
+   (r-sd rs2 off) (le32 (off >> 5 << 25 | rs2 << 20 | 2 << 15 | 3 << 12
+                         | (off & 31) << 7 | 0x23))
+   (r-ld rd off)  (le32 (off << 20 | 2 << 15 | 3 << 12 | rd << 7 | 0x03))
    r-push (v-mapi (\ i r ['st 'sp (8 * i) r]) r-save
            + [['raw (r-sd 30 112)] ['raw (r-sd 31 120)]]
            + v-mapi (\ i r ['stsd 'sp (128 + 8 * i) r]) r-fregs)
@@ -262,7 +259,7 @@
    ;; ignores the low 11 bits: a table off its boundary dispatches into another entry.
    (lay-vec dst arch) (write-bytes dst (lay-vec-bytes arch))
    (lay-vec-bytes arch)
-    (? (arch = "x64")
+    (arch @ "x64"
        (objsecs 'x64
                 [[".text"   1 6 16 x-text]
                  [".data"   1 3 8  x-rodata]
@@ -273,13 +270,13 @@
                 ;; the stubs and the common tail as local function symbols, so nm, gdb and
                 ;; a fault backtrace all name them where a bare label could not.
                 (x-stub-names + '("exc_common")))
-       (arch = "a64")
+       "a64"
        (objsecs 'a64
                 [[".text.vectors" 1 6 2048 a-text]]
                 '("vectors")             ; arch.c: extern uint8_t vectors[] -> VBAR_EL1
                 () ()
                 '("a_irq" "a_fault"))
-       (arch = "rv64")
+       "rv64"
        (objsecs 'rv64
                 [[".text" 1 6 16 r-text]]
                 '("vectors")             ; arch.c: extern uint8_t vectors[] -> stvec

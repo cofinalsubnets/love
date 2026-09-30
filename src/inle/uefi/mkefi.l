@@ -1,14 +1,9 @@
-; src/inle/uefi/mkefi.l -- lay the firmware seam and bind the UEFI loader:
-; src/inle/virt/mkstart.l's sibling, the one piece of the boot that is not C, and
-; even it is holo IR. runs after src/love/holo/{elf,obj,link,pe}.l in a
-; (borrow 'holo) cat; (mkboot out arch objs..) links mooncc's loader objects into
-; the PE32+ that goes on the ESP as BOOTX64.EFI / BOOTAA64.EFI.
-;
-; three thunks in one object, laid FIRST so the PE entry is the first text byte.
-; what they have to say differs by arch because the CALLING CONVENTION does:
-; UEFI on x86-64 is ms_abi and the loader C is sysv, so both directions need a
-; shuffle; UEFI on a64 is AAPCS64, which is what the C already speaks, so
-; the two call thunks are pure tail jumps and only efi_go carries weight.
+; src/inle/uefi/mkefi.l -- lay the firmware seam in holo IR and bind the UEFI loader. runs after
+; src/love/holo/{elf,obj,link,pe}.l in a (borrow 'holo) cat; (mkboot out arch objs..) links
+; mooncc's loader objects into the PE32+ that goes on the ESP as BOOTX64.EFI / BOOTAA64.EFI.
+; three thunks in one object, laid first so the PE entry is the first text byte. x86-64 UEFI is
+; ms_abi against sysv C, so both directions shuffle; a64 UEFI is AAPCS64, so the call thunks are
+; tail jumps and only efi_go carries weight.
 ;   efiboot -- firmware enters here.
 ;   efi_call -- every UEFI service goes back OUT through this.
 ;   efi_go(tables, entry) -- the instructions C cannot spell: interrupts off,
@@ -96,8 +91,8 @@
    (efi-tgt arch) (arch @ "a64" 'a64 'x64)
    (efi-ir arch)  (arch @ "a64" efi-ir-a64 efi-ir-x64)
    (mkboot out arch objs)
-    (: srcs (map (\ f (: r (uread f)
-                       (two? r ? [f <>r] (say err ("mkefi: cannot open " + f), quit 1))))
+    (: srcs (map (f \ uread f @ r
+                       (two? r ? [f <>r] (say err ("mkefi: cannot open " + f), quit 1)))
                  objs)
        (pelink (efi-tgt arch)
                (["efi0" (string (objelf (efi-tgt arch) (efi-ir arch) () efi-exports () () () () () () ()))] .  srcs)
