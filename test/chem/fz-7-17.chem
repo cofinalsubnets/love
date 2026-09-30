@@ -1,0 +1,28 @@
+.cstart
+ring5 put NH at 3 put S at 1
+H
+CHO
+ring3 put N at 1 put S at 3 double 2,1 2,3 3,1
+.cend
+.sp
+.cstart
+benzene pointing up put OH at 1 double 4,5 1,2
+ring4 pointing left
+R1: Br
+O
+flatring pointing left
+front bond 129 ; HC
+double bond nw from O.V1
+.cend
+.PS
+box wid 0.2 ht 0.2
+begin chem
+R1: ring5 put CH3 at 1
+back bond 120 dashed
+ring
+O
+X1: back bond
+ring4 put OH at 1 put O at 3 with .V1 at X1.V1
+end
+move right 0.1
+.PE

@@ -1,0 +1,33 @@
+a paragraph line
+.PS
+box wid 0.2 ht 0.2
+begin chem
+front bond 242
+double bond
+BP
+bond
+"text"
+R2: bond 156
+end
+move right 0.1
+.PE
+.cstart
+NHCH3
+double bond 204
+ring3 pointing left put S at 1 put O at 2 double 3,1 2,3 2,1
+HO
+R1: bond -27
+front bond ; HC
+triple bond
+aromatic ring pointing down double 5,6 2,1 4,5
+.cend
+a paragraph line
+.cstart
+size 8
+flatring put N at 4
+C2H5
+A: SO3H
+ring3 pointing right double 3,1 2,3
+ring8 put S at 1 put CH3 at 6 with .V2 at A
+double bond 341
+.cend

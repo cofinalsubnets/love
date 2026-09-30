@@ -1,0 +1,28 @@
+.sp
+.PS
+box wid 0.2 ht 0.2
+begin chem
+B: bond -34
+NH2
+B: NO2
+CH3CH2 ; double bond 419
+back bond
+ring4 aromatic put O at 3 put CH3 at 4
+bond 350 ; O
+ring8 pointing left double 1,2 7,8 3,2
+CH3CH2
+end
+move right 0.1
+.PE
+.cstart
+NH2 ; bond 240
+triple bond 252
+OH ; bond 30
+.cend
+text
+.cstart
+NH2 ; back bond left
+double bond 120
+A: ring pointing up put CH3 at 2 put NH at 1 double 2,3 1,6 with .V6 at A
+bond
+.cend

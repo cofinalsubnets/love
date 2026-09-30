@@ -1,0 +1,23 @@
+.PS
+box wid 0.2 ht 0.2
+begin chem
+CH2
+R1: OC
+bond ne ; F
+back bond 330
+CH2
+CH
+B: triple bond length 0.5
+ring pointing right double 1,2
+end
+move right 0.1
+.PE
+.PS
+box wid 0.2 ht 0.2
+begin chem
+bond dashed ; C2H5
+CH
+CHO
+end
+move right 0.1
+.PE

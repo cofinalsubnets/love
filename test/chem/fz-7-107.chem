@@ -1,0 +1,25 @@
+.cstart
+bond 145 from Q
+C2H5
+triple bond length .25
+B: bond
+db = .25
+aromatic ring pointing up put N at 5 double 2,3 6,1 2,1
+.cend
+.PS
+box wid 0.2 ht 0.2
+begin chem
+"a b"
+HO
+NH4+
+double bond 282
+end
+move right 0.1
+.PE
+.cstart
+N(CH3)2
+B: double bond 64
+bond 241 from NCH32.C ; BP
+NHCH3 ; front bond nw
+bond 45 length .25 ; O-
+.cend

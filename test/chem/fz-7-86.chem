@@ -1,0 +1,40 @@
+.PS
+box wid 0.2 ht 0.2
+begin chem
+N
+BP
+back bond down
+R2: ring pointing left
+bond down
+bond 261
+A: NH
+bond down
+double bond left
+bond
+end
+move right 0.1
+.PE
+a paragraph line
+.cstart
+front bond right to BP
+front bond 206 length .25
+back bond 10
+SO3H
+flatring
+bond up from Last
+double bond length 0.5
+R3: flatring put O at 3 double 1,2
+HOCH2
+.cend
+text
+.PS
+box wid 0.2 ht 0.2
+begin chem
+R2: C=O
+C1: ring3
+benzene put CH3 at 2 put O at 1 double 1,2 6,1
+bond
+HOCH2
+end
+move right 0.1
+.PE

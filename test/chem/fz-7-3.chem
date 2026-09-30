@@ -1,0 +1,20 @@
+.cstart
+size 9
+R2: C2H5 at R1 + (0.5,0.5)
+bond ; NO2
+# comment
+.cend
+.PS
+box wid 0.2 ht 0.2
+begin chem
+bond 270 to BP
+double bond
+bond
+bond
+"a b"
+BP
+NH4+
+C1: bond up length 0.3 from NH4.V3
+end
+move right 0.1
+.PE

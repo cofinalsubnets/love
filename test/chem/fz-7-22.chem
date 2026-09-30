@@ -1,0 +1,26 @@
+.sp
+.cstart
+bond dotted
+R1: triple bond dotted
+ring5
+size = 11
+"a b"
+pic box wid 0.1
+COOH
+.cend
+text
+.cstart
+triple bond 2 length 0.5 to BP
+triple bond length 0.3 ; NH4+
+X1: COOH
+Cl ; bond 0
+ring5 aromatic with .V1 at X1.V2
+NH
+.cend
+text
+.cstart
+   # indented
+R1: flatring
+bond ; BP
+"text"
+.cend

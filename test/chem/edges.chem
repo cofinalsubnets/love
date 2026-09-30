@@ -1,0 +1,20 @@
+.PS
+box
+begin chem
+CH3
+bond 30
+ring
+end
+.PE
+.cstart extra words
+oxygen
+  C
+	bond	up
+R9: benzene put N at 2 put O at 5 double 3,4
+bond from R9 ; OH
+bond 45 from R9.V3
+X1: "a string"
+bond from X1
+BP ; C
+.cend
+trailing text

@@ -1,0 +1,24 @@
+.PS
+box wid 0.2 ht 0.2
+begin chem
+back bond
+Cl ; bond
+ring pointing up aromatic
+triple bond -17
+R2: bond right
+R2: aromatic ring
+C2H5
+double bond sw length 0.3
+NO2 ; double bond se
+double bond 104
+end
+move right 0.1
+.PE
+.cstart
+R2: HOCH2
+back bond 136
+bond 306 length .25 from R2.V1
+bond
+BP
+triple bond 307
+.cend
