@@ -72,12 +72,8 @@
    ; of its last forms is the empty-lcat disaster wearing a subtler face -- the build
    ; would take it as fresh and fail somewhere else.
    (minify src)
-    (: acc ((: (g acc cl first)
-              (: r (sound cl)
-                 (? (two? r) (g (first ? (show <r) (acc + " " + show <r)) >r 0)
-                    (r = 'torn) (die "unfinished form in input")
-                    acc)))
-            "" src 1)
+    (: acc (sounds src @ 'torn (die "unfinished form in input")
+                         fs (foldl (\ a f (a = "" ? (show f) (a + " " + show f))) "" fs))
        ; walk acc: drop redundant spaces (outside string literals). ctx = bytes since
        ; the last hard boundary (reversed); instr = inside a "..." literal (where \
        ; escapes); out = the survivors, reversed.

@@ -894,18 +894,12 @@
    ; folding to one application so infix reads; 'torn is an unfinished shape. the run
    ; sits under a trap, but a form calling `quit` still ends the process.
    (sh-loveval src)
-     (: m (nom 0)                                 ; a fresh nom: 'torn, ==-safe
-        (rdl x acc) (sound x @ 'torn       m
-                               (d . rest) (rdl rest (d . acc))
-                               _           (rev acc))
-        ; ^m, the pin: a bare `m` in a pattern would bind and take every answer.
-        ; the nom is read from outside and the arm asks for that value alone.
-        ; [] is the empty chain, exactly; a `()` arm would fit anything (pat.l)
-        (trap (\ _ (rdl src () @ ^m ('err . ('unfinished-form . src))
-                                 [] (1 . ())
-                                 ds (1 . (ev 'ev (two? >ds ? ds <ds)))))
-              ()
-              (\ a b ('err . (a . b)))))
+     ; [] is the empty chain, exactly; a `()` arm would fit anything (pat.l)
+     (trap (\ _ (sounds src @ 'torn ('err . ('unfinished-form . src))
+                              [] (1 . ())
+                              ds (1 . (ev 'ev (two? >ds ? ds <ds)))))
+           ()
+           (\ a b ('err . (a . b))))
    (sh-lovesay c)                                 ; a love condition, on err, status 1
      (say err "lush: love: ", print err <c, say err " ",
         print err >c, put err 10, flush err, 1)

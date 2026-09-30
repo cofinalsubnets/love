@@ -3152,12 +3152,8 @@
    raw (want 'raw)
 
 
-   (rdall cl acc)
-    (sound cl @ 'torn no                           ; unfinished shape -> more
-                (a . b) (rdall b (a . acc))
-                (rev acc))                         ; a clean end -> the datums, in order
-   (parseall cl) (rdall cl () @
-    ^no  no ; unfinished shape
+   (parseall cl) (sounds cl @
+    'torn no ; unfinished shape: more
     ((_ . ()) @ a) a                         ; one datum: as-is (leading monadic preserved)
     ((_ . _)  @ d) [d])           ; many: the application; a blank line: ()
 
@@ -3748,12 +3744,8 @@
                ; open is posix's, and a seat without it answers () here rather than at the bake
                (load1 p) (: q (cite 'posix 'open p "r")
                             (? (hot? q) (reads q) (say err $ "love: cannot open " + p + "\n", cli-leave 1)))
-               (eval1 s) (: m (nom 0)                           ; a fresh nom: the unfinished shape, ==-safe
-                  (rdl x acc) (sound x @ 'torn      m           ; every top-level datum off the string, in order
-                                          (a . b)  (rdl b (a . acc))
-                                          (rev acc))
-                  (rdl s () @ ^m (say err "love: -e: unfinished form\n", cli-leave 2)
-                              (d @ (a . u)) (ev 'ev (atom? u ? a d)))) ; many datums fold to one application
+               (eval1 s) (sounds s @ 'torn (say err "love: -e: unfinished form\n", cli-leave 2)
+                                    (d @ (a . u)) (ev 'ev (atom? u ? a d)))   ; many datums fold to one application
                v-msg ("love " + love-version + "\n")   ; _ arg: love has no nullary calls
                h-msg
                ("usage: love [wake IMAGE] [-l FILE] [-e EXPR] [-q] [-m SIZE] [-v] [-h] [--] [VERB|FILE] [ARG ...]\n" +

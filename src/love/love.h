@@ -725,7 +725,7 @@ lvm_t lvm_kcall,
  lvm_sleep, lvm_donep, lvm_scoop, lvm_hush,
  lvm_await,
  lvm_fgetc, lvm_fungetc, lvm_chug, lvm_unchug, lvm_inhand, lvm_fputc, lvm_fputs, lvm_fflush,
- lvm_fputbn, lvm_sound,
+ lvm_fputbn, lvm_sound, lvm_sounds,
  lvm_trayctor, lvm_iota, lvm_rank, lvm_alen, lvm_shape, lvm_atype,   // typed multi-rank arrays
  lvm_asum, lvm_aprod, lvm_max, lvm_min, lvm_aall, lvm_aany, lvm_max2, lvm_min2, lvm_floor, lvm_inner, lvm_outer,
  lvm_litp, lvm_hotp,

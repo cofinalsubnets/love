@@ -786,11 +786,11 @@ static unsigned char const rd_cls[257] = {
  ['5'] = RcDig, ['6'] = RcDig, ['7'] = RcDig, ['8'] = RcDig, ['9'] = RcDig };
 
 static lvm(lvm_rd_start); static lvm(lvm_rd_read); static lvm(lvm_rd_close);
-static lvm(lvm_rd_datum); static lvm(lvm_rd_all); static lvm(lvm_rd_called); static lvm(lvm_rd_reads);
+static lvm(lvm_rd_datum); static lvm(lvm_rd_all); static lvm(lvm_rd_called);
 static union u const
  rd_k[] = { {lvm_rd_start}, {lvm_rd_read}, {lvm_rd_close}, {lvm_rd_datum}, {lvm_rd_all} },
  rd_call_k[] = { {lvm_ap}, {lvm_rd_called} },
- rd_reads_k[] = { {lvm_rd_reads}, {lvm_ret0} };
+ rd_reads_k[] = { {lvm_sounds}, {lvm_ret0} };   // the boot's, the same run as the nif's
 
 // a position's char: 256 for a cell that holds no byte (a name's, to every class), -1 at
 // the end. a charm is an index into the string src; () is src when there is none
@@ -1158,16 +1158,15 @@ static struct ai *rd_all(struct ai *g) {
  return rd_done(g, l); }
 
 lvm(lvm_sound) LvmResume(g, rd_one)
-static lvm(lvm_rd_reads) LvmResume(g, rd_many)
+// (sounds text): every form of a text, in order, or `torn` -- sound's doors, and the boot's
+// reader. a stray closer ends the text
+lvm(lvm_sounds) LvmResume(g, rd_many)
 static lvm(lvm_rd_start) LvmResume(g, rd_start)
 static lvm(lvm_rd_read) LvmResume(g, rd_read)
 static lvm(lvm_rd_close) LvmResume(g, rd_close)
 static lvm(lvm_rd_datum) LvmResume(g, rd_datum)
 static lvm(lvm_rd_all) LvmResume(g, rd_all)
 static lvm(lvm_rd_called) LvmResume(g, rd_called)
-// (sounds text): every form of a text, in order, or `torn` -- sound's doors, and the boot's
-// reader. a stray closer ends the text
-LvNif("sounds", rd_reads_k, NULL);
 
 ////
 /// " the boot stitch "

@@ -56,6 +56,7 @@
       (nif_longp         "long?"         2 lvm_longp)
       (nif_snip          "snip"          3 lvm_snip)
       (nif_sound         "sound"         1 lvm_sound)
+      (nif_sounds        "sounds"        1 lvm_sounds)
       (nif_string        "string"        1 lvm_string)
       (nif_nomctor       "nom"           1 lvm_nomctor)
       (nif_spin          "spin"          1 lvm_spin)
