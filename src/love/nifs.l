@@ -175,60 +175,74 @@
       lvm_argtwocond)
 
    ; --- the C, through clay ------------------------------------------------------
-   ; one table: a nif's stream is a run inside it, and def1 carries the run's address.
-   ; two shapes spliced in flat -- {impl, ret0}, and {cur, count, impl, ret0} above one operand.
+   ; the roster laid once as X-rows, and three consumers expanding it: the nifs table,
+   ; def1, and ai_nif_lvm. P is a plain run {impl, ret0}; C a curried one, {cur, count,
+   ; impl, ret0} above one operand. at is the run's offset in nifs, a running sum here.
+   nl (string 10)
    (vr s) ['var s]
-   (cell e) ['init [e]]            ; one `union u`: braced, the ap being its first member
-   catl (foldl (+) ()) ; FIXME isn't there a nif for this?
-   (nif-run a im)                  ; the cells of one nif's run
-    (: end [(cell (vr (string im))) (cell (vr "lvm_ret0"))]
-       (? (a < 2) end
-          ([(cell (vr "lvm_cur"))
-            (cell ['dfield "x" ['call (vr "putcharm") [['num a]]]])]
-           + end)))
-   (nif-wide? r) (1 < <>>r)    ; a curried run is four cells, a plain one two
-   nif-table
-    ['gdecl [["nifs" '(arr (const (named "union u")) 0)
-              ['init (catl (map (r \ nif-run <>>r <>>>r) nif-rows))]]]
-     '(static)]
-
-   ; where each nif's run starts: a running sum over the roster
+   (mac nm body) ['cpp-def nm body]
+   (nif-wide? r) (1 < <>>r)
    nif-ats
     (: (go l n) (two? l ? (n . go >l (n + (nif-wide? <l ? 4 2))))
      (go nif-rows 0))
-
-   ; the book table: love name -> the value as a word. a nif carries its run's address,
-   ; an instruction carries itself. unsized, so C's count cannot disagree with the roster.
-   ; m is the value's own union member: a nif is threaded code (union u const*), an
-   ; instruction is the lvm_ that runs it (lvm_t*). the union says which; no cast either way.
    ; mod is the module the row is born in, () for the global book -- and no sweep in egg.l
    ; has to know it. the boot .l files compile against the bare book, so any name one of
    ; them spells has to stay global, which is what keeps that column near-empty.
    (mod-of r) (? (4 < tally r) (r 4) ())
-   (def-row m nm v mod) ['init [['str nm] ['init [['dfield m v]]]
-                                (? mod ['str (string mod)] ['num 0])]]
-   (nif-at n) (n < 1 ? (vr "nifs") ['bin '+ (vr "nifs") ['num n]])
    (zip a b) (two? a ? ([<a <b] . zip >a >b))
+   (nif-row at r)
+    (: im (string <>>>r)
+       md (: m (mod-of r) (? m (cstrlit (string m)) "0"))
+       (? (nif-wide? r)
+          ("C(" + show at + ", " + show <>>r + ", " + cstrlit <>r + ", " + im + ", " + md + ")")
+          ("P(" + show at + ", " + cstrlit <>r + ", " + im + ", " + md + ")")))
+   (chunk n l)
+    (: (go i cur l) (? (two? l) (? (i = n) (rev cur . go 0 () l) (go (i + 1) (<l . cur) >l))
+                       (two? cur ? [(rev cur)] ()))
+     (go 0 () l))
+   ; a macro body over several lines, each but the last ending in a continuation
+   (nif-lines l) (l @ (h . t) (foldl (a \ s \ a + " \\" + nl + " " + s) ("\\" + nl + " " + h) t) "")
+   nif-rows-def
+    (mac "ai_nif_rows(P, C)" (nif-lines (map (p \ nif-row <>p <p) (zip nif-rows nif-ats))))
+   nif-insts-def
+    (mac "ai_inst_rows(I)"
+         (nif-lines (map (c \ sepby " " (map (i \ "I(" + string i + ")") c)) (chunk 6 nif-insts))))
+
+   nif-table
+    ['gdecl [["nifs" '(arr (const (named "union u")) 0)
+              ['init [['call (vr "ai_nif_rows") [(vr "nif_run_p") (vr "nif_run_c")]]]]]]
+     '(static)]
+   ; the book table: love name -> the value as a word. a nif carries its run's address,
+   ; an instruction carries itself -- the union member says which, so no cast either way.
    nif-def1
     ['gdecl [["def1" '(arr (const (struct "ai_def")) 0)
-              ['init ((map (p \ def-row "k" <><p (nif-at <>p) (mod-of <p)) (zip nif-rows nif-ats))
-                      + (map (\ i (def-row "ap" (string i) (vr (string i)) ())) nif-insts))]]]
+              ['init [(vr "ai_nif_rows(nif_def_p, nif_def_c) ai_inst_rows(nif_def_i)")]]]]
      '(static)]
+   ; book name -> the lvm_ that runs it, as love data in .rodata: `dis` can name only the
+   ; book key, mooncc's IR only the C symbol. lib/splice.l reads it. not static: the
+   ; runtime asks for it by name.
+   nif-lvmmap
+    ['gdecl [["ai_nif_lvm" '(arr (const char) 0)
+              (vr (cstrlit "(" + " ai_nif_rows(nif_lvm_p, nif_lvm_c) " + cstrlit ")"))]] ()]
 
-   ; --- the bridge the splice JIT needs ------------------------------------------
-   ; book name -> the lvm_ that runs it, as love data in .rodata: `dis` can name only
-   ; the book key, mooncc's IR only the C symbol. lib/splice.l reads it out of .rodata.
-   nif-lvmtext
-    (: (row r) ("(\"" + <>r + "\" " + string <>>>r + ")")
-       ("(" + foldl (a \ r \ a + row r) "" nif-rows + ")"))
-   nif-lvmmap                       ; not static: the runtime asks for it by name
-    ['gdecl [["ai_nif_lvm" '(arr (const char) 0) ['str nif-lvmtext]]] ()]
+   nif-macs
+    [(mac "nif_run_p(at, nm, im, mod)" "{ im }, { lvm_ret0 },")
+     (mac "nif_run_c(at, a, nm, im, mod)" "{ lvm_cur }, { .x = putcharm(a) }, { im }, { lvm_ret0 },")
+     (mac "nif_def_p(at, nm, im, mod)" "{ nm, { .k = nifs + at }, mod },")
+     (mac "nif_def_c(at, a, nm, im, mod)" "nif_def_p(at, nm, im, mod)")
+     (mac "nif_def_i(im)" "{ #im, { .ap = im }, 0 },")
+     (mac "nif_lvm_p(at, nm, im, mod)" (cstrlit "(\"" + " nm " + cstrlit "\" " + " #im " + cstrlit ")"))
+     (mac "nif_lvm_c(at, a, nm, im, mod)" "nif_lvm_p(at, nm, im, mod)")]
+   nif-undefs
+    (map (n \ ['cpp-undef n])
+         '("ai_nif_rows" "ai_inst_rows" "nif_run_p" "nif_run_c" "nif_def_p" "nif_def_c"
+           "nif_def_i" "nif_lvm_p" "nif_lvm_c"))
 
-   nifs-h
-    (cats (map clay-show
-      ['(note "nifs.h -- the nif + instruction registry. generated by nifs.l, do not edit")
-       nif-table '(note "") nif-def1 '(note "") nif-lvmmap]))
+   nif-forms
+    ([['note "nifs.h -- the nif + instruction registry. generated by nifs.l, do not edit"]
+      ['note "one row per nif: P(at, name, impl, mod) plain, C(at, arity, name, impl, mod) curried"]
+      nif-rows-def nif-insts-def]
+     + nif-macs + [nif-table nif-def1 nif-lvmmap] + nif-undefs)
+   nifs-h (cats (map clay-show nif-forms))
    ; a shape check first: a malformed tree arrives as a codegen error naming nothing.
-   nifs-ok
-    (: bad (any (c \ clay-ok? c != 1) [nif-table nif-def1])
-       (? bad 0 1)))
+   nifs-ok (? (any (c \ clay-ok? c != 1) nif-forms) 0 1))
