@@ -65,24 +65,39 @@
    ; --- exclusive: a directory holding its owner, laid whole by a rename ---
    (lk-xdir root nm) (root + "/x/" + lk-slug nm)
    (lk-gone d) (: _ (unlink (d + "/owner")) (rmdir d))
-   ; a stale lock is renamed aside before it goes, so two sessions reclaiming it cannot both win
-   (lk-reclaim d who) (: g (d + ".gone-" + show who) (? !(rename d g) (lk-gone g) ()))
-   (lk-x-take root nm who note tries)
-    (: _ (lk-mkdirs (root + "/x"))
-       d (lk-xdir root nm)
+   ; an owner's own name, pid start and since, which no later owner shares
+   (lk-token o) (lk-slug (peep o "pid" "0") + "-" + lk-slug (peep o "start" "") + "-" + lk-slug (peep o "since" ""))
+   ; a stale lock is renamed aside only by the one reaper whose mkdir of d.reap-TOKEN won, and only
+   ; while d still holds that owner, so a live lock laid since is never moved. a marker goes after an hour
+   (lk-reclaim dir base o)
+    (: d (dir + "/" + base) k (lk-token o) pre (base + ".reap-") now (clock 0)
+       _ (map (\ n (: p (dir + "/" + n) s (stat p) (? (two? s && s 1 < now - 3600000) (rmdir p) 0)))
+              (filter (\ n (#pre <= #n && snip n 0 #pre = pre)) (: ns (readdir dir) (? (two? ns) ns ()))))
+       (? (mkdir (d + ".reap-" + k) 448) 0
+          ((lk-token (lk-parse (lk-read (d + "/owner")))) != k) 0
+          !(rename d (d + ".gone-" + k)) (lk-gone (d + ".gone-" + k))
+          0))
+   (lk-x-take dir base nm who note tries)
+    (: _ (lk-mkdirs dir)
+       d (dir + "/" + base)
        tmp (d + ".new-" + show who)
        _ (mkdir tmp 448)
-       _ (lk-write (tmp + "/owner") (lk-owner who note))
-       r (rename tmp d)
-       (? !r {"granted" 1 "lock" nm}
+       (? !(lk-write (tmp + "/owner") (lk-owner who note))
+           (: _ (lk-gone tmp) {"granted" 0 "lock" nm "error" "cannot write the owner"})
+          !(rename tmp d) {"granted" 1 "lock" nm}
           (: _ (lk-gone tmp)
-             o (lk-parse (lk-read (d + "/owner")))
+             t (lk-read (d + "/owner"))
+             o (lk-parse t)
              (? (lk-num (peep o "pid" "0") = who) {"granted" 1 "lock" nm}
-                (!(lk-live? o) && 0 < tries) (: _ (lk-reclaim d who) (lk-x-take root nm who note (tries - 1)))
+                (tries <= 0) {"granted" 0 "lock" nm "position" 1 "holder" (lk-view o)}
+                ; no owner: its holder is letting go, and a rename onto the empty dir takes it
+                !(string? t) (lk-x-take dir base nm who note (tries - 1))
+                !(lk-live? o) (: _ (lk-reclaim dir base o) (lk-x-take dir base nm who note (tries - 1)))
                 {"granted" 0 "lock" nm "position" 1 "holder" (lk-view o)}))))
-   (lk-x-drop root nm who)
-    (: d (lk-xdir root nm) o (lk-parse (lk-read (d + "/owner")))
+   (lk-x-free d who)
+    (: o (lk-parse (lk-read (d + "/owner")))
        (? (lk-num (peep o "pid" "0") = who) (: _ (lk-gone d) 1) ()))
+   (lk-x-drop root nm who) (lk-x-free (lk-xdir root nm) who)
 
    ; --- heavy: tickets, q/ waiting and h/ held, each a file holding its owner; a ticket is named
    ; by when it was asked for, so sorted names are the order of asking ---
@@ -133,7 +148,7 @@
           "/tmp/love-locks"))
 
    (locks-acquire root nm kind who note floor max)
-    (kind @ 'exclusive (lk-x-take root nm who note 1)
+    (kind @ 'exclusive (lk-x-take (root + "/x") (lk-slug nm) nm who note 1)
             'heavy (lk-h-take root nm who note floor max)
             {"granted" 0 "error" "kind is exclusive or heavy"})
 

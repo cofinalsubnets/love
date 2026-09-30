@@ -59,6 +59,43 @@
 
 (test (string? (locks-root 0)))
 
+; --- races: n processes at a barrier, each a kid file of its own run under this love ---
+; a kid waits for ROOT.go, runs body, writes its answer to ROOT.res/PID, waits for ROOT.done
+(: lr-love (: l <cmdline (l 0 = 47 ? l (cwd 0 + "/" + l)))
+   (lr-put p s) (: f (open p "w") _ (say f s) (close f))
+   (lr-names d) (: ns (readdir d) (? (two? ns) (filter (n \ n 0 != 46) ns) ()))
+   (lr-kids rt n body)
+    (: _ (hark ["rm" "-rf" rt (rt + ".go") (rt + ".done") (rt + ".res")])
+       _ (mkdir rt 448) _ (mkdir (rt + ".res") 448)
+       _ (lr-put (rt + ".kid.l")
+                 ("(borrow 'posix)\n(borrow 'locks)\n(: rt " + show rt + " me (getpid 0)\n"
+                  + " (bar f) (? (two? (stat f)) 0 (: _ (rest 1) (bar f)))\n _ (bar (rt + \".go\"))\n"
+                  + " r " + body + "\n f (open (rt + \".res/\" + show me) \"w\") _ (say f (show r)) _ (close f)\n"
+                  + " (bar (rt + \".done\")))\n"))
+       (map (\ _ (spawn [lr-love (rt + ".kid.l")])) ^n))
+   ; go, then watch f every few ms until n answers or 20 s -> [f's most, the answers]
+   (lr-go rt ps n f)
+    (: _ (rest 800) _ (lr-put (rt + ".go") "")
+       (look m k) (: m2 (max m (f 0)) got (lr-names (rt + ".res"))
+                     (? (n <= #got || k <= 0) [m2 got] (: _ (rest 3) (look m2 (k - 1)))))
+       r (look 0 6000)
+       as (map (\ p (: f (open (rt + ".res/" + p) "r") s (slurp f) _ (close f) s)) (r 1))
+       _ (lr-put (rt + ".done") "")
+       _ (map wait ps)
+       _ (hark ["rm" "-rf" rt (rt + ".go") (rt + ".done") (rt + ".res") (rt + ".kid.l")])
+       [<r as]))
+
+; a stale exclusive lock, sixteen reapers at once: one of them holds it
+(: lr-x (lk-root + "-x")
+   (round _)
+    (: ps (lr-kids lr-x 16 "(peep (locks-acquire rt \"out-r\" 'exclusive me \"race\" () 1) \"granted\" 0)")
+       _ (mkdir (lr-x + "/x") 448) _ (mkdir (lr-x + "/x/out-r") 448)
+       _ (lr-put (lr-x + "/x/out-r/owner") ("pid " + show lk-dead + "\nstart 1\nsince 0\nnote dead\n"))
+       r (lr-go lr-x ps 16 (\ _ 0))
+       [#(r 1) #(filter (\ a (a = "1")) (r 1))])
+   _ (test (all (\ r (r = [16 1])) (map round ^4)))
+   0)
+
 (hark ["rm" "-rf" lk-root])
 (test_fin ())
 (puts "locks: ok")
