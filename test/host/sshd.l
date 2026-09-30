@@ -16,7 +16,7 @@
    _ (hark ["rm" "-rf" dir]) _ (mkdir dir 448)
    me (ssh-me 0)
    user (me 0)
-   port 7452
+   port (test-free 0)
    (mk name) (: seed (rnd 32) pub (ed-pub seed) _ (ssh-keywrite (dir + "/" + name) seed pub name) [seed pub])
    hk (mk "host") id (mk "id") bad (mk "bad")
    ; the files read back as they were written, the private one closed to all but its owner
@@ -34,7 +34,7 @@
    _ (setenv "PATH" (dir + "/bin:" + path0))
    srv (tether [love "kore" "sshd" "-p" (show port) "-h" (dir + "/host") "-o" ("AuthorizedKeysFile=" + dir + "/ak")])
    _ (setenv "PATH" path0)
-   _ (rest 400)                                    ; its listen, before our connects
+   _ (test-up port)                                ; its listen, before our connects
    (ssh key args) (tether (love . "kore" . "ssh" . "-p" . show port . "-i" . (dir + "/" + key)
                                 . "-o" . "StrictHostKeyChecking=no" . args))
    (run key args) (: r (ssh key args) t (slurp >r) [t <(waitfor <r)])
