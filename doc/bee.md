@@ -36,7 +36,7 @@ bee - a coding agent in the terminal, and the protocol its sessions talk by
 - **list_sessions** and **send_message**, described under SESSIONS AND MESSAGES;
 - **start_job**, **check_job** and **stop_job**, and **spawn_bee** and **stop_bee**, described under JOBS AND WORKERS.
 
-A write, an edit, a shell command, a job's start, a spawn and a stop of another bee ask y/n before they run, unless **-y** is given. The rest run without asking.
+A write, an edit, a shell command, a job's start, a queue row, a spawn and a stop of another bee ask y/n before they run, unless **-y** is given. The rest run without asking.
 
 Given a *prompt*, bee runs one turn and exits, streaming the answer to standard output. With no prompt, it opens its full screen on a terminal and a **>** loop elsewhere, or on a terminal too with **--plain**.
 
@@ -115,7 +115,7 @@ Sessions working in parallel often share one branch, and merge into it one at a 
 
 bee quotes each queue in the system prompt as it stood at start, and tells the model to follow the rules and to read the queue fresh before acting on it. A row names its session. The model reaches a bee session with **send_message**, and asks the user to relay to any other.
 
-The model writes a queue only through **queue_row**, never by hand; a small model given the text to edit once replaced a whole queue with its one row. The tool reads the queue and changes exactly one line: the bee's own row, keyed by its session name, in the header's format *position session branch gated-on gated-head state*, with an optional note after **#**. The model gives the state (**waiting**, **gating**, **green**, **folded-into-***N*, or **left**, which removes the row) and whichever other fields change, and the rest keep their values. A bee with no row joins at the bottom, one past the highest position. The write is a compare-and-swap, retried from a fresh read when someone wrote first. Only the bee named on the **leader** line may pass **session** to edit another's row, or **base** to move the base line (*branch* *sha*) when it lands; anyone else is refused.
+The model writes a queue only through **queue_row**, never by hand; a small model given the text to edit once replaced a whole queue with its one row. The tool reads the queue and changes exactly one line: the bee's own row, keyed by its session name, in the header's format *position session branch gated-on gated-head state*, with an optional note after **#**. The model gives the state (**waiting**, **gating**, **green**, **folded-into-***N*, or **left**, which removes the row) and whichever other fields change, and the rest keep their values. A bee with no row joins at the bottom, one past the highest position. The write is a compare-and-swap, retried from a fresh read when someone wrote first. Only the bee named on the **leader** line may pass **session** to edit another's row, or **base** to move the base line (*branch* *sha*) when it lands; anyone else is refused. The queue must be **refs/queue/***name* or **queue/***name*, and no field may hold a control character, nor any but the note a space, so one field cannot write another row.
 
 A bee watches the queues for its rows. On the full screen and when serving, it reads every queue again every **(queue-watch** *n***)** seconds (20 unless set, 0 for never). A change that concerns its rows comes to it as a message from **queue-watch**:
 

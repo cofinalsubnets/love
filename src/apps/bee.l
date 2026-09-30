@@ -563,7 +563,17 @@
          (? !(two? (filter is? ls)) [text "no base line"]
             [(foldl (\ a l (a + (is? l ? (<(words l) + " " + sha) l) + "\n")) "" ls) ""]))
      ; the tool: -> [ok? text]
+     ; a row is one line of words: no field may hold a control character, nor a space but the note
+     (q-bad in) (filter (\ k (: v (in k) (string? v && two? (filter (\ c (c < 32 || c = 127 || (c = 32 && k != "note")))
+                                                                  (map v ^#v)))))
+                        (keys in))
+     (q-name? q) (: s (? (starts? q "refs/queue/") (snip q 11 #q) (starts? q "queue/") (snip q 6 #q) "")
+                    (name-ok? s && s != "." && s != ".."))
      (queue-row in)
+      (? !(q-name? (in "queue")) [0 "a queue is refs/queue/NAME or queue/NAME"]
+         (two? (q-bad in)) [0 ("a field holds a control character, or a space outside the note: " + <(q-bad in))]
+         (queue-row1 in))
+     (queue-row1 in)
       (: q (in "queue") who (field in "session" bee-name)
          (try n)
           (: rd (q-read q) old <rd text (rd 1) lead (q-leader text)
@@ -1009,7 +1019,7 @@
                  (in "path")))
      ; the tools that run without asking: they read, speak only to another bee, or look at
      ; or stop a job this bee started
-     bee-free ["read_file" "list_sessions" "send_message" "check_job" "stop_job" "queue_row" "lock_list" "lock_release"]
+     bee-free ["read_file" "list_sessions" "send_message" "check_job" "stop_job" "lock_list" "lock_release"]
 
      ; one tool_use block -> its tool_result, asking first unless yes or a read
      (answer f b)

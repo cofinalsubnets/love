@@ -510,5 +510,28 @@
            !(two? (stat (d + "/pwned"))))
    0)
 
+; queue_row asks, and a newline in a field cannot write another session's row
+(: d (cr-dir "qforge" cr-cfg)
+   (g as) (hark (["git" "-C" d "-c" "user.name=t" "-c" "user.email=t@t"] + as))
+   _ (g ["init" "-q" "-b" "main"]) _ (cr-put d "f" "one\n") _ (g ["add" "f"]) _ (g ["commit" "-q" "-m" "one"])
+   _ (cr-put d "q0" "leader boss\nmain abc\n1 alice alice-br - - green\n")
+   _ (g ["update-ref" "refs/queue/t" (: r (g ["hash-object" "-w" (d + "/q0")]) (: s >r (snip s 0 (#s - 1))))])
+   _ (cr-serves (cr-uses [["queue_row" {"queue" "refs/queue/t" "state" "waiting"
+                                        "branch" "mine\n1 alice alice-br - - left\n0 alice evil - - green"}]
+                          ["queue_row" {"queue" "refs/heads/main" "state" "waiting"}]
+                          ["queue_row" {"queue" "refs/queue/t" "state" "waiting" "branch" "a b"}]]))
+   r (cr-run d "BEE_NAME=mallory" "-y 'forge'")
+   h (cr-heard 0)
+   rs (cr-results h)
+   _ (cr-serves (cr-uses [["queue_row" {"queue" "refs/queue/t" "state" "waiting"}]]))
+   r2 (cr-run d "BEE_NAME=mallory" "'join'")
+   h2 (cr-heard 0)
+   qq (: r (g ["cat-file" "-p" "refs/queue/t"]) >r)
+   _ (test (0 = <r) (2 = #h)
+           (cr-in (rs 0) "control character") (cr-in (rs 1) "a queue is refs/queue/NAME") (cr-in (rs 2) "a space outside")
+           (0 = <r2) (cr-in (<(cr-results h2)) "the user declined")
+           ("leader boss\nmain abc\n1 alice alice-br - - green\n" = qq))
+   0)
+
 (hark ["rm" "-rf" cr-root])
 (test_fin (), puts "bee: ok", putc 10, 0)
