@@ -382,7 +382,7 @@
    (gr-add g) (gr-left g gr-mul ["+" "-"])
    (gr-mul g) (gr-left g gr-unary ["*" "/" "%"])
    (gr-unary g)
-    (? (gr-op? g 0 "-") (: _ (gr-next g) (0.0 - gr-unary g))
+    (? (gr-op? g 0 "-") (: _ (gr-next g) (-1.0 * gr-unary g))
        (gr-op? g 0 "+") (: _ (gr-next g) (gr-unary g))
        (gr-op? g 0 "!") (: _ (gr-next g) (gr-truth (gr-unary g = 0)))
        (gr-power g))
@@ -503,8 +503,8 @@
                      (go 0))
                  0)
        _ (go 0)
-       ; a range said, and neither axis gets a margin
-       _ (? (c 'xfix || c 'yfix) (pin c 'set 1) 0)
+       ; a range said anywhere in the graph, and no system gets the default margin
+       _ (? (c 'xfix || c 'yfix) (: _ (pin c 'set 1) (pin g 'anyset 1)) 0)
        ; a log axis keeps its range as logs
        (lg ax) (: l (? (ax = 'x) 'xl 'yl) u (? (ax = 'x) 'xu 'yu) f (? (ax = 'x) 'xfix 'yfix)
                   (? (c f)
@@ -572,7 +572,7 @@
        (gr-next-pt g nm p st))
    ; x y1 y2 ..: each y a mark at x, or on along the line when it is drawn
    (gr-data g)
-    (: (num _) (? (gr-op? g 0 "-") (: _ (gr-next g) (0.0 - <>(gr-next g))) (<>(gr-next g)))
+    (: (num _) (? (gr-op? g 0 "-") (: _ (gr-next g) (-1.0 * <>(gr-next g))) (<>(gr-next g)))
        (go acc) (? (gr-k g 0 = 'num || (gr-op? g 0 "-" && gr-k g 1 = 'num)) (go (num 0 . acc)) (rev acc))
        vs (go ())
        nm (gr-cur g)
@@ -744,12 +744,13 @@
        (? (gr-w? g 0 "off")
            (: _ (gr-next g)
               (? (sd = ()) (pin g 'auto ())
-                 (io != ()) (: _ (pin g 'auto [sd]) (? (io = 1) (pin (g 'autoin) sd 1) 0))
+                 (io != ()) (: _ (pin g 'auto [sd]) _ (gr-autopref g sd) (? (io = 1) (pin (g 'autoin) sd 1) 0))
                  (pin g 'auto (filter (s \ s != sd) (g 'auto)))))
           (: tl (gr-tick-list g 0)
              (? (tl = ())
                  (? (sd = ()) 0
                     (: _ (? (elem sd (g 'auto)) 0 (pin g 'auto (sd . g 'auto)))
+                       _ (gr-autopref g sd)
                        (? (io = 1) (pin (g 'autoin) sd 1) 0)))
                 (: nm <tl its (tl 1) any (tl 2) kind (tl 3)
                    c (gr-coord g nm)
@@ -759,6 +760,8 @@
                                  _ (gr-extend2 c ax v 1)
                                  (? (sd = ()) 0 (gr-tick g sd (io = 1) 0 nm v (gr-tick-label it any kind)))))
                         its))))))
+   ; the side an axis's automatic ticks take, when both of its are on
+   (gr-autopref g sd) (pin (g 'autopref) (? (elem sd ['bot 'top]) 'bot 'left) sd)
    ; explicit ticks or a grid on an axis end its automatic ones
    (gr-unauto g sd)
     (: pair (? (elem sd ['bot 'top]) ['bot 'top] ['left 'right])
@@ -846,7 +849,9 @@
              body0 (g 'body)
              _ (pin g 'body o)
              (axis a sides)
-              (: sd (? (elem (sides 1) au) (sides 1) (elem <sides au) <sides ())
+              ; the side of the axis named last, else the other one still on
+              (: pf (peep (g 'autopref) <sides <sides) ot (? (pf = <sides) (sides 1) <sides)
+                 sd (? (elem pf au) pf (elem ot au) ot ())
                  lg (c (? (<sides = 'bot) 'xlog 'ylog))
                  (? (sd = () || atom? (a 3)) 0
                     (: _ (gr-ol g ("Ticks_" + nm + ":\n\tticklen = 0.1"))
@@ -866,7 +871,7 @@
                     (? (lg && l <= u) [(gr-pow10 l) (gr-pow10 u)] [l u]))
        sx (said 'x) sy (said 'y)
        _ (say o ("\t# " + nm + " " + gr-g <sx + " .. " + gr-g (sx 1) + ", " + gr-g <sy + " .. " + gr-g (sy 1) + "\n"))
-       m (? (g 'mset) (gr-var g "margin") (c 'set) 0.0 0.07)
+       m (? (g 'mset) (gr-var g "margin") (g 'anyset) 0.0 0.07)
        _ (? (c 'xfix) 0 (gr-margin c 'x m))
        _ (? (c 'yfix) 0 (gr-margin c 'y m))
        (map1 ax arg size) (: l (c (? (ax = 'x) 'xl 'yl)) u (c (? (ax = 'x) 'xu 'yu))
@@ -900,7 +905,7 @@
           (say o ("\n] " + g 'gpos + "\n"))))
    (gr-new-graph g nm pos)
     (pins g 'gname nm 'gpos pos 'drew 0 'body (jug 0) 'cs (tablet 0) 'corder () 'lines (tablet 0)
-            'fsides (tablet 0) 'auto ['bot 'left] 'autoin (tablet 0) 'ht 2.0 'wid 3.0 'ncoord 0 'nextx 1.0)
+            'fsides (tablet 0) 'auto ['bot 'left] 'autoin (tablet 0) 'autopref (tablet 0) 'ht 2.0 'wid 3.0 'ncoord 0 'nextx 1.0 'anyset 0)
 
    ; -- statements -------------------------------------------------------------------
    ; a statement ends at a newline or a semicolon; troff's lines, for and if do not
