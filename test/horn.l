@@ -3,8 +3,8 @@
 ; the writer parks and the scheduler runs on, what has played drains at the rate.
 ; on the host HORN=none picks the sink, a ring that keeps time and discards -- so
 ; the gate needs no card and wakes no speaker. under inle the same laws meet a real
-; card: inle/hda.c's where the machine has a controller, the page's own where it is a
-; wasm module (inle/wasm/horn.c). a seat with neither is the errno nom.
+; card: src/inle/hda.c's where the machine has a controller, the page's own where it is a
+; wasm module (src/inle/wasm/horn.c). a seat with neither is the errno nom.
 
 (: _ (? hosted (setenv "HORN" "none") ())        ; inle and the browser read no policy word
    h (horn 48000 2)

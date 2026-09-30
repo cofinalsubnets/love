@@ -1,4 +1,4 @@
-; test/gate/tfm.l -- apps/tfm.l's half of test/gate/tfm.sh. one process walks a list of
+; test/gate/tfm.l -- src/apps/tfm.l's half of test/gate/tfm.sh. one process walks a list of
 ; TFM files (one path a line) and writes what the shell holds to TeX Live's own programs:
 ;
 ;   pl LIST DIR           DIR/<k>.pl and DIR/<k>.msg, tfm-pl's text for the k-th file
@@ -9,7 +9,7 @@
 ; the read lines are e-TeX's: \fontdimen 1..np, then \fontcharwd/ht/dp/ic for codes 0..255,
 ; which answer a code's dimensions whenever it lies in bc..ec, extant or not.
 (: _ (borrow 'posix)
-   _ (borrow "apps/tfm.l")
+   _ (borrow "src/apps/tfm.l")
    (die m) (: _ (say err ("tfm.l: " + m + "\n")) _ (flush err) (quit 1))
    (slurpf p) (uread p @ [1 x] (x + "") (die ("cannot read " + p)))
    (spit p s) (: q (open p "w") (? (hot? q) (: _ (say q s) (close q)) (die ("cannot write " + p))))

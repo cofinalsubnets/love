@@ -1,4 +1,4 @@
-; test/uulay.l -- the layout ledger: apps/lux/layout.l's rt-tile, mirrored in
+; test/uulay.l -- the layout ledger: src/apps/lux/layout.l's rt-tile, mirrored in
 ; uu at the window level, and the tiling theorem proved of it -- rt-tile places
 ; every window in the row exactly once, in row order (xmonad's prop_tiling).
 ; Geometry is erased to an opaque rect token (the nat-only model can't carry

@@ -70,7 +70,7 @@ test/gate/moon.sh), and the deliberate readings in them:
 - **`int f(int), a;`** — `one`/`more` hoisted out of the dispatch's inner scope, so the
   function-first list reaches the object lane mproto cannot take.
 - **bare `typeof`**, and an attribute run **before** a struct/union tag.
-- **an integer where a pointer is owed** — the §4 row that took `love/main.c`'s `return 1` in
+- **an integer where a pointer is owed** — the §4 row that took `src/love/main.c`'s `return 1` in
   silence and handed back address 1. `return <non-zero literal>` from a `T *` now refuses and
   says so; a cast still passes, because a cast says the program means it.
 - **`_Generic` over QUALIFIED types** (test/cc/143-genericqual.c) — the row below, and the last
@@ -183,7 +183,7 @@ and 145-attrpos.c hold both to gcc):
 - `__label__ a, b;` at a block head gives each name its block's own label (above); gcc's short
   `__attribute` reads as `__attribute__`.
 
-The whole set costs **+0.081% of the instructions** compiling love/love.c (perf, 136.115G vs
+The whole set costs **+0.081% of the instructions** compiling src/love/love.c (perf, 136.115G vs
 136.005G, the same tree built twice and stable to eight figures). `pprim` sees every identifier
 in the TU, so the four arms' string compares hide behind `bib?` — a length test and one
 character. Without it the same features cost +0.128%, which is what the shape test is for.
@@ -324,7 +324,7 @@ outlive the declaration that described it. The sources of a mark are the specifi
 slot for), and — for a cast, whose `('cast ty ..)` node keeps the bare type gen reads — a
 re-read of the type-name off the tokens (`qctl`).
 
-It costs **+0.09% of the instructions** compiling love/love.c (perf, 130.348G vs 130.231G,
+It costs **+0.09% of the instructions** compiling src/love/love.c (perf, 130.348G vs 130.231G,
 stable to five figures across runs), and the `.o` is byte-identical. Two things buy that back and both are load-bearing: nothing is staged for
 an unqualified declaration (the common path never touches a table), and `qrun` walks the
 specifier run rather than taking a token span — a span by `tally` is O(the rest of the stream),
@@ -564,7 +564,7 @@ becomes observable; both ops were already in the vocabulary and all six targets 
 
 Held by test/cc/140-fsuffix.c. The old note here said the consumer was PDCLib's `INFINITY`
 spelled `(_PDCLIB_FLT_MAX * 2)` — that reading was wrong twice over: PDCLib is not this
-tree's libc (`apps/moon/lib/moonlibc/` is), and we do not define `INFINITY` at all. The real
+tree's libc (`src/apps/moon/lib/moonlibc/` is), and we do not define `INFINITY` at all. The real
 consumer is every `float` expression in the tree.
 
 ### the `#if` evaluator — LANDED 2026-08-14, and one of its three bugs cost right answers
@@ -655,8 +655,8 @@ never silent**.
 | 64-bit `*` and shifts | ✓ | ✓ | ✓ | ✓ | ✓ | rt.c |
 | `double`/`float` arithmetic | ✓ | ✓ | ✓ | ✓ | rt.c | rt.c |
 
-**The table is generated, not maintained: `tools/moon-parity.sh table` prints it and
-`tools/moon-parity.sh check` fails if this doc and the compiler have drifted** (`why` prints
+**The table is generated, not maintained: `src/tools/moon-parity.sh table` prints it and
+`src/tools/moon-parity.sh check` fails if this doc and the compiler have drifted** (`why` prints
 each refusal's cause). Regenerate it rather than editing a cell by hand.
 
 **A ✓ means the lane exists, not that it is differentiated** — the sweep compiles (`-c`) and
@@ -670,7 +670,7 @@ thumb1 (v6-M) has no UMULL, no long shifts and no FPU, so 64-bit `*`/shifts/divi
 conversion and *all* float and double arithmetic lower to `__aeabi_*` calls (`gen.l`'s `v6m?`
 lanes). thumb2sp calls out for one row only — it is ARMv7E-M with an **SP-only** FPU (the
 Playdate's STM32F746), so `float` rides the hardware and `double` softens, where thumb2's
-fpv5-d16 does both. The answers are `apps/moon/lib/rt.c`, the tree's own compiler runtime;
+fpv5-d16 does both. The answers are `src/apps/moon/lib/rt.c`, the tree's own compiler runtime;
 gcc's libgcc.a answered them until 2026-09-10 and rides no board link now. A call-out is a
 LINK-time dependency, invisible to a compile: it shows up as an undefined `__aeabi_*` in the
 object, which is how the table finds it. Everywhere else the lane is ours or there is no lane.
@@ -708,7 +708,7 @@ also takes — probe the one you mean.
   80-byte struct by value on <tgt>`. Probe: `typedef struct { long a[10]; } R;` with a
   definition that returns one; a bare prototype compiles everywhere.
 - **signed 64-bit `/` and `%` on t32** call out to the runtime's own `__divdi3`/`__moddi3`
-  (apps/moon/lib/rt.c) on all three targets.
+  (src/apps/moon/lib/rt.c) on all three targets.
 - **thumb1 varargs** — the pop-pc epilogue cannot drop the r0-r3 block; `vaspill-t32` refuses
   v6-M whole.
 - **thumb1 `leax`** — the indexed-call variant (`a[i]()` over a local array) hits
@@ -722,7 +722,7 @@ also takes — probe the one you mean.
   a load reads the member's width whatever its alignment. every other lane takes the unaligned
   access in hardware.
 
-What **thumb2** carries, so it is not re-derived (thumb1 reaches apps/moon/lib/rt.c, the
+What **thumb2** carries, so it is not re-derived (thumb1 reaches src/apps/moon/lib/rt.c, the
 compiler runtime, for most of this — the above): 64-bit `long long` as register pairs (lo:hi on r0:r1, r2:r3 the shuttle) with +, -,
 ×(UMULL/MLA), unsigned `/` and `%` (a self-contained 64-step restoring expansion — no
 helper call at all), all shifts across the word

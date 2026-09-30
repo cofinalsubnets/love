@@ -15,7 +15,7 @@ import { dirname, join } from 'node:path';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const [wasm, image, log] = process.argv.slice(2);
-const seat = join(here, '..', '..', 'inle', 'wasm', 'inle.mjs');
+const seat = join(here, '..', '..', 'src', 'inle', 'wasm', 'inle.mjs');
 const frames = (log ?? 'out/wasm/echo') + '.frames';
 const nap = (ms) => new Promise((r) => setTimeout(r, ms));
 const ceiling = 200;                   // ms; the paint answers in tens, the blink in ~650

@@ -1,7 +1,7 @@
 ; --- test/host/mop.l: what the mop takes off a baked image, and what nomop keeps ---
 ; a baked run holds no door that reads or writes a word by address, lays a thread cell,
 ; or swaps the scope stack or a core hook: the boot's compiled code keeps its own
-; references and the names leave the `guts` module for good (love/boot/egg.l). the
+; references and the names leave the `guts` module for good (src/love/boot/egg.l). the
 ; bounded byte doors and the glaze's reads of ev.l stay. an unbaked boot under
 ; LOVE_NO_MOP keeps every one, on the book and in the module.
 ;   cat test/00-init.l test/host/mop.l | out/love

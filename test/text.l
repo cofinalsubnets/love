@@ -66,7 +66,7 @@
       (edcut "e\xcc\x81x" 1 = "e\xcc\x81")                  ; the combining mark rides its base
       (edfit "日本語" 3 "." = "日.") (edfit "日" 4 " " = "日  ")))
 
-; 'text's classes and case maps: glibc 2.44's, off tools/mkctype.l. grep -i folds by cpfold,
+; 'text's classes and case maps: glibc 2.44's, off src/tools/mkctype.l. grep -i folds by cpfold,
 ; gnulib's rule, which is not symmetric: U+1C80 takes U+0412, and U+0412 does not take it
 (: cpupper (cite 'text 'cpupper) cplower (cite 'text 'cplower) cpis (cite 'text 'cpis)
    cpclass? (cite 'text 'cpclass?) cpfold (cite 'text 'cpfold) cpfolds (cite 'text 'cpfolds)

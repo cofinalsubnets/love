@@ -6,7 +6,7 @@
 // The standing rule: love must not gain a feature whose only purpose is letting
 // a test break it -- the deleted LOVE_FAULT_EAGAIN hook is the recorded reason.
 // The port vt has always been the frontend's job --
-// the Makefile builds liblove.a from love.c ONLY and links love/*.c direct --
+// the Makefile builds liblove.a from love.c ONLY and links src/love/*.c direct --
 // so a frontend that lies to the runtime is test code, not language surface.
 // Nothing in this file is compiled into `love`.
 //
@@ -28,7 +28,7 @@
 //                 the number backpressure exists to bound
 //   (naps ())     how many times the scheduler has reached its wait -- the gauge
 //                 that tells a park from a spin
-//   (tapped ())   the PCM love/horn.c's sink accepted, as text; (taprate ()) and
+//   (tapped ())   the PCM src/love/horn.c's sink accepted, as text; (taprate ()) and
 //                 (tapchans ()) the rate and channels it took it at
 //   (starved n)   pull n frames off the seat ring and answer how many samples came
 //                 back loud -- 0 is a starved ring zeroing what it could not fill
@@ -39,7 +39,7 @@
 // harness kills it. That makes this frontend a deadlock detector as well as a
 // fault injector, which is most of its value on the rungs after this one.
 #include "love.h"
-#include "../../love/hornring.h"
+#include "../../src/love/hornring.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -180,7 +180,7 @@ struct ai_fio ai_stderr = { { lvm_port_io, &ai_fd_port_vt, putcharm(EOF) }, putc
 
 // --- the raw-fd rows -------------------------------------------------------
 // love's io ops take a charm as well as a port, so a frontend owes these two as
-// well as the vtable: love/fd.c has them on a hosted seat and love/fdrow.h on a
+// well as the vtable: src/love/fd.c has them on a hosted seat and src/love/fdrow.h on a
 // board, and both are unreachable from here. the shape is fd.c's, over these
 // devices -- >0 landed, 0 busy, -1 gone, and a say that lands every byte.
 intptr_t ai_fd_readn(struct ai *g, int fd, unsigned char *dst, uintptr_t n) {
@@ -199,7 +199,7 @@ uintptr_t ai_fd_say(int fd, unsigned char const *src, uintptr_t n) {
 // no scratch on an lvm_ frame (CLAUDE.md, the tail-threaded VM): the bodies
 // that need one go through an ai_noinline helper, and the ones here need none.
 
-// (quit n) -- the frontend nif cli's scare tail reaches for (love/boot/post.l). Without
+// (quit n) -- the frontend nif cli's scare tail reaches for (src/love/boot/post.l). Without
 // it `(borrow 'cli)` compiles a form naming an unbound global and raises missing.
 static lvm(lvm_quit) {
   fflush(stdout);
@@ -302,14 +302,14 @@ static lvm(lvm_naps) {
   Ip += 1; return Continue(); }
 
 // --- the horn's tap ---------------------------------------------------------
-// love/horn.c's sink hands its ACCEPTED frames to ai_horn_tap and the weak default in
+// src/love/horn.c's sink hands its ACCEPTED frames to ai_horn_tap and the weak default in
 // that file takes nothing, so on every native seat the PCM stops at the sink and no
 // law can say what went in came out. a seat with a speaker and no card defines this
 // and plays what it is handed; here it is kept, so a .l law can read it back.
 //
 //   (tapped ())    what the sink has taken, as text, and the keep is emptied
 //   (taprate ())   the rate it was taken at, 0 for nothing yet
-//   (tapchans ())  ..and the channel count. love/horn.c doubles a mono port on the way
+//   (tapchans ())  ..and the channel count. src/love/horn.c doubles a mono port on the way
 //                  down, so this is the DEVICE's two, never the port's one
 //
 // the seat is doorless by HORN=none, which is also the only way a box with a card
@@ -324,21 +324,21 @@ void ai_horn_tap(unsigned char const *pcm, uintptr_t frames, uintptr_t chans, ui
   memcpy(tap_buf + tap_len, pcm, n < room ? n : room);
   tap_len += n < room ? n : room; }
 
-// ..and the SEAT's door, the OTHER way PCM leaves love: love/horn.c asks k_horn_* where the
-// seat carries its own card -- inle over inle/hda.c, the playdate over its SDK. out/front is
+// ..and the SEAT's door, the OTHER way PCM leaves love: src/love/horn.c asks k_horn_* where the
+// seat carries its own card -- inle over src/inle/hda.c, the playdate over its SDK. out/front is
 // built TWICE, once doorless where the sink taps and once with -D ai_horn_seat=1 where
 // these four are the device, so one pair of nifs reads both lanes and a law can say
 // exactly where they differ.
 //
-// and it is the DEVICE'S OWN RING under them -- love/hornring.h, the same header
-// love/user/playdate/pdglue.c hands its SDK callback. that ring is the one part of a seat's
+// and it is the DEVICE'S OWN RING under them -- src/love/hornring.h, the same header
+// src/love/user/playdate/pdglue.c hands its SDK callback. that ring is the one part of a seat's
 // sound nobody could law from a gate: a card pulls on its own clock and a gate has no
 // card. here the pull is (tapped ()), so push, pull and the wrap all ride every law
 // below. SMALL on purpose -- 1024 frames against writes of a few hundred, so the
 // free-running indices wrap many times over a run rather than never.
 //
 // the rate is whatever is asked: a real device refuses one it cannot play (the playdate
-// speaker is 44100 alone), and love/horn.c's misuse laws already cover the refusal path.
+// speaker is 44100 alone), and src/love/horn.c's misuse laws already cover the refusal path.
 // chans is 2 always -- horn_land doubles a mono port on the way to this door, which is
 // the difference the sink lane does not have.
 enum { seat_n = 1 << 10 };
@@ -456,8 +456,8 @@ int main(int argc, char const **argv) {
     fprintf(stderr, "usage: %s <file.l>...\n", argv[0]);
     return 2; }
   struct ai *g = ai_defn(ai_ini(), defs, countof(defs));
-  // ..and the LvNif slice of every TU linked beside this one, as love/main.c drains it:
-  // love/horn.c's rows ride the section, not the table above, so without this the horn is
+  // ..and the LvNif slice of every TU linked beside this one, as src/love/main.c drains it:
+  // src/love/horn.c's rows ride the section, not the table above, so without this the horn is
   // in the binary and off the book.
   g = ai_defn(g, __start_love_nifs, __stop_love_nifs - __start_love_nifs);
   g = ai_egg(g,

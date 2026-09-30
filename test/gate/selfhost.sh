@@ -23,14 +23,14 @@ mkdir -p "$d/obj" "$d/libc"
 rm -f "$d/obj/"*.o "$d/libc/"*.o "$d/libmoon.a"
 
 for f in $gate_love_c $gate_host_c $gate_seat_c; do
-  "$m" mooncc -D ai_tco=1 -I"$ho" -I. -Ilove -Iinle -Iout/lib -c "$f" "$d/obj/`basename $f .c`.o" \
+  "$m" mooncc -D ai_tco=1 -I"$ho" -I. -Isrc/love -Isrc/inle -Iout/lib -c "$f" "$d/obj/`basename $f .c`.o" \
     || fail "mooncc -c $f"
 done
-"$m" mooncc -Iapps/moon/include -c apps/moon/lib/moonlibc/math/am.c "$d/obj/am.o" || fail "mooncc -c am.c"
+"$m" mooncc -Isrc/apps/moon/include -c src/apps/moon/lib/moonlibc/math/am.c "$d/obj/am.o" || fail "mooncc -c am.c"
 
-for f in `find apps/moon/lib/moonlibc -name '*.c' | LC_ALL=C sort`; do
-  b=`echo "$f" | sed 's#apps/moon/lib/moonlibc/##; s#/#_#g; s#\.c$##'`
-  "$m" mooncc -Iapps/moon/lib/moonlibc -Iapps/moon/include -c "$f" "$d/libc/$b.o" || fail "mooncc -c $f"
+for f in `find src/apps/moon/lib/moonlibc -name '*.c' | LC_ALL=C sort`; do
+  b=`echo "$f" | sed 's#src/apps/moon/lib/moonlibc/##; s#/#_#g; s#\.c$##'`
+  "$m" mooncc -Isrc/apps/moon/lib/moonlibc -Isrc/apps/moon/include -c "$f" "$d/libc/$b.o" || fail "mooncc -c $f"
 done
 ar rcs "$d/libmoon.a" "$d/libc/"*.o || fail "ar the libc"
 
@@ -38,11 +38,11 @@ ar rcs "$d/libmoon.a" "$d/libc/"*.o || fail "ar the libc"
   echo "(: b (string (objelf 'x64 (['label '_start] . (cite 'moon 'crt0)) () '(\"_start\" \"__ai_start\") () '(\"__ai_start\") () () () () ()))"
   echo "   q (open \"$d/crt0.o\" \"w\") (: _ (say q b) (close q)))"
 } | "$m" || fail "lay crt0.o"
-{ cat apps/kore/text.l apps/kore/u.l apps/kore/asbook.l love/holo/elf.l love/holo/obj.l apps/moon/lib/mksys.l
+{ cat src/apps/kore/text.l src/apps/kore/u.l src/apps/kore/asbook.l src/love/holo/elf.l src/love/holo/obj.l src/apps/moon/lib/mksys.l
   echo "((cite 'moon 'mksys-x64) \"$d/sys.o\")"
 } | "$m" || fail "lay sys.o"
 
-${CC:-cc} -static -nostdlib -Wl,-T,love/love_data.ld \
+${CC:-cc} -static -nostdlib -Wl,-T,src/love/love_data.ld \
     -Wl,--defsym=__start_love_rela=0 -Wl,--defsym=__stop_love_rela=0 \
     -o "$ho/love-selfhost" "$d/crt0.o" "$d/obj/"*.o "$d/sys.o" "$d/libmoon.a" \
   || fail "link the all-mooncc binary"

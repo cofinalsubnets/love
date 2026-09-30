@@ -1,5 +1,5 @@
 # svalbard's ignore list, one rule a line, read by sb's walk and by the dist cut
-# (tools/selfpack.l). a rule holding * ? [ is a glob over the whole relative path
+# (src/tools/selfpack.l). a rule holding * ? [ is a glob over the whole relative path
 # and `*` crosses `/`; every other rule is a path prefix at a segment boundary.
 # the built-ins .sb .git out need no line here. those three are directories and are asked
 # only of a directory, so a file by one of those names is a file (gitignore's `/out/`).

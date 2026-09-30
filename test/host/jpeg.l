@@ -1,10 +1,10 @@
-; --- test/host/jpeg.l: apps/jpeg.l and love/lib/jpeg.c's jpeg-pixels --------------------
+; --- test/host/jpeg.l: src/apps/jpeg.l and src/love/lib/jpeg.c's jpeg-pixels --------------------
 ; jpeg-encode's own output read back near its source, and the refusals; where magick is
 ; here, a picture written every way it writes one -- baseline and progressive, each
 ; sampling, grey, restart markers, one pixel -- and each decode held to magick's.
 ;   cat test/00-init.l test/host/jpeg.l | out/love
 (borrow 'posix)
-(borrow "apps/jpeg.l")
+(borrow "src/apps/jpeg.l")
 (: dir ((cwd 0) + "/out/.jpegd")
    _ (hark ["rm" "-rf" dir]) _ (mkdir dir 448)
    (put p s) (: q (open p "w") _ (say q s) (close q))

@@ -1,10 +1,10 @@
 ; --- test/host/gzc.l: the C twins of gz.l, held to the love they shadow ---
-; not in the test/*.l corpus: `inflate` (love/lib/gz.c) and `crc32` (love/lib/hash.c) are
-; host nifs and apps/gz.l is a lib module, so neither is visible to the love0 bake.
+; not in the test/*.l corpus: `inflate` (src/love/lib/gz.c) and `crc32` (src/love/lib/hash.c) are
+; host nifs and src/apps/gz.l is a lib module, so neither is visible to the love0 bake.
 ;
-; test/host/gz.l is where apps/gz.l's own laws live; this file asks the other question --
+; test/host/gz.l is where src/apps/gz.l's own laws live; this file asks the other question --
 ; does the C answer what love answers, on the same stream? gz-puff is the oracle
-; (love/lib/gz.c says so in its head), so a disagreement is the C being wrong until
+; (src/love/lib/gz.c says so in its head), so a disagreement is the C being wrong until
 ; proven otherwise.
 ;
 ;   shapes    the round trip over the five that break coders, plus a long dist-1 run and
@@ -157,7 +157,7 @@
       !(inflate-feed (inflate-new 0) ""))
    (puts "gzc: inflate-feed ok -- every cut of a stream answers the one-shot inflate\n"))
 
-; --- crc32, the other twin in love/lib/hash.c, against gz-crcwalk ---
+; --- crc32, the other twin in src/love/lib/hash.c, against gz-crcwalk ---
 ; every length 0 through 129, because the C reads eight bytes at a time where the walk
 ; reads one: the tail is the only place the two can part and it is a different tail at
 ; every length mod eight. The published check value is asserted off the C side, so a twin
@@ -192,7 +192,7 @@
  ; ..and the empty stream is not a stream at all, at either lane
  (gzc-same "" 0))
 
-; --- deflate, the coder twin (love/lib/gz.c): held to the bytes, not just the round
+; --- deflate, the coder twin (src/love/lib/gz.c): held to the bytes, not just the round
 ;     trip -- same parse, same block costing, same Huffman tie-breaks, so `=` over the
 ;     streams is the law. the love lane is the oracle; a divergence is the C being
 ;     wrong until proven otherwise.

@@ -1,7 +1,7 @@
 ; --- test/proto/spl.l: CALL vs SPLICE, modeled -- an ev.l inliner design spike ---
 ; ev.l inlines nothing above the nif level. this model is the license an inliner
 ; would need, said runnable: a stack machine in ev's emitter shape (an emitter is
-; (\ k ..) prepending onto the continuation's thread -- love/boot/ev.l "THE EMISSION
+; (\ k ..) prepending onto the continuation's thread -- src/love/boot/ev.l "THE EMISSION
 ; INTERFACE" the design), and THREE ways to compile a call site,
 ; which are one body compiler `cb` handed three param READERS:
 ;
@@ -22,7 +22,7 @@
 ; story), scare/abort mid-body (a scare here is a trace record, not a control
 ; exit), recursion. run: cat test/00-init.l test/proto/spl.l | out/love
 ;
-; the uu lift: tools/spl2uu.l emits these threads as test/uusplgen.l;
+; the uu lift: src/tools/spl2uu.l emits these threads as test/uusplgen.l;
 ; test/uuspllaw.l proves the laws forall states, and the cross-machine theorem
 ; meets the register machine's de5bck there.
 

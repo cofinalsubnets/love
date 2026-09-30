@@ -9,11 +9,11 @@
 <!-- the machine's shared ring wants an isolated page, and a static host sends no headers:
      this asks for them with a service worker and one reload. first, so the reload is
      cheap; inert where the server sends them itself (kiosko does). -->
-<script src="inle/wasm/coi.js"></script>
+<script src="src/inle/wasm/coi.js"></script>
 </head>
 <body class="full">
 
-<!-- the machine island: the markup inle/wasm/machine.js drives, its parts found by
+<!-- the machine island: the markup src/inle/wasm/machine.js drives, its parts found by
      class, and here the whole page -- the canvas is the screen. a page carries this block
      and machine.js (a module), and coi.js in the head -- that one goes first because it
      may reload the page to put the isolation headers on. the boot line and the two
@@ -27,6 +27,6 @@
 <canvas class="fb" tabindex="0"></canvas>
 </div>
 
-<script type="module" src="inle/wasm/machine.js"></script>
+<script type="module" src="src/inle/wasm/machine.js"></script>
 </body>
 </html>

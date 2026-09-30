@@ -23,15 +23,15 @@ count is near its floor; its TRUSTED surface is not, and that is where clay pays
 -> JS backend is a second consumer of the same datum rather than a second implementation,
 and `cc-clay` gives a native leg with no C text at all.
 
-**rungs 0 through 6 have landed** (`apps/moon/clay.l`, `make test_clay`, `mx.l` +
+**rungs 0 through 6 have landed** (`src/apps/moon/clay.l`, `make test_clay`, `mx.l` +
 `mx.h` + `kinds.h`, the order of work's rung 1 -- the five node shapes -- its rung 3, the
 nif registry, its rung 2, the preprocessor nodes, and four more node shapes plus
-`tools/clay-g2.l`); the rest is unbuilt. one rung was landed and REVERTED, and it is the
+`src/tools/clay-g2.l`); the rest is unbuilt. one rung was landed and REVERTED, and it is the
 one that reshaped this doc -- see §the criterion.
 
 ## the state, measured
 
-on the current tree -- `love.c` 8232 lines, `love.h` 540, `apps/moon/clay.l` 601.
+on the current tree -- `love.c` 8232 lines, `love.h` 540, `src/apps/moon/clay.l` 601.
 re-measure these rather than quoting them; the previous figure sat here stale by 84.
 
 `make test_clay` reads **63 round-trip, 55 inexpressible, 0 unparsed, 118 files**.
@@ -54,7 +54,7 @@ are emit-only.
 
 ## the criterion -- GENERATE, DON'T TRANSCRIBE
 
-`inle/mkvec.l:4-6` states it, about assembly:
+`src/inle/mkvec.l:4-6` states it, about assembly:
 
 > this one is generated rather than transcribed: the 32 x86 stubs and the 16 a64
 > vector slots were `.macro`/`.rept` loops in GAS, and a love loop says the same thing
@@ -183,7 +183,7 @@ expensive thing standing between per-region migration and the whole file.
 
 `note` stays, emit-only, for the banner every generated region owes: "edit `love.c.l`, not
 this file". `lex.l` has no comment token and `cpp.l` runs first, so a note is AUTHORED in
-the generator -- exactly as `inle/mkvec.l` carries its narrative in the love that lays
+the generator -- exactly as `src/inle/mkvec.l` carries its narrative in the love that lays
 the assembly.
 
 ## the order of work
@@ -213,7 +213,7 @@ name the region in a commit message instead.
    ("mixed/bignum/broadcast falls through to the general loop; results bit-identical"),
    which nothing checks.
    those in-function macros mean generated C writes the loop out ~11 times, so
-   BYTE-comparison here is structurally impossible; the AST-vs-AST oracle (`tools/clay-g2.l`)
+   BYTE-comparison here is structurally impossible; the AST-vs-AST oracle (`src/tools/clay-g2.l`)
    is immune, and this is the rung it was built for.
    then the rest of the family, all the same shape: `vmap1_fill` 7255, `vmap2_fill` 7734,
    `twin_fill` 7932, `cbin_fill` 7958, `twin_pow_fill` 8011, `twin_build_fill` 8062,
@@ -234,7 +234,7 @@ name the region in a commit message instead.
    they are mostly CALL-SHAPED and need no grammar, so most of the loop is transcription
    and does not qualify. what qualifies is whatever survives rungs 5-6, and the honest
    answer today is "not obviously anything". it is also where a mistake is least visible.
-8. **the lawed injection seam** -- `cc-clay` in `apps/moon/moon.l`, sibling to `cc-parse`
+8. **the lawed injection seam** -- `cc-clay` in `src/apps/moon/moon.l`, sibling to `cc-parse`
    (`moon.l:128`): clay in, `clay-ok?`, `clay-tables`, `cgen-obj` (`gen.l:6141`). this is
    what makes clay a frontend target OTHER MODULES can share, and it enables G3's third
    leg. `clay-tables` derives `stag` + `sigs`, REUSING `playout` (`parse.l:576`) rather
@@ -257,9 +257,9 @@ these were ranked by purity and are transcription targets. §the parse is enough
   FUZZES love's limbs against it, and putting the IMPLEMENTATION into Rocq is still the
   largest single verification step this plan offers -- but that step is `clay2coq` over
   the PARSE, not a `.l` transcription. and it was never byte-exact anyway:
-  `apps/moon/cpp.l` leaves `__SIZEOF_INT128__` undefined, so mooncc-built love.c takes the
+  `src/apps/moon/cpp.l` leaves `__SIZEOF_INT128__` undefined, so mooncc-built love.c takes the
   32-bit limb path and gcc-built takes the 64-bit one.
-* ~~**dtoa**~~ -- SETTLED the other way: the printer moved into lisp (`love/boot/post.l`), and
+* ~~**dtoa**~~ -- SETTLED the other way: the printer moved into lisp (`src/love/boot/post.l`), and
   `dg_*` + `ai_dtoa2` went with it. love has bignums, so the digit arrays and their x2/x5
   carry walks are just exact integer arithmetic there. nothing left to convert.
 * **the GC and the heap-image codec** -- 796 lines scoring zero on the purity meter, which
@@ -317,7 +317,7 @@ why `vbin_fill` earns its place even though it comes later.
   thing standing in front of the bug). run over all 114 files of `test/cc/`: that
   makes "expresses arbitrary C" empirical rather than claimed. currently **63 / 51 / 0**.
   emit-only additions must not move it.
-* **G2 conversion equivalence** -- `tools/clay-g2.l`: parse the original translation unit
+* **G2 conversion equivalence** -- `src/tools/clay-g2.l`: parse the original translation unit
   and the converted one WHOLE, and compare the named top-level definitions as TREES.
   parsing whole is what makes it exact -- both sides meet the same cpp, typedefs and macro
   expansions, so a surviving difference is a difference in MEANING, which is the comparison
@@ -356,7 +356,7 @@ segfaulted for every |x| >= 2^19), `68ee440a` (u64->double converted signed, 160
 `make test` is the DEV gate (~20s, every edit) -- host + love0 must BOTH print the zz-fin
 summary, love0 exactly twice. `make test_slow` is the MERGE gate, before publishing only.
 between them, the individual `test_*` covering what you touched. `out/love
-apps/libra/libra.l <file>` on every .l -- silence is clean. never assert on `(show x)` as a
+src/apps/libra/libra.l <file>` on every .l -- silence is clean. never assert on `(show x)` as a
 value test. and watch the clock: a generator that crawls is a bug announcing itself.
 
 ## what stays trusted, honestly
@@ -368,7 +368,7 @@ tells about moon. state it this way or not at all.
 
 ## what has landed
 
-0. **name it and law it.** `apps/moon/clay.l`, a registered module (`(borrow 'clay)`). the
+0. **name it and law it.** `src/apps/moon/clay.l`, a registered module (`(borrow 'clay)`). the
    node grammar as data (`clay-tags`, the live roster): top `prog fn proto gdecl xdecl tdef
    note edef sdef`; stmt `blk decl sdecl ret if while for do switch case dflt brk cont goto
    lbl expr nop asm`; expr `num flo str var bin un asn rmw post cond comma call deref addr
@@ -380,7 +380,7 @@ tells about moon. state it this way or not at all.
 1. **`clay-show` and G1.** AST -> C text, plus the round-trip gate over `test/cc/`.
 2. **the dispatch matrices; deleted `tools/mxdump.c`.** `mx.l` is the table; `mx.h` is
    laid from it through clay and `#include`d by love.c (its first generated region);
-   `tools/mx2coq.l` reads the same table instead of a dump, so mx.v's bridge moved from
+   `src/tools/mx2coq.l` reads the same table instead of a dump, so mx.v's bridge moved from
    shape 3 to shape 1. the dumper, its `$(CC)` step, the function-pointer comparison and the
    UNKNOWN case are all gone. net C **-54** lines.
 2b. **the kind lattice the matrices are INDEXED by.** `enum q` was hand-written and
@@ -463,7 +463,7 @@ tells about moon. state it this way or not at all.
    lays both sides, so it had nothing left to catch.
    G1 held at 63/51/0, as it must -- an emit-only node adds nothing to round-trip.
 
-6. **four more node shapes, `tools/clay-g2.l`, and a rung landed then REVERTED.** the
+6. **four more node shapes, `src/tools/clay-g2.l`, and a rung landed then REVERTED.** the
    α-equivalence cluster -- `salpha`/`shash` and the beta bridge, 156 lines -- was
    converted to `alpha.l` + `alpha.h` and then taken back out. the code is gone; what it
    bought is this doc's criterion (§the criterion, §the parse is enough) and four shapes
@@ -483,7 +483,7 @@ tells about moon. state it this way or not at all.
    it is the tax on converting one that should not be. they are kept because a GENERATION
    rung still owes readable output, and rungs 4-6 of the order of work will spend them.
    G1 held at 63/51/0 throughout, as an emit-only widening must.
-   `tools/clay-g2.l` is the durable half: it proved the reverted conversion exact (10/10
+   `src/tools/clay-g2.l` is the durable half: it proved the reverted conversion exact (10/10
    definitions tree-identical) and caught two real slips on the way -- a stray list
    constructor, and a `(blk ..)` around statements that stood in the branch directly, a
    scope the original had no brace for and a C compiler would never have noticed.

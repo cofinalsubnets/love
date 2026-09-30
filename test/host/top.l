@@ -1,10 +1,10 @@
 ; --- test/host/top.l: top's face on a real terminal ---
-; the frame builder (apps/kore/top.l's tp-frame) is exercised through `top -b` in
+; the frame builder (src/apps/kore/top.l's tp-frame) is exercised through `top -b` in
 ; test/kore/top.sh with no tty at all; what is left is the face -- raw mode, the
 ; alternate screen, the poll that stands in for a timer, and the exit that puts
 ; the screen back. That lane needs a terminal, so it gets one: `tether` spawns
 ; `kore top` on a pty, we type at the master and read the frames back off it.
-; not in the test/*.l corpus -- tether and tty both live in love/posix.c, which love0
+; not in the test/*.l corpus -- tether and tty both live in src/love/posix.c, which love0
 ; does not link. Run it (the test macro comes from test/00-init.l):
 ;
 ;   lovebin=out/love sh -c "cat test/00-init.l test/host/top.l | out/love"

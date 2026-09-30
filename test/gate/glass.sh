@@ -1,6 +1,6 @@
 #!/bin/sh
 # test/gate/glass.sh -- the framebuffer console's grid, end to end. a size in REAL pixels and
-# a scale go into the machine (inle/wasm/arch.c's k_start), and rows and columns come back
+# a scale go into the machine (src/inle/wasm/arch.c's k_start), and rows and columns come back
 # out of tty (test/kernel/glass.l) after kmain has settled them. what each boot should
 # answer is worked out HERE and not read off the kernel, so the law gets two readings: an
 # 8x16 face at `scale` pixels a glyph pixel, and the scale itself either the door's or the
@@ -29,7 +29,7 @@ glass() {
   [ -n "$1" ] && fbarg="--fb $1"
   scarg=""
   [ -n "$2" ] && scarg="--scale $2"
-  INLE_RAM=256 "$node" inle/wasm/inle.mjs $fbarg $scarg --image "$image" "$wasm" \
+  INLE_RAM=256 "$node" src/inle/wasm/inle.mjs $fbarg $scarg --image "$image" "$wasm" \
     test/kernel/glass.l < /dev/null > "$log" 2>&1
   got=$(grep '^glass ' "$log" | head -n 1)
   if [ "$got" = "$3" ]; then
@@ -58,7 +58,7 @@ glass "" "" "glass none enotty"
 # should be the first with every pixel doubled both ways. a console that blanked itself on
 # the re-make answers a bare cursor instead.
 ink() {
-  INLE_RAM=256 "$node" inle/wasm/inle.mjs --fb 640x400 --scale 1 --dump "$2" \
+  INLE_RAM=256 "$node" src/inle/wasm/inle.mjs --fb 640x400 --scale 1 --dump "$2" \
     --image "$image" "$wasm" test/kernel/ink.l $1 < /dev/null > "$log" 2>&1
 }
 ink "" "$out/ink-plain.ppm"
@@ -69,7 +69,7 @@ ink 2 "$out/ink-scaled.ppm"
 # solid in the first face written to /proc/vt/face and empty in the second; the pictures
 # differ by exactly those glyphs, 世 two cells wide.
 face() {
-  INLE_RAM=256 "$node" inle/wasm/inle.mjs --fb 640x400 --scale 1 --dump "$2" \
+  INLE_RAM=256 "$node" src/inle/wasm/inle.mjs --fb 640x400 --scale 1 --dump "$2" \
     --image "$image" "$wasm" test/kernel/face.l $1 < /dev/null > "$log" 2>&1
 }
 face full "$out/face-full.ppm"
@@ -79,7 +79,7 @@ face empty "$out/face-empty.ppm"
 # A SIXEL PICTURE PAINTS OFF THE STORE, A PIXEL A PIXEL. a 16x16 square, white then black
 # (the console's ground): the pictures differ by exactly its 256 pixels, two tiles wide.
 six() {
-  INLE_RAM=256 "$node" inle/wasm/inle.mjs --fb 640x400 --scale 1 --dump "$2" \
+  INLE_RAM=256 "$node" src/inle/wasm/inle.mjs --fb 640x400 --scale 1 --dump "$2" \
     --image "$image" "$wasm" test/kernel/six.l $1 < /dev/null > "$log" 2>&1
 }
 six full "$out/six-full.ppm"
@@ -93,7 +93,7 @@ six empty2 "$out/six-empty2.ppm"
 
 # A KITTY PICTURE PAINTS THE SAME WAY: 16x16, white then black, 256 pixels between them.
 kit() {
-  INLE_RAM=256 "$node" inle/wasm/inle.mjs --fb 640x400 --scale 1 --dump "$2" \
+  INLE_RAM=256 "$node" src/inle/wasm/inle.mjs --fb 640x400 --scale 1 --dump "$2" \
     --image "$image" "$wasm" test/kernel/kit.l $1 < /dev/null > "$log" 2>&1
 }
 kit full "$out/kit-full.ppm"

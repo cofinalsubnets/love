@@ -1,4 +1,4 @@
-; test/caja/docs.l -- apps/caja/doc.l held to TeX: a whole document, laid out by caja's
+; test/caja/docs.l -- src/apps/caja/doc.l held to TeX: a whole document, laid out by caja's
 ; shower, set twice. the shower's tokens go through caja to OUT.dvi, and through cp-tex to
 ; OUT.tex, which test/gate/caja.sh gives tex -ini; the two DVIs must be one file.
 ;
@@ -7,14 +7,14 @@
 ; the TFMs are cd-fonts' in order; a gzipped man page is unpacked by the caller.
 (: _ (borrow 'posix)
    _ (borrow 'lapiz)
-   _ (borrow "apps/tfm.l")
-   _ (borrow "apps/caja/box.l")
+   _ (borrow "src/apps/tfm.l")
+   _ (borrow "src/apps/caja/box.l")
    _ (borrow 'caja-box)
-   _ (borrow "apps/caja/par.l")
+   _ (borrow "src/apps/caja/par.l")
    _ (borrow 'caja-par)
-   _ (borrow "apps/caja/page.l")
+   _ (borrow "src/apps/caja/page.l")
    _ (borrow 'caja-page)
-   _ (borrow "apps/caja/doc.l")
+   _ (borrow "src/apps/caja/doc.l")
    _ (borrow 'caja-doc)
    (die m) (: _ (say err ("docs: " + m + "\n")) _ (flush err) (quit 1))
    (slurpf p) (uread p @ [1 x] (x + "") (die ("cannot read " + p)))

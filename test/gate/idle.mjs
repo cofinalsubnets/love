@@ -1,9 +1,9 @@
 // test/gate/idle.mjs -- the machine at rest STAYS at rest, once it has been typed at.
 // the page writes a key onto two lanes: the terminal's bytes, which the guest reads, and
-// inle/wasm/machine.js's scancodes, which only a game ever asks for. the worker holds its
+// src/inle/wasm/machine.js's scancodes, which only a game ever asks for. the worker holds its
 // sleep while a lane has something in it (cpu.mjs's idle), so a lane nobody reads is a
 // spin for the life of the page -- one keystroke and the core never comes back. the
-// kernel empties an unarmed tap's lane each idle (inle/wasm/arch.c's k_idle) and the
+// kernel empties an unarmed tap's lane each idle (src/inle/wasm/arch.c's k_idle) and the
 // worker only skips the sleep for a lane that is still growing; this weighs the answer
 // the only way that cannot be argued with, which is the CPU the machine spends.
 // the seat is booted, typed at, and then WATCHED: a machine that sleeps spends a few
@@ -16,7 +16,7 @@ import { dirname, join } from 'node:path';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const [wasm, image, log] = process.argv.slice(2);
-const seat = join(here, '..', '..', 'inle', 'wasm', 'inle.mjs');
+const seat = join(here, '..', '..', 'src', 'inle', 'wasm', 'inle.mjs');
 const nap = (ms) => new Promise((r) => setTimeout(r, ms));
 const ceiling = 30;                    // per cent of one core: a sleeper is ~3, a spinner 100
 

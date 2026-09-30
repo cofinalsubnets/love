@@ -1,4 +1,4 @@
-; --- test/host/loader.l: use on a path, the loader (love/boot/prel.l) ---
+; --- test/host/loader.l: use on a path, the loader (src/love/boot/prel.l) ---
 ; not in the corpus, and it cannot be: love0 evaluates the corpus twice, and the first
 ; law below is that zz-loadprobe is absent -- true once, since the run that proves it
 ; registers it. a second evaluation reads the module it just made and stops there.

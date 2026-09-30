@@ -3,7 +3,7 @@
 . "$(dirname "$0")/common.sh"
 
 # cksum, sum and the digest tools against GNU. these are the tools whose entire
-# output is one number, so a single wrong byte in love/lib/hash.c is a wrong line here and
+# output is one number, so a single wrong byte in src/love/lib/hash.c is a wrong line here and
 # nowhere else. THE LENGTHS ARE THE POINT of the battery: a digest pads its last block
 # with the message length in the final 8 bytes, so 55/56 and 119/120 are where a pad
 # off by one shows (111/112 and 239/240 for sha-384/512's 128-byte block, 128 and 256

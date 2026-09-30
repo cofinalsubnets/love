@@ -2,8 +2,8 @@
 ; below drives the pure engine (vstep, one byte at a time) and reads the
 ; tablet back -- no tty, no port, no file. the cat (`make test_vi`):
 ;
-;   cat test/00-init.l apps/kore/text.l apps/kore/core.l apps/kore/re.l apps/kore/sed.l apps/libra/lint.l \
-;       apps/vi/config.l apps/vi/hue.l apps/vi/hues.l apps/vi/core.l test/law/vi.l | out/love
+;   cat test/00-init.l src/apps/kore/text.l src/apps/kore/core.l src/apps/kore/re.l src/apps/kore/sed.l src/apps/libra/lint.l \
+;       src/apps/vi/config.l src/apps/vi/hue.l src/apps/vi/hues.l src/apps/vi/core.l test/law/vi.l | out/love
 ;
 ; (vgo lines keys) births a buffer, feeds the TEXT's bytes (27 spelled \e via
 ; the 27-element list shape), and answers the state; the helpers read it back.
@@ -497,7 +497,7 @@
       (: q (vgo '("a") "") _ (vload q () "e.l") (lns q = '(""))))             ; an empty read is one empty line
 
 ; --- libra ⚖ on the buffer: :lint weighs what you are looking at. one scanner
-;     (apps/libra/lint.l) under libra's faces and this one ---------------------------
+;     (src/apps/libra/lint.l) under libra's faces and this one ---------------------------
    (ex ls s) (vgob ls ((bytes (":" + s)) + [CR]))
    _ (test
       (st? (ex '("(: a 1)") "lint") 'msg = "balance clean")
@@ -621,7 +621,7 @@
       (: f (mini '("ab") "/x") (snip f (#f - 6) #f = (E$ + "[4;3H")))
       (: f (mini '("ab") "") (snip f (#f - 6) #f = (E$ + "[1;1H"))))
 
-; --- the syntax paint (apps/vi/hue.l): classes, the carry, and the one law
+; --- the syntax paint (src/apps/vi/hue.l): classes, the carry, and the one law
 ; that keeps every exact-frame assertion above honest --------------------------
    hbk (hue-book ())
    hlx (\ s in keep (hue-lex hbk s in keep))
@@ -740,7 +740,7 @@
       (twin '("(a really quite long line that clips at the view edge)") "$")
       (twin '("") ""))
 
-; --- the other languages (apps/vi/hues.l): the name picks the lexer, else a #!
+; --- the other languages (src/apps/vi/hues.l): the name picks the lexer, else a #!
 ;     naming a shell, and each answers hue-lex's shape, the carry included ----
    (hk g s in) (map (\ r <r) <(hues-lexer g s in 1))
    (hc g ls) (hue-carry (hues-lexer g) ls)
@@ -866,7 +866,7 @@
       !(st? (vnew '("a") "l") 'hl)
       !(st? (vnew '("a") "x.txt") 'hl)
       (st? (vnew '("a") "x.l") 'hl)
-      (st? (vnew '("a") "apps/vi/hue.l") 'hl)
+      (st? (vnew '("a") "src/apps/vi/hue.l") 'hl)
       (st? (vnew '("a") "x.c") 'hl)
       (st? (vnew '("a") "Makefile") 'hl)
       (st? (vnew '("#!/bin/sh") "run") 'hl)

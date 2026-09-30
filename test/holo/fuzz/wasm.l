@@ -7,7 +7,7 @@
 ; the model is the point. every op is simulated over an unsigned 64-bit register file with
 ; wasm's own semantics -- shr_u against shr_s, i64.mul wrapping, div_u -- so the expectation
 ; comes from the instruction's MEANING and not from a second run of our own code.
-; run: cat love/holo/holo.l love/holo/wasm.l love/holo/wasmfn.l test/holo/fuzz/wasm.l | out/love
+; run: cat src/love/holo/holo.l src/love/holo/wasm.l src/love/holo/wasmfn.l test/holo/fuzz/wasm.l | out/love
 
 (borrow 'holo)
 (borrow 'posix)

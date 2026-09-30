@@ -8,7 +8,7 @@
 ;
 ; kernel only -- test/kernel/all.l's roster, never $t: on the host `open` is the real
 ; filesystem and these laws would write the tree. The scratch is a real baked row on
-; purpose: /etc/profile, the machine's own (inle/rootfs/), which this boot never reads
+; purpose: /etc/profile, the machine's own (src/inle/rootfs/), which this boot never reads
 ; -- the tree's rows under /proc/src refuse every write -- and the laws put its bytes
 ; back.
 ;
@@ -46,19 +46,19 @@
    (wr f (orig + orig) "w")
    (orig + orig = rd f)
    ; the tree under /proc/src is what a module loads from, and nobody's to write
-   (0 < tally (rd "/proc/src/apps/json.l"))
-   !(wr "/proc/src/apps/json.l" "no" "w")
+   (0 < tally (rd "/proc/src/src/apps/json.l"))
+   !(wr "/proc/src/src/apps/json.l" "no" "w")
    ; put it back, and the tree reads as the bake left it
    (wr f orig "w")
    (orig = rd f)))
 
 ; the payoff, and the end-to-end proof the rung is real: prel's module walk is gated
-; on the presence of `open` (love/boot/prel.l's fsopen, by peep), so with the row in
+; on the presence of `open` (src/love/boot/prel.l's fsopen, by peep), so with the row in
 ; defs[] `borrow` resolves lib/<x>.l off the ramfs with zero prel change -- json is in
 ; no baked ai_libs table on this seat, only in the initrd. it also reads the
 ; scratch back through the compiler, so it is the restore above proving itself byte
 ; for byte; it has to stay after those laws.
-(borrow "apps/json.l")
+(borrow "src/apps/json.l")
 (test (elem 'json-read (names ())))
 
 ; /proc's live rows. meminfo is the kernel's own free list, gauge the collector's

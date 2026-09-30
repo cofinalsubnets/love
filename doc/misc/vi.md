@@ -1,6 +1,6 @@
 # vi — the editor
 
-apps/vi/ orients here; the laws live in test/law/vi.l, the gate is `make test_vi`, and every
+src/apps/vi/ orients here; the laws live in test/law/vi.l, the gate is `make test_vi`, and every
 doubt settles by feeding `vstep` bytes.
 
 ## the shape
@@ -8,31 +8,31 @@ doubt settles by feeding `vstep` bytes.
 Five files, over the seeds the repo already had (bao's port-driven editor discipline, kore's
 re.l regex engine):
 
-* **apps/vi/core.l** — the PURE engine. A state tablet stepped one byte at a time:
+* **src/apps/vi/core.l** — the PURE engine. A state tablet stepped one byte at a time:
   `(vstep st byte) -> st`, `(vfeed st bytes)`, `(vframe st)` -> one full escape-sequence frame
   as text. No tty, no port, no file io — the ex commands leave a REQUEST on the state (`'dow`
   to write, `'doe` to read, both in uread's `(name)` shape) and flip `'quit`; whoever holds the
   state acts. That purity is the whole test story: the laws drive key sequences and read the
   tablet back, and the frame is lawed to the byte on a tiny screen.
-* **apps/vi/vi.l** — the face. Keys off `in` one byte at a time (arrows ESC[A-D decode to kjlh
+* **src/apps/vi/vi.l** — the face. Keys off `in` one byte at a time (arrows ESC[A-D decode to kjlh
   with a one-byte pushback so a bare ESC still interleaves), frames onto `out`, the alternate
   screen (?1049) so scrollback survives, `raw` for the tty (cooked restores at exit), tty
   when there is one (80x24 on a pipe). It performs the engine's write/read requests. Port EOF
   quits — which is what makes `kore vi` fully drivable from a pipe: the smokes script whole
   sessions (`printf 'ihello\033:wq\n' | kore vi f`).
-* **apps/vi/hue.l** — the .l syntax written down once, for two readers: the painter in core.l's
-  `vframe`, and the vim syntax file, which tools/hue2vim.l generates from the same table, so the
+* **src/apps/vi/hue.l** — the .l syntax written down once, for two readers: the painter in core.l's
+  `vframe`, and the vim syntax file, which src/tools/hue2vim.l generates from the same table, so the
   two readings cannot drift. `make syntax` builds it into `out/syntax.vim` and
   `make install` puts it in `~/.vim/syntax/love.vim`; it is never checked in, so there is no
   copy to keep up to date.
-* **apps/vi/hues.l** — the paint for C, JS, awk, HTML (its `<style>` and `<script>` bodies as
+* **src/apps/vi/hues.l** — the paint for C, JS, awk, HTML (its `<style>` and `<script>` bodies as
   CSS and JS), CSS, sh, make (a recipe line reads as sh), JSON, diffs, roff, assembly (gas in
   AT&T or Intel, a64, rv64 and arm) and markdown (a fence naming a language is lexed as it).
   Each lexer answers what hue.l's does, so the painter, the carry and `%` take any of them.
   The file name picks one — `.c .h .js .mjs .awk .html .css .sh .mk .json .diff .patch .s .S
   .asm .md .man .1`–`.9`, `Makefile`, `Cookfile` — else a `#!` naming a shell or an awk; `:hl`
   on anything else paints it as .l.
-* **apps/vi/config.l** — the theme (molokayo) as plain data, keyed by vim highlight group, so
+* **src/apps/vi/config.l** — the theme (molokayo) as plain data, keyed by vim highlight group, so
   the generated syntax file can emit `hi def link` lines rather than hardcoded colours.
 * **test/law/vi.l** — the gate.
 
@@ -71,4 +71,4 @@ stop at the last row the view really shows, and ^F ^B ^D ^U and zt zz zb step by
 As need arises, in rough order: `.` (the repeat — record the last change's byte string, replay
 it), visual mode (a span-selection over the same operators), `:s` ranges over re.l (sed's engine
 is right there), named registers, tab-stop-aware rendering, and a pty smoke that drives the face
-under a real terminal via love/posix.c (as test/baoedit.l does for bao's line editor).
+under a real terminal via src/love/posix.c (as test/baoedit.l does for bao's line editor).

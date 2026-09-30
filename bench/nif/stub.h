@@ -3,7 +3,7 @@
  * a nif file is an ALGORITHM plus a love-facing wrapper. the algorithm is what
  * this corpus differentials, and it is reachable by including the .c: every
  * entry point is a static, so a harness that includes the file sees all of them
- * and needs no seam cut into inle/.
+ * and needs no seam cut into src/inle/.
  *
  * what the wrapper needs is a handful of runtime symbols -- the string/cask
  * predicates, the allocator door, and four lvm ops the nif's dispatch row names.
@@ -19,7 +19,7 @@
 
 const struct ai_mint ai_mint_zero = {0, 0};
 
-#include "../../love/alloc.c"               // a real allocator: deflate's arena asks it at run time
+#include "../../src/love/alloc.c"               // a real allocator: deflate's arena asks it at run time
 
 struct ai *ai_strof(struct ai *g, const char *s) { return g; }
 struct ai *str0(struct ai *g, uintptr_t n) { return g; }

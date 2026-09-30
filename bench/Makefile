@@ -150,7 +150,7 @@ raw: $(call txt,$(PRESENT))
 # solvers on PHP(5..8). Cached like the language results -- re-run only when the
 # runner or the solver changes. `make satrace` to refresh it on its own.
 SATRACE := $(BDIR)/satrace.txt
-$(SATRACE): satrace.sh $(R)/apps/sat/sat.l $(GL) | $(BDIR)
+$(SATRACE): satrace.sh $(S)/apps/sat/sat.l $(GL) | $(BDIR)
 	@./satrace.sh $(TIMEOUT) > $@
 satrace: $(SATRACE)
 	@cat $(SATRACE)
@@ -173,7 +173,7 @@ setup: $(SETUP)
 # the build row pays a libc build inside it. cached; `make ccbench` refreshes it on its
 # own. (mooncc is x86-64 only -- dnf elsewhere.)
 CCBENCH := $(BDIR)/ccbench.txt
-$(CCBENCH): ccbench.sh ccrypto.l cnifs.l ccgen.l $(GL) $(R)/love/love.c $(wildcard $(R)/love/*.c $(R)/love/lib/*.c) | $(BDIR)
+$(CCBENCH): ccbench.sh ccrypto.l cnifs.l ccgen.l $(GL) $(S)/love/love.c $(wildcard $(S)/love/*.c $(S)/love/lib/*.c) | $(BDIR)
 	@$(MAKE) -s -C $(R) host dist-seed
 	@LOVE_CFLAGS='$(cflags)' CORPUS='$(t)' ./ccbench.sh $(TIMEOUT) $(SAMPLES) > $@
 ccbench: $(CCBENCH)
@@ -189,7 +189,7 @@ ccsize: $(CCBENCH)
 ccdead: $(CCBENCH)
 	@$(GL) ccdead.l
 
-# mooncc against gcc and clang on the three files in inle/ that ask the most of it --
+# mooncc against gcc and clang on the three files in src/inle/ that ask the most of it --
 # the checksum and gzip floors, compiled straight (no love runtime, no libc in the
 # picture) and read three ways: answers, .text, wall clock. Where ccbench times these
 # nifs through the shipped binary, this times the CODE. Not cached and not a gate: a
@@ -219,7 +219,7 @@ ccwasm: $(GL)
 # kore's applets against busybox, uutils and GNU coreutils on one generated corpus:
 # answers (GNU the oracle -- a divergence is a bug), the fixed per-invocation start
 # cost, and the per-corpus work. Not cached and not a gate, for the same reason ccnif
-# is not: a development instrument, run while working in apps/kore/. The doc it
+# is not: a development instrument, run while working in src/apps/kore/. The doc it
 # fills is the kore gauge. `make korebench MB=32 SAMPLES=5` for a quieter
 # reading; a lane not on PATH drops out of every table.
 MB ?= 8

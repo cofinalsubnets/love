@@ -15,7 +15,7 @@ top=$(pwd)
 case $wasm in /*) ;; *) wasm=$top/$wasm ;; esac
 case $image in /*) ;; *) image=$top/$image ;; esac
 case $d in /*) ;; *) d=$top/$d ;; esac
-seat=$top/inle/wasm/inle.mjs
+seat=$top/src/inle/wasm/inle.mjs
 bad=0
 
 rm -rf "$d"

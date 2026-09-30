@@ -1,5 +1,5 @@
 ; --- test/host/kiosko.l: the newsstand, over a real socket ---
-; not in the test/*.l corpus: the socket nifs live in love/sock.c, which love0 does not
+; not in the test/*.l corpus: the socket nifs live in src/love/sock.c, which love0 does not
 ; link, and this loads a crew file and splices its module.
 ;
 ; the whole thing runs in one process, the way test/net.l does: a server task
@@ -241,6 +241,6 @@
    _ (close l)
 
    _ (test_fin ())
-   _ (puts "apps/kiosko: ok -- the static web server (guard, methods, paths, types)
+   _ (puts "src/apps/kiosko: ok -- the static web server (guard, methods, paths, types)
 ")
    0)
