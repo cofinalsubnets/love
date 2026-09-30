@@ -220,7 +220,7 @@
    (hs-serve l mode)
     (: c (accept l) sv (tablet 8) _ (pins sv 's c 'pend "" 'cseq 0 'sseq 0)
        r (rdrec sv) ch <>r b (snip ch 4 #ch) sid (snip b 35 (35 + b 34))
-       priv (rnd 32) pub (x25519-pub priv)
+       priv (rnd 32) pub (? (mode = 'zeroshare) (zeros 32) (x25519-pub priv))
        exts (ext 43 (u16 772) + ext 51 (u16 29 + u16 32 + pub))
        shb (u16 771 + rnd 32 + u8 #sid + sid + u16 4867 + u8 0 + u16 #exts + exts)
        sh (hs-msg 2 shb)
@@ -266,6 +266,9 @@
    _ (map (m \ (: r (hs-run (hs-seat 0) <m 'none)
                   (test !(<r) ((r 1) = [21 (u8 2 + u8 (m 2))]) (string? (r 2)))))
           [['badsig 0 51] ['otherkey 1 51] ['nocv 2 51] ['badfin 3 51] ['nocert 4 51]])
+   ; RFC 8446 7.4.2: an all-zero shared secret is refused
+   zs (hs-run (hs-seat 0) 'zeroshare 'none)
+   _ (test !(<zs) (0 <= str-at (zs 2) "small order" 0))
    ; the aead's tag compare
    _ (test (ct-same? "abc" "abc") (ct-same? "" "") !(ct-same? "abc" "abd") !(ct-same? "xbc" "abc")
            !(ct-same? "ab" "abc"))

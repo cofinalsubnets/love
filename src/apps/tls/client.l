@@ -265,6 +265,7 @@
                    (? (atom? ss) (quit-why t "the server chose nothing this client speaks")
                       (: share <ss kl <>ss
                          shared (x25519 priv share)
+                         weak (shared = zeros 32)                              ; RFC 8446 7.4.2: a small-order share
                          early (hkdf-extract (zeros 32) (zeros 32))
                          hs (hkdf-extract (derive early "derived" "") shared)
                          chs (derive hs "c hs traffic" (t 'tr))
@@ -297,7 +298,7 @@
                                 ; a request for our certificate: its context kept
                                 (<m = 13) (pin t 'creq (snip <>m 1 (1 + <>m 0)), flight 0)
                                 (flight 0)))
-                         fin (flight 0)
+                         fin (? weak (pin t 'why "the server's key share is of small order", ()) (flight 0))
                          why (? (atom? fin) () (trust-why sni port (t 'chain) (t 'spki) how))
                          (? (atom? fin) (quit-why t "the handshake failed")
                             (string? why) (: _ (alert t (? (0 <= str-at why "pinned" 0) 42 48) why) (quit-why t why))
