@@ -5,7 +5,8 @@
 ;            both padding edges (111/112, 127/128, 239/240) -- the digests off
 ;            python's hashlib, over bytes (7i + 1) & 255.
 ;   ed25519  RFC 8032 §7.1 tests 1-3: the public key, the signature, and verify's
-;            answer on it and on each way of spoiling it.
+;            answer on it and on each way of spoiling it; signing's walk traced to one
+;            schedule whatever the scalar.
 ;   wire     RFC 4251 §5's mpint examples, and base64 both ways on a key blob.
 ;   aes      FIPS 197 appendix C's three key sizes, and SP 800-38A F.5.5's ctr blocks.
 ;   locked   a key ssh-keygen locked (aes256-ctr, bcrypt 4 rounds, "hunter2 pass"):
@@ -64,6 +65,18 @@
 ; an S at or past the group order is refused, not reduced
 (: ssht-s (le-bytes (le-num (snip (unhex (ssht-ed 0 3)) 32 64) + ed-l)))
 (test !(ed-verify (unhex (ssht-ed 0 1)) "" (snip (unhex (ssht-ed 0 3)) 0 32 + ssht-s)))
+; signing's walk keeps one schedule: on a trace curve, the integers, every scalar takes 256
+; doublings and 64 additions and lands on itself; the ends of the scalar range land right
+(: ssht-walk
+    (\ v (: n {} (bump k) (pin n k (peep n k 0 + 1))
+            r (p2-walk (\ a b (: _ (bump 'a) s (a 0 0 + b 0 0) [[s]])) (a \ (: _ (bump 'd) s (2 * a 0 0) [[s]]))
+                       [[0]] (map (j \ [[j]]) ^16) (ed-nib (p2-limbs v)))
+            [(r 0 0) (peep n 'a 0) (peep n 'd 0)])))
+(test (all (v \ ssht-walk v = [v 64 256]) [0 1 257 ((1 << 252) + 12345) (ed-l - 1) ((1 << 251) + 1)])
+      ((ed-lenc (ed-mulb (p2-limbs 0))) = ed-enc ed-zero)
+      ((ed-lenc (ed-mulb (p2-limbs 1))) = ed-enc ed-b)
+      ((ed-lenc (ed-mulb (p2-limbs (ed-l - 1)))) = ed-enc [(ed-q - ed-b 0) (ed-b 1) 1 0])
+      ((ed-lenc (ed-mulb (p2-limbs 5))) = ed-enc (ed-scale 5 ed-b)))
 
 ; --- wire -------------------------------------------------------------------------
 (test
