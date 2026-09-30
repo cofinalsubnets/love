@@ -1029,7 +1029,7 @@
    ; -- nproc: the machine's processors, sysconf's configured count. GNU counts the ones
    ; this process may run on; nothing here reads an affinity mask, so this is GNU's --all --
    (nproc-main _)
-    (: n (sysconf () @ (_ c . _) (charm? c ? c 0) 0)
+    (: n (sysconf () @ (_ . c . _) (charm? c ? c 0) 0)
        (say out (show (? (0 < n) n 1)), put out 10, flush out, 0))
 
    ; -- basename and dirname: the two path clips --

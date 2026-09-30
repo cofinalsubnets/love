@@ -55,7 +55,7 @@
    ; LOVE may predate sysconf, and reads /proc/cpuinfo instead; no count is 1, the serial fan.
    (rt-cores _)
     (: sc (cite 'posix 'sysconf)
-       n (? sc (sc () @ (_ _ c . _) (charm? c ? c 0) 0) (rt-cpuinfo 0))
+       n (? sc (sc () @ (_ . _ . c . _) (charm? c ? c 0) 0) (rt-cpuinfo 0))
        (0 < n ? (n // 2 + 1) 1))
    (rt-cpuinfo _)
     (: q (open "/proc/cpuinfo" "r")

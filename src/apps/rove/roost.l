@@ -44,7 +44,7 @@
  (open-ttl _) (: u (getenv "USER" || getenv "LOGNAME")
                  (? (string? u && 0 < #u) (host-name () @ h (u + "@" + h) u) "the nest"))
  ; the host's short name, off uname(2)
- (host-name _) (uname () @ (_ h . _) (: k (findsub h ".") (? (#h < 1) () (k < 0) h (snip h 0 k))) ())
+ (host-name _) (uname () @ (_ . h . _) (: k (findsub h ".") (? (#h < 1) () (k < 0) h (snip h 0 k))) ())
  open-foot '(""
              "move     h j k l    or the arrow keys"
              "perch    bump it to lay this build in the nest, or not"

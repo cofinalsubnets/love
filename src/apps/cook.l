@@ -1206,7 +1206,7 @@
    ; mooncc heap; bounded by MemAvailable at 512 MB a job, since one TU peaks near 350 MB, and
    ; the smaller of the two wins. MemAvailable is linux's word; elsewhere the cores alone decide.
    (jobauto _)
-   (: cpus (sysconf () @ (_ _ c . _) (charm? c ? c 0) 0)   ; the online count
+   (: cpus (sysconf () @ (_ . _ . c . _) (charm? c ? c 0) 0)   ; the online count
       mls (jobfile "/proc/meminfo")
       free (? !(two? mls) 0
               (foldl (\ a l ((13 <= tally l) && (snip l 0 13 = "MemAvailable:")
