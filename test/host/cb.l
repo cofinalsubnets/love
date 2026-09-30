@@ -1,7 +1,14 @@
-; test/host/cb.l -- a vttest-lite for quay's console screen (src/love/cb.c, src/love/quay/quay.c).
-; the same struct cb is inle's framebuffer console, so this is the emulator's executable spec.
-; held out of the corpus: inside it, love0's second evaluation stops.
-; run: cat test/00-init.l test/host/cb.l | out/love
+; --- test/host/cb.l: a vttest-lite for quay's console screen (src/love/cb.c + src/love/quay/quay.c) ---
+; held out of the corpus, and not for its nifs: love0 links screen/scribe/glass/gaze/reply
+; as surely as the final `love` does, and these laws pass twice on their own and beside
+; the other movers. inside the whole corpus love0's second evaluation stops. which
+; member it is quarrelling with is not known -- the corpus resists subsetting, since
+; the roster is an ordering and a half of it is not a corpus. standalone, then:
+;
+;   cat test/00-init.l test/host/cb.l | out/love      ; exits 1 on fail, prints cb: ok
+;
+; the same struct cb is the kernel's framebuffer console, so every law asserted
+; here holds under inle too -- this file is the emulator's executable spec.
 
 ; --- the little vocabulary ---
 ; a cell is three words (src/love/quay/quay.h): the glyph -- codepoint, width, picture,
@@ -16,8 +23,8 @@
    (cbg s i) (cink (glass s i 2))
    (cur s) (gaze s 0)
    (rowtx s r)                                       ; row r's chars, blanks as spaces
-    (gaze s 2 @ c
-       (foldl (a \ i \ (a + string (chat s (r * c + i) @ ch (0 = ch ? 32 ch)))) "" (jot c))))
+    (: c (gaze s 2)
+       (foldl (\ a i (a + string (: ch (chat s ((r * c) + i)) (0 = ch ? 32 ch)))) "" (jot c))))
 
 ; --- 1. the ctor and the size protocol ---
 (: n (screen () 4 10)
@@ -32,7 +39,7 @@
  _ (test
     (4 = gaze s 1) (10 = gaze s 2)   ; rows, cols
     (0 = gaze s 4) (3 = gaze s 5)    ; the scroll region opens full
-    (3 = 3 & gaze s 3)               ; cursor shown + autowrap on
+    (3 = (3 & gaze s 3))               ; cursor shown + autowrap on
     (0 = cur s)
     (0 = chat s 0)
     !(glass s 40 0)                   ; off the grid: nothing
@@ -48,7 +55,7 @@
  _ (scribe s 33)                         ; a bare charm is one byte
  _ (test (33 = chat s 2))
  b (cask 2)
- _ (pin b 0 63, pin b 1 63)
+ _ (pin b 0 63) _ (pin b 1 63)
  _ (scribe s b)                          ; a cask pours its bytes
  _ (test ("hi!??" = snip (rowtx s 0) 0 5))
  _ (scribe s "\r")
@@ -57,271 +64,288 @@
  _ (test (0 = cur s))
  _ (scribe s "\x08")
  _ (test (0 = cur s)))               ; bs at column 0 stays (no row crossing)
-(mkscr 4 10 @ s
- (scribe s "ab\ncd",
-  test (99 = chat s 12) (100 = chat s 13)   ; bare \n keeps the column (LNM off)
-       (14 = cur s)))
+(: s (mkscr 4 10)
+ _ (scribe s "ab\ncd")
+ _ (test
+    (99 = chat s 12) (100 = chat s 13)   ; bare \n keeps the column (LNM off)
+    (14 = cur s)))
 
 ; --- 3. tabs ---
-(mkscr 4 20 @ s
- (scribe s "\ta",
-  test (97 = chat s 8),               ; tab stops every 8
-  scribe s "\tb",
-  test (98 = chat s 16),
-  scribe s "\t",
-  test (19 = cur s)))               ; ... clamped at the last column
+(: s (mkscr 4 20)
+ _ (scribe s "\ta")
+ _ (test (97 = chat s 8))             ; tab stops every 8
+ _ (scribe s "\tb")
+ _ (test (98 = chat s 16))
+ _ (scribe s "\t")
+ _ (test (19 = cur s)))               ; ... clamped at the last column
 
 ; --- 4. autowrap, deferred (the DECAWM pending-wrap law) ---
-(mkscr 4 10 @ s
- (scribe s "0123456789",
-  test (9 = cur s)                         ; ten glyphs: cursor stays on the last column
-       (16 = 16 & gaze s 3)              ; ... wrap pending
-       (57 = chat s 9),
-  scribe s "A",
-  test (65 = chat s 10)                    ; the eleventh glyph carried to a fresh row
-       (11 = cur s),
-  scribe s "\e[?7l",                      ; autowrap off
-  scribe s "\e[1;10H",
-  scribe s "XYZ",
-  test (90 = chat s 9)                     ; X, Y, Z overwrote in place: Z holds
-       (9 = cur s)
-       (65 = chat s 10),                ; the next row untouched
-  scribe s "\e[?7h"))
+(: s (mkscr 4 10)
+ _ (scribe s "0123456789")
+ _ (test
+    (9 = cur s)                         ; ten glyphs: cursor stays on the last column
+    (16 = (16 & gaze s 3))              ; ... wrap pending
+    (57 = chat s 9))
+ _ (scribe s "A")
+ _ (test
+    (65 = chat s 10)                    ; the eleventh glyph carried to a fresh row
+    (11 = cur s))
+ _ (scribe s "\e[?7l")                    ; autowrap off
+ _ (scribe s "\e[1;10H")
+ _ (scribe s "XYZ")
+ _ (test
+    (90 = chat s 9)                     ; X, Y, Z overwrote in place: Z holds
+    (9 = cur s)
+    (65 = chat s 10))                   ; the next row untouched
+ _ (scribe s "\e[?7h"))
 
 ; --- 5. absolute addressing + relative moves, clamped ---
-(mkscr 4 10 @ s
- (scribe s "\e[2;5H",
-  test (14 = cur s),                  ; cup is 1-based
-  scribe s "\e[9;99H",
-  test (39 = cur s),                  ; ... and clamps to the grid
-  scribe s "\e[H",
-  test (0 = cur s),
-  scribe s "\e[2B", test (20 = cur s),         ; cud
-  scribe s "\e[3C", test (23 = cur s),         ; cuf
-  scribe s "\e[2A", test (3 = cur s),          ; cuu
-  scribe s "\e[9A", test (3 = cur s),          ; clamped at the top
-  scribe s "\e[2D", test (1 = cur s),          ; cub
-  scribe s "\e[9C", test (9 = cur s),          ; clamped in the row
-  scribe s "\e[5G", test (4 = cur s),          ; cha: column 5
-  scribe s "\e[3d", test (24 = cur s),         ; vpa: row 3, column kept
-  scribe s "\e[E", test (30 = cur s),          ; cnl: next row home
-  scribe s "\e[2F", test (10 = cur s)))   ; cpl: two up, home
+(: s (mkscr 4 10)
+ _ (scribe s "\e[2;5H")
+ _ (test (14 = cur s))                ; cup is 1-based
+ _ (scribe s "\e[9;99H")
+ _ (test (39 = cur s))                ; ... and clamps to the grid
+ _ (scribe s "\e[H")
+ _ (test (0 = cur s))
+ _ (scribe s "\e[2B") _ (test (20 = cur s))    ; cud
+ _ (scribe s "\e[3C") _ (test (23 = cur s))    ; cuf
+ _ (scribe s "\e[2A") _ (test (3 = cur s))     ; cuu
+ _ (scribe s "\e[9A") _ (test (3 = cur s))     ; clamped at the top
+ _ (scribe s "\e[2D") _ (test (1 = cur s))     ; cub
+ _ (scribe s "\e[9C") _ (test (9 = cur s))     ; clamped in the row
+ _ (scribe s "\e[5G") _ (test (4 = cur s))     ; cha: column 5
+ _ (scribe s "\e[3d") _ (test (24 = cur s))    ; vpa: row 3, column kept
+ _ (scribe s "\e[E")  _ (test (30 = cur s))    ; cnl: next row home
+ _ (scribe s "\e[2F") _ (test (10 = cur s)))   ; cpl: two up, home
 
 ; --- 6. erase: display and line, all three shapes ---
-(mkscr 3 10 @ s
- (scribe s "0123456789012345678901234567",     ; fill (the last two pend)
-  scribe s "\e[2;5H\e[K",
-  test ("0123      " = rowtx s 1),         ; el 0: to end of row
-  scribe s "\e[1;5H\e[1K",
-  test ("     56789" = rowtx s 0),         ; el 1: from start, cursor inclusive
-  scribe s "\e[3;5H\e[2K",
-  test ("          " = rowtx s 2)))      ; el 2: the whole row
-(mkscr 3 10 @ s
- (scribe s "aaaaaaaaaabbbbbbbbbbcccccccc",
-  scribe s "\e[2;5H\e[J",
-  test ("aaaaaaaaaa" = rowtx s 0)
-       ("bbbb      " = rowtx s 1)
-       ("          " = rowtx s 2),           ; ed 0: cursor to the end
-  scribe s "\e[1;5H\e[1J",
-  test ("     aaaaa" = rowtx s 0),         ; ed 1: start to cursor
-  scribe s "\e[2J",
-  test ("          " = rowtx s 0)))      ; ed 2: everything
+(: s (mkscr 3 10)
+ _ (scribe s "0123456789012345678901234567")   ; fill (the last two pend)
+ _ (scribe s "\e[2;5H\e[K")
+ _ (test ("0123      " = rowtx s 1))       ; el 0: to end of row
+ _ (scribe s "\e[1;5H\e[1K")
+ _ (test ("     56789" = rowtx s 0))       ; el 1: from start, cursor inclusive
+ _ (scribe s "\e[3;5H\e[2K")
+ _ (test ("          " = rowtx s 2)))      ; el 2: the whole row
+(: s (mkscr 3 10)
+ _ (scribe s "aaaaaaaaaabbbbbbbbbbcccccccc")
+ _ (scribe s "\e[2;5H\e[J")
+ _ (test
+    ("aaaaaaaaaa" = rowtx s 0)
+    ("bbbb      " = rowtx s 1)
+    ("          " = rowtx s 2))              ; ed 0: cursor to the end
+ _ (scribe s "\e[1;5H\e[1J")
+ _ (test ("     aaaaa" = rowtx s 0))       ; ed 1: start to cursor
+ _ (scribe s "\e[2J")
+ _ (test ("          " = rowtx s 0)))      ; ed 2: everything
 
 ; --- 7. edit: insert/delete characters, erase characters ---
-(mkscr 2 10 @ s
- (scribe s "abcdefghij",
-  scribe s "\e[1;3H\e[2@",
-  test ("ab  cdefgh" = rowtx s 0),         ; ich: room made, tail slides off
-  scribe s "\e[2P",
-  test ("abcdefgh  " = rowtx s 0),         ; dch: closed back up
-  scribe s "\e[3X",
-  test ("ab   fgh  " = rowtx s 0)
-         (2 = cur s)))                     ; ech blanks in place, cursor still
+(: s (mkscr 2 10)
+ _ (scribe s "abcdefghij")
+ _ (scribe s "\e[1;3H\e[2@")
+ _ (test ("ab  cdefgh" = rowtx s 0))       ; ich: room made, tail slides off
+ _ (scribe s "\e[2P")
+ _ (test ("abcdefgh  " = rowtx s 0))       ; dch: closed back up
+ _ (scribe s "\e[3X")
+ _ (test ("ab   fgh  " = rowtx s 0)
+           (2 = cur s)))                     ; ech blanks in place, cursor still
 
 ; --- 8. insert/delete lines ---
-(mkscr 4 10 @ s
- (scribe s "aaaa\e[2;1Hbbbb\e[3;1Hcccc\e[4;1Hdddd",
-  scribe s "\e[2;1H\e[L",
-  test ("aaaa      " = rowtx s 0)
-       ("          " = rowtx s 1)               ; il opened a blank row
-       ("bbbb      " = rowtx s 2)
-       ("cccc      " = rowtx s 3),           ; ... and dddd fell off
-  scribe s "\e[M",
-  test ("bbbb      " = rowtx s 1)               ; dl took the blank back out
-       ("cccc      " = rowtx s 2)
-       ("          " = rowtx s 3)))
+(: s (mkscr 4 10)
+ _ (scribe s "aaaa\e[2;1Hbbbb\e[3;1Hcccc\e[4;1Hdddd")
+ _ (scribe s "\e[2;1H\e[L")
+ _ (test
+    ("aaaa      " = rowtx s 0)
+    ("          " = rowtx s 1)               ; il opened a blank row
+    ("bbbb      " = rowtx s 2)
+    ("cccc      " = rowtx s 3))              ; ... and dddd fell off
+ _ (scribe s "\e[M")
+ _ (test
+    ("bbbb      " = rowtx s 1)               ; dl took the blank back out
+    ("cccc      " = rowtx s 2)
+    ("          " = rowtx s 3)))
 
 ; --- 9. the scroll region: decstbm, region-bound feeds, su/sd, RI ---
-(mkscr 5 10 @ s
- (scribe s "top\e[2;1Haa\e[3;1Hbb\e[4;1Hcc\e[5;1Hbot",
-  scribe s "\e[2;4r",
-  test (1 = gaze s 4) (3 = gaze s 5)          ; the region took
-       (0 = cur s),                          ; ... and decstbm homes
-  scribe s "\e[4;1H\n",                        ; \n at the region's bottom margin
-  test ("top       " = rowtx s 0)               ; above the region: untouched
-       ("bb        " = rowtx s 1)               ; the region scrolled up
-       ("cc        " = rowtx s 2)
-       ("          " = rowtx s 3)
-       ("bot       " = rowtx s 4),           ; below the region: untouched
-  scribe s "\e[2;1H\eM",                       ; RI at the region's top margin
-  test ("          " = rowtx s 1)               ; the region scrolled down
-       ("bb        " = rowtx s 2)
-       ("top       " = rowtx s 0),
-  scribe s "\e[2S",                            ; su by two
-  test ("cc        " = rowtx s 1),
-  scribe s "\e[T",                             ; sd by one
-  test ("cc        " = rowtx s 2),
-  scribe s "\e[r",                             ; the region opens back up
-  test (0 = gaze s 4) (4 = gaze s 5)))
+(: s (mkscr 5 10)
+ _ (scribe s "top\e[2;1Haa\e[3;1Hbb\e[4;1Hcc\e[5;1Hbot")
+ _ (scribe s "\e[2;4r")
+ _ (test
+    (1 = gaze s 4) (3 = gaze s 5)          ; the region took
+    (0 = cur s))                             ; ... and decstbm homes
+ _ (scribe s "\e[4;1H\n")                      ; \n at the region's bottom margin
+ _ (test
+    ("top       " = rowtx s 0)               ; above the region: untouched
+    ("bb        " = rowtx s 1)               ; the region scrolled up
+    ("cc        " = rowtx s 2)
+    ("          " = rowtx s 3)
+    ("bot       " = rowtx s 4))              ; below the region: untouched
+ _ (scribe s "\e[2;1H\eM")                     ; RI at the region's top margin
+ _ (test
+    ("          " = rowtx s 1)               ; the region scrolled down
+    ("bb        " = rowtx s 2)
+    ("top       " = rowtx s 0))
+ _ (scribe s "\e[2S")                          ; su by two
+ _ (test ("cc        " = rowtx s 1))
+ _ (scribe s "\e[T")                           ; sd by one
+ _ (test ("cc        " = rowtx s 2))
+ _ (scribe s "\e[r")                           ; the region opens back up
+ _ (test (0 = gaze s 4) (4 = gaze s 5)))
 
 ; --- 10. scroll at the screen's own bottom (the classic teletype law) ---
-(mkscr 3 10 @ s
- (scribe s "one\r\ntwo\r\nthree\r\n",
-  test ("two       " = rowtx s 0)               ; one scrolled off the top
-       ("three     " = rowtx s 1)
-       ("          " = rowtx s 2)
-       (20 = cur s)))
+(: s (mkscr 3 10)
+ _ (scribe s "one\r\ntwo\r\nthree\r\n")
+ _ (test
+    ("two       " = rowtx s 0)               ; one scrolled off the top
+    ("three     " = rowtx s 1)
+    ("          " = rowtx s 2)
+    (20 = cur s)))
 
 ; --- 11. SGR: colours, faces, resets ---
-(mkscr 2 12 @ s
- (scribe s "\e[31;44;1mx",
-  test (1 = cfg s 0) (4 = cbg s 0) (1 = cface s 0), ; red on blue, bold
-  scribe s "\e[4;7my",
-  test (7 = cface s 1),                              ; + underline + reverse
-  scribe s "\e[22;27mz",
-  test (2 = cface s 2),                              ; bold and reverse off, underline holds
-  scribe s "\e[mw",
-  test ('def = cfg s 3) ('def = cbg s 3) (0 = cface s 3),     ; SGR 0: the floor
-  scribe s "\e[92ma\e[38;5;196mb\e[38;2;255;0;0mc",
-  test (10 = cfg s 4)                          ; bright green: the high half
-       (196 = cfg s 5)                         ; 256-colour, straight index
-       ([255 0 0] = cfg s 6),               ; truecolour: the rgb itself
-  scribe s "\e[48;5;238;39mq",
-  test (238 = cbg s 7) ('def = cfg s 7),
-  scribe s "\e[48;2;1;2;300mr",
-  test ([1 2 255] = cbg s 8),                    ; a channel past 255 holds at 255
-  scribe s "\e[0;2;3;5;8;9ms",
-  test (248 = cface s 9),                       ; dim 8 italic 16 strike 32 blink 64 hidden 128
-  scribe s "\e[23;25;28;29mt",
-  test (8 = cface s 10),                         ; ..each with its own off
-  scribe s "\e[1;22mu",
-  test (0 = cface s 11)))                      ; 22 ends bold and dim both
+(: s (mkscr 2 12)
+ _ (scribe s "\e[31;44;1mx")
+ _ (test
+    (1 = cfg s 0) (4 = cbg s 0) (1 = cface s 0))   ; red on blue, bold
+ _ (scribe s "\e[4;7my")
+ _ (test (7 = cface s 1))                            ; + underline + reverse
+ _ (scribe s "\e[22;27mz")
+ _ (test (2 = cface s 2))                            ; bold and reverse off, underline holds
+ _ (scribe s "\e[mw")
+ _ (test ('def = cfg s 3) ('def = cbg s 3) (0 = cface s 3))   ; SGR 0: the floor
+ _ (scribe s "\e[92ma\e[38;5;196mb\e[38;2;255;0;0mc")
+ _ (test
+    (10 = cfg s 4)                          ; bright green: the high half
+    (196 = cfg s 5)                         ; 256-colour, straight index
+    ([255 0 0] = cfg s 6))                  ; truecolour: the rgb itself
+ _ (scribe s "\e[48;5;238;39mq")
+ _ (test (238 = cbg s 7) ('def = cfg s 7))
+ _ (scribe s "\e[48;2;1;2;300mr")
+ _ (test ([1 2 255] = cbg s 8))                  ; a channel past 255 holds at 255
+ _ (scribe s "\e[0;2;3;5;8;9ms")
+ _ (test (248 = cface s 9))                     ; dim 8 italic 16 strike 32 blink 64 hidden 128
+ _ (scribe s "\e[23;25;28;29mt")
+ _ (test (8 = cface s 10))                       ; ..each with its own off
+ _ (scribe s "\e[1;22mu")
+ _ (test (0 = cface s 11)))                      ; 22 ends bold and dim both
 
 ; --- 12. save/restore (ESC 7/8 and CSI s/u carry cursor + pen) ---
-(mkscr 4 10 @ s
- (scribe s "\e[2;3H\e[35m\e7",
-  scribe s "\e[4;9H\e[m\e[42m",
-  scribe s "\e8x",
-  test (120 = chat s 12)                       ; restored to 2;3 and stamped there
-       (5 = cfg s 12)                          ; ... with the saved magenta pen
-       ('def = cbg s 12),                   ; ... not the green that came after
-  scribe s "\e[1;1H\e[s\e[3;3H\e[u",
-  test (0 = cur s)))
+(: s (mkscr 4 10)
+ _ (scribe s "\e[2;3H\e[35m\e7")
+ _ (scribe s "\e[4;9H\e[m\e[42m")
+ _ (scribe s "\e8x")
+ _ (test
+    (120 = chat s 12)                       ; restored to 2;3 and stamped there
+    (5 = cfg s 12)                          ; ... with the saved magenta pen
+    ('def = cbg s 12))                      ; ... not the green that came after
+ _ (scribe s "\e[1;1H\e[s\e[3;3H\e[u")
+ _ (test (0 = cur s)))
 
 ; --- 13. modes: cursor visibility, origin ---
-(mkscr 6 10 @ s
- (test (1 = 1 & gaze s 3),
-  scribe s "\e[?25l",
-  test (0 = 1 & gaze s 3),              ; hidden: the flag renderers read
-  scribe s "\e[?25h",
-  test (1 = 1 & gaze s 3),
-  scribe s "\e[3;5r\e[?6h",                   ; region rows 3..5, origin on
-  test (20 = cur s),                      ; home = the region's top
-  scribe s "\e[2;1H",
-  test (30 = cur s),                      ; row 2 = one under the region top
-  scribe s "\e[9;1H",
-  test (40 = cur s),                      ; clamped at the region's bottom
-  scribe s "\e[?6l\e[r"))
+(: s (mkscr 6 10)
+ _ (test (1 = (1 & gaze s 3)))
+ _ (scribe s "\e[?25l")
+ _ (test (0 = (1 & gaze s 3)))            ; hidden: the flag renderers read
+ _ (scribe s "\e[?25h")
+ _ (test (1 = (1 & gaze s 3)))
+ _ (scribe s "\e[3;5r\e[?6h")                 ; region rows 3..5, origin on
+ _ (test (20 = cur s))                    ; home = the region's top
+ _ (scribe s "\e[2;1H")
+ _ (test (30 = cur s))                    ; row 2 = one under the region top
+ _ (scribe s "\e[9;1H")
+ _ (test (40 = cur s))                    ; clamped at the region's bottom
+ _ (scribe s "\e[?6l\e[r"))
 
 ; --- 14. the alternate screen ---
-(mkscr 3 10 @ s
- (scribe s "ground\e[35m",
-  scribe s "\e[?1049h",
-  test (0 = chat s 0)                          ; a clean page for the full-screen guest
-       (0 = cur s),
-  scribe s "guest",
-  scribe s "\e[?1049l",
-  scribe s "x",
-  test (103 = chat s 0)                        ; the ground back as it was
-       (120 = chat s 6)                        ; ..the cursor where it was saved
-       (5 = cfg s 6)))                         ; ..and the pen
+(: s (mkscr 3 10)
+ _ (scribe s "ground\e[35m")
+ _ (scribe s "\e[?1049h")
+ _ (test
+    (0 = chat s 0)                          ; a clean page for the full-screen guest
+    (0 = cur s))
+ _ (scribe s "guest")
+ _ (scribe s "\e[?1049l")
+ _ (scribe s "x")
+ _ (test
+    (103 = chat s 0)                        ; the ground back as it was
+    (120 = chat s 6)                        ; ..the cursor where it was saved
+    (5 = cfg s 6)))                         ; ..and the pen
 
 ; --- 15. replies: dsr, da, and the drain-once law ---
-(mkscr 4 10 @ s
- (scribe s "\e[3;7H\e[6n",
-  test ([27 91 51 59 55 82] = reply s)       ; "\e[3;7R"
-         !(reply s),                          ; drained: quiet
-  scribe s "\e[c",
-  test ("\e[?62;4;22c" = string (reply s)),       ; a vt220, sixel (4) and ansi colour (22)
-  scribe s "\eZ",                                ; DECID: the vt102 answer it always gave
-  test ([27 91 63 54 99] = reply s),
-  scribe s "\e[5n",
-  test ([27 91 48 110] = reply s)))          ; "\e[0n": all well
+(: s (mkscr 4 10)
+ _ (scribe s "\e[3;7H\e[6n")
+ _ (test ([27 91 51 59 55 82] = reply s)       ; "\e[3;7R"
+           !(reply s))                        ; drained: quiet
+ _ (scribe s "\e[c")
+ _ (test ("\e[?62;4;22c" = string (reply s)))     ; a vt220, sixel (4) and ansi colour (22)
+ _ (scribe s "\eZ")                              ; DECID: the vt102 answer it always gave
+ _ (test ([27 91 63 54 99] = reply s))
+ _ (scribe s "\e[5n")
+ _ (test ([27 91 48 110] = reply s)))          ; "\e[0n": all well
 
 ; --- 15b. the asks a line editor waits on: colour queries, secondary da ---
 ; (silence here cost a real second of buffered keystrokes at zsh startup)
-(mkscr 4 20 @ s
- (scribe s "\e]11;?\x07",
-  test ([27 93 49 49 59 114 103 98 58 48 48 48 48 47 48 48 48 48 47 48 48 48 48 7]
-            = reply s),                          ; bg: rgb:0000/0000/0000, bel-terminated
-  scribe s "\e]10;?\e\\",                        ; st-terminated ask, same answer lane
-  test ([27 93 49 48 59 114 103 98 58 99 48 99 48 47 99 48 99 48 47 99 48 99 48 7]
-            = reply s),                          ; fg: rgb:c0c0/c0c0/c0c0
-  scribe s "\e]0;just a title\x07",
-  test !(reply s),                          ; a title is not a question
-  scribe s "\e[>c",
-  test ([27 91 62 48 59 48 59 48 99] = reply s),         ; secondary da
-  scribe s "\e[c",
-  test ("\e[?62;4;22c" = string (reply s))))  ; primary da unchanged
+(: s (mkscr 4 20)
+ _ (scribe s "\e]11;?\x07")
+ _ (test ([27 93 49 49 59 114 103 98 58 48 48 48 48 47 48 48 48 48 47 48 48 48 48 7]
+              = reply s))                        ; bg: rgb:0000/0000/0000, bel-terminated
+ _ (scribe s "\e]10;?\e\\")                      ; st-terminated ask, same answer lane
+ _ (test ([27 93 49 48 59 114 103 98 58 99 48 99 48 47 99 48 99 48 47 99 48 99 48 7]
+              = reply s))                        ; fg: rgb:c0c0/c0c0/c0c0
+ _ (scribe s "\e]0;just a title\x07")
+ _ (test !(reply s))                        ; a title is not a question
+ _ (scribe s "\e[>c")
+ _ (test ([27 91 62 48 59 48 59 48 99] = reply s))       ; secondary da
+ _ (scribe s "\e[c")
+ _ (test ("\e[?62;4;22c" = string (reply s))))  ; primary da unchanged
 
 ; --- 16. what must be swallowed whole ---
-(mkscr 2 10 @ s
- (scribe s "\e]0;a title\x07x",                  ; osc to bel (\x07 -- \a is no reader escape)
-  test (120 = chat s 0),
-  scribe s "\e]2;more\e\\y",                     ; osc to st
-  test (121 = chat s 1),
-  scribe s "\e(B\e)0\e=\e>z",                    ; charsets + keypad chatter
-  test (122 = chat s 2),
-  scribe s "\e[?2004h\e[>1c\e[0 q!",             ; odd modes, intermediates: junked
-  test (33 = chat s 3),
-  scribe s "a\x7fb\e[\x7f1D",                    ; del: nothing, anywhere (mid-CSI too)
-  test (97 = chat s 4) (98 = chat s 5) (5 = cur s)))
+(: s (mkscr 2 10)
+ _ (scribe s "\e]0;a title\x07x")                ; osc to bel (\x07 -- \a is no reader escape)
+ _ (test (120 = chat s 0))
+ _ (scribe s "\e]2;more\e\\y")                   ; osc to st
+ _ (test (121 = chat s 1))
+ _ (scribe s "\e(B\e)0\e=\e>z")                  ; charsets + keypad chatter
+ _ (test (122 = chat s 2))
+ _ (scribe s "\e[?2004h\e[>1c\e[0 q!")           ; odd modes, intermediates: junked
+ _ (test (33 = chat s 3))
+ _ (scribe s "a\x7fb\e[\x7f1D")                  ; del: nothing, anywhere (mid-CSI too)
+ _ (test (97 = chat s 4) (98 = chat s 5) (5 = cur s)))
 
 ; --- 17. decaln: the adjustment screen ---
-(mkscr 3 8 @ s
- (scribe s "\e[2;3r\e#8",
-  test (69 = chat s 0) (69 = chat s 23)         ; E corner to corner
-       (0 = gaze s 4) (2 = gaze s 5)            ; region reopened
-       (0 = cur s)))
+(: s (mkscr 3 8)
+ _ (scribe s "\e[2;3r\e#8")
+ _ (test
+    (69 = chat s 0) (69 = chat s 23)         ; E corner to corner
+    (0 = gaze s 4) (2 = gaze s 5)            ; region reopened
+    (0 = cur s)))
 
 ; --- 17b. utf-8 decodes: a cell holds the codepoint, whatever face draws it ---
-(mkscr 4 20 @ s
- (scribe s "\xc3\xa9",                            ; é
-  test (233 = chat s 0),
-  scribe s "\xe2\x94\x80\xe2\x94\x82\xe2\x94\x8c\xe2\x95\x90\xe2\x95\x94",     ; ─ │ ┌ ═ ╔
-  test (9472 = chat s 1) (9474 = chat s 2) (9484 = chat s 3)
-         (9552 = chat s 4) (9556 = chat s 5),
-  scribe s "\xe2\x95\xad",                        ; ╭ stays itself: the face aliases it
-  test (9581 = chat s 6),
-  scribe s "\xe2\x96\x91\xe2\x96\x88",            ; ░ █
-  test (9617 = chat s 7) (9608 = chat s 8),
-  scribe s "\xce\xb1\xe2\x88\x9e\xc2\xb0",        ; α ∞ °
-  test (945 = chat s 9) (8734 = chat s 10) (176 = chat s 11),
-  scribe s "\xf0\x9f\x98\x80",                    ; an emoji: wide, held whole
-  test (128512 = chat s 12) (0 = chat s 13) (14 = cur s),
-  scribe s 226, scribe s 148,                     ; a sequence split across feeds
-  scribe s 144,                                   ; ... still one ┐
-  test (9488 = chat s 14),
-  scribe s "\x80",                                ; a stray continuation: U+FFFD
-  test (65533 = chat s 15),
-  scribe s "\xc3\e[Dx",                           ; torn mid-sequence: a U+FFFD lands,
-  test (120 = chat s 16)                    ; the ESC rides on -- cub steps
-         (17 = cur s),                          ; back and x overwrites it
-  scribe s "\xe2\x96\xba\xe2\x96\xb2\xe2\x99\xaa",     ; ► ▲ ♪: pictures whose cp437 bytes
-  test (9658 = chat s 17) (9650 = chat s 18) (9834 = chat s 19)   ; ..are controls
-         (19 = cur s),                          ; and act as none: ♪ holds the last column
-  scribe s "\xc2\x9b\xed\xa0\x80",                ; a C1 control and a surrogate:
-  test (65533 = chat s 20) (65533 = chat s 21)))    ; neither lands as itself
+(: s (mkscr 4 20)
+ _ (scribe s "\xc3\xa9")                          ; é
+ _ (test (233 = chat s 0))
+ _ (scribe s "\xe2\x94\x80\xe2\x94\x82\xe2\x94\x8c\xe2\x95\x90\xe2\x95\x94")   ; ─ │ ┌ ═ ╔
+ _ (test (9472 = chat s 1) (9474 = chat s 2) (9484 = chat s 3)
+           (9552 = chat s 4) (9556 = chat s 5))
+ _ (scribe s "\xe2\x95\xad")                      ; ╭ stays itself: the face aliases it
+ _ (test (9581 = chat s 6))
+ _ (scribe s "\xe2\x96\x91\xe2\x96\x88")          ; ░ █
+ _ (test (9617 = chat s 7) (9608 = chat s 8))
+ _ (scribe s "\xce\xb1\xe2\x88\x9e\xc2\xb0")      ; α ∞ °
+ _ (test (945 = chat s 9) (8734 = chat s 10) (176 = chat s 11))
+ _ (scribe s "\xf0\x9f\x98\x80")                  ; an emoji: wide, held whole
+ _ (test (128512 = chat s 12) (0 = chat s 13) (14 = cur s))
+ _ (scribe s 226) _ (scribe s 148)                ; a sequence split across feeds
+ _ (scribe s 144)                                 ; ... still one ┐
+ _ (test (9488 = chat s 14))
+ _ (scribe s "\x80")                              ; a stray continuation: U+FFFD
+ _ (test (65533 = chat s 15))
+ _ (scribe s "\xc3\e[Dx")                         ; torn mid-sequence: a U+FFFD lands,
+ _ (test (120 = chat s 16)                    ; the ESC rides on -- cub steps
+           (17 = cur s))                        ; back and x overwrites it
+ _ (scribe s "\xe2\x96\xba\xe2\x96\xb2\xe2\x99\xaa")   ; ► ▲ ♪: pictures whose cp437 bytes
+ _ (test (9658 = chat s 17) (9650 = chat s 18) (9834 = chat s 19)   ; ..are controls
+           (19 = cur s))                        ; and act as none: ♪ holds the last column
+ _ (scribe s "\xc2\x9b\xed\xa0\x80")              ; a C1 control and a surrogate:
+ _ (test (65533 = chat s 20) (65533 = chat s 21)))    ; neither lands as itself
 ; --- 17c. wide characters: two cells, a lead holding the codepoint and a tail holding 0 ---
 (: (cwide s i) (glass s i 0 >> 21 & 3)            ; 0 single, 1 lead, 2 tail
  s (mkscr 3 6)
@@ -340,20 +364,20 @@
          (8 = cur s))
  _ (scribe s "\e[2;5H\u{4e16}")                    ; filling the last two columns
  _ (test (1 = cwide s 10) (2 = cwide s 11)
-         (11 = cur s) (16 = 16 & gaze s 3))      ; ..pends the wrap on the tail
+         (11 = cur s) (16 = (16 & gaze s 3)))      ; ..pends the wrap on the tail
  _ (scribe s "\e[3;1H\u{0301}e\u{0301}")           ; combining marks take no cell
  _ (test (101 = chat s 12) (13 = cur s)))
 
 ; --- 17d. an erase or a shift that splits a pair blanks the half left over ---
-(mkscr 1 8 @ s
- (scribe s "\u{4e16}\u{754c}\u{4e16}\u{754c}",      ; 世界世界: four pairs, the row full
-  scribe s "\e[1;2H\e[1X",                         ; ech on the first tail
-  test (0 = chat s 0) (0 = cwide s 0),             ; ..the lead goes with it
-  scribe s "\e[1;4H\e[1P",                         ; dch on 界's tail: 世 shifts onto col 3
-  test (19990 = chat s 3) (1 = cwide s 3) (2 = cwide s 4)
-       (0 = cwide s 2),                            ; ..and 界's lead, alone, blanks
-  scribe s "\e[1;5H\e[K",                          ; el from 世's tail
-  test (0 = chat s 3) (0 = cwide s 3)))          ; ..takes its lead too
+(: s (mkscr 1 8)
+ _ (scribe s "\u{4e16}\u{754c}\u{4e16}\u{754c}")    ; 世界世界: four pairs, the row full
+ _ (scribe s "\e[1;2H\e[1X")                       ; ech on the first tail
+ _ (test (0 = chat s 0) (0 = cwide s 0))           ; ..the lead goes with it
+ _ (scribe s "\e[1;4H\e[1P")                       ; dch on 界's tail: 世 shifts onto col 3
+ _ (test (19990 = chat s 3) (1 = cwide s 3) (2 = cwide s 4)
+         (0 = cwide s 2))                          ; ..and 界's lead, alone, blanks
+ _ (scribe s "\e[1;5H\e[K")                        ; el from 世's tail
+ _ (test (0 = chat s 3) (0 = cwide s 3)))          ; ..takes its lead too
 
 ; --- 17e. the vt's widths are 'text's: a cursor steps what wcwidth says, on every plane ---
 (: _ (borrow 'text)
@@ -361,17 +385,17 @@
       63744 65024 65040 65281 65377 94176 110592 119648 127744 128512 129280 131072
       173782 194560 917505 917760 983040]
  s (mkscr 1 8)
- (step cp) (scribe s "\e[1;1H", scribe s (utf8 cp), cur s)
- _ (test (foldl (a \ cp \ (&& a (step cp = max 0 (wcwidth cp)))) 1 cps)))
+ (step cp) (: _ (scribe s "\e[1;1H") _ (scribe s (utf8 cp)) (cur s))
+ _ (test (foldl (\ a cp (&& a (step cp = max 0 (wcwidth cp)))) 1 cps)))
 
 ; --- 17f. a mark joins the cell before the cursor: glass answers the base, and 3 4 5 the
 ;     marks; a pool of 128 clusters, a slot no cell names taken back when it is full ---
 (: (marks s i) (filter (< 0) (map (glass s i) [3 4 5]))
  s (mkscr 3 4)
  _ (scribe s "e\u{301}\u{4e16}\u{300}")           ; é, then 世 with a grave
- _ (test (101 = chat s 0) ([769] = marks s 0) (0 = glass s 0 0 >> 21 & 3)
+ _ (test (101 = chat s 0) ([769] = marks s 0) (0 = (glass s 0 0 >> 21 & 3))
          (19990 = chat s 1) ([768] = marks s 1)     ; ..on the lead
-         (1 = glass s 1 0 >> 21 & 3) (2 = glass s 2 0 >> 21 & 3)
+         (1 = (glass s 1 0 >> 21 & 3)) (2 = (glass s 2 0 >> 21 & 3))
          (() = marks s 2) (3 = cur s))
  _ (scribe s "\e[2;1Habcd\u{302}")                   ; a pending wrap: the last column's
  _ (test (100 = chat s 7) ([770] = marks s 7) (7 = cur s))
@@ -380,18 +404,18 @@
  _ (scribe s "\e[3;1Hx")                             ; a write takes the cluster away
  _ (test (120 = chat s 8) (() = marks s 8))
  w (mkscr 1 200)
- (clus i) (utf8 (65 + i // 100) + utf8 (768 + i % 100))   ; 200 distinct clusters
- (scribe w (cats (map clus (jot 200))),
-  test ([795] = marks w 127) (() = marks w 128)   ; the pool's 128, then bare bases
-       (66 = chat w 128) (200 = #(filter (i \ (0 < chat w i)) (jot 200))),
-  scribe w ("\e[1;1H" + cats (map (i \ "x") (jot 64))),     ; 64 slots no longer named
-  scribe w ("\e[1;130H" + clus 150),                ; ..so a new one finds room
-  test ([818] = marks w 129) ([867] = marks w 99)))
+ (clus i) (utf8 (65 + (i // 100)) + utf8 (768 + (i % 100)))   ; 200 distinct clusters
+ _ (scribe w (cats (map clus (jot 200))))
+ _ (test ([795] = marks w 127) (() = marks w 128)   ; the pool's 128, then bare bases
+         (66 = chat w 128) (200 = #(filter (\ i (0 < chat w i)) (jot 200))))
+ _ (scribe w ("\e[1;1H" + cats (map (\ i "x") (jot 64))))   ; 64 slots no longer named
+ _ (scribe w ("\e[1;130H" + clus 150))              ; ..so a new one finds room
+ _ (test ([818] = marks w 129) ([867] = marks w 99)))
 
 ; --- 20. sixel: a picture decoded into the store, its tiles laid in cells at the cursor ---
 ; a 10x12 picture: red, with blue over the first five columns of the first band. 8x16
 ; cells, so it lands as two tiles on one row, and the cursor steps under it
-(: (pic? s i) (1 = glass s i 0 >> 23 & 1)
+(: (pic? s i) (1 = (glass s i 0 >> 23 & 1))
    (slot s i) (glass s i 0 >> 16 & 127)
    (tx s i) (glass s i 0 >> 8 & 255)
    red 4294901760 blue 4278190335                    ; 0xff over the rgb: a pixel the picture set
@@ -412,7 +436,7 @@
    _ (test !(pic? s 0) (120 = chat s 0) (pic? s 1)))
 
 ; --- 20b. the colour lanes, a scroll, an abort, and a store that sweeps ---
-(: (pic? s i) (1 = glass s i 0 >> 23 & 1)
+(: (pic? s i) (1 = (glass s i 0 >> 23 & 1))
    s (mkscr 3 10)
    _ (scribe s "\ePq#1;1;120;50;100#1~\e\\")         ; HLS: sixel's 120 degrees is red
    _ (test (4294901760 = tilepx s 0 0 0))
@@ -426,14 +450,14 @@
    ; two hundred pictures, each written over at once: the store would hold a few dozen,
    ; so only the sweep keeps the last one coming
    s3 (mkscr 4 10)
-   (many n) (n < 1 ? 0 (scribe s3 "\e[1;1H\ePq#0;2;0;0;100!10~-!10~\e\\\e[1;1Hxy", many (n - 1)))
-   (many 200,
-    scribe s3 "\e[1;1H\ePq#0;2;0;0;100!10~\e\\",
-    test (pic? s3 0) (4278190335 = tilepx s3 0 3 3)))
+   (many n) (? (n < 1) 0 (: _ (scribe s3 "\e[1;1H\ePq#0;2;0;0;100!10~-!10~\e\\\e[1;1Hxy") (many (n - 1))))
+   _ (many 200)
+   _ (scribe s3 "\e[1;1H\ePq#0;2;0;0;100!10~\e\\")
+   _ (test (pic? s3 0) (4278190335 = tilepx s3 0 3 3)))
 
 ; --- 20c. the sizes a picture is fitted to, and the graphics asks ---
 (: s (mkscr 4 10)
- (ask q) (scribe s q, string (reply s))
+ (ask q) (: _ (scribe s q) (string (reply s)))
  _ (test ("\e[6;16;8t" = ask "\e[16t")                    ; a cell in pixels
          ("\e[4;64;80t" = ask "\e[14t")                   ; the grid in pixels
          ("\e[8;4;10t" = ask "\e[18t")                    ; the grid in cells
@@ -442,8 +466,8 @@
          ("\e[?62;4;22c" = ask "\e[c")))                  ; sixel, in the DA
 
 ; --- 21. kitty graphics: APC G key=value,..;base64 ST, a subset -- raw pixels, direct ---
-(: (pic? s i) (1 = glass s i 0 >> 23 & 1)
-   (ask s q) (scribe s q, string (reply s))
+(: (pic? s i) (1 = (glass s i 0 >> 23 & 1))
+   (ask s q) (: _ (scribe s q) (string (reply s)))
    red 4294901760 blue 4278190335 green 4278255360
    ; a=T: a 2x2 red placed at the cursor, which then stands beside it on its last row
    s (mkscr 4 10)
@@ -473,7 +497,8 @@
            ("\e_Gi=6;EINVAL:medium\e\\" = ask s2 "\e_Ga=T,f=24,t=f,s=1,v=1,i=6;AAAA\e\\")
            ("\e_Gi=99;ENOENT:no such image\e\\" = ask s2 "\e_Ga=p,i=99\e\\")
            ("\e_Gi=4;EINVAL:short\e\\" = ask s2 "\e_Ga=T,f=24,s=2,v=1,i=4;AAAA\e\\")
-           ("" = ask s2 "\e_Ga=T,f=100,i=5,q=2;AAAA\e\\"))           ; q=2: silence
+           ("" = ask s2 "\e_Ga=T,f=100,i=5,q=2;AAAA\e\\")            ; q=2: silence
+           ("\e_Gi=4294967289;EINVAL:size\e\\" = ask s2 "\e_Gi=4294967289\e\\"))   ; a 10-digit id, whole
    ; c and r: the placement in cells, nearest pixel; C=1 leaves the cursor
    s3 (mkscr 4 10)
    _ (scribe s3 "\e_Ga=T,f=24,s=2,v=2,c=2,r=1,C=1;/wAA/wAA/wAA/wAA\e\\")
@@ -489,7 +514,7 @@
 ;     needs, clipped where narrower, a wide char cut in two blanked, clusters whole, and the
 ;     pictures the new store holds. the old screen is left as it was ---
 (: (rmarks s i) (filter (< 0) (map (glass s i) [3 4 5]))
-   (rpic? s i) (1 = glass s i 0 >> 23 & 1)
+   (rpic? s i) (1 = (glass s i 0 >> 23 & 1))
    (rwide s i) (glass s i 0 >> 21 & 3)
    (re s r c) (regrid s (cask (screen () r c)) r c)
    s (mkscr 4 10)
@@ -521,7 +546,7 @@
 ; --- 23. history: rows a scroll pushes off the top are kept, and glass reads them at negative
 ;     indices, -cols the newest line's first cell. the view looks back through them: the
 ;     painter's rows move down, and more output keeps the view on the same lines ---
-(: (hrow s k c) (cats (map (q \ (2097151 & glass s (k + q) 0 @ ch (0 = ch ? " " (string ch)))) (jot c)))
+(: (hrow s k c) (cats (map (\ q (: ch (2097151 & glass s (k + q) 0) (0 = ch ? " " (string ch)))) (jot c)))
    s (mkscr 3 4)
    _ (scribe s ("\e[20h" + "aa\nbb\ncc\ndd\nee"))        ; LNM: \n is a newline; five lines on three rows
    _ (test (2 = gaze s 9) (0 = gaze s 8)
@@ -543,11 +568,11 @@
    _ (test (0 = gaze t 9))                             ; ..scrolls keep no history
    w (mkscr 3 4)
    _ (scribe w ("\e[20h" + "e\u{301}\n\u{4e16}\n3\n4\n5"))    ; a cluster and a wide char into history
-   _ (test (769 = glass w -8 3) (19990 = 2097151 & glass w -4 0) (1 = glass w -4 0 >> 21 & 3))
+   _ (test (769 = glass w -8 3) (19990 = 2097151 & glass w -4 0) (1 = (glass w -4 0 >> 21 & 3)))
    r (regrid w (cask (screen () 2 3)) 2 3)             ; regrid: history and the rows shrunk away
    _ (test (3 = gaze r 9) ("e" = snip (hrow r -9 3) 0 1) ("3  " = hrow r -3 3) ("5  " = hrow r 3 3))
    ; the painter looks back too: row 0 one line back paints what a screen with it there does
-   (pix sc y) (cask (4 * 32 * 48) @ px (dye sc px 32 y -1 (), snip px (y * 2048) ((y + 1) * 2048)))
+   (pix sc y) (: px (cask (4 * 32 * 48)) _ (dye sc px 32 y -1 ()) (snip px (y * 2048) ((y + 1) * 2048)))
    p (mkscr 3 4)
    _ (scribe p ("\e[20h" + "aa\nbb\ncc\ndd"))
    q (mkscr 3 4)
@@ -559,7 +584,7 @@
 
 ; --- 24. the alternate screen: the main grid waits in the twin and comes back whole, the
 ;     cursor with it; its clusters stay named while it waits, and a resize carries it ---
-(: (arow s k c) (cats (map (q \ (2097151 & glass s (k + q) 0 @ ch (0 = ch ? " " (string ch)))) (jot c)))
+(: (arow s k c) (cats (map (\ q (: ch (2097151 & glass s (k + q) 0) (0 = ch ? " " (string ch)))) (jot c)))
    s (mkscr 3 5)
    _ (scribe s "abc\e[2;2Hd")
    _ (scribe s "\e[?1049hxyz")
@@ -569,7 +594,7 @@
    _ (scribe s "\e[?47hq\e[?47l")                     ; 47 and 1047 the same way
    _ (test ("abc  " = arow s 0 5))
    w (mkscr 2 100)
-   (clus i) (utf8 (65 + i // 100) + utf8 (768 + i % 100))
+   (clus i) (utf8 (65 + (i // 100)) + utf8 (768 + (i % 100)))
    _ (scribe w "e\u{301}\e[?1049h")
    _ (scribe w (cats (map clus (jot 200))))           ; the pool full twice over in the alternate
    _ (scribe w "\e[?1049l")
@@ -577,26 +602,26 @@
    r (mkscr 3 5)
    _ (scribe r "abcde\e[?1049hzz")
    t (regrid r (cask (screen () 3 3)) 3 3)           ; a resize while the alternate is up
-   (scribe t "\e[?1049l",
-    test ("abc" = arow t 0 3)))
+   _ (scribe t "\e[?1049l")
+   _ (test ("abc" = arow t 0 3)))
 
 ; --- 25. the mouse: the report a pointer event makes, as the program asked for it ---
 (: (ml b x y) ("\e[M" + string b + string x + string y)   ; the classic report, each byte +32
    s (mkscr 5 10)
    _ (test ("" = mouse s 0 2 3 0))                        ; nothing asked, nothing said
    _ (scribe s "\e[?1000h")
-   _ (test (ml 32 36 35 = mouse s 0 2 3 0)             ; left pressed at row 2, col 3
-           (ml 35 36 35 = mouse s 0 2 3 1)             ; a release names no button
-           (ml 51 36 35 = mouse s 16 2 3 1)            ; ..but keeps ctrl
-           (ml 36 36 35 = mouse s 4 2 3 0)             ; shift
+   _ (test ((ml 32 36 35) = mouse s 0 2 3 0)             ; left pressed at row 2, col 3
+           ((ml 35 36 35) = mouse s 0 2 3 1)             ; a release names no button
+           ((ml 51 36 35) = mouse s 16 2 3 1)            ; ..but keeps ctrl
+           ((ml 36 36 35) = mouse s 4 2 3 0)             ; shift
            ("" = mouse s 0 2 3 2)                        ; moves not asked
-           (ml 96 33 33 = mouse s 64 0 0 0)            ; the wheel up
+           ((ml 96 33 33) = mouse s 64 0 0 0)            ; the wheel up
            ("" = mouse s 64 0 0 1)                       ; and no release of it
            ("" = mouse s 3 2 3 0))                       ; no button, no press
    _ (scribe s "\e[?1002h")
-   _ (test (ml 64 36 35 = mouse s 0 2 3 2) ("" = mouse s 3 2 3 2))   ; a drag, not a hover
+   _ (test ((ml 64 36 35) = mouse s 0 2 3 2) ("" = mouse s 3 2 3 2))   ; a drag, not a hover
    _ (scribe s "\e[?1003h")
-   _ (test (ml 67 36 35 = mouse s 3 2 3 2))            ; every move
+   _ (test ((ml 67 36 35) = mouse s 3 2 3 2))            ; every move
    _ (scribe s "\e[?1006h")
    _ (test ("\e[<0;4;3M" = mouse s 0 2 3 0) ("\e[<2;4;3m" = mouse s 2 2 3 1)
            ("\e[<35;10;5M" = mouse s 3 4 9 2) ("\e[<80;1;1M" = mouse s 80 0 0 0))
@@ -604,20 +629,20 @@
    _ (scribe s "\e[?1000l")
    _ (test ("" = mouse s 0 2 3 0))                        ; one tracking off is all of it
    _ (scribe s "\e[?1006l\e[?9h")
-   _ (test (ml 32 36 35 = mouse s 4 2 3 0) ("" = mouse s 0 2 3 1))   ; x10: no modifiers, no releases
+   _ (test ((ml 32 36 35) = mouse s 4 2 3 0) ("" = mouse s 0 2 3 1))   ; x10: no modifiers, no releases
    w (mkscr 2 250)
    _ (scribe w "\e[?1000h")
-   _ (test (ml 32 255 34 = mouse w 0 1 240 0))         ; a column past a byte's reach
+   _ (test ((ml 32 255 34) = mouse w 0 1 240 0))         ; a column past a byte's reach
    _ (scribe s "\e[?1000h\ec")
    _ (test ("" = mouse s 0 2 3 0))                        ; ris turns it off
-   (pasting s) (0 < gaze s 3 & 16384)                 ; ?2004, which a seat reads to bracket a paste
-   (test !(pasting s),
-    scribe s "\e[?2004h",
-    test (pasting s),
-    scribe s "\e[?2004l",
-    test !(pasting s),
-    scribe s "\e[?2004h\ec",
-    test !(pasting s)))
+   (pasting s) (0 < ((gaze s 3) & 16384))                 ; ?2004, which a seat reads to bracket a paste
+   _ (test !(pasting s))
+   _ (scribe s "\e[?2004h")
+   _ (test (pasting s))
+   _ (scribe s "\e[?2004l")
+   _ (test !(pasting s))
+   _ (scribe s "\e[?2004h\ec")
+   _ (test !(pasting s)))
 
 ; --- 26. a paste as a seat sends it, and a picture's tile read back from the history ---
 (: s (mkscr 3 10)
@@ -633,7 +658,7 @@
    t (mkscr 2 10)
    _ (scribe t "\eP0;1;0q#0;2;100;0;0#1;2;0;0;100#0!10~$#1!5~-#0!10~\e\\")
    _ (scribe t "\r\n")                                 ; the tiles' row scrolls into the history
-   _ (test (1 = glass t -10 0 >> 23 & 1) (blue = tilepx t -10 0 0) (red = tilepx t -9 1 0)
+   _ (test (1 = (glass t -10 0 >> 23 & 1)) (blue = tilepx t -10 0 0) (red = tilepx t -9 1 0)
            !(tilepx t -11 0 0)))                        ; past what is held
 
 ; --- 27. the selection: cells, words and lines, the text they copy, and what ends it ---
@@ -664,16 +689,16 @@
    _ (test ([0 10] = sel w))                           ; the line is both rows
    v (mkscr 2 10)
    _ (scribe v ("a" + utf8 20013 + "b e" + utf8 769))
-   _ (test ("a" + utf8 20013 + "b e" + utf8 769 = copied v 0 10))   ; a wide char once, a mark kept
+   _ (test (("a" + utf8 20013 + "b e" + utf8 769) = copied v 0 10))   ; a wide char once, a mark kept
    _ (select v 2 2 0)                                  ; its tail takes the whole of it
    _ (test ([1 3] = sel v))
    t (mkscr 2 5)
-   (scribe t "ab",
-    select t 0 1 0,
-    scribe t "\r\n\r\n",                               ; its row scrolls into the history
-    test ([-5 -3] = sel t) ("ab" = copied t -5 -3),
-    scribe t "\e[3J",                                   ; the history cleared, the selection too
-    test ([0 0] = sel t)))
+   _ (scribe t "ab")
+   _ (select t 0 1 0)
+   _ (scribe t "\r\n\r\n")                             ; its row scrolls into the history
+   _ (test ([-5 -3] = sel t) ("ab" = copied t -5 -3))
+   _ (scribe t "\e[3J")                                 ; the history cleared, the selection too
+   _ (test ([0 0] = sel t)))
 
 ; --- 28. a picture read back out: its size, its gen, and its pixels as base64 rgba or raw ---
 (: (slot s i) (glass s i 0 >> 16 & 127)
@@ -682,7 +707,7 @@
    k (slot s 0)
    _ (test (2 = picture s k 0) (2 = picture s k 1) (1 = picture s k 2)
            ("/wAA//8AAP//AAD//wAA/w==" = picture s k 3)            ; ff 00 00 ff, four times
-           (cats (map (_ \ "\xff\x00\x00\xff") (jot 4)) = picture s k 4)   ; ..and raw
+           ((cats (map (\ _ "\xff\x00\x00\xff") (jot 4))) = picture s k 4)   ; ..and raw
            !(picture s (k + 1) 0) !(picture s 0 0) !(picture s k 5))
    _ (scribe s "\e[3;1H\e_Ga=T,f=32,s=1,v=1,q=2;AAD/AA==\e\\")      ; another: a new gen
    _ (test (2 = picture s (slot s 20) 2))
@@ -691,7 +716,7 @@
 
 ; --- 29. ?2027: VS16 gives a character with an emoji style two cells; DECRQM says so ---
 (: (cwide s i) (glass s i 0 >> 21 & 3)
-   (rqm s m) (scribe s m, string (reply s))
+   (rqm s m) (: _ (scribe s m) (string (reply s)))
    s (mkscr 3 6)
    _ (scribe s "\u{2764}\u{fe0f}x")                    ; off: ❤ keeps one cell
    _ (test (10084 = chat s 0) (0 = cwide s 0) (120 = chat s 1)
@@ -707,57 +732,58 @@
    _ (test (0 = chat s 5) (10084 = chat s 6) (1 = cwide s 6) (8 = cur s)
            ("\u{2764}\u{fe0f}x    \u{2764}\u{fe0f}x" = copied s 0 12))   ; ..the row it left wrapped: no newline
    t (mkscr 1 8)
-   (scribe t "\e[?2027h1\u{fe0f}\u{20e3}q",            ; a keycap
-    test (49 = chat t 0) (1 = cwide t 0) (113 = chat t 2)
-         ("\e[?12345;0$y" = rqm t "\e[?12345$p")      ; a mode quay does not know
-         ("\e[?2004;2$y" = rqm t "\e[?2004$p") ("\e[?7;1$y" = rqm t "\e[?7$p")
-         ("\e[20;2$y" = rqm t "\e[20$p")              ; an ansi one
-         ("\e[?2027;2$y" = rqm t "\ec\e[?2027$p")))   ; ris resets it
+   _ (scribe t "\e[?2027h1\u{fe0f}\u{20e3}q")          ; a keycap
+   _ (test (49 = chat t 0) (1 = cwide t 0) (113 = chat t 2)
+           ("\e[?12345;0$y" = rqm t "\e[?12345$p")      ; a mode quay does not know
+           ("\e[?2004;2$y" = rqm t "\e[?2004$p") ("\e[?7;1$y" = rqm t "\e[?7$p")
+           ("\e[20;2$y" = rqm t "\e[20$p")              ; an ansi one
+           ("\e[?2027;2$y" = rqm t "\ec\e[?2027$p")))   ; ris resets it
 
 ; --- 30. ?2027: a ZWJ sequence, a skin tone and a flag are one cluster, two cells ---
 (: (cwide s i) (glass s i 0 >> 21 & 3)
    fam "\u{1f468}\u{200d}\u{1f469}\u{200d}\u{1f467}\u{200d}\u{1f466}"   ; 👨‍👩‍👧‍👦, seven characters
    s (mkscr 4 12)
-   (scribe s (fam + "x"),                              ; off: four wide chars, a ZWJ riding each
-    test (128104 = chat s 0) (8205 = glass s 0 3) (128105 = chat s 2) (128102 = chat s 6) (120 = chat s 8),
-    scribe s ("\e[?2027h\e[2;1H" + fam + "x"),         ; on: one lead, one tail
-    test (128104 = chat s 12) (1 = cwide s 12) (2 = cwide s 13) (120 = chat s 14)
-         (128102 = glass s 12 8) (0 = glass s 12 9)
-         (fam + "x" = copied s 12 15),
-    scribe s "\e[3;1H\u{1f44d}\u{1f3fd}y\u{1f1eb}\u{1f1f7}\u{1f1e9}z",     ; 👍🏽, 🇫🇷, a lone 🇩
-    test (1 = cwide s 24) (127997 = glass s 24 3) (121 = chat s 26)
-         (127467 = chat s 27) (1 = cwide s 27) (127479 = glass s 27 3) (127465 = chat s 29) (0 = cwide s 29)
-         (122 = chat s 30),
-    scribe s "\e[4;1Ha\u{200d}b\u{1f468}\u{200d}c\u{2764}\u{200d}\u{1f525}q",     ; a ZWJ between letters joins
-    test (97 = chat s 36) (98 = chat s 37)                                  ; nothing after it; after a
-         (128104 = chat s 38) (99 = chat s 40)                                 ; pictograph, only another;
-         (10084 = chat s 41) (1 = cwide s 41) (128293 = glass s 41 4) (113 = chat s 43)))   ; a narrow ❤ widens
+   _ (scribe s (fam + "x"))                            ; off: four wide chars, a ZWJ riding each
+   _ (test (128104 = chat s 0) (8205 = glass s 0 3) (128105 = chat s 2) (128102 = chat s 6) (120 = chat s 8))
+   _ (scribe s ("\e[?2027h\e[2;1H" + fam + "x"))       ; on: one lead, one tail
+   _ (test (128104 = chat s 12) (1 = cwide s 12) (2 = cwide s 13) (120 = chat s 14)
+           (128102 = glass s 12 8) (0 = glass s 12 9)
+           ((fam + "x") = copied s 12 15))
+   _ (scribe s "\e[3;1H\u{1f44d}\u{1f3fd}y\u{1f1eb}\u{1f1f7}\u{1f1e9}z")   ; 👍🏽, 🇫🇷, a lone 🇩
+   _ (test (1 = cwide s 24) (127997 = glass s 24 3) (121 = chat s 26)
+           (127467 = chat s 27) (1 = cwide s 27) (127479 = glass s 27 3) (127465 = chat s 29) (0 = cwide s 29)
+           (122 = chat s 30))
+   _ (scribe s "\e[4;1Ha\u{200d}b\u{1f468}\u{200d}c\u{2764}\u{200d}\u{1f525}q")   ; a ZWJ between letters joins
+   _ (test (97 = chat s 36) (98 = chat s 37)                                  ; nothing after it; after a
+           (128104 = chat s 38) (99 = chat s 40)                                 ; pictograph, only another;
+           (10084 = chat s 41) (1 = cwide s 41) (128293 = glass s 41 4) (113 = chat s 43)))   ; a narrow ❤ widens
 
 ; --- 18. ris: back to the floor ---
-(mkscr 3 8 @ s
- (scribe s "\e[31;44;7mxyz\e[2;2r\e[?25l\e[?7l",
-  scribe s "\ec",
-  test (0 = chat s 0)
-       (0 = cur s)
-       (3 = 3 & gaze s 3)                       ; shown + wrapping again
-       (0 = gaze s 4) (2 = gaze s 5),
-  scribe s "w",
-  test ('def = cfg s 0) (0 = cface s 0)))
+(: s (mkscr 3 8)
+ _ (scribe s "\e[31;44;7mxyz\e[2;2r\e[?25l\e[?7l")
+ _ (scribe s "\ec")
+ _ (test
+    (0 = chat s 0)
+    (0 = cur s)
+    (3 = (3 & gaze s 3))                       ; shown + wrapping again
+    (0 = gaze s 4) (2 = gaze s 5))
+ _ (scribe s "w")
+ _ (test ('def = cfg s 0) (0 = cface s 0)))
 
 ; --- 19. wet: every write names its rows; a read clears the ledger ---
-(mkscr 4 10 @ s
- (test (15 = 15 & wet s 0),         ; fresh: every row dirty
-  test (0 = wet s 0),                 ; read-and-cleared
-  scribe s "\e[3;1Hx",
-  test (4 = wet s 0),                 ; row 2 alone
-  scribe s "hi\nyo",
-  test (12 = wet s 0),                ; rows 2 and 3 (\n keeps the column)
-  scribe s "\e[2J",
-  test (15 = wet s 0),                ; erase display: everything
-  scribe s "\e[1;5r\e[4;1H\n",               ; a region scroll dirties the region
-  wet s 0,
-  scribe s "\e[2;1H\e[L",
-  test (14 = 14 & wet s 0)))      ; il at row 1: rows 1..3
+(: s (mkscr 4 10)
+ _ (test (15 = (15 & wet s 0)))       ; fresh: every row dirty
+ _ (test (0 = wet s 0))               ; read-and-cleared
+ _ (scribe s "\e[3;1Hx")
+ _ (test (4 = wet s 0))               ; row 2 alone
+ _ (scribe s "hi\nyo")
+ _ (test (12 = wet s 0))              ; rows 2 and 3 (\n keeps the column)
+ _ (scribe s "\e[2J")
+ _ (test (15 = wet s 0))              ; erase display: everything
+ _ (scribe s "\e[1;5r\e[4;1H\n")             ; a region scroll dirties the region
+ _ (wet s 0)
+ _ (scribe s "\e[2;1H\e[L")
+ _ (test (14 = (14 & wet s 0))))      ; il at row 1: rows 1..3
 
 (test_fin ())
 (puts "cb: ok")

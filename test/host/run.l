@@ -1,7 +1,17 @@
-; test/host/run.l -- the hark and herald nifs: (hark argv) answers (status . output); herald
-; answers the same but relays each chunk as it reads, and the tee must not disturb the capture.
-; payloads stay tiny since herald echoes into the gate log; the >64KB lane is checked by hand.
-; run: cat test/00-init.l test/host/run.l | out/love
+; --- test/host/run.l: smoke test for the hark / herald nifs (src/love/main.c) ---
+; (hark argv) forks, captures the child's stdout into a string, and answers
+; (status . output). (herald argv) is the same answer, but relays each chunk to our
+; stdout as it is read instead of holding it to the exit -- what make does, and
+; what lets a long cook step show progress. The tee must not disturb the capture.
+; host-only (the nifs are src/love/*.c), so it runs standalone against the built
+; binary like test/host/bake.l:
+;   cat test/00-init.l test/host/run.l | out/love
+;
+; The payloads are deliberately tiny: herald echoes what it captures, so anything
+; big would flood the gate log. The >64KB lane -- where the capture string
+; outgrows its buffer and moves mid-drain -- is checked by hand instead:
+;   (: c `("sh" "-c" "i=0; while [ $i -lt 20000 ]; do echo abcdefgh; i=$((i+1)); done")
+;      (test ((>(hark c)) = (>(herald c)))))
 (: cmd ["sh" "-c" "printf 'tee-me\n'"]
 
    ; the two agree on both halves of the answer: teeing changes when the bytes
@@ -17,9 +27,9 @@
 
    ; no output -> the EmptyString singleton, tee or not
    quiet (herald ["sh" "-c" "exit 0"])
-   (test (two? quiet) (<quiet = 0) !>quiet,
+   _ (test (two? quiet) (<quiet = 0) !>quiet)
 
-    puts "run: ok\n"))
+   (puts "run: ok\n"))
 
 ; --- rung 4: a write to a device that will not take it does not stop the vm ----
 ; `sleep 1; cat` reads nothing for a second, so the pipe's 64K of kernel buffer
@@ -39,10 +49,10 @@
    t0 (clock 0)
    _ (say w ("x" * 200000))          ; 200K against a 64K pipe: the tail cannot land
    ms (clock t0)
-   (test (charm? pid) (0 < pid)
-           (ms < 500),               ; a blocking door sits here for the child's whole nap
-    close w,                         ; ai_io_wflush: the residue lands before the fd dies
-    wait pid))
+   _ (test (charm? pid) (0 < pid)
+             (ms < 500))             ; a blocking door sits here for the child's whole nap
+   _ (close w)                       ; ai_io_wflush: the residue lands before the fd dies
+   _ (wait pid))
 
 (puts "run rung4: ok\n")
 
@@ -69,6 +79,28 @@
       (sig = "SigIgn:\t0000000000000000\n")))  ; the child inherits no ignore at all
 
 (puts "run sigpipe: ok\n")
+
+; --- close-on-exec: a child sees its 0/1/2 and what it was handed, nothing love holds ---
+; a file, a raw fd, a pipe, a dup and a pty master held here; the child's fd list is the
+; one it had before any of them. spawnmap's fdmap hands on two fds, one onto itself.
+(: (fdls _) (: r (hark ["ls" "/proc/self/fd"]) (lines >r))
+   base (fdls 0)
+   q (open "test/host/run.l" "r")
+   f (openfd "test/host/run.l" 0)
+   p (pipe 0)
+   d (dup f)
+   t (tether ["sleep" "1"])
+   _ (test (base != ()) (fdls 0 = base))
+   o (openfd "out/.fdlaw" 1)
+   pid (spawnmap ["ls" "/proc/self/fd"] [(1 . o) (f . f) (9 . <p)] () -1 0)
+   _ (wait pid)
+   got (: r (hark ["cat" "out/.fdlaw"]) (lines >r))
+   _ (test (#got = #base + 2) (elem (show f) got) (elem "9" got))
+   _ (map close [f <p >p d o])
+   _ (close q)
+   (wait <t))
+
+(puts "run cloexec: ok\n")
 
 ; --- rung 6: seventeen parked tasks, and the wake reaches the last of them ------
 ; the law and the shape live in test/host/parked.l -- driven from here, under a

@@ -31,13 +31,15 @@
    (p2-zip f a b) (? (atom? a) () ((f <a <b) . (p2-zip f >a >b)))
    (p2-limbs x) (map (i \ x >> (26 * i) & p2-m) ^10)   ; a public value's limbs
    (p2-num l) (foldl (a \ v \ a << 26 | v) 0 (rev l))  ; ..and back, for a public result
-   ; 32 bytes big-endian -> limbs, by shifts fixed by position alone
-   (p2-bytes s)
-    (map (i \ (: lo (26 * i)
-                 js (filter (j \ lo <= 8 * j + 7 && 8 * j <= lo + 25) ^32)
-                 ((foldl (a \ j \ (: sh (8 * j - lo) v (s (31 - j)) (a | (? (sh < 0) (v >> (0 - sh)) (v << sh))))) 0 js)
+   ; ten limbs from bit o of a little-endian number of nb bytes, byte j being (b j), by shifts
+   ; fixed by position alone
+   (p2-rd b nb o)
+    (map (i \ (: lo (o + 26 * i)
+                 js (filter (j \ lo <= 8 * j + 7 && 8 * j <= lo + 25) ^nb)
+                 ((foldl (a \ j \ (: sh (8 * j - lo) v (b j) (a | (? (sh < 0) (v >> (0 - sh)) (v << sh))))) 0 js)
                   & p2-m)))
          ^10)
+   (p2-bytes s) (p2-rd (j \ s (31 - j)) 32 0)           ; 32 bytes big-endian
    ; a carry chain down the limbs; limbs may be negative, the carry is the arithmetic shift
    (p2-norm t)
     (: (go l c acc) (? (atom? l) (rev acc) (: v (<l + c) (go >l (v >> 26) ((v & p2-m) . acc))))
@@ -109,25 +111,25 @@
        [(p2-fs (p2-fm xc t3) (p2-fm t4 yc))                               ; 35, 39-40
         (p2-fa (p2-fm xc za) (p2-fm t0b yc))                              ; 36-38
         (p2-fa (p2-fm za t4) (p2-fm t3 t0b))])                            ; 41-43
-   ; [0P .. 15P]
-   (p2-table q) (: (go i acc) (? (i = 16) (rev acc) (go (i + 1) ((p2-add <acc q) . acc))) (go 1 [p2-o]))
+   ; [0P .. 15P] under a curve's addition and identity
+   (p2-table add o q) (: (go i acc) (? (i = 16) (rev acc) (go (i + 1) ((add <acc q) . acc))) (go 1 [o]))
    ; entry w of the table, every entry read and all but one masked away
    (p2-pick tab w)
-    (: (sel acc j) (: mk ((j ^ w) - 1 >> 62) e (tab j)
-                      (map (c \ p2-zip (u \ v \ u | v & mk) (acc c) (e c)) ^3))
-       (foldl sel [p2-zero p2-zero p2-zero] ^16))
-   ; k q for a 32-byte k, q's table given: four doublings and one addition a nibble
+    (: (sel acc j) (: mk ((j ^ w) - 1 >> 62) (p2-zip (p2-zip (u \ v \ u | v & mk)) acc (tab j)))
+       (foldl sel (map (_ \ p2-zero) <tab) ^16))
+   ; k q, q's table given and (nib i) k's nibbles from the top: four doublings and one addition each
+   (p2-walk add dbl o tab nib)
+    (: (go i acc) (? (i = 64) acc (go (i + 1) (add (dbl (dbl (dbl (dbl acc)))) (p2-pick tab (nib i)))))
+       (go 0 o))
+   ; k q for a 32-byte big-endian k
    (p2-mulw tab k)
-    (: (nib i) (: c (k (i >> 1)) (? ((i & 1) = 0) (c >> 4) (c & 15)))
-       (dbl a) (p2-add a a)
-       (go i acc) (? (i = 64) acc (go (i + 1) (p2-add (dbl (dbl (dbl (dbl acc)))) (p2-pick tab (nib i)))))
-       (go 0 p2-o))
+    (p2-walk p2-add (a \ p2-add a a) p2-o tab (i \ (: c (k (i >> 1)) (? ((i & 1) = 0) (c >> 4) (c & 15)))))
    ; a projective point -> [x y], affine and out of the domain
    (p2-affine q)
     (: zi (p2-pow (q 2) (p2-p - 2) p2-fp p2-onep)
        (out a) (p2-num (p2-mm (p2-fm a zi) p2-unit p2-fp))
        [(out <q) (out (q 1))])
-   p2-gtab (p2-table p2-g)
+   p2-gtab (p2-table p2-add p2-o p2-g)
 
    ; --- the scalar: 1 when 0 < k < n, else 0, by masks ---
    (p2-ok? k)
