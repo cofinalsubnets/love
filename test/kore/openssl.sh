@@ -1,5 +1,5 @@
 #!/bin/sh
-# test/kore/openssl.sh -- openssl: x509, verify, dgst, rand, base64, and bad input
+# test/kore/openssl.sh -- openssl: x509, verify, dgst, rand, base64, genpkey, req, x509 -req, and bad input
 . "$(dirname "$0")/common.sh"
 
 # the chain fixtures are test/host/tlschain's (gen.sh lays them). the fixed answers below
@@ -138,6 +138,41 @@ for at in 0 1 3 4 6 8 15 40 70 150 250 400 600 700 800; do
   [ $r -le 2 ] && ! grep -q '^;;' "$d/err" || fail "kore openssl verify on a der bitten at $at (exit $r)"
 done
 
+# --- making: genpkey, req, x509 -req; each chain checked by our verify (and openssl's below) ---
+k genpkey -algorithm ed25519 -out "$d/ca.key" || fail "kore openssl genpkey ed25519"
+grep -q '^-----BEGIN PRIVATE KEY-----$' "$d/ca.key" || fail "kore openssl genpkey: not pkcs#8"
+k genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 -out "$d/in.key" || fail "kore openssl genpkey p-256"
+k req -new -x509 -key "$d/ca.key" -subj "/CN=kore root/O=love" -days 3650 \
+  -addext "keyUsage=critical,keyCertSign,cRLSign" \
+  -addext "nameConstraints=critical,permitted;DNS:sb.test,permitted;IP:10.0.0.0/255.0.0.0,excluded;DNS:bad.sb.test" \
+  -out "$d/ca.pem" || fail "kore openssl req -x509"
+is "req -x509 subject" "$(k x509 -in "$d/ca.pem" -noout -subject -issuer | tr '\n' '|')" "subject=CN=kore root, O=love|issuer=CN=kore root, O=love|"
+k req -new -key "$d/in.key" -subj "/CN=kore issuer" -out "$d/in.csr" || fail "kore openssl req -new"
+grep -q '^-----BEGIN CERTIFICATE REQUEST-----$' "$d/in.csr" || fail "kore openssl req -new: not a request"
+printf 'basicConstraints = critical, CA:TRUE, pathlen:0\nkeyUsage = critical, keyCertSign\n[ leaf ]\nbasicConstraints=critical,CA:FALSE\nextendedKeyUsage=serverAuth\n' > "$d/ext.cnf"
+k x509 -req -in "$d/in.csr" -CA "$d/ca.pem" -CAkey "$d/ca.key" -days 365 -extfile "$d/ext.cnf" -out "$d/in.pem" \
+  || fail "kore openssl x509 -req (issuer)"
+k req -new -newkey ec -pkeyopt ec_paramgen_curve:P-256 -keyout "$d/lf.key" -subj "/CN=kore leaf" \
+  -addext "subjectAltName=DNS:a.sb.test,IP:10.1.2.3" -out "$d/lf.csr" || fail "kore openssl req -newkey"
+k x509 -req -in "$d/lf.csr" -CA "$d/in.pem" -CAkey "$d/in.key" -set_serial 0x1234 -extfile "$d/ext.cnf" -extensions leaf \
+  -copy_extensions copy -out "$d/lf.pem" || fail "kore openssl x509 -req (leaf)"
+is "x509 -req serial" "$(k x509 -in "$d/lf.pem" -noout -serial)" "serial=1234"
+is "x509 -req extensions" "$(k x509 -in "$d/lf.pem" -noout -ext subjectAltName,basicConstraints,extendedKeyUsage | tr '\n' '|')" \
+  "X509v3 Subject Alternative Name: |    DNS:a.sb.test, IP Address:10.1.2.3|X509v3 Basic Constraints: critical|    CA:FALSE|X509v3 Extended Key Usage: |    TLS Web Server Authentication|"
+is "verify our chain" "$(k verify -CAfile "$d/ca.pem" -untrusted "$d/in.pem" "$d/lf.pem")" "$d/lf.pem: OK"
+k req -new -newkey ed25519 -keyout "$d/bad.key" -subj "/CN=bad" -addext "subjectAltName=DNS:x.bad.sb.test" -out "$d/bad.csr" \
+  && k x509 -req -in "$d/bad.csr" -CA "$d/in.pem" -CAkey "$d/in.key" -copy_extensions copy -out "$d/bad.pem" \
+  || fail "kore openssl: the excluded leaf"
+vfail "excluded name" "error 48 at [0-9] depth lookup: excluded subtree violation" -CAfile "$d/ca.pem" -untrusted "$d/in.pem" "$d/bad.pem"
+k x509 -req -in "$d/lf.csr" -signkey "$d/lf.key" -days 2 -out "$d/self.pem" || fail "kore openssl x509 -req -signkey"
+is "verify self-signed" "$(k verify -CAfile "$d/self.pem" "$d/self.pem")" "$d/self.pem: OK"
+clean "x509 -req a key that is not the CA's" 1 x509 -req -in "$d/lf.csr" -CA "$d/in.pem" -CAkey "$d/ca.key"
+clean "x509 -req no signer" 1 x509 -req -in "$d/lf.csr"
+clean "req a bad extension" 1 req -new -x509 -key "$d/ca.key" -subj /CN=x -addext "keyUsage=bogus"
+clean "req no subject" 1 req -new -key "$d/ca.key"
+clean "genpkey rsa" 1 genpkey -algorithm RSA
+clean "x509 -req a torn request" 1 x509 -req -in "$d/short.pem" -signkey "$d/lf.key"
+
 # --- whole outputs against the host's openssl, where it speaks the same face ---
 if command -v openssl > /dev/null 2>&1 && [ "$(openssl x509 -in $tc/leafr.pem -noout -subject 2>/dev/null)" = "subject=CN=leafr" ]; then
   for c in leafr leafe leaf512 leafw roote rootr rootw inter0 crit client nosan; do
@@ -152,7 +187,14 @@ if command -v openssl > /dev/null 2>&1 && [ "$(openssl x509 -in $tc/leafr.pem -n
     k verify -CAfile "$d/rr.pem" $tc/$c.pem > "$o" 2>&1; ro=$?
     same "openssl verify $c"; [ $rg -eq $ro ] || fail "kore openssl verify $c exit ($ro vs $rg)"
   done
-  echo "kore: openssl (x509 -text identical to the host openssl on the fixtures, verify, dgst, rand, base64, bad input) ok"
+  # what kore made, read and verified by the host's openssl, and its text the same
+  for c in ca in lf self bad; do both "openssl x509 -text made $c" openssl x509 -in "$d/$c.pem" -noout -text; done
+  openssl verify -CAfile "$d/ca.pem" -untrusted "$d/in.pem" "$d/lf.pem" > "$o" 2>&1 || fail "openssl verify of kore's chain: $(cat "$o")"
+  openssl verify -CAfile "$d/ca.pem" -untrusted "$d/in.pem" "$d/bad.pem" > "$o" 2>&1 && fail "openssl verify took kore's excluded leaf"
+  grep -q "excluded subtree violation" "$o" || fail "openssl verify of kore's excluded leaf: $(cat "$o")"
+  openssl pkey -in "$d/in.key" -noout 2>/dev/null || fail "openssl reads kore's p-256 key"
+  openssl req -in "$d/lf.csr" -noout -verify > /dev/null 2>&1 || fail "openssl verifies kore's request"
+  echo "kore: openssl (x509 -text identical to the host openssl on the fixtures and on what genpkey, req and x509 -req made, verify, dgst, rand, base64, bad input) ok"
 else
-  echo "kore: openssl (x509, verify, dgst, rand, base64, bad input) ok -- no openssl 3 here to compare whole outputs"
+  echo "kore: openssl (x509, genpkey, req, x509 -req, verify, dgst, rand, base64, bad input) ok -- no openssl 3 here to compare whole outputs"
 fi

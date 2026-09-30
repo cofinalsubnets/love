@@ -20,8 +20,9 @@
                  (see p @ (10 || -1) acc ch (go (acc + string ch)))))
 
   ; --- listen / accept / connect / get / say / seal over 127.0.0.1 ---
-  (: port 7391
-   l (listen port)
+  (: pl (test-listen 0)
+   port <pl
+   l (pl 1)
    _ (test
       (lit? l)                              ; the listener is a heap port
       (hot? l))                             ; ... an opaque hot, like any fd port
@@ -50,9 +51,10 @@
   ; --- every failure lane answers the unit (never a stray fixnum / hang) ---
   ; a failure is a nom, and the nom says which failure: refused is not a bad
   ; argument, and the two operator problems a () could never part now read apart.
-  (: _ (test
+  (: none (test-free 0)   ; a port of ours, its listener gone
+     _ (test
       ('badarg = listen -1)                       ; bad port: refused up here
-      ('econnrefused = connect ['tcp "127.0.0.1" 7392])  ; nothing listening on 7392
+      ('econnrefused = connect ['tcp "127.0.0.1" none])  ; nothing listening there
       ('badarg = connect ['tcp 12345 80])         ; non-string host
       ('badarg = connect ['tcp "example.org" 80])  ; a NAME is a misuse: connect takes a quad
       ('badarg = bind ['udp -1])
@@ -74,8 +76,9 @@
   ; a drain, so two of them are enough -- no need to out-run a socket buffer the
   ; kernel auto-tunes into the megabytes. under the bug they are shut in behind the
   ; half-close, close's write answers epipe, and the server counts none.
-  (: port 7393
-   l (listen port)
+  (: pl (test-listen 0)
+   port <pl
+   l (pl 1)
    got (tablet 0)
    srv (twirl (\ _ (: c (accept l)
                       n ((: (go k) (see c @ -1 k (go (k + 1)))) 0)
@@ -97,8 +100,9 @@
   ; quadratic in the stream and fell over somewhere past 200K. measured on the
   ; recursive form: 40K 1.75s, 80K 7.1s, 120K 15.0s, 160K 25.6s -- textbook n².
   ; with the accumulator it is 17/34/58/53 ms, and 4 MB lands in 1.9s.
-  (: port 7394
-   l (listen port)
+  (: pl (test-listen 0)
+   port <pl
+   l (pl 1)
    got (tablet 0)
    srv (twirl (\ _ (: c (accept l) s (slurp c) _ (pin got 0 #s) _ (close c) 1)) 0)
    c (connect ['tcp "127.0.0.1" port])
@@ -117,8 +121,9 @@
   ; write answers "the device is gone" (writen -1) and io_wdrain lets the run go;
   ; before, the process died on the first byte after the hangup and took every other
   ; task with it. the console keeps the old behaviour -- see test/host/run.l.
-  (: port 7395
-   l (listen port)
+  (: pl (test-listen 0)
+   port <pl
+   l (pl 1)
    srv (twirl (\ _ (: c (accept l)
                       _ ((: (go k) (? (k = 0) 0
                                       (say c ("x" * 200000), rest 5, go (k - 1)))) 30)
@@ -131,9 +136,10 @@
    _ (close l))                             ; reaching here at all is the law
 
   ; a listener on one address, loopback's, reached there; a quad that is not one refused
-  (: l (listen ['tcp "127.0.0.1" 7398]) c (connect ['tcp "127.0.0.1" 7398]) s (accept l)
+  (: pl (test-seat (\ p (listen ['tcp "127.0.0.1" p])))
+     l (pl 1) c (connect ['tcp "127.0.0.1" <pl]) s (accept l)
      _ (close c) _ (close s) _ (close l)
-     (test (hot? l) (hot? c) (hot? s) ('badarg = listen ['tcp "1.2.3" 7399])))
+     (test (hot? l) (hot? c) (hot? s) ('badarg = listen ['tcp "1.2.3" (test-free 0)])))
 
   ; --- the other families: unix streams, udp's peer, an icmp echo -----------------
   ; one listen and one connect for every stream family: a unix one echoes the same way
@@ -160,13 +166,14 @@
    _ (unlink path)
    (test ('eaddrinuse = f) (kept = "keep me") (hot? a) (hot? b)))
   ; a datagram comes with its peer as send takes one, so a reply is (send p (car d) ..)
-  (: a (bind ['udp 7396]) b (bind ['udp 7397])
-   _ (send b ["127.0.0.1" 7396] "ping")
+  (: ua (test-bind 0) ub (test-bind 0)
+   pa <ua pb <ub a (ua 1) b (ub 1)
+   _ (send b ["127.0.0.1" pa] "ping")
    d (recv a)
    _ (send a <d "pong")
    e (recv b)
    _ (close a) _ (close b)
-   (test (<>d = "ping") (<(<d) = "127.0.0.1") (<d 1 = 7397) (e = [["127.0.0.1" 7396] "pong"])))
+   (test (<>d = "ping") (<(<d) = "127.0.0.1") (<d 1 = pb) (e = [["127.0.0.1" pa] "pong"])))
   ; an echo to loopback over icmp, its ttl asked for. linux lets a group in
   ; ping_group_range open this socket unprivileged; where it may not, the bind says so
   (: p (bind ['icmp 'ttl])
