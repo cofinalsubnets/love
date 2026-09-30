@@ -531,6 +531,23 @@
            (0 = <r2) (1 = #ib1))
    0)
 
+; read_file asks outside the working tree, a link out of it included: whoever answers on the
+; model's port reads only the tree unasked
+(: d (cr-dir "reads" cr-cfg)
+   _ (cr-put d "inside.txt" "INSIDE-TEXT")
+   _ (cr-put cr-root "outside.txt" "OUTSIDE-SECRET")
+   _ (hark ["ln" "-s" (cr-root + "/outside.txt") (d + "/link.txt")])
+   _ (cr-serves (cr-uses [["read_file" {"path" "inside.txt"}] ["read_file" {"path" "../outside.txt"}]
+                          ["read_file" {"path" "link.txt"}] ["read_file" {"path" (cr-root + "/outside.txt")}]]))
+   r (cr-run d "" "'read them'")
+   h (cr-heard 0)
+   rs (cr-results h)
+   _ (test (0 = <r) (2 = #h) (4 = #rs)
+           ("INSIDE-TEXT" = <rs)
+           (all (\ s (s = "the user declined")) >rs)
+           !(cr-in (h 1) "OUTSIDE-SECRET"))
+   0)
+
 ; queue_row asks, and a newline in a field cannot write another session's row
 (: d (cr-dir "qforge" cr-cfg)
    (g as) (hark (["git" "-C" d "-c" "user.name=t" "-c" "user.email=t@t"] + as))

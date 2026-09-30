@@ -765,6 +765,16 @@
           + "\r\ncontent-length: " + show #body
           + "\r\nConnection: close\r\n\r\n" + body))
 
+     ; the uids listening on a tcp port of this machine, off linux's /proc/net; () elsewhere
+     (port-uids port)
+      (catmap (\ f (: s (slurp-file f)
+                      (? !(string? s) ()
+                         (filter charm? (map (\ l (: w (words l)
+                                                    (? (9 < #w && w 3 = "0A"
+                                                        && port = hexn (: a (w 1) (snip a (find a ":" 0 + 1) #a)))
+                                                       (digits (w 7)) ())))
+                                             (lines s))))))
+              ["/proc/net/tcp" "/proc/net/tcp6"])
      ; one POST, its head read -> a reader carrying 'code, or () for a dead wire. plain http
      ; reaches this machine alone and carries no key; a key goes over tls only to a peer
      ; tls-open verified, and not at all from a binary without it. a refusal is a reader
@@ -772,6 +782,9 @@
      (bee-open key body)
       (: tls? <bee-at keyed (string? key && 0 < #key) port (bee-at 2)
          (? (!tls? && !bee-local?) {'code "plain http reaches this machine alone"}
+            ; a listener of another login's (uid 1000 up) could be anyone; a service's (ollama's) is the box's
+            (!tls? && two? (filter (\ u (u != getuid 0 && 1000 <= u)) (port-uids port)))
+             {'code ("port " + show port + " is another user's")}
             (tls? && keyed && !(lit? topen)) {'code "this binary's tls cannot verify a certificate"}
             (: t (? !tls? (cite 'dns 'dial bee-host port)
                     (lit? topen) (topen bee-host port 'verify)
@@ -940,6 +953,23 @@
 
      ; --- the tools ---
      (clip s) (#s <= bee-cap ? s (snip s 0 bee-cap + "\n[cut at " + show bee-cap + " bytes]"))
+     ; a path with every link, . and .. taken out of it; () past 40 links
+     (canon q)
+      (: (up a) (: (go i) (? (i <= 0) "/" (a i = 47) (snip a 0 i) (go (i - 1))) (go (#a - 1)))
+         (parts p) (filter (\ w (0 < #w)) (cite 'kore 'usplit 47 p))
+         (walk acc ps n)
+          (? (atom? ps) acc
+             (n <= 0) ()
+             (<ps = ".") (walk acc >ps n)
+             (<ps = "..") (walk (up acc) >ps n)
+             (: c (acc = "/" ? ("/" + <ps) (acc + "/" + <ps)) t (readlink c)
+                (? (string? t && 0 < #t) (walk (t 0 = 47 ? "/" acc) (parts t + >ps) (n - 1))
+                   (walk c >ps n))))
+         (walk "/" (parts (? (0 < #q && q 0 = 47) q (cwd 0 + "/" + q))) 40))
+     ; inside the working tree, where a link out of it does not count
+     (in-tree? p)
+      (: r (canon bee-cwd) f (canon p)
+         (string? r && string? f && (r = "/" || f = r || starts? f (r + "/"))))
 
      ; the child's output read by see, which parks this task alone, and its exit by gather,
      ; which never blocks: the screen keeps painting while a command runs. stdin is /dev/null
@@ -1017,16 +1047,18 @@
                  "queue_row" (in "queue" + " " + (: s (peep in "session" ()) (string? s ? (s + " ") ""))
                               + in "state" + (: h (peep in "gated_head" ()) (string? h ? (" " + h) "")))
                  (in "path")))
-     ; the tools that run without asking: they read, speak only to another bee, or look at
-     ; or stop a job this bee started
-     bee-free ["read_file" "list_sessions" "check_job" "stop_job" "lock_list" "lock_release"]
+     ; the tools that run without asking: they look, or stop a job or free a lock of this bee's
+     ; own. read_file runs unasked inside the working tree only. a message or a queue row asks,
+     ; since either can start a turn in a peer that acts without asking
+     bee-free ["list_sessions" "check_job" "stop_job" "lock_list" "lock_release"]
+     (free? name in) (? (name = "read_file") (in-tree? (in "path")) (elem name bee-free))
 
-     ; one tool_use block -> its tool_result, asking first unless yes or a read
+     ; one tool_use block -> its tool_result, asking first unless yes or free
      (answer f b)
       (: name (b "name") in (b "input")
          h (f 'tool name in)
          r (? !(valid? name in) (run f h name in)
-              (f 'yes || elem name bee-free || (f 'ask h) = 1) (run f h name in)
+              (f 'yes || free? name in || (f 'ask h) = 1) (run f h name in)
               [0 "the user declined"])
          _ (f 'done h r)
          t {"type" "tool_result" "tool_use_id" (b "id") "content" (r 1)}
