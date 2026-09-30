@@ -745,9 +745,9 @@ lvm(lvm_string) {
 // a state machine the vm runs. each state in rd_k is an lvm_ that hands the stack to a C
 // helper, and the helper leaves the next state in g->ip. the reader's state is love data on
 // the stack, so a collection moves it and a deep form costs heap, never C stack:
-//   sp[0..4]  the registers: the position, the promises forced so far, the height of the
-//             open pile, a finished datum on its way out, and the text when it is a string --
-//             read in place, its positions charms, and laid down as cells only for a residue
+//   sp[0..3]  the registers: the position, the height of the open pile, a finished datum on
+//             its way out, and the text when it is a string -- read in place, its positions
+//             charms, and laid down as cells only for a residue
 //   then the pile -- the open list's datums, newest first -- its frame's header, and under
 //   that the enclosing pile and frame, down to the base frame, the ip to answer to, and the
 //   argument's slot. the entry is an op like any other, which the compiler may lay inline:
@@ -755,9 +755,9 @@ lvm(lvm_string) {
 //   is a charm, the frame's kind with the enclosing pile's height above it; a mono frame
 //   keeps its operator under its header.
 // a tail may be a promise. a helper that meets one it has not forced hands it to the vm
-// (rd_call) and is run again from the last position it committed; the answer waits in
-// the memo, so a walk can always start over.
-enum { RdCur, RdMemo, RdCnt, RdVal, RdSrc, RdRegs };
+// (rd_call) and is run again from the last position it committed, over a copy that holds
+// the answer, so a walk can always start over.
+enum { RdCur, RdCnt, RdVal, RdSrc, RdRegs };
 enum { RkOne, RkAll, RkParen, RkList, RkHash, RkTuple, RkQuote, RkLift, RkMono };
 enum { RsStart, RsRead, RsClose, RsDatum, RsAll };
 #define RdHdr(k, n) putcharm((k) | (intptr_t) (n) << 4)
@@ -815,16 +815,8 @@ static ai_inline intptr_t rd_dval(intptr_t c) { return c >= '0' && c <= '9' ? c 
 // the slow halves stay out of line: every step of every walk inlines the fast ones
 static ai_noinline bool rd_hot(word x) { return evenp(x) && !coinp(x) && ai_kind(x) >= KTablet; }
 static ai_inline bool rd_lit(word x) { return evenp(x) && !chainp(x) && x != ZeroPoint && rd_hot(x); }
-static ai_noinline word rd_memo(word memo, word t) {
- if (!rd_hot(t)) return t;
- for (; chainp(memo); memo = B(memo)) if (AA(memo) == t) return BA(memo);
- return t; }
-// the position after a cell: its tail, or a forced promise's answer out of the memo. one
-// not forced yet comes back as itself, for the caller to hand to rd_call
-static ai_inline word rd_next(word memo, word p) {
- if (charmp(p)) return putcharm(getcharm(p) + 1);
- word t = B(p);
- return chainp(t) || t == ZeroPoint ? t : rd_memo(memo, t); }
+// the position after a cell: its tail, which a promise is too, for the caller to hand to rd_call
+static ai_inline word rd_next(word p) { return charmp(p) ? putcharm(getcharm(p) + 1) : B(p); }
 
 // a string's positions hold no promise, so its walks are byte loops
 static ai_inline bool rd_in(word src, word p) { return charmp(p) && src != ZeroPoint; }
@@ -843,21 +835,29 @@ static ai_noinline uintptr_t rd_send(struct ai_str const *s, uintptr_t i) {
  while (i < len(s) && !(rd_cls[t[i]] & RcEnd)) i++;
  return i; }
 
-// the vm calls f on a, and lvm_rd_called files (t . answer) in the memo and runs the asking
-// state again. the four words are RdSlack's
+// the vm calls f on a, and lvm_rd_called lays the answer in: the cells from the committed
+// position to the one whose tail was t are copied, the last copy's tail the answer, and the
+// asking state runs again over the copy. the four words are RdSlack's
 static struct ai *rd_call(struct ai *g, word f, word a, word t) {
  g->sp -= 4;
  g->sp[0] = a, g->sp[1] = f, g->sp[2] = t, g->sp[3] = word(g->ip);
  return g->ip = (union u*) rd_call_k, g; }
-#define RdStep(n, p) if (rd_lit(n = rd_next(memo, p))) return rd_call(g, n, ZeroPoint, n)
+#define RdStep(n, p) if (rd_lit(n = rd_next(p))) return rd_call(g, n, ZeroPoint, n)
 
 static struct ai *rd_called(struct ai *g) {             // [v t ip regs ..]
- if (!ai_ok(g = ai_have(g, 2 * chain_req))) return g;
+ word t = g->sp[1], p = g->sp[3 + RdCur];
+ if (p == t) {                                          // the door's: the text is the answer
+  word v = g->sp[0];
+  g->sp[3 + RdCur] = rd_lit(v) ? ZeroPoint : v, g->sp += 3;
+  return RdGo(RsRead); }
+ uintptr_t k = 1;
+ for (; B(p) != t; p = B(p)) k++;
+ if (!ai_ok(g = ai_have(g, k * chain_req))) return g;
  word v = g->sp[0];
  if (rd_lit(v)) v = ZeroPoint;                          // a promise of a promise ends the text
- struct ai_chain *e = bump(g, chain_req), *m = bump(g, chain_req);
- ini_chain(e, g->sp[1], v), ini_chain(m, word(e), g->sp[3 + RdMemo]);
- g->sp[3 + RdMemo] = word(m);
+ word *c = bump(g, k * chain_req);
+ p = g->sp[3 + RdCur], g->sp[3 + RdCur] = word(c);
+ for (; k--; p = B(p), c += chain_req) ini_chain((struct ai_chain*) c, A(p), k ? word(c + chain_req) : v);
  g->ip = cell(g->sp[2]), g->sp += 3;
  return g; }
 
@@ -888,14 +888,14 @@ static struct ai *rd_enter(struct ai *g, int k) {       // [x ..]
  if (!ai_ok(g = ai_have(g, RdRegs + 2))) return g;
  word x = g->sp[0];
  g->sp -= RdRegs + 2;
- g->sp[RdCur] = x, g->sp[RdMemo] = ZeroPoint, g->sp[RdCnt] = putcharm(0), g->sp[RdVal] = ZeroPoint;
+ g->sp[RdCur] = x, g->sp[RdCnt] = putcharm(0), g->sp[RdVal] = ZeroPoint;
  g->sp[RdSrc] = ZeroPoint;
  g->sp[RdRegs] = RdHdr(k, 0), g->sp[RdRegs + 1] = word(g->ip + 1);
  return RdGo(RsStart); }
 static struct ai *rd_one(struct ai *g) { return rd_enter(g, RkOne); }
 static struct ai *rd_many(struct ai *g) { return rd_enter(g, RkAll); }
 
-// the doors: a string is read in place, a port flows (post.l's flow, the one
+// the doors: a string is read in place, a port flows (hook 9, post.l's flow, the one
 // lazy charlist there is), a promise is forced, and a charlist is read as it stands
 static struct ai *rd_start(struct ai *g) {
  if (!ai_ok(g = ai_have(g, RdSlack))) return g;
@@ -903,22 +903,18 @@ static struct ai *rd_start(struct ai *g) {
  if (strp(x)) {
   return g->sp[RdSrc] = x, g->sp[RdCur] = putcharm(0), RdGo(RsRead); }
  if (!iop(x) && !rd_lit(x)) return RdGo(RsRead);
- for (word m = g->sp[RdMemo]; chainp(m); m = B(m))
-  if (AA(m) == x) return g->sp[RdCur] = BA(m), RdGo(RsRead);
  if (!iop(x)) return rd_call(g, x, ZeroPoint, x);
- word f = stacklook(g, ZeroPoint, g->rnom[RnFlow]);
- if (!evenp(f) || f == ZeroPoint) return g->sp[RdCur] = ZeroPoint, RdGo(RsRead);
- return rd_call(g, f, x, x); }
+ return rd_call(g, hot_hook(g->hot_flow), x, x); }
 
 // a text's escapes: n t r e 0, \xhh as two chars hex or not, \u{h..} one to six hex
 // digits naming a code point outside the surrogates (else a plain u), any other char
 // itself. counts the bytes, and lays them too when d is given; -1 torn, -2 a promise to
 // force (in *end), else the count with *end past the closing quote
-static intptr_t rd_strw(word memo, word src, word p, char *d, word *end) {
+static intptr_t rd_strw(word src, word p, char *d, word *end) {
  intptr_t k = 0;
  word n, q;
 #define Put(b) ((void) (d && (d[k] = (char) (b))), k++)
-#define Over(n, p) if (rd_lit(n = rd_next(memo, p))) return *end = n, -2
+#define Over(n, p) if (rd_lit(n = rd_next(p))) return *end = n, -2
  for (;;) {
   intptr_t c = rd_at(src, p);
   if (c < 0) return -1;
@@ -959,15 +955,15 @@ static intptr_t rd_strw(word memo, word src, word p, char *d, word *end) {
 }
 
 static struct ai *rd_str(struct ai *g) {
- word memo = g->sp[RdMemo], src = g->sp[RdSrc], n, e;
+ word src = g->sp[RdSrc], n, e;
  RdStep(n, g->sp[RdCur]);
- intptr_t k = rd_strw(memo, src, n, NULL, &e);
+ intptr_t k = rd_strw(src, n, NULL, &e);
  if (k == -1) return rd_torn(g);
  if (k == -2) return rd_call(g, e, ZeroPoint, e);
  if (!ai_ok(g = ai_have(g, str_width(k) + RdSlack))) return g;
- memo = g->sp[RdMemo], src = g->sp[RdSrc], n = rd_next(memo, g->sp[RdCur]);
+ src = g->sp[RdSrc], n = rd_next(g->sp[RdCur]);
  struct ai_str *s = k ? ini_str(bump(g, str_width(k)), k) : NULL;
- rd_strw(memo, src, n, s ? txt(s) : NULL, &e);
+ rd_strw(src, n, s ? txt(s) : NULL, &e);
  g->sp[RdVal] = s ? word(s) : EmptyString, g->sp[RdCur] = e;
  return RdGo(RsDatum); }
 
@@ -1002,17 +998,17 @@ static struct ai *rd_atom(struct ai *g) {
 // run is cut one past the run, when a datum is glued there: 2?<>x is 2?<> around x. a
 // trailing - before a digit is the next numeral's sign, so the cut falls before it
 static struct ai *rd_tok(struct ai *g, bool split) {
- word memo = g->sp[RdMemo], src = g->sp[RdSrc], p = g->sp[RdCur], n;
+ word src = g->sp[RdSrc], p = g->sp[RdCur], n;
  uintptr_t len = 0;
  if (rd_in(src, p)) len = rd_send(str(src), getcharm(p)) - getcharm(p);
  else for (; rd_at(src, p) >= 0 && !(rd_c(src, p) & RcEnd); p = n, len++) RdStep(n, p);
  if (!ai_ok(g = ai_have(g, 2 * str_width(len) + RdSlack))) return g;
- memo = g->sp[RdMemo], src = g->sp[RdSrc], p = g->sp[RdCur];
+ src = g->sp[RdSrc], p = g->sp[RdCur];
  struct ai_str *s = ini_str(bump(g, str_width(len)), len);
  word lop = ZeroPoint, aop = ZeroPoint;                 // the run's last char, and past it
  uintptr_t k = 0;
  for (uintptr_t i = 0; i < len; i++) {
-  txt(s)[i] = rd_byte(src, p), n = rd_next(memo, p);
+  txt(s)[i] = rd_byte(src, p), n = rd_next(p);
   if (rd_c(src, p) & RcOp) k = i + 1, lop = p, aop = n;
   p = n; }
  if (split && k && !rd_numeral(s)) {
@@ -1035,15 +1031,15 @@ static struct ai *rd_tok(struct ai *g, bool split) {
 // when a datum is glued after it. @ may lead a run but never extend one, a trailing -
 // before a digit is shed back to the numeral, and \ never wraps: it is form space
 static struct ai *rd_op(struct ai *g) {
- word memo = g->sp[RdMemo], src = g->sp[RdSrc], p = g->sp[RdCur], last = p, n;
+ word src = g->sp[RdSrc], p = g->sp[RdCur], last = p, n;
  uintptr_t len = 0;
  for (intptr_t c; (c = rd_at(src, p)) >= 0 && (c == '@' ? !len : rd_cls[c] & RcOp); last = p, p = n, len++)
   RdStep(n, p);
  len -= len > 1 && rd_at(src, last) == '-' && (rd_c(src, p) & RcDig);
  if (!ai_ok(g = ai_have(g, str_width(len) + RdSlack))) return g;
- memo = g->sp[RdMemo], src = g->sp[RdSrc], p = g->sp[RdCur];
+ src = g->sp[RdSrc], p = g->sp[RdCur];
  struct ai_str *s = ini_str(bump(g, str_width(len)), len);
- for (uintptr_t i = 0; i < len; i++) txt(s)[i] = rd_byte(src, p), p = rd_next(memo, p);
+ for (uintptr_t i = 0; i < len; i++) txt(s)[i] = rd_byte(src, p), p = rd_next(p);
  bool mono = !(len == 1 && txt(s)[0] == '\\') && rd_glued(src, p);
  g->sp[RdCur] = p, *--g->sp = word(s);
  if (!ai_ok(g = ai_have(intern(g), 2))) return g;
@@ -1057,13 +1053,13 @@ static struct ai *rd_op(struct ai *g) {
 static struct ai *rd_read(struct ai *g) {
  for (;;) {
   if (!ai_ok(g = ai_have(g, RdSlack))) return g;
-  word const memo = g->sp[RdMemo], src = g->sp[RdSrc];
+  word const src = g->sp[RdSrc];
   word p = g->sp[RdCur], n;
   intptr_t c;
   if (rd_in(src, p)) p = putcharm(rd_sskip(str(src), getcharm(p)));
   for (;;) {
    if ((c = rd_at(src, p)) < 0) break;
-   if (rd_cls[c] & RcWs) { RdStep(n, p); p = n; continue; }
+   if (rd_cls[c] & RcWs) { RdStep(n, p); g->sp[RdCur] = p = n; continue; }
    if (c != ';' && c != '#') break;
    word const s = p;
    g->sp[RdCur] = s;
@@ -1105,7 +1101,6 @@ static struct ai *rd_read(struct ai *g) {
 static struct ai *rd_close(struct ai *g) {
  uintptr_t const cnt = getcharm(g->sp[RdCnt]);
  if (!ai_ok(g = ai_have(g, (cnt + 2) * chain_req + RdSlack))) return g;
- word const memo = g->sp[RdMemo];
  word n;
  RdStep(n, g->sp[RdCur]);
  word const h = g->sp[RdRegs + cnt];

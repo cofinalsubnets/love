@@ -130,11 +130,19 @@
    rd-storn ('torn = sounds "(a \"b" && 'torn = sounds "(a" && [1 2] = sounds "1 2) 3")
    ; a port flows, through post.l's flow
    rd-port (rd-cforms sound (tap (rd-cl "(1 2) x \"y\"")) = ['(1 2) 'x "y"])
+   ; the door holds the flow post.l sealed, never a name in scope
+   rd-sealed ((flow \ rd-cforms sound (tap (rd-cl "(1 2) x"))) (_ \ ()) = ['(1 2) 'x])
+   ; a promise per char under an 8k token and a 2000-form text: a restart walks a copy
+   ; laid in as it forces, so neither reads its prefix's promises again
+   rd-long (: tok (rd-rep "abcdefgh" 1000)
+              txt ("\"" + tok + "\" " + tok + " " + rd-rep "(foo 12 \"b\") " 2000)
+              (rd-cforms sound (rd-flow txt 1) = rd-forms sound txt))
    ; a form nests on the heap, never the C stack: far past the deepest in the tree
    rd-deep (: (depth x n) (two? x ? (depth <x (n + 1)) n)
               (19999 = depth <(sound ((rd-rep "(" 20000) + (rd-rep ")" 20000))) 0))
    _ (puts ("rdiff: flows bad=" + show rd-fbad + " texts bad=" + show rd-sbad + " oracle=" + show rd-fp1
-            + " port=" + show rd-port + " deep=" + show rd-deep + "\n")))
+            + " port=" + show rd-port + " sealed=" + show rd-sealed + " long=" + show rd-long
+            + " deep=" + show rd-deep + "\n")))
 
 (test
  ; the sweep reached the tree and read it -- the proof OF work, checked and not
@@ -146,7 +154,7 @@
  ; and the rig can go red: one spoiled form in one file is enough to see
  (0 < (peep rd-hurtn 'bad 0))
  ; a flowing text reads as the text does, in both readers
- (0 = rd-fbad) rd-fp1 rd-port
+ (0 = rd-fbad) rd-fp1 rd-port rd-sealed rd-long
  ; and a text read whole, in place, as it reads form by form
  (0 = rd-sbad) rd-storn
  rd-deep)

@@ -244,7 +244,7 @@ extern const struct ai_mint ai_mint_zero;
 struct ai_port_vt;   // the port's kind, in its head; spelled out with the ports
 // the reader's names (g->rnom): its wraps, its two lone chars, the torn answer, and the
 // flow a port is read through
-enum { RnQuote, RnList, RnHash, RnTuple, RnTablet, RnIota, RnMono, RnTorn, RnAt, RnComma, RnFlow, RnN };
+enum { RnQuote, RnList, RnHash, RnTuple, RnTablet, RnIota, RnMono, RnTorn, RnAt, RnComma, RnN };
 struct ai {
  union u *ip;
  word *hp, *sp;
@@ -314,6 +314,7 @@ struct ai {
                   // 5 the help and 6 the stdio are the running task's, in its node
      hot_show,    // 7: show a value as a string
      hot_net,     // 8: the measure of a compound value (prel's `measure`), what C's truth asks
+     hot_flow,    // 9: a port as a charlist (post.l's `flow`), the reader's port door
      lib,        // the library: name -> book. `borrow` takes one onto the stack, `cite`
                  // reads one where it stands, `leave` checks the written one back in.
      errs,        // errno vocabulary: canonical number -> its nom; ai_err reads it
