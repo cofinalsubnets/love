@@ -4,6 +4,7 @@
 ;
 ;   love bee [-y] [--plain] [prompt ..]      one prompt, the screen, or a > loop
 ;   love bee --list | --send NAME TEXT ..    the sessions, from a shell
+;   love bee --avatar [NAME]                 the avatars, or wear one
 ;
 ; the settings are ~/.love/etc/bee.l's, each a form per line; ./.bee.l may set model,
 ; max-tokens, thinking, context and queue-watch over them:
@@ -18,6 +19,7 @@
 ;   (backend claude-code) a `claude -p` child thinks and runs the tools, bee the harness; api else
 ;   (claude-model NAME)   the model that child runs; claude's own default when unset
 ;   (mem-floor GB) (heavy-max N)   no heavy lock below GB available; N heavy locks at once, 2
+;   (avatar NAME)       the face and its accent, bunny unless set; /avatar or --avatar sets it
 ; the answer streams: text prints as it comes. a key goes out only over tls, and only to a
 ; peer tls-open verified: its chain to a root the host trusts, and its name.
 (module (bee bee-main)
@@ -1427,6 +1429,7 @@
       (: _ (puts "> ") _ (flush out) l (line 0)
          (? !(string? l) 0
             (#l = 0) (repl key f msgs)
+            (<(words l) = "/avatar") (: _ (map (x \ puts (x + "\n")) ((avatar-cmd l 80) 1)) (repl key f msgs))
             (: _ (state! "busy") m (turn key f (user l . msgs)) _ (state! "idle")
                (repl key f (two? m ? m msgs)))))
 
@@ -1497,16 +1500,74 @@
      (scr-text s) (: w (gaze s 2) (copied s -(gaze s 9 * w) (gaze s 0)))
 
      ; --- the look ---
-     bee-ink "38;5;218"
-     ; the avatar, four rows of eight cells: a white baby bunny -- ears up with pink insides,
-     ; dark eyes and a pink nose on a white face, a round body, its feet
-     bee-face
-      (: w (\ s (sgr "97" s)) p (\ s (sgr "38;5;218" s))
-         e (\ s (sgr "38;5;236;107" s)) n (\ s (sgr "38;5;205;107" s))
-         [(w " ▐" + p "█" + w "▌ ▐" + p "█" + w "▌")
-          (w " ▗▛" + e "•" + n "ᴥ" + e "•" + w "▜▖")
-          (w " ▐▙▄▄▄▟▌")
-          (w "  ▀▘ ▝▀ ")])
+     ; an avatar: eight rows of eight pixels, a letter each or . for none, and its palette of
+     ; letter and rgb; its 'grid is the rgb or () of each, and pom draws it. 'ink, a letter,
+     ; names the accent where the pixels would choose badly
+     cells (cite 'pom 'pom-cells)
+     tinted (cite 'pom 'pom-tint)
+     bee-24? ((cite 'pom 'pom-tc) 0)
+     (tint x) (tinted x "38" bee-24?)
+     (rgb x) [(x // 65536) (x // 256 % 256) (x % 256)]
+     (pal a) (: (go l t) (? (atom? l) t (go (drop 2 l) (pin t (<l 0) (l 1)))) (go (a 'pal) {}))
+     (grid a) (: p (pal a) (map (r \ map (x \ x = 46 ? () (p x)) (map r ^#r)) (a 'px)))
+     bee-avatars
+      (map (a \ pin a 'grid (grid a))
+       [{'name "bunny" 'pal ["W" 0xffffff "P" 0xffafd7 "E" 0x303030 "N" 0xff5faf]
+         'px [".WPW.WPW" ".WPW.WPW" "..WEWEW." ".WWWNWWW" ".WWWWWWW" ".WWWWWWW" "..WW.WW." "........"]}
+        {'name "bee" 'pal ["W" 0xafd7ff "Y" 0xffd700 "K" 0x875f00 "E" 0xffffff "G" 0x808080]
+         'px ["...W..W." "..W.WW.W" "..YKYKYE" ".GYKYKYE" "..YKYKY." "........" "...G.G.." "........"]}
+        {'name "baby" 'ink "P" 'pal ["W" 0xeeeeee "C" 0xffd7af "E" 0x303030 "P" 0xffafaf]
+         'px ["....WWW." "..WWCWWW" ".WWWCCWW" "WWECWWWW" "PCWWWWWW" ".WWWWWWW" "..WWWWW." "..P...P."]}
+        {'name "hare" 'pal ["B" 0x5b6ee1]
+         'px [".B....B." ".BB..BB." ".BB..BB." "..BBBB.." ".B.BB.B." ".B.BB.B." "..BBBB.." "...BB..."]}
+        {'name "honeybee" 'pal ["K" 0x222034 "Y" 0xfbf236 "C" 0x5fcde4 "G" 0x696a6a "H" 0x595652]
+         'px ["...GG..." "..GKKG.." "..HYYH.." ".CCCCCC." ".CYYYYC." "..KKKK.." "..HYYH.." "...KK..."]}
+        {'name "beeface" 'pal ["K" 0x222034 "Y" 0xfbf236 "M" 0x45283c "B" 0x5b6ee1 "W" 0xffffff
+                               "G" 0x847e87 "H" 0x696a6a "D" 0x595652 "R" 0x663931 "L" 0x639bff]
+         'px [".K....K." "..K..K.." "..K..K.." ".KWMMWK." ".GHKKHG." "BMDRRDMB" "LBYYYYBL" "Y......Y"]}]
+       ; the moon as it is tonight, utc
+       + [{'name "moon" 'grid ((cite 'pom 'pom-pixels) ((cite 'pom 'pom-now) 0) 8)}])
+     bee-names (map (a \ a 'name) bee-avatars)
+     (avatar nm) (: l (filter (a \ a 'name = nm) bee-avatars) (two? l ? <l ()))
+     (draw a) (cells (a 'grid) bee-24?)
+     ; the accent: the most-used vivid colour, else the most-used of any; a tie to the stronger
+     (ink-of a)
+      (: k (peep a 'ink ())
+         n (foldl (\ t x (pin t x (peep t x 0 + 1))) {} (catmap (r \ filter charm? r) (a 'grid)))
+         (strength x) (: c (rgb x) (foldl max 0 c - foldl min 255 c))
+         (vivid? x) (: hi (foldl max 0 (rgb x)) (90 <= hi && hi <= 4 * strength x))
+         cs (map (x \ [(n x) (strength x) x]) (keys n))
+         vs (filter (e \ vivid? (e 2)) cs)
+         (string? k ? ((pal a) (k 0)) (<(rev (sort (two? vs ? vs cs))) 2)))
+     ; the avatar worn: its name, its face drawn, and the accent everything else takes
+     bee-look {}
+     (look! nm) (: a (avatar nm) (pins bee-look 'name nm 'face (draw a) 'ink (tint (ink-of a))))
+     _ (look! (: n (setting 'avatar "bunny") (tablet? (avatar n) ? n "bunny")))
+     ; (avatar NAME) in ~/.love/etc/bee.l, in place of any before it
+     (keep-avatar nm)
+      (: h (getenv "HOME")
+         (? !(string? h) 0
+            (: d (h + "/.love/etc") p (d + "/bee.l") s (slurp-file p)
+               ls (filter (l \ !(starts? (trim l) "(avatar")) (lines (string? s ? s "")))
+               _ (mkdirs d)
+               (spit-file p (foldl (\ a l (a + l + "\n")) "" ls + "(avatar " + nm + ")\n")))))
+     ; every avatar with its name under it, as many to a row as w holds
+     (gallery w)
+      (: per (max 1 ((w - 2) // 11))
+         (go l) (? (atom? l) ()
+                   (: row (take per l) fs (map draw row)
+                      ((map (i \ foldl (\ s f (s + "  " + f i + " ")) "" fs) ^4)
+                       + [(foldl (\ s a (s + "  " + sgr ((a 'name = bee-look 'name ? "1;" "") + tint (ink-of a))
+                                                         (edfit (a 'name) 9 " "))) "" row)]
+                       + go (drop per l))))
+         (go bee-avatars))
+     ; /avatar lists them, /avatar NAME wears one and keeps it -> [ok lines]
+     (avatar-cmd s w)
+      (: ws (words s) nm (two? >ws ? <>ws "")
+         (? (atom? >ws) [1 (gallery w + [(sgr "2" "  /avatar NAME to wear one")])]
+            !(tablet? (avatar nm)) [0 [("no avatar " + nm + "; there are " + joinw bee-names)]]
+            (: _ (look! nm) _ (keep-avatar nm)
+               [1 (map (i \ "  " + (bee-look 'face) i + (i = 1 ? ("   " + sgr (bee-look 'ink) nm) "")) ^4)])))
      ; lines in a rounded box n wide, its border in pen
      (boxed pen ls n)
       (: d (\ s (sgr pen s)) rule (edfit "" (n - 2) "─")
@@ -1530,7 +1591,7 @@
                "munching clover" "flopping" "grooming its ears" "zooming"]
      (spinner c)
       (: ms (clock 0 - c 't0) k (ms // 120)
-         (sgr bee-ink (bee-spin (k % #bee-spin) + " " + c 'hum + "…")
+         (sgr (bee-look 'ink) (bee-spin (k % #bee-spin) + " " + c 'hum + "…")
           + sgr "2" (" (" + show (ms // 1000) + "s · esc to interrupt)")))
      ; the gauge: the last request's tokens against the window, or a count when it is unknown
      (kilo n) (n < 1000 ? (show n) (show (n // 100 / 10) + "k"))
@@ -1548,31 +1609,32 @@
 
      ; a block's lines at width w, cached on the block by [w its version]
      (blines b w)
-      (: k [w (peep b 'v 0)]
+      (: k [w (peep b 'v 0) (bee-look 'name)]
          (? (peep b 'lk () = k) (b 'lines)
             (: ls (blines0 b w) _ (pins b 'lk k 'lines ls) ls)))
      (blines0 b w)
       (b 'k @
-       'hello (: t [(sgr ("1;" + bee-ink) "bee")
+       'hello (: t [(sgr ("1;" + bee-look 'ink) "bee")
                     (bee-model + sgr "2" (" · " + bee-api))
                     (sgr "2" bee-cwd)
                     (sgr "2" ("session " + (me 0) + " · enter send · ^d quit"))]
-                 (boxed bee-ink (map (\ i (bee-face i + "   " + t i)) ^4) (min w 72)))
+                 (boxed (bee-look 'ink) (map (\ i ((bee-look 'face) i + "   " + t i)) ^4) (min w 72)))
        'you (: ls (catmap (\ l (wrap l (w - 4))) (lines (b 'text)))
                (map (\ l (sgr "2" l)) ("> " + <ls . map (l \ "  " + l) >ls)))
        'bee (: md (map unindent (lines (cite 'lapiz 'md->tty (b 'text) (w + 2))))
                 ls (two? md ? md [""])
                 ("⏺ " + trim <ls . >ls))
        'note (hang [(sgr "2;3" (b 'text))])
+       'lines (b 'ls)
        ; a message from another session, its sender first
        'mail (: ls (catmap (\ l (wrap l (w - 4))) (lines (b 'text)))
-                (sgr bee-ink "✉ " + sgr "1" (b 'from) . map (\ l ("  " + l)) ls))
+                (sgr (bee-look 'ink) "✉ " + sgr "1" (b 'from) . map (\ l ("  " + l)) ls))
        ; thinking streams dim while it runs, its last eight lines; done, it folds to one line
        ; unless ^t has them all open
        'think (: ls (catmap (\ l (wrap l (w - 4))) (lines (b 'text)))
                  n #(words (b 'text))
                  body (map (\ l (sgr "2;3" ("  " + l))) ls)
-                 (? (b 'open) (sgr bee-ink "✻ thinking…" . (8 < #body ? (drop (#body - 8) body) body))
+                 (? (b 'open) (sgr (bee-look 'ink) "✻ thinking…" . (8 < #body ? (drop (#body - 8) body) body))
                     (b 'x) (sgr "2;3" ("✻ thought · " + show n + " words") . body)
                     [(sgr "2;3" ("✻ thought · " + show n + " words  ^t"))]))
        'tool (: st (b 'st)
@@ -1620,7 +1682,7 @@
          busy (c 'busy != ())
          spin (busy && !(tablet? (c 'asking)) ? (spinner c) "")
          ; the session's name leads the hints, always: it is how other sessions address this one
-         stat (sgr bee-ink ("  " + (me 0)) + sgr "2" (? (tablet? (c 'asking)) " · y run · n decline"
+         stat (sgr (bee-look 'ink) ("  " + (me 0)) + sgr "2" (? (tablet? (c 'asking)) " · y run · n decline"
                                                          busy " · esc interrupt · ↑↓ scroll"
                                                          " · enter send · alt-enter newline · ↑↓ scroll · ^t thoughts · /whoami · ^d quit"))
          rows (map (\ l (edfit l w " ")) (win + pad + [spin] + box))
@@ -1732,6 +1794,7 @@
                (v @ 10 (: s (edtext e)
                           (? (busy || #s = 0) 0
                             (s = "/whoami") (: _ (edclear e) (push c {'k 'note 'text (whoami 0)}))
+                            (<(words s) = "/avatar") (: _ (edclear e) (push c {'k 'lines 'ls ((avatar-cmd s (c 'cols)) 1)}))
                             (: _ (edclear e) (send c s))))
                     4 (? (#(edtext e) = 0) (pin c 'over 1) 0)
                     -8 (pin c 'scroll (c 'scroll + 1))
@@ -2056,6 +2119,10 @@
               (? !(two? dd) (say err "usage: love bee --lock [--heavy] [--out DIR] -- CMD ..\n", 2)
                  !(locks? 0) (say err "bee: locks are not in this binary\n", 1)
                  (lk 'locks-run (lk 'locks-root 0) reqs (joinw dd) bee-floor bee-hmax dd)))
+          ; --avatar lists them, --avatar NAME wears one from now on
+          "--avatar" (: r (avatar-cmd (joinw as) 80)
+                        _ (say (<r ? out err) (foldl (\ a l (a + l + "\n")) (<r ? "" "bee: ") (r 1)))
+                        (<r ? 0 1))
           "--stop" (? (#as < 2) (say err "usage: love bee --stop NAME\n", 2)
                       (: e (stop-bee <>as) (? (starts? e "stopped") (: _ (puts (e + "\n")) 0) (say err ("bee: " + e + "\n"), 1))))
           2))
@@ -2080,7 +2147,7 @@
          words (filter (\ w !(elem w bee-flags)) as)
          (? (elem "--mcp" as) (: _ (mcp-serve in out) 0)             ; a claude child's own server
             (two? as && <as = "--lock") (bee-cli as yes)              ; its command's words stay as given
-            (two? words && elem <words ["--list" "--send" "--spawn" "--stop"]) (bee-cli words yes)
+            (two? words && elem <words ["--list" "--send" "--spawn" "--stop" "--avatar"]) (bee-cli words yes)
             ; the api backend wants its endpoint, model and key; claude brings its own
             (!bee-cc? && atom? bee-at) (say err ("bee: cannot read the url " + bee-url + "\n"), 1)
             (!bee-cc? && #bee-model = 0) (say err "bee: name the model, (model NAME) in ~/.love/etc/bee.l\n", 1)
@@ -2101,7 +2168,8 @@
    bee-usage "usage: love bee [-y] [--plain] [PROMPT ..]      one prompt, the screen, or a > loop
        love bee --list | --send NAME TEXT ..           the sessions, from a shell
        love bee --spawn NAME DIR [-y] PROMPT ..         a bee serving detached in DIR
-       love bee --stop NAME | --serve [-y] [PROMPT ..]"
+       love bee --stop NAME | --serve [-y] [PROMPT ..]
+       love bee --avatar [NAME]                        the avatars, or wear one"
    _ (pins (cite 'verbs 'tab) 'bee (udoor 'bee bee-main bee-usage 1 0)))
 
 ; the seat: run as a file, `love src/apps/bee.l ..`, bee starts itself; as the verb, the
