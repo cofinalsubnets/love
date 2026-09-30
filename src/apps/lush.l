@@ -1299,7 +1299,7 @@
    (sh-nfsay w fm)
      (? (atom? fm) (sh-saynf w)
         (: saves (map (\ e (<e . dup <e)) fm)
-           _ (each fm (\ e (? (charm? >e) (dup2 >e <e) (close <e))))
+           _ (each fm (\ e (? (charm? >e) (dup2 >e <e) (two? >e) 0 (close <e))))
            _ (sh-saynf w)
            _ (flush err)
            (each saves (\ e (? (nom? >e) (close <e) (dup2 >e <e, close >e))))))
@@ -1307,11 +1307,21 @@
    ; --- redirects -> the fdmap ------------------------------------------------
    ; (sh-rdmap redirs) -> (1 fdmap opens writes) | ('err . msg). opens close in the
    ; child and in the parent after spawn; writes ((wfd . body)..) are heredoc feeds,
-   ; poured and closed by the parent after the spawn.
+   ; poured and closed by the parent after the spawn. sh-rdmapx is the map for a child
+   ; to lay: a fifo, whose open blocks until its other end arrives, rides as (path mode
+   ; msg) and the child opens it, so the shell runs on to open that other end itself.
    (dfd ion d) (ion @ (i . _) i d)
    (rderr opens msg) (each opens close, ('err . msg))
-   (sh-rdmap rs) (rdm rs () () ())
-   (rdm rs fdmap opens writes)
+   (sh-rdmap rs) (rdm rs () () () 0)
+   (sh-rdmapx rs) (rdm rs () () () 1)
+   (sh-fifo? t) (: s (stat t) (two? s && s 2 & 61440 = 4096))
+   (rdo rs t m d fdmap opens writes dx)
+     (? (dx && sh-fifo? t)
+        (rdm >rs ((d . [t m ("lush: " + t + ": cannot open\n")]) . fdmap) opens writes dx)
+        (: fd (openfd t m)
+           (? (nom? fd) (rderr opens (t + ": cannot open"))
+              (rdm >rs ((d . fd) . fdmap) (fd . opens) writes dx))))
+   (rdm rs fdmap opens writes dx)
      (? !rs [1 (rev fdmap) opens writes]
         (: r <rs ion (r 0) op (r 1)
            (? (op = "<h")
@@ -1320,22 +1330,17 @@
                     (rdm >rs
                          ((dfd ion 0 . <pp) . fdmap)
                          (<pp . opens)
-                         ((>pp . sh-textof (r 2)) . writes))))
+                         ((>pp . sh-textof (r 2)) . writes)
+                         dx)))
               (: tf (sh-fields (r 2))
                  (? (atom? tf || two? >tf) (rderr opens "ambiguous redirect")
                     (: t <tf
-                       (op @ "<"
-                            (: fd (openfd t 0)
-                               (? (nom? fd) (rderr opens (t + ": cannot open"))
-                                  (rdm >rs ((dfd ion 0 . fd) . fdmap) (fd . opens) writes)))
-                          (">" || ">>")
-                            (: fd (openfd t (? (op = ">") 1 2))
-                               (? (nom? fd) (rderr opens (t + ": cannot open"))
-                                  (rdm >rs ((dfd ion 1 . fd) . fdmap) (fd . opens) writes)))
+                       (op @ "<" (rdo rs t 0 (dfd ion 0) fdmap opens writes dx)
+                          (">" || ">>") (rdo rs t (? (op = ">") 1 2) (dfd ion 1) fdmap opens writes dx)
                           (">&" || "<&")
                             (: d (dfd ion (? (op = "<&") 0 1))
-                               (? (t = "-") (rdm >rs ((d . ()) . fdmap) opens writes)
-                                  (sh-digits? t) (rdm >rs ((d . sh-int t) . fdmap) opens writes)
+                               (? (t = "-") (rdm >rs ((d . ()) . fdmap) opens writes dx)
+                                  (sh-digits? t) (rdm >rs ((d . sh-int t) . fdmap) opens writes dx)
                                   (rderr opens (t + ": bad fd"))))
                           (rderr opens (op + ": unsupported")))))))))
    (sh-hwrite wrs)
@@ -1559,6 +1564,15 @@
    ; after sh-pgkid, never before: the handoff wants TTOU still ignored.
    (sh-subjc _) (pin sh-jc () 0,
                  each [sig-int sig-quit sig-tstp sig-ttou sig-ttin] (flip signal 0))
+   ; one fdmap entry laid on a child's own fds; a deferred (path mode msg) opens here
+   (sh-lay1 e)
+     (: s >e
+        (? (charm? s) (dup2 s <e)
+           (two? s) (: fd (openfd (s 0) (s 1))
+                       (? (nom? fd) (say err (s 2), flush err, quit 1)
+                          (fd = <e) 0
+                          (dup2 fd <e, close fd)))
+           (close <e)))
    ; the fork child itself, shared by the pipeline stage and the simple foreground
    ; command: answers the pid in the parent (or fork's own nom), never in the child.
    ; every line of it is child hygiene -- copy the whole thing, not parts.
@@ -1578,7 +1592,7 @@
                          (say err ";; ", print err a,
                           say err " ", print err b,
                           put err 10, quit 1))),
-            each fdmap (e \ dup2 >e <e),
+            each fdmap sh-lay1,
             each allclose (fd \ 2 < fd ? (close fd) 0),
             ; 0: a child has a shell already. cli-line answers the line's status, a
             ; charm, and the process answers with it; anything else is 0
@@ -1974,7 +1988,7 @@
                  argv (catmap sh-fields >pk)
                  (? (two? <pk || atom? argv || sh-bi? <argv || sh-fn? <argv || string? (sh-aliases <argv))
                     (sh-stagex >cmds ['a c () () () . acc])
-                    (: rm (sh-rdmap (c 2))
+                    (: rm (sh-rdmapx (c 2))
                        (? (<rm = 'err) (stclean acc, rm)
                           (sh-stagex >cmds
                                      ['x argv (rm 1) (rm 2) (rm 3) . acc]))))))))
@@ -2084,6 +2098,15 @@
               r (sh-simple2 argv rs)
               _ (each saves sh-tmprestore)
               r)))
+   ; under a forkless capture `out` is a port over the pipe, not fd 1: a map that moves
+   ; fd 1 wears a port over the moved fd for the thunk's length
+   (sh-outrs fdmap th)
+     (? (atom? (sh-subfds ()) || !(elem 1 (map cap fdmap))) (th ())
+        (: fd (dup 1)
+           (? (nom? fd) (th ())
+              (: po (fdopen fd) w0 (worn ())
+                 _ (sh-wearout po)
+                 (mind th () (\ _ (flush out, wear w0, close po)))))))
    ; run a thunk with redirects laid over our own fds (dup saves, dup2 swaps,
    ; swap back after) -- functions and builtins take their > < this way
    (sh-withrs rs th)
@@ -2095,7 +2118,7 @@
                  saves (map (e \ <e . dup <e) fdmap)
                  _ (each fdmap (e \ charm? >e ? (dup2 >e <e) (close <e)))
                  _ (each opens close)
-                 s (th ())
+                 s (sh-outrs fdmap th)
                  (flush out, flush err,
                   each saves (e \ nom? >e ? (close <e) (dup2 >e <e, close >e)),
                   s)))))
@@ -2144,7 +2167,7 @@
                 st (? (charm? s) s 0)
                 _ (pin sh-status () st)
                 (sh-echk st))
-           (: rm (sh-rdmap rs)
+           (: rm (sh-rdmapx rs)
               (? (<rm = 'err) (cmderr >rm)
                  (: opens (rm 2) wrs (rm 3)
                     ac (opens + (map cap wrs))
@@ -2296,7 +2319,7 @@
               saves (map (e \ <e . dup <e) fdmap)
               _ (each fdmap (e \ charm? >e ? (dup2 >e <e) (close <e)))
               _ (each opens close)
-              s (b ())
+              s (sh-outrs fdmap b)
               _ (each saves (e \ nom? >e ? (close <e) (dup2 >e <e, close >e)))
               s)))
 

@@ -948,5 +948,27 @@
    _ (landed? t ? (catch t) (freeze t))
    (test !early late (has? s "pasted-ran") (has? s (e + "[?2004h"))))
 
+; a redirect onto a fifo opens in the child, so the shell runs on to open the other end:
+; a background reader, a background writer, a braced group, a warm-forked verb. a child's
+; failed open says so and exits 1; a missing file is still the parent's to say. each line
+; rides a timeout, since a regression here is a hang
+(: d "out/.lush-t12"
+   _ (mkdir d 493)
+   (fl s) (hark ["out/love" "timeout" "20" "out/love" "out/lush" "-c"
+                 ("d=" + d + "; rm -f $d/f; mkfifo $d/f; " + s)])
+   r1 (fl "cat < $d/f > $d/o & p=$!; exec 3> $d/f; echo hi >&3; exec 3>&-; wait $p; echo \"r $(cat $d/o)\"")
+   r2 (fl "echo x > $d/s; cat $d/s > $d/f & p=$!; r=$(cat $d/f); wait $p; echo \"w $r\"")
+   r3 (fl "{ cat; } < $d/f > $d/o & p=$!; echo grp > $d/f; wait $p; echo \"g $(cat $d/o)\"")
+   r4 (fl "out/love cat < $d/f > $d/o & p=$!; echo warm > $d/f; wait $p; echo \"v $(cat $d/o)\"")
+   r5 (fl "exec 2>&1; cat < $d/nope; echo st=$?")
+   r6 (fl "exec 2>&1; chmod 0 $d/f; cat < $d/f & wait $!; echo st=$?; out/love cat < $d/f & wait $!; echo st=$?")
+   no ("lush: " + d + "/f: cannot open\n")
+   ; a builtin's stdout redirect inside $( ) lands on the fd, not in the capture
+   r7 (fl "x=$(exec 3> $d/o; printf 'p\\n' >&3; echo e > $d/s; { echo g; } > $d/t; echo body); echo \"[$x] $(cat $d/o $d/s $d/t)\"")
+   (test ("r hi\n" = >r1) ("w x\n" = >r2) ("g grp\n" = >r3) ("v warm\n" = >r4)
+         (("lush: " + d + "/nope: cannot open\nst=1\n") = >r5)
+         (getuid 0 = 0 || (no + "st=1\n" + no + "st=1\n") = >r6)
+         ("[body] p\ne\ng\n" = >r7)))
+
 (test_fin ())
 (puts "sh: ok") (putc 10)

@@ -240,6 +240,29 @@ static void stdin_exact(struct ai *g) {
  ai_io_unread(g, i, -(intptr_t) ai_io_pending(g, i));
  if (u) ai_stdin.io.ungetc_buf = putcharm(EOF); }
 
+// openfd's modes: 0 read, 1 truncate, 2 append, 3 exclusive, 4 write, 5 a tty probe
+static int openfd_mode(char const *path, intptr_t m) {
+ int flags = m == 1 ? (O_WRONLY | O_CREAT | O_TRUNC)
+           : m == 2 ? (O_WRONLY | O_CREAT | O_APPEND)
+           : m == 3 ? (O_WRONLY | O_CREAT | O_EXCL)
+           : m == 4 ? O_WRONLY
+           : m == 5 ? (O_RDWR | O_NOCTTY | O_NONBLOCK)
+           : O_RDONLY;
+ return open(path, flags, m == 3 ? 0600 : 0644); }
+
+// a deferred redirect, (path mode msg): opened in the child, where a fifo may block.
+// a failed open says msg on the stderr laid so far and exits 1, as a shell's redirect does.
+static void spawn_open(int cfd, word d) {
+ char const *p = str_c(A(d));
+ word m = chainp(B(d)) ? A(B(d)) : ZeroPoint,
+      w = chainp(B(d)) && chainp(B(B(d))) ? A(B(B(d))) : ZeroPoint;
+ int fd = p ? openfd_mode(p, charmp(m) ? getcharm(m) : 0) : -1;
+ if (fd < 0) {
+  char const *s = str_c(w);
+  if (s) (void) !write(2, s, strlen(s));
+  _exit(1); }
+ if (fd != cfd) dup2(fd, cfd), close(fd); }
+
 // the one fork + exec. argv rides at sp[0]; in/out/err are spawnio's fixed triple (-1: leave
 // it), applied first; fdmap is a list of (childfd . srcfd) pairs and closes a list of fds,
 // both read off the stack after the marshal (a GC may have moved them), -1 for none.
@@ -270,6 +293,7 @@ ai_noinline static struct ai *host_spawnx(struct ai *g, int in, int out, int err
    if (cfd < 0) continue;
    word sw = B(e);
    if (charmp(sw) && getcharm(sw) >= 0) dup2((int) getcharm(sw), (int) cfd);
+   else if (chainp(sw)) spawn_open((int) cfd, sw);
    else close((int) cfd); }                    // () (or a negative) srcfd closes childfd
   for (word p = closes; chainp(p); p = B(p)) {
    intptr_t fd = getcharm(A(p));
@@ -540,14 +564,7 @@ static lvm(lvm_pipe) {
 
 static int mk_openfd(struct ai *g, void *env) {
  (void) env;
- intptr_t m = charmp(g->sp[1]) ? getcharm(g->sp[1]) : 0;
- int flags = m == 1 ? (O_WRONLY | O_CREAT | O_TRUNC)
-           : m == 2 ? (O_WRONLY | O_CREAT | O_APPEND)
-           : m == 3 ? (O_WRONLY | O_CREAT | O_EXCL)
-           : m == 4 ? O_WRONLY
-           : m == 5 ? (O_RDWR | O_NOCTTY | O_NONBLOCK)
-           : O_RDONLY,
-     fd = open(str_c(g->sp[0]), flags, m == 3 ? 0600 : 0644);
+ int fd = openfd_mode(str_c(g->sp[0]), charmp(g->sp[1]) ? getcharm(g->sp[1]) : 0);
  return fd < 0 ? -errno : fd; }
 ai_noinline static struct ai *host_openfd(struct ai *g) {
  int fd = mk_openfd(g, NULL);
@@ -591,9 +608,10 @@ static lvm(lvm_fdopen) {
 
 // (spawnmap argv fdmap closes pg fg) -> pid | a nom. spawnio with `fdmap`, a list of
 // (childfd . srcfd) pairs applied in order in the child -- dup2(srcfd, childfd) for a
-// charm srcfd >= 0, close(childfd) for () -- each srcfd reading the fd table as remapped
-// so far, the POSIX left-to-right redirection law (`>f 2>&1` is ((1 . f) (2 . 1)) and the
-// second entry sees the first's work). pg/fg and closes ride unchanged from spawnio.
+// charm srcfd >= 0, spawn_open for a (path mode msg) srcfd, close(childfd) for () --
+// each srcfd reading the fd table as remapped so far, the POSIX left-to-right redirection
+// law (`>f 2>&1` is ((1 . f) (2 . 1)) and the second entry sees the first's work). pg/fg
+// and closes ride unchanged from spawnio.
 static lvm(lvm_spawnmap) {
  intptr_t pg = charmp(Sp[3]) ? getcharm(Sp[3]) : -1,
           fg = charmp(Sp[4]) ? getcharm(Sp[4]) : 0;
