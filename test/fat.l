@@ -128,4 +128,3 @@
          ('("loop.txt") = <>r2)))
 
 (test_fin ())
-(puts "fat: ok") (putc 10)
