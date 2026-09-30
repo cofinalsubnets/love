@@ -140,24 +140,24 @@
      (near s) (kp 'pic-near im 0 0 s (max 1 (int (im 0 / s))) (max 1 (int (im 1 / s))))
      (? (gm = "block")
          (: sm (near (kp 'pic-fit im cols rows)) [(sm 0) (kp 'pic-cells sm deep) ""])
-        (: ph (rows * ch) ph2 (max 1 (? (gm = "sixel") (6 * (ph // 6)) ph))
+        (: ph (rows * ch) ph2 (max 1 (gm @ "sixel" (6 * (ph // 6)) ph))
            sm (near (max 1.0 (max (im 0 / (cols * cw)) (im 1 / ph2))))
-           g (? (gm = "sixel") (kp 'pic-sixel sm) (kp 'pic-kits sm mc-kitkeys))
+           g (gm @ "sixel" (kp 'pic-sixel sm) (kp 'pic-kits sm mc-kitkeys))
            [((sm 0 + cw - 1) // cw) (map (_ \ "") ^((sm 1 + ch - 1) // ch)) g])))
  ; the thumbnail of the picture at q, or a string saying why none: from the cache when it
  ; is there, else decoded when cheap or when the frame has budget, else "..." and owed
  (mc-thumbat s q st cols rows gm)
   (: sz <st
      key (q + " " + show (st 1) + " " + show sz + " " + show cols + " " + show rows + " " + gm)
-     hit (peep (s 'cache) key ())
+     hit (s 'cache key)
      (? (hit != ()) hit
         (s 'cap < sz) ("too big to show, " + show (sz // 1048576) + " MB")
         (sz < s 'cheap || 0 < s 'budget)
          (: _ (pin s 'budget (s 'budget - 1))
             r (uread q)
-            im (? (two? r) (cite 'kore 'pic-decode <>r) "cannot read")
-            th (? (two? im) (mc-thumb im cols rows gm (s 'cw) (s 'ch) (s 'deep)) im)
-            _ (? (64 < #(keys (s 'cache))) (pin s 'cache (tablet 0)) 0)
+            im (two? r ? (cite 'kore 'pic-decode <>r) "cannot read")
+            th (two? im ? (mc-thumb im cols rows gm (s 'cw) (s 'ch) (s 'deep)) im)
+            _ (64 < #(keys (s 'cache)) ? (pin s 'cache {}) 0)
             _ (pin (s 'cache) key th)
             th)
         (pin s 'owe 1, "...")))
@@ -214,7 +214,7 @@
  (mc-cell d e w sel)                           ; one listing row, fitted plain then dressed
   (: sz (mc-size e)
      k (w - #sz - 2)
-     txt (" " + (edfit <e (? (k < 1) 1 k) " ") + " " + sz)
+     txt (" " + (edfit <e (k < 1 ? 1 k) " ") + " " + sz)
      row (edfit txt w " ")
      h (mc-hue d e)
      (? (sel = 1) ("\e[7m" + row + "\e[0m")
@@ -224,7 +224,7 @@
  (mc-row p k w act?)
   (: es (p 'es) i ((p 'top) + k)
      (? (#es <= i) (edfit "" w " ")
-        (mc-cell (p 'dir) <(drop i es) w (? (i != (p 'cur)) 0 act? 1 2))))
+        (mc-cell (p 'dir) <(drop i es) w (? (i != p 'cur) 0 act? 1 2))))
  (mc-head d w) ("\e[7m" + (edfit (" " + d) w " ") + "\e[0m")
  mc-keys " tab pane  enter descend  u up  v view  t thumbs  r reread  q quit"
  ; a graphic goes out after the text, at its place, since text laid over it may wipe it:
@@ -243,8 +243,7 @@
  (mc-frame s w h)
   (: j (jug 0)
      rows (? (h < 6) 1 (h - 3))
-     _ (pin s 'rows rows)
-     _ (pin s 'owe 0)
+     _ (pins s 'rows rows 'owe 0)
      lw ((w - 1) // 2)
      rw (w - 1 - lw)
      l (s 'l) r (s 'r) a (s 'act) qv (s 'qv)
@@ -254,8 +253,8 @@
      v (qv @ 1 (mc-look s p vw rows) 2 (mc-grid s p vw rows) [() ()])
      (vrow k) (: x <(drop k <v) (edfit (string? x ? x "") vw " "))
      vh (qv @ 1 ("view " + (two? e ? <e (p 'dir))) 2 ("thumbnails " + p 'dir) "")
-     (lrow k) (? (qv && a = 1) (vrow k) (mc-row l k lw (0 = a)))
-     (rrow k) (? (qv && a = 0) (vrow k) (mc-row r k rw (1 = a)))
+     (lrow k) (qv && a = 1 ? (vrow k) (mc-row l k lw (0 = a)))
+     (rrow k) (qv && a = 0 ? (vrow k) (mc-row r k rw (1 = a)))
      _ (say j "\e[H\e[0m")
      _ (say j (mc-head (qv && a = 1 ? vh (l 'dir)) lw + "\e[0m|"
                + mc-head (qv && a = 0 ? vh (r 'dir)) rw + "\e[0m\e[K\r\n"))
@@ -271,7 +270,7 @@
  ; afford one sets 'owe; past 'cap bytes a picture is only named
  (mc-new ld rd)
   (pins {} 'l (mc-pane ld) 'r (mc-pane rd) 'act 0 'rows 20 'over 0 'qv 0
-        'gm "block" 'cw 8 'ch 16 'deep (cite 'kore 'pic-deep 0) 'cache (tablet 0)
+        'gm "block" 'cw 8 'ch 16 'deep (cite 'kore 'pic-deep 0) 'cache {}
         'cheap 65536 'cap 33554432 'budget 1000 'owe 0 'shown "")
  ; a key within k ms: 1, else ()
  (mc-rest k) (? (k < 1) () (cue? 0) 1 (rest 10, mc-rest (k - 10)))
@@ -285,15 +284,15 @@
      _ (flush out)
      (? (s 'owe && !(mc-rest 150)) (pin s 'budget 1, mc-loop s)
         (: c (edkey in) _ (pin s 'budget 0)
-           (? (c = -7) () (mc-key s c, s 'over ? () (mc-loop s))))))
+           (c @ -7 () (mc-key s c, s 'over ? () (mc-loop s))))))
  (mc-run ld rd gm)
   (: s (mc-new ld rd)
      kp (cite 'kore)
-     pr (? (gm = "block") (kp 'pic-heard "") (kp 'pic-probe 0))
+     pr (gm @ "block" (kp 'pic-heard "") (kp 'pic-probe 0))
      _ (pins s 'gm (kp 'pic-pick gm pr) 'budget 0
-               'cw (? (0 < pr 'cw) (pr 'cw) 8) 'ch (? (0 < pr 'ch) (pr 'ch) 16))
+               'cw (0 < pr 'cw ? (pr 'cw) 8) 'ch (0 < pr 'ch ? (pr 'ch) 16))
      (raw 1, say out "\e[?1049h", mc-loop s,
-      say out ((s 'gm = "kitty" ? (kp 'pv-unkit) "") + "\e[0m\e[?25h\e[?1049l"), flush out, raw 0, 0))
+      say out ((s 'gm @ "kitty" (kp 'pv-unkit) "") + "\e[0m\e[?25h\e[?1049l"), flush out, raw 0, 0))
  mc-usage "usage: love mc [-g block|sixel|kitty|auto] [DIR [DIR]]"
  (mc-main as)
   (: g? (two? as && <as = "-g")

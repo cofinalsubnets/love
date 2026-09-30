@@ -793,10 +793,10 @@
    _ (pgload st '("x") "a.txt")
    _ (pins st 'files '("a.txt" "b.txt") 'fi 0)
    _ (pgstep st 58) _ (pgstep st 110)
-   (test (st 'fi = 1) (st 'doe = '("b.txt")))
+   _ (test (st 'fi = 1) (st 'doe = '("b.txt")))
    _ (pin st 'doe ())
    _ (pgstep st 58) _ (pgstep st 110)
-   (test (st 'fi = 1) !(st 'doe) (st 'msg = "no next file"))
+   _ (test (st 'fi = 1) !(st 'doe) (st 'msg = "no next file"))
    _ (pgstep st 58) _ (pgstep st 112)
    (test (st 'fi = 0) (st 'doe = '("a.txt"))))
 

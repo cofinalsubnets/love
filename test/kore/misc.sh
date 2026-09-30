@@ -93,7 +93,7 @@ korerun which no-such-tool-xyzzy > /dev/null 2>&1; r=$?
 [ $r -eq 1 ] || fail "kore which: an unfound name exits 1 (got $r)"
 [ "$(korerun which /bin/sh 2>/dev/null)" = /bin/sh ] || fail "kore which: a path answers itself"
 [ "$(korerun hostname 2>/dev/null)" = "$(korerun uname -n 2>/dev/null)" ] \
-  || fail "kore hostname and uname -n read the one file"
+  || fail "kore hostname and uname -n give the one answer"
 [ "$(korerun tty < /dev/null 2>/dev/null)" = "not a tty" ] || fail "kore tty off a pipe"
 korerun tty < /dev/null > /dev/null 2>&1; r=$?
 [ $r -eq 1 ] || fail "kore tty: not a terminal is exit 1 (got $r)"

@@ -145,7 +145,7 @@ c_c = $(addprefix $S/apps/moon/lib/moonlibc/string/,memchr.c memcmp.c memcpy.c m
     chdir.c chmod.c chown.c clock_gettime.c close.c dup2.c fcntl.c fork.c fstat.c getcwd.c \
     ftruncate.c getgid.c getpgrp.c getpid.c getpriority.c getrlimit.c getrusage.c getuid.c setrlimit.c ioctl.c kevent.c kill.c kqueue.c \
     link.c lseek.c lstat.c madvise.c mkdir.c mmap.c mount.c mprotect.c munmap.c open.c pipe.c poll.c raise.c readlink.c \
-    rename.c rmdir.c setpgid.c setsid.c stat.c statfs.c symlink.c sysconf.c sysctl.c umask.c fsync.c fdatasync.c \
+    rename.c rmdir.c setpgid.c setsid.c stat.c statfs.c symlink.c sysconf.c sysctl.c umask.c uname.c fsync.c fdatasync.c \
     unlink.c unshare.c utimensat.c waitpid.c) \
   $(addprefix $S/apps/moon/lib/moonlibc/dirent/,closedir.c opendir.c readdir.c) \
   $(addprefix $S/apps/moon/lib/moonlibc/signal/,grantpt.c posix_openpt.c ptsname.c \

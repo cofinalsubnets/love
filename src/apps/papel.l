@@ -352,7 +352,7 @@ usage: papel [-o OUT] [-t TITLE] [SRC ..]
   -s, --serve PORT  build, then hand OUT to kiosko and serve it on PORT
   SRC               a .md file or a directory of them; with none, README.md and doc/
 "
-   _ (:
+   pm (:
    (pdie c m) (udie c ("papel: " + m))
    (papel-main as)
    (: _ (lit? (cite 'papel) ? (borrow 'papel) 0)   ; splice my registered self if I am one (cook-main's
@@ -398,7 +398,7 @@ usage: papel [-o OUT] [-t TITLE] [SRC ..]
       0)
    papel-main)
 
-   papel-main _)
+   papel-main pm)
 
 ; the seat (cook's shape): fire papel-main iff this file -- or the installed `papel`
 ; script -- sits in the program seat of the real command line, on the args after it.

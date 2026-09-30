@@ -282,14 +282,9 @@ static struct ai *env_budget(struct ai *g) {
   if (g && b && atol(b) > 0) {
     g->budget = (uintptr_t) atol(b) * (1024 * 1024 / sizeof(word));
     return g; }
-  if (g && !g->budget) {
-    int fd = open("/proc/meminfo", O_RDONLY);
-    if (fd >= 0) { char mb[64]; long n = (long) read(fd, mb, sizeof mb - 1);
-      close(fd);
-      if (n > 8 && !memcmp(mb, "MemTotal", 8)) { mb[n] = 0;
-        char *p = mb; while (*p && (*p < '0' || *p > '9')) p++;
-        uintptr_t kb = 0; while (*p >= '0' && *p <= '9') kb = kb * 10 + (uintptr_t)(*p++ - '0');
-        g->budget = kb * 1024 / 2 / sizeof(word); } } }
+  if (g && !g->budget) {                                   // half the machine's memory
+    long pg = sysconf(_SC_PHYS_PAGES), sz = sysconf(_SC_PAGESIZE);
+    if (pg > 0 && sz > 0) g->budget = (uintptr_t) pg * (uintptr_t) sz / 2 / sizeof(word); }
   return g; }
 
 // LOVE_NO_GLAZE: a pure-interpreter session -- ev back to base-ev and the natjit hook

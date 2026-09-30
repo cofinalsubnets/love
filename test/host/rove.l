@@ -52,7 +52,7 @@
 (: hd {'w 9 'h 5 't (cask 45) 'seen (cask 45) 'rooms [[1 1 3 3] [5 1 3 3]]}
    _ (map (\ y (map (\ x (x = 4 ? () (dput hd x y 1))) '(1 2 3 4 5 6 7))) '(1 2 3))
    v (fov hd 1 1 8)
- (test
+   _ (test
   (peep v (1 + 9 * 1) 0)                         ; your own cell is lit
   (peep v (3 + 9 * 1) 0)                         ; down the room
   (peep v (4 + 9 * 1) 0)                         ; the wall catches the light

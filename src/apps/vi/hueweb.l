@@ -1,43 +1,18 @@
-; src/apps/vi/hueweb.l -- the .l syntax as a stylesheet and as painted html, out of
-; src/apps/vi/hue.l's class table and src/apps/vi/config.l's theme. the third reader of that
-; one table: the painter in src/apps/vi/core.l's vframe, the vim syntax (src/tools/hue2vim.l),
-; and this. nothing here knows what a comment or a sigil is -- it asks hue, the way the
-; other two do, so a class added to that table arrives in all three unannounced.
+; src/apps/vi/hueweb.l -- the .l syntax as a stylesheet and as painted html, from hue.l's
+; class table and config.l's theme: the third reader of that table, beside core.l's vframe
+; and src/tools/hue2vim.l. it asks hue what each span is, so a new class reaches all three.
 ;
-;   (hw-vars scheme)     the :root block: config.l's hue-page palette of that name,
-;                        each role a css variable, the dark half under a media query
-;   (hw-css scheme)      the stylesheet over it: one rule per class, the frame, and
-;                        just enough prose styling for a rendered document -- `love
-;                        serve` has no papel.css to lean on
+;   (hw-vars scheme)     the :root block: a hue-page palette as css variables, dark under a media query
+;   (hw-css scheme)      the stylesheet: a rule per class, the frame, a little prose styling
 ;   (hw-body path src)   that source as a <pre>, one span per line
 ;   (hw-page ttl hrefs home body)   ..in a page, with its stylesheets and a home link
 ;
-; the split the theme already makes is what makes this cheap. hue.l says "a comment is
-; a Comment"; src/apps/vi/config.l says "in molokayo a Comment is #75715E". the vim
-; generator uses the first half and leaves the colour to the reader's colorscheme; a
-; web page has no colorscheme, so this joins both and the page wears the editor's
-; theme by construction.
-;
-; the runs are sparse: hue-lex answers only the spans it claims, so the emitter fills
-; the gaps with plain text rather than assuming they tile the line. and it carries
-; `in`, the string-open state, from each line to the next, or a multi-line literal
-; (papel's forty-line css) paints as code from its second line on.
-;
-; no papel here, and that is what makes `love serve` possible: hue.l, config.l and
-; kiosko are already in the artifact (the Makefile's distfiles) and papel is not. so
-; the page template is this file's own, small and self-contained, and the seed can
-; paint its own source with nothing on the box.
-;
-; the vocabulary is the host's: the word lanes ask `names`, `macros` and `values` of
-; the running binary, so under LOVE_NO_IMAGE (the egg boot) the answer is the
-; compiler's own internals rather than the language that shipped -- a generator
-; writing files must clear it, the way the syntax rule does.
-;
-; hue rides module 'vi. the images that cat src/apps/vi/{config,hue}.l registered it; a
-; tool outside those images says (borrow "src/apps/vi/config.l") and (borrow "src/apps/vi/hue.l")
-; first. the use below sits inside this module, so it splices vi for this file's
-; compile alone: at a catted file's top level it would hand the session vi's ninety
-; -odd names.
+; hue-lex answers only the spans it claims, so the gaps fill with plain text, and the
+; string-open state carries from line to line. no papel: hue.l, config.l and kiosko ride
+; the artifact and papel does not, so `love serve` paints its own source with nothing on
+; the box. the word lanes ask the running binary, so under LOVE_NO_IMAGE they see the
+; compiler's internals. (borrow 'vi) sits inside the module, so vi's names stay out of the
+; session; a tool outside the vi images borrows config.l and hue.l first.
 (module (hueweb hw-vars hw-css hw-body hw-page)
 (borrow 'vi)
 (:
@@ -59,11 +34,8 @@
    (hw-vars nm)
    (: s (hw-find hue-page nm)
       (roles p) (":root{" + cats (map (r \ "--" + string <r + ":" + <>r + ";") p) + "}\n")
-      ; the parens around the first `roles` are load-bearing: bare, the + binds its
-      ; two neighbours and leaves `roles` standing as an element of the ? -- a
-      ; predicate, always true, and the call never happens
       (? (atom? s) ""
-         (roles (s 1)) + (two? >>s ? ("@media (prefers-color-scheme:dark){" + roles (s 2) + "}\n") "")))
+         (roles (s 1) + (two? >>s ? ("@media (prefers-color-scheme:dark){" + roles (s 2) + "}\n") ""))))
 
    ; --- the stylesheet -------------------------------------------------------
    ; one rule per class, coloured by the group that class names. a class whose

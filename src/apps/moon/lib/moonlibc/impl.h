@@ -236,6 +236,8 @@ struct _IO_FILE {
 #define NR_setsid         157
 #define NR_umask          166
 #define NR_getpid         172
+#define NR_uname          160
+#define NR_sysinfo        179
 #define NR_getuid         174
 #define NR_getgid         176
 #define NR_sendfile        71
@@ -288,6 +290,8 @@ struct _IO_FILE {
 #define NR_pread64         17
 #define NR_pwrite64        18
 #define NR_getpid          39
+#define NR_uname           63
+#define NR_sysinfo         99
 #define NR_setuid         105
 #define NR_setgid         106
 #define NR_setgroups      116
