@@ -1,14 +1,7 @@
-; --- test/host/wharf.l: the laws of src/apps/berth/wharf.l, quay's layout algebra ---
-; not in the corpus, and not for its nifs: wharf needs none at all -- it is arithmetic
-; over lists. two things hold it back. `borrow` finds src/apps/berth/wharf.l by the
-; filesystem walk, and the corpus runs where there is no filesystem; and inside the
-; whole corpus love0's second evaluation stops, as cb's does, against a member not
-; identified. when a seat bakes wharf behind its egg, the first of those goes.
-;
-;   cat test/00-init.l test/host/wharf.l | out/love   ; exits 1 on fail
-;
-; the vocabulary under test is rectangles in cells: (id row col rows cols), origins
-; 0-based, and a bar is (dir row col len) with dir 'across or 'down.
+; test/host/wharf.l -- the laws of src/apps/berth/wharf.l, quay's layout algebra, arithmetic over
+; lists. a rectangle is (id row col rows cols), 0-based; a bar is (dir row col len), dir 'across
+; or 'down. not in the corpus: borrow finds wharf.l on the filesystem, and love0's second
+; evaluation stops inside it. run: cat test/00-init.l test/host/wharf.l | out/love
 (borrow "src/apps/berth/wharf.l")
 
 ; --- the two standing laws, checked rather than trusted ---
@@ -22,7 +15,7 @@
                    0 <= wharf-col b && wharf-col b + wharf-cols b <= c)
    (strays r c bs) #(filter (nil? * inside r c) bs)
    ; every plan laid at every size: nothing overlaps, nothing escapes, nobody is lost
-   (sound? p r c) (: bs (wharf-lay p r c)
+   (sound? p r c) (wharf-lay p r c @ bs
                    (0 = clashes bs && 0 = strays r c bs && #bs = #(wharf-berths p)))
    plans '(9
            (beside 50 1 2)
@@ -35,7 +28,7 @@
    ; so the arithmetic below would run on a list and quietly prove nothing
    sizes '((24 80) (1 1) (2 2) (3 3) (1 80) (80 1) (5 7) (200 300))
  _ (test
-    (0 = #(filter (\ p !(foldl (\ a s (a && sound? p <s <>s)) 1 sizes))
+    (0 = #(filter (p \ !(foldl (a \ s \ (a && sound? p <s <>s)) 1 sizes))
                         plans))))
 
 ; --- 1. a lone berth is the whole wharf, and wears no bar ---
@@ -60,8 +53,8 @@
       ('((across 11 0 80)) = wharf-bars '(stack 50 1 2) 24 80)))
 
 ; --- 4. pct is a's share of what is left after the bar ---
-(: bs (wharf-lay '(beside 25 1 2) 24 80)
- _ (test (19 = wharf-cols <bs) (60 = wharf-cols <>bs)))
+(wharf-lay '(beside 25 1 2) 24 80 @ bs
+ (test (19 = wharf-cols <bs) (60 = wharf-cols <>bs)))
 
 ; --- 5. nesting: a plan is a tree, and the halves divide what they were handed ---
 (: p '(beside 50 1 (stack 50 2 3))
@@ -86,35 +79,35 @@
     (2 = #b2)))                          ; and it is still in the list
 
 ; --- 7. the hit test: bars belong to nobody ---
-(: bs (wharf-lay '(beside 50 1 (stack 50 2 3)) 24 80)
- _ (test
-    (1 = wharf-at bs 0 0)
-    (() = wharf-at bs 0 39)                   ; the bar's own column
-    (2 = wharf-at bs 0 40)
-    (3 = wharf-at bs 12 40)
-    (() = wharf-at bs 11 40)                  ; the across bar between 2 and 3
-    (() = wharf-at bs 99 99)
-    ; a zero-extent berth claims nothing, even the cell it is seated on -- asked
-    ; alone, because its showable sibling covers that corner and answers first
-    (() = wharf-at (drop 1 (wharf-lay '(beside 50 1 2) 24 2)) 0 0)))
+(wharf-lay '(beside 50 1 (stack 50 2 3)) 24 80 @ bs
+ (test
+  (1 = wharf-at bs 0 0)
+  (() = wharf-at bs 0 39)                   ; the bar's own column
+  (2 = wharf-at bs 0 40)
+  (3 = wharf-at bs 12 40)
+  (() = wharf-at bs 11 40)                  ; the across bar between 2 and 3
+  (() = wharf-at bs 99 99)
+  ; a zero-extent berth claims nothing, even the cell it is seated on -- asked
+  ; alone, because its showable sibling covers that corner and answers first
+  (() = wharf-at (drop 1 (wharf-lay '(beside 50 1 2) 24 2)) 0 0)))
 
 ; --- 8. steering: nearest past the edge, other axis overlapping ---
 ; the wall is a no-op rather than a condition, and so is a focus that has been shut.
-(: bs (wharf-lay '(beside 50 1 (stack 50 2 3)) 24 80)
- _ (test
-    (2 = wharf-steer bs 1 'right)             ; ties on gap break to the nearer row
-    (1 = wharf-steer bs 2 'left)
-    (1 = wharf-steer bs 3 'left)              ; one tall berth reached from either
-    (3 = wharf-steer bs 2 'down)
-    (2 = wharf-steer bs 3 'up)
-    (1 = wharf-steer bs 1 'left)              ; the wall
-    (3 = wharf-steer bs 3 'right)
-    (2 = wharf-steer bs 2 'up)
-    (99 = wharf-steer bs 99 'left)))          ; a stale id steers nowhere
+(wharf-lay '(beside 50 1 (stack 50 2 3)) 24 80 @ bs
+ (test
+  (2 = wharf-steer bs 1 'right)             ; ties on gap break to the nearer row
+  (1 = wharf-steer bs 2 'left)
+  (1 = wharf-steer bs 3 'left)              ; one tall berth reached from either
+  (3 = wharf-steer bs 2 'down)
+  (2 = wharf-steer bs 3 'up)
+  (1 = wharf-steer bs 1 'left)              ; the wall
+  (3 = wharf-steer bs 3 'right)
+  (2 = wharf-steer bs 2 'up)
+  (99 = wharf-steer bs 99 'left)))          ; a stale id steers nowhere
 
 ; --- 8a. an unshowable berth is never steered to ---
-(: bs (wharf-lay '(beside 50 1 2) 24 2)
- _ (test (1 = wharf-steer bs 1 'right)))
+(wharf-lay '(beside 50 1 2) 24 2 @ bs
+ (test (1 = wharf-steer bs 1 'right)))
 
 ; --- 9. splitting names the new berth, and leaves the rest of the plan alone ---
 (: _ (test
@@ -123,13 +116,13 @@
       ('(beside 50 1 2) = wharf-split '(beside 50 1 2) 99 'stack 50 5)))
 
 ; --- 10. shutting promotes the sibling: the pair's whole rectangle, bar included ---
-(: p (wharf-shut '(beside 50 1 (stack 50 2 3)) 2)
- _ (test
-    ('(beside 50 1 3) = p)
-    ('((1 0 0 24 39) (3 0 40 24 40)) = wharf-lay p 24 80)
-    (() = wharf-shut 7 7)                     ; the last one leaves an empty wharf
-    ('(beside 50 1 2) = wharf-shut '(beside 50 1 2) 99)
-    (1 = wharf-shut '(beside 50 1 2) 2)))
+(wharf-shut '(beside 50 1 (stack 50 2 3)) 2 @ p
+ (test
+  ('(beside 50 1 3) = p)
+  ('((1 0 0 24 39) (3 0 40 24 40)) = wharf-lay p 24 80)
+  (() = wharf-shut 7 7)                     ; the last one leaves an empty wharf
+  ('(beside 50 1 2) = wharf-shut '(beside 50 1 2) 99)
+  (1 = wharf-shut '(beside 50 1 2) 2)))
 
 ; --- 10a. the empty wharf holds nothing, and is not a berth named () ---
 (: _ (test

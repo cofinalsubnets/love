@@ -1,4 +1,4 @@
-; --- test/host/chem.l: chem (src/apps/kore/chem.l), the laws without groff at hand ---
+; test/host/chem.l -- chem (src/apps/kore/chem.l), the laws without groff at hand
 ; the prelude and chem.pic's copy once, a moiety's width and subscripts, a bond's corners, a
 ; ring's vertices in chem's own degrees, heterocycles chopped at their atoms; then chem as a
 ; command. test/gate/chem.sh holds it to groff's own, byte for byte.
@@ -6,12 +6,12 @@
 (borrow 'posix)
 (: K (cite 'kore)
    run (K 'ch-run)
-   (chem t) (: r (run ["-"] t) (? (<r = 0) (r 1) ""))
+   (chem t) (run ["-"] t @ r (<r = 0 ? (r 1) ""))
    (has s p) (0 <= (K 'wg-find) s p 0)
-   love ((cwd 0) + "/out/love")
-   dir ((cwd 0) + "/out/.chemtest-" + show (getpid 0))
-   _ (hark ["rm" "-rf" dir]) _ (mkdir dir 448)
-   (put p s) (: q (open p "w") _ (say q s) (close q))
+   love (cwd 0 + "/out/love")
+   dir (cwd 0 + "/out/.chemtest-" + show (getpid 0))
+   _ (hark ["rm" "-rf" dir], mkdir dir 448)
+   (put p s) (open p "w" @ q (say q s, close q))
 
    ; -- the alkyl chain of the manual ----------------------------------------------------
    c1 (chem "a\n.cstart\nCH3\nbond\nC\ndouble bond up\nO\nbond right from C\nCH3\n.cend\nb\n.cstart\n.cend\n")
@@ -42,7 +42,7 @@
    _ (put f ".cstart\nbenzene\nbond 30 ; OH\n.cend\n")
    r1 (hark [love "kore" "chem" f])
    r2 (hark [love "kore" "chem" (dir + "/none.chem")])
-   _ (test (<r1 = 0) (has >r1 "#bond 30 ; OH\nLast: bond(0.2, 30, from Last.V1.ne )\n")
-           (<r2 = 1))
-   _ (hark ["rm" "-rf" dir]))
+   (test (<r1 = 0) (has >r1 "#bond 30 ; OH\nLast: bond(0.2, 30, from Last.V1.ne )\n")
+         (<r2 = 1),
+    hark ["rm" "-rf" dir]))
 (test_fin (), puts "chem: ok", putc 10, 0)

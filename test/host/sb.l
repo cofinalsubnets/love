@@ -1,11 +1,7 @@
-; the svalbard gate (src/apps/sb/): a sandbox store driven end to end
-; (record / log / diff, tips + snap + deps + the content addresses). runs under
-; `make test_sb`: cat test/00-init.l this | out/love -- host nifs
-; (sha256, readdir, chdir), so it stays off the corpus like the other hostnif
-; tests. cwd is the repo root, and everything here happens inside out/.sbtest-PID,
-; the pid's own so two runs over one out/ keep apart, removed at the end.
-; the use below splices svalbard under the session layer: every internal reads
-; bare, and the test's own helpers stay above in the session.
+; test/host/sb.l -- the svalbard gate: a sandbox store driven end to end (record, log, diff, tips,
+; snap, deps, the content addresses) inside out/.sbtest-PID, removed at the end. borrow splices
+; svalbard under the session layer, so its internals read bare and the helpers here stay above.
+; run: make test_sb
 (borrow 'sb)
 (borrow 'kore)          ; sb splices the text floor below itself, so the session must ask for it too
 
@@ -53,7 +49,7 @@
  (seq (fld f2 'deps) [p1])                          ; the context reads p1's writes
  (3 = #(fld f2 'hunks))
  (seq (tips ()) [p2])                               ; p1 is no longer maximal
- !(elem "sub/b.txt" (: (go m acc) (two? m ? (go >m (<<m . acc)) acc)
+ (nelem "sub/b.txt" (: (go m acc) (two? m ? (go >m (<<m . acc)) acc)
                           (go (snap ()) ())))       ; the death left the snap
  (0 = sb-diff ()))                                   ; recorded = working again
 
@@ -92,8 +88,8 @@
  (elem pp (tips ()))                                ; and it opens a fresh tip
  (3 = #(tips ()))                                      ; p2 + p3 + pp, all maximal
  (4 = got)                                                ; p1 p2 p3 + the peer's pp
- ((<>(look "peer.txt")) = "from the other machine\n")  ; materialized into the working tree
- ((<>(look "a.txt")) = "one\ntwo point five\nthree\n") ; local edits untouched
+ (<>(look "peer.txt") = "from the other machine\n")  ; materialized into the working tree
+ (<>(look "a.txt") = "one\ntwo point five\nthree\n") ; local edits untouched
  (0 = sb-diff ())                                       ; working tree == the recomputed snap
  !(sb-record "noop"))                                   ; ...so nothing is left to record
 
@@ -130,29 +126,29 @@
 ;     order), a true overlap lands in markers and sync answers 0, and the
 ;     resolution is an ordinary record -- after which the clash is settled for
 ;     good. two nests under an ignored parent so the outer walk never sees them ---
-(: _ (mkdir "mrg" 493) _ (mkdir "mrg/a" 493)
+(: _ (mkdir "mrg" 493, mkdir "mrg/a" 493)
    _ (chdir "mrg/a")
    _ (lay "f" "one\ntwo\nthree\nfour\nfive\n")
    _ (mk ())
    _ (sb-record "the base")
-   _ (mkdir "../b" 493) _ (chdir "../b") _ (mk ())
+   _ (mkdir "../b" 493, chdir "../b", mk ())
    _ (sb-sync "../a")
    ; a moves the head, b moves the tail -- one file, disjoint regions
-   _ (chdir "../a") _ (lay "f" "ONE\ntwo\nthree\nfour\nfive\n") _ (sb-record "a: the head")
-   _ (chdir "../b") _ (lay "f" "one\ntwo\nthree\nfour\nFIVE\n") _ (sb-record "b: the tail")
+   _ (chdir "../a", lay "f" "ONE\ntwo\nthree\nfour\nfive\n", sb-record "a: the head")
+   _ (chdir "../b", lay "f" "one\ntwo\nthree\nfour\nFIVE\n", sb-record "b: the tail")
    gotm (sb-sync "../a")
-   mtext (<>(look "f"))
-   cfm (<>(derive-snap (readdir ".sb/patch")))
+   mtext <>(look "f")
+   cfm <>(derive-snap (readdir ".sb/patch"))
    ; now both move the same line -- a real overlap
-   _ (chdir "../a") _ (lay "f" "ONE\nA-TWO\nthree\nfour\nFIVE\n") _ (sb-record "a: two")
-   _ (chdir "../b") _ (lay "f" "ONE\nB-TWO\nthree\nfour\nFIVE\n") _ (sb-record "b: two")
+   _ (chdir "../a", lay "f" "ONE\nA-TWO\nthree\nfour\nFIVE\n", sb-record "a: two")
+   _ (chdir "../b", lay "f" "ONE\nB-TWO\nthree\nfour\nFIVE\n", sb-record "b: two")
    gotc (sb-sync "../a")
-   ctext (<>(look "f"))
-   cfc (<>(derive-snap (readdir ".sb/patch")))
+   ctext <>(look "f")
+   cfc <>(derive-snap (readdir ".sb/patch"))
    ; the resolution is just a record
    _ (lay "f" "ONE\nRESOLVED\nthree\nfour\nFIVE\n")
    _ (sb-record "resolve the overlap")
-   cfr (<>(derive-snap (readdir ".sb/patch")))
+   cfr <>(derive-snap (readdir ".sb/patch"))
    ndirty (dirty ())
    _ (chdir "../.."))
 
@@ -171,32 +167,32 @@
 ; --- the two sides that cannot line-merge: a delete meeting an edit keeps the
 ;     content (a deletion would be the one lossy answer), and flags it ---
 (: _ (chdir "mrg/a")
-   _ (lay "g" "keep\nme\n") _ (sb-record "g is born")
-   _ (chdir "../b") _ (sb-sync "../a")
-   _ (chdir "../a") _ (unlink "g") _ (sb-record "a: g dies")
-   _ (chdir "../b") _ (lay "g" "keep\nme too\n") _ (sb-record "b: g edited")
+   _ (lay "g" "keep\nme\n", sb-record "g is born")
+   _ (chdir "../b", sb-sync "../a")
+   _ (chdir "../a", unlink "g", sb-record "a: g dies")
+   _ (chdir "../b", lay "g" "keep\nme too\n", sb-record "b: g edited")
    gotd (sb-sync "../a")
    gtext (look "g")
-   cfd (<>(derive-snap (readdir ".sb/patch")))
+   cfd <>(derive-snap (readdir ".sb/patch"))
    _ (chdir "../.."))
 
 (test
  (0 = gotd)                                              ; a delete against an edit is a conflict
  (two? gtext)                                            ; the file is still there...
  (<>gtext = "keep\nme too\n")                          ; ...with the edit intact, not the deletion
- (1 = #(filter (\ e ("g" = <e)) cfd)))                   ; ...and g is named in the report
+ (1 = #(filter (e \ ("g" = <e)) cfd)))                   ; ...and g is named in the report
 
 ; --- sync is an exchange, not a fetch: one command settles both nests. the
 ;     derive is a pure function of the patch set, so two nests over one union
 ;     land on the same snap -- after a sync the trees are identical and the far
 ;     end needed no attendance. a peer that is dirty takes no push at all (its
 ;     store is left whole, never half-fed) and sync says so ---
-(: _ (mkdir "mrg/c" 493) _ (chdir "mrg/c") _ (mk ())
-   _ (lay "shared" "base\n") _ (sb-record "c: the base")
-   _ (mkdir "../d" 493) _ (chdir "../d") _ (mk ())
+(: _ (mkdir "mrg/c" 493, chdir "mrg/c", mk ())
+   _ (lay "shared" "base\n", sb-record "c: the base")
+   _ (mkdir "../d" 493, chdir "../d", mk ())
    _ (sb-sync "../c")
-   _ (lay "d-only" "from d\n") _ (sb-record "d: its own file")
-   _ (chdir "../c") _ (lay "c-only" "from c\n") _ (sb-record "c: its own file")
+   _ (lay "d-only" "from d\n", sb-record "d: its own file")
+   _ (chdir "../c", lay "c-only" "from c\n", sb-record "c: its own file")
    gotx (sb-sync "../d")                               ; one sync, run from c
    csnap (snap ()) cdirty (dirty ())
    dhere (look "d-only")                              ; d's file walked in
@@ -206,7 +202,7 @@
    _ (lay "scratch" "unrecorded\n")                   ; now dirty the peer
    _ (chdir "../c")
    nb4 #(readdir ".sb/patch")
-   _ (lay "late" "late work\n") _ (sb-record "c: late")
+   _ (lay "late" "late work\n", sb-record "c: late")
    goty (sb-sync "../d")
    dstore #(readdir "../d/.sb/patch")
    _ (chdir "../.."))
@@ -225,19 +221,19 @@
 ;     conflict. a named patch drags its DEP closure along: topo silently drops a
 ;     patch whose context-writer is absent, so leaving one behind would quietly
 ;     realize less than you asked for ---
-(: _ (mkdir "mrg/e" 493) _ (chdir "mrg/e") _ (mk ())
+(: _ (mkdir "mrg/e" 493, chdir "mrg/e", mk ())
    _ (lay "a" "v1\n") pa (sb-record "a born")
    _ (lay "a" "v2\n") pb (sb-record "a edited")
    ; "b" on purpose: a built-in ignore names it, and those are directory-only, so a
    ; file by that name is an ordinary file. this line is what says so.
    _ (lay "b" "x\n")  pc (sb-record "b born -- independent")
    n1 (sb-apply [pa])                                  ; checkout: the tree as OF pa
-   a1 (<>(look "a")) b1 (look "b")
+   a1 <>(look "a") b1 (look "b")
    n2 (sb-apply [pa pc])                               ; cherry-pick: pc taken, pb skipped
-   a2 (<>(look "a")) b2 (look "b")
+   a2 <>(look "a") b2 (look "b")
    n3 (sb-apply [pb])                                  ; the closure drags pa in behind pb
    n4 (sb-apply ())                                    ; no id: the way back
-   a4 (<>(look "a"))
+   a4 <>(look "a")
    bad (sb-apply '("deadbeef"))                        ; a prefix that resolves to nothing
    nstore #(readdir ".sb/patch")                ; read here -- the assert runs after the chdir back
    clean (dirty ())
@@ -258,21 +254,21 @@
 ;     rather than clobbered: base = what the patch wrote, ours = what is there
 ;     now, theirs = what it replaced -- so the later edits survive and only that
 ;     patch's write is lifted out. a true overlap records nothing ---
-(: _ (mkdir "mrg/u" 493) _ (chdir "mrg/u") _ (mk ())
-   _ (lay "f" "one\ntwo\nthree\n") _ (sb-record "base")
+(: _ (mkdir "mrg/u" 493, chdir "mrg/u", mk ())
+   _ (lay "f" "one\ntwo\nthree\n", sb-record "base")
    _ (lay "f" "one\nBAD\nthree\n") pbad (sb-record "the bad edit, line 2")
-   _ (lay "f" "one\nBAD\nTHREE!\n") _ (sb-record "later work, line 3")
+   _ (lay "f" "one\nBAD\nTHREE!\n", sb-record "later work, line 3")
    n0 #(readdir ".sb/patch")
    u1 (sb-undo [pbad])
-   ftext (<>(look "f"))
+   ftext <>(look "f")
    n1 #(readdir ".sb/patch")
    clean (dirty ())
    _ (lay "g" "born\n") pg (sb-record "g born")       ; a birth undone is a death
    u2 (sb-undo [pg])
    gone (look "g")
-   _ (lay "h" "a\nb\n") _ (sb-record "h base")        ; the overlap: same line, later patch
+   _ (lay "h" "a\nb\n", sb-record "h base")           ; the overlap: same line, later patch
    _ (lay "h" "a\nB2\n") pq (sb-record "h -> B2")
-   _ (lay "h" "a\nB3\n") _ (sb-record "h -> B3")
+   _ (lay "h" "a\nB3\n", sb-record "h -> B3")
    n2 #(readdir ".sb/patch")
    u3 (sb-undo [pq])
    n3 #(readdir ".sb/patch")
@@ -282,7 +278,7 @@
 (test
  (1 = u1)                                               ; the undo landed as a patch
  (ftext = "one\ntwo\nTHREE!\n")                        ; the bad edit lifted, the later work kept
- (n1 = (n0 + 1))                                        ; ...by growing the store, never shrinking it
+ (n1 = n0 + 1)                                        ; ...by growing the store, never shrinking it
  (0 = clean)                                            ; ...and the tree matches the snap after
  (1 = u2) !(two? gone)                                  ; a birth undone leaves no file
  !u3                                                    ; a true overlap answers 0...
@@ -294,14 +290,14 @@
 ;     ordinary parallel work looks like, not a fork to repair. a ref freezes the
 ;     tip set instead -- the head DAG state whatever its shape, and the same
 ;     thing psid hashes, so a release and its goods line up ---
-(: _ (mkdir "mrg/k" 493) _ (chdir "mrg/k") _ (mk ())
-   _ (lay "a" "1\n") _ (sb-record "a born")
-   _ (lay "b" "2\n") _ (sb-record "b born -- independent, so BOTH stay tips")
+(: _ (mkdir "mrg/k" 493, chdir "mrg/k", mk ())
+   _ (lay "a" "1\n", sb-record "a born")
+   _ (lay "b" "2\n", sb-record "b born -- independent, so BOTH stay tips")
    ntip #(tips ())
    b1 (sb-bank '("v1"))
    b2 (sb-bank '("v1"))                                ; the same head again: idempotent
    r1 (refof "v1")
-   _ (lay "c" "3\n") _ (sb-record "work after the release")
+   _ (lay "c" "3\n", sb-record "work after the release")
    b3 (sb-bank '("v1"))                                ; a different head: immutable, refuses
    b4 (sb-bank '("v2"))
    n1 (sb-apply '("v1"))                               ; realize the release by NAME
@@ -328,16 +324,16 @@
 ;     the same name at the same head is idempotent; at different heads it is a
 ;     human error, since a banked name is immutable and neither nest may repoint
 ;     the other's -- so each side keeps its own and the clash is told once ---
-(: _ (mkdir "mrg/r" 493) _ (mkdir "mrg/r/l" 493) _ (chdir "mrg/r/l") _ (mk ())
-   _ (lay "f" "base\n") _ (sb-record "base") _ (sb-bank '("v1"))
-   _ (mkdir "../d" 493) _ (chdir "../d") _ (mk ())
+(: _ (mkdir "mrg/r" 493, mkdir "mrg/r/l" 493, chdir "mrg/r/l", mk ())
+   _ (lay "f" "base\n", sb-record "base", sb-bank '("v1"))
+   _ (mkdir "../d" 493, chdir "../d", mk ())
    got (sb-sync "../l")
    travelled (refof "v1")                                ; ...it arrived, unbanked here
    n1 (sb-apply '("v1"))                               ; ...and realizes by NAME
    ; now bank the same name on each side at different heads
-   _ (lay "g" "d\n") _ (sb-record "d work") _ (sb-bank '("rel"))
+   _ (lay "g" "d\n", sb-record "d work", sb-bank '("rel"))
    drel (refof "rel")
-   _ (chdir "../l") _ (lay "h" "l\n") _ (sb-record "l work") _ (sb-bank '("rel"))
+   _ (chdir "../l", lay "h" "l\n", sb-record "l work", sb-bank '("rel"))
    lrel (refof "rel")
    clash (sb-sync "../d")
    lkept (refof "rel")                                   ; l kept its rel...
@@ -355,15 +351,15 @@
 ; --- a hostile peer: its patch hashes honestly but names a path out of the tree and
 ;     a blob id that is a path. the patch is refused whole -- not copied, not laid,
 ;     and refused again when planted in the store by hand ---
-(: _ (mkdir "mrg/h" 493) _ (mkdir "mrg/h/a" 493) _ (lay "mrg/h/secret" "the key\n")
-   _ (chdir "mrg/h/a") _ (mk ())
+(: _ (mkdir "mrg/h" 493, mkdir "mrg/h/a" 493, lay "mrg/h/secret" "the key\n")
+   _ (chdir "mrg/h/a", mk ())
    bh (keep "pwned\n")
    ptext ("(patch (note \"evil\") (time 0) (deps) (hunks (\"stolen\" () \"../../../secret\")"
           + " (\"../escaped\" () \"" + bh + "\")))")
    pid (sha256 ptext)
    _ (lay (".sb/patch/" + pid) ptext)
    _ (lay ".sb/tips" ("(\"" + pid + "\")"))
-   _ (mkdir "../b" 493) _ (chdir "../b") _ (mk ())
+   _ (mkdir "../b" 493, chdir "../b", mk ())
    _ (sb-sync "../a")
    hcopied (look (".sb/patch/" + pid))
    hstolen (look "stolen")
@@ -387,9 +383,9 @@
 ; --- a ledger: the one value here that moves, and only by compare-and-swap. it moves
 ; from what it stands at, every entry stays, a live holder's lock is waited on and a dead
 ; one's taken, and sync carries patches, blobs and refs but never a ledger ---
-(: _ (mkdir "mrg/g" 493) _ (mkdir "mrg/g/a" 493) _ (mkdir "mrg/g/b" 493)
-   _ (chdir "mrg/g/a") _ (mk ())
-   _ (lay "v1" "row 1\n") _ (lay "v2" "row 1\nrow 2\n")
+(: _ (mkdir "mrg/g" 493, mkdir "mrg/g/a" 493, mkdir "mrg/g/b" 493)
+   _ (chdir "mrg/g/a", mk ())
+   _ (lay "v1" "row 1\n", lay "v2" "row 1\nrow 2\n")
    made (lg-swap "queue/main" "none" "v1")
    h1 (lg-now "queue/main")
    stale (lg-swap "queue/main" "none" "v2")                 ; it no longer stands at none
@@ -399,17 +395,17 @@
    held (: _ (mkdir ".sb/ledger/queue/main.lock" 448)
            _ (lay ".sb/ledger/queue/main.lock/pid" (show (getpid 0)))    ; a live holder: us
            r (lg-lock "queue/main" 2)
-           _ (lg-unlock "queue/main")
-           r)
+           (lg-unlock "queue/main",
+            r))
    taken (: _ (mkdir ".sb/ledger/queue/main.lock" 448)
             _ (lay ".sb/ledger/queue/main.lock/pid" "999999")           ; a gone one
             r (lg-lock "queue/main" 2)
-            _ (lg-unlock "queue/main")
-            r)
+            (lg-unlock "queue/main",
+             r))
    log (lg-lines "queue/main")
    names (lg-names ".sb/ledger" "")
-   _ (lay "f.txt" "a patch to carry\n") _ (sb-record "the carried one")
-   _ (chdir "../b") _ (mk ())
+   _ (lay "f.txt" "a patch to carry\n", sb-record "the carried one")
+   _ (chdir "../b", mk ())
    _ (sb-sync "../a")
    carried (look "f.txt")
    theirs (lg-now "queue/main")

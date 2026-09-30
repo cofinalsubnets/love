@@ -1,4 +1,4 @@
-; --- test/host/salt.l: salt, the config door (src/apps/libra/salt.l) ------------------
+; test/host/salt.l -- salt, the config door (src/apps/libra/salt.l)
 ; the files are the interesting part, so this writes real ones under out/ and
 ; reads them back. `salt-file` is the testable unit -- it takes the path, so a
 ; test never has to fake HOME or depend on whose machine it runs on. run
@@ -9,20 +9,20 @@
 
 ; every path this lays is the pid's own, so two runs over one out/ keep apart
 (: st-dir ("out/.salt-" + show (getpid 0))
-   _ (mkdir "out" 493) _ (mkdir st-dir 493)
+   _ (mkdir "out" 493, mkdir st-dir 493)
    (st-put nm text) (: p (st-dir + "/" + nm)
                        q (open p "w")
-                       _ (say q text)
-                       _ (close q)
-                       p)
+                       (say q text,
+                        close q,
+                        p))
    st-gone (st-dir + "/no-such-file.l"))
 
 ; --- one file ---------------------------------------------------------------
 ; a setting is `(key operand ..)`: the head names it, the tail is the value.
 (: st-a (st-put "a.l" "(singleton 1)\n(deprecated old-thing (worse \"say better\"))\n"))
 (test
- (: c (salt-file st-a {})
-    (&& (1 = (salt-one c 'singleton 0))
+ (salt-file st-a {} @ c
+    (&& (1 = salt-one c 'singleton 0)
         (2 = #(salt-all c 'deprecated))
         ('old-thing = <(salt-all c 'deprecated)))))
 
@@ -34,7 +34,7 @@
 (test
  (: c (salt-file st-q {})
     v (salt-one c 'danger ())
-    (two? v && ('quit = <v))))
+    (two? v && 'quit = <v)))
 
 ; --- presence is the open -------------------------------------------------
 ; an absent file and an empty one both mean "no overrides", and neither may
@@ -42,8 +42,8 @@
 ; good thing for a config file to be -- the question is whether it opened.)
 (: st-e (st-put "empty.l" ""))
 (test
- (: c (salt-file st-e (salt-file st-a {})) (1 = (salt-one c 'singleton 0)))
- (: c (salt-file st-gone (salt-file st-a {})) (1 = (salt-one c 'singleton 0)))
+ (salt-file st-e (salt-file st-a {}) @ c (1 = salt-one c 'singleton 0))
+ (salt-file st-gone (salt-file st-a {}) @ c (1 = salt-one c 'singleton 0))
  !(salt-all (salt-file st-e {}) 'singleton)
  !(salt-all (salt-file st-gone {}) 'singleton))
 
@@ -54,42 +54,42 @@
 ; for the tree's own.)
 (: st-b (st-put "b.l" "(singleton 0)\n"))
 (test
- (: c (salt-file st-b (salt-file st-a {}))
-    ((0 = (salt-one c 'singleton 9)) && (2 = #(salt-all c 'deprecated))))         ; untouched
- (: c (salt-file st-a (salt-file st-b {}))
-    (1 = (salt-one c 'singleton 9))))                    ; ...and the other way round
+ (salt-file st-b (salt-file st-a {}) @ c
+    (0 = salt-one c 'singleton 9 && 2 = #(salt-all c 'deprecated)))         ; untouched
+ (salt-file st-a (salt-file st-b {}) @ c
+    (1 = salt-one c 'singleton 9)))                    ; ...and the other way round
 
 ; --- a form that is not a setting is simply not a setting ------------------
 ; a typo must not take the tool down, and half a config is better than none:
 ; the bad forms are skipped in silence and everything around them still lands.
 (: st-j (st-put "junk.l" "loose-symbol\n42\n\"a string\"\n(singleton 1)\n((f x) 2)\n(deprecated a)\n"))
 (test
- (: c (salt-file st-j {})
-    ((1 = (salt-one c 'singleton 0)) && (1 = #(salt-all c 'deprecated)))))
+ (salt-file st-j {} @ c
+    (1 = salt-one c 'singleton 0 && 1 = #(salt-all c 'deprecated))))
 
 ; ...and a dropped paren ends the read rather than spinning on it: `sound`
 ; answers `torn` on an unfinished shape, which is a third thing to catch --
 ; not a datum and not the clean end.
 (: st-t (st-put "trunc.l" "(singleton 1)\n(deprecated foo\n"))
 (test
- (: c (salt-file st-t {})
-    ((1 = (salt-one c 'singleton 0)) && !(salt-all c 'deprecated))))
+ (salt-file st-t {} @ c
+    (1 = salt-one c 'singleton 0 && !(salt-all c 'deprecated))))
 
 ; --- reading a setting ------------------------------------------------------
 ; salt-all cannot tell an absent key from one written with no operand -- both
 ; are () -- so a switch is `(singleton 1)`, never a bare `(singleton)`.
 (: st-n (st-put "none.l" "(singleton)\n"))
 (test
- (: c (salt-file st-n {})
-    (!(salt-all c 'singleton) && ('dflt = (salt-one c 'singleton 'dflt))))
- (: c (salt-file st-a {})
-    (('dflt = (salt-one c 'never-written 'dflt)) && !(salt-all c 'never-written))))
+ (salt-file st-n {} @ c
+    (!(salt-all c 'singleton) && 'dflt = salt-one c 'singleton 'dflt))
+ (salt-file st-a {} @ c
+    ('dflt = salt-one c 'never-written 'dflt && !(salt-all c 'never-written))))
 
 ; the roster lane: an entry is either a bare name or `(name "hint"), and the
 ; answer is the entry wrapped -- presence out of band, since a bare name nets
 ; whatever its spelling nets and could not say "found" on its own.
 (test
- (: c (salt-file st-a {})
+ (salt-file st-a {} @ c
     (&& (two? (salt-has? c 'deprecated 'old-thing))
         ('old-thing = <>(salt-has? c 'deprecated 'old-thing))
         (two? (salt-has? c 'deprecated 'worse))

@@ -1,25 +1,8 @@
-; --- test/host/parked.l: many tasks parked on many fds, and the wake finds them --
-; not in hostnif_tests: this is the program test/host/run.l runs as a bounded
-; subprocess, because its regression is a hang and a gate that wedges is worse
-; than one that fails -- so the checks are `assert`, not `test`, which is a
-; missing name with no harness catted in. the law it carries:
-;
-;   the scheduler used to fold every parked task's fd into an `int fds[8]` on its
-;   own C frame and silently drop the rest, so a ninth parked task with no timer
-;   pending could not wake the wait at all. kiosko twirls a task per client, so
-;   that was a live hang in shipped code. love.c holds no fd array now (love.h's
-;   arm/go: the fds go to the frontend one at a time), so the only bound is the
-;   frontend's own storage -- the host's pollfd vector, which grows.
-;
-; the shape that reaches the wait: every task parked and no timer running, so
-; nothing is runnable and the scheduler must actually sleep on the fd set. the
-; wake therefore has to come from outside the process -- a task that wakes a peer
-; is itself runnable, and find_runnable answers before the wait is ever entered.
-; and no `rest` anywhere: a timer bounds the wait, which would turn the dropped
-; fd from a hang into a latency and the law would pass over the bug.
-;
-; the target is the first-twirled task -- tasks are prepended to the ring, so it
-; sits furthest from the walking head and is the one the old cap dropped first.
+; test/host/parked.l -- many tasks parked on many fds, and the wake finds them all. run by
+; test/host/run.l as a bounded subprocess, since the regression is a hang; checks are `assert`.
+; every task parked and no timer running, so the scheduler must really sleep on the fd set and the
+; wake comes from outside the process; no `rest` anywhere, or a dropped fd is a latency, not a hang.
+; the target is the first-twirled task, the one furthest from the ring's head.
 (: (mk k acc) (k = 0 ? acc (mk (k - 1) (. (pipe 0) acc)))
    ps (mk 16 ())
    q (pipe 0)
@@ -28,17 +11,17 @@
 
    ; the write ends stay open here. close one and its reader gets the end of the
    ; stream instead of parking, and the whole shape evaporates.
-   _ (each ps (\ p (twirl (\ _ (: r (fdopen <p)
-                                  _ (see r)
-                                  _ (say qw "x")
-                                  (flush qw))) ())))
+   _ (each ps (p \ (twirl (_ \ (fdopen <p @ r
+                                (see r,
+                                 say qw "x",
+                                 flush qw))) ())))
 
    ; the one byte from outside, a second from now: by then all 17 are parked.
    pid (spawnio ["sh" "-c" "sleep 1; printf x"] 0 ><ps 2 [] -1 0)
 
    b (see qr)                      ; parks; only the woken peer's byte releases it
-   _ (wait pid)
-   _ (assert (b = 120)))
+   (wait pid,
+    assert (b = 120)))
 
 ; --- defect 6: readiness is asked of an FD, but the bytes live in the port -----
 ; a task parked on a quiet fd over a buffer another task's gulp filled used to
@@ -54,13 +37,13 @@
 ; to say, over a buffer holding its byte -- and `catch` hangs instead of reaping.
 (: p (pipe 0)
    r (fdopen <p)               ; one heap port; the write end stays a bare fd
-   t (twirl (\ _ (see r)) ())
+   t (twirl (_ \ (see r)) ())
    _ (rest 20)                      ; t reaches its park before anything is written
    pid (spawnio ["sh" "-c" "sleep 0.3; printf AB"] 0 >p 2 [] -1 0)
    a (see r)
    b (catch t)                      ; hangs with the port half of the test taken out
-   _ (wait pid)
-   _ (assert (a = 65) (b = 66)))    ; one byte each, in order
+   (wait pid,
+    assert (a = 65) (b = 66)))    ; one byte each, in order
 
 ; --- the same defect at the entry: await asked the fd alone --------------------
 ; a port holding bytes is readable however quiet its fd is (love.c, bio_of's park
@@ -88,14 +71,14 @@
 (: p3 (pipe 0)
    r3 (fdopen <p3)
    (spin n) (n < 1 ? 0 (spin (n - 1)))
-   t3 (twirl (\ _ (see r3)) ())
+   t3 (twirl (_ \ (see r3)) ())
    _ (rest 30)                      ; t3 reaches its park before the compute starts
-   c1 (twirl (\ _ (spin 4000000)) ())
-   c2 (twirl (\ _ (spin 4000000)) ())
+   c1 (twirl (_ \ (spin 4000000)) ())
+   c2 (twirl (_ \ (spin 4000000)) ())
    pid3 (spawnio ["sh" "-c" "sleep 0.2; printf Z"] 0 >p3 2 [] -1 0)
    got (catch t3)                   ; never returns if the parked peer starves
-   _ (wait pid3)
-   _ (freeze c1) _ (freeze c2)
-   _ (assert (got = 90)))
+   (wait pid3,
+    freeze c1, freeze c2,
+    assert (got = 90)))
 
 (puts "parked: ok\n")

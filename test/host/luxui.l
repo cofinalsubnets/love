@@ -1,44 +1,35 @@
-; --- test/host/luxui.l: lux end to end under a headless X ---
-; not in the test/*.l corpus (connect/tether are src/love/*.c). spawns an Xvfb,
-; sails the real lux driver (the same eight modules `make install` cats into
-; bin/lux) as one child, then a probe (test/host/luxui-probe.l) as another: the
-; probe drives synthetic input -- xtest FakeInput for the super+drags, SendEvent
-; ClientMessages for the EWMH requests -- and asserts every effect off
-; GetGeometry/GetProperty/GetInputFocus, exiting 0 iff all held. two processes
-; on purpose: lux's stream and the probe's never share a socket, so neither
-; can desync the other.
-;
-;   cat test/00-init.l test/host/luxui.l | out/love
-;
-; no Xvfb on the box -> a polite skip (the sentinel still prints).
+; test/host/luxui.l -- lux end to end under a headless X: an Xvfb, the real lux driver as one
+; child and test/host/luxui-probe.l as another, never sharing a socket so neither can desync the
+; other. no Xvfb -> a polite skip, the sentinel still printed.
+; run: cat test/00-init.l test/host/luxui.l | out/love
 
 ; the display number off Xvfb's -displayfd stdout: take the first line that is
 ; entirely digits (server chatter shares the pty).
 (: xv (tether ["Xvfb" "-displayfd" "1" "-screen" "0" "640x480x24" "-nolisten" "tcp"])
-   (wfx p) (: g2 (gather p) (two? g2 ? g2 (rest 2, wfx p)))
+   (wfx p) (gather p @ g2 (two? g2 ? g2 (rest 2, wfx p)))
    camp {}
    (enlist k pid) (pin camp k pid)
-   (strike _) (map (k \ (: p (camp k)
-                           _ (charm? p ? (still p 15, wfx p)) 0))
+   (strike _) (map (k \ (camp k @ p
+                         ((charm? p ? (still p 15, wfx p)), 0)))
                    (keys camp))
    (must tag v) (v ? v (strike (),
                         puts "luxui: FAIL ", putx tag, putc 10,
                         quit 1))
- _ ((atom? xv) ? (puts "luxui: ok (no Xvfb, skipped)", quit 0))
+ _ (atom? xv ? (puts "luxui: ok (no Xvfb, skipped)", quit 0))
  _ (enlist 'xv <xv)
  (rdnum p) (:- (go 0 0) (go n st)
             (see p @ -1 () 13 (go n st) 10 (st @ 1 n (go 0 0))
                      c (48 <= c < 58 ? (st @ 2 (go 0 2) (go (10 * n + c - 48) 1))
                                        (go 0 2))))
  dn (rdnum >xv)
- _ (must 'display (charm? dn && (atom? (gather <xv))))
+ _ (must 'display (charm? dn && atom? (gather <xv)))
  dpy ("/tmp/.X11-unix/X" + show dn)
 
  ; a dead moor socket -- what an exec'd restart or a dead Xephyr session leaves,
  ; bound and closed so it refuses connects -- must fall to lux's sweep at moor start
- rdir (: rd (getenv "XDG_RUNTIME_DIR") (1 < #rd ? rd "/tmp"))
+ rdir (getenv "XDG_RUNTIME_DIR" @ rd (1 < #rd ? rd "/tmp"))
  stale "lux-luxui-stale.sock"
- _ (: p (listen ['unix (rdir + "/" + stale)]) (hot? p ? (close p)))
+ _ (listen ['unix (rdir + "/" + stale)] @ p (hot? p ? (close p)))
  _ (must 'stale-planted (any (= stale) (readdir rdir)))
 
  ; the real driver, the same modules bin/lux ships. HOME rides a scratch seat so
@@ -64,13 +55,13 @@
  g (wfx <pr)
  _ (pull camp 'pr 0)
  (echo p) (see p @ -1 0 c (putc c, echo p))
- _ (echo >pr)
- _ (close >pr)
- _ (must 'probe-clean (0 = <g))
- _ (must 'swept !(any (= stale) (readdir rdir)))
+ (echo >pr,
+  close >pr,
+  must 'probe-clean (0 = <g),
+  must 'swept !(any (= stale) (readdir rdir)),
 
- _ (strike ())
- _ (close >ph) _ (close >xv)
- _ (hark ["rm" "-rf" luxhome])
- _ (test_fin ())
- (puts "luxui: ok"))
+  strike (),
+  close >ph, close >xv,
+  hark ["rm" "-rf" luxhome],
+  test_fin (),
+  puts "luxui: ok"))

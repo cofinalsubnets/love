@@ -1,18 +1,7 @@
-; --- test/host/sbhttp.l: svalbard pulling a store over a real socket ---
-; not in the test/*.l corpus: the socket nifs live in src/love/sock.c, which love0 does
-; not link, and this loads two crew files and splices their modules.
-;
-; the whole thing runs in one process, test/host/kiosko.l's shape: kiosko twirled
-; onto a listener over the origin nest's .sb/, svalbard.s client in the main task,
-; the two interleaving through the cooperative scheduler. so this is a real HTTP
-; pull off a real socket, and the two crew members meet the way they would in
-; anger -- love serving love.
-;
-; what it proves is the claim the design rests on: an sb remote needs no server
-; logic. the store is content-addressed and immutable, there is no listing
-; endpoint, and the walk discovers everything by reading what it already fetched
-; -- /tips names the heads, each patch names its `deps` and its `hunks`. an
-; empty blob rides through too, which is the case that found kiosko's 404.
+; test/host/sbhttp.l -- svalbard pulling a store over a real socket, kiosko serving the origin's
+; .sb/ in the same process. the claim: an sb remote needs no server logic -- the store is
+; content-addressed and immutable, with no listing, and the walk finds everything through what
+; it already fetched (/tips, then each patch's deps and hunks). an empty blob rides through too.
 (borrow 'sb)                                 ; the baked module: the whole stack, spliced
 (borrow 'kiosko)
 
@@ -23,7 +12,7 @@
    ; every path this lays is the pid's own, so two runs over one out/ keep apart
    root ("out/.sbhttp-" + show (getpid 0))
    _ (mkdir root 493)
-   _ (mkdir (root + "/origin") 493) _ (mkdir (root + "/clone") 493)
+   _ (mkdir (root + "/origin") 493, mkdir (root + "/clone") 493)
    home (cwd 0)
    ; the server task shares this process's cwd, and the client chdirs into the
    ; clone before pulling -- so the root it serves must be absolute
@@ -31,9 +20,9 @@
    ; --- the origin nest: a nested path and an empty file, then a release ---
    _ (chdir (root + "/origin"))
    _ (mkdir "sub" 493)
-   _ (lay "a.txt" "v1\n") _ (lay "sub/b.txt" "nested\n") _ (lay "empty.txt" "")
-   _ (mk ()) _ (record "first")
-   _ (lay "a.txt" "v2\n") _ (record "second")
+   _ (lay "a.txt" "v1\n", lay "sub/b.txt" "nested\n", lay "empty.txt" "")
+   _ (mk (), record "first")
+   _ (lay "a.txt" "v2\n", record "second")
    _ (bank '("v1"))
    nblob #(readdir ".sb/blob")
    _ (chdir home)
@@ -41,10 +30,10 @@
    pl (test-listen 0)
    port <pl
    l (pl 1)
-   srv (twirl (\ _ ((: (g k) (: _ (await l)
+   srv (twirl (_ \ ((: (g k) (: _ (await l)
                                 c (accept l)
-                                _ (hot? c ? (cite 'kiosko 'serve1 oroot () c, close c))
-                                (g k)))
+                                ((hot? c ? (cite 'kiosko 'serve1 oroot () c, close c)),
+                                 g k)))
                     0)) 0)
    ; --- the pull, from a nest that has never seen the origin ---
    _ (chdir (root + "/clone"))

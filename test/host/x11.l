@@ -1,4 +1,4 @@
-; --- test/host/x11.l: the x11 colour names (src/apps/x11.l) --------------------------------
+; test/host/x11.l -- the x11 colour names (src/apps/x11.l)
 ;   cat test/00-init.l test/host/x11.l | out/love
 (borrow 'x11)
 (test ("#f0fff0" = x11 "honeydew")

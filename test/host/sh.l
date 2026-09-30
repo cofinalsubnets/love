@@ -1,10 +1,6 @@
-; --- test/host/sh.l: lush's gate -- the lexer / grammar / expansion / glob pure
-; functions, the job-control nifs (signal / wait's stop lane / sigfd's signal
-; list: doc/misc/posix.md step 4, signals arriving as conditions), and the built
-; shell driven end to end through out/love (never env's PATH love). the
-; interactive loop needs a pty (probed live, the berth pattern); everything
-; beneath it gates headless here. the one file reads bare; its seat stays
-; quiet under the corpus (no lush on cmdline).
+; test/host/sh.l -- lush's gate: the lexer, grammar, expansion and glob, the job-control nifs
+; (signal, wait's stop lane, sigfd), and the built shell driven end to end through out/love, never
+; env's PATH love. the interactive loop wants a pty and is probed live. its seat stays quiet here.
 ; run: cat test/00-init.l test/host/sh.l | out/love
 (reads (open "src/apps/lush.l" "r"))
 (borrow 'lush) ; the parts just registered module 'lush -- the laws below read it spliced
@@ -13,9 +9,9 @@
 ; the lexer: glued operators, io-numbers out of band ((), or (n) attached),
 ; quotes as segments, # comments, the 'more protocol on an unfinished shape.
 ; (the reader has no dotted-pair syntax, so expecteds are BUILT, not quoted.)
-(: lw (\ s ('w . [('lit . s)]))
-   rdt (\ ion o ('rd . ion . o))
-   opt (\ o ('op . o))
+(: lw (s \ ('w . [('lit . s)]))
+   rdt (ion \ o \ ('rd . ion . o))
+   opt (o \ ('op . o))
    (test
     ([1 (lw "a") (lw "b")] = sh-lex " a  b ")
     ([1 ('w . [('sq . "x  y")])] = sh-lex "'x  y'")
@@ -52,7 +48,7 @@
 ; (sh-show (sh-read s)) is a canonical s and not s. sh-read here is sh-lex plus
 ; sh-fields, the whole path a word takes to argv -- tilde, parameters, splitting,
 ; glob, quote removal -- so a quote that only fools the lexer still fails here.
-(: (sh-read s) (: lx (sh-lex s)
+(: (sh-read s) (sh-lex s @ lx
                   (<lx != 1 ? ['lex <lx]
                    (catmap (t \ (<t != 'w ? ['tok <t] (sh-fields >t))) >lx)))
    ; bytes 1 to 126, alone and buried in a word (a shell word holds no NUL, and
@@ -68,22 +64,22 @@
     ; the sweep: 271 words, each alone -- a filter and not `all`, so a failure
     ; names the words that failed rather than answering 0
     (() = filter (w \ (sh-read (sh-quote w)) != [w]) corpus)
-    ((sh-read (sh-show corpus)) = corpus)        ; ..and all of them as one line
+    (sh-read (sh-show corpus) = corpus)        ; ..and all of them as one line
     ; the spellings, so a change to the bare set reads as a diff and not a silence
-    ((sh-quote "") = "''")
-    ((sh-quote "abc") = "abc")
-    ((sh-quote "a b") = "'a b'")
-    ((sh-quote "a'b") = "'a'\\''b'")             ; the one byte '..' cannot hold
-    ((sh-quote "--port=8080") = "--port=8080")   ; an assignment's name is a name
-    ((sh-quote "a=b") = "'a=b'")                 ; ..and this one is, in command position
-    ((sh-quote "=x") = "'=x'")                   ; zsh reads a leading = as a command path
-    ((sh-quote "9x=1") = "9x=1")
-    ((sh-show []) = "") ((sh-show ["a"]) = "a") ((sh-show ["a" "b c"]) = "a 'b c'")
+    (sh-quote "" = "''")
+    (sh-quote "abc" = "abc")
+    (sh-quote "a b" = "'a b'")
+    (sh-quote "a'b" = "'a'\\''b'")             ; the one byte '..' cannot hold
+    (sh-quote "--port=8080" = "--port=8080")   ; an assignment's name is a name
+    (sh-quote "a=b" = "'a=b'")                 ; ..and this one is, in command position
+    (sh-quote "=x" = "'=x'")                   ; zsh reads a leading = as a command path
+    (sh-quote "9x=1" = "9x=1")
+    (sh-show [] = "") (sh-show ["a"] = "a") (sh-show ["a" "b c"] = "a 'b c'")
     ; a keyword at the head is syntax and not a command name, which sh-fields cannot
     ; see -- the parser can. quoted it is one simple command; plain it is not a
     ; command at all, and a later `in` needs nothing
-    ((sh-show ["if" "x"]) = "'if' x")
-    ((sh-show ["grep" "-w" "in" "f"]) = "grep -w in f")
+    (sh-show ["if" "x"] = "'if' x")
+    (sh-show ["grep" "-w" "in" "f"] = "grep -w in f")
     (<(sh-parse >(sh-lex (sh-show ["if" "x"]))) = 'ok)
     (<(sh-parse >(sh-lex "if x")) != 'ok)))
 
@@ -98,20 +94,20 @@
 (: pr (sh-parse >(sh-lex "a | b"))
    a >pr
    (test (<a = 'pipe) (2 = #(a 1))))
-(: pr (sh-parse >(sh-lex "! false"))
+((sh-parse >(sh-lex "! false")) @ pr
    (test (<>pr = 'not)))
 (test (<(sh-parse >(sh-lex "a &&")) = 'more)
         (<(sh-parse >(sh-lex "( x )")) = 'ok))
 
 ; rung 3: compounds parse (and stay 'more while open), ${..} lexes as vop,
 ; heredocs rewrite to <h with the body as the target word
-(: pr (sh-parse >(sh-lex "if a; then b; fi"))
+((sh-parse >(sh-lex "if a; then b; fi")) @ pr
    (test (<pr = 'ok) (<>pr = 'if)))
-(: pr (sh-parse >(sh-lex "while a; do b; done < f"))
+((sh-parse >(sh-lex "while a; do b; done < f")) @ pr
    (test (<pr = 'ok) (<>pr = 'rdr)))
-(: pr (sh-parse >(sh-lex "case x in a|b) c;; esac"))
+((sh-parse >(sh-lex "case x in a|b) c;; esac")) @ pr
    (test (<pr = 'ok) (<>pr = 'case)))
-(: pr (sh-parse >(sh-lex "f() { x; }"))
+((sh-parse >(sh-lex "f() { x; }")) @ pr
    (test (<pr = 'ok) (<>pr = 'fun)))
 (test (<(sh-parse >(sh-lex "if a; then b")) = 'more)
         (<(sh-parse >(sh-lex "for f in")) = 'more)
@@ -124,33 +120,33 @@
 
 ; rung 3, end to end through the built shell: control flow, functions,
 ; positionals, ${}, heredocs, subshells, set -u
-(: r (hark ["out/love" "out/lush" "-c" "for f in a b; do echo f=$f; done"])
+(hark ["out/love" "out/lush" "-c" "for f in a b; do echo f=$f; done"] @ r
    (test ("f=a\nf=b\n" = >r)))
-(: r (hark ["out/love" "out/lush" "-c" "f() { echo n=$# one=$1; return 3; }; f x y; echo rc=$?"])
+(hark ["out/love" "out/lush" "-c" "f() { echo n=$# one=$1; return 3; }; f x y; echo rc=$?"] @ r
    (test ("n=2 one=x\nrc=3\n" = >r)))
-(: r (hark ["out/love" "out/lush" "-c" "case q.l in *.c) echo c;; *.l) echo l;; esac"])
+(hark ["out/love" "out/lush" "-c" "case q.l in *.c) echo c;; *.l) echo l;; esac"] @ r
    (test ("l\n" = >r)))
-(: r (hark ["out/love" "out/lush" "-c" "p=a/b.l; echo ${p%.l} ${p#a/} ${U:-dflt} ${#p}"])
+(hark ["out/love" "out/lush" "-c" "p=a/b.l; echo ${p%.l} ${p#a/} ${U:-dflt} ${#p}"] @ r
    (test ("a/b b.l dflt 5\n" = >r)))
 ; IFS: unset is white space, "" splits nothing, its white space runs together, any other
 ; byte of it ends a field even an empty one; bare $@ / $* and a bare `for` field per
 ; positional; read splits on IFS too
-(: r (hark ["out/love" "out/lush" "-c" "IFS=:; x='a::b:'; for f in $x; do echo \"[$f]\"; done"])
+(hark ["out/love" "out/lush" "-c" "IFS=:; x='a::b:'; for f in $x; do echo \"[$f]\"; done"] @ r
    (test ("[a]\n[]\n[b]\n" = >r)))
-(: r (hark ["out/love" "out/lush" "-c" "IFS='|'; s='a b|c'; for f in $s; do echo \"[$f]\"; done; IFS=; for f in $s; do echo \"<$f>\"; done"])
+(hark ["out/love" "out/lush" "-c" "IFS='|'; s='a b|c'; for f in $s; do echo \"[$f]\"; done; IFS=; for f in $s; do echo \"<$f>\"; done"] @ r
    (test ("[a b]\n[c]\n<a b|c>\n" = >r)))
-(: r (hark ["out/love" "out/lush" "-c" "IFS=' :'; x='a : b'; for f in $x; do echo \"[$f]\"; done"])
+(hark ["out/love" "out/lush" "-c" "IFS=' :'; x='a : b'; for f in $x; do echo \"[$f]\"; done"] @ r
    (test ("[a]\n[b]\n" = >r)))
-(: r (hark ["out/love" "out/lush" "-c" "set -- 'x y' z; IFS=:; for f in $@; do echo \"[$f]\"; done; g() { for w; do echo \"<$w>\"; done; }; g 'p q' r"])
+(hark ["out/love" "out/lush" "-c" "set -- 'x y' z; IFS=:; for f in $@; do echo \"[$f]\"; done; g() { for w; do echo \"<$w>\"; done; }; g 'p q' r"] @ r
    (test ("[x y]\n[z]\n<p q>\n<r>\n" = >r)))
-(: r (hark ["out/love" "out/lush" "-c" "IFS=,; echo 'u,v,w rest' | { read a b c; echo \"$a|$b|$c\"; }"])
+(hark ["out/love" "out/lush" "-c" "IFS=,; echo 'u,v,w rest' | { read a b c; echo \"$a|$b|$c\"; }"] @ r
    (test ("u|v|w rest\n" = >r)))
 (: _ (setenv "LUSH_HD" "quay")
    r (hark ["out/love" "out/lush" "-c" "cat <<EOF | tr a-z A-Z\nhd $LUSH_HD\nEOF"])
    (test ("HD QUAY\n" = >r)))
-(: r (hark ["out/love" "out/lush" "-c" "( exit 5 ); echo sub=$?"])
+(hark ["out/love" "out/lush" "-c" "( exit 5 ); echo sub=$?"] @ r
    (test ("sub=5\n" = >r)))
-(: r (hark ["out/love" "out/lush" "-c" "set -u; echo $LUSH_UNDEF_QQ; echo no"])
+(hark ["out/love" "out/lush" "-c" "set -u; echo $LUSH_UNDEF_QQ; echo no"] @ r
    (test !(0 = <r)))
 
 ; $(( .. )): C's operators at C's precedence, the bases, and truncation toward
@@ -167,13 +163,13 @@
 
 ; trap exit: once, at the end, and the status the shell was leaving with -- a
 ; `false` under a cleanup is still a 1, however well the cleanup went
-(: r (hark ["out/love" "out/lush" "-c" "trap 'echo bye' EXIT; echo hi"])
+(hark ["out/love" "out/lush" "-c" "trap 'echo bye' EXIT; echo hi"] @ r
    (test ("hi\nbye\n" = >r)))
-(: r (hark ["out/love" "out/lush" "-c" "trap 'echo bye' EXIT; false"])
+(hark ["out/love" "out/lush" "-c" "trap 'echo bye' EXIT; false"] @ r
    (test ("bye\n" = >r) (1 = <r)))
 ; ..and a forked subshell runs neither: POSIX resets a caught condition there, or
 ; `( exit )` would take the parent's temp dir while the parent was still working
-(: r (hark ["out/love" "out/lush" "-c" "trap 'echo bye' EXIT; (exit 0); echo after"])
+(hark ["out/love" "out/lush" "-c" "trap 'echo bye' EXIT; (exit 0); echo after"] @ r
    (test ("after\nbye\n" = >r)))
 
 ; a signal condition is delivered. sigfd blocks INT and queues it to an fd, the
@@ -181,9 +177,9 @@
 ; lane, with no race to lose, because the shell signals itself. the second line
 ; is the one that would catch a shell left blocked with nothing reading: after the
 ; trap fires the shell must still be alive and answering.
-(: r (hark ["out/love" "out/lush" "-c" "trap 'echo CAUGHT' INT; kill -INT $$; echo done"])
+(hark ["out/love" "out/lush" "-c" "trap 'echo CAUGHT' INT; kill -INT $$; echo done"] @ r
    (test ("CAUGHT\ndone\n" = >r)))
-(: r (hark ["out/love" "out/lush" "-c" "trap 'echo T' TERM; kill -TERM $$; trap; echo alive"])
+(hark ["out/love" "out/lush" "-c" "trap 'echo T' TERM; kill -TERM $$; trap; echo alive"] @ r
    (test ("T\ntrap -- 'echo T' TERM\nalive\n" = >r)))
 ; ..but a signal ignored on entry cannot be trapped at all (POSIX), and no error
 ; is owed for trying. The everyday way a script gets one is its caller's `&` -- a
@@ -192,31 +188,31 @@
 ; and inherited, so the child's own trap must never arm.
 (: _ (signal sig-int 1)
    r (hark ["out/love" "out/lush" "-c" "trap 'echo CAUGHT' INT; kill -INT $$; echo done"])
-   _ (signal sig-int 0)
-   (test ("done\n" = >r)))
+   (signal sig-int 0,
+    test ("done\n" = >r)))
 
 ; exec: the shell becomes the command, or keeps the redirects of one that is not
 ; there. the words after it run in this very process -- nothing after the line does
-(: r (hark ["out/love" "out/lush" "-c" "echo one; exec echo two; echo three"])
+(hark ["out/love" "out/lush" "-c" "echo one; exec echo two; echo three"] @ r
    (test ("one\ntwo\n" = >r) (0 = <r)))
 ; ..and with no command the redirects are the SHELL's from here on, which is the
 ; whole of `exec 3>&1`: a second command still finds the fd open
-(: r (hark ["out/love" "out/lush" "-c" "exec 3>&1; echo a >&3; echo b >&3"])
+(hark ["out/love" "out/lush" "-c" "exec 3>&1; echo a >&3; echo b >&3"] @ r
    (test ("a\nb\n" = >r)))
 ; a word that is not there is 127 and the end of a script (POSIX), never a line
 ; the shell carries on from
-(: r (hark ["out/love" "out/lush" "-c" "exec nosuchcmd123; echo after"])
+(hark ["out/love" "out/lush" "-c" "exec nosuchcmd123; echo after"] @ r
    (test ("" = >r) (127 = <r)))
 ; a stage is a process of its own, so exec there replaces the stage and the
 ; pipeline reads its output like any other
-(: r (hark ["out/love" "out/lush" "-c" "exec echo hi | cat; echo end"])
+(hark ["out/love" "out/lush" "-c" "exec echo hi | cat; echo end"] @ r
    (test ("hi\nend\n" = >r)))
 ; the blocked mask a trap installs must not ride the exec: the exec'd shell is
 ; killed by its own INT (130), where a mask carried over would leave it pending
 (: r (hark ["out/love" "out/lush" "-c"
             "trap 'echo T' INT; exec out/love out/lush -c 'kill -INT $$; echo NOT'"])
    (test ("" = >r) (130 = <r)))
-(: r (hark ["out/love" "out/lush" "-c" "type exec"])
+(hark ["out/love" "out/lush" "-c" "type exec"] @ r
    (test ("exec is a shell builtin\n" = >r)))
 
 ; the engine plans: (sh-plan ast) reads the AST once and answers a thunk, so
@@ -224,8 +220,8 @@
 ; two? can never see it, and absence is the sh-nofn mint (peep's total test)
 (: pr (sh-parse >(sh-lex "LUSH_PL=$(expr ${LUSH_PL:-0} + 1)"))
    p (sh-plan >pr)
-   _ (p ()) _ (p ())
-   (test ('("2") = sh-fields [('var . "LUSH_PL")])))
+   (p (), p (),
+    test ('("2") = sh-fields [('var . "LUSH_PL")])))
 (sh-line "lush_pf() { echo x; }",
  test (sh-fn? "lush_pf") !(sh-fn? "lush_pq_zz")
            !(two? (sh-fnof "lush_pf")))
@@ -252,7 +248,7 @@
 (: r (hark ["out/love" "out/lush" "-c"
            "set -e; eval \"false; echo x\"; echo after"])
    (test (1 = <r) ("" = >r)))
-(: r (hark ["out/love" "out/lush" "-c" "set -e; false && echo a; echo survived"])
+(hark ["out/love" "out/lush" "-c" "set -e; false && echo a; echo survived"] @ r
    (test ("survived\n" = >r)))
 ; ... but a $( ) body is guarded, so under set -e it runs to its end and hands
 ; back what it wrote -- the two capture lanes (a seq reaped per step, a compound
@@ -269,25 +265,25 @@
 ; a command with no command name answers the last $( ) performed over its
 ; assignments, in order (POSIX) -- none ran is a clean 0, a command name of its
 ; own wins, and under set -e that status is a real trigger unless it is guarded
-(: r (hark ["out/love" "out/lush" "-c" "v=$(exit 3); echo $?"])
+(hark ["out/love" "out/lush" "-c" "v=$(exit 3); echo $?"] @ r
    (test ("3\n" = >r)))
-(: r (hark ["out/love" "out/lush" "-c" "v=1; echo $?"])
+(hark ["out/love" "out/lush" "-c" "v=1; echo $?"] @ r
    (test ("0\n" = >r)))
-(: r (hark ["out/love" "out/lush" "-c" "a=$(exit 3) b=$(exit 4); echo $?"])
+(hark ["out/love" "out/lush" "-c" "a=$(exit 3) b=$(exit 4); echo $?"] @ r
    (test ("4\n" = >r)))
-(: r (hark ["out/love" "out/lush" "-c" "v=$(exit 5)x$(exit 6); echo $?"])
+(hark ["out/love" "out/lush" "-c" "v=$(exit 5)x$(exit 6); echo $?"] @ r
    (test ("6\n" = >r)))
-(: r (hark ["out/love" "out/lush" "-c" "v=$(false) true; echo $?"])
+(hark ["out/love" "out/lush" "-c" "v=$(false) true; echo $?"] @ r
    (test ("0\n" = >r)))
 ; the words expand before the assignments, so a $( ) that vanishes to no field
 ; still counts, and still counts first
-(: r (hark ["out/love" "out/lush" "-c" "v=1 $(exit 3); echo $?"])
+(hark ["out/love" "out/lush" "-c" "v=1 $(exit 3); echo $?"] @ r
    (test ("3\n" = >r)))
-(: r (hark ["out/love" "out/lush" "-c" "v=$(exit 2) $(exit 3); echo $?"])
+(hark ["out/love" "out/lush" "-c" "v=$(exit 2) $(exit 3); echo $?"] @ r
    (test ("2\n" = >r)))
-(: r (hark ["out/love" "out/lush" "-c" "$(exit 6); echo $?"])
+(hark ["out/love" "out/lush" "-c" "$(exit 6); echo $?"] @ r
    (test ("6\n" = >r)))
-(: r (hark ["out/love" "out/lush" "-c" "set -e; v=$(false); echo never"])
+(hark ["out/love" "out/lush" "-c" "set -e; v=$(false); echo never"] @ r
    (test (1 = <r) ("" = >r)))
 (: r (hark ["out/love" "out/lush" "-c"
            "set -e; if v=$(false); then echo t; else echo e; fi"])
@@ -297,7 +293,7 @@
 ; shield, an unset var alone is no field, a quoted empty is one, glob last
 (: _ (setenv "LUSH_T1" "quay")
    _ (setenv "LUSH_T2" "a  b")
-   v (\ nm ('var . nm))
+   v (nm \ ('var . nm))
    (test
     ('("pre-quay") = sh-fields [('lit . "pre-") (v "LUSH_T1")])
     ('("a" "b") = sh-fields [(v "LUSH_T2")])
@@ -322,28 +318,28 @@
 
 ; completion (rung 2): (insert . candidates) -- one path candidate lands its
 ; tail (+ " ", a directory its "/"), the common prefix otherwise; the helpers
-(: r (sh-complete (sh-expl "cat src/apps/lus"))
+(sh-complete (sh-expl "cat src/apps/lus") @ r
    (test (two? r) ("h.l " = slurp (tap <r)) ('("src/apps/lush.l") = >r)))
-(: r (sh-complete (sh-expl "cat src/apps/ko"))
+(sh-complete (sh-expl "cat src/apps/ko") @ r
    (test ("re/" = slurp (tap <r))))              ; one DIR candidate: its /
-(: r (sh-complete (sh-expl "cat src/apps/lu"))
+(sh-complete (sh-expl "cat src/apps/lu") @ r
    (test ('("src/apps/lupa.l" "src/apps/lush.l" "src/apps/lux") = >r)))   ; three ways forward, listed
 (test ("ab" = sh-common '("abc" "abd" "ab"))
         ("~" = sh-homely ("" + getenv "HOME")))
 
 ; (signal sig 1) ignores: a self-INT that would kill us just fizzles; restore after
-(: me (getpid 0)
-   _ (test !(signal sig-int 1))
-   _ (still me sig-int)
-   _ (test 1)                                     ; still here: the ignore held
-   _ (test !(signal sig-int 0)))
+(getpid 0 @ me
+ (test !(signal sig-int 1),
+  still me sig-int,
+  test 1,                                         ; still here: the ignore held
+  test !(signal sig-int 0)))
 
 ; wait's stop lane: a sigstopped child answers 256+sig (a charm past every exit
 ; status -- the shell's "park it as a job" signal), then CONT + KILL ends it 137
-(: p (spawn ["sleep" "5"])
-   _ (still p 19)                                   ; sigstop
-   (test ((256 + 19) = wait p)
-           (still p sig-cont, still p 9, = 137 (wait p))))
+(spawn ["sleep" "5"] @ p
+ (still p 19,                                       ; sigstop
+  test (256 + 19 = wait p)
+         (still p sig-cont, still p 9, = 137 (wait p))))
 
 ; sigfd takes a signal list now: sigusr1 blocked + queued, kill self, take the
 ; record -- the signal is data, (signo . pid)
@@ -355,16 +351,16 @@
 
 ; ... and a taken signal re-raised through the condition system is the doc's
 ; "signals arrive as conditions": scare routes it to the installed help policy
-(hear (\ a b ['gotsig a b]))
+(hear (a \ b \ ['gotsig a b]))
 (test (['gotsig 'sigusr1 (getpid 0)] = scare 'sigusr1 (getpid 0)))
 (hear 0)
 
 ; env nifs: set, read back through environ's raw K=V, absence unsets
 (test !(setenv "LOVE_SH_T5" "quay")
         ("quay" = getenv "LOVE_SH_T5")
-        (foldl (\ a e (a ? a (e = "LOVE_SH_T5=quay"))) 0 (environ 0)))
+        (foldl (a \ e \ (a ? a (e = "LOVE_SH_T5=quay"))) 0 (environ 0)))
 (test !(setenv "LOVE_SH_T5" ())                                   ; absence unsets
-        ((getenv "LOVE_SH_T5") = ()))
+        (getenv "LOVE_SH_T5" = ()))
 ; $? and export, through the shell's own line entry
 (sh-line "sh -c 'exit 7'",
  test (7 = sh-status ()) ('("7") = sh-fields [('var . "?")]))
@@ -373,15 +369,15 @@
 
 ; the built shell, end to end: pipes, lists, cmdsub, glob, 2>&1 -- driven
 ; through out/love so the tree's own nifs serve (env's love is the nest's)
-(: r (hark ["out/love" "out/lush" "-c" "echo a b | tr a-z A-Z"])
+(hark ["out/love" "out/lush" "-c" "echo a b | tr a-z A-Z"] @ r
    (test (0 = <r) ("A B\n" = >r)))
-(: r (hark ["out/love" "out/lush" "-c" "false && echo no || echo yes"])
+(hark ["out/love" "out/lush" "-c" "false && echo no || echo yes"] @ r
    (test ("yes\n" = >r)))
-(: r (hark ["out/love" "out/lush" "-c" "echo $(echo hi | tr h H) src/apps/lus*.l"])
+(hark ["out/love" "out/lush" "-c" "echo $(echo hi | tr h H) src/apps/lus*.l"] @ r
    (test ("Hi src/apps/lush.l\n" = >r)))
-(: r (hark ["out/love" "out/lush" "-c" "sh -c 'echo e >&2' 2>&1 | tr e E"])
+(hark ["out/love" "out/lush" "-c" "sh -c 'echo e >&2' 2>&1 | tr e E"] @ r
    (test ("E\n" = >r)))
-(: r (hark ["out/love" "out/lush" "-c" "exit 9"])
+(hark ["out/love" "out/lush" "-c" "exit 9"] @ r
    (test (9 = <r)))
 
 ; rung 4: --login reads $HOME/.profile (a scratch HOME keeps the suite
@@ -390,8 +386,8 @@
 (: home0 ("" + getenv "HOME")
    d "out/.lush-t4"
    _ (mkdir d 493)
-   p (open (d + "/.profile") "w") _ (say p "LUSH_P4=prof\nexport LUSH_P4\n") _ (close p)
-   p (open (d + "/rr.sh") "w") _ (say p "echo one\nreturn 5\necho two\n") _ (close p)
+   p (open (d + "/.profile") "w") _ (say p "LUSH_P4=prof\nexport LUSH_P4\n", close p)
+   p (open (d + "/rr.sh") "w") _ (say p "echo one\nreturn 5\necho two\n", close p)
    _ (setenv "HOME" d)
    r1 (hark ["out/love" "out/lush" "--login" "-c" "echo p=$LUSH_P4"])
    r2 (hark ["out/love" "out/lush" "-c" "echo p=[$LUSH_P4]"])
@@ -402,53 +398,53 @@
            ("one\nrc=5\n" = >r3)))
 ; a comment ends at its newline, never the input's end (the multi-line -c /
 ; buffered-script shape every /etc/profile.d file has)
-(: r (hark ["out/love" "out/lush" "-c" "# lead\necho a # tail\n# mid\necho b"])
+(hark ["out/love" "out/lush" "-c" "# lead\necho a # tail\n# mid\necho b"] @ r
    (test ("a\nb\n" = >r)))
 ; a closer on its own line: the multi-line subshell in cmdsub, the case item's ;;
-(: r (hark ["out/love" "out/lush" "-c" "v=$(\n(\necho deep\n)\n)\necho v=$v"])
+(hark ["out/love" "out/lush" "-c" "v=$(\n(\necho deep\n)\n)\necho v=$v"] @ r
    (test ("v=deep\n" = >r)))
-(: r (hark ["out/love" "out/lush" "-c" "case x in\na) echo no\n;;\nx) echo yes\n;;\nesac"])
+(hark ["out/love" "out/lush" "-c" "case x in\na) echo no\n;;\nx) echo yes\n;;\nesac"] @ r
    (test ("yes\n" = >r)))
 ; ${x:-word}: word is quote-aware (sh-wordize) -- inner quotes remove, and a
 ; quoted pattern char in ${v#pat} is inert (the mask law through the vop)
-(: r (hark ["out/love" "out/lush" "-c" "echo \"${LUSH_U4:-\"a b\"}\" ${LUSH_U4:-'c d'}"])
+(hark ["out/love" "out/lush" "-c" "echo \"${LUSH_U4:-\"a b\"}\" ${LUSH_U4:-'c d'}"] @ r
    (test ("a b c d\n" = >r)))
-(: r (hark ["out/love" "out/lush" "-c" "v='x*y'; echo ${v#\"x*\"} ${v#x?}"])
+(hark ["out/love" "out/lush" "-c" "v='x*y'; echo ${v#\"x*\"} ${v#x?}"] @ r
    (test ("y y\n" = >r)))
 
 ; the forkless $( ), lane one: a no-effect builtin says its piece into a jug this
 ; task wears (love.h's hook 6) -- no pipe, no fd, no child. the answer is the one
 ; the pipe gave, the status included, and a function of the same name takes the
 ; name back (to lane two, below: a body that may spawn needs an fd)
-(: r (hark ["out/love" "out/lush" "-c" "cd /; echo \"[$(pwd)][$(pwd)]\""])
+(hark ["out/love" "out/lush" "-c" "cd /; echo \"[$(pwd)][$(pwd)]\""] @ r
    (test ("[/][/]\n" = >r)))
-(: r (hark ["out/love" "out/lush" "-c" "x=$(false); echo $?; y=$(true); echo $?"])
+(hark ["out/love" "out/lush" "-c" "x=$(false); echo $?; y=$(true); echo $?"] @ r
    (test ("1\n0\n" = >r)))
 
 ; a failed cd must say so. chdir answers () on success and the ERRNO on failure, and
 ; an errno is negative -- so it is red, so a truth test reads the failure as a success:
 ; `cd nowhere` returned 0 with no word said, and `cd build && make` ran make wherever you
 ; already stood. The kind is what separates them (charm?, never !).
-(: r (hark ["out/love" "out/lush" "-c" "cd /definitely-not-here; echo $?"])
+(hark ["out/love" "out/lush" "-c" "cd /definitely-not-here; echo $?"] @ r
    (test ("1\n" = >r)))
-(: r (hark ["out/love" "out/lush" "-c" "cd /definitely-not-here && echo moved; echo done"])
+(hark ["out/love" "out/lush" "-c" "cd /definitely-not-here && echo moved; echo done"] @ r
    (test ("done\n" = >r)))
-(: r (hark ["out/love" "out/lush" "-c" "pwd() { echo shadow; }; echo $(pwd)"])
+(hark ["out/love" "out/lush" "-c" "pwd() { echo shadow; }; echo $(pwd)"] @ r
    (test ("shadow\n" = >r)))
 
 ; lane two: the body runs here, down a pipe a task drains, and the state a
 ; subshell would have taken by copy is put back by hand (sh-subsave's roster).
-(: r (hark ["out/love" "out/lush" "-c" "f() { echo a; echo b; }; x=$(f); echo \"[$x]\""])
+(hark ["out/love" "out/lush" "-c" "f() { echo a; echo b; }; x=$(f); echo \"[$x]\""] @ r
    (test ("[a\nb]\n" = >r)))
-(: r (hark ["out/love" "out/lush" "-c" "cd /tmp; echo [$(cd /; pwd)][$(pwd)]"])
+(hark ["out/love" "out/lush" "-c" "cd /tmp; echo [$(cd /; pwd)][$(pwd)]"] @ r
    (test ("[/][/tmp]\n" = >r)))
-(: r (hark ["out/love" "out/lush" "-c" "v=out; echo [$(v=in; echo $v)][$v]"])
+(hark ["out/love" "out/lush" "-c" "v=out; echo [$(v=in; echo $v)][$v]"] @ r
    (test ("[in][out]\n" = >r)))
-(: r (hark ["out/love" "out/lush" "-c" "export E=out; echo [$(export E=in; echo $E)][$E]"])
+(hark ["out/love" "out/lush" "-c" "export E=out; echo [$(export E=in; echo $E)][$E]"] @ r
    (test ("[in][out]\n" = >r)))
-(: r (hark ["out/love" "out/lush" "-c" "g() { echo G; }; f() { g() { echo I; }; }; echo [$(f; g)][$(g)]"])
+(hark ["out/love" "out/lush" "-c" "g() { echo G; }; f() { g() { echo I; }; }; echo [$(f; g)][$(g)]"] @ r
    (test ("[I][G]\n" = >r)))
-(: r (hark ["out/love" "out/lush" "-c" "set -- keep it; f() { echo $1; }; echo [$(f one)][$1 $2]"])
+(hark ["out/love" "out/lush" "-c" "set -- keep it; f() { echo $1; }; echo [$(f one)][$1 $2]"] @ r
    (test ("[one][keep it]\n" = >r)))
 ; ..and the roster rides the raised way out too -- the one exit a driven shell
 ; cannot reach from here, since nothing a script can type raises a condition. a
@@ -457,31 +453,31 @@
 ; the cwd is read and put back before the assert, never inside it: a failure
 ; here would otherwise leave every later test reading from the wrong directory.
 (: start (cwd 0)
-   r (trap (\ _ (sh-subhere (\ _ (chdir "/", scare 'boom 0)))) () (\ a b a))
+   r (trap (_ \ (sh-subhere (_ \ (chdir "/", scare 'boom 0)))) () (a \ b \ a))
    here (cwd 0)
-   _ (chdir start)
-   (test (r = 'boom)                       ; the condition still rides outward
+   (chdir start,
+    test (r = 'boom)                       ; the condition still rides outward
            (start = here)                      ; ..and the subshell's chdir did not
            !(start = "/")))                    ; ..(and the law was not vacuous)
 ; `exit` in a forkless body may not reach `quit` -- it folds to ('xit . st),
 ; which nothing catches but the capture. a fork under one puts the depth back,
 ; so a subshell's exit is a real one again
-(: r (hark ["out/love" "out/lush" "-c" "echo [$(echo x; exit 7; echo y)]; z=$(exit 7); echo $?"])
+(hark ["out/love" "out/lush" "-c" "echo [$(echo x; exit 7; echo y)]; z=$(exit 7); echo $?"] @ r
    (test ("[x]\n7\n" = >r)))
-(: r (hark ["out/love" "out/lush" "-c" "f() { exit 9; }; (f); echo after $?"])
+(hark ["out/love" "out/lush" "-c" "f() { exit 9; }; (f); echo after $?"] @ r
    (test ("after 9\n" = >r)))
 ; a fork under a forkless body inherits the drainer, so it has to shut it down
 ; before it runs a step -- else the child reads its parent's capture and stalls
 ; on a pipe only its parent can end. a stage that is a function is such a fork; a
 ; `( )` is not, since under a capture it runs in-process instead
-(: r (hark ["out/love" "out/lush" "-c" "f() { echo hi; }; echo [$(f | tr a-z A-Z)]"])
+(hark ["out/love" "out/lush" "-c" "f() { echo hi; }; echo [$(f | tr a-z A-Z)]"] @ r
    (test ("[HI]\n" = >r)))
-(: r (hark ["out/love" "out/lush" "-c" "cd /tmp; echo [$( (cd /; pwd) )][$(pwd)]"])
+(hark ["out/love" "out/lush" "-c" "cd /tmp; echo [$( (cd /; pwd) )][$(pwd)]"] @ r
    (test ("[/][/tmp]\n" = >r)))
 ; the brackets are quoted here and nowhere else in this file: [tail] is a glob class
 ; over {t,a,i,l}, which a one-letter name in the tree would match. the law is
 ; about the capture, not about globbing, so it says so.
-(: r (hark ["out/love" "out/lush" "-c" "x=$( (exit 4); echo tail); echo \"[$x]\""])
+(hark ["out/love" "out/lush" "-c" "x=$( (exit 4); echo tail); echo \"[$x]\""] @ r
    (test ("[tail]\n" = >r)))
 ; the drainer earns its keep: a body saying more than one pipe buffer (64 KiB) would
 ; stop forever against a reader that is us. a builtin's buffered bytes come first.
@@ -513,7 +509,7 @@
 ; love's lexical law and not the shell's: a ' is a sigil, a ; runs to the line's
 ; end, and a ) or a } inside a "" is text. `${` with a non-POSIX op reached
 ; 'unterm before this, so no script that lexed yesterday means anything new.
-(: w1 (\ sg ('w . [sg]))                        ; a one-segment word token
+(: w1 (sg \ ('w . [sg]))                        ; a one-segment word token
    ew ('w . [('lit . "echo")])
    (test
     ([1 ew (w1 ('lov . "(1 + 2)"))] = sh-lex "echo ${(1 + 2)}")
@@ -533,9 +529,9 @@
 ; the value is a VALUE, not a chomped byte stream: one field, never IFS-split,
 ; never globbed -- quiet like "${x}". Splitting can be bought later; unsplitting
 ; cannot, so the quiet law is the one that keeps the door open.
-(: r (hark ["out/love" "out/lush" "-c" "for w in ${(\"a b c\")}; do echo \"[$w]\"; done"])
+(hark ["out/love" "out/lush" "-c" "for w in ${(\"a b c\")}; do echo \"[$w]\"; done"] @ r
    (test ("[a b c]\n" = >r)))
-(: r (hark ["out/love" "out/lush" "-c" "echo ${(\"*\")} ${(1 + 2)}"])
+(hark ["out/love" "out/lush" "-c" "echo ${(\"*\")} ${(1 + 2)}"] @ r
    (test ("* 3\n" = >r)))
 ; all four seg-kind walks: a bare word (wseg), inside ".." (dqat), a ${x:-..}
 ; word (sh-textof), and a heredoc body (sh-dollarize's segs through sh-textof)
@@ -543,11 +539,11 @@
             "echo ${(1 + 2)} \"[${(2 + 2)}]\" ${UNSET_LV:-${(3 + 3)}}; cat <<E\nsum ${(10 + 5)}\nE"])
    (test ("3 [4] 6\nsum 15\n" = >r)))
 ; a love form spanning lines, with a ; comment eating a } and a ) on the way
-(: r (hark ["out/love" "out/lush" "-c" "echo ${(1 + 2 ; a } and a )\n)}"])
+(hark ["out/love" "out/lush" "-c" "echo ${(1 + 2 ; a } and a )\n)}"] @ r
    (test ("3\n" = >r)))
 ; errors contain, and at expansion there is no line left to fail: the word is
 ; empty and the shell stays sayable
-(: r (hark ["out/love" "out/lush" "-c" "echo [${(nosuchname)}] 2>/dev/null; echo alive"])
+(hark ["out/love" "out/lush" "-c" "echo [${(nosuchname)}] 2>/dev/null; echo alive"] @ r
    (test ("[]\nalive\n" = >r)))
 
 ; `ev`: the answer on out, the truth bit as the status (positive is true), and
@@ -556,9 +552,9 @@
 ; would read -e as a datum and fold it in, answering 3.0 for 3. The two want
 ; different command lines and isolated processes, so `love` spawns.
 (test !(sh-bi? "love") (sh-bi? "ev"))
-(: r (hark ["out/love" "out/lush" "-c" "ev 1 + 2; ev -n 9; echo st=$?"])
+(hark ["out/love" "out/lush" "-c" "ev 1 + 2; ev -n 9; echo st=$?"] @ r
    (test ("3\nst=0\n" = >r)))
-(: r (hark ["out/love" "out/lush" "-c" "ev 0; echo st=$?; ev 1; echo st=$?"])
+(hark ["out/love" "out/lush" "-c" "ev 0; echo st=$?; ev 1; echo st=$?"] @ r
    (test ("0\nst=1\n1\nst=0\n" = >r)))
 ; a love form as a shell condition -- the one thing ${( )} cannot do, an
 ; expansion being a word and not a command. quoted, and both directions: the
@@ -571,16 +567,16 @@
              if ev -n '2 > 3'; then echo yes; else echo no; fi"])
    (test ("yes\nno\n" = >r)))
 ; errors contain: a bad form is a status and a line on err, and the shell runs on
-(: r (hark ["out/love" "out/lush" "-c" "ev '(1 +' 2>/dev/null; echo st=$?; echo alive"])
+(hark ["out/love" "out/lush" "-c" "ev '(1 +' 2>/dev/null; echo st=$?; echo alive"] @ r
    (test ("st=1\nalive\n" = >r)))
 ; the form runs in this image -- no process is spawned, so a binding it makes is
 ; still there on the next line
-(: r (hark ["out/love" "out/lush" "-c" "ev '(: zz 7)'; ev zz"])
+(hark ["out/love" "out/lush" "-c" "ev '(: zz 7)'; ev zz"] @ r
    (test ("7\n7\n" = >r)))
-(: r (hark ["out/love" "out/lush" "-c" "x=$(ev '\"a b\"'); echo \"[$x]\"; echo $(ev '[1 2 3]')"])
+(hark ["out/love" "out/lush" "-c" "x=$(ev '\"a b\"'); echo \"[$x]\"; echo $(ev '[1 2 3]')"] @ r
    (test ("[a b]\n(1 2 3)\n" = >r)))
 ; ..and the binary keeps its own command line, in its own process
-(: r (hark ["out/love" "out/lush" "-c" "PATH=$PWD/out:$PATH love -e '1 + 2'"])
+(hark ["out/love" "out/lush" "-c" "PATH=$PWD/out:$PATH love -e '1 + 2'"] @ r
    (test ("3\n" = >r)))
 
 ; the mode. autonomous (the default): a bare verb word is ours whatever PATH holds --
@@ -590,12 +586,12 @@
 ; lushflags carries the choice into a child shell, and a flag word on its own line
 ; overrides it. autonomous is the default.
 (test (0 = sh-envflag 0))
-(: r (hark ["out/love" "out/lush" "-c" "PATH=/nonexistent; printf abc | tr a-c A-C; echo; tr 2>/dev/null; echo st=$?"])
+(hark ["out/love" "out/lush" "-c" "PATH=/nonexistent; printf abc | tr a-c A-C; echo; tr 2>/dev/null; echo st=$?"] @ r
    (test ("ABC\nst=2\n" = >r)))
 ; (under -p even echo is PATH's, so the status crosses a variable and PATH comes back)
-(: r (hark ["out/love" "out/lush" "-p" "-c" "p=$PATH; PATH=/nonexistent; tr 2>/dev/null; s=$?; PATH=$p; echo st=$s"])
+(hark ["out/love" "out/lush" "-p" "-c" "p=$PATH; PATH=/nonexistent; tr 2>/dev/null; s=$?; PATH=$p; echo st=$s"] @ r
    (test ("st=127\n" = >r)))
-(: r (hark ["out/love" "out/lush" "--precarious" "-c" "p=$PATH; PATH=/nonexistent; tr 2>/dev/null; s=$?; PATH=$p; echo st=$s"])
+(hark ["out/love" "out/lush" "--precarious" "-c" "p=$PATH; PATH=/nonexistent; tr 2>/dev/null; s=$?; PATH=$p; echo st=$s"] @ r
    (test ("st=127\n" = >r)))
 (: r (hark ["out/love" "out/lush" "-c"
             "export p=$PATH; PATH=/nonexistent; LUSHFLAGS=-p sh -c 'tr 2>/dev/null; s=$?; PATH=$p; echo st=$s'; LUSHFLAGS=-p sh -a -c 'tr 2>/dev/null; echo st=$?'; LUSHFLAGS=-p sh -g -c 'tr 2>/dev/null; echo st=$?'"])
@@ -646,8 +642,8 @@
    (test ("seat\nverb\nonly\nwhere\n" = >r)))
 ; `dir` is a second name on ls, registered beside it (kore.l) the way `more` rides
 ; less, so it takes the in-image lane and the verdict reads it as ours
-(: r (hark ["out/love" "out/lush" "-c" "PATH=/nonexistent; dir /; type dir"])
-   (: s (hark ["out/love" "out/lush" "-c" "PATH=/nonexistent; ls /"])
+(hark ["out/love" "out/lush" "-c" "PATH=/nonexistent; dir /; type dir"] @ r
+   (hark ["out/love" "out/lush" "-c" "PATH=/nonexistent; ls /"] @ s
       (test (>s = snip >r 0 #>s)
               (elem 'verb (sh-verdict "dir")))))
 ; (under -p even echo is PATH's, so the status crosses a variable and PATH comes back)
@@ -661,13 +657,13 @@
 ; the in-image lane, widened: the toolchain's other half plus the crew tools that
 ; answer a status instead of quitting. each is claimed by name, from its own module
 ; where that is not the applets' home.
-(test (all (\ w (two? (sh-imgfn w)))
+(test (all (w \ (two? (sh-imgfn w)))
              '("nm" "ar" "ld" "as" "readelf" "strip" "libra" "fat" "mkfs.vfat" "mkdosfs"
                "vdir" "sha1sum" "who" "chgrp" "truncate")))
 ; ..and the stdin readers stay out: a filter with no file operand would drink the
 ; terminal in here, where ^C kills the shell and no pid answers `kill %1`. tar is one
 ; (f -, or no f at all)
-(test (all (\ w !(two? (sh-imgfn w))) '("gzip" "gunzip" "zcat" "cpio" "sort" "tar")))
+(test (all (w \ !(two? (sh-imgfn w))) '("gzip" "gunzip" "zcat" "cpio" "sort" "tar")))
 ; the door is what makes that safe. a tool that used to `quit` on its error path
 ; would have taken the shell with it; now every failure is one command's status and
 ; the line after it still runs.
@@ -678,11 +674,11 @@
              echo alive"])
    (test ("t=2\nl=1\nm=2\nalive\n" = >r)))
 ; ..and a main's early answer too: mooncc's --version leaves, never quits, in here
-(: r (hark ["out/love" "out/lush" "-a" "-c" "mooncc --version > /dev/null; mooncc -h > /dev/null; echo alive"])
+(hark ["out/love" "out/lush" "-a" "-c" "mooncc --version > /dev/null; mooncc -h > /dev/null; echo alive"] @ r
    (test ("alive\n" = >r)))
 ; a capture of one takes the jug: no pipe, no fd, no child, which is the whole
 ; point of `cc=$(which cc)`
-(: pr (sh-parse-line "which cc")
+(sh-parse-line "which cc" @ pr
    (test ('jug = sh-lane >pr) ('jug = (sh-lane >(sh-parse-line "type cc")))))
 
 ; job control rides the process group, and a stage that runs in-image forks rather
@@ -695,7 +691,7 @@
        (go i) (? (m < i + n) 0 (snip hay i (i + n) = ned) 1 (go (i + 1)))
        (go 0))
    (sh-t-pump src dst) (see src @ -1 0 ch (put dst ch, flush dst, sh-t-pump src dst))
-   (sh-t-type m s) (: (go i) (? (#s <= i) (flush m) (put m (s i), go (i + 1))) (go 0))
+   (sh-t-type m s) (: (go i) (#s <= i ? (flush m) (put m (s i), go (i + 1))) (go 0))
    e (string 27)
    ; the pager is the pipeline's forked half: it must keep the terminal it reads keys on
    r (tether ["out/love" "lush"])
@@ -741,17 +737,16 @@
    _ (rest 2500)
    _ (rest 700)
    j4 (slurp sink2)
-   _ (still <r2 9)
-   _ (landed? t2 ? (catch t2) (freeze t2))
-   (test
-    (sh-t-has? s1 (e + "[?1049h"))      ; the pager opened
-    !(sh-t-has? s1 (e + "[?1049l"))     ; ..and did not quit on its own
-    (sh-t-has? s2 (e + "[?1049l"))      ; ..and q reached it
-    (sh-t-has? j1 "stopped")            ; ^Z reached the forked job
-    (sh-t-has? j2 "st=0")               ; ..and fg ran it to completion
-    (sh-t-has? j3 "] stopped  ( sleep") ; the subshell is the job the shell lists
-    !(sh-t-has? j4 "no such job")       ; ..which fg can still find
-    (sh-t-has? j4 "woke")))             ; ..and wakes, group and all, to the end
+   (still <r2 9,
+    (landed? t2 ? (catch t2) (freeze t2)),
+    test (sh-t-has? s1 (e + "[?1049h"))      ; the pager opened
+         !(sh-t-has? s1 (e + "[?1049l"))     ; ..and did not quit on its own
+         (sh-t-has? s2 (e + "[?1049l"))      ; ..and q reached it
+         (sh-t-has? j1 "stopped")            ; ^Z reached the forked job
+         (sh-t-has? j2 "st=0")               ; ..and fg ran it to completion
+         (sh-t-has? j3 "] stopped  ( sleep") ; the subshell is the job the shell lists
+         !(sh-t-has? j4 "no such job")       ; ..which fg can still find
+         (sh-t-has? j4 "woke")))             ; ..and wakes, group and all, to the end
 
 ;; a $( ) of a roster word is ours to run in here: the jug when nothing wants an fd,
 ;; the pipe lane when a redirect does; a spelled path still spawns, a builtin keeps its lane,
@@ -772,7 +767,7 @@
 (: r (hark ["out/love" "out/lush" "-c"
             "sleep 5 & kill %1; wait $!; echo st=$?; sleep 5 & kill -9 %%; wait $!; echo st=$?; sleep 5 & kill -s TERM -- $!; wait $!; echo st=$?; kill %7; echo st=$?"])
    (test ("st=143\nst=137\nst=143\nst=1\n" = >r)))
-(: r (hark ["out/love" "out/lush" "-c" "umask 022; umask; umask -S; umask 077; umask; umask 8 || echo st=$?"])
+(hark ["out/love" "out/lush" "-c" "umask 022; umask; umask -S; umask 077; umask; umask 8 || echo st=$?"] @ r
    (test ("0022\nu=rwx,g=rx,o=rx\n0077\nst=1\n" = >r)))
 (: r (hark ["out/love" "out/lush" "-c"
             "set -- -ab val -c x y; while getopts ab:c o; do echo \"$o:${OPTARG-}\"; done; shift $((OPTIND-1)); echo \"[$@]\""])
@@ -785,14 +780,14 @@
 ;; interpreter line names it; a foreign path or shebang still execs. the script rides
 ;; its interpreter line into cli-line, so it sees the same command line either way
 (: seat (sh-seat ())
-   (put p t) (: h (open p "w") _ (say h t) _ (close h) (cite 'posix 'chmod p 493))
+   (put p t) (open p "w" @ h (say h t, close h, cite 'posix 'chmod p 493))
    ours "/tmp/lush-t-ours.l" sh "/tmp/lush-t-sh.l"
    _ (put ours ("#!" + seat + "\n(puts (show (cup cmdline)), puts \"\\n\")\n"))
    _ (put sh "#!/bin/sh\necho sh\n")
    r (hark ["out/love" "out/lush" "-c" (ours + " a b </dev/null; " + sh + " </dev/null")])
-   _ (test (1 = sh-forkask seat) (1 = sh-forkask ours) (0 = sh-forkask sh) (0 = sh-forkask "/bin/date")
-           (("(\"" + ours + "\" \"a\" \"b\")\nsh\n") = >r))
-   (unlink ours, unlink sh))
+   (test (1 = sh-forkask seat) (1 = sh-forkask ours) (0 = sh-forkask sh) (0 = sh-forkask "/bin/date")
+         ("(\"" + ours + "\" \"a\" \"b\")\nsh\n" = >r),
+    (unlink ours, unlink sh)))
 ;; a script's stdin forks only while the shell has read none of it: a script file, -c
 ;; and cook's lines never have, so their stdin readers fork; once `read` or the stdin
 ;; loop has, a buffer may hold read-ahead the child would see again, and it execs --
@@ -807,21 +802,21 @@
    ; ..and a foreign bare word spawns as (path . word), the path PATH gave it here
    w (sh-whichp "git")
    v (sh-spawnv ["git" "--version"])
-   d (? (two? w) (<v = (<>w . "git") && >v = ["--version"]) 1)
-   _ (pin sh-tty () tty0)
-   _ (pin sh-inread () in0)
-   (test (1 = a) (0 = b) (1 = c) (1 = d)))
+   d (two? w ? (<v = (<>w . "git") && >v = ["--version"]) 1)
+   (pin sh-tty () tty0,
+    pin sh-inread () in0,
+    test (1 = a) (0 = b) (1 = c) (1 = d)))
 
 ;; a verb that says it is a builtin (verbs' traits) runs as one in every mode, ahead of
 ;; PATH, and says so; the self lane reads the same table
-(: r (hark ["out/love" "out/lush" "-p" "-c" "PATH=/nonexistent; echo hi; printf '%s\\n' pf; [ a = a ] && test 1 = 1 && echo t; type echo"])
+(hark ["out/love" "out/lush" "-p" "-c" "PATH=/nonexistent; echo hi; printf '%s\\n' pf; [ a = a ] && test 1 = 1 && echo t; type echo"] @ r
    (test ("hi\npf\nt\necho is a shell builtin\n" = >r)))
-(: T (cite 'verbs 'trait)
+(cite 'verbs 'trait @ T
    (test (1 = sh-verbbi? "echo") (1 = sh-verbbi? "[") (0 = sh-verbbi? "ls")
          (1 = T 'mooncc 'self) (1 = T 'fat 'self) (0 = T 'tar 'self) (lit? (T 'cat 'self))))
 ;; a reader is self per call: every operand a regular file, or it forks -- bare, a -,
 ;; a missing file, a device, or an option's word
-(: f "test/00-init.l"
+("test/00-init.l" @ f
    (test (1 = sh-selfcall? ["wc" "-l" f f]) (1 = sh-selfcall? ["sha256sum" f])
          (0 = sh-selfcall? ["wc"]) (0 = sh-selfcall? ["wc" "-"]) (0 = sh-selfcall? ["wc" f "/nonexistent-qq"])
          (0 = sh-selfcall? ["md5sum" "/dev/zero"]) (1 = sh-selfcall? ["cat" f]) (0 = sh-selfcall? ["cat"])
@@ -834,49 +829,49 @@
          (1 = sh-selfcall? ["ls" "-l"]) (0 = sh-selfplain? "wc") (1 = sh-selfplain? "ls")))
 ;; ..and a capture of a big in-image reader lives: the body writes a port that parks
 ;; on a full pipe, so the drain gets its turn -- the static stdout would block on it
-(: r (hark ["out/love" "out/lush" "-a" "-c" "f() { cat src/love/*.c; cat src/love/*.c; }; x=$(f); echo ${#x}"])
+(hark ["out/love" "out/lush" "-a" "-c" "f() { cat src/love/*.c; cat src/love/*.c; }; x=$(f); echo ${#x}"] @ r
    (test (0 < #(>r))))
 ;; exec rides the same (path . word) spawn: PATH's file, the child named as spelled --
 ;; GNU's cat says `cat:`, never its path -- and a word nothing answers is 127
-(: r (hark ["out/love" "out/lush" "-g" "-c" "exec cat /nonexistent-qq 2>&1"])
+(hark ["out/love" "out/lush" "-g" "-c" "exec cat /nonexistent-qq 2>&1"] @ r
    (test (1 = <r) ("cat: " = snip >r 0 5)))
-(: r (hark ["out/love" "out/lush" "-g" "-c" "exec nope-qq-cmd 2>/dev/null"])
+(hark ["out/love" "out/lush" "-g" "-c" "exec nope-qq-cmd 2>/dev/null"] @ r
    (test (127 = <r)))
 ;; a crew main answers its status to a caller in the image, a failure from deep in
 ;; included -- only the seats quit
-(: C (cite 'verbs 'call)
+(cite 'verbs 'call @ C
    (test (1 = C 'cook ["-f" "/nonexistent-qq.mk"]) (2 = C 'sb ["no-such-verb"])
          (2 = C 'kore ["httpd" "-z"])))
 ;; ..and a trait may turn on the call: love's bake and wake want a fresh process, asked
 ;; under the name the word runs as, so a path to this binary is love too
-(: H (cite 'verbs 'holds)
+(cite 'verbs 'holds @ H
    (test (1 = H 'love 'exec ["bake"]) (1 = H 'love 'exec ["wake" "x"]) (0 = H 'love 'exec ["-e" "1"])
          (1 = sh-exec? ["out/love" "bake"]) (0 = sh-exec? ["out/love" "kore" "ls"])
          (0 = sh-forkok? ["out/love" "bake"] [(0 . 5)])))
 
 ;; readonly, alias, times, hash and ulimit: each acts on this process or its tables.
 ;; a readonly assignment is an error, fatal to a script, from every setter
-(: r (hark ["out/love" "out/lush" "-c" "readonly R=1 S; readonly; R=2; echo after"])
+(hark ["out/love" "out/lush" "-c" "readonly R=1 S; readonly; R=2; echo after"] @ r
    (test (2 = <r) ("readonly R='1'\nreadonly S\n" = >r)))
-(: r (hark ["out/love" "out/lush" "-c" "readonly R=1; unset R; echo after"])
+(hark ["out/love" "out/lush" "-c" "readonly R=1; unset R; echo after"] @ r
    (test (2 = <r) ("" = >r)))
-(: r (hark ["out/love" "out/lush" "-c" "f() { local R=9; echo in; }; readonly R=1; f; echo after"])
+(hark ["out/love" "out/lush" "-c" "f() { local R=9; echo in; }; readonly R=1; f; echo after"] @ r
    (test (2 = <r) ("" = >r)))
 ;; an alias is words, expanded at the simple command, in a capture and in a pipeline
 ;; stage, recursion stopping at its own name; its text may open with an assignment
 (: r (hark ["out/love" "out/lush" "-c"
             "alias ll='echo L'; ll a; x=$(ll b); echo [$x]; ll p | cat; alias; alias echo='echo E'; echo x; alias e='V=7 echo'; e y; echo [$V]; unalias -a; alias bad='a | b'; echo st=$?"])
    (test ("L a\n[L b]\nL p\nalias ll='echo L'\nE x\ny\nE []\nst=1\n" = >r)))
-(: r (hark ["out/love" "out/lush" "-c" "alias zz-qq='echo L'; type zz-qq; command -v zz-qq; unalias zz-qq; type zz-qq"])
+(hark ["out/love" "out/lush" "-c" "alias zz-qq='echo L'; type zz-qq; command -v zz-qq; unalias zz-qq; type zz-qq"] @ r
    (test (1 = <r) ("zz-qq is an alias for echo L\nalias zz-qq='echo L'\n" = >r)))
 ;; times is two lines of the POSIX shape; hash remembers PATH's winners and forgets
-(: r (hark ["out/love" "out/lush" "-c" "times"])
-   (test (2 = #(lines >r)) (all (\ l ("m" = snip l 1 2)) (lines >r))))
-(: r (hark ["out/love" "out/lush" "-c" "hash -r; hash; hash nosuch-qq; echo st=$?; hash sh; hash | sed 's/=.*//'; hash -r; hash"])
+(hark ["out/love" "out/lush" "-c" "times"] @ r
+   (test (2 = #(lines >r)) (all (l \ ("m" = snip l 1 2)) (lines >r))))
+(hark ["out/love" "out/lush" "-c" "hash -r; hash; hash nosuch-qq; echo st=$?; hash sh; hash | sed 's/=.*//'; hash -r; hash"] @ r
    (test ("st=1\nsh\n" = >r)))
 ;; ulimit: -n set both bounds, -S the soft alone, -H reads the hard; an unknown letter
 ;; and a bad limit are errors
-(: r (hark ["out/love" "out/lush" "-c" "ulimit -n 1000; ulimit -n; ulimit -Sn 500; ulimit -n; ulimit -Hn; ulimit -z; echo st=$?; ulimit -n abc; echo st=$?"])
+(hark ["out/love" "out/lush" "-c" "ulimit -n 1000; ulimit -n; ulimit -Sn 500; ulimit -n; ulimit -Hn; ulimit -z; echo st=$?; ulimit -n abc; echo st=$?"] @ r
    (test ("1000\n500\n1000\nst=1\nst=1\n" = >r)))
 
 ;; the line editor takes utf-8 on a pty: a character's bytes arrive one at a time, and left
@@ -886,7 +881,7 @@
        (go i) (? (m < i + n) 0 (snip hay i (i + n) = ned) 1 (go (i + 1)))
        (go 0))
    (pump src dst) (see src @ -1 0 ch (put dst ch, flush dst, pump src dst))
-   (type m s) (: (go i) (? (#s <= i) (flush m) (put m (s i), go (i + 1))) (go 0))
+   (type m s) (: (go i) (#s <= i ? (flush m) (put m (s i), go (i + 1))) (go 0))
    e (string 27)
    r (tether ["out/love" "lush"])
    m >r
@@ -900,12 +895,12 @@
    _ (type m "\n")
    _ (rest 700)
    s (slurp sink)
-   _ (still <r 9)
-   _ (landed? t ? (catch t) (freeze t))
-   (test (has? s "a本b|") !(has? s "a日本b|") !(has? s "\xef\xbf\xbd")))
+   (still <r 9,
+    (landed? t ? (catch t) (freeze t)),
+    test (has? s "a本b|") !(has? s "a日本b|") !(has? s "\xef\xbf\xbd")))
 
 ;; PATH unset searches the default path, never the cwd: a word planted there is not found
-(: r (hark ["out/love" "out/lush" "-c" "d=out/.lush-t9; mkdir -p $d; printf '#!/bin/sh\\necho planted\\n' > $d/zz-qq-plant; chmod 755 $d/zz-qq-plant; cd $d; unset PATH; zz-qq-plant; echo st=$?"])
+(hark ["out/love" "out/lush" "-c" "d=out/.lush-t9; mkdir -p $d; printf '#!/bin/sh\\necho planted\\n' > $d/zz-qq-plant; chmod 755 $d/zz-qq-plant; cd $d; unset PATH; zz-qq-plant; echo st=$?"] @ r
    (test ("st=127\n" = >r)))
 ;; the prompt shows a control byte in the cwd as ^X, so a directory's name cannot drive the terminal
 (test ("a^[^Gb^?" = sh-vis ("a" + string 27 + string 7 + "b" + string 127))
@@ -918,8 +913,8 @@
    _ (sh-histput "echo zz")
    _ (sh-histput "echo yy")
    st (stat (d + "/.lush_history"))
-   _ (setenv "HOME" home0)
-   (test (two? st) (384 = (511 & (st 2)))))
+   (setenv "HOME" home0,
+    test (two? st) (384 = 511 & st 2)))
 
 ;; a bracketed paste is text on the line: its newlines run nothing until an enter
 (: (has? hay ned)
@@ -927,7 +922,7 @@
        (go i) (? (m < i + n) 0 (snip hay i (i + n) = ned) 1 (go (i + 1)))
        (go 0))
    (pump src dst) (see src @ -1 0 ch (put dst ch, flush dst, pump src dst))
-   (type m s) (: (go i) (? (#s <= i) (flush m) (put m (s i), go (i + 1))) (go 0))
+   (type m s) (: (go i) (#s <= i ? (flush m) (put m (s i), go (i + 1))) (go 0))
    e (string 27)
    f "out/.lush-t11"
    _ (hark ["out/love" "out/lush" "-c" ("rm -f " + f)])
@@ -944,9 +939,9 @@
    _ (rest 700)
    late (two? (stat f))
    s (slurp sink)
-   _ (still <r 9)
-   _ (landed? t ? (catch t) (freeze t))
-   (test !early late (has? s "pasted-ran") (has? s (e + "[?2004h"))))
+   (still <r 9,
+    (landed? t ? (catch t) (freeze t)),
+    test !early late (has? s "pasted-ran") (has? s (e + "[?2004h"))))
 
 (test_fin ())
 (puts "sh: ok") (putc 10)

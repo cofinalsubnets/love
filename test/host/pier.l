@@ -1,30 +1,19 @@
-; --- test/host/pier.l: the terminal in its own X window, headless ---
-; spawns an Xvfb and runs `love pier` on it with a child that paints two red cells and
-; reads a line. the window's pixels come back through GetImage: the red is there, laid by
-; the console's own painter (dye). then `a` and Return go in through XTEST -- pier's key
-; path to the pty -- and the child, having read `a`, paints two green cells a row down.
-; a second Return scrolls both off the top, and shift+PgUp looks back through the history
-; until the red is in the corner again; a plain key brings the view home. then the child
-; asks for the mouse (?1000, ?1006), and a click at row 1, col 2 through XTEST reaches it
-; as its press and release reports: it paints a blue cell in the corner. last it asks for
-; bracketed paste, the test takes the primary selection, and a middle click has pier ask
-; for it: "p\nq" arrives bracketed, the newline a return, and the child paints magenta.
-; then it prints "hello world": a drag over hello selects it and pier takes the primary,
-; which the test asks for and reads back; a double click on world takes the word. then
-; ctrl+shift+C puts it on the clipboard, a shift click stretches the primary back over
-; hello, and last the test owns the clipboard and hands pier a paste INCR, in pieces --
-; "p1", "\nq2", and the empty one that ends it: the child reads it whole and paints yellow.
-; the child's exit takes pier with it, status 0. no Xvfb on the box -> a polite skip.
-;   cat test/00-init.l test/host/pier.l | out/love
+; test/host/pier.l -- the terminal in its own X window, headless: an Xvfb, `love pier` on it,
+; and a child that paints cells as its input arrives. the pixels come back through GetImage.
+; asserted in turn: the red cells, XTEST keys through to the pty, scrollback through shift+PgUp,
+; mouse reports (?1000 ?1006), bracketed paste off the primary, drag and double-click
+; selection, ctrl+shift+C to the clipboard, a shift-click stretch, and an INCR paste in
+; pieces. the child's exit takes pier with it, status 0. no Xvfb -> a polite skip.
+; run: cat test/00-init.l test/host/pier.l | out/love
 (: xv (tether ["Xvfb" "-displayfd" "1" "-screen" "0" "800x600x24" "-nolisten" "tcp"])
-   (wfx p) (: g2 (gather p) (two? g2 ? g2 (rest 2, wfx p)))
-   _ (? !(two? xv) (puts "pier: ok (no Xvfb, skipped)\n", quit 0) 0)
-   (rdnum p) ((: (go n st) (: c (see p)
+   (wfx p) (gather p @ g2 (two? g2 ? g2 (rest 2, wfx p)))
+   _ (!(two? xv) ? (puts "pier: ok (no Xvfb, skipped)\n", quit 0) 0)
+   (rdnum p) ((: (go n st) (see p @ c
                               (? (c = -1) ()
                                  (c = 13) (go n st)
                                  (c = 10) (st = 1 ? n (go 0 0))
-                                 ((48 <= c) && (c < 58))
-                                  (st = 2 ? (go 0 2) (go ((10 * n) + (c - 48)) 1))
+                                 (48 <= c && c < 58)
+                                  (st = 2 ? (go 0 2) (go (10 * n + (c - 48)) 1))
                                  (go 0 2))))
               0 0)
    dn (rdnum >xv)
@@ -41,130 +30,130 @@
    _ (test (two? tree))
    kids <>tree                                         ; (1 windows): the children
    _ (test (two? kids))
-   win (: (last l) (? (two? >l) (last >l) <l) (last kids))
+   win (: (last l) (two? >l ? (last >l) <l) (last kids))
    ; GetImage, ZPixmap: a 16x16 square of pier's window at (x,y), as (r g b) of its middle pixel
-   (px x y) (: _ (w8 s 73) _ (w8 s 2) _ (w16 s 5) _ (w32 s win)
-               _ (w16 s x) _ (w16 s y) _ (w16 s 16) _ (w16 s 16) _ (w32 s 4294967295)
+   (px x y) (: _ (w8 s 73, w8 s 2, w16 s 5, w32 s win)
+               _ (w16 s x, w16 s y, w16 s 16, w16 s 16, w32 s 4294967295)
                _ (XW 'x-flush s)
                hdr (XW 'x-reply s)
-               n ((XW 'u32 hdr 4) * 4)
+               n (XW 'u32 hdr 4 * 4)
                bs (XW 'x-rbytes s n)
-               at (((8 * 16) + 8) * 4)                   ; the middle, bgrx
+               at ((8 * 16 + 8) * 4)                   ; the middle, bgrx
                [(bs (at + 2)) (bs (at + 1)) (bs at)])
    _ (test ([128 0 0] = px 0 0))                       ; the red cells, xterm-256's 1
    ; XTEST: the key `a` (keycode 38) and Return (36), pressed and let go
-   qx (: _ (w8 s 98) _ (w8 s 0) _ (w16 s 4) _ (w16 s 5) _ (w16 s 0)
-         _ (XW 'x-wpad s "XTEST") _ (XW 'x-flush s)
+   qx (: _ (w8 s 98, w8 s 0, w16 s 4, w16 s 5, w16 s 0)
+         _ (XW 'x-wpad s "XTEST", XW 'x-flush s)
          hdr (XW 'x-reply s) (hdr 9))
-   (fake ty kc) (: _ (w8 s qx) _ (w8 s 2) _ (w16 s 9) _ (w8 s ty) _ (w8 s kc) _ (w16 s 0)
-                   _ (w32 s 0) _ (w32 s 0) _ (w32 s 0) _ (w32 s 0)
-                   _ (w16 s 0) _ (w16 s 0) _ (w32 s 0) _ (w16 s 0) _ (w8 s 0) _ (w8 s 0)
-                   (XW 'x-flush s))
+   (fake ty kc) (w8 s qx, w8 s 2, w16 s 9, w8 s ty, w8 s kc, w16 s 0,
+                 w32 s 0, w32 s 0, w32 s 0, w32 s 0,
+                 w16 s 0, w16 s 0, w32 s 0, w16 s 0, w8 s 0, w8 s 0,
+                 XW 'x-flush s)
    _ (test (0 < qx))
-   _ (fake 2 38) _ (fake 3 38) _ (fake 2 36) _ (fake 3 36)
+   _ (fake 2 38, fake 3 38, fake 2 36, fake 3 36)
    _ (rest 1500)
    _ (test ([0 128 0] = px 0 16))                      ; a row down: the green, the child read `a`
-   _ (fake 2 36) _ (fake 3 36)                         ; Return: eighty lines scroll it all away
+   _ (fake 2 36, fake 3 36)                            ; Return: eighty lines scroll it all away
    _ (rest 1500)
    _ (test ([0 0 0] = px 0 0))
-   (pgup n) (? (0 < n) (: _ (fake 2 50) _ (fake 2 112) _ (fake 3 112) _ (fake 3 50) (pgup (n - 1))) 0)
+   (pgup n) (0 < n ? (fake 2 50, fake 2 112, fake 3 112, fake 3 50, pgup (n - 1)) 0)
    _ (pgup 6)                                          ; shift+Prior, six times: past the top
    _ (rest 1000)
    _ (test ([128 0 0] = px 0 0))                       ; the history's first line, in the corner
-   _ (fake 2 50) _ (fake 3 50) _ (fake 2 38) _ (fake 3 38)   ; shift alone says nothing; `a` goes home
+   _ (fake 2 50, fake 3 50, fake 2 38, fake 3 38)            ; shift alone says nothing; `a` goes home
    _ (rest 1000)
    _ (test ([0 0 0] = px 0 0))
-   (fakeat ty d x y) (: _ (w8 s qx) _ (w8 s 2) _ (w16 s 9) _ (w8 s ty) _ (w8 s d) _ (w16 s 0)
-                        _ (w32 s 0) _ (w32 s 0) _ (w32 s 0) _ (w32 s 0)
-                        _ (w16 s x) _ (w16 s y) _ (w32 s 0) _ (w16 s 0) _ (w8 s 0) _ (w8 s 0)
-                        (XW 'x-flush s))
-   _ (fakeat 6 0 20 24) _ (fake 4 1) _ (fake 5 1)      ; to row 1, col 2, and a click
+   (fakeat ty d x y) (w8 s qx, w8 s 2, w16 s 9, w8 s ty, w8 s d, w16 s 0,
+                      w32 s 0, w32 s 0, w32 s 0, w32 s 0,
+                      w16 s x, w16 s y, w32 s 0, w16 s 0, w8 s 0, w8 s 0,
+                      XW 'x-flush s)
+   _ (fakeat 6 0 20 24, fake 4 1, fake 5 1)            ; to row 1, col 2, and a click
    _ (rest 1000)
    _ (test ([0 0 128] = px 0 0))                       ; the child read `a` and both reports
    ; the primary, held by a window of the test's: create it, own the selection, and answer
    ; the one SelectionRequest pier's middle click makes (in a task, so a silence can't hang)
    ow (XW 'scr-idbase sc)
-   _ (: _ (w8 s 1) _ (w8 s 0) _ (w16 s 8) _ (w32 s ow) _ (w32 s (XW 'scr-root sc))
-        _ (w16 s 0) _ (w16 s 0) _ (w16 s 1) _ (w16 s 1) _ (w16 s 0) _ (w16 s 2) _ (w32 s 0) _ (w32 s 0)
-        _ (w8 s 22) _ (w8 s 0) _ (w16 s 4) _ (w32 s ow) _ (w32 s 1) _ (w32 s 0)
-        (XW 'x-flush s))
-   (owner _) (: e (XW 'x-next s)
+   _ (w8 s 1, w8 s 0, w16 s 8, w32 s ow, w32 s (XW 'scr-root sc),
+      w16 s 0, w16 s 0, w16 s 1, w16 s 1, w16 s 0, w16 s 2, w32 s 0, w32 s 0,
+      w8 s 22, w8 s 0, w16 s 4, w32 s ow, w32 s 1, w32 s 0,
+      XW 'x-flush s)
+   (owner _) (XW 'x-next s @ e
               (? !(two? e) 0
-                 !((XW 'ev-code e) = 30) (owner 0)
+                 !(XW 'ev-code e = 30) (owner 0)
                  (: raw (XW 'ev-raw e) u32 (XW 'u32)
                     rq (u32 raw 12) sel (u32 raw 16) ty (u32 raw 20) pr (u32 raw 24)
-                    _ (w8 s 18) _ (w8 s 0) _ (w16 s 7) _ (w32 s rq) _ (w32 s pr) _ (w32 s ty)
-                    _ (w8 s 8) _ (w8 s 0) _ (w16 s 0) _ (w32 s 3) _ (XW 'x-wpad s "p\nq")
-                    _ (w8 s 25) _ (w8 s 0) _ (w16 s 11) _ (w32 s rq) _ (w32 s 0)
-                    _ (w8 s 31) _ (w8 s 0) _ (w16 s 0) _ (w32 s 0) _ (w32 s rq) _ (w32 s sel)
-                    _ (w32 s ty) _ (w32 s pr) _ (w32 s 0) _ (w32 s 0)
-                    (XW 'x-flush s))))
-   ot (twirl (\ _ (owner 0)) 0)
-   _ (fake 4 2) _ (fake 5 2)                           ; the middle button: paste
+                    (w8 s 18, w8 s 0, w16 s 7, w32 s rq, w32 s pr, w32 s ty,
+                     w8 s 8, w8 s 0, w16 s 0, w32 s 3, XW 'x-wpad s "p\nq",
+                     w8 s 25, w8 s 0, w16 s 11, w32 s rq, w32 s 0,
+                     w8 s 31, w8 s 0, w16 s 0, w32 s 0, w32 s rq, w32 s sel,
+                     w32 s ty, w32 s pr, w32 s 0, w32 s 0,
+                     XW 'x-flush s))))
+   ot (twirl (_ \ (owner 0)) 0)
+   _ (fake 4 2, fake 5 2)                              ; the middle button: paste
    _ (rest 1500)
-   _ (? (landed? ot) 0 (freeze ot))
+   _ (landed? ot ? 0 (freeze ot))
    _ (test ([128 0 128] = px 0 0))                     ; the child read the paste, bracketed
    ; the primary as the test's window reads it: ConvertSelection, then the property
    ut (XW 'x-intern s "UTF8_STRING") tp (XW 'x-intern s "TSEL")
    cb (XW 'x-intern s "CLIPBOARD") ic (XW 'x-intern s "INCR")
-   (ask sel) (: _ (w8 s 24) _ (w8 s 0) _ (w16 s 6) _ (w32 s ow) _ (w32 s sel) _ (w32 s ut) _ (w32 s tp) _ (w32 s 0)
+   (ask sel) (: _ (w8 s 24, w8 s 0, w16 s 6, w32 s ow, w32 s sel, w32 s ut, w32 s tp, w32 s 0)
               _ (XW 'x-flush s)
-              (wait _) (: e (XW 'x-next s)
+              (wait _) (XW 'x-next s @ e
                           (? !(two? e) ""
-                             ((XW 'ev-code e) = 31) (string (XW 'x-getprop s ow tp 2))
+                             (XW 'ev-code e = 31) (string (XW 'x-getprop s ow tp 2))
                              (wait 0)))
               (wait 0))
-   (primary sel) (: got {} t (twirl (\ _ (pin got () (ask sel))) 0)
-                  _ (rest 1000)
-                  _ (? (landed? t) 0 (freeze t))
-                  (peep got () ""))
-   _ (fakeat 6 0 4 40) _ (fake 4 1) _ (fakeat 6 0 36 40) _ (fake 5 1)   ; a drag across hello, row 2
+   (primary sel) (: got {} t (twirl (_ \ (pin got () (ask sel))) 0)
+                  (rest 1000,
+                   (landed? t ? 0 (freeze t)),
+                   peep got () ""))
+   _ (fakeat 6 0 4 40, fake 4 1, fakeat 6 0 36 40, fake 5 1)            ; a drag across hello, row 2
    _ (rest 500)
    _ (test ("hello" = primary 1))
-   _ (fakeat 6 0 60 40) _ (fake 4 1) _ (fake 5 1) _ (fake 4 1) _ (fake 5 1)   ; a double click on world
+   _ (fakeat 6 0 60 40, fake 4 1, fake 5 1, fake 4 1, fake 5 1)               ; a double click on world
    _ (rest 500)
    _ (test ("world" = primary 1))
-   (presses l) (? (two? l) (: _ (fake <l <>l) (presses >>l)) 0)   ; (type keycode) pairs, in turn
+   (presses l) (two? l ? (fake <l <>l, presses >>l) 0)   ; (type keycode) pairs, in turn
    (chord kc) (presses [2 37 2 50 2 kc 3 kc 3 50 3 37])    ; with ctrl and shift held
    _ (chord 54)                                        ; ctrl+shift+C
    _ (rest 300)
    _ (test ("world" = primary cb))                      ; on the clipboard now
-   _ (presses [2 50]) _ (fakeat 6 0 4 40) _ (fake 4 1) _ (fake 5 1) _ (presses [3 50])   ; a shift click on hello
+   _ (presses [2 50], fakeat 6 0 4 40, fake 4 1, fake 5 1, presses [3 50])               ; a shift click on hello
    _ (rest 500)
    _ (test ("hello world" = primary 1))                 ; the word stretched back to it
    ; the clipboard, the test's again, and a paste of it INCR: the pieces go on pier's
    ; property each time pier deletes the last, the empty one closing it
-   (prop w pr ty fmt n bs) (: _ (w8 s 18) _ (w8 s 0) _ (w16 s (6 + (#bs + 3) // 4)) _ (w32 s w) _ (w32 s pr)
-                             _ (w32 s ty) _ (w8 s fmt) _ (w8 s 0) _ (w16 s 0) _ (w32 s n) (XW 'x-wpad s bs))
-   (next code f) (: e (XW 'x-next s) (? !(two? e) () (((XW 'ev-code e) = code) && f (XW 'ev-raw e)) (XW 'ev-raw e) (next code f)))
+   (prop w pr ty fmt n bs) (w8 s 18, w8 s 0, w16 s (6 + (#bs + 3) // 4), w32 s w, w32 s pr,
+                            w32 s ty, w8 s fmt, w8 s 0, w16 s 0, w32 s n, XW 'x-wpad s bs)
+   (next code f) (XW 'x-next s @ e (? !(two? e) () (XW 'ev-code e = code && f (XW 'ev-raw e)) (XW 'ev-raw e) (next code f)))
    (serve _) (: u32 (XW 'u32)
-                raw (next 30 (\ r 1))
+                raw (next 30 (r \ 1))
                 rq (u32 raw 12) sel (u32 raw 16) ty (u32 raw 20) pr (u32 raw 24)
-                _ (w8 s 2) _ (w8 s 0) _ (w16 s 4) _ (w32 s rq) _ (w32 s 2048) _ (w32 s 4194304)   ; its property changes, to us
+                _ (w8 s 2, w8 s 0, w16 s 4, w32 s rq, w32 s 2048, w32 s 4194304)                  ; its property changes, to us
                 _ (prop rq pr ic 32 1 (string 5 + string 0 + string 0 + string 0))
-                _ (w8 s 25) _ (w8 s 0) _ (w16 s 11) _ (w32 s rq) _ (w32 s 0)
-                _ (w8 s 31) _ (w8 s 0) _ (w16 s 0) _ (w32 s 0) _ (w32 s rq) _ (w32 s sel)
-                _ (w32 s ty) _ (w32 s pr) _ (w32 s 0) _ (w32 s 0)
+                _ (w8 s 25, w8 s 0, w16 s 11, w32 s rq, w32 s 0)
+                _ (w8 s 31, w8 s 0, w16 s 0, w32 s 0, w32 s rq, w32 s sel)
+                _ (w32 s ty, w32 s pr, w32 s 0, w32 s 0)
                 _ (XW 'x-flush s)
-                (feed l) (? (two? l)
-                            (: _ (next 28 (\ r (((u32 r 4) = rq) && ((u32 r 8) = pr) && ((r 16) = 1))))
-                               _ (prop rq pr ty 8 #<l <l)
-                               _ (XW 'x-flush s)
-                               (feed >l))
+                (feed l) (two? l ?
+                            (next 28 (r \ (u32 r 4 = rq && u32 r 8 = pr && r 16 = 1)),
+                             prop rq pr ty 8 #<l <l,
+                             XW 'x-flush s,
+                             feed >l)
                             0)
                 (feed ["p1" "\nq2" ""]))
-   _ (w8 s 22) _ (w8 s 0) _ (w16 s 4) _ (w32 s ow) _ (w32 s cb) _ (w32 s 0) _ (XW 'x-flush s)
-   it (twirl (\ _ (serve 0)) 0)
+   _ (w8 s 22, w8 s 0, w16 s 4, w32 s ow, w32 s cb, w32 s 0, XW 'x-flush s)
+   it (twirl (_ \ (serve 0)) 0)
    _ (chord 55)                                        ; ctrl+shift+V
    _ (rest 1500)
-   _ (? (landed? it) 0 (freeze it))
+   _ (landed? it ? 0 (freeze it))
    _ (test ([128 128 0] = px 0 0))                     ; the child read the pieces as one paste
    _ (close s)
-   (wfn p n) (: g2 (gather p) (two? g2 ? g2 (n < 1 ? () (rest 2, wfn p (n - 1)))))
+   (wfn p n) (gather p @ g2 (two? g2 ? g2 (n < 1 ? () (rest 2, wfn p (n - 1)))))
    st (wfn <ph 3000)                                   ; a child still waiting on a paste: a fail, not a hang
-   _ (? (two? st) 0 (: _ (still <ph 15) (wfx <ph)))
-   _ (test (two? st) (0 = <st))                        ; the child's exit took pier with it
-   _ (still <xv 15)
-   _ (wfx <xv)
-   _ (test_fin ())
-   (puts "pier: ok\n"))
+   ((two? st ? 0 (still <ph 15, wfx <ph)),
+    test (two? st) (0 = <st),                          ; the child's exit took pier with it
+    still <xv 15,
+    wfx <xv,
+    test_fin (),
+    puts "pier: ok\n"))

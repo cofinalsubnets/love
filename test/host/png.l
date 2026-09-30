@@ -1,4 +1,4 @@
-; --- test/host/png.l: src/apps/png.l and src/love/lib/png.c's unfilter --------------------------
+; test/host/png.l -- src/apps/png.l and src/love/lib/png.c's unfilter
 ; the nif and the walk on rows worked by hand: each filter, a bad filter byte, too few
 ; bytes. then, where python3 with PIL and magick are here, images of every colour type, grey
 ; at 1 to 16 bits, palettes of 1 to 8, colour keys, 16-bit and interlaced ones at a size
@@ -7,11 +7,11 @@
 ;   cat test/00-init.l test/host/png.l | out/love
 (borrow 'posix)
 (borrow "src/apps/png.l")
-(: dir ((cwd 0) + "/out/.png")
-   _ (hark ["rm" "-rf" dir]) _ (mkdir dir 448)
-   (rd p) (: q (open p "r") s (slurp q) _ (close q) s)
-   (put p s) (: q (open p "w") _ (say q s) (close q))
-   (bytes l) (: c (cask #l) _ (map (i \ pin c i (l i)) (jot #l)) (string c))
+(: dir (cwd 0 + "/out/.png")
+   _ (hark ["rm" "-rf" dir], mkdir dir 448)
+   (rd p) (: q (open p "r") s (slurp q) (close q, s))
+   (put p s) (open p "w" @ q (say q s, close q))
+   (bytes l) (cask #l @ c (map (i \ pin c i (l i)) (jot #l), string c))
 
    ; -- the nif --------------------------------------------------------------------------
    ; sub then paeth over the row above, then none, up and average, bpp 1 and 2
@@ -21,9 +21,9 @@
    (walk l o rows n bpp)
     (: c (cask #l) _ (map (i \ pin c i (l i)) (jot #l))
        e (png-walk c o rows n bpp)
-       (? (string? e) e
-          (foldl (\ acc y (acc + snip (string c) (o + 1 + y * (n + 1)) (o + 1 + y * (n + 1) + n))) ""
-                 (jot rows))))
+       (string? e ? e
+        (foldl (acc \ y \ (acc + snip (string c) (o + 1 + y * (n + 1)) (o + 1 + y * (n + 1) + n))) ""
+               (jot rows))))
    _ (test (r1 = bytes [10 15 20 11 16 21])
            (r2 = bytes [7 8 9 250  8 9 10 4  6 6 10 7])
            (walk [1 10 5 5  4 1 1 1] 0 2 3 1 = r1)
@@ -34,7 +34,7 @@
            (png-unfilter "abc" 0 1 3 0 = ()))
 
    ; -- images against magick ------------------------------------------------------------
-   (has p) (: q (open p "r") (? (hot? q) (close q, 1) 0))
+   (has p) (open p "r" @ q (hot? q ? (close q, 1) 0))
    pil? (: r (hark ["python3" "-c" "import PIL"]) (two? r) && (<r = 0))
    ok? (pil? && has "/usr/bin/magick")
    _ (put (dir + "/mk.py") "import sys
@@ -60,7 +60,7 @@ for n in (2, 4, 16, 256):
    (sh s) (hark ["sh" "-c" s])
    names ["g1" "g8" "g8t" "ga8" "c8" "c8t" "ca8" "p2" "p4" "p16" "p256" "p2t" "p4t" "p16t" "p256t"
           "g2" "g4" "g16" "c16" "ca16" "ga16" "ic8" "ica16" "ig1" "ip16"]
-   _ (? ok?
+   _ (ok? ?
         (: _ (sh ("python3 " + dir + "/mk.py " + dir))
            m ("cd " + dir + " && ")
            _ (sh (m + "magick g8.png -depth 16 -define png:bit-depth=16 g16.png"))
@@ -78,19 +78,19 @@ for n in (2, 4, 16, 256):
            (one n) (: f (dir + "/" + n + ".png")
                       want (sh ("magick " + f + " -depth 8 rgba:-"))
                       got (png-decode (rd f))
-                      (? ((two? want) && (<want = 0) && (two? got) && (got 0 = 37) && (got 1 = 23)
-                          && (got 2 = >want))
+                      (? (two? want && <want = 0 && two? got && got 0 = 37 && got 1 = 23
+                          && got 2 = >want)
                          1 (puts ("png: " + n + " differs from magick\n"), 0)))
            (test (filter (n \ !(one n)) names = ())))
         (puts "png: no python3 PIL or magick, images skipped\n"))
 
    ; -- refusals -------------------------------------------------------------------------
-   good (? ok? (rd (dir + "/c8.png")) "")
-   (flip s i) (: c (cask #s) _ (pour c 0 s 0 #s) _ (pin c i (255 - s i)) (string c))
+   good (ok? ? (rd (dir + "/c8.png")) "")
+   (flip s i) (cask #s @ c (pour c 0 s 0 #s, pin c i (255 - s i), string c))
    _ (test (png-decode "GIF89a" = "not a png")
-           (? ok? ((png-decode (snip good 0 (#good - 20))) = "truncated") 1)
-           (? ok? ((png-decode (flip good (#good - 30))) = "bad crc in IDAT") 1)
-           (? ok? ((png-decode (flip good 20)) = "bad crc in IHDR") 1))
+           (ok? ? (png-decode (snip good 0 (#good - 20)) = "truncated") 1)
+           (ok? ? (png-decode (flip good (#good - 30)) = "bad crc in IDAT") 1)
+           (ok? ? (png-decode (flip good 20) = "bad crc in IHDR") 1))
    ; a header past 2^24 pixels is refused before any of it is allocated, and so is image
    ; data too short for its header
    wrbe (cite 'bytes 'wrbe) zb (cite 'bytes 'zbytes)
@@ -98,11 +98,11 @@ for n in (2, 4, 16, 256):
    (mkpng w h z) (bytes [137 80 78 71 13 10 26 10]
                   + chunk "IHDR" (wrbe w 4 + wrbe h 4 + bytes [8 6 0 0 0])
                   + chunk "IDAT" ("\x78\x01" + deflate z + zb 4) + chunk "IEND" "")
-   _ (test (png-decode (mkpng 100000 100000 (zb 64)) = "too big")
-           (png-decode (mkpng 4097 4096 (zb 64)) = "too big")
-           (png-decode (mkpng 8 8 (zb 64)) = "short image data")
-           (png-decode (mkpng 2 2 (zb 18)) = [2 2 (zb 16)]))
-   _ (hark ["rm" "-rf" dir])
-   0)
+   (test (png-decode (mkpng 100000 100000 (zb 64)) = "too big")
+         (png-decode (mkpng 4097 4096 (zb 64)) = "too big")
+         (png-decode (mkpng 8 8 (zb 64)) = "short image data")
+         (png-decode (mkpng 2 2 (zb 18)) = [2 2 (zb 16)]),
+    hark ["rm" "-rf" dir],
+    0))
 
 (test_fin (), puts "png: ok", putc 10, 0)
