@@ -266,6 +266,9 @@
    _ (map (m \ (: r (hs-run (hs-seat 0) <m 'none)
                   (test !(<r) ((r 1) = [21 (u8 2 + u8 (m 2))]) (string? (r 2)))))
           [['badsig 0 51] ['otherkey 1 51] ['nocv 2 51] ['badfin 3 51] ['nocert 4 51]])
+   ; the aead's tag compare
+   _ (test (ct-same? "abc" "abc") (ct-same? "" "") !(ct-same? "abc" "abd") !(ct-same? "xbc" "abc")
+           !(ct-same? "ab" "abc"))
    ; the trust, with HOME and SSL_CERT_FILE the test's own
    home0 (getenv "HOME") cf0 (getenv "SSL_CERT_FILE")
    hdir ((cwd 0) + "/out/.tlsp-" + show (getpid 0))

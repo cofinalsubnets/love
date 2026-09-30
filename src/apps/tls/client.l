@@ -43,6 +43,9 @@
    (rd24 s i) (rdbe s i 3)
    (zeros n) (zbytes n)
    (xors a b) (xorb a b)
+   ; equal strings, in time that does not hang on where they differ
+   (ct-same? a b) (: d (xors a b) (go i acc) (? (i < #d) (go (i + 1) (acc | d i)) acc)
+                  (#a = #b && go 0 0 = 0))
    ; a small count as eight bytes, either end first
    (u64le n) (bytes 8 (i \ (n >> (8 * i)) & 255))
    (u64be n) (wrbe n 8)
@@ -112,7 +115,7 @@
              pk (snip (cc-stream key nn 0 1) 0 32)
              ct (snip ctag 0 n)
              tag (snip ctag n #ctag)
-             (tag = po-mac pk (aad + pad16 aad + ct + pad16 ct + u64le #aad + u64le #ct)
+             (ct-same? tag (po-mac pk (aad + pad16 aad + ct + pad16 ct + u64le #aad + u64le #ct))
                ? [1 (cc-xor key nn 1 ct)] ())))))
 
    ; --- the wire: exact reads over the socket, a run kept between records ---
@@ -277,7 +280,7 @@
                           (: tb (t 'tr) m (hs-next t)
                              (? (atom? m) ()
                                 (<m = 20)
-                                 (? (t 'cv = 1 && <>m = hmac (hkdf-label shs "finished" "" 32) (sha tb)) m
+                                 (? (t 'cv = 1 && ct-same? <>m (hmac (hkdf-label shs "finished" "" 32) (sha tb))) m
                                     (alert t 51 "the server's Finished does not verify"))
                                 (<m = 11)
                                  (: ds (cert-list <>m)
