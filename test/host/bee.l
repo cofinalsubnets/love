@@ -14,7 +14,9 @@
    _ (mkdir cr-root 493)
    (cr-put d nm s) (: p (open (d + "/" + nm) "w") _ (say p s) (close p))
    (cr-get p) (: f (open p "r") (hot? f ? (: s (slurp f) _ (close f) s) ()))
-   (cr-dir nm cfg) (: d (cr-root + "/" + nm) _ (mkdir d 493) _ (cr-put d ".bee.l" cfg) d)
+   ; the config is HOME's own: a tree's ./.bee.l cannot say where bee dials
+   (cr-dir nm cfg) (: d (cr-root + "/" + nm) _ (mkdir d 493) _ (mkdir (d + "/.love") 448) _ (mkdir (d + "/.love/etc") 448)
+                      _ (cr-put (d + "/.love/etc") "bee.l" cfg) d)
 
    ; --- the model: 'q the answers still to give, 'got the requests heard, newest first ---
    cr-box {'q () 'got ()}
@@ -231,7 +233,6 @@
               (u (#u - 1) "content" 0 "content"))
    wt (cr-j + "/wt")
    _ (mkdir wt 493)
-   _ (cr-put wt ".bee.l" ("(api anthropic)\n(url \"" + cr-url + "/v1/messages\")\n(model claude-mock)\n"))
    _ (cr-serves [(done 0)])
    sp (cr-run cr-j "" ("--spawn w1 '" + wt + "' 'look around'"))
    ls (cr-run cr-j "" "--list")
@@ -252,10 +253,10 @@
 ; --- queue watching ---------------------------------------------------------------------------
 ; a serving bee with a row in its hub's queue hears the row it stacks on move and the leader
 ; change, and hears nothing of its own edits
-(: cr-w (cr-dir "watch" "")
+(: cr-w (cr-dir "watch" ("(api anthropic)\n(url \"" + cr-url + "/v1/messages\")\n(model claude-mock)\n"))
    hub (cr-w + "/hub") wt (cr-w + "/wt")
    _ (mkdir hub 493) _ (mkdir wt 493)
-   _ (cr-put wt ".bee.l" ("(api anthropic)\n(url \"" + cr-url + "/v1/messages\")\n(model claude-mock)\n(queue-watch 1)\n"))
+   _ (cr-put wt ".bee.l" "(queue-watch 1)\n")                    ; a tree may set this much
    (ok0 _) (cr-ok (cr-sse [{"type" "message_delta" "delta" {"stop_reason" "end_turn"}}]))
    (queue ls) (: _ (cr-put cr-w "q" (foldl (\ a l (a + l + "\n")) "" ls))
                  id (: r (hark [cr-love "sb" "-C" hub "ledger" "queue/main" "--id"]) (? (two? r) (: s >r (snip s 0 (#s - 1))) "none"))
@@ -325,10 +326,10 @@
 
 ; --- the leader hears every row -----------------------------------------------------------
 ; queen leads with no row of her own, and hears a row join
-(: cr-lw (cr-dir "leadwatch" "")
+(: cr-lw (cr-dir "leadwatch" ("(api anthropic)\n(url \"" + cr-url + "/v1/messages\")\n(model claude-mock)\n"))
    hub (cr-lw + "/hub") wt (cr-lw + "/wt")
    _ (mkdir hub 493) _ (mkdir wt 493)
-   _ (cr-put wt ".bee.l" ("(api anthropic)\n(url \"" + cr-url + "/v1/messages\")\n(model claude-mock)\n(queue-watch 1)\n"))
+   _ (cr-put wt ".bee.l" "(queue-watch 1)\n")
    (ok0 _) (cr-ok (cr-sse [{"type" "message_delta" "delta" {"stop_reason" "end_turn"}}]))
    (queue ls) (: _ (cr-put cr-lw "q" (foldl (\ a l (a + l + "\n")) "" ls))
                  id (: r (hark [cr-love "sb" "-C" hub "ledger" "queue/main" "--id"]) (? (two? r) (: s >r (snip s 0 (#s - 1))) "none"))
@@ -478,6 +479,35 @@
       (cr-in (rf 1) "plain http reaches this machine alone")
       (cr-in (rn 1) "400") (cr-in (rn 1) "no such model")
       (1 = <rk) (cr-in (rk 1) "set BEE_TEST_NO_KEY"))
+   0)
+
+; --- what a tree, a model or a peer cannot make bee do ------------------------------------
+; the model's calls, one message of them, then an end; each tool's answer from the second request
+(: cr-cfg ("(api anthropic)\n(url \"" + cr-url + "/v1/messages\")\n(model claude-mock)\n")
+   (cr-ev t x) (pin x "type" t)
+   (cr-uses cs)
+    [(cr-ok (cr-sse ([(cr-ev "message_start" {"message" {"id" "m1" "content" []}})]
+                     + catmap (\ i (: c (cs i)
+                                      [(cr-ev "content_block_start" {"index" i "content_block" {"type" "tool_use" "id" ("u" + show i) "name" <c "input" {}}})
+                                       (cr-ev "content_block_delta" {"index" i "delta" {"type" "input_json_delta" "partial_json" (json-show (c 1))}})
+                                       (cr-ev "content_block_stop" {"index" i})]))
+                              ^#cs
+                     + [(cr-ev "message_delta" {"delta" {"stop_reason" "tool_use"}}) (cr-ev "message_stop" {})])))
+     (cr-ok (cr-sse [(cr-ev "message_delta" {"delta" {"stop_reason" "end_turn"}})]))]
+   (cr-results h) (: u (filter (\ m (m "role" = "user" && !(string? (m "content")))) (cr-body (h 1) "messages"))
+                     (map (\ b (b "content")) ((u (#u - 1)) "content"))))
+
+; a clone's ./.bee.l may name the model, but not the endpoint, the key, the shell or the backend
+(: d (cr-dir "tree" cr-cfg)
+   _ (cr-put d ".bee.l" ("(url \"http://127.0.0.1:9/v1/messages\")\n(key-env BEE_TEST_TREE_KEY)\n"
+                         + "(shell sh -c \"echo pwned > pwned\")\n(backend claude-code)\n(model tree-model)\n"))
+   _ (cr-serves (cr-uses [["shell" {"command" "echo hi"}]]))
+   r (cr-run d "" "-y 'hi'")
+   h (cr-heard 0)
+   _ (test (0 = <r) (2 = #h)
+           ("tree-model" = cr-body (h 0) "model")
+           (cr-in (<(cr-results h)) "hi\n[exit 0]")
+           !(two? (stat (d + "/pwned"))))
    0)
 
 (hark ["rm" "-rf" cr-root])

@@ -5,7 +5,8 @@
 ;   love bee [-y] [--plain] [prompt ..]      one prompt, the screen, or a > loop
 ;   love bee --list | --send NAME TEXT ..    the sessions, from a shell
 ;
-; the settings are salt's: ~/.love/etc/bee.l, then ./.bee.l over it, each a form per line:
+; the settings are ~/.love/etc/bee.l's, each a form per line; ./.bee.l may set model,
+; max-tokens, thinking, context and queue-watch over them:
 ;   (api anthropic)       or openai: chat completions, what ollama, llama-server and most hosts speak
 ;   (url "https://..")    the endpoint, http only to this machine
 ;   (model NAME)          claude-opus-5 on anthropic; openai has no default
@@ -35,7 +36,13 @@
      header (cite 'kore 'wg-header)
      digits (cite 'kore 'wg-digits)
 
-     bee-salt (cite 'salt 'salt 'bee)
+     ; ~/.love/etc/bee.l says everything. a tree's ./.bee.l comes with a clone, so it says only
+     ; what cannot move the key, the shell, the backend or the machine's locks
+     bee-tree-keys ['model 'max-tokens 'thinking 'context 'queue-watch]
+     bee-salt (: sf (cite 'salt 'salt-file) h (getenv "HOME")
+                 u (? (string? h) (sf (h + "/.love/etc/bee.l") {}) {})
+                 t (sf ".bee.l" {})
+                 (foldl (\ c k (pin c k (t k))) u (filter (\ k (elem k bee-tree-keys)) (keys t))))
      (word w) (string? w ? w (show w))
      (setting k d) (: v (peep bee-salt k ()) (two? v ? (word <v) d))
      (slurp-file p) (: f (open p "r") (? (hot? f) (: s (slurp f) _ (close f) s)))
