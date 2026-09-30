@@ -362,15 +362,39 @@
 
    ; C is one reading's state: D a slot's node, B the let names in scope, R a let-bound
    ; closure's (name captures), memo a lambda already read -> its name, F a name's form,
-   ; want a name recursion asked for
-   (lamform v) (: nm (nifnom v) r (? (string? nm) (nifn v (name nm)) (call-cc (\ k (: C {'k k 'D {} 'B {} 'R {} 'busy () 'memo {} 'F {} 'want {} 'pre {} 'obj {} 'objs () 'letE {}}
-                                    (rename (cites (tie C (? (partp v) (rfn C (fbase v) . map (rk C) (pargs v)) (rlam C (unw v))))))))))
+   ; want a name recursion asked for, sites how many places quote a lambda, n the bodies
+   ; read so far. a reading past lim bodies is a tree laid of a graph: a function with a
+   ; name is its name, one without is read again with each lambda quoted twice named once
+   (lamform v) (: nm (nifnom v)
+                  (go S) (: r (call-cc (\ k (: C {'k k 'D {} 'B {} 'R {} 'busy () 'memo {} 'F {} 'want {} 'pre {} 'obj {} 'objs () 'letE {} 'sites (? S S {}) 'n 0}
+                                            (rename (cites (tie C (? (partp v) (rfn C (fbase v) . map (rk C) (pargs v)) (rlam C (unw v)))))))))
+                          (? (!== r 'big) r (tablet? S || !== (glob v) ()) 0 (go (sites v))))
+                  r (? (string? nm) (nifn v (name nm)) (go 0))
                  (? (== r 0) (: g (glob v) (? (!== g ()) g 0)) r))
+   lim 20000
    (fail C) (C 'k 0)
    ; the run from p over the frame's slots S0: its node, each slot it made pinned in D
    (run C p S0) (: t (thrun p S0 0 thcfg)
                    _ (? (== t 0) (fail C) (each >t (\ q (pin (C 'D) <q >q))))
                    <t)
+   ; a lambda quoted in one place reads back in place, a let's; one quoted in more is a
+   ; function called from each, and in place wherever it is quoted a graph of them reads
+   ; as a tree. sites: how many places quote each lambda v reaches, its own body aside
+   (sites v) (: T {} seen {}
+    (see me v) (? (charm? v || == v () || mint? v || nom? v || two? v || !(fn? v) || !== (glob v) ()) 0
+                  (: u (unw v)
+                   (? (partp u) (part me u)
+                      (string? (nifnom u) || opnom u || !== (glob u) ()) 0
+                      (: _ (? (== u me) 0 (pin T u (1 + peep T u 0))) (walk u)))))
+    (part me u) (: _ (see me (fbase u)) (each (pargs u) (see me)))
+    (walk u) (? (peep seen u 0) 0
+                (: _ (pin seen u 1)
+                   t (thrun (entry u) (map (\ _ (mint 0)) (jot (arity u))) 0 thcfg)
+                   (wn x) (? (two? x) (? (== <x 'k) (see u (x 1)) (name? <x) (each >x wn) (each x wn)) 0)
+                 (? (== t 0) 0 (: _ (wn <t) (each >t (\ q (wn >q)))))))
+    _ (? (partp v) (part 0 v) (walk (unw v)))
+    T)
+   (one C v) ((peep (C 'sites) v 0) < 2)
 
    ; --- rendering: a node to a source form, the binders still mints
    (res C x) (? (mint? x) (: b (peep (C 'B) x 0) d (peep (C 'D) x C)
@@ -397,7 +421,7 @@
    (spine C x gs) (: y (res C x) (? (two? y && <y = 'a) (spine C (y 1) ((y 2) . gs)) (y . gs)))
    ; a lambda to read back: no name of its own, not a partial, not being read already
    (lam C h) (? (two? h && <h = 'k)
-               (: v (unw (h 1)) (? (fn? v && !(partp v) && fname C v == 0 && !(busy? C v)) v)))
+               (: v (unw (h 1)) (? (fn? v && !(partp v) && fname C v == 0 && !(busy? C v) && one C v) v)))
    (nlet C h) (? (two? h && <h = 'k) (named C (unw (h 1))))
    ; a lambda head: fewer args than params are its captures, a closure; the group that
    ; saturates it is a let's inits, the groups before it its captures
@@ -453,10 +477,10 @@
    (unself m y) (? (two? y && == <y ': && 4 = #y && mint? (y 1) && == (y 1) (y 3)) (sub (y 1) m (y 2)) y)
    (sub a b x) (? (== x a) b (atom? x || qot? x) x (map (\ e (sub a b e)) x))
    ; a closure node: (lambda . capture vars), or ()
-   (clo C d) (? (two? d && <d = 'k) (: v (unw (d 1)) (? (fn? v && !(partp v) && !(nifnom v)) [v]))
+   (clo C d) (? (two? d && <d = 'k) (: v (unw (d 1)) (? (fn? v && !(partp v) && !(nifnom v) && one C v) [v]))
                 (two? d && <d = 'a)
                 (: sp (spine C d ()) h <sp as (catmap id >sp) E (? (two? h && <h = 'k) (unw (h 1)))
-                 (? (E && fn? E && !(partp E) && !(nifnom E) && #as < arity E && all (var? C) as)
+                 (? (E && fn? E && !(partp E) && !(nifnom E) && one C E && #as < arity E && all (var? C) as)
                     (E . map (res C) as))))
    (named C v) (peep (C 'R) v ())
    ; read with captures, a lambda's own name is the bare lambda -- a call of it from inside
@@ -464,6 +488,8 @@
    (rbody C E pre) (: bz (C 'busy) le (peep (C 'letE) E 0)
     (inq l) (? (two? l) (== E <l || inq >l))
     _ (? (inq bz) (fail C))
+    _ (pin C 'n (1 + C 'n))
+    _ (? (lim < C 'n) (C 'k 'big) 0)
     _ (pin C 'busy (E . bz))
     _ (pin (C 'pre) E pre)
     _ (? (two? pre) (pin (C 'letE) E 1) 0)
