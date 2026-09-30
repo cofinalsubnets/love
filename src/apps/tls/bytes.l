@@ -13,21 +13,21 @@
 
    ; ..and the same word back out, into a cask at offset o.
    (le32! b o v)
-    (: _a (pin b o (v & 255))
-       _b (pin b (o + 1) (v >> 8 & 255))
-       _c (pin b (o + 2) (v >> 16 & 255))
-       _d (pin b (o + 3) (v >> 24 & 255))
-       0)
+    (pin b o (v & 255),
+     pin b (o + 1) (v >> 8 & 255),
+     pin b (o + 2) (v >> 16 & 255),
+     pin b (o + 3) (v >> 24 & 255),
+     0)
 
    ; the record layer counts in big-endian 16, the one place tls disagrees with the
    ; ciphers about which end a number starts at.
    (be16 s i) (rdbe s i 2)
-   (be16! b o v) (: _a (pin b o (v >> 8 & 255)) _b (pin b (o + 1) (v & 255)) 0)
+   (be16! b o v) (pin b o (v >> 8 & 255), pin b (o + 1) (v & 255), 0)
 
    ; an n-byte string, byte i being (f i). the one constructor everything uses.
    (bytes n f)
     (: b (cask n)
-       (go i) (? (n <= i) (string b) (: _ (pin b i (f i)) (go (i + 1))))
+       (go i) (n <= i ? (string b) (pin b i (f i), go (i + 1)))
        (go 0))
 
    ; lowercase hex, and back. the tests speak hex because the RFCs do.

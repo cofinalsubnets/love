@@ -35,10 +35,10 @@
  (glean s) (sound ("(" + s + ")") @ (d . _) (two? d ? d))
 
  ; --- the cell-name shape: one letter, then digits (a1 .. z999) ---
- (cell? n) (? (name? n) (: s (string n) t (tally s)
-            (1 < t < 5 &&
-             97 <= s 0 <= 122 &&
-             (: (digs i) (i >= t || (48 <= s i <= 57 ? (digs (i + 1))))) 1)))
+ (cell? n) (name? n ? (: s (string n) t #s
+          (1 < t < 5 &&
+           97 <= s 0 <= 122 &&
+           (: (digs i) (i >= t || (48 <= s i <= 57 ? (digs (i + 1))))) 1)))
 
  ; --- the book of known names, laid once on first use: a name off this
  ; book and off the sheet is a label and binds to its own spelling ---
@@ -63,7 +63,7 @@
                           ((cell? f || label? f) && !(peep seen f 0))
                            (pin seen f 1, acc + [f])
                           acc)
- (deps f) (walkdeps f (tablet 0) ())
+ (deps f) (walkdeps f {} ())
 
  ; --- the sheet ---
  (sheet _) {0 {} 1 {} 2 {} 3 0}   ; 3: the whirl count
@@ -78,22 +78,22 @@
  ; --- worth: demand-evaluate, memoize. the formula becomes a lambda over
  ; its deps and is applied to their worths (cells recurse; labels are their
  ; spelling), so nothing global is touched and no missing ever fires ---
- (worth1 sh s) (: f (glean s)
-                  (? (atom? f) s                        ; unreadable: the text itself
+ (worth1 sh s) (glean s @ f
+                  (atom? f ? s                          ; unreadable: the text itself
                    (: ds (deps f)
                       lam (ev $ !ds ? f (['\] + ds + [f]))
                       vs (map (d \ cell? d ? (worth sh d) (string d)) ds)
-                      (? (foldl (a \ v \ v = whirl || a) 0 vs)
+                      (foldl (a \ v \ v = whirl || a) 0 vs ?
                          whirl                          ; a whirl dep taints (it would ride as the unit)
                          (foldl id lam vs)))))
  ; a visiting-hit bumps the whirl count; any cell whose evaluation window saw
  ; a bump answers whirl itself, so the cycle wears its face at every cell on
  ; the loop (a bare whirl is a mint -- the unit -- and would otherwise ride
  ; through the arithmetic and let a circle quietly converge).
- (worth sh n) (: v (peep (sh 1) n none)
+ (worth sh n) (peep (sh 1) n none @ v
                  (? (v != none) v
                   (peep (sh 2) n 0) (pin sh 3 (1 + peep sh 3 0), whirl)
-                  (: s (peep (sh 0) n none)
+                  (peep (sh 0) n none @ s
                      (s = none ? ()                 ; an empty cell is the unit
                       (: _ (pin (sh 2) n 1)
                          c0 (peep sh 3 0)
@@ -104,7 +104,7 @@
                           v2))))))
 
  ; --- stow / unstow: the sheet as one readable form ---
- (stow sh path) (: p (open path "w")
+ (stow sh path) (open path "w" @ p
                  (lit? p ?
                   (say p "(manifest\n",
                    map (n \ say p $ " (" + string n + " " + show (peep (sh 0) n "") + ")\n")
@@ -113,7 +113,7 @@
                    flush p,
                    close p,
                    1)))
- (unstow sh path) (: p (open path "r")
+ (unstow sh path) (open path "r" @ p
                      (!(lit? p) ? sh
                       (: t (slurp p)
                          r (sound t)
@@ -124,7 +124,7 @@
 
  ; --- faces: how a worth looks in its 9 columns ---
  ; cli's edwide counts display columns, so a wide character costs the two it takes
- (padl s w) (: t (edcut s w) ((w - edwide t) (x \ " " + x) t))
+ (padl s w) (edcut s w @ t ((w - edwide t) (x \ " " + x) t))
  (padr s w) (edfit s w " ")
  (face v) (? (v = whirl) "cycle!"
              (v = ()) ""
@@ -172,14 +172,14 @@
      say j "\e[K\r\n",
      ; the header row: column letters, the cursor's lit
      say j "    ",
-     upto nc (i \ (: t (padl (string (97 + i) + "    ") 7)
+     upto nc (i \ (padl (string (97 + i) + "    ") 7 @ t
                    (i = cx ? (say j "\e[7m"),
                     say j (padr t 9),
                     i = cx ? (say j "\e[0m"),
                     say j " "))),
      say j "\e[K\r\n",
      ; the sheet
-     upto nr (k \ (: cy2 (top + k)
+     upto nr (k \ (top + k @ cy2
                    (say j (padl (show (cy2 + 1)) 3),
                     say j " ",
                     upto nc (i \ drawcell j sh i cy2 (i = cx && cy2 = cy)),
@@ -194,7 +194,7 @@
      ; editing: the terminal cursor rides the formula bar's end
      string? edit ?
       (say j ("\e[1;" + show (#(string cur) + 4 + #edit) + "H\e[?25h")),
-     (slurp j)))
+     slurp j))
 
  ; one key, one step on the tablet. the codes are cli's edkey: arrows are the
  ; negatives, a byte is itself
@@ -202,7 +202,7 @@
     sh (d 'sh) path (d 'path) cx (d 'cx) cy (d 'cy) edit (d 'edit)
     nc (mcols (d 'w))
     cur (cnom cx cy)
-    (? (string? edit)
+    (string? edit ?
        (k @ (13 || 10) (cell! sh cur edit, pin d 'edit ())
             27 (pin d 'edit ())
             (127 || 8) (pin d 'edit (#edit ? (snip edit 0 (#edit - 1)) edit))

@@ -1,33 +1,17 @@
-; src/apps/vi/hue.l -- the .l syntax, written down once, for two readers: the
-; painter in src/apps/vi/core.l's vframe, and the vim syntax file, which src/tools/hue2vim.l
-; generates from the very table below -- built by make into out/syntax.vim and
-; never checked in, so the two readings cannot drift apart. (they had: the syntax
-; used to carry a hand-curated copy of the vocabulary whose own comment asked a
-; human to re-probe it on every rename.)
+; src/apps/vi/hue.l -- the .l syntax, written down once, for two readers: the painter in
+; src/apps/vi/core.l's vframe, and the vim syntax file src/tools/hue2vim.l generates from
+; the table below (out/syntax.vim, never checked in).
 ;
 ; it reads .l by src/apps/libra/lint.l's rules -- `;` and `#!` comment to end of line,
-; "..." is the only string with \ escapes, `'` is a reader operator and never a
-; delimiter (the trap a C lexer falls into) -- one step further than lint: lint
-; knows delimiters, this knows tokens. it is still not a parse.
+; "..." is the only string, `'` is a reader operator and never a delimiter -- and knows
+; tokens, not a parse.
 ;
-; --- the table ---------------------------------------------------------------
-; a row is `(class vim-group rule)`. the rule's head is its tag, and the tag set
-; is closed at eight: eol span mark delim num word punct sep. each tag has
-; exactly two interpreters -- hue-lex below (bytes -> runs) and hue-vim in the
-; generator (tag -> syn lines) -- and neither is a regex engine. when a class
-; wants a shape neither can say, that is the signal to add a tag, not to hand-
-; patch either output.
-;
-; row order is priority, and the word lanes sit above the punct lanes on purpose:
-; `?` is both a special form and a sigil char, `&&` is both a macro and a punct
-; run, and putting the word lanes first is exactly how vim reads the same rows
-; (a syn keyword beats a syn match).
-;
-; nothing here is a list OF words. every word lane names a probe and the runtime
-; answers it: `names` the whole vocabulary, `macros` the macro table (prel's
-; macro-names, the twin of names), `values` the names bound to a value rather
-; than a nif. only the three special forms are written out, and they are the
-; grammar, not the book. a list would rot; a question cannot.
+; a row is `(class vim-group rule)`; the rule's tag set is closed at eight (eol span mark
+; delim num word punct sep), each with exactly two interpreters, hue-lex and hue-vim. a
+; shape neither can say wants a new tag, not a hand patch.
+; row order is priority: the word lanes sit above punct, as vim's syn keyword beats a
+; syn match (`?` and `&&` are both). every word lane names a runtime probe (`names`,
+; `macros`, `values`) rather than listing words; only the three special forms are written.
 (module 'vi
 (borrow 'posix)
 
@@ -95,7 +79,7 @@
    ; here serves both readers -- syntax.vim has always said the same thing in
    ; prose ("the sigil matches below own every punct run"), which is precisely the
    ; kind of promise that goes stale when only prose keeps it.
-   (hue-name? w) (: t (string w) (0 < #t && !(hue-sig? (t 0))))
+   (hue-name? w) (string w @ t (0 < #t && !(hue-sig? (t 0))))
 
    ; the words a lane claims. a probe nom asks the runtime; anything else is the
    ; literal list itself. sorted, because the generator freezes this into a
@@ -123,7 +107,7 @@
    ; out of both lanes rather than being named and excluded. that costs argv and
    ; cmdline their colour, which is the price of a file that cannot flap.
    (hue-verb? w) (lit? (ev w))
-   (hue-const? w) (: v (ev w)
+   (hue-const? w) (ev w @ v
                      (!(lit? v) &&
                       (constellation? v || string? v || nom? v)))
    (hue-words a)
@@ -136,7 +120,7 @@
    ; wins -- the same priority hue-lex reads top-down, paid once at birth instead
    ; of walked per token.
    (hue-book x)
-    (foldl (\ b r (foldl (\ b2 w (pin b2 w (hue-cls r))) b (hue-words (hue-arg r))))
+    (foldl (b \ r \ foldl (b2 \ w \ pin b2 w (hue-cls r)) b (hue-words (hue-arg r)))
            (tablet ()) (rev (hue-tagged 'word)))
 
    ; --- is this token a number? -----------------------------------------------
@@ -148,9 +132,9 @@
    (hue-num? t)
     (: n #t
        (digs i) (i < n && 48 <= t i && t i <= 57 ? (digs (i + 1)) i)
-       (hexs i) (i < n && (: c (t i) (48 <= c && c <= 57 ||
-                                      97 <= c && c <= 102 ||
-                                      65 <= c && c <= 70))
+       (hexs i) (i < n && (t i @ c (48 <= c && c <= 57 ||
+                                    97 <= c && c <= 102 ||
+                                    65 <= c && c <= 70))
                  ? (hexs (i + 1)) i)
        s0 (0 < n && t 0 = 45 ? 1 0)
        hx (s0 + 2 < n && t s0 = 48 && (t (s0 + 1) = 120 || t (s0 + 1) = 88)
@@ -192,27 +176,27 @@
                    (: c (s j)
                       !(hue-blank? c || c = 41 || c = 44 || c = 59 || hue-sig? c)))
        (word i j acc)
-        (: t (snip s i j)
+        (snip s i j @ t
            (hue-num? t ? (w j (emit acc 'number i j))
-              (: k (hue-word bk t)
+              (hue-word bk t @ k
                  (nom? k ? (w j (emit acc k i j))
-                    (: p (srun i)                          ; a leading punct run only --
+                    (srun i @ p                            ; a leading punct run only --
                        (i < p ?                            ; punct inside a name is the name
                            (w p (emit acc (glued? p ? 'mono 'dyad) i p))
                           (w j acc)))))))
        (wstr i a acc)                                      ; inside "..."
         (n <= i ? [(rev (emit acc 'string a n)) 1]
-           (: c (s i)
+           (s i @ c
               (? (c = hue-esc) (wstr (i + 2) a acc)
                  (c = hue-str) (w (i + 1) (emit acc 'string a (i + 1)))
                  (wstr (i + 1) a acc))))
        (w i acc)
         (n <= i ? [(rev acc) 0]
-           (: c (s i)
+           (s i @ c
               (? (hue-blank? c) (w (i + 1) acc)
                  (any (t \ hue-at? s i t) hue-eols) [(rev (emit acc 'comment i n)) 0]
                  (c = hue-str) (wstr (i + 1) i acc)
-                 (c = hue-quo) (: j (tend (i + 1)) (w j (emit acc 'atom i j)))
+                 (c = hue-quo) (tend (i + 1) @ j (w j (emit acc 'atom i j)))
                  (hue-delim? c) (w (i + 1) (emit acc 'paren i (i + 1)))
                  (c = hue-sep) (w (i + 1) (emit acc 'comma i (i + 1)))
                  ; a stop no lane claims (a control byte) is one plain char --
@@ -226,7 +210,7 @@
    (hue-carry lx ls)
     (:- (go ls 0 ())
         (go l st acc) (atom? l ? (rev acc)
-                        (: r (lx <l st ()) (go >l <>r (st . acc)))))
+                        (lx <l st () @ r (go >l <>r (st . acc)))))
 
    ; --- the pens --------------------------------------------------------------
    ; one finished escape per class, built once, so painting a frame is a lookup
@@ -237,7 +221,7 @@
    hue-off "\e[0m"
    (hue-hx c) (? (48 <= c && c <= 57) (c - 48) (65 <= c && c <= 70) (c - 55) (c - 87))
    (hue-byte t k) (hue-hx (t k) * 16 + hue-hx (t (k + 1)))
-   (hue-faces fs) (foldl (\ a f (a + (f = 'bold ? "1;" "3;"))) "" fs)
+   (hue-faces fs) (foldl (a \ f \ a + (f = 'bold ? "1;" "3;")) "" fs)
    (hue-pen row deep)
     (: n (row 1) g (row 2) fs (row 3)
        ("\e[" + hue-faces fs
@@ -246,8 +230,8 @@
              ("38;5;" + show n))
         + "m"))
    (hue-pens rows deep)
-    (: gp (foldl (\ b r (pin b <r (hue-pen r deep))) (tablet ()) rows)
-       (foldl (\ b c (pin b (hue-cls c) (gp (hue-grp c)))) (tablet ()) hue-classes))
+    (foldl (b \ r \ pin b <r (hue-pen r deep)) (tablet ()) rows @ gp
+       (foldl (b \ c \ pin b (hue-cls c) (gp (hue-grp c))) (tablet ()) hue-classes))
 
    ; --- painting one line -----------------------------------------------------
    ; escapes are zero width, so a caller clips first and paints the clipped text:
@@ -287,12 +271,12 @@
     (: h (getenv "HOME")
        q (string? h ? (open (h + hue-theme-file) "r") ())
        (hot? q ? (: t (slurp q)
-                    (go x acc) (: r (sound x)
+                    (go x acc) (sound x @ r
                                   (two? r ? (go >r (<r . acc)) (rev acc)))
                     rs (go t ())
                     (close q, foldl hue-over hue-theme rs))
           hue-theme))
-   (hue-deep x) (: ct (getenv "COLORTERM")
+   (hue-deep x) (getenv "COLORTERM" @ ct
                    (string? ct ? (ct = "truecolor" || ct = "24bit") ()))
    (hue-wake x) (hue-pens (hue-rows ()) (hue-deep ())))
 ) ; module 'vi

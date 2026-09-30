@@ -13,9 +13,9 @@
 (:
    jprimes [2 3 5 7]
    jaxes   [3 5 7]
-   (jparts r) (? (coin? r) (load r) [r 1])       ; (num den), den 1 for a whole one
+   (jparts r) (coin? r ? (load r) [r 1])         ; (num den), den 1 for a whole one
    (ipow b e) (e < 1 ? 1 (b * ipow b (e - 1)))
-   (rinv r)   (: p (jparts r) (<>p /// <p))
+   (rinv r)   (jparts r @ p (<>p /// <p))
 
    ; [rest k]: n with every factor p taken out, and how many there were
    (pexp n p) ((: (go m k) (m % p = 0 ? (go (m // p) (k + 1)) [m k])) n 0)
@@ -29,20 +29,20 @@
        p (jparts r)
        (walk jprimes <p <>p))
    (unmonzo m)
-    (foldl (\ q pe (: p <pe e >pe
-                      (e < 0 ? (q * (1 /// ipow p (0 - e))) (q * ipow p e))))
+    (foldl (q \ pe \ (: p <pe e >pe
+                        (e < 0 ? (q * (1 /// ipow p (0 - e))) (q * ipow p e))))
            1 (zip jprimes m))
 
    ; the lattice point, octave dropped; and back, in the octave above 1
-   (point r)   (: m (monzo r) (m = 'over ? 'over >m))
+   (point r)   (monzo r @ m (m = 'over ? 'over >m))
    (unpoint v) (oct (unmonzo (0 . v)))
    (oct r)     (? (r >= 2) (oct (r * (1 /// 2))) (r < 1) (oct (r * 2)) r)
    ; the octave nearest 1: within half an octave either side, so a center stays put
-   (near r)    (: o (oct r) (cents o > 600.0 ? (o * (1 /// 2)) o))
+   (near r)    (oct r @ o (cents o > 600.0 ? (o * (1 /// 2)) o))
 
-   (cents r)  (: p (jparts r) (1200.0 * (log <p - log <>p) / log 2))
+   (cents r)  (jparts r @ p (1200.0 * (log <p - log <>p) / log 2))
    (semis r)  (cents r / 100.0)
-   (tenney r) (: p (jparts r) ((log <p + log <>p) / log 2))
+   (tenney r) (jparts r @ p ((log <p + log <>p) / log 2))
    ; how far a point is from home with octaves free: tenney height of its odd part,
    ; so a fifth up and a fifth down are the same distance
    (lnorm v) (foldl (+) 0.0 (map (p \ abs >p * log <p / log 2) (zip jaxes v)))
@@ -55,8 +55,8 @@
    ; the leftovers when two paths to one note disagree
    jcomma {'syntonic (81 /// 80) 'pythagorean (531441 /// 524288) 'diesis (128 /// 125)
            'septimal (64 /// 63) 'schisma (32805 /// 32768)}
-   (jname r) (: o (oct r) ((: (go ks) (? !(two? ks) () (jint <ks = o) <ks (go >ks)))
-                           (sort (keys jint))))
+   (jname r) (oct r @ o ((: (go ks) (? !(two? ks) () (jint <ks = o) <ks (go >ks)))
+                         (sort (keys jint))))
 
    ; the nearest step of n equal divisions of the octave: [step error-in-cents]
    (edo-near n r) (: c (cents (oct r)) k (floor (n * c / 1200.0 + 0.5))
@@ -65,11 +65,11 @@
    ; continued fractions: k terms of x, and the fractions they converge through. the
    ; euclidean algorithm on log2 3/2 -- its denominators are the equal divisions whose
    ; fifths come closest: 12, 41, 53
-   (cfrac x k) (? (k < 1) ()
+   (cfrac x k) (k < 1 ? ()
                   (: a (floor x) f (x - a)
                      (a . (f < 0.000000001 ? () (cfrac (1.0 / f) (k - 1))))))
    (convergents as)
-    (: (go as h1 k1 h0 k0) (? !(two? as) ()
+    (: (go as h1 k1 h0 k0) (two? as ?
                               (: h (<as * h1 + h0) k (<as * k1 + k0)
                                  ([h k] . go >as h k h1 k1)))
        (go as 1 0 0 1))
@@ -92,7 +92,7 @@
 
    ; how rough a phrase is: the mean tenney height over each pair of its notes
    (pdiss rs)
-    (: (pairs l) (? !(two? l) () (map (y \ [<l y]) >l + pairs >l))
+    (: (pairs l) (two? l ? (map (y \ [<l y]) >l + pairs >l))
        ps (pairs rs)
        (? !(two? ps) 0.0
           (foldl (+) 0.0 (map (q \ tenney (oct (q 1 * rinv (q 0)))) ps) / #ps))))

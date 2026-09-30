@@ -1,51 +1,33 @@
 ; src/apps/tls/chacha.l -- chacha20 (rfc 8439), in the word lane.
 ;
-; the cipher is add / xor / rotate on 32-bit words, which is exactly what a z-tray
-; is: contiguous limbs, fixed-width two's complement, `+ - *` wrapping, the bitwise
-; five broadcasting elementwise (test/spec.l's WIDTH LAW). so there is no C here --
-; the arithmetic love already has is the cipher's arithmetic.
+; the cipher is add / xor / rotate on 32-bit words, which is what a z-tray does: fixed
+; width, wrapping `+ - *`, the bitwise five elementwise (test/spec.l's WIDTH LAW).
+; vectorised across blocks, not across the state: each of the 16 state words is a galaxy
+; of n cells, one per block in flight, so a round is pure elementwise work and the
+; diagonal round only names other galaxies. the counter word is ctr + (iota n).
+; the serving path uses the C twin (src/love/lib/tls.c's `chacha20`); this file is the
+; oracle, and test/host/tlsc.l holds the twin to it.
 ;
-; the shape that makes it fast enough to be worth doing: vectorise across blocks,
-; not across the state. each of the 16 state words becomes a galaxy of n cells --
-; one cell per block in flight -- so a quarter-round is pure elementwise work and
-; no permutation is ever needed. the diagonal round differs from the column round
-; only in which galaxies it names, which is a list index, not a data movement.
-; the counter word is the one that varies down a galaxy: ctr + (iota n).
-;
-; ~2 MB/s at any batch width from 256 blocks up (the plateau is the lane's
-; per-cell cost, ~14ns, not per-op overhead) -- ample for a handshake and for
-; sb's pulls. the serving path has the C twin instead: src/love/lib/tls.c's `chacha20`
-; nif, which sits behind this interface. this file stays the oracle, and
-; test/host/tlsc.l holds the twin to it -- never the other way round.
-; src/apps/tls/bench.l prints the two side by side.
-;
-; the one-scope law eats this cipher if you let it. a body-having `:` is one
-; scope, so a quarter-round written the obvious way --
-;   (: a (& (a + b) m32) d (rotl (d ^ a) 16) ..)
-; -- has `(a + b)` read the inner `a`, before its pin: the missing condition, which
-; is the zero point, which is 0. every round then computes nothing and cc-block
-; hands back its own input. love says so now (";; missing a" -- ab0fd92e taught
-; file mode to surface a pre-pin read, the same hour-eating trap met from the
-; reader's side), but the value is still 0 and the cipher still runs: a scare
-; nobody reads is a cipher encrypting with nothing. fresh names per step, always.
+; fresh names per step: in one body-having `:`, `(: a (& (a + b) m32) ..)` reads the
+; inner `a` before its pin -- 0 -- and the cipher still runs, encrypting with nothing.
 (module 'tls
 (:
    m32 4294967295
 
    ; rotate left within 32 bits. x is always already masked, so it is non-negative
    ; and `>>` (arithmetic, sign-propagating) coincides with the logical shift.
-   (rotl x n) (((x << n) | (>> x (32 - n))) & m32)
+   (rotl x n) ((x << n | x >> 32 - n) & m32)
 
    ; the quarter-round, on four galaxies -> a 4-list of galaxies.
    (qr a b c d)
-    (: a1 ((a + b) & m32)   d1 (rotl (d ^ a1) 16)
-       c1 ((c + d1) & m32)  b1 (rotl (b ^ c1) 12)
-       a2 ((a1 + b1) & m32) d2 (rotl (d1 ^ a2) 8)
-       c2 ((c1 + d2) & m32) b2 (rotl (b1 ^ c2) 7)
+    (: a1 (a + b & m32)   d1 (rotl (d ^ a1) 16)
+       c1 (c + d1 & m32)  b1 (rotl (b ^ c1) 12)
+       a2 (a1 + b1 & m32) d2 (rotl (d1 ^ a2) 8)
+       c2 (c1 + d2 & m32) b2 (rotl (b1 ^ c2) 7)
        [a2 b2 c2 d2])
 
    ; the state is a 16-list of galaxies; these are its two accessors.
-   (lset l i v) (: (go j r) (j < 0 ? r (go (j - 1) (. (? (j = i) v (peep l j 0)) r)))
+   (lset l i v) (: (go j r) (j < 0 ? r (go (j - 1) (. (j = i ? v (peep l j 0)) r)))
                    (go 15 ()))
    (qra s i j k l)
     (: r (qr (peep s i 0) (peep s j 0) (peep s k 0) (peep s l 0))
@@ -97,7 +79,7 @@
         (n <= i ? b
          (: (gw j) ; j counts words within block i
              (15 < j ? 0
-                (le32! b ((i * 64) + (j * 4)) (wd j i), gw (j + 1)))
+                (le32! b (i * 64 + j * 4) (wd j i), gw (j + 1)))
           (gw 0, go (i + 1))))
        (go 0, string b))
 

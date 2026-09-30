@@ -1,18 +1,10 @@
-; src/apps/lux/config.l -- the config: ~/.xmonad/xmonad.hs transliterated, now with a
-; door. Everything the Haskell record pinned, as plain values the driver
-; (src/apps/lux/lux.l) reads -- the dsl underneath (l/layout/manage/keys/ewmh)
-; already is the xmonad vocabulary, so this file is short the way a config should
-; be. a body-less `:`.
+; src/apps/lux/config.l -- the config: ~/.xmonad/xmonad.hs transliterated, as plain
+; values the driver (src/apps/lux/lux.l) reads. a body-less `:`.
 ;
-; the door is salt (src/apps/libra/salt.l): ~/.love/etc/lux.l for your taste, then ./.lux.l
-; for a tree's own, the second winning. Every setting falls back to the value that
-; was hardcoded here, so no config file anywhere is today's lux to the byte.
-; salt is data, never code: nothing in a config file is evaluated, so nothing in
-; it needs quoting.
-;
-; a repeated setting replaces rather than appends -- so each roster takes all
-; its entries in one form, and `()` as the lone operand spells the empty roster
-; (an operand-less `(startup)` is indistinguishable from no line at all).
+; the door is salt (src/apps/libra/salt.l): ~/.love/etc/lux.l, then ./.lux.l, the second
+; winning; every setting falls back to its default, so no config file is lux unchanged.
+; salt is data: nothing is evaluated, nothing needs quoting. a repeated setting replaces,
+; so a roster takes all its entries in one form, and `()` alone spells the empty roster.
 ;
 ;   (border 3)  (normal-color "Dark Slate Blue")  (focused-color "Light Cyan")
 ;   (tags 9)  (mod sup)  (nudge 20)
@@ -25,22 +17,19 @@
 ;   (unbind (sup p) (sup z))
 ;   (display ":7")  (xauthority "/home/me/.Xauthority")
 ;
-; a chord is a list, the last element the key and the rest modifiers: a symbol
-; names it (`e`, `Return`), a one-char string is that character (`","`, `"1"`),
-; and a bare number is the keysym itself -- so the name table is a convenience,
-; never a ceiling.
-;
-; the conf-* readers take the tablet, so test/law/lux.l proves the defaults against
-; an empty one -- the gate must not change meaning the day you write a config file.
+; a chord is a list, the key last: a symbol names it (`e`, `Return`), a one-char string
+; is that character, a bare number the keysym itself.
+; the conf-* readers take the tablet, so test/law/lux.l proves the defaults against an
+; empty one.
 (borrow 'xwire)   ; the X wire, src/apps/lux/wire.l
 (borrow 'salt)
 (:
    ; --- the readers. a roster entry is a name or a form; anything else (the lone
    ;     `()` that spells "empty") drops out, and an absent roster takes d. ---
    (conf-live? e) (two? e || name? e || string? e)
-   (conf-roster c k d) (: r (salt-all c k) (two? r ? (filter conf-live? r) d))
-   (conf-mod c) (: m (kmod-of (salt-one c 'mod 'sup) supm) (m ? m supm))
-   (conf-tags c) (: n (salt-one c 'tags 9) (charm? n && (0 < n) ? n 9))
+   (conf-roster c k d) (salt-all c k @ r (two? r ? (filter conf-live? r) d))
+   (conf-mod c) (kmod-of (salt-one c 'mod 'sup) supm @ m (m ? m supm))
+   (conf-tags c) (salt-one c 'tags 9 @ n (charm? n && (0 < n) ? n 9))
 
    lux-conf (salt 'lux)
 
@@ -63,7 +52,7 @@
    ; `phi` stands for the golden ratio wherever a number would go.
    (lux-arg a i d) (: (go l k) (? (atom? l) d
                                   (0 < k) (go >l (k - 1))
-                                  (: v <l (v = 'phi ? lux-phi (constellation? v ? v d))))
+                                  (<l @ v (v = 'phi ? lux-phi (constellation? v ? v d))))
                       (go a i))
    (lux-lay-of sp)
     (: h (two? sp ? <sp sp) a (two? sp ? >sp ())
@@ -95,7 +84,7 @@
    ;   (setWMName "LG3D (XMonad)" rides ewmh-init; the cursor is x-cursor).
    ;   lux_nostartup skips the spawns -- a headless harness wants no keyboard
    ;   churn on its bare Xvfb
-   lux-startup (? (getenv "LUX_NOSTARTUP") ()
+   lux-startup (getenv "LUX_NOSTARTUP" ? ()
                   (conf-roster lux-conf 'startup
                                '(("setxkbmap" "-option" "ctrl:nocaps" "-option" "compose:rctrl"))))
 
@@ -105,12 +94,12 @@
    ;   -- every other X client reads it that way, and a display manager that parks
    ;   the live cookie elsewhere (ly's /run/user/<uid>/lyxauth) leaves a stale
    ;   ~/.Xauthority behind, whose cookie the server refuses
-   (lux-dispof d) (? (#d < 2) "7"                                           ; unset: the Xephyr harness habit
-                     (: b (snip d 1 #d)
+   (lux-dispof d) (#d < 2 ? "7"                                           ; unset: the Xephyr harness habit
+                     (snip d 1 #d @ b
                         (: (go i) (i = #b || b i = 46 ? (snip b 0 i) (go (i + 1)))
                            (go 0))))
-   (lux-dispnum u) (lux-dispof (: d (salt-one lux-conf 'display ()) (string? d ? d (getenv "DISPLAY"))))
-   (lux-xauth u) (: v (getenv "XAUTHORITY") (0 < #v ? v (getenv "HOME" + "/.Xauthority")))
+   (lux-dispnum u) (lux-dispof (salt-one lux-conf 'display () @ d (string? d ? d (getenv "DISPLAY"))))
+   (lux-xauth u) (getenv "XAUTHORITY" @ v (0 < #v ? v (getenv "HOME" + "/.Xauthority")))
    (lux-auth-for disp) (xauth-cookie (salt-one lux-conf 'xauthority (lux-xauth ())) disp)
    lux-display ("/tmp/.X11-unix/X" + lux-dispnum ())
    lux-auth (lux-auth-for (lux-dispnum ())))

@@ -34,8 +34,8 @@
                        o (two? p ? (score-num (snip t <>p #t)) ())
                        (charm? o ? (<p + (int o - 4) * 12) ()))
  ; the key line's words into the key: letter -> accidental
- (score-key ws) (foldl (\ k w (: p (score-pc w {}) c (w 0) u (97 <= c ? (c - 32) c)
-                                (two? p ? (pin k (u - 65) (<p - pcs (u - 65))) k)))
+ (score-key ws) (foldl (k \ w \ (: p (score-pc w {}) c (w 0) u (97 <= c ? (c - 32) c)
+                                  (two? p ? (pin k (u - 65) (<p - pcs (u - 65))) k)))
                        {} ws)
  ; [C#m7/G#]: the bass is g sharp, an octave under middle c's
  (score-chord t) (: in (snip t 1 (#t - 1))
@@ -47,13 +47,13 @@
       (s i = 32 || s i = 9) (go (i + 1) (0 < #w ? (w . ws) ws) "")
       (go (i + 1) ws (w + string (s i)))))
  ; one bar's words to its slots: a quarter-beat grid, each slot () or [note sixteenths]
- (score-bar ws key beats) (:- (go ws 0.0 (map (\ _ ()) ^(beats * 4)) () ())
+ (score-bar ws key beats) (:- (go ws 0.0 (map (_ \ ()) ^(beats * 4)) () ())
    (go l pos sl bs err)
    (? err {'err err}
-      (atom? l) (: sum (int (pos * 4.0 + 0.5))
-                  (? (sum != beats * 4) {'err ("adds up to " + show pos + " beats, not " + show beats)}
+      (atom? l) (int (pos * 4.0 + 0.5) @ sum
+                  (sum != beats * 4 ? {'err ("adds up to " + show pos + " beats, not " + show beats)}
                      (score-strings sl bs beats)))
-      (<l 0 = 91) (: b (score-chord <l) (b = () ? (go () pos sl bs ("bad chord " + <l)) (go >l pos sl b err)))
+      (<l 0 = 91) (score-chord <l @ b (b = () ? (go () pos sl bs ("bad chord " + <l)) (go >l pos sl b err)))
       (atom? >l) (go () pos sl bs ("no beats after " + <l))
       (: n (score-note <l key) d (score-num <>l)
          k (pos * 4.0) i (int (k + 0.5))
@@ -74,7 +74,7 @@
                  (? (atom? c && atom? d && atom? e) (f a)
                     (atom? c && atom? e) ("[" + f a + " " + f d + "]")
                     ("[" + f a + " " + f c + " " + f d + " " + f e + "]")))
-   (line f) (foldl (\ acc b (acc + (0 < b ? " " "") + word f b)) "" ^beats)
+   (line f) (foldl (acc \ b \ acc + (0 < b ? " " "") + word f b) "" ^beats)
    {'notes (line cell) 'legs (line dur) 'bass bs 'beats beats
     'pitches (map (x \ <x) (filter two? sl))})
  ; a list of lines to bars, a bar per line and per |, blank lines skipped, a key or a
@@ -83,23 +83,23 @@
  (score-lines s) (split "\n" s)
  (score-parse ls) (:
    (bare ln) (:- (go 0) (go i) (? (i >= #ln) ln (ln i = 59) (snip ln 0 i) (go (i + 1))))
-   (bars-of ln i key beats) (map (t \ (: ws (score-words t) (atom? ws ? () (pin (score-bar ws key beats) 'line i)))) (split "|" (bare ln)))
+   (bars-of ln i key beats) (map (t \ (score-words t @ ws (atom? ws ? () (pin (score-bar ws key beats) 'line i)))) (split "|" (bare ln)))
    ; the fold carries [bars key beats]
    (line acc i) (: ws (score-words (bare (ls i))) key (acc 1) beats (acc 2)
                    (? (two? ws && <ws = "key") [(acc 0) (score-key >ws) beats]
-                      (two? ws && <ws = "beats") [(acc 0) key (: n (two? >ws ? (score-num <>ws) ()) (charm? n && 0 < n ? (int n) score-beats))]
+                      (two? ws && <ws = "beats") [(acc 0) key ((two? >ws ? (score-num <>ws) ()) @ n (charm? n && 0 < n ? (int n) score-beats))]
                       [(acc 0 + bars-of (ls i) (i + 1) key beats) key beats]))
    (filter tablet? (foldl line [() {} score-beats] ^#ls 0)))
  ; the check: every complaint to the screen, and with all every bar as harp will play
  ; it; answers whether anything was bad
  (score-check ls all) (: bs (score-parse ls)
    bad (filter (b \ b 'err) bs)
-   _ (each bs (b \ (? (b 'err) (puts ("line " + show (b 'line) + ": " + b 'err + "\n"))
-                       all (puts ("line " + show (b 'line) + ": " + b 'notes + "   |   " + b 'legs
-                                  + (b 'bass = () ? "" ("   bass " + show (b 'bass))) + "\n"))
-                       ())))
-   _ (all || two? bad ? (puts (show #bs + " bars, " + show #bad + " bad\n")))
-   (two? bad ? 1 0))
+   (each bs (b \ (? (b 'err) (puts ("line " + show (b 'line) + ": " + b 'err + "\n"))
+                     all (puts ("line " + show (b 'line) + ": " + b 'notes + "   |   " + b 'legs
+                                + (b 'bass = () ? "" ("   bass " + show (b 'bass))) + "\n"))
+                     ())),
+    all || two? bad ? (puts (show #bs + " bars, " + show #bad + " bad\n")),
+    two? bad ? 1 0))
 
  ; the score as harp's pattern at cps bars a second: the melody on the music box, a
  ; note's ring a little past its written length, the bass a bar long under it

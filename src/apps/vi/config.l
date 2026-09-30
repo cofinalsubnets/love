@@ -1,19 +1,11 @@
 ; src/apps/vi/config.l -- the theme: molokayo, as plain data the painter reads.
 ; src/apps/lux/config.l is the shape -- a body-less `:`, values not code.
 ;
-; the theme is keyed by vim highlight group, not by syntax class. src/apps/vi/hue.l
-; says "a comment is a Comment"; this file says "in molokayo a Comment is 59 /
-; #75715E". that split is what lets the generated vim syntax file emit plain
-; `hi def link` lines -- a syntax file that hardcoded colours would fight the
-; reader's own colorscheme -- while pulchritude, which has no colorscheme, still
-; gets the same molokayo out of the same table. swap the numbers below for
-; another scheme's and only the editor follows.
-;
-; every value is lifted verbatim from awesome-vim-colorschemes: molokayo.vim is
-; molokai.vim with `molokai_original = 1` plus its own `hi!` lines, and molokayo
-; wins where it defines a group (Identifier, Special). nothing here is
-; approximated by us -- the cterm numbers are molokai's own 256-colour block, so
-; a terminal that cannot do 24-bit still shows the author's fallback.
+; keyed by vim highlight group, not syntax class: hue.l says a comment is a Comment, this
+; says what a Comment looks like, so the generated vim syntax emits plain `hi def link`
+; lines while the painter gets the same colours from this table. every value is lifted
+; verbatim from molokayo.vim (molokai with its own `hi!` lines); the cterm numbers are
+; molokai's own 256-colour fallback.
 ;
 ; a row is `(group cterm256 "#rrggbb" faces)`, faces drawn from (bold italic).
 (module 'vi

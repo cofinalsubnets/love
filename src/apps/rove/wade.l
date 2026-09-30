@@ -84,11 +84,11 @@
    u (clamp (pz / arc-z) 0.0 1.0)
    v (clamp ((pz - arc-z) / morph-z) 0.0 1.0)
    rel (wrap (maz * (1.0 - u) - th)) c (cos rel) el (mel * cos (u * pi / 2.0))
-   moon (? (abs rel < 1.3) [(cx0 + foc * tn rel) (hz - foc * tn el / c) (foc * tn mang / c) (hz - foc * tn el / c) 0.0 0.0]
+   moon (abs rel < 1.3 ? [(cx0 + foc * tn rel) (hz - foc * tn el / c) (foc * tn mang / c) (hz - foc * tn el / c) 0.0 0.0]
            off-screen)
    dz (lamp-z - pz) dist (sqrt (2 px + 2 dz))
    rl (wrap (atan2 (0.0 - px) dz - th)) dep (dist * cos rl)
-   lamp (? (abs rl < 1.3 && 0.5 < dep)
+   lamp (abs rl < 1.3 && 0.5 < dep ?
            [(cx0 + foc * tn rl) (hz - (foc * (lamp-h - eh)) / dep) (foc * lamp-r / dep)
             (hz + foc * eh / dep) (foc * post-w / dep) 1.0]
            off-screen)
@@ -101,7 +101,7 @@
  trees {}
  (tree-of k s r) (: kk ((k % loop + loop) % loop) key (kk * 8 + r * 2 + (0 < s))
    b (trees key)
-   b2 (? (two? b) b
+   b2 (two? b ? b
          (: seed (s + 2 + 5 * r)
             b3 [(dice kk seed 3 100 / 100.0 * sp)
                 (s * (rw + 0.8 + 2.2 * r + dice kk seed 5 100 / 100.0 * 2.0))
@@ -118,7 +118,7 @@
  (fresh st) (: w (st 'w) h (st 'h) hz (st 'hz) th (st 'th) foc (st 'foc) cx (st 'cx)
    xs (iota w)
    tb {'xs xs 'tops {} 'ntops {} 'bots {} 'qes {} 'sky {} 'dark {} 'rows {}
-       'qas (((floor ((th + atan ((xs - cx) / foc)) / (2.0 * pi) * 256.0)) % 256 + 256) % 256)}
+       'qas ((floor ((th + atan ((xs - cx) / foc)) / (2.0 * pi) * 256.0) % 256 + 256) % 256)}
    (row y) (y < hz ? (pin (tb 'qes) y (flo (atan ((hz - y) / foc) * foc)), row (y + 1)))
    (row (-h - 12), tb))
  ; the trees within sight, each laid into the columns it covers: a conifer or a round
@@ -129,24 +129,24 @@
    (one k s r) (: tr (tree-of k s r)
      dx (tr 'x - px) dz (tr 'z - pz)
      d (dx * sn + dz * cs) lat (dx * cs - dz * sn)
-     (? (0.5 < d)
-        (: u (lat / d)
-           (? (abs u < 1.5)
+     (0.5 < d ?
+        (lat / d @ u
+           (abs u < 1.5 ?
               (: cx (cx0 + foc * u) hw (foc * tr 'wd / (2.0 * d)) hg (foc * tr 'ht / d) by (hz + foc * eh / d)
                  tops (tb (d < near ? 'ntops 'tops)) bots (tb 'bots)
                  xa (clamp (flo (cx - hw)) 0 (w - 1)) xb (clamp (flo (cx + hw)) 0 (w - 1))
                  (col x) (x <= xb ? (: q (abs (x - cx) / hw)
                                        hx (q < 1.0 ? (hg * (tr 'round ? (sqrt (1.0 - 2 q)) (1.0 - q))) 0.0)
-                                       _ (pin tops x (min2 (peep tops x 999.0) (by - hx)))
-                                       _ (pin bots x (max2 (peep bots x (hz - 1.0)) (by + hx)))
-                                       (col (x + 1))))
+                                       (pin tops x (min2 (peep tops x 999.0) (by - hx)),
+                                        pin bots x (max2 (peep bots x (hz - 1.0)) (by + hx)),
+                                        col (x + 1))))
                  (col xa))))))
    (go k k1 r) (k <= k1 ? (one k -1 r, one k 1 r, go (k + 1) k1 r))
    (span r reach) (go (flo ((pz - reach) / sp)) (flo ((pz + reach) / sp)) r)
    (tray-of tab d) (gem-tray [w] (map (x \ peep tab x d) ^w))
    (span 0 far, span 1 (far / 2.0), span 2 (far / 2.0),
     pins tb 'tops (tray-of (tb 'tops) 999.0) 'ntops (tray-of (tb 'ntops) 999.0) 'bots (tray-of (tb 'bots) (hz - 1.0))))
- (wade-tables st) (: tb (lay-trees st (fresh st)) (pin tb 'water (water-rows st)))
+ (wade-tables st) (lay-trees st (fresh st) @ tb (pin tb 'water (water-rows st)))
  ; the sky, a row at a time in trays over the columns: a grey ramp up from the horizon,
  ; the stars hashed off the column's bearing cell and the row's height cell, the moon's
  ; glow, and its disc with its seas, each laid over the last where its mask holds. the
@@ -200,23 +200,23 @@
                  glowed (over (over starry (r2 < g4 * g4) 237)     ; #3a3a3a the glow, wide
                               (r2 < g1 * g1) 238)                  ; #444444 ..and close
                  posted (over glowed ((0.0 < pw) * (0.0 < dy) * (2 dx <= 2 hw)) tree-pen)
-                 (? lit (lantern posted dx)
-                    (over posted (r2 < (r * r)) (over moon-pen sea sea-pen))))
+                 (lit ? (lantern posted dx)
+                    (over posted (r2 < r * r) (over moon-pen sea sea-pen))))
    (abs dy < g4 || lit && abs dy <= reach || 0.0 < pw && 0.0 < dy ? (mooned ()) starry))
- (sky-at y st tb mn t) (: r (tb 'sky y)
-   (? (tray? r) r (: r2 (sky-row y st tb mn t) (pin (tb 'sky) y r2, r2))))
+ (sky-at y st tb mn t) (tb 'sky y @ r
+   (tray? r ? r (sky-row y st tb mn t @ r2 (pin (tb 'sky) y r2, r2))))
  ; a row above the horizon: the sky, a far tree's haze over it, a near tree's black over that
- (top-row y st tb mn t) (: r (tb 'rows y)
-   (? (tray? r) r
-      (: r2 (over (over (sky-at y st tb mn t) (y >= tb 'tops) haze-pen) (y >= tb 'ntops) tree-pen)
+ (top-row y st tb mn t) (tb 'rows y @ r
+   (tray? r ? r
+      (over (over (sky-at y st tb mn t) (y >= tb 'tops) haze-pen) (y >= tb 'ntops) tree-pen @ r2
          (pin (tb 'rows) y r2, r2))))
  ; the water's lift, in the world's units: a slow swell, and the rings the player's steps
  ; sent out, each fading as it spreads. x and z are trays, a row of points at once, and
  ; a ring's reach is a mask over them; numbers pass through the same words
- (swell x z t) ((0.10 * sin (1.1 * z + 0.3 * x + 0.20 * t)) + (0.07 * sin (1.7 * x - 0.4 * z + 0.31 * t)))
+ (swell x z t) (0.10 * sin (1.1 * z + 0.3 * x + 0.20 * t) + 0.07 * sin (1.7 * x - 0.4 * z + 0.31 * t))
  (rings-at x z t rings) (:
    (ring a r) (: age (t - r 't) dx (x - r 'x) dz (z - r 'z) d (sqrt (2 dx + 2 dz))
-                 (? (0.0 < age) (a + (d < (0.18 * age)) * 0.25 * exp (-0.25 * d - 0.03 * age) * sin (4.0 * d - 0.72 * age)) a))
+                 (0.0 < age ? (a + (d < 0.18 * age) * 0.25 * exp (-0.25 * d - 0.03 * age) * sin (4.0 * d - 0.72 * age)) a))
    (foldl ring 0.0 rings))
  ; a ring five seconds old is a hundredth of what it was: gone from the list, so the
  ; water stops asking after it
@@ -239,8 +239,8 @@
         l (swell wx wz t + rl)
         y2 (y + l * g * 2.0)
         x2 (floor (max 0.0 (min hi (xs + l * g * 0.4))))
-        _ (pin rows y [bank y2 x2 rl])
-        (row (y + 1))))
+        (pin rows y [bank y2 x2 rl],
+         row (y + 1))))
    (row hz, rows))
  ; what the water makes of what it mirrors -- its own grey under the forest, a shade
  ; off the bank -- and a ring's crest catching the moon, a step or two lighter
@@ -254,16 +254,16 @@
  darks (star-tray [256] (map (i \ peep dark i haze-pen) ^256))
  crests (star-tray [256] (map (i \ peep crest i i) ^256))
  ; a sky row as the water darkens it, kept as asked for
- (dark-at r st tb mn t) (: d (tb 'dark r)
-   (? (tray? d) d (: d2 (peep darks (sky-at r st tb mn t) haze-pen) (pin (tb 'dark) r d2, d2))))
+ (dark-at r st tb mn t) (tb 'dark r @ d
+   (tray? d ? d (peep darks (sky-at r st tb mn t) haze-pen @ d2 (pin (tb 'dark) r d2, d2))))
  ; a water row, off its trays: the mirror's sample, gathered from each darkened sky row
  ; the row's columns reach; the forest's reflection where the sample is under the
  ; treeline; a crest a step lighter; and the bank
  (water-row y st tb mn t) (: hz (st 'hz) row (tb 'water y)
    bank (row 0) y2 (row 1) x2 (row 2) rl (row 3)
    yq (min (floor (2 * hz - 1 - y2)) (hz - 1))
-   (band r r1 acc) (? (r <= r1)
-                      (: m (yq = r)
+   (band r r1 acc) (r <= r1 ?
+                      (yq = r @ m
                        (band (r + 1) r1 (aany m ? (over acc m (peep (dark-at r st tb mn t) x2 haze-pen)) acc)))
                       acc)
    c (band (amin yq) (amax yq) haze-pen)
@@ -287,7 +287,7 @@
                             [(a 0 + p 0 + q 0) (a 1 + p 1 + q 1) (a 2 + p 2 + q 2)])
                sum (foldl add [0 0 0] (map (+ x0) ^#s)) n (2 * #s)
                [x0 s text-pen (rgb-pen (sum 0 // n) (sum 1 // n) (sum 2 // n))])
-   bands (foldl (\ tab i (: ty (h // 4 - text-row - i) (0 <= ty < h // 2 ? (pin tab ty (band i)) tab))) {} ^#ws)
+   bands (foldl (tab \ i \ (h // 4 - text-row - i @ ty (0 <= ty < h // 2 ? (pin tab ty (band i)) tab))) {} ^#ws)
    (view-frame w h src bands))
  ; the state: the screen, where the player stands and faces, the horizon's row, the
  ; tick, the rings on the water, and whether they walk on by themselves
@@ -299,11 +299,11 @@
  ; still look around; it sends a ring, but not on the heels of the last one
  (wade-move st mv) (: t (st 't) rs (st 'rings) px (st 'px)
    pz2 (min2 (st 'pz + mv) (lamp-z - lamp-near))
-   due (rs @ () 1 (6.0 <= (t - peep <rs 't 0.0)))
+   due (rs @ () 1 (6.0 <= t - peep <rs 't 0.0))
    r {'x px 'z pz2 't (t + 0.0)}
-   (? (st 'done) st
-      (: _ (pins st 'pz pz2 'rings (due ? (first-n 5 (r . rs)) rs))
-         (lamp-z - pz2 <= lamp-near ? (pins st 'done 1 'walk 0 'th0 (st 'th) 'hz0 (st 'hz)) st))))
+   (st 'done ? st
+      ((pins st 'pz pz2 'rings (due ? (first-n 5 (r . rs)) rs)),
+       lamp-z - pz2 <= lamp-near ? (pins st 'done 1 'walk 0 'th0 (st 'th) 'hz0 (st 'hz)) st)))
 
  ; a key: h l or the arrows turn, within sixty degrees of ahead, k or up wades on -- there
  ; is no wading back -- u n look up and down, the horizon dropping down the screen to
@@ -347,26 +347,26 @@
  ; low octave three times in four, ringing long; a gong when it is due, the next some
  ; seconds on. the port is any jug, so the song gates headless
  (wade-song-feed s) (: sb (s 'sb) base (s 'fpos)
-   (strike v) (: at (base + roll sb song-chunk)
+   (strike v) (base + roll sb song-chunk @ at
                  (pins s 'vs (s 'vs + [[at (mkvoice at v song-rate)]]) 'struck (s 'struck + 1)))
-   _ (? (roll sb 1000 < chime-odds)
-        (strike {'s "chime" 'note (slendro (roll sb 5) - 36 + 12 * (roll sb 4 = 0))
-                 'gain (0.6 + roll sb 40 / 100.0) 'pan (0.2 + roll sb 60 / 100.0) 'legato 5.0}))
+   (roll sb 1000 < chime-odds ?
+      (strike {'s "chime" 'note (slendro (roll sb 5) - 36 + 12 * (roll sb 4 = 0))
+               'gain (0.6 + roll sb 40 / 100.0) 'pan (0.2 + roll sb 60 / 100.0) 'legato 5.0}),
    ; the gong is a triangle, not a sine: its odd harmonics are what a small speaker
    ; gives of a note this low
-   _ (? (s 'gong <= base)
-        (strike {'s "tri" 'note -22.0 'gain 0.9 'pan 0.5 'legato 7.0},
-         pin s 'gong (base + song-rate * (8 + roll sb 6))))
-   (song-out s song-chunk song-gain))
+    s 'gong <= base ?
+      (strike {'s "tri" 'note -22.0 'gain 0.9 'pan 0.5 'legato 7.0},
+       pin s 'gong (base + song-rate * (8 + roll sb 6))),
+    song-out s song-chunk song-gain))
  ; --- the walk, on view's loop: walking on by itself, or at the lamppost settling on the
  ; lamp over settle-ms, and the apartment after it. wade-walk takes a stage already
  ; raised, and wade-run raises one ---
  (wade-walk _) (view-walk {'new wade-new 'size wade-size 'frame wade-frame 'key wade-step 'fps fps
-                           'tick (st \ (? (st 'done-at) (: s (clock (st 'done-at) / (1.0 * settle-ms))
+                           'tick (st \ (? (st 'done-at) (clock (st 'done-at) / (1.0 * settle-ms) @ s
                                                             (wade-settle st (1.0 < s ? 1.0 s)))
                                           (st 'walk) (wade-move st 0.25)))
-                           'song (hn \ (: s (? hn (wade-song-new hn (wheel (clock 0))) ())
-                                          (? s (\ _ (wade-song-feed s)) ())))
+                           'song (hn \ ((hn ? (wade-song-new hn (wheel (clock 0)))) @ s
+                                          (s ? (_ \ (wade-song-feed s)))))
                            'linger (settle-ms + done-ms) 'next ['apartment 'apartment-walk]})
  (wade-run _) (view-run wade-walk)
  wade-usage "usage: love wade   (h l turn, k j wade, u n look, space walks on to the lamppost; q or esc leaves)"

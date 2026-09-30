@@ -32,7 +32,7 @@
    ; console shows the base system works end to end before we hand off the tty. `hark`
    ; returns (exit . stdout); the shebang on /bin/kore points at /bin/love.
    (selfcheck _)
-     (: r (hark ["/bin/kore" "ls" "/proc"])
+     (hark ["/bin/kore" "ls" "/proc"] @ r
         (say1 ("-- self-check: kore ls /proc -> exit " + show <r
                + ", " + show #>r + " bytes --")))
 
@@ -40,16 +40,16 @@
    ; respawns it (a getty); any other pid is a reparented orphan we just harvest. a
    ; non-pair glean (nothing pending / -ECHILD) paces the loop so we never busy-spin.
    (harvest shpid)
-     (: ev (glean 0)
-        (? (two? ev)
+     (glean 0 @ ev
+        (two? ev ?
              (<ev = shpid ? (say1 "  [init] console exited -> respawn", harvest (spawn (console 0)))
                             (say1 "  [init] reaped a reparented orphan", harvest shpid))
            (rest 50, harvest shpid)))
 
    (boot-init _)
-     (: me (getpid 0)
-        _ (say1 ("-- love as PID " + show me + " -- the initramfs /init --"))
-        (? (me = 1)
+     (getpid 0 @ me
+        (say1 ("-- love as PID " + show me + " -- the initramfs /init --"),
+         me = 1 ?
              (say1 "-- mount the early filesystems --",
               mnt "proc"     "/proc" "proc",
               mnt "sysfs"    "/sys"  "sysfs",

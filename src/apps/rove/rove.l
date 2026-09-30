@@ -27,12 +27,12 @@
  (dat d x y) (0 <= x < d 'w && 0 <= y < d 'h ? (peep (d 't) (x + d 'w * y) 0) 0)
  ; walked: anything laid, but for the tiles this floor calls solid. the engine lays 1 and
  ; 2 and knows no other number -- a floor that lays a wall of its own names it in 'solid
- (open? d x y) (: t (dat d x y) (0 < t && !(elem t (peep d 'solid ()))))
+ (open? d x y) (dat d x y @ t (0 < t && nelem t (d 'solid)))
  (lit? d x y) (0 < dat d x y)                           ; looked through
- (dput d x y v) (pin (d 't) (x + (d 'w) * y) v)
+ (dput d x y v) (pin (d 't) (x + d 'w * y) v)
 
  ; a spun rng: the functional state in a box, one draw steps it
- (roll sb n) (: p (random (peep sb () 0) n) (pin sb () >p, <p))
+ (roll sb n) (random (peep sb () 0) n @ p (pin sb () >p, <p))
 
  ; --- delve: carve rooms, lash them with corridors ---
  ; a room is [x y rw rh]; its center anchors the corridors. rooms keep a
@@ -57,9 +57,9 @@
                          1 + peep o 0 0 + peep o 2 1 <= peep rm 0 0 ||
                          1 + peep rm 1 0 + peep rm 3 1 <= peep o 1 0 ||
                          1 + peep o 1 0 + peep o 3 1 <= peep rm 1 0))
-   (try n) (? (0 < n)
-            (: rw ((pl 0) + roll sb (pl 1)) rh ((pl 2) + roll sb (pl 3))
-               (? (w <= rw + 2 || h <= rh + 2) (try (n - 1))
+   (try n) (0 < n ?
+            (: rw (pl 0 + roll sb (pl 1)) rh (pl 2 + roll sb (pl 3))
+               (w <= rw + 2 || h <= rh + 2 ? (try (n - 1))
                 ; the span a room of width rw can start at, keeping a 1-cell border: x is
                 ; 1 + roll(w - rw - 1), so the far edge lands at w-2 at worst. (this read `+ 1`
                 ; while the additive band folded right and w - (rw + 1) is the same number --
@@ -71,22 +71,22 @@
                    d 'rooms ? (lash (mid rm) (mid <(d 'rooms))),
                    pin d 'rooms (rm . d 'rooms),
                    try (n - 1)))))))
-   _ (try (w * h // pl 4))
+   (try (w * h // pl 4),
    ; a cramped floor can come up short: guarantee two joined rooms
-   _ (#(d 'rooms) < 2 ?
-      (: r1 '(1 1 3 3) r2 [(w - 4) (h - 4) 3 3]
-         (carve 1 1 3 3, carve (w - 4) (h - 4) 3 3,
-          lash (mid r1) (mid r2), pin d 'rooms [r2 r1])))
-   _ (pins d 'in (mid (last (d 'rooms)))
-             'stair (mid <(d 'rooms)))
-   _ (dput d <(d 'stair) <>(d 'stair) 2)
+    (#(d 'rooms) < 2 ?
+     (: r1 '(1 1 3 3) r2 [(w - 4) (h - 4) 3 3]
+        (carve 1 1 3 3, carve (w - 4) (h - 4) 3 3,
+         lash (mid r1) (mid r2), pin d 'rooms [r2 r1]))),
+    (pins d 'in (mid (last (d 'rooms)))
+            'stair (mid <(d 'rooms))),
+    dput d <(d 'stair) <>(d 'stair) 2,
    ; ..and a second stair in another room, where the floor has one to spare
-   _ (? (2 < #(d 'rooms)) (: s2 (mid (d 'rooms 1)) (dput d <s2 <>s2 2)))
-   (d . peep sb () 0))
+    (? (2 < #(d 'rooms)) (mid (d 'rooms 1) @ s2 (dput d <s2 <>s2 2))),
+    d . peep sb () 0))
 
  ; a list dealt out in a random order, and the first n of one
  (deal sb l) (:- (go l ())
-   (go l acc) (two? l ? (: k (roll sb #l) (go (cat (snip-l l 0 k) (nth-on l (k + 1))) ((l k) . acc))) acc))
+   (go l acc) (two? l ? (roll sb #l @ k (go (cat (snip-l l 0 k) (nth-on l (k + 1))) (l k . acc))) acc))
  (snip-l l a b) (a < b ? (l a . snip-l l (a + 1) b))
  (nth-on l k) (k <= 0 ? l (nth-on >l (k - 1)))
  (first-n n l) (0 < n && two? l ? (<l . first-n (n - 1) >l))
@@ -96,11 +96,11 @@
  ; endpoint itself may be rock -- that is how a wall catches the light.
  (clear? d x0 y0 x1 y1) (:
    dx |(x1 - x0) dy -|(y1 - y0)
-   sx (? (x0 < x1) 1 -1) sy (? (y0 < y1) 1 -1)
-   (go x y e) (? (x = x1 && y = y1) 1
+   sx (x0 < x1 ? 1 -1) sy (y0 < y1 ? 1 -1)
+   (go x y e) (x = x1 && y = y1 ? 1
                (: e2 (2 * e)
                   mx (dy <= e2) my (e2 <= dx)
-                  nx (? mx (x + sx) x) ny (? my (y + sy) y)
+                  nx (mx ? (x + sx) x) ny (my ? (y + sy) y)
                   ne (e + (mx ? dy) + (my ? dx))
                   (? (nx = x1 && ny = y1) 1
                      (lit? d nx ny) (go nx ny ne)
@@ -113,18 +113,18 @@
  ; wear their walls (a bare stride only catches rock end-on)
  (fov d px py r) (:
    vis {} w (d 'w) h (d 'h) sn (d 'seen) r2 (1 + r * r)
-   (glow x y) (: i (x + w * y) (pin vis i 1, pin sn i 1, ()))
+   (glow x y) (x + w * y @ i (pin vis i 1, pin sn i 1, ()))
    (cell x y) (2 (x - px) + 2 (y - py) <= r2 && clear? d px py x y ? (glow x y))
    (row y x) (x <= px + r ? (cell x y, row y (x + 1)))
    (rows y) (y <= py + r ? (row y (px - r), rows (y + 1)))
-   _ (rows (py - r))
-   _ (flip map (keys vis) (i \ 0 < peep (d 't) i 0 ?
-      (: x (i % w) y (i // w)
-       (map (\ o (: nx (x + <o) ny (y + <>o)
-                  (0 <= nx < w && 0 <= ny < h && dat d nx ny = 0 ? (glow nx ny))))
-            '((-1 -1) (0 -1) (1 -1) (-1 0)
-              (1 0) (-1 1) (0 1) (1 1))))))
-   vis)
+   (rows (py - r),
+    flip map (keys vis) (i \ 0 < peep (d 't) i 0 ?
+    (: x (i % w) y (i // w)
+     (map (o \ (: nx (x + <o) ny (y + <>o)
+                (0 <= nx < w && 0 <= ny < h && dat d nx ny = 0 ? (glow nx ny))))
+          '((-1 -1) (0 -1) (1 -1) (-1 0)
+            (1 0) (-1 1) (0 1) (1 1))))),
+    vis))
 
  ; --- the painter: one frame said into a port as painted cells ---
  ; a cell's face is the game's: cell takes a cell's index and answers (glyph hue), and
@@ -133,25 +133,25 @@
  ; put off right after the glyph it was under; the port is any jug, so frames gate headless.
  pens {}
  (pen n) (two? n ? ("\e[38;5;" + show <n + ";48;5;" + show <>n + "m")
-          (: s (pens n) (string? s ? s
-             (: s2 ("\e[38;5;" + show n + "m") (pin pens n s2, s2)))))
+          (pens n @ s (string? s ? s
+           ("\e[38;5;" + show n + "m" @ s2 (pin pens n s2, s2)))))
  ; a pen's rgb and the pen nearest an rgb, over the cube and the grey ramp both
  levels [0 95 135 175 215 255]
- (pen-rgb c) (? (232 <= c) (: v (8 + 10 * (c - 232)) [v v v])
-                (16 <= c) (: i (c - 16) [(levels (i // 36)) (levels ((i // 6) % 6)) (levels (i % 6))])
+ (pen-rgb c) (? (232 <= c) (8 + 10 * (c - 232) @ v [v v v])
+                (16 <= c) (c - 16 @ i [(levels (i // 36)) (levels (i // 6 % 6)) (levels (i % 6))])
                 [0 0 0])
  (cube v) (v < 48 ? 0 ((v - 35) // 40))                 ; x11's rule: a channel to its nearest level
  (rgb-pen r g b) (: cb (16 + 36 * cube r + 6 * cube g + cube b)
                     n (((r + g + b) // 3 - 3) // 10)
                     gy (232 + (? (n < 0) 0 (23 < n) 23 n))
-                    (dist p) (: q (pen-rgb p) (2 (q 0 - r) + 2 (q 1 - g) + 2 (q 2 - b)))
+                    (dist p) (pen-rgb p @ q (2 (q 0 - r) + 2 (q 1 - g) + 2 (q 2 - b)))
                     (dist gy < dist cb ? gy cb))
  ; how far apart two pens are, in rgb squared and in luminance -- hues apart in rgb can
  ; still be as bright as each other, which is what the eye goes by; and a fg that reads
  ; over a bg: the hue itself when the two are far enough apart both ways, else its
  ; inverse, else black or white, whichever the bg is not
  (pen-gap a b) (: p (pen-rgb a) q (pen-rgb b) (2 (p 0 - q 0) + 2 (p 1 - q 1) + 2 (p 2 - q 2)))
- (pen-lum c) (: q (pen-rgb c) (int (0.2126 * q 0 + 0.7152 * q 1 + 0.0722 * q 2)))
+ (pen-lum c) (pen-rgb c @ q (int (0.2126 * q 0 + 0.7152 * q 1 + 0.0722 * q 2)))
  legible-gap 14400                                       ; a hundred and twenty of rgb, squared
  legible-lum 80                                          ; ..and this much of luminance, of 255
  (legible fg bg) (: (far? a) (legible-gap <= pen-gap a bg && legible-lum <= |(pen-lum a - pen-lum bg))
@@ -160,16 +160,16 @@
  ; two multiply-shift rounds masked to 32 bits: the dice a cell throws for itself,
  ; so the same cell of the same floor always throws the same number.
  lim 4294967296
- (mix a) (: h ((a * 2654435761) % lim)
-            h2 ((h ^ (h >> 15)) * 2246822519 % lim)
-            (h2 ^ (h2 >> 13)))
- (dice x y s k) ((mix (y * 374761393 + x * 668265263 + s * 2654435761 + 1)) % k)
+ (mix a) (: h (a * 2654435761 % lim)
+            h2 ((h ^ h >> 15) * 2246822519 % lim)
+            (h2 ^ h2 >> 13))
+ (dice x y s k) (mix (y * 374761393 + x * 668265263 + s * 2654435761 + 1) % k)
  ; a piece with a book opens it a page at a time: every page is a sign under the book's
  ; title, and the key that takes one down puts the next up. the foot is read here and
  ; not in the words below: a lambda reads a value bound above it, never one below
  page-foot "-- ~ of ~, any key --"
  (open-book g bk) (: n #>bk
-                      (page i) (<bk . ((>bk i) + ["" (fill page-foot [(i + 1) n])]))
+                      (page i) (<bk . (>bk i + ["" (fill page-foot [(i + 1) n])]))
                       pgs (map page ^n)
                       (pins g 'sign <pgs 'pages >pgs))
  (paint j d cell msg bar) (:
@@ -185,7 +185,7 @@
    ; d 'top is the rows it took, for the live painter to keep under
    cols (peep d 'cols w)
    wr (cite 'story 'wrap)
-   notes (: ls (wr && cols < vlen msg ? (wr msg cols) [msg]) (first-n 3 ls))
+   notes ((wr && cols < vlen msg ? (wr msg cols) [msg]) @ ls (first-n 3 ls))
    _ (pin d 'top #notes)
    _ (say j "\e[H")
    ; an erase under a pending wrap takes the glyph that raised it, so a row that
@@ -205,8 +205,8 @@
    (rows y p) (y >= vy + rows-n ? p
                (rows (y + 1) (: on (0 <= y < h)
                                 p2 (on ? (say j padding, row y 0 (w * y) p) p)
-                                _ (say j (end (on ? (vx + w) 0)))
-                                p2)))
+                                (say j (end (on ? (vx + w) 0)),
+                                 p2))))
    ; ..and the bar a column short of the screen: a console that wraps at its edge would
    ; scroll the floor for a bar that reached it
    (rows (vy + #notes - 1) -1,
@@ -216,16 +216,16 @@
  ; cell off the screen, under the note, unlit or under a sign's box is left be
  (paint-live j d vis cell cells) (:
    w (d 'w) h (d 'h) rows (peep d 'rows h) vy (peep d 'vy 0) vx (peep d 'vx 0)
-   top (peep d 'top 1) box (peep d 'box ())
+   top (peep d 'top 1) box (d 'box)
    lit-all? (peep d 'lit 0)
-   (boxed? sx sy) (box && (box 0 <= sx < box 0 + box 2) && (box 1 <= sy < box 1 + box 3))
+   (boxed? sx sy) (box && box 0 <= sx < box 0 + box 2 && box 1 <= sy < box 1 + box 3)
    (one i) (: x (i % w) y (i // w) sx (x + vx) sy (y - vy + 1)
               (? (top <= sy < rows + 1 && (lit-all? || peep vis i 0) && !(boxed? sx sy))
-                 (: gh (cell i)
+                 (cell i @ gh
                     (say j ("\e[" + show (sy + 1) + ";" + show (sx + 1) + "H" + pen <>gh + string <gh
                             + (two? <>gh ? "\e[49m" ""))))))
-   _ (each cells one)
-   (say j "\e[0m", j))
+   (each cells one,
+    (say j "\e[0m", j)))
 
  ; --- the helm: a key (cli's edkey: a byte, an arrow code, an alt letter) -> one steer,
  ; a move pair; any other key answers as itself ---
@@ -242,8 +242,8 @@
  ; is a floor y and one. c is [x y], cli's edtap.
  (toward a b) (a < b ? 1 (a > b ? -1 0))
  (tap-steer g c) (: p (g 'p) d (g 'd)
-                    ex (<c - peep d 'vx 0 - (p 'x))
-                    ey (<>c - 1 + peep d 'vy 0 - (p 'y))
+                    ex (<c - peep d 'vx 0 - p 'x)
+                    ey (<>c - 1 + peep d 'vy 0 - p 'y)
                     ax (abs ex) ay (2 * abs ey)          ; in cell widths
                     ; within 22.5 degrees of a row or a column is along it: tan is 5/12
                     dx (12 * ax < 5 * ay ? 0 (toward 0 ex))
@@ -257,7 +257,7 @@
  (hole v) (string? v ? v (show v))
  (fill s vs) (:- (go 0 "" vs) (go i acc vs)
               (i >= #s ? acc
-               (: c (s i)
+               (s i @ c
                 (c = 126 && two? vs ? (go (i + 1) (acc + hole <vs) >vs)
                  (go (i + 1) (acc + string c) vs)))))
  ; a cell is a character and not a byte: the face's blocks and arrows are three bytes
@@ -273,14 +273,14 @@
  (fit-in s w off) (: on ("\e[38;5;" + show token-pen + "m")
                      on2 ("\e[48;5;" + show choice-bg + ";38;5;" + show choice-fg + "m")
               (go i n acc)
-               (? (i >= #s) acc
-                  (: c (s i)
+               (i >= #s ? acc
+                  (s i @ c
                      (? (n >= w) acc
                         (c = 123) (go (i + 1) n (acc + on))
                         (c = 1) (go (i + 1) n (acc + on2))
                         (c = 125 || c = 2) (go (i + 1) n (acc + off))
                         (: k (cpnext s i) v (n + cw s i)
-                           (? (w < v) acc (go k v (acc + snip s i k)))))))
+                           (w < v ? acc (go k v (acc + snip s i k)))))))
               (go 0 0 ""))
  (fit s w) (fit-in s w "\e[0m")
 
@@ -290,13 +290,13 @@
  sign-tpen (x11-256 "honeydew")
  (vlen s) (:- (go 0 0) (go i n) (i >= #s ? n
            (s i @ c (go (cpnext s i) (c @ (123 || 125 || 1 || 2) n (n + cw s i))))))
- (pad s n c) (: v (vlen s) (v >= n ? s (s + ((n - v) (\ t (t + c)) ""))))
+ (pad s n c) (vlen s @ v (v >= n ? s (s + ((n - v) (t \ t + c) ""))))
  (sign-box ttl ls) (:
-   w (foldl (\ a l (vlen l @ v (a < v ? v a))) (vlen ttl) ls)
+   w (foldl (a \ l \ (vlen l @ v (a < v ? v a))) (vlen ttl) ls)
    ww (w + 4)
    top ("+-" + pad (ttl + " ") (ww - 3) "-" + "+")
    bot ("+" + ((ww - 2) (t \ t + "-") "") + "+")
-   ([top] + (map (l \ "| " + pad l (ww - 4) " " + " |") ls) + [bot]))
+   ([top] + map (l \ "| " + pad l (ww - 4) " " + " |") ls + [bot]))
  ; the first n cells of a painted row: an SGR has no width, so the count is of glyphs,
  ; and a glyph's tail bytes belong to the cell its lead began -- k is the leads so far.
  ; a painted row ends on \e[K, an escape with no m, so the skip stops at the end too
@@ -307,7 +307,7 @@
                   (past i) (i >= #r ? i (r i @ 109 (i + 1) (past (i + 1))))
                   (go i k acc)
                    (i >= #r ? (acc + ((n - k) (t \ t + " ") ""))
-                    (: c (r i)
+                    (r i @ c
                        (? (n <= cell-of c k) acc
                           (c = 27) (past i @ e (go e k (acc + snip r i e)))
                           (go (i + 1) (k + lead c) (acc + string c))))))
@@ -324,10 +324,10 @@
  ; a line wider than the screen is reflowed at its words -- story's own wrap -- to a
  ; few cells short of the edge either side, so no row runs full and a word never sits
  ; against the frame. one list of rows per line
- (sign-flow ls w) (: wr (cite 'story 'wrap)
+ (sign-flow ls w) ((cite 'story 'wrap) @ wr
                    (map (l \ wr && (w - 10) < vlen l ? (wr l (w - 10)) [l]) ls))
  ; the screen row the box's top takes, for a box of nb rows
- (sign-top a n nb) (: q (a + (n - nb) // 2) (a < q ? q a))
+ (sign-top a n nb) (a + (n - nb) // 2 @ q (a < q ? q a))
  ; the line under screen row y, as an index into ls, or -1 off the box and its frame
  (sign-line ttl ls a n w y) (:- (go (y - sign-top a n (2 + net (map tally fl)) - 1) 0 fl)
    fl (sign-flow ls w)
@@ -337,14 +337,14 @@
  ; where the box lands on the screen: [x0 y0 w rows], as sign-over lays it
  (sign-rect ttl ls a n w) (: box (sign-box ttl (foldl (+) () (sign-flow ls w)))
                              ww (vlen <box)
-                             [(: q ((w - ww) // 2) (0 < q ? q 0)) (sign-top a n #box) ww #box])
+                             [((w - ww) // 2 @ q (0 < q ? q 0)) (sign-top a n #box) ww #box])
  ; a frame with the box centred over its rows a .. a+n, for a screen w wide; the box
  ; takes the rows the reflow makes
  (sign-over f ttl ls a n w) (:- (go 0 "")
    rs (split "\r\n" f)
    box (sign-box ttl (foldl (+) () (sign-flow ls w)))
    ww (vlen <box)
-   x0 (: q ((w - ww) // 2) (0 < q ? q 0))
+   x0 ((w - ww) // 2 @ q (0 < q ? q 0))
    y0 (sign-top a n #box)
    ; ..and never past the rows it was given: a box too tall for the screen loses its
    ; foot, which is the screen's doing, but the bar under it is not the box's to take
@@ -357,7 +357,7 @@
              (cells-cut r x0 + "\e[0m" + pen sign-pen + fit-in (row i) 400 ("\e[0m" + pen sign-pen)
               + "\e[0m" + cells-from r (x0 + ww))))
    ; the top row's tab, +-title, wears its own pen; the cells were counted before the pens went in
-   (row i) (: s (box (i - y0))
+   (row i) (box (i - y0) @ s
               (i = y0 && 0 < #ttl ? (pen sign-tpen + snip s 0 (3 + #ttl) + pen sign-pen + snip s (3 + #ttl) #s) s))
    (go i acc) (i >= #rs ? acc (go (i + 1) (acc + (0 < i ? "\r\n" "") + lay i))))
 
@@ -369,17 +369,17 @@
  sign-gap 600                                           ; ..and while a sign stands
  ; the blocking shape: wait for a key, running idle between polls -- last is the key
  ; the last turn took and t0 when; answers the key to turn on
- (key-wait t0 last gap idle) (? (cue? 0)
-                                (: k (edkey in)
+ (key-wait t0 last gap idle) (cue? 0 ?
+                                (edkey in @ k
                                    (k = last && clock t0 < gap ? (key-wait t0 last gap idle) k))
                                 (idle (), key-wait t0 last gap idle))
  ; the polling shape: every key waiting handed to take under the same rule, the last
  ; key taken and its time riding g as 'lk and 'lt; answers how many were taken
  (key-drain g gap take)
   (:- (go 0) (go n)
-   (? (cue? 0)
-      (: k (edkey in)
-         (? (k = g 'lk && clock (g 'lt) < gap) (go n)
+   (cue? 0 ?
+      (edkey in @ k
+         (k = g 'lk && clock (g 'lt) < gap ? (go n)
             (take k, pins g 'lk k 'lt (clock 0), go (n + 1))))
       n))
  ; the queue eaten: keys typed at what stood before are not typed at what stands now --
@@ -401,9 +401,9 @@
  (pace! p) (: t (clock 0)
               d (1.0 * (t - p 't))
               v ((d / 2000.0) 0.5 * p 'gap)
-              _ (pins p 't t 'gap (v < d ? d v))
-              (p 'gap))
- (song-lead-of gap) (: n (int (2.5 * gap * song-rate / 1000.0))
+              ((pins p 't t 'gap (v < d ? d v)),
+               p 'gap))
+ (song-lead-of gap) (int (2.5 * gap * song-rate / 1000.0) @ n
                        (n < song-lead ? song-lead (song-lead-max < n ? song-lead-max n)))
  ; the horn fed up to a lead: feed while the lag is under it AND EACH FEED RAISES IT.
  ; the lag counts the card's ring and the port's run behind it, but a full ring takes
@@ -412,7 +412,7 @@
  ; either way the lag stops rising, and the filler stops with it rather than loop, so
  ; the keys are read and the sound merely gaps. answers the feeds made
  (song-fill hn lead feed) (:- (go (horn-lag hn) 0) (go l0 k)
-                            (? (l0 < lead) (: _ (feed ()) l1 (horn-lag hn) (? (l0 < l1) (go l1 (k + 1)) (k + 1)))
+                            (l0 < lead ? (: _ (feed ()) l1 (horn-lag hn) (l0 < l1 ? (go l1 (k + 1)) (k + 1)))
                                k))
  ; ..and for a while: a box that goes up over what the keys were typed at
  settle-slice 25

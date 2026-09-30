@@ -12,10 +12,10 @@
    scount (cite 'kanren 'scount)                   ; count the stream without materializing it
    st0 (cite 'kanren 'st0)                         ; the empty state: substitution + constraints
    (sat n) (:
-     vs (map var (map (\ i (intern (+ "x" (show i)))) (jot n)))
+     vs (map var (map (i \ intern ("x" + show i)) (jot n)))
      bools (map boolean vs)
-     clauses (map (\ i (+ ((vs i) === 1) ((vs (% (+ i 1) n)) === 1))) (jot n))
+     clauses (map (i \ (vs i === 1) + (vs ((i + 1) % n) === 1)) (jot n))
      formula (foldl (*) 1 (bools + clauses))
      (scount (load formula st0)))
- _ (assert (= 6726 (sat 10)))
+ _ (assert (6726 = sat 10))
  _ (puts "kanren-count: #SAT-with-multiplicity of the cyclic n=10 CNF = ") _ (putn (sat 10)) _ (putc 10))

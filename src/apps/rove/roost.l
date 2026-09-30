@@ -41,10 +41,10 @@
  w-lay      "the nest's love will be this build"
  w-keep     "the nest keeps its love"
  ; the opening sign's title, read when the floor opens rather than at the bake
- (open-ttl _) (: u (getenv "USER" || getenv "LOGNAME")
-                 (? (string? u && 0 < #u) (: h (host-name ()) (? h (u + "@" + h) u)) "the nest"))
+ (open-ttl _) (getenv "USER" || getenv "LOGNAME" @ u
+                 (string? u && 0 < #u ? (host-name () @ h (h ? (u + "@" + h) u)) "the nest"))
  ; the host's short name, off uname(2)
- (host-name _) (uname () @ (_ . h . _) (: k (findsub h ".") (? (#h < 1) () (k < 0) h (snip h 0 k))) ())
+ (host-name _) (uname () @ (_ . h . _) (findsub h "." @ k (? (#h < 1) () (k < 0) h (snip h 0 k))) ())
  open-foot '(""
              "move     h j k l    or the arrow keys"
              "perch    bump it to lay this build in the nest, or not"
@@ -88,13 +88,13 @@
    dr (d 'door)
    p {'x <dr 'y (<>dr - 1) 'gl 64 'hue me-pen}
    g {'d d 'p p 'pl pl 'ms () 'msg "" 'tn 0 'over 0 'sign () 'ask ()}
-   _ (pin g 'sign (open-ttl () . src 'nest-lines pl + open-foot))
-   g)
+   (pin g 'sign (open-ttl () . src 'nest-lines pl + open-foot),
+    g))
 
  ; --- the questions: a sign with choices, and the digit that answers it ---------------
  (ask g what ttl ls) (pins g 'ask what 'sign (ttl . ls))
  (ask-perch g) (: pl (g 'pl) when (src 'nest-when)
-   (? (pl 'verdict = 'same) (note g w-same)
+   (pl 'verdict = 'same ? (note g w-same)
       (ask g 'perch perch-ttl
            [("the nest: " + when (pl 'theirs) + ", this build: " + when (pl 'mine))
             (src 'nest-verdict pl)
@@ -118,7 +118,7 @@
      50 (done (), pin g 'over 'cancel)
      51 (done ()))))
  ; a shelf bumped: its tool's link on or off. one that is love's already has nothing to do
- (toggle g k) (: t (g 'pl 'tools k)
+ (toggle g k) (g 'pl 'tools k @ t
    (t 'was @ "love" (note g (fill w-already [(t 'nm)]))
     (pin t 'act (t 'act = 'link ? 'keep 'link),
      note g (src 'nest-tool-line (g 'pl) t))))
@@ -129,13 +129,12 @@
         5 (toggle g (d 'shelves nx))
         3 (ask-door g)
         (open? d nx ny ? (pins p 'x nx 'y ny) (note g w-wall))))
- (roost-turn g k) (:
-   _ (pins g 'msg "" 'tn (1 + g 'tn))
-   _ (? (g 'ask) (answer g k)
-        (g 'sign) (pin g 'sign ())
-        (g 'over) ()
-        (steer k @ mv (? (two? mv) (roost-stride g mv) ())))
-   g)
+ (roost-turn g k) ((pins g 'msg "" 'tn (1 + g 'tn)),
+                   (? (g 'ask) (answer g k)
+                      (g 'sign) (pin g 'sign ())
+                      (g 'over) ()
+                      (steer k @ mv (two? mv ? (roost-stride g mv)))),
+                   g)
 
  ; --- the frame --------------------------------------------------------------------
  (roost-face g) (: d (g 'd) w (d 'w) p (g 'p) pl (g 'pl) at (p 'x + w * p 'y)
@@ -144,21 +143,21 @@
                 [perch-glyph [old-pen ground]])
    (shelf x) (: k (d 'shelves x) t (pl 'tools k)
                 [(d 'glyphs k)
-                 [(? (t 'act = 'link || t 'was = "love") link-pen keep-pen) ground]])
-   (\ i (: x (i % w) t (peep (d 't) i 0)
-           (? (i = at) ["@" [(legible me-pen ground) ground]]
+                 [(t 'act = 'link || t 'was = "love" ? link-pen keep-pen) ground]])
+   (i \ (: x (i % w) t (peep (d 't) i 0)
+           (i = at ? ["@" [(legible me-pen ground) ground]]
               (t @ 1 [floor-glyph [floor-pen ground]]
                    2 [wall-glyph wall-pen]
                    3 [door-glyph door-pen]
                    4 (perch ())
                    5 (shelf x)
                    '(32 0))))))
- (roost-bar g) (: when (src 'nest-when) (fill w-bar [(when (g 'pl 'theirs)) (when (g 'pl 'mine))]))
+ (roost-bar g) (src 'nest-when @ when (fill w-bar [(when (g 'pl 'theirs)) (when (g 'pl 'mine))]))
  (roost-frame g) (: d (g 'd) rows (d 'rows) cols (d 'cols)
    f (:- (slurp j) j (paint (jug 0) d (roost-face g) (g 'msg) (roost-bar g)))
    sg (g 'sign)
-   _ (pin d 'box (two? sg ? (sign-rect <sg >sg 1 rows cols) ()))
-   (two? sg ? (sign-over f <sg >sg 1 rows cols) f))
+   (pin d 'box (two? sg ? (sign-rect <sg >sg 1 rows cols) ()),
+    two? sg ? (sign-over f <sg >sg 1 rows cols) f))
 
  ; --- the walk: the screen raised, a key a turn, the answer handed back ---------------
  (roost-walk pl) (: ws (tty 1)
@@ -169,14 +168,14 @@
                (k = 27 && g 'sign) (pin g 'sign ())
                (k @ (113 || 27 || -7) (pin g 'over 'cancel)
                 (roost-turn g k)))
-   (loop last t0) (? (g 'over) ()
+   (loop last t0) (g 'over ? ()
                      (: _ (say out (roost-frame g), flush out)
                         k (key-wait t0 last (g 'sign ? sign-gap repeat-gap) (_ \ rest 30))
-                        _ (turn k)
-                        (loop k (clock 0))))
-   _ (say out (esc + "[2J"))
-   _ (loop 0 0)
-   (g 'over))
+                        (turn k,
+                         loop k (clock 0))))
+   (say out (esc + "[2J"),
+    loop 0 0,
+    g 'over))
  (roost-run pl)
   (raw 1,
    say out (esc + "[?1049h" + esc + "[?25l"),

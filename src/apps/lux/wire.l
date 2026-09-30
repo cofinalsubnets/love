@@ -27,12 +27,12 @@
 (:
    ; --- byte IO over the socket (little-endian) ---
    (x-w8 s v)  (put s v)
-   (x-w16 s v) (put s (255 & v), put s (255 & (v >> 8)))
-   (x-w32 s v) (x-w16 s (65535 & v), x-w16 s (65535 & (v >> 16)))
+   (x-w16 s v) (put s (255 & v), put s (255 & v >> 8))
+   (x-w32 s v) (x-w16 s (65535 & v), x-w16 s (65535 & v >> 16))
    x-flush flush
    x-r8 see
-   (x-r16 s) (: a (see s) b (see s) (a | (b << 8)))
-   (x-r32 s) (: a (x-r16 s) b (x-r16 s) (a | (b << 16)))
+   (x-r16 s) (: a (see s) b (see s) (a | b << 8))
+   (x-r32 s) (: a (x-r16 s) b (x-r16 s) (a | b << 16))
    (x-skip s n) (: (go i) (i < n ? (see s, go (i + 1))) (go 0))
    (x-rstr s n) (: (go i acc) (i >= n ? acc (go (i + 1) (acc + string (see s)))) (go 0 ""))
    (x-pad4 n) (padk n 4)
@@ -46,7 +46,7 @@
    ;     which: 0 error, 1 reply, >=2 event. x-reply stashes events (in evq, a
    ;     fifo) while it waits for a reply; x-next drains evq before the socket. ---
    evq {0 ()}
-   (x-reply s) (: pkt (x-rbytes s 32)                                            ; the next 32-byte reply header, events stashed; an error
+   (x-reply s) (x-rbytes s 32 @ pkt                                              ; the next 32-byte reply header, events stashed; an error
                 (<pkt = 1 || (127 & <pkt) = 0 ? pkt                              ; packet also answers the wait (the window died mid-query --
                  (pin evq 0 (evq 0 + [pkt]), x-reply s)))                        ; blocking forever on it would hang the whole wm)
 
@@ -78,9 +78,9 @@
              wpx (x-r16 s) hpx (x-r16 s)
              _ (x-skip s 8)                                                      ; mm sizes, min/max installed maps
              vis (x-r32 s) _ (x-r8 s) _ (x-r8 s)                                 ; root visual; backing-stores, save-unders
-             depth (x-r8 s) _ (x-r8 s)                                           ; root depth (a drawing client's PutImage needs it)
-             _ (x-skip s ((4 * alen) - (32 + ((vlen + x-pad4 vlen) + ((8 * nfmt) + 40)))))
-             [root wpx hpx minkc maxkc idbase cmap vis depth])))
+             depth (x-r8 s) (x-r8 s,                                             ; root depth (a drawing client's PutImage needs it)
+                             x-skip s (4 * alen - (32 + (vlen + x-pad4 vlen + (8 * nfmt + 40)))),
+                             [root wpx hpx minkc maxkc idbase cmap vis depth]))))
    (scr-root sc) <sc  (scr-w sc) <>sc  (scr-h sc) <>>sc
    (scr-mink sc) (sc 3)  (scr-maxk sc) (sc 4)  (scr-idbase sc) (sc 5)
    (scr-cmap sc) (sc 6)  (scr-visual sc) (sc 7)  (scr-depth sc) (sc 8)
@@ -117,7 +117,7 @@
           (: rlen (u32 hdr 4) fmt (hdr 1) n (u32 hdr 16)                        ; the reply's length in longs; the value's item count at 16
              bytes (x-rbytes s (rlen * 4))
              [fmt n (take (n * (fmt // 8)) bytes)])))                            ; the value alone, its padding dropped
-   (x-atoms-of bytes) (? (#bytes < 4) ()                                         ; group 4 le bytes -> a 32-bit atom/window list
+   (x-atoms-of bytes) (#bytes < 4 ? ()                                           ; group 4 le bytes -> a 32-bit atom/window list
                          (u32 bytes 0 . x-atoms-of (drop 4 bytes)))
    (x-getprop-atoms s win prop) (x-atoms-of (x-getprop s win prop 2))
    (x-has-atom s win propnm valnm) (: at (x-getprop-atoms s win (x-intern s propnm)) va (x-intern s valnm)   ; isInProperty
@@ -128,7 +128,7 @@
                           (<l = 0) (seen ? acc (go >l 1 acc))
                           (go >l seen (seen ? (acc + string <l) acc)))
        (go bytes 0 ""))
-   (x-transient s win) (: a (x-getprop-atoms s win 68) (two? a ? <a))            ; wm_transient_for (atom 68) -> the parent window | ()
+   (x-transient s win) (x-getprop-atoms s win 68 @ a (two? a ? <a))              ; wm_transient_for (atom 68) -> the parent window | ()
 
    ; --- GetGeometry (opcode 14) -> the window's (x y w h) ---
    (x-getgeom s win)
@@ -200,7 +200,7 @@
        (? !(<hdr = 1) '(0 1)                                                    ; the window died: reads as unmanageable
           (x-rbytes s (u32 hdr 4 * 4),                                          ; drain the trailing reply data
            [(hdr 26) (hdr 27)])))
-   (x-manageable? s win) (: a (x-attrs s win) (<a = 2 && <>a = 0))               ; viewable and not override-redirect
+   (x-manageable? s win) (x-attrs s win @ a (<a = 2 && <>a = 0))                 ; viewable and not override-redirect
 
    ; --- become the wm: SubstructureRedirect|Notify on the root, synced by an
    ;     intern round-trip. 1 = we hold it, 0 = another wm -- the Access error
@@ -213,7 +213,7 @@
    ; --- RandR 1.5: the monitors are the screens. QueryExtension (opcode 98) finds
    ;     the major opcode + event base; RRQueryVersion, RRSelectInput on the root
    ;     (screen/crtc/output/resource change), then RRGetMonitors on demand. ---
-   (i16 l off) (: v (u16 l off) (v < 32768 ? v (v - 65536)))
+   (i16 l off) (u16 l off @ v (v < 32768 ? v (v - 65536)))
    (x-queryext s nm)                                                            ; -> (major-opcode first-event) | ()
     (: n #nm
        _ (x-w8 s 98, x-w8 s 0, x-w16 s (2 + (n + x-pad4 n) / 4),
@@ -223,8 +223,8 @@
        hdr (x-reply s)
        (<hdr = 1 && hdr 8 ? [(hdr 9) (hdr 10)]))
    (x-randr-init s root)                                                        ; -> (opcode event-base) once 1.5 answers, else ()
-    (: ext (x-queryext s "RANDR")
-       (? !ext ()
+    (x-queryext s "RANDR" @ ext
+       (!ext ? ()
           (: op <ext
              _ (x-w8 s op, x-w8 s 0, x-w16 s 3, x-w32 s 1, x-w32 s 5, x-flush s)   ; RRQueryVersion 1.5
              hdr (x-reply s)
@@ -236,9 +236,9 @@
        hdr (x-reply s)
        (? !(<hdr = 1) ()
           (: n (u32 hdr 12) b (x-rbytes s (4 * u32 hdr 4))
-             (go i off) (? (i >= n) ()
+             (go i off) (i >= n ? ()
                            ([(i16 b (off + 8)) (i16 b (off + 10)) (u16 b (off + 12)) (u16 b (off + 14))]
-                            . go (i + 1) (off + 24 + (4 * u16 b (off + 6)))))
+                            . go (i + 1) (off + 24 + 4 * u16 b (off + 6))))
              (go 0 0))))
 
    ; --- keyboard: GetKeyboardMapping -> a keysym->keycode map; GrabKey ---
@@ -260,13 +260,13 @@
        ; "no chords", the inert value this file answers everywhere else. --
        kpc (<hdr = 1 ? (hdr 1) 0)
        km (tablet 8)
-       _ (: (go i) (i < nkc * kpc ?
-                    (: sym (x-r32 s)
-                       _ (? (any (x \ x = sym) syms && !(peep km sym 0))
-                            (pin km sym (mink + (i // kpc))))
-                       (go (i + 1))))
-            (go 0))
-       km)
+       ((: (go i) (i < nkc * kpc ?
+                   (x-r32 s @ sym
+                      ((? (any (x \ x = sym) syms && !(peep km sym 0))
+                          (pin km sym (mink + i // kpc))),
+                       go (i + 1))))
+           (go 0)),
+        km))
    (x-grab s root lib kc) (kc < 1 ? 0
                             (x-w8 s 33, x-w8 s 1, x-w16 s 4, x-w32 s root,
                              x-w16 s lib, x-w8 s kc, x-w8 s 1, x-w8 s 1,
@@ -301,25 +301,25 @@
    (xauth-parse b disp)
     (: n #b
        (fld i) (: ln (b i << 8 | b (i + 1)) e (i + 2 + ln) [(snip b (i + 2) e) e])
-       (go i) (? (n - i < 10) ()                                                 ; too short for another record
+       (go i) (n - i < 10 ? ()                                                   ; too short for another record
                  (: ad (fld (i + 2)) nu (fld <>ad) nm (fld <>nu) da (fld <>nm)
                     (<nu = disp && <nm = "MIT-MAGIC-COOKIE-1" ? [<nm <da]
                      (go <>da))))
        (go 0))
    (xauth-cookie path disp)
-    (: p (open path "r")
-       (hot? p ? (: b (slurp p) _ (close p) (xauth-parse b disp))))
+    (open path "r" @ p
+       (hot? p ? (slurp p @ b (close p, xauth-parse b disp))))
 
    ; --- the event decoder: one 32-byte event -> (code detail window state) | ()
    ;     code 0 = X error (window is garbage). window at byte 8, state at byte 28,
    ;     detail (keycode) at byte 1 -- enough for every event the wm handles. ---
    (x-decode pkt) [(127 & <pkt) (pkt 1) (u32 pkt 8) (u16 pkt 28) pkt]         ; code, detail(keycode), window@8, state@28, + the raw bytes
    (x-next s)                                                                    ; a stashed event first, else the socket
-    (: q (evq 0)
+    (evq 0 @ q
        (two? q ? (pin evq 0 >q, x-decode <q)
-        (: b0 (see s)
+        (see s @ b0
            (b0 = -1 ? ()
-            (: pkt (b0 . x-rbytes s 31)
+            ((b0 . x-rbytes s 31) @ pkt
                (b0 = 1 ? (x-skip s (4 * u32 pkt 4), x-next s)                    ; an orphaned reply (its wait ended on an error): drain + skip
                 (x-decode pkt)))))))
    (ev-code e) <e  (ev-detail e) <>e  (ev-window e) (e 2)  (ev-state e) (e 3)

@@ -41,14 +41,14 @@
    (tally-fatal ws) (foldl (a \ w \ fatal? w ? (a + 1) a) 0 ws)
 
    (libra-check-files conf fs bad)
-    (? (atom? fs) bad
-       (: r (uread <fs)
-          (? (atom? r) (say err ("libra: cannot open " + <fs + "\n"),
-                        libra-check-files conf >fs (bad + 1))
+    (atom? fs ? bad
+       (uread <fs @ r
+          (atom? r ? (say err ("libra: cannot open " + <fs + "\n"),
+                      libra-check-files conf >fs (bad + 1))
              (: src <>r
                 bw (lint-of src conf)
-                _ (foldl (\ _ w (say err (warnline <fs w), 0)) 0 bw)
-                (libra-check-files conf >fs (bad + tally-fatal bw))))))
+                (foldl (\ _ w (say err (warnline <fs w), 0)) 0 bw,
+                 libra-check-files conf >fs (bad + tally-fatal bw))))))
 
    ; the count is the status, answered and not quit with: every arm below is
    ; libra-main's own tail, so a caller already in this image reads it as a charm
@@ -66,9 +66,9 @@
    (dblank? s) !(0 < #(ltrim s))
    ; one leading space off, so `;   foo` keeps the display's two and a bare `;`
    ; is the blank line it looks like
-   (dbody s) (: n #s (0 < n && s 0 = 32 ? (snip s 1 n) s))
-   (dcmts src) (: t (tablet 0) (each (lint-cmts src) (c \ pin t <c c), t))
-   (dalone ln c) (: k (<>c - 1)
+   (dbody s) (#s @ n (0 < n && s 0 = 32 ? (snip s 1 n) s))
+   (dcmts src) ({} @ t (each (lint-cmts src) (c \ pin t <c c), t))
+   (dalone ln c) (<>c - 1 @ k
                     (dblank? (snip ln 0 k) ? [1 (snip ln 0 k + dbody <>>c)] ()))
    (drtrim l) (two? l ? (drtrim >l @ r (two? r || !(dblank? <l) ? (<l . r) ())))
 
@@ -76,7 +76,7 @@
    (ldoc-head src)
     (: t (dcmts src)
        (g ls k acc)
-        (? (atom? ls) (drtrim (rev acc))
+        (atom? ls ? (drtrim (rev acc))
            (: c (t k)
               a (two? c ? (dalone <ls c) ())      ; the line's own sentence, if it is one
               (? (atom? a) (dblank? <ls ? (g >ls (k + 1) ("" . acc))
@@ -92,13 +92,13 @@
    (ddashy? c) (c = 45 || c = 32)
    ; `--- name ------------` -> [1 "name"]; dashes both sides are marker and padding
    (dbanner s)
-    (: n #s
+    (#s @ n
        (? !(3 <= n && snip s 0 3 = "---") ()
           (: a ((: (f i) (i < n && ddashy? (s i) ? (f (i + 1)) i)) 0)
              b ((: (f j) (a < j && ddashy? (s (j - 1)) ? (f (j - 1)) j)) n)
              (a < b ? [1 (snip s a b)] ()))))
    (ditem? s)
-    (: n #s (2 <= n && snip s 0 2 = "- " || 3 <= n && 47 < s 0 && s 0 < 58 && snip s 1 3 = ". "))
+    (#s @ n (2 <= n && snip s 0 2 = "- " || 3 <= n && 47 < s 0 && s 0 < 58 && snip s 1 3 = ". "))
 
    ; a display: the run of indented lines at the head of ls, and what is left.
    (dtake ls) (:- (g ls ()) (g l acc)
@@ -107,7 +107,7 @@
    ; the content, the margin in front of it is not
    (dmin a b) (a < b ? a b)
    (dfence ls)
-    (: k (foldl (a \ s \ dblank? s ? a (dmin a (dind s))) #<ls ls)
+    (foldl (a \ s \ dblank? s ? a (dmin a (dind s))) #<ls ls @ k
        ("```\n" + foldl (+) "" (map (s \ snip s (dmin k #s) #s + "\n") ls)
         + "```\n"))
 
@@ -116,13 +116,13 @@
    ; -- an indented line means two different things depending on it.
    (ldoc-md src)
     (: (go ls li acc)
-        (? (atom? ls) acc
+        (atom? ls ? acc
            (: s <ls
               b (dbanner s)
               (? (dblank? s)         (go >ls 0 (acc + "\n"))
                  (two? b)            (go >ls 0 (acc + "## " + <>b + "\n"))
                  (starts? s "usage:")
-                  (: r (dtake >ls) (go <>r 0 (acc + dfence (s . <r))))
+                  (dtake >ls @ r (go <>r 0 (acc + dfence (s . <r))))
                  (0 < dind s && li)  (go >ls 1 (acc + s + "\n"))
                  (0 < dind s)        (dtake ls @ r (go <>r 0 (acc + dfence <r)))
                  (ditem? s)          (go >ls 1 (acc + s + "\n"))
@@ -135,10 +135,10 @@
    ; lapiz loads here, not at the top: `make lint` runs check over every tracked
    ; .l and pays for whatever this file names.
    (libra-doc-files fs surf bad)
-    (? (atom? fs) bad
-       (: r (uread <fs)
-          (? (atom? r) (say err ("libra: cannot open " + <fs + "\n"),
-                        libra-doc-files >fs surf (bad + 1))
+    (atom? fs ? bad
+       (uread <fs @ r
+          (atom? r ? (say err ("libra: cannot open " + <fs + "\n"),
+                      libra-doc-files >fs surf (bad + 1))
              (: body (ldoc-md <>r)
                 md ("# " + <fs + "\n\n" + body)
                 (? !(0 < #body)

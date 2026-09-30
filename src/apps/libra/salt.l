@@ -27,7 +27,7 @@
  ; rest, () at a clean end, `torn` on a dropped paren -- so ask two?, never spin.
  (salt-file path c)
   ; a kind test, not a match on (): a refusal answers a nom, and a nom is truthy
-  (: q (open path "r")
+  (open path "r" @ q
      (? !(hot? q) c
         (: t (slurp q)
            (go x) (sound x @ (d . u) (two? d && name? <d && pin c <d >d, go u))

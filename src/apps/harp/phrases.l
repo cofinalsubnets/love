@@ -5,8 +5,8 @@
 ; phrase sounds together.
 
 (module '(phrases phrase-books book-names book book-phrases)
-(borrow (: m (cite 'just) (? m m "src/apps/harp/just.l")))
-(borrow (: m (cite 'tonnetz) (? m m "src/apps/harp/tonnetz.l")))
+(borrow ((cite 'just) @ m (m ? m "src/apps/harp/just.l")))
+(borrow ((cite 'tonnetz) @ m (m ? m "src/apps/harp/tonnetz.l")))
 (:
    (r a b) (a /// b)
    ; a phrase and its utonal mirror, named as a pair
@@ -14,7 +14,7 @@
    (low c) (map (x \ x * (1 /// 2)) c)
 
    triads
-    ((pair "major up" [1 (r 5 4) (r 3 2) (r 5 4)])
+    (pair "major up" [1 (r 5 4) (r 3 2) (r 5 4)]
     + pair "major down" [(r 3 2) (r 5 4) 1 (r 3 4)]
     + pair "minor" [1 (r 6 5) (r 3 2) (r 6 5)]
     + pair "major held" [(low [1 (r 5 4) (r 3 2)]) (r 3 2) (r 15 8)]
@@ -22,14 +22,14 @@
     + pair "ninth" [(low [1 (r 5 4) (r 3 2)]) (r 9 8) (r 5 4)])
 
    sevens
-    ((pair "harmonic" (otonal [4 5 6 7]))
+    (pair "harmonic" (otonal [4 5 6 7])
     + pair "subminor" [1 (r 7 6) (r 3 2) (r 7 6)]
     + pair "septimal line" [1 (r 8 7) (r 5 4) (r 3 2) (r 7 4)]
     + pair "tritone" [(low [1 (r 7 5)]) (r 7 4) (r 7 5)]
     + pair "seventh held" [(low (otonal [4 5 6 7])) (r 9 8) (r 7 4)])
 
    lines
-    ((pair "fifths climb" (lpath [[1 0 0] [1 0 0] [1 0 0]]))
+    (pair "fifths climb" (lpath [[1 0 0] [1 0 0] [1 0 0]])
     + pair "thirds climb" (lpath [[0 1 0] [0 1 0] [-1 0 0]])
     + pair "zigzag" (lpath [[1 0 0] [0 1 0] [1 0 0] [0 -1 0]])
     + pair "square" (lpath [[1 0 0] [0 1 0] [-1 0 0] [0 -1 0]])
