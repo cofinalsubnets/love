@@ -240,6 +240,13 @@ static void stdin_exact(struct ai *g) {
  ai_io_unread(g, i, -(intptr_t) ai_io_pending(g, i));
  if (u) ai_stdin.io.ungetc_buf = putcharm(EOF); }
 
+// an fd love opens for itself moves from 3..9 to 10 and up: those are a shell's to hand its
+// user (`exec 3>&-`), and a port's fd closed or laid over under it is closed again at GC
+static int fd_up(int fd) {
+ if (fd < 3 || fd > 9) return fd;
+ int h = fcntl(fd, F_DUPFD, 10);
+ return h < 0 ? fd : (close(fd), h); }
+
 // openfd's modes: 0 read, 1 truncate, 2 append, 3 exclusive, 4 write, 5 a tty probe
 static int openfd_mode(char const *path, intptr_t m) {
  int flags = m == 1 ? (O_WRONLY | O_CREAT | O_TRUNC)
@@ -248,7 +255,7 @@ static int openfd_mode(char const *path, intptr_t m) {
            : m == 4 ? O_WRONLY
            : m == 5 ? (O_RDWR | O_NOCTTY | O_NONBLOCK)
            : O_RDONLY;
- return open(path, flags, m == 3 ? 0600 : 0644); }
+ return fd_up(open(path, flags, m == 3 ? 0600 : 0644)); }
 
 // a deferred redirect, (path mode msg): opened in the child, where a fifo may block.
 // a failed open says msg on the stderr laid so far and exits 1, as a shell's redirect does.
@@ -550,7 +557,11 @@ static lvm(lvm_selfpath) {
 //                   fresh group the process leads. spawnio does this dance in C for a
 //                   child it execs; a shell's forked stage never execs, so it asks here --
 //                   both sides call it, closing the same race spawnio's two calls do.
-static int mk_pipe(struct ai *g, void *fds) { (void) g; return pipe(fds) ? -errno : 0; }
+static int mk_pipe(struct ai *g, void *fds) {
+ (void) g;
+ int *f = fds;
+ if (pipe(f)) return -errno;
+ return f[0] = fd_up(f[0]), f[1] = fd_up(f[1]), 0; }
 ai_noinline static struct ai *host_pipe(struct ai *g) {
  int fds[2], r = mk_pipe(g, fds);
  if (!ai_ok(g = ai_fd_retry(g, &r, mk_pipe, fds))) return g;
@@ -633,7 +644,7 @@ static ai_inline word host_fork(struct ai *g) {
 static lvm(lvm_fork) { Sp[0] = host_fork(g); ai_musttail return Next(1); }
 
 // (dup2 src dst) -> () | a nom | 'badarg. the self-redirect.
-// (dup fd) -> a fresh fd duplicating fd (>= 3, clear of stdio) | a nom. the save half.
+// (dup fd) -> a fresh fd duplicating fd (>= 10, clear of the 0-9 a shell hands its user) | a nom.
 static ai_inline word host_dup2(struct ai *g, word sw, word dw) {
  return !charmp(sw) || !charmp(dw) ? ai_badarg(g) :
         dup2((int) getcharm(sw), (int) getcharm(dw)) < 0 ? ai_err(g, errno) :
@@ -643,7 +654,7 @@ static lvm(lvm_dup2) { Sp[1] = host_dup2(g, Sp[0], Sp[1]); Sp += 1; ai_musttail 
 
 static int mk_dup(struct ai *g, void *env) {
  (void) env;
- int fd = fcntl((int) getcharm(g->sp[0]), F_DUPFD, 3);
+ int fd = fcntl((int) getcharm(g->sp[0]), F_DUPFD, 10);
  return fd < 0 ? -errno : fd; }
 ai_noinline static struct ai *host_dup(struct ai *g) {
  if (!charmp(g->sp[0])) return g->sp[0] = ai_badarg(g), g;
@@ -1579,7 +1590,7 @@ static int call_open(struct ai_str *pv, struct ai_str *mv) {
     case 'w': flags = O_WRONLY | O_CREAT | O_TRUNC; break;
     case 'a': flags = O_WRONLY | O_CREAT | O_APPEND; break;
     default: return -1; }
-  int fd = open(pv->bytes, flags, 0644);
+  int fd = fd_up(open(pv->bytes, flags, 0644));
   return fd < 0 ? -errno : fd; }
 static int mk_open(struct ai *g, void *env) { (void) env; return call_open(str(g->sp[0]), str(g->sp[1])); }
 

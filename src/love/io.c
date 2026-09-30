@@ -298,6 +298,26 @@ lvm(lvm_unchug) {
                                            (intptr_t) getcharm(Sp[1])) : 0);
  ai_musttail return Nextp(1, 1); }
 
+// (snug port n) -> 1 | 0. n = 1 has each refill ask the device for one byte, so the port
+// never holds bytes past what its reader took -- a shell's `read` on a pipe its children
+// share; any other n gives the full run back. 0 when the port holds read-ahead, which the
+// switch would strand, or keeps no run of its own.
+ai_noinline static struct ai *io_snug(struct ai *g) {
+ word p = *task_io(g) != ZeroPoint ? io_route(g, g->sp[0]) : g->sp[0];
+ intptr_t n = charmp(g->sp[1]) ? getcharm(g->sp[1]) : 0;
+ struct ai_bio *b = iop(p) ? rbio_of(g, (struct ai_io*) p) : NULL;
+ if (!b || bio_rpending(b)) return ai_push(g, 1, putcharm(0));
+ if (n != 1) return b->rbuf = b->rpos = b->rlen = putcharm(0), ai_push(g, 1, putcharm(1));
+ g->sp[0] = p;                                     // the routed port, rooted across the alloc
+ if (!ai_ok(g = str0(g, 1))) return g;
+ b = rbio_of(g, (struct ai_io*) g->sp[1]);
+ b->rbuf = g->sp[0], b->rpos = b->rlen = putcharm(0);
+ gen_wb(g, (word) b, b->rbuf);
+ return g->sp[0] = putcharm(1), g; }
+static lvm(lvm_snug) { LvmCallp(g, 2, io_snug) }
+static union u const nif_snug[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_snug}, {lvm_ret0}};
+LvNif("snug", nif_snug, NULL);
+
 struct ai *ai_io_wflush(struct ai *g, struct ai_io *i) { return io_wdrain(g, i); }
 
 uintptr_t ai_io_wpending(struct ai *g, struct ai_io *i) {

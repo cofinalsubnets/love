@@ -1593,6 +1593,7 @@
                           say err " ", print err b,
                           put err 10, quit 1))),
             each fdmap sh-lay1,
+            (? (sh-fd0? fdmap) (chug in) 0),     ; a new stdin: our read-ahead is not its
             each allclose (fd \ 2 < fd ? (close fd) 0),
             ; 0: a child has a shell already. cli-line answers the line's status, a
             ; charm, and the process answers with it; anything else is 0
@@ -1610,8 +1611,12 @@
    (sh-readb args)
      (: args2 (? (two? args && <args = "-r") >args args)
         nms (? (two? args2) args2 ["REPLY"])
-        _ (pin sh-inread () 1)
+        ; off a terminal the line is read exactly, one byte a refill, so no read-ahead
+        ; is left for a child to miss or inherit; a refusal means some already is
+        sn (? (sh-tty ()) 0 (snug in 1))
+        _ (? sn 0 (pin sh-inread () 1))
         ln (sh-getline in)
+        _ (? sn (snug in 0) 0)
         (? (ln = 'eof) 1 (sh-readset (sh-ifs ()) nms ln 0 #ln, 0)))
    ; each name but the last takes a field; the last takes the rest, less trailing IFS white space
    (sh-readset f nms ln i n)
@@ -2019,6 +2024,7 @@
                        sh-pgkid pg fgi,          ; and joins the pipeline's group
                        sh-subjc (),              ; ..and runs no job control of its own
                        each base (e \ dup2 >e <e),
+                       (? (sh-fd0? base) (chug in) 0),   ; a new stdin drops our read-ahead
                        each allclose (\ fd (2 < fd ? (close fd) 0)))
                   s (sh-eval (st 1))
                   (quit (? (charm? s) s (<s @ 'ret >s 0))))
@@ -2132,6 +2138,7 @@
               _ (flush out) _ (flush err)          ; what we still hold is the OLD fd's
               _ (each fdmap (e \ charm? >e ? (dup2 >e <e) (close <e)))
               _ (each opens close)
+              _ (? (sh-fd0? fdmap) (chug in) 0)       ; the old stdin's read-ahead goes with it
               (? (atom? argv) (pin sh-status () 0, 0)
                  (sh-execgo argv)))))
    ; the five tty ignores are the shell's and an ignore survives exec: the hand
