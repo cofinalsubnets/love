@@ -900,7 +900,7 @@
    ; the word as typed when it is one, else the meaning of the one word it heads;
    ; ('many ..) when the heads mean different things, and the word itself when none
    (vexfull st w)
-    (: ws (vexwords + map (x \ [x x]) (peep st 'exmore ()))
+    (: ws (vexwords + map (x \ [x x]) (st 'exmore))
        hit (filter (p \ w = <p) ws)
        heads (filter (p \ (#<p @ k (#w < k && w = snip <p 0 #w))) ws)
        means (foldl (a \ p \ (elem <>p a ? a (<>p . a))) () heads)

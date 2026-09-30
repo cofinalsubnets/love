@@ -429,7 +429,7 @@
    ; the scrutinee in its own parens: an infix ? left bare would take the @- as its arm
    ; ..and on the vale the grass past the pink front takes slop's ramp instead. the
    ; front is () until there is pink anywhere, so the walk never pays for this
-   fr (peep d 'front ()) fc (peep d 'fire '(0 0)) fcx <fc fcy <>fc
+   fr (d 'front) fc (peep d 'fire '(0 0)) fcx <fc fcy <>fc
    (pinkish? x y) (fr && (: dx (x - fcx) dy (y - fcy) (fr < dx * dx + 4 * dy * dy)))
    ; slop's skin in its glyph mode: the tile's glyph in the pen of its cell's lower half
    (skinned rp x y gl) (cite 'slop 'slop-face (skin 'ground) (ramp-pen rp) x y gl)
@@ -444,8 +444,8 @@
    (flow gh y) [<gh (water-flow (fmod (y - ft) 3))]
    (ember k gl x y) [gl (ember-pens k ((ft // 2 + dice x y sd 4) % 4))]
    (twinkle gh x y) (dice x y (sd + ft) 9 @ 0 [<gh star-bright] 1 [<gh star-dim] gh)
-   tint (peep d 'tint ())                             ; heaven's, a colour to a platform
-   ov (peep d 'over ())                               ; the vale's: a face laid over a lit cell, or ()
+   tint (d 'tint)                                     ; heaven's, a colour to a platform
+   ov (d 'over)                                       ; the vale's: a face laid over a lit cell, or ()
    ; a floor lit end to end says so, and no table of every cell is asked per cell
    lit-all? (peep d 'lit 0)
    spot (foldl (t \ e \ pin t (e 'x + w * e 'y) e) {} ents)

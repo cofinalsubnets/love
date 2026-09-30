@@ -160,7 +160,7 @@
       map (b \ (: id (wharf-id b) s (peep (hbox (hpane hb id)) () 0) r (wharf-rows b) c (wharf-cols b)
                   row0 (wharf-row b) col0 (wharf-col b)
                   (pk = 2 ?
-                     (: n (now id) o (peep old id ()) rr (n 2) op (peep hb 'opx ())
+                     (: n (now id) o (peep old id ()) rr (n 2) op (hb 'opx)
                         (limn-rows j s rr c row0 col0 0 -1 2,
                          limn-rows j s r c row0 col0 rr -1 0,
                          two? o && <o = <n ? (pin now id [<n (n 1) rr (o 3)])

@@ -223,7 +223,7 @@
    ; targets there are. the answer rides a property of the asker's and a SelectionNotify
    (pier-serve s dirty raw)
     (: rq (u32 raw 12) sel (u32 raw 16) ty (u32 raw 20) pr0 (u32 raw 24)
-       tx (? (sel = 1) (peep dirty 'held ()) (sel = peep dirty 'clip 0) (peep dirty 'clipped ()) ())
+       tx (? (sel = 1) (dirty 'held) (sel = peep dirty 'clip 0) (dirty 'clipped) ())
        pr (pr0 = 0 ? ty pr0) ut (peep dirty 'utf8 0) tg (peep dirty 'targets 0)
        (prop tp fmt n bs) (#bs @ nb
                             (x-w8 s 18, x-w8 s 0, x-w16 s (6 + (nb + x-pad4 nb) // 4), x-w32 s rq, x-w32 s pr,
@@ -286,7 +286,7 @@
        (: v (pier-take s dirty (peep dirty 'prop 0))
           bs (two? v ? (v 2))
           (two? bs ? (pin dirty 'pieces (pier-text (peep dirty 'incrty 0) bs . peep dirty 'pieces ()))
-             (cats (rev (peep dirty 'pieces ())) @ t
+             (cats (rev (dirty 'pieces)) @ t
                 ((pins dirty 'incron 0 'pieces ()),
                  0 < #t ? (pier-send m bx dirty t) 0))))
        0)

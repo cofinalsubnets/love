@@ -69,13 +69,13 @@
    ; not vframe: a full redraw a keystroke is what the flicker is, and it writes only
    ; the rows that changed since the last
    (vi-face st doors)
-    (: box (peep doors 'reg ())
+    (: box (doors 'reg)
        (load _) (box ? (pin st 'reg (peep box () (st 'reg))) 0)
        (keep _) (box ? (pin box () (st 'reg)) 0)
        (text v) (? (atom? v) "" (<v = 'lin) (foldl (a \ l \ a + l + "\n") "" <>v) <>v)
        (type s) (map (c \ vstep st c) (map (i \ s i) ^#s))
      [(w \ h \ (pins st 'w w 'h h, "\e[?25h" + vfresh st))
-      (c \ (load (), vstep st c, keep (), dow st, doe st, dos st (peep doors 'split ()), dox st (peep doors 'ex ())))
+      (c \ (load (), vstep st c, keep (), dow st, doe st, dos st (doors 'split), dox st (doors 'ex)))
       (_ \ (st 'quit))
       (v \ (? (elem (st 'mode) '(i c s)) (type (text v))
               (pin st 'reg v, vstep st 112, keep ())))])

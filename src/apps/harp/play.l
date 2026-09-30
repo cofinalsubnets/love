@@ -268,7 +268,7 @@
                                    !ls (say err ("harp: cannot read " + f + "\n"), 'bad)
                                    (sc 'score-check ls 0) 'bad
                                    (acc + filter (b \ !(b 'err)) (sc 'score-parse ls)))))
-                   () (peep o 'scores ()))
+                   () (o 'scores))
        cps  (o 'cps)
        ps2  (bars = 'bad ? () (ps + (two? bars ? [(sc 'score-tune bars cps)] ())))
        p    (? !(two? ps2) hush
@@ -281,7 +281,7 @@
        (? (bars = 'bad) 1
           !(two? ps2) (say err (harp-usage + "\n"), 1)
           (o 'print) (harp-print p c0 ncyc, 0)
-          (peep o 'wav ()) (harp-wav p c0 ncyc rate cps tail g (o 'wav), 0)
+          (o 'wav) (harp-wav p c0 ncyc rate cps tail g (o 'wav), 0)
           (harp-horn p c0 ncyc rate cps tail g, 0)))
    ; ..and as a verb of the artifact: `love harp`
    _ (pins (cite 'verbs 'tab) 'harp (udoor 'harp harp-main harp-usage 0 0)))

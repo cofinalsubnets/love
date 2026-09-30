@@ -27,7 +27,7 @@
  (dat d x y) (0 <= x < d 'w && 0 <= y < d 'h ? (peep (d 't) (x + d 'w * y) 0) 0)
  ; walked: anything laid, but for the tiles this floor calls solid. the engine lays 1 and
  ; 2 and knows no other number -- a floor that lays a wall of its own names it in 'solid
- (open? d x y) (dat d x y @ t (0 < t && nelem t (peep d 'solid ())))
+ (open? d x y) (dat d x y @ t (0 < t && nelem t (d 'solid)))
  (lit? d x y) (0 < dat d x y)                           ; looked through
  (dput d x y v) (pin (d 't) (x + d 'w * y) v)
 
@@ -216,7 +216,7 @@
  ; cell off the screen, under the note, unlit or under a sign's box is left be
  (paint-live j d vis cell cells) (:
    w (d 'w) h (d 'h) rows (peep d 'rows h) vy (peep d 'vy 0) vx (peep d 'vx 0)
-   top (peep d 'top 1) box (peep d 'box ())
+   top (peep d 'top 1) box (d 'box)
    lit-all? (peep d 'lit 0)
    (boxed? sx sy) (box && box 0 <= sx < box 0 + box 2 && box 1 <= sy < box 1 + box 3)
    (one i) (: x (i % w) y (i // w) sx (x + vx) sy (y - vy + 1)

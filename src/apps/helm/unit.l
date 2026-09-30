@@ -152,7 +152,7 @@
        head (string kind + " " + string nm)
        body (kind == 'target
              ? (" wants " + hargv-line (map string (peep u 'wants [])))
-               (" restart " + string (peep u 'restart ()) + " tries " + show (peep u 'tries 0)))
+               (" restart " + string (u 'restart) + " tries " + show (peep u 'tries 0)))
        dep  (two? af ? (" after " + hargv-line (map string af)) "")
        run  (two? ex ? ("\n    exec " + hargv-show ex) "")
        (head + body + dep + run))))

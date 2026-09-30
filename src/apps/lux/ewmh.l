@@ -41,7 +41,7 @@
        vals (two? vals ? vals (x-getprop-atoms s win (ewmh-atom "_NET_WM_STRUT")))
        st (strut-parse vals)
        (st ? (pin ewst 'struts ([win st] . filter (p \ <p != win) (ewst 'struts)), st)))
-   (ewmh-untrack win) (pin ewst 'struts (filter (p \ <p != win) (peep ewst 'struts ())))
+   (ewmh-untrack win) (pin ewst 'struts (filter (p \ <p != win) (ewst 'struts)))
 
    ; --- CreateWindow (opcode 1): the 1x1 InputOnly support window at (-1,-1) ---
    (x-mkwin s wid parent)

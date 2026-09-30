@@ -55,7 +55,7 @@
        (need <= #c ? 0
           (: n2 ((: (go m) (m >= need ? m (go (2 * m)))) (2 * #c))
              nu (cask n2) (pour nu 0 c 0 #c, pin s k nu, 0))))
-   (fassign s el rv) (fasg (peep s 'fx ()) el rv)
+   (fassign s el rv) (fasg (s 'fx) el rv)
    ; --- clause db (lisp side: initial load + reduction; aru/wnu live in fx) --------
    (fadd s lits)                                            ; append [size, lits..] to the arena; -> cid (word offset)
     (: n #lits fx (s 'fx) aru (getw fx 4)
@@ -707,7 +707,7 @@
         foldl (\ _ c (fload s c)) 0 formula, s))
    ; --- the cold path: restarts, decay, learnt-db reduction (lisp side) -----------
    (fbackjump s lvl)                                        ; pop + unassign above lvl (restarts: lvl = 0)
-    (: fx (peep s 'fx ()) nv (peep s 'nvars 0) lvo (peep s 'lvo 0) rso (peep s 'rso 0)
+    (: fx (s 'fx) nv (peep s 'nvars 0) lvo (peep s 'lvo 0) rso (peep s 'rso 0)
        vao (peep s 'vao 0) pho (pho-of nv)
        nt ((: (go t)
               (t = 0 ? 0
@@ -720,7 +720,7 @@
            (getw fx 0))
        (putw fx 0 nt, putw fx 1 nt, putw fx 2 lvl))
    (fdecay s)                                               ; integer VSIDS: vinc *= 21/20; rescale by >>8
-    (: fx (peep s 'fx ()) vi (getw fx 6 * 21 // 20)
+    (: fx (s 'fx) vi (getw fx 6 * 21 // 20)
        (vi > 16777216 ?
           (: nv (peep s 'nvars 0) aco (aco-of nv)
              (((: (go v) (v > nv ? 0 (putw fx (aco + v) (getw fx (aco + v) >> 8), go (v + 1)))) 1),
@@ -728,22 +728,22 @@
           (putw fx 6 vi)))
    (fnext-restart s) (1 + peep s 'rnum 1 @ rn (pin s 'rnum rn, pin s 'nconf 0, pin s 'climit (luby rn * peep fru0 () 400), 0))
    (frephase s st)                                          ; randomize every saved phase; -> st'
-    (: fx (peep s 'fx ()) nv (peep s 'nvars 0) pho (pho-of nv)
+    (: fx (s 'fx) nv (peep s 'nvars 0) pho (pho-of nv)
        ((: (go v st) (v > nv ? st
              (random st 2 @ p (putw fx (pho + v) (1 + <p), go (v + 1) >p))))
         1 st))
    (fbest s)                                                ; restore the best-trail phases (the deepest basin seen)
-    (: fx (peep s 'fx ()) nv (peep s 'nvars 0) pho (pho-of nv) b (peep s 'bph ())
+    (: fx (s 'fx) nv (peep s 'nvars 0) pho (pho-of nv) b (s 'bph)
        ((: (go v) (v > nv ? 0
              (getw b v @ p (p = 0 ? 0 (putw fx (pho + v) p), go (v + 1))))) 1))
    (fsnap s)                                                ; snapshot the assignment's polarities at a new deepest trail
-    (: fx (peep s 'fx ()) nv (peep s 'nvars 0) vao (vao-of nv) b (peep s 'bph ())
+    (: fx (s 'fx) nv (peep s 'nvars 0) vao (vao-of nv) b (s 'bph)
        ((: (go v) (v > nv ? 0
              (getw fx (vao + v) @ el
                 (putw b v (? (el = 0) 0 (0 = el & 1) 1 2),
                  go (v + 1))))) 1))
    (finvert s)                                              ; flip every saved phase
-    (: fx (peep s 'fx ()) nv (peep s 'nvars 0) pho (pho-of nv)
+    (: fx (s 'fx) nv (peep s 'nvars 0) pho (pho-of nv)
        ((: (go v) (v > nv ? 0
              (getw fx (pho + v) @ p (putw fx (pho + v) (p = 1 ? 2 1), go (v + 1))))) 1))
    ; learnt-db reduction at a level-0 restart, by tombstone: the worst-glue half
@@ -833,21 +833,21 @@
        (putw fx 4 <res, pin s 'learnts >res, pin s 'nl #>res))
    ; --- the search loop: three kernel calls + lisp bookkeeping --------------------
    (fsearch s)                                              ; -> 'sat or 'unsat (s holds the model on SAT)
-    (: fx (peep s 'fx ()) nv (peep s 'nvars 0)
+    (: fx (s 'fx) nv (peep s 'nvars 0)
        ((: (loop st)                                                ; st threads the rephase RNG (seeded: reproducible)
-           (peep s 'bcp () fx (peep s 'ar ()) (peep s 'wn ()) @ confl
+           (peep s 'bcp () fx (s 'ar) (s 'wn) @ confl
               (? (confl > -1)
                  (: _ (getw fx 0 > peep s 'btop 0 ?                 ; a new deepest trail: snapshot its
                          (pin s 'btop (getw fx 0), fsnap s)  ; polarities (the wheel's best spoke)
                          0)
                     _ (fens s 'ar (8 * (getw fx 4 + (nv + 3))))     ; room for the learnt clause
                     _ (fens s 'wn (8 * (getw fx 5 + 4)))            ; ... and its two watch nodes
-                    r (peep s 'conf () fx (peep s 'ar ()) (peep s 'wn ()) confl)
+                    r (peep s 'conf () fx (s 'ar) (s 'wn) confl)
                     (r = -1 ? 'unsat
                        (: cid (r >> 6) glue (r & 63)
                           (peep fdrat0 () 0 @ j                  ; the learnt is rup: log it
                              (hot? j ? (fdsay j "" (map fdlit (fclits s cid))) 0),
-                           1 < getw (peep s 'ar ()) cid ?           ; size >= 2: track for reduction
+                           1 < getw (s 'ar) cid ?                   ; size >= 2: track for reduction
                              (pin s 'learnts ((cid . glue) . peep s 'learnts ()),
                               pin s 'nl (1 + peep s 'nl 0)) 0,
                            fdecay s, pin s 'nconf (1 + peep s 'nconf 0),
@@ -896,7 +896,7 @@
                         0 = peep s 'bad 0 ? (loop st2) 'unsat))       ; a compaction can prove UNSAT (all-false at level 0)
                  (s 'dec  fx @ v
                     (v = 0 ? 'sat (loop st)))))) (wheel 42)))
-   (fextract s nvars) (: fx (peep s 'fx ()) vao (peep s 'vao 0)
+   (fextract s nvars) (: fx (s 'fx) vao (peep s 'vao 0)
                          (map (v \ (v . (0 = getw fx (vao + v) & 1 ? 1 -1))) (rng 1 (nvars + 1))))
    ; --- BVA: bounded variable addition (clause factoring), the preprocessing pass ---
    ; the ablation-found pigeonhole killer: cadical minus factoring
@@ -1090,11 +1090,11 @@
                                    (mlit . chain))))))
                     (l . ()) n0 (getw bx 13) -1)
                  mlit <g
-                 bp2 (peep b 'bp ())
+                 bp2 (b 'bp)
                  mcls ((: (go p) (p = 0 ? () (getw bp2 p . go (getw bp2 (p + 1))))) >g)
                  _ (foldl (\ _ m (putw bx (MLO + m) 0, 0)) 0 mlit)
                  _ (putw bx 3 pnu0)
-                 ar (peep b 'ba ())
+                 ar (b 'ba)
                  nl #mlit ncl #mcls
                  (nl * ncl - (nl + ncl) < 1 ? 0             ; apply only when it strictly shrinks the formula
                     (: x (1 + getw bx 2) _ (putw bx 2 x)
@@ -1137,7 +1137,7 @@
                  r < peep fbvar0 () 8 && getw bx 2 < 4 * nvars + 64 ?
                    (round (r + 1)) 0)))
            0)
-       ar (peep b 'ba ()) end (getw bx 0)
+       ar (b 'ba) end (getw bx 0)
        out ((: (walk cid acc)
                (cid >= end ? (rev acc)
                   (getw ar cid @ n

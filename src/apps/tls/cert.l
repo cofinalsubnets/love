@@ -229,7 +229,7 @@
    (cert-make o)
     (: kid (key-id (o 'spki))
        ctx {'kid kid 'akid (o 'akid @ a (string? a ? a kid))}
-       rs (map (l \ (string? l ? (ext-der l ctx) l)) (peep o 'exts ()))
+       rs (map (l \ (string? l ? (ext-der l ctx) l)) (o 'exts))
        bad (filter string? rs)
        k (o 'key) alg (sig-alg k)
        (? (two? bad) [<bad]

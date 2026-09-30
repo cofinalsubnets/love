@@ -121,7 +121,7 @@
           (pull pids pid 0,
            (: u     (hby (hunits-now 0) nm)
              s     (hstat nm)
-             kind  (peep u 'kind ())
+             kind  (u 'kind)
              rs    (peep u 'restart 'no)
              lived (clock 0 - peep s 'since 0)
              n     (hsteady < lived ? 0 (peep s 'tries 0))
