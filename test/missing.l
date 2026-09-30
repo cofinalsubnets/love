@@ -20,14 +20,14 @@
 ; armed help the read still answers its own 0 (presence beats value; the
 ; value no longer tells bound from missing apart -- the condition lane does)
 (: an-zero 0)
-(hear (\ a b 'BOOM))
+(hear (a \ b \ 'BOOM))
 (test (0 = an-zero) !('BOOM = an-zero) !((:) = an-zero))
 (hear 0)
 
 ; the help hears (help 'missing nom) and its result is the value at the site
-(hear (\ a b (? (a = 'missing) ['missing-was b] 0)))
-(test (: r an-ghost
-           (two? r && 'missing-was = <r && 'an-ghost = <>r)))
+(hear (a \ b \ a = 'missing ? ['missing-was b] 0))
+(test (an-ghost @ r
+       (two? r && 'missing-was = <r && 'an-ghost = <>r)))
 (hear 0)
 
 ; the read of a lambda's free global happens at closure creation (the runtime
@@ -35,7 +35,7 @@
 ; with the help installed across both moments, both lanes answer the help.
 ; note the discipline: love0 runs this corpus twice in one scope, so a name
 ; asserted missing must never be defined later -- the second pass would fold it.
-(hear (\ a b (? (a = 'missing) 42 0)))
+(hear (a \ b \ a = 'missing ? 42 0))
 (: (an-g _) an-phantom)
 (test (42 = (an-g 0)))
 (hear 0)
@@ -52,8 +52,8 @@
  (99 = (: a an-outer an-outer 2 a))              ; the bare pre-pin read is the book's an-outer
  ((:) = (: a an-local an-local 2 a))            ; ... and of nothing, the zero point
  (2 = (: a an-local an-local 2 an-local))        ; the body reads the local, post-pin
- ((:) = (: f (\ _ an-cell) v (f 0) an-cell 5 v))  ; the closure's read is the cell: the point pre-pin
- (5 = (: f (\ _ an-cell) v (f 0) an-cell 5 (f 0)))) ; ... and the value, once pinned
+ ((:) = (: f (_ \ an-cell) v (f 0) an-cell 5 v))  ; the closure's read is the cell: the point pre-pin
+ (5 = (: f (_ \ an-cell) v (f 0) an-cell 5 (f 0)))) ; ... and the value, once pinned
 (hear 0)
 ; at every depth means nested too, and a shadowed name is the sharp case: the
 ; outer binding answers exactly the eager pre-pin reads -- bare in a def -- and
@@ -63,18 +63,18 @@
 ; runs un-inlined; the two shapes below are the ones that told the lanes apart.
 (: an-outer2 42)
 (test
- (43 = (: q 1 (: an-outer2 (an-outer2 + 1) an-outer2)))      ; shadowed constant, nested: the outer 42 + 1
- (43 = ((\ p (: p (p + 1) p)) 42))                           ; ..and a shadowed lambda param, alike
- ((:) = (: an-o3 99 (: f (\ _ an-o3) r (f 0) an-o3 42 r))) ; ..the closure's read is the cell, outer in scope
+ (43 = (1 @ q (: an-outer2 (an-outer2 + 1) an-outer2)))      ; shadowed constant, nested: the outer 42 + 1
+ (43 = ((p \ (: p (p + 1) p)) 42))                           ; ..and a shadowed lambda param, alike
+ ((:) = (99 @ an-o3 (: f (_ \ an-o3) r (f 0) an-o3 42 r))) ; ..the closure's read is the cell, outer in scope
  (2 = (: b 1 b (b + 1) b))                                   ; a rebind within one chain still
  (43 = (: c 42 d (c + 1) d)))                                ;   reads the previous value, and folds
 
 ; the help hears the cell miss too; the payload is the binding-site nom
-(hear (\ a b (? (a = 'missing && nom? b && "an-fwd" = (string b)) 'cell-nom 0)))
-(test ('cell-nom = (: g (\ _ an-fwd) q (g 0) an-fwd 2 q)))
+(hear (a \ b \ a = 'missing && nom? b && "an-fwd" = (string b) ? 'cell-nom 0))
+(test ('cell-nom = (: g (_ \ an-fwd) q (g 0) an-fwd 2 q)))
 (hear 0)
 
-(hear (\ a b (? (a = 'missing) 'fired 0)))
+(hear (a \ b \ a = 'missing ? 'fired 0))
 (test ((:) = ()) ((?) = ()) ((\) = ()))
 (hear 0)
 

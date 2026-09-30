@@ -9,78 +9,78 @@
 ; the seat: rename/symlink/chown/utime are the OS's own metadata, and inle's ramfs
 ; answers for none of them -- `files` is true there and not enough, so these laws ask
 ; for a kernel underneath. run.l guards the same way, for the same kind of reason.
-(? !hosted 0
+(!hosted ? 0
 (: d "out/.fs-nif-smoke"
    a (d + "/a") b (d + "/b") l (d + "/l")
-   _ (mkdir d 493)                                  ; EEXIST from a prior run is fine
-   _ (unlink a) _ (unlink b) _ (unlink l)           ; a clean slate, tolerated if absent
-   _ (: p (open a "w") _ (say p "five!") (close p))
+   (mkdir d 493,                                    ; EEXIST from a prior run is fine
+    unlink a, unlink b, unlink l,                   ; a clean slate, tolerated if absent
+    (open a "w" @ p (say p "five!", close p)),
 
-   ; rename: the file moves whole -- old gone, new wears the same size
-   _ (test
-       !(rename a b)                                ; ok is ()
-       ((stat a) = 'enoent) (5 = <(stat b))
-       ('enoent = (rename a (d + "/x"))) ; a missing source is a live errno
-       ('badarg = (rename 7 b)))         ; misuse: a non-string path
+    ; rename: the file moves whole -- old gone, new wears the same size
+    (test
+      !(rename a b)                                 ; ok is ()
+      ((stat a) = 'enoent) (5 = <(stat b))
+      ('enoent = (rename a (d + "/x")))  ; a missing source is a live errno
+      ('badarg = (rename 7 b))),         ; misuse: a non-string path
 
-   ; symlink + readlink: path becomes a link to target -- and the target string
-   ; resolves relative to the link's directory, so a link beside its file names
-   ; it bare. readlink answers that string verbatim; on a non-link (or a miss)
-   ; it is nothing. stat follows the link, so through l it sees the file whole.
-   _ (test
-       !(symlink "b" l)
-       (readlink l = "b")
-       (5 = <(stat l)) (32768 = (& 61440 <>>(stat l)))
-       ((readlink b) = 'einval) ((readlink (d + "/nope")) = 'enoent))
+    ; symlink + readlink: path becomes a link to target -- and the target string
+    ; resolves relative to the link's directory, so a link beside its file names
+    ; it bare. readlink answers that string verbatim; on a non-link (or a miss)
+    ; it is nothing. stat follows the link, so through l it sees the file whole.
+    (test
+      !(symlink "b" l)
+      (readlink l = "b")
+      (5 = <(stat l)) (32768 = (& 61440 <>>(stat l)))
+      ((readlink b) = 'einval) ((readlink (d + "/nope")) = 'enoent)),
 
-   ; chmod: the permission bits land exactly (0600 = 384); utime: the mtime
-   ; lands on the stat scale (MILLISECONDS), and a non-charm ms reads "now"
-   _ (test
-       !(chmod b 384)
-       (384 = (<>>(stat b) - 32768))
-       !(utime b 1600000000000)
-       (1600000000000 = <>(stat b))
-       !(utime b ())
-       (1600000000000 < <>(stat b))          ; "now" is later than the pinned past
-       ('enoent = (chmod (d + "/nope") 384)) ; a miss is a live errno
-       ('badarg = (chmod b "rw")))           ; misuse: a non-charm mode
+    ; chmod: the permission bits land exactly (0600 = 384); utime: the mtime
+    ; lands on the stat scale (MILLISECONDS), and a non-charm ms reads "now"
+    (test
+      !(chmod b 384)
+      (384 = (<>>(stat b) - 32768))
+      !(utime b 1600000000000)
+      (1600000000000 = <>(stat b))
+      !(utime b ())
+      (1600000000000 < <>(stat b))           ; "now" is later than the pinned past
+      ('enoent = (chmod (d + "/nope") 384))  ; a miss is a live errno
+      ('badarg = (chmod b "rw"))),           ; misuse: a non-charm mode
 
-   ; chown: a no-op self-chown succeeds (-1 -1 leaves both ids alone); misuse einvals
-   _ (test
-       !(chown b -1 -1)
-       ('badarg = (chown b "x" 0)))
+    ; chown: a no-op self-chown succeeds (-1 -1 leaves both ids alone); misuse einvals
+    (test
+      !(chown b -1 -1)
+      ('badarg = (chown b "x" 0))),
 
-   ; umask: always answers the previous mask, so set-read-restore round-trips
-   _ (: m0 (umask 18)
-        (test (charm? m0) (18 = umask m0) (m0 = umask m0)))
+    ; umask: always answers the previous mask, so set-read-restore round-trips
+    (umask 18 @ m0
+     (test (charm? m0) (18 = umask m0) (m0 = umask m0))),
 
-   ; rmdir: the empty-directory unlink -- full is a live errno, empty goes
-   _ (: e (d + "/sub")
-        _ (mkdir e 493)
-        (test
-          ('enotempty = (rmdir d))                 ; d holds b and l still
-          !(rmdir e)
-          ((stat e) = 'enoent)
-          ('enoent = (rmdir e))                    ; already gone: a live errno
-          ('badarg = (rmdir 7))))
+    ; rmdir: the empty-directory unlink -- full is a live errno, empty goes
+    ((d + "/sub") @ e
+     (mkdir e 493,
+      (test
+        ('enotempty = (rmdir d))                   ; d holds b and l still
+        !(rmdir e)
+        ((stat e) = 'enoent)
+        ('enoent = (rmdir e))                      ; already gone: a live errno
+        ('badarg = (rmdir 7))))),
 
-   ; hardlink: two names, one file -- content shows through both, and the
-   ; survivor keeps it when the first name unlinks
-   _ (: h (d + "/h")
-        _ (unlink h)
-        (test
-          !(hardlink b h)
-          (5 = <(stat h))
-          ('eexist = (hardlink b h))               ; the name is taken
-          (unlink b, (5 = <(stat h)))
-          !(unlink h)))
+    ; hardlink: two names, one file -- content shows through both, and the
+    ; survivor keeps it when the first name unlinks
+    ((d + "/h") @ h
+     (unlink h,
+      (test
+        !(hardlink b h)
+        (5 = <(stat h))
+        ('eexist = (hardlink b h))                 ; the name is taken
+        (unlink b, (5 = <(stat h)))
+        !(unlink h)))),
 
-   ; copyfile: a value op -- the byte count, or the failure's nom. an empty source
-   ; answers 0, a falsy success, which is why every caller asks charm? and never
-   ; the truth.
-   _ (: c (d + "/c") z (d + "/z")
-        _ (: p (open c "w") _ (say p "five!") (close p))
-        _ (: p (open z "w") (close p))
+    ; copyfile: a value op -- the byte count, or the failure's nom. an empty source
+    ; answers 0, a falsy success, which is why every caller asks charm? and never
+    ; the truth.
+    (: c (d + "/c") z (d + "/z")
+       ((open c "w" @ p (say p "five!", close p)),
+        (open z "w" @ p (close p)),
         (test
           (5 = copyfile c (d + "/c2"))
           (5 = <(stat (d + "/c2")))
@@ -88,36 +88,36 @@
           ('enoent = (copyfile (d + "/nope") (d + "/c3")))
           ('badarg = (copyfile 7 c))              ; misuse: a non-string path
           !(unlink c) !(unlink z)
-          !(unlink (d + "/c2")) !(unlink (d + "/z2"))))
+          !(unlink (d + "/c2")) !(unlink (d + "/z2"))))),
 
-   ; selfpath: the running binary's own path, the seat every library walk starts
-   ; from. no cwd and no argv here -- an absolute path at a real regular file is
-   ; the whole contract, and it is what the per-OS doors have to agree on.
-   _ (: s (selfpath 0)
-        (test
-          (string? s)
-          (47 = peep s 0 0)                    ; absolute, whatever the cwd was
-          (32768 = (& 61440 <>>(stat s)))      ; s_ifreg: a file, not the /proc link
-          (0 < <(stat s))))
+    ; selfpath: the running binary's own path, the seat every library walk starts
+    ; from. no cwd and no argv here -- an absolute path at a real regular file is
+    ; the whole contract, and it is what the per-OS doors have to agree on.
+    (selfpath 0 @ s
+     (test
+       (string? s)
+       (47 = peep s 0 0)                       ; absolute, whatever the cwd was
+       (32768 = (& 61440 <>>(stat s)))         ; s_ifreg: a file, not the /proc link
+       (0 < <(stat s)))),
 
-   ; the OS roster: the linux lane is compiled in, not its stub. a lost
-   ; __linux__ predefine compiles posix.c's lanes out in silence, so probe one:
-   ; the stub always answers 'enosys, the real mount answers the call's own
-   ; errno (nobody mounts "" on / as no-such-fs). sigfd's twin assert lives in
-   ; test/host/sh.l. forks on the OS when a second one joins.
-   _ (: e (mount "" "/" "no-such-fs")
-        (test (nom? e) !(e = 'enosys)))
+    ; the OS roster: the linux lane is compiled in, not its stub. a lost
+    ; __linux__ predefine compiles posix.c's lanes out in silence, so probe one:
+    ; the stub always answers 'enosys, the real mount answers the call's own
+    ; errno (nobody mounts "" on / as no-such-fs). sigfd's twin assert lives in
+    ; test/host/sh.l. forks on the OS when a second one joins.
+    (mount "" "/" "no-such-fs" @ e
+     (test (nom? e) !(e = 'enosys))),
 
-   ; a NUL inside a path is misuse: the kernel would stop at it, and open a shorter path
-   ; than the one love was asked about (d + NUL + "x" would be d)
-   _ (: z (d + string 0 + "x")
-        (test ('badarg = (open z "r")) ('badarg = (stat z)) ('badarg = (lstat z))
-              ('badarg = (openfd z 0)) ('badarg = (readdir z)) ('badarg = (unlink z))
-              ('badarg = (chdir z)) ('badarg = (mkdir z 493)) ('badarg = (copyfile z (d + "/c4")))
-              ('badarg = (setenv ("LOVE_FS" + string 0 + "X") "v"))
-              ('badarg = (setenv "LOVE_FS" ("v" + string 0)))
-              ('badarg = (spawn ["true" ("a" + string 0)]))
-              (two? (stat d))))
+    ; a NUL inside a path is misuse: the kernel would stop at it, and open a shorter path
+    ; than the one love was asked about (d + NUL + "x" would be d)
+    ((d + string 0 + "x") @ z
+     (test ('badarg = (open z "r")) ('badarg = (stat z)) ('badarg = (lstat z))
+           ('badarg = (openfd z 0)) ('badarg = (readdir z)) ('badarg = (unlink z))
+           ('badarg = (chdir z)) ('badarg = (mkdir z 493)) ('badarg = (copyfile z (d + "/c4")))
+           ('badarg = (setenv ("LOVE_FS" + string 0 + "X") "v"))
+           ('badarg = (setenv "LOVE_FS" ("v" + string 0)))
+           ('badarg = (spawn ["true" ("a" + string 0)]))
+           (two? (stat d)))),
 
-   _ (unlink l) _ (unlink b)
-   (test_fin ())))
+    unlink l, unlink b,
+    test_fin ())))

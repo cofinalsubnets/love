@@ -12,7 +12,7 @@
    g-ret (guts 'lvm_ret) g-ap (guts 'lvm_ap) g-quote (guts 'lvm_quote)
    cells-open (lit? g-peek))
 ; a law that asks the doors, and holds only where they stand
-(:: 'cells-law (\ l ['? 'cells-open ('test . l) ()]))
+(:: 'cells-law (l \ ['? 'cells-open ('test . l) ()]))
 
 ; the doors are reachable, and every instruction name is a charm rather than an address
 (cells-law (tablet? G) g-peek g-pick g-place (charm? g-ret) (charm? g-ap))

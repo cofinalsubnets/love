@@ -7,7 +7,7 @@
 ; excluded -- (tablet 0) must yield a fresh hash on every call under both compilers.
 (test
  ; --- impure / identity-minting heads are not folded (fresh each call) ---
- (: (f _) (tablet 0) !(f 0 = f 0))          ; `table` excluded -> distinct hashes
+ (: (f _) {} !(f 0 = f 0))                  ; `table` excluded -> distinct hashes
 
  ; --- arithmetic / numeric folds are correct (nested, bottom-up) ---
  (7 = (1 + (2 * 3)))
@@ -26,7 +26,7 @@
  ("abcd" = ("ab" "cd"))                               ; juxtaposition
  ("abcdef" = ("ab" "cd" "ef"))                        ; ... curried, folded left to right
  ("abcd" = (: a "ab" b "cd" (a b)))                   ; ... through const-propagated binders, no literal in sight
- (97 = ("abc" 0)) (nil? ("hi" 9))                     ; the byte index and its out-of-range unit
+ (97 = ("abc" 0)) !("hi" 9)                           ; the byte index and its out-of-range unit
  ("abcdef" = (: (f x) ("ab" "cd" x) (f "ef")))        ; known prefix folds, the unknown tail rides on
  ("abcdefgh" = (: (f x) ("ab" "cd" x "gh") (f "ef"))) ; ... and the operands after it still apply in order
  ("abZcd" = (: (f x) ("ab" x "cd") (f "Z")))          ; nothing known past the head -> wholly residual
@@ -35,7 +35,7 @@
  ; --- ... and the walk is the head VALUE's purity, not text: a point and a numeral fold too ---
  (256 = (: (f x) (3 2 x) (f 2)))     ; (3 2) is the charm 8, folded; the unknown tail rides on
  ('sym = (: (f x) ('sym 5 x) (f 9))) ; a point applied answers itself, so the fold answers the point
- (nil? (: (f x) (() 5 x) (f 9)))     ; () folds too -- nom? is false of it, so it is named apart
+ !(: (f x) (() 5 x) (f 9))           ; () folds too -- nom? is false of it, so it is named apart
  (5 = (0 0 5)) (262144 = (2 3 4))    ; const of const is id; the tower, both charm-sized
  (1.0 = (: (f x) (2 1.5 x) (f 1)))   ; (2 1.5) is the gem 2.25 -- charm-sized, so it folds
  ; the bound is owed by both fold lanes. a pure-fn head cleared by pure-head? still reaches
@@ -47,7 +47,7 @@
  ("aXcd" = (: (f x) (pin "abcd" 1 x) (f 88)))      ; pin on text -- the functional update, folded whole
  ('(1 X 3) = (: (f x) (pin '(1 2 3) 1 x) (f 'X)))  ; ... and on a chain
  (8 = (: (f x) (peep '(7 8 9) x 0) (f 1)))         ; peep reads a known chain at compile time
- (: (f _) (pin (tablet 0) 1 2) !(f 0 = f 0))       ; a tablet is mutable: pin there is a write, never folded
+ (: (f _) (pin {} 1 2) !(f 0 = f 0))               ; a tablet is mutable: pin there is a write, never folded
  (256 = (: (f x) ('(7 8 9) 1 x) (f 2)))            ; ... and indexes: ('(7 8 9) 1) folds to 8, leaving (8 x)
  !(: (f x) ((1 . 2) x) (f (a \ b \ a + b)))        ; a lambda operand takes the default action
  ; and a numeral whose answer outgrows a charm stays residual rather than baking into the image:
@@ -64,15 +64,15 @@
  (7 = (: (f .) (. 3 4) (f (+))))  ; param X shadows the global; f + -> (+ 3 4)
 
  ; --- nil?-flip: (? (nil? e) a b) == (? e b a); behavior-preserving under both compilers ---
- ('z = (: (f x) (? (nil? x) 'z 'nz) (f 0)))           ; falsy e -> consequent
- ('nz = (: (f x) (? (nil? x) 'z 'nz) (f 5)))          ; truthy e -> alternative
- ('z = (: (f x) (? (nil? x) 'z 'nz) (f "")))          ; empty string is falsy
- ('nz = (: (f x) (? (nil? x) 'z 'nz) (f '(1))))       ; non-empty list is truthy
- ('z = (: (f x) (? !x 'z 'nz) (f 0)))                 ; the `!` sigil reads as (nil? x), flips too
- ('c = (: (f x) (? (5 < x) 'a (nil? x) 'c 'b) (f 0))) ; final-clause flip inside a chain
- ('b = (: (f x) (? (5 < x) 'a (nil? x) 'c 'b) (f 3))) ; ... fall-through to the else
- ('a = (: (f x) (? (5 < x) 'a (nil? x) 'c 'b) (f 9))) ; ... first clause still wins
- (() = (: (f x) (? (nil? x) 'z) (f 5))))              ; no-else cond falls to the zero point () (nil-ontology)
+ ('z = (: (f x) (!x ? 'z 'nz) (f 0)))                 ; falsy e -> consequent
+ ('nz = (: (f x) (!x ? 'z 'nz) (f 5)))                ; truthy e -> alternative
+ ('z = (: (f x) (!x ? 'z 'nz) (f "")))                ; empty string is falsy
+ ('nz = (: (f x) (!x ? 'z 'nz) (f '(1))))             ; non-empty list is truthy
+ ('z = (: (f x) (!x ? 'z 'nz) (f 0)))                 ; the `!` sigil reads as (nil? x), flips too
+ ('c = (: (f x) (? (5 < x) 'a !x 'c 'b) (f 0)))       ; final-clause flip inside a chain
+ ('b = (: (f x) (? (5 < x) 'a !x 'c 'b) (f 3)))       ; ... fall-through to the else
+ ('a = (: (f x) (? (5 < x) 'a !x 'c 'b) (f 9)))       ; ... first clause still wins
+ (() = (: (f x) (? !x 'z) (f 5))))                    ; no-else cond falls to the zero point () (nil-ontology)
 
 ; --- the purity gate on beta's arguments --- an inlined lambda substitutes only pure args:
 ; a body naming a param twice would run an impure arg twice (the flip, test/uuspllaw.l's
@@ -82,7 +82,7 @@
 ; it caught pure-head? being called under-applied -- a partial is truthy, so every purity
 ; question answered yes and (dbl (bump 0)) bumped the counter twice. the arity is the protocol.
 (: pg-ctr (cask 1)
-   (pg-bump _) (: v (peep pg-ctr 0 0) (pin pg-ctr 0 (v + 1), v + 1))
+   (pg-bump _) (peep pg-ctr 0 0 @ v (pin pg-ctr 0 (v + 1), v + 1))
    (pg-dbl x) (x + x)                                ; names its param twice -- the duplication site
    (test
     (: _ (pin pg-ctr 0 0) r (pg-dbl (pg-bump 0))
@@ -94,7 +94,7 @@
 ; around it. behavioral pins only (whether a splice FIRED is out of band, per the header);
 ; each holds under both compilers and under decline, which is the point -- the license.
 (: bs-ctr (cask 1)
-   (bs-bump _) (: v (peep bs-ctr 0 0) (pin bs-ctr 0 (v + 1), v + 1))
+   (bs-bump _) (peep bs-ctr 0 0 @ v (pin bs-ctr 0 (v + 1), v + 1))
    (bs-mix a b c) (a + b + c)
    (bs-ord a b) (b - a)                    ; reads its args in reverse; eval stays call order
    (bs-drop a b) b                         ; drops its first param; the effect must still run
@@ -110,7 +110,7 @@
     (: _ (pin bs-ctr 0 0) r (bs-drop (bs-bump 0) 7)
        (7 = r && 1 = peep bs-ctr 0 0))
     ; identity-minting arg: bound once, so the two reads see one mint
-    (: (bs-same t) (t = t) (bs-same (tablet 0)))
+    (: (bs-same t) (t = t) (bs-same {}))
     ; under-saturated + impure: declined -- the partial's effect fires at build time, once
     (: _ (pin bs-ctr 0 0) p (bs-mix 3 (bs-bump 0))
        (9 = p 5 && 1 = peep bs-ctr 0 0))
@@ -123,8 +123,8 @@
 ; gone with no let. read-many still binds; a read under ? or \ declines the substitution
 ; (it could run zero or many times); order holds across a bind + a substitution.
 (: r1-c1 (cask 1) r1-c2 (cask 1)
-   (r1-b1 _) (: v (peep r1-c1 0 0) (pin r1-c1 0 (v + 1), v + 1))
-   (r1-b2 x) (: v (peep r1-c2 0 0) (pin r1-c2 0 (v + 1), x + v))    ; answers x + own pre-count
+   (r1-b1 _) (peep r1-c1 0 0 @ v (pin r1-c1 0 (v + 1), v + 1))
+   (r1-b2 x) (peep r1-c2 0 0 @ v (pin r1-c2 0 (v + 1), x + v))      ; answers x + own pre-count
    (r1-mix a b c) (a + c + b)                                       ; b read once -> substitutes; a c fold
    (r1-two a b) (a + a + b)                                         ; a read twice -> binds; b once -> substitutes
    (r1-iff p b) (p ? b 0)                                           ; b read under ? -> declines; still runs once
@@ -151,18 +151,18 @@
    (test
     (15 = (: (g i) (ustw (usadd i) i) (g 5)))            ; the doc's promise: collapses to first-order
     (7 = (ustw (us3 1 2) 1))                             ; two params short, then cascaded
-    (9 = (: h (usadd 4) (h (h 1))))))                    ; value position: the partial reverts, still right
+    (9 = (usadd 4 @ h (h (h 1))))))                      ; value position: the partial reverts, still right
 
 ; --- the body-position `:` splices into its parent (lflat) --- one frame where the source
 ; nested two, and the same meaning either way. shadowing and capture are the gates: an inner
 ; name that collides with an outer one, or that an outer def reads, keeps its own frame.
 (: (lf-h n) (n = 0 ? 4 (lf-h (n - 1)))           ; recursive, so cprop neither folds nor inlines it
    (test
-    (3 = (: a 1 (: b 2 (a + b))))                   ; the plain splice
-    (6 = (: a 1 (: b 2 (: c 3 (a + b + c)))))       ; a chain of any depth lands in one frame
-    (2 = (: a 1 (: a 2 a)))                         ; a collision -- the inner still shadows
-    (4 = (: a 1 (: b a (: a 3 (b + a)))))           ; ... and the outer a is what b read
-    (4 = (: (f _) (lf-h 1) (: lf-h (y \ 99) (f 0))))))   ; an outer def reads the name -> no capture
+    (3 = (1 @ a (2 @ b (a + b))))                   ; the plain splice
+    (6 = (1 @ a (2 @ b (3 @ c (a + b + c)))))       ; a chain of any depth lands in one frame
+    (2 = (1 @ a (2 @ a a)))                         ; a collision -- the inner still shadows
+    (4 = (1 @ a (a @ b (3 @ a (b + a)))))           ; ... and the outer a is what b read
+    (4 = (: (f _) (lf-h 1) ((y \ 99) @ lf-h (f 0))))))   ; an outer def reads the name -> no capture
 
 ; --- an over-applied known-arity head splits (napof/napn) --- the n-ary apply takes the
 ; arity prefix and the surplus curries onto its answer, so (f 1 2 3) is ((f 1 2) 3). the

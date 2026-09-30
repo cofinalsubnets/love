@@ -1,7 +1,7 @@
 (: (f m n) 
     (: m_plus (+ m) n_plus (+ n)
-              (g a) (? (a < 0) a (h (n_plus a)))
-              (h a) (? (a < 0) a (g (m_plus a)))
+              (g a) (a < 0 ? a (h (n_plus a)))
+              (h a) (a < 0 ? a (g (m_plus a)))
               h)
    f3 (f -3)
    f37 (f3 -7)
@@ -15,7 +15,7 @@
  (9 = ((f \ n \ f n) 2 3)) ; (2 3) = 3 ** 2
  ('abc = ('abc 0))         ; a point is its own constant: applied, it answers itself
  ('abc = ('abc 'x))        ;   whatever the operand
- (: m (mint 0) (m = m 5))  ; an anonymous one too
+ (mint 0 @ m (m = m 5))    ; an anonymous one too
  (8 = (3 2))               ; (3 2) = 2 ** 3
  (13 = ((3 (+ 1)) 10)))    ; non-numeric operand -> (+ 1) composed 3 times on 10
 ; the whole numeric tower is a Church numeral, not just fixnums (data.c data_num_apply
@@ -41,15 +41,15 @@
  (abs (1 - abs ((0 ~ 1) 5)) < 0.0001)                                       ; |5^i| = 1 exactly (w^z = exp(z Log w))
  (abs (im ((0 ~ 1) (0 ~ 1))) < 0.0001))                                     ; i^i = e^(-pi/2) is real
 ; basic arithmetic
-(: zero? (= 0)
-(test
- (17 = ((f \ f 9) (+ 8)))
- (13 = (: a 9 b 7 c -3 (a + (b + c))))
- (: (even? n) (? (zero? n) 1 (odd? (-1 + n)))
-    (odd? n) (? (zero? n) 0 (even? (-1 + n)))
-  (odd? 99))
- ; a higher-order param applied past its own arity: f takes g, then over-applies it
- (3 = ((f \ g \ f g 1 2 3) (g \ a \ b \ c \ g c b) (a \ b \ a)))))
+((= 0) @ zero?
+ (test
+  (17 = ((f \ f 9) (+ 8)))
+  (13 = (: a 9 b 7 c -3 (a + (b + c))))
+  (: (even? n) (zero? n ? 1 (odd? (-1 + n)))
+     (odd? n) (zero? n ? 0 (even? (-1 + n)))
+   (odd? 99))
+  ; a higher-order param applied past its own arity: f takes g, then over-applies it
+  (3 = ((f \ g \ f g 1 2 3) (g \ a \ b \ c \ g c b) (a \ b \ a)))))
 
 ; ackermann function
 (: (ack m n p) (?
@@ -61,9 +61,9 @@
  (test (65536 = ack 2 3 3)))
 ; tarai function
 (: (たらい x y z)
-   (? (x <= y) y (たらい (たらい (x - 1) y z)
-                         (たらい (y - 1) z x)
-                         (たらい (z - 1) x y)))
+   (x <= y ? y (たらい (たらい (x - 1) y z)
+                       (たらい (y - 1) z x)
+                       (たらい (z - 1) x y)))
  (test (1013 = (たらい 1012 1013 1014))))
 
 (: (c1895 m n) (m + (m + n) * (m + (n + 1)) / 2)
@@ -79,7 +79,7 @@
 
 ; heron's method for finding square roots (integer Newton -- floor division `//`,
 ; so it converges to the exact integer root and the `=` test terminates)
-(: (heron x g) (? (g = (x // g)) g
+(: (heron x g) (g = (x // g) ? g
     (heron x ((g + (x // g)) // 2)))
    guess 1337
  (test (6 = heron 36 guess)))
@@ -98,5 +98,5 @@
  (test (420 = mul (mul two five) (mul six seven) (+ 1) 0)))
 
 ; fibonacci
-(: (fib n) (? (3 > n) 1 (fib (-1 + n) + fib (-2 + n)))
+(: (fib n) (3 > n ? 1 (fib (-1 + n) + fib (-2 + n)))
  (test (2178309 = fib 32)))

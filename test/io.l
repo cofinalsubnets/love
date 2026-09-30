@@ -18,12 +18,12 @@
   ; the same pair once a real read has happened, which the net-zero roundtrip cannot
   ; reach. on a tap, never on `in`: a real read of `in` eats the corpus feeding this
   ; suite. the pushback is the port's (love.c's zungetc), so a tap walks identical code.
-  (: t (tap '(120 121))         ; a tap taps a charlist -- (tap "xy") is the empty one
-   _ (see t)
-   (99 = unsee t 99
-    && 99 = see t
-    && 121 = see t    ; ..and y is still there, unshifted by the detour
-    && -1 = see t))   ; ..and the end is still the end
+  (tap '(120 121) @ t           ; a tap taps a charlist -- (tap "xy") is the empty one
+   (see t,
+    (99 = unsee t 99
+     && 99 = see t
+     && 121 = see t   ; ..and y is still there, unshifted by the detour
+     && -1 = see t))) ; ..and the end is still the end
 
   ; a non-port reads as an already-empty stream: (get x) is -1, not the echoed x, so a
   ; read-until-(-1) loop over an absent port terminates. this is what bounds the file
@@ -40,7 +40,7 @@
   !(port? 42)
   !(port? "notaport")
   !(port? ())
-  !(port? (\ x x))
+  !(port? (x \ x))
   !(port? (cask 4))
   ; slurp is bounded like see: a non-port drains as the empty stream rather than reading
   ; the raw words of whatever it was handed. every drain lands text.
@@ -51,21 +51,21 @@
   ; file roundtrip: say a string to /tmp, read it back byte-by-byte, compare. the payload
   ; is (show (clock 0)) so a stale file from a previous run cannot pass. gated on files --
   ; native and inle have a filesystem, the wasm shim stubs fd ports to EOF.
-  (? files (: txt (show (clock 0))
+  (files ? (: txt (show (clock 0))
      wp (open "/tmp/l-io-test" "w")
      _ (say wp txt)
      _ (close wp)
      rp (open "/tmp/l-io-test" "r")
-     (slurp acc) (: c (see rp) (c = -1 ? (rev acc) (slurp (c . acc))))
+     (slurp acc) (see rp @ c (c = -1 ? (rev acc) (slurp (c . acc))))
      rd (string (slurp 0))
-     _ (close rp)
-     (txt = rd)) 1)
+     (close rp,
+      txt = rd)) 1)
 
   ; --- chug and unchug: the run, and the run put back ---------------------------
   ; unchug rewinds rpos, which is at once the reader's position and what ai_io_pending
   ; counts, so bytes given back are bytes stdin's seek-back sees again.
   ; on a file, never on `in`: a real read of `in` eats the corpus feeding this suite.
-  (? files (: pth "/tmp/l-io-unchug"
+  (files ? (: pth "/tmp/l-io-unchug"
      wp (open pth "w") _ (say wp "abcdefghij") _ (close wp)
      p (open pth "r")
      c (see p) _ (unsee p c)
@@ -77,12 +77,12 @@
      back10 (unchug p 99)
      fwd3 (unchug p -3)                 ; a negative take steps the position forward
      rest7 (chug p)
-     _ (close p)
-     ; && and never `do` -- do is seqx, so it would answer the last clause alone
-     ("abcdefghij" = whole
-      && 4 = back4    && "ghij" = tail4
-      && 10 = backall && "abcdefghij" = again
-      && 10 = back10  && 3 = fwd3      && "defghij" = rest7)) 1)
+     (close p,
+      ; && and never `do` -- do is seqx, so it would answer the last clause alone
+      ("abcdefghij" = whole
+       && 4 = back4    && "ghij" = tail4
+       && 10 = backall && "abcdefghij" = again
+       && 10 = back10  && 3 = fwd3      && "defghij" = rest7))) 1)
   ; nothing to give back is 0, never a scare -- and a short answer is the refusal, so the
   ; count is the only check a caller has. a tap carries the ci vt and never a run.
   (0 = unchug (tap '(120 121)) 4)
@@ -102,28 +102,28 @@
   ; a tap is a byte stream, so a charm outside 0..255 lands as its low byte. that is what
   ; stops a -1 in the list forging the end of the stream: readers that stop at -1 lose
   ; the whole list to one element.
-  (: p (tap '(300 -1 65))
-     (44 = see p && 255 = see p && 65 = see p && -1 = see p))
+  (tap '(300 -1 65) @ p
+   (44 = see p && 255 = see p && 65 = see p && -1 = see p))
   ; counted by forcing, never by tally: a flow is lazy past the first run and a tap has
   ; no buffered run, so tally sees one cell and a promise. the law is that both arrive.
-  (: (fw cl n) (two? cl ? (fw (: t >cl (lit? t ? (t ()) t)) (n + 1)) n)
+  (: (fw cl n) (two? cl ? (fw (>cl @ t (lit? t ? (t ()) t)) (n + 1)) n)
      (2 = (fw (flow (tap '(-1 65))) 0)))
 
   ; --- once: the promise ---
   ; a thunk that runs at most once and remembers, fired with the unit per the
   ; zero-operand law -- (th) alone is th unrun. the law is the count, not the agreement:
   ; two firings that agree prove nothing, so the witness is a tablet the body bumps.
-  (: c (tablet 0)
-     th (once (\ u (: k (peep c 0 0) (pin c 0 (k + 1), k))))
+  (: c {}
+     th (once (u \ peep c 0 0 @ k (pin c 0 (k + 1), k)))
      a (th ()) b (th ()) d (th ())
      (a = b && b = d && 1 = peep c 0 0))
   ; a promise of nothing still forces once -- a flow's last promise answers () at eof.
   ; presence-as-the-net fails here: a bare pin of () leaves the slot reading exactly like
   ; an unforced one, so f re-runs forever, silently.
-  (: c (tablet 0)
-     th (once (\ u (pin c 0 (peep c 0 0 + 1), ())))
-     _ (th ()) _ (th ())
-     (!(th ()) && 1 = peep c 0 0))
+  (: c {}
+     th (once (u \ (pin c 0 (peep c 0 0 + 1), ())))
+     (th (), th (),
+      !(th ()) && 1 = peep c 0 0))
 
   ; --- flow: a port is a charlist ---
   ; one whose tail is a promise drinking the next gulp, so `sound` reads a port with no
@@ -134,8 +134,8 @@
   ; the gulp is realized and only the join is lazy: one run's cells are ordinary conses,
   ; and a flowing charlist ends in a promise or in (). the run is what the port has in
   ; hand -- a buffered fd port hands over its 4096 the same way (test/front/io.l).
-  (: f (flow (tap '(97 98)))
-     (97 = <f && 98 = <>f && (lit? >>f || !(>>f))))
+  (flow (tap '(97 98)) @ f
+   (97 = <f && 98 = <>f && (lit? >>f || !(>>f))))
   ; an empty port is the empty charlist, not a promise of one
   !(flow (tap ()))
   ; the memoization law: a position forced twice answers the same thing, so the flow's
@@ -161,10 +161,10 @@
   ; single datum: number, symbol, list, quoted form, string literal
   (1 = <(sound '(49)))            ; "1"
   ('a = <(sound '(97)))           ; "a"
-  (: d <(sound '(40 49 32 50 41)) ; "(1 2)"
-     (two? d && 1 = <d && 2 = <>d))
-  (: d <(sound '(39 49))                           ; "'1" -> (` 1)
-     (two? d && 1 = <>d))
+  (<(sound '(40 49 32 50 41)) @ d ; "(1 2)"
+   (two? d && 1 = <d && 2 = <>d))
+  (<(sound '(39 49)) @ d                           ; "'1" -> (` 1)
+   (two? d && 1 = <>d))
   (string (104 . 105 . 0) = <(sound '(34 104 105 34)))   ; "hi"
 
   ; sequential reads thread the residue; the last one is the clean end
@@ -187,11 +187,11 @@
   ; torn and the clean end are distinct, and neither is a datum: a datum comes back as a
   ; cons whatever it holds, so reading "()" answers the datum () -- exactly the case a
   ; net test would call nothing.
-  (: r (sound '(40 41)) (two? r && !<r))
+  (sound '(40 41) @ r (two? r && !<r))
   ('torn != sound ())
 
   ; a torn read resumes: hand back the same text with the rest appended
-  (: r (sound ('(40 49) + '(32 50 41))) (two? r && '(1 2) = <r))
+  (sound ('(40 49) + '(32 50 41)) @ r (two? r && '(1 2) = <r))
 
   ; mixed sequence, residue threaded: "() 1"
   (: a (sound '(40 41 32 49)) b (sound >a)
@@ -200,8 +200,8 @@
   ; an unforced tail is a charlist not yet drunk, so sound fires it and reads on. without
   ; this arm a residue arriving unforced would read as a clean end -- a short read,
   ; silently. the cost is that a closure handed to sound is called, not refused.
-  (: r (sound (once (\ u (map "(1 2)" ^5))))
-     (two? r && '(1 2) = <r))
+  (sound (once (u \ map "(1 2)" ^5)) @ r
+   (two? r && '(1 2) = <r))
 
   ; misuse: a non-charlist holds no datum, and reads as the clean end
   !(sound 42)

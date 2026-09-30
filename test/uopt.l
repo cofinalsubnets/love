@@ -9,8 +9,8 @@
    ; the map a long name is read through: to a letter's key, so --width and -w are one
    ; option with one reader, or to anything else where there is no letter to share
    L {"width" 119 "text" 116 "no-build" 'nb "port" 112}
-   (walk as) (: t {} (uopt as t '(119 116 112) '(101) L))
-   (short as) (: t {} (uopt as t '(109) '(101) ())))
+   (walk as) ({} @ t (uopt as t '(119 116 112) '(101) L))
+   (short as) ({} @ t (uopt as t '(109) '(101) ())))
 
 (test
  ; --- uopt1: one word into its letters ------------------------------------------------
@@ -58,7 +58,7 @@
  !(uoptv <(walk ["--no-build"]) 'nb)                    ; a flag with no value is not one
  ; a key in `reps` stacks into the second slot instead of pinning, that being the option
  ; a tool spells more than once (sed -e, grep -e)
- (["a" "b"] = <>(: t {} (uopt ["-e" "a" "-e" "b" "f"] t '(101) '(101) ())))
+ (["a" "b"] = <>({} @ t (uopt ["-e" "a" "-e" "b" "f"] t '(101) '(101) ())))
 
  ; --- the three readings an applet owes over the walk ---------------------------------
  ; the short lane takes ANY letter, so the alphabet is the applet's to state and the key
@@ -69,11 +69,11 @@
  ('nb = (uoptun <(walk ["--no-build" "f"]) '(119)))     ; a long name's key, likewise
  ; uoptbad names uoptun's stranger as typed: -ba is b where the tablet says a, a value's
  ; text is never a letter it names, and a long key comes back as uoptun's
- (98 = (: as ["-ba" "f"] (uoptbad as <(walk as) "w")))
+ (98 = (["-ba" "f"] @ as (uoptbad as <(walk as) "w")))
  (97 = (uoptun <(walk ["-ba" "f"]) "w"))
- (122 = (: as ["-w3" "-z" "f"] (uoptbad as <(walk as) "w")))
- !(: as ["-w3" "f"] (uoptbad as <(walk as) "w"))
- ('nb = (: as ["--no-build" "f"] (uoptbad as <(walk as) '(119))))
+ (122 = (["-w3" "-z" "f"] @ as (uoptbad as <(walk as) "w")))
+ !(["-w3" "f"] @ as (uoptbad as <(walk as) "w"))
+ ('nb = (["--no-build" "f"] @ as (uoptbad as <(walk as) '(119))))
  ; an operand that still looks like a flag, the walk having stopped at the first that is
  ; not one -- and nothing at all once `--` has been spelled
  ("-q" = (uoptstray ["f" "-q"] <>>(walk ["f" "-q"])))

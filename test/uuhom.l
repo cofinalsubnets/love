@@ -31,11 +31,11 @@
 
 ; the differential foot: one composite, three lanes -- vof, lof, the binary's `*` --
 ; meeting at a numeral
-(: hc '(homcomp nat nat nat (lam y (succ y)) (lam x (succ (succ x))) 3)
+('(homcomp nat nat nat (lam y (succ y)) (lam x (succ (succ x))) 3) @ hc
  (test
   (6 = (vof 0 hc))
   ((vof 0 hc) = (lof hc))
-  ((vof 0 hc) = (((\ y (y + 1)) * (\ x (x + 2))) 3))))
+  ((vof 0 hc) = (((y \ y + 1) * (x \ x + 2)) 3))))
 
 ; --- the skeleton, worn: an object is a location (a nat), the state one map,
 ; --- a morphism a state transformer. hmov is the relocation the design declines

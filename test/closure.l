@@ -24,7 +24,7 @@
  (mkconst z) (n \ n < 1 ? z (kconst (n - 1)))
  kconst (mkconst 7)
  ; memoizing fixpoint combinator (used for the recursive-value fib below)
- (memo f) (: m (tablet 0) (x \ (: c (peep m x 0) (c ? c (: y (f x) (pin m x y, y))))))
+ (memo f) (: m {} (x \ (: c (peep m x 0) (c ? c (: y (f x) (pin m x y, y))))))
  (test
   ; --- recursive functions (unchanged behaviour) ---
   (120 = nfac 5) ; named recursion
@@ -118,7 +118,7 @@
 ; truthy partial, the body never ran, silently (rm -r walked a tree and deleted
 ; nothing). avw's shadow guard ('far keys every binding name) now stops the
 ; escape, and weave scares 'imports-grew if a frozen import row ever grows again.
-(: rq (cap [1])
+(: rq <[1]
    (zap q)
     (? (two? q)
        (: (go m ok) (? (atom? m) ok

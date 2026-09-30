@@ -4,8 +4,8 @@
 ; strings, symbols and nested arrays -- and is the one tuple type the collector
 ; traces element-by-element. a one-cell array demotes to its value (a boxed scalar is just a value).
 
-(: (oa-list n acc) (? (n < 1) acc (oa-list (n - 1) (. n acc)))          ; build (1 .. n)
-   (oa-churn n)    (? (n < 1) 0 (: g (oa-list 300) (oa-churn (n - 1)))) ; alloc + discard
+(: (oa-list n acc) (n < 1 ? acc (oa-list (n - 1) (. n acc)))            ; build (1 .. n)
+   (oa-churn n)    (n < 1 ? 0 (oa-list 300 @ g (oa-churn (n - 1))))     ; alloc + discard
    oa-big     (100 2)                                                   ; a bignum (past fixnum/box range)
    oa-vals  [oa-big (oa-big * oa-big) (oa-big + 7) "hi" 'sym]
    oa-a     (top-tray '(5) oa-vals)
@@ -33,8 +33,8 @@
  (4 = peep (peep oa-nest 1 0) 1 0)
 
  ; --- falsiness: an all-nil o-array is falsy; any truthy element flips it ---
- (? oa-z 0 1)                                    ; oa-z all nil -> falsy -> 1
- (? oa-a 1 0)                                     ; oa-a has truthy elems -> 1
+ (oa-z ? 0 1)                                    ; oa-z all nil -> falsy -> 1
+ (oa-a ? 1 0)                                     ; oa-a has truthy elems -> 1
 
  ; --- print: an object array prints as the @(…)/(array …) surface form like any
  ;     other; the type is re-inferred on read-back, so an o array of plain
@@ -76,7 +76,7 @@
  (3 + 100 2 = peep (100 2 + oa-x) 2 0) ; scalar on the left; oa-x elem 2 = 3
 
  ; mixed: object array (+) typed int array -> widens the int array, stays exact
- (? word ((2 * oa-w) = peep (oa-oar + oa-zar) 0 0) 1)   ; 2^40 wraps differently in a 32-bit z-array
+ (word ? ((2 * oa-w) = peep (oa-oar + oa-zar) 0 0) 1)   ; 2^40 wraps differently in a 32-bit z-array
 
  ; comparison over object arrays -> 0/1 element
  (1 = peep (top-tray '(2) '(1 5) < top-tray '(2) '(3 2)) 0 0)
@@ -151,8 +151,8 @@
 ; --- a cell holds a value, so `=` reads through to it and hashing has to as well:
 ; two object arrays built apart hold one set of values behind two sets of pointers,
 ; and a tablet that keyed them by those pointers would miss what `=` calls equal.
-(: oa-k1 @((+ "a" "b") [1 2] 'sym)
-   oa-k2 @((+ "a" "b") [1 2] 'sym)
+(: oa-k1 @(("a" + "b") [1 2] 'sym)
+   oa-k2 @(("a" + "b") [1 2] 'sym)
    oa-t (pin (pin {} oa-k1 1) oa-k2 2))
 (test
  (aall (oa-k1 = oa-k2)) (dig oa-k1 = dig oa-k2)
@@ -161,7 +161,7 @@
  !(aall (oa-k1 = @("ab" [1 3] 'sym)))   ; a cell apart is a key apart: the mask has a 0
  !(dig oa-k1 = dig @("ab" [1 3] 'sym))
  (0 = (oa-k1 = @("ab" [1 2])))      ; ..and so is a shape apart: no mask, a 0
- (aall (array [2 2] "a" "b" "c" "d" = array [2 2] (+ "" "a") "b" "c" "d"))   ; rank-N alike, cell by cell
+ (aall (array [2 2] "a" "b" "c" "d" = array [2 2] ("" + "a") "b" "c" "d"))   ; rank-N alike, cell by cell
  (dig (array [2 2] "a" "b" "c" "d") = dig (array [2 2] ("" + "a") "b" "c" "d"))
  ; the cells move and the key stays findable: a probe rehashes, so a hash that read
  ; the pointers would lose its own entry at the first collection

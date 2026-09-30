@@ -28,22 +28,22 @@
 
  ; shift d c t -- bump free vars (index >= c) by d   (spec.v: shift)
  (tshift d c t)
-   (? (dtag t = 0) (: k (dn t) (? (k < c) (dvar k) (dvar (k + d))))
+   (? (dtag t = 0) (dn t @ k (k < c ? (dvar k) (dvar (k + d))))
       (dtag t = 1) (dlam (tshift d (c + 1) (dbody t)))
       (dapp (tshift d c (dfun t)) (tshift d c (darg t))))
  ; subst j s t -- replace var j by s, renumber survivors   (spec.v: subst)
  (tsubst j s t)
-   (? (dtag t = 0) (: k (dn t) (? (k = j) s (? (k < j) (dvar k) (dvar (k - 1)))))
+   (? (dtag t = 0) (dn t @ k (k = j ? s (k < j ? (dvar k) (dvar (k - 1)))))
       (dtag t = 1) (dlam (tsubst (j + 1) (tshift 1 0 s) (dbody t)))
       (dapp (tsubst j s (dfun t)) (tsubst j s (darg t))))
 
  ; cbv / n-ary / weak / saturating evaluation -- love's strategy
- (darity t) (? (dtag t = 1) (1 + darity (dbody t)) 0)
- (rebuild t args) (? !args t (rebuild (dapp t <args) >args))
- (apply-n t args n) (? (n < 1) t (apply-n (tsubst 0 <args (dbody t)) >args (n - 1)))
+ (darity t) (dtag t = 1 ? (1 + darity (dbody t)) 0)
+ (rebuild t args) (!args ? t (rebuild (dapp t <args) >args))
+ (apply-n t args n) (n < 1 ? t (apply-n (tsubst 0 <args (dbody t)) >args (n - 1)))
  (evs fuel t args)
    (? (fuel < 1) (rebuild t args)
-      (dtag t = 2) (: a (evs (fuel - 1) (darg t) 0) (evs (fuel - 1) (dfun t) (a . args)))
+      (dtag t = 2) (evs (fuel - 1) (darg t) 0 @ a (evs (fuel - 1) (dfun t) (a . args)))
       (dtag t = 1)
         (: n (darity t) k #args
            (? (k < 1) t
@@ -62,7 +62,7 @@
 
  ; random closed affine term: partition splits a scope so f/a never share a var
  (partition sc st)
-   (? !sc [0 0 st]
+   (!sc ? [0 0 st]
       (: r (random st 2) rest (partition >sc >r)
          (? (<r = 0)
             [(<sc . <rest) <>rest <>>rest]
@@ -70,12 +70,12 @@
  tI (dlam (dvar 0))
  (gen g sc st)
    (: r (random st 10) pick <r st1 >r
-      (? (g < 1) (? !sc [tI 0 st1] [(dvar <sc) >sc st1])
-         (!!sc && (pick < 4)) [(dvar <sc) >sc st1]
+      (? (g < 1) (!sc ? [tI 0 st1] [(dvar <sc) >sc st1])
+         (!!sc && pick < 4) [(dvar <sc) >sc st1]
          (pick < 7)
            (: bsc (0 . map (+ 1) sc)
               res (gen (g - 1) bsc st1) b <res lo <>res st2 <>>res
-              lo' (map (\ x (x - 1)) (filter (\ x (0 < x)) lo))
+              lo' (map (x \ x - 1) (filter (x \ 0 < x) lo))
               [(dlam b) lo' st2])
            (: pr (partition sc st1) sc1 <pr sc2 <>pr st2 <>>pr
               rf (gen (g - 1) sc1 st2) f <rf lof <>rf st3 <>>rf
@@ -86,15 +86,15 @@
  (ground v) (v 'm1 'm2 'm3 'm4 'm5)
  (oracle-ok n sd g)
    (: (go n st good)
-        (? (n < 1) good
+        (n < 1 ? good
            (: res (gen g 0 st) t <res st' <>>res
               ok (ground (ev (render 0 t)) = ground (ev (render 0 (teval t))))
-              (go (n - 1) st' (good + (? ok 1 0)))))
+              (go (n - 1) st' (good + (ok ? 1 0)))))
       (n = go n (wheel sd) 0))
 
  ; spec.v's reduction theorems, as binary twins (beta_id / beta_const / nested / eta)
  (test
-  (5 = ((\ x x) 5))  (1 = ((\ _ 1) 9))  (5 = ((\ x x) ((\ x x) 5)))
-  !((\ x <x) = cap)
+  (5 = ((x \ x) 5))  (1 = ((_ \ 1) 9))  (5 = ((x \ x) ((x \ x) 5)))
+  !((x \ <x) = cap)
   ; the fuzzed differential: every random closed affine term agrees with ev
   (oracle-ok 300 1 4) (oracle-ok 300 2 5) (oracle-ok 200 3 6)))

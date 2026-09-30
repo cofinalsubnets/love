@@ -20,16 +20,16 @@
    (fact n) (:
     (f n x) (n < 2 ? x (f (n - 1) (x * n)))
     v (facts n)
-    (? v v (: v (f n 1) (pin facts n v, v))))
+    (v ? v (f n 1 @ v (pin facts n v, v))))
    (bell n) (:
     (f n k x) (k >= n ? x (f n (k + 1) (x + (choose (n - 1) k * bell k))))
     v (bells n)
-    (? v v (: v (n < 2 ? 1 (f n 0 0)) (pin bells n v, v))))
-   (showloop acc n) (? (n < 1) acc (showloop (digit (n % tally digits) + acc)(n // tally digits) ))
+    (v ? v ((n < 2 ? 1 (f n 0 0)) @ v (pin bells n v, v))))
+   (showloop acc n) (n < 1 ? acc (showloop (digit (n % tally digits) + acc)(n // tally digits) ))
    show (showloop "")
-   (gen i limit) (: b (show (bell i)) (#b <= limit ? (b . gen (i + 1) limit)))
+   (gen i limit) (show (bell i) @ b (#b <= limit ? (b . gen (i + 1) limit)))
    (leq a b) (two? a ? (two? b && <a = <b && leq >a >b) (atom? b))
-   (ln x) (foldl (\ n _ (1 + n)) 0 x)            ; line count ($ on a list is the net sum)
+   (ln x) (foldl (n \ _ \ 1 + n) 0 x)            ; line count ($ on a list is the net sum)
    out (gen 0 280)
    ; expected: byte-exact stdout of `ruby test/bell.rb` (n defaults to 280),
    ; 291 lines, B(0..290) in base 36.

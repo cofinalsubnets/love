@@ -231,7 +231,7 @@
     ('(2 2) = shape C && 58 = peep C '(0 0) 0 && 64 = peep C '(0 1) 0
         && 139 = peep C '(1 0) 0 && 154 = peep C '(1 1) 0))   ; 2x2 matmul, every cell
  (aall (@(6 15) = (inner (star-tray '(2 3) '(1 2 3 4 5 6)) @(1 1 1))))   ; matrix . vector
- (: O (outer @(1 2 3) @(10 20))
-    ('(3 2) = shape O && 10 = peep O '(0 0) 0 && 60 = peep O '(2 1) 0))  ; outer
+ (outer @(1 2 3) @(10 20) @ O
+  ('(3 2) = shape O && 10 = peep O '(0 0) 0 && 60 = peep O '(2 1) 0))    ; outer
  (gem-tray = tier (outer @(1 2) @(3.0 4.0)))     ; outer widens on an inexact operand
  !(inner @(1 2) 5) !(outer @(1 2) 5))              ; non-array operand -> nil

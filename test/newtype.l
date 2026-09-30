@@ -6,23 +6,23 @@
 ; builds and registers a kind, `lift` a method, `kinds` reads the registry.
 
 (: ; Z/5Z -- add and multiply the residues mod 5
-   z5 (coin 'z5 (z \ {'+ (lift z (\ x y ((x + y) % 5)))
-                     '* (lift z (\ x y ((x * y) % 5)))}))
+   z5 (coin 'z5 (z \ {'+ (lift z (x \ y \ (x + y) % 5))
+                     '* (lift z (x \ y \ (x * y) % 5))}))
    a  (z5 3)
    b  (z5 4)
    ; a sum -- a plus but no times
-   sm (coin 'sm (z \ {'+ (lift z (\ x y (x + y)))}))
+   sm (coin 'sm (z \ {'+ (lift z (x \ y \ x + y))}))
    smp (sm 2)
    smq (sm 3)
    ; a counted kind -- nets by tally, not by content
-   cnt (coin 'cnt {'net (\ c #(load c))})
+   cnt (coin 'cnt {'net (c \ #(load c))})
    (tail-from k l) (? (atom? l) () (<l = k) l (tail-from k >l))
    (test
     ; --- what a coin is ---
     (coin? a)                      ; a is a coin
     !(coin? 5)               ; a plain value is not
     !(coin? "s")
-    !(coin? (\ x x))         ; ..nor a lambda, though it shares the hot row
+    !(coin? (x \ x))         ; ..nor a lambda, though it shares the hot row
     !(coin? sin)
     (3 = load a)           ; load reads the payload
     (7 = load 7)           ; load of a non-coin is itself
@@ -34,10 +34,10 @@
     ('coin = kind (strike {} 5))   ; an unnamed table is a coin still, and not the row's lambda
     ('charm = kind 5)  ('mint = kind ())  ('mint = kind (nom 0))  ('nom = kind 'a)
     ('string = kind "s")  ('chain = kind [1 2])  ('tablet = kind {})
-    ('lambda = kind (\ x x))  ('port = kind out)  ('cask = kind (cask 4))
+    ('lambda = kind (x \ x))  ('port = kind out)  ('cask = kind (cask 4))
     ; --- the registry: a kind's table by name, and the names in registration order ---
     ('lambda = kind ((kinds 'z5) '+))
-    (: l (tail-from 'z5 (kinds ())) ('(z5 sm) = [<l <>l]))
+    (tail-from 'z5 (kinds ()) @ l ('(z5 sm) = [<l <>l]))
     ([(z5 1) (sm 1)] = sort [(sm 1) (z5 1)])   ; distinct kinds order by registration
 
     ; --- value equality: same kind + eqv payloads ---
@@ -117,18 +117,18 @@
     ; the law that pins it: `=` has to agree with the order it is already given. a
     ; value where (<= a b) and (>= a b) are both true and (= a b) is false is not a
     ; number in an order, it is two answers -- which is what this used to be.
-    (: a (4 /// 2) b 2  (((a <= b) && (a >= b)) = (a = b)))
+    (: a (4 /// 2) b 2  ((a <= b && a >= b) = (a = b)))
     (1 /// 1 = 1)   (1 = 1 /// 1)   (4 /// 2 = 2)   (0 /// 1 = 0)
     (7 /// 2 = 3.5) (3.5 = 7 /// 2) (1 /// 2 = 0.5)
     !(1 /// 2 = 1)  !(1 /// 1 = 2)
-    (elem (1 /// 1) [1 2 3])  !(elem (9 /// 1) [1 2 3])
+    (elem (1 /// 1) [1 2 3])  (nelem (9 /// 1) [1 2 3])
     ([0 (1 /// 1) 2] = sort [2 (1 /// 1) 0])
     ; exact, never through a double: these two differ by a part f64 has no room
     ; for, and the quotient of the second rounds to exactly 1.0
-    (: h (2 3 40)  (!(1 /// h = 1 /// (h + 1)) && !((h + 1) /// h = 1.0)))
+    (2 3 40 @ h (!(1 /// h = 1 /// (h + 1)) && !((h + 1) /// h = 1.0)))
     ; ..and the promotion is the ratio die's alone: an ordinary newtype is opaque,
     ; which is the whole point of striking one
-    (: m (coin 'metre (z \ {}))  (!(m 5 = 5) && !(5 = m 5) && (m 5 = m 5)))
+    (coin 'metre (z \ {}) @ m (!(m 5 = 5) && !(5 = m 5) && (m 5 = m 5)))
 
     ; --- `-` rides slot 5: q pins it (cross-multiply, reduce); the unit still rides ---
     (1 /// 6 = 1 /// 2 - 1 /// 3)    ; 1/2 - 1/3 = 1/6

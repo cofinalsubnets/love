@@ -2142,10 +2142,10 @@
  p0 '(mkh 0 (ncons 1 nnil) (ncons 7 (ncons 8 nnil)))
  q0 '(mkh 3 (ncons 3 nnil) (ncons 9 nnil))
  q0p '(mkh 2 (ncons 3 nnil) (ncons 9 nnil))
- _ (test
-    ((vof 0 ['hap ['hap s0 p0] q0]) = (vof 0 ['hap ['hap s0 q0p] p0]))
-    ((vof 0 ['hcommute p0 q0]) = (vof 0 ['ii1 ['tpair q0p p0]])))
- 0)
+ ((test
+   ((vof 0 ['hap ['hap s0 p0] q0]) = (vof 0 ['hap ['hap s0 q0p] p0]))
+   ((vof 0 ['hcommute p0 q0]) = (vof 0 ['ii1 ['tpair q0p p0]]))),
+  0))
 
 ; ============================================================================
 ; the element tree: every nat is a rose tree. labels are nats and kid lists
@@ -6096,8 +6096,8 @@
   = (vof 0 '(ii2 tt)))
  ((vof 0 '(mtch 1 (mcell 0 (lmv 0) (latom 0)) (tcode 0 (latom 1)) snil)) = (vof 0 '(ii2 tt)))
  ; instantiation computes: soundness by eye, and a free metavariable rides
- (= (vof 0 '(inst 1 (mcell 0 (lmv 0) (lmv 0)) (scons (tpair 0 (tcode 0 (latom 1))) snil)))
-      (vof 0 '(tcode 1 (mcell 0 (latom 1) (latom 1)))))
+ (vof 0 '(inst 1 (mcell 0 (lmv 0) (lmv 0)) (scons (tpair 0 (tcode 0 (latom 1))) snil)) =
+    vof 0 '(tcode 1 (mcell 0 (latom 1) (latom 1))))
  (vof 0 '(tcode 0 (lmv 4)) = vof 0 '(inst 0 (lmv 4) snil)))
 
 ; --- bindings only grow: what a match step bound stays bound, unchanged
@@ -6714,8 +6714,8 @@
       (lam p
         (lam g (lam sf (lam e (mtch-sound-ext d p g snil sf e sf (lam v (lam t (lam h3 h3))))))))))
  ; the headline in the small: match, instantiate, come home
- (= (vof 0 '(inst 1 (mcell 0 (lmv 0) (latom 0)) (scons (tpair 0 (tcode 0 (latom 1))) snil)))
-      (vof 0 '(tcode 1 (mcell 0 (latom 1) (latom 0))))))
+ (vof 0 '(inst 1 (mcell 0 (lmv 0) (latom 0)) (scons (tpair 0 (tcode 0 (latom 1))) snil)) =
+    vof 0 '(tcode 1 (mcell 0 (latom 1) (latom 0)))))
 
 ; --- the re-aim at address grain: the schematic swallow moves a deep
 ; --- patch's path from the variable's olds seat to its news seat by

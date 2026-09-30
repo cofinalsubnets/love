@@ -11,7 +11,7 @@
 ; not a scare -- absence is nothing.
 ; the nif links on every seat, but the ANSWERS below are the OS's: a seat with no unix
 ; sockets under it refuses differently. skip where there is no kernel (hosted).
-(? hosted (do
+(hosted ? (do
   (test (lit? connect))
   (test ('enoent = connect ['unix "/nonexistent/never/sock"]))   ; no such path
   (test ('badarg = connect ['unix ""]))                          ; empty path: refused up here

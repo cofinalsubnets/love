@@ -10,36 +10,36 @@
 
 ; the whole file probes the 64-bit-word wide-int box (2^62 fixnum-max, bit-63
 ; shift idioms); on a 32-bit word these are out of range, so skip there (word).
-(? word (test
+(word ? (test
  ; --- promotion / demotion boundary ---
- !(charm? (<< 1 62))                 ; 2^62 is boxed, not a fixnum
- !(gem? (<< 1 62))                 ; ...integer, not float
- (charm? (>> (<< 1 62) 1))              ; 2^62 >> 1 = 2^61 demotes to a fixnum
- (2305843009213693952 = (>> (<< 1 62) 1))
- (charm? ((<< 1 62) - (<< 1 62)))       ; box - box = 0, a fixnum
- (0 = ((<< 1 62) - (<< 1 62)))
+ !(charm? (1 << 62))                 ; 2^62 is boxed, not a fixnum
+ !(gem? (1 << 62))                 ; ...integer, not float
+ (charm? ((1 << 62) >> 1))              ; 2^62 >> 1 = 2^61 demotes to a fixnum
+ (2305843009213693952 = ((1 << 62) >> 1))
+ (charm? ((1 << 62) - (1 << 62)))       ; box - box = 0, a fixnum
+ (0 = ((1 << 62) - (1 << 62)))
  ; -2^62 is exactly fix_min, so it stays a fixnum (the tagged range is
  ; asymmetric: [-2^62, 2^62-1]); one less overflows into a box
- (charm? (0 - (<< 1 62)))
- !(charm? ((0 - (<< 1 62)) - 1))
+ (charm? (0 - (1 << 62)))
+ !(charm? ((0 - (1 << 62)) - 1))
 
  ; --- two equal boxes compare = (rides eqv's tuple arm); a box never = a fixnum
- ((<< 1 62) = (<< 1 62))
+ ((1 << 62) = (1 << 62))
  (2200000000 * 2200000000 = 2200000000 * 2200000000)
- !((<< 1 62) = 0)
+ !((1 << 62) = 0)
 
  ; --- bitwise identities reduce a box back to a small fixnum ---
- (0 = (^ (<< 1 62) (<< 1 62)))         ; X ^ X = 0
- (-1 = (| (^ (<< 1 62) -1) (<< 1 62))) ; ~X | X = -1
- (0 = (& (^ (<< 1 62) -1) (<< 1 62)))  ; ~X & X = 0
- (-1 = (^ (^ (<< 1 62) -1) (<< 1 62))) ; ~X ^ X = -1
+ (0 = ((1 << 62) ^ (1 << 62)))         ; X ^ X = 0
+ (-1 = (((1 << 62) ^ -1) | (1 << 62))) ; ~X | X = -1
+ (0 = (((1 << 62) ^ -1) & (1 << 62)))  ; ~X & X = 0
+ (-1 = (((1 << 62) ^ -1) ^ (1 << 62))) ; ~X ^ X = -1
 
  ; --- masked shift-right byte extraction with bit 63 set (the rd64 idiom:
  ; the mask discards the arithmetic-vs-logical shift difference) ---
- !(charm? (<< 171 56))                               ; 0xab << 56 sets bit 63 -> box
- (171 = (& (>> (<< 171 56) 56) 255))                 ; top byte reads back as 0xab
- (205 = (& (>> (| (<< 171 56) (<< 205 48)) 48) 255)) ; byte 6 of 0xabcd... = 0xcd
- (171 = (& (>> (| (<< 171 56) (<< 205 48)) 56) 255)) ; byte 7 = 0xab
+ !(charm? (171 << 56))                               ; 0xab << 56 sets bit 63 -> box
+ (171 = (((171 << 56) >> 56) & 255))                 ; top byte reads back as 0xab
+ (205 = ((((171 << 56) | (205 << 48)) >> 48) & 255)) ; byte 6 of 0xabcd... = 0xcd
+ (171 = ((((171 << 56) | (205 << 48)) >> 56) & 255)) ; byte 7 = 0xab
 
  ; --- multiply stays exact within z, then divides back down ---
  (2200000000 = (2200000000 * 2200000000 / 2200000000))
@@ -47,13 +47,13 @@
  (1 = ((1 + 2 * 2305843009213693952) % 2))
 
  ; --- ordered comparison across the box / fixnum / float boundary ---
- (2305843009213693952 < (<< 1 62))       ; 2^61 < 2^62 (fixnum < box)
- ((<< 1 62) < 3 * 2305843009213693952) ; box < box
- ((<< 1 62) <= (<< 1 62))
- (3 * 2305843009213693952 > (<< 1 62))
- !((<< 1 62) < 2305843009213693952)
- (1e18 < (<< 1 62)) ; float < box
- ((<< 1 62) < 1e19) ; box < float
+ (2305843009213693952 < (1 << 62))       ; 2^61 < 2^62 (fixnum < box)
+ ((1 << 62) < 3 * 2305843009213693952) ; box < box
+ ((1 << 62) <= (1 << 62))
+ (3 * 2305843009213693952 > (1 << 62))
+ !((1 << 62) < 2305843009213693952)
+ (1e18 < (1 << 62)) ; float < box
+ ((1 << 62) < 1e19) ; box < float
 
  ; --- -2^63 = INT_MIN: still a (negative) box, compares and prints right. built by
 ; negating the tower, not by (<< 1 63) -- << promotes now, so that is a big, not this ---

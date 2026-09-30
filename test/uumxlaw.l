@@ -164,34 +164,34 @@
 ; --- reason -- an empty range, a lookup that fell off its table -- would paint
 ; --- every theorem above green, so each load-bearing claim gets its false twin
 ; --- and the kernel must refuse that one. every negative takes its positive. ---
-(hear (\ p e (: h (peep HELPC () 0) (? h (h p e) 0))))
+(hear (p \ e \ peep HELPC () 0 @ h (h ? (h p e) 0)))
 (test
  ; the cartesian cell is not the zero
- ('accepted = (rejects (\ z (defq mx-ok-cart
-    (paths nat (mxmul mxKChain mxKChain) mxLmul_cart) (idpath mxLmul_cart)))))
- ('rejected = (rejects (\ z (defq mx-bad-cart (paths nat (mxmul mxKChain mxKChain) mxL0) (idpath mxL0)))))
+ ('accepted = (rejects (z \ defq mx-ok-cart
+   (paths nat (mxmul mxKChain mxKChain) mxLmul_cart) (idpath mxLmul_cart))))
+ ('rejected = (rejects (z \ defq mx-bad-cart (paths nat (mxmul mxKChain mxKChain) mxL0) (idpath mxL0))))
  ; the band assignment has to be the derived one: shift it by a kind and the
  ; factorization stops holding
- ('rejected = (rejects (\ z (defq mx-bad-band
-    (paths bool
-      (mxsq (lam a (lam b (nateqb (mxadd a b) (mxaddband (mxband a) (mxband (succ b)))))))
-      true)
-    (idpath true)))))
+ ('rejected = (rejects (z \ defq mx-bad-band
+   (paths bool
+     (mxsq (lam a (lam b (nateqb (mxadd a b) (mxaddband (mxband a) (mxband (succ b)))))))
+     true)
+   (idpath true))))
  ; and the numeric band is mx-numk itself, not a roster slid one kind along the
  ; lattice -- the guard on the RANGE, which is the shape a count-from-KCharm took
- ('rejected = (rejects (\ z (defq mx-bad-numeric
-    (paths bool
-      (mxall mxnk (lam k (mxiff (mxnumeric (succ k)) (nateqb (mxband k) (mxband mxKCharm)))))
-      true)
-    (idpath true)))))
+ ('rejected = (rejects (z \ defq mx-bad-numeric
+   (paths bool
+     (mxall mxnk (lam k (mxiff (mxnumeric (succ k)) (nateqb (mxband k) (mxband mxKCharm)))))
+     true)
+   (idpath true))))
  ; and mirror is not the identity: the positional pair really does trade places
- ('rejected = (rejects (\ z (defq mx-bad-mirror
-    (paths bool (mxsq (lam a (lam b (nateqb (mxadd a b) (mxadd b a))))) true)
-    (idpath true)))))
+ ('rejected = (rejects (z \ defq mx-bad-mirror
+   (paths bool (mxsq (lam a (lam b (nateqb (mxadd a b) (mxadd b a))))) true)
+   (idpath true))))
  ; the compose cell is the mul lane, not the Church sum -- a band with one
  ; operation would make uuhom's monoid the whole story, and it is half of it
- ('accepted = (rejects (\ z (defq mx-ok-compose (paths nat (mxmul mxKHot mxKHot) mxLmulh) (idpath mxLmulh)))))
- ('rejected = (rejects (\ z (defq mx-bad-compose (paths nat (mxmul mxKHot mxKHot) mxLaddh) (idpath mxLaddh)))))
+ ('accepted = (rejects (z \ defq mx-ok-compose (paths nat (mxmul mxKHot mxKHot) mxLmulh) (idpath mxLmulh))))
+ ('rejected = (rejects (z \ defq mx-bad-compose (paths nat (mxmul mxKHot mxKHot) mxLaddh) (idpath mxLaddh))))
  ; ..and the mint annihilates there rather than uniting
- ('rejected = (rejects (\ z (defq mx-bad-compose-unit (paths nat (mxmul mxKHot mxKMint) mxLmulh) (idpath mxLmulh))))))
+ ('rejected = (rejects (z \ defq mx-bad-compose-unit (paths nat (mxmul mxKHot mxKMint) mxLmulh) (idpath mxLmulh)))))
 (hear test-strict)

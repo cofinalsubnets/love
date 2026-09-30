@@ -17,8 +17,8 @@
 ; off an empty port (the sentinel is bao-private now -- the editor no longer leaks
 ; its `eofsym` global, so we name it by what edraw produces, not by its binding).
 ; the editor paints stdout and asks the terminal questions: muted, so neither reaches it
-(: edraw (\ k p (test-mute (_ \ cite 'cli 'edraw k p)))
-   edln (\ k p h (test-mute (_ \ cite 'cli 'edln k p h)))
+(: edraw (k \ p \ test-mute (_ \ cite 'cli 'edraw k p))
+   edln (k \ p \ h \ test-mute (_ \ cite 'cli 'edln k p h))
    edlay (cite 'cli 'edlay)
    (ed-keys l) (tap l)
    abc [97 98 99]
@@ -75,15 +75,15 @@
 (: edkey (cite 'cli 'edkey) edgc (cite 'cli 'edgc)
    (bs s) (map (i \ s i) (jot #s))
    fam "\u{1f468}\u{200d}\u{1f469}\u{200d}\u{1f467}"         ; 👨‍👩‍👧: 18 bytes, three wide chars
-   _ (test (0 = edkey (ed-keys (bs "\e[?2027;2$y"))) (0 = edgc 'on)
-           (0 = edkey (ed-keys (bs "\e[?2027;1$y"))) (1 = edgc 'on))
-   _ (test ([0 4 0] = edlay 80 2 () (rev (bs fam)) () ())                      ; "> " then two columns
-           (("x" + fam) = string (edraw (ed-keys (bs (fam + "\e[Dx\r"))) ""))   ; left over the whole of it
-           ("a" = string (edraw (ed-keys (bs ("a" + fam + "\x7f\r"))) ""))     ; backspace takes it all
-           ((fam + "y") = string (edraw (ed-keys (bs (fam + "\e[H\e[Cy\r"))) ""))
-           ("" = string (edraw (ed-keys (bs (fam + "\e[H\e[3~\r"))) "")))
-   _ (pin edgc 'on 0)
-   (test ([0 8 0] = edlay 80 2 () (rev (bs fam)) () ())))                     ; off: wcwidth's six
+   ((test (0 = edkey (ed-keys (bs "\e[?2027;2$y"))) (0 = edgc 'on)
+          (0 = edkey (ed-keys (bs "\e[?2027;1$y"))) (1 = edgc 'on)),
+    (test ([0 4 0] = edlay 80 2 () (rev (bs fam)) () ())                       ; "> " then two columns
+          (("x" + fam) = string (edraw (ed-keys (bs (fam + "\e[Dx\r"))) ""))    ; left over the whole of it
+          ("a" = string (edraw (ed-keys (bs ("a" + fam + "\x7f\r"))) ""))      ; backspace takes it all
+          ((fam + "y") = string (edraw (ed-keys (bs (fam + "\e[H\e[Cy\r"))) ""))
+          ("" = string (edraw (ed-keys (bs (fam + "\e[H\e[3~\r"))) ""))),
+    pin edgc 'on 0,
+    (test ([0 8 0] = edlay 80 2 () (rev (bs fam)) () ()))))                   ; off: wcwidth's six
 
 
 ; the layout under the redraw: [row col endrow] of the cursor on a screen w wide, rows
