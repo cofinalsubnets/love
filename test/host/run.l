@@ -80,6 +80,28 @@
 
 (puts "run sigpipe: ok\n")
 
+; --- close-on-exec: a child sees its 0/1/2 and what it was handed, nothing love holds ---
+; a file, a raw fd, a pipe, a dup and a pty master held here; the child's fd list is the
+; one it had before any of them. spawnmap's fdmap hands on two fds, one onto itself.
+(: (fdls _) (: r (hark ["ls" "/proc/self/fd"]) (lines >r))
+   base (fdls 0)
+   q (open "test/host/run.l" "r")
+   f (openfd "test/host/run.l" 0)
+   p (pipe 0)
+   d (dup f)
+   t (tether ["sleep" "1"])
+   _ (test (base != ()) (fdls 0 = base))
+   o (openfd "out/.fdlaw" 1)
+   pid (spawnmap ["ls" "/proc/self/fd"] [(1 . o) (f . f) (9 . <p)] () -1 0)
+   _ (wait pid)
+   got (: r (hark ["cat" "out/.fdlaw"]) (lines >r))
+   _ (test (#got = #base + 2) (elem (show f) got) (elem "9" got))
+   _ (map close [f <p >p d o])
+   _ (close q)
+   (wait <t))
+
+(puts "run cloexec: ok\n")
+
 ; --- rung 6: seventeen parked tasks, and the wake reaches the last of them ------
 ; the law and the shape live in test/host/parked.l -- driven from here, under a
 ; timeout, because its regression is a hang (the scheduler sleeping on a fd set

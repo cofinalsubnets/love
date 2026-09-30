@@ -13,7 +13,7 @@
 ; driven bare -- no test/00-init.l ahead of it -- so the posix door is borrowed here.
 (cite 'posix ? (borrow 'posix) ())
 
-(: dir "/tmp/cooktest"
+(: dir ("/tmp/cooktest-" + show (getpid 0))   ; per run: sessions share the box
    love  "out/love"                          ; run from the project root (where make runs)
 
    ; -- a tiny assert harness (this file is standalone, not in the corpus) --
@@ -506,6 +506,7 @@
    _ (ok "-j wants a count" !(0 = jbad))
 
    ; ---------------------------------------------------------------- summary
+   _ (sh ("rm -rf " + dir))
    np (peep pass 0 0) nf (peep fail 0 0)
    _ (puts (show np + (" cook tests pass" + ? (0 < nf) (", " + (show nf + " FAIL")) "")))
    _ (putc 10)

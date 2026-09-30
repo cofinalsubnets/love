@@ -187,7 +187,7 @@ long __ai_inle(long n, long a, long b, long c, long d, long e, long f) {
    return k_fd_dup3((int) a, (int) b);
   case NR_fcntl:
    switch (b) {
-    case F_DUPFD: return k_fd_dup((int) a, (int) c);
+    case F_DUPFD: case F_DUPFD_CLOEXEC: return k_fd_dup((int) a, (int) c);   // nothing execs
     case F_GETFD: case F_SETFD: case F_GETFL: {   // flag words this seat does not keep
      struct k_st t;
      return k_fd_stat((int) a, &t) ? -EBADF : 0; }

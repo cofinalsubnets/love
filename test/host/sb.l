@@ -384,6 +384,30 @@
  (sb-rel? "a/b.txt") !(sb-rel? "/etc/passwd") !(sb-rel? "a/../b")
  !(sb-rel? "a//b") !(sb-rel? "./a") !(sb-rel? "") !(sb-rel? 'a))
 
+; --- a store's own files and a link are out of reach: no hunk names .git or .sb at any
+;     depth or in any case, no control byte, and no write lands through a symlink ---
+(: _ (mkdir "mrg/l" 493) _ (mkdir "mrg/lo" 493) _ (lay "mrg/lo/y" "outside\n")
+   _ (chdir "mrg/l") _ (mk ())
+   _ (symlink "../lo" "lk")
+   lrec (sb-record "a link is not walked")               ; lk/y is not ours to record
+   bh (keep "pwned\n")
+   ptext (show ['patch ['note "through"] ['time 0] ['deps] ['hunks ["lk/x" () bh]]])
+   pid (sha256 ptext)
+   _ (lay (".sb/patch/" + pid) ptext)
+   _ (lay ".sb/tips" (show [pid]))
+   lsound (two? (patch pid))                             ; the path is fine on its face...
+   lapp (sb-apply ())
+   lout (look "../lo/x")                                 ; ...but the write would leave the tree
+   _ (chdir "../.."))
+
+(test
+ !lrec lsound !(two? lout)
+ !(sb-rel? ".git/config") !(sb-rel? "a/.git/hooks/x") !(sb-rel? ".GIT/config")
+ !(sb-rel? ".git./config") !(sb-rel? ".git /config") !(sb-rel? "git~1/config")
+ !(sb-rel? ".sb/refs") !(sb-rel? "sub/.Sb/tips") !(sb-rel? (string [97 10 98])) !(sb-rel? (string [97 0 98]))
+ (sb-rel? ".sbignore") (sb-rel? ".gitignore") (sb-rel? "a.git/x") (sb-rel? "x/.github/y")
+ (sb-link? "mrg/l/lk/x") !(sb-link? "mrg/l/nope") !(sb-link? "mrg/lo/y"))
+
 ; --- a ledger: the one value here that moves, and only by compare-and-swap. it moves
 ; from what it stands at, every entry stays, a live holder's lock is waited on and a dead
 ; one's taken, and sync carries patches, blobs and refs but never a ledger ---

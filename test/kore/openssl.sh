@@ -142,6 +142,16 @@ done
 k genpkey -algorithm ed25519 -out "$d/ca.key" || fail "kore openssl genpkey ed25519"
 grep -q '^-----BEGIN PRIVATE KEY-----$' "$d/ca.key" || fail "kore openssl genpkey: not pkcs#8"
 k genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 -out "$d/in.key" || fail "kore openssl genpkey p-256"
+# a private key is 0600 whatever the umask, over an old file of wider mode, and through no link
+mode() { ls -l "$1" | cut -c1-10; }
+: > "$d/old.key"; chmod 666 "$d/old.key"; ln -s "$d/lnk.target" "$d/lnk.key"
+(umask 0; k genpkey -algorithm ed25519 -out "$d/new.key") || fail "kore openssl genpkey under umask 0"
+k genpkey -algorithm ed25519 -out "$d/old.key" && k genpkey -algorithm ed25519 -out "$d/lnk.key" \
+  || fail "kore openssl genpkey over an old file"
+for f in ca in new old lnk; do is "genpkey $f.key mode" "$(mode "$d/$f.key")" "-rw-------"; done
+[ -e "$d/lnk.target" ] && fail "kore openssl genpkey followed a link"
+(umask 0; cd "$d" && LOVE_NO_IMAGE= "$K" kore openssl req -x509 -newkey ed25519 -subj /CN=k -out k.pem) || fail "kore openssl req -newkey, keyout default"
+is "req privkey.pem mode" "$(mode "$d/privkey.pem")" "-rw-------"
 k req -new -x509 -key "$d/ca.key" -subj "/CN=kore root/O=love" -days 3650 \
   -addext "keyUsage=critical,keyCertSign,cRLSign" \
   -addext "nameConstraints=critical,permitted;DNS:sb.test,permitted;IP:10.0.0.0/255.0.0.0,excluded;DNS:bad.sb.test" \

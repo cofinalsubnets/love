@@ -44,6 +44,14 @@ writable; when it is not, sync still pulls (always safe), leaves the peer's stor
 rather than half-fed, and says so with exit 1. An `http://` remote is pull-only — any static
 file tree serving a `.sb/` is a complete remote, and it takes no push.
 
+**What a peer can and cannot do.** Every blob and patch is checked against its sha256 name, and
+a patch is refused whole if a hunk names an absolute path, a `.`/`..`/empty segment, a control
+byte, or `.git`/`.sb` at any depth in any case. No write or unlink goes through a symlink in the
+tree, and the walk neither follows nor records one. What is *not* authenticated is `/tips` and
+`/refs`: a mirror, or anyone on a plain-http path, chooses which self-consistent patches you
+pull, so it can plant or replace any ordinary file in the tree. Closing that needs signed tips
+and refs, or http remotes only behind TLS.
+
 **Refs travel too.** A ref is a single file rather than a content-addressed one, so sync
 **unions it by name** instead of gap-filling: the same name at the same head is idempotent, and
 the same name at *different* heads is a human error (a banked name is immutable, and neither

@@ -210,7 +210,8 @@
 ; decrypt_error (51) -- under the client's handshake key. those dial with no trust check
 ; ('none); then the trust: its self-signed certificate is refused against a root that did not
 ; sign it (unknown_ca, 48), taken by a pin in ~/.love/tls_pins, and refused under another
-; pin (bad_certificate, 42)
+; pin (bad_certificate, 42). after the handshake, the stream's end: a close_notify alone ends
+; it, and wget holds a body to its Content-Length
 (: hs-seed (unhex "893a665eebf62b9c0caf1f1de33129ee339d748b1e5f38327c4ad24e2052683d")
    (hs-msg ty b) (u8 ty + u24 #b + b)
    (hs-share ch)
@@ -220,7 +221,7 @@
    (hs-serve l mode)
     (: c (accept l) sv (tablet 8) _ (pins sv 's c 'pend "" 'cseq 0 'sseq 0)
        r (rdrec sv) ch <>r b (snip ch 4 #ch) sid (snip b 35 (35 + b 34))
-       priv (rnd 32) pub (x25519-pub priv)
+       priv (rnd 32) pub (? (mode = 'zeroshare) (zeros 32) (x25519-pub priv))
        exts (ext 43 (u16 772) + ext 51 (u16 29 + u16 32 + pub))
        shb (u16 771 + rnd 32 + u8 #sid + sid + u16 4867 + u8 0 + u16 #exts + exts)
        sh (hs-msg 2 shb)
@@ -242,14 +243,53 @@
        _ (map (m \ ? (0 < #m) (seal sv 22 m) 0) [ee crt2 cv fin])
        master (hkdf-extract (derive hs "derived" "") (zeros 32))
        sats (derive master "s ap traffic" (tr1 + cv + fin))
+       cats (derive master "c ap traffic" (tr1 + cv + fin))
        got (open-rec sv)
-       _ (? (mode = 'honest)
-            (: _ (pins sv 'ckey (hkdf-label sats "key" "" 32) 'civ (hkdf-label sats "iv" "" 12) 'cseq 0)
-               _ (seal sv 23 "the stub says hi")
-               (seal sv 21 (u8 1 + u8 0)))
-            0)
+       _ (hs-key sv 'out sats) _ (hs-key sv 'in cats)
+       _ (? (elem mode ['wtrunc 'wshort 'wfull] || two? mode) (open-rec sv) 0)   ; wget's request, read
+       said (hs-tail sv mode sats cats)
        _ (close c)
-       got)
+       (mode = 'keyupdate ? said got))
+   (hs-key sv w sec)
+    (? (w = 'out) (pins sv 'ckey (hkdf-label sec "key" "" 32) 'civ (hkdf-label sec "iv" "" 12) 'cseq 0)
+       (pins sv 'skey (hkdf-label sec "key" "" 32) 'siv (hkdf-label sec "iv" "" 12) 'sseq 0))
+   hs-http "HTTP/1.1 200 OK\r\nContent-Length: 3000\r\n\r\n"
+   ; what the stub says once the client's finished is in: honest, the data and a close_notify;
+   ; cut short; a plaintext close_notify forged after; a record whose tag is bitten; a ticket and
+   ; a key update asking for the client's, whose answer and next record are read back; to wget,
+   ; a body cut short of its Content-Length, with and without the close_notify, or whole; or
+   ; ['wdown port], a redirect down to plain http on that port
+   (hs-tail sv mode sats cats)
+    (: bye (_ \ seal sv 21 (u8 1 + u8 0))
+       hi (_ \ seal sv 23 "the stub says hi")
+       (? (mode = 'honest) (hi 0, bye 0)
+          (mode = 'trunc) (hi 0)
+          (mode = 'inject) (hi 0, wr sv (u8 21 + u16 771 + u16 2 + u8 1 + u8 0))
+          (mode = 'badtag)
+           (: aad (u8 23 + u16 771 + u16 21)
+              ct (aead-seal (sv 'ckey) (sv 'civ) (sv 'cseq) aad ("more" + u8 23))
+              (hi 0, wr sv (aad + vflip ct 2)))
+          (mode = 'keyupdate)
+           (: _ (seal sv 22 (hs-msg 4 (zeros 12)))
+              _ (seal sv 23 "the stub ")
+              _ (seal sv 22 (hs-msg 24 (u8 1)))
+              _ (hs-key sv 'out (hkdf-label sats "traffic upd" "" 32))
+              _ (seal sv 23 "says hi")
+              _ (bye 0)
+              r1 (open-rec sv)
+              _ (hs-key sv 'in (hkdf-label cats "traffic upd" "" 32))
+              [r1 (open-rec sv)])
+          (mode = 'wtrunc) (seal sv 23 (hs-http + zeros 1000))
+          (mode = 'wshort) (seal sv 23 (hs-http + zeros 1000), bye 0)
+          (mode = 'wfull) (seal sv 23 (hs-http + zeros 3000), bye 0)
+          (two? mode)
+           (seal sv 23 ("HTTP/1.1 302 Found\r\nLocation: http://127.0.0.1:" + show (mode 1) + "/x\r\nContent-Length: 0\r\n\r\n"),
+            bye 0)
+          0))
+   ; a plain http server for one request, its answer "plain"
+   (hs-plain l)
+    (: c (accept l) _ (see c) _ (chug c)
+       (say c "HTTP/1.1 200 OK\r\nContent-Length: 5\r\nConnection: close\r\n\r\nplain", flush c, close c))
    ; a loopback listener of this run's own, [port listener], for hs-run
    (hs-seat u) (test-seat (\ p (listen ['tcp "127.0.0.1" p])))
    (hs-run pl mode how)
@@ -257,15 +297,48 @@
        l (pl 1)
        s (twirl (_ \ hs-serve l mode) ())
        t (tls-open "127.0.0.1" port how)
-       body (? (tablet? t) (: b (tls-slurp t) _ (close (t 's)) b) ())
+       body (? (tablet? t) (: b (tls-slurp t) _ (? (mode = 'keyupdate) (tls-say t "after") 0) _ (close (t 's)) b) ())
        got (catch s)
        _ (close l)
-       [body got (? (tablet? t) (t 'spki) t)])
+       [body got (? (tablet? t) (t 'spki) t) (? (tablet? t) (t 'why) ())])
+   ; wget -O over the stub, flags ahead -> [exit file-length], -1 for no file
+   (hs-wget mode fl)
+    (: pl (hs-seat 0)
+       s (twirl (_ \ hs-serve (pl 1) mode) ())
+       f ((cwd 0) + "/out/.tlsw-" + show (getpid 0))
+       rc ((cite 'kore 'wget-main) (["-q" "--no-check-certificate"] + fl + ["-O" f ("https://127.0.0.1:" + show <pl + "/x")]))
+       _ (catch s) _ (close (pl 1))
+       n (uread f @ [1 b] #b -1)
+       _ (hark ["rm" "-f" f])
+       [rc n])
    ok (hs-run (hs-seat 0) 'honest 'none)
    _ (test (<ok = "the stub says hi") (<(ok 1) = 22) ((ok 2) = (ked 2)))
    _ (map (m \ (: r (hs-run (hs-seat 0) <m 'none)
                   (test !(<r) ((r 1) = [21 (u8 2 + u8 (m 2))]) (string? (r 2)))))
           [['badsig 0 51] ['otherkey 1 51] ['nocv 2 51] ['badfin 3 51] ['nocert 4 51]])
+   ; RFC 8446 7.4.2: an all-zero shared secret is refused
+   zs (hs-run (hs-seat 0) 'zeroshare 'none)
+   _ (test !(<zs) (0 <= str-at (zs 2) "small order" 0))
+   ; the end: a cut, a forged plaintext alert, a bitten tag each a nom and a reason; a ticket
+   ; passed, a key update taken and answered (4.6.3)
+   tr (hs-run (hs-seat 0) 'trunc 'none)
+   ij (hs-run (hs-seat 0) 'inject 'none)
+   bt (hs-run (hs-seat 0) 'badtag 'none)
+   ku (hs-run (hs-seat 0) 'keyupdate 'none)
+   _ (test (<tr = 'eof) (0 <= str-at (tr 3) "without a close_notify" 0)
+           (<ij = 'bad) (0 <= str-at (ij 3) "plaintext" 0)
+           (<bt = 'bad) (0 <= str-at (bt 3) "tag does not verify" 0)
+           (<ku = "the stub says hi") ((ku 1) = [[22 (hs-msg 24 (u8 0))] [23 "after"]]))
+   ; wget: a body short of its Content-Length is exit 4 and no file, close_notify or not
+   _ (test (hs-wget 'wtrunc () = [4 -1]) (hs-wget 'wshort () = [4 -1]) (hs-wget 'wfull () = [0 3000]))
+   ; ..and follows https down to http only when asked to
+   dn (: p (hs-seat 0) _ (close (p 1)) (hs-wget ['wdown <p] ()))
+   up (: p (hs-seat 0) s (twirl (_ \ hs-plain (p 1)) ())
+         r (hs-wget ['wdown <p] ["--allow-downgrade"]) _ (catch s) _ (close (p 1)) r)
+   _ (test (dn = [1 -1]) (up = [0 5]))
+   ; the aead's tag compare
+   _ (test (ct-same? "abc" "abc") (ct-same? "" "") !(ct-same? "abc" "abd") !(ct-same? "xbc" "abc")
+           !(ct-same? "ab" "abc"))
    ; the trust, with HOME and SSL_CERT_FILE the test's own
    home0 (getenv "HOME") cf0 (getenv "SSL_CERT_FILE")
    hdir ((cwd 0) + "/out/.tlsp-" + show (getpid 0))

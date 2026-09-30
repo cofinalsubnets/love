@@ -948,5 +948,60 @@
    _ (landed? t ? (catch t) (freeze t))
    (test !early late (has? s "pasted-ran") (has? s (e + "[?2004h"))))
 
+; a redirect onto a fifo opens in the child, so the shell runs on to open the other end:
+; a background reader, a background writer, a braced group, a warm-forked verb. a child's
+; failed open says so and exits 1; a missing file is still the parent's to say. each line
+; rides a timeout, since a regression here is a hang
+(: d "out/.lush-t12"
+   _ (mkdir d 493)
+   (fl s) (hark ["out/love" "timeout" "20" "out/love" "out/lush" "-c"
+                 ("d=" + d + "; rm -f $d/f; mkfifo $d/f; " + s)])
+   r1 (fl "cat < $d/f > $d/o & p=$!; exec 3> $d/f; echo hi >&3; exec 3>&-; wait $p; echo \"r $(cat $d/o)\"")
+   r2 (fl "echo x > $d/s; cat $d/s > $d/f & p=$!; r=$(cat $d/f); wait $p; echo \"w $r\"")
+   r3 (fl "{ cat; } < $d/f > $d/o & p=$!; echo grp > $d/f; wait $p; echo \"g $(cat $d/o)\"")
+   r4 (fl "out/love cat < $d/f > $d/o & p=$!; echo warm > $d/f; wait $p; echo \"v $(cat $d/o)\"")
+   r5 (fl "exec 2>&1; cat < $d/nope; echo st=$?")
+   r6 (fl "exec 2>&1; chmod 0 $d/f; cat < $d/f & wait $!; echo st=$?; out/love cat < $d/f & wait $!; echo st=$?")
+   no ("lush: " + d + "/f: cannot open\n")
+   ; a builtin's stdout redirect inside $( ) lands on the fd, not in the capture
+   r7 (fl "x=$(exec 3> $d/o; printf 'p\\n' >&3; echo e > $d/s; { echo g; } > $d/t; echo body); echo \"[$x] $(cat $d/o $d/s $d/t)\"")
+   (test ("r hi\n" = >r1) ("w x\n" = >r2) ("g grp\n" = >r3) ("v warm\n" = >r4)
+         (("lush: " + d + "/nope: cannot open\nst=1\n") = >r5)
+         (getuid 0 = 0 || (no + "st=1\n" + no + "st=1\n") = >r6)
+         ("[body] p\ne\ng\n" = >r7)))
+
+; stdin read-ahead: `read` off a pipe takes its line and no more, so the next reader sees
+; the rest; a child laying a new stdin drops the shell's read-ahead rather than reading it
+; first; `exec 0<` drops it too
+(: (sh1 s) (hark ["out/love" "timeout" "20" "out/love" "out/lush" "-c" s])
+   (has? hay ned)
+     (: n #ned m #hay
+        (go i) (? (m < i + n) 0 (snip hay i (i + n) = ned) 1 (go (i + 1)))
+        (go 0))
+   r1 (sh1 "printf '0:a\\n3:b\\n6:c|d\\n' | while IFS=: read -r v w; do echo \"$w\" | tr '|' '\\n' | while read -r x; do echo \"$v $x\"; done; done")
+   r2 (sh1 "printf 'one\\ntwo\\nthree\\n' | { read a; cat; read c; echo \"a=$a c=$c\"; }")
+   r3 (sh1 "printf 'p\\nq\\n' | { read a; exec 0< /dev/null; read b; echo \"a=$a b=[$b]\"; }")
+   r4 (sh1 "printf 'printf \"x\\\\n\" | while read b; do echo b=$b; done\\necho end\\n' | out/love out/lush")
+   (test ("0 a\n3 b\n6 c\n6 d\n" = >r1)
+         ("two\nthree\na=one c=\n" = >r2)
+         ("a=p b=[]\n" = >r3)
+         (has? >r4 "b=x\n") !(has? >r4 "b=echo") (has? >r4 "end\n")))
+
+; the shell's own fds -- a script it reads, a capture's pipe -- sit at 10 and up, so
+; 3 to 9 are the user's to open and close
+(: d "out/.lush-t12"
+   p (open (d + "/fd.sh") "w")
+   _ (say p "a=$(ls /proc/$$/fd); b=$(x=$(ls /proc/$$/fd); echo $x); echo $a $b\n")
+   _ (close p)
+   ; fds the gate itself leaves open are not the shell's: /bin/sh sheds them first
+   r (hark ["/bin/sh" "-c" "exec 3>&- 4>&- 5>&- 6>&- 7>&- 8>&- 9>&-; exec out/love timeout 20 out/love out/lush \"$0\""
+            (d + "/fd.sh")])
+   s (" " + snip >r 0 (#>r - 1) + " ")
+   (has? hay ned)
+     (: n #ned m #hay
+        (go i) (? (m < i + n) 0 (snip hay i (i + n) = ned) 1 (go (i + 1)))
+        (go 0))
+   (test (has? s " 0 ") (has? s " 2 ") (all (w \ !(has? s (" " + w + " "))) ["3" "4" "5" "6" "7" "8" "9"])))
+
 (test_fin ())
 (puts "sh: ok") (putc 10)
