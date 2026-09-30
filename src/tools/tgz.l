@@ -28,13 +28,10 @@
     (: es (tgz-open arch)
        w (tar-scatter dir es)
        _ (!w && tgz-die ("cannot write under " + dir))
-       _ (say out $ "tgz: " + show <>w + " entries -> " + dir + "\n")
-       0)
+       (say out $ "tgz: " + show <>w + " entries -> " + dir + "\n", 0))
 
    (tgz-t arch)
-    (: es (tgz-open arch)
-       _ (each es (e \ say out (peep e 'nom "" + "\n")))
-       0)
+    (tgz-open arch @ es (each es (e \ say out (peep e 'nom "" + "\n")), 0))
 
    (tgz-main av)
     (: n #av
@@ -44,7 +41,5 @@
           (v = "t" && 2 <= n) (tgz-t <>av)
           (tgz-die "usage: tgz x|t ARCHIVE.tar.gz [DIR]")))
 
-   ; `argv` is a list, not a function -- (argv ()) would apply it and answer the
-   ; church exponent of nothing. Its head is the script's own path, so the verbs
-   ; start at the tail.
+   ; argv's head is the script's own path, so the verbs start at the tail
    (tgz-main >argv))

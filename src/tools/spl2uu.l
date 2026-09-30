@@ -16,19 +16,17 @@
 ; BUILD, and stdout is the artifact -- so bind assert's instead: silent on success,
 ; and a false law stops the run rather than printing a dot into the output.
 (:: 'test (\ l (. 'assert l)))
-(: j (jug 0) _ (wear [in j err])
-   _ (reads (open "test/proto/spl.l" "r"))
-   _ (wear ()) ())
+(jug 0 @ j (wear [in j err], reads (open "test/proto/spl.l" "r"), wear (), ()))
 
 (: ops '((pushk 0) (pusha 1) (pushl 2) (pushs 3) (setl 4) (sets 5) (add 6) (emit 7))
-   (opc o) (: e (assoc o ops) (two? e ? <>e (scare 'spl2uu-op o)))
+   (opc o) (assoc o ops @ e (two? e ? <>e (scare 'spl2uu-op o)))
    (emit1 g)
     (: nm (g 0) th (g 1 ())
-       _ (each th (f \ puts $ "\n ; " + string nm + "  " + show f))
-       _ (puts $ "\n (defn " + string nm + " nlist")
-       _ (each th (f \ puts $ "\n    (ncons " + show (opc (f 0)) + " (ncons " + show (f 1)))
-       _ (puts $ "\n    nnil" + ")" * (2 * #th) + ")")
-       ())
+       (each th (f \ puts $ "\n ; " + string nm + "  " + show f),
+        puts $ "\n (defn " + string nm + " nlist",
+        each th (f \ puts $ "\n    (ncons " + show (opc (f 0)) + " (ncons " + show (f 1)),
+        puts $ "\n    nnil" + ")" * (2 * #th) + ")",
+        ()))
    progs [['sp0call (ecall (e0 0) (e0 1))]  ['sp0bind (ebind (e0 0) (e0 1))]
           ['sp0subst (esubst (e0 0) (e0 1))]
           ['sp1call (ecall (e1 0) (e1 1))]  ['sp1bind (ebind (e1 0) (e1 1))]
@@ -37,14 +35,14 @@
           ['sp2subst (esubst (e2 0) (e2 1))]
           ['sp3call (ecall (e3 0) (e3 1))]  ['sp3bind (ebind (e3 0) (e3 1))]]
 
-   _ (puts "; test/uusplgen.l -- generated from test/proto/spl.l by src/tools/spl2uu.l. Do not")
-   _ (puts "\n; edit; refresh with `make uusplgen`. The call-site samples under the three")
-   _ (puts "\n; compilers -- ecall (args into seats), ebind (the binding splice), esubst")
-   _ (puts "\n; (the substitution splice) -- lifted to uu nlist terms, 2 nats per op (op x),")
-   _ (puts "\n; opcodes pushk0 pusha1 pushl2 pushs3 setl4 sets5 add6 emit7, operands raw.")
-   _ (puts "\n; Each source op prints over its term. Laws: test/uuspllaw.l; substrate:")
-   _ (puts "\n; test/uuhom.l's stack machine over test/uu.l (the kernel).")
-   _ (puts "\n(test")
-   _ (each progs emit1)
-   _ (puts ")\n")
-   0)
+   (puts "; test/uusplgen.l -- generated from test/proto/spl.l by src/tools/spl2uu.l. Do not",
+    puts "\n; edit; refresh with `make uusplgen`. The call-site samples under the three",
+    puts "\n; compilers -- ecall (args into seats), ebind (the binding splice), esubst",
+    puts "\n; (the substitution splice) -- lifted to uu nlist terms, 2 nats per op (op x),",
+    puts "\n; opcodes pushk0 pusha1 pushl2 pushs3 setl4 sets5 add6 emit7, operands raw.",
+    puts "\n; Each source op prints over its term. Laws: test/uuspllaw.l; substrate:",
+    puts "\n; test/uuhom.l's stack machine over test/uu.l (the kernel).",
+    puts "\n(test",
+    each progs emit1,
+    puts ")\n",
+    0))

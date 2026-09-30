@@ -8,15 +8,12 @@
 ;   <sym>_len   an 8-byte little-endian length, at offset 0 (so it is 8-aligned)
 ;   <sym>       the bytes, right behind it
 ;
-; src/tools/mksrc.l is the same lay under two fixed names, for the one blob every
-; artifact carries; this is the door for the rest. src/inle/doom.c reads a pair.
-;
-; no (borrow 'holo) here, for mksrc's reason: it resolves off a nest (~/.love),
-; which a fresh seed tree does not have. make hands us holo the way it hands
-; mksrc its own -- -l $(ho)/.mksys-cat.l.
+; src/tools/mksrc.l is the same lay under two fixed names; src/inle/doom.c reads a pair.
+; no unconditional (borrow 'holo): it resolves off a nest (~/.love), which a fresh seed tree
+; does not have, so make hands holo in as a cat, as it does for mksrc.
 
 (borrow 'posix)
-(? (lit? (cite 'holo 'objelf)) (borrow 'holo) 0) ; splice the assembler when this love is baked
+(lit? (cite 'holo 'objelf) ? (borrow 'holo) 0)   ; splice the assembler when this love is baked
 
 (: (mkblob-slurp p) (uread p @ [1 s] [1 (s + "")] ())
    (mkblob-die m) (udie 1 ("mkblob: " + m))
@@ -36,7 +33,7 @@
        ; the backend file is the canonical arch word now -- one spelling, no map
        (: f ("src/love/holo/" + string arch + ".l")
           q (open f "r")
-          (? q (mkblob-rdev (flow q), close q)
+          (q ? (mkblob-rdev (flow q), close q)
            (mkblob-die ("no backend aboard and no text at " + f)))))
    (mkblob-rdev cl)
     (sound cl @ 'torn (mkblob-die "torn backend text")
@@ -49,8 +46,7 @@
     (: q (open dst "w")
        _ (!(hot? q) ? (mkblob-die ("cannot write " + dst)))
        t (show [() forms () syms () () () () () () () ()])
-       _ (say q ("wo1 " + show #t + " " + show #s + "\n" + t + s))
-       (close q))
+       (say q ("wo1 " + show #t + " " + show #s + "\n" + t + s), close q))
 
    (mkblob arch src dst sym)
     (: _ (arch = 'wasm ? 0 (mkblob-be arch))
@@ -58,7 +54,7 @@
        _ (atom? g ? (mkblob-die $ "cannot read " + src))
        s <>g
        n #s
-       _ (? (0 < n) 0 (mkblob-die (src + " is empty")))
+       _ (0 < n ? 0 (mkblob-die (src + " is empty")))
        lsym (sym + "_len")
        ; the payload rides as a BLOB -- the string itself, one item holding every byte
        ; (holo.l's item-len) -- so a wad costs a cell here and not four million
@@ -67,11 +63,10 @@
        (arch = 'wasm ? (mkblob-wasm dst forms [sym lsym] s)
         (write-bytes dst (objelf arch () () () [sym lsym] () () () () () forms))))
 
-   ; `argv` is a list whose head is this script's own path, so the arguments
-   ; start at the tail. the arch arrives as TEXT and `name` interns it, so the
-   ; answer is the very symbol the backend table is keyed by.
+   ; argv's head is this script's own path; the arch arrives as text and nom interns it
+   ; to the symbol the backend table is keyed by
    (mkblob-main av)
-    (: n #av
+    (#av @ n
      (3 <= n ? (mkblob (4 <= n ? (nom (av 3)) 'x64) <av <>av <>>av)
       (mkblob-die "usage: mkblob IN OUT.o SYM [ARCH]")))
 

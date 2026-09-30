@@ -4,13 +4,10 @@
 ;   love src/tools/hue2web.l css        the stylesheet, on stdout
 ;   love src/tools/hue2web.l src file   that file as an annotated page, on stdout
 ;
-; the painting itself is src/apps/vi/hueweb.l, which `love serve` also uses to paint the
-; same file at request time. one painter, two errands -- a build that wrote pages
-; a server would paint differently is two answers to one question.
-;
-; LOVE_NO_IMAGE must be cleared by whoever runs this, and the Makefile does: the
-; word lanes ask the running binary for its vocabulary, and under the egg boot
-; that answer is the compiler's own internals rather than the language we ship.
+; the painting itself is src/apps/vi/hueweb.l, which `love serve` also uses at request time,
+; so a built page and a served one cannot differ.
+; LOVE_NO_IMAGE must be cleared by whoever runs this (the Makefile does): the word lanes ask
+; the running binary for its vocabulary, and under the egg boot that is the compiler's internals.
 (borrow "src/apps/vi/config.l")
 (borrow "src/apps/vi/hue.l")
 (borrow 'hueweb)
@@ -22,7 +19,7 @@
    ; the site's own chrome: papel.css first, so a painted page and a doc page are
    ; one design, then hue.css over it for the syntax.
    (h2w-src path)
-   (: r (h2w-rdf path)
+   (h2w-rdf path @ r
       (atom? r ? (udie 1 ("hue2web: cannot open " + path))
        (say out (hw-page path '("papel.css" "hue.css") "index.html"
                          ("<p class=\"srcnav\">the source of <code>" + path + "</code></p>\n"

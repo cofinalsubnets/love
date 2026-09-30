@@ -10,40 +10,39 @@
 (: (rd p) (uread p @ [1 s] (s + "") (die ("cannot read " + p)))
    (die m) (udie 1 ("mkemoji: " + m))
    (hex s) (foldl (a \ c \ a * 16 + hexv c) 0 (chars s))
-   (sub? h n) (: (go i) (? ((i + #n) <= #h) (? (n = snip h i (i + #n)) 1 (go (i + 1))) 0) (go 0))
-   (data file) (filter (ln \ #ln && !((ln 0) = 35)) (lines (rd (dir + "/emoji/" + file))))
+   (sub? h n) (: (go i) (i + #n <= #h ? (n = snip h i (i + #n) ? 1 (go (i + 1))) 0) (go 0))
+   (data file) (filter (ln \ #ln && !(ln 0 = 35)) (lines (rd (dir + "/emoji/" + file))))
    ; a data line's first field as its words
    (seq ln) (words <(split ";" <(split "#" ln)))
-   (span f) (: p (split ".." f) [(hex <p) (hex (two? >p ? <>p <p))])
+   (span f) (split ".." f @ p [(hex <p) (hex (two? >p ? <>p <p))])
    dir (two? >argv ? <>argv (die "usage: love src/tools/mkemoji.l UCD-DIR [c]"))
    c? (two? >>argv && <>>argv = "c")
-   vs (map (s \ : c (hex <s) [c c])
+   vs (map (s \ hex <s @ c [c c])
            (filter (s \ two? >s && <>s = "FE0F")
                    (map seq (filter (ln \ sub? ln "emoji style") (data "emoji-variation-sequences.txt")))))
    xp (map (ln \ span <(seq ln))
-           (filter (ln \ (: f (split ";" <(split "#" ln)) (two? >f && <(words <>f) = "Extended_Pictographic")))
+           (filter (ln \ split ";" <(split "#" ln) @ f (two? >f && <(words <>f) = "Extended_Pictographic"))
                    (data "emoji-data.txt")))
    ; [lo hi] spans as toggles: each run's first and one past its last, touching runs joined
    (toggles l)
-    (: (go l acc) (? (atom? l) (rev acc)
-                     (: lo <<l hi (<>(<l) + 1)
-                        (? (two? acc && <acc = lo) (go >l (hi . >acc)) (go >l (hi . lo . acc)))))
+    (: (go l acc) (atom? l ? (rev acc)
+                     (: lo <<l hi (<><l + 1)
+                        (two? acc && <acc = lo ? (go >l (hi . >acc)) (go >l (hi . lo . acc)))))
        (go (sort l) ()))
    ; a line of entries at a time, ninety-odd columns wide
-   (lay l ln) (? (atom? l) (puts (ln + ")\n"))
-                 (: s (show <l)
+   (lay l ln) (atom? l ? (puts (ln + ")\n"))
+                 (show <l @ s
                     (#ln + #s > 92 ? (puts (ln + "\n"), lay l "     ")
                        (lay >l (ln + (ln (#ln - 1) = 32 || ln (#ln - 1) = 40 ? "" " ") + s)))))
    (tray nm l) (puts ("   " + nm + "\n"), lay l "   @(")
    ; ..or a C array, the same ninety-odd columns
-   (clay l ln) (? (atom? l) (puts (ln + " };\n"))
-                  (: e (show <l + (two? >l ? "," ""))
+   (clay l ln) (atom? l ? (puts (ln + " };\n"))
+                  (show <l + (two? >l ? "," "") @ e
                      (#ln + #e > 92 ? (puts (ln + "\n"), clay l "  ") (clay >l (ln + " " + e)))))
    (arr nm l) (clay l ("static uint32_t const " + nm + "[" + show #l + "] = {"))
-   (? c? (: _ (puts "// cpemoji.h -- the emoji tables, as runs each entry opening or closing in turn: the\n")
-            _ (puts "//   characters VS16 gives an emoji style, and the Extended_Pictographic ones. generated\n")
-            _ (puts "//   by src/tools/mkemoji.l off unicode's emoji data, as post.l's cpvs and cpxp are; do not edit\n")
-            _ (arr "cpvs" (toggles vs))
-            (arr "cpxp" (toggles xp)))
-      (: _ (tray "cpvs" (toggles vs))
-         (tray "cpxp" (toggles xp)))))
+   (c? ? (puts "// cpemoji.h -- the emoji tables, as runs each entry opening or closing in turn: the\n",
+          puts "//   characters VS16 gives an emoji style, and the Extended_Pictographic ones. generated\n",
+          puts "//   by src/tools/mkemoji.l off unicode's emoji data, as post.l's cpvs and cpxp are; do not edit\n",
+          arr "cpvs" (toggles vs),
+          arr "cpxp" (toggles xp))
+         (tray "cpvs" (toggles vs), tray "cpxp" (toggles xp))))
