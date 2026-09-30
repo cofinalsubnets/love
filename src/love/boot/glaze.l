@@ -2350,9 +2350,16 @@
                                                   (m = gone ? (: v (gv x gone) c (v = gone ? 0 (peep tab v 0)) _ (pin mt x c) c) m))
                                                (? (!c || elem c bnd) x  (hd || !(elem c ops)) c  x)))   ; a binder that took the canonical word keeps the spelling
                          (cbinders bs) (atom? >bs ? () (: b <bs ((two? b ? <b b) . cbinders >>bs)))   ; a :'s names, sugared heads too
+                         (cocc n e) (two? e ? (cocc n <e || cocc n >e) (e == n))
+                         (crows l) (atom? >l ? l (nom 0 . <l . crows >l))
+                         (cvals? l) (? (atom? >l) 1  (two? <l || two? <>l && <<>l = '\) 0  (cvals? >>l))   ; no row defines a function
                          (cw x bnd) (?
                           (nom? x) (cnom x bnd 0)
                           (atom? x) x
+                          (<x = '@ && nom? <>>x && <>>x != '_ && two? >>>x && !(cocc <>>x <>x) && !(two? <>x && <<>x = '\))   ; (x @ v B): a lone name fits
+                           (cw [': <>>x <>x <>>>x] bnd)                                          ; everything, so it is (: v x B), a value-let
+                          (<x = ': && two? >x && cvals? >x && (: b (last x) (two? b && <b = ', && two? >b)))   ; (: .. (a, b, c)): the , body
+                           (cw (init x + crows >(last x)) bnd)                                   ; joins the rows, _ a _ b c, not a : in a :
                           (<x = '\) (atom? >>x ? x                                           ; (\ v): a quote
                                        (: ps (init >x) (. '\ (ps + [(cw (last x) (ps + bnd))]))))
                           (<x = '@) (: (arms l) (? (atom? l) l (atom? >l) [(cw <l bnd)]            ; (@ x pat body ..): a pattern is the
