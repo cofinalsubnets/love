@@ -1019,7 +1019,7 @@
                  (in "path")))
      ; the tools that run without asking: they read, speak only to another bee, or look at
      ; or stop a job this bee started
-     bee-free ["read_file" "list_sessions" "send_message" "check_job" "stop_job" "lock_list" "lock_release"]
+     bee-free ["read_file" "list_sessions" "check_job" "stop_job" "lock_list" "lock_release"]
 
      ; one tool_use block -> its tool_result, asking first unless yes or a read
      (answer f b)
