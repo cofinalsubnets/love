@@ -1,16 +1,9 @@
 ; src/tools/clay-g2.l -- g2, doc/misc/clay.md's conversion gate: does the C a generator lays
 ; mean what the C it replaces meant?
 ;
-; parse two whole translation units and compare the named top-level definitions as
-; trees. parsing whole is what makes it exact: both sides meet the same cpp, the same
-; typedefs and the same macro expansions, so a difference that survives is a
-; difference in what the C means and never in how it was spelled. that is the one
-; comparison a byte diff cannot make -- the generator says `A(l)`, prints `A(l)`, and
-; cpp turns both into the same tree whatever the macro happens to be today.
-;
-; it runs once, at a conversion, against the file the region came out of -- the
-; original is deleted afterwards and there is nothing left to compare to. what stands
-; afterwards is the regeneration-drift cmp in test_clay, and the corpus.
+; parse two whole translation units and compare the named top-level definitions as trees: both
+; sides meet the same cpp, typedefs and macro expansions, so a surviving difference is one of
+; meaning, never of spelling. it runs once per conversion, against the file the region came out of.
 ;
 ; run on the baked love, whose crew layer carries the front end:
 ;   love -l src/tools/clay-g2.l \
@@ -23,20 +16,20 @@
    ; the front end without cc-parse's udie: a refusal has to come back as a value, so
    ; that "the file did not parse" reads differently from "the trees differ".
    (g2-front src)
-    (: r (uread src)
-       (? (atom? r) 'noread
-          (: lx (clex ((deftext [(archdef 'x64)]) + <>r))
-             (? !(okv? lx) 'lexfail
-                (: pp (cpp <>lx (\ n s (incload () () (cdir src) n s)) src)
-                   (? !(okv? pp) 'cppfail
-                      (: ps (cparse-t <>pp 'x64)
+    (uread src @ r
+       (atom? r ? 'noread
+          (clex (deftext (archdefs 'x64) + <>r) @ lx
+             (!(okv? lx) ? 'lexfail
+                (cpp <>lx (\ n s (incload () () (cdir src) n s)) src @ pp
+                   (!(okv? pp) ? 'cppfail
+                      (cparse-t <>pp 'x64 @ ps
                          (okv? ps ? (<>ps 1) 'parsefail))))))))
 
    ; the definition, never the prototype that announces it: the two wear one name, and
    ; comparing the wrong one would pass on a signature while the body drifted.
    (g2-find tops nm)
-    (: (go l) (? (atom? l) ()
-                 (: e <l (<e = 'fn && (: w (e 1) (string? w && w = nm))
+    (: (go l) (atom? l ? ()
+                 (<l @ e (<e = 'fn && (e 1 @ w (string? w && w = nm))
                           ? [1 e] (go >l))))
        (go tops))
 
@@ -52,10 +45,9 @@
               (fa 1 = fb 1) 1
               (g2-say ("g2: DIFFERS: " + nm), 0)))
        oks (foldl (+) 0 (map one names))
-       _ (g2-say $ "g2: " + show oks + " / " + show #names
-                   + " definitions identical as trees")
-       ; a vacuous pass is a fail: a front end that answered nothing reports 0/0,
-       ; and 0/0 is not agreement -- it is a gate that measured nothing.
-       (oks = #names && 0 < oks
+       (g2-say $ "g2: " + show oks + " / " + show #names
+                 + " definitions identical as trees",
+        ; a vacuous pass is a fail: a front end that answered nothing reports 0/0
+        oks = #names && 0 < oks
         ? (g2-say "g2: pass", 1)
           (g2-say "g2: FAIL", quit 1))))

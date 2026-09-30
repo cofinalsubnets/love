@@ -1,10 +1,7 @@
-; src/tools/kproject.l -- the metal projection (plan C2). the artifact is one
-; hosted -pie love; a boot door eats a fixed-address image. this tool derives
-; the second from the first: re-base every PT_LOAD at the kernel base, apply
-; the love_rela table there (the same law moonlibc's __ai_reloc runs at a hosted
-; start -- run ahead of time, since on metal nobody is there to run it), lay
-; and patch boot.o below the image, write k_image_top into the file, and emit
-; the flat ELF the doors have always eaten. cat after src/love/holo/{elf,obj,link}.l:
+; src/tools/kproject.l -- the metal projection: the artifact is one hosted -pie love, and a boot
+; door eats a fixed-address image. re-base every PT_LOAD at the kernel base, apply the love_rela
+; table there (__ai_reloc's law, run ahead of time), lay and patch boot.o below the image, write
+; k_image_top, and emit the flat ELF. cat after src/love/holo/{elf,obj,link}.l:
 ;
 ;   love <cat> in.pie boot.o out.elf arch
 ;
@@ -13,12 +10,12 @@
 ; over a boot.o it laid itself (src/apps/source.l).
 
 (: (kparams arch)                       ; target, kernel base, entry symbol
-    (? (arch = "x64")  ['x64   0x200000   "kmain"]
-       (arch = "a64") ['a64 0x40200000 "a64boot"]
-       ; entered at the lowest load, not the entry symbol -- kproject lays boot first
-       (arch = "rv64") ['rv64  0x80200000 "rvboot"]
-       (scare 'kproject-arch arch))
-   (kread p) (: r (uread p) (two? r ? [p <>r] (scare 'kproject-open p)))
+    (arch @ "x64"  ['x64   0x200000   "kmain"]
+            "a64"  ['a64 0x40200000 "a64boot"]
+            ; entered at the lowest load, not the entry symbol -- kproject lays boot first
+            "rv64" ['rv64  0x80200000 "rvboot"]
+            (scare 'kproject-arch arch))
+   (kread p) (uread p @ r (two? r ? [p <>r] (scare 'kproject-open p)))
 
    (kproject pie bootb out arch)
    (: kp (kparams arch)
@@ -28,7 +25,7 @@
       ; --- the pie, parsed: program headers, the named sections, the symtab --
       phoff (rle64 pie 32) shoff (rle64 pie 40)
       phnum (rle16 pie 56) shnum (rle16 pie 60) shstrx (rle16 pie 62)
-      (pho i) (phoff + (i * 56))
+      (pho i) (phoff + i * 56)
       ; each load: (vaddr fileoff filesz memsz flags)
       loads ((: (go i acc)
                  (? (phnum <= i) (rev acc)
@@ -38,7 +35,7 @@
                              (rle64 pie (pho i + 32)) (rle64 pie (pho i + 40))
                              (rle32 pie (pho i + 4))] . acc)
                            acc)))) 0 ())
-      (sho i) (shoff + (i * 64))
+      (sho i) (shoff + i * 64)
       shstro (rle64 pie (sho shstrx + 24))
       (sname i) (ld-cstr pie (shstro + rle32 pie (sho i)))
       (shfind nm) ((: (go i) (? (shnum <= i) (scare 'kproject-section nm)
@@ -51,7 +48,7 @@
       stro (: x (shfind ".strtab") (rle64 pie (sho x + 24)))
       strz (: x (shfind ".strtab") (rle64 pie (sho x + 32)))
       (pie-sym nm) ((: (go e)                    ; a defined global's value, or ()
-                        (? ((symo + symz) <= e) ()
+                        (? (symo + symz <= e) ()
                            (: sx (rle16 pie (e + 6))
                               (0 < sx < 0xff00 && ld-cstr pie (stro + rle32 pie e) = nm
                                ? (rle64 pie (e + 8))
@@ -79,7 +76,7 @@
       ; the pie's globals join the book (boot's own definitions stand), so a
       ; boot reloc that names a kernel symbol resolves at its metal address
       _ ((: (go e)
-             (? ((symo + symz) <= e) 0
+             (? (symo + symz <= e) 0
                 (: sx (rle16 pie (e + 6)) bind (pie (e + 4) >> 4)
                    _ (? (0 < sx < 0xff00 && elem bind '(1 2))
                         (: nm (ld-cstr pie (stro + rle32 pie e))
@@ -117,13 +114,13 @@
       nph (2 + #loads - (0 < nsz ? 0 1))
       hdrsz (64 + 56 * nph)
       _ (4096 < hdrsz + nsz ? (scare 'kproject-headers hdrsz))
-      (fo a) ((a - kbase) + 4096)
+      (fo a) (a - kbase + 4096)
       ; each load with the file offset it takes: dense from where the boot chain
       ; stopped, moved on only far enough to keep p_offset congruent to p_vaddr mod
       ; the page -- which is all a loader asks and more than a copier needs. the pie's
       ; own cuts already skip address space the file does not carry, and laying this
       ; file address-linear would put back the zeros the link took out.
-      (cfo c a) (: r ((a % 4096) - (c % 4096)) (c + (r >= 0 ? r (r + 4096))))
+      (cfo c a) (a % 4096 - c % 4096 @ r (c + (r >= 0 ? r (r + 4096))))
       lds (rev ((: (go l c acc)
                     (? (atom? l) acc
                        (: g <l o (cfo c (bias + g 0))
@@ -156,7 +153,7 @@
       fsz <body
       ; the symtab, values slid: the uefi loader reads `kboot` out of exactly this
       esy ((: (go e acc)
-               (? ((symo + symz) <= e) (rev acc)
+               (? (symo + symz <= e) (rev acc)
                   (: sx (rle16 pie (e + 6))
                      (go (e + 24)
                          (? (0 < sx < 0xff00)

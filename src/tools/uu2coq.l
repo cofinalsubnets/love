@@ -21,7 +21,7 @@
 ; the files read below spell their laws `test`, the corpus recorder. here they run to
 ; BUILD, and stdout is the artifact -- so bind assert's instead: silent on success,
 ; and a false law stops the run rather than printing a dot into the output.
-(:: 'test (\ l (. 'assert l)))
+(:: 'test (l \ (. 'assert l)))
 (: _ (reads (open "test/uu.l" "r"))
    _ (reads (open "test/uuhom.l" "r"))
    _ (reads (open "test/uuhomgen.l" "r"))
@@ -46,7 +46,7 @@
    ; read a file's top-level forms as data (the reader strips ; comments)
 
    ; a uu name -> a Rocq identifier: prefix uu_, kebab '-' -> '_'
-   (sanit s) (: (g i acc) (? (i < #s) (g (1 + i) (acc + string (: c (s i) (? (c = 45) 95 c)))) acc) (g 0 ""))
+   (sanit s) (: (g i acc) (i < #s ? (g (1 + i) (acc + string (s i @ c (c = 45 ? 95 c)))) acc) (g 0 ""))
    (rocqn nm) ("uu_" + sanit (string nm))
 
    ; --- collect (kind nm T t) entries from the uu.l forms (defns live inside asserts) ---
@@ -55,8 +55,8 @@
    (entry c) (? (deq? c) ['def (unq (c 1)) (unq (c 2)) (unq (c 3))]
                 (axq? c) ['axm (unq (c 1)) (unq (c 2)) ()])
    (kids ks acc) (two? ks ? (kids >ks (deq? <ks || axq? <ks ? (entry <ks . acc) acc)) acc)
-   (gather fs acc) (? (two? fs)
-                      (gather >fs (: F <fs
+   (gather fs acc) (two? fs ?
+                      (gather >fs (<fs @ F
                         (? (two? F && <F = 'test) (kids >F acc)
                            (deq? F || axq? F) (entry F . acc) acc)))
                       (rev acc))
@@ -70,19 +70,19 @@
    ; nothing and paints its assert dot green. redden here instead. the empty seat is
    ; `== ()` and not `!`: a term of 0 is a legal def (a code table's first row) and
    ; falsy, so truthiness would redden it.
-   _ (map (\ e (? (<e = 'def && e 3 = () || !(peep GLOB (e 1) 0))
+   _ (map (e \ ((<e = 'def && e 3 = () || !(peep GLOB (e 1) 0)) ?
                   (puts "MALFORMED-OR-UNPINNED-DEF ", puts (string (e 1)), quit 1)
                   0))
         ents)
 
    ; names that exist (corpus-wide) -- for telling a global reference from a bound var
-   nt (tablet 0) _ (map (\ e (pin nt (e 1) 1)) ents)
+   nt (tablet 0) _ (map (e \ (pin nt (e 1) 1)) ents)
    (corpus? x) (peep nt x 0)
 
    ; explicit skips: the type-in-type detonations (sound MLTT can't host them, and
    ; coqc's universe check rightly rejects them -- the filter, working as intended)
    bl (tablet 0)
-   _ (map (\ n (pin bl n 1)) '(the_world_explodes but_seriously_the_world_explodes whoa irref))
+   _ (map (n \ (pin bl n 1)) '(the_world_explodes but_seriously_the_world_explodes whoa irref))
 
    ; --- the translator: a uu term -> a Gallina string ---
    ; every MLTT constructor is now mapped (Sigma -> sigT, coprod -> sum, the -> ascription);
@@ -93,68 +93,68 @@
    _ (pin bases 'nat "nat") _ (pin bases 'UU "Type") _ (pin bases 'bool "bool")
    _ (pin bases 'unit "unit") _ (pin bases 'empty "Empty_set")
    _ (pin bases 'true "true") _ (pin bases 'false "false") _ (pin bases 'tt "tt")
-   (atom-c t) (peep bases t (? (corpus? t) (rocqn t) (string t)))   ; base type / global / bound var
+   (atom-c t) (peep bases t (corpus? t ? (rocqn t) (string t)))   ; base type / global / bound var
 
-   (spine-c l) (? (two? l) (u2c <l + (two? >l ? " " "") + spine-c >l) "")
+   (spine-c l) (two? l ? (u2c <l + (two? >l ? " " "") + spine-c >l) "")
    (u2c t)
    (? (charm? t) (show t)
       (nom? t) (atom-c t)
-      (two? t) (: h <t
-        (? (h = 'pi)        ("(forall " + (string (t 1)) + " : " + (u2c (t 2)) + ", " + (u2c (t 3)) + ")")
-           (h = 'lam)       ("(fun " + (string (t 1)) + " => " + (u2c (t 2)) + ")")
-           (h = 'let)       ("(let " + (string (t 1)) + " := " + (u2c (t 2)) + " in " + (u2c (t 3)) + ")")
-           (h = 'succ)      ("(S " + (u2c (t 1)) + ")")
-           (h = 'idpath)    ("(idpath " + (u2c (t 1)) + ")")
-           (h = 'paths)     ("(@paths " + (u2c (t 1)) + " " + (u2c (t 2)) + " " + (u2c (t 3)) + ")")
-           (h = 'nat_rect)  ("(nat_rect " + (u2c (t 1)) + " " + (u2c (t 2)) + " " + (u2c (t 3)) + " " + (u2c (t 4)) + ")")
-           (h = 'bool_rect) ("(bool_rect " + (u2c (t 1)) + " " + (u2c (t 2)) + " " + (u2c (t 3)) + " " + (u2c (t 4)) + ")")
-           (h = 'unit_rect) ("(unit_rect " + (u2c (t 1)) + " " + (u2c (t 2)) + " " + (u2c (t 3)) + ")")
-           (h = 'empty_rect)("(Empty_set_rect " + (u2c (t 1)) + " " + (u2c (t 2)) + ")")
+      (two? t) (<t @ h
+        (h @ 'pi        ("(forall " + (string (t 1)) + " : " + (u2c (t 2)) + ", " + (u2c (t 3)) + ")")
+           'lam       ("(fun " + (string (t 1)) + " => " + (u2c (t 2)) + ")")
+           'let       ("(let " + (string (t 1)) + " := " + (u2c (t 2)) + " in " + (u2c (t 3)) + ")")
+           'succ      ("(S " + (u2c (t 1)) + ")")
+           'idpath    ("(idpath " + (u2c (t 1)) + ")")
+           'paths     ("(@paths " + (u2c (t 1)) + " " + (u2c (t 2)) + " " + (u2c (t 3)) + ")")
+           'nat_rect  ("(nat_rect " + (u2c (t 1)) + " " + (u2c (t 2)) + " " + (u2c (t 3)) + " " + (u2c (t 4)) + ")")
+           'bool_rect ("(bool_rect " + (u2c (t 1)) + " " + (u2c (t 2)) + " " + (u2c (t 3)) + " " + (u2c (t 4)) + ")")
+           'unit_rect ("(unit_rect " + (u2c (t 1)) + " " + (u2c (t 2)) + " " + (u2c (t 3)) + ")")
+           'empty_rect ("(Empty_set_rect " + (u2c (t 1)) + " " + (u2c (t 2)) + ")")
            ; Sigma -> a primitive-projection total2 record (preamble below): it has the
            ; same definitional eta uu's Sigma has, so eta-dependent proofs (idisweq ..)
            ; export soundly. total2 mirrors pi (index 1 var, 2 domain, 3 body); tpair's
            ; family is implicit, inferred from the def's stated type.
-           (h = 'total2)    ("(total2 (fun " + (string (t 1)) + " : " + (u2c (t 2)) + " => " + (u2c (t 3)) + "))")
-           (h = 'tpair)     ("(tpair " + (u2c (t 1)) + " " + (u2c (t 2)) + ")")
-           (h = 'pr1)       ("(pr1 " + (u2c (t 1)) + ")")
-           (h = 'pr2)       ("(pr2 " + (u2c (t 1)) + ")")
+           'total2    ("(total2 (fun " + (string (t 1)) + " : " + (u2c (t 2)) + " => " + (u2c (t 3)) + "))")
+           'tpair     ("(tpair " + (u2c (t 1)) + " " + (u2c (t 2)) + ")")
+           'pr1       ("(pr1 " + (u2c (t 1)) + ")")
+           'pr2       ("(pr2 " + (u2c (t 1)) + ")")
            ; coprod -> sum; ii1/ii2 -> inl/inr (other summand inferred), the eliminator -> sum_rect
-           (h = 'coprod)    ("(sum " + (u2c (t 1)) + " " + (u2c (t 2)) + ")")
-           (h = 'ii1)       ("(inl " + (u2c (t 1)) + ")")
-           (h = 'ii2)       ("(inr " + (u2c (t 1)) + ")")
-           (h = 'coprod_rect)("(sum_rect " + (u2c (t 1)) + " " + (u2c (t 2)) + " " + (u2c (t 3)) + " " + (u2c (t 4)) + ")")
+           'coprod    ("(sum " + (u2c (t 1)) + " " + (u2c (t 2)) + ")")
+           'ii1       ("(inl " + (u2c (t 1)) + ")")
+           'ii2       ("(inr " + (u2c (t 1)) + ")")
+           'coprod_rect ("(sum_rect " + (u2c (t 1)) + " " + (u2c (t 2)) + " " + (u2c (t 3)) + " " + (u2c (t 4)) + ")")
            ; (the T t) is a type ascription -- emit it as one
-           (h = 'the)       ("(" + (u2c (t 2)) + " : " + (u2c (t 1)) + ")")
+           'the       ("(" + (u2c (t 2)) + " : " + (u2c (t 1)) + ")")
            ; full path induction (J): uu (paths_rect P pr e) -> match on the paths Id type
-           (h = 'paths_rect)
+           'paths_rect
              ("(match " + (u2c (t 3)) + " as ep0 in (paths _ bp0) return ("
               + (u2c (t 1)) + " bp0 ep0) with idpath _ => " + (u2c (t 2)) + " end)")
            ("(" + (spine-c t) + ")")))                              ; an application spine
       (show t))
 
    ; --- translatability: every head handled (no unhandled constructor anywhere) ---
-   (alltr? l) (? (two? l) (tr? <l && alltr? >l) 1)
+   (alltr? l) (two? l ? (tr? <l && alltr? >l) 1)
    (tr? t) (? (charm? t) 1  (nom? t) 1
-              (two? t) (? (peep un <t 0) 0 (alltr? >t))  1)
+              (two? t) (peep un <t 0 ? 0 (alltr? >t))  1)
 
    ; --- the global names a term mentions (corpus names only), accumulated into a set ---
-   (ment t acc) (? (nom? t) (? (corpus? t) (pin acc t 1, acc) acc)
+   (ment t acc) (? (nom? t) (corpus? t ? (pin acc t 1, acc) acc)
                    (two? t) (ment-l t acc)  acc)
-   (ment-l l acc) (? (two? l) (ment-l >l (ment <l acc)) acc)
+   (ment-l l acc) (two? l ? (ment-l >l (ment <l acc)) acc)
 
    ; candidates: a def, in the fragment, not blacklisted, present in glob (uu-certified)
    (cand? e) (<e = 'def && !(peep bl (e 1) 0) && peep GLOB (e 1) 0 && tr? (e 2) && tr? (e 3))
-   cands (foldl (\ a e (? (cand? e) (e . a) a)) () ents)   ; reversed; restore order at emit
+   cands (foldl (\ a e (cand? e ? (e . a) a)) () ents)   ; reversed; restore order at emit
    ; each candidate's mentioned-names list (its global dependencies)
    (mlist e) (keys (ment-l (. (e 2) (. (e 3) ())) (tablet 0)))
 
    ; --- dependency closure: keep only defs all of whose mentions also survive ---
-   (allin? l ex) (? (two? l) (peep ex <l 0 && allin? >l ex) 1)
-   (pass cs ex) (foldl (\ a e (? (allin? (mlist e) ex) (pin a (e 1) 1, a) a)) (tablet 0) cs)
+   (allin? l ex) (two? l ? (peep ex <l 0 && allin? >l ex) 1)
+   (pass cs ex) (foldl (\ a e (allin? (mlist e) ex ? (pin a (e 1) 1, a) a)) (tablet 0) cs)
    ; the measure is the key COUNT: pass only ever shrinks ex, so the counts settle
    ; exactly when the set does. not glued $, which nets any tablet to 1 and would
    ; stop the walk after one pass, past defs whose dependency that pass dropped.
-   (fix ex) (: ex2 (pass cands ex) (? (#(keys ex2) = #(keys ex)) ex2 (fix ex2)))
+   (fix ex) (pass cands ex @ ex2 (? (#(keys ex2) = #(keys ex)) ex2 (fix ex2)))
    ex0 (foldl (\ a e (pin a (e 1) 1, a)) (tablet 0) cands)    ; seed: all candidates
    keep (fix ex0)                                                   ; the closed exportable set
 
@@ -162,7 +162,7 @@
    (emit e) (cat ["Definition " (rocqn (e 1)) " : " (u2c (e 2)) " :=" (string 10)
                   "  " (u2c (e 3)) "." (string 10)])
    ; foldr keeps ents' order, and coq wants every definition before its uses (foldl flips)
-   exports (foldr (\ e a (? (peep keep (e 1) 0) (e . a) a)) () ents)
+   exports (foldr (\ e a (peep keep (e 1) 0 ? (e . a) a)) () ents)
 
    _ (dot (cat [
       "(* test/proof/rocq/uugen.v -- GENERATED from test/uu.l by src/tools/uu2coq.l. Do not edit;" (string 10)
@@ -192,7 +192,7 @@
       "   a path can be a Sigma CARRIER (an element of UU), as in the hProp-valued nat order." (string 10)
       "   paths_to_eq (below) bridges it back to Coq's = for the Nat.* headline laws. *)" (string 10)
       "Inductive paths {A : Type} (a : A) : A -> Type := idpath : paths a a." (string 10) (string 10)]))
-   _ (map (\ e (dot (emit e))) exports)
+   _ (map (e \ (dot (emit e))) exports)
    ; --- the bridge: a static tail tying uu's nat ops to Coq's standard ones, so the
    ;     headline laws restate on Nat.* (spec.v's vocabulary) and discharge from the
    ;     uu exports above. Tactic proofs (induction over the shared recursion); the

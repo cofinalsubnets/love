@@ -1,15 +1,12 @@
-; src/tools/mkman.l -- markdown -> roff(man), through the lapiz lens (src/apps/lapiz.l).
-; the man pages are written in doc/*.md and this generates doc's roff at build time, so
-; there is only one source to keep true. run from the repo root:
+; src/tools/mkman.l -- markdown -> roff(man), through the lapiz lens (src/apps/lapiz.l): the man
+; pages are written once, in doc/*.md, and laid as roff at build time. run from the repo root:
 ;   love src/tools/mkman.l file.md [love_version.h]
-; (the (borrow 'lapiz) below splices the baked module)
-; @version@ is the one placeholder the prose carries and the second argument is where the
-; build keeps the version, so the fill lands here and the chain needs no sed. with no
-; second argument the placeholder rides through, which is what a hand run wants.
+; @VERSION@ is the one placeholder; the second argument fills it from love_version.h, and with
+; none it rides through, which is what a hand run wants.
 (borrow 'lapiz)
 (borrow 'posix)
-(: (rd p) (: q (open p "r")
-             (? q (: t (slurp q) (close q, t))
+(: (rd p) (open p "r" @ q
+             (q ? (slurp q @ t (close q, t))
                 (say err ("mkman: cannot read " + p), put err 10, quit 1)))
    ; the version is whatever sits between love_version.h's two quotes
    (quoted t)
@@ -31,5 +28,4 @@
        (go 0 0 ()))
    vh >>argv
    rf (md->rf (rd <>argv))
-   _ (puts (two? vh ? (fill rf "@VERSION@" (quoted (rd <vh))) rf))
-   0)
+   (puts (two? vh ? (fill rf "@VERSION@" (quoted (rd <vh))) rf), 0))

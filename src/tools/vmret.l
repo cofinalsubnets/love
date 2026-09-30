@@ -26,7 +26,7 @@
    (skip-hex   s i) (i >= #s || !(hex? (peep s i 0)) ? i (skip-hex   s (i + 1)))
    (skip-nonws s i) (i >= #s ||   ws? (peep s i 0)  ? i (skip-nonws s (i + 1)))
    ; one past the last non-ws char (0 if the line is all whitespace).
-   (trim-end s) ((: (f i e) (i < #s ? (f (i + 1) (? (ws? (peep s i 0)) e (i + 1))) e)) 0 0)
+   (trim-end s) ((: (f i e) (i < #s ? (f (i + 1) (ws? (peep s i 0) ? e (i + 1))) e)) 0 0)
    (dash? a) (0 < #a && 45 = peep a 0 0))
 
 ; --- line classifiers ---------------------------------------------
@@ -34,11 +34,11 @@
 (: (parse-header line)
    (: i (skip-ws line 0)
       j (skip-hex line i)
-      (? (j = i) 0                                       ; need >=1 hex digit
-         (: k (skip-ws line j)
-            (? (k = j) 0                                  ; need >=1 space
-               (? (60 = peep line k 0)                   ; '<'
-                  (: e (trim-end line)
+      (j = i ? 0                                       ; need >=1 hex digit
+         (skip-ws line j @ k
+            (k = j ? 0                                  ; need >=1 space
+               (60 = peep line k 0 ?                   ; '<'
+                  (trim-end line @ e
                      (? (e >= k + 4 &&                 ; room for "<x>:"
                          58 = line (e - 1) && ; ':' at end
                          62 = line (e - 2)) ; '>' before it
@@ -51,7 +51,7 @@
    (: i (skip-ws line 0)
       j (skip-hex line i)
       (j > i && 58 = peep line j 0 ?               ; hexrun then ':'
-         (: k (skip-ws line (j + 1))
+         (skip-ws line (j + 1) @ k
           (k > j + 1 ?                                ; need >=1 ws after ':'
            (snip line i j . snip line k #line))))))
 
@@ -59,7 +59,7 @@
 (: PREFIXES ["rep" "repz" "repe" "repnz" "repne" "lock" "bnd" "notrack" "data16"]
    (mnemonic text)
    ((: (f i)
-       (: ts (skip-ws text i)
+       (skip-ws text i @ ts
           (ts >= #text ? ""
            (: te (skip-nonws text ts)
               w  (snip text ts te)
@@ -68,7 +68,7 @@
 ; --- per-arch return-mnemonic matchers --------------------------------
 ; x86: ^l?ret[a-z]*$ (ret/retq/lret/...; not iret). arm: ^ret(aa|ab)?$
 ; (iret/eret never match).
-(: (lower? s i) (? (i < #s) (: c (peep s i 0) (? (97 <= c <= 122) (lower? s (i + 1)) 0)) 1)
+(: (lower? s i) (i < #s ? (peep s i 0 @ c (97 <= c <= 122 ? (lower? s (i + 1)) 0)) 1)
    (ret-tail? r) (starts? r "ret" && lower? r 3)
    (retx?  m) (ret-tail? m || 108 = peep m 0 0 && ret-tail? (snip m 1 #m))
    (reta?  m) (m = "ret" || m = "retaa" || m = "retab"))
@@ -107,18 +107,18 @@
    (u64 d i) (u32 d i + u32 d (i + 4) * 4294967296)   ; `+`/`*` so a high-half addr promotes to bignum
    (find-symtab d base ent n k)                           ; sht_symtab (2) -> (off . size), else 0
      (k >= n ? 0
-      (: sh (base + k * ent)
+      (base + k * ent @ sh
        (2 = u32 d (sh + 4) ? (u64 d (sh + 24) . u64 d (sh + 32))
         (find-symtab d base ent n (k + 1)))))
    (collect-syms d off n k m)                             ; Elf64_Sym (24 B): value -> size, sized funcs
-     (? (k < n)
+     (k < n ?
         (: p (off + k * 24) info (u8 d (p + 4)) val (u64 d (p + 8)) sz (u64 d (p + 16))
            (collect-syms d off n (k + 1)
-              (? (2 = info & 15 && 0 < sz) (pin m val sz) m)))
+              (2 = info & 15 && 0 < sz ? (pin m val sz) m)))
         m)
    (symtab-sizes d)                                       ; -> map: fn start address -> byte size
-     (: st (find-symtab d (u64 d 40) (u16 d 58) (u16 d 60) 0)  ; e_shoff / e_shentsize / e_shnum
-        (? st (collect-syms d <st (>st // 24) 0 (tablet 0)) (tablet 0))))
+     (find-symtab d (u64 d 40) (u16 d 58) (u16 d 60) 0 @ st  ; e_shoff / e_shentsize / e_shnum
+        (st ? (collect-syms d <st (>st // 24) 0 (tablet 0)) (tablet 0))))
 
 ; --- the scan, grouping by function header ----------------------------
 ; close the current watched function: flag it iff it collected any rets.
@@ -133,18 +133,18 @@
 (: (scan-all ls prefix ret? sizes)
    ((: (loop ls name watching lim rets flagged total)
        (ls @ (line . rest)
-          (: h (parse-header line)
-             (? h
-                (? (starts? h ".")                              ; local label: stay inside
+          (parse-header line @ h
+             (h ?
+                (starts? h "." ?                              ; local label: stay inside
                    (loop rest name watching lim rets flagged total)
                    (: fl2  (close name watching rets flagged)   ; real header: close, open new
                       w2   (starts? h prefix)
                       ha   (parse-header-addr line)
                       sz   (peep sizes ha 0)                     ; symtab size, 0 if absent
                       lim2 (0 < sz ? (ha + sz) BIG)           ; extent end, or unbounded
-                      (loop rest h w2 lim2 0 fl2 (? w2 (total + 1) total))))
-                (: ins (? watching (parse-insn line) 0)         ; instruction: maybe a ret
-                   (? (ins && hex->int <ins < lim && ret? (mnemonic >ins))
+                      (loop rest h w2 lim2 0 fl2 (w2 ? (total + 1) total))))
+                ((watching ? (parse-insn line) 0) @ ins         ; instruction: maybe a ret
+                   (ins && hex->int <ins < lim && ret? (mnemonic >ins) ?
                       (loop rest name watching lim (<ins . rets) flagged total)
                       (loop rest name watching lim rets flagged total)))))
           (close name watching rets flagged . total)))
@@ -157,22 +157,22 @@
                               (i >= #b) 0
                               (: ca (peep a i 0) cb (peep b i 0)
                                  (? (ca < cb) 1 (ca > cb) 0 (f (i + 1)))))) 0)
-   (maxlen fl) (foldl (\ m e (: l #<e (m < l ? l m))) 0 fl)
+   (maxlen fl) (foldl (\ m e (#<e @ l (m < l ? l m))) 0 fl)
    (join-rets rs) (rs @ (a . u) ("0x" + a + (u @ (_ . _) (", " + join-rets u) "")) ""))
 
 ; sort the flagged entries by function name (ascending), matching .py.
 ; the merge split counts the spine (entries are chains; $ is the net sum), so fold.
-(: (emerge a b) (? (two? a) (? (two? b)
-                     (? (str< <<a <<b)
+(: (emerge a b) (two? a ? (two? b ?
+                     (str< <<a <<b ?
                         (<a . emerge >a b) (<b . emerge a >b))
                      a) b)
    (llen l) (foldl (\ n _ (1 + n)) 0 l)
-   (esort l) (? (two? >l) (: n (llen l >> 1) (emerge (esort (take n l)) (esort (drop n l)))) l))
+   (esort l) (two? >l ? (llen l >> 1 @ n (emerge (esort (take n l)) (esort (drop n l)))) l))
 
 ; --- argument parsing ------------------------------------------------
 (: (parse-args args path prefix od)
  (atom? args ? [path prefix od]
-  (: a <args
+  (<args @ a
    (? (a = "--prefix")
        (two? >args ? (parse-args >>args path <>args od) (die "missing argument for --prefix"))
       (a = "--objdump")
@@ -186,8 +186,8 @@
 ; (hark ...) returns (status . output) when the tool ran, else a fixnum errno
 ; (spawn failed -> try the next). -> (cand status . output) or 0 if exhausted.
 (: (try-cands cs elf)
-   (? (two? cs)
-      (: r (hark [<cs "-d" "--no-show-raw-insn" elf])
+   (two? cs ?
+      (hark [<cs "-d" "--no-show-raw-insn" elf] @ r
          (two? r ? (<cs . r) (try-cands >cs elf)))
       0))
 
@@ -196,10 +196,10 @@
    path     <parsed
    prefix   <>parsed
    od       <>>parsed
-   _        (? path 0 (die "usage: vmret.l ELF [--prefix PREFIX] [--objdump PATH]"))
+   _        (path ? 0 (die "usage: vmret.l ELF [--prefix PREFIX] [--objdump PATH]"))
    base     (pbase path)
    port     (open path "r")
-   _        (? port 0 (die ("cannot open " + path)))
+   _        (port ? 0 (die ("cannot open " + path)))
    hdr      (slurp port)                                 ; whole image: e_ident/e_machine + .symtab
    _        (close port)
    _        (127 = hdr 0 && 69 = hdr 1 && 76 = hdr 2 && 70 = hdr 3 ? 0
@@ -211,7 +211,7 @@
    x86?     (mach = 62)
    known?   (x86? || mach = 183)
    ret?     (x86? ? retx? (mach @ 183 reta? retx?))
-   _        (? known? 0
+   _        (known? ? 0
                (say err "vmret: note: ", say err base,
                 say err " is an unrecognized arch (0x", putbn err mach 16,
                 say err "); falling back to the generic `ret` matcher\n", 0))
@@ -219,12 +219,12 @@
    ; cross arches; an explicit --objdump or $objdump wins. execvp does the PATH
    ; search, so a candidate that isn't found just spawn-fails -> next one.
    cands    (filter id [od (getenv "OBJDUMP")
-                         (? x86? "objdump" "llvm-objdump") (? x86? "llvm-objdump" "objdump")])
+                         (x86? ? "objdump" "llvm-objdump") (x86? ? "llvm-objdump" "objdump")])
    chosen   (try-cands cands path)
-   _        (? chosen 0 (die "no disassembler found (tried llvm-objdump, objdump); pass --objdump"))
+   _        (chosen ? 0 (die "no disassembler found (tried llvm-objdump, objdump); pass --objdump"))
    status   <>chosen
    output   >>chosen
-   _        (? (0 = status) 0 (die (<chosen + " failed: status " + show status)))
+   _        (0 = status ? 0 (die (<chosen + " failed: status " + show status)))
    scanned  (scan-all (lines output) prefix ret? sizes)
    flagged  <scanned
    total    >scanned

@@ -11,14 +11,10 @@
 ;   ai_rtgz_<nm>       the bytes, right behind it (a .a under DEFLATE; `id`
 ;                      is moon.l's rtcid of the tree slice, plain text)
 ;
-; a link carrying no runtime (love0, and the gate links) names src/love/noblob.c, whose
-; zeros answer nothing and leave the compile-from-source lane standing. determinism is
-; load-bearing: arbytes and rtcid are all pure of the machine, so the
-; seed's fixpoint carries this object unchanged.
-; this rides the mooncc image (wake), not the mksys cat: the archives are
-; mooncc compiles, so the whole compiler must be aboard; arch names the object
-; format (the LINK's arch), and a cross backend joins from its tree text the
-; way mksrc.l joins one.
+; a link carrying no runtime (love0, the gate links) names src/love/noblob.c instead. arbytes
+; and rtcid are pure of the machine, so the seed's fixpoint carries this object unchanged.
+; this rides the mooncc image (wake), since the archives are mooncc compiles; arch names the
+; object format (the link's arch), and a cross backend joins from its tree text.
 
 (borrow 'posix)
 (: (rt-die m) (say err ("mkrt: " + m + "\n"), quit 1)
@@ -26,23 +22,17 @@
     (sound cl @ 'torn (rt-die "torn backend text")
                 (a . u) (ev a, rt-rdev u))
    (rt-be arch)
-    (? (lit? (cite 'holo 'backends arch)) 0
-       ; the backend file is the canonical arch word now -- one spelling, no map
+    (lit? (cite 'holo 'backends arch) ? 0
        (: f ("src/love/holo/" + string arch + ".l")
           q (open f "r")
-          (? (hot? q) (rt-rdev (flow q), close q)
+          (hot? q ? (rt-rdev (flow q), close q)
              (rt-die ("no backend aboard and no text at " + f)))))
    (rt-bytes s i acc) (i < 0 ? acc (rt-bytes s (i - 1) (s i . acc)))
    (rt-le8 v i acc) (i = 8 ? acc (rt-le8 (v >> 8) (i + 1) (acc + [(v & 255)])))
    (rt-zeros k acc) (k < 1 ? acc (rt-zeros (k - 1) (0 . acc)))
 
-   ; the fan's width, cook's own down the environment -- a hint about the machine, and
-   ; with no jobserver no claim on its pool. only a width ABOVE ONE is a signal: cook
-   ; answers 1 whenever no -j was given, and a plain make exports nothing at all, so
-   ; either way read the machine here rather than let the fan be narrower than the box
-   ; merely because of how it was driven. what a worker adds is not the fork, which
-   ; is free, but mooncc warming per process -- rtwarm hands out contiguous runs to hold
-   ; that down, and a member's first compile in a fresh process still costs twice the rest.
+   ; the fan's width: cook's COOKJOBS, a hint only. a width of 1 is no signal (cook says 1
+   ; with no -j, and a plain make exports nothing), so then read the machine instead
    (rt-width _)
     (: w ("" + getenv "COOKJOBS")
        n #w
@@ -55,31 +45,26 @@
    ; LOVE may predate sysconf, and reads /proc/cpuinfo instead; no count is 1, the serial fan.
    (rt-cores _)
     (: sc (cite 'posix 'sysconf)
-       n (? sc (sc () @ (_ . _ . c . _) (charm? c ? c 0) 0) (rt-cpuinfo 0))
+       n (sc ? (sc () @ (_ . _ . c . _) (charm? c ? c 0) 0) (rt-cpuinfo 0))
        (0 < n ? (n // 2 + 1) 1))
    (rt-cpuinfo _)
     (: q (open "/proc/cpuinfo" "r")
-       (? !(hot? q) 0
-          (: s (slurp q)
-             _ (close q)
-             (foldl (a \ l \ 9 <= #l && snip l 0 9 = "processor" ? (a + 1) a) 0 (lines s)))))
-   ; ~600 member compiles across the three archives and none reads another, so a pool of
-   ; children fills the member cache and `one` below indexes the archives out of it,
-   ; every member a hit. the cache IS the join -- without one a child's work dies with
-   ; it; a fork refused leaves its residue to `one`, that much slower.
+       (!(hot? q) ? 0
+          (slurp q @ s
+             (close q, foldl (a \ l \ 9 <= #l && snip l 0 9 = "processor" ? (a + 1) a) 0 (lines s)))))
+   ; ~600 member compiles and none reads another, so a pool of children fills the member
+   ; cache and `one` below indexes the archives out of it. the cache is the join; a fork
+   ; refused leaves its residue to `one`, that much slower.
    (rt-fan rtwarm cd ts)
-    (? !(string? cd) ()
+    (!(string? cd) ? ()
        (: w (rt-width 0)
           _ (flush out, flush err)
           ps (rt-kids rtwarm ts w 1 ())
-          ; THE PARENT'S OWN RESIDUE GOES BESIDE THEM, never after the wait: waiting
-          ; first spends the children's cores and then runs one share alone, which is
-          ; half the width for the whole second half.
-          _ (rtwarm "src/apps/moon/" ts 'linux () w 0)
-          (foldl (_ \ wait) 0 ps)))
+          ; the parent's own share runs beside the children, never after the wait
+          (rtwarm "src/apps/moon/" ts 'linux () w 0, foldl (_ \ wait) 0 ps)))
    (rt-kids rtwarm ts w i acc)
-    (? (w <= i) acc
-       (: p (fork 0)
+    (w <= i ? acc
+       (fork 0 @ p
           (? (p = 0) (rtwarm "src/apps/moon/" ts 'linux () w i, quit 0)
              (0 < p) (rt-kids rtwarm ts w (i + 1) (p . acc))
              (rt-kids rtwarm ts w (i + 1) acc))))
@@ -90,7 +75,7 @@
    ; (holo.l's item-len) -- so a megabyte member costs a cell and not a million.
    (rt-forms nm s)
     (: n #s
-       pad ((8 - (n & 7)) & 7)
+       pad (8 - (n & 7) & 7)
        [['label (name ("ai_rtgz_" + nm + "_len"))]
         ['raw (rt-le8 n 0 ())]
         ['label (name ("ai_rtgz_" + nm))]
@@ -122,10 +107,10 @@
        zx (one 'x64)
        za (one 'a64)
        zr (one 'rv64)
-       forms ((rt-forms "id" cid)
-              + (rt-forms "x64" zx)
-              + (rt-forms "a64" za)
-              + (rt-forms "rv64" zr))
+       forms (rt-forms "id" cid
+              + rt-forms "x64" zx
+              + rt-forms "a64" za
+              + rt-forms "rv64" zr)
        xs '("ai_rtgz_id" "ai_rtgz_id_len"
             "ai_rtgz_x64" "ai_rtgz_x64_len"
             "ai_rtgz_a64" "ai_rtgz_a64_len"
@@ -134,7 +119,7 @@
        (cite 'holo 'write-bytes dst ob))        ; ob is a byte list, not a string
 
    (mkrt-main av)
-    (: n #av
+    (#av @ n
        (1 <= n ? (mkrt (2 <= n ? (name <>av) 'x64) <av)
         (rt-die "usage: love wake out/mooncc0.image src/tools/mkrt.l OUT.o [ARCH]")))
 

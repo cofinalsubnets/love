@@ -22,20 +22,18 @@
 ; BUILD, and stdout is the artifact -- so bind assert's instead: silent on success,
 ; and a false law stops the run rather than printing a dot into the output.
 (:: 'test (. 'assert))
-(: j (jug 0) _ (wear [in j err])
-   _ (reads (open "test/proto/dest.l" "r"))
-   _ (wear ()) ())
+(jug 0 @ j (wear [in j err], reads (open "test/proto/dest.l" "r"), wear (), ()))
 
 (: regs '((r0 0) (r1 1) (r2 2) (r3 3) (r4 4) (r5 5) (r6 6) (r7 7)
           (r8 8) (r9 9) (r10 10) (r11 11) (sp 12))
    rels '((lt 0) (ge 1) (le 2) (gt 3) (eq 4) (ne 5))
-   (look t k) (: e (assoc k t) (two? e ? <>e (scare 'dest2uu-look k)))
+   (look t k) (assoc k t @ e (two? e ? <>e (scare 'dest2uu-look k)))
    ; labels and frame offsets take codes as met, in emission order -- presence is
    ; the (1 x) wrapper, a code may be 0
    LAB {} OFF {}
-   (dyn t x) (: e (t x)
-                (? (two? e) <e
-                   (: k (peep t 'n 0) _ (pin t 'n (k + 1)) _ (pin t x [k]) k)))
+   (dyn t x) (t x @ e
+                (two? e ? <e
+                   (peep t 'n 0 @ k (pin t 'n (k + 1), pin t x [k], k))))
    (tr r) (2 * look regs r)
    (ti k) (1 + 2 * k)
    (toff o) (ti (dyn OFF o))
@@ -76,13 +74,13 @@
                (<fs . pre >fs))
    (emit1 g)
     (: nm (g 0) fs (plift (g 1))
-       _ (each fs (f \ puts $ "\n ; " + string nm + "  " + show f))
-       _ (puts $ "\n (defn " + string nm + " nlist")
-       _ (each fs (f \ (: q (lift1 f)
-                          (puts $ "\n    (ncons " + show (q 0) + " (ncons " + show (q 1)
-                                  + " (ncons " + show (q 2) + " (ncons " + show (q 3)))))
-       _ (puts $ "\n    nnil" + ")" * 4 * #fs + ")")
-       ())
+       (each fs (f \ puts $ "\n ; " + string nm + "  " + show f),
+        puts $ "\n (defn " + string nm + " nlist",
+        each fs (f \ lift1 f @ q
+                       (puts $ "\n    (ncons " + show (q 0) + " (ncons " + show (q 1)
+                               + " (ncons " + show (q 2) + " (ncons " + show (q 3))),
+        puts $ "\n    nnil" + ")" * 4 * #fs + ")",
+        ()))
 
    eb '(bin add (v y) (k 1))                    ; dest.l's e5 bin, held inline there
    _ (relab 0)  a3 (cvs s3 e3)
@@ -97,15 +95,15 @@
           ['de5vcv (cv '(v z) e5)]   ['de5vck (ck '(v z) e5 P ())]
           ['de5bcv (cv eb e5)]       ['de5bck (ck eb e5 P ())]]
 
-   _ (puts "; test/uuhomgen.l -- generated from test/proto/dest.l by src/tools/dest2uu.l. Do not")
-   _ (puts "\n; edit; refresh with `make uuhomgen`. The law-site programs, cv (r0 protocol)")
-   _ (puts "\n; and ck (destination die), lifted to uu nlist terms -- 4 nats per instruction")
-   _ (puts "\n; (op d a b), operands parity-tagged (reg r = 2r, imm k = 2k+1), frame offsets")
-   _ (puts "\n; and labels coded as met, opcodes li0 mov1 ld2 st3 si4 add5 sub6 cmp7 set8")
-   _ (puts "\n; br9 jmp10 label11 call12 ret13 push14 pop15 (the sp shuttle rides push/pop).")
-   _ (puts "\n; Each source form is printed over its term. Laws: test/uuhomlaw.l; substrate:")
-   _ (puts "\n; test/uuhom.l over test/uu.l (the kernel).")
-   _ (puts "\n(test")
-   _ (each progs emit1)
-   _ (puts ")\n")
-   0)
+   (puts "; test/uuhomgen.l -- generated from test/proto/dest.l by src/tools/dest2uu.l. Do not",
+    puts "\n; edit; refresh with `make uuhomgen`. The law-site programs, cv (r0 protocol)",
+    puts "\n; and ck (destination die), lifted to uu nlist terms -- 4 nats per instruction",
+    puts "\n; (op d a b), operands parity-tagged (reg r = 2r, imm k = 2k+1), frame offsets",
+    puts "\n; and labels coded as met, opcodes li0 mov1 ld2 st3 si4 add5 sub6 cmp7 set8",
+    puts "\n; br9 jmp10 label11 call12 ret13 push14 pop15 (the sp shuttle rides push/pop).",
+    puts "\n; Each source form is printed over its term. Laws: test/uuhomlaw.l; substrate:",
+    puts "\n; test/uuhom.l over test/uu.l (the kernel).",
+    puts "\n(test",
+    each progs emit1,
+    puts ")\n",
+    0))

@@ -41,8 +41,8 @@
    ; equal signature = same band
    (sig i) [(rrow addm i) (rcol addm i) (rrow mulm i) (rcol mulm i)]
    (idxin x l k) (? (atom? l) -1 (<l = x) k (idxin x >l (k + 1)))
-   sigs ((: (go is acc) (? (atom? is) (rev acc)
-                           (: s (sig <is)
+   sigs ((: (go is acc) (atom? is ? (rev acc)
+                           (sig <is @ s
                               (go >is (-1 < idxin s acc 0 ? acc (s . acc)))))) ridx ())
    (band i) (idxin (sig i) sigs 0)                      ; class id, enum-appearance order
    nb #sigs
@@ -52,9 +52,9 @@
    (kn i) (show (kinds i))                              ; kcharm ...
    ; lane nom -> Coq ctor. the table spells lanes as their C symbols (lvm_addn), and
    ; the prefix says nothing here, so it comes off: Laddn, not Llvm_addn.
-   (ln x) (: t (show x) ("L" + ("lvm_" = snip t 0 4 ? (snip t 4 #t) t)))
+   (ln x) (show x @ t ("L" + ("lvm_" = snip t 0 4 ? (snip t 4 #t) t)))
    lanes ((: (go rows acc)                              ; distinct lanes, appearance order
-            (? (atom? rows) (rev acc)
+            (atom? rows ? (rev acc)
                (go >rows (foldl (\ a x (elem x a ? a (x . a))) acc <rows))))
           (addm + mulm) ())
 
@@ -108,7 +108,7 @@
          + " | _, _ => false end." + nl))
    ; mirror: the argument swap's action on lanes. the positional degenerate pair
    ; trades places (bin_a answers Sp[0], bin_b Sp[1]); every symmetric lane is fixed.
-   (mir x) (: t (show x) (t @ "lvm_bin_a" "Lbin_b" "lvm_bin_b" "Lbin_a" (ln x)))
+   (mir x) (show x @ t (t @ "lvm_bin_a" "Lbin_b" "lvm_bin_b" "Lbin_a" (ln x)))
    _ (dot ("Definition mirror (l : lane) : lane := match l with "
          + (join (map (x \ (x = <lanes ? "" " | ") + ln x + " => " + mir x) lanes))
          + " end." + nl + nl))
