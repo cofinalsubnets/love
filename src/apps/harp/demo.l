@@ -7,12 +7,12 @@
 ;
 ; the second line is the same shape from the shell, less the transforms: a bare
 ; argument is mini-notation, and several arguments stack.
-(borrow (: m (cite 'harp) (? m m "src/apps/harp/harp.l")))
+(borrow ((cite 'harp) @ m (m ? m "src/apps/harp/harp.l")))
 (borrow "src/apps/harp/play.l")
 (:
    ; every fourth cycle the kick doubles up -- `every` takes the transform, so the
    ; variation is a function of the pattern and not a second pattern to keep in step
-   kick  (every 4 (\ q (fastcat [q (hit (mini "bd*2"))])) (hit (mini "bd ~ [~ bd] ~")))
+   kick  (every 4 (q \ fastcat [q (hit (mini "bd*2"))]) (hit (mini "bd ~ [~ bd] ~")))
    ; eight hats, half of them dropped, riding a slow swell: `sine` has no structure
    ; of its own, so `#` samples it wherever the hats put their onsets
    hats  (pset (hit (mini "hh*8?")) (gain (range 0.25 0.8 sine)))
@@ -28,9 +28,9 @@
    song  (stack [kick hats snare bass lead])
 
    (demo-main as)
-    (: w (? (two? as) <as "out/harp-demo.wav")
-       _ (harp-wav song 0 8 48000 0.55 24000 11000.0 w)
-       _ (say out $ w + "\n") 0))
+    ((two? as ? <as "out/harp-demo.wav") @ w
+       (harp-wav song 0 8 48000 0.55 24000 11000.0 w,
+        say out $ w + "\n", 0)))
 
 (: s (cite 'verbs 'fire ["harp-demo" "demo.l"])
    (two? s ? (quit (demo-main >s))))

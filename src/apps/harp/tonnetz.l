@@ -11,11 +11,11 @@
 
 (module '(tonnetz
   triad ttones tflip twalk tchord tvoice common lpath pinv ptrans otonal utonal)
-(borrow (: m (cite 'just) (? m m "src/apps/harp/just.l")))
+(borrow ((cite 'just) @ m (m ? m "src/apps/harp/just.l")))
 (:
    ; a triad is [root-point kind], kind 'maj or 'min
    (triad p k) [p k]
-   (ttones t) (: p (t 0)
+   (ttones t) (t 0 @ p
                  (t 1 = 'maj ? [p (vadd p [0 1 0]) (vadd p [1 0 0])]
                                [p (vadd p [1 -1 0]) (vadd p [1 0 0])]))
    (tflip t f)
@@ -25,7 +25,7 @@
           (f = 'L) (mj ? [(vadd p [0 1 0]) 'min] [(vadd p [0 -1 0]) 'maj])
           t))
    ; the triads a string of flips passes through, the start included
-   (twalk t fs) (t . (? !(two? fs) () (twalk (tflip t <fs) >fs)))
+   (twalk t fs) (t . (two? fs ? (twalk (tflip t <fs) >fs)))
 
    ; a pitch in the octave nearest a reference pitch (both ratios)
    (nearto ref r) (: o (oct r) c (cents (o * rinv ref))
@@ -36,8 +36,8 @@
    (tvoice ref ps) (map (p \ nearto ref (unpoint p)) ps)
    ; a walk of triads as chords, each voiced around the last one's middle
    (tchord ts ref)
-    (? !(two? ts) ()
-       (: c (sort (tvoice ref (ttones <ts)))
+    (two? ts ?
+       (sort (tvoice ref (ttones <ts)) @ c
           (c . tchord >ts (c 1))))
 
    ; how many lattice points two chords share: what makes a move sound connected
@@ -55,6 +55,6 @@
    (pinv rs) (map (r \ (coin? r || !(two? r)) ? (rinv r) (pinv r)) rs)
    (ptrans k rs) (map (r \ (coin? r || !(two? r)) ? (k * r) (ptrans k r)) rs)
    ; the harmonic series' chords and their mirrors: 4:5:6:7 and 1/4:1/5:1/6:1/7
-   (otonal ns) (: b <ns (map (n \ n /// b) ns))
-   (utonal ns) (: t (last ns) (map (n \ t /// n) ns)))
+   (otonal ns) (<ns @ b (map (n \ n /// b) ns))
+   (utonal ns) (last ns @ t (map (n \ t /// n) ns)))
 ) ; module tonnetz

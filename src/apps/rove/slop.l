@@ -61,7 +61,7 @@
    y2 (ycol * 0.5 + 0.25 + xrow * 0.0)
    x2 (ycol * 0.0 + xrow * 1.0)
    cx (x2 - c / 2.0)
-   (field t dy) (: yy (y2 + (dy * 1.0))
+   (field t dy) (: yy (y2 + dy * 1.0)
                    cy ((yy - r / 2.0) * 2.0)
                    rr (1 / 2 $ cx * cx + cy * cy)
                  (sin (x2 * 0.09 + t) +
@@ -72,19 +72,19 @@
  ; the skin read as ground, the floors' as well as slop's: a ramp's step at skin value v,
  ; its steps spread over [-span, span]
  (slop-ramp-pen rp span v) (: m (#rp - 1)
-                              n (int (((v + span) * #rp) / (2.0 * span)))
+                              n (int ((v + span) * #rp / (2.0 * span)))
                               (rp (? (n < 0) 0 (m < n) m n)))
  ; the pen under what stands on cell (x y): its lower half's, pen taking a skin value
  (slop-under k pen x y) (pen (peep k [(2 * y + 1) x] 0.0))
  ; the skin at cell (x y) as a face, in either mode: gl () is a `▀`, the upper half's pen
  ; over the lower's; a glyph wears the lower half's pen alone
  (slop-face k pen x y gl)
-  (? (gl = ()) ["▀" [(pen (peep k [(2 * y) x] 0.0)) (slop-under k pen x y)]]
+  (gl = () ? ["▀" [(pen (peep k [(2 * y) x] 0.0)) (slop-under k pen x y)]]
      [gl (slop-under k pen x y)])
  ; a ramp pre-rendered as SGR pens, [foreground background] a step, so a frame is pure
  ; lookup; the cell is the caller's, which lets it collapse a run of equal cells
  (slop-pal rs) (: (pen b n) (string 27 + "[" + show b + ";5;" + show n + "m")
-                  (dab t i l) (? !l t (pin t i [(pen 38 <l) (pen 48 <l)], dab t (i + 1) >l))
+                  (dab t i l) (!l ? t (pin t i [(pen 38 <l) (pen 48 <l)], dab t (i + 1) >l))
                   (dab {} 0 rs))
  ; the slop's 24: gold up through yellow and cream, over into pink, and back --
  ; the ends meet, so the shimmer never seams
@@ -114,10 +114,10 @@
 
  ; --- the lie of the land: sines across the columns, a hash within them ---
  ; the engine's mix, thrown for a world row and a column: the grass
- (dice w x k) ((mix ((w * 374761393) + (x * 668265263) + 1)) % k)
+ (dice w x k) (mix (w * 374761393 + x * 668265263 + 1) % k)
  ; the road wanders on two sines a screen and a few screens long -- so it bends where
  ; you can see it, never repeats, and never leaves the width
- (slop-road g w) (: mid (g 'c // 2)
+ (slop-road g w) (g 'c // 2 @ mid
                     (mid + int (3.0 * sin (w * 0.21) + 2.0 * sin (w * 0.063))))
  ; the shoreline and the depth of beach behind it: two sines each, wavy the way the road
  ; is wavy. the amplitude-times-frequency sum is what matters -- keep it under one row a
@@ -146,20 +146,20 @@
  ; it. the road fans out over its last four rows, so the path opens onto the beach.
  ; a wooden sign a third of a screen in, well off the road's right edge and lost in the
  ; weeds: not on the way, so never reached and never read, and the slop takes it like turf
- (slop-post g) (: w (g 'r // 3) [(slop-road g w + 12) w])
+ (slop-post g) (g 'r // 3 @ w [(slop-road g w + 12) w])
  (slop-turf g w x)
   (: h (dice w x 120)
-     s ((slop-shore g x) + slop-sand g x)        ; this column's last row of beach
+     s (slop-shore g x + slop-sand g x)          ; this column's last row of beach
      sg (slop-post g)
    (? (w <= s) [46 (sand-pens (h % 4))]
       (x = <sg && w = <>sg) '("¶" 137)
       (: rx (slop-road g w)
-         d (w - ((slop-shore g rx) + slop-sand g rx))    ; rows of grass the road has left
+         d (w - (slop-shore g rx + slop-sand g rx))      ; rows of grass the road has left
          hw (? (d < 0) 6 (d < 4) (6 - d) 2)              ; five columns wide, thirteen at the sand
        (? (|(x - rx) <= hw) [46 (road-pens (h % 3))]
           (h < 9)   [35 (turf-pens (h % 2))]
           (h < 27)  [46 (turf-pens (h % 3))]
-                    [34 (turf-pens (2 + (h % 3)))]))))
+                    [34 (turf-pens (2 + h % 3))]))))
 
  ; --- the walk -----------------------------------------------------------------
  ; a fresh game on an r by c screen, from a seeded rng state: you stand on the road at
@@ -169,10 +169,10 @@
  (slop-new r c st)
   (: waves {} sands {} shores {}
      _ (each ^c (x \ (pin waves x (shore-wave x), pin sands x (sand-deep x))))
-     top (foldl (\ a x (: v ((peep waves x 0) + peep sands x 0) (a < v ? v a))) 0 ^c)
+     top (foldl (a \ x \ (peep waves x 0 + peep sands x 0 @ v (a < v ? v a))) 0 ^c)
      sh0 (shore0 r top)
      _ (each ^c (x \ pin shores x (sh0 + peep waves x 0)))
-     wetto (foldl (\ a x (: v (peep shores x 0) (a < v ? v a))) (sh0 - 9) ^c)
+     wetto (foldl (a \ x \ (peep shores x 0 @ v (a < v ? v a))) (sh0 - 9) ^c)
      climb (r - 1 - r // 3)
      ; the beach's nearest world row: the sand shows on the screen the moment wtop
      ; reaches it, which is a fact about the screen and not about your distance to the
@@ -187,18 +187,18 @@
         'wetto wetto 'climb climb 'drag (r - 3) 'bt bt 'gedge gedge
         'push 0 'spent 0 't 0.0 'msg "" 'over 0
         'sb {st} 'rows {} 'field (slop-drift r c)}
-     _ (pin g 'span (slop-gap g))
+     (pin g 'span (slop-gap g),
    ; the bottom of the dip, a screen and a third into the walk -- and the foot of the
    ; edge's ramp. a third nearer the start than the two screens the fall would take,
    ; which is what buys the quiet valley behind it its length
-   (pin g 'gmin (g 'span - 4 * r // 3), g))
+      (pin g 'gmin (g 'span - 4 * r // 3), g)))
 
  ; where you stand on the screen, and the rows between you and the slop at your own
  ; column. a square costs ceil(drag / gap), so it is one press until the shore is about
  ; a screen out and a screen's worth for the last one; rate is squares per press.
  (slop-sy g) (g 'w - g 'wtop)
  (slop-gap g) (g 'w - slop-shore g (slop-road g (g 'w)))
- (slop-cost g) (: gap (slop-gap g) (gap < 1 ? (g 'drag) ((g 'drag + gap - 1) // gap)))
+ (slop-cost g) (slop-gap g @ gap (gap < 1 ? (g 'drag) ((g 'drag + gap - 1) // gap)))
  (slop-rate g) (1.0 / slop-cost g)
 
  ; one square forward. you always cross a world row; what differs is who the row on the
@@ -207,22 +207,22 @@
  (slop-step g)
   (: own (slop-sy g > g 'climb ? 1 (0 = roll (g 'sb) own-odds))
      seen (g 'wtop <= g 'wetto)              ; is any of it on the screen yet?
-     _ (pin g 'w (g 'w - 1))
-     _ (? own (pin g 'msg "a square")
-              (pins g 'wtop ((g 'wtop) - 1)
-                      'msg (seen ? "the slop comes on" "you walk on")))
-   (slop-gap g < 1 ? (pins g 'over 'taken 'msg "the slop has you")))
+     (pin g 'w (g 'w - 1),
+      own ? (pin g 'msg "a square")
+            (pins g 'wtop (g 'wtop - 1)
+                    'msg (seen ? "the slop comes on" "you walk on")),
+      slop-gap g < 1 ? (pins g 'over 'taken 'msg "the slop has you")))
 
  ; one press of forward effort: bank it, and spend a bankful on a square
- (slop-push g) (: n ((g 'push) + 1)
-                  _ (pin g 'spent ((g 'spent) + 1))
-                  (n < slop-cost g ? (pins g 'push n 'msg "")
+ (slop-push g) (g 'push + 1 @ n
+                  (pin g 'spent (g 'spent + 1),
+                   n < slop-cost g ? (pins g 'push n 'msg "")
                      (pin g 'push 0, slop-step g)))
 
  ; the helm is rove's: forward is any steer that climbs, and nothing else moves you.
  ; q or esc steps back off the map. one way forward is one thing to tap, so a tap
  ; anywhere (cli's -12) is the step -- there is nowhere else on this map to mean.
- (slop-key g k) (: mv (steer (k = -12 ? 107 k))
+ (slop-key g k) (steer (k = -12 ? 107 k) @ mv
                    (? (g 'over) g
                       (k @ (113 || 27) 1 0) (pin g 'over 'fled)
                       (atom? mv) g
@@ -230,7 +230,7 @@
                       (pin g 'msg "only forward")))
 
  ; one beat of the slop's own clock, scaled by how fast you are still moving
- (slop-tick g) (pin g 't ((g 't) + (beat * slop-rate g)))
+ (slop-tick g) (pin g 't (g 't + beat * slop-rate g))
 
  ; --- the frame ----------------------------------------------------------------
  ; a row below the shoreline's lowest reach is all ground, so it is painted once and
@@ -238,20 +238,19 @@
  ; fresh. a pen goes out only where it changes, so a row is a handful of runs.
  (turf-line g w px)
   (: j (jug 0)
-     (go x f) (? (x < (g 'c))
+     (go x f) (x < g 'c ?
                  (: cell (slop-turf g w x)
                     gl (x = px ? 64 <cell)
                     hue (x = px ? 231 <>cell)
-                    _ (hue != f ? (say j (esc + "[38;5;" + show hue + "m")))
-                    _ (say j (string gl))
-                  (go (x + 1) hue))
-                 ())
-     _ (go 0 -1)
-   (slurp j))
+                    (hue != f ? (say j (esc + "[38;5;" + show hue + "m")),
+                     say j (string gl),
+                     go (x + 1) hue)))
+     (go 0 -1,
+      slurp j))
  (turf-row g w px)
-  (: hit (? (px < 0) (peep (g 'rows) w ()) ())
+  ((px < 0 ? (peep (g 'rows) w ())) @ hit
    (? (string? hit) hit
-      (px < 0) (: s (turf-line g w -1) (pin (g 'rows) w s, s))
+      (px < 0) (turf-line g w -1 @ s (pin (g 'rows) w s, s))
       (turf-line g w px)))
 
  ; a row the shore cuts: slop cells take a background off the ramp, ground cells a
@@ -264,30 +263,29 @@
  (wet-line g w i k px sunk)
   (: j (jug 0)
      (go x wet f b)
-      (? (x < (g 'c))
-         (? (slop-wet? g w x)
+      (x < g 'c ?
+         (slop-wet? g w x ?
             (: t (int (peep k [(2 * i) x] 0)) u (int (peep k [(2 * i + 1) x] 0))
-               _ (? wet 0 (say j (esc + "[0m")))
-               f0 (? wet f -1) b0 (? wet b -1)
-               _ (? (u = b0) 0 (say j (pal u 1)))
-               (? ((x = px) || (w = slop-shore g x))
-                  (: _ (say j (? (x = px) sunk surf)) (go (x + 1) 1 -1 u))
-                  (: _ (? (t = f0) 0 (say j (pal t 0))) _ (say j "▀") (go (x + 1) 1 t u))))
+               _ (wet ? 0 (say j (esc + "[0m")))
+               f0 (wet ? f -1) b0 (wet ? b -1)
+               (u = b0 ? 0 (say j (pal u 1)),
+                x = px || w = slop-shore g x ?
+                  (say j (x = px ? sunk surf), go (x + 1) 1 -1 u)
+                  (t = f0 ? 0 (say j (pal t 0)), say j "▀", go (x + 1) 1 t u)))
             (: cell (slop-turf g w x)
                gl (x = px ? 64 <cell)
                hue (x = px ? 231 <>cell)
-               _ (? wet (say j (esc + "[0m")) ())
-               f0 (? wet -1 f)
-               _ (? ((-2 - hue) = f0) 0 (say j (esc + "[38;5;" + show hue + "m")))
-               _ (say j (string gl))
-             (go (x + 1) 0 (-2 - hue) -1)))
-         ())
-     _ (go 0 0 -1 -1)
-   (slurp j))
+               _ (wet ? (say j (esc + "[0m")))
+               f0 (wet ? -1 f)
+               (-2 - hue = f0 ? 0 (say j (esc + "[38;5;" + show hue + "m")),
+                say j (string gl),
+                go (x + 1) 0 (-2 - hue) -1))))
+     (go 0 0 -1 -1,
+      slurp j))
 
  ; the skin is asked for at the world row on the screen's top, not at row zero, so the
  ; slop drifts with the ground under it rather than sitting still against a moving shore
- (slop-skin g) (((g 'field (g 't) (g 'wtop) + 4.001) * 2.9) // 1)
+ (slop-skin g) ((g 'field (g 't) (g 'wtop) + 4.001) * 2.9 // 1)
 
  (slop-frame g) (:
    j (jug 0) r (g 'r) wtop (g 'wtop) wetto (g 'wetto)
@@ -295,31 +293,31 @@
    sy (slop-sy g) px (slop-road g (g 'w))
    ; where the shore has closed over you, a dark mark is all that says so
    sunk (esc + "[38;5;52m@" + esc + "[39m")
-   (line i) (: w (wtop + i) me (? (i = sy) px -1)
+   (line i) (: w (wtop + i) me (i = sy ? px -1)
              (wetto < w ? (turf-row g w me) (wet-line g w i k me sunk)))
    ; a line is painted to the screen's edge: an erase there would take its last cell
    (lines i) (i < r ? (say j (line i + esc + "[0m\r\n"), lines (i + 1)))
-   _ (say j (esc + "[H"))
-   _ (lines 0)
-   _ (say j (slop-bar-fit g + esc + "[K"))
-   (slurp j))
+   (say j (esc + "[H"),
+    lines 0,
+    say j (slop-bar-fit g + esc + "[K"),
+    slurp j))
 
  ; the end: the shore closed over you, so the screen is slop and nothing else. no
  ; ground, no road, no you -- the bar under it is the only thing left standing.
  (slop-flood g t) (:
    j (jug 0) r (g 'r) c (g 'c)
-   k (((g 'field t (g 'wtop) + 4.001) * 2.9) // 1)
-   (row i q f b) (? (q < c)
+   k ((g 'field t (g 'wtop) + 4.001) * 2.9 // 1)
+   (row i q f b) (q < c ?
                     (: t (int (peep k [(2 * i) q] 0)) u (int (peep k [(2 * i + 1) q] 0))
-                       _ (? (t = f) 0 (say j (pal t 0)))
-                       _ (? (u = b) 0 (say j (pal u 1)))
-                       _ (say j "▀")
-                       (row i (q + 1) t u)))
+                       (t = f ? 0 (say j (pal t 0)),
+                        u = b ? 0 (say j (pal u 1)),
+                        say j "▀",
+                        row i (q + 1) t u)))
    (rows i) (i < r ? (row i 0 -1 -1, say j (esc + "[0m\r\n"), rows (i + 1)))
-   _ (say j (esc + "[H"))
-   _ (rows 0)
-   _ (say j (slop-bar-fit g + esc + "[K"))
-   (slurp j))
+   (say j (esc + "[H"),
+    rows 0,
+    say j (slop-bar-fit g + esc + "[K"),
+    slurp j))
 
  ; --- the song -----------------------------------------------------------------
  ; gwen's tidal line, note for note:
@@ -335,7 +333,7 @@
  ; pinkyup sounds the top note after each of the others; down just falls
  (pinkyup l) (:- (go 0 ()) top <(lrev l)
               (go k acc) (k + 1 < #l ? (go (k + 1) (top . l k . acc)) (lrev acc)))
- (arp-of q) (? (q < 2) pinkyup lrev)    ; "pinkyup down": the first half, then the second
+ (arp-of q) (q < 2 ? pinkyup lrev)      ; "pinkyup down": the first half, then the second
  ; the tune: four quarters to the cycle and four cycles to the round, the k'th cycle dropping
  ; its k'th quarter five semitones -- which is what chunk 4 does. sine, because the
  ; piano it was written for is not the point; the notes are.
@@ -380,7 +378,7 @@
  (slop-song-edge g)
   (: gap (slop-gap g) lo (g 'gedge)
      m (? (lo <= gap) 0.0
-          (1 < gap) (: u ((lo - gap) * 1.0 / ((lo - 1) * 1.0))
+          (1 < gap) ((lo - gap) * 1.0 / ((lo - 1) * 1.0) @ u
                      (u * u * (3.0 - 2.0 * u)))
           1.0)
    (? (m < 0.0) 0.0 (1.0 < m) 1.0 m))
@@ -399,12 +397,12 @@
      d (g 'wtop - g 'bt)            ; rows of scroll still to come before the sand
      h (g 'r // 2)
      v (? (sp <= gap) 1.0
-          (lo < gap) (: q (((gap - lo) * 1.0) / ((sp - lo) * 1.0))
-                        s (q * q * (3.0 - (2.0 * q)))
+          (lo < gap) (: q ((gap - lo) * 1.0 / ((sp - lo) * 1.0))
+                        s (q * q * (3.0 - 2.0 * q))
                       (song-floor + (1.0 - song-floor) * s))
           (h <= d) song-floor
-          (0 < d) (: u ((h - d) * 1.0 / (h * 1.0))
-                   (song-floor + ((1.0 - song-floor) * u)))
+          (0 < d) ((h - d) * 1.0 / (h * 1.0) @ u
+                   (song-floor + (1.0 - song-floor) * u))
           1.0)
    (? (v < song-floor) song-floor (1.0 < v) 1.0 v))
 
@@ -412,10 +410,10 @@
  ; quarter, minus one at three. play.l's own i-tri starts at minus one, a quarter period
  ; behind -- nothing on its own and wrong in a blend, where the two would cancel toward
  ; the middle rather than cross. harp's i-sqr already shares the sine's sign.
- (song-tri u) (: v (u * 4.0)
-                 (((u < 0.25) * v)
-                  + (((u >= 0.25) * (u < 0.75)) * (2.0 - v))
-                  + ((u >= 0.75) * (v - 4.0))))
+ (song-tri u) (u * 4.0 @ v
+                 ((u < 0.25) * v
+                  + ((u >= 0.25) * (u < 0.75)) * (2.0 - v)
+                  + (u >= 0.75) * (v - 4.0)))
  ; the dial, in three steps: sine, then triangle, then square. straight from a sine to a
  ; square is a wide jump and the triangle sits between them in harmonic content, so the
  ; waypoint stays -- it is the SLIDE between them that goes. a crossfade builds BOTH of
@@ -428,7 +426,7 @@
  (slop-song-wave tp f m)
   (? (m < 0.34) (sin (tp * tau * f))
      (m < 0.67) (song-tri (tp * f % 1.0))
-     (: u (tp * f % 1.0) (((u < 0.5) * 2.0) - 1.0)))
+     (tp * f % 1.0 @ u ((u < 0.5) * 2.0 - 1.0)))
  ; a voice is its note, its shape and how long it lasts, and from its onset every voice
  ; of a kind is the one waveform -- so each kind is laid once, the first time the walk
  ; meets it, and kept: a chunk of a voice is then a cut of it, one tray op, where the
@@ -439,12 +437,12 @@
  (song-wave-of nt f m dur rate)
   (: k [nt (m < 0.34 ? 0 (m < 0.67 ? 1 2)) dur]
      w (song-waves k)
-     (? (tray? w) w
-        (: t (((iota (int (dur * rate) + 2 + 2 * song-chunk)) - song-chunk) * (1.0 / rate))
+     (tray? w ? w
+        (: t ((iota (int (dur * rate) + 2 + 2 * song-chunk) - song-chunk) * (1.0 / rate))
            tp (t * (t > 0.0))
            v (slop-song-wave tp f m * venv tp dur * (t < dur))
-           _ (pin song-waves k v)
-           v)))
+           (pin song-waves k v,
+            v))))
 
  ; a voice m of the way along that dial, at the volume the dip puts there. built here
  ; rather than taken off harp's mkvoice because an instrument there is a name, and this
@@ -455,13 +453,13 @@
      f   (261.6255653005986 * exp (nt * ln2-12))
      amp (vnum v 'gain 1.0 * vol)
      pn  (vnum v 'pan 0.5)
-     end (st + (int (dur * rate)) + 2)
+     end (st + int (dur * rate) + 2)
      w   (song-wave-of nt f m dur rate)
      ; no (t >= 0.0) gate: tp is already zero for every frame before the onset, and venv
      ; is zero at zero -- so the envelope has answered that question by the time a mask
      ; could ask it, and a mask is two more tray ops a voice a chunk
-     fn  (\ ix (: k0 ((peep ix 0 0) - st + song-chunk) n #ix
-                  (? (0 <= k0 && k0 + n <= #w) (snip w k0 (k0 + n))
+     fn  (ix \ (: k0 (peep ix 0 0 - st + song-chunk) n #ix
+                  (0 <= k0 && k0 + n <= #w ? (snip w k0 (k0 + n))
                      (: t  ((ix - st) * (1.0 / rate))
                         tp (t * (t > 0.0))
                       (slop-song-wave tp f m * venv tp dur * (t < dur))))))
@@ -474,7 +472,7 @@
  ; to drop it by, and only the end is in the voice itself.
  (song-voices s c st spc m vol)
   (filter two?
-          (map (\ x (: at (st + (int (spc * qnum (evwb x - qi c))))
+          (map (x \ (: at (st + int (spc * qnum (evwb x - qi c)))
                        v (song-voice at (evv x) song-rate m vol)
                      (two? v ? [at v])))
                (filter onset? (s 'tune (qi c) (qi (c + 1))))))
@@ -485,16 +483,16 @@
  ; frame loop that feeds it needs no rest of its own.
  (slop-song-feed s sp m vol)
   (: spc (int (song-rate / (song-cps * sp)))
-     (fill _) (? ((s 'next) <= ((s 'fpos) + song-chunk))
-                 (: _ (pin s 'vs (cat (s 'vs) (song-voices s (s 'cyc) (s 'next) spc m vol)))
-                    _ (pins s 'cyc ((s 'cyc) + 1) 'next ((s 'next) + spc))
-                  (fill ())))
+     (fill _) (s 'next <= s 'fpos + song-chunk ?
+                 (pin s 'vs (cat (s 'vs) (song-voices s (s 'cyc) (s 'next) spc m vol)),
+                  (pins s 'cyc (s 'cyc + 1) 'next (s 'next + spc)),
+                  fill ()))
      _ (fill ())
      base (s 'fpos)
      live (filter (p \ p 1 0 >= base) (s 'vs))       ; not finished
      now (filter (p \ p 0 < base + song-chunk) live) ; ..and already begun
-     _ (pins s 'vs live 'fpos (base + song-chunk))
-   (say (s 'h) (pack (mixdown (map (p \ p 1) now) base song-chunk) song-chunk song-gain)))
+     ((pins s 'vs live 'fpos (base + song-chunk)),
+      say (s 'h) (pack (mixdown (map (p \ p 1) now) base song-chunk) song-chunk song-gain)))
 
  (presses n) (show n + (n = 1 ? " press" " presses"))
  ; the bar stops a column short of the screen: a console that wraps at its edge would
@@ -523,10 +521,10 @@
      vs (both ? [tk pn] (tk ? [tk] [pn]))
      rows (both ? sign-both (tk ? sign-tok sign-pnn))
      head (map (l \ fill l vs) rows)
-     _ (say out (sign-over (slop-frame g) sign-ttl (head + sign-rest) 0 (g 'r) (g 'c)))
-     _ (flush out)
-     _ (settle sign-settle)
-     (edkey in))
+     (say out (sign-over (slop-frame g) sign-ttl (head + sign-rest) 0 (g 'r) (g 'c)),
+      flush out,
+      settle sign-settle,
+      edkey in))
 
  (slop-walk tk pn) (: ws (tty 1)
              r (two? ws && 7 < <ws ? (<ws - 1) 23)
@@ -535,19 +533,19 @@
              ; the song: harp for the notes, a horn to put them out of. no card and
              ; the walk is silent, which is all it is.
              tune (slop-tune ())
-             hn (: r (horn song-rate 2) (? (nom? r) () r))
-             sng (? hn (slop-song-new tune hn) ())
+             hn (horn song-rate 2 @ r (nom? r ? () r))
+             sng (hn ? (slop-song-new tune hn))
              ; a chunk of song is a frame's worth and the card takes it at playing
              ; speed, so with a horn the music is the clock; without one, rest is
-             (beat-out sp m vol) (? sng (slop-song-feed sng sp m vol) (rest 33))
+             (beat-out sp m vol) (sng ? (slop-song-feed sng sp m vol) (rest 33))
              ; since is beats since the last frame
-             (swim since) (? (g 'over) ()
+             (swim since) (g 'over ? ()
                          (: keys (key-drain g repeat-gap (k \ slop-key g k))   ; a held key at the tower's pace
                             _ (g 'over ? () (slop-tick g))
                             due (!hn || frame-due? song-yield (horn-lag hn) (0 < keys) since)
-                            _ (? due (say out (slop-frame g), flush out))
-                            (beat-out (slop-song-speed g) (slop-song-edge g) (slop-song-vol g),
-                             swim (due ? 0 (since + 1)))))
+                            (due ? (say out (slop-frame g), flush out),
+                             (beat-out (slop-song-speed g) (slop-song-edge g) (slop-song-vol g),
+                              swim (due ? 0 (since + 1))))))
              _ (say out (esc + "[?25l"))
              _ (tk || pn ? (slop-sign g tk pn))
              _ (swim 0)
@@ -557,32 +555,32 @@
              ; gap left to slow either one
              ; the flood answers to nothing, but it still drains: a key pressed at it is
              ; a key that would otherwise be sitting in the queue when the shell reads
-             (flood n t) (? (0 < n) (: _ (drain-keys ())
-                                       _ (say out (slop-flood g t), flush out,
-                                          beat-out 1.0 1.0 1.0)
-                                     (flood (n - 1) (t + beat))))
-             _ (g 'over = 'taken ? (flood 15 (g 't)))
-             _ (? hn (: _ (flush hn) (close hn)) ())
-             g)
+             (flood n t) (0 < n ? (drain-keys (),
+                                   (say out (slop-flood g t), flush out,
+                                    beat-out 1.0 1.0 1.0),
+                                   flood (n - 1) (t + beat)))
+             (g 'over = 'taken ? (flood 15 (g 't)),
+              hn ? (flush hn, close hn),
+              g))
 
  ; ..and the verb around it: the screen is raised here and put back here, and the
  ; walk between the two neither knows nor cares which door it came in by
  (slop-run tk pn) (: _ (raw 1)
                  _ (say out (esc + "[?1049h" + esc + "[2J" + esc + "[?9h" + esc + "[?1006h"))   ; a tap's press, as edkey's -12
                  g (slop-walk tk pn)
-                 _ (say out (esc + "[?1006l" + esc + "[?9l" + esc + "[0m" + esc + "[?25h" + esc + "[?1049l"))
-                 _ (flush out)
-                 _ (drain-keys ())
-                 _ (raw 0)
-                 (puts (g 'over @ 'taken ("the slop has you, " + presses (g 'spent) + " in\n")
-                                         ("you turn back, " + presses (g 'spent) + " in\n")),
-                  0))
+                 (say out (esc + "[?1006l" + esc + "[?9l" + esc + "[0m" + esc + "[?25h" + esc + "[?1049l"),
+                  flush out,
+                  drain-keys (),
+                  raw 0,
+                  (puts (g 'over @ 'taken ("the slop has you, " + presses (g 'spent) + " in\n")
+                                          ("you turn back, " + presses (g 'spent) + " in\n")),
+                   0)))
  slop-usage "usage: love slop [token] [pennies]   (what you bring; forward is k or up, q or esc leaves)"
  ; the two optional words, in either order: a number is pennies and anything else is
  ; the token. given either, the walk opens on a sign saying what you came in with.
  (slop-args as) (:- (go as () ()) (go l tk pn) (atom? l ? [tk pn]
                  (: t <l n (unum t) (charm? n ? (go >l tk n) (go >l t pn)))))
  (slop-main as) (2 < #as ? (say err ("slop: " + slop-usage + "\n"), flush err, 2)
-                    (: p (slop-args as) (slop-run <p <>p)))
+                    (slop-args as @ p (slop-run <p <>p)))
  _ (pins (cite 'verbs 'tab) 'slop (udoor 'slop slop-main slop-usage 1 1)))
 ) ; module slop

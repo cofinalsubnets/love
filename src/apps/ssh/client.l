@@ -39,12 +39,12 @@
        (sstr (0 < #r && 127 < r 0 ? (u8 0 + r) r)))
 
    ; a cursor over a payload: a tablet of the run and an index, read forward
-   (cur s) (: c (tablet 2) (pin c 's s, pin c 'i 0, c))
+   (cur s) (tablet 2 @ c (pin c 's s, pin c 'i 0, c))
    (g-skip c n) (: i (c 'i) (pin c 'i (i + n), i))
    (g-u8 c) (c 's (g-skip c 1))
    (g-u32 c) (be32 (c 's) (g-skip c 4))
    (g-str c) (: n (g-u32 c) i (g-skip c n) (snip (c 's) i (i + n)))
-   (g-names c) (: s (g-str c) (#s = 0 ? () (split s 44)))
+   (g-names c) (g-str c @ s (#s = 0 ? () (split s 44)))
 
    ; --- base64, both ways (RFC 4648; decode skips what is not the alphabet) ---
    b64a "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
@@ -53,9 +53,9 @@
    (b64d s)
     (: vs (filter (v \ -1 < v) (map (i \ b64v (s i)) (jot #s)))
        (go l acc k out)
-        (? (two? l) (: a2 (acc << 6 | <l) k2 (k + 6)
-                       (? (8 <= k2) (go >l (a2 & (1 << k2 - 8) - 1) (k2 - 8) (a2 >> (k2 - 8) . out))
-                          (go >l a2 k2 out)))
+        (two? l ? (: a2 (acc << 6 | <l) k2 (k + 6)
+                     (8 <= k2 ? (go >l (a2 & (1 << k2 - 8) - 1) (k2 - 8) (a2 >> (k2 - 8) . out))
+                        (go >l a2 k2 out)))
            (string (rev out)))
        (go vs 0 0 ()))
    (b64e s pad?)
@@ -73,21 +73,21 @@
    (ssh-clean s)
     (: n #s
        (cont? i) (i < n && 127 < s i && s i < 192)
-       (seq i) (: b (s i)                                   ; a well-formed sequence's length at i, else 0
-                  (? (b < 194 || 244 < b) 0
+       (seq i) (s i @ b                                     ; a well-formed sequence's length at i, else 0
+                  (b < 194 || 244 < b ? 0
                      (: k (? (b < 224) 1 (b < 240) 2 3)
                         lo (? (b = 224) 160 (b = 240) 144 128)
                         hi (? (b = 237) 159 (b = 244) 143 191)
                         s1 (i + 1 < n ? (s (i + 1)) 0)
                         (? !(lo <= s1 && s1 <= hi) 0
-                           (k = 1 || (cont? (i + 2) && (k = 2 || cont? (i + 3)))) (k + 1)
+                           (k = 1 || cont? (i + 2) && (k = 2 || cont? (i + 3))) (k + 1)
                            0))))
        (go i a)
-        (? (n <= i) (string (rev a))
-           (: b (s i)
+        (n <= i ? (string (rev a))
+           (s i @ b
               (? (b < 32) (go (i + 1) (b = 9 || b = 10 ? (b . a) a))
                  (b < 127) (go (i + 1) (b . a))
-                 (: m (b = 127 ? 0 (seq i))
+                 ((b = 127 ? 0 (seq i)) @ m
                     (? (m = 0) (go (i + 1) a)
                        (b = 194 && s (i + 1) < 160) (go (i + 2) a)
                        (go (i + m) (foldl (a2 \ j \ (s (i + j) . a2)) a ^m)))))))
@@ -104,60 +104,60 @@
        pad (pd < 4 ? (pd + 8) pd)
        body (u8 pad + p + zeros pad)
        len (u32 #body)
-       (? (seq = m32) (: s (t 's) _ (? (hot? s) (close s) 0) ())   ; the next would wrap and reuse a nonce: hang up
-          (: _ (pin t 'sseq (seq + 1))
-             (? enc
-                (: n (nonce seq) el (chacha20 <>k n 0 len) eb (chacha20 <k n 1 body)
-                   (wr t (el + eb + poly1305 (polykey <k n) (el + eb))))
-                (wr t (len + body))))))
+       (seq = m32 ? (: s (t 's) (hot? s ? (close s) 0, ()))        ; the next would wrap and reuse a nonce: hang up
+          (pin t 'sseq (seq + 1),
+           enc ?
+             (: n (nonce seq) el (chacha20 <>k n 0 len) eb (chacha20 <k n 1 body)
+                (wr t (el + eb + poly1305 (polykey <k n) (el + eb))))
+             (wr t (len + body)))))
    ; tasks share the socket, and a write can park: one packet on the wire at a time
-   (ssh-send t p) (? (t 'busy) (rest 1, ssh-send t p)
-                     (: _ (pin t 'busy 1) r (send1 t p) _ (pin t 'busy 0) r))
+   (ssh-send t p) (t 'busy ? (rest 1, ssh-send t p)
+                     (: _ (pin t 'busy 1) r (send1 t p) (pin t 'busy 0, r)))
    (unpad b) (snip b 1 (#b - b 0))
    (ssh-recv t)
     (: k (t 'sk) seq (t 'rseq)
        _ (pin t 'rseq (seq + 1 & m32))
        h (seq = m32 ? () (rd t 4))                   ; a wrapped sequence number ends it, as sending does
        (? (atom? h) ()
-          (atom? k) (: len (be32 <>h 0)                          ; pre-newkeys: rfc 4253 6.1 caps a packet at 35000
-                       (35000 < len ? () (: r (rd t len) (two? r ? (unpad <>r) ()))))
+          (atom? k) (be32 <>h 0 @ len                            ; pre-newkeys: rfc 4253 6.1 caps a packet at 35000
+                       (35000 < len ? () (rd t len @ r (two? r ? (unpad <>r) ()))))
           (: n (nonce seq) el <>h
              len (be32 (chacha20 <>k n 0 el) 0)
              r (len < 262144 ? (rd t (len + 16)) ())
-             (? (atom? r) ()
-                (: eb (snip <>r 0 len)
-                   (? (snip <>r len (len + 16) != poly1305 (polykey <k n) (el + eb)) ()
+             (atom? r ? ()
+                (snip <>r 0 len @ eb
+                   (snip <>r len (len + 16) != poly1305 (polykey <k n) (el + eb) ? ()
                       (unpad (chacha20 <k n 1 eb))))))))
 
    ; the next payload that is not transport noise: ignore, debug and ext-info pass, a
    ; banner goes to stderr, a global request is refused, a disconnect is the end. under
    ; strict kex ('strict, agreement to newkeys) any of that noise ends the connection
    (ssh-next t)
-    (: p (ssh-recv t)
+    (ssh-recv t @ p
        (? !(string? p) ()
-          (: ty (p 0) c (cur p) _ (g-skip c 1)
-             (? (t 'strict = 1 && elem ty [2 4 7 53 80]) ()
-                (ty = 2 || ty = 4 || ty = 7) (ssh-next t)
-                (ty = 53) (say err (ssh-clean (g-str c)), ssh-next t)
-                (ty = 80) (g-str c, g-u8 c ? (ssh-send t (u8 82)) 0, ssh-next t)
-                (ty = 1) (: code (g-u32 c) (say err ("ssh: disconnected: " + ssh-clean (g-str c) + "\n"), ()))
-                p))))
+          (: ty (p 0) c (cur p) (g-skip c 1,
+                                 (? (t 'strict = 1 && elem ty [2 4 7 53 80]) ()
+                                    (ty = 2 || ty = 4 || ty = 7) (ssh-next t)
+                                    (ty = 53) (say err (ssh-clean (g-str c)), ssh-next t)
+                                    (ty = 80) (g-str c, g-u8 c ? (ssh-send t (u8 82)) 0, ssh-next t)
+                                    (ty = 1) (g-u32 c @ code (say err ("ssh: disconnected: " + ssh-clean (g-str c) + "\n"), ()))
+                                    p)))))
    ; a payload of type ty, or ()
-   (expect t ty) (: p (ssh-next t) (string? p && p 0 = ty ? p ()))
+   (expect t ty) (ssh-next t @ p (string? p && p 0 = ty ? p ()))
 
    ; --- the version lines ---
    ; a crlf-terminated line, bytes gathered in a list and capped at 255 (rfc 4253 4.2);
    ; overlong or eof ends the session
    (rdline t)
-    (: (go acc n) (? (255 < n) ()
-                     (: r (rd t 1)
+    (: (go acc n) (255 < n ? ()
+                     (rd t 1 @ r
                         (? (atom? r) () (<>r = "\n") (string (rev acc)) (go (<>r 0 . acc) (n + 1)))))
        l (go () 0)
        (string? l ? (0 < #l && l (#l - 1) = 13 ? (snip l 0 (#l - 1)) l) ()))
    ; the peer's version line, skipping at most 1024 lines of banner ahead of it
    (server-version t)
-    (: (go j) (? (1024 < j) ()
-                 (: l (rdline t)
+    (: (go j) (1024 < j ? ()
+                 (rdline t @ l
                     (? !(string? l) () (4 <= #l && snip l 0 4 = "SSH-") l (go (j + 1)))))
        (go 0))
 
@@ -174,12 +174,12 @@
        kx (g-names c) hk (g-names c) cs (g-names c) sc (g-names c)
        (? !(elem "curve25519-sha256" kx || elem "curve25519-sha256@libssh.org" kx)
           ("no common key exchange; the server offers " + join "," kx)
-          !(elem "ssh-ed25519" hk) ("no ssh-ed25519 host key; the server offers " + join "," hk)
+          (nelem "ssh-ed25519" hk) ("no ssh-ed25519 host key; the server offers " + join "," hk)
           !(elem cipher cs && elem cipher sc) ("no common cipher; the server offers " + join "," cs)
           (elem "kex-strict-s-v00@openssh.com" kx)))
 
    (ssh-dial host port)
-    (: s (dial host port)
+    (dial host port @ s
        (? !(hot? s) ("cannot connect to " + host + " port " + show port)
           (: t (tablet 16)
              _ (pin t 's s) _ (pin t 'pend "") _ (pin t 'sseq 0) _ (pin t 'rseq 0) _ (pin t 'busy 0)
@@ -189,7 +189,7 @@
              _ (ssh-send t ic)
              is (expect t 20)
              ok (string? vs ? (string? is ? (agree is) "no kexinit") "no version line")
-             (? (string? ok) (close s, ok)
+             (string? ok ? (close s, ok)
                 (: _ (pin t 'strict ok)
                    priv (rnd 32) qc (x25519-pub priv)
                    _ (ssh-send t (u8 30 + sstr qc))
@@ -206,18 +206,18 @@
                             !(kt = "ssh-ed25519" && st = "ssh-ed25519" && ed-verify hpk h sb)
                              (close s, "the host key's signature does not verify")
                             (: _ (pin t 'sid h) _ (pin t 'hostkey ks)
-                               (kd x) (: k1 (sha (kk + h + x + h)) (k1 + sha (kk + h + k1)))
+                               (kd x) (sha (kk + h + x + h) @ k1 (k1 + sha (kk + h + k1)))
                                (pair k) [(snip k 0 32) (snip k 32 64)]
                                _ (ssh-send t (u8 21))
                                _ (pin t 'ck (pair (kd "C")))
-                               _ (? ok (pin t 'sseq 0) 0)
+                               _ (ok ? (pin t 'sseq 0) 0)
                                nk (expect t 21)
-                               _ (pin t 'sk (pair (kd "D")))
-                               _ (? ok (pin t 'rseq 0) 0)
-                               _ (pin t 'strict 0)
-                               (? !(string? nk) (close s, "no newkeys")
-                                  (ssh-send t (u8 5 + sstr "ssh-userauth"),
-                                   string? (expect t 6) ? t (close s, "no userauth service"))))))))))))
+                               (pin t 'sk (pair (kd "D")),
+                                ok ? (pin t 'rseq 0) 0,
+                                pin t 'strict 0,
+                                (? !(string? nk) (close s, "no newkeys")
+                                   (ssh-send t (u8 5 + sstr "ssh-userauth"),
+                                    string? (expect t 6) ? t (close s, "no userauth service")))))))))))))
 
    ; the host key's fingerprint, as openssh prints it
    (ssh-fingerprint t) ("SHA256:" + b64e (sha (t 'hostkey)) 0)
@@ -232,7 +232,7 @@
        r (ssh-next t)
        (? !(string? r) "the server closed during auth"
           (r 0 = 52) 1
-          (r 0 = 51) (: c (cur r) (g-skip c 1, "permission denied (" + join "," (g-names c) + ")"))
+          (r 0 = 51) (cur r @ c (g-skip c 1, "permission denied (" + join "," (g-names c) + ")"))
           "unexpected auth reply"))
 
    ; --- the identity: openssh-key-v1 (PROTOCOL.key), an ed25519 key, bare or under aes-ctr ---
@@ -245,21 +245,21 @@
        kiv (bcrypt-pbkdf pass salt rounds (kl + 16))
        (aes-ctr (aes-keys (snip kiv 0 kl)) (snip kiv kl (kl + 16)) enc))
    (ssh-key path ask)
-    (: q (open path "r")
+    (open path "r" @ q
        (? !(hot? q) ("cannot read " + path)
-          (: txt (slurp q) (close q, ssh-keytext path txt ask))))
+          (slurp q @ txt (close q, ssh-keytext path txt ask))))
    (ssh-keytext path txt ask)
     (: body (join "" (filter (l \ !(0 < #l && l 0 = 45)) (split txt 10)))
        b (b64d body)
        magic "openssh-key-v1"
-       (? (snip b 0 14 != magic) (path + ": not an openssh private key")
+       (snip b 0 14 != magic ? (path + ": not an openssh private key")
           (: c (cur b) _ (g-skip c 15)
              ciph (g-str c) kdf (g-str c) ko (cur (g-str c)) _ (g-u32 c) _ (g-str c)
              enc (g-str c)
              kl (key-len ciph)
              (? (kl < 0) (path + ": keys under " + ciph + " are not supported")
                 (0 < kl && kdf != "bcrypt") (path + ": the kdf " + kdf + " is not supported")
-                (: pass (0 < kl ? (ask path) "")
+                ((0 < kl ? (ask path) "") @ pass
                    (? !(string? pass) (path + ": no passphrase")
                       (: pc (cur (0 < kl ? (unlock kl ko pass enc) enc))
                          c1 (g-u32 pc) c2 (g-u32 pc) ty (g-str pc) pk (g-str pc) sk (g-str pc)
@@ -273,48 +273,48 @@
     (ssh-send t (u8 98 + u32 (t 'rch) + sstr name + u8 reply + body))
    ; wait out a channel request's reply, taking window adjusts on the way -> 1 | 0
    (reply t)
-    (: p (ssh-next t)
+    (ssh-next t @ p
        (? !(string? p) 0
           (p 0 = 99) 1
           (p 0 = 100) 0
-          (p 0 = 93) (: c (cur p) (g-skip c 5, pin t 'rwin (t 'rwin + g-u32 c), reply t))
+          (p 0 = 93) (cur p @ c (g-skip c 5, pin t 'rwin (t 'rwin + g-u32 c), reply t))
           (reply t)))
    ; stdin to the channel, a packet per read, inside the peer's window and packet size
    (pump t)
-    (: ch (see in)
-       (? (ch = -1) (ssh-send t (u8 96 + u32 (t 'rch)))
+    (see in @ ch
+       (ch = -1 ? (ssh-send t (u8 96 + u32 (t 'rch)))
           (: _ (unsee in ch)
              s (chug in)
-             (put1 i) (? (#s <= i) 0
-                         (: room (min (t 'rmax) (t 'rwin))
-                            (? (room < 1) (rest 5, put1 i)
-                               (: n (min room (#s - i))
+             (put1 i) (#s <= i ? 0
+                         (min (t 'rmax) (t 'rwin) @ room
+                            (room < 1 ? (rest 5, put1 i)
+                               (min room (#s - i) @ n
                                   (pin t 'rwin (t 'rwin - n),
                                    ssh-send t (u8 94 + u32 (t 'rch) + sstr (snip s i (i + n))),
                                    put1 (i + n))))))
              (put1 0, pump t))))
    ; the channel's traffic until it closes -> the exit status
    (drain t)
-    (: p (ssh-next t)
+    (ssh-next t @ p
        (? !(string? p) (t 'status)
-          (: ty (p 0) c (cur p) _ (g-skip c 5)
-             (? (ty = 94) (: d (g-str c) _ (say out d) _ (flush out)
-                             used (t 'used + #d)
-                             _ (? (lwin // 2 < used)
-                                (ssh-send t (u8 93 + u32 (t 'rch) + u32 used), pin t 'used 0)
-                                (pin t 'used used))
-                             (drain t))
-                (ty = 95) (: _ (g-u32 c) d (g-str c)
-                             (say err d, flush err, pin t 'used (t 'used + #d), drain t))
-                (ty = 93) (pin t 'rwin (t 'rwin + g-u32 c), drain t)
-                (ty = 98) (: nm (g-str c) wr? (g-u8 c)
-                             _ (? (nm = "exit-status") (pin t 'status (g-u32 c))
-                                  (nm = "exit-signal") (pin t 'status 255)
-                                  0)
-                             _ (wr? ? (ssh-send t (u8 100 + u32 (t 'rch))) 0)
-                             (drain t))
-                (ty = 97) (ssh-send t (u8 97 + u32 (t 'rch)), t 'status)
-                (drain t)))))
+          (: ty (p 0) c (cur p) (g-skip c 5,
+                                 (? (ty = 94) (: d (g-str c) _ (say out d) _ (flush out)
+                                                 used (t 'used + #d)
+                                                 (lwin // 2 < used ?
+                                                  (ssh-send t (u8 93 + u32 (t 'rch) + u32 used), pin t 'used 0)
+                                                  (pin t 'used used),
+                                                  drain t))
+                                    (ty = 95) (: _ (g-u32 c) d (g-str c)
+                                                 (say err d, flush err, pin t 'used (t 'used + #d), drain t))
+                                    (ty = 93) (pin t 'rwin (t 'rwin + g-u32 c), drain t)
+                                    (ty = 98) (: nm (g-str c) wr? (g-u8 c)
+                                                 ((? (nm = "exit-status") (pin t 'status (g-u32 c))
+                                                     (nm = "exit-signal") (pin t 'status 255)
+                                                     0),
+                                                  wr? ? (ssh-send t (u8 100 + u32 (t 'rch))) 0,
+                                                  drain t))
+                                    (ty = 97) (ssh-send t (u8 97 + u32 (t 'rch)), t 'status)
+                                    (drain t))))))
 
    ; the terminal's size as the wire's cols, rows and two zero pixel counts
    (geom _) (: a (tty 1) sz (two? a ? a (tty 0))
@@ -329,18 +329,18 @@
           (: c (cur r) _ (g-skip c 5)
              _ (pin t 'rch (g-u32 c)) _ (pin t 'rwin (g-u32 c)) _ (pin t 'rmax (g-u32 c))
              _ (pin t 'used 0) _ (pin t 'status -1)
-             term (: e (getenv "TERM") (string? e ? e "xterm"))
+             term (getenv "TERM" @ e (string? e ? e "xterm"))
              _ (pty? ? (chreq t "pty-req" 1 (sstr term + geom 0 + sstr (u8 0))) 0)
              okp (pty? ? (reply t) 1)
-             _ (!cmd ? (chreq t "shell" 1 "") (chreq t "exec" 1 (sstr cmd)))
-             (? !(reply t) -1
-                (: _ (pty? ? (raw 1) 0)
-                   sig (pty? ? (sigfd [28]) ())
-                   _ (hot? sig ? (twirl (_ \ winch t sig) 0) 0)
-                   _ (twirl (_ \ pump t) 0)
-                   st (drain t)
-                   _ (pty? ? (raw 0) 0)
-                   st)))))
+             (!cmd ? (chreq t "shell" 1 "") (chreq t "exec" 1 (sstr cmd)),
+              (? !(reply t) -1
+                 (: _ (pty? ? (raw 1) 0)
+                    sig (pty? ? (sigfd [28]) ())
+                    _ (hot? sig ? (twirl (_ \ winch t sig) 0) 0)
+                    _ (twirl (_ \ pump t) 0)
+                    st (drain t)
+                    (pty? ? (raw 0) 0,
+                     st)))))))
 
    ; --- a channel as a byte stream, for a protocol riding exec (scp) ---
    ;   (ssh-open t cmd)   a session channel running cmd, no pty -> 1 | a reason string
@@ -359,25 +359,25 @@
               chreq t "exec" 1 (sstr cmd),
               reply t ? 1 ("the server would not run " + cmd)))))
    (ch-took t n) (: used (t 'used + n)
-                    (? (lwin // 2 < used) (ssh-send t (u8 93 + u32 (t 'rch) + u32 used), pin t 'used 0)
+                    (lwin // 2 < used ? (ssh-send t (u8 93 + u32 (t 'rch) + u32 used), pin t 'used 0)
                        (pin t 'used used)))
    ; one packet into the channel's state -> 0 once it can bring no more
    (ch-pull t)
-    (: p (t 'closed = 1 ? () (ssh-next t))
+    ((t 'closed = 1 ? () (ssh-next t)) @ p
        (? !(string? p) (pins t 'eof 1 'closed 1, 0)
-          (: ty (p 0) c (cur p) _ (g-skip c 5)
-             (? (ty = 94) (: d (g-str c) (pin t 'rbuf (t 'rbuf + d), ch-took t #d, 1))
-                (ty = 95) (: _ (g-u32 c) d (g-str c) (say err d, flush err, ch-took t #d, 1))
-                (ty = 93) (pin t 'rwin (t 'rwin + g-u32 c), 1)
-                (ty = 98) (: nm (g-str c) wr? (g-u8 c)
-                             _ (? (nm = "exit-status") (pin t 'status (g-u32 c)) (nm = "exit-signal") (pin t 'status 255) 0)
-                             _ (wr? ? (ssh-send t (u8 100 + u32 (t 'rch))) 0)
-                             1)
-                (ty = 96) (pin t 'eof 1, 1)
-                (ty = 97) (ssh-send t (u8 97 + u32 (t 'rch)), pins t 'eof 1 'closed 1, 0)
-                1))))
+          (: ty (p 0) c (cur p) (g-skip c 5,
+                                 (? (ty = 94) (g-str c @ d (pin t 'rbuf (t 'rbuf + d), ch-took t #d, 1))
+                                    (ty = 95) (: _ (g-u32 c) d (g-str c) (say err d, flush err, ch-took t #d, 1))
+                                    (ty = 93) (pin t 'rwin (t 'rwin + g-u32 c), 1)
+                                    (ty = 98) (: nm (g-str c) wr? (g-u8 c)
+                                                 ((? (nm = "exit-status") (pin t 'status (g-u32 c)) (nm = "exit-signal") (pin t 'status 255) 0),
+                                                  wr? ? (ssh-send t (u8 100 + u32 (t 'rch))) 0,
+                                                  1))
+                                    (ty = 96) (pin t 'eof 1, 1)
+                                    (ty = 97) (ssh-send t (u8 97 + u32 (t 'rch)), pins t 'eof 1 'closed 1, 0)
+                                    1)))))
    (ch-read t n)
-    (: b (t 'rbuf)
+    (t 'rbuf @ b
        (? (n <= #b) (pin t 'rbuf (snip b n #b), snip b 0 n)
           (t 'eof = 1) ()
           (ch-pull t, ch-read t n)))
@@ -390,9 +390,9 @@
    (ch-write t s)
     (: (go i) (? (#s <= i) 1
                  (t 'closed = 1) 0
-                 (: room (min (t 'rmax) (t 'rwin))
-                    (? (room < 1) (ch-pull t, go i)
-                       (: n (min room (#s - i))
+                 (min (t 'rmax) (t 'rwin) @ room
+                    (room < 1 ? (ch-pull t, go i)
+                       (min room (#s - i) @ n
                           (pin t 'rwin (t 'rwin - n),
                            ssh-send t (u8 94 + u32 (t 'rch) + sstr (snip s i (i + n))),
                            go (i + n))))))

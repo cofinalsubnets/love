@@ -12,7 +12,7 @@
    (pint s y n)                                            ; an optional '-' then >=1 digits -> (the int); fail otherwise
     (: t <s i0 >s m #t neg (i0 < m && t i0 = 45) j0 (i0 + ?neg)
        j (: (g i) (i < m && dig? (t i) ? (g (i + 1)) i) (g j0))
-     (j = j0 ? (n s) (: v (str->nat (snip t j0 j)) (y (t . j) [(neg ? -v v)]))))
+     (j = j0 ? (n s) (str->nat (snip t j0 j) @ v (y (t . j) [(neg ? -v v)]))))
    ; -- the dimacs grammar --
    ws        (skip (span ws?))                              ; a (possibly empty) whitespace run
    cline     (seq (lit "c") (span notnl?))                  ; a 'c' comment: 'c' + rest of line (the newline is ws)
@@ -25,7 +25,7 @@
         (? (atom? ls) (atom? cur ? (rev acc) (rev (rev cur . acc)))         ; flush a final un-terminated clause
            (<ls = 0) (g >ls () (rev cur . acc))
            (g >ls (<ls . cur) acc))) ints () ())
-   (dimacs text) (: p (runp cnf text) (split0 (drop 4 p) . p 2))         ; (formula . nvars)
+   (dimacs text) (runp cnf text @ p (split0 (drop 4 p) . p 2))           ; (formula . nvars)
 
  ; -- parse self-tests (standalone; no solver needed) --
  _ (assert

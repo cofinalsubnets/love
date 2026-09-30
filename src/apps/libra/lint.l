@@ -27,7 +27,7 @@
                   (go k) (? (n <= k) (0 < n) (p (s k)) (go (k + 1)) ())
                   (go 0))
    ; the token starting at index i (empty if a delimiter sits there)
-   (ltok-at src n i) (: (go k) (? (k < n && ltkc? (src k)) (go (k + 1)) k)
+   (ltok-at src n i) (: (go k) (k < n && ltkc? (src k) ? (go (k + 1)) k)
                         (snip src i (go i)))
 
    ; --- the config the rules read --------------------------------------------
@@ -40,14 +40,14 @@
    (lname t) (: n #t (go k) (k < n && t k = 39 ? (go (k + 1)) (snip t k n)) (go 0))
    ; the roster entry for the token text t: a bare name, or (name "hint")
    (lint-dep roster t)
-    (? (atom? roster) ()
+    (atom? roster ? ()
        (: e <roster
           nm (two? e ? <e e)
           (string nm = t ? [1 e] (lint-dep >roster t))))
    (lint-depmsg e)
     (: nm (two? e ? <e e)
        h  (two? e && two? >e ? <>e ())
-       ("deprecated " + string nm + (? (string? h) (" -- " + h) "")))
+       ("deprecated " + string nm + (string? h ? (" -- " + h) "")))
 
    ; is frame f a binder slot -- a `\` past its head, or a `:` at an even element?
    (lbind? src n {'e1 e1 'ne ne})
@@ -63,7 +63,7 @@
    (lelem stk i)
     (atom? stk ? stk
      (: f <stk ne (f 'ne + 1)
-      (pin f 'ne ne, (ne = 1 ? (pin f 'e1 i) 0), stk)))
+      (pin f 'ne ne, ne = 1 ? (pin f 'e1 i) 0, stk)))
 
    ; a bare `@` marks its frame a match: everything after is arms, where (x) is a
    ; list shape and the singleton rule stands down. a glued @( is the tray ctor and
@@ -82,7 +82,7 @@
    ;                             needs the operator table a balance scan lacks
    ;   anything else          -> foo(x) is two datums, so the ( is a plain form
    (lpush stk c i line col src it ti)
-    (: pre (? it (snip src ti i) "")
+    (: pre (it ? (snip src ti i) "")
        pq  (two? stk ? (<stk 'qd) 0)
        am  (two? stk ? (<stk 'am) 0)
        ct  (lall? lctc? pre)
@@ -117,7 +117,7 @@
        (lbind? src n <>rest) [2 (<>rest 'ne)])
    ; hang (idx . warn) on the binder's pend slot
    (lpend rest d idx wr)
-    (: f (d @ 1 <rest <>rest)
+    ((d @ 1 <rest <>rest) @ f
      (pin f 'pd ((idx . wr) . f 'pd), rest))
 
    ; --- the scan -------------------------------------------------------------
@@ -134,9 +134,9 @@
        dp (conf 'deprecated)
        ; a token just ended at i, having started at ti/tc. a no-op until a config asks
        (lend line tc ti i warns)
-        (: t (snip src ti i)
-         (? (atom? dp) warns
-          (: r (lint-dep dp (lname t))
+        (snip src ti i @ t
+         (atom? dp ? warns
+          (lint-dep dp (lname t) @ r
            (two? r ? ([line tc (lint-depmsg <>r) 'deprecated] . warns) warns))))
 
        ; stk the frames above, a matched-pair stack so ([)] is caught; sl/sc a
@@ -144,13 +144,13 @@
        ; it must fire once per token, at its first character -- once per character
        ; and a three-letter name counts as three elements.
        (w i st stk line col sl sc it ti tc warns)
-        (? (n <= i)
-            (: w0 (? it (lend line tc ti i warns) warns)
+        (n <= i ?
+            (: w0 (it ? (lend line tc ti i warns) warns)
                w1 (st @ 'str ([sl sc "unclosed string" 'balance] . w0) w0)
-               (rev (foldl (\ a o (o @ {'cl cl 'ln ln 'co co}
-                            ([ln co ("unclosed " + string (lopen cl)) 'balance] . a)))
+               (rev (foldl (a \ o \ (o @ {'cl cl 'ln ln 'co co}
+                              ([ln co ("unclosed " + string (lopen cl)) 'balance] . a)))
                      w1 stk)))
-           (: c (src i)
+           (src i @ c
               (? (st = 'str)                                    ; inside "..."
                   (c @ 92 (w (i + 2) 'str stk line (col + 2) sl sc 0 ti tc warns)   ; \ escape: skip next
                        34 (w (i + 1) 'code stk line (col + 1) sl sc 0 ti tc warns)
@@ -161,24 +161,24 @@
                           (w (i + 1) 'cmt stk line (col + 1) sl sc 0 ti tc warns))
                  (c = 59)                                                      ; ; -- start comment
                   (w (i + 1) 'cmt (lat src stk it ti i) line (col + 1) sl sc 0 ti tc
-                     (? it (lend line tc ti i warns) warns))
+                     (it ? (lend line tc ti i warns) warns))
                  (c = 35 && i + 1 < n && src (i + 1) = 33)                     ; #! shebang, to eol
                   (w (i + 2) 'cmt stk line (col + 2) sl sc 0 ti tc
-                     (? it (lend line tc ti i warns) warns))
+                     (it ? (lend line tc ti i warns) warns))
                  (c = 34)                                                      ; " -- start string
-                  (w (i + 1) 'str (? it stk (lelem stk i)) line (col + 1) line col 0 ti tc
-                     (? it (lend line tc ti i warns) warns))
+                  (w (i + 1) 'str (it ? stk (lelem stk i)) line (col + 1) line col 0 ti tc
+                     (it ? (lend line tc ti i warns) warns))
                  (c = 10)
                   (w (i + 1) 'code (lat src stk it ti i) (line + 1) 1 sl sc 0 ti tc
-                     (? it (lend line tc ti i warns) warns))
+                     (it ? (lend line tc ti i warns) warns))
                  (c = 40 || c = 91 || c = 123)                                 ; ( [ {  -- push
                   ; an opener is an element of its parent, unless glued to the
                   ; token before it, where the two are one datum
-                  (w (i + 1) 'code (lpush (? it stk (lelem stk i)) c i line col src it ti)
+                  (w (i + 1) 'code (lpush (it ? stk (lelem stk i)) c i line col src it ti)
                      line (col + 1) sl sc 0 ti tc
-                     (? it (lend line tc ti i warns) warns))
+                     (it ? (lend line tc ti i warns) warns))
                  (c = 41 || c = 93 || c = 125)                                 ; ) ] }  -- match
-                  (: w0 (? it (lend line tc ti i warns) warns)
+                  ((it ? (lend line tc ti i warns) warns) @ w0
                      (? (atom? stk)
                          (w (i + 1) 'code stk line (col + 1) sl sc 0 ti tc
                             ([line col ("stray " + string c) 'balance] . w0))
@@ -188,22 +188,22 @@
                         (: f <stk rest >stk
                            ; the verdicts this binder owed: an entry at the final
                            ; index was the body, which is where a singleton warns
-                           w1 (foldl (\ a p (: wr >p (<p = f 'ne ? (wr . a) a)))
+                           w1 (foldl (a \ p \ (>p @ wr (<p = f 'ne ? (wr . a) a)))
                                      w0 (f 'pd))
                            ; the off path answers (), which is what the test below reads:
                            ; && is transparent and would pass sg's own 0 through
                            sw (sg ? (lsing src n f) ())
                            (? (sw = ()) (w (i + 1) 'code rest line (col + 1) sl sc 0 ti tc w1)
                               (f 'am)   (w (i + 1) 'code rest line (col + 1) sl sc 0 ti tc w1)   ; match arms: silent
-                              (: dh (ldefer src n rest)
+                              (ldefer src n rest @ dh
                                  (dh @ () (w (i + 1) 'code rest line (col + 1) sl sc 0 ti tc (sw . w1))
                                           (w (i + 1) 'code (lpend rest <dh <>dh sw) line (col + 1) sl sc 0 ti tc w1)))))))
                  (c < 33)                                                      ; space, tab, the rest
                   (w (i + 1) 'code (lat src stk it ti i) line (col + 1) sl sc 0 ti tc
-                     (? it (lend line tc ti i warns) warns))
+                     (it ? (lend line tc ti i warns) warns))
                  ; an ordinary character: a token start only if we were not in one
-                 (w (i + 1) 'code (? it stk (lelem stk i)) line (col + 1) sl sc
-                    1 (? it ti i) (? it tc col) warns))))
+                 (w (i + 1) 'code (it ? stk (lelem stk i)) line (col + 1) sl sc
+                    1 (it ? ti i) (it ? tc col) warns))))
        (w 0 'code () 1 1 1 1 0 0 1 ()))
 
    ; --- the comments ---------------------------------------------------------
@@ -217,7 +217,7 @@
      (shut i cl cc ti ck acc) ([cl cc (snip src ti i) ck] . acc)
      (w i st line col cl cc ti ck acc)
       (n <= i ? (rev (st @ 'cmt (shut i cl cc ti ck acc) acc))
-       (: c (src i)
+       (src i @ c
         (st @
          'str (c @ 92 (w (i + 2) 'str line (col + 2) cl cc ti ck acc)
                    34 (w (i + 1) 'code line (col + 1) cl cc ti ck acc)

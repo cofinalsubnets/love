@@ -66,7 +66,7 @@
    u (clamp (st 'pz / arc-z) 0.0 1.0)
    az (maz * (1.0 - u)) el (mel * cos (u * pi / 2.0) - mang * u)
    rel (wrap (az - th)) c (cos rel)
-   (? (abs rel < 1.3) [(cx + foc * tan rel) (hz - foc * tan el / c) (foc * tan mang / c) el az]
+   (abs rel < 1.3 ? [(cx + foc * tan rel) (hz - foc * tan el / c) (foc * tan mang / c) el az]
       [-999.0 -999.0 0.0 el az]))
  ; the garage's top as an angle over the eye, from pz: what the sun sets behind
  (garage-top pz) (atan ((gh - eh) / (gz - pz)))
@@ -82,7 +82,7 @@
  bushes {}
  (bush-of k s) (: kk ((k % loop + loop) % loop) key (kk * 2 + (0 < s))
    b (peep bushes key ())
-   b2 (? (two? b) b
+   b2 (two? b ? b
          (: seed (s + 2)
             b3 [(dice kk seed 3 100 / 100.0 * sp)
                 (s * (bed-w + 1.5 + dice kk seed 5 100 / 100.0 * 14.0))
@@ -111,7 +111,7 @@
    q (hx / hole-w)
    crown ((q * q < 1.0) * (hole-h * sqrt (max 0.0 (1.0 - q * q)) + jag))
    tb {'xc xc 'ab ab 'vx vx 'vz vz 'qa (cell // 2)
-       'mt (hz - foc * (peep mesas cell 0.0))
+       'mt (hz - foc * peep mesas cell 0.0)
        'tw tw 'hx hx 'hxa hxa 'hxb hxb 'win ((0.0 < vz) * (hx * hx < gw * gw))
        'wt (hz - foc * (gh - eh) / tw) 'wf (hz + foc * eh / tw) 'crown crown
        'dusk (dusk-of pz) 'sun (sun-at st)}
@@ -124,17 +124,17 @@
    (one k s) (: b (bush-of k s)
      dx (b 'x - px) dz (b 'z - pz)
      d (dx * sn + dz * cs) lat (dx * cs - dz * sn)
-     (? (0.5 < d && b 'z < gz - 2.0)
-        (: u (lat / d)
-           (? (abs u < 1.5)
+     (0.5 < d && b 'z < gz - 2.0 ?
+        (lat / d @ u
+           (abs u < 1.5 ?
               (: cx (cx0 + foc * u) hw (foc * b 'wd / (2.0 * d)) hg (foc * b 'ht / d) by (hz + foc * eh / d)
                  tops (tabs (d < near ? 'ntops 'tops)) foots (tabs (d < near ? 'nfoots 'foots))
                  xa (clamp (flo (cx - hw)) 0 (w - 1)) xb (clamp (flo (cx + hw)) 0 (w - 1))
                  (col x) (x <= xb ? (: q (abs (x + 0.5 - cx) / hw)
                                        hx (q < 1.0 ? (hg * sqrt (1.0 - q * q)) 0.0)
-                                       _ (? (0.0 < hx) (: _ (pin tops x (min2 (peep tops x 999.0) (by - hx)))
-                                                          (pin foots x (max2 (peep foots x -999.0) by))))
-                                       (col (x + 1))))
+                                       (0.0 < hx ? (pin tops x (min2 (peep tops x 999.0) (by - hx)),
+                                                    pin foots x (max2 (peep foots x -999.0) by)),
+                                        col (x + 1))))
                  (col xa))))))
    (go k k1) (k <= k1 ? (one k -1, one k 1, go (k + 1) k1))
    (tray-of tab d) (gem-tray [w] (map (x \ peep tab x d) ^w))
@@ -165,12 +165,12 @@
    inbed (ax2 < be * be)
    k (? (t < 10.0) 0 (t < 30.0) 1 2)
    c (over (sand-pens k) inbed (bed-pens k))
-   (? (1 < k) c
+   (1 < k ? c
       (: pebble ((1 - inbed) * (0 = throw (floor (wx * 3.0 + 1000.0)) (floor (wz * 3.0 + 1000.0)) 5 29))
          c2 (over c pebble pebble-pen)
          bank ((be * be <= ax2) * (ax2 < (be + 0.3) * (be + 0.3)))
          c3 (over c2 bank bank-pen)
-         (? (0 < k) c3
+         (0 < k ? c3
             (: rip ((1 - inbed) * (0.75 < sin (2.1 * wz + 0.8 * wx + 0.6 * sin (0.5 * wx))))
                fx (frac (wx * 0.9 + 0.25 * sin (1.3 * wz))) fz (frac (wz * 1.1 + 0.25 * sin (1.7 * wx)))
                ex (t / foc * 0.9) ez (t * t / (foc * eh) * 1.1)      ; a pixel's reach across each
@@ -182,10 +182,10 @@
  ; stretch of the face holds it -- one pixel a line, wherever the walk puts it -- and only
  ; while the lines stand a few pixels apart
  (wall-over c y st tb) (: foc (st 'foc) hz (st 'hz) tw (tb 'tw) hx (tb 'hx) dusk (tb 'dusk)
-   on ((tb 'win) * (tb 'wt <= y) * (y < tb 'wf))
+   on (tb 'win * (tb 'wt <= y) * (y < tb 'wf))
    (? !(aany on) c
       (: yw (eh - (y + 0.5 - hz) * tw / foc)
-         k (? (dusk < 0.6) 0 1)
+         k (dusk < 0.6 ? 0 1)
          base (over (over (wall-pens k) (60.0 < tw) (wall-pens 1)) (120.0 < tw) (wall-pens 2))
          sy (tw / foc) ya (yw + 0.5 * sy) yb (yw - 0.5 * sy)   ; the pixel's stretch of the face, up and across
          xa (tb 'hxa) xb (tb 'hxb)
@@ -202,11 +202,11 @@
  ; a pixel row: above the horizon the sky and the mesas on it, below it the ground; the
  ; garage over either, and the bushes over that
  (pixel-row y st tb) (: hz (st 'hz)
-   c (? (y < hz) (: s (sky-row y st tb)
-                    (over s (tb 'mt <= y + 0.5) (0.5 < tb 'dusk ? dusk-mesa-pen mesa-pen)))
+   c (y < hz ? (sky-row y st tb @ s
+                  (over s (tb 'mt <= y + 0.5) (0.5 < tb 'dusk ? dusk-mesa-pen mesa-pen)))
         (ground-row y st tb))
    (bushes-over (wall-over c y st tb) y tb))
- (dusk-frame st) (: tb (dusk-tables st)
+ (dusk-frame st) (dusk-tables st @ tb
    (view-frame (st 'w) (st 'h) (y \ pixel-row y st tb) {}))
  ; the state: the screen, where the player stands and faces, the tick, whether they walk
  ; on by themselves, and whether they are in the hole
@@ -215,10 +215,10 @@
  (dusk-size st w r) (view-size st w r 4)
  ; a step on down the bed, whichever way the player faces, no further than the hole's
  ; mouth, where the level is done and the walking with it
- (dusk-move st mv) (? (st 'done) st
-                      (: pz2 (min2 (st 'pz + mv) end-z)
-                         _ (pin st 'pz pz2)
-                         (end-z <= pz2 ? (pins st 'done 1 'walk 0) st)))
+ (dusk-move st mv) (st 'done ? st
+                      (min2 (st 'pz + mv) end-z @ pz2
+                         (pin st 'pz pz2,
+                          end-z <= pz2 ? (pins st 'done 1 'walk 0) st)))
  ; ..and in the hole, the view eased back to dead ahead and level, a frame at a time
  (dusk-settle st) (: h2 (st 'h // 2) hz (st 'hz)
                      (pins st 'th (0.8 * st 'th) 'hz (hz + (hz < h2) - (h2 < hz))))
@@ -248,22 +248,22 @@
  ; gong when it is due, the next some seconds on. the port is any jug, so the song gates
  ; headless
  (dusk-song-feed s) (: sb (s 'sb) base (s 'fpos)
-   (strike v) (: at (base + roll sb song-chunk)
+   (strike v) (base + roll sb song-chunk @ at
                  (pins s 'vs (s 'vs + [[at (mkvoice at v song-rate)]]) 'struck (s 'struck + 1)))
-   _ (? (roll sb 1000 < chime-odds)
-        (strike {'s "chime" 'note (pelog (roll sb 5) - 24 + 12 * (roll sb 3 = 0))
-                 'gain (0.5 + roll sb 40 / 100.0) 'pan (0.2 + roll sb 60 / 100.0) 'legato 5.0}))
-   _ (? (s 'gong <= base)
-        (strike {'s "tri" 'note -19.3 'gain 0.8 'pan 0.5 'legato 8.0},
-         pin s 'gong (base + song-rate * (9 + roll sb 6))))
-   (song-out s song-chunk song-gain))
+   (roll sb 1000 < chime-odds ?
+      (strike {'s "chime" 'note (pelog (roll sb 5) - 24 + 12 * (roll sb 3 = 0))
+               'gain (0.5 + roll sb 40 / 100.0) 'pan (0.2 + roll sb 60 / 100.0) 'legato 5.0}),
+    s 'gong <= base ?
+      (strike {'s "tri" 'note -19.3 'gain 0.8 'pan 0.5 'legato 8.0},
+       pin s 'gong (base + song-rate * (9 + roll sb 6))),
+    song-out s song-chunk song-gain))
  ; --- the walk, on view's loop: walking on by itself, or in the hole settling, a frame
  ; at a time, and the garage after it. dusk-walk takes a stage already raised, and
  ; dusk-run raises one ---
  (dusk-walk _) (view-walk {'new dusk-new 'size dusk-size 'frame dusk-frame 'key dusk-step 'fps fps
                            'tick (st \ (? (st 'done) (dusk-settle st) (st 'walk) (dusk-move st 0.25)))
-                           'song (hn \ (: s (? hn (dusk-song-new hn (wheel (clock 0))) ())
-                                          (? s (\ _ (dusk-song-feed s)) ())))
+                           'song (hn \ ((hn ? (dusk-song-new hn (wheel (clock 0)))) @ s
+                                          (s ? (_ \ (dusk-song-feed s)))))
                            'linger done-ms 'next ['garage 'garage-walk]})
  (dusk-run _) (view-run dusk-walk)
  dusk-usage "usage: love dusk   (h l turn, k walks on, u n look, space walks on to the garage; q or esc leaves)"

@@ -68,10 +68,10 @@
    ; --- lane 3, the general one: chunk into a jug until the reads stop. for anything
    ; `stat` cannot size -- a procfs file, a fifo -- and the fallback whenever a promise
    ; below turns out to be false. it reopens, because the lanes above have consumed theirs.
-   (gulp-loop f) (: q (open f "r")
+   (gulp-loop f) (open f "r" @ q
                     (? !(hot? q) ()
                        (: j (jug 0) buf (cask 65536)
-                          (go _) (: k (swig q buf)
+                          (go _) (swig q buf @ k
                                     (charm? k && 0 < k ?
                                      (say j (snip buf 0 k), go ())
                                      (see q @ -1 0 c (put j c, go ()))))
@@ -85,7 +85,7 @@
       ; back 3288 of its 26322 bytes the one time a short read was trusted here.
       (? !(0 < n) (gulp-loop f)
          !swigp (gulp-loop f)                          ; no cb.c: the slow lane still works
-         (: q (open f "r")
+         (open f "r" @ q
             (? !(hot? q) ()
                ; --- lane 1, zero copies: ask for exactly n, and if we got n, hand back the
                ; cask. `say` writes a cask straight out and `tally` gives its length, so
@@ -108,7 +108,7 @@
                (: buf (cask (n + 1))
                   k (swig q buf)
                 (charm? k && 0 < k && k < #buf ?
-                 (: s (snip buf 0 k) (close q, s))
+                 (snip buf 0 k @ s (close q, s))
                  (close q, gulp-loop f)))))))    ; it grew past its own size
    ; `got?`, not `lit?`: lit? asks "is this a function", and a string is not one, so
    ; (lit? line) reads every request as a dead peer. and it cannot be a net test either --
@@ -129,7 +129,7 @@
                    (go acc)
                    (? (has? acc "\r\n\r\n" || has? acc "\n\n") acc
                       (reqcap < #acc) acc
-                      (: k (swig c buf)
+                      (swig c buf @ k
                        (charm? k && 0 < k ? (go (acc + snip buf 0 k))
                         (see c @ -1 acc ch (go (acc + string ch))))))
                    (go ""))
@@ -155,7 +155,7 @@
                   (step i acc c) (c < 32 || c = 127 ? () (g i (acc + string c)))
                   (g i acc)
                   (!(i < n) ? acc
-                     (: c (s i)
+                     (s i @ c
                         (c = 37 && i + 2 < n
                          ? (: h (hexv (s (i + 1))) l (hexv (s (i + 2)))
                               (-1 < h && -1 < l ? (step (i + 3) acc (16 * h + l))
@@ -187,7 +187,7 @@
    ; spells a refusal and an empty path the same way -- and "/a/.." IS the root, not
    ; an escape. cleaned unbounded, a leading ".." is exactly the escape.
    (rooted p)  (!(0 < #p && p 0 = 47) ? ()
-                  (: cl (pclean (segs p) ())
+                  (pclean (segs p) () @ cl
                      (two? cl && <cl = ".." ? ()
                         ("/" + join "/" cl + (ends? p "/" && two? cl ? "/" ""))))))
 
@@ -204,7 +204,7 @@
            ("ico" "image/x-icon")              ("pdf" "application/pdf")
            ("woff2" "font/woff2")              ("woff" "font/woff")
            ("wasm" "application/wasm"))
-   (extof p) (: ps (splits p 46) (atom? >ps ? "" (: (last l) (two? >l ? (last >l) <l) (last ps))))
+   (extof p) (splits p 46 @ ps (atom? >ps ? "" (: (last l) (two? >l ? (last >l) <l) (last ps))))
    (mime p)  (: e (extof p) (g l) (? (atom? l) "application/octet-stream"
                                      (<<l = e) <><l
                                      (g >l))
@@ -225,7 +225,7 @@
                 + "Cross-Origin-Opener-Policy: same-origin\r\n"
                 + "Cross-Origin-Embedder-Policy: require-corp\r\n"
                 + "Connection: close\r\n\r\n"),
-    (!head? ? (say c body)),
+    !head? ? (say c body),
     flush c,
     code)
    ; an error is a page too -- small, and readable when a browser shows it
@@ -239,7 +239,7 @@
    (listing c root p head?)
    (: full (root + p)
       names (sort (filter (f \ !(0 < #f && f 0 = 46)) (readdir full)))
-      (row f) (: sub (dir? (full + f) ? (f + "/") f)
+      (row f) ((dir? (full + f) ? (f + "/") f) @ sub
                  ("<li><a href=\"" + hesc (penc sub) + "\">" + hesc sub + "</a></li>"))
       body ("<!doctype html><meta charset=\"utf-8\"><title>" + hesc p + "</title>"
             + "<body style=\"font:16px ui-serif,Georgia,serif;padding:2rem\">"
@@ -262,7 +262,7 @@
 (: (serve1 root make c)
    (: blk (reqblk c)
       line (line1 blk)
-      (? (0 = #blk) 0                                    ; the peer went away
+      (0 = #blk ? 0                                      ; the peer went away
          (: meth (word1 line)
             raw (word1 (after1 line))
             head? (meth = "HEAD")
@@ -272,10 +272,10 @@
                   (? !(string? d) (oops c 400 "Bad Request" head?, [400 meth raw])
                      !(string? p) (oops c 403 "Forbidden" head?, [403 meth raw])
                      (dotted? p) (oops c 404 "Not Found" head?, [404 meth raw])
-                     (: m (? make (make p blk))
-                        (? (two? m)
+                     ((make ? (make p blk)) @ m
+                        (two? m ?
                            (reply c 200 "OK" <m <>m head?, [200 meth raw])
-                     (: full (root + p)
+                     (root + p @ full
                         (? (dir? full)
                            ; a directory: redirect to the slashed form first, so the
                            ; relative links inside its index resolve against the right
@@ -285,11 +285,11 @@
                                       + "/\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"),
                                flush c, [301 meth raw])
                               (fhere? (full + "index.html"))
-                              (: b (gulp (full + "index.html"))
+                              (gulp (full + "index.html") @ b
                                  (reply c 200 "OK" "text/html; charset=utf-8" b head?, [200 meth raw]))
                               (listing c root p head?, [200 meth raw]))
                            !(fhere? full) (oops c 404 "Not Found" head?, [404 meth raw])
-                           (: b (gulp full)
+                           (gulp full @ b
                               (got? b ? (reply c 200 "OK" (mime full) b head?, [200 meth raw])
                                  (oops c 403 "Forbidden" head?, [403 meth raw]))))))))))))))
 
@@ -318,17 +318,17 @@
    (: _ (await l)
       c (accept l)
       (drain (),
-       (hot? c ? ((before ? (before ())),
-                ; the session's raise is the session's: uncaught, a scare anywhere under
-                ; serve1 -- a file that vanished between the stat and the gulp, a peer that
-                ; hung up mid-write -- takes the whole server down with it, every other
-                ; session included. the trap lands here, where the close already is (nothing
-                ; unwinds, so the cleanup has to be at the landing site), and the client
-                ; gets a 500 instead of a reset. the help rides the task, so five sessions
-                ; hold five of these at once without seeing each other's.
-                twirl (_ \ (: r (trap (serve1 root make) c
-                                       (\ a b (oops c 500 "Internal Server Error" 0, [500 "-" (show a)])))
-                                  ((r ? (note quiet r)), seal c 1, close c))) ())),
+       hot? c ? (before ? (before ()),
+               ; the session's raise is the session's: uncaught, a scare anywhere under
+               ; serve1 -- a file that vanished between the stat and the gulp, a peer that
+               ; hung up mid-write -- takes the whole server down with it, every other
+               ; session included. the trap lands here, where the close already is (nothing
+               ; unwinds, so the cleanup has to be at the landing site), and the client
+               ; gets a 500 instead of a reset. the help rides the task, so five sessions
+               ; hold five of these at once without seeing each other's.
+               twirl (_ \ (: r (trap (serve1 root make) c
+                                      (a \ b \ (oops c 500 "Internal Server Error" 0, [500 "-" (show a)])))
+                                 (r ? (note quiet r), seal c 1, close c))) ()),
        accept-loop root l quiet before make))
    ; the entry. `root` is a directory (no trailing slash), `port` a fixnum for loopback or
    ; [host port] for another address ("0.0.0.0" every one), `before` a thunk or ().
@@ -341,10 +341,10 @@
    ; came before.
    (serve root port quiet before) (serve5 root port quiet before ())
    (serve5 root port quiet before make)
-   (: r (? (ends? root "/") (snip root 0 (#root - 1)) root)
+   (: r (ends? root "/" ? (snip root 0 (#root - 1)) root)
       a (charm? port ? ["127.0.0.1" port] port)
       l (listen ['tcp <a <>a])
-    (? (hot? l)
+    (hot? l ?
        (!quiet ? (say err $ "kiosko: serving " + r + " on http://" + <a + ":" + show <>a + "/"
                    + (<a = "0.0.0.0" ? " (every address)" "") + "\n"),
         accept-loop r l quiet before make,

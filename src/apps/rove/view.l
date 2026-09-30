@@ -18,12 +18,12 @@
  ; the hash: two rounds of multiply, shift and mask kept under 32 bits, so a tray's
  ; machine words and a number throw alike
  m32 4294967295
- (mash a) (: h (((a & m32) * 1103515245) & m32) h2 (((h ^ (h >> 15)) * 1664525) & m32) (h2 ^ (h2 >> 13)))
- (throw x y s k) ((mash (y * 374761393 + x * 668265263 + s * 2654435761 + 1)) % k)
+ (mash a) (: h ((a & m32) * 1103515245 & m32) h2 ((h ^ h >> 15) * 1664525 & m32) (h2 ^ h2 >> 13))
+ (throw x y s k) (mash (y * 374761393 + x * 668265263 + s * 2654435761 + 1) % k)
  ; a pen on a ground as an sgr, kept once said
  sgrs {}
  (sgr f b) (: k (f * 256 + b) s (sgrs k)
-              (string? s ? s (: s2 (esc + "[38;5;" + show f + ";48;5;" + show b + "m") (pin sgrs k s2, s2))))
+              (string? s ? s (esc + "[38;5;" + show f + ";48;5;" + show b + "m" @ s2 (pin sgrs k s2, s2))))
  ; the screen rides the state: 'w and 'h its pixels, 'cx the middle column, 'foc the
  ; focal length, half the width for a view ninety degrees wide, 'hz the horizon's row
  (view! st w h hz) (pins st 'w w 'h h 'cx (w / 2.0) 'foc (w / 2.0) 'hz hz)
@@ -41,14 +41,14 @@
  ; y's pens, a tray or a cask; bands holds a cell row's words, [x0 text fg bg], laid over
  ; the cells they cover
  (view-frame w h src bands) (: j (jug 0)
-   (row x f b ts bs bd) (? (x < w)
+   (row x f b ts bs bd) (x < w ?
      (: tx (two? bd && bd 0 <= x < bd 0 + #(bd 1))
         f2 (tx ? (bd 2) (peep ts x 0)) b2 (tx ? (bd 3) (peep bs x 0))
-        _ (f2 != f || b2 != b ? (say j (sgr f2 b2)))
-        _ (say j (tx ? (string (bd 1 (x - bd 0))) "▀"))
-        (row (x + 1) f2 b2 ts bs bd)))
-   (rows y) (? (y < h // 2) (row 0 -1 -1 (src (2 * y)) (src (2 * y + 1)) (peep bands y ()),
-                             say j (esc + "[0m"), (? ((y + 1) < (h // 2)) (say j "\r\n")), rows (y + 1)))
+        (f2 != f || b2 != b ? (say j (sgr f2 b2)),
+         say j (tx ? (string (bd 1 (x - bd 0))) "▀"),
+         row (x + 1) f2 b2 ts bs bd)))
+   (rows y) (y < h // 2 ? (row 0 -1 -1 (src (2 * y)) (src (2 * y + 1)) (peep bands y ()),
+                           say j (esc + "[0m"), y + 1 < h // 2 ? (say j "\r\n"), rows (y + 1)))
    (rows 0, slurp j))
  ; a level on a stage already raised, a frame a tick: every key waiting is read and the
  ; last one acts, so a held key moves once a frame; the horn is fed until a lead stands
@@ -60,46 +60,46 @@
  (view-walk lv) (:
    ; the terminal's size, and 80 by 24 off a tty that will not say; asked again every
    ; frame, so a resized window is painted whole
-   (shape _) (: ws (tty 1) [(two? ws && 19 < <>ws ? <>ws 80) (two? ws && 7 < <ws ? <ws 24)])
+   (shape _) (tty 1 @ ws [(two? ws && 19 < <>ws ? <>ws 80) (two? ws && 7 < <ws ? <ws 24)])
    sh0 (shape ())
    st (lv 'new (sh0 0) (2 * sh0 1))
-   (resize _) (: sh (shape ())
-               (? (sh 0 != st 'w || 2 * sh 1 != st 'h)
+   (resize _) (shape () @ sh
+               (sh 0 != st 'w || 2 * sh 1 != st 'h ?
                 (lv 'size st (sh 0) (sh 1), say out (esc + "[2J"))))
    tick (1000 // lv 'fps)
-   hn (: q (horn song-rate 2) (? (nom? q) () q))
+   hn (horn song-rate 2 @ q (nom? q ? () q))
    fd (lv 'song hn)
    pace (pacer ())
-   (feed _) (? (hn && fd) (song-fill hn (song-lead-of (pace! pace)) (\ _ (fd st))) fd (fd st) 0)
-   (keys last) (? (cue? 0) (edkey in @ (113 || 27) 'quit k (keys (charm? k ? k last))) last)
+   (feed _) (? (hn && fd) (song-fill hn (song-lead-of (pace! pace)) (_ \ (fd st))) fd (fd st) 0)
+   (keys last) (cue? 0 ? (edkey in @ (113 || 27) 'quit k (keys (charm? k ? k last))) last)
    (go _) (: t0 (clock 0)
              _ (feed ())
              _ (resize ())
              _ (say out (esc + "[H" + lv 'frame st), flush out)
              k (keys ())
-             _ (? (charm? k) (lv 'key st k))
-             _ (lv 'tick st)
-             _ (pin st 't (st 't + 1))
-             _ (? (st 'done && !(st 'done-at)) (pin st 'done-at (clock 0)))
-             (? (k = 'quit || (st 'done-at && lv 'linger <= clock (st 'done-at))) ()
-                (: spent (clock 0 - t0)
-                   _ (spent < tick ? (rest (tick - spent)))
-                   (go ()))))
+             (charm? k ? (lv 'key st k),
+              lv 'tick st,
+              pin st 't (st 't + 1),
+              (? (st 'done && !(st 'done-at)) (pin st 'done-at (clock 0))),
+              k = 'quit || st 'done-at && lv 'linger <= clock (st 'done-at) ? ()
+                (clock 0 - t0 @ spent
+                   (spent < tick ? (rest (tick - spent)),
+                    go ()))))
    _ (say out (esc + "[2J"))
    _ (go ())
    ; ..and the card goes back before the next level asks for it
-   _ (? hn (flush hn, close hn))
+   _ (hn ? (flush hn, close hn))
    ; done: the next level takes the stage as it stands and gives it back here; a seat
    ; that carries no such level ends where this one did
-   nx (lv 'next) walk (? nx (cite (nx 0) (nx 1)) ())
-   _ (? (st 'done && walk) (walk ()))
-   st)
+   nx (lv 'next) walk (nx ? (cite (nx 0) (nx 1)))
+   (st 'done && walk ? (walk ()),
+    st))
  ; ..and the verb around a walk: the screen raised here and put back here
- (view-run walk) (: _ (raw 1)
-   _ (say out (esc + "[?1049h" + esc + "[?25l"))
-   _ (walk ())
-   _ (say out (esc + "[0m" + esc + "[?25h" + esc + "[?1049l"), flush out)
-   _ (drain-keys ())
-   _ (raw 0)
-   0))
+ (view-run walk) (raw 1,
+                  say out (esc + "[?1049h" + esc + "[?25l"),
+                  walk (),
+                  (say out (esc + "[0m" + esc + "[?25h" + esc + "[?1049l"), flush out),
+                  drain-keys (),
+                  raw 0,
+                  0))
 ) ; module view

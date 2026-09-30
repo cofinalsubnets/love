@@ -33,17 +33,17 @@
    (helm-reset us)
     (hput 'units us, hput 'st {}, hput 'pids {}, hput 'order [], us)
    (hunits-now _) (hcell 'units [])
-   (hpids _)      (: t (hcell 'pids ()) (tablet? t ? t (: n {} (hput 'pids n, n))))
+   (hpids _)      (hcell 'pids () @ t (tablet? t ? t ({} @ n (hput 'pids n, n))))
    (hstat nm)
     (: t (hcell 'st ())
-       b (tablet? t ? t (: n {} (hput 'st n, n)))
+       b (tablet? t ? t ({} @ n (hput 'st n, n)))
        s (b nm)
        (s ? s
-          (: n (pins {} 'name nm 'state 'down 'pid 0 'tries 0 'code () 'since (clock 0))
+          ((pins {} 'name nm 'state 'down 'pid 0 'tries 0 'code () 'since (clock 0)) @ n
              (pin b nm n, n))))
    (hstate nm)    (peep (hstat nm) 'state 'down)
    (hmark nm k v) (pin (hstat nm) k v)
-   (hup? nm)      (: s (hstate nm) (s == 'up || s == 'done))
+   (hup? nm)      (hstate nm @ s (s == 'up || s == 'done))
 
    ; --- the narrator ----------------------------------------------------------
    ; every event lands in a bounded ring the moor reads back, and on stderr
@@ -65,8 +65,8 @@
        old (map (\ [k v] [k (getenv k)]) ps)
        _   (each ps (\ [k v] (setenv k v)))
        r   (f 0)
-       _   (each old (\ [k v] (setenv k (string? v ? v ""))))
-       r)
+       (each old (\ [k v] (setenv k (string? v ? v ""))),
+        r))
 
    ; --- act: make the process -------------------------------------------------
    ; stdin from /dev/null, stdout and stderr to the unit's log (appended) or to
@@ -84,10 +84,10 @@
        d    (u 'dir)
        old  (cwd 0)
        _    (string? d ? (chdir d) 0)
-       pid  (henv-with (peep u 'env []) (\ _ (spawnmap argv fm cl 0 0)))
-       _    (string? d ? (chdir old) 0)
-       _    (each cl (\ f (close f)))
-       pid)
+       pid  (henv-with (peep u 'env []) (_ \ (spawnmap argv fm cl 0 0)))
+       (string? d ? (chdir old) 0,
+        each cl (f \ close f),
+        pid))
 
    ; --- act: one unit up ------------------------------------------------------
    ; a target has nothing to run, so reaching it is reaching its wants. a oneshot
@@ -98,7 +98,7 @@
        kind (u 'kind)
        (kind == 'target
         ? (hmark nm 'state 'done, hnote ("target " + string nm + " reached"), 1)
-          (: pid (hspawn u)
+          (hspawn u @ pid
              (? !(charm? pid && 0 < pid)
                   (hmark nm 'state 'failed,
                    hnote ("cannot spawn " + string nm + ": errno " + show (0 - pid)),
@@ -117,7 +117,7 @@
    (hreaped pid st)
     (: pids (hpids 0)
        nm   (pids pid)
-       (? !nm (hnote ("reaped orphan pid " + show pid + " status " + show st))
+       (!nm ? (hnote ("reaped orphan pid " + show pid + " status " + show st))
           (pull pids pid 0,
            (: u     (hby (hunits-now 0) nm)
              s     (hstat nm)
@@ -126,27 +126,27 @@
              lived (clock 0 - peep s 'since 0)
              n     (hsteady < lived ? 0 (peep s 'tries 0))
              was   (s 'state)
-             _     (hmark nm 'code st)
-             _     (hmark nm 'pid 0)
-             _     (hnote (string nm + " exited " + show st))
+             (hmark nm 'code st,
+              hmark nm 'pid 0,
+              hnote (string nm + " exited " + show st),
              ; a reload can drop a unit while its child is still running: it is
              ; still ours to reap, and there is no policy left to apply to it.
-             (? !u (hmark nm 'state 'down)
-                (was == 'stopping || hcell 'shutting 0) (hmark nm 'state 'down)
-                (kind == 'oneshot) (hmark nm 'state (st == 0 ? 'done 'failed))
-                (: want (rs == 'always || rs == 'on-fail && st != 0)
-                   lim  (peep u 'tries 3)
-                   (? (want && n < lim)
-                        (hmark nm 'tries (n + 1),
-                         hmark nm 'state 'down,
-                         hnote ("restart " + string nm + " #" + show (n + 1)),
-                         hstart1 u)
-                      (hmark nm 'state (st == 0 ? 'done 'failed),
-                       want ? (hnote (string nm + " gave up after " + show n + " restarts")) 0,
-                       0))))))))
+              (? !u (hmark nm 'state 'down)
+                 (was == 'stopping || hcell 'shutting 0) (hmark nm 'state 'down)
+                 (kind == 'oneshot) (hmark nm 'state (st == 0 ? 'done 'failed))
+                 (: want (rs == 'always || rs == 'on-fail && st != 0)
+                    lim  (peep u 'tries 3)
+                    (want && n < lim ?
+                         (hmark nm 'tries (n + 1),
+                          hmark nm 'state 'down,
+                          hnote ("restart " + string nm + " #" + show (n + 1)),
+                          hstart1 u)
+                       (hmark nm 'state (st == 0 ? 'done 'failed),
+                        want ? (hnote (string nm + " gave up after " + show n + " restarts")) 0,
+                        0)))))))))
 
    ; drain every dead child: SIGCHLD coalesces, so one wake can owe several.
-   (hdrain _) (: e (glean 0) (two? e ? (hreaped <e >e, hdrain 0) 0))
+   (hdrain _) (glean 0 @ e (two? e ? (hreaped <e >e, hdrain 0) 0))
    ; wait for one unit's pid to be gone. the condition is the UNIT's recorded
    ; pid, not this loop's own glean, because either of two hands may do the
    ; reaping -- this drain during boot, when hloop is not up yet, or hloop's own
@@ -166,24 +166,24 @@
    (hensure nm seen)
     (? (hup? nm) 1
        (elem nm seen) (hnote ("after cycles at " + string nm), 0)
-       (: u (hby (hunits-now 0) nm)
-          (? !u (hnote ("no unit " + string nm), 0)
-             (each (peep u 'after []) (\ d (hensure d (nm . seen))), hstart1 u))))
+       (hby (hunits-now 0) nm @ u
+          (!u ? (hnote ("no unit " + string nm), 0)
+             (each (peep u 'after []) (d \ hensure d (nm . seen)), hstart1 u))))
 
    (hboot nm)
-    (: u (hby (hunits-now 0) nm)
+    (hby (hunits-now 0) nm @ u
        (? !u (hnote ("no unit " + string nm), 0)
           (u 'kind == 'target)
-            (each (peep u 'wants []) (\ w (hensure w [])), hstart1 u)
+            (each (peep u 'wants []) (w \ hensure w []), hstart1 u)
           (hensure nm [])))
 
    ; the boot goal: the `default` target if the config names one, every runnable
    ; unit in file order otherwise.
    (hboot-all _)
-    (: d (hby (hunits-now 0) 'default)
-       (? d (hboot 'default)
+    (hby (hunits-now 0) 'default @ d
+       (d ? (hboot 'default)
           (each (hunits-now 0)
-                (\ u (u 'kind == 'target ? 0 (hensure (u 'name) []))))))
+                (u \ (u 'kind == 'target ? 0 (hensure (u 'name) []))))))
 
    ; --- act: one unit down ----------------------------------------------------
    ; 'stopping suspends the restart policy for exactly one exit. the negative pid
@@ -195,9 +195,9 @@
           (hmark nm 'state 'stopping,
            still (0 - pid) sig-term,
            hnote ("term " + string nm + " pid " + show pid),
-           (: ok (hwait nm pid hpatience)
-              (ok ? 1 (still (0 - pid) sig-kill, hnote ("kill " + string nm),
-                       hwait nm pid hpatience))))))
+           hwait nm pid hpatience @ ok
+             (ok ? 1 (still (0 - pid) sig-kill, hnote ("kill " + string nm),
+                      hwait nm pid hpatience)))))
 
    (hbounce nm) (hstop1 nm, hmark nm 'tries 0, hensure nm [])
 
@@ -206,7 +206,7 @@
    ; restart policy for the whole walk: a service dying while we take the system
    ; down is the system going down, not a service that needs help.
    (hshutdown _)
-    (hput 'shutting 1, each (hcell 'order []) (\ nm (hstop1 nm)), hnote "all stopped", 1)
+    (hput 'shutting 1, each (hcell 'order []) (nm \ hstop1 nm), hnote "all stopped", 1)
 
    ; --- reload ----------------------------------------------------------------
    ; re-read the config and adopt it. nothing is restarted: a reload is a READ,
@@ -214,9 +214,9 @@
    (hreload _)
     (: r  (hconf (hcell 'conf "/etc/helm.l"))
        us <r
-       _  (each <>r (\ g (hnote ("config: " + g))))
-       _  (two? us ? (hput 'units us, hnote ("config: " + show #us + " units")) 0)
-       #us)
+       (each <>r (g \ hnote ("config: " + g)),
+        two? us ? (hput 'units us, hnote ("config: " + show #us + " units")) 0,
+        #us))
 
    ; --- the loop: park on the signal source -----------------------------------
    (hloop sig)
@@ -232,8 +232,8 @@
    ; --- introspection ---------------------------------------------------------
    (hpad s n) (n <= #s ? s (hpad (s + " ") n))
    (hstatus-line nm)
-    (: s (hstat nm)
+    (hstat nm @ s
        (hpad (string nm) 16 + hpad (string (peep s 'state 'down)) 10
         + "pid " + hpad (show (peep s 'pid 0)) 8
         + "tries " + show (peep s 'tries 0)
-        + (: c (s 'code) (charm? c ? (" last " + show c) ""))))))
+        + (s 'code @ c (charm? c ? (" last " + show c) ""))))))

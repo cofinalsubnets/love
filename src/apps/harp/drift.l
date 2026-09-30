@@ -14,8 +14,8 @@
 
 (module '(drift dmoves dkernel dopts dopt minby dflat tension ptones drift-new drift-step
           drift-walk drift-cents drift-pick drift-compose tune phrase-pat drift-song compose-song)
-(borrow (: m (cite 'just) (? m m "src/apps/harp/just.l")))
-(borrow (: m (cite 'harp) (? m m "src/apps/harp/harp.l")))
+(borrow ((cite 'just) @ m (m ? m "src/apps/harp/just.l")))
+(borrow ((cite 'harp) @ m (m ? m "src/apps/harp/harp.l")))
 (:
    dzero [0.0 0.0 0.0]
    ; the steps a center may take, as points: stay, the fifths, the major thirds, the
@@ -27,7 +27,7 @@
    dopts {'lean 1.0 'home 0.0 'cost 0.25 'kernel dkernel 'moves dmoves
           'wc 1.0 'steer 1.0 'fresh 2.0}
    (dopt o k) (peep o k (dopts k))
-   (minby f l) (foldl (\ a x (f x < f a ? x a)) <l >l)
+   (minby f l) (foldl (a \ x \ (f x < f a ? x a)) <l >l)
 
    ; where a phrase's weight lies, relative to its center: the mean of its points,
    ; each weighted by how far out it is. a chord is a list inside the phrase
@@ -49,7 +49,7 @@
     (: t    (tension rs)
        q    (st 'queue)
        want (vsub (vadd (vscale (dopt o 'lean) t) <q) (vscale (dopt o 'home) (st 'pos)))
-       (score m) (: d (vsub want m) (vdot d d + dopt o 'cost * lnorm m))
+       (score m) (vsub want m @ d (vdot d d + dopt o 'cost * lnorm m))
        m    (minby score (dopt o 'moves))
        err  (vsub want m)
        q2   (map (p \ vadd <p (vscale >p err)) (zip (>q + [dzero]) (dopt o 'kernel)))
@@ -58,7 +58,7 @@
 
    ; n phrases, taken round from ps: the state each one plays under
    (drift-walk o ps n)
-    (: (go st i) (? (i >= n) () (st . go (drift-step o st (ps (i % #ps))) (i + 1)))
+    (: (go st i) (i >= n ? () (st . go (drift-step o st (ps (i % #ps))) (i + 1)))
        (go (drift-new o) 0))
    (drift-cents st) (cents (st 'tonic))
    ; a phrase's notes as absolute lattice points, over a center at pos
@@ -82,8 +82,8 @@
        best (minby (ph \ 0.0 - score ph) vocab)
        [best (ptones (st 'pos) best)])
    (drift-compose o vocab n)
-    (: (go st prev i) (? (i >= n) ()
-                         (: pk (drift-pick o st prev vocab)
+    (: (go st prev i) (i >= n ? ()
+                         (drift-pick o st prev vocab @ pk
                             ([st (pk 0)] . go (drift-step o st (pk 0)) pk (i + 1))))
        (go (drift-new o) [() ()] 0))
 
@@ -91,8 +91,8 @@
    ; ratios over a center become 'note, semitones from middle c; a tablet keeps its
    ; other keys and gives its 'ji
    (tune t p)
-    (pmap (v \ (: r (? (tablet? v) (v 'ji) v) s (semis (t * r))
-                  (? (tablet? v) (pin (foldl (\ n k (pin n k (v k))) {} (keys v)) 'note s)
+    (pmap (v \ (: r (tablet? v ? (v 'ji) v) s (semis (t * r))
+                  (tablet? v ? (pin (foldl (n \ k \ pin n k (v k)) {} (keys v)) 'note s)
                      {'note s})))
           p)
    ; a phrase as one cycle: its members in turn, a list among them sounding together
@@ -101,7 +101,7 @@
        (fastcat (map (r \ (coin? r || !(two? r)) ? (one r) (stack (map one r))) rs)))
    ; n cycles, a phrase each, every one over the center the walk gave it
    (drift-song o ps n)
-    (: w (drift-walk o ps n)
+    (drift-walk o ps n @ w
        (slowcat (map (i \ phrase-pat (w i 'tonic) (ps (i % #ps))) ^n)))
    (compose-song o vocab n)
     (slowcat (map (x \ phrase-pat (x 0 'tonic) (x 1)) (drift-compose o vocab n))))

@@ -23,7 +23,7 @@
 ; itself down -- the supervisor it is a window into keeps running.
 (module 'helm
 (borrow 'posix)
-(: (hrundir _) (: r (getenv "XDG_RUNTIME_DIR") (string? r && 1 < #r ? r "/run"))
+(: (hrundir _) (getenv "XDG_RUNTIME_DIR" @ r (string? r && 1 < #r ? r "/run"))
    (helm-sock _) (hrundir 0 + "/helm.sock")
 
    ; --- one session -----------------------------------------------------------
@@ -32,7 +32,7 @@
    ; the reader hands back. a string answer goes out as itself -- a report is
    ; written to be read -- and everything else is shown.
    (hsession c)
-    (: (rdline acc) (: ch (see c)
+    (: (rdline acc) (see c @ ch
                        (? (ch == -1)  ()
                           (ch == 10)  (rev (10 . acc))
                           (rdline (ch . acc))))
@@ -43,11 +43,11 @@
                     s (0 < n && t (n - 1) == 10 ? t (t + "\n"))
                     (say c s, flush c))
        (go pend)
-        (: cl (rdline ())
-           (? (atom? cl) 0
-              ((: (h x) (: r (sound x)
+        (rdline () @ cl
+           (atom? cl ? 0
+              ((: (h x) (sound x @ r
                            (? (two? r)
-                                (: v (trap (\ _ (ev 'ev <r)) 0 (\ a b ['scare a b]))
+                                (trap (_ \ (ev 'ev <r)) 0 (a \ b \ ['scare a b]) @ v
                                    (reply v, h >r))
                               (r == 'torn) (go x)
                               (go ()))))
@@ -60,20 +60,20 @@
    ; () -- so the drain costs what actually finished and helm keeps no roster.
    (hscoop _) (two? (scoop 0) ? (hscoop 0) 0)
    (helm-moor path)
-    (: l (listen ['unix path])
+    (listen ['unix path] @ l
        (? !(lit? l) (hnote ("no moor at " + path), 0)
           (hnote ("moored at " + path),
            (: (go _) (await l,
-                      (: c (accept l)
-                         (hscoop 0, lit? c ? (twirl (\ _ (hsession c, close c)) 0) 0, go 0)))
+                      accept l @ c
+                        (hscoop 0, lit? c ? (twirl (_ \ (hsession c, close c)) 0) 0, go 0))
               (go 0)))))
 
    ; --- the vocabulary --------------------------------------------------------
    ; short names, because they are typed at a prompt. they answer strings where a
    ; person is reading and love values where a program is.
-   (hlines l)  (foldl (\ a s (a + s + "\n")) "" l)
+   (hlines l)  (foldl (a \ s \ a + s + "\n") "" l)
    (status x)  (hlines (map hstatus-line (name? x ? [x] (hnames (hunits-now 0)))))
-   (units x)   (map (\ u [(u 'name) (u 'kind) (hstate (u 'name)) (peep u 'exec [])])
+   (units x)   (map (u \ [(u 'name) (u 'kind) (hstate (u 'name)) (peep u 'exec [])])
                     (hunits-now 0))
    (start nm)  (hensure nm [])
    (stop nm)   (hstop1 nm)

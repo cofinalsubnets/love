@@ -36,18 +36,18 @@
 
    ; a's share of n cells at pct, the bar's cell already spent. both halves get
    ; at least one; under three there is no split to make and a takes it all.
-   (wcut n pct) (? (n < 3) n
-                   (: k ((n - 1) * pct // 100)
+   (wcut n pct) (n < 3 ? n
+                   ((n - 1) * pct // 100 @ k
                       (? (k < 1) 1 (n - 2 < k) (n - 2) k)))
-   (wrest n a) (? (n < 3) 0 (n - 1 - a))
+   (wrest n a) (n < 3 ? 0 (n - 1 - a))
 
    ; --- the lay: every berth's rectangle, in plan order -----------------------
    ; a half with no room lays at its parent's corner, not past the bar that was never
    ; spent, so a caller may do arithmetic on an origin without asking if it is real.
    (wlay p row col r c)
-    (? (two? p)
+    (two? p ?
        (p @ [d pct a b]
-        (? (d = 'stack)
+        (d = 'stack ?
            (: h (wcut r pct) t (wrest r h)
               (cat (wlay a row col h c)
                    (wlay b (0 < t ? (row + h + 1) row) col t c)))
@@ -64,9 +64,9 @@
    ; a bar rides only where a split actually happened -- both halves showable --
    ; so a wharf too narrow to divide is drawn with no line through it.
    (wbars p row col r c)
-    (? (two? p)
+    (two? p ?
        (p @ [d pct a b]
-        (? (d = 'stack)
+        (d = 'stack ?
            (: h (wcut r pct) t (wrest r h)
               (cat (0 < h && 0 < t ? [['across (row + h) col c]] ())
                    (cat (wbars a row col h c)
@@ -74,8 +74,7 @@
            (: w (wcut c pct) t (wrest c w)
               (cat (0 < w && 0 < t ? [['down row (col + w) r]] ())
                    (cat (wbars a row col r w)
-                        (wbars b row (col + w + 1) r t))))))
-       ())
+                        (wbars b row (col + w + 1) r t)))))))
    (wharf-bars p r c) (() = p ? () (wbars p 0 0 r c))
 
    ; --- the roster and the hit test -------------------------------------------
@@ -87,7 +86,7 @@
    (wharf-at bs row col)
     (two? bs ?
      (: b <bs r0 (wharf-row b) c0 (wharf-col b)
-        (? (r0 <= row < r0 + wharf-rows b && c0 <= col < c0 + wharf-cols b)
+        (r0 <= row < r0 + wharf-rows b && c0 <= col < c0 + wharf-cols b ?
            (wharf-id b)
            (wharf-at >bs row col)))
      ())
@@ -119,27 +118,27 @@
                                     (wharf-col b - wharf-col f))
        |v)
    (wnear f d best b)
-    (? (atom? best) b
+    (atom? best ? b
        (: g1 (wgap f b d) g2 (wgap f best d)
           (? (g1 < g2) b (g2 < g1) best
              (wskew f b d < wskew f best d ? b best))))
    (wharf-steer bs id d)
-    (: f (wpick bs id)
-       (? (atom? f) id
-          (: cs (filter (b \ wharf-show? b && wpast f b d) bs)
+    (wpick bs id @ f
+       (atom? f ? id
+          (filter (b \ wharf-show? b && wpast f b d) bs @ cs
              (two? cs ? (wharf-id (foldl (wnear f d) () cs)) id))))
 
    ; --- editing the plan --------------------------------------------------------
    ; split the berth named id in two; the new one takes the second half. an id
    ; that is not in the plan changes nothing, which is what a stale focus deserves.
    (wharf-split p id d pct new)
-    (? (two? p) [<p <>p (wharf-split <>>p id d pct new) (wharf-split <>>>p id d pct new)]
+    (two? p ? [<p <>p (wharf-split <>>p id d pct new) (wharf-split <>>>p id d pct new)]
        (p = id ? [d pct p new] p))
 
    ; shut a berth; its sibling takes the whole of what the pair held, bar and all.
    ; shutting the last one answers () -- a wharf with nothing tied up at it.
    (wharf-shut p id)
-    (? (two? p)
+    (two? p ?
        (: a (wharf-shut <>>p id) b (wharf-shut <>>>p id)
           (? (() = a) b (() = b) a [<p <>p a b]))
        (p = id ? () p)))

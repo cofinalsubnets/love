@@ -46,16 +46,16 @@
    hss ['skip 0 65536 1 65536 1]
 
    (cd-job tfms hyph date)
-    (: J (cp-setup (cb-job 0))
-       _ (map (e \ pin (J 'sf) (e 0) (e 1)) sfcodes)
-       _ (cp-hyphen-file J hyph)
-       _ (map (k \ (: e (fonts k) f (cb-font J (e 0) "" (tfms k) (e 1))
-                      (? (f = 'badtfm) (die ("caja: " + e 0 + ".tfm is not a TFM TeX would load")) f)))
-              ^#fonts)
-       _ (map (k \ pin (J 'fonts k) 'hyphenchar 45) (map (+ 1) ^#fonts))
-       _ (map (i \ cb-set-param J (['year 'month 'day 'time] i) (date i)) ^4)
-       J)
-   (die m) (: _ (say err (m + "\n")) _ (flush err) (quit 1))
+    (cp-setup (cb-job 0) @ J
+       (map (e \ pin (J 'sf) (e 0) (e 1)) sfcodes,
+        cp-hyphen-file J hyph,
+        map (k \ (: e (fonts k) f (cb-font J (e 0) "" (tfms k) (e 1))
+                    (f = 'badtfm ? (die ("caja: " + e 0 + ".tfm is not a TFM TeX would load")) f)))
+            ^#fonts,
+        map (k \ pin (J 'fonts k) 'hyphenchar 45) (map (+ 1) ^#fonts),
+        map (i \ cb-set-param J (['year 'month 'day 'time] i) (date i)) ^4,
+        J))
+   (die m) (say err (m + "\n"), flush err, quit 1)
 
    ; --- text ----------------------------------------------------------------------------------
    ; a code point cmr has no slot for, as OT1 codes: the accented letters take their base
@@ -77,16 +77,16 @@
     (: cs (cps s)
        (go l prev acc)
         (? (!(two? l)) (rev acc)
-           (: c <l
-              (? (space? c) (go >l 32 (? (prev = 32) acc ('sp . acc)))
+           (<l @ c
+              (space? c ? (go >l 32 (prev = 32 ? acc ('sp . acc)))
                  (: ts (? (f = tt) (? (32 < c && c < 127) [['c c]] (c < 256) [['c 63]] [])
-                          (c = 34) (? (elem prev [32 40 91 0]) [['c 96] ['c 96]] [['c 39] ['c 39]])
+                          (c = 34) (elem prev [32 40 91 0] ? [['c 96] ['c 96]] [['c 39] ['c 39]])
                           (tt-sign? c) [['f tt] ['c c] ['f f]]
                           (c < 127) [['c c]]
-                          (: m (near c) (? (m != ()) (map (x \ ['c x]) m) (c < 256) [['c (base c)]] [])))
+                          (near c @ m (? (m != ()) (map (x \ ['c x]) m) (c < 256) [['c (base c)]] [])))
                     ; text says -- and !` as it spells them: a kern keeps cmr's ligature out
-                    lig? (f != tt && ((prev = 45 && c = 45) || (c = 96 && (prev = 33 || prev = 63))))
-                    (go >l c (rev ts + (? lig? (['kern 0] . acc) acc)))))))
+                    lig? (f != tt && (prev = 45 && c = 45 || c = 96 && (prev = 33 || prev = 63)))
+                    (go >l c (rev ts + (lig? ? (['kern 0] . acc) acc)))))))
        (go cs 0 ()))
    ; an inl's tokens in font f; a change of font comes back to f after
    (inl-toks f l)
@@ -105,12 +105,12 @@
    (glue0 w) [w 0 0 0 0]
    (para f ind l) (['set 'leftskip (glue0 ind)] . ['f f] . 'noindent . inl-toks f l + ['par])
    (head n l ind)
-    (: f (? (n = 1) h1 (n = 2) h2 bf)
+    ((? (n = 1) h1 (n = 2) h2 bf) @ f
        ([['pen -100] (skip ((? (n = 1) 10 (n = 2) 8 4) * pt)) ['set 'rightskip [0 65536 1 0 0]]]
         + para f ind l + [['set 'rightskip (glue0 0)] ['pen 10000]]))
    ; an item: the label in a box as wide as the hanging indentation, then the text
    (item ind label l)
-    (: w (20 * pt)
+    (20 * pt @ w
        ([['set 'leftskip (glue0 ind)] ['set 'hangindent w] ['f rm] 'noindent
          ['hbox w (hss . label + [['kern (5 * pt)]])]]
         + inl-toks rm l + ['par]))
@@ -118,12 +118,12 @@
    (fence-line ind s)
     (: (detab cs col acc)
         (? (!(two? cs)) (rev acc)
-           (<cs = 9) (: n (8 - (col % 8)) (detab >cs (col + n) (cats (map (_ \ ['xsp]) ^n) + acc)))
+           (<cs = 9) (8 - col % 8 @ n (detab >cs (col + n) (cats (map (_ \ ['xsp]) ^n) + acc)))
            (<cs = 32) (detab >cs (col + 1) ('xsp . acc))
-           (detab >cs (col + 1) (? (32 < <cs && <cs < 127) (['c <cs] . acc) (['c 63] . acc))))
-       ['hbox () ([['kern (ind + (10 * pt))] ['f tt]] + detab (cps s) 0 ())])
+           (detab >cs (col + 1) (32 < <cs && <cs < 127 ? (['c <cs] . acc) (['c 63] . acc))))
+       ['hbox () ([['kern (ind + 10 * pt)] ['f tt]] + detab (cps s) 0 ())])
    (lines s) (: n #s
-                (go i a acc) (? (i >= n) (rev (? (a < n) (snip s a n . acc) acc))
+                (go i a acc) (? (i >= n) (rev (a < n ? (snip s a n . acc) acc))
                                 (s i = 10) (go (i + 1) (i + 1) (snip s a i . acc))
                                 (go (i + 1) a acc))
                 (go 0 0 ()))
@@ -139,7 +139,7 @@
        ws (map (k \ foldl max 0 (map (r \ wd (r k)) (hrow . brows))) ^cols)
        sep (12 * pt)
        (row r) ['hbox () ([['kern ind]]
-                          + cats (map (k \ [(cell-box J rm (ws k) (aligns k) (r k))] + (? (k < cols - 1) [['kern sep]] []))
+                          + cats (map (k \ [(cell-box J rm (ws k) (aligns k) (r k))] + (k < cols - 1 ? [['kern sep]] []))
                                       ^cols))]
        total (+ws + sep * (cols - 1))
        ([(skip (4 * pt)) (row hrow) (skip (2 * pt)) ['hrule total 26214 0] (skip (3 * pt))]
@@ -147,15 +147,15 @@
    (blocks J ind doc) (cats (map (b \ block J ind b) doc))
    (block J ind b)
     (b 0 @
-     'meta (: kv (b 1) (get k) (: e (filter (p \ p 0 = k) kv) (? (two? e) (e 0 1) ""))
+     'meta (: kv (b 1) (get k) (filter (p \ p 0 = k) kv @ e (two? e ? (e 0 1) ""))
               t (get 'title) sec (get 'section)
-              (? (#t = 0) [] (head 1 [['text (? (#sec = 0) t (t + "(" + sec + ")"))]] ind)))
+              (#t = 0 ? [] (head 1 [['text (#sec = 0 ? t (t + "(" + sec + ")"))]] ind)))
      'head (head (b 1) (b 2) ind)
      'para (para rm ind (b 1))
-     'fence (([(skip (3 * pt))] + map (fence-line ind) (lines (b 2))) + [(skip (3 * pt))])
-     'quote (blocks J (ind + (20 * pt)) (b 1) + [['set 'leftskip (glue0 ind)]])
+     'fence ([(skip (3 * pt))] + map (fence-line ind) (lines (b 2)) + [(skip (3 * pt))])
+     'quote (blocks J (ind + 20 * pt) (b 1) + [['set 'leftskip (glue0 ind)]])
      'bullets (cats (map (l \ item ind [['f sy] ['c 15] ['f rm]] l) (b 1)))
-     'numbers (: l (b 1) (cats (map (k \ item ind (digits (k + 1) + [['c 46]]) (l k)) ^#l)))
+     'numbers (b 1 @ l (cats (map (k \ item ind (digits (k + 1) + [['c 46]]) (l k)) ^#l)))
      'deflist (cats (map (e \ para bf ind (e 0) + ([['set 'hangindent (20 * pt)] ['set 'hangafter 0]]
                                                    + para rm ind (e 1)))
                          (b 1)))
@@ -169,27 +169,27 @@
    (cd-dvi J doc)
     (: _ (cp-run J (cp-mode J) outer)
        ; the document's settings are its \vbox group's: restored when the box is made
-       pr (J 'params) saved (: t {} _ (map (k \ pin t k (pr k)) (keys pr)) t)
+       pr (J 'params) saved ({} @ t (map (k \ pin t k (pr k)) (keys pr), t))
        M (cp-run J (cp-mode J) (cd-tokens J doc))
        v0 (cp-node J (cb-vpackage J (cp-vlist J M) 0 'additional 0))
        _ (map (k \ pin pr k (saved k)) (keys saved))
        (go v n)
-        (? (v != ())
+        (v != () ?
            (: r (cg-vsplit J v (J 'params 'vsize))
               _ (pin (J 'count) 0 n)
               M2 (cp-run J (cp-mode J) [['box <r] (skip (24 * pt)) (footer n)])
-              _ (cb-ship J (cb-vpackage J (cp-vlist J M2) 0 'additional 0))
-              (go (r 1) (n + 1))))
-       _ (go v0 1)
-       (cb-dvi J))
+              (cb-ship J (cb-vpackage J (cp-vlist J M2) 0 'additional 0),
+               go (r 1) (n + 1))))
+       (go v0 1,
+        cb-dvi J))
    (cd-tex J doc hyph)
-    (: d (map (k \ J 'params k) ['year 'month 'day 'time])
+    (map (k \ J 'params k) ['year 'month 'day 'time] @ d
        ("\\catcode`\\{=1 \\catcode`\\}=2 \\batchmode\\year=" + show (d 0) + " \\month=" + show (d 1)
         + " \\day=" + show (d 2) + " \\time=" + show (d 3) + "\n"
         + "\\def\\sp{ }\\input " + hyph + "\n\\defaulthyphenchar=45\n"
-        + cats (map (k \ (: e (fonts k)
-                            ("\\font\\f" + string (97 + k) + "=" + (e 0)
-                             + (? (e 1 = -1000) "" (" at " + show (e 1) + "sp")) + "\\relax\n")))
+        + cats (map (k \ (fonts k @ e
+                            ("\\font\\f" + string (97 + k) + "=" + e 0
+                             + (e 1 = -1000 ? "" (" at " + show (e 1) + "sp")) + "\\relax\n")))
                     ^#fonts)
         + cats (map (e \ "\\sfcode" + show (e 0) + "=" + show (e 1) + "\\relax\n") sfcodes)
         + cp-tex outer + "\n"

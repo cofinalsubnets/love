@@ -34,18 +34,18 @@
 
    ; rotate left within 32 bits. x is always already masked, so it is non-negative
    ; and `>>` (arithmetic, sign-propagating) coincides with the logical shift.
-   (rotl x n) (((x << n) | (>> x (32 - n))) & m32)
+   (rotl x n) ((x << n | x >> 32 - n) & m32)
 
    ; the quarter-round, on four galaxies -> a 4-list of galaxies.
    (qr a b c d)
-    (: a1 ((a + b) & m32)   d1 (rotl (d ^ a1) 16)
-       c1 ((c + d1) & m32)  b1 (rotl (b ^ c1) 12)
-       a2 ((a1 + b1) & m32) d2 (rotl (d1 ^ a2) 8)
-       c2 ((c1 + d2) & m32) b2 (rotl (b1 ^ c2) 7)
+    (: a1 (a + b & m32)   d1 (rotl (d ^ a1) 16)
+       c1 (c + d1 & m32)  b1 (rotl (b ^ c1) 12)
+       a2 (a1 + b1 & m32) d2 (rotl (d1 ^ a2) 8)
+       c2 (c1 + d2 & m32) b2 (rotl (b1 ^ c2) 7)
        [a2 b2 c2 d2])
 
    ; the state is a 16-list of galaxies; these are its two accessors.
-   (lset l i v) (: (go j r) (j < 0 ? r (go (j - 1) (. (? (j = i) v (peep l j 0)) r)))
+   (lset l i v) (: (go j r) (j < 0 ? r (go (j - 1) (. (j = i ? v (peep l j 0)) r)))
                    (go 15 ()))
    (qra s i j k l)
     (: r (qr (peep s i 0) (peep s j 0) (peep s k 0) (peep s l 0))
@@ -97,7 +97,7 @@
         (n <= i ? b
          (: (gw j) ; j counts words within block i
              (15 < j ? 0
-                (le32! b ((i * 64) + (j * 4)) (wd j i), gw (j + 1)))
+                (le32! b (i * 64 + j * 4) (wd j i), gw (j + 1)))
           (gw 0, go (i + 1))))
        (go 0, string b))
 

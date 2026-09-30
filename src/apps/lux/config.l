@@ -38,9 +38,9 @@
    ; --- the readers. a roster entry is a name or a form; anything else (the lone
    ;     `()` that spells "empty") drops out, and an absent roster takes d. ---
    (conf-live? e) (two? e || name? e || string? e)
-   (conf-roster c k d) (: r (salt-all c k) (two? r ? (filter conf-live? r) d))
-   (conf-mod c) (: m (kmod-of (salt-one c 'mod 'sup) supm) (m ? m supm))
-   (conf-tags c) (: n (salt-one c 'tags 9) (charm? n && (0 < n) ? n 9))
+   (conf-roster c k d) (salt-all c k @ r (two? r ? (filter conf-live? r) d))
+   (conf-mod c) (kmod-of (salt-one c 'mod 'sup) supm @ m (m ? m supm))
+   (conf-tags c) (salt-one c 'tags 9 @ n (charm? n && (0 < n) ? n 9))
 
    lux-conf (salt 'lux)
 
@@ -63,7 +63,7 @@
    ; `phi` stands for the golden ratio wherever a number would go.
    (lux-arg a i d) (: (go l k) (? (atom? l) d
                                   (0 < k) (go >l (k - 1))
-                                  (: v <l (v = 'phi ? lux-phi (constellation? v ? v d))))
+                                  (<l @ v (v = 'phi ? lux-phi (constellation? v ? v d))))
                       (go a i))
    (lux-lay-of sp)
     (: h (two? sp ? <sp sp) a (two? sp ? >sp ())
@@ -95,7 +95,7 @@
    ;   (setWMName "LG3D (XMonad)" rides ewmh-init; the cursor is x-cursor).
    ;   lux_nostartup skips the spawns -- a headless harness wants no keyboard
    ;   churn on its bare Xvfb
-   lux-startup (? (getenv "LUX_NOSTARTUP") ()
+   lux-startup (getenv "LUX_NOSTARTUP" ? ()
                   (conf-roster lux-conf 'startup
                                '(("setxkbmap" "-option" "ctrl:nocaps" "-option" "compose:rctrl"))))
 
@@ -105,12 +105,12 @@
    ;   -- every other X client reads it that way, and a display manager that parks
    ;   the live cookie elsewhere (ly's /run/user/<uid>/lyxauth) leaves a stale
    ;   ~/.Xauthority behind, whose cookie the server refuses
-   (lux-dispof d) (? (#d < 2) "7"                                           ; unset: the Xephyr harness habit
-                     (: b (snip d 1 #d)
+   (lux-dispof d) (#d < 2 ? "7"                                           ; unset: the Xephyr harness habit
+                     (snip d 1 #d @ b
                         (: (go i) (i = #b || b i = 46 ? (snip b 0 i) (go (i + 1)))
                            (go 0))))
-   (lux-dispnum u) (lux-dispof (: d (salt-one lux-conf 'display ()) (string? d ? d (getenv "DISPLAY"))))
-   (lux-xauth u) (: v (getenv "XAUTHORITY") (0 < #v ? v (getenv "HOME" + "/.Xauthority")))
+   (lux-dispnum u) (lux-dispof (salt-one lux-conf 'display () @ d (string? d ? d (getenv "DISPLAY"))))
+   (lux-xauth u) (getenv "XAUTHORITY" @ v (0 < #v ? v (getenv "HOME" + "/.Xauthority")))
    (lux-auth-for disp) (xauth-cookie (salt-one lux-conf 'xauthority (lux-xauth ())) disp)
    lux-display ("/tmp/.X11-unix/X" + lux-dispnum ())
    lux-auth (lux-auth-for (lux-dispnum ())))

@@ -44,7 +44,7 @@
    ; text -> [forms torn?]. a dropped paren hides every unit under it, so it is
    ; answered and not swallowed.
    (hforms t)
-    (: (go x acc) (: r (sound x)
+    (: (go x acc) (sound x @ r
                      (? (two? r)     (go >r (<r . acc))
                         (r == 'torn) [(rev acc) 1]
                         [(rev acc) 0]))
@@ -52,7 +52,7 @@
 
    ; --- one unit --------------------------------------------------------------
    (hclause u c gs)
-    (? (atom? c) (("a clause is a form, not " + show c) . gs)
+    (atom? c ? (("a clause is a form, not " + show c) . gs)
        (: k <c v >c m (hkeys k)
           (? !m          (("unknown clause " + string k) . gs)
              (m == 'one) (atom? v ? (("(" + string k + ") wants an operand") . gs)
@@ -63,16 +63,16 @@
    (hunit kind nm cs gs)
     (: u (pins {} 'name nm 'kind kind 'exec [] 'after [] 'wants [] 'env []
                   'restart (kind == 'service ? 'on-fail 'no) 'tries 3)
-       [u (foldl (\ g c (hclause u c g)) gs cs)])
+       [u (foldl (g \ c \ hclause u c g) gs cs)])
 
    ; --- a whole config --------------------------------------------------------
    ; forms -> [units gripes], units in file order.
    (hunits fs)
     (: (go fs us gs)
-        (? (atom? fs) [(rev us) (rev gs)]
-           (: f <fs
+        (atom? fs ? [(rev us) (rev gs)]
+           (<fs @ f
               (? (atom? f)            (go >fs us (("not a unit form: " + show f) . gs))
-                 !(elem <f hkinds)    (go >fs us (("unknown kind " + show <f) . gs))
+                 (nelem <f hkinds)    (go >fs us (("unknown kind " + show <f) . gs))
                  (atom? >f)           (go >fs us (("a " + string <f + " wants a name") . gs))
                  !(name? <>f)           (go >fs us (("a unit name is a name, not " + show <>f) . gs))
                  (: nm <>f  cs >>f
@@ -81,60 +81,60 @@
        (go fs () ()))
 
    ; --- the unit by name ------------------------------------------------------
-   (hby us nm) (? (atom? us) () (: u <us (u 'name == nm ? u (hby >us nm))))
+   (hby us nm) (atom? us ? () (<us @ u (u 'name == nm ? u (hby >us nm))))
    (hnames us) (map (u \ u 'name) us)
 
    ; --- what is wrong with it -------------------------------------------------
    ; every check answers a list of complaints, and `hcheck` is their concatenation
    ; in reading order. nothing here raises: a bad config is a report, not a fault.
-   (happend a b) (foldl (\ l x (x . l)) b (rev a))
-   (hdedup l seen) (? (atom? l) (rev seen)
+   (happend a b) (foldl (l \ x \ (x . l)) b (rev a))
+   (hdedup l seen) (atom? l ? (rev seen)
                       (elem <l seen ? (hdedup >l seen) (hdedup >l (<l . seen))))
-   (hstrings? l) (? (atom? l) 1 (string? <l ? (hstrings? >l) 0))
+   (hstrings? l) (atom? l ? 1 (string? <l ? (hstrings? >l) 0))
 
    ; a cycle in `after` is the one error the supervisor cannot survive: the dep
    ; walk would never bottom out. answers the name the walk came back to, or ().
    (hcycle us nm seen)
-    (? (elem nm seen) nm
-       (: u (hby us nm)
-          (? !u ()
+    (elem nm seen ? nm
+       (hby us nm @ u
+          (!u ? ()
              (: path (nm . seen)
-                (go ds) (? (atom? ds) ()
-                           (: r (hcycle us <ds path) (? r r (go >ds))))
+                (go ds) (atom? ds ? ()
+                           (hcycle us <ds path @ r (r ? r (go >ds))))
                 (go (peep u 'after []))))))
 
    (hcheck1 us u)
     (: nm  (u 'name)            kind (u 'kind)
        ex  (peep u 'exec [])    tag  ("unit " + string nm + ": ")
        run? (kind !== 'target)
-       (deps k) (: bad (filter (\ d !(hby us d)) (peep u k []))
-                   (map (\ d (tag + string k + " " + string d + " is not a unit")) bad))
+       (deps k) (filter (\ d !(hby us d)) (peep u k []) @ bad
+                   (map (d \ tag + string k + " " + string d + " is not a unit") bad))
        (happend
         (happend
-         (: r (peep u 'restart ())
-            (? !(elem r hrestarts) [(tag + "restart " + show r + " is not no|on-fail|always")]
-               (: n (peep u 'tries 0)
-                  (? (charm? n && 0 < n) () [(tag + "tries wants a positive count")]))))
+         (peep u 'restart () @ r
+            (nelem r hrestarts ? [(tag + "restart " + show r + " is not no|on-fail|always")]
+               (peep u 'tries 0 @ n
+                  (charm? n && 0 < n ? () [(tag + "tries wants a positive count")]))))
          (? (run? && atom? ex)         [(tag + "no (exec ..) -- nothing to run")]
             (run? && !(hstrings? ex))  [(tag + "(exec ..) wants strings")]
-            (!run? && (two? ex))       [(tag + "a target has nothing to exec")]
+            (!run? && two? ex)       [(tag + "a target has nothing to exec")]
             ()))
         (happend (deps 'after) (deps 'wants))))
 
    (hcheck us)
     (: ns  (hnames us)
-       dup (hdedup (filter (\ n (1 < tally (filter (\ m (m == n)) ns))) ns) [])
-       cyc (filter (\ n (hcycle us n [])) (hdedup ns []))
-       (happend (map (\ n ("duplicate unit " + string n)) dup)
-                (happend (map (\ n ("unit " + string n + ": after cycles back to itself")) cyc)
-                         (foldl (\ g u (happend g (hcheck1 us u))) () us))))
+       dup (hdedup (filter (n \ 1 < tally (filter (m \ (m == n)) ns)) ns) [])
+       cyc (filter (n \ hcycle us n []) (hdedup ns []))
+       (happend (map (n \ "duplicate unit " + string n) dup)
+                (happend (map (n \ "unit " + string n + ": after cycles back to itself") cyc)
+                         (foldl (g \ u \ happend g (hcheck1 us u)) () us))))
 
    ; --- the door --------------------------------------------------------------
    ; path -> [units gripes]. an unreadable file is one gripe and no units, which
    ; is what a supervisor with nothing to run should say rather than raise.
    (hconf path)
-    (: t (hslurp path)
-       (? !t [() [("cannot read " + path)]]
+    (hslurp path @ t
+       (!t ? [() [("cannot read " + path)]]
           (: r (hforms t)
              p (hunits <r)
              us <p

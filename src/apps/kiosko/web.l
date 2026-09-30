@@ -69,8 +69,8 @@
 
    ; ..and a .l's header as a document: libra lifts it, lapiz shows it
    (sv-head path src)
-   (: md (ldoc-md src)
-      (? (0 < #md) ("# " + path + "\n\n" + md)
+   (ldoc-md src @ md
+      (0 < #md ? ("# " + path + "\n\n" + md)
          ("# " + path + "\n\nthis file has no header comment.\n")))
 
    ; a case-blind substring walk over the request head; the needle comes in lowercase
@@ -109,7 +109,7 @@
                !(hd? || sv-doc? head) ["text/plain; charset=utf-8" <>r]
                ["text/html; charset=utf-8"
                 (sv-cached box p
-                  (\ _ (? hd? (sv-doc p (sv-head src <>r) [src "the source"])
+                  (_ \ (? hd? (sv-doc p (sv-head src <>r) [src "the source"])
                           md? (sv-doc p <>r ())
                           (sv-page p (hw-body p <>r) [(p + ".md") "the header, as a document"]))))]))))
 
@@ -164,10 +164,10 @@ tree is served. this binary drives the page's build; no love is compiled for it.
       _ (two? >rest ? (sv-die 2 ("one tree at a time, not " + <>rest)) 0)
       pt (uoptv t 112)
       ; [IP:]PORT, loopback unless an address is named
-      k (? (string? pt) ((: (g i) (? (i < 0) -1 (pt i = 58) i (g (i - 1)))) (#pt - 1)) -1)
-      ip (? (k < 1) "127.0.0.1" (snip pt 0 k))
-      pn (? (string? pt) (snip pt (k + 1) #pt) ())
-      port (: v (uport pn) (? !pn 8080 v v (sv-die 2 ("not a port: " + pt))))
+      k (string? pt ? ((: (g i) (? (i < 0) -1 (pt i = 58) i (g (i - 1)))) (#pt - 1)) -1)
+      ip (k < 1 ? "127.0.0.1" (snip pt 0 k))
+      pn (string? pt ? (snip pt (k + 1) #pt))
+      port (uport pn @ v (? !pn 8080 v v (sv-die 2 ("not a port: " + pt))))
       dir0 (two? rest ? <rest ".")
       build? (peep t 110 0 ? 0 1)
       ; the tree: DIR itself, the nest laid under it before, or laid there now.
@@ -178,12 +178,12 @@ tree is served. this binary drives the page's build; no love is compiled for it.
              dir0)
       _ (build? && sv-tree? dir ? (sv-build dir) 0)
       serve5 (cite 'kiosko 'serve5)
-      _ (nil? serve5 ? (udie 1 "web: no kiosko aboard"))
-      _ (sv-tree? dir ? (say err ("web: " + dir + " -- the page is http://" + ip + ":" + show port
-                                  + "/, the machine\n")) 0)
-      _ (: r (serve5 dir [ip port] 0 () (sv-make dir box))
-           (nom? r ? (udie 1 ("web: cannot listen on " + ip + ":" + show port + " -- " + show r))))
-      0)
+      (nil? serve5 ? (udie 1 "web: no kiosko aboard"),
+       sv-tree? dir ? (say err ("web: " + dir + " -- the page is http://" + ip + ":" + show port
+                                + "/, the machine\n")) 0,
+       serve5 dir [ip port] 0 () (sv-make dir box) @ r
+         (nom? r ? (udie 1 ("web: cannot listen on " + ip + ":" + show port + " -- " + show r))),
+       0))
 
    ; the verb, and the seat (kiosko's shape): `love web ..` on the artifact, or
    ; this file named on a command line, and neither needs a script
