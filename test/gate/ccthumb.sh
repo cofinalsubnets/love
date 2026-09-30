@@ -1,45 +1,21 @@
 #!/bin/sh
-# test/gate/ccthumb.sh -- the C battery on the DEVICE CPUs: every test/cc/*.c built by
-# `mooncc -t thumb1|thumb2`, run on qemu's Cortex-M, and required to answer exactly what
-# arm-none-eabi-gcc answers for the same source on the same machine.
+# test/gate/ccthumb.sh -- the C battery on the device cpus: every test/cc/*.c built by
+# `mooncc -t thumb1|thumb2`, run on qemu's cortex-m, must answer what arm-none-eabi-gcc
+# answers for the same source on the same machine. m-profile is ilp32 with no qemu-user
+# lane, so x64 cannot be the reference as it is in ccarch.sh; the cross gcc is.
 #
-# WHY A SECOND ORACLE. ccarch.sh pins a64 and rv64 against the x86-64 build, which
-# works because those are LP64 like x64 and run under qemu-USER. The thumb family is
-# M-profile: no MMU, no Linux, no qemu-user lane at all, and ILP32 besides -- so x64
-# cannot be the reference (a program reading `sizeof(long)` is not wrong to differ) and
-# there is no hosted process to run. Both problems have the same answer: build the same
-# source with the cross gcc for the same machine and compare. Same ISA, same ABI, same
-# startup, one compiler differs -- which is thumb.sh's shape, over the whole battery
-# instead of a hand-written lane.
+# three lists, each asserted:
+#   refuse   mooncc has no lane: nonzero exit, no signal, the diagnostic names the file.
+#            the day a lane lands this fails, and the name comes off.
+#   hosted   the program wants printf, malloc, emutls or a header the bare-metal sysroot
+#            lacks, so at least one of the two builds must fail to produce a binary.
+#   narrow   the program assumes a 64-bit long; the reference compiler must agree it does
+#            not carry to ilp32 -- see the note beside each name.
 #
-# What this catches that nothing else did: gen.l's cgzero strode 8 bytes per store on a
-# target whose store is 4, so a partly-spelled local aggregate kept every other word of
-# the frame; and objsecs3 told the linker 4-byte section grain whatever the stream asked,
-# so every aligned(N) global landed off its boundary. Both were live on every board port,
-# both compiled clean, and both are invisible to a 64-bit run.
-#
-# THREE LISTS, EACH ASSERTED, because they refuse for three different reasons and folding
-# them is how a gate starts lying:
-#   refuse   mooncc has no lane -- nonzero exit, no signal, the diagnostic names the file.
-#            the day a lane lands the build succeeds, this fails, and the name comes off.
-#   hosted   the program wants a hosted environment -- printf, malloc, gcc's emutls for a
-#            _Thread_local, or a header (sys/mman.h) the bare-metal sysroot has no copy
-#            of. at least one of the two builds must therefore FAIL to produce a binary,
-#            at compile or at link. a program that stops needing one gets noticed the same
-#            way a new refusal does.
-#   narrow   the program assumes a 64-bit `long`, so its answers do not carry to ILP32
-#            (a union of double with `unsigned long`, a `:40` bit-field). the reference
-#            compiler is asked, and it must AGREE that the source does not build or that
-#            we cannot both be right -- see the note beside each name.
-#
-# exit codes are 8 bits and stdout needs a libc, so this compares the CODE alone. Every
-# program in test/cc returns a count of passing checks, which is what makes that enough --
-# but unlike thumb.sh, the wants belong to the programs and cannot be chosen clear of the
-# codes a death wears: 43-dispatch legitimately answers 131, which is 128+3 read as a
-# signal. So a fault is read off QEMU'S OWN OUTPUT instead. These binaries carry no libc
-# and print nothing, so anything on that stream is the machine's register dump and
-# `qemu: fatal` is its first line. 124 stays timeout's, which no program returns.
-# NOT set -e: the checks report their own failures with context.
+# these binaries have no libc, so the exit code is compared alone; each program returns
+# its count of passing checks. a code can look like a signal (43-dispatch answers 131),
+# so a fault is read off qemu's own output, whose first line is `qemu: fatal`. 124 is
+# timeout's. not set -e: the checks report their own failures.
 #
 # usage: ccthumb.sh TARGET OUTDIR LOVE     (TARGET: thumb1 | thumb2)
 set -u
@@ -64,8 +40,7 @@ for tool in arm-none-eabi-gcc arm-none-eabi-ld qemu-system-arm; do
     echo "$name: no arm-none-eabi toolchain / qemu-system-arm, skipped"; exit 0; }
 done
 
-# ONE RUN'S WORTH: a failing case keeps its objects and elfs, which is the only time
-# anyone wants them; clearing at the start rather than the end is what bounds the pile.
+# cleared at the start, not the end: the last run stays for a post-mortem
 d=$ho/cc-$tgt
 rm -rf "$d"
 mkdir -p "$d"

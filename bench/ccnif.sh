@@ -1,56 +1,32 @@
 #!/bin/sh
-# ccnif.sh -- mooncc's codegen against gcc's and clang's, on the three files in
-# host/ that ask the most of it. NOT A GATE and deliberately not wired into one:
-# it is a development instrument, run by hand while working on gen.l, and what it
-# prints is three readings of the same source, not a verdict.
+# ccnif.sh -- mooncc's codegen against gcc's and clang's on src/love/lib/hash.c and
+# src/love/lib/gz.c (sha-256, md5, crc32, cksum, deflate, inflate): the widest C the tree
+# owns and the least like love.c -- rotates, eight-register wrapping adds, parallel table
+# lookups, runtime shifts, a hash-chain match finder. a development instrument, not a gate.
 #
-# THE SUBJECT is src/love/lib/hash.c and src/love/lib/gz.c -- sha-256, md5,
-# crc32, cksum, DEFLATE and inflate. They are the widest C the tree owns and the
-# least like the rest of it: 32-bit rotates, a wrapping add carried over eight
-# registers, two table walks reading EIGHT INDEPENDENT lookups a step, a 64-bit
-# accumulator shifted by a runtime count, a hash-chain match finder, an insertion
-# sort over packed keys, and an eight-in-order copy that is deliberately not a
-# word move. love.c has none of those shapes, so nothing else here reads them --
-# and mooncc compiles all three into the shipped artifact.
+# the harnesses include the .c, so every static is reachable; the love-facing wrappers'
+# names are stubbed (nif/stub.h) and only have to link.
 #
-# THE HARNESSES INCLUDE THE .c. Every entry point in the three files is a
-# static, so a program that includes the source sees the algorithm whole and no
-# seam had to be cut into host/ to reach it. What the love-facing wrappers name is
-# stubbed (nif/stub.h) -- main() enters at the algorithm and the lvm ops are never
-# called, they only have to link. That trick works for any src/love/*.c nif.
+#   answers -- every lane's report is diffed; a divergence is a miscompile. gcc -O0 and
+#              -O2 are compared first: where they disagree it is undefined behaviour in
+#              our source, not a mooncc bug.
+#   text    -- .text bytes per lane. the whole-file number, off the section header, is
+#              the only sound total (gcc and clang inline statics away); under it, the
+#              widest per-function ratios.
+#   time    -- one row per algorithm, median of samples, clocked by the shell since the
+#              builds carry different libcs.
 #
-# THREE READINGS, and they answer different questions:
-#
-#   answers -- every lane runs the same report and the reports are diffed. A
-#              divergence is a MISCOMPILE and the only place in this script where
-#              one compiler can be said to be wrong. gcc runs at -O0 as well as
-#              -O2, and those two are compared to EACH OTHER first: where the
-#              oracle disagrees with itself the fault is undefined behaviour in
-#              OUR source and not a mooncc bug, which is a different repair.
-#   text    -- .text bytes per lane. The whole-file number is exact, off the
-#              section header, and it is the only SOUND total: gcc and clang
-#              inline statics out of existence, so a sum over the names two lanes
-#              share charges mooncc for a callee its opposite number already paid
-#              for inside a caller. Under it, the widest per-function ratios --
-#              which is what actually names a lane worth working on.
-#   time    -- the algorithms run for real, one row each, median of SAMPLES. The
-#              shell holds the clock: the two builds carry different libcs, so a
-#              program reading its own would time the clock as much as the code.
-#
-# READ THE TIME ROWS IN PAIRS, never as one number. crc32 and cksum are branch-
-# free table walks; sha-256 and md5 are register pressure with no memory in the
-# loop; deflate is pointer chasing; inflate is a branch per symbol. mooncc level
-# on one and far behind on another names the lane that wants work -- which is the
-# whole reason this prints six rows and not an average. (bench/ccbench.sh
-# times three of these too, but through the SHIPPED BINARY's nifs, where the love
-# runtime and the libc are in the picture; here nothing is but the code.)
+# read the time rows against each other: crc32/cksum are table walks, sha-256/md5
+# register pressure, deflate pointer chasing, inflate a branch per symbol. level on one
+# and behind on another names the lane that wants work. (bench/ccbench.sh times some
+# of these through the shipped binary's nifs, runtime and libc included.)
 #
 # usage: ./ccnif.sh [reps] [samples]
 #   reps    passes over the timed corpus per run (default 24)
 #   samples timed runs per row, median reported (default 3)
 #
-# x86-64 only -- mooncc emits x64 here. Needs `make host` first (out/love IS
-# the compiler under test) and whichever of gcc/clang are on PATH.
+# x86-64 only. needs `make host` first (out/love is the compiler under test) and
+# whichever of gcc/clang are on PATH.
 set -u
 
 R=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)

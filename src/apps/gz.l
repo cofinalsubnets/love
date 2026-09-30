@@ -38,12 +38,8 @@
 ; writes through), a `tray`'s pin answers a COPY so it holds only tables that never change,
 ; and a `tablet` is the mutable map the bit cursor and the Huffman tables ride.
 ;
-; `+` is DYADIC: every sum here is infix. a prefix (+ a b c) is application, which
-; church-exponentiates and answers a bignum the size of the sky.
-;
 ; the wrap registers module 'gz whether borrowed or ridden in a cat, so the dist bake pays
-; the compile once and (borrow 'gz) is a splice afterwards. unwrapped, the names leaked into
-; the cat's layer, `borrow` found no module, and every caller recompiled this file.
+; the compile once and (borrow 'gz) is a splice afterwards.
 (module 'gz
 (borrow 'bytes)
 (:

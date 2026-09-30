@@ -1,46 +1,19 @@
 #!/bin/sh
-# test/gate/ccarch.sh -- the C battery on a CROSS TARGET: every test/cc/*.c built
-# by `mooncc -t <arch>`, run under qemu-user, and required to answer exactly what
-# the same source answers on x86-64. TWO targets, ONE procedure (raw.sh's shape).
+# test/gate/ccarch.sh -- the C battery on a cross target: every test/cc/*.c built by
+# `mooncc -t <arch>`, run under qemu-user, must answer what the same source answers on
+# x86-64. the targets share mooncc's front end and most of gen.l, so a fault in the
+# shared model can hide behind a lane one target has and another lacks.
 #
-# WHY, and why the ORACLE is x86-64 rather than gcc. test_moon has run this battery
-# against gcc -O0 since the driver was born, but only ever natively, and its own
-# comment said "x86-64 only until a64 parity" -- so for four of the five backends
-# the differential did not exist. That gap is not incidental: mooncc's targets share
-# the whole front end and most of gen.l, which is exactly the arrangement where a
-# fault in the SHARED model is masked on one target by a lane the other lacks.
+# the reference is the x86-64 build, which test_moon pins against gcc: gcc pins x64 and
+# x64 pins the rest, with no cross gcc needed. where one exists (a64, via AARCH64_CC or
+# the local nerves toolchain) it is an extra oracle, since agreeing with x64 cannot
+# catch a fault both share. stdout is compared, not just the exit code.
 #
-# The first a64 run proved it. `(x * 0x076be629) >> 27` on an `unsigned int` x --
-# test/cc/104-u32wrap.c's own de Bruijn ctz, the musl mallocng shape -- did not wrap
-# to 32 bits. The faulty rule was shared by every target (a bare literal's value
-# tuple is typed 'long, and u32bin? disqualifies on a long operand); x64 was right
-# only because it has a mul-IMMEDIATE lane that passes 'int by hand, and a64,
-# having no such form, fell to the register lane and read the 'long. One rule, two
-# targets, and only the second told the truth.
+# the exclusions are per target and asserted: a program using a feature the target has
+# no lane for must be refused (nonzero exit, no signal, a diagnostic naming the file).
+# the day the target grows the lane this fails, and the name comes off its list.
 #
-# So the reference is THE X86-64 BUILD OF THE SAME SOURCE, which test_moon already
-# pins against gcc. The two gates compose into a complete argument: gcc pins x64,
-# and x64 pins every other target. That also makes this gate work where no cross
-# gcc exists at all -- rv64 has qemu here but no cross toolchain, and asking
-# "do my targets agree?" needs no third compiler. Where a cross gcc IS available
-# (a64, via AARCH64_CC or the local Nerves toolchain) it is used as an
-# ADDITIONAL oracle, because agreeing with x64 cannot catch a bug both share.
-#
-# stdout is compared, not just the exit code. These programs return a COUNT of
-# passing checks; eight bits can say THAT something moved and never which one.
-#
-# THE EXCLUSIONS ARE ASSERTED, NOT SKIPPED, and the list is PER TARGET. A program
-# using a feature this target has no lane for must be REFUSED: nonzero exit, no
-# signal, a diagnostic naming the file. A silent skip list is where a regression
-# hides; and the day a target grows one of these its build starts succeeding, this
-# check fails, and the name comes off that target's list -- which is exactly how
-# 101-vla left a64's (the lane was one `and` mask and three sp moves away from
-# neutral, and the C99 VLA has ridden both backends since).
-#
-# Skips whole (exit 0, a note) without the target's qemu -- like test_raw_a64 /
-# test_rv64. make owns the dependency graph; this owns the procedure.
-# NOT set -e: the checks report their own failures with context.
-#
+# skips whole without the target's qemu. not set -e: the checks report their own failures.
 # usage: ccarch.sh ARCH OUTDIR LOVE     (ARCH: a64 | rv64)
 set -u
 
@@ -64,11 +37,8 @@ case $arch in
   *) echo "ccarch.sh: unknown target $arch" >&2; exit 1 ;;
 esac
 
-# ONE RUN'S WORTH, and no more: each case leaves a .g (a STATIC gcc binary, ~3.2 MB), a
-# .glog, a .gout, a .t and a .tout, and nothing ever read them again -- 1192 files and 420 MB
-# for a64 alone, 94 MB for riscv, growing with every run. Clearing at the START rather than
-# the end keeps the last run's artifacts for a post-mortem, which is the only time anyone wants
-# them, while bounding the pile to a single run.
+# cleared at the start, not the end: the last run stays for a post-mortem, and the pile
+# never grows past one run
 d=$ho/cc-$arch
 rm -rf "$d"
 mkdir -p "$d"
@@ -153,12 +123,8 @@ for f in test/cc/*.c; do
     fi
   fi
 
-  # A PASSED CASE IS DEAD WEIGHT. `fail` exits, so reaching here means this program agreed
-  # on every leg -- and the diffs are printed INLINE at the moment they disagree, so nothing
-  # downstream ever reads these again. The .g is a STATICALLY LINKED cross binary, 3.3 MB, one
-  # per program: 137 of them made cc-a64 436 MB, 73% of the whole out/ tree, for a gate that
-  # only runs in test_extra. A FAILING case keeps everything, which is the only time anyone
-  # has ever wanted it.
+  # a passed case agreed on every leg and its diffs were never needed; its static .g
+  # binaries are ~3 MB each. a failing case keeps everything
   rm -f "$d/$b.g" "$d/$b.t" "$d/$b.tout" "$d/$b.gout" "$d/$b.glog" \
         "$d/$b.x" "$d/$b.xout" "$d/$b.xlog" "$d/$b.tlog"
   n=$((n + 1))

@@ -1,40 +1,22 @@
 #!/bin/sh
-# moon-sqlite.sh -- build the SQLite amalgamation with mooncc + moonlibc + the
-# holo linker (no gcc/glibc/ld) and prove it RUNS: an in-memory battery
-# (aggregates, ORDER BY, expressions) and a FILE-BACKED one through the whole
-# unix VFS -- journaled transaction, index, close/reopen persistence, prepared
-# statements, and PRAGMA integrity_check answering ok. The sixth moon-userland
-# rung, after bzip2, gzip, tar, m4 and lua.
+# moon-sqlite.sh -- build the SQLite amalgamation with mooncc + moonlibc + the holo
+# linker (no gcc/glibc/ld) and prove it runs: an in-memory battery (aggregates, ORDER
+# BY, expressions) and a file-backed one through the unix VFS -- journaled transaction,
+# index, close/reopen persistence, prepared statements, PRAGMA integrity_check.
 #
-# TWO TARGETS, one procedure (raw.sh's shape, as moon-lua.sh does it):
-# `moon-sqlite.sh` builds the native x86-64 lane, `moon-sqlite.sh a64`
-# cross-compiles the same source with `mooncc -t a64` and runs the battery
-# under qemu-aarch64. The cross lane SKIPS cleanly without qemu.
+# `moon-sqlite.sh a64` cross-compiles with `mooncc -t a64` and runs under qemu-aarch64,
+# skipping without it. 256k machine-built lines reach C shapes nobody writes by hand,
+# which makes it the widest single net here.
 #
-# WHY THE CROSS LANE IS WORTH ITS MINUTE. This is the widest single net the
-# tree has: 256k lines from one file, and the amalgamation is machine-built
-# from many, so it reaches C shapes nobody writes by hand -- deep switch
-# ladders, computed unions, 64-bit mixing, a whole float formatter of its own.
-# The precedent is moon-lua-a64, whose FIRST run found a miscompile that 110
-# single-file cc programs and the entire love corpus under mooncc/a64 had all
-# been green over. A package on a cross target is the cheapest coverage here.
-#
-# The amalgamation is the one imported artifact -- two files, no configure.
-# Point SQLSRC at an extracted sqlite-amalgamation-* dir; without one the
-# check SKIPS (like moon-lua without LUASRC). To make one:
+# two files, no configure. point SQLSRC at an extracted sqlite-amalgamation-* dir, or let
+# it find one under dl/ then $MOONSRC (~/src when unset); a missing tree skips.
 #   curl -O https://sqlite.org/2024/sqlite-amalgamation-3450300.zip
 #   unzip sqlite-amalgamation-3450300.zip
 #   make moon-sqlite       SQLSRC=$PWD/sqlite-amalgamation-3450300
 #   make moon-sqlite-a64 SQLSRC=$PWD/sqlite-amalgamation-3450300
 #
-# THE SOURCES ARE CACHED, so none of that is needed twice: this looks for
-# `sqlite-amalgamation-*` under dl/ and then under $MOONSRC -- ~/src when that is unset --
-# so a bare `make moon-sqlite` finds a cached tree with no variable at all. An
-# explicit SQLSRC= still outranks both, and a missing tree is a clean SKIP
-# rather than a failure, so this gate stays opt-in either way.
-#
-# The config: THREADSAFE=0 (moonlibc carries no pthreads) and no load-extension
-# (no dlopen) -- both first-class sqlite configurations, not patches.
+# THREADSAFE=0 (moonlibc has no pthreads) and no load-extension (no dlopen), both
+# stock sqlite configurations.
 set -e
 
 target=${1:-x64}

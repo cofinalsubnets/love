@@ -7,11 +7,9 @@
 ;   papel  is what is left: the site -- titles, anchors, contents, cross-links, the page
 ;          template -- the things that are true of a page only because of the other pages.
 ;
-; that split is the whole design. papel declares one cook recipe per page (out/site/x.html
-; from doc/x.md) and hands the lot to cook, so an incremental site build is not a feature
-; papel implements -- it is cook's ordinary job, arriving for free. and papel never parses
-; markdown or emits a paragraph: it asks lapiz. what it does own is the site-level reading
-; of the AST, and each piece of that is a small walk over the middle:
+; papel declares one cook recipe per page (out/site/x.html from doc/x.md), so the
+; incremental build is cook's, and it never parses markdown or emits a paragraph: lapiz
+; does. its own part is the site-level reading of the AST, each a small walk:
 ;
 ;   title     the first head-1, else the meta `title`, else the file name.
 ;   anchors   every head gets a stable id (`slug`, deduped), so a heading is linkable.
