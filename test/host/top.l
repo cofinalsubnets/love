@@ -102,13 +102,14 @@
    k1 (waitfor s1)
    _ (test (0 = r9 1) (has? <r9 "Send signal:") (143 = <k1))
 
-   ; --- ] twice: a sleep of ours two steps nicer
+   ; --- ] twice: a sleep of ours two steps nicer than it started, which is the runner's nice
    s2 (sleeper 0)
+   b2 (<(sound (nice s2)))
    r10 (run ["]" "]"] ["-p" (show s2)])
-   n2 (nice s2)
+   n2 (<(sound (nice s2)))
    _ (still s2 9)
    _ (waitfor s2)
-   _ (test (0 = r10 1) (n2 = "2"))
+   _ (test (0 = r10 1) (n2 = b2 + 2))
 
    ; --- three rows: this harness and two sleeps it spawned
    me (getpid 0)
