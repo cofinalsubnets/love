@@ -44,15 +44,15 @@
     ; a flag's duration in ms, -1 when absent or negative
     (dur c) (: v (uoptv t c)
                neg (string? v && 0 < #v && v 0 = 45)
-               m (? (string? v) (udur (? neg (snip v 1 #v) v)) -1)
+               m (string? v ? (udur (? neg (snip v 1 #v) v)) -1)
                (? !(charm? m) (die ("-" + string c + " takes a duration, not " + v)) neg -1 m))
     q (dur 113)
     w (dur 119)
     i (dur 105)
-    seen (tablet 0)   ; the clock at the last chunk either way, for -w
+    seen {}   ; the clock at the last chunk either way, for -w
     ov (uoptv t 111)
     dumpf (? (string? ov) (: h (open ov "w") (? (hot? h) h (die ("cannot write " + ov + ": " + uerrno h)))) ())
-    offs (tablet 0)   ; each direction's offset, for -o
+    offs {}   ; each direction's offset, for -o
     (note m) (? (t 118) (say err (m + "\n"), flush err) 0)
 
     ; -o: s as traditional netcat's hex lines -- dir (> or <), the offset, 16 bytes, their text
@@ -124,14 +124,14 @@
                     (? (nom? d) 0
                        (<d = to) (dwrite (d 1), ddown p to)
                        (ddown p to)))
-    (dtalk p to) (converse (_ \ (? (t 100) 0 (dup p to))) (_ \ ddown p to) p)
+    (dtalk p to) (converse (_ \ t 100 ? 0 (dup p to)) (_ \ ddown p to) p)
 
     ; server: listen on la, named name, accept a client and talk; with -k the next, until
     ; killed. a unix peer has no address to say, so its path stands in
     (serve la name)
      (: l (listen la)
         (go _) (: c (accept l)
-                  (? (hot? c) (: f (? (t 85) () (farend c))
+                  (? (hot? c) (: f (t 85 ? () (farend c))
                                  _ (? (two? f) (note ("Connection received on " + <f + " " + show (f 1)))
                                       (t 85) (note ("Connection received on " + name)) 0)
                                  _ (talk c)
@@ -139,13 +139,13 @@
                      (close l, die ("accept failed: " + uerrno c))))
         (? (hot? l) (note ("Listening on " + name), go 0)
            (die ("cannot listen on " + name + ": " + uerrno l))))
-    (tserve addr port) (serve (? addr ['tcp addr port] port) ((? addr addr "0.0.0.0") + " " + show port))
+    (tserve addr port) (serve (? addr ['tcp addr port] port) ((addr || "0.0.0.0") + " " + show port))
     ; -U -l: the socket file goes when the server does
     (userv path) (serve ['unix path] path, unlink path, 0)
     ; -u -l: bind, and the first datagram's sender is the peer
     (userve addr port)
      (: p (? addr (bind ['udp addr port]) (bind ['udp port]))
-        (? (hot? p) (: _ (note ("Bound on " + (? addr addr "0.0.0.0") + " " + show port))
+        (? (hot? p) (: _ (note ("Bound on " + (addr || "0.0.0.0") + " " + show port))
                        d (recv p)
                        (? (nom? d) (die ("recv failed: " + uerrno d))
                           (: _ (note ("Connection received on " + <<d + " " + show (<d 1)))
@@ -176,7 +176,7 @@
                         _ (freeze d)
                         (two? x ? (x 1) 'etimedout)))
     ; each of host's addresses in turn until one takes: the port, or the last refusal
-    (reach host port) (: (go l e) (? (atom? l) e (: c (conn ['tcp (dns-show <l) port]) (hot? c ? c (go >l c))))
+    (reach host port) (: (go l e) (atom? l ? e (: c (conn ['tcp (dns-show <l) port]) (hot? c ? c (go >l c))))
                          (go (resolve host) 'ehostunreach))
     (took host port) ("Connection to " + host + " " + show port + " port [tcp/*] succeeded!")
     (refused host port e) ("connect to " + host + " port " + show port + " (tcp) failed: " + uerrno e)
@@ -213,7 +213,7 @@
                  (uconn <ops))
        (t 108) (!(t 122) ? (listener 0) (die usage))
        (t 107 || t 112 || t 115) (die "-k, -p and -s go with -l")
-       (t 122) (two? >ops ? (scan <ops (foldl (\ l a (l + span a)) () >ops)) (die usage))
+       (t 122) (two? >ops ? (scan <ops (foldl (l \ a \ l + span a) () >ops)) (die usage))
        (#ops = 2) (? (t 117) (uclient <ops (portof <>ops)) (client <ops (portof <>ops)))
        (die usage))))
 
