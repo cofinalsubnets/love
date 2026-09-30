@@ -2,7 +2,7 @@
 # test/gate/boot.sh -- LOVE ITSELF booting on emulated silicon, and inle's bring-up
 # beside it. Six gates, one procedure: build the port with its own make (rvboot's make
 # target builds it before calling), run the ELF under qemu, and require an exact exit
-# code. 42 means the laws held on-device; 98 is a fault, 1 is a law that failed. These
+# code. 42 means the seat check held on-device; 98 is a fault, 1 is a failed check. These
 # are the gates that prove a whole runtime -- not a codegen lane -- survives on a board.
 #
 #   mps2             Cortex-M7,  all-mooncc thumb2         42
@@ -92,7 +92,7 @@ a=$?
 case $gate in
   mps2_wake|nucleo446_smoke) [ "$a" -eq "$want" ] || fail "$why (got $a, want $want)" ;;
   *)         [ "$a" -eq "$want" ] \
-               || fail "$why (got $a, want $want = the egg hatched + the driver laws held; 98 = fault, 1 = a law failed)" ;;
+               || fail "$why (got $a, want $want = the egg hatched + the seat check held; 98 = fault, 1 = the check failed)" ;;
 esac
 
 echo "$name: $done_msg"

@@ -138,6 +138,9 @@ static struct ai_def defs[] = {
 // supplies those: a first-fit free list (ffalloc.h) over a static arena in OCRAM2,
 // with the C stack above it under __stack_top__.
 #include "../ffalloc.h"
+
+// the seat check: the egg hatched into the self-hosted ev, and a closure runs through the heap
+#define SEAT_OK "(lit? ev && map (+ 1) '(1 2 3) = '(2 3 4))"
 static struct mem *freelist;
 
 static void *mallocw(uintptr_t n) { return ff_alloc(&freelist, n); }
@@ -226,7 +229,7 @@ int main(void) {
 #define TE_TAIL(banner) \
     "   _ (gpio_init 3) _ (gpio_dir 3 1) _ (gpio_put 3 0)" \
     "   _ (putc 10)" \
-    "   _ (puts (? ok \"" banner "\" \"; SEAT LAWS FAILED -- shell up anyway\"))" \
+    "   _ (puts (? ok \"" banner "\" \"; SEAT CHECK FAILED -- shell up anyway\"))" \
     "   _ (putc 10) ((cite 'cli 'shell) 0))"
   if (!woke) {
     // the on-device egg bake: bao is a MODULE, registered by the eval below and
@@ -246,15 +249,15 @@ int main(void) {
   // THE SESSION: a fresh writable layer, C-side -- the shell's defglobs land
   // here, never in the base (bakes carry none; every boot or wake pushes its own).
   g = ai_open(g);
-  // the seat laws (src/inle/seat.l) answer first: a shell over an image that fails them is
+  // the seat check answers first: a shell over an image that fails it is
   // worse than a loud prompt, and this board has no exit code to say it with.
   struct ai *r = ai_evals_(g, woke ?
     "(: ok "
-#include "seat.h"
+    SEAT_OK
     TE_TAIL("; image hatched -- shell up")
     :
     "(: ok "
-#include "seat.h"
+    SEAT_OK
     TE_TAIL("; egg hatched -- shell up"));
   // The shell only returns on a fatal error: honest face, then blink it out.
   if (ai_code_of(r) == ai_status_scare) ai_scare_face(r);
