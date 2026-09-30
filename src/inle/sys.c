@@ -7,6 +7,7 @@
 // an unmapped number answers -ENOSYS, the same refusal mount and unshare wear off linux.
 #include "../apps/moon/lib/moonlibc/impl.h"
 #include <stdint.h>
+#include <sys/utsname.h>
 
 // the C runtime is moonlibc's core.c: errno, the streams, the mmap-arena malloc. what a
 // hosted __ai_start would arm the kernel arms here -- an empty environment and the std
@@ -234,4 +235,21 @@ long __ai_inle(long n, long a, long b, long c, long d, long e, long f) {
   // inle is one process and love tasks are its threads, so getpid answers the machine's
   // constant. the task pid is love's question, and its nif keeps the g that holds it.
   case NR_getpid: return 1;
+  // the machine names itself; it keeps no host name and no release to report
+  case NR_uname: {
+   struct utsname *u = (struct utsname *) a;
+   if (!u) return -EFAULT;
+   memset(u, 0, sizeof *u);
+   strcpy(u->sysname, "Inle");
+   strcpy(u->nodename, "inle");
+#if defined(__x86_64__)
+   strcpy(u->machine, "x86_64");
+#elif defined(__aarch64__)
+   strcpy(u->machine, "aarch64");
+#elif defined(__riscv)
+   strcpy(u->machine, "riscv64");
+#elif defined(__wasm__)
+   strcpy(u->machine, "wasm32");
+#endif
+   return 0; }
   default:       return -38; } }                       // ENOSYS, canonically

@@ -41,7 +41,7 @@
 (borrow 'rove)
 (borrow 'view)                          ; the screen, its rays, the pens
 (borrow 'play)                          ; the voices, the mix
-(? (cite 'posix) (borrow 'posix) ())    ; close, for the horn
+(borrow 'posix)    ; close, for the horn
 (:
  fps 30
  ; --- the shaft, in the world's units: x and z across it, y up, the middle of the
@@ -281,7 +281,7 @@
    ey (tb 'ey) ex (tb 'ex) ez (tb 'ez) r shaft-r w2 (2.0 * shaft-r)
    (rowof d yy) (flo (hz - foc * (yy - ey) / (d < 0.02 ? 0.02 d)))
    (fill! x ra rb p) (: a (max2 0 (min2 ra rb)) b (min2 (h - 1) (max2 ra rb))
-                        (go i) (? (i <= x + w * b) (: _ (? (0 = peep ov i 0) (pin ov i p)) (go (i + w))))
+                        (go i) (i <= x + w * b ? (peep ov i 0 @ 0 (pin ov i p), go (i + w)))
                         (go (x + w * a)))
    (span a k lo hi) (? (k * k < 1e-18) (lo <= a <= hi ? [0.0 1e9] [1.0 0.0])
                        (: t0 ((lo - a) / k) t1 ((hi - a) / k) (t0 < t1 ? [t0 t1] [t1 t0])))
@@ -294,9 +294,9 @@
      (ring b f) (: da (b 0) db (b 1) sag (b 3 + w2 * b 2) ks (b 4) front (b 5) yf (f * floor-h)
                    ; the stretch in s, and the ledge's runs on it between the gaps, as stretches in d
                    sA (sag + ks * da) sB (sag + ks * db) lo (min2 sA sB) hi (max2 sA sB)
-                   gs ((peep (lay 'gaps) f ()) + (peep hatches f ()))   ; the gaps, and the hole over the ladder
+                   gs ((peep (lay 'gaps) f ()) + hatches f)   ; the gaps, and the hole over the ladder
                    pts (sort ([lo hi] + (filter (p \ lo < p < hi) (cat (map (g \ g 0) gs) (map (g \ g 1) gs)))))
-                   (drawn? p) (: ss (wrap-s p) (ledge? lay f ss && !(any (g \ g 0 <= ss < g 1) (peep hatches f ()))))
+                   (drawn? p) (: ss (wrap-s p) (ledge? lay f ss && !(any (g \ g 0 <= ss < g 1) (hatches f))))
                    (run p0 p1) (: mid ((p0 + p1) / 2.0)
                                   (? (drawn? mid) (: d0 ((p0 - sag) / ks) d1 ((p1 - sag) / ks) [(min2 d0 d1) (max2 d0 d1)]) ()))
                    runs (? (ks * ks < 1e-18) (drawn? sag ? [[da db]] ())
@@ -304,11 +304,11 @@
                    (one rr) (: d0 (max2 da (rr 0)) d1 (min2 db (rr 1)) k (band-of d0)
                                _ (? (front || da + 1e-6 < d0) (fill! x (rowof d0 yf) (rowof d0 (yf - ledge-t)) (face-pens k)))
                                _ (? (yf < ey) (fill! x (rowof d1 yf) (rowof d0 yf) (rust-pens k)))
-                               (? (ey < yf - ledge-t) (fill! x (rowof d0 (yf - ledge-t)) (rowof d1 (yf - ledge-t)) (under-pens k))))
+                               (ey < yf - ledge-t && fill! x (rowof d0 (yf - ledge-t)) (rowof d1 (yf - ledge-t)) (under-pens k)))
                    (each runs one))
      bands (sort (filter (b \ b 0 < b 1) (map band ^4)))
      rings (map (p \ p 1) (sort (map (f \ (: dy (f * floor-h - ey) [(dy * dy) f])) (map (+ 1) ^(floors - 1)))))
-     (each bands (b \ each rings (f \ ring b f))))
+     (each bands (each rings * ring)))
    (each ^w col))
  ; a frame, as view lays it: the background rows are trays and the ledges a cask over
  ; them, a pixel row a cask of the two, and the flash tints both
@@ -325,14 +325,14 @@
    hx (ex + dw * vx) hzz (ez + dw * vz)
    sw (over (over (over (hx + r) (iw = 1) (hzz + r)) (iw = 2) (r - hx)) (iw = 3) (r - hzz))
    tb {'ex ex 'ez ez 'ey ey 'vx vx 'vz vz 'dw dw 'iw iw 'sw sw 'sg (sw + 2.0 * r * iw) 'bd (band-of dw)
-       'ceil ((floors - 1) * floor-h + ceil-h) 'blinks (map (f \ blink (st 't) f) ^floors)}
+       'ceil ((floors - 1) * floor-h + ceil-h) 'blinks (map (blink $ st 't) ^floors)}
    ov (cask (w * h))                       ; zero to start: nothing painted
    _ (ledges! st tb ov)
    lv (int (st 'flash * 4.0 + 0.999))
    fm (0 < lv ? (flashes (lv - 1)) ())
    (src y) (: rw (bg-row y st tb) ts (fm ? (peep fm rw 0) rw) i0 (w * y) px (cask w)
               (go x) (? (x < w) (: o (peep ov (i0 + x) 0)
-                                  _ (pin px x (0 = o ? (peep ts x 0) (fm ? (peep fm o 0) o)))
+                                  _ (pin px x (o @ 0 (peep ts x 0) (fm ? (peep fm o 0) o)))
                                   (go (x + 1))))
               (go 0, px))
    (view-frame w h src {}))

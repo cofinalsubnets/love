@@ -20,9 +20,7 @@
          carve-floor car-new car-head drive run-down corner? road? climb-hp sky her-lines
          mirror lane-at songs tower-bars tower-tune song-vol song-new song-feed song-tier
          song-sfx garden-bars middle-bars sky-bars heart-bars heart-rate tune?)
-; posix is optional -- the page's seat (src/inle/wasm) links none of it and this file runs
-; there, so ask before splicing: an absent module is a scare.
-(? (cite 'posix) (borrow 'posix) ())
+(borrow 'posix)
 (borrow 'x11)
 (borrow 'rove)
 (:

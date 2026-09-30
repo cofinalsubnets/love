@@ -350,9 +350,9 @@
 
 ; the whole importer lives in one body-having `:`, so none of its many helper names leak; it
 ; reads the outer globals freely and its body answers cook-main (args -> the whole job, answering
-; its status; a failure leaves by udie). the outer `_`-holder leaks cook-main as the one public -- the multi-call `kore`
+; its status; a failure leaves by udie). the outer `:` binds cook-main as the one public -- the multi-call `kore`
 ; calls it as `make` -- and the seat at the bottom fires it when this file was invoked.
-(: _ (:
+(: cook-main (:
    ; --emit: when set, expand-steps emits a serializable ("sh" "-c" cmd) step instead of a
    ; sh-line thunk, so the resolved cards can be shown back as a Cookfile (emit-cookfile below).
    emitp (tablet 0)
@@ -1204,14 +1204,9 @@
    ; a bare -j: what this machine can carry, cores and memory. half the cores plus one, since the
    ; wall stops paying for width well before the last core while every worker costs a whole
    ; mooncc heap; bounded by MemAvailable at 512 MB a job, since one TU peaks near 350 MB, and
-   ; the smaller of the two wins. no /proc (the BSDs) answers 1.
+   ; the smaller of the two wins. MemAvailable is linux's word; elsewhere the cores alone decide.
    (jobauto _)
-   (: (rows p w) (: ls (jobfile p)
-                    (? !(two? ls) 0
-                       (foldl (\ a l (: k #w
-                                        ((k <= tally l) && (snip l 0 k = w) ? (a + 1) a)))
-                              0 ls)))
-      cpus (rows "/proc/cpuinfo" "processor")
+   (: cpus (sysconf () @ (_ . _ . c . _) (charm? c ? c 0) 0)   ; the online count
       mls (jobfile "/proc/meminfo")
       free (? !(two? mls) 0
               (foldl (\ a l ((13 <= tally l) && (snip l 0 13 = "MemAvailable:")
@@ -1316,9 +1311,7 @@
          (two? pos) (udie 1 "cook: no Cards.l, Cookfile or Makefile found")
          0))
 
-   cook-main)
-
-   cook-main _)
+   cook-main))
 
 ; the seat (src/apps/nc.l's shape): fire cook-main iff this file -- or the installed `cook` symlink
 ; -- sits in the program seat of the real command line, taking the args after the seat. cmdline

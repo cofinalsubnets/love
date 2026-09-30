@@ -31,7 +31,7 @@
 (borrow 'rove)
 (borrow 'view)                          ; the screen, its rays, the pens
 (borrow 'play)                          ; the voices, the mix
-(? (cite 'posix) (borrow 'posix) ())    ; close, for the horn
+(borrow 'posix)    ; close, for the horn
 (:
  eh 1.6                               ; the eye above the bed, standing
  bed-w 2.6                            ; the bed's half width, its banks wandering a little either side

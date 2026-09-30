@@ -10,6 +10,10 @@ int open(char const*, int, ...);   /* fcntl.h's shape, repeated for the lone-inc
 long sysconf(int);
 const char *getprogname(void);   /* mirrors stdlib.h; gnulib's progname reaches either */
 #define _SC_PAGESIZE 30
+#define _SC_NPROCESSORS_CONF 83
+#define _SC_NPROCESSORS_ONLN 84
+#define _SC_PHYS_PAGES 85
+#define _SC_AVPHYS_PAGES 86
 #define STDIN_FILENO  0
 #define STDOUT_FILENO 1
 #define STDERR_FILENO 2

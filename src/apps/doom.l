@@ -29,7 +29,7 @@
    ;     XAUTHORITY or ~/.Xauthority when the server wants one ---
    (dispof d) (#d < 2 ? "0" (:- (go 0) b (snip d 1 #d)
                (go i) (i = #b || b i = 46 ? (snip b 0 i) (go (i + 1)))))
-   (xauth u) (: v (getenv "XAUTHORITY") (0 < tally v ? v (getenv "HOME" + "/.Xauthority")))
+   (xauth u) (: v (getenv "XAUTHORITY") (0 < #v ? v (getenv "HOME" + "/.Xauthority")))
 
    ; --- the requests the wire does not carry: a window of ours, a GC, a title,
    ;     the delete protocol, and PutImage ---
@@ -168,7 +168,7 @@
              _ (mkdir d 493)
              _ (mkdir (d + "/doomgeneric") 493)
              _ (note ("laying " + show #ps + " files of doomgeneric off " + dg-raw))
-             bad #(filter (p \ (grab (dg-raw + p) (d + "/" + p) != 0)) ps)
+             bad #(filter (p \ grab (dg-raw + p) (d + "/" + p) != 0) ps)
              (? !ps 1 bad 1 0))))
    (dg-tar dl)
     (: tgz (dl + "/doomgeneric.tgz")
@@ -215,8 +215,8 @@
            (fail ("the nest's love carries no doom either: `cook host DOOM=1` under " + nest))
           (two? (stat bin)) (enter 0)
           (: m (nest-lay here nest dl
-                         (\ _ (cite 'source 'src-arm nest exe,            ; autonomous: ours throughout
-                                note "building the nest's love with doom inside"))
+                         (_ \ (cite 'source 'src-arm nest exe,            ; autonomous: ours throughout
+                               note "building the nest's love with doom inside"))
                          [exe "cook" "host" "DOOM=1" ("LOVE=" + exe)])
              (string? m ? (fail m) (enter 0)))))
 
@@ -228,7 +228,7 @@
    ; (kexec) in place of this one, and that one carries the game
    (doom-nest-inle _)
     (: here (cwd 0)
-       nest ((here = "/" ? "" here) + "/love-" + love-version)     ; the page's shell sits at /
+       nest ((here @ "/" "" here) + "/love-" + love-version)     ; the page's shell sits at /
        dl (nest + "/dl")
        mod (nest + "/out/doom/love.wasm")
        (fail s) (say err ("doom: " + s + "\n"), 1)

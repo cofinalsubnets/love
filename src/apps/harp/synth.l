@@ -60,7 +60,7 @@
 (borrow 'just)                          ; ratios, cents, the lattice
 (borrow 'drift)                         ; the walk and its chooser
 (borrow 'phrases)                       ; its books
-(? (cite 'posix) (borrow 'posix) ())    ; close, for the horn
+(borrow 'posix)    ; close, for the horn
 (:
  esc (string 27)
  synth-digits "1234567890-="           ; the row, a semitone a key

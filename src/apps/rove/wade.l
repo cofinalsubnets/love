@@ -35,7 +35,7 @@
 (borrow 'rove)
 (borrow 'view)                          ; the screen, its rays, the pens
 (borrow 'play)                          ; the voices, the mix
-(? (cite 'posix) (borrow 'posix) ())    ; close, for the horn
+(borrow 'posix)    ; close, for the horn
 (:
  eh 1.2 rw 5.0                        ; the eye above the water, waist deep; the river's half width
  sp 3.0 loop 64                       ; a tree every so far along a bank; the bank repeats
@@ -100,7 +100,7 @@
  ; loop has so many places, and each is hashed once and kept
  trees {}
  (tree-of k s r) (: kk ((k % loop + loop) % loop) key (kk * 8 + r * 2 + (0 < s))
-   b (peep trees key ())
+   b (trees key)
    b2 (? (two? b) b
          (: seed (s + 2 + 5 * r)
             b3 [(dice kk seed 3 100 / 100.0 * sp)

@@ -51,16 +51,18 @@
                    (go (k + 1) (a * 10 + w k - 48)))
        v (0 < n ? (go 0 0) 0)
        (1 < v ? v (rt-cores 0)))
-   ; half the cores /proc/cpuinfo names, plus one -- the same width rule cook's bare -j
-   ; takes. no /proc (the BSDs) is 1, the serial fan.
+   ; half the online cores, plus one -- the same width rule cook's bare -j takes. a driving
+   ; LOVE may predate sysconf, and reads /proc/cpuinfo instead; no count is 1, the serial fan.
    (rt-cores _)
+    (: sc (cite 'posix 'sysconf)
+       n (? sc (sc () @ (_ . _ . c . _) (charm? c ? c 0) 0) (rt-cpuinfo 0))
+       (0 < n ? (n // 2 + 1) 1))
+   (rt-cpuinfo _)
     (: q (open "/proc/cpuinfo" "r")
-       (? !(hot? q) 1
+       (? !(hot? q) 0
           (: s (slurp q)
              _ (close q)
-             n (foldl (a \ l \ 9 <= #l && snip l 0 9 = "processor" ? (a + 1) a)
-                      0 (lines s))
-             (0 < n ? (n // 2 + 1) 1))))
+             (foldl (a \ l \ 9 <= #l && snip l 0 9 = "processor" ? (a + 1) a) 0 (lines s)))))
    ; ~600 member compiles across the three archives and none reads another, so a pool of
    ; children fills the member cache and `one` below indexes the archives out of it,
    ; every member a hit. the cache IS the join -- without one a child's work dies with

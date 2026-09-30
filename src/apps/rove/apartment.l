@@ -30,9 +30,7 @@
          cube-w cube-h river-h water-rate water-gap inside? oct-pt stone-lines apartment-song-new apartment-song-feed
          apartment-sfx phrase phrase-gap phrase-ring phrase-slow phrase-every phrase-vary phrase-first
          phrase-echoes drone-voice drone-notes song-chunk npc-glyph bones-glyph)
-; posix is optional -- the page's seat (src/inle/wasm) links none of it and this file runs
-; there, so ask before splicing: an absent module is a scare.
-(? (cite 'posix) (borrow 'posix) ())
+(borrow 'posix)
 (borrow 'rove)
 (borrow 'play)                          ; the voices, the mix; harp is cited, never borrowed
 (:

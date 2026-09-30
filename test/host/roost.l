@@ -15,6 +15,7 @@
    ; a step onto (x y) from the cell below it: stand there, then press k
    (bump x y k) (pins p 'x x 'y (y + 1), roost-turn g k)
    _ (test (two? (g 'sign)))                               ; the opening sign stands
+   _ (test (string? <(g 'sign)))                           ; ..under user@host, or the nest
    _ (roost-turn g 32)
    _ (test !(g 'sign))                                     ; ..and any key takes it down
    pc (d 'perch)

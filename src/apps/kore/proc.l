@@ -484,7 +484,7 @@
    ; -s the name up to its first dot, -f the canonical name the host resolves itself to
    (hostname-main as)
     (: fo (uflagsl "hostname" as () "fs" {"short" 115 "fqdn" 102 "long" 102})
-       h (u-1line "/proc/sys/kernel/hostname" "unknown")
+       h (u-uts 1 "unknown")
        n (? (<fo 102) <>(uhw-self 0) (<fo 115) (: k (findsub h ".") (? (k < 0) h (snip h 0 k))) h)
        (say out n, put out 10, flush out, 0))
 

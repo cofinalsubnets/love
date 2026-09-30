@@ -23,14 +23,11 @@
 (borrow 'posix)
 (:
    ; --- lines ----------------------------------------------------------------
-   (ltrim s) (: n #s
-                (g i) (i < n && (s i = 32 || s i = 9) ? (g (i + 1)) (snip s i n))
-                (g 0))
-   (linesof s) (: n #s
-                  (g i st acc) (? (n <= i) (rev (snip s st n . acc))
-                                  (s i = 10) (g (i + 1) (i + 1) (snip s st i . acc))
-                                  (g (i + 1) st acc))
-                  (g 0 0 ()))
+   (ltrim s) (:- (g 0) n #s (g i) (i < n && (s i = 32 || s i = 9) ? (g (i + 1)) (snip s i n)))
+   (linesof s) (:- (g 0 0 ()) n #s
+                (g i st acc) (? (n <= i) (rev (snip s st n . acc))
+                                (s i = 10) (g (i + 1) (i + 1) (snip s st i . acc))
+                                (g (i + 1) st acc)))
 
    ; --- the check ------------------------------------------------------------
    ; `path:line:col: text`, the shape an editor's error list already parses
@@ -41,7 +38,7 @@
    ; balance alone fails. the other rules speak -- an editing aid, read by hand --
    ; and nothing promotes one, so libra never refuses a file over a habit.
    (fatal? w) (<>>>w = 'balance)
-   (tally-fatal ws) (foldl (\ a w (fatal? w ? (a + 1) a)) 0 ws)
+   (tally-fatal ws) (foldl (a \ w \ fatal? w ? (a + 1) a) 0 ws)
 
    (libra-check-files conf fs bad)
     (? (atom? fs) bad
@@ -55,10 +52,10 @@
 
    ; the count is the status, answered and not quit with: every arm below is
    ; libra-main's own tail, so a caller already in this image reads it as a charm
-   (libra-check conf fs) (: n (libra-check-files conf fs 0) (0 < n ? 1 0))
+   (libra-check conf fs) (0 < libra-check-files conf fs 0)
 
    (flag? x) (0 < #x && x 0 = 45)
-   (files as) (filter (\ x !(flag? x)) as)
+   files (filter (nil? * flag?))
 
    ; --- the header, as a document --------------------------------------------
    ; a text walk, and it has to be: no reader in the tree keeps comments, so a
@@ -70,10 +67,10 @@
    ; one leading space off, so `;   foo` keeps the display's two and a bare `;`
    ; is the blank line it looks like
    (dbody s) (: n #s (0 < n && s 0 = 32 ? (snip s 1 n) s))
-   (dcmts src) (: t (tablet 0) (each (lint-cmts src) (\ c (pin t <c c)), t))
+   (dcmts src) (: t (tablet 0) (each (lint-cmts src) (c \ pin t <c c), t))
    (dalone ln c) (: k (<>c - 1)
                     (dblank? (snip ln 0 k) ? [1 (snip ln 0 k + dbody <>>c)] ()))
-   (drtrim l) (? (atom? l) () (: r (drtrim >l) (two? r || !(dblank? <l) ? (<l . r) ())))
+   (drtrim l) (two? l ? (drtrim >l @ r (two? r || !(dblank? <l) ? (<l . r) ())))
 
    ; a `#!` line is a seat, not a sentence -- six crew tools open with one
    (ldoc-head src)
@@ -100,21 +97,18 @@
           (: a ((: (f i) (i < n && ddashy? (s i) ? (f (i + 1)) i)) 0)
              b ((: (f j) (a < j && ddashy? (s (j - 1)) ? (f (j - 1)) j)) n)
              (a < b ? [1 (snip s a b)] ()))))
-   (ditem? s) (: n #s
-                 (2 <= n && snip s 0 2 = "- "
-                  || 3 <= n && 47 < s 0 && s 0 < 58 && snip s 1 3 = ". "))
+   (ditem? s)
+    (: n #s (2 <= n && snip s 0 2 = "- " || 3 <= n && 47 < s 0 && s 0 < 58 && snip s 1 3 = ". "))
 
    ; a display: the run of indented lines at the head of ls, and what is left.
-   (dtake ls)
-    (: (g l acc) (atom? l || dblank? <l || !(0 < dind <l) ? [(rev acc) l]
-                    (g >l (<l . acc)))
-       (g ls ()))
+   (dtake ls) (:- (g ls ()) (g l acc)
+    (atom? l || dblank? <l || !(0 < dind <l) ? [(rev acc) l] (g >l (<l . acc))))
    ; ..fenced, dedented by its own least indent: the alignment inside a display is
    ; the content, the margin in front of it is not
    (dmin a b) (a < b ? a b)
    (dfence ls)
-    (: k (foldl (\ a s (dblank? s ? a (dmin a (dind s)))) #<ls ls)
-       ("```\n" + foldl (+) "" (map (\ s ((snip s (dmin k #s) #s) + "\n")) ls)
+    (: k (foldl (a \ s \ dblank? s ? a (dmin a (dind s))) #<ls ls)
+       ("```\n" + foldl (+) "" (map (s \ snip s (dmin k #s) #s + "\n") ls)
         + "```\n"))
 
    ; the header as markdown text; lapiz decides what a document is, and every
@@ -130,7 +124,7 @@
                  (starts? s "usage:")
                   (: r (dtake >ls) (go <>r 0 (acc + dfence (s . <r))))
                  (0 < dind s && li)  (go >ls 1 (acc + s + "\n"))
-                 (0 < dind s)        (: r (dtake ls) (go <>r 0 (acc + dfence <r)))
+                 (0 < dind s)        (dtake ls @ r (go <>r 0 (acc + dfence <r)))
                  (ditem? s)          (go >ls 1 (acc + s + "\n"))
                  (go >ls 0 (acc + s + "\n")))))
        (go (ldoc-head src) 0 ""))
@@ -150,11 +144,11 @@
                 (? !(0 < #body)
                     (say err (<fs + ": no header comment\n"),
                      libra-doc-files >fs surf (bad + 1))
-                   (say out (surf = 'md ? md (cite 'lapiz (surf = 'ht ? 'md->ht 'md->rf) md)),
+                   (say out (surf @ 'md md (cite 'lapiz (surf @ 'ht 'md->ht 'md->rf) md)),
                     libra-doc-files >fs surf bad))))))
    (libra-doc fs surf)
-    (surf = 'md ? 0 (borrow 'lapiz),
-     (: n (libra-doc-files fs surf 0) (0 < n ? 1 0)))
+    (surf @ 'md 0 (borrow 'lapiz),
+     0 < libra-doc-files fs surf 0)
 
    ; above its reader: only lambda-to-lambda recursion resolves lazily, so a
    ; closure over a later non-lambda binding of this `:` raises missing usage at load.
@@ -196,5 +190,5 @@
    ; merely answers leaves cli holding our arguments and loads the first as a
    ; program. the seat miss does return -- that arm is (borrow 'libra).
    ; the status is libra-main's now, so the seat carries it out rather than 0.
-   (two? s ? (: r (door >s) (quit (charm? r ? r 0))) ()))
+   (two? s ? (door >s @ r (quit (charm? r ? r 0)))))
 ) ; module libra
