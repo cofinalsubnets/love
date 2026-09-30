@@ -833,6 +833,12 @@
 ;   ([a b] + t)            a split: the leading run, then t over what is left. the left side
 ;                          must be a bracket -- its length picks the split point -- and it
 ;                          needs its own parens inside @'s operands, like any infix.
+;   ("v" + t)              a string split, when a string literal is among the pieces: strings
+;   (t + ".l")             only. a literal or a pin is an anchor, standing exactly there; any
+;   (k + "=" + v)          other piece is free and takes what the anchors leave -- the anchors
+;   (s + "")               from both ends, then each needle between two free pieces at its
+;                          first occurrence. (s + "") fits any string. two free pieces side by
+;                          side, or a bracket among the pieces, is no string split.
 ;   'a  (\ a)              the literal a, never a binding
 ;   {'f x}  (hash 'f x)    a map carrying key 'f -- the key an expression, the value a
 ;                          pattern, matched by subset (the one place a pattern is looser)
@@ -872,6 +878,7 @@
 ; outer scope, so a pattern nom may wear the name of an accessor its own test needs. cprop
 ; beta-reduces the wrapper away when the scrutinee is already a value.
 (: gone (mint 0)                 ; absence out of band: no stored value poses as a fresh mint
+   rtag (mint 0)                 ; heads a string split's run of anchors
    (lit d) ['\ d]               ; d, as the code that answers d
    ; a literal is compared with `=` -- except a nom, which is interned, so == is the same
    ; answer off one pointer. noms and nothing else: = on a charm is numeric across the band
@@ -931,8 +938,9 @@
                                               (wcat (pw <as ['cap v]) (pw <>as ['cup v])))
                                         (wlist p v))
               (h = '+) (? (2 != #as) (wlist p v)      ; a split: the left run, then the rest
-                          (: l <as t <>as
-                             (? (? (two? l) (= <l 'list) ()) (wrest >l t v)
+                          (: l <as t <>as ps (splat p)
+                             (? (wstr? ps) (wstr ps v)          ; a string literal among the pieces
+                                (? (two? l) (= <l 'list) ()) (wrest >l t v)
                                 ; `+` is left-handed, so ([a b] + [c] + t) arrives as a + whose
                                 ; left is a +. cat is associative and so is the split: re-associate
                                 ; right and the ordinary rule reads it. this is the multi-split.
@@ -962,6 +970,57 @@
    (wskip ps v end) (atom? ps ? (end v) (wcat (pw <ps ['cap v]) (wskip >ps ['cup v] end)))
    (wlist as v) (wrun as v (r \ wts [['= () r]]))
    (wrest ps t v) (wrun ps v (pw t))
+
+   ; --- the string split -------------------------------------------------------
+   ; a + chain with a string literal among its pieces cuts a string. a literal, or a pin ^x
+   ; read at match time, is an anchor: it must stand exactly there. every other piece is free
+   ; and takes what the anchors leave. anchors are laid from both ends first; between two free
+   ; pieces the anchors are one needle, found at its first occurrence, so each free piece is
+   ; as short as it can be, left to right, and nothing is tried twice.
+   (splat p) (? (? (two? p) (? (= <p '+) (2 = #>p))) (splat <>p + splat <>>p) [p])
+   (wpin? q) (? (two? q) (? (= (opword <q) 'jot) (1 = #>q)))
+   (anchor? q) (string? q || wpin? q)
+   (atext q) (string? q ? q <>q)
+   (alen q) (string? q ? #q ['tally <>q])
+   (padd a b) (? (charm? a && charm? b) (a + b) (== b 0) a (== a 0) b ['+ a b])
+   (psub a b) (? (charm? a && charm? b) (a - b) (== b 0) a ['- a b])
+   (acat a b) (? (string? a && string? b) (a + b) ['+ a b])
+   ; the pieces, a run of anchors gathered under rtag
+   (aruns ps) (? (atom? ps) ()
+                 (anchor? <ps) (: r (aruns >ps)
+                                  (? (run? <r) ((rtag . <ps . ><r) . >r) ([rtag <ps] . r)))
+                 (<ps . aruns >ps))
+   (run? x) (? (two? x) (== <x rtag))
+   (rlen r) (foldl (\ n q (padd n (alen q))) 0 r)
+   ; a run's tests, one per anchor, laid from pos forwards or back from end
+   (lfwd r pos v) (atom? r ? () (: e (padd pos (alen <r)) (['= (atext <r) ['snip v pos e]] . lfwd >r e v)))
+   (lbck r end v) (lfwd r (psub end (rlen r)) v)
+   (meet? rs) (? (two? >rs) (? (!(run? <rs) && !(run? <>rs)) 1 (meet? >rs)))
+   ; a literal among the pieces, no bracket, and no two free pieces side by side: anything
+   ; else reads as + always has, since @ refuses no pattern
+   (wstr? ps) (any string? ps && !(any (q \ two? q && (= <q 'list)) ps) && !(meet? (aruns ps)))
+   (wstr ps v)
+     (: rs (aruns ps)
+        ; the left run, the right run, and between them free pieces and needles, alternating
+        lr (run? <rs ? ><rs ())
+        m0 (run? <rs ? >rs rs)
+        rr (? (two? m0) (? (run? (last m0)) >(last m0)))
+        mid (two? rr ? (init m0) m0)
+        lo (rlen lr)
+        hi (psub ['tally v] (rlen rr))
+        pre ([['string? v]] + map (q \ ['string? <>q]) (filter wpin? ps)
+             + lfwd lr 0 v + lbck rr ['tally v] v
+             + [(two? mid ? ['<= lo hi] ['= lo hi])])
+        ; a free piece's text: the whole value when nothing is cut off it
+        (part a b) (? (== a 0) (? (same? b ['tally v]) v ['snip v a b]) ['snip v a b])
+        ; each needle is sought from where the free piece before it starts
+        (cut ms cur)
+          (? (atom? >ms) (pw <ms (part cur hi))
+             (: rn ><>ms n (foldl acat "" (map atext rn))
+                at [(lit fsub) v n cur] e (padd at (rlen rn))
+                (wcat (wts [['<= 0 at] ['<= e hi]])
+                      (wcat (pw <ms ['snip v cur at]) (cut >>ms e)))))
+        (wcat (wts pre) (two? mid ? (cut mid lo) wnil)))
    (wkv as v) (atom? >as ? wnil
                (: g ['peep v <as (lit gone)]
                 (wcat (wcat (wts [['! ['= (lit gone) g]]]) (pw <>as g))
