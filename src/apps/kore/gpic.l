@@ -953,7 +953,12 @@
               j (ls 1)
               r (gp-object g j)
               (label x) (map (nm \ pin (g 'fr 'labels) nm x) (ls 0))
+              w (gp-v g j)
               (? (two? r) (label (r 0), r 1)
+                 ; a label on an assignment is where the picture has got to
+                 (gp-k g j = 'word && (gp-op? g (j + 1) "=" || gp-op? g (j + 1) ":=") && !(elem w gp-reserved))
+                  (: _ (label (fr 'here))
+                     (gp-expr g (j + 2) @ [e m] (gp-assign g w e (gp-op? g (j + 1) ":="), m) (gp-syn g (j + 2))))
                  (gp-position g j @ [p m] (label p, m) (gp-syn g j))))
           (k = 'word && elem v ["right" "left" "up" "down"]
                && (gp-k g (i + 1) = 'nl || gp-k g (i + 1) = 'eof || gp-k g (i + 1) = 'troff
@@ -1343,7 +1348,7 @@
        b (? (two? bb) bb [0.0 0.0 0.0 0.0])
        sc (gp-var g "scale")
        w0 ((b 2 - b 0) / sc) h0 ((b 3 - b 1) / sc)
-       aw (: ws (gp-words args) (? (two? ws) (gem <ws) ())) ah (: ws (gp-words args) (? (two? >ws) (gem <>ws) ()))
+       wh (gp-ps-args args) aw <wh ah (wh 1)
        ; .PS wid ht fits the picture to them, a zero one aside; else maxpswid maxpsht
        ; bound it
        fw (? (aw != () && aw > 0 && w0 > 0) (aw / w0) ())
@@ -1356,9 +1361,30 @@
        W (w0 * f) H (h0 * f)
        _ (pins g 'W W 'H H)
        (? (g 'mode = 'tex) (gp-tx-picture g os) (gp-tr-frame g os args b)))
+   ; .PS's width and height as scanf's "%lf %lf" reads them: a number's leading part, a
+   ; unit after it dropped, and a height only when blanks follow the width -> [w h], () unsaid
+   (gp-ps-args s)
+    (: n #s
+       (sp i) (? (i < n && gp-blank? (s i)) (sp (i + 1)) i)
+       (digs i) (? (i < n && gp-dig? (s i)) (digs (i + 1)) i)
+       ; the end of a number starting at i, or i where none starts
+       (num i) (: a (? (i < n && (s i = 45 || s i = 43)) (i + 1) i)
+                  b (digs a) c (? (b < n && s b = 46) (digs (b + 1)) b)
+                  (? (c = a || (c = a + 1 && b = a)) i
+                     (: e (? (c < n && (s c = 101 || s c = 69))
+                             (: f (? (c + 1 < n && (s (c + 1) = 45 || s (c + 1) = 43)) (c + 2) (c + 1)) g (digs f) (? (g = f) c g))
+                             c)
+                        e)))
+       i0 (sp 0) i1 (num i0)
+       (val i j) (? (s i = 45) (0 - gp-decimal (snip s (i + 1) j)) (gp-decimal (snip s (? (s i = 43) (i + 1) i) j)))
+       (? (i1 = i0) [() ()]
+          (: w (val i0 i1) i2 (sp i1) i3 (num i2)
+             [w (? (i3 = i2) () (val i2 i3))])))
    (gp-tr-frame g os args b)
     (: W (g 'W) H (g 'H)
-       _ (gp-o g (".PS " + gp-in H + " " + gp-in W + args + "\n"))
+       ; the arguments said again after one blank, however many they came after
+       a2 (: (sp i) (? (i < #args && gp-blank? (args i)) (sp (i + 1)) i) k (sp 0) (snip args k #args))
+       _ (gp-o g (".PS " + gp-in H + " " + gp-in W + (? (0 < #a2) (" " + a2) "") + "\n"))
        _ (gp-o g (".\\\" " + gp-g (b 0) + " " + gp-g (b 1) + " " + gp-g (b 2) + " " + gp-g (b 3) + "\n"))
        _ (gp-o g (".\\\" " + gp-in (gp-X g [(b 0) (b 1)]) + " " + gp-in (gp-Y g [(b 0) (b 1)]) + " "
                   + gp-in (gp-X g [(b 2) (b 3)]) + " " + gp-in (gp-Y g [(b 2) (b 3)]) + "\n"))
@@ -1541,6 +1567,12 @@
 
    ; -- the document -------------------------------------------------------------------
    (gp-starts? l w) (#w <= #l && snip l 0 #w = w)
+   ; troff's .lf N [FILE] between pictures -> [N FILE-or-()]: the next line is N of FILE
+   (gp-lf l)
+    (: ws (gp-words l)
+       (? (!(two? ws) || <ws != ".lf" || !(two? >ws)) ()
+          (: n (>ws 0) ok (0 < #n && (: (all i) (? (#n <= i) 1 (gp-dig? (n i)) (all (i + 1)) 0) (all 0)))
+             (? ok [(int (gem n)) (? (two? >>ws) (>>ws 0) ())] ()))))
    ; a .PS, .PE line: the macro and then a blank or the end, or anything with -C
    (gp-macro? g l w) (gp-starts? l w && (#l = #w || g 'Cflag || gp-blank? (l #w)))
    (gp-end? g l) (gp-macro? g l ".PE" || gp-macro? g l ".PF" || gp-macro? g l ".PY")
@@ -1561,7 +1593,8 @@
                _ (pin g 'top (string? pe && !(gp-macro? g pe ".PE")))
                t (cats (map (x \ x + "\n") bl))
                tex (g 'mode = 'tex)
-               _ (? tex 0 (gp-o g (".lf " + show k + "\n")))
+               _ (? tex 0 (gp-o g (".lf " + show k + (? (peep g 'lfname 0) (" \"" + g 'name) "") + "\n")))
+               _ (pin g 'lfname 0)
                o0 (g 'o)
                _ (pin g 'o (jug 0))
                drew (trap (_ \ gp-picture g t k args) ()
@@ -1573,7 +1606,10 @@
                     (gp-o g (pic + ".lf " + show endln + "\n" + (? (string? pe) pe ".PE") + "\n")))
                _ (? tex 0 (gp-o g (".lf " + show (pk + 1) + "\n")))
                (go (r 3) (pk + 1)))
-           (: _ (gp-o g (<ls + "\n")) (go >ls (k + 1))))
+           (: _ (gp-o g (<ls + "\n"))
+              lf (? (g 'mode = 'troff) (gp-lf <ls) ())
+              _ (? (two? lf && string? (lf 1)) (pins g 'name (lf 1) 'lfname 1) 0)
+              (go >ls (? (two? lf) <lf (k + 1)))))
        _ (go ls 1)
        (pin g 'prevln (n + 1)))
 

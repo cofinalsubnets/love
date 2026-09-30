@@ -257,11 +257,17 @@
                 (: r (uread file) (? (two? r) <>r (gr-err g ("can't open file " + file))))
                 ())
        (? !(string? thru)
-           (? (string? file) (gr-push g (gr-src text 'text)) 0)
+           (? (string? file) (gr-push-file g file text) 0)
           (: ls (? (string? file) (lines text) (gr-take-lines g until))
              ls2 (? (string? file) (gr-cut-until ls until) ls)
              body (cats (map (l \ gr-subst thru (gr-words l) + "\n") ls2))
-             (gr-push g (gr-src body 'text)))))
+             (? (string? file) (gr-push-file g file body) (gr-push g (gr-src body 'text))))))
+   ; a file's text pushed: troff hears of it, and of where the graph goes on after it
+   (gr-push-file g file t)
+    (: _ (gr-o0 g (".lf 1 " + file + "\n"))
+       s (gr-src t 'text)
+       _ (pin s 'endlf (".lf " + show (gr-fline g + g 'skew) + " " + g 'name + "\n"))
+       (gr-push g s))
    (gr-cut-until ls w)
     (? (!(string? w) || atom? ls) ls
        (: ws (gr-words <ls) (? (two? ws && <ws = w) () (<ls . gr-cut-until >ls w))))
@@ -284,7 +290,7 @@
           (#(s 't) <= s 'i)
            (? (s 'k = 'file) (tok 'eof ())
               (s 'k = 'for) (? (gr-for-next g s) (gr-lex g) (gr-pop g, gr-lex g))
-              (gr-pop g, gr-lex g))
+              (: _ (? (peep s 'endlf ()) (gr-o0 g (s 'endlf)) 0) _ (gr-pop g) (gr-lex g)))
           (: c (gr-c g) c1 (gr-c1 g)
              (? ((s 'bol) && c = 46 && !(gr-dig? c1))
                  (: t (gr-rest-line g) _ (? (gr-c g = 10) (gr-adv g) 0) (tok 'troff t))
@@ -651,7 +657,7 @@
        n #ss
        width (? (w != ()) (w + 0.00001) (gr-fl (foldl (\ m s (max m #<s)) 0 ss) / 15))
        _ (gr-ol g "\ttextht = 0.166667")
-       _ (? lr (gr-ol g ("\ttextwid = " + gr-g width)) 0)
+       _ (? (lr || w != ()) (gr-ol g ("\ttextwid = " + gr-g width)) 0)
        body (cats (map (s \ " \"" + <s + "\"" + s 1) ss))
        at (sd @ 'bot " with .n at Frame.s - (0,2 * textht)"
                'top " with .s at Frame.n + (0,2 * textht)"
@@ -931,7 +937,11 @@
     (: _ (gr-next g)
        s (gr-text g)
        (say err ("\t" + (? (string? s) s (gr-g (gr-expr g))) + "\n")))
-   (gr-sh g cmd) (: r (hark ["sh" "-c" cmd]) (? (two? r) (gr-o g >r) 0))
+   ; sh runs the command, its output straight out ahead of all grap has kept
+   (gr-sh g cmd)
+    (: r (hark ["sh" "-c" cmd])
+       _ (? (two? r) (: _ (say out >r) (flush out)) 0)
+       (gr-ol g "# shell cmd..."))
    ; graph Name rest: the graph before it ends, and a new one starts in the same picture
    (gr-graph-stmt g)
     (: _ (gr-next g)
@@ -977,6 +987,7 @@
        (go 0))
    (gr-doc g nm text)
     (: ls (lines text)
+       _ (pin g 'name nm)
        _ (gr-o0 g (".lf 1 " + nm + "\n"))
        (go ls k)
         (? (atom? ls) 0
@@ -1007,12 +1018,12 @@
        (go ls 1))
    (gr-o0 g s) (say (g 'o) s)
    ; a graph given up: said, and what it drew let go. the lines after the one it failed
-   ; on go through as they are, and grap's count of lines is one short from then on
+   ; on go through as they are, and grap's count of lines is one short from then on. the
+   ; status stays 0, as plan 9's does
    (gr-gave-up g nm m k bl pe pk)
     (: t (? (g 'errln = ()) (gr-fline g) (g 'errln))
        sk (g 'skew)
        _ (say err ("grap: " + m + " near " + nm + ":" + show (t - 1) + "\n"))
-       _ (pin g 'status 1)
        rest (: (drop l j) (? (atom? l) () (t < j) l (drop >l (j + 1))) (drop bl (k + 1)))
        _ (gr-o0 g (".PE\n.lf " + show (t + sk) + "\n" + cats (map (x \ x + "\n") rest) + (? (string? pe && t < pk) (pe + "\n") "")))
        (pin g 'skew (sk - 1)))
