@@ -79,8 +79,8 @@
  ; nothing is ordinary (eof gives ()), and a bare pin would read as unforced, so f would re-run.
  (once f) (: t (tablet 0) (u \ (: v (t 0) (two? v ? >v (: w (f ()) _ (pin t 0 (1 . w)) w)))))
  ; a port is a charlist: the run just gulped realized, the tail a promise for the next. the tail
- ; must be a `once` -- p1 forces a position twice, and a re-drinking tail would lose the bytes
- ; between. the `see` is what refills; chug never touches the device.
+ ; must be a `once` -- a residue read again forces the same position twice, and a re-drinking
+ ; tail would lose the bytes between. the `see` is what refills; chug never touches the device.
  (flow p) (: (gulp tl) (: c (see p)
                           (c @ -1 tl
                                (: t (unsee p c, chug p)
@@ -1990,7 +1990,7 @@
     (: (go (a . u)) (vet1 s a @ ^ufail ufail r (: t (go u) (t == ufail || r == 'drop ? t (r . t)))) go)
    (con st c) (: d (vet <st c) (? (ufail? d) ufail (<st . d)))   ; a state with c added, or ufail
 
-   ; --- streams: a colist, love's lazy list (src/love/boot/p1.l's shape) --------------
+   ; --- streams: a colist, love's lazy list (the reader's shape) ----------------------
    ; () is empty, (x . s) is mature, a thunk is immature -- three shapes told apart by lit?/two?.
    ; the church encoding this replaced cost 26-35% more instructions on every shape measured.
    sno ()
@@ -3127,12 +3127,8 @@
    raw (want 'raw)
 
 
-   (rdall cl acc)
-    (sound cl @ 'torn no                           ; unfinished shape -> more
-                (a . b) (rdall b (a . acc))
-                (rev acc))                         ; a clean end -> the datums, in order
-   (parseall cl) (rdall cl () @
-    ^no  no ; unfinished shape
+   (parseall cl) (sounds cl @
+    'torn no ; unfinished shape: more
     ((_ . ()) @ a) a                         ; one datum: as-is (leading monadic preserved)
     ((_ . _)  @ d) [d])           ; many: the application; a blank line: ()
 
@@ -3723,12 +3719,8 @@
                ; open is posix's, and a seat without it answers () here rather than at the bake
                (load1 p) (: q (cite 'posix 'open p "r")
                             (? (hot? q) (reads q) (say err $ "love: cannot open " + p + "\n", cli-leave 1)))
-               (eval1 s) (: m (nom 0)                           ; a fresh nom: the unfinished shape, ==-safe
-                  (rdl x acc) (sound x @ 'torn      m           ; every top-level datum off the string, in order
-                                          (a . b)  (rdl b (a . acc))
-                                          (rev acc))
-                  (rdl s () @ ^m (say err "love: -e: unfinished form\n", cli-leave 2)
-                              (d @ (a . u)) (ev 'ev (atom? u ? a d)))) ; many datums fold to one application
+               (eval1 s) (sounds s @ 'torn (say err "love: -e: unfinished form\n", cli-leave 2)
+                                    (d @ (a . u)) (ev 'ev (atom? u ? a d)))   ; many datums fold to one application
                v-msg ("love " + love-version + "\n")   ; _ arg: love has no nullary calls
                h-msg
                ("usage: love [wake IMAGE] [-l FILE] [-e EXPR] [-q] [-m SIZE] [-v] [-h] [--] [VERB|FILE] [ARG ...]\n" +

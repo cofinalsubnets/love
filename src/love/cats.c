@@ -1,4 +1,4 @@
-// cats.c -- the baked source, one copy for the whole link: the egg's four texts, the
+// cats.c -- the baked source, one copy for the whole link: the egg's three texts, the
 // module registry, the glaze and the CLI driver, laid by src/tools/lcat.l into one header, the
 // texts DEFLATED. src/love/main.c and src/inle/kmain.c both warm from these through the
 // calls below; see src/love/cats.h.
@@ -29,12 +29,11 @@ static struct ai *cat_eval(struct ai *g, unsigned char const *z, uintptr_t zn, u
   return ai_alloc(t, 0), g; }
 #define CatEval(g, nm) cat_eval((g), nm, sizeof nm - 1, nm##_raw)
 
-// the egg wants its four texts at once, so all four are open across the one call.
+// the egg wants its three texts at once, so all three are open across the one call.
 struct ai *ai_cats_egg(struct ai *g) {
-  char *e = CatOpen(g, ai_cat_egg_z), *p = CatOpen(g, ai_cat_p1_z),
-       *r = CatOpen(g, ai_cat_prel_z), *o = CatOpen(g, ai_cat_post_z);
-  if (e && p && r && o) g = ai_egg(g, e, p, r, o);      // prel carries ev's half spliced after its own
-  ai_alloc(e, 0), ai_alloc(p, 0), ai_alloc(r, 0), ai_alloc(o, 0);
+  char *e = CatOpen(g, ai_cat_egg_z), *r = CatOpen(g, ai_cat_prel_z), *o = CatOpen(g, ai_cat_post_z);
+  if (e && r && o) g = ai_egg(g, e, r, o);             // prel carries ev's half spliced after its own
+  ai_alloc(e, 0), ai_alloc(r, 0), ai_alloc(o, 0);
   return g; }
 
 // the arch's holo, scan riding it; every other module registers as post is sat

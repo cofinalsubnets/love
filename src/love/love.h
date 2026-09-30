@@ -242,6 +242,9 @@ extern const struct ai_mint ai_mint_zero;
 
 // --- the core ---
 struct ai_port_vt;   // the port's kind, in its head; spelled out with the ports
+// the reader's names (g->rnom): its wraps, its two lone chars, the torn answer, and the
+// flow a port is read through
+enum { RnQuote, RnList, RnHash, RnTuple, RnTablet, RnIota, RnMono, RnTorn, RnAt, RnComma, RnFlow, RnN };
 struct ai {
  union u *ip;
  word *hp, *sp;
@@ -304,7 +307,6 @@ struct ai {
              // love's `book` is this one's head. GC-forwarded in v0..end.
      scare_a, scare_b, // the last scare's condition data, stashed at the raise for
      // hooks: lisp functions that C calls
-     hot_read,    // 0: the p1 reader
      hot_numap,   // 1: numeric application (church exponentiation)
      hot_arrange,   // 2: church addition (prel's `arrange`)
      hot_compose, // 3: composition (church multiplication)
@@ -318,6 +320,7 @@ struct ai {
      kinds,       // the kind roster: enum q row -> its nom (kinds.h); `kind` reads it
      kreg,        // the named kinds: name -> (serial . table), pinned by post.l's `coin`
      knom[20],    // the kind table's keys and the built-in coins' names (the Kn rows)
+     rnom[RnN],   // the reader's own names, interned at boot so a read allocates none
      inport;      // the buffered stdin port, or 0
    union {
     word x;
@@ -505,13 +508,12 @@ void *ai_alloc(void *p, size_t n);  // n>0 reserve n bytes (p ignored), n==0 fre
 
 // --- the runtime's entry ---
 // the boot driver: ai_egg applies src/love/boot/egg.l to the quoted corpus -- compile the compiler
-// with c0, recompile the corpus through itself, install as `ev`. the list is stitched (p0 reads
-// egg + p1, p1 reads the corpus), so p1.l alone is held to the pure lisp subset.
+// with c0, recompile the corpus through itself, install as `ev`.
 struct ai
  *ai_ini(void),
  *ai_evals(struct ai*, const char*),      // ..keeping the last form's value at sp[0]
  *ai_evals_(struct ai*, const char*),
- *ai_egg(struct ai*, char const*, char const*, char const*, char const*),  // (egg, p1, corpus, post)
+ *ai_egg(struct ai*, char const*, char const*, char const*),  // (egg, corpus, post)
  *ai_defn(struct ai*, struct ai_def const*, uintptr_t),                // immortal values only
  *ai_defv(struct ai*, char const*),                // its twin for a live heap value (rides sp[0], stays there)
  *ai_open(struct ai*),      // push a fresh writable layer (the runtime's enter); every frontend opens its session with it
@@ -723,7 +725,7 @@ lvm_t lvm_kcall,
  lvm_sleep, lvm_donep, lvm_scoop, lvm_hush,
  lvm_await,
  lvm_fgetc, lvm_fungetc, lvm_chug, lvm_unchug, lvm_inhand, lvm_fputc, lvm_fputs, lvm_fflush,
- lvm_fputbn, lvm_sound0,
+ lvm_fputbn, lvm_sound, lvm_sounds,
  lvm_trayctor, lvm_iota, lvm_rank, lvm_alen, lvm_shape, lvm_atype,   // typed multi-rank arrays
  lvm_asum, lvm_aprod, lvm_max, lvm_min, lvm_aall, lvm_aany, lvm_max2, lvm_min2, lvm_floor, lvm_inner, lvm_outer,
  lvm_litp, lvm_hotp,

@@ -1,7 +1,7 @@
-; p1: real love parser; is read by and succeeds the love.c bootstrap parser p0.
-; p0 does not parse the full love language, only the pure lisp subset. therefore
-; this file may not use prefix or infix operators.
-(: sound (: ; the input is a colist. thunk tails must be memoized or idempotent.
+; test/host/p1.l -- the reader in love, the oracle test/host/rdiff.l holds sound (the reader
+; in src/love/io.c, ported from this) to. one form, whose value is the reader. written in the
+; pure lisp subset, since it was once read by a reader of only that.
+(: ; the input is a colist. thunk tails must be memoized or idempotent.
    ! nil?
    (atom? x) (! (two? x))
    (!= a b) (! (= a b))
@@ -307,63 +307,17 @@
            (& (p1-cls (cap cl)) 32) (. (p1-rev acc ()) (p1-cup cl))
            (: d (p1-read1 cl head) (? (atom? d) 'torn (p1-list (cup d) () (. (cap d) acc))))))
 
-   ; --- a port is a charlist ------------------------------------------------
-   ; p1-flow lays a port's readable run down as ordinary conses and closes it on a
-   ; thunk for the next, which p1-cup fires like any other tail. the thunk must
-   ; memoize: p1 forces a position more than once on purpose (the `#!` lookahead,
-   ; the \xnn lane), and a re-drinking tail would take the next gulp instead, losing
-   ; the bytes between. it wraps its answer (1 v) and reads it back with two?, since
-   ; a promise of nothing is the ordinary case at eof. these are prel's flow/once
-   ; written again -- prel is not loaded when p1 runs.
-   (p1-port? o) (? (hot? o) (== (pick 0 o) (pick 0 in)))
-   (p1-once f) (: t (tablet 0)
-                  (\ u (: v (peep t 0 ())
-                          (? (two? v) (cup v)
-                             (: w (f ()) _ (pin t 0 (. 1 w)) w)))))
-   ; the gulp: `see` draws the first byte and is the only step that touches the
-   ; device -- it parks the task and refills -- `unsee` hands it back, and `chug`
-   ; takes it plus the run the port has in hand. one chug per gulp: the run is the
-   ; port's own, so a file arrives 4096 at a time and never all at once.
-   ; the steps are pinned in order, never nested as arguments: an n-ary call evals
-   ; right to left, so a nested (go .. (chug p)) would draw the byte before it
-   ; chugged. `go` lays the text down backwards onto the tail handed in, so the
-   ; thunk is what the list closes on and there is no second pass.
-   (p1-gulp p tl)
-     (: c (see p)
-        (? (= c -1) tl
-           (: _ (unsee p c)
-              t (chug p)
-              (go k l) (? (>= 0 k) l (: j (- k 1) (go j (. (t j) l))))
-              (go (tally t) tl))))
-   (p1-flow p)
-     (: c (see p)
-        (? (= c -1) ()
-           (: _ (unsee p c) (p1-gulp p (p1-once (\ u (p1-flow p)))))))
-   ; every datum in a text, in source order -- what the boot stitch wants.
-   ; answers `torn` if any shape did not finish.
-   (p1-reads cl)
-     (: (go cl acc)
-          (: d (p1-read1 cl ())
-             (? (two? d) (go (cup d) (. (cap d) acc))
-                (== d 'torn) 'torn
-                (p1-rev acc ())))
-        (go cl ()))
-   ; a text -> its charlist. built by index rather than by map/jot: those are
-   ; prel's, and prel is not loaded when the boot calls this.
+   ; a text -> its charlist
    (p1-chars s)
      (: n (tally s)
         (go k acc) (? (< k 0) acc (go (- k 1) (. (s k) acc)))
         (go (- n 1) ()))
-   ; the boot's door, whole text -> every form: what ai_egg calls to read ev.l.
-   (p1-text s) (p1-reads (p1-chars s))
 
-   _ (seal-hook 0 p1-text)
    ; --- the doors -----------------------------------------------------------
-   ; sound: one datum off text, and the tree's whole reader. answers
-   ; (datum . rest), () at a clean end, or `torn` mid-shape. four doors: a port, a
-   ; string, an unforced tail, or the charlist a previous read left. the residue is
-   ; always a charlist, so a caller threads it and never hands a port back twice.
+   ; one datum off text: (datum . rest), () at a clean end, or `torn` mid-shape. four
+   ; doors: a port (through post.l's flow), a string, an unforced tail, or the charlist
+   ; a previous read left. the residue is always a charlist.
    (\ x (p1-read1 (? (string? x)  (p1-chars x)
-                     (p1-port? x) (p1-flow x)
+                     (port? x)    (flow x)
                      (lit? x)     (x ())
-                     x) ()))))
+                     x) ())))

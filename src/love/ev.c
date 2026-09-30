@@ -1000,7 +1000,7 @@ static lvm(lvm_numtap) {
  dst[0] = n, dst[1] = h, dst[2] = x, dst[3] = ret;
  Sp = dst; Ip = (union u*) numap_drive; ai_musttail return Continue(); }
 
-// (seal-hook n f): install f as core hook n (0 read, 1 num-ap, 2 stack, 3 compose,
+// (seal-hook n f): install f as core hook n (1 num-ap, 2 stack, 3 compose,
 // 4 opfix, 5 the help, 6 the task's stdio, 7 show, 8 measure). 5 and 6 are the dynamic slots and
 // alone skip the lambda gate -- 5 takes a help or (), 6 a 3-chain or (); anything else
 // traps. a switch, not a table: a slot[] would be an address-taken local (the lvm
@@ -1009,7 +1009,6 @@ lvm(lvm_seal) {
  if (getcharm(Sp[0]) != 5 && getcharm(Sp[0]) != 6 && !evenp(Sp[1])) __builtin_trap();   // the two dynamic slots alone skip the gate
  Pack(g);                        // 5 and 6 store into the node, and their barrier reads g->hp
  switch (getcharm(Sp[0])) {
-  case 0: g->hot_read = Sp[1]; break;
   case 1: g->hot_numap = Sp[1]; break;
   case 2: g->hot_arrange = Sp[1]; break;
   case 3: g->hot_compose = Sp[1]; break;

@@ -72,12 +72,8 @@
    ; of its last forms is the empty-lcat disaster wearing a subtler face -- the build
    ; would take it as fresh and fail somewhere else.
    (minify src)
-    (: acc ((: (g acc cl first)
-              (: r (sound cl)
-                 (? (two? r) (g (first ? (show <r) (acc + " " + show <r)) >r 0)
-                    (r = 'torn) (die "unfinished form in input")
-                    acc)))
-            "" src 1)
+    (: acc (sounds src @ 'torn (die "unfinished form in input")
+                         fs (foldl (\ a f (a = "" ? (show f) (a + " " + show f))) "" fs))
        ; walk acc: drop redundant spaces (outside string literals). ctx = bytes since
        ; the last hard boundary (reversed); instr = inside a "..." literal (where \
        ; escapes); out = the survivors, reversed.
@@ -132,7 +128,6 @@
    ; part of the boot's meaning.
    rows
     [['ai_cat_egg_z ['egg]]
-     ['ai_cat_p1_z ['p1]]
      ['ai_cat_prel_z ['prel " " 'ev]]                     ; prel carries ev's half spliced after its own
      ['ai_cat_post_z ['post]]
      ; holo, one blob per arch because the backend is; an arch with no backend registers

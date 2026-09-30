@@ -138,8 +138,6 @@ int main(void) {
   struct ai *r = ai_egg(g,
 #include "egg.h"
     ,
-#include "p1.h"
-    ,
 #include "prel.h"
     " "
 #include "ev.h"
