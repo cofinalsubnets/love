@@ -18,7 +18,7 @@
    (g2-front src)
     (uread src @ r
        (atom? r ? 'noread
-          (clex (deftext [(archdef 'x64)] + <>r) @ lx
+          (clex (deftext (archdefs 'x64) + <>r) @ lx
              (!(okv? lx) ? 'lexfail
                 (cpp <>lx (\ n s (incload () () (cdir src) n s)) src @ pp
                    (!(okv? pp) ? 'cppfail
