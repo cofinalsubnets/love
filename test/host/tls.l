@@ -246,7 +246,7 @@
        cats (derive master "c ap traffic" (tr1 + cv + fin))
        got (open-rec sv)
        _ (hs-key sv 'out sats) _ (hs-key sv 'in cats)
-       _ (? (elem mode ['wtrunc 'wshort 'wfull]) (open-rec sv) 0)       ; wget's request, read
+       _ (? (elem mode ['wtrunc 'wshort 'wfull] || two? mode) (open-rec sv) 0)   ; wget's request, read
        said (hs-tail sv mode sats cats)
        _ (close c)
        (mode = 'keyupdate ? said got))
@@ -257,7 +257,8 @@
    ; what the stub says once the client's finished is in: honest, the data and a close_notify;
    ; cut short; a plaintext close_notify forged after; a record whose tag is bitten; a ticket and
    ; a key update asking for the client's, whose answer and next record are read back; to wget,
-   ; a body cut short of its Content-Length, with and without the close_notify, or whole
+   ; a body cut short of its Content-Length, with and without the close_notify, or whole; or
+   ; ['wdown port], a redirect down to plain http on that port
    (hs-tail sv mode sats cats)
     (: bye (_ \ seal sv 21 (u8 1 + u8 0))
        hi (_ \ seal sv 23 "the stub says hi")
@@ -281,7 +282,14 @@
           (mode = 'wtrunc) (seal sv 23 (hs-http + zeros 1000))
           (mode = 'wshort) (seal sv 23 (hs-http + zeros 1000), bye 0)
           (mode = 'wfull) (seal sv 23 (hs-http + zeros 3000), bye 0)
+          (two? mode)
+           (seal sv 23 ("HTTP/1.1 302 Found\r\nLocation: http://127.0.0.1:" + show (mode 1) + "/x\r\nContent-Length: 0\r\n\r\n"),
+            bye 0)
           0))
+   ; a plain http server for one request, its answer "plain"
+   (hs-plain l)
+    (: c (accept l) _ (see c) _ (chug c)
+       (say c "HTTP/1.1 200 OK\r\nContent-Length: 5\r\nConnection: close\r\n\r\nplain", flush c, close c))
    ; a loopback listener of this run's own, [port listener], for hs-run
    (hs-seat u) (test-seat (\ p (listen ['tcp "127.0.0.1" p])))
    (hs-run pl mode how)
@@ -293,12 +301,12 @@
        got (catch s)
        _ (close l)
        [body got (? (tablet? t) (t 'spki) t) (? (tablet? t) (t 'why) ())])
-   ; wget -O over the stub -> [exit file-length], -1 for no file
-   (hs-wget mode)
+   ; wget -O over the stub, flags ahead -> [exit file-length], -1 for no file
+   (hs-wget mode fl)
     (: pl (hs-seat 0)
        s (twirl (_ \ hs-serve (pl 1) mode) ())
        f ((cwd 0) + "/out/.tlsw-" + show (getpid 0))
-       rc ((cite 'kore 'wget-main) ["-q" "--no-check-certificate" "-O" f ("https://127.0.0.1:" + show <pl + "/x")])
+       rc ((cite 'kore 'wget-main) (["-q" "--no-check-certificate"] + fl + ["-O" f ("https://127.0.0.1:" + show <pl + "/x")]))
        _ (catch s) _ (close (pl 1))
        n (uread f @ [1 b] #b -1)
        _ (hark ["rm" "-f" f])
@@ -322,7 +330,12 @@
            (<bt = 'bad) (0 <= str-at (bt 3) "tag does not verify" 0)
            (<ku = "the stub says hi") ((ku 1) = [[22 (hs-msg 24 (u8 0))] [23 "after"]]))
    ; wget: a body short of its Content-Length is exit 4 and no file, close_notify or not
-   _ (test (hs-wget 'wtrunc = [4 -1]) (hs-wget 'wshort = [4 -1]) (hs-wget 'wfull = [0 3000]))
+   _ (test (hs-wget 'wtrunc () = [4 -1]) (hs-wget 'wshort () = [4 -1]) (hs-wget 'wfull () = [0 3000]))
+   ; ..and follows https down to http only when asked to
+   dn (: p (hs-seat 0) _ (close (p 1)) (hs-wget ['wdown <p] ()))
+   up (: p (hs-seat 0) s (twirl (_ \ hs-plain (p 1)) ())
+         r (hs-wget ['wdown <p] ["--allow-downgrade"]) _ (catch s) _ (close (p 1)) r)
+   _ (test (dn = [1 -1]) (up = [0 5]))
    ; the aead's tag compare
    _ (test (ct-same? "abc" "abc") (ct-same? "" "") !(ct-same? "abc" "abd") !(ct-same? "xbc" "abc")
            !(ct-same? "ab" "abc"))
