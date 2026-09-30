@@ -1029,6 +1029,29 @@
           "lock_release" (lock-release in)
           "lock_list" (lock-list 0)))
 
+     ; a control character as ^X, so a shown text cannot move the cursor or hide a tail
+     (ctl? c) ((c < 32 && c != 10 && c != 9) || c = 127)
+     (visible s) (: bs (map s ^#s)
+                    (? (two? (filter ctl? bs))
+                       (string (catmap (\ c (? (ctl? c) [94 (c = 127 ? 63 (c + 64))] [c])) bs))
+                       s))
+     ; what an ask shows: all of the input, a write or an edit as its whole diff
+     (ask-lines name in)
+      (map visible
+           (? !(tablet? in) [(show in)]
+              (valid? name in && (name = "write_file" || name = "edit_file"))
+               (: s (slurp-file (in "path")) p ("path: " + in "path")
+                  e (? (name = "edit_file") (edited s (in "old_text") (in "new_text")) [1 (in "content")])
+                  (? !<e [p (e 1)]
+                     (p . drop 2 (lines (cite 'kore 'udiff "a" "b" (string? s ? s "") (e 1))))))
+              (: ks (sort (keys in))
+                 (? (#ks = 1 && string? (in <ks)) (lines (in <ks))
+                    (catmap (\ k (: v (in k)
+                                    (? !(string? v) [(k + ": " + json-show v)]
+                                       (: ls (lines v)
+                                          (? (#ls <= 1) [(k + ": " + v)] ((k + ":") . map (\ l ("  " + l)) ls))))))
+                            ks)))))
+     (joinl ls) (? (two? ls) (foldl (\ a l (a + "\n" + l)) <ls >ls) "")
      ; a tool as the transcript names it: the shell by its own name
      (shown name) (name = "shell" ? <bee-shell name)
      (brief name in)
@@ -1115,8 +1138,12 @@
        'note (\ s (puts ("\nbee: " + s + "\n")))
        'mail (\ from t (puts ("\nbee: a message from " + from + "\n" + t + "\n")))
        'wire (\ s 0)
-       'tool (\ name in (puts ("  " + shown name + " " + brief name in + "\n")))
-       'ask (\ h (: _ (state! "asking") a (? (ask "  run? [y/N] ") 1 0) _ (state! "busy") a))
+       'tool (\ name in (: _ (puts ("  " + shown name + " " + visible (brief name in) + "\n")) [name in]))
+       ; the whole input under the line when the line did not say all of it
+       'ask (\ h (: _ (state! "asking")
+                    ls (ask-lines <h (h 1))
+                    _ (? (joinl ls != visible (brief <h (h 1))) (puts (foldl (\ a l (a + "    " + l + "\n")) "" ls)) 0)
+                    a (? (ask "  run? [y/N] ") 1 0) _ (state! "busy") a))
        'done (\ h r 0)
        'usage (\ n 0)
        'cost (\ x 0)
@@ -1162,6 +1189,8 @@
                    (edwide cur + 1 + edwide w <= n) (go >ws (cur + " " + w) acc)
                    (go >ws w (cur . acc)))))
          (go (words l) "" ()))
+     ; l as lines at most n columns wide, cut anywhere, every character kept
+     (hwrap l n) (? (edwide l <= n) [l] (: a (edcut l n) (? (#a = 0) [l] (a . hwrap (snip l #a #l) n))))
 
      ; a unified diff, coloured, at most n lines
      (diffs a b n)
@@ -1289,7 +1318,11 @@
                 dot (sgr (st @ 'ask "1;33" 'ok "32" 'err "31" "2") "⏺")
                 head (dot + " " + sgr "1" (title (b 'name)) + sgr "2" ("(" + b 'brief + ")"))
                 out (peep b 'out "")
-                tail (? (st = 'ask) [(sgr "1;33" "run it?  y / n")]
+                ; an ask shows all of what runs, wrapped by column, never cut
+                tail (? (st = 'ask)
+                        (catmap (\ l (hwrap l (w - 6))) (ask-lines (b 'name) (b 'in))
+                         + [(sgr "1;33" (peep b 'tall 0 ? "taller than the screen: ↑↓ to read it all, then y / n"
+                                           "run it?  y / n"))])
                         (st = 'cut) [(sgr "2" "interrupted")]
                         (st = 'err) [(sgr "31" (: l (lines out) (two? l ? <l out)))]
                         (b 'name @
@@ -1298,12 +1331,14 @@
                                        (map (sgr "2") (8 < n ? (drop (n - 8) ls) ls))))
                          "read_file" (? (st = 'ok) [(sgr "2" ("read " + show #(lines out) + " lines"))] ())
                          ()))
-                (head . (peep b 'pre () + hang tail)))
+                (head . ((st = 'ask ? () (peep b 'pre ())) + hang tail)))
        [""])
 
      ; the transcript, oldest first, a blank line between blocks
      (tlines c w) (catmap (\ b ("" . blines b w)) (rev (c 'blocks)))
 
+     ; the transcript's rows: the screen's less the spinner, the input box and the hints
+     (room c) (c 'rows - 4 - min 6 (max 1 #(lines (edtext (c 'ed)))))
      ; the transcript, a spinner row while a turn runs, the input boxed with the gauge
      ; right-aligned on its first row, and the hints under it
      (frame c)
@@ -1316,7 +1351,7 @@
          (row i) (: l (edcut (il2 (top + i)) iw)
                     (? (i = 0 && 0 < gw && edwide l + gw + 2 <= iw) (edfit l (iw - gw) " " + g) l))
          box (boxed "2" (map (\ i ((i = 0 && top = 0 ? (sgr "1" ">") " ") + " " + row i)) ^bh) w)
-         th (h - 4 - bh)
+         th (room c)
          all (tlines c w)
          end (max 0 (#all - c 'scroll))
          win (drop (max 0 (end - th)) (take end all))
@@ -1352,10 +1387,10 @@
        'wire (\ s (pin c 'sock s))
        'usage (\ n (pin c 'used n, soil c))
        'cost (\ x (pin c 'cost (peep c 'cost 0 + x), soil c))       ; claude's own reckoning, summed
-       'tool (\ name in (: b {'k 'tool 'name name 'brief (brief name in) 'st 'run 'v 0
+       'tool (\ name in (: b {'k 'tool 'name name 'in in 'brief (brief name in) 'st 'run 'v 0
                                'pre (? (name = "edit_file" || name = "write_file") (preview name in) ())}
                           (push c b, soil c, b)))
-       'ask (\ b (: _ (pins b 'st 'ask 'v (b 'v + 1)) _ (pin c 'asking b) _ (soil c)
+       'ask (\ b (: _ (pins b 'st 'ask 'v (b 'v + 1)) _ (pins c 'asking b 'scroll 0) _ (soil c)
                     _ (state! "asking")
                     (wait _) (? (charm? (peep b 'ans ())) (b 'ans) (: _ (rest 30) (wait 0)))
                     a (wait 0)
@@ -1414,7 +1449,17 @@
 
      (onkey c k)
       (: a (c 'asking) e (c 'ed) busy (c 'busy != ())
-         (? (tablet? a) (? (k = 121 || k = 89) (pin a 'ans 1) (k = 110 || k = 78 || k = 27) (pin a 'ans 0) 0)
+         ; y runs only once every row of the ask has been on the screen; ↑↓ and ^b ^f scroll it
+         (? (tablet? a) (? (k = 121 || k = 89)
+                            (? (#(blines a (c 'cols)) + 1 <= room c + peep a 'seen 0) (pin a 'ans 1)
+                               (: _ (pins a 'tall 1 'v (a 'v + 1)) (soil c)))
+                           (k = 110 || k = 78 || k = 27) (pin a 'ans 0)
+                           (k = -8 || k = 2)
+                            (: s (c 'scroll + (k = 2 ? (room c) 1))
+                               _ (pin c 'scroll s)
+                               (pin a 'seen (max s (peep a 'seen 0))))
+                           (k = -9 || k = 6) (pin c 'scroll (max 0 (c 'scroll - (k = 6 ? (room c) 1))))
+                           0)
             (busy && (k = 27 || k = 3)) (halt c)
             (k = 20)                                             ; ^t: every thought open, or folded
              (: x (!(c 'thinkall) ? 1 0)
@@ -1535,7 +1580,8 @@
                                      tn (peep j "tool_name" "?") in (peep j "input" {})
                                      tu (peep j "tool_use_id" ())
                                      h (? (string? tu) (peep blocks tu ()) ())
-                                     h2 (? h h ((f 'tool) tn in))
+                                     ; the ask's own input is what is shown, whichever block it lands on
+                                     h2 (? (tablet? h) (: _ (pins h 'name tn 'in in 'v (h 'v + 1)) h) ((f 'tool) tn in))
                                      r ((f 'ask) h2)
                                      (spit-file ans (r = 1 ? "y" "n")))))))
                    (sort fs))

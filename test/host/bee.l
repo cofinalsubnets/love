@@ -548,6 +548,19 @@
            !(cr-in (h 1) "OUTSIDE-SECRET"))
    0)
 
+; an ask shows all of what runs: a tail past a run of spaces, a second line, and a control
+; character as ^X, never raw
+(: d (cr-dir "askshow" cr-cfg)
+   cmd ("echo ok" + foldl (\ a _ (a + " ")) "" ^100 + "; echo hidden-tail\necho " + string 27 + "[2Kline2" + string 13 + "x")
+   _ (cr-serves (cr-uses [["shell" {"command" cmd}] ["queue_row" {"queue" "refs/queue/t" "state" "waiting" "note" ("a" + string 27 + "b")}]]))
+   r (cr-run d "" "'run it'")
+   h (cr-heard 0)
+   _ (test (0 = <r) (2 = #h)
+           (cr-in (r 1) "; echo hidden-tail") (cr-in (r 1) "echo ^[[2Kline2^Mx") (cr-in (r 1) "note: a^[b")
+           !(cr-in (r 1) (string 27)) !(cr-in (r 1) (string 13))
+           (all (\ s (s = "the user declined")) (cr-results h)))
+   0)
+
 ; queue_row asks, and a newline in a field cannot write another session's row
 (: d (cr-dir "qforge" cr-cfg)
    (g as) (hark (["git" "-C" d "-c" "user.name=t" "-c" "user.email=t@t"] + as))
