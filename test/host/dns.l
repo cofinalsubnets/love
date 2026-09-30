@@ -5,10 +5,10 @@
 ; answers a canned response built with the module's own be16 helper. Nothing
 ; leaves the loopback and nothing here reads the machine's own /etc.
 ;
-;   out/love test/host/dns.l      ; silence is a pass, exits 1 on fail
+;   cat test/00-init.l test/host/dns.l | out/love   ; silence is a pass, exits 1 on fail
 ;
-; the checks are `assert`, not `test`: standalone there is no harness, so `test`
-; is a missing name and the file dies at load.
+; 00-init.l leads for its ports (test-bind); the checks are `assert`, which stops the
+; run where `test` would record and carry on.
 ;
 ; driven from test/host/run.l under a timeout, like the other socket laws: a
 ; resolver that stops parking stops the whole vm, and a wedged gate is worse than
@@ -36,18 +36,18 @@
            + (string ((addr >> 24) & 255)) + (string ((addr >> 16) & 255))
            + (string ((addr >> 8) & 255)) + (string (addr & 255)))))
 
-   ; serve exactly one query on `port`, then exit. the recv parks -- this task is
-   ; the peer whose running proves the resolver gave up its turn.
-   (nameserver port addr tc)
-    (twirl (\ _ (: p (bind ['udp port])
-                   d (recv p)
+   ; serve exactly one query on the bound socket p, then exit. the recv parks -- this
+   ; task is the peer whose running proves the resolver gave up its turn.
+   (nameserver p addr tc)
+    (twirl (\ _ (: d (recv p)
                    _ (send p <d (dns-reply <>d addr tc))
                    _ (rest 20)                        ; let the datagram leave
                    _ (close p) 1)) ()))
 
 ; --- law 1: a query goes out, an answer comes back, the address is exact -------
-(: port 7401
-   s (nameserver port 16909060 ())                    ; 1.2.3.4
+(: sp (test-bind 0)
+   port <sp
+   s (nameserver (sp 1) 16909060 ())                    ; 1.2.3.4
    _ (rest 20)                                        ; s reaches its park
    a (dns-ask 2130706433 port "ab.cd" 2000)
    _ (catch s)
@@ -60,8 +60,9 @@
 ; watchdog waits on the clock, and the freeze out from under the catcher is what
 ; wakes the caller. this law pins that it wakes at all; the elapsed time pins
 ; that it waited rather than answering at once.
-(: t0 (clock 0)
-   a (dns-ask 2130706433 7402 "ab.cd" 200)            ; nothing is bound there
+(: none (test-free 0)      ; a port of ours, its socket gone
+   t0 (clock 0)
+   a (dns-ask 2130706433 none "ab.cd" 200)            ; nothing is bound there
    ms ((clock 0) - t0)
    _ (assert !(two? a)
              (200 <= ms)
@@ -137,9 +138,10 @@
 
 ; --- law 7: resolve6's pieces -- an aaaa asked and read back as text, hosts' v6 lines ---
 ; the query carries edns, so the question the reply echoes stops short of its 11-byte OPT
-(: port 7403
+(: sp (test-bind 0)
+   port <sp
    v6 (catmap string [32 1 13 184 0 0 0 0 0 0 0 0 0 0 0 1])
-   s (twirl (\ _ (: p (bind ['udp port])
+   s (twirl (\ _ (: p (sp 1)
                     d (recv p) q <>d
                     r (snip q 0 2 + wrbe 33152 2 + wrbe 1 2 + wrbe 1 2 + wrbe 0 2 + wrbe 0 2
                        + snip q 12 (#q - 11) + string 192 + string 12 + wrbe 28 2 + wrbe 1 2
@@ -156,10 +158,11 @@
 ; ahead of the true answer come four that must be dropped: one from another address
 ; (127.0.0.2, where the host has it), one from another port, one with another id and one
 ; to another question. the resolver keeps waiting and takes the fifth
-(: port 7404
+(: sp (test-bind 0)
+   port <sp
    (rep q addr) (dns-reply q addr ())
    (other-name q) (snip q 0 13 + string (q 13 ^ 1) + snip q 14 #q)          ; ab.cd -> `b.cd
-   s (twirl (\ _ (: p (bind ['udp port])
+   s (twirl (\ _ (: p (sp 1)
                     d (recv p) q <>d
                     far (bind ['udp "127.0.0.2" 0])
                     _ (? (hot? far) (send far <d (rep q 101058054)) 0)       ; 6.6.6.6

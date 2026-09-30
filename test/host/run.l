@@ -96,7 +96,7 @@
 ; waits for a connection only the wedged vm could still make), and a wedged gate is
 ; worse than a red one. 124 is the control's answer, and each law was verified by
 ; putting its own blocking call back.
-(: rc <(hark ["sh" "-c" "timeout 20 out/love test/host/nifpark.l"])
+(: rc <(hark ["sh" "-c" "cat test/00-init.l test/host/nifpark.l | timeout 20 out/love"])
    _ (test (rc = 0)))
 
 (puts "run nifpark: ok\n")
@@ -106,7 +106,7 @@
 ; the loopback. driven from here for the usual reason: a resolver whose deadline
 ; stops working does not redden, it hangs -- there is no answer coming and nothing
 ; to wake the caller.
-(: rc <(hark ["sh" "-c" "timeout 20 out/love test/host/dns.l"])
+(: rc <(hark ["sh" "-c" "cat test/00-init.l test/host/dns.l | timeout 20 out/love"])
    _ (test (rc = 0)))
 
 (test_fin ())

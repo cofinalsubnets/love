@@ -3,10 +3,10 @@
 ; instead of stopping the whole vm inside a syscall. The device floor made every
 ; device entry point nonblocking; this is the layer where the caller is a nif.
 ;
-;   out/love test/host/nifpark.l      ; silence is a pass, exits 1 on fail
+;   cat test/00-init.l test/host/nifpark.l | out/love   ; silence is a pass, exits 1 on fail
 ;
-; the checks are `assert`, not `test`: standalone there is no harness, so `test`
-; is a missing name and the file dies at load.
+; 00-init.l leads for its ports (test-listen, test-bind); the checks are `assert`, which
+; stops the run where `test` would record and carry on.
 ;
 ; driven from test/host/run.l under a timeout, because most of these regressions
 ; are hangs rather than red asserts: a blocking `accept` with an empty backlog waits
@@ -31,8 +31,9 @@
 ; the server task reaches `accept` before anyone has connected. Under the blocking
 ; accept it sat in the syscall and nothing else in the process ran -- not the ticker,
 ; and not the main task that was about to connect, which is why the control hangs.
-(: port 7394
-   l (listen port)
+(: pl (test-listen 0)
+   port <pl
+   l (pl 1)
    n {}
    srv (twirl (\ _ (: c (accept l) (close c, 1))) ())
    t (ticker n)
@@ -49,14 +50,15 @@
 ; the same law on the datagram side. The peer address is (ipv4 << 16) | port --
 ; 127.0.0.1 is 2130706433 -- which is how src/love/sock.c marshals a sockaddr into a
 ; charm.
-(: p (bind ['udp 7395])
+(: up (test-bind 0)
+   p (up 1)
    n {}
    rx (twirl (\ _ (: d (recv p) (close p, <>d))) ())
    t (ticker n)
    _ (rest 20)
    k (peep n 0 0)
-   s (bind ['udp 7396])
-   _ (send s ["127.0.0.1" 7395] "ping")
+   s ((test-bind 0) 1)
+   _ (send s ["127.0.0.1" <up] "ping")
    got (catch rx)
    _ (freeze t)
    _ (close s)
@@ -118,8 +120,9 @@
 ; closing the listener is what ends it: the queued connections reset, the stalled
 ; client's handshake fails, and `catch` reaps the failure's nom. no freeze, so no
 ; socket is left behind by a task unspliced mid-park.
-(: port 7397
-   l (listen port)
+(: pl (test-listen 0)
+   port <pl
+   l (pl 1)
    n {}
    a (connect ['tcp "127.0.0.1" port])         ; the witness: one that lands, kept open
    (fillq k) (k @ 0 0 (: c (connect ['tcp "127.0.0.1" port]) (close c, fillq (k - 1))))

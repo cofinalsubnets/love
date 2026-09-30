@@ -426,6 +426,25 @@
                         "all:" "\t@echo \"SA[$(U)]\"" "\t@echo \"SB[$(X)]\""]) "all")
    _ (ok "$(shell) in this image: no PATH wanted" (has ea "SA[" && !(has ea "SA[]")))
    _ (ok "$(shell) in this image rides .SHELLFLAGS" (has ea "SB[]"))
+   ; a line run in this image forks warm children -- `sh FILE`, a ( ), a pipeline stage --
+   ; and each one's `exit` ends that child with its status, never the line above it
+   _ (write-file (dir + "/x0.sh") "true\nexit\n")
+   _ (write-file (dir + "/x3.sh") "f() { exit 3; }\nf\necho no\n")
+   xe (: _ (write-file (dir + "/Makefile")
+                       (mk ["all:" ("\t@sh " + dir + "/x0.sh; echo X0[$$?]")
+                            ("\t@sh " + dir + "/x3.sh; echo X3[$$?]")
+                            "\t@(exit 4); echo XS[$$?]"
+                            "\t@exit 5 | true; echo XP[$$?]"
+                            ("\t@sh " + dir + "/x0.sh")
+                            "\t@echo XE[end]"]))
+         (hark ["env" "PATH=/nonexistent" "LUSHFLAGS=-a" love "-l" "src/apps/cook.l"
+                "-f" (dir + "/Makefile") "all"]))
+   xo (two? xe ? >xe "")
+   _ (ok "sh FILE's exit ends the script: status 0" (has xo "X0[0]"))
+   _ (ok "exit 3 in a script's function: status 3" (has xo "X3[3]" && !(has xo "no")))
+   _ (ok "exit in a ( ): the subshell's status" (has xo "XS[4]"))
+   _ (ok "exit in a pipeline stage: that stage's" (has xo "XP[0]"))
+   _ (ok "a recipe line of sh FILE; exit: rc 0" (has xo "XE[end]" && two? xe && 0 = <xe))
    ; the build file's fd is closed before any recipe runs
    fdl (run-cook (mk ["all:" "\t@ls -l /proc/self/fd/ 2>/dev/null"]) "all")
    _ (ok "the Makefile's fd is not a recipe's" !(has fdl (dir + "/Makefile")))

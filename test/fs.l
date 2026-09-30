@@ -120,5 +120,4 @@
               (two? (stat d))))
 
    _ (unlink l) _ (unlink b)
-   _ (test_fin ())
-   _ (say out "fs: ok") (put out 10)))
+   (test_fin ())))

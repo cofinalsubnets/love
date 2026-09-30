@@ -19,19 +19,19 @@
            (s p != 255) (go (p + 1))
            (: m (s (p + 1))
               (? (m = 255) (go (p + 1))
-                 ((m = 0) || (m = 1) || (208 <= m <= 216)) (go (p + 2))
-                 ((192 <= m <= 207) && !(elem m [196 200 204]))
+                 (m = 0 || m = 1 || 208 <= m <= 216) (go (p + 2))
+                 (192 <= m <= 207 && !(elem m [196 200 204]))
                   [(jpeg-be16 s (p + 7)) (jpeg-be16 s (p + 5))]
                  (m = 217) "no frame"
                  (go (p + 2 + jpeg-be16 s (p + 2))))))
-       (? ((#s < 4) || (s 0 != 255) || (s 1 != 216)) "not a jpeg" (go 2)))
+       (#s < 4 || s 0 != 255 || s 1 != 216 ? "not a jpeg" (go 2)))
 
    ; the door: the nif where the artifact carries it, asked at first call, never at load
    jpeg-door (tablet 0)
    (jpeg-nif? _)
     (: v (peep jpeg-door 0 ())
        (? (charm? v) v
-          (: w (trap (\ _ (: _ (jpeg-pixels "") 1)) () (\ a b 0)) _ (pin jpeg-door 0 w) w)))
+          (: w (trap (\ _ (jpeg-pixels "", 1)) () (\ a b 0)) _ (pin jpeg-door 0 w) w)))
 
    (jpeg-decode s)
     (: d (jpeg-size s)

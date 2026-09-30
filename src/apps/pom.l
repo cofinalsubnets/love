@@ -32,7 +32,7 @@
  (kepler m0 ecc)
   (: m (rad m0)
      (go e) (: dl (e - ecc * sin e - m) e2 (e - dl / (1 - ecc * cos e))
-               (? (abs dl > 0.000001) (go e2) e2))
+               (abs dl > 0.000001 ? (go e2) e2))
      (go m))
 
  ; the moon's age as a fraction of a circle: 0 new, 0.25 first quarter, 0.5 full
@@ -55,7 +55,7 @@
      (fixangle (lp + v - lsun) / 360))
 
  ; how much is lit, 0 to 100, and its name; waxing is judged at two places, as printed
- (pom-percent p) (: k (int ((p * 360 - 180) / 180 * 100)) (? (k < 0) (100 + k) (100 - k)))
+ (pom-percent p) (: k (int ((p * 360 - 180) / 180 * 100)) (k < 0 ? (100 + k) (100 - k)))
  (pom-name p)
   (: k (pom-percent p)
      wax (floor (p * 100 + 0.5) < 50)
@@ -77,7 +77,7 @@
          ms0 (int (x * w * 5 / 7))
          ms (? (ms0 & 1) (ms0 - 1) ms0)
          sp (int ((w - ms) / 2))
-         t (? (k < 3) (texts k) "")
+         t (k < 3 ? (texts k) "")
          dark (ms * abs rot)
          light (ms - dark)
          term (string (surface (int ((light - floor light) * 10))))
