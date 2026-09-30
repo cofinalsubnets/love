@@ -85,7 +85,7 @@ for _ in range(int(sys.argv[3])):
             req += b
         path = req.decode().strip().split('" + ms + "', 1)[-1] or '/'
         s.sendall(routes.get(path, '51 no route ' + path + '\\r\\n').encode())
-        s.close()
+        s.unwrap().close()                 # a close_notify, which gemini asks for
     except Exception as e:
         print('server:', e, flush=True)
 "))

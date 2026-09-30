@@ -273,12 +273,14 @@
           (: bad (ww-pin (<hp + ":" + show (hp 1)) ("spki:" + sha256 (t 'spki)) (sha256 (t 'cert)))
              (? (string? bad) ((cite 'tls 'tls-close t), [1 ("www: " + bad)])
                 (: _ (cite 'tls 'tls-say t (u + "\r\n"))
-                   b (cite 'tls 'tls-slurp t) _ (close (t 's))
+                   b0 (cite 'tls 'tls-slurp t) _ (close (t 's))
+                   b (? (string? b0) b0 "")
                    k (wg-find b "\r\n" 0)
                    hd (? (k < 0) "" (snip b 0 k)) body (? (k < 0) "" (snip b (k + 2) #b))
                    code (? (2 <= #hd) (unum (snip hd 0 2)) ())
                    meta (? (3 < #hd) (snip hd 3 #hd) "")
-                   (? !(charm? code) [1 ("www: " + url + " answered no gemini status")]
+                   (? !(string? b0) [1 ("www: " + wg-cut <hp (t 'why))]
+                      !(charm? code) [1 ("www: " + url + " answered no gemini status")]
                       (code < 20)
                        (: form ("form:" + ww-join [(p 0) (p 1) (p 2) "" ""] + "?input=")
                           lab (? (code = 11) "[answer, unshown]" "[answer]")

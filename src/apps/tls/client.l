@@ -18,8 +18,11 @@
 ;                              'pin-only (the caller holds the pin: gemini), or 'none
 ;   (tls-open-as host port sni how)   the same, sni the name said and checked
 ;   (tls-say t s)              send s as application data
-;   (tls-hear t)               the next run of application data as it arrives, () at the close
-;   (tls-slurp t)              every byte of application data the peer sends, to its close
+;   (tls-hear t)               the next run of application data as it arrives, () at the
+;                              peer's close_notify, a nom for a stream cut or forged, (t 'why)
+;                              the reason
+;   (tls-slurp t)              every byte of application data the peer sends to its
+;                              close_notify, else tls-hear's nom
 ;   (tls-close t)              a close_notify, and the socket shut
 ;   (t 'chain)                 the server's certificates, ders, leaf first, as they came
 ;   (t 'cert) (t 'spki)        the leaf's der, and its SubjectPublicKeyInfo's
@@ -144,22 +147,33 @@
        (wr t (aad + ct)))
    ; a fatal alert under the client's current key, and no session
    (alert t d why) (pin t 'why why, seal t 21 (u8 2 + u8 d), ())
-   ; one record in: a plaintext CCS is skipped, an encrypted one opened under the server's
-   ; key -> (inner-type body) | () at the end or on a bad tag
+   ; the read side dead for good: the nom kept and answered, the reason said, an alert sent
+   ; when d names one
+   (rd-fail t nm d why) (pins t 'dead nm 'why why, (0 < d ? (seal t 21 (u8 2 + u8 d)) 0), nm)
+   ; one record in, opened under the server's key -> (inner-type body), () after a
+   ; close_notify, or rd-fail's nom: an end with no close_notify, a plaintext record but a
+   ; CCS before the handshake is done, a bad tag
    (open-rec t)
-    (: r (rdrec t)
-       (? (atom? r) ()
-          (<r = 20) (open-rec t)
-          (<r != 23) ()
+    (: r (? (t 'done || t 'dead) () (rdrec t))
+       (? (t 'done) ()
+          (t 'dead) (t 'dead)
+          (atom? r) (rd-fail t 'eof 0 "the peer closed the connection without a close_notify")
+          (<r = 20 && !(t 'up) && <>r = u8 1) (open-rec t)
+          (<r != 23) (rd-fail t 'bad 10 "a plaintext record where only encrypted ones may come")
           (: body <>r
              aad (u8 23 + u16 771 + u16 #body)
              pt (aead-open (t 'skey) (t 'siv) (t 'sseq) aad body)
              _ (pin t 'sseq (t 'sseq + 1))
-             (? (atom? pt) ()
+             (? (atom? pt) (rd-fail t 'bad 20 "a record whose tag does not verify")
                 (: s <>pt
                    (strip i) (i > 0 && s (i - 1) = 0 ? (strip (i - 1)) i)
                    e (strip #s)
-                   (e < 1 ? () [(s (e - 1)) (snip s 0 (e - 1))]))))))
+                   (e < 1 ? (rd-fail t 'bad 10 "a record with no content type") [(s (e - 1)) (snip s 0 (e - 1))]))))))
+   ; an alert heard: close_notify ends the stream, user_canceled waits for it, the rest refuse
+   (alert-in t b)
+    (? (#b = 2 && b 1 = 0) (pin t 'done 1, ())
+       (#b = 2 && b 1 = 90) [1]
+       (rd-fail t 'alert 0 ("the peer sent alert " + show (#b = 2 ? (b 1) -1))))
 
    ; --- handshake messages off the decrypted stream, each added to the transcript ---
    (hs-next t)
@@ -172,7 +186,8 @@
                    (: r (open-rec t)
                       (? (atom? r) ()
                          (<r = 22) (go (buf + <>r))
-                         (go buf))))
+                         (<r = 21) (: a (alert-in t <>r) (? (two? a) (go buf) ()))
+                         (rd-fail t 'bad 10 "application data before the handshake is done"))))
        (go (t 'hbuf)))
 
    ; --- the client hello ---
@@ -319,7 +334,7 @@
                                sats (derive master "s ap traffic" tr0)
                                _ (pin t 'ckey (hkdf-label cats "key" "" kl)) _ (pin t 'civ (hkdf-label cats "iv" "" 12))
                                _ (pin t 'skey (hkdf-label sats "key" "" kl)) _ (pin t 'siv (hkdf-label sats "iv" "" 12))
-                               _ (pin t 'cseq 0) _ (pin t 'sseq 0)
+                               _ (pins t 'cseq 0 'sseq 0 'cats cats 'sats sats 'up 1)
                                t)))))))))
 
    ; --- the application half ---
@@ -332,14 +347,35 @@
        (go 0))
    (tls-hear t)
     (: r (open-rec t)
-       (? (atom? r) ()
+       (? (atom? r) r
           (<r = 23) <>r
-          (<r = 21) ()                                                 ; an alert: close_notify or worse, the end either way
-          (tls-hear t)))                                               ; a ticket, a key update: not ours
+          (<r = 21) (: a (alert-in t <>r) (? (two? a) (tls-hear t) a))
+          (<r = 22) (post-hs t (t 'hbuf + <>r))
+          (rd-fail t 'bad 10 "a record of no type this client knows")))
+   ; the handshake messages after it: a ticket passed over (no resumption here), a key update
+   ; taken, which must end its record (RFC 8446 5.1), the rest refused
+   (post-hs t buf)
+    (? (4 <= #buf && 4 + rd24 buf 1 <= #buf)
+       (: n (4 + rd24 buf 1) m (snip buf 4 n) more (snip buf n #buf)
+          (? (buf 0 = 4) (post-hs t more)
+             (buf 0 != 24) (rd-fail t 'bad 10 "a handshake message after the handshake")
+             (#m = 1 && m 0 < 2 && #more = 0) (key-step t (m 0), pin t 'hbuf "", tls-hear t)
+             (rd-fail t 'bad 47 "a key update that does not read")))
+       (pin t 'hbuf buf, tls-hear t))
+   ; RFC 8446 4.6.3: the server's key steps on; asked to, ours does too, said under the old one
+   (key-step t ask)
+    (: kl #(t 'skey)
+       ss (hkdf-label (t 'sats) "traffic upd" "" 32)
+       _ (pins t 'sats ss 'skey (hkdf-label ss "key" "" kl) 'siv (hkdf-label ss "iv" "" 12) 'sseq 0)
+       (? (ask = 1)
+          (: _ (seal t 22 (u8 24 + u24 1 + u8 0))
+             cs (hkdf-label (t 'cats) "traffic upd" "" 32)
+             (pins t 'cats cs 'ckey (hkdf-label cs "key" "" kl) 'civ (hkdf-label cs "iv" "" 12) 'cseq 0))
+          0))
    (tls-slurp t)
     (: j (jug 0)
-       (go _) (: s (tls-hear t) (? (string? s) (say j s, go 0) 0))
-       _ (go 0)
-       (slurp j))
+       (go _) (: s (tls-hear t) (? (string? s) (say j s, go 0) s))
+       e (go 0)
+       (? (nom? e) e (slurp j)))
    (tls-close t) (seal t 21 (u8 1 + u8 0), close (t 's)))
 ) ; module tls
