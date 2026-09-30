@@ -45,6 +45,8 @@
   (rt= (\ x (: h (\ y (y + 1)) g (\ z (map h z)) [(g x) (map h x) (g (cup x))])))   ; a helper read once
   ; a big carrier a closure keeps reads as its size; ev keeps its caches so, and prints short
   (has? (show (: t (foldl (\ t i (pin t i i)) {} (jot 40)) (\ x (peep t (x + 1) 0)))) "{..40}")
+  (has? (show (: t {'s (foldl (\ t i (pin t i i)) {} (jot 40))} (\ x (peep t x 0)))) "{..1}")
+  (has? (show (: t {'a 1} _ (pin t 'me t) (\ x (peep t x 0)))) "{..2}")
   (#(show ev) < 200000)
   !(has? (show ev) "((mint ")                        ; every name it calls is bound
   ; ..and ev read back off its own show is an ev -- where its doors are nameable: an ev

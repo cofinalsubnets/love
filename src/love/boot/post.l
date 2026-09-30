@@ -491,9 +491,14 @@
                (nom? v || two? v) ['\ v]
                (fn? v) (rfn C v)
                ; a carrier is `=` to itself alone, so no spelling reads back as it: a big
-               ; one, a cache the function keeps, is its size
-               (tablet? v || hot? v) (: g (glob v) (? (!== g ()) g (tablet? v && 16 < #v) (name ("{.." + dec #v + "}")) v))
+               ; one, a cache the function keeps, or one reaching one, is its size
+               (tablet? v || hot? v) (: g (glob v) (? (!== g ()) g (tablet? v && (16 < #v || wee 64 v < 0)) (name ("{.." + dec #v + "}")) v))
                v)
+   ; what is left of n once v is walked, negative past it: a cycle ends there too
+   (wee n v) (? (n < 0) n
+                (tablet? v) (? (n < #v) -1 (foldl (\ m k (wee (wee (m - 1) k) (peep v k ()))) n (keys v)))
+                (two? v) (wee (wee (n - 1) <v) >v)
+                (n - 1))
    ; an object only itself is `=` to, named once and bound over the whole to a fresh one
    (obj C v init) (: n (peep (C 'obj) v 0)
     (? (mint? n) n (: n (mint 0) _ (pin (C 'obj) v n) _ (pin C 'objs ([n init] . C 'objs)) n)))
