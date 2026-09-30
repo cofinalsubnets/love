@@ -65,28 +65,28 @@
  (x11 n) (: h (string? n ? (peep x11-tab (x11-key n) ()) ()) (string? h ? ("#" + h) ()))
  (x11-hex2 s i) (: (dig c) (? (47 < c && c < 58) (c - 48) (96 < c && c < 103) (c - 87) 0)
                    (16 * dig (s i) + dig (s (i + 1))))
- (x11-rgb n) (: h (x11 n) (string? h ? [(x11-hex2 h 1) (x11-hex2 h 3) (x11-hex2 h 5)] ()))
- (x11-sgr k n) (: c (x11-rgb n)
+ (x11-rgb n) (x11 n @ h (string? h ? [(x11-hex2 h 1) (x11-hex2 h 3) (x11-hex2 h 5)] ()))
+ (x11-sgr k n) (x11-rgb n @ c
                   (two? c ? ("\e[" + show k + ";2;" + show <c + ";" + show (c 1) + ";" + show (c 2) + "m") ""))
  (x11-fg n) (x11-sgr 38 n)
  (x11-bg n) (x11-sgr 48 n)
  ; the 6x6x6 cube's levels are 0 95 135 175 215 255; a channel lands on the nearest
  (x11-cube v) (v < 48 ? 0 ((v - 35) // 40))
- (x11-256 n) (: c (x11-rgb n) (two? c ? (16 + 36 * x11-cube <c + 6 * x11-cube (c 1) + x11-cube (c 2)) ()))
+ (x11-256 n) (x11-rgb n @ c (two? c ? (16 + 36 * x11-cube <c + 6 * x11-cube (c 1) + x11-cube (c 2)) ()))
  (x11-names _) (sort (keys x11-tab))
  ; ..and the other way: a pen's rgb, 16..231 the cube and 232..255 the grey ramp, where
  ; 232 + n is 8 + 10n; its hex; and the name nearest it in rgb
  x11-levels [0 95 135 175 215 255]
  (x11-pen c) (? (!(charm? c)) ()
-                (232 <= c && c <= 255) (: v (8 + 10 * (c - 232)) [v v v])
-                (16 <= c && c < 232) (: i (c - 16) [(x11-levels (i // 36)) (x11-levels ((i // 6) % 6)) (x11-levels (i % 6))])
+                (232 <= c && c <= 255) (8 + 10 * (c - 232) @ v [v v v])
+                (16 <= c && c < 232) (c - 16 @ i [(x11-levels (i // 36)) (x11-levels (i // 6 % 6)) (x11-levels (i % 6))])
                 ())
  (x11-pen-hex c) (: p (x11-pen c) d "0123456789abcdef"
                     (hx v) (string (d (v // 16)) + string (d (v % 16)))
                     (two? p ? ("#" + hx <p + hx (p 1) + hx (p 2)) ()))
  (x11-near c) (: p (x11-pen c)
-                 (gap n) (: q (x11-rgb n) (2 (q 0 - p 0) + 2 (q 1 - p 1) + 2 (q 2 - p 2)))
-                 (two? p ? (foldl (\ a n (gap n < gap a ? n a)) "black" (x11-names 0)) ()))
+                 (gap n) (x11-rgb n @ q (2 (q 0 - p 0) + 2 (q 1 - p 1) + 2 (q 2 - p 2)))
+                 (two? p ? (foldl (a \ n \ (gap n < gap a ? n a)) "black" (x11-names 0)) ()))
  ; the verb: every argument a row -- a name's hex, rgb and cube cell, or a pen's hex,
  ; rgb and nearest name, marked ~ -- the columns padded to the widest, as ls pads its;
  ; a swatch of the cell on the end when stdout is a terminal, and no arguments is
@@ -94,21 +94,21 @@
  (x11-main as)
   (: tty? (two? (tty 1))
      (row n) (: h (x11 n) c (unum n)
-                (? (string? h) (: q (x11-rgb n) [n h (show (q 0)) (show (q 1)) (show (q 2)) (show (x11-256 n))])
-                   (two? (x11-pen c)) (: q (x11-pen c) [("~" + x11-near c) (x11-pen-hex c) (show (q 0)) (show (q 1)) (show (q 2)) n])
+                (? (string? h) (x11-rgb n @ q [n h (show (q 0)) (show (q 1)) (show (q 2)) (show (x11-256 n))])
+                   (two? (x11-pen c)) (x11-pen c @ q [("~" + x11-near c) (x11-pen-hex c) (show (q 0)) (show (q 1)) (show (q 2)) n])
                    ()))
      (lpad w t) (#t < w ? (lpad w (" " + t)) t)
      (rpad w t) (#t < w ? (rpad w (t + " ")) t)
-     (wide rs k) (foldl (\ w r (: n #(r k) (w < n ? n w))) 0 rs)
+     (wide rs k) (foldl (w \ r \ (: n #(r k) (w < n ? n w))) 0 rs)
      (emit rs) (: wn (wide rs 0) wr (wide rs 2) wg (wide rs 3) wb (wide rs 4) wp (wide rs 5)
                   (each rs (r \ puts (rpad wn (r 0) + "  " + r 1 + "  " + lpad wr (r 2) + " " + lpad wg (r 3) + " " + lpad wb (r 4)
                                        + "  " + lpad wp (r 5) + (tty? ? ("  \e[48;5;" + r 5 + "m   \e[0m") "") + "\n"))))
      names (two? as ? as (x11-names 0))
      rs (map row names)
      bad (filter (n \ !(two? (row n))) names)
-     _ (emit (filter two? rs))
-     _ (each bad (n \ say err $ "x11: not a colour: " + n + "\n"))
-     (two? bad ? 1 0))
+     (emit (filter two? rs),
+      each bad (n \ say err $ "x11: not a colour: " + n + "\n"),
+      (two? bad ? 1 0)))
  _ (pins (cite 'verbs 'tab) 'x11 x11-main)
  s (cite 'verbs 'fire ["x11" "x11.l"])
  _ (two? s ? (x11-main >s) 0))                     ; a binding: a module's letrec ends in none

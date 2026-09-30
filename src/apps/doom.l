@@ -29,7 +29,7 @@
    ;     XAUTHORITY or ~/.Xauthority when the server wants one ---
    (dispof d) (#d < 2 ? "0" (:- (go 0) b (snip d 1 #d)
                (go i) (i = #b || b i = 46 ? (snip b 0 i) (go (i + 1)))))
-   (xauth u) (: v (getenv "XAUTHORITY") (0 < #v ? v (getenv "HOME" + "/.Xauthority")))
+   (xauth u) (getenv "XAUTHORITY" @ v (0 < #v ? v (getenv "HOME" + "/.Xauthority")))
 
    ; --- the requests the wire does not carry: a window of ours, a GC, a title,
    ;     the delete protocol, and PutImage ---
@@ -39,11 +39,11 @@
      x-w32 s visual, x-w32 s 2048, x-w32 s 131075)                            ; KeyPress|KeyRelease|StructureNotify
    (x-gc s gc win) (x-w8 s 55, x-w8 s 0, x-w16 s 4, x-w32 s gc, x-w32 s win, x-w32 s 0)
    (x-title s win t)                                                           ; ChangeProperty WM_NAME STRING
-    (: n #t
+    (#t @ n
        (x-w8 s 18, x-w8 s 0, x-w16 s (6 + (n + x-pad4 n) // 4), x-w32 s win,
         x-w32 s 39, x-w32 s 31, x-w8 s 8, x-w8 s 0, x-w16 s 0, x-w32 s n, x-wpad s t))
    (x-protocols s win dl)                                                      ; WM_PROTOCOLS = [WM_DELETE_WINDOW]
-    (: pr (x-intern s "WM_PROTOCOLS")
+    (x-intern s "WM_PROTOCOLS" @ pr
        (x-w8 s 18, x-w8 s 0, x-w16 s 7, x-w32 s win, x-w32 s pr, x-w32 s 4,
         x-w8 s 32, x-w8 s 0, x-w16 s 0, x-w32 s 1, x-w32 s dl))
    ; a held key, by default, is a release and a press every 40 ms after the server's delay,
@@ -54,10 +54,10 @@
    ; XKB answers no opcode, and the keys stay as they were.
    (x-autorepeat s)
     (: n #"XKEYBOARD"
-       _ (x-w8 s 98, x-w8 s 0, x-w16 s (2 + ((n + x-pad4 n) // 4)), x-w16 s n, x-w16 s 0, x-wpad s "XKEYBOARD", x-flush s)
+       _ (x-w8 s 98, x-w8 s 0, x-w16 s (2 + (n + x-pad4 n) // 4), x-w16 s n, x-w16 s 0, x-wpad s "XKEYBOARD", x-flush s)
        hdr (x-reply s)
        op (<hdr = 1 ? (hdr 9) 0)
-       (? (op < 1) 0
+       (op < 1 ? 0
           (x-w8 s op, x-w8 s 0, x-w16 s 2, x-w16 s 1, x-w16 s 0, x-flush s,
            x-reply s,
            x-w8 s op, x-w8 s 21, x-w16 s 7, x-w16 s 256, x-w16 s 0, x-w32 s 1, x-w32 s 1, x-w32 s 0, x-w32 s 0, x-w32 s 0, x-flush s,
@@ -65,10 +65,10 @@
            1)))
    ; one band of rows out of the frame cask: ZPixmap at the window's depth, 32 bpp
    (x-putband s win gc depth buf y rows)
-    (: n (rows * 2560)
-       _ (x-w8 s 72, x-w8 s 2, x-w16 s (6 + n // 4), x-w32 s win, x-w32 s gc,
-          x-w16 s 640, x-w16 s rows, x-w16 s 0, x-w16 s y, x-w8 s 0, x-w8 s depth, x-w16 s 0)
-       (say s (snip buf (y * 2560) (y * 2560 + n))))
+    (rows * 2560 @ n
+       (x-w8 s 72, x-w8 s 2, x-w16 s (6 + n // 4), x-w32 s win, x-w32 s gc,
+        x-w16 s 640, x-w16 s rows, x-w16 s 0, x-w16 s y, x-w8 s 0, x-w8 s depth, x-w16 s 0,
+        say s (snip buf (y * 2560) (y * 2560 + n))))
    (x-putframe s win gc depth buf)
     (x-putband s win gc depth buf 0 100, x-putband s win gc depth buf 100 100,
      x-putband s win gc depth buf 200 100, x-putband s win gc depth buf 300 100, x-flush s)
@@ -80,9 +80,9 @@
        hdr (x-reply s)
        kpc (<hdr = 1 ? (hdr 1) 0)
        km (tablet 8)
-       _ (:- (go 0) (go i) (i < nkc * kpc ?
-          (: sym (x-r32 s) (i % kpc = 0 && pin km (mink + i // kpc) sym, go (i + 1)))))
-       km)
+       ((:- (go 0) (go i) (i < nkc * kpc ?
+         (x-r32 s @ sym (i % kpc = 0 && pin km (mink + i // kpc) sym, go (i + 1))))),
+        km))
    ; a keysym -> doomkeys.h's code, () for one doom has no name for. letters arrive
    ; lower-case (the unshifted column), which is what doom's menus want.
    doomkeys {65361 172 65362 173 65363 174 65364 175                              ; arrows
@@ -93,7 +93,7 @@
              65470 187 65471 188 65472 189 65473 190 65474 191                    ; f1..f5
              65475 192 65476 193 65477 194 65478 195 65479 196 65480 215 65481 216 ; f6..f12
              32 162}                                                              ; space: use
-   (keyof sym) (: k (doomkeys sym) (? (charm? k) k (32 < sym < 127) sym))
+   (keyof sym) (doomkeys sym @ k (? (charm? k) k (32 < sym < 127) sym))
 
    ; --- the driver ---
    (drive s sc win gc wad frames)
@@ -102,19 +102,19 @@
        dl (x-intern s "WM_DELETE_WINDOW")
        buf (cask 1024000)
        ; every event waiting on the wire, none waited for; 1 = the window is gone
-       (events _) (? !(cue? s) 0
-                     (: e (x-next s)
-                        (? (atom? e) 1
+       (events _) (!(cue? s) ? 0
+                     (x-next s @ e
+                        (atom? e ? 1
                          (: c (ev-code e)
                             gone (c @ (17 || 33 && u32 (ev-raw e) 12 = dl) 1)
-                            _ (c = 2 || c = 3 ?
-                                 (: k (keyof (peep km (ev-detail e) 0))
-                                  (charm? k && doom-key k (c = 2))))
-                            (gone ? 1 (events 0))))))
+                            ((c = 2 || c = 3 ?
+                                (keyof (peep km (ev-detail e) 0) @ k
+                                 (charm? k && doom-key k (c = 2)))),
+                             (gone ? 1 (events 0)))))))
        (loop n) (? (events 0) n
                    (frames && n >= frames) n
-                   (: drew (doom-tick ())                                     ; -1: the game quit itself
-                      (? (drew < 0) n
+                   (doom-tick () @ drew ; -1: the game quit itself
+                      (drew < 0 ? n
                          (drew ? (doom-frame buf, x-putframe s win gc depth buf),
                           loop (n + drew)))))
        (loop 0))
@@ -142,13 +142,13 @@
        _ (chdir dir)
        p (spawn argv)
        st (charm? p ? (wait p) 1)
-       _ (chdir here)
-       st)
+       (chdir here,
+        st))
    (grab url path)
-    (? (two? (stat path)) 0
-       (: rc (cite 'kore 'wget-main ["-q" "-O" path url])
+    (two? (stat path) ? 0
+       (cite 'kore 'wget-main ["-q" "-O" path url] @ rc
           (rc @ 0 0 (unlink path, rc))))
-   (fetch url path) (? (two? (stat path)) 0 (note ("fetching " + url), grab url path))
+   (fetch url path) (two? (stat path) ? 0 (note ("fetching " + url), grab url path))
    ; the listing's blobs under doomgeneric/: the fields come in order, so each "path"
    ; is the text between the next two quotes and its kind sits before the next "path"
    (dg-blobs s)
@@ -162,7 +162,7 @@
        (? (two? (stat (d + "/doomgeneric"))) 0
           (fetch dg-tree ls) 1
           (: q (open ls "r")
-             s (? (hot? q) (: s (slurp q) _ (close q) s) "")
+             s (hot? q ? (slurp q @ s (close q, s)) "")
              ps (dg-blobs s)
              _ (unlink ls)
              _ (mkdir d 493)
@@ -211,16 +211,16 @@
                        exec (bin . "doom" . nest-args dl as))
                   (fail $ "cannot run " + bin + " (" + show e + ")"))
        (? !(string? exe) (fail "cannot find this binary's path")
-          ((0 < #(getenv "LOVE_DOOM_NEST")) && two? (stat bin))
+          (0 < #(getenv "LOVE_DOOM_NEST") && two? (stat bin))
            (fail ("the nest's love carries no doom either: `cook host DOOM=1` under " + nest))
           (two? (stat bin)) (enter 0)
-          (: m (nest-lay here nest dl
-                         (_ \ (cite 'source 'src-arm nest exe,            ; autonomous: ours throughout
-                               note "building the nest's love with doom inside"))
-                         [exe "cook" "host" "DOOM=1" ("LOVE=" + exe)])
+          (nest-lay here nest dl
+                    (_ \ (cite 'source 'src-arm nest exe,            ; autonomous: ours throughout
+                          note "building the nest's love with doom inside"))
+                    [exe "cook" "host" "DOOM=1" ("LOVE=" + exe)] @ m
              (string? m ? (fail m) (enter 0)))))
 
-   (inle? _) (? (elem 'love-os (names ())) (elem (ev 'love-os) '(inle wasm)) 0)
+   (inle? _) (elem 'love-os (names ()) ? (elem (ev 'love-os) '(inle wasm)) 0)
    ; --- the nest on inle: the same lay, off this machine's own tree, with the page's
    ; fetch door as the network and no binary to exec -- cook runs as
    ; a task under the same registry, seed's way, and LOVE=love names this kernel as the
@@ -239,29 +239,29 @@
           (two? (stat mod)) (enter 0)
           ; a task shares no environment with its spawner on this seat, so what cook is
           ; told goes on its line
-          (: m (nest-lay here nest dl (\ _ (note "building this machine's love with doom inside"))
-                         ["cook" "wasm" "DOOM=1" "LOVE=love" "LUSHFLAGS=-a" "LOVE_ARMED=1"])
+          (nest-lay here nest dl (_ \ note "building this machine's love with doom inside")
+                    ["cook" "wasm" "DOOM=1" "LOVE=love" "LUSHFLAGS=-a" "LOVE_ARMED=1"] @ m
              (? (string? m) (fail m)
                 (atom? (stat mod)) (fail ("the build left no module at " + mod))
                 (enter 0)))))
    (digits s) (:- (go 0 0) n #s (go i a) (n <= i ? a
-               (: c (s i) (47 < c < 58 ? (go (i + 1) (a * 10 + c - 48)) a))))
+               (s i @ c (47 < c < 58 ? (go (i + 1) (a * 10 + c - 48)) a))))
    doom-usage "usage: love doom [-iwad FILE] [-display :N] [-frames N]"
    (doom-main as)
     (: (opt a k d) (? (atom? a) d (<a = k && two? >a) <>a (opt >a k d))
        nestwad (cwd 0 + "/love-" + love-version + "/dl/doom1.wad")
        wad (opt as "-iwad" (two? (stat "dl/doom1.wad") ? "dl/doom1.wad" nestwad))
        disp (opt as "-display" (getenv "DISPLAY"))
-       frames (: f (opt as "-frames" ()) (string? f ? (digits f) 0))
+       frames (opt as "-frames" () @ f (string? f ? (digits f) 0))
        ; on inle the game is linked in or it is not: no window, no nest, and nothing to
        ; fetch with -- the WAD is a baked file and (doom ()) runs it whole
-       (? (inle? 0) (? (elem 'doom (names ())) (doom ()) (doom-nest-inle 0))
+       (? (inle? 0) (elem 'doom (names ()) ? (doom ()) (doom-nest-inle 0))
           !(elem 'doom-start (names ())) (doom-nest as)
           (atom? (stat wad)) (say err ("doom: no IWAD at " + wad + "\n"), 1)
           (: dn (dispof (string? disp ? disp ""))
              s (x-connect ("/tmp/.X11-unix/X" + dn))
-             (? !(hot? s) (say err ("doom: no display :" + dn + "\n"), 1)
-                (: sc (x-setup s (xauth-cookie (xauth 0) dn))
+             (!(hot? s) ? (say err ("doom: no display :" + dn + "\n"), 1)
+                (x-setup s (xauth-cookie (xauth 0) dn) @ sc
                    (atom? sc ? (say err "doom: the display refused us\n", 1)
                       (: win (scr-idbase sc) gc (scr-idbase sc + 1)
                          n (x-create s win (scr-root sc) 640 400 (scr-depth sc) (scr-visual sc),
