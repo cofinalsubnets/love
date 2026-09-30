@@ -18,10 +18,7 @@
 
    ; --- the model: 'q the answers still to give, 'got the requests heard, newest first ---
    cr-box {'q () 'got ()}
-   ; a port of this run's own: two gates at once must not share a mock, so start from the
-   ; pid and step past any port already taken
-   cr-pl (: (try p n) (: l (listen p) (? (!(nom? l) || n <= 0) [p l] (try (p + 1) (n - 1))))
-            (try (20000 + getpid 0 % 20000) 200))
+   cr-pl (test-listen 0)                                  ; a port of this run's own
    cr-port <cr-pl
    cr-l (cr-pl 1)
    cr-header (cite 'kore 'wg-header)

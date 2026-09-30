@@ -10,7 +10,7 @@
 (module 'bz2
 (: (bz2-pack s level) (bz2e s level)
    (bz2-word c) (c @ 1 'format 3 'end 4 'check 5 'big 'corrupt)
-   (bz2-unpack s) (: u (bz2d s) (? (string? u) [1 u] (bz2-word u)))
+   (bz2-unpack s) (bz2d s @ u (string? u ? [1 u] (bz2-word u)))
 
    ; bz2d's walk a block at a time off rd (rd _ the next piece, "" at the end). a block lies
    ; on bits and says its length only by ending, so the input is held a little past the
@@ -20,7 +20,7 @@
    (bz2-more g)                        ; the buffer topped up past bz2-hold and a piece, or the end said
     (: want (max bz2-hold (#(g 'buf) + 65536))
        (fill acc have) (? (want <= have) acc
-                          (: p (g 'rd 0) (? (#p = 0) (: _ (pin g 'eof 1) acc) (fill (p . acc) (have + #p)))))
+                          (: p (g 'rd 0) (#p @ 0 (pin g 'eof 1, acc) (fill (p . acc) (have + #p)))))
        ps (fill () #(g 'buf))
        (? (two? ps) (pin g 'buf (cats (g 'buf . rev ps))) (pin g 'eof 1)))
    (bz2-next g)
@@ -28,7 +28,7 @@
        (: r (bz2-step (g 'st) (g 'buf) (g 'eof))
           (? (two? r) (: o <r
                          _ (pins g 'buf (snip (g 'buf) >r #(g 'buf)) 'n (g 'n + #o))
-                         (? (#o = 0) (bz2-next g) o))
+                         (#o @ 0 (bz2-next g) o))
              (r = -1) (: _ (bz2-more g) (bz2-next g))
              (: _ (pins g 'mode 'end 'ans (? (r = 0) [1 (g 'n)] (charm? r) (bz2-word r) 'corrupt)) ""))))
    ; mk is asked for the writer before the first byte out; a stream that fails before any
@@ -39,7 +39,7 @@
           (: m (mk 0)
              (? !(two? m) 'no
                 (: w <>m
-                   (go p) (? (#p = 0) (g 'ans) (: _ (w p) (go (bz2-next g))))
+                   (go p) (#p @ 0 (g 'ans) (w p, go (bz2-next g)))
                    (go p))))))
 )
 ) ; module 'bz2
@@ -89,7 +89,7 @@ no file, or a bare -, is the filter: stdin -> stdout"
     (? (two? (lstat dst) && !(peep t 'f 0)) (bzc-moan t ("Output file " + dst + " already exists."), 1)
        !(uwrite dst bytes) (bzc-moan t ("Can't create output file " + dst + "."), 1)
        (two? st && (chmod dst (st 2 & 4095), utime dst (st 1)), peep t 'k 0 ? 0 (unlink p), 0))
-   (bzc-rd q) (\ _ (: c (see q) (? (c < 0) "" (: _ (unsee q c) (chug q)))))
+   (bzc-rd q) (\ _ (see q @ c (c < 0 ? "" (unsee q c, chug q))))
    ; a file decompressed as it comes off the disk: the output opened before the first byte,
    ; its mode and time laid after the last, and taken away again if the stream fails partway
    (bzc-unone t p st)
@@ -98,14 +98,14 @@ no file, or a bare -, is the filter: stdin -> stdout"
           (: k (tablet 0)
              x (bzc-suf p)
              dst (? x (snip p 0 (#p - #<x) + <>x) (p + ".out"))
-             (no m) (: _ (bzc-moan t m) ())
+             (no m) (bzc-moan t m, ())
              (mk _) (? (peep t 't 0) [1 (\ s 0)]
                        (peep t 'c 0) [1 (\ s (say out s))]
                        (: _ (!x && bzc-moan t ("Can't guess original name for " + p + " -- using " + dst))
                           (? (two? (lstat dst) && !(peep t 'f 0)) (no ("Output file " + dst + " already exists."))
                              (: o (open dst "w")
                                 (? !(hot? o) (no ("Can't create output file " + dst + "."))
-                                   (: _ (pin k 'o o) [1 (\ s (say o s))]))))))
+                                   (pin k 'o o, [1 (\ s (say o s))]))))))
              u (bz2-unf (bzc-rd q) mk)
              _ (close q)
              o (peep k 'o ())   laid (hot? o)
@@ -129,10 +129,10 @@ no file, or a bare -, is the filter: stdin -> stdout"
                       (bzc-moan t ("Input file " + p + " already has " + <x + " suffix."), 1)
                       (: z (bz2-pack <>r (peep t 'lvl 9))
                          _ (peep t 'v 0 && bzc-tell t p (bzc-ratio <>r z))
-                         (? (peep t 'c 0) (say out z, 0) (bzc-put t p (p + ".bz2") z st)))))))))
+                         (peep t 'c 0 ? (say out z, 0) (bzc-put t p (p + ".bz2") z st)))))))))
    (bzc-filter t)
     (? (peep t 'd 0)
-       (: u (bz2-unf (bzc-rd in) (\ _ [1 (? (peep t 't 0) (\ s 0) (\ s (say out s)))]))
+       (: u (bz2-unf (bzc-rd in) (\ _ [1 (peep t 't 0 ? (s \ 0) (say out))]))
           (? (atom? u) (bzc-say t (bzc-why t "(stdin)" u), 2) 0))
        (two? (tty out) && !(peep t 'f 0))
         (bzc-say t "I won't write compressed data to a terminal.", 1)
@@ -151,10 +151,10 @@ no file, or a bare -, is the filter: stdin -> stdout"
           bad (: w <(filter (w \ 1 < #w && w 0 = 45 && w 1 != 45 && elem bad w) as)
                  (bzc-say t ("Bad flag `" + w + "'"), ()))
           (: _ (each (chars "ckfqvhVs") (c \ peep u c 0 && pin t (intern (string c)) 1))
-             _ (? (peep u 76 0) (pin t 'V 1))
-             _ (? (peep u 116 0) (pin t 't 1))
+             _ (peep u 76 0 && pin t 'V 1)
+             _ (peep u 116 0 && pin t 't 1)
              dir (cite 'cli 'uoptlast as [100 122 116] () bzc-longs)
-             _ (? dir (pin t 'd (dir = 122 ? 0 1)))
+             _ (? dir (pin t 'd (dir @ 122 0 1)))
              lv (cite 'cli 'uoptlast as "123456789" () bzc-longs)
              _ (? lv (pin t 'lvl (lv - 48)))
              [1 (r 2)])))
@@ -164,14 +164,14 @@ no file, or a bare -, is the filter: stdin -> stdout"
        r (? !o 1
             (peep t 'h 0) (say out (bzc-help + "\n"), 0)
             (peep t 'V 0) (say out ("bzip2 (love " + love-version + ")\n"), 0)
-            (: fs (filter (p \ p != "-") <>o)
-               _ (pin t 'w (foldl (\ a p (max a #p)) 7 fs))
+            (: fs (filter (!= "-") <>o)
+               _ (pin t 'w (foldl (a \ p \ max a #p) 7 fs))
                (? (atom? fs) (bzc-filter t)
-                  (foldl (\ acc p (max acc (bzc-one t p))) 0 fs))))
+                  (foldl (acc \ p \ max acc (bzc-one t p)) 0 fs))))
        (flush out, flush err, r))
    (bzip2-main as) (bzc-run as (tablet 0))
-   (bunzip2-main as) (: t (tablet 0) (pin t 'd 1, pin t 'nm "bunzip2", bzc-run as t))
-   (bzcat-main as) (: t (tablet 0) (pin t 'd 1, pin t 'c 1, pin t 'nm "bzcat", bzc-run as t))
+   (bunzip2-main as) (bzc-run as {'d 1 'nm "bunzip2"})
+   (bzcat-main as) (bzc-run as {'d 1 'c 1 'nm "bzcat"})
 
    _ (pins (cite 'verbs 'tab)
       'bzip2 bzip2-main 'bunzip2 bunzip2-main 'bzcat bzcat-main))
