@@ -21,7 +21,7 @@
    ; decimal text -> a charm (a leading - reads negative)
    (uatoi s)
     (: n #s
-       (go i acc) (i >= n ? acc (go (i + 1) ((10 * acc) + (s i - 48))))
+       (go i acc) (i >= n ? acc (go (i + 1) (10 * acc + s i - 48)))
        (? (0 < n && s 0 = 45) (0 - go 1 0) (go 0 0)))
    ; text with its sgr runs taken out, every other byte where it was. the shape a tool
    ; wants when its own output is going somewhere that is not a terminal -- a colour is
@@ -60,7 +60,7 @@
        (ws? c) (c = 32 || 8 < c < 14)
        (go k inw l w) (n <= k ? [inw l w]
                        (s k @ c
-                        (ws? c ? (go (k + 1) 0 (? (c = 10) (l + 1) l) w)
+                        (ws? c ? (go (k + 1) 0 (c = 10 ? (l + 1) l) w)
                                  (go (k + 1) 1 l (? inw w (w + 1))))))
        r (go 0 <st <>st <>>st)
        [<r <>r <>>r (<>>>st + n)])
@@ -69,7 +69,7 @@
    (ucount-b st s) [<st <>st <>>st (<>>>st + #s)]
    (ucount-l sc st s)
     (: n #s
-       (go k l) (: i (sc s 10 k) (i < 0 ? l (go (i + 1) (l + 1))))
+       (go k l) (sc s 10 k @ i (i < 0 ? l (go (i + 1) (l + 1))))
        [<st (go 0 <>st) <>>st (<>>>st + n)])
    (ucount-for l? w?)
     (? w? ucount-go (? l? (ucount-l (cite 'scan 'scanner ())) ucount-b))
@@ -80,7 +80,7 @@
    (ucharc-go st s)
     (: t (<>st + s) n #t
        (need b) (? (b < 194) 0 (b < 224) 2 (b < 240) 3 (b < 245) 4 0)
-       (tails? k) (? (n <= k) 1 ((t k & 192) = 128) (tails? (k + 1)) 0)
+       (tails? k) (? (n <= k) 1 (t k & 192 = 128) (tails? (k + 1)) 0)
        (go i m) (? (n <= i) [m ""]
                    (: w (cpn t i)
                       (? (0 < w) (go (i + w) (m + 1))
@@ -95,14 +95,13 @@
    ; posix's faces, not make's: trailing slashes are stripped first, and a bare name's
    ; directory is "." where make's $(dir) says "./". `chop` is that strip, and what is
    ; left is one 'glob lastslash -- the scan itself lives there.
-   (uchop p) (: (e k) (? (0 < k && (p (k - 1) = 47)) (e (k - 1)) k) (e #p))
+   (uchop p) (: (e k) (0 < k && p (k - 1) = 47 ? (e (k - 1)) k) (e #p))
    (ubase p sfx)
     (: e0 (uchop p)
-       (? (e0 = 0) (? (0 < #p) "/" "")
-          (: s (snip p (lastslash (snip p 0 e0)) e0)
-             m #sfx n #s
-             (? (0 < m && m < n && (snip s (n - m) n = sfx))
-                (snip s 0 (n - m)) s))))
+       (? (e0 = 0) (0 < #p ? "/" "")
+        (: s (snip p (lastslash (snip p 0 e0)) e0)
+           m #sfx n #s
+         (0 < m && m < n && snip s (n - m) n = sfx ? (snip s 0 (n - m)) s))))
    ; the process umask, read and put back
    (umask-now _) (: o (umask 18) _ (umask o) o)
    ; a tool's flags off the head of as: [t operands], every letter in `ok` and a value
@@ -111,18 +110,17 @@
    (uflags who as vals ok)
     (: t (tablet 0)
        o (uopt as t vals () ())
-       _ (? (two? o) () (udie 2 (who + ": an option wants a value")))
+       _ (atom? o && udie 2 (who + ": an option wants a value"))
        _ (: c (uoptun t ok) (? !c () (udie 2 (who + ": unknown option -" + string c))))
-       _ (: w (uoptstray as <>>o) (? !w () (udie 2 (who + ": unknown option " + w))))
+       _ (uoptstray as <>>o @ w (? !w () (udie 2 (who + ": unknown option " + w))))
        [t <>>o])
    ; a hand-walked tool's operands, refused with 2 when one still looks like a flag: its
    ; walk stops at the first word it does not know, so that word is a stranger or a flag
    ; after an operand
-   (ustray who as rest) (: w (uoptstray as rest) (? !w rest (udie 2 (who + ": unknown option " + w))))
+   (ustray who as rest) (uoptstray as rest @ w (? !w rest (udie 2 (who + ": unknown option " + w))))
    ; octal text -> a charm ("755" is 493), chmod's one argument shape
    (uoct s) (:- (go 0 0) n #s (go i acc)
-    (i >= n ? acc (go (i + 1) ((8 * acc) + (s i - 48))))
-       )
+    (i >= n ? acc (go (i + 1) (8 * acc + s i - 48))))
    ; a mode word onto the mode cur: octal whole, or chmod's symbolic clauses, `who` of
    ; ugoa then +-= runs of rwxXst or one of ugo to copy (u+x,go-w,a=rX). no who is all
    ; three less the umask um. a directory keeps its setuid and setgid bits through = and
@@ -131,15 +129,15 @@
     (: n #m
        (oct? i) (? (n <= i) 1 (48 <= m i <= 55) (oct? (i + 1)) 0)
        (base c) (? (c = 117) 64 (c = 103) 8 1)
-       (over ws f) (foldl (\ a w (a | f w)) 0 ws)
-       (perm ws cur c)
-        (? (c = 114) (over ws (w \ 4 * base w))
-           (c = 119) (over ws (w \ 2 * base w))
-           (c = 120) (over ws base)
-           (c = 88) (? (dir? || 0 < (cur & 73)) (over ws base) 0)
-           (c = 115) ((? (elem 117 ws) 2048 0) | (? (elem 103 ws) 1024 0))
-           (c = 116) (? (elem 111 ws) 512 0)
-           (: v ((cur // base c) & 7) (over ws (w \ v * base w))))
+       (over ws f) (foldl (a \ w \ a | f w) 0 ws)
+       (perm ws cur c) (c @
+        114 (over ws (w \ 4 * base w))
+        119 (over ws (w \ 2 * base w))
+        120 (over ws base)
+        88 (? (dir? || 0 < cur & 73) (over ws base) 0)
+        115 ((elem 117 ws ? 2048 0) | (elem 103 ws ? 1024 0))
+        116 (elem 111 ws ? 512 0)
+        (: v ((cur // base c) & 7) (over ws (w \ v * base w))))
        (class ws) ((over ws (w \ 7 * base w)) | (? dir? 0 (perm ws 0 115)) | perm ws 0 116)
        (who i ws) (? (i < n && elem (m i) "ugoa")
                      (who (i + 1) (m i = 97 ? (117 . 103 . 111 . ws) (m i . ws)))
@@ -186,7 +184,7 @@
    ; join with charm c between
    (ujoinc c ls)
     (: o (jug 0)
-       (go m first) (? (atom? m) (slurp o)
+       (go m first) (atom? m ? (slurp o)
                        ((? first () (put o c)), say o <m, go >m 0))
        (go ls 1))
    ; cut's list -> ((lo hi)..): N, N-M, N- (open above), -M (from 1)
