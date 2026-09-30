@@ -462,7 +462,7 @@
     (: t (tablet 0)
        o (uopt as t '(110 100 112) '(112) ())       ; -n -d -p take values, -p repeats
        _ (? (two? o) () (udie 2 tp-usage))
-       _ (: c (uoptun t "bndpPC") (? !c () (udie 2 ("top: unknown option -- " + (string c)))))
+       _ (: c (uoptbad as t "bndpPC") (? !c () (udie 2 ("top: unknown option -- " + (string c)))))
        b? (peep t 98 0)
        plain? (peep t 80 0)
        n (: v (uoptv t 110) (? (string? v) (: k (unum v) (? (charm? k) k (udie 2 tp-usage))) 0))

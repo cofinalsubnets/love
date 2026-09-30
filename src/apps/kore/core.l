@@ -176,7 +176,7 @@
                {"echo" 101 "input-range" 105 "head-count" 110 "output" 111
                 "repeat" 114 "zero-terminated" 122})
        _ (? (two? o) () (sdie "an option wants a value"))
-       _ (: c (uoptun t "einorz") (? !c () (sdie ("unknown option -" + string c))))
+       _ (: c (uoptbad as t "einorz") (? !c () (sdie ("unknown option -" + string c))))
        rest <>>o e? (peep t 101 0) r? (peep t 114 0)
        d (? (peep t 122 0) 0 10)
        ir (uoptv t 105) nv (uoptv t 110) of (uoptv t 111)
@@ -212,10 +212,21 @@
        _ (flush q) _ (? (string? of) (close q) 0)
        0)
 
-   ; -- echo: the args back; -n holds the newline --
+   ; -- echo: the args back; -n holds the newline, -e lays the escapes (u.l's, printf's
+   ; %b's: \c ends it all), -E leaves them, the later winning; the letters cluster, and
+   ; the first word that is not all of them is text, as GNU's reads it --
    (echo-main as)
-    (as @ ("-n" . u) (say out (ujoin u), flush out, 0)
-     (say out (ujoin as), put out 10, flush out, 0))
+    (: (flag? w) (1 < #w && w 0 = 45 && all (c \ elem c "neE") >(chars w))
+       (go a n e) (? (two? a && flag? <a)
+                     (: w <a (go >a (n || has? w "n") (: k (max (findsub w "e") -1) K (max (findsub w "E") -1) (? (k < 0 && K < 0) e (K < k) 1 0))))
+                     [n e a])
+       r (go as 0 0)
+       n? <r e? <>r ws <>>r
+       t (ujoin ws)
+       x (? e? (ubexp t "echo") [t 0])
+       _ (say out <x)
+       _ (? (n? || <>x) 0 (put out 10))
+       _ (flush out) 0)
 
    ; -- head and tail: one driver, two clips; -n N (10 the default) --
    ; `-5` is the obsolescent spelling and every script still writes it, so it is not
@@ -397,21 +408,35 @@
    ; -- wc: lines, words, characters, bytes (flags pick; bare wc reads lines words bytes) --
    (wc-main as)
     ; the flags cluster, as GNU's do: -lw is the two of them and not a filename
-    (: (fl a l w m c)
-        (atom? a ? [l w m c a]
+    (: (fl a l w m c x)
+        (atom? a ? [l w m c x a]
          (: g <a n #g
-          (2 > n || g 0 != 45 ? [l w m c a]
-           (:- (cl 1 l w m c) (cl k L W M C)
-            (n <= k ? (fl >a L W M C)
-             (g k @ 108 (cl (k + 1) 1 W M C)
-                    119 (cl (k + 1) L 1 M C)
-                    109 (cl (k + 1) L W 1 C)
-                    99 (cl (k + 1) L W M 1)
-                    [l w m c a])))))) ; an unknown charm: the word is not ours
-       p (fl as 0 0 0 0)
-       none !(<p || <>p || <>>p || <>>>p)
-       l? (? none 1 <p) w? (? none 1 <>p) m? <>>p c? (? none 1 <>>>p)
-       fs (ustray "wc" as <>>>>p)
+          (2 > n || g 0 != 45 ? [l w m c x a]
+           (:- (cl 1 l w m c x) (cl k L W M C X)
+            (n <= k ? (fl >a L W M C X)
+             (g k @ 108 (cl (k + 1) 1 W M C X)
+                    119 (cl (k + 1) L 1 M C X)
+                    109 (cl (k + 1) L W 1 C X)
+                    99 (cl (k + 1) L W M 1 X)
+                    76 (cl (k + 1) L W M C 1)
+                    [l w m c x a])))))) ; an unknown charm: the word is not ours
+       p (fl as 0 0 0 0 0)
+       none !(<p || <>p || <>>p || <>>>p || p 4)
+       l? (? none 1 <p) w? (? none 1 <>p) m? <>>p c? (? none 1 <>>>p) x? (p 4)
+       fs (ustray "wc" as (p 5))
+       ; -L: the widest line in columns, GNU's way -- a tab to the next stop of 8, a
+       ; newline, return or form feed ends one, a character its display width. the
+       ; state [col widest] runs across gulps
+       (xcnt st h) (? !x? st
+                      (: n #h
+                         (go i col top) (? (n <= i) [col top]
+                                           (: b (h i)
+                                              (? (b = 10 || b = 13 || b = 12) (go (i + 1) 0 (max top col))
+                                                 (b = 9) (go (i + 1) (col + 8 - col % 8) top)
+                                                 (b < 32 || b = 127) (go (i + 1) col top)
+                                                 (b < 128) (go (i + 1) (col + 1) top)
+                                                 (: j (cpnext h i) (go j (col + swidth (snip h i j)) top)))))
+                         (go 0 <st <>st)))
        (c3 x) <>>x (c4 x) <>>>x
        ; a row is (name (l w b m)), name () for stdin. counted a gulp at a time --
        ; nothing here needs the text, only the numbers off it
@@ -421,23 +446,25 @@
        _ (ureachm (f \ (say err ("wc: cannot open " + f), put err 10,
                           pin st 'ok 0, 0))
                   (\ f first rd
-                     (: (go acc ma) (: h (urd-gulp rd) (? #h (go (cnt acc h) (mcnt ma h)) [acc ma]))
-                        r (go ucount0 ucharc0)
-                        c (ucount-say <r + [<<>r])
+                     (: (go acc ma xa) (: h (urd-gulp rd) (? #h (go (cnt acc h) (mcnt ma h) (xcnt xa h)) [acc ma xa]))
+                        r (go ucount0 ucharc0 [0 0])
+                        c (ucount-say <r + [<<>r (max (<(r 2)) (<>(r 2)))])
                         _ (pin st 'rows ([(? (two? fs) f ()) c] . st 'rows))
                         1))
                   fs)
        rows (rev (st 'rows)) ok (peep st 'ok 0)
        (sum sel a acc) (? (two? a) (sum sel >a (acc + sel <><a)) acc)
        tl (sum cap rows 0) tw (sum caup rows 0) tb (sum c3 rows 0) tm (sum c4 rows 0)
+       tx (foldl (\ m r (max m (<>r 4))) 0 rows)                    ; -L's total is the widest
        ; the GNU face: pad every column to the byte total's width, even where the
        ; bytes are not printed (`wc -lw` of a 3001-byte file wears width 4).
        ; one count over one input wears none -- `wc -l f` is "1 f", never "   1 f".
        ; a one-digit byte count hides this, which is every fixture until .gs1.
-       wdt (? (!!l? + !!w? + !!m? + !!c? = 1 && atom? >rows)
+       wdt (? (!!l? + !!w? + !!m? + !!c? + !!x? = 1 && atom? >rows)
               1 #(show tb))
-       ; GNU's column order: lines words characters bytes
-       (fmt cnt) (: a (? c? [(upad wdt (show (c3 cnt)))] ())
+       ; GNU's column order: lines words characters bytes, the widest line
+       (fmt cnt) (: a (? x? [(upad wdt (show (cnt 4)))] ())
+                    a (? c? (upad wdt (show (c3 cnt)) . a) a)
                     a (? m? (upad wdt (show (c4 cnt)) . a) a)
                     a (? w? (upad wdt (show <>cnt) . a) a)
                     a (? l? (upad wdt (show <cnt) . a) a)
@@ -450,7 +477,7 @@
                       emit >rs)))
        _ (emit rows)
        _ (two? rows && two? >rows ?
-          (say out (fmt [tl tw tb tm]), say out " total", put out 10))
+          (say out (fmt [tl tw tb tm tx]), say out " total", put out 10))
        _ (flush out) (? ok 0 1))
 
    ; -- sort ----------------------------------------------------------------------
@@ -460,8 +487,8 @@
    ; uses those INSTEAD of the global ones, which is GNU's rule and not an addition to
    ; them. equal keys fall to the last-resort compare -- the whole line, bytewise --
    ; unless -s or -u, neither of which wants it.
-   ; absent, and said so rather than half-done: -k's .CHAR offsets, -c/-C, -o, -z,
-   ; and the -M -h -V -R orderings.
+   ; absent, and said so rather than half-done: -k's .CHAR offsets and the -M -g -R
+   ; orderings. a key is [F M b f n r h V], its letters' flags after its fields.
    (usort-blank? c) (c = 32 || c = 9)
    ; a line's fields as [start end] pairs. under the DEFAULT separator the blanks
    ; BEFORE a run belong to the run -- GNU's rule, and the whole reason -b exists;
@@ -531,65 +558,62 @@
                   (sk i) (? (n <= i || !(usort-blank? (ln i))) i (sk (i + 1)))
                   (snip ln (sk 0) n))
             ln)
-       (? n? (usort-num t) f? (usort-up t) t))
+       (? n? (usort-num t) (k 6) (usort-hnum t) (k 7) (usort-ver t) f? (usort-up t) t))
+   ; -h reads a number with its unit, and orders by the unit first, as GNU's: 1M above
+   ; 1500K. the reading is -n's, of the rank before the digits
+   (usort-hnum s)
+    (: p (usort-num s) n #s
+       (sk i) (? (n <= i || !(usort-blank? (s i) || s i = 45 || s i = 46 || 48 <= s i <= 57)) i (sk (i + 1)))
+       u (: i (sk 0) (? (i < n) (findsub "KMGTPEZY" (string (? (s i = 107) 75 (s i)))) -1))
+       (? (!#(p 1) && !#(p 2)) p [(p 0) (show (u + 1) + zpad 40 (p 1)) (p 2)]))
+   ; -V reads runs: text, number, text, number.. so 1.10 comes after 1.9
+   (usort-ver s)
+    (: n #s
+       (dig? i) (48 <= s i <= 57)
+       (run i d) (? (n <= i || !(dig? i = d)) i (run (i + 1) d))
+       (go i d acc) (? (n <= i) (rev acc)
+                       (: j (run i d) v (snip s i j) (go j !d ((? d (unum v) v) . acc))))
+       (go 0 0 ()))
+   (usort-numk? k) (k 4 || k 6)
    (usort-cmp1 ka kb k)                        ; two readings under key k -> -1 | 0 | 1
-    (: c (k 4 ? (usort-cmpnum ka kb) (usort-cmpstr ka kb)) (k 5 ? -c c))
+    (: c (usort-numk? k ? (usort-cmpnum ka kb) (usort-cmpstr ka kb)) (k 5 ? -c c))
    (sort-main as)
     (: (sdie m) (udie 2 ("sort: " + m))
-       ; the flag walk is sort's own: -k takes a value AND stacks, -t takes a charm
-       ; that may be glued or not, and uopt stacks only what `reps` names.
-       ; every arm below sits inside the ONE `?`. a `(:` here reads `(w = "--")` as a
-       ; BINDING -- a define whose head is a call pattern -- and silently shadows w with
-       ; a two-parameter function, which is how the first draft of this walk answered a
-       ; closure where the file list belonged.
-       (fl a b? f? n? r? s? u? sep ks fs)
-        (? (atom? a) [b? f? n? r? s? u? sep (rev ks) (rev fs)]
-           (: w <a
-              (val g) (: v (snip w 2 #w)
-                         (? #v [v >a]
-                            (two? >a) [<>a >>a]
-                            (sdie (g + " wants a value"))))
-              ; the letters glue: -nr is two of them
-              (ltr j B F N R S U)
-               (? (#w <= j) (fl >a B F N R S U sep ks fs)
-                  ((w j) @
-                   98  (ltr (j + 1) 1 F N R S U)
-                   102 (ltr (j + 1) B 1 N R S U)
-                   110 (ltr (j + 1) B F 1 R S U)
-                   114 (ltr (j + 1) B F N 1 S U)
-                   115 (ltr (j + 1) B F N R 1 U)
-                   117 (ltr (j + 1) B F N R S 1)
-                   c   (sdie ("unknown option -- " + string c))))
-              (? (w = "--") [b? f? n? r? s? u? sep (rev ks) (rev fs + >a)]
-                 (#w < 2 || w 0 != 45) (fl >a b? f? n? r? s? u? sep ks (w . fs))
-                 (w = "-k") (: pv (val "-k") (fl <>pv b? f? n? r? s? u? sep (<pv . ks) fs))
-                 (#w > 2 && w 1 = 107)
-                    (fl >a b? f? n? r? s? u? sep (snip w 2 #w . ks) fs)
-                 (w = "-t") (: pv (val "-t")
-                               v <pv
-                               _ (? #v () (sdie "-t wants a separator"))
-                               (fl <>pv b? f? n? r? s? u? (v 0) ks fs))
-                 (#w > 2 && w 1 = 116) (fl >a b? f? n? r? s? u? (w 2) ks fs)
-                 (ltr 1 b? f? n? r? s? u?))))
-       p (fl as 0 0 0 0 0 0 () () ())
-       b? <p f? <>p n? <>>p r? (p 3) s? (p 4) u? (p 5) sep (p 6) kt (p 7) fs (p 8)
+       ; the flags in gnu order, a flag free to follow a file: -k takes a value and
+       ; stacks, -t a separator glued or not, -o a file; the long names ride the same keys
+       t (tablet 0)
+       o (uoptp as t '(107 116 111) '(107)
+                {"reverse" 114 "numeric-sort" 110 "human-numeric-sort" 104 "version-sort" 86
+                 "unique" 117 "stable" 115 "ignore-case" 102 "ignore-leading-blanks" 98 "check" 99
+                 "zero-terminated" 122 "merge" 109 "output" 111 "key" 107 "field-separator" 116})
+       _ (? (two? o) () (sdie "an option wants a value"))
+       _ (: c (uoptbad as t "bcCfhkmnorstuVz") (? !c () (sdie ("unknown option -- " + string c))))
+       _ (: w (o 3) (? !w () (sdie ("unknown option " + w))))
+       (fl c) (peep t c 0)
+       b? (fl 98) f? (fl 102) n? (fl 110) r? (fl 114) s? (fl 115) u? (fl 117) h? (fl 104) V? (fl 86)
+       c? (fl 99) C? (fl 67) z? (fl 122)
+       sep (: v (uoptv t 116) (? !v () !#v (sdie "-t wants a separator") (v 0)))
+       kt (o 1) fs (o 2)
+       of (uoptv t 111)
        ; a key spec: F[,M] with the ordering letters glued to either number
        (kspec s)
         (: n #s
            (num i) (: (go j) (? (n <= j || !(48 <= (s j) <= 57)) j (go (j + 1))) (go i))
-           (opt i B F N R)                     ; the letters trailing a number
-            (? (n <= i || (s i = 44)) [i B F N R]
+           (opt i B F N R H V)                 ; the letters trailing a number
+            (? (n <= i || (s i = 44)) [i B F N R H V]
                ((s i) @
-                98  (opt (i + 1) 1 F N R)
-                102 (opt (i + 1) B 1 N R)
-                110 (opt (i + 1) B F 1 R)
-                114 (opt (i + 1) B F N 1)
+                98  (opt (i + 1) 1 F N R H V)
+                102 (opt (i + 1) B 1 N R H V)
+                110 (opt (i + 1) B F 1 R H V)
+                114 (opt (i + 1) B F N 1 H V)
+                104 (opt (i + 1) B F N R 1 V)
+                86  (opt (i + 1) B F N R H 1)
                 c   (sdie ("unknown key letter -- " + string c))))
            e1 (num 0)
            _ (? (e1 < 1) (sdie ("bad key -- " + s)) ())
            f (uatoi (snip s 0 e1))
-           o1 (opt e1 0 0 0 0)
-           (? (#s <= <o1) [f 0 (o1 1) (o1 2) (o1 3) (o1 4)]
+           o1 (opt e1 0 0 0 0 0 0)
+           (? (#s <= <o1) [f 0 (o1 1) (o1 2) (o1 3) (o1 4) (o1 5) (o1 6)]
               (: rest (snip s (<o1 + 1) n)
                  nr #rest
                  (num2 j) (? (nr <= j || !(48 <= rest j <= 57)) j (num2 (j + 1)))
@@ -597,13 +621,15 @@
                  _ (e2 < 1 && sdie ("bad key -- " + s))
                  m (uatoi (snip rest 0 e2))
                  ; the second half's letters count for the whole key too, GNU-style
-                 (opt2 i B F N R)
-                  (nr <= i ? [B F N R]
+                 (opt2 i B F N R H V)
+                  (nr <= i ? [B F N R H V]
                      (rest i @
-                      98  (opt2 (i + 1) 1 F N R)
-                      102 (opt2 (i + 1) B 1 N R)
-                      110 (opt2 (i + 1) B F 1 R)
-                      114 (opt2 (i + 1) B F N 1)
+                      98  (opt2 (i + 1) 1 F N R H V)
+                      102 (opt2 (i + 1) B 1 N R H V)
+                      110 (opt2 (i + 1) B F 1 R H V)
+                      114 (opt2 (i + 1) B F N 1 H V)
+                      104 (opt2 (i + 1) B F N R 1 V)
+                      86  (opt2 (i + 1) B F N R H 1)
                       c   (sdie ("unknown key letter -- " + string c))))
                  ; the two halves do NOT carry the same letters. n/r/f on either
                  ; half order the whole key, but `b` names a POSITION: on the start
@@ -612,19 +638,23 @@
                  ; and folding them together silently sorted `-k1,1b` on the wrong key.
                  ; the end spec's b is read and dropped -- trailing blanks are not
                  ; modelled here, and inventing a meaning for it would be worse.
-                 o2 (opt2 e2 0 (o1 2) (o1 3) (o1 4))
-                 [f m (o1 1) (o2 1) (o2 2) (o2 3)])))
+                 o2 (opt2 e2 0 (o1 2) (o1 3) (o1 4) (o1 5) (o1 6))
+                 [f m (o1 1) (o2 1) (o2 2) (o2 3) (o2 4) (o2 5)])))
        ; a key with no letters of its own takes the global ones; one with any letter
        ; takes only its own. that is GNU's rule, and it is why -k2,2 -n is not -k2,2n.
-       (glob k) (k 2 || k 3 || k 4 || k 5 ? k [<k <>k b? f? n? r?])
-       keys (? (two? kt) (map (glob * kspec) kt) [[0 0 b? f? n? r?]])
+       (glob k) (k 2 || k 3 || k 4 || k 5 || k 6 || k 7 ? k [<k <>k b? f? n? r? h? V?])
+       keys (? (two? kt) (map (glob * kspec) kt) [[0 0 b? f? n? r? h? V?]])
        ; the lines off the reading floor: prel's `lines` walks a charm at a time and
        ; costs more than the sort does. a miss has said its piece; sort still leaves
-       (rd fs) (: box (tablet 0)
-                  (dot ln term?) (pin box 'l (ln . box 'l), 1)
-                  st (ulines "sort" dot fs)
-                  _ (st @ 0 0 (uleave 2))
-                  (rev (box 'l)))
+       ; -z's records end with a NUL, read whole and cut
+       (rd fs) (? z? (: t (cats (map (f \ (? (f = "-") (slurp in) (: r (uread f) (? (two? r) <>r (sdie ("cannot read: " + f)))))) (? (two? fs) fs ["-"])))
+                        ps (usplit 0 t)
+                        (? (two? ps && <(rev ps) = "") (rev >(rev ps)) ps))
+                  (: box (tablet 0)
+                     (dot ln term?) (pin box 'l (ln . box 'l), 1)
+                     st (ulines "sort" dot fs)
+                     _ (st @ 0 0 (uleave 2))
+                     (rev (box 'l))))
        ; the comparison: every key in turn, then the last-resort whole-line compare.
        ; -r is already inside each key (glob hands it down), so it must NOT also
        ; reverse the output -- doing both is the identity, and the first draft of this
@@ -651,13 +681,13 @@
        ls (rd fs)
        ; no key and no letter is byte order, and that is prel's `sort` -- the C lane,
        ; stable, and the whole line is the key so -r is the reverse; -u still dedupes
-       plain? ((atom? kt) && !b? && !f? && !n?)
+       plain? ((atom? kt) && !b? && !f? && !n? && !h? && !V?)
        ; the keyed C lane: prel's sort orders lists lexicographically, exactly (bigs)
        ; and stably, so a line decorated [reading.. tiebreak] sorts under every key at
        ; once. one direction has to serve the lot -- a numeric reading reverses by
        ; negation, a text cannot -- so the text keys and the last resort pick it, and a
        ; text key against the grain takes the merge lane below instead.
-       tkeys (filter (\ k !(k 4)) keys)
+       tkeys (filter (\ k !(usort-numk? k)) keys)
        dir (? (two? tkeys) (<tkeys 5) (!(s? || u?)) r? 0)
        clane? (foldl (\ a k (a && (k 5 = dir))) 1 tkeys &&
                ((s? || u?) || r? = dir))
@@ -674,7 +704,7 @@
                          fr (? neg (ncomp fp) fp)
                          (? flip [(0 - sc) (0 - v) (ncomp fr)] [sc v fr]))
        (creading ln k) (: r (usort-keyof ln k sep)
-                          (? (k 4) (ntrip r (k 5 != dir)) r))
+                          (? (usort-numk? k) (ntrip r (k 5 != dir)) r))
        (cdeco l) (: (go l i acc)
                      (atom? l ? (rev acc)
                       (go >l (i + 1)
@@ -688,24 +718,39 @@
                     (? (atom? l) (rev acc)
                        (go >l (k + 1) ([k <l (map (key \ usort-keyof <l key sep) keys)] . acc)))
                    (go l 0 ()))
-       s1 (? plain? (: s0 (sort ls) (? r? (rev s0) s0))
-             clane? (: s0 (map clast (sort (cdeco ls))) (? dir (rev s0) s0))
-             (map (p \ p 1)
-                  (sortby (x \ y \ cmp x y @ 0 (<x <= <y) c (c < 0)) (deco ls))))
-       _ (say out (unlines (? u? (map (p \ p 1) (ded (deco s1))) s1)))
-       _ (flush out) 0)
+       ; -c and -C: is it sorted already -- the first line out of order said (-c) and 1,
+       ; under -u a line equal to the one before it out of order too
+       (check _) (: (go l k) (? (atom? l || atom? >l) 0
+                                (: c (cmp <l <>l)
+                                   (? (0 < c || (u? && c = 0))
+                                      (: _ (? c? (say err ("sort: " + (? (two? fs) <fs "-") + ":" + show (k + 1) + ": disorder: " + (<>l 1) + "\n")) 0)
+                                         _ (flush err) 1)
+                                      (go >l (k + 1)))))
+                    (go (deco ls) 1))
+       ; -o's file opens after the reading, so it may be one of the inputs, as GNU allows
+       (emit s1) (: q (? of (: q (open of "w") (? (hot? q) q (sdie ("cannot create " + of)))) out)
+                    _ (say q (? z? (cats (map (l \ l + string 0) s1)) (unlines s1)))
+                    _ (flush q) _ (? of (close q) 0) 0)
+       (? (c? || C?) (check 0)
+          (: s1 (? plain? (: s0 (sort ls) (? r? (rev s0) s0))
+                   clane? (: s0 (map clast (sort (cdeco ls))) (? dir (rev s0) s0))
+                   (map (p \ p 1)
+                        (sortby (x \ y \ cmp x y @ 0 (<x <= <y) c (c < 0)) (deco ls))))
+             (emit (? u? (map (p \ p 1) (ded (deco s1))) s1)))))
 
    ; -- uniq: adjacent runs to their firsts; -c wears the run count, width 7; -d says only
-   ; the runs of two or more, -u only the lone lines; -i, -f N and -s N compare past N
-   ; fields and then N characters, case aside. INPUT and OUTPUT --
+   ; the runs of two or more, -u only the lone lines, -D every line of a run of two or
+   ; more; -i, -f N and -s N compare past N fields and then N characters, case aside, -w
+   ; N no more than N characters; -z lines end with a NUL. INPUT and OUTPUT --
    (uniq-main as)
-    (: fo (uflags "uniq" as '(102 115) "cdfisu")
+    (: fo (uflags "uniq" as '(102 115 119) "cdDfisuwz")
        t <fo fs (fo 1)
-       c? (t 99) d? (t 100) u? (t 117) i? (t 105)
+       c? (t 99) d? (t 100) u? (t 117) i? (t 105) D? (t 68) z? (t 122)
        (count c) (: v (uoptv t c) n (? v (unum v) 0)
                     (? (charm? n && 0 <= n) n (udie 1 ("uniq: invalid number: '" + v + "'"))))
-       nf (count 102) ns (count 115)
-       _ (? (atom? >>fs) () (udie 2 "usage: uniq [-cdiu] [-f N] [-s N] [INPUT [OUTPUT]]"))
+       nf (count 102) ns (count 115) nw (: v (uoptv t 119) (? v (count 119) ()))
+       end (? z? 0 10)
+       _ (? (atom? >>fs) () (udie 2 "usage: uniq [-cdDiuz] [-f N] [-s N] [-w N] [INPUT [OUTPUT]]"))
        o (? (two? >fs) (: q (open <>fs "w") (? (hot? q) q (udie 1 ("uniq: cannot write " + <>fs)))) out)
        (blank? c) (c = 32 || c = 9)
        (field l i) (: n #l
@@ -713,34 +758,42 @@
                       (ink i) (? (i < n && !(blank? (l i))) (ink (i + 1)) i)
                       (ink (sp i)))
        (skipf l k i) (? (k = 0) i (skipf l (k - 1) (field l i)))
-       (key l) (: i (min #l (skipf l nf 0 + ns)) s (snip l i #l)
+       (key l) (: i (min #l (skipf l nf 0 + ns)) s (snip l i (? nw (min #l (i + nw)) #l))
                   (? i? (lower s) s))
-       plain? !(i? || 0 < nf || 0 < ns)
+       plain? !(i? || 0 < nf || 0 < ns || nw)
        (emit line cnt) (? ((d? && cnt < 2) || (u? && 1 < cnt)) ()
                           ((? c? (say o (upad 7 (show cnt) + " ")) ()),
-                           say o line, put o 10))
+                           say o line, put o end))
        ; adjacent runs, so one line of memory is the whole state -- the run's first,
-       ; its key, and how many have matched it
-       _ (ureachm (f \ (udie 2 ("uniq: cannot open " + f)))
-                  (\ f first rd
-                     (:- (go () () 0) (go prev pk cnt)
-                      (: l (urd-line rd)
-                       (? (atom? l) (0 < cnt ? (emit prev cnt) (), 1)
-                        (: x <l k (? plain? x (key x))
-                         (? (cnt = 0) (go x k 1)
-                            (k = pk) (go prev pk (cnt + 1))
-                            (emit prev cnt, go x k 1)))))))
-                  (two? fs ? [<fs]))
+       ; its key, and how many have matched it; -D says each as it comes, a run's first
+       ; held back until a second shows it is a run
+       (step prev pk cnt x k)
+        (? (cnt = 0) [x k 1]
+           (k = pk) (: _ (? D? (: _ (? (cnt = 1) (: _ (say o prev) (put o end)) 0) _ (say o x) (put o end)) 0) [prev pk (cnt + 1)])
+           (: _ (? D? 0 (emit prev cnt)) [x k 1]))
+       (feed recs)
+        (: r (foldl (\ st x (step <st <>st (st 2) x (? plain? x (key x)))) [() () 0] recs)
+           (? (!D? && 0 < r 2) (emit <r (r 2)) 0))
+       _ (? z? (: src (? (two? fs) (: r (uread <fs) (? (two? r) <>r (udie 2 ("uniq: cannot open " + <fs)))) (slurp in))
+                  ps (usplit 0 src)
+                  (feed (? (two? ps && <(rev ps) = "") (rev >(rev ps)) ps)))
+            (ureachm (f \ (udie 2 ("uniq: cannot open " + f)))
+                     (\ f first rd
+                        (:- (go () () 0) (go prev pk cnt)
+                         (: l (urd-line rd)
+                          (? (atom? l) (? (!D? && 0 < cnt) (emit prev cnt) ()) 
+                           (: x <l k (? plain? x (key x)) s (step prev pk cnt x k)
+                              (go <s <>s (s 2)))))))
+                     (two? fs ? [<fs])))
        _ (flush o) _ (? (two? >fs) (close o) 0) 0)
 
    ; -- tee: stdin onto out and every file (-a appends) --
+   ; -i ignores an interrupt, as GNU's; -p is taken -- love ignores SIGPIPE from the
+   ; start, so a pipe that closes never ends tee and the rest still take what comes
    (tee-main as)
-    (: t (tablet 0)
-       o (uopt as t () '(101) ())
-       _ (uoptun t "a" @ c (c ? (udie 2 ("tee: unknown option -" + string c))))
-       a? (peep t 97 0)
-       fs <>>o
-       _ (uoptstray as fs @ w (w ? (udie 2 ("tee: unknown option " + w))))
+    (: fo (uflagsl "tee" as () "aip" {"append" 97 "ignore-interrupts" 105 "output-error" 112})
+       t <fo a? (peep t 97 0) fs (fo 1)
+       _ (? (t 105) (signal 2 1) 0)
        ; every destination opens up front. tee is a pipe, and a pipe cannot wait
        ; for the end of its input to start writing -- it used to slurp stdin whole.
        (opn l acc ok)
@@ -757,32 +810,54 @@
        _ (clo qs)
        _ (flush out) (? ok 0 1))
 
-   ; -- seq: first incr last, one a line (one and two args fill in the 1s) --
-   ; a signed whole number, or (). the sign is read here rather than left to a flag
-   ; walk: `seq -5 5` counts up from -5, so a leading dash is a sign and not an option
-   (useqn s) (: n #s
-                neg (0 < n && s 0 = 45)
-                v (unum (neg ? (snip s 1 n) s))
-                (charm? v ? (neg ? -v v)))
+   ; -- seq: FIRST INCR LAST, exact: each is an integer and its decimals, the walk runs
+   ; scaled by the most decimals any has, and each line wears as many as FIRST and INCR
+   ; do (GNU's rule: seq 0 0.5 1 is 0.0 0.5 1.0). -w pads to the widest with zeros, -s
+   ; puts SEP between, -f formats each through printf. a leading word that reads as a
+   ; number (-5, -.5) ends the flags, so a negative FIRST is not one --
+   (useqd w)                                   ; -> [int scale] | ()
+    (: neg (0 < #w && w 0 = 45) b (? (0 < #w && (w 0 = 45 || w 0 = 43)) (snip w 1 #w) w)
+       k (findsub b ".") ip (? (k < 0) b (snip b 0 k)) fp (? (k < 0) "" (snip b (k + 1) #b))
+       ds (ip + fp)
+       (? (0 < #ds && all digit? (chars ds)) [(? neg (0 - unum ds) (unum ds)) #fp] ()))
    (seq-main as)
-    (: n #as
-       ns (map useqn as)
-       ; uatoi read "abc" as a number made of its bytes, so `seq --nosuch` counted to
-       ; a large negative and printed nothing, in silence and at 0
-       _ (? (all charm? ns) () (udie 2 "usage: seq [FIRST [INCR]] LAST"))
-       trip (n @ 1 [1 1 (ns 0)]
-                 2 [(ns 0) 1 (ns 1)]
-                 3 [(ns 0) (ns 1) (ns 2)]
-                 (udie 2 "usage: seq [FIRST [INCR]] LAST"))
-       a <trip d <>trip z <>>trip
+    (: (numw? w) (1 < #w && (w 0 = 45 || w 0 = 43) && (digit? (w 1) || w 1 = 46))
+       ; -s and -f with their value in the next word take it along
+       (val? w) (1 < #w && !(w 1 = 45) && (w (#w - 1) = 115 || w (#w - 1) = 102))
+       k ((: (g i) (? (#as <= i) i (: w (as i) (? (w = "--" || !(0 < #w && w 0 = 45) || numw? w) i (val? w) (g (i + 2)) (g (i + 1)))))) 0)
+       fo (uflagsl "seq" (take k as) '(115 102) "wsf" {"separator" 115 "format" 102 "equal-width" 119})
+       t <fo
+       ops (: r (drop k as) (? (two? r && <r = "--") >r r))
+       n #ops
+       ns (map useqd ops)
+       _ (? (0 < n && n <= 3 && all two? ns) () (udie 2 "usage: seq [-w] [-s SEP] [-f FMT] [FIRST [INCR]] LAST"))
+       trip (n @ 1 [[1 0] [1 0] (ns 0)]
+                 2 [(ns 0) [1 0] (ns 1)]
+                 [(ns 0) (ns 1) (ns 2)])
+       P (max (<>(trip 0)) (max (<>(trip 1)) (<>(trip 2))))
+       p (max (<>(trip 0)) (<>(trip 1)))
+       (up x) (<x * ((P - <>x) 10))                ; a reading at scale P (n x is x ** n)
+       a (up (trip 0)) d (up (trip 1)) z (up (trip 2))
        _ (d @ 0 (udie 2 "seq: increment must not be 0"))
-       (go i) (? (0 < d ? (i <= z) (z <= i))
-               (say out (show i), put out 10, go (i + d)))
-       _ (go a) _ (flush out) 0)
+       q ((P - p) 10)
+       (txt v) (: u (v // q) m (? (u < 0) (0 - u) u) b (p 10)
+                  ((? (u < 0) "-" "") + show (m // b) + (? (0 < p) ("." + zpad p (show (m % b))) "")))
+       last (? (0 < d) (? (z < a) a (a + ((z - a) // d) * d)) (? (a < z) a (a - ((a - z) // (0 - d)) * (0 - d))))
+       wd (max #(txt a) #(txt last))
+       (padw s) (? (#s < wd) (? (s 0 = 45) ("-" + zpad (wd - 1) (snip s 1 #s)) (zpad wd s)) s)
+       sep (? (t 115) (uoptv t 115) "\n")
+       ff (uoptv t 102)
+       pf (? ff (cite 'kore 'printf-main) ())
+       (one v) (: s (txt v) (? ff (pf [ff s]) (say out (? (t 119) (padw s) s))))
+       (go i first) (? (0 < d ? (i <= z) (z <= i))
+                       (: _ (? first 0 (say out sep)) _ (one i) (go (i + d) 0))
+                       (? first 0 (say out "\n")))
+       _ (go a 1) _ (flush out) 0)
 
    ; -- yes: the affirmative, forever (args override the y) --
-   (yes-main as)
-    (: w (two? as ? (ujoin as) "y")
+   (yes-main as0)
+    (: as ((uflags "yes" as0 () "") 1)
+       w (two? as ? (ujoin as) "y")
        (go _) (say out w, put out 10, flush out, go ())
        (go ()))
 
@@ -975,23 +1050,36 @@
                      (each ns (n \ (say out (f n), put out end)),
                       flush out, 0))
    (basename-main as)
-    (: t (tablet 0) ops (ubn-opts as t) a? (peep t 'a 0)
+    (: t (tablet 0) ops (ustray "basename" as (ubn-opts as t)) a? (peep t 'a 0)
        (? (atom? ops) (udie 1 "usage: basename NAME [SUFFIX] | basename -a [-s SUF] NAME..")
           (!a? && two? >>ops) (udie 1 ("basename: extra operand '" + <>>ops + "'"))
           a? (ubn-say t ops (n \ ubase n (peep t 's "")))
           (ubn-say t [<ops] (n \ ubase n (? (two? >ops) <>ops "")))))
    (dirname-main as)
-    (: t (tablet 0) ops (ubn-opts as t)
+    (: t (tablet 0) ops (ustray "dirname" as (ubn-opts as t))
        (atom? ops ? (udie 1 "usage: dirname NAME..")
         (ubn-say t ops udir)))
 
    ; -- cut: -f list [-d C] [-s] over fields, -c list over characters, -b list over
-   ; bytes (flags glue or not) --
-   (cut-args as)                       ; -> (delim fields chars b? s? files)
-    (: (fl a d f c b? s?)
+   ; bytes (flags glue or not, and GNU's long names); --complement the seats not listed,
+   ; --output-delimiter=S between fields, or between the runs of -c and -b; -z records
+   ; end with a NUL; -n is taken, the characters being whole already --
+   (cut-args as)                       ; -> (delim fields chars b? s? files comp od z)
+    (: st {'comp 0 'od () 'z 0}
+       (long? h p) (: n #p (n < #h && snip h 0 n = p))
+       (fl a d f c b? s?)
         (? (atom? a) [d f c b? s? a]
            (: h <a
-              (? (h = "-s") (fl >a d f c b? 1)
+              (? (h = "--") [d f c b? s? >a]
+                 (h = "-s" || h = "--only-delimited") (fl >a d f c b? 1)
+                 (h = "--complement") (: _ (pin st 'comp 1) (fl >a d f c b? s?))
+                 (h = "-z" || h = "--zero-terminated") (: _ (pin st 'z 1) (fl >a d f c b? s?))
+                 (h = "-n") (fl >a d f c b? s?)
+                 (long? h "--output-delimiter=") (: _ (pin st 'od (snip h 19 #h)) (fl >a d f c b? s?))
+                 (long? h "--delimiter=") (fl >a (h 12) f c b? s?)
+                 (long? h "--fields=") (fl >a d (snip h 9 #h) c b? s?)
+                 (long? h "--characters=") (fl >a d f (snip h 13 #h) 0 s?)
+                 (long? h "--bytes=") (fl >a d f (snip h 8 #h) 1 s?)
                  (h = "-d") (? (two? >a) (fl >>a (<>a 0) f c b? s?)
                                (udie 2 "cut: -d wants a delimiter"))
                  (h = "-f") (? (two? >a) (fl >>a d <>a c b? s?)
@@ -1005,32 +1093,44 @@
                  (2 < #h && snip h 0 2 = "-c") (fl >a d f (snip h 2 #h) 0 s?)
                  (2 < #h && snip h 0 2 = "-b") (fl >a d f (snip h 2 #h) 1 s?)
                  [d f c b? s? a])))
-       (fl as 9 () () 0 0))
+       r (fl as 9 () () 0 0)
+       (r + [(st 'comp) (st 'od) (st 'z)]))
    (cut-main as)
     (: p (cut-args as)
        d <p fspec <>p cspec <>>p b? <>>>p s? <>>>>p
-       fs (ustray "cut" as <>>>>>p)
+       fs (ustray "cut" as (p 5))
+       comp (p 6) od (p 7) z? (p 8)
+       end (? z? 0 10)
        _ (? (fspec || cspec) () (udie 2 "usage: cut -f LIST [-d C] [-s] | cut -c LIST | cut -b LIST"))
        spec (uspec (? fspec fspec cspec))
+       (pick? k) (? comp !(upick spec k) (upick spec k))
        (fieldline ln)
         (: ps (usplit d ln)
-           (? (atom? >ps) (? s? () (say out ln, put out 10))
+           (? (atom? >ps) (? s? () (say out ln, put out end))
               (: (go m k acc) (? (atom? m) (rev acc)
-                                 (go >m (k + 1) (? (upick spec k) (<m . acc) acc)))
-                 _ (say out (ujoinc d (go ps 1 ())))
-                 (put out 10))))
+                                 (go >m (k + 1) (? (pick? k) (<m . acc) acc)))
+                 sel (go ps 1 ())
+                 _ (say out (? od (join od sel) (ujoinc d sel)))
+                 (put out end))))
        ; seat k is the k-th character from byte i on, or the k-th byte under -b; a
-       ; byte that begins no valid character is a character of its own
+       ; byte that begins no valid character is a character of its own. --output-
+       ; delimiter goes between two runs of seats, not between two seats
        (charline ln)
         (: n #ln o (jug 0)
            (step i) (? (b? || ln i < 128) (i + 1) (cpnext ln i))
-           (go i k) (? (n <= i) ()
-                       (: j (step i) _ (? (upick spec k) (say o (snip ln i j)) ()) (go j (k + 1))))
-           _ (go 0 1)
-           _ (say out (slurp o)) (put out 10))
+           (go i k prev any) (? (n <= i) ()
+                                (: j (step i) on (pick? k)
+                                   _ (? (on && od && any && !prev) (say o od) ())
+                                   _ (? on (say o (snip ln i j)) ())
+                                   (go j (k + 1) on (any || on))))
+           _ (go 0 1 0 0)
+           _ (say out (slurp o)) (put out end))
        ; cut terminates every line it writes, so the source's own end says nothing
        (dot ln term?) (((? fspec fieldline charline) ln), 1)
-       (ulines "cut" dot fs))
+       (? z? (: t (cats (map (f \ (? (f = "-") (slurp in) (: r (uread f) (? (two? r) <>r (udie 1 ("cut: " + f + ": No such file or directory")))))) (? (two? fs) fs ["-"])))
+                ps (usplit 0 t)
+                (: _ (each (? (two? ps && <(rev ps) = "") (rev >(rev ps)) ps) (r \ dot r 1)) _ (flush out) 0))
+          (ulines "cut" dot fs)))
 
    ; ---- the byte loops, natively -------------------------------------------------
    ; the interpreter's byte loop is ~700 instructions a byte (src/love/boot/scan.l
@@ -1132,24 +1232,26 @@
    ; the flags cluster: -c (or -C) reads SET1 as its complement, -d deletes, -s
    ; squeezes. a dash word that is none of them is refused and not read as a set --
    ; `tr -c a-z .` used to translate the literal set "-c". `--` ends the walk.
-   (tr-flags a c? d? s?)
-    (? (atom? a) [c? d? s? a]
-       (<a = "--") [c? d? s? >a]
+   ; -> [c? d? s? rest t?]; -t cuts SET1 to SET2's length, where it pads SET2
+   (tr-flags a c? d? s? t?)
+    (? (atom? a) [c? d? s? a t?]
+       (<a = "--") [c? d? s? >a t?]
        (: w <a n #w
-          (? (2 > n || w 0 != 45) [c? d? s? a]
-             (: (cl k C D S)
-                 (n <= k ? (tr-flags >a C D S)
-                  (w k @ (99 || 67) (cl (k + 1) 1 D S)
-                         100 (cl (k + 1) C 1 S)
-                         115 (cl (k + 1) C D 1)
+          (? (2 > n || w 0 != 45) [c? d? s? a t?]
+             (: (cl k C D S T)
+                 (n <= k ? (tr-flags >a C D S T)
+                  (w k @ (99 || 67) (cl (k + 1) 1 D S T)
+                         100 (cl (k + 1) C 1 S T)
+                         115 (cl (k + 1) C D 1 T)
+                         116 (cl (k + 1) C D S 1)
                          (udie 2 ("tr: unknown option " + w))))
-                (cl 1 c? d? s?)))))
+                (cl 1 c? d? s? t?)))))
    (tr-main as)
-    (: fp (tr-flags as 0 0 0)
-       c? <fp d? <>fp s? <>>fp rest <>>>fp
-       _ (? (two? rest) () (udie 2 "usage: tr [-cds] SET1 [SET2]"))
-       one (uset <rest)
+    (: fp (tr-flags as 0 0 0 0)
+       c? <fp d? <>fp s? <>>fp rest <>>>fp t? (fp 4)
+       _ (? (two? rest) () (udie 2 "usage: tr [-cdst] SET1 [SET2]"))
        two (? (two? >rest) (uset <>rest) ())
+       one (: o (uset <rest) (? (t? && two? two) (take #two o) o))
        (mem ls) (: t {}
                    (go m) (two? m ? (pin t <m 1, go >m) t)
                    (go ls))
@@ -1208,25 +1310,33 @@
             (walk out))
        _ (flush out) 0)
 
-   ; -- nl: number the lines that hold ink (pad 6, a tab after); a blank line wears
-   ; seven spaces and no number, and the count carries across inputs --
+   ; -- nl: number the lines -- -b t those with ink (the default), a all, n none; -n ln rn
+   ; rz the number left, right or zero-padded; -w its width (6), -s what follows it (a
+   ; tab), -v the first (1), -i the step (1). a line left unnumbered wears the width and
+   ; the separator's length in spaces, and the count carries across inputs --
    (nl-main as)
-    (: t {'i 1}
+    (: fo (uflags "nl" as '(98 110 119 115 118 105) "bnwsvi")
+       t <fo
+       (num c d) (: v (uoptv t c) (? !v d (: n (uint v) (? (charm? n) n (udie 1 ("nl: invalid number: '" + v + "'"))))))
+       sty (: v (uoptv t 98) (? (!v || v = "t") 't (v = "a") 'a (v = "n") 'n (udie 1 ("nl: invalid body numbering style: '" + v + "'"))))
+       fmt (: v (uoptv t 110) (? (!v || v = "rn") 'rn (v = "ln") 'ln (v = "rz") 'rz (udie 1 ("nl: invalid line numbering format: '" + v + "'"))))
+       w (num 119 6) sep (? (t 115) (uoptv t 115) "\t") inc (num 105 1)
+       st {'i (num 118 1)}
+       (numstr i) (: n (show i) (? (fmt = 'ln) (urpad w n) (fmt = 'rz) (zpad w n) (upad w n)))
+       (on? ln) (? (sty = 'a) 1 (sty = 'n) 0 (? ln 1 0))
        ; nl terminates every line it writes, so term? says nothing here either
        (dot ln term?)
-        ((? !ln (say out "       ", put out 10)
-            (: i (peep t 'i 1)
-               _ (say out (upad 6 (show i))) _ (put out 9)
-               _ (say out ln) _ (put out 10)
-               (pin t 'i (i + 1)))),
+        ((? (on? ln)
+            (: i (st 'i) _ (say out (numstr i + sep + ln + "\n")) (pin st 'i (i + inc)))
+            (say out (cats (map (_ \ " ") (jot (w + #sep))) + ln + "\n"))),
          1)
-       (ulines "nl" dot (uflags "nl" as () "" 1)))
+       (ulines "nl" dot (fo 1)))
 
    ; -- rev: every line back to front --
    (rev-main as)
     ; the last line keeps the source's end, which is exactly what term? carries
     (: (dot ln term?) (say out (cprev ln), term? && put out 10, 1)
-       (ulines "rev" dot as))
+       (ulines "rev" dot ((uflags "rev" as () "") 1)))
 
    ; ---- the column tools: fold, expand, unexpand --------------------------------
    ; all three count columns and not bytes -- a tab steps to the next stop, \b steps
@@ -1267,7 +1377,7 @@
        p (pre as () ())
        o (uopt <>p t '(119) '(101) ())
        _ (? (two? o) () (udie 2 "fold: -w wants a width"))
-       _ (: c (uoptun t "wsb") (? !c () (udie 2 ("fold: unknown option -" + string c))))
+       _ (: c (uoptbad as t "wsb") (? !c () (udie 2 ("fold: unknown option -" + string c))))
        v (uoptv t 119)
        w (? (string? v) (uatoi v) (? (charm? <p) <p 80))
        _ (? (0 < w) () (udie 2 "fold: width must be positive"))
@@ -1336,7 +1446,7 @@
     (: t (tablet 0)
        o (uopt as t '(99 115 111) () ())
        _ (? (two? o) 0 (udie 1 "usage: column [-tx] [-c COLUMNS] [-s SEP] [-o SEP] [FILE..]"))
-       _ (: c (uoptun t "csotx") (? !c 0 (udie 1 ("column: unknown option -" + string c))))
+       _ (: c (uoptbad as t "csotx") (? !c 0 (udie 1 ("column: unknown option -" + string c))))
        wv (uoptv t 99)
        w (? (string? wv)
             (: n (unum wv) (? (charm? n && 0 < n) n (udie 1 ("column: invalid columns argument: '" + wv + "'"))))
@@ -1365,7 +1475,7 @@
     (: t (tablet 0)
        o (uopt as t '(116) '(101) ())
        _ (? (two? o) () (udie 2 "expand: -t wants a tab size"))
-       _ (: c (uoptun t "ti") (? !c () (udie 2 ("expand: unknown option -" + string c))))
+       _ (: c (uoptbad as t "ti") (? !c () (udie 2 ("expand: unknown option -" + string c))))
        v (uoptv t 116)
        n (? (string? v) (uatoi v) 8)
        _ (? (0 < n) () (udie 2 "expand: tab size must be positive"))
@@ -1397,7 +1507,7 @@
     (: t (tablet 0)
        o (uopt as t '(116) '(101) ())
        _ (? (two? o) () (udie 2 "unexpand: -t wants a tab size"))
-       _ (: c (uoptun t "ta") (? !c () (udie 2 ("unexpand: unknown option -" + string c))))
+       _ (: c (uoptbad as t "ta") (? !c () (udie 2 ("unexpand: unknown option -" + string c))))
        v (uoptv t 116)
        n (? (string? v) (uatoi v) 8)
        _ (? (0 < n) () (udie 2 "unexpand: tab size must be positive"))
@@ -1438,7 +1548,7 @@
     (: t {}
        o (uopt as t () '(101) ())
        _ (? (two? o) () (udie 2 d2u-usage))
-       _ (uoptun t '(102 107 113 110) @ c
+       _ (uoptbad as t '(102 107 113 110) @ c
           (c ? (udie 2 (nm + ": unknown option -" + string c))))
        fs <>>o
        q? (peep t 113 0) f? (peep t 102 0) k? (peep t 107 0) n? (peep t 110 0)
@@ -1550,7 +1660,7 @@
     (: t {}
        o (uopt as t '(119) '(101) ())
        _ (atom? o ? (udie 1 (who + ": -w wants a width")))
-       _ (: c (uoptun t "wd") (? !c () (udie 1 (who + ": unknown option -" + string c))))
+       _ (: c (uoptbad as t "wd") (? !c () (udie 1 (who + ": unknown option -" + string c))))
        v (uoptv t 119)
        w (string? v ? (uatoi v) 76)
        d? (peep t 100 0)
@@ -1763,8 +1873,9 @@
    ; order, not GNU's: where the input pins one they agree, and where it does not both
    ; are right -- so the gate asks only about inputs that pin one. a loop is named on
    ; err, broken at the first node still standing, and leaves 1, as GNU's does --
-   (tsort-main as)
-    (: _ (? (two? >as) (udie 1 "usage: tsort [FILE]") ())
+   (tsort-main as0)
+    (: as ((uflags "tsort" as0 () "") 1)
+       _ (? (two? >as) (udie 1 "usage: tsort [FILE]") ())
        t (? (two? as) (: r (<as @ "-" [1 (slurp in)] (uread <as))
                          (? (two? r) <>r (udie 1 ("tsort: cannot open " + <as))))
               (slurp in))
@@ -1883,6 +1994,8 @@
     (: (fl a s1 s2 s3)
         (? (atom? a) [s1 s2 s3 a]
            (#<a < 2 || <a 0 != 45) [s1 s2 s3 a]
+           (<a = "--") [s1 s2 s3 >a]
+           (<a 1 = 45) (udie 2 ("comm: unknown option " + <a))
            (: w <a
               (cl k b1 b2 b3)
                (#w <= k ? (fl >a b1 b2 b3)
@@ -1909,10 +2022,11 @@
    ; -- split: a file cut into pieces named prefix + a rolling suffix. -l N lines (1000
    ; unsaid), -b N bytes (a K/M/G suffix multiplies), -a N the suffix width, -d digits
    ; for letters. an empty input writes no file, like GNU --
-   (usfx n w d?)                       ; the n'th suffix, w wide: aa ab .. or 00 01 ..
-    (: b (? d? 10 26)
+   (usfx n w d?)                       ; the n'th suffix, w wide: aa ab .., 00 01 .. or (d? 'x) 00 .. 0f
+    (: b (? (d? = 'x) 16 d? 10 26)
+       (dig v) (? (b = 26) (97 + v) (v < 10) (48 + v) (87 + v))
        (go k v acc) (k < 1 ? acc
-                       (go (k - 1) (v // b) (string ((? d? 48 97) + (v % b)) + acc)))
+                       (go (k - 1) (v // b) (string (dig (v % b)) + acc)))
        (go w n ""))
    (usize s)                           ; a byte count, an optional K/M/G multiplying
     (: n #s
@@ -1920,31 +2034,29 @@
        m (? (c = 107 || c = 75) 1024 (c = 109 || c = 77) 1048576
             (c = 103 || c = 71) 1073741824 0)
        (? m (m * uatoi (snip s 0 (n - 1))) (uatoi s)))
+   ; -n N makes N files of equal bytes, the last taking the rest (l/N the same, a line
+   ; never broken); -C SIZE fills each with whole lines up to SIZE, a longer line cut;
+   ; -x hex suffixes, --additional-suffix=S after each
    (split-main as)
-    (: (fl a ln by sw d? fs)
-        (: (val w) (snip w 2 #w)
-           (long? w) (2 < #w && snip w 0 2 = "-l")
-           (? (atom? a) [ln by sw d? (rev fs)]
-              (<a = "-l") (? (two? >a) (fl >>a (uatoi <>a) () sw d? fs)
-                             (udie 2 "split: -l wants a count"))
-              (<a = "-b") (? (two? >a) (fl >>a () (usize <>a) sw d? fs)
-                             (udie 2 "split: -b wants a size"))
-              (<a = "-a") (? (two? >a) (fl >>a ln by (uatoi <>a) d? fs)
-                             (udie 2 "split: -a wants a width"))
-              (<a = "-d") (fl >a ln by sw 1 fs)
-              (long? <a) (fl >a (uatoi (val <a)) () sw d? fs)
-              (2 < #<a && snip <a 0 2 = "-b") (fl >a () (usize (val <a)) sw d? fs)
-              (2 < #<a && snip <a 0 2 = "-a") (fl >a ln by (uatoi (val <a)) d? fs)
-              (fl >a ln by sw d? (<a . fs))))
-       p (fl as () () 2 0 ())
-       ln <p by <>p sw <>>p d? (p 3) fs (ustray "split" as (p 4))
+    (: fo (uflagsl "split" as '(108 98 97 110 67 1001) (chars "abCdlnx" + [1001])
+                   {"lines" 108 "bytes" 98 "suffix-length" 97 "number" 110 "line-bytes" 67 "numeric-suffixes" 100
+                    "hex-suffixes" 120 "additional-suffix" 1001})
+       tf <fo fs (fo 1)
+       (need c what) (: v (uoptv tf c) (? (string? v) v (udie 2 ("split: -" + string c + " wants " + what))))
+       ln (? (tf 108) (uatoi (need 108 "a count")) ())
+       by (? (tf 98) (usize (need 98 "a size")) ())
+       sw (? (tf 97) (uatoi (need 97 "a width")) 2)
+       d? (? (tf 120) 'x (tf 100) 1 0)
+       sfx2 (? (tf 1001) (uoptv tf 1001) "")
+       nw (: v (uoptv tf 110) (? !v () (starts? v "l/") ['l (uatoi (snip v 2 #v))] ['b (uatoi v)]))
+       cb (? (tf 67) (usize (need 67 "a size")) ())
        nl (charm? ln ? ln 1000)
        src (two? fs ? <fs "-")
        pre (two? fs && two? >fs ? <>fs "x")
        t (src @ "-" (slurp in)
           (: r (uread src) (? (two? r) <>r (udie 1 ("split: cannot open " + src)))))
        end? (nl-end? t)
-       (wr i txt) (: nm (pre + usfx i sw d?)
+       (wr i txt) (: nm (pre + usfx i sw d? + sfx2)
                      (? (uwrite nm txt) () (udie 1 ("split: cannot write " + nm))))
        (bygo i k) (? (#t <= k) 0
                      (: e (? (k + by < #t) (k + by) #t)
@@ -1958,7 +2070,27 @@
                          txt (unlines (take nl ls))
                          _ (wr i (? (two? rest || end?) txt (chomp txt)))
                          (lngo (i + 1) rest)))
-       _ (? (charm? by) (bygo 0 0) (lngo 0 (lines t)))
+       ; the end of the line holding byte k, one past its newline, or the end
+       (eol k) (: j (? (k < #t) (findsub (snip t k #t) "\n") -1) (? (j < 0) #t (k + j + 1)))
+       ; -n: N pieces of size/N rounded up, the last the rest; under l/ each boundary
+       ; moves to its line's end
+       (ngo i k n lines?) (? (n <= i) 0
+                             (: e0 (? (i = n - 1) #t (min #t ((i + 1) * ((#t + n - 1) // n))))
+                                e (? (lines? && k < e0 && e0 < #t) (eol (e0 - 1)) e0)
+                                e2 (max k e)
+                                _ (wr i (snip t k e2))
+                                (ngo (i + 1) e2 n lines?)))
+       ; -C: as many whole lines as fit in cb; a line longer than cb alone is cut
+       (cgo i k) (? (#t <= k) 0
+                    (: (fill e) (: e2 (eol e) (? (e2 - k <= cb && e < #t) (fill e2) e))
+                       e (fill k)
+                       e2 (? (e = k) (min #t (k + cb)) e)
+                       _ (wr i (snip t k e2))
+                       (cgo (i + 1) e2)))
+       _ (? nw (ngo 0 0 (nw 1) (<nw = 'l))
+            (charm? cb) (cgo 0 0)
+            (charm? by) (bygo 0 0)
+            (lngo 0 (lines t)))
        0)
 
    ; the shape every option walk past this point rides: a word is -X and the value is
@@ -1984,37 +2116,32 @@
               (go (i + 1) (? (st < 0) i st) acc))
           (go 0 -1 ())))
    (unth l k) (k < 1 ? () (l (k - 1)))
+   ; -o FORMAT lays each row as 0 (the key), 1.N or 2.N, comma or space apart, -o auto by
+   ; each file's first line; -e says a field that is not there; -i matches keys case aside,
+   ; each still said as its file spells it
    (join-main as)
-    (: t {'f1 1 'f2 1 'sep () 'a1 0 'a2 0 'v1 0 'v2 0}
-       (fl a fs)
-        (atom? a ? (rev fs)
-           (: w <a
-              o (uflag w)
-              takes (? o (elem <o '("1" "2" "t" "a" "v")) 0)
-              glue (? o <>o "")
-              got (? (0 < tally glue) glue (? (two? >a) <>a ()))
-              rest (? (0 < tally glue) >a (? (two? >a) >>a >a))
-              (? !takes (fl >a (w . fs))
-                 !(string? got) (udie 2 ("join: " + w + " wants a value"))
-               (<o @ "1" (pin t 'f1 (uatoi got))
-                     "2" (pin t 'f2 (uatoi got))
-                     "t" (pin t 'sep (got 0))
-                     "a" (pin t (got @ "2" 'a2 'a1) 1)
-                         (pin t (got @ "2" 'v2 'v1) 1),
-                fl rest fs))))
-       fs (ustray "join" as (fl as ()))
-       _ (atom? >fs ?
-          (udie 2 "usage: join [-1 F] [-2 F] [-t C] [-a 1|2] [-v 1|2] FILE1 FILE2"))
-       sep (t 'sep)
+    (: fo (uflags "join" as '(49 50 116 97 118 111 101) "12aeiotv")
+       tf <fo fs (fo 1)
+       ; -a may come twice, and the tablet keeps one, so its values are read off the words
+       av (: (go a acc) (? (atom? a) acc (<a = "--") acc
+                           (<a = "-a" && two? >a) (go >>a (<>a . acc))
+                           (2 < #<a && snip <a 0 2 = "-a") (go >a (snip <a 2 #<a . acc))
+                           (go >a acc))
+             (go as ()))
+       _ (? (atom? >fs) (udie 2 "usage: join [-i] [-1 F] [-2 F] [-t C] [-a 1|2] [-v 1|2] [-e S] [-o FORMAT] FILE1 FILE2"))
+       sep (: v (uoptv tf 116) (? v (v 0) ()))
        jsep (? (charm? sep) sep 32)
-       n1 (peep t 'f1 1) n2 (peep t 'f2 1)
-       pair? !(peep t 'v1 0 || peep t 'v2 0)
-       un1 (peep t 'a1 0 || peep t 'v1 0)
-       un2 (peep t 'a2 0 || peep t 'v2 0)
+       n1 (? (tf 49) (uatoi (uoptv tf 49)) 1) n2 (? (tf 50) (uatoi (uoptv tf 50)) 1)
+       vv (uoptv tf 118)
+       pair? !vv
+       un1 (vv = "1" || elem "1" av)
+       un2 (vv = "2" || elem "2" av)
+       ic (tf 105) empty (? (tf 101) (uoptv tf 101) "")
+       (ck k) (? ic (lower k) k)
        ; a side is its rows grouped by key: ((key (fields..)..)..), the run of one key
        (grp sel lns)
         (: rows (map (ln \ (: f (ujfs sep ln) k (unth f sel)
-                              [(? (string? k) k "") f]))
+                              [(ck (? (string? k) k "")) f]))
                      lns)
            (go rs) (two? rs ?
                       (: k <<rs
@@ -2026,20 +2153,34 @@
        (drop1 sel f) (: (go l i acc) (? (atom? l) (rev acc)
                                         (go >l (i + 1) (? (i = sel) acc (<l . acc))))
                         (go f 1 ()))
+       l1 (urows "join" <fs) l2 (urows "join" <>fs)
+       ; -o's spec: ('k) for 0, (s n) for S.N; auto takes each file's first line's count
+       spec (: v (uoptv tf 111)
+               (? !v ()
+                  (v = "auto") (: c1 (? (two? l1) #(ujfs sep <l1) 0) c2 (? (two? l2) #(ujfs sep <l2) 0)
+                                  ('k . map (i \ [1 i]) (filter (i \ !(i = n1)) (map (+ 1) (jot c1)))
+                                   + map (i \ [2 i]) (filter (i \ !(i = n2)) (map (+ 1) (jot c2)))))
+                  (map (w \ (? (w = "0") 'k (: d (findsub w ".") (? (d < 0) (udie 1 ("join: invalid field specifier: '" + w + "'"))
+                                                                  [(uatoi (snip w 0 d)) (uatoi (snip w (d + 1) #w))]))))
+                       (filter (w \ 0 < #w) (usplit 44 (replace v " " ","))))))
+       (cell f i) (: v (? (two? f) (unth f i) ()) (? (string? v) v empty))
        (row ps) (say out (ujoinc jsep ps), put out 10)
-       (one k sel g) (foldl (\ _ f (row (k . drop1 sel f))) 0 <>g)
+       ; one output row off f1 (or ()) and f2 (or ()): -o's cells, else the key and the rest.
+       ; not `out`, which is the port
+       (jrow k f1 f2)
+        (row (? spec (map (c \ (? (c = 'k) k (cell (? (<c = 1) f1 f2) (c 1)))) spec)
+                (k . (? f1 (drop1 n1 f1) ()) + (? f2 (drop1 n2 f2) ()))))
+       (one sel g side) (foldl (\ _ f (: k (unth f sel) (? (side = 1) (jrow k f ()) (jrow k () f)))) 0 <>g)
        (cross g1 g2)
-        (foldl (\ _ f1 (foldl (\ _ f2 (row ((<g1 . drop1 n1 f1) + drop1 n2 f2)))
-                              0 <>g2))
-               0 <>g1)
+        (foldl (\ _ f1 (foldl (\ _ f2 (jrow (unth f1 n1) f1 f2)) 0 <>g2)) 0 <>g1)
        (go g1 g2)
         (? ((atom? g1) && (atom? g2)) ()
-           (atom? g1) ((? un2 (one <<g2 n2 <g2) ()), go g1 >g2)
-           (atom? g2) ((? un1 (one <<g1 n1 <g1) ()), go >g1 g2)
+           (atom? g1) ((? un2 (one n2 <g2 2) ()), go g1 >g2)
+           (atom? g2) ((? un1 (one n1 <g1 1) ()), go >g1 g2)
            (<<g1 = <<g2) ((? pair? (cross <g1 <g2) ()), go >g1 >g2)
-           (<<g1 < <<g2) ((? un1 (one <<g1 n1 <g1) ()), go >g1 g2)
-           ((? un2 (one <<g2 n2 <g2) ()), go g1 >g2))
-       _ (go (grp n1 (urows "join" <fs)) (grp n2 (urows "join" <>fs)))
+           (<<g1 < <<g2) ((? un1 (one n1 <g1 1) ()), go >g1 g2)
+           ((? un2 (one n2 <g2 2) ()), go g1 >g2))
+       _ (go (grp n1 l1) (grp n2 l2))
        _ (flush out) 0)
 
    ; -- od: the byte dump, GNU's columns to the space. -A d|o|x|n picks the address
@@ -2157,15 +2298,18 @@
    ; -- xxd: the canonical dump, and -r to read one back. 16 bytes a row, the offset
    ; in 8 hex digits, the bytes in pairs of two, then the ascii gutter --
    (uxx-esc c) (? (32 <= c && c < 127) c 46)     ; a dot for anything unprintable
-   (uxx-row off blk)
+   (uxx-row off blk) (uxx-rowf off blk 16 2 0)
+   ; c bytes a row in groups of g, upper? the hex in capitals
+   (uxx-rowf off blk c g upper?)
     (: n #blk o (jug 0)
-       _ (say o (zpad 8 (radix off 16))) _ (say o ": ")
-       (hex i) (? (16 <= i) 0
-                  ((i < n ? (say o (zpad 2 (radix (blk i) 16))) (say o "  ")),
-                   (1 = i % 2 ? (put o 32) 0),
+       (hx v w) (: h (zpad w (radix v 16)) (? upper? (upper h) h))
+       _ (say o (hx off 8)) _ (say o ": ")
+       (hex i) (? (c <= i) 0
+                  ((i < n ? (say o (hx (blk i) 2)) (say o "  ")),
+                   (0 = (i + 1) % g ? (put o 32) 0),
                    hex (i + 1)))
-       _ (hex 0) _ (put o 32)
-       (asc i) (16 <= i || n <= i ? 0 (put o (uxx-esc (blk i)), asc (i + 1)))
+       _ (hex 0) _ (? (0 = c % g) 0 (put o 32)) _ (put o 32)
+       (asc i) (c <= i || n <= i ? 0 (put o (uxx-esc (blk i)), asc (i + 1)))
        _ (asc 0)
        (slurp o))
    ; -r reads the dump back: the offset up to the colon is skipped, the gutter past
@@ -2186,19 +2330,39 @@
                  (charm? hi) (go (k + 1) (((16 * hi) + v) . acc) ())
                  (go (k + 1) acc v))))
        (go s () ()))
+   ; -p the plain hex, 30 bytes a line; -i a C array named for the file; -c the bytes a
+   ; row, -g a group, -u capitals; -l stops after so many bytes and -s starts past so
+   ; many, the offsets counting from there. a count may be 0x hex
    (xxd-main as)
-    (: r? (two? as && <as = "-r")
-       fs (? r? >as as)
-       _ (? (two? fs && (<fs 0) = 45) (udie 2 "usage: xxd [-r] [FILE..]") ())
-       (? r?
+    (: fo (uflags "xxd" as '(99 103 108 115) "cgilprsu")
+       t <fo fs (fo 1)
+       (num c d) (: v (uoptv t c)
+                    (? !v d
+                       (: h (starts? v "0x") w (? h (snip v 2 #v) v)
+                          n (? h (foldl (\ a ch (a * 16 + hexv ch)) 0 (chars w)) (unum w))
+                          (? (charm? n && (!h || all (ch \ 0 <= hexv ch) (chars w))) n (udie 1 ("xxd: invalid number: " + v))))))
+       p? (t 112) i? (t 105)
+       c (num 99 (? p? 30 i? 12 16)) g (num 103 2) lim (num 108 ()) sk (num 115 0)
+       _ (? (0 < c) 0 (udie 1 "xxd: invalid number of columns"))
+       (? (t 114)
           (: (dot ln term?) (map (put out) (uxx-unrow ln), 1)
              _ (ulines "xxd" dot fs) _ (flush out) 0)
           (: rd (urdb (f \ (udie 1 ("xxd: cannot open " + f))) fs)
-             (go off) (: blk (urdj-take rd 16)
-                         (? !#blk 0
-                            (say out (uxx-row off blk), put out 10,
-                               go (off + #blk))))
-             _ (go 0) _ (flush out) 0)))
+             (drop k) (? (k <= 0) 0 (: b (urdj-take rd (min k 4096)) (? #b (drop (k - #b)) 0)))
+             _ (drop sk)
+             nm (? (two? fs) (string (map (ch \ (? (48 <= ch <= 57 || 65 <= ch <= 90 || 97 <= ch <= 122) ch 95)) (chars <fs))) ())
+             _ (? (i? && nm) (say out ("unsigned char " + nm + "[] = {\n")) 0)
+             (go off first)
+              (: want (? (charm? lim) (min c (lim - (off - sk))) c)
+                 blk (? (0 < want) (urdj-take rd want) "")
+                 (? !#blk off
+                    (: _ (? p? (say out (cats (map (b \ zpad 2 (radix b 16)) (chars blk)) + "\n"))
+                            i? (say out ((? first "" ",\n") + "  " + join ", " (map (b \ "0x" + zpad 2 (radix b 16)) (chars blk))))
+                            (say out (uxx-rowf off blk c g (t 117) + "\n")))
+                       (go (off + #blk) 0))))
+             end (go sk 1)
+             _ (? i? (say out ((? (end = sk) "" "\n") + (? nm ("};\nunsigned int " + nm + "_len = " + show (end - sk) + ";\n") ""))) 0)
+             _ (flush out) 0)))
 
    ; -- hexdump: the BSD dump, two faces. bare: a 7-digit hex offset and eight
    ; little-endian 16-bit words a row; -C (and hd): an 8-digit offset, sixteen bytes
@@ -2225,7 +2389,7 @@
     (: t {}
        o (uopt as t '(110 115) () ())
        _ (? (two? o) () (udie 1 (who + ": option requires an argument")))
-       _ (: c (uoptun t "Cvns") (? !c () (udie 1 (who + ": unknown option -" + string c))))
+       _ (: c (uoptbad as t "Cvns") (? !c () (udie 1 (who + ": unknown option -" + string c))))
        (num k) (: v (uoptv t k)
                   (? !(string? v) ()
                      (: x (unum v) (? (charm? x) x (udie 1 (who + ": bad number " + v))))))
@@ -2267,7 +2431,7 @@
                   {"options" 111 "longoptions" 108 "long" 108 "name" 110 "quiet" 113
                    "quiet-output" 81 "alternative" 97 "shell" 115 "test" 84 "unquoted" 117}))
        _ (? (two? o) () (udie 2 "getopt: option requires an argument"))
-       _ (: c (uoptun t "olnqQasTu") (? !c () (udie 2 ("getopt: invalid option -- '" + string c + "'"))))
+       _ (: c (uoptbad as t "olnqQasTu") (? !c () (udie 2 ("getopt: invalid option -- '" + string c + "'"))))
        _ (? (peep t 84 0) (uleave 4) 0)
        _ (: s (uoptv t 115) (? (!(string? s) || elem s '("sh" "bash")) 0
                                (udie 2 "getopt: unknown shell after -s or --shell argument")))
@@ -2397,60 +2561,100 @@
        _ (go ())
        _ (flush out) 0)
 
-   ; -- dd: blocks in, blocks out. if=/of= default to the streams, bs= sizes the
-   ; block (512 unsaid), count= stops, skip= reads past that many blocks first.
-   ; no seek=: lseek here takes a raw fd and a port's read buffer desyncs under one,
-   ; and every other operand is a stream walk that works on a pipe too. the record
-   ; report goes to err, GNU's shape, and status=none holds it --
+   ; -- dd: blocks in, blocks out. if=/of= default to the streams; bs= sizes both
+   ; blocks, ibs= and obs= each (512 unsaid); count= stops, skip= reads past that many
+   ; input blocks first, seek= puts the output that many blocks in; iflag=skip_bytes
+   ; count_bytes fullblock and oflag=seek_bytes append; conv= ucase lcase swab sync
+   ; notrunc excl nocreat fsync fdatasync noerror sparse -- one this dd does not do is
+   ; refused, never dropped. skip is read past, not sought, so it works on a pipe; a
+   ; seek, notrunc or append onto a file is laid by reading the file and writing it
+   ; back with the data in place (lseek here takes a raw fd, and a port's buffer
+   ; desyncs under one). the record report goes to err, GNU's shape; status=none
+   ; holds it, status=noxfer the byte line --
    (udd-eq w)                          ; "bs=512" -> ("bs" "512"), () for a bare word
     (: n #w
        (go k) (? (n <= k) () (w k = 61) [(snip w 0 k) (snip w (k + 1) n)] (go (k + 1)))
        (go 0))
    (dd-main as)
-    (: t {'bs 512 'count () 'skip 0 'if () 'of () 'quiet 0}
+    (: t {'ibs 512 'obs 512 'count () 'skip 0 'seek 0 'if () 'of () 'quiet 0 'conv () 'iflag () 'oflag ()}
+       (words1 v) (filter (w \ 0 < #w) (usplit 44 v))
+       (known k ok v) (: ws (words1 v) _ (each ws (w \ (? (elem w ok) 0 (udie 1 ("dd: invalid " + k + ": '" + w + "'"))))) ws)
        (fl a) (? (atom? a) 0
                  (: kv (udd-eq <a)
                     _ (? (atom? kv) (udie 1 ("dd: unknown operand " + <a))
                          (: k <kv v <>kv
-                            (k @ "bs" (pin t 'bs (usize v))
+                            (k @ "bs" (pins t 'ibs (usize v) 'obs (usize v))
+                                 "ibs" (pin t 'ibs (usize v))
+                                 "obs" (pin t 'obs (usize v))
                                  "count" (pin t 'count (usize v))
                                  "skip" (pin t 'skip (usize v))
+                                 "seek" (pin t 'seek (usize v))
                                  "if" (pin t 'if v)
                                  "of" (pin t 'of v)
-                                 "status" (v @ "none" (pin t 'quiet 1) 0)
-                                 "conv" 0          ; the conversions are not here
+                                 "status" (v @ "none" (pin t 'quiet 1) "noxfer" (pin t 'quiet 2) "progress" 0
+                                             (udie 1 ("dd: invalid status level: '" + v + "'")))
+                                 "conv" (pin t 'conv (t 'conv + known "conversion" '("ucase" "lcase" "swab" "sync" "notrunc" "excl" "nocreat" "fsync" "fdatasync" "noerror" "sparse") v))
+                                 "iflag" (pin t 'iflag (t 'iflag + known "input flag" '("skip_bytes" "count_bytes" "fullblock") v))
+                                 "oflag" (pin t 'oflag (t 'oflag + known "output flag" '("seek_bytes" "append") v))
                                  (udie 1 ("dd: unknown operand " + k)))))
                     (fl >a)))
        _ (fl as)
-       bs (: b (peep t 'bs 512) (0 < b ? b (udie 1 "dd: invalid block size")))
-       cnt (t 'count) skip (peep t 'skip 0)
+       (cv? w) (elem w (t 'conv)) (if? w) (elem w (t 'iflag)) (of? w) (elem w (t 'oflag))
+       ibs (: b (t 'ibs) (0 < b ? b (udie 1 "dd: invalid block size")))
+       obs (: b (t 'obs) (0 < b ? b (udie 1 "dd: invalid block size")))
+       cnt (t 'count) skip (t 'skip)
        inf (t 'if) outf (t 'of)
+       _ (? (cv? "ucase" && cv? "lcase") (udie 1 "dd: cannot combine lcase and ucase") 0)
+       _ (? (string? outf && cv? "excl" && two? (stat outf)) (udie 1 ("dd: failed to open '" + outf + "': File exists")) 0)
+       _ (? (string? outf && cv? "nocreat" && atom? (stat outf)) (udie 1 ("dd: failed to open '" + outf + "': No such file or directory")) 0)
        rd (urdb (f \ (udie 1 ("dd: cannot open " + f))) (? (string? inf) [inf] ()))
-       q (? (string? outf) (: h (open outf "w")
-                               (? (hot? h) h (udie 1 ("dd: cannot write " + outf))))
-            out)
        ; skip is READ past, not sought: it works the same on a pipe, which a seek
        ; would not. a short input mid-skip is GNU's own diagnostic
-       (drop k) (? (k <= 0) 1 (: g (urdj-take rd bs) (? #g (drop (k - 1)) 0)))
-       _ (? (drop skip) 0 (udie 1 "dd: cannot skip past end of input"))
+       sk (? (if? "skip_bytes") skip (skip * ibs))
+       (drop k) (? (k <= 0) 1 (: g (urdj-take rd (min k ibs)) (? #g (drop (k - #g)) 0)))
+       _ (? (drop sk) 0 (udie 1 "dd: cannot skip past end of input"))
+       ; one input block as it goes out: the case, the byte pairs, sync's pad to ibs
+       (conv b) (: b1 (? (cv? "ucase") (upper b) (cv? "lcase") (lower b) b)
+                   b2 (? (cv? "swab") (: n #b1 (cats (map (i \ (? (i + 1 < n) (string (b1 (i + 1)) + string (b1 i)) (string (b1 i)))) (filter (i \ i % 2 = 0) (jot n))))) b1)
+                   (? (cv? "sync" && #b2 < ibs) (b2 + cats (map (_ \ string 0) (jot (ibs - #b2)))) b2))
+       ; the sink: blocks stream out as they come, save where a file is spliced, when
+       ; they gather to be laid into it at the end
+       sd (? (of? "seek_bytes") (t 'seek) (t 'seek * obs))
+       splice? (string? outf && (0 < sd || cv? "notrunc" || of? "append"))
+       q (? splice? (jug 0)
+            (string? outf) (: h (open outf "w") (? (hot? h) h (udie 1 ("dd: cannot write " + outf))))
+            out)
        ; full and part are GNU's two record columns: a short block is a partial one
-       (go n full part got)
-        (? (charm? cnt && n >= cnt) [full part got]
-           (: blk (urdj-take rd bs)
+       limit (? (if? "count_bytes") cnt ())
+       (go n full part got put)
+        (? (!limit && charm? cnt && n >= cnt) [full part got put]
+           (limit && limit <= got) [full part got put]
+           (: blk (urdj-take rd (? limit (min ibs (limit - got)) ibs))
               c #blk
-              (? !c [full part got]
-                 (say q blk,
-                  go (n + 1) (? (c = bs) (full + 1) full) (? (c = bs) part (part + 1))
-                     (got + c)))))
-       r (go 0 0 0 0)
-       _ (flush q)
-       _ (? (string? outf) (close q) 0)
+              (? !c [full part got put]
+                 (: ob (conv blk) _ (say q ob)
+                    (go (n + 1) (? (c = ibs) (full + 1) full) (? (c = ibs) part (part + 1)) (got + c) (put + #ob))))))
+       r (go 0 0 0 0 0)
+       ; onto a file: at the seek, the old bytes before it kept (zeros past its end), the
+       ; old bytes after it kept only under notrunc; append after all of it -- and after
+       ; nothing without notrunc, the file cut first as GNU's cuts it
+       _ (? splice?
+            (: data (slurp q)
+               old (: r (uread outf) (? (two? r) <>r ""))
+               new (? (of? "append") ((? (cv? "notrunc") old "") + data)
+                      (: pre (? (sd <= #old) (snip old 0 sd) (old + cats (map (_ \ string 0) (jot (sd - #old)))))
+                         post (? (cv? "notrunc" && sd + #data < #old) (snip old (sd + #data) #old) "")
+                         (pre + data + post)))
+               (? (uwrite outf new) 0 (udie 1 ("dd: cannot write " + outf))))
+            (: _ (flush q) (? (string? outf) (close q) 0)))
+       _ (? (string? outf && (cv? "fsync" || cv? "fdatasync")) (fsync outf (cv? "fdatasync")) 0)
+       n (r 3)
        ; the two record lines and the byte count. GNU adds a duration and a rate; no
        ; two runs agree on those, so no gate could hold them and they are not spoken
-       _ (? (peep t 'quiet 0) 0
-            (: ln ((show <r) + "+" + (show <>r) + " records ")
-               _ (say err (ln + "in")) _ (put err 10)
-               _ (say err (ln + "out")) _ (put err 10)
-               _ (say err ((show <>>r) + " bytes copied")) _ (put err 10) (flush err)))
+       _ (? (t 'quiet = 1) 0
+            (: _ (say err (show <r + "+" + show (r 1) + " records in\n"))
+               _ (say err (show (n // obs) + "+" + show (? (0 < n % obs) 1 0) + " records out\n"))
+               _ (? (t 'quiet = 2) 0 (say err (show n + " bytes copied\n")))
+               (flush err)))
        0))
 ) ; module 'kore

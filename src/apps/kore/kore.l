@@ -849,7 +849,7 @@
    ; the synopses, one line a tool -- what `TOOL --help` prints. a name with no row
    ; here still answers the flag, with its own spelling for a synopsis.
    korehelp
-   {'diff "usage: diff OLD NEW   (0 same / 1 differ / 2 trouble)"
+   {'diff "usage: diff [-Nqru] OLD NEW   (0 same / 1 differ / 2 trouble)"
     'nm "usage: nm [-g] [-u] [-p] FILE.."
     'nc "usage: nc [-CdkNnUuvz] [-i SECS] [-o FILE] [-q SECS] [-w SECS] {HOST PORT.. | -l [[-s] ADDR] [-p] PORT | -U [-l] PATH}"
     'ssh "usage: ssh [-p port] [-i identity] [-l user] [-t|-T] [-o option=value] [user@]host [command]"
@@ -863,12 +863,12 @@
     'tac "usage: tac [-br] [-s SEP] [FILE..]"
     'head "usage: head [-qv] [-n N] [-c N] [-N] [FILE..]"
     'tail "usage: tail [-fFqv] [-s SECS] [-n N] [-c N] [-N] [FILE..]"
-    'wc "usage: wc [-lwmc] [FILE..]"
-    'sort "usage: sort [-bfnrsu] [-k SPEC].. [-t C] [FILE..]"
-    'uniq "usage: uniq [-cdiu] [-f N] [-s N] [INPUT [OUTPUT]]"
+    'wc "usage: wc [-lwmcL] [FILE..]"
+    'sort "usage: sort [-bcCfhmnrsuVz] [-k KEY].. [-t C] [-o FILE] [FILE..]"
+    'uniq "usage: uniq [-cdDiuz] [-f N] [-s N] [-w N] [INPUT [OUTPUT]]"
     'shuf "usage: shuf [-rz] [-n N] [-o F] [FILE]  |  shuf -e [ARG..]  |  shuf -i LO-HI"
-    'tee "usage: tee [-a] [FILE..]"
-    'seq "usage: seq [FIRST [INCR]] LAST"
+    'tee "usage: tee [-aip] [FILE..]"
+    'seq "usage: seq [-w] [-s SEP] [-f FMT] [FIRST [INCR]] LAST"
     'yes "usage: yes [WORD..]"
     'true "usage: true   (the 0 exit, and nothing else)"
     'false "usage: false   (the 1 exit, and nothing else)"
@@ -876,11 +876,11 @@
     'arch "usage: arch   (uname -m, and nothing else)"
     'nproc "usage: nproc"
     'printf "usage: printf FORMAT [ARG..]"
-    'basename "usage: basename NAME [SUFFIX]"
-    'dirname "usage: dirname NAME"
-    'cut "usage: cut -f LIST [-d C] [-s] | cut -c LIST | cut -b LIST"
-    'tr "usage: tr SET1 SET2 | tr -d SET1 | tr -s SET1"
-    'nl "usage: nl [FILE..]"
+    'basename "usage: basename NAME [SUFFIX] | basename [-az] [-s SUFFIX] NAME.."
+    'dirname "usage: dirname [-z] NAME.."
+    'cut "usage: cut -f LIST [-d C] [-s] | cut -c LIST | cut -b LIST  [--complement] [--output-delimiter=S] [-z]"
+    'tr "usage: tr [-cCdst] SET1 [SET2]"
+    'nl "usage: nl [-b a|t|n] [-n ln|rn|rz] [-w N] [-s SEP] [-v N] [-i N] [FILE..]"
     'rev "usage: rev [FILE..]"
     'fold "usage: fold [-w N] [-s] [-b] [FILE..]"
     'column "usage: column [-tx] [-c COLUMNS] [-s SEP] [-o SEP] [FILE..]"
@@ -892,11 +892,11 @@
     'factor "usage: factor [N..]"
     'paste "usage: paste [-s] [-d LIST] [FILE..]"
     'comm "usage: comm [-123] FILE1 FILE2"
-    'split "usage: split [-l N] [-b SIZE] [-a N] [-d] [FILE [PREFIX]]"
-    'join "usage: join [-1 F] [-2 F] [-t C] [-a 1|2] [-v 1|2] FILE1 FILE2"
+    'split "usage: split [-l N | -b SIZE | -C SIZE | -n [l/]N] [-a N] [-d | -x] [--additional-suffix=S] [FILE [PREFIX]]"
+    'join "usage: join [-i] [-1 F] [-2 F] [-t C] [-a 1|2].. [-v 1|2] [-e S] [-o FORMAT|auto] FILE1 FILE2"
     'od "usage: od [-A C] [-t TYPE] [-N N] [-j N] [-v] [-abcdiosx] [FILE..]"
     'cksum "usage: cksum [FILE..]"
-    'md5sum "usage: md5sum [-c] [FILE..]"
+    'md5sum "usage: md5sum [-bt] [FILE..] | md5sum -c [--quiet] [--status] [--ignore-missing] [--strict] [-w] [LIST..]"
     'sha256sum "usage: sha256sum [-c] [FILE..]"
     'sha1sum "usage: sha1sum [-c] [FILE..]"
     'sha224sum "usage: sha224sum [-c] [FILE..]"
@@ -927,7 +927,7 @@
     'dc "usage: dc [-e EXPR] [-f FILE] [FILE..]"
     'readelf "usage: readelf -h|-l|-S|-s|-e [-W] FILE.."
     'hexedit "usage: hexedit [-r] FILE"
-    'ls "usage: ls [-aACdlrtx1] [FILE..]"
+    'ls "usage: ls [-aACcdFghiLlnoprRsStux1] [--color[=WHEN]] [FILE..]"
     'dir "usage: dir [-aACdlrtx1] [FILE..]"
     'cp "usage: cp [-afinpPLrRuv] [-t DIR] SRC.. DST"
     'mv "usage: mv [-finuv] [-t DIR] SRC.. DST"
@@ -935,30 +935,30 @@
     'mkdir "usage: mkdir [-pv] [-m MODE] DIR.."
     'rmdir "usage: rmdir [-pv] DIR.."
     'ln "usage: ln [-fnsTv] TARGET [LINK] | ln [-fnsv] TARGET.. DIR"
-    'touch "usage: touch [-c] [-r FILE] [-d @SECONDS] FILE.."
+    'touch "usage: touch [-c] [-r FILE] [-d DATE] FILE.."
     'lift "usage: lift FILE   -- carry FILE out of the machine: the page's downloads, the runner's directory"
-    'pwd "usage: pwd"
+    'pwd "usage: pwd [-L|-P]"
     'chmod "usage: chmod [-Rf] MODE FILE.."
-    'install "usage: install [-D] [-m OCTAL] [-s] SRC DST  |  install -d DIR.."
-    'readlink "usage: readlink [-f] PATH"
-    'realpath "usage: realpath [-e|-m|-s] PATH.."
+    'install "usage: install [-CDpsTv] [-m MODE] [-o USER] [-g GROUP] [-t DIR] SRC.. DST | install -d [-m MODE] [-v] DIR.."
+    'readlink "usage: readlink [-efmnz] PATH.."
+    'realpath "usage: realpath [-emqszLP] [--relative-to=DIR] [--relative-base=DIR] PATH.."
     'link "usage: link FILE NEW"
     'unlink "usage: unlink FILE"
-    'cmp "usage: cmp [-s] A B"
-    'stat "usage: stat [-L] [-c FORMAT | --printf=FORMAT] FILE.."
-    'du "usage: du [-sabchk] [-d N] [FILE..]"
-    'df "usage: df [-h|-k] [-i] [-a] [-P] [FILE..]"
-    'chown "usage: chown [-R] OWNER[:GROUP] FILE.."
-    'chgrp "usage: chgrp [-R] GROUP FILE.."
-    'mktemp "usage: mktemp [-d] [-u] [-q] [-p DIR] [TEMPLATE]"
+    'cmp "usage: cmp [-bls] [-n N] [-i SKIP[:SKIP]] A B [SKIP1 [SKIP2]]"
+    'stat "usage: stat [-fL] [-c FORMAT | --printf=FORMAT] FILE.."
+    'du "usage: du [-abchLsx0] [-d N] [--max-depth=N] [--exclude=GLOB] [--apparent-size] [FILE..]"
+    'df "usage: df [-ahHikPT] [-t TYPE].. [-x TYPE].. [FILE..]"
+    'chown "usage: chown [-chRv] OWNER[:GROUP] FILE.. | chown --reference=RFILE FILE.."
+    'chgrp "usage: chgrp [-chRv] GROUP FILE.. | chgrp --reference=RFILE FILE.."
+    'mktemp "usage: mktemp [-dqtu] [-p DIR] [--tmpdir[=DIR]] [--suffix=S] [TEMPLATE]"
     'sync "usage: sync   (the bare call; no operands here)"
     'mkfifo "usage: mkfifo [-m MODE] NAME.."
     'mknod "usage: mknod [-m MODE] NAME TYPE [MAJOR MINOR]"
     'expr "usage: expr EXPRESSION"
     'patch "usage: patch [-pN] [-R] [-i F] [-o F] [-s] [--dry-run]"
-    'grep "usage: grep [-cEFhHiLlnoqrRsvwx] [-e PAT] [-f FILE] [-m N] [-A N] [-B N] [-C N] [--include=GLOB] [--exclude=GLOB] PATTERN [FILE..]"
-    'egrep "usage: egrep [-nvclqhaixwo] [-e PAT] [-m N] PATTERN [FILE..]   (grep -E)"
-    'fgrep "usage: fgrep [-nvclqhaixwo] [-e PAT] [-m N] PATTERN [FILE..]   (grep -F)"
+    'grep "usage: grep [-acEFhHiLlnoqrRsvwx] [-e PAT] [-f FILE] [-m N] [-A N] [-B N] [-C N] [--include=GLOB] [--exclude=GLOB] PATTERN [FILE..]"
+    'egrep "usage: egrep [grep's flags] PATTERN [FILE..]   (grep -E)"
+    'fgrep "usage: fgrep [grep's flags] PATTERN [FILE..]   (grep -F)"
     'sed "usage: sed [-nErs] [-i[SUFFIX]] [-e SCRIPT].. [-f FILE].. SCRIPT [FILE..]"
     'awk "usage: awk [-F FS] [-v var=val].. PROGRAM [FILE..]  |  awk .. -f PROGFILE.. [FILE..]"
     'find "usage: find [-L] [PATH..] [EXPR]  -- see doc/misc/kore.md for the grammar"
@@ -972,7 +972,7 @@
     'vi "usage: vi [FILE]"
     'ed ed-usage
     'ex ex-usage
-    'env "usage: env [-i] [-u NAME].. [NAME=VALUE].. [CMD [ARG..]]"
+    'env "usage: env [-0i] [-u NAME].. [-C DIR] [-S STRING] [NAME=VALUE].. [CMD [ARG..]]"
     'nohup "usage: nohup CMD [ARG..]"
     'nice "usage: nice [-n N] [CMD [ARG..]]"
     'renice "usage: renice [-n|--relative] PRIORITY [-p|-g|-u] ID.."
@@ -980,7 +980,7 @@
     'microcom "usage: microcom [-X] [-s SPEED] [-t TIMEOUT] TTY"
     'truncate "usage: truncate [-co] [-r RFILE] [-s [+-<>/%]SIZE] FILE.."
     'getopt "usage: getopt [-o SHORTS] [-l LONGS].. [-n NAME] [-aqQTu] [-s sh] [--] PARAMS  |  getopt SHORTS PARAMS"
-    'printenv "usage: printenv [NAME..]"
+    'printenv "usage: printenv [-0] [NAME..]"
     'sleep "usage: sleep N[smhd].."
     'chroot "usage: chroot DIR [CMD [ARG..]]"
     'mount "usage: mount [-t TYPE] [-o OPTS] SRC TGT   (or bare, to list)"
@@ -993,24 +993,24 @@
     'strip "usage: strip [-s|-g] [-p] [-o OUT] FILE.."
     'ranlib "usage: ranlib ARCHIVE.."
     'groups "usage: groups"
-    'ps "usage: ps [-e]"
+    'ps "usage: ps [-Aef] [-o KEY[=HDR],..] [-p PID,..] [-u USER,..] | ps [a][u][x]"
     'top "usage: top [-b] [-n FRAMES] [-d SECS] [-p PID]..
   -b  batch: no terminal wanted, every process, a frame per iteration
   -n  stop after N frames (-b alone is one frame)
   -d  seconds between frames (3 by default)
   -p  one process, spelled again for each
   keys: q quit, space or r repaint, c the command line, P M T N the orders"
-    'free "usage: free [-m|-g]"
-    'uptime "usage: uptime"
-    'pidof "usage: pidof NAME.."
-    'pgrep "usage: pgrep [-f] [-x] PATTERN"
-    'pkill "usage: pkill [-SIG] [-f] [-x] PATTERN"
+    'free "usage: free [-b|-k|-m|-g|-h] [-tw]"
+    'uptime "usage: uptime [-p|-s]"
+    'pidof "usage: pidof [-s] NAME.."
+    'pgrep "usage: pgrep [-acflnovx] [-d DELIM] [-u USER,..] [PATTERN]"
+    'pkill "usage: pkill [-SIG] [-efnovx] [-u USER,..] [PATTERN]"
     'killall "usage: killall [-SIG] NAME.."
     'pwdx "usage: pwdx PID.."
-    'kill "usage: kill [-SIG] PID.."
+    'kill "usage: kill [-s SIG | -SIG] PID.. | kill -l [SIG..]"
     'xargs "usage: xargs [-0rt] [-d C] [-n N] [-L N] [-I S] [-P N] [CMD ARGS..]"
     'time "usage: time [-p] CMD [ARG..]"
-    'date "usage: date [-u] [-d TIME] [-r FILE] [+FORMAT]"
+    'date "usage: date [-u] [-d DATE] [-r FILE] [+FORMAT]"
     'id "usage: id [-u|-g|-G] [-n] [-r]"
     'dos2unix "usage: dos2unix [-fkqn] [FILE..]"
     'unix2dos "usage: unix2dos [-fkqn] [FILE..]"
@@ -1029,17 +1029,17 @@
     'ping6 "usage: ping6 [-q] [-c COUNT] [-i SECS] [-W SECS] [-s SIZE] HOST"
     'traceroute "usage: traceroute [-46nI] [-f FIRST] [-m MAX] [-q N] [-w SECS] HOST"
     'traceroute6 "usage: traceroute6 [-nI] [-f FIRST] [-m MAX] [-q N] [-w SECS] HOST"
-    'dd "usage: dd [if=F] [of=F] [bs=N] [count=N] [skip=N] [status=none]"
-    'xxd "usage: xxd [-r] [FILE..]"
+    'dd "usage: dd [if=F] [of=F] [bs=N] [ibs=N] [obs=N] [count=N] [skip=N] [seek=N] [conv=..] [iflag=..] [oflag=..] [status=none|noxfer]"
+    'xxd "usage: xxd [-ipu] [-c N] [-g N] [-l N] [-s N] [FILE..] | xxd -r [-p] [FILE..]"
     'hexdump "usage: hexdump [-Cv] [-n LEN] [-s SKIP] [FILE..]"
     'hd "usage: hd [-v] [-n LEN] [-s SKIP] [FILE..]   (hexdump -C)"
     'strings "usage: strings [-n LEN] [FILE..]"
     'cal "usage: cal [[MONTH] YEAR]"
-    'timeout "usage: timeout [-s SIG] [-k DURATION] DURATION CMD [ARG..]"
+    'timeout "usage: timeout [-v] [-s SIG] [-k DUR] [--preserve-status] DURATION CMD [ARG..]"
     'which "usage: which [-a] NAME.."
     'tty "usage: tty"
     'clear "usage: clear"
-    'hostname "usage: hostname"
+    'hostname "usage: hostname [-s|-f]"
     ; the archives keep their own screens: the cmd modules leak them off the same
     ; bodyless letrec the mains come through, so the door shows what the tool would
     'cpio (cite 'cpiocmd 'cpioc-usage)
@@ -1058,13 +1058,13 @@
    ; -v is never the door's: gnu gives --version no short spelling, and the letter is the
    ; tool's wherever it wants one (cpio -v names members, grep -v inverts, nl -v numbers).
    ; -h is the door's where it is free -- these spell it themselves, or posix and gnu do.
-   korenoh '(grep du df ls sort touch chown ln free readelf pinky httpd)
+   korenoh '(grep du df ls sort touch chown chgrp ln free readelf pinky httpd)
    ; the tools that read no options at all, and the few dash words the two of them
    ; that do read still answer. each of these ignored every argument it was handed,
    ; so `arch -Z` printed the machine and `ps --nosuch` the process table -- the walk
    ; is the leading words only, which leaves `ps aux` (no dash) exactly as it was.
-   korebare '(arch nproc whoami groups uptime pwd ps free tty clear hostname)
-   korebareok {'ps '("-e" "-A" "-a" "-ax" "-x") 'free '("-g" "-m" "-h")}
+   korebare '(arch nproc whoami groups pwd tty clear)
+   korebareok {'pwd '("-L" "-P")}
    (kobare nm as)
     (: ok (peep korebareok nm ())
        (<(filter (w \ 1 < #w && w 0 = 45 && (nelem w ok)) as)))

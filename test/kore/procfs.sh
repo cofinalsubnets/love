@@ -51,4 +51,42 @@ if [ -n "$nu" ]; then
 else
   korerun uptime | grep -q users && fail "kore uptime invented a user count"
 fi
+# ps's faces byte for byte on pid 1's row and every header, under TZ=UTC0 (START and
+# STIME are UTC here): -o with its headers renamed and blanked, -p, -f, BSD's aux, -e;
+# -u, an unknown key and a pid not there
+# a TIME may tick between the two reads, so its digits are blanked, its width kept
+pstm() { sed -E 's/[0-9]{2}:[0-9]{2}:[0-9]{2}/HH:MM:SS/; s/ [0-9]+:[0-9]{2} / M:SS /'; }
+for c in "-o pid,ppid,user,comm,stat,rss,tty -p 1" "-o pid=,ppid=,comm= -p 1" "-o pid,user,vsz,rss,stat,ni -p 1" "-f -p 1"; do
+  # shellcheck disable=SC2086
+  TZ=UTC0 ps $c | pstm > "$g"; TZ=UTC0 korerun ps $c | pstm > "$o"; same "ps $c"
+done
+for c in -e -ef aux; do
+  # shellcheck disable=SC2086
+  TZ=UTC0 ps $c | awk 'NR == 1 || $2 == 1 || $1 == 1' | pstm > "$g"; TZ=UTC0 korerun ps $c | awk 'NR == 1 || $2 == 1 || $1 == 1' | pstm > "$o"; same "ps $c"
+done
+[ "$(korerun ps -o pid=P,comm -p 1 | head -1)" = "      P COMMAND" ] || fail "kore ps -o, a header renamed"
+korerun ps -u root | awk '{ print $1 }' | grep -qx 1 || fail "kore ps -u root"
+korerun ps -o bogus > /dev/null 2>&1; r=$?; [ $r -eq 1 ] || fail "kore ps -o bogus ($r)"
+korerun ps -p 999999999 > /dev/null 2>&1; r=$?; [ $r -eq 1 ] || fail "kore ps -p of no pid ($r)"
+# pgrep's -l -a -c -d -n -o -f -x -u and a miss against procps over two naps of our own;
+# pkill -e -n takes the newest alone and says so
+PN=$PWD/$ho/.kore-pgnap; cp "$(command -v sleep)" "$PN"; chmod 755 "$PN"
+"$PN" 30 & pa=$!; sleep 0.3; "$PN" 31 & pb=$!; sleep 0.3
+for c in ".kore-pgnap" "-l .kore-pgnap" "-a .kore-pgnap" "-c .kore-pgnap" "-d , .kore-pgnap" "-n .kore-pgnap" "-o .kore-pgnap" \
+         "-x .kore-pgnap" "-c -u root .kore-pgnap" "nosuchthing_q"; do
+  # shellcheck disable=SC2086
+  { pgrep $c; echo "rc=$?"; } > "$g" 2>&1; { korerun pgrep $c; echo "rc=$?"; } > "$o" 2>&1; same "pgrep $c"
+done
+[ "$(korerun pkill -e -n .kore-pgnap)" = ".kore-pgnap killed (pid $pb)" ] || fail "kore pkill -e -n"
+wait $pb; kill -0 $pa || fail "kore pkill -n took the oldest too"
+kill $pa; wait $pa 2> /dev/null; rm -f "$PN"
+# free's -b -k -m -t -w: the header, each row's name and its total, which hold still while
+# the used and free figures move
+for c in -b -k -m -t -w -tw; do
+  free $c | awk 'NR == 1 { print; next } { print $1, $2 }' > "$g"; korerun free $c | awk 'NR == 1 { print; next } { print $1, $2 }' > "$o"; same "free $c"
+done
+# uptime -p's words and -s's moment (btime, under TZ=UTC0); hostname -s -f
+[ "$(uptime -p)" = "$(korerun uptime -p)" ] || fail "kore uptime -p: $(korerun uptime -p)"
+[ "$(TZ=UTC0 uptime -s)" = "$(korerun uptime -s)" ] || fail "kore uptime -s: $(korerun uptime -s)"
+for c in "-s" "-f" "--fqdn"; do [ "$(hostname $c)" = "$(korerun hostname $c)" ] || fail "kore hostname $c"; done
 echo "kore: the /proc family (ps/free/uptime/pidof/pgrep/pkill/killall/pwdx vs procps) ok"

@@ -79,7 +79,7 @@ korerun timeout 9 sh -c 'exit 7' > /dev/null 2>&1; r=$?
 [ "$(korerun timeout 9 echo hi 2>/dev/null)" = hi ] || fail "kore timeout: the output passes"
 [ "$(korerun timeout 0 echo hi 2>/dev/null)" = hi ] || fail "kore timeout 0 is no limit"
 korerun timeout -s KILL 1 sleep 20 > /dev/null 2>&1; r=$?
-[ $r -eq 124 ] || fail "kore timeout -s KILL (got $r)"
+[ $r -eq 137 ] || fail "kore timeout -s KILL is 137, as GNU's (got $r)"
 korerun timeout -k 1 1 sleep 20 > /dev/null 2>&1; r=$?
 [ $r -eq 124 ] || fail "kore timeout -k (got $r)"
 korerun timeout 9 /nonexistent-xyzzy > /dev/null 2>&1; r=$?
@@ -177,4 +177,48 @@ if env printf %q x > /dev/null 2>&1; then
   pf '%5b' x
   pf '%#d' 1
 fi
+# every tool refuses a flag it does not know with 2 (env with GNU's 125), before it does
+# anything -- these read one as a file, a user, a name to kill, or said nothing at all
+: > "$ho/.rfq"
+for c in "stat -Q" "cmp -l" "install -v" "chown -Q gwen" "chgrp -Q gwen" "readlink -Q" "md5sum -Q" "sha256sum -c --nosuch" \
+         "cksum -Q" "killall -q" "which -Q" "time -v" "printenv -Q" "pidof -x" "basename -Q" "dirname -Q" "ls --nosuch" \
+         "realpath --foo" "users -Q" "fsync -Q" "umount -Q" "chroot -Q" "tsort -Q" "rev -Q" "link -Q" "unlink -Q" "yes -Q" \
+         "hostid -Q" "reset -Q" "dnsdomainname -Q" "du --foo" "comm --foo"; do
+  # shellcheck disable=SC2086
+  korerun $c "$ho/.rfq" < /dev/null > /dev/null 2>&1; r=$?; [ $r -eq 2 ] || fail "kore $c must refuse (rc $r)"
+done
+korerun env -Q > /dev/null 2>&1; r=$?; [ $r -eq 125 ] || fail "kore env -Q (rc $r)"
+korerun rev -ba "$ho/.rfq" 2>&1 | grep -q "unknown option -b" || fail "kore's refusal names the letter typed first"
+[ "$(korerun printenv -0 HOME | tr '\0' '|')" = "$HOME|" ] || fail "kore printenv -0"
+# dd's seek= (onto a file, zeros past its end), conv= ucase lcase swab sync notrunc,
+# oflag=append (cut first unless notrunc), ibs=/obs= records, iflag/oflag's byte counts,
+# status=none; the file left and the two record lines, against GNU
+printf 'Hello World abcdefghij\n' > "$ho/.ddi"; printf '0123456789ABCDEFGHIJ' > "$ho/.ddb"
+for c in "bs=4 count=2" "bs=4 skip=1 count=2" "conv=ucase" "conv=lcase" "conv=swab" "bs=5 conv=sync count=1" "bs=4 seek=2 count=1" \
+         "bs=4 seek=2 count=1 conv=notrunc" "oflag=append" "oflag=append conv=notrunc" "bs=1 seek=30 count=2 conv=notrunc" "ibs=3 obs=5" \
+         "iflag=skip_bytes,count_bytes skip=3 count=5" "oflag=seek_bytes seek=3 conv=notrunc bs=2 count=2" "status=none bs=4"; do
+  cp "$ho/.ddb" "$ho/.ddg"; cp "$ho/.ddb" "$ho/.ddk"
+  # shellcheck disable=SC2086
+  dd $c of="$ho/.ddg" < "$ho/.ddi" 2> "$g"; korerun dd $c of="$ho/.ddk" < "$ho/.ddi" 2> "$o"
+  sed -i '/copied/d' "$g" "$o"; same "dd $c (report)"; cmp -s "$ho/.ddg" "$ho/.ddk" || fail "kore dd $c (the file)"
+done
+korerun dd conv=block < /dev/null > /dev/null 2>&1; r=$?; [ $r -eq 1 ] || fail "kore dd conv=block must refuse ($r)"
+rm -f "$ho"/.dd?
+# xxd's -p -i (from a file and from stdin) -c -g -u -l -s (0x too), and -p back through -r -p
+X2=$PWD/$ho/.xxq; printf 'Hello World 0123456789abcdef\n' > "$X2"
+for c in "-p" "-i" "-c 8" "-g 1" "-g 4" "-u" "-l 20" "-s 3" "-s 3 -l 10 -c 8" "-s 0x10" "-c 5" "-c 8 -g 3"; do
+  # shellcheck disable=SC2086
+  (cd "$ho" && xxd $c .xxq) > "$g"; (cd "$ho" && LOVE_NO_IMAGE= "$PWD/../$m" kore xxd $c .xxq) > "$o"; same "xxd $c"
+done
+xxd -i < "$X2" > "$g"; korerun xxd -i < "$X2" > "$o"; same "xxd -i from stdin"
+korerun xxd -p "$X2" | korerun xxd -r -p > "$o"; cmp -s "$X2" "$o" || fail "kore xxd -p | xxd -r -p"
+rm -f "$X2"
+# timeout -v's words for each signal, --preserve-status, and 137 where a KILL ended it
+# (-s KILL, and -k after a TERM the command ignores); GNU's under LC_ALL=C
+for c in "-v 0.3 sleep 2" "--preserve-status 0.3 sleep 2" "-s KILL -v 0.3 sleep 2" "--signal=INT --verbose 0.3 sleep 2"; do
+  # shellcheck disable=SC2086
+  { LC_ALL=C timeout $c; echo "rc=$?"; } > "$g" 2>&1; { korerun timeout $c; echo "rc=$?"; } > "$o" 2>&1; same "timeout $c"
+done
+{ LC_ALL=C timeout -v -k 0.2 0.3 sh -c 'trap "" TERM; sleep 3'; echo "rc=$?"; } > "$g" 2>&1
+{ korerun timeout -v -k 0.2 0.3 sh -c 'trap "" TERM; sleep 3'; echo "rc=$?"; } > "$o" 2>&1; same "timeout -k after an ignored TERM"
 echo "kore: dd, xxd, strings, cal, timeout, which, tty, clear, hostname, hexdump, getopt ok"
