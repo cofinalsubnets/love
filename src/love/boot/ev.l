@@ -633,7 +633,8 @@
             j (then (tojoin k) $ 2 + n)                    ; true: then, jump to join, into k
             (p2 lvm_cond (pop c 'alt) j)))))))))
 
-  ; recursive-fn ref: bake `quote code` if the closure is built, else `quote 0` + a backpatch site
+  ; recursive-fn ref: a built closure is a constant like any other, through kim's fusion (so a
+  ; sibling call compiles as the same call to a global does), else `quote 0` + a backpatch site
   ; (lfd . box-of-cell) on the scope for wire to resolve. the cell rides a box (pin, barriered) --
   ; a raw poke into tenured data is the one write the precise barrier can't cover.
   (qsite site k n) (: cell (poke -1 0 * k $ 2 + n)
@@ -645,7 +646,7 @@
   (cof e) (peep >e 0 0)
   (cput e v) (pin >e 0 v, v)
   (lz c lfd scope)(: code <(cof lfd)
-                   p (code ? (em2 lvm_quote code)
+                   p (code ? (kim code)
                         (: site (lfd . {})
                          (pin scope 'sites (site . scope 'sites),
                           qsite site)))

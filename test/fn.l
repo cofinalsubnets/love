@@ -8,6 +8,8 @@
 ; and a param is a stack slot there, so lambdas that differ only in their names are equal. a
 ; partial-app is its base and its captures: equal to another partial of an equal base holding equal
 ; captures, never to a lambda it would reduce to (`=` reduces nothing).
+; two globals bound as one letrec, as post.l binds its own: fn-al calls its sibling
+(: (fn-dg c) (? (c < 1) 0 (fn-dg (c - 1)))  (fn-al c) (fn-dg c || c > 90))
 (: (rt x) (ev <(sound (show x)))
    (rt= f) (f = rt f)
    (fnfree s x) (: f (trap (_ \ ev x) () (a \ b \ 0)) (f ? (s = show f) 1))
@@ -42,6 +44,8 @@
   (rt= (a \ b \ c \ foldl a b c 4))                            ; an n-ary apply and its surplus
   (rt= (l \ foldl (+) 0 l))                                    ; an operator as a value  (rt= (\ x (\ x x)))
   (rt= ((a \ b \ a + b) 1))
+  (rt= fn-al)                                                  ; a sibling call fuses as a global's does
+  (rt= (m \ x \ (: k (tally x) (m < k ? k m))))               ; an inner lambda `=` to glaze's amax is its own
   (rt= (x \ (: h (y \ y + 1) g (z \ map h z) [(g x) (map h x) (g >x)])))            ; a helper read once
   ; a big carrier a closure keeps reads as its size; ev keeps its caches so, and prints short
   (has? (show (: t (foldl (t \ i \ pin t i i) {} (jot 40)) (x \ peep t (x + 1) 0))) "{..40}")
