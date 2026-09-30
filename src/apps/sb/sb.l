@@ -35,22 +35,35 @@
    (sb-hex? s)
     (: (go i) (? (64 <= i) 1 (: c (s i) (? ((48 <= c <= 57) || (97 <= c <= 102)) (go (i + 1)) 0)))
        (string? s && #s = 64 && go 0))
-   ; a hunk's path is relative and stays under the root: no leading /, no empty, . or .. segment
+   ; a hunk's path is relative and stays under the root: no leading /, no empty, . or .. segment,
+   ; no control byte, and no segment naming a store (.git, .sb) at any depth
    (sb-rel? p) (string? p && sb-rel1? p)
    (sb-rel1? p)
     (: n #p
-       (seg a b) (: s (snip p a b) !(#s = 0 || s = "." || s = ".."))
+       (seg a b) (: s (snip p a b) !(#s = 0 || s = "." || s = ".." || sb-meta? s))
        (go a i) (? (n <= i) (seg a i)
                    (p i = 47) (seg a i && go (i + 1) (i + 1))
                    (go a (i + 1)))
-       (0 < n && go 0 0))
+       (0 < n && !(sb-ctl? p) && go 0 0))
+   (sb-ctl? s) (: (go i) (? (#s <= i) 0 (s i < 32 || s i = 127) 1 (go (i + 1))) (go 0))
+   ; a store's name in any case, trailing dots and spaces dropped, or git's 8.3 spelling
+   (sb-meta? s)
+    (: (go n) (? (0 < n && (s (n - 1) = 46 || s (n - 1) = 32)) (go (n - 1)) n)
+       t (lower (snip s 0 (go #s)))
+       (t = ".git" || t = ".sb" || t = "git~1"))
+   ; some prefix of p, or p itself, is a symlink: a write there would leave the tree
+   (sb-link? p)
+    (: n #p
+       (ln? q) (: st (lstat q) (two? st && (61440 & <>>st) = 40960))
+       (go i) (? (n <= i) (ln? p) (p i = 47) (ln? (snip p 0 i) || go (i + 1)) (go (i + 1)))
+       (go 0))
    (sb-all? f l) (? (atom? l) (l = ()) (f <l && sb-all? f >l))
    (sb-oid? x) (x = () || sb-hex? x)                             ; a hunk side: absent or a blob
    (sb-hunk? h) (two? h && #h = 3 && string? <h && sb-rel? <h && sb-oid? <>h && sb-oid? <>>h)
    (sb-sound? f) (sb-all? sb-hunk? (fld f 'hunks) && sb-all? sb-hex? (fld f 'deps))
    (sb-bad? id) (!(sb-hex? id) || (: f (form (".sb/patch/" + id)) (two? f && !(sb-sound? f))))
    (sb-refuse id) (say err ("sb: patch " + (? (string? id) (sh id) (show id)) + " refused -- an id that is not a hash,"
-                            + " or a path that leaves the tree\n"))
+                            + " or a path sb may not write\n"))
 
    ; --- ignores: one rule a line in .sbignore, over the built-ins. a rule holding
    igsdir '(".sb" ".git" "out")
@@ -69,8 +82,8 @@
        (go m acc)
         (? (atom? m) acc
            (: p (? !dir <m (dir + "/" + <m))
-              (? (ign? p igs) (go >m acc)
-                 (: st (stat p)
+              (? (ign? p igs || !(sb-rel? p)) (go >m acc)       ; a name no patch may carry
+                 (: st (lstat p)                                 ; a link is not followed, nor kept
                     md (two? st ? (61440 & <>>st) 0)
                   (md @ 16384 (? (ign? p igsdir) (go >m acc) (go >m (walk p igs acc)))
                         32768 (go >m (p . acc))
@@ -299,7 +312,7 @@
        _ (: (go m) (two? m ? (pin np <<m <><m, go >m)) (go newsnap))
        w (: (go m n) (? (atom? m) n
               (: e <m p <e ch <>e
-                 ok (sb-rel? p && sb-hex? ch)
+                 ok (sb-rel? p && sb-hex? ch && !(sb-link? p))
                  bl (? ok (look (".sb/blob/" + ch)))   ; presence, not net: an empty blob is real
                  cur (? ok (look p)) curh (? (two? cur) (sha256 <>cur) ())
                  (? !ok (say err ("sb: will not write " + show p + " from " + show ch + "\n"), go >m n)
@@ -309,7 +322,7 @@
             (go newsnap 0))
        d (: (go m n) (? !(two? m) n
               (: p <<m (? (peep np p 0) (go >m n)
-                          !(sb-rel? p) (say err ("sb: will not unlink " + show p + "\n"), go >m n)
+                          (!(sb-rel? p) || sb-link? p) (say err ("sb: will not unlink " + show p + "\n"), go >m n)
                           (unlink p, go >m (n + 1)))))
             (go oldsnap 0))
        (w + d))
@@ -477,7 +490,9 @@
                  ((? loud (say err ("sb: REF CLASH on " + <e
                                     + " -- banked to different heads\n")) ()),
                   go >m acc (n + 1)))))
-       (go extra base 0))
+       (go (? (sb-all? sb-ref? extra) extra ()) base 0))              ; a malformed file is taken whole or not at all
+   ; a ref off the wire: a printable name over a set of patch ids
+   (sb-ref? e) (two? e && string? <e && 0 < #<e && !(sb-ctl? <e) && two? <>e && sb-all? sb-hex? <>e)
    (refof-in rs nm) (: (go m) (? (atom? m) () (<<m = nm) <><m (go >m)) (go rs))
 
    (sb-bank args)
@@ -513,7 +528,10 @@
                         (atom? m ? n
                            (: h <m p <h pold <>h pnew <>>h
                               cur (sn p)             ; the index maps path -> chash directly
-                              (? (cur = pnew)                ; P still owns the path: a clean lift
+                              (? (sb-link? p)
+                                 (say err $ "sb: CONFLICT on " + p + " -- it lies through a link; kept what is there\n",
+                                  go >m (n + 1))
+                                 (cur = pnew)                ; P still owns the path: a clean lift
                                  ((? !pold (unlink p)
                                      (mkparents p, lay p (blob pold))),
                                   go >m n)

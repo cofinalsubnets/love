@@ -71,4 +71,59 @@
  (two? ref)                                                          ; the ref rode along
  (0 = clean))                                                        ; the tree matches the snap
 
+; --- a hostile mirror: every object hashes honestly, but each tip's patch aims at the
+;     puller's git config, sb's own store, or out through a symlink in the tree. the one
+;     plain patch lands; the rest are refused, and git's config is never touched ---
+(: SD (cite 'sb)
+   sync (SD 'sb-sync) look (SD 'look) lay (SD 'lay) mk (SD 'mk) refof (SD 'refof)
+   root ("out/.sbevil-" + show (getpid 0))
+   home (cwd 0)
+   _ (mkdir root 493)
+   _ (: e (root + "/evil/.sb/") (mkdir (root + "/evil") 493, mkdir e 493,
+                                  mkdir (e + "blob") 493, mkdir (e + "patch") 493))
+   eroot (home + "/" + root + "/evil/.sb")
+   (blob s) (: h (sha256 s) _ (lay (eroot + "/blob/" + h) s) h)
+   (patch p h) (: t (show ['patch ['note "evil"] ['time 0] ['deps] ['hunks [p () h]]])
+                  i (sha256 t) _ (lay (eroot + "/patch/" + i) t) i)
+   cfg (blob "[core]\n\tfsmonitor = touch pwned\n")
+   own (blob "owned\n")
+   tips (map (p \ patch p (p = ".git/config" ? cfg own))
+             [".git/config" ".GIT/config" ".git./hooks/post-checkout" "sub/.git/config"
+              ".sb/refs" "sub/.sb/tips" "link/planted" (string [97 10 98]) "ok.txt"])
+   _ (lay (eroot + "/tips") (show tips))
+   _ (lay (eroot + "/refs") (show [["v1" ["zz"] 0]]))       ; a ref whose tip is no id
+   ; the victim: a git checkout with a link out of the tree
+   _ (mkdir (root + "/outside") 493)
+   _ (mkdir (root + "/victim") 493) _ (mkdir (root + "/victim/.git") 493)
+   _ (lay (root + "/victim/.git/config") "orig\n")
+   _ (symlink "../outside" (root + "/victim/link"))
+   pl (test-listen 0)
+   port <pl
+   l (pl 1)
+   srv (twirl (\ _ ((: (g k) (: _ (await l)
+                                c (accept l)
+                                _ (hot? c ? (cite 'kiosko 'serve1 eroot () c, close c))
+                                (g k)))
+                    0)) 0)
+   _ (chdir (root + "/victim"))
+   _ (mk ())
+   got (sync ("http://127.0.0.1:" + show port + "/"))
+   gcfg (look ".git/config")
+   ok (look "ok.txt")
+   planted (look "../outside/planted")
+   stray (map (p \ two? (look p)) [".GIT/config" ".git./hooks/post-checkout" "sub/.git/config"
+                                    "sub/.sb/tips" (string [97 10 98])])
+   srefs (look ".sb/refs")
+   ref (refof "v1")
+   _ (chdir home)
+   _ (hark ["rm" "-rf" root]))
+
+(test
+ (<>gcfg = "orig\n")                                               ; git's config untouched
+ (<>ok = "owned\n")                                                ; the plain patch landed
+ !(two? planted)                                                   ; nothing through the link
+ (show stray = show [0 0 0 0 0])                                   ; nor under any store name
+ !(two? srefs) !ref                                                ; the malformed ref was dropped
+ !got)                                                             ; and the pull says it was refused
+
 (test_fin (), puts "sbhttp: ok", putc 10, 0)
