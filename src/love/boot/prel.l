@@ -652,7 +652,7 @@
    (join sep l)    (two? l ? (foldl (a \ x \ a + sep + x) <l >l) "")
    (split sep s)                                        ; always >= 1 piece; "" splits nowhere
     (: (go i) (: j (fsub s sep i)
-                 (? (#sep = 0 || j < 0) [(snip s i #s)] (snip s i j . go (j + #sep))))
+                 (#sep = 0 || j < 0 ? [(snip s i #s)] (snip s i j . go (j + #sep))))
        (go 0))
 
 )    ; (a + 1 a) would read as a + (1 a)
@@ -663,7 +663,7 @@
 (: ; the int tier takes a cell one machine word wide, so what belongs in it is a question
    ; of magnitude, not of which box the numeral came in. whole? first: love orders across kinds,
    ; so a bare magnitude test would seat a twin in the int tier and say nothing about it.
-   (a-rank x) (? (gem? x) 1 (twin? x) 2 (whole? x && (min-word <= x <= max-word)) 0 3)
+   (a-rank x) (? (gem? x) 1 (twin? x) 2 (whole? x && min-word <= x <= max-word) 0 3)
    (a-emax m x) (: k (a-rank x) (m < k ? k m))
    (a-type d) (: k (foldl a-emax 0 d) (? (k = 0) 0 (k = 1) 0.0 (k = 2) (twin 0 0) ()))   ; a witness star of the tier
    (a-dim d) (two? d ? #d $d)
@@ -672,18 +672,18 @@
 ;;; FIXME we new names for these. tuple isn't too bad but "hash" for the tablet constructor is wrong
 ; tuple/hash value constructors -- also the read-back targets of the printed @(…) / {…}
 (: (spread l) (tray (a-type l) (list (foldl (\ n _ (1 + n)) 0 l)) l))
-(:: 'tuple (\ a (list 'spread ('list . a))))
+(:: 'tuple (a \ (list 'spread ('list . a))))
 ; (hash x) boxes any non-list: a fresh tablet pinning x at 0, so {5} = {0 5} and {} is {0}.
 ; an odd trailing operand lands in that 0 slot.
 (: (hashtx a) (? (atom? a) '(tablet 0)
                  (atom? >a) (list 'pin (hashtx 0) () <a)
                  (list 'pin (hashtx >>a) <a <>a)))
-(:: 'hash (\ a (hashtx a)))
+(:: 'hash (a \ (hashtx a)))
 
 ; (array shape elem…): the N-D constructor. shape is a dimension list or a lone number; the
 ; element type is inferred. the shape fixes the count, so elements are ordinary trailing args.
 (: (a-coll sh n acc) (n < 1 ? (: d (rev acc) (tray (a-type d) sh d))
-                              (\ x (a-coll sh (n - 1) (x . acc))))
+                              (x \ (a-coll sh (n - 1) (x . acc))))
 )
 
 ; recursive-value boxing for `:` -- the letrec* "capture by location" fix. a reference at-or-before
@@ -691,22 +691,22 @@
 ; pre-fill read is a map miss = the missing condition. it emits nif values, not names, so the
 ; egg's mop cannot break it. 0 when nothing needs boxing, else (prs' . body').
 (: (lambp x) (two? x && == '\ <x && two? >>x) ; \ with >=1 param (one-operand \ is quote)
-   (dsug n d) (? (atom? n) (n . d) (dsug <n ('\ . >n + list d)))
+   (dsug n d) (atom? n ? (n . d) (dsug <n ('\ . >n + list d)))
    (lp x) (: a >x (atom? >a ? (0 . <a) (init a . last a)))
    (ln bs) (? (atom? bs) 0 (atom? >bs) 0 (<(dsug <bs 0) . ln >>bs))
    ; w/wl: does x / binding-list bs reference symbol v? \ and : shadow, one-operand \ is quote,
    ; macros expand. u tracks lambda depth; dm counts only references not under a lambda.
    (w v x bnd u dm) (?
-    (nom? x) (&& (? dm !u 1) (== x v) !(elem v bnd))
+    (nom? x) (&& (dm ? !u 1) (x == v) !(elem v bnd))
     (atom? x) 0
     (: h <x (?
-      (== h '\) (? (atom? >>x) 0 (: r (lp x) (w v >r (<r + bnd) 1 dm)))
-      (== h ':) (wl v >x (cat (ln >x) bnd) u dm)
+      (h == '\) (atom? >>x ? 0 (: r (lp x) (w v >r (<r + bnd) 1 dm)))
+      (h == ':) (wl v >x (cat (ln >x) bnd) u dm)
       (: m (nom? h ? (macros h) 0) (m && !(elem h bnd) ? (w v (m >x) bnd u dm) (any (e \ w v e bnd u dm) x))))))
    (wl v bs bnd u dm) (?
     (atom? bs) 0
     (atom? >bs) (w v <bs bnd u dm)
-    (: nd (dsug <bs <>bs) (? (w v >nd bnd u dm) 1 (wl v >>bs bnd u dm))))
+    (: nd (dsug <bs <>bs) (w v >nd bnd u dm ? 1 (wl v >>bs bnd u dm))))
    ; a name wants a cell when something that runs before its slot is filled can read it. two
    ; doors: a direct read from a binding at or before it (for a lambda name, only one not
    ; shielded by a \ -- a call comes after the pin), and, for a value name, a read from anywhere
@@ -715,18 +715,18 @@
      (reads m) >(assoc m es)
      (anyname m) (map cap (reads m))                           ; read anywhere
      (barename m) (map cap (filter (nil? * cup) (reads m)))   ; read not under a \
-     (grow s) (: s2 (foldl (a \ m \ a + filter (\ k !(elem k a)) (anyname m)) s s)
+     (grow s) (: s2 (foldl (a \ m \ a + filter (k \ !(elem k a)) (anyname m)) s s)
                   (#s2 = #s ? s (grow s2)))
      ; near: a read from a binding at or before v. a lambda name takes only the bare ones --
      ; a call comes after the pin -- a value name every one.
      (near v) (: d (lambp >(assoc v prs))
-                 (any (m \ elem v (? d (barename m) (anyname m)))
+                 (any (m \ elem v (d ? (barename m) (anyname m)))
                       (take (1 + lidx v nm) nm)))
      ; reach: v is read from anywhere the bindings before it get to through the let's own
      ; names -- capture, not evaluation order. an earlier closure inherits a later sibling's
      ; captures, so it wants v's slot at construction, before that slot exists.
      (reach v) (elem v (grow (catmap anyname (take (lidx v nm) nm))))
-     (filter (\ v (? (near v) 1 (lambp >(assoc v prs)) 0 (reach v))) nm))
+     (filter (v \ (? (near v) 1 (lambp >(assoc v prs)) 0 (reach v))) nm))
    ; breads: the read graph boxset takes -- per def, every sibling name it reads, tagged with
    ; whether the read sat under a \ (u). \ and : bind, a one-operand \ is quote, macros expand,
    ; except a head this let binds, which is a variable and never a macro. c0's door builds it here;
@@ -736,10 +736,10 @@
       (nom? x) (elem x nm && !(elem x bnd) ? ((x . u) . acc) acc)
       (atom? x) acc
       (: h <x (?
-        (== h '\) (atom? >>x ? acc (: r (lp x) (bref >r (<r + bnd) 1 acc)))
-        (== h ':) (brefl >x (ln >x + bnd) u acc)
-        (: m (? (nom? h) (macros h) 0)
-           (? (m && !(elem h bnd) && !(elem h nm)) (bref (m >x) bnd u acc)
+        (h == '\) (atom? >>x ? acc (: r (lp x) (bref >r (<r + bnd) 1 acc)))
+        (h == ':) (brefl >x (ln >x + bnd) u acc)
+        (: m (nom? h ? (macros h) 0)
+           (m && !(elem h bnd) && !(elem h nm) ? (bref (m >x) bnd u acc)
               (foldl (a \ e \ bref e bnd u a) acc x))))))
      (brefl bs bnd u acc) (?
       (atom? bs) acc
@@ -754,7 +754,7 @@
    ; `sent` is minted once and closure-private, so nothing a cell holds poses as absence.
    cellread (: sent (mint 0)
                (\ c nm (: v (peep c nm sent)
-                          (? !(== v sent) v
+                          (? !(v == sent) v
                              !(heard ()) ()
                              (scare 'missing nm))))))
 
@@ -763,49 +763,49 @@
 ; the law: eager reads see let*, closures see letrec*. a bare read before its name's pin keeps
 ; the plain nom -- a boxed name's own binding is renamed _, so (: s (trim s)) under a param s
 ; reads the param. pn is the pinned-so-far set; u is 1 under a \.
-(: (boxfix-core prs body es) (: (rmc cs ns) (filter (\ p !(elem <p ns)) cs)
+(: (boxfix-core prs body es) (: (rmc cs ns) (filter (p \ !(elem <p ns)) cs)
    ; bnd: the lexical binder set, seeded with the scope's own names, so a locally-bound name is
    ; an ordinary variable and never a macro head.
    (sub cs x bnd pn u) (?
     (nom? x) (: p (assoc x cs)
                 (? (atom? p) x
-                   (|| u (elem x pn)) (list cellread <>p (list '\ >>p))
+                   (u || elem x pn) (list cellread <>p (list '\ >>p))
                    x))
     (atom? x) x
-    (: h (cap x) (?
-      (== h '\) (atom? >>x ? x (: r (lp x) ('\ . <r + list (sub (rmc cs <r) >r (<r + bnd) pn 1))))
-      (== h ':) (: ns (ln >x) (': . subl (rmc cs ns) >x (cat ns bnd) pn u))
-      (: m (macros h) (? (&& m !(elem h bnd)) (sub cs (m >x) bnd pn u) (map (e \ sub cs e bnd pn u) x))))))
+    (: h <x (?
+      (h == '\) (atom? >>x ? x (: r (lp x) ('\ . <r + list (sub (rmc cs <r) >r (<r + bnd) pn 1))))
+      (h == ':) (: ns (ln >x) (': . subl (rmc cs ns) >x (cat ns bnd) pn u))
+      (: m (macros h) (m && !(elem h bnd) ? (sub cs (m >x) bnd pn u) (map (e \ sub cs e bnd pn u) x))))))
    (subl cs bs bnd pn u) (?
     (atom? bs) bs
     (atom? >bs) (list (sub cs <bs bnd pn u))
     (: nd (dsug <bs <>bs) (<nd . sub cs >nd bnd pn u . subl cs >>bs bnd pn u)))
    (: bx (boxset prs es)
-      (? (== () bx) ()
+      (() == bx ? ()
        (: cs (mkcs bx) ns0 (map cap prs)
           (one p pn) (: d (sub cs >p ns0 pn 0)
-                        (? (elem <p bx)
+                        (elem <p bx ?
                            (: c (assoc <p cs) ('_ . list pin <>c (list '\ >>c) d))
                            (cap p . d)))
-          (ones ps pn) (? (atom? ps) ()
+          (ones ps pn) (atom? ps ? ()
                           ((one <ps pn) . ones >ps (<<ps . pn)))
           (cs . cellbinds cs + ones prs () . sub cs body ns0 ns0 0))))))
 ; the flat-list adapters: a `:` binding list -> (the rewritten list . the cells laid), the input
 ; and () when nothing boxes. boxfix-es takes the read graph (ev.l's census has one); boxfix
 ; walks for its own. love.c interns "boxfix" and calls it off the book, so c0 compiles prel
 ; through this. it must exist before ev.l does, and both compilers share the one pass.
-(: (boxfix-es fs es) (? (bodyless? fs) (fs . ())
+(: (boxfix-es fs es) (bodyless? fs ? (fs . ())
     (: pb (bpr fs) r (boxfix-core <pb >pb es)
-       (? r ((catmap (p \ list <p >p) <>r + list >>r) . <r) (fs . ()))))
+       (r ? ((catmap (p \ list <p >p) <>r + list >>r) . <r) (fs . ()))))
    (bodyless? l) (? (atom? l) 1 (atom? >l) 0 (bodyless? >>l))
-   (bpr fs) (? (atom? >fs) (0 . <fs)
+   (bpr fs) (atom? >fs ? (0 . <fs)
                (: r (bpr >>fs) ((dsug <fs <>fs . <r) . >r)))
    (boxfix fs) (bodyless? fs ? fs <(boxfix-es fs (breads <(bpr fs)))))
 
 ; --- scheme and common lisp spellings ---------------------------------------
 ; every row here is the same function under another name; where the lisp semantics differ
 ; from love's it is a definition and not an alias, and says so.
-(: (assq x l)   (? (two? l) (? (== x (caap l)) (cap l) (assq x (cup l))))
+(: (assq x l)   (two? l ? (x == caap l ? <l (assq x >l)))
 )
 ; pat -- @ : pattern matching, one macro and no special form. a post-egg layer, not part of
 ; the language: each frontend includes the layers it wants. its `borrow` must precede every
@@ -905,10 +905,10 @@
    ; (nom access) pairs its body binds, and the guards, which are neither.
    (pw p v)
      (? (nom? p) (p = '_ ? wnil [() [[p v]] ()])
-        (== p ()) (wts [['= () v]])                        ; () is the empty list, and asks for it
+        (p == ()) (wts [['= () v]])                        ; () is the empty list, and asks for it
         (atom? p) (wts [['= p v]])
         (: h (opword <p) as >p                     ; opfix's glued heads are values; opword names them
-           (? (= h '?) (? (atom? as) (wlist p v)           ; a guard: (? g1 .. gn pat), or (? g)
+           (? (h = '?) (? (atom? as) (wlist p v)           ; a guard: (? g1 .. gn pat), or (? g)
                           (atom? >as) (wgd <as)           ; ..one operand is the lone guard
                           (wq as v))                         ; ..else every one but the last guards
               ; the guard, in the spelling a hand reaches for: (c && 0 < c) is (? (0 < c) c).
@@ -931,22 +931,22 @@
                  ts (map (e \ two? e && two? >e ? (: w <e d <>e (pand (<w + <d + map (bind <>d) <>>w)))) (zip ws ds))
                  bss (map caup ds)
                  uni (foldl (u \ g \ adds u (map cap g)) () bss)
-                 [[('|| . ts)] (map (\ n [n (across n bss ts)]) uni) ()])
+                 [[('|| . ts)] (map (n \ [n (across n bss ts)]) uni) ()])
               (h = '\) (two? >as ? (wlist p v) (wts (weq <as v)))      ; (\ x b) is a lambda, a form
               (h = 'list) (wlist as v)
-              (h = '.) (? (2 = #as)                         ; the cons tag; prefix
+              (h = '.) (2 = #as ?                         ; the cons tag; prefix
                                                                    ; `link` is the function, not a tag
                                         (wcat (wts [['two? v]])
                                               (wcat (pw <as ['cap v]) (pw <>as ['cup v])))
                                         (wlist p v))
-              (h = '+) (? (2 != #as) (wlist p v)      ; a split: the left run, then the rest
+              (h = '+) (2 != #as ? (wlist p v)      ; a split: the left run, then the rest
                           (: l <as t <>as ps (splat p)
                              (? (wstr? ps) (wstr ps v)          ; a string literal among the pieces
-                                (? (two? l) (= <l 'list) ()) (wrest >l t v)
+                                (two? l ? (<l = 'list) ()) (wrest >l t v)
                                 ; `+` is left-handed, so ([a b] + [c] + t) arrives as a + whose
                                 ; left is a +. cat is associative and so is the split: re-associate
                                 ; right and the ordinary rule reads it. this is the multi-split.
-                                (? (two? l) (= <l '+) ()) (pw ['+ <>l ['+ <>>l t]] v)
+                                (two? l ? (<l = '+) ()) (pw ['+ <>l ['+ <>>l t]] v)
                                 (wlist p v))))
               (h = 'hash) (wcat (wts [['tablet? v]]) (wkv as v))
               (h = 'tuple) (wcat (wts [['tray? v] ['= #as ['tally v]]])
@@ -962,7 +962,7 @@
    ; before any of it is read: `two?` on the head, then one `long?` for the rest of the depth.
    ; the head's test stays first and separate, not folded into the long?: it is what the
    ; decision tree hoists, and the tag compare must be reachable before the arity walk.
-   (warity k v) (? (k = 1) [['two? v]] [['long? k v]])   ; at one, two? is the same answer and fuses
+   (warity k v) (k = 1 ? [['two? v]] [['long? k v]])   ; at one, two? is the same answer and fuses
    (wrun ps v end)
      (atom? ps ? (end v)
       (: n #ps
@@ -979,34 +979,34 @@
    ; and takes what the anchors leave. anchors are laid from both ends first; between two free
    ; pieces the anchors are one needle, found at its first occurrence, so each free piece is
    ; as short as it can be, left to right, and nothing is tried twice.
-   (splat p) (? (? (two? p) (? (= <p '+) (2 = #>p))) (splat <>p + splat <>>p) [p])
-   (wpin? q) (? (two? q) (? (= (opword <q) 'jot) (1 = #>q)))
+   (splat p) ((two? p ? (<p = '+ ? (2 = #>p))) ? (splat <>p + splat <>>p) [p])
+   (wpin? q) (two? q ? (opword <q = 'jot ? (1 = #>q)))
    (anchor? q) (string? q || wpin? q)
    (atext q) (string? q ? q <>q)
    (alen q) (string? q ? #q ['tally <>q])
-   (padd a b) (? (charm? a && charm? b) (a + b) (== b 0) a (== a 0) b ['+ a b])
-   (psub a b) (? (charm? a && charm? b) (a - b) (== b 0) a ['- a b])
-   (acat a b) (? (string? a && string? b) (a + b) ['+ a b])
+   (padd a b) (? (charm? a && charm? b) (a + b) (b == 0) a (a == 0) b ['+ a b])
+   (psub a b) (? (charm? a && charm? b) (a - b) (b == 0) a ['- a b])
+   (acat a b) (string? a && string? b ? (a + b) ['+ a b])
    ; the pieces, a run of anchors gathered under rtag
    (aruns ps) (? (atom? ps) ()
                  (anchor? <ps) (: r (aruns >ps)
-                                  (? (run? <r) ((rtag . <ps . ><r) . >r) ([rtag <ps] . r)))
+                                  (run? <r ? ((rtag . <ps . ><r) . >r) ([rtag <ps] . r)))
                  (<ps . aruns >ps))
-   (run? x) (? (two? x) (== <x rtag))
+   (run? x) (two? x ? (<x == rtag))
    (rlen r) (foldl (\ n q (padd n (alen q))) 0 r)
    ; a run's tests, one per anchor, laid from pos forwards or back from end
    (lfwd r pos v) (atom? r ? () (: e (padd pos (alen <r)) (['= (atext <r) ['snip v pos e]] . lfwd >r e v)))
    (lbck r end v) (lfwd r (psub end (rlen r)) v)
-   (meet? rs) (? (two? >rs) (? (!(run? <rs) && !(run? <>rs)) 1 (meet? >rs)))
+   (meet? rs) (two? >rs ? (!(run? <rs) && !(run? <>rs) ? 1 (meet? >rs)))
    ; a literal among the pieces, no bracket, and no two free pieces side by side: anything
    ; else reads as + always has, since @ refuses no pattern
-   (wstr? ps) (any string? ps && !(any (q \ two? q && (= <q 'list)) ps) && !(meet? (aruns ps)))
+   (wstr? ps) (any string? ps && !(any (q \ two? q && (<q = 'list)) ps) && !(meet? (aruns ps)))
    (wstr ps v)
      (: rs (aruns ps)
         ; the left run, the right run, and between them free pieces and needles, alternating
         lr (run? <rs ? ><rs ())
         m0 (run? <rs ? >rs rs)
-        rr (? (two? m0) (? (run? (last m0)) >(last m0)))
+        rr (two? m0 ? (run? (last m0) ? >(last m0)))
         mid (two? rr ? (init m0) m0)
         lo (rlen lr)
         hi (psub ['tally v] (rlen rr))
@@ -1014,10 +1014,10 @@
              + lfwd lr 0 v + lbck rr ['tally v] v
              + [(two? mid ? ['<= lo hi] ['= lo hi])])
         ; a free piece's text: the whole value when nothing is cut off it
-        (part a b) (? (== a 0) (? (same? b ['tally v]) v ['snip v a b]) ['snip v a b])
+        (part a b) (a == 0 ? (same? b ['tally v] ? v ['snip v a b]) ['snip v a b])
         ; each needle is sought from where the free piece before it starts
         (cut ms cur)
-          (? (atom? >ms) (pw <ms (part cur hi))
+          (atom? >ms ? (pw <ms (part cur hi))
              (: rn ><>ms n (foldl acat "" (map atext rn))
                 at [(lit fsub) v n cur] e (padd at (rlen rn))
                 (wcat (wts [['<= 0 at] ['<= e hi]])
@@ -1032,7 +1032,7 @@
    ; the non-linear pass: a nom already sighted becomes an `=` against the access
    ; form that first bound it, and drops out of the binder list.
    (dedup bs seen)
-    (? (atom? bs) wnil
+    (atom? bs ? wnil
      (: b <bs e (assoc <b seen)
       (wcat (atom? e ? [() [b] ()] (wts [['= <>e <>b]]))
        (dedup >bs (atom? e ? (b . seen) seen)))))
@@ -1048,9 +1048,9 @@
    ; its neighbours, so the common prefix is factored: asked once outside the chain and
    ; dropped from each clause. the else is then reached two ways and written twice, which is
    ; why this only fires for a small else, and it is one level, never recursive.
-   (same? a b) (? (two? a) (? (two? b) (? (same? <a <b) (same? >a >b)))
+   (same? a b) (? (two? a) (two? b ? (same? <a <b ? (same? >a >b)))
                   (two? b) ()
-                  (== a b))
+                  (a == b))
    ; --- factoring, and its one safe shape --------------------------------------
    ; a full decision tree writes the fallthrough twice per level -- 21 distinct tags is 2^21
    ; nodes -- so factoring pays only where the fallthrough does not branch: the prefix every
@@ -1059,16 +1059,16 @@
      (? (atom? cs) ()
         (atom? <<cs) ()                        ; a clause with no tests left: stop
         (: t <<<cs
-           (? (all (c \ two? <c && same? <<c t) cs)
+           (all (c \ two? <c && same? <<c t) cs ?
               (t . cpx (map (c \ [><c <>c]) cs)))))
-   (nodes x) (atom? x ? 1 (foldl (\ n e (n + (nodes e))) 1 x))
-   (flat cs els) ('? . (catmap (\ c [(pand <c) <>c]) cs) + [els])
+   (nodes x) (atom? x ? 1 (foldl (\ n e (n + nodes e)) 1 x))
+   (flat cs els) ('? . (catmap (c \ [(pand <c) <>c]) cs) + [els])
    ; two clauses or more, or there is nothing to discriminate: at one clause cpx eats all of
    ; its tests, so factoring would read (? p (? 1 body els) els) -- vacuous, and the else twice.
    (tree cs els)
      (: p (cpx cs)
-        (? (two? >cs && two? p && nodes els < 40)   ; >=2 clauses, a prefix, a small else
-           ['? (pand p) (flat (map (\ c [(drop #p <c) <>c]) cs) els) els]
+        (two? >cs && two? p && nodes els < 40 ?   ; >=2 clauses, a prefix, a small else
+           ['? (pand p) (flat (map (c \ [(drop #p <c) <>c]) cs) els) els]
            (flat cs els)))
    ; --- alternatives, and why they split two ways ------------------------------
    ; (p1 || p2) fits when either does -- `|` too. a nom sits somewhere else in every branch,
@@ -1078,7 +1078,7 @@
    ; the body binds the union, and a nom this branch did not bind is bound to () -- which is
    ; what stops it reaching whatever wears that name outside. the arm is normalised first: a
    ; guard wrapping an alternative belongs to every branch, asked once per branch.
-   (arms p) (? (atom? p) [[p ()]]
+   (arms p) (atom? p ? [[p ()]]
                (: h <p as >p
                   (? (h = '||) (catmap arms as)
                      (h = '&&) (arms (gnorm p))                 ; the guard, normalised first
@@ -1086,7 +1086,7 @@
                        (map (b \ [<b (<as . <>b)]) (arms <>as))
                      [[p ()]])))
    (wgds w gs) (foldl (\ x g (wcat x (wgd g))) w gs)
-   (adds u ns) (u + filter (\ n !(elem n u)) ns)    ; u, then what it did not have
+   (adds u ns) (u + filter (n \ !(elem n u)) ns)    ; u, then what it did not have
    _ (:: '@ (\ a
        (: v (nom 0)
           ; the clause a walk answers: its tests, then its non-linear equalities, then its
