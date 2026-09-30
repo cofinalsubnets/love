@@ -75,7 +75,7 @@
        _ (? (two? o) () (udie 2 "grep: bad option"))
        ; -a is in the usage and read nowhere: everything here is text, so it is a
        ; no-op and not an unknown
-       _ (: c (uoptun t (chars "nvclqhaixwFEoemfrRHLsABC" + [1001 1002]))
+       _ (: c (uoptbad as t (chars "nvclqhaixwFEoemfrRHLsABC" + [1001 1002]))
             (? !c () (udie 2 ("grep: unknown option -" + string c))))
        eps <>o rest <>>o
        ; -f's patterns, a line each; an empty file is no pattern, which matches nothing

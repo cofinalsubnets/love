@@ -106,5 +106,18 @@ if command -v vdir >/dev/null 2>&1; then
   done
 fi
 
+# the flags past the first nine: sizes (-h -S -s), marks (-F -p), inodes (-i), owners
+# (-n -g -o), the other clocks (-u -c), down the tree (-R, a link to a directory not
+# followed), through links (-L), colour said outright; over a tree with a fifo, an
+# executable and a link to a directory
+u=$w/u; mkdir -p "$u/d/sub/deep"; head -c 3000 /dev/zero > "$u/d/big"; : > "$u/d/empty"; printf 'ab' > "$u/d/two"
+chmod 755 "$u/d/big"; ln -s big "$u/d/lnk"; ln -s sub "$u/d/lsub"; mkfifo "$u/d/fifo"; echo z > "$u/d/sub/z"; echo q > "$u/d/sub/deep/q"
+touch -d '2024-01-02 10:00' "$u/d/big"; touch -d '2024-01-03 10:00' "$u/d/two"; touch -d '2024-01-01 10:00' "$u/d/empty"
+for f in -1S -1Sr -1F -1p -1i -1s -1si -lh -lS -ln -lg -lo -lgo -lF -lp -li -ls -lsh -1R -lR -1L -lL -R -1tu -1tc "-1 --color=never"; do
+  # shellcheck disable=SC2086
+  try $f "$u/d"
+done
+try -lh "$u/d/big" "$u/d/two"
+[ "$("$m" ls --color=always -1 "$u/d" | head -1 | od -c | head -1 | tr -s ' ')" = "$(printf '0000000 033 [ 3 2 m b i g 033 [ 0 m \\n')" ] || { echo "FAIL ls --color=always"; fail=$((fail + 1)); }
 echo "kore ls: $ran rows, $fail failed"
 [ "$fail" = 0 ]

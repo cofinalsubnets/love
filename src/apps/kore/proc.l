@@ -27,22 +27,34 @@
                               _ (setenv (snip s 0 i) (snip s (i + 1) #s))
                               (setp >a))
                          a)))
-       ; the options come first: -i empties the environment, -u NAME drops one --
-       ; a non-string value unsets (src/love/main.c's setenv shape); then the assignments
+       ; the options come first: -i empties the environment, -u NAME drops one -- a
+       ; non-string value unsets (src/love/main.c's setenv shape); -0 ends each listed with a
+       ; NUL, -C DIR runs the command there, -S STRING splits STRING into words, the
+       ; shebang's way (env -S 'cmd a b'); then the assignments
+       st {'nul 0 'dir ()}
        (unset-all e) (? (atom? e) 0 (: k <e i (eqat k) _ (setenv (? i (snip k 0 i) k) ()) (unset-all >e)))
        (opts a) (? (atom? a) a
-                  (<a = "-i") (unset-all (environ 0), opts >a)
-                  (<a = "-u") (? (two? >a) (setenv <>a (), opts >>a) (udie 1 "env: -u needs a name"))
+                  (<a = "-i" || <a = "-" || <a = "--ignore-environment") (unset-all (environ 0), opts >a)
+                  (<a = "-u") (? (two? >a) (setenv <>a (), opts >>a) (udie 125 "env: -u needs a name"))
+                  (<a = "-0" || <a = "--null") (pin st 'nul 1, opts >a)
+                  (<a = "-C") (? (two? >a) (pin st 'dir <>a, opts >>a) (udie 125 "env: -C needs a directory"))
+                  (starts? <a "--chdir=") (pin st 'dir (snip <a 8 #<a), opts >a)
+                  (<a = "-S") (? (two? >a) (opts (words <>a + >>a)) (udie 125 "env: -S needs a string"))
+                  (2 < #<a && starts? <a "-S") (opts (words (snip <a 2 #<a) + >a))
+                  (starts? <a "--split-string=") (opts (words (snip <a 15 #<a) + >a))
                   (<a = "--") >a
+                  (1 < #<a && <a 0 = 45) (udie 125 ("env: unknown option " + <a))
                   a)
        rest (setp (opts as))
+       _ (? (st 'dir) (? (two? rest) (? (chdir (st 'dir)) (udie 125 ("env: cannot change directory to '" + st 'dir + "'")) 0)
+                         (udie 125 "env: must specify command with --chdir (-C)")) 0)
        (? (two? rest)
           (: p (spawn rest)
              (? (nom? p) (udie 127 ("env: cannot run " + <rest))
                 (: w (wait p) _ (flush out) w)))
           (: (pr e) (? (atom? e) (flush out, 0)
-                       (say out <e, put out 10, pr >e))
-             (pr (environ 0)))))
+                       (say out <e, put out (? (st 'nul) 0 10), pr >e))
+             (pr (rev (environ 0))))))   ; environ answers last first
 
    ; -- sleep: the durations, summed --
    (sleep-main as)
@@ -60,9 +72,11 @@
    ; the one signal table: kill, pkill, killall and timeout spell by it, and lush's
    ; trap and kill builtins read it too. the numbers are Linux's; USR1 USR2 CHLD TSTP
    ; want an ISA/OS table on a BSD
-   usignames '(("HUP" 1) ("INT" 2) ("QUIT" 3) ("ABRT" 6) ("KILL" 9) ("USR1" 10) ("SEGV" 11)
-               ("USR2" 12) ("PIPE" 13) ("ALRM" 14) ("TERM" 15) ("CHLD" 17) ("CONT" 18)
-               ("STOP" 19) ("TSTP" 20) ("TTIN" 21) ("TTOU" 22))
+   usignames '(("HUP" 1) ("INT" 2) ("QUIT" 3) ("ILL" 4) ("TRAP" 5) ("ABRT" 6) ("BUS" 7) ("FPE" 8)
+               ("KILL" 9) ("USR1" 10) ("SEGV" 11) ("USR2" 12) ("PIPE" 13) ("ALRM" 14) ("TERM" 15)
+               ("STKFLT" 16) ("CHLD" 17) ("CONT" 18) ("STOP" 19) ("TSTP" 20) ("TTIN" 21) ("TTOU" 22)
+               ("URG" 23) ("XCPU" 24) ("XFSZ" 25) ("VTALRM" 26) ("PROF" 27) ("WINCH" 28) ("IO" 29)
+               ("PWR" 30) ("SYS" 31))
    (usigdig? b k) (? (#b <= k) (0 < #b)
                      (48 <= (b k) && (b k) <= 57) (usigdig? b (k + 1))
                      0)
@@ -70,25 +84,40 @@
     (: n #w
        (snl l b) (? (atom? l) () (<<l = b) <><l (snl >l b))
        (? (n < 2 || !((w 0) = 45)) ()
-          (: b (snip w 1 n)
+          (: b0 (snip w 1 n) b (? (starts? b0 "SIG") (snip b0 3 #b0) b0)   ; -SIGTERM too
              (? (usigdig? b 0) (uatoi b) (snl usignames b)))))
 
-   ; -- kill: a signal (default TERM) onto every named pid --
+   ; -- kill: a signal (default TERM) onto every named pid, -PID a process group; -s SIG
+   ; the signal spelled apart; -l the names, -l N the name of N (a status past 128 the
+   ; signal that made it), -l NAME its number --
    (kill-main as)
     (: (alldig? s) (usigdig? s 0)
-       sig (? (two? as) (usignum <as) ())
-       pids (? (charm? sig) >as as)
-       sg (? (charm? sig) sig 15)
-       _ (? (two? pids) () (udie 1 "usage: kill [-SIG] PID.."))
-       (one p ok)
-        (? !(alldig? p)
-           (say err ("kill: invalid pid " + p), put err 10, 0)
-           (: r (still (uatoi p) sg)
-              (? !r ok
-                 (say err ("kill: cannot kill " + p), put err 10, 0))))
-       (go a ok) (? (two? a) (go >a (one <a ok))
-                    (flush err, (? ok 0 1)))
-       (go pids 1))
+       (die m) (udie 1 ("kill: " + m))
+       (named w) (: n (usignum ("-" + w)) (? (charm? n) n (die ("unknown signal " + w))))
+       (sname n) (: e (filter (x \ <>x = n) usignames) (? (two? e) <<e ()))
+       (lone w) (? (alldig? w) (: nm (sname (uatoi w % 128)) (? nm nm (die ("unknown signal " + w))))
+                   (show (named w)))
+       (? (two? as && <as = "-l")
+          (: _ (? (two? >as) (each >as (w \ say out (lone w + "\n"))) (each usignames (x \ say out (<x + "\n"))))
+             _ (flush out) 0)
+       (: sig (? (atom? as) ()
+                 (<as = "-s") (? (two? >as) (named <>as) (die "-s wants a signal"))
+                 (<as = "--") ()
+                 (usignum <as))
+          pids (? (atom? as) () (<as = "-s") >>as (<as = "--") >as (charm? sig) >as as)
+          sg (? (charm? sig) sig 15)
+          _ (? (two? pids) () (udie 1 "usage: kill [-s SIG | -SIG] PID.. | kill -l [SIG..]"))
+          (pid? p) (? (alldig? p) 1 (1 < #p && p 0 = 45 && alldig? (snip p 1 #p)))
+          _ (? (<pids 0 = 45 && !(pid? <pids)) (die ("unknown signal " + <pids)) 0)
+          (one p ok)
+           (? !(pid? p)
+              (say err ("kill: invalid pid " + p), put err 10, 0)
+              (: r (still (uatoi p) sg)
+                 (? !r ok
+                    (say err ("kill: cannot kill " + p), put err 10, 0))))
+          (go a ok) (? (two? a) (go >a (one <a ok))
+                       (flush err, (? ok 0 1)))
+          (go pids 1))))
 
    ; -- the time zone: TZ, else /etc/localtime. a zone is a function from utc seconds to
    ; [offset-east-seconds abbreviation]. a TZif file is read for its transitions and its
@@ -239,9 +268,8 @@
                          (put o 37, put o d))
                     (go (k + 2))))))
        (go 0))
-   (udt-when w)                        ; -d's @seconds, the one spelling this date parses
-    (? ((0 < tally w) && (w 0 = 64)) (1000 * (uatoi (snip w 1 #w)))
-       (udie 1 ("date: cannot read the date '" + w + "' (only @SECONDS here)")))
+   (udt-when w)                        ; -d's date, through u.l's udate
+    (: v (udate w (clock 0)) (? (charm? v) v (udie 1 ("date: invalid date '" + w + "'"))))
    (date-main as)
     (: u {'u 0}
        (fl a when fmt)
@@ -430,15 +458,17 @@
 
    ; -- printenv: the world, or just the names asked for (a name with no value in it
    ; says nothing and the exit remembers, like GNU's) --
-   (printenv-main as)
-    (? (atom? as)
+   ; -0 ends each with a NUL where a newline was
+   (printenv-main as0)
+    (: fo (uflags "printenv" as0 () "0") as (fo 1) nl (? (<fo 48) 0 10)
+     (? (atom? as)
        (: (pr e) (? (atom? e) (flush out, 0)
-                    (say out <e, put out 10, pr >e))
-          (pr (environ 0)))
+                    (say out <e, put out nl, pr >e))
+          (pr (rev (environ 0))))   ; environ answers last first
        (: (one w ok) (: v (getenv w)
-                        (? (string? v) (say out v, put out 10, ok) 0))
+                        (? (string? v) (say out v, put out nl, ok) 0))
           (go a ok) (? (two? a) (go >a (one <a ok)) (flush out, (? ok 0 1)))
-          (go as 1)))
+          (go as 1))))
 
    ; -- whoami and groups: id's two thin faces (id -un and id -Gn) --
    (whoami-main _)
@@ -451,8 +481,12 @@
 
    ; -- hostname: the name the kernel keeps. uname -n reads the same line, and this is
    ; the spelling a script asks by; no setting, which wants privilege and a syscall --
-   (hostname-main _)
-    (say out (u-1line "/proc/sys/kernel/hostname" "unknown"), put out 10, flush out, 0)
+   ; -s the name up to its first dot, -f the canonical name the host resolves itself to
+   (hostname-main as)
+    (: fo (uflagsl "hostname" as () "fs" {"short" 115 "fqdn" 102 "long" 102})
+       h (u-1line "/proc/sys/kernel/hostname" "unknown")
+       n (? (<fo 102) <>(uhw-self 0) (<fo 115) (: k (findsub h ".") (? (k < 0) h (snip h 0 k))) h)
+       (say out n, put out 10, flush out, 0))
 
    ; -- hostid and dnsdomainname: what the resolver says of this host's own name, read
    ; the way glibc's lookup reaches it here -- /etc/hosts, then the addresses the host
@@ -495,14 +529,16 @@
        r (uhw-hosts h)
        (? (two? r) r
           (: ls (uhw-local 0) [(? (two? ls) <ls 33554559) h])))
-   (hostid-main _)
-    (: r (uread "/etc/hostid")
+   (hostid-main as)
+    (: _ (uflags "hostid" as () "")
+       r (uread "/etc/hostid")
        v (? (two? r && 4 <= #<>r) (: b <>r (b 0 + (b 1 << 8) + (b 2 << 16) + (b 3 << 24)))
             (: a <(uhw-self 0) (((a << 16) + (a >> 16)) & 4294967295)))
        x (radix v 16)
        _ (say out ((zpad 8 x) + "\n")) _ (flush out) 0)
-   (dnsdomainname-main _)
-    (: c <>(uhw-self 0)
+   (dnsdomainname-main as)
+    (: _ (uflags "dnsdomainname" as () "")
+       c <>(uhw-self 0)
        k (findsub c ".")
        _ (? (0 <= k) (say out ((snip c (k + 1) #c) + "\n")) 0)
        _ (flush out) 0)
@@ -828,7 +864,7 @@
        t (tablet 0)
        o (uopt as t '(115 116 100) () ())
        _ (? (two? o) 0 (udie 1 usage))
-       _ (: u (uoptun t '(115 116 88)) (? !u 0 (udie 1 ("microcom: -" + string u + " is not supported\n" + usage))))
+       _ (: u (uoptbad as t '(115 116 88)) (? !u 0 (udie 1 ("microcom: -" + string u + " is not supported\n" + usage))))
        ops (o 2)
        _ (? (two? ops && atom? >ops) 0 (udie 1 usage))
        dev <ops
@@ -884,8 +920,8 @@
                               (rev (p . acc)))))
           (go ds ())))
    (which-main as)
-    (: a? (two? as && <as = "-a")
-       ns (? a? >as as)
+    (: fo (uflags "which" as () "a")
+       a? (<fo 97) ns (fo 1)
        _ (? (two? ns) () (udie 2 "usage: which [-a] NAME.."))
        (go l bad)
         (? (atom? l) (flush out, bad)
@@ -899,36 +935,37 @@
    ; TERM unless -s names another, and -k arms a KILL that far past it. GNU's status:
    ; 124 for a command the clock ended, 125 for our own trouble, 126/127 for one that
    ; would not start, and otherwise the command's own --
-   ; usignum wants the dash the command line writes; -s spells the bare name
-   (utmo-flags a sig kill)
-    (? (atom? a) [sig kill a]
-       (<a = "-s") (? (two? >a) (utmo-flags >>a (usignum ("-" + <>a)) kill)
-                      (udie 125 "timeout: -s wants a signal"))
-       (<a = "-k") (? (two? >a) (utmo-flags >>a sig (udur <>a))
-                      (udie 125 "timeout: -k wants a duration"))
-       [sig kill a])
    ; the deadline and the wait are ONE loop: gather polls without blocking, so there
    ; is no alarm to arm and no handler to run. `sent` is the elapsed reading the signal
-   ; went out at and () while the command still has its time; k? says the KILL followed
-   (utmo-wait p t0 lim sig kill)
-    (: (go sent k?)
+   ; went out at and () while the command still has its time; k? says the KILL followed.
+   ; o: 'v says each signal sent, 'keep answers the command's own status where 124 would
+   (utmo-wait p t0 lim sig kill o)
+    (: (name n) (: e (filter (x \ <>x = n) usignames) (? (two? e) <<e (show n)))
+       (send s) (: _ (? (o 'v) (say err ("timeout: sending signal " + name s + " to command '" + o 'cmd + "'\n")) 0) (still p s))
+       (go sent k?)
         (: r (gather p)
-           (? (two? r) (? (charm? sent) 124 <r)  ; a child we ended reads 124, not its own
+           ; a child we ended reads 124, not its own -- save one KILL ended, which reads
+           ; 137 as GNU's does, a KILL being no signal a command could have chosen to obey
+           (? (two? r) (? (charm? sent && !(o 'keep)) (? (sig = 9 || k?) 137 124) <r)
               (nom? r) 125
               (: el (clock t0)
                  fire (? (!(charm? sent) && lim <= el) el sent)
-                 _ (? (fire = sent) 0 (still p sig))
+                 _ (? (fire = sent) 0 (send sig))
                  k2 (? ((!k? && charm? fire) && (charm? kill && (fire + kill) <= el))
-                       (still p 9, 1)
+                       (send 9, 1)
                        k?)
                  _ (rest 20)
                  (go fire k2))))
        (go () 0))
+   ; -s SIG the signal, -k DUR the KILL after it, -v says each, --preserve-status the
+   ; command's own status where the clock ended it
    (timeout-main as)
-    (: fp (utmo-flags as 15 ())
-       sig <fp kill <>fp ops <>>fp
+    (: fo (ucmdflagsl "timeout" as '(115 107) (chars "ksv" + [1001]) {"signal" 115 "kill-after" 107 "verbose" 118 "preserve-status" 1001})
+       t <fo ops (fo 1)
+       sig (? (t 115) (usignum ("-" + uoptv t 115)) 15)
+       kill (? (t 107) (: v (udur (uoptv t 107)) (? (charm? v) v (udie 125 "timeout: -k wants a duration"))) ())
        _ (? (two? ops && two? >ops) ()
-            (udie 125 "usage: timeout [-s SIG] [-k DUR] DURATION CMD [ARG..]"))
+            (udie 125 "usage: timeout [-v] [-s SIG] [-k DUR] [--preserve-status] DURATION CMD [ARG..]"))
        _ (? (charm? sig) () (udie 125 "timeout: unknown signal"))
        lim (udur <ops)
        _ (? (charm? lim) () (udie 125 ("timeout: invalid duration '" + <ops + "'")))
@@ -937,7 +974,7 @@
        p (spawn cmd)
        (? (nom? p) (say err ("timeout: cannot run " + <cmd), put err 10, uleave 127)
           (lim = 0) (wait p)                    ; a zero duration is no limit, as GNU has it
-          (utmo-wait p t0 lim sig kill)))
+          (utmo-wait p t0 lim sig kill {'v (t 118) 'keep (t 1001) 'cmd <cmd})))
 
 
    ; ---- chroot, mount and umount: the three the distro's own boot asks for -------
@@ -955,8 +992,9 @@
    ; which is exactly what fexecve is for: the fd is opened HERE, before the root moves,
    ; and names the image afterwards when no path does. a seat that cannot say where it
    ; is (no selfpath) has no self to exec and falls back to the path it was given.
-   (chroot-main as)
-    (: _ (? (two? as) () (udie 1 "usage: chroot DIR [CMD [ARG..]]"))
+   (chroot-main as0)
+    (: as ((ucmdflags "chroot" as0 () "") 1)
+       _ (? (two? as) () (udie 1 "usage: chroot DIR [CMD [ARG..]]"))
        d <as
        _ (? (lit? (cite 'posix 'chroot)) () (udie 1 "chroot: no chroot on this seat"))
        ; both of these are read BEFORE the root moves, and for the same reason:
@@ -1008,7 +1046,7 @@
        (: t (tablet 0)
           o (uopt as t '(116 111) '(101) ())
           _ (? (two? o) () (udie 1 "mount: -t and -o each want a value"))
-          _ (: c (uoptun t "to") (? !c () (udie 1 ("mount: unknown option -" + string c))))
+          _ (: c (uoptbad as t "to") (? !c () (udie 1 ("mount: unknown option -" + string c))))
           ty (: v (uoptv t 116) (? (string? v) v "auto"))
           ob (: v (uoptv t 111) (? (string? v) (umnt-bits (usplit 44 v) 0) 0))
           fs <>>o
@@ -1017,8 +1055,9 @@
           _ (? (lit? (cite 'posix 'mountf)) () (udie 1 "mount: no mount on this seat"))
           e (mountf src tgt ty ob)
           (? e (udie 1 ("mount: cannot mount " + src + " on " + tgt + ": " + (show e))) 0)))
-   (umount-main as)
-    (: _ (? (two? as) () (udie 1 "usage: umount TARGET.."))
+   (umount-main as0)
+    (: as ((uflags "umount" as0 () "") 1)
+       _ (? (two? as) () (udie 1 "usage: umount TARGET.."))
        _ (? (lit? (cite 'posix 'umount)) () (udie 1 "umount: no umount on this seat"))
        (go l ok) (? (atom? l) ok
                     (: e (umount <l)
@@ -1120,46 +1159,129 @@
    ; the owner comes off /proc/PID itself, whose directory is owned by the process:
    ; one stat where /proc/PID/status would be a second read and a second parser.
    (upuid p) (: st (stat ("/proc/" + (show p))) (? (5 < #st) (st 4) -1))
+   ; the columns: [header right-aligned? cell-of]. a cell reads the stat fields f, the pid
+   ; and a box of the clock readings, and answers text
+   (ups-cols b)
+    (: HZ 100
+       (tk f) (uatoi (f 13) + uatoi (f 14))
+       (age f) (max 1 (b 'up * HZ - uatoi (f 21)))
+       (pct n) (show (n // 10) + "." + show (n % 10))
+       (start f) (: s (b 'boot + (uatoi (f 21) // HZ)) ymd (civil (s // 86400)) now (civil (b 'now // 86400))
+                    (? (ymd = now) (zpad 2 (show (s % 86400 // 3600)) + ":" + zpad 2 (show (s % 3600 // 60)))
+                       (mon3 (ymd 1 - 1) + zpad 2 (show (ymd 2)))))
+       (args p f) (: c (upcmd p) (? (string? c) c ("[" + f 1 + "]")))
+       ; statm's resident pages, which the kernel keeps exact where stat's may lag
+       (rss p f) (: r (uread ("/proc/" + show p + "/statm")) w (? (two? r) (words <>r) ())
+                    (show (4 * (? (two? >w) (uatoi <>w) (uatoi (f 23))))))
+       ; the state and procps' marks after it: < or N for the nice, s a session leader,
+       ; l threaded, + in the terminal's foreground group
+       (st p f) (: ni (uatoi (f 18))
+                   (f 2 + (? (ni < 0) "<" (0 < ni) "N" "") + (? (show p = f 5) "s" "")
+                    + (? (1 < uatoi (f 19)) "l" "") + (? (!(f 7 = "-1") && f 4 = f 7) "+" "")))
+       ; procps' least widths, the last column unpadded
+       {'pid ["PID" 1 (\ p f (show p)) 7]
+        'ppid ["PPID" 1 (\ p f (f 3)) 7]
+        'uid ["UID" 1 (\ p f (show (upuid p))) 5]
+        'user ["USER" 0 (\ p f (uidname "/etc/passwd" (upuid p))) 8]
+        'tty ["TT" 0 (\ p f (utty (uatoi (f 6)))) 8]
+        'tty8 ["TTY" 0 (\ p f (utty (uatoi (f 6)))) 8]
+        'time ["TIME" 1 (\ p f (uhms (tk f))) 8]
+        'bsdtime ["TIME" 1 (\ p f (: s (tk f // HZ) (show (s // 60) + ":" + zpad 2 (show (s % 60))))) 6]
+        'stat ["STAT" 0 st 4]
+        'ni ["NI" 1 (\ p f (f 18)) 3]
+        'rss ["RSS" 1 rss 5]
+        'vsz ["VSZ" 1 (\ p f (show (uatoi (f 22) // 1024))) 6]
+        'pcpu ["%CPU" 1 (\ p f (pct (1000 * tk f // age f))) 4]
+        'pmem ["%MEM" 1 (\ p f (pct (1000 * uatoi (rss p f) // max 1 (b 'mem)))) 4]
+        'c ["C" 1 (\ p f (show (min 99 (100 * tk f // age f)))) 2]
+        'start ["START" 0 (\ p f (start f)) 5]
+        'stime ["STIME" 0 (\ p f (start f)) 5]
+        'comm ["COMMAND" 0 (\ p f (f 1)) 15]
+        'cmd ["CMD" 0 args 0]
+        'ucmd ["CMD" 0 (\ p f (f 1)) 0]
+        'args ["COMMAND" 0 args 0]})
+   ; -- ps: bare ps takes the ones that are ours and share this terminal, procps' rule
+   ; (same euid, same tty); -e -A and a x ax take every one, -p PID,.. and -u USER,..
+   ; those. the face is PID TTY TIME CMD; -f is the full one, BSD's u the user one (so
+   ; `ps aux`), and -o KEY[=HEADER],.. names its own, from pid ppid uid user tty time
+   ; stat ni rss vsz pcpu pmem c start stime comm cmd args. times are UTC.
+   ; the owner comes off /proc/PID itself, whose directory is owned by the process:
+   ; one stat where /proc/PID/status would be a second read and a second parser.
+   (upuid p) (: st (stat ("/proc/" + (show p))) (? (5 < #st) (st 4) -1))
    (ps-main as)
-    (: all (: (go l) (? (atom? l) 0
-                        (: w <l
-                           (? (elem w '("-e" "-A" "-ax" "ax" "a" "x" "-a")) 1 (go >l))))
-              (go as))
+    (: bsd (filter (w \ 0 < #w && !(w 0 = 45) && all (c \ elem c "aux") (chars w)) as)
+       fo (uflags "ps" (filter (w \ !(elem w bsd)) as) '(111 112 117) "Aaefopux")
+       t <fo
+       _ (? (two? (fo 1)) (udie 1 ("ps: unknown operand " + <(fo 1))) 0)
+       bl (cats (map chars bsd))
+       every? (? (t 101 || t 65 || elem 97 bl || elem 120 bl) 1 0)
+       ; not `list`: [a b] is (list a b), and a local of that name would take every one
+       (csv c) (: v (uoptv t c) (? v (filter (w \ 0 < #w) (usplit 44 (replace v " " ","))) ()))
+       pids (map uatoi (csv 112))
+       users (csv 117)
        self (upself 0)
        mine (? self (uatoi (self 6)) 0)
        myuid (getuid 0)
-       _ (say out "    PID TTY          TIME CMD") _ (put out 10)
-       (one p) (: f (upstat p)
-                  (? !f 0
-                     (: tty (uatoi (f 6))
-                        (? !(all || (tty = mine && (upuid p) = myuid)) 0
-                           (say out (upad 7 (show p)), say out (" " + (urpad 8 (utty tty))), say out (" " + (uhms ((uatoi (f 13)) + (uatoi (f 14))))), say out (" " + (f 1)), put out 10)))))
-       _ (foldl (\ _ p (one p)) 0 (uprocs 0))
-       _ (flush out) 0)
+       up (: r (uread "/proc/uptime") w (? (two? r) <(words <>r) "0") k (findsub w ".") (uatoi (? (k < 0) w (snip w 0 k))))
+       now ((clock 0) // 1000)
+       b {'up up 'now now 'boot (now - up) 'mem (peep (umeminfo 0) 'MemTotal 1)}
+       cols (ups-cols b)
+       spec (? (t 111) (map (w \ (: k (findsub w "=") nm (? (k < 0) w (snip w 0 k))
+                                    c (cols (intern nm))
+                                    (? !c (udie 1 ("ps: unknown key " + nm))
+                                       (k < 0) c [(snip w (k + 1) #w) (c 1) (c 2) (c 3)])))
+                             (csv 111))
+               (t 102) ([(: c (cols 'user) ["UID" (c 1) (c 2) (c 3)])] + map cols '(pid ppid c stime tty8 time cmd))
+               (elem 117 bl) (map cols '(user pid pcpu pmem vsz rss tty8 stat start bsdtime args))
+               (map cols '(pid tty8 time ucmd)))
+       (want p f) (: u (upuid p)
+                     (? (two? pids) (elem p pids)
+                        (two? users) (any (w \ w = show u || w = uidname "/etc/passwd" u) users)
+                        (? (every? || (uatoi (f 6) = mine && u = myuid)) 1 0)))
+       rows (filter two? (map (p \ (: f (upstat p) (? (two? f && want p f) (map (c \ (c 2) p f) spec) ()))) (uprocs 0)))
+       n #spec
+       ; procps' widths hold: a longer number runs over, a longer name is cut to a +
+       ws (map (k \ max ((spec k) 3) #(<(spec k))) (jot n))
+       ; a cell past its width is paid back out of the padding after it, as procps pays
+       ; it, so the row comes back into line; a name that runs over is cut to a + instead,
+       ; and a left-aligned last column is not padded at all
+       (line cells) (: (go k over) (? (n <= k) ""
+                                      (: c (cells k) R ((spec k) 1) last (k = n - 1)
+                                         w (max 0 (ws k - over))
+                                         c2 (? (!R && !last && ws k < #c) (snip c 0 (ws k - 1) + "+") c)
+                                         s (? (last && !R) c2 R (upad w c2) (urpad w c2))
+                                         (s + (? last "" " ") + go (k + 1) (max 0 (#s - w)))))
+                       (go 0 0))
+       _ (? (any (c \ 0 < #<c) spec) (say out (line (map (c \ <c) spec) + "\n")) 0)
+       _ (each rows (r \ say out (line r + "\n")))
+       _ (flush out)
+       (? (two? rows) 0 1))
 
    ; -- free: /proc/meminfo, procps' six columns. used is total minus available and
    ; not total minus free: the kernel's own estimate of what a new program could have
    ; is the only honest reading of "used", and it is what procps prints --
+   ; -b bytes, -k KiB (unsaid), -m MiB, -g GiB, -h the unit each fits; -t a Total row
+   ; of the two; -w buffers and cache apart
    (free-main as)
-    (: m (umeminfo 0)
+    (: fo (uflags "free" as () "bghkmtw")
+       t <fo
+       m (umeminfo 0)
        (g k) (peep m k 0)
-       div (? (elem "-g" as) 1048576 (? (elem "-m" as) 1024 1))
        ; -h: the unit each number fits, procps' suffixes. the readings are KiB out of
        ; /proc/meminfo, so the ladder starts at Ki
        (hum k) (: (go v us) (? (v < 1024 || (atom? >us)) (show v + <us) (go (v // 1024) >us))
                   (go k '("Ki" "Mi" "Gi" "Ti" "Pi")))
-       h? (elem "-h" as)
-       (cell x) (upad 12 (? h? (hum x) (show (x // div))))
+       (cell x) (upad 12 (? (t 104) (hum x) (t 98) (show (x * 1024)) (t 103) (show (x // 1048576)) (t 109) (show (x // 1024)) (show x)))
        tot (g 'MemTotal) fre (g 'MemFree) av (g 'MemAvailable)
-       bc (((g 'Buffers) + (g 'Cached)) + (g 'SReclaimable))
+       bu (g 'Buffers) ca ((g 'Cached) + (g 'SReclaimable))
        st (g 'SwapTotal) sf (g 'SwapFree)
-       _ (say out "               total        used        free      shared  buff/cache   available")
-       _ (put out 10)
-       _ (say out ((urpad 8 "Mem:") + (cell tot) + (cell (tot - av)) + (cell fre)
-                   + (cell (g 'Shmem)) + (cell bc) + (cell av)))
-       _ (put out 10)
-       _ (say out ((urpad 8 "Swap:") + (cell st) + (cell (st - sf)) + (cell sf)))
-       _ (put out 10)
+       w? (t 119)
+       _ (say out (? w? "               total        used        free      shared     buffers       cache   available\n"
+                       "               total        used        free      shared  buff/cache   available\n"))
+       _ (say out ((urpad 8 "Mem:") + (cell tot) + (cell (tot - av)) + (cell fre) + (cell (g 'Shmem))
+                   + (? w? (cell bu + cell ca) (cell (bu + ca))) + (cell av) + "\n"))
+       _ (say out ((urpad 8 "Swap:") + (cell st) + (cell (st - sf)) + (cell sf) + "\n"))
+       _ (? (t 116) (say out ((urpad 8 "Total:") + (cell (tot + st)) + (cell (tot - av + st - sf)) + (cell (fre + sf)) + "\n")) 0)
        _ (flush out) 0)
 
    ; -- uptime: the clock, how long since boot, the users the host's utmp holds, and
@@ -1179,8 +1301,24 @@
        ws (? (two? l) (words <>l) ())
        (? (2 < #ws) ((((ws 0) + ", ") + ((ws 1) + ", ")) + (ws 2))
           "0.00, 0.00, 0.00"))
+   ; -p says the time up alone, in weeks days hours minutes as procps says it; -s the
+   ; moment the host came up
    (uptime-main as)
-    (: secs (uupsecs 0)
+    (: fo (uflags "uptime" as () "ps")
+       secs (uupsecs 0)
+       (unit n w) (? (n = 0) () (show n + " " + w + (? (n = 1) "" "s")))
+       _ (? (<fo 112) (: ps (filter string? [(unit (secs // 604800) "week") (unit (secs % 604800 // 86400) "day")
+                                             (unit (secs % 86400 // 3600) "hour") (unit (secs % 3600 // 60) "minute")])
+                         _ (say out ("up " + (? (two? ps) (join ", " ps) "0 minutes") + "\n"))
+                         _ (flush out) (uleave 0)) 0)
+       ; the boot is /proc/stat's btime, the kernel's own record of it, where now less the
+       ; uptime would fall either side of a second
+       _ (? (<fo 115) (: st (uread "/proc/stat")
+                         bl (? (two? st) (filter (l \ starts? l "btime ") (lines <>st)) ())
+                         b (? (two? bl) (uatoi (snip <bl 6 #<bl)) ((clock 0) // 1000 - secs))
+                         ymd (civil (b // 86400)) tod (uclk (b % 86400))
+                         _ (say out (show <ymd + "-" + zpad 2 (show (ymd 1)) + "-" + zpad 2 (show (ymd 2)) + " " + tod + "\n"))
+                         _ (flush out) (uleave 0)) 0)
        ld (uloadav 0)
        tod (uclk (((clock 0) // 1000) % 86400))
        r (uut-read (uut-file 0))
@@ -1388,8 +1526,9 @@
 
    ; -- reset: the terminal put back -- the line discipline sane where stdin is one, and
    ; the full reset (RIS) sent, toybox's pair --
-   (reset-main _)
-    ((? (two? (tty 0)) (stty-main ["sane"]) 0), say out "\ec", flush out, 0)
+   (reset-main as)
+    (: _ (uflags "reset" as () "")
+       ((? (two? (tty 0)) (stty-main ["sane"]) 0), say out "\ec", flush out, 0))
 
    ; -- ts: each line of the input stamped as it arrives, toybox's: the date and time
    ; ("%b %d %H:%M:%S"), or with -s the time since the start and with -i since the line
@@ -1418,8 +1557,9 @@
        (loop t0))
 
    ; -- users: the names logged in, sorted, on one line --
-   (users-main as)
-    (: _ (? (1 < #as) (udie 1 ("users: extra operand '" + as 1 + "'")) 0)
+   (users-main as0)
+    (: as ((uflags "users" as0 () "") 1)
+       _ (? (1 < #as) (udie 1 ("users: extra operand '" + as 1 + "'")) 0)
        fl (? (two? as) <as (uut-file 0))
        r (uut-read fl)
        _ (? r 0 (udie 1 ("users: " + fl + ": No such file or directory")))
@@ -1452,8 +1592,9 @@
    (upfind f? x? pat)                  ; the pids answering, ours never among them
     (: me (: s (upself 0) (? s <s -1))
        (filter (p \ (? (p = me) 0 (upmatch f? x? pat p))) (uprocs 0)))
+   ; -s says one pid, the first
    (pidof-main as)
-    (: fs (filter (\ w !((0 < tally w) && (w 0) = 45)) as)
+    (: fo (uflags "pidof" as () "s") fs (fo 1) one? (<fo 115)
        _ (? (two? fs) () (udie 1 "usage: pidof NAME.."))
        me (: s (upself 0) (? s <s -1))
        (hit p) (: s (upstat p)
@@ -1462,35 +1603,51 @@
                   (? (p = me) 0
                      (foldl (\ acc w (? acc 1 (? (c = w || a = w) 1 0))) 0 fs)))
        ps (filter hit (rev (uprocs 0)))
-       _ (? (two? ps) (say out (ujoin (map show ps)), put out 10) 0)
+       _ (? (two? ps) (say out (ujoin (map show (? one? [<ps] ps))), put out 10) 0)
        _ (flush out)
        (? (two? ps) 0 1))
+   ; pgrep's and pkill's choosing, off their shared flags: the pattern over the name (or
+   ; with -f the command line, -x the whole of it), -v the others, -u USER,.. by owner,
+   ; and of what is left -n the newest or -o the oldest. no pattern takes every one
+   (upsel t pat)
+    (: me (: s (upself 0) (? s <s -1))
+       users (: v (uoptv t 117) (? v (filter (w \ 0 < #w) (usplit 44 v)) ()))
+       (own? p) (: u (upuid p) (any (w \ w = show u || w = uidname "/etc/passwd" u) users))
+       (hit p) (? (p = me) 0
+                  (: m (? pat (upmatch (t 102) (t 120) pat p) 1)
+                     (? ((? (t 118) !m m) && (atom? users || own? p)) 1 0)))
+       ps (filter hit (uprocs 0))
+       (start p) (: f (upstat p) (? (two? f) (uatoi (f 21)) 0))
+       (? (atom? ps) ()
+          (t 110) [(foldl (\ b p (? (start b <= start p) p b)) <ps >ps)]
+          (t 111) [(foldl (\ b p (? (start p < start b) p b)) <ps >ps)]
+          ps))
+   ; -l the name beside each pid, -a the whole command line, -c the count alone, -d the
+   ; delimiter between them
    (pgrep-main as)
-    (: t (tablet 0)
-       o (uopt as t () '(101) ())
-       _ (? (two? o) () (udie 2 "usage: pgrep [-f] [-x] PATTERN"))
-       _ (: c (uoptun t "fx") (? !c () (udie 2 ("pgrep: unknown option -" + string c))))
-       rest <>>o
-       _ (? (two? rest) () (udie 2 "usage: pgrep [-f] [-x] PATTERN"))
-       ps (upfind (peep t 102 0) (peep t 120 0) <rest)
-       _ (foldl (\ _ p (say out (show p), put out 10)) 0 ps)
+    (: fo (uflags "pgrep" as '(117 100) "acdflnouvx")
+       t <fo rest (fo 1)
+       _ (? (two? rest || t 117) () (udie 2 "usage: pgrep [-acflnovx] [-d DELIM] [-u USER,..] [PATTERN]"))
+       ps (upsel t (? (two? rest) <rest ()))
+       (row p) (show p + (? (t 97) (" " + (: c (upcmd p) (? (string? c) c (: f (upstat p) (? f (f 1) ""))))) (t 108) (" " + (: f (upstat p) (? f (f 1) ""))) ""))
+       _ (? (t 99) (say out (show #ps + "\n")) (two? ps) (say out (join (? (t 100) (uoptv t 100) "\n") (map row ps) + "\n")) 0)
        _ (flush out)
        (? (two? ps) 0 1))
+   ; -e says what each signal went to
    (pkill-main as)
     (: sig (? (two? as) (usignum <as) ())
-       rest (? (charm? sig) >as as)
-       t (tablet 0)
-       o (uopt rest t () '(101) ())
-       _ (? (two? o) () (udie 2 "usage: pkill [-SIG] [-f] [-x] PATTERN"))
-       _ (: c (uoptun t "fx") (? !c () (udie 2 ("pkill: unknown option -" + string c))))
-       ws <>>o
-       _ (? (two? ws) () (udie 2 "usage: pkill [-SIG] [-f] [-x] PATTERN"))
-       ps (upfind (peep t 102 0) (peep t 120 0) <ws)
-       _ (foldl (\ _ p (still p (? (charm? sig) sig 15))) 0 ps)
+       fo (uflags "pkill" (? (charm? sig) >as as) '(117) "efnouvx")
+       t <fo ws (fo 1)
+       _ (? (two? ws || t 117) () (udie 2 "usage: pkill [-SIG] [-efnovx] [-u USER,..] [PATTERN]"))
+       ps (upsel t (? (two? ws) <ws ()))
+       _ (each ps (p \ (: nm (: f (upstat p) (? f (f 1) "?"))
+                          r (still p (? (charm? sig) sig 15))
+                          (? (t 101 && !r) (say out (nm + " killed (pid " + show p + ")\n")) 0))))
+       _ (flush out)
        (? (two? ps) 0 1))
    (killall-main as)
     (: sig (? (two? as) (usignum <as) ())
-       ns (? (charm? sig) >as as)
+       ns (ustray "killall" as (? (charm? sig) >as as))
        _ (? (two? ns) () (udie 1 "usage: killall [-SIG] NAME.."))
        me (: s (upself 0) (? s <s -1))
        (one nm ok)
@@ -1533,7 +1690,7 @@
     (: t (tablet 0)
        o (uopt as t '(100 73 76 110 80) () ())
        _ (? (two? o) () (udie 1 "xargs: an option wants a value"))
-       _ (: c (uoptun t "0dILnPrt") (? !c () (udie 1 ("xargs: unknown option -" + string c))))
+       _ (: c (uoptbad as t "0dILnPrt") (? !c () (udie 1 ("xargs: unknown option -" + string c))))
        (num c lo) (: v (uoptv t c) n (? v (unum v) ())
                      (? (!v || (charm? n && lo <= n)) n (udie 1 ("xargs: invalid number for -" + string c + ": " + v))))
        nn (num 110 1) ll (num 76 1) pp (: v (num 80 0) (? (charm? v) (? (v = 0) 1073741824 v) 1))
@@ -1579,7 +1736,7 @@
        ((show (cs // 100)) + "." + (zpad 2 (show (cs % 100)))))
    (utline nm v) (say err (nm + " " + v), put err 10)
    (time-main as)
-    (: cmd (? (two? as && <as = "-p") >as as)
+    (: cmd ((ucmdflags "time" as () "p") 1)
        _ (? (two? cmd) () (udie 2 "usage: time [-p] CMD [ARG..]"))
        r0 (rusage -1)
        t0 (clock 0)

@@ -132,7 +132,7 @@
     (: t (tablet 0)
        o (uopt as t () '(101) ())
        _ (? (two? o) () (udie 2 man-usage))
-       _ (: c (uoptun t '(119)) (? !c () (udie 2 ("man: unknown option -" + string c))))
+       _ (: c (uoptbad as t '(119)) (? !c () (udie 2 ("man: unknown option -" + string c))))
        rest <>>o
        sec? (man-sec? rest)
        sec (? sec? <rest "")
