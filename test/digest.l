@@ -260,8 +260,4 @@
  (crc32-on (crc32-on 0 (hash-bytes 500)) (snip (hash-bytes 1000) 500 1000) = crc32 (hash-bytes 1000))
  (crc32-on 0 "123456789" = 3421780262))
 
-(: _ (test_fin ())
-   _ (puts "digest: ok -- md5, the shas, sha-3 and blake2b on their published vectors, each stream
-      against its one-shot, cksum and bsd sum against love walks
-")
-   0)
+(test_fin ())

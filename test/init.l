@@ -118,5 +118,4 @@
           (4096 = flush 4096))                      ; nothing of love's is pending
 
   (test_fin ())
-  (puts "init: ok") (putc 10)
 ) 0)
