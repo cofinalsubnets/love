@@ -1497,16 +1497,16 @@
      (scr-text s) (: w (gaze s 2) (copied s -(gaze s 9 * w) (gaze s 0)))
 
      ; --- the look ---
-     bee-ink "38;5;214"
-     ; the avatar, four rows of eight cells: wings, a striped body between stinger and eye,
-     ; its underside, legs
+     bee-ink "38;5;218"
+     ; the avatar, four rows of eight cells: a white baby bunny -- ears up with pink insides,
+     ; dark eyes and a pink nose on a white face, a round body, its feet
      bee-face
-      (: w (\ s (sgr "38;5;153" s)) y (\ s (sgr "38;5;220" s)) k (\ s (sgr "38;5;94" s))
-         o (\ s (sgr "1;97" s)) d (\ s (sgr "2" s))
-         [(w "  ▗▀▖▗▀▖")
-          (d " ◂" + y "█" + k "█" + y "█" + k "█" + y "█" + o "◕")
-          ("  " + y "▀" + k "▀" + y "▀" + k "▀" + y "▀" + " ")
-          (d "   ╹ ╹  ")])
+      (: w (\ s (sgr "97" s)) p (\ s (sgr "38;5;218" s))
+         e (\ s (sgr "38;5;236;107" s)) n (\ s (sgr "38;5;205;107" s))
+         [(w " ▐" + p "█" + w "▌ ▐" + p "█" + w "▌")
+          (w " ▗▛" + e "•" + n "ᴥ" + e "•" + w "▜▖")
+          (w " ▐▙▄▄▄▟▌")
+          (w "  ▀▘ ▝▀ ")])
      ; lines in a rounded box n wide, its border in pen
      (boxed pen ls n)
       (: d (\ s (sgr pen s)) rule (edfit "" (n - 2) "─")
@@ -1525,7 +1525,9 @@
 
      bee-spin ["·" "✢" "✳" "✶" "✻" "✽" "✻" "✶" "✳" "✢"]
      bee-hums ["buzzing" "foraging" "waggling" "humming" "pollinating" "hovering" "combing"
-               "gathering nectar" "making honey" "dancing"]
+               "gathering nectar" "making honey" "dancing"
+               "hopping" "nibbling" "twitching its nose" "burrowing" "binkying" "thumping"
+               "munching clover" "flopping" "grooming its ears" "zooming"]
      (spinner c)
       (: ms (clock 0 - c 't0) k (ms // 120)
          (sgr bee-ink (bee-spin (k % #bee-spin) + " " + c 'hum + "…")
