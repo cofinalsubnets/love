@@ -8,10 +8,12 @@
 ; is a strike: the note rings and dies on its own, since a tty tells of keys pressed
 ; and never of keys let go, and a held key's repeats are dropped as the games drop them.
 ;
-; the horn is fed a small chunk at a time, a short lead ahead of the speaker, paced by
-; the loop's gap (rove's pacer), so a strike sounds a few hundredths of a second on;
-; the filler is rove's song-fill, which stops when the card stops taking, so a loop
-; heavier than the seat can mix gaps rather than holds the keys.
+; the horn is fed a small chunk at a time, paced by the loop's gap (rove's pacer), at
+; least an eighth of a second ahead of the speaker: longer than the runtime's pauses (a
+; collection, a section of the image paged in on first use), whose first ones
+; synth-warm takes before the card opens. the filler is rove's song-fill, which stops
+; when the card stops taking, so a loop heavier than the seat can mix gaps rather than
+; holds the keys.
 ;
 ; the shifted row is the keymap's: what shift makes of the digits is the terminal's to
 ; say, and synth-shifted is the us row. alt reaches the terminal as an escape before
@@ -67,7 +69,7 @@
  synth-timbres [["sin" 1.2] ["tri" 1.2] ["saw" 0.9] ["sqr" 0.9] ["box" 1.6] ["chime" 3.0]]
  synth-octaves 3                        ; up or down from middle c's
  synth-chunk (song-rate // 60)          ; a feed, in frames
- synth-lead (song-rate // 16)           ; the least queued ahead of the speaker
+ synth-lead (song-rate // 8)            ; the least queued ahead of the speaker
  synth-gain 11000.0
  names ["C" "C#" "D" "D#" "E" "F" "F#" "G" "G#" "A" "A#" "B"]
  synth-cps 0.5                          ; cycles a second the loop starts at
@@ -267,9 +269,21 @@
                     (k = st 'lk && (clock 0 - st 'lt) < repeat-gap) (keys st)
                     (synth-step st k, pins st 'lk k 'lt (clock 0), keys st)))
               st)
+ ; every timbre struck, a text read and played, the drift walked and a frame drawn, two
+ ; seconds into a jug: the code the keys will reach paged in, and the first collections
+ ; made, before the card is open
+ (synth-warm _) (: st (synth-new ()) j (jug 0)
+                   _ (each ^#synth-timbres (i \ (pin st 'tim i, synth-step st 49)))
+                   _ (synth-send st "n \"0 [4 7] ~ 12\" # s \"sin\" # gain 0.8")
+                   _ (each ^60 (i \ (synth-feed st j, slurp j)))
+                   _ (synth-drift st)
+                   _ (each ^60 (i \ (synth-feed st j, slurp j)))
+                   _ (synth-frame st)
+                   0)
  (lead-of gap) (: n (int (2.5 * gap * song-rate / 1000.0))
                   (n < synth-lead ? synth-lead (song-lead-max < n ? song-lead-max n)))
- (synth-run _) (: _ (raw 1)
+ (synth-run _) (: _ (synth-warm ())
+   _ (raw 1)
    _ (say out (esc + "[?1049h" + esc + "[?25l"))
    st (synth-new ())
    hn (: h (horn song-rate 2) (? (nom? h) () h))
@@ -288,7 +302,7 @@
  synth-usage "usage: love synth [LOOP]   (1 .. = play, shift and alt bend, tab the timbre, up and down the octave, p e [ ] the loop, q leaves)"
  ; --- the harbour: the keys a stage over the buffer, a vi stage on the loop's text.
  ; the keys' tick feeds the card; e sends the buffer; q ends both panes ---
- (synth-berth br vi f) (: st (synth-new ())
+ (synth-berth br vi f) (: _ (synth-warm ()) st (synth-new ())
    hn (: h (horn song-rate 2) (? (nom? h) () h))
    pace (pacer ())
    (feed _) (: l (lead-of (pace! pace))
