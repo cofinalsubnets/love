@@ -18,7 +18,6 @@
    ch-dirs {"up" 0 "down" 180 "left" 270 "right" 90 "ne" 45 "nw" 315 "se" 135 "sw" 225}
    ch-compass ["n" "ne" "e" "se" "s" "sw" "w" "nw"]
    ch-bond-kinds {"double" "doublebond" "triple" "triplebond" "front" "frontbond" "back" "backbond"}
-   ; the rings: ring, benzene and flatring six-sided, ringN N-sided by its last figure, 1 to 8
    ch-settings ["textht" "cwid" "db" "size"]
    ; chem turns degrees to radians by this, not by pi
    ch-deg 57.29578
@@ -242,6 +241,7 @@
                            (: _ (ch-thing s pre <l (? first l ()) lab)
                               (go >l "" 0)))
        (go cs (? (lab = ()) "" (lab + ": ")) 1))
+   ; the rings: ring, benzene and flatring six-sided, ringN N-sided by its last figure, 1 to 8
    (ch-ring? w) (elem w ["benzene" "flatring"] || ch-starts? w "ring")
    (ch-ring-sides w) (: d (? (ch-starts? w "ring" && 4 < #w) (w (#w - 1) - 48) 6) (? (1 <= d <= 8) d 6))
    (ch-bond? ws) (: w <ws (w = "bond" || (peep ch-bond-kinds w () != () && two? >ws && <>ws = "bond")))

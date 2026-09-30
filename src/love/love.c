@@ -167,7 +167,7 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0) {
  memset(g, 0, sizeof(struct ai));
  g->len = len0;
  g->scare_a = g->scare_b = zero;        // v0..end is GC-walked: raw 0 is not a value
- g->hot_numap = g->hot_arrange = g->hot_compose = g->hot_opfix = g->hot_show = g->hot_net = zero;   // unsealed: hot_hook traps until (seal-hook) fills them
+ g->hot_numap = g->hot_arrange = g->hot_compose = g->hot_opfix = g->hot_show = g->hot_net = g->hot_flow = zero;   // unsealed: hot_hook traps until (seal-hook) fills them
  g->hp = g->end, g->sp = (word*) g + len0, g->ip = (union u*) yield_c;
  // the rem set + major pool ride ai_alloc: a seat whose heap cannot supply them cannot run
  g->major_len = ai_major0;
@@ -281,7 +281,7 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0) {
                                   "payload", "<", "=", "int", "ceil", "lambda", "cask", "port", "coin" };
     for (int i = 0; ai_ok(g) && i < KnN; i++)
      if (ai_ok(g = intern(ai_strof(g, ns[i])))) g->knom[i] = ai_pop1(g); }
-  { char const *const ns[RnN] = { "\\", "list", "hash", "tuple", "tablet", "iota", "mono", "torn", "@", ",", "flow" };
+  { char const *const ns[RnN] = { "\\", "list", "hash", "tuple", "tablet", "iota", "mono", "torn", "@", "," };
     for (int i = 0; ai_ok(g) && i < RnN; i++)
      if (ai_ok(g = intern(ai_strof(g, ns[i])))) g->rnom[i] = ai_pop1(g); }
   if (ai_ok(g = map_new(g))) g->kreg = ai_pop1(g);
