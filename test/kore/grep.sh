@@ -135,7 +135,7 @@ for f in -r -R -rn -rl -rL -rh -rc "-r --include=*.c" "-r --exclude=*.c"; do
   # shellcheck disable=SC2086
   bsort "grep $f" grep $f foo "$R/t"
 done
-(cd "$R/t" && grep -r foo | sort > "$g" && korerun grep -r foo | sort > "$o"); same "grep -r with no operand"
+(cd "$R/t" && grep -r foo) | sort > "$g"; (cd "$R/t" && LOVE_NO_IMAGE= "$K" kore grep -r foo) | sort > "$o"; same "grep -r with no operand"
 seq 1 30 | sed 's/^1[05]$/hit &/; s/^2$/hit 2/; s/^29$/hit 29/' > "$R/s"; printf 'hit\nfoo\n' > "$R/p"; : > "$R/e"
 for f in -A1 -B1 -C1 "-A2 -B1" -nC1 -C0 -A3 -cA1 -vC1 "-m2 -A1" "-C1 -H"; do
   # shellcheck disable=SC2086

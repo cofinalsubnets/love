@@ -11,6 +11,7 @@
 (borrow 'cal)
 (borrow 'posix)
 (borrow 'text)
+(borrow 'glob) ; du --exclude
 
 (:
    ; a file destination: into a directory the source's basename lands beside
@@ -46,8 +47,16 @@
                a (line ())
                (? (two? a && (<a = 121 || <a = 89)) 1 0))
 
-   ; -- pwd: where we stand --
-   (pwd-main _) (say out (cwd ()), put out 10, flush out, 0)
+   ; -- pwd: where we stand. -P the path with no link in it; -L $PWD, the way the shell
+   ; came, when it is absolute, holds no . or .., and is the same directory; the later
+   ; of the two wins, and -P unsaid --
+   (pwd-main as)
+    (: L? (: ws (filter (w \ w = "-L" || w = "-P") as) (? (two? ws) (<(rev ws) = "-L") 0))
+       e (getenv "PWD")
+       (same a b) (: x (stat a) y (stat b) (? (two? x && two? y) (x 8 = y 8 && ust-at x 11 = ust-at y 11) 0))
+       (clean? p) (: segs (usplit 47 p) (? (elem "." segs || elem ".." segs) 0 1))
+       w (? (L? && string? e && 0 < #e && e 0 = 47 && clean? e && same e ".") e (cwd ()))
+       (say out w, put out 10, flush out, 0))
 
    ; -- sync: the writeback, scheduled. sync(2) answers nothing and cannot fail.
    ; GNU's takes FILEs and fsyncs each; this one is the bare call only, since the
@@ -71,7 +80,7 @@
     (: t (tablet 0)
        o (uopt as t '(109) '(101) ())
        _ (? (two? o) () (udie 1 "mkfifo: -m wants a mode"))
-       _ (: c (uoptun t "m") (? !c () (udie 1 ("mkfifo: unknown option -" + string c))))
+       _ (: c (uoptbad as t "m") (? !c () (udie 1 ("mkfifo: unknown option -" + string c))))
        v (uoptv t 109)
        md (? (string? v) (uoct v) 438)          ; 0666, the mode mkfifo(1) defaults to
        fs <>>o
@@ -88,7 +97,7 @@
     (: t (tablet 0)
        o (uopt as t '(109) '(101) ())
        _ (? (two? o) () (udie 1 "mknod: -m wants a mode"))
-       _ (: c (uoptun t "m") (? !c () (udie 1 ("mknod: unknown option -" + string c))))
+       _ (: c (uoptbad as t "m") (? !c () (udie 1 ("mknod: unknown option -" + string c))))
        v (uoptv t 109)
        md (? (string? v) (uoct v) 438)
        fs <>>o
@@ -120,9 +129,12 @@
    ; the gate that compares it to GNU sets TZ for that reason.
    ; colour is automatic and goes only onto a terminal -- (tty 1) answers a pair for
    ; one and 'enotty for anything else, so a pipe keeps the plain name and `ls | grep`
-   ; reads what it always read. there is no --color to ask for it or refuse it.
-   ; absent and said so: -R, -S, -h, -i and -F.
-   uls-opts "aACldrtx1"
+   ; reads what it always read; --color=always|never|auto says otherwise, bare always.
+   ;   -h sizes as du -h's   -S by size   -u -c atime or ctime for -t and the row
+   ;   -R down every directory, a link never followed   -L the thing a link names
+   ;   -F / * @ | = after a name, -p the / alone   -i inode, -s 1K blocks, ahead of it
+   ;   -n numeric owners, -g no owner, -o no group -- each of the three a long row
+   uls-opts (chars "aACcdFghiLlnoprRsStux1" + [1001])
    ; GNU shows the clock for the last six months and the year outside them. six
    ; months is 31556952/2 -- the average Gregorian year halved, coreutils' own
    ; constant, not 180 days.
@@ -153,18 +165,28 @@
        (? (40960 = (md & 61440))
           (: t (readlink p) (? (string? t) (n + " -> " + t) n))
           n))
-   (uls-row p nm st now tty?)           ; the six columns, as strings
-    [(ust-perm (st 2))
-     (? (charm? (ust-at st 6)) (show (st 6)) "?")
-     (? (charm? (ust-at st 4)) (uidname "/etc/passwd" (st 4)) "?")
-     (? (charm? (ust-at st 5)) (uidname "/etc/group" (st 5)) "?")
-     (show <st)
-     (uls-when ((st 3) // 1000000000) now)
-     (uls-nom p nm (st 2) (? tty? (uls-hue p (st 2)) ""))]
+   ; the long row's columns as strings, an owner or group column () when -g or -o drops
+   ; it. o: the tablet of flags ls-main read, 'n 'g 'o 'h 'tf 'ind
+   (uls-row p nm st now col? o)
+    (: (id k f) (? (charm? (ust-at st k)) (? (o 'n) (show (st k)) (uidname f (st k))) "?")
+       [(ust-perm (st 2))
+        (? (charm? (ust-at st 6)) (show (st 6)) "?")
+        (? (o 'g) () (id 4 "/etc/passwd"))
+        (? (o 'o) () (id 5 "/etc/group"))
+        (? (o 'h) (uhuman <st) (show <st))
+        (uls-when (((o 'tf) st) // 1000000000) now)
+        (uls-nom p nm (st 2) (? col? (uls-hue p (st 2)) "") + ((o 'ind) st p))])
+   ; -F's mark after a name (-p's the / alone), "" for none; a long row's link wears its
+   ; target and not an @
+   (uls-mark F? st long?)
+    (: k (61440 & st 2)
+       (? (k = 16384) "/" !F? ""
+          (k = 40960) (? long? "" "@") (k = 4096) "|" (k = 49152) "="
+          (k = 32768 && 0 < (st 2 & 73)) "*" ""))
    ; the names as a grid. a cell's width is the NAME's and not the coloured text's:
    ; the sgr bytes ride along and take up no screen, and a wide character takes two.
-   (uls-grid es tty? w down?)
-    (: cs (map (\ e ((uls-name e tty?) . swidth <e)) es)
+   (uls-grid es tty? w down? pre)
+    (: cs (map (\ e ((pre e + uls-name e tty?) . (#(pre e) + swidth <e))) es)
        (go l) (? (atom? l) () (say out <l, put out 10, go >l))
        (go (cite 'grid 'lay cs w down?)))
    (uls-wide rs k) (foldl (\ w r (: n #(r k) (? (w < n) n w))) 0 rs)
@@ -173,53 +195,80 @@
    ; operand is listed further down as a block of its own and its row is never
    ; printed here. `ls -l file dir` pads file's size to the width of dir's, and a
    ; block sizing itself off its own rows silently loses that space.
-   (uls-emit rs ws0)                    ; the rows, columns aligned the way GNU aligns
+   (uls-emit rs ws0 pres)               ; the rows, columns aligned the way GNU aligns
     (: wl (uls-wide ws0 1) wu (uls-wide ws0 2) wg (uls-wide ws0 3) ws (uls-wide ws0 4)
-       (go l) (? (atom? l) ()
-                 (: r <l
-                    _ (say out (<r + " " + (upad wl (r 1)) + " " + (urpad wu (r 2))
-                                   + " " + (urpad wg (r 3)) + " " + (upad ws (r 4))
-                                   + " " + (r 5) + " " + (r 6)))
-                    _ (put out 10)
-                    (go >l)))
-       (go rs))
+       (cell s pad w) (? (string? s) (" " + pad w s) "")
+       (go l ps) (? (atom? l) ()
+                    (: r <l
+                       _ (say out (<ps + <r + (cell (r 1) upad wl) + (cell (r 2) urpad wu)
+                                      + (cell (r 3) urpad wg) + (cell (r 4) upad ws)
+                                      + " " + (r 5) + " " + (r 6)))
+                       _ (put out 10)
+                       (go >l >ps)))
+       (go rs pres))
    ; the order: by name, or by mtime newest-first under -t with the name breaking a
    ; tie. -r turns whichever of those around, which is why it is applied last and not
    ; folded into the comparison.
-   (uls-sort es t? r?)
-    (: le (? t? (\ x y (: a (<>x 3) b (<>y 3) (? (a = b) (<x <= <y) (b < a))))
+   (uls-sort es key r?)                 ; key: () by name, else a number, biggest first
+    (: le (? key (\ x y (: a (key <>x) b (key <>y) (? (a = b) (<x <= <y) (b < a))))
               (\ x y (<x <= <y)))
        s (sortby le es)
        (? r? (rev s) s))
    ; one entry: [name lstat] | () when it cannot be stat'd
-   (uls-ent dir nm)
+   ; one entry: [name stat path] | () when it cannot be stat'd; -L's stat reads through a
+   ; link, and a broken one keeps its own
+   (uls-ent dir nm L?)
     (: p (? #dir (dir + "/" + nm) nm)
-       st (lstat p)
+       st (? L? (: s (stat p) (? (two? s) s (lstat p))) (lstat p))
        (? (two? st) [nm st p] ()))
    (vdir-main as) (ls-main ("-l" . as))           ; coreutils' long one
-   (ls-main as)
-    (: t (tablet 0)
-       o (uopt as t '() '(101) ())
+   (ls-main as0)
+    (: as (map (w \ (? (w = "--color") "--color=always" w)) as0)
+       t (tablet 0)
+       o (uopt as t '(1001) '(101) {"color" 1001})
        _ (? (two? o) () (udie 2 "ls: an option wants a value"))
-       ops <>>o
-       _ (: k (uoptun t uls-opts) (? !k () (udie 2 ("ls: unknown option -- " + (string k)))))
-       a? (peep t 97 0) aa? (peep t 65 0) l? (peep t 108 0) d? (peep t 100 0)
-       r? (peep t 114 0) tm? (peep t 116 0)
+       ops (ustray "ls" as <>>o)
+       _ (: k (uoptbad as t uls-opts) (? !k () (udie 2 ("ls: unknown option -- " + (string k)))))
+       a? (peep t 97 0) aa? (peep t 65 0) d? (peep t 100 0)
+       r? (peep t 114 0) tm? (peep t 116 0) R? (peep t 82 0) L? (peep t 76 0)
+       l? (peep t 108 0 || peep t 110 0 || peep t 103 0 || peep t 111 0)
        c? (peep t 67 0) x? (peep t 120 0) o1? (peep t 49 0)
+       i? (peep t 105 0) s? (peep t 115 0) h? (peep t 104 0)
        now ((clock 0) // 1000)
-       tty? (two? (tty 1))                  ; colour only onto a terminal
+       tty? (two? (tty 1))
+       cw (uoptv t 1001)
+       col? (? (!cw || cw = "auto" || cw = "tty" || cw = "if-tty") tty?
+               (cw = "always" || cw = "yes" || cw = "force") 1
+               (cw = "never" || cw = "no" || cw = "none") 0
+               (udie 2 ("ls: invalid argument '" + cw + "' for '--color'")))
        w (cite 'grid 'screen 1)
        grid? (? l? 0 o1? 0 (x? || c? || tty?) 1 0)
        down? !x?
+       (tf st) (? (peep t 117 0) (ust-at st 9) (peep t 99 0) (ust-at st 10) (st 3))
+       key (? (peep t 83 0) (st \ <st) tm? tf ())
+       F? (peep t 70 0) p? (peep t 112 0)
+       o {'n (peep t 110 0) 'g (peep t 103 0) 'o (peep t 111 0) 'h h? 'tf tf
+          ; a long row's link wears, under -F, the mark of what it names
+          'ind (st \ p \ (? (F? || p?) (? (40960 = 61440 & st 2) (: q (stat p) (? (F? && two? q) (uls-mark F? q 0) ""))
+                                             (uls-mark F? st 1)) ""))}
        fs (? (two? ops) ops '("."))
-       hdr? (two? >fs)
-       (rows es) (map (\ e (uls-row (e 2) <e <>e now tty?)) es)
+       hdr? (two? >fs || R?)
+       (blocks st) (: b (ust-at st 7) (? (charm? b) b 0))
+       (kb st) (? h? (uhuman (512 * blocks st)) (show ((blocks st + 1) // 2)))
+       ; -i and -s ride ahead of a name in every face, padded across the run
+       (pres es) (: ws (foldl (\ m e (max m #(show (ust-at <>e 8)))) 0 es)
+                    wb (foldl (\ m e (max m #(kb <>e))) 0 es)
+                    (map (e \ ((? i? ((upad ws (show (ust-at <>e 8))) + " ") "") + (? s? ((upad wb (kb <>e)) + " ") ""))) es))
+       (rows es) (map (\ e (uls-row (e 2) <e <>e now col? o)) es)
+       (name e) (uls-name e col? + (? (F? || p?) (uls-mark F? <>e 0) ""))
        (show1 es ws0)                    ; a run of entries: long, gridded, or a name a line
-        (? l? (uls-emit (rows es) ws0)
-           grid? (uls-grid es tty? w down?)
-           (: (go l) (? (atom? l) ()
-                        (: e <l _ (say out (uls-name e tty?)) _ (put out 10) (go >l)))
-              (go es)))
+        (: ps (pres es) pt (tablet 0) _ (each (zip es ps) (q \ pin pt (<q 2) >q))
+           (pre e) (peep pt (e 2) "")
+           (? l? (uls-emit (rows es) ws0 ps)
+              grid? (uls-grid es col? w down? pre)
+              (: (go l) (? (atom? l) ()
+                           (: e <l _ (say out (pre e + name e)) _ (put out 10) (go >l)))
+                 (go es))))
        ; a directory's own listing: the entries, with `total` ahead of a long one.
        ; an EMPTY directory still owes its header and its `total 0`, so nothing here
        ; returns early on the empty readdir.
@@ -231,14 +280,16 @@
            keep (? a? ("." . (".." . ns))
                    aa? ns
                    (filter (\ n !(n 0 = 46)) ns))
-           es (filter two? (map (\ n (uls-ent p n)) keep))
-           srt (uls-sort es tm? r?)
+           es (filter two? (map (\ n (uls-ent p n L?)) keep))
+           srt (uls-sort es key r?)
            rs (? l? (rows srt) ())
            _ (? hdr? ((? first () (put out 10)), say out (p + ":"), put out 10) ())
-           _ (? l? (: blk (foldl (\ a e (: b (ust-at <>e 7) (? (charm? b) (a + b) a))) 0 es)
-                      _ (say out ("total " + (show (blk // 2)))) (put out 10)) ())
+           _ (? (l? || s?) (: blk (foldl (\ a e (a + blocks <>e)) 0 es)
+                              _ (say out ("total " + (? h? (uhuman (512 * blk)) (show ((blk + 1) // 2))))) (put out 10)) ())
            _ (show1 srt rs)
-           ok)
+           ; -R: each directory in the listing, in its order, a link to one not followed
+           sub (? R? (filter (e \ !(<e = "." || <e = "..") && 16384 = 61440 & (<>e 2)) srt) ())
+           (foldl (\ k e (dirlist (e 2) 0 k)) ok sub))
        ; the operands, GNU's way round: the non-directories first as one listing,
        ; then a listing per directory. -d makes every operand a non-directory.
        (miss p) (say err ("ls: cannot access " + p), put err 10, 0)
@@ -247,9 +298,9 @@
        _ (map miss bad)
        plain (? d? good (filter (\ p !(udirp p)) good))
        dirs (? d? () (filter udirp good))
-       pes (filter two? (map (\ p (uls-ent "" p)) plain))
-       aes (filter two? (map (\ p (uls-ent "" p)) good))
-       _ (? (two? pes) (show1 (uls-sort pes tm? r?) (rows aes)) ())
+       pes (filter two? (map (\ p (uls-ent "" p L?)) plain))
+       aes (filter two? (map (\ p (uls-ent "" p L?)) good))
+       _ (? (two? pes) (show1 (uls-sort pes key r?) (rows aes)) ())
        ; the directory operands go in name order (-r turns them around); -t orders
        ; what is INSIDE a directory and is not claimed over the operands themselves.
        dps (: s (sort dirs) (? r? (rev s) s))
@@ -280,7 +331,7 @@
     (: fs (rev ops)
        dst (? td td <fs)
        srcs (? td ops (rev >fs))
-       (? (atom? srcs) (udie 2 ("usage: " + who + " [-" + (who = "cp" ? "afinpPLrRuv" "finuv") + "] [-t DIR] SRC.. DST"))
+       (? (atom? srcs) (udie 2 ("usage: " + who + " [-" + (? (who = "cp") "afinpPLrRuv" (who = "mv") "finuv" "CDgmopsv") + "] [-t DIR] SRC.. DST"))
           ((td || two? >srcs) && !(udirp dst))
            (udie 1 (who + ": target " + dst + " is not a directory"))
           (: ok (foldl (\ ok src (? (each1 src (udest src dst)) ok 0)) 1 srcs)
@@ -431,8 +482,8 @@
           (2 < n) (udie 1 ("ln: target " + last + " is not a directory"))
           (? (mk <ops last) 0 1)))
 
-   ; -- touch: be there, and be now; -c makes nothing, -r takes a file's time, -d @SECONDS
-   ; a given one --
+   ; -- touch: be there, and be now; -c makes nothing, -r takes a file's time, -d DATE
+   ; a given one, as date -d reads it --
    (touch-main as)
     (: fo (uflags "touch" as '(100 114) "cdr")
        t <fo fs (fo 1)
@@ -441,8 +492,7 @@
        rs (? rf (stat rf) ())
        _ (? (!rf || two? rs) () (udie 1 ("touch: cannot stat " + rf)))
        ms (? rf <>rs
-             dw (? (1 < #dw && dw 0 = 64 && all digit? (chars (snip dw 1 #dw))) (1000 * unum (snip dw 1 #dw))
-                   (udie 1 ("touch: cannot read the date '" + dw + "' (only @SECONDS here)")))
+             dw (: v (udate dw (clock 0)) (? (charm? v) v (udie 1 ("touch: invalid date format '" + dw + "'"))))
              ())
        (one q ok)
         (: there (two? (stat q))
@@ -487,39 +537,51 @@
        (? (foldl (\ ok q (tree q ok)) 1 >rest) 0 1))
 
    ; -- install: copy with the mode set in the same breath (what the build's
-   ; place-a-file steps say). -d makes directories (with parents, like -p);
-   ; -D lays the destination's parents first; -m octal sets the mode (else 755);
-   ; -s (strip) is accepted and noted -- no stripper rides kore yet, so the copy
-   ; keeps its symbol table (a fatter install, never a wrong one) --
-   (imkp q)                        ; a tolerant mkdir at every slash (parents only)
+   ; place-a-file steps say). SRC DST, SRC.. DIR, or -t DIR SRC.., as cp's walk takes
+   ; them; -d makes directories (with parents, like -p); -D lays the destination's
+   ; parents first; -m MODE sets the mode (755 else), octal or symbolic; -o and -g the
+   ; owner and group; -p keeps the source's time; -C leaves a target already the same
+   ; bytes and mode alone; -v says each; -s (strip) is accepted and noted -- no
+   ; stripper rides kore yet, so the copy keeps its symbol table (a fatter install,
+   ; never a wrong one) --
+   (imkp q v?)                     ; a tolerant mkdir at every slash (parents only), -v saying each made
     (: n #q
-       (go k) (? (k < n) ((? ((0 < k) && (q k = 47)) (mkdir (snip q 0 k) 493) ()), go (k + 1))
+       (mk d) (? (!(mkdir d 493) && v?) (say out ("install: creating directory '" + d + "'\n")) 0)
+       (go k) (? (k < n) ((? ((0 < k) && (q k = 47)) (mk (snip q 0 k)) ()), go (k + 1))
                  ())
        (go 1))
    (install-main as)
-    (: (fl a d D m s fs) (? (atom? a) [d D m s fs]
-                            (<a = "-d") (fl >a 1 D m s fs)
-                            (<a = "-D") (fl >a d 1 m s fs)
-                            ((<a = "-m") && two? >a) (fl >>a d D (uoct <>a) s fs)
-                            (<a = "-s") (fl >a d D m 1 fs)
-                            (fl >a d D m s (fs + [<a])))
-       p (fl as 0 0 493 0 ())
-       d? <p D? <>p m <>>p s? <>>>p fs <>>>>p
-       _ (? s? (say err "install: -s noted, not stripped (no kore stripper yet)", put err 10) ())
-       (? d? (: (go a ok)
-                 (? (two? a)
-                    (: _ (imkp <a) e (mkdir <a m)
-                       ok2 (? (udirp <a) ((? !e (chmod <a m) ()), ok)
-                              (say err ("install: cannot create " + <a), put err 10, 0))
-                       (go >a ok2))
-                    (? ok 0 1))
-                 (? (two? fs) (go fs 1) (udie 2 "usage: install -d DIR..")))
-          (atom? >fs) (udie 2 "usage: install [-D] [-m OCTAL] [-s] SRC DST")
-          (: src <fs dst (udest <fs <>fs)
-             _ (? D? (imkp dst) ())
-             _ (ucopy "install" src dst)
-             _ (chmod dst m)
-             0)))
+    (: fo (uflags "install" as '(109 116 111 103) "CdDgmopstTv")
+       t <fo fs (fo 1)
+       mw (uoptv t 109)
+       m (? mw (umode mw 0 0 0) 493)
+       _ (? (charm? m) () (udie 1 ("install: invalid mode '" + mw + "'")))
+       own (? (t 111 || t 103) (uowner "install" (? (t 111) (uoptv t 111) "") + (? (t 103) (":" + uoptv t 103) "") "") ())
+       _ (? (t 115) (say err "install: -s noted, not stripped (no kore stripper yet)", put err 10) ())
+       (owned q) (? own (chown q <own <>own) ())
+       (same? src dst) (: a (uread src) b (uread dst) sa (stat src) sb (stat dst)
+                          (? (two? a && two? b && two? sb) (<>a = <>b && (4095 & <>>sb) = m) 0))
+       (one src dst)
+        (? (t 67 && same? src dst) 1
+           (: _ (? (t 68) (imkp dst (t 118)) ())
+              k (ucopy1 "install" src dst)
+              _ (? k (: _ (chmod dst m) _ (owned dst)
+                        st (? (t 112) (stat src) ())
+                        _ (? (two? st) (utime dst <>st) 0)
+                        (? (t 118) (say out ("'" + src + "' -> '" + dst + "'\n")) 0)) 0)
+              k))
+       (? (t 100)
+          (: (go a ok)
+              (? (two? a)
+                 (: _ (imkp <a (t 118)) e (mkdir <a m)
+                    _ (? (!e && t 118) (say out ("install: creating directory '" + <a + "'\n")) 0)
+                    ok2 (? (udirp <a) ((? !e (: _ (chmod <a m) (owned <a)) ()), ok)
+                           (say err ("install: cannot create " + <a), put err 10, 0))
+                    (go >a ok2))
+                 (? ok 0 1))
+             (? (two? fs) (go fs 1) (udie 2 "usage: install -d DIR..")))
+          (t 84) (? (atom? >fs) (udie 2 "usage: install -T SRC DST") (? (one <fs <>fs) 0 1))
+          (: r (cp-srcs "install" fs (uoptv t 116) one) _ (flush out) r)))
 
    ; -- readlink: what a symbolic link says (-f chases to an absolute, clean path) --
    (rl-abs q) (? ((0 < tally q) && (q 0 = 47)) q (cwd () + "/" + q))
@@ -535,20 +597,23 @@
                        (<l = "..") (fold >l (? (two? acc) >acc acc))
                        (fold >l (<l . acc)))
        ("/" + ujoinc 47 (fold (seg 0 0 ()) ())))
-   (rl-chase q n)                  ; follow link upon link (n bounds a cycle)
-    (: t (readlink q)
-       (? (atom? (stat q)) ()
-          !(string? t) q
-          (0 = n) ()
-          (rl-chase (? (t 0 = 47) t (rl-clean (rl-abs q + "/../" + t))) (n - 1))))
+   ; -- readlink: a link's target, or with -f -e -m the whole path canonical by
+   ; realpath's walk -- -f all but the last name there, -e all of it, -m none; -n no
+   ; newline, -z a NUL after each; a failure says nothing and costs the status --
    (readlink-main as)
-    (: f? (two? as && (<as = "-f"))
-       fs (? f? >as as)
-       _ (? (two? fs) () (udie 2 "usage: readlink [-f] PATH"))
-       q <fs
-       r (? f? (: c (rl-chase (rl-clean (rl-abs q)) 40) (? (string? c) c ()))
-            (: t (readlink q) (? (string? t) t ())))
-       (? (string? r) (say out r, put out 10, flush out, 0) 1))
+    (: fo (uflagsl "readlink" as () "efmnqsvz" {"canonicalize" 102 "canonicalize-existing" 101 "canonicalize-missing" 109
+                                                 "no-newline" 110 "zero" 122 "quiet" 113 "silent" 115 "verbose" 118})
+       t <fo fs (fo 1)
+       _ (? (two? fs) () (udie 2 "usage: readlink [-efmnz] PATH.."))
+       mode (? (t 101) 'e (t 109) 'm (t 102) 'f ())
+       end (? (t 122) (string 0) (t 110 && atom? >fs) "" "\n")
+       (one q) (? !mode (: r (readlink q) (? (string? r) r ()))
+                  (: r (rp-canon q 40)
+                     (? (atom? r) (? (mode = 'm) (rl-clean (rl-abs q)) ())   ; a loop: -m keeps the path
+                        (: p <>r want (? (mode = 'm) () (mode = 'e) p (udir p))
+                           (? (!want || two? (stat want)) p ())))))
+       ok (foldl (\ ok q (: r (one q) (? (string? r) (say out (r + end), ok) 0))) 1 fs)
+       _ (flush out) (? ok 0 1))
 
    ; -- realpath: a path with every symlink, every . and every .. taken out of it.
    ; the walk resolves component by component, so a last name that does not exist yet
@@ -567,35 +632,57 @@
                     (? !(string? t) (walk cand >parts d)
                        (walk (? (t 0 = 47) "/" acc) (rp-parts t + >parts) (d - 1)))))))
        (walk "/" (rp-parts (rl-abs q)) n))
+   ; -q says nothing of a miss, -z ends each with a NUL; -L takes .. before the links
+   ; (a/link/.. is a), -P after them, the default; --relative-to=DIR says the answer
+   ; from DIR, --relative-base=DIR only for what lies under DIR
+   (rp-rel p base)                     ; two canonical paths -> p seen from base
+    (: a (rp-parts p) b (rp-parts base)
+       (common x y) (? (two? x && two? y && <x = <y) (common >x >y) [x y])
+       c (common a b)
+       ups (map (_ \ "..") <>c)
+       r (ups + <c)
+       (? (two? r) (ujoinc 47 r) "."))
    (realpath-main as)
     (: t (tablet 0)
-       o (uopt as t () '(101) ())
-       _ (: c (uoptun t "ems") (? !c () (udie 1 ("realpath: unknown option -" + string c))))
-       fs <>>o
-       _ (? (two? fs) () (udie 1 "usage: realpath [-e|-m|-s] PATH.."))
-       e? (peep t 101 0) m? (peep t 109 0) s? (peep t 115 0)
+       o (uopt as t '(1001 1002) '(101) {"relative-to" 1001 "relative-base" 1002 "quiet" 113 "zero" 122 "logical" 76 "physical" 80
+                                        "canonicalize-existing" 101 "canonicalize-missing" 109 "strip" 115 "no-symlinks" 115})
+       _ (: c (uoptbad as t (chars "emsqzLP" + [1001 1002])) (? !c () (udie 1 ("realpath: unknown option -" + string c))))
+       fs (ustray "realpath" as <>>o)
+       _ (? (two? fs) () (udie 1 "usage: realpath [-emqszLP] [--relative-to=DIR] [--relative-base=DIR] PATH.."))
+       e? (peep t 101 0) m? (peep t 109 0) s? (peep t 115 0) q? (peep t 113 0) L? (peep t 76 0)
+       end (? (peep t 122 0) 0 10)
+       (canon q) (? s? [1 (rl-clean (rl-abs q))] (rp-canon (? L? (rl-clean (rl-abs q)) q) 40))
+       (dir d) (: r (canon d) (? (two? r) <>r (udie 1 ("realpath: " + d + ": No such file or directory"))))
+       rto (? (peep t 1001 0) (dir (uoptv t 1001)) ())
+       rbase (? (peep t 1002 0) (dir (uoptv t 1002)) ())
+       (under? p b) (? (b = "/") 1 (p = b || starts? p (b + "/")))
+       (face p) (? (rto && (!rbase || (under? p rbase && under? rto rbase))) (rp-rel p rto)
+                   (rbase && under? p rbase) (rp-rel p rbase)
+                   p)
        (one q ok)
-        (: r (? s? [1 (rl-clean (rl-abs q))] (rp-canon q 40))
+        (: r (canon q)
            (? (atom? r)
-              (say err ("realpath: " + q + ": too many levels of symbolic links"), put err 10, 0)
+              (? q? 0 (: _ (say err ("realpath: " + q + ": too many levels of symbolic links"), put err 10) 0))
               (: p <>r
                  want (? m? () (? e? p (udir p)))    ; what has to be there to answer
                  (? ((want = ()) || (two? (stat want)))
-                    (say out p, put out 10, ok)
-                    (say err ("realpath: " + q + ": No such file or directory"), put err 10, 0)))))
+                    (: _ (say out (face p), put out end) ok)
+                    (? q? 0 (: _ (say err ("realpath: " + q + ": No such file or directory"), put err 10) 0))))))
        (go a ok) (? (two? a) (go >a (one <a ok)) (flush out, (? ok 0 1)))
        (go fs 1))
 
    ; -- link and unlink: the two syscalls said plainly, no face on them (ln and rm
    ; are where the faces live) --
-   (link-main as)
-    (? (atom? >as) (udie 1 "usage: link FILE NEW")
+   (link-main as0)
+    (: as ((uflags "link" as0 () "") 1)
+     (? (atom? >as) (udie 1 "usage: link FILE NEW")
        (: e (hardlink <as <>as)
-          (? !e 0 (udie 1 ("link: cannot link " + <>as + " to " + <as)))))
-   (unlink-main as)
-    (? (atom? as) (udie 1 "usage: unlink FILE")
+          (? !e 0 (udie 1 ("link: cannot link " + <>as + " to " + <as))))))
+   (unlink-main as0)
+    (: as ((uflags "unlink" as0 () "") 1)
+     (? (atom? as) (udie 1 "usage: unlink FILE")
        (: e (unlink <as)
-          (? !e 0 (udie 1 ("unlink: cannot unlink " + <as)))))
+          (? !e 0 (udie 1 ("unlink: cannot unlink " + <as))))))
 
    ; ---- the reporting tools: stat, du -- and chown, mktemp ---------------------
    ; these read the stat tail. src/love/posix.c's stat answers
@@ -792,26 +879,54 @@
        _ (line ("Change: " + (ustamp (ust-at st 10))))
        b (birth p L?)
        (line (" Birth: " + (charm? b ? (ustamp b) "-"))))
+   ; -f: the filesystem a path is on, statfs's tuple through a format of its own -- %n
+   ; the name, %i the id and %l the longest name, %t the type's magic in hex and %T its
+   ; name off the mount list, %s %S the block and fundamental block, %b %f %a the blocks,
+   ; free and available, %c %d the inodes and free ones; a - and a width pad a field
+   ufs-face "  File: \"%n\"\n    ID: %-8i Namelen: %-7l Type: %T\nBlock size: %-10s Fundamental block size: %S\nBlocks: Total: %-10b Free: %-10f Available: %a\nInodes: Total: %-10c Free: %d\n"
+   (ufs-expand fmt p r)
+    (: n #fmt o (jug 0)
+       ty (: m (udf-holds (udf-mounts ()) p) (? (two? m) (m 2) "?"))
+       (at k) (: v (? (k < #r) (r k) ()) (? (charm? v) v 0))
+       (cell c) (c @ 110 p 105 (radix (at 7) 16 + zpad 8 (radix (at 8) 16)) 108 (show (at 9)) 116 (radix (at 10) 16) 84 ty
+                    115 (show (at 0)) 83 (show (at 6)) 98 (show (at 1)) 102 (show (at 2)) 97 (show (at 3))
+                    99 (show (at 4)) 100 (show (at 5)) 37 "%" ("?"))
+       (go k) (? (n <= k) (slurp o)
+                 (!(fmt k = 37) || n <= k + 1) (: _ (put o (fmt k)) (go (k + 1)))
+                 (: left (fmt (k + 1) = 45) j0 (? left (k + 2) (k + 1))
+                    (dg j) (? (j < n && 48 <= fmt j <= 57) (dg (j + 1)) j)
+                    j (dg j0) w (? (j0 < j) (uatoi (snip fmt j0 j)) 0)
+                    v (? (j < n) (cell (fmt j)) "")
+                    _ (say o (? (w <= #v) v left (urpad w v) (upad w v)))
+                    (go (j + 1))))
+       (go 0))
    (stat-main as)
     (: (long? w n s) ((n < tally w) && (snip w 0 n = s))
+       fsm {'f 0}
        (fl a fmt L pf fs)
         (? (atom? a) [fmt L pf (rev fs)]
            (<a = "-L") (fl >a fmt 1 pf fs)
+           (<a = "-f" || <a = "--file-system") (: _ (pin fsm 'f 1) (fl >a fmt L pf fs))
            (<a = "-c") (? (two? >a) (fl >>a <>a L 0 fs) (udie 2 "stat: -c wants a format"))
            (2 < #<a && snip <a 0 2 = "-c") (fl >a (snip <a 2 #<a) L 0 fs)
            (long? <a 9 "--format=") (fl >a (snip <a 9 #<a) L 0 fs)
            (long? <a 9 "--printf=") (fl >a (snip <a 9 #<a) L 1 fs)
            (fl >a fmt L pf (<a . fs)))
        p (fl as () 0 0 ())
-       fmt <p L? <>p pf? <>>p fs (p 3)
+       fmt <p L? <>p pf? <>>p fs (ustray "stat" as (p 3))
        _ (? (two? fs) () (udie 2 "usage: stat [-L] [-c FORMAT | --printf=FORMAT] FILE.."))
        (one q ok)
+        (: st (? (fsm 'f) (statfs q) L? (stat q) (lstat q))
+           (? (atom? st) (say err ("stat: cannot read file system information for '" + q + "': No such file or directory\n"), 0)
+              (fsm 'f) (: _ (say out (ufs-expand (? (string? fmt) (fmt + (? pf? "" "\n")) ufs-face) q st)) ok)
+              0))
+       (one0 q ok)
         (: st (? L? (stat q) (lstat q))
            (? (atom? st)
               (say err ("stat: cannot stat '" + q + "': No such file or directory\n"), 0)
               (string? fmt) (say out (ust-expand fmt q st pf? L?), pf? || put out 10, ok)
               (ust-block q st L?, ok)))
-       (go a ok) (two? a ? (go >a (one <a ok)) (flush out, !ok))
+       (go a ok) (two? a ? (go >a ((? (fsm 'f) one one0) <a ok)) (flush out, !ok))
        (go fs 1))
 
    ; -- du: what a tree costs on the disk. the count is st_blocks (512 each), which is
@@ -822,11 +937,14 @@
    ; per run, keyed by inode alone: this stat carries no device, so a walk crossing two
    ; filesystems could collide two inodes -- rare, and named here rather than hidden.
    ; the walk sorts each directory, like find's, so the same tree reports twice alike.
-   (uhuman n)                          ; GNU's -h: three significant figures, rounded up
-    (: units '("K" "M" "G" "T" "P")
-       (pick k) (? (4 < k || n < (10 * (k + 1)) 2) k (pick (k + 1)))
-       k (n < 1024 ? 0 (pick 1))
-       d ((10 * k) 2)
+   (uhuman n) (uhumanb n 0)             ; GNU's -h: three significant figures, rounded up
+   ; the same in powers of 1000 when si? (-H, --si), kilo spelled k as GNU's spells it
+   (uhumanb n si?)
+    (: units (? si? '("k" "M" "G" "T" "P") '("K" "M" "G" "T" "P"))
+       (pow k) (? si? ((3 * k) 10) ((10 * k) 2))      ; n x is x ** n
+       (pick k) (? (4 < k || n < pow (k + 1)) k (pick (k + 1)))
+       k (n < pow 1 ? 0 (pick 1))
+       d (pow k)
        (k @ 0 (show n)
           (: tenths ((n * 10 + d - 1) // d)
              whole ((n + d - 1) // d)
@@ -837,6 +955,23 @@
         (<a = "-d") (two? >a ? (pin t 'd (uatoi <>a), fl >>a t fs)
                      (udie 2 "du: -d wants a depth"))
         (#<a < 2 || <a 0 != 45) (fl >a t (<a . fs))
+        (<a = "--") [t (rev fs + >a)]
+        ; GNU's long names, onto the same keys the letters take
+        (<a 1 = 45)
+         (: w <a
+            (long p) (: n #p (n < #w && snip w 0 n = p))
+            (? (long "--max-depth=") (pin t 'd (uatoi (snip w 12 #w)), fl >a t fs)
+               (long "--exclude=") (pin t 'ex (snip w 10 #w), fl >a t fs)
+               (w = "--all") (pin t 'a 1, fl >a t fs)
+               (w = "--summarize") (pin t 's 1, fl >a t fs)
+               (w = "--total") (pin t 'c 1, fl >a t fs)
+               (w = "--bytes") (pin t 'b 1, fl >a t fs)
+               (w = "--apparent-size") (pin t 'ap 1, fl >a t fs)
+               (w = "--human-readable") (pin t 'h 1, fl >a t fs)
+               (w = "--one-file-system") (pin t 'x 1, fl >a t fs)
+               (w = "--dereference") (pin t 'L 1, fl >a t fs)
+               (w = "--null") (pin t 'z 1, fl >a t fs)
+               (udie 2 ("du: unknown option " + w))))
         (:- (cl 1) w <a (cl k) (#w <= k ? (fl >a t fs) (w k @
          97 (pin t 'a 1, cl (k + 1))
          115 (pin t 's 1, cl (k + 1))
@@ -844,6 +979,9 @@
          98 (pin t 'b 1, cl (k + 1))
          104 (pin t 'h 1, cl (k + 1))
          107 (cl (k + 1))       ; -k is the default
+         120 (pin t 'x 1, cl (k + 1))
+         76 (pin t 'L 1, cl (k + 1))
+         48 (pin t 'z 1, cl (k + 1))
          100 (pin t 'd (uatoi (snip w (k + 1) #w)), fl >a t fs)
          c (udie 2 $ "du: unknown option -" + string c)))))
        t {}
@@ -851,26 +989,35 @@
        fs (? (two? <>p) <>p '("."))
        a? (t 'a) s? (t 's) c? (t 'c)
        b? (t 'b) h? (t 'h) maxd (t 'd)
+       ; --apparent-size counts as -b does and still says K; -x keeps to the first
+       ; operand's device, -L stats through links, --exclude drops a name by its glob
+       ap? (b? || t 'ap) x? (t 'x) L? (t 'L) ex (t 'ex)
        seen (tablet 0)
        (fmt n) (? h? (uhuman n) (b? ? (show n) (show $ (n + 1023) // 1024)))
-       (emit n q) (say out (fmt n), put out 9, say out q, put out 10)
+       (emit n q) (say out (fmt n), put out 9, say out q, put out (? (t 'z) 0 10))
        ; -b's apparent size counts a file's st_size and a directory's not at all --
        ; GNU's rule, and not a guess: an empty directory whose st_size is 40 reports 0.
        (own st dir?)
         (: nlk (ust-at st 6) ino (ust-at st 8)
-           ct (? b? (? dir? 0 <st) (512 * (? (charm? (ust-at st 7)) (ust-at st 7) 0)))
-           (? ((charm? nlk) && (1 < nlk))
+           ct (? ap? (? dir? 0 <st) (512 * (? (charm? (ust-at st 7)) (ust-at st 7) 0)))
+           (? ((charm? nlk) && (1 < nlk) || L?)
               (? (peep seen ino 0) 0 (pin seen ino 1, ct))
               ct))
+       ; a directory is counted once however it is reached -- under -L a link can reach
+       ; one twice, and GNU's says it where it met it first
+       (again? st) (: k [(ust-at st 11) (ust-at st 8)] (? (peep seen k 0) 1 (pin seen k 1, 0)))
        (walk q depth top?)
-        (: st (lstat q)
+        (: st (? L? (: s (stat q) (? (two? s) s (lstat q))) (lstat q))
+           _ (? top? (pin t 'dev (ust-at st 11)) 0)
            (atom? st ?  (say err ("du: cannot access '" + q + "'\n"), pin t 'bad 1, 0)
             (: dir? (16384 = (61440 & <>>st))
-               kids (?- 0 dir?
-                     (foldl (acc \ c \ acc + walk (q + "/" + c) (depth + 1) 0) 0 (sort (readdir q))))
-               tot (own st dir? + kids)
+               in? (!x? || ust-at st 11 = t 'dev)
+               dup? (dir? && again? st)
+               kids (?- 0 (dir? && in? && !dup?)
+                     (foldl (acc \ c \ (? (ex && match ex c) acc (acc + walk (q + "/" + c) (depth + 1) 0))) 0 (sort (readdir q))))
+               tot (? dup? 0 (own st dir? + kids))
                deep? (charm? maxd && maxd < depth)
-               _ ((dir? || a? || top?) && !s? && !deep? && emit tot q)
+               _ ((dir? || a? || top?) && !s? && !deep? && !dup? && emit tot q)
                tot)))
        (go a acc) (atom? a ? acc (walk <a 0 1 @ n (s? && emit n <a, go >a (acc + n))))
        total (go fs 0)
@@ -905,7 +1052,7 @@
     (: r (uread "/proc/self/mounts")
        (go l acc) (? (atom? l) (rev acc)
                      (: w (words <l)
-                        (go >l (? (2 <= #w) ([(udf-esc (w 0)) (udf-esc (w 1))] . acc) acc))))
+                        (go >l (? (3 <= #w) ([(udf-esc (w 0)) (udf-esc (w 1)) (w 2)] . acc) acc))))
        (? (two? r) (go (filter (\ s #s) (lines <>r)) ()) ()))
    ; the mount a path sits on: the LONGEST point its resolved name starts with, so a
    ; bind mount names itself and not the twin it shares a device with. stat's %m asks
@@ -920,7 +1067,7 @@
    (udf-cells dev pt fs h? i?)         ; a statfs tuple -> the six cells of its row
     (: bs (fs 0) blk (fs 1) fre (fs 2) av (fs 3) ino (fs 4) ifr (fs 5)
        frs (: f (fs 6) (? ((charm? f) && (0 < f)) f bs))
-       (sz n) (? h? (uhuman (n * frs)) (show (udf-up (n * frs) 1024)))
+       (sz n) (? h? (uhumanb (n * frs) (h? = 'si)) (show (udf-up (n * frs) 1024)))
        (? i? [dev (show ino) (show (ino - ifr)) (show ifr) (udf-pct (ino - ifr) ifr) pt]
           [dev (sz blk) (sz (blk - fre)) (sz av) (udf-pct (blk - fre) av) pt]))
    ; the table: every column as wide as its widest cell but never under the floor below,
@@ -928,37 +1075,54 @@
    ; never padded at all. the floors are GNU's, and they are why a table of short names
    ; still lines up with one of long ones.
    udf-min '(14 5 5 5 4 0)
-   (udf-show rows)
+   (udf-show rows mins lefts)           ; lefts: the columns that read left
     (: n #<rows
-       ws (map (\ k (foldl (\ w r (: c #(r k) (? (w < c) c w))) (udf-min k) rows)) ^n)
+       ws (map (\ k (foldl (\ w r (: c #(r k) (? (w < c) c w))) (mins k) rows)) ^n)
        (line r) (: (go k acc) (? (n <= k) acc
                                  (: s (r k)
-                                    p (? (k + 1 = n) s (? k (upad (ws k) s) (urpad (ws k) s)))
+                                    p (? (k + 1 = n) s (elem k lefts) (urpad (ws k) s) (upad (ws k) s))
                                     (go (k + 1) (? k (acc + " " + p) p))))
                    (go 0 ""))
        (go rs) (? (two? rs) (say out (line <rs), put out 10, go >rs) 0)
        (go rows))
+   ; -T wears each mount's type after its name, -t TYPE takes only those types and -x
+   ; TYPE leaves those out, each as many times as said; -H is -h in powers of 1000
    (df-main as)
-    (: t {}
+    (: t {'t () 'x ()}
+       (val a k fs) (? (two? >a) (: _ (pin t k (<>a . t k)) (fl >>a fs)) (udie 2 "df: an option wants a type"))
        (fl a fs) (? (atom? a) (rev fs)
+                    (<a = "--") (rev fs + >a)
+                    (<a = "-t" || <a = "-x") (val a (? (<a = "-t") 't 'x) fs)
+                    (<a = "-T" || <a = "--print-type") (pin t 'T 1, fl >a fs)
+                    (<a = "-H" || <a = "--si") (pin t 'h 'si, fl >a fs)
+                    (2 < #<a && (snip <a 0 2 = "-t" || snip <a 0 2 = "-x")) (: k (? (<a 1 = 116) 't 'x) _ (pin t k ((snip <a 2 #<a) . t k)) (fl >a fs))
+                    (7 < #<a && snip <a 0 7 = "--type=") (pin t 't ((snip <a 7 #<a) . t 't), fl >a fs)
+                    (15 < #<a && snip <a 0 15 = "--exclude-type=") (pin t 'x ((snip <a 15 #<a) . t 'x), fl >a fs)
                     (#<a < 2 || <a 0 != 45) (fl >a (<a . fs))
                     (:- (cl 1) w <a (cl k) (#w <= k ? (fl >a fs) (w k @
-                     104 (pin t 'h 1, cl (k + 1))
+                     104 (pin t 'h (? (t 'h = 'si) 'si 1), cl (k + 1))
+                     84 (pin t 'T 1, cl (k + 1))
+                     72 (pin t 'h 'si, cl (k + 1))
                      105 (pin t 'i 1, cl (k + 1))
                      97 (pin t 'a 1, cl (k + 1))
                      107 (cl (k + 1))   ; -k is the default, and -P names this very face
                      80 (cl (k + 1))    ; (posix's, and the only one laid out here)
                      c (udie 2 $ "df: unknown option -" + string c)))))
        fs (fl as ())
-       h? (t 'h) i? (t 'i) a? (t 'a)
-       hdr (? i? '("Filesystem" "Inodes" "IUsed" "IFree" "IUse%" "Mounted on")
-              h? '("Filesystem" "Size" "Used" "Avail" "Use%" "Mounted on")
-              '("Filesystem" "1K-blocks" "Used" "Available" "Use%" "Mounted on"))
-       ms (udf-mounts ())
+       h? (t 'h) i? (t 'i) a? (t 'a) T? (t 'T)
+       hdr0 (? i? '("Filesystem" "Inodes" "IUsed" "IFree" "IUse%" "Mounted on")
+               h? '("Filesystem" "Size" "Used" "Avail" "Use%" "Mounted on")
+               '("Filesystem" "1K-blocks" "Used" "Available" "Use%" "Mounted on"))
+       ; -T's column rides second
+       (typed ty r) (? T? (<r . ty . >r) r)
+       hdr (typed "Type" hdr0)
+       mins (? T? '(14 4 5 5 5 4 0) udf-min)
+       (keep? ty) (? (two? (t 't)) (elem ty (t 't)) (two? (t 'x)) !(elem ty (t 'x)) 1)
+       ms (filter (m \ keep? (m 2)) (udf-mounts ()))
        _ (? ((two? fs) || (two? ms)) () (udie 1 "df: cannot read /proc/self/mounts"))
        (named p acc)
         (: r (statfs p)
-           (? (two? r) (: m (udf-holds ms p) ((udf-cells (? m <m "-") (? m <>m p) r h? i?) . acc))
+           (? (two? r) (: m (udf-holds ms p) (? (atom? m) acc ((typed (m 2) (udf-cells <m <>m r h? i?)) . acc)))
               (say err ("df: " + p + ": "
                              + (? (r = 'eacces) "Permission denied" "No such file or directory")), put err 10, pin t 'bad 1, acc)))
        ; a filesystem the call refuses (a mount someone else owns) is dropped from the
@@ -967,11 +1131,11 @@
        (scan mm acc)
         (? (atom? mm) acc
            (: m <mm r (statfs <>m)
-              (scan >mm (? (two? r) (? (a? || (r 1)) ((udf-cells <m <>m r h? i?) . acc) acc)
-                           a? ([<m "-" "-" "-" "-" <>m] . acc)
+              (scan >mm (? (two? r) (? (a? || (r 1)) ((typed (m 2) (udf-cells <m <>m r h? i?)) . acc) acc)
+                           a? ((typed (m 2) [<m "-" "-" "-" "-" <>m]) . acc)
                            acc))))
        rows (rev (? (two? fs) (foldl (\ a p (named p a)) () fs) (scan ms ())))
-       _ (? (two? rows) (udf-show (hdr . rows)) ())
+       _ (? (two? rows) (udf-show (hdr . rows) mins (? T? '(0 1) '(0))) ())
        _ (flush out)
        !!(peep t 'bad 0))
 
@@ -986,21 +1150,41 @@
                                            (udie 1 (who + ": invalid " + kind + ": '" + shown + "'")))))))
        [(side <ps "/etc/passwd" "user") (atom? >ps ? -1 (side <>ps "/etc/group" "group"))])
    ; chown and chgrp are one walk: chgrp's GROUP is chown's :GROUP
+   ; -R goes down a tree, a directory after what is in it, changing a link found on the
+   ; way itself and never what it names; -h does the same for an operand; -v says each, -c only those it changed; --reference=FILE takes
+   ; FILE's owner and group, every operand then a file
    (uchown who as)
-    (: r? (two? as && <as = "-R")
-       rest (r? ? >as as)
+    (: fo (uflagsl who as '(1001) (chars "chRv" + [1001 102]) {"reference" 1001 "no-dereference" 104 "changes" 99 "verbose" 118
+                                                        "recursive" 82 "silent" 102 "quiet" 102})
+       t <fo r? (t 82) rest (fo 1)
        grp? (who = "chgrp")
-       _ (atom? >rest && udie 2 ("usage: " + who + (grp? ? " [-R] GROUP FILE.." " [-R] OWNER[:GROUP] FILE..")))
-       ug (grp? ? (uowner who (":" + <rest) <rest) (uowner who <rest <rest))
+       rf (uoptv t 1001)
+       rs (? rf (stat rf) ())
+       _ (? (!rf || two? rs) 0 (udie 1 (who + ": failed to get attributes of '" + rf + "'")))
+       _ (? ((rf && atom? rest) || (!rf && atom? >rest)) (udie 2 ("usage: " + who + " [-chRv] " + (grp? ? "GROUP" "OWNER[:GROUP]") + " FILE.. | " + who + " --reference=RFILE FILE..")) 0)
+       ug (? rf [(? grp? -1 (rs 4)) (rs 5)] grp? (uowner who (":" + <rest) <rest) (uowner who <rest <rest))
+       files (? rf rest >rest)
        uid <ug gid <>ug
-       (one q ok)
-        (: e (chown q uid gid)
-           ok2 (!e ? ok (say err (who + (grp? ? ": cannot change group of '" ": cannot chown '") + q + "'\n"), 0))
-           (r? && (udirp q) ?
-            (foldl (acc \ c \ one (q + "/" + c) acc) ok2 (readdir q))
-            ok2))
-       (go a ok) (two? a ? (go >a (one <a ok)) !ok)
-       (go >rest 1))
+       (nm path id) (? (charm? id) (uidname path id) "?")
+       (face st) (? grp? (nm "/etc/group" (st 5)) (nm "/etc/passwd" (st 4) + ":" + nm "/etc/group" (st 5)))
+       (one q ok top?)
+        (: k (ukind q)
+           kids (? (r? && k = 'dir) (foldl (acc \ c \ one (q + "/" + c) acc 0) ok (readdir q)) ok)
+           (one1 q kids (!top? || t 104)))
+       (one1 q ok own?)
+        (: lk? (own? && ukind q = 'link)
+           before (? lk? (lstat q) (stat q))
+           e (? lk? (lchown q uid gid) (chown q uid gid))
+           after (? lk? (lstat q) (stat q))
+           _ (? (!e && two? before && two? after && (t 118 || t 99))
+                (: a (face before) b (face after)
+                   (? (!(a = b)) (say out ("changed " + (? grp? "group" "ownership") + " of '" + q + "' from " + a + " to " + b + "\n"))
+                      (t 118) (say out ((? grp? "group" "ownership") + " of '" + q + "' retained as " + b + "\n"))
+                      0))
+                0)
+           (!e ? ok (? (t 102) 0 (say err (who + (grp? ? ": cannot change group of '" ": cannot chown '") + q + "'\n")), 0)))
+       (go a ok) (two? a ? (go >a (one <a ok 1)) (flush out, !ok))
+       (go files 1))
    (chown-main as) (uchown "chown" as)
    (chgrp-main as) (uchown "chgrp" as)
 
@@ -1074,8 +1258,8 @@
    ; -- fsync: what the kernel holds of each file written down (-d fdatasync's lesser
    ; promise, the file's data alone) --
    (fsync-main as)
-    (: d? (two? as && <as = "-d")
-       fs (? d? >as as)
+    (: fo (uflags "fsync" as () "d")
+       d? (<fo 100) fs (fo 1)
        ok (foldl (\ a f (: e (fsync f d?)
                            (? (nom? e) (say err ("fsync: " + f + ": " + uerrno e + "\n"), 0) a)))
                  1 fs)
@@ -1688,12 +1872,19 @@ EXEC 01;32
        (go k) (n > k ? (put o (umtchars (rand 62)), go (k + 1)))
        _ (go en)
        (slurp o))
+   ; GNU's long names too: --suffix=S after the random run, --tmpdir[=DIR] as -p (bare,
+   ; $TMPDIR or /tmp), --directory --dry-run --quiet
    (mktemp-main as)
-    (: (fl a d u q dir fs)
+    (: sf {'s ""}
+       (fl a d u q dir fs)
         (? (atom? a) [d u q dir (rev fs)]
-           (<a = "-d") (fl >a 1 u q dir fs)
-           (<a = "-u") (fl >a d 1 q dir fs)
-           (<a = "-q") (fl >a d u 1 dir fs)
+           (<a = "-d" || <a = "--directory") (fl >a 1 u q dir fs)
+           (<a = "-u" || <a = "--dry-run") (fl >a d 1 q dir fs)
+           (<a = "-q" || <a = "--quiet") (fl >a d u 1 dir fs)
+           (<a = "--tmpdir") (fl >a d u q (: e (getenv "TMPDIR") (? (string? e) e "/tmp")) fs)
+           (9 < #<a && snip <a 0 9 = "--tmpdir=") (fl >a d u q (snip <a 9 #<a) fs)
+           (9 < #<a && snip <a 0 9 = "--suffix=") (: _ (pin sf 's (snip <a 9 #<a)) (fl >a d u q dir fs))
+           (<a = "--suffix") (? (two? >a) (: _ (pin sf 's <>a) (fl >>a d u q dir fs)) (udie 1 "mktemp: --suffix wants a suffix"))
            (<a = "-t") (fl >a d u q (? dir dir (getenv "TMPDIR")) fs)
            (<a = "-p") (? (two? >a) (fl >>a d u q <>a fs) (udie 1 "mktemp: -p wants a directory"))
            (2 < #<a && snip <a 0 2 = "-p") (fl >a d u q (snip <a 2 #<a) fs)
@@ -1709,7 +1900,7 @@ EXEC 01;32
        base (named && !(string? pdir) ? tmpl ((0 < #tm ? tm ".") + "/" + tmpl))
        (try n)
         (? (n < 1) (? q? 1 (udie 1 "mktemp: could not make a name nobody had"))
-           (: nm (umtname base)
+           (: nm (umtname base + sf 's)
               fd (? d? -1 (openfd nm 3))
               got (? d? !(mkdir nm 448) (charm? fd && 0 <= fd))
               _ (? (charm? fd && 0 <= fd) (close fd) ())
@@ -1718,15 +1909,47 @@ EXEC 01;32
                   say out nm, put out 10, flush out, 0))))
        (try 100))
 
-   ; -- cmp: are two files the same bytes (-s says nothing, the exit code answers) --
+   ; -- cmp: are two files the same bytes. the first difference is said by its char (POSIX's word)
+   ; and line, as POSIX has it; -b adds the two bytes, -l lists every difference in
+   ; octal, -s says nothing and the status answers; -n N compares at most N, -i SKIP or
+   ; SKIP1:SKIP2 (and the operands after the files) skip a start. a file that ends
+   ; first is an EOF on stderr, status 1 --
    (cmp-main as)
-    (: s? (two? as && (<as = "-s"))
-       fs (? s? >as as)
-       _ (atom? >fs ? (udie 2 "usage: cmp [-s] A B"))
-       ra (uread <fs) rb (uread <>fs)
+    (: fo (uflagsl "cmp" as '(110 105) "blsin" {"silent" 115 "quiet" 115 "verbose" 108 "print-bytes" 98 "bytes" 110 "ignore-initial" 105})
+       t <fo s? (t 115) l? (t 108) b? (t 98) fs (fo 1)
+       _ (? (two? >fs && atom? >>>>fs) () (udie 2 "usage: cmp [-bls] [-n N] [-i SKIP[:SKIP]] A B [SKIP1 [SKIP2]]"))
+       (num w) (: v (unum w) (? (charm? v) v (udie 2 ("cmp: invalid number: '" + w + "'"))))
+       iv (uoptv t 105)
+       k (? iv (findsub iv ":") -1)
+       sk1 (? (two? >>fs) (num (fs 2)) iv (num (? (k < 0) iv (snip iv 0 k))) 0)
+       sk2 (? (two? >>>fs) (num (fs 3)) iv (num (? (k < 0) iv (snip iv (k + 1) #iv))) 0)
+       lim (? (t 110) (num (uoptv t 110)) ())
+       (rd f) (? (f = "-") [1 (slurp in)] (uread f))
+       ra (rd <fs) rb (rd <>fs)
        (? (atom? ra || atom? rb)
-          (!s? ? (say err ("cmp: cannot read " + (two? ra ? <>fs <fs)), put err 10),
-             2)
-          (<>ra = <>rb) 0
-          ((? s? () (say out ((<fs + " ") + (<>fs + " differ")), put out 10, flush out)), 1))))
+          (: _ (? s? () (say err ("cmp: " + (two? ra ? <>fs <fs) + ": No such file or directory\n"))) 2)
+          (: A (snip <>ra (min sk1 #<>ra) #<>ra) B (snip <>rb (min sk2 #<>rb) #<>rb)
+             n0 (min #A #B) n (? lim (min lim n0) n0)
+             short (? (lim && lim <= n0) () (#A < #B) <fs (#B < #A) <>fs ())
+             (oct c) (upad 3 (radix c 8))
+             (face c) (? (32 <= c < 127) (string c) (c < 32) ("^" + string (c + 64)) (c = 127) "^?" ("M-" + string (c - 128)))
+             (bc c) (oct c + " " + face c)
+             ; -l's byte number is as wide as the longer file's size
+             wn #(show (max #A #B))
+             ; the first difference, and its line: the newlines before it, plus one
+             (first i ln) (? (n <= i) () (A i = B i) (first (i + 1) (? (A i = 10) (ln + 1) ln)) [i ln])
+             (eof i ln) (? (s? || !short) 0 (say err ("cmp: EOF on '" + short + "'" + (? (i = 0) " which is empty" (" after byte " + show i + (? l? "" (", in line " + show ln)))) + "\n")))
+             (? l? (: (go i d) (? (n <= i) d
+                                 (A i = B i) (go (i + 1) d)
+                                 (: _ (? s? 0 (say out (upad wn (show (i + 1)) + " " + oct (A i) + (? b? (" " + urpad 4 (face (A i))) "")
+                                                        + " " + oct (B i) + (? b? (" " + face (B i)) "") + "\n"))) (go (i + 1) 1)))
+                      d (go 0 0)
+                      _ (flush out)
+                      _ (eof n 0)
+                      (? (d || short) 1 0))
+                (: f (first 0 1)
+                   (? f (: i <f _ (? s? 0 (say out (<fs + " " + <>fs + " differ: " + (? b? "byte " "char ") + show (i + 1) + ", line " + show <>f
+                                                   + (? b? (" is " + bc (A i) + " " + bc (B i)) "") + "\n"))) _ (flush out) 1)
+                      short (: ln (foldl (\ a c (? (c = 10) (a + 1) a)) 1 (chars (snip A 0 n))) _ (eof n ln) 1)
+                      0)))))))
 ) ; module 'kore

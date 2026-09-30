@@ -789,11 +789,14 @@ static lvm(lvm_posix_lstat) {
 static lvm(lvm_posix_stat) {
  LvmCall(g, host_posix_stat) }
 
-// (statfs path) -> (bsize blocks bfree bavail files ffree frsize) | a nom | 'badarg.
+// (statfs path) -> (bsize blocks bfree bavail files ffree frsize fsid0 fsid1 namelen type)
+//                  | a nom | 'badarg.
 //                  what the filesystem holding the path has, in blocks of frsize (bsize
 //                  where a kernel leaves frsize at 0). bavail is what an ordinary user may
 //                  take and sits under bfree by the reserve root keeps. files/ffree are
-//                  the inode counts, 0 where the filesystem has none. linux's shape alone:
+//                  the inode counts, 0 where the filesystem has none. the fsid's two words,
+//                  the longest name and the type's magic ride after, for stat -f; the
+//                  tail is append-only. linux's shape alone:
 //                  the BSDs spell the call over another struct, so a BSD hears 'enosys.
 #if defined(LvHaveStatfs)
 ai_noinline static struct ai *host_posix_statfs(struct ai *g) {
@@ -801,9 +804,15 @@ ai_noinline static struct ai *host_posix_statfs(struct ai *g) {
  if (!p) return g->sp[0] = ai_badarg(g), g;
  struct statfs fs;
  if (statfs(p, &fs)) return g->sp[0] = ai_err(g, errno), g;
- if (!ai_ok(g = ai_have(g, 7 * Width(struct ai_chain)))) return g;
+ if (!ai_ok(g = ai_have(g, 11 * Width(struct ai_chain)))) return g;
  size_t const C = Width(struct ai_chain);
- struct ai_chain *c = ini_chain(bump(g, C), putcharm((intptr_t) fs.f_frsize), ZeroPoint);
+ uint32_t id[2];                                  // glibc's fsid_t and moonlibc's int[2] alike
+ memcpy(id, &fs.f_fsid, sizeof id);
+ struct ai_chain *c = ini_chain(bump(g, C), putcharm((intptr_t) (unsigned long) fs.f_type), ZeroPoint);
+ c = ini_chain(bump(g, C), putcharm((intptr_t) fs.f_namelen), word(c));
+ c = ini_chain(bump(g, C), putcharm((intptr_t) id[1]), word(c));
+ c = ini_chain(bump(g, C), putcharm((intptr_t) id[0]), word(c));
+ c = ini_chain(bump(g, C), putcharm((intptr_t) fs.f_frsize), word(c));
  c = ini_chain(bump(g, C), putcharm((intptr_t) fs.f_ffree), word(c));
  c = ini_chain(bump(g, C), putcharm((intptr_t) fs.f_files), word(c));
  c = ini_chain(bump(g, C), putcharm((intptr_t) fs.f_bavail), word(c));
@@ -1022,6 +1031,7 @@ LvNif("environ", nif_posix_environ, NULL);
 //   (readlink path)       -> the target string | a nom | 'badarg
 //   (chmod path mode)     -> () | a nom | 'badarg  (mode the raw permission charm)
 //   (chown path uid gid)  -> () | a nom | 'badarg  (-1 leaves that id alone)
+//   (lchown path uid gid) -> the same, of a link itself and not what it names
 //   (utime path ms)       -> () | a nom | 'badarg  (mtime and atime on the stat
 //                            scale, milliseconds; a non-charm ms reads "now")
 //   (umask mask)          -> the previous mask | 'badarg misuse (always succeeds)
@@ -1070,6 +1080,13 @@ static ai_inline word host_posix_chown(struct ai *g, word pw, word uw, word gw) 
  return chown(p, (uid_t) getcharm(uw), (gid_t) getcharm(gw)) ? ai_err(g, errno) : ZeroPoint; }
 static lvm(lvm_posix_chown) {
  Sp[2] = host_posix_chown(g, Sp[0], Sp[1], Sp[2]);
+ ai_musttail return Nextp(1, 2); }
+static ai_inline word host_posix_lchown(struct ai *g, word pw, word uw, word gw) {
+ char const *p = str_c(pw);
+ if (!p || !charmp(uw) || !charmp(gw)) return ai_badarg(g);
+ return lchown(p, (uid_t) getcharm(uw), (gid_t) getcharm(gw)) ? ai_err(g, errno) : ZeroPoint; }
+static lvm(lvm_posix_lchown) {
+ Sp[2] = host_posix_lchown(g, Sp[0], Sp[1], Sp[2]);
  ai_musttail return Nextp(1, 2); }
 
 ai_noinline static word host_posix_utime(struct ai *g, word pw, word msw) {
@@ -1230,6 +1247,7 @@ static union u const
   nif_posix_readlink[] = {{lvm_posix_readlink}, {lvm_ret0}},
   nif_posix_chmod[]    = {{lvm_cur}, {.x = putcharm(2)}, {lvm_posix_chmod}, {lvm_ret0}},
   nif_posix_chown[]    = {{lvm_cur}, {.x = putcharm(3)}, {lvm_posix_chown}, {lvm_ret0}},
+  nif_posix_lchown[]   = {{lvm_cur}, {.x = putcharm(3)}, {lvm_posix_lchown}, {lvm_ret0}},
   nif_posix_utime[]    = {{lvm_cur}, {.x = putcharm(2)}, {lvm_posix_utime}, {lvm_ret0}},
   nif_posix_umask[]    = {{lvm_posix_umask}, {lvm_ret0}},
   nif_posix_rlimit[]   = {{lvm_cur}, {.x = putcharm(2)}, {lvm_posix_rlimit}, {lvm_ret0}},
@@ -1247,6 +1265,7 @@ LvNif("symlink", nif_posix_symlink, "posix");
 LvNif("readlink", nif_posix_readlink, "posix");
 LvNif("chmod", nif_posix_chmod, "posix");
 LvNif("chown", nif_posix_chown, "posix");
+LvNif("lchown", nif_posix_lchown, "posix");
 LvNif("utime", nif_posix_utime, "posix");
 LvNif("umask", nif_posix_umask, "posix");
 LvNif("rlimit", nif_posix_rlimit, "posix");

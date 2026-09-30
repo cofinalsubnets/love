@@ -3079,7 +3079,7 @@
 ; heap. the shadow rule lives in one place, verbs' `word`.
 
 (module '(cli read reads forms shell welp edraw edln edlnc edlay cli-rail cli-line stage edkey edtap edgc
-          uopt uopt1 uoptv uoptun uoptstray uoptp uoptlast uask udoor edcmd edsgr edwide edcut edpad edfit
+          uopt uopt1 uoptv uoptun uoptbad uoptstray uoptp uoptlast uask udoor edcmd edsgr edwide edcut edpad edfit
           ednew edstep edput ednl edclear edempty? edchars edtext edcol edparses? edframe edload
           edleft edright edbsp eddel edhome edend edtop edbot edup eddown uphist downhist eddetach
           joinln splitat parseall)
@@ -3543,6 +3543,18 @@
    ; applet's own. the short lane takes any letter, an alphabet being the applet's to state,
    ; so the key comes back for a refusal to name it.
    (uoptun t ok) (<(filter (c \ (nelem c ok)) (sort (keys t))))
+   ; uoptun's stranger named as typed: of the letters the walk pinned that `ok` does not
+   ; name, the first spelled, so `-ba` is b where the tablet's order says a. a value's
+   ; text is never pinned, so it is never named; a long key comes back as uoptun has it
+   (uoptbad as t ok)
+    (: bad (uoptun t ok)
+       (word w k) (? (#w <= k) () (: c (w k) (? (t c && nelem c ok) c (word w (k + 1)))))
+       (go a) (? (atom? a) bad
+                 (: w <a
+                    (? (w = "--") bad
+                       (1 < #w && w 0 = 45 && !(w 1 = 45)) (: c (word w 1) (? c c (go >a)))
+                       (go >a))))
+       (? bad (go as) ()))
    ; an operand that still looks like a flag, or (). the walk stops at the first word that is
    ; not one, so an applet with positional operands would take `-x` for a filename. () once
    ; `--` has been spelled: the words behind it are literal by request.

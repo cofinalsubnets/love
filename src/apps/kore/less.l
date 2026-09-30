@@ -437,7 +437,7 @@
     (: t (tablet 0)
        o (uopt as t () '(101) ())
        _ (? (two? o) () (udie 2 "less: bad option"))
-       _ (: c (uoptun t '(78 105 115 101))
+       _ (: c (uoptbad as t '(78 105 115 101))
             (? !c () (udie 2 ("less: unknown option -" + string c))))
        [t <>>o])
    ; -- hexedit: toybox's -- a file as rows of sixteen bytes, the hex and then the
