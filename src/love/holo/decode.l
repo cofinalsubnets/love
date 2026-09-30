@@ -19,8 +19,8 @@
 (module 'holo
 (: ;; --- bytes and fields: reads past the end answer 0, and `fin` refuses the instruction ---
    (dc-at s k) (k < #s ? (s k) 0)
-   (dc-le s i n) ((: (g k a) (? (k < n) (g (k + 1) (a + (dc-at s (i + k) << (8 * k)))) a)) 0 0)
-   (dc-sx v n) (: m (1 << (8 * n - 1)) (v >= m ? (v - (m << 1)) v))
+   (dc-le s i n) ((: (g k a) (k < n ? (g (k + 1) (a + (dc-at s (i + k) << 8 * k))) a)) 0 0)
+   (dc-sx v n) (1 << 8 * n - 1 @ m (v >= m ? (v - (m << 1)) v))
    (dc-imm s i n) (dc-sx (dc-le s i n) n)                     ; a signed immediate of n bytes
    dc-hexd "0123456789abcdef"
    (dc-hex2 b) ("0x" + string (dc-hexd (b >> 4)) + string (dc-hexd (b & 15)))
@@ -28,10 +28,10 @@
    dc-conds '(o no b ae e ne be a s ns p np l ge le g)      ; the sixteen, by low nibble
    (dc-ccname pre k) (name (pre + show (dc-conds k)))
    ;; a whole-state save under REX.W is objdump's <name>64; mxcsr's pair (digits 2, 3) has none
-   (dc-x64 w dig mn) (? (w = 8 && !(elem dig '(2 3))) (name (show mn + "64")) mn)
+   (dc-x64 w dig mn) (w = 8 && !(elem dig '(2 3)) ? (name (show mn + "64")) mn)
    ;; a register operand: n the 4-bit number, w its width; a byte register 4..7 without a REX
    ;; is ah..bh, which the value keeps 16 above (dialect.l)
-   (dc-reg n w rexp) (? (w = 1 && !rexp && 4 <= n <= 7) ['rg (n + 16) 1] ['rg n w])
+   (dc-reg n w rexp) (w = 1 && !rexp && 4 <= n <= 7 ? ['rg (n + 16) 1] ['rg n w])
    dc-alu  '(add or adc sbb and sub xor cmp)
    dc-grp2 '(rol ror rcl rcr shl shr shl sar)
    dc-grp3 '(test test not neg mul imul div idiv)
@@ -56,23 +56,23 @@
    ;; --- modrm at k, the register field at width wr and the r/m at wm (16 = xmm): ---
    ;;     -> [k2 reg-operand rm-operand digit], a memory operand wrapped by any segment override
    (dc-modrm s k p wr wm)
-    (: m (dc-at s k) md (m >> 6) dg ((m >> 3) & 7) rm (m & 7)
+    (: m (dc-at s k) md (m >> 6) dg (m >> 3 & 7) rm (m & 7)
        rexp (pf p 'rex) bx (pf p 'b) xx (pf p 'x)
-       reg (dc-reg (dg | (pf p 'r << 3)) wr rexp)
+       reg (dc-reg (dg | pf p 'r << 3) wr rexp)
        (wrap o) (nom? (pf p 'seg) ? ['seg (pf p 'seg) o] o)
-       (? (md = 3) [(k + 1) reg (dc-reg (rm | (bx << 3)) wm rexp) dg]
+       (? (md = 3) [(k + 1) reg (dc-reg (rm | bx << 3) wm rexp) dg]
           (md = 0 && rm = 5) [(k + 5) reg (wrap ['rip () (dc-imm s (k + 1) 4)]) dg]
           (rm = 4)                                                    ; a SIB
           (: sb (dc-at s (k + 1))
-             ix (((sb >> 3) & 7) | (xx << 3)) ix2 (ix = 4 ? -1 ix)
+             ix ((sb >> 3) & 7 | xx << 3) ix2 (ix = 4 ? -1 ix)
              sc (ix2 < 0 ? 1 (1 << (sb >> 6)))
              nobase (md = 0 && sb & 7 = 5)
-             bs (nobase ? -1 ((sb & 7) | (bx << 3)))
+             bs (nobase ? -1 (sb & 7 | bx << 3))
              dn (? nobase 4 (md = 1) 1 (md = 2) 4 0)
              d (dn = 0 ? 0 (dc-imm s (k + 2) dn))
              [(k + 2 + dn) reg (wrap ['mem bs ix2 sc d]) dg])
           (: dn (md @ 1 1 2 4 0) d (dn @ 0 0 (dc-imm s (k + 1) dn))
-             [(k + 1 + dn) reg (wrap ['mem (rm | (bx << 3)) -1 1 d]) dg])))
+             [(k + 1 + dn) reg (wrap ['mem (rm | bx << 3) -1 1 d]) dg])))
 
    ;; --- the prefixes, then the opcode ---
    (x64-decode s i)
@@ -87,11 +87,11 @@
        101 (go (j + 1) (pin p 'seg 'gs))
        (38 || 46 || 54 || 62) (go (j + 1) p)   ; es/cs/ss/ds: null in long mode
        (c && 64 <= c <= 79)
-        (go (j + 1) (pins p 'rex 1 'w ((c >> 3) & 1) 'r ((c >> 2) & 1) 'x ((c >> 1) & 1) 'b (c & 1)))
+        (go (j + 1) (pins p 'rex 1 'w (c >> 3 & 1) 'r (c >> 2 & 1) 'x (c >> 1 & 1) 'b (c & 1)))
        (dc-op s i j p))))
 
    ;; the prefix items an instruction carries: lock always, rep/repne unless the opcode ate them
-   (dc-pre p ate) ((pf p 'lock ? [['op 'lock 0 ()]] ())
+   (dc-pre p ate) ((pf p 'lock ? [['op 'lock 0 ()]])
                    + (pf p 'rep && !ate ? [['op 'rep 0 ()]] ())
                    + (pf p 'repne && !ate ? [['op 'repne 0 ()]] ()))
 
@@ -100,33 +100,33 @@
        w (? (pf p 'w) 8 (pf p 'opsz) 2 4)                    ; the operand size: REX.W outranks 66
        w8 (pf p 'opsz ? 2 8)                                 ; push/pop: 64-bit unless 66
        rexp (pf p 'rex)
-       (rl c) ((c & 7) | (pf p 'b << 3))                      ; a register in the opcode's low bits
+       (rl c) (c & 7 | pf p 'b << 3)                      ; a register in the opcode's low bits
        (fin k2 items) (k2 > n ? (1 . [(dc-byte c)]) ((k2 - i) . (dc-pre p 0 + items)))
        (fin1 k2 items) (k2 > n ? (1 . [(dc-byte c)]) ((k2 - i) . (dc-pre p 1 + items)))   ; the opcode ate rep
        (op1 mn w ops) ['op mn w ops]
        (nil mn) (fin k [(op1 mn 0 ())])
        ;; the two modrm faces: ge is reg <- r/m (dst the reg field), eg is r/m <- reg
-       (ge mn wr wm) (: r (dc-modrm s k p wr wm) (fin (r 0) [(op1 mn (dc-vw wr wm) [(r 1) (r 2)])]))
-       (eg mn wm wr) (: r (dc-modrm s k p wr wm) (fin (r 0) [(op1 mn (dc-vw wr wm) [(r 2) (r 1)])]))
+       (ge mn wr wm) (dc-modrm s k p wr wm @ r (fin (r 0) [(op1 mn (dc-vw wr wm) [(r 1) (r 2)])]))
+       (eg mn wm wr) (dc-modrm s k p wr wm @ r (fin (r 0) [(op1 mn (dc-vw wr wm) [(r 2) (r 1)])]))
        ;; r/m with a digit: the ALU immediates, the shifts, the unary groups
-       (grp1 wm isz) (: r (dc-modrm s k p wm wm) (fin (r 0 + isz) [(op1 (dc-alu (r 3)) wm [(r 2) ['im (dc-imm s (r 0) isz)]])]))
+       (grp1 wm isz) (dc-modrm s k p wm wm @ r (fin (r 0 + isz) [(op1 (dc-alu (r 3)) wm [(r 2) ['im (dc-imm s (r 0) isz)]])]))
        (grp2 wm cnt) (: r (dc-modrm s k p wm wm) mn (dc-grp2 (r 3))
                         (cnt @ 'ib (fin (r 0 + 1) [(op1 mn wm [(r 2) ['im (dc-imm s (r 0) 1)]])])
                              'cl (fin (r 0) [(op1 mn wm [(r 2) ['rg 1 1]])])
                              (fin (r 0) [(op1 mn wm [(r 2)])])))
        (grp3 wm) (: r (dc-modrm s k p wm wm) dg (r 3) mn (dc-grp3 dg)
-                    (? (dg < 2) (: isz (wm @ 1 1 2 2 4) (fin (r 0 + isz) [(op1 'test wm [(r 2) ['im (dc-imm s (r 0) isz)]])]))
+                    (dg < 2 ? (: isz (wm @ 1 1 2 2 4) (fin (r 0 + isz) [(op1 'test wm [(r 2) ['im (dc-imm s (r 0) isz)]])]))
                        (fin (r 0) [(op1 mn wm [(r 2)])])))
-       (rel isz mn) (: t (k + isz + dc-imm s k isz) (fin (k + isz) [(op1 mn 0 [['lbl t]])]))
+       (rel isz mn) (k + isz + dc-imm s k isz @ t (fin (k + isz) [(op1 mn 0 [['lbl t]])]))
        (c @ ;; the ALU block 00-3F: the op in bits 5..3, the form in bits 2..0
-          (c && c < 64 && (c & 7) < 6)
+          (c && c < 64 && c & 7 < 6)
            (: mn (dc-alu (c >> 3)) f (c & 7)
               (f @ 0 (eg mn 1 1) 1 (eg mn w w) 2 (ge mn 1 1) 3 (ge mn w w)
                  4 (fin (k + 1) [(op1 mn 1 [['rg 0 1] ['im (dc-imm s k 1)]])])
                  (: isz (w = 2 ? 2 4) (fin (k + isz) [(op1 mn w [['rg 0 w] ['im (dc-imm s k isz)]])]))))
           (c && 80 <= c <= 87) (fin k [(op1 'push w8 [['rg (rl c) w8]])])
           (c && 88 <= c <= 95) (fin k [(op1 'pop w8 [['rg (rl c) w8]])])
-          99 (: r (dc-modrm s k p w 4) (fin (r 0) [(op1 'movsl w [(r 1) (r 2)])]))     ; movsxd
+          99 (dc-modrm s k p w 4 @ r (fin (r 0) [(op1 'movsl w [(r 1) (r 2)])]))     ; movsxd
           104 (fin (k + 4) [(op1 'push 8 [['im (dc-imm s k 4)]])])
           106 (fin (k + 1) [(op1 'push 8 [['im (dc-imm s k 1)]])])
           (105 || 107)                                                                ; imul r, r/m, imm
@@ -139,9 +139,9 @@
           136 (eg 'mov 1 1)  137 (eg 'mov w w)  138 (ge 'mov 1 1)  139 (ge 'mov w w)
           141 (ge 'lea w w)
           ; a segment register in the reg field: 8C stores it to r/m, 8E loads it
-          140 (: r (dc-modrm s k p w w) (fin (r 0) [(op1 'mov 2 [(r 2) ['sr (r 3)]])]))
-          142 (: r (dc-modrm s k p w w) (fin (r 0) [(op1 'mov 2 [['sr (r 3)] (r 2)])]))
-          143 (: r (dc-modrm s k p w8 w8) (fin (r 0) [(op1 'pop w8 [(r 2)])]))
+          140 (dc-modrm s k p w w @ r (fin (r 0) [(op1 'mov 2 [(r 2) ['sr (r 3)]])]))
+          142 (dc-modrm s k p w w @ r (fin (r 0) [(op1 'mov 2 [['sr (r 3)] (r 2)])]))
+          143 (dc-modrm s k p w8 w8 @ r (fin (r 0) [(op1 'pop w8 [(r 2)])]))
           144 (? (pf p 'rep) (fin1 k [(op1 'pause 0 ())])
                        (pf p 'b) (fin k [(op1 'xchg w [['rg 8 w] ['rg 0 w]])])
                        (pf p 'opsz) (fin k [(op1 'xchg 2 [['rg 0 2] ['rg 0 2]])])      ; 66 90: the two-byte nop's spelling
@@ -151,11 +151,11 @@
           153 (nil (w @ 2 'cwd 8 'cqo 'cdq))
           158 (nil 'sahf)  159 (nil 'lahf)
           ;; fwait ahead of an x87 escape rides it, one instruction as objdump reads it
-          155 (? (k < n && 216 <= dc-at s k <= 223) (: r (dc-op s i k p) (<r . ([(op1 'fwait 0 ())] + >r)))
+          155 (k < n && 216 <= dc-at s k <= 223 ? (dc-op s i k p @ r (<r . ([(op1 'fwait 0 ())] + >r)))
                  (nil 'fwait))
           ;; the x87 escapes: the state doors over memory, fninit and fnclex
           (c && elem c '(217 219 221 223))
-           (? (dc-at s k >> 6 = 3)
+           (dc-at s k >> 6 = 3 ?
                (c = 219 && dc-at s k = 227 ? (fin (k + 1) [(op1 'fninit 0 ())])
                   (c = 219 && dc-at s k = 226) (fin (k + 1) [(op1 'fnclex 0 ())]) (bad 0))
               (: r (dc-modrm s k p 4 4)
@@ -198,7 +198,7 @@
                            1 (fin (r 0) [(op1 'dec w [(r 2)])])
                            2 (fin (r8 0) [(op1 'call 0 [['ind (r8 2)]])])
                            4 (fin (r8 0) [(op1 'jmp 0 [['ind (r8 2)]])])
-                           6 (: rp (dc-modrm s k p w8 w8) (fin (rp 0) [(op1 'push w8 [(rp 2)])]))
+                           6 (dc-modrm s k p w8 w8 @ rp (fin (rp 0) [(op1 'push w8 [(rp 2)])]))
                            (fin k [(dc-byte c)])))
           15 (dc-0f s i j p)
           (fin k [(dc-byte c)])))
@@ -218,18 +218,18 @@
        (eg mn wm wr) (dc-modrm s k2 p wr wm @ r (fin (r 0) [(op1 mn (dc-vw wr wm) [(r 2) (r 1)])]))
        ;; an SSE face: xmm <- xmm/m (or the store, r/m <- xmm), the name by the prefix's lane
        (lane base) (name $ base + (px @ 'none "ps" '66 "pd" 'f3 "ss" "sd"))
-       (xx mn) (: r (dc-modrm s k2 p 16 16) (finx (r 0) [(op1 mn 0 [(r 1) (r 2)])]))
-       (xxs mn) (: r (dc-modrm s k2 p 16 16) (finx (r 0) [(op1 mn 0 [(r 2) (r 1)])]))
+       (xx mn) (dc-modrm s k2 p 16 16 @ r (finx (r 0) [(op1 mn 0 [(r 1) (r 2)])]))
+       (xxs mn) (dc-modrm s k2 p 16 16 @ r (finx (r 0) [(op1 mn 0 [(r 2) (r 1)])]))
        (c @ 5 (nil 'syscall)  7 (nil (w @ 8 'sysretq 'sysretl))  11 (nil 'ud2)  119 (nil 'emms)  8 (nil 'invd)  9 (nil 'wbinvd)  51 (nil 'rdpmc)
           48 (nil 'wrmsr)  49 (nil 'rdtsc)  50 (nil 'rdmsr)  162 (nil 'cpuid)
-          (c && c = 0) (: r (dc-modrm s k2 p 2 2) (r 3 @ 3 (fin (r 0) [(op1 'ltr 2 [(r 2)])])
-                                                         0 (fin (r 0) [(op1 'sldt 0 [(r 2)])]) 1 (fin (r 0) [(op1 'str 0 [(r 2)])])
-                                                         2 (fin (r 0) [(op1 'lldt 0 [(r 2)])])
-                                                         4 (fin (r 0) [(op1 'verr 0 [(r 2)])]) 5 (fin (r 0) [(op1 'verw 0 [(r 2)])])
-                                                         (bad 0)))
-          31 (: r (dc-modrm s k2 p w w) (fin (r 0) [(op1 'nop w [(r 2)])]))          ; the long nops
+          (c && c = 0) (dc-modrm s k2 p 2 2 @ r (r 3 @ 3 (fin (r 0) [(op1 'ltr 2 [(r 2)])])
+                                                       0 (fin (r 0) [(op1 'sldt 0 [(r 2)])]) 1 (fin (r 0) [(op1 'str 0 [(r 2)])])
+                                                       2 (fin (r 0) [(op1 'lldt 0 [(r 2)])])
+                                                       4 (fin (r 0) [(op1 'verr 0 [(r 2)])]) 5 (fin (r 0) [(op1 'verw 0 [(r 2)])])
+                                                       (bad 0)))
+          31 (dc-modrm s k2 p w w @ r (fin (r 0) [(op1 'nop w [(r 2)])]))          ; the long nops
           24 (: m (dc-at s k2) r (dc-modrm s k2 p 8 8)                               ; the prefetch hints, /0../3
-                 mn (? (m >> 6 = 3) () (r 3 @ 0 'prefetchnta 1 'prefetcht0 2 'prefetcht1 3 'prefetcht2 ()))
+                 mn (m >> 6 = 3 ? () (r 3 @ 0 'prefetchnta 1 'prefetcht0 2 'prefetcht1 3 'prefetcht2 ()))
                  (nom? mn ? (fin (r 0) [(op1 mn 0 [(r 2)])]) (bad 0)))
           (c && c = 30 && px = 'f3 && (dc-at s k2 = 250 || dc-at s k2 = 251))
            (finx (k2 + 1) [(op1 (dc-at s k2 = 250 ? 'endbr64 'endbr32) 0 ())])
@@ -252,14 +252,14 @@
           33 (dc-modrm s k2 p 8 8 @ r (fin (r 0) [(op1 'mov 8 [(r 2) ['dr <>(r 1)]])]))    ; mov r64, drN
           35 (dc-modrm s k2 p 8 8 @ r (fin (r 0) [(op1 'mov 8 [['dr <>(r 1)] (r 2)])]))    ; mov drN, r64
           120 (eg 'vmread 8 8)  121 (ge 'vmwrite 8 8)
-          199 (: r (dc-modrm s k2 p 8 8)
-               (r 3 @- (bad 0)
-                (3 || 4 || 5) (? (dc-at s k2 >> 6 = 3 || px != 'none) (bad 0)
-                                 (fin (r 0) [(op1 (dc-x64 w 0 (r 3 @ 3 'xrstors 4 'xsavec 'xsaves)) 0 [(r 2)])]))
-                6 (finx (r 0) [(op1 (px @ 'none 'vmptrld '66 'vmclear 'f3 'vmxon 'vmptrld) 0 [(r 2)])])))
+          199 (dc-modrm s k2 p 8 8 @ r
+                 (r 3 @- (bad 0)
+                  (3 || 4 || 5) (dc-at s k2 >> 6 = 3 || px != 'none ? (bad 0)
+                                   (fin (r 0) [(op1 (dc-x64 w 0 (r 3 @ 3 'xrstors 4 'xsavec 'xsaves)) 0 [(r 2)])]))
+                  6 (finx (r 0) [(op1 (px @ 'none 'vmptrld '66 'vmclear 'f3 'vmxon 'vmptrld) 0 [(r 2)])])))
           (c && 64 <= c <= 79) (ge (dc-ccname "cmov" (c & 15)) w w)
-          (c && 128 <= c <= 143) (: t (k2 + 4 + dc-imm s k2 4) (fin (k2 + 4) [(op1 (dc-ccname "j" (c & 15)) 0 [['lbl t]])]))
-          (c && 144 <= c <= 159) (: r (dc-modrm s k2 p 1 1) (fin (r 0) [(op1 (dc-ccname "set" (c & 15)) 1 [(r 2)])]))
+          (c && 128 <= c <= 143) (k2 + 4 + dc-imm s k2 4 @ t (fin (k2 + 4) [(op1 (dc-ccname "j" (c & 15)) 0 [['lbl t]])]))
+          (c && 144 <= c <= 159) (dc-modrm s k2 p 1 1 @ r (fin (r 0) [(op1 (dc-ccname "set" (c & 15)) 1 [(r 2)])]))
           175 (ge 'imul w w)
           182 (ge 'movzb w 1)  183 (ge 'movzw w 2)  190 (ge 'movsb w 1)  191 (ge 'movsw w 2)
           176 (eg 'cmpxchg 1 1)  177 (eg 'cmpxchg w w)
@@ -268,28 +268,28 @@
           163 (eg 'bt w w)  171 (eg 'bts w w)  179 (eg 'btr w w)  187 (eg 'btc w w)
           186 (: r (dc-modrm s k2 p w w) mn (r 3 @ 4 'bt 5 'bts 6 'btr 7 'btc ())
                  (nom? mn ? (fin (r 0 + 1) [(op1 mn w [(r 2) ['im (dc-imm s (r 0) 1)]])]) (bad 0)))
-          (164 || 172) (: r (dc-modrm s k2 p w w)
-                        (fin (r 0 + 1) [(op1 (c @ 164 'shld 'shrd) w [(r 2) (r 1) ['im (dc-imm s (r 0) 1)]])]))
-          (165 || 173) (: r (dc-modrm s k2 p w w) (fin (r 0) [(op1 (c @ 165 'shld 'shrd) w [(r 2) (r 1) ['rg 1 1]])]))
+          (164 || 172) (dc-modrm s k2 p w w @ r
+                          (fin (r 0 + 1) [(op1 (c @ 164 'shld 'shrd) w [(r 2) (r 1) ['im (dc-imm s (r 0) 1)]])]))
+          (165 || 173) (dc-modrm s k2 p w w @ r (fin (r 0) [(op1 (c @ 165 'shld 'shrd) w [(r 2) (r 1) ['rg 1 1]])]))
           ;; the scans, and under F3 the counts (tzcnt lzcnt popcnt)
-          188 (? (px = 'f3) (dc-modrm s k2 p w w @ r (finx (r 0) [(op1 'tzcnt w [(r 1) (r 2)])])) (ge 'bsf w w))
-          189 (? (px = 'f3) (dc-modrm s k2 p w w @ r (finx (r 0) [(op1 'lzcnt w [(r 1) (r 2)])])) (ge 'bsr w w))
+          188 (px = 'f3 ? (dc-modrm s k2 p w w @ r (finx (r 0) [(op1 'tzcnt w [(r 1) (r 2)])])) (ge 'bsf w w))
+          189 (px = 'f3 ? (dc-modrm s k2 p w w @ r (finx (r 0) [(op1 'lzcnt w [(r 1) (r 2)])])) (ge 'bsr w w))
           195 (eg 'movnti w w)
           (c && c = 56 && px = '66 && dc-at s k2 = 130)
-           (: r (dc-modrm s (k2 + 1) p 8 8) (finx (r 0) [(op1 'invpcid 0 [(r 1) (r 2)])]))
+           (dc-modrm s (k2 + 1) p 8 8 @ r (finx (r 0) [(op1 'invpcid 0 [(r 1) (r 2)])]))
           (c && c = 174 && px = 'f3 && dc-at s k2 >> 6 = 3)
-           (: r (dc-modrm s k2 p w w)
+           (dc-modrm s k2 p w w @ r
               (fin (r 0) [(op1 (r 3 @ 0 'rdfsbase 1 'rdgsbase 2 'wrfsbase 'wrgsbase) 0 [(r 2)])]))
           (c && c = 184 && px = 'f3) (dc-modrm s k2 p w w @ r (finx (r 0) [(op1 'popcnt w [(r 1) (r 2)])]))
           ;; the fences: 0F AE with modrm F0 E8 F8
           174 (dc-at s k2 @ 240 (fin (k2 + 1) [(op1 'mfence 0 ())]) 232 (fin (k2 + 1) [(op1 'lfence 0 ())])
                            248 (fin (k2 + 1) [(op1 'sfence 0 ())])
-                           m (? (m >> 6 = 3 || !(elem px '(none 66))) (bad 0)
+                           m (m >> 6 = 3 || !(elem px '(none 66)) ? (bad 0)
                                 (: r (dc-modrm s k2 p 8 8)
-                                   mn (? (px = '66) (r 3 @ 6 'clwb 7 'clflushopt ())
+                                   mn (px = '66 ? (r 3 @ 6 'clwb 7 'clflushopt ())
                                          (r 3 @ 0 'fxsave 1 'fxrstor 2 'ldmxcsr 3 'stmxcsr 4 'xsave 5 'xrstor 6 'xsaveopt 7 'clflush ()))
                                    (nom? mn ? (fin (r 0) [(op1 (dc-x64 w (r 3) mn) 0 [(r 2)])]) (bad 0)))))
-          (c && 200 <= c <= 207) (fin k2 [(op1 'bswap w [['rg ((c & 7) | (pf p 'b << 3)) w]])])
+          (c && 200 <= c <= 207) (fin k2 [(op1 'bswap w [['rg (c & 7 | pf p 'b << 3) w]])])
           ;; SSE
           16 (xx (px @ 'none 'movups '66 'movupd 'f3 'movss 'movsd))
           17 (xxs (px @ 'none 'movups '66 'movupd 'f3 'movss 'movsd))
@@ -298,21 +298,21 @@
            (: reg? (dc-at s k2 >> 6 = 3) lo (c = 18)
               (xx (? (px = '66) (lo ? 'movlpd 'movhpd) reg? (lo ? 'movhlps 'movlhps) (lo ? 'movlps 'movhps))))
           (c && (c = 19 || c = 23) && (px = 'none || px = '66) && dc-at s k2 >> 6 != 3)
-           (xxs (? (px = '66) (c = 19 ? 'movlpd 'movhpd) (c = 19 ? 'movlps 'movhps)))
-          (c && c = 18 && px = 'none) (: r (dc-modrm s k2 p 16 16) (finx (r 0) [(op1 (<(r 2) = 'rg ? 'movhlps 'movlps) 0 [(r 1) (r 2)])]))
+           (xxs (px = '66 ? (c = 19 ? 'movlpd 'movhpd) (c = 19 ? 'movlps 'movhps)))
+          (c && c = 18 && px = 'none) (dc-modrm s k2 p 16 16 @ r (finx (r 0) [(op1 (<(r 2) = 'rg ? 'movhlps 'movlps) 0 [(r 1) (r 2)])]))
           (c && c = 20 && (px = 'none || px = '66)) (xx (lane "unpckl"))
           40 (xx (px = '66 ? 'movapd 'movaps))  41 (xxs (px = '66 ? 'movapd 'movaps))
-          (c && c = 42 && ate) (: r (dc-modrm s k2 p 16 w) (finx (r 0) [(op1 (px = 'f3 ? 'cvtsi2ss 'cvtsi2sd) w [(r 1) (r 2)])]))
-          (c && c = 44 && ate) (: r (dc-modrm s k2 p w 16) (finx (r 0) [(op1 (px = 'f3 ? 'cvttss2si 'cvttsd2si) w [(r 1) (r 2)])]))
-          (c && c = 45 && ate) (: r (dc-modrm s k2 p w 16) (finx (r 0) [(op1 (px = 'f3 ? 'cvtss2si 'cvtsd2si) w [(r 1) (r 2)])]))
+          (c && c = 42 && ate) (dc-modrm s k2 p 16 w @ r (finx (r 0) [(op1 (px = 'f3 ? 'cvtsi2ss 'cvtsi2sd) w [(r 1) (r 2)])]))
+          (c && c = 44 && ate) (dc-modrm s k2 p w 16 @ r (finx (r 0) [(op1 (px = 'f3 ? 'cvttss2si 'cvttsd2si) w [(r 1) (r 2)])]))
+          (c && c = 45 && ate) (dc-modrm s k2 p w 16 @ r (finx (r 0) [(op1 (px = 'f3 ? 'cvtss2si 'cvtsd2si) w [(r 1) (r 2)])]))
           46 (xx (px = '66 ? 'ucomisd 'ucomiss))  47 (xx (px = '66 ? 'comisd 'comiss))
-          80 (: r (dc-modrm s k2 p 4 16) (finx (r 0) [(op1 (px = '66 ? 'movmskpd 'movmskps) 4 [(r 1) (r 2)])]))
+          80 (dc-modrm s k2 p 4 16 @ r (finx (r 0) [(op1 (px = '66 ? 'movmskpd 'movmskps) 4 [(r 1) (r 2)])]))
           81 (xx (lane "sqrt"))  84 (xx (lane "and"))  85 (xx (lane "andn"))
           86 (xx (lane "or"))  87 (xx (lane "xor"))  88 (xx (lane "add"))  89 (xx (lane "mul"))
           90 (xx (px @ 'none 'cvtps2pd '66 'cvtpd2ps 'f3 'cvtss2sd 'cvtsd2ss))
           92 (xx (lane "sub"))  93 (xx (lane "min"))  94 (xx (lane "div"))  95 (xx (lane "max"))
-          (c && c = 110 && px = '66) (: r (dc-modrm s k2 p 16 w) (finx (r 0) [(op1 (w = 8 ? 'movq 'movd) w [(r 1) (r 2)])]))
-          (c && c = 126 && px = '66) (: r (dc-modrm s k2 p 16 w) (finx (r 0) [(op1 (w = 8 ? 'movq 'movd) w [(r 2) (r 1)])]))
+          (c && c = 110 && px = '66) (dc-modrm s k2 p 16 w @ r (finx (r 0) [(op1 (w = 8 ? 'movq 'movd) w [(r 1) (r 2)])]))
+          (c && c = 126 && px = '66) (dc-modrm s k2 p 16 w @ r (finx (r 0) [(op1 (w = 8 ? 'movq 'movd) w [(r 2) (r 1)])]))
           (c && c = 126 && px = 'f3) (xx 'movq)
           (c && c = 214 && px = '66) (xxs 'movq)
           (c && c = 111 && px = '66) (xx 'movdqa)  (c && c = 127 && px = '66) (xxs 'movdqa)
@@ -322,10 +322,10 @@
            (: r (dc-modrm s k2 p 16 16) mn (dc-pshift c (r 3))
               (nom? mn ? (finx (r 0 + 1) [(op1 mn 0 [(r 2) ['im (dc-at s (r 0))]])]) (bad 0)))
           (c && c = 112 && (ate || px = '66))                                 ; pshufd / pshufhw / pshuflw ib
-           (: r (dc-modrm s k2 p 16 16) (finx (r 0 + 1) [(op1 (px @ '66 'pshufd 'f3 'pshufhw 'pshuflw) 0 [(r 1) (r 2) ['im (dc-at s (r 0))]])]))
-          198 (: r (dc-modrm s k2 p 16 16) (finx (r 0 + 1) [(op1 (px = '66 ? 'shufpd 'shufps) 0 [(r 1) (r 2) ['im (dc-at s (r 0))]])]))
-          (c && c = 215 && px = '66) (: r (dc-modrm s k2 p 4 16) (finx (r 0) [(op1 'pmovmskb 4 [(r 1) (r 2)])]))
-          194 (: r (dc-modrm s k2 p 16 16) (finx (r 0 + 1) [(op1 (lane "cmp") 0 [(r 1) (r 2) ['im (dc-at s (r 0))]])]))
+           (dc-modrm s k2 p 16 16 @ r (finx (r 0 + 1) [(op1 (px @ '66 'pshufd 'f3 'pshufhw 'pshuflw) 0 [(r 1) (r 2) ['im (dc-at s (r 0))]])]))
+          198 (dc-modrm s k2 p 16 16 @ r (finx (r 0 + 1) [(op1 (px = '66 ? 'shufpd 'shufps) 0 [(r 1) (r 2) ['im (dc-at s (r 0))]])]))
+          (c && c = 215 && px = '66) (dc-modrm s k2 p 4 16 @ r (finx (r 0) [(op1 'pmovmskb 4 [(r 1) (r 2)])]))
+          194 (dc-modrm s k2 p 16 16 @ r (finx (r 0 + 1) [(op1 (lane "cmp") 0 [(r 1) (r 2) ['im (dc-at s (r 0))]])]))
           (bad 0)))
 
    ;; --- the stream: every instruction with its offset, targets made absolute ---
@@ -339,7 +339,7 @@
     (:- (go 0 ()) n #s (go off acc)
      (off >= n ? (rev acc)
       (: r (x64-decode s off) ln <r
-         its (map (\ it (<it = 'op ? ['op (it 1) (it 2) (map (o \ dc-abs base off ln o) (it 3))] it)) >r)
+         its (map (it \ (<it = 'op ? ['op (it 1) (it 2) (map (o \ dc-abs base off ln o) (it 3))] it)) >r)
        (go (off + ln) ([off ln its] . acc)))))
    ;; a target inside the stream, on an instruction boundary, becomes the symbol L<addr> and a
    ;; label row is laid there; a rip form keeps its address as (rip L<addr> 0). base is the first
@@ -359,12 +359,12 @@
         'rip (nom? <>o ? -1 <>>o)
         'ind (tg <>o)
         'seg (tg <>>o))
-       used (foldl (\ t r (foldl (\ t it (? (<it = 'op) (foldl (\ t o (: a (tg o) (tgt a ? (pin t a 1) t))) t (it 3))
+       used (foldl (\ t r (foldl (\ t it (<it = 'op ? (foldl (\ t o (tg o @ a (tgt a ? (pin t a 1) t))) t (it 3))
                                                     t))
                                  t (r 2)))
                    {} rows)
-       (catmap (\ r (: a (<r + base)
-                        its (map (\ it (<it = 'op ? ['op (it 1) (it 2) (map fix (it 3))] it)) (r 2))
-                        ((peep used a 0 ? [['label (sym a)]] ()) + its)))
+       (catmap (r \ (: a (<r + base)
+                        its (map (it \ (<it = 'op ? ['op (it 1) (it 2) (map fix (it 3))] it)) (r 2))
+                        ((peep used a 0 ? [['label (sym a)]]) + its)))
                rows)))
 ) ; module 'holo

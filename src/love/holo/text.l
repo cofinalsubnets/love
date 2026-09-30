@@ -31,25 +31,25 @@
    (txnum p)   (<p = "-" ? -(txint (txjoin >p)) (txint (txjoin p)))
 
    ;; -- the line grammar. a token is at least one char (so `many` can't twirl on the empty match). --
-   txtsym (pmap (\ x [(name (txjoin x))]) (seq (one txidc?) (span txidc?)))
-   txtnum (pmap (\ x [(txnum x)]) (seq (opt (lit "-")) (seq (one digit?) (span digit?))))
+   txtsym (pmap (x \ [(name (txjoin x))]) (seq (one txidc?) (span txidc?)))
+   txtnum (pmap (x \ [(txnum x)]) (seq (opt (lit "-")) (seq (one digit?) (span digit?))))
    txop   (alt txtnum txtsym)                                   ; an operand: number first, else symbol
    txgap  (skip (span txsep?))                                  ; a run of spaces/commas, dropped
    txline (seq txtsym (many (seq txgap txop)))                  ; head symbol then operands -> one form
 
    ;; -- line preprocessing: drop the `;` comment, trim the ends, split on newlines. --
-   (txdecomment s) (: n #s
-      ((: (g i) (? (i >= n) s (s i = 59) (snip s 0 i) (g (i + 1)))) 0))
+   (txdecomment s) (#s @ n
+                      ((: (g i) (? (i >= n) s (s i = 59) (snip s 0 i) (g (i + 1)))) 0))
    (txtrim s) (: n #s
-      a ((: (gl i) (? (i < n && blank? (s i)) (gl (i + 1)) i)) 0)
-      b ((: (gr j) (? (j > a && blank? (s (j - 1))) (gr (j - 1)) j)) n)
+      a ((: (gl i) (i < n && blank? (s i) ? (gl (i + 1)) i)) 0)
+      b ((: (gr j) (j > a && blank? (s (j - 1)) ? (gr (j - 1)) j)) n)
       (snip s a b))
-   (txsplit s) (: n #s
-      ((: (g i start acc)
-          (? (i >= n)     (rev (snip s start n . acc))
-             (s i = 10) (g (i + 1) (i + 1) (snip s start i . acc))
-             (g (i + 1) start acc)))
-       0 0 ()))
+   (txsplit s) (#s @ n
+                  ((: (g i start acc)
+                      (? (i >= n)     (rev (snip s start n . acc))
+                         (s i = 10) (g (i + 1) (i + 1) (snip s start i . acc))
+                         (g (i + 1) start acc)))
+                   0 0 ()))
 
    ;; -- the front door: TEXT -> IR. blank/comment-only lines vanish; a line that won't parse is a
    ;; deliberate raise (a typo shouldn't silently drop an instruction). the assemble step stays
@@ -57,9 +57,9 @@
    ;; it loads clean in both worlds -- the raw holo.l stream and the baked host (book-only). --
    (asm-text src)
       (foldr (\ ln acc
-                (: clean (txtrim (txdecomment ln))
+                (txtrim (txdecomment ln) @ clean
                    (0 = #clean ? acc
-                    (: form (parse txline clean)
-                     (two? form ? (form . acc) (scare 'asm-text clean))))))
+                    (parse txline clean @ form
+                       (two? form ? (form . acc) (scare 'asm-text clean))))))
              () (txsplit src)))
 ) ; module 'holo

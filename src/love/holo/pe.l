@@ -39,12 +39,12 @@
    ;; no sites at all still emits one dummy block: an empty-handed .reloc is what
    ;; marks the image relocatable (RELOCS_STRIPPED unset means firmware may slide).
    (pe-relocs sites)
-    (? !(two? sites) (catall [(le32 4096) (le32 12) (le16 0) (le16 0)])
+    (!(two? sites) ? (catall [(le32 4096) (le32 12) (le16 0) (le16 0)])
        (: (blocks ss acc)
-           (? !(two? ss) (rev acc)
-              (: pg ((<ss - pe-ibase) & -4096)
+           (!(two? ss) ? (rev acc)
+              (: pg (<ss - pe-ibase & -4096)
                  (grab l es) (two? l && <l - pe-ibase <  pg + 4096 ?
-                               (grab >l ((40960 | ((<l - pe-ibase) & 4095)) . es))
+                               (grab >l ((40960 | <l - pe-ibase & 4095) . es))
                                [l (rev es)])
                  g (grab ss ())
                  es <>g
@@ -118,11 +118,11 @@
          (pe-sect ".text" tfsz 4096 traw pe-hraw 1610612768)           ; 0x60000020 code|r-x
          (pe-sect ".data" data-vsz data-rva draw (pe-hraw + traw) 3221225536)    ; 0xc0000040 data|rw-
          (pe-sect ".reloc" rsz reloc-rva rraw (pe-hraw + traw + draw) 1107296320)])   ; 0x42000040
-       _ (pe-hraw < #hdr ? (scare 'pe-headers-overflow #hdr))
+       (pe-hraw < #hdr ? (scare 'pe-headers-overflow #hdr),
        ;; headers, the read-only half padded to its file size, then the writable
        ;; half padded to its own, then .reloc. `+` folds right, so the chunks
        ;; concatenate in the order written.
-       (ld-write out
+        ld-write out
           ([hdr (ld-zeros (pe-hraw - #hdr))]
            + >eo + [(ld-zeros (traw - tfsz))]
            + >en + [(ld-zeros (draw - dfsz)) reloc (ld-zeros (rraw - rsz))]))))

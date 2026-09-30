@@ -25,17 +25,17 @@
    (oc-segs fs s)
     (: n (ld-f fs s 0 'e-phnum) po (ld-f fs s 0 'e-phoff) e (ld-n fs 'ph-ent)
        (go i acc)
-        (? (n <= i) (rev acc)
-           (: h (po + (i * e))
-              (go (i + 1) (? (ld-f fs s h 'ph-type = 1)
+        (n <= i ? (rev acc)
+           (po + i * e @ h
+              (go (i + 1) (ld-f fs s h 'ph-type = 1 ?
                              ([(ld-f fs s h 'ph-off) (ld-f fs s h 'ph-fsz)
                                (ld-f fs s h 'ph-pa)] . acc)
                              acc))))
        (go 0 ()))
    (oc-lma id segs off)
-    (: (go ps) (? (atom? ps) (scare 'copy-unmapped-section off)
-                  (: p <ps
-                     (? ((<p <= off) && (off < (<p + p 1))) (p 2 + (off - <p))
+    (: (go ps) (atom? ps ? (scare 'copy-unmapped-section off)
+                  (<ps @ p
+                     (<p <= off && off < <p + p 1 ? (p 2 + (off - <p))
                         (go >ps))))
        (go segs))
 
@@ -45,7 +45,7 @@
    ;; has bytes, not is-progbits: a dynamic exe loads its .note, .dynsym, .gnu.hash
    ;; and .rela.dyn too, and each is a type of its own.
    (oc-read id s)
-    (: _ (? ((s 0 = 127) && (s 1 = 69) && (s 2 = 76) && (s 3 = 70)) 0
+    (: _ (s 0 = 127 && s 1 = 69 && s 2 = 76 && s 3 = 70 ? 0
             (scare 'copy-not-elf id))
        fs (? (s 4 = 2) elf64f (s 4 = 1) elf32f (scare 'copy-elf-class id))
        ; a table this file does not have is a table of stride 0, so ask after the
@@ -56,34 +56,34 @@
        ; too; llvm-objcopy writes a zero-BYTE image and says nothing, which on a board
        ; is a brick that looks like a build.)
        shnum (ld-f fs s 0 'e-shnum) phnum (ld-f fs s 0 'e-phnum)
-       _ (? (0 < shnum) 0 (scare 'copy-no-sections id))
-       _ (? (0 < phnum) 0 (scare 'copy-no-segments id))
-       _ (? (ld-f fs s 0 'e-shent = ld-n fs 'sh-ent) 0 (scare 'copy-shentsize id))
-       _ (? (ld-f fs s 0 'e-phent = ld-n fs 'ph-ent) 0 (scare 'copy-phentsize id))
+       _ (0 < shnum ? 0 (scare 'copy-no-sections id))
+       _ (0 < phnum ? 0 (scare 'copy-no-segments id))
+       _ (ld-f fs s 0 'e-shent = ld-n fs 'sh-ent ? 0 (scare 'copy-shentsize id))
+       _ (ld-f fs s 0 'e-phent = ld-n fs 'ph-ent ? 0 (scare 'copy-phentsize id))
        segs (oc-segs fs s)
-       _ (? (two? segs) 0 (scare 'copy-no-load id))
+       _ (two? segs ? 0 (scare 'copy-no-load id))
        shoff (ld-f fs s 0 'e-shoff)
        (go i acc)
-        (? (shnum <= i) acc
-           (: h (shoff + (i * ld-n fs 'sh-ent))
+        (shnum <= i ? acc
+           (: h (shoff + i * ld-n fs 'sh-ent)
               ty (ld-f fs s h 'sh-type) fl (ld-f fs s h 'sh-flags)
               off (ld-f fs s h 'sh-off) sz (ld-f fs s h 'sh-size)
-              keep (!(ty = 8) && (0 < (fl & 2)) && (0 < sz))
-              (go (i + 1) (? keep ([(oc-lma id segs off) off sz] . acc) acc))))
+              keep (!(ty = 8) && 0 < fl & 2 && 0 < sz)
+              (go (i + 1) (keep ? ([(oc-lma id segs off) off sz] . acc) acc))))
        secs (go 1 ())
-       _ (? (two? secs) 0 (scare 'copy-nothing id))
-       [(sortby (\ a b (<a <= <b)) secs) (ld-f fs s 0 'e-entry)])
+       (two? secs ? 0 (scare 'copy-nothing id),
+        [(sortby (\ a b (<a <= <b)) secs) (ld-f fs s 0 'e-entry)]))
 
    ;; -- the flat image, as a list of pieces for ld-write. a gap between two sections
    ;; is zeros: the file lays down from the lowest load address, so whatever is not a
    ;; section is what the part comes up holding there.
    (oc-bin s secs)
     (: (go l pos acc)
-        (? (atom? l) (rev acc)
+        (atom? l ? (rev acc)
            (: c <l a <c o (c 1) n (c 2)
-              _ (? (a < pos) (scare 'copy-overlap a) 0)
-              (go >l (a + n)
-                  (snip s o (o + n) . (? (pos < a) (ld-zeros (a - pos) . acc) acc)))))
+              (a < pos ? (scare 'copy-overlap a) 0,
+               go >l (a + n)
+                  (snip s o (o + n) . (pos < a ? (ld-zeros (a - pos) . acc) acc)))))
        (go secs (<secs 0) ()))
 
    ;; -- Intel hex: ":" ll AAAA tt dd.. CC, every byte two ASCII hex digits, CC the
@@ -105,42 +105,42 @@
    (oc-cat ls) (foldl (+) "" ls)
    (oc-rec ty addr bs)
     (: all ([#bs (addr >> 8 & 255) (addr & 255) ty] + bs)
-       ck ((256 - (foldl (+) 0 all % 256)) % 256)
+       ck ((256 - foldl (+) 0 all % 256) % 256)
        (oc-cat (":" . (map oc-x2 (all + [ck]) + '("\r\n")))))
-   (oc-be4 v) [((v >> 24) & 255) ((v >> 16) & 255) ((v >> 8) & 255) (v & 255)]
+   (oc-be4 v) [(v >> 24 & 255) (v >> 16 & 255) (v >> 8 & 255) (v & 255)]
    ;; the entry wears the same two ages as the base: type 03 is cs:ip under 1 MB, and
    ;; type 05 the flat address above it.
    (oc-start e)
-    (? (0xFFFFF < e) (oc-rec 5 0 (oc-be4 e))
-       (oc-rec 3 0 [(((e >> 16) & 15) << 4) 0 ((e >> 8) & 255) (e & 255)]))
+    (0xFFFFF < e ? (oc-rec 5 0 (oc-be4 e))
+       (oc-rec 3 0 [((e >> 16 & 15) << 4) 0 (e >> 8 & 255) (e & 255)]))
    (oc-chunks secs)
     (: (go a o left acc)
-        (? (left < 1) acc
-           (: room (65536 - (a % 65536))
-              m (? (16 < left) 16 left)
-              n (? (room < m) room m)
+        (left < 1 ? acc
+           (: room (65536 - a % 65536)
+              m (16 < left ? 16 left)
+              n (room < m ? room m)
               (go (a + n) (o + n) (left - n) ([a o n] . acc))))
        (rev (foldl (\ acc c (go <c (c 1) (c 2) acc)) () secs)))
-   (oc-b02 nb) (oc-rec 2 0 [((nb >> 12) & 255) ((nb >> 4) & 255)])
-   (oc-b04 nb) (oc-rec 4 0 [((nb >> 24) & 255) ((nb >> 16) & 255)])
+   (oc-b02 nb) (oc-rec 2 0 [(nb >> 12 & 255) (nb >> 4 & 255)])
+   (oc-b04 nb) (oc-rec 4 0 [(nb >> 24 & 255) (nb >> 16 & 255)])
    ;; base is the 64K window in force, sg whether a segment base is standing in it
    (oc-ihex s secs entry)
     (: (go l base sg acc)
-        (? (atom? l)
+        (atom? l ?
            (rev (. ":00000001FF\r\n"
-                      (? (0 < entry) (oc-start entry . acc) acc)))
+                      (0 < entry ? (oc-start entry . acc) acc)))
            (: c <l a <c
-              new? ((base + 65535) < a)
+              new? (base + 65535 < a)
               lin? (0xFFFFF < a)
-              nb (a - (a % 65536))
+              nb (a - a % 65536)
               acc2 (? !new? acc
                       !lin? (oc-b02 nb . acc)
                       sg (oc-b04 nb . (oc-b02 0 . acc))
                       (oc-b04 nb . acc))
-              b2 (? new? nb base)
-              (go >l b2 (? new? !lin? sg)
+              b2 (new? ? nb base)
+              (go >l b2 (new? ? !lin? sg)
                   (oc-rec 0 (a - b2)
-                          (map (k \ s (c 1 + k)) (jot (c 2))) . acc2))))
+                          (map (k \ s (c 1 + k)) ^(c 2)) . acc2))))
        (go (oc-chunks secs) 0 () ()))
 
    ;; -- the applet. GNU's objcopy names itself when it complains and exits 1, and a
@@ -148,15 +148,15 @@
    ;; here, and so does the one-line cat a port build runs.
    (oc-die m) (say err ("objcopy: " + m), put err 10, quit 1)
    (objcopy as)
-    (? (#as != 4) (oc-die "usage: objcopy -O binary|ihex IN OUT")
-       (: fmt (? (<as = "-O") <>as (oc-die ("unrecognized option " + <as)))
+    (#as != 4 ? (oc-die "usage: objcopy -O binary|ihex IN OUT")
+       (: fmt (<as = "-O" ? <>as (oc-die ("unrecognized option " + <as)))
           src (as 2) dst (as 3)
-          _ (? (elem fmt '("binary" "ihex")) 0 (oc-die ("unknown output format " + fmt)))
+          _ (elem fmt '("binary" "ihex") ? 0 (oc-die ("unknown output format " + fmt)))
           r (uread src)
-          _ (? (two? r) 0 (oc-die ("cannot open " + src)))
+          _ (two? r ? 0 (oc-die ("cannot open " + src)))
           s <>r
           w (oc-read src s)
-          nw (ld-write dst (? (fmt = "ihex") (oc-ihex s <w <>w) (oc-bin s <w)))
-          _ (? (nom? nw) (oc-die ("cannot write " + dst + " -- " + show nw)) 0)
-          (quit 0))))
+          nw (ld-write dst (fmt = "ihex" ? (oc-ihex s <w <>w) (oc-bin s <w)))
+          (nom? nw ? (oc-die ("cannot write " + dst + " -- " + show nw)) 0,
+           quit 0))))
 ) ; module 'holo

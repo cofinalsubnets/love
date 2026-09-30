@@ -66,7 +66,7 @@
    (byte n)  (n & 255)
    (le16 n)  [(byte n) (byte (n >> 8))]
    (le32 n)  [(byte n) (byte (n >> 8)) (byte (n >> 16)) (byte (n >> 24))]
-   (le64 n)  (: u (u64 n) ((: (go i) (? (i < 8) (((u // i 256) % 256) . go (i + 1)) ())) 0))   ; 8 LE bytes via //%
+   (le64 n)  (u64 n @ u ((: (go i) (i < 8 ? (((u // i 256) % 256) . go (i + 1)) ())) 0))   ; 8 LE bytes via //%
    (u64 n) (n < 0 ? (n + 18446744073709551616) n)                     ; two's-complement into [0,2^64)
    (s64 n) (n > 9223372036854775807 ? (n - 18446744073709551616) n)   ; a u64 pattern as the signed value it encodes
    ;; a 32-bit thumb instruction: two halfwords, the high one first, each little-endian
@@ -74,13 +74,13 @@
    ;; the wide thumb branch, byte offset o: S:J1:J2:imm10:imm11 with i1=~(J1^S), i2=~(J2^S);
    ;; hw2's base says which -- 0xd000 BL, 0x9000 B.W
    (tbw o base)
-      (: imm11 ((o >> 1) & 2047)  imm10 ((o >> 12) & 1023)
-         i2 ((o >> 22) & 1)  i1 ((o >> 23) & 1)  s ((o >> 24) & 1)
+      (: imm11 (o >> 1 & 2047)  imm10 (o >> 12 & 1023)
+         i2 (o >> 22 & 1)  i1 (o >> 23 & 1)  s (o >> 24 & 1)
          j1 (((i1 ^ 1) ^ s) & 1)  j2 (((i2 ^ 1) ^ s) & 1)
-         (t32 (((0xF000 | ((s << 10) | imm10)) << 16) | (base | ((j1 << 13) | ((j2 << 11) | imm11))))))
+         (t32 ((0xF000 | (s << 10 | imm10)) << 16 | (base | (j1 << 13 | (j2 << 11 | imm11))))))
    (blank? c) (c = 32 || c = 9)                      ; a lexer's space or tab; a newline ends the line
-   (fits8  n) ((n >= -128) && (n <= 127))
-   (fits32 n) ((n >= -2147483648) && (n <= 2147483647))
+   (fits8  n) (n >= -128 && n <= 127)
+   (fits32 n) (n >= -2147483648 && n <= 2147483647)
    ;; IR condition -> the 4-bit arm cond field, one encoding for a64, thumb2 and thumb1.
    ;; p/np (x86 parity: ucomisd's unordered bit) alias vs/vc: fcmp parks unordered in V
    arm-cc {'eq 0 'ne 1 'ae 2 'below 3 's 4 'ns 5 'vs 6 'vc 7 'p 6 'np 7
@@ -96,7 +96,7 @@
    ;; out. `aux` is backend scratch -- x86 ignores it; a fixed-width arch stashes the base
    ;; instruction word there, its branch offset being a bitfield within the word, not bytes. --
    (fix w kind label aux) ['fix w kind label aux]
-   (fix? x)   (? (two? x) (<x = 'fix) 0)
+   (fix? x)   (two? x ? (<x = 'fix) 0)
    (fix-w x)  (x 1)
    (fix-k x)  (x 2)
    (fix-l x)  (x 3)
@@ -109,13 +109,13 @@
    ;; -- fold a freshly lowered chunk onto the reversed item stream, answering (len . items).
    ;; measure-then-rev-then-append walks the chunk three times and conses it twice; this walks
    ;; once and conses once. the assembler's hottest loop -- one per instruction per pass. --
-   (revonto l items n) (? !(two? l) (n . items)
+   (revonto l items n) (!(two? l) ? (n . items)
                           (revonto >l (<l . items) (n + item-len <l)))
 
    ;; -- the little table kit every backend leans on: `fregs` builds the f0..fn-1 float
    ;; file, and `look` is the guarded read (a miss scares with the caller's tag). --
-   (fregs n)   (: t {} _ (foldl (\ _ i (pin t (intern ("f" + show i)) i)) 0 (jot n)) t)
-   (look tab k tag) (: e (peep tab k -1) (? (e < 0) (scare tag k) e))
+   (fregs n)   ({} @ t (foldl (\ _ i (pin t (intern ("f" + show i)) i)) 0 ^n, t))
+   (look tab k tag) (peep tab k -1 @ e (e < 0 ? (scare tag k) e))
 
    ;; -- the IR's operand counts, one neutral table (the header's forms made executable). a
    ;; backend keeps an emitter tablet, each row partial-applied to everything but its IR operands
@@ -199,23 +199,23 @@
    ;; an emitter row is (arity . emitter): `emsof` builds a backend's tablet from
    ;; ('op . f) pairs, stamping each row with its count off ir-arity. so ir-arity
    ;; is read at bake time, once per op, and lowering reads arity and emitter in one lookup.
-   (emsof prs) (: t {} _ (foldl (\ _ p (emrow t <p >p)) 0 prs) t)
+   (emsof prs) ({} @ t (foldl (\ _ p (emrow t <p >p)) 0 prs, t))
    (emrow t op f) (pin t op (look ir-arity op 'bad-op . f))
    ;; feed the emitter its operands, left to right, straight off the form's own tail. `n` counts
    ;; the row's declared arity down and must reach zero exactly as the operands run out: a form
    ;; carrying the wrong count scares here rather than answering a partial application, which
    ;; would lay as zero bytes -- a silent hole in the output.
-   (feed f l n op) (? (two? l) (? (n < 1) (scare 'arity-skew op) (feed (f <l) >l (n - 1) op))
+   (feed f l n op) (? (two? l) (n < 1 ? (scare 'arity-skew op) (feed (f <l) >l (n - 1) op))
                       (n = 0) f
                       (scare 'arity-skew op))
    (lower-via ems ins)
       (: op <ins  r (peep ems op 'no)
-         _ (r = 'no ? (scare 'bad-op op) 0)
-         (feed >r >ins <r op))
+         (r = 'no ? (scare 'bad-op op) 0,
+          feed >r >ins <r op))
 
    ;; -- the backend registry. a backend is a tablet { 'lower 'patch }, plus 'refix where the
    ;; linker reaches in. --
-   backends (tablet 0)
+   backends {}
    (defbackend name be) (pin backends name be)
    (lower-with be ins)         (peep be 'lower 0 ins)
    (patch-with be k t s w aux) (peep be 'patch 0 k t s w aux)
@@ -226,7 +226,7 @@
    ;; answered by presence, never by a zero: an unbound slot would be `(0 k ..)`,
    ;; which is const-1 applied and comes back a plausible number.
    (refix-with be k bs t s w)
-    (: f (peep be 'refix ()) (? (lit? f) (f k bs t s w) (scare 'holo-no-refix k)))
+    (peep be 'refix () @ f (lit? f ? (f k bs t s w) (scare 'holo-no-refix k)))
 
    ;; -- pass one: walk the program, lower each form, assign addresses, record labels -> (items .
    ;; labels), the flat byte/fixup stream and a name->address tablet. items accumulate reversed
@@ -236,7 +236,7 @@
    ;; count -- alignment lives here, the only pass that knows the address. the pad is
    ;; between-function filler, never executed, so a torn unit at an odd grain is harmless. --
    (pad-to be addr n)
-      (: k ((n - (addr % n)) % n)
+      (: k ((n - addr % n) % n)
          unit (peep be 'nop '(144))
          (fill j u) (? (j < 1) ()
                        !(two? u) (fill j unit)
@@ -246,7 +246,7 @@
    ;; and the rewrite stands only where nothing reads the flags that spelling clobbers. the
    ;; `li` test comes first, so every other instruction pays one symbol compare.
    (zeroidiom be ins rest)
-      (? (<ins = 'li && ins 2 = 0 && be 'zeroxor && flagfree be rest 64)
+      (<ins = 'li && ins 2 = 0 && be 'zeroxor && flagfree be rest 64 ?
          ['xor (ins 1) (ins 1) (ins 1)] ins)
    ;; the flags are free if a writer lands over them before any reader -- or a call or ret,
    ;; across which they do not live at all. a jump may deliver them to a reader we cannot see,
@@ -254,24 +254,24 @@
    ;; though: only the fall-through carries what this instruction wrote, and a reader past the
    ;; label is still a reader here. the bound holds this linear.
    (flagfree be l k)
-      (? (k < 1 || atom? l) 0
-         (: o <(<l)
+      (k < 1 || atom? l ? 0
+         (<(<l) @ o
             (? (elem o (be 'flagr)) 0
                (elem o (be 'flagw)) 1
                (elem o '(call ret sys)) 1
                (elem o '(jmp jmpr jmpm)) 0
                (flagfree be >l (k - 1)))))
    (lay prog be addr items labels)
-      (? !(two? prog) (rev items . labels)
-         (: ins <prog
+      (!(two? prog) ? (rev items . labels)
+         (<prog @ ins
             (? (<ins = 'label)
                (pin labels (ins 1) addr, lay >prog be addr items labels)
                (<ins = 'align)
-               (: r (revonto (pad-to be addr (ins 1)) items 0)
+               (revonto (pad-to be addr (ins 1)) items 0 @ r
                   (lay >prog be (addr + <r) >r labels))
                ; ..and in a section nothing executes, zeros: the pad is data a reader sees
                (<ins = 'dalign)
-               (: r (revonto (map (i \ 0) ^((ins 1 - (addr % ins 1)) % ins 1)) items 0)
+               (: r (revonto (map (i \ 0) ^((ins 1 - addr % ins 1) % ins 1)) items 0)
                   (lay >prog be (addr + <r) >r labels))
                (: r (revonto (lower-with be (zeroidiom be ins >prog)) items 0)
                   (lay >prog be (addr + <r) >r labels)))))
@@ -281,10 +281,10 @@
    ;; into to resolve (an inline asm's jump to a label of the function around it)
    (resolve items labels be addr) (resolve-open items labels be addr {})
    (resolve-open items labels be addr open)
-      (? (atom? items) ()
-         (: x <items
-            (? (fix? x)
-               (: tgt (labels (fix-l x))
+      (atom? items ? ()
+         (<items @ x
+            (fix? x ?
+               (labels (fix-l x) @ tgt
                   (? (imm? tgt)
                       (patch-with be (fix-k x) tgt addr (fix-w x) (fix-a x)
                        + resolve-open >items labels be (addr + fix-w x) open)
@@ -312,19 +312,19 @@
    ;; the locals here are spelled to shadow no caller-side global: a `scan`/`rw`/`skip` would
    ;; collide with moon/kore file-scope names in a cat'd stream. --
    (laylax prog be at0 labels longs)
-      (? !(lit? (peep be 'short 0)) (lay prog be at0 () labels)
+      (!(lit? (peep be 'short 0)) ? (lay prog be at0 () labels)
          (: spots {} eras {}
             ;; pass one: lower each form once, cache (len . REVERSED chunk) -- the length rides
             ;; along so pass two never re-walks a chunk, and the reversal is already paid since
             ;; pass two splices onto a reversed stream. labels ride (0 . ()).
             (plumb p addr era acc)
-               (? (atom? p) (rev acc)
-                  (: ins <p
+               (atom? p ? (rev acc)
+                  (<p @ ins
                      (? (<ins = 'label)
                         (pin spots (ins 1) addr, pin eras (ins 1) era,
                          plumb >p addr era ((0 . ()) . acc))
                         (<ins = 'align)
-                        (: r (revonto (pad-to be addr (ins 1)) () 0)
+                        (revonto (pad-to be addr (ins 1)) () 0 @ r
                            (plumb >p (addr + <r) (era + 1) (r . acc)))
                         (: r (revonto (lower-with be (zeroidiom be ins >p)) () 0)
                            (plumb >p (addr + <r) era (r . acc))))))
@@ -335,7 +335,7 @@
             ;; decision pass sound. the backend judges the distance; this only offers it.
             short-of (peep be 'short 0)
             (tgt-of l era)
-               (: t (spots l)
+               (spots l @ t
                   (? !(imm? t) ()
                      (peep longs l 0) ()
                      (era != peep eras l -1) ()
@@ -343,18 +343,18 @@
             ;; pass two: splice the cached chunks -- pessimistic addresses (pa) drive the
             ;; shortening decisions, final addresses (fa) pin the labels and re-lay the pads.
             (stitch p cs pa fa era items)
-               (? (atom? p) (rev items . labels)
+               (atom? p ? (rev items . labels)
                   (: ins <p  k <<cs  c ><cs
                      (? (<ins = 'label)
                         (pin labels (ins 1) fa, stitch >p >cs pa fa era items)
                         (<ins = 'align)
-                        (: pad (pad-to be fa (ins 1))
+                        (pad-to be fa (ins 1) @ pad
                            (stitch >p >cs (pa + k) (fa + tally pad) (era + 1)
                                    (rev pad + items)))
                         (elem <ins '(jmp br))
-                        (: t (tgt-of (? (<ins = 'jmp) (ins 1) (ins 2)) era)
-                           sc (? (imm? t) (short-of ins (rev c) (t - pa)) ())
-                           (? (two? sc)
+                        (: t (tgt-of (<ins = 'jmp ? (ins 1) (ins 2)) era)
+                           sc (imm? t ? (short-of ins (rev c) (t - pa)))
+                           (two? sc ?
                               (: r (revonto sc items 0)          ; bytes, not elements: one
                                  (stitch >p >cs (pa + k) (fa + <r) era >r))   ;  fixup is 4 of them
                               (stitch >p >cs (pa + k) (fa + k) era (c + items))))
