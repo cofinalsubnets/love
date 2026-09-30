@@ -1,11 +1,10 @@
 ; --- test/host/rdiff.l: the reader differential ---
-; two readers, one text, one comparison -- the oracle rungs 5-6 were built against.
-; run standalone from the repo root:
+; two readers, one text, one comparison. run standalone from the repo root:
 ;   cat test/00-init.l test/host/rdiff.l | out/love
 ;
 ; the input set is the tree: every .l under the root, walked off readdir (not off
 ; git -- an untracked stray in the tree is still text the reader must read), read form by
-; form. that is ~1300 real forms carrying every construct the grammar has in
+; form. that is thousands of real forms carrying every construct the grammar has in
 ; anger -- the operator runs, the glued monos, the constructor wraps, three
 ; integer bases, the comma -- which is a better corpus than any generator, and
 ; it is already here. two laws ride it:
@@ -13,15 +12,12 @@
 ;   A/B          two readers agree on one text, form for form
 ;   print->read  (rd (show f)) is (f) -- one form back, equal to the one that went in
 ;
-; the A/B leg is p0 against p1 now, and it is the only pair left: rung 6c
-; retired the C reader, so `sound` and `rd-test` are one reader and comparing
-; them proves nothing. p0 (love.c's sound0, the pure lisp subset) is the real
-; second implementation, and rd-p0 below is where the law does its work. the
-; tree-wide sweep keeps print->read, which one reader can still fail.
-; what keeps all of it honest is the injectors -- rd-hurt and rd-p0hurt, readers
-; deliberately broken part-way -- because a green diff over a reader that never
-; ran proves nothing, and neither does a comparison that cannot fail. both are
-; asserted at the foot.
+; the pair is sound, the reader in src/love/io.c, and test/host/p1.l, the reader in love it
+; was ported from. a third leg reads the same texts as flowing charlists, a promise every
+; few chars, which is the one door where the C reader leaves the vm and comes back.
+; what keeps all of it honest is the injector -- rd-hurt, a reader deliberately broken
+; part-way -- because a green diff over a reader that never ran proves nothing, and
+; neither does a comparison that cannot fail. it is asserted at the foot.
 
 (: (rd-cl s) (map s (jot #s))
    (rd-slurp path) (: q (open path "r") (hot? q ? (: t (slurp q) _ (close q) t) ""))
@@ -30,10 +26,18 @@
    ; every form a reader gets off a text. the read protocol is sound's, and the
    ; residue is the answer, so the walk threads it: a clean end and a torn shape
    ; both stop, which is what makes the injected-fault runs below comparable.
-   (rd-forms r txt)
+   (rd-forms r txt) (rd-cforms r (rd-cl txt))
+   (rd-cforms r cl)
      (: (go cl acc) (: x (r cl)
                        (two? x ? (go >x (<x . acc)) (rev acc)))
-        (go (rd-cl txt) ())))
+        (go cl ()))
+   ; the text as a flowing charlist: k chars, then a promise of the rest
+   (rd-flow s k)
+     (: n #s
+        (seg i j tl) (j <= i ? tl (seg i (j - 1) (s (j - 1) . tl)))
+        (go i) (: j (min n (i + k)) (seg i j (j < n ? (once (u \ go j)) ())))
+        (n = 0 ? () (go 0)))
+   rd-p1 (ev <(sound (rd-slurp "test/host/p1.l"))))
 
 ; the smallest subform where two trees part -- descend while the differing child
 ; is itself a pair, then report that pair. a leaf alone says "0 vs ()" and names
@@ -79,9 +83,8 @@
            _ (bump 'files 1)
            _ (bump 'forms #fa)
            _ (fa = fb ? 0 (say "A/B" path fa fb))
-           ; print->read rides reader A's forms so it still measures something
-           ; when a and B are the same reader
-           (each fa (\ f (: g (rd-forms r (show f))
+           ; print->read rides reader A both ways: the printer against the reader that ships
+           (each fa (\ f (: g (rd-forms sound (show f))
                             ([f] = g ? 0 (say "print->read" path [f] g))))))
       _ (each paths one)
       n))
@@ -99,45 +102,39 @@
 
 (: rd-files (rd-walk "." ())
    _ (puts ("rdiff: " + (show #rd-files) + " .l files\n"))
-   rd-clean (rd-run rd-test rd-files 1)
+   rd-clean (rd-run rd-p1 rd-files 1)
    rd-hurtn (rd-run rd-hurt ["test/spec.l"] 0)
    _ (puts ("rdiff: files=" + (show (peep rd-clean 'files 0))
             + " forms=" + (show (peep rd-clean 'forms 0))
             + " bad=" + (show (peep rd-clean 'bad 0))
             + " injected=" + (show (peep rd-hurtn 'bad 0)) + "\n")))
 
-; --- p0, over the subset it owns -------------------------------------------
-; `sound0` is the bootstrap reader in love.c: the pure lisp subset, no sigil
-; surface. this is the A/B law with a real second reader on one leg -- and since
-; 6c retired the C reader it is the only pair left in the tree.
-;
-; the input is the subset's own files, deliberately. p0 diverges on every sigil by
-; design (#(a b) reads as # then (a b)), so a tree sweep would measure the
-; divergence instead of the agreement. p1.l and egg.l are what p0 reads at boot;
-; p0fix.l spans the grammar they are too thin to cover. a sigil creeping into any
-; of the three fails here -- and prel.l is not among them: it rides p1 now.
-(: rd-p0 (rd-run sound0 ["test/host/p0fix.l" "src/love/boot/p1.l" "src/love/boot/egg.l"] 1)
-   ; and the same rig pointed at a file outside the subset, which must go red:
-   ; the proof this leg can fail, the rd-hurt discipline applied to a real reader
-   ; rather than a spoiled one.
-   rd-p0x (rd-run sound0 ["src/love/boot/ev.l"] 0)
-   ; p0 puts nesting on the C stack -- the trade that buys its size, and the one
-   ; thing the stackless reader has over it. so pin the depth it reaches, far
-   ; past the deepest form in the tree (38, test/uupatch.l).
-   rd-deep (: s ((rd-rep "(" 20000) + (rd-rep ")" 20000))
-              (sound0 (rd-cl s) = sound (rd-cl s)))
-   ; and p0's own injector: the A/B leg above is the load-bearing one now, so it
-   ; owes the same proof that its comparison can fail.
-   rd-p0hn {}
-   (rd-p0hurt cl) (: x (sound0 cl)
-                     _ (pin rd-p0hn 0 (1 + (peep rd-p0hn 0 0)))
-                     (3 = peep rd-p0hn 0 0 ? 'rd-spoiled x))
-   rd-p0hurtn (rd-run rd-p0hurt ["test/host/p0fix.l"] 0)
-   _ (puts ("rdiff: p0 forms=" + (show (peep rd-p0 'forms 0))
-            + " bad=" + (show (peep rd-p0 'bad 0))
-            + " off-subset=" + (show (peep rd-p0x 'bad 0))
-            + " injected=" + (show (peep rd-p0hurtn 'bad 0))
-            + " deep=" + (show rd-deep) + "\n")))
+; --- promises ---------------------------------------------------------------
+; the same texts again as flowing charlists, a promise every k chars, against the
+; plain read: a promise can fall inside a comment, a string, an escape, a token, an
+; operator run's lookahead or a list's close. small k on a few files, since a promise
+; per char is a love call per char; a wide k on the whole tree
+(: (rd-flows k paths)
+     (foldl (\ n path (: txt (rd-slurp path)
+                          (n + (rd-forms sound txt = rd-cforms sound (rd-flow txt k) ? 0 1))))
+            0 paths)
+   rd-small ["test/spec.l" "test/io.l" "test/valence.l" "test/escape.l"]
+   rd-fbad (net (map (k \ rd-flows k rd-small) [1 2 3 5]) + rd-flows 61 rd-files)
+   ; the oracle reads a flow the same way
+   rd-fp1 (rd-cforms sound (rd-flow (rd-slurp "test/valence.l") 2)
+           = rd-cforms rd-p1 (rd-flow (rd-slurp "test/valence.l") 2))
+   ; a whole text read in place, the boot's door, against the forms threaded one by one
+   rd-sbad (foldl (\ n path (: txt (rd-slurp path)
+                               (n + (sounds txt = rd-forms sound txt ? 0 1))))
+                  0 rd-files)
+   rd-storn ('torn = sounds "(a \"b" && 'torn = sounds "(a" && [1 2] = sounds "1 2) 3")
+   ; a port flows, through post.l's flow
+   rd-port (rd-cforms sound (tap (rd-cl "(1 2) x \"y\"")) = ['(1 2) 'x "y"])
+   ; a form nests on the heap, never the C stack: far past the deepest in the tree
+   rd-deep (: (depth x n) (two? x ? (depth <x (n + 1)) n)
+              (19999 = depth <(sound ((rd-rep "(" 20000) + (rd-rep ")" 20000))) 0))
+   _ (puts ("rdiff: flows bad=" + show rd-fbad + " texts bad=" + show rd-sbad + " oracle=" + show rd-fp1
+            + " port=" + show rd-port + " deep=" + show rd-deep + "\n")))
 
 (test
  ; the sweep reached the tree and read it -- the proof OF work, checked and not
@@ -148,15 +145,11 @@
  (0 = (peep rd-clean 'bad 0))
  ; and the rig can go red: one spoiled form in one file is enough to see
  (0 < (peep rd-hurtn 'bad 0))
- ; rung 5: p0 agrees with p1 on every form of the subset it owns ...
- (50 <= (peep rd-p0 'forms 0))
- (0 = (peep rd-p0 'bad 0))
- ; ... and parts from it off the subset, so the agreement above is a measurement
- (0 < (peep rd-p0x 'bad 0))
- ; ... and its C-stack nesting reaches far past anything the tree contains
- rd-deep
- ; ... and that leg can go red too, so its zero is a measurement as well
- (0 < (peep rd-p0hurtn 'bad 0)))
+ ; a flowing text reads as the text does, in both readers
+ (0 = rd-fbad) rd-fp1 rd-port
+ ; and a text read whole, in place, as it reads form by form
+ (0 = rd-sbad) rd-storn
+ rd-deep)
 
 (test_fin ())
 (puts "rdiff: ok")

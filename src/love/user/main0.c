@@ -46,14 +46,12 @@ struct ai *boot(struct ai *g, bool argp, char const *bake, char const *bake_load
                 char const *bake_out) {
   (void) bake, (void) bake_load, (void) bake_out;
   if (argp) {
-    g = ai_evals_(g, src0_p1);
     g = evals0(g, prelpost0);
     g = evals0(g, mods0);
     g = ai_evals_(g, "(borrow 'cli)(borrow 'kanren)(borrow 'verbs)");
     g = ai_shelve(g);
     return ai_evals(g, "(cli-line cmdline 0)"); }
-  g = ai_evals_(g, src0_p1);                         // its own call: readtext picks its reader once per
-  g = evals0(g, prelpost0);                          // text, and p1 seals hook 0 only when this call evaluates
+  g = evals0(g, prelpost0);
   g = evals0(g, mods0);
   g = ai_evals_(g, "(borrow 'cli)(borrow 'holo)");
   g = ai_shelve(g);
@@ -76,5 +74,5 @@ struct ai *boot(struct ai *g, bool argp, char const *bake, char const *bake_load
     "   tests (foldl (\\ a f (a + c0read f)) \"\" fs))");
   g = ai_evals_(g, runner);          // pass 1: corpus via ev = the c0 nif
   char *corpus = join0(g, prelev0);                   // bootstrap: install the self-hosted ev
-  if (corpus) g = ai_egg(g, src0_egg, src0_p1, corpus, src0_post), ai_alloc(corpus, 0);
+  if (corpus) g = ai_egg(g, src0_egg, corpus, src0_post), ai_alloc(corpus, 0);
   return ai_evals_(g, runner); }                      // pass 2: corpus via the self-hosted ev

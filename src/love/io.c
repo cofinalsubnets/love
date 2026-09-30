@@ -8,35 +8,24 @@ double am_strtod(char const*, char**);   // correctly rounded read: the printer'
 #define ai_digits "0123456789abcdefghijklmnopqrstuvwxyz"
 // this file's own, forward-declared so order within it does not matter.
 static ai_noinline double strtod_wrap(struct ai*g, word x);
-static ai_noinline struct ai *p0text(struct ai *g);
 static bool
  bio_wpending(struct ai_bio *b),
  is_dec_int(char const *s, uintptr_t n),
  is_hex_int(char const *s, uintptr_t n),
  is_oct_int(char const *s, uintptr_t n),
  lam_head(struct ai *g, word a);
-static int
- p0getc(struct ai *g, uintptr_t d),
- p0peek(struct ai *g, uintptr_t d),
- p0peek2(struct ai *g, uintptr_t d),
- p0skip(struct ai *g, uintptr_t d);
 static intptr_t
  ci_readn(struct ai *g, unsigned char *dst, uintptr_t n);
 static struct ai
  *to_writen(struct ai *g, unsigned char const *src, uintptr_t n),
- *applyq(struct ai *g, char const *driver), *applyq_(struct ai *g, char const *driver),
+ *applyq(struct ai *g, char const *driver),
  *bio_wgrow(struct ai *g),
  *facex(struct ai *g, word x, int d),
  *io_refill(struct ai *g),
  *io_wdrain(struct ai *g, struct ai_io *i),
- *ioread1str(struct ai*g, uintptr_t d),
- *ioread1sym(struct ai*g, uintptr_t d, int c),
  *noop_flush(struct ai *g),
- *p0chars(struct ai *g, char const *s),
- *p0onto(struct ai *g, char const *s),
- *p0read1(struct ai *g, uintptr_t d),
- *p1text(struct ai *g, char const *s),
  *qtop(struct ai *g),
+ *readonto(struct ai *g, char const *s),
  *readtext(struct ai *g, char const *s),
  *zgetc(struct ai*g),
  *zungetc(struct ai*g, int c),
@@ -45,10 +34,7 @@ static struct ai
 static struct ai_bio *rbio_of(struct ai *g, struct ai_io *i);
 static uintptr_t ci_athand(struct ai *g, uintptr_t n);
 static union u *fn_unc0(union u *k);
-static void
- io_close(struct ai *g, void *p),
- p0pop(struct ai *g, uintptr_t d);
-static word *p0cur(struct ai *g, uintptr_t d);
+static void io_close(struct ai *g, void *p);
 // ============================================================================
 // io
 // ============================================================================
@@ -678,8 +664,6 @@ static ai_inline bool is_oct_int(char const *s, uintptr_t n) {
  for (i += 1; i < n; i++) if (s[i] < '0' || s[i] > '7') return false;
  return true; }
 
-static ai_inline struct ai *ioread1sym(struct ai*g, uintptr_t d, int c), *ioread1str(struct ai*g, uintptr_t d);
-
 struct ai *grbufg(struct ai *g, uintptr_t len) {
  if (ai_ok(g = str0(g, 2 * len)))
   memcpy(txt(g->sp[0]), txt(g->sp[1]), len),
@@ -752,244 +736,477 @@ lvm(lvm_string) {
  ai_musttail return Continue(); }
 
 ////
-/// " the parser "
+/// " the reader "
 //
-// p0's input is a charlist and its position is the list: the cursor is one love
-// value on the l stack, named by its depth (a collection moves the stack, never
-// a depth); p0read1 piles datums and frames above it. a lookahead needs no pushback --
-// `unget` is simply not advancing.
-static ai_inline word *p0cur(struct ai *g, uintptr_t d) {
- return topof(ai_core_of(g)) - d; }
+// sound: one datum off a charlist -> (datum . residue), () at a clean end, `torn` where the
+// text ran out inside a shape. test/host/p1.l is the same grammar in love, and
+// test/host/rdiff.l holds the two readers to each other over the tree.
+//
+// a state machine the vm runs. each state in rd_k is an lvm_ that hands the stack to a C
+// helper, and the helper leaves the next state in g->ip. the reader's state is love data on
+// the stack, so a collection moves it and a deep form costs heap, never C stack:
+//   sp[0..4]  the registers: the position, the promises forced so far, the height of the
+//             open pile, a finished datum on its way out, and the text when it is a string --
+//             read in place, its positions charms, and laid down as cells only for a residue
+//   then the pile -- the open list's datums, newest first -- its frame's header, and under
+//   that the enclosing pile and frame, down to the base frame, the ip to answer to, and the
+//   argument's slot. the entry is an op like any other, which the compiler may lay inline:
+//   it answers where the next instruction is, never through a return on the stack. a header
+//   is a charm, the frame's kind with the enclosing pile's height above it; a mono frame
+//   keeps its operator under its header.
+// a tail may be a promise. a helper that meets one it has not forced hands it to the vm
+// (rd_call) and is run again from the last position it committed; the answer waits in
+// the memo, so a walk can always start over.
+enum { RdCur, RdMemo, RdCnt, RdVal, RdSrc, RdRegs };
+enum { RkOne, RkAll, RkParen, RkList, RkHash, RkTuple, RkQuote, RkLift, RkMono };
+enum { RsStart, RsRead, RsClose, RsDatum, RsAll };
+#define RdHdr(k, n) putcharm((k) | (intptr_t) (n) << 4)
+#define RdKind(h) ((int) (getcharm(h) & 15))
+#define RdUnder(h) ((uintptr_t) getcharm(h) >> 4)
+#define RdGo(s) (g->ip = (union u*) (rd_k + (s)), g)
+// what every state reserves before it reads a register: a frame, a call, a wrap's conses
+#define RdSlack 32
 
-static ai_inline int p0peek(struct ai *g, uintptr_t d) {
- word h = *p0cur(g, d);
- return chainp(h) ? (int) getcharm(A(h)) : EOF; }
+// the char classes: whitespace, an operator char, the end of a name-led token, the
+// openers and closers, a numeral's sign, where a glued run stops, a digit.
+// 12 is form feed, spelled as a number here as in the love it was ported from
+enum { RcWs = 1, RcOp = 2, RcEnd = 4, RcOpen = 8, RcClose = 16, RcSign = 32, RcStop = 64, RcDig = 128 };
+#define RcW (RcWs | RcEnd | RcStop)
+#define RcO (RcEnd | RcOpen)
+#define RcC (RcEnd | RcClose | RcStop)
+static unsigned char const rd_cls[257] = {
+ ['\t'] = RcW, ['\n'] = RcW, [12] = RcW, ['\r'] = RcW, [' '] = RcW,
+ ['"'] = RcEnd, [','] = RcEnd, [';'] = RcEnd | RcStop, ['#'] = RcOp | RcEnd,
+ ['('] = RcO, ['['] = RcO, ['{'] = RcO, [')'] = RcC, [']'] = RcC, ['}'] = RcC,
+ ['+'] = RcOp | RcSign, ['-'] = RcOp | RcSign,
+ ['!'] = RcOp, ['$'] = RcOp, ['%'] = RcOp, ['&'] = RcOp, ['*'] = RcOp, ['.'] = RcOp,
+ ['/'] = RcOp, [':'] = RcOp, ['<'] = RcOp, ['='] = RcOp, ['>'] = RcOp, ['?'] = RcOp,
+ ['@'] = RcOp, ['\\'] = RcOp, ['^'] = RcOp, ['|'] = RcOp, ['~'] = RcOp,
+ ['0'] = RcDig, ['1'] = RcDig, ['2'] = RcDig, ['3'] = RcDig, ['4'] = RcDig,
+ ['5'] = RcDig, ['6'] = RcDig, ['7'] = RcDig, ['8'] = RcDig, ['9'] = RcDig };
 
-static ai_inline int p0peek2(struct ai *g, uintptr_t d) {
- word h = *p0cur(g, d);
- return chainp(h) && chainp(B(h)) ? (int) getcharm(A(B(h))) : EOF; }
+static lvm(lvm_rd_start); static lvm(lvm_rd_read); static lvm(lvm_rd_close);
+static lvm(lvm_rd_datum); static lvm(lvm_rd_all); static lvm(lvm_rd_called); static lvm(lvm_rd_reads);
+static union u const
+ rd_k[] = { {lvm_rd_start}, {lvm_rd_read}, {lvm_rd_close}, {lvm_rd_datum}, {lvm_rd_all} },
+ rd_call_k[] = { {lvm_ap}, {lvm_rd_called} },
+ rd_reads_k[] = { {lvm_rd_reads}, {lvm_ret0} };
 
-static ai_inline void p0pop(struct ai *g, uintptr_t d) {
- word *c = p0cur(g, d);
- if (chainp(*c)) *c = B(*c); }
+// a position's char: 256 for a cell that holds no byte (a name's, to every class), -1 at
+// the end. a charm is an index into the string src; () is src when there is none
+static ai_inline intptr_t rd_at(word src, word p) {
+ if (charmp(p))
+  return src != ZeroPoint && (uintptr_t) getcharm(p) < len(str(src)) ? (unsigned char) txt(str(src))[getcharm(p)] : -1;
+ if (!chainp(p)) return -1;
+ word c = A(p);
+ return charmp(c) && (uintptr_t) getcharm(c) < 256 ? getcharm(c) : 256; }
+static ai_inline unsigned rd_c(word src, word p) { intptr_t c = rd_at(src, p); return c < 0 ? 0 : rd_cls[c]; }
+// what a position lays into a text: its byte, or a cell's own value, whose low byte it keeps
+static ai_inline intptr_t rd_raw(word src, word p) {
+ return charmp(p) ? (unsigned char) txt(str(src))[getcharm(p)] : getcharm(A(p)); }
+static ai_inline char rd_byte(word src, word p) { return (char) rd_raw(src, p); }
+static ai_inline bool rd_glued(word src, word p) { return rd_at(src, p) >= 0 && !(rd_c(src, p) & RcStop); }
+static ai_inline intptr_t rd_low(intptr_t c) { return c >= 'A' && c <= 'Z' ? c + 32 : c; }
+static ai_inline bool rd_hex(intptr_t c) {
+ return (c >= '0' && c <= '9') || (rd_low(c) >= 'a' && rd_low(c) <= 'f'); }
+static ai_inline intptr_t rd_dval(intptr_t c) { return c >= '0' && c <= '9' ? c - '0' : rd_low(c) - 87; }
 
-static ai_inline int p0getc(struct ai *g, uintptr_t d) {
- int c = p0peek(g, d);
- return p0pop(g, d), c; }
+// a promise: lit?'s upper segment of the lattice, which is what a tail gets called for.
+// the slow halves stay out of line: every step of every walk inlines the fast ones
+static ai_noinline bool rd_hot(word x) { return evenp(x) && !coinp(x) && ai_kind(x) >= KTablet; }
+static ai_inline bool rd_lit(word x) { return evenp(x) && !chainp(x) && x != ZeroPoint && rd_hot(x); }
+static ai_noinline word rd_memo(word memo, word t) {
+ if (!rd_hot(t)) return t;
+ for (; chainp(memo); memo = B(memo)) if (AA(memo) == t) return BA(memo);
+ return t; }
+// the position after a cell: its tail, or a forced promise's answer out of the memo. one
+// not forced yet comes back as itself, for the caller to hand to rd_call
+static ai_inline word rd_next(word memo, word p) {
+ if (charmp(p)) return putcharm(getcharm(p) + 1);
+ word t = B(p);
+ return chainp(t) || t == ZeroPoint ? t : rd_memo(memo, t); }
 
-// the next significant char, the cursor left at it: whitespace stepped over,
-// `;` and `#!` (shebang) running to end of line. a bare `#` is significant (the
-// len reader macro), as is any other non-whitespace char.
-static int p0skip(struct ai *g, uintptr_t d) {
- for (int c; (c = p0peek(g, d)) != EOF;) {
-  if (c == ';' || (c == '#' && p0peek2(g, d) == '!'))
-   while ((c = p0getc(g, d)) != EOF && c != '\n' && c != '\r');
-  else if (c == ' ' || c == '\n' || c == '\t' || c == '\r' || c == '\f' || !c) p0pop(g, d);
-  else return c; }
- return EOF; }
+// a string's positions hold no promise, so its walks are byte loops
+static ai_inline bool rd_in(word src, word p) { return charmp(p) && src != ZeroPoint; }
+static ai_noinline uintptr_t rd_sskip(struct ai_str const *s, uintptr_t i) {
+ unsigned char const *t = (unsigned char const*) txt(s);
+ uintptr_t const n = len(s);
+ while (i < n) {
+  unsigned const c = t[i];
+  if (rd_cls[c] & RcWs) { i++; continue; }
+  if (c == '#' ? i + 1 >= n || t[i + 1] != '!' : c != ';') break;
+  for (i += c == '#' ? 2 : 1; i < n && t[i] != '\n' && t[i] != '\r'; i++);
+  i += i < n; }
+ return i; }
+static ai_noinline uintptr_t rd_send(struct ai_str const *s, uintptr_t i) {
+ unsigned char const *t = (unsigned char const*) txt(s);
+ while (i < len(s) && !(rd_cls[t[i]] & RcEnd)) i++;
+ return i; }
 
-static ai_inline struct ai *ioread1str(struct ai*g, uintptr_t d) {
- int c;
- size_t n = 0, lim = sizeof(word);
- for (g = str0(g, lim); ai_ok(g); g = grbufg(g, lim), lim *= 2)
-  for (; n < lim; txt(g->sp[0])[n++] = c) {
-   if ((c = p0getc(g, d)) == '"')                    // close quote; "" -> the empty
-    return n ? (len(g->sp[0]) = n, g)                // (truthy) singleton, never allocated
-             : (g->sp[0] = EmptyString, g);
-   else if (c == EOF) return encode(g, ai_status_more);
-   else if (c == '\\') {                             // escape: take next char
-    if ((c = p0getc(g, d)) == EOF) return encode(g, ai_status_more);
-    else if (c == 'n') c = '\n';
-    else if (c == 't') c = '\t';
-    else if (c == 'r') c = '\r';
-    else if (c == 'e') c = 27;                    // \e: ESC, the terminal's own letter
-    else if (c == '0') c = '\0';
-    else if (c == 'x') {                          // \xHH: two hex digits
-     int h1 = p0getc(g, d), h2 = p0getc(g, d);
-     if (h1 == EOF || h2 == EOF) return encode(g, ai_status_more);
-     int v1 = h1 <= '9' ? h1 - '0' : (h1 | 0x20) - 'a' + 10;
-     int v2 = h2 <= '9' ? h2 - '0' : (h2 | 0x20) - 'a' + 10;
-     c = ((v1 & 0xf) << 4) | (v2 & 0xf); } } }
+// the vm calls f on a, and lvm_rd_called files (t . answer) in the memo and runs the asking
+// state again. the four words are RdSlack's
+static struct ai *rd_call(struct ai *g, word f, word a, word t) {
+ g->sp -= 4;
+ g->sp[0] = a, g->sp[1] = f, g->sp[2] = t, g->sp[3] = word(g->ip);
+ return g->ip = (union u*) rd_call_k, g; }
+#define RdStep(n, p) if (rd_lit(n = rd_next(memo, p))) return rd_call(g, n, ZeroPoint, n)
+
+static struct ai *rd_called(struct ai *g) {             // [v t ip regs ..]
+ if (!ai_ok(g = ai_have(g, 2 * chain_req))) return g;
+ word v = g->sp[0];
+ if (rd_lit(v)) v = ZeroPoint;                          // a promise of a promise ends the text
+ struct ai_chain *e = bump(g, chain_req), *m = bump(g, chain_req);
+ ini_chain(e, g->sp[1], v), ini_chain(m, word(e), g->sp[3 + RdMemo]);
+ g->sp[3 + RdMemo] = word(m);
+ g->ip = cell(g->sp[2]), g->sp += 3;
  return g; }
 
+// the room is the caller's, from here down: a cons, and k words in under the registers
+static ai_noinline word rd_cons(struct ai *g, word a, word b) {
+ return word(ini_chain(bump(g, chain_req), a, b)); }
+static ai_inline void rd_open(struct ai *g, uintptr_t k) {
+ g->sp -= k, memmove(g->sp, g->sp + k, RdRegs * sizeof(word)); }
+static ai_inline void rd_shut(struct ai *g, uintptr_t k) {
+ memmove(g->sp + k, g->sp, RdRegs * sizeof(word)), g->sp += k; }
+static ai_inline void rd_frame(struct ai *g, int k) {
+ rd_open(g, 1);
+ g->sp[RdRegs] = RdHdr(k, getcharm(g->sp[RdCnt])), g->sp[RdCnt] = putcharm(0); }
+static ai_inline void rd_mono(struct ai *g, word o) {
+ rd_open(g, 2);
+ g->sp[RdRegs] = RdHdr(RkMono, getcharm(g->sp[RdCnt])), g->sp[RdRegs + 1] = o;
+ g->sp[RdCnt] = putcharm(0); }
 
-
-static ai_inline struct ai *ioread1sym(struct ai*g, uintptr_t d, int c) {
- uintptr_t n = 1, lim = sizeof(intptr_t);
- if (ai_ok(g = str0(g, sizeof(word))))
-  for (txt(str(g->sp[0]))[0] = c; ai_ok(g); g = grbufg(g, lim), lim *= 2)
-   for (; n < lim; txt(g->sp[0])[n++] = c) {
-    switch (c = p0peek(g, d)) {
-     default: p0pop(g, d); continue;
-     case ' ': case '\n': case '\t': case '\r': case '\f': case ';': case '#':
-     case '(': case ')': case '[': case ']': case '{': case '}':
-     // '\'' is not here -- a name keeps a trailing/internal prime (x', n''). a leading '
-     // is still quote: p0read1 dispatches it as a wrap before this sounder runs.
-     case '"': case ',': case 0 : case EOF: {   // the cursor stays on the terminator
-      struct ai_str *s = str(g->sp[0]);
-      txt(s)[len(s) = n] = 0; // zero terminate for am_strtod ; n < lim so this is safe
-      // the three predicates are exhaustive over what a base-0 strtol accepts whole,
-      // which is why the reader does not call it
-      if (is_dec_int(txt(s), n)) return ai_big_read_dec(g);
-      if (is_hex_int(txt(s), n)) return ai_big_read_hex(g);
-      if (is_oct_int(txt(s), n)) return ai_big_read_oct(g);
-      char *e;
-      // the IEEE specials read by their own names; everything else strtod would take by
-      // spelling stays a symbol, since a float token leads with a digit, sign or dot.
-      char *tx = txt(s);
-      double dv;
-      if (n == 8 && !memcmp(tx, "infinity", 8)) dv = __builtin_inf();
-      else if (n == 9 && !memcmp(tx, "-infinity", 9)) dv = -__builtin_inf();
-      // no ieee-nan twin: mk_gem answers () for a NaN, so "ieee-nan" stays an honest symbol
-      else {
-       char c0 = *tx == '+' || *tx == '-' ? tx[1] : *tx;
-       if (!(c0 >= '0' && c0 <= '9') && c0 != '.') return intern(g);
-       dv = am_strtod(tx, &e);
-       if (e == tx || *e != 0) return intern(g); }
-      if (ai_ok(g = ai_have(g, gem_req)))
-       g->sp[0] = mk_gem(&g->hp, dv);
-      return g; } } }
+// out through the base frame: v is the answer, in the argument's slot
+static struct ai *rd_done(struct ai *g, word v) {
+ uintptr_t i = RdRegs + getcharm(g->sp[RdCnt]);
+ for (word h; RdKind(h = g->sp[i]) > RkAll; i += (RdKind(h) == RkMono ? 2 : 1) + RdUnder(h));
+ g->ip = cell(g->sp[i + 1]), g->sp += i + 2, g->sp[0] = v;
  return g; }
+static struct ai *rd_torn(struct ai *g) { return rd_done(g, g->rnom[RnTorn]); }
 
-////
-/// " p0 -- the bootstrap reader "
-//
-// the pure lisp subset and nothing else: delimiters, comments, strings, atoms, ' quote --
-// the sigil surface is p1's, and p1.l + egg.l are held to this subset so p0 can read them.
-// values on g->sp, and the nesting there too, so no love value sits in a C local across
-// an allocation and a deep form costs heap, never C stack. a reader of a subset, not a
-// validator: enforcement is the differential (test/host/rdiff.l).
-//
-// one datum, read as a loop over open frames. each frame is a charm under its datums:
-// the enclosing frame's count, put by when this one opened. n is the open frame's own --
-// a list's elements so far, or -1 for a quote, which takes exactly one. a list folds
-// with a () tail, not zero -- reader lists are ()-terminated (the zero-ontology), and
-// zero is the fixnum 0, which the printer shows the same way.
-static struct ai *p0read1(struct ai *g, uintptr_t d) {
- intptr_t n = 0;
- uintptr_t depth = 0;
+static struct ai *rd_enter(struct ai *g, int k) {       // [x ..]
+ if (!ai_ok(g = ai_have(g, RdRegs + 2))) return g;
+ word x = g->sp[0];
+ g->sp -= RdRegs + 2;
+ g->sp[RdCur] = x, g->sp[RdMemo] = ZeroPoint, g->sp[RdCnt] = putcharm(0), g->sp[RdVal] = ZeroPoint;
+ g->sp[RdSrc] = ZeroPoint;
+ g->sp[RdRegs] = RdHdr(k, 0), g->sp[RdRegs + 1] = word(g->ip + 1);
+ return RdGo(RsStart); }
+static struct ai *rd_one(struct ai *g) { return rd_enter(g, RkOne); }
+static struct ai *rd_many(struct ai *g) { return rd_enter(g, RkAll); }
+
+// the doors: a string is read in place, a port flows (post.l's flow, the one
+// lazy charlist there is), a promise is forced, and a charlist is read as it stands
+static struct ai *rd_start(struct ai *g) {
+ if (!ai_ok(g = ai_have(g, RdSlack))) return g;
+ word x = g->sp[RdCur];
+ if (strp(x)) {
+  return g->sp[RdSrc] = x, g->sp[RdCur] = putcharm(0), RdGo(RsRead); }
+ if (!iop(x) && !rd_lit(x)) return RdGo(RsRead);
+ for (word m = g->sp[RdMemo]; chainp(m); m = B(m))
+  if (AA(m) == x) return g->sp[RdCur] = BA(m), RdGo(RsRead);
+ if (!iop(x)) return rd_call(g, x, ZeroPoint, x);
+ word f = stacklook(g, ZeroPoint, g->rnom[RnFlow]);
+ if (!evenp(f) || f == ZeroPoint) return g->sp[RdCur] = ZeroPoint, RdGo(RsRead);
+ return rd_call(g, f, x, x); }
+
+// a text's escapes: n t r e 0, \xhh as two chars hex or not, \u{h..} one to six hex
+// digits naming a code point outside the surrogates (else a plain u), any other char
+// itself. counts the bytes, and lays them too when d is given; -1 torn, -2 a promise to
+// force (in *end), else the count with *end past the closing quote
+static intptr_t rd_strw(word memo, word src, word p, char *d, word *end) {
+ intptr_t k = 0;
+ word n, q;
+#define Put(b) ((void) (d && (d[k] = (char) (b))), k++)
+#define Over(n, p) if (rd_lit(n = rd_next(memo, p))) return *end = n, -2
  for (;;) {
-  int c = p0skip(g, d);
-  p0pop(g, d);
-  if (c == ')' && depth && n >= 0) {                   // the open list closes
-   for (g = ai_push(g, 1, ZeroPoint); ai_ok(g) && n--; g = gxr(g));
-   if (!ai_ok(g)) return g;
-   n = getcharm(g->sp[1]), g->sp[1] = g->sp[0], g->sp++, depth--; }
-  else switch (c) {
-   case '(': case '\'':                               // a frame opens: list, or quote 'x = (\ x)
-    if (!ai_ok(g = ai_push(g, 1, putcharm(n)))) return g;
-    n = c == '(' ? 0 : -1, depth++;
-    continue;
-   case ')': case EOF:                                 // stray ) / no datum; inside a frame, unfinished
-    return encode(ai_core_of(g), depth ? ai_status_more : ai_status_eof);
-   case '"': g = ioread1str(g, d); break;
-   case '\\': g = intern(ai_strof(g, "\\")); break;  // lambda/quote: never fuses (form space)
-   default: g = ioread1sym(g, d, c); }                 // name / number
-  // a datum is on top: an element of the open list, or the operand that closes a quote
+  intptr_t c = rd_at(src, p);
+  if (c < 0) return -1;
+  Over(n, p);
+  if (c == '"') return *end = n, k;
+  if (c != '\\') { Put(rd_byte(src, p)), p = n; continue; }
+  if ((c = rd_at(src, q = n)) < 0) return -1;
+  Over(n, q);
+  if (c == 'x') {
+   word h;
+   if (rd_at(src, n) < 0) return -1;
+   Over(h, n);
+   if (rd_at(src, h) < 0) return -1;
+   Put(rd_dval(rd_raw(src, n)) * 16 + rd_dval(rd_raw(src, h)));
+   Over(p, h);
+   continue; }
+  if (c == 'u' && rd_at(src, n) == '{') {
+   intptr_t v = 0, j = 0, h;
+   Over(q, n);
+   for (; (h = rd_at(src, q)) != '}' && h >= 0 && j < 6 && rd_hex(h); j++) {
+    v = v * 16 + rd_dval(h);
+    Over(q, q); }
+   if (h < 0) return -1;
+   if (h == '}' && j && v <= 0x10ffff && (v < 0xd800 || v > 0xdfff)) {
+    if (v < 0x80) Put(v);
+    else if (v < 0x800) Put(0xc0 | v >> 6), Put(0x80 | (v & 63));
+    else if (v < 0x10000) Put(0xe0 | v >> 12), Put(0x80 | (v >> 6 & 63)), Put(0x80 | (v & 63));
+    else Put(0xf0 | v >> 18), Put(0x80 | (v >> 12 & 63)), Put(0x80 | (v >> 6 & 63)), Put(0x80 | (v & 63));
+    Over(p, q);
+    continue; }
+   Put('u'), p = n;
+   continue; }
+  c = rd_raw(src, q);
+  Put(c == 'n' ? '\n' : c == 't' ? '\t' : c == 'r' ? '\r' : c == 'e' ? 27 : c == '0' ? 0 : c);
+  p = n; }
+#undef Put
+#undef Over
+}
+
+static struct ai *rd_str(struct ai *g) {
+ word memo = g->sp[RdMemo], src = g->sp[RdSrc], n, e;
+ RdStep(n, g->sp[RdCur]);
+ intptr_t k = rd_strw(memo, src, n, NULL, &e);
+ if (k == -1) return rd_torn(g);
+ if (k == -2) return rd_call(g, e, ZeroPoint, e);
+ if (!ai_ok(g = ai_have(g, str_width(k) + RdSlack))) return g;
+ memo = g->sp[RdMemo], src = g->sp[RdSrc], n = rd_next(memo, g->sp[RdCur]);
+ struct ai_str *s = k ? ini_str(bump(g, str_width(k)), k) : NULL;
+ rd_strw(memo, src, n, s ? txt(s) : NULL, &e);
+ g->sp[RdVal] = s ? word(s) : EmptyString, g->sp[RdCur] = e;
+ return RdGo(RsDatum); }
+
+// a token's text: an integer in any of the three bases, the named infinities, or a float
+// if it leads like one (a digit or a dot, past a sign) and parses whole. mk_gem's () for a
+// nan would lose the name, so that is no float either
+static bool rd_float(char const *t, uintptr_t n, double *d) {
+ if (n == 8 && !memcmp(t, "infinity", 8)) return *d = __builtin_inf(), true;
+ if (n == 9 && !memcmp(t, "-infinity", 9)) return *d = -__builtin_inf(), true;
+ char c = n && (*t == '+' || *t == '-') ? t[1] : *t;   // the NUL past a lone sign leads nothing
+ if (!(c >= '0' && c <= '9') && c != '.') return false;
+ char *e;
+ *d = am_strtod(t, &e);
+ return e != t && *e == 0 && *d == *d; }
+static bool rd_numeral(struct ai_str *s) {
+ double d;
+ return is_dec_int(txt(s), len(s)) || is_hex_int(txt(s), len(s)) || is_oct_int(txt(s), len(s))
+     || rd_float(txt(s), len(s), &d); }
+// the text at sp[0] -> what it spells, a numeral at full precision or else the name
+static struct ai *rd_atom(struct ai *g) {
+ struct ai_str *s = str(g->sp[0]);
+ uintptr_t n = len(s);
+ double d;
+ if (is_dec_int(txt(s), n)) return ai_big_read_dec(g);
+ if (is_hex_int(txt(s), n)) return ai_big_read_hex(g);
+ if (is_oct_int(txt(s), n)) return ai_big_read_oct(g);
+ if (!rd_float(txt(s), n, &d)) return intern(g);
+ if (!ai_ok(g = ai_have(g, gem_req))) return g;
+ return g->sp[0] = mk_gem(&g->hp, (ai_flo_t) d), g; }
+
+// a name-led token, whole. a digit-led one that is no numeral and carries an operator
+// run is cut one past the run, when a datum is glued there: 2?<>x is 2?<> around x. a
+// trailing - before a digit is the next numeral's sign, so the cut falls before it
+static struct ai *rd_tok(struct ai *g, bool split) {
+ word memo = g->sp[RdMemo], src = g->sp[RdSrc], p = g->sp[RdCur], n;
+ uintptr_t len = 0;
+ if (rd_in(src, p)) len = rd_send(str(src), getcharm(p)) - getcharm(p);
+ else for (; rd_at(src, p) >= 0 && !(rd_c(src, p) & RcEnd); p = n, len++) RdStep(n, p);
+ if (!ai_ok(g = ai_have(g, 2 * str_width(len) + RdSlack))) return g;
+ memo = g->sp[RdMemo], src = g->sp[RdSrc], p = g->sp[RdCur];
+ struct ai_str *s = ini_str(bump(g, str_width(len)), len);
+ word lop = ZeroPoint, aop = ZeroPoint;                 // the run's last char, and past it
+ uintptr_t k = 0;
+ for (uintptr_t i = 0; i < len; i++) {
+  txt(s)[i] = rd_byte(src, p), n = rd_next(memo, p);
+  if (rd_c(src, p) & RcOp) k = i + 1, lop = p, aop = n;
+  p = n; }
+ if (split && k && !rd_numeral(s)) {
+  bool shed = k > 1 && rd_at(src, lop) == '-' && (rd_c(src, aop) & RcDig);
+  word r = shed ? lop : aop;
+  if (rd_glued(src, r)) {
+   k -= shed;
+   struct ai_str *o = ini_str(bump(g, str_width(k)), k);
+   memcpy(txt(o), txt(s), k);
+   g->sp[RdCur] = r, *--g->sp = word(o);
+   if (!ai_ok(g = ai_have(intern(g), 2))) return g;
+   rd_mono(g, *g->sp++);
+   return RdGo(RsRead); } }
+ g->sp[RdCur] = p, *--g->sp = word(s);
+ if (!ai_ok(g = rd_atom(g))) return g;
+ g->sp[1 + RdVal] = g->sp[0], g->sp++;
+ return RdGo(RsDatum); }
+
+// an operator run: the longest run of operator chars, one plain name, and a monadic wrap
+// when a datum is glued after it. @ may lead a run but never extend one, a trailing -
+// before a digit is shed back to the numeral, and \ never wraps: it is form space
+static struct ai *rd_op(struct ai *g) {
+ word memo = g->sp[RdMemo], src = g->sp[RdSrc], p = g->sp[RdCur], last = p, n;
+ uintptr_t len = 0;
+ for (intptr_t c; (c = rd_at(src, p)) >= 0 && (c == '@' ? !len : rd_cls[c] & RcOp); last = p, p = n, len++)
+  RdStep(n, p);
+ len -= len > 1 && rd_at(src, last) == '-' && (rd_c(src, p) & RcDig);
+ if (!ai_ok(g = ai_have(g, str_width(len) + RdSlack))) return g;
+ memo = g->sp[RdMemo], src = g->sp[RdSrc], p = g->sp[RdCur];
+ struct ai_str *s = ini_str(bump(g, str_width(len)), len);
+ for (uintptr_t i = 0; i < len; i++) txt(s)[i] = rd_byte(src, p), p = rd_next(memo, p);
+ bool mono = !(len == 1 && txt(s)[0] == '\\') && rd_glued(src, p);
+ g->sp[RdCur] = p, *--g->sp = word(s);
+ if (!ai_ok(g = ai_have(intern(g), 2))) return g;
+ if (mono) return rd_mono(g, *g->sp++), RdGo(RsRead);
+ g->sp[1 + RdVal] = g->sp[0], g->sp++;
+ return RdGo(RsDatum); }
+
+// the next datum's first char, past whitespace and comments -- ; and #! run through the
+// end of the line, and a comment is walked again from its start when a promise inside it
+// is forced -- and what that char opens
+static struct ai *rd_read(struct ai *g) {
+ for (;;) {
+  if (!ai_ok(g = ai_have(g, RdSlack))) return g;
+  word const memo = g->sp[RdMemo], src = g->sp[RdSrc];
+  word p = g->sp[RdCur], n;
+  intptr_t c;
+  if (rd_in(src, p)) p = putcharm(rd_sskip(str(src), getcharm(p)));
   for (;;) {
-   if (!ai_ok(g) || !depth) return g;
-   if (n >= 0) { n++; break; }
-   g = gxr(ai_push(g, 1, ZeroPoint));                  // (d . ())
-   g = gxl(intern(ai_strof(g, "\\")));                // (\ . (d))
-   if (!ai_ok(g)) return g;
-   n = getcharm(g->sp[1]), g->sp[1] = g->sp[0], g->sp++, depth--; } } }
+   if ((c = rd_at(src, p)) < 0) break;
+   if (rd_cls[c] & RcWs) { RdStep(n, p); p = n; continue; }
+   if (c != ';' && c != '#') break;
+   word const s = p;
+   g->sp[RdCur] = s;
+   if (c == '#') {
+    RdStep(n, p);
+    if (rd_at(src, n) != '!') break;
+    p = n; }
+   do { RdStep(n, p); p = n; } while ((c = rd_at(src, p)) >= 0 && c != '\n' && c != '\r');
+   if (c >= 0) { RdStep(n, p); p = n; }
+   g->sp[RdCur] = p; }
+  g->sp[RdCur] = p;
+  word const h = g->sp[RdRegs + getcharm(g->sp[RdCnt])];
+  int const k = RdKind(h);
+  unsigned const m = c < 0 ? RcClose : rd_cls[c];
+  if (m & RcClose)                                       // the end of the text or of a list
+   return k >= RkParen && k <= RkTuple ? (c < 0 ? rd_torn(g) : RdGo(RsClose))
+        : k == RkOne ? rd_done(g, ZeroPoint)
+        : k == RkAll ? RdGo(RsAll)
+        : rd_torn(g);
+  if (m & RcOpen) {                                      // a list, or the @ wrap turned constructor
+   RdStep(n, p);
+   if (k == RkLift) g->sp[RdRegs] = RdHdr(RkTuple, RdUnder(h));
+   else rd_frame(g, c == '(' ? RkParen : c == '[' ? RkList : RkHash);
+   g->sp[RdCur] = n;
+   continue; }
+  if (c == '"') return rd_str(g);
+  if (c == '\'') { RdStep(n, p); rd_frame(g, RkQuote), g->sp[RdCur] = n; continue; }
+  if (c == '@' || c == ',' || (m & RcSign)) {            // each looks one char past itself
+   RdStep(n, p);
+   if (c == ',') return g->sp[RdVal] = g->rnom[RnComma], g->sp[RdCur] = n, RdGo(RsDatum);
+   if (c == '@') {                                       // a run, the tuple wrap, or the plain @
+    if (rd_c(src, n) & RcOp) return rd_op(g);
+    if (rd_glued(src, n)) { rd_frame(g, RkLift), g->sp[RdCur] = n; continue; }
+    return g->sp[RdVal] = g->rnom[RnAt], g->sp[RdCur] = n, RdGo(RsDatum); }
+   return (rd_c(src, n) & RcDig) || rd_at(src, n) == '.' ? rd_tok(g, false) : rd_op(g); }   // a numeral's sign
+  return m & RcOp ? rd_op(g) : rd_tok(g, m & RcDig); } }
 
-// (sound0 text): sound's bootstrap twin over p0's grammar, for the differential.
-// the text slot is the cursor: sp[0] comes in as the charlist and goes out as the
-// answer; what is left in between is the residue. the body stays in an
-// ai_noinline helper: a frame in the lvm_ would force the tail Continue() into a
-// ret (make vmret).
-ai_noinline static struct ai *p0text(struct ai *g) {
- uintptr_t const d = topof(g) - g->sp;                // the cursor's depth, and the rollback point
- g = p0read1(g, d);
- if (ai_ok(g)) return gxl(g);                         // (datum . residue), over the text slot
- enum ai_status const st = ai_code_of(g);             // no datum: which nothing?
- if (st != ai_status_eof && st != ai_status_more) return g;   // a real failure (oom) propagates
- // the rollback is not optional: a torn parse leaves p0read1's pile behind and
- // the text slot is no longer sp[0] -- drop back to the entry depth
- g = ai_core_of(g), g->sp = topof(g) - d;
- if (st == ai_status_eof) return g->sp[0] = ZeroPoint, g;     // a clean end, over the text slot
- if (!ai_ok(g = intern(ai_strof(g, "torn")))) return g;
- return g->sp[1] = g->sp[0], g->sp++, g; }
+// a closer ends the open list: its datums, under the wrap its opener named
+static struct ai *rd_close(struct ai *g) {
+ uintptr_t const cnt = getcharm(g->sp[RdCnt]);
+ if (!ai_ok(g = ai_have(g, (cnt + 2) * chain_req + RdSlack))) return g;
+ word const memo = g->sp[RdMemo];
+ word n;
+ RdStep(n, g->sp[RdCur]);
+ word const h = g->sp[RdRegs + cnt];
+ word l = ZeroPoint;
+ for (uintptr_t i = 0; i < cnt; i++) l = rd_cons(g, g->sp[RdRegs + i], l);
+ rd_shut(g, cnt + 1), g->sp[RdCnt] = putcharm(RdUnder(h)), g->sp[RdCur] = n;
+ int const k = RdKind(h);
+ g->sp[RdVal] = k == RkParen ? l
+  : l == ZeroPoint && k != RkList ? rd_cons(g, g->rnom[k == RkHash ? RnTablet : RnIota], rd_cons(g, putcharm(0), ZeroPoint))
+  : rd_cons(g, g->rnom[k == RkList ? RnList : k == RkHash ? RnHash : RnTuple], l);
+ return RdGo(RsDatum); }
 
-lvm(lvm_sound0) LvmCall(g, p0text)
+// a string's residue, the cells a caller threads: the text past the position
+static ai_noinline word rd_rest(struct ai *g) {
+ struct ai_str *s = str(g->sp[RdSrc]);
+ word l = ZeroPoint;
+ for (uintptr_t i = len(s); i-- > (uintptr_t) getcharm(g->sp[RdCur]);)
+  l = rd_cons(g, putcharm((unsigned char) txt(s)[i]), l);
+ return l; }
+
+// a datum is done: onto the open pile, or out through the wraps waiting on it
+static struct ai *rd_datum(struct ai *g) {
+ for (;;) {
+  if (!ai_ok(g = ai_have(g, RdSlack))) return g;
+  uintptr_t const cnt = getcharm(g->sp[RdCnt]);
+  word const h = g->sp[RdRegs + cnt], v = g->sp[RdVal];
+  int const k = RdKind(h);
+  if (k == RkOne) {
+   word r = g->sp[RdCur];
+   if (charmp(r)) {
+    if (!ai_ok(g = ai_have(g, (len(str(g->sp[RdSrc])) - getcharm(r) + 1) * chain_req))) return g;
+    r = rd_rest(g); }
+   return rd_done(g, rd_cons(g, g->sp[RdVal], r)); }
+  if (k < RkQuote) {                                     // a list's, or the whole text's
+   rd_open(g, 1), g->sp[RdRegs] = v, g->sp[RdCnt] = putcharm(cnt + 1);
+   return RdGo(RsRead); }
+  word const o = g->sp[RdRegs + 1];
+  rd_shut(g, k == RkMono ? 2 : 1), g->sp[RdCnt] = putcharm(RdUnder(h));
+  g->sp[RdVal] =
+     k == RkQuote ? rd_cons(g, g->rnom[RnQuote], rd_cons(g, v, ZeroPoint))             // 'x: (\ x)
+   : k == RkMono ? rd_cons(g, g->rnom[RnMono], rd_cons(g, rd_cons(g, o, rd_cons(g, v, ZeroPoint)), ZeroPoint))
+   : v == ZeroPoint ? rd_cons(g, g->rnom[RnIota], rd_cons(g, putcharm(0), ZeroPoint))    // @x
+   : rd_cons(g, g->rnom[RnTuple], chainp(v) ? v : rd_cons(g, v, ZeroPoint)); } }
+
+static struct ai *rd_all(struct ai *g) {
+ uintptr_t const cnt = getcharm(g->sp[RdCnt]);
+ if (!ai_ok(g = ai_have(g, cnt * chain_req))) return g;
+ word l = ZeroPoint;
+ for (uintptr_t i = 0; i < cnt; i++) l = rd_cons(g, g->sp[RdRegs + i], l);
+ return rd_done(g, l); }
+
+lvm(lvm_sound) LvmResume(g, rd_one)
+static lvm(lvm_rd_reads) LvmResume(g, rd_many)
+static lvm(lvm_rd_start) LvmResume(g, rd_start)
+static lvm(lvm_rd_read) LvmResume(g, rd_read)
+static lvm(lvm_rd_close) LvmResume(g, rd_close)
+static lvm(lvm_rd_datum) LvmResume(g, rd_datum)
+static lvm(lvm_rd_all) LvmResume(g, rd_all)
+static lvm(lvm_rd_called) LvmResume(g, rd_called)
+// (sounds text): every form of a text, in order, or `torn` -- sound's doors, and the boot's
+// reader. a stray closer ends the text
+LvNif("sounds", rd_reads_k, NULL);
 
 ////
 /// " the boot stitch "
 //
-// the egg's corpus is stitched: p0 reads the halves it owns (p1.l, prel.l,
-// egg.l) and p1, the reader in love, reads ev.l -- the egg expression never
-// learns. the circularity resolves by reading p1.l twice: once evaluated on the
-// spot so p1 is callable, once into the corpus so it recompiles like everything
-// else. at the head, never the tail: sit answers the last form's value, which
-// is what gets pinned as ev.
+// the egg's corpus is read whole and handed to the egg expression, which never learns.
 
-// the boot's text is a C string, so cons it: one Have for the whole run, then a
-// backward walk that needs no root. the peak is one text at a time (~424KB transient).
-static struct ai *p0chars(struct ai *g, char const *s) {
- uintptr_t n = 0;
- while (s[n]) n++;
- g = ai_push(g, 1, ZeroPoint);                                     // the cursor's slot first,
- if (!ai_ok(g = ai_have(g, n * Width(struct ai_chain)))) return g; // then the whole run at once
- word l = ZeroPoint;
- for (uintptr_t i = n; i--;) {
-  struct ai_chain *p = bump(g, Width(struct ai_chain));
-  ini_chain(p, putcharm((unsigned char) s[i]), l);
-  l = (word) p; }
- return g->sp[0] = l, g; }
-
-// read every top-level datum of a C string with p0 and cons them, in source
-// order, onto the list already on top of the stack. reading the corpus right to
-// left then stitches its halves with no append and no copy.
-static struct ai *p0onto(struct ai *g, char const *s) {
- if (!ai_ok(g = p0chars(g, s))) return g;
- uintptr_t const d = topof(g) - g->sp;               // the cursor, pushed under the datums
- uintptr_t n = 0;
- for (;; n++) {
-  g = p0read1(g, d);
-  if (ai_ok(g)) continue;
-  if (ai_code_of(g) != ai_status_eof) return g;      // more: an unfinished shape
-  g = ai_core_of(g);
-  break; }
- if (!ai_ok(g = ai_push(g, 1, zero))) return g;       // reserve first, then copy the
- g->sp[0] = g->sp[n + 2];                            // tail up: a push can gc and move it
- for (; ai_ok(g) && n--; g = gxr(g));                //   (+2: the datums sit over the cursor)
- return ai_ok(g) ? (g->sp[2] = g->sp[0], g->sp += 2, g) : g; }
-
-// the corpus, read by the reader in love: an ordinary call of hook 0 on the whole text
-static struct ai *p1text(struct ai *g, char const *s) {
- g = ai_strof(g, s);
- g = gxr(push0(g));                                  // ("<text>")
- if (!ai_ok(g = ai_push(g, 1, zero))) return g;       // reserve first, then read the slot:
- g->sp[0] = g->hot_read;                             //   a push can gc, and the gc is what
- if (!ai_ok(g = ai_eval(gxl(g)))) return g;           //   moves hot_read. (<reader> "<text>")
- // p1 answers `torn` for an unfinished shape; the egg would fold over it as an
- // empty corpus and silently pin ev to 0, so refuse it here (chainp and not nomp)
- word r = g->sp[0];
- return (chainp(r) && !nomp(r)) || r == ZeroPoint ? g
-      : encode(g, ai_status_more); }
-
-// a text -> the list of its forms, pushed: p1 reads it once sealed, p0 until then
-// (the sealed slot is the test)
+// a text -> the list of its forms, pushed. an unfinished shape answers `torn`, which the
+// egg would fold as an empty corpus and silently pin ev to 0: refuse it here
 static struct ai *readtext(struct ai *g, char const *s) {
- if (evenp(ai_core_of(g)->hot_read)) return p1text(g, s);
- return p0onto(push0(g), s); }
+ g = gxr(push0(ai_strof(g, s)));                     // ("<text>")
+ if (!ai_ok(g = ai_push(g, 1, word(rd_reads_k)))) return g;
+ if (!ai_ok(g = ai_eval(gxl(g)))) return g;           // (<reads> "<text>")
+ word r = g->sp[0];
+ return chainp(r) || r == ZeroPoint ? g : encode(g, ai_status_more); }
+
+// a text's forms, in source order, onto the front of the list under them
+static struct ai *readonto(struct ai *g, char const *s) {
+ if (!ai_ok(g = readtext(g, s))) return g;
+ uintptr_t n = 0;
+ for (word l = g->sp[0]; chainp(l); l = B(l)) n++;
+ if (!ai_ok(g = ai_have(g, 2 * n * chain_req))) return g;
+ word r = ZeroPoint, o = g->sp[1];
+ for (word l = g->sp[0]; chainp(l); l = B(l)) r = rd_cons(g, A(l), r);
+ for (; chainp(r); r = B(r)) o = rd_cons(g, A(r), o);
+ return g->sp[1] = o, g->sp += 1, g; }
 
 static struct ai *qtop(struct ai *g) {                // x on top -> 'x
  return gxl(pushq(gxr(push0(g)))); }                 // (x), then (\ x)
 
-// apply a one-form driver text (pure lisp, p0-read) to the quoted list on top of
-// the stack: (<driver> '(list)). the answer stays at sp[0]; applyq_ drops it.
+// apply a one-form driver text to the quoted list on top of the stack: (<driver> '(list)),
+// the answer at sp[0]
 static struct ai *applyq(struct ai *g, char const *driver) {
- g = p0onto(gxr(push0(qtop(g))), driver);            // ('(list)), then (driver '(list))
+ g = readonto(gxr(push0(qtop(g))), driver);          // ('(list)), then (driver '(list))
  return ai_eval(g); }
-static struct ai *applyq_(struct ai *g, char const *driver) {
- return ai_pop(applyq(g, driver), 1); }
 
 // the plain eval fold: run a list of forms in order, answer the last one's
 // value. `ev` is read late so one text drives both of love0's passes. the forms
 // left are asked two?, never their truth: that would net the rest of the text per form
-static char const evfold[] = "((:(e a b)(? (two? b)(e(ev 'ev(cap b))(cup b))a)e)0)";
+static char const evfold[] = "((: (e a b) (? (two? b) (e (ev 'ev (cap b)) (cup b)) a) e) 0)";
 
 // every top-level form of a text, evaluated in order -- the frontends' door for a
 // boot tail, a CLI driver, a corpus runner. ai_evals keeps the last form's value at
@@ -1003,12 +1220,8 @@ ai_noinline struct ai *ai_evals_(struct ai *g, char const *s) {
 // the egg takes two corpora: `corpus` is sat twice (ev compiles itself), `post`
 // once, after the hatch and before the mop -- the seat for love that needs the
 // runtime-internal noms (peek/seek) the mop is about to take off the book.
-ai_noinline struct ai *ai_egg(struct ai *g, char const *egg, char const *p1,
-                               char const *corpus, char const *post) {
- g = p0onto(ai_push(g, 1, ZeroPoint), p1);           // p1's forms, by p0 ..
- g = applyq_(g, evfold);                             // .. and c0 evals them: p1 is live
- g = gxr(push0(qtop(p1text(g, post))));              // ('post), parked under the corpus
- g = p1text(g, corpus);                              // prel + ev, through the reader in love
- g = p0onto(g, p1);                                  // and p1 at the head of the corpus
- g = p0onto(gxl(qtop(g)), egg);                      // (egg 'corpus 'post)
+ai_noinline struct ai *ai_egg(struct ai *g, char const *egg, char const *corpus, char const *post) {
+ g = gxr(push0(qtop(readtext(g, post))));            // ('post), parked under the corpus
+ g = readtext(g, corpus);                            // prel + ev
+ g = readonto(gxl(qtop(g)), egg);                    // (egg 'corpus 'post)
  return ai_pop(ai_eval(g), 1); }

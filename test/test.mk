@@ -180,7 +180,7 @@ test_stdincorpus: $(ho)/love
 # and supplies the frontend contract itself, so its port vt can answer would-block on
 # cue. it exits 97 on a wait with no deadline -- a deadlock, said loudly.
 $(ho)/front: test/front/main.c $(S)/love/bare.c $(S)/love/alloc.c $(S)/love/horn.c $(love_h) $(ho)/liblove.a $(ho)/.hostcc $(S)/love/love_data.ld \
-    out/lib/egg.h out/lib/post.h out/lib/p1.h out/lib/prel.h out/lib/ev.h
+    out/lib/egg.h out/lib/post.h out/lib/prel.h out/lib/ev.h
 	@echo 'CC	'$@
 	@mkdir -p $(dir $@)
 	@$(hcc) -o $@ test/front/main.c $(S)/love/bare.c $(S)/love/alloc.c $(S)/love/horn.c $(ho)/liblove.a $(data_ld)
@@ -190,7 +190,7 @@ $(ho)/front: test/front/main.c $(S)/love/bare.c $(S)/love/alloc.c $(S)/love/horn
 # reaches it without -- the frontend's k_horn_* are the device, over the same
 # src/love/hornring.h the playdate hands its SDK callback.
 $(ho)/frontseat: test/front/main.c $(S)/love/bare.c $(S)/love/alloc.c $(S)/love/horn.c $(S)/love/hornring.h $(love_h) $(ho)/liblove.a $(ho)/.hostcc $(S)/love/love_data.ld \
-    out/lib/egg.h out/lib/post.h out/lib/p1.h out/lib/prel.h out/lib/ev.h
+    out/lib/egg.h out/lib/post.h out/lib/prel.h out/lib/ev.h
 	@echo 'CC	'$@
 	@mkdir -p $(dir $@)
 	@$(hcc) -D ai_horn_seat=1 -o $@ test/front/main.c $(S)/love/bare.c $(S)/love/alloc.c $(S)/love/horn.c $(ho)/liblove.a $(data_ld)

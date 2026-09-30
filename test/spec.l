@@ -727,9 +727,6 @@
 ; once and remembers, through a tablet, wrapping the answer because a promise of nothing is
 ; ordinary. `read` rides sound (one form, evaled); `reads` and `forms` walk a flowing port, evaling
 ; and collecting; `dot` prints x to out and returns it.
-; `sound0` is sound's bootstrap twin, same protocol over the pure lisp subset: parens, comments,
-; strings, atoms, ' quote, and none of the sigil surface -- so #(a) is the glued tally run to sound
-; and the plain symbol # to sound0. it is what reads prel.l before there is a language.
 (test
  (string? (show out)) ("hi" = slurp (tap '(104 105))) (: o (jug 0) _ (print o 42) ("42" = slurp o))
  (: a (jug 0) b (jug 0) _ (say a "a") _ (say b "b") ("a" = slurp a && "b" = slurp b))           ; two jugs are two sinks
@@ -743,9 +740,7 @@
  !(sound "") ('torn = sound "(1") !(sound 42)                        ; ...and reads the same three ways
  (: c (tablet 0) th (once (u \ (: k (peep c 0 0) _ (pin c 0 (k + 1)) k)))
     ((th ()) = th () && 1 = peep c 0 0))            ; a promise forces once and remembers
- ('(a) = <(sound0 '(40 97 41))) !(sound0 ())
- ('torn = sound0 '(40 97))                           ; torn, unfinished shape
- ('(mono (# (a))) = <(sound '(35 40 97 41))) ((intern "#") = <(sound0 '(35 40 97 41))))
+ ('(mono (# (a))) = <(sound '(35 40 97 41))))       ; #(a) is the glued tally run
 
 ; --- bootstrapping --- the key semantics are l closures shared by both compilers (numap, add/mul,
 ; opfix, boxfix, feel, maps); the egg is warmed and the evaluator sits on it twice; `born` is what

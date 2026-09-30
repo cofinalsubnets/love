@@ -79,8 +79,8 @@
  ; nothing is ordinary (eof gives ()), and a bare pin would read as unforced, so f would re-run.
  (once f) (: t (tablet 0) (u \ (: v (t 0) (two? v ? >v (: w (f ()) _ (pin t 0 (1 . w)) w)))))
  ; a port is a charlist: the run just gulped realized, the tail a promise for the next. the tail
- ; must be a `once` -- p1 forces a position twice, and a re-drinking tail would lose the bytes
- ; between. the `see` is what refills; chug never touches the device.
+ ; must be a `once` -- a residue read again forces the same position twice, and a re-drinking
+ ; tail would lose the bytes between. the `see` is what refills; chug never touches the device.
  (flow p) (: (gulp tl) (: c (see p)
                           (c @ -1 tl
                                (: t (unsee p c, chug p)
@@ -2015,7 +2015,7 @@
     (: (go (a . u)) (vet1 s a @ ^ufail ufail r (: t (go u) (t == ufail || r == 'drop ? t (r . t)))) go)
    (con st c) (: d (vet <st c) (? (ufail? d) ufail (<st . d)))   ; a state with c added, or ufail
 
-   ; --- streams: a colist, love's lazy list (src/love/boot/p1.l's shape) --------------
+   ; --- streams: a colist, love's lazy list (the reader's shape) ----------------------
    ; () is empty, (x . s) is mature, a thunk is immature -- three shapes told apart by lit?/two?.
    ; the church encoding this replaced cost 26-35% more instructions on every shape measured.
    sno ()

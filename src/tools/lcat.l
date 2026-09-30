@@ -132,7 +132,6 @@
    ; part of the boot's meaning.
    rows
     [['ai_cat_egg_z ['egg]]
-     ['ai_cat_p1_z ['p1]]
      ['ai_cat_prel_z ['prel " " 'ev]]                     ; prel carries ev's half spliced after its own
      ['ai_cat_post_z ['post]]
      ; holo, one blob per arch because the backend is; an arch with no backend registers

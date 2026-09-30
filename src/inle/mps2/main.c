@@ -224,8 +224,6 @@ int main(void) {
   struct ai *r = ai_egg(g,
 #include "egg.h"
     ,
-#include "p1.h"
-    ,
 #include "prel.h"
     " "
 #include "ev.h"
@@ -311,8 +309,6 @@ int main(void) {
   if (ai_ok(g)) g->budget = POOL_BYTES / sizeof(word) / 4;
   struct ai *r = ai_egg(g,
 #include "egg.h"
-    ,
-#include "p1.h"
     ,
 #include "prel.h"
     " "
