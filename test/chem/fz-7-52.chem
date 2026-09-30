@@ -1,0 +1,31 @@
+.sp
+.cstart
+OCH3 ; bond se dashed
+bond 360
+CO
+C1: double bond
+.cend
+.sp
+.cstart
+ring8 pointing right put NH at 5 put O at 1
+SO3H
+benzene double 1,2
+CH3CH2
+bond 170
+cwid = .1
+HOCH2 at CH3CH2 + (0.5,0.5)
+.cend
+.sp
+.PS
+box wid 0.2 ht 0.2
+begin chem
+R1: front bond length 0.3 from Last
+front bond length 0.3
+C2H5 ; back bond 270
+R1: bond 120 length 0.3
+ring3 pointing right put S at 2 put O at 2
+R2: benzene
+C=O ; back bond length .25
+end
+move right 0.1
+.PE

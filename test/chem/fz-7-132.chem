@@ -1,0 +1,20 @@
+.cstart
+double bond nw
+O
+S ; bond 227 length .25 from O
+.cend
+.PS
+box wid 0.2 ht 0.2
+begin chem
+CH3
+R2: double bond 322 from CH3.V3
+CH ; bond 184
+end
+move right 0.1
+.PE
+.cstart
+bond
+R2: ring aromatic put O at 3
+benzene pointing down put CH3 at 6 double 1,6 5,6 3,4
+bond from R2.start
+.cend

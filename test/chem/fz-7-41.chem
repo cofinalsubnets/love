@@ -1,0 +1,26 @@
+.cstart
+aromatic ring put CH3 at 4 put N at 6 double 1,2
+"a b"
+ring5 aromatic
+CH2 ; triple bond 67 length 0.3
+.cend
+.PS
+box wid 0.2 ht 0.2
+begin chem
+"text"
+double bond length 0.3
+"a b"
+end
+move right 0.1
+.PE
+.cstart
+X1: triple bond 0
+C1: H2O
+N ; triple bond 346 length .25
+triple bond from X1 ; NH
+ring5 put CH3 at 5 put OH at 2
+back bond 90 ; NO2
+ring4 aromatic put N at 2 put NH at 2
+SO3H ; bond length 0.5 from H2O.C
+line right 0.1
+.cend

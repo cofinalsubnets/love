@@ -1,0 +1,32 @@
+.sp
+.PS
+box wid 0.2 ht 0.2
+begin chem
+flatring
+R3: flatring put O at 3 double 1,2
+back bond dotted
+triple bond 235 length .25
+O-
+X1: bond from O.V3
+bond 239 ; CN
+B: N
+B: bond nw
+X1: front bond
+end
+move right 0.1
+.PE
+text
+.cstart
+front bond dotted
+OCH3
+O
+bond 45 from O
+
+triple bond 240 ; S
+bond ne from O.V1
+ring5 pointing left
+bond 1
+.cend
+.cstart
+HOCH2
+.cend

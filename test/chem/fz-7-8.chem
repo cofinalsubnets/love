@@ -1,0 +1,26 @@
+.cstart
+COOH ; front bond
+.cend
+.PS
+box wid 0.2 ht 0.2
+begin chem
+front bond
+front bond 122
+double bond down
+Br
+flatring put S at 1
+CH3CH2
+
+end
+move right 0.1
+.PE
+.cstart
+CH3
+O-
+X1: Fe(CN)6
+R2: bond 349 length 0.3 dashed
+benzene put OH at 1 put N at 1
+back bond sw
+OCH3 at X1 + (0.5,0.5)
+ring pointing right aromatic
+.cend

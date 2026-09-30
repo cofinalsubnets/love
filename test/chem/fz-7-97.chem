@@ -1,0 +1,31 @@
+.sp
+.cstart
+Na+ ; double bond 254
+front bond 150 length .25
+back bond 196
+aromatic ring pointing right put CH3 at 4
+aromatic ring put S at 5
+OC ; bond from Q
+double bond
+bond sw from Q
+.cend
+.cstart
+R1: C=O
+front bond length .25
+ring pointing down put NH at 3 with .V5 at R1.V2
+R2: back bond left
+.cend
+.PS
+box wid 0.2 ht 0.2
+begin chem
+C=O ; bond
+S
+triple bond 210
+bond length 0.5
+bond 282 length .25
+S ; triple bond 0
+bond
+benzene put CH3 at 3 double 3,4 2,1 2,3
+end
+move right 0.1
+.PE
