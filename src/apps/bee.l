@@ -296,13 +296,13 @@
          _ (pin j 'code code)
          (post-as ("job-" + j 'id) bee-name
                   ("job " + j 'id + " ended with exit " + show code + " after "
-                   + show ((clock 0 - j 't0) // 1000) + "s: " + j 'cmd + "\nits last lines:\n"
+                   + show (clock (j 't0) // 1000) + "s: " + j 'cmd + "\nits last lines:\n"
                    + tail-of (j 'log) 20)))
      (job-text id)
       (: j (peep bee-jobs id ())
          (? !(tablet? j) ("no job " + id)
             ((? (charm? (j 'code)) ("exit " + show (j 'code))
-                ("running for " + show ((clock 0 - j 't0) // 1000) + "s"))
+                ("running for " + show (clock (j 't0) // 1000) + "s"))
              + ": " + j 'cmd + "\n" + tail-of (j 'log) 30)))
      ; the whole group: the shell and whatever it started
      (job-stop id)
@@ -582,40 +582,40 @@
      bee-floor (: v (peep bee-salt 'mem-floor ()) (? (two? v && charm? <v) <v ()))
      bee-hmax (: v (peep bee-salt 'heavy-max ()) (? (two? v && charm? <v) <v 2))
      ; the holder's pid: this bee's own, read off its card when a child speaks as it
-     (lock-pid _) (: c (card-of bee-name) p (? (tablet? c) (card-pid c) 0) (? (alive? p) p (getpid 0)))
+     (lock-pid _) (: c (card-of bee-name) p (tablet? c ? (card-pid c) 0) (? (alive? p) p (getpid 0)))
      (lock-ask nm kind note)
-      ((lk 'locks-acquire) ((lk 'locks-root) 0) nm (kind = "heavy" ? 'heavy 'exclusive) (lock-pid 0) note bee-floor bee-hmax)
+      (lk 'locks-acquire (lk 'locks-root 0) nm (kind @ "heavy" 'heavy 'exclusive) (lock-pid 0) note bee-floor bee-hmax)
      (lock-say r nm)
-      (? ((peep r "granted" 0) = 1) ("granted " + nm)
-         (: h (peep r "holder" ()) hs (peep r "holders" ())
-            by (? (tablet? h) (show (peep h "pid" "?") + ": " + peep h "note" "")
-                  (two? hs) (foldl (\ a x (a + (0 < #a ? ", " "") + show (peep x "pid" "?") + ": " + peep x "note" "")) "" hs)
-                  "?")
-            ("queued for " + nm + ": position " + show (peep r "position" "?") + ", held by " + by
-             + (: g (peep r "mem_gb" ()) (? (g = ()) "" (", " + show g + " GB available")))
-             + "; a message from lock-" + nm + " comes when it is yours")))
+      (peep r "granted" 0 @ 1 ("granted " + nm)
+       (: h (peep r "holder" ()) hs (peep r "holders" ())
+          by (? (tablet? h) (show (peep h "pid" "?") + ": " + peep h "note" "")
+                (two? hs) (foldl (\ a x (a + (0 < #a ? ", " "") + show (peep x "pid" "?") + ": " + peep x "note" "")) "" hs)
+                "?")
+          ("queued for " + nm + ": position " + show (peep r "position" "?") + ", held by " + by
+           + (r "mem_gb" @ () "" g (", " + show g + " GB available"))
+           + "; a message from lock-" + nm + " comes when it is yours")))
      (lock-acquire in)
       (? !(locks? 0) [0 "locks are not in this binary"]
          (: nm (in "name") kind (field in "kind" "exclusive") note (field in "note" "")
             (? !(elem kind ["exclusive" "heavy"]) [0 "kind is exclusive or heavy"]
                (: r (lock-ask nm kind note)
                   (? !(tablet? r) [0 ("the lock answered " + show r)]
-                     (: _ (? ((peep r "granted" 0) = 1) (pull bee-locks nm 0) (pin bee-locks nm [kind note]))
-                        [1 (lock-say r nm)]))))))
+                     (peep r "granted" 0 @ 1 (pull bee-locks nm 0) (pin bee-locks nm [kind note]),
+                      [1 (lock-say r nm)]))))))
      (lock-release in)
       (? !(locks? 0) [0 "locks are not in this binary"]
          (: nm (in "name") q (peep bee-locks nm ())
             kind (field in "kind" (? (two? q) <q (nm = "heavy" ? "heavy" "exclusive")))
-            r ((lk 'locks-release) ((lk 'locks-root) 0) nm (kind = "heavy" ? 'heavy 'exclusive) (lock-pid 0))
+            r (lk 'locks-release (lk 'locks-root 0) nm (kind = "heavy" ? 'heavy 'exclusive) (lock-pid 0))
             _ (pull bee-locks nm 0)
             (? (r = 1) [1 ("released " + nm)] [0 ("this session holds nothing named " + nm)])))
      (lock-list _)
       (? !(locks? 0) [0 "locks are not in this binary"]
-         (: t ((lk 'locks-list) ((lk 'locks-root) 0))
+         (: t (lk 'locks-list (lk 'locks-root 0))
             (who h) (show (peep h "pid" "?") + " (" + peep h "note" "" + ")")
             ex (peep t "exclusive" ()) hv (peep t "heavy" ()) wt (peep t "waiting" ())
-            [1 (foldl (\ a l (a + l + "\n")) ""
-                      ((map (\ e (<e + ": " + who (e 1))) (two? ex ? ex ()))
+            [1 (foldl (a \ l \ a + l + "\n") ""
+                      ((map (e \ <e + ": " + who (e 1)) (two? ex ? ex))
                        + [("heavy: " + (two? hv ? (foldl (\ a h (a + " " + who h)) "" hv) " none"))
                           ("waiting: " + (two? wt ? (foldl (\ a h (a + " " + who h)) "" wt) " none"))
                           ("memory " + show (peep t "mem_gb" "?") + " GB available, load " + peep t "load" "?")]))]))
@@ -624,7 +624,7 @@
       (: _ (rest 5000)
          _ (? (locks? 0)
               (map (\ nm (: q (bee-locks nm) r (lock-ask nm <q (q 1))
-                            (? (tablet? r && (peep r "granted" 0) = 1)
+                            (? (tablet? r && peep r "granted" 0 = 1)
                                (: _ (pull bee-locks nm 0)
                                   (post-as ("lock-" + nm) bee-name
                                            ("lock " + nm + " is granted to you: go ahead, and lock_release it when done")))
@@ -819,7 +819,7 @@
                       (go stop))
                     "content_block_stop"
                      (b "type" @
-                      ("text" || "thinking") ((f 'break) 0, go stop)
+                      ("text" || "thinking") (f 'break 0, go stop)
                       "tool_use" (: j (json-read (peep js i "{}")) (pin b "input" (two? j ? (j 1) {}), go stop))
                       (go stop))
                     "message_start"
@@ -1028,17 +1028,17 @@
      (api-turn key f msgs0)
       (: msgs (with-mail f msgs0)
          r (bee-open key (bee-body msgs))
-         (? !(tablet? r) ((f 'note) "no answer", ())
+         (? !(tablet? r) (f 'note "no answer", ())
             !(charm? (r 'code))
-             ((f 'note) (bee-host + " refused: " + (r 'code) + "; the key stays here"), ())
+             (f 'note (bee-host + " refused: " + (r 'code) + "; the key stays here"), ())
             !(r 'code = 200)
              (: j (json-read (drain r)) _ (close (sock r))
-                ((f 'note) (show (r 'code) + " " + (two? j ? (json-show (j 1 "error")) "")), ()))
+                (f 'note (show (r 'code) + " " + (two? j ? (json-show (j 1 "error")) "")), ()))
             (: _ (f 'wire (sock r))
                s (? bee-oai? (stream-oai f r) (stream f r)) _ (close (sock r)) _ (f 'wire ())
                stop <s blocks (s 1)
                (? !(string? stop)
-                   ((f 'note) (tablet? blocks ? (json-show blocks) "the stream broke off"), ())
+                   (f 'note (tablet? blocks ? (json-show blocks) "the stream broke off"), ())
                 (: uses (filter (\ b (b "type" = "tool_use")) blocks)
                    ; a tool_use without its result would poison the next request: only a
                    ; tool_use stop keeps them
@@ -1046,8 +1046,8 @@
                    m (? (two? kept) ({"role" "assistant" "content" kept} . msgs) msgs)
                    (stop @
                     "tool_use" (turn key f ({"role" "user" "content" (map (answer f) uses)} . m))
-                    "refusal" ((f 'note) "declined", m)
-                    "max_tokens" ((f 'note) "cut at max_tokens", m)
+                    "refusal" (f 'note "declined", m)
+                    "max_tokens" (f 'note "cut at max_tokens", m)
                     m))))))
 
      (user s) {"role" "user" "content" s}
@@ -1092,7 +1092,7 @@
       (: _ (puts "> ") _ (flush out) l (line 0)
          (? !(string? l) 0
             (#l = 0) (repl key f msgs)
-            (: _ (state! "busy") m (turn key f ((user l) . msgs)) _ (state! "idle")
+            (: _ (state! "busy") m (turn key f (user l . msgs)) _ (state! "idle")
                (repl key f (two? m ? m msgs)))))
 
      ; --- the full screen ---
@@ -1157,7 +1157,7 @@
          (map (\ i (: j (jug 0) _ (cite 'limn 'limn-row j s w i 0 -1 0) (slurp j + esc + "[0m")))
               (map (\ d (lo + d)) ^(max 0 (hi - lo + 1)))))
      ; everything the command wrote, as text, for the model
-     (scr-text s) (: w (gaze s 2) (copied s (0 - ((gaze s 9) * w)) (gaze s 0)))
+     (scr-text s) (: w (gaze s 2) (copied s -(gaze s 9 * w) (gaze s 0)))
 
      ; --- the look ---
      bee-ink "38;5;214"
@@ -1173,10 +1173,10 @@
      ; lines in a rounded box n wide, its border in pen
      (boxed pen ls n)
       (: d (\ s (sgr pen s)) rule (edfit "" (n - 2) "─")
-         ((d ("╭" + rule + "╮")) . (map (\ l (d "│" + " " + edfit l (n - 4) " " + " " + d "│")) ls
+         (d ("╭" + rule + "╮") . (map (\ l (d "│" + " " + edfit l (n - 4) " " + " " + d "│")) ls
                                     + [(d ("╰" + rule + "╯"))])))
      ; the first line after ⎿, the rest under it
-     (hang ls) (? (atom? ls) () (((sgr "2" "  ⎿  ") + <ls) . map (\ l ("     " + l)) >ls))
+     (hang ls) (? (atom? ls) () (sgr "2" "  ⎿  " + <ls . map (l \ "     " + l) >ls))
      ; lapiz sets a body at five columns; the gutter here is two
      (unindent l) (: (go i) (? (i < 3 && i < #l && l i = 32) (go (i + 1)) i) (snip l (go 0) #l))
      (trim l) (: (go i) (? (i < #l && l i = 32) (go (i + 1)) i) (snip l (go 0) #l))
@@ -1220,21 +1220,21 @@
                     (sgr "2" ("session " + bee-name + " · enter send · ^d quit"))]
                  (boxed bee-ink (map (\ i (bee-face i + "   " + t i)) ^4) (min w 72)))
        'you (: ls (catmap (\ l (wrap l (w - 4))) (lines (b 'text)))
-               (map (\ l (sgr "2" l)) (("> " + <ls) . map (\ l ("  " + l)) >ls)))
+               (map (\ l (sgr "2" l)) ("> " + <ls . map (l \ "  " + l) >ls)))
        'bee (: md (map unindent (lines (cite 'lapiz 'md->tty (b 'text) (w + 2))))
                 ls (two? md ? md [""])
-                (("⏺ " + trim <ls) . >ls))
+                ("⏺ " + trim <ls . >ls))
        'note (hang [(sgr "2;3" (b 'text))])
        ; a message from another session, its sender first
        'mail (: ls (catmap (\ l (wrap l (w - 4))) (lines (b 'text)))
-                ((sgr bee-ink "✉ " + sgr "1" (b 'from)) . map (\ l ("  " + l)) ls))
+                (sgr bee-ink "✉ " + sgr "1" (b 'from) . map (\ l ("  " + l)) ls))
        ; thinking streams dim while it runs, its last eight lines; done, it folds to one line
        ; unless ^t has them all open
        'think (: ls (catmap (\ l (wrap l (w - 4))) (lines (b 'text)))
                  n #(words (b 'text))
                  body (map (\ l (sgr "2;3" ("  " + l))) ls)
-                 (? (b 'open) ((sgr bee-ink "✻ thinking…") . (8 < #body ? (drop (#body - 8) body) body))
-                    (b 'x) ((sgr "2;3" ("✻ thought · " + show n + " words")) . body)
+                 (? (b 'open) (sgr bee-ink "✻ thinking…" . (8 < #body ? (drop (#body - 8) body) body))
+                    (b 'x) (sgr "2;3" ("✻ thought · " + show n + " words") . body)
                     [(sgr "2;3" ("✻ thought · " + show n + " words  ^t"))]))
        'tool (: st (b 'st)
                 dot (sgr (st @ 'ask "1;33" 'ok "32" 'err "31" "2") "⏺")
@@ -1337,7 +1337,7 @@
       (: m0 (c 'msgs)
          _ (pins c 't0 (clock 0) 'hum (bee-hums (clock 0 % #bee-hums)))
          _ (state! "busy")
-         t (twirl (\ _ (: m (turn (c 'key) (c 'face) ((user s) . m0))
+         t (twirl (\ _ (: m (turn (c 'key) (c 'face) (user s . m0))
                           _ (pins c 'msgs (two? m ? m m0) 'busy ())
                           _ (state! "idle")
                           (soil c))) 0)
@@ -1486,9 +1486,9 @@
                                      tn (peep j "tool_name" "?") in (peep j "input" {})
                                      tu (peep j "tool_use_id" ())
                                      h (? (string? tu) (peep blocks tu ()) ())
-                                     h2 (? h h ((f 'tool) tn in))
-                                     r ((f 'ask) h2)
-                                     (spit-file ans (r = 1 ? "y" "n")))))))
+                                     h2 (? h h (f 'tool tn in))
+                                     r (f 'ask h2)
+                                     (spit-file ans (r @ 1 "y" "n")))))))
                    (sort fs))
               0)
          0)
@@ -1498,7 +1498,7 @@
      (cc-turn key f msgs0)
       (: msgs (with-mail f msgs0)
          ok (? (bee-cc 'live) 1 (cc-start (string? (bee-cc 'sid))))
-         (? !ok ((f 'note) "claude would not start: is it on PATH? its errors are in the cell's claude.err", ())
+         (? !ok (f 'note "claude would not start: is it on PATH? its errors are in the cell's claude.err", ())
             (: w (bee-cc 'w) q (bee-cc 'q)
                _ (say w (json-show {"type" "user" "message" {"role" "user" "content" (cc-said msgs)}}))
                _ (say w "\n") _ (flush w)
@@ -1511,12 +1511,12 @@
                     "content_block_delta"
                      (: d (e "delta")
                         (d "type" @
-                         "text_delta" (: x (d "text") _ (pin st 'text (st 'text + x)) ((f 'text) x))
-                         "thinking_delta" (: x (d "thinking") (? (0 < #x) ((f 'think) x) 0))
+                         "text_delta" (: x (d "text") _ (pin st 'text (st 'text + x)) (f 'text x))
+                         "thinking_delta" (: x (d "thinking") (? (0 < #x) (f 'think x) 0))
                          0))
-                    "content_block_stop" (? (elem (peep kinds i "") ["text" "thinking"]) ((f 'break) 0) 0)
+                    "content_block_stop" (? (elem (peep kinds i "") ["text" "thinking"]) (f 'break 0) 0)
                     "message_start" (: u (peep (e "message") "usage" ())
-                                       (? (tablet? u) ((f 'usage) (num u "input_tokens" + num u "cache_creation_input_tokens"
+                                       (? (tablet? u) (f 'usage (num u "input_tokens" + num u "cache_creation_input_tokens"
                                                                    + num u "cache_read_input_tokens" + num u "output_tokens")) 0))
                     0))
                (go _)
@@ -1526,43 +1526,40 @@
                          (m "type" @
                           "stream_event" (: _ (ev (m "event")) (go 0))
                           ; the model claude runs names the card and the gauge's window
-                          "system" (: md (peep m "model" ())
+                          "system" (: md (m "model")
                                       _ (? (string? md && md != peep bee-cc 'model "")
                                            (: _ (pin bee-cc 'model md) (card! (bee-cell 'state))) 0)
                                       (go 0))
                           "assistant" (: _ (map (\ b (? (b "type" = "tool_use")
-                                                         (pin blocks (b "id") ((f 'tool) (b "name") (b "input")))
+                                                         (pin blocks (b "id") (f 'tool (b "name") (b "input")))
                                                          0))
-                                                (: c (m "message" "content") (two? c ? c ())))
+                                                (: c (m "message" "content") (two? c ? c)))
                                          (go 0))
                           "user" (: c (m "message" "content")
                                     _ (? (two? c)
                                          (map (\ b (? (tablet? b && b "type" = "tool_result")
-                                                      (: h (peep blocks (b "tool_use_id") ())
-                                                         (? h ((f 'done) h [(!(peep b "is_error" ()) || peep b "is_error" () = json-false ? 1 0)
+                                                      (: h (blocks (b "tool_use_id"))
+                                                         (? h (f 'done h [(!(b "is_error") || b "is_error" = json-false ? 1 0)
                                                                               (cc-text (b "content"))]) 0))
                                                       0))
                                               c)
                                          0)
                                     (go 0))
                           "result" (: x (peep m "total_cost_usd" ())
-                                      _ (? (x = () || string? x) 0 ((f 'cost) x))
-                                      (? ((peep m "is_error" ()) = json-true)
-                                         (: _ ((f 'note) ("claude: " + (: r (peep m "result" "") (string? r ? r (show r))))) 'failed)
-                                         'ok))
+                                      _ (? (x = () || string? x) 0 (f 'cost x))
+                                      (m "is_error" = json-true ?
+                                       (f 'note ("claude: " + (: r (peep m "result" "") (string? r ? r (show r)))), 'failed)
+                                       'ok))
                           (go 0)))))
                end (go 0)
                _ (pin st 'done 1)
-               _ (? (end = 'eof) (: _ (cc-stop 0) ((f 'note) "the claude child ended; the next turn resumes its session")) 0)
-               (? (end = 'ok)
-                  (: t (st 'text) ({"role" "assistant" "content" (0 < #t ? t "(tools only)")} . msgs))
-                  ()))))
+               _ (end @- 0 'eof (cc-stop 0, f 'note "the claude child ended; the next turn resumes its session"))
+               (end @ 'ok (st 'text @ t ({"role" "assistant" "content" (0 < #t ? t "(tools only)")} . msgs))))))
 
      ; --- the MCP server: `love bee --mcp`, JSON-RPC 2.0 one message a line, what a claude
      ; child runs to reach its bee and the hive. the ports are arguments, so a test drives a
      ; whole conversation without a child. an id is presence, not truth: requests count from 0 ---
-     (line-of p) (: (go acc) (see p @ -1 (? (two? acc) (string (rev acc))) 10 (string (rev acc)) c (go (c . acc)))
-                    (go ()))
+     (line-of p) (:- (go ()) (go acc) (see p @ -1 (two? acc ? (string (rev acc))) 10 (string (rev acc)) c (go (c . acc))))
      mcp-shared ["list_sessions" "send_message" "queue_row" "lock_acquire" "lock_release" "lock_list"]
      mcp-tools
       ({"name" "approve"
@@ -1572,9 +1569,9 @@
                                      "tool_use_id" {"type" "string"}}
                        "required" ["tool_name"]}}
        . map (\ t {"name" (t "name") "description" (t "description") "inputSchema" (t "input_schema")})
-             (filter (\ t (elem (t "name") mcp-shared)) bee-tools))
+             (filter (t \ elem (t "name") mcp-shared) bee-tools))
      ; how long an ask waits for the screen, in seconds: BEE_ASK_WAIT, else ten minutes
-     ask-limit (: w (getenv "BEE_ASK_WAIT") (? (string? w && 0 < #w) (digits w) 600))
+     ask-limit (: w (getenv "BEE_ASK_WAIT") (string? w && 0 < #w ? (digits w) 600))
      ; "y", "n", or () when no answer came in time
      (ask-wait p n)
       (: s (slurp-file p)
@@ -1585,7 +1582,7 @@
      ; BEE_YES it allows; else it drops the ask in this bee's cell, asks/ID.ask, and waits for the
      ; screen to write asks/ID.answer
      (mcp-approve a)
-      (: tn (peep a "tool_name" ()) inp (peep a "input" ())
+      (: tn (a "tool_name") inp (a "input")
          (allow _) [1 (json-show {"behavior" "allow" "updatedInput" (tablet? inp ? inp {})})]
          (deny why) [1 (json-show {"behavior" "deny" "message" why})]
          (? !(string? tn) [0 "approve wants tool_name"]
@@ -1594,7 +1591,7 @@
                id (show (clock 0) + "-" + hex2 (clock 0 % 256))
                tu (peep a "tool_use_id" ())                ; so the screen asks on the block it drew
                _ (spit-file (d + "/." + id) (json-show (: j {"tool_name" tn "input" (tablet? inp ? inp {})}
-                                                           (? (string? tu) (pin j "tool_use_id" tu) j))))
+                                                           (string? tu ? (pin j "tool_use_id" tu) j))))
                _ (rename (d + "/." + id) (d + "/" + id + ".ask"))
                ans (ask-wait (d + "/" + id + ".answer") (ask-limit * 5))
                _ (unlink (d + "/" + id + ".ask")) _ (unlink (d + "/" + id + ".answer"))
@@ -1605,15 +1602,15 @@
          (elem nm mcp-shared) (run (plain 1) () nm a)
          [0 ("no tool " + nm)])
      (mcp-serve inp outp)
-      (: (send m) (: _ (say outp (json-show (pin m "jsonrpc" "2.0"))) _ (say outp "\n") (flush outp))
+      (: (send m) (say outp (json-show (pin m "jsonrpc" "2.0")), say outp "\n", flush outp)
          (reply id r) (send {"id" id "result" r})
          (fail id code msg) (send {"id" id "error" {"code" code "message" msg}})
          (one m)
-          (: id (peep m "id" ()) meth (peep m "method" ()) ps (peep m "params" ())
-             (? !(string? meth) (? (() = id) 0 (fail id -32600 "a request names its method"))
+          (: id (m "id") meth (m "method") ps (m "params")
+             (? !(string? meth) (id @ () 0 (fail id -32600 "a request names its method"))
                 (meth @
                  "initialize"
-                  (reply id {"protocolVersion" (: v (? (tablet? ps) (peep ps "protocolVersion" ()) ())
+                  (reply id {"protocolVersion" (: v (tablet? ps ? (ps "protocolVersion"))
                                                   (string? v ? v "2025-06-18"))
                              "capabilities" {"tools" {}}
                              "serverInfo" {"name" "bee" "version" love-version}})
@@ -1624,19 +1621,19 @@
                      (: a (peep ps "arguments" ())
                         r (mcp-call (ps "name") (tablet? a ? a {}))
                         (reply id {"content" [{"type" "text" "text" (r 1)}] "isError" (<r ? json-false json-true)})))
-                 (? (() = id) 0 (fail id -32601 ("no method " + meth))))))
+                 (id @ () 0 (fail id -32601 ("no method " + meth))))))
          (go _) (: l (line-of inp)
                    (? !(string? l) 0
-                      (: j (? (0 < #l) (json-read l) ())
-                         _ (? (two? j && tablet? (j 1)) (one (j 1)) 0)
+                      (: j (0 < #l ? (json-read l))
+                         _ (two? j && tablet? (j 1) ? (one (j 1)) 0)
                          (go 0))))
-         _ (twirl (\ _ (lock-poll 0)) 0)                   ; a claude child's queued locks, mailed to its bee
+         _ (twirl (_ \ lock-poll 0) 0)                   ; a claude child's queued locks, mailed to its bee
          (go 0))
 
      ; --list, --send, --spawn and --stop speak to the hive from a shell and settle nowhere;
      ; a sender there is BEE_NAME, else cli- and the user
      (bee-cli as yes)
-      (: say1 (\ e ok (? (#e = 0) (: _ (puts (ok + "\n")) 0) (say err ("bee: " + e + "\n"), 1)))
+      (: say1 (\ e ok (? (#e = 0) (puts (ok + "\n"), 0) (say err ("bee: " + e + "\n"), 1)))
          (<as @
           "--list" (: s (sessions-text 0) (puts (s + (#s && s (#s - 1) = 10 ? "" "\n")), 0))
           "--send" (? (#as < 3) (say err "usage: love bee --send NAME TEXT ..\n", 2)
@@ -1650,14 +1647,14 @@
           ; (./out when there is one) and, with --heavy, a heavy ticket; waits for both, runs,
           ; releases whatever way it ends, and answers the command's status
           "--lock"
-           (: dd (: k (index-of as "--") (? (k < 0) () (drop (k + 1) as)))
+           (: dd (: k (index-of as "--") (k >= 0 ? (drop (k + 1) as)))
               od (: k (index-of as "--out") (? (0 <= k && k + 1 < #as) (as (k + 1)) ""))
               out (? (0 < #od) (od 0 = 47 ? od (bee-cwd + "/" + od))
                      (two? (stat (bee-cwd + "/out"))) (bee-cwd + "/out") "")
               reqs ((0 < #out ? [[out 'exclusive]] ()) + (elem "--heavy" as ? [["heavy" 'heavy]] ()))
               (? !(two? dd) (say err "usage: love bee --lock [--heavy] [--out DIR] -- CMD ..\n", 2)
                  !(locks? 0) (say err "bee: locks are not in this binary\n", 1)
-                 ((lk 'locks-run) ((lk 'locks-root) 0) reqs (joinw dd) bee-floor bee-hmax dd)))
+                 (lk 'locks-run (lk 'locks-root 0) reqs (joinw dd) bee-floor bee-hmax dd)))
           "--stop" (? (#as < 2) (say err "usage: love bee --stop NAME\n", 2)
                       (: e (stop-bee <>as) (? (starts? e "stopped") (: _ (puts (e + "\n")) 0) (say err ("bee: " + e + "\n"), 1))))
           2))
@@ -1667,7 +1664,7 @@
       (: ms (take-mail 0)
          (? (two? ms)
             (: _ (map (\ m (f 'mail <m (m 1))) ms) _ (state! "busy")
-               m (turn key f ((user (mail-text ms)) . msgs)) _ (state! "idle")
+               m (turn key f (user (mail-text ms) . msgs)) _ (state! "idle")
                (serve key f (two? m ? m msgs)))
             (: _ (rest 1000) (serve key f msgs))))
      (serve-first key f p)
@@ -1690,7 +1687,7 @@
             ; settled for the run, so other sessions can find it and write to it
             (: _ (settle bee-branch)
                _ (pin bee-cc 'yes yes)
-               _ (? sv (: _ (twirl (\ _ (watch 0)) 0) (twirl (\ _ (lock-poll 0)) 0)) 0)
+               _ (? sv (: _ (twirl (_ \ watch 0) 0) (twirl (_ \ lock-poll 0) 0)) 0)
                r (? sv (serve-first key (plain yes) (: p (getenv "BEE_PROMPT")
                                                     (? (string? p && 0 < #p) p (two? words) (joinw words) "")))
                     (two? words) (: _ (state! "busy") _ (turn key (plain yes) [(user (joinw words))]) 0)

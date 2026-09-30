@@ -295,7 +295,7 @@
    ; a text ending in `!` ahead of a link wears one backslash, else the pair reads as an image
    (mdi l)  (? (atom? l) ""
                (: s (mdi1 <l)
-                  (? ((<(<l) = 'text) && (two? >l) && (<(<>l) = 'link) && (0 < #s) && (s (#s - 1) = 33))
+                  (? (<<l = 'text && two? >l && <<>l = 'link && 0 < #s && s (#s - 1) = 33)
                       (snip s 0 (#s - 1) + "\\!" + mdi >l)
                      (s + mdi >l))))
    (mdi1 x) (<x @ 'text (mq <>x)
@@ -314,7 +314,7 @@
    (mdefs l)    (catmap (it \ mdi <it + "\n:   " + mdi <>it + "\n") l)
    ; a table row, a cell's bars escaped so the row splits where it should
    (tbar l)     ("| " + join " | " l + " |")
-   (tmcell i)   (: s (mdi i) (cats (map (k \ (? (s k = 124) "\\|" (string (s k)))) ^#s)))
+   (tmcell i)   (: s (mdi i) (cats (map (k \ s k @ 124 "\\|" c (string c)) ^#s)))
    (tmal a)     (a @ 'l ":--" 'c ":-:" 'r "--:" "---")
    (mtable x)   (tbar (map tmcell (x 2)) + "\n" + tbar (map tmal (x 1)) + "\n"
                  + catmap (r \ tbar (map tmcell r) + "\n") (x 3))
@@ -332,7 +332,7 @@
    (mdshow d) (join "\n" (map mdb d)))                        ; each block ends in \n, so \n between = a blank line
 
 ; ---------------------------------------------------------------- html, show
-(: (hq s) (:- (g 0 "") (g i acc) (i >= #s ? acc (: c (s i) (g (i + 1)
+(: (hq s) (:- (g 0 "") (g i acc) (i >= #s ? acc (s i @ c (g (i + 1)
            (acc + (c @ 38 "&amp;" 60 "&lt;" 62 "&gt;" (string c)))))))
    (hti l)  (catmap hti1 l)
    (hti1 x) (<x @ 'text   (hq <>x)
@@ -380,9 +380,9 @@
            ("larr" "←") ("rarr" "→") ("harr" "↔") ("le" "≤") ("ge" "≥") ("ne" "≠"))
    (hnum nm)                                     ; &#NN; and &#xHH; -> the character
     (: n #nm
-       (go i b v) (? (n <= i) (? (v < 0) () (utf8 v))
+       (go i b v) (? (n <= i) (v < 0 ? () (utf8 v))
                      (: d (hexv (nm i))
-                        (? (d < 0 || b <= d) () (go (i + 1) b ((? (v < 0) 0 v) * b + d)))))
+                        (? (d < 0 || b <= d) () (go (i + 1) b ((v < 0 ? 0 v) * b + d)))))
        (? (n < 2 || nm 0 != 35) ()
           (elem (nm 1) '(120 88)) (go 2 16 -1) (go 1 10 -1)))
    (entof nm) ((: (g l) (? (atom? l) (: u (hnum nm) (? (string? u) u ("&" + nm + ";")))
@@ -570,7 +570,7 @@
    ; content is a line and ahead of any other. `ba` is 1 while an <a> with no href is open:
    ; that is an anchor, not a link, so its tags go and only its mark and its text stay.
    (htscrub s)
-    (:- (go 0 0) n #s o (jug 0) fs (pin (tablet 0) 'f (tablet 0))
+    (:- (go 0 0) n #s o (jug 0) fs (pin {} 'f {})
      (field i) (peep (fs 'f) i "")
      (go i ba)
       (? (n <= i) (slurp o)
@@ -583,7 +583,7 @@
                (: t <h e <>h op? <>>h
                   k (i + 1 + #t)
                   mk (? op? (hmk (hattr s k (e - 1) "id") + hmain s t k (e - 1)) "")
-                  (? (t = "form") (pin fs 'f (? op? (hform s k (e - 1) e) (tablet 0)), say o mk, go e ba)
+                  (? (t = "form") (pin fs 'f (? op? (hform s k (e - 1) e) {}), say o mk, go e ba)
                      (t = "input") (say o (mk + field i), go e ba)
                      (t = "textarea") (say o (mk + field i), go (? op? (hpast s e t) e) ba)
                      (t = "img") (say o (mk + (? op? (himg s k (e - 1)) "")), go e ba)
@@ -638,7 +638,7 @@
 
    (hlev n)  (tag (p \ ['head n <p]) (wrapt ("h" + show n) (pack htinl)))
    hlang     (seqs [(skip (lit " class=\"language-")) (span (!= 34)) (skip (lit "\""))])
-   h-rule  (tag (const '(rule)) (lit "<hr>"))
+   h-rule  (tag (_ \ '(rule)) (lit "<hr>"))
    h-head  (alts (map hlev '(1 2 3 4 5 6)))
    h-para  (tag (p \ ['para <p]) (wrapt "p" (pack htinl)))
    h-fence (tag (p \ ['fence <p (plain <>p)])
@@ -872,11 +872,11 @@
                         (go >l de 1 d rs defs (nf ? acc ((m2 + "\n") . acc)))
                        (elem m2 '(".fi" ".EE"))
                         (go >l de 0 d rs defs (nf ? ((m2 + "\n") . acc) acc))
-                       (m2 = ".RS") (go >l de nf d (rs + 1) defs ((m2 + rest + "\n") . acc))
-                       (m2 = ".RE") (? rs (go >l de nf d (rs - 1) defs ((m2 + "\n") . acc))
+                       (m2 = ".RS") (go >l de nf d (rs + 1) defs (m2 + rest + "\n" . acc))
+                       (m2 = ".RE") (? rs (go >l de nf d (rs - 1) defs (m2 + "\n" . acc))
                                         (go >l de nf d rs defs acc))
                        (elem m defs) (go >l de nf d rs defs (rfown ln . acc))
-                       (go >l de nf d rs defs ((m2 + rest + "\n") . acc))))))))
+                       (go >l de nf d rs defs (m2 + rest + "\n" . acc))))))))
      (splitnl s) 0 0 0 0 () ()))
 
 ; ---------------------------------------------------------------- roff (man), read
@@ -1093,11 +1093,11 @@
     (: pad (ttsp ind)
        room (w - ind @ r (r < 8 ? 8 r))
        (go l n sty acc)
-        (? (atom? l) (n < 0 ? (rev acc) (rev ((pad + sty) . acc)))
+        (? (atom? l) (n < 0 ? (rev acc) (rev (pad + sty . acc)))
            (: v (swidth <<l) s <><l
               (? (n < 0) (go >l v s acc)
                  (n + 1 + v <= room) (go >l (n + 1 + v) (sty + " " + s) acc)
-                 (go >l v s ((pad + sty) . acc)))))
+                 (go >l v s (pad + sty . acc)))))
        (go words -1 "" ()))
    (ttinl l w ind a) (ttfill (ttwords (ttsegs l a)) w ind)
    ; a marker replaces the head of the first line's indent, which is spaces
@@ -1147,7 +1147,7 @@
           'numbers (ttnums <>x w ind 1)
           'deflist (ttdefs <>x w ind)
           'table   (tttable x w ind)
-          'rule    [(ttsp ind + rep "-" (? (w - ind < 1) 1 (w - ind)))])
+          'rule    [(ttsp ind + rep "-" (w - ind < 1 ? 1 (w - ind)))])
    ; a table the width holds is its columns; one it does not is each row as head: cell
    ; lines, a blank between rows, so no line overruns and nothing is cut
    (tttable x w ind)
@@ -1243,7 +1243,7 @@
    (ttpage d w)
     (: r (ttlinks d) l (ttlift (ttyshow <r w))
        (lk? a) (0 < #<a && <a 0 = 3)
-       t (foldl (\ t a (pin t (tldig <a) <>a)) {} (filter lk? <>l))
+       t (foldl (t \ a \ pin t (tldig <a) <>a) {} (filter lk? <>l))
        [<l (r 1) (filter (a \ !(lk? a)) <>l) (map (i \ peep t (i + 1) -1) ^#(r 1))])
    ; [text anchors]: ttyshow's layout, links as they are, with the marks lifted as ttpage
    ; lifts them -- an image's " img SRC" among them, for a viewer to draw under its line
