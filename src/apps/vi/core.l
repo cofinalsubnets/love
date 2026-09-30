@@ -1,64 +1,14 @@
-; src/apps/vi/core.l -- the vi engine, pure: a state tablet stepped one byte at a
-; time (vstep), rendered to escape sequences -- vframe writes a whole screen,
-; vfresh writes the difference from the last one. no port, no tty, no file io
-; in here -- the face (src/apps/vi/vi.l) reads keys, performs the write requests the
-; ex commands leave on the state, and blits frames; the laws (test/law/vi.l)
-; drive vstep with byte lists and read the tablet back.
-; search rides src/apps/kore/re.l (rebre/refind), so re.l loads first in any cat.
+; src/apps/vi/core.l -- the vi engine, pure: a state tablet stepped one byte at a time
+; (vstep); vframe paints a whole screen, vfresh the difference. no port, tty or file io:
+; the face (src/apps/vi/vi.l) reads keys, blits frames and performs the requests the ex
+; commands leave on the state ('dow write, 'doe read, 'dos split, 'dox an unknown ex word).
+; search rides src/apps/kore/re.l, so re.l loads first in any cat.
 ;
-; the state (a tablet): 'lines (texts, never empty -- the vi invariant),
-; 'row 'col (0-based), 'goal (the column j/k aim for), 'top (first visible row),
-; 'wrap (long lines fold onto more screen rows? off by default -- :set wrap), with
-; 'tops (the segment of 'top's line the view starts at, wrapped) and 'left (the
-; first visible column, unwrapped) naming the view's corner between them,
-; 'mode ('n normal, 'i insert, 'c ex, 's search, 'v and 'V visual, charwise and
-; linewise, with 'va the other end of the selection), 'cnt (pending count), 'op
-; (pending operator (char n) or ()), 'pc (pending char-arg nom: f F t T r g z Z,
-; and ti/ta for a text object), 'lastf (the f F t T that ; and , repeat), 'reg
-; (the yank: ('lin lines) | ('chr text), a charwise text carrying newlines when the
-; cut crossed rows), 'undo 'redo (snapshot stacks), 'dot 'rec 'reccnt 'dotting (the
-; `.` register: the last change's keys, its count apart from them, and the guard
-; keeping a replay from recording itself), 'file 'dirty 'msg 'sw (the shiftwidth
-; > and < move by), 'cmd (the ex/search line), 'pat 'pattx 'patw (the search state;
-; 'patw is * and #'s word-bounding, which re.l's engine has no node for), 'dir,
-; 'quit (() | 1), 'dow (a write request: (name), uread's shape, the face consumes
-; it), 'doe (a READ request, same shape: :e/:o leave it, the face calls vload),
-; 'dos (a SPLIT request, (dir name): :sp/:vs leave it, name "" for a new buffer,
-; and the face opens the pane where it has a harbour), 'dox (an ex word this engine
-; does not know, (word arg): the face may, and clears the complaint when it does;
-; 'exmore lists the words it knows, so a head of one of them resolves too),
-; 'w 'h (the view).
-;
-; the syntax paint rides src/apps/vi/hue.l and src/apps/vi/hues.l and five more keys: 'hl
-; (paint? -- born on for a file hues-lang names, :hl flips it), 'pens (the class ->
-; escape tablet, installed by the FACE so this file touches no getenv and no file),
-; 'lex ([lang lexer], built at the first paint), 'hlcar (the per-line start state as
-; [gen lang states] -- the wrapper is load-bearing, gen 0 over an empty buffer being a real
-; cached value a bare one could not tell from "no cache"), 'hlgen (bumped by the three
-; line mutators, vput/vsplice/vrest, and nothing else touches 'lines), 'hlrow (the
-; painted row per SCREEN row, keyed by the text, carry, width and language it came from).
-; the lexer is not only the paint's: % and the bracket objects read its runs to know
-; which ( is code, which is why a ) in a literal is not a mate.
-;
-; the dialect: motions h j k l (space and backspace too, and the arrows)
-; 0 ^ $ | w b e W B E f F t T ; , { } + - _ G gg g_ H M L %, counts, the
-; diagonals alt-y u b n (cli's edkey hands an alt letter in as 256 + the
-; letter: a k or j then an h or l, the count on both, and never under an
-; operator), operators d c y > < (doubled = linewise; with j/k/G/gg linewise,
-; else charwise, crossing rows when the motion does -- dw stops where the
-; word ends the line, vim's own special case), the text objects i and a with
-; w W p ( ) b [ ] { } B < > " ' `, x X D C s S r J gJ ~ Y, i a I a o O,
-; p P (lin + chr), u and ^R, `.` with a count, ^A ^X, * # / ? n N (BRE, over
-; re.l), v V visual, zt zz zb, ZZ, ^F ^B ^D ^U paging, and ^W ^U in insert.
-;
-; the ex line is a real one: [range] command [args], where an address is
-; N . $ /re/ ?re? with +N / -N offsets, joined by , or ; and % for 1,$. the
-; commands are s (over sed's own usub, so & and \1 read the same there as
-; here), g and v, d y m t co j p nu = , and the file half w [NAME] e[!] [NAME]
-; o [NAME] q q! wq x hl lint set. a bare range moves the cursor.
-; out of scope: named registers ("a and the rest),
-; marks (m ' `), macros (q @), :r and :!, g~ gu gU, sentence motions ( and ),
-; ge, ^E ^Y, gj gk, tabs render raw (the terminal's stops, not ours).
+; 'lines is never empty (the vi invariant); 'row 'col are 0-based, 'col always a
+; character's first byte. 'hlgen is bumped by vput/vsplice/vrest alone, the only
+; mutators of 'lines, and every paint cache keys on it. 'hlcar is [gen lang states]:
+; the wrapper tells a cached gen 0 from no cache. 'pens is installed by the face, so
+; this file reads no env. the lexer also tells % and the bracket objects which ( is code.
 (module 'vi
 (borrow 'kore) ; the text/u floors
 (borrow 'lint)  ; lint-scan, spliced for this module's compile

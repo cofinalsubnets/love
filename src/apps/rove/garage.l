@@ -1,21 +1,12 @@
-; garage -- the level after the desert: the dry riverbed runs in through the east wall of
-; a mall's parking garage and out through the west. concrete all round, thickened into
-; pilasters along the walls, and the floor laid out as a garage is: a lane round the
-; outside, islands of bays back to back with lanes between them, the bays in sections a
-; few wide with a lane between the sections, so a car could drive round; yellow lines
-; between the bays and a column on the middle line of each section; wrecked cars in
-; some of the bays, drawn in blocks. the middle, where the bed runs, is left bare. rats have the place; they wander, they are not hostile, and there is no
-; fighting -- bumping one is rat-interaction, which for now reports the rat hawking a
-; bauble at you. the way on is west, off the map along the bed.
+; garage -- the level after the desert: the dry riverbed runs through a mall's parking
+; garage, east wall to west. lanes, islands of bays, columns, wrecked cars; the middle
+; where the bed runs is bare. rats wander, never hostile: bumping one is rat-interaction.
+; the way on is west along the bed, to the shaft (src/apps/rove/shaft.l).
 ;
-; a roguelike floor on rove: laid, not delved, the size of the screen, lit end to end;
-; the painter is rove's and the keys the tower's. the game is pure love -- garage-new,
-; garage-turn and garage-frame are state in and state out, the song feeds any port --
-; gated headless by test/host/garage.l. garage-walk takes a stage already raised, which
-; is how the dusk (src/apps/rove/dusk.l) hands over on the same screen, and hands it on the same way to
-; the shaft (src/apps/rove/shaft.l) when the player walks off west; garage-run raises one.
-; the music is the machinery: a harp loop, garage-tune, pulled a cycle at a time into
-; the song, which feeds any port.
+; a roguelike floor on rove, laid rather than delved; the painter is rove's, the keys the
+; tower's. garage-new/turn/frame are pure, gated by test/host/garage.l; garage-walk takes
+; a raised stage, so the dusk hands over on the same screen. the music is a harp loop,
+; garage-tune, pulled a cycle at a time.
 ;
 ; run: love garage    h j k l or the arrows walk, y u b n slant; q or esc leaves
 (module (garage garage-run garage-walk garage-main garage-new garage-turn garage-frame

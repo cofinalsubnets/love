@@ -1,54 +1,16 @@
-; synth -- a keyboard to pick a tune out on, for someone with no piano: the number row
-; plays notes out the horn on harp's voices, a screen says which.
+; synth -- a keyboard to pick a tune out on: the number row plays notes out the horn
+; on harp's voices, a screen says which.
 ;
-; 1 is middle c and each key on from it along the row -- the digits, then - and = --
-; a semitone higher, twelve keys to the octave; shift plays the note an octave up and
-; alt lowers it a quarter tone. tab takes the next timbre, the up and down arrows move
-; the octave, q leaves. a key is a strike: the note rings and dies on its own, since a
-; tty tells of keys pressed and never of keys let go, and a held key's repeats are
-; dropped as the games drop them.
+; 1 is middle c, each key along the row a semitone up; shift an octave up, alt a
+; quarter tone down (alt arrives as an escape first, read by synth-key). a key is a
+; strike that rings and dies: a tty never says a key was let go.
+; the horn is fed a small chunk at a time, at least an eighth of a second ahead of the
+; speaker -- longer than the runtime's pauses, whose first ones synth-warm takes early.
+; a backing loop (harp's pattern text) is a vi buffer in a pane under the keys; a new
+; pattern takes over at a cycle's start. d plays in just intonation (drift.l, phrases.l).
+; all but synth-run is pure and gated by test/host/synth.l.
 ;
-; the horn is fed a small chunk at a time, paced by the loop's gap (rove's pacer), at
-; least an eighth of a second ahead of the speaker: longer than the runtime's pauses (a
-; collection, a section of the image paged in on first use), whose first ones
-; synth-warm takes before the card opens. the filler is rove's song-fill, which stops
-; when the card stops taking, so a loop heavier than the seat can mix gaps rather than
-; holds the keys.
-;
-; the shifted row is the keymap's: what shift makes of the digits is the terminal's to
-; say, and synth-shifted is the us row. alt reaches the terminal as an escape before
-; the key, read by the synth's own synth-key, which makes alt of any key where the
-; cli's edkey makes it of the letters alone; on the harbour the keys' stage hands berth
-; that reader through its 'key door.
-;
-; a backing loop to play over: harp's patterns, in the text `love harp` takes -- a mini
-; string, or a love form over harp's names in parentheses -- pulled a cycle at a time
-; into the same voices the strikes ring in, so one mix goes out the card. the text is
-; a vi buffer in a pane under the keys, on berth's harbour: e in the keys' pane sends
-; the buffer, and :send :play :stop and :cps N are the buffer's own ex words. a new
-; pattern takes over at a cycle's start, so a change never drops the beat; a torn or
-; bad one is said and the loop kept. on a seat with no harbour the keys run alone.
-;
-; d plays in just intonation instead (src/apps/harp/drift.l): the loop becomes a walk
-; of phrases from a book (src/apps/harp/phrases.l) over a center that drifts on the
-; lattice, one phrase a cycle. k turns what the row plays under it: fixed, the equal
-; row from middle c as ever; follow, the same equal row rooted on the center now
-; sounding, so the keys modulate as the walk moves; just, the twelve of 5-limit over
-; that center -- alt taking the septimal one where there is one -- pure against the
-; walk. , and . turn the walk's steer, ; and ' its lean, h its pull home, v the book;
-; the screen draws the lattice round the center, its trail behind it.
-;
-; the keys, the notes, the loop and the feed are pure -- synth-new, synth-step,
-; synth-code, synth-semis, synth-name, synth-send, synth-play, synth-stop, synth-pull
-; and synth-feed into any port -- gated by test/host/synth.l; only synth-run ties the
-; tty and the horn.
-;
-; run: love synth [LOOP]   1 .. = play, shift and alt bend, tab is the timbre, up and
-;                         down the octave, p plays or stops the loop, e sends the
-;                         buffer, [ and ] the cps, q leaves. the buffer opens on LOOP
-;                         and :w keeps it. d the drift, k the keys under it,
-;                         , . ; ' h v its knobs.
-;                         HORN=none plays silent on a seat with no card
+; run: love synth [LOOP]   HORN=none plays silent on a seat with no card
 (module (synth synth-run synth-main synth-new synth-step synth-code synth-semis synth-name
          synth-strike synth-feed synth-frame synth-key synth-timbres synth-shifted synth-digits
          synth-chunk synth-lead synth-octaves synth-send synth-play synth-stop synth-pull

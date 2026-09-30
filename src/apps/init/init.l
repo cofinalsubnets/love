@@ -1,30 +1,11 @@
 ; --- init: a service supervisor modeled in love (a runnable sketch) ---
-; the executable companion to the "love as pid 1" idea -- the Tier-1 init (runit/s6/
-; dinit class: own unit format, no D-Bus): a perceive->decide->act supervisor with a
-; watchdog over checkpointable state, driving processes + signals over the host
-; kernel's stack.
-;
-; like boot/tag.l this is a sketch -- it models the parts that stay love so
-; the shape runs and is probed on the host. there are now two lanes:
-;   (demos 0) -- the modeled supervisor: a deterministic tour where a "service" is a
-;     green task and a crash is a `scare` the watchdog `help` welps to () (the SAME
-;     shape recovery inle uses), so the dep graph / restart policy / checkpoint run
-;     with no OS processes. (the oneshot lane here is already real via the `hark` nif.)
-;   (real 0) -- the real supervisor: services are OS processes. src/love/posix.c adds the
-;     two missing primitives -- (spawn argv) forks+execs and returns a pid to track,
-;     (glean _) is the SIGCHLD core (waitpid(-1) -> (pid . status), restart per policy).
-;     same supervisor shape, now over real children. (demos 0) ends by calling it.
-; run either:
-;   out/love -l init/init.l -e "(demos 0)"      ; or "(real 0)"
-; (the file only DEFINES -- a plain load prints nothing; -l preloads it into the shared
-; global scope so the -e call finds `demos`/`real`.)
-;
-; what an actual pid1 still needs is small and core-clean (src/love/posix.c via the LvNif
-; glob, no love.c/love.h edit -- the same discipline as nc/bao). done: fork/execve +
-; the non-blocking waitpid reaper (spawn/glean). remaining: signalfd (SIGCHLD/SIGTERM
-; become perceive events, merged with timers by ai_wait_fds exactly like {nic, clock}),
-; mount (early /proc, /sys, devtmpfs), and the cgroup-v2 writes. everything below that
-; is this file -- the dependency graph, the restart policy, the checkpoint -- already love.
+; a perceive->decide->act supervisor with a watchdog over checkpointable state.
+;   (demos 0) -- the model: a service is a green task and a crash a `scare` the watchdog
+;     `help` welps to (), so the dep graph, restart policy and checkpoint run with no OS
+;     processes. it ends by calling (real 0).
+;   (real 0) -- services are OS processes: (spawn argv) forks+execs, (glean _) reaps.
+; run: out/love -l src/apps/init/init.l -e "(demos 0)"      ; or "(real 0)"
+; the file only defines; -l preloads it so the -e call finds `demos`/`real`.
 
 (borrow 'posix)
 (: (note s) (puts s, puts "\n")                      ; the narrator: a line to the console

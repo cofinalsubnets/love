@@ -1,60 +1,19 @@
 ; berth -- quay's terminal multiplexer: where programs tie up.
 ;
-; each child rides its own pty (tether); its bytes pour through a quay cb screen
-; -- the same vt parser the kernel console runs, hosted in a cask by src/love/cb.c --
-; and the grids repaint the outer terminal as painted cells. keys pour down the
-; other way; dsr/da answers ride home off each screen's reply queue; the outer
-; size is polled each second-ish and mirrored onto every pty (the kernel raises
-; sigwinch on the children for us). a resize lays each grid across (regrid), and a
-; full-screen guest repaints on its sigwinch.
+; each child rides its own pty (tether); its bytes pour through a quay cb screen (the
+; kernel console's vt parser, hosted by src/love/cb.c) and the grids repaint the outer
+; terminal. the panes come from wharf.l (plan tree -> rectangles), the paint from limn.l
+; (grid -> escapes); neither knows a pty, so the kernel console uses them too.
 ;
-; the panes come from src/apps/berth/wharf.l (a plan tree in, rectangles in cells out),
-; the paint from src/apps/berth/limn.l (a grid and an origin in, escapes out); neither
-; knows a pty, so the kernel console lays and paints its own panes with them. berth
-; owns which grid goes where.
-;
-; C-a is the prefix, and the intercept sits in the key pump, below every guest:
-;   C-a s / C-a v   split the focused berth, stacked or beside
-;   C-a h j k l     steer the focus
-;   C-a x           shut the focused berth
-;   C-a [           copy mode: the focused pane's screen in a vi buffer above it
-;   C-a ]           paste the clip into the focused pane
-;   C-a C-a         send a literal C-a through
-; a guest never sees the prefix and never has to cooperate. below the prefix, what the
-; outer terminal sends as a sequence is read whole: shift+PgUp/PgDn look back through the
-; focused pane's history half a pane at a time (any key brings it home), a paste arrives
-; bracketed and goes to the pane as `pasted` lays it, and while the focused pane asks for
-; the mouse the outer terminal is asked too -- a press on another pane moves the focus
-; there, the rest is laid into the pane's own report, and the wheel it leaves unasked
-; scrolls its history. an outer terminal that answers kitty's graphics query gets a pane's
-; pictures themselves (limn-pics) instead of their ▀ blocks, and one that says it draws
-; sixels (a 4 in its DA) gets them as sixels (limn-sixes).
-;
-; the clip is the harbour's: one register, vi's shape, that every vi buffer on the
-; wharf yanks into and puts from, so a yank in one pane is a put in another. copy
-; mode is vi too -- the screen's rows become a buffer, and its motions and yanks
-; are the selection -- and :q closes it. a paste into a child is the text typed at
-; it; into a stage, its 'paste door, which vi answers with a put, or the text typed
-; in insert mode
-;
-; a guest need not be a child either: a stage of this process -- cli's triple, (show w
-; h) the frame as escapes, (step k) a key, (over? _) done -- berths the same way. its
-; frame is scribed onto the pane's screen as a child's bytes are, so it knows nothing
-; of panes, and its keys come through edkey as on cli's stage, or through its own
-; reader if a door 'key holds one, for a guest whose keys edkey does not spell. a door
-; 'tick is asked every swim: a true answer is a frame to paint, which is how a guest
-; with a clock or a card gets its turn without a key. splits from a stage open a shell.
+; C-a is the prefix, intercepted in the key pump below every guest: s/v split, h j k l
+; steer, x shut, [ copy mode (the pane's screen as a vi buffer), ] paste, C-a a literal.
+; the clip is the harbour's one register, vi's shape, shared by every vi buffer on it.
+; a guest may be a stage of this process -- cli's triple (show w h) (step k) (over? _) --
+; berthed like a child; a door 'key reads its keys, a door 'tick asks for a frame.
 ;
 ; run: out/love -e "(: _ (borrow 'berth) (berth [\"sh\"]))"
-;      out/love -e "(: _ (borrow 'berth) (berth [\"vim\" \"README.md\"]))"
-;      out/love -e "(: _ (borrow 'berth) (berth (berth-stage SHOW STEP OVER?)))"
-;      (-l src/apps/berth/berth.l ahead of -e runs the file on disk instead of the baked one)
-;
-; host-only (screen/scribe + tether/gather + raw/tty ride src/love/*.c), so
-; berth never joins the corpus; the moor core needs no tty and is smoke-
-; tested end to end over a real pty by test/host/berth.l. a module, so a guest
-; that berths itself (vi's splits) cites it: harbour makes an empty wharf, hberth
-; ties a pane up on it, and hsail runs it on the tty until the last pane leaves.
+; host-only (screen/tether/tty ride src/love/*.c): never in the corpus; test/host/berth.l
+; smokes it over a real pty. a module, so a guest that berths itself (vi's splits) cites it.
 (module '(berth berth berth-stage harbour hberth hsail hopen hopen-stage moor waitfor
           hbox hmas hpid hstage hpty? hpane hsoil hrelay hframe hmoor hsplit hsteer hshut
           hfeed hkey oars hsize htide htick hswim hquick? hcopy hpaste hclip-text hscreen-text

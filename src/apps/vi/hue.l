@@ -1,33 +1,17 @@
-; src/apps/vi/hue.l -- the .l syntax, written down once, for two readers: the
-; painter in src/apps/vi/core.l's vframe, and the vim syntax file, which src/tools/hue2vim.l
-; generates from the very table below -- built by make into out/syntax.vim and
-; never checked in, so the two readings cannot drift apart. (they had: the syntax
-; used to carry a hand-curated copy of the vocabulary whose own comment asked a
-; human to re-probe it on every rename.)
+; src/apps/vi/hue.l -- the .l syntax, written down once, for two readers: the painter in
+; src/apps/vi/core.l's vframe, and the vim syntax file src/tools/hue2vim.l generates from
+; the table below (out/syntax.vim, never checked in).
 ;
 ; it reads .l by src/apps/libra/lint.l's rules -- `;` and `#!` comment to end of line,
-; "..." is the only string with \ escapes, `'` is a reader operator and never a
-; delimiter (the trap a C lexer falls into) -- one step further than lint: lint
-; knows delimiters, this knows tokens. it is still not a parse.
+; "..." is the only string, `'` is a reader operator and never a delimiter -- and knows
+; tokens, not a parse.
 ;
-; --- the table ---------------------------------------------------------------
-; a row is `(class vim-group rule)`. the rule's head is its tag, and the tag set
-; is closed at eight: eol span mark delim num word punct sep. each tag has
-; exactly two interpreters -- hue-lex below (bytes -> runs) and hue-vim in the
-; generator (tag -> syn lines) -- and neither is a regex engine. when a class
-; wants a shape neither can say, that is the signal to add a tag, not to hand-
-; patch either output.
-;
-; row order is priority, and the word lanes sit above the punct lanes on purpose:
-; `?` is both a special form and a sigil char, `&&` is both a macro and a punct
-; run, and putting the word lanes first is exactly how vim reads the same rows
-; (a syn keyword beats a syn match).
-;
-; nothing here is a list OF words. every word lane names a probe and the runtime
-; answers it: `names` the whole vocabulary, `macros` the macro table (prel's
-; macro-names, the twin of names), `values` the names bound to a value rather
-; than a nif. only the three special forms are written out, and they are the
-; grammar, not the book. a list would rot; a question cannot.
+; a row is `(class vim-group rule)`; the rule's tag set is closed at eight (eol span mark
+; delim num word punct sep), each with exactly two interpreters, hue-lex and hue-vim. a
+; shape neither can say wants a new tag, not a hand patch.
+; row order is priority: the word lanes sit above punct, as vim's syn keyword beats a
+; syn match (`?` and `&&` are both). every word lane names a runtime probe (`names`,
+; `macros`, `values`) rather than listing words; only the three special forms are written.
 (module 'vi
 (borrow 'posix)
 

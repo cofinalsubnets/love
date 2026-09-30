@@ -1,27 +1,12 @@
-; apartment -- the level after the river: you come to inside a glass cube on a grassy
-; plain, one of eight standing in an octagon, a flat side up, yours the left of the top
-; pair; a river runs through the octagon's middle from its east edge off the map to the
-; west, meandering a little, and each cube's path drops straight to it; there is no way
-; out. someone is in every other cube, wandering. a stranger stands outside against your
-; glass, named in blocks, and you talk through the pane. when the talk is done the
-; stranger is gone, the pane shatters to a drum, the others are bones where they stood,
-; the grass past the glass goes over to desert -- the grass inside stays -- and the river
-; runs dry: a stone stands in its bed near the west edge, an inscription on it, and the
-; way off the map is west along the bed, into the desert at sunset
-; (src/apps/rove/dusk.l) where the seat carries it.
+; apartment -- the level after the river: you wake in one of eight glass cubes on a
+; grassy plain, a river through the middle. a stranger talks through your pane; when the
+; talk ends the pane shatters, the plain goes to desert, the river runs dry, and the way
+; off the map is west along the bed into dusk (src/apps/rove/dusk.l).
 ;
-; a roguelike floor on rove: the plain is laid, not delved, the size of the screen and
-; lit end to end; the painter is rove's and the keys the tower's. the talk is a tree the
-; tower's way: a node its lines and its choices, a choice a key, its words and the node
-; it leads to; a node with no choices closes on any key, and closing is the end of the
-; talk. the words are placeholders and the tree is data, chat-book.
-;
-; the game is pure love -- apartment-new, apartment-turn and apartment-frame are state
-; in and state out, the song feeds any port -- gated headless by test/host/apartment.l.
-; apartment-walk takes a stage already raised, which is how wade hands over on the same
-; screen, and apartment-run raises one. the music is three notes on a music box, g a c
-; each a quarter tone flat, at an octave the die picks, every twenty seconds or so; the
-; sound effects ride the same feed.
+; a roguelike floor on rove, laid rather than delved; the painter is rove's, the keys the
+; tower's. the talk is a tree of nodes and choices, data in chat-book.
+; apartment-new/turn/frame are pure, gated by test/host/apartment.l; apartment-walk takes
+; a raised stage, so wade hands over on the same screen.
 ;
 ; run: love apartment    h j k l or the arrows walk, y u b n slant; q or esc leaves
 (module (apartment apartment-run apartment-walk apartment-main apartment-new apartment-turn

@@ -1,36 +1,16 @@
 ; slop -- rove's second game: the walk into a thing that will not let you arrive.
 ;
-; a road through grass, and somewhere ahead of it a shore. the slop lies beyond that
-; shore -- the skin (slop-drift) under a gold-pink-yellow ramp -- but at the first
-; frame it is well above the top and there is nothing to see but field. you
-; stand on the road at the foot and the only steer that answers is forward.
-;
-; every square you pay for carries you one world row forward. below the climb line, a
-; third of the way up, the row is yours and you rise on the screen. at it or above, one
-; square in twenty-seven is still yours and the rest scroll the ground down under you --
-; which is what brings the shore into view, and then down the screen to meet you. the
-; gap closes either way -- by one, or by two where the road meets a headland, or by
-; none at all across the mouth of a bay. within a screen of the shore a square costs
-; ceil(drag / gap) presses, so the last one costs a screen's worth, and the slop's own
-; clock is scaled by that same rate: it thickens as you do.
-;
-; the ground is a pure function of where it is -- slop-turf hashes (world row, column)
-; into grass, sand and road, slop-road puts the path on two sines, and the shoreline and
-; the depth of beach behind it are two more, laid out per column at the start. so
-; scrolling costs nothing and the same shore is there when it comes back. a row with no
-; slop in it is painted once and kept by world row, and the skin is asked for at the
-; world row on top rather than at zero, so it drifts with the ground under it.
-;
-; the song is harp's (src/apps/harp): gwen's tidal line, arpeggiated chords over four cycles,
-; scheduled a cycle at a time at whatever tempo the walk is down to -- so the music
-; drags with everything else and no note's pitch bends. the card takes a chunk at the
-; rate it plays one, which is what paces the frame loop when there is a card at all.
+; a road through grass toward a shore, the slop (slop-drift's skin) beyond it. each square
+; paid for is one world row forward; above the climb line most of them scroll the ground
+; instead, and within a screen of the shore a square costs ceil(drag / gap) presses, the
+; slop's own clock slowed by the same rate.
+; the ground is a pure function of where it is (slop-turf, slop-road, per-column shore
+; and beach), so scrolling costs nothing; a row with no slop in it is painted once and
+; kept by world row. the song is harp's, scheduled a cycle at a time at the walk's tempo.
 ;
 ; run: love slop
-; the game is pure love -- slop-new, slop-key, slop-tick and slop-frame are state in
-; and state out, gated headless by test/host/slop.l; only slop-run ties the tty (raw /
-; tty / cue?, over src/love/posix.c), so slop never joins the corpus. rove lends the helm and
-; the die; the skin and its palette are slop's own, and the other floors borrow the skin.
+; slop-new/key/tick/frame are pure, gated headless by test/host/slop.l; only slop-run ties
+; the tty, so slop never joins the corpus. the other floors borrow the skin.
 (module (slop slop-run slop-walk slop-main slop-new slop-sy slop-gap slop-cost slop-rate
          slop-step slop-push slop-key slop-tick slop-frame slop-flood slop-bar slop-bar-fit slop-road slop-turf slop-post
          slop-tune slop-song-speed slop-song-edge slop-song-vol slop-song-wave

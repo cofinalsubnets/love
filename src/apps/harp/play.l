@@ -11,19 +11,11 @@
 ;   harp '(jux rev (hit (mini "bd sn hh cp")))'   a parenthesised arg is love
 ;   HORN=none harp 'bd sn'            the timed sink: right speed, no sound
 ;
-; A VOICE IS A FUNCTION FROM A TRAY OF FRAME NUMBERS TO A TRAY OF AMPLITUDES, and
-; that is the whole synthesis engine. love's trays are vectorised in C -- sin, exp,
-; %, the comparisons and the bit ops all run elementwise -- so an oscillator is one
-; expression over `iota`, with no per-sample love loop anywhere. it also means a
-; voice needs no state and no slicing: a note that starts mid-chunk is gated by
-; `(t >= 0)`, which is a tray, so the same closure is correct in every chunk it
-; touches and is simply dropped once its end frame is behind the write head.
-; the module where it is already registered (a baked artifact, or a cat'd corpus),
-; and this tree's file where it is not -- so the verb runs from either.
-; the voice layer is a MODULE: this file rides the crew roster, and a roster file
-; is catted into the global scope -- so a splice at its top level (harp's rev and
-; every, here) would shadow the prel for everything compiled after it. a module
-; enters its own layer, and the borrow below is confined to it.
+; a voice is a function from a tray of frame numbers to a tray of amplitudes: one
+; expression over `iota`, no per-sample loop. a note starting mid-chunk is gated by
+; `(t >= 0)`, a tray, so one closure is right in every chunk it touches.
+; a module, since a roster file is catted into the global scope: harp's rev and every
+; spliced at top level would shadow the prel for everything after it.
 (module '(play harp-main harp-usage harp-wav harp-horn harp-print harp-read harp-run
          harp-scale harp-chunk mkvoice cyc-voices mixdown pack song-out
          twopi ln2-12 venv vnum vnoise vphase instr vname mkvoice)

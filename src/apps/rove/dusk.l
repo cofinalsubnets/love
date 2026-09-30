@@ -1,25 +1,13 @@
 ; dusk -- the level after the apartment: a dry river through the desert at sunset, first
-; person in half blocks. the player walks on down the bed, facing where they like within
-; sixty degrees of ahead, and the sun goes where the walking takes it: high on the left
-; at the start, where wade's moon was on the right, it arcs down to dead ahead and sets behind the parking garage that stands
-; across the bed, low and wide out of the sand. the bed runs into a broken hole in its
-; face, dark as a cave; walking into the hole ends the level, and the garage takes the
-; screen (src/apps/rove/garage.l) where the seat carries it.
+; person in half blocks. the sun arcs down ahead as the player walks the bed and sets
+; behind a parking garage; walking into the hole in its face ends the level, and the
+; garage (src/apps/rove/garage.l) takes the screen.
 ;
-; the screen is the terminal as view lays it (src/apps/rove/view.l), ninety degrees wide
-; whatever the width. nothing is stored: a bush is a hash of its bank and its place along
-; the river, which loops, and the mesas on the skyline a hash of their bearing, so both
-; keep their places as the player turns and walks. the sky is a ramp of sunset pens by
-; height, warmed toward the sun and cooled as the dusk comes on after it sets.
-;
-; the music is a pelog pentatonic, the other gamelan tuning, five uneven steps to the
-; octave, struck at random on a long-ringing chime with a low gong under it every so many
-; seconds; it goes out the horn a frame's worth at a time.
-;
-; the scene is pure love -- dusk-new, dusk-step, dusk-move and dusk-frame are state in
-; and state out, and the song feeds any port -- gated headless by test/host/dusk.l; only
-; dusk-walk and dusk-run tie the tty and the horn. dusk-walk takes a stage already
-; raised, which is how the apartment hands over on the same screen.
+; the screen is view.l's, ninety degrees wide. nothing is stored: a bush is a hash of its
+; bank and place along the looping river, a mesa a hash of its bearing. the music is a
+; pelog pentatonic on a chime, a gong under it, out the horn a frame at a time.
+; dusk-new/step/move/frame are pure, gated by test/host/dusk.l; only dusk-walk and
+; dusk-run tie the tty and horn. dusk-walk takes a raised stage, so the apartment hands over.
 ;
 ; run: love dusk    h l or the arrows turn, k or up walks on, u n look up and down,
 ;                   space walks on until pressed again; q or esc leaves.

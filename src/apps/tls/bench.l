@@ -1,19 +1,9 @@
-; src/apps/tls/bench.l -- the two ciphers, love against their C twins.
+; src/apps/tls/bench.l -- the two ciphers, love against their C twins (src/love/lib/tls.c).
+; test/host/tlsc.l proves they agree; this asks what the readable one costs. the ratio is
+; the binary's: mooncc is weakest at indexed loops over arrays, so it moves most with the
+; compiler that built love.
 ;
-; src/apps/tls/chacha.l and src/apps/tls/poly1305.l are the readable statement of each
-; cipher; src/love/lib/tls.c holds a C twin of each behind a nif, and test/host/tlsc.l
-; proves the two answer the same bytes. this asks the other question: what does
-; the readable one cost?
-;
-; the answer is the binary's, not the language's. love ships mooncc-built, and
-; mooncc is weakest at exactly the shape both ciphers lean on -- an indexed loop
-; over an array. run this again under the clang binary the static lane leaves in
-; out/musl/ and the C chacha moves ~25x, the love chacha ~2x, while a scalar
-; VM loop moves the catalogued 1.3x. a ratio off one binary is a ratio about that
-; binary, and the chacha ratio is the one that moves most.
-;
-; not a gate: it prints numbers, it asserts nothing. run it by hand --
-;   out/love src/apps/tls/bench.l
+; not a gate: it prints numbers. run it by hand -- out/love src/apps/tls/bench.l
 (borrow "src/apps/tls/tls.l")
 
 (:

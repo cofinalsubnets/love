@@ -1,32 +1,16 @@
-; src/apps/harp/harp.l -- harp: cycles as patterns, tidal's algebra in love. Pure --
-; no port, no clock, no card -- so it rides the corpus on every seat and
-; test/law/harp.l asserts the whole thing by querying spans.
+; src/apps/harp/harp.l -- harp: cycles as patterns, tidal's algebra in love. pure, so it
+; rides the corpus on every seat and test/law/harp.l asserts it by querying spans.
 ;
-; A PATTERN IS A FUNCTION FROM A SPAN TO EVENTS: (p b e) -> [ev ..], where b and
-; e are cycle positions. That one sentence is the design; every combinator below
-; is a change of variable on the query, the answer, or both. There is no event
-; list anywhere, so a pattern is infinite, and `fast 3` costs nothing until asked.
+; a pattern is a function from a span to events: (p b e) -> [ev ..]. every combinator is
+; a change of variable on the query, the answer, or both; there is no event list.
+; an event is [wb we pb pe v]: the whole span it occupies, the part this query saw
+; (onsets are pb = wb), and the value -- whatever the caller put there.
+; times are exact rationals (`1 /// 3`), never floats, or `fast 3` drops a beat.
+; a scalar where a pattern is wanted is one by its type: a string is mini-notation, a
+; number a pure pattern; a time may be a decimal, made exact.
 ;
-; an event is [wb we pb pe v]: the WHOLE span the event logically occupies, the
-; PART of it this query saw, and the value. the two differ when a query cuts an
-; event in half, and the difference is what tells a player which fragments are
-; onsets (pb = wb) and which are the tails of something already struck.
-;
-; times are the tree's exact rationals (`1 /// 3`), never floats: a third of a cycle
-; has to land on the same side of a boundary from both directions or `fast 3` drops
-; a beat. they are big-aware, so a deep nest of fasts does not lose the denominator.
-;
-; the value is whatever the caller puts there. the mini-notation makes strings and
-; numbers; the control words (hit/note/gain/pan/..) lift those into tablets, which
-; merge, which is what makes `#` a set and `jux` a stereo split.
-;
-; a scalar where a pattern is wanted is one by its type, as a literal is in tidal: a
-; string is mini-notation, a number is a pure pattern, anything else is taken for a
-; pattern -- so (hit "bd sn") and (note 7) read as (hit (mini "bd sn")) and (note
-; (pure 7)) -- and a time may be an int or a decimal, made exact: (fast 1.5 p).
-;
-; this file shadows prel's `rev` and `every` with the pattern ones (tidal's names,
-; and the tree has no other reader here). nothing below may call the list versions.
+; this file shadows prel's `rev` and `every` with the pattern ones; nothing below may
+; call the list versions.
 
 ; (psets p q ..): `#` over several controls in one form -- (pset (pset p q) q2 ..),
 ; folded from the left, so a later word wins a key. a macro, as pins is, since a

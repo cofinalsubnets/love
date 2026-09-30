@@ -1,33 +1,16 @@
-; kiosko -- the newsstand: a static web server over a directory.
+; kiosko -- the newsstand: a static web server over a directory, and nothing else.
 ;
-; it knows nothing about markdown, or about papel, or about how the files under its root
-; came to be there. it is a directory and a port, and that is the whole of its idea --
-; which is why it is its own crew member rather than a verb of the generator: `papel`
-; happens to be the thing that fills the shelf, but anything can.
+; the concurrency is the scheduler's: `await` parks the accept loop on the listener, each
+; client is its own `twirl` task, and fgetc yields on a not-ready fd -- no threads, poll
+; loop or timeouts here.
+; HTTP, as much as a static server needs: get and head, else 405. the request path is
+; percent-decoded then cleaned by 'glob's pclean before any path is built; a `..` that
+; leaves the root is 403 (a segment, not a substring: `a..b` is served), a control byte
+; 400, a dot segment 404. a query string is ignored; a directory answers its index.html
+; or a listing. every reply carries Connection: close and Cache-Control: no-cache.
 ;
-; the concurrency is the host's, not ours: `await`
-; parks the accept loop on the listener fd, so the following `accept` never blocks, and
-; each client is spun as its own task with `twirl`. love's fgetc yields on a not-ready fd,
-; so a slow client parks itself and the others keep going -- there is no thread, no poll
-; loop, and no timeout machinery here, because the scheduler already owns all three.
-;
-; what kiosko does own is HTTP, and only as much of it as a static server needs:
-;   get and head; anything else is 405.
-;   the request line is percent-decoded and then normalized by 'glob's pclean, before
-;     any path is built: `.` and an inward `..` resolve, and a `..` that would leave the
-;     root is 403. (a segment, not a substring: a file honestly named `a..b` is not an
-;     escape attempt and is served.) a control byte, decoded or not, is 400, and a
-;     segment that starts with a dot is 404: dotfiles are not served or listed.
-;   a query string is cut and ignored; a static file has no use for one.
-;   a directory answers its index.html, and a listing when it has none.
-;   Content-Type comes off the extension, Content-Length off the body, and every response
-;     carries Connection: close -- we close after one request, which is what makes this
-;     server small enough to read in one sitting.
-;   Cache-Control: no-cache, because the thing kiosko is for is watching a site change.
-;
-; its command line is kore's httpd (src/apps/kore/net.l), busybox's flags onto `serve`.
-; gulp is exported for test/host/kiosko.l alone: it drives the cask/string lane
-; boundary directly, which nothing else reaches. hesc and penc are for a make hook's pages
+; its command line is kore's httpd (src/apps/kore/net.l). gulp is exported for
+; test/host/kiosko.l alone; hesc and penc are for a make hook's pages
 (module (kiosko serve serve5 serve1 gulp hesc penc)
 
 ; --- little utils -------------------------------------------------------------------

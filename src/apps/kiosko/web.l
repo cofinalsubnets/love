@@ -2,36 +2,13 @@
 ;
 ;   love web [-p [ip:]port] [-n] [DIR]     DIR defaults to the working directory
 ;
-; kiosko already serves a directory and lists what it holds. what this adds is one
-; hook, and three answers through it:
-;
-;   *.l        the painted source -- syntax coloured, one span per line, every
-;              line linkable (src/apps/vi/hueweb.l). only for a browser NAVIGATING here:
-;              a fetch() and a bare client read the file itself (sv-doc?)
-;   *.l.md     that file's header comment as a document -- libra lifts it, lapiz
-;              shows it, and the two pages link to each other
-;   *.md       the rendered document -- markdown through lapiz's html surface
-;   /hue.css   the stylesheet that colours both
-;
-; everything else is kiosko's ordinary static serving, directory listings and all.
-; nothing is written to disk and nothing is generated ahead of time -- a page is
-; built at request time and held in a box until its file's stamp moves.
-;
-; no papel here, so a rendered .md is the document and not a site page: no title,
-; anchors, contents nav or cross-link rewriting. `make site` still builds a site.
-;
-; and the github page: index.html and web/style.css are written by hand; make web lays the
-; icon and fonts, make wasm the module and its image, site-wasm copies them beside the
-; island, and the machine is the page itself (index.html, src/inle/wasm/machine.js) -- .sbignore drops
-; the laid ones from the source, so a checkout serves no machine until they are. where DIR
-; is the tree (a Makefile and index.html), this lays them through our own make first; where
-; it is a bare directory the source aboard is laid under it (`love source`) and that tree
-; is built and served. this binary drives the build and no love is compiled for it. the
-; `doom` at the machine's shell lays the source, fetches doomgeneric and the shareware
-; IWAD off their own hosts, builds the game aboard and boots what it built. the page's
-; own module is laid plain -- a game inside it would answer `doom` at once and the build
-; would never run. the two isolation headers kiosko's reply sends are what let
-; the page's machine run here without its service worker.
+; kiosko's static serving plus one hook with three answers: *.l painted (hueweb.l; only
+; for a browser navigating here, a fetch() gets the file itself -- sv-doc?), *.l.md its
+; header comment as a document (libra lifts, lapiz shows), *.md rendered through lapiz,
+; and /hue.css. pages are built at request time and boxed until the file's stamp moves.
+; where DIR is the tree, the github page's laid files (icon, fonts, the wasm machine) are
+; laid through our own make first; a bare DIR gets the source aboard laid under it.
+; the page's module is laid plain: a game inside it would answer `doom` before the build.
 ;
 ; kiosko is a module: `cite` is the reach, and its miss is checked by name -- () applied
 ; to operands is 1, a miss that would read as a server that started.

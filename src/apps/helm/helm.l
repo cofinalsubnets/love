@@ -1,31 +1,18 @@
 #!/usr/bin/env -S love -l
 ; src/apps/helm/helm.l -- the driver: helm's command line, and helm's own boot.
 ;
-;   helm [-c CONF] [-s SOCK] [-q]   supervise. as pid 1 it lays the machine first
-;                                   (below); anywhere else it just supervises.
-;   helm check [-c CONF]            read the config, say what is wrong with it,
-;                                   print the units it would run. exit 1 on a gripe.
-;   helm ctl [WORDS ..]             talk to a running helm over its socket. with
-;                                   words, one command and its answer; without,
-;                                   a session -- stdin up, the answers down.
+;   helm [-c CONF] [-s SOCK] [-q]   supervise. as pid 1 it lays the machine first.
+;   helm check [-c CONF]            read the config, say what is wrong, print the units.
+;                                   exit 1 on a gripe.
+;   helm ctl [WORDS ..]             talk to a running helm: one command, or a session.
 ;
-; the config defaults to /etc/helm.l and the socket to $XDG_RUNTIME_DIR/helm.sock
-; when that is set, /run/helm.sock otherwise. src/apps/helm/sample.l is a config that
-; shows the whole language; `helm check -c src/apps/helm/sample.l` reads it.
+; the config defaults to /etc/helm.l, the socket to $XDG_RUNTIME_DIR/helm.sock else
+; /run/helm.sock. src/apps/helm/sample.l shows the whole language.
+; as pid 1 it lays a machine that needs no disk: the early filesystems, /usr/bin as links
+; onto this binary (argv[0] is the door), then the carried source inflated to a tree --
+; inle's boot in userspace. src/apps/init/ is not joined to it yet.
 ;
-; as pid 1 it lays a machine that needs no disk: the early filesystems, then
-; /usr/bin as links onto this binary (every name in the verb registry, argv[0] being
-; the door), then the carried source archive inflated to a tree. that is inle's boot
-; in userspace -- src/inle/kmain.c inflates the same blob into its own ramfs -- and
-; the two differ where the kernels do: inle has no symlinks, so its k-prog reads the
-; registry where execve here wants a dirent.
-;
-; src/apps/init/ is where this started: init.l models the supervisor with green tasks
-; and boot.l is the initramfs /init the kernel execs. helm is the running thing --
-; real processes, a config it did not have, and a socket to ask it questions. the
-; two have not been joined yet: boot.l still hands the console to lush.
-;
-; run it out of the tree, without installing anything:
+; run from the tree:
 ;   love -l src/apps/helm/unit.l -l src/apps/helm/sup.l -l src/apps/helm/moor.l \
 ;        -l src/apps/helm/helm.l -e '(helm-main ["-c" "src/apps/helm/sample.l"])'
 (module 'helm

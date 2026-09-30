@@ -4,26 +4,12 @@
 ; so the designer (design.l) edits what this file plays:
 ;   (level TITLE (start X Y) (map ROW ..)
 ;     (tiles (CH GLYPH FG BG SOLID) ..) (things (ID X Y GLYPH FG BG NAME STEP ..) ..))
-; the map's rows are characters, and the palette says what each is: the glyph it
-; shows, its pens (xterm's 256; -1 the terminal's own), and whether it stops you --
-; a solid tile that shows nothing is a wall you cannot see, the outdoors' edge. a
-; character the palette lacks is # a wall or a floor drawn as itself. a thing sits on
-; a tile with a glyph and pens, and bumping it opens its dialog: a window over the map that plays the
-; thing's steps -- (say TEXT ..) pages of words, (ask) a prompt -- and the prompt is
-; where the words go free: an interpreter takes a line (read X, open X, look, help, or a
-; love form, evaluated) and answers into the window. only inside a window; on the map
-; the keys are the roguelike's, hjkl yubn and the arrows, @ for you, and the hand is
-; vi's: `:` opens a command line at the foot -- :q leaves, nothing else does -- and esc
-; backs out of anything. a map wider or taller than the screen scrolls under you.
-;
-; the engine is pure -- a turn is (story-key g c), a frame (story-frame g w h) into any
-; port -- so it gates headless (test/host/story.l); story-run puts it on cli's stage,
-; and its keys are cli's edkey codes (arrows negative, alt letters 256 + the letter).
-;
-; the library: (library ROOT) lays a hall with a shelf per crew module under the root,
-; each shelf's dialog the module's header as libra lifts it and its books the files;
-; `read` a book is its own header, `open` a book is vi called in place, and the hatch
-; in the floor runs the crawl (rove.l). no story in this file: the words are the levels'.
+; a map character the palette lacks is # a wall, else a floor drawn as itself. bumping a
+; thing opens its dialog, which plays its steps -- (say TEXT ..) pages, (ask) a prompt
+; whose line an interpreter answers (read, open, look, help, or a love form).
+; the engine is pure -- (story-key g c), (story-frame g w h) -- and gates headless
+; (test/host/story.l); its keys are cli's edkey codes.
+; (library ROOT) lays a hall with a shelf per crew module, each book a file.
 ;
 ; usage: love story [LEVEL.l | ROOT]      a level file (default src/apps/rove/levels/lighthouse.l),
 ;                                         or a root to lift the library from (apps)

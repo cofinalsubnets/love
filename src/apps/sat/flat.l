@@ -1,33 +1,20 @@
-; src/apps/sat/flat -- the CDCL solver over flat state, with four domain-specific native
-; kernels: at solver-build time the hot loops are assembled through src/love/holo/ (neutral IR,
-; section offsets baked as immediates -- each kernel is specialized to the instance's
-; nvars, cached per nv) and installed via the `nif` seam:
+; src/apps/sat/flat -- the CDCL solver over flat state, its hot loops assembled at build
+; time through src/love/holo/ (section offsets baked as immediates, cached per nvars) and
+; installed through the `nif` seam:
 ;   bcp  (fx ar wn)        two-watched-literal propagation      -> conflict cid | -1
-;   conf (fx ar wn confl)  the whole conflict: 1-uip absorb (+ inline VSIDS bumps),
-;                          self-subsumption minimization (in-place compaction), glue,
-;                          backjump, learnt-clause commit + watches, asserting assign
+;   conf (fx ar wn confl)  1-uip absorb + VSIDS bumps, minimization, glue, backjump,
+;                          learnt commit + watches, asserting assign
 ;                                                              -> (cid<<6)|glue | -1 at level 0
-;   dec  (fx)              highest-activity free var, phase-saved polarity, assign
-;                                                              -> the var | 0 = SAT
-;   fbvag (bx ba bo bp)    one BVA grow step over the flat intake state (its own
-;                          arena family; the layout comment sits above fbvag3)
-;                                                              -> best key | count = M_cls
-; the interpreted twins (fbcp3/fconf3/fdec3/fbvag3) over the same memory are the deopt
-; fallbacks, the a64/no-`nif` engine (the seam rides `(cite 'glaze 'nif)` -- main.c's
-; seal pulls nif off the book, and the glaze module is the door it keeps), and the
-; differential oracle: the `fknob` box forces the twins and `fboth` gates verdict
-; equality. lisp keeps only the cold path: restarts, learnt-db reduction, decay/rescale.
-; Run after sat.l (it reuses the leaked oracle + instances):
-;   cat src/apps/sat/sat.l src/apps/sat/flat.l | love
-; the story, the kernel contract, and the measured results:.
+;   dec  (fx)              highest-activity free var, saved phase -> the var | 0 = SAT
+;   fbvag (bx ba bo bp)    one BVA grow step (layout above fbvag3) -> best key | count = M_cls
+; the interpreted twins (fbcp3/fconf3/fdec3/fbvag3) are the deopt fallback, the no-`nif`
+; engine and the oracle: `fknob` forces them, `fboth` gates verdict equality.
+; run after sat.l (it reuses its oracle + instances): cat src/apps/sat/sat.l src/apps/sat/flat.l | love
 ;
-; a literal is encoded: +v -> 2v, -v -> 2v+1 (neg = xor 1, var = >>1). val[v] holds
-; the true encoded literal itself (0 = free) so lit-val is a load + a compare. VSIDS
-; activities are integers (vinc starts 256, grows *21//20 per conflict; when it tops
-; 2^24 every activity shifts right 8 -- decay-by-shift, ratios kept, ancient bumps
-; fade to 0, which is the point). words are 8-byte slots whose low 4 bytes carry the
-; value (getw/putw touch only those; the high bytes stay zero from the zeroed cask,
-; so the kernels' 64-bit ld/st and the byte accessors agree exactly).
+; a literal is encoded +v -> 2v, -v -> 2v+1; val[v] holds the true encoded literal (0 free).
+; activities are integers; past 2^24 every one shifts right 8 (decay by shift). words are
+; 8-byte slots whose low 4 bytes carry the value, the high bytes zero, so the kernels'
+; 64-bit ld/st and the byte accessors agree.
 ; fx layout (word offsets; nv = nvars):
 ;   w0 top  w1 qhead  w2 level  w3 nv  w4 aru  w5 wnu  w6 vinc  w7 kernel scratch
 ;   tro=8 trail | lvo lvl | rso rsn (0 none, else cid+1) | who watch heads (2nv+2,
