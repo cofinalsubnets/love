@@ -497,7 +497,8 @@
            ("\e_Gi=6;EINVAL:medium\e\\" = ask s2 "\e_Ga=T,f=24,t=f,s=1,v=1,i=6;AAAA\e\\")
            ("\e_Gi=99;ENOENT:no such image\e\\" = ask s2 "\e_Ga=p,i=99\e\\")
            ("\e_Gi=4;EINVAL:short\e\\" = ask s2 "\e_Ga=T,f=24,s=2,v=1,i=4;AAAA\e\\")
-           ("" = ask s2 "\e_Ga=T,f=100,i=5,q=2;AAAA\e\\"))           ; q=2: silence
+           ("" = ask s2 "\e_Ga=T,f=100,i=5,q=2;AAAA\e\\")            ; q=2: silence
+           ("\e_Gi=4294967289;EINVAL:size\e\\" = ask s2 "\e_Gi=4294967289\e\\"))   ; a 10-digit id, whole
    ; c and r: the placement in cells, nearest pixel; C=1 leaves the cursor
    s3 (mkscr 4 10)
    _ (scribe s3 "\e_Ga=T,f=24,s=2,v=2,c=2,r=1,C=1;/wAA/wAA/wAA/wAA\e\\")

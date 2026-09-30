@@ -241,6 +241,12 @@ static void stdin_exact(struct ai *g) {
  ai_io_unread(g, i, -(intptr_t) ai_io_pending(g, i));
  if (u) ai_stdin.io.ungetc_buf = putcharm(EOF); }
 
+// every fd love opens is close-on-exec; a child sees only what is laid onto its own
+// numbers. dup2 onto itself keeps the flag, so that case clears it instead.
+static void fd_give(int s, int d) {
+ if (s == d) fcntl(d, F_SETFD, 0);
+ else dup2(s, d); }
+
 // the one fork + exec. argv rides at sp[0]; in/out/err are spawnio's fixed triple (-1: leave
 // it), applied first; fdmap is a list of (childfd . srcfd) pairs and closes a list of fds,
 // both read off the stack after the marshal (a GC may have moved them), -1 for none.
@@ -261,16 +267,16 @@ ai_noinline static struct ai *host_spawnx(struct ai *g, int in, int out, int err
    setpgid(0, (pid_t) pg);                     // 0 leads a fresh group, >0 joins it
    if (fg) { signal(SIGTTOU, SIG_IGN);          // the handoff, from the background
     tcsetpgrp(0, pg ? (pid_t) pg : getpid()); } }
-  if (in  >= 0) dup2(in, 0);
-  if (out >= 0) dup2(out, 1);
-  if (err >= 0) dup2(err, 2);
+  if (in  >= 0) fd_give(in, 0);
+  if (out >= 0) fd_give(out, 1);
+  if (err >= 0) fd_give(err, 2);
   for (word p = fdmap; chainp(p); p = B(p)) {
    word e = A(p);
    if (!chainp(e)) continue;
    intptr_t cfd = charmp(A(e)) ? getcharm(A(e)) : -1;
    if (cfd < 0) continue;
    word sw = B(e);
-   if (charmp(sw) && getcharm(sw) >= 0) dup2((int) getcharm(sw), (int) cfd);
+   if (charmp(sw) && getcharm(sw) >= 0) fd_give((int) getcharm(sw), (int) cfd);
    else close((int) cfd); }                    // () (or a negative) srcfd closes childfd
   for (word p = closes; chainp(p); p = B(p)) {
    intptr_t fd = getcharm(A(p));
@@ -502,6 +508,7 @@ static lvm(lvm_selfpath) {
  LvmCall(g, host_selfpath_ap) }
 
 // --- pipes + redirects (the fd plumbing a shell pipeline needs) ------------------
+// every fd here is close-on-exec: a child gets only what in/out/err, fdmap or dup2 lay.
 // (pipe _)       -> (readfd . writefd) of a fresh pipe (raw fds), or a nom.
 // (openfd path m) -> a raw fd opening `path`: m 0 = read, 1 = write/create/trunc,
 //                   2 = write/create/append, 3 = write/create/EXCL at mode 0600 -- the one
@@ -527,7 +534,12 @@ static lvm(lvm_selfpath) {
 //                   fresh group the process leads. spawnio does this dance in C for a
 //                   child it execs; a shell's forked stage never execs, so it asks here --
 //                   both sides call it, closing the same race spawnio's two calls do.
-static int mk_pipe(struct ai *g, void *fds) { (void) g; return pipe(fds) ? -errno : 0; }
+static int mk_pipe(struct ai *g, void *fds) {
+ (void) g;
+ int *p = fds;
+ if (pipe(p)) return -errno;
+ fcntl(p[0], F_SETFD, FD_CLOEXEC), fcntl(p[1], F_SETFD, FD_CLOEXEC);   // pipe2's flags: not every seat
+ return 0; }
 ai_noinline static struct ai *host_pipe(struct ai *g) {
  int fds[2], r = mk_pipe(g, fds);
  if (!ai_ok(g = ai_fd_retry(g, &r, mk_pipe, fds))) return g;
@@ -548,7 +560,7 @@ static int mk_openfd(struct ai *g, void *env) {
            : m == 4 ? O_WRONLY
            : m == 5 ? (O_RDWR | O_NOCTTY | O_NONBLOCK)
            : O_RDONLY,
-     fd = open(str_c(g->sp[0]), flags, m == 3 ? 0600 : 0644);
+     fd = open(str_c(g->sp[0]), flags | O_CLOEXEC, m == 3 ? 0600 : 0644);
  return fd < 0 ? -errno : fd; }
 ai_noinline static struct ai *host_openfd(struct ai *g) {
  int fd = mk_openfd(g, NULL);
@@ -616,17 +628,19 @@ static ai_inline word host_fork(struct ai *g) {
 static lvm(lvm_fork) { Sp[0] = host_fork(g); ai_musttail return Next(1); }
 
 // (dup2 src dst) -> () | a nom | 'badarg. the self-redirect.
-// (dup fd) -> a fresh fd duplicating fd (>= 3, clear of stdio) | a nom. the save half.
+// (dup fd) -> a fresh fd duplicating fd (>= 3, clear of stdio, close-on-exec) | a nom.
+// the save half.
 static ai_inline word host_dup2(struct ai *g, word sw, word dw) {
  return !charmp(sw) || !charmp(dw) ? ai_badarg(g) :
-        dup2((int) getcharm(sw), (int) getcharm(dw)) < 0 ? ai_err(g, errno) :
+        (sw == dw ? fcntl((int) getcharm(dw), F_SETFD, 0)       // the laid fd rides an exec
+                  : dup2((int) getcharm(sw), (int) getcharm(dw))) < 0 ? ai_err(g, errno) :
         ZeroPoint; }
 
 static lvm(lvm_dup2) { Sp[1] = host_dup2(g, Sp[0], Sp[1]); Sp += 1; ai_musttail return Next(1); }
 
 static int mk_dup(struct ai *g, void *env) {
  (void) env;
- int fd = fcntl((int) getcharm(g->sp[0]), F_DUPFD, 3);
+ int fd = fcntl((int) getcharm(g->sp[0]), F_DUPFD_CLOEXEC, 3);
  return fd < 0 ? -errno : fd; }
 ai_noinline static struct ai *host_dup(struct ai *g) {
  if (!charmp(g->sp[0])) return g->sp[0] = ai_badarg(g), g;
@@ -1164,9 +1178,9 @@ static lvm(lvm_posix_hardlink) {
 ai_noinline static word host_posix_copyfile(struct ai *g, word sw, word dw) {
  char const *s = str_c(sw), *d = str_c(dw);
  if (!s || !d) return ai_badarg(g);
- int in = open(s, O_RDONLY);
+ int in = open(s, O_RDONLY | O_CLOEXEC);
  if (in < 0) return ai_err(g, errno);
- int out = open(d, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+ int out = open(d, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0666);
  if (out < 0) { int e = errno; close(in); return ai_err(g, e); }
  char buf[1 << 15];                               // the helper's own frame, never a global
  intptr_t done = 0, err = 0;
@@ -1346,6 +1360,7 @@ ai_noinline static struct ai *host_tether(struct ai *g, int envat) {
   // static -- snapshot it for the child, which inherits the snapshot across fork).
  int mfd = posix_openpt(O_RDWR | O_NOCTTY);
  if (mfd < 0) return ai_push(g, 1, ai_err(g, errno));
+ fcntl(mfd, F_SETFD, FD_CLOEXEC);                  // a later child may not read this one
  if (grantpt(mfd) || unlockpt(mfd)) { int e = errno; close(mfd); return ai_push(g, 1, ai_err(g, e)); }
  char sname[128];
  { char const *p = ptsname(mfd);
@@ -1356,7 +1371,7 @@ ai_noinline static struct ai *host_tether(struct ai *g, int envat) {
   // exec closes the write end -> parent reads EOF (childerr stays 0).
  int ep[2];
  if (pipe(ep)) { int e = errno; close(mfd); return ai_push(g, 1, ai_err(g, e)); }
- fcntl(ep[1], F_SETFD, FD_CLOEXEC);
+ fcntl(ep[0], F_SETFD, FD_CLOEXEC), fcntl(ep[1], F_SETFD, FD_CLOEXEC);
 
  pid_t pid = fork();
  if (pid < 0) { int e = errno; close(mfd); close(ep[0]); close(ep[1]); return ai_push(g, 1, ai_err(g, e)); }
@@ -1598,7 +1613,7 @@ static int call_open(struct ai_str *pv, struct ai_str *mv) {
     case 'w': flags = O_WRONLY | O_CREAT | O_TRUNC; break;
     case 'a': flags = O_WRONLY | O_CREAT | O_APPEND; break;
     default: return -1; }
-  int fd = open(pv->bytes, flags, 0644);
+  int fd = open(pv->bytes, flags | O_CLOEXEC, 0644);
   return fd < 0 ? -errno : fd; }
 static int mk_open(struct ai *g, void *env) { (void) env; return call_open(str(g->sp[0]), str(g->sp[1])); }
 

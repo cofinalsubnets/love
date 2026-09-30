@@ -199,8 +199,11 @@
 ; one engine, two carriers: io is a tablet of 'rd (n -> bytes | ()), 'line (-> through a
 ; newline | ()), 'wr (bytes ->) and 'err (a message the peer or we should see). the client
 ; carries it over ssh-open's channel; `scp -t` and `scp -f` carry it over stdin and stdout,
-; the ends a remote shell runs. a name with a slash, or . or .., is refused on receipt.
+; the ends a remote shell runs. a name with a slash, or . or .., is refused on receipt;
+; the client takes at the top only the names it asked for, and a mode loses its setuid,
+; setgid and sticky bits, and the umask's too without -p.
 (:
+   sc-match (cite 'glob 'match)
    (sc-oct m) (: (d k) (string (48 + (m >> k & 7))) (d 9 + d 6 + d 3 + d 0))
    (sc-unoct s) (foldl (a \ c \ a * 8 + c - 48) 0 (map (i \ s i) (jot #s)))
    (sc-isdir? p) (: st (stat p) (two? st ? (st 2 & 61440 = 16384) 0))
@@ -248,38 +251,42 @@
    ; the bytes of a file, n of them, written to q as they come
    (sc-recv io q n) (? (n < 1) 0 (: b (io 'rd (min n 32768))
                                     (? !(string? b) 0 ((hot? q ? (say q b) 0), sc-recv io q (n - #b)))))
-   (sc-take io dir asdir rec pres tm errs)
+   ; want: the names asked for, globs allowed; () takes any (scp -t, or inside a directory)
+   (sc-want? want name) (atom? want || elem 1 (map (p \ ? (p = name || sc-match p name) 1 0) want))
+   (sc-mode m pres) (: o (umask 18) _ (umask o) (m & 511 & (pres ? 511 (511 ^ o))))
+   (sc-take io want dir asdir rec pres tm errs)
     (: l (io 'line 0)
        (? !(string? l) errs
           (: k (l 0) body (snip l 1 (#l - 1))
              f (split body 32)
              (? (k = 1 || k = 2) (say err body, say err "\n", flush err,
-                                  ? (k = 2) (errs + 1) (sc-take io dir asdir rec pres () (errs + 1)))
+                                  ? (k = 2) (errs + 1) (sc-take io want dir asdir rec pres () (errs + 1)))
                 (k = 69) (sc-z io, errs)
-                (k = 84) (sc-z io, sc-take io dir asdir rec pres (map unum f) errs)
+                (k = 84) (sc-z io, sc-take io want dir asdir rec pres (map unum f) errs)
                 (k = 67 || k = 68)
                  (: mode (sc-unoct (f 0)) size (unum (f 1)) name (join " " >>f)
                     dest (asdir ? (dir + "/" + name) dir)
-                    (? (0 = #name || name = "." || name = ".." || elem 47 (map (i \ name i) (jot #name)))
+                    (? (0 = #name || name = "." || name = ".." || elem 47 (map (i \ name i) (jot #name))
+                        || !(sc-want? want name))
                         ((io 'wr) (string 2 + "scp: unexpected filename: " + name + "\n"), errs + 1)
                        (k = 68)
                         (? !rec ((io 'wr) (string 2 + "scp: received a directory without -r\n"), errs + 1)
-                           (: _ (sc-isdir? dest ? 0 (mkdir dest (mode | 448)))
+                           (: _ (sc-isdir? dest ? 0 (mkdir dest (sc-mode mode 1 | 448)))
                               _ (sc-z io)
-                              e2 (sc-take io dest 1 rec pres () 0)
+                              e2 (sc-take io () dest 1 rec pres () 0)
                               _ (two? tm ? (utime dest (<tm * 1000)) 0)
-                              (sc-take io dir asdir rec pres () (errs + e2))))
+                              (sc-take io want dir asdir rec pres () (errs + e2))))
                        (: q (open dest "w")
                           _ (sc-z io)
                           _ (sc-recv io q size)
                           _ (io 'rd 1)
                           ok (hot? q)
-                          _ (ok ? (close q, chmod dest mode, ? (two? tm) (utime dest (<tm * 1000)) 0) 0)
+                          _ (ok ? (close q, chmod dest (sc-mode mode pres), ? (two? tm) (utime dest (<tm * 1000)) 0) 0)
                           _ (ok ? (sc-z io) (io 'wr (string 1 + "scp: " + dest + ": cannot write\n")))
-                          (sc-take io dir asdir rec pres () (ok ? errs (errs + 1))))))
+                          (sc-take io want dir asdir rec pres () (ok ? errs (errs + 1))))))
                 ((io 'wr) (string 2 + "scp: protocol error\n"), errs + 1)))))
-   (sc-sink io target rec pres)
-    (sc-z io, sc-take io target (sc-isdir? target) rec pres () 0)
+   (sc-sink io want target rec pres)
+    (sc-z io, sc-take io want target (sc-isdir? target) rec pres () 0)
 
    ; --- the carriers ---
    (sc-stdio _)
@@ -325,7 +332,9 @@
     okc (ssh-open t cmd)
     _ (? (string? okc) (die okc) 0)
     io (sc-chan t)
-    e (? up (sc-source io srcs rec pres) (sc-sink io target rec pres))
+    ; the names a download may bring: each source's own, its glob matched; a brace takes any
+    want (map (r \ (: b (sc-base (r 2)) (elem 123 (map (i \ b i) (jot #b)) ? "*" b))) rs)
+    e (? up (sc-source io srcs rec pres) (sc-sink io want target rec pres))
     st (ch-end t)
     (0 < e || st != 0 ? 1 0)))
 
@@ -350,7 +359,7 @@
     _ (map (c \ ? (elem c [114 112 113 79 116 102 100 118]) 0 (die ("unknown option -" + string c + "\n" + usage))) (keys fl))
     ; the remote ends over stdin and stdout, else the client
     (st e) (0 < e ? 1 0)
-    (? (peep fl 116 0) (? (two? ops && atom? >ops) (st (sc-sink (sc-stdio 0) <ops rec pres)) (die usage))
+    (? (peep fl 116 0) (? (two? ops && atom? >ops) (st (sc-sink (sc-stdio 0) () <ops rec pres)) (die usage))
        (peep fl 102 0) (st (sc-source (sc-stdio 0) ops rec pres))
        (two? ops && two? >ops) (scp-client o ops rec pres)
        (die usage))))

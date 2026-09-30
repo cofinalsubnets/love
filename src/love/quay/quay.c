@@ -144,9 +144,9 @@ static void cb_say(struct cb *c, char const *s) {
   while (*s && c->on < cb_outn) c->out[c->on++] = (uint8_t) *s++; }
 
 static void cb_sayn(struct cb *c, uint32_t n) {
-  char b[8]; int i = 8;
+  char b[10]; int i = 10;   // a uint32 is at most 10 digits
   do b[--i] = (char) ('0' + n % 10u), n /= 10u; while (n);
-  while (i < 8 && c->on < cb_outn) c->out[c->on++] = (uint8_t) b[i++]; }
+  while (i < 10 && c->on < cb_outn) c->out[c->on++] = (uint8_t) b[i++]; }
 
 int cb_reply(struct cb *c, uint8_t *buf) {
   int n = c->on;
