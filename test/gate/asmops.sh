@@ -91,8 +91,8 @@ for a in x64 a64 rv64; do
     rv64) t=rv64; ctarget=riscv64-none-elf ;;
   esac
   h=src/inle/$a/asmops.h
-  # -I inle is arch-neutral: src/inle/asmops.h picks by the target's own predefine
-  inc="-I inle -I src/apps/moon/include"
+  # -I src/inle is arch-neutral: src/inle/asmops.h picks by the target's own predefine
+  inc="-I src/inle -I src/apps/moon/include"
 
   # 1. coverage, straight off the header
   for op in $(sed -n 's/^static inline [^(]* \**\(k_[A-Za-z0-9_]*\)(.*/\1/p' "$h"); do
