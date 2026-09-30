@@ -20,6 +20,7 @@
 (borrow 'posix)
 (borrow 'tui)
 (:
+ mc-kitkeys "i=7,p=1,C=1,"          ; kitty's keys: image 7, placement 1, cursor stays
  (mc-rfind s b) (: (go k) (? (k < 0) (0 - 1) (s k = b) k (go (k - 1))) (go (#s - 1)))
 
  ; --- an entry is [name mode size], the mode an LSTAT's: a link is a link here -------
@@ -229,7 +230,6 @@
  ; a graphic goes out after the text, at its place, since text laid over it may wipe it:
  ; a sixel whole every frame; kitty's sent once as image 7 and then placed again by id,
  ; every picture let go when it changes
- mc-kitkeys "i=7,p=1,C=1,"
  (mc-gfx s x0 y0 g)
   (: e (string 27)
      at (? (two? g) (e + "[" + show (y0 + g 1) + ";" + show (x0 + g 0) + "H") "")
