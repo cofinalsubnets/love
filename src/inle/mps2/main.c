@@ -113,6 +113,9 @@ static struct ai_def defs[] = { {"m7exit", {.k = nif_m7exit}} };
 // The first-fit free list (ffalloc.h), fed the AN500's 16 MB PSRAM (mps.ram at
 // 0x60000000) by address -- no linker section, the region is just there.
 #include "../ffalloc.h"
+
+// the seat check: the egg hatched into the self-hosted ev, and a closure runs through the heap
+#define SEAT_OK "(lit? ev && map (+ 1) '(1 2 3) = '(2 3 4))"
 static struct mem *freelist;
 
 #define POOL ((uint8_t*) 0x60000000u)
@@ -174,11 +177,11 @@ int main(void) {
   if (ai_ok(g)) g->budget = freelist->len / 4;
   struct ai *r = ai_evals_(g,
     "(: ok (&& "
-#include "seat.h"
+    SEAT_OK
 #ifdef BAKER_RUNE
     "          (! ((cite ()) = ())))"           // the module registry is live: rune registered
 #else
-    "          1)"                              // no rune here: the seat laws are the whole verdict
+    "          1)"                              // no rune here: the seat check is the whole verdict
 #endif
     "   _ (putc 10) _ (puts \"; the image woke -- love on the M7\") _ (putc 10)"
     "   (m7exit (? ok 42 1)))");
@@ -271,7 +274,7 @@ int main(void) {
   if (!g2) { sh_puts("; round-trip load FAILED\n"); m7_exit(7); }
   struct ai *r2 = ai_evals_(g2,
     "(: _ (? "
-#include "seat.h"
+    SEAT_OK
     " (puts \"; round-trip ok\") (puts \"; ROUND-TRIP BROKEN\"))"
     "   _ (putc 10) 0)");
   if (!ai_ok(r2)) { sh_puts("; round-trip eval FAILED\n"); m7_exit(8); }
@@ -317,9 +320,9 @@ int main(void) {
 #include "post.h"
     );
   r = ai_evals_(r,
-    // the driver tail: the seat laws (src/inle/seat.l), alive on the M7.
+    // the driver tail: the seat check, alive on the M7.
     "(: ok "
-#include "seat.h"
+    SEAT_OK
     "   _ (putc 10) _ (puts \"; the egg hatched -- love on the M7\") _ (putc 10)"
     "   (m7exit (? ok 42 1)))");
   if (ai_code_of(r) == ai_status_scare) ai_scare_face(r);

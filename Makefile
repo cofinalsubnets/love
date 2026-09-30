@@ -66,12 +66,6 @@ out/lib/rune.h: src/apps/rune.l src/tools/lcat.l $(love0)
 	@echo 'LOVE	'$@
 	@mkdir -p out/lib
 	@$(lcat_love) src/tools/lcat.l $< > $@
-# the seat laws, one text for every board that runs love (src/inle/mps2, src/inle/virt): their
-# main.c splices this literal into its driver tail, so the laws are said once.
-out/lib/seat.h: src/inle/seat.l src/tools/lcat.l $(love0)
-	@echo 'LOVE	'$@
-	@mkdir -p out/lib
-	@$(lcat_love) src/tools/lcat.l $< > $@
 .PHONY: force_corpus_list
 force_corpus_list: ;
 # love0 reads this at runtime to find the corpus. $t is a glob, so it is written
