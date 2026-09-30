@@ -74,10 +74,12 @@ numbered as code comments cite them.
 6. **four readability shapes** kept from the reverted α conversion (`proto` with a
    signature, valued `edef` constants, index sugar through `dot`, `chr`), and
    `src/tools/clay-g2.l`, the conversion gate.
-7. **`nifs.h` as X-rows.** the roster is laid once as `ai_nif_rows(P, C)` (a plain and a
+7. **`nifs.h` and `mx.h` as rows.** the roster is laid once as `ai_nif_rows(P, C)` (a plain and a
    curried row shape, the run offset in each) plus `ai_inst_rows(I)`, and `nifs[]`, `def1`
-   and `ai_nif_lvm` are three short consumers of it. the objects compile identical to the
-   expanded form.
+   and `ai_nif_lvm` are three short consumers of it. `mx.h` likewise keeps `mx-rows`' own
+   shape: `mx_row` fans a row's seven lanes out to the fourteen columns, one macro per row
+   names its seven, and each grid names a row per kind. the objects compile identical to
+   the expanded forms.
 
 ## next
 
