@@ -1,36 +1,22 @@
 #!/bin/sh
 # moon-gzip.sh -- build gzip 1.2.4 with mooncc + moonlibc + the holo linker (no
-# gcc/glibc/ld) and prove it RUNS: round-trips over four shapes of input, `-t`
-# integrity, the `-l` listing, and -- the one that matters -- FORMAT ACCURACY
-# both ways against the system gzip. The second moon-userland rung
-#, after bzip2.
+# gcc/glibc/ld) and prove it runs: round-trips over four shapes of input, `-t`
+# integrity, the `-l` listing, and format accuracy both ways against the system gzip.
+# 1.2.4 is the pre-gnulib gzip: 14 plain C89/K&R files.
 #
-# 1.2.4 is the pre-gnulib gzip: 14 plain C89/K&R files, no gnulib link tree and
-# no C23 header cascade, which is why it is the version that reaches a RUNNABLE
-# binary. (1.13 compiles its 8 core files but its far end is ~100 gnulib TUs.)
-#
-# Point GZIPSRC at a CONFIGURED gzip-1.2.4 tree (its configure writes the
-# Makefile this reads DEFS from -- we pass the same three by hand). Without one
-# the check SKIPS. To make one:
+# point GZIPSRC at a configured gzip-1.2.4 tree, or let it find `gzip-1.2.4*` under
+# dl/ then $MOONSRC (~/src when unset); a missing tree skips.
 #   curl -O https://ftp.gnu.org/gnu/gzip/gzip-1.2.4.tar.gz
 #   tar xzf gzip-1.2.4.tar.gz && cd gzip-1.2.4 && CC="gcc -std=gnu89" ./configure
 #   make moon-gzip GZIPSRC=$PWD/gzip-1.2.4
-# and the sources are CACHED, so a bare `make moon-gzip` finds `gzip-1.2.4*`
-# under dl/ then under $MOONSRC (~/src when unset). An explicit GZIPSRC= still
-# outranks both, and a missing tree is a clean SKIP rather than a failure.
+# configure's DEFS are three macros this script passes anyway; its Makefile is only the
+# witness that the tree was prepared.
 #
-# configure is not load-bearing here: DEFS is three macros this script passes
-# anyway, so an UNconfigured tree builds too. It stays the witness because it is
-# the one file that says the tree was prepared.
+# `moon-gzip.sh a64` cross-compiles and runs under qemu, skipping without it.
 #
-# THREE TARGETS, one procedure (raw.sh's shape): `moon-gzip.sh a64` cross
-# compiles and runs under qemu, SKIPPING cleanly without it.
-#
-# THE ONE APP-SIDE EDIT, and it is a real 64-bit portability bug in gzip, not
-# a mooncc gap: gzip.c calls `ctime` with no declaration in scope. On the 32-bit
-# machines of 1993 the implicit `int` return was the same width as the pointer;
-# on x86-64 it TRUNCATES the returned char*. We prepend `#include <time.h>` to a
-# COPY, leaving the imported tree pristine.
+# gzip.c calls `ctime` with no declaration in scope, so the implicit int truncates the
+# returned char* on LP64; a copy of it gets `#include <time.h>` prepended, and the
+# imported tree stays pristine.
 set -e
 
 target=${1:-x64}

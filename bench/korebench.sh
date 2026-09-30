@@ -1,65 +1,34 @@
 #!/bin/sh
-# korebench.sh -- kore's applets against busybox, uutils and GNU, on generated
-# corpora. NOT A GATE and deliberately not wired into one: a development
-# instrument, run by hand while working in src/apps/kore/, printing four readings
-# of the same jobs rather than a verdict.
+# korebench.sh -- kore's applets against busybox, uutils and GNU, on generated corpora.
+# a development instrument, not a gate: it prints readings, not a verdict. love is
+# expected to be slower; what it looks for is the shape of the slowness.
 #
-# THE SUBJECT is src/apps/kore/ -- love on the u-floor, interpreted, against three
-# C/Rust userlands. Being slower than all three is expected and is not the finding.
-# WHAT THIS LOOKS FOR IS THE SHAPE OF THE SLOWNESS, and that is why there are five
-# tables instead of one number:
-#
-#   answers -- every lane runs the same command line, outputs diffed against GNU.
-#              A divergence is a BUG and this is the only table where a tool can be
-#              said to be wrong. It is also the cheapest differential src/apps/kore/
-#              has: three independent implementations of the same POSIX text, which
-#              will disagree with us in different places if we are wrong and in none
-#              if we are right. LC_ALL=C throughout -- sort and tr have a locale,
-#              and without it GNU collates differently from the other three and
-#              every row reads as a divergence.
-#   start   -- the fixed price of one invocation. love loads an image and wakes a
-#              heap before reading a byte; busybox execs and is in main(). This is
-#              what a `find -exec` loop pays and it has nothing to do with any
-#              applet, so it is measured once and never folded into a row below.
+#   answers -- every lane runs the same command line, diffed against GNU; a divergence
+#              is a bug. LC_ALL=C throughout, or GNU collates differently and every
+#              row diverges.
+#   start   -- the fixed price of one invocation (love wakes a heap; busybox is in
+#              main), measured once and never folded into a row below.
 #   work    -- the corpus rows, big enough that start is a rounding error.
-#   shapes  -- THE POINT OF THIS SCRIPT. The same tools on inputs chosen to be
-#              adversarial rather than typical: one line with no newline in it, a
-#              million one-byte lines, a file of one repeated byte, random bytes,
-#              and an ERE built to make a backtracking matcher explode. A tool can
-#              be a flat 8x on the `work` table and 400x on one of these, and
-#              nothing in ordinary use would ever say so.
-#   scaling -- the other half of the same question, and the more reliable one: the
-#              same job at n, 2n and 4n, reported as t(4n)/t(n) with the start cost
-#              SUBTRACTED OUT first. 4.0 is linear, ~4.3 is n log n, 16.0 is
-#              quadratic, and 1.0 means the tool stopped early instead of reading
-#              the whole input. A single timing cannot tell a slow constant from a
-#              bad exponent; this table is what tells them apart, and an exponent
-#              is the defect that keeps growing after the machine gets faster.
+#   shapes  -- adversarial inputs: one line with no newline, a million one-byte lines,
+#              one repeated byte, random bytes, an ERE that explodes a backtracker.
+#   scaling -- the same job at n, 2n and 4n as t(4n)/t(n), start subtracted: 4.0 is
+#              linear, ~4.3 n log n, 16.0 quadratic, 1.0 stopped early.
 #
-# NEVER READ A WORK ROW ALONE. The nif-backed rows (md5sum, sha256sum, cksum) are
-# the floor: their inner loop is the same C in every lane, so whatever ratio they
-# show is love's own per-invocation and per-byte overhead and NOT the applet's
-# algorithm. A row at the md5sum ratio is as fast as this tree can currently make
-# it; a row well above it is the applet's own, and the scaling table says whether
-# that is a constant or an exponent.
-#
-# EVERY TIMED RUN IS UNDER A TIMEOUT (default 60 s). A pathology need not
-# terminate -- catastrophic backtracking is the one here that will not -- so a cell
-# reading `to` is a result and not a harness failure.
-#
-# A lane not on PATH drops out of every table; uutils is coreutils only, so the
-# grep/sed/awk/bc/tar/sh rows show `-` for it and that is not a failure.
+# read a work row against the nif-backed rows (md5sum, sha256sum, cksum): their inner
+# loop is the same C in every lane, so their ratio is love's own overhead, and a row
+# well above it is the applet's own.
+# every timed run is under a timeout; a cell reading `to` is a result. a lane not on
+# PATH drops out (uutils has no grep/sed/awk/bc/tar/sh), shown as `-`.
 #
 # usage: ./korebench.sh [mb] [samples]
 #   mb       corpus size in megabytes for the work table (default 8)
 #   samples  timed runs per cell, median reported (default 3)
 # env:
 #   LOVE=path   the binary under test (default ../out/love)
-#   TIMEOUT=n   per-run wall-clock cutoff, seconds (default 60). not tight: the
-#               rows here are chosen to be slow, and a cutoff that catches one of
-#               them turns a NUMBER worth recording into an unreadable `to`.
-#   SCALE=n     the LARGEST scaling size in MB; the table reads n/4, n/2, n
-#               (default 4). A scaling row answering `too fast` wants this raised.
+#   TIMEOUT=n   per-run cutoff, seconds (default 60); loose, since the rows are slow
+#               on purpose
+#   SCALE=n     the largest scaling size in MB; the table reads n/4, n/2, n
+#               (default 4). a row answering `too fast` wants this raised.
 #   RAW=path    also write "<row> <lane> <ms>" lines for bench/mkhtml.sh
 set -u
 

@@ -49,14 +49,14 @@
 ; word ends the line, vim's own special case), the text objects i and a with
 ; w W p ( ) b [ ] { } B < > " ' `, x X D C s S r J gJ ~ Y, i a I a o O,
 ; p P (lin + chr), u and ^R, `.` with a count, ^A ^X, * # / ? n N (BRE, over
-; re.l), zt zz zb, ZZ, ^F ^B ^D ^U paging, and ^W ^U in insert.
+; re.l), v V visual, zt zz zb, ZZ, ^F ^B ^D ^U paging, and ^W ^U in insert.
 ;
 ; the ex line is a real one: [range] command [args], where an address is
 ; N . $ /re/ ?re? with +N / -N offsets, joined by , or ; and % for 1,$. the
 ; commands are s (over sed's own usub, so & and \1 read the same there as
 ; here), g and v, d y m t co j p nu = , and the file half w [NAME] e[!] [NAME]
 ; o [NAME] q q! wq x hl lint set. a bare range moves the cursor.
-; out of scope, documented: visual mode, named registers ("a and the rest),
+; out of scope: named registers ("a and the rest),
 ; marks (m ' `), macros (q @), :r and :!, g~ gu gU, sentence motions ( and ),
 ; ge, ^E ^Y, gj gk, tabs render raw (the terminal's stops, not ours).
 (module 'vi

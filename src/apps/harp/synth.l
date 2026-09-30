@@ -4,9 +4,9 @@
 ; 1 is middle c and each key on from it along the row -- the digits, then - and = --
 ; a semitone higher, twelve keys to the octave; shift plays the note an octave up and
 ; alt lowers it a quarter tone. tab takes the next timbre, the up and down arrows move
-; the octave, q leaves. a key
-; is a strike: the note rings and dies on its own, since a tty tells of keys pressed
-; and never of keys let go, and a held key's repeats are dropped as the games drop them.
+; the octave, q leaves. a key is a strike: the note rings and dies on its own, since a
+; tty tells of keys pressed and never of keys let go, and a held key's repeats are
+; dropped as the games drop them.
 ;
 ; the horn is fed a small chunk at a time, a short lead ahead of the speaker, paced by
 ; the loop's gap (rove's pacer), so a strike sounds a few hundredths of a second on;
