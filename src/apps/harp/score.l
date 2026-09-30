@@ -16,7 +16,7 @@
          score-strings score-words score-note score-num score-pc score-chord score-key
          score-beats)
 (borrow 'harp)
-(? (cite 'posix) (borrow 'posix) ())
+(borrow 'posix)
 (:
  score-beats 4                          ; a bar, unless a beats line says otherwise
  (score-num t) (:- (go 0 0 0 1) (go i n f d)

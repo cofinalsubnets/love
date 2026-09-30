@@ -23,7 +23,7 @@ mine=$("$love" nest --stamp)
 fresh
 out=$(nest -n); st=$?
 [ $st = 0 ] || fail "-n exits $st"
-case $out in *"nothing is there yet"*"lush     absent -> love"*) ;; *) fail "-n said: $out";; esac
+case $out in *"the nest has no love yet"*"lush     absent -> love"*) ;; *) fail "-n said: $out";; esac
 [ -e "$H/.love/bin/love" ] && fail "-n laid a love"
 out=$(nest -y); st=$?
 [ $st = 0 ] || fail "a fresh nest exits $st: $out"

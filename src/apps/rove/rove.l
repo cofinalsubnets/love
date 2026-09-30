@@ -13,9 +13,7 @@
          settle settle-slice sign-box sign-flow sign-gap sign-line sign-over sign-pen
          sign-rect sign-top sign-tpen snip-l song-fill song-lead song-lead-max song-lead-of song-rate steer
          tail? tap-steer toward vlen)
-; posix is optional -- the page's seat (src/inle/wasm) links none of it and this file runs
-; there, so ask before splicing: an absent module is a scare.
-(? (cite 'posix) (borrow 'posix) ())
+(borrow 'posix)
 (borrow 'x11)
 (borrow 'text)
 (:

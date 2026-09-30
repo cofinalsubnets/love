@@ -45,7 +45,7 @@
 ; posix is OPTIONAL: the page's seat (src/inle/wasm) links none of it, and this file runs
 ; there. ask before splicing -- an absent module is a scare, and the names below that
 ; want a tty go missing on that seat exactly as they did before there was a module.
-(? (cite 'posix) (borrow 'posix) ())
+(borrow 'posix)
 (:
  ; the skin: four drifting sine waves (three linear, one radial ripple) sampled over a
  ; grid of r by c cells by galaxy broadcasting, C doing every sample -- a cuttlefish's

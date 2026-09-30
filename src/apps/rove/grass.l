@@ -23,7 +23,7 @@
 (borrow 'harp)                          ; the cycle algebra the song is scheduled by
 (borrow 'score)                         ; the tune as text
 (borrow 'play)                          ; the voices, the mix
-(? (cite 'posix) (borrow 'posix) ())    ; close, for the horn
+(borrow 'posix)    ; close, for the horn
 (:
  esc (string 27)
  fps (love-arch @ 'wasm 15 30)          ; the page's machine paints every cell in the interpreter: half the frames there

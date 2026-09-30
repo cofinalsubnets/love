@@ -5,7 +5,7 @@
 (module (view esc pi clamp flo wrap min2 max2 over throw sgr view! view-hz view-size view-rays
          view-frame view-walk view-run)
 (borrow 'rove)                          ; the pacer, the horn's lead, the keys drained
-(? (cite 'posix) (borrow 'posix) ())    ; close, for the horn
+(borrow 'posix)    ; close, for the horn
 (:
  esc (string 27)
  pi 3.141592653589793

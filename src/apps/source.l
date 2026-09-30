@@ -513,11 +513,11 @@
    ; the verdict, said
    (nest-verdict pl)
     (: v (pl 'verdict)
-       (? (v = 'fresh) "nothing is there yet"
-          (v = 'older) "the love there is older"
-          (v = 'same) "the love there is this very build"
-          (v = 'twin) "the love there has this stamp but other bytes"
-          "the love there is newer"))
+       (? (v = 'fresh) "the nest has no love yet"
+          (v = 'older) "the nest's love is older"
+          (v = 'same) "the nest's love is this very build"
+          (v = 'twin) "the nest's love has this stamp but other bytes"
+          "the nest's love is newer"))
    ; a tool's line: what it is, and what it becomes
    (nest-tool-line pl t)
     (: nm (t 'nm) was (t 'was) pad (fill1 8 nm)
@@ -527,7 +527,7 @@
    (fill1 n s) (? (n <= #s) (s + " ") (fill1 n (s + " ")))
    ; the plan, said: every line a person needs to say yes to it
    (nest-lines pl)
-    ([("~/.love/bin/love  there: " + nest-when (pl 'theirs)
+    ([("~/.love/bin/love: " + nest-when (pl 'theirs)
        + (? (pl 'verdict = 'fresh) " (none)" "") + ", this build: " + nest-when (pl 'mine))
       (nest-verdict pl)
       (pl 'lay = 'lay ? "lay this build as ~/.love/bin/love" "leave ~/.love/bin/love as it is")
@@ -538,7 +538,7 @@
    (nest-ours? pl) (pl 'lay = 'lay || pl 'verdict = 'same)
    (nest-lux-lines pl)
     (: a (pl 'luxact)
-       (? (a = 'lay) [("  lux      " + (? (nest-ours? pl) "written from this build" "kept, beside the love there"))]
+       (? (a = 'lay) [("  lux      " + (? (nest-ours? pl) "written from this build" "kept, beside the nest's love"))]
           (a = 'keep) ["  lux      this build's"]
           ()))
    ; ~/.local/bin is already on PATH where ~/.love/bin is not; a name there that is not

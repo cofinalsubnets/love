@@ -41,7 +41,7 @@
 (borrow 'rove)
 (borrow 'view)                          ; the screen, its rays, the pens
 (borrow 'play)                          ; the voices, the mix
-(? (cite 'posix) (borrow 'posix) ())    ; close, for the horn
+(borrow 'posix)    ; close, for the horn
 (:
  fps 30
  ; --- the shaft, in the world's units: x and z across it, y up, the middle of the

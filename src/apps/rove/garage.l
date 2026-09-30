@@ -22,9 +22,7 @@
          garage-bar garage-lay garage-face garage-stride garage-stir rat-interaction
          car-cells bay-w bay-d bed-h rat-glyph garage-tune garage-song-new garage-song-feed
          song-chunk song-cps)
-; posix is optional -- the page's seat (src/inle/wasm) links none of it and this file runs
-; there, so ask before splicing: an absent module is a scare.
-(? (cite 'posix) (borrow 'posix) ())
+(borrow 'posix)
 (borrow 'rove)
 (borrow 'play)                          ; the voices, the mix
 (:
