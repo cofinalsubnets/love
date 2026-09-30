@@ -17,49 +17,49 @@
 (module (locks locks-root locks-acquire locks-release locks-list locks-run)
 (borrow 'posix)
 
-(: (lk-str x) (? (string? x) x (show x))
-   (lk-cs s) (: t (lk-str s) (map (\ i (t i)) (jot #t)))   ; a string's bytes, as a list
+(: (lk-str x) (string? x ? x (show x))
+   (lk-cs s) (lk-str s @ t (map t ^#t))   ; a string's bytes, as a list
    ; a name as a file name: letters, digits, _ and -; the dot is kept for the tool's own temps
-   (lk-slug s) (string (map (\ c (? ((47 < c && c < 58) || (64 < c && c < 91) || (96 < c && c < 123) ||
+   (lk-slug s) (string (map (\ c (? (47 < c < 58 || 64 < c < 91 || 96 < c < 123 ||
                                      c = 95 || c = 45) c 45))
                             (lk-cs s)))
    (lk-dot? n) (elem 46 (lk-cs n))
-   (lk-num s) (foldl (\ a c (? (47 < c && c < 58) (a * 10 + c - 48) a)) 0 (lk-cs s))
-   (lk-pad n) (: s (show n) ((string (map (\ _ 48) (jot (16 - #s)))) + s))
-   (lk-mkdirs p) (foldl (\ a s (: d (a + "/" + s) _ (mkdir d 448) d)) (? (0 < #p && p 0 = 47) "" ".")
-                        (filter (\ s (0 < #s)) ((cite 'kore 'usplit) 47 p)))
+   (lk-num s) (foldl (\ a c (47 < c < 58 ? (a * 10 + c - 48) a)) 0 (lk-cs s))
+   (lk-pad n) (: s (show n) (string (map (_ \ 48) ^(16 - #s)) + s))
+   (lk-mkdirs p) (foldl (\ a s (: d (a + "/" + s) _ (mkdir d 448) d)) (0 < #p && p 0 = 47 ? "" ".")
+                        (filter (s \ 0 < #s) (cite 'kore 'usplit 47 p)))
    (lk-read p) (: r (uread p) (? (two? r) <>r ()))
    (lk-paras ls) (foldl (\ a l (a + l + "\n")) "" ls)
-   (lk-write p s) (: f (open p "w") (? (hot? f) (: _ (say f s) _ (close f) 1)))
-   (lk-names d) (: ns (readdir d) (? (two? ns) (sort (filter (\ n (0 < #n && (n 0) != 46)) ns)) ()))
+   (lk-write p s) (: f (open p "w") (? (hot? f) (say f s, close f, 1)))
+   (lk-names d) (: ns (readdir d) (? (two? ns) (sort (filter (n \ 0 < #n && n 0 != 46) ns)) ()))
 
    ; a process's start time, field 22 of /proc/PID/stat, as the string it is there; () off linux
    (lk-start p)
     (: t (lk-read ("/proc/" + show p + "/stat"))
        (? !(string? t) ()
-          (: f ((cite 'kore 'ustatf) t) (? (two? f && 21 < #f) (f 21) ()))))
+          (: f (cite 'kore 'ustatf t) (two? f && 21 < #f ? (f 21)))))
 
    ; an owner, one `key value` a line
    (lk-owner who note)
     (lk-paras [("pid " + show who) ("start " + lk-str (lk-start who)) ("since " + show (clock 0))
             ("note " + lk-str note)])
    (lk-parse t)
-    (foldl (\ o l (: k (lk-sp l 0) (? (0 < k) (pin o (snip l 0 k) (snip l (k + 1) #l)) o)))
+    (foldl (\ o l (: k (lk-sp l 0) (0 < k ? (pin o (snip l 0 k) (snip l (k + 1) #l)) o)))
            {} (lines (lk-str t)))
-   (lk-sp l k) (? (#l <= k) -1 ((l k) = 32) k (lk-sp l (k + 1)))
+   (lk-sp l k) (? (#l <= k) -1 (l k = 32) k (lk-sp l (k + 1)))
    ; live: the pid answers a signal 0 (eperm is someone else's, and alive), and where a start
    ; time was kept it still matches
    (lk-live? o)
     (: p (lk-num (peep o "pid" "0")) s (peep o "start" "")
        (0 < p && 'esrch != still p 0 &&
-        (? (0 < #s) (: now (lk-start p) (? (string? now) (now = s) 1)) 1)))
+        (0 >= #s ? 1 (: now (lk-start p) (string? now ? (now = s) 1)))))
    (lk-view o) {"pid" (lk-num (peep o "pid" "0")) "note" (peep o "note" "") "since" (lk-num (peep o "since" "0"))}
 
    ; MemAvailable in GB, () where there is no /proc/meminfo
    (lk-mem _)
     (: t (lk-read "/proc/meminfo")
-       ls (? (string? t) (filter (\ l (13 <= #l && snip l 0 13 = "MemAvailable:")) (lines t)) ())
-       (? (two? ls) (: w (words <ls) (? (1 < #w) (lk-num (w 1) / 1048576) ())) ()))
+       ls (? (string? t) (filter (l \ 13 <= #l && snip l 0 13 = "MemAvailable:") (lines t)) ())
+       (? (two? ls) (: w (words <ls) (1 < #w ? (lk-num (w 1) / 1048576))) ()))
    (lk-load _) (: t (lk-read "/proc/loadavg") (? (string? t) (: w (words t) (? (two? w) <w "")) ""))
 
    ; --- exclusive: a directory holding its owner, laid whole by a rename ---
@@ -93,7 +93,7 @@
    ; the dead go, in either pile; the live names, sorted, answer
    (lk-sweep d)
     (filter (\ n (: o (lk-parse (lk-read (d + "/" + n)))
-                    (? (lk-live? o) 1 (: _ (unlink (d + "/" + n)) ()))))
+                    (? (lk-live? o) 1 (unlink (d + "/" + n), ()))))
             (lk-names d))
    (lk-h-take root nm who note floor max)
     (: q (lk-hq root) h (lk-hh root)
@@ -120,7 +120,7 @@
    (lk-at l x k) (? !(two? l) -1 (<l = x) k (lk-at >l x (k + 1)))
    (lk-h-drop root nm who)
     (: tag (lk-tag who nm)
-       ps (foldl (\ a d (a + map (\ n (d + "/" + n)) (filter (\ n (lk-mine? n tag)) (lk-names d))))
+       ps (foldl (a \ d \ a + map (n \ d + "/" + n) (filter (n \ lk-mine? n tag) (lk-names d)))
                  () [(lk-hh root) (lk-hq root)])
        _ (map unlink ps)
        (? (two? ps) 1 ()))
@@ -143,10 +143,10 @@
    (locks-list root)
     (: xs (lk-names (root + "/x"))
        {"exclusive" (filter two? (map (\ n (: o (lk-parse (lk-read (root + "/x/" + n + "/owner")))
-                                              (? (lk-live? o) [n (lk-view o)] ())))
-                                     (filter (\ n !(lk-dot? n)) xs)))
-        "heavy" (map (\ n (lk-view (lk-parse (lk-read (lk-hh root + "/" + n))))) (lk-sweep (lk-hh root)))
-        "waiting" (map (\ n (lk-view (lk-parse (lk-read (lk-hq root + "/" + n))))) (lk-sweep (lk-hq root)))
+                                              (lk-live? o ? [n (lk-view o)])))
+                                     (filter (nil? * lk-dot?) xs)))
+        "heavy" (map (n \ lk-view (lk-parse (lk-read (lk-hh root + "/" + n)))) (lk-sweep (lk-hh root)))
+        "waiting" (map (n \ lk-view (lk-parse (lk-read (lk-hq root + "/" + n)))) (lk-sweep (lk-hq root)))
         "mem_gb" (lk-mem 0) "load" (lk-load 0)})
 
    ; the wrapper: each [nm kind] in turn, waiting with a line on stderr whenever the answer
@@ -165,7 +165,7 @@
                  _ (rest 5000)
                  (wait1 r s))))
        _ (map (\ r (wait1 r "")) reqs)
-       (mind (\ _ (: p (spawn argv) (? (charm? p && 0 <= p) (wait p) 127)))
+       (mind (\ _ (: p (spawn argv) (charm? p && 0 <= p ? (wait p) 127)))
              ()
-             (\ _ (map (\ r (locks-release root <r (r 1) me)) (rev reqs))))))
+             (\ _ (map (r \ locks-release root <r (r 1) me) (rev reqs))))))
 ) ; module locks

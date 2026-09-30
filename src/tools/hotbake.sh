@@ -13,30 +13,32 @@
 # is run as, so any other name touches other slots.
 set -u
 here=$(cd "$(dirname "$0")" && pwd) || exit 1
-if [ "${1:-}" != -p ]; then
+# the bake is the script's last word: a bare `exit` in a recipe's script ends the whole
+# recipe line when cook runs it in its own image
+if [ "${1:-}" = -p ]; then
+  raw=$2 prof=$3 cat=$4
+  d=$(mktemp -d) || exit 1
+  trap 'rm -rf "$d"' EXIT
+  env LOVE_NO_IMAGE=1 LOVE_BAKE_CHUNK=512 "$raw" bake -o "$d/love" -l "$cat" || exit 1
+  mkdir "$d/w" || exit 1
+  i=0
+  while [ $i -lt 40 ]; do
+    echo "line $((i * 7 % 40)) of the lvm fixture: $((i * i)) words, $((40 - i)) left"
+    i=$((i + 1))
+  done > "$d/w/in"
+  run() { (cd "$d/w" && env -i PATH="$d" LOVE_TOUCH_OUT="$d/touch" love "$@" > /dev/null 2>&1 < /dev/null); }
+  run -e 1
+  run kore echo hi
+  run kore ls .
+  run kore cat in
+  run kore sort in
+  run kore grep -c lvm in
+  run kore wc in
+  run kore head -3 in
+  run lush -c true
+  # a build whose wake is eager (not moonlibc's: HCC, the gcc lanes) records no touch
+  [ -s "$d/touch" ] || { echo "hotbake: $raw woke eagerly, no profile" >&2; exit 1; }
+  cp "$d/touch" "$prof"
+else
   env LOVE_NO_IMAGE=1 LOVE_BAKE_HOT="$here/hot.prof" "$1" bake -o "$2" -l "$3"
-  exit
 fi
-raw=$2 prof=$3 cat=$4
-d=$(mktemp -d) || exit 1
-trap 'rm -rf "$d"' EXIT
-env LOVE_NO_IMAGE=1 LOVE_BAKE_CHUNK=512 "$raw" bake -o "$d/love" -l "$cat" || exit 1
-mkdir "$d/w" || exit 1
-i=0
-while [ $i -lt 40 ]; do
-  echo "line $((i * 7 % 40)) of the lvm fixture: $((i * i)) words, $((40 - i)) left"
-  i=$((i + 1))
-done > "$d/w/in"
-run() { (cd "$d/w" && env -i PATH="$d" LOVE_TOUCH_OUT="$d/touch" love "$@" > /dev/null 2>&1 < /dev/null); }
-run -e 1
-run kore echo hi
-run kore ls .
-run kore cat in
-run kore sort in
-run kore grep -c lvm in
-run kore wc in
-run kore head -3 in
-run lush -c true
-# a build whose wake is eager (not moonlibc's: HCC, the gcc lanes) records no touch
-[ -s "$d/touch" ] || { echo "hotbake: $raw woke eagerly, no profile" >&2; exit 1; }
-cp "$d/touch" "$prof"

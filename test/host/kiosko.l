@@ -53,8 +53,9 @@
    ; --- one request, one connection: the client half -------------------------------------
    ; kiosko answers with Connection: close, so slurping to EOF is the whole response and
    ; there is no framing to get wrong on this side.
-   port 7431
-   l (listen port)
+   pl (test-listen 0)
+   port <pl
+   l (pl 1)
    _ (test (lit? l))
    ; the server task is kiosko's own accept loop in miniature -- `await` parks it on the
    ; listener (a bare `accept` would BLOCK the whole process, and the client below would
