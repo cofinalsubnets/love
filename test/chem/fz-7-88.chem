@@ -1,0 +1,26 @@
+text
+.cstart
+bond 135 dashed
+A: C2H5
+ring double 1,2
+R2: bond
+N ; double bond up from R2.start
+bond 135 from R2.start
+front bond length .25 from R2.start
+.cend
+text
+.cstart
+CHO
+aromatic ring put NH at 2 put S at 4 double 1,6 2,3
+front bond 198 from CHO.V3
+db 0.3
+back bond right ; NO2
+Na+ ; front bond up from CHO.start
+ring
+O
+R3: flatring put O at 3 double 1,2
+C2H5 ; front bond 0 length 0.3 from O.C
+.cend
+.cstart
+R2: F
+.cend

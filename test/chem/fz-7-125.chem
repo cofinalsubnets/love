@@ -1,0 +1,34 @@
+.PS
+box wid 0.2 ht 0.2
+begin chem
+bond se
+A: front bond
+Br
+end
+move right 0.1
+.PE
+.cstart
+B: HO
+double bond 49 from B.start
+R2: H
+CH
+bond 112
+OCH3 ; front bond
+back bond 108 length 0.3 from CH
+.cend
+a paragraph line
+.PS
+box wid 0.2 ht 0.2
+begin chem
+double bond 126 from Last ; CH2
+textht = 0.14
+bond se to BP ; S
+OCH3
+B: ring3 pointing up
+C ; bond 206
+O at B + (0.5,0.5)
+bond sw
+F
+end
+move right 0.1
+.PE

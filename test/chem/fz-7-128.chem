@@ -1,0 +1,33 @@
+.sp
+.cstart
+CH3
+A: OCH3
+bond 137
+bond 371 ; CH3CH2
+NH
+S
+X1: double bond
+bond se from OCH3.start
+bond length .25
+HOCH2
+.cend
+.cstart
+N(CH3)2
+B: OC
+C2H5
+ring aromatic put N at 3
+C2H5 ; double bond right length 0.5
+OC ; bond 120
+triple bond
+.cend
+text
+.PS
+box wid 0.2 ht 0.2
+begin chem
+R2: bond 160 length 0.3 to BP
+NHCH3
+Fe(CN)6
+NO2
+end
+move right 0.1
+.PE

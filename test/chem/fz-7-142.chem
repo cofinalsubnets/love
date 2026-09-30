@@ -1,0 +1,31 @@
+.sp
+.cstart
+benzene double 1,2 put N at 3
+CO
+COOH ; bond
+double bond length .25 ; Na+
+.cend
+.cstart
+ring
+C2H5
+Na+
+triple bond right
+bond
+X1: double bond 257
+flatring pointing down double 2,3 4,5 5,1 with .V4 at Na.V2
+bond 240
+A: SO3H
+R2: CH
+.cend
+.sp
+.PS
+box wid 0.2 ht 0.2
+begin chem
+R2: ring4 double 1,2 4,3 3,2
+ring5 pointing left aromatic put CH3 at 1 put N at 1
+HO
+back bond ; Na+
+A: Cl
+end
+move right 0.1
+.PE

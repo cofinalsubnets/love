@@ -307,7 +307,7 @@ kore_arc = src/apps/gz.l src/apps/tar.l src/apps/xz.l src/apps/bz2.l src/apps/cp
 kore_net = src/apps/tls/bytes.l src/apps/tls/chacha.l src/apps/tls/poly1305.l src/apps/tls/verify.l src/apps/tls/client.l src/apps/tls/p256.l src/apps/tls/cert.l \
   src/apps/ssh/sha512.l src/apps/ssh/ed25519.l src/apps/ssh/aes.l src/apps/ssh/bcrypt.l src/apps/ssh/client.l \
   src/apps/ssh/server.l src/apps/ssh/cli.l \
-  src/apps/png.l src/apps/jpeg.l src/apps/gif.l src/apps/kore/wget.l src/apps/kore/openssl.l src/apps/kore/gpic.l src/apps/kore/grap.l src/apps/kore/pic.l src/apps/kore/www.l src/apps/kore/net.l src/apps/kore/kore.l
+  src/apps/png.l src/apps/jpeg.l src/apps/gif.l src/apps/kore/wget.l src/apps/kore/openssl.l src/apps/kore/gpic.l src/apps/kore/grap.l src/apps/kore/chem.l src/apps/kore/pic.l src/apps/kore/www.l src/apps/kore/net.l src/apps/kore/kore.l
 # the crew the artifact carries past kore and mooncc
 crewfiles = src/apps/json.l src/apps/sb/merge.l src/apps/sb/http.l src/apps/sb/sb.l src/apps/kiosko/kiosko.l \
   src/apps/fat.l \

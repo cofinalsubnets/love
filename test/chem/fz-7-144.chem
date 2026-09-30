@@ -1,0 +1,32 @@
+.sp
+.PS
+box wid 0.2 ht 0.2
+begin chem
+front bond -21
+aromatic ring
+B: double bond -61
+ring8 pointing down with .V1 at B.V1
+OH
+ring8 put O at 7
+R1: C=O
+triple bond right
+C1: bond 310
+end
+move right 0.1
+.PE
+.sp
+.PS
+box wid 0.2 ht 0.2
+begin chem
+triple bond 211
+X1: ring4 put OH at 3 put NH at 4
+A: C2H5
+A: double bond 191
+NO2
+bond 304 from A
+CH3CH2
+C at X1 + (0.5,0.5)
+R2: flatring pointing down double 1,2 3,2
+end
+move right 0.1
+.PE

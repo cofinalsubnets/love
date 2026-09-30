@@ -1,0 +1,25 @@
+.sp
+.cstart
+NH ; bond ne from Last
+move right 0.2
+X1: front bond
+R1: bond nw
+triple bond down from X1.C
+back bond 313 from R1
+.cend
+a paragraph line
+.PS
+box wid 0.2 ht 0.2
+begin chem
+HO
+bond 120
+end
+move right 0.1
+.PE
+.cstart
+double bond 266
+ring8 pointing up
+bond nw
+NH ; back bond
+ring3 pointing right put O at 2 double 1,2
+.cend

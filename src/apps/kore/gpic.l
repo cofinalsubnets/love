@@ -207,7 +207,8 @@
           (c = 34) (put o c, gp-adv g)
           (c = 92) (put o c, gp-adv g, (? (0 <= gp-c g) (put o (gp-c g), gp-adv g) 0), gp-strraw g o)
           (put o c, gp-adv g, gp-strraw g o)))
-   (gp-expand g body as) (gp-push g (gp-src (gp-subst body as) 'text 0))
+   ; a call without parentheses leaves its $1.. as they are written
+   (gp-expand g body as) (gp-push g (gp-src (? (as = 'bare) body (gp-subst body as)) 'text 0))
    (gp-define g)
     (: _ (gp-skip-space g)
        nm (gp-word g)
@@ -302,7 +303,7 @@
    (gp-lex-word g w tok)
     (: m (peep (g 'macros) w ())
        (? (string? m)
-           (: as (? (gp-c g = 40) (gp-adv g, gp-args g) ()) _ (gp-expand g m as) (gp-lex g))
+           (: as (? (gp-c g = 40) (gp-adv g, gp-args g) 'bare) _ (gp-expand g m as) (gp-lex g))
           (w = "define") (gp-define g, gp-lex g)
           (w = "undef") (gp-undef g, gp-lex g)
           (w = "copy") (gp-copy g, gp-lex g)
@@ -917,12 +918,14 @@
           'c [((bb2 0 + bb2 2) / 2) ((bb2 1 + bb2 3) / 2)] 'objs os 'labels (sp 'labels)}
        c0 (o 'c)
        _ (gp-common g sp o)
-       ; the block moves by where its reference point should be less where it is
+       ; the block's centre goes where its reference point should be less the reference's
+       ; offset from it, and each point keeps its own offset from the centre
        fr (g 'fr) d (fr 'dir) half (? (gp-horiz? d) (o 'w / 2) (o 'h / 2))
        wv (peep sp 'with ())
        ref (? (wv = ()) c0 (string? <wv) (gp-with-at g o wv) (gp-add c0 wv))
        to (? (peep sp 'at () != ()) (sp 'at) (wv != ()) (fr 'here) (gp-add (fr 'here) (gp-mul (gp-unit d) half)))
-       _ (gp-move o (p \ gp-add (gp-sub p ref) to))
+       nc (gp-sub to (gp-sub ref c0))
+       _ (gp-move o (p \ gp-add (gp-sub p c0) nc))
        _ (pin fr 'here (gp-add (o 'c) (gp-mul (gp-unit d) half)))
        _ (gp-add-obj g o)
        o)
@@ -1326,6 +1329,8 @@
        (? (((ah & 1) && flat (ps 0) (ps 1)) || ((ah & 2) && flat (ps (n - 2)) (ps (n - 1))))
            (: _ (say err ("pic:" + peep g 'name "-" + ":" + show (peep g 'pk 0) + ": error: cannot draw arrow on object with zero length\n")) 1)
           0))
+   ; a path's end drawn k short: the side times k over its length, off the end
+   (gp-back p q k) (: v (gp-sub p q) l (gp-len v) (? (l = 0) (gp-sub p [k 0.0]) (gp-sub p (gp-mul v (k / l)))))
    (gp-tr-line g o)
     (: ps (o 'pts) n #ps ah (peep o 'ah 0)
        vis (gp-visible? o) spl (o 'ty = 'spline)
@@ -1336,7 +1341,7 @@
        _ (? (vis && (ah & 2)) (gp-head g o q0 (gp-sub q0 q1) 1) 0)
        ; the line stops at a solid head's base (a spline a tenth of the way in), at an
        ; open one's tip
-       (back p q) (gp-sub p (gp-mul (unit p q) (? (o 'asolid) (? spl (o 'aht / 10) (o 'aht)) (gp-retreat o))))
+       (back p q) (gp-back p q (? (o 'asolid) (? spl (o 'aht / 10) (o 'aht)) (gp-retreat o)))
        ps2 (: a (? (ah & 1) (back p0 p1) p0) b (? (ah & 2) (back q0 q1) q0)
               (a . rev (b . >(rev >ps))))
        (? !vis 0
@@ -1526,7 +1531,7 @@
        (unit p q) (: v (gp-sub p q) l (gp-len v) (? (l = 0) [1.0 0.0] (gp-mul v (1.0 / l))))
        _ (? (ah & 1) (gp-tx-head g o p0 (gp-sub p0 p1)) 0)
        _ (? (ah & 2) (gp-tx-head g o q0 (gp-sub q0 q1)) 0)
-       (back p q) (gp-sub p (gp-mul (unit p q) (? (o 'asolid) (? spl (o 'aht / 10) (o 'aht)) (gp-retreat o))))
+       (back p q) (gp-back p q (? (o 'asolid) (? spl (o 'aht / 10) (o 'aht)) (gp-retreat o)))
        ps2 (: a (? (ah & 1) (back p0 p1) p0) b (? (ah & 2) (back q0 q1) q0)
               (a . rev (b . >(rev >ps))))
        _ (gp-opn g o)
@@ -1543,10 +1548,22 @@
                 + "\n  }%\n}%\n")))
 
    ; -- a picture ----------------------------------------------------------------------
+   ; a picture's outer frame: its objects are its own, its variables the document's, set
+   ; in one picture and seen in the next, and so are its labels, as places
    (gp-new-root g)
     (: fr (gp-frame ())
-       _ (map (d \ pin (fr 'vars) <d <>d) gp-defaults)
+       vs (peep g 'gvars ())
+       _ (? (tablet? vs) (pin fr 'vars vs)
+            (: _ (map (d \ pin (fr 'vars) <d <>d) gp-defaults) (pin g 'gvars (fr 'vars))))
+       ls (peep g 'glabels ())
+       _ (? (tablet? ls) (map (nm \ pin (fr 'labels) nm (ls nm)) (keys ls)) 0)
        fr)
+   (gp-keep-labels g)
+    (: f (peep g 'fr ())
+       (? !(tablet? f) 0
+          (: r (gp-root g) ls (r 'labels) kept (tablet 0)
+             _ (map (nm \ (: v (ls nm) (pin kept nm (? (tablet? v) (gp-pos g v) v)))) (keys ls))
+             (pin g 'glabels kept))))
    ; the picture's lines run and written -> 1 when it drew, 0 when empty; an error gives up
    ; a picture given up: said, and pic will leave 1. a syntax error inside a line still
    ; draws what came before it (2), one at a line's end or a missing place draws nothing
@@ -1599,6 +1616,7 @@
                _ (pin g 'o (jug 0))
                drew (trap (_ \ gp-picture g t k args) ()
                           (\ a m (a @ 'gp-err (gp-gave-up g nm m args) (scare a m))))
+               _ (gp-keep-labels g)
                pic (slurp (g 'o))
                _ (pin g 'o o0)
                endln (? (drew = 2) (g 'errln) pk)

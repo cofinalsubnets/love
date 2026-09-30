@@ -700,6 +700,32 @@ their attributes, places and corners, expressions and variables, blocks, `define
 boxes and `aligned` text; `-c` and `-z` for TeX. `sh` runs only under `-U`. Not yet: dashed
 or dotted ellipses and rounded boxes, `.PS <file`, groff's `rand`, and its error messages
 (the exit status and what is drawn before an error agree, the words on stderr do not).
+As groff's, a picture's variables and labels carry into the next one, `.lf` lines between
+pictures renumber the document, and `.PS`'s width and height are read as scanf reads them.
+
+`grap [FILE..]` is Kernighan and Bentley's language for graphs (src/apps/kore/grap.l), a
+preprocessor ahead of pic: each graph between `.G1` and `.G2` becomes a picture of its
+coordinate systems' macros, its frame, its ticks and what it plots. Its output is held byte
+for byte to plan 9's grap (`make test_grap`, the corpus in test/grap), and what it writes is
+drawn by kore's pic as groff's pic draws plan 9's: frames and their sides, `coord` with log
+axes, automatic ticks as plan 9 chooses them (its steps, slack and margins, log decades and
+their widened ends), `ticks` and `grid` at lists or iterators with their labels and formats,
+`label`, `plot`, `line`, `arrow`, `circle`, `draw`, `new`, `next` and plain numbers,
+`define`, `copy` and `copy thru`, `for`, `if`, `sh`, `sprintf`, `graph` for several in one
+picture, and plan 9's marks (its grap.defines, or a copy of them where plan9port is not).
+`log` and `exp` are base ten and, like `^`, the doubles nearest the true values, as glibc's
+are. Not yet: plan 9's mark left dangling from one graph to the next, and its error
+recovery beyond a line given up.
+
+`chem [FILE..]` is the language for chemical structures (src/apps/kore/chem.l), a
+preprocessor ahead of pic over groff's chem.pic macros: each diagram between `.cstart` and
+`.cend` (or `begin chem` and `end` inside a picture) becomes pic. Its output is held byte for
+byte to groff's chem (`make test_chem`, the corpus in test/chem): moieties with their
+subscripts and where a bond meets them, bonds of each kind by angle or compass word, length,
+`from` and `to`, rings of three to eight sides, `benzene`, `flatring` and `aromatic`, with
+`pointing`, `put` and `double`, labels, `BP`, strings, `size`, `textht`, `cwid` and `db`, and
+pic and troff lines through. It writes the copy of groff's own chem.pic it finds beside
+groff, and `chem.pic` where there is none.
 
 The decoders: src/apps/png.l (every colour type and depth, Adam7), src/love/lib/jpeg.c (baseline and
 progressive, any sampling), src/love/lib/gif.c (LZW, interlace, transparency, and the three
@@ -866,7 +892,8 @@ kore does not is the census's to say.
 
 ## the census (kore against the other userlands)
 
-Taken 2026-09-26; kore's column retaken and plan9port's added 2026-09-27. A row is a tool
+Taken 2026-09-26; kore's column retaken and plan9port's added 2026-09-27; kore's `grap` and
+`chem` counted 2026-09-30. A row is a tool
 NAME and a mark says the implementation answers to it — the same reach as the inventory,
 nothing about flags (plan9port's `ls` or `grep` answers to the name in Plan 9's manner). Every
 tool kore has is a row, and so is every tool at least two of the others share; a name only
@@ -904,9 +931,9 @@ over the packages above; util-linux's column added 2026-09-27.
 
 | | kore | busybox | toybox | GNU | uutils | plan9port | util-linux |
 | --- | :-: | :-: | :-: | :-: | :-: | :-: | :-: |
-| names | 205 | 389 | 239 | 191 | 107 | 260 | 136 |
-| shared with kore | | 170 | 142 | 135 | 101 | 49 | 12 |
-| carried by no one else | 11 | 136 | 25 | 48 | 0 | 201 | 75 |
+| names | 207 | 389 | 239 | 191 | 107 | 260 | 136 |
+| shared with kore | | 170 | 142 | 135 | 101 | 50 | 12 |
+| carried by no one else | 12 | 136 | 25 | 48 | 0 | 200 | 75 |
 
 What at least three of the other six carry and kore does not: `blkdiscard`, `blkid`,
 `blockdev`, `chrt`, `dmesg`, `eject`, `fallocate`, `flock`, `fmt`, `fsfreeze`, `hwclock`,
@@ -938,6 +965,7 @@ What at least three of the other six carry and kore does not: `blkdiscard`, `blk
 | `cat` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  |
 | `cc` | ✓ |  |  | ✓ |  |  |  |
 | `chattr` |  | ✓ | ✓ |  |  |  |  |
+| `chem` | ✓ |  |  |  |  |  |  |
 | `chgrp` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
 | `chmod` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
 | `chown` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
@@ -999,6 +1027,7 @@ What at least three of the other six carry and kore does not: `blkdiscard`, `blk
 | `ftpget` |  | ✓ | ✓ |  |  |  |  |
 | `ftpput` |  | ✓ | ✓ |  |  |  |  |
 | `getopt` | ✓ | ✓ | ✓ |  |  |  | ✓ |
+| `grap` | ✓ |  |  |  |  | ✓ |  |
 | `grep` | ✓ | ✓ | ✓ | ✓ |  | ✓ |  |
 | `groups` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
 | `gunzip` | ✓ | ✓ | ✓ | ✓ |  | ✓ |  |
@@ -1248,13 +1277,13 @@ The names only one carries:
   `gprofng-gmon` `gzexe` `m4` `objdump` `rcp` `rlogin` `rlogind` `rsh` `rshd` `sdiff` `talk`
   `talkd` `zcmp` `zdiff` `zegrep` `zfgrep` `zforce` `zgrep` `zless` `zmore` `znew`
 * **uutils alone** (0): none
-* **plan9port alone** (201): `"` `""` `9660srv` `9ar` `9c` `9fs` `9import` `9l` `9p` `9pfuse`
+* **plan9port alone** (200): `"` `""` `9660srv` `9ar` `9c` `9fs` `9import` `9l` `9p` `9pfuse`
   `9pserve` `9term` `B` `E` `Getdir` `Mail` `Netfiles` `acid` `acidtypes` `acme` `acmeevent`
   `adict` `aescbc` `asn12dsa` `asn12rsa` `astro` `auxclog` `auxstats` `awd` `bmp` `bundle`
   `calendar` `cb` `cleanname` `clock` `cmapcube` `colors` `compress` `core` `crop` `db`
   `delatex` `deroff` `devdraw` `dial` `dict` `disknfs` `dns` `dnsdebug` `dnsquery` `dnstcp`
   `doctype` `dsa2pub` `dsa2ssh` `dsagen` `dsasign` `dump9660` `eqn` `factotum` `fontsrv`
-  `fortune` `freq` `fsize` `g` `getflags` `gif` `grap` `graph` `gview` `hget` `hist` `hoc`
+  `fortune` `freq` `fsize` `g` `getflags` `gif` `graph` `gview` `hget` `hist` `hoc`
   `htmlfmt` `htmlroff` `ico` `idiff` `img` `import` `ipso` `jpg` `label` `lc` `lex` `listen1`
   `lookman` `macedit` `mapd` `mk` `mk9660` `mklatinkbd` `mntgen` `mtime` `namespace`
   `ndbipquery` `ndbmkdb` `ndbmkhash` `ndbmkhosts` `ndbquery` `netfileget` `netfileput`

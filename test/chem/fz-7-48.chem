@@ -1,0 +1,27 @@
+a paragraph line
+.PS
+box wid 0.2 ht 0.2
+begin chem
+BP
+aromatic ring
+size 8
+CH2OH
+bond 315
+N(CH3)2 ; double bond
+Na+ ; double bond nw length 0.5 dotted
+Fe(CN)6 ; bond 61 length 0.3
+end
+move right 0.1
+.PE
+text
+.cstart
+double bond
+SO3H
+front bond length 0.5 from SO3H.start
+ring put NH at 5 double 1,6 2,1 with .V6 at SO3H.V1
+R2: back bond 87
+R2: double bond length .25
+S ; double bond 210 from SO3H.V3
+bond length 0.5
+SO3H ; bond 174
+.cend

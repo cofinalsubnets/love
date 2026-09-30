@@ -1,0 +1,18 @@
+.cstart
+OC ; bond dashed
+bond 225 length 0.5
+CH
+bond ne
+A: triple bond from CH.start
+C1: bond
+C1: back bond 315 from C1
+.cend
+text
+.PS
+box wid 0.2 ht 0.2
+begin chem
+bond left length 0.5 from Last
+B: aromatic ring pointing right double 2,1 1,6 4,3
+end
+move right 0.1
+.PE

@@ -1,0 +1,21 @@
+.cstart
+B: ring8 double 8,1 4,5
+bond 3
+N(CH3)2
+ring5 pointing up put CH3 at 2
+R2: back bond 378
+.cend
+.sp
+.PS
+box wid 0.2 ht 0.2
+begin chem
+ring4 aromatic
+double bond 268
+N(CH3)2
+Na+
+HO
+flatring double 1,2
+CH3CH2
+end
+move right 0.1
+.PE
