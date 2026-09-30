@@ -35,15 +35,15 @@
        at? (two? old && <old = geo)
        (place i ln) (e + "[" + show (i + 1) + ";1H" + ln + e + "[K")
        (dif a b i acc)
-        (? (atom? b) acc
+        (atom? b ? acc
            (dif (two? a ? >a ()) >b (i + 1)
                 (two? a && <a = <b ? acc (acc + place i <b))))
        body (? same? ""
                 at? (dif <>>old rows 0 "")
-                (: (go l acc) (? (atom? l) acc (go >l (acc + <l + e + "[K" + "\r\n")))
+                (: (go l acc) (atom? l ? acc (go >l (acc + <l + e + "[K" + "\r\n")))
                    (e + "[H" + go rows "")))
        stat2 (at? && <>>>old = stat ? "" (place (h - 1) stat))
-       _ (pin box 'lastr [geo key rows stat])
-       (e + "[?2026h" + body + stat2
+       (pin box 'lastr [geo key rows stat],
+        e + "[?2026h" + body + stat2
           + e + "[" + show cr + ";" + show cc + "H" + e + "[?2026l")))
 ) ; module tui

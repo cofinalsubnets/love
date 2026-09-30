@@ -107,8 +107,8 @@
    ; roster down with it; the raise's tag is what the census records, so the kernel names itself.
    (forge-lay row)
     (: nom <row  ar <>row  mkir <>>row
-       bs (trap (_ \ peep (forge-asm forge-arch ((mkir 0) + forge-deopt ar)) 'bytes 0)
-                () (\ a b (forge-no a nom, 'raised)))
+       bs (trap (_ \ peep (forge-asm forge-arch (mkir 0 + forge-deopt ar)) 'bytes 0)
+                () (a \ b \ (forge-no a nom, 'raised)))
        ; a nom, not (): a bare () reads as "assembled to nothing" and tallies the miss twice.
        (bs @ (_ . _) bs 'raised () (forge-no 'no-bytes nom)))
    ; a decline is never a raise: a missing glaze and a target with no ABI row both leave the
@@ -118,12 +118,12 @@
        !forge-abi? (forge-no 'no-abi forge-arch, 0)
        (: rows (forge-roll ())
           laid (map (r \ [r (forge-lay r)]) rows)
-          (foldl (\ n lr
+          (foldl (n \ lr \
              (: r <lr  bs <>lr  nom <r  ar <>r  twin <>>>r  xt <>>>>r
-                (? !(two? bs) n
+                (!(two? bs) ? n
                    (: j (xt @ 'none (forge-seam (cask bs) twin ar)
                          (forge-seamx (cask bs) twin ar xt))
-                      (? !(lit? j) (forge-no 'declined nom, n)
+                      (!(lit? j) ? (forge-no 'declined nom, n)
                          (pin forge-fits nom j, pin forge-nat nom 1, n + 1))))))
              0 laid)))
 

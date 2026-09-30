@@ -19,34 +19,34 @@
 (:
    (le16 v) (string (v & 255) + string (v >> 8 & 255))
    (le32 v) (le16 (v & 65535) + le16 (v >> 16 & 65535))
-   (rd16 f i) (f i | (f (i + 1) << 8))
+   (rd16 f i) (f i | f (i + 1) << 8)
    (hexn s a b) (foldl (n \ i \ n * 16 + hexv (s i)) 0 (map (+ a) ^(b - a)))
 
    ; one line: (cp rows) or () -- rows the 16 words; a narrow glyph's byte shifts high
    (face-line l)
     (: k (findsub l ":")
        n (#l - k - 1)
-       (? (k < 1 || !(n = 32 || n = 64)) ()
+       (k < 1 || !(n = 32 || n = 64) ? ()
           (: cp (hexn l 0 k)
              d (n // 16)                                  ; hex digits a row: 2 or 4
-             rows (map (\ r (: a (k + 1 + r * d)
+             rows (map (r \ (: a (k + 1 + r * d)
                               v (hexn l a (a + d))
                               (d = 2 ? (v << 8) v)))
                        ^16)
              [cp rows])))
 
    (face-hex s)
-    (: gs (sort (filter two? (map face-line (lines s))))  ; by code point
-       (? !(two? gs) ()
+    (sort (filter two? (map face-line (lines s))) @ gs ; by code point
+       (!(two? gs) ? ()
           (: pages (uniq (map (g \ <g >> 8) gs))
              slot {}
-             _ (foldl (\ i p (pin slot p i, i + 1)) 0 pages)
+             _ (foldl (i \ p \ (pin slot p i, i + 1)) 0 pages)
              idx {}
-             _ (foldl (\ i g (pin idx <g i, i + 1)) 1 gs)
-             dir (cats (map (\ p (le16 (peep slot p 65535))) ^4352))
-             pgs (cats (map (\ p (cats (map (lo \ le16 (peep idx ((p << 8) | lo) 0)) ^256)))
+             _ (foldl (i \ g \ (pin idx <g i, i + 1)) 1 gs)
+             dir (cats (map (p \ le16 (peep slot p 65535)) ^4352))
+             pgs (cats (map (p \ cats (map (lo \ le16 (peep idx (p << 8 | lo) 0)) ^256))
                             pages))
-             bits (cats (map (\ g (cats (map le16 <>g))) gs))
+             bits (cats (map (g \ cats (map le16 <>g)) gs))
              ("qf1" + string 0 + string 8 + string 16 + le16 #pages + le32 #gs
               + dir + pgs + bits))))
 
@@ -55,7 +55,7 @@
        pg (cp < 1114112 ? (rd16 f (12 + 2 * (cp >> 8))) 65535)
        (pg @ 65535 ()
         (rd16 f (8716 + pg * 512 + 2 * (cp & 255)) @ 0 ()
-         gi (: at (8716 + np * 512 + (gi - 1) * 32)
+         gi (8716 + np * 512 + (gi - 1) * 32 @ at
              (map (r \ rd16 f (at + 2 * r)) ^16)))))
 )
 ) ; module face
