@@ -471,7 +471,7 @@
         rest (drop np as)
       (op || two? rest || !(lambp bd) ?
          (: f2 (atom? <sp ? bd (': . (<sp + [bd])))                          ; no binding left -> no let: the call is gone
-            (cprop (two? rest ? (f2 . rest) f2) se (fl - 1) op bnd pb))
+            (cprop (two? rest ? (f2 . rest) f2) se (burn fl) op bnd pb))
          (keep2 x h2 as)))))                                                     ; a lambda body escaping at a value position -> decline (the escape law)
    ; a param that shadows an enclosing lambda param renames to a fresh mint (with its like-named
    ; inners: one cluster, so a pre-pin read still sees the outer) -- ana's letrec loads a
@@ -522,11 +522,11 @@
              hr (nom? h ? (: e (assq h se) (atom? e ? h <>e)) (cprop h se fl 1 bnd pb)) ; head is consumed -> op 1
              h2 (nom? h ? (propk? hr && (kind hr) != 'lambda ? hr h) hr)       ; the emitted head: a const-bound nom is its value -- a closure stays a nom (the frame imports the name and the glaze reads it)
              hk (kconst hr)                                                       ; the head's own value, when it has one
-             (? (0 < fl && lambp hr && two? as)
+             (? (lambp hr && two? as && fuel? fl hr)
                  (? (entg? (last hr))                   ; an entangled : in the body -> no bsub lane is sound;
                      (keep2 x h2 as)                                                     ;   keep the call (boxfix's runtime law answers it)
                     (allp as se)                        ; two? as: (f) is f -- nothing to substitute
-                     (: red (cprop (beta hr as) se (fl - 1) op bnd pb)                       ; known lambda -> beta, re-cprop (fuel-bounded)
+                     (: red (cprop (beta hr as) se (burn fl) op bnd pb)                         ; known lambda -> beta, re-cprop (fuel-bounded)
                       (op || !(lambp red) ? red (keep2 x h2 as)))                    ; escaping lambda result -> revert (keep the closure)
                     (bspl x h h2 hr as se fl op bnd pb))                                     ;    foldc/cpap are dead for a lambda head, so its decline keeps the call)
                 (nom? h && allk as && !(elem h bnd) && pure-head? h as)            ; pure-fn on consts -> fold. bnd-guarded: a binder
@@ -542,7 +542,16 @@
                 (keep2 x h2 as)))))))                                                ; nothing rewrote -> the original call
    (sub1 x p m) (? (x == p) m  (atom? x) x  (<x == '\ && atom? >>x) x
                    (mapi2 x (sub1 <x p m) (sub1 >x p m)))
-   (wx (cprop x () 64 0 () ()) ()))   ; bnd seeds (): a 0 seed rode `list + 0` into every binder set
+   ; the fuel: (depth . box), the betas left on this path and the nodes the whole form may
+   ; still copy. depth alone bounds a chain, not a tree: a sibling that inlined its own callee
+   ; twice is inlined whole, so each level doubles. a form copies at most 256 plus 16 per node
+   ; of its own; the most any baked or corpus form copies is under 4 per node. the box holds
+   ; [form] until the first beta asks, so a form that inlines nothing is never measured
+   (left fl) (: b >fl v (peep b 0 0) (? (two? v) (: n (256 + 16 * nsz <v) _ (pin b 0 n) n) v))
+   (fuel? fl lam) (: n (nsz (last lam)) _ (pin >fl 'z n) (0 < <fl && n <= left fl))   ; z: the size asked, for burn
+   (burn fl) (: b >fl _ (pin b 0 (left fl - peep b 'z 0)) ((<fl - 1) . b))
+   (nsz y) (? (two? y) (nsz <y + nsz >y) 1)
+   (wx (cprop x () (64 . {0 [x]}) 0 () ()) ()))   ; bnd seeds (): a 0 seed rode `list + 0` into every binder set
   ; a bare symbol is a variable reference -- except the zero point, which reads as a nom? literal;
   ; routing it to ava captures it as a spurious import, an under-saturated partial. the test is
   ; ==-the-zero-point, not nil?: boxfix's cell names are fresh nameless mints (also nil?) bound
