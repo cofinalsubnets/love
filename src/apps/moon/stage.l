@@ -42,7 +42,8 @@
                 (recse (gst ir-nolab) ir-nolab)      ; renames, like coal
                 (coal (gst ir-nolab) ir-nolab)       ; stage-preserving: it renames, never re-addresses
                 (unframe (gst ir-nolab) ir-noframe)
-                (jr0 (ir-noframe) ir-jmpfix)
+                (rvunframe (gst ir-noframe) ir-noframe)
+                (jr0 (gst ir-noframe) ir-jmpfix)
                 (unhome (gst ir-jmpfix) ir-final)
                 (cskeep (gst ir-final) ir-emitted)
                 (csdrop (gst ir-emitted) ir-emitted)
@@ -53,8 +54,9 @@
    src (open "src/apps/moon/gen.l" "r")
    _ (? (hot? src) 0 (puts ";; moon-stage: cannot open src/apps/moon/gen.l", quit 1))
    text (slurp src)
+   (tops f) (two? f && <f = 'module ? (filter (g \ two? g && <g = ':) >>f) [f])   ; a module's book is its `:`
    reps (catmap (f \ (two? f && <f = ': ? (ovck stage-dom stage-sigs f) ()))
-                (forms text))
+                (catmap tops (forms text)))
    _ (? (two? reps)
         (map (r \ (puts ";; moon-stage: ", putx r, putc 10)) reps, quit 1)
         0)
