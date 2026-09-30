@@ -10,9 +10,9 @@
 (: eps 0.0001 tol 0.003
 
    ;; -- a tiny assert harness (this file is standalone, not in the corpus) --
-   pass (tablet 0) fail (tablet 0)
+   pass {} fail {}
    _ (pin pass 0 0) _ (pin fail 0 0)
-   (ok nm c) (? c (pin pass 0 (1 + peep pass 0 0))
+   (ok nm c) (c ? (pin pass 0 (1 + peep pass 0 0))
                 (pin fail 0 (1 + peep fail 0 0), puts ("FAIL " + nm), putc 10))
 
    ;; -- list / constellation helpers --
@@ -24,8 +24,8 @@
    (gcell v k)   (tray? v ? (peep v (decode (shape v) k) 0) v)
    ;; functionally bump cell k of a constellation by d (arrays are immutable -> rebuild)
    (bump v k d)  (? (tray? v)
-                    (: sh (shape v) (gem-tray sh (map (j \ gcell v j + (j = k ? d 0))
-                                                      (jot (lprod sh)))))
+                    (shape v @ sh (gem-tray sh (map (j \ gcell v j + (j = k ? d 0))
+                                                    (jot (lprod sh)))))
                     (v + d))
    (setnth l p x) (p = 0 ? (x . >l) (<l . setnth >l (p - 1) x))
    (close? a b)   (abs (a - b) < tol * (1 + abs b))
@@ -98,13 +98,13 @@
 
    ;; sgd step: a param with a known grad moves by -lr*grad
    _ (: p (glass @(1.0 2.0 3.0)) _ (pin p (quote grad) @(0.5 0.5 0.5))
-        opt (sgd [p] 0.1) _ (step opt)
-        (ok "sgd step: p -= lr*grad" (close-c? (peep p (quote val) 0) @(0.95 1.95 2.95))))
+        opt (sgd [p] 0.1) (step opt,
+                           ok "sgd step: p -= lr*grad" (close-c? (peep p (quote val) 0) @(0.95 1.95 2.95))))
 
    ;; zero clears the grad
    _ (: p (glass @(1.0 2.0)) _ (pin p (quote grad) @(9.0 9.0))
-        opt (sgd [p] 0.1) _ (zero opt)
-        (ok "zero clears grad" (0 = grad p)))
+        opt (sgd [p] 0.1) (zero opt,
+                           ok "zero clears grad" (0 = grad p)))
 
    ;; end-to-end: a linear layer learns a linear target; the loss collapses
    _ (: _ (rng-set (wheel 1))
@@ -113,7 +113,7 @@
         Y  (inner X Wt)                                  ; the true targets, X @ Wt
         (lossof model) (tl-reset 0, tl-val (mse (call model X) Y))
         (trainstep model opt) (: _ (tl-reset 0) _ (zero opt)
-                                  loss (mse (call model X) Y) _ (back loss) _ (step opt) (tl-val loss))
+                                  loss (mse (call model X) Y) (back loss, step opt, tl-val loss))
         (trainN model opt k) (k = 0 ? 0 (trainstep model opt, trainN model opt (k - 1)))
         model (linear 2 1)
         opt (sgd (params model) 0.08)
@@ -124,6 +124,6 @@
 
    ;; -- summary --
    np (peep pass 0 0) nf (peep fail 0 0)
-   _ (puts (show np + " tele tests pass" + (0 < nf ? (", " + show nf + " FAIL") "")))
-   _ (putc 10)
-   (0 < nf ? (quit 1) 0))                          ; quit is the exit nif (was `exit`)
+   (puts (show np + " tele tests pass" + (0 < nf ? (", " + show nf + " FAIL") "")),
+    putc 10,
+    0 < nf ? (quit 1) 0))                          ; quit is the exit nif (was `exit`)

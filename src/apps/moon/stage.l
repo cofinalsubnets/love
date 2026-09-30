@@ -1,22 +1,13 @@
-; src/apps/moon/stage.l -- the pipeline's types: gen.l's stage contracts as an overlay
-; domain + sig table, checked statically by the moon gate. gen.l is read as data
-; (sound), never evaled, and nothing here rides any image -- the sigs live in this
-; file and the gate's process alone, so the baked mooncc pays zero bytes and zero
-; time (the ov-slot hook stays unarmed everywhere).
-;
-; a die is the stage a form list is at. a cleanup pass is stage-preserving ((a) a,
-; polymorphic -- its order among its peers is free), a staging pass advances through
-; a concrete die -- so the post-choice chain types in exactly one order, and a
-; recomposition is a clash naming its site. a new pass slots in by declaring a sig
-; here: the input die says what must already be true, the result die says what the
-; next pass may assume. the checker is gradual: a local name reads bot and binds
-; nothing, so the enforcement is sharp exactly at the pass-to-pass seams.
-; (content of the forms is cskeep's charge at emission; this leg types the WIRING.)
+; src/apps/moon/stage.l -- the pipeline's types: gen.l's pass contracts as an overlay domain + sig
+; table, checked by the moon gate. gen.l is read as data, never evaled, and nothing here rides
+; an image. a die is the stage a form list is at: a cleanup pass is stage-preserving ((a) a), a
+; staging pass advances through a concrete die, so the chain types in exactly one order. a new
+; pass declares its sig here. the checker is gradual: a local name reads bot and binds nothing.
 
 (borrow 'posix)
 
 (: ovck (cite 'overlay 'ov-check)
-   _ (? !!(cite 'overlay) 0 (puts ";; moon-stage: no overlay module in this love", quit 1))
+   _ (!!(cite 'overlay) ? 0 (puts ";; moon-stage: no overlay module in this love", quit 1))
    stage-dies '(gst ir-vreg ir-chosen ir-nolab ir-noframe ir-jmpfix ir-final ir-emitted)
    (stage-join x y) (x = y ? x 'top)
    (stage-tr op x y) 'top
@@ -42,7 +33,8 @@
                 (recse (gst ir-nolab) ir-nolab)      ; renames, like coal
                 (coal (gst ir-nolab) ir-nolab)       ; stage-preserving: it renames, never re-addresses
                 (unframe (gst ir-nolab) ir-noframe)
-                (jr0 (ir-noframe) ir-jmpfix)
+                (rvunframe (gst ir-noframe) ir-noframe)
+                (jr0 (gst ir-noframe) ir-jmpfix)
                 (unhome (gst ir-jmpfix) ir-final)
                 (cskeep (gst ir-final) ir-emitted)
                 (csdrop (gst ir-emitted) ir-emitted)
@@ -51,11 +43,12 @@
                 (swrap (gst ir-emitted) ir-emitted))
    (forms text) (sounds text @ 'torn (puts ";; moon-stage: gen.l reads torn", quit 1) fs fs)
    src (open "src/apps/moon/gen.l" "r")
-   _ (? (hot? src) 0 (puts ";; moon-stage: cannot open src/apps/moon/gen.l", quit 1))
+   _ (hot? src ? 0 (puts ";; moon-stage: cannot open src/apps/moon/gen.l", quit 1))
    text (slurp src)
+   (tops f) (two? f && <f = 'module ? (filter (g \ two? g && <g = ':) >>f) [f])   ; a module's book is its `:`
    reps (catmap (f \ (two? f && <f = ': ? (ovck stage-dom stage-sigs f) ()))
-                (forms text))
-   _ (? (two? reps)
+                (catmap tops (forms text)))
+   _ (two? reps ?
         (map (r \ (puts ";; moon-stage: ", putx r, putc 10)) reps, quit 1)
         0)
    (puts "moon-stage: ",

@@ -25,10 +25,10 @@
    _ (say h pcm)
    _ (flush h)
    got (tapped ())
-   _ (assert (1600 = #got))
-   _ (assert (pcm = got))                      ; ..and in order, which a ring can lose
-   _ (assert (8000 = taprate ()))
-   (assert (2 = tapchans ())))
+   (assert (1600 = #got),
+    assert (pcm = got),                        ; ..and in order, which a ring can lose
+    assert (8000 = taprate ()),
+    assert (2 = tapchans ())))
 
 ; --- a mono port taps as MONO, which is the trap for whoever plays the tap --------
 ; src/love/horn.c doubles a 1-channel port to stereo so that the device is always stereo --
@@ -42,9 +42,9 @@
    _ (say h pcm)
    _ (flush h)
    got (tapped ())
-   _ (assert (pcm = got))                      ; the port's own bytes, undoubled
-   _ (assert (1 = tapchans ()))              ; ..and its own count, said plainly
-   (assert (8000 = taprate ())))
+   (assert (pcm = got),                        ; the port's own bytes, undoubled
+    assert (1 = tapchans ()),                ; ..and its own count, said plainly
+    assert (8000 = taprate ())))
 
 ; --- a write past the ring's depth is backpressure, not a dropped frame -----------
 ; the sink holds a quarter second and no more -- 2000 frames at 8k, 8000 bytes -- so
@@ -58,8 +58,8 @@
    _ (say h pcm)
    _ (flush h)
    got (tapped ())
-   _ (assert (16000 = #got))
-   (assert (pcm = got)))
+   (assert (16000 = #got),
+    assert (pcm = got)))
 
 ; --- a rate outside the range, and a channel count that is neither 1 nor 2 --------
 (assert (nom? (horn 10 2)))

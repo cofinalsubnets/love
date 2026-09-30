@@ -1,44 +1,31 @@
 ; --- test/digest.l: the digests in src/love/lib/hash.c, held to what publishes them ---
-; named digest, not hash, because test/hash.l is the tablet's.
-; src/apps/kore's checksum tools are these plus a line of output, and test/kore/sum.sh holds those to GNU coreutils -- so this file is
-; the half of the rope that does not need another implementation on the box.
-;
-;   vectors   RFC 1321's md5 suite, fips 180-4's sha examples and RFC 7693's blake2b
-;             one, verbatim. a digest with no love twin has nothing else to be right
-;             against.
-;   cksum     ..except this one, which gets a twin: the POSIX crc is short enough to
-;             state in love, so `hash-ckwalk` below is the statement of the polynomial
-;             and the C is held to it at every length 0..129. the walk is written from
-;             the standard and not from the C: same poly 0x04c11db7, register the other
-;             way round from crc32's, seed 0, and the byte count walked through after
-;             the message, low byte first, which is why an empty file is 4294967295.
-;   lengths   the block is 64 bytes and the length rides the last 8 of it, so 55/56 and
-;             119/120 are where a padding off by one shows (sha-384/512: 128 and 16,
-;             so 111/112 and 239/240; blake2b holds a block back, so 128 and 256).
-;   misuse    value ops: a wrong shape answers (), it does not digest.
-;   stream    <X>-init/feed/done is the same digest resumable -- every one of them --
-;             and its oracle is the one-shot beside it: fed in chunks of every awkward
-;             size, at every length where the padding could slip, it must answer what
-;             the one-shot answers. a second spelling of the compression function is
-;             exactly what this must not be, so the test is agreement and not another
-;             vector. the state's width is the only thing telling them apart, so the
-;             misuse cases feed each nif its neighbours' casks.
-;
+; (not hash.l: that is the tablet's.) test/kore/sum.sh holds kore's checksum tools to GNU;
+; this is the half that needs no other implementation.
+;   vectors   RFC 1321's md5 suite, fips 180-4's sha examples, RFC 7693's blake2b one.
+;   cksum     hash-ckwalk states the POSIX crc in love, from the standard not the C (poly
+;             0x04c11db7, seed 0, the byte count walked after the message low byte first,
+;             so an empty file is 4294967295), and the C is held to it at lengths 0..129.
+;   lengths   55/56 and 119/120 where the length rides the block's last 8 bytes (sha-384/512:
+;             111/112, 239/240; blake2b holds a block back: 128, 256).
+;   misuse    a wrong shape answers (), it does not digest.
+;   stream    <X>-init/feed/done must answer what the one-shot does, fed in chunks of every
+;             awkward size; agreement, not another vector. misuse feeds each nif its
+;             neighbours' casks, since the state's width is all that tells them apart.
 ; run:  cat test/00-init.l test/digest.l | out/love
 (test
  (lit? sha256)
  (lit? md5)
  (lit? cksum))
 
-(: (hash-mk n f) (: b (cask n) (go i) (? (n <= i) (string b) (: _ (pin b i (f i)) (go (i + 1)))) (go 0))
+(: (hash-mk n f) (: b (cask n) (go i) (n <= i ? (string b) (pin b i (f i), go (i + 1))) (go 0))
    hash-alpha "abcdefghijklmnopqrstuvwxyz"
    hash-mixed ("ABCDEFGHIJKLMNOPQRSTUVWXYZ" + hash-alpha + "0123456789")
-   hash-nums  (: (go k a) (? (k < 1) a (go (k - 1) (a + "1234567890"))) (go 8 ""))
+   hash-nums  (: (go k a) (k < 1 ? a (go (k - 1) (a + "1234567890"))) (go 8 ""))
    hash-56 "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq"
    hash-112 ("abcdefghbcdefghicdefghijdefghijkefghijklfghijklmghijklmn"
              + "hijklmnoijklmnopjklmnopqklmnopqrlmnopqrsmnopqrstnopqrstu")
    ; the bytes, not the text: NULs and the high half included
-   (hash-bytes n) (hash-mk n (\ i (((i * 2654435761) >> 11) & 255))))
+   (hash-bytes n) (hash-mk n (i \ ((i * 2654435761) >> 11) & 255)))
 
 ; --- md5, RFC 1321 appendix A.5 ---
 (test
@@ -59,9 +46,9 @@
 
 ; --- cksum: the love statement of the polynomial, and the C against it ---
 (: hash-m32 4294967295
-   (hash-ckstep c) (: c2 ((c << 1) & hash-m32)
-                      (? (0 < (c & 2147483648)) (c2 ^ 79764919) c2))
-   (hash-ckbyte c b) (: (go c i) (? (i < 1) c (go (hash-ckstep c) (i - 1)))
+   (hash-ckstep c) (((c << 1) & hash-m32) @ c2
+                    (0 < (c & 2147483648) ? (c2 ^ 79764919) c2))
+   (hash-ckbyte c b) (: (go c i) (i < 1 ? c (go (hash-ckstep c) (i - 1)))
                         (go (c ^ ((b & 255) << 24)) 8))
    ; the message, then its own length low byte first, then the register complemented
    (hash-ckwalk s)
@@ -69,7 +56,7 @@
        (fold c m) (m < 1 ? (c ^ hash-m32) (fold (hash-ckbyte c (m & 255)) (m >> 8)))
        (go c i) (n <= i ? (fold c n) (go (hash-ckbyte c (s i)) (i + 1)))
        (go 0 0))
-   (hash-cksame s) (? ((cksum s) = (hash-ckwalk s)) 1 0)
+   (hash-cksame s) ((cksum s) = (hash-ckwalk s) ? 1 0)
    (hash-cklen k) (: (go i) (? (k < i) 1 !(hash-cksame (hash-bytes i)) 0 (go (i + 1)))
                      (go 0)))
 (test
@@ -83,15 +70,15 @@
 ; --- the lengths either side of a block and its length field ---
 (: (hash-hexlen s n) (: d (n @ 32 (md5 s) (sha256 s))
                         (go k) (n <= k ? 1
-                                (d k @ c (? (47 < c < 58 || 96 < c < 103) (go (k + 1)) 0)))
+                                (d k @ c (47 < c < 58 || 96 < c < 103 ? (go (k + 1)) 0)))
                         (#d = n ? (go 0) 0))
    (hash-shape ls)
-    (? !(two? ls) 1
-       (: s (hash-bytes <ls)
-          (? !(hash-hexlen s 32) 0
-             !(hash-hexlen s 64) 0
-             !(hash-cksame s) 0
-             (hash-shape >ls)))))
+    (!(two? ls) ? 1
+       (hash-bytes <ls @ s
+        (? !(hash-hexlen s 32) 0
+           !(hash-hexlen s 64) 0
+           !(hash-cksame s) 0
+           (hash-shape >ls)))))
 (test (hash-shape '(0 1 54 55 56 57 63 64 65 118 119 120 127 128 129 200)))
 
 ; --- misuse: value ops, so a wrong shape answers () ---
@@ -119,16 +106,16 @@
        _ (<>d b)
        n #s
        (go i) (n <= i ? (<>>>d b)
-                 (: j (n < i + k ? n (i + k))
-                    _ (<>>d b (snip s i j))
-                    (go j)))
+                 ((n < i + k ? n (i + k)) @ j
+                  (<>>d b (snip s i j),
+                   go j)))
        (go 0))
-   dig-sha (\ _ [sha-st sha256-init sha256-feed sha256-done])
-   dig-md5 (\ _ [md5-st  md5-init    md5-feed    md5-done])
-   dig-ck  (\ _ [ck-st   cksum-init  cksum-feed  cksum-done])
+   dig-sha (_ \ [sha-st sha256-init sha256-feed sha256-done])
+   dig-md5 (_ \ [md5-st  md5-init    md5-feed    md5-done])
+   dig-ck  (_ \ [ck-st   cksum-init  cksum-feed  cksum-done])
    ; init and feed answer the cask itself: a value the collector can walk, held live
    ; across a collection by whoever binds it
-   (dig-gc d s) (: b (cask <d) (<>d b, <>>d b s, please 1, <>>>d b))
+   (dig-gc d s) (cask <d @ b (<>d b, <>>d b s, please 1, <>>>d b))
    (sha-stream s k) (dig-stream (dig-sha 0) s k)
    (md5-stream s k) (dig-stream (dig-md5 0) s k)
    (ck-stream s k)  (dig-stream (dig-ck 0) s k)
@@ -136,7 +123,7 @@
    ; and in chunks that divide the block, straddle it, and outrun it
    (dig-agree? n)
     (: s (hash-bytes n)
-       (go ks) (? (atom? ks) 1
+       (go ks) (atom? ks ? 1
                   (? (sha256 s = sha-stream s <ks &&
                       md5 s = md5-stream s <ks &&
                       cksum s = ck-stream s <ks)
@@ -204,24 +191,24 @@
 ; sha-384/512 run a 128-byte block with a 16-byte length, so 111/112 and 239/240 are
 ; their pad boundaries; blake2b holds a whole block back until it knows whether it was
 ; the last, so 128, 256 and one either side are where it could slip
-(: dig-sha1 (\ _ [93 sha1-init sha1-feed sha1-done])
-   dig-sha224 (\ _ [106 sha224-init sha224-feed sha224-done])
-   dig-sha384 (\ _ [202 sha384-init sha384-feed sha384-done])
-   dig-sha512 (\ _ [201 sha512-init sha512-feed sha512-done])
-   (dig-b2 n) [210 (\ b (blake2b-init b n)) blake2b-feed blake2b-done]
+(: dig-sha1 (_ \ [93 sha1-init sha1-feed sha1-done])
+   dig-sha224 (_ \ [106 sha224-init sha224-feed sha224-done])
+   dig-sha384 (_ \ [202 sha384-init sha384-feed sha384-done])
+   dig-sha512 (_ \ [201 sha512-init sha512-feed sha512-done])
+   (dig-b2 n) [210 (b \ blake2b-init b n) blake2b-feed blake2b-done]
    (dig-agree2? n)
     (: s (hash-bytes n)
-       (go ks) (? (atom? ks) 1
+       (go ks) (atom? ks ? 1
                   (? (sha1 s = dig-stream (dig-sha1 0) s <ks &&
                       sha224 s = dig-stream (dig-sha224 0) s <ks &&
                       sha384 s = dig-stream (dig-sha384 0) s <ks &&
                       sha512 s = dig-stream (dig-sha512 0) s <ks &&
                       blake2b s = dig-stream (dig-b2 64) s <ks)
                      (go >ks) 0)))
-   (dig-sweep2 ns) (? !(two? ns) 1 (dig-agree2? <ns '(1 7 64 127 128 129) ? (dig-sweep2 >ns) 0))
+   (dig-sweep2 ns) (!(two? ns) ? 1 (dig-agree2? <ns '(1 7 64 127 128 129) ? (dig-sweep2 >ns) 0))
    ; bsd sum's rotate-then-add, stated in love
-   (hash-bsdwalk s) (: (go c i) (? (#s <= i) c (go ((((c >> 1) | ((c & 1) << 15)) + s i) & 65535) (i + 1))) (go 0 0))
-   (hash-bsdsame s) (? (bsdsum 0 s = hash-bsdwalk s) 1 0))
+   (hash-bsdwalk s) (: (go c i) (#s <= i ? c (go ((((c >> 1) | ((c & 1) << 15)) + s i) & 65535) (i + 1))) (go 0 0))
+   (hash-bsdsame s) (bsdsum 0 s = hash-bsdwalk s ? 1 0))
 (test
  (dig-sweep2 '(0 1 55 56 63 64 65 111 112 119 120 127 128 129 239 240 255 256 257 1000))
  (dig-stream (dig-sha512 0) (hash-bytes 100000) 1000 = sha512 (hash-bytes 100000))
@@ -240,7 +227,7 @@
  !(charm? (bsdsum 0 7)) !(charm? (bsdsum "x" "y")))
 
 ;; --- sha-3 (fips 202) through its sponge, and crc32 carried across a split ---
-(: (dig-k3 bits sh) [204 (\ b (sha3-init b bits sh)) sha3-feed sha3-done])
+(: (dig-k3 bits sh) [204 (b \ sha3-init b bits sh) sha3-feed sha3-done])
 (test
  (lit? sha3) (lit? sha3-init) (lit? crc32-on)
  (sha3 "" = "a7ffc6f8bf1ed76651c14756a061d662f580ff4de43b49fa82d80a4b80f8434a")

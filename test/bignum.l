@@ -6,8 +6,8 @@
 ; - reader parses oversized decimal literals exactly; printer is base-10
 ; - mixed fixnum/box/bignum/float arithmetic, comparison, equality
 
-(: (bfact n) (? (n < 2) 1 (n * bfact (n - 1)))
-   (bpow2 n) (? (n < 1) 1 (2 * bpow2 (n - 1)))
+(: (bfact n) (n < 2 ? 1 (n * bfact (n - 1)))
+   (bpow2 n) (n < 1 ? 1 (2 * bpow2 (n - 1)))
    B100 (bpow2 100)
    F25 (bfact 25)
    F24 (bfact 24)
@@ -39,7 +39,7 @@
 
  ; --- a bignum is its own tier: not a fixnum, truthy, not falsy, not a chain ---
  !(charm? B100) ; (charm? bignum) is false
- (? B100 1 0)   ; a bignum is truthy
+ (B100 ? 1 0)   ; a bignum is truthy
  !!B100         ; ...hence not falsy
  (atom? B100)
 

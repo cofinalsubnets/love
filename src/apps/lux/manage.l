@@ -31,9 +31,9 @@
    (do-float c sh) (wsdofloat sh (mg-win c) (mg-geom c))                         ; float at the window's own geometry
    (do-center-float c sh)                                                        ; center the window's size on the screen
     (: r (mg-screen c) g (mg-geom c) w (rw g) h (rh g)
-       (wsdofloat sh (mg-win c) (rct (rx r + ((rw r - w) // 2)) (ry r + ((rh r - h) // 2)) w h)))
+       (wsdofloat sh (mg-win c) (rct (rx r + (rw r - w) // 2) (ry r + (rh r - h) // 2) w h)))
    (do-ignore c sh) (evict sh (mg-win c))                                        ; never manage it (docks/notifications): the driver maps it raw
-   (do-raise c sh) (: _ (x-raise (mg-sock c) (mg-win c)) sh)                     ; restack above (X); returns the sheaf unchanged
+   (do-raise c sh) (x-raise (mg-sock c) (mg-win c), sh)                          ; restack above (X); returns the sheaf unchanged
 
    ; --- predicates: (ctx) -> bool. prop?/class-of? query X properties. ---
    (prop? propnm valnm) (c \ x-has-atom (mg-sock c) (mg-win c) propnm valnm)   ; isInProperty atom VALUE
@@ -44,17 +44,17 @@
    ; --- combinators. A Maybe-hook (from -?>) is (ctx sh) -> (sh') | () : matched
    ;     yields a 1-list, else nothing. compose-one takes the first match;
    ;     compose-all threads a list of plain hooks. ---
-   (-?> pred act) (\ c sh (pred c ? [(act c sh)] ()))
-   (compose-one mhs) (\ c sh (: (go l) (? !(two? l) sh
-                                          (: r (<l c sh) (two? r ? <r (go >l)))) (go mhs)))
-   (compose-all hs) (\ c sh (foldl (\ s h (h c s)) sh hs))
+   (-?> pred act) (c \ sh \ (pred c ? [(act c sh)] ()))
+   (compose-one mhs) (c \ sh \ (: (go l) (? !(two? l) sh
+                                            (<l c sh @ r (two? r ? <r (go >l)))) (go mhs)))
+   (compose-all hs) (c \ sh \ foldl (s \ h \ h c s) sh hs)
 
    ; --- xmonad's transience' and manageDocks as plain hooks (VALUES, not nullary
    ;     helpers -- (f) == f would hand back the wrapper unrun) ---
-   transience (\ c sh (x-transient (mg-sock c) (mg-win c) ? (do-center-float c sh) sh))   ; a dialog floats centered on its parent
-   manage-docks (\ c sh (? ((prop? "_NET_WM_WINDOW_TYPE" "_NET_WM_WINDOW_TYPE_DOCK"          ; checkDock: a dock or a desktop --
-                             <||> prop? "_NET_WM_WINDOW_TYPE" "_NET_WM_WINDOW_TYPE_DESKTOP") c)     ; the file manager's wallpaper window
-                           (do-ignore c sh) sh))                                                    ; is a client only by accident
+   transience (c \ sh \ (x-transient (mg-sock c) (mg-win c) ? (do-center-float c sh) sh))   ; a dialog floats centered on its parent
+   manage-docks (c \ sh \ (? ((prop? "_NET_WM_WINDOW_TYPE" "_NET_WM_WINDOW_TYPE_DOCK"          ; checkDock: a dock or a desktop --
+                               <||> prop? "_NET_WM_WINDOW_TYPE" "_NET_WM_WINDOW_TYPE_DESKTOP") c)     ; the file manager's wallpaper window
+                             (do-ignore c sh) sh))                                                  ; is a client only by accident
 
    ; --- run a hook against a freshly-admitted window ---
    (manage-window hook c sh) (hook c sh)
@@ -73,14 +73,14 @@
    ;     centers float centered, floats float in place, ignores are never managed. ---
    (manage-for centers floats ignores)
     (compose-all [
-       (\ c sh sh)                                                              ; manageHook def: tile (identity -- the driver already admitted it)
+       (c \ sh \ sh)                                                            ; manageHook def: tile (identity -- the driver already admitted it)
        transience
        manage-docks
        (compose-one [
-          (class-of? (mg-classes ignores) -?> (\ c sh (do-ignore c (do-raise c sh))))
+          (class-of? (mg-classes ignores) -?> (c \ sh \ do-ignore c (do-raise c sh)))
           ((prop? "_NET_WM_WINDOW_TYPE" "_NET_WM_WINDOW_TYPE_NOTIFICATION"
             <||> prop? "_NET_WM_WINDOW_TYPE" "_NET_WM_WINDOW_TYPE_DOCK")
-           -?> (\ c sh (do-ignore c (do-raise c sh))))                          ; doRaise >> doIgnore
+           -?> (c \ sh \ do-ignore c (do-raise c sh)))                          ; doRaise >> doIgnore
           (prop? "_NET_WM_STATE" "_NET_WM_STATE_FULLSCREEN" -?> do-full-float)
           ((prop? "_NET_WM_WINDOW_TYPE" "_NET_WM_WINDOW_TYPE_DIALOG"
             <||> class-of? (mg-classes centers))

@@ -6,11 +6,11 @@
 ; the writer on a full device on the way -- which is the shape being asked about, not the
 ; length. the wait is the drainer's: it takes them at the rate, so the run is its 417 ms.
 (: n 80000
-   pcm (string (map (\ i (i % 251)) (jot n)))
+   pcm (string (map (i \ (i % 251)) (jot n)))
    h (horn 48000 2)
-   (? (nom? h) (puts $ "horn " + show h + "\n")
-      (: _ (say h pcm)
-         _ (flush h)
-         _ (rest 1200)
-         _ (close h)
-         (puts $ "horn wrote " + show n + "\n"))))
+   (nom? h ? (puts $ "horn " + show h + "\n")
+    (say h pcm,
+     flush h,
+     rest 1200,
+     close h,
+     (puts $ "horn wrote " + show n + "\n"))))

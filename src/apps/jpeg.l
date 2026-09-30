@@ -15,9 +15,9 @@
    ; the markers from the top to the frame header, its length word at p
    (jpeg-size s)
     (: (go p)
-        (? (#s < (p + 9)) "cut short"
+        (? (#s < p + 9) "cut short"
            (s p != 255) (go (p + 1))
-           (: m (s (p + 1))
+           (s (p + 1) @ m
               (? (m = 255) (go (p + 1))
                  (m = 0 || m = 1 || 208 <= m <= 216) (go (p + 2))
                  (192 <= m <= 207 && !(elem m [196 200 204]))
@@ -27,15 +27,15 @@
        (#s < 4 || s 0 != 255 || s 1 != 216 ? "not a jpeg" (go 2)))
 
    ; the door: the nif where the artifact carries it, asked at first call, never at load
-   jpeg-door (tablet 0)
+   jpeg-door {}
    (jpeg-nif? _)
-    (: v (peep jpeg-door 0 ())
-       (? (charm? v) v
-          (: w (trap (\ _ (jpeg-pixels "", 1)) () (\ a b 0)) _ (pin jpeg-door 0 w) w)))
+    (jpeg-door 0 @ v
+       (charm? v ? v
+          (trap (_ \ (jpeg-pixels "", 1)) () (a \ b \ 0) @ w (pin jpeg-door 0 w, w))))
 
    (jpeg-decode s)
-    (: d (jpeg-size s)
+    (jpeg-size s @ d
        (? (string? d) d
           !(jpeg-nif? 0) "no decoder here"
-          (: r (jpeg-pixels s)
+          (jpeg-pixels s @ r
              (? (string? r) [(d 0) (d 1) r] (charm? r) (jpeg-why r) "not a jpeg"))))))

@@ -1,29 +1,13 @@
-; test/host/nifpark.l -- the nif floor's laws. a nif that cannot answer yet parks the
-; task (love.h: leave Ip unadvanced, `return Ap(lvm_yield_sw, g)`, the op re-runs)
-; instead of stopping the whole vm inside a syscall. The device floor made every
-; device entry point nonblocking; this is the layer where the caller is a nif.
-;
-;   cat test/00-init.l test/host/nifpark.l | out/love   ; silence is a pass, exits 1 on fail
-;
-; 00-init.l leads for its ports (test-listen, test-bind); the checks are `assert`, which
-; stops the run where `test` would record and carry on.
-;
-; driven from test/host/run.l under a timeout, because most of these regressions
-; are hangs rather than red asserts: a blocking `accept` with an empty backlog waits
-; for a connection that only the wedged vm could still make, and a blocking
-; `connect` on a dropped syn waits about two minutes. a wedged gate is worse than a
-; red one, so the timeout is the instrument. (Law 3 does redden on its own -- a
-; blocking `wait` merely finishes late. It rides here anyway, because the laws are
-; one invariant.)
-;
-; the shape of every law: a ticker task that only advances if the task under test
-; gave up its turn. Its count is the gauge, exactly as (naps ()) is in test/front.
+; test/host/nifpark.l -- the nif floor's laws: a nif that cannot answer yet parks its task
+; instead of stopping the vm inside a syscall. every law is a ticker task that advances only if
+; the task under test gave up its turn. driven by test/host/run.l under a timeout, since most of
+; these regressions are hangs; the checks are `assert`, which stops the run.
 
 ; driven bare -- no test/00-init.l ahead of it -- so the posix door is borrowed here,
 ; the same guarded way the corpus prelude borrows it.
 (cite 'posix ? (borrow 'posix) ())
 
-(: (ticker n) (twirl (\ _ ((: (go u) (pin n 0 (1 + (peep n 0 0)),
+(: (ticker n) (twirl (_ \ ((: (go u) (pin n 0 (1 + peep n 0 0),
                                       rest 0,
                                       go ())) ())) ()))
 
@@ -35,7 +19,7 @@
    port <pl
    l (pl 1)
    n {}
-   srv (twirl (\ _ (: c (accept l) (close c, 1))) ())
+   srv (twirl (_ \ (accept l @ c (close c, 1))) ())
    t (ticker n)
    _ (rest 20)                          ; both reach their parks; the ticker spins
    k (peep n 0 0)
@@ -53,17 +37,17 @@
 (: up (test-bind 0)
    p (up 1)
    n {}
-   rx (twirl (\ _ (: d (recv p) (close p, <>d))) ())
+   rx (twirl (_ \ (recv p @ d (close p, <>d))) ())
    t (ticker n)
    _ (rest 20)
    k (peep n 0 0)
    s ((test-bind 0) 1)
    _ (send s ["127.0.0.1" <up] "ping")
    got (catch rx)
-   _ (freeze t)
-   _ (close s)
-   _ (assert (0 < k)
-             (got = "ping")))           ; and the datagram still arrives whole
+   (freeze t,
+    close s,
+    assert (0 < k)
+           (got = "ping")))           ; and the datagram still arrives whole
 
 ; --- law 3: wait parks while a child is up ------------------------------------
 ; and it is a poll, not an fd wait: sigchld is not in the scheduler's wait set and
@@ -74,10 +58,10 @@
    t (ticker n)
    r (tether '("sleep" "0.3"))
    st (wait <r)
-   _ (freeze t)
-   _ (close >r)
-   _ (assert (0 < peep n 0 0)         ; 0 with the blocking waitpid back in
-             (st = 0)))                 ; ... and the child's status is still exact
+   (freeze t,
+    close >r,
+    assert (0 < peep n 0 0)         ; 0 with the blocking waitpid back in
+           (st = 0)))                 ; ... and the child's status is still exact
 
 ; --- law 4: hark parks for the child's whole life ------------------------------
 ; not the reap -- the drain. a blocking read(2) over the child's stdout held the
@@ -91,10 +75,10 @@
 (: n {}
    t (ticker n)
    r (hark '("sh" "-c" "echo one; sleep 0.2; echo two"))
-   _ (freeze t)
-   _ (assert (0 < peep n 0 0)         ; 0 with the blocking drain back in
-             (<r = 0)
-             (>r = "one\ntwo\n")))  ; ... and the capture is still whole
+   (freeze t,
+    assert (0 < peep n 0 0)         ; 0 with the blocking drain back in
+           (<r = 0)
+           (>r = "one\ntwo\n")))  ; ... and the capture is still whole
 
 ; --- law 5: connect parks on the handshake ------------------------------------
 ; the write-direction park, and the only one there is -- held back until something
@@ -125,7 +109,7 @@
    l (pl 1)
    n {}
    a (connect ['tcp "127.0.0.1" port])         ; the witness: one that lands, kept open
-   (fillq k) (k @ 0 0 (: c (connect ['tcp "127.0.0.1" port]) (close c, fillq (k - 1))))
+   (fillq k) (k @ 0 0 (connect ['tcp "127.0.0.1" port] @ c (close c, fillq (k - 1))))
    _ (fillq 512)                        ; a + 512 = 513 = backlog + 1: the queue is full
    t (ticker n)
    s (twirl (_ \ connect ['tcp "127.0.0.1" port]) ())   ; the next: syn dropped, stalls
@@ -133,10 +117,10 @@
    k (peep n 0 0)
    _ (close l)                          ; ... which resets it, so the task ends
    r (catch s)
-   _ (freeze t)
-   _ (close a)
-   _ (assert (0 < k)                    ; 0 with a blocking connect back in
-             (nom? r)                   ; the reset handshake answers its nom
-             (lit? a)))                 ; ... and a connect that did land is a port
+   (freeze t,
+    close a,
+    assert (0 < k)                    ; 0 with a blocking connect back in
+           (nom? r)                   ; the reset handshake answers its nom
+           (lit? a)))                 ; ... and a connect that did land is a port
 
 (say out "nifpark: ok\n")

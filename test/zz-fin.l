@@ -10,7 +10,7 @@
      (putx s) (puts p) (puts (putx ms) (puts " seconds") (putc 10))
      (? f (do
       (putx #f) (puts " failed:") (putc 10)
-      (each f (\ x (do (puts "  ") (putx x) (putc 10))))
+      (each f (x \ do (puts "  ") (putx x) (putc 10)))
       (quit 1)
       ))
      ))

@@ -57,7 +57,7 @@
  ((opfix '(x @ p b $ y)) = '($ (@ x p b) y))        ; $ is looser, so it folds the whole match and takes it
  ((opfix '(c ? a + b)) = '(? c (+ a b)))            ; an n-ary frame yields its last right operand to a tighter op
  ((opfix '(? c a b)) = '(? c a b))                  ; ..and the prefix spelling is untouched, a fixed point as ever
- (: r (grip -1 '? ()) _ (grip -1 '? r) (r = 10))      ; the arity is the lane, so the door names it and restores exactly
+ (: r (grip -1 '? ()) (grip -1 '? r, r = 10))         ; the arity is the lane, so the door names it and restores exactly
  ((opfix '(a + b . c)) = '(. (+ a b) c))          ; . the loosest builder, below arithmetic
  ((opfix '(a :+ b . c)) = '(. (:+ a b) c))         ; a coined op at house band beats .
  ((opfix '(a :+ b + c)) = '(+ (:+ a b) c))          ; ..and arithmetic, and every other band:
@@ -109,30 +109,30 @@
  ; shows the change at once. ---
  (: was (grip 2 '<+> -60)                           ; haskell's `infixl 7 <+>` -- the minus is the left hand
     tree (opfix '(a <+> b <+> c))
-    _ (grip 2 '<+> was)
-    (was = () && tree = '(<+> (<+> a b) c))) ; undeclared before; left-handed after
+    (grip 2 '<+> was,
+     was = () && tree = '(<+> (<+> a b) c))) ; undeclared before; left-handed after
  (: _ (grip 2 '<+> 60)                       ; `infixr 7` -- a positive band is right-handed
     tree (opfix '(a <+> b <+> c))
-    _ (grip 2 '<+> ())
-    (tree = '(<+> a (<+> b c))))
+    (grip 2 '<+> (),
+     tree = '(<+> a (<+> b c))))
  (: _ (grip 2 '<+> -60)
     prev (grip 2 '<+> ())                                        ; () clears, and answers what it cleared
     (prev = -60 && ((opfix '(a <+> b * c)) = '(* (<+> a b) c)))) ; back to house band -- above *
  ((grip 2 '<+> ()) = ())                                         ; clearing an absent row is a no-op answering ()
  (: _ (grip 2 '=: '(pin 20))                                     ; the (nom band) alias: a target with no row to lend
     tree (opfix '(t =: k))
-    _ (grip 2 '=: ())
-    (tree = '(pin t k)))
+    (grip 2 '=: (),
+     tree = '(pin t k)))
  (: was (grip 2 '+ -70)                             ; a core operator can be re-gripped ..
     tree (opfix '(a + b * c))
-    _ (grip 2 '+ was)                                 ; .. and put back
-    (tree = '(* (+ a b) c) && ((opfix '(a + b * c)) = '(+ a (* b c)))))
+    (grip 2 '+ was,                                   ; .. and put back
+     tree = '(* (+ a b) c) && ((opfix '(a + b * c)) = '(+ a (* b c)))))
  ; a shape op-ent refuses is rolled back and scared -- never pinned, because a bad row does not
  ; error, it silently demotes its operator to the fresh-punct default.
- (!(catch (\ _ (grip 2 '^^ 0))))                      ; band 0 -- a table miss answers 0, so zero can never be a row
- (!(catch (\ _ (grip 2 '^^ '(a b)))))                 ; a shape that is neither charm, nom nor (nom band)
- (!(catch (\ _ (grip 2 '^^ 'zzz))))                   ; an alias to a word with no row of its own
- (!(catch (\ _ (grip 2 'plain 60))))                  ; and the name must be an all-punct sigil
+ (!(catch (_ \ grip 2 '^^ 0)))                        ; band 0 -- a table miss answers 0, so zero can never be a row
+ (!(catch (_ \ grip 2 '^^ '(a b))))                   ; a shape that is neither charm, nom nor (nom band)
+ (!(catch (_ \ grip 2 '^^ 'zzz)))                     ; an alias to a word with no row of its own
+ (!(catch (_ \ grip 2 'plain 60)))                    ; and the name must be an all-punct sigil
  ((opfix '(x ^^ y ^^ z)) = '(^^ x (^^ y z))))         ; the table survived all four intact
 
 (test
@@ -171,18 +171,18 @@
     r (2 < 1 < (bump ()))
     (!r && (0 = (peep t 0 0)))))
 (test
- (!(catch (\ _ (grip 7 '^^ 60))))                   ; ..and a lane with no key is refused, never minted
+ (!(catch (_ \ grip 7 '^^ 60)))                     ; ..and a lane with no key is refused, never minted
 
  ; --- the glued lane through the same door: arity 0, where a row is the word the sigil names.
  ; one nom lives in as many lanes as it has faces, and `?` is the pair:
  ; `bit` glued, cond spaced -- the valence law as two keys of one table. ---
- (: r (grip 0 '? ()) _ (grip 0 '? r) (opnom r = 'bit))  ; a clear-and-restore is the non-destructive read
+ (: r (grip 0 '? ()) (grip 0 '? r, opnom r = 'bit))     ; a clear-and-restore is the non-destructive read
  ; the fixture needs a sigil whose glued row is empty -- `was = ()` is half the law. it was
  ; `^` until ^ became jot; `&` and `=` are what is left free. fill one and move this.
  (: was (grip 0 '& 'cup)                            ; coin a glued sigil ..
     tree (opfix '&x)
-    _ (grip 0 '& was)
-    (was = () && tree = '(cup x))) ; .. it factors, then clears
+    (grip 0 '& was,
+     was = () && tree = '(cup x))) ; .. it factors, then clears
  ((unglue (opfix '?5)) = '(bit 5)) ; the glued lane survived intact
 
  ; --- && / || stay lazy: the macro rides ?/: , so the right arm never fires when the left decides it.

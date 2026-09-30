@@ -28,20 +28,20 @@
 (test
  (: w1 (grip 0 '<> 'tally) w2 (grip 0 '>| 'net)
     tree (unglue (opfix '<>|x))
-    _ (grip 0 '<> w1) _ (grip 0 '>| w2)
-    (tree = '(cap (net x))))
+    (grip 0 '<> w1, grip 0 '>| w2,
+     tree = '(cap (net x))))
  ; and it backtracks: |< is the longest suffix but its leftover & has no row, so the walk
  ; falls back to < and takes the &| that was waiting behind it.
  (: w1 (grip 0 '|< 'tally) w2 (grip 0 '&| 'net)
     tree (unglue (opfix '&|<x))
-    _ (grip 0 '|< w1) _ (grip 0 '&| w2)
-    (tree = '(net (cap x))))
+    (grip 0 '|< w1, grip 0 '&| w2,
+     tree = '(net (cap x))))
  ; which is what keeps `grip 0` composable: without the fallback, coining ?< would unfactor
  ; 2?<x -- a run that has nothing to do with it -- and unfactoring is silent, since a run the
  ; table cannot spell has to fall through to the plain application.
  ('(two? (cap x)) = unglue (opfix '2?<x))
- (: w (grip 0 '?< 'tally) tree (unglue (opfix '2?<x)) _ (grip 0 '?< w)
-    (tree = '(two? (cap x)))))                      ; ?< is preferred and cannot complete, so it yields
+ (: w (grip 0 '?< 'tally) tree (unglue (opfix '2?<x))
+    (grip 0 '?< w, tree = '(two? (cap x)))))        ; ?< is preferred and cannot complete, so it yields
 
 ; --- the shadow law: a glued row is the function, not the word --------------
 ; the run factors to a VALUE, so nothing in scope can reach it: `<x` means cap wherever it
@@ -50,11 +50,11 @@
 ; the text that uses it. a row `grip 0` puts there is whatever the caller handed over --
 ; a nom row resolves at the use site, as it always did.
 (test
- (1 = (: cap 5 ((\ v <v) '(1 2 3))))                ; the catastrophic one: <v stayed cap
+ (1 = (: cap 5 ((v \ <v) '(1 2 3))))                ; the catastrophic one: <v stayed cap
  (5 = (: cap 5 cap))                                ; ..and the binding still stands
- (6 = (: net 'not-a-fn ((\ l +l) '(1 2 3))))         ; a love-closure row is reached the same way
- (1 = (: two? 0 ((\ l 2?l) '(1))))                   ; ..and one that is another nif's alias
- (2 = ((\ l (: cap <l cup >l (cap + tally cup))) '(1 2)))) ; the two names bound and the sigils used, one form
+ (6 = (: net 'not-a-fn ((l \ +l) '(1 2 3))))         ; a love-closure row is reached the same way
+ (1 = (: two? 0 ((l \ 2?l) '(1))))                   ; ..and one that is another nif's alias
+ (2 = ((l \ (: cap <l cup >l (cap + tally cup))) '(1 2)))) ; the two names bound and the sigils used, one form
 
 ; --- opnom / unglue: the words, when a reader wants them --------------------
 ; a value head is a form no text can spell, so the map back is the door -- and every reader

@@ -48,7 +48,7 @@
 (borrow 'posix)
 (: (findme (a . u)) ; the word that named this file, if any
     (pbase a @ ("papel" || "papel.l") a (findme u))
-   (up p) (: n #p (0 < n ? (phead (snip p 0 (n - 1))) p))   ; "a/b/" -> "a/"
+   (up p) (#p @ n (0 < n ? (phead (snip p 0 (n - 1))) p))   ; "a/b/" -> "a/"
    ; ..and follow a symlink to it. `papel` installs the way cook does, as a link on PATH
    ; pointing at this source file, so the name we were invoked by lives in ~/.local/bin
    ; and the siblings do not. readlink is what turns the link back into the source tree.
@@ -60,7 +60,7 @@
    ; an installed love baked. the tree lane probes first, so a tree papel running
    ; under an installed love reads its own siblings, never the baked older copies.
    (want nm f) (cite nm ? 1
-                  (: q (open (root + f) "r")
+                  (open (root + f) "r" @ q
                      (hot? q ? (close q, borrow (root + f), 1)
                         (borrow nm, 1))))
    _ (want 'lapiz "lapiz/lapiz.l")
@@ -80,7 +80,7 @@
 ; --- little utils (papel's own: it leans on lapiz for DOCUMENTS, not for lists) --------
 (: (strcat l)    (foldl (+) "" l)
    (slurpf f)    (uread f @ [1 s] s "")
-   (spitf f s)   (: q (open f "w") (hot? q ? (say q s, close q, 1) 0))
+   (spitf f s)   (open f "w" @ q (hot? q ? (say q s, close q, 1) 0))
    ; a directory answers a list from readdir, a file answers nothing -- that is the test,
    ; and it needs no mode bits (love has no bitwise and to pick S_IFDIR out of stat's mode).
    (dir? p)      (two? (readdir p))
@@ -99,7 +99,7 @@
 (: (down c)   (65 <= c && c <= 90 ? (c + 32) c)
    (squash s) (:- (g 0 "" 0)
                   (g i acc prev) (i < #s ?
-                                    (: c (s i)
+                                    (s i @ c
                                        (c = 45 && prev = 45 ? (g (i + 1) acc c)
                                           (g (i + 1) (acc + string c) c)))
                                     acc))
@@ -109,27 +109,27 @@
                  (snip s a b))
    (slug s)   (: raw (:- (g 0 "")
                          (g i acc) (i < #s ?
-                                      (: c (s i) (g (i + 1) (acc + (alnum? c ? (string (down c)) "-"))))
+                                      (s i @ c (g (i + 1) (acc + (alnum? c ? (string (down c)) "-"))))
                                       acc))
                  out (trimd (squash raw))
                  (0 < #out ? out "section")))
 
 ; --- reading the middle: the site-level facts of one page ------------------------------
 ; every one of these is a walk over the AST, which is the point of having one.
-(: (itext l) (strcat (map (x \ (: t <x
+(: (itext l) (strcat (map (x \ (<x @ t
                                   (? (t = 'text) <>x
                                      (t = 'code) <>x
                                      (t = 'strong || t = 'em || t = 'link) (itext <>x)
                                      ""))) l))
    (head? b)  (<b = 'head)
-   (pmeta d)  (: m (filter (b \ <b = 'meta) d) (two? m ? <><m ()))
+   (pmeta d)  (filter (b \ <b = 'meta) d @ m (two? m ? <><m ()))
    (pbody d)  (filter (b \ <b != 'meta) d)
    ; the heads, each with its deduped slug: ((level slug label) ..). one parse feeds both
    ; the anchors in the body and the toc beside it, so the two cannot drift apart.
-   (pheads d) (:- (g d (tablet 0) ())
+   (pheads d) (:- (g d {} ())
                   (g l seen acc)
                   (atom? l ? (rev acc)
-                     (: b <l
+                     (<l @ b
                         (head? b ?
                            (: lab (itext (b 2))
                               s0 (slug lab)
@@ -140,7 +140,7 @@
    ; the deflist terms, each with its slug: one list per deflist, in document order, deduped
    ; after the heads so a term and a heading never share an anchor. a glossary entry is
    ; linkable the way a heading is, and a link to one is checked the same way.
-   (pterms d hs) (: seen (foldl (\ t h (: s0 (slug (h 2)) (pin t s0 (peep t s0 0 + 1)))) (tablet 0) hs)
+   (pterms d hs) (: seen (foldl (t \ h \ (slug (h 2) @ s0 (pin t s0 (peep t s0 0 + 1)))) {} hs)
                     (one it) (: s0 (slug (itext <it))
                                 k (peep seen s0 0)
                                 (pin seen s0 (k + 1), (0 < k ? (s0 + "-" + show k) s0)))
@@ -152,11 +152,11 @@
                          (0 < #mt) mt
                          dflt))
    ; the blurb: the first paragraph, clipped on a word boundary. () when the page has none.
-   (clip s n) (: t #s
+   (clip s n) (#s @ t
                  (t <= n ? s
                     (: b (:- (f n) (f i) (0 < i && s (i - 1) != 32 ? (f (i - 1)) i))
                        (snip s 0 (0 < b ? (b - 1) n) + "..."))))
-   (blurb d)  (: ps (filter (b \ <b = 'para) d)
+   (blurb d)  (filter (b \ <b = 'para) d @ ps
                  (two? ps ? [['text (clip (itext <><ps) 160)]] ())))
 
 ; --- cross-links: .md becomes .html, but only inside the site --------------------------
@@ -166,7 +166,7 @@
 (: (mdurl known u)
    (? (has? u "://") u
       !(ends? u ".md") u
-      (: b (pbase u)
+      (pbase u @ b
          (peep known b 0 ? (snip u 0 (#u - 3) + ".html") u)))
    (rli f l)  (map (x \ (<x @ 'link ['link (rli f <>x) (f <>>x)]
                               ('strong || 'em) [<x (rli f <>x)]
@@ -198,9 +198,9 @@
    (:- (g d hs ts () "")
        (g l hs ts acc cls)
        (atom? l ? (join "\n" (rev acc))
-          (: b <l
+          (<l @ b
              (? (head? b)
-                (: h (hhead <<hs <><hs <>>b)
+                (hhead <<hs <><hs <>>b @ h
                    (g >l >hs ts (h . acc) <><hs))
                 (<b = 'deflist) (g >l hs >ts (hdl cls <ts <>b . acc) cls)
                 (g >l hs ts (htb b . acc) cls)))))
@@ -215,7 +215,7 @@
 
 ; --- the page template ------------------------------------------------------------------
 (: (wrap conf ttl metah toch body)
-   (: site (peep conf 'title "papel")
+   (peep conf 'title "papel" @ site
       ("<!doctype html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n"
        + "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n"
        + "<title>" + hq ttl + (ttl = site ? "" (" &middot; " + hq site)) + "</title>\n"
@@ -234,7 +234,7 @@
 ; (so editing this string rebuilds the site). the colours are config.l's paper palette
 ; through hueweb's hw-vars, so this sheet and the painted sources' agree by construction.
 (: css
-   ((cite 'hueweb 'hw-vars 'paper) +
+   (cite 'hueweb 'hw-vars 'paper +
    "*{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.65 ui-serif,Georgia,serif}
 header{border-bottom:1px solid var(--rule);padding:1rem 1.25rem;font-family:ui-sans-serif,system-ui,sans-serif}
@@ -267,7 +267,7 @@ table{border-collapse:collapse}
 "))
 
 ; --- one page, and the index ------------------------------------------------------------
-(: (outname s) (: b (pbase s) (snip b 0 (#b - 3) + ".html"))
+(: (outname s) (pbase s @ b (snip b 0 (#b - 3) + ".html"))
    (render conf known src dst)
    (: d0 (mdread (slurpf src))
       d  (relink (u \ mdurl known u) d0)
@@ -281,7 +281,7 @@ table{border-collapse:collapse}
    ; link/blurb pairs -- and lapiz shows it. no second template, no html here at all.
    (index-doc conf srcs)
    (: site (peep conf 'title "papel")
-      rows (map (s \ (: d (mdread (slurpf s))
+      rows (map (s \ (mdread (slurpf s) @ d
                       [[['link [['text (ptitle d (pbase s))]] (outname s)]] (blurb d)])) srcs)
     [['head 1 [['text site]]] ['deflist rows]])
    (windex conf srcs dst)
@@ -312,9 +312,9 @@ table{border-collapse:collapse}
    ; request compares against that same reading and sees it. and `build` itself is
    ; untouched, so the decision that actually matters stays cook's, at cook's resolution.
    ; mtime and size, because an edit can preserve either one alone.
-   (fprint conf) (foldl (+) 0 (map (s \ (: st (stat s) (two? st ? (<>st + <st) 0)))
+   (fprint conf) (foldl (+) 0 (map (s \ (stat s @ st (two? st ? (<>st + <st) 0)))
                                    (sources conf)))
-   (refresh conf box) (: f (fprint conf)
+   (refresh conf box) (fprint conf @ f
                          (f = peep box 'f -1 ? 0 (pin box 'f f, build conf)))
 
    (build conf)
@@ -322,7 +322,7 @@ table{border-collapse:collapse}
       srcs (sources conf)
       _ (atom? srcs ? (scare 'papel "papel: no markdown sources"))
       _ (mkdirp out)
-      known (foldl (\ t s (pin t (pbase s) 1)) {} srcs)
+      known (foldl (t \ s \ pin t (pbase s) 1) {} srcs)
       self (peep conf 'self "")
       dep (two? (stat self) ? [self])
       dsts (map (s \ out + "/" + outname s) srcs)
@@ -362,7 +362,7 @@ usage: papel [-o OUT] [-t TITLE] [SRC ..]
       ; this file's own names, and nothing puts back the doors it was loaded with.
       _ (borrow 'posix)
       c (conf0 ())
-      t (tablet 0)
+      t {}
       o (uopt as t '(111 116 115) () {"out" 111 "title" 116 "quiet" 113 "serve" 115})
       _ (two? o ? 0 (pdie 2 (last as + " needs an argument")))
       un (uoptun t '(111 116 113 115))
@@ -370,11 +370,11 @@ usage: papel [-o OUT] [-t TITLE] [SRC ..]
       src <>>o
       sy (uoptstray as src)
       _ (!sy ? 0 (pdie 2 ("unknown option " + sy)))
-      _ (: v (uoptv t 111) (!v ? 0 (pin c 'out v)))
-      _ (: v (uoptv t 116) (!v ? 0 (pin c 'title v)))
+      _ (uoptv t 111 @ v (!v ? 0 (pin c 'out v)))
+      _ (uoptv t 116 @ v (!v ? 0 (pin c 'title v)))
       _ (peep t 113 0 ? (pin c 'quiet 1) 0)
       sp (uoptv t 115)
-      _ (!sp ? 0 (: v (uport sp) (v ? (pin c 'serve v) (pdie 2 ("not a port: " + sp)))))
+      _ (!sp ? 0 (uport sp @ v (v ? (pin c 'serve v) (pdie 2 ("not a port: " + sp)))))
       _ (pin c 'src (two? src ? src '("README.md" "doc")))
       _ (build c)
       ; --serve: hand the finished directory to kiosko, which is a separate crew member and
@@ -388,14 +388,14 @@ usage: papel [-o OUT] [-t TITLE] [SRC ..]
       ; because a rebuild per request is not news. the box carries the last fingerprint,
       ; seeded from the build we just did so the first request is not a false alarm.
       port (peep c 'serve 0)
-      _ (port ?
-           (: _ (want 'kiosko "kiosko/kiosko.l")
-              q (peep c 'quiet 0)
-              _ (pin c 'quiet 1)
-              box (pin (tablet 0) 'f (fprint c))
-              (cite 'kiosko 'serve (peep c 'out "out/site") port q (_ \ _ \ refresh c box) ? 0
-               (pdie 1 ("cannot listen on :" + show port)))))
-      0)
+      ((port ?
+          (: _ (want 'kiosko "kiosko/kiosko.l")
+             q (peep c 'quiet 0)
+             _ (pin c 'quiet 1)
+             box (pin {} 'f (fprint c))
+             (cite 'kiosko 'serve (peep c 'out "out/site") port q (_ \ _ \ refresh c box) ? 0
+              (pdie 1 ("cannot listen on :" + show port))))),
+       0))
    papel-main)
 
    papel-main pm)

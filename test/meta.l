@@ -39,7 +39,7 @@
  expr '((\ a b (: c (+ a 9) d (+ c b) (* c d))) 4 5)
  G ev
  (test
- (= 234 (ev expr))
-    (= 234 (meta_eval expr G))
-    (= 234 (meta_eval evr G expr G))
-    (= 234 (meta_eval evr G evr G expr G))))
+ (234 = ev expr)
+    (234 = meta_eval expr G)
+    (234 = meta_eval evr G expr G)
+    (234 = meta_eval evr G evr G expr G)))

@@ -1,4 +1,4 @@
-; --- test/host/xz.l: the .xz container read as it comes, held to the one read whole ---
+; test/host/xz.l -- the .xz container read as it comes, held to the one read whole
 ; xz-pull walks a source a piece at a time and xz-unpack walks the whole string; both are
 ; src/apps/xz.l's, and every cut of a container answers the same bytes, or the same word.
 ;   run:  cat test/00-init.l test/host/xz.l | out/love
@@ -6,23 +6,23 @@
 (borrow 'bytes)
 
 (: (xzt-mk n f) (: b (cask n) (go i) (n <= i ? (string b) (pin b i (f i), go (i + 1))) (go 0))
-   (xzt-cut s k) (: n #s (go i) (? (n <= i) () ((snip s i (min n (i + k))) . go (i + k))) (go 0))
-   (xzt-rd ps) (: t {0 ps} (\ _ (: l (peep t 0 ()) (? (two? l) (: _ (pin t 0 >l) <l) ""))))
+   (xzt-cut s k) (: n #s (go i) (n <= i ? () ((snip s i (min n (i + k))) . go (i + k))) (go 0))
+   (xzt-rd ps) ({0 ps} @ t (_ \ (peep t 0 () @ l (two? l ? (pin t 0 >l, <l) ""))))
    (xzt-pull s k) (: g (xz-pull (xzt-rd (xzt-cut s k)))
-                     (go acc) (: p (xz-next g) (? (#p = 0) [(g 'ans) (? (two? acc) (cats (rev acc)) "")] (go (p . acc))))
+                     (go acc) (xz-next g @ p (#p = 0 ? [(g 'ans) (two? acc ? (cats (rev acc)) "")] (go (p . acc))))
                      (go ()))
    ; the answer whole, as the pull spells it: (1 n) and the bytes, or the word
-   (xzt-whole s) (: u (xz-unpack s) (? (atom? u) [u ""] [[1 #<>u] <>u]))
-   (xzt-all f xs) (foldl (\ a x (a && f x)) 1 xs)
+   (xzt-whole s) (xz-unpack s @ u (atom? u ? [u ""] [[1 #<>u] <>u]))
+   (xzt-all f xs) (foldl (a \ x \ (a && f x)) 1 xs)
    xzt-ks [1 7 4096 100000]
    ; a word is compared alone: the pull has put out what came before it, the whole has not
-   (xzt-same s) (: w (xzt-whole s)
-                   (xzt-all (\ k (: p (xzt-pull s k) (? (atom? <w) (<p = <w) (p = w)))) xzt-ks))
-   xzt-text (: (go i a) (? (i < 1) a (go (i - 1) (a + "the quick brown fox jumps over the lazy dog. "))) (go 400 ""))
-   xzt-noise (xzt-mk 70000 (\ i (((i * 2654435761) >> 11) & 255)))
-   xzt-big (xzt-mk 3000000 (\ i ((i * 7 + (i // 1000)) % 251)))
+   (xzt-same s) (xzt-whole s @ w
+                   (xzt-all (k \ (xzt-pull s k @ p (atom? <w ? (<p = <w) (p = w)))) xzt-ks))
+   xzt-text (: (go i a) (i < 1 ? a (go (i - 1) (a + "the quick brown fox jumps over the lazy dog. "))) (go 400 ""))
+   xzt-noise (xzt-mk 70000 (i \ (i * 2654435761 >> 11 & 255)))
+   xzt-big (xzt-mk 3000000 (i \ ((i * 7 + i // 1000) % 251)))
    xzt-a (xz-pack xzt-text 4096 'crc64)
-   (xzt-flip s k) (: c (cask #s) _ (pour c 0 s 0 #s) _ (pin c k ((s k) ^ 1)) (string c)))
+   (xzt-flip s k) (cask #s @ c (pour c 0 s 0 #s, pin c k (s k ^ 1), string c)))
 (test
  (lit? lzma2-chunk)
  ; the shapes, every check, a window the output outruns, and the empty stream

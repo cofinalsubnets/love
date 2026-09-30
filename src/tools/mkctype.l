@@ -17,17 +17,17 @@
    dir (two? >argv ? <>argv (die "usage: love src/tools/mkctype.l UCD-DIR"))
    ; UnicodeData as rows [lo hi name cat decomp upper lower]; a First/Last pair is one row
    (ud ls acc)
-    (? (atom? ls) (rev acc)
+    (atom? ls ? (rev acc)
        (: f (split ";" <ls) c (hex <f) nm (f 1)
-          (? (ends? nm "First>") (: g (split ";" <>ls)
-                                   (ud >>ls ([c (hex <g) nm (f 2) (f 5) "" ""] . acc)))
+          (ends? nm "First>" ? (split ";" <>ls @ g
+                                  (ud >>ls ([c (hex <g) nm (f 2) (f 5) "" ""] . acc)))
              (ud >ls ([c c nm (f 2) (f 5) (f 12) (f 13)] . acc)))))
    rows (ud (filter (l \ #l) (lines (rd (dir + "/UnicodeData.txt")))) ())
    ; DerivedCoreProperties' ranges for one property
    (dcp prop)
-    (catmap (l \ (: f (map strip (split ";" (data l)))
-                    (? (two? >f && <>f = prop)
-                       (: p (split ".." <f) [[(hex <p) (hex (two? >p ? <>p <p))]]))))
+    (catmap (l \ map strip (split ";" (data l)) @ f
+                    (two? >f && <>f = prop
+                     ? (split ".." <f @ p [[(hex <p) (hex (two? >p ? <>p <p))]])))
             (lines (rd (dir + "/DerivedCoreProperties.txt"))))
    ; the rows a test passes, as ranges
    (pick ok) (map (r \ [<r <>r]) (filter ok rows))
@@ -55,26 +55,26 @@
    (maps k) (map (r \ (<r . hex (r k))) (filter (r \ #(r k)) rows))
    (runs ps)
     (: (go l acc)
-        (? (atom? l) (rev acc)
+        (atom? l ? (rev acc)
            (: c <<l d (><l - c)
               (acc @ ([s n st dd] . more)
-                 (? (dd = d && (n = 1 ? (c - s <= 2) (c = s + n * st)))
-                    (go >l ([s (n + 1) (n = 1 ? (c - s) st) d] . more))
+                 (dd = d && (n = 1 ? (c - s <= 2) (c = s + n * st))
+                  ? (go >l ([s (n + 1) (n = 1 ? (c - s) st) d] . more))
                     (go >l ([c 1 1 d] . acc)))
                  (go >l [[c 1 1 d]]))))
        (catmap 1 (go ps ())))
    ; a line of entries at a time, ninety-odd columns wide
-   (lay l ln) (? (atom? l) (puts (ln + ")\n"))
-                 (: s (show <l)
+   (lay l ln) (atom? l ? (puts (ln + ")\n"))
+                 (show <l @ s
                     (#ln + #s > 92 ? (puts (ln + "\n"), lay l "     ")
                        (lay >l (ln + (ln (#ln - 1) = 32 || ln (#ln - 1) = 40 ? "" " ") + s)))))
    (tray nm l) (puts ("   " + nm + "\n"), lay l "   @(")
-   _ (tray "cpalpha" (toggles alpha))
-   _ (tray "cpupc" (toggles upper))
-   _ (tray "cplowc" (toggles lower))
-   _ (tray "cpprint" (toggles print))
-   _ (tray "cpspace" (toggles space))
-   _ (tray "cpblank" (toggles blank))
-   _ (tray "cpcntrl" (toggles cntrl))
-   _ (tray "cptou" (runs (maps 5)))
-   (tray "cptol" (runs (maps 6))))
+   (tray "cpalpha" (toggles alpha),
+    tray "cpupc" (toggles upper),
+    tray "cplowc" (toggles lower),
+    tray "cpprint" (toggles print),
+    tray "cpspace" (toggles space),
+    tray "cpblank" (toggles blank),
+    tray "cpcntrl" (toggles cntrl),
+    tray "cptou" (runs (maps 5)),
+    tray "cptol" (runs (maps 6))))

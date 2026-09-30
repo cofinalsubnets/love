@@ -7,39 +7,39 @@
 ; run: cat src/love/holo/{thumb1,elf,obj,link}.l + the kore lay, then (ld32-check "<o>").
 (: (ld32-check p)
    (: r (uread p)
-      _ (? (two? r) 0 (scare 'ld32-no-object p))
+      _ (two? r ? 0 (scare 'ld32-no-object p))
       s <>r
-      _ (? ((s 4) = 1) 0 (scare 'ld32-not-elf32 p))
+      _ (s 4 = 1 ? 0 (scare 'ld32-not-elf32 p))
       ob (ld-read p s 40)                                  ; EM_ARM
       secs (peep ob 'secs 0)
       tx (peep (peep ob 'lanes 0) 'text ())
-      _ (? (two? tx) 0 (scare 'ld32-no-text p))
-      _ (? (0 < (peep secs <tx ()) 2) 0 (scare 'ld32-empty-text p))
+      _ (two? tx ? 0 (scare 'ld32-no-text p))
+      _ (0 < (secs <tx) 2 ? 0 (scare 'ld32-empty-text p))
       syms (peep ob 'syms 0) nsym (peep ob 'nsym 0)
       ; a defined func's st_value carries the thumb bit. lose it and the caller
       ; enters arm state, which an M-profile part does not have: an instant fault.
       (swalk i nf nu)
-       (? (nsym <= i) [nf nu]
-          (: v (peep syms i ()) nm (v 0) ty (v 2) sx (v 3) val (v 4)
-             fn? (ty = 2 && 0 < sx)
-             _ (? fn? (? (1 = val & 1) 0 (scare 'ld32-thumb-bit nm)) 0)
-             (swalk (i + 1) (nf + (? fn? 1 0))
-                            (nu + (? (sx = 0 && 0 < #nm) 1 0)))))
+       (nsym <= i ? [nf nu]
+        (: v (syms i) nm (v 0) ty (v 2) sx (v 3) val (v 4)
+           fn? (ty = 2 && 0 < sx)
+           ((fn? ? (1 = val & 1 ? 0 (scare 'ld32-thumb-bit nm)) 0),
+            swalk (i + 1) (nf + (fn? ? 1 0))
+                          (nu + (sx = 0 && 0 < #nm ? 1 0)))))
       w (swalk 0 0 0)
-      _ (? (0 < <w) 0 (scare 'ld32-no-funcs p))
-      _ (? (0 < <>w) 0 (scare 'ld32-no-undefs p))          ; am.c calls __aeabi_*
+      _ (0 < <w ? 0 (scare 'ld32-no-funcs p))
+      _ (0 < <>w ? 0 (scare 'ld32-no-undefs p))          ; am.c calls __aeabi_*
       ; the only two kinds a thumb1 object mints -- and the addend slot empty on
       ; every one, because a rel keeps its addend in the field. a kind outside the
       ; set means the writer grew one the reader was never told about.
       (each ts m)
-       (? (atom? ts) m
-          (: t <ts k (t 1) ad (t 3)
-             _ (? (elem k '(2 10)) 0 (scare 'ld32-reloc-kind k))
-             _ (? (two? ad) (scare 'ld32-rel-addend k) 0)
-             (each >ts (m + 1))))
-      (rwalk rs n) (? (atom? rs) n (rwalk >rs (each >(<rs) n)))
+       (atom? ts ? m
+        (: t <ts k (t 1) ad (t 3)
+           ((elem k '(2 10) ? 0 (scare 'ld32-reloc-kind k)),
+            (two? ad ? (scare 'ld32-rel-addend k) 0),
+            each >ts (m + 1))))
+      (rwalk rs n) (atom? rs ? n (rwalk >rs (each >(<rs) n)))
       nr (rwalk (peep ob 'relas 0) 0)
-      _ (? (0 < nr) 0 (scare 'ld32-no-relocs p))
-      _ (puts ("ld32: " + show nsym + " syms, " + show <w + " thumb funcs, "
-               + show <>w + " undefs, " + show nr + " REL relocs -- ok\n"))
-      (flush out)))
+      ((0 < nr ? 0 (scare 'ld32-no-relocs p)),
+       puts ("ld32: " + show nsym + " syms, " + show <w + " thumb funcs, "
+             + show <>w + " undefs, " + show nr + " REL relocs -- ok\n"),
+       flush out)))

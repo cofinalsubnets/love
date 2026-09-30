@@ -1,6 +1,6 @@
-; test/caja/boxes.l -- src/apps/caja/box.l held to TeX, a box at a time. a page is described
-; once, as data, and said two ways: as plain -ini TeX input, and as caja's nodes. the
-; shell (test/gate/caja.sh) runs TeX on the one and compares its DVI with the other's.
+; test/caja/boxes.l -- src/apps/caja/box.l held to TeX, a box at a time: a page described
+; once as data is said as plain -ini TeX and as caja's nodes, and test/gate/caja.sh
+; compares the two DVIs.
 ;
 ;   love test/caja/boxes.l OUT SEED N   OUT.tex and OUT.dvi: the fixed pages, then N more
 ;                                       drawn from SEED
@@ -19,9 +19,9 @@
    _ (borrow "src/apps/tfm.l")
    _ (borrow "src/apps/caja/box.l")
    _ (borrow 'caja-box)
-   (die m) (: _ (say err ("boxes: " + m + "\n")) _ (flush err) (quit 1))
+   (die m) (say err ("boxes: " + m + "\n"), flush err, quit 1)
    (slurpf p) (uread p @ [1 x] (x + "") (die ("cannot read " + p)))
-   (spit p s) (: q (open p "w") (? (hot? q) (: _ (say q s) (close q)) (die ("cannot write " + p))))
+   (spit p s) (open p "w" @ q (hot? q ? (say q s, close q) (die ("cannot write " + p))))
 
    ; the fonts: TeX name, and size (-1000 the design size, else sp)
    fonts [["cmr10" -1000] ["cmbx12" -1000] ["cmr10" 478413] ["cmtt10" 1310720] ["cmsl9" -1000]
@@ -29,24 +29,24 @@
    (fname k) ("\\f" + string (97 + k))
    (tex-fonts _) (cats (map (k \ (: e (fonts k) sz (e 1)
                                     ("\\font" + fname k + "=" + (e 0)
-                                     + (? (sz = -1000) "" (" at " + show sz + "sp")) + "\\relax\n")))
+                                     + (sz = -1000 ? "" (" at " + show sz + "sp")) + "\\relax\n")))
                              ^#fonts))
 
    ; --- the TeX side ---------------------------------------------------------------------
    (units o) (["sp" "fil" "fill" "filll"] o)
    ; a fil amount is written as a decimal of 65536ths; the generator keeps it exact
-   (amt v o) (? (o = 0) (show v + "sp")
+   (amt v o) (o = 0 ? (show v + "sp")
                 (: whole (v // 65536) frac (v % 65536)
-                   (? (frac = 0) (show whole + units o) (show whole + ".5" + units o))))
+                   (frac = 0 ? (show whole + units o) (show whole + ".5" + units o))))
    (spec-tex sp) (? (!(two? sp)) "" (sp 0 = 'to) (" to " + show (sp 1) + "sp") (" spread " + show (sp 1) + "sp"))
-   (dim-tex nm v) (? (v = ()) "" (" " + nm + " " + show v + "sp"))
+   (dim-tex nm v) (v = () ? "" (" " + nm + " " + show v + "sp"))
    (item-tex mode it)                         ; mode 'h or 'v, the list the item stands in
     (it 0 @
      'c ("\\relax" + fname (it 1) + "\\noboundary\\char" + show (it 2) + "\\noboundary\\relax")
      'k ("\\kern" + show (it 1) + "sp\\relax")
-     'g ((? (mode = 'h) "\\hskip" "\\vskip") + show (it 1) + "sp plus " + amt (it 2) (it 3)
+     'g ((mode = 'h ? "\\hskip" "\\vskip") + show (it 1) + "sp plus " + amt (it 2) (it 3)
          + " minus " + amt (it 4) (it 5) + "\\relax")
-     'r ((? (mode = 'h) "\\vrule" "\\hrule") + dim-tex "width" (it 1) + dim-tex "height" (it 2)
+     'r ((mode = 'h ? "\\vrule" "\\hrule") + dim-tex "width" (it 1) + dim-tex "height" (it 2)
          + dim-tex "depth" (it 3) + "\\relax")
      'l (["\\leaders" "\\cleaders" "\\xleaders"] (it 1 - 100) + box-tex mode (it 2) + item-tex mode (it 3))
      ('h || 'v) (box-tex mode it)
@@ -55,9 +55,9 @@
    (box-tex mode it)
     (: kind (it 0)
        sh (it 1)
-       body (cats (map (x \ (? (kind = 'v && elem (x 0) ['h 'v]) "\\prevdepth=-1000pt\\relax" "")
+       body (cats (map (x \ (kind = 'v && elem (x 0) ['h 'v] ? "\\prevdepth=-1000pt\\relax" "")
                             + item-tex kind x) (it 3)))
-       b ((? (kind = 'h) "\\hbox" "\\vbox") + spec-tex (it 2) + "{" + body + "}")
+       b ((kind = 'h ? "\\hbox" "\\vbox") + spec-tex (it 2) + "{" + body + "}")
        (? (it 0 = 'r) (item-tex mode it)
           (sh = 0) b
           (mode = 'h) ("\\lower" + show sh + "sp" + b)
@@ -67,22 +67,22 @@
    (item-node J it)
     (it 0 @
      'c (cb-char J (J 'fmap (it 1)) (it 2))
-     'k (: k (cb-kern (it 1)) _ (pin k 'sub 1) k)
+     'k (cb-kern (it 1) @ k (pin k 'sub 1, k))
      'g (cb-glue (it 1) (it 2) (it 3) (it 4) (it 5))
-     'r (cb-rule (? (it 1 = ()) -1073741824 (it 1)) (? (it 2 = ()) -1073741824 (it 2))
-                 (? (it 3 = ()) -1073741824 (it 3)))
+     'r (cb-rule (it 1 = () ? -1073741824 (it 1)) (it 2 = () ? -1073741824 (it 2))
+                 (it 3 = () ? -1073741824 (it 3)))
      'l (cb-leaders (it 1) (item-node J (it 2)) (item-node J (it 3)))
      ('h || 'v) (box-node J it)
      (die ("no form " + show it)))
    (box-node J it)
     (: l (cb-list (map (item-node J) (it 3)))
        sp (it 2)
-       m (? (two? sp) (? (sp 0 = 'to) 'exactly 'additional) 'additional)
-       w (? (two? sp) (sp 1) 0)
+       m (two? sp ? (sp 0 = 'to ? 'exactly 'additional) 'additional)
+       w (two? sp ? (sp 1) 0)
        ; -ini TeX's \boxmaxdepth is 0: a vbox's depth goes into its height
-       b (? (it 0 = 'h) (cb-hpack J l w m) (cb-vpackage J l w m 0))
-       _ (pin b 'shift (it 1))
-       b)
+       b (it 0 = 'h ? (cb-hpack J l w m) (cb-vpackage J l w m 0))
+       (pin b 'shift (it 1),
+        b))
 
    ; --- the pages ------------------------------------------------------------------------
    ab ['c 0 65] ; a few pieces the fixed pages share
@@ -110,24 +110,24 @@
      ['h 0 () (map (k \ ['c 5 (128 + k * 9)]) ^14)]]
 
    ; --- random pages: a small grammar, drawn from a seeded stream --------------------------
-   (rnd st) (: x ((st 's * 1103515245 + 12345) % 2147483648) _ (pin st 's x) (x // 16))
+   (rnd st) (((st 's * 1103515245 + 12345) % 2147483648) @ x (pin st 's x, x // 16))
    (pick st l) (l (rnd st % #l))
    (rand-item st mode depth)
-    (: k (rnd st % (? (depth > 2) 5 7))
-       (? (k = 0 || (k = 1 && mode = 'h)) (? (mode = 'h) ['c (rnd st % 2) (65 + rnd st % 26)] ['k (rnd st % 200000)])
-          (k = 1) ['k (rnd st % 200000 - 50000)]
-          (k = 2) (: o (pick st [0 0 0 1 2]) ['g (rnd st % 300000) (? (o = 0) (rnd st % 100000) (65536 * (1 + rnd st % 3))) o
-                                              (rnd st % 50000) 0])
-          (k = 3) (? (mode = 'h) ['r (rnd st % 50000) () ()] ['r () (rnd st % 40000) 0])
-          (k = 4) ['k (rnd st % 100000)]
-          (k = 5) (rand-box st 'h (depth + 1))
-          (rand-box st 'v (depth + 1))))
+    ((rnd st % (depth > 2 ? 5 7)) @ k
+     (? (k = 0 || (k = 1 && mode = 'h)) (mode = 'h ? ['c (rnd st % 2) (65 + rnd st % 26)] ['k (rnd st % 200000)])
+        (k = 1) ['k (rnd st % 200000 - 50000)]
+        (k = 2) (pick st [0 0 0 1 2] @ o ['g (rnd st % 300000) (o = 0 ? (rnd st % 100000) (65536 * (1 + rnd st % 3))) o
+                                          (rnd st % 50000) 0])
+        (k = 3) (mode = 'h ? ['r (rnd st % 50000) () ()] ['r () (rnd st % 40000) 0])
+        (k = 4) ['k (rnd st % 100000)]
+        (k = 5) (rand-box st 'h (depth + 1))
+        (rand-box st 'v (depth + 1))))
    (rand-box st kind depth)
     (: n (1 + rnd st % 5)
        items (map (_ \ rand-item st kind depth) ^n)
-       items2 (? (kind = 'v) (map (x \ (? (x 0 = 'c) ['h 0 () [x]] x)) items) items)
+       items2 (kind = 'v ? (map (x \ x 0 = 'c ? ['h 0 () [x]] x) items) items)
        sp (pick st [() () ['to (rnd st % 4000000)] ['spread (rnd st % 400000 - 100000)]])
-       [kind (? (depth = 0) 0 (rnd st % 100000 - 30000)) sp items2])
+       [kind (depth = 0 ? 0 (rnd st % 100000 - 30000)) sp items2])
 
    (main args)
     (: out (args 0) st {'s (read (args 1))} n (read (args 2))
@@ -137,15 +137,15 @@
        _ (pin J 'fmap (: m {} (go k) (? (k < #fonts)
                                          (: e (fonts k) p (args (3 + k))
                                             f (cb-font J (e 0) "" (slurpf p) (e 1))
-                                            _ (? (f = 'badtfm) (die ("font " + p)))
-                                            _ (pin m k f) (go (k + 1)))
+                                            ((? (f = 'badtfm) (die ("font " + p))),
+                                             pin m k f, go (k + 1)))
                                          m)
                           (go 0)))
        _ (map (k \ cb-set-param J k ({'year 1776 'month 7 'day 4 'time 720} k)) ['year 'month 'day 'time])
        tex ("\\catcode`\\{=1 \\catcode`\\}=2 \\batchmode\\year=1776 \\month=7 \\day=4 \\time=720\n"
             + tex-fonts 0
             + cats (map (pg \ "\\shipout" + box-tex 'v pg + "\n") pages) + "\\end\n")
-       _ (spit (out + ".tex") tex)
-       _ (map (pg \ cb-ship J (box-node J pg)) pages)
-       (spit (out + ".dvi") (cb-dvi J)))
+       (spit (out + ".tex") tex,
+        map (pg \ cb-ship J (box-node J pg)) pages,
+        spit (out + ".dvi") (cb-dvi J)))
    (main >argv))

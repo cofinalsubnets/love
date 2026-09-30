@@ -7,15 +7,15 @@
 ; usage: love test/gate/ink.l SCALE PLAIN.ppm SCALED.ppm
 (borrow 'kore)
 (: as >argv
-   k (uatoi (cap as))
-   (past s i n) (? (3 <= n) i (past s (i + 1) (n + (s i = 10))))  ; P6, the size, the depth
-   (ink p) (: r (uread p) (? (two? r) (: s <>r (net (snip s (past s 0 0) (tally s)))) 0))
-   a (ink (cap >as))
-   b (ink (cap >>as))
-   want ((k * k) * a)
-   bad (? (a < 1) ((cap >as) + ": no ink at all")
-          (b != want) ("the re-made grid holds " + (show b) + " ink, wanted " + (show want))
+   k (uatoi <as)
+   (past s i n) (3 <= n ? i (past s (i + 1) (n + (s i = 10))))  ; P6, the size, the depth
+   (ink p) (uread p @ r (two? r ? (<>r @ s (net (snip s (past s 0 0) #s))) 0))
+   a (ink <>as)
+   b (ink <>>as)
+   want (k * k * a)
+   bad (? (a < 1) (<>as + ": no ink at all")
+          (b != want) ("the re-made grid holds " + show b + " ink, wanted " + show want)
           ())
-   _ (puts (0 < (tally bad) ? ("FAIL ink: " + bad + "\n")
-                              ("  ink: ok -- " + (show a) + " on the paper, and the same text at " + (show want) + " once the grid was re-made\n")))
-   (quit (0 < (tally bad) ? 1 0)))
+   (puts (0 < #bad ? ("FAIL ink: " + bad + "\n")
+                            ("  ink: ok -- " + show a + " on the paper, and the same text at " + show want + " once the grid was re-made\n")),
+    quit (0 < #bad ? 1 0)))

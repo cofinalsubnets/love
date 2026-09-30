@@ -17,8 +17,8 @@
    (cnt p a b) #(p (qi a) (qi b))
    ; a query answers in EMISSION order, not time order -- a stack interleaves its
    ; members -- so a law about which value lands where sorts first.
-   (vals p a b) (map (\ x (evv x))
-                     (sortby (\ u v ((evwb u) < (evwb v)))
+   (vals p a b) (map (x \ evv x)
+                     (sortby (u \ v \ (evwb u) < (evwb v))
                              (filter onset? (p (qi a) (qi b)))))
 
    ; --- cycle time: what harp leans on the tree's rationals for --------------
@@ -100,8 +100,8 @@
              ((vals (palin pp) 1 2) = ['c 'b 'a])
              (4 = #(ons (seg (qi 4) (pure 'a)) 0 1))
              ; off stacks a shifted copy on the plain one: three fragments, two struck
-             (3 = cnt (off (1 /// 4) (\ q q) (pure 'a)) 0 1)
-             (2 = #(ons (off (1 /// 4) (\ q q) (pure 'a)) 0 1)))
+             (3 = cnt (off (1 /// 4) (q \ q) (pure 'a)) 0 1)
+             (2 = #(ons (off (1 /// 4) (q \ q) (pure 'a)) 0 1)))
 
    ; --- chance is a place, not a moment --------------------------------------
    ; the same span asked twice must answer the same, or a live loop stutters
@@ -116,17 +116,17 @@
    ; span: a real one answers exactly one event spanning it, an empty one answers
    ; nothing at all. an inverted test here silences the whole family in silence.
    _ (test
-      (: r (sine (qi 0) (qi 1))
-         ((1 = #r) && ((0 = qnum (evwb (r 0))) && (1 = qnum (evwe (r 0))))))
+      (sine (qi 0) (qi 1) @ r
+       (1 = #r && ((0 = qnum (evwb (r 0))) && (1 = qnum (evwe (r 0))))))
       ; every member of the family, over a real span and an empty one
-      (foldl (\ a p (a && ((1 = #(p (qi 0) (qi 1))) && !(p (qi 1) (qi 1)))))
+      (foldl (a \ p \ a && ((1 = #(p (qi 0) (qi 1))) && !(p (qi 1) (qi 1))))
              1 [sine cosine saw isaw tri square rand])
       ; ..and the sampled values keep to their rails
       (: (v1 p) (evv (p (qi 0) (qi 1) 0))
-         (foldl (\ a p (a && (: x (v1 p) ((0.0 <= x) && (x <= 1.0)))))
+         (foldl (a \ p \ a && (v1 p @ x (0.0 <= x && x <= 1.0)))
                 1 [sine cosine saw isaw tri square rand]))
       ; range maps those rails onto its own
-      (: x (evv (range 2.0 3.0 saw (qi 0) (qi 1) 0)) ((2.0 <= x) && (x <= 3.0)))
+      (evv (range 2.0 3.0 saw (qi 0) (qi 1) 0) @ x (2.0 <= x && x <= 3.0))
       ; the same span asked twice answers the same: rand is a place, not a moment
       ((evv (rand (qi 3) (qi 4) 0)) = (evv (rand (qi 3) (qi 4) 0))))
 
@@ -134,8 +134,8 @@
    hv (hit (pure "bd") (qi 0) (qi 1))
    _ (test (tablet? (evv (hv 0)))  ("bd" = (peep (evv (hv 0)) 's ()))
              ; # takes structure from the left and the value from the right
-             ((: r (pset (hit (pure "bd")) (note (pure 7)) (qi 0) (qi 1))
-                 [(peep (evv (r 0)) 's ()) (peep (evv (r 0)) 'note ())])
+             ((pset (hit (pure "bd")) (note (pure 7)) (qi 0) (qi 1) @ r
+               [(peep (evv (r 0)) 's ()) (peep (evv (r 0)) 'note ())])
               = ["bd" 7])
              ; psets is # over several controls in one form, folded from the left: the
              ; later word wins a key, and a pattern alone is itself
@@ -143,18 +143,18 @@
                  v (evv (r 0))
                  [(peep v 's ()) (peep v 'note ()) (peep v 'gain ())])
               = ["bd" 9 0.5])
-             (: (flat q) (: v (evv (q (qi 0) (qi 1) 0)) [(peep v 's ()) (peep v 'note ())])
+             (: (flat q) (evv (q (qi 0) (qi 1) 0) @ v [(peep v 's ()) (peep v 'note ())])
                 (flat (psets (hit (pure "bd")) (note (pure 7))) = flat (pset (hit (pure "bd")) (note (pure 7)))))
              (1 = #((psets (hit (pure "bd"))) (qi 0) (qi 1)))
              ; jux is the same shape: two copies, hard left and hard right
-             ((: r (jux rev (hit (fastcat [(pure "bd") (pure "sn")])) (qi 0) (qi 1))
-                 (sort (map (\ x (peep (evv x) 'pan ())) r)))
+             ((jux rev (hit (fastcat [(pure "bd") (pure "sn")])) (qi 0) (qi 1) @ r
+               (sort (map (x \ peep (evv x) 'pan ()) r)))
               = [0.0 0.0 1.0 1.0]))
 
    ; --- a scalar where a pattern is wanted is one by its type: a string is mini, a
    ; number is pure, and a time may be an int or a decimal, made exact
-   _ (test ((map (\ x (evv x)) (stack ["bd sn"] (qi 0) (qi 1))) = ["bd" "sn"])
-             ((map (\ x (peep (evv x) 's ())) (hit "bd sn" (qi 0) (qi 1))) = ["bd" "sn"])
+   _ (test ((map (x \ evv x) (stack ["bd sn"] (qi 0) (qi 1))) = ["bd" "sn"])
+             ((map (x \ peep (evv x) 's ()) (hit "bd sn" (qi 0) (qi 1))) = ["bd" "sn"])
              ((peep (evv (note 7 (qi 0) (qi 1) 0)) 'note ()) = 7)
              ((peep (evv (gain 0.5 (qi 0) (qi 1) 0)) 'gain ()) = 0.5)
              ((evs (fast 2 (pure 'a)) 0 1) = (evs (fast (qi 2) (pure 'a)) 0 1))
@@ -189,10 +189,10 @@
              (: ix (iota 200 + 10)
                 (amp v) (mkvoice 10 v 1000 1 ix)
                 a (amp {'s "sin" 'note 0})  b (amp {'s "sin" 'note 0 'slide 0})  c (amp {'s "sin" 'note 0 'slide 12})
-                ((aall (a = b)) && !(aall (a = c)))))
+                (aall (a = b) && !(aall (a = c)))))
 
    ; --- mini-notation --------------------------------------------------------
-   (m s) (map (\ x [(qnum (evwb x)) (qnum (evwe x)) (evv x)])
+   (m s) (map (x \ [(qnum (evwb x)) (qnum (evwe x)) (evv x)])
               (filter onset? (mini s (qi 0) (qi 1))))
    _ (test ((m "bd sn")     = [[0 0.5 "bd"] [0.5 1 "sn"]])
              ((m "bd*2 sn")   = [[0 0.25 "bd"] [0.25 0.5 "bd"] [0.5 1 "sn"]])
@@ -204,7 +204,7 @@
              ((m "bd(3,8)")   = [[0 0.125 "bd"] [0.375 0.5 "bd"] [0.75 0.875 "bd"]])
              ((m "0 .5 -2")   = [[0 (1 / 3) 0] [(1 / 3) (2 / 3) 0.5] [(2 / 3) 1 -2]])
              ; < > is one member per cycle, not one slot
-             ((map (\ x (evv x)) (filter onset? (mini "<bd sn>" (qi 1) (qi 2)))) = ["sn"])
+             ((map (x \ evv x) (filter onset? (mini "<bd sn>" (qi 1) (qi 2)))) = ["sn"])
              ; a comma stacks, at the top level and inside a bracket alike
              (6 = #(m "bd*2, hh*4"))
              (6 = #(m "[bd*2, hh*4]"))
@@ -216,14 +216,14 @@
 ; --- the voices, at the far end only ----------------------------------------
 ; the pure half above is the gate; this half proves the pattern reaches PCM. it
 ; wants a filesystem and the horn's policy word, so it is hosted-only.
-(: _ (? !(hosted && files) 0
+(: _ (!(hosted && files) ? 0
         (: _ (setenv "HORN" "none")
            p (hit (mini "bd*2 [~ sn]"))
            w "out/.harp.wav"
            spc 24000                                   ; rate 24000, cps 1: one cycle
            _ (harp-wav p 0 1 24000 1 0 20000.0 w)
            q (open w "r")
-           s (? (hot? q) (: b (slurp q) _ (close q) (b + "")) "")
+           s (hot? q ? (slurp q @ b (close q, b + "")) "")
            ; a canonical 44-byte riff header over exactly one cycle of stereo frames
            _ (test (("RIFF" = snip s 0 4)  ("WAVE" = snip s 8 12)
                       ("data" = snip s 36 40)
@@ -232,10 +232,10 @@
            ; quarter cycle, a snare at three quarters, and near-nothing between --
            ; the peak of n frames from frame a, left channel, sign-extended
            (pk a n) (: e (44 + ((a + n) * 4))
-                       (go i m) (? (i >= e) m
+                       (go i m) (i >= e ? m
                                    (: v ((s i) + ((s (i + 1)) << 8))
-                                      u (? (v > 32767) (65536 - v) v)
-                                      (go (i + 4) (? (u > m) u m))))
+                                      u (v > 32767 ? (65536 - v) v)
+                                      (go (i + 4) (u > m ? u m))))
                        (go (44 + (a * 4)) 0))
            _ (test ((pk 0 2000) > 1000)                            ; kick
                      ((pk (spc // 4) 2000) > 1000)                   ; kick
@@ -248,8 +248,8 @@
            t0 (clock 0)
            _ (harp-horn p 0 2 24000 2 0 20000.0)
            dt (clock t0)
-           _ (test (dt >= 400) (dt < 8000))
-           (setenv "HORN" ()))))
+           ((test (dt >= 400) (dt < 8000)),
+            setenv "HORN" ()))))
 
 ; --- pack: the two ways of laying a chunk answer the same bytes ---------------------
 ; pack has a fast path (guts' pinv, a channel a call, the stride doing the interleave)
@@ -261,13 +261,13 @@
    ; the byte loop, transcribed: pack's own slow arm, so a drift in either is caught
    (slowpack lr n g)
     (: L <lr  R >lr  c (cask (n * 4))
-       (clip1 x) (: v (int (x * g))
-                    (? (v > 32767) 32767 (v < -32768) -32768 (v & 65535)))
-       (go i) (? (i >= n) c
+       (clip1 x) (int (x * g) @ v
+                  (? (v > 32767) 32767 (v < -32768) -32768 (v & 65535)))
+       (go i) (i >= n ? c
                  (: l (clip1 (peep L i 0))  r (clip1 (peep R i 0))  o (i * 4)
-                    _ (pin c o (l & 255))         _ (pin c (o + 1) ((l >> 8) & 255))
-                    _ (pin c (o + 2) (r & 255))   _ (pin c (o + 3) ((r >> 8) & 255))
-                    (go (i + 1))))
+                    (pin c o (l & 255), pin c (o + 1) ((l >> 8) & 255),
+                     pin c (o + 2) (r & 255), pin c (o + 3) ((r >> 8) & 255),
+                     go (i + 1))))
        (string (go 0)))
    n 600
    ix ((iota n) * 1.0)
@@ -275,13 +275,13 @@
    ; reads the clamp, the sign and the ordinary middle in one pass
    L (((ix / (n * 1.0)) * 5.0) - 2.5)
    R (sin (ix * 0.017))
-   _ (test lay                                            ; the door is here at all
-           (pack (L . R) n 20000.0 = slowpack (L . R) n 20000.0)
-           ((n * 4) = #(pack (L . R) n 20000.0)))
-   ; ..and at a gain that rails almost everything, where the two clamps must agree
-   _ (test (pack (L . R) n 900000.0 = slowpack (L . R) n 900000.0))
-   ; ..and at one that rails nothing
-   (test (pack (L . R) n 100.0 = slowpack (L . R) n 100.0)))
+   ((test lay                                             ; the door is here at all
+          (pack (L . R) n 20000.0 = slowpack (L . R) n 20000.0)
+          ((n * 4) = #(pack (L . R) n 20000.0))),
+    ; ..and at a gain that rails almost everything, where the two clamps must agree
+    (test (pack (L . R) n 900000.0 = slowpack (L . R) n 900000.0)),
+    ; ..and at one that rails nothing
+    (test (pack (L . R) n 100.0 = slowpack (L . R) n 100.0))))
 
 ; the sentinel the gate reads
 (say out "test/law/harp: patterns, mini-notation, voices\n")

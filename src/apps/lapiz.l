@@ -97,17 +97,17 @@
 (borrow 'text)  ; a line's width in cells
 
 ; --- little utils ---
-(: (rep s n)    (? (n < 1) "" (s + rep s (n - 1)))
-   (splitnl s)  ((: (g i st acc) (? (i < #s) (? (s i = 10) (g (i + 1) (i + 1) (snip s st i . acc))
+(: (rep s n)    (n < 1 ? "" (s + rep s (n - 1)))
+   (splitnl s)  ((: (g i st acc) (? (i < #s) (s i = 10 ? (g (i + 1) (i + 1) (snip s st i . acc))
                                                       (g (i + 1) st acc))
                                     (st < i) (rev (snip s st i . acc))
                                     (rev acc)))
                  0 0 ())
    (endnl s)    (#s && s (#s - 1) = 10 ? s (s + "\n"))               ; one trailing newline, always
    ; a parser whose payload must also pass ok, or it fails where it began
-   (pwhen ok a s y n) (a s (\ s1 x (? (ok x) (y s1 x) (n s))) n)
+   (pwhen ok a s y n) (a s (s1 \ x \ (ok x ? (y s1 x) (n s))) n)
    ; a row laid to n cells: the cells past its end empty, the ones past n gone
-   (tfit n l) (? (n < 1) () ((? (two? l) <l ()) . (tfit (n - 1) (? (two? l) >l ())))))
+   (tfit n l) (n < 1 ? () ((two? l ? <l) . (tfit (n - 1) (two? l ? >l)))))
 
 
 ; --- character classes ---
@@ -146,7 +146,7 @@
              ("==" "≡") ("!=" "≠") ("<=" "≤") (">=" "≥") ("sr" "√") ("fm" "′"))
    (glyph n)   ((: (g l) (? (atom? l) ((: (h m) (? (atom? m) ("\\(" + n) (<<m = n) <><m (h >m))) rglyphr)
                             (<<l = n) <><l (g >l))) rglyphs)
-   (rqat s i)  ((: (g l) (? (atom? l) ()                       ; does a glyph start at i? -> (name len)
+   (rqat s i)  ((: (g l) (atom? l ? ()                       ; does a glyph start at i? -> (name len)
                             (: gl <><l n #gl
                              (i + n <= #s && gl = snip s i (i + n) ? [<<l n] (g >l)))))
                 rglyphs)
@@ -158,7 +158,7 @@
    (rstr n) ((: (g l) (? (atom? l) "" (<<l = n) <><l (g >l))) rstrs))
 
 ; --- normalizing an inl: adjacent texts are one text (the AST is the fixed point, so this matters) ---
-(: (mrg l) (? (atom? l) () (: h <l (<h = 'text && 0 = #<>h)) (mrg >l)     ; a \& contributes an empty text: drop it
+(: (mrg l) (? (atom? l) () (<l @ h (<h = 'text && 0 = #<>h)) (mrg >l)     ; a \& contributes an empty text: drop it
               (atom? >l) (<l . ())
               (: a <l b <>l
                (<a = 'text && <b = 'text ? (mrg (['text (<>a + <>b)] . >>l))
@@ -169,7 +169,7 @@
    (bmrg l) (? (atom? l) ()
                (atom? >l) (<l . ())
                (: a <l b <>l
-                  (? (<a = <b && elem <a '(bullets numbers deflist))
+                  (<a = <b && elem <a '(bullets numbers deflist) ?
                      (bmrg ([<a (<>a + <>b)] . >>l))
                      (a . bmrg >l))))
    plain (cats * map caup)                        ; an inl of pure texts back to a string
@@ -209,13 +209,13 @@
    ; a cell ends at a bar no backslash escapes (the escape comes off, so a code span keeps
    ; its bar) and is one inl. only a head over a delimiter row starts one, so a line that
    ; merely opens with a bar stays prose
-   (tbtrim s) (: n #s (l i) (? (i < n && sp? (s i)) (l (i + 1)) i)
-                 (r j) (? (0 < j && sp? (s (j - 1))) (r (j - 1)) j)
-                 a (l 0) b (r n) (? (a < b) (snip s a b) ""))
+   (tbtrim s) (: n #s (l i) (i < n && sp? (s i) ? (l (i + 1)) i)
+                 (r j) (0 < j && sp? (s (j - 1)) ? (r (j - 1)) j)
+                 a (l 0) b (r n) (a < b ? (snip s a b) ""))
    (tcells s)
     (: n #s
        (go i cur acc)
-        (? (n <= i) (rev (? (0 < #(tbtrim cur)) (tbtrim cur . acc) acc))
+        (? (n <= i) (rev (0 < #(tbtrim cur) ? (tbtrim cur . acc) acc))
            (s i = 92 && i + 1 < n && s (i + 1) = 124) (go (i + 2) (cur + "|") acc)
            (s i = 92 && i + 1 < n) (go (i + 2) (cur + snip s i (i + 2)) acc)
            (s i = 124) (go (i + 1) "" (tbtrim cur . acc))
@@ -223,14 +223,14 @@
        (go 0 "" ()))
    (tdel c)                        ; a delimiter cell -> its alignment, () for any other text
     (: n #c lc (0 < n && c 0 = 58) rc (1 < n && c (n - 1) = 58)
-       mid (snip c (? lc 1 0) (? rc (n - 1) n))
+       mid (snip c (lc ? 1 0) (rc ? (n - 1) n))
        dash ((: (g i) (? (#mid <= i) 1 (mid i = 45) (g (i + 1)) 0)) 0)
-       (? (0 < #mid && dash) (? (lc && rc) 'c rc 'r lc 'l 'n) ()))
+       (0 < #mid && dash ? (? (lc && rc) 'c rc 'r lc 'l 'n)))
    (tdels? l) (? (atom? l) 1 !(tdel <l) 0 (tdels? >l))
    t-row   (tag (p \ tcells (cats p)) (seqs [(skip (lit "|")) (span nonl?) eol]))
    t-del   (pwhen (p \ two? <p && tdels? <p) t-row)
    t-start (pwhen (p \ #<p = #<>p) (seq t-row t-del))
-   b-table (tag (p \ (: w #<p ['table (map tdel <>p) (map mdinl <p) (map (r \ tfit w (map mdinl r)) >>p)]))
+   b-table (tag (p \ (#<p @ w ['table (map tdel <>p) (map mdinl <p) (map (r \ tfit w (map mdinl r)) >>p)]))
                 (pwhen (p \ #<p = #<>p) (seqs [t-row t-del (many t-row)])))
    b-rule  (tag (_ \ '(rule)) (seqs [(lit "---") (skip (span sp?)) (lit "\n")]))
    b-head  (tag (p \ ['head (1 + #<>p) (mdinl <>>>p)])
@@ -293,9 +293,9 @@
 ; ---------------------------------------------------------------- markdown, show
 (: (mq s) (:- (g 0 "") (g i acc) (i >= #s ? acc (s i @ c (g (i + 1) (acc + (spec? c ? "\\" "") + string c)))))
    ; a text ending in `!` ahead of a link wears one backslash, else the pair reads as an image
-   (mdi l)  (? (atom? l) ""
-               (: s (mdi1 <l)
-                  (? (<<l = 'text && two? >l && <<>l = 'link && 0 < #s && s (#s - 1) = 33)
+   (mdi l)  (atom? l ? ""
+               (mdi1 <l @ s
+                  (<<l = 'text && two? >l && <<>l = 'link && 0 < #s && s (#s - 1) = 33 ?
                       (snip s 0 (#s - 1) + "\\!" + mdi >l)
                      (s + mdi >l))))
    (mdi1 x) (<x @ 'text (mq <>x)
@@ -314,7 +314,7 @@
    (mdefs l)    (catmap (it \ mdi <it + "\n:   " + mdi <>it + "\n") l)
    ; a table row, a cell's bars escaped so the row splits where it should
    (tbar l)     ("| " + join " | " l + " |")
-   (tmcell i)   (: s (mdi i) (cats (map (k \ s k @ 124 "\\|" c (string c)) ^#s)))
+   (tmcell i)   (mdi i @ s (cats (map (k \ s k @ 124 "\\|" c (string c)) ^#s)))
    (tmal a)     (a @ 'l ":--" 'c ":-:" 'r "--:" "---")
    (mtable x)   (tbar (map tmcell (x 2)) + "\n" + tbar (map tmal (x 1)) + "\n"
                  + catmap (r \ tbar (map tmcell r) + "\n") (x 3))
@@ -349,13 +349,13 @@
    (hmeta kvs)  (join "\n" (map (p \ "<meta name=\"" + string <p + "\" content=\"" + hq <>p + "\">") (mfilled kvs)))
    (hdefs l)    ("<dl>\n" + join "\n" (map (it \ "<dt>" + hti <it + "</dt>\n<dd>" + hti <>it + "</dd>") l) + "\n</dl>")
    (hal a)      (a @ 'l " align=\"left\"" 'c " align=\"center\"" 'r " align=\"right\"" "")
-   (hcells t al cs) (? (two? cs) ("<" + t + hal <al + ">" + hti <cs + "</" + t + ">" + hcells t >al >cs) "")
+   (hcells t al cs) (two? cs ? ("<" + t + hal <al + ">" + hti <cs + "</" + t + ">" + hcells t >al >cs) "")
    (hrow t al cs) ("<tr>" + hcells t al cs + "</tr>")
    (htable x)   ("<table>\n<thead>\n" + hrow "th" (x 1) (x 2) + "\n</thead>\n<tbody>\n"
                  + cats (map (r \ hrow "td" (x 1) r + "\n") (x 3)) + "</tbody>\n</table>")
    (htb x) (<x @ 'head    (: h ("h" + show <>x) ("<" + h + ">" + hti <>>x + "</" + h + ">"))
                  'para    ("<p>" + hti <>x + "</p>")
-                 'fence   ("<pre><code" + (? (0 < #<>x) (" class=\"language-" + <>x + "\"") "")
+                 'fence   ("<pre><code" + (0 < #<>x ? (" class=\"language-" + <>x + "\"") "")
                                   + ">" + hq <>>x + "</code></pre>")
                  'quote   ("<blockquote>\n" + htshow <>x + "\n</blockquote>")
                  'bullets ("<ul>\n" + hitems <>x "ul")
@@ -380,19 +380,19 @@
            ("larr" "←") ("rarr" "→") ("harr" "↔") ("le" "≤") ("ge" "≥") ("ne" "≠"))
    (hnum nm)                                     ; &#NN; and &#xHH; -> the character
     (: n #nm
-       (go i b v) (? (n <= i) (v < 0 ? () (utf8 v))
-                     (: d (hexv (nm i))
-                        (? (d < 0 || b <= d) () (go (i + 1) b ((v < 0 ? 0 v) * b + d)))))
+       (go i b v) (n <= i ? (v < 0 ? () (utf8 v))
+                     (hexv (nm i) @ d
+                        (d < 0 || b <= d ? () (go (i + 1) b ((v < 0 ? 0 v) * b + d)))))
        (? (n < 2 || nm 0 != 35) ()
           (elem (nm 1) '(120 88)) (go 2 16 -1) (go 1 10 -1)))
-   (entof nm) ((: (g l) (? (atom? l) (: u (hnum nm) (? (string? u) u ("&" + nm + ";")))
+   (entof nm) ((: (g l) (? (atom? l) (hnum nm @ u (string? u ? u ("&" + nm + ";")))
                            (<<l = nm) <><l (g >l))) hents)
    (hdec s)
     (: n #s o (jug 0)
        (semi i) ((: (g k) (? (n <= k || i + 12 < k) -1 (s k = 59) k (g (k + 1)))) (i + 1))
        (go i) (? (n <= i) (slurp o)
-                 (s i = 38) (: e (semi i)
-                               (? (e < 0) (put o 38, go (i + 1))
+                 (s i = 38) (semi i @ e
+                               (e < 0 ? (put o 38, go (i + 1))
                                   (say o (entof (snip s (i + 1) e)), go (e + 1))))
                  (put o (s i), go (i + 1)))
        (go 0)))
@@ -417,31 +417,31 @@
              (n <= i ? (slurp o) (t i @ c (put o (64 < c < 91 ? (c + 32) c), go (i + 1)))))
    ; the tag starting at i: [name end-index open?], or () where none does
    (htag s i)
-    (: n #s
-       (? !(i < n && s i = 60) ()
+    (#s @ n
+       (!(i < n && s i = 60) ? ()
           (: c? (i + 1 < n && s (i + 1) = 47)
-             b (? c? (i + 2) (i + 1))
+             b (c? ? (i + 2) (i + 1))
              (nm k) (? (n <= k) k (elem (s k) '(32 9 10 13 47 62)) k (nm (k + 1)))
              e (nm b)
              ; a > inside a quoted value does not end the tag
              (go k q) (? (n <= k) k
-                         (0 < q) (go (k + 1) (? (s k = q) 0 q))
+                         (0 < q) (go (k + 1) (s k = q ? 0 q))
                          (s k = 62) (k + 1)
                          (elem (s k) '(34 39) && s (k - 1) = 61) (go (k + 1) (s k))
                          (go (k + 1) 0))
-             (? (n <= b || e = b) () [(hlow (snip s b e)) (go e 0) !c?]))))
+             (n <= b || e = b ? () [(hlow (snip s b e)) (go e 0) !c?]))))
    (halias? t) ((: (g l) (? (atom? l) t (<<l = t) <><l (g >l))) halias)
    ; from i, past the matching close of t -- nesting counted, so a <div> inside a killed
    ; <div> does not end it early. an unclosed one runs to the end, as it does in a browser.
    (hpast s i t)
     (:- (go i 1) n #s (go k d)
      (n <= k ? k
-      (: h (htag s k) (?
-       (atom? h) (go (k + 1) d)
-       (<h != t) (go <>h d)
-       <>>h (go <>h (d + 1))
-       (d <= 1) <>h
-       (go <>h (d - 1))))))
+      (htag s k @ h (?
+     (atom? h) (go (k + 1) d)
+     (<h != t) (go <>h d)
+     <>>h (go <>h (d + 1))
+     (d <= 1) <>h
+     (go <>h (d - 1))))))
    ; an attribute's value by name, where the name starts a word -- so id= is not data-id= --
    ; quoted either way, or bare to the next space
    ; every open tag asks, so it compares in place and allocates only the answer
@@ -453,13 +453,13 @@
                      (s (i + m) @ ((34 || 39) @ c)
                       ((: (h j) (? (e <= j) () (s j = c) (snip s (i + m + 1) j) (h (j + 1))))
                        (i + m + 1))
-                      ((: (h j) (? (e <= j || elem (s j) '(32 9 10 13)) (snip s (i + m) j) (h (j + 1))))
+                      ((: (h j) (e <= j || elem (s j) '(32 9 10 13) ? (snip s (i + m) j) (h (j + 1))))
                        (i + m)))))
         k))
    ; a place a link can land, in the one shape the reader knows. a name with a quote in it
    ; cannot be spelled there, and is no place
    (hmk v)
-    (? (string? v && 0 < #v && (: (g i) (? (#v <= i) 1 (v i = 34) 0 (g (i + 1))) (g 0)))
+    (string? v && 0 < #v && (: (g i) (? (#v <= i) 1 (v i = 34) 0 (g (i + 1))) (g 0)) ?
        ("<a id=\"" + v + "\"></a>") "")
    ; the tags whose content is a line of text: a mark goes inside, where the text is; any
    ; other tag holds blocks or is dropped, and its mark goes ahead of it
@@ -484,54 +484,54 @@
    ; a form's name or value as a query spells it: space a +, the rest past the unreserved %XX
    (hpe s)
     (: o (jug 0) hx "0123456789ABCDEF"
-       (go i) (? (#s <= i) (slurp o)
-                 (: c (s i)
-                    _ (? ((96 < c < 123) || (64 < c < 91) || (47 < c < 58) || elem c '(45 46 95 126)) (put o c)
-                         (c = 32) (put o 43)
-                         (put o 37, put o (hx (c // 16)), put o (hx (c % 16))))
-                    (go (i + 1))))
+       (go i) (#s <= i ? (slurp o)
+                 (s i @ c
+                    ((? (96 < c < 123 || 64 < c < 91 || 47 < c < 58 || elem c '(45 46 95 126)) (put o c)
+                        (c = 32) (put o 43)
+                        (put o 37, put o (hx (c // 16)), put o (hx (c % 16)))),
+                     go (i + 1))))
        (go 0))
    ; an attribute's value decoded, or "" where there is none
-   (hval s k e nm) (: v (hattr s k e nm) (? (string? v) (hdec v) ""))
+   (hval s k e nm) (hattr s k e nm @ v (string? v ? (hdec v) ""))
    ; the option a <select> sends: the selected one, else the first; its value, else its text
    (hopt s i z)
-    (: (val k e e2) (: v (hattr s k e "value")
-                       (? (string? v) (hdec v)
-                          (hdec ((: (g j) (? (z <= j || s j = 60) (snip s e2 j) (g (j + 1)))) e2))))
+    (: (val k e e2) (hattr s k e "value" @ v
+                       (string? v ? (hdec v)
+                          (hdec ((: (g j) (z <= j || s j = 60 ? (snip s e2 j) (g (j + 1)))) e2))))
        (go i first)
-        (? (z <= i) (? (string? first) first "")
-           (: h (htag s i)
+        (z <= i ? (string? first ? first "")
+           (htag s i @ h
               (? (atom? h) (go (i + 1) first)
                  !(<h = "option" && <>>h) (go <>h first)
                  (: k (i + 7) e (<>h - 1) v (val k e <>h)
-                    (? (hflag s k e "selected") v (go <>h (? (string? first) first v)))))))
+                    (hflag s k e "selected" ? v (go <>h (string? first ? first v)))))))
        (go i ()))
    ; a form's controls from i to z, in order: [at kind name value label], kind 'text for what
    ; a person types, 'fix for what goes as it stands, 'sub for a submit button
    (hctls s i z)
     (: (go i acc)
-        (? (z <= i) (rev acc)
-           (: h (htag s i)
-              (? (atom? h) (go (i + 1) acc)
+        (z <= i ? (rev acc)
+           (htag s i @ h
+              (atom? h ? (go (i + 1) acc)
                  (: t <h e2 <>h k (i + 1 + #t) e (e2 - 1)
                     nm (hattr s k e "name") v (hval s k e "value")
                     (? !(<>>h && string? nm) (go e2 acc)
                        (t = "input")
-                        (: y (hattr s k e "type") ty (? (string? y) (hlow y) "text")
+                        (: y (hattr s k e "type") ty (string? y ? (hlow y) "text")
                            (go e2 (? (ty = "hidden") ([i 'fix nm v ""] . acc)
                                      (elem ty '("checkbox" "radio"))
-                                      (? (hflag s k e "checked") ([i 'fix nm (? #v v "on") ""] . acc) acc)
+                                      (hflag s k e "checked" ? ([i 'fix nm (#v ? v "on") ""] . acc) acc)
                                      (ty = "submit") ([i 'sub nm v ""] . acc)
                                      (elem ty '("image" "reset" "button" "file")) acc
-                                     ([i 'text nm v (? #v v (: p (hval s k e "placeholder") (? #p p nm)))] . acc))))
+                                     ([i 'text nm v (#v ? v (hval s k e "placeholder" @ p (#p ? p nm)))] . acc))))
                        (t = "textarea")
                         (: z2 (hpast s e2 t)
                            c (hdec (snip s e2 ((: (g j) (? (j <= e2) e2 (s j = 60) j (g (j - 1)))) (z2 - 1))))
-                           (go z2 ([i 'text nm c (? #c c nm)] . acc)))
-                       (t = "select") (: z2 (hpast s e2 t) (go z2 ([i 'fix nm (hopt s e2 z2) ""] . acc)))
+                           (go z2 ([i 'text nm c (#c ? c nm)] . acc)))
+                       (t = "select") (hpast s e2 t @ z2 (go z2 ([i 'fix nm (hopt s e2 z2) ""] . acc)))
                        (t = "button")
-                        (: y (hattr s k e "type")
-                           (go e2 (? (!(string? y) || hlow y = "submit") ([i 'sub nm v ""] . acc) acc)))
+                        (hattr s k e "type" @ y
+                           (go e2 (!(string? y) || hlow y = "submit" ? ([i 'sub nm v ""] . acc) acc)))
                        (go e2 acc))))))
        (go i ()))
    ; a get form -> a tablet of its text fields' links by where each tag starts. a field is a
@@ -539,32 +539,32 @@
    ; browser sends what was typed by putting it in place of what follows that last =. the
    ; first submit button goes too, as return in a field sends it. a post form lays no field
    (hform s k e0 e)
-    (: m (hattr s k e0 "method") t (tablet 0)
-       (? (string? m && hlow m != "get") t
+    (: m (hattr s k e0 "method") t {}
+       (string? m && hlow m != "get" ? t
           (: a (hval s k e0 "action")
-             act (: j ((: (g j) (? (#a <= j || elem (a j) '(35 63)) j (g (j + 1)))) 0)
+             act (: j ((: (g j) (#a <= j || elem (a j) '(35 63) ? j (g (j + 1)))) 0)
                     (hesc [[34 "%22"] [38 "%26"] [60 "%3C"]] (snip a 0 j)))
              cs (hctls s e (hpast s e "form"))
-             sub (: l (filter (c \ c 1 = 'sub) cs) (? (two? l) [<l] ()))
+             sub (filter (c \ c 1 = 'sub) cs @ l (two? l ? [<l]))
              kept (filter (c \ c 1 != 'sub) cs)
              (pair c) (hpe (c 2) + "=" + hpe (c 3))
              (link c) (: ot (map pair (filter (d \ <d != <c) kept + sub))
                          lb (c 4)
                          ("<a href=\"form:" + act + "?" + cats (map (x \ x + "&") ot) + pair c + "\">["
                           + hq lb + rep "_" (12 - #lb) + "]</a>"))
-             _ (map (c \ pin t <c (link c)) (filter (c \ c 1 = 'text) kept))
-             t)))
+             (map (c \ pin t <c (link c)) (filter (c \ c 1 = 'text) kept),
+              t))))
    ; an image in the one shape the reader knows, src then alt; one with neither is not there
    (himg s k e)
     (: v (hval s k e "src") a (hval s k e "alt")
-       (? ((0 < #v) || (0 < #a)) ("<img src=\"" + hqa v + "\" alt=\"" + hqa a + "\">") ""))
+       (0 < #v || 0 < #a ? ("<img src=\"" + hqa v + "\" alt=\"" + hqa a + "\">") ""))
    ; s with each byte the table names spelled its way
    (hesc tb s)
     (: o (jug 0)
-       (go i) (? (#s <= i) (slurp o)
+       (go i) (#s <= i ? (slurp o)
                  (: c (s i) r ((: (g l) (? (atom? l) () (<(<l) = c) <>(<l) (g >l))) tb)
-                    _ (? r (say o r) (put o c))
-                    (go (i + 1))))
+                    ((r ? (say o r) (put o c)),
+                     go (i + 1))))
        (go 0))
    ; an id is the other attribute the middle keeps: it becomes a mark, inside a tag whose
    ; content is a line and ahead of any other. `ba` is 1 while an <a> with no href is open:
@@ -578,16 +578,16 @@
           (go (hfind s (i + 4) "-->") ba)
          (i + 1 < n && s i = 60 && s (i + 1) = 33)                       ; <!doctype ..>
           (go ((: (g k) (? (n <= k) k (s k = 62) (k + 1) (g (k + 1)))) (i + 1)) ba)
-         (: h (htag s i)
-            (? (atom? h) (put o (s i), go (i + 1) ba)
+         (htag s i @ h
+            (atom? h ? (put o (s i), go (i + 1) ba)
                (: t <h e <>h op? <>>h
                   k (i + 1 + #t)
-                  mk (? op? (hmk (hattr s k (e - 1) "id") + hmain s t k (e - 1)) "")
-                  (? (t = "form") (pin fs 'f (? op? (hform s k (e - 1) e) {}), say o mk, go e ba)
+                  mk (op? ? (hmk (hattr s k (e - 1) "id") + hmain s t k (e - 1)) "")
+                  (? (t = "form") (pin fs 'f (op? ? (hform s k (e - 1) e) {}), say o mk, go e ba)
                      (t = "input") (say o (mk + field i), go e ba)
-                     (t = "textarea") (say o (mk + field i), go (? op? (hpast s e t) e) ba)
-                     (t = "img") (say o (mk + (? op? (himg s k (e - 1)) "")), go e ba)
-                     (elem t hkill) (go (? op? (hpast s e t) e) ba)
+                     (t = "textarea") (say o (mk + field i), go (op? ? (hpast s e t) e) ba)
+                     (t = "img") (say o (mk + (op? ? (himg s k (e - 1)) "")), go e ba)
+                     (elem t hkill) (go (op? ? (hpast s e t) e) ba)
                      (elem t hbare) (say o mk, go e ba)
                      (t = "br") (say o "</p><p>", go e ba)
                      ; a link is the one tag whose attribute the middle keeps, so it is
@@ -597,8 +597,8 @@
                                 (? !op? (say o (ba ? "" "</a>"), go e 0)
                                    (string? v) (say o (m2 + "<a href=\"" + v + "\">"), go e 0)
                                    (say o m2, go e 1)))
-                     (: a (halias? t)
-                      (say o $ op? ? (: tg ("<" + a + snip s k (e - 1) + ">")
+                     (halias? t @ a
+                      (say o $ op? ? ("<" + a + snip s k (e - 1) + ">" @ tg
                                         (elem a hinside ? (tg + mk) (mk + tg)))
                                      ("</" + a + ">"),
                        go e ba)))))))))
@@ -614,7 +614,7 @@
    (wrapt t a) (seqs [(skip (otag t)) a hws (skip (ctag t))])
    (hraw? c)   (c != 60 && c != 38)                        ; ordinary text runs to the next < or &
 
-   (hname? c)  ((96 < c < 123) || (64 < c < 91) || (47 < c < 58) || c = 35)
+   (hname? c)  (96 < c < 123 || 64 < c < 91 || 47 < c < 58 || c = 35)
    ; an & that starts no entity is itself -- a query's a=1&b=2, or "fish & chips"
    hent    (alts [(tag (p \ ['text (entof <p)]) (seqs [(skip (lit "&")) (span hname?) (skip (lit ";"))]))
                   (tag (const '(text "&")) (lit "&"))])
@@ -623,7 +623,7 @@
    hmark   (tag (p \ ['mark (plain (runp (many (alts [hent htext])) <p))])
                 (seqs [(skip (lit "<a id=\"")) (span (!= 34)) (skip (lit "\"></a>"))]))
    ; an image, src then alt as the scrub lays it, each entity-decoded as an href is
-   himgp   (tag (p \ (: (dec s) (: r (plain (runp (many (alts [hent htext])) s)) (? (string? r) r ""))
+   himgp   (tag (p \ (: (dec s) (plain (runp (many (alts [hent htext])) s) @ r (string? r ? r ""))
                         ['img (dec <>p) (dec <p)]))
                 (seqs [(skip (lit "<img src=\"")) (span (!= 34)) (skip (lit "\" alt=\""))
                        (span (!= 34)) (skip (lit "\">"))]))
@@ -655,8 +655,8 @@
    h-dl    (tag (p \ ['deflist (dpair p)]) (wrapt "dl" (many h-dt)))
    ; a table: the cells inline, th or td alike, an alignment off htshow's own attribute
    ; and none off any other; the head is the first row, whichever section held it
-   (hcellp t) (alts ((map (a \ tag (c \ [a <c]) (seqs [hws (skip (lit ("<" + t + hal a + ">"))) (pack htinl) (skip (ctag t))]))
-                         '(l c r))
+   (hcellp t) (alts (map (a \ tag (c \ [a <c]) (seqs [hws (skip (lit ("<" + t + hal a + ">"))) (pack htinl) (skip (ctag t))]))
+                         '(l c r)
                      + [(tag (c \ ['n <c]) (seqs [hws (skip (otag t)) (pack htinl) (skip (ctag t))]))]))
    h-tr    (pack (seqs [hws (skip (otag "tr")) (many (alts [(hcellp "th") (hcellp "td")])) hws (skip (ctag "tr"))]))
    (h-tsec t) (seqs [hws (skip (otag t)) (many h-tr) hws (skip (ctag t))])
@@ -696,20 +696,20 @@
 ; and a place ttlinks marked rides in its sentinels (bytes 1 and 2), which have none.
 (: (tplain l) (catmap (x \ <x @ 'text <>x 'code <>x 'strong (tplain <>x) 'em (tplain <>x)
                             'link (tplain <>x) 'tmark (string 1 + <>x + string 2)
-                            'img (? (0 < #<>x) ("[" + <>x + "]") "") "") l)
+                            'img (0 < #<>x ? ("[" + <>x + "]") "") "") l)
    (tvw s) ((: (g i n) (? (#s <= i) n
-                          (s i = 1) (g ((: (h k) (? (#s <= k || s k = 2) (k + 1) (h (k + 1)))) i) n)
+                          (s i = 1) (g ((: (h k) (#s <= k || s k = 2 ? (k + 1) (h (k + 1)))) i) n)
                           (g (cpnext s i) (n + max 0 (wcwidth (cpat s i)))))) 0 0)
-   (tpad a w s) (: k (w - tvw s)
+   (tpad a w s) (w - tvw s @ k
                    (? (k < 1) s (a = 'r) (rep " " k + s)
                       (a = 'c) (rep " " (k // 2) + s + rep " " (k - k // 2)) (s + rep " " k)))
    (tblines x)
     (: al (x 1) rows ((map tplain (x 2)) . (map (r \ map tplain r) (x 3)))
-       ws (foldl (\ a r (map (p \ max <p <>p) (zipm a (map tvw r)))) (map (_ \ 0) (x 1)) rows)
-       (line r) (: (g as wz cs) (? (atom? cs) "" (: c (tpad <as <wz <cs)
-                                                   (? (atom? >cs) c (c + "  " + g >as >wz >cs))))
+       ws (foldl (a \ r \ map (p \ max <p <>p) (zipm a (map tvw r))) (map (_ \ 0) (x 1)) rows)
+       (line r) (: (g as wz cs) (atom? cs ? "" (tpad <as <wz <cs @ c
+                                                 (atom? >cs ? c (c + "  " + g >as >wz >cs))))
                    (g al ws r))
-       (strip s) (: (b j) (? (0 < j && s (j - 1) = 32) (b (j - 1)) j) (snip s 0 (b #s)))
+       (strip s) (: (b j) (0 < j && s (j - 1) = 32 ? (b (j - 1)) j) (snip s 0 (b #s)))
        ([(strip (line <rows)) (join "  " (map (n \ rep "-" n) ws))] + map (r \ strip (line r)) >rows)))
 
 ; ---------------------------------------------------------------- roff (man), show
@@ -717,10 +717,10 @@
 ; hyperlink at all -- the domain law 1 holds on, and the four normalizations outside it,
 ; are in the header.
 (: (rq s) ((: (g i acc)
-              (? !(i < #s) acc
-                 (: hit (rqat s i)
-                    (? (two? hit) (g (i + <>hit) (acc + "\\(" + <hit))
-                       (: c (s i) (g (i + 1) (acc + (c @ 92 "\\e" 45 "\\-" (string c)))))))))
+              (!(i < #s) ? acc
+                 (rqat s i @ hit
+                    (two? hit ? (g (i + <>hit) (acc + "\\(" + <hit))
+                       (s i @ c (g (i + 1) (acc + (c @ 92 "\\e" 45 "\\-" (string c)))))))))
            0 "")
    (rline s) (#s && (s 0 = 46 || s 0 = 39) ? ("\\&" + s) s)       ; a leading . or ' is text
    ; roff double-spaces after a period ending an input line, so one long line loses its
@@ -737,19 +737,19 @@
                   'strong ("\\fB" + rfi <>x + "\\fR")
                   'em     ("\\fI" + rfi <>x + "\\fR")
                   'link   (rfi <>x + " \\(la" + rq <>>x + "\\(ra")
-                  'img    (? (0 < #<>x) (rq ("[" + <>x + "]")) "")
+                  'img    (0 < #<>x ? (rq ("[" + <>x + "]")) "")
                   "")
    (rth kvs)   (".TH" + cats (map (k \ " \"" + mget kvs k + "\"") metakeys) + "\n")
    (rnums l i) (atom? l ? "" (".IP \"" + show i + ".\" 4\n" + rline (rfi <l) + "\n" + rnums >l (i + 1)))
    (rdefs l)   (catmap (it \ ".TP\n" + rline (rfi <it) + "\n" + rfill (rfi <>it)) l)
    ; roff has no cells here: a table that fits a page is its laid columns as a display,
    ; and a wider one each row a paragraph of head: cell lines, which the page can fill
-   (rcell hc) (? (0 < #<hc) (<hc + ": " + tplain <>hc) (tplain <>hc))
+   (rcell hc) (0 < #<hc ? (<hc + ": " + tplain <>hc) (tplain <>hc))
    (rrow hd r) (".PP\n" + join "\n.br\n" (map (hc \ rline (rq (rcell hc))) (zipm hd r)) + "\n")
    (rtable x)
-    (: ls (tblines x)
-       (? (foldl (\ a l (a && tvw l <= 78)) 1 ls) (rfb ['fence "" (catmap (ln \ ln + "\n") ls)])
-          (: hd (map tplain (x 2)) (catmap (r \ rrow hd r) (x 3)))))
+    (tblines x @ ls
+       (foldl (a \ l \ a && tvw l <= 78) 1 ls ? (rfb ['fence "" (catmap (ln \ ln + "\n") ls)])
+          (map tplain (x 2) @ hd (catmap (r \ rrow hd r) (x 3)))))
    (rfb x) (<x @ 'meta    (rth <>x)
                  'head    ((<>x < 2 ? ".SH " ".SS ") + rfi <>>x + "\n")
                  'para    (".PP\n" + rfill (rfi <>x))
@@ -787,7 +787,7 @@
    (rfas m)   ((: (g l) (? (atom? l) m (<<l = m) <><l (g >l))) rfsame)
    ; the \{ groups one line opens, less the ones it closes; a lone \} floors at none open
    (rfdepth ln d)
-    ((: (g i k) (? (#ln <= i) (? (k < 0) 0 k)
+    ((: (g i k) (? (#ln <= i) (k < 0 ? 0 k)
                    (ln i = 92 && i + 1 < #ln && ln (i + 1) = 123) (g (i + 2) (k + 1))
                    (ln i = 92 && i + 1 < #ln && ln (i + 1) = 125) (g (i + 2) (k - 1))
                    (g (i + 1) k))) 0 d)
@@ -805,7 +805,7 @@
        i ((: (g k) (? (n <= k) k !(elem (r k) '(32 9)) k (g (k + 1)))) 0)
        (? (rfmac ln = ".el") 'no                         ; an .el carries no condition at all
           (rfdepth ln 0) 'no
-          !((i + 1 < n) && elem (r (i + 1)) '(32 9)) 'no
+          !(i + 1 < n && elem (r (i + 1)) '(32 9)) 'no
           (r i = 110) (snip r (i + 2) n)
           (r i = 116) ""
           'no))
@@ -815,19 +815,19 @@
     (: n #ln
        (go i) (? (n <= i) ""
                  (elem (ln i) '(32 9)) (go (i + 1))
-                 (ln i = 34) ((: (h k) (? (n <= k || ln k = 34) (snip ln (i + 1) k) (h (k + 1)))) (i + 1))
-                 ((: (h k) (? (n <= k || elem (ln k) '(32 9)) (snip ln i k) (h (k + 1)))) i))
+                 (ln i = 34) ((: (h k) (n <= k || ln k = 34 ? (snip ln (i + 1) k) (h (k + 1)))) (i + 1))
+                 ((: (h k) (n <= k || elem (ln k) '(32 9) ? (snip ln i k) (h (k + 1)))) i))
        (go #(rfmac ln)))
    (rfdigs? a) (#a && ((: (g i) (? (#a <= i) 1 (dig? (a i)) (g (i + 1)) 0)) 0))
    (rfbul? a)  (elem a '("\\(bu" "\\(em" "\\-" "•" "-" "*" "o"))
-   (rfnum? a)  (: n #a (1 < n && elem (a (n - 1)) '(46 41) && rfdigs? (snip a 0 (n - 1))))
+   (rfnum? a)  (#a @ n (1 < n && elem (a (n - 1)) '(46 41) && rfdigs? (snip a 0 (n - 1))))
    ; .IP is three blocks under one macro: a bullet, a numbered item, or a tagged paragraph.
    ; a tagged paragraph is what .TP already spells, so it becomes one and the reader needs no
    ; new block for it -- and without this the tag is skipped with the rest of the .IP line,
    ; which on a pod2man page is every option name in the file. a bare .IP, or one carrying
    ; only the indent it wants, tags nothing and is a paragraph.
    (rfip ln)
-    (: a (rffst ln)
+    (rffst ln @ a
        (? (!#a || rfdigs? a) ".PP\n"
           (rfbul? a) ".IP \\(bu\n"
           (rfnum? a) (".IP \"" + a + "\"\n")
@@ -841,7 +841,7 @@
    ; a macro the page defined for itself: we dropped the .de that says what it does, but its
    ; arguments are still its content, and they are the difference between a word rendered
    ; without its quotes and a line that is not in the page at all
-   (rfown ln) (: r (rffst ln) (!#r ? "" ((r 0 = 46 ? ("\\&" + r) r) + "\n")))
+   (rfown ln) (rffst ln @ r (!#r ? "" ((r 0 = 46 ? ("\\&" + r) r) + "\n")))
    (rfscrub s)
     ((: (go l de nf d rs defs acc)
         (atom? l ? (cats (rev acc) + rfshut nf rs)
@@ -859,7 +859,7 @@
                  ; the branch this device takes is read in the condition's place, so a macro
                  ; there is still a macro and the text is still text
                  (elem m rfcond)
-                  (: k (rfnro ln)
+                  (rfnro ln @ k
                      (? (k = 'no) (go >l de nf (rfdepth ln 0) rs defs acc)
                         !#k       (go >l de nf d rs defs acc)
                         (go (k . >l) de nf d rs defs acc)))
@@ -873,7 +873,7 @@
                        (elem m2 '(".fi" ".EE"))
                         (go >l de 0 d rs defs (nf ? ((m2 + "\n") . acc) acc))
                        (m2 = ".RS") (go >l de nf d (rs + 1) defs (m2 + rest + "\n" . acc))
-                       (m2 = ".RE") (? rs (go >l de nf d (rs - 1) defs (m2 + "\n" . acc))
+                       (m2 = ".RE") (rs ? (go >l de nf d (rs - 1) defs (m2 + "\n" . acc))
                                         (go >l de nf d rs defs acc))
                        (elem m defs) (go >l de nf d rs defs (rfown ln . acc))
                        (go >l de nf d rs defs (m2 + rest + "\n" . acc))))))))
@@ -970,10 +970,10 @@
    (allplain? l) (? (atom? l) 1 (<<l = 'text) (allplain? >l) 0)
    (argl a f)    (rfinl a @ l (allplain? l ? (wrapf f l) l))     ; an explicit \f inside the arg wins
    (argls as fs i sp) (two? as ?
-                       (: h (argl <as (fs (i % #fs)))
+                       (argl <as (fs (i % #fs)) @ h
                         (atom? >as ? h
                            (h + (? sp '((text " ")) ()) + argls >as fs (i + 1) sp))))
-   (imacl line) (: a (rargs line) m (? (two? a) <a "") info (macinfo m)
+   (imacl line) (: a (rargs line) m (two? a ? <a "") info (macinfo m)
                  (atom? info ?  (rfinl line)
                   (mrg (argls (rargs (snip line #m #line)) <info <>info 0))))
    (linl line)  (#line && line 0 = 46 ? (imacl line) (rfinl line)))
@@ -985,7 +985,7 @@
    (rmacl m) (seqs [(skip (lit m)) (skip (span sp?)) (span nonl?) (skip (lit "\n"))])
    (r-fline s y n)  ((tag (linl * cats)
                           (seqs [(notp blockmac) (one nonl?) (span nonl?) (skip (lit "\n"))])) s y n)
-   (joinfr (a . u)) (atom? u ? a (a + '((text " ")) + (joinfr u)))
+   (joinfr (a . u)) (atom? u ? a (a + '((text " ")) + joinfr u))
    r-filled (tag (mrg * joinfr) (many1 r-fline))
 
    r-th   (tag (p \ ['meta (mnorm (zipm metakeys (rargs <p)))]) (rmacl ".TH"))
@@ -1049,8 +1049,8 @@
    (ttadd a b) (#a ? (a + ";" + b) b)                        ; a nested attribute joins the outer
    ; an inl -> [text attribute] runs. code stays plain: roman is what a terminal shows for it
    (ttsegs l a)
-    (? (atom? l) ()
-       (: x <l
+    (atom? l ? ()
+       (<l @ x
           (<x @ 'text   ([[<>x a]] + ttsegs >l a)
                 'code   ([[<>x a]] + ttsegs >l a)
                 'strong (ttsegs <>x (ttadd a "1") + ttsegs >l a)
@@ -1060,7 +1060,7 @@
                 'link   (ttsegs <>x a + (#<>>x ? [[(" <" + <>>x + ">") a]] ()) + ttsegs >l a)
                 ; ttlinks' own node: a place, laid as a sentinel with no width that ttpage lifts
                 'tmark  ([[(ttmk0 + <>x + ttmk1) 'mark]] + ttsegs >l a)
-                'img    ((? (0 < #<>x) [[("[" + <>x + "]") a]] ()) + ttsegs >l a)
+                'img    ((0 < #<>x ? [[("[" + <>x + "]") a]]) + ttsegs >l a)
                 (ttsegs >l a))))
    ; a run's text at its space breaks; the empty pieces at each end are what lets a word
    ; carry on across a style change with no space between the halves. a newline is a break
@@ -1085,7 +1085,7 @@
                  s2 (sty + (#h ? (#a ? (tton a + h + ttoff) h) ""))
                (atom? >p ? (pc >p v2 s2 acc)
                 (pc >p "" (#v2 ? "" s2) (#v2 ? ([v2 s2] . acc) acc)))))
-          (? (a = 'mark) (go >l vis (sty + s) acc) (pc (ttsplit s) vis sty acc)))))
+          (a = 'mark ? (go >l vis (sty + s) acc) (pc (ttsplit s) vis sty acc)))))
      segs "" "" ())
    ; greedy fill: the words onto lines of at most (w - ind) cells, each indented; n is the
    ; line's width so far, -1 before its first word
@@ -1093,7 +1093,7 @@
     (: pad (ttsp ind)
        room (w - ind @ r (r < 8 ? 8 r))
        (go l n sty acc)
-        (? (atom? l) (n < 0 ? (rev acc) (rev (pad + sty . acc)))
+        (atom? l ? (n < 0 ? (rev acc) (rev (pad + sty . acc)))
            (: v (swidth <<l) s <><l
               (? (n < 0) (go >l v s acc)
                  (n + 1 + v <= room) (go >l (n + 1 + v) (sty + " " + s) acc)
@@ -1102,8 +1102,8 @@
    (ttinl l w ind a) (ttfill (ttwords (ttsegs l a)) w ind)
    ; a marker replaces the head of the first line's indent, which is spaces
    (ttmark ls mk ind)
-    (? (atom? ls) ls
-       (: h <ls (((ttsp ind + mk) + snip h (ind + swidth mk) #h) . >ls)))
+    (atom? ls ? ls
+       (<ls @ h ((ttsp ind + mk + snip h (ind + swidth mk) #h) . >ls)))
    (ttitem l w ind mk) (ttmark (ttinl l w (ind + swidth mk) "") mk ind)
    ; the .th line: the page either side of its manual, which is what a terminal reader
    ; looks at to know what they opened. it is dropped whole if the width cannot hold it.
@@ -1112,7 +1112,7 @@
        l (#sec ? (t + "(" + sec + ")") t)
        gap (w - 1 - 2 * swidth l - swidth mn)                          ; the last column stays empty
        lf (gap // 2)
-       (? (!#t || gap < 2) (#t ? [l] ())
+       (!#t || gap < 2 ? (#t ? [l] ())
           [(l + ttsp lf + mn + ttsp (gap - lf) + l)]))
    (ttvis words) ((: (g l a) (atom? l ? a (g >l (#a ? (a + " " + <<l) <<l)))) words "")
    ; the term carries whatever fonts the page gave it, so nothing is forced on it here.
@@ -1127,7 +1127,7 @@
         tl (ttfill tw w ind)
         bl (ttinl <>it w (ind + 7) "")
         tc (swidth tv)
-        h  (? (#tv && tc < 7 && atom? >tl && two? bl)
+        h  (#tv && tc < 7 && atom? >tl && two? bl ?
               (ttsp ind + snip <tl ind #<tl + ttsp (7 - tc)
                 + snip <bl (ind + 7) #(<bl) . >bl)
               (tl + bl))
@@ -1151,16 +1151,16 @@
    ; a table the width holds is its columns; one it does not is each row as head: cell
    ; lines, a blank between rows, so no line overruns and nothing is cut
    (tttable x w ind)
-    (: ls (tblines x)
-       (? ((: (g l) (? (atom? l) 1 (w < ind + tvw <l) 0 (g >l))) ls) (map (ln \ ttsp ind + ln) ls)
+    (tblines x @ ls
+       (((: (g l) (? (atom? l) 1 (w < ind + tvw <l) 0 (g >l))) ls) ? (map (ln \ ttsp ind + ln) ls)
           (: hd (map tplain (x 2))
-             (rw r) (catmap (hc \ ttinl [['text (? (0 < #<hc) (<hc + ": " + tplain <>hc) (tplain <>hc))]] w ind "")
+             (rw r) (catmap (hc \ ttinl [['text (0 < #<hc ? (<hc + ": " + tplain <>hc) (tplain <>hc))]] w ind "")
                             (zipm hd r))
              ((: (g rs) (? (atom? rs) () (atom? >rs) (rw <rs) (rw <rs + [""] + g >rs))) (x 3)))))
    ; one blank line between blocks, none before the first, and none after a heading --
    ; a heading belongs to what follows it, and man sets it that way
    (ttdoc d w ind)
-    (? (atom? d) ()
+    (atom? d ? ()
        (: h (ttblk <d w ind) r (ttdoc >d w ind)
           (? (atom? h) r (atom? r) h
              (<<d = 'head) (h + r)
@@ -1187,7 +1187,7 @@
                  [[x] acc])
         s (tlgo >l (r 1))
         [(<r + <s) (s 1)]))
-   (tlspans l acc) (: r (tlgo l acc) [(mrg <r) (r 1)])     ; the marker joins its text: normal
+   (tlspans l acc) (tlgo l acc @ r [(mrg <r) (r 1)])     ; the marker joins its text: normal
    (tldef p acc) (: t (tlspans <p acc) b (tlspans <>p (t 1)) [[<t <b] (b 1)])
    (tlblk x acc)
     (<x @ 'head    (tlspans (x 2) acc @ i [['head <>x <i] (i 1)])
@@ -1204,7 +1204,7 @@
    ; ..and so does one whose only text is blank, which is what a page's indenting leaves
    (tlblank? x) (<x = 'text && (: t <>x (g i) (? (#t <= i) 1 (elem (t i) '(32 9 10 13)) (g (i + 1)) 0) (g 0)))
    ; ..an image with no alt among them, which lays nothing but its mark
-   (tlmk? x) ((<x = 'mark) || ((<x = 'img) && (0 = #(x 1))))
+   (tlmk? x) (<x = 'mark || <x = 'img && 0 = #(x 1))
    (tlmarks? l)
     (: (g m k) (? (atom? m) k (tlmk? <m) (g >m 1) (tlblank? <m) (g >m k) 0)
        (g l 0))
@@ -1219,27 +1219,27 @@
    (tlcarry d)
     ((: (go l pend)
         (two? l ?
-         (: x <l
-          (? (<x = 'para && tlmarks? <>x) (go >l (pend + tlonly <>x))
+         (<l @ x
+          (<x = 'para && tlmarks? <>x ? (go >l (pend + tlonly <>x))
            (: y (atom? pend ? (<x = 'quote ? ['quote (tlcarry <>x)] x) (tlput x pend))
-            (? (atom? y) (x . go >l pend) (y . go >l ())))))))
+            (atom? y ? (x . go >l pend) (y . go >l ())))))))
      d ())
    ; a doc -> [doc urls]: the links numbered in reading order, urls 1-based by that number.
    ; a browser shows the doc and follows (urls (n - 1)); man keeps ttyshow's <url>
-   (ttlinks d) (: r (tlmap tlblk (tlcarry d) ()) [<r (rev (r 1))])
+   (ttlinks d) (tlmap tlblk (tlcarry d) () @ r [<r (rev (r 1))])
    ; the laid text with each mark's sentinel lifted out -> [text anchors], an anchor being
    ; [name line] with the line counted from 0
    (ttlift t)
     (: n #t o (jug 0)
        (go i ln acc)
         (? (n <= i) [(slurp o) (rev acc)]
-           (t i = 1) (: e ((: (g k) (? (n <= k || t k = 2) k (g (k + 1)))) (i + 1))
+           (t i = 1) (: e ((: (g k) (n <= k || t k = 2 ? k (g (k + 1)))) (i + 1))
                         (go (e + 1) ln ([(snip t (i + 1) e) ln] . acc)))
-           (: c (t i) _ (put o c) (go (i + 1) (c @ 10 (ln + 1) ln) acc)))
+           (t i @ c (put o c, go (i + 1) (c @ 10 (ln + 1) ln) acc)))
        (go 0 0 ()))
    ; [text urls anchors lines]: what a browser shows, follows, and lands on, and the line
    ; each link was laid on, by n
-   (tldig s) ((: (g i v) (? (#s <= i) v (g (i + 1) ((v * 10) + (s i - 48))))) 1 0)
+   (tldig s) ((: (g i v) (#s <= i ? v (g (i + 1) (v * 10 + (s i - 48))))) 1 0)
    (ttpage d w)
     (: r (ttlinks d) l (ttlift (ttyshow <r w))
        (lk? a) (0 < #<a && <a 0 = 3)

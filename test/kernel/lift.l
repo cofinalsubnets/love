@@ -6,7 +6,7 @@
    p (open f "w")
    _ (say p msg, close p)
    q (open "/proc/lift" "w")
-   (? !(hot? q) (puts "lift: no /proc/lift\n")
-      (: _ (say q f, close q)
-         _ (rest 800)                      ; the worker lifts at its next idle
-         (puts "lift asked\n"))))
+   (!(hot? q) ? (puts "lift: no /proc/lift\n")
+      ((say q f, close q),
+       rest 800,                           ; the worker lifts at its next idle
+       puts "lift asked\n")))

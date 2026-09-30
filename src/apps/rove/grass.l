@@ -31,7 +31,7 @@
  week-start 6.0                         ; monday, dawn
  week-hours 174.0                       ; ..to the next monday's dawn: seven days
  dt (1.0 / fps)                         ; a frame, in seconds
- dh (((week-hours - week-start) / week-secs) / fps)   ; ..and in game hours
+ dh ((week-hours - week-start) / week-secs / fps)     ; ..and in game hours
  rpi 2                                  ; rows an inch of blade takes
  dance-gap 400                          ; ms within which the next press is still the dance
  dry-rate 4.0                           ; the sky's thirst: the drops an hour it takes at noon
@@ -74,26 +74,26 @@
 
  (clamp x lo hi) (x < lo ? lo (hi < x ? hi x))
  (round x) (int (x + (x < 0.0 ? -0.5 0.5)))
- (fx1 x) (: n (int (x * 10.0 + 0.5)) (show (n // 10) + "." + show (n % 10)))
+ (fx1 x) (int (x * 10.0 + 0.5) @ n (show (n // 10) + "." + show (n % 10)))
  (two-dig n) (n < 10 ? ("0" + show n) (show n))
  ; what a row is worth in cells: a glyph's tail bytes belong to the lead that began it
  (wide s) (:- (go 0 0) (go i n) (i >= #s ? n (go (i + 1) (n + lead (s i)))))
  sgrs {}
  (sgr f b) (: k [f b] s (sgrs k)
               (string? s ? s
-               (: s2 (esc + "[38;5;" + show f + ";48;5;" + show b + "m") (pin sgrs k s2, s2))))
+               (esc + "[38;5;" + show f + ";48;5;" + show b + "m" @ s2 (pin sgrs k s2, s2))))
 
  ; --- the clock and the weather --------------------------------------------------
  (grass-hour g) (g 'h % 24.0)
- (grass-day g) (: d (int (g 'h / 24.0)) (6 < d ? 6 d))
- (daylight hr) (: v (sin (pi * (hr - 6.0) / 12.0)) (v < 0.0 ? 0.0 v))
+ (grass-day g) (int (g 'h / 24.0) @ d (6 < d ? 6 d))
+ (daylight hr) (sin (pi * (hr - 6.0) / 12.0) @ v (v < 0.0 ? 0.0 v))
  (sky-pen hr) (sky-pens (int hr))
  ; the day's own mean, warmest mid-afternoon and coldest at three
- (grass-temp g) (: t0 (g 'tdays (grass-day g))
+ (grass-temp g) (g 'tdays (grass-day g) @ t0
                    (t0 + 12.0 * sin (pi * (grass-hour g - 9.0) / 12.0)))
- (compass deg) (points ((int ((deg + 11.25) / 22.5)) % 16))
+ (compass deg) (points (int ((deg + 11.25) / 22.5) % 16))
  ; the wind's push along the screen: it blows FROM its heading, and east is right
- (grass-wind-x g) (0.0 - (sin (g 'head * pi / 180.0)) * (g 'wind))
+ (grass-wind-x g) (0.0 - sin (g 'head * pi / 180.0) * g 'wind)
 
  ; --- a fresh field on an r by c screen ------------------------------------------
  ; a blade every other column, you in the middle; the week's temperatures and cloud
@@ -108,10 +108,10 @@
    bs (map blade ^n)
    me (bs (n // 2))
    _ (pins me 'me 1 'ht 2.0 'gf 1.0)
-   tdays (map (\ _ (52.0 + roll sb 26)) ^7)
-   songs (map (\ _ (roll sb 240 / 10.0)) ^7)       ; the hour each day's song comes
-   covers (map (\ _ (roll sb 10 / 10.0)) ^7)
-   clouds (map (\ _ {'x0 (roll sb c * 1.0) 'y (1 + roll sb (r // 2))
+   tdays (map (_ \ (52.0 + roll sb 26)) ^7)
+   songs (map (_ \ (roll sb 240 / 10.0)) ^7)       ; the hour each day's song comes
+   covers (map (_ \ (roll sb 10 / 10.0)) ^7)
+   clouds (map (_ \ {'x0 (roll sb c * 1.0) 'y (1 + roll sb (r // 2))
                      'w (6.0 + roll sb 13) 'h (1.2 + roll sb 19 / 10.0)}) ^14)
    {'r r 'c c 'h week-start 'fr 0 'sb sb 'bs bs 'me me 'tdays tdays 'covers covers 'clouds clouds
     'wind (3.0 + roll sb 10) 'wt 8.0 'head (roll sb 360 * 1.0) 'gust 1.0 'drift 0.0 'kept {} 'cm () 'last ()
@@ -128,7 +128,7 @@
       (k @ (113 || 27) 1 0) (pins g 'over 'fled 'msg "")
       (atom? mv) g
       (: dx <mv dy <>mv
-         combo (? (k != g 'dk && (now - g 'dms) < dance-gap) (1 + g 'combo) 1)
+         combo (k != g 'dk && now - g 'dms < dance-gap ? (1 + g 'combo) 1)
          ; a diagonal does both: the lean from its dx, the stretch from its dy
          _ (dx != 0 ? (pin me 'w (me 'w + dx * 7.0)))
          _ (dy != 0 ? (pin me 'sv (me 'sv - dy * 4.0)))
@@ -158,12 +158,12 @@
  ; --- one frame of the week -------------------------------------------------------
  (grass-tick g) (:
    c (g 'c) sb (g 'sb)
-   h (: v (g 'h + dh) (v < week-hours ? v week-hours))
+   h (g 'h + dh @ v (v < week-hours ? v week-hours))
    fr (g 'fr + 1)
    t (fr * dt)
    day (grass-day g)
    ; the wind walks toward the day's own mean, the heading wanders, gusts ride three sines
-   wt (? (fr % (fps * 60) = 1) (3.0 + roll sb 15) (g 'wt))
+   wt (fr % (fps * 60) = 1 ? (3.0 + roll sb 15) (g 'wt))
    wind (clamp (g 'wind + (roll sb 3 - 1) * 0.25 + (wt - g 'wind) * 0.003) 0.0 30.0)
    head ((g 'head + (roll sb 3 - 1) * 1.5 + 360.0) % 360.0)
    gust (1.0 + 0.3 * sin (t * 1.7) + 0.2 * sin (t * 4.3 + 1.0) + 0.15 * sin (t * 0.37))
@@ -202,13 +202,13 @@
                 sv (b 'sv - (40.0 * b 's + 5.0 * b 'sv) * dt)
                 (pins b 'w w 'th (clamp (b 'th + w * dt) -1.3 1.3)
                         'sv sv 's (clamp (b 's + sv * dt) -0.6 0.35)))
-   _ (each (g 'bs) blade)
+   (each (g 'bs) blade,
    ; the clouds ride the steady wind, not the gusts: a drift that wobbled would step
    ; every cloud back and forth on its column
-   _ (pin g 'drift (g 'drift + grass-wind-x g * dt * 0.12))
+    pin g 'drift (g 'drift + grass-wind-x g * dt * 0.12),
    ; seven days, and the week is over
-   _ (h >= week-hours && !(g 'over) ? (pins g 'over 'done 'msg ""))
-   g)
+    h >= week-hours && !(g 'over) ? (pins g 'over 'done 'msg ""),
+    g))
 
  ; --- the frame --------------------------------------------------------------------
  ; what stands on the sky and the dirt: [cells shade rows] -- cells is index -> [glyph fg
@@ -225,10 +225,10 @@
                  L (int (n * (1.0 - dl) * 1.3 + 1.0))
                  x0 (b 'x + round (b 'th * n * 0.4))
                  (go i) (i <= L ? (shade (x0 + sd * i) (base + 1),
-                                   (i <= L // 2 ? (shade (x0 + sd * i) (base + 2))),
+                                   i <= L // 2 ? (shade (x0 + sd * i) (base + 2)),
                                    go (i + 1)))
                  (0.15 < dl ? (go 1)))
-   (blade b) (: n (: v (int (b 'ht * rpi * (1.0 + b 's) + 0.5)) (top < v ? top v))
+   (blade b) (: n (int (b 'ht * rpi * (1.0 + b 's) + 0.5) @ v (top < v ? top v))
                 wilt (b 'hy < 12.0)
                 ; a shortened blade bows out of line: a bulge along its length, on the
                 ; side it already leans, that grows with the squeeze
@@ -236,15 +236,15 @@
                 (px k) (b 'x + round (b 'th * k * 0.8 + bow * sin (pi * k / (1 + n))))
                 (cell k) (: x (px k) d (px (k + 1) - x)
                            gl (d @ 0 "┃" 1 "╱" "╲")
-                           gi (clamp (int (dl * 3.0) + (b 'me ? 2 0) + ((k + b 'x) % 2)) 0 5)
+                           gi (clamp (int (dl * 3.0) + (b 'me ? 2 0) + (k + b 'x) % 2) 0 5)
                            fg (wilt ? (b 'me ? 178 142) (greens gi))
                            (put x (base - k) [gl fg -1]))
                 (go k) (k < n ? (cell k, go (k + 1)))
                 (go 0))
    ; the rest first: you are painted over them
-   _ (each (g 'bs) (b \ (b 'me ? () (shadow b, blade b))))
-   _ (: me (g 'me) (shadow me, blade me))
-   [ov sh ys])
+   (each (g 'bs) (b \ (b 'me ? () (shadow b, blade b))),
+    (: me (g 'me) (shadow me, blade me)),
+    [ov sh ys]))
 
  ; the clouds of the day as a tablet of sky index -> depth, 3 at the core down to 0 at
  ; the edge: the cover picks how many show, each an ellipse on the drift, flatter under
@@ -252,32 +252,32 @@
  ; through the whole of it. where two overlap the deeper one shows
  ; ..a cloud steps by whole columns, so the layout holds until one steps: it is kept under
  ; the columns the clouds stand on
- (grass-clouds g) (: n (3 + int ((g 'covers (grass-day g)) * 10.0)) drift (g 'drift)
+ (grass-clouds g) (: n (3 + int (g 'covers (grass-day g) * 10.0)) drift (g 'drift)
    key (map (cl \ int (cl 'x0 + drift)) (first-n n (g 'clouds)))
    kept (g 'cm)
-   (? (two? kept && kept 0 = key) (kept 1)
-      (: cm (clouds-lay g n drift) (pin g 'cm [key cm], cm))))
+   (two? kept && kept 0 = key ? (kept 1)
+      (clouds-lay g n drift @ cm (pin g 'cm [key cm], cm))))
  (clouds-lay g n drift) (:
    cm {} r (g 'r) c (g 'c)
-   (deep k v) (: o (peep cm k -1) (o < v ? (pin cm k v)))
+   (deep k v) (peep cm k -1 @ o (o < v ? (pin cm k v)))
    ; a cloud sits on a whole column and is tested by whole columns, so nothing at its
    ; edge moves until the whole of it steps; the noise and the dither are keyed to the
    ; cloud's own columns, so they step with it
-   (lay cl) (: cx (((int (cl 'x0 + drift)) + 2 * c) % c) w (cl 'w) hh (cl 'h) cy (cl 'y)
+   (lay cl) (: cx ((int (cl 'x0 + drift) + 2 * c) % c) w (cl 'w) hh (cl 'h) cy (cl 'y)
                k0 (int (cl 'x0 - w) - 2)                 ; the cloud's own first column
                (row y x) (x <= cx + w ?
                           (: dx ((x - cx) / w) dy ((y - cy) / hh * (cy < y ? 1.7 1.0)) e (dx * dx + dy * dy)
                              xx ((x + 2 * c) % c)
                              kx (x - int (cx - w) + k0)
                              v (3 - int (e * 3.0) - (cy < y) - (0 = dice kx y 5 4))
-                             _ (? (e < 1.0) (deep (xx + c * y) (v < 0 ? 0 v))
-                                  (e < 1.3 && 0 = dice kx y 9 3) (deep (xx + c * y) 0)
-                                  ())
-                           (row y (x + 1))))
+                             ((? (e < 1.0) (deep (xx + c * y) (v < 0 ? 0 v))
+                                 (e < 1.3 && 0 = dice kx y 9 3) (deep (xx + c * y) 0)
+                                 ()),
+                              row y (x + 1))))
                (rows y) (y <= cy + hh ? (1 <= y ? (row y (int (cx - w) - 2)), rows (y + 1)))
                (rows (int (cy - hh))))
-   _ (each (first-n n (g 'clouds)) lay)
-   cm)
+   (each (first-n n (g 'clouds)) lay,
+    cm))
 
  ; the frame's rows as strings -- the hud, every field row with its end, the bar: the
  ; frame is their join, and a paint is the rows that changed. a row nothing stands on
@@ -309,13 +309,13 @@
    dirt (? (0.3 < dl) dirt-day (0.05 < dl) dirt-dusk dirt-night)    ; the dirt by light
    dots (? (0.3 < dl) dot-day (0.05 < dl) dot-dusk dot-night)
    ; the sky behind a cell: a cloud over the sun, the moon and the stars
-   (sky x y i) (: cl (peep cm i -1)
+   (sky x y i) (peep cm i -1 @ cl
                   (? (0 <= cl) (cloud-cell cl (y = sy && -1 <= x - sx <= 2))
                      (y = sy && (x = sx || x = sx + 1)) [" " sp sp]
-                     (dark && 0 = dice x y 7 53) [(twinkles ((dice x y 11 3 + (g 'fr // 9)) % 3)) 230 skybg]
+                     (dark && 0 = dice x y 7 53) [(twinkles ((dice x y 11 3 + g 'fr // 9) % 3)) 230 skybg]
                      [" " skybg skybg]))
    ; the dirt: patches four cells wide, a dot of its own on each, and the shadows
-   (dirt-cell x y i) (: s (peep sh i 0)
+   (dirt-cell x y i) (peep sh i 0 @ s
      [(dirt-dots (dice x y 3 4)) (s ? 94 (dots (dice x y 17 #dots))) (s ? 58 (dirt (dice (x // 4) y 13 #dirt)))])
    ; a sky row's cells, kept: the key is the light and the sun, the clouds' columns,
    ; and the twinkle where a star is in the row (a star's pen is its own)
@@ -323,8 +323,8 @@
    ph (dark ? (g 'fr // 9) 0)
    kept (g 'kept)
    (held? e) (tablet? e && e 'k = bk && (!(e 'starry) || e 'ph = ph))
-   (entry y) (: e (kept y)
-     (? (held? e) e
+   (entry y) (kept y @ e
+     (held? e ? e
         (: cs (base < y ? () (map (x \ sky x y (x + c * y)) ^c))
            e2 {'k bk 'ph ph 'starry (foldl (a \ cl \ a || cl 1 = 230) 0 cs) 's ()
                'cells (base < y ? () (top-tray [c] cs))}
@@ -338,11 +338,11 @@
    ; pending wrap an erase takes the very glyph that raised it, and the last column
    ; would go blank
    (row p y x f b cells) (x < c ? (: cl (cell x y cells) f2 (cl 1) b2 (cl 2)
-                                    _ (f2 != f || b2 != b ? (say p (sgr f2 b2)))
-                                    _ (say p (cl 0))
-                                    (row p y (x + 1) f2 b2 cells)))
-   (paint y cells) (: p (jug 0) _ (row p y 0 -1 -1 cells, say p (esc + "[0m\r\n")) (slurp p))
-   (line y) (: e (entry y)
+                                    (f2 != f || b2 != b ? (say p (sgr f2 b2)),
+                                     say p (cl 0),
+                                     row p y (x + 1) f2 b2 cells)))
+   (paint y cells) (jug 0 @ p ((row p y 0 -1 -1 cells, say p (esc + "[0m\r\n")), slurp p))
+   (line y) (entry y @ e
      (? (peep ys y 0) (paint y (e 'cells))
         (string? (e 's)) (e 's)
         (paint y (e 'cells) @ s (pin e 's s, s))))
@@ -350,17 +350,17 @@
    ; field -- and its erase falls on that spare column, where it costs nothing
    (esc + "[0m" + fit (grass-hud g) c + "\r\n"
     . map line (map (+ 1) ^(r - 1)) + [(esc + "[0m" + fit (grass-bar g) (c - 1) + esc + "[K")]))
- (grass-frame g) (: j (jug 0) _ (say j (esc + "[H")) _ (each (grass-rows g) (say j)) (slurp j))
+ (grass-frame g) (jug 0 @ j (say j (esc + "[H"), each (grass-rows g) (say j), slurp j))
  ; the rows that changed since the last paint, each under its cursor move; the first
  ; paint, and one after a sign stood over the screen, is the whole frame
  (grass-paint g) (: rs (grass-rows g) j (jug 0)
-   last (: t (g 'last) (tablet? t ? t (pin g 'last {}, g 'last)))
-   (go l i) (? (two? l)
-               (: s <l
-                  _ (s != last i ? (say j (esc + "[" + show (i + 1) + ";1H" + s), pin last i s))
-                  (go >l (i + 1))))
-   _ (go rs 0)
-   (slurp j))
+   last (g 'last @ t (tablet? t ? t (pin g 'last {}, g 'last)))
+   (go l i) (two? l ?
+               (<l @ s
+                  (s != last i ? (say j (esc + "[" + show (i + 1) + ";1H" + s), pin last i s),
+                   go >l (i + 1))))
+   (go rs 0,
+    slurp j))
 
  ; the day and the weather to the left, what is yours to the right, the screen's spare
  ; cells between them
@@ -368,9 +368,9 @@
    l (day-names (d % 7) + " " + two-dig hh + ":" + two-dig mm
       + "  " + show (round (grass-temp g)) + "°F  " + show (round (g 'wind)) + " kt " + compass (g 'head))
    r (fx1 (g 'me 'ht) + "\"  H2O " + show (round (g 'me 'hy)) + "%  score " + show (g 'pts))
-   gap (: n (g 'c - wide l - wide r) (n < 2 ? 2 n))
-   (l + (gap (t \ t + " ") "") + r))
- (grass-bar g) (? (g 'me 'hy < 12.0) ("you are wilting  " + g 'msg)
+   gap (g 'c - wide l - wide r @ n (n < 2 ? 2 n))
+   (l + gap (t \ t + " ") "" + r))
+ (grass-bar g) (g 'me 'hy < 12.0 ? ("you are wilting  " + g 'msg)
                   (g 'msg || "dance: arrows or hjkl   q leaves"))
  (grass-final g) (g 'over @ 'done ("seven days: " + show (g 'pts) + " points, " + fx1 (g 'me 'ht) + "inches tall")
                                   ("you left the field on day " + show (1 + grass-day g)))
@@ -385,7 +385,7 @@
  ; chimes may ring, a die of its own. mode is 'chimes or 'song; a cue starts the song at
  ; the write head, and when its last bar is scheduled the chimes come back under it
  (grass-song-new bs h st)                  ; st is a wheel: a bare number rolls nothing
-  (: ps (foldl (\ acc b (foldl (\ a p (elem p a ? a (p . a))) acc (b 'pitches))) () bs)
+  (foldl (acc \ b \ foldl (a \ p \ (elem p a ? a (p . a))) acc (b 'pitches)) () bs @ ps
    {'tune (score-tune bs song-cps) 'bars #bs 'set (sort ps) 'sb {st} 'h h
     'fpos 0 'cyc 0 'next 0 'vs () 'mode 'chimes 'chimes 1 'cap chime-cap})
  (grass-song-cue s) (pins s 'mode 'song 'cyc 0 'next (s 'fpos))
@@ -393,7 +393,7 @@
  (chime-rate wind) (0.25 + wind / 8.0)
  ; one bar's onsets as [start voice], the bar starting at frame st and spc frames long
  (song-voices s c st spc)
-  (filter two? (map (\ x (: at (st + int (spc * qnum (evwb x - qi c)))
+  (filter two? (map (x \ (: at (st + int (spc * qnum (evwb x - qi c)))
                            v (mkvoice at (evv x) song-rate)
                          (two? v ? [at v])))
                     (filter onset? (s 'tune (qi c) (qi (c + 1))))))
@@ -402,7 +402,7 @@
  ; rest of its own
  (grass-song-feed s wind)
   (: spc (int (song-rate / song-cps))
-     (sched _) (? (s 'mode = 'song && s 'next <= s 'fpos + song-chunk && s 'cyc < s 'bars)
+     (sched _) (s 'mode = 'song && s 'next <= s 'fpos + song-chunk && s 'cyc < s 'bars ?
                   (pin s 'vs (s 'vs + song-voices s (s 'cyc) (s 'next) spc),
                    pins s 'cyc (s 'cyc + 1) 'next (s 'next + spc),
                  sched ()))
@@ -422,8 +422,8 @@
      live (filter (p \ p 1 0 >= base) (s 'vs))          ; not finished
      now (filter (p \ p 0 < base + song-chunk) live)    ; ..and already begun
      vs (map (p \ p 1) now)
-     _ (pins s 'vs live 'fpos (base + song-chunk))
-   (say (s 'h) (pack (mixdown vs base song-chunk) song-chunk song-gain)))
+     ((pins s 'vs live 'fpos (base + song-chunk)),
+      say (s 'h) (pack (mixdown vs base song-chunk) song-chunk song-gain)))
 
  ; --- the week on the tty ------------------------------------------------------------
  ; the clock paces the ticks, thirty a second, and the horn is fed by its lag: chunks go
@@ -440,22 +440,22 @@
                            t0 (clock 0)
                            (deaf _) (clock t0 < sign-deaf ? (drain-keys (), beat (), deaf ()))
                            (wait _) (cue? 0 ? (edkey in) (beat (), wait ()))
-                           _ (deaf ())
-                           (wait (), pin g 'last ()))       ; the box stood over the screen: the next paint is whole
+                           (deaf (),
+                            (wait (), pin g 'last ())))     ; the box stood over the screen: the next paint is whole
  (grass-week ls) (: ws (tty 1)
    r (two? ws && 7 < <ws ? (<ws - 1) 23)
    c (two? ws && 19 < <>ws ? <>ws 80)
    g (grass-new r c (wheel (clock 0)))
    bs (filter (b \ !(b 'err)) (score-parse ls))
-   hn (? bs (: h (horn song-rate 2) (? (nom? h) () h)) ())
-   sng (? hn (grass-song-new bs hn (wheel (clock 0))) ())
+   hn (bs ? (horn song-rate 2 @ h (nom? h ? () h)))
+   sng (hn ? (grass-song-new bs hn (wheel (clock 0))))
    ; THE QUEUE MUST OUTLAST THE GAP BETWEEN FEEDS, and on a slow seat that gap is one
    ; frame's painting: a fifth of a second is a desktop's answer and a phone's silence.
    ; so the gap is measured, held at its recent worst -- halving every two seconds, by
    ; the clock and not by calls -- and the lead follows it
    pace (pacer ())
-   (feed _) (: l (song-lead-of (pace! pace))
-               (? sng (song-fill hn l (_ \ grass-song-feed sng (g 'wind))) ()))
+   (feed _) (song-lead-of (pace! pace) @ l
+               (sng ? (song-fill hn l (_ \ grass-song-feed sng (g 'wind)))))
    (beat _) (feed (), rest 5)                           ; a sign's idle: the lead, then a breath
    (cue _) (sng && g 'cue ? (grass-song-cue sng, pin g 'cue 0))
    ; tick n is owed at t0 + n ticks. behind by a whole tick, the frame is skipped and the
@@ -465,35 +465,34 @@
      (: _ (feed ())
         due (g 't0 + n * tick-ms)
         late (clock 0 - due)
-        (? (late < 0.0) (rest 2, swim n)
-           ((? (10.0 * tick-ms < late) (pin g 't0 (g 't0 + late))),
+        (late < 0.0 ? (rest 2, swim n)
+           (10.0 * tick-ms < late ? (pin g 't0 (g 't0 + late)),
             key-drain g repeat-gap (k \ (k = -12 ? (grass-tap g (edtap ()) (clock 0))
                                                        (grass-key g k (clock 0)))),
             grass-tick g,
             cue (),
-            (? (late < tick-ms) (say out (grass-paint g), flush out) ()),
+            late < tick-ms ? (say out (grass-paint g), flush out),
             swim (n + 1)))))
-   _ (say out (esc + "[?25l"))
-   _ (sign g open-ttl open-rows beat)
-   _ (pin g 't0 (clock 0))
-   _ (swim 0)
-   _ (? (g 'over = 'done)
-        (pin g 'cue 1, cue (),
-         sign g end-ttl ["" ("final score   " + show (g 'pts))
-                         ("final height  " + fx1 (g 'me 'ht) + " in") "" "-- any key --"] beat)
-        ())
-   _ (? hn (flush hn, close hn) ())
-   g)
+   (say out (esc + "[?25l"),
+    sign g open-ttl open-rows beat,
+    pin g 't0 (clock 0),
+    swim 0,
+    g 'over = 'done ?
+      (pin g 'cue 1, cue (),
+       sign g end-ttl ["" ("final score   " + show (g 'pts))
+                       ("final height  " + fx1 (g 'me 'ht) + " in") "" "-- any key --"] beat),
+    hn ? (flush hn, close hn),
+    g))
  ; the screen raised and put back here; a terminal is asked for its taps too (xterm's
  ; SGR mouse reports, which cli's edkey reads as the key -12)
  (grass-run ls) (: _ (raw 1)
                   _ (say out (esc + "[?1049h" + esc + "[2J" + esc + "[?1000h" + esc + "[?1006h"))
                   g (grass-week ls)
-                  _ (say out (esc + "[?1006l" + esc + "[?1000l" + esc + "[0m" + esc + "[?25h" + esc + "[?1049l"))
-                  _ (flush out)
-                  _ (drain-keys ())
-                  _ (raw 0)
-                  (puts (grass-final g + "\n"), 0))
+                  (say out (esc + "[?1006l" + esc + "[?1000l" + esc + "[0m" + esc + "[?25h" + esc + "[?1049l"),
+                   flush out,
+                   drain-keys (),
+                   raw 0,
+                   (puts (grass-final g + "\n"), 0)))
  grass-usage "usage: love grass   (dance: arrows, hjkl, or tap about your blade; q or esc leaves)"
  (grass-main as) (as @ () (grass-run score)
                        (say err ("grass: " + grass-usage + "\n"), flush err, 2))

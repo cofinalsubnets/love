@@ -8,9 +8,9 @@
  (200 = peep t 2 0)
  (300 = peep t 3 0)
  (0 = peep t 9 0)                       ; missing key -> default
- (3 = foldl (\ n _ (1 + n)) 0 (keys t)) ; three entries
+ (3 = foldl (n \ _ \ 1 + n) 0 (keys t)) ; three entries
  ; empty + single-entry printer forms are deterministic (no bucket-order dependence)
- ("{}" = show (tablet 0))
+ ("{}" = show {})
  ("{1 100}" = show (hash 1 100))
  ("{1 \"hi\"}" = show (hash 1 "hi"))
  (string? (show t))                             ; multi-entry: just exercise the path
@@ -21,7 +21,7 @@
  ; a lambda leaf hashes its source, and a quote body in that source walks as data --
  ; that re-entrant walk scratches above the elements still pending beside it, so the
  ; leading 1/3 still reaches the digest
- !(dig [1 (\ a (\ 5)) 2] = dig [3 (\ a (\ 5)) 2]))
+ !(dig [1 (a \ (\ 5)) 2] = dig [3 (a \ (\ 5)) 2]))
 
 ; {…} reader form: splices a list operand into (hash …), wraps an atom as (hash x) --
 ; a box. {} reads to the empty map directly: the reader emits (tablet 0) -- () is the
@@ -31,10 +31,10 @@
  (tablet? ht)
  (100 = peep ht 1 0)
  (300 = peep ht 3 0)
- (tablet? (tablet 0))                                  ; the empty hash
- (? (tablet 0)) (? {}) (0 = #(tablet 0)) (0 = #{})     ; the empty map is truthy (a lambda) and tallies 0; {} reads to (tablet 0)
+ (tablet? {})                                          ; the empty hash
+ (? {}) (? {}) (0 = #{}) (0 = #{})                     ; the empty map is truthy (a lambda) and tallies 0; {} reads to (tablet 0)
  (50 = peep (pin {} 5 50) 5 0)                 ; the empty hash is mutable
- (3 = foldl (\ n _ (1 + n)) 0 (keys {1 10 2 20 3 30})) ; splice builds all entries
+ (3 = foldl (n \ _ \ 1 + n) 0 (keys {1 10 2 20 3 30})) ; splice builds all entries
  ("{}" = show {})                                      ; {} is the empty map, and round-trips
  ("{1 \"hi\"}" = show {1 "hi"}))
 

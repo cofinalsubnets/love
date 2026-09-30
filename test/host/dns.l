@@ -1,19 +1,7 @@
-; --- test/host/dns.l: the resolver's laws (src/apps/dns.l) ------------------------
-; hermetic and offline, which is the whole difficulty: a resolver's subject is a
-; nameserver, and a gate that asks the real one is a gate that fails on a train.
-; So the nameserver is a love task -- it binds a UDP port, waits for a query, and
-; answers a canned response built with the module's own be16 helper. Nothing
-; leaves the loopback and nothing here reads the machine's own /etc.
-;
-;   cat test/00-init.l test/host/dns.l | out/love   ; silence is a pass, exits 1 on fail
-;
-; 00-init.l leads for its ports (test-bind); the checks are `assert`, which stops the
-; run where `test` would record and carry on.
-;
-; driven from test/host/run.l under a timeout, like the other socket laws: a
-; resolver that stops parking stops the whole vm, and a wedged gate is worse than
-; a red one.
-; driven bare -- no test/00-init.l ahead of it -- so the posix door is borrowed here.
+; test/host/dns.l -- the resolver's laws, hermetic and offline: the nameserver is a love task on
+; a loopback UDP port answering canned responses, and nothing reads the machine's /etc. driven
+; from test/host/run.l under a timeout: a resolver that stops parking stops the whole vm. the
+; checks are `assert`, which stops the run; no test/00-init.l ahead, so posix is borrowed here.
 (cite 'posix ? (borrow 'posix) ())
 
 (: _ (borrow 'dns))
@@ -25,24 +13,24 @@
 ; -- the two-byte form that ends a name -- which is what a real server sends and
 ; what the parser's skip has to get right.
 (: (dns-reply q addr tc)
-    ((snip q 0 2)                                     ; the id, echoed
-     + (wrbe (tc ? 33664 33152) 2)                  ; qr|RD|ra, and TC if asked
-     + (wrbe 1 2) + (wrbe (tc ? 0 1) 2) + (wrbe 0 2) + (wrbe 0 2)
-     + (snip q 12 #q)                          ; the question, verbatim
-     + (tc ? "" ((string 192) + (string 12)             ; name: a pointer to offset 12
-           + (wrbe 1 2) + (wrbe 1 2)              ; type A, class in
-           + (wrbe 0 2) + (wrbe 60 2)             ; ttl
-           + (wrbe 4 2)
-           + (string ((addr >> 24) & 255)) + (string ((addr >> 16) & 255))
-           + (string ((addr >> 8) & 255)) + (string (addr & 255)))))
+    (snip q 0 2                                     ; the id, echoed
+     + wrbe (tc ? 33664 33152) 2                  ; qr|RD|ra, and TC if asked
+     + wrbe 1 2 + wrbe (tc ? 0 1) 2 + wrbe 0 2 + wrbe 0 2
+     + snip q 12 #q                          ; the question, verbatim
+     + (tc ? "" (string 192 + string 12             ; name: a pointer to offset 12
+           + wrbe 1 2 + wrbe 1 2              ; type A, class in
+           + wrbe 0 2 + wrbe 60 2             ; ttl
+           + wrbe 4 2
+           + string (addr >> 24 & 255) + string (addr >> 16 & 255)
+           + string (addr >> 8 & 255) + string (addr & 255))))
 
    ; serve exactly one query on the bound socket p, then exit. the recv parks -- this
    ; task is the peer whose running proves the resolver gave up its turn.
    (nameserver p addr tc)
-    (twirl (\ _ (: d (recv p)
-                   _ (send p <d (dns-reply <>d addr tc))
-                   _ (rest 20)                        ; let the datagram leave
-                   _ (close p) 1)) ()))
+    (twirl (_ \ (recv p @ d
+                 (send p <d (dns-reply <>d addr tc),
+                  rest 20,                            ; let the datagram leave
+                  close p, 1))) ()))
 
 ; --- law 1: a query goes out, an answer comes back, the address is exact -------
 (: sp (test-bind 0)
@@ -63,7 +51,7 @@
 (: none (test-free 0)      ; a port of ours, its socket gone
    t0 (clock 0)
    a (dns-ask 2130706433 none "ab.cd" 200)            ; nothing is bound there
-   ms ((clock 0) - t0)
+   ms (clock 0 - t0)
    _ (assert !(two? a)
              (200 <= ms)
              (ms < 2000)))
@@ -75,7 +63,7 @@
 ; the lie.
 (: q (dns-query 4660 "ab.cd")
    r (dns-reply q 0 1)
-   _ (assert ((dns-answers r 4660) = 'torn)))
+   _ (assert (dns-answers r 4660 = 'torn)))
 
 ; --- law 4: /etc/hosts answers with no packet at all ---------------------------
 ; and a fixture is the only way to say that: pointing at the machine's own file
@@ -105,8 +93,8 @@
 ; --- law 5: an empty resolv.conf still names a server --------------------------
 ; musl's fallback and moonlibc's: 127.0.0.1, so a machine with no config reaches a
 ; local stub instead of answering "no such host".
-(: ns (dns-servers (dns-dir + "/nope"))
-   _ (assert (two? ns) (<<ns = 2130706433)))
+(dns-servers (dns-dir + "/nope") @ ns
+   (assert (two? ns) (<<ns = 2130706433)))
 
 ; --- law 6: a whole answer read back, every record type nslookup shows ----------
 ; one response carrying a cname, an a, two aaaas (one run of zeros to fold and one single
@@ -128,8 +116,8 @@
                          ["ex.test" 28 "1:0:2::3:4"] ["ex.test" 15 "10 mx.ex.test"]
                          ["ex.test" 16 "\"hi\" \"you\""] ["ex.test" 2 "ex.test"] ["ex.test" 12 "srv.ex.test"]]])
              (<(dns-records (resp 33155) 4661) = 3)            ; NXDOMAIN's rcode
-             ((dns-records (resp 33152) 4662) = ())            ; another question's answer
-             ((dns-name (snip q0 0 12 + ptr) 12) = ()))         ; a pointer to itself
+             (dns-records (resp 33152) 4662 = ())            ; another question's answer
+             (dns-name (snip q0 0 12 + ptr) 12 = ()))         ; a pointer to itself
    ; the edns query is the plain one with an OPT record added and counted
    qe (dns-qedns 4661 "ex.test" 1)
    _ (assert (snip qe 0 10 = snip q0 0 10) (qe 11 = 1)
@@ -141,18 +129,18 @@
 (: sp (test-bind 0)
    port <sp
    v6 (catmap string [32 1 13 184 0 0 0 0 0 0 0 0 0 0 0 1])
-   s (twirl (\ _ (: p (sp 1)
+   s (twirl (_ \ (: p (sp 1)
                     d (recv p) q <>d
                     r (snip q 0 2 + wrbe 33152 2 + wrbe 1 2 + wrbe 1 2 + wrbe 0 2 + wrbe 0 2
                        + snip q 12 (#q - 11) + string 192 + string 12 + wrbe 28 2 + wrbe 1 2
                        + wrbe 0 2 + wrbe 60 2 + wrbe 16 2 + v6)
-                    _ (send p <d r) _ (rest 20) _ (close p) 1)) ())
+                    (send p <d r, rest 20, close p, 1))) ())
    _ (rest 20)
    a (dns-walk6 [(2130706433 . port)] "ab.cd")
    _ (catch s)
    _ (assert (a = ["2001:db8::1"])
-             ((resolve6-in (dns-dir + "/conf") (dns-dir + "/hosts") "v6.only") = ["::1"])
-             ((resolve6 "fe80::1") = ["fe80::1"])))
+             (resolve6-in (dns-dir + "/conf") (dns-dir + "/hosts") "v6.only" = ["::1"])
+             (resolve6 "fe80::1" = ["fe80::1"])))
 
 ; --- law 8: only the nameserver's own answer to our own question is taken ------
 ; ahead of the true answer come four that must be dropped: one from another address
@@ -162,17 +150,17 @@
    port <sp
    (rep q addr) (dns-reply q addr ())
    (other-name q) (snip q 0 13 + string (q 13 ^ 1) + snip q 14 #q)          ; ab.cd -> `b.cd
-   s (twirl (\ _ (: p (sp 1)
+   s (twirl (_ \ (: p (sp 1)
                     d (recv p) q <>d
                     far (bind ['udp "127.0.0.2" 0])
-                    _ (? (hot? far) (send far <d (rep q 101058054)) 0)       ; 6.6.6.6
+                    _ (hot? far ? (send far <d (rep q 101058054)) 0)       ; 6.6.6.6
                     near (bind ['udp 0])
-                    _ (send near <d (rep q 117901063))                          ; 7.7.7.7
-                    _ (send p <d (rep (wrbe ((rdbe q 0 2) ^ 1) 2 + snip q 2 #q) 134744072))   ; 8.8.8.8
-                    _ (send p <d (rep (other-name q) 151587081))                ; 9.9.9.9
-                    _ (send p <d (rep q 16909060))                              ; 1.2.3.4
-                    _ (rest 20)
-                    _ (? (hot? far) (close far) 0) _ (close near) _ (close p) 1)) ())
+                    (send near <d (rep q 117901063),                            ; 7.7.7.7
+                     send p <d (rep (wrbe (rdbe q 0 2 ^ 1) 2 + snip q 2 #q) 134744072),     ; 8.8.8.8
+                     send p <d (rep (other-name q) 151587081),                  ; 9.9.9.9
+                     send p <d (rep q 16909060),                                ; 1.2.3.4
+                     rest 20,
+                     (hot? far ? (close far) 0), close near, close p, 1))) ())
    _ (rest 20)
    a (dns-ask 2130706433 port "ab.cd" 2000)
    _ (catch s)

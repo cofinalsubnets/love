@@ -28,8 +28,8 @@
 ; green under a shell help; only a value demo would catch it. one loud probe:
 ; a defn must land in glob and compute.
 (test
- (: _ (defn uu-alive (pi n nat nat) (lam n (succ n)))
-    (two? (peep GLOB 'uu-alive 0)))
+ (defn uu-alive (pi n nat nat) (lam n (succ n)),
+  two? (peep GLOB 'uu-alive 0))
  (3 = vof 0 '(uu-alive 2)))
 
 ; --- UniMath Foundations PartA, the core snip: every name is the original.
@@ -1730,16 +1730,16 @@
 ; level expr) is ('U l); the surface (UU l) picks the level. The univalence tower still
 ; stays parked in the type-in-type checker above (it needs that inference) -- the fragment
 ; uu2coq already skips.
-(: (lsuc l) (? (charm? l) (l + 1) ['lsuc l]) ; smart successor: fold concretes, else build the expr
+(: (lsuc l) (charm? l ? (l + 1) ['lsuc l])   ; smart successor: fold concretes, else build the expr
    (lle a b)                                 ; conservative a <= b over level exprs (the universe constraint, decided structurally)
    (? (a = b) 1
       (a = 0) 1                                                        ; 0 <= any level
       (charm? a && charm? b) (a <= b)
-      (two? b && (<b = 'lsuc)) (lle a <>b)                 ; a <= b' => a <= (lsuc b')
+      (two? b && <b = 'lsuc) (lle a <>b)                   ; a <= b' => a <= (lsuc b')
       0)
-   (umax a b) (? (charm? a && charm? b) (? (a < b) b a)            ; max of level exprs
+   (umax a b) (? (charm? a && charm? b) (a < b ? b a)              ; max of level exprs
                  (lle a b) b  (lle b a) a  ['lmax a b])
-   (ulvl u) (? (u = 'UU) 0 (two? u && (<u = 'U)) <>u 'no) ; universe value -> level expr ('no = not a universe)
+   (ulvl u) (? (u = 'UU) 0 (two? u && <u = 'U) <>u 'no)   ; universe value -> level expr ('no = not a universe)
    (umk l) (l @ 0 'UU ['U l])                         ; level expr -> universe value
 
    ; --- the universe constraint solver: difference constraints + positive-cycle detection.
@@ -1751,18 +1751,18 @@
    ;     (a<=b, b<a) no local check sees. (Whole-corpus IMPLICIT inference -- generalize a def
    ;     over its level vars + instantiate per use -- is the remaining integration on top.)
    (lparse l) (? (charm? l) ['ground l]
-                 (two? l && <l = 'lsuc) (: p (lparse <>l) [<p (1 + <>p)])
+                 (two? l && <l = 'lsuc) (lparse <>l @ p [<p (1 + <>p)])
                  (two? l && <l = 'lv) [l 0]
                  ['ground 0])
-   (atomset prs) (: s {} _ (map (e \ pins s <e 1 <>e 1) prs) (keys s))
+   (atomset prs) ({} @ s (map (e \ pins s <e 1 <>e 1) prs, keys s))
    (usat? cs)                                                          ; cs: list of [x y], each meaning x <= y
-   (: prs (map (\ c (: x (lparse <c) y (lparse <>c) [<x <y (<>x - <>y)])) cs)
-      atoms (atomset prs) pot (tablet 0) _ (map (a \ pin pot a 0) atoms)
-      (relax1 z) (foldl (\ ch e (: uu (peep pot <e 0) w <>>e v (peep pot <>e 0)
-                                   (? (uu + w > v) (pin pot <>e (uu + w), 1) ch))) 0 prs)
-      (spin1 k) (? (k < #atoms) (relax1 (), spin1 (k + 1)) 0)
-      _ (spin1 0)
-      !(relax1 ()))                                                ; one more relaxation still moves => positive cycle => unsat
+   (: prs (map (c \ (: x (lparse <c) y (lparse <>c) [<x <y (<>x - <>y)])) cs)
+      atoms (atomset prs) pot {} _ (map (a \ pin pot a 0) atoms)
+      (relax1 z) (foldl (ch \ e \ (: uu (peep pot <e 0) w <>>e v (peep pot <>e 0)
+                                     (uu + w > v ? (pin pot <>e (uu + w), 1) ch))) 0 prs)
+      (spin1 k) (k < #atoms ? (relax1 (), spin1 (k + 1)) 0)
+      (spin1 0,
+       !(relax1 ())))                                              ; one more relaxation still moves => positive cycle => unsat
 
    ; --- implicit level inference: elaborate bare UU to a fresh level metavar, then check. So a
    ;     definition checks with no (UU l) annotation -- the levels are inferred (as metavars;
@@ -1771,8 +1771,8 @@
    ;     def generates (a global usat? over the check -- the conservative bit), the full
    ;     recursor/sigma checker, and generalize/instantiate-per-use. The type-in-type-exploiting
    ;     defs (the_world_explodes, the ordinal descent) stay correctly rejected -- by design.
-   MVC (tablet 0)                                                 ; fresh-metavar counter
-   (freshmv z) (: i (peep MVC 0 0) _ (pin MVC 0 (i + 1)) ['mv i]) ; a fresh universe level metavariable (mv i)
+   MVC {}                                                         ; fresh-metavar counter
+   (freshmv z) (peep MVC 0 0 @ i (pin MVC 0 (i + 1), ['mv i]))    ; a fresh universe level metavariable (mv i)
    (elab t) (? (t = 'UU) ['UU (freshmv ())]                       ; bare UU -> (UU (mv i)); leave annotated (UU l) alone
               (two? t && <t = 'UU) t  (two? t) (map elab t)  t)
 
@@ -1780,9 +1780,9 @@
    (? (x = 'UU) '(U 1)
       (elem x '(nat bool unit empty)) 'UU
       (x = 'zero) 'nat (x = 'tt) 'unit (elem x '(true false)) 'bool
-      (: e (assoc x cx) (? e <>e (: g (peep GLOB x 0) (? g <g (scare 'uu-unbound x))))))
+      (assoc x cx @ e (e ? <>e (peep GLOB x 0 @ g (g ? <g (scare 'uu-unbound x))))))
 
-   (sortof cx en d T) (: l (ulvl (pinf cx en d T)) (l @ 'no (scare 'uu-not-a-type T) l))
+   (sortof cx en d T) (ulvl (pinf cx en d T) @ l (l @ 'no (scare 'uu-not-a-type T) l))
 
    (cleq d ti t)
    (ulvl ti != 'no && ulvl t != 'no ? (usat? [[(ulvl ti) (ulvl t)]]) (conv d ti t))
@@ -1794,24 +1794,24 @@
 
    (pinf-spine cx en d f as)
    (? (atom? as) f
-      (<f = 'pi) (: a <as _ (pchk cx en d a <>f) (pinf-spine cx en d (capp <>>f (vof en a)) >as))
+      (<f = 'pi) (<as @ a (pchk cx en d a <>f, pinf-spine cx en d (capp <>>f (vof en a)) >as))
       (scare 'uu-not-a-pi as))
 
    (pinf cx en d t)
    (? (charm? t) 'nat
       (nom? t) (psym cx t)
-      (: h <t
-         (? (two? h)      (pinf-spine cx en d (pinf cx en d h) >t)
-            (h = 'UU)     (umk (lsuc <>t))                          ; (UU l) : UU(l+1) -- l a level expr
-            (h = 'pi)     (predpi cx en d t)
-            (h = 'total2) (predpi cx en d t)
-            (h = 'paths)  (: l (sortof cx en d <>t) Av (vof en <>t)
-                              _ (pchk cx en d <>>t Av) _ (pchk cx en d <>>>t Av) (umk l))
-            (h = 'succ)   (: _ (pchk cx en d <>t 'nat) 'nat)
-            (h = 'the)    (: l (sortof cx en d <>t) Tv (vof en <>t) _ (pchk cx en d <>>t Tv) Tv)
-            (h = 'let)    (: x <>t Av (pinf cx en d <>>t) va (vof en <>>t) (pinf (. [x Av] cx) (. [x va] en) d <>>>t))
-            (h = 'idpath) (: Av (pinf cx en d <>t) v (vof en <>t) ['paths Av v v])
-            (pinf-spine cx en d (pinf cx en d h) >t))))
+      (<t @ h
+       (? (two? h)      (pinf-spine cx en d (pinf cx en d h) >t)
+          (h = 'UU)     (umk (lsuc <>t))                            ; (UU l) : UU(l+1) -- l a level expr
+          (h = 'pi)     (predpi cx en d t)
+          (h = 'total2) (predpi cx en d t)
+          (h = 'paths)  (: l (sortof cx en d <>t) Av (vof en <>t)
+                            (pchk cx en d <>>t Av, pchk cx en d <>>>t Av, umk l))
+          (h = 'succ)   (pchk cx en d <>t 'nat, 'nat)
+          (h = 'the)    (: l (sortof cx en d <>t) Tv (vof en <>t) (pchk cx en d <>>t Tv, Tv))
+          (h = 'let)    (: x <>t Av (pinf cx en d <>>t) va (vof en <>>t) (pinf (. [x Av] cx) (. [x va] en) d <>>>t))
+          (h = 'idpath) (: Av (pinf cx en d <>t) v (vof en <>t) ['paths Av v v])
+          (pinf-spine cx en d (pinf cx en d h) >t))))
 
    (pchk cx en d t T)
    (? (two? t && <t = 'lam)
@@ -1820,16 +1820,16 @@
        (scare 'uu-lam-needs-pi t))
       (two? t && <t = 'idpath)
       (<T @ 'paths
-       (: _ (pchk cx en d <>t <>T) v (vof en <>t) (? (conv d v <>>T && conv d v <>>>T) 1 (scare 'uu-idpath-mismatch t)))
+       (: _ (pchk cx en d <>t <>T) v (vof en <>t) (conv d v <>>T && conv d v <>>>T ? 1 (scare 'uu-idpath-mismatch t)))
        (scare 'uu-idpath-needs-paths t))
       (two? t && <t = 'let)
        (: x <>t Av (pinf cx en d <>>t) va (vof en <>>t) (pchk (. [x Av] cx) (. [x va] en) d <>>>t T))
-      (: Ti (pinf cx en d t) (? (cleq d Ti T) 1 (scare 'uu-type-mismatch t))))
+      (pinf cx en d t @ Ti (cleq d Ti T ? 1 (scare 'uu-type-mismatch t))))
 
-   (pdefn nm T t) (: _ (sortof 0 0 0 T) Tv (vof 0 T) _ (pchk 0 0 0 t Tv) nm)   ; vof now normalizes (UU l)
+   (pdefn nm T t) (: _ (sortof 0 0 0 T) Tv (vof 0 T) (pchk 0 0 0 t Tv, nm))    ; vof now normalizes (UU l)
 
    (qdefn nm T t)                                                     ; implicit: elaborate bare UU to fresh metavars, then check -- levels inferred, no annotation
-   (: eT (elab T) _ (sortof 0 0 0 eT) Tv (vof 0 eT) _ (pchk 0 0 0 (elab t) Tv) nm))
+   (: eT (elab T) _ (sortof 0 0 0 eT) Tv (vof 0 eT) (pchk 0 0 0 (elab t) Tv, nm)))
 
 ; landmarks as pure booleans (so a false one scares loudly here, before the negative-test
 ; section installs its scare-swallowing help) -- no `rejects`, which needs that help.
@@ -2306,11 +2306,11 @@
 ; --- untrusted like the translator, so every pin rides the differential
 ; --- battery right here: vof the kernel's lane, lof the compiled one, and a
 ; --- wrong bridge (or a uu2l bug) reddens the gate -- never a theorem.
-(: _ (bridge 'add (n \ m \ n + m))
-   _ (bridge 'niszero (m \ m @ 0 'true 'false))
-   _ (bridge 'npred (m \ m @ 0 0 (m - 1)))
-   _ (bridge 'nateqb (n \ m \ n @ ^m 'true 'false))
-   0)
+(bridge 'add (n \ m \ n + m),
+ bridge 'niszero (m \ m @ 0 'true 'false),
+ bridge 'npred (m \ m @ 0 0 (m - 1)),
+ bridge 'nateqb (n \ m \ n @ ^m 'true 'false),
+ 0)
 (test
  ; the bridged names, both lanes, edges included
  ((vof 0 '(add 2 3)) = (lof '(add 2 3)))
@@ -2486,7 +2486,7 @@
 
 ; --- the kernel refuses: ill-typed terms scare; the help cell catches them.
 ; --- (install per the help law; the scare bit is the only one a help sees.)
-(hear (\ p e (: h (peep HELPC () 0) (? h (h p e) 0))))
+(hear (p \ e \ peep HELPC () 0 @ h (h ? (h p e) 0)))
 (test
  ('rejected = rejects (z \ defn uu-bad1 (paths nat 1 2) (idpath 1)))
  ('rejected = rejects (z \ defn uu-bad2 (pi x nat nat) (lam x (succ y))))

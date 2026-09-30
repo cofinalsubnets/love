@@ -1,9 +1,9 @@
 (: l [0 1 2 3 4 5 6 7 8 9]
    (diag f x) (f x x)
-   (ln x) (foldl (\ n _ (1 + n)) 0 x)
+   (ln x) (foldl (n \ _ \ 1 + n) 0 x)
    m (map (diag (+)) l)
    n (map (* 2) l)
-   (even n) (? n (odd (-1 + n)) 1)
+   (even n) (n ? (odd (-1 + n)) 1)
    (odd n) (? n (even (-1 + n)))
    eo (part even l)
    es <eo

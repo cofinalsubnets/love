@@ -1,30 +1,12 @@
-; test/uuvalband.l -- the band algebra over test/uuval.l's values: love's `+`
-; and `*` themselves, where uuval models only what net reads and test/uumx.l
-; only which lane a pair of kinds dispatches to. the tree's notions of band meet
-; here: this carrier has the three shapes a value can be -- () and a number and
-; a link -- and each is one of mx.l's fifteen kinds, so the cell vadd takes is
-; the lane mx.l's matrix dispatches to, checked over all nine pairs. the three
-; vocabularies cut at different depths and disagree about nothing: kinds.l's
-; lattice ranks the numeric tier inside the one band mx.l's roster gives it.
-;
-; the laws are the ones test/proof/rocq/spec.v proves of `gval` -- the unit on
-; either side of +, the zero that annihilates * on either side, the degeneration
-; of a mixed band under + (a number against a chain arrives as that band's unit,
-; which is what buys associativity over the whole carrier with no side
-; conditions), the |count| action of a number on a chain, and the cartesian
-; product that makes chain*chain a semiring rather than a monoid -- restated
-; here over the finer carrier and proved in uu rather than in Rocq alone.
-;
-; what + needs that uuval did not: the integers really associate. that is the
-; first block, and it is why uuval respells zadd by iteration -- the four
-; definitional equations below are the whole proof, and the truncated-
-; subtraction spelling has none of them. the chain band needs one more thing --
-; that append associates -- and that needs the pad to be invisible to append and
-; veq to compose, which is why uuval's equality is an equivalence. every law
-; here is given twice: once over veq, and once over paths on uuval's pinned
-; carrier, the second by the bridge and one line each.
-;
-; substrate: test/uu.l and test/uuval.l (both load before this by sort order).
+; test/uuvalband.l -- the band algebra over test/uuval.l's values: love's `+` and `*`
+; themselves. the carrier has three shapes -- (), a number, a link -- each one of mx.l's
+; kinds, so the cell vadd takes is the lane mx.l's matrix dispatches to, checked over all
+; nine pairs. the laws are those test/proof/rocq/spec.v proves of `gval` (units, the
+; annihilating zero, a mixed band degenerating to its unit under +, a number's |count|
+; action on a chain, chain*chain as a semiring), proved here in uu. the integers must
+; really associate, which is why uuval spells zadd by iteration; each law is given over
+; veq and again over paths on the pinned carrier. loads after test/uu.l and
+; test/uuval.l (sort order).
 (test (elem 'vof (names ())) (two? (peep GLOB 'vlink 0)))
 
 ; --- zsucc and zpred are inverse, each way. the two nat cases are where the
@@ -339,16 +321,16 @@
  (vof 0 'true = vof 0 '(veq (vadd vnilv (nval 3)) (nval 3)))
  (vof 0 'true = vof 0 '(veq (vadd (nval 3) vnilv) (nval 3)))
  (vof 0 'true = vof 0 '(veq (vadd (nval 2) (nval 3)) (nval 5)))
- (= (vof 0 'true) (vof 0 '(veq (vadd (nval 5) (vlink (nval 1) (nval 2)))
-                               (vlink (nval 1) (nval 2)))))
- (= (vof 0 'true) (vof 0 '(veq (vadd (vlink (nval 1) (nval 2)) (nval 5))
-                               (vlink (nval 1) (nval 2)))))
+ (vof 0 'true = vof 0 '(veq (vadd (nval 5) (vlink (nval 1) (nval 2)))
+                            (vlink (nval 1) (nval 2))))
+ (vof 0 'true = vof 0 '(veq (vadd (vlink (nval 1) (nval 2)) (nval 5))
+                            (vlink (nval 1) (nval 2))))
  ; '(1) + '(2) = '(1 2): the left spine ends in (), and the right takes its place
- (= (vof 0 'true) (vof 0 '(veq (vadd (vlink (nval 1) vnilv) (vlink (nval 2) vnilv))
-                               (vlink (nval 1) (vlink (nval 2) vnilv)))))
+ (vof 0 'true = vof 0 '(veq (vadd (vlink (nval 1) vnilv) (vlink (nval 2) vnilv))
+                            (vlink (nval 1) (vlink (nval 2) vnilv))))
  ; ..and a dotted tail is replaced, not kept -- love answers (1 3) too
- (= (vof 0 'true) (vof 0 '(veq (vadd (vlink (nval 1) (nval 2)) (vlink (nval 3) vnilv))
-                               (vlink (nval 1) (vlink (nval 3) vnilv))))))
+ (vof 0 'true = vof 0 '(veq (vadd (vlink (nval 1) (nval 2)) (vlink (nval 3) vnilv))
+                            (vlink (nval 1) (vlink (nval 3) vnilv)))))
 
 ; --- append associates, modulo veq. this is the law the depth index made hard:
 ; --- a link meets its limbs at a height neither spells, so appending on the left
@@ -894,46 +876,46 @@
  (vof 0 'true = vof 0 '(veq (vmul vnilv (vlink (nval 1) vnilv)) vnilv))
  (vof 0 'true = vof 0 '(veq (vmul (nval 0) (vlink (nval 1) vnilv)) vnilv))
  ; 2 * '(1) = '(1 1)
- (= (vof 0 'true) (vof 0 '(veq (vmul (nval 2) (vlink (nval 1) vnilv))
-                               (vlink (nval 1) (vlink (nval 1) vnilv)))))
+ (vof 0 'true = vof 0 '(veq (vmul (nval 2) (vlink (nval 1) vnilv))
+                            (vlink (nval 1) (vlink (nval 1) vnilv))))
  ; ..and |count| is the absolute value: -2 repeats twice, as love does
- (= (vof 0 'true) (vof 0 '(veq (vmul (zval (ii2 1)) (vlink (nval 1) vnilv))
-                               (vlink (nval 1) (vlink (nval 1) vnilv)))))
+ (vof 0 'true = vof 0 '(veq (vmul (zval (ii2 1)) (vlink (nval 1) vnilv))
+                            (vlink (nval 1) (vlink (nval 1) vnilv))))
  ; '(1) * '(2 3) = ((1 2) (1 3))
- (= (vof 0 'true)
-      (vof 0 '(veq (vmul (vlink (nval 1) vnilv) (vlink (nval 2) (vlink (nval 3) vnilv)))
-                   (vlink (vlink (nval 1) (vlink (nval 2) vnilv))
-                          (vlink (vlink (nval 1) (vlink (nval 3) vnilv)) vnilv)))))
+ (vof 0 'true =
+    vof 0 '(veq (vmul (vlink (nval 1) vnilv) (vlink (nval 2) (vlink (nval 3) vnilv)))
+                (vlink (vlink (nval 1) (vlink (nval 2) vnilv))
+                       (vlink (vlink (nval 1) (vlink (nval 3) vnilv)) vnilv))))
  ; and * discriminates, so none of the above is a constant
  (vof 0 'false = vof 0 '(veq (vmul (nval 2) (nval 3)) (nval 5)))
- (= (vof 0 'false) (vof 0 '(veq (vmul (nval 2) (vlink (nval 1) vnilv))
-                                (vlink (nval 1) vnilv)))))
+ (vof 0 'false = vof 0 '(veq (vmul (nval 2) (vlink (nval 1) vnilv))
+                             (vlink (nval 1) vnilv))))
 
 ; --- and + associating, computed. the append is the interesting one: the two
 ; --- bracketings build the same chain at different heights, which is the whole
 ; --- of what the law says and the whole of what veq is for ---
 (test
- (= (vof 0 'true)
-      (vof 0 '(veq (vadd (vadd (vlink (nval 1) vnilv) (vlink (nval 2) vnilv))
-                         (vlink (nval 3) vnilv))
-                   (vadd (vlink (nval 1) vnilv)
-                         (vadd (vlink (nval 2) vnilv) (vlink (nval 3) vnilv))))))
+ (vof 0 'true =
+    vof 0 '(veq (vadd (vadd (vlink (nval 1) vnilv) (vlink (nval 2) vnilv))
+                      (vlink (nval 3) vnilv))
+                (vadd (vlink (nval 1) vnilv)
+                      (vadd (vlink (nval 2) vnilv) (vlink (nval 3) vnilv)))))
  ; ..and the two bracketings really do differ as trees: veq sees past the height
- (= (vof 0 'false)
-      (vof 0 '(veq (vadd (vadd (vlink (nval 1) vnilv) (vlink (nval 2) vnilv))
-                         (vlink (nval 3) vnilv))
-                   (vlink (nval 1) vnilv))))
+ (vof 0 'false =
+    vof 0 '(veq (vadd (vadd (vlink (nval 1) vnilv) (vlink (nval 2) vnilv))
+                      (vlink (nval 3) vnilv))
+                (vlink (nval 1) vnilv)))
  ; append is not commutative, so the associativity above is not a constant
- (= (vof 0 'false)
-      (vof 0 '(veq (vapp (vlink (nval 1) vnilv) (vlink (nval 2) vnilv))
-                   (vapp (vlink (nval 2) vnilv) (vlink (nval 1) vnilv)))))
+ (vof 0 'false =
+    vof 0 '(veq (vapp (vlink (nval 1) vnilv) (vlink (nval 2) vnilv))
+                (vapp (vlink (nval 2) vnilv) (vlink (nval 1) vnilv))))
  ; the mixed cells associate by degeneration: both sides answer the chain
- (= (vof 0 'true)
-      (vof 0 '(veq (vadd (vadd (nval 5) (vlink (nval 1) vnilv)) (nval 7))
-                   (vadd (nval 5) (vadd (vlink (nval 1) vnilv) (nval 7))))))
- (= (vof 0 'true)
-      (vof 0 '(veq (vadd (vadd (nval 5) (vlink (nval 1) vnilv)) (nval 7))
-                   (vlink (nval 1) vnilv)))))
+ (vof 0 'true =
+    vof 0 '(veq (vadd (vadd (nval 5) (vlink (nval 1) vnilv)) (nval 7))
+                (vadd (nval 5) (vadd (vlink (nval 1) vnilv) (nval 7)))))
+ (vof 0 'true =
+    vof 0 '(veq (vadd (vadd (nval 5) (vlink (nval 1) vnilv)) (nval 7))
+                (vlink (nval 1) vnilv))))
 
 ; --- what is not proved here, named rather than left to be noticed. + is done:
 ; --- every cell associates, chain+chain included. * is not -- its numeric cell
@@ -948,39 +930,39 @@
 ; --- the planted faults: a proof term that type-checks whatever it says proves
 ; --- nothing, so each load-bearing claim gets its false twin and the kernel must
 ; --- refuse that one. every negative takes its positive. ---
-(hear (\ p e (: h (peep HELPC () 0) (? h (h p e) 0))))
+(hear (p \ e \ peep HELPC () 0 @ h (h ? (h p e) 0)))
 (test
  ; the integers really do associate -- and zsucc really does travel
- ('accepted = (rejects (\ z (defq uv-ok-zsucc
-    (pi a zed (paths zed (zadd a (zsucc zzero)) (zsucc a)))
-    (lam a (idpath (zsucc a)))))))
- ('rejected = (rejects (\ z (defq uv-bad-zsucc (pi a zed (paths zed (zadd a (zsucc zzero)) a)) (lam a (idpath a))))))
+ ('accepted = (rejects (z \ defq uv-ok-zsucc
+   (pi a zed (paths zed (zadd a (zsucc zzero)) (zsucc a)))
+   (lam a (idpath (zsucc a))))))
+ ('rejected = (rejects (z \ defq uv-bad-zsucc (pi a zed (paths zed (zadd a (zsucc zzero)) a)) (lam a (idpath a)))))
  ; the degeneration drops the number; it does not keep it
- ('accepted = (rejects (\ z (defq uv-ok-degen
-    (pi m msr (pi a val (pi b val (paths val (vadd (vnum m) (vlink a b)) (vlink a b)))))
-    (lam m (lam a (lam b (idpath (vlink a b)))))))))
- ('rejected = (rejects (\ z (defq uv-bad-degen
-    (pi m msr (pi a val (pi b val (paths val (vadd (vnum m) (vlink a b)) (vnum m)))))
-    (lam m (lam a (lam b (idpath (vnum m)))))))))
+ ('accepted = (rejects (z \ defq uv-ok-degen
+   (pi m msr (pi a val (pi b val (paths val (vadd (vnum m) (vlink a b)) (vlink a b)))))
+   (lam m (lam a (lam b (idpath (vlink a b))))))))
+ ('rejected = (rejects (z \ defq uv-bad-degen
+   (pi m msr (pi a val (pi b val (paths val (vadd (vnum m) (vlink a b)) (vnum m)))))
+   (lam m (lam a (lam b (idpath (vnum m))))))))
  ; () is the unit of + and the zero of *, not the unit of both
- ('rejected = (rejects (\ z (defq uv-bad-mulunit (pi v val (paths val (vmul vnilv v) v)) (lam v (idpath v))))))
+ ('rejected = (rejects (z \ defq uv-bad-mulunit (pi v val (paths val (vmul vnilv v) v)) (lam v (idpath v)))))
  ; the sign of a product is not the sign of its magnitude
- ('accepted = (rejects (\ z (defn uv-ok-zmul (paths zed (zmul (ii2 1) (ii1 3)) (ii2 5)) (idpath (ii2 5))))))
- ('rejected = (rejects (\ z (defn uv-bad-zmul (paths zed (zmul (ii2 1) (ii1 3)) (ii1 6)) (idpath (ii1 6))))))
+ ('accepted = (rejects (z \ defn uv-ok-zmul (paths zed (zmul (ii2 1) (ii1 3)) (ii2 5)) (idpath (ii2 5)))))
+ ('rejected = (rejects (z \ defn uv-bad-zmul (paths zed (zmul (ii2 1) (ii1 3)) (ii1 6)) (idpath (ii1 6)))))
  ; ..and the bridge names the lane mx.l names: a chain against a number keeps
  ; the chain, which is bin_a with the chain on the left
- ('accepted = (rejects (\ z (defn uv-ok-lane (paths nat (mxadd mxKChain mxKCharm) mxLbin_a) (idpath mxLbin_a)))))
- ('rejected = (rejects (\ z (defn uv-bad-lane (paths nat (mxadd mxKChain mxKCharm) mxLbin_b) (idpath mxLbin_b)))))
+ ('accepted = (rejects (z \ defn uv-ok-lane (paths nat (mxadd mxKChain mxKCharm) mxLbin_a) (idpath mxLbin_a))))
+ ('rejected = (rejects (z \ defn uv-bad-lane (paths nat (mxadd mxKChain mxKCharm) mxLbin_b) (idpath mxLbin_b))))
  ; append associates and does not commute -- a law that held of both would be
  ; holding of nothing
- ('rejected = (rejects (\ z (defq uv-bad-app-comm
-    (pi d nat (pi t (vtre d) (pi v val
-       (paths bool (veq (vappd d t v) (vapp v (tpair d t))) true))))
-    (lam d (lam t (lam v (uv-veq-refl (vappd d t v)))))))))
+ ('rejected = (rejects (z \ defq uv-bad-app-comm
+   (pi d nat (pi t (vtre d) (pi v val
+      (paths bool (veq (vappd d t v) (vapp v (tpair d t))) true))))
+   (lam d (lam t (lam v (uv-veq-refl (vappd d t v))))))))
  ; ..and the pad really is invisible to it: an append onto a padded spine is the
  ; append onto the spine, which is the step the associativity leans on
- ('accepted = (rejects (\ z (defq uv-ok-app-pad
-    (pi a nat (pi b nat (pi t (vtre a) (pi w val
-       (paths bool (veq (vappd (mx2 a b) (padl a b t) w) (vappd a t w)) true)))))
-    uv-vapp-padl)))))
+ ('accepted = (rejects (z \ defq uv-ok-app-pad
+   (pi a nat (pi b nat (pi t (vtre a) (pi w val
+      (paths bool (veq (vappd (mx2 a b) (padl a b t) w) (vappd a t w)) true)))))
+   uv-vapp-padl))))
 (hear test-strict)

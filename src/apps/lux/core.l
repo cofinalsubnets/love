@@ -26,20 +26,20 @@
    (zrow z) (two? z ? (rev <>z + (<z . <>>z)))               ; the stack as an ordered row, master first
    (zfrom l) (two? l ? (zmk <l () >l))                        ; a row -> a zipper, head focused
    (zrev z) (two? z ? (zmk <z <>>z <>z))                      ; mirror: up <-> down
-   (zfocup z) (? (atom? z) ()                                      ; focus up, wrapping to the bottom
+   (zfocup z) (atom? z ? ()                                        ; focus up, wrapping to the bottom
                  (: up <>z
-                    (? (two? up) (zmk <up >up (<z . <>>z))
+                    (two? up ? (zmk <up >up (<z . <>>z))
                        (: all (rev (<z . <>>z)) (zmk <all >all ())))))
    (zfocdn z) (zrev (zfocup (zrev z)))                             ; focus down = mirrored focus up
-   (zswapup z) (? (atom? z) ()                                     ; swap the focused window upward
+   (zswapup z) (atom? z ? ()                                       ; swap the focused window upward
                   (: up <>z
-                     (? (two? up) (zmk <z >up (<up . <>>z))
+                     (two? up ? (zmk <z >up (<up . <>>z))
                         (zmk <z (rev <>>z) ()))))                  ; at the top: rotate to the bottom
    (zswapdn z) (zrev (zswapup (zrev z)))
    (zmaster z) (atom? z ? () (zmk <z () (rev <>z + <>>z)))       ; focused becomes master
    (zins w z) (two? z ? (zmk w <>z (<z . <>>z)) (zmk w () ()))  ; insert above the focus, focused
    (znub w l) (filter (x \ x != w) l)
-   (zdel w z) (? (atom? z) ()                                      ; delete w; focus falls down, then up
+   (zdel w z) (atom? z ? ()                                        ; delete w; focus falls down, then up
                  (: f <z up (znub w <>z) dn (znub w <>>z)
                     (? (f != w) (zmk f up dn)
                        (two? dn) (zmk <dn up >dn)
@@ -51,7 +51,7 @@
                                     (go (<m . up) >m))
                        (go () row))
    (zfocto w z) (zhas? w z ? (zfromrow (zrow z) w) z)            ; focus the named window (Go dir's StackSet half)
-   (zswapw a b z) (? (zhas? a z && zhas? b z)                      ; exchange a and b in place; focus follows its window
+   (zswapw a b z) (zhas? a z && zhas? b z ?                        ; exchange a and b in place; focus follows its window
                      (zfromrow (map (x \ (? (x = a) b (x = b) a x)) (zrow z)) (zfoc z)) z)
 
    ; --- the sheaf: (cur board floating vis). board = ((tag zipper)..), every tag;
@@ -95,7 +95,7 @@
        (go () rects))
    (wsrescreen sh rects)                                           ; the screens changed: visible tags keep their screens in order,
     (: rs (sort (wsclean rects))                                   ; hidden ones fill new screens, tags past the last screen hide;
-       (? (atom? rs) sh                                            ; screens go by position (x, then y): the leftmost is screen 0
+       (atom? rs ? sh                                              ; screens go by position (x, then y): the leftmost is screen 0
           (: tags (take #rs (wsvistags sh + wshidden sh))
              cur (any (= (wscur sh)) tags ? (wscur sh) <tags)
              (wsmake cur (wsboard sh) (wsfloat sh) (wspair tags rs)))))
@@ -124,14 +124,14 @@
 
    ; --- the tiled half, derived. the layout sees a zipper with the floats
    ;     filtered out (W.filter: a deleted focus falls down, then up). ---
-   (wstilezof sh t) (foldl (\ z w (zdel w z)) (wsget sh t) (wsflof sh t))   ; a tag's tiled zipper
+   (wstilezof sh t) (foldl (z \ w \ zdel w z) (wsget sh t) (wsflof sh t))   ; a tag's tiled zipper
    (wstilez sh) (wstilezof sh (wscur sh))
    (wsrow sh) (zrow (wstilez sh))                                  ; the current tiled row, ordered, master first
    (wsztile sh zop)                                                ; run a zipper op on the TILED subsequence; floats keep their slots
     (: f (wsfoc sh)
-       (? (!f || wsfloating? sh f) sh
+       (!f || wsfloating? sh f ? sh
           (: z (zfromrow (wsrow sh) f)
-             (? !z sh
+             (!z ? sh
                 (: ts (zrow (zop z)) row (wsring sh)
                    (fill m r) (? (atom? m) ()
                                  (wsfloating? sh <m) (<m . fill >m r)
@@ -143,7 +143,7 @@
 
    ; --- per screen: what each screen paints, and focus across screens ---
    (wsringof sh t) (zrow (wsget sh t))                              ; a tag's ring
-   (wsonscreen sh) (foldl (\ a t (a + wsringof sh t)) () (wsvistags sh))   ; every window some screen shows
+   (wsonscreen sh) (foldl (a \ t \ a + wsringof sh t) () (wsvistags sh))   ; every window some screen shows
    (wsscreenof sh w) (wsrectof sh (wstagof sh w))                   ; the rect of the screen showing w, or ()
    (wsscreenat sh x y) (: p (afind (p \ (: r <>p (two? r && r 0 <= x < r 0 + r 2 && r 1 <= y < r 1 + r 3))) (wsvis sh))
                           (two? p ? <p))                            ; the tag on the screen under (x y), or ()
@@ -151,7 +151,7 @@
                    (t && wsvisible? sh t ? (wsmap (wsview sh t) (zfocto w)) sh))
 
    ; --- managing windows across the whole sheaf ---
-   (wsallw sh) (foldl (\ a p (a + zrow <>p)) () (wsboard sh))      ; every managed window, all workspaces
+   (wsallw sh) (foldl (a \ p \ a + zrow <>p) () (wsboard sh))      ; every managed window, all workspaces
    (wstiled sh) (filter (w \ !(wsfloating? sh w)) (wsallw sh))     ; every tiled window
    (wsfloatw sh) (filter (w \ wsfloating? sh w) (wsallw sh))       ; every floating window
    (wswins sh) (wstiled sh + wsfloatw sh)                          ; tiles then floats: the stacking order a pager reads, bottom to top
@@ -161,7 +161,7 @@
                      (two? r ? <<r))
    (admit sh w) (wsknownw? sh w ? sh (wsmap sh (zins w)))        ; manage w into the current ws (a no-op if already managed)
    (evict sh w) (wsmake (wscur sh) (wsdelw sh w) (wsunfl w (wsfloat sh)) (wsvis sh))   ; unmanage w everywhere
-   (shiftwin sh w t) (? !(wsknown? sh t && wsknownw? sh w && (t != wstagof sh w)) sh
+   (shiftwin sh w t) (? !(wsknown? sh t && wsknownw? sh w && t != wstagof sh w) sh
                         (: d (wsmake (wscur sh) (wsdelw sh w) (wsfloat sh) (wsvis sh))   ; one path: a float emigrates with its rect
                            (wsset d t (zins w (wsget d t)))))                 ; and arrives focused on t
    (shiftto sh t) (shiftwin sh (wsfoc sh) t)                       ; the focused window emigrates to tag t; we stay

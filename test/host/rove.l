@@ -1,14 +1,7 @@
-; --- test/host/rove.l: the rove engine and the climb it carries, headless ---
-; not in the test/*.l corpus (it loads a crew file and leaks its helpers).
-; the engine core is pure love, so everything but the tty runner gates here:
-; delve (seeded, connected, bordered), fov (strides, walls, memory), the
-; painter (a frame into a jug), the make of each floor and what it says, the helm
-; decoder, the words and their holes, the sign the tower opens with, and
-; the climb end to end -- combat, pennies, the mending, the pace, the stair,
-; death, and the circle that ends it. the tty side (tower-run) is berth-thin over
-; what this file proves, and test/host/tty.l plays it on a real pty.
-;
-;   cat test/00-init.l test/host/rove.l | out/love
+; test/host/rove.l -- the rove engine and its climb, headless: delve, fov, the painter, each
+; floor's make, the helm decoder, the words, the opening sign, and the climb end to end. the tty
+; runner is berth-thin over this and test/host/tty.l plays it.
+; not in the corpus: it leaks its helpers. run: cat test/00-init.l test/host/rove.l | out/love
 
 (borrow 'rove)   ; the artifact's modules, warm from the tree
 (borrow 'tower)
@@ -20,7 +13,7 @@
    p2 (delve 60 20 (wheel 11) (plan 2))
    p3 (delve 60 20 (wheel 12) (plan 2))
    d <p1
-   (teq a b) (: (go i ok) (i < 1200 ? (go (i + 1) (ok && (peep (a 't) i 0 = peep (b 't) i 0))) ok)
+   (teq a b) (: (go i ok) (i < 1200 ? (go (i + 1) (ok && peep (a 't) i 0 = peep (b 't) i 0)) ok)
                 (go 0 1))
    flood (: mk (cask 1200)
             (go stk n) (!stk ? n (: xy <stk x <xy y <>xy i (x + 60 * y)
@@ -50,34 +43,33 @@
 ;   #...#...#
 ;   #########
 (: hd {'w 9 'h 5 't (cask 45) 'seen (cask 45) 'rooms [[1 1 3 3] [5 1 3 3]]}
-   _ (map (\ y (map (\ x (x = 4 ? () (dput hd x y 1))) '(1 2 3 4 5 6 7))) '(1 2 3))
+   _ (map (y \ (map (x \ (x = 4 ? () (dput hd x y 1))) '(1 2 3 4 5 6 7))) '(1 2 3))
    v (fov hd 1 1 8)
-   _ (test
-  (peep v (1 + 9 * 1) 0)                         ; your own cell is lit
-  (peep v (3 + 9 * 1) 0)                         ; down the room
-  (peep v (4 + 9 * 1) 0)                         ; the wall catches the light
-  !(peep v (5 + 9 * 1) 0)                        ; ... and keeps the far room dark
-  !(peep v (7 + 9 * 3) 0)
-  (peep v 0 0)                                   ; the corner wall glows (adjacency)
-  (peep (hd 'seen) (3 + 9 * 1) 0)                ; the lantern leaves a memory
-  !(peep (hd 'seen) (5 + 9 * 1) 0))
- ; step across: the far room lights, the seen cask keeps both
- (: v2 (fov hd 5 2 8)
+   (test (peep v (1 + 9 * 1) 0)                         ; your own cell is lit
+         (peep v (3 + 9 * 1) 0)                         ; down the room
+         (peep v (4 + 9 * 1) 0)                         ; the wall catches the light
+         !(peep v (5 + 9 * 1) 0)                        ; ... and keeps the far room dark
+         !(peep v (7 + 9 * 3) 0)
+         (peep v 0 0)                                   ; the corner wall glows (adjacency)
+         (peep (hd 'seen) (3 + 9 * 1) 0)                ; the lantern leaves a memory
+         !(peep (hd 'seen) (5 + 9 * 1) 0),
+    ; step across: the far room lights, the seen cask keeps both
+    (fov hd 5 2 8 @ v2
   (test
    (peep v2 (5 + 9 * 1) 0)
    !(peep v2 (1 + 9 * 1) 0)
    (peep (hd 'seen) (1 + 9 * 1) 0)
-   (peep (hd 'seen) (6 + 9 * 2) 0))))
+   (peep (hd 'seen) (6 + 9 * 2) 0)))))
 
 ; --- the helm: arrows, the sailor's keys, alt letters; anything else is itself ---
 (test
  ('(0 -1) = steer -8) ('(0 1) = steer -9) ('(1 0) = steer -2) ('(-1 0) = steer -1)
- (27 = (steer 27))
+ (27 = steer 27)
  ('(-1 0) = steer 104) ('(0 1) = steer 106) ('(0 -1) = steer 107) ('(1 0) = steer 108)
  ('(-1 -1) = steer 121) ('(1 -1) = steer 117) ('(-1 1) = steer 98) ('(1 1) = steer 110)
  ('(-1 -1) = steer 377) ('(1 1) = steer 366)
- (62 = (steer 62))
- (113 = (steer 113)))
+ (62 = steer 62)
+ (113 = steer 113))
 
 ; --- the words: a line fills its holes, and wears its braces at the port ---
 (test
@@ -93,43 +85,43 @@
 
 ; --- the climb on a hand floor: every verb of the game, deterministic ---
 (: (hand-g _) (: hd {'w 9 'h 5 't (cask 45) 'seen (cask 45) 'rooms [[1 1 3 3] [5 1 3 3]]}
-                 _ (map (\ y (map (\ x (x = 4 ? () (dput hd x y 1))) '(1 2 3 4 5 6 7))) '(1 2 3))
+                 _ (map (y \ (map (x \ (x = 4 ? () (dput hd x y 1))) '(1 2 3 4 5 6 7))) '(1 2 3))
                  _ (pin hd 'in [1 1], pin hd 'stair [7 3])
                  st (wheel 5) sb {st}
                  pl {'x 1 'y 1 'gl 64 'hue 228 'hp 40 'mx 40 'penny 0}
                  {'d hd 'lvl 1 'tn 0 'sb sb 'p pl 'ms () 'loot {} 'msg "" 'over 0}))
 
 ; the floor holds: a stride into rock stands you still, and the floor says its own name
-(: g (hand-g ())
-   _ (crawl-turn g [0 -1])
- (test (1 = g 'p 'x) (1 = g 'p 'y) (0 < #(g 'msg))))
+(hand-g () @ g
+ (crawl-turn g [0 -1],
+  test (1 = g 'p 'x) (1 = g 'p 'y) (0 < #(g 'msg))))
 
 ; the stream underfoot has its own lines, and they are about water
-(: g (hand-g ())
-   _ (dput (g 'd) 2 1 3)
-   _ (crawl-turn g [1 0])
- (test (2 = g 'p 'x)                                    ; water is walked
+(hand-g () @ g
+ (dput (g 'd) 2 1 3,
+  crawl-turn g [1 0],
+  test (2 = g 'p 'x)                                    ; water is walked
        (0 < #(g 'msg))))
 
 ; furniture stands where it is: bumped for its line, never walked onto, and
 ; remembered once seen
-(: g (hand-g ())
-   _ (pin (g 'loot) (2 + 9 * 1) '(table))
-   _ (crawl-turn g [1 0])
- (test (1 = g 'p 'x) (0 < #(g 'msg))
+(hand-g () @ g
+ (pin (g 'loot) (2 + 9 * 1) '(table),
+  crawl-turn g [1 0],
+  test (1 = g 'p 'x) (0 < #(g 'msg))
        (<(loot-face '(table) 1) = <(loot-face '(table) 0))   ; a face, seen or remembered
        (charm? <(loot-face '(penny 3) 1))))
 
 ; she is met, not struck: the bump puts up her sign and takes her off the floor, and
 ; the next key takes the sign down without moving you
-(: g (hand-g ())
-   _ (pin g 'her {'x 2 'y 1 'gl "x" 'hue 1})
-   _ (crawl-turn g [1 0])
-   _ (test (1 = g 'p 'x) (two? (g 'sign)) !(g 'her) (1 = #(ents g)))
-   _ (crawl-turn g [1 0])
-   _ (test (1 = g 'p 'x) !(g 'sign))
-   _ (crawl-turn g [1 0])
- (test (2 = g 'p 'x)))
+(hand-g () @ g
+ (pin g 'her {'x 2 'y 1 'gl "x" 'hue 1},
+  crawl-turn g [1 0],
+  test (1 = g 'p 'x) (two? (g 'sign)) !(g 'her) (1 = #(ents g)),
+  crawl-turn g [1 0],
+  test (1 = g 'p 'x) !(g 'sign),
+  crawl-turn g [1 0],
+  test (2 = g 'p 'x)))
 
 ; a real climb: the garden has a stream and its two pieces of furniture, she is on the
 ; first three floors and not the circle, and the stream is never the stair
@@ -137,18 +129,18 @@
    d (g 'd)
    (wet _) #(filter (i \ 3 = dat d (i % 60) (i // 60)) ^(60 * 20))
    (kind k) (any (i \ k = <(g 'loot i)) (keys (g 'loot)))
-   (climb _) (: d (g 'd)                              ; this floor's stair, not the first's
-                _ (pins (g 'p) 'x <(d 'stair) 'y <>(d 'stair))
-                (crawl-turn g 60))
-   _ (crawl-turn g 46)                                ; the opening sign, down
-   _ (test (0 < wet ()) (kind 'table) (kind 'throne) (tablet? (g 'her))
-           (2 = dat d <(d 'stair) <>(d 'stair)))
-   _ (climb ())
-   _ (test (2 = g 'lvl) (tablet? (g 'her)) !(kind 'table))
-   _ (climb ())
-   _ (test (3 = g 'lvl) (tablet? (g 'her)) (kind 'mirror) (kind 'fountain))
-   _ (climb ())
- (test (circle? g) (tablet? (g 'her))))                 ; ..and by the fire on the last
+   (climb _) (g 'd @ d  ; this floor's stair, not the first's
+              ((pins (g 'p) 'x <(d 'stair) 'y <>(d 'stair)),
+               crawl-turn g 60))
+   (crawl-turn g 46,                                  ; the opening sign, down
+    test (0 < wet ()) (kind 'table) (kind 'throne) (tablet? (g 'her))
+         (2 = dat d <(d 'stair) <>(d 'stair)),
+    climb (),
+    test (2 = g 'lvl) (tablet? (g 'her)) !(kind 'table),
+    climb (),
+    test (3 = g 'lvl) (tablet? (g 'her)) (kind 'mirror) (kind 'fountain),
+    climb (),
+    test (circle? g) (tablet? (g 'her))))                 ; ..and by the fire on the last
 
 ; --- the city: streets on a grid, buildings between them with a floor and doors on
 ; different walls, the climber inside one, the two stairs inside two others, and all
@@ -164,12 +156,12 @@
    (doors rm) (: x0 (peep rm 0 0 - 1) y0 (peep rm 1 0 - 1)
                  x1 (x0 + peep rm 2 1 + 1) y1 (y0 + peep rm 3 1 + 1)
                  (wall x y) (? (y = y0) 'n (y = y1) 's (x = x0) 'w 'e)
-                 (filter two? (map (\ xy (5 = t <xy <>xy ? [(wall <xy <>xy)] ()))
-                                   (cat (map (\ i [(x0 + i) y0]) ^(x1 - x0 + 1))
-                                        (map (\ i [(x0 + i) y1]) ^(x1 - x0 + 1))
-                                        (map (\ j [x0 (y0 + j)]) ^(y1 - y0 + 1))
-                                        (map (\ j [x1 (y0 + j)]) ^(y1 - y0 + 1))))))
-   (walls-of rm) (sort (keys (foldl (\ t dr (pin t <dr 1)) {} (doors rm))))
+                 (filter two? (map (xy \ (5 = t <xy <>xy ? [(wall <xy <>xy)] ()))
+                                   (cat (map (i \ [(x0 + i) y0]) ^(x1 - x0 + 1))
+                                        (map (i \ [(x0 + i) y1]) ^(x1 - x0 + 1))
+                                        (map (j \ [x0 (y0 + j)]) ^(y1 - y0 + 1))
+                                        (map (j \ [x1 (y0 + j)]) ^(y1 - y0 + 1))))))
+   (walls-of rm) (sort (keys (foldl (t \ dr \ (pin t <dr 1)) {} (doors rm))))
    flood (: mk (cask (w * h))
             (go stk n) (!stk ? n (: xy <stk x <xy y <>xy i (x + w * y)
                            (!(open? d x y) || peep mk i 0 ? (go >stk n) (pin mk i 1,
@@ -189,7 +181,7 @@
   (all two-lane? roads)
   (2 < #rms)                                             ; buildings enough
   (all (rm \ 2 <= #(walls-of rm)) rms)                   ; doors on two walls at least, each
-  (all (rm \ (: m [(peep rm 0 0 + peep rm 2 1 // 2) (peep rm 1 0 + peep rm 3 1 // 2)]
+  (all (rm \ ([(peep rm 0 0 + peep rm 2 1 // 2) (peep rm 1 0 + peep rm 3 1 // 2)] @ m
                   (elem (t <m <>m) '(4 2)))) rms)        ; a floor inside, dark
   (in-room? <(d 'in) <>(d 'in))                          ; you arrive indoors
   (2 = #stairs)                                          ; two stairs up
@@ -205,15 +197,15 @@
 ; car still headed the way it was; walking into one is the same hurt. it is never struck.
 (: g (hand-g ())
    c (car-new 2 1 -1 0 196)
-   _ (pin g 'ms [c])
-   _ (crawl-turn g 46)                                  ; a turn passed: the car comes
-   _ (test (30 = g 'p 'hp) (find (g 'msg) "car" 0) (elem 'horn (g 'sfx))
-           (-1 = c 'dx) ("◄" = c 'gl) (2 = c 'x)          ; ..and it is where it was, still headed your way
-           (1 = g 'p 'x) (2 = g 'p 'y))                  ; you are off its line, the one way you could be
-   _ (pin g 'sfx ())
-   _ (pins (g 'p) 'x 1 'y 1)
-   _ (crawl-turn g [1 0])                               ; you walk into it
- (test (20 <= g 'p 'hp && g 'p 'hp <= 22) (elem 'horn (g 'sfx)) (99 = c 'hp) (1 = g 'p 'x)))
+   (pin g 'ms [c],
+    crawl-turn g 46,                                    ; a turn passed: the car comes
+    test (30 = g 'p 'hp) (find (g 'msg) "car" 0) (elem 'horn (g 'sfx))
+         (-1 = c 'dx) ("◄" = c 'gl) (2 = c 'x)          ; ..and it is where it was, still headed your way
+         (1 = g 'p 'x) (2 = g 'p 'y),                    ; you are off its line, the one way you could be
+    pin g 'sfx (),
+    pins (g 'p) 'x 1 'y 1,
+    crawl-turn g [1 0],                                 ; you walk into it
+    test (20 <= g 'p 'hp && g 'p 'hp <= 22) (elem 'horn (g 'sfx)) (99 = c 'hp) (1 = g 'p 'x)))
 
 ; a car turns only at a corner -- a cell whose lane runs the way of the turn, which is
 ; not the lane beside it and not the oncoming one -- and goes off the map where its road
@@ -226,12 +218,12 @@
    g {'d hd 'lvl 2 'tn 0 'sb {(wheel 5)} 'p {'x 1 'y 3 'gl 64 'hue 228 'hp 40 'mx 40 'penny 0}
       'ms () 'loot {} 'msg "" 'over 0 'gates '((0 2 1 0) (4 4 0 -1))}
    c (car-new 6 2 1 0 196)
-   _ (pin g 'ms [c])
-   _ (test !(corner? hd 2 2 0 -1) (corner? hd 4 2 0 -1) !(corner? hd 4 2 0 1)
-           !(open? hd 8 2) (lit? hd 8 2) (road? hd 8 2))
-   _ (crawl-turn g 46)                                  ; three cells: 7, 8, and off
- (test (6 = dat hd (c 'x) (c 'y))                      ; it is at a gate
-       (road? hd (c 'x + c 'dx) (c 'y + c 'dy))))      ; ..headed in
+   (pin g 'ms [c],
+    test !(corner? hd 2 2 0 -1) (corner? hd 4 2 0 -1) !(corner? hd 4 2 0 1)
+         !(open? hd 8 2) (lit? hd 8 2) (road? hd 8 2),
+    crawl-turn g 46,                                    ; three cells: 7, 8, and off
+    test (6 = dat hd (c 'x) (c 'y))                      ; it is at a gate
+         (road? hd (c 'x + c 'dx) (c 'y + c 'dy))))      ; ..headed in
 
 ; a fresh middle's cars are on the road and headed the way their lane runs, every one,
 ; and every gate lets in along its lane
@@ -241,7 +233,7 @@
    _ (crawl-turn g 60)
    d (g 'd)
    cars (filter (m \ m 'car) (g 'ms))
-   (on-lane? x y dx dy) (: l (lane-at d x y) (dx != 0 ? (<l = dx) (<>l = dy)))
+   (on-lane? x y dx dy) (lane-at d x y @ l (dx != 0 ? (<l = dx) (<>l = dy)))
  (test (2 = g 'lvl) (two? cars) (two? (g 'gates))
        (all (m \ road? d (m 'x) (m 'y) && on-lane? (m 'x) (m 'y) (m 'dx) (m 'dy)) cars)
        (all (e \ 6 = dat d <e (e 1) && on-lane? <e (e 1) (e 2) (e 3)) (g 'gates))))
@@ -263,15 +255,15 @@
        (all (i \ 4 = t i) coals)))                        ; ..and the coals are indoors
 
 ; she says the floor's page: the middle's is not the garden's
-(: g (hand-g ())
-   _ (pin g 'lvl 2)
-   _ (pin g 'her {'x 2 'y 1 'gl "x" 'hue 1})
-   _ (crawl-turn g [1 0])
- (test (>(g 'sign) = her-lines 2) !(her-lines 1 = her-lines 2) (her-lines 1 = her-lines 9)))
+(hand-g () @ g
+ (pin g 'lvl 2,
+  pin g 'her {'x 2 'y 1 'gl "x" 'hue 1},
+  crawl-turn g [1 0],
+  test (>(g 'sign) = her-lines 2) !(her-lines 1 = her-lines 2) (her-lines 1 = her-lines 9)))
 
 ; a line wider than the screen is reflowed at its words, and the box still fits it
 (: ln "the quick brown fox jumps over the lazy dog and keeps going past the edge of the screen"
-   row (30 (\ t (t + ".")) "")
+   row (30 (t \ (t + ".")) "")
    f (: (go i acc) (i < 8 ? (go (i + 1) (acc + (0 < i ? "\r\n" "") + row)) acc) (go 0 ""))
    out (sign-over f "t" [ln] 0 8 30)
    (bare s) (: (go i acc) (? (i >= #s) acc
@@ -287,7 +279,7 @@
 ; three bytes to a cell -- still leaves every row as wide as the screen, with the
 ; blocks either side of it and none doubled
 (: blk "\xe2\x96\x88"
-   row (30 (\ t (t + blk)) "")
+   row (30 (t \ (t + blk)) "")
    f (: (go i acc) (i < 6 ? (go (i + 1) (acc + (0 < i ? "\r\n" "") + "\e[38;5;33m" + row)) acc) (go 0 ""))
    out (sign-over f "t" ["a line"] 0 6 30)
    (bare s) (: (go i acc) (? (i >= #s) acc
@@ -303,12 +295,12 @@
        (30 = chars (rs 0))))
 
 ; glass is looked through and not walked: the lantern reaches past it, a stride does not
-(: g (hand-g ())
-   _ (dput (g 'd) 4 2 6)
-   _ (pin (g 'd) 'solid '(6))                           ; the floor that lays glass names it
-   _ (pins (g 'p) 'x 3 'y 2)
-   _ (crawl-turn g [1 0])
- (test (3 = g 'p 'x) (0 < #(g 'msg))
+(hand-g () @ g
+ (dput (g 'd) 4 2 6,
+  pin (g 'd) 'solid '(6),                               ; the floor that lays glass names it
+  pins (g 'p) 'x 3 'y 2,
+  crawl-turn g [1 0],
+  test (3 = g 'p 'x) (0 < #(g 'msg))
        (clear? (g 'd) 3 2 5 2) (peep (g 'vis) (5 + 9 * 2) 0) !(open? (g 'd) 4 2) (lit? (g 'd) 4 2)))
 
 ; --- heaven: platforms in the void, every one a checkered rhombus with a stairway to the
@@ -328,22 +320,22 @@
    (count k) #(filter (i \ k = t (i % w) (i // w)) ^(w * h))
    opens #(filter (i \ open? d (i % w) (i // w)) ^(w * h))
    stairs (filter (i \ 2 = t (i % w) (i // w)) ^(w * h))
-   tints (map (rm \ (: m (mid rm) (peep (d 'tint) (<m + w * <>m) ()))) rms)
+   tints (map (rm \ (mid rm @ m (peep (d 'tint) (<m + w * <>m) ()))) rms)
  (test (1 < #rms)
        (all two? tints) !(tints 0 = tints 1)                        ; a colour each, and no two the same
-       (all (rm \ (: m (mid rm) (elem (t <m <>m) '(8 2)))) rms)          ; a platform under each middle
+       (all (rm \ (mid rm @ m (elem (t <m <>m) '(8 2)))) rms)          ; a platform under each middle
        (any (rm \ 6 = t (peep rm 0 0) (peep rm 1 0)) rms)                 ; ..and void at a corner: a rhombus, not a block
        (2 = #stairs) (flood = opens) (0 < count 7) (0 < count 6) (0 = count 0)
        (all (i \ lit? d (i % w) (i // w)) ^(w * h))))                     ; all of it looked through
 
 ; a mirror lets you out beside another, and alone it keeps you
-(: g (hand-g ())
-   _ (pin (g 'loot) (2 + 9 * 1) '(mirror))
-   _ (crawl-turn g [1 0])
-   _ (test (1 = g 'p 'x) (find (g 'msg) "is solid" 0))
-   _ (pin (g 'loot) (6 + 9 * 2) '(mirror))
-   _ (crawl-turn g [1 0])
- (test (0 < #(g 'msg))
+(hand-g () @ g
+ (pin (g 'loot) (2 + 9 * 1) '(mirror),
+  crawl-turn g [1 0],
+  test (1 = g 'p 'x) (find (g 'msg) "is solid" 0),
+  pin (g 'loot) (6 + 9 * 2) '(mirror),
+  crawl-turn g [1 0],
+  test (0 < #(g 'msg))
        (|(g 'p 'x - 6) <= 1) (|(g 'p 'y - 2) <= 1) !(6 = g 'p 'x && 2 = g 'p 'y)))
 
 ; the platforms and the steps say what they are
@@ -352,36 +344,36 @@
    _ (dput (g 'd) 3 1 7)
    _ (crawl-turn g [1 0])
    m1 (g 'msg)
-   _ (crawl-turn g [1 0])
- ; the platform mutters one of its lines, the step mutters one of its own, and the
- ; two are not the same line -- the flavour text itself is the tower's to reword
- (test (0 < #m1)
-       (0 < #(g 'msg))
-       (m1 != (g 'msg))))
+   (crawl-turn g [1 0],
+    ; the platform mutters one of its lines, the step mutters one of its own, and the
+    ; two are not the same line -- the flavour text itself is the tower's to reword
+    test (0 < #m1)
+         (0 < #(g 'msg))
+         (m1 != g 'msg)))
 
 ; the horn the game asked for is two voices in the song, at the write head, and the
 ; asking is spent by it
 (: s (song-new ())
    g {'sfx '(horn) 'lvl 2 'st 0}
-   _ (pin s 'fpos 4000)
-   _ (song-tier s g)
- (test (2 = #(s 'vs)) !(g 'sfx)
-       (all (v \ 4000 < v 0) (s 'vs))                  ; both end past the head
-       !((<(s 'vs) 0) = (s 'vs) 1 0)))             ; ..and not together: one, then the other
+   (pin s 'fpos 4000,
+    song-tier s g,
+    test (2 = #(s 'vs)) !(g 'sfx)
+         (all (v \ 4000 < v 0) (s 'vs))                  ; both end past the head
+         !((<(s 'vs) 0) = (s 'vs) 1 0)))             ; ..and not together: one, then the other
 
 ; the shelf opens its book a page at a time: a key turns the page and takes no step, and
 ; the key after the last page closes it
-(: g (hand-g ())
-   _ (pin (g 'loot) (2 + 9 * 1) '(shelf))
-   _ (crawl-turn g [1 0])
-   _ (test (1 = g 'p 'x) (two? (g 'sign)) ("Muse" = <(g 'sign)) (find (g 'msg) "one book" 0)
-           (find (last (g 'sign)) "1 of 6" 0) (5 = #(g 'pages)))
-   _ (crawl-turn g [1 0])
-   _ (test (1 = g 'p 'x) (two? (g 'sign)) (find (last (g 'sign)) "2 of 6" 0))
-   _ (each ^4 (_ \ crawl-turn g 46))
-   _ (test (two? (g 'sign)) (find (last (g 'sign)) "6 of 6" 0) !(g 'pages))
-   _ (crawl-turn g 46)
- (test !(g 'sign) (1 = g 'p 'x)))
+(hand-g () @ g
+ (pin (g 'loot) (2 + 9 * 1) '(shelf),
+  crawl-turn g [1 0],
+  test (1 = g 'p 'x) (two? (g 'sign)) ("Muse" = <(g 'sign)) (find (g 'msg) "one book" 0)
+       (find (last (g 'sign)) "1 of 6" 0) (5 = #(g 'pages)),
+  crawl-turn g [1 0],
+  test (1 = g 'p 'x) (two? (g 'sign)) (find (last (g 'sign)) "2 of 6" 0),
+  each ^4 (_ \ crawl-turn g 46),
+  test (two? (g 'sign)) (find (last (g 'sign)) "6 of 6" 0) !(g 'pages),
+  crawl-turn g 46,
+  test !(g 'sign) (1 = g 'p 'x)))
 
 ; the cottage's shelf holds the book that never ends: a page a Bell number, made as it
 ; is turned, and a page offers the next page or the shelf. 1 turns, 2 puts it back,
@@ -406,10 +398,10 @@
    _ (test ("B(4) = 15" = line ()) (find (last (g 'sign)) "page 5" 0))
    (turn n) ("a bookmark" = <(g 'sign) ? n (crawl-turn g 49, turn (n + 1)))
    n (turn 0)
-   _ (test (10 < n < 40) !(g 'bell) (any (l \ find l "handwriting" 0) (g 'sign)))
-   _ (crawl-turn g 46)
- (test !(g 'sign) !(g 'bell) (1 = g 'p 'x)
-       ('(1 2) = bell-row [1]) ('(2 3 5) = bell-row [1 2]) ('(5 7 10 15) = bell-row [2 3 5])))
+   (test (10 < n < 40) !(g 'bell) (any (l \ find l "handwriting" 0) (g 'sign)),
+    crawl-turn g 46,
+    test !(g 'sign) !(g 'bell) (1 = g 'p 'x)
+         ('(1 2) = bell-row [1]) ('(2 3 5) = bell-row [1 2]) ('(5 7 10 15) = bell-row [2 3 5])))
 
 ; ..and a tap on one of its choices is that choice: the page's row of "put it back"
 (: g (hand-g ())
@@ -441,7 +433,7 @@
    ; the same cells, whatever pen each row was entered on
    (bare s) (:- (go 0 "")
               (go i acc) (? (i >= #s) acc (s i = 27) (go (1 + past i) acc) (go (i + 1) (acc + string (s i))))
-              (past i) (: c (s (i + 1)) (? (i + 1 >= #s) i (c = 91 || c < 64) (past (i + 1)) (i + 1))))
+              (past i) (s (i + 1) @ c (? (i + 1 >= #s) i (c = 91 || c < 64) (past (i + 1)) (i + 1))))
  (test (#r1 = #r2) (find (r2 1) "screen" 0) (bare (r1 3) = bare (r2 3)) (bare (last r1) = bare (last r2))
        (60 = tap-steer g [(g 'p 'x + peep (g 'd) 'vx 0) (g 'p 'y + 1)])))
 
@@ -453,8 +445,8 @@
    (tap dx dy) (tap-steer g [(7 + dx) (4 + dy)])
    on [(tap 1 1) (tap -1 0) (tap 0 -1) (tap 0 0)]
    off [(tap 2 0) (tap 0 2)]
-   _ (dput d 7 3 1)
- (test (all (= 60) on) !(any (= 60) off) ('(1 1) = tap 1 1) (60 = tap 0 0)))
+   (dput d 7 3 1,
+    test (all (= 60) on) !(any (= 60) off) ('(1 1) = tap 1 1) (60 = tap 0 0)))
 
 ; the floor's live cells: water and coals, found once; the count on the floor moves
 ; the water's pen a row a count; and the live painter lays those cells alone, each
@@ -463,14 +455,14 @@
    d (g 'd)
    _ (pins d 'rows 5 'cols 20 'lit 1)
    _ (each ^45 (i \ pin (d 'seen) i 1))
-   _ (dput d 2 2 3) _ (dput d 3 2 3) _ (dput d 1 0 3)
+   _ (dput d 2 2 3, dput d 3 2 3, dput d 1 0 3)
    _ (pin (g 'loot) (5 + 9 * 1) '(brazier))
    ls (live-cells d (g 'loot))
    (live _) (:- (slurp j) j (paint-live (jug 0) d (g 'vis) (cell-face d (g 'vis) (g 'loot) (ents g)) ls))
    (moves s) (: (go i n) (i >= #s ? n (go (i + 1) (n + (s i = 72 ? 1 0)))) (go 0 0))
    (bare s) (:- (go 0 "")
               (go i acc) (? (i >= #s) acc (s i = 27) (go (1 + past i) acc) (go (i + 1) (acc + string (s i))))
-              (past i) (: c (s (i + 1)) (? (i + 1 >= #s) i (c = 91 || c < 64) (past (i + 1)) (i + 1))))
+              (past i) (s (i + 1) @ c (? (i + 1 >= #s) i (c = 91 || c < 64) (past (i + 1)) (i + 1))))
    _ (pin d 'ft 0)
    f0 (crawl-frame g) l0 (live ())
    _ (pin d 'ft 1)
@@ -489,22 +481,22 @@
        (two? (d 'box)) (moves l3 < 4)))                  ; ..and so is what the box covers
 
 ; pennies weigh in, and they are the only thing on the floor
-(: g (hand-g ())
-   _ (pin (g 'loot) (2 + 9 * 1) ['penny 7])
-   _ (crawl-turn g [1 0])
- (test (7 = g 'p 'penny) (0 < #(g 'msg)) !(keys (g 'loot))))
+(hand-g () @ g
+ (pin (g 'loot) (2 + 9 * 1) ['penny 7],
+  crawl-turn g [1 0],
+  test (7 = g 'p 'penny) (0 < #(g 'msg)) !(keys (g 'loot))))
 
 ; the bar is not a resource: a turn spent acting mends, a turn passed does not, and
 ; the mending stops at the brim
-(: g (hand-g ())
-   _ (pin (g 'p) 'hp 5)
-   _ (crawl-turn g [1 0])
-   _ (test (7 = g 'p 'hp))                       ; a step mends
-   _ (crawl-turn g 46)
-   _ (test (7 = g 'p 'hp))                       ; a pass does not
-   _ (pin (g 'p) 'hp 39)
-   _ (crawl-turn g [1 0])
- (test (40 = g 'p 'hp)))                         ; and never past the brim
+(hand-g () @ g
+ (pin (g 'p) 'hp 5,
+  crawl-turn g [1 0],
+  test (7 = g 'p 'hp),                           ; a step mends
+  crawl-turn g 46,
+  test (7 = g 'p 'hp),                           ; a pass does not
+  pin (g 'p) 'hp 39,
+  crawl-turn g [1 0],
+  test (40 = g 'p 'hp)))                         ; and never past the brim
 
 ; ..and the bar is deep enough that one thing beside you is a nuisance: mending is two
 ; a turn and the heaviest bite in the book is three, so at the very worst a single mob
@@ -521,17 +513,17 @@
 (: g (hand-g ())
    m (mob-new 0 2 1)
    _ (pin g 'ms [m])
-   (fight i) ((i < 8) && g 'ms ? (crawl-turn g [1 0], fight (i + 1)) i)
+   (fight i) (i < 8 && g 'ms ? (crawl-turn g [1 0], fight (i + 1)) i)
    n (fight 0)
  (test !(g 'ms) (n <= 4) (0 < #(g 'msg))
          (1 = g 'p 'x)))                         ; you strike in place, never through
 
 ; the bite: cornered with one hp and standing still, you are done for -- and standing
 ; still is the only way there, a pass being the one turn that does not mend
-(: g (hand-g ())
-   _ (pin g 'ms [(mob-new 0 2 1)], pin (g 'p) 'hp 1)
-   _ (crawl-turn g 46)
- (test ('dead = (g 'over)) (0 < #(g 'msg))))
+(hand-g () @ g
+ ((pin g 'ms [(mob-new 0 2 1)], pin (g 'p) 'hp 1),
+  crawl-turn g 46,
+  test ('dead = g 'over) (0 < #(g 'msg))))
 
 ; the pace: a garden mob stirs every turn, a heaven mob every other one, so the shapes
 ; can be walked past. row 5 is the d4 and it carries pace 2.
@@ -542,10 +534,10 @@
          !(due? {'tn 1} slow) (due? {'tn 2} slow)))     ; every other one
 
 ; the floors bear their own tier, and nothing from another
-(: (kinds lvl) (: g (crawl-new 60 20 (wheel 3))
-                  _ (pin g 'lvl lvl)
-                  _ (stock g)
-                  (sort (keys (foldl (\ t m (pin t (nom (m 'nm)) 1)) {} (g 'ms)))))
+(: (kinds lvl) (crawl-new 60 20 (wheel 3) @ g
+                (pin g 'lvl lvl,
+                 stock g,
+                 sort (keys (foldl (t \ m \ (pin t (nom (m 'nm)) 1)) {} (g 'ms)))))
    (apart? a b) !(any (k \ elem k b) a)
  (test
   (0 < #(kinds 1)) (0 < #(kinds 2)) (0 < #(kinds 3))
@@ -554,25 +546,25 @@
 ; --- the make of a floor: a tier is built of its own stuff, and what a cell wears is
 ; the cell's own dice -- so a floor strews the same way twice, never out of another
 ; tier's table, and the two tiers never come out looking alike
-(: (kit th) ((<(th 1)) . map (r \ <r) (th 2))    ; the ground, and what lies on it
+(: (kit th) (<(th 1) . map (r \ <r) (th 2))    ; the ground, and what lies on it
    (marks th) (map (i \ <(tile-face th 1 1 (i % 40) (i // 40) 5)) ^400)
-   (all-of? l ks) (foldl (\ a x (a && elem x ks)) 1 l)
+   (all-of? l ks) (foldl (a \ x \ (a && elem x ks)) 1 l)
  (test
   (all-of? (marks (themes 0)) (kit (themes 0)))
   (all-of? (marks (themes 1)) (kit (themes 1)))
   (all-of? (marks (themes 2)) (kit (themes 2)))
-  ((marks (themes 0)) = (marks (themes 0)))      ; the dice are the cell's, not the clock's
-  !((marks (themes 0)) = (marks (themes 1)))     ; and no two tiers wear the same face
+  (marks (themes 0) = marks (themes 0))      ; the dice are the cell's, not the clock's
+  !(marks (themes 0) = marks (themes 1))     ; and no two tiers wear the same face
   (35 = <(tile-face (themes 1) 0 1 0 0 0))
   (35 = <(tile-face (themes 2) 0 1 0 0 0))
-  (28 = (tile-face (themes 0) 0 1 0 0 0 1))      ; lit and remembered are two pens
-  (22 = (tile-face (themes 0) 0 0 0 0 0 1))
+  (28 = tile-face (themes 0) 0 1 0 0 0 1)      ; lit and remembered are two pens
+  (22 = tile-face (themes 0) 0 0 0 0 0 1)
   (60 = <(tile-face (themes 0) 2 1 0 0 0))       ; and the stair is gold on every floor
-  (220 = (tile-face (themes 2) 2 1 0 0 0 1))))
+  (220 = tile-face (themes 2) 2 1 0 0 0 1)))
 
 ; --- the flavour: nothing on a floor is silent, and nothing says one thing only
 (: (says? nm) (0 < #(mutter 0 nm))
-   (all-say? l) (foldl (\ a nm (a && says? nm)) 1 l)
+   (all-say? l) (foldl (a \ nm \ (a && says? nm)) 1 l)
    (strewings th) (map (r \ (r 4)) (th 2))
  (test
   (all-say? (strewings (themes 0)))                ; every strewing of every tier
@@ -580,7 +572,7 @@
   (all-say? (strewings (themes 2)))
   (all-say? (map (k \ (mob-new k 0 0 'nm)) ^13))   ; ..and every mob in the book
   !(says? "the man in the moon")                   ; a name with no row is silent
-  (: t (foldl (\ t k (pin t (mutter k "tuft") 1)) {} ^9)
+  (foldl (t \ k \ (pin t (mutter k "tuft") 1)) {} ^9 @ t
      (1 < #(keys t)))))                            ; and one thing says several
 
 ; ..and it is said when you stand on it: the cell picks the line, so the same cell
@@ -590,8 +582,8 @@
    (salt n) (99 < n ? 0 (pin (g 'd) 'sd n, 0 < #(underfoot g 2 1) ? n (salt (n + 1))))
    _ (pin (g 'd) 'sd (salt 0))
    s (underfoot g 2 1)
-   _ (crawl-turn g [1 0])
- (test (0 < #s) (find (g 'msg) s 0) (s = underfoot g 2 1)))
+   (crawl-turn g [1 0],
+    test (0 < #s) (find (g 'msg) s 0) (s = underfoot g 2 1)))
 
 ; ..and a mob says its piece the first time you lay into it, and only then
 (: g (hand-g ())
@@ -599,41 +591,41 @@
    (rat? t) (find t (mutter 0 "rat") 0 || find t (mutter 1 "rat") 0)
    _ (crawl-turn g [1 0])
    f (g 'msg)
-   _ (crawl-turn g [1 0])
- (test (rat? f) !(rat? (g 'msg))))
+   (crawl-turn g [1 0],
+    test (rat? f) !(rat? (g 'msg))))
 
 ; ..nor are the tiers laid out alike: the garden is a patch of small beds, heaven a
 ; few long blocks, and the plan is the whole of the difference
 (: gd <(delve 70 20 (wheel 5) (plan 1))
    hv <(delve 70 20 (wheel 5) (plan 3))
-   (span rs) ((net (map (r \ (r 2) * (r 3)) rs)) // #rs)
+   (span rs) (net (map (r \ (r 2) * (r 3)) rs) // #rs)
  (test (#(hv 'rooms) < #(gd 'rooms))
-         ((span (gd 'rooms)) < (span (hv 'rooms)))))
+         (span (gd 'rooms) < span (hv 'rooms))))
 
 ; ..and a floor is dressed when it is cut, the stair changing what the next one is made of
 (: g (crawl-new 40 16 (wheel 7))
    t1 (g 'd 'th)
-   _ (ascend g)
- (test ((themes 0) = t1) ((themes 1) = (g 'd 'th)) (charm? (g 'd 'sd))))
+   (ascend g,
+    test (themes 0 = t1) (themes 1 = g 'd 'th) (charm? (g 'd 'sd))))
 
 ; the stair: < climbs only where the stair is cut, and restocks the floor. the
 ; imperative is restated on arrival, every time.
-(: g (hand-g ())
-   _ (crawl-turn g 60)
-   _ (test (1 = g 'lvl) (0 < #(g 'msg)))
-   _ (dput (g 'd) 1 1 2)
-   _ (crawl-turn g 60)
- (test (2 = g 'lvl) (0 < #(g 'msg))                ; the imperative restated
+(hand-g () @ g
+ (crawl-turn g 60,
+  test (1 = g 'lvl) (0 < #(g 'msg)),
+  dput (g 'd) 1 1 2,
+  crawl-turn g 60,
+  test (2 = g 'lvl) (0 < #(g 'msg))                ; the imperative restated
          (elem (dat (g 'd) (g 'p 'x) (g 'p 'y)) '(1 4 8))   ; standing on the fresh floor, in a building, on a platform
          (60 = g 'p 'mx)                         ; a climb is twenty more of the bar
          (60 = g 'p 'hp || find (g 'msg) "bites" 0)   ; ..and the bar is full, unless something met you there
          (tablet? (g 'loot))))
 
 ; ..and the same climb by the keys a seat with no < to hand has: enter, return, space
-(: (climbs? k) (: g (hand-g ())
-                  _ (dput (g 'd) 1 1 2)
-                  _ (crawl-turn g k)
-                  (2 = g 'lvl))
+(: (climbs? k) (hand-g () @ g
+                (dput (g 'd) 1 1 2,
+                 crawl-turn g k,
+                 (2 = g 'lvl)))
  (test (climbs? 60) (climbs? 32) (climbs? 13) (climbs? 10)
        !(climbs? 46)))                           ; a turn passed is still a turn passed
 
@@ -678,7 +670,7 @@
 ; the fire with her beside it, the cottage's door a way into the house and the house's
 ; stair a way into the attic, where the box is
 (: g (crawl-new 60 22 (wheel 3))
-   _ (ascend g) _ (ascend g) _ (ascend g)
+   _ (ascend g, ascend g, ascend g)
    d (g 'd) w 60 h (d 'h)
    fx (g 'cx) fy (g 'cy)
    (t x y) (dat d x y)
@@ -693,14 +685,14 @@
        (7 = #stones) (10 = t <spot <>spot)               ; seven stand; the eighth's place is lighter grass
        (<spot < fx) (<>spot < fy)                        ; ..and it is the upper left:
        (<>spot = <>(oct-pt fx fy 0)) (fx < <(oct-pt fx fy 0))   ; the left of the top pair, the first stone its right
-       (tablet? (g 'her)) (g 'her 'x = (fx + 2)) (g 'her 'y = fy)
+       (tablet? (g 'her)) (g 'her 'x = fx + 2) (g 'her 'y = fy)
        (5 = t <door (<>door - 1)) (11 = t (<door - 1) (<>door - 1))   ; the cottage: timber, a door south
        (12 = t fx (<>door - 7))                          ; ..and the garden behind it
        ('house = <(exit-at g <door (<>door - 1)))
        (tablet? (g 'scenes 'house)) (tablet? (g 'scenes 'attic))
        (d 'lit) (all (i \ peep (d 'seen) i 0) ^(w * h))    ; all of it lit, and all of it seen
-       (: si (filter (i \ 'sign = <(g 'loot i)) (keys (g 'loot)))   ; the wooden sign: one, on grass, by the foot
-          (two? si && atom? >si && 1 = t (<si % w) (<si // w) && (h - 5) = (<si // w)))))
+       (filter (i \ 'sign = <(g 'loot i)) (keys (g 'loot)) @ si   ; the wooden sign: one, on grass, by the foot
+          (two? si && atom? >si && 1 = t (<si % w) (<si // w) && h - 5 = <si // w))))
 
 ; ..and the story of it: in at the door, up the stair, the box opened and the token
 ; named there; down and out with it, the ground shudders, the sign, and she is gone
@@ -708,7 +700,7 @@
 ; the ring stands at the screen's edge, a strike on it puts you back, the push keeps
 ; you inside it, and the point is the end
 (: g (crawl-new 60 22 (wheel 3))
-   _ (ascend g) _ (ascend g) _ (ascend g)
+   _ (ascend g, ascend g, ascend g)
    d (g 'd) w 60
    door (d 'door)
    _ (crawl-turn g 46)                                 ; the opening sign, down
@@ -741,7 +733,7 @@
    _ (crawl-turn g 46)                                 ; the sign down: no turn passes
    _ (test (wr0 = g 'wr))
    _ (crawl-turn g [0 -1])                             ; the door is shut now
-   _ (test ('vale = g 'scene) (0 < #(g 'msg)) ((wr0 - 2) = g 'wr))
+   _ (test ('vale = g 'scene) (0 < #(g 'msg)) (wr0 - 2 = g 'wr))
    (until-wall n) (? (walled? g 1 1) n ('ring = g 'phase) -1 (40 < n) -2
                      (crawl-turn g 46, until-wall (n + 1)))
    nw (until-wall 0)
@@ -770,7 +762,7 @@
 ; shows the page again, a leaf closes on any key and she stays -- until you come out
 ; with the token, spoken to or not
 (: g (crawl-new 60 22 (wheel 3))
-   _ (ascend g) _ (ascend g) _ (ascend g)
+   _ (ascend g, ascend g, ascend g)
    h (g 'her)
    _ (crawl-turn g 46)                                 ; the opening sign, down
    _ (pins (g 'p) 'x (h 'x + 1) 'y (h 'y))
@@ -785,19 +777,19 @@
    _ (crawl-turn g 120)                                ; x: not a choice, the page again
    _ (test (c1 2 = g 'talk) (two? (g 'sign)))
    leaf <(filter (n \ !(two? (n 2))) her-tree)
-   _ (talk g <leaf)
-   _ (test (0 < #(last (g 'sign))))
-   _ (crawl-turn g 46)                                 ; closes
-   _ (test !(g 'talk) !(g 'sign) (tablet? (g 'her)) (g 'p 'x = (h 'x + 1)))   ; ..and you never moved
-   _ (pin g 'token "the rubbed coin")
-   _ (enter g 'house (19 // 2) (9 - 2))
-   _ (crawl-turn g [0 1])                              ; out with the token, having spoken to her
- (test ('vale = g 'scene) (g 'doom) !(g 'her) ('close = g 'phase)))   ; ..and she is gone all the same
+   (talk g <leaf,
+    test (0 < #(last (g 'sign))),
+    crawl-turn g 46,                                   ; closes
+    test !(g 'talk) !(g 'sign) (tablet? (g 'her)) (g 'p 'x = h 'x + 1),     ; ..and you never moved
+    pin g 'token "the rubbed coin",
+    enter g 'house (19 // 2) (9 - 2),
+    crawl-turn g [0 1],                                ; out with the token, having spoken to her
+    test ('vale = g 'scene) (g 'doom) !(g 'her) ('close = g 'phase)))   ; ..and she is gone all the same
 
 ; the frame of a floor taller than the screen is the screen's height, about the climber,
 ; and a room shorter than it is padded to it
 (: g (crawl-new 60 22 (wheel 3))
-   _ (ascend g) _ (ascend g) _ (ascend g)
+   _ (ascend g, ascend g, ascend g)
    _ (crawl-turn g 46)                                 ; the opening sign, down
    f (crawl-frame g)
    d (g 'd)
@@ -835,17 +827,17 @@
 ; the board -- which is to say nowhere on it -- while there is no ring and while the
 ; ring is at half its scale, and in only as the second half of the closing is done
 (: g (crawl-new 60 22 (wheel 3))
-   _ (ascend g) _ (ascend g) _ (ascend g)
+   _ (ascend g, ascend g, ascend g)
    (front r) (pins g 'phase 'ring 'r r, pink-front g)
  (test (1.0 = pink-front g)                              ; no ring, no pink
        (1.0 = front 8) (1.0 = front 4)                   ; r 8, 4: none anywhere
-       ((front 3) < 1.0)                                 ; r 3: it starts in
-       ((front 2) < (front 3)) ((front 0) < (front 2))   ; ..and keeps coming
+       (front 3 < 1.0)                                 ; r 3: it starts in
+       (front 2 < front 3) (front 0 < front 2)   ; ..and keeps coming
        (0.0 < front 0 < 1.0)))                           ; r 0: and stops well short
 
 ; ..and the door the last hit opens: the walk proper, not the verb, since the stage
 ; the climb raised is the one the slop is to run on. a missed cite is a silent end.
-(test !(() = (cite 'slop 'slop-walk)))
+(test !(() = cite 'slop 'slop-walk))
 
 ; --- the horn's lead: a fifth of a second on a seat that keeps up, two and a half gaps
 ; on one that lags, a second at most; the pacer holds a gap at its recent worst and lets
@@ -889,71 +881,71 @@
    _ (pins (g 'd) 'th (themes 0) 'sd 3)
    _ (dput (g 'd) 2 1 2)                         ; a stair cut to the right of you
    s (underfoot g 2 1)
-   _ (crawl-turn g [1 0])
- (test (0 < #s) (find (g 'msg) s 0)
-         (: h (hand-g ()) !(crawl-bar g = crawl-bar h))))   ; ..and the bar says more on it than off it
+   (crawl-turn g [1 0],
+    test (0 < #s) (find (g 'msg) s 0)
+           (hand-g () @ h !(crawl-bar g = crawl-bar h))))   ; ..and the bar says more on it than off it
 
 ; --- pennies: a thing that goes down leaves some, the ground carries more, and they
 ; say something for themselves when you pick them up
 (: g (hand-g ())
    _ (pin g 'ms [(mob-new 0 2 1)])
-   (fight i) ((i < 8) && g 'ms ? (crawl-turn g [1 0], fight (i + 1)) i)
+   (fight i) (i < 8 && g 'ms ? (crawl-turn g [1 0], fight (i + 1)) i)
    _ (fight 0)
    it (peep (g 'loot) (2 + 9 * 1) ())
    _ (test (two? it) ('penny = <it) (0 < <>it))  ; it dropped them where it stood
    n <>it
    _ (crawl-turn g [1 0])
-   (says? t) (foldl (\ a k (a || find t (mutter k "pennies") 0)) 0 ^4)
+   (says? t) (foldl (a \ k \ (a || find t (mutter k "pennies") 0)) 0 ^4)
  (test (n = g 'p 'penny) (says? (g 'msg))))
 
 ; ..and a fresh floor is not miserly: every room bar your own carries a pile or more
-(: g (crawl-new 60 20 (wheel 3))
+(crawl-new 60 20 (wheel 3) @ g
  (test (#(g 'd 'rooms) <= #(keys (g 'loot)))))
 
 ; --- the music: a floor's bar is built off the cycle, and the circle's off the ring.
 ; no gate can listen, so what is held is what a bar holds -- the slots, their count,
 ; and the way each floor's rule answers a different bar as the cycle runs on
 (: g (crawl-new 60 22 (wheel 3))
-   _ (ascend g) _ (ascend g) _ (ascend g)
+   _ (ascend g, ascend g, ascend g)
    (vat st) (pins g 'phase 'ring 'r (8 - st) 'r0 8, song-vol g)   ; the ring in by st of its scale
-   (hits bs) (foldl (\ a b (a + (foldl (\ t v (t + (tablet? v ? 1 0))) 0 b))) 0 bs)
-   (slots bs) (foldl (\ a b (a + #b)) 0 bs)
+   (hits bs) (foldl (a \ b \ (a + foldl (t \ v \ (t + (tablet? v ? 1 0))) 0 b)) 0 bs)
+   (slots bs) (foldl (a \ b \ (a + #b)) 0 bs)
    ; every slot is a voice play can sound, or nothing at all -- there is no third thing
-   (sane? bs) (foldl (\ a b (a && foldl (\ t v (t && ? (tablet? v) (string? (v 's)) !v)) 1 b)) 1 bs)
-   (over n f) (foldl (\ a c (a + (f c))) 0 ^n)
+   (sane? bs) (foldl (a \ b \ (a && foldl (t \ v \ (t && ? (tablet? v) (string? (v 's)) !v)) 1 b)) 1 bs)
+   (over n f) (foldl (a \ c \ (a + f c)) 0 ^n)
  (test
   (#floors = #songs)                             ; a floor, a loudness
-  (foldl (\ a v (a && (0.0 < v))) 1 songs)
+  (foldl (a \ v \ (a && 0.0 < v)) 1 songs)
   ; the garden: sixteen slots to the bar, mostly empty, and never the same two bars
   (16 = slots (garden-bars 0)) (16 = slots (garden-bars 7))
   (sane? (garden-bars 3))
   (0 < over 40 (c \ hits (garden-bars c)))
   (0 < over 40 (c \ (16 > hits (garden-bars c)) ? 1 0))
-  ((garden-bars 0) != (garden-bars 1))
+  (garden-bars 0 != garden-bars 1)
   ; the middle: two bars to a horn, struck in the same slots -- one horn, two notes
-  (: bs (middle-bars 4)
-     ((2 = #bs) && foldl (\ a i (a && ((tablet? (<bs i)) = (tablet? (bs 1 i))))) 1 ^12))
+  (middle-bars 4 @ bs
+     (2 = #bs && foldl (a \ i \ (a && tablet? (<bs i) = tablet? (bs 1 i))) 1 ^12))
   ; ..and now and then it is a tune instead, which holds for a whole run of bars
   (0 < over 200 (c \ (tune? c) ? 1 0))
   (0 < over 200 (c \ (tune? c) ? 0 1))
-  (foldl (\ a c (a && ((tune? c) = (tune? (5 * (c // 5)))))) 1 ^40)
+  (foldl (a \ c \ (a && tune? c = tune? (5 * (c // 5)))) 1 ^40)
   ; heaven: one bar of one sequence, and the four bars of a block are that sequence
   ; taken in order -- so bar 0 and bar 4 are different bars of it, or another one
   (1 = #(sky-bars 0)) (sane? (sky-bars 0))
   (0 < hits (sky-bars 0))
-  ((sky-bars 0) != (sky-bars 1))
+  (sky-bars 0 != sky-bars 1)
   ; the circle: a heart, and the beats further apart the smaller the ring is
-  ((heart-rate 2) < (heart-rate 5)) ((heart-rate 5) < (heart-rate 8))
+  (heart-rate 2 < heart-rate 5) (heart-rate 5 < heart-rate 8)
   (1 = heart-rate 0)
-  ((slots (heart-bars 2)) < (slots (heart-bars 8)))
+  (slots (heart-bars 2) < slots (heart-bars 8))
   (4 = hits (heart-bars 0))                      ; lub and dub, two voices each
   (2 = #(heart-bars 0))                          ; ..the kick you feel and the knock you hear
   (sane? (heart-bars 8))
   ; the fade is the ring's own size
   (1.0 = vat 0)
-  ((vat 4) < (vat 0)) ((vat 6) < (vat 4))
+  (vat 4 < vat 0) (vat 6 < vat 4)
   (0.0 = vat 8)
-  (: h (crawl-new 20 10 (wheel 1)) (0 < song-vol h))   ; a floor with rooms just plays
+  (crawl-new 20 10 (wheel 1) @ h (0 < song-vol h))   ; a floor with rooms just plays
   ; and every floor's bar goes through harp and comes out a pattern
   !(() = tower-tune 1 0 0) !(() = tower-tune 2 0 0)
   !(() = tower-tune 3 0 0) !(() = tower-tune 4 0 8)))
@@ -969,10 +961,10 @@
                    p (g 'p)
                    (turn (i + 1)
                          (ok && open? (g 'd) (p 'x) (p 'y)
-                                && (p 'hp) <= p 'mx
+                                && p 'hp <= p 'mx
                                 && 0 <= p 'penny))) ok)
  (test (turn 0 1)
-         (g 'over || (0 < g 'p 'hp))))
+         (g 'over || 0 < g 'p 'hp)))
 
 ; --- the painter: one frame into a jug, glyphs and hues where they belong ---
 ; the sign comes down first: it is laid over the frame, and a garden behind a box is
@@ -995,7 +987,7 @@
    _ (crawl-turn g 60)
    d (g 'd) n (60 * 20)
    _ (each ^n (i \ pin (d 'seen) i 1))
-   _ (pin g 'vis (foldl (\ t i (pin t i 1)) {} ^n))
+   _ (pin g 'vis (foldl (t \ i \ (pin t i 1)) {} ^n))
    _ (pin g 'sign ())
    f (crawl-frame g)
    (pen n) ("\e[38;5;" + show n + "m")
@@ -1012,7 +1004,7 @@
 ; the row ends on \e[K the way a painted one does: an escape with no m, which a skip
 ; that only looks for the m walks off the end of.
 (: sw 40
-   srow ("\e[38;5;34m" + (string (map (\ _ 46) ^sw)) + "\e[0m\e[K")
+   srow ("\e[38;5;34m" + string (map (_ \ 46) ^sw) + "\e[0m\e[K")
    sf (: (go k acc) (6 <= k ? acc (go (k + 1) (acc + (0 < k ? "\r\n" "") + srow)))
          (go 0 ""))
    sout (sign-over sf "sign" ["a line"] 0 6 sw)
@@ -1030,19 +1022,19 @@
 
 ; --- pens: a pen's rgb and back, a pair as a glyph on a ground, and a fg that reads
 ; --- over a bg -- itself when far enough, otherwise something far
-(: (frame gl hue) (: d {'w 3 'h 1 't (cask 3) 'seen (cask 3)}
-                     _ (each ^3 (i \ pin (d 't) i 1))
-                     (:- (slurp j) j (paint (jug 0) d (i \ (i = 1 ? [gl [hue 22]] [35 22])) "" "")))
+(: (frame gl hue) ({'w 3 'h 1 't (cask 3) 'seen (cask 3)} @ d
+                   (each ^3 (i \ pin (d 't) i 1),
+                    (:- (slurp j) j (paint (jug 0) d (i \ (i = 1 ? [gl [hue 22]] [35 22])) "" ""))))
    f (frame 64 228)
    (kept? fg bg) (fg = legible fg bg)
  (test (pen-rgb 16 = [0 0 0]) (pen-rgb 231 = [255 255 255]) (pen-rgb 233 = [18 18 18])
-       (all (c \ c = (: q (pen-rgb c) (rgb-pen (q 0) (q 1) (q 2)))) (map (+ 16) ^240))   ; every pen comes back
+       (all (c \ c = (pen-rgb c @ q (rgb-pen (q 0) (q 1) (q 2)))) (map (+ 16) ^240))   ; every pen comes back
        (find (pen [228 22]) ";48;5;22m" 0) (find (pen [228 22]) "38;5;228" 0)
        (find f ";48;5;22m" 0) (find f "\e[49m" 0)                    ; the ground put on, and off again
        (kept? 228 22) (kept? 16 231)                                  ; far apart: the hue itself
-       (!(kept? 22 22)) (!(kept? 244 244)) (!(kept? 228 187))         ; too close: another
-       (!(kept? 213 118)) (!(kept? 226 118))                          ; ..as bright as each other: another
-       (all (bg \ (: fg (legible bg bg)                                ; ..and always far enough, both ways
+       !(kept? 22 22) !(kept? 244 244) !(kept? 228 187)         ; too close: another
+       !(kept? 213 118) !(kept? 226 118)                          ; ..as bright as each other: another
+       (all (bg \ (legible bg bg @ fg                                ; ..and always far enough, both ways
                      (legible-gap <= pen-gap fg bg && legible-lum <= |(pen-lum fg - pen-lum bg))))
             (map (+ 16) ^240))))
 

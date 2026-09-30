@@ -1,18 +1,9 @@
-; test/uumxlaw.l -- the laws of love's `+` and `*` dispatch, proved of the
-; generated table (test/uumx.l, lifted from src/love/mx.l by src/tools/mx2uu.l; this file
-; loads after it by sort order, and the kernel + nat vocabulary live in
-; test/uu.l). the theorems are hand-written over a table nobody typed, so a
-; dispatch edit that breaks the band quotient, the mirror symmetry, or any cell
-; the narrative names one at a time, fails a proof right here at `make test`.
-;
-; every proof is `idpath true`: the claim is a bounded forall and the kernel runs
-; it, so a square closes by conversion where test/proof/rocq/mx.v's closes by
-; vm_compute. the two models read one datum and derive the band partition by one
-; rule, and these terms export through uu2coq/uu2lean -- so mx.l's shape stands in
-; three kernels, twice in Rocq by two roads.
-;
-; what this cannot see, and the fuzz must: that a lane nom names the C function it
-; says it does. the table is the interface; love.c is the other side of it.
+; test/uumxlaw.l -- the laws of love's `+` and `*` dispatch, proved of the generated table
+; (test/uumx.l, from src/love/mx.l by src/tools/mx2uu.l; loads after it and test/uu.l by
+; sort order). a dispatch edit that breaks the band quotient, the mirror symmetry or a
+; named cell fails a proof here, at `make test`. every proof is `idpath true`: a bounded
+; forall the kernel runs, where test/proof/rocq/mx.v uses vm_compute. what this cannot
+; see, and the fuzz must: that a lane nom names the C function it says it does.
 (test (elem 'vof (names ())))
 
 ; --- the roster's shape, said once and nowhere else. every forall below ranges over
@@ -164,34 +155,34 @@
 ; --- reason -- an empty range, a lookup that fell off its table -- would paint
 ; --- every theorem above green, so each load-bearing claim gets its false twin
 ; --- and the kernel must refuse that one. every negative takes its positive. ---
-(hear (\ p e (: h (peep HELPC () 0) (? h (h p e) 0))))
+(hear (p \ e \ peep HELPC () 0 @ h (h ? (h p e) 0)))
 (test
  ; the cartesian cell is not the zero
- ('accepted = (rejects (\ z (defq mx-ok-cart
-    (paths nat (mxmul mxKChain mxKChain) mxLmul_cart) (idpath mxLmul_cart)))))
- ('rejected = (rejects (\ z (defq mx-bad-cart (paths nat (mxmul mxKChain mxKChain) mxL0) (idpath mxL0)))))
+ ('accepted = (rejects (z \ defq mx-ok-cart
+   (paths nat (mxmul mxKChain mxKChain) mxLmul_cart) (idpath mxLmul_cart))))
+ ('rejected = (rejects (z \ defq mx-bad-cart (paths nat (mxmul mxKChain mxKChain) mxL0) (idpath mxL0))))
  ; the band assignment has to be the derived one: shift it by a kind and the
  ; factorization stops holding
- ('rejected = (rejects (\ z (defq mx-bad-band
-    (paths bool
-      (mxsq (lam a (lam b (nateqb (mxadd a b) (mxaddband (mxband a) (mxband (succ b)))))))
-      true)
-    (idpath true)))))
+ ('rejected = (rejects (z \ defq mx-bad-band
+   (paths bool
+     (mxsq (lam a (lam b (nateqb (mxadd a b) (mxaddband (mxband a) (mxband (succ b)))))))
+     true)
+   (idpath true))))
  ; and the numeric band is mx-numk itself, not a roster slid one kind along the
  ; lattice -- the guard on the RANGE, which is the shape a count-from-KCharm took
- ('rejected = (rejects (\ z (defq mx-bad-numeric
-    (paths bool
-      (mxall mxnk (lam k (mxiff (mxnumeric (succ k)) (nateqb (mxband k) (mxband mxKCharm)))))
-      true)
-    (idpath true)))))
+ ('rejected = (rejects (z \ defq mx-bad-numeric
+   (paths bool
+     (mxall mxnk (lam k (mxiff (mxnumeric (succ k)) (nateqb (mxband k) (mxband mxKCharm)))))
+     true)
+   (idpath true))))
  ; and mirror is not the identity: the positional pair really does trade places
- ('rejected = (rejects (\ z (defq mx-bad-mirror
-    (paths bool (mxsq (lam a (lam b (nateqb (mxadd a b) (mxadd b a))))) true)
-    (idpath true)))))
+ ('rejected = (rejects (z \ defq mx-bad-mirror
+   (paths bool (mxsq (lam a (lam b (nateqb (mxadd a b) (mxadd b a))))) true)
+   (idpath true))))
  ; the compose cell is the mul lane, not the Church sum -- a band with one
  ; operation would make uuhom's monoid the whole story, and it is half of it
- ('accepted = (rejects (\ z (defq mx-ok-compose (paths nat (mxmul mxKHot mxKHot) mxLmulh) (idpath mxLmulh)))))
- ('rejected = (rejects (\ z (defq mx-bad-compose (paths nat (mxmul mxKHot mxKHot) mxLaddh) (idpath mxLaddh)))))
+ ('accepted = (rejects (z \ defq mx-ok-compose (paths nat (mxmul mxKHot mxKHot) mxLmulh) (idpath mxLmulh))))
+ ('rejected = (rejects (z \ defq mx-bad-compose (paths nat (mxmul mxKHot mxKHot) mxLaddh) (idpath mxLaddh))))
  ; ..and the mint annihilates there rather than uniting
- ('rejected = (rejects (\ z (defq mx-bad-compose-unit (paths nat (mxmul mxKHot mxKMint) mxLmulh) (idpath mxLmulh))))))
+ ('rejected = (rejects (z \ defq mx-bad-compose-unit (paths nat (mxmul mxKHot mxKMint) mxLmulh) (idpath mxLmulh)))))
 (hear test-strict)

@@ -1,4 +1,4 @@
-; --- test/host/score.l: a tune as text, read back as harp's bars ---
+; test/host/score.l -- a tune as text, read back as harp's bars
 ; not in the test/*.l corpus (it loads a crew module). the reader is pure: the built-in
 ; score of grass parses clean, every kind of slip is named by its line, a key line
 ; sharpens the bare letters and a beats line lengthens the bar, and the strings come

@@ -1,54 +1,16 @@
-; synth -- a keyboard to pick a tune out on, for someone with no piano: the number row
-; plays notes out the horn on harp's voices, a screen says which.
+; synth -- a keyboard to pick a tune out on: the number row plays notes out the horn
+; on harp's voices, a screen says which.
 ;
-; 1 is middle c and each key on from it along the row -- the digits, then - and = --
-; a semitone higher, twelve keys to the octave; shift plays the note an octave up and
-; alt lowers it a quarter tone. tab takes the next timbre, the up and down arrows move
-; the octave, q leaves. a key is a strike: the note rings and dies on its own, since a
-; tty tells of keys pressed and never of keys let go, and a held key's repeats are
-; dropped as the games drop them.
+; 1 is middle c, each key along the row a semitone up; shift an octave up, alt a
+; quarter tone down (alt arrives as an escape first, read by synth-key). a key is a
+; strike that rings and dies: a tty never says a key was let go.
+; the horn is fed a small chunk at a time, at least an eighth of a second ahead of the
+; speaker -- longer than the runtime's pauses, whose first ones synth-warm takes early.
+; a backing loop (harp's pattern text) is a vi buffer in a pane under the keys; a new
+; pattern takes over at a cycle's start. d plays in just intonation (drift.l, phrases.l).
+; all but synth-run is pure and gated by test/host/synth.l.
 ;
-; the horn is fed a small chunk at a time, paced by the loop's gap (rove's pacer), at
-; least an eighth of a second ahead of the speaker: longer than the runtime's pauses (a
-; collection, a section of the image paged in on first use), whose first ones
-; synth-warm takes before the card opens. the filler is rove's song-fill, which stops
-; when the card stops taking, so a loop heavier than the seat can mix gaps rather than
-; holds the keys.
-;
-; the shifted row is the keymap's: what shift makes of the digits is the terminal's to
-; say, and synth-shifted is the us row. alt reaches the terminal as an escape before
-; the key, read by the synth's own synth-key, which makes alt of any key where the
-; cli's edkey makes it of the letters alone; on the harbour the keys' stage hands berth
-; that reader through its 'key door.
-;
-; a backing loop to play over: harp's patterns, in the text `love harp` takes -- a mini
-; string, or a love form over harp's names in parentheses -- pulled a cycle at a time
-; into the same voices the strikes ring in, so one mix goes out the card. the text is
-; a vi buffer in a pane under the keys, on berth's harbour: e in the keys' pane sends
-; the buffer, and :send :play :stop and :cps N are the buffer's own ex words. a new
-; pattern takes over at a cycle's start, so a change never drops the beat; a torn or
-; bad one is said and the loop kept. on a seat with no harbour the keys run alone.
-;
-; d plays in just intonation instead (src/apps/harp/drift.l): the loop becomes a walk
-; of phrases from a book (src/apps/harp/phrases.l) over a center that drifts on the
-; lattice, one phrase a cycle. k turns what the row plays under it: fixed, the equal
-; row from middle c as ever; follow, the same equal row rooted on the center now
-; sounding, so the keys modulate as the walk moves; just, the twelve of 5-limit over
-; that center -- alt taking the septimal one where there is one -- pure against the
-; walk. , and . turn the walk's steer, ; and ' its lean, h its pull home, v the book;
-; the screen draws the lattice round the center, its trail behind it.
-;
-; the keys, the notes, the loop and the feed are pure -- synth-new, synth-step,
-; synth-code, synth-semis, synth-name, synth-send, synth-play, synth-stop, synth-pull
-; and synth-feed into any port -- gated by test/host/synth.l; only synth-run ties the
-; tty and the horn.
-;
-; run: love synth [LOOP]   1 .. = play, shift and alt bend, tab is the timbre, up and
-;                         down the octave, p plays or stops the loop, e sends the
-;                         buffer, [ and ] the cps, q leaves. the buffer opens on LOOP
-;                         and :w keeps it. d the drift, k the keys under it,
-;                         , . ; ' h v its knobs.
-;                         HORN=none plays silent on a seat with no card
+; run: love synth [LOOP]   HORN=none plays silent on a seat with no card
 (module (synth synth-run synth-main synth-new synth-step synth-code synth-semis synth-name
          synth-strike synth-feed synth-frame synth-key synth-timbres synth-shifted synth-digits
          synth-chunk synth-lead synth-octaves synth-send synth-play synth-stop synth-pull
@@ -97,18 +59,18 @@
  (synth-dopts st) {'lean (st 'dlean) 'home (st 'dhome) 'steer (st 'dsteer)
                    'cost 0.1 'wc 1.0 'fresh 2.0}
  ; on: a walk from home, playing from the next frame; off: the loop stops
- (rshow r) (: p (jparts r) (<>p = 1 ? (show <p) (show <p + "/" + show <>p)))
- (synth-drift st) (? (st 'dr) (pins st 'dr 0 'lmsg "" 'dirty 1, synth-stop st)
-                     (: w (drift-new (synth-dopts st))
+ (rshow r) (jparts r @ p (<>p = 1 ? (show <p) (show <p + "/" + show <>p)))
+ (synth-drift st) (st 'dr ? (pins st 'dr 0 'lmsg "" 'dirty 1, synth-stop st)
+                     (drift-new (synth-dopts st) @ w
                         (pins st 'dr 1 'dw w 'dnow w 'dprev [() ()] 'trail () 'on 0 'dirty 1,
                          synth-play st)))
  ; the cycle's phrase: chosen over the center now, which then steps on
  (dcycle st) (: o (synth-dopts st) w (st 'dw) b (book (st 'dbook))
                 pk (drift-pick o w (st 'dprev) (map (p \ p 1) (b 1)))
                 nm ((: (go l) (? !(two? l) "" (<l 1 = pk 0) (<l 0) (go >l))) (b 1))
-                _ (pins st 'dprev pk 'dph nm 'dnow w 'dw (drift-step o w (pk 0))
-                           'trail (take 8 ((w 'pos) . st 'trail)) 'dirty 1)
-                (pset (pset (phrase-pat (w 'tonic) (pk 0))
+                ((pins st 'dprev pk 'dph nm 'dnow w 'dw (drift-step o w (pk 0))
+                          'trail (take 8 (w 'pos . st 'trail)) 'dirty 1),
+                 pset (pset (phrase-pat (w 'tonic) (pk 0))
                             (hit (pure (synth-timbres (st 'tim) 0))))
                       (gain (pure 0.45))))
  ; a lattice point's name: its letter along the fifths (a third is four), then a - for
@@ -142,8 +104,8 @@
  ; center, just lays the ratios over it
  (synth-semis st [i sh al])
   (: km (st 'dr ? (st 'km) 0) o (12.0 * (st 'oct + sh))
-     (? (km = 2) (semis ((st 'dnow) 'tonic * synth-jdeg [i sh al]) + o)
-        (km = 1) (semis ((st 'dnow) 'tonic) + o + i - 0.5 * al)
+     (? (km = 2) (semis (st 'dnow 'tonic * synth-jdeg [i sh al]) + o)
+        (km = 1) (semis (st 'dnow 'tonic) + o + i - 0.5 * al)
         (o + i - 0.5 * al)))
  ; a note's name: the semitone under it and its octave, and the quarter tone said in cents
  (synth-name s) (: t (int s) n (s < t ? (t - 1) t)
@@ -158,11 +120,11 @@
  ; the text sent: harp-read's reading of it, under a trap -- a bad one answers its
  ; complaint and the loop keeps what it had. an empty text is hush. sending starts
  ; the loop if it stood
- (synth-text ls) (foldl (\ a l (a + "\n" + l)) <ls >ls)
+ (synth-text ls) (foldl (a \ l \ a + "\n" + l) <ls >ls)
  (synth-send st text) (: t (strip text)
-                         r (? (0 = #t) hush
-                              (trap (_ \ harp-read t) () (\ a b ['bad (show a + " " + show b)])))
-                         (? (two? r) (pins st 'lmsg <>r 'dirty 1)
+                         r (0 = #t ? hush
+                              (trap (_ \ harp-read t) () (a \ b \ ['bad (show a + " " + show b)])))
+                         (two? r ? (pins st 'lmsg <>r 'dirty 1)
                             (pins st 'nextp r 'lmsg "sent" 'dirty 1,
                              st 'on ? st (synth-play st))))
  ; play: from the next frame written, cycle 0; stop: no more pulled, what has not
@@ -177,24 +139,23 @@
  ; the one crossing, as in play's own run
  (synth-pull st lim) (:- (go ()) (go _)
    (? (!(st 'on) || lim <= st 'cstart) ()
-      (: _ (? (st 'nextp) (pins st 'pat (st 'nextp) 'nextp ()) ())
+      (: _ (st 'nextp ? (pins st 'pat (st 'nextp) 'nextp ()))
          p (st 'dr ? (dcycle st) (st 'pat)) c (st 'cyc) f0 (st 'cstart) spc (int (song-rate / st 'cps))
-         vs (? p (filter two? (map (x \ (: at (f0 + int (spc * qnum (evwb x - qi c)))
+         vs (p ? (filter two? (map (x \ (: at (f0 + int (spc * qnum (evwb x - qi c)))
                                           v (mkvoice at (evv x) song-rate)
                                         (two? v ? [at v] ())))
-                                   (filter onset? (p (qi c) (qi (c + 1))))))
-                 ())
-         _ (pins st 'due (st 'due + vs) 'cyc (c + 1) 'cstart (f0 + spc) 'dirty 1)
-         (go ()))))
+                                   (filter onset? (p (qi c) (qi (c + 1)))))))
+         ((pins st 'due (st 'due + vs) 'cyc (c + 1) 'cstart (f0 + spc) 'dirty 1),
+          go ()))))
  ; the buffer's ex words, vi's door: answers true for one of the loop's
  (synth-ex st s w arg) (: (num t) (: v <(sound t) (charm? v ? v ()))
    (? (w = "send") (synth-send st (synth-text (s 'lines)), pin s 'msg (st 'lmsg), 1)
       (w = "play") (synth-play st, pin s 'msg "playing", 1)
       (w = "stop") (synth-stop st, pin s 'msg "stopped", 1)
-      (w = "cps") (: v (num arg)
-                     _ (? v (synth-cps! st v) ())
-                     _ (pin s 'msg (v ? ("cps " + show (st 'cps)) "cps N"))
-                     1)
+      (w = "cps") (num arg @ v
+                     (v ? (synth-cps! st v),
+                      pin s 'msg (v ? ("cps " + show (st 'cps)) "cps N"),
+                      1))
       ()))
 
  ; one chunk out the port: the loop's next cycles pulled in, the voices due in this
@@ -203,13 +164,13 @@
                       _ (synth-pull st lim)
                       now (map (p \ p 1) (filter (p \ p 0 < lim) (st 'due)))
                       live (filter (v \ v 0 >= base) (st 'vs + now))
-                      _ (pins st 'vs live 'due (filter (p \ p 0 >= lim) (st 'due)) 'fpos lim)
-                      (say h (pack (mixdown live base synth-chunk) synth-chunk synth-gain)))
+                      ((pins st 'vs live 'due (filter (p \ p 0 >= lim) (st 'due)) 'fpos lim),
+                       say h (pack (mixdown live base synth-chunk) synth-chunk synth-gain)))
 
  ; --- a key: a note struck, the timbre or the octave turned, the loop played or
  ; stopped and its cps moved; q or ^c is the end ---
- (synth-step st k) (: c (synth-code k)
-   (? (two? c) (: s2 (synth-strike st (synth-semis st c))
+ (synth-step st k) (synth-code k @ c
+   (? (two? c) (synth-strike st (synth-semis st c) @ s2
                   (st 'dr && st 'km = 2 ? (pins s2 'last (rshow (synth-jdeg c) + " " + synth-name (synth-semis st c))) s2))
       (k = 9) (pins st 'tim ((st 'tim + 1) % #synth-timbres) 'dirty 1)
       (k = -8) (pins st 'oct (min (st 'oct + 1) synth-octaves) 'dirty 1)
@@ -232,7 +193,7 @@
  ; many rows, which is what the keys' pane is given on the harbour --------------------
  synth-rows 16
  (synth-frame st) (: tm (synth-timbres (st 'tim))
-   (cell i) (: n (synth-name (synth-semis st [i 0 0]))
+   (cell i) (synth-name (synth-semis st [i 0 0]) @ n
                (string (synth-digits i) + " " + n + snip "     " 0 (6 - #n)))
    (row a) ("  " + foldl (+) "" (map (i \ cell (a + i)) ^6) + "\r\n")
    (esc + "[H" + esc + "[2J"
@@ -242,7 +203,7 @@
     + row 0 + row 6 + "\r\n"
     + "  loop " + (st 'on ? "playing" "stopped") + "   cps " + show (st 'cps)
     + "   cycle " + show (st 'cyc) + "   " + st 'lmsg + "\r\n"
-    + (st 'dr ? (: w (st 'dnow)
+    + (st 'dr ? (st 'dnow @ w
                    ("  drift " + book (st 'dbook) 0 + "   phrase " + st 'dph
                     + "   center " + synth-lname (w 'pos) + " " + rshow (w 'tonic)
                     + " " + show (int (drift-cents w)) + "c\r\n"
@@ -255,76 +216,76 @@
     + "  p: play/stop loop   e: send buffer   [ ]: cps   C-a j: buffer   q: leave"))
 
  ; --- the tty: a key, alt as the escape before it, arrows as the cli's numbers -------
- (synth-key p) (: c (see p)
+ (synth-key p) (see p @ c
    (? (c != 27) c
       !(rest 1, cue? p) 27
-      (: c2 (see p)
-         (c2 = 91 ? (: (fin _) (: f (see p) (64 <= f <= 126 ? (f @ 65 -8 66 -9 0) (fin ()))) (fin ()))
+      (see p @ c2
+         (c2 = 91 ? (: (fin _) (see p @ f (64 <= f <= 126 ? (f @ 65 -8 66 -9 0) (fin ()))) (fin ()))
                     (256 + c2)))))
  ; every key waiting, a held key's repeats dropped; answers 'quit -- q, ^c or the end of
  ; the input -- or the state
- (keys st) (? (cue? 0)
-              (: k (synth-key in)
+ (keys st) (cue? 0 ?
+              (synth-key in @ k
                  (? (k = 113 || k = 3 || k = -1) 'quit
-                    (k = st 'lk && (clock 0 - st 'lt) < repeat-gap) (keys st)
+                    (k = st 'lk && clock 0 - st 'lt < repeat-gap) (keys st)
                     (synth-step st k, pins st 'lk k 'lt (clock 0), keys st)))
               st)
  ; every timbre struck, a text read and played, the drift walked and a frame drawn, two
  ; seconds into a jug: the code the keys will reach paged in, and the first collections
  ; made, before the card is open
  (synth-warm _) (: st (synth-new ()) j (jug 0)
-                   _ (each ^#synth-timbres (i \ (pin st 'tim i, synth-step st 49)))
-                   _ (synth-send st "n \"0 [4 7] ~ 12\" # s \"sin\" # gain 0.8")
-                   _ (each ^60 (i \ (synth-feed st j, slurp j)))
-                   _ (synth-drift st)
-                   _ (each ^60 (i \ (synth-feed st j, slurp j)))
-                   _ (synth-frame st)
-                   0)
- (lead-of gap) (: n (int (2.5 * gap * song-rate / 1000.0))
+                   (each ^#synth-timbres (i \ (pin st 'tim i, synth-step st 49)),
+                    synth-send st "n \"0 [4 7] ~ 12\" # s \"sin\" # gain 0.8",
+                    each ^60 (i \ (synth-feed st j, slurp j)),
+                    synth-drift st,
+                    each ^60 (i \ (synth-feed st j, slurp j)),
+                    synth-frame st,
+                    0))
+ (lead-of gap) (int (2.5 * gap * song-rate / 1000.0) @ n
                   (n < synth-lead ? synth-lead (song-lead-max < n ? song-lead-max n)))
  (synth-run _) (: _ (synth-warm ())
    _ (raw 1)
    _ (say out (esc + "[?1049h" + esc + "[?25l"))
    st (synth-new ())
-   hn (: h (horn song-rate 2) (? (nom? h) () h))
+   hn (horn song-rate 2 @ h (nom? h ? () h))
    pace (pacer ())
-   (feed _) (: l (lead-of (pace! pace))
-               (? hn (song-fill hn l (\ _ (synth-feed st hn))) 0))
+   (feed _) (lead-of (pace! pace) @ l
+               (hn ? (song-fill hn l (_ \ (synth-feed st hn))) 0))
    (go _) (feed (),
-           (? (st 'dirty) (say out (synth-frame st), flush out, pin st 'dirty 0)),
+           st 'dirty ? (say out (synth-frame st), flush out, pin st 'dirty 0),
            keys st = 'quit || st 'over ? () (rest 4, go ()))
-   _ (go ())
-   _ (say out (esc + "[0m" + esc + "[?25h" + esc + "[?1049l"), flush out)
-   _ (hn ? (flush hn, close hn))
-   _ (drain-keys ())
-   _ (raw 0)
-   0)
+   (go (),
+    (say out (esc + "[0m" + esc + "[?25h" + esc + "[?1049l"), flush out),
+    hn ? (flush hn, close hn),
+    drain-keys (),
+    raw 0,
+    0))
  synth-usage "usage: love synth [LOOP]   (1 .. = play, shift and alt bend, tab the timbre, up and down the octave, p e [ ] the loop, q leaves)"
  ; --- the harbour: the keys a stage over the buffer, a vi stage on the loop's text.
  ; the keys' tick feeds the card; e sends the buffer; q ends both panes ---
  (synth-berth br vi f) (: _ (synth-warm ()) st (synth-new ())
-   hn (: h (horn song-rate 2) (? (nom? h) () h))
+   hn (horn song-rate 2 @ h (nom? h ? () h))
    pace (pacer ())
-   (feed _) (: l (lead-of (pace! pace))
-               (? hn (song-fill hn l (\ _ (synth-feed st hn))) 0))
+   (feed _) (lead-of (pace! pace) @ l
+               (hn ? (song-fill hn l (_ \ (synth-feed st hn))) 0))
    sz (br 'hsize 0) hb (br 'harbour <sz <>sz)
    buf (vi 'vi-open f)
    _ (pin buf 'exmore '("send" "play" "stop" "cps"))
    face (vi 'vi-face buf {'ex (synth-ex st) 'reg (hb 'clip)})
-   keys (br 'berth-stage (\ w h (pin st 'dirty 0, synth-frame st))
-                         (\ k (? (k = 101) (synth-send st (synth-text (buf 'lines))) (synth-step st k)))
-                         (\ _ (st 'over)))
-   _ (pins keys 'tick (\ _ (feed (), st 'dirty)) 'key synth-key)   ; alt on any key, the row's own reading
-   text (br 'berth-stage (face 0) (face 1) (\ _ (buf 'quit || st 'over)))
+   keys (br 'berth-stage (w \ h \ (pin st 'dirty 0, synth-frame st))
+                         (k \ (k = 101 ? (synth-send st (synth-text (buf 'lines))) (synth-step st k)))
+                         (_ \ (st 'over)))
+   _ (pins keys 'tick (_ \ (feed (), st 'dirty)) 'key synth-key)   ; alt on any key, the row's own reading
+   text (br 'berth-stage (face 0) (face 1) (_ \ (buf 'quit || st 'over)))
    _ (pin text 'paste (face 3))
    share (min 90 ((100 * (synth-rows + 1) + <sz - 1) // <sz))   ; the keys' rows, and one over
-   _ (pin hb 'more (\ _ (br 'hopen ["sh"] 1 1)))
-   _ (br 'hberth hb 'stack 50 (br 'hopen-stage keys <sz <>sz))
-   _ (br 'hberth hb 'stack share (br 'hopen-stage text 1 1))
-   _ (br 'hsteer hb 'up)                ; the keys first
-   _ (br 'hsail hb)
-   _ (hn ? (flush hn, close hn))
-   0)
+   (pin hb 'more (_ \ (br 'hopen ["sh"] 1 1)),
+    br 'hberth hb 'stack 50 (br 'hopen-stage keys <sz <>sz),
+    br 'hberth hb 'stack share (br 'hopen-stage text 1 1),
+    br 'hsteer hb 'up,                  ; the keys first
+    br 'hsail hb,
+    hn ? (flush hn, close hn),
+    0))
  (synth-main as) (: br (cite 'berth) vi (cite 'vi)
    (? (1 < #as) (say err ("synth: " + synth-usage + "\n"), flush err, 2)
       (tablet? br && tablet? vi) (synth-berth br vi (two? as ? <as ""))

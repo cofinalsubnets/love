@@ -5,12 +5,12 @@
 
 (borrow 'lush) ; the engine parts above just registered module 'lush
 
-(: (rd p) (: q (open p "r") (port? q ? (: s (slurp q) (close q, s))))
+(: (rd p) (open p "r" @ q (port? q ? (slurp q @ s (close q, s))))
    ; wc pads its counts to the byte total's width, so read the number, not the face
-   (numof s) ((: (go i acc) (? (<= (tally s) i) acc
-                  (: c (s i) (48 <= c <= 57 ?
-                              (go (+ i 1) (+ (* 10 acc) (- c 48)))
-                              (go (+ i 1) acc)))))
+   (numof s) ((: (go i acc) (tally s <= i ? acc
+                  (s i @ c (48 <= c <= 57 ?
+                            (go (i + 1) (10 * acc + (c - 48)))
+                            (go (i + 1) acc)))))
               0 0)
 
    ; the doc's own spelling: kore ls | kore wc -l, the line count = the tree's
@@ -21,7 +21,7 @@
    ; and a byte-exact tail, where wc's padding is width one
    r2 (sh-line "kore echo hi | kore wc -c > /tmp/l-sh-wc")
    s2 (rd "/tmp/l-sh-wc")
-   _  (unlink "/tmp/l-sh-wc")
+   (unlink "/tmp/l-sh-wc",
 
- (test (r1 = 0) (string? s1) (numof s1 = #(readdir "src/apps/kore"))
-         (r2 = 0) (s2 = "3\n")))
+    test (r1 = 0) (string? s1) (numof s1 = #(readdir "src/apps/kore"))
+           (r2 = 0) (s2 = "3\n")))

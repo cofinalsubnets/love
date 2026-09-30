@@ -77,7 +77,7 @@
   (27 = (typed (ednew ()) [97 27] 'ev))                            ; escape is the caller's
   (-8 = (typed (ednew ()) [97 -8] 'ev))                            ; up with no line above
   ("a" = (edtext (typed (ednew ()) [97 -8 -9])))                  ; ..and the text stands
-  (: t (typed (ed ['(1 2)] () () ()) [-8]) (0 = (t 'ev) && '(1 2 10) = (edchars t)))  ; up with a line above is a motion
+  (typed (ed ['(1 2)] () () ()) [-8] @ t (0 = (t 'ev) && '(1 2 10) = (edchars t)))    ; up with a line above is a motion
    ; --- utf-8: the keys arrive a byte at a time and the cursor moves by character.
    ; 日 is 230 151 165, 本 230 156 172, each two columns wide ---
   ("日本" = (edtext (typed (ednew ()) [230 151 165 230 156 172])))
@@ -89,8 +89,8 @@
   (0 = (edcol (typed (ednew ()) [230 151])))                               ; a character still arriving
   (3 = (edcol (typed (ednew ()) [97 98 99])))
   ; up keeps the column in characters, so it never lands inside one
-  (: t (edup (ed ['(230 151 165 230 156 172 120)] '(98 97) () ()))
-     ('(172 156 230 165 151 230) = (t 'l) && '(120) = (t 'r)))
+  (edup (ed ['(230 151 165 230 156 172 120)] '(98 97) () ()) @ t
+   ('(172 156 230 165 151 230) = (t 'l) && '(120) = (t 'r)))
    ; --- joinln / splitat ---
   (() = (joinln ()))
   ('(1 2 3) = (joinln ['(1 2 3)]))
@@ -103,9 +103,9 @@
   ([() '(1) ()] = (fr () '(1) () ()))
   ('(((1)) (2 3) (4) (5)) = (fr ['(1)] '(2 3) '(4) ['(5)]))
   (() = (eddetach (edh () () () () () () ()) 'hu))
-  (: cur (fr () '(1) () ()) ([cur] = (eddetach (edh () () () () () () cur) 'hu)))
+  (fr () '(1) () () @ cur ([cur] = (eddetach (edh () () () () () () cur) 'hu)))
   (: cur (fr () '(1) () ()) old (fr () '(9) () ())
-     (: t (eddetach (edh () () () () [old] () cur)) ([cur old] = (t 'hu) && () = (t 'cur))))
+     (eddetach (edh () () () () [old] () cur) @ t ([cur old] = (t 'hu) && () = (t 'cur))))
   (edempty? (ed () () () ()))
   !(edempty? (ed () '(1) () ()))
   !(edempty? (ed ['(1)] () () ()))
@@ -118,19 +118,19 @@
    ; --- uphist / downhist ---
   (: cur (fr () '(1) () ()) old (fr () '(9) () ())
      ((k7 () '(9) () () () [cur] old) = (b7 (uphist (edh () '(1) () () [old] () cur)))))
-  (: old (fr () '(9) () ())
-     ((k7 () '(9) () () () () old) = (b7 (uphist (edh () () () () [old] () ())))))
-  (: cur (fr () [49] () ())
-     ((k7 () () () () () [cur] ()) = (b7 (uphist (edh () [49] () () () () cur)))))
-  (: cur (fr () [40] () ())
-     ((k7 () [40] () () () () cur) = (b7 (uphist (edh () [40] () () () () cur)))))
+  (fr () '(9) () () @ old
+   ((k7 () '(9) () () () () old) = (b7 (uphist (edh () () () () [old] () ())))))
+  (fr () [49] () () @ cur
+   ((k7 () () () () () [cur] ()) = (b7 (uphist (edh () [49] () () () () cur)))))
+  (fr () [40] () () @ cur
+   ((k7 () [40] () () () () cur) = (b7 (uphist (edh () [40] () () () () cur)))))
   ((k7 () [49] () () () () ()) = (b7 (uphist (edh () [49] () () () () ()))))
   (: cur (fr () '(1) () ()) new (fr () '(9) () ())
      ((k7 () '(9) () () [cur] () new) = (b7 (downhist (edh () '(1) () () () [new] cur)))))
-  (: new (fr () '(9) () ())
-     ((k7 () '(9) () () () () new) = (b7 (downhist (edh () () () () () [new] ())))))
-  (: cur (fr () [49] () ())
-     ((k7 () () () () [cur] () ()) = (b7 (downhist (edh () [49] () () () () cur)))))
+  (fr () '(9) () () @ new
+   ((k7 () '(9) () () () () new) = (b7 (downhist (edh () () () () () [new] ())))))
+  (fr () [49] () () @ cur
+   ((k7 () () () () [cur] () ()) = (b7 (downhist (edh () [49] () () () () cur)))))
    ; --- edkey: bytes as themselves, the escape family decoded, esc x pushed back ---
   (97 = (edkey (tap [97])))
   (-7 = (edkey (tap ())))
@@ -143,10 +143,10 @@
   (: p (tap [27 58]) a (edkey p) b (edkey p) ([27 58] = [a b]))      ; esc, then a colon: two keys
    ; a tap is a PLACE: the SGR report decoded whole, the press answering -12 with the
    ; cell waiting in edtap, and the release answering the miss and moving nothing
-  (: p (tap [27 91 60 48 59 49 50 59 53 77])                         ; ESC [ <0;12;5M
-     (-12 = (edkey p) && [11 4] = edtap ()))
-  (: p (tap [27 91 60 48 59 49 59 49 109])                           ; ..and the release
-     (0 = (edkey p) && [0 0] = edtap ()))
+  (tap [27 91 60 48 59 49 50 59 53 77] @ p                           ; ESC [ <0;12;5M
+   (-12 = (edkey p) && [11 4] = edtap ()))
+  (tap [27 91 60 48 59 49 59 49 109] @ p                             ; ..and the release
+   (0 = (edkey p) && [0 0] = edtap ()))
    ; --- parseall: a line is one expression; floats; the more-sentinel ---
    ; a single datum is returned as-is in a one-list (no extra wrap), so a leading
    ; monadic stays fused: "+(-3)" -> (mono (+ (-3))) -> -3, not the head-position (+ -3).
@@ -166,7 +166,7 @@
   (two? (parseall '(49 32 61 32 49)))]                ; "1 = 1"
 
    ; every check in the battery must be true.
-   _ (each results (\ b (test b)))
+   _ (each results (b \ test b))
    ; and the battery must be non-trivial (a typo'd list returning () would
    ; vacuously pass the each above).
    _ (test (50 < tally results)))

@@ -33,7 +33,7 @@
    ;; -- the tape: a global Wengert list of op nodes, newest-first (= reverse-topo)
    tl-tape {}
    (tl-reset _) (pin tl-tape 0 ())
-   (tl-push n)  (: _ (pin tl-tape 0 (n . peep tl-tape 0 ())) n)
+   (tl-push n)  (pin tl-tape 0 (n . peep tl-tape 0 ()), n)
 
    ;; -- nodes --
    (tl-node? x)  (tablet? x)                          ; a tele node (a raw constellation is never a tab)
@@ -121,7 +121,7 @@
      (s \ : g (peep s 'grad 0)
            (tl-accum na (tl-gemm g (tl-tr (tl-val nb))),     ; dA = G @ b^t
             tl-accum nb (tl-gemm (tl-tr (tl-val na)) g)))))  ; dB = a^t @ G
-   (sum x) (: nx (node x)                            ; reduce-all to a scalar
+   (sum x) (node x @ nx                              ; reduce-all to a scalar
     (tl-op (tl-reduce (tl-val nx))
      (s \ tl-accum nx (tl-val nx * 0 + peep s 'grad 0))))  ; broadcast g to x's shape
 
@@ -143,7 +143,7 @@
    ;; relu is the color law, differentiated: it passes the positive (blue) and
    ;; clamps the rest to the blue floor at 0. the local slope is the mask (x>0) --
    ;; and the kink, where the subgradient switches, is exactly that blue floor.
-   (relu x) (: nx (node x) xv (tl-val nx) m (< 0 xv)
+   (relu x) (: nx (node x) xv (tl-val nx) m (0 < xv)
       (tl-op (xv * m) (s \ tl-accum nx (peep s 'grad 0 * m))))
 
    ;; sigmoid s = 1/(1+e^-x); the adjoint s'(x) = s(1-s) (read off the output).
@@ -156,7 +156,7 @@
 
    ;; mse = mean((p-t)^2). a composite of the ops (no new adjoint): d is reused, so
    ;; mul d d squares it and the fan-out makes the chain rule give 2d for free.
-   (mse p t) (: d (sub p t) (mean (mul d d)))
+   (mse p t) (sub p t @ d (mean (mul d d)))
 
    ;; ---- Stage 3: nn modules + optim ----
    ;; a module is a tablet { 'fwd 'params } -- a forward fn + its parameter glasses.
@@ -193,5 +193,5 @@
    ;; newest-first (reverse-topo): each op's adjoint scatters to its parents, and
    ;; by the time we reach a node every later consumer has already added in.
    (tl-seed v) (tray? v ? (v * 0 + 1) 1)
-   (tl-walk ns) (two? ns ? (: n <ns _ (peep n 'bwd 0 n) (tl-walk >ns)) 0)
+   (tl-walk ns) (two? ns ? (<ns @ n (peep n 'bwd 0 n, tl-walk >ns)) 0)
    (back loss) (pin loss 'grad (tl-seed (tl-val loss)), tl-walk (peep tl-tape 0 ()), loss))

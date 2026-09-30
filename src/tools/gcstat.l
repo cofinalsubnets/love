@@ -40,16 +40,16 @@
   (revbig n) #(foldl (flip (.)) () ^n)
 
   ; --- run --------------------------------------------------------------------
-  _ (puts "workload              churn (a -DAI_STAT host; interpreted unless glazed)\n")
-  _ (gcwin "deforest-20k x40 " 40 (_ \ deforest 20000))
-  _ (gcwin "mapchurn-50k x40 " 40 (_ \ mapchurn 50000 20))
-  _ (gcwin "revbig-100k  x40 " 40 (_ \ revbig 100000))
-  _ (gcwin "primes-30k   x4  " 4  (_ \ primes 30000))
-  _ (gcwin "fib-30       x3  " 3  (_ \ fib 30))
-  ; --- whole-run cumulative ---------------------------------------------------
-  _ (putc 10)
-  _ (puts "cumulative (incl boot)  colls=") _ (putx (gget G_GC))
-  _ (puts "  mortality=") _ (putx (pct (gget G_SEEN - gget G_EVAC) (gget G_SEEN))) _ (puts "%")
-  _ (puts "  copy-amp(x100)=") _ (putx (per (gget G_EVAC * 100) (gget G_MAXH)))
-  _ (puts "  peak-live=") _ (putx (gget G_MAXH))
-  (putc 10))
+  (puts "workload              churn (a -DAI_STAT host; interpreted unless glazed)\n",
+   gcwin "deforest-20k x40 " 40 (_ \ deforest 20000),
+   gcwin "mapchurn-50k x40 " 40 (_ \ mapchurn 50000 20),
+   gcwin "revbig-100k  x40 " 40 (_ \ revbig 100000),
+   gcwin "primes-30k   x4  " 4  (_ \ primes 30000),
+   gcwin "fib-30       x3  " 3  (_ \ fib 30),
+   ; --- whole-run cumulative ---------------------------------------------------
+   putc 10,
+   puts "cumulative (incl boot)  colls=", putx (gget G_GC),
+   puts "  mortality=", putx (pct (gget G_SEEN - gget G_EVAC) (gget G_SEEN)), puts "%",
+   puts "  copy-amp(x100)=", putx (per (gget G_EVAC * 100) (gget G_MAXH)),
+   puts "  peak-live=", putx (gget G_MAXH),
+   putc 10))

@@ -58,7 +58,7 @@
           ; the string kind off g's reach (slot 1), never an li of (apof ""):
           ; that is a C code address, and a blob that names one is not the same
           ; bytes under another base. glaze.l's `reach` law, and the same reason
-          ['ld 'r8 G ((reach-offset 0) + 8)]
+          ['ld 'r8 G (reach-offset 0 + 8)]
           '(cmp r7 r8) '(br ne deopt)]                            ; ... of string kind
         + [['ld SC SP 8] ['test SC 1] '(br eq deopt)]             ; Sp[1] a charm
         + [['ld SC SP 16] ['test SC 1] '(br eq deopt)]            ; Sp[2] a charm
@@ -101,14 +101,14 @@
    ; build it, or answer the twin. `nif` hands the twin back itself when it declines
    ; (inle's heap rides an NX window; so does wasm), so no fallback is arranged here
    (mk _) (: h (cite 'holo) g (cite 'glaze)
-             (? (!h || !g || !(elem love-arch '(x64 a64))) walk
+             (!h || !g || !(elem love-arch '(x64 a64)) ? walk
                 (: bs (peep (h 'assemble love-arch (scan-ir love-arch)) 'bytes 0)
                    (g 'nif (cask bs) walk 3))))
    box {}                                ; one install for the process, not one per ask
    ; (scanner ()) -> (f s c i), answering the index of charm c at-or-after i, or -1.
    ; a caller with many texts asks once and holds f: this is a tablet read, which is
    ; ~1000 instructions, and belongs outside any loop
-   (scanner _) (: k (peep box 'k 'none) (k @- k 'none (: k2 (mk ()) (pin box 'k k2, k2))))
+   (scanner _) (peep box 'k 'none @ k (k @- k 'none (mk () @ k2 (pin box 'k k2, k2))))
 )
 
 ) ; module 'scan

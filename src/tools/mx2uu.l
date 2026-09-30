@@ -4,26 +4,13 @@
 ;
 ;   love src/tools/mx2uu.l > test/uumx.l        (or: make uumx)
 ;
-; the uu twin of src/tools/mx2coq.l, and the band partition is derived the same way
-; -- kinds grouped by row+column equality across both matrices at once -- so the
-; two exports cannot disagree about what a band is. what differs is the metatheory
-; and the shape of the proof: Rocq closes each square by vm_compute, uu closes it
-; by conversion, `idpath true` against a bounded forall the kernel runs. the terms
-; then re-export through uu2coq/uu2lean, so mx.l's shape lands in three kernels.
-;
-; the lift: a kind is its index in the enum roster (0..14, mx.l's own order, which
-; is the dispatch lattice), a lane its index in appearance order, a band its class
-; id. a square is a grid -- a list of rows, one per kind -- and not a flat list
-; indexed by arithmetic: every walk here rides `npred`, which the eager NbE prices
-; at O(index), so a 225-long row costs 225x what a 15-long one does and the whole
-; corpus feels it. hence mvec/mlist, nvec/nlist's shape one type up.
-; names are emitted for every kind and lane (mxKCharm, mxLaddn) so test/uumxlaw.l
-; can name a cell instead of counting to it, and mxnumeric lifts mx-numk for the
-; same reason: a law ranges over mxnk and asks, never over a block reached by
-; offset. a roster that grows leaves such a range short, and a bounded forall
-; that stopped covering its carrier is green for the wrong reason.
-; untrusted like every translator here: a wrong lift can miss a law, never fake
-; one, and each row prints under its kind.
+; the uu twin of src/tools/mx2coq.l, deriving the band partition the same way (kinds grouped by
+; row+column equality across both matrices), so the two exports cannot disagree about a band.
+; a kind is its index in mx.l's enum roster, a lane its index in appearance order, a band its
+; class id. a square is a grid (a list of rows), not a flat list: every walk rides `npred`,
+; O(index) under the eager NbE. every kind and lane is emitted by name, so test/uumxlaw.l
+; names a cell rather than counting to it: a bounded forall that stopped covering a grown
+; roster would be green for the wrong reason. untrusted like every translator here.
 ;
 ; load the table first, in its own top-level form: the next form's bare mx-kinds /
 ; mx-add / mx-mul references resolve at its compile, which must follow this run.
@@ -47,7 +34,7 @@
    (sig i) [(rrow addm i) (rcol addm i) (rrow mulm i) (rcol mulm i)]
    (idxin x l k) (? (atom? l) -1 (<l = x) k (idxin x >l (k + 1)))
    sigs ((: (go is acc) (? (atom? is) (rev acc)
-                           (: s (sig <is)
+                           (sig <is @ s
                               (go >is (-1 < idxin s acc 0 ? acc (s . acc))))))
          ridx ())
    (band i) (idxin (sig i) sigs 0)                   ; class id, enum-appearance order
@@ -59,15 +46,15 @@
    (kn i) ("mx" + string (kinds i))                  ; mxkcharm ..
    ; the table spells a lane as its C symbol (lvm_addn); the prefix says nothing
    ; here, so it comes off -- mxLaddn, matching mx.v's Laddn.
-   (ln x) (: t (string x) ("mxL" + ("lvm_" = snip t 0 4 ? (snip t 4 #t) t)))
+   (ln x) (string x @ t ("mxL" + ("lvm_" = snip t 0 4 ? (snip t 4 #t) t)))
    lanes ((: (go rows acc)                           ; distinct lanes, appearance order
-            (? (atom? rows) (rev acc)
+            (atom? rows ? (rev acc)
                (go >rows (foldl (\ a x (elem x a ? a (x . a))) acc <rows))))
           (addm + mulm) ())
    (lcode x) (idxin x lanes 0)
    ; mirror: the argument swap's action on lanes. the positional degenerate pair
    ; trades places (bin_a answers the a operand, bin_b the b); the rest are fixed.
-   (mir x) (: t (string x) (t @ "lvm_bin_a" 'lvm_bin_b "lvm_bin_b" 'lvm_bin_a x))
+   (mir x) (string x @ t (t @ "lvm_bin_a" 'lvm_bin_b "lvm_bin_b" 'lvm_bin_a x))
 
    ; --- literals: an nlist row, and a grid of them under their row names ---
    (rowlit cs) (: (go l) (two? l ? (join ["(ncons " (show <l) " " (go >l) ")"]) "nnil")
@@ -76,7 +63,7 @@
     (join ["\n ; " cmt "\n (defn " nm " nlist\n   " (rowlit cs) ")\n"])
    (griddef nm rows labs cmt)
     (: n #rows
-       (go r) (? (r = n) (join ["\n    mnil" (")" * n) ")\n"])
+       (go r) (r = n ? (join ["\n    mnil" (")" * n) ")\n"])
                  (join ["\n   ; " (labs r) "\n   (mcons " (rowlit (rows r)) (go (r + 1))]))
        (join ["\n ; " cmt "\n (defn " nm " mlist" (go 0)]))
    (rowsof m is js) (map (i \ map (j \ lcode (cell m i j)) js) is)
@@ -140,39 +127,39 @@
    blabs (map (c \ join ["band " (show c) " -- " (string (kinds (reps c)))]) ^nb)
    bidx ^nb
    bimg (map (c \ reps c) bidx)
-   _ (pl "")
-   _ (pl "; --- the squares, one row per kind in enum order ---")
-   _ (puts "(test")
-   _ (puts (griddef "mxaddgrid" (rowsof addm ridx ridx) klabs
-                    (join ["`+`: " (show nk) " kinds square, " (show (nk * nk)) " cells"])))
-   _ (puts (griddef "mxmulgrid" (rowsof mulm ridx ridx) klabs
-                    (join ["`*`: " (show nk) " kinds square, " (show (nk * nk)) " cells"])))
-   _ (puts (flatdef "mxbandtbl" (map band ridx)
-                    "the band partition, DERIVED by row+column equality over both squares"))
-   _ (puts (flatdef "mxnumtbl" (map (i \ (elem (kinds i) mx-numk ? 1 0)) ridx)
-                    "mx.l's own mx-numk roster: which kinds take the arithmetic lane"))
-   _ (puts (flatdef "mxmirtbl" (map (x \ lcode (mir x)) lanes)
-                    "mirror: the argument swap's action on lanes, in code order"))
-   _ (puts (griddef "mxaddbgrid" (rowsof addm bimg bimg) blabs
-                    (join ["`+` on the band quotient, " (show (nb * nb)) " cells"])))
-   _ (puts (griddef "mxmulbgrid" (rowsof mulm bimg bimg) blabs
-                    (join ["`*` on the band quotient, " (show (nb * nb)) " cells"])))
-   _ (pl "")
-   _ (pl " ; --- and the seven lookups they carry ---")
-   _ (pl " (defn mxadd (pi a nat (pi b nat nat)) (lam a (lam b (mxnth b (mxrow a mxaddgrid)))))")
-   _ (pl " (defn mxmul (pi a nat (pi b nat nat)) (lam a (lam b (mxnth b (mxrow a mxmulgrid)))))")
-   _ (pl " (defn mxband (pi k nat nat) (lam k (mxnth k mxbandtbl)))")
-   _ (pl " (defn mxnumeric (pi k nat bool) (lam k (nateqb (mxnth k mxnumtbl) 1)))")
-   _ (pl " (defn mxmirror (pi l nat nat) (lam l (mxnth l mxmirtbl)))")
-   _ (pl " (defn mxaddband (pi x nat (pi y nat nat))")
-   _ (pl "   (lam x (lam y (mxnth y (mxrow x mxaddbgrid)))))")
-   _ (pl " (defn mxmulband (pi x nat (pi y nat nat))")
-   _ (pl "   (lam x (lam y (mxnth y (mxrow x mxmulbgrid))))))")
-   _ (pl "")
-   _ (pl "; --- the bounded forall the theorems close by: every kind, then the square ---")
-   _ (pl "(test")
-   _ (pl " (defn mxall (pi n nat (pi f (pi k nat bool) bool))")
-   _ (pl "   (lam n (lam f (nat_rect (lam q bool) true (lam k (lam r (andb (f k) r))) n))))")
-   _ (pl " (defn mxsq (pi f (pi a nat (pi b nat bool)) bool)")
-   _ (pl "   (lam f (mxall mxnk (lam a (mxall mxnk (lam b (f a b))))))))")
-   (quit 0))
+   (pl "",
+    pl "; --- the squares, one row per kind in enum order ---",
+    puts "(test",
+    puts (griddef "mxaddgrid" (rowsof addm ridx ridx) klabs
+                  (join ["`+`: " (show nk) " kinds square, " (show (nk * nk)) " cells"])),
+    puts (griddef "mxmulgrid" (rowsof mulm ridx ridx) klabs
+                  (join ["`*`: " (show nk) " kinds square, " (show (nk * nk)) " cells"])),
+    puts (flatdef "mxbandtbl" (map band ridx)
+                  "the band partition, DERIVED by row+column equality over both squares"),
+    puts (flatdef "mxnumtbl" (map (i \ (elem (kinds i) mx-numk ? 1 0)) ridx)
+                  "mx.l's own mx-numk roster: which kinds take the arithmetic lane"),
+    puts (flatdef "mxmirtbl" (map (x \ lcode (mir x)) lanes)
+                  "mirror: the argument swap's action on lanes, in code order"),
+    puts (griddef "mxaddbgrid" (rowsof addm bimg bimg) blabs
+                  (join ["`+` on the band quotient, " (show (nb * nb)) " cells"])),
+    puts (griddef "mxmulbgrid" (rowsof mulm bimg bimg) blabs
+                  (join ["`*` on the band quotient, " (show (nb * nb)) " cells"])),
+    pl "",
+    pl " ; --- and the seven lookups they carry ---",
+    pl " (defn mxadd (pi a nat (pi b nat nat)) (lam a (lam b (mxnth b (mxrow a mxaddgrid)))))",
+    pl " (defn mxmul (pi a nat (pi b nat nat)) (lam a (lam b (mxnth b (mxrow a mxmulgrid)))))",
+    pl " (defn mxband (pi k nat nat) (lam k (mxnth k mxbandtbl)))",
+    pl " (defn mxnumeric (pi k nat bool) (lam k (nateqb (mxnth k mxnumtbl) 1)))",
+    pl " (defn mxmirror (pi l nat nat) (lam l (mxnth l mxmirtbl)))",
+    pl " (defn mxaddband (pi x nat (pi y nat nat))",
+    pl "   (lam x (lam y (mxnth y (mxrow x mxaddbgrid)))))",
+    pl " (defn mxmulband (pi x nat (pi y nat nat))",
+    pl "   (lam x (lam y (mxnth y (mxrow x mxmulbgrid))))))",
+    pl "",
+    pl "; --- the bounded forall the theorems close by: every kind, then the square ---",
+    pl "(test",
+    pl " (defn mxall (pi n nat (pi f (pi k nat bool) bool))",
+    pl "   (lam n (lam f (nat_rect (lam q bool) true (lam k (lam r (andb (f k) r))) n))))",
+    pl " (defn mxsq (pi f (pi a nat (pi b nat bool)) bool)",
+    pl "   (lam f (mxall mxnk (lam a (mxall mxnk (lam b (f a b))))))))",
+    quit 0))

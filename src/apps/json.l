@@ -30,12 +30,12 @@
    ; --- reading --------------------------------------------------------------------
    (jws s i n)  (i < n && elem (s i) '(32 9 10 13) ? (jws s (i + 1) n) i)
 
-   (jdigv c)    (? (48 <= c <= 57) (c - 48) -1)
+   (jdigv c)    (48 <= c <= 57 ? (c - 48) -1)
 
    ; a run of decimals -> `(value end). end = start means there were none, which the
    ; callers check: json wants at least one digit everywhere it wants a digit.
    (jdigits s i n) ((: (go k acc)
-                       (? (k < n && -1 < jdigv (s k))
+                       (k < n && -1 < jdigv (s k) ?
                           (go (k + 1) (acc * 10 + jdigv (s k)))
                           [acc k]))
                     i 0)
@@ -43,7 +43,7 @@
    (jhex4 s i n)   ((: (go k acc d)
                        (? (d = 0)      [acc k]
                           (k >= n)  ()
-                          (: v (hexv (s k))
+                          (hexv (s k) @ v
                              (v >= 0 ? (go (k + 1) (acc * 16 + v) (d - 1))))))
                     i 0 4)
 
@@ -56,17 +56,17 @@
          [(utf8 u) k]
         !(k + 1 < n && s k = 92 && s (k + 1) = 117)
          [(utf8 u) k]
-        (: l (jhex4 s (k + 2) n)
-           (? (atom? l) [(utf8 u) k]
-              (: v <l
-                 (? (56320 <= v <= 57343)
+        (jhex4 s (k + 2) n @ l
+           (atom? l ? [(utf8 u) k]
+              (<l @ v
+                 (56320 <= v <= 57343 ?
                     [(utf8 (65536 + (u - 55296) * 1024 + (v - 56320))) <>l]
                     [(utf8 u) k]))))))
 
    ; the byte after the backslash. -1 for "no such escape", never () -- 0 is a fine byte.
-   (jesc s i n) (? (i < n)
-                   (: c (s i)
-                      (? (c = 117) (juni s (i + 1) n)
+   (jesc s i n) (i < n ?
+                   (s i @ c
+                      (c = 117 ? (juni s (i + 1) n)
                          (: b (c @ 34  34   92  92   47  47
                                    98  8    102 12   110 10
                                    114 13   116 9
@@ -74,10 +74,10 @@
                             (b >= 0 ? [(string b) (i + 1)])))))
 
    (jstr s i n) ((: (go k acc)
-                     (? (k < n)
-                        (: c (s k)
+                     (k < n ?
+                        (s k @ c
                            (? (c = 34) [acc (k + 1)]
-                              (c = 92) (: e (jesc s (k + 1) n)
+                              (c = 92) (jesc s (k + 1) n @ e
                                           (two? e && go <>e (acc + <e)))
                               (c < 32) ()            ; a raw control byte is not json
                               (go (k + 1) (acc + string c))))))
@@ -93,13 +93,13 @@
 
    ; a whole int stays exact (charm -> sun -> big, whatever it needs); anything with a
    ; fraction or an exponent becomes a gem, which is what json means by those.
-   (jnum s i n) (: neg (i < n && (s i = 45))
-                   a   (? neg (i + 1) i)
+   (jnum s i n) (: neg (i < n && s i = 45)
+                   a   (neg ? (i + 1) i)
                    ip  (jdigits s a n)
                    iv  <ip
                    b   <>ip
-                   (? (b = a) ()                       ; a sign with no digits is nothing
-                      (: fd (? (b < n && s b = 46) (jdigits s (b + 1) n) ())
+                   (b = a ? ()                       ; a sign with no digits is nothing
+                      (: fd (b < n && s b = 46 ? (jdigits s (b + 1) n))
                          c  (two? fd ? <>fd b)
                          fv (two? fd ? <fd 0)
                          fl (two? fd ? (c - (b + 1)) 0)
@@ -109,11 +109,11 @@
                          (? (two? fd && fl = 0) ()   ; "1." is not json
                             (ee && atom? ex)     ()   ; "1e" is not json either
                             (: sgn (neg ? -1 1)
-                               (? (fl = 0 &&  !ee)
+                               (fl = 0 &&  !ee ?
                                   [(sgn * iv) d]
                                   (: mant (iv * fl 10 + fv)
                                      base (1.0 * sgn * mant / fl 10)
-                                     (two? ex ? [(base * (jpow10 <ex)) d]
+                                     (two? ex ? [(base * jpow10 <ex) d]
                                                 [base d]))))))))
 
    (jlit? s i n w) (i + #w @ e (e <= n && snip s i e = w))
@@ -123,36 +123,36 @@
                    (jlit? s i n "null")  [json-null (i + 4)]
                    (jnum s i n))
 
-   (jarr s i n) (: a (jws s (i + 1) n)
+   (jarr s i n) (jws s (i + 1) n @ a
                    (a < n && s a = 93 ? [() (a + 1)]
                     (:- (go a ()) (go k acc)
-                     (: r (jval s k n)
+                     (jval s k n @ r
                       (two? r ?
-                       (: e (jws s <>r n)
+                       (jws s <>r n @ e
                         (e < n ? (s e @ 44 (go (e + 1) (<r . acc))
                                         93 [(rev (<r . acc)) (e + 1)]))))))))
 
    ; a later duplicate key wins, which is what pin does and what every other reader does.
-   (jobj s i n) (: a (jws s (i + 1) n)
+   (jobj s i n) (jws s (i + 1) n @ a
     (a < n && s a = 125 ? [{} (a + 1)]
      (:- (go a {}) (go k acc)
-      (: ks (jws s k n)
+      (jws s k n @ ks
        (ks < n && s ks = 34 ?
-        (: kr (jstr s ks n)
-         (two? kr ? (: cn (jws s <>kr n)
+        (jstr s ks n @ kr
+         (two? kr ? (jws s <>kr n @ cn
           (cn < n && s cn = 58 ?
-           (: vr (jval s (cn + 1) n)
+           (jval s (cn + 1) n @ vr
             (two? vr ?  (: e (pin acc <kr <vr, jws s <>vr n)
              (e < n ? (s e @ 44 (go (e + 1) acc) 125 [acc (e + 1)]))))))))))))))
 
-   (jval s i n) (: a (jws s i n)
+   (jval s i n) (jws s i n @ a
                   (a < n ? (s a @ 34 (jstr s a n) 91 (jarr s a n) 123 (jobj s a n) (jlit s a n))))
 
    ; --- the door in ----------------------------------------------------------------
    ; (1 value), or () -- trailing junk after the document is a refusal, not a shrug.
    (json-read s) (: n #s
                     r (jval s 0 n)
-                    (? (two? r) (: e (jws s <>r n) (? (e < n) () [1 <r]))))
+                    (two? r ? (jws s <>r n @ e (e < n ? () [1 <r]))))
 
    ; --- writing --------------------------------------------------------------------
    (jhexd v) (string (v + (v < 10 ? 48 87)))
@@ -166,23 +166,23 @@
    (jqc c) (c @ 34 "\\\""  92 "\\\\"
                 10 "\\n"   13 "\\r"   9 "\\t"
                 8  "\\b"   12 "\\f"
-                (c < 32 ? ("\\u00" + (jhexd (c // 16)) + (jhexd (c % 16)))
+                (c < 32 ? ("\\u00" + jhexd (c // 16) + jhexd (c % 16))
                           (string c)))
 
-   (jqt s) (: n #s
-              ((: (go k acc) (? (k < n) (go (k + 1) (acc + (jqc (s k)))) (acc + "\"")))
+   (jqt s) (#s @ n
+              ((: (go k acc) (k < n ? (go (k + 1) (acc + jqc (s k))) (acc + "\"")))
                0 "\""))
 
-   (jjoin xs) (? (atom? xs) ""
-                 ((: (go l acc) (? (two? l) (go >l ((acc + ",") + <l)) acc)) >xs <xs))
+   (jjoin xs) (atom? xs ? ""
+                 ((: (go l acc) (two? l ? (go >l (acc + "," + <l)) acc)) >xs <xs))
 
    ; show is the whole number lane -- it already lays a charm, a sun, a big and a gem down
    ; the way json spells them. the guard is for what json has no word for: infinity and
    ; friends show as names, so anything not starting with a digit or a minus becomes null
    ; rather than riding out as text that no parser would take back.
    (jnumshow v) (: t (show v)
-                   c (? (0 < #t) (t 0) 0)
-                   (? (c = 45 || (48 <= c && c <= 57)) t "null"))
+                   c (0 < #t ? (t 0) 0)
+                   (c = 45 || 48 <= c && c <= 57 ? t "null"))
 
    ; the () = v test is exact -- true only for () itself, never 0 or "" (different bands)
    ; -- so a bare () after a map or a filter writes `[]` with no renaming step. anything
@@ -190,14 +190,14 @@
    ; stay out of the contract (arrays are lists here).
    (json-show v)
       (? (string? v)    (jqt v)
-         (json-bool? v) (? v "true" "false")
+         (json-bool? v) (v ? "true" "false")
          (json-null? v) "null"
          (() = v)       "[]"
-         (tablet? v)    (("{"
-                          + (jjoin (map (\ k ((jqt k) + ":" + (json-show (v k)))) (keys v))))
+         (tablet? v)    ("{"
+                          + jjoin (map (k \ jqt k + ":" + json-show (v k)) (keys v))
                          + "}")
          (tray? v)      (scare 'json "arrays are lists" v)
-         (two? v)       (("[" + (jjoin (map json-show v))) + "]")
+         (two? v)       ("[" + jjoin (map json-show v) + "]")
          (constellation? v) (jnumshow v)
          (scare 'json "no json spelling for this" v)))
 ) ; module json

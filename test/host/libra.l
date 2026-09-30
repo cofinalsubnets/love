@@ -1,4 +1,4 @@
-; --- test/host/libra.l: libra ⚖, the .l balance tool (src/apps/libra/libra.l) ---
+; test/host/libra.l -- libra ⚖, the .l balance tool (src/apps/libra/libra.l)
 ; two verbs over one scanner, and this gate is that claim: the check and the doc
 ; lifter both read src/apps/libra/lint.l, so the two cannot disagree about what a paren or a
 ; comment is. run standalone from the repo root:
@@ -14,7 +14,7 @@
 ; 'libra) in a test -- that would read the machine's own ~/.love/etc/libra.l and
 ; make the gate depend on who is running it.
 (: lt-none {}
-   (lt-conf prs) (foldl (\ t p (pin t <p >p, t)) {} prs))
+   (lt-conf prs) (foldl (t \ p \ (pin t <p >p, t)) {} prs))
 
 ; the check is the scan itself, laid out for a terminal: one warning here is one
 ; line there, and the config rides in as an argument rather than being read
@@ -33,19 +33,19 @@
    lt-dep  (lt-conf [['deprecated 'old-thing '(worse-thing "use better-thing")]])
    ; the 4th field is the rule, appended -- so <w / <>w / <>>w still read line,
    ; column and text, which is why no consumer had to change
-   (lt-rule ws) (map (\ w <>>>w) ws)
-   (lt-msg ws)  (map (\ w <>>w) ws))
+   (lt-rule ws) (map (w \ <>>>w) ws)
+   (lt-msg ws)  (map (w \ <>>w) ws))
 
 (test
  !(lint-scan "(go)")                        ; off by default: the rule is an opinion
  (1 = #(lint-of "(go)" lt-sing))
- ('(singleton) = (lt-rule (lint-of "(go)" lt-sing)))
- ('(balance) = (lt-rule (lint-scan "(: a 1\n"))))
+ ('(singleton) = lt-rule (lint-of "(go)" lt-sing))
+ ('(balance) = lt-rule (lint-scan "(: a 1\n")))
 
 ; a form of one element is that element, so the parens do nothing -- and a
 ; nullary call never fires. the position points at the opener.
 (test
- (: w <(lint-of "(: a 1\n   (go))" lt-sing) ((2 = <w) && (4 = <>w)))
+ (: w <(lint-of "(: a 1\n   (go))" lt-sing) (2 = <w && 4 = <>w))
  (1 = #(lint-of "(0)" lt-sing))         ; a number is no different
  (1 = #(lint-of "((f x))" lt-sing))     ; nor is an inner form
  (1 = #(lint-of "foo(x)" lt-sing)))     ; foo(x) is two datums, so (x) is a form
@@ -79,7 +79,7 @@
  ("deprecated old-thing" = <(lt-msg (lint-of "(f old-thing)" lt-dep)))
  ("deprecated worse-thing -- use better-thing"
   = <(lt-msg (lint-of "(f worse-thing)" lt-dep)))
- ('(deprecated) = (lt-rule (lint-of "(f old-thing)" lt-dep)))
+ ('(deprecated) = lt-rule (lint-of "(f old-thing)" lt-dep))
  (1 = #(lint-of "(f 'old-thing)" lt-dep))                ; 'foo is a mention
  !(lint-of "; old-thing" lt-dep)                                ; a comment is not code
  !(lint-of "(f \"old-thing\")" lt-dep)                          ; nor is a string
@@ -113,14 +113,13 @@
 ; eight
 "
    cs (lint-cmts src)
-   _ (test
-      (6 = tally cs)                                    ; six, and the string holds none
-      ('(1 1 "/usr/bin/env -S love -l" bang) = <cs)     ; the introducer's own spot
-      ('(2 1 " two" semi) = (cs 1))                ; the text is what follows `;`
-      ('(5 1 " five" semi) = (cs 3))               ; the blank line is counted
-      ('(6 27 " six, to the right" semi) = (cs 4)) ; past the string, at its own column
-      ('(8 1 " eight" semi) = (cs 5)))
-   0)
+   (test (6 = tally cs)                                    ; six, and the string holds none
+         ('(1 1 "/usr/bin/env -S love -l" bang) = <cs)     ; the introducer's own spot
+         ('(2 1 " two" semi) = cs 1)                ; the text is what follows `;`
+         ('(5 1 " five" semi) = cs 3)               ; the blank line is counted
+         ('(6 27 " six, to the right" semi) = cs 4) ; past the string, at its own column
+         ('(8 1 " eight" semi) = cs 5),
+    0))
 
 ; the header: a seat line, an indented display, a blank inside, an indented
 ; sentence, a comment to the right of code (never the header), one under it.
@@ -134,18 +133,17 @@
 (: run 1)   ; not the header
 ; nor this
 "
-   _ (test
-      ('("the tool -- what it is for" "" "  a display, two spaces in"
-         "  and an indented line is still a sentence" "and back")
-       = (ldoc-head src))                                ; ..and it keeps its indent
-      ; ..and an indented run is a display, dedented by its own least indent
-      ((ldoc-md src) = "the tool -- what it is for\n\n```\na display, two spaces in\nand an indented line is still a sentence\n```\nand back\n")
-      ; ..and the degenerate shapes answer nothing rather than something
-      (() = (ldoc-head "(: x 1)\n; a tail comment\n"))  ; code first: no header at all
-      (() = (ldoc-head ""))
-      ("" = (ldoc-md "(: x 1)\n"))
-      ('("just this") = (ldoc-head "; just this\n")))    ; no newline trouble at the end
-   0)
+   (test ('("the tool -- what it is for" "" "  a display, two spaces in"
+            "  and an indented line is still a sentence" "and back")
+          = ldoc-head src)                                ; ..and it keeps its indent
+         ; ..and an indented run is a display, dedented by its own least indent
+         (ldoc-md src = "the tool -- what it is for\n\n```\na display, two spaces in\nand an indented line is still a sentence\n```\nand back\n")
+         ; ..and the degenerate shapes answer nothing rather than something
+         (() = ldoc-head "(: x 1)\n; a tail comment\n")  ; code first: no header at all
+         (() = ldoc-head "")
+         ("" = ldoc-md "(: x 1)\n")
+         ('("just this") = ldoc-head "; just this\n"), ; no newline trouble at the end
+    0))
 
 ; a banner is where the header used to be lost. `starter` claims a `---` line and
 ; no markdown block can parse it, so mdread stopped dead there and dropped
@@ -155,11 +153,10 @@
 ; the body under it
 (: x 1)
 "))
-   _ (test
-      (2 = tally d)
-      ('(head 2 ((text "a banner"))) = <d)
-      ('(para ((text "the body under it"))) = (d 1)))
-   0)
+   (test (2 = tally d)
+         ('(head 2 ((text "a banner"))) = <d)
+         ('(para ((text "the body under it"))) = d 1),
+    0))
 
 ; the law, on files nobody wrote for this test: the document keeps every letter
 ; of the header. alphanumerics on both sides, so markdown's own normalizations --
@@ -171,78 +168,77 @@
 ; named here are the hardest: all begin with a banner. (hue.l and eval.l have no
 ; doc/*.md at all, which is the gap the doc verb exists to close.)
 (:
-   (alnum? c) (((48 <= c) && (c <= 57)) || ((65 <= c) && (c <= 90)) || ((97 <= c) && (c <= 122)))
+   (alnum? c) (48 <= c && c <= 57 || 65 <= c && c <= 90 || 97 <= c && c <= 122)
    (bare s) ((: (g i acc) (i < tally s ? (g (i + 1) (alnum? (s i) ? (acc + string (s i)) acc)) acc))
              0 "")
-   (itext l) (foldl (+) "" (map (\ x (: t <x
+   (itext l) (foldl (+) "" (map (x \ (<x @ t
                                         (? (t = 'text) <>x
                                            (t = 'code) <>x
                                            (t = 'link) (itext <>x + x 2)
-                                           ((t = 'strong) || (t = 'em)) (itext <>x)
+                                           (t = 'strong || t = 'em) (itext <>x)
                                            ""))) l))
-   (btext b) (: t <b
+   (btext b) (<b @ t
                 (? (t = 'head)  (itext (b 2))
                    (t = 'para)  (itext <>b)
                    (t = 'fence) (b 2)
                    (t = 'quote) (dtext <>b)
-                   ((t = 'bullets) || (t = 'numbers)) (foldl (+) "" (map itext <>b))
-                   (t = 'deflist) (foldl (+) "" (map (\ it (itext <it + itext <>it)) <>b))
+                   (t = 'bullets || t = 'numbers) (foldl (+) "" (map itext <>b))
+                   (t = 'deflist) (foldl (+) "" (map (it \ (itext <it + itext <>it)) <>b))
                    ""))
    (dtext d) (foldl (+) "" (map btext d))
-   (slurpf f) (: q (open f "r") (hot? q ? (slurp q) ""))
-   _ (map (\ f (: src (slurpf f)
-                  head (foldl (+) "" (ldoc-head src))
-                  d (mdread (ldoc-md src))
-                  (test
-                   (1 < tally d)                         ; a document, not a line
-                   (0 < tally (bare head))
-                   ((bare head) = (bare (dtext d))))))   ; ..and it kept every letter
-          ["src/apps/vi/hue.l" "src/apps/lush.l" "src/apps/libra/libra.l"])
-   ; the surfaces come free, and that is the seam's whole promise: libra says
-   ; markdown, lapiz says the rest.
-   _ (: md (ldoc-md (slurpf "src/apps/vi/hue.l"))
-        _ (test (0 < tally (md->ht md))
-                  (0 < tally (md->rf md)))
-        0)
-   0)
+   (slurpf f) (open f "r" @ q (hot? q ? (slurp q) ""))
+   (map (f \ (: src (slurpf f)
+                head (foldl (+) "" (ldoc-head src))
+                d (mdread (ldoc-md src))
+                (test
+                 (1 < tally d)                         ; a document, not a line
+                 (0 < tally (bare head))
+                 (bare head = bare (dtext d)))))   ; ..and it kept every letter
+        ["src/apps/vi/hue.l" "src/apps/lush.l" "src/apps/libra/libra.l"],
+    ; the surfaces come free, and that is the seam's whole promise: libra says
+    ; markdown, lapiz says the rest.
+    (ldoc-md (slurpf "src/apps/vi/hue.l") @ md
+     (test (0 < tally (md->ht md))
+             (0 < tally (md->rf md)),
+      0)),
+    0))
 
 
 ; the structure the corpus already carries (rung 1): a banner is a section, a
 ; display is a display. the prose is read, never rewritten.
 (test
  ; a `--- name ---` banner is a level-2 heading, and the padding dashes are padding
- ((ldoc-md "; --- the table ------------------------------------------------\n; a row is a thing.\n(: x 1)\n")
+ (ldoc-md "; --- the table ------------------------------------------------\n; a row is a thing.\n(: x 1)\n"
   = "## the table\na row is a thing.\n")
- ((ldoc-md "; --- the middle ---\n(: x 1)\n") = "## the middle\n")
+ (ldoc-md "; --- the middle ---\n(: x 1)\n" = "## the middle\n")
  ; ..but three dashes with nothing in them are not a banner
- ((ldoc-md "; ---\n(: x 1)\n") = "---\n")
+ (ldoc-md "; ---\n(: x 1)\n" = "---\n")
  ; a `usage:` line and the indented lines under it are one display: the alignment
  ; is the content, and filling it into a paragraph would destroy it
- ((ldoc-md "; usage:  tool [-x] FILE ..    do the thing\n;     or: love -l tool.l FILE\n; and prose after it.\n(: x 1)\n")
+ (ldoc-md "; usage:  tool [-x] FILE ..    do the thing\n;     or: love -l tool.l FILE\n; and prose after it.\n(: x 1)\n"
   = "```\nusage:  tool [-x] FILE ..    do the thing\n    or: love -l tool.l FILE\n```\nand prose after it.\n")
  ; an indent under a list item is a wrap, not a display -- it stays a line and
  ; lapiz joins it to the item above (its lazy continuation)
- ((ldoc-md "; - a bullet that wraps onto\n;   a second line\n; - and one that does not\n(: x 1)\n")
+ (ldoc-md "; - a bullet that wraps onto\n;   a second line\n; - and one that does not\n(: x 1)\n"
   = "- a bullet that wraps onto\n  a second line\n- and one that does not\n")
- ((mdread (ldoc-md "; - a bullet that wraps onto\n;   a second line\n(: x 1)\n"))
+ (mdread (ldoc-md "; - a bullet that wraps onto\n;   a second line\n(: x 1)\n")
   = '((bullets (((text "a bullet that wraps onto a second line"))))))
  ; prose is read, never rewritten: a paragraph comes out as the sentence it was
- ((ldoc-md "; a plain line, and it stays one.\n(: x 1)\n") = "a plain line, and it stays one.\n")
- ((ldoc-md "; prose.\n; a second line fills into it.\n(: x 1)\n")
+ (ldoc-md "; a plain line, and it stays one.\n(: x 1)\n" = "a plain line, and it stays one.\n")
+ (ldoc-md "; prose.\n; a second line fills into it.\n(: x 1)\n"
   = "prose.\na second line fills into it.\n"))
 
 ; and the whole of it through the lens: a real header comes out as a document with
 ; a heading its sections hang off, which is what papel reads a page's title,
 ; anchors and contents nav from.
-(: (rd f) (: q (open f "r") (hot? q ? (slurp q) ""))
+(: (rd f) (open f "r" @ q (hot? q ? (slurp q) ""))
    d (mdread ("# src/apps/lapiz.l\n\n" + ldoc-md (rd "src/apps/lapiz.l")))
-   heads (filter (\ b (<b = 'head)) d)
-   _ (test
-      (3 < tally heads)
-      ('(head 1 ((text "src/apps/lapiz.l"))) = <heads)   ; the file names the page
-      (2 = <>(heads 1))                               ; ..and its banners are sections
-      (0 < tally (filter (\ b (<b = 'fence)) d)))       ; the diagrams survived as displays
-   0)
+   heads (filter (b \ (<b = 'head)) d)
+   (test (3 < tally heads)
+         ('(head 1 ((text "src/apps/lapiz.l"))) = <heads)   ; the file names the page
+         (2 = <>(heads 1))                               ; ..and its banners are sections
+         (0 < tally (filter (b \ (<b = 'fence)) d)),    ; the diagrams survived as displays
+    0))
 
 (test_fin ())
 (puts "libra: ok")

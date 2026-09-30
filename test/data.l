@@ -11,32 +11,32 @@
          ('asdf = 2 nom "asdf") ; ...so it is a projection to the kind: idempotent
          ("asdf" = string 'asdf)))
 (:
- t (tablet 0)
+ t {}
  (Put k v) (pin t k v)
  (Del k) (pull t k 0)
  (Get k) (peep t k 0)
- (ln x) (foldl (\ n _ (1 + n)) 0 x)             ; spine length ($ on a list is the net sum)
- _ (Put 1 2)
- _ (Put 2 3)
- _ (Put 3 4)
- _ (Put 't 'f)
- _ (test
-    (4 = #t)
-    (4 = ln (keys t)))
- _ (Del 2)
- _ (Del 't)
- (test
-    (2 = #t)
-    (2 = ln (keys t))
-    (: (lll t) (foldl (l \ k \ k . Get k . l) () (keys t))
-     (2 * #t = ln (lll t)))))
+ (ln x) (foldl (n \ _ \ 1 + n) 0 x)             ; spine length ($ on a list is the net sum)
+ (Put 1 2,
+  Put 2 3,
+  Put 3 4,
+  Put 't 'f,
+  (test
+   (4 = #t)
+   (4 = ln (keys t))),
+  Del 2,
+  Del 't,
+  (test
+     (2 = #t)
+     (2 = ln (keys t))
+     (: (lll t) (foldl (l \ k \ k . Get k . l) () (keys t))
+      (2 * #t = ln (lll t))))))
 
 (:
  (stripPrefix p s) (? (p = snip s 0 #p) (snip s #p #s))
- (lit l y n s) ((\ ss (? ss (y ss [l]) (n s))) (stripPrefix l s))
- (drop p y) (p (\ s _ (y s ())))
- (opt p y _) (p y (\ s (y s ())))
- (cats a b y n) (a (\ s l (b (\ s m (y s (cat l m))) n s)) n)
+ (lit l y n s) ((ss \ ss ? (y ss [l]) (n s)) (stripPrefix l s))
+ (drop p y) (p (s \ _ \ y s ()))
+ (opt p y _) (p y (s \ y s ()))
+ (cats a b y n) (a (s \ l \ b (s \ m \ y s (cat l m)) n s) n)
  (alt a b y n) (a y (b y n))
  (rep a y n s) (opt (cats a (rep a)) y n s)
  (test
@@ -91,4 +91,4 @@
   (() = snip [1 2 3] 3 3) (() = snip [1 2 3] 4 1) (() = snip () 0 3)
   ("" = snip "abc" 3 3)
   ([1 2] = snip (1 . 2 . 3) 0 2)             ; an improper tail is no element of it
-  ((snip-grid (\ i j (string (snip snip-l i j)))) = (snip-grid (\ i j (snip snip-s i j))))))
+  ((snip-grid (i \ j \ string (snip snip-l i j))) = (snip-grid (i \ j \ snip snip-s i j)))))

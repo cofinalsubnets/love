@@ -1,33 +1,19 @@
 ; src/apps/sb/merge.l -- diff3: the three-way line merge svalbard falls to when two
-; patches write one path from a shared base. the base is free: a hunk records the
-; content hash it expected (its `old`), so the common ancestor is already in the
-; store -- no ancestry search, just a blob read.
+; patches write one path from a shared base. a hunk records the hash it expected (its
+; `old`), so the base is already in the store.
 ;
-; the shape: myers each side against the base, then read each script as one part
-; per slot, the slots alternating gap/line/gap/line../gap -- a line slot is what
-; that side puts where base line i stood, a gap slot what it inserts between two
-; base lines. the alternation is what keeps edits apart: a substitution moves its
-; line slot only (the replacement rides with the del it answers), an insertion
-; moves a gap slot only, so two disjoint edits never share a slot and never meet.
-; a slot where both sides produce the base's own content is stable; a maximal run
-; where either side differs is unstable, and the run resolves by comparison alone:
+; myers each side against the base, then read each script as one part per slot, slots
+; alternating gap/line/../gap: a substitution moves a line slot only, an insertion a gap
+; slot only, so disjoint edits never share a slot. a maximal run where either side
+; differs from the base resolves by comparison:
 ;   ours = theirs   -> both made the same edit, take it (convergent)
 ;   ours = base     -> only theirs moved, take theirs
 ;   theirs = base   -> only ours moved, take ours
 ;   otherwise       -> a true overlap: markers, and the caller counts it
-; so edits to different regions never meet, and only a real overlap conflicts.
-; adjacent edits with no stable line between them share a run and conflict --
-; textbook diff3, the same call git makes.
+; adjacent edits with no stable line between them conflict, the textbook diff3.
 ;
-; every lane rides module 'sb (the wrap below): a consumer says (borrow 'sb) --
-; the parts assemble the whole stack (kore text + diff, then merge/http/core),
-; each part registering itself; the standalone script is the same files catted,
-; the wrap registering the same module. loads after src/apps/kore/{text,diff}.l
-; either way. it captures
-; lines/unlines and myers at its define -- the capture law. the round trip
-; through lines is exact on newline-terminated text; a final unterminated line
-; gains its newline, text.l's one normalization, and it only ever touches a
-; path already diverged.
+; rides module 'sb (the wrap below); loads after src/apps/kore/{text,diff}.l and captures
+; lines/unlines and myers at its define. a final unterminated line gains its newline.
 
 (module 'sb
 (borrow 'kore) ; the text/diff floors (myers, lines) ride module 'kore
@@ -44,14 +30,14 @@
       (atom? m ? (rev (rev gp . acc))
        (: o <m op <o x <>o acc2 (rev gp . acc)                   ; the gap closes on a line op
         (op @ 'keep (go >m () ([x] . acc2))
-              'del (: r (m3grab >m ()) (go <r () (<>r . acc2)))
+              'del (m3grab >m () @ r (go <r () (<>r . acc2)))
               (go >m (x . gp) acc)))))                            ; 'add: into the open gap
 
    ; the base's own slots: every gap empty, every line its one line
    (m3base b) (:- (go b ()) (go m a) (two? m ? (go >m ([<m] . (() . a))) (rev (() . a))))
 
    ; the chunks (a list of line-lists) -> one flat line list
-   (m3cat cs) (:- (go cs ()) (go m a) (? (two? m) (go >m (a + <m)) a))
+   (m3cat cs) (:- (go cs ()) (go m a) (two? m ? (go >m (a + <m)) a))
 
    ; the marker block for a true overlap
    (m3marks ob tb ol tl)
@@ -63,7 +49,7 @@
     (? (atom? bs) [acc nc]
        (<os = <bs && <ts = <bs) (m3go >bs >os >ts ol tl (<bs . acc) nc)
        (: (run b o t bb ob tb)                                        ; extend while either side moved
-           (? (two? b && (<o != <b || <t != <b))
+           (two? b && (<o != <b || <t != <b) ?
               (run >b >o >t (<b . bb) (<o . ob) (<t . tb))
               [b o t (m3cat (rev bb)) (m3cat (rev ob)) (m3cat (rev tb))])
           r (run bs os ts () () ())

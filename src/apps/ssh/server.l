@@ -38,7 +38,7 @@
        (lines i) (#b <= i ? "" (snip b i (min #b (i + 70)) + "\n" + lines (i + 70)))
        ("-----BEGIN OPENSSH PRIVATE KEY-----\n" + lines 0 + "-----END OPENSSH PRIVATE KEY-----\n"))
    (ssh-keywrite path seed pub comment)
-    (: fd (openfd path 3)
+    (openfd path 3 @ fd
        (? !(charm? fd) ("cannot create " + path + " (" + show fd + ")")
           (: p (fdopen fd) _ (say p (sd-keytext seed pub comment)) _ (close p)
              q (open (path + ".pub") "w")
@@ -48,7 +48,7 @@
    ; (command=, from=, ..) grants nothing, since none of them is honoured here
    (ssh-authorized path)
     (: q (open path "r")
-       txt (hot? q ? (: s (slurp q) (close q, s)) "")
+       txt (hot? q ? (slurp q @ s (close q, s)) "")
        (key l) (: f (filter (w \ 0 < #w) (split l 32))
                   b (2 <= #f ? (b64d (f 1)) "")
                   (<f = "ssh-ed25519" && #b = 51 && snip b 0 19 = sstr "ssh-ed25519" + u32 32
@@ -57,9 +57,9 @@
    (ssh-me _)
     (: uid (getuid 0)
        q (open "/etc/passwd" "r")
-       txt (hot? q ? (: s (slurp q) (close q, s)) "")
-       (find ls) (? (atom? ls) ()
-                    (: f (split <ls 58)
+       txt (hot? q ? (slurp q @ s (close q, s)) "")
+       (find ls) (atom? ls ? ()
+                    (split <ls 58 @ f
                        (7 <= #f && unum (f 2) = uid ? [(f 0) (f 5) (f 6)] (find >ls))))
        (find (split txt 10)))
    (sd-fpr pub) ("SHA256:" + b64e (sha (sstr "ssh-ed25519" + sstr pub)) 0)
@@ -76,7 +76,7 @@
        kx (g-names c) hk (g-names c) cs (g-names c) sc (g-names c)
        (? !(elem "curve25519-sha256" kx || elem "curve25519-sha256@libssh.org" kx)
           ("no common key exchange; the client offers " + join "," kx)
-          !(elem "ssh-ed25519" hk) ("no common host key type; the client takes " + join "," hk)
+          (nelem "ssh-ed25519" hk) ("no common host key type; the client takes " + join "," hk)
           !(elem cipher cs && elem cipher sc) ("no common cipher; the client offers " + join "," cs)
           (elem "kex-strict-c-v00@openssh.com" kx)))
    ; versions, kexinits, the ecdh reply signed by the host key, newkeys each way, and the
@@ -88,21 +88,21 @@
        _ (ssh-send t is)
        ic (string? vc ? (expect t 20) ())
        ok (? !(string? vc) "no version line" !(string? ic) "no kexinit" (sd-agree ic))
-       (? (string? ok) ok
+       (string? ok ? ok
           (: _ (pin t 'strict ok)                          ; strict kex: noise before newkeys ends it (ssh-next)
              e (expect t 30)
              (? !(string? e) "no key exchange"
                 (: c (cur e) _ (g-skip c 1) qc (g-str c)
                    priv (rnd 32) qs (x25519-pub priv)
                    shared (#qc = 32 ? (x25519 priv qc) (zeros 32))
-                   (? (shared = zeros 32) "degenerate key exchange"
+                   (shared = zeros 32 ? "degenerate key exchange"
                       (: hs (hk 0) hp (hk 1)
                          ks (sstr "ssh-ed25519" + sstr hp)
                          kk (mpint shared)
                          h (sha (sstr vc + sstr vsd + sstr ic + sstr is + sstr ks + sstr qc + sstr qs + kk))
                          _ (ssh-send t (u8 31 + sstr ks + sstr qs + sstr (sstr "ssh-ed25519" + sstr (ed-sign hs hp h))))
                          _ (pin t 'sid h)
-                         (kd x) (: k1 (sha (kk + h + x + h)) (k1 + sha (kk + h + k1)))
+                         (kd x) (sha (kk + h + x + h) @ k1 (k1 + sha (kk + h + k1)))
                          (pair k) [(snip k 0 32) (snip k 32 64)]
                          _ (ssh-send t (u8 21))
                          _ (pin t 'ck (pair (kd "D")))
@@ -112,7 +112,7 @@
                          _ (ok ? (pin t 'rseq 0) 0)
                          _ (pin t 'strict 0)
                          sr (string? nk ? (expect t 5) ())
-                         sv (string? sr ? (: c2 (cur sr) (g-skip c2 1, g-str c2)) "")
+                         sv (string? sr ? (cur sr @ c2 (g-skip c2 1, g-str c2)) "")
                          (? !(string? nk) "no newkeys"
                             (sv != "ssh-userauth") "no userauth service request"
                             (ssh-send t (u8 6 + sstr "ssh-userauth"), 1)))))))))
@@ -122,7 +122,7 @@
    ; a query (PK_OK when it would do); ten refusals and the door closes
    (sd-no t) (ssh-send t (u8 51 + names ["publickey"] + u8 0))
    (sd-auth t user keys n)
-    (: p (ssh-next t)
+    (ssh-next t @ p
        (? !(string? p) "closed during auth"
           (n < 1) "too many authentication failures"
           (p 0 != 50) "unexpected message during auth"
@@ -137,21 +137,21 @@
                       (sd-no t, sd-auth t user keys (n - 1))
                       !sig? (ssh-send t (u8 60 + sstr al + sstr blob), sd-auth t user keys n)
                       (: sc (cur (g-str c)) st (g-str sc) s64 (g-str sc)
-                         (? (st = "ssh-ed25519" && #s64 = 64 && ed-verify pk (sstr (t 'sid) + snip p 0 at) s64)
+                         (st = "ssh-ed25519" && #s64 = 64 && ed-verify pk (sstr (t 'sid) + snip p 0 at) s64 ?
                             (ssh-send t (u8 52), [pk])
                             (sd-no t, sd-auth t user keys (n - 1))))))))))
 
    ; --- the session channel ---
    ; s to the channel inside the peer's window and packet size, as data or (ext) as stderr
    (sd-data t ch s ext)
-    (: (go i) (? (#s <= i || ch 'dead) 0
-                 (: room (min (ch 'rmax) (ch 'rwin))
-                    (? (room < 1) (rest 5, go i)
+    (: (go i) (#s <= i || ch 'dead ? 0
+                 (min (ch 'rmax) (ch 'rwin) @ room
+                    (room < 1 ? (rest 5, go i)
                        (: n (min room (#s - i)) b (snip s i (i + n))
-                          _ (pin ch 'rwin (ch 'rwin - n))
-                          _ (ssh-send t (? ext (u8 95 + u32 (ch 'rch) + u32 1 + sstr b)
-                                           (u8 94 + u32 (ch 'rch) + sstr b)))
-                          (go (i + n))))))
+                          (pin ch 'rwin (ch 'rwin - n),
+                           ssh-send t (ext ? (u8 95 + u32 (ch 'rch) + u32 1 + sstr b)
+                                         (u8 94 + u32 (ch 'rch) + sstr b)),
+                           go (i + n))))))
        (go 0))
    ; a task of the session's own, trapped: an uncaught raise in a task ends the process, and
    ; this one serves every other connection too
@@ -160,21 +160,21 @@
    ; read never holds the process
    (sd-pump t ch p ext)
     (: _ (await p) c (see p)
-       (? (c = -1 || ch 'dead) 0
-          (: _ (unsee p c) s (chug p) _ (sd-data t ch s ext) (sd-pump t ch p ext))))
+       (c = -1 || ch 'dead ? 0
+          (: _ (unsee p c) s (chug p) (sd-data t ch s ext, sd-pump t ch p ext))))
    ; the output drained, then the status, eof and close
    (sd-finish t ch ports pid)
     (: e (two? >ports ? (sd-spawn (_ \ sd-pump t ch (ports 1) 1)) ())
        _ (sd-pump t ch <ports 0)
        _ (!e ? 0 (catch e))
        st (wait pid)
-       _ (pin ch 'in ())
-       _ (? (ch 'dead) 0
-            (ssh-send t (u8 98 + u32 (ch 'rch) + sstr "exit-status" + u8 0 + u32 (st & 255)),
-             ssh-send t (u8 96 + u32 (ch 'rch)),
-             pin ch 'closed 1,
-             ssh-send t (u8 97 + u32 (ch 'rch))))
-       (map close ports))
+       (pin ch 'in (),
+        ch 'dead ? 0
+          (ssh-send t (u8 98 + u32 (ch 'rch) + sstr "exit-status" + u8 0 + u32 (st & 255)),
+           ssh-send t (u8 96 + u32 (ch 'rch)),
+           pin ch 'closed 1,
+           ssh-send t (u8 97 + u32 (ch 'rch))),
+        map close ports))
    ; the login shell, or it running cmd; lush spells its login flag in full
    (sd-argv me cmd)
     (: sh (0 < #(me 2) ? (me 2) "/bin/sh")
@@ -184,25 +184,25 @@
    (sd-start t ch me cmd)
     (: argv (sd-argv me cmd)
        pt (ch 'pty)
-       (? (two? pt)
-          (: r (tetherenv argv [("TERM=" + pt 0)])       ; the child's TERM alone, never the server's
-             (? (atom? r) ("cannot start " + <argv + " (" + show r + ")")
-                (: m >r
+       (two? pt ?
+          (tetherenv argv [("TERM=" + pt 0)] @ r       ; the child's TERM alone, never the server's
+             (atom? r ? ("cannot start " + <argv + " (" + show r + ")")
+                (>r @ m
                    (settty m (pt 1) (pt 2),
                     pins ch 'pid <r 'in m 'tty 1,
                     sd-spawn (_ \ sd-finish t ch [m] <r),
                     1))))
           (: pi (pipe 0) po (pipe 0) pe (pipe 0)
              pid (spawnio argv <pi >po >pe [>pi <po <pe] -1 0)
-             _ (close <pi) _ (close >po) _ (close >pe)
-             (? !(charm? pid) (map close [>pi <po <pe], "cannot start " + <argv + " (" + show pid + ")")
-                (pins ch 'pid pid 'in (fdopen >pi) 'tty 0,
-                 sd-spawn (_ \ sd-finish t ch [(fdopen <po) (fdopen <pe)] pid),
-                 1)))))
+             (close <pi, close >po, close >pe,
+              (? !(charm? pid) (map close [>pi <po <pe], "cannot start " + <argv + " (" + show pid + ")")
+                 (pins ch 'pid pid 'in (fdopen >pi) 'tty 0,
+                  sd-spawn (_ \ sd-finish t ch [(fdopen <po) (fdopen <pe)] pid),
+                  1))))))
    (sd-open t c)
     (: kind (g-str c) rch (g-u32 c) rwin (g-u32 c) rmax (g-u32 c)
        (? (kind = "session" && !(t 'ch))
-          (: ch (tablet 16)
+          (tablet 16 @ ch
              (pins ch 'rch rch 'rwin rwin 'rmax rmax 'used 0 'dead 0 'closed 0,
               pin t 'ch ch,
               ssh-send t (u8 91 + u32 rch + u32 0 + u32 sd-win + u32 32768)))
@@ -218,11 +218,11 @@
           (nm = "window-change") (: cols (g-u32 c) rows (g-u32 c)
                                     (ch 'tty = 1 ? (settty (ch 'in) rows cols) 0))
           (nm = "shell" || nm = "exec")
-           (? (ch 'pid) (ack 0)
+           (ch 'pid ? (ack 0)
               (: cmd (nm = "exec" ? (g-str c) ())
                  _ (ack 1)
                  r (sd-start t ch me cmd)
-                 (? (r = 1) 0
+                 (r = 1 ? 0
                     (sd-log quiet r,
                      sd-data t ch ("sshd: " + r + "\r\n") 1,
                      ssh-send t (u8 98 + u32 (ch 'rch) + sstr "exit-status" + u8 0 + u32 127),
@@ -233,27 +233,27 @@
    ; the client's bytes to the program's stdin; our window reopened past its half
    (sd-in t ch c)
     (: _ (g-u32 c) d (g-str c)
-       (? !ch 0
+       (!ch ? 0
           (: p (ch 'in)
              _ (!p ? 0 (say p d, flush p))
              used (ch 'used + #d)
-             (? (sd-win // 2 < used) (ssh-send t (u8 93 + u32 (ch 'rch) + u32 used), pin ch 'used 0)
+             (sd-win // 2 < used ? (ssh-send t (u8 93 + u32 (ch 'rch) + u32 used), pin ch 'used 0)
                 (pin ch 'used used)))))
    ; eof closes a pipe's stdin; a pty has no half-close, so there it waits for the close
    (sd-eof ch) (!ch || !(ch 'in) || ch 'tty = 1 ? 0 (close (ch 'in), pin ch 'in ()))
    ; the connection's messages until the channel closes or the client goes
    (sd-conn t me quiet)
-    (: p (ssh-next t)
+    (ssh-next t @ p
        (? !(string? p) 0
           (: ty (p 0) c (cur p) _ (g-skip c 1) ch (t 'ch)
-             _ (? (ty = 90) (sd-open t c)
-                  (ty = 98) (sd-req t ch c me quiet)
-                  (ty = 94) (sd-in t ch c)
-                  (ty = 93) (!ch ? 0 (g-u32 c, pin ch 'rwin (ch 'rwin + g-u32 c)))
-                  (ty = 96) (sd-eof ch)
-                  (ty = 20) (ssh-send t (u8 1 + u32 11 + sstr "rekeying is not supported" + sstr ""))
-                  0)
-             (ty = 97 || ty = 20 ? 0 (sd-conn t me quiet)))))
+             ((? (ty = 90) (sd-open t c)
+                 (ty = 98) (sd-req t ch c me quiet)
+                 (ty = 94) (sd-in t ch c)
+                 (ty = 93) (!ch ? 0 (g-u32 c, pin ch 'rwin (ch 'rwin + g-u32 c)))
+                 (ty = 96) (sd-eof ch)
+                 (ty = 20) (ssh-send t (u8 1 + u32 11 + sstr "rekeying is not supported" + sstr ""))
+                 0),
+              ty = 97 || ty = 20 ? 0 (sd-conn t me quiet)))))
    ; one connection, start to end; a program still running when the client goes is hung up on
    (sd-session c hk keys me quiet)
     (: t (tablet 16)
@@ -261,30 +261,30 @@
        _ (sd-spawn (_ \ (rest sd-grace, t 'authed ? 0 (close c))))   ; drop a still-unauthed connection (wakes its parked read; sd-loop's later close is a no-op)
        h (sd-hello t hk)
        a (h = 1 ? (sd-auth t (me 0) keys 10) h)
-       _ (string? a ? 0 (pin t 'authed 1))
-       (? (string? a) (sd-log quiet ("connection closed: " + a))
+       (string? a ? 0 (pin t 'authed 1),
+        string? a ? (sd-log quiet ("connection closed: " + a))
           (: _ (sd-log quiet ("accepted publickey for " + me 0 + " " + sd-fpr <a))
              _ (sd-conn t me quiet)
              ch (t 'ch)
-             _ (? !ch 0
-                  (pin ch 'dead 1,
-                   ch 'closed = 1 ? 0 (ssh-send t (u8 97 + u32 (ch 'rch))),
-                   !(ch 'pid) ? 0 (still (ch 'pid) 1)))
-             (sd-log quiet ("session for " + me 0 + " ended")))))
+             (!ch ? 0
+                (pin ch 'dead 1,
+                 ch 'closed = 1 ? 0 (ssh-send t (u8 97 + u32 (ch 'rch))),
+                 !(ch 'pid) ? 0 (still (ch 'pid) 1)),
+              sd-log quiet ("session for " + me 0 + " ended")))))
 
    ; --- the loop, kiosko's shape: park on the listener, a task per client, the ended collected ---
    (sd-drain _) (two? (scoop 0) ? (sd-drain 0) 0)
    (sd-loop l hk keys me quiet)
     (: _ (await l)
        c (accept l)
-       _ (sd-drain 0)
-       _ (? (hot? c)
-            (twirl (_ \ (: r (trap (c \ sd-session c hk keys me quiet) c
-                                  (a \ b \ sd-log quiet ("session failed: " + show a)))
-                           (seal c 1, close c))) ()) 0)
-       (sd-loop l hk keys me quiet))
+       (sd-drain 0,
+        hot? c ?
+          (twirl (_ \ (: r (trap (c \ sd-session c hk keys me quiet) c
+                                (a \ b \ sd-log quiet ("session failed: " + show a)))
+                         (seal c 1, close c))) ()) 0,
+        sd-loop l hk keys me quiet))
    (sshd-serve port hk keys me quiet)
-    (: l (listen port)
+    (listen port @ l
        (? !(hot? l) l
           (sd-log quiet ("listening on port " + show port + ", host key " + sd-fpr (hk 1)),
            sd-loop l hk keys me quiet)))

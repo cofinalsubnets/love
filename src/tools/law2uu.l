@@ -47,26 +47,24 @@
 ; BUILD, and stdout is the artifact -- so bind assert's instead: silent on success,
 ; and a false law stops the run rather than printing a dot into the output.
 (:: 'test (\ l (. 'assert l)))
-(: j (jug 0) _ (wear [in j err])
-   _ (reads (open "test/uu.l" "r"))
-   _ (reads (open "test/uuval.l" "r"))
-   _ (wear ()) ())
+(jug 0 @ j (wear [in j err], reads (open "test/uu.l" "r"), reads (open "test/uuval.l" "r"),
+            wear (), ()))
 
 (:
    nl (string 10)
    (join l) (foldl (+) "" l)
    (pl s) (puts (s + nl))
-   (idxin x l k) (? (! (two? l)) -1 (<l = x) k (idxin x >l (k + 1)))
-   (look k tbl) (? (! (two? tbl)) () (<<tbl = k) <tbl (look k >tbl))
+   (idxin x l k) (? !(two? l) -1 (<l = x) k (idxin x >l (k + 1)))
+   (look k tbl) (? !(two? tbl) () (<<tbl = k) <tbl (look k >tbl))
    (zero? e) (charm? e && e = 0)
    (one? e) (charm? e && e = 1)
-   (same? a b) ((show a) = (show b))
+   (same? a b) (show a = show b)
    ; an operator head is matched by its spelling: the lambda sigil has no quote
    ; form to compare against, and neither `?` nor `:` reads back as a bare nom.
-   (is? x s) (nom? x && (string x) = s)
+   (is? x s) (nom? x && string x = s)
    (hd? e s) (two? e && is? <e s)
    bs (intern "\\")
-   (unq x) (? (two? x && (<x = bs)) (x 1) x)     ; reads shows a quote as (\ ..)
+   (unq x) (two? x && <x = bs ? (x 1) x)         ; reads shows a quote as (\ ..)
 
    ; --- the tower, as a type oracle: the levels, and the rung between each pair ---
    lv-order '(bool nat zed rea msr val)
@@ -77,8 +75,8 @@
    (co t f g)
     (? (f = g) t
        (g = 'val) [(look f to-val 1) t]
-       ((ht f) < (ht g)) (: r (look f up-rungs) (co [(r 1) t] (r 2) g))
-       (: r (look f dn-rungs) (co [(r 1) t] (r 2) g)))
+       (ht f < ht g) (look f up-rungs @ r (co [(r 1) t] (r 2) g))
+       (look f dn-rungs @ r (co [(r 1) t] (r 2) g)))
 
    ; --- the word map: each love word, the level it wants, its model name, its
    ; --- answer. love's ceil/saturate/bit/nil? read a whole value (they compose
@@ -95,7 +93,7 @@
    (bad r) [0 r]
    (won? r) (two? r && one? <r)
    (un1 a env want mk res)
-    (: r (tx a env) (? (! (won? r)) r (ok (mk (co (r 1) (r 2) want)) res)))
+    (tx a env @ r (!(won? r) ? r (ok (mk (co (r 1) (r 2) want)) res)))
    (un2 e env w)
     (: A (tx (e 1) env) B (tx (e 2) env)
        (? (! (won? A)) A (! (won? B)) B
@@ -106,28 +104,28 @@
    (eqof e env)
     (: A (tx (e 1) env) B (tx (e 2) env)
        (? (! (won? A)) A (! (won? B)) B
-          (: la (A 2) lb (B 2) L (? ((ht la) < (ht lb)) lb la)
+          (: la (A 2) lb (B 2) L (ht la < ht lb ? lb la)
              ta (co (A 1) la L) tb (co (B 1) lb L)
              (? (L = 'bool) (ok ['beqb ta tb] 'bool)
                 (L = 'nat)  (ok ['nateqb ta tb] 'bool)
                 (ok ['veq (co ta L 'val) (co tb L 'val)] 'bool)))))
    ; a guard the tower can read stays: it becomes the implication it was
    (guard-orb e env)
-    (: P (tx (e 1) env)
-       (? (! (won? P)) P
+    (tx (e 1) env @ P
+       (!(won? P) ? P
           (: yes (one? (e 2))
-             E (tx (? yes (e 3) (e 2)) env)
-             (? (! (won? E)) E
-                (: p (co (P 1) (P 2) 'bool)
-                   (ok ['orb (? yes p ['negb p]) (co (E 1) (E 2) 'bool)] 'bool))))))
+             E (tx (yes ? (e 3) (e 2)) env)
+             (!(won? E) ? E
+                (co (P 1) (P 2) 'bool @ p
+                   (ok ['orb (yes ? p ['negb p]) (co (E 1) (E 2) 'bool)] 'bool))))))
    ; (? (< 0 E) E 0) at the integers is the clamp -- saturate's own shape
    (clamp? e)
-    (: c (e 1)
+    (e 1 @ c
        (hd? c "<" && #c = 3 && zero? (c 1)
         && same? (c 2) (e 2) && zero? (e 3)))
    (tx e env)
     (? (charm? e) (ok e 'nat)
-       (nom? e) (: p (look e env) (? (two? p) (ok (p 1) (p 2)) (bad (show e))))
+       (nom? e) (look e env @ p (two? p ? (ok (p 1) (p 2)) (bad (show e))))
        (e = ()) (ok 'vnilv 'val)                       ; the empty list is the model's ()
        (! (two? e)) (bad (show e))
        (: h <e n #e w (look h wordmap) w2 (look h wordmap2)
@@ -150,30 +148,30 @@
    ; --- the claim. a guard that erases is reported, never dropped in silence.
    (guard1? b) (hd? b "?" && #b = 4 && (one? (b 2) || one? (b 3)))
    ; only a guard the tower cannot read erases; one it can becomes an orb above
-   (peel b env) (? (guard1? b && ! (won? (tx (b 1) env)))
-                   [(peel (? (one? (b 2)) (b 3) (b 2)) env 0) (show (b 1))]
+   (peel b env) (guard1? b && !(won? (tx (b 1) env))
+                 ? [(peel (one? (b 2) ? (b 3) (b 2)) env 0) (show (b 1))]
                    [b ()])
    (letish? b) (hd? b ":" && #b = 4 && nom? (b 1))
 
    ; --- claim: the translated obligation body, and its left side ---
    (claim b env)
     (? (letish? b)
-        (: r (tx (b 2) env)
-           (? (! (won? r)) r
+        (tx (b 2) env @ r
+           (!(won? r) ? r
               (claim (b 3) ([(b 1) (r 1) (r 2)] . env))))
        (hd? b "=" && #b = 3)
         (: A (tx (b 1) env) B (tx (b 2) env)
            (? (! (won? A)) A (! (won? B)) B
               (: la (A 2) lb (B 2)
-                 L (? ((ht la) < (ht lb)) lb la)
+                 L (ht la < ht lb ? lb la)
                  ta (co (A 1) la L) tb (co (B 1) lb L)
                  ; at val the claim is veq's; below it the carrier is canonical
-                 (? (L = 'val) (: q ['veq ta tb] [1 ['paths 'bool q 'true] q])
+                 (L = 'val ? (['veq ta tb] @ q [1 ['paths 'bool q 'true] q])
                     [1 ['paths L ta tb] ta]))))
        ; anything else the tower reads as a bool is the claim "..and it is true"
        (: r (tx b env)
           (? (won? r && r 2 = 'bool) [1 ['paths 'bool (r 1) 'true] (r 1)]
-             (won? r) (bad ("a claim at the " + (string (r 2)) + " rung"))
+             (won? r) (bad ("a claim at the " + string (r 2) + " rung"))
              (bad (? (hd? b ":") "a (: ..) binding the tower cannot follow"
                      (two? b) (show <b)
                      (show b))))))
@@ -181,45 +179,45 @@
    ; --- a range check is not an obligation: the tower already assigns the
    ; --- codomain, so (|| (= b 0) (= b 1)) and (&& (<= 0 s) (charm? s)) have
    ; --- nothing left to say. detected by shape, answered by the type.
-   (unlet b env) (? (letish? b)
-                    (: r (tx (b 2) env)
-                       (? (! (won? r)) ()
+   (unlet b env) (letish? b
+                  ? (tx (b 2) env @ r
+                       (!(won? r) ? ()
                           (unlet (b 3) ([(b 1) (r 1) (r 2)] . env))))
                     [b env])
    (eq0? c) (hd? c "=" && #c = 3 && zero? (c 2))
    (eq1? c) (hd? c "=" && #c = 3 && one? (c 2))
    (bool-range? e) (hd? e "||" && #e = 3 && eq0? (e 1) && eq1? (e 2))
    (nat-range? e) (hd? e "&&" && #e = 3
-                   && (: c (e 1) (hd? c "<=" && zero? (c 1)))
+                   && (e 1 @ c (hd? c "<=" && zero? (c 1)))
                    && (hd? (e 2) "charm?"))
    (range? b env)
-    (: c (unlet (peel b env 0) env)
-       (? (! (two? c)) ()
+    (unlet (peel b env 0) env @ c
+       (!(two? c) ? ()
           (: e (c 0) en (c 1)
-             (? (! (bool-range? e) && ! (nat-range? e)) ()
-                (: inner (? (bool-range? e) (e 1 1) (e 1 2))
+             (!(bool-range? e) && !(nat-range? e) ? ()
+                (: inner (bool-range? e ? (e 1 1) (e 1 2))
                    r (tx inner en)
-                   (? (won? r) (r 2) ()))))))
+                   (won? r ? (r 2)))))))
 
    ; --- the kernel, live: a strategy is tried, not asserted ---
    dq (uu 'defq)
-   _ (hear (\ p e (: h (peep HELPC () 0) (? h (h p e) 0))))
+   _ (hear (\ p e (peep HELPC () 0 @ h (h ? (h p e) 0))))
    (checks? nm ty tm) ('accepted = rejects (\ z (dq nm ty tm)))
 
    ; --- the rows ---
    fs (forms (open "test/law.l" "r"))
    (findb l) (? !(two? l) () (<l = 'law-rows) (l 1) (findb >l))
    rows >(findb >(<fs))
-   (qstrip s) (: (go i) (? (i = #s) ""
+   (qstrip s) (: (go i) (i = #s ? ""
                             ((? (s i = 63) "q" (s i = 61) "eq" (string (s i))) + go (i + 1)))
                  (go 0))                                 ; ? is no name character downstream
    ; unglue maps a head VALUE to the operator's own word; a head spelled in source
    ; arrives as a nom and misses that lookup, so an alias (`saturate` onto `sat`)
    ; would read as a different form from the sigil that means it. resolve the nom
    ; through the book first -- only a name the book holds, never a lambda's param.
-   bk (foldl (\ t n (pin t n 1)) (tablet 0) (names ()))
-   (opn h) (: v (? (nom? h && peep bk h 0) (ev h) 0) n (? v (opnom v) 0) (? (nom? n) n h))
-   (canon f) (? (two? f) ((opn <f) . (map canon >f)) f)
+   bk (foldl (\ t n (pin t n 1)) {} (names ()))
+   (opn h) (: v (nom? h && peep bk h 0 ? (ev h) 0) n (v ? (opnom v) 0) (nom? n ? n h))
+   (canon f) (two? f ? (opn <f . map canon >f) f)
    (surface? b) (hd? b "=" && #b = 3 && same? (b 1) (b 2))
 
    ; --- one row, all the way to [nm src type proof how guard], [nm 'range level]
@@ -284,9 +282,9 @@
    ; the cases proof wears its four operands one to a line: the motive is the
    ; obligation again at (nval n), and reading them stacked is the point
    (proofof d)
-    (: p (d 3)
-       (? (d 4 != 'cases) ("   " + (show p) + ")")
-          (: nr (p 2)
+    (d 3 @ p
+       (d 4 != 'cases ? ("   " + show p + ")")
+          (p 2 @ nr
              (join ["   (lam v (nat_rect " (show (nr 1)) nl
                     "                     " (show (nr 2)) nl
                     "                     " (show (nr 3)) nl
@@ -299,36 +297,36 @@
    ; claim stands alone, the bridge restates it over the pinned carrier, which
    ; is mechanical: the same law, as an equality rather than a decision.
    (veqclaim? ty)
-    (: c (ty 3)
+    (ty 3 @ c
        (#c = 4 && c 0 = 'paths && c 1 = 'bool
         && c 3 = 'true
         && (: q (c 2) (two? q && #q = 3 && q 0 = 'veq))))
    (twinof d)
-    (? !(veqclaim? (d 2)) 0
+    (!(veqclaim? (d 2)) ? 0
        (: q (d 2 3 2) ta (q 1) tb (q 2)
           g (intern ("law-" + (qstrip (show (d 0)))))
           (pl " ; ..and the same law over the pinned carrier, by the bridge",
            pl (" (defq law-" + qstrip (show (d 0)) + "-p"),
            pl ("   " + show ['pi 'v 'val ['paths 'pval ['pin ta] ['pin tb]]]),
            pl ("   " + show ['lam 'v ['uv-veq-paths ta tb [g 'v]]] + ")"))))
-   _ (map (\ d (pl (join [" ; " (show (d 0)) "   " (srcof d)]),
-                 pl (join [" ; " (howof d)
-                           (d 5 = () ? "" ("; the guard " + (d 5) + " erases"))]),
-                 pl (" (defq law-" + qstrip (show (d 0))),
-                 pl ("   " + show (d 2)),
-                 pl (proofof d),
-                 twinof d))
-          proved)
-   _ (pl ")")
-   _ (pl "")
-   _ (pl "; --- rows whose codomain is the proof: the tower assigns the type, so the")
-   _ (pl "; --- range check has nothing left to state ---")
-   _ (map (\ d (pl (join [" ;   " (pad (show (d 0)) 14) "lands in " (d 2)]))) ranged)
-   _ (pl "")
-   _ (pl "; --- off the model, with the reason (skipped and counted, never dropped) ---")
-   _ (map (\ d (pl (join [" ;   " (pad (show (d 0)) 14) (d 2)]))) missed)
-   _ (pl "")
-   _ (pl (join [" ; " (show #proved) " obligations / " (show #rows)
-                " law rows; " (show #ranged) " carried by a type, "
-                (show #missed) " off the model."]))
-   (quit 0))
+   (map (\ d (pl (join [" ; " (show (d 0)) "   " (srcof d)]),
+               pl (join [" ; " (howof d)
+                         (d 5 = () ? "" ("; the guard " + (d 5) + " erases"))]),
+               pl (" (defq law-" + qstrip (show (d 0))),
+               pl ("   " + show (d 2)),
+               pl (proofof d),
+               twinof d))
+        proved,
+    pl ")",
+    pl "",
+    pl "; --- rows whose codomain is the proof: the tower assigns the type, so the",
+    pl "; --- range check has nothing left to state ---",
+    map (\ d (pl (join [" ;   " (pad (show (d 0)) 14) "lands in " (d 2)]))) ranged,
+    pl "",
+    pl "; --- off the model, with the reason (skipped and counted, never dropped) ---",
+    map (\ d (pl (join [" ;   " (pad (show (d 0)) 14) (d 2)]))) missed,
+    pl "",
+    pl (join [" ; " (show #proved) " obligations / " (show #rows)
+              " law rows; " (show #ranged) " carried by a type, "
+              (show #missed) " off the model."]),
+    quit 0))

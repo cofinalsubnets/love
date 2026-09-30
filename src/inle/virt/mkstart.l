@@ -1,19 +1,12 @@
-; src/inle/virt/mkstart.l -- lay start.o for the qemu-virt (rv64) port: the one
-; piece of the image that is not C, and even it is holo IR, not foreign asm.
-; the board's mask ROM jumps to the DRAM base (0x80000000) with everything at
-; reset defaults -- sp is garbage, the FPU is OFF (mstatus.FS = 0), mtvec
-; points nowhere. the driver's crt0 sits at that address (the -Ttext trick in
-; the Makefile) and its first act is `call __ai_start` -- so this object
-; overrides __ai_start STRONG (the same weak seam moonlibc uses) and does the
-; three things C cannot: pin sp, open the FPU, aim mtvec at a fault tail that
-; hands mcause/mepc to main.c's fault_report (exit 98 -- loud, never a silent
-; trap loop). the CSR instructions ride the 'raw escape (holo carries no Zicsr
-; rows -- these four words are the only ones the tree needs).
-;
-; runs after src/love/holo/{elf,obj}.l in a cat with the riscv backend spliced
-; into the sealed holo module (the mksys-rv64 shape; src/inle/virt/Makefile).
+; src/inle/virt/mkstart.l -- lay start.o for the qemu-virt (rv64) port, in holo IR. the mask ROM
+; jumps to the DRAM base with sp garbage, the FPU off and mtvec nowhere; the driver's crt0 there
+; calls __ai_start, which this object overrides strong (moonlibc's weak seam) to pin sp, open the
+; FPU, and aim mtvec at a fault tail that hands mcause/mepc to main.c's fault_report. the CSR
+; instructions ride 'raw, since holo carries no Zicsr rows.
+; runs after src/love/holo/{elf,obj}.l in a cat with the riscv backend spliced into the sealed
+; holo module (src/inle/virt/Makefile).
 (: ;; csr rd rs1: the Zicsr I-form (opcode 0x73) -- f3 2 = csrrs, 1 = csrrw
-   (csrw f3 rd rs1 csr) ((csr << 20) | ((rs1 << 15) | ((f3 << 12) | ((rd << 7) | 0x73))))
+   (csrw f3 rd rs1 csr) (csr << 20 | (rs1 << 15 | (f3 << 12 | (rd << 7 | 0x73))))
    (mkstart dst)
     (: fsen (le32 (csrw 2 0 5 768))     ; csrrs x0, mstatus, t0 -- FS on (0x300)
        mtv  (le32 (csrw 1 0 5 773))     ; csrrw x0, mtvec, t0   -- direct mode (0x305)
@@ -27,7 +20,7 @@
            ['raw mtv]
            ['call 'main]
            ['label 'spin] ['jmp 'spin]
-            ;; the machine-trap tail: a fresh stack (the faulting one may BE
+            ;; the machine-trap tail: a fresh stack (the faulting one may be
             ;; the fault), cause and pc into the argument file, then C.
            ['label '__ai_trap]
            ['li 'sp 2181038080]

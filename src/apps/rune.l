@@ -17,7 +17,7 @@
    (mkey m) >m
    ; an integer-valued coin demotes to its numerator, so = stays structural across Z and Q
    ; and the zero-drop is the plain (c = 0). never ! a coefficient: a red one nets nothing
-   (cnorm c) (!(coin? c) ? c (: p (load c) (1 = <>p ? <p c)))
+   (cnorm c) (!(coin? c) ? c (load c @ p (1 = <>p ? <p c)))
    (keylt a b) (? (0 = #a) 0 (<a < <b) 1 (<b < <a) 0 (keylt >a >b))   ; the lex key order
    (padd p1 p2) (? (0 = #p1) p2
                    (0 = #p2) p1
@@ -37,7 +37,7 @@
    (setn l n x) (n @ 0 (x . >l) (<l . setn >l (n - 1) x))
    (deln l n) (n @ 0 >l (<l . deln >l (n - 1)))
    (zeros n) (n @ 0 () (0 . zeros (n - 1)))
-   (pconst n c) (: k (cnorm c) (? (k = 0) () [(k . zeros n)]))
+   (pconst n c) (cnorm c @ k (k = 0 ? () [(k . zeros n)]))
    (pvar n k) [(1 . setn (zeros n) k 1)])
 
 ; --- the derivative and the determinant ------------------------------------
@@ -45,7 +45,7 @@
 (: (pd p v) (#p ?  (: mm <p e (mkey mm v) r (pd >p v)
                     (e = 0 ? r (padd [(cnorm (mco mm * e) . setn (mkey mm) v (e - 1))] r))))
    (pdet rows) (#rows @ 1 <<rows (:- (go <rows 0 1)   ; along the first row, minors by deln
-                (go r0 j sg) (#r0 ?  (: t (pmul <r0 (pdet (map (r \ deln r j) >rows)))
+                (go r0 j sg) (#r0 ?  (pmul <r0 (pdet (map (r \ deln r j) >rows)) @ t
                                       (padd (sg = 1 ? t (pneg t)) (go >r0 (j + 1) -sg)))))))
 
 ; --- gcd & squarefree factorization: euclid in Q[x], answers monic ----------
@@ -61,7 +61,7 @@
                  (pmod (psub a (pmul (pquo a b) b)) b))
    (pquot a b) (? (0 = #a) ()
                   (pdeg a < pdeg b) ()
-                  (: t (pquo a b)
+                  (pquo a b @ t
                      (padd t (pquot (psub a (pmul t b)) b))))
    (pgcd a b) (: x (load a) y (load b)       ; monic is unique in Q[x]: the units divide out
                (0 = #y ? (pmonic x) (pgcd y (pmod x y))))
@@ -72,8 +72,8 @@
                          (: z (psub y (pd w 0))
                             a (pgcd w z)
                           (a . go (pquot w a) (pquot z a))))
-               (? (0 = #f || 0 = pdeg f) ()
-                (: g (pgcd f (pd f 0))
+               (0 = #f || 0 = pdeg f ? ()
+                (pgcd f (pd f 0) @ g
                  (go (pquot f g) (pquot (pd f 0) g))))))
 
 ; --- multivariate gcd: Q[x..] as (Q[y..])[x], the primitive prs -------------
@@ -86,8 +86,8 @@
    (me1s p) (#p @ 0 () (: e <(mkey <p) (e . me1s (filter (m \ e != <(mkey m)) >p))))
    ; exact lex division: how the content splits off
    (mdiv f d) (#f @ 0 ()
-               (: t [(. (cnorm (mco <f * cinv (mco <d)))
-                           (ksub (mkey <f) (mkey <d)))]
+               ([(. (cnorm (mco <f * cinv (mco <d)))
+                       (ksub (mkey <f) (mkey <d)))] @ t
                 (padd t (mdiv (psub f (pmul t d)) d))))
    ; the pseudo-remainder cross-multiplies the lead coefficients, so the top term cancels
    ; exactly with no coefficient division
@@ -101,14 +101,14 @@
                 (go >es (mcof p <es)))
    (mpp p) (mdiv p (mlift (mcont p) 0))   ; the primitive half
    (mgcd a b) (: x (load a) y (load b)
-                 (go f g) (: r (mprem f g)
+                 (go f g) (mprem f g @ r
                              (? (0 = #r) g
                                 (0 = pdeg r) (pconst #(mkey <g) 1)   ; coprime in x
                                 (go g (mpp r))))
                  (? (0 = #x) (pmonic y)
                     (0 = #y) (pmonic x)
                     (1 = #(mkey <x)) (pgcd x y)
-                    (: c (mgcd (mcont x) (mcont y))
+                    (mgcd (mcont x) (mcont y) @ c
                        (pmonic (pmul (mlift c 0) (go (mpp x) (mpp y))))))))   ; content-gcd times primitive-gcd
 
 ; --- rational roots: factorization's first rung ------------------------------
@@ -116,7 +116,7 @@
 ; is thereby irreducible over Q -- a factor would be linear; degree 4 up it merely has no
 ; rational roots, and says so honestly.
 (: (pden c) (coin? c ? <>(load c) 1)
-   (pint f) (: cs (filter (m \ coin? (mco m)) f)   ; clears denominators: roots are scale-blind
+   (pint f) (filter (m \ coin? (mco m)) f @ cs ; clears denominators: roots are scale-blind
              (#cs @ 0 f (pint (pmul [(pden (mco <cs) . '(0))] f))))
    (divs n) (: m (n < 0 ? -n n)
                (go i acc) (? (i * i > m) acc
@@ -125,12 +125,12 @@
                              (go (i + 1) acc))
                (go 1 ()))
    (flat ls) (#ls ? (<ls + flat >ls))
-   (peval f r) (#f @ 0 0 (cnorm ((mco <f * ((<(mkey <f)) r)) + peval >f r)))   ; powers by application
+   (peval f r) (#f @ 0 0 (cnorm (mco <f * ((<(mkey <f)) r) + peval >f r)))   ; powers by application
    (plast f) (0 = #>f ? <f (plast >f))
    (plin r) (r = 0 ? [(1 . '(1))] [(1 . '(1)) (cnorm -r . '(0))])
    ; candidates are +-n/d, n dividing the constant and d the lead; the part is squarefree,
    ; so every hit is simple and divides out once
-   (rroots f) (: g (pint f)
+   (rroots f) (pint f @ g
                  (? (0 = #g || 0 = pdeg g) ()
                     (0 < <(mkey (plast g))) (0 . rroots (pquot g [(1 . '(1))]))
                     (: cds (: ns (divs (mco (plast g)))
@@ -156,7 +156,7 @@
 ; one is needed; iv* the same over Z, unreduced; tovec/topoly cross to the monomial lists.
 (: (zmod m x) (x % m @ r (r < 0 ? (r + m) r))
    (zcen m x) (zmod m x @ r (m < (r + r) ? (r - m) r))   ; centered: recombination divides over Z
-   (vtrim v) (#v ? (: r (vtrim >v) (0 = #r && 0 = <v ? () (<v . r))))
+   (vtrim v) (#v ? (vtrim >v @ r (0 = #r && 0 = <v ? () (<v . r))))
    (vpadn n v) (v + (n - #v) (. 0) ())
    (fvshift k v) (k (. 0) v)
    (fvadd m a b) (vtrim (: (go a b) (? (0 = #a) b
@@ -172,7 +172,7 @@
    (fvdeg v) (#v - 1)
    (finv m c) (zmod m ((m - 2) (zmod m c)))   ; fermat, m prime
    (fvdm m a b) (: (go u qq)
-                   (? (0 = #u || fvdeg u < fvdeg b) [qq u]
+                   (0 = #u || fvdeg u < fvdeg b ? [qq u]
                       (: c (zmod m (fvlead u * finv m (fvlead b)))
                          k (fvdeg u - fvdeg b)
                          (go (fvsub m u (fvscale m c (fvshift k b)))
@@ -181,7 +181,7 @@
    (fvquo m a b) <(fvdm m a b)
    (fvrem m a b) <>(fvdm m a b)
    (fvgcd m a b) (#b @ 0 (fvscale m (finv m (fvlead a)) a) (fvgcd m b (fvrem m a b)))
-   (fvegcd m a b) (#b @ 0 (: c (finv m (fvlead a)) [(fvscale m c a) [c] ()])   ; bezout, for the lift
+   (fvegcd m a b) (#b @ 0 (finv m (fvlead a) @ c [(fvscale m c a) [c] ()])   ; bezout, for the lift
                    (: dm (fvdm m a b)
                       e3 (fvegcd m b <>dm)
                     [<e3 <>>e3 (fvsub m <>e3 (fvmul m <dm <>>e3))]))
@@ -232,8 +232,8 @@
          (? (#fs2 = r) fs2
             (s = p) fs2
             (go (s + 1)
-                (flat (map (u \ (? (fvdeg u < 2) [u]
-                                   (: g (fvgcd p u (fvsub p <vs (vtrim [(zmod p s)])))
+                (flat (map (u \ (fvdeg u < 2 ? [u]
+                                   (fvgcd p u (fvsub p <vs (vtrim [(zmod p s)])) @ g
                                       (0 = fvdeg g || fvdeg g = fvdeg u ? [u]
                                        [g (fvquo p u g)]))))
                           fs2))))
@@ -258,7 +258,7 @@
                       s <>e3
                       t <>>e3
                       (go pk gg hh)
-                      (? (P <= pk) [gg hh]
+                      (P <= pk ? [gg hh]
                          (: ep (vtrim (map (c \ zmod p (cnorm (c /// pk)))
                                            (ivsub f (ivmul gg hh))))
                             dm (fvdm p (fvmul p t ep) gp)
@@ -270,7 +270,7 @@
    ; ... and pairwise up a tree, for the whole list
    (hliftn P p f gs)
    (#gs @ 1 [(vtrim (map (c \ zmod P c) f))] t
-    (: hn (cnorm ((t - (t % 2)) /// 2))
+    (: hn (cnorm ((t - t % 2) /// 2))
        ga (ltake hn gs)
        gb (ldrop hn gs)
        gh (hl2 P p f (fvprod p ga) (fvprod p gb))
@@ -285,7 +285,7 @@
    (zrec s P F ls acc)
     (s + s > #ls ? (pdeg F @ 0 acc (F . acc))
      (: (try cs) (#cs ?
-                  (: cand (topoly (map (zcen P) (fvprod P <cs)))
+                  (topoly (map (zcen P) (fvprod P <cs)) @ cand
                    (#(pmod F cand) @ 0 [cand <cs] (try >cs))))
         h (try (combs s ls))
         (#h @ 0 (zrec (s + 1) P F ls acc)
@@ -300,22 +300,22 @@
    (habs v) (:- (go v 0) (go l m2) (#l @ 0 m2 (: a (<l < 0 ? -<l <l) (go >l (m2 < a ? a m2)))))
    (zfac F) (: n (pdeg F)
                p (pickp F primes)
-               (? !p [F]
-                  (: bfs (bk p (vtrim (map (zmod p) (tovec F))))
+               (!p ? [F]
+                  (bk p (vtrim (map (zmod p) (tovec F))) @ bfs
                      (#bfs @ 1 [F]
                       (: fv (tovec F)
                          B ((n + 1) * n 2 * habs fv)   ; a generous mignotte bound: bignums make the overshoot free
                          P (:- (go p) (go pk) (B + B < pk ? pk (go (pk * p))))   ; lift until p^K > 2B
                        (zrec 1 P F (hliftn P p fv bfs) ()))))))
    ; the monic reduction and back: msub1 lays F, msub2 maps a factor home
-   (pdeep f) (? (pdeg f < 4) [f]
+   (pdeep f) (pdeg f < 4 ? [f]
                 (: g (pint f)
                    L (mco <g)
                    n (pdeg g)
                    (map (G \ pmonic (msub2 G L))
                         (zfac (msub1 g L n)))))
    (msub1 g L n) (map (m2 \ (: e <(mkey m2)
-                               (. (? (e = n) 1 (mco m2 * ((n - 1 - e) L)))
+                               (. (e = n ? 1 (mco m2 * ((n - 1 - e) L)))
                                      (mkey m2))))
                       g)
    (msub2 G L) (map (m2 \ cnorm (mco m2 * <(mkey m2) L) . mkey m2) G)
@@ -359,11 +359,11 @@
    (m2dm f d) (: (go u qq)
                  (? (0 = #u) [qq ()]
                     (pdeg u < pdeg d) [qq u]
-                    (: t2 (mlift (mcof u (pdeg u)) (pdeg u - pdeg d))
+                    (mlift (mcof u (pdeg u)) (pdeg u - pdeg d) @ t2
                        (go (psub u (pmul t2 d)) (padd t2 qq))))
                  (go f ()))
    ; bezout over Q[x], once: the same u/w identity as the integer lift
-   (pegcd a b) (#b @ 0 (: c (cinv (mco <a)) [(pmonic a) [(c . '(0))] ()])
+   (pegcd a b) (#b @ 0 (cinv (mco <a) @ c [(pmonic a) [(c . '(0))] ()])
                 (: qq (pquot a b)
                    e3 (pegcd b (pmod a b))
                  [<e3 <>(>e3) (psub <>e3 (pmul qq <>(>e3)))]))
@@ -371,8 +371,8 @@
                          (: z (psub y (pd w 0))
                             a2 (mgcd w z)
                           (a2 . go (mdiv w a2) (mdiv z a2))))
-               (? (0 = #f || 0 = pdeg f) ()
-                (: g (mgcd f (pd f 0))
+               (0 = #f || 0 = pdeg f ? ()
+                (mgcd f (pd f 0) @ g
                    (go (mdiv f g) (mdiv (pd f 0) g)))))
    ; the lift, pairwise in powers of y
    (hl22 K g G H) (: e3 (pegcd G H)
@@ -390,7 +390,7 @@
                      (go 1 (a1to2 0 G) (a1to2 0 H)))
    (hliftn2 K g us) (#us @ 1 [(ytrunc K g)]
                      (: t2 #us
-                        hn (cnorm ((t2 - (t2 % 2)) /// 2))
+                        hn (cnorm ((t2 - t2 % 2) /// 2))
                         ua (ltake hn us)
                         ub (ldrop hn us)
                         (prodl l) (#l @ 1 <l (pmul <l (prodl >l)))
@@ -399,7 +399,7 @@
    ; subset products truncated at K = deg_y + 1. a true factor equals its own truncation,
    ; so no centering: a candidate divides or dies
    (zrec2 s K g ls acc)
-   (? (s + s > #ls) (pdeg g @ 0 acc (g . acc))
+   (s + s > #ls ? (pdeg g @ 0 acc (g . acc))
       (: (prod2 l) (#l @ 1 <l (ytrunc K (pmul <l (prod2 >l))))
          (try cs) (#cs ?
                    (: cand (ytrunc K (prod2 <cs))
@@ -408,22 +408,22 @@
          h (try (combs s ls))
          (#h @ 0 (zrec2 (s + 1) K g ls acc)
           (zrec2 1 K <>(>h) (lminus ls <>h) (<h . acc)))))
-   (zfac2 f) (? (0 = mdegy f)
+   (zfac2 f) (0 = mdegy f ?
                 (map (a1to2 0) (pfac (a2to1 f)))
                 (: (pick as) (#as @ 0 ()
-                              (: f0 (yevat f <as)
+                              (yevat f <as @ f0
                                (pdeg (pgcd f0 (pd f0 0)) @ 0 [<as] (pick >as))))
                    aw (pick '(0 1 -1 2 -2 3 -3 4 -4 5 -5 6 -6))
-                   (? (0 = #aw) [f]
+                   (0 = #aw ? [f]
                       (: a <aw
                          g (ysub f a)
                          us (pfac (a2to1 (ytrunc 1 g)))
-                         (? (1 = #us) [f]
+                         (1 = #us ? [f]
                             (: K (mdegy f + 1)
                                fs (zrec2 1 K g (hliftn2 K g us) ())
                                (map (z \ ysub z -a) fs)))))))   ; shift back, y -> y-a
-   (zfac2g f) (: L (mcof f (pdeg f))
-                 (? (L = [(1 . '(0))]) (zfac2 f)
+   (zfac2g f) (mcof f (pdeg f) @ L
+                 (L = [(1 . '(0))] ? (zfac2 f)
                     (: n (pdeg f)
                        (bsub es) (#es @ 0 ()
                                   (padd (mlift (<es @ ^n [(1 . '(0))]
@@ -432,7 +432,7 @@
                                         (bsub >es)))
                        (bunsub G) (:- (go (me1s G)) (go es) (#es @ 0 ()
                                    (padd (mlift (pmul (mcof G <es) (lpow <es L)) <es) (go >es))))
-                       (map (G \ (: gb (bunsub G)
+                       (map (G \ (bunsub G @ gb
                                     (pmonic (mdiv gb (mlift (mcont gb) 0)))))
                             (zfac2 (bsub (me1s f)))))))
    (lcs fs) (0 = #fs ? 1 (cnorm (mco <(<fs) * lcs >fs)))
@@ -443,29 +443,29 @@
                                 (flat (map (z \ i (. z) ()) fs) + go (i + 1) >r)))
                 all (yfs + go 1 (msff pp))
                 cst (cnorm (mco <x * cinv (lcs all)))
-                (? (cst = 1) all (pconst 2 cst . all)))
+                (cst = 1 ? all (pconst 2 cst . all)))
 ; --- n variables: kronecker packs onto the bivariate engine ------------------
 ; vpack folds the last variable into the one before it, D past that variable's degree: a ring
 ; homomorphism whose exponent map e*D + e' is injective below D and order-preserving on lex
 ; keys, so the packed poly is canonical as it stands. n variables pack down to two and the
 ; bivariate engine factors the image whole. this trades eez's staged lifting for degree growth
 ; in the image -- exact and complete either way, the honest choice at this scale.
-   (mrg D k) (0 = #>>k ? [((<k * D) + <>k)] (<k . mrg D >k))
+   (mrg D k) (0 = #>>k ? [(<k * D + <>k)] (<k . mrg D >k))
    (vpack x D) (map (m2 \ mco m2 . mrg D (mkey m2)) x)
    (vunpk g D) (map (m2 \ (: (go l) (0 = #>l ?
-                                     [(cnorm ((<l - (<l % D)) /// D)) (<l % D)]
+                                     [(cnorm ((<l - <l % D) /// D)) (<l % D)]
                                      (<l . go >l))
                            (mco m2 . go (mkey m2)))) g)
-   (lastk k) (? (0 = #>k) <k (lastk >k))
-   (mdeglast x) (:- (go x 0) (go l m2) (#l @ 0 m2 (: e (lastk (mkey <l)) (go >l (m2 < e ? e m2)))))
+   (lastk k) (0 = #>k ? <k (lastk >k))
+   (mdeglast x) (:- (go x 0) (go l m2) (#l @ 0 m2 (lastk (mkey <l) @ e (go >l (m2 < e ? e m2)))))
    (kz1? x) (1 = #x && 0 = +(mkey <x))
    (kge a b) (? (0 = #a) 1 (<a < <b) () (kge >a >b))
    ; lex division with remainder, safe on any divisor
    (mdm f d) (: (go u qq rr)
                 (? (0 = #u) [qq rr]
                    (kge (mkey <u) (mkey <d))
-                   (: t2 [(. (cnorm (mco <u * cinv (mco <d)))
-                                (ksub (mkey <u) (mkey <d)))]
+                   ([(. (cnorm (mco <u * cinv (mco <d)))
+                           (ksub (mkey <u) (mkey <d)))] @ t2
                       (go (psub u (pmul t2 d)) (padd t2 qq) rr))
                    (go >u qq (padd [(mco <u . mkey <u)] rr)))
                 (go f () ()))
@@ -473,21 +473,21 @@
    ; the pack round-trip guards each candidate: a true factor's product never carries past
    ; D, so a carry accident reads as a clean miss rather than a wrong factor
    (nrec s D x ls acc)
-   (? (s + s > #ls) (kz1? x ? acc (pmonic x . acc))
+   (s + s > #ls ? (kz1? x ? acc (pmonic x . acc))
       (: (try cs) (#cs ? (: pp (mprod <cs) cand (vunpk pp D)
                           (vpack cand D != pp ? (try >cs)
-                           (: dm (mdm x cand)
+                           (mdm x cand @ dm
                             (0 = #<>dm ? [cand <cs <dm] (try >cs))))))
          h (try (combs s ls))
-         (? (0 = #h) (nrec (s + 1) D x ls acc)
+         (0 = #h ? (nrec (s + 1) D x ls acc)
             (nrec 1 D <>(>h) (lminus ls <>h) (<h . acc)))))
    (mfacn x) (: D (mdeglast x + 1)
                 fs (pfac (vpack x D))
                 out (nrec 1 D x (filter (g \ !(kz1? g)) fs) ())
                 cst (cnorm (mco <x * cinv (lcs out)))
-                (? (cst = 1) out
+                (cst = 1 ? out
                    (pconst #(mkey <x) cst . out)))
-   (pfac p2) (: x (load p2)   ; dispatch on arity; anything it cannot split it keeps whole
+   (pfac p2) (load p2 @ x ; dispatch on arity; anything it cannot split it keeps whole
                 (? (0 = #x) ()
                    (1 = #(mkey <x)) (0 = pdeg x ? [x] (ufac x))
                    (2 != #(mkey <x)) (kz1? x ? [x] (mfacn x))
@@ -514,18 +514,18 @@
    (plift v w) (polyish? v ? v (pconst (arity w) v))   ; a star lifts to the other side's arity
    ; a method owns its domain: against the zero poly the arity is unknowable, so + and -
    ; answer () there, as does anything else it cannot type
-   (pmeth z f) (\ a b (: x (load a) y (load b)
-                       (? (pok? x y && pok? y x) (z (f (plift x y) (plift y x))))))
-   (zface v w) (? (star? v) (? (polyish? w) (0 = #w) 0) 0)   ; c times the zero poly is the zero poly: * needs no lift
+   (pmeth z f) (a \ b \ (: x (load a) y (load b)
+                         (pok? x y && pok? y x ? (z (f (plift x y) (plift y x))))))
+   (zface v w) (star? v ? (polyish? w ? (0 = #w) 0) 0)   ; c times the zero poly is the zero poly: * needs no lift
    mk (coin 'poly (z \ {'net (c \ #(load c)) 'star 1
                           '+ (pmeth z padd)
-                          '* (: mulm (pmeth z pmul)
-                               (\ a b (: x (load a) y (load b)
-                                        (? (zface x y) (z ())
-                                           (zface y x) (z ())
-                                           (mulm a b)))))
+                          '* (pmeth z pmul @ mulm
+                               (a \ b \ (: x (load a) y (load b)
+                                          (? (zface x y) (z ())
+                                             (zface y x) (z ())
+                                             (mulm a b)))))
                           '- (pmeth z psub)}))
-   (poly p) (? (polyish? p) (mk p) ()))
+   (poly p) (polyish? p ? (mk p)))
 
 ; --- the eval bridge: a poly compiles to a live closure ---------------------
 ; pemit renders a poly (raw or coin) as core source over the given variable symbols, one per
@@ -559,7 +559,7 @@
    mnil (cite 'kanren 'empty_dict)
    ; () on a miss. a var-less hit is the empty binding, whose truth is blue, so test a miss
    ; against (), never with ! alone
-   (match p x) (: r (unify mnil p x) (ufail? r ? () r))
+   (match p x) (unify mnil p x @ r (ufail? r ? () r))
    (vlook v ps) (? (0 = #ps) ()
                    (<<ps = v) ><ps
                    (vlook v >ps))
@@ -570,18 +570,18 @@
                   t)
    ; each named symbol in vs becomes one var shared across both halves; the guard is a
    ; closure over the bound values, vs order, and must answer green for the rewrite to fire
-   (grule vs pat tpl g) (: ps (map (s \ s . var s) vs)
+   (grule vs pat tpl g) (map (s \ s . var s) vs @ ps
                          [(mark ps pat) (mark ps tpl) g (map cup ps)])
    (rule vs pat tpl) (grule vs pat tpl 0)
    (gpass? rl r) (rl 2 @ 0 1 g (ap g (map (sew r) (rl 3))))
-   (rw1 rs x) (? (0 = #rs) x   ; the rules once, at the root, guards included
+   (rw1 rs x) (0 = #rs ? x   ; the rules once, at the root, guards included
                  (: rl <rs r (unify mnil <rl x)
                     (? (ufail? r) (rw1 >rs x)
                        (gpass? rl r) (sew r <>rl)
                        (rw1 >rs x))))
    (rewrite rs x) (: y (? (nom? x) x (two? x) (map (rewrite rs) x) x)   ; bottom-up to a fixpoint: termination is the rule set's burden
                      z (rw1 rs y)
-                     (? (z = y) y (rewrite rs z))))
+                     (z = y ? y (rewrite rs z))))
 
 ; --- laws + fold: the shipped simplifier -------------------------------------
 ; every rule here shrinks or keeps size once, so the fixpoint lands. the conditional laws ride
@@ -612,8 +612,8 @@
                                 '+ (posc c <>t && posc c <>>t)))
    (glaws c) [(grule '(a) '(/ a a) 1 (nzc c))   ; the conditional laws, over a context
               (grule '(a) '(/ 0 a) 0 (nzc c))
-              (grule '(a b) '(/ (* a b) b) 'a (\ a b (nzc c b)))
-              (grule '(a b) '(/ (* b a) b) 'a (\ a b (nzc c b)))
+              (grule '(a b) '(/ (* a b) b) 'a (a \ b \ nzc c b))
+              (grule '(a b) '(/ (* b a) b) 'a (a \ b \ nzc c b))
               (grule '(a) '(sqrt (** a 2)) 'a (posc c))]
    ulaws [(rule '(a) '(+ a 0) 'a)
           (rule '(a) '(+ 0 a) 'a)
@@ -692,7 +692,7 @@
                 '(- (* (cos a) (cos b)) (* (sin a) (sin b))))
           (rule '(a b) '(cos (- a b))
                 '(+ (* (cos a) (cos b)) (* (sin a) (sin b))))]
-   (xlawsc c) ((ulaws + glaws c) + grows)   ; simp never expands; expand adds these and collects on the way
+   (xlawsc c) (ulaws + glaws c + grows)   ; simp never expands; expand adds these and collects on the way
    xlaws (xlawsc ())
    ; a ground node folds to its value, cnormed: + - * ** / over two stars -- integers, gems,
    ; rational coins and poly coins alike. a zero divisor or base, or a slot-less die, keeps
@@ -704,7 +704,7 @@
                 (: a <>t b <>(>t)
                    (? !(star? a && star? b) t
                       (<t = '**)
-                      (? !(whole? b) t   ; a power folds by application: (b a) is a**b
+                      (!(whole? b) ? t   ; a power folds by application: (b a) is a**b
                          (: v (? (0 <= b) (b a)
                                  !(nz? a) ()
                                  (whole? a) (/// 1 (-b a))
@@ -713,13 +713,13 @@
                       (<t = '/)
                       ; Q is the codomain: (/ 1 2) and (** 2 -1) both land (1 /// 2) and (/ 6 3) demotes to 2,
                       ; never a gem
-                      (? !(nz? b) t
-                         (: v (? (whole? a && whole? b) (/// a b) (a / b))
-                            (? (star? v) (cnorm v) t)))
+                      (!(nz? b) ? t
+                         (: v (whole? a && whole? b ? (/// a b) (a / b))
+                            (star? v ? (cnorm v) t)))
                       (cnorm (<t @ '+ (a + b) '- (a - b) (a * b))))))
    (simpw rs t) (: y (? (nom? t) t (two? t) (map (simpw rs) t) t)   ; rules + fold, bottom-up to a fixpoint, as rewrite
                    z (fold1 (rw1 rs y))
-                   (? (z = y) y (simpw rs z)))
+                   (z = y ? y (simpw rs z)))
    (simp t) (simpw laws t)
    (simpc c t) (simpw (ulaws + glaws c) t)
    assume simpc)
@@ -742,7 +742,7 @@
                  (star? t) [t 1]
                  (two? t && 3 = tally t && '* = <t && star? <>t) [<>t <>(>t)]
                  [1 t])
-   (sone s t) (: p (csplit t) [(cnorm (s * <p)) <>p])
+   (sone s t) (csplit t @ p [(cnorm (s * <p)) <>p])
    ; carries the sign through every -, so subtraction is a signed addend
    (sflat s t) (? (nom? t) [(sone s t)]
                   (two? t && 3 = #t && '+ = <t) (sflat s <>t + sflat s <>>t)
@@ -780,21 +780,21 @@
                (? (0 = #ks) 0
                   (0 = #ns) (refold '+ xs)
                   (0 = #xs + #(filter (p \ <>p != 1) ns)) <<ns
-                  (dsub (? (0 = #xs) 0 (refold '+ xs)) ys)))
+                  (dsub (0 = #xs ? 0 (refold '+ xs)) ys)))
    (tmul xs) (0 = #xs ? 1 (cnorm (<xs * tmul >xs)))
    ; a product power-collects too: repeated factors merge into (** u n), exponents whole and
    ; >= 1 only -- x * x**-1 never folds, x might be 0
    (esplit f) (? (nom? f) [1 f]
                  (two? f && 3 = tally f && '** = <f && whole? <>>f && 0 < <>>f) [<>>f <>f]
                  [1 f])
-   (eone p) (: n <p u <>p (? (n = 1) u ['** u n]))
+   (eone p) (: n <p u <>p (n = 1 ? u ['** u n]))
    (unneg f) (? (nom? f) [1 f]
                 (two? f && 3 = tally f && '- = <f && 0 = <>f) [-1 <>>f]
                 [1 f])
    (tprod t) (: ps (map unneg (spine '* t))
                 gs (map caup ps)
                 c (cnorm (tmul (map cap ps) * tmul (filter star? gs)))
-                us (map eone (cmerge (tsort (\ p r (tkey <>p < tkey <>r))
+                us (map eone (cmerge (tsort (p \ r \ tkey <>p < tkey <>r)
                                             (map esplit
                                                  (filter (f \ !(star? f)) gs)))))
                 (femit k) (k = 1 ? (refold '* us) (refold '* (k . us)))
@@ -814,7 +814,7 @@
 ; a derivative rune cannot take stays symbolic, which is the honest answer.
 (: (free? t v) (? (t = v) 0
                   (nom? t) 1
-                  (two? t) (? (free? <t v && free? >t v) 1 0)
+                  (two? t) (free? <t v && free? >t v ? 1 0)
                   1)
    dlaws [(grule '(a v) '(d a v) 0 free?)   ; the base case: 0 exactly when a is free of v
           (rule '(a) '(d a a) 1)   ; the nonlinear pattern earns this one
@@ -859,25 +859,25 @@
    ; and below. so (- (- 10 4) 3) renders 10 - 4 - 3 while (- 10 (- 4 3)) keeps its parens
    (uxs x g) (? (nom? x) [x]
                 (atom? x) [x]
-                (infix3? x) (? (glook <x uband < g) [(unfix x)] (unfix x))
+                (infix3? x) (glook <x uband < g ? [(unfix x)] (unfix x))
                 (ophead? x) [(unfix x)]
                 (unfix x))
    (unfix t) (? (nom? t) t
                 (atom? t) t
                 (infix3? t) (: g (glook <t uband) h (hlook <t uband)
-                             (uxs <>t (? h g (g + 1)) + [<t] + uxs <>(>t) (? h (g + 1) g)))
+                             (uxs <>t (h ? g (g + 1)) + [<t] + uxs <>(>t) (h ? (g + 1) g)))
                 (uxw <t . map uxw >t)))
 
 ; --- the field Q[x]/(m) ----------------------------------------------------
 ; an element, deg m = d, is an ascending list of d rational coins. the field is given not by m
 ; but by xd -- x^d rewritten as an element -- so reduction folds top powers down with no
 ; division anywhere.
-(: (vmax a b) (? (a < b) b a)
+(: (vmax a b) (a < b ? b a)
    (vpad v n) (? (n = 0) ()
                  (0 = #v) (0 /// 1 . vpad () (n - 1))
                  (<v . vpad >v (n - 1)))
-   (vzip a b) (? (0 = #a) () ((<a + <b) . vzip >a >b))
-   (vadd a b) (: n (vmax #a #b) (vzip (vpad a n) (vpad b n)))
+   (vzip a b) (0 = #a ? () ((<a + <b) . vzip >a >b))
+   (vadd a b) (vmax #a #b @ n (vzip (vpad a n) (vpad b n)))
    (vscale c v) (map (* c) v)
    (vshift v n) (n @ 0 v (0 /// 1 . vshift v (n - 1)))
    (vmul a b) (#a @ 0 () (vadd (vscale <a b) (vshift (vmul >a b) 1)))

@@ -154,7 +154,7 @@
 ; 0-axis empty (a 1-axis takes the OTHER size including 0 -- max here once
 ; filled one element out of an empty operand), and empty reductions answer
 ; their monoid units: the floor appears as the values of empty reductions.
-(: e (star-tray '(0) 0)
+(star-tray '(0) 0 @ e
  (test
   ("@()" = (show e)) ('(0) = (shape e)) (1 = (rank e)) (0 = #e) ; empty rank-1 prints @()
   (0 = (net e)) (1 = (prod e)) (aall e)                         ; the units: empty sum 0, empty product 1, empty conjunction true
@@ -166,8 +166,8 @@
   (0 = #((star-tray '(1) '(5)) + e))           ; a 1-axis broadcasts to 0, not 1
   (-1 = (peep e 0 -1))                         ; out of bounds -> the default
   ('(0 3) = (shape ((gem-tray '(0 3) 0) + 1))) ; rank-2 empties keep their shape
-  (: rt @()                                    ; the printed form (@()) reads back
-     (0 = #rt && '(0) = shape rt && star-tray = tier rt))))
+  (@() @ rt                                    ; the printed form (@()) reads back
+   (0 = #rt && '(0) = shape rt && star-tray = tier rt))))
 
 ; --- the apl rule: `=` and `!=` are masks, the whole question a reduction; max and min
 ; are binary and elementwise, the operand itself; floor and int take a float tray to an int tray ---

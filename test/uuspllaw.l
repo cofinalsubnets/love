@@ -1,16 +1,10 @@
-; test/uuspllaw.l -- the splice license, proved of the terms test/uusplgen.l
-; generated from test/proto/spl.l (loaded just before this by sort order; the
-; stack machine in test/uuhom.l, kernel in test/uu.l). the model pins these
-; laws by assert at one demo env; here each is a theorem forall states -- and
-; the flip pair is the reason the observation carries a trace: substitution
-; under an effectful arg read twice keeps the VALUE equal and doubles the
-; trace, the by-name breach R alone cannot convict. the license ev.l's inliner
-; would ship under, stated before any inliner exists. sl-cross is the
-; cross-machine theorem: the stack machine's y+1 under the binding splice
-; meets the register machine's de5bck (test/uuhomgen.l) at the same value,
-; forall states of both machines's "one design, two machines"
-; as one law. exports to Rocq + Lean with the corpus.
-; guard: substrate + generated terms must land in glob first; fail by name if not.
+; test/uuspllaw.l -- the splice license, proved of the terms test/uusplgen.l generated from
+; test/proto/spl.l (loaded just before this; the stack machine is test/uuhom.l's, the
+; kernel test/uu.l's). the model asserts these laws at one env; here each holds forall
+; states. the observation carries a trace for the flip pair: substituting an effectful arg
+; read twice keeps the value and doubles the trace, a breach R alone cannot see. sl-cross
+; meets the register machine's de5bck (test/uuhomgen.l) at the same value, forall states
+; of both. the guard below fails by name if the substrate or generated terms are missing.
 (test (elem 'vof (names ())) (two? (peep GLOB 'srun 0)) (two? (peep GLOB 'sp0call 0)))
 
 ; --- the license: the splice observes as the call, value and trace, forall states ---

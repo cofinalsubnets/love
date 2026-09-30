@@ -1,20 +1,12 @@
-; test/uupatch.l -- the patch groupoid's named-slot and positional slices as uu
-; proof terms: the generated leg of the patch arc. test/patch.l's first two
-; forms state the laws as executable asserts; test/proof/rocq/patch.v hand-proved
-; them as scaffolding and promised this file (its provenance note): the laws
-; re-proven inside uu's own kernel, then emitted to Rocq and Lean by
-; src/tools/uu2coq.l + src/tools/uu2lean.l -- two independent kernels re-certifying the
-; same terms, the de Bruijn criterion the rest of the proof corpus already
-; rides. Substrate: test/uu.l + test/uulay.l's list vocabulary (this file
-; loads after both by sort order).
+; test/uupatch.l -- the patch groupoid's named-slot and positional slices as uu proof terms:
+; test/patch.l's laws re-proven in uu's kernel, then emitted to Rocq and Lean by
+; src/tools/uu2coq.l + uu2lean.l, two independent kernels re-certifying the same terms.
+; loads after test/uu.l and test/uulay.l (sort order), whose list vocabulary it uses.
 ;
-; the model mirrors the .l's first form name for name: a tree is a total map
-; (key -> value, nats -- the .v's closure of "a missing slot reads 0"), a patch
-; (chg k a b) one slot-change carrying its context, commute the partial swap.
-; where patch.v case-split on Nat.eqb with tactics, the terms here case on
-; isdeceqnat -- decidable equality as a coprod, so every branch carries the
-; path evidence a bool would have dropped; refusal is the unit summand. all
-; equality of trees is pointwise (no funext anywhere), exactly the .v's rule.
+; the model mirrors patch.l name for name: a tree is a total map of nats (a missing slot
+; reads 0), (chg k a b) one slot-change carrying its context, commute the partial swap.
+; branches case on isdeceqnat, a coprod, so each carries its path evidence; refusal is
+; the unit summand. tree equality is pointwise, no funext.
 
 ; --- the model: patch, tree, apply, validity, inverse, commute ---
 (test
@@ -2142,10 +2134,10 @@
  p0 '(mkh 0 (ncons 1 nnil) (ncons 7 (ncons 8 nnil)))
  q0 '(mkh 3 (ncons 3 nnil) (ncons 9 nnil))
  q0p '(mkh 2 (ncons 3 nnil) (ncons 9 nnil))
- _ (test
-    ((vof 0 ['hap ['hap s0 p0] q0]) = (vof 0 ['hap ['hap s0 q0p] p0]))
-    ((vof 0 ['hcommute p0 q0]) = (vof 0 ['ii1 ['tpair q0p p0]])))
- 0)
+ ((test
+   ((vof 0 ['hap ['hap s0 p0] q0]) = (vof 0 ['hap ['hap s0 q0p] p0]))
+   ((vof 0 ['hcommute p0 q0]) = (vof 0 ['ii1 ['tpair q0p p0]]))),
+  0))
 
 ; ============================================================================
 ; the element tree: every nat is a rose tree. labels are nats and kid lists
@@ -6096,8 +6088,8 @@
   = (vof 0 '(ii2 tt)))
  ((vof 0 '(mtch 1 (mcell 0 (lmv 0) (latom 0)) (tcode 0 (latom 1)) snil)) = (vof 0 '(ii2 tt)))
  ; instantiation computes: soundness by eye, and a free metavariable rides
- (= (vof 0 '(inst 1 (mcell 0 (lmv 0) (lmv 0)) (scons (tpair 0 (tcode 0 (latom 1))) snil)))
-      (vof 0 '(tcode 1 (mcell 0 (latom 1) (latom 1)))))
+ (vof 0 '(inst 1 (mcell 0 (lmv 0) (lmv 0)) (scons (tpair 0 (tcode 0 (latom 1))) snil)) =
+    vof 0 '(tcode 1 (mcell 0 (latom 1) (latom 1))))
  (vof 0 '(tcode 0 (lmv 4)) = vof 0 '(inst 0 (lmv 4) snil)))
 
 ; --- bindings only grow: what a match step bound stays bound, unchanged
@@ -6714,8 +6706,8 @@
       (lam p
         (lam g (lam sf (lam e (mtch-sound-ext d p g snil sf e sf (lam v (lam t (lam h3 h3))))))))))
  ; the headline in the small: match, instantiate, come home
- (= (vof 0 '(inst 1 (mcell 0 (lmv 0) (latom 0)) (scons (tpair 0 (tcode 0 (latom 1))) snil)))
-      (vof 0 '(tcode 1 (mcell 0 (latom 1) (latom 0))))))
+ (vof 0 '(inst 1 (mcell 0 (lmv 0) (latom 0)) (scons (tpair 0 (tcode 0 (latom 1))) snil)) =
+    vof 0 '(tcode 1 (mcell 0 (latom 1) (latom 0)))))
 
 ; --- the re-aim at address grain: the schematic swallow moves a deep
 ; --- patch's path from the variable's olds seat to its news seat by

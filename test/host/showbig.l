@@ -1,4 +1,4 @@
-; --- test/host/showbig.l: show over a graph of helpers ---
+; test/host/showbig.l -- show over a graph of helpers
 ; moon's parser is one letrec of helpers the module does not export, each quoted as a
 ; constant in many places. read in place wherever it is quoted, the graph reads as a tree;
 ; the reading counts the bodies it reads, and past its lim a function with a name is its
@@ -10,11 +10,11 @@
 
 (: m (cite 'moon)
    ks ['adims 'specask]
-   ss (map (\ k (show (m k))) ks)
-   _ (test (ss = map (\ k ("(cite 'moon '" + show k + ")")) ks)
-           (all (\ k (m k = ev <(sound (show (m k))))) ks)
-           (has? (show (m 'arr?)) "(\\ ")
-           (m 'arr? = ev <(sound (show (m 'arr?)))))
-   _ (test_fin ())
-   _ (puts "showbig: ok -- moon's adims and specask show as their names, arr? as its lambda")
- (putc 10))
+   ss (map (k \ (show (m k))) ks)
+   (test (ss = map (k \ ("(cite 'moon '" + show k + ")")) ks)
+         (all (k \ (m k = ev <(sound (show (m k))))) ks)
+         (has? (show (m 'arr?)) "(\\ ")
+         (m 'arr? = ev <(sound (show (m 'arr?)))),
+    test_fin (),
+    puts "showbig: ok -- moon's adims and specask show as their names, arr? as its lambda",
+    putc 10))

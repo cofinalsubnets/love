@@ -1,4 +1,4 @@
-; --- test/host/synth.l: the keyboard synth, headless ---
+; test/host/synth.l -- the keyboard synth, headless
 ; not in the test/*.l corpus (it loads a crew module). the keys, the notes and the feed
 ; are pure, so everything but the tty runner gates here: a key into a degree and its
 ; bends, the bends' sizes against each other, a note's name, the timbre and octave
@@ -32,7 +32,7 @@
 ; --- a name: middle c and its octaves, the semitone under a quarter tone said in cents
 (test (synth-name 0.0 = "C4") (synth-name 12.0 = "C5") (synth-name -12.0 = "C3")
       (synth-name -1.0 = "B3") (synth-name 1.0 = "C#4") (synth-name 11.0 = "B4")
-      (has? (synth-name 0.5) "C4") (has? (synth-name 0.5) "50") (!(has? (synth-name 0.0) "50"))
+      (has? (synth-name 0.5) "C4") (has? (synth-name 0.5) "50") !(has? (synth-name 0.0) "50")
       (has? (synth-name -0.5) "B3"))
 
 ; --- the timbre cycles through them all and round; the octave climbs and stops --------
@@ -78,21 +78,21 @@
    n #whole quiet (all (i \ 0 = whole (n - 1 - i)) ^(4 * synth-chunk))
    c3 (st 'cyc)
    _ (synth-cps! st 100.0) hi (st 'cps) _ (synth-cps! st 0.0) lo (st 'cps)
-   _ (synth-cps! st 1.0) _ (synth-step st 93) up (st 'cps) _ (synth-step st 91) _ (synth-step st 91) down (st 'cps)
+   _ (synth-cps! st 1.0, synth-step st 93) up (st 'cps) _ (synth-step st 91, synth-step st 91) down (st 'cps)
    _ (synth-step st 112) p1 (st 'on) _ (synth-step st 112) p2 (st 'on)
-   _ (synth-step st 113)
- (test (on = 1) (m1 = "sent") (0 < c1) (0 < loud) ahead gone
-       (m3 != "sent") (kept != ()) (m4 = "sent") (m5 = "sent")
-       (off = 0) (c2 = c3) quiet
-       (hi = synth-cps-hi) (lo = synth-cps-lo)
-       (abs (up - 1.0 - synth-cps-step) < 0.001) (abs (1.0 - synth-cps-step - down) < 0.001)
-       (p1 = 1) (p2 = 0) (st 'over = 1)))
+   (synth-step st 113,
+    test (on = 1) (m1 = "sent") (0 < c1) (0 < loud) ahead gone
+         (m3 != "sent") (kept != ()) (m4 = "sent") (m5 = "sent")
+         (off = 0) (c2 = c3) quiet
+         (hi = synth-cps-hi) (lo = synth-cps-lo)
+         (abs (up - 1.0 - synth-cps-step) < 0.001) (abs (1.0 - synth-cps-step - down) < 0.001)
+         (p1 = 1) (p2 = 0) (st 'over = 1)))
 
 ; --- the buffer's ex words: send plays its lines, cps sets, stop stops, and a word that
 ; --- is neither the engine's nor the loop's is still a complaint
 (: st (synth-new ()) buf (vi-open "") _ (pin buf 'lines ["bd sn" "hh"])
    face (vi-face buf {'ex (synth-ex st)})
-   (ex s) (: t (":" + s) (map (face 1) ((map (i \ t i) ^#t) + [13])))
+   (ex s) (":" + s @ t (map (face 1) (map (i \ t i) ^#t + [13])))
    _ (ex "send") m1 (buf 'msg) on (st 'on) t (st 'lmsg)
    _ (ex "cps 1") m2 (buf 'msg) c (st 'cps)
    _ (ex "cps") m3 (buf 'msg)

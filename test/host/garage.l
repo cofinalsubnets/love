@@ -1,11 +1,7 @@
-; --- test/host/garage.l: the parking garage, headless ---
-; not in the test/*.l corpus (it loads a crew module). the level is pure love, so
-; everything but the tty runner gates here: the lay -- concrete round, pilasters and
-; columns, the bays' lines, wrecks in some bays and never on the bed, the bed in
-; through the east wall and out through the west -- the rats wandering the bare floor,
-; a rat bumped, the walls and the wrecks holding, the way out west and not east, and
-; the song into a jug, the tune's cycles pulled as the head reaches them.
-;   cat test/00-init.l test/host/garage.l | out/love
+; test/host/garage.l -- the parking garage, headless: the lay (pilasters, bays, wrecks never on the
+; bed, the bed through east and west walls), the rats, the walls holding, the way out west, and
+; the song into a jug. not in the corpus: it loads a crew module.
+; run: cat test/00-init.l test/host/garage.l | out/love
 
 (borrow 'garage)   ; the artifact's module, warm from the tree
 (borrow 'rove)     ; dat, open?
@@ -36,7 +32,7 @@
        (any (y \ 5 = t 0 y) ^h) (any (y \ 5 = t (w - 1) y) ^h)         ; which breaks through both
        (has-tile? 2) (has-tile? 3) (has-tile? 4)                        ; columns, pilasters, lines
        ; ..and none of them, nor a wreck, in the zone the bed runs through
-       (: z (d 'zone) (all (i \ !(elem (peep (d 't) i 0) '(2 4 6))) (range (w * <z) (w * <>z))))
+       (d 'zone @ z (all (i \ !(elem (peep (d 't) i 0) '(2 4 6))) (range (w * <z) (w * <>z))))
        (all (i \ !(elem (peep (d 't) i 0) '(2 4 6))) (filter (i \ 5 = peep (d 't) i 0) ^(w * h)))
        (0 < #cars) (all (c \ all (cl \ 6 = peep (d 't) <cl 0) (car-cells c w)) cars)   ; wrecks whole, and not on the bed
        (all (c \ (bay-d * (bay-w - 1)) = #(car-cells c w)) cars)
@@ -52,11 +48,11 @@
    _ (each ^30 (i \ garage-turn g '(1 0)))                              ; thirty turns at the east wall
    now (map (m \ [(m 'x) (m 'y)]) (g 'ms))
    r <(g 'ms) rx (r 'x) ry (r 'y)
-   _ (pins p 'x (rx + 1) 'y ry)
-   _ (garage-turn g '(-1 0))
- (test (was != now) (all (m \ open? d (m 'x) (m 'y)) (g 'ms))
-       (0 < #(g 'msg)) (p 'x = rx + 1) (p 'y = ry) (!(g 'over))
-       (string? (rat-interaction (g 'sb) r))))
+   (pins p 'x (rx + 1) 'y ry,
+    garage-turn g '(-1 0),
+    test (was != now) (all (m \ open? d (m 'x) (m 'y)) (g 'ms))
+         (0 < #(g 'msg)) (p 'x = rx + 1) (p 'y = ry) !(g 'over)
+         (string? (rat-interaction (g 'sb) r))))
 
 ; --- concrete holds and so does a wreck; west along the bed is the way out, east is not ---
 (: g (garage-new 80 22 (wheel 5)) d (g 'd) w 80 h 22 p (g 'p)
@@ -64,18 +60,18 @@
    _ (garage-turn g 32)
    x0 (p 'x) y0 (p 'y)
    _ (garage-turn g '(1 0)) m1 (g 'msg) o1 (g 'over)                  ; east, off the map: no
-   _ (pins p 'x 1 'y 0) _ (garage-turn g '(0 -1)) m2 (g 'msg)          ; into the top wall
+   _ (pins p 'x 1 'y 0, garage-turn g '(0 -1)) m2 (g 'msg)          ; into the top wall
    c <(d 'cars)
-   _ (pins p 'x (c 'x - 1) 'y (c 'y)) _ (garage-turn g '(1 0)) m3 (g 'msg) x3 (p 'x)   ; into a wreck
-   wy (<(filter (y \ 5 = t 0 y) ^h))
-   _ (pins p 'x 0 'y wy) _ (garage-turn g '(-1 0))                      ; west, off the map along the bed
- (test (0 < #m1) (nil? o1) (0 < #m2) (0 < #m3) (x3 = c 'x - 1)
-       ('west = g 'over)))
+   _ (pins p 'x (c 'x - 1) 'y (c 'y), garage-turn g '(1 0)) m3 (g 'msg) x3 (p 'x)   ; into a wreck
+   wy <(filter (y \ 5 = t 0 y) ^h)
+   (pins p 'x 0 'y wy, garage-turn g '(-1 0),                           ; west, off the map along the bed
+    test (0 < #m1) !o1 (0 < #m2) (0 < #m3) (x3 = c 'x - 1)
+         ('west = g 'over)))
 
 ; --- a garage too small for a bay is laid without one, and without a car, and stands ---
 (: g (garage-new 24 10 (wheel 5)) d (g 'd) w 24 h 10
    (t x y) (dat d x y)
- (test (rows (garage-frame g) = h + 2) (!(d 'cars))
+ (test (rows (garage-frame g) = h + 2) !(d 'cars)
        (all (i \ !(elem (peep (d 't) i 0) '(2 4 6))) ^(w * h))
        (any (y \ 5 = t 0 y) ^h) (any (y \ 5 = t (w - 1) y) ^h)
        (5 = t (g 'p 'x) (g 'p 'y))))

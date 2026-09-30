@@ -36,10 +36,10 @@
    (po-r key)
     (: t0 (le32 key 0) t1 (le32 key 4) t2 (le32 key 8) t3 (le32 key 12)
        [(t0 & m26)
-        (((t0 >> 26) | (t1 << 6)) & 67108611)
-        (((t1 >> 20) | (t2 << 12)) & 67092735)
-        (((t2 >> 14) | (t3 << 18)) & 66076671)
-        ((t3 >> 8) & 1048575)])
+        ((t0 >> 26 | t1 << 6) & 67108611)
+        ((t1 >> 20 | t2 << 12) & 67092735)
+        ((t2 >> 14 | t3 << 18) & 66076671)
+        (t3 >> 8 & 1048575)])
 
    ; --- absorb: h += the block at offset o, as five limbs -------------------------
    ; `hi` is the 2^128 term: 2^24 in the top limb for a full block, and 0 for the
@@ -48,10 +48,10 @@
     (: t0 (le32 msg o) t1 (le32 msg (o + 4))
        t2 (le32 msg (o + 8)) t3 (le32 msg (o + 12))
        [(peep h 0 0 + (t0 & m26))
-        (peep h 1 0 + (((t0 >> 26) | (t1 << 6)) & m26))
-        (peep h 2 0 + (((t1 >> 20) | (t2 << 12)) & m26))
-        (peep h 3 0 + (((t2 >> 14) | (t3 << 18)) & m26))
-        (peep h 4 0 + ((t3 >> 8) | hi))])
+        (peep h 1 0 + ((t0 >> 26 | t1 << 6) & m26))
+        (peep h 2 0 + ((t1 >> 20 | t2 << 12) & m26))
+        (peep h 3 0 + ((t2 >> 14 | t3 << 18) & m26))
+        (peep h 4 0 + (t3 >> 8 | hi))])
 
    ; --- h = h * r mod 2^130 - 5 ---------------------------------------------------
    ; the modulus never appears: a limb that overflows past 2^130 comes back at the
@@ -95,23 +95,23 @@
        n4 (i4 + k3 - 67108864)
        keep (n4 >> 63)                       ; -1 when h < p (keep h), else 0
        drop (keep ^ -1)
-       p0 ((i0 & keep) | (n0 & drop)) p1 ((j1 & keep) | (n1 & drop))
-       p2 ((i2 & keep) | (n2 & drop)) p3 ((i3 & keep) | (n3 & drop))
-       p4 ((i4 & keep) | (n4 & drop))
+       p0 (i0 & keep | n0 & drop) p1 (j1 & keep | n1 & drop)
+       p2 (i2 & keep | n2 & drop) p3 (i3 & keep | n3 & drop)
+       p4 (i4 & keep | n4 & drop)
        ; five 26-bit limbs back into four 32-bit words
-       w0 ((p0 | (p1 << 26)) & 4294967295)
-       w1 (((p1 >> 6) | (p2 << 20)) & 4294967295)
-       w2 (((p2 >> 12) | (p3 << 14)) & 4294967295)
-       w3 (((p3 >> 18) | (p4 << 8)) & 4294967295)
+       w0 ((p0 | p1 << 26) & 4294967295)
+       w1 ((p1 >> 6 | p2 << 20) & 4294967295)
+       w2 ((p2 >> 12 | p3 << 14) & 4294967295)
+       w3 ((p3 >> 18 | p4 << 8) & 4294967295)
        ; + s, with the carry walking up
        f0 (w0 + le32 key 16) o0 (f0 & 4294967295)
        f1 (w1 + le32 key 20 + (f0 >> 32)) o1 (f1 & 4294967295)
        f2 (w2 + le32 key 24 + (f1 >> 32)) o2 (f2 & 4294967295)
        f3 (w3 + le32 key 28 + (f2 >> 32)) o3 (f3 & 4294967295)
        b (cask 16)
-       _a (le32! b 0 o0)  _b (le32! b 4 o1)
-       _c (le32! b 8 o2)  _d (le32! b 12 o3)
-       (string b))
+       (le32! b 0 o0, le32! b 4 o1,
+        le32! b 8 o2, le32! b 12 o3,
+        string b))
 
    ; --- the whole authenticator: (po-mac key msg) -> a 16-byte tag ----------------
    ; key is 32 bytes: r in the first sixteen, s in the second.

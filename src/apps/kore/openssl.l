@@ -29,10 +29,10 @@
 (:
    (os-tls nm) (cite 'tls nm)
    (os-sp n) (string (map (_ \ 32) ^n))
-   (os-cat f l) (? (two? l) (catmap f l) "")
+   (os-cat f l) (two? l ? (catmap f l) "")
    (os-lines l) (os-cat (s \ s + "\n") l)
-   (os-up s) (string (map (i \ (: c (s i) (96 < c < 103 ? (c - 32) c))) ^#s))
-   (os-hexn n) (? (n < 16) (string ("0123456789abcdef" n)) (os-hexn (n // 16) + os-hexn (n % 16)))
+   (os-up s) (string (map (i \ (s i @ c (96 < c < 103 ? (c - 32) c))) ^#s))
+   (os-hexn n) (n < 16 ? (string ("0123456789abcdef" n)) (os-hexn (n // 16) + os-hexn (n % 16)))
    (os-num b) (foldl (a \ i \ a * 256 + b i) 0 ^#b)
    (os-colon s) (: h (b2hex s) (join ":" (map (i \ snip h (2 * i) (2 * i + 2)) ^#s)))
    ; openssl's hex blocks: per bytes a line, each byte but the very last followed by a colon
@@ -123,25 +123,25 @@
    ; --- time: "Jan  1 00:00:00 2025 GMT" ---
    os-months ["Jan" "Feb" "Mar" "Apr" "May" "Jun" "Jul" "Aug" "Sep" "Oct" "Nov" "Dec"]
    (os-dnum b i k)
-    (? (#b < i + k) -1
-       (foldl (a \ j \ (: c (b (i + j)) (? (a < 0 || c < 48 || 57 < c) -1 (a * 10 + c - 48)))) 0 ^k))
+    (#b < i + k ? -1
+     (foldl (a \ j \ (b (i + j) @ c (a < 0 || c < 48 || 57 < c ? -1 (a * 10 + c - 48)))) 0 ^k))
    (os-2 n) (n < 10 ? ("0" + show n) (show n))
    (os-time s)
     (: t (os-tag s) b (os-body s) g (t = 24)
        o (g ? 4 2)
-       y (? g (os-dnum b 0 4) (: v (os-dnum b 0 2) (? (v < 0) -1 (v < 50) (2000 + v) (1900 + v))))
+       y (g ? (os-dnum b 0 4) (os-dnum b 0 2 @ v (? (v < 0) -1 (v < 50) (2000 + v) (1900 + v))))
        mo (os-dnum b o 2) d (os-dnum b (o + 2) 2) h (os-dnum b (o + 4) 2)
        mi (os-dnum b (o + 6) 2) sc (os-dnum b (o + 8) 2)
-       (? ((t != 23 && t != 24) || y < 0 || mo < 1 || 12 < mo || d < 1 || h < 0 || mi < 0 || sc < 0) "Bad time value"
-          (os-months (mo - 1) + " " + (d < 10 ? (" " + show d) (show d)) + " " + os-2 h + ":" + os-2 mi + ":"
-           + os-2 sc + " " + show y + " GMT")))
+       (t != 23 && t != 24 || y < 0 || mo < 1 || 12 < mo || d < 1 || h < 0 || mi < 0 || sc < 0 ? "Bad time value"
+        (os-months (mo - 1) + " " + (d < 10 ? (" " + show d) (show d)) + " " + os-2 h + ":" + os-2 mi + ":"
+         + os-2 sc + " " + show y + " GMT")))
 
    ; --- the certificate, read for printing -> a tablet | () ---
    (os-cert d)
     (: top (os-in d)
        tk (? (two? top && #top = 3) (os-in <top) 0)
        v? (two? tk && os-tag <tk = 160)
-       tf (? v? >tk tk)
+       tf (v? ? >tk tk)
        ok (two? tf && 6 <= #tf && os-tag <tf = 2 && all (i \ os-tag (tf i) = 48) [1 2 3 4 5]
            && os-tag (top 1) = 48 && os-tag (top 2) = 3)
        vl (? ok (os-in (tf 3)) 0)
@@ -212,9 +212,9 @@
        (? (os-tag g = 135 && #b = 8) ("IP:" + join "." (map (i \ show (b i)) ^4) + "/" + join "." (map (i \ show (b (4 + i))) ^4))
           (os-gn g)))
    ; an unknown value: its bytes, the unprintable ones as dots
-   (os-raw v) (string (map (i \ (: c (v i) (? (c < 32 || 126 < c) 46 c))) ^#v))
+   (os-raw v) (string (map (i \ (v i @ c (c < 32 || 126 < c ? 46 c))) ^#v))
    (os-extlines o v)
-    (: (bad x) (? (atom? x) [(os-raw v)] x)
+    (: (bad x) (atom? x ? [(os-raw v)] x)
        (bad
         (o @ "2.5.29.19"
               (: l (os-in v)
@@ -298,13 +298,13 @@
        (rl + (? (two? txt) [("    Explicit Text: " + os-ctext <txt)] ())))
    ; one extension, header and value lines at two indents
    (os-extblock e i j)
-    (: o <e
+    (<e @ o
        ((os-sp i + peep os-extnames o o + ": " + (e 1 ? "critical" ""))
-        . map (l \ (? (0 < #l) (os-sp j + l) "")) (os-extlines o (e 2))))
+        . map (l \ (0 < #l ? (os-sp j + l) "")) (os-extlines o (e 2))))
 
    ; --- the key ---
    (os-rsa k) (os-in k @ [n e] [(os-mag (os-body n)) (os-mag (os-body e))] ())
-   (os-bits n) (: (go n k) (? (n < 1) k (go (n >> 1) (k + 1))) (go n 0))
+   (os-bits n) (: (go n k) (n < 1 ? k (go (n >> 1) (k + 1))) (go n 0))
    ; [kind bits curve]: 'rsa 'ec 'ed25519 or the dotted oid
    (os-keyof x)
     (: a (x 'kalg)
@@ -322,18 +322,18 @@
                             + [(i + "Exponent: " + show (os-num e) + " (0x" + os-hexn (os-num e) + ")")]))
                         [(i + "Unable to load Public Key")]))
              'ec ([(i + "Public-Key: (" + show (k 1) + " bit)") (i + "pub:")] + os-dump (x 'key) 15 20
-                  + (: c (k 2) (? (two? c) ([(i + "ASN1 OID: " + <c)] + (? (string? (c 1)) [(i + "NIST CURVE: " + c 1)] ())) ())))
+                  + (k 2 @ c (two? c ? ([(i + "ASN1 OID: " + <c)] + (string? (c 1) ? [(i + "NIST CURVE: " + c 1)])))))
              'ed25519 ([(i + "ED25519 Public-Key:") (i + "pub:")] + os-dump (x 'key) 15 20)
              ([(i + "pub:")] + os-dump (x 'key) 15 20)))
 
    ; --- x509 -text ---
    (os-serial-text s)
-    (: n (os-num s)
-       (? (#s <= 8 && n < (63 2))
+    (os-num s @ n
+       (#s <= 8 && n < (63 2) ?
           [("        Serial Number: " + show n + " (0x" + os-hexn n + ")")]
           ["        Serial Number:" ("            " + os-colon s)]))
    (os-text x)
-    (: es (x 'exts)
+    (x 'exts @ es
        (["Certificate:" "    Data:"
           ("        Version: " + show (x 'ver + 1) + " (0x" + os-hexn (x 'ver) + ")")]
          + os-serial-text (x 'serial)
@@ -346,7 +346,7 @@
             "        Subject Public Key Info:"
             ("            Public Key Algorithm: " + os-alg (x 'kalg))]
          + os-keylines x
-         + (? (two? es) ("        X509v3 extensions:" . catmap (e \ os-extblock e 12 16) es) ())
+         + (two? es ? ("        X509v3 extensions:" . catmap (e \ os-extblock e 12 16) es))
          + [("    Signature Algorithm: " + os-alg (x 'oalg)) "    Signature Value:"]
          + os-dump (x 'sig) 18 8))
 
@@ -404,13 +404,13 @@
          "-startdate" ("notBefore=" + os-time (x 'nb) + "\n")
          "-enddate" ("notAfter=" + os-time (x 'na) + "\n")
          "-serial" ("serial=" + os-up (b2hex (x 'serial)) + "\n")
-         "-fingerprint" (: m (peep st 'md (os-md "-sha1")) (m 1 + " Fingerprint=" + os-up (os-colon (hex2b (m 2 (x 'der)))) + "\n"))
+         "-fingerprint" (peep st 'md (os-md "-sha1") @ m (m 1 + " Fingerprint=" + os-up (os-colon (hex2b (m 2 (x 'der)))) + "\n"))
          "-pubkey" ("-----BEGIN PUBLIC KEY-----\n" + ubwrap 64 (ubenc ub64set 6 (x 'spki)) + "-----END PUBLIC KEY-----\n")
          "-ext"
           (: want (map (n \ peep os-extshort n n) (split "," (st "-ext")))
              es (filter (e \ elem <e want) (x 'exts))
-             (? (atom? es) "No extensions in certificate\n"
-                (catmap (e \ os-lines (os-extblock e 0 4)) es)))
+             (atom? es ? "No extensions in certificate\n"
+              (catmap (e \ os-lines (os-extblock e 0 4)) es)))
          "")
 
    ; --- making: keys, requests and certificates, the tls module's cert.l doing the work ---
@@ -437,12 +437,12 @@
    (os-flags as vals ones)
     (: st {'addext ()}
        (go a)
-        (? (atom? a) st
-           (: w <a
-              (? (elem w ones) (pin st w 1, go >a)
-                 (!(elem w vals) || atom? >a) ['bad w]
-                 (w = "-addext") (pin st 'addext (st 'addext + [<>a]), go >>a)
-                 (pin st w <>a, go >>a))))
+        (atom? a ? st
+         (<a @ w
+            (? (elem w ones) (pin st w 1, go >a)
+               (nelem w vals || atom? >a) ['bad w]
+               (w = "-addext") (pin st 'addext (st 'addext + [<>a]), go >>a)
+               (pin st w <>a, go >>a))))
        (go as))
    (os-hex? s) (0 < #s && all (c \ elem c (chars "0123456789abcdefABCDEF")) (chars s))
    ; -set_serial: decimal or 0x hex -> n | ()
@@ -454,7 +454,7 @@
    (os-validity st)
     (: now (os-now 0)
        d (unum (peep st "-days" "30"))
-       nb (? (string? (st "-not_before")) (os-tls 'time-arg (st "-not_before")) now)
+       nb (string? (st "-not_before") ? (os-tls 'time-arg (st "-not_before")) now)
        na (? (string? (st "-not_after")) (os-tls 'time-arg (st "-not_after")) (charm? d && charm? nb) (nb + d * 86400) ())
        (? (!(charm? d) || d < 1) "-days wants a count of days"
           !(charm? nb) "-not_before wants [CC]YYMMDDHHMMSSZ"
@@ -472,8 +472,8 @@
    ; x509 -req: the request, signed by -CA and -CAkey or self-signed by -signkey (-key) -> der | [why]
    (os-issue st)
     (: ct (os-slurp (st "-in"))
-       cd (? (string? ct) (: ds (os-tls 'pem-in ct "CERTIFICATE REQUEST") (? (two? ds) <ds ct)) ())
-       r (? (string? cd) (os-tls 'csr-read cd) "the request does not read")
+       cd (string? ct ? (os-tls 'pem-in ct "CERTIFICATE REQUEST" @ ds (two? ds ? <ds ct)))
+       r (string? cd ? (os-tls 'csr-read cd) "the request does not read")
        caf (st "-CA") self (peep st "-signkey" (st "-key"))
        ca (? (string? caf) (: t (os-slurp caf) (? (string? t) (os-der-in t) ())) ())
        cx (? (string? ca) (os-tls 'x509 ca) ())
@@ -481,8 +481,8 @@
        k (? (string? kf) (os-keyfile kf) ())
        v (os-validity st)
        ef (st "-extfile")
-       et (? (string? ef) (os-slurp ef) ())
-       (? !(string? ct) [("cannot read the request " + (? (string? (st "-in")) (st "-in") "on stdin"))]
+       et (string? ef ? (os-slurp ef))
+       (? !(string? ct) [("cannot read the request " + (string? (st "-in") ? (st "-in") "on stdin"))]
           !(tablet? r) [r]
           (string? v) [v]
           (string? caf && !(tablet? cx)) [("cannot read the CA certificate " + caf)]
@@ -490,13 +490,13 @@
           (atom? k) [("cannot read a private key from " + kf)]
           (string? ef && !(string? et)) [("cannot read the extfile " + ef)]
           (: sp (os-tls 'key-spki k)
-             cp (? (elem (peep st "-copy_extensions" "none") ["copy" "copyall"]) (filter two? (map (os-tls 'ext-pair) (r 'exts))) ())
-             fl (? (string? et) (os-extfile et (peep st "-extensions" "")) ())
+             cp (elem (peep st "-copy_extensions" "none") ["copy" "copyall"] ? (filter two? (map (os-tls 'ext-pair) (r 'exts))))
+             fl (string? et ? (os-extfile et (peep st "-extensions" "")))
              (? (string? caf && sp != cx 'key 2) ["the CA key does not match the CA certificate"]
                 (!(string? caf) && sp != r 'spki) ["the key does not match the request"]
-                (os-tls 'cert-make {'subject (r 'subject) 'issuer (? (string? caf) (cx 'subject) (r 'subject))
+                (os-tls 'cert-make {'subject (r 'subject) 'issuer (string? caf ? (cx 'subject) (r 'subject))
                                     'spki (r 'spki) 'key k 'nb <v 'na (v 1) 'serial (os-serial (st "-set_serial"))
-                                    'akid (? (string? ca) (os-tls 'cert-kid ca) ())
+                                    'akid (string? ca ? (os-tls 'cert-kid ca))
                                     'exts (["subjectKeyIdentifier=hash" "authorityKeyIdentifier=keyid"] + cp + fl + st 'addext)})))))
    ; the extensions openssl's configuration gives a self-signed certificate
    os-ca-exts ["subjectKeyIdentifier=hash" "authorityKeyIdentifier=keyid:always" "basicConstraints=critical,CA:TRUE"]
@@ -567,57 +567,57 @@
    (os-verify as)
     (: st {}
        (go a fs)
-        (? (atom? a) (rev fs)
-           (: w <a
-              (? (w = "-CAfile" || w = "-untrusted")
-                  (? (two? >a) (pin st w <>a, go >>a fs) (os-bad "verify" w))
-                 (1 < #w && w 0 = 45) (os-bad "verify" w)
-                 (go >a (w . fs)))))
+        (atom? a ? (rev fs)
+         (<a @ w
+            (? (w = "-CAfile" || w = "-untrusted")
+                (two? >a ? (pin st w <>a, go >>a fs) (os-bad "verify" w))
+               (1 < #w && w 0 = 45) (os-bad "verify" w)
+               (go >a (w . fs)))))
        fs (go as ())
-       _ (? (charm? fs) (uleave fs) 0)
-       caf (peep st "-CAfile" ()) unf (peep st "-untrusted" ())
-       ct (? (string? caf) (os-slurp caf) ())
-       ut (? (string? unf) (os-slurp unf) "")
-       roots (? (string? caf) (? (string? ct) (os-x509s ct) ()) (os-tls 'tls-roots 0 1))
-       pool (? (string? ut) (os-tls 'pem-ders ut) ())
+       _ (charm? fs ? (uleave fs) 0)
+       caf (st "-CAfile") unf (st "-untrusted")
+       ct (string? caf ? (os-slurp caf))
+       ut (string? unf ? (os-slurp unf) "")
+       roots (string? caf ? (string? ct ? (os-x509s ct)) (os-tls 'tls-roots 0 1))
+       pool (string? ut ? (os-tls 'pem-ders ut))
        (one f)
         (: nm (f = "-" ? "stdin" f)
            t (os-slurp f)
-           d (? (string? t) (os-der-in t) ())
-           r (? (string? d) (os-tls 'chain-fail (d . pool) roots () (os-now 0)) ())
+           d (string? t ? (os-der-in t))
+           r (string? d ? (os-tls 'chain-fail (d . pool) roots () (os-now 0)))
            (? !(string? t) (say err ("Could not open file or uri for loading certificate from " + nm + "\n"), 0)
               !(string? d) (say err ("Could not find certificate from " + nm + "\n"), 0)
               (r = 1) (say out (nm + ": OK\n"), 1)
               (: x <r k <>r c (os-vcode x k (r 2))
-                 (say err ((? (tablet? x) (os-dn (x 'subject) + "\n") "")
+                 (say err ((tablet? x ? (os-dn (x 'subject) + "\n") "")
                            + "error " + show <c + " at " + show k + " depth lookup: " + c 1 + "\n"
                            + "error " + nm + ": verification failed\n"), 0))))
        (? (string? caf && !(string? ct)) (say err ("Could not open file or uri for loading certificate file from " + caf + "\n"), 2)
           (string? unf && !(string? ut)) (say err ("Could not open file or uri for loading certificate file from " + unf + "\n"), 2)
-          (: ok (foldl (a \ f \ one f && a) 1 (? (two? fs) fs ["-"]))
+          (foldl (a \ f \ one f && a) 1 (two? fs ? fs ["-"]) @ ok
              (flush out, ok ? 0 2))))
 
    ; --- dgst ---
    (os-dgst as)
     (: (go a m r fs)
-        (? (atom? a) [m r (rev fs)]
-           (: w <a md (os-md w)
-              (? (two? md) (go >a [md (os-summd w)] r fs)
-                 (w = "-r") (go >a m 1 fs)
-                 (w = "-hex") (go >a m r fs)
-                 (w = "--") [m r ((rev fs) + >a)]
-                 (1 < #w && w 0 = 45) [w]
-                 (go >a m r (w . fs)))))
+        (atom? a ? [m r (rev fs)]
+         (: w <a md (os-md w)
+            (? (two? md) (go >a [md (os-summd w)] r fs)
+               (w = "-r") (go >a m 1 fs)
+               (w = "-hex") (go >a m r fs)
+               (w = "--") [m r (rev fs + >a)]
+               (1 < #w && w 0 = 45) [w]
+               (go >a m r (w . fs)))))
        o (go as [["SHA256"] (os-summd "-sha256")] 0 ())
-       (? (atom? >o) (say err ("dgst: Unrecognized flag " + <o + "\ndgst: Use -help for summary.\n"), 1)
-          (: lab (o 0 0 0) mk (o 0 1) r? (o 1) fs (o 2)
-             (row f)
-              (: nm (f = "-" ? "stdin" f)
-                 v (sum-run mk f)
-                 (? (atom? v) (say err (nm + ": " + (? (v = 'dir) "Is a directory" (nom? v) (uerrno v) "cannot read") + "\n"), 0)
-                    (say out (? r? (<v + " *" + nm + "\n") (lab + "(" + nm + ")= " + <v + "\n")), 1)))
-             ok (foldl (a \ f \ row f && a) 1 (? (two? fs) fs ["-"]))
-             (flush out, ok ? 0 1))))
+       (atom? >o ? (say err ("dgst: Unrecognized flag " + <o + "\ndgst: Use -help for summary.\n"), 1)
+        (: lab (o 0 0 0) mk (o 0 1) r? (o 1) fs (o 2)
+           (row f)
+            (: nm (f = "-" ? "stdin" f)
+               v (sum-run mk f)
+               (atom? v ? (say err (nm + ": " + (? (v = 'dir) "Is a directory" (nom? v) (uerrno v) "cannot read") + "\n"), 0)
+                (say out (r? ? (<v + " *" + nm + "\n") (lab + "(" + nm + ")= " + <v + "\n")), 1)))
+           ok (foldl (a \ f \ row f && a) 1 (two? fs ? fs ["-"]))
+           (flush out, ok ? 0 1))))
    ; the digest triple sum.l streams a file through
    (os-summd w)
     (w @ "-md5" sum-md5d "-sha1" sum-sha1d "-sha224" sum-sha224d "-sha384" sum-sha384d
@@ -625,11 +625,11 @@
 
    ; --- rand: the os's entropy or nothing ---
    (os-entropy n)
-    (: q (open "/dev/urandom" "r")
-       (? !(hot? q) ()
+    (open "/dev/urandom" "r" @ q
+       (!(hot? q) ? ()
           (: (go acc have)
-              (? (n <= have) (join "" (rev acc))
-                 (: c (see q) (? (c < 0) () (: p (string c + chug q) (go (p . acc) (have + #p))))))
+              (n <= have ? (join "" (rev acc))
+               (see q @ c (c < 0 ? () (string c + chug q @ p (go (p . acc) (have + #p))))))
              r (go () 0)
              (close q, (string? r ? (snip r 0 n) ())))))
    (os-rand as)
@@ -642,7 +642,7 @@
                  (1 < #w && w 0 = 45) ['bad w]
                  (go >a f o (w . ns)))))
        r (go as () () ())
-       n (? (two? (r 2) && atom? >(r 2)) (unum <(r 2)) ())
+       n (two? (r 2) && atom? >(r 2) ? (unum <(r 2)))
        (? (<r = 'bad) (os-bad "rand" (r 1))
           (!(charm? n) || n < 1)
            (say err ((? (two? (r 2)) ("Invalid size suffix " + <(r 2) + "\n") "") + "rand: Use -help for summary.\n"), 1)
@@ -681,7 +681,7 @@
    ; "host:port", "[v6]:port" or a bare host (443) -> [host port] | ()
    (os-hostport s)
     (: cs (filter (i \ s i = 58) ^#s)
-       k (? (two? cs) (last cs) -1)
+       k (two? cs ? (last cs) -1)
        br (0 < #s && s 0 = 91)
        (? (br && 0 < k && s (k - 1) = 93) [(snip s 1 (k - 1)) (uport (snip s (k + 1) #s))]
           br ()
@@ -690,37 +690,37 @@
    (os-pkey x)
     (: k (os-keyof x)
        (<k @ 'rsa ("RSA, " + show (k 1) + " (bit)")
-             'ec ("EC, (" + (: c (k 2) (? (two? c) <c "?")) + ")")
+             'ec ("EC, (" + (k 2 @ c (two? c ? <c "?")) + ")")
              'ed25519 "ED25519, 253 (bit)"
              (<k + ", " + show (k 1) + " (bit)")))
    (os-sclient as)
     (: st {}
        (go a)
-        (? (atom? a) 0
-           (: w <a
-              (? (elem w ["-showcerts" "-verify_return_error" "-brief" "-quiet"]) (pin st w 1, go >a)
-                 ((w = "-connect" || w = "-servername") && two? >a) (pin st w <>a, go >>a)
-                 (!(1 < #w && w 0 = 45) && !(st "-connect")) (pin st "-connect" w, go >a)
-                 (os-bad "s_client" w))))
+        (atom? a ? 0
+         (<a @ w
+            (? (elem w ["-showcerts" "-verify_return_error" "-brief" "-quiet"]) (pin st w 1, go >a)
+               ((w = "-connect" || w = "-servername") && two? >a) (pin st w <>a, go >>a)
+               (!(1 < #w && w 0 = 45) && !(st "-connect")) (pin st "-connect" w, go >a)
+               (os-bad "s_client" w))))
        r0 (go as)
-       hp (? (string? (st "-connect")) (os-hostport (st "-connect")) ())
+       hp (string? (st "-connect") ? (os-hostport (st "-connect")))
        (? (r0 != 0) r0
           !(two? hp && charm? (hp 1)) (say err "s_client: -connect HOST:PORT is required\ns_client: Use -help for summary.\n", 1)
           (: host <hp port (hp 1)
              sni (peep st "-servername" host)
              brief (st "-brief") quiet (brief || st "-quiet")
-             _ (? quiet 0 (say err ("Connecting to " + host + "\n"), flush err))
+             _ (quiet ? 0 (say err ("Connecting to " + host + "\n"), flush err))
              t (os-tls 'tls-open-as host port sni 'none)
-             (? !(tablet? t) (say err ("s_client: " + (? (string? t) t "no connection") + "\nconnect:errno=1\n"), 1)
+             (!(tablet? t) ? (say err ("s_client: " + (string? t ? t "no connection") + "\nconnect:errno=1\n"), 1)
                 (os-session t st brief quiet)))))
    (os-session t st brief quiet)
     (: ders (t 'chain)
        xs (map os-cert ders)
        rv (os-tls 'chain-fail ders (os-tls 'tls-roots 0 1) () (os-now 0))
-       code (? (rv = 1) [0 "ok"] (os-vcode <rv (rv 1) (rv 2)))
-       fk (? (rv = 1) -1 (rv 1))
-       (dn x) (? (tablet? x) (os-dn (x 'subject)) "?")
-       (idn x) (? (tablet? x) (os-dn (x 'issuer)) "?")
+       code (rv = 1 ? [0 "ok"] (os-vcode <rv (rv 1) (rv 2)))
+       fk (rv = 1 ? -1 (rv 1))
+       (dn x) (tablet? x ? (os-dn (x 'subject)) "?")
+       (idn x) (tablet? x ? (os-dn (x 'issuer)) "?")
        ; the chain as openssl's callback walks it, the top first
        _ (? quiet 0
             (each (rev ^#xs)
@@ -739,14 +739,14 @@
                             + "Negotiated TLS1.3 group: X25519\n"))
                   quiet 0
                   (say out ("CONNECTED\n---\nCertificate chain\n"
-                            + catmap (i \ (: x (xs i)
+                            + catmap (i \ (xs i @ x
                                              (" " + show i + " s:" + dn x + "\n   i:" + idn x + "\n"
                                               + (? (tablet? x) ("   a:PKEY: " + os-pkey x + "; sigalg: " + os-alg (x 'oalg) + "\n"
                                                                 + "   v:NotBefore: " + os-time (x 'nb) + "; NotAfter: " + os-time (x 'na) + "\n") "")
                                               + (? (st "-showcerts") (os-pem (ders i)) ""))))
                                      ^#xs
                             + "---\n"
-                            + (? (st "-showcerts" || !(two? ders)) "" ("Server certificate\n" + os-pem <ders))
+                            + (st "-showcerts" || !(two? ders) ? "" ("Server certificate\n" + os-pem <ders))
                             + "subject=" + dn leaf + "\nissuer=" + idn leaf + "\n---\n"
                             + "Negotiated TLS1.3 group: X25519\n---\n"
                             + (0 = <code ? "Verification: OK\n" ("Verification error: " + code 1 + "\n")) + "---\n"

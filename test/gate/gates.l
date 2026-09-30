@@ -53,23 +53,23 @@
    ; the cwd goes back where it was after every row. a row that walks into a scratch
    ; directory and stays there breaks the next row's relative borrow, and losing the cwd
    ; is one of the things a process of its own used to hide.
-   (nfail u) (: f (test_get 'fail) (? (two? f) #f 0))
+   (nfail u) (test_get 'fail @ f (two? f ? #f 0))
    (row r)
     (: nm <r
        f0 (nfail ()) c0 (test_get 'count) here (cwd ())
        _ (each >r borrow)
-       _ (? (string? here) (chdir here) 0)
+       _ (string? here ? (chdir here) 0)
        df (nfail () - f0) dc (test_get 'count - c0)
-       _ (say1 ("gates: " + show nm + " " + show dc + " tests, " + show df + " failed"))
-       (? (0 < df) 1 (0 = dc) (say1 ("gates: " + show nm + " ran NO test"), 1) 0))
+       (say1 ("gates: " + show nm + " " + show dc + " tests, " + show df + " failed"),
+        (? (0 < df) 1 (0 = dc) (say1 ("gates: " + show nm + " ran NO test"), 1) 0)))
 
    ; a tail of row names runs just those, so every lane keeps a name of its own to be run
    ; by -- `love test/gate/gates.l lux` is what `make test_lux` asks for, and the make
    ; target stays. no tail runs the lot, early first.
    want (map intern >argv)
-   pick (? want (filter (\ r (elem <r want)) all) all)
-   miss (filter (\ n !(elem n (map cap all))) want)
-   _ (each miss (\ n (say1 ("gates: no row named " + show n))))
+   pick (want ? (filter (r \ (elem <r want)) all) all)
+   miss (filter (n \ (nelem n (map cap all))) want)
+   _ (each miss (n \ (say1 ("gates: no row named " + show n))))
    bad (miss ? #miss 0 + net (map row pick))
-   _ (say1 (0 < bad ? ("gates: " + show bad + " rows failed") "gates: ok"))
-   (quit (0 < bad ? 1 0)))
+   (say1 (0 < bad ? ("gates: " + show bad + " rows failed") "gates: ok"),
+    quit (0 < bad ? 1 0)))

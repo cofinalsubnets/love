@@ -1,24 +1,15 @@
-; --- test/kernel/svm.l: the amd-v spike -- one guest, one exit.
-; guarded twice, and both guards are the tree's own laws. The nom is in the book
-; only on x64, so presence is asked of (names ()) and never by reading it (a
-; read would be a missing condition, not an absence); and the CPU under that
-; seat may still be an Intel one, or a qemu model without the feature, so
-; (svm ()) answers for the silicon. Either way this file says so and stays
-; green -- an absence is not a divergence.
-;
-; What the three laws below separate: that the entry was accepted (a refused one
-; answers -1, invalid, and nothing else), that a guest instruction retired (the
-; sentinel is in the guest's own rax, and only the guest could have put it
-; there), and that the intercept fired where it should (the saved rip is the
-; cpuid's own address, one instruction in -- not 0, and not the hlt's 5).
-(: had (elem 'svm (names ()))
-   (? (! (? had (svm ()) ()))
-      (: _ (puts "svm: no AMD-V here, laws skipped") _ (putc 10) ())
-      (: r (svm-run ())
-         _ (test
-            (3 = (tally r))          ; (exitcode rax rip) -- a refusal answers ()
-            (114 = <r)               ; 0x72, the cpuid intercept
-            (4660 = <>r)             ; 0x1234, the sentinel the guest loaded
-            (3 = <>>r))              ; the cpuid's own address
-         _ (puts "svm: guest ran, cpuid intercepted") _ (putc 10)
-         ())))
+; test/kernel/svm.l -- the amd-v spike: one guest, one exit. the nom is in the book only on x64,
+; so presence is asked of (names ()), never by a read; the cpu may lack the feature, so (svm ())
+; answers for it, and either absence stays green. the laws: the entry was accepted (a refused one
+; answers -1), a guest instruction retired (the sentinel in the guest's rax), and the intercept
+; fired at the cpuid's own address, one instruction in.
+(elem 'svm (names ()) @ had
+   (! (had ? (svm ())) ?
+      (puts "svm: no AMD-V here, laws skipped", putc 10, ())
+      (svm-run () @ r
+       (test (3 = #r)          ; (exitcode rax rip) -- a refusal answers ()
+             (114 = <r)               ; 0x72, the cpuid intercept
+             (4660 = <>r)             ; 0x1234, the sentinel the guest loaded
+             (3 = <>>r),             ; the cpuid's own address
+        puts "svm: guest ran, cpuid intercepted", putc 10,
+        ()))))

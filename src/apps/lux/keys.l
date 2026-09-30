@@ -30,10 +30,10 @@
    (kb lib sym act) [lib sym act]
    (kb-mods r) <r  (kb-sym r) <>r  (kb-act r) (r 2)
    (keys-has t lib sym) (any (r \ kb-mods r = lib && kb-sym r = sym) t)
-   (keys-find t lib sym) (: hit (afind (r \ kb-mods r = lib && kb-sym r = sym) t)
+   (keys-find t lib sym) (afind (r \ kb-mods r = lib && kb-sym r = sym) t @ hit
                              (two? hit ? (kb-act hit) ()))
-   (keys-union custom def) (custom + (filter (r \ !(keys-has custom (kb-mods r) (kb-sym r))) def))
-   (keys-syms t) (foldl (\ a r (any (x \ x = kb-sym r) a ? a (kb-sym r . a))) () t)
+   (keys-union custom def) (custom + filter (r \ !(keys-has custom (kb-mods r) (kb-sym r))) def)
+   (keys-syms t) (foldl (a \ r \ (any (x \ x = kb-sym r) a ? a (kb-sym r . a))) () t)
 
    ; --- key specs: a list, `(sup shift e)` -- the last element is the key, every
    ;     one before it a modifier. a config writes these (src/apps/lux/config.l reads
@@ -59,11 +59,11 @@
      '("XF86AudioStop" 269025045)        '("XF86AudioPrev" 269025046)
      '("XF86AudioNext" 269025047)
      '("XF86MonBrightnessUp" 269025026)  '("XF86MonBrightnessDown" 269025027)])
-   (xk-of k) (? (charm? k) (31 < k ? k ())                                     ; a keysym, verbatim -- the escape hatch past the table
-                (: nm (name? k ? (string k) k)
+   (xk-of k) (charm? k ? (31 < k ? k ())                                       ; a keysym, verbatim -- the escape hatch past the table
+                ((name? k ? (string k) k) @ nm
                    (? !(string? nm) ()
                       (#nm = 1) (nm 0)                                      ; one char is its ascii keysym
-                      (: hit (afind (r \ <r = nm) xk-names)
+                      (afind (r \ <r = nm) xk-names @ hit
                          (two? hit ? <>hit ())))))                             ; unknown name -> () (no keysym is 0, so nothing is lost)
    (kmod-of m modm) (? (m = 'sup || m = 'super || m = 'mod4) supm
                        (m = 'alt || m = 'mod1) altm
@@ -75,10 +75,10 @@
    ; through a `(1 mask)` wrapper: a bare mask of 0 (no modifiers) is a legitimate
    ; answer and would read as failure on its own.
    (kspec modm spec)
-    (? (atom? spec) ()
+    (atom? spec ? ()
        (: n #spec
           ks (xk-of (spec (n - 1)))
-          ms (foldl (\ a m (: b (kmod-of m modm) (two? a && b ? [(<a | b)] ())))
+          ms (foldl (a \ m \ (kmod-of m modm @ b (two? a && b ? [(<a | b)] ())))
                     '(0) (take (n - 1) spec))
           (ks && two? ms ? [<ms ks] ())))
 
@@ -89,12 +89,12 @@
                     (<a = 'spawn || <a = 'exec) [<a >a]
                     a)
    (keys-rows modm rows)                                                         ; ((spec action) ..) -> binding rows; an unreadable spec is dropped
-    (foldr (\ r acc (: k (two? r ? (kspec modm <r) ())
-                       (two? k && two? >r ? (kb <k <>k (kb-act-of <>r) . acc) acc)))
+    (foldr (r \ acc \ ((two? r ? (kspec modm <r) ()) @ k
+                         (two? k && two? >r ? (kb <k <>k (kb-act-of <>r) . acc) acc)))
            () rows)
    (keys-drop modm t specs)                                                      ; remove every chord named in specs
-    (: ks (filter two? (map (s \ kspec modm s) specs))
-       (? (atom? ks) t
+    (filter two? (map (s \ kspec modm s) specs) @ ks
+       (atom? ks ? t
           (filter (r \ !(any (k \ <k = kb-mods r && <>k = kb-sym r) ks)) t)))
 
    ; --- the directional block: the .hs list comprehension as a map --
@@ -136,7 +136,7 @@
    ;     mod+shift+/ help are not ported; some rows are overridden by custom).
    ;     the digit rows follow the tag count, and stop at 9 -- there is no tenth
    ;     digit key to hang a tenth workspace on. ---
-   (keys-def-for modm ntags) (: ds (map (+ 1) (jot (9 < ntags ? 9 ntags)))
+   (keys-def-for modm ntags) (map (+ 1) (jot (9 < ntags ? 9 ntags)) @ ds
     (cat [
      (kb (modm | shiftm) xk-ret '(spawn ("xterm")))                              ; mod+shift+return  terminal
      (kb modm 112 '(spawn ("dmenu_run")))                                        ; mod+p             (custom overrides)
@@ -177,7 +177,7 @@
    (keys-build modm nud ntags binds unbinds)
     (keys-drop modm
                (keys-union (keys-rows modm binds)
-                           (keys-union ((keys-dir-for modm nud) + (keys-cmd-for modm))
+                           (keys-union (keys-dir-for modm nud + keys-cmd-for modm)
                                        (keys-def-for modm ntags)))
                unbinds)
 

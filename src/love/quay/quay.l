@@ -93,10 +93,10 @@
    ; --- the widths: wcwidth walked over every code point, each change of width opening
    ;     a run (cp << 2 | w), so the vt and 'text agree by construction. a control counts
    ;     one here: no cell holds one ---
-   q-runs (: (w c) (: x (wcwidth c) (? (x < 0) 1 x))
-             (go c last acc) (? (1114111 < c) (rev acc)
-                                (: x (w c) (? (x = last) (go (c + 1) last acc)
-                                               (go (c + 1) x (((c << 2) | x) . acc)))))
+   q-runs (: (w c) (wcwidth c @ x (x < 0 ? 1 x))
+             (go c last acc) (1114111 < c ? (rev acc)
+                                (w c @ x (x = last ? (go (c + 1) last acc)
+                                             (go (c + 1) x ((c << 2 | x) . acc)))))
              (go 0 -1 ()))
    q-wid-ok (0 = <q-runs                                ; the blank opens the first run, 0 wide
              && 500 < #q-runs

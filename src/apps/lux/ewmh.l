@@ -32,16 +32,16 @@
    (ewmh-atom nm) (peep (peep ewst 'atoms (tablet 1)) nm 0)
    (ewmh-rect scrn swp shp)                                                      ; a screen's tiling rect: minus the struts reaching it (when avoiding)
     (? !(peep ewst 'avoid 0) scrn
-       (foldl (\ r p (strut-shrink r <>p swp shp)) scrn (ewst 'struts)))
+       (foldl (r \ p \ strut-shrink r <>p swp shp) scrn (ewst 'struts)))
    (ewmh-toggle u) (pin ewst 'avoid !(ewst 'avoid))
-   (ewmh-names tags) (foldl (\ a t (a + show t + string 0)) "" tags)            ; _net_desktop_names: NUL-terminated utf8 strings
-   (ewmh-per tags vals) (foldl (\ a t (a + vals)) () tags)                       ; one row of vals per desktop
+   (ewmh-names tags) (foldl (a \ t \ a + show t + string 0) "" tags)            ; _net_desktop_names: NUL-terminated utf8 strings
+   (ewmh-per tags vals) (foldl (a \ t \ a + vals) () tags)                       ; one row of vals per desktop
    (ewmh-track s win)                                                            ; read the window's strut; () if it has none
     (: vals (x-getprop-atoms s win (ewmh-atom "_NET_WM_STRUT_PARTIAL"))
        vals (two? vals ? vals (x-getprop-atoms s win (ewmh-atom "_NET_WM_STRUT")))
        st (strut-parse vals)
        (st ? (pin ewst 'struts ([win st] . filter (p \ <p != win) (ewst 'struts)), st)))
-   (ewmh-untrack win) (pin ewst 'struts (filter (p \ <p != win) (peep ewst 'struts ())))
+   (ewmh-untrack win) (pin ewst 'struts (filter (p \ <p != win) (ewst 'struts)))
 
    ; --- CreateWindow (opcode 1): the 1x1 InputOnly support window at (-1,-1) ---
    (x-mkwin s wid parent)
@@ -76,16 +76,16 @@
        utf8 (x-intern s "UTF8_STRING")
        _ (pins ewst 'atoms at 'root root 'sup idbase)
        (a nm) (peep at nm 0)
-       _ (x-mkwin s idbase root)
-       _ (x-chprop32 s root (a "_NET_SUPPORTED") 4                                           ; type atom(4); only the _net_ vocabulary
-                     (map (nm \ peep at nm 0) (filter (nm \ snip nm 0 5 = "_NET_") ewmh-atoms)))
-       _ (x-chprop32 s root (a "_NET_SUPPORTING_WM_CHECK") 33 [idbase])                     ; type window(33)
-       _ (x-chprop32 s idbase (a "_NET_SUPPORTING_WM_CHECK") 33 [idbase])
-       _ (x-chprop8 s idbase (a "_NET_WM_NAME") utf8 "LG3D (XMonad)")                        ; setwmname: the Java hack
-       _ (x-chprop32 s root (a "_NET_NUMBER_OF_DESKTOPS") 6 [#tags])                        ; type cardinal(6)
-       _ (x-chprop32 s root (a "_NET_DESKTOP_VIEWPORT") 6 (ewmh-per tags '(0 0)))           ; no large desktops: every viewport (0 0)
-       _ (x-chprop8 s root (a "_NET_DESKTOP_NAMES") utf8 (ewmh-names tags))
-       (x-flush s))
+       (x-mkwin s idbase root,
+        x-chprop32 s root (a "_NET_SUPPORTED") 4                                           ; type atom(4); only the _net_ vocabulary
+                   (map (nm \ peep at nm 0) (filter (nm \ snip nm 0 5 = "_NET_") ewmh-atoms)),
+        x-chprop32 s root (a "_NET_SUPPORTING_WM_CHECK") 33 [idbase],                     ; type window(33)
+        x-chprop32 s idbase (a "_NET_SUPPORTING_WM_CHECK") 33 [idbase],
+        x-chprop8 s idbase (a "_NET_WM_NAME") utf8 "LG3D (XMonad)",                        ; setwmname: the Java hack
+        x-chprop32 s root (a "_NET_NUMBER_OF_DESKTOPS") 6 [#tags],                        ; type cardinal(6)
+        x-chprop32 s root (a "_NET_DESKTOP_VIEWPORT") 6 (ewmh-per tags '(0 0)),           ; no large desktops: every viewport (0 0)
+        x-chprop8 s root (a "_NET_DESKTOP_NAMES") utf8 (ewmh-names tags),
+        x-flush s))
 
    ; --- sync: publish the sheaf whenever it changed (pagers track us); scrn is the
    ;     root rect, so the desktop's shape and workarea follow the screen and the struts ---
@@ -94,18 +94,18 @@
        foc (wsfoc sh ? (wsfoc sh) 0)                                             ; a focused float is what a taskbar must highlight,
        wa (ewmh-rect scrn (scrn 2) (scrn 3))                                     ; and wsfoc names one
        key [cur foc wins scrn wa]
-       (? (key = ewst 'last) 0
+       (key = ewst 'last ? 0
           (: _ (pin ewst 'last key) root (peep ewst 'root 0) tags (map cap (wsboard sh))
-             _ (x-chprop32 s root (ewmh-atom "_NET_DESKTOP_GEOMETRY") 6 [(scrn 2) (scrn 3)])
-             _ (x-chprop32 s root (ewmh-atom "_NET_WORKAREA") 6 (ewmh-per tags wa))      ; the root minus every strut, per desktop
-             _ (x-chprop32 s root (ewmh-atom "_NET_CLIENT_LIST") 33 wins)
-             _ (x-chprop32 s root (ewmh-atom "_NET_CLIENT_LIST_STACKING") 33 wins)   ; libwnck creates its windows off this list (no stacking =
+             (x-chprop32 s root (ewmh-atom "_NET_DESKTOP_GEOMETRY") 6 [(scrn 2) (scrn 3)],
+              x-chprop32 s root (ewmh-atom "_NET_WORKAREA") 6 (ewmh-per tags wa),      ; the root minus every strut, per desktop
+              x-chprop32 s root (ewmh-atom "_NET_CLIENT_LIST") 33 wins,
+              x-chprop32 s root (ewmh-atom "_NET_CLIENT_LIST_STACKING") 33 wins,   ; libwnck creates its windows off this list (no stacking =
                                                                                      ; an empty taskbar); wswins is tiles-then-floats = bottom to top
-             _ (x-chprop32 s root (ewmh-atom "_NET_CURRENT_DESKTOP") 6 [cur])
-             _ (x-chprop32 s root (ewmh-atom "_NET_ACTIVE_WINDOW") 33 [foc])
-             _ (map (p \ (: t (<p - 1)                                           ; every window wears its workspace -- a float's
-                            (map (w \ x-chprop32 s w (ewmh-atom "_NET_WM_DESKTOP") 6 [t]) (zrow <>p)))) (wsboard sh))   ; tag is the zipper that holds it
-             (x-flush s))))
+              x-chprop32 s root (ewmh-atom "_NET_CURRENT_DESKTOP") 6 [cur],
+              x-chprop32 s root (ewmh-atom "_NET_ACTIVE_WINDOW") 33 [foc],
+              map (p \ (<p - 1 @ t                                               ; every window wears its workspace -- a float's
+                          (map (w \ x-chprop32 s w (ewmh-atom "_NET_WM_DESKTOP") 6 [t]) (zrow <>p)))) (wsboard sh),   ; tag is the zipper that holds it
+              x-flush s))))
 
    ; --- ClientMessage (event 33) field reads, off the raw bytes ---
    (ewmh-cm-win pkt) (u32 pkt 4)  (ewmh-cm-type pkt) (u32 pkt 8)

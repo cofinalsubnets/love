@@ -13,11 +13,11 @@
 ; it searches from i; `at?` is the exact-position twin, which is what counting wants
 (: (at? h n i) (((i + #n) <= #h) && n = snip h i (i + #n))
    (sub? h n i) (? ((i + #n) < (#h + 1))
-                   (? (at? h n i) 1 (sub? h n (i + 1)))
+                   (at? h n i ? 1 (sub? h n (i + 1)))
                    0)
    (mkscr r c) (screen (cask (screen () r c)) r c)
    (paint s r c row0 col0)                     ; limn one whole grid into a jug
-    (: j (jug 0) _ (limn-rows j s r c row0 col0 0 -1 0) (slurp j))
+    (jug 0 @ j (limn-rows j s r c row0 col0 0 -1 0, slurp j))
 
 ; --- the address: 0-based in, 1-based out, row then col ---
    _ (test
@@ -135,7 +135,7 @@
 ; --- a picture: a ▀ block to a plain outer terminal, bare ground under kitty's own
 ;     picture (limn-pics) to one that takes them -- sent once, placed each time ---
    _ (: s (mkscr 2 6)
-        _ (scribe s ("\e_Ga=T,f=24,s=10,v=12,q=2;" + cats (map (\ _ "/wAA") (jot 120)) + "\e\\"))
+        _ (scribe s ("\e_Ga=T,f=24,s=10,v=12,q=2;" + cats (map (_ \ "/wAA") (jot 120)) + "\e\\"))
         blocks (paint s 2 6 0 0)
         j (jug 0)
         _ (limn-rows j s 2 6 0 0 0 -1 1)
@@ -157,14 +157,14 @@
                 ((six + "4;4#180;2;100;0;0!4N$-\e\\") = limn-sixel (cats [red red red red]) 2 0 0 2 2 4 4)
                 ((six + "2;1#180;2;100;0;0?@$-\e\\") = limn-sixel (cats [clear red]) 2 0 0 2 1 2 1)
                 ((six + "1;2#5;2;0;0;100A$#180;2;100;0;0@$-\e\\") = limn-sixel (cats [red blue]) 1 0 0 1 2 1 2)
-                ((six + "1;7#180;2;100;0;0~$-#180@$-\e\\") = limn-sixel (cats (map (\ _ red) (jot 7))) 1 0 0 1 7 1 7)
+                ((six + "1;7#180;2;100;0;0~$-#180@$-\e\\") = limn-sixel (cats (map (_ \ red) (jot 7))) 1 0 0 1 7 1 7)
                 ((six + "1;1#228;2;52;52;52@$-\e\\") = limn-sixel (px 128 128 128 255) 1 0 0 1 1 1 1)
                 ((six + "1;1#216;2;0;0;0@$-\e\\") = limn-sixel (cats [red (px 0 0 0 255)]) 2 1 0 1 1 1 1)))
 
 ; --- ..and in a pane: its tiles stepped over, each picture's part laid at its top-left
 ;     tile, the same part laid again from what was laid, and the cells it took erased ---
    _ (: s (mkscr 2 6)
-        _ (scribe s ("\e_Ga=T,f=24,s=10,v=12,q=2;" + cats (map (\ _ "/wAA") (jot 120)) + "\e\\"))
+        _ (scribe s ("\e_Ga=T,f=24,s=10,v=12,q=2;" + cats (map (_ \ "/wAA") (jot 120)) + "\e\\"))
         ps (limn-placed s 2 6)
         j (jug 0) _ (limn-rows j s 2 6 0 0 0 -1 2) stepped (slurp j)
         laid {} k (jug 0) _ (limn-sixes k s ps 3 4 (gaze s 6) (gaze s 7) {} laid) one (slurp k)
@@ -195,7 +195,7 @@
         _ (test !(sub? plain ";7;" 0) (sub? chosen ";7;" 0)))
 
 ; --- an empty bar list paints nothing, and a zero-row pane paints nothing ---
-   _ (: j (jug 0) _ (limn-bars j ()) (test ("" = slurp j)))
-   _ (: s (mkscr 1 4) (test ("" = paint s 0 4 0 0)))
+   _ (jug 0 @ j (limn-bars j (), (test ("" = slurp j))))
+   _ (mkscr 1 4 @ s (test ("" = paint s 0 4 0 0)))
 
    _ (test_fin ()))

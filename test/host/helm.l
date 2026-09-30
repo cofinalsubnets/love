@@ -1,25 +1,8 @@
-; --- test/host/helm.l: helm, the supervisor -- the unit language, the restart
-; policy over real processes, and the control socket ---
-; spawnmap/glean/sigfd/shore live in src/posix.c and src/sock.c, which love0 does not
-; link, so this runs standalone against the built binary like test/host/kiosko.l.
-; helm is not baked into the image either, so the four crew files are loaded by path.
-; run: cat test/00-init.l test/host/helm.l | out/host/love
-;
-; what is asserted:
-;   language  a config reads to units keyed by their own clause names; the defaults
-;             land (a service restarts on-fail, a oneshot not at all).
-;   checks    every complaint at once, and the ones that matter: an unknown kind or
-;             clause, a duplicate, an `after` cycle, a dep that is not a unit.
-;   policy    over real children: a oneshot blocks its dependents and ends 'done, a
-;             service that exits nonzero is restarted to its cap and then 'failed,
-;             one that exits 0 is left alone.
-;   moor      a love form in over the socket, its value back out.
-;   underlay  the verb table laid as a directory of links onto selfpath, and a
-;             child resolving `ls` through it with that directory as its whole PATH.
-;   scatter   the carried source archive inflated to a tree, re-homed below the
-;             archive's top the way src/inle/kmain.c's k_untar does it.
-; the mount half of both is pid 1's and root's, and is not asserted here: hunderlay
-; answers the errno and lays in place, which is the lane this runs.
+; test/host/helm.l -- helm, the supervisor: the unit language and its checks, the restart policy
+; over real children, a love form round-tripped over the control socket, the verb underlay laid
+; as links onto selfpath, and the carried source scattered to a tree. the mounts are pid 1's and
+; are not asserted. helm is not baked, so its crew files load by path.
+; run: cat test/00-init.l test/host/helm.l | out/love
 (borrow "src/apps/helm/unit.l")
 (borrow "src/apps/helm/sup.l")
 (borrow "src/apps/helm/moor.l")
@@ -32,10 +15,10 @@
  (lit? (cite 'helm 'helm-main)))
 
 ; --- a config on disk -------------------------------------------------------------
-(: (spill path text) (: q (open path "w") _ (say q text) _ (flush q) (close q))
+(: (spill path text) (open path "w" @ q (say q text, flush q, close q))
    ; is n a substring of h? there is no core `find`, and the gate needs one
    (has? h n) (: nh #h nn #n
-                 (go i) (? ((nh - nn) < i) 0
+                 (go i) (? (nh - nn < i) 0
                            (n = snip h i (i + nn)) 1
                            (go (i + 1)))
                  (go 0))
@@ -62,7 +45,7 @@
    us <r
    _ (test
       (4 = #us)
-      (['once 'fails 'settles 'default] = (hnames us))
+      (['once 'fails 'settles 'default] = hnames us)
       (atom? <>r)                                  ; a clean config gripes about nothing
       (== 'oneshot (peep (hby us 'once) 'kind ()))
       (== 'no      (peep (hby us 'once) 'restart ()))   ; a oneshot does not restart
@@ -70,7 +53,7 @@
       (3 = peep (hby us 'settles) 'tries 0)            ; ... three times
       (1 = peep (hby us 'fails) 'tries 0)              ; unless the config says otherwise
       (['once] = peep (hby us 'fails) 'after [])
-      (["/bin/sh" "-c" "exit 3"] = (peep (hby us 'fails) 'exec []))
+      (["/bin/sh" "-c" "exit 3"] = peep (hby us 'fails) 'exec [])
       ; what check prints of an exec is a command line, not a list laid out with
       ; spaces: the one word sh is handed comes back as one word
       (has? (hunit-line (hby us 'fails)) "exec /bin/sh -c 'exit 3'"))
@@ -93,11 +76,11 @@
    ; signal loop makes -- so this is the real reaper, just hand-cranked.
    _ (helm-reset us)
    _ (hput 'quiet 1)
-   (settled? nm) (: s (hstate nm) ((s == 'done) || (s == 'failed)))
+   (settled? nm) (hstate nm @ s (s == 'done || s == 'failed))
    (settle ms) (: t0 (clock 0)
                   (go _) (hdrain 0,
-                          ? ((settled? 'fails) && (settled? 'settles)) 1
-                               (((clock 0) - t0) > ms) 0
+                          ? (settled? 'fails && settled? 'settles) 1
+                               (clock 0 - t0 > ms) 0
                                (rest 5, go 0))
                   (go 0))
    _ (hboot 'default)
@@ -114,13 +97,13 @@
    ; the socket is an eval server: a form in, its value out. one process, two tasks --
    ; the moor twirled, the client here -- interleaving through the scheduler.
    sock ("out/.helm-" + me + ".sock")
-   _ (twirl (\ _ (helm-moor sock)) 0)
+   _ (twirl (_ \ (helm-moor sock)) 0)
    _ (rest 50)
    c (connect ['unix sock])
    _ (test (lit? c))
    ; the reply, one line. the accumulator is a charlist, and `string` is what
    ; makes it one string -- a `+ ""` leaves it a list of charms.
-   (rdline _) (: (go acc) (: ch (see c)
+   (rdline _) (: (go acc) (see c @ ch
                              (? (ch == -1) (string (rev acc))
                                 (ch == 10) (string (rev acc))
                                 (go (ch . acc))))
@@ -144,13 +127,13 @@
    ubd ("out/.helm-underlay-" + me)
    n   (hunderlay ubd)
    ws  (keys (cite 'verbs 'tab))
-   _   (test (n = (1 + tally ws)))                  ; every verb, and `love` itself
+   _   (test (n = 1 + tally ws))                  ; every verb, and `love` itself
    _   (test (readlink (ubd + "/ls") = selfpath 0))
    _   (test (elem 'ls ws) (string? (readlink (ubd + "/love"))))
    ; the point of the directory: a child with nothing but it on PATH has a userland.
    r   (hark [(ubd + "/sh") "-c" ("PATH=" + ubd + "; ls " + ubd + "/ls")])
    _   (test (0 = <r) (has? <>r "ls"))
-   _   (each ws (\ w (unlink (ubd + "/" + string w))))
+   _   (each ws (w \ (unlink (ubd + "/" + string w))))
    _   (unlink (ubd + "/love"))
    _   (rmdir ubd)
 
@@ -159,13 +142,13 @@
    ; so its own files are where this file says they are.
    scd ("out/.helm-scatter-" + me)
    k   (hscatter scd)
-   _   (test (0 < k))
-   _   (test (two? (stat (scd + "/src/apps/helm/helm.l"))))
-   _   (test (atom? (stat (scd + "/love-0.1"))))  ; the top is dropped, not laid
-   _   (hark [(selfpath 0) "rm" "-rf" scd])           ; 13M of tree, and out/ is not a nest
+   (test (0 < k),
+    test (two? (stat (scd + "/src/apps/helm/helm.l"))),
+    test (atom? (stat (scd + "/love-0.1"))),      ; the top is dropped, not laid
+    hark [(selfpath 0) "rm" "-rf" scd],               ; 13M of tree, and out/ is not a nest
 
-   _ (unlink good) _ (unlink bad) _ (unlink stamp)
-   _ (test_fin ())
-   0)
+    unlink good, unlink bad, unlink stamp,
+    test_fin (),
+    0))
 
 (puts "helm: ok\n")

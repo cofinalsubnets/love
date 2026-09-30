@@ -1,41 +1,17 @@
-; test/uuval.l -- love's own values, modelled in uu: the measure tower of
-; claude.md's lambda equations ($x = ceil (re (net x)), ?x = ($x > 0)) built as
-; a stack OF retractions, so the laws test/law.l can only refute become theorems
-; (src/tools/law2uu.l compiles them off law.l's own rows into test/uuvallaw.l -- one
-; spelling, both lanes). the value universe is a binary tree of measures -- love's
-; net sums over a compound's parts and reads nothing else, so a leaf is its
-; measure and no gem's value (hence no ieee) enters the model.
-;
-; the tower, each rung a section/retraction pair whose round trip is definitional:
+; test/uuval.l -- love's own values modelled in uu: the measure tower of claude.md's
+; lambda equations ($x = ceil (re (net x)), ?x = ($x > 0)) as a stack of retractions, so
+; test/law.l's laws become theorems (src/tools/law2uu.l compiles its rows into
+; test/uuvallaw.l). a value is a binary tree of measures: net reads nothing else, so no ieee
+; enters the model.
 ;
 ;   bool  --nbit-->  nat  --nzed-->  zed  --zrea-->  rea  --rmsr-->  msr  --vnum--> val
 ;         <-natbit-       <--zsat--       <-rceil--       <--mre---        <--vnet--
 ;
-; a real is a half-integer (z, plus a bit for +1/2): the smallest carrier closed
-; under addition on which ceil is not the identity, which is all the tower's shape
-; asks of it -- 2.5 ceils to 3 and -2.5 to -2 here, exactly as love answers.
-;
-; a leaf is not quite its measure: () and 0 net the same, read nil the same, and
-; are still two values, so the leaf carries a tag (atm) and = reads it. that one
-; bit is what a whole layer of the model needed and nothing else in it uses.
-; the equality itself is an equivalence here -- reflexive, and transitive off the
-; reflection of each rung's decidable equality into a path -- which is what lets
-; a link's two limbs be compared through the heights neither of them spells.
-; and beside it sits the pinned carrier, the same trees with the index tied to
-; the height, where the spelling is unique and `paths` is the equality. the two
-; are bridged both ways: veq answers true exactly when the two values pin to the
-; same one, so love's = is a decision procedure for paths and every law can be
-; read either way. the laws below are given in both.
-; above the tower sits the charm ceiling, the only rung with a width -- zsat is
-; the retraction and stays unbounded, zsatc is what the word can hold -- and
-; beside it the colours, the sign structure ?x = ($x > 0) actually rests on.
-; the laws here are about idempotence and factorisation, so a wrong zadd cannot
-; fake one; the algebra of + and * is test/uuvalband.l's, and what gates the
-; arithmetic in both is the differential in test/uuvaldiff.l, which runs love's
-; own saturate beside this model's vsat over test/law.l's corpus.
-;
-; substrate: test/uu.l (the kernel + nat vocabulary; this file loads after it by
-; sort order). guard: fail by name if the kernel is not up.
+; a real is a half-integer, the smallest carrier on which ceil is not the identity. a leaf
+; carries a tag (atm) because () and 0 net alike yet are two values. veq is an equivalence,
+; bridged both ways to the pinned carrier where `paths` is the equality, so each law is
+; given in both. the + and * algebra is test/uuvalband.l's; test/uuvaldiff.l gates the
+; arithmetic against love's own. loads after test/uu.l (sort order), its kernel.
 (test (elem 'vof (names ())))
 
 ; --- zed: the integers, ceil's codomain. ii1 n is n, ii2 n is -(succ n) ---
@@ -1533,16 +1509,16 @@
  (vof 0 'true = vof 0 '(vnil  (zval (zneg 4))))              ; !-5 = 1
  (vof 0 'true = vof 0 '(vbit  (nval 2)))
  ; a link: (1 2) nets 3, and the pair sits one level up
- (= (vof 0 '3)
-      (vof 0 '(vsat (tpair 1 (ii2 (tpair (anum (rmsr (zrea (nzed 1))))
-                                         (anum (rmsr (zrea (nzed 2))))))))))
+ (vof 0 '3 =
+    vof 0 '(vsat (tpair 1 (ii2 (tpair (anum (rmsr (zrea (nzed 1))))
+                                      (anum (rmsr (zrea (nzed 2)))))))))
  ; (-2 1) nets -1, so it saturates to 0 and reads nil -- the sign is the whole story
- (= (vof 0 '0)
-      (vof 0 '(vsat (tpair 1 (ii2 (tpair (anum (rmsr (zrea (zneg 1))))
-                                         (anum (rmsr (zrea (nzed 1))))))))))
+ (vof 0 '0 =
+    vof 0 '(vsat (tpair 1 (ii2 (tpair (anum (rmsr (zrea (zneg 1))))
+                                      (anum (rmsr (zrea (nzed 1)))))))))
  ; a twin: (3 ~ 4) ceils to 3 -- re drops the imaginary rung
- (= (vof 0 '(ii1 3))
-      (vof 0 '(vceil (vnum (tpair (zrea (nzed 3)) (zrea (nzed 4)))))))
+ (vof 0 '(ii1 3) =
+    vof 0 '(vceil (vnum (tpair (zrea (nzed 3)) (zrea (nzed 4))))))
  ; --- and veq discriminates, which is what keeps its laws from being vacuous:
  ; --- a constant-true equality would prove every one of them ---
  (vof 0 'true = vof 0 '(veq (nval 2) (nval 2)))
@@ -1554,21 +1530,21 @@
  ; cap and cup invert a link, and the padding a link costs is not observable
  (vof 0 'true = vof 0 '(veq (vcap (vlink (nval 1) (nval 2))) (nval 1)))
  (vof 0 'true = vof 0 '(veq (vcup (vlink (nval 1) (nval 2))) (nval 2)))
- (= (vof 0 'true)  (vof 0 '(veq (vlink (vlink (nval 1) (nval 2)) (nval 3))
-                                (vlink (vlink (nval 1) (nval 2)) (nval 3)))))
+ (vof 0 'true = vof 0 '(veq (vlink (vlink (nval 1) (nval 2)) (nval 3))
+                            (vlink (vlink (nval 1) (nval 2)) (nval 3))))
  ; an atom is its own cap; its cup is ()
  (vof 0 'true = vof 0 '(veq (vcap (nval 7)) (nval 7)))
  (vof 0 'true = vof 0 '(veq (vcup (nval 7)) vnilv))
  ; --- and veq composes: a value, its padded self, and the same value read back
  ; --- out of a deeper link are three spellings, and the chain closes ---
- (= (vof 0 'true)
-      (vof 0 '(veq (vcap (vlink (vcap (vlink (nval 1) (nval 2))) (nval 3))) (nval 1))))
- (= (vof 0 'true)
-      (vof 0 '(veq (vlink (vcap (vlink (nval 1) (nval 2))) (nval 3))
-                   (vlink (nval 1) (nval 3)))))
+ (vof 0 'true =
+    vof 0 '(veq (vcap (vlink (vcap (vlink (nval 1) (nval 2))) (nval 3))) (nval 1)))
+ (vof 0 'true =
+    vof 0 '(veq (vlink (vcap (vlink (nval 1) (nval 2))) (nval 3))
+                (vlink (nval 1) (nval 3))))
  ; ..and the congruence discriminates: one limb agreeing is not enough
- (= (vof 0 'false)
-      (vof 0 '(veq (vlink (nval 1) (nval 2)) (vlink (nval 1) (nval 3)))))
+ (vof 0 'false =
+    vof 0 '(veq (vlink (nval 1) (nval 2)) (vlink (nval 1) (nval 3))))
  ; --- and the pinned carrier: the index a value carries is the height it has,
  ; --- where the unpinned one carries whatever height it was met at ---
  (vof 0 '0 = vof 0 '(pr1 (pr1 (pin (nval 7)))))
@@ -1576,81 +1552,81 @@
  (vof 0 '2 = vof 0 '(pr1 (pr1 (pin (vlink (vlink (nval 1) (nval 2)) (nval 3))))))
  ; the cup of that link is the number 3, met at height 1 and living at 0
  (vof 0 '1 = vof 0 '(pr1 (vcup (vlink (vlink (nval 1) (nval 2)) (nval 3)))))
- (= (vof 0 '0)
-      (vof 0 '(pr1 (pr1 (pin (vcup (vlink (vlink (nval 1) (nval 2)) (nval 3))))))))
+ (vof 0 '0 =
+    vof 0 '(pr1 (pr1 (pin (vcup (vlink (vlink (nval 1) (nval 2)) (nval 3)))))))
  ; ..and the two spellings net the same, which is what makes pin a change of
  ; spelling and not of meaning
- (= (vof 0 '(vnet (nval 3)))
-      (vof 0 '(pnet (pin (vcup (vlink (vlink (nval 1) (nval 2)) (nval 3)))))))
+ (vof 0 '(vnet (nval 3)) =
+    vof 0 '(pnet (pin (vcup (vlink (vlink (nval 1) (nval 2)) (nval 3))))))
  ; the bridge, computed: what veq accepts the pinned values agree on
  (vof 0 'true = vof 0 '(veq (vcup (vlink (vlink (nval 1) (nval 2)) (nval 3))) (nval 3)))
- (= (vof 0 '(pin (nval 3)))
-      (vof 0 '(pin (vcup (vlink (vlink (nval 1) (nval 2)) (nval 3)))))))
+ (vof 0 '(pin (nval 3)) =
+    vof 0 '(pin (vcup (vlink (vlink (nval 1) (nval 2)) (nval 3))))))
 
 ; --- the planted faults: a proof term that type-checks whatever it says proves
 ; --- nothing, so each load-bearing claim gets its false twin, and the kernel
 ; --- must refuse that one. every negative takes its positive (test/uu.l's rule:
 ; --- a term rejected for the wrong reason is not evidence). ---
-(hear (\ p e (: h (peep HELPC () 0) (? h (h p e) 0))))
+(hear (p \ e \ peep HELPC () 0 @ h (h ? (h p e) 0)))
 (test
  ; ceil is not the identity on the integer part -- the rung that makes the
  ; tower more than five copies of one retraction
- ('accepted = (rejects (\ z (defn uv-ok-ceil (paths zed (rceil (rmk (ii1 2) true)) (ii1 3)) (idpath (ii1 3))))))
- ('rejected = (rejects (\ z (defn uv-bad-ceil (paths zed (rceil (rmk (ii1 2) true)) (ii1 2)) (idpath (ii1 2))))))
+ ('accepted = (rejects (z \ defn uv-ok-ceil (paths zed (rceil (rmk (ii1 2) true)) (ii1 3)) (idpath (ii1 3)))))
+ ('rejected = (rejects (z \ defn uv-bad-ceil (paths zed (rceil (rmk (ii1 2) true)) (ii1 2)) (idpath (ii1 2)))))
  ; the clamp bites at 0, and takes the whole negative half with it
- ('accepted = (rejects (\ z (defn uv-ok-clamp (paths nat (zsat (zneg 4)) 0) (idpath 0)))))
- ('rejected = (rejects (\ z (defn uv-bad-clamp (paths nat (zsat (zneg 4)) 5) (idpath 5)))))
+ ('accepted = (rejects (z \ defn uv-ok-clamp (paths nat (zsat (zneg 4)) 0) (idpath 0))))
+ ('rejected = (rejects (z \ defn uv-bad-clamp (paths nat (zsat (zneg 4)) 5) (idpath 5))))
  ; net sums over a link; it does not read the head alone
- ('rejected = (rejects (\ z (defq uv-bad-link
-    (pi d nat (pi a (vtre d) (pi b (vtre d)
-      (paths msr (netd (succ d) (ii2 (tpair a b))) (netd d a)))))
-    (lam d (lam a (lam b (idpath (netd d a)))))))))
+ ('rejected = (rejects (z \ defq uv-bad-link
+   (pi d nat (pi a (vtre d) (pi b (vtre d)
+     (paths msr (netd (succ d) (ii2 (tpair a b))) (netd d a)))))
+   (lam d (lam a (lam b (idpath (netd d a))))))))
  ; and saturate is idempotent, not idempotent-up-to-one
- ('rejected = (rejects (\ z (defq uv-bad-satidem
-    (pi v val (paths nat (vsat (nval (succ (vsat v)))) (vsat v)))
-    (lam v (idpath (vsat v)))))))
+ ('rejected = (rejects (z \ defq uv-bad-satidem
+   (pi v val (paths nat (vsat (nval (succ (vsat v)))) (vsat v)))
+   (lam v (idpath (vsat v))))))
  ; the tag on the leaf: () and 0 net the same and are not the same value
- ('accepted = (rejects (\ z (defn uv-ok-tag (paths bool (veq vnilv (nval 0)) false) (idpath false)))))
- ('rejected = (rejects (\ z (defn uv-bad-tag (paths bool (veq vnilv (nval 0)) true) (idpath true)))))
+ ('accepted = (rejects (z \ defn uv-ok-tag (paths bool (veq vnilv (nval 0)) false) (idpath false))))
+ ('rejected = (rejects (z \ defn uv-bad-tag (paths bool (veq vnilv (nval 0)) true) (idpath true))))
  ; ..and it is only the tag: the measure cannot tell them apart
- ('rejected = (rejects (\ z (defn uv-bad-tagnet
-    (paths bool (meqb (vnet vnilv) (vnet (nval 0))) false) (idpath false)))))
+ ('rejected = (rejects (z \ defn uv-bad-tagnet
+   (paths bool (meqb (vnet vnilv) (vnet (nval 0))) false) (idpath false))))
  ; the ceiling holds a net that will not fit at the edge
- ('accepted = (rejects (\ z (defn uv-ok-ceiling (paths nat (zsatc (nzed (add chmax 3))) chmax) (idpath chmax)))))
- ('rejected = (rejects (\ z (defn uv-bad-ceiling
-    (paths nat (zsatc (nzed (add chmax 3))) (add chmax 3)) (idpath (add chmax 3))))))
+ ('accepted = (rejects (z \ defn uv-ok-ceiling (paths nat (zsatc (nzed (add chmax 3))) chmax) (idpath chmax))))
+ ('rejected = (rejects (z \ defn uv-bad-ceiling
+   (paths nat (zsatc (nzed (add chmax 3))) (add chmax 3)) (idpath (add chmax 3)))))
  ; and truth is green above the floor, not green alone -- 0 is both
- ('rejected = (rejects (\ z (defq uv-bad-green
-    (pi v val (paths bool (beqb (vbit v) (vgreen v)) true))
-    (lam v (uv-colq (pr1 (vre v)) (pr2 (vre v))))))))
+ ('rejected = (rejects (z \ defq uv-bad-green
+   (pi v val (paths bool (beqb (vbit v) (vgreen v)) true))
+   (lam v (uv-colq (pr1 (vre v)) (pr2 (vre v)))))))
  ; transitivity takes both sides -- the left one alone says nothing about the right
- ('accepted = (rejects (\ z (defq uv-ok-trans
-    (pi u val (pi v val (pi w val (pi h1 (paths bool (veq u v) true)
-       (pi h2 (paths bool (veq v w) true) (paths bool (veq u w) true))))))
-    uv-veq-trans))))
- ('rejected = (rejects (\ z (defq uv-bad-trans
-    (pi u val (pi v val (pi w val (pi h1 (paths bool (veq u v) true)
-       (paths bool (veq u w) true)))))
-    (lam u (lam v (lam w (lam h1 (uv-veq-refl u)))))))))
+ ('accepted = (rejects (z \ defq uv-ok-trans
+   (pi u val (pi v val (pi w val (pi h1 (paths bool (veq u v) true)
+      (pi h2 (paths bool (veq v w) true) (paths bool (veq u w) true))))))
+   uv-veq-trans)))
+ ('rejected = (rejects (z \ defq uv-bad-trans
+   (pi u val (pi v val (pi w val (pi h1 (paths bool (veq u v) true)
+      (paths bool (veq u w) true)))))
+   (lam u (lam v (lam w (lam h1 (uv-veq-refl u))))))))
  ; ..and the congruence takes both limbs: a link is not read by its cap alone
- ('rejected = (rejects (\ z (defq uv-bad-link-cong
-    (pi a val (pi b val (pi c val (pi d val (pi ha (paths bool (veq a c) true)
-       (paths bool (veq (vlink a b) (vlink c d)) true))))))
-    (lam a (lam b (lam c (lam d (lam ha (uv-veq-refl (vlink a b)))))))))))
+ ('rejected = (rejects (z \ defq uv-bad-link-cong
+   (pi a val (pi b val (pi c val (pi d val (pi ha (paths bool (veq a c) true)
+      (paths bool (veq (vlink a b) (vlink c d)) true))))))
+   (lam a (lam b (lam c (lam d (lam ha (uv-veq-refl (vlink a b))))))))))
  ; the pin does not move the net: a normaliser that did would be worthless, and
  ; every law crossing the bridge would be crossing to a different carrier
- ('accepted = (rejects (\ z (defq uv-ok-pinnet (pi v val (paths msr (pnet (pin v)) (vnet v))) uv-pin-net))))
- ('rejected = (rejects (\ z (defq uv-bad-pinnet (pi v val (paths msr (pnet (pin v)) mzero)) uv-pin-net))))
+ ('accepted = (rejects (z \ defq uv-ok-pinnet (pi v val (paths msr (pnet (pin v)) (vnet v))) uv-pin-net)))
+ ('rejected = (rejects (z \ defq uv-bad-pinnet (pi v val (paths msr (pnet (pin v)) mzero)) uv-pin-net)))
  ; ..and the bridge goes both ways: soundness alone leaves veq free to accept
  ; more than paths does, which is exactly the thing a decision procedure owes
- ('accepted = (rejects (\ z (defq uv-ok-bridge
-    (pi u val (pi w val (pi h (paths pval (pin u) (pin w)) (paths bool (veq u w) true))))
-    uv-paths-veq))))
- ('rejected = (rejects (\ z (defq uv-bad-bridge
-    (pi u val (pi w val (paths bool (veq u w) true)))
-    (lam u (lam w (uv-veq-refl u)))))))
+ ('accepted = (rejects (z \ defq uv-ok-bridge
+   (pi u val (pi w val (pi h (paths pval (pin u) (pin w)) (paths bool (veq u w) true))))
+   uv-paths-veq)))
+ ('rejected = (rejects (z \ defq uv-bad-bridge
+   (pi u val (pi w val (paths bool (veq u w) true)))
+   (lam u (lam w (uv-veq-refl u))))))
  ; and a leaf spelled at height 1 is a legal VALUE and not a legal pinned one --
  ; the many-spellings defect, turned into a type error
- ('accepted = (rejects (\ z (defn uv-ok-pin pval (tpair (tpair 0 (anum (rmsr (zrea (nzed 7))))) (idpath 0))))))
- ('rejected = (rejects (\ z (defn uv-bad-pin pval (tpair (tpair 1 (ii1 (anum (rmsr (zrea (nzed 7)))))) (idpath 1)))))))
+ ('accepted = (rejects (z \ defn uv-ok-pin pval (tpair (tpair 0 (anum (rmsr (zrea (nzed 7))))) (idpath 0)))))
+ ('rejected = (rejects (z \ defn uv-bad-pin pval (tpair (tpair 1 (ii1 (anum (rmsr (zrea (nzed 7)))))) (idpath 1))))))
 (hear test-strict)

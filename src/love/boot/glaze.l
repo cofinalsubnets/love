@@ -51,7 +51,7 @@
    (jit2 lam) (jitn lam)                                                  ; arity-2 alias (self-t/auto.l)
    (gfind p l) (atom? l ? () (p <l) <l (gfind p >l))     ; first elt matching p
    ; a blob names no address of the binary: sentinels and drives are reached through g (love.h's Reach* slots)
-   (reach tgt r k) ['ld r (greg tgt 'g) ((reach-offset 0) + (8 * k))]   ; 0 chain 1 str 2 map 3 nom 4 mint 5 gem 6 cask 7 drive 8 resume 9 cur 10 unc 11 gap
+   (reach tgt r k) ['ld r (greg tgt 'g) (reach-offset 0 + 8 * k)]   ; 0 chain 1 str 2 map 3 nom 4 mint 5 gem 6 cask 7 drive 8 resume 9 cur 10 unc 11 gap
    mapmix 0x9e3779b97f4a7c15                                       ; = love.c's map hash multiplier, for the inline probe
    (hasm tgt ir) (: f (glazeasm 'f) ((lit? f ? f (cite 'holo 'assemble)) tgt ir))   ; the pinned assembler, else the module's
    (asmx ir) (hasm 'x64 ir 'bytes)                                          ; assemble neutral IR -> flat bytes, x86
@@ -80,7 +80,7 @@
    (hasl e) (two? e ? (<e = '. || foldl (a \ x \ a || hasl x) 0 >e) 0)   ; e contains a cons? -> the group is value-typed
    (suse? e P) (? (atom? e) 0  (elem <e '(peep tally pin) && <>e = P) 1  (foldl (a \ x \ a || suse? x P) 0 >e))   ; a string: (peep P..)/(tally P)/(pin P..)
    (buse? e P) (? (atom? e) 0  (<e = 'pin && <>e = P) 1  (foldl (a \ x \ a || buse? x P) 0 >e))   ; a cask: (pin P..), so the guard wants the buf kind, not str
-   (cuse? e P) (? (atom? e) 0  (elem <e '(cap cup two?) && (<>e = P)) 1  (foldl (a \ x \ a || cuse? x P) 0 >e))   ; a chain: <P />P /(two? P) -- raw, no entry guard, since two? is total
+   (cuse? e P) (? (atom? e) 0  (elem <e '(cap cup two?) && <>e = P) 1  (foldl (a \ x \ a || cuse? x P) 0 >e))   ; a chain: <P />P /(two? P) -- raw, no entry guard, since two? is total
    (muse? e P) (? (atom? e) 0  ((<e = 'mpeep || <e = 'mpin) && <>e = P) 1  (foldl (a \ x \ a || muse? x P) 0 >e))   ; a map: (mpeep P k d) read or (mpin P k v) update -- raw, map-guarded
    ; a point key, (P = <..) or (<.. = P): raw word identity guarded nom|mint, since a charm
    ; could bridge (2 = 2.0)
@@ -109,17 +109,17 @@
    (loopregs tgt) (tgt = 'x64 ? '(r8 r9 r10) '(r6 r7 r8))   ; N / counter / acc: disjoint from acc/tmp/scratch/anchor on both targets
    ; loopepi: putfix acc, then Continue (Ip += 16 ; jmp [Ip])
    (loopepi tgt) (: A (greg tgt 'acc) S (greg tgt 'sp) IP (greg tgt 'ip) T (greg tgt 'tmp)
-      ([['adds A A A]] + (ldeopt tgt 0) + [['or A A 1] ['st S 0 A] ['add IP IP 16] ['ld T IP 0] ['jmpr T]]))
+      ([['adds A A A]] + ldeopt tgt 0 + [['or A A 1] ['st S 0 A] ['add IP IP 16] ['ld T IP 0] ['jmpr T]]))
    (exitcc cmp) (cmp @ '< 'ge  '<= 'gt  '> 'le  '>= 'lt  '= 'ne  ())   ; exit on the inverse of the continue-comparison
    (loopcode body cv op cmp tgt)
     (: rs (loopregs tgt) N (rs 0) CV (rs 1) ACC (rs 2) A (greg tgt 'acc) S (greg tgt 'sp)
        bodyir (cgvir tgt (\ e d (e = cv && [['mov A CV]])) body 0)      ; body -> acc; the counter is read from cv
-       accir  (op @ '+ ([['adds ACC ACC A]] + (ldeopt tgt 0))                                  ; acc += acc ; overflow -> inline deopt
+       accir  (op @ '+ ([['adds ACC ACC A]] + ldeopt tgt 0)                                  ; acc += acc ; overflow -> inline deopt
                     '* (: dl (mint 0) ok (mint 0)                                                ; acc *= acc ; mulo sets no a64 flag, so it branches
                         ([['mulo ACC ACC A (greg tgt 'scratch) dl] ['jmp ok] ['label dl]] + deoptbody tgt 0 + [['label ok]])))
        pre  [['ld N S 0] ['sar N 1] ['li CV 0] ['li ACC (foldinit op)]]   ; N = Sp[0]>>1 (assumed fixnum) ; cv = 0 ; acc = init
        (asmt tgt (pre + ['(label top) ['cmp CV N] ['br (exitcc cmp) 'end]]   ; cmp cv,N ; exit when (cmp CV N) false
-              + bodyir + accir + [['inc CV] '(jmp top) '(label end) ['mov A ACC]] + (loopepi tgt))))   ; cv++ ; loop ; acc <- acc ; putfix + Continue
+              + bodyir + accir + [['inc CV] '(jmp top) '(label end) ['mov A ACC]] + loopepi tgt)))   ; cv++ ; loop ; acc <- acc ; putfix + Continue
    ; (jitsum body) -- compile (\ n (sum_{i<n} body(i))) to a native counted loop (x86 self-test helper).
    (jitsum body)
     (: src ['\ 'n [[': ['go 'i 'a] ['? ['< 'i 'n] ['go ['+ 'i 1] ['+ 'a body]] 'a]] 0 0]]
@@ -141,15 +141,15 @@
    ; so a nom loads unguarded; nesting rides the machine stack, so coff is constant across sub-exprs
    (caargir tgt e coff)
     (: A (greg tgt 'acc) S (greg tgt 'sp) T (greg tgt 'tmp)
-       (bin a b fin) ((caargir tgt a coff) + [['push A]] + (caargir tgt b coff) + fin)
+       (bin a b fin) (caargir tgt a coff + [['push A]] + caargir tgt b coff + fin)
        (? (nom? e) [['ld A S coff]]                                                                          ; the counter, raw
           (whole? e) [['li A e]]
           (e @ ('? c t f) (: el (mint 0) en (mint 0)
-                             ((caargir tgt c coff) + [['cmp A 0] ['br 'le el]] + (caargir tgt t coff)
-                              + [['jmp en] ['label el]] + (caargir tgt f coff) + [['label en]]))
-               (op a b) (? (elem op '(+ - *))       (bin a b ([['pop T]] + (arithir tgt op)))
-                           (elem op '(// %) && divc? b) ((caargir tgt a coff) + [['mov T A]] + (divk tgt op b))
-                           (elem op '(// %))        (bin a b ([['test A A] '(br eq deopt) ['pop T]] + (divir tgt op)))
+                             (caargir tgt c coff + [['cmp A 0] ['br 'le el]] + caargir tgt t coff
+                              + [['jmp en] ['label el]] + caargir tgt f coff + [['label en]]))
+               (op a b) (? (elem op '(+ - *))       (bin a b ([['pop T]] + arithir tgt op))
+                           (elem op '(// %) && divc? b) (caargir tgt a coff + [['mov T A]] + divk tgt op b)
+                           (elem op '(// %))        (bin a b ([['test A A] '(br eq deopt) ['pop T]] + divir tgt op))
                            (elem op '(& | ^))       (bin a b [['pop T] [(bitop op) A A T]])
                            (elem op '(< <= > >= =)) (bin a b [['pop T] ['cmp T A] ['set (ccof op) A]])
                            ())
@@ -158,7 +158,7 @@
    (caarg tgt arg) (: A (greg tgt 'acc) SP (greg tgt 'sp) T (greg tgt 'tmp) AN (greg tgt 'anchor)
       (nom? arg ? [['ld T SP 8] ['leax T T T 1 1] ['st SP -32 T]]                                         ; bare counter: F[0] = tag(i)
          ([['lea AN 'sp 0]]                                                                                     ; anchor the machine sp for the arg-expr deopt unwind
-          + (caargir tgt arg 8)                                                                                   ; A = arg(counter) raw ; guards/overflow -> deopt
+          + caargir tgt arg 8                                                                                   ; A = arg(counter) raw ; guards/overflow -> deopt
           + [['adds A A A] ['br 'vs 'deopt] ['or A A 1] ['st SP -32 A]])))                                   ; F[0] = tag(ARG) ; tag overflow -> deopt
    ; caargdeopt: unwind the machine sp to the anchor, Sp R -> R-8, fall into codeopt; computed args only
    (caargdeopt tgt) (: SP (greg tgt 'sp) AN (greg tgt 'anchor)
@@ -174,7 +174,7 @@
           ['lar T 'entry0] ['st SP 32 T]]                     ; Sbase = the blob base (out-of-pool W^X; lar = ADR on a64)  -> R[4]
         + ['(label top)
            ['ld T SP 8] ['ld U SP 16] ['cmp T U] ['br 'ge 'end]]   ; i >= n -> end
-        + (caarg tgt arg)                                       ; F[0] = tag(ARG(counter)) -- bare i, or a computed expr (deopts to `deopt`)
+        + caarg tgt arg                                       ; F[0] = tag(ARG(counter)) -- bare i, or a computed expr (deopts to `deopt`)
         + [['ld T SP 24] ['st SP -24 T]                      ; F[1] = clos
            ['lar T 'bb] ['ld U SP 32] ['subs T T U]          ; F[2] = tag(&bb - base): an odd charm, GC-walk-clean
            ['leax T T T 1 1] ['st SP -16 T]
@@ -184,11 +184,11 @@
         + ['(label bb)
            ['ld A SP 0]                                        ; A = result (Sp[0] on resume, Sp = R-8)
            ['test A 1] ['br 'eq 'codeopt]]                    ; gate 1: non-fixnum (even) result -> deopt
-        + (coacc tgt op)                                        ; gate 2: fold the result into sa @ Sp[8] (overflow -> deopt)
+        + coacc tgt op                                        ; gate 2: fold the result into sa @ Sp[8] (overflow -> deopt)
         + [['ld T SP 16] ['add T T 1] ['st SP 16 T]         ; SC += 1
            ['add SP SP 8] ['jmp 'top]]                        ; Sp = R ; next iteration
         + ['(label end)]
-        + (coend tgt op)                                        ; A = sa tagged (`*` retags here, overflow -> deopt)
+        + coend tgt op                                        ; A = sa tagged (`*` retags here, overflow -> deopt)
         + [['add SP SP 48] ['st SP 0 A]                      ; Sp = entry ; result into arg slot
            ['ld IP SP 8] ['st SP 8 A] ['add SP SP 8]         ; inline ret0: Ip=caller-cont; Sp[1]=result; Sp++
            ['ld T IP 0] ['jmpr T]]                            ; Continue -> caller
@@ -221,7 +221,7 @@
            ['lar T 'entry0] ['st SP 32 T]]                     ; Sbase = the blob base (out-of-pool W^X)
         + ['(label top)
            ['ld T SP 8] ['ld U SP 16] ['cmp T U] ['br 'ge 'end]]   ; SC >= sn -> end
-        + (caarg tgt arg)                                       ; F[0] = tag(ARG(counter)) -- bare SC, or a computed expr (deopts to `deopt`)
+        + caarg tgt arg                                       ; F[0] = tag(ARG(counter)) -- bare SC, or a computed expr (deopts to `deopt`)
         + [['ld T SP 24] ['st SP -24 T]                      ; F[1] = sf (clos)
            ['lar T 'bb] ['ld U SP 32] ['subs T T U]          ; F[2] = tag(&bb - base)
            ['leax T T T 1 1] ['st SP -16 T]
@@ -230,11 +230,11 @@
            ['ld T IP 0] ['jmpr T]]                            ; Continue -> lvm_ap -> F -> lvm_resume -> bb
         + ['(label bb)
            ['ld A SP 0] ['test A 1] ['br 'eq 'codeopt]]      ; gate 1: a non-fixnum result -> deopt
-        + (coacc tgt op)                                        ; gate 2: fold the result into sa @ Sp[8] (overflow -> deopt)
+        + coacc tgt op                                        ; gate 2: fold the result into sa @ Sp[8] (overflow -> deopt)
         + [['ld T SP 16] ['add T T 1] ['st SP 16 T]         ; SC += 1
            ['add SP SP 8] ['jmp 'top]]                        ; Sp = R ; next iteration
         + ['(label end)]
-        + (coend tgt op)                                        ; A = sa tagged (`*` retags here, overflow -> deopt)
+        + coend tgt op                                        ; A = sa tagged (`*` retags here, overflow -> deopt)
         + [['add SP SP 48] ['st SP 0 A]                      ; Sp = E (frame) ; result into Sp[0]
            ['ld IP SP (8 * a)] ['st SP (8 * a) A] ['add SP SP (8 * a)]   ; hand-rolled lvm_ret(n=a): cont@Sp[a] ; deliver ; pop a
            ['ld T IP 0] ['jmpr T]]                            ; Continue -> caller
@@ -258,7 +258,7 @@
    (aparams? ps M) (adistinct (filter (p \ p != '_) ps) && (adistinct ps || !(amentions? '_ M)))
    ; a constant rides as the immediate 2e+1, so only a fixnum (charm?): a big would be laid truncated, silently
    (afix? e) (charm? e)
-   (aconst? e) (afix? e || (e = amble-nil))
+   (aconst? e) (afix? e || e = amble-nil)
    (aop2? op) (elem op '(+ - * // % & | ^ < <= > >= = == .))
    (acmp? op) (elem op '(< <= > >= =))
    (aquote? e) (two? e && (<e = '\) && 2 = #e)            ; the reader's quote: (\ X) at exactly two -- a datum constant
@@ -276,8 +276,8 @@
    (ahascall? env go e)                                                  ; does e contain a call (any non-op head)? the bisect knob's test
     (? (aquote? e) 0
        (two? e) (: op <e
-          ((nom? op && !(op = go) && !(elem op aopheads))
-           || (foldl (\ a x (a || ahascall? env go x)) 0 >e)))
+          (nom? op && !(op = go) && !(elem op aopheads)
+           || foldl (\ a x (a || ahascall? env go x)) 0 >e))
        0)
    ; aheads: the free call heads of e, the global-callee candidates. go is never one: a non-tail
    ; (go ..) must decline, not resolve a leaked namesake. over-approximate; amble-ok? is the gate
@@ -285,8 +285,8 @@
     (? (aquote? e) acc
        (two? e)
         (: op <e                                                    ; a2, not a rebind of acc: a `:` is one scope, so `acc (.. acc ..)`
-           a2 (? ((nom? op) && !(op = go) && !(elem op env) && !(elem op acc)
-                  && !(elem op aopheads))
+           a2 (nom? op && !(op = go) && !(elem op env) && !(elem op acc)
+               && !(elem op aopheads) ?
                  (op . acc) acc)                                      ; would read the unpinned local
            (foldl (\ ac x (aheads env go x ac)) a2 >e))
        acc)
@@ -299,21 +299,21 @@
        (aquote? e) 1
        (two? e)
         (: op <e  as >e  n #as  oop (elem op shd ? 0 op)      ; a name the frame took is a call
-           (? (op = '?) (2 <= n <= 3 && (amble-ok? env shd gn go k 0 <as)   ; 2-arm ?: the missing else is (), acg's amble-nil slot
-                           && (amble-ok? env shd gn go k tl <>as)
-                           && (amble-ok? env shd gn go k tl <>>as))
+           (? (op = '?) (2 <= n <= 3 && amble-ok? env shd gn go k 0 <as   ; 2-arm ?: the missing else is (), acg's amble-nil slot
+                           && amble-ok? env shd gn go k tl <>as
+                           && amble-ok? env shd gn go k tl <>>as)
               (op = ':) (!(#e % 2)                                        ; a value let: binders enter env in order, so a forward
                            && ((: (gol l ev)                                       ; read declines rather than reading a stale slot
-                                (? (atom? >l) (amble-ok? ev shd gn go k tl <l)
-                                   ((amble-ok? ev shd gn go k 0 <>l)
-                                    && (gol >>l (<l = '_ ? ev (<l . ev))))))
+                                (atom? >l ? (amble-ok? ev shd gn go k tl <l)
+                                   (amble-ok? ev shd gn go k 0 <>l
+                                    && gol >>l (<l = '_ ? ev (<l . ev)))))
                                as env))
               (elem oop '(two? cap cup)) (n = 1 && amble-ok? env shd gn go k 0 <as)
               (aop2? oop) (n = 2 && amble-ok? env shd gn go k 0 <as && amble-ok? env shd gn go k 0 <>as)
               (op = amble-lam) (all (v \ elem v env) >>as)                 ; an inner lambda site: its imports are frame reads
               (op = go) (tl && n = k && all (x \ amble-ok? env shd gn go k 0 x) as)
-              (nom? op) ((0 < n) && (elem op env || elem op gn)
-                          && (all (x \ amble-ok? env shd gn go k 0 x) as))
+              (nom? op) (0 < n && (elem op env || elem op gn)
+                          && all (x \ amble-ok? env shd gn go k 0 x) as)
               0))
        0)
    ; amble-depth: an upper bound on the spill slots e needs; cx op = the extra curry steps a head
@@ -327,8 +327,8 @@
              (op = ':) (admax go cx as)                             ; lets ride their own slots; parts run sequentially
              (elem op '(two? cap cup)) (amble-depth go cx <as)
              (op = amble-lam) 0                                     ; the site lays its chain straight onto the heap
-             (op = '=) (2 + (amax (amble-depth go cx <as) (1 + (amble-depth go cx <>as))))   ; aeq2's slow lane spills the partial + the operand
-             (aop2? op) (amax (amble-depth go cx <as) (1 + (amble-depth go cx <>as)))
+             (op = '=) (2 + amax (amble-depth go cx <as) (1 + amble-depth go cx <>as))   ; aeq2's slow lane spills the partial + the operand
+             (aop2? op) (amax (amble-depth go cx <as) (1 + amble-depth go cx <>as))
              (op = go) (#as + admax go cx as)
              (cx op + #as + admax go cx as))))                      ; a call spills a partial per curry step, so an n-arg call reserves n
    ; amble-loop: match the named-let body, both def sugars x both spellings -> (go vars GB inits) | 0
@@ -338,7 +338,7 @@
     (S @ (': D1 D2)
          (? (two? D1 && nom? <D1 && all nom? >D1 && 0 < #>D1)
               [<D1 >D1 D2 inits]
-            (nom? D1 && two? D2 && (<D2 = '\) && two? >D2 && two? >>D2)
+            (nom? D1 && two? D2 && <D2 = '\ && two? >D2 && two? >>D2)
               [D1 (init >D2) (last >D2) inits]
             0)
        0)
@@ -354,7 +354,7 @@
    ; asub: whole-form substitution, capture-free since the grammar admits no inner binders. renames
    ; a loop var that shadows a param, so inits read the params and the body the renamed vars
    (asub old new e) (? (e = old) new  (aquote? e) e  (two? e) (map (x \ asub old new x) e)  e)   ; quoted data is inert -- never rename inside it
-   (afresh v avoid) (: c (intern ((string v) + "~")) (elem c avoid ? (afresh c avoid) c))
+   (afresh v avoid) (: c (intern (string v + "~")) (elem c avoid ? (afresh c avoid) c))
    ; aopv: a macro splices op values as heads (list lays the link nif), so a value head is named
    ; back to its nom, ==-keyed, unless env-shadowed; a miss falls through to prel's opnom
    aopv [[two? 'two?] [cap 'cap] [cup 'cup] [(.) '.] [(==) '==] [peep 'peep]
@@ -366,12 +366,12 @@
    aopix {}
    probebox {}                                                            ; slot 0 set: amble answers 1 where it would compile, and emits nothing
    (aopw x)
-    (: _ (? (#(keys aopix) = 0)
+    (: _ (#(keys aopix) = 0 ?
             (: nf (cite 'guts 'nifop) gv (cite 'guts 'gv)
                (each '(pin peep elem max min snip tally two? cap cup + - * // % & | ^ < <= > >= = == .
                        rev cat assoc last string charm? nom? tablet? lit? string? gem? atom? nil? abs)
-                     (n \ (: v (? gv (gv n 0) 0) w (? (nf && v && !(charm? v)) (nf v) 0)
-                             (? (charm? w && w != 0) (pin aopix w n) 0))))))
+                     (n \ (: v (gv ? (gv n 0) 0) w (nf && v && !(charm? v) ? (nf v) 0)
+                             (charm? w && w != 0 ? (pin aopix w n) 0))))))
        (peep aopix x 0))
    (aopn x l) (atom? l ? (: n (opnom x) (? n n (charm? x) (aopw x) 0)) (x = <<l) <><l (aopn x >l))
    ; gopword: a head as its canonical word; test/glaze.l holds every aopnames word to an aopv row.
@@ -436,8 +436,8 @@
    (adrv? env sf e)
     (? (aquote? e) 0
        (two? e) (: op <e
-          ((nom? op && (op = sf || (elem op env && two? >e)))
-           || (foldl (a \ x \ a || adrv? env sf x) 0 >e)))
+          (nom? op && (op = sf || (elem op env && two? >e))
+           || foldl (a \ x \ a || adrv? env sf x) 0 >e))
        0)
    ; ainl: every inner lambda ala recorded (inl = ((exp src-tail (entry . imports))..), matched by
    ; node) becomes (amble-lam i n v..): entry i in st, arity n = imports + params, v.. the import names
@@ -450,7 +450,7 @@
        (<e = '\ && two? >e && two? >>e)
         (: r (ainlr >e inl)
            (r ? (: i #(st 'l)
-                   _ (pin st 'l ((st 'l) + [<r]))
+                   _ (pin st 'l (st 'l + [<r]))
                    (amble-lam . i . #>r + #e - 2 . >r))
               e))
        (map (x \ ainl0 x inl st) e))
@@ -491,7 +491,7 @@
        ; the value lets ride slots past the spills, one flat namespace (alets declined any rebind)
        lts0 (foldl (flip alets) (alets body ()) inits)
        lts  (? (lts0 = 'bad) 'bad
-               (foldl (\ ac p (ac || elem p env || (p = go) || (p = self))) 0 lts0) 'bad
+               (foldl (\ ac p (ac || elem p env || p = go || p = self)) 0 lts0) 'bad
                lts0)
        nl   (lts = 'bad ? 0 #lts)
        envl (lts = 'bad ? env (env + lts))
@@ -534,7 +534,7 @@
        ; "a call has run" and answers the flag, or 'bad; a saturated tail self-call rewrites the slots and clears it
        (asafe tl cl ex)
         (: (aseq c l) (foldl (asafe 0) c l)                      ; the children, in order
-           (aguard c) (? (c = 'bad || c) 'bad 0)                         ; then the node's own guard
+           (aguard c) (c = 'bad || c ? 'bad 0)                         ; then the node's own guard
            (? (cl = 'bad) 'bad
               (atom? ex) cl
               (aquote? ex) cl
@@ -542,9 +542,9 @@
                  (? (op = ':) ((: (gol l c) (atom? >l ? (asafe tl c <l) (gol >>l (asafe 0 c <>l)))) as cl)
                     (op = '?)
                      (: ct (fbk ? (asafe 0 cl <as) (aguard (asafe 0 cl <as)))
-                        (? (ct = 'bad) 'bad
+                        (ct = 'bad ? 'bad
                            (: ca (asafe tl 0 <>as)  cb (asafe tl 0 <>>as)      ; the arms are alternatives; either call poisons the sequel
-                              (? (ca = 'bad || cb = 'bad) 'bad (ca || cb)))))
+                              (ca = 'bad || cb = 'bad ? 'bad (ca || cb)))))
                     (sfq && tl && op = self && #as = a - ni)
                      (aseq cl as @ 'bad 'bad 0)                ; the self back edge
                     (op = go) (fbk ? (aseq cl as) (aguard (aseq cl as)))     ; the named-let back edge
@@ -562,10 +562,10 @@
            && all (amble-ok? ps shd kn 0 0 0) inits
            && amble-ok? env shd kn go k 1 body
            && asafe 1 (foldl (\ ac i (asafe 0 ac i)) 0 inits) body != 'bad)   ; the restart law, over the gated body
-       _ (? (getenv "LOVE_AMBLE_WHY" && !ok)
+       _ (getenv "LOVE_AMBLE_WHY" && !ok ?
             (: (small e) (? (atom? e) e (aquote? e) e
                             (: bad (filter (x \ two? x && !(aquote? x) && !(amble-ok? envl shd kn go k 0 x)) >e)
-                               (? (two? bad) (small <bad) e)))
+                               (two? bad ? (small <bad) e)))
                why (? !(two? s && two? >s && all nom? ps && aparams? ps M && a = #ps && 0 < a) 'shape
                       !lpok 'loop !drok 'cost (lts = 'bad) 'lets !(two? body) 'nobody
                       !(all lit? gvals) ['globals (filter (p \ !(lit? <>p)) (map (f \ [f (gv f 0)]) gn))] !(all lit? ovals) 'ops
@@ -584,27 +584,27 @@
              A (greg tgt 'acc)  T (greg tgt 'tmp)  X (greg tgt 'anchor)  SC (greg tgt 'scratch)
              SP (greg tgt 'sp)  IP (greg tgt 'ip)  HP (greg tgt 'hp)
              seo (8 * k)  soo (8 * (k + 1))  budo (8 * (k + 2))  gbo (8 * (k + 3))  spo (8 * (k + 3 + ng))  fro (8 * R)
-             (voff v) (? (elem v vars) (8 * (posof v vars 0))  (elem v lts) (lvo v)  (fro + (8 * (posof v ps 0))))
-             (spill d) (spo + (8 * d))
-             eqo (gbo + (8 * (1 + #gn + #cn + nq)))   ; the = value's extras slot (past globals, siblings, quotes)
-             ino (eqo + (8 * (lit? eqv ? 1 0)))                    ; the inner entries' slots (past =)
+             (voff v) (? (elem v vars) (8 * posof v vars 0)  (elem v lts) (lvo v)  (fro + 8 * posof v ps 0))
+             (spill d) (spo + 8 * d)
+             eqo (gbo + 8 * (1 + #gn + #cn + nq))   ; the = value's extras slot (past globals, siblings, quotes)
+             ino (eqo + 8 * (lit? eqv ? 1 0))                    ; the inner entries' slots (past =)
              ovo (8 * (k + 3 + ng + nd + nl))                       ; the one op-value slot, fallback mode only: a stub fills it off the chain
              (ovload o) ([['ld T SP budo]]                          ; the chain from the budget cell: ng copied links, then the op values
                          + ((: (go j) (j < 1 + ng + posof o ovs 0 ? (['ld T T 16] . go (j + 1)) ())) 0)
                          + [['ld X T 8] ['st SP ovo X]])
              lto (8 * (k + 3 + ng + nd))                    ; the let region, past the spills
-             (lvo v) (lto + (8 * (posof v lts 0)))
+             (lvo v) (lto + 8 * posof v lts 0)
              (fx2 lbl) [['mov X T] ['and X X A] ['test X 1] ['br 'eq lbl]]    ; both T and a fixnum, else lbl
-             (abin sa sb d fin) ((acg sa d) + [['st SP (spill d) A]] + (acg sb (d + 1))
+             (abin sa sb d fin) (acg sa d + [['st SP (spill d) A]] + acg sb (d + 1)
                                  + (fbk ? [['st SP (spill (d + 1)) A]] ()) + [['ld T SP (spill d)]] + fin)   ; T = a, A = b (b spilled too for a stub)
              (refb seq fb) (map (i \ map (x \ x = 'deopt ? fb x) i) seq)                        ; a sequence's deopts retargeted to a stub
-             (fb2 op d fin) (? !fbk fin                                                            ; the two-operand stub: drive op's value over a (spill d) then b
+             (fb2 op d fin) (!fbk ? fin                                                            ; the two-operand stub: drive op's value over a (spill d) then b
                               (: fb (mint 0) en (mint 0)                                          ; (spill d+1), the partial rolling through spill d, answer in A
-                                 (refb fin fb + [['jmp en] ['label fb]] + ovload op + [['ld A SP (spill d)]] + (adrive ovo)
-                                  + [['st SP (spill d) A] ['ld A SP (spill (d + 1))]] + (adrive (spill d)) + [['label en]])))
-             (fb1 op fin) (? !fbk fin                                                              ; the one-operand stub: A still holds the operand at the guard
+                                 (refb fin fb + [['jmp en] ['label fb]] + ovload op + [['ld A SP (spill d)]] + adrive ovo
+                                  + [['st SP (spill d) A] ['ld A SP (spill (d + 1))]] + adrive (spill d) + [['label en]])))
+             (fb1 op fin) (!fbk ? fin                                                              ; the one-operand stub: A still holds the operand at the guard
                             (: fb (mint 0) en (mint 0)
-                               ((refb fin fb) + [['jmp en] ['label fb]] + ovload op + (adrive ovo) + [['label en]])))
+                               (refb fin fb + [['jmp en] ['label fb]] + ovload op + adrive ovo + [['label en]])))
              (atruth _) (: fb (fbk ? (mint 0) 'deopt) tk (mint 0)                                     ; the truth guard and its stub: bit's value answers 0/1, back to the compare
                          [[['test A 1] ['br 'eq fb] ['label tk]]
                           (fbk ? ([['label fb]] + ovload 'bit + adrive ovo + [['jmp tk]]) ())])   ; ovload spares A
@@ -613,7 +613,7 @@
                (op @ '+ (fx2 'deopt + [['sub A A 1] ['adds A A T] ['br 'vs 'deopt]])         ; 2y + (2x+1) = tag(x+y)
                     '- (fx2 'deopt + [['subs T T A] ['br 'vs 'deopt] ['lea A T 1]])          ; 2(x-y) then tag
                     (fx2 'deopt + [['sar A 1] ['sub T T 1] ['mulo A A T SC 'deopt] ['or A A 1]]))))   ; y * 2x = 2xy, where mulo is the tag-range gate, then tag
-             (acmp2 op sa sb d) (abin sa sb d (fb2 op d ((fx2 'deopt) + [['cmp T A] ['set (ccof op) A] ['leax A A A 1 1]])))
+             (acmp2 op sa sb d) (abin sa sb d (fb2 op d (fx2 'deopt + [['cmp T A] ['set (ccof op) A] ['leax A A A 1 1]])))
              (adm op sa sb d) (abin sa sb d (fb2 op d                                             ; // %: untag, /-by-0 -> twin, divir (trunc toward zero), retag
               (fx2 'deopt + [['sar T 1] ['sar A 1]]                                              ; (the adds gate catches most-negative // -1)
                + (divc? sb ? (divk tgt op sb) ([['test A A] ['br 'eq 'deopt]] + divir tgt op))
@@ -637,19 +637,19 @@
                  ['label ys] ['li A 3] ['jmp dn]
                  ['label no] ['li A 1] ['jmp dn]
                  ['label sl] ['st SP (spill (d + 1)) A] ['mov A T]]                              ; slow: spill b ; A = a
-                + (adrive eqo)                                                                     ; A = (= a)
+                + adrive eqo                                                                     ; A = (= a)
                 + [['st SP (spill d) A] ['ld A SP (spill (d + 1))]]                              ; spill the partial ; A = b
-                + (adrive (spill d))                                                               ; A = (= a b)
+                + adrive (spill d)                                                               ; A = (= a b)
                 + [['label dn]])))
              (aid sa sb d) (abin sa sb d [['cmp T A] ['set 'eq A] ['leax A A A 1 1]])                ; raw word identity: total, no guard
              (atwo sx d) (: ln (mint 0)
-              ((acg sx d) + [['li T 1] ['test A 1] ['br 'ne ln]
+              (acg sx d + [['li T 1] ['test A 1] ['br 'ne ln]
                               ['ld X A 0] (reach tgt A 0) ['cmp X A] ['br 'ne ln]
                               ['li T 3] ['label ln] ['mov A T]]))
-             (acap sx d off) ((acg sx d) + (fb1 (off = 8 ? 'cap 'cup)
-                                            [['test A 1] ['br 'ne 'deopt]
-                                             ['ld X A 0] (reach tgt T 0) ['cmp X T] ['br 'ne 'deopt]
-                                             ['ld A A off]]))
+             (acap sx d off) (acg sx d + fb1 (off = 8 ? 'cap 'cup)
+                                           [['test A 1] ['br 'ne 'deopt]
+                                            ['ld X A 0] (reach tgt T 0) ['cmp X T] ['br 'ne 'deopt]
+                                            ['ld A A off]])
              (alink sa sb d) (abin sa sb d (fb2 '. d                                                ; room for 3w + floor, else deopt (no GC mid-native) -- or the
                                              [['lea X HP 88] ['cmp SP X] ['br 'below 'deopt]         ; stub, whose cons collects
                                               (reach tgt X 0) ['st HP 0 X] ['st HP 8 T] ['st HP 16 A]
@@ -669,17 +669,17 @@
                                      + achain >as (spill d) (d + 1)))                                ; partial -> spill -> next arg (currying)
              ; asite: (amble-lam i n v..) lays lvm_cur's partial cells on the heap under one room guard:
              ; [cur n-1 unc arg cont tag] while curry remains, [unc arg cont tag] last; cont = callee+2, tag = cell|2
-             (asite as d) (: so (ino + (8 * <as))  n <>as  vs >>as
+             (asite as d) (: so (ino + 8 * <as)  n <>as  vs >>as
                              (acur v a) (a > 2 ?
-                                           [(reach tgt X 9) ['st HP 0 X] ['li X ((2 * a) - 1)] ['st HP 8 X]
+                                           [(reach tgt X 9) ['st HP 0 X] ['li X (2 * a - 1)] ['st HP 8 X]
                                             (reach tgt X 10) ['st HP 16 X] ['ld X SP (voff v)] ['st HP 24 X] ['lea X T 16] ['st HP 32 X]
                                             ['mov X HP] ['or X X 2] ['st HP 40 X] ['mov T HP] ['add HP HP 48]]
                                            [(reach tgt X 10) ['st HP 0 X] ['ld X SP (voff v)] ['st HP 8 X] ['lea X T 16] ['st HP 16 X]
                                             ['mov X HP] ['or X X 2] ['st HP 24 X] ['mov T HP] ['add HP HP 32]])
-                             (gov l a) (two? l ? ((acur <l a) + (gov >l (a - 1))) ())
+                             (gov l a) (two? l ? (acur <l a + gov >l (a - 1)) ())
                              (two? vs ?
-                                ([['lea X HP (64 + (48 * #vs))] ['cmp SP X] ['br 'below 'deopt] ['ld T SP so]]
-                                 + (gov vs n) + [['mov A T]])
+                                ([['lea X HP (64 + 48 * #vs)] ['cmp SP X] ['br 'below 'deopt] ['ld T SP so]]
+                                 + gov vs n + [['mov A T]])
                                 [['ld A SP so]]))
              (astr1 cso) (: ld (mint 0) ok (mint 0) en (mint 0)                                             ; the string fast lane at a 1-arg frame-callee site: (s i) on a text and an
               ([['ld T SP cso] ['test T 1] ['br 'ne ld]                                             ; in-range charm reads the byte; anything else drives, never deopts. the one
@@ -725,14 +725,14 @@
              ; asat: a saturated n-ary call. a callee cur cell of arity exactly n takes the apn frame
              ; [args cont tag base] and enters its body at cell+2; anything else drives the chain over the same spills
              (asat as cso d) (: bb (mint 0)  sw (mint 0)  dn (mint 0)  n #as  w (n + 3)
-              ((agous as 0 d)
+              (agous as 0 d
                + [['ld X SP cso] ['test X 1] ['br 'ne sw]
                   ['ld T X 0] (reach tgt SC 9) ['cmp T SC] ['br 'ne sw]                               ; entry = lvm_cur?
                   ['ld T X 8] ['cmp T (2 * n + 1)] ['br 'ne sw]]                                 ; arity = n?
-               + (: (gsl j) (j < n ? ([['ld A SP (spill (d + j))] ['st SP (8 * j - 8 * w) A]] + (gsl (j + 1))) ()) (gsl 0))
+               + (: (gsl j) (j < n ? ([['ld A SP (spill (d + j))] ['st SP (8 * j - 8 * w) A]] + gsl (j + 1)) ()) (gsl 0))
                + [(reach tgt T 8) ['add T T 8] ['st SP (8 * n - 8 * w) T]                         ; cont = &resume[1]
                   ['lar T bb] ['lar A 'entry0] ['subs T T A] ['leax T T T 1 1] ['st SP (8 * (n + 1) - 8 * w) T]
-                  ['st SP ((8 * (n + 2)) - (8 * w)) A]
+                  ['st SP (8 * (n + 2) - 8 * w) A]
                   ['lea IP X 16] ['sub SP SP (8 * w)] ['ld T IP 0] ['jmpr T]                      ; enter the body at cell+2
                   ['label bb] ['ld A SP 0] ['add SP SP 8] ['jmp dn]
                   ['label sw]]
@@ -758,18 +758,18 @@
                        (two? >as) (asat as cso d)                                                      ; multi-arg saturates when the callee's arity agrees
                        (achain as cso d))))
              (agous us j d) (two? us ? (acg <us (d + j) + [['st SP (spill (d + j)) A]] + agous >us (j + 1) d))
-             (agomv j d) (j >= 0 ? ([['ld A SP (spill (d + j))] ['st SP (8 * j) A]] + (agomv (j - 1) d)))
+             (agomv j d) (j >= 0 ? ([['ld A SP (spill (d + j))] ['st SP (8 * j) A]] + agomv (j - 1) d))
              (ago as d) (agous as 0 d + agomv (k - 1) d + [['jmp 'top]])                            ; updates from the old vars (spilled first), then the back-edge
              (asmv j d) (j >= 0 ? ([['ld A SP (spill (d + j))] ['st SP (fro + 8 * (ni + j)) A]] + asmv (j - 1) d))
              ; aselfcall: a saturated non-tail self-call enters the own blob on the frame [imports.. args..
              ; resume tag(bb-entry0) entry0], Ip off So; its hand-rolled ret returns through lvm_resume to bb
              (aselfcall as d) (: bb (mint 0)  w (a + 3)
               (agous as 0 d
-               + (: (gimp l i) (two? l ? ([['ld T SP (voff <l)] ['st SP (8 * i - 8 * w) T]] + (gimp >l (i + 1))) ()) (gimp simp 0))
-               + (: (garg j) (j < a - ni ? ([['ld T SP (spill (d + j))] ['st SP (8 * (ni + j) - 8 * w) T]] + (garg (j + 1))) ()) (garg 0))
-               + [(reach tgt T 8) ['add T T 8] ['st SP ((8 * a) - (8 * w)) T]                          ; cont = &resume[1]: ret jumps the cell's word 0 = lvm_resume
+               + (: (gimp l i) (two? l ? ([['ld T SP (voff <l)] ['st SP (8 * i - 8 * w) T]] + gimp >l (i + 1)) ()) (gimp simp 0))
+               + (: (garg j) (j < a - ni ? ([['ld T SP (spill (d + j))] ['st SP (8 * (ni + j) - 8 * w) T]] + garg (j + 1)) ()) (garg 0))
+               + [(reach tgt T 8) ['add T T 8] ['st SP (8 * a - 8 * w) T]                          ; cont = &resume[1]: ret jumps the cell's word 0 = lvm_resume
                   ['lar T bb] ['lar X 'entry0] ['subs T T X] ['leax T T T 1 1] ['st SP (8 * (a + 1) - 8 * w) T]
-                  ['st SP ((8 * (a + 2)) - (8 * w)) X]
+                  ['st SP (8 * (a + 2) - 8 * w) X]
                   ['ld IP SP soo]]
                + (a = 1 ? () [['add IP IP 16]])
                + [['sub SP SP (8 * w)] ['jmp 'entry0]
@@ -794,12 +794,12 @@
                  (whole? e) [['li A (2 * e + 1)]]
                  (e = amble-nil) [['ld A SP gbo]]
                  (nom? e) [['ld A SP (voff e)]]
-                 (aquote? e) [['ld A SP (gbo + (8 * (1 + #gn + #cn + aposq e qs 0)))]]   ; a quoted datum: its extras slot (past the globals + sibling entries)
+                 (aquote? e) [['ld A SP (gbo + 8 * (1 + #gn + #cn + aposq e qs 0))]]   ; a quoted datum: its extras slot (past the globals + sibling entries)
                  (: op <e  as >e  oop (elem op shd ? 0 op)
                     (? (op = ':) ((: (gol l) (atom? >l ? (acg <l d)                            ; a value let: each binding lands in its slot, in order
-                                                  ((acg <>l d)
+                                                  (acg <>l d
                                                    + (<l = '_ ? () [['st SP (lvo <l) A]])
-                                                   + (gol >>l)))) as)
+                                                   + gol >>l))) as)
                        (op = '?) (acq <as <>as <>>as d)
                        (oop = 'two?) (atwo <as d)
                        (oop = 'cap) (acap <as d 8)
@@ -808,7 +808,7 @@
                        (oop = '.) (alink <as <>as d)
                        (oop = '= && (aqnom? <as || aqnom? <>as))
                         (aid <as <>as d)                                               ; (a = 'sym): a point equals only itself (the point-= law) -> raw identity, total
-                       (oop = '= && (lit? eqv)) (aeq2 <as <>as d)
+                       (oop = '= && lit? eqv) (aeq2 <as <>as d)
                        (acmp? oop) (acmp2 op <as <>as d)
                        (elem oop '(+ - *)) (aar op <as <>as d)
                        (elem oop '(// %)) (adm op <as <>as d)
@@ -818,8 +818,8 @@
                        (op = amble-lam) (asite as d)
                        (op = go) (ago as d)
                        (acall op as d))))
-             initR (: (goi j) (j < R ? ([['st SP (8 * j) T]] + (goi (j + 1))) ())
-                      ([['li T 1]] + (goi 0)))                                                          ; every reserved slot a valid value before any call (GC walks them)
+             initR (: (goi j) (j < R ? ([['st SP (8 * j) T]] + goi (j + 1)) ())
+                      ([['li T 1]] + goi 0))                                                          ; every reserved slot a valid value before any call (GC walks them)
              unpk ([['ld T IP 8] ['st SP seo T]]                                                  ; Se = value[1] = e (plain -- image-revert-clean)
                    + (a = 1 ? [['st SP soo IP]] [['mov T IP] ['sub T T 16] ['st SP soo T]])     ; So = the own cell (= Ip, or Ip-16 past the cur pair) -- the self-drive callee
                    + [['ld T IP 32]                                                               ; T = the nifx extras chain
@@ -838,7 +838,7 @@
                   + (a = 1 ? [['mov IP T]] [['lea IP T 16]])                                      ; a=1: re-apply e; else enter e's body on the saturated frame
                   + [['ld T IP 0] ['jmpr T]])
              prog (['(label entry0)                                                                       ; entry0 = the resume-offset anchor (the blob's first byte)
-                      ['lea X HP (40 + (8 * (R + 4 + (amax a nd))))] ['cmp SP X] ['br 'below 'd0]    ; room guard: the reservation + the widest call frame (nd bounds any site's args) + floor must fit Sp-Hp
+                      ['lea X HP (40 + 8 * (R + 4 + amax a nd))] ['cmp SP X] ['br 'below 'd0]    ; room guard: the reservation + the widest call frame (nd bounds any site's args) + floor must fit Sp-Hp
                       ['ld T IP 32] ['ld X T 8] ['cmp X 1] ['br 'le 'd0]                            ; the deopt budget (extras link 0, a charm): spent -> every call takes d0
                       ['sub SP SP fro]]                                                                   ; straight to the twin, and a perma-deopting native heals to bytecode
                    + initR + unpk + bodyir + epi + dpt
@@ -854,9 +854,9 @@
     (: A (greg tgt 'acc)
        nvld (\ e d (? (e = n) (fxvir tgt 0 d)
                       (elem e vars) [['mov A (lvreg tgt (argix e vars 0))]]))
-       pre  ((: (go j is) (two? is ? ([['li (lvreg tgt j) <is]] + (go (j + 1) >is)) ())) 0 inits)        ; reg-init
-       ups  ((: (go j us) (two? us ? ((cgvir tgt nvld <us j) + [['push A]] + (go (j + 1) >us)) ())) 0 updates)   ; push Uj at depth j
-       pops ((: (go j) (j < 0 ? () ([['pop (lvreg tgt j)]] + (go (j - 1))))) (#updates - 1))                ; pop reg(k-1)..reg(0)
+       pre  ((: (go j is) (two? is ? ([['li (lvreg tgt j) <is]] + go (j + 1) >is) ())) 0 inits)        ; reg-init
+       ups  ((: (go j us) (two? us ? (cgvir tgt nvld <us j + [['push A]] + go (j + 1) >us) ())) 0 updates)   ; push Uj at depth j
+       pops ((: (go j) (j < 0 ? () ([['pop (lvreg tgt j)]] + go (j - 1)))) (#updates - 1))                ; pop reg(k-1)..reg(0)
        tb   (cgvir tgt nvld test 0)
        rb   (cgvir tgt nvld result 0)
        (asmt tgt (pre + '((label top))
@@ -908,7 +908,7 @@
    (jitfrx lam tgt interp)
     (: v <>lam
        A (greg tgt 'acc) S (greg tgt 'sp) HP (greg tgt 'hp) IP (greg tgt 'ip) T (greg tgt 'tmp) ok (mint 0)
-       (nif (emit (asmt tgt ((cgf tgt v <>>lam 0)
+       (nif (emit (asmt tgt (cgf tgt v <>>lam 0
           + [['lea A HP 80] ['cmp S A] ['br 'ae ok]]                  ; cmp Sp,Hp+10w ; room? skip deopt
           + deoptbody tgt 0 + [['label ok]] + nanc tgt             ; heap-full -> deopt (depth 0: cgf balances its spills) ; NaN -> 0.0
           + [(reach tgt T 5) ['st HP 0 T]                                  ; [Hp] = lvm_gembox (box header)
@@ -938,7 +938,7 @@
                           (dadd ['L e 0] dag))                    ; a leaf: (L datum 0)
    (vnall rs dag acc) (two? rs ? (: r (vnum <rs dag) (vnall >rs <>r (snoc acc <r))) [acc dag])
    (binop? dag v) (<(dag v) != 'L)
-   (luse v dag rv n) ((: (go i ds best) (? (atom? ds) (elem v rv ? n best)         ; the last index using v (roots live to n)
+   (luse v dag rv n) ((: (go i ds best) (atom? ds ? (elem v rv ? n best)         ; the last index using v (roots live to n)
        (go (i + 1) >ds (binop? dag i && (v = <><ds || v = <>><ds) ? i best)))) 0 dag -1)
    (dies? v i dag rv n) (binop? dag v && luse v dag rv n = i && !(elem v rv))
    (rgof leaf env) (: e (clook leaf env) (two? e ? <>e (scare 'glaze-leaf leaf)))   ; a leaf -> its fixed reg
@@ -955,7 +955,7 @@
                      (atom? e)  (: cb (clook e ce) (two? cb ? <>cb ()))           ; a counter -> its (cvtsi2sd f0 cntr) IR
                      (e @ (op a b)
                           (elem op '(+ - * /)
-                           && ((cgFd tgt ht ce a) + (xpushir tgt) + (cgFd tgt ht ce b) + (xpop1ir tgt) + (fbinop op)))
+                           && cgFd tgt ht ce a + xpushir tgt + cgFd tgt ht ce b + xpop1ir tgt + fbinop op)
                           ()))
    (loopcode-gridn dims cnames invs invd fvars updates testexpr cmpop bound lim tgt)
     ; k=r7, acc=r8, counters r9.. through gr; f2..=consts, f8..=invariants, fvars next, the rest the DAG
@@ -966,10 +966,10 @@
        fenv (invs + fvars)
        cenv (map2 (\ nm r [nm [['cvtsi2sd 'f0 (gr r)]]]) cnames cregs)    ; counter name -> its (cvtsi2sd f0 cntr) IR (cgFd reads it)
        ht (htbl (fcc bound (fccl invd (fccl updates (fcc testexpr ())))) 2)   ; distinct consts -> xmm2..7
-       derives (foldl (\ a p (a + (cgFd tgt ht cenv >p) + [['movsd (fr (8 + <p)) 'f0]])) () (map2 (\ i d (i . d)) (rangeL 0 M) invd))   ; inv i -> xmm(8+i)
+       derives (foldl (\ a p (a + cgFd tgt ht cenv >p + [['movsd (fr (8 + <p)) 'f0]])) () (map2 (\ i d (i . d)) (rangeL 0 M) invd))   ; inv i -> xmm(8+i)
        zerof (foldl (\ a j (a + [['xorpd (fr (8 + M + j)) (fr (8 + M + j))]])) () (rangeL 0 N))   ; fvar j -> xmm(8+M+j) = 0
-       aenv ((efold fenv 8) + ht)
-       pool ([0 1] + (rangeL (8 + M + N) 16))
+       aenv (efold fenv 8 + ht)
+       pool ([0 1] + rangeL (8 + M + N) 16)
        AR (vnall (testexpr . updates) () ())  rootv <AR  dag <>AR  nn #dag
        AL (allocp dag rootv aenv nn pool 'movsd sseops)  bodyc <AL  rg <>AL
        magr (peep rg <rootv 0)  breg (fr (hlook bound ht))
@@ -978,21 +978,21 @@
              + bodyc + [['ucomisd (fr magr) breg] ['br (ucmpx cmpop) 'iesc]]
              + wb + '((inc r7) (jmp itop) (label iesc)))
        popsv (foldl (\ a r (a + [['pop (gr r)]])) () (rev saved))           ; x86 D>=3: restore callee-saved counters before deopt
-       accb (['(adds r8 r8 r7) '(br vc cont)] + popsv + (deoptbody tgt 0) + '((label cont)))   ; escape: acc += k ; overflow -> deopt
+       accb (['(adds r8 r8 r7) '(br vc cont)] + popsv + deoptbody tgt 0 + '((label cont)))   ; escape: acc += k ; overflow -> deopt
        cell (derives + zerof + '((li r7 0)) + iter + accb)                    ; derive invariants; zero fvars; k=0; recur; acc += k
        (loop-nest ci body) (: cr (gr (cregs ci))  b (dims ci)                 ; counted loops outer->inner, single-step
-          tp (intern ("lt" + (show ci)))  en (intern ("le" + (show ci)))
+          tp (intern ("lt" + show ci))  en (intern ("le" + show ci))
           inner (ci = (D - 1) ? body (loop-nest (ci + 1) body))
           ([['li cr 0] ['label tp] ['cmp cr b] ['br 'ge en]] + inner + [['inc cr] ['jmp tp] ['label en]]))
        pushsv (foldl (\ a r (a + [['push (gr r)]])) () saved)
        popsv2 (foldl (\ a r (a + [['pop (gr r)]])) () (rev saved))
        preload (foldl (\ a e (a + [['li SCR (fbits <e)] ['movqxr (fr <>e) SCR]])) () ht)   ; load each const
-       (pushsv + preload + '((li r8 0)) + (loop-nest 0 cell) + popsv2 + [['mov SCR 'r8]]))   ; push saved; consts; acc=0; the nest; pop; result -> scr
+       (pushsv + preload + '((li r8 0)) + loop-nest 0 cell + popsv2 + [['mov SCR 'r8]]))   ; push saved; consts; acc=0; the nest; pop; result -> scr
    ; --- the 2-wide packed grid kernel ------------------------------------------------------------
    ; the innermost dim two cells at a time, lanes [c, c+1] packed per xmm; the escape test ands a
    ; per-lane mask into a sticky alive and `psubq count,alive` counts it (alive = -1). x86 only (sse2)
-   (fr n)   (intern ("f" + (show n)))                                                    ; an xmm number -> its IR symbol f0..f15
-   (gr p)   (intern ("r" + (show (p - 1))))                                              ; a physical GPR encoding (>=8) -> its abstract-file IR name (r10 -> r9 ..)
+   (fr n)   (intern ("f" + show n))                                                    ; an xmm number -> its IR symbol f0..f15
+   (gr p)   (intern ("r" + show (p - 1)))                                              ; a physical GPR encoding (>=8) -> its abstract-file IR name (r10 -> r9 ..)
    (sseop op)  (op @ '+ 'addpd  '* 'mulpd  '- 'subpd  '/ 'divpd  'movupd)   ; a DAG op -> its packed-double mnemonic (grid2)
    (sseops op) (op @ '+ 'addsd  '* 'mulsd  '- 'subsd  '/ 'divsd  'movsd)    ; ... its scalar-double mnemonic (gridn)
    (ucmpx op) (op @ '<= 'above  '< 'ae  '>= 'be  '> 'below  ())             ; the exit cc after ucomisd: the inverse of the continue cmp
@@ -1003,7 +1003,7 @@
        (push r) (pin pl 'p (r . pl 'p))
        forms ((: (go i acc) (i = n ? acc
           (: nd (dag i)
-             (? (<nd = 'L) (pin rg i (rgof <>nd env), go (i + 1) acc)
+             (<nd = 'L ? (pin rg i (rgof <>nd env), go (i + 1) acc)
                 (: op <nd a <>nd b <>>nd ra (peep rg a 0) rb (peep rg b 0)
                    adie (dies? a i dag rv n) bdie (dies? b i dag rv n)
                    dst (adie ? ra (pop 0))
@@ -1013,9 +1013,9 @@
        [forms rg])
    (cmppd-imm op) (op @ '<= 2  '< 1  ())                                    ; the cmppd predicate: le / lt, the "continue while small" escape tests
    (grid2-ok? dims invs fvars updates testexpr cmpop bound)                              ; the packed shape: D<=2, M+N<=4 (f8..f11), <=2 inner consts (f2,f3), cmpop in {< <=}, an even innermost dim
-    ((elem cmpop '(< <=)) && (#dims < 3) && (1 < (last dims)) && (0 = ((last dims) % 2))
-     && ((#invs + #fvars) < 5)
-     && (#(htbl (fcc bound (fccl updates (fcc testexpr ()))) 2) < 3))
+    (elem cmpop '(< <=) && #dims < 3 && 1 < last dims && 0 = last dims % 2
+     && #invs + #fvars < 5
+     && #(htbl (fcc bound (fccl updates (fcc testexpr ()))) 2) < 3)
    ; gp: r0=scratch, r5=Ip (the deopt tail), r7=k, r8=acc, r9../r10..=the grid counters. xmm: f2,f3=consts,
    ; f4=count, f5=alive, f6=scratch, f8,f9=invariants, f10,f11=fvars, f0,f1,f12..f15 the DAG pool
    (loopcode-grid2 dims cnames invs invd fvars updates testexpr cmpop bound lim)
@@ -1026,12 +1026,12 @@
        ht (htbl (fcc bound (fccl updates (fcc testexpr ()))) 2)                          ; only inner-recurrence consts (bound+..) -> f2,f3; derive consts inline -> f4,5,6 free
        breg (fr (hlook bound ht))  pred (cmppd-imm cmpop)
        idx (map2 (\ i d (i . d)) (rangeL 0 M) invd)                                   ; (inv-index . derive-expr) pairs
-       d0 (foldl (\ a p (a + (cgFd 'x64 ht cenv >p) + [['movsd (fr (8 + <p)) 'f0]])) () idx)       ; inv i lane0 -> low of f(8+i)
-       d1 (foldl (\ a p (a + (cgFd 'x64 ht cenv >p) + [['unpcklpd (fr (8 + <p)) 'f0]])) () idx)    ; inv i lane1 (counter+1) -> high
+       d0 (foldl (\ a p (a + cgFd 'x64 ht cenv >p + [['movsd (fr (8 + <p)) 'f0]])) () idx)       ; inv i lane0 -> low of f(8+i)
+       d1 (foldl (\ a p (a + cgFd 'x64 ht cenv >p + [['unpcklpd (fr (8 + <p)) 'f0]])) () idx)    ; inv i lane1 (counter+1) -> high
        derives (d0 + [['inc iir]] + d1 + [['dec iir]])                               ; lane1 = the same derive at counter+1
        zerof (foldl (\ a j (a + [['xorpd (fr (8 + M + j)) (fr (8 + M + j))]])) () (rangeL 0 N))   ; fvars := 0 (both lanes)
-       aenv ((efold fenv 8) + ht)
-       pool ([0 1] + (rangeL (8 + M + N) 16))
+       aenv (efold fenv 8 + ht)
+       pool ([0 1] + rangeL (8 + M + N) 16)
        AR (vnall (testexpr . updates) () ())  rootv <AR  dag <>AR  nn #dag
        AL (allocp dag rootv aenv nn pool 'movupd sseop)  bodyc <AL  rg <>AL
        magr (peep rg <rootv 0)
@@ -1044,18 +1044,18 @@
              + '((label cont0) (movhlps f6 f4) (movqrx r0 f6) (adds r8 r8 r0) (br vc cont1)) + deopt + '((label cont1)))   ; acc += count.lane1 ; guard
        cell (derives + zerof + '((xorpd f4 f4) (pcmpeqd f5 f5) (li r7 0)) + iter + accb)   ; count=0; alive=ones; k=0; loop; acc
        (loop-nest ci body) (: p (cregs ci) cr (gr p) b (dims ci)               ; counted loops outer->inner; innermost steps by 2
-          tp (intern ("lt" + (show ci))) en (intern ("le" + (show ci)))
-          inner (? (ci = (D - 1)) body (loop-nest (ci + 1) body))
-          step  (? (ci = (D - 1)) [['add cr cr 2]] [['inc cr]])
+          tp (intern ("lt" + show ci)) en (intern ("le" + show ci))
+          inner (ci = D - 1 ? body (loop-nest (ci + 1) body))
+          step  (ci = D - 1 ? [['add cr cr 2]] [['inc cr]])
           ([['li cr 0] ['label tp] ['cmp cr b] ['br 'ge en]] + inner + step + [['jmp tp] ['label en]]))
        preload (foldl (\ a e (a + [['li 'r0 (fbits <e)] ['movqxr (fr <>e) 'r0] ['unpcklpd (fr <>e) (fr <>e)]])) () ht)   ; broadcast each const [c,c]
-       (preload + '((li r8 0)) + (loop-nest 0 cell) + '((mov r0 r8))))                    ; IR program (x86): acc=0 ; nest ; result -> r0(=acc)
+       (preload + '((li r8 0)) + loop-nest 0 cell + '((mov r0 r8))))                    ; IR program (x86): acc=0 ; nest ; result -> r0(=acc)
    ; jitfgridn: the packed kernel where the shape fits (x86 only: neon has no movmskpd), else scalar, then loopepi
    (jitfgridn lam cnames dims invs invd fvars updates testexpr cmpop bound lim tgt)
     (: pk (tgt = 'x64 && grid2-ok? dims invs fvars updates testexpr cmpop bound
              ? (loopcode-grid2 dims cnames invs invd fvars updates testexpr cmpop bound lim) ())
        prog (atom? pk ? (loopcode-gridn dims cnames invs invd fvars updates testexpr cmpop bound lim tgt) pk)
-       (nif (emit (asmt tgt (prog + (loopepi tgt)))) (ev lam) 1))
+       (nif (emit (asmt tgt (prog + loopepi tgt))) (ev lam) 1))
    ; jitfgrid: the 2D mandelbrot-class signature onto the general kernel, D=2 over (px py), M=2 (cx cy)
    (jitfgrid lam pxn pyn cxd cyd fvars updates testexpr cmpop bound lim tgt)
     (jitfgridn lam '(px py) [pxn pyn] '(cx cy) [cxd cyd] fvars updates testexpr cmpop bound lim tgt)
@@ -1105,7 +1105,7 @@
    ; (+ n when M < 0) >> s, + 1 for negative n so it truncates toward zero like idiv; % is n - q*k
    (divc? b) (charm? b && b >= 2)
    (magic k) (: two63 9223372036854775808  two64 18446744073709551616
-                anc (two63 - 1 - (two63 % k))
+                anc (two63 - 1 - two63 % k)
                 (go p q1 r1 q2 r2)
                  (: p1 (p + 1)
                     q1a (2 * q1) r1a (2 * r1)
@@ -1113,12 +1113,12 @@
                     q2a (2 * q2) r2a (2 * r2)
                     q2b (r2a >= k ? (q2a + 1) q2a) r2b (r2a >= k ? (r2a - k) r2a)
                     delta (k - r2b)
-                    (? ((q1b < delta) || ((q1b = delta) && (r1b = 0))) (go p1 q1b r1b q2b r2b)
+                    (q1b < delta || (q1b = delta) && (r1b = 0) ? (go p1 q1b r1b q2b r2b)
                        (: M (q2b + 1) ((M >= two63 ? (M - two64) M) . (p1 - 64)))))
-                (go 63 (two63 // anc) (two63 - ((two63 // anc) * anc)) (two63 // k) (two63 - ((two63 // k) * k))))
-   (pow2 k) ((: (go j) (? ((j 2) < k) (go (j + 1)) ((j 2) = k) j 0)) 1)                  ; k = 2^j -> j, else 0
+                (go 63 (two63 // anc) (two63 - (two63 // anc) * anc) (two63 // k) (two63 - (two63 // k) * k)))
+   (pow2 k) ((: (go j) (? (j 2 < k) (go (j + 1)) (j 2 = k) j 0)) 1)                  ; k = 2^j -> j, else 0
    (divk tgt op k) (: A (greg tgt 'acc) T (greg tgt 'tmp) SC (greg tgt 'scratch) j (pow2 k)
-      (? j ([['mov A T] ['sar A 63] ['shr A (64 - j)] ['add A A T] ['sar A j]]                   ; a power of two: bias a negative n by k-1, then shift
+      (j ? ([['mov A T] ['sar A 63] ['shr A (64 - j)] ['add A A T] ['sar A j]]                   ; a power of two: bias a negative n by k-1, then shift
             + (op @ '% [['shl A j] ['sub T T A] ['mov A T]] ()))
          (: m (magic k) M <m s >m
             ([['li SC M] ['mulh A T SC]]
@@ -1130,15 +1130,15 @@
    ; it reads every op by name, never shd: sound only while amble-ok? declines a frame that rebinds one
    (cgir tgt ps e)
     (: A (greg tgt 'acc) T (greg tgt 'tmp)
-       (bin a b fin) ((cgir tgt ps a) + [['push A]] + (cgir tgt ps b) + fin)
+       (bin a b fin) (cgir tgt ps a + [['push A]] + cgir tgt ps b + fin)
        (? (elem e ps) (fxir tgt (argix e ps 0))
           (whole? e) [['li A e]]
           (e @ ('? c t f) (: el (mint 0) en (mint 0)
-                             ((cgir tgt ps c) + [['cmp A 0] ['br 'le el]] + (cgir tgt ps t)
-                              + [['jmp en] ['label el]] + (cgir tgt ps f) + [['label en]]))
-               (op a b) (? (elem op '(+ - *))       (bin a b ([['pop T]] + (arithir tgt op)))
-                           (elem op '(// %) && divc? b) ((cgir tgt ps a) + [['mov T A]] + (divk tgt op b))
-                           (elem op '(// %))        (bin a b ([['test A A] '(br eq deopt) ['pop T]] + (divir tgt op)))
+                             (cgir tgt ps c + [['cmp A 0] ['br 'le el]] + cgir tgt ps t
+                              + [['jmp en] ['label el]] + cgir tgt ps f + [['label en]]))
+               (op a b) (? (elem op '(+ - *))       (bin a b ([['pop T]] + arithir tgt op))
+                           (elem op '(// %) && divc? b) (cgir tgt ps a + [['mov T A]] + divk tgt op b)
+                           (elem op '(// %))        (bin a b ([['test A A] '(br eq deopt) ['pop T]] + divir tgt op))
                            (elem op '(& | ^))       (bin a b [['pop T] [(bitop op) A A T]])
                            (elem op '(< <= > >= =)) (bin a b [['pop T] ['cmp T A] ['set (ccof op) A]])
                            ())
@@ -1150,9 +1150,9 @@
    ; coreir: prologue (anchor = the machine sp) ; body ; putfix + Continue ; the deopt block
    (coreir tgt ps body deoptblk)
     (: AN (greg tgt 'anchor) S (greg tgt 'sp) A (greg tgt 'acc) IP (greg tgt 'ip) T (greg tgt 'tmp)
-       ([['lea AN 'sp 0]] + (cgir tgt ps body) + [['adds A A A] '(br vs deopt) ['or A A 1] ['st S 0 A] ['add IP IP 16] ['ld T IP 0] ['jmpr T]] + deoptblk))
+       ([['lea AN 'sp 0]] + cgir tgt ps body + [['adds A A A] '(br vs deopt) ['or A A 1] ['st S 0 A] ['add IP IP 16] ['ld T IP 0] ['jmpr T]] + deoptblk))
    ; (jitir '(\ x E) tgt) -- a leaf by hand: ev compiles it, the thread lane glazes what ev wrote
-   (jitir lam tgt)  (: f (ev lam) j (jitthread f tgt) (? (lit? j) j f))
+   (jitir lam tgt)  (: f (ev lam) j (jitthread f tgt) (lit? j ? j f))
    (jitnir lam tgt) (jitir lam tgt)
    ; the leaf off the thread: post.l's threadir reads an entry as [arity node], and a node in
    ; the leaf grammar reads as the (\ p0 .. body) the leaf lane takes. 0 when it is not one
@@ -1166,45 +1166,45 @@
                     ('o op as) (op . map (tform ps) as)
                     ('c t a b) ['? (tform ps t) (tform ps a) (tform ps b)]
                     0)
-   (pnames n) (map (\ i (name ("p" + show i))) (jot n))
+   (pnames n) (map (i \ (name ("p" + show i))) ^n)
    ; a body that computes nothing, a param or a constant, runs faster than a native call
-   (thleaf t) (: n (? (two? t) (t 0) 0)
-               (? (0 < n && elem <(t 1) '(o c) && tleaf? n (t 1))
+   (thleaf t) (: n (two? t ? (t 0) 0)
+               (0 < n && elem <(t 1) '(o c) && tleaf? n (t 1) ?
                   (: ps (pnames n) ('\ . ps + [(tform ps (t 1))]))
                   0))
    ; an existing function glazed by the leaf lane, deopting to its own thread; 0 on decline
    (jitthread e tgt) (: l (thleaf (threadir e leafops))
-                      (? (two? l) (: ps (init >l)
-                                   (nif (emit (asmt tgt (coreir tgt ps (last l) (deoptir tgt (#ps = 1 ? 0 1))))) e #ps))
+                      (two? l ? (: ps (init >l)
+                                 (nif (emit (asmt tgt (coreir tgt ps (last l) (deoptir tgt (#ps = 1 ? 0 1))))) e #ps))
                          0))
 
    ; --- the loop-body neutral IR ------------------------------------------------------------------
    ; cgvir: cgir's grammar for the loop lanes, which leave no free reg for an anchor, so a guard deopts
    ; inline: unwind the d pending pushes, then tail-apply value[1] to the arg still in Sp[0]. varld loads a var
    (deoptbody tgt d) (: A (greg tgt 'acc) IP (greg tgt 'ip)
-      ((d > 0 ? [['add 'sp 'sp ((slotsz tgt) * d)]] ()) + [['ld A IP 8] ['mov IP A] ['ld A IP 0] ['jmpr A]]))
-   (ldeopt tgt d) (: ok (mint 0) ([['br 'vc ok]] + (deoptbody tgt d) + [['label ok]]))   ; skip the deopt unless overflow
-   (zdeopt tgt d) (: ok (mint 0) ([['br 'ne ok]] + (deoptbody tgt d) + [['label ok]]))   ; skip unless nonzero: the /-by-0 and fixnum-input guard
+      ((d > 0 ? [['add 'sp 'sp (slotsz tgt * d)]] ()) + [['ld A IP 8] ['mov IP A] ['ld A IP 0] ['jmpr A]]))
+   (ldeopt tgt d) (: ok (mint 0) ([['br 'vc ok]] + deoptbody tgt d + [['label ok]]))   ; skip the deopt unless overflow
+   (zdeopt tgt d) (: ok (mint 0) ([['br 'ne ok]] + deoptbody tgt d + [['label ok]]))   ; skip unless nonzero: the /-by-0 and fixnum-input guard
    (fxvir tgt i d) (: A (greg tgt 'acc) S (greg tgt 'sp)   ; load Sp[i] tagged, fixnum-guard with an inline deopt at depth d, untag
-      ([['ld A S (8 * i)] ['test A 1]] + (zdeopt tgt d) + [['sar A 1]]))
+      ([['ld A S (8 * i)] ['test A 1]] + zdeopt tgt d + [['sar A 1]]))
    (arithl tgt op d) (: A (greg tgt 'acc) T (greg tgt 'tmp) SC (greg tgt 'scratch) dl (mint 0) ok (mint 0)   ; acc = (popped a) OP acc, overflow -> inline deopt
-      (op @ '+ ([['adds A A T]] + (ldeopt tgt d))
-            '* ([['mulo A A T SC dl]] + [['jmp ok] ['label dl]] + (deoptbody tgt d) + [['label ok]])   ; mulo sets no a64 flag, so it branches; SC is the smulh scratch
-            '- ([['subs T T A]] + (ldeopt tgt d) + [['mov A T]])
+      (op @ '+ ([['adds A A T]] + ldeopt tgt d)
+            '* ([['mulo A A T SC dl]] + [['jmp ok] ['label dl]] + deoptbody tgt d + [['label ok]])   ; mulo sets no a64 flag, so it branches; SC is the smulh scratch
+            '- ([['subs T T A]] + ldeopt tgt d + [['mov A T]])
             ()))
    (divl tgt op d) (: A (greg tgt 'acc) T (greg tgt 'tmp) SC (greg tgt 'scratch)   ; a in tmp (popped), b in acc -> acc; b == 0 deopts
-      ([['pop T] ['test A A]] + (zdeopt tgt d) + (op @ '// [['div A T A]]  '% [['rem A T A SC]]  ())))
+      ([['pop T] ['test A A]] + zdeopt tgt d + (op @ '// [['div A T A]]  '% [['rem A T A SC]]  ())))
    (cgvir tgt varld e d)
     (: A (greg tgt 'acc) T (greg tgt 'tmp)
-       (bin a b fin) ((cgvir tgt varld a d) + [['push A]] + (cgvir tgt varld b (d + 1)) + fin)
+       (bin a b fin) (cgvir tgt varld a d + [['push A]] + cgvir tgt varld b (d + 1) + fin)
        vl (varld e d)
        (? vl vl                                              ; a var -> its loader IR (acc <- the var, at depth d)
           (whole? e) [['li A e]]
           (e @ ('? c t f) (: el (mint 0) en (mint 0)
-                             ((cgvir tgt varld c d) + [['cmp A 0] ['br 'le el]] + (cgvir tgt varld t d)
-                              + [['jmp en] ['label el]] + (cgvir tgt varld f d) + [['label en]]))
-               (op a b) (? (elem op '(+ - *))       (bin a b ([['pop T]] + (arithl tgt op d)))
-                           (elem op '(// %) && divc? b) ((cgvir tgt varld a d) + [['mov T A]] + (divk tgt op b))
+                             (cgvir tgt varld c d + [['cmp A 0] ['br 'le el]] + cgvir tgt varld t d
+                              + [['jmp en] ['label el]] + cgvir tgt varld f d + [['label en]]))
+               (op a b) (? (elem op '(+ - *))       (bin a b ([['pop T]] + arithl tgt op d))
+                           (elem op '(// %) && divc? b) (cgvir tgt varld a d + [['mov T A]] + divk tgt op b)
                            (elem op '(// %))        (bin a b (divl tgt op d))
                            (elem op '(& | ^))       (bin a b [['pop T] [(bitop op) A A T]])
                            (elem op '(< <= > >= =)) (bin a b [['pop T] ['cmp T A] ['set (ccof op) A]])
@@ -1221,7 +1221,7 @@
    (hrest tgt)  (tgt = 'x64 ? () ['(pop lr)])
    (saveargsir tgt k) (foldl (\ a i (bcat [a [['push (argregir tgt i)]]])) () (rangeL 0 k))
    (restargsir tgt k) (foldl (\ a i (bcat [a [['pop (argregir tgt ((k - 1) - i))]]])) () (rangeL 0 k))
-   (loadargsir tgt k) (foldl (\ a i (bcat [a [['ld (argregir tgt i) 'sp ((slotsz tgt) * ((2 * k) - i))]]])) () (rangeL 0 k))   ; argreg_i <- the passed arg at [sp + slotsz*(2k-i)]
+   (loadargsir tgt k) (foldl (\ a i (bcat [a [['ld (argregir tgt i) 'sp (slotsz tgt * (2 * k - i))]]])) () (rangeL 0 k))   ; argreg_i <- the passed arg at [sp + slotsz*(2k-i)]
    (garith tgt op) (: A (greg tgt 'acc) T (greg tgt 'tmp) SC (greg tgt 'scratch)   ; acc = (popped a) OP acc, overflow -> OVF
       (op @ '+ [['adds A A T] '(br vs OVF)]
             '- [['subs T T A] '(br vs OVF) ['mov A T]]
@@ -1250,14 +1250,14 @@
           (whole? e) [['li A e]]
           (atom? e) ()
           (elem <e syms)
-            (bcat [(gargsir tgt syms ps >e) [['call <e]] [['add 'sp 'sp ((slotsz tgt) * #>e)]]])
+            (bcat [(gargsir tgt syms ps >e) [['call <e]] [['add 'sp 'sp (slotsz tgt * #>e)]]])
           (e @ (op a b)
             (? (elem op '(+ - *))
                  (: pa (preg tgt ps a) pb (preg tgt ps b)
                     (? pb                             (bcat [(go a) (garith-r tgt op pb)])   ; (E op p): E->acc; acc OP= p_reg
                        (pimm? b && !(op = '*))   (bcat [(go a) (garith-i tgt op b)])    ; (E op C)
                        (pa && elem op '(+ *))   (bcat [(go b) (garith-r tgt op pa)])   ; (p op E): commute
-                       (pimm? a && (op = '+))     (bcat [(go b) (garith-i tgt op a)])    ; (C + E): commute; an imm `*` has no a64 form, so it stays generic
+                       (pimm? a && op = '+)     (bcat [(go b) (garith-i tgt op a)])    ; (C + E): commute; an imm `*` has no a64 form, so it stays generic
                        (bcat [(go a) [['push A]] (go b) [['pop T]] (garith tgt op)])))   ; generic
                (elem op '(// %) && divc? b) (bcat [(go a) [['mov T A]] (divk tgt op b)])
                (elem op '(// %))
@@ -1309,7 +1309,7 @@
    ; cggvir: value-mode codegen -- e yields a love value (a heap pointer or a tagged scalar) in acc, not a raw int
    (cggvir tgt syms ps e)
     (: A (greg tgt 'acc) T (greg tgt 'tmp)
-      (? (whole? e) [['li A ((2 * e) + 1)]]                                        ; the tagged value C
+      (? (whole? e) [['li A (2 * e + 1)]]                                        ; the tagged value C
          (elem e ps) (: R (argregir tgt (argix e ps 0)) [['leax A R R 1 1]])    ; a param: acc = 2*reg + 1
          (atom? e) ()
          (elem <e syms) (cggir tgt syms ps e)                                   ; a value-group call: cggir's call already answers the value
@@ -1322,7 +1322,7 @@
    ; the arg regs and jumps Lbody past save/load: the frame is reused. self only; a sibling tail-call stays a plain `call`
    (cggtir tgt syms ps e selfnm Lbody)
     (: A (greg tgt 'acc) k #ps
-       (? (two? e && (<e = selfnm) && #>e = k)                    ; a tail self-call -> loop in place
+       (two? e && (<e = selfnm) && #>e = k ?                    ; a tail self-call -> loop in place
             (bcat [(gargsir tgt syms ps >e)                                      ; push the new args, all read from the old regs
                    (foldl (\ a i (bcat [a [['pop (argregir tgt ((k - 1) - i))]]])) () (rangeL 0 k))   ; pop into the arg regs, in reverse
                    [['jmp Lbody]]])
@@ -1366,10 +1366,10 @@
                '? 4 'peep 4 'pin 4 'mpeep 4 'mpin 4
                'tally 2 'two? 2 'cap 2 'cup 2}
    (jgir-ops-ok? syms e)                                          ; every head in e is a group call or a supported op at its own arity
-    (? (atom? e) (gem? e || twin? e ? 0 1)                       ; a smooth-numeric leaf is out of the integer lane
+    (atom? e ? (gem? e || twin? e ? 0 1)                       ; a smooth-numeric leaf is out of the integer lane
        (: op <e
           n (jgir-arity op)
-          ((elem op syms || (n && #e = n)) && all (x \ jgir-ops-ok? syms x) >e)))
+          ((elem op syms || n && #e = n) && all (x \ jgir-ops-ok? syms x) >e)))
    (jgir-ok? defs) (: syms (map (d \ <<d) defs)
       (all (d \ jgir-ops-ok? syms >d) defs))
    ; jgir-lrf -- the ((mpeep..) (peep..) (mpin..) (pin..) def..) tail the deopt fallback re-evaluates.
@@ -1404,7 +1404,7 @@
 (: sfuel {})   ; autospec's unfold fuel; a global, since a sibling-captured value-local misses in the hatched ev
 (: glaze-loaded? (lit? (cite 'glaze))   ; re-load detector, read before this load defglobs anything: `glaze` registered means the baked glaze is installed
    ; the registry, never `book`: a woken image has `book` sealed away
-   base-ev (: G (cite 'glaze) (? G (G 'base-ev) ev))   ; the pure interpreter: on a re-load ev is auto-ev already, so read it out of the module, else autospec's fold re-enters the glaze
+   base-ev (: G (cite 'glaze) (G ? (G 'base-ev) ev))   ; the pure interpreter: on a re-load ev is auto-ev already, so read it out of the module, else autospec's fold re-enters the glaze
    opfixed (cite 'guts 'opfixed)                       ; ev.l's already-factored tag: auto-ev opfixes once, ahead of its source passes
    arch love-arch                         ; the host CPU as the assembler target ('x64 / 'a64), already a nom; glaze loads only on these
    x86? (arch = 'x64)                 ; gates the still-x86-only lanes (float result, counted loops, float grids)
@@ -1418,31 +1418,31 @@
    ;     (n v0..vk), n passed along and the inits constants; G's body (? T (G n U0..Uk) R), its
    ;     self call known by identity. the letrec's (\ a a) wrapper reads through
    (thspine x) (: (go x acc) (x @ ('a f as) (go f (as + acc)) [x acc]) (go x ()))
-   (thid? h) (h @ ('k v) (: t (threadir v leafops) (two? t && (t 0) = 1 && (t 1) = ['p 0])) 0)
-   (thcall h as) (? (thid? h && two? as) (: s (thspine <as) (thcall <s ((s 1) + >as))) [h as])
+   (thid? h) (h @ ('k v) (: t (threadir v leafops) (two? t && t 0 = 1 && t 1 = ['p 0])) 0)
+   (thcall h as) (thid? h && two? as ? (: s (thspine <as) (thcall <s (s 1 + >as))) [h as])
    ; [n vars updates test result inits], forms over p0 .. pk, or 0
    (thloop t)
-    (? !(two? t && (t 0) = 1) 0
+    (!(two? t && t 0 = 1) ? 0
        (: s (thspine (t 1))  sp (thcall <s (s 1))  as (sp 1)
           G ((sp 0) @ ('k v) v 0)
-          tg (? G (threadir G leafops) 0)
-          n (? (two? tg) (tg 0) 0)
-          (? !(1 < n && n < 5 && #as = n && (as 0) = ['p 0] && all (a \ a @ ('k c) (charm? c) 0) >as) 0
+          tg (G ? (threadir G leafops) 0)
+          n (two? tg ? (tg 0) 0)
+          (!(1 < n && n < 5 && #as = n && as 0 = ['p 0] && all (a \ a @ ('k c) (charm? c) 0) >as) ? 0
              ((tg 1) @ ('c T S R)
               (: ss (thspine S)  us (ss 1)
-                 (? (((ss 0) @ ('k v) (== v G) 0)
-                     && #us = n && (us 0) = ['p 0]
-                     && (T @ ('o cmp _) (elem cmp '(< <= > >= =)) 0)
-                     && tleaf? n T && all (tleaf? n) >us && tleaf? n R)
+                 (((ss 0) @ ('k v) (v == G) 0)
+                  && #us = n && us 0 = ['p 0]
+                  && (T @ ('o cmp _) (elem cmp '(< <= > >= =)) 0)
+                  && tleaf? n T && all (tleaf? n) >us && tleaf? n R ?
                     (: ps (pnames n)
-                       [<ps >ps (map (tform ps) >us) (tform ps T) (tform ps R) (map (\ a (a 1)) >as)])
+                       [<ps >ps (map (tform ps) >us) (tform ps T) (tform ps R) (map (a \ (a 1)) >as)])
                     0))
               0))))
    ; the counted sum inside it, as [B I op cmp]
    (thcount l)
     (l @ [N [I A] [U1 [op A2 B]] [cmp I2 N2] R [i0 z2]]
-       (? (U1 = ['+ I 1] && A2 = A && I2 = I && N2 = N && R = A && i0 = 0
-           && elem op '(+ *) && z2 = (foldinit op) && exprp B I)
+       (U1 = ['+ I 1] && A2 = A && I2 = I && N2 = N && R = A && i0 = 0
+        && elem op '(+ *) && z2 = foldinit op && exprp B I ?
           [B I op cmp] 0)
        0)
    ; --- call-out loop: the counted sum's shape, with the per-step term a call (F ARG) rather than arithmetic.
@@ -1483,19 +1483,19 @@
                  ['/ a b]                                              ; /: float-division ok; int/int is value-dependent -> reject
                    (: ta (fty a v) tb (fty b v)
                       (? (ta = 0 || tb = 0) 0 (ta = 'F || tb = 'F) 'F 0))))
-   (allsafe e v) (? !(occurs? v e) 1  (atom? e) 1  ((fty e v) = 'I) 0    ; an I-typed compound holding the param -> late promotion -> reject
+   (allsafe e v) (? !(occurs? v e) 1  (atom? e) 1  (fty e v = 'I) 0    ; an I-typed compound holding the param -> late promotion -> reject
                     (allsafe <>e v && allsafe <>>e v))
-   (qualfr ['\ v body]) (nom? v && ((fty body v) = 'F) && allsafe body v)   ; a float result, param floated everywhere
+   (qualfr ['\ v body]) (nom? v && fty body v = 'F && allsafe body v)   ; a float result, param floated everywhere
    ; --- the grid nest, D-dimensional: a letrec of D counted-loop defs wrapping a float recurrence under an (&& (it < LIM)
    ;     (cmp TEST BOUND)) escape test, the outermost driven by a trailing (driver 0 ..). M invariants + N float-vars <= 6, the xmm budget
-   (anat-defs bs) (? (atom? >bs) [() <bs]             ; a : binding list -> (pairs body); pairs = ((nameform . body)..)
+   (anat-defs bs) (atom? >bs ? [() <bs]             ; a : binding list -> (pairs body); pairs = ((nameform . body)..)
                      (: r (anat-defs >>bs)
                         [((<bs . <>bs) . <r) <>r]))
    (afind pred l) (? (atom? l) () (pred <l) <l (afind pred >l))
    ; the recurrence pair: a (? (&& ..) (SELF ..) ..) whose then-branch self-calls (head = its own name)
    (anat-rec? p) (: nm <<p
                     (>p @ ['? cond then _]
-                        (two? cond && (<cond = '&&) && two? then && (<then = nm))
+                        (two? cond && <cond = '&& && two? then && <then = nm)
                         0))
    ; anat-callee: the next-inner fn a loop def calls, or () off the loop shape; the outermost loop is the one no other loop names
    (anat-callee q)
@@ -1511,7 +1511,7 @@
          (two? rest ? ([cnt bnd ()] . rest))))))
    ; rebind: rebuild a : binding list, replacing the outermost loop's body with (native 0)
    (anat-rebind bs outernm ng)
-    (? (atom? >bs) bs
+    (atom? >bs ? bs
      (: nm <bs bd <>bs
       (nm . (two? nm && <nm = outernm ? [ng 0] bd) . anat-rebind >>bs outernm ng)))
    ; --- autogroup: the maximal closed subset of a `:`'s mutually-recursive arithmetic fns (groupok?'s fragment; a fn calling
@@ -1535,32 +1535,32 @@
    (auxclose aps) (foldl (\ acc ap (acc + [(<ap . (foldl (\ b q (subst-sym <q >q b)) >ap acc))])) () aps)
    (auxinl aps x) (foldl (\ b ap (subst-sym <ap >ap b)) x (auxclose aps))
    (norm-let body)
-    (? !(two? body && (<body = ':) && !(atom? >body)) body
+    (!(two? body && <body = ': && !(atom? >body)) ? body
        (: parsed (anat-defs >body) pairs <parsed result <>parsed
           fnps (filter (pr \ two? <pr) pairs) auxps (filter (pr \ !(two? <pr)) pairs)
           (? !(1 = #fnps && two? result) body                                         ; need exactly one local fn + a call result
              !(all (dcheap? * cup) auxps) body                                          ; a call-valued aux does not copy -> leave the let alone
              (: g <<<fnps q ><<fnps gbody ><fnps
-                (? !(<result = g && #>result = #q) body            ; result must be (g inits..) matching arity
+                (!(<result = g && #>result = #q) ? body            ; result must be (g inits..) matching arity
                    (: inl (auxinl auxps)                                             ; inline every aux name -> its closed value
                       ([': (g . q) (inl gbody)] . map inl >result)))))))
    (lift-pair p)                                                                                  ; (nameform . body) -> (rewritten-pair newdefs)
     (: nf <p pbody (norm-let >p)
-       (? !(two? nf && nom? <nf && 1 < #nf && named-let? pbody) [p ()]
+       (!(two? nf && nom? <nf && 1 < #nf && named-let? pbody) ? [p ()]
           (: F <nf P >nf  nl <pbody inits >pbody
              gnf <>nl g <gnf q >gnf GBODY <>>nl
              gn (name (string F + "_" + string g))                                        ; lifted name F_g (unique per enclosing fn)
              fv (filter (pp \ occurs? pp GBODY && !(elem pp q)) P)                        ; enclosing params free in gbody
              [(nf . gn . fv + inits)                                                 ; F's body -> (gn fv.. inits..)
                [((gn . fv + q) . subst-call g gn fv GBODY)]])))                       ; new def: (gn fv.. q..) . gbody'
-   (unpair ps body) (? (atom? ps) [body] (: pr <ps (<pr . (>pr . unpair >ps body))))    ; pairs + body -> a : binding list
+   (unpair ps body) (atom? ps ? [body] (: pr <ps (<pr . (>pr . unpair >ps body))))    ; pairs + body -> a : binding list
    (lift form)                                                                                    ; lambda-lift every named-let fn body in a `:`
-    (? !(two? form && <form = ': && two? >form) form
+    (!(two? form && <form = ': && two? >form) ? form
        (: parsed (anat-defs >form) pairs <parsed body <>parsed
           results (map lift-pair pairs)
           allpairs (foldl (a \ r \ a + (<r . <>r)) () results)                       ; each lifted def right behind its fn: a later value binding may call it
           hasbody (1 = #>form % 2)
-          (': . (? hasbody (unpair allpairs body) (cbflat allpairs)))))                       ; body-less in, body-less out
+          (': . (hasbody ? (unpair allpairs body) (cbflat allpairs)))))                       ; body-less in, body-less out
    ; --- plift: hoist a read-only self-loop out of a nested `:` to the top level, its captures as leading params -- the case
    ;     lift can't reach, a read loop among allocating siblings that stay interpreted. no roalloc head, no sibling call
    roalloc '(pin pull . tablet hash cask say pour jug tap put puts putc putn putx flush dot see sip slurp sound read reads rand randf twirl catch scare ev)   ; allocating/mutating/IO heads -- a `_`-bound one is an effect that must not be dropped or hoisted
@@ -1572,15 +1572,15 @@
    ; --- write-loop: a read-modify-write self-loop (g i) (? COND (: k.. _ (pin H k V) (g STEP)) H) over a captured map, hoisted
    ;     with (mpin H k V) threaded into the call's H slot and base H -> 0 (native answers a fixnum): sound only where H's result is discarded, bumpok?'s job
    (wmaph pr sibs) (: g <<pr body >pr                                                   ; the captured map H of an rmw write-loop pr, else ()
-      (? !(fnpair? pr && occurs? g body && !(any (s \ s != g && occurs? s body) sibs)
-             && two? body && <body = '? && 4 = #body) ()
+      (!(fnpair? pr && occurs? g body && !(any (s \ s != g && occurs? s body) sibs)
+           && two? body && <body = '? && 4 = #body) ? ()
          (: THEN (opd body 1) BASE (opd body 2)
-            (? !(nom? BASE && two? THEN && <THEN = ': && two? >THEN) ()
+            (!(nom? BASE && two? THEN && <THEN = ': && two? >THEN) ? ()
                (: pp (anat-defs >THEN) binds <pp call <>pp
                   pinpr (afind (b \ (: v >b (two? v && <v = 'pin && 4 = #v && <>v = BASE))) binds)
-                  (? (two? pinpr
-                      && (all (b \ b = pinpr || !(uses-head? roalloc >b)) binds)   ; the only effect is that one pin
-                      && two? call && <call = g) BASE ()))))))                            ; tail self-call; H is captured here, wthread threads it after plift
+                  (two? pinpr
+                   && all (b \ b = pinpr || !(uses-head? roalloc >b)) binds   ; the only effect is that one pin
+                   && two? call && <call = g ? BASE ()))))))                            ; tail self-call; H is captured here, wthread threads it after plift
    (wthread g gn fv H pr) (: body >pr COND (opd body 0) THEN (opd body 1)                    ; the hoisted write-loop body, still peep/pin: mapfix rewrites to mpeep/mpin later
       pp (anat-defs >THEN) binds <pp call <>pp
       pinpr (afind (b \ (: v >b (two? v && <v = 'pin && <>v = H))) binds)
@@ -1592,14 +1592,14 @@
    (other-use? nm self ipairs ibody) (occurs? nm ibody || any (pr \ !(pr = self) && occurs? nm >pr) ipairs)   ; nm used outside its own binding?
    (bumpok? g defpr ipairs ibody)                                                                ; every (g ..) call (besides g's def) is a discarded whole-binding value
     (!(occurs? g ibody)
-     && (all (pr \ pr = defpr || !(occurs? g >pr)
-                    || !(fnpair? pr)
-                       && (: v >pr (two? v && <v = g))
-                       && !(other-use? <pr pr ipairs ibody)) ipairs))
+     && all (pr \ pr = defpr || !(occurs? g >pr)
+                   || !(fnpair? pr)
+                      && (: v >pr (two? v && <v = g))
+                      && !(other-use? <pr pr ipairs ibody)) ipairs)
    (subst-pairs g gn fv pairs) (map (pr \ <pr . subst-call g gn fv >pr) pairs)    ; rewrite (g A..) in every pair's value
    (plift-fn Fpair)                                                                               ; ((F P..) . FBODY) -> `(Fpair' newdefs)
     (: nf <Fpair FBODY >Fpair
-       (? !(two? nf && nom? <nf && two? FBODY && <FBODY = ': && two? >FBODY) [Fpair ()]
+       (!(two? nf && nom? <nf && two? FBODY && <FBODY = ': && two? >FBODY) ? [Fpair ()]
           (: F <nf P >nf
              parsed (anat-defs >FBODY) ipairs <parsed ibody <>parsed
              sibnames (map caap (filter fnpair? ipairs))                                           ; all inner fn names
@@ -1609,37 +1609,37 @@
                             cnd (two? bd && <bd = '? ? (opd bd 0))
                             N (two? cnd && <cnd = '< ? (opd cnd 1))                   ; cond (i < N) -> the bound
                             (nom? H && N != () ? ((H . N) . m) m))) () wlifts)       ; so `(tablet 0)` -> `(tablet N)`: the native inserts never grow
-             lifts ((filter (pr \ roloop? pr sibnames) ipairs) + wlifts)
-             (? (atom? lifts) [Fpair ()]
+             lifts (filter (pr \ roloop? pr sibnames) ipairs + wlifts)
+             (atom? lifts ? [Fpair ()]
                 (: remain (filter (pr \ !(any (lp \ (pr = lp)) lifts)) ipairs)                ; the non-lifted inner bindings (by identity)
                    specs (map (pr \ <<pr                                               ; per lift a spec (g gn fv..): name, hoisted name F_g, captures
                                . ((name (string F + "_" + string <<pr))
                                      . (filter (s \ !(s = '_) && !(elem s ><pr) && occurs? s >pr) (P + valnames)))) lifts)   ; `_` is rebound locally by the loop's pin slot, never a capture
-                   (presz pr) (? (fnpair? pr) pr (: ms (afind (x \ (<x = <pr)) mapsz) v >pr   ; a map binding `(H (tablet 0))` -> `(H (tablet N))`
-                                  (? (two? ms && two? v && (<v = 'tablet)) (<pr . ['tablet >ms]) pr)))    ; presize `(tablet N)` so the N native inserts never grow
+                   (presz pr) (fnpair? pr ? pr (: ms (afind (x \ (<x = <pr)) mapsz) v >pr   ; a map binding `(H (tablet 0))` -> `(H (tablet N))`
+                                (two? ms && two? v && <v = 'tablet ? (<pr . ['tablet >ms]) pr)))    ; presize `(tablet N)` so the N native inserts never grow
                    rwp (map presz (foldl (\ ps sp (subst-pairs <sp <>sp >>sp ps)) remain specs))   ; rewrite (g A..) calls through every spec, then presize the maps
                    rwb (foldl (\ b sp (subst-call <sp <>sp >>sp b)) ibody specs)       ; ... and in the trailing body
                    newdefs (map (sp \ (: lp (afind (pr \ (<<pr = <sp)) lifts)            ; the hoisted def: (gn fv.. q..) . body'[g->gn]
                                   wl (any (w \ (w = lp)) wlifts)                                   ; a write-loop -> threaded body; else the plain read-only rename
                                   ((<>sp . >>sp + ><lp)
-                                     . (? wl (wthread <sp <>sp >>sp (wmaph lp sibnames) lp)
+                                     . (wl ? (wthread <sp <>sp >>sp (wmaph lp sibnames) lp)
                                            (subst-call <sp <>sp >>sp >lp))))) specs)
                    [(nf . (': . unpair rwp rwb)) newdefs])))))
    (plift form)                                                                                   ; hoist read-only loops out of every top-level fn's nested :
-    (? !(two? form && <form = ': && two? >form) form
+    (!(two? form && <form = ': && two? >form) ? form
        (: parsed (anat-defs >form) pairs <parsed body <>parsed
           results (map plift-fn pairs)
           extradefs (foldl (a \ r \ a + <>r) () results)
           hasbody (1 = #>form % 2)
-        (? (atom? extradefs) form
+        (atom? extradefs ? form
          (: allp (foldl (a \ r \ a + (<r . <>r)) () results)                          ; each hoisted def right behind its fn: a later value binding may call it
-          (': . (? hasbody (unpair allp body) (cbflat allp))))))) ; body-less in -> body-less out
+          (': . (hasbody ? (unpair allp body) (cbflat allp))))))) ; body-less in -> body-less out
    ; --- mapfix: a group fn's param peep'd but never tally'd is a map, so (peep h k d) -> (mpeep h k d), the open-addressed
    ;     probe; the entry's mapkind guard backstops the guess -- a non-map arg deopts
-   (puse? e P) (? (two? e) (? (<e = 'peep && <>e = P) 1 (foldl (a \ x \ a || puse? x P) 0 >e)) 0)   ; P used as (peep P k d)?
-   (tuse? e P) (? (two? e) (? (<e = 'tally && <>e = P) 1 (foldl (a \ x \ a || tuse? x P) 0 >e)) 0)   ; P used as (tally P)?
-   (peep->mpeep P e) (? (two? e) (? (<e = 'peep && <>e = P) ('mpeep . map (peep->mpeep P) >e) (map (peep->mpeep P) e)) e)
-   (pin->mpin P e)   (? (two? e) (? (<e = 'pin && <>e = P) ('mpin . map (pin->mpin P) >e) (map (pin->mpin  P) e)) e)   ; a map param's (pin P k v) update -> (mpin P k v); a cask param is pin'd-not-peep'd so never in mps
+   (puse? e P) (two? e ? (<e = 'peep && <>e = P ? 1 (foldl (a \ x \ a || puse? x P) 0 >e)) 0)   ; P used as (peep P k d)?
+   (tuse? e P) (two? e ? (<e = 'tally && <>e = P ? 1 (foldl (a \ x \ a || tuse? x P) 0 >e)) 0)   ; P used as (tally P)?
+   (peep->mpeep P e) (two? e ? (<e = 'peep && <>e = P ? ('mpeep . map (peep->mpeep P) >e) (map (peep->mpeep P) e)) e)
+   (pin->mpin P e)   (two? e ? (<e = 'pin && <>e = P ? ('mpin . map (pin->mpin P) >e) (map (pin->mpin  P) e)) e)   ; a map param's (pin P k v) update -> (mpin P k v); a cask param is pin'd-not-peep'd so never in mps
    (mapfix-def def) (: nf <def body >def
       mps (filter (P \ puse? body P && !(tuse? body P)) >nf)                              ; this fn's map params (peep'd, not tally'd)
       (nf . foldl (b \ P \ pin->mpin P (peep->mpeep P b)) body mps))
@@ -1651,70 +1651,70 @@
    (cbset l i v) (i @ 0 (v . >l) (<l . cbset >l (i - 1) v))  ; l with index i replaced by v
    (cbnotelse? s as si) (foldl (a \ j \ a && (j = si || !(occurs? s (as j)))) 1 (rangeL 0 #as))   ; s in no arg but si
    (cbacc nf)                                                                        ; -> (si X g q COND RECUR recur-is-then?) on a match, else ()
-    (? !(named-let? nf) ()
+    (!(named-let? nf) ? ()
        (: nl <nf inits >nf gnf <>nl g <gnf q >gnf B <>>nl    ; B = the loop body
-          (? !(two? B && <B = '? && 4 = #B) ()                   ; B = (? COND e1 e2)
+          (!(two? B && <B = '? && 4 = #B) ? ()                   ; B = (? COND e1 e2)
              (: ar #q c (opd B 0) e1 (opd B 1) e2 (opd B 2)
-                rth (cbcall? e1 g ar) r (? rth e1 (cbcall? e2 g ar) e2 ()) base (? rth e2 e1)   ; which branch is the tail self-call; the other is the base
-                (? !(two? r && nom? base && elem base q) ()                ; need a self-call branch + a param-returning base
+                rth (cbcall? e1 g ar) r (? rth e1 (cbcall? e2 g ar) e2 ()) base (rth ? e2 e1)   ; which branch is the tail self-call; the other is the base
+                (!(two? r && nom? base && elem base q) ? ()                ; need a self-call branch + a param-returning base
                    (: si (posof base q 0) sa (>r si) IN (inits si)
-                      (? !(two? sa && <sa = '+ && 3 = #sa && opd sa 0 = base) ()   ; arg_si = (s + X)
+                      (!(two? sa && <sa = '+ && 3 = #sa && opd sa 0 = base) ? ()   ; arg_si = (s + X)
                          (: X (opd sa 1)
-                            (? (string? IN && 0 = #IN && !(occurs? base c) && !(occurs? base X) && cbnotelse? base >r si)
+                            (string? IN && 0 = #IN && !(occurs? base c) && !(occurs? base X) && cbnotelse? base >r si ?
                                [si X g q c r rth] ())))))))))                        ; init "" + s only in (s + X)@si and the base
    (cbrw nf [si X g q c r rth])                                                  ; the threaded-jug rewrite: the accumulator param becomes a jug, init (jug 0)
     (: inits >nf  s (q si)                                                      ; s = the accumulator param (now the jug, threaded unchanged)
-       app  (? (cbsay? X) ['say s X] ['say s ['string X]])                        ; (say s X) | (say s (string X)) -- mirrors (s + X)
+       app  (cbsay? X ? ['say s X] ['say s ['string X]])                        ; (say s X) | (say s (string X)) -- mirrors (s + X)
        r2   (': . ['_ app (g . cbset >r si s)])                        ; (: _ (say s ..) (g ..s..)) -- pass the jug unchanged
-       b2   (? rth ['? c r2 ['slurp s]] ['? c ['slurp s] r2])                    ; keep the original branch orientation; base -> (slurp s)
+       b2   (rth ? ['? c r2 ['slurp s]] ['? c ['slurp s] r2])                    ; keep the original branch orientation; base -> (slurp s)
        (': . [(g . q) b2 (g . cbset inits si '(jug 0))]))                ; (: (g q..) b2 (g ..(jug 0)..)) -- the jug born once at the call
    (cbwalk e) (? (atom? e) e  (cbquote? e) e
-                 (: nf (norm-let e) info (cbacc nf) (? (two? info) (cbrw nf info) (map cbwalk e))))
+                 (: nf (norm-let e) info (cbacc nf) (two? info ? (cbrw nf info) (map cbwalk e))))
    ; --- the native cask variant: a single-byte counted builder, i:0-by-1 the cask index and E a charm expr -> a counted byte-store.
    ;     the epilogue tags rax as a fixnum, so the cask cannot come back: the loop lifts to a sibling F-fill answering the count, the wrapper F holds the cask
    (cbbyte? e i) (? (charm? e) 1  (e = i) 1  (two? e && <e = 'peep) 1                ; a charm expr: const | the counter | a peep byte | arith thereof
                     (two? e && elem <e '(+ - * // % & | ^ << >>) && 3 = #e) (cbbyte? (opd e 0) i && cbbyte? (opd e 1) i) 0)
    (cbcask nlval nf)                                                                              ; -> (wrapper-pair fill-pair) on a clean single-byte counted match, else ()
-    (? !(two? nf && nom? <nf && 1 < #nf) ()                                    ; nf must be (F p..) so we can sibling the fill
+    (!(two? nf && nom? <nf && 1 < #nf) ? ()                                    ; nf must be (F p..) so we can sibling the fill
        ((cbacc nlval) @ [si X g q cond r rth]
           (: inits >nlval
-             (? !(rth && (two? cond) && (<cond = '<) && (3 = #cond) && (elem (opd cond 0) q)   ; recur-then; cond = (i < n)
-                   && (two? X) && (<X = 'string) && (2 = #X) && (cbbyte? (opd X 0) (opd cond 0))) ()   ; append = (string E), E a charm in the counter
+             (!(rth && two? cond && <cond = '< && 3 = #cond && elem (opd cond 0) q   ; recur-then; cond = (i < n)
+                 && two? X && <X = 'string && 2 = #X && cbbyte? (opd X 0) (opd cond 0)) ? ()   ; append = (string E), E a charm in the counter
                 (: i (opd cond 0) n (opd cond 1) ci (posof i q 0) E (opd X 0) rargs >r ia (rargs ci)
-                   (? !(0 = (inits ci) && two? ia && (<ia = '+) && 3 = #ia && ((opd ia 0) = i) && 1 = (opd ia 1)) ()   ; counter init 0, step (i + 1)
+                   (!(0 = inits ci && two? ia && (<ia = '+) && 3 = #ia && (opd ia 0 = i) && 1 = opd ia 1) ? ()   ; counter init 0, step (i + 1)
                       (: F <nf Fp >nf s (q si) fillnm (name (string F + "-fill")) cbn (name (string F + "-cb"))
                          fv (filter (p \ occurs? p cond || occurs? p r) Fp)               ; enclosing params the loop reads
                          fbody ['? cond (fillnm . fv + (cbset rargs si ['pin s i E])) i]     ; (? COND (F-fill fv.. (i + 1) (pin s i E)) i)
                          wbody (': . [cbn ['cask n] '_ (fillnm . fv + (cbset inits si cbn)) ['string cbn]])
                          [(nf . wbody) ((fillnm . fv + q) . fbody)])))))
           ()))
-   (cbcpair p) (: info (cbcask (norm-let >p) <p) (? (two? info) info [(<p . cbwalk >p)]))    ; cask variant, else keep (jug via cbwalk)
-   (cbflat ps) (? (atom? ps) () (: pr <ps (<pr . (>pr . cbflat >ps))))   ; pairs -> a binding list, no trailing body (preserves a body-less `:`)
+   (cbcpair p) (: info (cbcask (norm-let >p) <p) (two? info ? info [(<p . cbwalk >p)]))    ; cask variant, else keep (jug via cbwalk)
+   (cbflat ps) (atom? ps ? () (: pr <ps (<pr . (>pr . cbflat >ps))))   ; pairs -> a binding list, no trailing body (preserves a body-less `:`)
    (castbuild form)
-    (? !(two? form && (<form = ':) && !(atom? >form)) (cbwalk form)              ; a `:` group: try the cask variant per binding (adds F-fill siblings); else the in-place walk
+    (!(two? form && <form = ': && !(atom? >form)) ? (cbwalk form)              ; a `:` group: try the cask variant per binding (adds F-fill siblings); else the in-place walk
        (: parsed (anat-defs >form) pairs <parsed body <>parsed
           newpairs (foldl (\ a r (a + r)) () (map cbcpair pairs))
-          (? (1 = (#>form % 2)) (': . unpair newpairs (cbwalk body))             ; odd count -> has a body
+          (1 = #>form % 2 ? (': . unpair newpairs (cbwalk body))             ; odd count -> has a body
              (': . cbflat newpairs))))                                                       ; even -> body-less, which leaks its bindings globally: keep it so
    ; fold-consts: inline a top-level `:`'s whole-constant value bindings into every body and drop them, so a constant does
    ; not read as a free symbol. a pair's own params shadow a same-named sibling throughout its body, so no inliner substitutes there
-   (prps pr) (? (two? <pr) ><pr (two? >pr && (<>pr = '\)) (ho-initl >>pr) ())
+   (prps pr) (? (two? <pr) ><pr (two? >pr && <>pr = '\) (ho-initl >>pr) ())
    (fold-consts form)
-    (? !(two? form && (<form = ':) && !(atom? >form)) form
+    (!(two? form && <form = ': && !(atom? >form)) ? form
        (: parsed (anat-defs >form) pairs <parsed body <>parsed
           consts (filter (pr \ nom? <pr && whole? >pr) pairs)
-          (? (atom? consts) form
-             (: sub (\ ps e (foldl (\ b pr (? (elem <pr ps) b (subst-sym <pr >pr b))) e consts))
-                hasbody (1 = (#>form % 2))
-                keep (? hasbody (filter (pr \ !(nom? <pr && whole? >pr)) pairs) pairs)  ; body-less: the const is exported, keep it bound
+          (atom? consts ? form
+             (: sub (\ ps e (foldl (\ b pr (elem <pr ps ? b (subst-sym <pr >pr b))) e consts))
+                hasbody (1 = #>form % 2)
+                keep (hasbody ? (filter (pr \ !(nom? <pr && whole? >pr)) pairs) pairs)  ; body-less: the const is exported, keep it bound
                 subbed (map (pr \ <pr . sub (prps pr) >pr) keep)
-                (': . (? hasbody (unpair subbed (sub () body)) (cbflat subbed)))))))
+                (': . (hasbody ? (unpair subbed (sub () body)) (cbflat subbed)))))))
    ; --- dehof: a non-recursive lambda-constant binding inlines into every body and dsimp beta-collapses the literal curried
    ;     application to first-order arithmetic. dehead desugars the head first: glazeability must not turn on how a binding was spelled
-   (dehead pr) (: h <pr (? (atom? h) pr (<h . ('\ . >h + [>pr]))))    ; (f a..) body -> (f . (\ a.. body)); a plain name binding passes through (dsug is mopped post-egg)
+   (dehead pr) (: h <pr (atom? h ? pr (<h . ('\ . >h + [>pr]))))    ; (f a..) body -> (f . (\ a.. body)); a plain name binding passes through (dsug is mopped post-egg)
    ; --- higher-order inference: a fn is ho iff it returns a function or takes a function param, and only those inline -- the
    ;     group lane is first-order. a monotone fixpoint over the call graph, marked only when provable, so a missed hof falls to interp. ho-* are local: the boxfix globals are mopped post-egg
-   (ho-initl l) (? (atom? >l) () (<l . ho-initl >l))                         ; all but the last
+   (ho-initl l) (atom? >l ? () (<l . ho-initl >l))                         ; all but the last
    (ho-lamb? v) (two? v && <v = '\ && 2 < #v)
    (ho-any p l) (foldl (a \ x \ a || p x) 0 l)
    (ho-memb x l) (? (atom? l) 0 (<l = x) 1 (ho-memb x >l))
@@ -1725,21 +1725,21 @@
    (ho-rf nm hm) (: e (ho-assq nm hm) (two? e ? <>e 0))                                    ; nm returns a function?
    (ho-ar nm info) (: e (ho-assq nm info) (two? e ? #<>e -1))                       ; nm's arity, -1 if not a group fn
    (ho-walkfp fp body hm)                                                                         ; func-param mask of fp in body
-    (ho-dedup ((: (walk acc e) (? !(two? e) acc
-                  (: hd <e a0 (? (ho-memb hd fp) (ho-posn hd fp 0 . acc) acc)            ; (p ..) -> p applied as a fn
+    (ho-dedup ((: (walk acc e) (!(two? e) ? acc
+                  (: hd <e a0 (ho-memb hd fp ? (ho-posn hd fp 0 . acc) acc)            ; (p ..) -> p applied as a fn
                      gm (ho-fpm hd hm)
-                     a1 (? (atom? gm) a0 (foldl (\ ac j (: arg (>e j) (? (ho-memb arg fp) (ho-posn arg fp 0 . ac) ac))) a0 gm))   ; our param at a callee's func-pos
+                     a1 (atom? gm ? a0 (foldl (\ ac j (: arg (>e j) (ho-memb arg fp ? (ho-posn arg fp 0 . ac) ac))) a0 gm))   ; our param at a callee's func-pos
                      (foldl walk a1 >e)))) () body))
    (ho-ret? e fp fpm info hm)                                                                     ; does e yield a function?
     (? (atom? e) (ho-memb e fp && ho-memb (ho-posn e fp 0) fpm)                               ; a func-typed param
        (<e = '\) (ho-lamb? e)                                                              ; a lambda literal
        (<e = '?) (ho-any (b \ ho-ret? b fp fpm info hm) >e)                          ; a ?-branch that does
        (: hd <e ar (ho-ar hd info) (? (ar < 0) 0 (#>e < ar) 1 (ho-rf hd hm))))    ; non-group->0; partial->fn; full->g's result
-   (ho-fn fp body info hm) (: fpm (ho-walkfp fp body hm) ((? (ho-ret? body fp fpm info hm) 1 0) . fpm))
+   (ho-fn fp body info hm) (: fpm (ho-walkfp fp body hm) ((ho-ret? body fp fpm info hm ? 1 0) . fpm))
    (ho-sz hm) (foldl (a \ e \ a + <>e + #>>e) 0 hm)                            ; monotone measure (rflags + |fpmask|)
    (ho-fix info hm) (monofix hm (st \ map (f \ <f . ho-fn (f 1) (f 2) info st) info) ho-sz)   ; higher-order lattice (ascending: rflags+|fpmask|) over the shared harness (prel)
    (dehof form)
-    (? !(two? form && (<form = ':) && !(atom? >form)) form
+    (!(two? form && <form = ': && !(atom? >form)) ? form
        (: parsed (anat-defs >form) pairs <parsed body <>parsed
           fns (filter (ho-lamb? * cup) (map dehead pairs))                              ; lambda-valued (desugared) bindings = the group fns
           info (map (p \ [<p (ho-initl >>p) (last >p)]) fns)                 ; (name params body)
@@ -1749,16 +1749,16 @@
           lamcs0 (map dehead (filter lamc? pairs))
           ; a lamc named in another lamc's body stays bound: the fold substitutes each value as written, so inlining both would leave the dropped binding dangling
           lamcs (filter (q \ !(ho-any (r \ <r != <q && occurs? <q >r) lamcs0)) lamcs0)
-          (? (atom? lamcs) form                                                                  ; no hof const -> leave the form for the other lanes (dsimp mangles string/cask/loop forms)
+          (atom? lamcs ? form                                                                  ; no hof const -> leave the form for the other lanes (dsimp mangles string/cask/loop forms)
              (: sub (\ ps e (dsimp (foldl (\ b pr (elem <pr ps ? b (subst-sym <pr >pr b))) e lamcs)))   ; inline each hof lamc the pair does not shadow, then beta-collapse
                 hasbody (1 = #>form % 2)
                 ; a body-less `:` exports every binding, so an inlined hof const stays bound (its callers are outside the form);
                 ; dropping it is dead-binding elimination, sound only for a body-having `:`, where an unreferenced binding is unobservable
                 ;;; FIXME this is either wrong or a super weird way to write it:  (q \ (= <q <) (dehead pr))
-                keep (? hasbody (filter (pr \ !(ho-any (q \ (<q = <) (dehead pr)) lamcs)) pairs)
+                keep (hasbody ? (filter (pr \ !(ho-any (q \ (<q = <) (dehead pr)) lamcs)) pairs)
                                 pairs)                                                           ; non-inlined bindings keep their raw form (grpfix recognizes define-sugar function heads)
                 subbed (map (pr \ <pr . sub (prps pr) >pr) keep)
-                (': . (? hasbody (unpair subbed (sub () body)) (cbflat subbed)))))))
+                (': . (hasbody ? (unpair subbed (sub () body)) (cbflat subbed)))))))
    ; --- dechurch: (N f x), N a small numeral and f a literal function, lowers to the nesting f^N(x) at compile time -- love's
    ;     church semantics, (0 f x)=x. the operand being a function tells it from the tower: (2 i)/(2 5)/(2 3 4) carry a numeral and stay
    (dch-fn? f) (ho-lamb? f || two? f && 2 = #f && elem <f '(+ - * // % & | ^))   ; a lambda, or a dyadic-op partial like (+ i)
@@ -1768,8 +1768,8 @@
                    (foldl (s \ t \ s + dch-occs v t) 0 e))
    ; the fat gate: beta splices x at every param occurrence, so a body naming its param k>=2 times residualizes ~k^N nodes;
    ; a fat one rides num-ap. only a unary lambda's k counts: op-partials and multi-param lambdas never duplicate (dsimp betas unary only)
-   (dch-fat? f n) ((ho-lamb? f) && (3 = #f)
-                   && (: k (dch-occs <>f <>>f) (1 < k && 256 < (n k))))
+   (dch-fat? f n) (ho-lamb? f && 3 = #f
+                   && (: k (dch-occs <>f <>>f) (1 < k && 256 < n k)))
    (dechurch e)
     (? (atom? e) e  (dquote? e) e
        (map dechurch e @ y                                                                       ; bottom-up: lower nested church first
@@ -1786,10 +1786,10 @@
    (dcheap? e) (? (atom? e) 1  (dquote? e) 0                                                  ; dup-cheap: arith/cmp/bit/peep/tally, no call
                   (: h <e (elem h '(? + - * // % & | ^ < <= > >= = peep tally) ? (all dcheap? >e) 0)))
    (delet-go pairs result orig)
-    (? (atom? pairs) result
+    (atom? pairs ? result
        (: pr <pairs nm <pr val >pr rest >pairs
           uses (foldl (a \ e \ a + dcount nm e) 0 (map cup rest + [result]))          ; uses in subsequent values + body
-          (? !(dcheap? val) orig                       ; a call never inlines -- bail to the unchanged `:`
+          (!(dcheap? val) ? orig                       ; a call never inlines -- bail to the unchanged `:`
              (delet-go (map (p \ <p . subst-sym nm val >p) rest) (subst-sym nm val result) orig))))
    (delet-body e)                                                                             ; inline value-lets anywhere in a fn body (root or nested), bottom-up
     (? (atom? e) e
@@ -1800,22 +1800,22 @@
           hasbody (1 = #>e % 2)                                                  ; odd count -> a trailing result; even -> body-less (a named-let returning its fn)
           pairs2  (map (pr \ <pr . delet-body >pr) pairs)                     ; bottom-up: inline within each value (a local fn's body too) ...
           result2 (delet-body result)                                                         ; ... and within the result
-          (? (!hasbody || !(all nom? names && distinctp names) || uses-head? roalloc e) ; body-less, a local fn, or an effectful let (a `_`-bound pin/say must not drop) -> keep the structure,
-               (': . (? hasbody (unpair pairs2 result2) (cbflat pairs2)))                   ; but surface a value-let nested in any body (else it survives lift -> deopt)
+          (!hasbody || !(all nom? names && distinctp names) || uses-head? roalloc e ? ; body-less, a local fn, or an effectful let (a `_`-bound pin/say must not drop) -> keep the structure,
+               (': . (hasbody ? (unpair pairs2 result2) (cbflat pairs2)))                   ; but surface a value-let nested in any body (else it survives lift -> deopt)
              (delet-go pairs2 result2 (': . unpair pairs2 result2)))))                    ; a pure value-let with a body -> inline it (a bail keeps the walked `:`, sound)
    (delet form)                                                                              ; inline value-lets in every fn body of a `:`
-    (? !(two? form && <form = ': && two? >form) form
+    (!(two? form && <form = ': && two? >form) ? form
        (: parsed (anat-defs >form) pairs <parsed body <>parsed
           hasbody (1 = #>form % 2)                                               ; as delet-body reads it: even is body-less
           pairs2 (map (pr \ <pr . (two? <pr ? (delet-body >pr) >pr)) pairs)
-          (': . (? hasbody (unpair pairs2 body) (cbflat pairs2)))))                      ; cbflat keeps a body-less `:` body-less
+          (': . (hasbody ? (unpair pairs2 body) (cbflat pairs2)))))                      ; cbflat keeps a body-less `:` body-less
    ; --- debool: (&& a b)=(? a b a), (|| a b)=(? a a b), (abs x)=(? (x < 0) (0 - x) x). each dups an operand, so dcheap? guards it.
    ;     bottom-up; runs inside autogroup, so autonat still sees a raw (&& (it < L) ..). a binary (min a b) is the tower, not lowered
    (dband as) (? (atom? as) 1  (atom? >as) <as  !(dcheap? <as) ('&& . as)            ; (&& a R..) = (? a (&& R..) a); a dup'd, so guard
                  ['? <as (dband >as) <as])
    (dbor as)  (? (atom? as) 0  (atom? >as) <as  !(dcheap? <as) ('|| . as)            ; (|| a R..) = (? a a (|| R..)); a dup'd, so guard
                  ['? <as <as (dbor >as)])
-   (dbabs x) (? !(dcheap? x) ['abs x] ['? ['< x 0] ['- 0 x] x])                           ; (abs x) = (? (x < 0) (0 - x) x)
+   (dbabs x) (!(dcheap? x) ? ['abs x] ['? ['< x 0] ['- 0 x] x])                           ; (abs x) = (? (x < 0) (0 - x) x)
    ; an `@` clause's odd operands are patterns, where a guard like (b && lx-ws? b) lowered would ask for b before b binds: bodies lower, patterns stay verbatim
    (dbarms cs) (? (atom? cs) ()  (atom? >cs) [(debool <cs)]                     ; pat body .. [trailing default]
                   (<cs . ((debool <>cs) . dbarms >>cs)))
@@ -1829,9 +1829,9 @@
    ;     quoted AST) folds its dispatch away to straight-line arithmetic. a static-driven recursion unrolls, bounded by the descent guard and sfuel
    (sstat v) ['s v]  (sdyn c) ['r c]  (sstat? p) (<p = 's)  (spval p) <>p
    (sqv v) ['\ v]                                                                 ; quote a static datum -> seen as data
-   (sreify p) (: v <>p (? (sstat? p && !(constellation? v)) (sqv v) v))  ; non-number static -> quoted
+   (sreify p) (: v <>p (sstat? p && !(constellation? v) ? (sqv v) v))  ; non-number static -> quoted
    (sstatval? p v) (sstat? p && v = spval p)
-   (szipenv ps apv) (? (atom? ps) () ([<ps <apv] . szipenv >ps >apv))
+   (szipenv ps apv) (atom? ps ? () ([<ps <apv] . szipenv >ps >apv))
    (slook env k) (? (atom? env) (sdyn k) (k = <<env) <><env (slook >env k))  ; unbound -> dynamic
    (sdeflook nm defs) (? (atom? defs) () (nm = <<defs) <defs (sdeflook nm >defs))
    (sprim? h) (elem h '(* - + ! < <= > >= = cap cup caap caup cuap cuup ==))   ; arith + comparisons + static AST navigation
@@ -1844,7 +1844,7 @@
        (2 = #apv) (ssimp1 h <apv <>apv)                           ; binary -> residualize, drop units
        (sdyn (h . map sreify apv)))
    (spcondm cs env seen defs)
-    (? (atom? >cs) (spe <cs env seen defs)                              ; lone else
+    (atom? >cs ? (spe <cs env seen defs)                              ; lone else
        (: cv (spe <cs env seen defs)
           (? !(sstat? cv) (sdyn ('? . sresidcl cv <>cs >>cs env seen defs))  ; dynamic test -> residual tail
              !(spval cv) (spcondm >>cs env seen defs)                     ; static false -> drop clause
@@ -1852,7 +1852,7 @@
    (sresidcl cv then rest env seen defs)
     (sreify cv . (sreify (spe then env seen defs) . sresidtl rest env seen defs))
    (sresidtl cs env seen defs)
-    (? (atom? >cs) [(sreify (spe <cs env seen defs))]
+    (atom? >cs ? [(sreify (spe <cs env seen defs))]
        (: cv (spe <cs env seen defs)
           (? !(sstat? cv) (sresidcl cv <>cs >>cs env seen defs)
              !(spval cv) (sresidtl >>cs env seen defs)
@@ -1877,17 +1877,17 @@
              (h = '?) (spcondm a env seen defs)
              (sprim? h) (speprim h (map (e \ spe e env seen defs) a))
              (: d (sdeflook h defs)
-                (? d (specall d (map (e \ spe e env seen defs) a) seen defs)
+                (d ? (specall d (map (e \ spe e env seen defs) a) seen defs)
                      (sdyn (h . map sreify (map (e \ spe e env seen defs) a))))))))
    ; the residual-size gate: a param's residual lands at every occurrence, so nested unfolds share a DAG whose tree reading is
    ; exponential, and every downstream walker reads trees: an over-budget residual is a hang. stsz walks with a step budget, 0 = blown
-   (stsz e n) (? (n < 1) 0 (atom? e) (n - 1) (stsz <e (n - 1) @ m (? !m 0 (stsz >e m))))
+   (stsz e n) (? (n < 1) 0 (atom? e) (n - 1) (stsz <e (n - 1) @ m (!m ? 0 (stsz >e m))))
    (smix call statenv defs) (: _ (pin sfuel 'n 100000) r (sreify (spe call statenv () defs))
-                               (? (stsz r 20000) r call))   ; specialize one call -> residual source (small ones only)
+                               (stsz r 20000 ? r call))   ; specialize one call -> residual source (small ones only)
    ; autospec proper: fn bindings + names bound to a quoted datum; every defined-fn call mentioning a static name is specialized in place
    (sconst? v) (two? v && <v = '\ && 2 = #v)                      ; a quoted-constant binding value (\ datum)
    (sment? e statn) (? (nom? e) (elem e statn)  (two? e) (srefany? e statn)  0)
-   (srefany? args statn) (? (atom? args) 0 (sment? <args statn || srefany? >args statn))
+   (srefany? args statn) (atom? args ? 0 (sment? <args statn || srefany? >args statn))
    (specall? e defn statn) (two? e && elem <e defn && srefany? >e statn)   ; defined-fn call mentioning a static name
    (swalk e statenv defs defn statn)
     (? (atom? e) e
@@ -1895,13 +1895,13 @@
        (specall? e defn statn) (smix e statenv defs)                              ; specialize this call in place
        (map (x \ swalk x statenv defs defn statn) e))                           ; walk every element (a list head holds the loop body)
    (autospec form)
-    (? !(two? form && (<form = ':) && !(atom? >form)) form
+    (!(two? form && <form = ': && !(atom? >form)) ? form
        (: parsed (anat-defs >form) pairs <parsed
           fnps (filter (pr \ two? <pr) pairs)
           defs (map (pr \ <<pr . (><pr . (>pr . ()))) fnps)   ; (name (p..) body)
           statps (filter (pr \ nom? <pr && sconst? >pr) pairs)
           statenv (map (pr \ [<pr (sstat <>>pr)]) statps)         ; name -> (stat datum)
-          (? !(two? defs && two? statenv) form                            ; need a defined fn and a static-data binding
+          (!(two? defs && two? statenv) ? form                            ; need a defined fn and a static-data binding
              (swalk form statenv defs (map cap defs) (map cap statenv)))))
    ; --- deforestation: fuse a map/filter pipeline under foldl/foldr/all/any into one pass, then lower it over (jot N) to the
    ;     named-let loop lift glazes. all/any glaze because their false is the fixnum 0, not (); `each` is an effect, out of the fragment
@@ -1909,12 +1909,12 @@
    (drm ks env) (filter (p \ !(elem <p ks)) env)                    ; drop the shadowed substitutions
    (dcolnms bs) (two? >bs ? (: n <bs (nom? n ? (n . dcolnms >>bs) (dcolnms >>bs))))   ; a : binding list's binder noms
    (dsubx env x)                                                              ; capture-avoiding multi-substitution (twin of ev.l's): α-rename both \ and : binders
-    (? (nom? x) (: p (assoc x env) (? (two? p) >p x))
+    (? (nom? x) (: p (assoc x env) (two? p ? >p x))
        (atom? x) x
        (dquote? x) x
-       (<x = '\) (? (atom? >>x) x
+       (<x = '\) (atom? >>x ? x
           (: ps (init >x) ren (map (p \ p . nom 0) ps)
-             ('\ . (map cup ren) + [(dsubx (ren + (drm ps env)) (last x))])))
+             ('\ . (map cup ren) + [(dsubx (ren + drm ps env) (last x))])))
        (<x = ':) (: nms (dcolnms >x) ren (map (p \ p . nom 0) nms)
           (map (dsubx (ren + drm nms env)) x))
        (map (dsubx env) x))
@@ -1922,12 +1922,12 @@
    ; the define-sugar decline: a sugared binder ((g z..) B) is a list dsubx never renames, so a beta whose argument carries a
    ; colliding free name would capture; decline it -- the redex stays source, a missed inline, never a miscompile
    (dsyms e) (? (nom? e) [e] (atom? e) () (dquote? e) () (foldl (a \ x \ a + dsyms x) () e))
-   (dsugcol bs) (? (atom? >bs) () (: r (dsugcol >>bs) n <bs (? (two? n) (n + r) r)))
+   (dsugcol bs) (atom? >bs ? () (: r (dsugcol >>bs) n <bs (two? n ? (n + r) r)))
    (dsugs e) (? (atom? e) () (dquote? e) ()
                 (: r (foldl (a \ x \ a + dsugs x) () e)
                    (<e = ': ? (dsugcol >e + r) r)))
    (dbeta? old new B) (: ds (dsugs B)
-      (? (atom? ds) 1
+      (atom? ds ? 1
          (!(elem old ds) && !(foldl (a \ s \ a || elem s ds) 0 (dsyms new)))))
    (dmap? P)   (two? P && <P = 'map && 3 = #P)                ; exact: (map f l x) indexes the mapped list
    (dfilt? P)  (two? P && <P = 'filter && 3 = #P)
@@ -1943,11 +1943,11 @@
     (? (atom? x)   x
        (dquote? x) x
        (dfold? x)  (: tag <x c <>x z <>>x P <>>>x e (mint 0) a (mint 0)
-                      B0 (? (tag = 'foldl) [c a e] [c e a])               ; foldl step (c a e); foldr step (c e a)
+                      B0 (tag = 'foldl ? [c a e] [c e a])               ; foldl step (c a e); foldr step (c e a)
                       r (dpeel B0 e a P)                                      ; filter-skip = the acc (unchanged)
-                      hd (? (tag = 'foldl) ['\ a e <r] ['\ e a <r])
+                      hd (tag = 'foldl ? ['\ a e <r] ['\ e a <r])
                       [tag hd (dforest z) <>r])
-       (dpred? x)  (: tag <x q <>x P <>>x e (mint 0) unit (? (tag = 'all) 1 0)   ; filter-skip = the short-circuit unit
+       (dpred? x)  (: tag <x q <>x P <>>x e (mint 0) unit (tag = 'all ? 1 0)   ; filter-skip = the short-circuit unit
                       r (dpeel [q e] e unit P)
                       [tag ['\ e <r] <>r])
        (<x . map dforest >x))
@@ -1966,14 +1966,14 @@
    (dstep1? f) (two? f && <f = '\ && 3 = #f)                 ; (\ E BODY)    -- a 1-param predicate
    (dlowerfold x)                                                            ; (foldl/foldr STEP Z (jot N)) -> counted loop (up / down)
     (: tag <x STEP <>x Z <>>x SRC <>>>x
-       (? !(dstep? STEP && djot? SRC) x
+       (!(dstep? STEP && djot? SRC) ? x
           (: P1 <>STEP P2 <>>STEP BODY <>>>STEP N <>SRC go (mint 0)
              (tag = 'foldl ?                                            ; step=(\ a e B): p1=a p2=e ; count e up 0..n-1
                 [[': [go P2 P1] ['? ['< P2 N] [go ['+ P2 1] BODY] P1]] 0 Z]
                 [[': [go P1 P2] ['? ['< P1 0] P2 [go ['- P1 1] BODY]]] ['- N 1] Z]))))           ; step=(\ e a B): count e down n-1..0
    (dlowerpred x)                                                            ; (all/any PRED (jot N)) -> short-circuit loop over one index
     (: tag <x PRED <>x SRC <>>x
-       (? !(dstep1? PRED && djot? SRC) x
+       (!(dstep1? PRED && djot? SRC) ? x
           (: E <>PRED BODY <>>PRED N <>SRC go (mint 0)
              (tag = 'all ?                                              ; all: a false body returns 0 early; run-off returns 1
                 [[': [go E] ['? ['< E N] ['? BODY [go ['+ E 1]] 0] 1]] 0]
@@ -1984,28 +1984,28 @@
        (elem <x '(all any) && 3 = #x)     (dlowerpred (<x . map dlower >x))
        (<x . map dlower >x))
    (has-pipe? x) (? (atom? x) 0  (dquote? x) 0  (dprod? x) 1  (dfold? x) 1  (dpred? x) 1  (any has-pipe? >x))
-   (defol-body b) (? (has-pipe? b) (dlower (dsimp (dforest b))) b)            ; fuse+lower a pipeline body, else leave it
+   (defol-body b) (has-pipe? b ? (dlower (dsimp (dforest b))) b)            ; fuse+lower a pipeline body, else leave it
    (defol-bs bl) (? (atom? bl) ()                                  ; a body-less `:` ends here; the next arm would read () as a trailing body and turn a defglob into a local let
                     (atom? >bl) [(defol-body <bl)]                 ; trailing body
                     (<bl . (defol-body <>bl . defol-bs >>bl)))   ; (name value ..) -> transform each value
    (defoliate form)
     (? !(has-pipe? form) form                                             ; no pipeline anywhere -> byte-identical (every legacy form)
-       !(two? form && (<form = ':) && !(atom? >form)) (dlower (dsimp (dforest form)))
+       !(two? form && <form = ': && !(atom? >form)) (dlower (dsimp (dforest form)))
        (': . defol-bs >form))
    ; --- loopclose: a polynomial accumulation (foldl/foldr (+) z SRC) closes to its form in the bound by finite differences,
    ;     Σ_{i<N} g(i) = Σ_k c_k C(N,k+1) with c_k = Δ^k g(0), as falling factorials over k!. before defoliate: it wants the raw fold. the body is sampled through base-ev
-   (lcfd ys)    (? (atom? >ys) () (<>ys - <ys . lcfd >ys))         ; one forward difference
-   (lclead ys)  (? (atom? ys) () (<ys . lclead (lcfd ys)))                          ; leading diagonal c_0..c_d
-   (lctopfd ys) (? (atom? >ys) <ys (lctopfd (lcfd ys)))                             ; last entry: Δ^(L-1) g(0)
+   (lcfd ys)    (atom? >ys ? () (<>ys - <ys . lcfd >ys))         ; one forward difference
+   (lclead ys)  (atom? ys ? () (<ys . lclead (lcfd ys)))                          ; leading diagonal c_0..c_d
+   (lctopfd ys) (atom? >ys ? <ys (lctopfd (lcfd ys)))                             ; last entry: Δ^(L-1) g(0)
    (lcsamp g d) (:- (go 0) (go i) (i <= d ? (g i . go (i + 1))))                   ; (g 0)..(g d)
-   (lcdeg g cp) (: (go d) (? (d >= cp) -1 (? (0 = (lctopfd (lcsamp g (d + 1)))) d (go (d + 1)))) (go 0))   ; degree, -1 if not polynomial within cp; `0 =`, not nil?, which also fires on a negative top difference
-   (lcfac r)    (: (go k a) (? (k < 2) a (go (k - 1) (a * k))) (go r 1))                      ; r! (a literal at glaze time)
-   (lcsub N j)  (? (j = 0) N ['- N j])                                                       ; (N - j), or N when j=0
+   (lcdeg g cp) (: (go d) (d >= cp ? -1 (0 = lctopfd (lcsamp g (d + 1)) ? d (go (d + 1)))) (go 0))   ; degree, -1 if not polynomial within cp; `0 =`, not nil?, which also fires on a negative top difference
+   (lcfac r)    (: (go k a) (k < 2 ? a (go (k - 1) (a * k))) (go r 1))                      ; r! (a literal at glaze time)
+   (lcsub N j)  (j = 0 ? N ['- N j])                                                       ; (N - j), or N when j=0
    (lcff N j r) (j = r - 1 ? (lcsub N j) ['* (lcsub N j) (lcff N (j + 1) r)])            ; falling factorial N(N-1)..(N-r+1) as source
    (lccbn N r)  (r @ 1 N ['// (lcff N 0 r) (lcfac r)])                                   ; C(N,r) as source (r consecutive ints / r!, exact)
    (lcmul c t)  (c @ 1 t ['* c t])
    (lcadd a b)  (b @ 0 a ['+ a b])
-   (lcsum cks N) (: (go ks k) (? (atom? ks) 0 (: rest (go >ks (k + 1)) (? (<ks = 0) rest (lcadd (lcmul <ks (lccbn N (k + 1))) rest)))) (go cks 0))   ; Σ_k c_k C(N,k+1), nonzero terms
+   (lcsum cks N) (: (go ks k) (atom? ks ? 0 (: rest (go >ks (k + 1)) (<ks = 0 ? rest (lcadd (lcmul <ks (lccbn N (k + 1))) rest)))) (go cks 0))   ; Σ_k c_k C(N,k+1), nonzero terms
    (lcfinal z sum) (z @ 0 sum ['+ z sum])
    (lcemit z g M) (: d (lcdeg g 8) (d >= 0 ? [(lcfinal z (lcsum (lclead (lcsamp g d)) M))]))    ; sample -> degree -> closed source, wrapped; () declines
    (lcjot? s)   (two? s && <s = 'jot && 2 = #s)
@@ -2015,7 +2015,7 @@
    (lcfold? x)  (two? x && elem <x '(foldl foldr) && 4 = #x && lcplus? (opd x 0))
    (lcsrc s)                                                                                  ; src -> (Fsrc Psrc Nexpr) | () ; F/P = () when absent
     (? (lcjot? s)  [() () (opd s 0)]
-       (lcfilt? s) (opd s 1 @ in (? (lcjot? in) [() (opd s 0) (opd in 0)]))
+       (lcfilt? s) (opd s 1 @ in (lcjot? in ? [() (opd s 0) (opd in 0)]))
        (lcmap? s)  (opd s 1 @ in (? (lcjot? in) [(opd s 0) () (opd in 0)]
                                     (lcfilt? in && lcjot? (opd in 1)) [(opd s 0) (opd in 0) (opd (opd in 1) 0)])))
    ; only a pure polynomial body (+ - * over the param and int consts) closes: its difference table dies exactly at its
@@ -2027,7 +2027,7 @@
    (lcpolyf? f)  (lc1lam? f && lcpoly? (opd f 0) (opd f 1))
    ; the filter predicate is recognized structurally, never by sampling (a longer period could fool it): (v % 2)/(1 = (v % 2)) odd, (0 = (v % 2)) even
    (lcmod2? e v) (two? e && <e = '% && 3 = #e && opd e 0 = v && opd e 1 = 2)
-   (lcoddp? f) (? !(lc1lam? f) ()                                                          ; -> 'odd | 'even | ()
+   (lcoddp? f) (!(lc1lam? f) ? ()                                                          ; -> 'odd | 'even | ()
                 (: v (opd f 0) b (opd f 1)
                  (? (lcmod2? b v) 'odd
                     (two? b && <b = '= && 3 = #b)
@@ -2036,16 +2036,16 @@
                          (a = 0 && lcmod2? c v) 'even (c = 0 && lcmod2? a v) 'even)))))
    (lcclose1 x)                                                                               ; (foldl/foldr (+) z SRC) -> (closed-source) | () decline
     (: z (opd x 1) p (lcsrc (opd x 2))
-       (? (atom? p) ()
+       (atom? p ? ()
           (: Fsrc <p Psrc <>p N <>>p
              Fc (? (() = Fsrc) 1 (lcpolyf? Fsrc) (base-ev Fsrc) ())          ; identity if no map; else F must be a pure polynomial
              (? (() = Fc) ()
                 (() = Psrc) (lcemit z Fc N)                                                 ; no filter: g = F over [0,N)
                 (lcoddp? Psrc @                                                         ; else need a recognized odd/even filter
-                 'odd  (lcemit z (j \ Fc (1 + (2 * j))) ['// N 2])          ; k=2j+1, M=N//2
+                 'odd  (lcemit z (j \ Fc (1 + 2 * j)) ['// N 2])          ; k=2j+1, M=N//2
                  'even (lcemit z (j \ Fc (2 * j)) ['// ['+ N 1] 2])))))) ; k=2j,   M=(N+1)//2
    (lcquote? x) (two? x && (<x = '\) && 2 = #x)
-   (lc:form? x) (two? x && (<x = ':) && !(atom? >x))                            ; a (: ..) with bindings
+   (lc:form? x) (two? x && <x = ': && !(atom? >x))                            ; a (: ..) with bindings
    (lcocc? v e) (? (e = v) 1 (atom? e) 0 (lcquote? e) 0 (any (s \ lcocc? v s) >e))   ; v occurs in e
    ; --- named-let accumulator: (NM i a) (? (i < N) (NM (i + 1) (a + B)) a), B a pure polynomial in i and N invariant, closes to
    ;     Σ_{i<=j<N} g(j) = G[N]-G[i] under the original test, so i>=N still answers acc. lcpoly? rejects a reference to acc or an outer var
@@ -2064,23 +2064,23 @@
                    && two? ACC && <ACC = '+ && 3 = #ACC && opd ACC 0 = A       ; (a + B)
                    && lcpoly? I (opd ACC 1))))))                                              ; B a pure polynomial in i
    (lcaccsum gfn N i)                                                                          ; G[N]-G[i] source, wrapped ; () declines
-    (: d (lcdeg gfn 8) (? (d < 0) () (: cks (lclead (lcsamp gfn d)) [['- (lcsum cks N) (lcsum cks i)]])))
+    (: d (lcdeg gfn 8) (d < 0 ? () (: cks (lclead (lcsamp gfn d)) [['- (lcsum cks N) (lcsum cks i)]])))
    (lcaccrw name val)                                                                          ; the accumulator binding -> its closed value
     (: I <>name A <>>name T (opd val 0)
        N (opd T 1) B (opd (opd (opd val 1) 1) 1)                                               ; then=(NM (i + 1) (a + B)) -> acc=(a + B) -> B
        cs (lcaccsum (base-ev ['\ I B]) N I)
        (atom? cs ? val ['+ A ['? T <cs 0]]))                                           ; (a + (? (i < N) (G[N]-G[i]) 0))
    (lc-bs bl) (? (atom? bl) bl  (atom? >bl) [(lcwalk <bl)]                           ; trailing body
-                 (<bl . ((? (lcacc? <bl <>bl) (lcaccrw <bl <>bl) (lcwalk <>bl)) . lc-bs >>bl)))
+                 (<bl . ((lcacc? <bl <>bl ? (lcaccrw <bl <>bl) (lcwalk <>bl)) . lc-bs >>bl)))
    (lcwalk x) (? (atom? x) x (lcquote? x) x
                  (lc:form? x) (': . lc-bs >x)                                         ; walk `:` bindings (accumulators + recurse)
-                 (: c (? (lcfold? x) (lcclose1 x) ())
-                    (? (atom? c) (<x . map lcwalk >x) <c)))               ; () decline -> recurse; (src) -> the residual
+                 (: c (lcfold? x ? (lcclose1 x) ())
+                    (atom? c ? (<x . map lcwalk >x) <c)))               ; () decline -> recurse; (src) -> the residual
    (lc-bs-has? bl) (? (atom? bl) 0  (atom? >bl) (lc-has-acc? <bl)
                       (lcacc? <bl <>bl || (lc-has-acc? <>bl || lc-bs-has? >>bl)))
    (lc-has-acc? x) (? (atom? x) 0 (lcquote? x) 0 (lc:form? x) (lc-bs-has? >x) (any lc-has-acc? >x))
    (lc-has-fold? x) (? (atom? x) 0 (lcquote? x) 0 (lcfold? x) 1 (any lc-has-fold? >x))
-   (loopclose form) (? (lc-has-fold? form || lc-has-acc? form) (lcwalk form) form)          ; byte-identical when nothing closeable
+   (loopclose form) (lc-has-fold? form || lc-has-acc? form ? (lcwalk form) form)          ; byte-identical when nothing closeable
    (clook2 nm al) (? (atom? al) -1 (nm = <<al) <><al (clook2 nm >al))   ; (name arity) alist -> arity (-1 absent)
    (cmlook nm cm) (? (atom? cm) () (nm = <<cm) ><cm (cmlook nm >cm))          ; (name . chain-param-index-list) -> indices (() absent)
    ; cok?: e is chain-valued, a raw chain word that may only flow to two?/cap/cup or a callee's chain slot, never an arith/cmp
@@ -2092,10 +2092,10 @@
    (pwcar? cm cands cps ps w) (two? w && elem <w '(cap cup) && 2 = #w && cok? cm cands cps ps <>w)
    (gargok? cm pm cands cps pps ps as i callee)
     (atom? as ||
-     ((? (elem i (cmlook callee cm)) (cok? cm cands cps ps <as)
-         (elem i (cmlook callee pm)) (elem <as pps)                             ; a point slot takes a point param, nothing else (the guard is at the entry only)
-                                     (groupok? cm pm cands cps pps ps <as))
-      && gargok? cm pm cands cps pps ps >as (i + 1) callee))
+     (? (elem i (cmlook callee cm)) (cok? cm cands cps ps <as)
+        (elem i (cmlook callee pm)) (elem <as pps)                             ; a point slot takes a point param, nothing else (the guard is at the entry only)
+                                    (groupok? cm pm cands cps pps ps <as))
+     && gargok? cm pm cands cps pps ps >as (i + 1) callee)
    (groupok? cm pm cands cps pps ps e)                                                        ; int-valued e over cands; cps/pps = the current fn's chain-/point-param names
     (? (elem e cps) 0                                                                       ; a chain param is not int-valued (only valid via cok?)
        (elem e pps) 0                                                                       ; a point param neither (raw word: only the point-= and point slots)
@@ -2133,7 +2133,7 @@
    (grpok-1 fns cm pm icands vcands vnames c) (: p (afind (q \ <<q = <c) fns)
                                 cps (map ><p (cmlook <c cm))      ; this fn's chain-param names (its index list -> names)
                                 pps (map ><p (cmlook <c pm))      ; ... and its point-param names (same alist shape)
-                                (? (elem <c vnames) (vok? cm pm icands vcands cps pps ><p >p)   ; a value fn -> value grammar
+                                (elem <c vnames ? (vok? cm pm icands vcands cps pps ><p >p)   ; a value fn -> value grammar
                                    (groupok? cm pm icands cps pps ><p >p)))      ; an int fn -> int grammar, over the int candidates only
    ; the membership fixpoint, a descending monofix: each step drops candidates failing the int/value grammar over the surviving set; tally is the measure
    (gfix fns cm pm vnames cands)
@@ -2147,10 +2147,10 @@
                                          (<<f . filter (k \ nuse? >f (fps k) && !(elem k cix)) (rangeL 0 #fps)))) fns)
                          vnames (map (f \ <<f) (filter (f \ hasl >f) fns))    ; the value-typed candidate names (body conses)
                          (gfix fns cm pm vnames cands))
-   (rewrite-bindings bl gnames gdefs) (? (atom? >bl) bl                                  ; the trailing body form -> keep
+   (rewrite-bindings bl gnames gdefs) (atom? >bl ? bl                                  ; the trailing body form -> keep
       (: nf <bl val <>bl  hit (two? nf && elem <nf gnames)
-         ((? hit <nf nf)                                                            ; drop the (name p..) define-sugar -> a plain binding
-            . ((? hit (jgir-ok? gdefs ? (jitgroupir gdefs <nf arch) val) val)   ; jgir-ok? spans the recognizer grammar, so the interp fallback is a backstop, not a live lane
+         ((hit ? <nf nf)                                                            ; drop the (name p..) define-sugar -> a plain binding
+            . ((hit ? (jgir-ok? gdefs ? (jitgroupir gdefs <nf arch) val) val)   ; jgir-ok? spans the recognizer grammar, so the interp fallback is a backstop, not a live lane
                   . (rewrite-bindings >>bl gnames gdefs)))))
    ; memo-leak?: a candidate reading a `:`-sibling map free. the group lane touches only a fn's own params, so a free map is a silent miscompile: decline to interp
    (memo-leak? form)
@@ -2168,10 +2168,10 @@
    (srcrec form0)
     (two? form0 && <form0 = ': && !(atom? >form0) && 0 = #>form0 % 2 ?                                   ; body-less `:` only -> a global-leaking define
      ({'form form0} @ cell (foldl (\ _ n (pin srcreg n cell)) () (swbnds form0))))
-   (swlow c) (? (peep c 'low 0) 0
+   (swlow c) (peep c 'low 0 ? 0
       (: _ (pin c 'low 1)
          low (plift (lift (delet (defoliate (loopclose (autospec (debool (dehof (dechurch (fold-consts (opfix (c 'form))))))))))))   ; autogroup's full lowering: church/hof/&& + structural (lift/loops/value-lets)
-         (foldl (\ _ pr (? (swfnpair? pr && (: cur (peep srcreg <<pr 0) (cur = 0 || (cur = c))))
+         (foldl (\ _ pr (swfnpair? pr && (: cur (peep srcreg <<pr 0) (cur = 0 || (cur = c))) ?
                             (pin srcreg <<pr (><pr . >pr)) ())) () <(anat-defs >low))))
    (swsrc h) (: d (peep srcreg h 0)                                                   ; a recorded global's lowered pair, or 0
     (? (d == 0) 0
@@ -2184,13 +2184,13 @@
    ; operand never masquerades as a head; bnd = the `:` names + params that filter local heads
    (swwalk e bnd acc) (? (atom? e) acc  (two? e && <e = '\) acc
       (two? e && <e = ':) (foldl (a \ x \ swwalk x (swbnds e + bnd) a) acc >e)
-      (: h <e acc2 (? (nom? h && !(elem h bnd)) (h . acc) acc)
+      (: h <e acc2 (nom? h && !(elem h bnd) ? (h . acc) acc)
          (foldl (a \ x \ swwalk x bnd a) acc2 >e)))
    (swheads e bnd acc) (swwalk (opfix e) bnd acc)
    (swgather fns) (: names (map caap fns)                                                 ; enlarge fns with recorded globals reachable from the bodies (to fixpoint)
       heads (foldl (a \ p \ swheads >p ><p a) () fns)                                ; the fn's own params bind too
       new (swuniq (filter (h \ !(elem h names) && swsrc h != 0) heads))
-      (? (atom? new) fns
+      (atom? new ? fns
          (swgather (foldr (\ h a (: d (swsrc h) (((h . <d) . >d) . a))) fns new))))
    ; swhope?: body e could pass groupok? or vok? were every recorded global it calls a member. both grammars take only a
    ;     charm or a param at a leaf and a head that is a grammar word, a candidate or a swallowed global, so a body that fails
@@ -2213,13 +2213,13 @@
           parsed (anat-defs >form) pairs <parsed
           fns0 (filter (p \ (: nf <p (two? nf && 1 < #nf < 6 && all nom? >nf && distinctp >nf))) pairs)   ; (name p..), 1..4 distinct sym params
           ; swallow: pull called globals' recorded sources in as synthetic members -- unless no candidate could join any group
-          fns (? (any (p \ swhope? (map caap fns0) ><p >p) fns0) (swgather fns0) ())
-          (? !(two? fns) form0                                                            ; no candidate functions -> original
+          fns (any (p \ swhope? (map caap fns0) ><p >p) fns0 ? (swgather fns0) ())
+          (!(two? fns) ? form0                                                            ; no candidate functions -> original
              (: armap (map (p \ [<<p (#<p - 1)]) fns)                  ; (name arity) candidates
                 grp (grpfix fns armap)                                                        ; the closed glazeable subset
                 (? (atom? grp) form0                                                          ; nothing survives the fixpoint -> original (un-lifted)
                    ; a group of swallowed members only rewrites nothing here, so committing the lowered form stakes the file on it for nothing
-                   !(ho-any (p \ elem (? (two? <p) <<p <p) (map cap grp)) pairs) form0
+                   !(ho-any (p \ elem (two? <p ? <<p <p) (map cap grp)) pairs) form0
                    (: gnames (map cap grp)
                       gdefs (map mapfix-def (filter (p \ elem <<p gnames) fns))   ; the group's (nameform . body) defs, with map-valued peeps rewritten to mpeep
                       (': . rewrite-bindings >form gnames gdefs))))))))             ; each binding of the lifted form -> its native
@@ -2232,72 +2232,72 @@
        (negf x)   ['- 0.0 x]
        (zero0? x) (gem? x && x = 0.0)
        (mkadd a b) (? (zero0? a) b (zero0? b) a ['+ a b])
-       (mksub a b) (? (zero0? b) a ['- a b])
-       (mkmul a b) (? (zero0? a || zero0? b) 0.0 ['* a b])
-       (adefs bs) (? (atom? >bs) (() . <bs)                          ; binding list -> (pairs . body)
+       (mksub a b) (zero0? b ? a ['- a b])
+       (mkmul a b) (zero0? a || zero0? b ? 0.0 ['* a b])
+       (adefs bs) (atom? >bs ? (() . <bs)                          ; binding list -> (pairs . body)
                      (: r (adefs >>bs) (((<bs . <>bs) . <r) . >r)))
        (fnpair? pr) (two? <pr)                                               ; nameform is a (name params..) list
        (fnname pr) <<pr  (fnparams pr) ><pr  (fnbody pr) >pr
        (twname p suf) (name (string p + suf))                                ; p_r / p_i
-       (? !(two? form && (<form = ':)) form
+       (? !(two? form && <form = ':) form
           (atom? >form) form
           (: parsed (adefs >form) pairs <parsed body >parsed
-             (? !(all fnpair? pairs) form                                      ; only the all-function-def `:` shape
+             (!(all fnpair? pairs) ? form                                      ; only the all-function-def `:` shape
                 (: fnames (map fnname pairs)
                    pt {} chg {}                                   ; `(fn i) -> 1 if param i of fn is twin
                    ; --- twin-type inference: is e twin under env (param-name -> twin bool)? ---
-                   (tty e env) (? (atom? e) (peep env e 0)
+                   (tty e env) (atom? e ? (peep env e 0)
                                   (e @ ('twin . _) 1
                                        (('re || 'im) . _) 0
                                        (('+ || '- || '*) a b) (tty a env || tty b env)
                                        ('? _ a b) (tty a env || tty b env)
                                        0))                                         ; a defined-fn call returns int here
                    (mkenv fn ps) (: e {} _ (mke fn ps 0 e) e)
-                   (mke fn ps i e) (? (atom? ps) e (pin e <ps (peep pt [fn i] 0), mke fn >ps (i + 1) e))
-                   (propargs g as i env) (? (atom? as) 0                          ; call-site arg twin-ness -> callee param
-                      ((? (memq g fnames && tty <as env && !(peep pt [g i] 0)) (pin pt [g i] 1, pin chg 0 1) 0),
+                   (mke fn ps i e) (atom? ps ? e (pin e <ps (peep pt [fn i] 0), mke fn >ps (i + 1) e))
+                   (propargs g as i env) (atom? as ? 0                          ; call-site arg twin-ness -> callee param
+                      ((memq g fnames && tty <as env && !(peep pt [g i] 0) ? (pin pt [g i] 1, pin chg 0 1) 0),
                        propargs g >as (i + 1) env))
-                   (walkprop env e) (? !(two? e) 0
-                      (: op <e _ (? (memq op fnames) (propargs op >e 0 env) 0) (map (a \ walkprop env a) >e, 0)))
+                   (walkprop env e) (!(two? e) ? 0
+                      (: op <e _ (memq op fnames ? (propargs op >e 0 env) 0) (map (a \ walkprop env a) >e, 0)))
                    (infer _) (pin chg 0 0,                                        ; fixpoint (monotone: flags only flip 0->1)
                               map (pr \ walkprop (mkenv (fnname pr) (fnparams pr)) (fnbody pr)) pairs,
                               walkprop {} body,
-                              (? (peep chg 0 0) (infer ()) 0))
+                              (peep chg 0 0 ? (infer ()) 0))
                    _ (infer ())
-                   (anytwin? prs) (? (atom? prs) 0 (twfn? (fnname <prs) 0 || anytwin? >prs))
+                   (anytwin? prs) (atom? prs ? 0 (twfn? (fnname <prs) 0 || anytwin? >prs))
                    (twfn? fn i) (? (peep pt [fn i] 0) 1 (i < 8) (twfn? fn (i + 1)) 0)
-                   (? !(anytwin? pairs) form                                   ; no twin param -> pass through
+                   (!(anytwin? pairs) ? form                                   ; no twin param -> pass through
                       ; --- lowering: loR scalar-valued ; loT twin-valued -> (re-expr . im-expr) ---
                       (: (mknmap fn ps) ({} @ m (mkn fn ps 0 m, m))      ; twin param -> (p_r . p_i) pair
-                         (mkn fn ps i m) (? (atom? ps) m ((? (peep pt [fn i] 0) (pin m <ps (twname <ps "_r" . twname <ps "_i")) 0), mkn fn >ps (i + 1) m))
-                         (flatps fn ps i) (? (atom? ps) ()                        ; flatten params, splitting twins
+                         (mkn fn ps i m) (atom? ps ? m ((peep pt [fn i] 0 ? (pin m <ps (twname <ps "_r" . twname <ps "_i")) 0), mkn fn >ps (i + 1) m))
+                         (flatps fn ps i) (atom? ps ? ()                        ; flatten params, splitting twins
                             (: p <ps rest (flatps fn >ps (i + 1))
-                               (? (peep pt [fn i] 0) (twname p "_r" . (twname p "_i" . rest)) (p . rest))))
-                         (loR e env nm) (? (atom? e) e
-                            (e @ ['re x] (? (tty x env) <(loT x env nm) (loR x env nm))
-                                 ['im x] (? (tty x env) >(loT x env nm) 0.0)
-                                 (: op <e (? (memq op fnames) (op . splitargs op >e 0 env nm)
+                               (peep pt [fn i] 0 ? (twname p "_r" . (twname p "_i" . rest)) (p . rest))))
+                         (loR e env nm) (atom? e ? e
+                            (e @ ['re x] (tty x env ? <(loT x env nm) (loR x env nm))
+                                 ['im x] (tty x env ? >(loT x env nm) 0.0)
+                                 (: op <e (memq op fnames ? (op . splitargs op >e 0 env nm)
                                                (op . map (a \ loR a env nm) >e)))))
-                         (loT2 e env nm) (? (tty e env) (loT e env nm) (loR e env nm . 0.0))
-                         (loT e env nm) (? (atom? e) (peep nm e (e . e))
+                         (loT2 e env nm) (tty e env ? (loT e env nm) (loR e env nm . 0.0))
+                         (loT e env nm) (atom? e ? (peep nm e (e . e))
                             (e @ ['twin u v] (loR u env nm . loR v env nm)
-                                 ['twin u] (? (tty u env) (: p (loT u env nm) (<p . negf >p)) (loR u env nm . 0.0))
+                                 ['twin u] (tty u env ? (: p (loT u env nm) (<p . negf >p)) (loR u env nm . 0.0))
                                  ['+ u v] (: a (loT2 u env nm) b (loT2 v env nm) (mkadd <a <b . mkadd >a >b))
                                  ['- u v] (: a (loT2 u env nm) b (loT2 v env nm) (mksub <a <b . mksub >a >b))
                                  ['* u v] (: a (loT2 u env nm)
-                                             (? (u = v)                                       ; z*z: imag = 2*ar*ai, one product
+                                             (u = v ?                                       ; z*z: imag = 2*ar*ai, one product
                                                 (: ar <a ai >a (mksub (mkmul ar ar) (mkmul ai ai) . mkmul (mkmul 2.0 ar) ai))
                                                 (: b (loT2 v env nm) ar <a ai >a br <b bi >b
                                                    (mksub (mkmul ar br) (mkmul ai bi) . mkadd (mkmul ar bi) (mkmul ai br)))))
                                  ['? t u v] (: c (loR t env nm) a (loT u env nm) b (loT v env nm)
                                                (['? c <a <b] . ['? c >a >b]))
                                  (e . e)))
-                         (splitargs g as i env nm) (? (atom? as) ()
+                         (splitargs g as i env nm) (atom? as ? ()
                             (: a <as rest (splitargs g >as (i + 1) env nm)
-                               (? (peep pt [g i] 0) (: p (loT2 a env nm) (<p . (>p . rest))) (loR a env nm . rest))))
+                               (peep pt [g i] 0 ? (: p (loT2 a env nm) (<p . (>p . rest))) (loR a env nm . rest))))
                          (lowerfn pr) (: fn (fnname pr) ps (fnparams pr) bd (fnbody pr) env (mkenv fn ps) nm (mknmap fn ps)
                                          ((fn . flatps fn ps 0) . loR bd env nm))
-                         (rebuild lowfns) (? (atom? lowfns) (loR body {} {} . ())
+                         (rebuild lowfns) (atom? lowfns ? (loR body {} {} . ())
                             (: lf <lowfns (<lf . (>lf . rebuild >lowfns))))
                          (': . rebuild (map lowerfn pairs)))))))))
    (autonat form)
@@ -2305,30 +2305,30 @@
        !(<form = ':) form
        (atom? >form) form
        (: parsed (anat-defs >form) pairs <parsed
-          (? !(1 < #pairs) form                        ; need a recurrence + >=1 loop
+          (!(1 < #pairs) ? form                        ; need a recurrence + >=1 loop
              (: recp (afind anat-rec? pairs)
-                (? !(two? recp) form                          ; no float recurrence found
+                (!(two? recp) ? form                          ; no float recurrence found
                    (: recnm <<recp recps ><recp
                       (>recp @ ['? ['&& ['< _ lim] [cmpop testexpr bound]] then _]
                          (: cl (classify recps >then) fvars <cl updates <>cl invs (cl 2)
                             looppairs (filter (q \ !(q = recp)) pairs)             ; the loop defs
                             callees (map anat-callee looppairs)
                             outerp (afind (q \ !(elem <<q callees)) looppairs)   ; the loop no loop calls
-                            (? !(two? outerp) form
+                            (!(two? outerp) ? form
                                (: chain (loopchain <<outerp pairs recnm)       ; outermost -> recurrence
                                   D #chain M #invs N #fvars
-                                  (? !(two? chain && elem cmpop '(< <= > >=) && 0 < N && (M + N) < 7 && D < 7) form
+                                  (!(two? chain && elem cmpop '(< <= > >=) && 0 < N && M + N < 7 && D < 7) ? form
                                      (: cnames (map cap chain) dims (map caup chain)
                                         margs (last chain 2)
                                         invd (map (iv \ margs (posof iv recps 0)) invs)
                                         glam ['\ '_ form]        ; faithful interp nest (deopt fallback / =-show)
                                         ng (jitfgridn glam cnames dims invs invd fvars updates testexpr cmpop bound lim arch)
-                                        (? (lit? ng) (': . anat-rebind >form <<outerp ng) form))))))
+                                        (lit? ng ? (': . anat-rebind >form <<outerp ng) form))))))
                          form)))))))
    ; compile cache: each source \-expr compiles once, keyed by source, so structurally-equal closures share the native (they are =).
    ; a counting wrapper is not =/show its source, so the trigger is "compile on first request"; pins natives for the run
    cache {}
-   (memo e mk) (: g (peep cache e 0) (? g g (: h (mk e) (pin cache e h, h))))
+   (memo e mk) (: g (peep cache e 0) (g ? g (: h (mk e) (pin cache e h, h))))
    ; auto-ev: a whole-form lambda -> native (cached), else the base interpreter. a creation hook cannot sit here: pre-macroexpansion
    ; it would disturb a macro's data args, and the cache would make equal closures ==-identical, against !(== (\ x E) (\ x E))
    ; canon: a free nom respelled by the value it names, toward the canonical spelling ((: add +) reads +, link reads .), so a synonym
@@ -2339,21 +2339,28 @@
                  map filter foldl foldr jot iota net string list && ||)                       ; link reads ., one? reads atom?, ~ reads twin
    ctab {}
    (ctable gv) (peep ctab 'ok 0 ? ctab
-                (each canon-names (n \ (: v (gv n gone) (? (v = gone) 0 (pin ctab v n)))),
+                (each canon-names (n \ (: v (gv n gone) (v = gone ? 0 (pin ctab v n)))),
                  pin ctab 'ok 1,
                  ctab))
    (canon e) (: gv (peep gvbox 0 0) mt {}                                                      ; mt: nom -> its answer, one form's worth (tab is value-keyed, and a closure hashes by its body)
-                (? gv (: tab (ctable gv)
+                (gv ? (: tab (ctable gv)
                          ops '(+ - * // % & | ^ < <= > >= = . && ||)                                   ; infix spellings: an operand written so reads as infix
-                         (cnom x bnd hd) (? (elem x bnd) x
+                         (cnom x bnd hd) (elem x bnd ? x
                                             (: c (: m (peep mt x gone)
-                                                  (? (m = gone) (: v (gv x gone) c (? (v = gone) 0 (peep tab v 0)) _ (pin mt x c) c) m))
+                                                  (m = gone ? (: v (gv x gone) c (v = gone ? 0 (peep tab v 0)) _ (pin mt x c) c) m))
                                                (? (!c || elem c bnd) x  (hd || !(elem c ops)) c  x)))   ; a binder that took the canonical word keeps the spelling
-                         (cbinders bs) (? (atom? >bs) () (: b <bs ((? (two? b) <b b) . cbinders >>bs)))   ; a :'s names, sugared heads too
+                         (cbinders bs) (atom? >bs ? () (: b <bs ((two? b ? <b b) . cbinders >>bs)))   ; a :'s names, sugared heads too
+                         (cocc n e) (two? e ? (cocc n <e || cocc n >e) (e == n))
+                         (crows l) (atom? >l ? l (nom 0 . <l . crows >l))
+                         (cvals? l) (? (atom? >l) 1  (two? <l || two? <>l && <<>l = '\) 0  (cvals? >>l))   ; no row defines a function
                          (cw x bnd) (?
                           (nom? x) (cnom x bnd 0)
                           (atom? x) x
-                          (<x = '\) (? (atom? >>x) x                                           ; (\ v): a quote
+                          (<x = '@ && nom? <>>x && <>>x != '_ && two? >>>x && !(cocc <>>x <>x) && !(two? <>x && <<>x = '\))   ; (x @ v B): a lone name fits
+                           (cw [': <>>x <>x <>>>x] bnd)                                          ; everything, so it is (: v x B), a value-let
+                          (<x = ': && two? >x && cvals? >x && (: b (last x) (two? b && <b = ', && two? >b)))   ; (: .. (a, b, c)): the , body
+                           (cw (init x + crows >(last x)) bnd)                                   ; joins the rows, _ a _ b c, not a : in a :
+                          (<x = '\) (atom? >>x ? x                                           ; (\ v): a quote
                                        (: ps (init >x) (. '\ (ps + [(cw (last x) (ps + bnd))]))))
                           (<x = '@) (: (arms l) (? (atom? l) l (atom? >l) [(cw <l bnd)]            ; (@ x pat body ..): a pattern is the
                                                     (<l . (cw <>l bnd) . arms >>l))               ; macro's to read, only the bodies respell
@@ -2361,7 +2368,7 @@
                           (<x = ':) (: bnd2 (cbinders >x + bnd)
                                        (cbs bs) (? (atom? bs) bs
                                                    (atom? >bs) [(cw <bs bnd2)]
-                                                   (: b <bs ps (? (two? b) >b ())
+                                                   (: b <bs ps (two? b ? >b ())
                                                       (. b (. (cw <>bs (ps + bnd2)) (cbs >>bs)))))
                                        (': . cbs >x))
                           (nom? <x) ((cnom <x bnd 1) . map (y \ cw y bnd) >x)                       ; the head may take an operator spelling
@@ -2371,7 +2378,7 @@
                          (cw e ()))
                    e))
    ; the integer leaf and the loops are the hook's, read off the thread base-ev writes
-   (auto-ev e) (? !x86? (? (qualfr e) (memo e (l \ jitfr l arch))      ; a64: scalar-float lanes native; float-result leaf -> heap-boxed gem
+   (auto-ev e) (? !x86? (qualfr e ? (memo e (l \ jitfr l arch))      ; a64: scalar-float lanes native; float-result leaf -> heap-boxed gem
                            (base-ev (opfixed . autogroup (autonat (twolow (canon (opfix e)))))))   ; float-grid nest (scalar gridn, arch-aware) then group; castbuild (cask-fill) is x86-only so skipped
                   (qualfr e) (memo e (l \ jitfr l arch))         ; float-result leaf -> heap-boxed gem (sound: param floated at first use)
                   ; fall-through: cask-build a string loop, lower a complex grid to real pairs, then a float-grid nest or an arith group, else interp
@@ -2417,12 +2424,12 @@
        ; lambda siblings ((name . cell)..; entry 0 declines), nm = the letrec name being bound (0 anonymous), ti/ta = ev.l's uninterned iop/apx markers, inl = the inner-closure record amble's site reads,
        ; rt = the top scope of the form being compiled, where a compile waiting on a sibling not yet built is deferred to (0: compile now or never)
        (natjit e s a gv farq lams nm ti ta inl rt)
-        (: _ (? (peep gvbox 0 0) 0 (pin gvbox 0 gv))
+        (: _ (peep gvbox 0 0 ? 0 (pin gvbox 0 gv))
            _ (pin probebox 0 0)
            ps (init >s)  body (last >s)                                                ; the frame [imps args] + the surface body
            t (threadir e leafops)                                                            ; the thread ev wrote, read once for every thread lane
            lf (thleaf t)
-           lp (? (two? lf) 0 (thloop t))
+           lp (two? lf ? 0 (thloop t))
            (? (two? lf) (hit (nif (emit (peep (asm arch (coreir arch (init >lf) (last lf) (deoptir arch (a = 1 ? 0 1)))) 'bytes 0)) e a))
               (two? lp) (thcount lp @ [B I op cmp] (hit (njit-loop B I op cmp e))     ; the counted loop, then the n-var one: the back-edge is the win
                          (hit (njit-loop-n (lp 0) (lp 1) (lp 2) (lp 3) (lp 4) (lp 5) e)))
@@ -2430,23 +2437,23 @@
               (qualfr s) (hit (jitfrx s arch e))                                      ; the float-result leaf boxes a gem; deopt to e, never (ev s), which re-enters ala
                 (: ci (calloutinfo s)                                               ; a counted sum over (F i), F a resolvable global: the stackless bridge
                    fv (ci && !(farq <ci) && gv <ci 0)
-                   (? (lit? fv) (ci @ [_ op iv arg] (hit (jitcalloutx fv s op iv arg arch)))
+                   (lit? fv ? (ci @ [_ op iv arg] (hit (jitcalloutx fv s op iv arg arch)))
                       (calloutinfo-frame s @ [F N op arg] (hit (njit-calloutframe s F N a e op arg arch))   ; ... F and the bound read from the frame
                        ; the group lane: a first-order mutually recursive arith group under the frame, its tail either (entry frame..) --
                        ; flat -- or any arith over group calls through a synthetic ((__outer . frame) . tail) entry. post-feel every def is name (\ p.. B)
-                       (: pd (? (two? body && (<body = ':)) (anat-defs >body) ())
-                          dds (? pd <pd ())  tail (? pd <>pd ())
+                       (: pd (two? body && <body = ': ? (anat-defs >body) ())
+                          dds (pd ? <pd ())  tail (pd ? <>pd ())
                           okshape (pd && two? tail && all (dd \ dd @ (n . '\ . _ . _) (nom? n) 0) dds)
-                          gdefs (? okshape (map (dd \ (<dd . init >>dd) . last >>dd) dds) ())     ; ((name p..) . B)
+                          gdefs (okshape ? (map (dd \ (<dd . init >>dd) . last >>dd) dds) ())     ; ((name p..) . B)
                           gnames (map caap gdefs)
                           flat? (okshape && elem <tail gnames && >tail = ps)                     ; the tail is (entry frame..)
-                          osym '__outer  agdefs (? okshape (gdefs + [((osym . ps) . tail)]) ())
+                          osym '__outer  agdefs (okshape ? (gdefs + [((osym . ps) . tail)]) ())
                           (? (flat? && grp-ok? gdefs && jgir-ok? gdefs && gdefs-ok? gdefs)
                              (hit (jitgroupirx gdefs <tail arch e))
                              (okshape && !(elem osym gnames) && opnd-ok? ps tail && grp-ok? agdefs && jgir-ok? agdefs && gdefs-ok? gdefs)
                              (hit (jitgroupirx agdefs osym arch e))
                              (: aj (njit-amble s a e gv farq lams nm ti ta inl arch)                 ; amble, the last lane: 0 on decline
-                                (? aj (hit aj)
+                                (aj ? (hit aj)
                                    (defer e s a gv farq lams nm ti ta inl rt))))))))))
        ; a decline that a sibling not yet built may have caused: amble asked again as though every
        ; sibling were (entry 1), and if that would compile, a cell of a native's shape stands in
@@ -2455,27 +2462,27 @@
        (defer e s a gv farq lams nm ti ta inl rt)
         (: (no _) (getenv "LOVE_AMBLE_TRACE2" && puts ("amble-DECLINE: " + show s + "\n"), e)
            (unbuilt? p) (: c (peep >p 0 0) (<p != nm && charm? <c))
-           (? !(rt && any unbuilt? lams) (no 0)
+           (!(rt && any unbuilt? lams) ? (no 0)
               (: ns (: (go t x) (? (nom? x) (pin t x 1) (two? x) (go (go t <x) >x) t) (go {} s))   ; the names the body spells
                  (wait? p) (unbuilt? p && peep ns <p 0)
-                 fk (map (p \ (? (wait? p) (<p . {0 (1 . >(peep >p 0 0))}) p)) lams)
-                 ok (? (any wait? lams)
+                 fk (map (p \ (wait? p ? (<p . {0 (1 . >(peep >p 0 0))}) p)) lams)
+                 ok (any wait? lams ?
                        (: _ (pin probebox 0 1)  r (njit-amble s a e gv farq fk nm ti ta inl arch)  _ (pin probebox 0 0)  r)
                        0)
-                 (? !ok (no 0)
+                 (!ok ? (no 0)
                     (: L (defercell e a)
                        sc (assoc nm lams)
-                       lz (map (p \ (? (two? sc && p == sc) (<p . {0 (peep >p 0 0)}) p)) lams)
-                       _ (pin rt 'defer ((\ _ (deferpatch L (natjit e s a gv farq lz nm ti ta inl 0))) . peep rt 'defer ()))
+                       lz (map (p \ (two? sc && p == sc ? (<p . {0 (peep >p 0 0)}) p)) lams)
+                       _ (pin rt 'defer ((_ \ (deferpatch L (natjit e s a gv farq lz nm ti ta inl 0))) . peep rt 'defer ()))
                        L)))))
        natjit)                                                            ; the inner : answers the closure; its aliases stay private
    (fired? n) (n < peep fires () 0)                                        ; did the hook fire since count n?
    ; a function already built, glazed off its thread: the native, or f itself on a decline
-   (glaze-thread f) (: j ((cite 'glaze 'jitthread) f love-arch) (? (lit? j) j f)))
+   (glaze-thread f) (: j ((cite 'glaze 'jitthread) f love-arch) (lit? j ? j f)))
 
 ; walk -- re-declare the prel list walkers through the glazed compiler: the prel originals are egg-baked pre-glaze, these compile
 ; under the live natjit. bodies verbatim from src/love/boot/prel.l, caap spelled through cap (a free accessor head declines); egg-baked consumers keep the closures they folded
-(? (0 < love-tco)
+(0 < love-tco ?
    (ev '(: (foldl f z l) (? (two? l) (foldl f (f z (cap l)) (cup l)) z)
            (foldr f z l) (? (two? l) (f (cap l) (foldr f z (cup l))) z)
            (filter p l) (? (two? l) (: m (filter p (cup l)) (? (p (cap l)) (. (cap l) m) m)))

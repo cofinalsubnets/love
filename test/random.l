@@ -15,7 +15,7 @@
  (4 = #(wheel 1))
  (1 = rank (wheel 1))
  (tier (wheel 0) = tier (wheel 1))       ; a seed's limb type is stable...
- (? word (star-tray = tier (wheel 1)) 1) ; ...a Z (word-int) array on a 64-bit word (a C array on wasm)
+ (word ? (star-tray = tier (wheel 1)) 1) ; ...a Z (word-int) array on a 64-bit word (a C array on wasm)
 
  ; --- determinism: same seed -> same functional sequence ---
  (rseq3 42 = rseq3 42)
@@ -30,19 +30,19 @@
  (: st (wheel 7) p (random st 6) (4 = #>p))   ; st' is a state tuple
 
  ; --- (random st n), positive int n: bounded int draws stay in [0,n) ---
- (: st (wheel 9) (<(random st 10) < 10))
- (: st (wheel 9) (0 <= <(random st 10)))
- (: st (wheel 9) (<(random st 2) < 2))
- (: r (random (wheel 9) 6) (0 <= <r))
- (: r (random (wheel 9) 6) (<r < 6))
- (: st (wheel 9) (<(random st 6) = <(random st 6)))    ; purity again
+ (wheel 9 @ st (<(random st 10) < 10))
+ (wheel 9 @ st (0 <= <(random st 10)))
+ (wheel 9 @ st (<(random st 2) < 2))
+ (random (wheel 9) 6 @ r (0 <= <r))
+ (random (wheel 9) 6 @ r (<r < 6))
+ (wheel 9 @ st (<(random st 6) = <(random st 6)))      ; purity again
 
  ; --- (random st n), float n: float draw in [0,n) ---
- (: r (random (wheel 3) 1.0) (<r < 1.0))
- (: r (random (wheel 3) 1.0) (0 <= <r))
- (: r (random (wheel 3) 1.0) (gem? <r))
- (: r (random (wheel 3) 2.0) (<r < 2.0))
- (: r (random (wheel 3) 1.0) (4 = #>r))      ; st' still a state tuple
+ (random (wheel 3) 1.0 @ r (<r < 1.0))
+ (random (wheel 3) 1.0 @ r (0 <= <r))
+ (random (wheel 3) 1.0 @ r (gem? <r))
+ (random (wheel 3) 2.0 @ r (<r < 2.0))
+ (random (wheel 3) 1.0 @ r (4 = #>r))        ; st' still a state tuple
 
  ; --- global rand: int in [0,n); full-width non-negative for n <= 0 ---
  (rand 10 < 10)  (0 <= rand 10)
@@ -52,7 +52,7 @@
  ; --- global randf: float in [0,n); [0,1) for n <= 0 ---
  (randf 0 < 1)   (0 <= randf 0)   (gem? (randf 0)) ; (randf 0) -> [0,1)
  (randf 1 < 1)   (0 <= randf 1)                    ; (randf 1) -> [0,1)
- (: u (randf 4) (0 <= u && u < 4))             ; (randf n) -> [0,n)
+ (randf 4 @ u (0 <= u && u < 4))               ; (randf n) -> [0,n)
  (gem? (randf 100))
 
  ; --- rng-set pins the global stream: (rng-set (wheel n)) makes rand/randf

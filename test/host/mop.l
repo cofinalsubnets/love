@@ -1,4 +1,4 @@
-; --- test/host/mop.l: what the mop takes off a baked image, and what nomop keeps ---
+; test/host/mop.l -- what the mop takes off a baked image, and what nomop keeps
 ; a baked run holds no door that reads or writes a word by address, lays a thread cell,
 ; or swaps the scope stack or a core hook: the boot's compiled code keeps its own
 ; references and the names leave the `guts` module for good (src/love/boot/egg.l). the
@@ -35,8 +35,8 @@
    ask "(: G (cite 'guts) _ (putx [(? (G 'peek) 1 0) (? (G 'setstack) 1 0) (? (elem 'poke (names ())) 1 0) (? (elem 'calloutdrive (names ())) 1 0)]) (quit 0))"
    kept (hark ["env" "LOVE_NO_IMAGE=1" "LOVE_NO_MOP=1" "out/love" "-e" ask])
    mopped (hark ["env" "LOVE_NO_IMAGE=1" "out/love" "-e" ask])
-   _ (test (two? kept) (<kept = 0) (>kept = "(1 1 1 1)")
-           (two? mopped) (<mopped = 0) (>mopped = "(0 0 0 0)"))
+   (test (two? kept) (<kept = 0) (>kept = "(1 1 1 1)")
+         (two? mopped) (<mopped = 0) (>mopped = "(0 0 0 0)"),
 
-   _ (test_fin ())
-   (puts "mop: ok\n"))
+    test_fin (),
+    puts "mop: ok\n"))

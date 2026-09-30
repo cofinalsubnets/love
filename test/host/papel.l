@@ -1,53 +1,35 @@
-; --- test/host/papel.l: the static site, exactly ---
-; not in the test/*.l corpus (it loads three crew files and splices their modules,
-; and it writes real files under /tmp).
-;
-; papel neither parses markdown nor decides what is stale -- lapiz owns the first
-; and cook the second, and both are proved by their own gates. so what is left to
-; prove here is exactly what papel adds, the site: the facts about a page that are
-; only true because of the other pages.
-;   anchors   every href="#x" papel emits has an id="x" on the same page. one parse
-;             feeds the toc and the body, and this is the assert that says so; it is
-;             the one invariant a second pass over the text would eventually break.
-;   slugs     stable, and deduped when two headings spell the same one.
-;   relink    a .md link becomes .html iff that page is in the site. absolute,
-;             anchored and outside-the-site links are left exactly as written --
-;             papel may not invent a dead link markdown did not already have.
-;   title     head-1, else the meta `title`, else the file name -- in that order.
-;   fresh     a second build writes nothing; touching one source writes exactly two
-;             files (that page and the index). that is cook's law, but papel is the
-;             one that has to declare the recipes right for it to hold.
-;
-; run:  cat test/00-init.l test/host/papel.l | out/love
-; (through STDIN, as the gate does -- `love test/host/papel.l` would seat a file
-;  whose basename is papel.l, and papel's own seat would fire on it.)
+; test/host/papel.l -- the static site, exactly: only what papel adds over lapiz and cook.
+; every href="#x" has its id="x" on the page, slugs are stable and deduped, a .md link becomes
+; .html iff its page is in the site (nothing else is rewritten), title falls head-1, meta, file
+; name, and a second build writes nothing while one touched source writes that page and the index.
+; not in the corpus: it writes under /tmp. run through stdin, as the gate does -- a file named
+; papel.l would fire papel's own seat: cat test/00-init.l test/host/papel.l | out/love
 
 ; --- the module seam: three modules, and papel adds nothing to the book ----------
-(: parse-before (elem 'parse (names ()))  ; the book before the load, for the leak delta
- _ (borrow "src/apps/papel.l")                ; the loader: papel wants lapiz + cook itself
- (test
-  (elem 'papel (cite ()))
-  (elem 'lapiz (cite ()))
-  (elem 'cook (cite ()))
-  (elem 'build (keys (cite 'papel)))
-  (lit? (cite 'papel 'papel-main))
-  !(cite 'papyrus)                          ; a missing module answers ()
-  ; the combinators are a module nobody splices at boot: lapiz and cook each said (borrow 'peg),
-  ; so peg is loaded and reachable by key. `parse` itself can sit on the book -- the
-  ; crew layer (moon's front end) puts it there in the warm lane -- so the leak check is
-  ; a delta: loading papel must not have added it.
-  (elem 'peg (cite ()))
-  (lit? (cite 'peg 'seq))
-  (parse-before = elem 'parse (names ()))))
+(elem 'parse (names ()) @ parse-before  ; the book before the load, for the leak delta
+ ((borrow "src/apps/papel.l"),                ; the loader: papel wants lapiz + cook itself
+  test (elem 'papel (cite ()))
+       (elem 'lapiz (cite ()))
+       (elem 'cook (cite ()))
+       (elem 'build (keys (cite 'papel)))
+       (lit? (cite 'papel 'papel-main))
+       !(cite 'papyrus)                          ; a missing module answers ()
+       ; the combinators are a module nobody splices at boot: lapiz and cook each said (borrow 'peg),
+       ; so peg is loaded and reachable by key. `parse` itself can sit on the book -- the
+       ; crew layer (moon's front end) puts it there in the warm lane -- so the leak check is
+       ; a delta: loading papel must not have added it.
+       (elem 'peg (cite ()))
+       (lit? (cite 'peg 'seq))
+       (parse-before = elem 'parse (names ()))))
 
 (: dir "/tmp/papeltest"
-   (put-file f s) (: q (open (dir + "/" + f) "w") _ (say q s) (close q))
-   (get-file f)   (: q (open (dir + "/" + f) "r") (hot? q ? (slurp q) ""))
+   (put-file f s) (open (dir + "/" + f) "w" @ q (say q s, close q))
+   (get-file f)   (open (dir + "/" + f) "r" @ q (hot? q ? (slurp q) ""))
    ; every attribute value introduced by `pre` and closed by a quote: the way to ask
    ; the emitted html what it actually said, without re-parsing it.
    (finds s pre)  (: m #pre n #s
                      ((: (g i acc)
-                         ((i + m) <= n ? ((snip s i (i + m)) = pre ? (: j ((: (f k) (k < n && !((s k) = 34) ? (f (k + 1)) k)) (i + m))
+                         (i + m <= n ? (snip s i (i + m) = pre ? (((: (f k) (k < n && !(s k = 34) ? (f (k + 1)) k)) (i + m)) @ j
                                   (g j (snip s (i + m) j . acc))) (g (i + 1) acc)) (rev acc))) 0 ()))
    (has? l x)     (elem x l)
    (uniq? l)      ((: (g l) (? !(two? l) 1 (elem <l >l) 0 (g >l))) l)
@@ -96,13 +78,13 @@ Only a paragraph, so the title has to come from the meta block.
    _ (put-file "src/three.md" "Neither a head-1 nor a meta block, so the file name is the title.
 ")
 
-   conf (: t {}
-           _ (pin t 'out (dir + "/site"))
-           _ (pin t 'title "Fixture")
-           _ (pin t 'src [(dir + "/src")])
-           _ (pin t 'self "src/apps/papel.l")
-           _ (pin t 'quiet 1)
-           t)
+   conf ({} @ t
+         (pin t 'out (dir + "/site"),
+          pin t 'title "Fixture",
+          pin t 'src [(dir + "/src")],
+          pin t 'self "src/apps/papel.l",
+          pin t 'quiet 1,
+          t))
 
    ; --- the build, and freshness ---------------------------------------------------
    ; 3 pages + the stylesheet + the index = 5 files; then nothing; then exactly the
@@ -117,7 +99,7 @@ Only a paragraph, so the title has to come from the meta block.
    ; reads it fresh. the fork-free stat nif made cook fast enough to hit this; the
    ; old shell-out date was ~ms per file, an accidental cushion.
    _ (rest 5)
-   _ (: s (get-file "src/one.md") q (open (dir + "/src/one.md") "w") _ (say q s) (close q))
+   _ (: s (get-file "src/one.md") q (open (dir + "/src/one.md") "w") (say q s, close q))
    n3 (build conf)
    _ (test (n1 = 5) (n2 = 0) (n3 = 2))
 
@@ -130,7 +112,7 @@ Only a paragraph, so the title has to come from the meta block.
    r1 (refresh conf box)                                 ; first look -- nothing remembered yet
    r2 (refresh conf box)
    _ (rest 5)                                       ; same coarse-clock care as one.md above
-   _ (: s (get-file "src/two.md") q (open (dir + "/src/two.md") "w") _ (say q s) (close q))
+   _ (: s (get-file "src/two.md") q (open (dir + "/src/two.md") "w") (say q s, close q))
    r3 (refresh conf box)
    r4 (refresh conf box)
    _ (test (0 = r1) (0 = r2) (2 = r3) (0 = r4))
@@ -140,10 +122,10 @@ Only a paragraph, so the title has to come from the meta block.
    ; rebuilds per source change climbed 28 ingredients a rebuild, forever, and `prep`
    ; walked all of them. unbounded memory and quadratic time out of a server sitting idle.
    cards (cite 'cook 'cards)
-   (icount _) #<(peep cards (dir + "/site/index.html") ())
+   (icount _) #<(cards (dir + "/site/index.html"))
    n0 (icount ())
    _ ((: (again k) (k < 6 ? (build conf, again (k + 1)) 0)) 0)
-   _ (test (0 < n0) (n0 = (icount ())))
+   _ (test (0 < n0) (n0 = icount ()))
 
    one (get-file "site/one.html")
    two (get-file "site/two.html")
@@ -155,7 +137,7 @@ Only a paragraph, so the title has to come from the meta block.
    ; every page of this tree's own docs, built below.
    (anchored? h) (: ids (finds h "id=\"")
                     tgts (finds h "href=\"#")
-                    (? !(two? tgts) 1 (: bad (filter (\ t !(has? ids t)) tgts) !(two? bad))))
+                    (!(two? tgts) ? 1 (filter (t \ !(has? ids t)) tgts @ bad !(two? bad))))
    _ (test
       (anchored? one) (anchored? two) (anchored? three)
       ; and it is not vacuous: page one really has a contents, with the head-1 left
@@ -195,35 +177,34 @@ Only a paragraph, so the title has to come from the meta block.
                   (0 < #(cite 'papel 'blurb (cite 'lapiz 'mdread (get-file "src/one.md"))))))
 
    ; --- the slug is a function of the text, and nothing else -------------------------
-   _ (: slug (cite 'papel 'slug)
-        (test ((slug "Hello, World!") = "hello-world")
-                ((slug "  --- ") = "section")            ; nothing left -> a name, never ""
-                ((slug "A") = (slug "a"))))
+   _ (cite 'papel 'slug @ slug
+        (test (slug "Hello, World!" = "hello-world")
+                (slug "  --- " = "section")            ; nothing left -> a name, never ""
+                (slug "A" = slug "a")))
 
    ; --- the real thing: this tree's own docs -----------------------------------------
    ; every markdown page in the tree through the whole pipe, and the anchor property has
    ; to hold on all of them. readme.md is deliberately in: it is the widest markdown here.
    ; mdsof does not recurse, so a directory that grows a subtree needs naming here.
-   rconf (: t {}
-            _ (pin t 'out (dir + "/love"))
-            _ (pin t 'title "love")
-            _ (pin t 'src '("README.md" "doc" "doc/misc"))
-            _ (pin t 'self "src/apps/papel.l")
-            _ (pin t 'quiet 1)
-            t)
+   rconf ({} @ t
+          (pin t 'out (dir + "/love"),
+           pin t 'title "love",
+           pin t 'src '("README.md" "doc" "doc/misc"),
+           pin t 'self "src/apps/papel.l",
+           pin t 'quiet 1,
+           t))
    rn (build rconf)
-   _ (test
-      (10 < rn)                                   ; it built a real site
-      (0 = (build rconf)))                        ; ..and is at once up to date
-   _ (: (page f) (: q (open (dir + "/love/" + f) "r") (hot? q ? (slurp q) ""))
-        _ (each (filter (\ f (cite 'papel 'ends? f ".html")) (readdir (dir + "/love")))
-                (\ f (: h (page f)
-                        (test (0 < #h)
-                                (cite 'papel 'ends? h "</html>\n")
-                                (anchored? h)))))
-        0)
+   (test (10 < rn)                                   ; it built a real site
+         (0 = build rconf),                     ; ..and is at once up to date
+    (: (page f) (open (dir + "/love/" + f) "r" @ q (hot? q ? (slurp q) ""))
+       (each (filter (f \ (cite 'papel 'ends? f ".html")) (readdir (dir + "/love")))
+             (f \ (page f @ h
+                     (test (0 < #h)
+                             (cite 'papel 'ends? h "</html>\n")
+                             (anchored? h)))),
+        0)),
 
-   _ (test_fin ())
-   _ (puts "src/apps/papel: ok -- the static site (anchors, slugs, relink, titles, freshness)
-")
-   0)
+    test_fin (),
+    puts "src/apps/papel: ok -- the static site (anchors, slugs, relink, titles, freshness)
+",
+    0))
