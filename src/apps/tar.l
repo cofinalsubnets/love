@@ -140,7 +140,7 @@
        (: b (tar-get e 'body "")
           _ (sha256-feed h b)
           r (#b % tar-blk)
-          (? r (sha256-feed h * string * cask $ tar-blk - r) 0)
+          _ (? r (sha256-feed h * string * cask $ tar-blk - r) 0)
           1)
     (: n (tar-get e 'size 0)
        q (? (0 < n) (open (tar-get e 'path "") "r") 0)
