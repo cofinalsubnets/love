@@ -63,7 +63,7 @@
 ;   kore sh [-c CMD | file]          the shell, lush (src/apps/lush.l; also `lush`, and an sh symlink)
 ; the C compiler is its own app, `mooncc` (doc/misc/moon.md).
 ;
-; loads LAST in the kore cat, when every tool main is defined, and its leave prunes the
+; loads last in the kore cat, when every tool main is defined, and its leave prunes the
 ; module down to the head below: every tool's <name>-main (the spelling lush's in-image lane
 ; and any (cite 'kore ..) reach), the u/text floors later cat members read bare, and
 ; kore-main. the registry stays private.
@@ -112,29 +112,29 @@
    (diff-main as)
     (: fo (uflags "diff" as () "Nqru")
        t <fo ops (fo 1)
-       _ (? (two? ops && two? >ops && atom? >>ops) () (udie 2 "usage: diff [-Nqru] OLD NEW"))
+       _ (two? ops && two? >ops && atom? >>ops ? () (udie 2 "usage: diff [-Nqru] OLD NEW"))
        fl (take (#as - #ops) as)
        (say1 m) (say out (m + "\n"))
-       (text f) (: r (? (ukind f) (uread f) (t 78) [1 ""] ()) (? (two? r) <>r ()))
+       (text f) ((? (ukind f) (uread f) (t 78) [1 ""] ()) @ r (two? r ? <>r))
        (files fa fb row?)
         (: ta (text fa) tb (text fb)
            (? !(string? ta) (usay-err ("diff: " + fa + ": No such file or directory"), 2)
               !(string? tb) (usay-err ("diff: " + fb + ": No such file or directory"), 2)
-              (: d (udiff fa fb ta tb)
+              (udiff fa fb ta tb @ d
                  (? !d 0
                     (t 113) (say1 ("Files " + fa + " and " + fb + " differ"), 1)
-                    (: _ (? row? (say1 (ujoinc 32 ("diff" . fl + [fa fb]))) 0) (puts d, 1))))))
-       (names d) (? (udirp d) (readdir d) ())
+                    (row? ? (say1 (ujoinc 32 ("diff" . fl + [fa fb]))) 0, puts d, 1)))))
+       (names d) (udirp d ? (readdir d))
        (dirs da db)
         (foldl (\ w nm
                   (: pa (da + "/" + nm) pb (db + "/" + nm)
                      ka (ukind pa) kb (ukind pb)
                      da? (udirp pa) db? (udirp pb)
-                     r (? (da? && db?) (? (t 114) (dirs pa pb) (say1 ("Common subdirectories: " + pa + " and " + pb), 0))
-                          (!ka || !kb) (? (t 78) (? (da? || db?) (? (t 114) (dirs pa pb) 0) (files pa pb 1))
-                                          (say1 ("Only in " + (? ka da db) + ": " + nm), 1))
-                          (da? || db?) (say1 ("File " + pa + " is a " + (? da? "directory" "regular file") + " while file "
-                                              + pb + " is a " + (? db? "directory" "regular file")), 1)
+                     r (? (da? && db?) (t 114 ? (dirs pa pb) (say1 ("Common subdirectories: " + pa + " and " + pb), 0))
+                          (!ka || !kb) (t 78 ? (da? || db? ? (t 114 ? (dirs pa pb) 0) (files pa pb 1))
+                                        (say1 ("Only in " + (ka ? da db) + ": " + nm), 1))
+                          (da? || db?) (say1 ("File " + pa + " is a " + (da? ? "directory" "regular file") + " while file "
+                                              + pb + " is a " + (db? ? "directory" "regular file")), 1)
                           (files pa pb 1))
                      (max w r)))
                0 (sort (uniq (names da + names db))))
@@ -143,100 +143,100 @@
             (udirp fa) (files (fa + "/" + ubase fb "") fb 0)
             (udirp fb) (files fa (fb + "/" + ubase fa "") 0)
             (files fa fb 0))
-       _ (flush out) r)
+       (flush out, r))
 
    ; as: IR forms -> a runnable ELF (src/love/holo/elf.l over the baked holo book)
    (as-main as)
-    (? (atom? >>as) (udie 2 "usage: kore as TARGET IN OUT   (TARGET: x64 | a64)")
-       (: tgt (arch-nom <as) src <>as dst <>>as
-          _ (? (tgt = 'x64 || tgt = 'a64) ()
-               (udie 2 ("as: unknown target " + <as)))
-          q (open src "r")
-          _ (? (hot? q) () (udie 2 ("as: cannot open " + src)))
-          ir (sounds (slurp q) @ 'torn (udie 2 ("as: unfinished form in " + src)) fs fs)
-          _ (? (two? ir) () (udie 2 ("as: no IR forms in " + src)))
-          res (elf64 tgt (_ \ ir) ())
-          _ (write-bytes dst (peep res 'bytes 0))
-          _ (say err ("as: wrote " + dst)) _ (put err 10)
-          0))
+    (atom? >>as ? (udie 2 "usage: kore as TARGET IN OUT   (TARGET: x64 | a64)")
+     (: tgt (arch-nom <as) src <>as dst <>>as
+        _ (tgt = 'x64 || tgt = 'a64 ? ()
+           (udie 2 ("as: unknown target " + <as)))
+        q (open src "r")
+        _ (hot? q ? () (udie 2 ("as: cannot open " + src)))
+        ir (sounds (slurp q) @ 'torn (udie 2 ("as: unfinished form in " + src)) fs fs)
+        _ (two? ir ? () (udie 2 ("as: no IR forms in " + src)))
+        res (elf64 tgt (_ \ ir) ())
+        (write-bytes dst (peep res 'bytes 0),
+         say err ("as: wrote " + dst), put err 10,
+         0)))
 
    ; ar: the classic "!<arch>" archive, GNU shape to the byte. the bytes come from holo's
    ; `arbytes`, beside the reader that pulls them back, so mooncc's runtime archive and this
    ; one share a writer. `ar rcs OUT M..` writes out whole; names stored as basenames.
    (ar-write dst ms)                                          ; ms: ((basename bytes)..)
-    (: q (open dst "w")
-       _ (? (hot? q) () (udie 2 ("ar: cannot write " + dst)))
-       _ (say q (arbytes ms))
-       (close q))
+    (open dst "w" @ q
+       (hot? q ? () (udie 2 ("ar: cannot write " + dst)),
+        say q (arbytes ms),
+        close q))
    ; an archive's members as ((name bytes)..), the index and the long-name table read
    ; past; () for bytes that are no archive
    (ar-mems b)
     (: n #b
        (go off lt acc)
-        (? (n - off < 60) (rev acc)
-           (: nm (ld-arfld b off 16) nx (ld-arnext b off)
-              (? (nm = "/" || nm = "/SYM64/") (go nx lt acc)
-                 (nm = "//") (go nx (snip b (off + 60) (off + 60 + ld-arsz b off)) acc)
-                 (go nx lt (ld-armem b off lt . acc)))))
-       (? (ld-ar? b) (go 8 "" ()) ()))
+        (n - off < 60 ? (rev acc)
+         (: nm (ld-arfld b off 16) nx (ld-arnext b off)
+            (? (nm = "/" || nm = "/SYM64/") (go nx lt acc)
+               (nm = "//") (go nx (snip b (off + 60) (off + 60 + ld-arsz b off)) acc)
+               (go nx lt (ld-armem b off lt . acc)))))
+       (ld-ar? b ? (go 8 "" ())))
    (ar-t p)                                                   ; list member names
-    (: r (uread p) _ (? (two? r) () (udie 2 ("ar: cannot open " + p)))
+    (: r (uread p) _ (two? r ? () (udie 2 ("ar: cannot open " + p)))
        b <>r
-       _ (? (ld-ar? b) () (udie 2 ("ar: not an archive: " + p)))
-       _ (map (m \ puts (<m + "\n")) (ar-mems b))
-       0)
+       (ld-ar? b ? () (udie 2 ("ar: not an archive: " + p)),
+        map (m \ puts (<m + "\n")) (ar-mems b),
+        0))
    (ar-main as)
-    (? (atom? as) (udie 2 "usage: kore ar rcs OUT MEMBER..   |   kore ar t OUT")
-       (: fl <as
-          (? (fl = "t") (? (two? >as) (ar-t <>as) (udie 2 "ar: t wants an archive"))
-             (: hasr ((: (go i) (? (i < #fl) (? (fl i = 114) 1 (go (i + 1))) 0)) 0)
-                _ (? hasr () (udie 2 ("ar: unsupported command " + fl + " (rcs / t)")))
-                _ (? (two? >as) () (udie 2 "ar: no archive named"))
-                dst <>as
-                fs >>as
-                _ (? (two? fs) () (udie 2 "ar: no members"))
-                ms (map (f \ (: r (uread f)
-                                 (? (two? r) [(ubase f "") <>r] (udie 2 ("ar: cannot open " + f)))))
-                        fs)
-                _ (ar-write dst ms)
-                0))))
+    (atom? as ? (udie 2 "usage: kore ar rcs OUT MEMBER..   |   kore ar t OUT")
+     (<as @ fl
+        (fl = "t" ? (two? >as ? (ar-t <>as) (udie 2 "ar: t wants an archive"))
+         (: hasr ((: (go i) (i < #fl ? (fl i = 114 ? 1 (go (i + 1))) 0)) 0)
+            _ (hasr ? () (udie 2 ("ar: unsupported command " + fl + " (rcs / t)")))
+            _ (two? >as ? () (udie 2 "ar: no archive named"))
+            dst <>as
+            fs >>as
+            _ (two? fs ? () (udie 2 "ar: no members"))
+            ms (map (f \ (uread f @ r
+                             (two? r ? [(ubase f "") <>r] (udie 2 ("ar: cannot open " + f)))))
+                    fs)
+            (ar-write dst ms,
+             0)))))
 
    ; ld: holo's static linker as an applet -- mooncc .o (and any ELF relocatable
    ; src/love/holo/link.l reads) into a static exe, no binutils anywhere; -pie the
    ; self-relocating et_dyn, -Ttext the bare-metal org (qemu -kernel's lane).
    (ld-main as)
     (: (num s) (: n #s
-                  hex (2 < n && (s 0 = 48) && (s 1 = 120))
-                  (go i a) (? (i < n)
-                              (go (i + 1) ((a * (? hex 16 10))
-                                           + (: b (s i)
+                  hex (2 < n && s 0 = 48 && s 1 = 120)
+                  (go i a) (i < n ?
+                              (go (i + 1) (a * (hex ? 16 10)
+                                           + (s i @ b
                                                 (? (48 <= b && b < 58) (b - 48)
                                                    (97 <= b && b < 103) (b - 87)
                                                    (65 <= b && b < 71) (b - 55)
                                                    (udie 2 ("ld: bad number " + s))))))
                               a)
-                  (go (? hex 2 0) 0))
+                  (go (hex ? 2 0) 0))
        (go a fs o pie org tgt rd)
         (? (atom? a) [(rev fs) o pie org tgt rd]
-           (<a = "-o")     (? (two? >a) (go >>a fs <>a pie org tgt rd) (udie 2 "ld: -o wants a path"))
+           (<a = "-o")     (two? >a ? (go >>a fs <>a pie org tgt rd) (udie 2 "ld: -o wants a path"))
            (<a = "-pie")   (go >a fs o 1 org tgt rd)
-           (<a = "-t")     (? (two? >a) (go >>a fs o pie org (intern <>a) rd) (udie 2 "ld: -t wants a target"))
-           (<a = "-Ttext") (? (two? >a) (go >>a fs o pie (num <>a) tgt rd) (udie 2 "ld: -Ttext wants an address"))
+           (<a = "-t")     (two? >a ? (go >>a fs o pie org (intern <>a) rd) (udie 2 "ld: -t wants a target"))
+           (<a = "-Ttext") (two? >a ? (go >>a fs o pie (num <>a) tgt rd) (udie 2 "ld: -Ttext wants an address"))
            ; --readme file: plain text into `.love.README`, for whoever opens the output
-           (<a = "--readme") (? (two? >a)
-                                (: t (uread <>a) (? (two? t) (go >>a fs o pie org tgt <>t)
-                                                    (udie 2 ("ld: cannot open " + <>a))))
+           (<a = "--readme") (two? >a ?
+                                (uread <>a @ t (two? t ? (go >>a fs o pie org tgt <>t)
+                                                (udie 2 ("ld: cannot open " + <>a))))
                                 (udie 2 "ld: --readme wants a path"))
            (go >a (<a . fs) o pie org tgt rd))
        r (go as () () 0 () 'x64 ())
        fs <r o <>r pie <>>r org (r 3) tgt (r 4) rdme (r 5)
-       _ (? (two? fs) () (udie 2 "usage: kore ld [-pie] [-t x64|a64|rv64] [-Ttext ADDR] [--readme F] A.o.. -o OUT"))
-       _ (? #o () (udie 2 "ld: no -o OUT"))
-       srcs (map (f \ (: r2 (uread f) (? (two? r2) [f <>r2] (udie 2 ("ld: cannot open " + f))))) fs)
+       _ (two? fs ? () (udie 2 "usage: kore ld [-pie] [-t x64|a64|rv64] [-Ttext ADDR] [--readme F] A.o.. -o OUT"))
+       _ (#o ? () (udie 2 "ld: no -o OUT"))
+       srcs (map (f \ (uread f @ r2 (two? r2 ? [f <>r2] (udie 2 ("ld: cannot open " + f))))) fs)
        ps (ldlink tgt pie org srcs ("love " + <(usplit 43 love-version)) rdme)
-       _ (ld-write o ps)
-       _ (chmod o 493)
-       0)
+       (ld-write o ps,
+        chmod o 493,
+        0))
 
    ; nm: VALUE type NAME over src/love/holo/link.l's ld-syms. the letter is ELF's own facts, never
    ; a guess: U undefined, a absolute, C common, else the section's flags pick T/B/D/R, and a
@@ -244,60 +244,60 @@
    ; from libgcc rather than ours (src/tools/moon-parity.sh reads exactly that).
    ; the sort is BY BYTE -- `LC_ALL=C nm`'s order, so it is the same on every machine.
    ; an archive is not walked here: nm's per-member header wants the walk `ar t` owns.
-   (nm-sp w) (? (w < 1) "" (nm-sp (w - 1) + " "))
+   (nm-sp w) (w < 1 ? "" (nm-sp (w - 1) + " "))
    (nm-hex v w) (: dg "0123456789abcdef"
-                   (go k a) (? (k < 0) a (go (k - 1) (a + string (dg ((v // (k 16)) % 16)))))
+                   (go k a) (k < 0 ? a (go (k - 1) (a + string (dg (v // k 16 % 16)))))
                    (go (w - 1) ""))
-   (nm-low t) (: c (t 0) (? (65 <= c && c <= 90) (string (c + 32)) t))
+   (nm-low t) (t 0 @ c (65 <= c && c <= 90 ? (string (c + 32)) t))
    (nm-let sy)
     (: x (sy 3) sec (sy 6)
        u (? (x = 0) "U" (x = 65521) "A" (x = 65522) "C"
             (atom? sec) "?"
             (: ty (sec 1) fl (sec 2)
-               (? (ty = 8) "B" (0 < (fl & 4)) "T" (0 < (fl & 1)) "D" "R")))
-       (? (sy 1 = 2) (? (x = 0) "w" "W")
+               (? (ty = 8) "B" (0 < fl & 4) "T" (0 < fl & 1) "D" "R")))
+       (? (sy 1 = 2) (x = 0 ? "w" "W")
           (sy 1 = 0) (nm-low u)
           u))
    (nm-file p wide g u srt)
-    (: r (uread p) _ (? (two? r) () (udie 2 ("nm: cannot open " + p)))
+    (: r (uread p) _ (two? r ? () (udie 2 ("nm: cannot open " + p)))
        b <>r
-       w (? (b 4 = 2) 16 8)
+       w (b 4 = 2 ? 16 8)
        ; a section or file symbol names no value of the program's -- nm shows
        ; neither, and an empty name is the null-ish filler a section symbol leaves
        all (filter (sy \ (? !#<sy () (elem (sy 2) '(3 4)) () 1))
                    (ld-syms p b))
        ; "no symbols" is the file's fact, asked before the flags narrow: a -u that
        ; comes back empty says the lanes are all ours, which is an answer, not a lack
-       _ (? (two? all) () (say err ("nm: " + p + ": no symbols"), put err 10, 1))
-       keep (filter (sy \ (? (g && (sy 1 = 0)) () (u && !(sy 3 = 0)) () 1)) all)
-       ord (? srt keep (sortby (\ a b (<a <= <b)) keep))
-       _ (? wide (puts ("\n" + p + ":\n"), 0) 0)
-       ; foldl is the printing walk: it answers the accumulator, so nothing is built
-       _ (foldl (\ _ sy (puts ((? (sy 3 = 0) (nm-sp w) (nm-hex (sy 4) w))
-                               + " " + nm-let sy + " " + <sy + "\n")))
-                0 ord)
-       (two? all))
+       _ (two? all ? () (say err ("nm: " + p + ": no symbols"), put err 10, 1))
+       keep (filter (sy \ (? (g && sy 1 = 0) () (u && !(sy 3 = 0)) () 1)) all)
+       ord (srt ? keep (sortby (\ a b (<a <= <b)) keep))
+       (wide ? (puts ("\n" + p + ":\n"), 0) 0,
+        ; foldl is the printing walk: it answers the accumulator, so nothing is built
+        foldl (\ _ sy (puts ((sy 3 = 0 ? (nm-sp w) (nm-hex (sy 4) w))
+                             + " " + nm-let sy + " " + <sy + "\n")))
+              0 ord,
+        two? all))
    (nm-main as)
     ; flags cluster: -gu is -g -u, which is what a hand types and what nm takes
     (: (nm-flags t k g u srt)
-        (? (#t <= k) [g u srt]
-           (: c (t k)
-              (? (c = 103) (nm-flags t (k + 1) 1 u srt)
-                 (c = 117) (nm-flags t (k + 1) g 1 srt)
-                 (c = 112) (nm-flags t (k + 1) g u 1)
-                 (udie 2 ("nm: unknown flag -" + (string c))))))
+        (#t <= k ? [g u srt]
+         (t k @ c
+            (? (c = 103) (nm-flags t (k + 1) 1 u srt)
+               (c = 117) (nm-flags t (k + 1) g 1 srt)
+               (c = 112) (nm-flags t (k + 1) g u 1)
+               (udie 2 ("nm: unknown flag -" + string c)))))
        (go a g u srt fs)
         (? (atom? a) [g u srt (rev fs)]
-           ((1 < tally <a) && (<a 0 = 45))
-            (: f (nm-flags <a 1 g u srt) (go >a <f <>f <>>f fs))
+           (1 < tally <a && <a 0 = 45)
+            (nm-flags <a 1 g u srt @ f (go >a <f <>f <>>f fs))
            (go >a g u srt (<a . fs)))
        r (go as () () () ())
        fs (r 3)
-       _ (? (two? fs) () (udie 2 "usage: kore nm [-g] [-u] [-p] FILE.."))
+       _ (two? fs ? () (udie 2 "usage: kore nm [-g] [-u] [-p] FILE.."))
        wide (two? >fs)
-       any (foldl (\ a p (? (nm-file p wide <r <>r <>>r) 1 a)) () fs)
-       _ (flush out)
-       (? any 0 1))
+       any (foldl (\ a p (nm-file p wide <r <>r <>>r ? 1 a)) () fs)
+       (flush out,
+        any ? 0 1))
 
    ; -- size, strip, ranlib: the three binutils that ride holo's ELF field table and its
    ; archive writer. little-endian ELF of either class; a section reads as
@@ -305,25 +305,25 @@
    (bu-put fs h nm v) (: r (ld-row fs nm) o <r w <>r (snip h 0 o + wrle v w + snip h (o + w) #h))
    (bu-elf? b) (20 <= #b && b 0 = 127 && b 1 = 69 && b 2 = 76 && b 3 = 70 && b 5 = 1
                 && (b 4 = 1 || b 4 = 2))
-   (bu-fs b) (? (b 4 = 2) elf64f elf32f)
+   (bu-fs b) (b 4 = 2 ? elf64f elf32f)
    (bu-secs fs b)
     (: shoff (ld-f fs b 0 'e-shoff) n (ld-f fs b 0 'e-shnum) e (ld-n fs 'sh-ent)
        sx (ld-f fs b 0 'e-shstrx)
-       stro (? (sx < n) (ld-f fs b (shoff + sx * e) 'sh-off) 0)
+       stro (sx < n ? (ld-f fs b (shoff + sx * e) 'sh-off) 0)
        (go i acc)
-        (? (n <= i) (rev acc)
-           (: h (shoff + i * e)
-              (go (i + 1) ([i (ld-cstr b (stro + ld-f fs b h 'sh-name)) (ld-f fs b h 'sh-type)
-                            (ld-f fs b h 'sh-flags) (ld-f fs b h 'sh-off) (ld-f fs b h 'sh-size)
-                            (ld-f fs b h 'sh-link) (ld-f fs b h 'sh-info) (ld-f fs b h 'sh-align)
-                            (snip b h (h + e))] . acc))))
+        (n <= i ? (rev acc)
+         (shoff + i * e @ h
+            (go (i + 1) ([i (ld-cstr b (stro + ld-f fs b h 'sh-name)) (ld-f fs b h 'sh-type)
+                          (ld-f fs b h 'sh-flags) (ld-f fs b h 'sh-off) (ld-f fs b h 'sh-size)
+                          (ld-f fs b h 'sh-link) (ld-f fs b h 'sh-info) (ld-f fs b h 'sh-align)
+                          (snip b h (h + e))] . acc))))
        (go 0 ()))
    ; binutils' berkeley sums: allocated code or read-only is text, allocated with bytes
    ; is data, allocated without is bss
    (bu-berk b)
     (foldl (\ a sc (: fl (sc 3) sz (sc 5)
-                      (? ((fl & 2) = 0) a
-                         (0 < (fl & 4) || (fl & 1) = 0) [(a 0 + sz) (a 1) (a 2)]
+                      (? (fl & 2 = 0) a
+                         (0 < fl & 4 || fl & 1 = 0) [(a 0 + sz) (a 1) (a 2)]
                          !(sc 2 = 8) [(a 0) (a 1 + sz) (a 2)]
                          [(a 0) (a 1) (a 2 + sz)])))
            [0 0 0] (bu-secs (bu-fs b) b))
@@ -331,32 +331,34 @@
     (: t? (elem "-t" as || elem "--totals" as)
        bad (filter (w \ 1 < #w && w 0 = 45 && !(elem w '("-t" "--totals" "-B" "-d" "--format=berkeley"
                                                         "--format=bsd" "--radix=10"))) as)
-       _ (? (two? bad) (udie 1 ("size: " + <bad + " is not here (the berkeley format, decimal, and -t)")) 0)
+       _ (two? bad ? (udie 1 ("size: " + <bad + " is not here (the berkeley format, decimal, and -t)")) 0)
        fs0 (filter (w \ !(1 < #w && w 0 = 45)) as)
-       fs (? (two? fs0) fs0 ["a.out"])
+       fs (two? fs0 ? fs0 ["a.out"])
        hd {0 0}
        (row s nm)
-        (: _ (? (hd 0) 0 (pin hd 0 1, puts "   text\t   data\t    bss\t    dec\t    hex\tfilename\n"))
+        (: _ (hd 0 ? 0 (pin hd 0 1, puts "   text\t   data\t    bss\t    dec\t    hex\tfilename\n"))
            d (s 0 + s 1 + s 2)
            (puts (upad 7 (show (s 0)) + "\t" + upad 7 (show (s 1)) + "\t" + upad 7 (show (s 2)) + "\t"
                   + upad 7 (show d) + "\t" + upad 7 (radix d 16) + "\t" + nm + "\n")))
        ; the status is the last trouble's: 1 a file not there, 3 one not an object
-       (add a s) [(a 0 + s 0) (a 1 + s 1) (a 2 + s 2) (? (0 < s 3) (s 3) (a 3))]
+       (add a s) [(a 0 + s 0) (a 1 + s 1) (a 2 + s 2) (0 < s 3 ? (s 3) (a 3))]
        (bad c m) (say err ("size: " + m + "\n"), [0 0 0 c])
        (one a f)
-        (: r (uread f)
-           (? (atom? r) (add a (bad 1 ("'" + f + "': No such file")))
-              (: b <>r ms (ar-mems b)
-                 (? (bu-elf? b) (: s (bu-berk b) _ (row s f) (add a (s + [0])))
-                    (two? ms)
-                     (foldl (\ a2 m (? (bu-elf? <>m) (: s (bu-berk <>m) _ (row s (<m + " (ex " + f + ")")) (add a2 (s + [0])))
-                                       (add a2 (bad 3 (<m + ": file format not recognized")))))
-                            a ms)
-                    (add a (bad 3 (f + ": file format not recognized")))))))
+        (uread f @ r
+           (atom? r ? (add a (bad 1 ("'" + f + "': No such file")))
+            (: b <>r ms (ar-mems b)
+               (? (bu-elf? b) (bu-berk b @ s
+                                 (row s f, add a (s + [0])))
+                  (two? ms)
+                   (foldl (\ a2 m (bu-elf? <>m ? (bu-berk <>m @ s
+                                                    (row s (<m + " (ex " + f + ")"), add a2 (s + [0])))
+                                   (add a2 (bad 3 (<m + ": file format not recognized")))))
+                          a ms)
+                  (add a (bad 3 (f + ": file format not recognized")))))))
        tot (foldl one [0 0 0 0] fs)
-       _ (? t? (row tot "(TOTALS)") 0)
-       _ (flush out)
-       (tot 3))
+       (t? ? (row tot "(TOTALS)") 0,
+        flush out,
+        tot 3))
 
    ; strip: the symbol table and the debugging sections out of an executable or a
    ; shared object; -g the debugging alone, which is all a relocatable object may lose,
@@ -369,146 +371,146 @@
        w64 (b 4 = 2)
        secs (bu-secs fs b)
        sx (ld-f fs b 0 'e-shstrx)
-       na (sc \ ((sc 3) & 2) = 0)
-       g0 (map (sc \ (<sc > 0) && na sc && ((all? && sc 2 = 2) || bu-dbg? (sc 1))) secs)
-       (linked-by i gs) (foldl (\ a sc (? (a || (sc 6 = i && gs <sc)) 1 0)) 0 secs)
-       (kept-link? i gs) (foldl (\ a sc (? (a || (sc 6 = i && !(gs <sc))) 1 0)) 0 secs)
+       na (sc \ (sc 3 & 2) = 0)
+       g0 (map (sc \ (<sc > 0) && na sc && (all? && sc 2 = 2 || bu-dbg? (sc 1))) secs)
+       (linked-by i gs) (foldl (\ a sc (a || sc 6 = i && gs <sc ? 1 0)) 0 secs)
+       (kept-link? i gs) (foldl (\ a sc (a || sc 6 = i && !(gs <sc) ? 1 0)) 0 secs)
        g1 (map (sc \ (g0 <sc) || (sc 2 = 3 && na sc && !(<sc = sx)
                                    && linked-by <sc g0 && !(kept-link? <sc g0))) secs)
        gone (map (sc \ (g1 <sc) || ((sc 2 = 4 || sc 2 = 9) && na sc
-                                     && ((0 < sc 7 && sc 7 < #secs && g1 (sc 7))
-                                         || (0 < sc 6 && sc 6 < #secs && g1 (sc 6))))) secs)
+                                     && (0 < sc 7 && sc 7 < #secs && g1 (sc 7)
+                                         || 0 < sc 6 && sc 6 < #secs && g1 (sc 6)))) secs)
        keep (filter (sc \ !(gone <sc)) secs)
-       (? (#keep = #secs) b
-          (: map1 (foldl (\ t sc (pin t <sc #(keys t))) {} keep)
-             (nx i) (peep map1 i 0)
-             ehs (? w64 64 52)
-             phend (: po (ld-f fs b 0 'e-phoff) pn (ld-f fs b 0 'e-phnum) pe (ld-n fs 'ph-ent)
-                      (foldl (\ a k (: h (po + k * pe) (max a (ld-f fs b h 'ph-off + ld-f fs b h 'ph-fsz))))
-                             (? pn (po + pn * pe) 0) ^pn))
-             base (foldl (\ a sc (? (na sc || sc 2 = 8) a (max a (sc 4 + sc 5)))) (max ehs phend) keep)
-             ; the name table, each kept name once, in section order
-             nt (foldl (\ a sc (? (<sc = 0) a [(<a + sc 1 + string 0) (pin <>a <sc #<a)]))
-                       [(string 0) {}] keep)
-             names <nt noff <>nt
-             ; the unmapped sections laid behind the mapped bytes, the name table among them
-             lay (foldl (\ a sc (: al (max 1 (sc 8)) at (ld-align al <a)
-                                   body (? (<sc = sx) names
-                                           (sc 2 = 2 && !all?) (bu-symfix fs (snip b (sc 4) (sc 4 + sc 5)) nx)
-                                           (sc 2 = 8) "" (snip b (sc 4) (sc 4 + sc 5)))
-                                   (? (!(na sc) || <sc = 0) a
-                                      [(at + #body) (pin <>a <sc at)
-                                       (<>>a + [(ld-zeros (at - <a)) body])])))
-                        [base {} ()] keep)
-             shoff (ld-align (? w64 8 4) <lay)
-             offs <>lay
-             hdrs (map (sc \ (: h0 (sc 9)
-                                h1 (bu-put fs h0 'sh-name (peep noff <sc 0))
-                                h2 (: o (peep offs <sc -1) (? (o < 0) h1 (bu-put fs h1 'sh-off o)))
-                                h3 (? (<sc = sx) (bu-put fs h2 'sh-size #names) h2)
-                                h4 (? (0 < sc 6) (bu-put fs h3 'sh-link (nx (sc 6))) h3)
-                                (? ((sc 2 = 4 || sc 2 = 9 || 0 < (sc 3 & 64)) && 0 < sc 7)
-                                   (bu-put fs h4 'sh-info (nx (sc 7))) h4)))
-                       keep)
-             eh (bu-put fs (bu-put fs (bu-put fs (snip b 0 ehs) 'e-shoff shoff) 'e-shnum #keep)
-                        'e-shstrx (nx sx))
-             (foldl (\ a p (a + (? (string? p) p (foldl (\ s z (s + string z)) "" p))))
-                    ""
-                    ([eh (snip b ehs base)] + <>>lay + [(ld-zeros (shoff - <lay))] + hdrs)))))
+       (#keep = #secs ? b
+        (: map1 (foldl (\ t sc (pin t <sc #(keys t))) {} keep)
+           (nx i) (peep map1 i 0)
+           ehs (w64 ? 64 52)
+           phend (: po (ld-f fs b 0 'e-phoff) pn (ld-f fs b 0 'e-phnum) pe (ld-n fs 'ph-ent)
+                    (foldl (\ a k (po + k * pe @ h (max a (ld-f fs b h 'ph-off + ld-f fs b h 'ph-fsz))))
+                           (pn ? (po + pn * pe) 0) ^pn))
+           base (foldl (\ a sc (na sc || sc 2 = 8 ? a (max a (sc 4 + sc 5)))) (max ehs phend) keep)
+           ; the name table, each kept name once, in section order
+           nt (foldl (\ a sc (<sc = 0 ? a [(<a + sc 1 + string 0) (pin <>a <sc #<a)]))
+                     [(string 0) {}] keep)
+           names <nt noff <>nt
+           ; the unmapped sections laid behind the mapped bytes, the name table among them
+           lay (foldl (\ a sc (: al (max 1 (sc 8)) at (ld-align al <a)
+                                 body (? (<sc = sx) names
+                                         (sc 2 = 2 && !all?) (bu-symfix fs (snip b (sc 4) (sc 4 + sc 5)) nx)
+                                         (sc 2 = 8) "" (snip b (sc 4) (sc 4 + sc 5)))
+                                 (!(na sc) || <sc = 0 ? a
+                                  [(at + #body) (pin <>a <sc at)
+                                   (<>>a + [(ld-zeros (at - <a)) body])])))
+                      [base {} ()] keep)
+           shoff (ld-align (w64 ? 8 4) <lay)
+           offs <>lay
+           hdrs (map (sc \ (: h0 (sc 9)
+                              h1 (bu-put fs h0 'sh-name (peep noff <sc 0))
+                              h2 (peep offs <sc -1 @ o (o < 0 ? h1 (bu-put fs h1 'sh-off o)))
+                              h3 (<sc = sx ? (bu-put fs h2 'sh-size #names) h2)
+                              h4 (0 < sc 6 ? (bu-put fs h3 'sh-link (nx (sc 6))) h3)
+                              ((sc 2 = 4 || sc 2 = 9 || 0 < sc 3 & 64) && 0 < sc 7 ?
+                                 (bu-put fs h4 'sh-info (nx (sc 7))) h4)))
+                     keep)
+           eh (bu-put fs (bu-put fs (bu-put fs (snip b 0 ehs) 'e-shoff shoff) 'e-shnum #keep)
+                      'e-shstrx (nx sx))
+           (foldl (\ a p (a + (string? p ? p (foldl (\ s z (s + string z)) "" p))))
+                  ""
+                  ([eh (snip b ehs base)] + <>>lay + [(ld-zeros (shoff - <lay))] + hdrs)))))
    (bu-symfix fs s nx)                 ; a kept symbol table's section numbers, renumbered
     (: e (ld-n fs 'sy-ent) n (#s // e)
        (go i acc)
-        (? (n <= i) acc
-           (: h (snip s (i * e) (i * e + e)) x (ld-f fs h 0 'sy-shndx)
-              (go (i + 1) (acc + (? (0 < x && x < 65280) (bu-put fs h 'sy-shndx (nx x)) h)))))
+        (n <= i ? acc
+         (: h (snip s (i * e) (i * e + e)) x (ld-f fs h 0 'sy-shndx)
+            (go (i + 1) (acc + (0 < x && x < 65280 ? (bu-put fs h 'sy-shndx (nx x)) h)))))
        (go 0 ""))
    (strip-main as)
     (: dbg (foldl (\ a w (a || elem w '("-g" "-S" "-d" "--strip-debug"))) 0 as)
        (go a o fs)
-        (? (atom? a) [o (rev fs)]
-           (: w <a
-              (? (w = "-o") (? (two? >a) (go >>a <>a fs) (udie 1 "strip: option requires an argument -- 'o'"))
-                 (elem w '("-g" "-S" "-d" "--strip-debug" "-s" "--strip-all" "--strip-unneeded" "-p" "--preserve-dates"))
-                  (go >a o fs)
-                 (1 < #w && w 0 = 45) (udie 1 ("strip: " + w + " is not here (-s -g -o -p)"))
-                 (go >a o (w . fs)))))
+        (atom? a ? [o (rev fs)]
+         (<a @ w
+            (? (w = "-o") (two? >a ? (go >>a <>a fs) (udie 1 "strip: option requires an argument -- 'o'"))
+               (elem w '("-g" "-S" "-d" "--strip-debug" "-s" "--strip-all" "--strip-unneeded" "-p" "--preserve-dates"))
+                (go >a o fs)
+               (1 < #w && w 0 = 45) (udie 1 ("strip: " + w + " is not here (-s -g -o -p)"))
+               (go >a o (w . fs)))))
        r (go as () ())
        o <r fs <>r
        p? (elem "-p" as || elem "--preserve-dates" as)
-       _ (? (two? fs) 0 (udie 1 "Usage: strip [-s|-g] [-p] [-o OUT] FILE.."))
-       _ (? (o && two? >fs) (udie 1 "strip: -o wants one input file") 0)
+       _ (two? fs ? 0 (udie 1 "Usage: strip [-s|-g] [-p] [-o OUT] FILE.."))
+       _ (o && two? >fs ? (udie 1 "strip: -o wants one input file") 0)
        (warn m) (say err ("strip: " + m + "\n"), 1)
        (one f)
-        (: rd (uread f)
-           (? (atom? rd) (warn ("'" + f + "': No such file"))
-              (: b <>rd
-                 (? !(bu-elf? b) (warn (f + ": file format not recognized"))
-                    (!dbg && (b 16 + 256 * b 17) = 1)
-                     (warn (f + ": a relocatable object keeps its symbols here (-g takes its debugging)"))
-                    (: out (bu-strip b !dbg)
-                       dst (? o o f)
-                       st (stat f)
-                       q (open dst "w")
-                       (? !(hot? q) (warn ("unable to write " + dst))
-                          (say q out, close q, (? (two? st) (chmod dst (st 2 & 4095)) 0), (? (p? && two? st) (utime dst (st 1)) 0), 0)))))))
-       (? (foldl (\ a f (max a (one f))) 0 fs) 1 0))
+        (uread f @ rd
+           (atom? rd ? (warn ("'" + f + "': No such file"))
+            (<>rd @ b
+               (? !(bu-elf? b) (warn (f + ": file format not recognized"))
+                  (!dbg && b 16 + 256 * b 17 = 1)
+                   (warn (f + ": a relocatable object keeps its symbols here (-g takes its debugging)"))
+                  (: out (bu-strip b !dbg)
+                     dst (o ? o f)
+                     st (stat f)
+                     q (open dst "w")
+                     (!(hot? q) ? (warn ("unable to write " + dst))
+                        (say q out, close q, two? st ? (chmod dst (st 2 & 4095)) 0, p? && two? st ? (utime dst (st 1)) 0, 0)))))))
+       (foldl (\ a f (max a (one f))) 0 fs ? 1 0))
 
    ; ranlib: an archive written again with its index, the index holo's own reader wants
    ; -- readelf: binutils' -h -l -S -s (and -e, all three headers), wide or at 80
    ; columns, over little-endian ELF of either class. out of reach, deliberately: the
    ; relocations, the dynamic section, notes, versions and the dumps --
-   (re-hex v w) (zpad w (? (v = 0) "0" (radix v 16)))
-   (re-0x v) ("0x" + (? (v = 0) "0" (radix v 16)))
+   (re-hex v w) (zpad w (v = 0 ? "0" (radix v 16)))
+   (re-0x v) ("0x" + (v = 0 ? "0" (radix v 16)))
    (re-u v w) (upad w (show v))
-   (re-cut s w) (? (w < #s) (snip s 0 (w - 5) + "[...]") s)
-   (re-at s w) (? (w < #s) (snip s 0 w) s)
+   (re-cut s w) (w < #s ? (snip s 0 (w - 5) + "[...]") s)
+   (re-at s w) (w < #s ? (snip s 0 w) s)
    (re-lbl l) ("  " + urpad 35 l)
    (re-mach m) (m @ 3 "Intel 80386" 40 "ARM" 62 "Advanced Micro Devices X86-64" 183 "AArch64"
                     243 "RISC-V" 8 "MIPS R3000" 20 "PowerPC" 21 "PowerPC64" ("<unknown>: 0x" + radix m 16))
    (re-osabi o) (o @ 0 "UNIX - System V" 1 "UNIX - HP-UX" 2 "UNIX - NetBSD" 3 "UNIX - GNU" 6 "UNIX - Solaris"
                      9 "UNIX - FreeBSD" 12 "UNIX - OpenBSD" ("<unknown: " + radix o 16 + ">"))
    (re-dyn fs b)                        ; the dynamic section's (tag . value) pairs
-    (: w (? (b 4 = 2) 8 4)
+    (: w (b 4 = 2 ? 8 4)
        d (filter (sc \ (sc 2 = 6)) (bu-secs fs b))
-       (? (atom? d) ()
-          (: o (<d 4) n (<d 5 // (2 * w))
-             (map (i \ [(rdle b (o + 2 * w * i) w) (rdle b (o + 2 * w * i + w) w)]) ^n))))
+       (atom? d ? ()
+        (: o (<d 4) n (<d 5 // (2 * w))
+           (map (i \ [(rdle b (o + 2 * w * i) w) (rdle b (o + 2 * w * i + w) w)]) ^n))))
    (re-type fs b t)
     (t @ 0 "NONE (None)" 1 "REL (Relocatable file)" 2 "EXEC (Executable file)" 4 "CORE (Core file)"
-         3 (? (any (p \ (<p = 1879048187 && 0 < (<>p & 134217728))) (re-dyn fs b))
+         3 (any (p \ (<p = 1879048187 && 0 < <>p & 134217728)) (re-dyn fs b) ?
               "DYN (Position-Independent Executable file)" "DYN (Shared object file)")
          ("<unknown>: " + radix t 16))
    (re-flags b m f)
     ("0x" + radix f 16
-     + (? (m = 40) (? (f >> 24) (", Version" + show (f >> 24) + " EABI"
-                               + (? (f & 1024) ", hard-float ABI" (f & 512) ", soft-float ABI" "")) "")
-          (m = 243) ((? (f & 1) ", RVC" "") + ([", soft-float ABI" ", single-float ABI" ", double-float ABI" ", quad-float ABI"] ((f & 6) >> 1))
-                     + (? (f & 8) ", RVE" "") + (? (f & 16) ", TSO" ""))
+     + (? (m = 40) (f >> 24 ? (", Version" + show (f >> 24) + " EABI"
+                             + (? (f & 1024) ", hard-float ABI" (f & 512) ", soft-float ABI" "")) "")
+          (m = 243) ((f & 1 ? ", RVC" "") + ([", soft-float ABI" ", single-float ABI" ", double-float ABI" ", quad-float ABI"] ((f & 6) >> 1))
+                     + (f & 8 ? ", RVE" "") + (f & 16 ? ", TSO" ""))
           ""))
    (re-head fs b)
-    (: e64 (b 4 = 2) m (rdle b 18 2) f (rdle b (? e64 48 36) 4)
+    (: e64 (b 4 = 2) m (rdle b 18 2) f (rdle b (e64 ? 48 36) 4)
        (row l v) (say out (re-lbl l + v + "\n"))
-       _ (say out "ELF Header:\n  Magic:   ")
-       _ (map (i \ (say out (re-hex (b i) 2 + " "))) ^16)
-       _ (say out "\n")
-       _ (row "Class:" (? e64 "ELF64" "ELF32"))
-       _ (row "Data:" "2's complement, little endian")
-       _ (row "Version:" (show (b 6) + (? (b 6 = 1) " (current)" "")))
-       _ (row "OS/ABI:" (re-osabi (b 7)))
-       _ (row "ABI Version:" (show (b 8)))
-       _ (row "Type:" (re-type fs b (rdle b 16 2)))
-       _ (row "Machine:" (re-mach m))
-       _ (row "Version:" (re-0x (rdle b 20 4)))
-       _ (row "Entry point address:" (re-0x (ld-f fs b 0 'e-entry)))
-       _ (row "Start of program headers:" (show (ld-f fs b 0 'e-phoff) + " (bytes into file)"))
-       _ (row "Start of section headers:" (show (ld-f fs b 0 'e-shoff) + " (bytes into file)"))
-       _ (row "Flags:" (re-flags b m f))
-       _ (row "Size of this header:" (show (rdle b (? e64 52 40) 2) + " (bytes)"))
-       _ (row "Size of program headers:" (show (ld-f fs b 0 'e-phent) + " (bytes)"))
-       _ (row "Number of program headers:" (show (ld-f fs b 0 'e-phnum)))
-       _ (row "Size of section headers:" (show (ld-f fs b 0 'e-shent) + " (bytes)"))
-       _ (row "Number of section headers:" (show (ld-f fs b 0 'e-shnum)))
-       (row "Section header string table index:" (show (ld-f fs b 0 'e-shstrx))))
+       (say out "ELF Header:\n  Magic:   ",
+        map (i \ (say out (re-hex (b i) 2 + " "))) ^16,
+        say out "\n",
+        row "Class:" (e64 ? "ELF64" "ELF32"),
+        row "Data:" "2's complement, little endian",
+        row "Version:" (show (b 6) + (b 6 = 1 ? " (current)" "")),
+        row "OS/ABI:" (re-osabi (b 7)),
+        row "ABI Version:" (show (b 8)),
+        row "Type:" (re-type fs b (rdle b 16 2)),
+        row "Machine:" (re-mach m),
+        row "Version:" (re-0x (rdle b 20 4)),
+        row "Entry point address:" (re-0x (ld-f fs b 0 'e-entry)),
+        row "Start of program headers:" (show (ld-f fs b 0 'e-phoff) + " (bytes into file)"),
+        row "Start of section headers:" (show (ld-f fs b 0 'e-shoff) + " (bytes into file)"),
+        row "Flags:" (re-flags b m f),
+        row "Size of this header:" (show (rdle b (e64 ? 52 40) 2) + " (bytes)"),
+        row "Size of program headers:" (show (ld-f fs b 0 'e-phent) + " (bytes)"),
+        row "Number of program headers:" (show (ld-f fs b 0 'e-phnum)),
+        row "Size of section headers:" (show (ld-f fs b 0 'e-shent) + " (bytes)"),
+        row "Number of section headers:" (show (ld-f fs b 0 'e-shnum)),
+        row "Section header string table index:" (show (ld-f fs b 0 'e-shstrx))))
    (re-shtype m t)
     (? (t < 20) (["NULL" "PROGBITS" "SYMTAB" "STRTAB" "RELA" "HASH" "DYNAMIC" "NOTE" "NOBITS" "REL"
                   "SHLIB" "DYNSYM" "" "" "INIT_ARRAY" "FINI_ARRAY" "PREINIT_ARRAY" "GROUP" "SYMTAB SECTION INDICES" "RELR"] t)
@@ -525,45 +527,45 @@
        (re-hex t 8 + ": <unknown>"))
    (re-shflags b m f)
     (: gnu (b 7 = 3 || b 7 = 9)
-       (go bit o) (? (32 <= bit) o
-                     (: v (1 << bit)
-                        (? (0 = (f & v)) (go (bit + 1) o)
-                           (: c (? (bit < 12) ("WAX?MSILOGTC" bit)
-                                   (v = 2097152 && gnu) 82
-                                   (v = 268435456 && m = 62) 108
-                                   (v = 536870912 && m = 40) 121
-                                   (v = 2147483648) 69
-                                   (0 < (v & 267386880)) 111
-                                   (0 < (v & 4026531840)) 112
-                                   120)
-                              (go (bit + 1) (? (elem c o) o (o + string c)))))))
+       (go bit o) (32 <= bit ? o
+                   (1 << bit @ v
+                      (0 = f & v ? (go (bit + 1) o)
+                       ((? (bit < 12) ("WAX?MSILOGTC" bit)
+                           (v = 2097152 && gnu) 82
+                           (v = 268435456 && m = 62) 108
+                           (v = 536870912 && m = 40) 121
+                           (v = 2147483648) 69
+                           (0 < v & 267386880) 111
+                           (0 < v & 4026531840) 112
+                           120) @ c
+                          (go (bit + 1) (elem c o ? o (o + string c)))))))
        (go 0 ""))
    (re-keys b m)
     ("Key to Flags:\n  W (write), A (alloc), X (execute), M (merge), S (strings), I (info),\n"
      + "  L (link order), O (extra OS processing required), G (group), T (TLS),\n"
      + "  C (compressed), x (unknown), o (OS specific), E (exclude),\n  "
-     + (? (b 7 = 3 || b 7 = 9) "R (retain), " "") + "D (mbind), "
+     + (b 7 = 3 || b 7 = 9 ? "R (retain), " "") + "D (mbind), "
      + (m @ 62 "l (large), " 40 "y (purecode), " "") + "p (processor specific)\n")
    (re-secs fs b w? h?)
     (: e64 (b 4 = 2) m (rdle b 18 2) ss (bu-secs fs b)
        (ent sc) (ld-f fs b 0 'e-shoff + sc 0 * ld-n fs 'sh-ent)
-       (addr sc) (rdle b ((ent sc) + (? e64 16 12)) (? e64 8 4))
+       (addr sc) (rdle b (ent sc + (e64 ? 16 12)) (e64 ? 8 4))
        (esz sc) (ld-f fs b (ent sc) 'sh-esz)
-       (? (atom? ss) (say out "\nThere are no sections in this file.\n")
-          ((? h? (say out "\n")
-                  (say out ("There are " + show #ss + " section headers, starting at offset " + re-0x (ld-f fs b 0 'e-shoff) + ":\n\n"))), say out (? (#ss = 1) "Section Header:\n" "Section Headers:\n"), say out (? !e64 "  [Nr] Name              Type            Addr     Off    Size   ES Flg Lk Inf Al\n"
-                           w? "  [Nr] Name              Type            Address          Off    Size   ES Flg Lk Inf Al\n"
-                           "  [Nr] Name              Type             Address           Offset\n       Size              EntSize          Flags  Link  Info  Align\n"), map (sc \
-                                                                                                                                                                                  (: nm (sc 1) ty (re-at (re-shtype m (sc 2)) 15) fl (re-shflags b m (sc 3))
-                                                                                                                                                                                     hd ("  [" + re-u (sc 0) 2 + "] " + urpad 17 (? w? nm (re-cut nm 17)) + " ")
-                                                                                                                                                                                     (say out (? (!e64 || w?)
-                                                                                                                                                                                                 (hd + urpad 15 ty + " " + re-hex (addr sc) (? e64 16 8) + " " + re-hex (sc 4) 6 + " "
-                                                                                                                                                                                                  + re-hex (sc 5) 6 + " " + re-hex (esz sc) 2 + " " + upad 3 fl + " " + re-u (sc 6) 2
-                                                                                                                                                                                                  + " " + re-u (sc 7) 3 + " " + re-u (sc 8) 2 + "\n")
-                                                                                                                                                                                                 (hd + urpad 15 ty + "  " + re-hex (addr sc) 16 + "  " + re-hex (sc 4) 8 + "\n       "
-                                                                                                                                                                                                  + re-hex (sc 5) 16 + "  " + re-hex (esz sc) 16 + " " + upad 3 fl + "      "
-                                                                                                                                                                                                  + re-u (sc 6) 2 + "   " + re-u (sc 7) 3 + "     " + show (sc 8) + "\n")))))
-                    ss, say out (re-keys b m))))
+       (atom? ss ? (say out "\nThere are no sections in this file.\n")
+        ((h? ? (say out "\n")
+                (say out ("There are " + show #ss + " section headers, starting at offset " + re-0x (ld-f fs b 0 'e-shoff) + ":\n\n"))), say out (#ss = 1 ? "Section Header:\n" "Section Headers:\n"), say out (? !e64 "  [Nr] Name              Type            Addr     Off    Size   ES Flg Lk Inf Al\n"
+                         w? "  [Nr] Name              Type            Address          Off    Size   ES Flg Lk Inf Al\n"
+                         "  [Nr] Name              Type             Address           Offset\n       Size              EntSize          Flags  Link  Info  Align\n"), map (sc \
+                                                                                                                                                                                (: nm (sc 1) ty (re-at (re-shtype m (sc 2)) 15) fl (re-shflags b m (sc 3))
+                                                                                                                                                                                   hd ("  [" + re-u (sc 0) 2 + "] " + urpad 17 (w? ? nm (re-cut nm 17)) + " ")
+                                                                                                                                                                                   (say out (!e64 || w? ?
+                                                                                                                                                                                               (hd + urpad 15 ty + " " + re-hex (addr sc) (e64 ? 16 8) + " " + re-hex (sc 4) 6 + " "
+                                                                                                                                                                                                + re-hex (sc 5) 6 + " " + re-hex (esz sc) 2 + " " + upad 3 fl + " " + re-u (sc 6) 2
+                                                                                                                                                                                                + " " + re-u (sc 7) 3 + " " + re-u (sc 8) 2 + "\n")
+                                                                                                                                                                                               (hd + urpad 15 ty + "  " + re-hex (addr sc) 16 + "  " + re-hex (sc 4) 8 + "\n       "
+                                                                                                                                                                                                + re-hex (sc 5) 16 + "  " + re-hex (esz sc) 16 + " " + upad 3 fl + "      "
+                                                                                                                                                                                                + re-u (sc 6) 2 + "   " + re-u (sc 7) 3 + "     " + show (sc 8) + "\n")))))
+                  ss, say out (re-keys b m))))
    (re-phtype m t)
     (? (t < 8) (["NULL" "LOAD" "DYNAMIC" "INTERP" "NOTE" "SHLIB" "PHDR" "TLS"] t)
        (t = 1685382480) "GNU_EH_FRAME" (t = 1685382481) "GNU_STACK" (t = 1685382482) "GNU_RELRO"
@@ -574,8 +576,8 @@
        ("<unknown>: " + radix t 16))
    (re-phs fs b)                        ; [type off vaddr paddr filesz memsz flags align]
     (: e64 (b 4 = 2) o (ld-f fs b 0 'e-phoff) n (ld-f fs b 0 'e-phnum) e (ld-f fs b 0 'e-phent)
-       (map (i \ (: h (o + i * e)
-                    (? e64 [(rdle b h 4) (rdle b (h + 8) 8) (rdle b (h + 16) 8) (rdle b (h + 24) 8) (rdle b (h + 32) 8)
+       (map (i \ (o + i * e @ h
+                    (e64 ? [(rdle b h 4) (rdle b (h + 8) 8) (rdle b (h + 16) 8) (rdle b (h + 24) 8) (rdle b (h + 32) 8)
                             (rdle b (h + 40) 8) (rdle b (h + 4) 4) (rdle b (h + 48) 8)]
                        [(rdle b h 4) (rdle b (h + 4) 4) (rdle b (h + 8) 4) (rdle b (h + 12) 4) (rdle b (h + 16) 4)
                         (rdle b (h + 20) 4) (rdle b (h + 24) 4) (rdle b (h + 28) 4)])))
@@ -584,96 +586,96 @@
    ; unsigned, so a size of 0 less 1 is every address
    (re-in? sc p)
     (: ty (sc 2) fl (sc 3) off (sc 4) sz (sc 5) addr (sc 10) pt <p
-       tls (0 < (fl & 1024)) alloc (0 < (fl & 2)) nob (ty = 8)
+       tls (0 < fl & 1024) alloc (0 < fl & 2) nob (ty = 8)
        (le1 x v) (v = 0 || x <= v - 1)       ; x <= v - 1, unsigned
-       ssz (? (!tls || !nob || pt = 7) sz 0)
+       ssz (!tls || !nob || pt = 7 ? sz 0)
        (? (tls && nob && !(pt = 7)) 0
-          !(? tls (pt = 7 || pt = 1685382482 || pt = 1) !(pt = 7 || pt = 6)) 0
+          !(tls ? (pt = 7 || pt = 1685382482 || pt = 1) !(pt = 7 || pt = 6)) 0
           (!alloc && elem pt [1 2 1685382480 1685382481 1685382482 1685382484]) 0
-          !(nob || (p 1 <= off && le1 (off - p 1) (p 4) && off - p 1 + ssz <= p 4)) 0
-          !(!alloc || (p 2 <= addr && le1 (addr - p 2) (p 5) && addr - p 2 + ssz <= p 5)) 0
+          !(nob || p 1 <= off && le1 (off - p 1) (p 4) && off - p 1 + ssz <= p 4) 0
+          !(!alloc || p 2 <= addr && le1 (addr - p 2) (p 5) && addr - p 2 + ssz <= p 5) 0
           (!(pt = 2 || pt = 4) || !(sz = 0) || p 5 = 0) 1
-          ((nob || (p 1 < off && off - p 1 < p 4)) && (!alloc || (p 2 < addr && addr - p 2 < p 5)))))
+          ((nob || p 1 < off && off - p 1 < p 4) && (!alloc || p 2 < addr && addr - p 2 < p 5))))
    (re-segs fs b h? w?)
     (: e64 (b 4 = 2) m (rdle b 18 2) ps (re-phs fs b)
-       ss (map (sc \ (sc + [(rdle b (ld-f fs b 0 'e-shoff + sc 0 * ld-n fs 'sh-ent + (? e64 16 12)) (? e64 8 4))]))
+       ss (map (sc \ (sc + [(rdle b (ld-f fs b 0 'e-shoff + sc 0 * ld-n fs 'sh-ent + (e64 ? 16 12)) (e64 ? 8 4))]))
                (drop 1 (bu-secs fs b)))
-       (? (atom? ps) (say out "\nThere are no program headers in this file.\n")
-          (: _ (? h? 0
-                  (say out ("\nElf file type is " + re-type fs b (rdle b 16 2) + "\nEntry point " + re-0x (ld-f fs b 0 'e-entry)
-                            + "\nThere are " + show #ps + " program headers, starting at offset " + show (ld-f fs b 0 'e-phoff) + "\n")))
-             _ (say out (? !e64 "\nProgram Headers:\n  Type           Offset   VirtAddr   PhysAddr   FileSiz MemSiz  Flg Align\n"
-                           w? "\nProgram Headers:\n  Type           Offset   VirtAddr           PhysAddr           FileSiz  MemSiz   Flg Align\n"
-                           "\nProgram Headers:\n  Type           Offset             VirtAddr           PhysAddr\n                 FileSiz            MemSiz              Flags  Align\n"))
-             (fl f) (string (? (f & 4) 82 32) + string (? (f & 2) 87 32) + string (? (f & 1) 69 32))
-             _ (map (p \
-                         (say out ("  " + urpad 14 (re-at (re-phtype m <p) 14) + " "
-                                        + (? (e64 && w?) ("0x" + re-hex (p 1) 6 + " 0x" + re-hex (p 2) 16 + " 0x" + re-hex (p 3) 16 + " 0x" + re-hex (p 4) 6
-                                                       + " 0x" + re-hex (p 5) 6 + " " + fl (p 6) + " " + re-0x (p 7))
-                                             e64 ("0x" + re-hex (p 1) 16 + " 0x" + re-hex (p 2) 16 + " 0x" + re-hex (p 3) 16
-                                                  + "\n                 0x" + re-hex (p 4) 16 + " 0x" + re-hex (p 5) 16 + "  " + fl (p 6) + "    " + re-0x (p 7))
-                                             ("0x" + re-hex (p 1) 6 + " 0x" + re-hex (p 2) 8 + " 0x" + re-hex (p 3) 8 + " 0x" + re-hex (p 4) 5
-                                              + " 0x" + re-hex (p 5) 5 + " " + fl (p 6) + " " + re-0x (p 7)))
-                                        + "\n"), (? (<p = 3) (say out ("      [Requesting program interpreter: " + ld-cstr b (p 1) + "]\n")) 0)))
-                    ps)
-             _ (say out "\n Section to Segment mapping:\n  Segment Sections...\n")
-             (map (i \ (: p (ps i)
-                          (say out ("   " + zpad 2 (show i) + "     "
-                                    + foldl (\ a sc (? (re-in? sc p) (a + sc 1 + " ") a)) "" ss + "\n"))))
-                  ^#ps))))
+       (atom? ps ? (say out "\nThere are no program headers in this file.\n")
+        (: _ (h? ? 0
+                (say out ("\nElf file type is " + re-type fs b (rdle b 16 2) + "\nEntry point " + re-0x (ld-f fs b 0 'e-entry)
+                          + "\nThere are " + show #ps + " program headers, starting at offset " + show (ld-f fs b 0 'e-phoff) + "\n")))
+           _ (say out (? !e64 "\nProgram Headers:\n  Type           Offset   VirtAddr   PhysAddr   FileSiz MemSiz  Flg Align\n"
+                         w? "\nProgram Headers:\n  Type           Offset   VirtAddr           PhysAddr           FileSiz  MemSiz   Flg Align\n"
+                         "\nProgram Headers:\n  Type           Offset             VirtAddr           PhysAddr\n                 FileSiz            MemSiz              Flags  Align\n"))
+           (fl f) (string (f & 4 ? 82 32) + string (f & 2 ? 87 32) + string (f & 1 ? 69 32))
+           (map (p \
+                     (say out ("  " + urpad 14 (re-at (re-phtype m <p) 14) + " "
+                                    + (? (e64 && w?) ("0x" + re-hex (p 1) 6 + " 0x" + re-hex (p 2) 16 + " 0x" + re-hex (p 3) 16 + " 0x" + re-hex (p 4) 6
+                                                   + " 0x" + re-hex (p 5) 6 + " " + fl (p 6) + " " + re-0x (p 7))
+                                         e64 ("0x" + re-hex (p 1) 16 + " 0x" + re-hex (p 2) 16 + " 0x" + re-hex (p 3) 16
+                                              + "\n                 0x" + re-hex (p 4) 16 + " 0x" + re-hex (p 5) 16 + "  " + fl (p 6) + "    " + re-0x (p 7))
+                                         ("0x" + re-hex (p 1) 6 + " 0x" + re-hex (p 2) 8 + " 0x" + re-hex (p 3) 8 + " 0x" + re-hex (p 4) 5
+                                          + " 0x" + re-hex (p 5) 5 + " " + fl (p 6) + " " + re-0x (p 7)))
+                                    + "\n"), <p = 3 ? (say out ("      [Requesting program interpreter: " + ld-cstr b (p 1) + "]\n")) 0))
+                ps,
+            say out "\n Section to Segment mapping:\n  Segment Sections...\n",
+            map (i \ (ps i @ p
+                        (say out ("   " + zpad 2 (show i) + "     "
+                                  + foldl (\ a sc (re-in? sc p ? (a + sc 1 + " ") a)) "" ss + "\n"))))
+                ^#ps))))
    ; a version index's name, off .gnu.version_r (what the file needs) and
    ; .gnu.version_d (what it defines): a tablet of index -> [name needed?]
    (re-vers ss b)
     (: t {}
        (str sc o) (ld-cstr b (ss (sc 6) 4 + o))
        (need sc)
-        (: (vn o k) (? (k < 1) 0
-                       (: cnt (rdle b (o + 2) 2) aux (rdle b (o + 8) 4) nx (rdle b (o + 12) 4)
-                          (va a j) (? (j < 1) 0
-                                      (pin t (rdle b (a + 6) 2) [(str sc (rdle b (a + 8) 4)) 1], va (a + rdle b (a + 12) 4) (j - 1)))
-                          _ (va (o + aux) cnt)
-                          (? (nx = 0) 0 (vn (o + nx) (k - 1)))))
+        (: (vn o k) (k < 1 ? 0
+                     (: cnt (rdle b (o + 2) 2) aux (rdle b (o + 8) 4) nx (rdle b (o + 12) 4)
+                        (va a j) (j < 1 ? 0
+                                  (pin t (rdle b (a + 6) 2) [(str sc (rdle b (a + 8) 4)) 1], va (a + rdle b (a + 12) 4) (j - 1)))
+                        (va (o + aux) cnt,
+                         nx = 0 ? 0 (vn (o + nx) (k - 1)))))
            (vn (sc 4) (sc 7)))
        (def sc)
-        (: (vd o k) (? (k < 1) 0
-                       (: ndx (rdle b (o + 4) 2) aux (rdle b (o + 12) 4) nx (rdle b (o + 16) 4)
-                          _ (pin t ndx [(str sc (rdle b (o + aux) 4)) 0])
-                          (? (nx = 0) 0 (vd (o + nx) (k - 1)))))
+        (: (vd o k) (k < 1 ? 0
+                     (: ndx (rdle b (o + 4) 2) aux (rdle b (o + 12) 4) nx (rdle b (o + 16) 4)
+                        (pin t ndx [(str sc (rdle b (o + aux) 4)) 0],
+                         nx = 0 ? 0 (vd (o + nx) (k - 1)))))
            (vd (sc 4) (sc 7)))
-       _ (map (sc \ (? (sc 2 = 1879048190) (need sc) (sc 2 = 1879048189) (def sc) 0)) ss)
-       t)
+       (map (sc \ (? (sc 2 = 1879048190) (need sc) (sc 2 = 1879048189) (def sc) 0)) ss,
+        t))
    (re-syms fs b w?)
-    (: e64 (b 4 = 2) ss (bu-secs fs b) es (? e64 24 16)
+    (: e64 (b 4 = 2) ss (bu-secs fs b) es (e64 ? 24 16)
        vt (re-vers ss b)
        vs (filter (sc \ (sc 2 = 1879048191)) ss)
-       (sym o k) (: h (o + k * es)
-                    (? e64 [(rdle b h 4) (b (h + 4)) (b (h + 5)) (rdle b (h + 6) 2) (rdle b (h + 8) 8) (rdle b (h + 16) 8)]
+       (sym o k) (o + k * es @ h
+                    (e64 ? [(rdle b h 4) (b (h + 4)) (b (h + 5)) (rdle b (h + 6) 2) (rdle b (h + 8) 8) (rdle b (h + 16) 8)]
                        [(rdle b h 4) (b (h + 12)) (b (h + 13)) (rdle b (h + 14) 2) (rdle b (h + 4) 4) (rdle b (h + 8) 4)]))
        (styp t) (? (t < 7) (["NOTYPE" "OBJECT" "FUNC" "SECTION" "FILE" "COMMON" "TLS"] t) (t = 10) "IFUNC"
                    (13 <= t) ("<processor specific>: " + show t) ("<OS specific>: " + show t))
        (sbind t) (? (t < 3) (["LOCAL" "GLOBAL" "WEAK"] t) (t = 10) "UNIQUE"
                     (13 <= t) ("<processor specific>: " + show t) ("<OS specific>: " + show t))
        (ndx x) (upad 4 (? (x = 0) "UND" (x = 65521) "ABS" (x = 65522) "COM" (65280 <= x) ("PRC[0x" + re-hex x 4 + "]") (show x)))
-       (szs v) (? (v < 100000) (re-u v 5) (re-0x v))
+       (szs v) (v < 100000 ? (re-u v 5) (re-0x v))
        (map (st \
-                  (: n (st 5 // es) stro (? (st 6 < #ss) (ss (st 6) 4) 0)
-                     _ (say out ("\nSymbol table '" + st 1 + "' contains " + show n + " " + (? (n = 1) "entry" "entries") + ":\n"
-                                 + (? e64 "   Num:    Value          Size Type    Bind   Vis      Ndx Name\n"
+                  (: n (st 5 // es) stro (st 6 < #ss ? (ss (st 6) 4) 0)
+                     _ (say out ("\nSymbol table '" + st 1 + "' contains " + show n + " " + (n = 1 ? "entry" "entries") + ":\n"
+                                 + (e64 ? "   Num:    Value          Size Type    Bind   Vis      Ndx Name\n"
                                       "   Num:    Value  Size Type    Bind   Vis      Ndx Name\n")))
-                     vsec (? (st 2 = 11) (filter (v \ (v 6 = st 0)) vs) ())
+                     vsec (st 2 = 11 ? (filter (v \ (v 6 = st 0)) vs))
                      ; a needed version says its index; a defined one says @@, or @ where hidden,
                      ; and nothing on the symbol that names the version itself
-                     (ver k y nm0) (? (atom? vsec) ""
-                                      (: x (rdle b (<vsec 4 + 2 * k) 2) i (x & 32767) e (peep vt i ())
-                                         (? (i < 2 || (atom? e)) ""
-                                            (y 3 = 0 || <>e) ("@" + <e + " (" + show i + ")")
-                                            (<e = nm0) ""
-                                            (x & 32768) ("@" + <e) ("@@" + <e))))
+                     (ver k y nm0) (atom? vsec ? ""
+                                    (: x (rdle b (<vsec 4 + 2 * k) 2) i (x & 32767) e (vt i)
+                                       (? (i < 2 || atom? e) ""
+                                          (y 3 = 0 || <>e) ("@" + <e + " (" + show i + ")")
+                                          (<e = nm0) ""
+                                          (x & 32768) ("@" + <e) ("@@" + <e))))
                      (map (k \ (: y (sym (st 4) k) t (y 1 & 15)
-                                  nm0 (? (t = 3 && y 0 = 0 && y 3 < #ss) (ss (y 3) 1) (ld-cstr b (stro + y 0)))
+                                  nm0 (t = 3 && y 0 = 0 && y 3 < #ss ? (ss (y 3) 1) (ld-cstr b (stro + y 0)))
                                   v (ver k y nm0)
-                                  nm (? (w? || #nm0 + #v <= 21) (nm0 + v) (snip nm0 0 (max 0 (16 - #v)) + "[...]" + v))
-                                  (say out (re-u k 6 + ": " + re-hex (y 4) (? e64 16 8) + " " + szs (y 5) + " "
+                                  nm (w? || #nm0 + #v <= 21 ? (nm0 + v) (snip nm0 0 (max 0 (16 - #v)) + "[...]" + v))
+                                  (say out (re-u k 6 + ": " + re-hex (y 4) (e64 ? 16 8) + " " + szs (y 5) + " "
                                             + urpad 7 (styp t) + " " + urpad 6 (sbind (y 1 >> 4)) + " "
                                             + urpad 7 (["DEFAULT" "INTERNAL" "HIDDEN" "PROTECTED"] (y 2 & 3)) + " "
                                             + ndx (y 3) + " " + nm + "\n"))))
@@ -684,50 +686,50 @@
        longs {"--file-header" 104 "--program-headers" 108 "--segments" 108 "--section-headers" 83
               "--sections" 83 "--headers" 101 "--syms" 115 "--symbols" 115 "--wide" 87}
        (go a o)
-        (? (atom? a) o
-           (: w <a n #w
-              (? (w = "--") (pin o 'fs (o 'fs + >a), o)
-                 (2 < n && snip w 0 2 = "--")
-                  (: k (peep longs w ()) (? (charm? k) (pin o k 1, go >a o) (usage (w + " is not here (-h -l -S -s -e -W)"))))
-                 (1 < n && w 0 = 45)
-                  (map (c \ (? (elem c "hlSseW") (pin o c 1) (usage ("-" + string c + " is not here (-h -l -S -s -e -W)"))))
-                            (map w (drop 1 ^n)), go >a o)
-                 (pin o 'fs (o 'fs + [w]), go >a o))))
+        (atom? a ? o
+         (: w <a n #w
+            (? (w = "--") (pin o 'fs (o 'fs + >a), o)
+               (2 < n && snip w 0 2 = "--")
+                (peep longs w () @ k (charm? k ? (pin o k 1, go >a o) (usage (w + " is not here (-h -l -S -s -e -W)"))))
+               (1 < n && w 0 = 45)
+                (map (c \ (elem c "hlSseW" ? (pin o c 1) (usage ("-" + string c + " is not here (-h -l -S -s -e -W)"))))
+                          (map w (drop 1 ^n)), go >a o)
+               (pin o 'fs (o 'fs + [w]), go >a o))))
        o (go as {'fs ()})
        e? (peep o 101 0)
        h? (e? || peep o 104 0) l? (e? || peep o 108 0) S? (e? || peep o 83 0) s? (peep o 115 0) w? (peep o 87 0)
        fs (o 'fs)
-       _ (? (h? || l? || S? || s?) 0 (usage "Warning: Nothing to do.\nUsage: readelf <option(s)> elf-file(s)"))
-       _ (? (two? fs) 0 (usage "Warning: Nothing to do.\nUsage: readelf <option(s)> elf-file(s)"))
+       _ (h? || l? || S? || s? ? 0 (usage "Warning: Nothing to do.\nUsage: readelf <option(s)> elf-file(s)"))
+       _ (two? fs ? 0 (usage "Warning: Nothing to do.\nUsage: readelf <option(s)> elf-file(s)"))
        (one f)
-        (: r (uread f)
-           (? (atom? r) (say err ("readelf: Error: '" + f + "': No such file\n"), 0)
-              (: b <>r
-                 (? !(bu-elf? b) (say err "readelf: Error: Not an ELF file - it has the wrong magic bytes at the start\n", 0)
-                    (: fs2 (bu-fs b)
-                       _ (? (two? >fs) (say out ("\nFile: " + f + "\n")) 0)
-                       _ (? h? (re-head fs2 b) 0)
-                       _ (? S? (re-secs fs2 b w? h?) 0)
-                       _ (? l? (re-segs fs2 b h? w?) 0)
-                       _ (? s? (re-syms fs2 b w?) 0)
-                       1)))))
-       ok (foldl (\ a f (? (one f) a 0)) 1 fs)
-       _ (flush out) _ (flush err)
-       (? ok 0 1))
+        (uread f @ r
+           (atom? r ? (say err ("readelf: Error: '" + f + "': No such file\n"), 0)
+            (<>r @ b
+               (!(bu-elf? b) ? (say err "readelf: Error: Not an ELF file - it has the wrong magic bytes at the start\n", 0)
+                  (bu-fs b @ fs2
+                     (two? >fs ? (say out ("\nFile: " + f + "\n")) 0,
+                      h? ? (re-head fs2 b) 0,
+                      S? ? (re-secs fs2 b w? h?) 0,
+                      l? ? (re-segs fs2 b h? w?) 0,
+                      s? ? (re-syms fs2 b w?) 0,
+                      1))))))
+       ok (foldl (\ a f (one f ? a 0)) 1 fs)
+       (flush out, flush err,
+        ok ? 0 1))
 
    (ranlib-main as)
     (: fs (filter (w \ !(1 < #w && w 0 = 45)) as)
-       _ (? (two? fs) 0 (udie 1 "Usage: ranlib ARCHIVE.."))
+       _ (two? fs ? 0 (udie 1 "Usage: ranlib ARCHIVE.."))
        (one f)
-        (: r (uread f)
-           (? (atom? r) (say err ("ranlib: '" + f + "': No such file\n"), 1)
-              (: ms (ar-mems <>r)
-                 (? (atom? ms && !(snip <>r 0 8 = "!<arch>\n"))
-                    (say err ("ranlib: " + f + ": file format not recognized\n"), 1)
-                    (: q (open f "w")
-                       (? (hot? q) (say q (arbytes ms), close q, 0)
-                          (say err ("ranlib: unable to write " + f + "\n"), 1)))))))
-       (? (foldl (\ a f (max a (one f))) 0 fs) 1 0))
+        (uread f @ r
+           (atom? r ? (say err ("ranlib: '" + f + "': No such file\n"), 1)
+            (ar-mems <>r @ ms
+               (atom? ms && !(snip <>r 0 8 = "!<arch>\n") ?
+                  (say err ("ranlib: " + f + ": file format not recognized\n"), 1)
+                  (open f "w" @ q
+                     (hot? q ? (say q (arbytes ms), close q, 0)
+                      (say err ("ranlib: unable to write " + f + "\n"), 1)))))))
+       (foldl (\ a f (max a (one f))) 0 fs ? 1 0))
 
    ; the registry: name -> main (aliases share)
    applets {'diff diff-main
@@ -1068,19 +1070,19 @@
    korebare '(arch nproc whoami groups pwd tty clear)
    korebareok {'pwd '("-L" "-P")}
    (kobare nm as)
-    (: ok (peep korebareok nm ())
+    (peep korebareok nm () @ ok
        (<(filter (w \ 1 < #w && w 0 = 45 && (nelem w ok)) as)))
    ; the applet as the world calls it: cli's door, then the tool under urun. both
    ; dispatch lanes come through here -- the verb registry and the symlink -- so there
    ; is one answer and not two. what kore keeps is the policy: which names take no
    ; flags at all, which have spoken for -h themselves, and the usage text.
    (koredoor nm f)
-    (: (run as) (? (nelem nm korebare) (urun f as)
-                   (: w (kobare nm as)
-                      (? !w (urun f as)
-                         (say err (string nm + ": unknown option " + w), put err 10, 2))))
-       (? (elem nm korenoflag) run
-          (udoor nm run (peep korehelp nm ()) (nelem nm korenoh) 0)))
+    (: (run as) (nelem nm korebare ? (urun f as)
+                 (kobare nm as @ w
+                    (!w ? (urun f as)
+                       (say err (string nm + ": unknown option " + w), put err 10, 2))))
+       (elem nm korenoflag ? run
+        (udoor nm run (korehelp nm) (nelem nm korenoh) 0)))
 
    kore-usage "kore -- the love multi-call toolbox
 usage: kore TOOL ARGS..     (or symlink a tool's name to kore)
@@ -1186,7 +1188,7 @@ every tool answers --help and --version, and -h where the letter is free
 "
    (usage _) (say err kore-usage, 2)
    (bn p) (: n #p
-             (go k r) (? (k < n) (go (k + 1) (? (p k = 47) (k + 1) r)) (snip p r n))
+             (go k r) (k < n ? (go (k + 1) (p k = 47 ? (k + 1) r)) (snip p r n))
              (go 0 0))
 
    ; -- the dispatch (this form's body) --
@@ -1224,7 +1226,7 @@ every tool answers --help and --version, and -h where the letter is free
    ; reads only those; any other word -- an option's argument, a -, nothing at all -- forks
    korefiles ['cat 'wc 'tac 'rev 'cksum 'md5sum 'sha1sum 'sha224sum 'sha256sum 'sha384sum
               'sha512sum 'sha3sum 'b2sum 'crc32 'sum]
-   (kregs? os) (: (reg? p) (: st (stat p) (two? st && (st 2 & 61440) = 32768))
+   (kregs? os) (: (reg? p) (stat p @ st (two? st && st 2 & 61440 = 32768))
                   (two? os && all (p \ !(p = "-") && reg? p) os))
    (kfiles? as)
     (: (ops l) (? (atom? l) () (<l = "--") >l
@@ -1233,20 +1235,21 @@ every tool answers --help and --version, and -h where the letter is free
        (kregs? (ops as)))
    ; ..and the filters whose options carry words: each asks its own parser for its
    ; operands, so a word an option took is never mistaken for a file
-   korepreds {'head (as \ (: p (uclip-args "head" as) (kregs? <>p)))
-              'tail (as \ (: p (uclip-args "tail" as) (kregs? <>p)))
-              'cut (as \ (: p (cut-args as) (kregs? (p 5))))
-              'grep (as \ (: t (tablet 0) o (grep-opt as t) (two? o && kregs? (grep-fs t o))))}
+   korepreds {'head (as \ (uclip-args "head" as @ p (kregs? <>p)))
+              'tail (as \ (uclip-args "tail" as @ p (kregs? <>p)))
+              'cut (as \ (cut-args as @ p (kregs? (p 5))))
+              'grep (as \ (: t {} o (grep-opt as t) (two? o && kregs? (grep-fs t o))))}
    (koretraits k) (? (elem k korebuiltin) ['builtin 'self] (elem k koreself) ['self]
                      (elem k korefiles) [('self . kfiles?)]
-                     (lit? (peep korepreds k ())) [('self . peep korepreds k ())] ())
+                     (lit? (korepreds k)) [('self . peep korepreds k ())] ())
    _ (: E (cite 'verbs 'enlist)
         ; kore-main is unbound here -- it binds later in this same form -- so the
         ; closure reads it through the registry at the call, when module 'kore holds
         ; it. a bare read compiled here would ride a missing cell against the
         ; caller's walk, where kore never walks.
         _ (E 'kore (as \ (cite 'kore 'kore-main ("kore" . as))) ())
-        (go ks) (? (two? ks) (: f (applets <ks) _ (E <ks (koredoor <ks f) (koretraits <ks)) (go >ks)) 0)
+        (go ks) (two? ks ? (applets <ks @ f
+                              (E <ks (koredoor <ks f) (koretraits <ks), go >ks)) 0)
         (go (keys applets)))
    ; kore-main is the dispatch door, and the in-image door too: it dispatches a
    ; program-relative arg list -- argv0 a tool symlink, or `kore`/a dev path then the
@@ -1256,22 +1259,22 @@ every tool answers --help and --version, and -h where the letter is free
    ; image runs a tool by handing it (. "kore" "ls" "-l") and reading the charm.
    ; two doors: a list handed in is scanned, () means "the line I was started with".
    (kore-main a)
-    (: s (? (two? a) (cite 'verbs 'seatof mynames a) (cite 'verbs 'fire mynames))
-       (? (atom? s) ()
-          (: n0 (intern (bn <s))
-             f0 (applets n0)
-             (? f0 (koredoor n0 f0 >s)
-                (: t >s
-                   n (? (two? t) (intern <t) ())
-                   f (? n (applets n) ())
-                   ; no tool named: kore's own two flags, then the listing
-                   (? f (koredoor n f >t)
-                      (uask t 1 1
-                       @ 'help (puts kore-usage, flush out, 0)
-                         'vers (puts ("kore (love " + love-version + ")\n"), flush out, 0)
-                         (usage ())))))))))
+    ((two? a ? (cite 'verbs 'seatof mynames a) (cite 'verbs 'fire mynames)) @ s
+       (atom? s ? ()
+        (: n0 (intern (bn <s))
+           f0 (applets n0)
+           (f0 ? (koredoor n0 f0 >s)
+              (: t >s
+                 n (two? t ? (intern <t))
+                 f (n ? (applets n))
+                 ; no tool named: kore's own two flags, then the listing
+                 (f ? (koredoor n f >t)
+                    (uask t 1 1
+                     @ 'help (puts kore-usage, flush out, 0)
+                       'vers (puts ("kore (love " + love-version + ")\n"), flush out, 0)
+                       (usage ())))))))))
 ; the seat: file mode (cat | love) dispatches on the real command line and quits with
 ; the status. the -l bake preload seats a flag, not kore, so the scan answers () and
 ; kore-main answers () -- the presence guard, and the one answer that is not a status.
-(: r (kore-main ()) (? (charm? r) (quit r) ()))
+(kore-main () @ r (charm? r ? (quit r)))
 ) ; module 'kore
