@@ -3,22 +3,14 @@
 ;   love src/tools/lcat.l          > out/lib/baked.h   the full love's one header, the roster below
 ;   love src/tools/lcat.l FILE.l   > FILE.h            one file as one C string literal (the ports, test/front)
 ;
-; each top-level form is re-printed via show (canonical), the forms are joined into one
-; string, and that string is minified -- a space is dropped wherever removing it does not
-; change how the reader parses. The boundary test is empirical, not a hardcoded delimiter
-; set: the left token (bytes since the last HARD boundary) and the whole next form are
-; re-parsed with and without the space, and the space is redundant iff both spellings
-; yield the same datums (`o(` reads the same as `o (`, but `-5` and `- 5` do not, and
-; `two? s` must keep its space -- `two?s` is one name token). Two things make this
-; reader-change-proof, where a count over one byte was not: the probe reaches the whole
-; next form (so a quote sees its operand -- `ev'ev` vs `ev 'ev`), and it compares the
-; datums themselves, not a count (a re-tokenization can keep the count yet change the
-; parse). Spaces inside a string literal are data and never touched.
-;
-; the baked header lays every text DEFLATED, so a blob the binary reads once and only at
-; bake time costs its compressed size in .rodata: SYM the bytes (sizeof - 1 their length),
-; SYM_raw what they inflate to. every byte goes out as a three-digit octal escape -- always
-; three, so a following digit cannot extend it, and no byte value needs a case of its own.
+; each top-level form is re-printed via show, the forms joined into one string, and that string
+; minified: a space is dropped wherever the reader parses the same without it. the test is
+; empirical -- the left token and the whole next form re-parse with and without the space, and
+; the datums themselves must agree (`o(` = `o (`, but not `-5` and `- 5`, nor `two?s`). spaces
+; inside a string literal are data.
+; the baked header lays every text deflated: SYM the bytes (sizeof - 1 their length), SYM_raw
+; what they inflate to, every byte a three-digit octal escape so a following digit cannot
+; extend it.
 
 (borrow 'posix)
 
@@ -28,9 +20,9 @@
    ; which read signals by returning the port itself) -- the full forms, compared
    ; structurally, not just counted: a re-tokenization can preserve the count yet
    ; change the parse (name'(a b) and name '(a b) both read two datums).
-   (datums s) ((: (g x a) (: r (sound x) (two? r ? (g >r (<r . a)) (rev a)))) s 0)
+   (datums s) ((: (g x a) (sound x @ r (two? r ? (g >r (<r . a)) (rev a)))) s 0)
    ; the next complete form of a charlist, re-shown; 0 if none reads cleanly.
-   (form1 cs) (: r (sound cs) (two? r ? (show <r) 0))
+   (form1 cs) (sound cs @ r (two? r ? (show <r) 0))
    ; a hard token boundary: whitespace, delimiters, string quote, comment, and
    ; the value-surface chars that reach across a space (' ` each skip whitespace
    ; to find their datum, so nothing a token could span survives them).
@@ -65,7 +57,7 @@
    ; just today's. the opb? clause still keeps an operator-then-datum space:
    ; the probe reads in isolation (head position, fusion off) but the run is
    ; monadic mid-list.
-   (redundant? ctx cs) (? (two? ctx && opb? <ctx && dstart? <cs) 0
+   (redundant? ctx cs) (two? ctx && opb? <ctx && dstart? <cs ? 0
                           (: lt (string (rev ctx)) rt (form1 cs)
                              (rt ? (datums (lt + rt) = datums (lt + " " + rt)) 0)))
    ; the minified text of a source. a torn input dies loudly: a header silently short
@@ -78,35 +70,33 @@
        ; the last hard boundary (reversed); instr = inside a "..." literal (where \
        ; escapes); out = the survivors, reversed.
        (g cs ctx instr out)
-        (? (two? cs)
-           (: c <cs
-              (? instr
-                 (? (c = 92) (g >>cs 0 1 (<>cs . c . out))
+        (two? cs
+         ? (: c <cs
+              (instr
+               ? (c = 92 ? (g >>cs 0 1 (<>cs . c . out))
                     (g >cs 0 (c = 34 ? 0 1) (c . out)))
-                 (? (c = 32)
-                    (? (redundant? ctx >cs)
-                       (g >cs ctx 0 out)                          ; drop the space; ctx keeps accruing
+                 (c = 32
+                  ? (redundant? ctx >cs
+                     ? (g >cs ctx 0 out)                          ; drop the space; ctx keeps accruing
                        (g >cs 0 0 (c . out)))                     ; keep it: a real boundary
                     ; a terminal ' is a prime, not a quote: `x'` is one name, so the byte
-                    ; belongs to the left token and the space after it is load-bearing. Only a
-                    ; ' at token start reaches across whitespace for its datum. Reading it as a
-                    ; boundary either way emptied ctx, so `redundant?` probed "" against the
-                    ; next form -- always equal -- and ate the space in `(ov-look env' x)`.
+                    ; belongs to the left token and the space after it is load-bearing; only a
+                    ; ' at token start reaches across whitespace for its datum
                     (g >cs (hardb c && (c != 39 || atom? ctx) ? 0 (c . ctx))
                        (c = 34) (c . out)))))
            (string (rev out)))
        (g (s2cl acc) 0 0 ()))
    ; a string as the body of a C literal: \n, \\ and \" escaped, nothing else
    (clit s) ((: (g cs out)
-               (? (two? cs)
-                  (: c <cs (g >cs (? (c = 10) (110 . 92 . out)
+               (two? cs
+                ? (: c <cs (g >cs (? (c = 10) (110 . 92 . out)
                                      (c = 92 || c = 34) (c . 92 . out)
                                      (c . out))))
                   (string (rev out))))
              (s2cl s) ())
    ; a deflated string as octal-escaped C rows, 20 bytes to a row
    (oct c) [92 (48 + c // 64) (48 + c // 8 % 8) (48 + c % 8)]
-   (row s i j acc) (? (j < i) acc (row s i (j - 1) (oct (s j) + acc)))
+   (row s i j acc) (j < i ? acc (row s i (j - 1) (oct (s j) + acc)))
    (zrows s i n)
     (n <= i ? 0
      (: e (n < i + 20 ? n (i + 20))
@@ -115,11 +105,11 @@
    ; the boot files by name; holo's live beside src/love/boot
    home {'holo "src/love/holo/" 'x64 "src/love/holo/" 'a64 "src/love/holo/" 'rv64 "src/love/holo/"}
    (path n) (peep home n "src/love/boot/" + show n + ".l")
-   (slurp-file p) (: q (open p "r") _ (!q ? (die ("cannot open " + p))) s (slurp q) _ (close q) s)
+   (slurp-file p) (: q (open p "r") _ (!q ? (die ("cannot open " + p))) s (slurp q) (close q, s))
    ; a file's minified text, once: holo rides four blobs
    cache {}
-   (file n) (: s (peep cache n ())
-               (? (string? s) s (: m (minify (slurp-file (path n))) _ (pin cache n m) m)))
+   (file n) (cache n @ s
+               (string? s ? s (minify (slurp-file (path n)) @ m (pin cache n m, m))))
 
    ; the baked source (src/love/cats.c), row by row: a string lays as it is -- the arch
    ; guards -- and a list is [symbol items], laid deflated with the _raw twin. an item is a
@@ -152,17 +142,17 @@
      "#endif"]
    (text items) (foldl (\ a i (a + (string? i ? i (file i)))) "" items)
    (lay-z sym s)
-    (: z (deflate s)
-       _ (string? z ? 0 (die ("deflate refused " + sym)))
-       _ (say out ("static unsigned char const " + sym + "[] =\n"))
-       _ (zrows z 0 #z)
-       (say out (";\nstatic uintptr_t const " + sym + "_raw = " + show #s + ";\n")))
+    (deflate s @ z
+       (string? z ? 0 (die ("deflate refused " + sym)),
+        say out ("static unsigned char const " + sym + "[] =\n"),
+        zrows z 0 #z,
+        say out (";\nstatic uintptr_t const " + sym + "_raw = " + show #s + ";\n")))
    (lay-row r)
-    (? (string? r) (say out (r + "\n"))
+    (string? r ? (say out (r + "\n"))
        (lay-z (show (r 0)) (text (r 1)))))
 
 ; argv leads with this script's own path: one file after it is the one-file door
-(: as >argv
-   (? (two? as) (say out ("\"" + clit (minify (slurp-file <as)) + "\"\n"))
+(>argv @ as
+   (two? as ? (say out ("\"" + clit (minify (slurp-file <as)) + "\"\n"))
       (say out "/* generated by src/tools/lcat.l -- do not edit. LvGlazed is the includer's word. */\n",
        map lay-row rows)))

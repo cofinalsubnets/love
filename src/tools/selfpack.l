@@ -2,25 +2,14 @@
 ;
 ;   love src/tools/selfpack.l archive.tar.gz top [stamp [build [drop..]]]
 ;
-; the one cutter, every world: the tree on disk is the source, checkout and seed-laid
-; tree alike. what it leaves out is sb's law -- .sbignore plus sb's built-ins, so the vcs
-; walk and this cut cannot disagree about what the tree is -- plus sp-own's structural
-; skips and each drop nom. the walk is sorted and every mtime pinned to stamp, so the same
-; files answer the same bytes wherever they sit; test_distboot holds a re-cut to the byte.
-; `build` rides in as top/STAMP, a file no tree holds: the stamp that orders two builds of
-; one VERSION, which an unpacked release reads back where there is no git to ask.
-;
-; the id is the sha of the LEVELED tar, kept in archive.sha, so a touch settles and a
-; delete or rename is seen. the quiet pass (tar-thin? + tar-hash) answers "has the tree
-; moved" off stat alone, holding neither the bodies nor the tar; only the cut writes the
-; sidecar, so what .sha names is always the archive that was written.
-;
-; the coder is src/love/lib/gz.c through gz.l's door -- love0 carries no nifs, which is why the
-; recipe prefers the tree's own love.
-;
-; the borrows below name PATHS, in dependency order. a module name has nothing to find
-; under love0 (gcc-built from the src/love/boot/*.l headers, no image), and `-l FILE` whose
-; basename names a verb SEATS it (post.l's seatof), so `-l src/apps/sb/sb.l` would run sb.
+; the tree on disk is the source, checkout and seed-laid tree alike. it leaves out sb's law
+; (.sbignore plus sb's built-ins, so the vcs walk and this cut agree), sp-own's structural skips
+; and each drop. the walk is sorted and every mtime pinned to stamp, so the same files answer
+; the same bytes (test_distboot holds a re-cut to the byte). `build` rides in as top/STAMP.
+; the id is the sha of the leveled tar, kept in archive.sha; the quiet pass (tar-thin? +
+; tar-hash) answers "has the tree moved" off stat alone, and only the cut writes the sidecar.
+; the borrows name paths, in dependency order: a module name has nothing to find under love0,
+; and `-l FILE` whose basename names a verb seats it (`-l src/apps/sb/sb.l` would run sb).
 (borrow "src/apps/gz.l")
 (borrow "src/apps/tar.l")
 (borrow "src/apps/kore/text.l")
@@ -44,13 +33,11 @@
    (sp-rules drops) ((cite 'sb 'igs 0) + (cite 'sb 'igsdir) + sp-own + drops)
    ; handed to the walk, not run after it, so a rejected directory is never descended
    ; into. .sbignore itself has to ride: a seeded tree cuts itself with the same law.
-   (sp-keep? rules nom) ((nom = ".sbignore") || !(sp-ign? nom rules))
+   (sp-keep? rules nom) (nom = ".sbignore" || !(sp-ign? nom rules))
    ; re-home the kept entries under top; the walk is sorted, so order holds.
    (sp-take es top acc)
-    (? (atom? es) (rev acc)
-       (: e <es
-          _ (pin e 'nom (top + "/" + tar-get e 'nom ""))
-          (sp-take >es top (e . acc))))
+    (atom? es ? (rev acc)
+       (<es @ e (pin e 'nom (top + "/" + tar-get e 'nom ""), sp-take >es top (e . acc))))
 
    ; the root leads, top follows wearing its mode, then STAMP, then moon's toolchain slice
    ; (include/ and lib/, what src/apps/moon/moon.l's mblob reads when there is no nest), then
@@ -80,11 +67,11 @@
        fresh (two? old && two? have && <>old = h)
        ; an archive with no sidecar (a seed-laid tree) is adopted when its content is
        ; this content -- no rewrite, so its mtime holds and nothing downstream re-links.
-       adopt (? (fresh || atom? have) 0
-                (: u (gz-unzip <>have) (two? u && <>u = a)))
+       adopt (fresh || atom? have ? 0
+                (gz-unzip <>have @ u (two? u && <>u = a)))
        (? fresh 0
           adopt (sp-write side h)
-          (: z (gz-zip9 a "" 0)                ; written once, carried in every artifact: the harder coder
+          (gz-zip9 a "" 0 @ z                  ; written once, carried in every artifact: the harder coder
              (puts ("LOVE\t" + arch), putc 10, sp-write arch z, sp-write side h, 0))))
 
    (sp-main av)
