@@ -91,6 +91,7 @@
  ; flow at one byte per force, where a whole run would read too far ahead. the one door that
  ; reads stdin exactly: `in` holds nothing in hand, though the device may gulp behind it.
  (trickle p) (: c (see p) (c != -1 ? (c . once (_ \ trickle p)))))
+(seal-hook 9 flow)   ; the reader's port door
 
 (:: '>>= (l \ (. (last l) (init l))))
 (:: '<=< (g \ (: y (nom 0) ['\ y (foldr (\ f x [f x]) y g)])))
