@@ -1019,9 +1019,9 @@
    r-close (alts [(lit ".RE") (lit ".EE") (lit ".fi")])
    r-lone  (skip (seqs [(notp r-close) (lit ".") (span nonl?) (lit "\n")]))
    ; .rs recurses into the block loop, so it sits with it and stays eta-expanded
-   (r-rs s y n) ((tag (p \ ['quote p])
-                      (seqs [(skip (lit ".RS")) (skip (span nonl?)) (skip (lit "\n"))
-                             (many r-block) (skip (lit ".RE")) (skip (span nonl?)) (skip (lit "\n"))])) s y n)
+   (r-rs s y n) (tag (p \ ['quote p])
+                     (seqs [(skip (lit ".RS")) (skip (span nonl?)) (skip (lit "\n"))
+                            (many r-block) (skip (lit ".RE")) (skip (span nonl?)) (skip (lit "\n"))]) s y n)
    (r-block s y n) (alts [r-blank r-br r-th r-sh r-ss r-pp r-ex r-rs r-ul r-ol r-dl r-para r-lone] s y n)
    rfread (bmrg * runp (many r-block) * rfscrub))   ; the scrub runs first: see above
 
@@ -1053,11 +1053,11 @@
        (: x <l
           (<x @ 'text   ([[<>x a]] + ttsegs >l a)
                 'code   ([[<>x a]] + ttsegs >l a)
-                'strong ((ttsegs <>x (ttadd a "1")) + ttsegs >l a)
-                'em     ((ttsegs <>x (ttadd a "4")) + ttsegs >l a)
+                'strong (ttsegs <>x (ttadd a "1") + ttsegs >l a)
+                'em     (ttsegs <>x (ttadd a "4") + ttsegs >l a)
                 ; the url trails the text it was on, the way a man page's \(la..\(ra does
                 ; -- and an anchor, which has no url, is just its text
-                'link   ((ttsegs <>x a) + (#<>>x ? [[(" <" + <>>x + ">") a]] ()) + ttsegs >l a)
+                'link   (ttsegs <>x a + (#<>>x ? [[(" <" + <>>x + ">") a]] ()) + ttsegs >l a)
                 ; ttlinks' own node: a place, laid as a sentinel with no width that ttpage lifts
                 'tmark  ([[(ttmk0 + <>x + ttmk1) 'mark]] + ttsegs >l a)
                 'img    ((? (0 < #<>x) [[("[" + <>x + "]") a]] ()) + ttsegs >l a)
@@ -1076,7 +1076,7 @@
    (ttwords segs)
     ((: (go l vis sty acc)
         (atom? l ? (#vis ? (rev ([vis sty] . acc))
-                   (#sty && two? acc) (rev ([<(<acc) (<acc 1 + sty)] . >acc))
+                   (#sty && two? acc) (rev ([<<acc (<acc 1 + sty)] . >acc))
                    (rev acc))
          (: s <<l a <><l
             (pc p vis sty acc)
@@ -1114,7 +1114,7 @@
        lf (gap // 2)
        (? (!#t || gap < 2) (#t ? [l] ())
           [(l + ttsp lf + mn + ttsp (gap - lf) + l)]))
-   (ttvis words) ((: (g l a) (atom? l ? a (g >l (#a ? (a + " " + <(<l)) <(<l))))) words "")
+   (ttvis words) ((: (g l a) (atom? l ? a (g >l (#a ? (a + " " + <<l) <<l)))) words "")
    ; the term carries whatever fonts the page gave it, so nothing is forced on it here.
    ; a term that fits the gap keeps its definition beside it, which is what .TP does and
    ; what a page of one-letter flags wants; a longer one takes the line to itself. and a
@@ -1128,8 +1128,8 @@
         bl (ttinl <>it w (ind + 7) "")
         tc (swidth tv)
         h  (? (#tv && tc < 7 && atom? >tl && two? bl)
-              (((ttsp ind + snip <tl ind #(<tl) + ttsp (7 - tc))
-                + snip <bl (ind + 7) #(<bl)) . >bl)
+              (ttsp ind + snip <tl ind #<tl + ttsp (7 - tc)
+                + snip <bl (ind + 7) #(<bl) . >bl)
               (tl + bl))
         r  (ttdefs >l w ind)
         (atom? r ? h (h + [""] + r))))
@@ -1177,27 +1177,27 @@
      (: x <l
         r (<x @ 'link   (#(x 2) ? (: a ((x 2) . acc) i (tlspans <>x a)
                                      [(['tmark (string 3 + show #a)] . ['text ("[" + show #a + "]")] . <i) (i 1)])
-                                  (: i (tlspans <>x acc) [[['link <i (x 2)]] (i 1)]))
-                 'em     (: i (tlspans <>x acc) [[['em <i]] (i 1)])
-                 'strong (: i (tlspans <>x acc) [[['strong <i]] (i 1)])
+                                  (tlspans <>x acc @ i [[['link <i (x 2)]] (i 1)]))
+                 'em     (tlspans <>x acc @ i [[['em <i]] (i 1)])
+                 'strong (tlspans <>x acc @ i [[['strong <i]] (i 1)])
                  'mark   [[['tmark <>x]] acc]
                  ; an image: a mark " img SRC" for a viewer to draw at, then its [alt]
-                 'img    [((? (0 < #(x 2)) [['tmark (" img " + x 2)]] ())
-                           + (? (0 < #<>x) [['text ("[" + <>x + "]")]] ())) acc]
+                 'img    [((0 < #(x 2) ? [['tmark (" img " + x 2)]] ())
+                           + (0 < #<>x ? [['text ("[" + <>x + "]")]] ())) acc]
                  [[x] acc])
         s (tlgo >l (r 1))
         [(<r + <s) (s 1)]))
    (tlspans l acc) (: r (tlgo l acc) [(mrg <r) (r 1)])     ; the marker joins its text: normal
    (tldef p acc) (: t (tlspans <p acc) b (tlspans <>p (t 1)) [[<t <b] (b 1)])
    (tlblk x acc)
-    (<x @ 'head    (: i (tlspans (x 2) acc) [['head <>x <i] (i 1)])
-          'para    (: i (tlspans <>x acc) [['para <i] (i 1)])
-          'quote   (: d (tlmap tlblk <>x acc) [['quote <d] (d 1)])
-          'bullets (: r (tlmap tlspans <>x acc) [['bullets <r] (r 1)])
-          'numbers (: r (tlmap tlspans <>x acc) [['numbers <r] (r 1)])
-          'deflist (: r (tlmap tldef <>x acc) [['deflist <r] (r 1)])
+    (<x @ 'head    (tlspans (x 2) acc @ i [['head <>x <i] (i 1)])
+          'para    (tlspans <>x acc @ i [['para <i] (i 1)])
+          'quote   (tlmap tlblk <>x acc @ d [['quote <d] (d 1)])
+          'bullets (tlmap tlspans <>x acc @ r [['bullets <r] (r 1)])
+          'numbers (tlmap tlspans <>x acc @ r [['numbers <r] (r 1)])
+          'deflist (tlmap tldef <>x acc @ r [['deflist <r] (r 1)])
           'table   (: h (tlmap tlspans (x 2) acc) r (tlmap (tlmap tlspans) (x 3) (h 1))
-                      [['table <>x <h <r] (r 1)])
+                    [['table <>x <h <r] (r 1)])
           [x acc])
    ; a paragraph of marks alone lays no line to land on, so its marks move onto the next
    ; block that holds text; past the end of a doc there is none, and they go
@@ -1212,18 +1212,17 @@
    (tlput x pend)
     (<x @ 'head    ['head <>x (pend + <>>x)]
           'para    ['para (pend + <>x)]
-          'bullets (two? <>x ? ['bullets ((pend + <(<>x)) . >(<>x))] ())
-          'numbers (two? <>x ? ['numbers ((pend + <(<>x)) . >(<>x))] ())
-          'deflist (two? <>x ? ['deflist ([(pend + <(<(<>x))) <>(<(<>x))] . >(<>x))] ())
-          'quote   ['quote (tlcarry (['para pend] . <>x))]
-          ())
+          'bullets (two? <>x ? ['bullets (pend + <<>x . ><>x)] ())
+          'numbers (two? <>x ? ['numbers (pend + <<>x . ><>x)] ())
+          'deflist (two? <>x ? ['deflist ([(pend + <<<>x) <><<>x] . ><>x)] ())
+          'quote   ['quote (tlcarry (['para pend] . <>x))])
    (tlcarry d)
     ((: (go l pend)
-        (? (atom? l) ()
-           (: x <l
-              (? (<x = 'para && tlmarks? <>x) (go >l (pend + tlonly <>x))
-                 (: y (? (atom? pend) (<x = 'quote ? ['quote (tlcarry <>x)] x) (tlput x pend))
-                    (? (atom? y) (x . (go >l pend)) (y . (go >l ()))))))))
+        (two? l ?
+         (: x <l
+          (? (<x = 'para && tlmarks? <>x) (go >l (pend + tlonly <>x))
+           (: y (atom? pend ? (<x = 'quote ? ['quote (tlcarry <>x)] x) (tlput x pend))
+            (? (atom? y) (x . go >l pend) (y . go >l ())))))))
      d ())
    ; a doc -> [doc urls]: the links numbered in reading order, urls 1-based by that number.
    ; a browser shows the doc and follows (urls (n - 1)); man keeps ttyshow's <url>
@@ -1236,7 +1235,7 @@
         (? (n <= i) [(slurp o) (rev acc)]
            (t i = 1) (: e ((: (g k) (? (n <= k || t k = 2) k (g (k + 1)))) (i + 1))
                         (go (e + 1) ln ([(snip t (i + 1) e) ln] . acc)))
-           (: c (t i) _ (put o c) (go (i + 1) (c = 10 ? (ln + 1) ln) acc)))
+           (: c (t i) _ (put o c) (go (i + 1) (c @ 10 (ln + 1) ln) acc)))
        (go 0 0 ()))
    ; [text urls anchors lines]: what a browser shows, follows, and lands on, and the line
    ; each link was laid on, by n
@@ -1244,7 +1243,7 @@
    (ttpage d w)
     (: r (ttlinks d) l (ttlift (ttyshow <r w))
        (lk? a) (0 < #<a && <a 0 = 3)
-       t (foldl (\ t a (pin t (tldig <a) <>a)) (tablet 0) (filter lk? <>l))
+       t (foldl (\ t a (pin t (tldig <a) <>a)) {} (filter lk? <>l))
        [<l (r 1) (filter (a \ !(lk? a)) <>l) (map (i \ peep t (i + 1) -1) ^#(r 1))])
    ; [text anchors]: ttyshow's layout, links as they are, with the marks lifted as ttpage
    ; lifts them -- an image's " img SRC" among them, for a viewer to draw under its line
@@ -1260,10 +1259,10 @@
           'table   ['table <>x (map (tpspans f) (x 2)) (map (map (tpspans f)) (x 3))]
           x)
    (ttpics d w)
-    (: (img x) (? (<x = 'img) ((? (0 < #(x 2)) [['mark (" img " + x 2)]] ())
-                               + (? (0 < #<>x) [['text ("[" + <>x + "]")]] ()))
+    (: (img x) (<x @ 'img ((0 < #(x 2) ? [['mark (" img " + x 2)]] ())
+                           + (0 < #<>x ? [['text ("[" + <>x + "]")]] ()))
                   [x])
-       (mk x) (? (<x = 'mark) [['tmark <>x]] [x])
+       (mk x) (<x @ 'mark [['tmark <>x]] [x])
        (ttlift (ttyshow (map (tpblk mk) (tlcarry (map (tpblk img) d))) w)))
    (ttyshow d w) (catmap (ln \ ln + "\n") (ttdoc d (w < 20 ? 20 w) 5))
    (rf->tty s w) (ttyshow (rfread s) w)

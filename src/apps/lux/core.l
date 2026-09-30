@@ -38,14 +38,14 @@
    (zswapdn z) (zrev (zswapup (zrev z)))
    (zmaster z) (atom? z ? () (zmk <z () (rev <>z + <>>z)))       ; focused becomes master
    (zins w z) (two? z ? (zmk w <>z (<z . <>>z)) (zmk w () ()))  ; insert above the focus, focused
-   (znub w l) (filter (x \ x != w) l)
+   (znub w l) (filter (!= w) l)
    (zdel w z) (? (atom? z) ()                                      ; delete w; focus falls down, then up
                  (: f <z up (znub w <>z) dn (znub w <>>z)
                     (? (f != w) (zmk f up dn)
                        (two? dn) (zmk <dn up >dn)
                        (two? up) (zmk <up >up ())
                        ())))
-   (zhas? w z) (any (x \ x = w) (zrow z))
+   (zhas? w z) (any (= w) (zrow z))
    (zfromrow row f) (: (go up m) (? (atom? m) ()                   ; a row -> a zipper focused at f (() if absent)
                                     (<m = f) (zmk f up >m)
                                     (go (<m . up) >m))
@@ -69,7 +69,7 @@
    (wsmake cur board float vis) [cur board float vis]
    (wsknown? sh t) (any (p \ <p = t) (wsboard sh))
    (wsget sh t) (: p (assoc t (wsboard sh)) (two? p ? <>p))   ; the tag's zipper
-   (wsset sh t z) (wsmake (wscur sh) (map (p \ (<p = t ? [t z] p)) (wsboard sh)) (wsfloat sh) (wsvis sh))
+   (wsset sh t z) (wsmake (wscur sh) (map (p \ <p = t ? [t z] p) (wsboard sh)) (wsfloat sh) (wsvis sh))
 
    ; --- screens: a tag is visible when a screen shows it, hidden otherwise.
    ;     view/greedy are xmonad's view/greedyView; rescreen is its rescreen. ---
