@@ -1,10 +1,6 @@
-; src/apps/moon/lex.l -- the C lexer (rung 3 stage 0; doc/misc/moon.md is the plan). text ->
-; (1 tokens) | () on a lex error. a token is (kind val line): ('kw nom), ('id
-; text), ('num charm), ('p text) -- the punctuator by maximal munch. comments
-; both kinds; line numbers carried for diagnostics. char literals 'a' (with
-; \n \t \r \0 \\ \') read as ('num code); string literals (same escapes,
-; plus \") as ('str text). not yet (staged): hex/octal/float literals,
-; adjacent-string pasting, the preprocessor's # lines.
+; src/apps/moon/lex.l -- the C lexer: text -> (1 tokens) | () on a lex error. a token is
+; (kind val line): ('kw nom), ('id text), ('num charm), ('p text) -- the punctuator by maximal
+; munch. char literals read as ('num code), string literals as ('str text).
 (module 'moon
 (borrow 'kore)
 (:
@@ -31,14 +27,14 @@
     (: m #s
        (cb? c) (128 <= c < 192)
        (go i acc)
-        (? (m <= i) (rev acc)
-           (: c (s i)
+        (m <= i ? (rev acc)
+           (s i @ c
               (? (194 <= c < 224 && i + 1 < m && cb? (s (i + 1)))
-                  (go (i + 2) ((((c - 192) << 6) | (s (i + 1) & 63)) . acc))
-                 (224 <= c < 240 && (i + 2 < m) && cb? (s (i + 1)) && cb? (s (i + 2)))
-                  (go (i + 3) ((((c - 224) << 12) | ((s (i + 1) & 63) << 6) | (s (i + 2) & 63)) . acc))
-                 (240 <= c < 245 && (i + 3 < m) && cb? (s (i + 1)) && cb? (s (i + 2)) && cb? (s (i + 3)))
-                  (go (i + 4) ((((c - 240) << 18) | ((s (i + 1) & 63) << 12) | ((s (i + 2) & 63) << 6) | (s (i + 3) & 63)) . acc))
+                  (go (i + 2) (((c - 192) << 6) | (s (i + 1) & 63) . acc))
+                 (224 <= c < 240 && i + 2 < m && cb? (s (i + 1)) && cb? (s (i + 2)))
+                  (go (i + 3) (((c - 224) << 12) | ((s (i + 1) & 63) << 6) | (s (i + 2) & 63) . acc))
+                 (240 <= c < 245 && i + 3 < m && cb? (s (i + 1)) && cb? (s (i + 2)) && cb? (s (i + 3)))
+                  (go (i + 4) (((c - 240) << 18) | ((s (i + 1) & 63) << 12) | ((s (i + 2) & 63) << 6) | (s (i + 3) & 63) . acc))
                  (go (i + 1) (c . acc)))))
        (go 0 ()))
    ; -- a float literal's VALUE, deferred --------------------------------------
@@ -49,7 +45,7 @@
    ; none of them. the pieces ride the VALUE slot, not the spelling slot, so the
    ; rebuilds that drop a 5th cell (cpp's relex, parse's stampf) carry them anyway.
    ; a number passes straight through -- cpp mints 'flo tokens with real values.
-   (cfipow b p) (: (go k a) (? (k < 1) a (go (k - 1) (a * b))) (go p 1))
+   (cfipow b p) (: (go k a) (k < 1 ? a (go (k - 1) (a * b))) (go p 1))
    ; never (/ mant (ipow 10 k)) in floats: that rounds twice, and 10^310 is an
    ; infinity before the divide ever runs -- 1e-310 folded to 0, 1e-308 to -inf,
    ; 1e-307 came out a ulp light, every one of them silent. hand the exact digits
@@ -79,12 +75,12 @@
    ; (whose tokens keep their definition's lines); a directive line takes none
    (clexasm src ln0)
     (: r (clexm src ln0 1)
-       (go l ln acc) (? (atom? l) (rev acc)
-                        (: t <l
+       (go l ln acc) (atom? l ? (rev acc)
+                        (<l @ t
                            (? (<>>t = ln) (go >l ln (t . acc))
                               (<t = 'p && <>t = "#") (go >l <>>t (t . acc))
-                              (go >l <>>t (t . (['p "\n" <>>t] . acc))))))
-       (? (okv? r) [1 (go <>r (ln0 - 1) ())] r))
+                              (go >l <>>t (t . ['p "\n" <>>t] . acc)))))
+       (okv? r ? [1 (go <>r (ln0 - 1) ())] r))
    (clexm src ln0 asm)
     (: n #src
        kws '(auto break case char const continue default do double else enum
@@ -98,16 +94,16 @@
        ; 21 of them on every punctuator token, each `at?` minting a closure and a
        ; tally; a `(` now looks at none of them and a `<` at three.
        pmap (: t {}
-               (add l) (? !(two? l) t
+               (add l) (!(two? l) ? t
                           (: pat <l  h (pat 0)
-                             _ (pin t h (t h + [pat]))
-                             (add >l)))
+                             (pin t h (t h + [pat]),
+                              add >l)))
                (add (p3 + p2)))
-       kwt (: t {} (go l) (? !(two? l) t (pin t <l 1, go >l)) (go kws))
+       kwt (: t {} (go l) (!(two? l) ? t (pin t <l 1, go >l)) (go kws))
        ; gcc's underscored spellings of a keyword, for a header that must not collide
        ; with a user macro. only a name opening `_` is looked up, so the common
        ; identifier pays one compare
-       kwal (: t {} (go l) (? !(two? l) t (pin t <<l <><l, go >l))
+       kwal (: t {} (go l) (!(two? l) ? t (pin t <<l <><l, go >l))
                (go '((__signed__ signed) (__signed signed))))
        p1 "()[]{};,.:?~!+-*/%<>=&|^#"
        ; --- the class table: one 256-byte string, a bitmask per char ------
@@ -133,15 +129,15 @@
        (hexd? c) (ctbl c & 32)
        (hexv c) (? (dig? c) (c - 48) (97 <= c <= 102) (c - 87) (c - 55))         ; a=10 A=10
        (suf? c) (ctbl c & 64)
-       (skipsuf j) (? (j < n && suf? (src j)) (skipsuf (j + 1)) j)                      ; eat an int-literal suffix run
+       (skipsuf j) (j < n && suf? (src j) ? (skipsuf (j + 1)) j)                      ; eat an int-literal suffix run
        ; a wide/prefixed literal marker before ' or " : L (C89 wchar_t), u/U (C11 char16/32),
        ; u8 (C11 UTF-8 string, byte semantics). -> prefix length (1|2), else 0; the
        ; prefixed lane below picks the token kind.
-       (wpfx i) (: c (src i)
-                   (? !(c = 76 || c = 117 || c = 85) 0
-                      (: pl (? (c = 117 && i + 1 < n && src (i + 1) = 56) 2 1)       ; u8 -> 2
-                         nc (? (i + pl < n) (src (i + pl)) 0)
-                         (? (nc = 39 || nc = 34) pl 0))))
+       (wpfx i) (src i @ c
+                   (!(c = 76 || c = 117 || c = 85) ? 0
+                      (: pl (c = 117 && i + 1 < n && src (i + 1) = 56 ? 2 1)       ; u8 -> 2
+                         nc (i + pl < n ? (src (i + pl)) 0)
+                         (nc = 39 || nc = 34 ? pl 0))))
        ; does the literal spanning [i, j) carry a u/U? an l/L? (neither is a hex
        ; digit, so the whole-span scan is safe for decimal and hex integers alike)
        (hasu? i j) (: (go k) (? (j <= k) () (src k = 117 || src k = 85) 1 (go (k + 1))) (go i))
@@ -166,7 +162,7 @@
                (hasl? i j) 'lnum                                 ; 1L is a long, not an int that fits
                'num)
            (hasll? i j) 'ullnum
-           (hasl? i j || (4294967296 <= v)) 'ulnum
+           (hasl? i j || 4294967296 <= v) 'ulnum
            'unum)
        ; C11 6.4.3p2: a ucn may not name a basic-set character (short identifier under
        ; 00a0, bar $ @ `), nor a surrogate, nor anything past the last code point. So
@@ -178,15 +174,15 @@
        (escv d) (d @ 110 10 116 9 114 13 97 7 98 8            ; \n \t \r \a \b
                    102 12 118 11 48 0 92 92                       ; \f \v \0 backslash
                    34 34 39 39 63 63 101 27)                   ; \" \' \? \e
-       (oct? c) ((ctbl c & 4) && c <= 55)                                            ; an octal digit 0-7
-       (escseq k) (: d (src k)                     ; k = index of the char after the backslash -> (value nextpos) or ()
+       (oct? c) (ctbl c & 4 && c <= 55)                                            ; an octal digit 0-7
+       (escseq k) (src k @ d                     ; k = index of the char after the backslash -> (value nextpos) or ()
                      (? (oct? d)                                                          ; \ooo -- 1..3 octal digits
-                         (: (oc m v cnt) (? (cnt < 3 && m < n && oct? (src m))
+                         (: (oc m v cnt) (cnt < 3 && m < n && oct? (src m) ?
                                             (oc (m + 1) (v * 8 + src m - 48) (cnt + 1))
                                             [v m])
                             (oc k 0 0))
                         (d = 120)                                                         ; \xhh -- 1+ hex digits
-                         (? (k + 1 < n && hexd? (src (k + 1)))
+                         (k + 1 < n && hexd? (src (k + 1)) ?
                             (: (hx m v) (m < n && hexd? (src m) ?
                                          (hx (m + 1) (v * 16 + hexv (src m)))
                                          [v m])
@@ -195,13 +191,13 @@
                         ; run refusing rather than taking what it found. the third element
                         ; marks it a ucn -- it names a code point, so a narrow string owes the
                         ; utf-8 encoding of it where \xhh lays the one byte it named.
-                        ((d = 117) || (d = 85))
-                         (: w (? (d = 117) 4 8)
-                            (uc m v cnt) (? (cnt = w) (? (ucnok? v) [v m 1] ())
+                        (d = 117 || d = 85)
+                         (: w (d = 117 ? 4 8)
+                            (uc m v cnt) (? (cnt = w) (ucnok? v ? [v m 1])
                                             (m < n && hexd? (src m))
                                              (uc (m + 1) (v * 16 + hexv (src m)) (cnt + 1)))
                             (uc (k + 1) 0 0))
-                        (: v (escv d) (charm? v ? [v (k + 1)]))))
+                        (escv d @ v (charm? v ? [v (k + 1)]))))
        ; the body of a string-shaped literal, from qi (after the opening quote) to the
        ; closing `term` -> (content endpos) | (). one lane under the narrow, wide and
        ; wide-char faces; `wide` re-encodes escape values as UTF-8 (utf8put below).
@@ -210,23 +206,23 @@
        ; literal baked into the kernel is 910 KB and cost 51s of a 64s build.
        (strbody qi term wide)
         (: sink (jug 0)
-           (run k) (? (n <= k) k                      ; how far the ordinary bytes reach
-                      (: c2 (src k)
-                         (? (c2 = term || c2 = 92 || c2 = 10) k (run (k + 1)))))
+           (run k) (n <= k ? k                      ; how far the ordinary bytes reach
+                      (src k @ c2
+                         (c2 = term || c2 = 92 || c2 = 10 ? k (run (k + 1)))))
            (eat j)
-            (: e (run j)
-               _ (? (j < e) (say sink (snip src j e)) ())
-               (? (n <= e) ()
-                  (: c2 (src e)
+            (run j @ e
+               (j < e ? (say sink (snip src j e)),
+                n <= e ? ()
+                  (src e @ c2
                      (? (c2 = term) [(slurp sink) (e + 1)]
                         (c2 = 92 && e + 1 < n && src (e + 1) = 10) (eat (e + 2))       ; \<nl> splice: the pair vanishes, the string reads on
                         (c2 = 92 && e + 2 < n && src (e + 1) = 13 && src (e + 2) = 10) (eat (e + 3))           ; \<cr><nl> splice
                         (c2 = 10) ()
                         (c2 = 92 && e + 1 < n)
-                         (: r (escseq (e + 1))
+                         (escseq (e + 1) @ r
                             ; a ucn (two? >>r) encodes even in a narrow string: gcc lays
                             ; "ä" as two utf-8 bytes, where "\xe4" is the one byte e4
-                            (? (two? r) ((? (wide || two? >>r) (utf8put sink <r) (put sink <r)), eat <>r) ()))
+                            (two? r ? ((wide || two? >>r ? (utf8put sink <r) (put sink <r)), eat <>r)))
                         ; a stop `run` made that none of the above claims: one byte,
                         ; then on. the trailing \ lands here, and so would any future
                         ; stop -- which is what keeps a widened `run` from looping.
@@ -253,15 +249,15 @@
                       (go 0))
        (firstat i (a . u)) (at? i a ? a (firstat i u))
        (in1? c) (ctbl c & 128)
-       (digend j) (? (j < n && dig? (src j)) (digend (j + 1)) j)
+       (digend j) (j < n && dig? (src j) ? (digend (j + 1)) j)
        ; is the line being lexed a directive (its first token `#`)? there a `#` is # or ##
-       (dirline? acc ln) (: (go l f) (? (two? l && <>><l = ln) (go >l <l) f)
+       (dirline? acc ln) (: (go l f) (two? l && <>><l = ln ? (go >l <l) f)
                             f (go acc ())
                             (two? f && <f = 'p && <>f = "#"))
        ; does a directive name follow a line-opening `#` (past blanks)?
-       (asmdir? j) (: (sk k) (? (k < n && ws? (src k)) (sk (k + 1)) k)
+       (asmdir? j) (: (sk k) (k < n && ws? (src k) ? (sk (k + 1)) k)
                       k (sk j)
-                      (idw e) (? (e < n && idc? (src e)) (idw (e + 1)) e)
+                      (idw e) (e < n && idc? (src e) ? (idw (e + 1)) e)
                       (elem (snip src k (idw k)) '("define" "undef" "if" "ifdef" "ifndef" "elif" "else" "endif"
                                                    "include" "include_next" "error" "warning" "line" "pragma")))
        ; -- float literals: a run with a '.' or an exponent (12.5, .5, 2., 1e9,
@@ -275,55 +271,55 @@
        (flolit i)
         (: ir (digrun i) j0 <ir iv <>ir
            dot (j0 < n && src j0 = 46)
-           fr (? dot (digrun (j0 + 1)) [j0 0 0])
+           fr (dot ? (digrun (j0 + 1)) [j0 0 0])
            j1 <fr fv <>fr fd <>>fr
            mant (iv * ipow 10 fd + fv)
            hase (j1 < n && (src j1 = 101 || src j1 = 69))
-           ee (? hase (: k (j1 + 1)
+           ee (hase ? (: k (j1 + 1)
                          neg (k < n && src k = 45)
-                         k2 (? (neg || (k < n && src k = 43)) (k + 1) k)
+                         k2 (neg || k < n && src k = 43 ? (k + 1) k)
                          er (digrun k2)
-                         [<er (? neg -<>er <>er)])
+                         [<er (neg ? -<>er <>er)])
                       [j1 0])
            j2 <ee exp <>ee
            isflo (dot || hase)
-           j3 (? (isflo && j2 < n && elem (src j2) '(102 70 108 76)) (j2 + 1) j2)
+           j3 (isflo && j2 < n && elem (src j2) '(102 70 108 76) ? (j2 + 1) j2)
            ; gcc's imaginary suffix (i/I/j/J, riding after or before f/l): 1.0fi
            ; is _Complex_I's spelling (musl complex.h) -- the flag rises to 'imag
            im (isflo && j3 < n && elem (src j3) '(105 73 106 74))
-           j4 (? !im j3
-                 (: k (j3 + 1)
-                    (? (k < n && elem (src k) '(102 70 108 76)) (k + 1) k)))
+           j4 (!im ? j3
+                 (j3 + 1 @ k
+                    (k < n && elem (src k) '(102 70 108 76) ? (k + 1) k)))
            dxp (exp - fd)
            ; C11 6.4.4.2: an f/F suffix makes the constant a float, not a double kept
            ; at 53 bits. the 4th element reports it; the caller picks the kind.
            fsu ?(isflo && (j2 < n) && elem (src j2) '(102 70))
-           val (? isflo ['dec mant dxp] iv)          ; cflo folds it, if anyone asks
-           [j4 (? im 'imag isflo) val fsu])
+           val (isflo ? ['dec mant dxp] iv)          ; cflo folds it, if anyone asks
+           [j4 (im ? 'imag isflo) val fsu])
        ; -- hex literals: 0x integer (0xff), or a hex float 0x H.H p [+-] D (a binary
        ; exponent, base 2): 0x1.0p-53, 0x1p4, 0x.8p1. i points at the '0'. -> (endj isflo? value). --
        (hxrun j v nd) (j < n && hexd? (src j) ? (hxrun (j + 1) (16 * v + hexv (src j)) (nd + 1)) [j v nd])
        ; -- octal literal: a leading 0 then octal digits (0777, 0644). i points at the 0
        ; (it folds to 0). -> (endj value); a plain `0`, `0.5`, `08`, `0x..` never reach here. --
-       (octd? c) ((ctbl c & 4) && c <= 55)
+       (octd? c) (ctbl c & 4 && c <= 55)
        (octlit i) (: (go k v) (k < n && octd? (src k) ? (go (k + 1) (8 * v + (src k - 48))) [k v]) (go i 0))
        ; 0b/0B binary (gcc's extension, C23's standard spelling) -- one lane beside
        ; the octal one, suffix run and all. a Playdate sprite mask is written this way.
-       (binlit i) (: (go k v) (? (k < n && (src k = 48 || src k = 49))
+       (binlit i) (: (go k v) (k < n && (src k = 48 || src k = 49) ?
                                  (go (k + 1) (2 * v + src k - 48)) [k v])
                      (go (i + 2) 0))
        (hexlit i)
         (: ir (hxrun (i + 2) 0 0) j0 <ir im <>ir
            dot (j0 < n && src j0 = 46)
-           fr (? dot (hxrun (j0 + 1) im 0) [j0 im 0])
+           fr (dot ? (hxrun (j0 + 1) im 0) [j0 im 0])
            j1 <fr mant <>fr fd <>>fr          ; mant folds the fractional hex digits in; fd counts them
            hasp (j1 < n && (src j1 = 112 || src j1 = 80))        ; p / P -- the (required) binary exponent
-           (? !(dot || hasp) [(skipsuf j0) () im]          ; a plain hex integer -- eat its suffix
-              (: ee (? hasp (: k (j1 + 1)
+           (!(dot || hasp) ? [(skipsuf j0) () im]          ; a plain hex integer -- eat its suffix
+              (: ee (hasp ? (: k (j1 + 1)
                                neg (k < n && src k = 45)
-                               k2 (? (neg || (k < n && src k = 43)) (k + 1) k)
+                               k2 (neg || k < n && src k = 43 ? (k + 1) k)
                                er (digrun k2)
-                               [<er (? neg -<>er <>er)])
+                               [<er (neg ? -<>er <>er)])
                             [j1 0])
                  j2 <ee exp <>ee
                  bexp (exp - 4 * fd)                        ; each fractional hex digit is 2^-4
@@ -331,8 +327,8 @@
                  j3 (j2 < n && elem (src j2) '(102 70 108 76) ? (j2 + 1) j2)
                  [j3 1 val (j2 < n && elem (src j2) '(102 70))])))
        (go i line acc)
-        (? (n <= i) [1 (rev acc)]
-           (: c (src i)
+        (n <= i ? [1 (rev acc)]
+           (src i @ c
               (? (c = 10) (go (i + 1) (line + 1) acc)
                  (c = 92 && i + 1 < n && src (i + 1) = 10)         ; \<nl> splice: one logical line
                   (go (i + 2) line acc)                                    ; (line unadvanced so a directive stays grouped)
@@ -340,17 +336,17 @@
                   (go (i + 3) line acc)
                  (ws? c) (go (i + 1) line acc)
                  ; gas's comment: `#` after code, or opening a line that names no directive
-                 (asm && c = 35 && (? (two? acc && <>><acc = line) !(dirline? acc line) !(asmdir? (i + 1))))
-                  (: (eat j) (? (n <= j || src j = 10) j (eat (j + 1)))
+                 (asm && c = 35 && (two? acc && <>><acc = line ? !(dirline? acc line) !(asmdir? (i + 1))))
+                  (: (eat j) (n <= j || src j = 10 ? j (eat (j + 1)))
                      (go (eat i) line acc))
                  ; a numeric label's reference: digits then b or f, one word
-                 (asm && dig? c && (: j (digend i) (j < n && elem (src j) '(98 102) && !(j + 1 < n && idc? (src (j + 1))))))
-                  (: j (1 + digend i) (go j line (['id (snip src i j) line] . acc)))
+                 (asm && dig? c && (digend i @ j (j < n && elem (src j) '(98 102) && !(j + 1 < n && idc? (src (j + 1))))))
+                  (1 + digend i @ j (go j line (['id (snip src i j) line] . acc)))
                  (asm && elem c '(36 64 92 96)) (go (i + 1) line (['p (string c) line] . acc))
                  ; both comment probes sit behind one (= c 47) gate (two at? calls
                  ; per character otherwise)
                  (c = 47 && at? i "//")
-                  (: (eat j) (? (n <= j || src j = 10) j (eat (j + 1)))
+                  (: (eat j) (n <= j || src j = 10 ? j (eat (j + 1)))
                      (go (eat i) line acc))
                  (c = 47 && at? i "/*")
                   (: ; a \<nl> inside a comment is a splice (C phase 2 runs before
@@ -359,13 +355,13 @@
                      ; (m4-1.4 regex.c PUSH_FAILURE_POINT)
                      (spliced? j) (0 < j && (src (j - 1) = 92 ||
                                                1 < j && src (j - 1) = 13 && src (j - 2) = 92))
-                     (eat j l2) (? (n <= (j + 1)) [() l2]   ; unterminated
+                     (eat j l2) (? (n <= j + 1) [() l2]   ; unterminated
                                               (at? j "*/") [(j + 2) l2]
-                                              (eat (j + 1) (? ((src j = 10) && !(spliced? j)) (l2 + 1) l2)))
+                                              (eat (j + 1) (src j = 10 && !(spliced? j) ? (l2 + 1) l2)))
                                 r (eat (i + 2) line)
-                                (? (charm? <r) (go <r <>r acc) ()))
-                 (c = 34) (: r (strbody (i + 1) 34 ())          ; a string literal
-                             (? (two? r) (go <>r line (['str <r line () (snip src i <>r)] . acc)) ()))
+                                (charm? <r ? (go <r <>r acc)))
+                 (c = 34) (strbody (i + 1) 34 () @ r          ; a string literal
+                             (two? r ? (go <>r line (['str <r line () (snip src i <>r)] . acc))))
                  ; a character constant: chars and escapes up to the closing quote.
                  ; multi-character ones are ordinary C (implementation-defined, gcc
                  ; packs left to right into an int) and they turn up in text the
@@ -373,9 +369,9 @@
                  ; sits in a dead #if, and the whole file lexes before cpp runs.
                  (c = 39) (: (mc k v cnt)
                              (? (n <= k) ()
-                                (src k = 39) (? (cnt = 0) () [k v cnt])
+                                (src k = 39) (cnt = 0 ? () [k v cnt])
                                 (src k = 92)
-                                 (: r (escseq (k + 1))
+                                 (escseq (k + 1) @ r
                                     (two? r ? (mc <>r ((v << 8) | (<r & 255)) (cnt + 1))))
                                 (mc (k + 1) ((v << 8) | (src k & 255)) (cnt + 1)))
                              r (mc (i + 1) 0 0)
@@ -383,13 +379,13 @@
                               (: j (<r + 1)
                                  ; one char keeps the raw byte it always had; a wider one
                                  ; is int-wide and signed, so '\xff\xff\xff\xff' is -1.
-                                 v (? (<>>r = 1) <>r
-                                      (: w (<>r & 4294967295)
-                                         (? (0 < (w & 2147483648)) (w - 4294967296) w)))
+                                 v (<>>r = 1 ? <>r
+                                      (<>r & 4294967295 @ w
+                                         (0 < w & 2147483648 ? (w - 4294967296) w)))
                                  (go j line (['num v line () (snip src i j)] . acc)))))
                  (c = 48 && i + 1 < n && (src (i + 1) = 120 || src (i + 1) = 88))        ; 0x / 0X hex (int or float)
                   (: r (hexlit i)
-                     k (? <>r (? <>>>r 'flof 'flo) (ukind i <r <>>r ()))   ; a u/U in the suffix run marks it unsigned (1U / 1ULL)
+                     k (<>r ? (<>>>r ? 'flof 'flo) (ukind i <r <>>r ()))   ; a u/U in the suffix run marks it unsigned (1U / 1ULL)
                      (go <r line ([k <>>r line () (snip src i <r)] . acc)))
                  (c = 48 && i + 2 < n && (src (i + 1) = 98 || src (i + 1) = 66) &&
                   (src (i + 2) = 48 || src (i + 2) = 49))                                            ; 0b / 0B binary
@@ -397,16 +393,16 @@
                      j2 (skipsuf <r)
                      k (ukind i j2 <>r ())
                      (go j2 line ([k <>r line () (snip src i j2)] . acc)))
-                 ((c = 48) && ((i + 1) < n) && octd? (src (i + 1)))       ; 0nnn octal integer (0644, 0777)
+                 (c = 48 && i + 1 < n && octd? (src (i + 1)))       ; 0nnn octal integer (0644, 0777)
                   (: r (octlit i)
                      j2 (skipsuf <r)
                      k (ukind i j2 <>r ())
                      (go j2 line ([k <>r line () (snip src i j2)] . acc)))
-                 (dig? c || (c = 46 && i + 1 < n && dig? (src (i + 1))))
+                 (dig? c || c = 46 && i + 1 < n && dig? (src (i + 1)))
                   (: r (flolit i)                        ; a digit run, or .digit -- integer or float
-                     j2 (? <>r <r (skipsuf <r))    ; an integer eats its u/U/l/L suffix
+                     j2 (<>r ? <r (skipsuf <r))    ; an integer eats its u/U/l/L suffix
                      k (? (<>r = 'imag) 'iflo    ; the imaginary float (1.0fi): its own kind
-                          <>r (? <>>>r 'flof 'flo) (ukind i j2 <>>r 1))
+                          <>r (<>>>r ? 'flof 'flo) (ukind i j2 <>>r 1))
                      (go j2 line ([k <>>r line () (snip src i j2)] . acc)))
                  ; a prefixed literal: the kind carries the width (L -> 'wstr, u -> 'str16,
                  ; U -> 'str32; u8 stays narrow), the value is canonical UTF-8, the
@@ -418,42 +414,42 @@
                      c2 (src (i + pl))
                      k (? (c = 117 && pl = 1) 'str16 (c = 85) 'str32 (c = 76) 'wstr 'str)
                      (? (c2 = 34)
-                         (: r (strbody ((i + pl) + 1) 34 !(k = 'str))
+                         (strbody (i + pl + 1) 34 !(k = 'str) @ r
                             (two? r ? (go <>r line ([k <r line () (snip src i <>r)] . acc))))
                         (k = 'str) (go (i + pl) line acc)     ; u8'': lex narrow, byte semantics
-                        (: r (strbody ((i + pl) + 1) 39 1)
-                           cps (? (two? r) (utf8dec <r) ())
-                           (lastc l) (? (two? >l) (lastc >l) <l)
-                           (? (two? cps) (go <>r line (['num (lastc cps) line () (snip src i <>r)] . acc)) ()))))
+                        (: r (strbody (i + pl + 1) 39 1)
+                           cps (two? r ? (utf8dec <r))
+                           (lastc l) (two? >l ? (lastc >l) <l)
+                           (two? cps ? (go <>r line (['num (lastc cps) line () (snip src i <>r)] . acc))))))
                  ; an identifier may be spelled with ucns (C99 6.4.2.1). a ucn names a code
                  ; point, so `Å` must intern as the utf-8 `Å` does -- one name, built by
                  ; the escape lane where the plain run is a snip. a malformed one lex-errors.
                  (idh? c || ucn? i)
                   (: (idr j) (? (j < n && idc? (src j)) (idr (j + 1))
-                                (ucn? j) (: r (escseq (j + 1)) (two? r ? (idr <>r) j))
+                                (ucn? j) (escseq (j + 1) @ r (two? r ? (idr <>r) j))
                                 j)
                      j0 (idr i)
                      (esc? k) (? (j0 <= k) () (src k = 92) 1 (esc? (k + 1)))
-                     (? (j0 <= i) ()
-                        (: t (? (esc? i)
+                     (j0 <= i ? ()
+                        (: t (esc? i ?
                                 (: sink (jug 0)
                                    (bld k) (? (j0 <= k) (slurp sink)
-                                              (ucn? k) (: r (escseq (k + 1))
-                                                          _ (utf8put sink <r)
-                                                          (bld <>r))
+                                              (ucn? k) (escseq (k + 1) @ r
+                                                          (utf8put sink <r,
+                                                           bld <>r))
                                               (put sink (src k), bld (k + 1)))
                                    (bld i))
                                 (snip src i j0))
                            s (intern t)
-                           k (? ((t 0) = 95) (peep kwal s s) s)
+                           k (t 0 = 95 ? (peep kwal s s) s)
                            ; gcc's short spelling of __attribute__, read as the long one
-                           ti (? (t = "__attribute") "__attribute__" t)
-                           (go j0 line ((? (kwt k) ['kw k line] ['id ti line]) . acc)))))
-                 (: hit (firstat i (pmap c))
+                           ti (t = "__attribute" ? "__attribute__" t)
+                           (go j0 line ((kwt k ? ['kw k line] ['id ti line]) . acc)))))
+                 (firstat i (pmap c) @ hit
                     (? hit (go (i + #hit) line (['p hit line] . acc))
                        (in1? c)                        ; a '(' GLUED to a preceding id (no space) carries a 4th field: the function-macro paren
-                        (: gl (c = 40 && 0 < i && idc? (src (i - 1)))
-                           (go (i + 1) line ((? gl ['p (string c) line 1] ['p (string c) line]) . acc)))
+                        (c = 40 && 0 < i && idc? (src (i - 1)) @ gl
+                           (go (i + 1) line ((gl ? ['p (string c) line 1] ['p (string c) line]) . acc)))
                        asm (go (i + 1) line (['p (string c) line] . acc))     ; gas reads what C would not
                        ())))))
        (go 0 ln0 ())))

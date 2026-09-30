@@ -1,22 +1,12 @@
-; src/apps/moon/moon.l -- the C compiler's driver:
+; src/apps/moon/moon.l -- the C compiler's driver: lex -> cpp -> parse -> gen -> the holo book.
 ;   mooncc [-c] [-I dir] [-D name[=val]] [-o out] in.c|in.o|lib.a ..
-; reads C, rides lex -> cpp -> parse -> gen -> the holo book. two outcomes, the cc shape: -c
-; lays relocatable ELF objects (src/love/holo/obj.l), each .c landing in the cwd as x.o; without
-; it every input (a .c compiled on the way, a .o read off disk) goes to our own static linker
-; (src/love/holo/link.l, rung 3), bound with crt0 and the implicit runtime into -o's exe, `a.out`
-; bare. the positional pair `mooncc [-c] IN OUT` still reads (two bare args, no .c and --
-; linking -- no .o). -I dirs search before our own headers on both include forms, and ours
-; are the only standard set: no /usr/include tail, so a header we do not carry is refused
-; rather than resolved to whatever libc the box has. a -D rides in as a synthesized #define
-; line. the advisory flag families (-W.. -O.. -g.. -std= -f.. -pipe -static) ride through
-; ignored so `CC=mooncc` drives a gcc-shaped recipe unchanged -- less -fno-inline, which is
-; real here and bars every splice. a link owing libc symbols pulls the runtime (moonlibc + am
-; math + sys) by need from the sources beside it; -nostdlib/-ffreestanding turn that off.
-; errors speak on err and exit 1, usage exits 2. last in the mooncc cat (its own app,
-; doc/misc/moon.md), after src/love/holo/{elf,obj,link}.l and src/apps/moon/{lex,cpp,parse,gen}.l;
-; rides post.l's door (uread udie urun). its tail seat fires moon-main when mooncc is the
-; program; moon-run is the same compile answering its status, for a caller in the image.
-;
+; -c lays relocatable objects (src/love/holo/obj.l) into the cwd; without it every input goes to
+; our static linker (src/love/holo/link.l) with crt0 and the runtime, into -o's exe or a.out.
+; our headers are the only standard set: no /usr/include tail, so a header we do not carry is
+; refused. advisory gcc flags (-W -O -g -std= -f -pipe -static) are ignored, save -fno-inline,
+; which bars every splice. a link owing libc symbols pulls moonlibc + am math + sys by need;
+; -nostdlib/-ffreestanding turn that off. errors exit 1, usage 2. moon-main is the program's
+; tail seat; moon-run is the same compile answering its status, for a caller in the image.
 (module 'moon
 (borrow 'kore)
 (borrow 'holo) ; the assembler module: asm-text, arbytes, the linker
@@ -28,7 +18,7 @@
 
 (:
    ; the directory portion of a path (up to and including the last '/'), or ""
-   (cdir path) (: d (lastslash path) (0 < d ? (snip path 0 d) ""))
+   (cdir path) (lastslash path @ d (0 < d ? (snip path 0 d) ""))
    ; the toolchain slice's place in the tree, spelled once: the roots below and the
    ; carried-blob filter both read it, and the filter reads its length too.
    mtree "src/apps/moon/"
@@ -38,9 +28,9 @@
    ; second rung mooncc only works with the repo root as the cwd.
    ; read at each call, never bound: mooncc rides a baked image, and a captured seat would
    ; fold the build tree's path into that image and ride it forever.
-   (mseat _) (: x (selfpath 0)
+   (mseat _) (selfpath 0 @ x
                 (string? x && cdir x + "../lib/love/moon/"))
-   (mroots _) (: s (mseat ()) (string? s ? [mtree s] [mtree]))
+   (mroots _) (mseat () @ s (string? s ? [mtree s] [mtree]))
    ; the runtime home: the first root that actually carries the sources, by read rather than
    ; by a name test -- core.c is the one member every link takes, so it says a root is real.
    (mhome _) (: (go rs) (? !(two? rs) ()
@@ -53,7 +43,7 @@
     (: n #p
        (go i st ps) (? (n < i) ps
                        (i = n || p i = 47)
-                        (: c (snip p st i)
+                        (snip p st i @ c
                            (go (i + 1) (i + 1)
                                (? (c = "" || c = ".") ps
                                   (c = "..") (two? ps ? >ps ())
@@ -63,12 +53,12 @@
        (jn (go 0 0 ()) ""))
    ; the carried archive is a .gz, opened by src/apps/gz.l's gz-unzip -- cited at the call, as a
    ; `borrow` here would tie moon to the bake order. a love without 'gz carries no archive.
-   (gzbody s) (: f (cite 'gz 'gz-unzip) r (? (lit? f) (f s) ()) (two? r ? <>r ()))
+   (gzbody s) (: f (cite 'gz 'gz-unzip) r (lit? f ? (f s)) (two? r ? <>r ()))
    ; ..and a read-only ustar walk: nom (prefix + name), size, body -- all this
    ; needs. src/apps/tar.l stays the whole law; this reads the slice and nothing else.
-   (ttxt s o k) (: (go i) (? (k <= i || s (o + i) = 0) i (go (i + 1)))
+   (ttxt s o k) (: (go i) (k <= i || s (o + i) = 0 ? i (go (i + 1)))
                    m (go 0)
-                   (m ? (: c (cask m) _ (pour c 0 s o m) (string c)) ""))
+                   (m ? (cask m @ c (pour c 0 s o m, string c)) ""))
    ; noms are "[./]<top>/apps/moon/.."; the top strips per-entry (the archive
    ; leads with "./")
    (strip1 nom) (: s (starts? nom "./" ? (snip nom 2 #nom) nom)
@@ -79,15 +69,15 @@
                    (go 0))
    (tarfiles s)                             ; -> [[nom body] ..], files only
     (: n #s
-       (go o acc) (? (n < o + 512 || s o = 0) acc
+       (go o acc) (n < o + 512 || s o = 0 ? acc
                      (: nm (ttxt s o 100)
                         pf (ttxt s (o + 345) 155)
                         nom (#pf ? (pf + "/" + nm) nm)
                         sz (rdoct s (o + 124) 12)
                         k (s (o + 156))
                         acc2 (k = 48 || k = 0
-                                ? (: c (cask sz) _ (pour c 0 s (o + 512) sz)
-                                     ([nom (string c)] . acc))
+                                ? (cask sz @ c (pour c 0 s (o + 512) sz,
+                                                [nom (string c)] . acc))
                                 acc)
                         (go (o + 512 + 512 * ((sz + 511) // 512)) acc2)))
        (go 0 ()))
@@ -98,8 +88,8 @@
    ; the slice leads the archive (src/tools/selfpack.l lays it so), so it is streamed -- gz.l's
    ; gz-pull under tar.l's walk -- and the read stops at the first file past it, rather than
    ; inflating the tree. where those doors are not aboard the whole archive is read as before
-   (msub nom) (: rel (strip1 nom) sub (? (starts? rel mtree) (snip rel #mtree #rel) "")
-                 (? (starts? sub "include/" || starts? sub "lib/") sub ()))
+   (msub nom) (: rel (strip1 nom) sub (starts? rel mtree ? (snip rel #mtree #rel) "")
+                 (starts? sub "include/" || starts? sub "lib/" ? sub))
    (mblob _)
     (: gz (source-gz "x")
        pull (cite 'gz 'gz-pull)   walk (cite 'tar 'tar-walk)
@@ -107,28 +97,28 @@
           !(lit? pull && lit? walk) (mblob-whole gz)
           (: next (cite 'gz 'gz-next)   body (cite 'tar 'tar-body)
              t {0 0}                                   ; fed a slice at a time, so the walk's stop stops the inflate
-             g (pull (\ _ (: o (peep t 0 0) (? (#gz <= o) "" (: _ (pin t 0 (o + 65536)) (snip gz o (min #gz (o + 65536))))))))
-             s (cite 'tar 'tar-src (\ _ (next g)))
+             g (pull (_ \ peep t 0 0 @ o (#gz <= o ? "" (pin t 0 (o + 65536), snip gz o (min #gz (o + 65536))))))
+             s (cite 'tar 'tar-src (_ \ next g))
              a {}   seen {0 0}
-             _ (walk s (\ e b (: sub (msub (e 'nom))
-                                  (? !sub (? (peep seen 0 0) 'stop 1)
-                                     (: ps {0 ()}
-                                        _ (? (e 'kind = 'file)
-                                             (: _ (body s b (x \ pin ps 0 (x . peep ps 0 ())))
-                                                l (peep ps 0 ())
-                                                (pin a sub (? (two? l) (cats (rev l)) ""))))
-                                        _ (pin seen 0 1)
-                                        1)))))
-             a)))
+             (walk s (e \ b \ msub (e 'nom) @ sub
+                                 (!sub ? (peep seen 0 0 ? 'stop 1)
+                                    ({0 ()} @ ps
+                                       (e 'kind = 'file ?
+                                          (: _ (body s b (x \ pin ps 0 (x . peep ps 0 ())))
+                                             l (ps 0)
+                                             (pin a sub (two? l ? (cats (rev l)) ""))),
+                                        pin seen 0 1,
+                                        1)))),
+              a))))
    (mblob-whole gz)
-    (: u (gzbody gz)
-       (? !(string? u) ()
-          (foldl (\ a e (: sub (msub <e) (? sub (pin a sub <>e) a))) {} (tarfiles u))))
+    (gzbody gz @ u
+       (!(string? u) ? ()
+          (foldl (a \ e \ msub <e @ sub (sub ? (pin a sub <>e) a)) {} (tarfiles u))))
    ; the first three of a name list, comma-joined, with a count of the rest --
    ; a diagnostic wants a taste, not the whole bag
    (mfew ns)
     (: n #ns
-       (go l k acc) (? (!(two? l) || 3 <= k) acc
+       (go l k acc) (!(two? l) || 3 <= k ? acc
                        (go >l (k + 1) (0 < k ? (acc + ", " + <l) <l)))
        s (go ns 0 "")
        (3 < n ? (s + " (+" + show (n - 3) + " more)") s))
@@ -141,14 +131,14 @@
    (incload vb is srcdir name sys?)
     (: ours (map (r \ r + "include/") (mroots ()))
        dirs (sys? ? (is + ours) ([srcdir ""] + is + ours))
-       (go ds) (? !(two? ds) ()
-                  (: r (uread (<ds + name))
-                     (? (two? r)
-                        (: hd (cdir (<ds + name))
+       (go ds) (!(two? ds) ? ()
+                  (uread (<ds + name) @ r
+                     (two? r ?
+                        (cdir (<ds + name) @ hd
                            ; the resolved path rides along as a fourth answer: cpp's
                            ; header memo keys on it beside the text, so two copies of
                            ; one header never share an entry.
-                           [1 <>r (\ n2 s2 (incload vb is hd n2 s2)) (<ds + name)])
+                           [1 <>r (n2 \ s2 \ incload vb is hd n2 s2) (<ds + name)])
                         (go >ds))))
        r (go dirs)
        (? (two? r) r
@@ -157,11 +147,10 @@
           ; headers -- the disk walk's own order
           (: k1 (pnorm (srcdir + name))
              h1 (!sys? && vb k1)
-             (? (string? h1) [1 h1 (\ n2 s2 (incload vb is (cdir k1) n2 s2)) k1]
+             (string? h1 ? [1 h1 (n2 \ s2 \ incload vb is (cdir k1) n2 s2) k1]
                 (: k2 ("include/" + name)
                    h2 (vb k2)
-                   (? (string? h2) [1 h2 (\ n2 s2 (incload vb is (cdir k2) n2 s2)) k2]
-                      ()))))))
+                   (string? h2 ? [1 h2 (n2 \ s2 \ incload vb is (cdir k2) n2 s2) k2]))))))
    ; a -D definition as #define text: the first = becomes the space, so
    ; -dx -> "X" (defined 1 below), -dx=v -> "X v", -df(x)=x -> "F(x) x"
    ; (the glued ( survives the lex, so it stays function-like).
@@ -172,13 +161,13 @@
                (go 0))
    ; each entry is one line, so the -D/-U run keeps clexat's skew exact. a -U rides
    ; as ('u name), which is how the two stay in the order the command line gave them
-   (deftext ds) (foldl (\ a d (a + (string? d ? ("#define " + eqsp d)
-                                                ("#undef " + <>d)) + "\n")) "" ds)
+   (deftext ds) (foldl (a \ d \ a + (string? d ? ("#define " + eqsp d)
+                                                 ("#undef " + <>d)) + "\n") "" ds)
    ; the target -t names: 'x64 (the default), 'a64, 'rv64, or one of the embedded three. the
    ; spellings are the prel's (arch-canon), which is also what uname's answer and a `seed`
    ; argument come through, so this file keeps no second list to drift. the arch predefine
    ; (__x86_64__ / __aarch64__ / __arm__) rides the -D channel, so cpp stays target-blind.
-   (totgt s) (: t (archof s) (t || udie 2 ("cc: unknown target " + s)))
+   (totgt s) (archof s @ t (t || udie 2 ("cc: unknown target " + s)))
 
    ; the arch predefines, both spellings where gcc gives two -- pdclib's config asks
    ; `defined(__x86_64)`, and one spelling missing reads as an unsupported machine.
@@ -206,7 +195,7 @@
    ; ref folds the bake session's absence in forever. nothing pinned owes a diagnostic, not a
    ; guess.
    (host-os _)
-    (: n (elem 'love-os (names ()) && ev 'love-os)
+    (elem 'love-os (names ()) && ev 'love-os @ n
        (nom? n ? (toos n)
                  (udie 2 "cc: cannot tell which kernel this is -- name one with -os")))
    (osdefs os0)
@@ -341,17 +330,17 @@
    ; wchar_t forks by ABI, not by width: signed int on x64/rv64 (SysV), unsigned int on
    ; a64/arm32 (AAPCS) -- gcc's values, so a header's typedef lays what a gcc object carries.
    (wchdefs tgt)
-    (? (tgt = 'a64 || arm32? tgt)
+    (tgt = 'a64 || arm32? tgt ?
        '("__WCHAR_TYPE__=unsigned int" "__WCHAR_MAX__=0xffffffffU" "__WCHAR_MIN__=0U" "__WCHAR_WIDTH__=32")
        '("__WCHAR_TYPE__=int" "__WCHAR_MAX__=0x7fffffff" "__WCHAR_MIN__=(-__WCHAR_MAX__ - 1)" "__WCHAR_WIDTH__=32"))
-   (stddefs tgt) ((? (arm32? tgt) stdt32 stdlp64) + wchdefs tgt + stdcommon)
+   (stddefs tgt) ((arm32? tgt ? stdt32 stdlp64) + wchdefs tgt + stdcommon)
    ; the diagnostic driver: a stage answered a gripe (a cause it named itself) or a bare bad.
    ; a gripe prints "cc: <file>:<line>:<col>: msg" -- an unknown file takes the source path,
    ; an unknown line/col elides; anything else falls back to <plain>.
    ; either way a fatal exit 1.
    (ccdie val src plain)
     (gripe? val ?
-       (: file (: f (val 1) (f || src))
+       (: file (val 1 @ f (f || src))
           ln (val 2) col (val 3) msg (val 4)
           loc (file + (ln ? (":" + show ln) "") + (col ? (":" + show col) ""))
           (udie 1 ("cc: " + loc + ": " + msg)))
@@ -365,9 +354,9 @@
     (: d2 ("__ASSEMBLER__=1" . ds)
        lx (clexasm (deftext d2 + s) (1 - #d2))
        _ (okv? lx || ccdie lx src ("cc: lex error in " + src))
-       pp (cpp <>lx (\ name sys? (incload vb is (cdir src) name sys?)) src)
-       _ (okv? pp || ccdie pp src ("cc: preprocessor error in " + src))
-       (asmwrap (asmspell <>pp)))
+       pp (cpp <>lx (name \ sys? \ incload vb is (cdir src) name sys?) src)
+       (okv? pp || ccdie pp src ("cc: preprocessor error in " + src),
+        asmwrap (asmspell <>pp)))
    ; tokens back to assembly text: an unexpanded token from a later line opens a new one (an
    ; expansion stays where it was invoked); a space between two words, and after a word unless
    ; a closer follows, so `movl $1,%eax`, `0x10(%rsp)` and `foo:` come back as written
@@ -375,17 +364,17 @@
     (: (word? t) (<t != 'p && <t != 'str)
        (closer? t) (<t = 'p && elem <>t '("," ")" ":" "(" "]" ";"))
        (qesc s) ("\"" + string (catmap (c \ (c @ 34 [92 34] 92 [92 92] 10 [92 110] 9 [92 116]
-                                                   (? (c < 32 || 126 < c) (: o (c & 255) [92 (48 + (o >> 6)) (48 + ((o >> 3) & 7)) (48 + (o & 7))]) [c])))
+                                                   (c < 32 || 126 < c ? (c & 255 @ o [92 (48 + (o >> 6)) (48 + ((o >> 3) & 7)) (48 + (o & 7))]) [c])))
                                         (chars s)) + "\"")
-       (spell t) (: sp (? (4 < #t && string? (t 4)) (t 4) ())
-                    (<t @ 'id <>t 'kw (show <>t) 'p <>t 'str (? sp sp (qesc <>t)) (? sp sp (show <>t))))
+       (spell t) (: sp (4 < #t && string? (t 4) ? (t 4))
+                    (<t @ 'id <>t 'kw (show <>t) 'p <>t 'str (sp ? sp (qesc <>t)) (sp ? sp (show <>t))))
        (go l prev acc)
-        (? (atom? l) (string (catall (rev acc)))
-           (: t <l
+        (atom? l ? (string (catall (rev acc)))
+           (<l @ t
               (? (<t = 'fspans) (go >l prev acc)                  ; cpp's file-span record, not text
                  (<t = 'p && <>t = "\n") (go >l () ([10] . acc))
                  (: sep (? (atom? prev) () (word? prev && !(closer? t)) [32] ())
-                    (go >l t ((chars (spell t)) . (sep . acc)))))))
+                    (go >l t (chars (spell t) . sep . acc))))))
        (go ts () ()))
    ; the shared front end: source path (+ -I dirs, -D defines) -> (1 ast stag sigs ..) | a
    ; fatal exit. the -D lines prepend to the source text before the one lex, so a define body
@@ -404,19 +393,19 @@
        ; the source may instead live in the carried table (a runtime member on the blob
        ; lane): disk first, then vb by key.
        r (src = "-" ? [1 (slurp in)]
-            (: q (uread src)
+            (uread src @ q
                (? (two? q) q
                   !vb ()
-                  (: h (vb src) (string? h && [1 h])))))
+                  (vb src @ h (string? h && [1 h])))))
        _ (two? r || udie 1 ("cc: cannot open " + src))
        txt (? (dotS? src) (asmcpp src <>r ds9 is vb) (dots? src) (asmwrap <>r) <>r)
        lx (clexat (deftext ds9 + txt) (1 - #ds9))
        _ (okv? lx || ccdie lx src ("cc: lex error in " + src))
-       pp (cpp <>lx (\ name sys? (incload vb is (cdir src) name sys?)) src)
+       pp (cpp <>lx (name \ sys? \ incload vb is (cdir src) name sys?) src)
        _ (okv? pp || ccdie pp src ("cc: preprocessor error in " + src))
        ps (cparse-d <>pp tgt dia)             ; the target sizes pointers/longs at the ABI width; the dialect says what grammar
-       _ (okv? ps || ccdie ps src ("cc: parse error in " + src))
-       ps)
+       (okv? ps || ccdie ps src ("cc: parse error in " + src),
+        ps))
    ; a relocatable object: text/data/.bss/love_nifs/.image sections + symbols + relocations
    ; -- the bytes (`-c` writes them; the link path feeds them to ldlink), and obj.l picks the
    ; reloc vocabulary by tgt. plus one section per other __attribute__((section(NAME))) name
@@ -435,36 +424,36 @@
        ; declined.
        (: ob (cgen-obj ast stag sigs weaks
                        [sfns svars sects alias aligns ainl noinl consts rstrs ni gregs vol] tgt)
-          _ (okv? ob || ccdie ob src ("cc: codegen error in " + src))
-          (@ ob [_ tforms dforms fnames gnames nforms iforms lnames xsecs bforms rforms xfns asecs]
-             (: xs (map ([nm forms ro] \ objsec-named nm forms ro) xsecs
-                        + map ([nm forms al] \ objsec-code nm forms al) xfns)   ; ..and the fns that named a section
-                ; the file-scope asm's sections, and the names its .globl exports by where they landed
-                at (? (two? asecs) asecs [() () ()])
-                fns (fnames + filter (s \ !(elem s fnames)) (at 1))
-                gns (gnames + filter (s \ !(elem s gnames)) (at 2))
-                ; the two writers, one shape: the standard set for the width, plus whatever
-                ; the TU named. arm32 has no .image lane and no local func symbols for
-                ; statics -- objsecs3 refuses the first, and `lnames` does not ride.
-                (? (tgt = 'wasm)
-                   (? (two? <at) (udie 1 ("cc: a file-scope asm has no wasm lane, in " + src))
-                      (show [tforms dforms fnames gnames nforms iforms lnames xsecs bforms rforms xfns weaks]))
-                   (arm32? tgt)
-                   (objsecs32 tgt (objsec-merge (objsecs3 tgt tforms dforms nforms iforms bforms rforms + xs) <at)
-                              fns gns weaks)
-                   (objsecs tgt (objsec-merge (objsecs4 tforms dforms nforms iforms bforms rforms + xs) <at)
-                            fns gns weaks lnames)))
-             (udie 1 ("cc: the code generator answered an unexpected shape for " + src))))
+          (okv? ob || ccdie ob src ("cc: codegen error in " + src),
+           (@ ob [_ tforms dforms fnames gnames nforms iforms lnames xsecs bforms rforms xfns asecs]
+              (: xs (map ([nm forms ro] \ objsec-named nm forms ro) xsecs
+                         + map ([nm forms al] \ objsec-code nm forms al) xfns)   ; ..and the fns that named a section
+                 ; the file-scope asm's sections, and the names its .globl exports by where they landed
+                 at (two? asecs ? asecs [() () ()])
+                 fns (fnames + filter (s \ !(elem s fnames)) (at 1))
+                 gns (gnames + filter (s \ !(elem s gnames)) (at 2))
+                 ; the two writers, one shape: the standard set for the width, plus whatever
+                 ; the TU named. arm32 has no .image lane and no local func symbols for
+                 ; statics -- objsecs3 refuses the first, and `lnames` does not ride.
+                 (? (tgt = 'wasm)
+                    (two? <at ? (udie 1 ("cc: a file-scope asm has no wasm lane, in " + src))
+                       (show [tforms dforms fnames gnames nforms iforms lnames xsecs bforms rforms xfns weaks]))
+                    (arm32? tgt)
+                    (objsecs32 tgt (objsec-merge (objsecs3 tgt tforms dforms nforms iforms bforms rforms + xs) <at)
+                               fns gns weaks)
+                    (objsecs tgt (objsec-merge (objsecs4 tforms dforms nforms iforms bforms rforms + xs) <at)
+                             fns gns weaks lnames)))
+              (udie 1 ("cc: the code generator answered an unexpected shape for " + src)))))
        (udie 1 ("cc: the parser answered an unexpected shape for " + src)))
    ; a wasm object is the gen tuple as TEXT (above), so it goes to the port whole:
-   ; write-bytes walks a BYTE LIST, and a string handed to it lands as an empty file.
+   ; write-bytes walks a byte list, and a string handed to it lands as an empty file.
    (cc-obj src dst (t @ {'tgt tgt}))
-    (: b (cc-objbytes src t)
+    (cc-objbytes src t @ b
        (tgt != 'wasm ? (write-bytes dst b)
-        (: q (open dst "w")
-           _ (!(hot? q) ? (udie 1 ("cc: cannot write " + dst)))
-           _ (say q b)
-           (close q))))
+        (open dst "w" @ q
+           (!(hot? q) ? (udie 1 ("cc: cannot write " + dst)),
+            say q b,
+            close q))))
    ; the link path (rung 3, src/love/holo/link.l): every input lands as object bytes (a .c
    ; compiled here, a .o read off disk), crt0 rides first -- its text is the entry -- and
    ; ldlink binds the static exe, no system linker. the entry hands the OS stack pointer
@@ -550,12 +539,12 @@
    ; sentence a reader gets when one will not open -- `cc: cannot open x`, not ldarch's
    ; scare.
    (arload srcs paths tgt)
-    (? !(two? paths) ()
+    (!(two? paths) ? ()
        (ldarch srcs
-               (map (p \ (: r (uread p)
-                              _ (two? r || udie 1 ("cc: cannot open " + p))
-                              _ (ld-ar? <>r || udie 1 ("cc: not an archive: " + p))
-                              [p <>r]))
+               (map (p \ (uread p @ r
+                              (two? r || udie 1 ("cc: cannot open " + p),
+                               ld-ar? <>r || udie 1 ("cc: not an archive: " + p),
+                               [p <>r])))
                     paths)
                tgt))
    ; -- the runtime cache. a member must be compiled to know what it defines, so the pull
@@ -573,24 +562,24 @@
    ; hashing the .l sources instead is a hole -- edit gen.l, link once before the image
    ; catches up, and the entry holds the old image's codegen. no identity, no cache, and it
    ; is read at each call.
-   (sdir? st) (two? st && (st 2 & 61440) = 16384)
+   (sdir? st) (two? st && st 2 & 61440 = 16384)
    ; the cache seat is the build tree's own out/, never a home directory: who wants it is a
    ; checkout, and a checkout is what has an out/. presence is the wrapper, the way mhome
    ; reads its roots, and out/ itself is never created here.
    (mcdir _)
-    (: d "out/cache/moon/"
-       _ (sdir? (stat "out") && map (s \ mkdir s 493) '("out/cache" "out/cache/moon"))
-       (sdir? (stat d) && d))
+    ("out/cache/moon/" @ d
+       (sdir? (stat "out") && map (s \ mkdir s 493) '("out/cache" "out/cache/moon"),
+        sdir? (stat d) && d))
    ; the input-name predicates, ahead of every reader of them.
-   (dota? p) (: n #p (2 < n && p (n - 2) = 46 && p (n - 1) = 97))
-   (dotc? p) (: n #p (2 < n && p (n - 2) = 46 && p (n - 1) = 99))
-   (dots? p) (: n #p (2 < n && p (n - 2) = 46 && p (n - 1) = 115))   ; assembly
-   (dotS? p) (: n #p (2 < n && p (n - 2) = 46 && p (n - 1) = 83))    ; ..that the preprocessor reads first
+   (dota? p) (#p @ n (2 < n && p (n - 2) = 46 && p (n - 1) = 97))
+   (dotc? p) (#p @ n (2 < n && p (n - 2) = 46 && p (n - 1) = 99))
+   (dots? p) (#p @ n (2 < n && p (n - 2) = 46 && p (n - 1) = 115))   ; assembly
+   (dotS? p) (#p @ n (2 < n && p (n - 2) = 46 && p (n - 1) = 83))    ; ..that the preprocessor reads first
    (dotsrc? p) (dotc? p || dots? p || dotS? p)                         ; a source this compiler lays an object from
-   (doto? p) (: n #p (2 < n && p (n - 2) = 46 && p (n - 1) = 111))
-   (dotim? p) (: n #p (6 < n && snip p (n - 6) n = ".image"))
-   (dotcid? p) (: n #p (4 < n && snip p (n - 4) n = ".cid"))
-   (dotrto? p) (: n #p (4 < n && snip p (n - 4) n = ".rto"))
+   (doto? p) (#p @ n (2 < n && p (n - 2) = 46 && p (n - 1) = 111))
+   (dotim? p) (#p @ n (6 < n && snip p (n - 6) n = ".image"))
+   (dotcid? p) (#p @ n (4 < n && snip p (n - 4) n = ".cid"))
+   (dotrto? p) (#p @ n (4 < n && snip p (n - 4) n = ".rto"))
    ; the build tree keeps the images in the love's own directory, an installed nest one rung
    ; over in lib/love/ -- the two seats mseat already knows. not point-free: the mapped
    ; lambda reads `d` to build the path it hashes, so dropping the parameter leaves that read
@@ -600,25 +589,25 @@
    ; input too: an edited stdio.h changes what moonlibc means, and the .c alone would not see
    ; it.
    (mctree d)
-    (foldl (\ a f (: p (d + f)
-                     st (stat p)
-                     (? !(two? st) a
-                        (sdir? st) (a + f + "/\n" + mctree (p + "/"))
-                        (: r (uread p) (a + f + "\n" + (two? r ? <>r "") + "\n")))))
+    (foldl (a \ f \ (: p (d + f)
+                       st (stat p)
+                       (? !(two? st) a
+                          (sdir? st) (a + f + "/\n" + mctree (p + "/"))
+                          (uread p @ r (a + f + "\n" + (two? r ? <>r "") + "\n")))))
            "" (sort (readdir d)))
    ; the same walk with the stats where the bytes go -- a stat per member against
    ; mctree's 1.2 MB of reads. it moves whenever an edit does, which is all a key needs.
    (mcshape d)
-    (foldl (\ a f (: p (d + f)
-                     st (stat p)
-                     (? !(two? st) a
-                        (sdir? st) (a + f + "/\n" + mcshape (p + "/"))
-                        (a + f + "\n" + show st + "\n"))))
+    (foldl (a \ f \ (: p (d + f)
+                       st (stat p)
+                       (? !(two? st) a
+                          (sdir? st) (a + f + "/\n" + mcshape (p + "/"))
+                          (a + f + "\n" + show st + "\n"))))
            "" (sort (readdir d)))
    ; the two dirs that are the toolchain, as bytes and as shape. every digest below wants
    ; one or the other of these and nothing else of the tree.
-   (mcsrctext home) ((mctree (home + "include/")) + (mctree (home + "lib/")))
-   (mcsrcshape home) ((mcshape (home + "include/")) + (mcshape (home + "lib/")))
+   (mcsrctext home) (mctree (home + "include/") + mctree (home + "lib/"))
+   (mcsrcshape home) (mcshape (home + "include/") + mcshape (home + "lib/"))
    ; a digest memoized under a shape -- mccid's law one rung up from a file: the bytes are
    ; the identity, a stat says when to read them, `mk` is the real read. tag parts memos by
    ; shape.
@@ -626,13 +615,13 @@
     (: d (mcdir ())
        k (string? d && sha256 (tag + "\n" + shape))
        hit (string? k && mcget d (k + ".cid") "cid1 ")
-       _ (two? hit && utime (d + k + ".cid") (clock ()))        ; the sweep orders by use
-       (two? hit ? (snip <>hit 5 69)
-          (: h (mk ())
-             _ (string? k && mcput d (k + ".cid") ("cid1 " + h + "\n"))
-             h)))
+       (two? hit && utime (d + k + ".cid") (clock ()),        ; the sweep orders by use
+        two? hit ? (snip <>hit 5 69)
+          (mk () @ h
+             (string? k && mcput d (k + ".cid") ("cid1 " + h + "\n"),
+              h))))
    (mcsrcid home)
-    (mcmemo "moon-src 1" (mcsrcshape home) (\ _ (sha256 (mcsrctext home))))
+    (mcmemo "moon-src 1" (mcsrcshape home) (_ \ sha256 (mcsrctext home)))
    ; the exe's path rides beside its content: two worktrees hold the same cwd-relative
    ; include paths, and only the seat tells their headers apart. the image is the one this
    ; session woke, which main.c pins as `love-image` -- read as data, never a bare ref: a
@@ -645,17 +634,17 @@
     (: x (selfpath 0)
        d (string? x && cdir x)
        w (elem 'love-image (names ()) && [1 (ev 'love-image)])
-       ims (two? w ? (: im <>w
+       ims (two? w ? (<>w @ im
                         (? !(string? im) ()
                            (im = "<baked>") ["<baked>"]
                            [[im (mccid im)]]))
-                     (string? d && (mcims d) + mcims (d + "../lib/love/")))
+                     (string? d && mcims d + mcims (d + "../lib/love/")))
        src (two? ims ? (mcsrcid home) "")
        ; the ablation knob compiles a different runtime, so it is part of the identity;
        ; unset stays out so every standing key survives
-       ab (: s (getenv "MOON_ABLATE") (string? s && 0 < #s ? ("\nabl " + s) ""))
+       ab (getenv "MOON_ABLATE" @ s (string? s && 0 < #s ? ("\nabl " + s) ""))
        (!(two? ims) ? ()
-          (sha256 ("moon-rt 2\n" + x + "\n" + (mccid x) + "\n" + show ims + "\n" + src + ab))))
+          (sha256 ("moon-rt 2\n" + x + "\n" + mccid x + "\n" + show ims + "\n" + src + ab))))
    ; an entry, read back and checked for its magic: the rename below lands it whole, so a
    ; torn file cannot appear and a mangled one is passed over. the (1 bytes) wrapper: empty
    ; is a miss.
@@ -671,9 +660,9 @@
     (: p (d + f)
        t (p + "." + show (getpid ()))
        q (open t "w")
-       _ (hot? q ? (say q bs, close q))
-       _ (hot? q && !(rename t p) ? () (unlink t))       ; anything but (): the rename lost
-       ())
+       (hot? q ? (say q bs, close q),
+        hot? q && !(rename t p) ? () (unlink t),       ; anything but (): the rename lost
+        ()))
    ; a file's identity is its bytes: a relink that changed nothing is not a different
    ; compiler, and an inode cannot say so. reading a whole exe per link would swamp the door
    ; it serves, so the hash is memoized under the stat; with no cache in reach the stat
@@ -683,13 +672,13 @@
        d (mcdir ())
        k (string? d && two? st && sha256 ("moon-cid 1\n" + p + "\n" + show st))
        hit (string? k && mcget d (k + ".cid") "cid1 ")
-       _ (two? hit && utime (d + k + ".cid") (clock ()))        ; the sweep orders by use
-       (two? hit ? (snip <>hit 5 69)
-          (: r (uread p)
+       (two? hit && utime (d + k + ".cid") (clock ()),        ; the sweep orders by use
+        two? hit ? (snip <>hit 5 69)
+          (uread p @ r
              (!(two? r) ? (show st)
-                (: h (sha256 <>r)
-                   _ (string? k && mcput d (k + ".cid") ("cid1 " + h + "\n"))
-                   h)))))
+                (sha256 <>r @ h
+                   (string? k && mcput d (k + ".cid") ("cid1 " + h + "\n"),
+                    h))))))
    ; the bound, and the cache keeps it itself: swept on every link, hit or miss, so a folder
    ; grown fat under an older policy trims on the next one. nothing here knows which
    ; generations are dead, so count decides -- count and not age, because a day of rebuilds
@@ -705,18 +694,18 @@
        ; compilers -- so the room here is deliberate. three shapes are kept: the archives,
        ; the members they index, and the .cid memos naming the compiler that cut them, each
        ; bounded on its own count. anything else goes.
-       _ (foldl (\ a f (? (dota? f || dotcid? f || dotrto? f) a (unlink (d + f), a))) 0 (readdir d))
-       (ages pk) (foldl (\ a f (: st (stat (d + f))
-                                  (pk f && two? st ? (a + [[(st 1) f]]) a)))
+       _ (foldl (a \ f \ dota? f || dotcid? f || dotrto? f ? a (unlink (d + f), a)) 0 (readdir d))
+       (ages pk) (foldl (a \ f \ stat (d + f) @ st
+                                   (pk f && two? st ? (a + [[(st 1) f]]) a))
                         () (readdir d))
-       (go l k most) (? !(two? l) 0
-                       (: e <l
-                          _ (most <= k && unlink (d + <>e))
-                          (go >l (k + 1) most)))
-       (old pk most) (go (sortby (\ a b (<b <= <a)) (ages pk)) 0 most)
-       _ (old dota? mckeep)
-       _ (old dotrto? mckeepo)
-       (old dotcid? mckeep))
+       (go l k most) (!(two? l) ? 0
+                       (<l @ e
+                          (most <= k && unlink (d + <>e),
+                           go >l (k + 1) most)))
+       (old pk most) (go (sortby (a \ b \ <b <= <a) (ages pk)) 0 most)
+       (old dota? mckeep,
+        old dotrto? mckeepo,
+        old dotcid? mckeep))
    ; the compiled runtime as one archive: the cache when it can answer, the compiler
    ; otherwise -- and the compile is what fills the cache. a cache that cannot open is
    ; invisible.
@@ -727,7 +716,7 @@
    ; and a link compares against the stamp; the memo is around it, never in it.
    (rtcid home)
     (mcmemo "moon-rtcid 1" (mcsrcshape home)
-            (\ _ (sha256 ("moon-rtc 1\n" + (mcsrctext home)))))
+            (_ \ sha256 ("moon-rtc 1\n" + mcsrctext home)))
    ; the carried runtime: the build lays each ISA's compiled archive beside the source blob
    ; (src/tools/mkrt.l; src/love/src.c answers runtime-gz), so a link owes no member compiles -- the
    ; bare door's ~28 s becomes a read. only when the identity matches: the blob lane's
@@ -742,11 +731,11 @@
    (rtcarried home tgt os)
     (? (os = 'none) ()                                     ; freestanding owes no runtime
        (tgt = 'rv64 && elem os '(freebsd netbsd)) ()
-       (: nm (elem tgt '(x64 a64 rv64) && string tgt)
-          (? !(string? nm) ()
-             (: z (runtime-gz nm)
-                (? !(string? z) ()
-                   (: ok (string? home ? ((rtcid home) = (runtime-gz "id")) 1)
+       (elem tgt '(x64 a64 rv64) && string tgt @ nm
+          (!(string? nm) ? ()
+             (runtime-gz nm @ z
+                (!(string? z) ? ()
+                   (: ok (string? home ? (rtcid home = runtime-gz "id") 1)
                       ; the carried bytes are a deflate stream with no size hint, so inflate
                       ; counts it first. inflate does not validate, so the magic is the
                       ; check: bytes that are not a stream decode to nonsense, not ().
@@ -756,8 +745,8 @@
    ; carries is the stamped truth, so a cache entry could only ever agree with it. the key is
    ; cut where it is used, on the lane the carried bytes refused.
    (rtarch home tgt os vb)
-    (: cr (rtcarried home tgt os)
-       (? (string? cr) cr
+    (rtcarried home tgt os @ cr
+       (string? cr ? cr
           ; the key carries the OS beside the target: two kernels' archives can wear one
           ; target name here even where the carried set has no such pair.
           (: id (string? home && mcid home)
@@ -766,11 +755,11 @@
              hit (string? k && mcget cd (k + ".a") "!<arch>\n")
              _ (two? hit && utime (cd + k + ".a") (clock ()))        ; the sweep orders by use
              bs (two? hit ? <>hit
-                   (: b (arbytes (rtmems home tgt os vb id))
-                      _ (string? k && mcput cd (k + ".a") b)
-                      b))
-             _ (string? cd && mcsweep cd)
-             bs)))
+                   (arbytes (rtmems home tgt os vb id) @ b
+                      (string? k && mcput cd (k + ".a") b,
+                       b)))
+             (string? cd && mcsweep cd,
+              bs))))
    ; the roster, ahead of any compile: [name source includes] a member, an empty source
    ; naming the one that is laid rather than compiled. apart from the compile so a
    ; warmer can take a slice of it where the archive lane takes all of it. moonlibc is a
@@ -785,25 +774,25 @@
        (dotobj n) (dotc? n ? (snip n 0 (#n - 2) + ".o") n)
        (swap47 s) (: n #s c (cask n)
                      _ (pour c 0 s 0 n)
-                     (go i) (? (n <= i) (string c)
+                     (go i) (n <= i ? (string c)
                                (peep c i 0 = 47 && pin c i 95,
                                 go (i + 1)))
                      (go 0))
        (nlmems d)
-        (? disk
-           (foldl (\ a e (: p (d + e)
-                            (? (dotc? e) (a + [[(dotobj e) p]])
-                               (sdir? (stat p))
-                                (a + foldl (\ a2 f (a2 + [[(dotobj $ e + "_" + f) (p + "/" + f)]]))
-                                           () (sort (filter dotc? (readdir p))))
-                               a)))
+        (disk ?
+           (foldl (a \ e \ d + e @ p
+                             (? (dotc? e) (a + [[(dotobj e) p]])
+                                (sdir? (stat p))
+                                 (a + foldl (a2 \ f \ a2 + [[(dotobj $ e + "_" + f) (p + "/" + f)]])
+                                            () (sort (filter dotc? (readdir p))))
+                                a))
                   () (sort (readdir d)))
            ; the carried source: the same pairs off the table's keys (the
            ; member's "path" is its key; cc-parse reads it back from vb)
-           (foldl (\ a k (: sub (snip k #d #k)
-                            (dotc? sub ? (a + [[(dotobj (swap47 sub)) k]]) a)))
+           (foldl (a \ k \ snip k #d #k @ sub
+                             (dotc? sub ? (a + [[(dotobj (swap47 sub)) k]]) a))
                   () (sort (filter (k \ starts? k d) (keys vb)))))
-       ((map ((a b) \ [a b [inc]]) (nlmems ndir))
+       (map ((a b) \ [a b [inc]]) (nlmems ndir)
         + (elem tgt '(x64 a64 rv64) ? [["mksys.o" "" ()]] ())))
    ; the members compile under the link's os (impl.h's table opens on it), and the sys
    ; leaf is the os's own -- freebsd rides the x64 machine.
@@ -818,16 +807,16 @@
        k (string? cd && string? id
           && (sha256 $ id + "\n" + nm + "\n" + show tgt + "\n" + show os))
        hit (string? k && mcget cd (k + ".rto") "rto1\n")
-       _ (two? hit && utime (cd + k + ".rto") (clock ()))        ; the sweep orders by use
-       (two? hit ? [nm (snip <>hit 5 #<>hit)]
+       (two? hit && utime (cd + k + ".rto") (clock ()),        ; the sweep orders by use
+        two? hit ? [nm (snip <>hit 5 #<>hit)]
           (: b (!#src ? (string (mksys-bytes tgt))
                         (string (cc-objbytes src (rtflags tgt os vb is))))
-             _ (string? k && mcput cd (k + ".rto") ("rto1\n" + b))
-             [nm b])))
+             (string? k && mcput cd (k + ".rto") ("rto1\n" + b),
+              [nm b]))))
    ; every member compiled, ready to index -- our own sources reaching only our own headers.
    ; the id is the caller's: it already cut one to key the archive, and mcid walks the slice.
    (rtmems home tgt os vb id)
-    (: cd (string? id && mcdir ())
+    (string? id && mcdir () @ cd
        (map (e \ rtmem1 tgt os vb id cd e) (rtplan home tgt os vb)))
    ; fill the member cache for one residue of the roster, over every target named --
    ; what a forked child runs. a child's whole answer is the entries it writes, so
@@ -842,7 +831,7 @@
        cd (string? id && mcdir ())
        (!(string? cd) ? 0
           (each tgts
-                (t \ (: (go l k) (? !(two? l) 0
+                (t \ (: (go l k) (!(two? l) ? 0
                                     (i = k // run % w && rtmem1 t os vb id cd <l,
                                      go >l (k + 1)))
                         (go (rtplan home t os vb) 0))))))
@@ -856,24 +845,24 @@
        home (two? owed && !nostd && mhome ())
        ; owed symbols and no runtime in reach: both facts, the certain one first -- leading
        ; with the absent toolchain prescribes the wrong repair for a misspelled label.
-       _ (two? owed && !(string? home) && !vb
-          && udie 1 ("cc: undefined reference to " + qfew owed
-                     + "; no runtime in reach to supply it either (looked in "
-                     + mfew (mroots ()) + ") -- check the spelling, then the nest"))
-       (? (nostd || (!(string? home) && !vb)) ()
-          (: pr (arpull "moon-runtime" (rtarch home tgt os vb) dt owed mach)
+       (two? owed && !(string? home) && !vb
+        && udie 1 ("cc: undefined reference to " + qfew owed
+                   + "; no runtime in reach to supply it either (looked in "
+                   + mfew (mroots ()) + ") -- check the spelling, then the nest"),
+        nostd || !(string? home) && !vb ? ()
+          (arpull "moon-runtime" (rtarch home tgt os vb) dt owed mach @ pr
              ; the owe at termination is the answer: exactly the set nothing anywhere
              ; defines, said here whole rather than one nom at a time by whichever holo
              ; scares about first.
-             _ (two? <>pr && undie <>pr)
-             <pr)))
+             (two? <>pr && undie <>pr,
+              <pr))))
    ; -- the wasm link (src/love/holo/wasmfn.l): the objects are gen tuples as text, the
    ; runtime the same members compiled for wasm and pulled by need, and one function
    ; imported -- __ai_sys, the syscall door the page's loader answers. crt0 hands moonlibc's
    ; __ai_start a stack laid in data (argc 1, an argv, empty envp and auxv) and exits with
    ; its answer through the import; the weak default calls main outright. ..or a container
    ; with the blobs behind the text (wasmfn.l's wasm-tu-read).
-   (wasm-tu text) (: r (wasm-tu-read text) (? (two? r) r (udie 1 "cc: not a wasm object")))
+   (wasm-tu text) (wasm-tu-read text @ r (two? r ? r (udie 1 "cc: not a wasm object")))
    crt0-wasm '(((label _start) (la r0 __ai_osstack) (call __ai_start) (mov r1 r0) (li r0 231) (call __ai_sys) (ret)
                 (label __ai_start) (push lr) (lea r1 r0 8) (ld r0 r0 0) (call main) (pop lr) (ret))
                ((label __ai_osstack) (raw (1 0 0 0 0 0 0 0 (fix 8 abs64 __ai_argv0 0) 0 0 0 0 0 0 0 0
@@ -889,9 +878,9 @@
        hit (string? k && mcget cd (k + ".wrt") "wrt1\n")
        _ (two? hit && utime (cd + k + ".wrt") (clock ()))
        txt (two? hit ? (snip <>hit 5 #<>hit)
-              (: s (show (rtmems home 'wasm os vb id))
-                 _ (string? k && mcput cd (k + ".wrt") ("wrt1\n" + s))
-                 s))
+              (show (rtmems home 'wasm os vb id) @ s
+                 (string? k && mcput cd (k + ".wrt") ("wrt1\n" + s),
+                  s)))
        <(sound txt))
    ; the inputs stay TEXT until the link reads them, and what is held of each here is its
    ; ledger alone: the link's live set is one copy of the program, not three
@@ -899,20 +888,20 @@
     (: os9 (!os ? 'linux os)                          ; the loader speaks linux's numbers
        t9 (pin t 'os os9)
        texts (map (f \ (? (dotsrc? f) (cc-objbytes f t9)
-                          (doto? f) (: r (uread f) (two? r ? <>r (udie 1 ("cc: cannot open " + f))))
+                          (doto? f) (uread f @ r (two? r ? <>r (udie 1 ("cc: cannot open " + f))))
                           (udie 2 ("cc: not a .c/.o input for wasm: " + f))))
                   ins)
        tsyms (map (x \ wasm-tu-syms (wasm-tu x)) texts)          ; (defs . refs) each
        ; the runtime by need: a member whose defs meet an owed name joins, and its own
        ; wants join the owe, until nothing more is owed or nothing more answers
        ledger (ss \ (: defs {} refs {}
-                       _ (map (s \ (map (d \ pin defs d 1) <s,
-                                     map (r \ pin refs r 1) >s))
-                              ss)
-                       (filter (r \ !(defs r)) (keys refs))))
+                       (map (s \ (map (d \ pin defs d 1) <s,
+                                   map (r \ pin refs r 1) >s))
+                            ss,
+                        filter (r \ !(defs r)) (keys refs))))
        ; crt0 rides when an input defines main; a module with a face of its own (the wasm
        ; seat's host.c, which the page enters at ai_init) links without an entry
-       entry? (foldl (\ a s (a || elem 'main <s)) 0 tsyms)      ; a ledger names noms
+       entry? (foldl (a \ s \ a || elem 'main <s) 0 tsyms)      ; a ledger names noms
        base (entry? ? (crt0-wasm . texts) texts)
        bsyms (entry? ? (wasm-tu-syms crt0-wasm . tsyms) tsyms)
        owed0 (ledger bsyms)
@@ -920,18 +909,18 @@
        rt (two? owed0 && !nostd && wasm-rt home os9 vb)
        mems (map (m \ [(m 0) (m 1) (wasm-tu-syms (wasm-tu (m 1)))]) rt)   ; name, text, ledger
        (pull set owed)
-        (: hit (filter (m \ foldl (\ a d (a || elem d owed)) 0 <(m 2)) mems)
+        (: hit (filter (m \ foldl (a \ d \ a || elem d owed) 0 <(m 2)) mems)
            new (filter (m \ !(elem m set)) hit)
            (!(two? new) ? set
-              (: set2 (set + new) (pull set2 (ledger (bsyms + map (m \ m 2) set2))))))
+              (set + new @ set2 (pull set2 (ledger (bsyms + map (m \ m 2) set2))))))
        picked (pull () owed0)
        all (base + map (m \ m 1) picked)
        m (wasm-link all {'imports '("__ai_sys") 'exports 'all})
        q (open dst "w")
-       _ (!(hot? q) ? (udie 1 ("cc: cannot write " + dst)))
-       _ (say q (wasm-emit m))
-       _ (close q)
-       0)
+       (!(hot? q) ? (udie 1 ("cc: cannot write " + dst)),
+        say q (wasm-emit m),
+        close q,
+        0))
    (cc-link ins dst t) (t 'tgt = 'wasm ? (cc-wasm ins dst t) (cc-link-elf ins dst t))
    (cc-link-elf ins dst (t @ {'is is 'ds ds 'tgt tgt 'os os 'pie pie 'org org 'dorg dorg
                           'nostd nostd 'vb vb 'ni ni 'rdme rdme 'relo relo}))
@@ -941,7 +930,7 @@
           && udie 1 "cc: -os freebsd links x64 only for now")
        ars (filter dota? ins)
        srcs (map (f \ (? (dotsrc? f) [f (string (cc-objbytes f t))]
-                         (doto? f) (: r (uread f)
+                         (doto? f) (uread f @ r
                                       (two? r ? [f <>r]
                                                 (udie 1 ("cc: cannot open " + f))))
                          (udie 2 ("cc: not a .c/.s/.o/.a input: " + f))))
@@ -979,21 +968,21 @@
        ; the ei_osabi = 9 brand (rung UV3) is ldlink's, laid where the header is made:
        ; one linker, one place, so kore's `ld` and this driver cannot disagree.
        nw (ld-write dst ps)
-       _ (nom? nw && udie 1 ("cc: cannot write " + dst + " -- " + show nw))
-       (chmod dst 493))
+       (nom? nw && udie 1 ("cc: cannot write " + dst + " -- " + show nw),
+        chmod dst 493))
    usage "usage: mooncc [-c] [-pie] [--emit-relocs] [-x c] [-t x64|a64|rv64] [-os linux|none|freebsd] [-Ttext addr] [-Tdata addr] [-I dir] [-D name[=val]] [-U name] [-freadme=F] [-o out] in.c|in.o|lib.a|- .."
    ; a flag's numeric argument: 0x.. hex or decimal (-Ttext 0x80000000)
    (tonum s)
     (: n #s
        hex (2 < n && s 0 = 48 && (s 1 = 120 || s 1 = 88))
-       (go i acc b) (? (n <= i) acc
+       (go i acc b) (n <= i ? acc
                        (: c (s i)
                           d (? (48 <= c <= 57) (c - 48)
                                (97 <= c <= 102) (c - 87)
                                (65 <= c <= 70) (c - 55)
                                (udie 2 usage))
-                          _ (d < b || udie 2 usage)
-                          (go (i + 1) (acc * b + d) b)))
+                          (d < b || udie 2 usage,
+                           go (i + 1) (acc * b + d) b)))
        (hex ? (go 2 0 16) (go 0 0 10)))
    ; the flag scan: -c, -pie, -t tgt / -ttgt, -Ttext addr, -I dir / -Idir, -D def / -Ddef, -o
    ; out; every other bare arg is an input. -pie links an et_dyn static-pie (the linker
@@ -1035,13 +1024,13 @@
    ; it.
    (std-take as)                                   ; -> (dialect args-without-std)
     (: (go l dia acc)
-        (? !(two? l) [dia (rev acc)]
-           (: a <l
-              (? (starts? a "-std=")
+        (!(two? l) ? [dia (rev acc)]
+           (<l @ a
+              (starts? a "-std=" ?
                  (: w (snip a 5 #a)
                     d (stdof w)
-                    _ (d || udie 2 ("cc: unknown -std=" + w + " -- mooncc reads: " + (stdnames ())))
-                    (go >l d acc))
+                    (d || udie 2 ("cc: unknown -std=" + w + " -- mooncc reads: " + stdnames ()),
+                     go >l d acc))
                  (go >l dia (a . acc)))))
        (go as 'moon ()))          ; unsaid means moon: our C, extensions and all
    ; `none` is gcc's word for "read the suffix again", which for us is the default.
@@ -1050,15 +1039,15 @@
    (tol? a) (a = "-pipe" || a = "-static" ||
              starts? a "-g" || starts? a "-O" ||
              starts? a "-f" || glu? a 108 || glu? a 76 ||
-             (starts? a "-W" &&
-              !(starts? a "-Wl," || starts? a "-Wa," || starts? a "-Wp,")))
+             starts? a "-W" &&
+             !(starts? a "-Wl," || starts? a "-Wa," || starts? a "-Wp,"))
    ; the -nostdlib family: freestanding on any cc's surface -- the driver supplies no
    ; runtime, and an owed symbol is an undefined reference, so rtpull says so rather than
    ; pulling.
    (nostd? a) (a = "-nostdlib" || a = "-nostartfiles" ||
                a = "-nodefaultlibs" || a = "-ffreestanding")
-   (dirn d) (: n #d (? !n d (d (n - 1) = 47) d (d + "/")))
-   (obase p) (: b (pbase p) (snip b 0 (#b - 1) + "o"))   ; dir/x.c -> x.o (in the cwd, gcc-shaped)
+   (dirn d) (#d @ n (? !n d (d (n - 1) = 47) d (d + "/")))
+   (obase p) (pbase p @ b (snip b 0 (#b - 1) + "o"))   ; dir/x.c -> x.o (in the cwd, gcc-shaped)
    ; one tablet, not a row of positional accumulators: a flag is one `pin` at its own arm and
    ; nothing anywhere else, and the reader asks for it by name. -std= is a pre-pass instead,
    ; because it names the language and belongs before the line is read at all.
@@ -1075,7 +1064,7 @@
    (fseed tgt dia) {'c () 'is () 'ds () 'o () 'ins () 'tgt tgt 'os () 'pie () 'org () 'dorg ()
                     'nostd () 'vb () 'ni () 'rdme () 'relo () 'dia dia}
    (flags as t)
-    (? !(two? as)
+    (!(two? as) ?
        (pin t 'is (rev (t 'is)),
         pin t 'ds (rev (t 'ds)),
         pin t 'ins (rev (t 'ins)),
@@ -1139,7 +1128,7 @@
              ; assembler` name compilers we are not, and taking either for C would read one
              ; language as another.
              (a = "-x") (two? r ? (xlang? <r ? (flags >r t) (udie 2 (xdie <r))) (udie 2 usage))
-             (glu? a 120) (: w (snip a 2 #a)
+             (glu? a 120) (snip a 2 #a @ w
                              (xlang? w ? (flags r t) (udie 2 (xdie w))))
              (tol? a) (flags r t)
              ; ahead of the dash refusal, and the only arg that is: a bare `-` is an
@@ -1158,11 +1147,11 @@
    ; here rides out on): taking it as an internal raise would print a nonsense sentence over
    ; every usage error and flatten its 2 to a 1.
    (moon-run as)
-    (trap (x \ (: r (moon-cc x) (charm? r ? r 0))) as
-          (\ a b (a = 'leave ? b
-                    (say err ("cc: internal error: " + show a + " " + show b + "\n"),
-                     flush err,
-                     1))))
+    (trap (x \ (moon-cc x @ r (charm? r ? r 0))) as
+          (a \ b \ a = 'leave ? b
+                     (say err ("cc: internal error: " + show a + " " + show b + "\n"),
+                      flush err,
+                      1)))
    ; moon-main is the shims' door and quits: the six -e drives and svalbard's verb table call
    ; it straight, and a compile ends the same way through all of them.
    (moon-main as) (quit (moon-run as))

@@ -45,7 +45,7 @@
    ; read it, gen's cmpu (compare/divide signedness) consumes it. w64 is the one seam: whether
    ; long is 8 bytes -- on ilp32 a long cannot hold every uint, so long meets uint at ulong
    ; where LP64 answers long.
-   (parith? ty) (? (bitf? ty) 1
+   (parith? ty) (bitf? ty ? 1
                    (elem ty '(bool char uchar short ushort int uint long ulong
                                  llong ullong i128 u128 float double)))
    (trank ty) (ty @ ('i128 || 'u128) 4 ('llong || 'ullong) 3 ('long || 'ulong) 2 1)
@@ -63,7 +63,7 @@
       (a = b ? a
        (: ua (tusg? a) ub (tusg? b)
         (ua && ub || !ua && !ub ? (trank a < trank b ? b a)   ; same signedness: higher rank
-         (: u (? ua a b) s (? ua b a)     ; one of each: the unsigned one, the signed one
+         (: u (ua ? a b) s (ua ? b a)     ; one of each: the unsigned one, the signed one
             (? (trank s <= trank u) u     ; unsigned rank >= signed: unsigned wins
                (tw w64 u < tw w64 s) s    ; signed strictly wider: it represents all of u
                (tusg s))))))))            ; same width: the signed one's unsigned twin
