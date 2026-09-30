@@ -417,6 +417,16 @@
    (os-keyfile f) (: t (os-slurp f) (? (string? t) (os-tls 'key-read t) ()))
    ; s to file f, or stdout for none -> 1 | 0
    (os-write f s) (: p (os-sink f) (? (hot? p) (say p s, os-close p f, 1) 0))
+   ; a private key to file f the way openssl lays one, 0600: a fresh name beside f made
+   ; O_EXCL (openfd 3), then renamed over f, so no link is followed and no old mode kept
+   (os-keywrite f s)
+    (? !(string? f) (os-write f s)
+       (: hx (os-tls 'hex) rn (os-tls 'rnd)
+          tmp (f + "." + hx (rn 6) + ".tmp")
+          fd (openfd tmp 3)
+          (? !(charm? fd) 0
+             (: p (fdopen fd) _ (say p s) _ (close p)
+                (? !(rename tmp f) 1 (unlink tmp, 0))))))
    ; -algorithm and -pkeyopt -> 'ed25519 | 'p256 | ()
    (os-kind alg opt)
     (: a (upper alg)
@@ -496,7 +506,7 @@
        kind (? (tablet? st) (os-kind (peep st "-algorithm" "") (peep st "-pkeyopt" "")) ())
        (? !(tablet? st) (os-bad "genpkey" (st 1))
           !(elem kind ['ed25519 'p256]) (say err "genpkey: made here: -algorithm ed25519, or -algorithm EC -pkeyopt ec_paramgen_curve:P-256\n", 1)
-          (os-write (st "-out") (os-tls 'key-pem (os-tls 'key-new kind))) 0
+          (os-keywrite (st "-out") (os-tls 'key-pem (os-tls 'key-new kind))) 0
           (say err ("genpkey: cannot write " + st "-out" + "\n"), 1)))
    ; --- req: a request, or with -x509 a self-signed certificate ---
    (os-req as)
@@ -513,7 +523,7 @@
                                 "req: -key FILE, or -newkey ed25519 or ec with -pkeyopt ec_paramgen_curve:P-256, is wanted\n"), 1)
           !(string? nm) (say err "req: -subj /CN=../O=.. is wanted (nothing is asked here)\n", 1)
           (string? v) (say err ("req: " + v + "\n"), 1)
-          (: kw (? (string? kf) 1 (os-write (peep st "-keyout" "privkey.pem") (os-tls 'key-pem k)))
+          (: kw (? (string? kf) 1 (os-keywrite (peep st "-keyout" "privkey.pem") (os-tls 'key-pem k)))
              sp (os-tls 'key-spki k)
              d (? (st "-x509")
                   (os-tls 'cert-make {'subject nm 'issuer nm 'spki sp 'key k 'nb <v 'na (v 1)

@@ -117,4 +117,16 @@
         0)
    0)
 
+;; a plain answer short of its Content-Length is cut short: exit 4, and no file. a chunked
+; body runs to its last chunk, or is nothing
+(: pl (test-listen 0)
+   s (twirl (_ \ (: c (accept (pl 1)) _ (see c) _ (chug c)
+                    (say c "HTTP/1.1 200 OK\r\nContent-Length: 10\r\n\r\nabc", flush c, close c))) ())
+   o ("out/.wgetc-" + show (getpid 0))
+   rc ((cite 'kore 'wget-main) ["-q" "-O" o ("http://127.0.0.1:" + show <pl + "/")])
+   _ (catch s) _ (close (pl 1))
+   U (cite 'kore 'wg-unchunk)
+   (test (rc = 4) !(two? (uread o))
+         (U "5\r\nhello\r\n0\r\n\r\n" = "hello") !(U "5\r\nhello\r\n") !(U "9\r\nhello\r\n0\r\n\r\n")))
+
 (test_fin (), puts "wget: ok", putc 10, 0)
