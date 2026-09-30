@@ -716,7 +716,7 @@ static ai_inline struct ai *ana_d(struct ai *g, struct env **b, word exp) {
  g = eset(g, b, EStack, ai_ok(g) ? pop1(g) : zero);
  for (def = ndef; chainp(nom); nom = B(nom), def = B(def))
   g = analyze(g, b, A(def)),
-  g = globp ? c0_ix(g, b, lvm_defglob, A(nom)) : g,
+  g = globp && !mintp(A(nom)) ? c0_ix(g, b, lvm_defglob, A(nom)) : g,   // a `_` row (opfix's fresh nom) never reaches the book
   g = gxl(ai_push(g, 2, A(nom), eget(g, *b, EStack))),
   g = eset(g, b, EStack, ai_ok(g) ? pop1(g) : zero);
  return

@@ -737,7 +737,7 @@
                            (#>x != #>(cof cls) ? (scare 'imports-grew n),
                             cput cls x)))
         f (ana c d)
-        g (?- id (even && !(c 'par) && n !== '_) (em2 lvm_defglob n))  ; `_` binds locally, never to the book
+        g (?- id (even && !(c 'par) && !(mint? n)) (em2 lvm_defglob n))  ; a `_` row (opfix's fresh nom) never reaches the book
         h (push c 'stk n,
            weave >nds)
         (f * g * h)))

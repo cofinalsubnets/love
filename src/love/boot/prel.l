@@ -521,13 +521,13 @@
                       (op-w (cup l) (cap r) (cup r)))))
              (: r (op-del (op-core e) out pend)
                 (op-w (cup l) (cap r) (cup r))))))
-   ; a `:` binds, it does not apply, so opfix must not rearrange it. binders stay verbatim and only
-   ; each pair's value and the trailing body factor. the pairing matches eval's exactly.
+   ; a `:` binds, it does not apply, so opfix must not rearrange it. binders stay verbatim but for
+   ; `_`, and only each pair's value and the trailing body factor. the pairing matches eval's exactly.
    (op-colon fs)
     (? (atom? fs) fs
        (atom? (cup fs)) (. (op-core (cap fs)) ())        ; a lone form is the body
        (: r (op-dpb (cap fs))                             ; define-sugar binds a \ too: lower its patterns
-          (. (cap r)                                     ; the name: verbatim, its params lowered
+          (. (cap r)                                     ; the name: verbatim but for `_`, its params lowered
                 (. (op-core (op-wrap (cup r) (caup fs))) ; the value: wrapped where they were, then factored
                       (op-colon (cuup fs))))))              ; the rest: pairs on
    ; a \ lambda is a binder too: the args stay verbatim, only the body factors.
@@ -542,16 +542,18 @@
    (op-wrap ws b) (? (atom? ws) b
                      (op-wrap (cup ws) (. (nom "@") (. (caap ws) (. (caup (cap ws))
                                                        (. b ()))))))
+   ; a `_` binder binds nothing: it takes a fresh nom no body can spell, so a read of `_` misses
+   (op-un p) (? (== p '_) (nom 0) p)
    (op-depat ol ws)
     (? (atom? (cup ol)) (. (op-wrap ws (cap ol)) ())          ; the body: wrapped outermost-last
        (: p (cap ol)
-          (? (nom? p) (. p (op-depat (cup ol) ws))
+          (? (nom? p) (. (op-un p) (op-depat (cup ol) ws))
              (: v (nom 0) (. v (op-depat (cup ol) (. (. v (. p ())) ws)))))))
    ; the same over a param list with no body -- answers (params . wraps), for the binder below.
    (op-dp ol ws)
     (? (atom? ol) (. () ws)
        (: p (cap ol)
-          (? (nom? p) (: r (op-dp (cup ol) ws) (. (. p (cap r)) (cup r)))
+          (? (nom? p) (: r (op-dp (cup ol) ws) (. (. (op-un p) (cap r)) (cup r)))
              (: v (nom 0) r (op-dp (cup ol) (. (. v (. p ())) ws))
                 (. (. v (cap r)) (cup r))))))
    ; a define-sugar binder is a lambda: (: (f [a b]) V ..) is (: (f v) (@ v [a b] V) ..).
@@ -559,7 +561,7 @@
    ; so every later position at every level is a param and lowers. a curried binder's inner params
    ; are the earlier arguments, so its wraps go outside this level's. ws is innermost-first.
    (op-dpb b)
-    (? (atom? b) (. b ())
+    (? (atom? b) (. (op-un b) ())
        (: hr (op-dpb (cap b)) pr (op-dp (cup b) ())
           (. (. (cap hr) (cap pr)) (cat (cup pr) (cup hr)))))
    ; flatten a directly-nested lambda body -- (\ a (\ b B)) -> (\ a b B) -- so neither compiler

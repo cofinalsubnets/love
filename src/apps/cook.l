@@ -350,9 +350,9 @@
 
 ; the whole importer lives in one body-having `:`, so none of its many helper names leak; it
 ; reads the outer globals freely and its body answers cook-main (args -> the whole job, answering
-; its status; a failure leaves by udie). the outer `_`-holder leaks cook-main as the one public -- the multi-call `kore`
+; its status; a failure leaves by udie). the outer `:` binds cook-main as the one public -- the multi-call `kore`
 ; calls it as `make` -- and the seat at the bottom fires it when this file was invoked.
-(: _ (:
+(: cook-main (:
    ; --emit: when set, expand-steps emits a serializable ("sh" "-c" cmd) step instead of a
    ; sh-line thunk, so the resolved cards can be shown back as a Cookfile (emit-cookfile below).
    emitp (tablet 0)
@@ -1311,9 +1311,7 @@
          (two? pos) (udie 1 "cook: no Cards.l, Cookfile or Makefile found")
          0))
 
-   cook-main)
-
-   cook-main _)
+   cook-main))
 
 ; the seat (src/apps/nc.l's shape): fire cook-main iff this file -- or the installed `cook` symlink
 ; -- sits in the program seat of the real command line, taking the args after the seat. cmdline

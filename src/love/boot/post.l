@@ -2000,14 +2000,14 @@
    (s_plus s t) (s @ (f && lit? f) (s_plus t * f)       ; interleave (disj): the swap is the fairness
                      (x . r)       (x . s_plus r t)
                      t)
-   (s_star s g) (s @ (f && lit? f) (_ \ s_star (f _) g)       ; bind (conj)
+   (s_star s g) (s @ (f && lit? f) (v \ s_star (f v) g)       ; bind (conj)
                      (x . r)       (s_plus (g x) (s_star r g)))
-   (s_app s t)  (s @ (f && lit? f) (_ \ s_app (f _) t)        ; ordered disj: no swap, so the left
+   (s_app s t)  (s @ (f && lit? f) (v \ s_app (f v) t)        ; ordered disj: no swap, so the left
                      (x . r)       (x . s_app r t)              ; side runs dry first -- incomplete
                      t)                                          ; by construction, and that is the point
    (sfire s) (lit? s ? (sfire (s ())) s)                ; force to a mature shape: () or a cons
    (stake i s) (i @ 0 () (sfire s @ (a . u) (a . stake (i - 1) u)))
-   (smap f s) (s @ (g && lit? g) (_ \ smap f (g _)) (x . r) (f x . smap f r) ())
+   (smap f s) (s @ (g && lit? g) (v \ smap f (g v)) (x . r) (f x . smap f r) ())
    (sfold f z s) (: m (sfire s) (? (two? m) (f <m (sfold f z >m)) z))
    slist (sfold (.) ())
    (scount s) (: (go a s) (: m (sfire s) (? (two? m) (go (a + 1) >m) a)) (go 0 s))
@@ -3798,12 +3798,12 @@
       (charm0 (? f          (trap (_ \ (f >ln)) () (\ a b (a == 'leave ? (charm0 b) (scare a b))))
                  (two? >ln) (cli-rail ln)
                  tty        (shell 0)
-                 (reads in, 0)))))         ; non-tty stdin: the stream face drinks the in port
+                 (reads in, 0))))         ; non-tty stdin: the stream face drinks the in port
 
  ; `love` is a verb like every other program this binary carries, which is what lets a shell
  ; with no seat to exec reach the repl by name. last in the letrec: the closure takes its free
  ; names as they stand.
  _ (cite 'verbs 'enlist 'love
      (as \ (two? as ? (cli-rail (. "love" as)) (shell 0)))
-     [('exec . (as \ (two? as && (<as = "bake" || <as = "wake"))))])
+     [('exec . (as \ (two? as && (<as = "bake" || <as = "wake"))))]))
 ) ; module cli
