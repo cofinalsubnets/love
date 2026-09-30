@@ -1,21 +1,10 @@
 ; test/closure.l -- recursive bindings in `:` (l's letrec*).
 ;
-; `:` is a sequential, letrec*-like scope: a binding may refer to earlier
-; bindings and to itself. Recursive *functions* (a `\` literal or the
-; `(name args) body` defun sugar) resolve lazily -- the name is bound before any
-; call, so self/forward references resolve per call (lvm_lazyb).
-;
-; Recursive *values* are the hard case: a binding whose eagerly-evaluated init
-; is (or builds) a closure capturing the very name being defined, or a
-; forward/mutual sibling. l closures capture free vars by VALUE at creation,
-; so such a closure used to snapshot the name while it was still unassigned (0)
-; and the self-call would dispatch on 0. ev.l's `boxfix` pass now fixes this:
-; it indirects exactly those names through a heap cell -- letrec*'s "capture by
-; location" -- while leaving everything else (functions, values defined before
-; their users, names captured only as lambda params) untouched. a value is boxed
-; when a def at index <= its own reads it, and also when one at a lower index
-; reaches it through the let's other names -- an earlier closure inherits a later
-; sibling's captures, so it wants the slot before the slot exists.
+; a binding may refer to earlier bindings and to itself. recursive functions (a `\`
+; literal or `(name args) body`) resolve lazily, per call (lvm_lazyb). recursive values
+; are the hard case: closures capture by value at creation, so ev.l's `boxfix` indirects
+; through a heap cell exactly the names a def at index <= its own reads -- directly, or
+; through an earlier closure that inherits a later sibling's captures.
 
 (:
  ; recursive function: recursion via the lazily-resolved name

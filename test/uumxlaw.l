@@ -1,18 +1,9 @@
-; test/uumxlaw.l -- the laws of love's `+` and `*` dispatch, proved of the
-; generated table (test/uumx.l, lifted from src/love/mx.l by src/tools/mx2uu.l; this file
-; loads after it by sort order, and the kernel + nat vocabulary live in
-; test/uu.l). the theorems are hand-written over a table nobody typed, so a
-; dispatch edit that breaks the band quotient, the mirror symmetry, or any cell
-; the narrative names one at a time, fails a proof right here at `make test`.
-;
-; every proof is `idpath true`: the claim is a bounded forall and the kernel runs
-; it, so a square closes by conversion where test/proof/rocq/mx.v's closes by
-; vm_compute. the two models read one datum and derive the band partition by one
-; rule, and these terms export through uu2coq/uu2lean -- so mx.l's shape stands in
-; three kernels, twice in Rocq by two roads.
-;
-; what this cannot see, and the fuzz must: that a lane nom names the C function it
-; says it does. the table is the interface; love.c is the other side of it.
+; test/uumxlaw.l -- the laws of love's `+` and `*` dispatch, proved of the generated table
+; (test/uumx.l, from src/love/mx.l by src/tools/mx2uu.l; loads after it and test/uu.l by
+; sort order). a dispatch edit that breaks the band quotient, the mirror symmetry or a
+; named cell fails a proof here, at `make test`. every proof is `idpath true`: a bounded
+; forall the kernel runs, where test/proof/rocq/mx.v uses vm_compute. what this cannot
+; see, and the fuzz must: that a lane nom names the C function it says it does.
 (test (elem 'vof (names ())))
 
 ; --- the roster's shape, said once and nowhere else. every forall below ranges over

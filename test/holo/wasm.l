@@ -51,7 +51,7 @@
              (imul r3 r3 10) (imul r6 r6 100) (imul r9 r9 1000)
              (add r0 r2 r3) (add r0 r0 r6) (add r0 r0 r9) (ret))
    env {'fib '(fn 8 1)}
-   (irfn ty prog n) (: f (wasm-fn prog n env) [ty <f >f])
+   (irfn ty prog n) (wasm-fn prog n env @ f [ty <f >f])
    m {'types '(((i64 i64) (i64))                           ; 0: (i64 i64) -> i64
                ((i64) (i64))                                ; 1: i64 -> i64
                (() ()))                                     ; 2: () -> ()
@@ -139,6 +139,6 @@
        'memory '(2 8)
        'data '((24 0 0 1 0 0 0 0 0))}                     ; the bump pointer starts at 65536
    m3 (wasm-program p3)
-   _ (wasm-write "out/.holo3.wasm" m3)
-   _ (puts ("test/holo/wasm: wrote out/.holo3.wasm, " + show #(wasm-emit m3) + " bytes\n"))
-   0)
+   (wasm-write "out/.holo3.wasm" m3,
+    puts ("test/holo/wasm: wrote out/.holo3.wasm, " + show #(wasm-emit m3) + " bytes\n"),
+    0))

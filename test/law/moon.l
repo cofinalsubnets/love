@@ -14,8 +14,8 @@
 (: (refused? x) (!x || gripe? x))
 
 ; --- the lexer: kinds, values, lines, comments, maximal munch ---
-(: (tn ts k) (? (k < 1) <ts (tn >ts (k - 1)))
-   (tn3 ts k) (: t (tn ts k) [<t <>t <>>t])   ; kind/value/line: not the slot-4 spelling
+(: (tn ts k) (k < 1 ? <ts (tn >ts (k - 1)))
+   (tn3 ts k) (tn ts k @ t [<t <>t <>>t])     ; kind/value/line: not the slot-4 spelling
    r (clex "int main() { return 42; }")
    ts <>r
    (test
@@ -29,10 +29,10 @@
       ((tn3 ts 6) = ['num 42 1])
       ((tn ts 7) = ['p ";" 1])
       ((tn ts 8) = ['p "}" 1])))
-(: (tn ts k) (? (k < 1) <ts (tn >ts (k - 1)))
-(tn3 ts k) (: t (tn ts k) [<t <>t <>>t])   ; kind/value/line: not the slot-4 spelling
-   (tn3 ts k) (: t (tn ts k) [<t <>t <>>t])
-   (spl r k) (: t (tn <>r k) (? (4 < tally t) <>>>>t ()))          ; the token's slot-4 spelling
+(: (tn ts k) (k < 1 ? <ts (tn >ts (k - 1)))
+(tn3 ts k) (tn ts k @ t [<t <>t <>>t])     ; kind/value/line: not the slot-4 spelling
+   (tn3 ts k) (tn ts k @ t [<t <>t <>>t])
+   (spl r k) (tn <>r k @ t (4 < tally t ? <>>>>t))                 ; the token's slot-4 spelling
    c1 <>(clex "a // x\nb")
    c2 <>(clex "a /* x\ny */ b")
    c3 <>(clex "a+++b")
@@ -215,57 +215,57 @@
 
 ; --- the gen-law kit: compile, cut one fn, count its traffic -- shared by every gen
 ; block below (a body-less `:` leaks, the corpus convention). ---
-(: (cgn src) (: r (cparse <>(clex src))
-              (? (okv? r) (cgen <>r <>>r <>>>r <>>>>r () 'x64) ()))
+(: (cgn src) (cparse <>(clex src) @ r
+              (okv? r ? (cgen <>r <>>r <>>>r <>>>>r () 'x64)))
    ; one fn's own forms, label to the next align seam (the inliner copies bodies into
    ; main, where a folded store may read a home register legitimately)
-   (fnf nm fs) (: (seek l) (? (atom? l) () (? (<l = ['label nm]) >l (seek >l)))
+   (fnf nm fs) (: (seek l) (atom? l ? () (<l = ['label nm] ? >l (seek >l)))
                   (take l) (? (atom? l) ()
                               (<l = '(align 2)) ()
                               (<l . take >l))
                   (take (seek fs)))
-   (movs fs) #(filter (f \ (two? f && (<f = 'mov))) fs)
-   (splds fs) (: (go l n) (? (atom? l) n
-                            (go >l (? (two? <l && (<<l = 'ld) && (<>><l = 'sp)) (n + 1) n)))
+   (movs fs) #(filter (f \ two? f && <f = 'mov) fs)
+   (splds fs) (: (go l n) (atom? l ? n
+                            (go >l (two? <l && <<l = 'ld && <>><l = 'sp ? (n + 1) n)))
                  (go fs 0))
-   (ldsp fs off) #(filter (f \ (two? f && (<f = 'ld) && (<>>f = 'sp) && (off = <>>>f))) fs)
-   (stsp fs off) #(filter (f \ (two? f && elem <f '(st si) && (<>f = 'sp) && (off = <>>f))) fs)
-   (ldc fs) #(filter (f \ (two? f && elem <f '(ld ld1 ldu1 ld2 ldu2 ld4 ldu4) && (<>>f = 'sp))) fs)
-   (sp? fs) (foldl (\ a f (a || (two? f && <f = 'sub && <>f = 'sp))) () fs)
-   (stc fs) #(filter (f \ (two? f && elem <f '(st st1 st2 st4 si si1 si2 si4) && (<>f = 'sp))) fs)
-   (leac fs) #(filter (f \ (two? f && elem <f '(lea lean))) fs)
-   (aeb fs) (: (go l) (? (atom? l) ()                 ; the array's base: the lea its escape leaves standing
-                         (: f <l (? (two? f && elem <f '(lea lean) && (<>>f = 'sp))
+   (ldsp fs off) #(filter (f \ two? f && <f = 'ld && <>>f = 'sp && off = <>>>f) fs)
+   (stsp fs off) #(filter (f \ two? f && elem <f '(st si) && <>f = 'sp && off = <>>f) fs)
+   (ldc fs) #(filter (f \ two? f && elem <f '(ld ld1 ldu1 ld2 ldu2 ld4 ldu4) && <>>f = 'sp) fs)
+   (sp? fs) (foldl (a \ f \ a || (two? f && <f = 'sub && <>f = 'sp)) () fs)
+   (stc fs) #(filter (f \ two? f && elem <f '(st st1 st2 st4 si si1 si2 si4) && <>f = 'sp) fs)
+   (leac fs) #(filter (f \ two? f && elem <f '(lea lean)) fs)
+   (aeb fs) (: (go l) (atom? l ? ()                   ; the array's base: the lea its escape leaves standing
+                         (<l @ f (? (two? f && elem <f '(lea lean) && <>>f = 'sp)
                                     <>>>f (go >l))))
                 (go fs))
-   (stofs fs op rg) (? (atom? fs) ()                  ; offsets of (op sp K rg) stores...
+   (stofs fs op rg) (atom? fs ? ()                    ; offsets of (op sp K rg) stores...
                        (: f2 <fs r (stofs >fs op rg)
-                          (? (two? f2 && (<f2 = op) && (<>f2 = 'sp) && (<>>>f2 = rg))
+                          (? (two? f2 && <f2 = op && <>f2 = 'sp && <>>>f2 = rg)
                              (<>>f2 . r) r)))
-   (ldofs fs op rg) (? (atom? fs) ()                  ; ...and of (op rg sp K) loads
+   (ldofs fs op rg) (atom? fs ? ()                    ; ...and of (op rg sp K) loads
                        (: f2 <fs r (ldofs >fs op rg)
-                          (? (two? f2 && (<f2 = op) && (<>f2 = rg) && (<>>f2 = 'sp))
+                          (? (two? f2 && <f2 = op && <>f2 = rg && <>>f2 = 'sp)
                              (<>>>f2 . r) r)))
    ; a law never spells a frame offset: repack re-chooses every number whenever the slot map
    ; grows, and a stale offset does not reliably red. name a slot by the register owning it.
-   (sof fs op rg) (: l (stofs fs op rg) (? (two? l) <l ()))   ; the slot rg stores itself to
+   (sof fs op rg) (stofs fs op rg @ l (two? l ? <l))          ; the slot rg stores itself to
    (nldrg fs rg) #(ldofs fs 'ld rg)          ; slots rg reloads from -- 1 = its cs
                                                     ; restore alone, i.e. it has no home
    (wrapon? rg fs) (two? (stofs fs 'st rg))
    ; nor the seat, for the same reason: promotion chooses which register a value takes.
    ; copyof? is the invariant instead -- rg is read out into some other register.
-   (copyof? fs rg) (two? (filter (\ f (two? f && (<f = 'mov) &&
-                                       ((f 2) = rg) && !((f 1) = rg)))
+   (copyof? fs rg) (two? (filter (f \ two? f && <f = 'mov &&
+                                      (f 2) = rg && !((f 1) = rg))
                                  fs))
-   (ldinto fs rg) #(filter (f \ (two? f && (<f = 'ld) && ((f 1) = rg))) fs)
+   (ldinto fs rg) #(filter (f \ two? f && <f = 'ld && (f 1) = rg) fs)
    (cspair? fs rg)                                    ; some slot holds rg's save/restore pair, once each
     (: so (stofs fs 'st rg) lo (ldofs fs 'ld rg)
-       (once k l) (: (go e n) (? (atom? e) n (go >e (? (<e = k) (n + 1) n))) (go l 0))
-       (seek l) (? (atom? l) ()
-                   (: k <l (? (((once k so) = 1) && ((once k lo) = 1)) 1 (seek >l))))
+       (once k l) (: (go e n) (atom? e ? n (go >e (<e = k ? (n + 1) n))) (go l 0))
+       (seek l) (atom? l ? ()
+                   (<l @ k ((once k so) = 1 && (once k lo) = 1 ? 1 (seek >l))))
        (seek so))
-   (spillrd? fs srg lop lrg) (: so (stofs fs 'st srg)             ; a spill some lop re-reads
-                                (? (atom? so) () (elem <so (ldofs fs lop lrg)))))
+   (spillrd? fs srg lop lrg) (stofs fs 'st srg @ so               ; a spill some lop re-reads
+                              (atom? so ? () (elem <so (ldofs fs lop lrg)))))
 
 ; --- the generator: one full golden, and the refusals that guard the seams ---
 (: (cast src) <>(cparse <>(clex src))
@@ -288,14 +288,14 @@
       ; a write or a taken address keeps the slot (the store stays), and the chain folds whole
       ((fnf 'f <>(cgn "long f(void) { long w = 8; return w; } int main() { return (int)f(); }")) =
          '((li r0 8) (ret)))
-      (: fs (fnf 'f <>(cgn "int use(long *p); long f(void) { long w = 8; use(&w); return w; } int main() { return (int)f(); }"))
-         (two? (filter (f9 \ (two? f9 && elem <f9 '(si st))) fs)))
+      (fnf 'f <>(cgn "int use(long *p); long f(void) { long w = 8; use(&w); return w; } int main() { return (int)f(); }") @ fs
+       (two? (filter (f9 \ two? f9 && elem <f9 '(si st)) fs)))
       ; the chain still folds whole under the one build; a homed link may leave
       ; one dead li behind (no dead-home-def sweep yet) but no memory ever opens
-      (: fs (fnf 'f <>(cgn "long f(void) { long a = 8; long b = a; long c = a + b; return c * b; } int main() { return (int)f(); }"))
-         (elem '(li r0 128) fs &&
-          (0 = splds fs) &&
-          (atom? (filter (f9 \ (two? f9 && elem <f9 '(si st ld imul add))) fs))))
+      (fnf 'f <>(cgn "long f(void) { long a = 8; long b = a; long c = a + b; return c * b; } int main() { return (int)f(); }") @ fs
+       (elem '(li r0 128) fs &&
+        (0 = splds fs) &&
+        atom? (filter (f9 \ two? f9 && elem <f9 '(si st ld imul add)) fs)))
       ; a statement-position attribute run skips (fallthrough..) -- except musttail: it rides
       ; the ret's pre slot and sibs spells the jump, or the compile refuses. no silent fallback
       (elem '(jmp rec) <>(cgn "int rec(int n){ if(n==0) return 5; __attribute__((musttail)) return rec(n-1); } int main(){ return rec(3); }"))
@@ -337,10 +337,10 @@
 ; -- the rotate idiom: (x >> n) | (x << (W - n)) in either order is one rotate. constant
 ; counts ride ror4/ror (rotate-right always: rotl c lands as W-c), a variable count rorv4/rorv
 ; off the splice's param; a shape off the law -- signed, split operands -- keeps its shifts.
-(: (rots src) (filter (f \ (two? f && elem <f '(ror4 ror rorv4 rorv))) <>(cgn src))
+(: (rots src) (filter (f \ two? f && elem <f '(ror4 ror rorv4 rorv)) <>(cgn src))
    (rotn src op c) (two? (filter (f \ <f = op && <>>f = c) (rots src)))
-   (rotv src op) (two? (filter (f \ (<f = op)) (rots src)))
-   (negs src) (two? (filter (f \ (two? f && (<f = 'neg))) <>(cgn src)))
+   (rotv src op) (two? (filter (f \ <f = op) (rots src)))
+   (negs src) (two? (filter (f \ two? f && <f = 'neg) <>(cgn src)))
    (test
       (rotn "unsigned f(unsigned x){ return (x >> 7) | (x << 25); } int main(){ return f(9u) & 63; }" 'ror4 7)
       (rotn "unsigned f(unsigned x){ return (x << 12) | (x >> 20); } int main(){ return f(9u) & 63; }" 'ror4 20)
@@ -363,12 +363,12 @@
 ; --- stage 4a: aggregates -- layout to the C rules, members, the new statements ---
 (: (cast src) <>(cparse <>(clex src))
    (cexpp pre e) (: ast (cast (pre + (" int main() { return " + (e + "; }"))))
-                    (last l) (? (two? >l) (last >l) <l)
+                    (last l) (two? >l ? (last >l) <l)
                     fn (last <>ast)
                     items <><>>>fn
                     <><items)
    (citems src) (: ast (cast src)                       ; the block items of the last top-level fn (a sizeof over a typed local folds)
-                   (last l) (? (two? >l) (last >l) <l)
+                   (last l) (two? >l ? (last >l) <l)
                    <><>>>(last <>ast))
    (test
       ((cexpp "struct S { char c; int i; char d; };" "sizeof(struct S)") = '(cast ulong (num 12)))
@@ -507,12 +507,12 @@
 ; --- the double lane (stage 6a, the gem): float literals lex, `double` types,
 ; the xmm value path, int<->double conversions, and the calling convention. ---
 (: (cast src) <>(cparse <>(clex src))
-   (tn ts k) (? (k < 1) <ts (tn >ts (k - 1)))
-   (tn3 ts k) (: t (tn ts k) [<t <>t <>>t])   ; kind/value/line: not the slot-4 spelling
-   (tnk ts k) (: t (tn ts k) [<t <>>t])       ; kind/line, for a token whose value is pieces
+   (tn ts k) (k < 1 ? <ts (tn >ts (k - 1)))
+   (tn3 ts k) (tn ts k @ t [<t <>t <>>t])     ; kind/value/line: not the slot-4 spelling
+   (tnk ts k) (tn ts k @ t [<t <>>t])         ; kind/line, for a token whose value is pieces
    (tnf ts k) (cflo <>(tn ts k))              ; ..and the value those pieces fold to
    irbits <>(cgn "int main() { double d = 1.0; return (int)d; }")
-   (has op forms) (: (go l) (? (atom? l) () (two? <l && (<<l = op)) 1 (go >l)) (go forms))
+   (has op forms) (: (go l) (? (atom? l) () (two? <l && <<l = op) 1 (go >l)) (go forms))
    (test
       ; a float literal is a 'flo token carrying the pieces, and cflo folds them. the kind
       ; and the fold are both law; which pieces they are is not.
@@ -563,7 +563,7 @@
 ; signature's variadic flag (cc's simplified all-stack call ABI -- doc/misc/moon.md);
 ; _Static_assert folds at parse and vanishes to a (tdef) no-op. ---
 (: (cast src) <>(cparse <>(clex src))
-   (csig src name) (: r (cparse <>(clex src)) (peep <>>>r name 'none))
+   (csig src name) (cparse <>(clex src) @ r (peep <>>>r name 'none))
    (test
       ; the `...` leaves the fn node clean; the variadic bit lives in the signature
       ((cast "int f(int n, ...) { return n; }") =
@@ -677,8 +677,8 @@
 ; _start) and data (globals + strings), and names the defined functions and globals for
 ; the symbol table. src/love/holo/obj.l turns that into a relocatable .o, whose ELF bytes are
 ; gated end-to-end by the make .o link/interop smoke. ---
-(: (cob src) (: r (cparse <>(clex src))
-                (? (okv? r) (cgen-obj <>r <>>r <>>>r <>>>>r () 'x64) ()))
+(: (cob src) (cparse <>(clex src) @ r
+              (okv? r ? (cgen-obj <>r <>>r <>>>r <>>>>r () 'x64)))
    ob (cob "int f(int x) { return x; } int g = 5; int main() { return f(g); }")
    (test
       (two? ob)                                             ; (1 text data funcnames globnames)
@@ -697,9 +697,9 @@
 ; is read by the core before an instruction runs. cob passes no xtra, so this needs the
 ; variant that carries the parser's section table. ---
 (: (cobx src)
-    (: r (cparse <>(clex src))
-       (? (okv? r) (cgen-obj (r 1) (r 2) (r 3) (r 4)
-                             [(r 5) (r 6) (r 7) (r 8) (r 9)] 'x64) ()))
+    (cparse <>(clex src) @ r
+     (okv? r ? (cgen-obj (r 1) (r 2) (r 3) (r 4)
+                         [(r 5) (r 6) (r 7) (r 8) (r 9)] 'x64)))
    ob (cobx "__attribute__((used, section(\".vectors\"))) static volatile long m = 7;
              __attribute__((section(\".vectors_tail\"))) static volatile long e = 1;
              long plain = 3; int main() { return (int) (m + e + plain); }")
@@ -731,19 +731,19 @@
 
 ; --- the preprocessor (stage 5). pps runs cpp (no includes) and joins the output
 ; tokens' spellings to a string. --
-(: (spell1 t) (: k <t
-                 (? (k = 'str) ("\"" + (<>t + "\""))
-                    (elem k '(wstr str16 str32))
-                     ((? (k = 'wstr) "L\"" (k = 'str16) "u\"" "U\"") + (<>t + "\""))
-                    ((k = 'num) || (k = 'kw)) (show <>t)
-                    <>t))
-   (pps src) (: r (cpp <>(clex src) () "<law>")
-                (? !(okv? r) 'FAIL
-                   (: (go l) (? (atom? l) "" ((spell1 <l) + ((? (two? >l) " " "") + (go >l))))
-                      (go (fsbody <>r)))))        ; peel cpp's leading spans marker (parse.l fsbody)
+(: (spell1 t) (<t @ k
+               (? (k = 'str) ("\"" + (<>t + "\""))
+                  (elem k '(wstr str16 str32))
+                   ((? (k = 'wstr) "L\"" (k = 'str16) "u\"" "U\"") + (<>t + "\""))
+                  (k = 'num || k = 'kw) (show <>t)
+                  <>t))
+   (pps src) (cpp <>(clex src) () "<law>" @ r
+              (!(okv? r) ? 'FAIL
+                 (: (go l) (atom? l ? "" ((spell1 <l) + ((two? >l ? " " "") + (go >l))))
+                    (go (fsbody <>r)))))          ; peel cpp's leading spans marker (parse.l fsbody)
    ; the refusal side of the same door: the message a cpp gripe carries, and its line
-   (cppno src) (: r (cpp <>(clex src) () "<law>") (? (gripe? r) <>>>>r 'FAIL))
-   (cppline src) (: r (cpp <>(clex src) () "<law>") (? (gripe? r) <>>r 'FAIL))
+   (cppno src) (cpp <>(clex src) () "<law>" @ r (gripe? r ? <>>>>r 'FAIL))
+   (cppline src) (cpp <>(clex src) () "<law>" @ r (gripe? r ? <>>r 'FAIL))
    (test
       ((pps "#define N 42\nN + 1") = "42 + 1")                         ; object macro
       ((pps "#define A B\n#define B 7\nA") = "7")                      ; rescan to fixpoint
@@ -802,23 +802,23 @@
 ; --- diagnostics: a parse refusal names where it stood ---
 ; the gripe carrier is ('gripe file line col msg); file () means the TU itself,
 ; which the driver (moon.l ccdie) fills the source path in for.
-(: (inc txt) (\ n s [1 txt])
-   (ppi src txt) (: r (cpp <>(clex src) (inc txt) "<law>") (? (two? r) <>r 'FAIL))
+(: (inc txt) (n \ s \ [1 txt])
+   (ppi src txt) (cpp <>(clex src) (inc txt) "<law>" @ r (two? r ? <>r 'FAIL))
    (pgi src txt) (cparse (ppi src txt))
    (gfile g) <>g (gline g) <>>g
    hdr "int a(void);\nint b(void);\nint c(void);\n"
    (test
       ; a bad form inside a header names the header and the header's own line -- an
       ; #include splices the header's numbering into the one flat stream.
-      (: g (pgi "int a(void);\n#include \"h.h\"\n" "int ok(void);\nint bad(void) { return ( ; }\n")
-         (gripe? g && (gfile g = "h.h") && (gline g = 2)))
+      (pgi "int a(void);\n#include \"h.h\"\n" "int ok(void);\nint bad(void) { return ( ; }\n" @ g
+       (gripe? g && (gfile g = "h.h") && (gline g = 2)))
       ; ... and the TU's own lines do not skew by what an earlier include spliced in
-      (: g (pgi "#include \"h.h\"\nint main(void)\n{\n  return (1 + ;\n}\n" hdr)
-         (gripe? g && !(gfile g) && (gline g = 4)))
+      (pgi "#include \"h.h\"\nint main(void)\n{\n  return (1 + ;\n}\n" hdr @ g
+       (gripe? g && !(gfile g) && (gline g = 4)))
       ; the report site is the furthest token the parse reached, not the failing
       ; form's first: a body that dies on line 5 must not point at line 2
-      (: g (cparse <>(clex "int ok(void) { return 1; }\nint bad(void)\n{\n  int x = 1;\n  x = x + ;\n  return x;\n}\n"))
-         (gripe? g && (gline g = 5)))
+      (cparse <>(clex "int ok(void) { return 1; }\nint bad(void)\n{\n  int x = 1;\n  x = x + ;\n  return x;\n}\n") @ g
+       (gripe? g && (gline g = 5)))
       ; adjacent string literals join across an include boundary -- src/love/main.c
       ; splices the egg exactly so, and the file marks stay invisible to phase 6
       (<>(pgi "char *s = \"a\"\n#include \"h.h\"\n\"c\";\n" "\"b\"\n") =
@@ -833,8 +833,8 @@
 ; has the lane. cgen-obj, not cgen: the object view compiles a TU as it stands,
 ; where cgen also insists on a `main` to start.
 (: (cgt src tgt)
-    (: r (cparse-t <>(clex src) tgt)
-       (? (okv? r) (cgen-obj <>r <>>r <>>>r <>>>>r () tgt) ()))
+    (cparse-t <>(clex src) tgt @ r
+     (okv? r ? (cgen-obj <>r <>>r <>>>r <>>>>r () tgt)))
    (gmsg g) (g 4)
    vla "int s(int n){ int a[n]; a[0]=1; return a[0]; }"
    big "struct b { long a,b,c,d,e; };\n"
@@ -845,18 +845,18 @@
       (okv? (cgt vla 'rv64))
       ; a >16-byte struct by value: the two halves refuse separately and each
       ; names which half it is -- passing and returning are different lanes
-      (: g (cgt (big + "int t(struct b f){ return (int)f.a; }") 'a64)
-         (gripe? g && (gmsg g = "no lane for passing this 40-byte struct by value on a64 (in t)")))
-      (: g (cgt (big + "struct b m(long x){ struct b r; r.a=x; return r; }") 'a64)
-         (gripe? g && (gmsg g = "no lane for returning this 40-byte struct by value on a64 (in m)")))
+      (cgt (big + "int t(struct b f){ return (int)f.a; }") 'a64 @ g
+       (gripe? g && (gmsg g = "no lane for passing this 40-byte struct by value on a64 (in t)")))
+      (cgt (big + "struct b m(long x){ struct b r; r.a=x; return r; }") 'a64 @ g
+       (gripe? g && (gmsg g = "no lane for returning this 40-byte struct by value on a64 (in m)")))
       (okv? (cgt (big + "int t(struct b f){ return (int)f.a; }") 'x64))
       ; C99 complex arithmetic is an x64 lane only
-      (: g (cgt "double _Complex f(double _Complex a, double _Complex b){ return a*b; }" 'a64)
-         (gripe? g && (gmsg g = "no lane for C99 complex arithmetic on a64 (in f)")))
+      (cgt "double _Complex f(double _Complex a, double _Complex b){ return a*b; }" 'a64 @ g
+       (gripe? g && (gmsg g = "no lane for C99 complex arithmetic on a64 (in f)")))
       ; a refusal with no named cause is still one gripe, never a note on one channel and
       ; an error on another -- the whole message reaches whichever stream a build log kept
-      (: g (cgt "int f(void){ return nope; }" 'x64)
-         (gripe? g && (gmsg g = "undeclared 'nope' (in f)")))
+      (cgt "int f(void){ return nope; }" 'x64 @ g
+       (gripe? g && (gmsg g = "undeclared 'nope' (in f)")))
       ; the static-data lane refuses through the same door: a cause pinned by globs, a
       ; gripe minted at gfns's tail (cgdata's callers thread a bare 'bad, not a gripe)
       (: g (cgt "int g = nope;\n" 'x64)
@@ -944,8 +944,8 @@
 ; (arr (arr T 4) 3); a[i][j] desugars to *(*(a+i)+j) -- gen does the type-directed work
 ; (the stride on a+i is the row size, and a deref still an array keeps the address).
 (: (cast src) <>(cparse <>(clex src))
-   (dty src)  (: ast (cast (src + " int main(void){return 0;}"))    ; the first global decl's type
-                 <><<><<>ast)
+   (dty src)  (cast (src + " int main(void){return 0;}") @ ast      ; the first global decl's type
+               <><<><<>ast)
    (test
       ((dty "int a[3][4];") = '(arr (arr int 4) 3))                 ; row-major nesting, outer dim first
       ((dty "char m[2][3][4];") = '(arr (arr (arr char 4) 3) 2))    ; three dims fold right
@@ -988,7 +988,7 @@
 (: (cast src) <>(cparse <>(clex src))
    (cexp src) (: ast (cast ("int main() { return " + (src + "; }")))
                  fn <<>ast items <><>>>fn <><items)
-   (dty src)  (: ast (cast (src + " int main(void){return 0;}")) <><<><<>ast)
+   (dty src)  (cast (src + " int main(void){return 0;}") @ ast <><<><<>ast)
    (test
       ((cexp "0x1p4") = '(flo 16.0))                               ; 0x1p4 = 1 * 2^4
       ((cexp "0xff") = '(num 255))                                 ; a plain hex integer is unchanged
@@ -1015,7 +1015,7 @@
 ; rep: a <=16-byte struct rides calls by its SysV eightbyte classes, one or two eightbytes
 ; (int/sse in any mix) in registers; a >16-byte one is memory class -- it rides the
 ; overflow block whole and returns through the caller's hidden pointer.
-(: (stg src) (: r (cparse <>(clex src)) (<>>r "S"))
+(: (stg src) (cparse <>(clex src) @ r (<>>r "S"))
    (test
       ((stg "struct S { double re, im; }; int main(){return 0;}") =
          '((("re" 0 double) ("im" 8 double)) 16 8))
@@ -1046,9 +1046,9 @@
 ; constraint refusal answers () out of cgen, never fudged bytes.
 (: (cast src) <>(cparse <>(clex src))
    hb (cite 'holo 'holo-bytes)
-   (hasraw fs want) (? (atom? fs) ()
-                       (: f2 <fs
-                          (? (two? f2 && (<f2 = 'raw) && (<>f2 = want)) 1 (hasraw >fs want))))
+   (hasraw fs want) (atom? fs ? ()
+                       (<fs @ f2
+                        (two? f2 && <f2 = 'raw && <>f2 = want ? 1 (hasraw >fs want))))
    want (hb 'x64 (asm-text "li r10, 40"))
    g1 (cgn "int main() { long v; asm(\"mov $40, %0\" : \"=r\"(v)); return v + 2; }")
    g1h (cgn "int main() { long v; __attribute__((holo)) asm(\"li %0, 40\" : \"=r\"(v)); return v + 2; }")
@@ -1067,14 +1067,14 @@
    ; a register variable pins the operand; a callee-saved clobber is pushed around the body
    want5 (hb 'x64 (asm-text "add r2, r2, 2"))
    g5 (cgn "int main() { register long v asm(\"rdx\") = 40; asm(\"addq $2, %%rdx\" : \"+r\"(v) :: \"r12\"); return v; }")
-   (hassaved fs want) (? (atom? fs) ()
+   (hassaved fs want) (atom? fs ? ()
                          (fs @ (('push 'r11) . ('raw ^want) . ('pop 'r11) . _) 1
                                (hassaved >fs want)))
    g6 (cgn "int main() { asm goto(\"jmp %l0\" : : : : out); return 1; out: return 0; }")
-   (hasfix fs l) (? (atom? fs) ()
-                    (: f2 <fs
-                       (? (two? f2 && <f2 = 'raw && vany (x \ (two? x && <x = 'fix && x 3 = l)) <>f2) 1
-                          (hasfix >fs l))))
+   (hasfix fs l) (atom? fs ? ()
+                    (<fs @ f2
+                     (two? f2 && <f2 = 'raw && vany (x \ two? x && <x = 'fix && x 3 = l) <>f2 ? 1
+                        (hasfix >fs l))))
    (asmof p) (p 1 0 3 1 0)                        ; prog -> first fn -> its blk -> first item
    (test
       ((cast "void f() { asm(\"sys\"); }") =
@@ -1136,8 +1136,8 @@
 ; tracepoint's `sym - .` (a rel32 is S + aux - P - 4, so it rides aux 4), a static call's
 ; numeric label read back from the section it pushed. a static only the asm names is laid. ---
 (: (tacast src) <>(cparse <>(clex src))
-   (tacob src) (: r (cparse <>(clex src))
-                  (? (okv? r) (cgen-obj <>r <>>r <>>>r <>>>>r () 'x64) ()))
+   (tacob src) (cparse <>(clex src) @ r
+                (okv? r ? (cgen-obj <>r <>>r <>>>r <>>>>r () 'x64)))
    ex (gas-top 'x64 ".section \".export_symbol\",\"a\" ; __export_symbol_x: ; .asciz \"\" ; .balign 8 ; .quad x ; .previous")
    tp (gas-top 'x64 "\t.section \"__tracepoints_ptrs\", \"a\"\n\t.balign 4\n\t.long __tracepoint_x - .\n\t.previous\n")
    sc (gas-top 'x64 ".pushsection .static_call.text, \"ax\"\n.globl sc\nsc:\n911: .pushsection .discard.annotate_insn, \"M\", @progbits, 8; .long 911b - ., 1; .popsection\n.byte 0xe9; .long it - (. + 4)\n.popsection\n")
@@ -1190,20 +1190,20 @@
 (: ; counts stores of the param-home registers (r6 r5) to the frame: the vmap's direct
    ; slot stores ride the operand pool (r9 r10 r7 r8) and are not spills. these fns carry
    ; no spush cells, so an sp store is a wrap.
-   (wraps fs) (: (go l n) (? (atom? l) n
-                             (: f2 <l
-                                (go >l (? (two? f2 &&
-                                           (<f2 = 'st) &&
-                                           elem <>f2 '(r4 sp) &&
-                                           elem <>>>f2 '(r5 r6))
-                                          (n + 1) n))))
+   (wraps fs) (: (go l n) (atom? l ? n
+                             (<l @ f2
+                              (go >l (? (two? f2 &&
+                                         <f2 = 'st &&
+                                         elem <>f2 '(r4 sp) &&
+                                         elem <>>>f2 '(r5 r6))
+                                        (n + 1) n))))
                  (go fs 0))
    pre9 "long g(long x); "
 
    ; a call-crossing fn's param cells: the spills land at entry (the first arg
    ; store precedes every ALU op); the cells are repack's to place from here
    (fsti fs rg) (: (go l i) (? (atom? l) 99
-                               (two? <l && (<<l = 'st) && ((<l 3) = rg)) i
+                               (two? <l && <<l = 'st && (<l 3) = rg) i
                                (go >l (i + 1)))
                    (go fs 0))
    (falu fs) (: (go l i) (? (atom? l) 99
@@ -1233,7 +1233,7 @@
    ; reads the r-twins -- the machine-stack cell opens only for a callish right.
    irW (cgn (pre9 + "unsigned long w(unsigned long a, unsigned long b, unsigned long c) { unsigned __int128 s = (unsigned __int128) a * b + c; return (unsigned long)(s >> 64) ^ (unsigned long) s; } int main() { return (int) w(3,4,5); }"))
    irX (cgn (pre9 + "unsigned long v(unsigned long a) { unsigned __int128 s = (unsigned __int128) a * a + (unsigned __int128) g(1); return (unsigned long) s; } int main() { return (int) v(3); }"))
-   (occh l h9) (: (go l2 n) (? (atom? l2) n (go >l2 (? (two? <l2 && (<<l2 = h9)) (n + 1) n))) (go l 0))
+   (occh l h9) (: (go l2 n) (atom? l2 ? n (go >l2 (two? <l2 && <<l2 = h9 ? (n + 1) n))) (go l 0))
    _ (test
       (two? irW) (two? irX)
       (1 = (occh (fnf 'w <>irW) 'mw128r))            ; the widening mul reads its parked register
@@ -1315,7 +1315,7 @@
    hvf (fnf 'f7 <>irHV)
    irCV (cgn "long f8(long *a, long *b, int n) { long s = a[0] / b[n]; for (int i = 0; i < 4; i++) s = s + a[i] / b[i]; return s; } int main() { return 0; }")
    cvf (fnf 'f8 <>irCV)
-   (cgt src tgt) (: r (cparse <>(clex src)) (? (okv? r) (cgen <>r <>>r <>>>r <>>>>r () tgt) ()))
+   (cgt src tgt) (cparse <>(clex src) @ r (okv? r ? (cgen <>r <>>r <>>>r <>>>>r () tgt)))
    irR4 (cgt "long f9(long *r, long *a, int na, long *b, int nb) { long s = 0; for (int i = 0; i < na; i++) for (int j = 0; j < nb; j++) s = s + a[i] / b[j]; return s; } int main() { return 0; }" 'a64)
    r4f (fnf 'f9 <>irR4)
    _ (test
@@ -1323,7 +1323,7 @@
       (elem '(mov r9 r2) hvf)                     ; f7: n vacates r2 to its positional seat...
       (elem '(sx4 r9) hvf)                        ; ...canonicalized there once
       (elem '(cmp r10 r9) hvf)                    ; ...and both bounds compare register-register
-      (0 = #(filter (f \ (two? f && (<f = 'ld4))) hvf))
+      (0 = #(filter (f \ two? f && <f = 'ld4) hvf))
       (elem '(st sp 0 r2) cvf)                    ; f8: a cold n spills...
       (elem '(ld4 r0 sp 0) cvf)                   ; ...and re-extends from its slot
       (elem '(sx4 r4) r4f)                        ; f9: nb rides r4 on a64
@@ -1372,7 +1372,7 @@
    nbf (fnf 'fb <>irNB)
    irNE (cgn (pre9 + "long fe(long *p, char c, short h) { char d = c + 1; short e = h * 3; unsigned char u = d; return p[d] + p[e] + p[u] + g(d) + e; } int main() { return 0; }"))
    nef (fnf 'fe <>irNE)
-   (narrowm fs) #(filter (f \ (two? f && elem <f '(st1 st2 ld1 ld2 ldu1 ldu2))) fs)
+   (narrowm fs) #(filter (f \ two? f && elem <f '(st1 st2 ld1 ld2 ldu1 ldu2)) fs)
    _ (test
       (two? irNA) (two? irNB) (two? irNE)
       (elem '(set eq r10) naf)                    ; fa: r's def lands on its seat (a set is already 0/1)...
@@ -1415,14 +1415,14 @@
       (1 = #(filter (f \ two? f && <f = 'a128r && <>>f = 0) mrf))   ; + r[i+j]: the park never opens
       (2 = (occh mrf 'a128r))                    ; + c reads c's home
       (0 = (occh mrf 'shr128))                   ; c = s >> 64: two moves, the high half a zero
-      (: ws (filter (f \ two? f && <f = 'a128r) mrf) (elem ['li <>>(ws 1) 0] mrf))
+      (filter (f \ two? f && <f = 'a128r) mrf @ ws (elem ['li <>>(ws 1) 0] mrf))
       ; the park never nests here, so the hot params r and b take seats: the full-word sp loads
       ; are the two cs restores (c's pair; s's folded away, so csdrop drops its save), cold a's
       ; read per row and ai's in the inner loop
       (4 = (splds mrf))
       ; r[i+j] is loaded and stored off one i + j: recse renames the load out of its register
-      (: ks (map (f \ >>f) (filter (f \ two? f && <f = 'add && #f = 4 && nom? (f 3)) mrf))
-         (0 = #(filter (k \ 1 < #(filter (= k) ks)) ks)))
+      (map (f \ >>f) (filter (f \ two? f && <f = 'add && #f = 4 && nom? (f 3)) mrf) @ ks
+       (0 = #(filter (k \ 1 < #(filter (= k) ks)) ks)))
       ; no cs seat is saved without a use
       (: (sv r) (two? (filter (f \ two? f && <f = 'st && <>f = 'sp && (f 3) = r) mrf))
          (us r) (two? (filter (f \ two? f && elem r >f && !(<f = 'st && <>f = 'sp) && !(<f = 'ld && <>>f = 'sp)) mrf))
@@ -1440,20 +1440,20 @@
    ; d + 2^64 adds to the high half alone
    irS (cgn "int ms(unsigned long *r, unsigned long *a, unsigned long *b, int n) { __int128 w = 0; for (int i = 0; i < n; i++) { __int128 d = (__int128) a[i] - b[i] - w; if (d < 0) d += (__int128) ((unsigned __int128) 1 << 64), w = 1; else w = 0; r[i] = (unsigned long) d; } return n; } int main() { return 0; }")
    msf (fnf 'ms <>irS)
-   _ (test
-      (two? irS)
-      (0 = (occh msf 'c128))                     ; no cell compare
-      (elem '(cmp r2 0) msf)                     ; the sign test
-      (0 = (occh msf 'sx128))                    ; w = 0 and w = 1: two li each
-      (0 = (occh msf 'shl128)))                  ; the 2^64 add rides the high word
-   (test
-      (two? irV)
-      (elem '(mov r11 r0) vf)                     ; c's write lands its lo home...
-      (elem '(mov r12 r2) vf)                     ; ...and its hi
-      (elem '(m128r r7 r8) vf)                    ; the mul rides the parked twins -- the
-      (elem '(a128r r11 r12) vf)                  ;   machine-stack cell never opens, and the
-                                                     ;   combine reads c's home, the park copied out
-      (4 = (splds vf))))                             ; full-word sp loads: a's two wd9-spill reloads + the cs restores
+   ((test
+     (two? irS)
+     (0 = (occh msf 'c128))                      ; no cell compare
+     (elem '(cmp r2 0) msf)                      ; the sign test
+     (0 = (occh msf 'sx128))                     ; w = 0 and w = 1: two li each
+     (0 = (occh msf 'shl128))),                  ; the 2^64 add rides the high word
+    (test
+       (two? irV)
+       (elem '(mov r11 r0) vf)                    ; c's write lands its lo home...
+       (elem '(mov r12 r2) vf)                    ; ...and its hi
+       (elem '(m128r r7 r8) vf)                   ; the mul rides the parked twins -- the
+       (elem '(a128r r11 r12) vf)                 ;   machine-stack cell never opens, and the
+                                                      ;   combine reads c's home, the park copied out
+       (4 = (splds vf)))))                           ; full-word sp loads: a's two wd9-spill reloads + the cs restores
 
 ; -- the callee-saved contract (cskeep): every cgn above already compiles under it -- a
 ; breach refuses at emission -- so these laws probe the checker itself. the dirty walk is
@@ -1478,20 +1478,20 @@
       (atom? (csdefs ck9 '(st sp 80 r11)))           ; a save writes memory, not the register
       ('dark = (csdefs ck9 '(frob r0))))           ; an op on neither roster is dark -> refuses
    klog {}
-   _ (hear (\ p e (pin klog p (1 + peep klog p 0), 0)))
-   _ (cskeep ck9 '((label f9) (mov r12 r6) (ret)))                 ; written bare: the cs9 shape
-   _ (cskeep ck9 '((label f9) (sub sp sp 16) (st sp 8 r11) (mov r11 r6)
-                   (cmp r6 r5) (br lt .k9) (ret)                   ; one path exits dirty
-                   (label .k9) (ld r11 sp 8) (ret)))
-   _ (cskeep ck9 '((label f9) (sub sp sp 16) (st sp 8 r11) (mov r11 r6) (jmp helper9)))   ; a sibcall is an exit too
-   _ (cskeep ck9 '((label f9) (frob r0) (ret)))
-   _ (cskeep ck9 '((label f9) (sub sp sp 16) (mov r11 r6) (st sp 8 r11) (ld r11 sp 8) (ret)))
-   _ (hear ())
-   (test
-      (1 = (peep klog 'cs-unsaved 0))
-      (3 = (peep klog 'cs-unrestored 0))             ; the bare write's exit + the dirty branch + the sibcall
-      (1 = (peep klog 'cs-dark-op 0))
-      (1 = (peep klog 'cs-save-late 0))))            ; a save after the write stores the clobber
+   (hear (p \ e \ (pin klog p (1 + peep klog p 0), 0)),
+    cskeep ck9 '((label f9) (mov r12 r6) (ret)),                   ; written bare: the cs9 shape
+    (cskeep ck9 '((label f9) (sub sp sp 16) (st sp 8 r11) (mov r11 r6)
+                  (cmp r6 r5) (br lt .k9) (ret)                    ; one path exits dirty
+                  (label .k9) (ld r11 sp 8) (ret))),
+    cskeep ck9 '((label f9) (sub sp sp 16) (st sp 8 r11) (mov r11 r6) (jmp helper9)),     ; a sibcall is an exit too
+    cskeep ck9 '((label f9) (frob r0) (ret)),
+    cskeep ck9 '((label f9) (sub sp sp 16) (mov r11 r6) (st sp 8 r11) (ld r11 sp 8) (ret)),
+    hear (),
+    (test
+       (1 = (peep klog 'cs-unsaved 0))
+       (3 = (peep klog 'cs-unrestored 0))            ; the bare write's exit + the dirty branch + the sibcall
+       (1 = (peep klog 'cs-dark-op 0))
+       (1 = (peep klog 'cs-save-late 0)))))          ; a save after the write stores the clobber
 
 ; -- the musttail contract (sibs): a marked ret-position call -- (call F must) -- leaves as
 ; the tail jmp and the marker dies with the rewrite; a shape that cannot tail scares
@@ -1502,27 +1502,27 @@
       (elem '(jmp g9) (sibcall mg9 ('((label f9) (call g9 must)) + mepi)))
       !(elem '(call g9 must) (sibcall mg9 ('((label f9) (call g9 must)) + mepi))))
    mlog {}
-   _ (hear (\ p e (pin mlog p (1 + peep mlog p 0), 0)))
-   _ (sibcall mg9 ('((label f9) (call g9 must) (mov r0 r5)) + mepi))   ; a live insn after the call: no tail
-   _ (: t9 {} _ (pin t9 'tgt 'x64) _ (pin t9 'fesc 1) _ (pin t9 'fn "f9")
-        (sibcall t9 '((label f9) (call g9 must) (ret))))               ; the whole-fn decline
-   _ (hear ())
-   (test
-      (1 = (peep mlog 'musttail-not-a-tail 0))
-      (1 = (peep mlog 'musttail-escape 0))))
+   (hear (p \ e \ (pin mlog p (1 + peep mlog p 0), 0)),
+    sibcall mg9 ('((label f9) (call g9 must) (mov r0 r5)) + mepi),     ; a live insn after the call: no tail
+    ({} @ t9 (pin t9 'tgt 'x64, pin t9 'fesc 1, pin t9 'fn "f9",
+              sibcall t9 '((label f9) (call g9 must) (ret)))),         ; the whole-fn decline
+    hear (),
+    (test
+       (1 = (peep mlog 'musttail-not-a-tail 0))
+       (1 = (peep mlog 'musttail-escape 0)))))
 
 ; -- free locals and a priced crossing (stage B1): one cold depth-0 call leaves the fn
 ; leaf-shaped (the path maximum prices it at one wrap pair), so n rides its arrival and
 ; the hot loop runs register-register end to end, touching no slot.
-(: irB (cgn "long g(long x); long f(long n) { g(n); long s = 0; long i = 0; while (i < n) { s = s + i*i; i = i + 1; } return s; } int main() { return f(4); }")
-   (test
-      (two? irB)
-      (elem '(st sp 0 r6) <>irB)                   ; the wrap's one save, at the call
-      (elem '(ld r6 sp 0) <>irB)                   ; ...and its one reload after
-      (elem '(cmp r5 r6) <>irB)                    ; the cond runs register-register
-      (elem '(imul r10 r5 r5) <>irB)               ; i*i on the home, 3-address
-      (elem '(add r9 r9 r10) <>irB)                ; s accumulates in its home
-      (elem '(add r5 r5 1) <>irB)))                ; i++ is one add on the home
+(cgn "long g(long x); long f(long n) { g(n); long s = 0; long i = 0; while (i < n) { s = s + i*i; i = i + 1; } return s; } int main() { return f(4); }" @ irB
+ (test
+    (two? irB)
+    (elem '(st sp 0 r6) <>irB)                     ; the wrap's one save, at the call
+    (elem '(ld r6 sp 0) <>irB)                     ; ...and its one reload after
+    (elem '(cmp r5 r6) <>irB)                      ; the cond runs register-register
+    (elem '(imul r10 r5 r5) <>irB)                 ; i*i on the home, 3-address
+    (elem '(add r9 r9 r10) <>irB)                  ; s accumulates in its home
+    (elem '(add r5 r5 1) <>irB)))                  ; i++ is one add on the home
 
 
 ; -- register-bound branch splices: a call-free cbinl predicate reads its args from
@@ -1591,7 +1591,7 @@
    xf (fnf 'f3 <>irX)
    _ (test
       (two? irX)
-      !(foldl (\ a f (a || (two? f && <f = 'call))) () xf)   ; no call: the hint is gone
+      !(foldl (a \ f \ a || (two? f && <f = 'call)) () xf)   ; no call: the hint is gone
       (<(rev xf) @ ('jmp _) 1 ())                            ; the arm lays last and jumps back
       (elem '(ret) xf))
    ; shrink-wrap: the path that never touches the frame runs without it -- the entry is the
@@ -1601,14 +1601,14 @@
    _ (test
       (two? irW)
       (<wf @ ('sub 'sp 'sp _) () 1)                          ; no frame at the entry
-      (foldl (\ a f (a || (f @ ('sub 'sp 'sp _) 1 ()))) () wf)   ; ..but one on the call's path
+      (foldl (a \ f \ a || (f @ ('sub 'sp 'sp _) 1 ())) () wf)   ; ..but one on the call's path
       (elem '(ret) wf))
    ; memfw: a word just stored rides its register, its reload through another base goes -- but
    ; only where the unit names no volatile (the parse tuple's last word; cgn passes none)
-   (cgv src vol) (: r (cparse <>(clex src))
-                    (? (okv? r) (cgen <>r <>>r <>>>r <>>>>r [() () {} {} {} () () {} {} () {} vol] 'x64) ()))
+   (cgv src vol) (cparse <>(clex src) @ r
+                  (okv? r ? (cgen <>r <>>r <>>>r <>>>>r [() () {} {} {} () () {} {} () {} vol] 'x64)))
    mfsrc "long h(long *sp, long *ip) { long *d = sp - 1; *d = ip[1]; long x = sp[-1]; return x + (long) d; }\nint main() { long a[4] = {0}; return (int) h(a + 2, a); }"
-   (lds fs) #(filter (f \ (two? f && <f = 'ld)) fs)
+   (lds fs) #(filter (f \ two? f && <f = 'ld) fs)
    mf0 (fnf 'h <>(cgv mfsrc ()))
    mf1 (fnf 'h <>(cgv mfsrc 1))
    _ (test
@@ -1649,7 +1649,7 @@
    aBf (fnf 'f <>aB)
    aT (cgn "static int rng(int x) { if (x < 0) return 0; if (x > 100) return 1; return x & 1; }\nint g(int x, int y) { if (rng(x)) return y + 1; return y * 3; }\nint main() { return g(3, 4); }")
    aTf (fnf 'g <>aT)
-   (has? op fs) (foldl (\ a f (a || (two? f && <f = op))) () fs)
+   (has? op fs) (foldl (a \ f \ a || (two? f && <f = op)) () fs)
    (test
       (two? aP)
       !(elem '(call inr) aPf)
@@ -1674,8 +1674,8 @@
 ; label, no control) runs with the left parked in r1 -- one mov, no push/pop round-trip; and
 ; stld carries a slot's binding through reg-reg movs, so a forwarded value survives its
 ; source register's death and the reload (then the dead store, via deadst) drops.
-(: (spsts fs) (: (go l n) (? (atom? l) n
-                            (go >l (? (two? <l && (<<l = 'st) && (<><l = 'sp)) (n + 1) n)))
+(: (spsts fs) (: (go l n) (atom? l ? n
+                            (go >l (two? <l && <<l = 'st && <><l = 'sp ? (n + 1) n)))
                  (go fs 0))
    g4 {}                                     ; no 'tgt: the x64 shapes, which every law here speaks
    ; r1safe? is the license: pure r0-landing forms pass; a call, a label, an r1-write refuse
@@ -1835,7 +1835,7 @@
 ; the coverage assert, and a guard relaxed too far fails an emit.
 (: hb9 (cite 'holo 'holo-bytes)
    ; the label rides along for la's fixup; a scare anywhere in the encode answers 0
-   (emits? f) (trap (_ \ (hb9 'x64 [f '(label zz9)], 1)) () (\ a b 0))
+   (emits? f) (trap (_ \ (hb9 'x64 [f '(label zz9)], 1)) () (a \ b \ 0))
    gX {}
    cpfile '(r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14)
    pro9 '((label fn) (push r4) (mov r4 sp) (sub sp sp 16) (st r4 -8 r3))
@@ -1872,32 +1872,32 @@
                movqxr movqrx cvtsi2sd cvttsd2si))
    ; the forward carrier: seed the map with (mov orig sub) and let the pass itself rewrite the
    ; form -- no guard is restated here, cpwalk decides and holo judges
-   (fwd f) (catmap (\ i (catmap (\ r9
-              (: out (cpwalk gX [['mov (f i) r9] f] {})
-                 f2 (out (#out - 1))
-                 (? (emits? f2) () [[f i r9 f2]])))
-            cpfile)) (cprp gX f))
-   nfwd ((foldl (\ n f9 (n + tally (cprp gX f9))) 0 shapes) * tally cpfile)
+   (fwd f) (catmap (i \ catmap (r9 \
+                                     (: out (cpwalk gX [['mov (f i) r9] f] {})
+                                        f2 (out (#out - 1))
+                                        (emits? f2 ? () [[f i r9 f2]])))
+           cpfile) (cprp gX f))
+   nfwd ((foldl (n \ f9 \ n + tally (cprp gX f9)) 0 shapes) * tally cpfile)
    bad1 (catmap fwd shapes)
    ; the backward carrier: a copy off the shape's own destination, folded by the real coal
-   (soled f) (: d (rdsp gX f)                          ; the shapes coal can fold: one gp def
-                (? (d = 'bar) () (: dfs <>d (? (two? dfs && (atom? >dfs) && elem <dfs cpfile)
-                                                 dfs ()))))
-   (bwd f) (: S (soled f)
-              (? (atom? S) ()
-                 (catmap (\ r9
-                   (: out (coal gX (pro9 + [f ['mov r9 <S] '(ret)]))
-                      f2 (out 5)
-                      (? (emits? f2) () [[f r9 f2]])))
-                  cpfile)))
-   nbwd (#(filter (f9 \ (two? (soled f9))) shapes) * tally cpfile)
+   (soled f) (rdsp gX f @ d                            ; the shapes coal can fold: one gp def
+              (d = 'bar ? () (<>d @ dfs (? (two? dfs && atom? >dfs && elem <dfs cpfile)
+                                             dfs ()))))
+   (bwd f) (soled f @ S
+            (atom? S ? ()
+               (catmap (r9 \
+                             (: out (coal gX (pro9 + [f ['mov r9 <S] '(ret)]))
+                                f2 (out 5)
+                                (emits? f2 ? () [[f r9 f2]])))
+                cpfile)))
+   nbwd (#(filter (f9 \ two? (soled f9)) shapes) * tally cpfile)
    bad2 (catmap bwd shapes)
    (test
       ; the carrier is what it says it is, and every shape is one both halves already accept
       (87 = #shapes)
-      (atom? (filter (f9 \ ((rdsp gX f9) = 'bar)) shapes))
+      (atom? (filter (f9 \ (rdsp gX f9) = 'bar) shapes))
       (all emits? shapes)
-      (atom? (filter (\ o9 !(elem o9 heads)) rostered))    ; the drift gate
+      (atom? (filter (o9 \ nelem o9 heads) rostered))      ; the drift gate
       (405 = nfwd) (675 = nbwd)                               ; a silent narrowing shows up here
       (atom? bad1)                                            ; forward: 390 renames, all encodable
       (atom? bad2)                                            ; backward: 660 folds, all encodable
@@ -1911,9 +1911,9 @@
 ; no cvt, no r0), and a homed local's init lands in the home with no bridge mov. bool keeps the
 ; protocol (its cvt normalizes to 0/1 where si would store the raw constant), as does a
 ; value-position asn, whose answer is read.
-(: (sis fs) #(filter (f \ (two? f && elem <f '(si si1 si2 si4))) fs)
-   (lik fs k) #(filter (f \ (two? f && (<f = 'li) && (<>>f = k))) fs)
-   (sivk fs k) #(filter (f \ (two? f && elem <f '(si si1 si2 si4) && ((f 3) = k))) fs)
+(: (sis fs) #(filter (f \ two? f && elem <f '(si si1 si2 si4)) fs)
+   (lik fs k) #(filter (f \ two? f && <f = 'li && <>>f = k) fs)
+   (sivk fs k) #(filter (f \ two? f && elem <f '(si si1 si2 si4) && (f 3) = k) fs)
    ; every local here escapes through a call: a merely &-taken local promotes, and a law about
    ; the si lane needs a slot no analysis can close -- only a departing address guarantees one
    irS1 (cgn "void e9(int*); int q(int n) { int i; i = 5; if (n) i = 6; e9(&i); return i + n; } int main() { return q(0) - 5; }")
@@ -1942,7 +1942,7 @@
 ; -- the destination die reaches the compare lane (the second lane): with no call on either
 ; side, cbranch's left aims at its park before it evaluates and the bridge mov dies. a call on
 ; either side bars the aim: the left keeps its sp cell (cmpfuse's cmpm reads it).
-(: (brid fs) #(filter (f \ (two? f && (<f = 'mov) && (<>>>f = 'r0))) fs)
+(: (brid fs) #(filter (f \ two? f && <f = 'mov && <>>>f = 'r0) fs)
    irC1 (cgn "struct s { long tag; long size; }; int ef(struct s *a, struct s *b) { if (a->tag == b->tag && a->size == b->size) return 1; return 0; } int main() { return 0; }")
    irC2 (cgn "int g(int x); int h(int x, int y) { if (x == g(y)) return 1; return 0; } int main() { return 0; }")
    ef (fnf 'ef <>irC1)
@@ -1963,7 +1963,7 @@
 ; right-to-left, so the first cell arg evaluates last and nothing after it writes its seat --
 ; it aims there, and an honored load skips the whole push/pop cell. an indirect call bars the
 ; aim, its head evaluating after the staging.
-(: (cells fs) #(filter (f \ (two? f && (<f = 'st) && (<>f = 'sp))) fs)
+(: (cells fs) #(filter (f \ two? f && <f = 'st && <>f = 'sp) fs)
    irC1 (cgn "struct s { long tag; long size; }; long f(long a, long b); long c2(struct s *p) { return f(1, p->size); } long caller(struct s *p) { return f(p->tag, p->size); } long ci(long (*fp)(long, long), struct s *p) { return fp(p->tag, p->size); } int main() { return 0; }")
    c2 (fnf 'c2 <>irC1)
    ca (fnf 'caller <>irC1)
@@ -1978,7 +1978,7 @@
       (elem '(mov r5 r0) ca)                      ;   anywhere: ld/mov/ld/mov/jmp is the whole call
       !(elem '(ld r6 r5 0) ci)                    ; an indirect call bars the aim: neither arg
       !(elem '(ld r5 r5 8) ci)                    ;   is delivered onto its seat, so both must
-      (2 = #(filter (f \ (two? f && (<f = 'ld) && !(<>>f = 'sp))) ci))  ; stage -- two loads
+      (2 = #(filter (f \ two? f && <f = 'ld && !(<>>f = 'sp)) ci))      ; stage -- two loads
       (0 = (ldinto ci 'r6)) (0 = (ldinto ci 'r5))))  ;   and neither lands on a seat. anchored on
                                                      ;   the struct loads, not on the staging
                                                      ;   register and not on every load
@@ -2087,7 +2087,7 @@
               (add sp sp 16) (ret)))
    cG (vctx '((sub sp sp 16) (st sp 8 r0) (add r0 sp 8) (ld r1 sp 8) (add sp sp 16) (ret)))
    (test
-      ((map (\ p <p) flA) = '(g))                     ; a non-dot label opens a fn, align is glue
+      ((map (p \ <p) flA) = '(g))                     ; a non-dot label opens a fn, align is glue
       (spA = '((2 8)))                                 ; the one back edge
       ([(vwt spA 5) (vwt spA 10)] = '(8 1))            ; in the loop 8, out 1
       ((vcells cB) = '((0 -8 1 0 0 0 0 2 2)))          ; one full-word call-free cell
@@ -2120,7 +2120,7 @@
 ; --- narrow promotion (moon-ssa rung 2): a cell whose every touch shares one
 ; width at its base rides the same chains, wearing the extension discipline: the
 ; store canonicalizes the seat, a matching load is a mov, an si def folds its li.
-(: (gN9 x) (: t {} _ (pin t 'slots '((-16 8))) t)    ; a fresh g per call: repack re-pins the packed map
+(: (gN9 x) ({} @ t (pin t 'slots '((-16 8)), t))     ; a fresh g per call: repack re-pins the packed map
    fsA '((label fn) (push r4) (mov r4 sp) (sub sp sp 16) (st r4 -8 r3)
          (li r5 7) (st4 r4 -16 r5) (ldu4 r6 r4 -16) (mov r0 r6) (ret))
    fsB '((label fn) (push r4) (mov r4 sp) (sub sp sp 16) (st r4 -8 r3)
@@ -2215,11 +2215,11 @@ long f(long n) {
   return s;
 }
 int main() { return 0; }"
-   (csset fs) (: t (foldl (\ t9 f9 (? (two? f9 && (<f9 = 'st) && (<>f9 = 'sp) &&
-                                        elem (f9 3) '(r11 r12 r13 r14))
-                                       (pin t9 (f9 3) 1) t9))
-                          {} fs)
-                  (keys t))
+   (csset fs) (foldl (t9 \ f9 \ (? (two? f9 && <f9 = 'st && <>f9 = 'sp &&
+                                     elem (f9 3) '(r11 r12 r13 r14))
+                                    (pin t9 (f9 3) 1) t9))
+                     {} fs @ t
+               (keys t))
    fJ (fnf 'f <>(cgn srcJ))
    (test
       (2 = #(csset fJ))))                     ; shared: a and b ride one seat

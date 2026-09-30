@@ -1,18 +1,8 @@
-; test/bell.l -- port of test/bell.rb: Bell numbers B(0),B(1),... rendered in
-; base 36, one per line, while the rendering's length stays <= n (Ruby's
-; argv[0], default 280). Built from binomials, with n! and B both memoized:
+; test/bell.l -- port of test/bell.rb: Bell numbers in base 36, one per line, while the
+; rendering stays <= n chars (default 280), built from memoized binomials:
 ;     B(n) = sum_{k<n} C(n-1,k) * B(k)      (B(0)=B(1)=1)
 ;     C(n,k) = n! / (k! (n-k)!)
-; The output exceeds 64-bit integers almost immediately, so this leans on the
-; bignum tower (* / %); the last lines are 280-digit base-36 numbers.
-;
-; Faithful port, with one forced deviation: Ruby's `memo` closes the cache
-; hash over a *returned* closure. a l closure that closes over a variable
-; currently miscomputes when called re-entrantly (a self-call), e.g.
-;     (: (mk z) (\ n (? (< n 1) 1 (* n (self (- n 1))))) self (mk 0))
-;     (self 1)   ; => 0, should be 1
-; so memoization here uses module-level hashes + named recursive functions,
-; which compile correctly. Same algorithm, identical output.
+; it leans on the bignum tower: the last lines are 280-digit base-36 numbers.
 
 (: facts {} bells {} digits "0123456789abcdefghijklmnopqrstuvwxyz"
    (digit d) (snip digits d (d + 1))

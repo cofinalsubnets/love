@@ -1,19 +1,9 @@
-; test/uuvaldiff.l -- the differential that binds test/uuval.l's model to the
-; implementation. the model proves the tower's shape (retraction, idempotence,
-; factorisation) and carries no arithmetic theorem on purpose; this file runs the
-; other half -- love's own saturate/bit/nil?/ceil beside the model's vsat/vbit/
-; vnil/vceil over an encoding of test/law.l's corpus, so a wrong zadd, a wrong
-; fold, or a wrong ceil reddens `make test` even though no proof could see it.
-;
-; the encoding is structural where love's values are: a pair becomes the model's
-; link (ii2 over a tpair, both limbs at the height below), an atom becomes a
-; leaf carrying its measure. the leaf measure is read off love's own net -- that
-; primitive is the one thing this lane cannot second-guess, the same standing gap
-; uuwm has with the C runtime under src/apps/lux/core.l. what is under test is
-; everything above it: the fold over links, re, ceil, the clamp and the bit.
-;
-; the model's reals are the half-integers, so a measure that is neither whole nor
-; a half is off the corpus and says so (uuval-not-a-half) rather than going quiet.
+; test/uuvaldiff.l -- the differential binding test/uuval.l's model to the implementation.
+; the model proves the tower's shape and no arithmetic; this runs love's saturate/bit/
+; nil?/ceil beside vsat/vbit/vnil/vceil over test/law.l's corpus, encoded structurally
+; (a pair a link, an atom a leaf carrying its measure), so a wrong fold or ceil reddens
+; `make test`. the leaf measure is love's own net, the one primitive this cannot check.
+; a measure neither whole nor a half is off the model and says so (uuval-not-a-half).
 (test (elem 'vof (names ())))
 
 ; a body-less `:` -- the uv2-* vocabulary leaks; none shadows a nif.

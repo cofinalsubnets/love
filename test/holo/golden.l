@@ -14,7 +14,7 @@
    (bump t)  (pin t 0 $ 1 + peep t 0 0)
    (sayln s) (puts s, flush out)
    (chk-eq name want got)
-      (? (want = got) (bump pass)
+      (want = got ? (bump pass)
        (bump fail,
         sayln $ "FAIL " + name + ": want " + show want + " got " + show got + "\n"))
    (chk2 name want target prog) (chk-eq name want (holo-hex target prog))
@@ -282,7 +282,7 @@
       ("cvtsd2ss"    "f20f5ac8"               ((cvtsd2ss f1 f0)))       ; cvtsd2ss xmm1,xmm0 (double->single)
       ("stss"        "f30f114208"             ((stss r2 8 f0)))         ; movss [rdx+8],xmm0
       ("ldss"        "f30f100b"               ((ldss f1 r3 0))))        ; movss xmm1,[rbx]
-   _ (foldl (\ _ t (chk (t 0) (t 1) (t 2))) 0 tests)
+   _ (foldl (_ \ t \ chk (t 0) (t 1) (t 2)) 0 tests)
 
    ;; -- label addresses are exposed on the assemble result, for a loader/linker to read. --
    loopres (assemble 'x64 '((label top) (cmp r0 r1) (br eq done) (dec r0) (jmp top) (label done) (ret)))
@@ -294,35 +294,35 @@
    ;; same (items . labels) shape as lay, resolved the same way.
    rx-be (peep backends 'x64 ())
    (rx prog longs)
-      (: p (laylax prog rx-be 0 (tablet 0) longs)
-         (hexs (resolve <p >p rx-be 0)))
+      (laylax prog rx-be 0 {} longs @ p
+       (hexs (resolve <p >p rx-be 0)))
    _ (chk-eq "rlx.loop" "4839c8740548ffc8ebf6c3"
-        (rx '((label top) (cmp r0 r1) (br eq done) (dec r0) (jmp top) (label done) (ret)) (tablet 0)))
+        (rx '((label top) (cmp r0 r1) (br eq done) (dec r0) (jmp top) (label done) (ret)) {}))
    _ (chk-eq "rlx.jcc.all" "7c0c750a7f087d067e0477027200c3"
-        (rx '((br lt a) (br ne a) (br gt a) (br ge a) (br le a) (br above a) (br below a) (label a) (ret)) (tablet 0)))
+        (rx '((br lt a) (br ne a) (br gt a) (br ge a) (br le a) (br above a) (br below a) (label a) (ret)) {}))
    _ (chk-eq "rlx.mulo" "490fafc00f8002000000eb02ffe6c3"                ; the mulo-inner jo stays rel32; the jmp lands short
-        (rx '((mulo r0 r0 r7 r4 ovf) (jmp done) (label ovf) (jmpr r5) (label done) (ret)) (tablet 0)))
+        (rx '((mulo r0 r0 r7 r4 ovf) (jmp done) (label ovf) (jmpr r5) (label done) (ret)) {}))
    _ (chk-eq "rlx.weak-stays-long" "e90b0000004839c80f8402000000ffe6c3" ; both wf-targets held long by the longs set
-        (: lg (tablet 0) _ (pin lg 'wf 1)
-           (rx '((jmp wf) (cmp r0 r1) (br eq wf) (jmpr r5) (label wf) (ret)) lg)))
+        ({} @ lg (pin lg 'wf 1,
+                          rx '((jmp wf) (cmp r0 r1) (br eq wf) (jmpr r5) (label wf) (ret)) lg)))
    _ (chk-eq "rlx.labels" 10
-        (: p (laylax '((label top) (cmp r0 r1) (br eq done) (dec r0) (jmp top) (label done) (ret))
-                     rx-be 0 (tablet 0) (tablet 0))
-           (peep >p 'done ())))
+        (laylax '((label top) (cmp r0 r1) (br eq done) (dec r0) (jmp top) (label done) (ret))
+                rx-be 0 {} {} @ p
+         (peep >p 'done ())))
 
    ;; -- the encoder refuses a three-way alias it cannot honestly encode (d <- a OP d, d != a,
    ;; non-commutative), raising 'alias-dst rather than emitting subtly wrong bytes. the help traps
    ;; that scare and delegates everything else back to welp. --
-   caught (tablet 0) _ (pin caught 0 0)
-   _ (hear (\ a b (? (a = 'alias-dst) (pin caught 0 1, ()) (welp a b))))
+   caught {} _ (pin caught 0 0)
+   _ (hear (a \ b \ a = 'alias-dst ? (pin caught 0 1, ()) (welp a b)))
    _ (holo-bytes 'x64 '((sub r0 r3 r0)))
    _ (chk-eq "alias.refused" 1 (peep caught 0 0))
 
    ;; -- the same principle one target over: a64's register-form ALU is the shifted-register
    ;; one, where encoding 31 is XZR in every slot -- so `(sub sp sp r0)` has honest-looking bytes
    ;; (`neg xzr, x0`) that leave sp alone. it raises instead; moving sp is `lea`'s job. --
-   spcaught (tablet 0) _ (pin spcaught 0 0)
-   _ (hear (\ a b (? (a = 'a64-alu-sp) (pin spcaught 0 1, ()) (welp a b))))
+   spcaught {} _ (pin spcaught 0 0)
+   _ (hear (a \ b \ a = 'a64-alu-sp ? (pin spcaught 0 1, ()) (welp a b)))
    _ (holo-bytes 'a64 '((sub sp sp r0)))
    _ (chk-eq "a64.alu.sp.refused" 1 (peep spcaught 0 0))
 
@@ -433,20 +433,20 @@
 
    ;; -- the ELF linker (src/love/holo/elf.l) wraps assembled bytes in a well-formed static executable. --
    elfprog '((li r0 60) (li r6 0) (sys))
-   elfres  (elf64 'x64 (\ a elfprog) '(65 66 67))
+   elfres  (elf64 'x64 (a \ elfprog) '(65 66 67))
    elfimg  (peep elfres 'bytes 0)
    _ (chk-eq "elf.magic"   127     (elfimg 0))        ; \x7f E L F
    _ (chk-eq "elf.machine" 62      (elfimg 18))       ; e_machine = x86-64
    _ (chk-eq "elf.entry"   4194424 (peep elfres 'entry 0))
    _ (chk-eq "elf.size"    (120 + (#(holo-bytes 'x64 elfprog) + 3)) #elfimg)
-   _ (chk-eq "elf.a64-machine" 183 (peep (elf64 'a64 (\ a elfprog) ()) 'bytes 0 18))
+   _ (chk-eq "elf.a64-machine" 183 (peep (elf64 'a64 (a \ elfprog) ()) 'bytes 0 18))
 
    ;; ..and the ELF32 twin: a 52-byte header + a 32-byte phdr. the two facts a width knob
    ;; would have gotten wrong are pinned here -- p_flags sits seventh in an Elf32_Phdr (at 76,
    ;; where 56 holds p_offset and an Elf64_Phdr would hold the flags), and e_entry carries the
    ;; thumb bit. test_elf32 puts the same image in front of a real loader.
    t32prog '((li r0 42) (li r7 1) (sys))
-   e32     (elf32 'thumb2 (\ a t32prog) ())
+   e32     (elf32 'thumb2 (a \ t32prog) ())
    e32img  (peep e32 'bytes 0)
    _ (chk-eq "elf32.class"      1  (e32img 4))          ; elfclass32
    _ (chk-eq "elf32.machine"    40 (e32img 18))         ; EM_ARM
@@ -481,8 +481,8 @@
    ;; ..and a field carrying an addend this backend never bakes refuses, rather than quietly
    ;; linking somewhere plausible: the base encoding is rebuilt and compared, so no inverse
    ;; scatter has to exist for the check to be honest.
-   rfcaught (tablet 0) _ (pin rfcaught 0 0)
-   _ (hear (\ a b (? (a = 'thumb-refix-addend) (pin rfcaught 0 1, ()) (welp a b))))
+   rfcaught {} _ (pin rfcaught 0 0)
+   _ (hear (a \ b \ a = 'thumb-refix-addend ? (pin rfcaught 0 1, ()) (welp a b)))
    _ (rfx 'bl '(255 247 255 255) 4096 256)                       ; ..the same bl two bytes further on
    _ (chk-eq "refix.addend.refused" 1 (peep rfcaught 0 0))
 
@@ -696,7 +696,7 @@
       ("a64.shl128v"  "f00301cb1024d09a5120c19a310210aa3f0000f15100919a300001d11020d09a3f0001f10222919a0020c19ae023809a" ((shl128v)))
       ("a64.shr128v"  "f00301cb5020d09a1124c19a310210aa3f0000f11100919a300001d15024d09a3f0001f10022919a4224c19ae223829a" ((shr128v)))
       ("a64.sar128v"  "f00301cb5020d09a1124c19a310210aa3f0000f11100919a300001d15028d09a3f0001f10022919a51fc7f934228c19a2222829a" ((sar128v))))
-   _ (foldl (\ _ t (chk2 (t 0) (t 1) 'a64 (t 2))) 0 a64tests)
+   _ (foldl (_ \ t \ chk2 (t 0) (t 1) 'a64 (t 2)) 0 a64tests)
 
    ;; -- the thumb2 backend: the same neutral IR, a third target -- armv7e-m (Cortex-M7, the Teensy
    ;; 4.1 / Playdate device CPU). mixed 16/32-bit little-endian, a 32-bit word laid hi-halfword
@@ -828,7 +828,7 @@
                      ((udivll)))
       ("t2.uremll"  "4df8044d4df8045d4df8046d4df8047d40f2000440f2000540f2400612eb020253eb030354eb040455eb050504d2b4eb000775eb010705d3b4eb000475eb010502f20102a6f20106b6f1000fe6d1204629465df8047b5df8046b5df8045b5df8044b"
                      ((uremll))))
-   _ (foldl (\ _ t (chk2 (t 0) (t 1) 'thumb2 (t 2))) 0 t2tests)
+   _ (foldl (_ \ t \ chk2 (t 0) (t 1) 'thumb2 (t 2)) 0 t2tests)
 
    ;; -- the thumb1 backend: the same neutral IR, a fourth target -- armv6-M (Cortex-M0/M0+, the
    ;; rp2040 CPU). 16-bit Thumb-1: two-address, low-registers, no MOVW/MOVT (so `li` byte-builds
@@ -930,7 +930,7 @@
                  ((div r1 r1 r0)))                                    ; |a|,|b| ; qsign=sa^sb ; core ; refix
       ("t1.rem"  "ca17c3175140891a5840c01a04b40022202349005241824201d3121a491c5b1ef7d108bc11005940c91a"
                  ((rem r1 r1 r0 r3))))                                ; |a|,|b| ; core ; sign=sa ; refix
-   _ (foldl (\ _ t (chk2 (t 0) (t 1) 'thumb1 (t 2))) 0 t1tests)
+   _ (foldl (_ \ t \ chk2 (t 0) (t 1) 'thumb1 (t 2)) 0 t1tests)
 
    ;; -- the riscv backend: the same neutral IR, a fifth target -- rv64imfd (the pine64 ox64's
    ;; c906, qemu -M virt). fixed 32-bit little-endian, three-address, and no flags register:
@@ -1100,7 +1100,7 @@
       ("rv.fset.ab"  "d39fa5a27e85"      ((ucomisd f0 f1) (set above r0)))       ; flt.d t6,fa1,fa0 ; mv a0,t6
       ("rv.fset.be"  "d39fa5a213b51f00"  ((ucomisd f0 f1) (set be r0)))          ; flt.d ; seqz a0,t6
       ("rv.tp"       "1285"              ((tp r0))))                   ; mv a0, tp (the thread pointer)
-   _ (foldl (\ _ t (chk2 (t 0) (t 1) 'rv64 (t 2))) 0 rvtests)
+   _ (foldl (_ \ t \ chk2 (t 0) (t 1) 'rv64 (t 2)) 0 rvtests)
 
    ;; -- the wasm module writer (src/love/holo/wasm.l): instruction forms -> bytes, each row the
    ;;    bytes binaryen's wasm-as lays for the same text (memory64 on). the whole-module shape is
@@ -1122,7 +1122,7 @@
       ("w.memory"         "3f004000"               ((memory.size) (memory.grow)))
       ("w.fc"             "fc0b00fc0a0000fc02"     ((memory.fill) (memory.copy) (i32.trunc_sat_f64_s)))
       ("w.tail"           "12030000"               ((return_call 3) (unreachable) (unreachable))))
-   _ (foldl (\ _ t (chk-eq (t 0) (t 1) (wins-hex (t 2)))) 0 wtests)
+   _ (foldl (_ \ t \ chk-eq (t 0) (t 1) (wins-hex (t 2))) 0 wtests)
    ;; the container: leb, names, a memory64 limit, a data segment's i64 offset
    _ (chk-eq "w.uleb" '(172 2) (uleb 300))
    _ (chk-eq "w.sleb" '(192 0) (sleb 64))
@@ -1159,4 +1159,4 @@
    ;; -- summary; nonzero exit on any miss, so `make`-style gates see the failure. --
    np (peep pass 0 0) nf (peep fail 0 0)
    _ (sayln $ "test/holo/golden: " + show np + " passed, " + show nf + " failed\n")
-   _ (? (0 = nf) 0 (quit 1)))
+   _ (0 = nf ? 0 (quit 1)))

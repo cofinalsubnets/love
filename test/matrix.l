@@ -1,19 +1,10 @@
 ; === the generic-op dispatch matrices, walked cell by cell ====================
-; l's generic dyadic ops are NxN ap matrices indexed by the kind lattice
-; (l.h enum q): kcharm | ksun kgem ktwin (the boxed scalars) | ktrayZ ktrayR
-; ktrayC ktrayO (the tray tower -- ONE rep, DTray, refined by element tier) |
-; kstring kmint | kchain(chain) | ktablet khot.
-; a monadic op is that matrix's diagonal. Three matrices are explicit tables in
-; l.c -- g_add_mx (+), g_mul_mx (*), g_apply_mx (apply); the rest (- / %
-; < <= = >= >) are lane aps that refine the same lattice internally.
-; This file holds the fine within-category cells: fix vs box/float/complex, a box
-; one word wide vs wider, the four array tiers, the rep pairings a coarse law
-; folds together. The
-; coarse cell of each row -- what the band law already says -- is spec.l's, and
-; the church-numeral rows are functions.l's; a row that is wholly theirs is a
-; pointer here, not a copy. So a dispatch regression (e.g. a data-sentinel stride
-; desync that mis-routes whole apply rows) still fails loudly, without the corpus
-; asserting one cell twice.
+; the generic dyadic ops are NxN matrices over the kind lattice (l.h's enum): kcharm |
+; ksun kgem ktwin | ktrayZ ktrayR ktrayC ktrayO (one rep, DTray, by element tier) |
+; kstring kmint | kchain | ktablet khot. a monadic op is its matrix's diagonal. g_add_mx,
+; g_mul_mx and g_apply_mx are explicit tables; the rest are lane aps over the same lattice.
+; this file holds the fine cells (fix vs box/float/complex, one-word vs wider box, the
+; tray tiers); each row's coarse cell is spec.l's and the church rows are functions.l's.
 
 ; one representative value per kind -- the legend a row is read against. The three
 ; boxed scalars are distinct kinds (KGem/KTwin/KSun) but share one apply cell, and

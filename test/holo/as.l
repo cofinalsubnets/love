@@ -18,7 +18,7 @@
    (bump t)  (pin t 0 $ 1 + peep t 0 0)
    (sayln s) (puts s, flush out)
    (chk-eq name want got)
-      (? (want = got) (bump pass)
+      (want = got ? (bump pass)
        (bump fail,
         sayln $ "FAIL " + name + ": want " + show want + " got " + show got + "\n"))
    (chk name want src) (chk-eq name want (as-hex src))
@@ -230,24 +230,24 @@
       ("rip.shufps" "0fc6150000000088c3" "shufps $136, t(%rip), %xmm2\nt:\n ret")
       ("rip.cmpb.imm" "803d0000000001c3" "cmpb $1, t(%rip)\nt:\n ret"))
 
-   _ (foldl (\ _ t (chk (t 0) (t 1) (t 2))) 0 tests)
+   _ (foldl (_ \ t \ chk (t 0) (t 1) (t 2)) 0 tests)
    ;; -- the lens laws over the same battery (src/love/holo/dialect.l): each source reads to a
    ;;    value both dialects show and read back unchanged, and the Intel spelling assembles to
    ;;    the golden bytes -- the conversion is byte-exact. --
    (law name want src)
-      (: v (att-read src)
-         _ (chk-eq (name + ".att") v (att-read (att-show v)))
-         _ (chk-eq (name + ".intel") v (intel-read (intel-show v)))
-         (chk-eq (name + ".intel.hex") want (as-hexv (intel-read (intel-show v)))))
-   _ (foldl (\ _ t (law (t 0) (t 1) (t 2))) 0 tests)
+      (att-read src @ v
+       (chk-eq (name + ".att") v (att-read (att-show v)),
+        chk-eq (name + ".intel") v (intel-read (intel-show v)),
+        chk-eq (name + ".intel.hex") want (as-hexv (intel-read (intel-show v)))))
+   _ (foldl (_ \ t \ law (t 0) (t 1) (t 2)) 0 tests)
    ;; ..and the template shapes gas.l reads through the same door: a control register, an
    ;; immediate expression, `;`-joined statements, a `//` comment -- law 1 on both surfaces, and
    ;; the reading the lowering counts on
    (law2 name want src)
-      (: v (att-read src)
-         _ (chk-eq name want v)
-         _ (chk-eq (name + ".att") v (att-read (att-show v)))
-         (chk-eq (name + ".intel") v (intel-read (intel-show v))))
+      (att-read src @ v
+       (chk-eq name want v,
+        chk-eq (name + ".att") v (att-read (att-show v)),
+        chk-eq (name + ".intel") v (intel-read (intel-show v))))
    _ (law2 "lens.cr" '((op mov 8 ((cr 3) (rg 7 8))) (op mov 8 ((rg 0 8) (cr 0)))) "mov %rdi, %cr3\nmov %cr0, %rax")
    _ (law2 "lens.expr" '((op and 8 ((rg 0 8) (im -5))) (op or 8 ((rg 0 8) (im 1536))))
            "and $~(1 << 2), %rax // clear\n or $((1 << 9) | (1 << 10)), %rax")
@@ -257,12 +257,12 @@
    ;;    to the value the source reads to (labels aside -- a decoded target is an address), and
    ;;    re-encode to the golden bytes through the relabelled rows. --
    (hexv c) (? (48 <= c <= 57) (c - 48) (97 <= c <= 102) (c - 87) (c - 55))
-   (unhex h) (string (map (\ i (hexv (h (2 * i)) * 16 + hexv (h (2 * i + 1)))) ^(#h // 2)))
+   (unhex h) (string (map (i \ hexv (h (2 * i)) * 16 + hexv (h (2 * i + 1))) ^(#h // 2)))
    (law3 name want src)
-      (: rows (x64-disasm (unhex want) 0)
-         _ (? (has? src ":") 0 (chk-eq (name + ".decode") (att-read src) (catmap (r \ r 2) rows)))
-         (chk-eq (name + ".decode.hex") want (as-hexv (x64-relabel rows))))
-   _ (foldl (\ _ t (law3 (t 0) (t 1) (t 2))) 0 tests)
+      (x64-disasm (unhex want) 0 @ rows
+       ((has? src ":" ? 0 (chk-eq (name + ".decode") (att-read src) (catmap (r \ r 2) rows))),
+        chk-eq (name + ".decode.hex") want (as-hexv (x64-relabel rows))))
+   _ (foldl (_ \ t \ law3 (t 0) (t 1) (t 2)) 0 tests)
    np (peep pass 0 0) nf (peep fail 0 0)
    _ (sayln $ "test/holo/as: " + show np + " passed, " + show nf + " failed\n")
-   _ (? (0 = nf) 0 (quit 1)))
+   _ (0 = nf ? 0 (quit 1)))

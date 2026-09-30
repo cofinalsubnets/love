@@ -1,30 +1,12 @@
-; test/uuvalband.l -- the band algebra over test/uuval.l's values: love's `+`
-; and `*` themselves, where uuval models only what net reads and test/uumx.l
-; only which lane a pair of kinds dispatches to. the tree's notions of band meet
-; here: this carrier has the three shapes a value can be -- () and a number and
-; a link -- and each is one of mx.l's fifteen kinds, so the cell vadd takes is
-; the lane mx.l's matrix dispatches to, checked over all nine pairs. the three
-; vocabularies cut at different depths and disagree about nothing: kinds.l's
-; lattice ranks the numeric tier inside the one band mx.l's roster gives it.
-;
-; the laws are the ones test/proof/rocq/spec.v proves of `gval` -- the unit on
-; either side of +, the zero that annihilates * on either side, the degeneration
-; of a mixed band under + (a number against a chain arrives as that band's unit,
-; which is what buys associativity over the whole carrier with no side
-; conditions), the |count| action of a number on a chain, and the cartesian
-; product that makes chain*chain a semiring rather than a monoid -- restated
-; here over the finer carrier and proved in uu rather than in Rocq alone.
-;
-; what + needs that uuval did not: the integers really associate. that is the
-; first block, and it is why uuval respells zadd by iteration -- the four
-; definitional equations below are the whole proof, and the truncated-
-; subtraction spelling has none of them. the chain band needs one more thing --
-; that append associates -- and that needs the pad to be invisible to append and
-; veq to compose, which is why uuval's equality is an equivalence. every law
-; here is given twice: once over veq, and once over paths on uuval's pinned
-; carrier, the second by the bridge and one line each.
-;
-; substrate: test/uu.l and test/uuval.l (both load before this by sort order).
+; test/uuvalband.l -- the band algebra over test/uuval.l's values: love's `+` and `*`
+; themselves. the carrier has three shapes -- (), a number, a link -- each one of mx.l's
+; kinds, so the cell vadd takes is the lane mx.l's matrix dispatches to, checked over all
+; nine pairs. the laws are those test/proof/rocq/spec.v proves of `gval` (units, the
+; annihilating zero, a mixed band degenerating to its unit under +, a number's |count|
+; action on a chain, chain*chain as a semiring), proved here in uu. the integers must
+; really associate, which is why uuval spells zadd by iteration; each law is given over
+; veq and again over paths on the pinned carrier. loads after test/uu.l and
+; test/uuval.l (sort order).
 (test (elem 'vof (names ())) (two? (peep GLOB 'vlink 0)))
 
 ; --- zsucc and zpred are inverse, each way. the two nat cases are where the

@@ -40,7 +40,7 @@
    _ (feed p "xy")
    _ (stall p 6)
    n {}
-   t (twirl (\ _ ((: (go u) (pin n 0 (1 + (peep n 0 0)), rest 0, go ())) ())) ())
+   t (twirl (_ \ (: (go u) (pin n 0 (1 + (peep n 0 0)), rest 0, go ())) ()) ())
    got (take p 2)
    _ (freeze t)
    _ (assert (got = "xy")
@@ -150,7 +150,7 @@
 (: p (dev ())
    _ (wstall p 30)
    n {}
-   t (twirl (\ _ ((: (go u) (pin n 0 (1 + (peep n 0 0)), rest 0, go ())) ())) ())
+   t (twirl (_ \ (: (go u) (pin n 0 (1 + (peep n 0 0)), rest 0, go ())) ()) ())
    _ (say p "xyz")
    _ (flush p)
    _ (freeze t)
@@ -168,7 +168,7 @@
 (: p (dev ())
    s (: (dup t n) (n @ 0 t (dup (t + t) (n - 1))) (dup "0123456789abcdef" 8))
    _ (wstall p 40)
-   hi (foldl (\ m _ (: _ (say p s) k (wpending p) (m < k ? k m))) 0 '(1 2 3 4))
+   hi (foldl (m \ _ \ (: _ (say p s) k (wpending p) (m < k ? k m))) 0 '(1 2 3 4))
    _ (flush p)
    _ (assert (#s = 4096)
              (hi <= 4096)                  ; 16384 with the park taken back out
@@ -181,7 +181,7 @@
 (: p (dev ())
    _ (wstall p 40)
    hi (: (go k m) (k @ 0 m
-                   (: _ (put p 120) j (wpending p) (go (k - 1) (? (m < j) j m))))
+                   (: _ (put p 120) j (wpending p) (go (k - 1) (m < j ? j m))))
          (go 9000 0))
    _ (flush p)
    _ (assert (hi <= 4096)                 ; 8192 with the park taken back out

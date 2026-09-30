@@ -69,9 +69,9 @@
  (: t {}
     _ (pin t 'n 0)
     p (twirl (_ \ (: (loop _) (? (peep t 'n 0 < 3)
-                                (do (pin t 'n (1 + peep t 'n 0))
-                                   (rest 0)
-                                   (loop 0))
+                                (pin t 'n (1 + peep t 'n 0),
+                                 rest 0,
+                                 loop 0)
                                 'done)
                     (loop 0))) 0)
     r (catch p)
@@ -208,7 +208,7 @@
  ; wait on its pid returns 0 (unknown).
  (: t {}
     _ (pin t 'flag 0)
-    p (twirl (_ \ (: (loop _) (do (rest 0) (pin t 'flag 1) (loop 0)) (loop 0))) 0)
+    p (twirl (_ \ (: (loop _) (rest 0, pin t 'flag 1, loop 0) (loop 0))) 0)
     r (freeze p)
     (1 = r && 0 = catch p))
 
@@ -219,12 +219,12 @@
    (1 = freeze p) && (0 = catch p)))
 
  ; double-chill: second chill is a no-op since the pid is gone from the ring.
- (twirl (_ \ (: (loop _) (do (rest 0) (loop 0)) (loop 0))) 0 @ p
+ (twirl (_ \ (: (loop _) (rest 0, loop 0) (loop 0))) 0 @ p
   ((1 = freeze p) && (0 = freeze p)))
 
  ; killing one of several tasks leaves the others intact.
  (: t {}
-    a (twirl (_ \ (: (loop _) (do (rest 0) (loop 0)) (loop 0))) 0)
+    a (twirl (_ \ (: (loop _) (rest 0, loop 0) (loop 0))) 0)
     b (twirl (x \ x * 10) 7)
     _ (freeze a)
     rb (catch b)
@@ -288,9 +288,9 @@
     _ (pin t 'n 0)
     a (twirl (_ \ rest 30) 0)
     b (twirl (_ \ (: (loop _) (? (peep t 'n 0 < 5)
-                                (do (pin t 'n (1 + peep t 'n 0))
-                                   (rest 0)
-                                   (loop 0))
+                                (pin t 'n (1 + peep t 'n 0),
+                                 rest 0,
+                                 loop 0)
                                 'done)
                     (loop 0))) 0)
     (catch a, catch b,

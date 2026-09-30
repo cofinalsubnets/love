@@ -1,41 +1,17 @@
-; test/uuval.l -- love's own values, modelled in uu: the measure tower of
-; claude.md's lambda equations ($x = ceil (re (net x)), ?x = ($x > 0)) built as
-; a stack OF retractions, so the laws test/law.l can only refute become theorems
-; (src/tools/law2uu.l compiles them off law.l's own rows into test/uuvallaw.l -- one
-; spelling, both lanes). the value universe is a binary tree of measures -- love's
-; net sums over a compound's parts and reads nothing else, so a leaf is its
-; measure and no gem's value (hence no ieee) enters the model.
-;
-; the tower, each rung a section/retraction pair whose round trip is definitional:
+; test/uuval.l -- love's own values modelled in uu: the measure tower of claude.md's
+; lambda equations ($x = ceil (re (net x)), ?x = ($x > 0)) as a stack of retractions, so
+; test/law.l's laws become theorems (src/tools/law2uu.l compiles its rows into
+; test/uuvallaw.l). a value is a binary tree of measures: net reads nothing else, so no ieee
+; enters the model.
 ;
 ;   bool  --nbit-->  nat  --nzed-->  zed  --zrea-->  rea  --rmsr-->  msr  --vnum--> val
 ;         <-natbit-       <--zsat--       <-rceil--       <--mre---        <--vnet--
 ;
-; a real is a half-integer (z, plus a bit for +1/2): the smallest carrier closed
-; under addition on which ceil is not the identity, which is all the tower's shape
-; asks of it -- 2.5 ceils to 3 and -2.5 to -2 here, exactly as love answers.
-;
-; a leaf is not quite its measure: () and 0 net the same, read nil the same, and
-; are still two values, so the leaf carries a tag (atm) and = reads it. that one
-; bit is what a whole layer of the model needed and nothing else in it uses.
-; the equality itself is an equivalence here -- reflexive, and transitive off the
-; reflection of each rung's decidable equality into a path -- which is what lets
-; a link's two limbs be compared through the heights neither of them spells.
-; and beside it sits the pinned carrier, the same trees with the index tied to
-; the height, where the spelling is unique and `paths` is the equality. the two
-; are bridged both ways: veq answers true exactly when the two values pin to the
-; same one, so love's = is a decision procedure for paths and every law can be
-; read either way. the laws below are given in both.
-; above the tower sits the charm ceiling, the only rung with a width -- zsat is
-; the retraction and stays unbounded, zsatc is what the word can hold -- and
-; beside it the colours, the sign structure ?x = ($x > 0) actually rests on.
-; the laws here are about idempotence and factorisation, so a wrong zadd cannot
-; fake one; the algebra of + and * is test/uuvalband.l's, and what gates the
-; arithmetic in both is the differential in test/uuvaldiff.l, which runs love's
-; own saturate beside this model's vsat over test/law.l's corpus.
-;
-; substrate: test/uu.l (the kernel + nat vocabulary; this file loads after it by
-; sort order). guard: fail by name if the kernel is not up.
+; a real is a half-integer, the smallest carrier on which ceil is not the identity. a leaf
+; carries a tag (atm) because () and 0 net alike yet are two values. veq is an equivalence,
+; bridged both ways to the pinned carrier where `paths` is the equality, so each law is
+; given in both. the + and * algebra is test/uuvalband.l's; test/uuvaldiff.l gates the
+; arithmetic against love's own. loads after test/uu.l (sort order), its kernel.
 (test (elem 'vof (names ())))
 
 ; --- zed: the integers, ceil's codomain. ii1 n is n, ii2 n is -(succ n) ---

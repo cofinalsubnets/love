@@ -1,29 +1,16 @@
 ; --- test/digest.l: the digests in src/love/lib/hash.c, held to what publishes them ---
-; named digest, not hash, because test/hash.l is the tablet's.
-; src/apps/kore's checksum tools are these plus a line of output, and test/kore/sum.sh holds those to GNU coreutils -- so this file is
-; the half of the rope that does not need another implementation on the box.
-;
-;   vectors   RFC 1321's md5 suite, fips 180-4's sha examples and RFC 7693's blake2b
-;             one, verbatim. a digest with no love twin has nothing else to be right
-;             against.
-;   cksum     ..except this one, which gets a twin: the POSIX crc is short enough to
-;             state in love, so `hash-ckwalk` below is the statement of the polynomial
-;             and the C is held to it at every length 0..129. the walk is written from
-;             the standard and not from the C: same poly 0x04c11db7, register the other
-;             way round from crc32's, seed 0, and the byte count walked through after
-;             the message, low byte first, which is why an empty file is 4294967295.
-;   lengths   the block is 64 bytes and the length rides the last 8 of it, so 55/56 and
-;             119/120 are where a padding off by one shows (sha-384/512: 128 and 16,
-;             so 111/112 and 239/240; blake2b holds a block back, so 128 and 256).
-;   misuse    value ops: a wrong shape answers (), it does not digest.
-;   stream    <X>-init/feed/done is the same digest resumable -- every one of them --
-;             and its oracle is the one-shot beside it: fed in chunks of every awkward
-;             size, at every length where the padding could slip, it must answer what
-;             the one-shot answers. a second spelling of the compression function is
-;             exactly what this must not be, so the test is agreement and not another
-;             vector. the state's width is the only thing telling them apart, so the
-;             misuse cases feed each nif its neighbours' casks.
-;
+; (not hash.l: that is the tablet's.) test/kore/sum.sh holds kore's checksum tools to GNU;
+; this is the half that needs no other implementation.
+;   vectors   RFC 1321's md5 suite, fips 180-4's sha examples, RFC 7693's blake2b one.
+;   cksum     hash-ckwalk states the POSIX crc in love, from the standard not the C (poly
+;             0x04c11db7, seed 0, the byte count walked after the message low byte first,
+;             so an empty file is 4294967295), and the C is held to it at lengths 0..129.
+;   lengths   55/56 and 119/120 where the length rides the block's last 8 bytes (sha-384/512:
+;             111/112, 239/240; blake2b holds a block back: 128, 256).
+;   misuse    a wrong shape answers (), it does not digest.
+;   stream    <X>-init/feed/done must answer what the one-shot does, fed in chunks of every
+;             awkward size; agreement, not another vector. misuse feeds each nif its
+;             neighbours' casks, since the state's width is all that tells them apart.
 ; run:  cat test/00-init.l test/digest.l | out/love
 (test
  (lit? sha256)

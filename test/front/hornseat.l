@@ -1,25 +1,12 @@
 ; test/front/hornseat.l -- the horn's seat door, and the ring a card pulls it through.
-;
-; these run under out/frontseat: test/front/main.c built with -D ai_horn_seat=1, where
-; src/love/horn.c asks k_horn_* for the device instead of hunting a kernel's. that is the lane
-; inle runs over src/inle/hda.c and the playdate over its sdk, and it is the only one of the
-; horn's three kinds no gate could reach -- the other two want a card, or want no card
-; at all.
-;
-; the frontend's k_horn_* are the device, over src/love/hornring.h: the same header
-; src/love/user/playdate/pdglue.c hands its sdk audio callback. (tapped ()) drains that ring the way
-; a card would and lays it back interleaved, so every law here rides a real push, a real
-; pull and -- the ring being 1024 frames against writes of a few hundred -- a real wrap.
-; a ring is otherwise the one piece of a seat's sound a gate cannot see, because a gate
-; has no card to pull with.
-;
-; the difference worth gating twice is the doubling. src/love/horn.c's horn_land sits between
-; the port and this door and widens a mono port to stereo, a device being always stereo
-; -- and the sink is not a device, so nothing widens there. test/front/horn.l says a mono
-; port taps as mono; this file says the same port reaches a seat as stereo. which of the
-; two a seat growing sound gets depends only on which door it wired.
+; runs under out/frontseat (test/front/main.c with -D ai_horn_seat=1), where
+; src/love/horn.c asks k_horn_* for the device: the lane inle and the playdate run, which
+; no other gate reaches. the frontend's device is src/love/hornring.h's ring; (tapped ())
+; drains it as a card would, and at 1024 frames against writes of a few hundred every law
+; rides a real push, pull and wrap. horn_land widens a mono port to stereo for a device,
+; never for the sink: test/front/horn.l taps a mono port as mono, this sees it as stereo.
 
-(: (ramp n) (string (map (\ i (i % 251)) (jot n))))
+(: (ramp n) (string (map (i \ i % 251) (jot n))))
 
 ; --- a stereo port goes down as it is -------------------------------------------
 (: h (horn 44100 2)
@@ -29,10 +16,10 @@
    _ (flush h)
    _ (assert (400 = horn-lag h))              ; the ring's fill, before anything pulls
    got (tapped ())                              ; ..and the pull that empties it
-   _ (assert (pcm = got))
-   _ (assert (0 = horn-lag h))                ; drained
-   _ (assert (44100 = taprate ()))
-   (assert (2 = tapchans ())))
+   (assert (pcm = got),
+    assert (0 = horn-lag h),                  ; drained
+    assert (44100 = taprate ()),
+    assert (2 = tapchans ())))
 
 ; --- ..and a mono one is doubled before it arrives -------------------------------
 ; the port still calls itself mono; what reached the device is twice the bytes, each
@@ -43,11 +30,11 @@
    _ (say h pcm)
    _ (flush h)
    got (tapped ())
-   _ (assert (1600 = #got))              ; ..400 stereo frames
-   _ (assert (2 = tapchans ()))
-   ; frame i is mono sample i twice: bytes 2i,2i+1 landing at 4i..4i+3
-   (assert (foldl (\ a i (a && ((got (4 * i) = pcm (2 * i)) && ((got ((4 * i) + 1) = pcm ((2 * i) + 1)) && ((got ((4 * i) + 2) = pcm (2 * i)) && (got ((4 * i) + 3) = pcm ((2 * i) + 1)))))))
-                  1 (jot 400))))
+   (assert (1600 = #got),                ; ..400 stereo frames
+    assert (2 = tapchans ()),
+    ; frame i is mono sample i twice: bytes 2i,2i+1 landing at 4i..4i+3
+    (assert (foldl (a \ i \ a && ((got (4 * i) = pcm (2 * i)) && ((got ((4 * i) + 1) = pcm ((2 * i) + 1)) && ((got ((4 * i) + 2) = pcm (2 * i)) && (got ((4 * i) + 3) = pcm ((2 * i) + 1))))))
+                   1 (jot 400)))))
 
 ; --- the ring wraps, and nothing is lost or reordered across it ------------------
 ; 1024 frames deep, so eight rounds of 400 carry the free-running indices past the end
@@ -71,29 +58,29 @@
 ; holding its last frame instead of zeroing reads the same from there. (starved n) is
 ; the other half: it pulls into buffers a card would have handed in, dirty, and counts
 ; what came back loud. holding the last frame rings a tone under a stall.
-(: h (horn 44100 2)
-   _ (assert (0 = horn-lag h))
-   _ (assert ("" = tapped ()))
-   _ (assert (0 = starved 64))
-   ; ..and the control, so the 0 above is the ring being silent and not `starved` blind
-   _ (say h (ramp 400))
-   _ (flush h)
-   _ (assert (0 < (starved 64)))
-   (tapped ()))                                 ; drained again, for the law below
+(horn 44100 2 @ h
+ (assert (0 = horn-lag h),
+  assert ("" = tapped ()),
+  assert (0 = starved 64),
+  ; ..and the control, so the 0 above is the ring being silent and not `starved` blind
+  say h (ramp 400),
+  flush h,
+  assert (0 < (starved 64)),
+  tapped ()))                                   ; drained again, for the law below
 
 ; --- the lag is the device's number, not a clock's --------------------------------
 ; the sink reckons what is played from ai_clock at the nominal rate, so its lag drifts
 ; with the wall. a seat answers k_horn_lag, which is what the ring actually holds --
 ; exact, and the number backpressure is owed.
-(: h (horn 44100 2)
-   _ (say h (ramp 400))                         ; 100 frames
-   _ (flush h)
-   _ (assert (100 = horn-lag h))
-   _ (say h (ramp 400))
-   _ (flush h)
-   _ (assert (200 = horn-lag h))              ; ..and it accumulates until something pulls
-   _ (tapped ())
-   (assert (0 = horn-lag h)))
+(horn 44100 2 @ h
+ (say h (ramp 400),                             ; 100 frames
+  flush h,
+  assert (100 = horn-lag h),
+  say h (ramp 400),
+  flush h,
+  assert (200 = horn-lag h),                  ; ..and it accumulates until something pulls
+  tapped (),
+  assert (0 = horn-lag h)))
 
 ; --- misuse is the port's, not the door's ----------------------------------------
 (assert (nom? (horn 10 2)),

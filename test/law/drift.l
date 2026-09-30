@@ -10,7 +10,7 @@
    (dr-near a b) (abs (a - b) < 0.000001)
    (dr-rots l) (map (i \ drop i l + take i l) ^#l)
    (dr-pow r k) (k < 1 ? 1 (r * dr-pow r (k - 1)))
-   (dr-all l) (? !(two? l) 1 (<l ? (dr-all >l) 0))
+   (dr-all l) (!(two? l) ? 1 (<l ? (dr-all >l) 0))
    ; --- the lattice ---------------------------------------------------------------
    _ (test ; a ratio is its prime exponents, and back
            ([-4 4 -1 0] = monzo (81 /// 80))

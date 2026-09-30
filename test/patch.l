@@ -1,12 +1,8 @@
-; test/patch.l -- the patch groupoid, the executable spec the whole patch stack drifts
-; against. the design: a distribution, a namespace and a
-; repo-state are one algebra of selectable sets, with commute the primitive underneath.
-;
-; the proofs run on two legs. the generated leg is the destination: test/uupatch.l
-; encodes the models below as uu proof terms, src/tools/uu2coq.l + uu2lean.l emit them, and
-; rocq + lean audit them axiom-free (make test_uugen + test_uulean). the hand leg,
-; test/proof/rocq/patch.v, scaffolds the slices whose models are still settling (make
-; test_proof); each migrates to the generated leg as its model stabilizes.
+; test/patch.l -- the patch groupoid, the executable spec the patch stack drifts against:
+; a distribution, a namespace and a repo-state are one algebra of selectable sets, with
+; commute underneath. test/uupatch.l is the uu twin, same model name for name (proved
+; axiom-free via uu2coq/uu2lean: test_uugen, test_uulean); test/proof/rocq/patch.v
+; scaffolds the slices still settling (test_proof).
 ;
 ; the named-slot model: a tree is a (key . value) assoc, a patch a single slot-change
 ; carrying its context (old -> new, not a bare diff), commute the partial swap.
@@ -14,9 +10,7 @@
 ;   L2  inverse round-trips (in context)       patches are order-free
 ;                                          L3b a frontier is stable under an
 ;                                              adjacent swap of independent patches
-; the uu twin is test/uupatch.l, same model name for name. helpers stay local (the
-; corpus runs concatenated in one scope) and the asserts run inside the body, so the
-; whole spec is one leak-free form.
+; helpers stay local and the asserts run inside the body: the corpus is one scope.
 
 (:
  ; --- the model ---

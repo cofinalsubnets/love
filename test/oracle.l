@@ -1,26 +1,11 @@
 ; --- differential oracle: ev's reduction vs a reference normalizer ---
-; The companion to test/proof/rocq/spec.v's reduction layer (shift/subst/step). spec.v proves
-; that calculus consistent; this checks the binary against an independent reference
-; implementation of the same de Bruijn reduction, over thousands of random terms --
-; the conformance witness the proof alone can't give. ("the math is sound" + "the
-; binary computes the math" = not slop.)
-;
-; The reference is a direct transcription of spec.v's shift/subst, evaluated under
-; love's own strategy: N-ARY closures (nested lambdas collapse to one arity-n closure)
-; with cbv, weak (no reduction under a binder) and saturating (a beta step fires only
-; when all n args are present; an under-applied closure is held unreduced -- exactly
-; as ev shows ((B A) stays (B A) until the 2nd arg lands).
-;
-; Terms are random closed affine lambda terms (each bound var used <=1 => strongly
-; normalizing, so both ev and the reference terminate). Comparison is extensional:
-; both results are applied to distinct marker symbols (a symbol applied is const-1,
-; so no church-numeral blowup), grounding away the only legitimate difference -- love
-; holding a partial application lazily vs the reference materializing the equal
-; closure. This is representation-independent and robust at every term size; a
-; deliberately wrong subst index (a mutation test) drops it well below 100%, so it
-; discriminates real reduction bugs. The free-variable shift path of subst is
-; unreachable here (weak CBV on closed terms only ever fires a closed function, so
-; free vars are never renumbered) -- that arithmetic is covered by spec.v, not ev.
+; test/proof/rocq/spec.v proves the de Bruijn calculus (shift/subst/step) consistent; this
+; checks the binary against a direct transcription of it, over thousands of random closed
+; affine terms (so both terminate), under love's strategy: n-ary closures, cbv, weak, and
+; saturating (an under-applied closure is held, as ev holds (B A)). results are compared
+; extensionally, applied to distinct marker symbols, which grounds away love's lazy
+; partials. a wrong subst index drops the rate well below 100%. subst's free-variable
+; shift is unreachable here (weak cbv on closed terms) and is spec.v's alone.
 (: ; de Bruijn terms as tagged chains: (0 n) Var | (1 b) Lam | (2 f a) App
  (dvar n) [0 n]   (dlam b) [1 b]   (dapp f a) [2 f a]
  (dtag t) <t   (dn t) <>t   (dbody t) <>t

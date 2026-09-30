@@ -27,12 +27,12 @@
    ;; nb: these take a dummy arg -- a nullary call (f) does not fire in love, it just
    ;; returns f (the empty-form law); a real argument is what invokes it.
    (trainstep _) (: _ (tl-reset 0) _ (zero opt)
-                  loss (mse (call model X) Y) _ (back loss) _ (step opt) (tl-val loss))
-   (loop k lv) (? (k = 0) lv
-                  (: nv (trainstep 0)
-                     _ (? (0 = k % 1000) (puts $
-                        "epoch " + show (epochs - k) + "   loss " + show nv + "\n"))
-                     (loop (k - 1) nv)))
+                  loss (mse (call model X) Y) (back loss, step opt, tl-val loss))
+   (loop k lv) (k = 0 ? lv
+                  (trainstep 0 @ nv
+                   ((? (0 = k % 1000) (puts $
+                     "epoch " + show (epochs - k) + "   loss " + show nv + "\n")),
+                    loop (k - 1) nv)))
 
    _ (puts "training a 2-8-1 MLP on XOR ...") _ (putc 10)
    final (loop epochs 1.0)
@@ -42,15 +42,15 @@
    _ (tl-reset 0)
    out (tl-val (call model X))
    (cell k) (peep out (k . 0 . ()) 0)
-   (yes k v) (? (0.5 < cell k) (v = 1) (v = 0))             ; does row k round to v?
-   _ (puts $ "00 -> " + show (cell 0) + "\n")
-   _ (puts $ "01 -> " + show (cell 1) + "\n")
-   _ (puts $ "10 -> " + show (cell 2) + "\n")
-   _ (puts $ "11 -> " + show (cell 3) + "\n")
-   _ (puts $ "final loss " + show final + " (ceiling " + show ceil + ")\n")
+   (yes k v) (0.5 < cell k ? (v = 1) (v = 0))               ; does row k round to v?
+   (puts $ "00 -> " + show (cell 0) + "\n",
+    puts $ "01 -> " + show (cell 1) + "\n",
+    puts $ "10 -> " + show (cell 2) + "\n",
+    puts $ "11 -> " + show (cell 3) + "\n",
+    puts $ "final loss " + show final + " (ceiling " + show ceil + ")\n",
 
-   ;; bound to _: a bare test in a binding slot is define-sugar and never runs.
-   ;; both halves -- the four rows round right and the loss actually fell, since rounding
-   ;; alone passes a net that merely leans the right way.
-   _ (test (yes 0 0) (yes 1 1) (yes 2 1) (yes 3 0) (final < ceil))
-   0)
+    ;; bound to _: a bare test in a binding slot is define-sugar and never runs.
+    ;; both halves -- the four rows round right and the loss actually fell, since rounding
+    ;; alone passes a net that merely leans the right way.
+    (test (yes 0 0) (yes 1 1) (yes 2 1) (yes 3 0) (final < ceil)),
+    0))

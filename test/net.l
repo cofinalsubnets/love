@@ -1,15 +1,7 @@
-; --- test/net.l: a runnable smoke test for nc's socket nifs (src/love/sock.c) ---
-; the socket nifs (connect/listen/accept/seal) live in src/love/sock.c, which love0 links
-; as surely as the final `love` does -- love0_o is the whole host glob -- so these are
-; corpus laws. it still reads standalone (test comes from test/00-init.l):
-;
-;   cat test/00-init.l test/net.l | out/love      ; green dots = pass, exits 1 on fail
-;
-; It runs a whole loopback in one process: a server task accepts and echoes a
-; line, the main task connects as a client and checks the round trip. The two
-; tasks interleave through the cooperative scheduler -- get on a not-ready fd
-; yields, the scheduler poll()s the parked fd and wakes the ready task. The
-; two-process integration gate is `make nettest` (test/net/loopback.sh).
+; --- test/net.l: a smoke test for nc's socket nifs (src/love/sock.c), linked by love0 too ---
+; a whole loopback in one process: a server task echoes a line back to a client task, the
+; two interleaving through the scheduler (get on a not-ready fd yields, poll wakes it).
+; run: cat test/00-init.l test/net.l | out/love. the two-process gate is `make nettest`.
 
 ; read a \n-terminated line off port p; (string ch) spells the byte, + concats.
 ; EOF (get -> -1) also ends the line.

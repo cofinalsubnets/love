@@ -7,25 +7,25 @@
 ; --- the zipper laws ---
 (borrow 'xwire)   ; the X wire, src/apps/lux/wire.l
 (borrow 'salt)    ; the config door, read below -- config.l splices it too, and a splice is not inherited
-(: z3 (zmk 2 '(1) '(3))                                                          ; row (1 2 3), 2 focused
-   (test
-      (zrow (zfrom '(1 2 3)) = '(1 2 3)) !(zfrom ()) !(zrow ())
-      (zrow z3 = '(1 2 3)) (zfoc z3 = 2)
-      (zfocdn (zfocup z3) = z3) (zfocup (zfocdn z3) = z3)                        ; motions are inverses
-      (zfoc (zfocup z3) = 1) (zfoc (zfocdn z3) = 3)
-      (zfoc (zfocup (zfocup z3)) = 3)                                            ; wrap past the top -> the bottom
-      (3 zfocup z3 = z3) (3 zfocdn z3 = z3)                                      ; the church numeral is the cycle law
-      (zfocup (zmk 7 () ()) = zmk 7 () ())                                       ; a singleton is a fixed point
-      (zswapdn (zswapup z3) = z3) (zswapup (zswapdn z3) = z3)                    ; swaps are inverses
-      (zfoc (zswapup z3) = 2) (zrow (zswapup z3) = '(2 1 3))
-      (zrow (zswapup (zfocup z3)) = '(2 3 1))                                    ; swapping the top rotates it down
-      (zrow (zmaster z3) = '(2 1 3)) (zmaster (zmaster z3) = zmaster z3)         ; master fronts the focus, idempotent
-      (zrow (zins 9 z3) = '(1 9 2 3)) (zfoc (zins 9 z3) = 9)
-      (zdel 2 z3 = zmk 3 '(1) ()) (zrow (zdel 1 z3) = '(2 3))
-      (zdel 9 z3 = z3) !(zdel 1 (zmk 1 () ()))))
+(zmk 2 '(1) '(3) @ z3                                                            ; row (1 2 3), 2 focused
+ (test
+    (zrow (zfrom '(1 2 3)) = '(1 2 3)) !(zfrom ()) !(zrow ())
+    (zrow z3 = '(1 2 3)) (zfoc z3 = 2)
+    (zfocdn (zfocup z3) = z3) (zfocup (zfocdn z3) = z3)                          ; motions are inverses
+    (zfoc (zfocup z3) = 1) (zfoc (zfocdn z3) = 3)
+    (zfoc (zfocup (zfocup z3)) = 3)                                              ; wrap past the top -> the bottom
+    (3 zfocup z3 = z3) (3 zfocdn z3 = z3)                                        ; the church numeral is the cycle law
+    (zfocup (zmk 7 () ()) = zmk 7 () ())                                         ; a singleton is a fixed point
+    (zswapdn (zswapup z3) = z3) (zswapup (zswapdn z3) = z3)                      ; swaps are inverses
+    (zfoc (zswapup z3) = 2) (zrow (zswapup z3) = '(2 1 3))
+    (zrow (zswapup (zfocup z3)) = '(2 3 1))                                      ; swapping the top rotates it down
+    (zrow (zmaster z3) = '(2 1 3)) (zmaster (zmaster z3) = zmaster z3)           ; master fronts the focus, idempotent
+    (zrow (zins 9 z3) = '(1 9 2 3)) (zfoc (zins 9 z3) = 9)
+    (zdel 2 z3 = zmk 3 '(1) ()) (zrow (zdel 1 z3) = '(2 3))
+    (zdel 9 z3 = z3) !(zdel 1 (zmk 1 () ()))))
 
 ; --- the sheaf laws ---
-(: (sameset? a b) ((#a = #b) && all (x \ any (y \ x = y) b) a)              ; equal as sets
+(: (sameset? a b) (#a = #b && all (x \ any (y \ x = y) b) a)                ; equal as sets
    s0 (sheaf '(1 2 3)) s1 (admit s0 10) s2 (admit (admit s1 20) 30)             ; ws1 row (30 20 10)
    s4 (shiftto s2 2)
    (test
@@ -38,8 +38,8 @@
       (sameset? (wswins (wsview s2 2)) (wswins s2))                             ; view moves no windows
       (wscur s4 = 1) (wstagof s4 30 = 2) (wsfoc s4 = 20) (wsrow s4 = '(20 10)) (wssane? s4)
       (shiftto s2 1 = s2) (shiftto s2 9 = s2)                                   ; to self / to nowhere: no-ops
-      (: s5 (shiftwin s2 10 3)                                                  ; shiftwin names its window: 10 leaves, focus stays 30
-         (wstagof s5 10 = 3 && wsrow s5 = '(30 20) && wsfoc s5 = 30 && wssane? s5))
+      (shiftwin s2 10 3 @ s5                                                    ; shiftwin names its window: 10 leaves, focus stays 30
+       (wstagof s5 10 = 3 && wsrow s5 = '(30 20) && wsfoc s5 = 30 && wssane? s5))
       (shiftwin s2 10 1 = s2) (shiftwin s2 99 2 = s2)                           ; to its own tag / an unknown window: no-ops
       !(wsknownw? (evict s2 20) 20) (wsrow (evict s2 20) = '(30 10))
       (wsfoc (evict s2 30) = 20) (wssane? (evict s2 30))
@@ -148,9 +148,9 @@
     8 (shiftto s (1 + (w % 3)))
     9 (wsgreedy s (1 + (w % 3)))
     10 (wsrescreen s (take (1 + (w % 2)) [rA rB]))                    ; one screen or two
-    (: fw (wsfoc s) (fw ? (wsfloating? s fw ? (wssink s fw) (wsdofloat s fw r99)) s)))   ; toggle-float the focus
+    (wsfoc s @ fw (fw ? (wsfloating? s fw ? (wssink s fw) (wsdofloat s fw r99)) s)))     ; toggle-float the focus
    (fz i st s)
-    (? (i < 1) s
+    (i < 1 ? s
        (: r1 (random st 12) r2 (random >r1 40)
           s2 (fzop <r1 (1 + <r2) s)
           (wssane? s2 ? (fz (i - 1) >r2 s2) ['broke <r1 (1 + <r2)])))
@@ -162,7 +162,7 @@
 
 ; --- the layout engine (src/apps/lux/layout.l): geometry is a partition ---
 (: (area p) (p 3 * p 4)                                                ; a placement's w*h
-   (sumarea ps) (foldl (\ a p (a + area p)) 0 ps)
+   (sumarea ps) (foldl (a \ p \ a + area p) 0 ps)
    r (rct 0 0 800 600) full-area 480000
    z1 (zfrom '(10)) z3 (zfrom '(10 20 30))                                       ; z3 focuses the master (10)
    L1 (resizable-tall 1 0.02 0.5)
@@ -184,15 +184,15 @@
       (lay-msg (lay-msg L1 'inc-master z3) 'dec-master z3 1 = 1)            ; dec undoes inc; floored at 1
       (lay-msg L1 'dec-master z3 1 = 1)
       ; Full places only the focus, whole rect
-      (: f <(lay-tile full r z3) (#f = 1 && <f = '(10 0 0 800 600)))
+      (<(lay-tile full r z3) @ f (#f = 1 && <f = '(10 0 0 800 600)))
       ; MirrorShrink shrinks the focused slave (focus 20, the first slave)
       (: zs (zfocdn z3) M (lay-msg L1 'mirror-shrink zs) h20 (<><(lay-tile M r zs) 4)
          (250 < h20 < 300))
       ; ||| holds the layouts; NextLayout cycles the index (tall -> full -> tall)
-      (: C (choice [L1 full])
-         (#<(ch-tile C r z3) = 3                                       ; index 0 = ResizableTall
-          && #<(ch-tile (lay-msg C 'next-layout z3) r z3) = 1          ; index 1 = Full
-          && lay-msg (lay-msg C 'next-layout z3) 'next-layout z3 1 = 0))     ; wraps back to 0
+      (choice [L1 full] @ C
+       (#<(ch-tile C r z3) = 3                                         ; index 0 = ResizableTall
+        && #<(ch-tile (lay-msg C 'next-layout z3) r z3) = 1            ; index 1 = Full
+        && lay-msg (lay-msg C 'next-layout z3) 'next-layout z3 1 = 0))       ; wraps back to 0
       ; a message ||| doesn't know (shrink) delegates to the active sublayout
       (ch-cur (lay-msg (choice [L1 full]) 'shrink z3) 2 = 0.48)))
 
@@ -218,7 +218,7 @@
 
 ; --- the layout modifiers (src/apps/lux/layout.l rung 4): each wraps a layout ---
 (: (area p) (p 3 * p 4)
-   (sumarea ps) (foldl (\ a p (a + area p)) 0 ps)
+   (sumarea ps) (foldl (a \ p \ a + area p) 0 ps)
    r (rct 0 0 800 600) z3 (zfrom '(10 20 30)) z1 (zfrom '(10))
    L1 (resizable-tall 1 0.02 0.5)
    base (choice [L1 (dwindle 1.618)])
@@ -229,27 +229,27 @@
          ((<p = '(10 0 0 800 300)) && (sumarea p = 480000)))                      ; master owns the top strip
       (lay-tile (mirror L1) r z3 = [<(lay-tile L1 r z3) (mirror L1)])            ; mirror off is a pass-through
       ; Dwindle is a golden spiral: the focus takes phi/(1+phi) of the width, still a partition
-      (: p <(lay-tile (dwindle 1.618) r z3)
+      (<(lay-tile (dwindle 1.618) r z3) @ p
        (<p 3 = int (1.618 / 2.618 * 800) && sumarea p = 480000 && #p = 3))
       ; toggleLayouts Full: off = inner, on = the focus fullscreen
       (#<(lay-tile (toggle-full L1) r z3) = 3)
       (<<(lay-tile (lay-msg (toggle-full L1) 'toggle-layout z3) r z3) = '(10 0 0 800 600))
       ; smartBorders: a lone window (or a fullscreen one) gets a border-0 hint (a 6th field)
-      (: p <(lay-tile (smart-borders L1) r z1) (#<p = 6 && <p 5 = 0))
-      (: p <(lay-tile (smart-borders L1) r z3) (all (q \ #q = 5) p))          ; multi-window: no border hint
+      (<(lay-tile (smart-borders L1) r z1) @ p (#<p = 6 && <p 5 = 0))
+      (<(lay-tile (smart-borders L1) r z3) @ p (all (q \ #q = 5) p))          ; multi-window: no border hint
       ; minimize filters a window out of the row; the rest re-tile; restore brings it back
-      (: p <(lay-tile (lay-msg (minimize L1) '(minimize-window 20) z3) r z3)
-         (#p = 2 && !(afind (q \ q 0 = 20) p)))
-      (: mm (lay-msg (lay-msg (minimize L1) '(minimize-window 20) z3) 'restore z3)
-         (#<(lay-tile mm r z3) = 3))
+      (<(lay-tile (lay-msg (minimize L1) '(minimize-window 20) z3) r z3) @ p
+       (#p = 2 && !(afind (q \ q 0 = 20) p)))
+      (lay-msg (lay-msg (minimize L1) '(minimize-window 20) z3) 'restore z3 @ mm
+       (#<(lay-tile mm r z3) = 3))
       ; windowNavigation geometry: nearest window in a direction
-      (: pls <(lay-tile L1 r z3)
-         (nav-target pls 10 'right = 20 && !(nav-target pls 10 'left)         ; master: right -> a slave, nothing left
-          && nav-target pls 20 'left = 10 && nav-target pls 20 'down = 30))     ; slave: left -> master, down -> the other slave
+      (<(lay-tile L1 r z3) @ pls
+       (nav-target pls 10 'right = 20 && !(nav-target pls 10 'left)           ; master: right -> a slave, nothing left
+        && nav-target pls 20 'left = 10 && nav-target pls 20 'down = 30))       ; slave: left -> master, down -> the other slave
       ; the whole config stack composes: message pass-through reaches the base, partition holds
       (sumarea <(lay-tile stk r z3) = 480000)
       (#<(lay-tile (lay-msg stk 'next-layout z3) r z3) = 3)                 ; next-layout reaches the ||| at the bottom
-      (: q <(lay-tile (lay-msg stk 'toggle-layout z3) r z3) (#q = 1 && <q 5 = 0))))                 ; toggle-full through the stack -> fullscreen, borderless
+      (<(lay-tile (lay-msg stk 'toggle-layout z3) r z3) @ q (#q = 1 && <q 5 = 0))))                 ; toggle-full through the stack -> fullscreen, borderless
 
 ; --- the open dispatch lane: a layout whose head is a closure answers the
 ; --- 'tile/'msg protocol itself -- user layouts enter as plain data, no table
@@ -264,8 +264,8 @@
       (<>(lay-tile Q r z3) = Q)                                                  ; ... and hands its record back
       (lay-msg Q 'grow z3 1 = 60)                                           ; a message it takes rewrites its state
       !(lay-msg Q 'shrink z3)                                                    ; one it doesn't reads () -- modifiers fall through
-      (: p <(lay-tile (smart-borders Q) r z3)                                    ; a modifier wraps the closure like any builtin
-         ((#p = 1) && (#<p = 6)))
+      (<(lay-tile (smart-borders Q) r z3) @ p                                    ; a modifier wraps the closure like any builtin
+       (#p = 1 && #<p = 6))
       (lay-msg (smart-borders Q) 'grow z3 1 1 = 60)))                  ; ... and a delegated message threads the closure's new state
 
 ; --- the manageHook dsl (src/apps/lux/manage.l rung 5): combinators + float actions ---
@@ -275,9 +275,9 @@
    tag (nm \ _ \ sh \ nm . sh)                                               ; mock action: cons a tag onto the sheaf (marks it ran)
    (test
       ; float actions move the (tiled) window into the floating half at the right rect
-      (: f (do-full-float c s0) (wsfloating? f 20 && wsrect f 20 = '(0 0 800 600) && !(any (= 20) (wstiled f))))
-      (: f (do-float c s0) (wsrect f 20 = '(100 100 300 200)))                  ; do-float keeps the window's own geometry
-      (: f (do-center-float c s0) (wsrect f 20 = '(250 200 300 200)))           ; centered: (800-300)/2=250, (600-200)/2=200
+      (do-full-float c s0 @ f (wsfloating? f 20 && wsrect f 20 = '(0 0 800 600) && !(any (= 20) (wstiled f))))
+      (do-float c s0 @ f (wsrect f 20 = '(100 100 300 200)))                    ; do-float keeps the window's own geometry
+      (do-center-float c s0 @ f (wsrect f 20 = '(250 200 300 200)))             ; centered: (800-300)/2=250, (600-200)/2=200
       (do-ignore c s0 = evict s0 20)                                            ; ignore un-manages entirely
       ; <||> is predicate or, and it reads as one: `p <||> q`
       ((yes <||> no) c) !((no <||> no) c) ((no <||> yes) c)
@@ -291,19 +291,19 @@
       ((compose-one [(no -?> tag 'a) (yes -?> tag 'b) (yes -?> tag 'c)] c s0) = ('b . s0))
       ((compose-one [(no -?> tag 'a) (no -?> tag 'b)] c s0) = s0)
       ; compose-all threads every hook (a plain hook, so wrap or use identity)
-      ((compose-all [(\ c sh ('x . sh)) (\ c sh ('y . sh))] c s0) = ('y . 'x . s0))
+      ((compose-all [(c \ sh \ 'x . sh) (c \ sh \ 'y . sh)] c s0) = ('y . 'x . s0))
       ; manage-for is the assembled config hook -- a runnable closure (X-driven; not called here)
       (lit? manage-default) (lit? (manage-for '("a") '("b") '("c")))))
 
 ; --- the Go/Swap zipper halves (src/apps/lux/core.l rung 6): focus/swap by NAME ---
-(: z3 (zmk 2 '(1) '(3))                                                          ; row (1 2 3), 2 focused
-   (test
-      (zfoc (zfocto 3 z3) = 3) (zrow (zfocto 3 z3) = '(1 2 3))                   ; zfocto moves only the focus
-      (zfocto 2 z3 = z3) (zfocto 9 z3 = z3)                                      ; to self / to absent: no-ops
-      (zrow (zswapw 1 3 z3) = '(3 2 1)) (zfoc (zswapw 1 3 z3) = 2)               ; zswapw exchanges positions, focus keeps its window
-      (zrow (zswapw 2 3 z3) = '(1 3 2)) (zfoc (zswapw 2 3 z3) = 2)               ; ... even when the focus is a swap party
-      (zswapw 1 3 (zswapw 1 3 z3) = z3)                                          ; an involution
-      (zswapw 1 9 z3 = z3)))                                                     ; a missing party: no-op
+(zmk 2 '(1) '(3) @ z3                                                            ; row (1 2 3), 2 focused
+ (test
+    (zfoc (zfocto 3 z3) = 3) (zrow (zfocto 3 z3) = '(1 2 3))                     ; zfocto moves only the focus
+    (zfocto 2 z3 = z3) (zfocto 9 z3 = z3)                                        ; to self / to absent: no-ops
+    (zrow (zswapw 1 3 z3) = '(3 2 1)) (zfoc (zswapw 1 3 z3) = 2)                 ; zswapw exchanges positions, focus keeps its window
+    (zrow (zswapw 2 3 z3) = '(1 3 2)) (zfoc (zswapw 2 3 z3) = 2)                 ; ... even when the focus is a swap party
+    (zswapw 1 3 (zswapw 1 3 z3) = z3)                                            ; an involution
+    (zswapw 1 9 z3 = z3)))                                                       ; a missing party: no-op
 
 ; --- the keymap (src/apps/lux/keys.l rung 6): the table's shape, the union law, nextMatch ---
 (: (test
@@ -345,9 +345,9 @@
       (strut-shrink (rct 0 0 100 100) (strut-parse '(700 0 0 0)) 800 600 2 = 0)))
 
 ; the desktop's shape for pagers: names as NUL-terminated strings, one row of values per desktop
-(: nul (string 0)
-   (test (ewmh-names '(1 2 3) = "1" + nul + "2" + nul + "3" + nul) (ewmh-names () = "")
-         (ewmh-per '(1 2 3) '(0 0) = '(0 0 0 0 0 0)) (ewmh-per '(7) '(1 2 3 4) = '(1 2 3 4)) !(ewmh-per () '(0 0))))
+(string 0 @ nul
+ (test (ewmh-names '(1 2 3) = "1" + nul + "2" + nul + "3" + nul) (ewmh-names () = "")
+       (ewmh-per '(1 2 3) '(0 0) = '(0 0 0 0 0 0)) (ewmh-per '(7) '(1 2 3 4) = '(1 2 3 4)) !(ewmh-per () '(0 0))))
 
 ; a partial strut reaches only the screens its span meets: a bottom panel under the left screen
 (: st (strut-parse '(0 0 0 20 0 0 0 0 0 0 0 799)) l (rct 0 0 800 600) r (rct 800 0 800 600)
@@ -358,8 +358,8 @@
    r1 (ewmh-rect (rct 0 0 800 600) 800 600)
    _ (ewmh-toggle ()) r2 (ewmh-rect (rct 0 0 800 600) 800 600)                   ; ToggleStruts: the full screen again
    _ (ewmh-toggle ()) _ (ewmh-untrack 88) r3 (ewmh-rect (rct 0 0 800 600) 800 600)
-   _ (pin ewst 'struts ())                                                       ; leave the tablet clean
-   (test (r1 = '(40 30 760 570)) (r2 = '(0 0 800 600)) (r3 = '(0 30 800 570))))
+   (pin ewst 'struts (),                                                         ; leave the tablet clean
+    (test (r1 = '(40 30 760 570)) (r2 = '(0 0 800 600)) (r3 = '(0 30 800 570)))))
 
 ; --- the property/window encodings, byte-exact into a jug ---
 (: j (jug 0) _ (x-chprop32 j 5 6 7 '(9 10)) b (slurp j)
@@ -376,14 +376,14 @@
          (b 12 = 255) (b 13 = 255) (b 16 = 1) (b 22 = 2)))                     ; x=-1, w=1, class InputOnly
 
 ; --- ClientMessage field reads (win@4 type@8 data@12,16,20) ---
-(: pk ('(33 32 0 0 9 0 0 0 5 0 0 0 2 0 0 0 7 0 0 0 8 0 0 0) + '(0 0 0 0 0 0 0 0))
-   (test (ewmh-cm-win pk = 9) (ewmh-cm-type pk = 5)
-           (ewmh-cm-d0 pk = 2) (ewmh-cm-d1 pk = 7) (ewmh-cm-d2 pk = 8)))
+(('(33 32 0 0 9 0 0 0 5 0 0 0 2 0 0 0 7 0 0 0 8 0 0 0) + '(0 0 0 0 0 0 0 0)) @ pk
+ (test (ewmh-cm-win pk = 9) (ewmh-cm-type pk = 5)
+         (ewmh-cm-d0 pk = 2) (ewmh-cm-d1 pk = 7) (ewmh-cm-d2 pk = 8)))
 
 ; --- the config (src/apps/lux/config.l rung 8): the transliteration's shape.
 ;     every law here reads an empty tablet, never lux-conf: this gate must mean
 ;     the same thing on a machine that has written ~/.love/etc/lux.l. ---
-(: c0 (tablet 0)
+(: c0 {}
    lay0 (foldr lux-wrap-of (choice (filter two? (map lux-lay-of (conf-roster c0 'layout '((rtall 1 0.02 0.5) (dwindle phi))))))
                (conf-roster c0 'layout-wrap '(minimize smart toggle-full mirror)))
    sm (lay0 2) tf (sm 1) mir (tf 2) ch (mir 2)               ; peel minimize/smart/toggle/mirror down to the |||
@@ -394,14 +394,14 @@
       (<mir = 'mirror) (<ch = 'choice)
       (<rt = 'rtall) (rt 1 = 1) (rt 2 = 0.5)                           ; ResizableTall 1 (2/100) (1/2)
       (<dw = 'dwindle)
-      (: phi (dw 1) ((1.61803 < phi) && (phi < 1.61804)))                   ; fib 32 / fib 31, the golden ratio
+      (dw 1 @ phi (1.61803 < phi && phi < 1.61804))                         ; fib 32 / fib 31, the golden ratio
       (#(keys-build supm 20 9 () ()) = 74) (lit? (manage-for '("a") '("b") ()))
       (<<(conf-roster c0 'startup '(("setxkbmap"))) = "setxkbmap")))
 
 ; --- the config door (src/apps/libra/salt.l): every setting overrides, and its absence is
 ;     the value that used to be hardcoded. the tablet is built by hand -- salt
 ;     pins a setting's whole tail under its head, which is what salt-file writes. ---
-(: (st l) (foldl (\ t p (pin t <p >p)) {} l)                             ; a settings roster -> the tablet salt would answer
+(: (st l) (foldl (t \ p \ pin t <p >p) {} l)                             ; a settings roster -> the tablet salt would answer
    c1 (st '((border 5) (mod alt) (tags 4) (nudge 7)
             (layout (dwindle 2.0)) (layout-wrap smart)
             (float-class inkscape "blender") (center-class ()) (startup ())))
@@ -425,7 +425,7 @@
       (two? lux-tags) (two? lux-keymap) (lit? lux-manage) (two? lux-layout)))    ; and the live ones built, whatever this machine's file says
 
 ; --- key specs (src/apps/lux/keys.l): the surface a config writes chords in ---
-(: c2 (foldl (\ t p (pin t <p >p)) (tablet 0)
+(: c2 (foldl (t \ p \ pin t <p >p) {}
              '((bind ((sup Return) (spawn "alacritty" "-e" "tmux"))
                      ((sup shift F1) (view 1))
                      ((mod XF86AudioMute) (spawn "amixer" "set" "Master" "toggle"))
