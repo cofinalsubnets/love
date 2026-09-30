@@ -22,3 +22,9 @@ Several sessions gate on one box. Two makes in one `out/` race, and a box short 
 
 - heavy: `test_slow` `test_extra` `test_inle` `test_kernel_%` `test_gcstress` `test_boards`, and a `make out/love` from a clean `out/`
 - one make at a time in an `out/`: an exclusive lock named by its path
+
+## the merge queue
+
+Take part in a merge queue only through bee's tools: as a bee agent, or from Claude Code through the tree's `.mcp.json`, which loads `love bee --mcp` (`mcp__bee__queue_row`, `queue_lead`, `queue_land`, `queue_landed`, `inbox`). Never edit a queue by hand. The protocol is written once in `doc/bee.md`, THE MERGE QUEUE, and each queue's header states it.
+
+When the queue is long (two or more rows waiting or gating, or more heavy-lock waiters than slots), fold, don't line up. One owner's branches join as one union that gates once, and each branch runs only its light lanes.
