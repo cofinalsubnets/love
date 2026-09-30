@@ -1,56 +1,35 @@
-; --- test/host/tty.l: the tty app runners, on a real terminal ---
-; the engines gate headless -- test/host/rove.l the climb, test/host/story.l the fiction,
-; test/host/slop.l the walk -- and each of those files says the same thing about
-; what it leaves out: the runner, the loop that asks the terminal its size, puts the
-; app on the alternate screen, reads keys and steps ashore. that lane wants a
-; terminal, so it gets one. `tether` spawns the verb on a pty, we type at the master
-; and scribe what came back onto a quay screen -- the same struct cb the app would be
-; painting on anywhere, which is what lets a law here be about the grid and not about
-; a byte count.
-;
-;   cat test/00-init.l test/host/tty.l | out/love
-;
-; not in the test/*.l corpus: tether and the screen nifs live in src/love/*.c, which love0 does
-; not link.
-;
-; two rules, both learned here:
-;
-; the size is set from inside the child. a fresh pty is 0x0 and the parent's
-; settty races the child's first `tty` -- the climb reads its size once and falls
-; back to 22x80, so a lost race is a quiet 22-row deck and a gate that reddens one run
-; in fifty. `stty` on the child's own tty before the exec cannot race.
-;
-; no escape key, ever. the stage tells a lone ESC from a sequence by a short rest, so
-; an ESC with a key hard behind it reads as alt-<key> -- and alt-q is not quit. that
-; run never lands and `slurp` waits on a child that is still playing. a hung gate is
-; worse than a red one, so every sequence here ends in a quit the app cannot misread --
-; and a child that never ends anyway is killed at the deadline, so its law reads red.
+; test/host/tty.l -- the tty app runners on a real terminal: `tether` spawns the verb on a pty,
+; we type at the master and scribe what comes back onto a quay screen, so a law is about the grid.
+; the size is set by `stty` inside the child: a fresh pty is 0x0 and a parent's settty races the
+; child's first read. no escape key ever: ESC then a key reads as alt-key, and a child that never
+; quits is killed at the deadline so its law reads red.
+; not in the corpus: tether is not in love0. run: cat test/00-init.l test/host/tty.l | out/love
 (borrow 'synth)   ; the keyboard's own naming of a note, for the alt law
-(: reaped (tablet 0)                                           ; pids waitfor has had back
+(: reaped {}                                           ; pids waitfor has had back
    deadline 20000                                              ; ms a child may take
-   (waitfor pid) (: s (gather pid)
-                    (? (two? s || nom? s) (pin reaped pid 1, s) (do (rest 2) (waitfor pid))))
+   (waitfor pid) (gather pid @ s
+                    (two? s || nom? s ? (pin reaped pid 1, s) (do (rest 2) (waitfor pid))))
    ; the child's whole session goes at the deadline (tether's child leads one), so the
    ; read at the master ends and the waitfor after it lands
    (watch pid t0) (? (peep reaped pid 0) 0
                      (deadline < clock t0) (still (0 - pid) 9)
                      (rest 50, watch pid t0))
-   (guard t) ((? (two? t) (twirl (_ \ watch <t (clock 0)) 0) 0), t)
+   (guard t) ((two? t ? (twirl (_ \ watch <t (clock 0)) 0) 0), t)
    (has? h n) (: k #n m #h
-                 (go i) (? ((m - k) < i) 0 (n = snip h i (i + k)) 1 (go (i + 1)))
+                 (go i) (? (m - k < i) 0 (n = snip h i (i + k)) 1 (go (i + 1)))
                  (go 0))
    ; the wire read until a phrase has passed, as the text so far: a read at a time, the
    ; phrase sought only where the new bytes could finish it. a byte at a time costs a
    ; frame half a second, which is longer than the deafest box stays deaf
-   (wire p n) (: (go acc) (: ch (see p)
+   (wire p n) (: (go acc) (see p @ ch
                              (ch = -1 ? acc
                                 (: acc2 (acc + string ch + chug p)
                                    from (max 0 (#acc - #n))
                                    (0 <= findsub (snip acc2 from #acc2) n ? acc2 (go acc2)))))
                  (go ""))
-   (blank? t) (foldl (\ a ch (a && (ch = 32))) 1 t)
+   (blank? t) (foldl (a \ ch \ (a && ch = 32)) 1 t)
    (count h n) (: k #n m #h
-                  (go i c) (? ((m - k) < i) c
+                  (go i c) (? (m - k < i) c
                               (n = snip h i (i + k)) (go (i + k) (c + 1))
                               (go (i + 1) c))
                   (go 0 0))
@@ -58,20 +37,20 @@
    ; whole run would lay the empty primary screen back over the app's last frame --
    ; what is wanted is the grid as the app left it, not as the terminal got it back.
    (held h) (: n #h k 8
-               (go i best) (? (n < (i + k)) best
+               (go i best) (? (n < i + k) best
                             ("\e[?1049l" = snip h i (i + k)) (go (i + 1) i)
                             (go (i + 1) best))
-               (: b (go 0 -1) (b < 0 ? h (snip h 0 b))))
+               (go 0 -1 @ b (b < 0 ? h (snip h 0 b))))
    (mkscr r c) (screen (cask (screen () r c)) r c)
    (chat s i) (2097151 & glass s i 0)
-   (cbg s i) (: k (glass s i 2) (k >> 24 = 1 ? (k & 255) 0))   ; a bg index, 0 for the default
-   (rowtx s r) (: c (gaze s 2)
-                  (foldl (\ a i (a + (: ch (chat s ((r * c) + i)) (0 = ch ? " " (utf8 ch)))))
+   (cbg s i) (glass s i 2 @ k (k >> 24 = 1 ? (k & 255) 0))   ; a bg index, 0 for the default
+   (rowtx s r) (gaze s 2 @ c
+                  (foldl (a \ i \ (a + (chat s (r * c + i) @ ch (0 = ch ? " " (utf8 ch)))))
                          "" (jot c)))
    ; the climb's floor is seeded off the clock, so where @ stands is nobody's law --
    ; that it stands somewhere is
    (at s) (: c (gaze s 2) r (gaze s 1)
-             (go i) (? ((r * c) <= i) () (64 = chat s i) ((i // c) . (i % c)) (go (i + 1)))
+             (go i) (? (r * c <= i) () (64 = chat s i) ((i // c) . (i % c)) (go (i + 1)))
              (go 0))
    (spawn cmd r c)
     (guard (tether ["sh" "-c" ("stty rows " + show r + " columns " + show c + " -echo; exec " + cmd)]))
@@ -84,8 +63,8 @@
        txt (slurp m)
        _ (waitfor <t)
        s (mkscr r c)
-       _ (scribe s (held txt))
-       [txt s])
+       (scribe s (held txt),
+        [txt s]))
 
 ; --- tower: the climb takes the terminal's size, and a key is a turn ---
 ; the bar is the last row, which is the geometry law -- but only away from 80x24. a
@@ -130,8 +109,8 @@
        _ (rest 500)
        _ (say m "zqzzzz")
        txt (slurp m)
-       _ (waitfor <t)
-       txt)
+       (waitfor <t,
+        txt))
  _ (test (has? dr "you leave the tower")                    ; it did play and did leave
          !(has? dr "zzzz"))                                 ; ..and ate what was behind it
 
@@ -178,7 +157,7 @@
  _ (say sm "jlq")                                           ; back, sideways, then ashore
  stx (sseen + slurp sm)
  _ (waitfor <st)
- ss (: s (mkscr 12 40) _ (scribe s (held stx)) s)
+ ss (mkscr 12 40 @ s (scribe s (held stx), s))
  _ (test
     (has? stx "\e[?1049h") (has? stx "\e[?1049l")            ; on the alternate screen
     !(has? stx "\e[48;5;")                                   ; no slop: the walk starts in a field
@@ -217,16 +196,16 @@
  _ (waitfor <sy)
  _ (test !(has? a1 an) (has? a2 an))                       ; not on the legend, on the screen after the key
 ; --- the shaft: a first frame of half blocks comes, and q ends it ---
- (blocks m acc k n) (: c (k < n ? (see m) -1)
-                       (? (c < 0) acc
-                          (: acc2 (acc + string c) l #acc2
-                             (blocks m acc2 (k + (3 <= l && "▀" = snip acc2 (l - 3) l)) n))))
+ (blocks m acc k n) ((k < n ? (see m) -1) @ c
+                       (c < 0 ? acc
+                        (: acc2 (acc + string c) l #acc2
+                           (blocks m acc2 (k + (3 <= l && "▀" = snip acc2 (l - 3) l)) n))))
  sh (spawn "env HORN=none out/love shaft" 12 70)
  shm >sh
  b1 (blocks shm "" 0 840)
- _ (say shm "q", flush shm)
- _ (slurp shm)
- _ (waitfor <sh)
- _ (test (840 <= #b1 // 3))                                 ; a frame's worth of half blocks came
- _ (test_fin ())
- (puts "tty: ok"))
+ ((say shm "q", flush shm),
+  slurp shm,
+  waitfor <sh,
+  test (840 <= #b1 // 3),                                   ; a frame's worth of half blocks came
+  test_fin (),
+  puts "tty: ok"))

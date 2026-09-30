@@ -5,14 +5,14 @@
 ; drainer that an AudioWorklet is in a page. nothing else in the tree reads that path back.
 ; usage: love test/gate/horn.l <raw>
 (borrow 'kore)
-(: p (cap >argv)
+(: p <>argv
    r (uread p)
-   want (string (map (\ i (i % 251)) (jot 80000)))
+   want (string (map (i \ (i % 251)) (jot 80000)))
    got (two? r ? <>r "")
    bad (? !(two? r) (p + ": cannot read")
           (#got != #want) (p + ": " + show #got + " bytes, wanted " + show #want)
           (got != want) (p + ": the ramp came back changed")
           ())
-   _ (puts (0 < #bad ? ("FAIL horn: " + bad + "\n")
-                       "  horn: ok -- the ramp out of the machine, whole and in order\n"))
-   (quit (0 < #bad ? 1 0)))
+   (puts (0 < #bad ? ("FAIL horn: " + bad + "\n")
+                     "  horn: ok -- the ramp out of the machine, whole and in order\n"),
+    quit (0 < #bad ? 1 0)))

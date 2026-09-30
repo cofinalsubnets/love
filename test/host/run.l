@@ -1,17 +1,7 @@
-; --- test/host/run.l: smoke test for the hark / herald nifs (src/love/main.c) ---
-; (hark argv) forks, captures the child's stdout into a string, and answers
-; (status . output). (herald argv) is the same answer, but relays each chunk to our
-; stdout as it is read instead of holding it to the exit -- what make does, and
-; what lets a long cook step show progress. The tee must not disturb the capture.
-; host-only (the nifs are src/love/*.c), so it runs standalone against the built
-; binary like test/host/bake.l:
-;   cat test/00-init.l test/host/run.l | out/love
-;
-; The payloads are deliberately tiny: herald echoes what it captures, so anything
-; big would flood the gate log. The >64KB lane -- where the capture string
-; outgrows its buffer and moves mid-drain -- is checked by hand instead:
-;   (: c `("sh" "-c" "i=0; while [ $i -lt 20000 ]; do echo abcdefgh; i=$((i+1)); done")
-;      (test ((>(hark c)) = (>(herald c)))))
+; test/host/run.l -- the hark and herald nifs: (hark argv) answers (status . output); herald
+; answers the same but relays each chunk as it reads, and the tee must not disturb the capture.
+; payloads stay tiny since herald echoes into the gate log; the >64KB lane is checked by hand.
+; run: cat test/00-init.l test/host/run.l | out/love
 (: cmd ["sh" "-c" "printf 'tee-me\n'"]
 
    ; the two agree on both halves of the answer: teeing changes when the bytes
@@ -27,9 +17,9 @@
 
    ; no output -> the EmptyString singleton, tee or not
    quiet (herald ["sh" "-c" "exit 0"])
-   _ (test (two? quiet) (<quiet = 0) !>quiet)
+   (test (two? quiet) (<quiet = 0) !>quiet,
 
-   (puts "run: ok\n"))
+    puts "run: ok\n"))
 
 ; --- rung 4: a write to a device that will not take it does not stop the vm ----
 ; `sleep 1; cat` reads nothing for a second, so the pipe's 64K of kernel buffer
@@ -49,10 +39,10 @@
    t0 (clock 0)
    _ (say w ("x" * 200000))          ; 200K against a 64K pipe: the tail cannot land
    ms (clock t0)
-   _ (test (charm? pid) (0 < pid)
-             (ms < 500))             ; a blocking door sits here for the child's whole nap
-   _ (close w)                       ; ai_io_wflush: the residue lands before the fd dies
-   _ (wait pid))
+   (test (charm? pid) (0 < pid)
+           (ms < 500),               ; a blocking door sits here for the child's whole nap
+    close w,                         ; ai_io_wflush: the residue lands before the fd dies
+    wait pid))
 
 (puts "run rung4: ok\n")
 

@@ -1,36 +1,20 @@
-; fuzz -- the glaze's differential fuzz: closures built at random in the shapes the
-; natjit creation hook recognizes, each applied, the answer printed. the gate
-; (test/test.mk test_glazefuzz) runs this file twice against the same binary, plain and
-; under LOVE_NO_GLAZE=1, and requires the two stdouts to match byte for byte -- the glaze
-; may be faster, never different. the failure it hunts is not a crash but a plausible
-; number: a lane that admits one shape too many emits no code for the operand it cannot
-; hold and answers whatever the accumulator last held, so the leaf pools carry strings,
-; noms, lists and gems the integer lanes must decline.
-;
-; every shape is applied to exactly its arity, so results are values: a partial's `show`
-; differs between the runs by design (the native cell keeps the surface src, the
-; bytecode twin its post-cprop body). the call-out and counted-loop lanes want the
-; applied named-let `((: (go i a) ..) 0 a0)`; the un-applied form drops to the group
-; lane -- probe ((cite 'glaze) 'calloutinfo) &c before believing a shape covers a lane.
-; the trailing `fires=` line is the proof of work: nonzero in the glazed run, zero in
-; the other, or the diff is over nothing.
-;
-; three dimensions the value pools alone do not reach. gfz4 carries an effect and its ledger
-; rides every line, so a lane whose deopt restarts over a call-out diverges on the count even
-; where the answer agrees. the 100 arity runs an accumulating loop past fixnum range, which is
-; the only way an overflow guard -- and the deopt behind it -- is ever reached. and bleaf holds
-; a constant past that range, which cannot be laid as a tagged immediate at all.
+; test/gate/glazefuzz.l -- the glaze's differential fuzz: random closures in the shapes the natjit
+; hook recognizes, each applied to exactly its arity and the answer printed. test_glazefuzz runs
+; it plain and under LOVE_NO_GLAZE=1 and wants the stdouts byte-identical. the leaf pools carry
+; strings, noms, lists and gems the integer lanes must decline; gfz4's effect ledger catches a
+; deopt that restarts over a call-out; the 100 arity and bleaf reach past fixnum range. the
+; trailing `fires=` line is the proof of work: nonzero glazed, zero plain.
 
 ; the free name is the instrument (bleaf), and file mode's help quits on every scare:
 ; a missing read answers the zero point and the case runs on, everything else stops the file
-(: fzhelp (heard ())
-   _ (hear (\ a b (= a 'missing ? () (fzhelp a b)))))
+(heard () @ fzhelp
+   (hear (a \ b \ (= a 'missing ? () (fzhelp a b)))))
 
 (: (gfz0 i) (i + 1)                                ; globals the call-out lane can resolve: two arithmetic,
    (gfz1 i) (i * 2)                                ; two handing back a value the integer lane cannot hold
    (gfz2 i) (i < 2 ? " " i)
    (gfz3 i) (i < 2 ? '(1 2) i)
-   FZL (tablet 0)                                  ; gfz4's ledger: an effect, so a lane whose deopt
+   FZL {}                                  ; gfz4's ledger: an effect, so a lane whose deopt
    (gfz4 i) (pin FZL 'n (1 + peep FZL 'n 0), (i + 1))        ; restarts over one diverges on the count, not the answer
    _ (rng-set (wheel 20260729))                    ; fixed seed: the two runs must generate the same forms
    (pick l) (l (rand #l))
@@ -42,11 +26,11 @@
    iop   (_ \ pick '(+ - * < > = // %))
    fop   (_ \ pick '(+ - *))
    gfn   (_ \ pick '(gfz0 gfz1 gfz2 gfz3 gfz4))
-   (xpr d lf op) (? (d < 1) (lf 0)                 ; an expression of depth d over a leaf and an operator generator
-                    (rand 4 @ 0 (lf 0)
-                              1 [(op 0) (xpr (d - 1) lf op) (xpr (d - 1) lf op)]
-                              2 ['? ['< (xpr (d - 1) lf op) 3] (xpr (d - 1) lf op) (xpr (d - 1) lf op)]
-                              ['+ (xpr (d - 1) lf op) (lf 0)]))
+   (xpr d lf op) (d < 1 ? (lf 0)                 ; an expression of depth d over a leaf and an operator generator
+                  (rand 4 @ 0 (lf 0)
+                            1 [(op 0) (xpr (d - 1) lf op) (xpr (d - 1) lf op)]
+                            2 ['? ['< (xpr (d - 1) lf op) 3] (xpr (d - 1) lf op) (xpr (d - 1) lf op)]
+                            ['+ (xpr (d - 1) lf op) (lf 0)]))
    ; fourteen shapes, one per lane the hook offers, each lane probed not assumed: 9 reaches
    ; calloutinfo with every earlier lane declining, 10 calloutinfo-frame, 11 the counted loop
    (shape i)
@@ -70,5 +54,5 @@
    n0 (peep fires () 0)
    (run i) (: s (shape i)  f (ev s)
               (puts (show i + " " + show s + " => " + show (try f i 0) + " | " + show (try f i 1) + " | " + show (try f i 4) + " | " + show (try f i 100) + " ~" + show (peep FZL 'n 0) + "\n")))
-   _ (each ^3000 run)
-   _ (puts ("fires=" + show (peep fires () 0 - n0) + "\n")))
+   (each ^3000 run,
+    puts ("fires=" + show (peep fires () 0 - n0) + "\n")))

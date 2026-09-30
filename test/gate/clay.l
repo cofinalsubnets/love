@@ -1,24 +1,8 @@
-; test/gate/clay.l -- G1, clay's faithfulness gate: (cparse (clay-show c)) == c, over
-; every C file in test/cc/. run inside a woken mooncc image, which is where the
-; front end lives; clay itself arrives by (borrow 'clay), a module, so none of its
-; helper names touch the compiler's book.
-;
-; the comparison is structural, on the reparsed AST, and never a string compare of
-; the C text -- twice now the printer has been the thing standing
-; in front of the bug. so this proves the shower and the parser agree about what a
-; tree means; it deliberately proves nothing about the text resembling its original.
-;
-; the partition is the point. cparse cannot keep a typedef, a struct definition or
-; a _Static_assert -- all four land as the empty marker (tdef), which carries nothing
-; and which clay-show refuses rather than papering over with a `;`. those files are
-; counted as inexpressible and named, never skipped in silence. that count is the
-; live measure of the gap between "moon can parse this C" and "clay can say it back",
-; and the way to make it fall is to teach parse.l to fill the marker -- (tdef name ty)
-; is already in clay's grammar waiting for it.
-;
-; the gate fails on a round-trip difference or a shower crash. it does not fail on an
-; inexpressible file, and it does not fail on a file the parser itself refuses (a few
-; in test/cc/ are there to be refused).
+; test/gate/clay.l -- G1, clay's faithfulness gate: (cparse (clay-show c)) == c over every C file
+; in test/cc/, compared as reparsed trees, never as text. run inside a woken mooncc image with
+; clay borrowed as a module. a typedef, struct definition or _Static_assert lands as the empty
+; (tdef) marker, which clay-show refuses: those files are counted as inexpressible and named, not
+; failed. the gate fails on a round-trip difference or a shower crash.
 (borrow 'posix)
 (:
    _ (borrow "src/apps/moon/clay.l")
@@ -27,73 +11,73 @@
    cok? (cite 'clay 'clay-ok?)
    nl (string 10)
    (say1 s) (puts (s + nl))
-   (dotc? s) (: n #s ((2 < n) && (((s (n - 2)) = 46) && ((s (n - 1)) = 99))))
+   (dotc? s) (#s @ n (2 < n && s (n - 2) = 46 && s (n - 1) = 99))
 
    ; the front end, without cc-parse's udie -- a refusal has to come back as a value
    ; here, since a third of the point is counting the refusals.
    (front src)
-    (: r (uread src)
-       (? (atom? r) ()
-          (: lx (clex ((deftext (archdefs 'x64)) + <>r))
-             (? !(okv? lx) ()
-                (: pp (cpp <>lx (\ n s (incload () () (cdir src) n s)) src)
-                   (? !(okv? pp) ()
-                      (: ps (cparse-t <>pp 'x64)
-                         (? (okv? ps) [1 (caup ps)] ()))))))))
+    (uread src @ r
+       (atom? r ? ()
+        (clex (deftext (archdefs 'x64) + <>r) @ lx
+           (!(okv? lx) ? ()
+              (cpp <>lx (n \ s \ (incload () () (cdir src) n s)) src @ pp
+                 (!(okv? pp) ? ()
+                    (cparse-t <>pp 'x64 @ ps
+                       (okv? ps ? [1 (caup ps)]))))))))
    ; the same, off TEXT rather than a path: the reparse leg
    (front2 txt)
-    (: lx (clex txt)
-       (? !(okv? lx) ()
-          (: pp (cpp <>lx (\ n s ()) "<clay>")
-             (? !(okv? pp) ()
-                (: ps (cparse-t <>pp 'x64)
-                   (? (okv? ps) [1 (caup ps)] ()))))))
+    (clex txt @ lx
+       (!(okv? lx) ? ()
+          (cpp <>lx (n \ s \ ()) "<clay>" @ pp
+             (!(okv? pp) ? ()
+                (cparse-t <>pp 'x64 @ ps
+                   (okv? ps ? [1 (caup ps)]))))))
 
    files (filter dotc? (readdir "test/cc"))
 
    ; one file -> 'ok | 'diff | 'inexpr | 'noparse | 'reparse
    (one f)
-    (: p (front ("test/cc/" + f))
-       (? (atom? p) 'noparse
-          (: a <>p
-             v (cok? a)
-             (? !(v = 1) 'badshape
-                (: t (cshow a)
-                   (? (gripe? t) 'inexpr
-                      (: b (front2 t)
-                         (? (atom? b) 'reparse
-                            (<>b = a) 'ok
-                            'diff))))))))
+    (front ("test/cc/" + f) @ p
+       (atom? p ? 'noparse
+        (: a <>p
+           v (cok? a)
+           (!(v = 1) ? 'badshape
+              (cshow a @ t
+                 (gripe? t ? 'inexpr
+                  (front2 t @ b
+                     (? (atom? b) 'reparse
+                        (<>b = a) 'ok
+                        'diff))))))))
 
    ; the tally, and the names of everything that is not plain ok -- a count alone
    ; would let a regression hide inside a category.
    (go l ok df ix np rp bs bad)
-    (? (atom? l) [ok df ix np rp bs (rev bad)]
-       (: f <l v (one f)
-          (? (v = 'ok) (go >l (ok + 1) df ix np rp bs bad)
-             (v = 'diff) (go >l ok (df + 1) ix np rp bs (. ['diff f] bad))
-             (v = 'inexpr) (go >l ok df (ix + 1) np rp bs (. ['inexpr f] bad))
-             (v = 'noparse) (go >l ok df ix (np + 1) rp bs bad)
-             (v = 'reparse) (go >l ok df ix np (rp + 1) bs (. ['reparse f] bad))
-             (go >l ok df ix np rp (bs + 1) (. ['badshape f] bad)))))
+    (atom? l ? [ok df ix np rp bs (rev bad)]
+     (: f <l v (one f)
+        (? (v = 'ok) (go >l (ok + 1) df ix np rp bs bad)
+           (v = 'diff) (go >l ok (df + 1) ix np rp bs (. ['diff f] bad))
+           (v = 'inexpr) (go >l ok df (ix + 1) np rp bs (. ['inexpr f] bad))
+           (v = 'noparse) (go >l ok df ix (np + 1) rp bs bad)
+           (v = 'reparse) (go >l ok df ix np (rp + 1) bs (. ['reparse f] bad))
+           (go >l ok df ix np rp (bs + 1) (. ['badshape f] bad)))))
    r (go files 0 0 0 0 0 0 ())
    ok (r 0) df (r 1) ix (r 2) np (r 3) rp (r 4) bs (r 5)
    bad (r 6)
 
-   _ (each bad (\ b (say1 ("clay-g1: " + (string <b) + " " + (b 1)))))
-   _ (say1 ("clay-g1: " + (show ok) + " round-trip, " + (show ix) + " inexpressible, "
-            + (show np) + " unparsed, " + (show #files) + " files"))
+   _ (each bad (b \ (say1 ("clay-g1: " + string <b + " " + b 1))))
+   _ (say1 ("clay-g1: " + show ok + " round-trip, " + show ix + " inexpressible, "
+            + show np + " unparsed, " + show #files + " files"))
    ; a vacuous pass is a fail. this file lived under test/ for one commit's worth
    ; of minutes, where the corpus glob swept it into a run with no compiler in scope:
    ; every file "unparsed", nothing checked, and it printed pass. so the floor is
    ; explicit -- most of test/cc/ must actually round-trip, or the front end is not
    ; there and the gate is measuring nothing.
    floor 50
-   _ (? (ok < floor)
-        (say1 ("clay-g1: FAIL -- only " + (show ok) + " files round-tripped, under the "
-                    + (show floor) + " floor: the front end is not in scope"), quit 1) 0)
-   ; the failures: a tree that came back different, C the parser could not read back,
-   ; or a tree clay-ok? rejected. an inexpressible file is a measured gap, not a red.
-   (? !(df + rp + bs) (say1 "clay-g1: pass", quit 0)
-      (say1 ("clay-g1: FAIL -- " + (show df) + " diff, " + (show rp)
-                  + " unreadable, " + (show bs) + " malformed"), quit 1)))
+   ((ok < floor ?
+       (say1 ("clay-g1: FAIL -- only " + show ok + " files round-tripped, under the "
+                   + show floor + " floor: the front end is not in scope"), quit 1) 0),
+    ; the failures: a tree that came back different, C the parser could not read back,
+    ; or a tree clay-ok? rejected. an inexpressible file is a measured gap, not a red.
+    (!(df + rp + bs) ? (say1 "clay-g1: pass", quit 0)
+       (say1 ("clay-g1: FAIL -- " + show df + " diff, " + show rp
+                   + " unreadable, " + show bs + " malformed"), quit 1))))

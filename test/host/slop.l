@@ -1,12 +1,7 @@
-; --- test/host/slop.l: the slop, headless ---
-; not in the test/*.l corpus (it loads a crew module). the game is pure love, so
-; everything but the tty runner gates here: the opening screen with nothing on it but
-; field, the shoreline's shape and the beach behind it, the road opening onto the sand,
-; the cost ladder and the rate that rides it, a press banked and a square spent, the
-; helm refusing all but forward, the two kinds of square either side of the climb line,
-; the ground as a function of where it is, and the frame. slop-run is ink's swim loop
-; over exactly these, and test/host/tty.l plays the shimmer on a pty.
-;   cat test/00-init.l test/host/slop.l | out/love
+; test/host/slop.l -- the slop, headless: the opening field, the shoreline and beach, the road,
+; the cost ladder and its rate, a press banked and a square spent, the helm, the squares either
+; side of the climb line, the ground, and the frame. test/host/tty.l plays the runner.
+; not in the corpus: it loads a crew module. run: cat test/00-init.l test/host/slop.l | out/love
 
 (borrow 'slop)   ; the artifact's module, warm from the tree
 
@@ -23,7 +18,7 @@
    rows (map (i \ (g 'wtop) + i) ^23)
    xs ^80
    (dry? w) (all (x \ !(slop-wet? g w x)) xs)
-   (green? w) (all (x \ (w > ((slop-shore g x) + slop-sand g x))) xs)
+   (green? w) (all (x \ (w > slop-shore g x + slop-sand g x)) xs)
    f (slop-frame g)
  (test
   (all dry? rows)                                ; no slop anywhere on the screen
@@ -34,25 +29,25 @@
 ; and the offset falls back on the beach the columns actually laid
 (: g (slop-new 11 40 (wheel 11))
    rows (map (i \ (g 'wtop) + i) ^11)
-   top (foldl (\ a x (: v ((slop-shore g x) + slop-sand g x) (a < v ? v a))) -99 ^40)
+   top (foldl (a \ x \ (slop-shore g x + slop-sand g x @ v (a < v ? v a))) -99 ^40)
  (test
   (top < 0)                                      ; the whole beach is above the first row
   (all (w \ (all (x \ !(slop-wet? g w x)) ^40)) rows)
-  (all (w \ (all (x \ (w > ((slop-shore g x) + slop-sand g x))) ^40)) rows)))
+  (all (w \ (all (x \ (w > slop-shore g x + slop-sand g x)) ^40)) rows)))
 
 ; --- the shoreline: wavy, and it steps one row at a time ---
 ; amplitude times frequency under one row a column is what keeps the quantized edge
 ; stepping singly; let it over and the edge drops two at once and reads as a skyline
 (: g (slop-new 23 80 (wheel 11))
    xs ^79
-   steps (map (x \ |((slop-shore g (x + 1)) - slop-shore g x)) xs)
+   steps (map (x \ |(slop-shore g (x + 1) - slop-shore g x)) xs)
    shores (map (x \ slop-shore g x) ^80)
    srt (sort shores)
    (last l) <(rev l)
  (test
   (all (s \ (s <= 1)) steps)                     ; never a two-row drop
   (0 < #(filter (s \ (s = 1)) steps))            ; but it does move
-  (2 < ((last srt) - <srt))                      ; bays and headlands, not a straight line
+  (2 < last srt - <srt)                      ; bays and headlands, not a straight line
   (all (x \ (0 < slop-sand g x)) ^80)))          ; and a beach behind it
 
 ; --- the ground in three bands: sand behind the line, grass in front, road through ---
@@ -70,7 +65,7 @@
 ; the road opens out as it reaches the sand: three columns out in the field, wider at it
 (: g (slop-new 23 80 (wheel 11))
    rx (slop-road g 20)
-   near ((slop-shore g rx) + slop-sand g rx)     ; the beach's last row at the road
+   near (slop-shore g rx + slop-sand g rx)     ; the beach's last row at the road
  (test
   (0 < road-width g 20)                          ; out in the field it is a track
   (road-width g 20 < road-width g (near + 3))    ; nearer the sand it fans
@@ -82,13 +77,13 @@
 ; the gap is read off the shore at the road's own column, so setting it means finding
 ; the world row that has it -- the road crosses a wavy line and a gap can be skipped
 (: g (slop-new 23 80 (wheel 11))
-   (row-at gp) (: (go w) (w < -70 ? () (: q (w - slop-shore g (slop-road g w))
+   (row-at gp) (: (go w) (w < -70 ? () (w - slop-shore g (slop-road g w) @ q
                              (q = gp ? w (go (w - 1)))))
                   (go 22))
    ; a world row is a charm that goes negative, so a miss is asked with charm?, never
    ; with ? -- truth here is the sign, and every row past the start would read as a miss
-   (at gp) (: w (row-at gp) (charm? w ? (pin g 'w w, slop-cost g) 'none))
-   (rate-at gp) (: w (row-at gp) (charm? w ? (pin g 'w w, slop-rate g) 'none))
+   (at gp) (row-at gp @ w (charm? w ? (pin g 'w w, slop-cost g) 'none))
+   (rate-at gp) (row-at gp @ w (charm? w ? (pin g 'w w, slop-rate g) 'none))
    ladder (: (go w acc) (w < -13 ? (rev acc) (pin g 'w w, go (w - 1) (slop-cost g . acc)))
              (go 22 ()))
    (rising? l) (l @- 1 (a . b . r) (b < a ? 0 (rising? (b . r))))
@@ -124,19 +119,18 @@
    none (slop-sy g)
    _ (slop-key g -8)
    fwd (slop-sy g)
-   _ (slop-key g 113)
- (test
-  (22 = back) (22 = side) (22 = none)            ; nothing but forward carries you
-  (21 = fwd)
-  (1 = g 'spent)
-  ('fled = g 'over)
-  (has? (slop-bar g) "turn back")))
+   (slop-key g 113,
+    test (22 = back) (22 = side) (22 = none)            ; nothing but forward carries you
+         (21 = fwd)
+         (1 = g 'spent)
+         ('fled = g 'over)
+         (has? (slop-bar g) "turn back")))
 
 ; --- an ended game is closed: further keys neither move you nor spend ---
 (: g (slop-new 23 80 (wheel 11)) y0 (slop-sy g)
-   _ (slop-key g 27)
-   _ (slop-key g 107)
- (test ('fled = g 'over) (y0 = slop-sy g) (0 = g 'spent)))
+   (slop-key g 27,
+    slop-key g 107,
+    test ('fled = g 'over) (y0 = slop-sy g) (0 = g 'spent)))
 
 ; --- below the climb line every square is yours: you rise, nothing scrolls ---
 (: g (slop-new 23 80 (wheel 11)) y0 (slop-sy g) gap0 (slop-gap g)
@@ -157,10 +151,10 @@
    _ (drive g at-line)
    (lawful? h) (: y0 (slop-sy h) t0 (h 'wtop) w0 (h 'w) gap0 (slop-gap h)
                   _ (slop-step h)
-                  mine (((slop-sy h) = (y0 - 1)) && ((h 'wtop) = t0))
-                  slop (((slop-sy h) = y0) && ((h 'wtop) = (t0 - 1)))
-                ((h 'w) = (w0 - 1) ? (mine || slop ? ((gap0 - 2) <= (slop-gap h) <= gap0) 0) 0))
-   (steps n ok) (? (g 'over) [n ok] (: k (lawful? g) (steps (n + 1) (ok && k))))
+                  mine (slop-sy h = y0 - 1 && h 'wtop = t0)
+                  slop (slop-sy h = y0 && h 'wtop = t0 - 1)
+                (h 'w = w0 - 1 ? (mine || slop ? (gap0 - 2 <= slop-gap h <= gap0) 0) 0))
+   (steps n ok) (g 'over ? [n ok] (lawful? g @ k (steps (n + 1) (ok && k))))
    r (steps 0 1)
  (test
   (0 < r 0)                                      ; squares from the line
@@ -174,13 +168,13 @@
                sand {-1} shore {-1}
                (seen? h b p) (? (0 <= peep b () -1) ()
                                 (p h) (pin b () (h 'spent)) ())
-               (sandy-top? h) (: w (h 'wtop)
-                                 (any (x \ (w <= ((slop-shore h x) + slop-sand h x))) ^80))
-               (wet-top? h) (: w (h 'wtop) (any (x \ slop-wet? h w x) ^80))
-               (go n) (? (g 'over) [n (slop-sy g) (peep sand () -1) (peep shore () -1)]
-                         (seen? g sand sandy-top?,
-                          seen? g shore wet-top?,
-                          slop-key g 107, go (n + 1)))
+               (sandy-top? h) (h 'wtop @ w
+                                 (any (x \ (w <= slop-shore h x + slop-sand h x)) ^80))
+               (wet-top? h) (h 'wtop @ w (any (x \ slop-wet? h w x) ^80))
+               (go n) (g 'over ? [n (slop-sy g) (peep sand () -1) (peep shore () -1)]
+                       (seen? g sand sandy-top?,
+                        seen? g shore wet-top?,
+                        slop-key g 107, go (n + 1)))
                (go 0))
    runs (map (i \ run (wheel (300 + i))) ^12)
    (col j) (map (r \ r j) runs)
@@ -188,26 +182,26 @@
  (test
   (all (= <(col 0)) (col 0))                     ; the same presses for the walk, every seed
   (all (b \ (2 < b < 22)) (col 1))               ; the shore never reaches the foot
-  (mid < ((net (col 1)) / 12.0))                 ; ..and on the whole lands past the middle
+  (mid < net (col 1) / 12.0)                 ; ..and on the whole lands past the middle
   (all (s \ (10 < s)) (col 2))                   ; the sand is a good walk away
-  (all (r \ ((r 2) < (r 3))) runs)))             ; and the shore behind it, always after
+  (all (r \ (r 2 < r 3)) runs)))             ; and the shore behind it, always after
 
 ; --- the ground is a function of where it is, so a scroll costs nothing ---
 (: g (slop-new 23 80 (wheel 11))
    r0 (slop-road g -7)
    t0 (slop-turf g -7 3)
    e0 (slop-shore g 3)
-   _ (drive g (h \ ((h 'wtop) < -8)))
+   _ (drive g (h \ (h 'wtop < -8)))
    ws (map (i \ (i - 40)) ^120)
  (test
-  ((g 'wtop) < -8)                               ; the ground did scroll
+  (g 'wtop < -8)                               ; the ground did scroll
   (r0 = slop-road g -7)                          ; the road at a world row is that row's
   (t0 = slop-turf g -7 3)                        ; the ground beside it likewise
   (e0 = slop-shore g 3)                          ; and the shore does not move at all
-  !((slop-road g 0) = (slop-road g 8))           ; ..though the road does wander
-  (all (w \ (1 < (slop-road g w) < 78)) ws)      ; never off the width
-  (: n (slop-new 23 20 (wheel 11))               ; nor on the narrowest screen the runner hands over
-   (all (w \ (0 < (slop-road n w) < 19)) ws))))
+  !(slop-road g 0 = slop-road g 8)           ; ..though the road does wander
+  (all (w \ (1 < slop-road g w < 78)) ws)      ; never off the width
+  (slop-new 23 20 (wheel 11) @ n               ; nor on the narrowest screen the runner hands over
+   (all (w \ (0 < slop-road n w < 19)) ws))))
 
 ; a turf cell is a glyph and a pen: grass, a shrub, sand, or the road's bare dirt
 (: g (slop-new 23 80 (wheel 11))
@@ -218,7 +212,7 @@
 
 ; --- the frame at the shore: slop, surf, sand, grass, and you on the road ---
 (: g (slop-new 23 80 (wheel 11))
-   _ (drive g (h \ ((h 'wtop) < -67)))
+   _ (drive g (h \ (h 'wtop < -67)))
    _ (slop-tick g)
    f (slop-frame g)
  (test
@@ -232,10 +226,10 @@
 ; --- the skin drifts with the ground: the same phase over a scrolled world is a
 ; different picture, and it is the picture the unscrolled world had one row up ---
 (: g (slop-new 23 80 (wheel 11))
-   _ (drive g (h \ ((h 'wtop) < -67)))
+   _ (drive g (h \ (h 'wtop < -67)))
    t0 (g 't)
    k0 (peep (g 'field t0 (g 'wtop)) [0 0] 0)           ; the skin's top-left half-cell, where we are
-   k1 (peep (g 'field t0 ((g 'wtop) + 1)) [0 0] 0)     ; ..and one row of drift along
+   k1 (peep (g 'field t0 (g 'wtop + 1)) [0 0] 0)     ; ..and one row of drift along
    k2 (peep (g 'field t0 (g 'wtop)) [2 0] 0)           ; a cell below it, undrifted
  (test
   !(k0 = k1)                                     ; a scroll moves the skin
@@ -249,7 +243,7 @@
   (has? f "\e[H")
   (has? f "\e[48;5;")                            ; slop
   !(has? f "@")                                  ; and no you
-  !((slop-flood g 1.0) = (slop-flood g 2.0))))   ; and it runs: a phase is a picture
+  !(slop-flood g 1.0 = slop-flood g 2.0)))   ; and it runs: a phase is a picture
 
 ; a row with no slop in it is the same string every time, so it is painted once and
 ; kept; a row the shore cuts is laid fresh every frame, because the shimmer moves
@@ -257,9 +251,9 @@
    f1 (slop-frame g)
    f2 (slop-frame g)
    kept #(keys (g 'rows))
-   _ (drive g (h \ ((h 'wtop) < -67)))
+   _ (drive g (h \ (h 'wtop < -67)))
    _ (slop-frame g)
-   cut #(filter (w \ (w <= (g 'wetto))) (keys (g 'rows)))
+   cut #(filter (w \ (w <= g 'wetto)) (keys (g 'rows)))
  (test (f1 = f2) (0 < kept) (0 = cut)))
 
 ; --- the song: gwen's tidal line, note for note, and a tempo the walk drags on ---
@@ -293,10 +287,10 @@
 
 ; the tempo falls with the cost, but only to a third: a twentieth of a tempo is none
 (: g (slop-new 23 80 (wheel 11))
-   (row-at gp) (: (go w) (w < -70 ? () (: q (w - slop-shore g (slop-road g w))
+   (row-at gp) (: (go w) (w < -70 ? () (w - slop-shore g (slop-road g w) @ q
                              (q = gp ? w (go (w - 1)))))
                   (go 22))
-   (sp gp) (: w (row-at gp) (charm? w ? (pin g 'w w, slop-song-speed g) 'none))
+   (sp gp) (row-at gp @ w (charm? w ? (pin g 'w w, slop-song-speed g) 'none))
  (test
   (1.0 = sp 66) (1.0 = sp 20)                    ; out in the field it runs at tempo
   (sp 1 < sp 10) (sp 10 < sp 20)                 ; and drags all the way in
@@ -307,10 +301,10 @@
 ; cost -- the cost is a reciprocal, so a dial linear in it spends nineteen of the
 ; twenty-one squares reaching half way and does the rest inside the last one.
 (: g (slop-new 23 80 (wheel 11))
-   (row-at gp) (: (go w) (w < -70 ? () (: q (w - slop-shore g (slop-road g w))
+   (row-at gp) (: (go w) (w < -70 ? () (w - slop-shore g (slop-road g w) @ q
                              (q = gp ? w (go (w - 1)))))
                   (go 22))
-   (ed gp) (: w (row-at gp) (charm? w ? (pin g 'w w, slop-song-edge g) 'none))
+   (ed gp) (row-at gp @ w (charm? w ? (pin g 'w w, slop-song-edge g) 'none))
  (test
   (0.0 = ed 66) (0.0 = ed 50)                    ; the whole first screen is a clean sine
   (0.0 = ed (g 'gmin))                           ; the ramp starts at the volume's floor
@@ -327,12 +321,12 @@
 (: g (slop-new 23 80 (wheel 11))
    (walk-to p) (: (go _) (? (g 'over) () (p g) () (slop-key g 107, go ())) (go ()))
    v0 (slop-song-vol g)                          ; the first frame
-   _ (walk-to (h \ ((slop-gap h) <= (h 'gmin))))
+   _ (walk-to (h \ (slop-gap h <= h 'gmin)))
    vmin (slop-song-vol g)                        ; the bottom of the dip
    emin (slop-song-edge g)
-   _ (walk-to (h \ (((h 'wtop) - (h 'bt)) <= ((h 'r) // 2))))
+   _ (walk-to (h \ (h 'wtop - h 'bt <= h 'r // 2)))
    vhalf (slop-song-vol g)                       ; half a screen of scroll short of the sand
-   _ (walk-to (h \ ((h 'wtop) <= (h 'bt))))
+   _ (walk-to (h \ (h 'wtop <= h 'bt)))
    vsand (slop-song-vol g)                       ; the sand on the screen
    esand (slop-song-edge g)
  (test
@@ -377,7 +371,7 @@
   ; they share a sign the whole way round, which is what lets the blend cross rather
   ; than cancel. to a tolerance: sin of pi is not zero, it is -1.2e-16, and the square
   ; has already flipped there
-  (all (p \ (-0.000001 <= ((w p 0.0) * (w p 1.0)))) phs)
+  (all (p \ (-0.000001 <= w p 0.0 * w p 1.0)) phs)
   ; half way is the triangle, in phase with both -- zero rising at the period's start,
   ; one at a quarter, minus one at three. play.l's own i-tri is a quarter period behind,
   ; and a triangle out of phase would cancel against the sine rather than cross with it.
@@ -392,7 +386,7 @@
   ; ..and the steps really are three different shapes, not one repeated
   !(near (w 0.125 0.0) (w 0.125 0.5)) !(near (w 0.125 0.5) (w 0.125 1.0))
   ; and nothing anywhere on the dial leaves the rails
-  (all (p \ (all (m \ (-1.0001 <= (w p m) <= 1.0001)) [0.0 0.25 0.5 0.75 1.0])) phs)))
+  (all (p \ (all (m \ (-1.0001 <= w p m <= 1.0001)) [0.0 0.25 0.5 0.75 1.0])) phs)))
 
 ; the voices go out a port, so a jug plays the part of the card: real pcm, not silence
 (: tune (slop-tune ())
@@ -401,15 +395,15 @@
    qi (cite 'harp 'qi)  evv (cite 'harp 'evv)  onset? (cite 'harp 'onset?)
    j (jug 0)
    s (slop-song-new tune j)
-   (feed n) (? (0 < n) (slop-song-feed s 1.0 0.0 1.0, feed (n - 1)))
+   (feed n) (0 < n ? (slop-song-feed s 1.0 0.0 1.0, feed (n - 1)))
    _ (feed 10)
    pcm (slurp j)
-   (samp i) (: v ((peep pcm (i * 2) 0) + ((peep pcm ((i * 2) + 1) 0) << 8))
+   (samp i) (peep pcm (i * 2) 0 + (peep pcm (i * 2 + 1) 0 << 8) @ v
              (v > 32767 ? (v - 65536) v))
    n (#pcm // 2)
-   peak (foldl (\ a i (: v |(samp i) (a < v ? v a))) 0 ^n)
+   peak (foldl (a \ i \ (|(samp i) @ v (a < v ? v a))) 0 ^n)
  (test
-  ((40 * ((love-arch = 'wasm ? 16000 48000) // 30)) = #pcm)   ; ten chunks, a thirtieth of a second at the seat's rate
+  (40 * ((love-arch = 'wasm ? 16000 48000) // 30) = #pcm)   ; ten chunks, a thirtieth of a second at the seat's rate
   (0 < peak)                                     ; something sounded
   (peak < 32768)                                 ; and it did not clip
   (0 < #(s 'vs))                                 ; voices are live
@@ -420,16 +414,16 @@
    c0 (slop-cost g)
    t0 (g 't)
    _ (slop-tick g)
-   far ((g 't) - t0)
+   far (g 't - t0)
    _ (drive g (h \ (19 < slop-cost h)))          ; walk up to the last square of all
    c1 (slop-cost g)
    t1 (g 't)
    _ (slop-tick g)
-   near ((g 't) - t1)
+   near (g 't - t1)
  (test
   (1 = c0) (1 < c1)
   (0.0 < near) (near < far)
-  (|((far * c0) - (near * c1)) < 0.000001)))     ; the beat divided by the cost, exactly
+  (|(far * c0 - near * c1) < 0.000001)))     ; the beat divided by the cost, exactly
 
 (test_fin ())
 (puts "slop: ok")
@@ -441,13 +435,13 @@
    w (song-wave-of 7 f 0.5 0.34 16000)
    w2 (song-wave-of 7 f 0.5 0.34 16000)
    pad ((#w - 5442) // 2)                          ; the silence either end
-   ix ((iota 533) + 1200)
+   ix (iota 533 + 1200)
    st 1000
    c (snip w (200 + pad) (733 + pad))
    t ((ix - st) * (1.0 / 16000))
    long (slop-song-wave t f 0.5 * venv t 0.34 * (t < 0.34))
    ; ..and the chunk it starts in is a cut too, silent before the onset
-   ix0 ((iota 533) + 700)
+   ix0 (iota 533 + 700)
    c0 (snip w (700 - st + pad) (700 - st + pad + 533))
    t0 ((ix0 - st) * (1.0 / 16000))
    tp0 (t0 * (t0 > 0.0))
@@ -457,7 +451,7 @@
 ; the bar stops a column short of the screen
 (: g (slop-new 10 20 (wheel 3))
    rows (split "\r\n" (slop-frame g))
- (test (19 = #(slop-bar-fit g)) ((slop-bar-fit g + "\e[K") = last rows)))
+ (test (19 = #(slop-bar-fit g)) (slop-bar-fit g + "\e[K" = last rows)))
 
 ; a frame gives way to a low ring only on a seat with a yield, and never on a beat that
 ; took a key, nor a fourth beat running; with no yield it is always due

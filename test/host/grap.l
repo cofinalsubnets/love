@@ -1,4 +1,4 @@
-; --- test/host/grap.l: grap (src/apps/kore/grap.l), the laws without plan 9 at hand ---
+; test/host/grap.l -- grap (src/apps/kore/grap.l), the laws without plan 9 at hand
 ; a graph's coordinate macros and automatic ticks as plan 9 spells them, the troff around a
 ; graph kept, log axes' decades, troff's minus on a negative tick; then grap as a command,
 ; its output drawn by kore's pic. test/gate/grap.sh holds it to plan 9's own, byte for byte.
@@ -6,12 +6,12 @@
 (borrow 'posix)
 (: K (cite 'kore)
    run (K 'gr-run)
-   (grap t) (: r (run ["-"] t) (? (<r = 0) (r 1) ""))
+   (grap t) (run ["-"] t @ r (<r = 0 ? (r 1) ""))
    (has s p) (0 <= (K 'wg-find) s p 0)
-   love ((cwd 0) + "/out/love")
-   dir ((cwd 0) + "/out/.graptest-" + show (getpid 0))
-   _ (hark ["rm" "-rf" dir]) _ (mkdir dir 448)
-   (put p s) (: q (open p "w") _ (say q s) (close q))
+   love (cwd 0 + "/out/love")
+   dir (cwd 0 + "/out/.graptest-" + show (getpid 0))
+   _ (hark ["rm" "-rf" dir], mkdir dir 448)
+   (put p s) (open p "w" @ q (say q s, close q))
 
    ; -- one graph: its system, frame, automatic ticks and marks ------------------------
    g1 (grap "a\n.G1\n1 2\n2 4\n3 9\n.G2\nb\n")
@@ -51,6 +51,6 @@
    ; what grap writes, kore's pic draws
    _ (put (dir + "/g.pic") >r1)
    r3 (hark [love "kore" "pic" (dir + "/g.pic")])
-   _ (test (<r3 = 0) (has >r3 "\\D'l "))
-   _ (hark ["rm" "-rf" dir]))
+   (test (<r3 = 0) (has >r3 "\\D'l "),
+    hark ["rm" "-rf" dir]))
 (test_fin (), puts "grap: ok", putc 10, 0)

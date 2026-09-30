@@ -1,4 +1,4 @@
-; --- test/host/roost.l: the nest as a floor (src/apps/rove/roost.l), headless ---
+; test/host/roost.l -- the nest as a floor (src/apps/rove/roost.l), headless
 ; the plan is spelled here as src/apps/source.l's nest-plan lays one, so nothing touches a
 ; home: the opening sign, the perch asked both ways, a shelf turned, the door stayed at
 ; and then taken, and a frame that paints the room.
@@ -28,7 +28,7 @@
    _ (test (pl 'lay = 'lay))                               ; 1: lay this build
    ; the shelves, in the tools' order: cook's is the second
    xs (sort (keys (d 'shelves)))
-   sy (: (row y) (? (5 = peep (d 't) (xs 1 + d 'w * y) 0) y (row (y + 1))) (row 0))
+   sy (: (row y) (5 = peep (d 't) (xs 1 + d 'w * y) 0 ? y (row (y + 1))) (row 0))
    _ (bump (xs 1) sy 107)
    _ (test (pl 'tools 1 'act = 'keep))                     ; cook's link turned off
    _ (bump (xs 2) sy 107)
@@ -45,5 +45,5 @@
    _ (roost-turn g 49)
    _ (test (g 'over = 'apply))                             ; 1: do it
    f (roost-frame g)
-   _ (test (string? f) (0 < #f))
-   (puts "src/apps/rove/roost: ok -- the nest's floor (the perch, the shelves, the door)\n"))
+   (test (string? f) (0 < #f),
+    puts "src/apps/rove/roost: ok -- the nest's floor (the perch, the shelves, the door)\n"))

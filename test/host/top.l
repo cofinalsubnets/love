@@ -1,23 +1,15 @@
-; --- test/host/top.l: top's two faces on a real terminal ---
-; the frame builders are exercised through `top -b` in test/kore/top.sh with no tty at
-; all; what is left is the faces -- raw mode, the alternate screen, the poll, the keys,
-; the mouse, and the exit that puts it all back. That lane needs a terminal, so it gets
-; one: `tether` spawns `kore top` on a pty, we type at the master, and the last frame
-; is laid on a quay screen to be read as text.
-; not in the test/*.l corpus -- tether and tty both live in src/love/posix.c, which love0
-; does not link. Run it (the test macro comes from test/00-init.l):
-;
-;   LOVEBIN=out/love sh -c "cat test/00-init.l test/host/top.l | out/love"
-;
-; the only processes signalled or reniced here are sleeps this file spawned, and top
-; is pointed at them with -p.
+; test/host/top.l -- top's faces on a real terminal (the frames are lawed by test/kore/top.sh):
+; raw mode, the alternate screen, the poll, keys, the mouse, and the exit. `tether` spawns
+; `kore top` on a pty and the last frame is read off a quay screen. the only processes signalled
+; or reniced are sleeps this file spawned, and top is pointed at them with -p.
+; run: LOVEBIN=out/love sh -c "cat test/00-init.l test/host/top.l | out/love"
 
 (: love (getenv "LOVEBIN")
    bf (cask 65536)
-   (waitfor pid) (: s (gather pid) (? (two? s) s (nom? s) s (do (rest 2) (waitfor pid))))
+   (waitfor pid) (gather pid @ s (? (two? s) s (nom? s) s (do (rest 2) (waitfor pid))))
    ; the master drained for ms: a frame nobody reads blocks its writer, and the keys
    ; typed meanwhile would land in one read, the closing q with them
-   (drain m acc ms) (: n (swig m bf)
+   (drain m acc ms) (swig m bf @ n
                        (? (charm? n && 0 < n) (drain m (acc + snip bf 0 n) ms)
                           (ms < 1) acc
                           (do (rest 20) (drain m acc (ms - 20)))))
@@ -35,22 +27,22 @@
        m >r
        _ (settty m 24 100)
        t0 (raised m "" 5000)
-       t1 (foldl (\ acc k (: _ (? (string? k) (say m k) (k m)) (drain m acc 500))) t0 keys)
-       t2 (: _ (say m "\e") (drain m t1 300))
+       t1 (foldl (acc \ k \ ((string? k ? (say m k) (k m)), drain m acc 500)) t0 keys)
+       t2 (say m "\e", drain m t1 300)
        _ (say m "q")
        txt (t2 + slurp m)
        st (waitfor <r)
        s (screen (cask (screen () 24 100)) 24 100)
-       _ (scribe s t1)
-       [txt <st (copied s 0 2400)])
-   (cnt t s) (: (go i a) (: k (findsub (snip t i #t) s) (k < 0 ? a (go (i + k + 1) (a + 1))))
+       (scribe s t1,
+        [txt <st (copied s 0 2400)]))
+   (cnt t s) (: (go i a) (findsub (snip t i #t) s @ k (k < 0 ? a (go (i + k + 1) (a + 1))))
                 (go 0 0))
    (at t s) (findsub t s)
-   (lineof t s) (: k (at t s) (k < 0 ? -1 (cnt (snip t 0 k) "\n")))
+   (lineof t s) (at t s @ k (k < 0 ? -1 (cnt (snip t 0 k) "\n")))
    (click x y) ("\e[<0;" + show (x + 1) + ";" + show (y + 1) + "M\e[<0;" + show (x + 1) + ";"
                 + show (y + 1) + "m")
    (sleeper _) (spawn ["sleep" "30"])
-   (nice p) (: r (uread ("/proc/" + show p + "/stat")) ((cite 'kore 'ustatf) <>r 18))
+   (nice p) (uread ("/proc/" + show p + "/stat") @ r ((cite 'kore 'ustatf) <>r 18))
 
    ; --- the plain face (-P): q leaves at once, and leaves the screen put back ---
    r1 (run [] ["-P"])
@@ -93,7 +85,7 @@
            (0 = r5 1) (0 = r6 1) (0 = r7 1))
 
    ; --- a new size is read at the next frame
-   r8 (run [(\ m (settty m 30 100)) "r"] [])
+   r8 (run [(m \ (settty m 30 100)) "r"] [])
    _ (test (0 = r8 1) (has? <r8 "\e[30;1H"))
 
    ; --- k: the signal menu over a sleep of ours, the only row; enter sends TERM
@@ -104,9 +96,9 @@
 
    ; --- ] twice: a sleep of ours two steps nicer than it started, which is the runner's nice
    s2 (sleeper 0)
-   b2 (<(sound (nice s2)))
+   b2 <(sound (nice s2))
    r10 (run ["]" "]"] ["-p" (show s2)])
-   n2 (<(sound (nice s2)))
+   n2 <(sound (nice s2))
    _ (still s2 9)
    _ (waitfor s2)
    _ (test (0 = r10 1) (n2 = b2 + 2))
@@ -143,8 +135,8 @@
 
    ; --- an unknown option is a usage refusal and not a screen ---
    r17 (run [] ["-Z"])
-   _ (test (2 = r17 1) !(has? <r17 "PID USER"))
-   _ (test_fin ())
+   (test (2 = r17 1) !(has? <r17 "PID USER"),
+    test_fin (),
 
-   _ (puts "test/host/top: both faces on a pty -- the plain one's frames and repaint key; the rich one's meters, colour and -C, help and pickers, a resize, kill and renice of our own sleeps, tree, filter, search, mouse sort and select, the screen and mouse put back, the refusal\n")
-   (flush out))
+    puts "test/host/top: both faces on a pty -- the plain one's frames and repaint key; the rich one's meters, colour and -C, help and pickers, a resize, kill and renice of our own sleeps, tree, filter, search, mouse sort and select, the screen and mouse put back, the refusal\n",
+    flush out))

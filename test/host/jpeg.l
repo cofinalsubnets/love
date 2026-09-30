@@ -1,28 +1,28 @@
-; --- test/host/jpeg.l: src/apps/jpeg.l and src/love/lib/jpeg.c's jpeg-pixels --------------------
+; test/host/jpeg.l -- src/apps/jpeg.l and src/love/lib/jpeg.c's jpeg-pixels
 ; jpeg-encode's own output read back near its source, and the refusals; where magick is
 ; here, a picture written every way it writes one -- baseline and progressive, each
 ; sampling, grey, restart markers, one pixel -- and each decode held to magick's.
 ;   cat test/00-init.l test/host/jpeg.l | out/love
 (borrow 'posix)
 (borrow "src/apps/jpeg.l")
-(: dir ((cwd 0) + "/out/.jpegd")
-   _ (hark ["rm" "-rf" dir]) _ (mkdir dir 448)
-   (put p s) (: q (open p "w") _ (say q s) (close q))
+(: dir (cwd 0 + "/out/.jpegd")
+   _ (hark ["rm" "-rf" dir], mkdir dir 448)
+   (put p s) (open p "w" @ q (say q s, close q))
    (image w h f)
-    (: c (cask (4 * w * h))
-       _ (map (i \ (: p (f (i % w) (i // w)) o (4 * i)
-                      (pins c o (p 0) (o + 1) (p 1) (o + 2) (p 2) (o + 3) (p 3))))
-              (jot (w * h)))
-       [w h (string c)])
-   grad (image 64 48 (\ x y [(x * 4) (y * 5) ((x + y) * 2) 255]))
-   odd (image 13 7 (\ x y [(x * 19) 200 (y * 36) 255]))
-   noise (image 64 48 (\ x y (: v (((((y * 64) + x) * 2654435761) >> 7) & 255)
-                                [v (255 - v) (v // 2) 255])))
+    (cask (4 * w * h) @ c
+     (map (i \ (: p (f (i % w) (i // w)) o (4 * i)
+                  (pins c o (p 0) (o + 1) (p 1) (o + 2) (p 2) (o + 3) (p 3))))
+          (jot (w * h)),
+      [w h (string c)]))
+   grad (image 64 48 (x \ y \ [(x * 4) (y * 5) ((x + y) * 2) 255]))
+   odd (image 13 7 (x \ y \ [(x * 19) 200 (y * 36) 255]))
+   noise (image 64 48 (x \ y \ ((y * 64 + x) * 2654435761 >> 7 & 255 @ v
+                                  [v (255 - v) (v // 2) 255])))
    ; the mean squared error of two rgba strings over r g b
    (mse a b) (: n (#a // 4)
                 (go i acc) (? (i = #a) (acc / (3 * n))
-                              ((i % 4) = 3) (go (i + 1) acc)
-                              (: d ((a i) - (b i)) (go (i + 1) (acc + (d * d)))))
+                              (i % 4 = 3) (go (i + 1) acc)
+                              (a i - b i @ d (go (i + 1) (acc + d * d))))
                 (go 0 0))
    (enc im q) (jpeg-encode (im 0) (im 1) (im 2) q)
 
@@ -42,7 +42,7 @@
            (2000 < #jn) (two? (jpeg-decode (snip jn 0 (#jn // 2)))))
 
    ; -- against magick ------------------------------------------------------------------
-   magick? (: q (open "/usr/bin/magick" "r") (? (hot? q) (close q, 1) 0))
+   magick? (open "/usr/bin/magick" "r" @ q (hot? q ? (close q, 1) 0))
    src (dir + "/src.rgba")
    _ (put src (grad 2))
    ; grad written with magick's flags -> [ours magick's] | ()
@@ -50,12 +50,11 @@
     (: f (dir + "/" + nm + ".jpg")
        r (hark (["magick" "-size" "64x48" "-depth" "8" ("rgba:" + src)] + flags + [f]))
        m (hark ["magick" f "-depth" "8" "rgba:-"])
-       (? ((two? m) && (<m = 0))
+       (two? m && <m = 0 ?
           (: q (open f "r") s (slurp q) _ (close q) d (jpeg-decode s)
-             (? (two? d) [(d 2) >m] ()))
-          ()))
-   (near nm flags lim) (: p (both nm flags) (? (two? p) (mse (p 0) (p 1) < lim) 0))
-   _ (? magick?
+             (two? d ? [(d 2) >m]))))
+   (near nm flags lim) (both nm flags @ p (two? p ? (mse (p 0) (p 1) < lim) 0))
+   _ (magick? ?
         (test (near "b420" ["-sampling-factor" "4:2:0"] 1)
               (near "b422" ["-sampling-factor" "4:2:2"] 1)
               (near "b444" ["-sampling-factor" "4:4:4" "-quality" "95"] 1)
@@ -73,23 +72,23 @@
    ; scans that carry no data stop at once, and past a thousand scans the rest are left:
    ; 1100 empty dc scans over 2048x2048 once cost a whole frame walk each. then a dc scan
    ; shifted by 13 whose predictor climbs past what an int holds after the shift
-   (by l) (: c (cask #l) _ (map (i \ pin c i (l i)) (jot #l)) (string c))
+   (by l) (cask #l @ c (map (i \ pin c i (l i)) (jot #l), string c))
    (seg m b) (by [255 m (#b + 2 >> 8) (#b + 2 & 255)] + b)
-   (frame w h dc) (by [255 216] + seg 219 (by (0 . map (\ _ 1) (jot 64)))
+   (frame w h dc) (by [255 216] + seg 219 (by (0 . map (_ \ 1) (jot 64)))
                    + seg 194 (by [8 (h >> 8) (h & 255) (w >> 8) (w & 255) 1 1 17 0])
-                   + seg 196 (by (0 . 1 . map (\ _ 0) (jot 15)) + by [dc]))
+                   + seg 196 (by (0 . 1 . map (_ \ 0) (jot 15)) + by [dc]))
    (sos al) (seg 218 (by [1 1 0 0 0 al]))
-   empty (frame 2048 2048 0 + cats (map (\ _ (sos 0)) (jot 1100)) + by [255 217])
+   empty (frame 2048 2048 0 + cats (map (_ \ (sos 0)) (jot 1100)) + by [255 217])
    t0 (clock 0)
    e (jpeg-decode empty)
    ms (clock 0 - t0)
    ; each block: the one code, then 11 one bits, a dc step of 2047
-   ones (cats (map (\ _ (by [127 247 255 0 127 247 255 0 127 247 255 0])) (jot 100)))
+   ones (cats (map (_ \ (by [127 247 255 0 127 247 255 0 127 247 255 0])) (jot 100)))
    hi (jpeg-decode (frame 1600 8 11 + sos 13 + ones + by [255 217]))
-   _ (test (two? e) (e 0 = 2048) (e 2 0 = 128) (#(e 2) = 16777216)
-           (ms < 5000)
-           (two? hi) (hi 0 = 1600))
-   _ (hark ["rm" "-rf" dir])
-   0)
+   (test (two? e) (e 0 = 2048) (e 2 0 = 128) (#(e 2) = 16777216)
+         (ms < 5000)
+         (two? hi) (hi 0 = 1600),
+    hark ["rm" "-rf" dir],
+    0))
 
 (test_fin (), puts "jpeg: ok", putc 10, 0)

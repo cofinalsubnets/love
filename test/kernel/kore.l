@@ -7,8 +7,8 @@
 
 (borrow 'kore) ; the applets ride module 'kore -- the cat's kore files above just registered it
 
-(: (rd p) (: q (open p "r") (port? q ? (: s (slurp q) (close q, s)) ()))
-   (wr p s) (: q (open p "w") (port? q ? (say q s, close q, 1) 0))
+(: (rd p) (open p "r" @ q (port? q ? (slurp q @ s (close q, s)) ()))
+   (wr p s) (open p "w" @ q (port? q ? (say q s, close q, 1) 0))
    d "/tmp/l-kore"
  (test
    (0 = pwd-main ())                          ; prints the seat, answers 0

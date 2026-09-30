@@ -1,11 +1,7 @@
-; --- test/host/apartment.l: the glass cube on the plain, headless ---
-; not in the test/*.l corpus (it loads a crew module). the level is pure love, so
-; everything but the tty runner gates here: the lay -- the road, the cubes each with a
-; path to it, yours closed round you with the stranger at its pane -- the names in
-; blocks, the sign, glass that holds, the talk through the pane from its first node to
-; a leaf, and the end: the stranger gone, the pane open, the drum asked for, the grass
-; outside gone to sand and the plain reachable; and the song into a jug.
-;   cat test/00-init.l test/host/apartment.l | out/love
+; test/host/apartment.l -- the glass cube on the plain, headless: the lay, the names, the sign,
+; glass that holds, the talk through the pane to a leaf, the ending (the pane open, the grass gone
+; to sand, the plain reachable), and the song into a jug. not in the corpus: a crew module.
+; run: cat test/00-init.l test/host/apartment.l | out/love
 
 (borrow 'apartment)   ; the artifact's module, warm from the tree
 (borrow 'rove)        ; dat, open?, the words
@@ -35,7 +31,7 @@
    in (reach g)
    f (apartment-frame g) f2 (apartment-frame g)
    ; the river's row in a column -- the stone's counts, it stands in the water -- or -1 where there is none
-   (river-at x) (: ys (filter (y \ elem (t x y) '(4 8)) ^h) (two? ys ? <ys -1))
+   (river-at x) (filter (y \ elem (t x y) '(4 8)) ^h @ ys (two? ys ? <ys -1))
    ; a cube's pane is its glass, in its middle column on the river's side, and the
    ; column from there to the river is path
    (pathed? cb) (: q (cb 4) x <q y <>q above (y < hy) ry (river-at x)
@@ -56,12 +52,12 @@
        (all (x \ |(river-at x - river-at (x + 1)) <= 1) ^(w - 1))   ; ..a row a column, never a jump
        (any (x \ river-at x != river-at 0) ^w)                   ; ..and it wanders
        ; ..but keeps a row of grass off every cube it passes
-       (all (cb \ all (x \ (: ry (river-at x)
+       (all (cb \ all (x \ (river-at x @ ry
                               (ry < 0 || cb 1 + cube-h < ry || ry + river-h < cb 1)))
                       (range (cb 0) (cb 0 + cube-w)))
             (d 'cubes))
        (all (cb \ cb 0 + cube-w - 1 <= east) (d 'cubes))
-       (: st (d 'stone) (8 = t <st <>st && <st < 5 && |(<>st - river-at (<st - 1)) <= 1))   ; the stone in the bed near the west edge
+       (d 'stone @ st (8 = t <st <>st && <st < 5 && |(<>st - river-at (<st - 1)) <= 1))   ; the stone in the bed near the west edge
        (8 = #(d 'cubes)) (all pathed? (d 'cubes))               ; eight, each with a path in
        (all (cb \ all (i \ 6 = peep (d 't) i 0) (walls cb)) (d 'cubes))   ; ..each glass all round
        (all (cb \ c 1 <= cb 1) (d 'cubes))                     ; yours on the top row
@@ -70,17 +66,17 @@
        (inside? c (p 'x) (p 'y)) (1 = t (p 'x) (p 'y))         ; you, on grass inside yours
        (all (i \ inside? c (i % w) (i // w)) (keys in))         ; ..and closed: nowhere to walk but inside
        (#(keys in) = (cube-w - 2) * (cube-h - 2))
-       (tablet? npc) (!(inside? c (npc 'x) (npc 'y)))           ; the stranger outside
+       (tablet? npc) !(inside? c (npc 'x) (npc 'y))           ; the stranger outside
        (6 = t <pn <>pn) (g 'pane = <pn + w * <>pn)              ; ..a pane between, on your glass
        (|(npc 'x - <pn) <= 1) (|(npc 'y - <>pn) <= 1)           ; ..which they stand against
        (7 = #(g 'ms))                                            ; the others, one to a cube, none in yours
        (all (m \ inside? (m 'cube) (m 'x) (m 'y) && !(inside? c (m 'x) (m 'y))) (g 'ms))
        (was != now)                                              ; ..and they wander, inside still
        (blocky? (npc 'nm))                                       ; named in blocks
-       (!(g 'talk))
-       (: g1 (apartment-new 80 22 (wheel 5)) (two? (g1 'sign) && (apartment-turn g1 32, !(g1 'sign))))   ; the opening sign stands, and a key takes it down
+       !(g 'talk)
+       (apartment-new 80 22 (wheel 5) @ g1 (two? (g1 'sign) && (apartment-turn g1 32, !(g1 'sign))))   ; the opening sign stands, and a key takes it down
        ; the same seed lays the same plain and names the same stranger
-       (: g2 (apartment-new 80 22 (wheel 5)) (g2 'npc 'nm = npc 'nm && g2 'd 'cube = c))))
+       (apartment-new 80 22 (wheel 5) @ g2 (g2 'npc 'nm = npc 'nm && g2 'd 'cube = c))))
 
 ; where you stand to bump the pane from inside: the interior cell nearest it, and the step
 (: (clampi v lo hi) (v < lo ? lo (hi < v ? hi v))
@@ -90,12 +86,12 @@
 ; --- glass holds, but for the pane the stranger stands at, which opens the talk ---
 (: g (apartment-new 80 22 (wheel 5)) d (g 'd) w 80 c (d 'cube) p (g 'p) npc (g 'npc)
    _ (apartment-turn g 32)
-   _ (pins p 'x (c 0 + 1) 'y (c 1 + 1)) _ (apartment-turn g '(-1 -1))   ; up into the corner
+   _ (pins p 'x (c 0 + 1) 'y (c 1 + 1), apartment-turn g '(-1 -1))      ; up into the corner
    x1 (p 'x) y1 (p 'y) m1 (g 'msg) k1 (g 'talk)
    bp (by-pane c)
-   _ (pins p 'x (bp 0) 'y (bp 1)) _ (apartment-turn g (bp 2))     ; into the pane
+   _ (pins p 'x (bp 0) 'y (bp 1), apartment-turn g (bp 2))        ; into the pane
    sg (g 'sign)
- (test (x1 = c 0 + 1) (y1 = c 1 + 1) (0 < #m1) (nil? k1)      ; held, and something said
+ (test (x1 = c 0 + 1) (y1 = c 1 + 1) (0 < #m1) !k1      ; held, and something said
        ('start = g 'talk) (two? sg) (<sg = npc 'nm)             ; the talk, under the stranger's name
        (p 'x = bp 0) (p 'y = bp 1)))                             ; ..and you never moved
 
@@ -104,38 +100,39 @@
    (t x y) (dat d x y) pn (c 4)
    _ (apartment-turn g 32)
    bp (by-pane c)
-   _ (pins p 'x (bp 0) 'y (bp 1)) _ (apartment-turn g (bp 2))
+   _ (pins p 'x (bp 0) 'y (bp 1), apartment-turn g (bp 2))
    root (chat-node 'start) c1 <(root 2)
    _ (apartment-turn g (48 + <c1)) k1 (g 'talk)
    _ (apartment-turn g 120) k2 (g 'talk)                          ; x is no choice: shown again
    leaf <(filter (e \ atom? (e 2)) chat-book)
    ; a grass cell outside the cube, and one inside, before the end
-   out (<(filter (i \ 1 = peep (d 't) i 0 && !(inside? c (i % w) (i // w))) ^(w * h)))
+   out <(filter (i \ 1 = peep (d 't) i 0 && !(inside? c (i % w) (i // w))) ^(w * h))
    _ (chat g <leaf) s1 (g 'sign)
    _ (apartment-turn g 32)
    in (reach g)
    bones (map (m \ [(m 'x) (m 'y)]) (g 'ms))
-   _ (each ^20 (i \ apartment-turn g '(-1 -1)))                  ; twenty turns at the corner
- (test (k1 = c1 2) (k2 = c1 2) (two? s1)
-       (!(g 'talk)) (!(g 'sign)) (!(g 'npc))                    ; closed, and the stranger gone
-       (elem 'drum (g 'sfx)) (0 < #(g 'msg))                     ; the drum asked for, and something said
-       (7 = t <pn <>pn) (open? d <pn <>pn)                       ; the pane is shards, and a way
-       (g 'desert) (2 = peep (d 't) out 0)                        ; the grass outside is sand
-       (1 = t (p 'x) (p 'y)) (all (i \ 1 = peep (d 't) i 0) (filter (i \ inside? c (i % w) (i // w)) ^(w * h)))
-       (any (i \ 5 = peep (d 't) i 0) (keys in))                 ; ..and the riverbed is a walk away
-       (all (m \ m 'bones && m 'gl = bones-glyph) (g 'ms))        ; the others are bones
-       (bones = map (m \ [(m 'x) (m 'y)]) (g 'ms))               ; ..where they stood
-       (pins p 'x (bp 0) 'y (bp 1), apartment-turn g (bp 2), p 'x = <pn && p 'y = <>pn)   ; out onto the pane
-       (rows (apartment-frame g) = h + 2)
-       ; the river is dry to the west edge, and walked: a step onto the stone reads it,
-       ; and a step west off the map along the bed is the way out
-       (all (i \ 4 != peep (d 't) i 0) ^(w * h))
-       (any (i \ 0 = i % w && 5 = peep (d 't) i 0) (keys in))
-       (: st (d 'stone) _ (pins p 'x (<st + 1) 'y <>st) _ (apartment-turn g '(-1 0))
-          (p 'x = <st && p 'y = <>st && two? (g 'sign)))
-       (: st (d 'stone) _ (apartment-turn g 32) wy (<(filter (y \ 5 = t 0 y) ^h))
-          _ (pins p 'x 0 'y wy) _ (apartment-turn g '(-1 0))
-          ('west = g 'over))))
+   (each ^20 (i \ apartment-turn g '(-1 -1)),                    ; twenty turns at the corner
+    test (k1 = c1 2) (k2 = c1 2) (two? s1)
+         !(g 'talk) !(g 'sign) !(g 'npc)                    ; closed, and the stranger gone
+         (elem 'drum (g 'sfx)) (0 < #(g 'msg))                     ; the drum asked for, and something said
+         (7 = t <pn <>pn) (open? d <pn <>pn)                       ; the pane is shards, and a way
+         (g 'desert) (2 = peep (d 't) out 0)                        ; the grass outside is sand
+         (1 = t (p 'x) (p 'y)) (all (i \ 1 = peep (d 't) i 0) (filter (i \ inside? c (i % w) (i // w)) ^(w * h)))
+         (any (i \ 5 = peep (d 't) i 0) (keys in))                 ; ..and the riverbed is a walk away
+         (all (m \ m 'bones && m 'gl = bones-glyph) (g 'ms))        ; the others are bones
+         (bones = map (m \ [(m 'x) (m 'y)]) (g 'ms))               ; ..where they stood
+         (pins p 'x (bp 0) 'y (bp 1), apartment-turn g (bp 2), p 'x = <pn && p 'y = <>pn)   ; out onto the pane
+         (rows (apartment-frame g) = h + 2)
+         ; the river is dry to the west edge, and walked: a step onto the stone reads it,
+         ; and a step west off the map along the bed is the way out
+         (all (i \ 4 != peep (d 't) i 0) ^(w * h))
+         (any (i \ 0 = i % w && 5 = peep (d 't) i 0) (keys in))
+         (d 'stone @ st
+          (pins p 'x (<st + 1) 'y <>st, apartment-turn g '(-1 0),
+           (p 'x = <st && p 'y = <>st && two? (g 'sign))))
+         (: st (d 'stone) _ (apartment-turn g 32) wy <(filter (y \ 5 = t 0 y) ^h)
+            (pins p 'x 0 'y wy, apartment-turn g '(-1 0),
+             ('west = g 'over)))))
 
 ; --- the river runs on its own clock: further along it, its cells paint differently and
 ; --- the grass paints the same; dry, its bed stands still with the rest
@@ -145,7 +142,7 @@
    water (cells 4) grass (cells 1)
    aw (faces water) ag (faces grass) _ (pin g 'wt 2.0) bw (faces water) bg (faces grass)
    _ (pin g 'wt 0.0) cw (faces water)
-   _ (pins g 'desert 1) _ (each (cells 4) (i \ pin (d 't) i 5))
+   _ (pins g 'desert 1, each (cells 4) (i \ pin (d 't) i 5))
    bed (cells 5) dry (faces bed) _ (pin g 'wt 2.0) dry2 (faces bed)
  (test (aw != bw) (ag = bg) (aw = cw) (dry = dry2)))
 
@@ -171,15 +168,15 @@
    loud (slurp j2)
  (test (#quiet = 5 * 4 * song-chunk) (any (i \ 0 != quiet (i * 89)) ^(#quiet // 89)) (k0 = 0)   ; the drone, before any phrase
        (n0 = 1)
-       (: y (drone-voice () 1 (iota 4800)) (1.0 < amax y - amin y))     ; ..and it is a wave, not a level
+       (drone-voice () 1 (iota 4800) @ y (1.0 < amax y - amin y))     ; ..and it is a wave, not a level
        (k1 = 1) (any (i \ 0 != heard (i * 89)) ^(#heard // 89))          ; the phrase, once, and heard
        ; a phrase is its notes and each note's echoes, every echo behind its note and softer
-       (: s3 (apartment-song-new (jug 0) (wheel 7)) _ (apartment-song-feed s3) _ (pin s3 'next 0) _ (apartment-song-feed s3)
+       (: s3 (apartment-song-new (jug 0) (wheel 7)) _ (apartment-song-feed s3, pin s3 'next 0, apartment-song-feed s3)
           vs >(s3 'vs)
           (#vs = #phrase * (1 + #phrase-echoes) && all (v \ v 0 < 1099511627776) vs))
        (2 <= k2 - k1 <= 4)                                                ; ..and every so often after
        (s2 'struck = k2) (s2 'next = s 'next)                             ; the same seed strikes the same
-       (0 < n1) (!(g 'sfx))
+       (0 < n1) !(g 'sfx)
        (#loud = 40 * 4 * song-chunk) (any (i \ 0 != loud (i * 89)) ^400)))
 
 (test_fin (),

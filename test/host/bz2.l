@@ -1,4 +1,4 @@
-; --- test/host/bz2.l: bzip2 read a block at a time, held to the stream read whole ---
+; test/host/bz2.l -- bzip2 read a block at a time, held to the stream read whole
 ; bz2-pull steps a block at a time off a reader and bz2-unpack reads the whole string; every
 ; cut of a stream answers the same bytes, or the same word. a word is compared alone: the
 ; pull has put out the blocks before it, the whole has not.
@@ -7,22 +7,22 @@
 (borrow 'bytes)
 
 (: (bzt-mk n f) (: b (cask n) (go i) (n <= i ? (string b) (pin b i (f i), go (i + 1))) (go 0))
-   (bzt-cut s k) (: n #s (go i) (? (n <= i) () ((snip s i (min n (i + k))) . go (i + k))) (go 0))
-   (bzt-rd ps) (: t {0 ps} (\ _ (: l (peep t 0 ()) (? (two? l) (: _ (pin t 0 >l) <l) ""))))
+   (bzt-cut s k) (: n #s (go i) (n <= i ? () ((snip s i (min n (i + k))) . go (i + k))) (go 0))
+   (bzt-rd ps) ({0 ps} @ t (_ \ (peep t 0 () @ l (two? l ? (pin t 0 >l, <l) ""))))
    (bzt-pull s k) (: g (bz2-pull (bzt-rd (bzt-cut s k)))
-                     (go acc) (: p (bz2-next g) (? (#p = 0) [(g 'ans) (? (two? acc) (cats (rev acc)) "")] (go (p . acc))))
+                     (go acc) (bz2-next g @ p (#p = 0 ? [(g 'ans) (two? acc ? (cats (rev acc)) "")] (go (p . acc))))
                      (go ()))
-   (bzt-whole s) (: u (bz2-unpack s) (? (atom? u) [u ""] [[1 #<>u] <>u]))
-   (bzt-all f xs) (foldl (\ a x (a && f x)) 1 xs)
-   (bzt-same s ks) (: w (bzt-whole s)
-                      (bzt-all (\ k (: p (bzt-pull s k) (? (atom? <w) (<p = <w) (p = w)))) ks))
+   (bzt-whole s) (bz2-unpack s @ u (atom? u ? [u ""] [[1 #<>u] <>u]))
+   (bzt-all f xs) (foldl (a \ x \ (a && f x)) 1 xs)
+   (bzt-same s ks) (bzt-whole s @ w
+                      (bzt-all (k \ (bzt-pull s k @ p (atom? <w ? (<p = <w) (p = w)))) ks))
    bzt-ks [1 7 4096 100000]
-   bzt-text (: (go i a) (? (i < 1) a (go (i - 1) (a + "the quick brown fox jumps over the lazy dog. "))) (go 3000 ""))
+   bzt-text (: (go i a) (i < 1 ? a (go (i - 1) (a + "the quick brown fox jumps over the lazy dog. "))) (go 3000 ""))
    bzt-a (bz2-pack bzt-text 1)
    ; noise past what the pull holds, in blocks of 100k: blocks run past its buffer and are read again
    bzt-noise (cats (map (i \ hex2b (sha256 (show i))) (jot 80000)))
    bzt-n (bz2-pack bzt-noise 1)
-   (bzt-flip s k) (: c (cask #s) _ (pour c 0 s 0 #s) _ (pin c k ((s k) ^ 1)) (string c)))
+   (bzt-flip s k) (cask #s @ c (pour c 0 s 0 #s, pin c k (s k ^ 1), string c)))
 (test
  (lit? bz2-step)
  (bzt-same bzt-a bzt-ks)

@@ -1,4 +1,4 @@
-; --- test/host/vi.l: vi on berth's harbour, over a real pty ---
+; test/host/vi.l -- vi on berth's harbour, over a real pty
 ; not in the test/*.l corpus (the harbour rides screen/scribe/tether in src/love/*.c). the
 ; engine's laws are test/law/vi.l; this is the visit: a buffer berthed as a stage,
 ; :vs and :sp opening another beside or under it, the prefix steering the focus, and
@@ -7,10 +7,10 @@
 
 (borrow 'posix)
 
-(: (sub? h n i) ((i + #n) < (#h + 1) ? (n = snip h i (i + #n) ? 1 (sub? h n (i + 1))) 0)
+(: (sub? h n i) (i + #n < #h + 1 ? (n = snip h i (i + #n) ? 1 (sub? h n (i + 1))) 0)
    ; type, and take what came back within a beat
    (drink m) (:- (go "") (go acc) (? (cue? m) (: b (cask 4096) n (swig m b)
-                                                  (? (charm? n && 0 < n) (go (acc + snip b 0 n)) acc))
+                                                  (charm? n && 0 < n ? (go (acc + snip b 0 n)) acc))
                                     (rest 150, cue? m) (go acc)
                                     acc))
    (say! m s) (say m s, flush m, drink m)
@@ -35,7 +35,7 @@
    bc (say! m "\x01]")                      ; C-a ]: the same put, the harbour's way
    b8 (say! m "\x01h:q!\r")                ; the first, dirty
    b9 (say! m ":q!\r")                     ; the last one leaves, and so does vi
-   st (: (wf p) (: g2 (gather p) (two? g2 ? g2 (rest 2, wf p))) (wf <md))
+   st (: (wf p) (gather p @ g2 (two? g2 ? g2 (rest 2, wf p))) (wf <md))
  (test (sub? b0 "\e[?1049h" 0)
        (sub? b1 "hello" 0)
        (sub? b2 "\e[1;40H" 0) (sub? b2 "\e[2;41H" 0)

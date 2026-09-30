@@ -1,4 +1,4 @@
-; --- test/host/ed.l: ed and ex on a terminal ---
+; test/host/ed.l -- ed and ex on a terminal
 ; test/kore/ed.sh drives both as scripts; this is the other face, a pty: ed's prompt, an
 ; error that says `?` and lets the edit go on, h saying why; ex's prompt and autoprint,
 ; and its vi handing the buffer to the vi engine, whose :wq writes it and ends both.
@@ -9,12 +9,12 @@
    dir ("out/.edtest-" + show (getpid 0))
    _ (mkdir dir 493)
    f (dir + "/t")
-   _ (: q (open f "w") _ (say q "alpha\nbeta\ngamma\n") (close q))
+   _ (open f "w" @ q (say q "alpha\nbeta\ngamma\n", close q))
    (sub? h n) (: (go i) (? (#h < i + #n) 0 (n = snip h i (i + #n)) 1 (go (i + 1))) (go 0))
    ; what the pty shows up to pat, or all of it at its end
-   (upto m pat t) (: b (see m) (? (b < 0) t (: t2 (t + string b) (? (sub? t2 pat) t2 (upto m pat t2)))))
-   (waitfor pid) (: s (gather pid) (? (two? s) s (nom? s) s (: _ (rest 2) (waitfor pid))))
-   (type m s) (: _ (say m s) (flush m))
+   (upto m pat t) (see m @ b (b < 0 ? t (t + string b @ t2 (sub? t2 pat ? t2 (upto m pat t2)))))
+   (waitfor pid) (gather pid @ s (? (two? s) s (nom? s) s (rest 2, waitfor pid)))
+   (type m s) (say m s, flush m)
    r (tether [love "kore" "ed" "-p" "* " f])
    _ (test (two? r))
    m >r
@@ -41,8 +41,8 @@
    _ (type n ":wq\r")
    b3 (slurp n)
    s2 (waitfor <r2)
-   got (: q (open f "r") (? (hot? q) (: g (slurp q) _ (close q) g) ""))
-   _ (test (sub? b0 "3L, 17B") (sub? b1 "beta") (sub? b2 "\e[?1049h") (sub? b3 "\e[?1049l")
-           (<s2 = 0) (got = "beta\ngamma\n"))
-   _ (hark ["rm" "-rf" dir]))
+   got (open f "r" @ q (hot? q ? (slurp q @ g (close q, g)) ""))
+   (test (sub? b0 "3L, 17B") (sub? b1 "beta") (sub? b2 "\e[?1049h") (sub? b3 "\e[?1049l")
+         (<s2 = 0) (got = "beta\ngamma\n"),
+    hark ["rm" "-rf" dir]))
 (test_fin (), puts "ed: ok", putc 10, 0)

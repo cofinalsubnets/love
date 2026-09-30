@@ -1,10 +1,6 @@
-; --- test/host/wade.l: the night river, headless ---
-; not in the test/*.l corpus (it loads a crew module). the scene is pure love, so
-; everything but the tty runner gates here: the frame's shape and pens, the moon
-; turning with the player and hiding behind them, the banks repeating, a step and
-; its ring, the helm's turns and tilts, the walk, the mirror keeping sky that is off
-; the top of the screen, and the song into a jug.
-;   cat test/00-init.l test/host/wade.l | out/love
+; test/host/wade.l -- the night river, headless: the frame, the moon turning with the player,
+; the banks, a step's ring, the helm, the walk, the mirror, and the song into a jug.
+; not in the corpus: a crew module. run: cat test/00-init.l test/host/wade.l | out/love
 
 (borrow 'wade)    ; the artifact's module, warm from the tree
 
@@ -51,13 +47,13 @@
 ; --- the banks repeat: a whole loop down the river lays the same treeline to within
 ; --- float noise, though the swell rides the river's length and so the water differs
 (: st (wade-new 80 48)
-   (line st) (: tb (wade-tables st) (map (x \ [(peep (tb 'tops) x 0) (peep (tb 'bots) x 0)]) ^80))
+   (line st) (wade-tables st @ tb (map (x \ [(peep (tb 'tops) x 0) (peep (tb 'bots) x 0)]) ^80))
    (same? a b) (80 = net (map (x \ (abs (a x 0 - b x 0) < 0.001 && abs (a x 1 - b x 1) < 0.001)) ^80))
    l0 (line st) f0 (wade-frame st)
    _ (pin st 'pz (loop * sp)) l1 (line st) f1 (wade-frame st)
    _ (pin st 'pz 7.0) l2 (line st)
    t0 (tree-of 3 1 0) t1 (tree-of (3 + loop) 1 0) t2 (tree-of 4 1 0)
- (test (same? l0 l1) (!(same? l0 l2)) (f0 != f1)
+ (test (same? l0 l1) !(same? l0 l2) (f0 != f1)
        (t0 'ht = t1 'ht) (t0 'wd = t1 'wd) (t1 'z - t0 'z = loop * sp)
        (t0 'ht != t2 'ht || t0 'wd != t2 'wd)
        (rw < t0 'x) (tree-of 3 -1 0 'x < 0.0 - rw)))
@@ -68,39 +64,39 @@
    z1 (st 'pz) n1 #(st 'rings)
    _ (wade-step st 107)
    n2 #(st 'rings)
-   _ (pin st 't 10) _ (wade-step st -9) _ (wade-step st 106)   ; down, j: nothing, six ticks on
+   _ (pin st 't 10, wade-step st -9, wade-step st 106)         ; down, j: nothing, six ticks on
    n3 #(st 'rings) z3 (st 'pz)
    _ (each '(20 30 40 50 60 70) (t \ (pin st 't t, wade-step st 107)))
    n4 #(st 'rings)
-   _ (pins st 'th 1.5707963267948966 'px 0.0)
-   _ (each '(1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20) (i \ wade-step st 107))
- (test (0.0 < z1) (n1 = 1) (n2 = 1)
-       (abs (z3 - 2 * z1) < 0.001) (n3 = 1) (n4 = 5)   ; two steps on, and the back keys took none
-       (st 'px = 0.0) (z3 < st 'pz)                    ; facing the bank, the wading is still down the river
-       ; ..and the last step is the lamppost's foot, where the level is done: no step, no
-       ; walk, and no turn or tilt either -- the view is the level's, and the settle
-       ; takes it from where it was to the aim, eased, all the way by 1: turned to the
-       ; lamp, which is dead ahead, and pitched down to its reflection, the horizon
-       ; higher on the screen
-       (: s (pins (wade-new 80 48) 'pz (lamp-z - 3.5) 'th 0.5 'hz 20) _ (wade-move s 1.0) z (s 'pz)
-          _ (wade-step s 107) _ (wade-step s 32) _ (wade-move s 1.0) _ (wade-step s 108) _ (wade-step s 117)
-          a (wade-aim s)
-          _ (wade-settle s 0.0) t0 (s 'th) h0 (s 'hz)
-          _ (wade-settle s 0.5) t5 (s 'th) h5 (s 'hz)
-          _ (wade-settle s 1.0)
-          (s 'done && abs (z - (lamp-z - lamp-near)) < 0.001 && s 'pz = z && s 'walk = 0
-           && abs (t0 - 0.5) < 0.001 && h0 = 20
-           && abs (a 0) < 0.001 && a 1 < 20
-           && 0.0 < t5 < 0.5 && a 1 < h5 < 20
-           && abs (s 'th - a 0) < 0.001 && s 'hz = a 1
-           && !(wade-new 80 48 'done)))))
+   (pins st 'th 1.5707963267948966 'px 0.0,
+    each '(1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20) (i \ wade-step st 107),
+    test (0.0 < z1) (n1 = 1) (n2 = 1)
+         (abs (z3 - 2 * z1) < 0.001) (n3 = 1) (n4 = 5)   ; two steps on, and the back keys took none
+         (st 'px = 0.0) (z3 < st 'pz)                    ; facing the bank, the wading is still down the river
+         ; ..and the last step is the lamppost's foot, where the level is done: no step, no
+         ; walk, and no turn or tilt either -- the view is the level's, and the settle
+         ; takes it from where it was to the aim, eased, all the way by 1: turned to the
+         ; lamp, which is dead ahead, and pitched down to its reflection, the horizon
+         ; higher on the screen
+         (: s (pins (wade-new 80 48) 'pz (lamp-z - 3.5) 'th 0.5 'hz 20) _ (wade-move s 1.0) z (s 'pz)
+            _ (wade-step s 107, wade-step s 32, wade-move s 1.0, wade-step s 108, wade-step s 117)
+            a (wade-aim s)
+            _ (wade-settle s 0.0) t0 (s 'th) h0 (s 'hz)
+            _ (wade-settle s 0.5) t5 (s 'th) h5 (s 'hz)
+            (wade-settle s 1.0,
+             (s 'done && abs (z - (lamp-z - lamp-near)) < 0.001 && s 'pz = z && s 'walk = 0
+              && abs (t0 - 0.5) < 0.001 && h0 = 20
+              && abs (a 0) < 0.001 && a 1 < 20
+              && 0.0 < t5 < 0.5 && a 1 < h5 < 20
+              && abs (s 'th - a 0) < 0.001 && s 'hz = a 1
+              && !(wade-new 80 48 'done))))))
 
 ; --- the words: the first line over the frame between its two points and not at the
 ; --- end, each of its cells in place of a pixel pair, on the average of what it covers
 (: e (texts 0) a (e 0) b (e 1) txt (e 2)
    on (wade-frame (pins (wade-new 80 48) 'pz ((a + b) / 2.0))) off (wade-frame (pins (wade-new 80 48) 'pz b))
- (test (has? on txt) (!(has? off txt)) (count on "▀" = 1920 - #txt) (count off "▀" <= 1920)
-       (elem txt (texts-at a)) (!(elem txt (texts-at b)))))
+ (test (has? on txt) !(has? off txt) (count on "▀" = 1920 - #txt) (count off "▀" <= 1920)
+       (elem txt (texts-at a)) (nelem txt (texts-at b))))
 
 ; --- the helm: turns stop at sixty degrees, tilts clamp, space walks, the rest is nothing ---
 (: st (wade-new 80 48)
@@ -111,14 +107,14 @@
    _ (each ^20 (i \ wade-step st 110)) hz2 (st 'hz)
    _ (wade-step st 32) w1 (st 'walk)
    _ (wade-step st 32) w2 (st 'walk)
-   _ (wade-step st 120) _ (wade-step st 'tap) _ (wade-step st ())
- (test (0.0 < th1) (abs th2 < 0.001)
-       (-1.05 < th3 < 0.0)                         ; a hundred left turns stop at sixty degrees
-       (24 < hz1 <= 36) (12 <= hz2 < 24) (w1 = 1) (w2 = 0)   ; looking up, the horizon drops down the screen, within bounds
-       (st 'pz = 0.0) (st 'rings = ())
-       ; a resize keeps the horizon in proportion and within its bounds
-       (: s2 (wade-size (wade-new 80 48) 100 40) (s2 'w = 100 && s2 'h = 80 && s2 'hz = 40 && s2 'foc = 50.0))
-       (: s3 (wade-size (pins (wade-new 80 48) 'hz 12) 80 12) (s3 'h = 24 && s3 'hz = 6))))
+   (wade-step st 120, wade-step st 'tap, wade-step st (),
+    test (0.0 < th1) (abs th2 < 0.001)
+         (-1.05 < th3 < 0.0)                         ; a hundred left turns stop at sixty degrees
+         (24 < hz1 <= 36) (12 <= hz2 < 24) (w1 = 1) (w2 = 0)   ; looking up, the horizon drops down the screen, within bounds
+         (st 'pz = 0.0) (st 'rings = ())
+         ; a resize keeps the horizon in proportion and within its bounds
+         (wade-size (wade-new 80 48) 100 40 @ s2 (s2 'w = 100 && s2 'h = 80 && s2 'hz = 40 && s2 'foc = 50.0))
+         (wade-size (pins (wade-new 80 48) 'hz 12) 80 12 @ s3 (s3 'h = 24 && s3 'hz = 6))))
 
 ; --- the mirror keeps the sky that is off the top: looking up, the moon's disc is past
 ; --- the screen's edge but its path is in the water; looking down, a full screen paints
@@ -127,7 +123,7 @@
    sky (snip up 0 (find up "\r\n" 0))          ; the first row alone
  (test (rows up = 24) (rows down = 24)
        (pen? up 179)                            ; the path
-       (!(pen? sky 187))                        ; ..and no sea on the top row: the disc is above it
+       !(pen? sky 187)                        ; ..and no sea on the top row: the disc is above it
        (pen? down 230) (pen? down 16)))
 
 ; --- the song: ten seconds into a jug, a chime now and then over a gong, never silent ---
@@ -137,10 +133,10 @@
    out (slurp j)
    loud (net (map (i \ (out (i * 97) != 0 ? 1 0)) ^2000))   ; samples across the first second
    s2 (wade-song-new (jug 0) (wheel 7))
-   _ (: (go n) (0 < n ? (wade-song-feed s2, go (n - 1))) (go 300))
- (test (#out = 4 * song-chunk * 300) (2 <= s 'struck <= 20) (0 < s 'gong)
-       (#slendro = 5) (abs (slendro 4 - 9.6) < 0.001) (slendro 0 = 0.0)
-       (100 < loud) (s 'struck = s2 'struck)))            ; ..and the same seed strikes the same
+   ((: (go n) (0 < n ? (wade-song-feed s2, go (n - 1))) (go 300)),
+    test (#out = 4 * song-chunk * 300) (2 <= s 'struck <= 20) (0 < s 'gong)
+         (#slendro = 5) (abs (slendro 4 - 9.6) < 0.001) (slendro 0 = 0.0)
+         (100 < loud) (s 'struck = s2 'struck)))            ; ..and the same seed strikes the same
 
 (test_fin (),
  puts "wade: ok -- the moon turns, the banks repeat, a step rings, the mirror keeps the sky, the moon comes down to a lamppost, the words show on the way, and the chimes sound\n")
