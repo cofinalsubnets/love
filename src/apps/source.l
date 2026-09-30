@@ -196,18 +196,17 @@
    ; which this machine cannot do for another ISA. the egg carries its source and the dist
    ; roster, so `love bake` on the target lays the crew from them (src/love/main.c), the same
    ; bytes a native `make dist` lays.
-   (seed-cross root xa dst)
-    (: made (root + "/out/x-" + (show (nom xa)) + "/love")
-       e (copyfile made dst)
-       _ (e < 0 ? (src-die ("can't write " + dst)))
-       _ (chmod dst 493)
-       out? (src-lift dst)
-       _ (puts (";; laid " + dst + " -- a raw egg for " + xa + ". on that machine\n"
-                + ";; `love bake` lays its crew from the source it carries.\n"
-                + (out? ? ";; carried out of the machine. the x bit does not travel: chmod +x it there.\n" "")
-                + ";; no fixpoint claimed here: a cross lay cannot BE this binary --\n"
-                + ";; `love seed` on the " + xa + " machine proves it.\n"))
-       0)
+   (seed-cross root xa dst) (:- 0
+    made (root + "/out/x-" + (show (nom xa)) + "/love")
+    e (copyfile made dst)
+    _ (e < 0 ? (src-die ("can't write " + dst)))
+    _ (chmod dst 493)
+    out? (src-lift dst)
+    _ (puts (";; laid " + dst + " -- a raw egg for " + xa + ". on that machine\n"
+             + ";; `love bake` lays its crew from the source it carries.\n"
+             + (out? ? ";; carried out of the machine. the x bit does not travel: chmod +x it there.\n" "")
+             + ";; no fixpoint claimed here: a cross lay cannot BE this binary --\n"
+             + ";; `love seed` on the " + xa + " machine proves it.\n")))
 
    ; the wait runs in a fresh process. src-lay's inflate leaves ~200 MB of heap the parent
    ; would otherwise hold through the whole build, and no collection gives it back -- free
@@ -400,8 +399,8 @@
              (? (hot? h) (: s (slurp h) _ (close h) s)
                 (src-die "can't read this binary")))
        m (kern-b16 pie 18)
-       arch (? (m = 62) "x64" (m = 183) "a64" (m = 243) "rv64"
-               (src-die "no boot door for this machine"))
+       arch (m @ 62 "x64" 183 "a64" 243 "rv64"
+             (src-die "no boot door for this machine"))
        gz (source-gz "x")
        _ (string? gz ? 0 (src-die "this love carries no source"))
        u (gz-unzip gz)
@@ -429,7 +428,7 @@
             + "(: kb (peep (cite 'verbs 'tab) 'kern-in 0)"
             + "   bb (string (cask (lay-boot-bytes (peep kb 'arch 0))))"
             + "   (kproject (peep kb 'pie 0) bb (peep kb 'out 0) (peep kb 'arch 0)))")
-       _ (reads (tap ((: (g i) (? (i < #cat) (peep cat i 0 . g (1 + i)))) 0)))
+       _ (reads (tap ((: (g i) (i < #cat ? (peep cat i 0 . g (1 + i)))) 0)))
        _ (pull vt 'kern-in 0)
        _ (puts (";; wrote " + out + " (" + arch + ")\n"))
        0)
@@ -511,13 +510,12 @@
        {'home home 'bin bin 'dst dst 'me me 'new new 'mine mine 'theirs theirs 'verdict vd
         'lay (? lay 'lay 'keep) 'tools (map tool nest-tools) 'lux lux 'luxact luxact})
    ; the verdict, said
-   (nest-verdict pl)
-    (: v (pl 'verdict)
-       (? (v = 'fresh) "the nest has no love yet"
-          (v = 'older) "the nest's love is older"
-          (v = 'same) "the nest's love is this very build"
-          (v = 'twin) "the nest's love has this stamp but other bytes"
-          "the nest's love is newer"))
+   (nest-verdict pl) (pl 'verdict @
+    'fresh "the nest has no love yet"
+    'older "the nest's love is older"
+    'same "the nest's love is this very build"
+    'twin "the nest's love has this stamp but other bytes"
+    "the nest's love is newer")
    ; a tool's line: what it is, and what it becomes
    (nest-tool-line pl t)
     (: nm (t 'nm) was (t 'was) pad (fill1 8 nm)
@@ -536,11 +534,9 @@
      + nest-lux-lines pl)
    ; lux follows the love that stays: written only when that is this build
    (nest-ours? pl) (pl 'lay = 'lay || pl 'verdict = 'same)
-   (nest-lux-lines pl)
-    (: a (pl 'luxact)
-       (? (a = 'lay) [("  lux      " + (? (nest-ours? pl) "written from this build" "kept, beside the nest's love"))]
-          (a = 'keep) ["  lux      this build's"]
-          ()))
+   (nest-lux-lines pl) (pl 'luxact @
+    'lay [("  lux      " + (? (nest-ours? pl) "written from this build" "kept, beside the nest's love"))]
+    'keep ["  lux      this build's"])
    ; ~/.local/bin is already on PATH where ~/.love/bin is not; a name there that is not
    ; ours already is left alone
    (nest-compat home bin nm)
@@ -563,7 +559,7 @@
                   e (rename tmp dst)
                   _ (? !e 0 (unlink tmp, src-die ("nest: cannot rename over " + dst)))
                   [("~/.love/bin/love is now " + nest-when (pl 'mine)
-                    + (? (pl 'verdict = 'fresh) "" (", was " + nest-when (pl 'theirs))))])
+                    + (pl 'verdict @ 'fresh "" (", was " + nest-when (pl 'theirs))))])
                ())
        ; a link to love wants a love to point at
        there (two? (stat dst))

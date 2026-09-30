@@ -42,7 +42,7 @@
  w-keep     "the nest keeps its love"
  ; the opening sign's title, read when the floor opens rather than at the bake
  (open-ttl _) (: u (getenv "USER" || getenv "LOGNAME")
-                 (? (string? u && 0 < #u) (host-name () @ h (u + "@" + h) u) "the nest"))
+                 (? (string? u && 0 < #u) (: h (host-name ()) (? h (u + "@" + h) u)) "the nest"))
  ; the host's short name, off uname(2)
  (host-name _) (uname () @ (_ . h . _) (: k (findsub h ".") (? (#h < 1) () (k < 0) h (snip h 0 k))) ())
  open-foot '(""

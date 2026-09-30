@@ -323,14 +323,14 @@
    ph (dark ? (g 'fr // 9) 0)
    kept (g 'kept)
    (held? e) (tablet? e && e 'k = bk && (!(e 'starry) || e 'ph = ph))
-   (entry y) (: e (peep kept y ())
+   (entry y) (: e (kept y)
      (? (held? e) e
-        (: cs (base < y ? () (map (\ x (sky x y (x + c * y))) (jot c)))
-           e2 {'k bk 'ph ph 'starry (foldl (\ a cl (a || cl 1 = 230)) 0 cs) 's ()
+        (: cs (base < y ? () (map (x \ sky x y (x + c * y)) ^c))
+           e2 {'k bk 'ph ph 'starry (foldl (a \ cl \ a || cl 1 = 230) 0 cs) 's ()
                'cells (base < y ? () (top-tray [c] cs))}
            (pin kept y e2, e2))))
    ; a cell: on the dirt its own; a blade's, with the sky's ground where it asks; the sky's
-   (cell x y cells) (: i (x + c * y) o (peep ov i ())
+   (cell x y cells) (: i (x + c * y) o (ov i)
      (? (base < y) (dirt-cell x y i)
         (two? o) [(o 0) (o 1) (o 2 < 0 ? (peep cells x () 2) (o 2))]
         (peep cells x ())))
@@ -345,20 +345,19 @@
    (line y) (: e (entry y)
      (? (peep ys y 0) (paint y (e 'cells))
         (string? (e 's)) (e 's)
-        (: s (paint y (e 'cells)) (pin e 's s, s))))
+        (paint y (e 'cells) @ s (pin e 's s, s))))
    ; the bar a column short of the screen, so a wrapping console never scrolls the
    ; field -- and its erase falls on that spare column, where it costs nothing
-   ((esc + "[0m" + fit (grass-hud g) c + "\r\n")
-    . (cat (map line (map (+ 1) (jot (r - 1))))
-           [(esc + "[0m" + fit (grass-bar g) (c - 1) + esc + "[K")])))
- (grass-frame g) (: j (jug 0) _ (say j (esc + "[H")) _ (each (grass-rows g) (s \ say j s)) (slurp j))
+   (esc + "[0m" + fit (grass-hud g) c + "\r\n"
+    . map line (map (+ 1) ^(r - 1)) + [(esc + "[0m" + fit (grass-bar g) (c - 1) + esc + "[K")]))
+ (grass-frame g) (: j (jug 0) _ (say j (esc + "[H")) _ (each (grass-rows g) (say j)) (slurp j))
  ; the rows that changed since the last paint, each under its cursor move; the first
  ; paint, and one after a sign stood over the screen, is the whole frame
  (grass-paint g) (: rs (grass-rows g) j (jug 0)
    last (: t (g 'last) (tablet? t ? t (pin g 'last {}, g 'last)))
    (go l i) (? (two? l)
                (: s <l
-                  _ (? (s = peep last i ()) () (say j (esc + "[" + show (i + 1) + ";1H" + s), pin last i s))
+                  _ (s != last i ? (say j (esc + "[" + show (i + 1) + ";1H" + s), pin last i s))
                   (go >l (i + 1))))
    _ (go rs 0)
    (slurp j))
@@ -373,8 +372,8 @@
    (l + (gap (t \ t + " ") "") + r))
  (grass-bar g) (? (g 'me 'hy < 12.0) ("you are wilting  " + g 'msg)
                   (g 'msg || "dance: arrows or hjkl   q leaves"))
- (grass-final g) (g 'over = 'done ? ("seven days: " + show (g 'pts) + " points, " + fx1 (g 'me 'ht) + "inches tall")
-                                    ("you left the field on day " + show (1 + grass-day g)))
+ (grass-final g) (g 'over @ 'done ("seven days: " + show (g 'pts) + " points, " + fx1 (g 'me 'ht) + "inches tall")
+                                  ("you left the field on day " + show (1 + grass-day g)))
 
  ; --- the song: a music box out the horn, wind chimes between its plays ---------------
  (grass-tune ls) (score-tune (filter (b \ !(b 'err)) (score-parse ls)) song-cps)
@@ -404,7 +403,7 @@
  (grass-song-feed s wind)
   (: spc (int (song-rate / song-cps))
      (sched _) (? (s 'mode = 'song && s 'next <= s 'fpos + song-chunk && s 'cyc < s 'bars)
-                  (pin s 'vs (cat (s 'vs) (song-voices s (s 'cyc) (s 'next) spc)),
+                  (pin s 'vs (s 'vs + song-voices s (s 'cyc) (s 'next) spc),
                    pins s 'cyc (s 'cyc + 1) 'next (s 'next + spc),
                  sched ()))
      _ (sched ())
@@ -419,7 +418,7 @@
              nt (s 'set (roll sb #(s 'set)))
              v (mkvoice at {'s "chime" 'note nt 'gain (0.1 + roll sb 25 / 100.0)
                              'pan (roll sb 100 / 100.0) 'legato chime-ring} song-rate)
-             (pin s 'vs (cat (s 'vs) [[at v]]))))
+             (pin s 'vs (s 'vs + [[at v]]))))
      live (filter (p \ p 1 0 >= base) (s 'vs))          ; not finished
      now (filter (p \ p 0 < base + song-chunk) live)    ; ..and already begun
      vs (map (p \ p 1) now)
@@ -456,13 +455,13 @@
    ; the clock and not by calls -- and the lead follows it
    pace (pacer ())
    (feed _) (: l (song-lead-of (pace! pace))
-               (? sng (song-fill hn l (\ _ (grass-song-feed sng (g 'wind)))) ()))
+               (? sng (song-fill hn l (_ \ grass-song-feed sng (g 'wind))) ()))
    (beat _) (feed (), rest 5)                           ; a sign's idle: the lead, then a breath
-   (cue _) (? (sng && g 'cue) (grass-song-cue sng, pin g 'cue 0))
+   (cue _) (sng && g 'cue ? (grass-song-cue sng, pin g 'cue 0))
    ; tick n is owed at t0 + n ticks. behind by a whole tick, the frame is skipped and the
    ; tick alone catches up; behind by many (a sign stood, the tab slept) the clock is
    ; re-based instead, so no stretch of the week runs in fast forward
-   (swim n) (? (g 'over) ()
+   (swim n) (g 'over ? ()
      (: _ (feed ())
         due (g 't0 + n * tick-ms)
         late (clock 0 - due)
