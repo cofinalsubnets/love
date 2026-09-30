@@ -394,7 +394,7 @@ static lvm(lvm_please) {
  Sp[0] = putcharm((intptr_t) g->n_gc);
  Ip += 1; ai_musttail return Continue(); }
 
-// (gauge 0) -> a rank-1 Z array of VM stats (full machine words, not 62-bit fixnums):
+// (gauge 0) -> a list of sixteen VM stats, so a caller can match it with @:
 //   [0] len       pool size (words)
 //   [1] heap      words used from base (core + live heap)
 //   [2] stack     stack height (words)
@@ -414,36 +414,36 @@ static lvm(lvm_please) {
 // derive: mortality = (n_seen - n_evac)/n_seen ; copy-amp = n_evac/max_heap
 static lvm(lvm_gauge) {
  enum { N = 16 };
- uintptr_t const bytes = tray_bytes(ai_Z, 1, N);
- Have(b2w(bytes));
- struct ai_tray *v = (struct ai_tray*) Hp;
- Hp += b2w(bytes);
- ini_tray(v, ai_Z, 1);
- v->shape[0] = N;
- tray_put_int(v, 0, (intptr_t) g->len);
- tray_put_int(v, 1, (intptr_t) (Hp - ptr(g)));
- tray_put_int(v, 2, (intptr_t) (ptr(g) + g->len - Sp));
- tray_put_int(v, 3, (intptr_t) g->n_gc);
- tray_put_int(v, 4, (intptr_t) g->max_len);
- tray_put_int(v, 5, (intptr_t) g->max_heap);
- tray_put_int(v, 6, (intptr_t) g->n_seen);
- tray_put_int(v, 7, (intptr_t) g->n_evac);
- tray_put_int(v, 9, (intptr_t) g->rem_miss);
- tray_put_int(v, 10, (intptr_t) g->rem_hi);
- tray_put_int(v, 11, (intptr_t) g->n_minor);
- tray_put_int(v, 8, (intptr_t) (g->major_hp - g->major_base));            // words live in the major pool
- tray_put_int(v, 12, (intptr_t) (2 * g->major_len));                         // major pool capacity (both halves), words
- tray_put_int(v, 13, (intptr_t) g->n_resize);
- tray_put_int(v, 14, (intptr_t) g->minor_hi);
- tray_put_int(v, 15, (intptr_t) g->major_hi);
- ai_musttail return Answer(word(v)); }
+ Have(N * Width(struct ai_chain));
+ struct ai_chain *c = (struct ai_chain*) Hp;
+ Hp += N * Width(struct ai_chain);
+ // cell i holds stat i and links to cell i+1, the last to ()
+ #define Gs(i, v) ini_chain(c + (i), putcharm((intptr_t) (v)), (i) + 1 < N ? (intptr_t) word(c + (i) + 1) : (intptr_t) ZeroPoint)
+ Gs(0, g->len);
+ Gs(1, Hp - ptr(g));
+ Gs(2, ptr(g) + g->len - Sp);
+ Gs(3, g->n_gc);
+ Gs(4, g->max_len);
+ Gs(5, g->max_heap);
+ Gs(6, g->n_seen);
+ Gs(7, g->n_evac);
+ Gs(8, g->major_hp - g->major_base);                // words live in the major pool
+ Gs(9, g->rem_miss);
+ Gs(10, g->rem_hi);
+ Gs(11, g->n_minor);
+ Gs(12, 2 * g->major_len);                          // major pool capacity (both halves), words
+ Gs(13, g->n_resize);
+ Gs(14, g->minor_hi);
+ Gs(15, g->major_hi);
+ #undef Gs
+ ai_musttail return Answer(word(c)); }
 
-// (tune v) -> the four live GC knobs as a rank-1 Z array, in words:
+// (tune v) -> the four live GC knobs as a list, in words:
 //   [0] budget  total footprint cap (minor + 2*major); 0 = unbounded (appel's rule)
 //   [1] minor0  the nursery floor every resize clamps up to
 //   [2] major0  the major pool's grow/shrink step (never 0: it divides)
 //   [3] ratio   copy-overhead setpoint -- the nursery grows while copied/allocated tops 1/ratio
-// (tune ()) reads; a rank-1 4-array writes and answers what it replaced, so a probe
+// (tune ()) reads; a list of four numbers writes and answers what it replaced, so a probe
 // can put the knobs back. seeded at ai_ini from ai_minor0/ai_major0/ai_gc_ratio.
 // a knob lands at the next collection -- tightening budget frees nothing until then,
 // so pair it with (please 1). a wrong shape is a silent no-op answering the current
@@ -451,27 +451,27 @@ static lvm(lvm_gauge) {
 // does not carry them: a woken image tunes again (host's LOVE_BUDGET_MB does exactly that).
 static lvm(lvm_tune) {
  enum { N = 4 };
- uintptr_t const bytes = tray_bytes(ai_Z, 1, N);
- Have(b2w(bytes));
+ Have(N * Width(struct ai_chain));
  word x = Sp[0];                             // read post-Have: a collection forwards the operand
- struct ai_tray *v = (struct ai_tray*) Hp;
- Hp += b2w(bytes);
- ini_tray(v, ai_Z, 1);
- v->shape[0] = N;
- tray_put_int(v, 0, (intptr_t) g->budget);
- tray_put_int(v, 1, (intptr_t) g->minor0);
- tray_put_int(v, 2, (intptr_t) g->major0);
- tray_put_int(v, 3, (intptr_t) g->ratio);
- if (galaxyp(x) && tray(x)->rank == 1 && tray(x)->shape[0] == N) {
-  struct ai_tray *w = tray(x);
-  intptr_t b = tray_get_int(w, 0), mi = tray_get_int(w, 1),
-           ma = tray_get_int(w, 2), ra = tray_get_int(w, 3);
+ struct ai_chain *c = (struct ai_chain*) Hp;
+ Hp += N * Width(struct ai_chain);
+ #define Ts(i, v) ini_chain(c + (i), putcharm((intptr_t) (v)), (i) + 1 < N ? (intptr_t) word(c + (i) + 1) : (intptr_t) ZeroPoint)
+ Ts(0, g->budget);
+ Ts(1, g->minor0);
+ Ts(2, g->major0);
+ Ts(3, g->ratio);
+ #undef Ts
+ // exactly four numbers, else the knobs stay as they are
+ word x1 = chainp(x) ? B(x) : ZeroPoint, x2 = chainp(x1) ? B(x1) : ZeroPoint,
+      x3 = chainp(x2) ? B(x2) : ZeroPoint;
+ if (chainp(x3) && B(x3) == ZeroPoint && charmp(A(x)) && charmp(A(x1)) && charmp(A(x2)) && charmp(A(x3))) {
+  intptr_t b = getcharm(A(x)), mi = getcharm(A(x1)), ma = getcharm(A(x2)), ra = getcharm(A(x3));
   // a pool knob no heap could hold is refused, as a 0 is: the sizers scale them
   g->budget = b > 0 ? (uintptr_t) b : 0;     // <= 0 is the unbounded spelling, not a refusal
   if (mi > 0 && (uintptr_t) mi <= ai_words_max / 4) g->minor0 = (uintptr_t) mi;   // a 0 floor would let the nursery vanish
   if (ma > 0 && (uintptr_t) ma <= ai_words_max / 4) g->major0 = (uintptr_t) ma;   // the step divides
   if (ra > 0 && ra <= 1024) g->ratio = (uintptr_t) ra; }   // 0 would never grow, a vast one overflows the grow test
- ai_musttail return Answer(word(v)); }
+ ai_musttail return Answer(word(c)); }
 
 // (apof x): x's kind pointer (cell[0]) as a fixnum, 0 for a fixnum/immediate. the string-lane glaze
 // reads the kind of a reference string at codegen time and emits a `cmp [s], kind; jne deopt` type guard.

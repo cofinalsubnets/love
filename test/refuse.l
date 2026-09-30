@@ -28,7 +28,7 @@
  ("abab" = "ab" * 2)
 
  ; a pool knob no heap holds is refused, the rest of the tune still lands
- (: _ (tune (star-tray [4] [(peep rf-knobs 0 0) rf-huge rf-huge 1000000])) now (tune ())
+ (: _ (tune [(peep rf-knobs 0 0) rf-huge rf-huge 1000000]) now (tune ())
     (: (same k) (peep rf-knobs k 0 = peep now k 0) (same 1 && same 2 && same 3)))
  (: _ (please 1) (1000 = tally (map (+ 1) (jot 1000))))
 

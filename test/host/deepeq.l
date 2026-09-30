@@ -17,7 +17,7 @@
 ;             gauge[8], the live set, so it holds as the image's weight moves
 
 (: (spine n acc) (n < 1 ? acc (spine (n - 1) (. acc 1)))    ; a left spine: n levels of car
-   knobs (tune @(0 16384 65536 24))              ; the floor, the step, the ratio; budget open
+   knobs (tune [0 16384 65536 24])              ; the floor, the step, the ratio; budget open
    _ (please 1)                                  ; ..a major, so the count below is the live one
    live (peep (gauge 0) 8 0)                     ; words the major pool holds live
    ; appel hands the nursery (budget - 2*live)/4, so a budget at twice live leaves it

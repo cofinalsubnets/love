@@ -12,7 +12,7 @@
    ; the law wants that collection, so it sorts under a budget tight enough to force one
    ; (tune's units are words; the knobs are put back before anything else reads them).
    k0 (tune ())
-   _ (tune @(1048576 8192 65536 24))
+   _ (tune [1048576 8192 65536 24])
    tight (sortby (\ a b ([a b (show a)], a < b)) l)
    _ (tune k0)
  (test
