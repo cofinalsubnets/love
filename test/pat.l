@@ -62,6 +62,40 @@
  ('fits = (@ '(lam x b j k) (['lam a b] + _) 'fits 'no))
  ('no = (@ '(lam x) (['lam a b] + _) 'fits 'no))
  ('exact = (@ '(lam x b) ['lam a b] 'exact 'no)) ('no = (@ '(lam x b j) ['lam a b] 'exact 'no))
+ ; --- + with a string literal among its pieces: the string split. a literal or a pin stands
+ ; exactly where it is written, a free piece takes what is left
+ ("world" = (@ "hello world" ("hello " + t) t 'no))       ; a prefix
+ ('no = (@ "help" ("hello " + t) t 'no))
+ ("pat" = (@ "pat.l" (b + ".l") b 'no))                   ; a suffix
+ ('no = (@ "pat.c" (b + ".l") b 'no))
+ ("abc" = (@ "abc" (s + "") s 'no))                       ; (s + "") is the string guard
+ ("" = (@ "" (s + "") s 'no))
+ ('no = (@ '(97 98) (s + "") s 'no))                      ; ..a charlist is no string
+ ('no = (@ 5 (s + "") s 'no))
+ ('exact = (@ "ab" ("a" + "b") 'exact 'no))               ; anchors alone fit exactly
+ ('no = (@ "abc" ("a" + "b") 'exact 'no))
+ ("" = (@ "abba" ("ab" + t + "ba") t 'no))                ; both ends
+ ('no = (@ "aba" ("ab" + t + "ba") t 'no))                ; ..and they may not overlap
+ ; between two free pieces a needle is found at its first occurrence
+ ('("a" "b=c") = (@ "a=b=c" (k + "=" + v) [k v] 'no))
+ ('("" "x") = (@ "=x" (k + "=" + v) [k v] 'no))
+ ('no = (@ "abc" (k + "=" + v) [k v] 'no))
+ ('("usr" "bin") = (@ "/usr/bin/" ("/" + a + "/" + b + "/") [a b] 'no))
+ ('no = (@ "/usr/bin" ("/" + a + "/" + b + "/") [a b] 'no))
+ ('("k" "v") = (@ "k: v" (a + ":" + " " + b) [a b] 'no))  ; ..a run of anchors is one needle
+ ; a piece is a pattern like any other
+ ("12" = (: x "v" (@ "v12" (^x + n + "") n 'no)))           ; a pin anchors, read at match time
+ ('no = (: x 5 (@ "v12" (^x + n + "") n 'no)))              ; ..and fits only a string
+ ('form = (: x "v" (@ '(+ "v" 1) (^x + n) 'form 'no)))      ; ..but a literal is what makes a split
+ ("12" = (@ "v12" ("v" + (n && #n < 3)) n 'no))             ; a guard on a piece
+ ('no = (@ "v123" ("v" + (n && #n < 3)) n 'no))
+ ('same = (@ "x/x" (a + "/" + a) 'same 'diff))              ; a repeated nom, non-linearly
+ ('diff = (@ "x/y" (a + "/" + a) 'same 'diff))
+ ('lisp = (@ "a.lisp" ((_ + ".l") || (_ + ".lisp")) 'lisp 'other))
+ ; with no literal among the pieces, + is what it was: a bracket splits a list, else the form
+ ('no = (@ "xy.l" (a + b + ".l") 'split 'no))                ; ..nor when two free pieces meet
+ ('form = (@ '(+ 1 2) (a + b) 'form 'no))
+ ('form = (@ '(+ n 1) (a + 1) 'form 'no))
  ; --- a map: keys are expressions, values are patterns, the match is by subset
  (9 = (@ {'f 9} {'f x} x 0))
  (0 = (@ {'g 9} {'f x} x 0))
