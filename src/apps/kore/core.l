@@ -991,6 +991,9 @@
              (go k) (? (n <= k) k (t k < 33) k (go (k + 1)))
              e (go 0)
              (e @ 0 d (snip t 0 e)))))
+   ; one of uname(2)'s five, by index (1 the host, 2 the release, 3 the version), or the
+   ; default -- the kernel's own answer, where a proc file is linux's alone
+   (u-uts i d) (: u (uname ()) (? (two? u) (: s (u i) (0 < #s ? s d)) d))
    ; the machine is love-arch respelled, and the prel owns the respelling (arch-uname):
    ; uname says the world's word for this ISA where love-arch says ours.
    (u-mach _) (: m (arch-mach love-arch) (string? m ? m (string love-arch)))
@@ -1006,8 +1009,6 @@
        s (? (nom? n) (os-uname n) ())
        (? (string? s) s (u-1line "/proc/sys/kernel/ostype" "unknown")))
    (u-join ws) (? (atom? ws) "" (atom? >ws) <ws (<ws + " " + u-join >ws))
-   ; a proc file's whole first line, spaces and all, or the default
-   (u-line p d) (: r (uread p) (? (atom? r) d (: l (lines <>r) (two? l && 0 < #<l ? <l d))))
    ; posix's letters, which cluster (-srm); -a is all five, in posix's order
    (uname-main as)
     (: fo (uflags "uname" as () "amnrsv")
@@ -1016,9 +1017,9 @@
        any (t 97 || t 109 || t 110 || t 114 || t 115 || t 118)
        (want c) (t 97 || t c || (c = 115 && !any))
        ws ((? (want 115) [(u-os ())] ())
-           + (? (want 110) [(u-1line "/proc/sys/kernel/hostname" "unknown")] ())
-           + (? (want 114) [(u-1line "/proc/sys/kernel/osrelease" "unknown")] ())
-           + (? (want 118) [(u-line "/proc/sys/kernel/version" "unknown")] ())
+           + (? (want 110) [(u-uts 1 "unknown")] ())
+           + (? (want 114) [(u-uts 2 "unknown")] ())
+           + (? (want 118) [(u-uts 3 "unknown")] ())
            + (? (want 109) [(u-mach ())] ()))
        (say out (u-join ws), put out 10, flush out, 0))
 
