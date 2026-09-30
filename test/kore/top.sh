@@ -1,5 +1,5 @@
 #!/bin/sh
-# test/kore/top.sh -- top: the header block, a table, a pid we hold, and the face on a pty
+# test/kore/top.sh -- top: the header block, a table, a pid we hold, and both faces on a pty
 . "$(dirname "$0")/common.sh"
 
 # every figure here is a clock and the table moves between two reads, so nothing
@@ -31,8 +31,8 @@ korerun top -b -n 2 > "$o" 2>&1 || fail "kore top -b -n 2"
 korerun top -Z > "$o" 2>&1
 [ $? -eq 2 ] || { cat "$o"; fail "kore top -Z: not 2"; }
 echo "kore: top (the header block, a table, a pid we hold, -p, -n 2, the refusal) ok"
-# ..and the SCREEN face, which needs a terminal of its own
-echo "TOP test/host/top.l (the face on a pty)"
+# ..and the SCREEN faces, plain and rich, which need a terminal of their own
+echo "TOP test/host/top.l (both faces on a pty)"
 cat test/00-init.l test/host/top.l | LOVEBIN=$K "$m" > "$o" 2>&1
 r=$?
 { [ $r -eq 0 ] && grep -q "test/host/top:" "$o"; } || { cat "$o"; fail "kore top on a pty (exit $r)"; }
