@@ -18,5 +18,4 @@
   (test (nom? (connect ['unix "/tmp"])))                             ; a directory, not a socket
   (test ('badarg = connect ['unix 7]))                           ; not a string
   (test_fin ())
-  (say err "lux: ok\n")
 ) 0)
