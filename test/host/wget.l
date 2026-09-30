@@ -19,8 +19,9 @@
    ; a 70000-byte file: bigger than one socket gulp, so the read runs to the peer's close
    blob (string (map (\ i (i & 255)) ^70000))
    _ (: p (open (sroot + "/blob.bin") "w") _ (say p blob) (close p))
-   port 7434
-   l (listen port)
+   pl (test-listen 0)
+   port <pl
+   l (pl 1)
    srv (twirl (\ _ ((: (g k) (: _ (await l)
                                 c (accept l)
                                 _ (hot? c ? ((cite 'kiosko 'serve1) sroot () c,
@@ -39,9 +40,10 @@
    page "<p>the sub page</p>\n"
    _ (: p (open (sroot + "/sub/index.html") "w") _ (say p page) (close p))
    love <cmdline
-   hp 7435
+   hp (test-free 0)
    hs (tether [love "kore" "httpd" "-p" (show hp) "-h" sroot])
-   _ (rest 400)
+   _ (test-up hp)
+   none (test-free 0)                      ; a port of ours, its listener gone
    hbase ("http://127.0.0.1:" + show hp)
    (wo args) (hark ([love "kore" "wget"] + args))
    (wq args) (hark ["sh" "-c" (foldl (a \ w \ a + " '" + w + "'") ("'" + love + "' kore wget") args + " 2>/dev/null")])
@@ -49,7 +51,7 @@
    sq (wo ["-q" "-O" "-" (hbase + "/blob.bin")])
    sr (wo ["-q" "-O" "-" (hbase + "/sub")])                           ; 301 to /sub/, its index
    s404 (wq ["-O" "-" (hbase + "/absent.bin")])                    ; its complaint is err's, dropped
-   sdead (wq ["-O" "-" "http://127.0.0.1:7436/x"])                   ; nobody listens there
+   sdead (wq ["-O" "-" ("http://127.0.0.1:" + show none + "/x")])      ; nobody listens there
    _ (still <hs 15)
    (reap pid) (: g (gather pid) (? (two? g || nom? g) g (rest 2, reap pid)))
    _ (reap <hs)
@@ -79,7 +81,7 @@
    (osh c) (hark ["sh" "-c" ("exec 2>/dev/null; cd " + odir + " && " + c)])
    (srv port) (: p (tether ["openssl" "s_server" "-quiet" "-tls1_3" "-naccept" "1" "-www" "-accept" ("127.0.0.1:" + show port)
                             "-key" (odir + "/leaf.key") "-cert" (odir + "/leaf.pem")])
-                 _ (rest 500) p)
+                 p)
    (reap p) (: _ (still <p 15) (: g (gather <p) (? (two? g || nom? g) g (rest 2, reap p))))
    cf0 (getenv "SSL_CERT_FILE") home0 (getenv "HOME")
    _ (? os? (: _ (hark ["mkdir" "-p" (odir + "/.love")])
@@ -90,21 +92,23 @@
                      + " && openssl x509 -req -in leaf.csr -CA root.pem -CAkey root.key -days 2 -extfile l.cnf -out leaf.pem")))
           0)
    (fetch port as) (: p (srv port) o (odir + "/got" + show port)
-                      rc (W (as + ["-q" "-O" o ("https://127.0.0.1:" + show port + "/")]))
+                      ; 1 is refused: the server is not listening yet
+                      rc (test-until (\ r (r = 1)) (\ _ (W (as + ["-q" "-O" o ("https://127.0.0.1:" + show port + "/")]))))
                       _ (reap p)
                       [rc (: r (uread o) (? (two? r) <>r ""))])
    (has s x) (0 <= (cite 'kore 'wg-find) s x 0)
    _ (? os?
         (: _ (setenv "SSL_CERT_FILE" (odir + "/root.pem"))
-           a (fetch 7437 [])
+           a (fetch (test-free 0) [])
            _ (setenv "SSL_CERT_FILE" "/nonexistent/bundle.pem")
-           b (fetch 7438 [])
-           c (fetch 7439 ["--no-check-certificate"])
+           b (fetch (test-free 0) [])
+           c (fetch (test-free 0) ["--no-check-certificate"])
            spki (: r (hark ["sh" "-c" ("cd " + odir + " && openssl x509 -in leaf.pem -pubkey -noout | openssl pkey -pubin -outform DER | sha256sum")])
                    (snip >r 0 64))
            _ (setenv "HOME" odir)
-           _ (: q (open (odir + "/.love/tls_pins") "w") _ (say q ("127.0.0.1:7440 spki:" + spki + "\n")) (close q))
-           d (fetch 7440 [])
+           dp (test-free 0)
+           _ (: q (open (odir + "/.love/tls_pins") "w") _ (say q ("127.0.0.1:" + show dp + " spki:" + spki + "\n")) (close q))
+           d (fetch dp [])
            _ (setenv "HOME" (? (string? home0) home0 ""))
            _ (setenv "SSL_CERT_FILE" (? (string? cf0) cf0 ""))
            _ (hark ["rm" "-rf" odir])

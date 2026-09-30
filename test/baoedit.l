@@ -8,8 +8,7 @@
 ;
 ;   cat test/00-init.l test/baoedit.l | out/love
 ;
-; green dots = pass; the shell's banner/prompts + edraw's ansi redraws are noise
-; around them. Full interactive editing (real keystrokes, real tty) stays manual.
+; green dots = pass. Full interactive editing (real keystrokes, real tty) stays manual.
 
 ; (ed-keys l) = a sip over the byte list l -> an input port edraw reads keystroke by
 ; keystroke. event bytes: 13 = Enter; 4 = ^D; 127 = backspace; ESC [ D/C/H/F =
@@ -17,8 +16,9 @@
 ; eof = the sentinel edraw returns at ^D / port EOF: captured by reading it back
 ; off an empty port (the sentinel is bao-private now -- the editor no longer leaks
 ; its `eofsym` global, so we name it by what edraw produces, not by its binding).
-(: edraw (cite 'cli 'edraw)              ; the editor primitives ride the bao module now
-   edln (cite 'cli 'edln)
+; the editor paints stdout and asks the terminal questions: muted, so neither reaches it
+(: edraw (\ k p (test-mute (_ \ cite 'cli 'edraw k p)))
+   edln (\ k p h (test-mute (_ \ cite 'cli 'edln k p h)))
    edlay (cite 'cli 'edlay)
    (ed-keys l) (tap l)
    abc [97 98 99]
@@ -85,8 +85,6 @@
    _ (pin edgc 'on 0)
    (test ([0 8 0] = edlay 80 2 () (rev (bs fam)) () ())))                     ; off: wcwidth's six
 
-(test_fin ())
-(puts "baoedit: ok") (putc 10)
 
 ; the layout under the redraw: [row col endrow] of the cursor on a screen w wide, rows
 ; from the buffer's first. a line wraps at w; one ending on the margin leaves the
@@ -100,3 +98,5 @@
    ([1 0 1] = edlay 10 0 [()] () () ())           ; an empty line above is one row
    ([0 0 1] = edlay 10 0 () () () [^10])          ; a line below that fills its row
    ([0 0 2] = edlay 10 0 () () () [^11])))        ; ..and one that wraps
+
+(test_fin ())

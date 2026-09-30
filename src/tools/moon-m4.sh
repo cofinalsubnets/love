@@ -1,45 +1,26 @@
 #!/bin/sh
 # moon-m4.sh -- build GNU m4 1.4 with mooncc + moonlibc + the holo linker (no
-# gcc/glibc/ld) and prove it runs: the package's own check suite (57 checks
-# lifted from the m4 manual) green against our binary, plus a direct battery
-# (define/eval/divert/esyscmd through popen/format floats). The fourth
-# moon-userland rung, after bzip2, gzip and tar.
+# gcc/glibc/ld) and prove it runs: the package's own check suite (57 checks from the
+# m4 manual) and a direct battery (define/eval/divert/esyscmd through popen/format floats).
 #
-# m4's source is the one imported artifact. Point M4SRC at a configured
-# m4-1.4 tree (./configure already run, so config.h exists). Without one the
-# check skips (like moon-tar without TARSRC). To make one:
+# point M4SRC at a configured m4-1.4 tree (config.h exists), or let it find `m4-1.4*`
+# under dl/ then $MOONSRC (~/src when unset); a missing tree skips. to make one:
 #   curl -O https://ftp.gnu.org/gnu/m4/m4-1.4.tar.gz
 #   tar xzf m4-1.4.tar.gz && (cd m4-1.4 && ./configure)
 #   make moon-m4       M4SRC=$PWD/m4-1.4
 #   make moon-m4-a64 M4SRC=$PWD/m4-1.4
 #
-# the sources are cached, so none of that is needed twice: this looks for
-# `m4-1.4*` under dl/ and then under $moonsrc -- ~/src when that is unset --
-# so a bare `make moon-m4` finds a cached tree with no variable at all. An
-# explicit M4SRC= still outranks both, and a missing tree is a clean skip
-# rather than a failure, so this gate stays opt-in either way.
+# `moon-m4.sh a64` cross-compiles with `mooncc -t a64` and runs under qemu-aarch64,
+# skipping without it. config.h serves both targets: both are little-endian LP64, and
+# the answers that differ are the ones corrected by hand below. an a64 binary cannot
+# exec here, so the cross lane puts a one-line `m4` on PATH that runs qemu, and
+# check-them runs unmodified.
 #
-# two targets, one procedure (raw.sh's shape, as moon-lua.sh and moon-sqlite.sh
-# do it): `moon-m4.sh a64` cross-compiles the same sources with `mooncc -t
-# a64` and runs everything under qemu-aarch64, SKIPPING cleanly without it.
-# config.h is reused as configure wrote it, which is sound here and worth
-# saying why: both targets are little-endian LP64, and the answers that differ
-# between them are the ones the header already corrects by hand.
-#
-# the check suite needs a wrapper on the cross target. check-them is a shell
-# script that finds `m4` on PATH and execs it, and an a64 binary is not
-# executable here (no binfmt_misc registration for qemu). So the cross lane
-# puts a one-line `m4` script on PATH that execs qemu with the real binary --
-# the suite then runs completely unmodified, which is the point of running it.
-#
-# Nothing here needs gcc except the one-time ./configure probe that emits
-# config.h (the accepted precedent -- mooncc COMPILES every object). Two of
-# configure's answers describe glibc, not our target libc, so the build
-# corrects them in place (config.h is a generated file; this IS configuration):
-#   have_efgcvt  -- moonlibc has no ecvt/fcvt/gcvt; format.c's sprintf branch
-#                   is the right lane (and the better code).
+# gcc runs only in the one-time ./configure; mooncc compiles every object. two of
+# configure's answers describe glibc, so the build corrects config.h in place:
+#   have_efgcvt  -- moonlibc has no ecvt/fcvt/gcvt; format.c's sprintf branch serves.
 #   use_stackovf -- stack-overflow detection needs sigaltstack + sys/resource.h
-#                   headers we don't carry yet; a nicety, off.
+#                   headers we don't carry; off.
 set -e
 
 target=${1:-x64}

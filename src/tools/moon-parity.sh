@@ -1,40 +1,21 @@
 #!/bin/sh
-# moon-parity.sh -- one C feature per row, every mooncc target per column: which
-# lanes exist where. doc/misc/moon-c-gaps.md's parity table is this script's output,
-# and `moon-parity.sh check` holds the doc to it.
+# moon-parity.sh -- one C feature per row, every mooncc target per column: which lanes
+# exist where. doc/misc/moon-c-gaps.md's parity table is this script's output, and
+# `moon-parity.sh check` holds the doc to it. a lane x64 has and rv64 lacks is invisible
+# to a single-target sweep (moon-sweep.sh) and to gcc (moon-reject.sh).
 #
-# moon-sweep.sh measures one target against a real package; moon-reject.sh measures
-# the refusal surface against gcc. This measures the TARGETS AGAINST EACH OTHER,
-# which neither of those can see: a lane that x64 has and rv64 does not is
-# invisible to any single-target sweep, and invisible to gcc, because gcc has them
-# all. Cross-target drift is the failure this tree actually ships -- src/love/love.c compiles
-# everywhere, so the gaps live in the C that src/love/love.c never writes.
-#
-# THREE VERDICTS per cell, and the third is the interesting one:
+# three verdicts per cell:
 #   ok       -- an object came out, referencing nothing the probe did not declare.
-#               The lane is ours.
-#   rt.c     -- an object came out, and it CALLS OUT: the lane exists but lands in
-#               the compiler runtime, src/apps/moon/lib/rt.c. That is ours, and a
-#               separate object -- a link-time dependency, not a compile-time one,
-#               so only the object's symbols reveal it.
-#   —        -- refused. The cause is printed by `moon-parity.sh why`.
+#   rt.c     -- an object came out that calls into the compiler runtime,
+#               src/apps/moon/lib/rt.c: an undefined symbol the probe never declared,
+#               so libgcc spellings (__divti3, __muldc3) count as well as __aeabi_.
+#   —        -- refused; `moon-parity.sh why` prints the cause.
 #
-# The call-out test is "an undefined symbol the probe's own source never declared",
-# not a grep for __aeabi_ -- so it catches an x64 or rv64 lane reaching for
-# libgcc's own spellings (__divti3, __muldc3) as readily as arm's.
-#
-# NO FOREIGN TOOL: the symbols come from `kore nm -u`, which is holo's ELF reader
-# (src/love/holo/link.l's ld-syms) behind nm's surface -- one wake over every object the
-# sweep laid, not one readelf per cell. Everything this script needs, the tree built.
-#
-# A cell is a COMPILE, not a run. `ok` means the lane exists, never that it is
-# right -- test_cts and the cross gates are what say that. Read this table for the
-# SHAPE of the coverage and go elsewhere for its depth.
-#
-# thumb2 and thumb2sp get their own columns, and the reason is one row: thumb2sp
-# is ARMv7E-M with an SP-only FPU (the Playdate's STM32F746), so f64 softens to
-# __aeabi_* where thumb2's fpv5-d16 does it in hardware. A merged t32 column hides
-# exactly that, which is how the hand-written table got it wrong.
+# the symbols come from `kore nm -u` (holo's ELF reader), one wake over every object.
+# a cell is a compile, not a run: `ok` says the lane exists, not that it is right --
+# test_cts and the cross gates say that.
+# thumb2sp is its own column: its SP-only FPU (the Playdate's STM32F746) softens f64 to
+# __aeabi_* where thumb2's fpv5-d16 does it in hardware.
 #
 # usage: moon-parity.sh [table | check | why]
 #   table  (default) the markdown table, ready to paste into doc/misc/moon-c-gaps.md

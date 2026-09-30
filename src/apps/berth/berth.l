@@ -8,13 +8,10 @@
 ; sigwinch on the children for us). a resize lays each grid across (regrid), and a
 ; full-screen guest repaints on its sigwinch.
 ;
-; where the panes come from: src/apps/berth/wharf.l, and nothing about it is berth's. it is
-; a plan tree in and rectangles in cells out -- no nif, no pty, no framebuffer --
-; so the kernel console can lay its own panes with the same arithmetic. where the
-; paint comes from: src/apps/berth/limn.l, the same bargain one layer down -- a grid and an
-; origin in, escapes out, and it knows no more about a pty than wharf does. that
-; sharing is the point; berth is just the first seat to ask. what is left here is
-; which grid goes where, which is the only half berth actually owns.
+; the panes come from src/apps/berth/wharf.l (a plan tree in, rectangles in cells out),
+; the paint from src/apps/berth/limn.l (a grid and an origin in, escapes out); neither
+; knows a pty, so the kernel console lays and paints its own panes with them. berth
+; owns which grid goes where.
 ;
 ; C-a is the prefix, and the intercept sits in the key pump, below every guest:
 ;   C-a s / C-a v   split the focused berth, stacked or beside

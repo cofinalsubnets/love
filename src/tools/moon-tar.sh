@@ -1,39 +1,21 @@
 #!/bin/sh
 # moon-tar.sh -- build GNU tar 1.13 with mooncc + moonlibc + the holo linker (no
-# gcc/glibc/ld) and prove it RUNS: a cf/xf roundtrip byte-identical to the tree
-# it archived, a czf/xzf roundtrip (tar forks gzip through a pipe), and interop
-# with the system tar reading our archive. The third moon-userland rung
-#, after bzip2 and gzip.
+# gcc/glibc/ld) and prove it runs: a cf/xf roundtrip byte-identical to the tree it
+# archived, a czf/xzf roundtrip (tar forks gzip through a pipe), and the system tar
+# reading our archive. the system tar/gzip only verify, never build.
 #
-# tar's source is the one imported artifact. Point TARSRC at a CONFIGURED
-# tar-1.13 tree (./configure already run, so config.h exists). Without one the
-# check SKIPS (like test_raw_a64 without qemu). To make one:
+# point TARSRC at a configured tar-1.13 tree (config.h exists), or let it find
+# `tar-1.13*` under dl/ then $MOONSRC (~/src when unset); a missing tree skips.
 #   curl -O https://ftp.gnu.org/gnu/tar/tar-1.13.tar.gz
 #   tar xzf tar-1.13.tar.gz && cd tar-1.13
-#   cp /usr/share/automake-*/config.{sub,guess} .   # 1999 vintage: no x64
+#   cp /usr/share/automake-*/config.{sub,guess} .   # predates x86-64
 #   CC="gcc -std=gnu89" ./configure                 # its probes are implicit-int
 #   make moon-tar       TARSRC=$PWD/tar-1.13
 #   make moon-tar-a64 TARSRC=$PWD/tar-1.13
+# gcc runs only in that configure; mooncc compiles every object.
 #
-# THE SOURCES ARE CACHED, so none of that is needed twice: this looks for
-# `tar-1.13*` under dl/ and then under $MOONSRC -- ~/src when that is unset --
-# so a bare `make moon-tar` finds a cached tree with no variable at all. An
-# explicit TARSRC= still outranks both, and a missing tree is a clean SKIP
-# rather than a failure, so this gate stays opt-in either way.
-#
-# (Those two lines are about CONFIGURE, not about us: tar 1.13 predates x86-64,
-# and modern gcc makes the implicit-int `main(){return(0);}` of its probes a
-# hard error. mooncc compiles every actual source either way.)
-#
-# TWO TARGETS, one procedure (raw.sh's shape, as moon-lua/sqlite/m4 do it):
-# `moon-tar.sh a64` cross-compiles with `mooncc -t a64` and runs the
-# roundtrips under qemu-aarch64, SKIPPING cleanly without it. config.h is
-# reused as configure wrote it for the host -- sound here because both targets
-# are little-endian LP64.
-#
-# Nothing here needs gcc EXCEPT the one-time ./configure probe that emits
-# config.h (the accepted precedent -- mooncc COMPILES every object). The system
-# tar/gzip are used only to VERIFY our binary, never to build it.
+# `moon-tar.sh a64` cross-compiles with `mooncc -t a64` and runs under qemu-aarch64,
+# skipping without it. config.h serves both: both are little-endian LP64.
 set -e
 
 target=${1:-x64}

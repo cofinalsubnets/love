@@ -1,50 +1,16 @@
 #!/bin/sh
-# test/gate/osbox.sh -- the multi-OS gate: ONE default-lane x64 binary -- no
-# -os, born branded EI_OSABI=9 and
-# carrying the netbsd ident note -- answers EVERY kernel with the same text
-# and status. one script, one battery, a box per OS: `osbox.sh OUT LOVE0
-# freebsd|netbsd`. the legs: UV1 (entry, carry, sigsetjmp), UV2 (the whole
-# compat battery: open flags, stat, dirent, signals, fork), UV-net (the
-# socket family: sockaddr heads, sockopt names, msg flags, over loopback
-# TCP + UDP + unix, and SCM_RIGHTS fd-passing through sendmsg/recvmsg),
-# UV-sig (the signal perceive source: signalfd, or its ENOSYS falling to
-# kqueue's EVFILT_SIGNAL), UV-pty (the quartet through three per-kernel
-# shapes), and -- FBSD_SEED=1 / NBSD_SEED=1, minutes -- the trophy:
-# `love seed` ON THE BOX answers the tree's own bytes.
-# NOT here on purpose: termios proper (a gate that needs a real tty).
+# test/gate/osbox.sh -- the multi-OS gate: one default-lane x64 binary (no -os, branded
+# EI_OSABI=9, carrying the netbsd ident note) answers every kernel with the same text and
+# status. the legs: UV1 (entry, carry, sigsetjmp), UV2 (open flags, stat, dirent,
+# signals, fork), UV-net (sockaddr heads, sockopt names, msg flags over loopback tcp, udp,
+# unix, and SCM_RIGHTS), UV-sig (signalfd, or kqueue's EVFILT_SIGNAL on its ENOSYS),
+# UV-pty, and with FBSD_SEED=1 / NBSD_SEED=1 (minutes) `love seed` on the box answering
+# the tree's own bytes. termios proper needs a real tty and is not here.
 #
-# the box arrives by env: FBSD_SSH / NBSD_SSH is a command prefix ("ssh -p
-# 2222 -i key root@host"); without one the gate skips loudly, the house rule
-# for a gate whose instrument is not on this machine.
-#
-# conjuring a freebsd box (what gated this 2026-08-16): the BASIC-CLOUDINIT
-# qcow2 from download.freebsd.org/releases/VM-IMAGES/<rel>/amd64/Lat/, a
-# NoCloud seed iso (mkisofs -V cidata user-data meta-data: disable_root
-# false + an authorized key + PermitRootLogin prohibit-password), then
-#   qemu-system-x86_64 -enable-kvm -m 2048 -drive file=img.qcow2,if=virtio \
-#     -cdrom seed.iso -nic user,hostfwd=tcp:127.0.0.1:2222-:22 -display none
-# first boot runs freebsd-update; sshd answers a few minutes in.
-# a netbsd box (2026-08-18): the -live.img.gz from
-# cdn.netbsd.org/pub/NetBSD/NetBSD-<rel>/images/, gunzip + qemu-img resize,
-# boot the same qemu shape with -qmp; its console is VGA, so the one-time
-# setup (rc.conf sshd=YES dhcpcd=YES, the key, consdev=com0) types in by QMP
-# send-key, root with no password. sshd's default already takes keyed root.
-# TWO DIMENSIONS NOW: the OS and the ISA. `osbox.sh OUT LOVE0 freebsd a64`
-# runs the same battery against a freebsd/arm64 box (FBSD_ARM64_SSH), and the
-# LOCAL half of every comparison rides qemu-aarch64 -- same binary, same ISA,
-# two kernels, which is the claim. Without that emulator the a64 lane skips
-# loudly, exactly as a missing box does.
-# an arm64 freebsd box (2026-08-18): the aarch64 BASIC-CLOUDINIT qcow2 from the
-# same VM-IMAGES tree, booted by qemu-system-aarch64 -M virt -accel kvm on an
-# a64 host (a pi is native; TCG elsewhere is ~2x slower again). the disk
-# must be virtio-blk-PCI said explicitly -- `if=virtio' lands it on the MMIO bus,
-# which the edk2 firmware does not enumerate, and UEFI walks the whole PXE list
-# instead. edk2 is not packaged for arch-arm; the .fd is GUEST code, so a copy
-# from any host serves, and an empty 64M file is a fine varstore.
-# an arm64 netbsd box (2026-08-18, NBSD_ARM64_SSH): the evbarm-a64
-# arm64.img.gz from the same cdn tree, on the same edk2 shape as its freebsd
-# neighbour -- and it boots to a serial login, so the one-time setup types in
-# over -serial stdio rather than QMP.
+# the box arrives by env: FBSD_SSH, NBSD_SSH, FBSD_ARM64_SSH, NBSD_ARM64_SSH, each a
+# command prefix ("ssh -p 2222 -i key root@host"); without one the gate skips loudly.
+# on a64 the local half of each comparison runs under qemu-aarch64, and skips without it.
+# provisioning the boxes: doc/misc/osbox.md.
 # usage: osbox.sh OUTDIR LOVE0 freebsd|netbsd [x64|a64]
 set -u
 

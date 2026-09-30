@@ -1,42 +1,20 @@
 #!/bin/sh
 # moon-lua.sh -- build Lua 5.4 with mooncc + moonlibc + the holo linker (no
-# gcc/glibc/ld) and prove it RUNS: a battery over closures, strings, tables,
-# the math floor (am.c under the libc faces), integer/bitwise ops, pcall +
-# coroutines (setjmp/longjmp through sys.o's leaves), metatables, gc, os
-# time/date (gmtime/mktime/strftime), io, and load. The fifth moon-userland
-# rung, after bzip2, gzip, tar and m4 -- and the first
-# where EVERY package source compiles unpatched (35/35 after the paren-
-# declarator + braced-string-literal rungs).
+# gcc/glibc/ld) and prove it runs: a battery over closures, strings, tables, the
+# math floor (am.c under the libc faces), integer/bitwise ops, pcall + coroutines
+# (setjmp/longjmp through sys.o's leaves), metatables, gc, os time/date, io, and load.
+# every package source compiles unpatched.
 #
-# TWO TARGETS, one procedure (raw.sh's shape): `moon-lua.sh` builds the native
-# x86-64 lane, `moon-lua.sh a64` cross-compiles the same sources with
-# `mooncc -t a64` and runs the battery under qemu-aarch64. The cross lane
-# SKIPS cleanly without qemu, like test_raw_a64.
+# `moon-lua.sh a64` cross-compiles with `mooncc -t a64` and runs the battery under
+# qemu-aarch64, skipping without it. a 30k-line package reaches shapes the single-file
+# programs of test/cc do not (test/cc/110-param5.c came from lstrlib.c's prepstate).
 #
-# WHY A CROSS LANE. Every package rung here had been x64-only, and a 30k-line
-# package is a far wider net than the 110 single-file programs of test/cc: the
-# first a64 run found a miscompile that had survived both, and Lua found it
-# in the one way that is hard to notice -- string.match, string.gsub and
-# string.find-with-a-pattern all silently returned nil in an interpreter that
-# otherwise ran floats, coroutines and its whole battery correctly. The cause
-# is test/cc/110-param5.c's law (a 5th pointer parameter riding x4 collided
-# with the frame-base spelling); the shape that reaches it is a six-parameter
-# function whose 5th is a pointer, which is prepstate in lstrlib.c and is not
-# a thing anyone writes into a compiler test on purpose.
-#
-# Lua's source is the one imported artifact -- and it needs NO configure.
-# Point LUASRC at an extracted lua-5.4.x tree; without one the check SKIPS
-# (like moon-tar without TARSRC). To make one:
+# lua needs no configure. point LUASRC at an extracted lua-5.4.x tree, or let it find
+# `lua-5.4.*` under dl/ then $MOONSRC (~/src when unset); a missing tree skips.
 #   curl -O https://www.lua.org/ftp/lua-5.4.7.tar.gz
 #   tar xzf lua-5.4.7.tar.gz
 #   make moon-lua LUASRC=$PWD/lua-5.4.7
 #   make moon-lua-a64 LUASRC=$PWD/lua-5.4.7
-#
-# THE SOURCES ARE CACHED, so none of that is needed twice: this looks for
-# `lua-5.4.*` under dl/ and then under $MOONSRC -- ~/src when that is unset --
-# so a bare `make moon-lua` finds a cached tree with no variable at all. An
-# explicit LUASRC= still outranks both, and a missing tree is a clean SKIP
-# rather than a failure, so this gate stays opt-in either way.
 set -e
 
 target=${1:-x64}

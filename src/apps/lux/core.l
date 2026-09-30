@@ -69,7 +69,7 @@
    (wsmake cur board float vis) [cur board float vis]
    (wsknown? sh t) (any (p \ <p = t) (wsboard sh))
    (wsget sh t) (: p (assoc t (wsboard sh)) (two? p ? <>p))   ; the tag's zipper
-   (wsset sh t z) (wsmake (wscur sh) (map (p \ (<p = t ? [t z] p)) (wsboard sh)) (wsfloat sh) (wsvis sh))
+   (wsset sh t z) (wsmake (wscur sh) (map (p \ <p = t ? [t z] p) (wsboard sh)) (wsfloat sh) (wsvis sh))
 
    ; --- screens: a tag is visible when a screen shows it, hidden otherwise.
    ;     view/greedy are xmonad's view/greedyView; rescreen is its rescreen. ---

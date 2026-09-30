@@ -198,5 +198,4 @@
    _ (: j (jug 0) _ (limn-bars j ()) (test ("" = slurp j)))
    _ (: s (mkscr 1 4) (test ("" = paint s 0 4 0 0)))
 
-   _ (test_fin ())
-   _ (puts "limn: ok") _ (putc 10))
+   _ (test_fin ()))

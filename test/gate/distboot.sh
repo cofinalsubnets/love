@@ -1,53 +1,18 @@
 #!/bin/sh
-# test/gate/distboot.sh -- the release claim, stated over the artifacts.
+# test/gate/distboot.sh -- either release artifact, built with `make`, gives the same binary.
+# SOURCE bootstraps through the machine's C compiler; SEED carries its own source and
+# toolchain and touches no ambient compiler. the two are compared to each other.
 #
-# THE CLAIM: take either artifact, type `make`, get the SAME binary. SOURCE bootstraps
-# through whatever C compiler the machine has; SEED carries its own source, is its own
-# toolchain, and touches no ambient compiler at all. Both answer the same bytes.
+# this holds because the local cc builds only love0, and every object in the product is
+# mooncc's -- test_fixpoint's property, stated across the artifacts.
+# the seed lane shadows cc/gcc/clang with scripts that fail, so a build that succeeds
+# was done by the bundled love. the seed lays its carried source (src/tools/mksrc.l,
+# src/love/src.c) and `love seed` builds it, then rebuilds itself from it byte for byte.
+# the seed is the tree's own out/love, and it re-cuts its archive from the tree
+# (selfpack); the claim compare runs before the circle leg, whose `make dist` bakes the
+# compared binary in place.
 #
-# WHY THAT IS EVEN POSSIBLE, and it is not something we engineered for this gate:
-# the local cc builds `love0` and NOTHING else (the Makefile). Every object in the
-# shipped binary is mooncc's, compiled by love0 waking mooncc0.image. The bootstrap
-# compiler is a scaffold that leaves no trace in the product -- which is the same
-# property test_fixpoint asserts within one tree, and whose DDC leg (a foreign
-# love0) was audited 2026-07-27. This gate says it ACROSS the artifacts, which is the
-# form a person downloading them can care about.
-#
-# THE ARTIFACTS ARE COMPARED TO EACH OTHER, not to the in-tree binary. That is the
-# claim as stated: the archive is cut from the tree itself (selfpack, no index and no
-# stage), so what you are looking at is what both artifacts carry.
-#
-# AND THE SEED LANE POISONS THE COMPILER. A gate that merely observes the build
-# succeed cannot tell whether the bundled love did the work or the ambient gcc quietly
-# did it: both produce a working binary. So cc/gcc/clang are shadowed by scripts that
-# fail loudly, and the build has to come out the far side anyway.
-#
-# THE SEED CARRIES ITS OWN SOURCE. It holds the source tarball in .rodata
-# (src/tools/mksrc.l, src/love/src.c) and lays it out itself, so one downloaded file needs no tar
-# and no second fetch. "It unpacked something" is not the claim -- the tree it lays has to
-# BUILD, compilers poisoned. and `love seed` is what drives that build, not a bare make:
-# the tree carries no love of its own now, so make alone can only mean the ambient cc (and
-# would find the poisoned one). A love driving knows its own selfpath and names CC.
-#
-# AND THE CIRCLE IS THE WHOLE CLAIM. The seed rebuilds ITSELF from the source it
-# laid, byte for byte -- so it carries everything it was made from and nothing of the
-# machine that made it. That leg only became possible once a bake stopped writing the
-# baker's ASLR base and hatch time into the image (test_bakerep guards the same law
-# cheaply, in the slow gate, so a regression does not wait for a release).
-#
-# THERE WAS A THIRD ARTIFACT, retired 2026-08-13: a FULL tarball, the source tree
-# with a baked love in bin/. The seed does that job strictly better -- one file, and
-# nothing needed to unpack it -- so its leg here was a third bootstrap proving what
-# the seed's already proves.
-#
-# THE SEED IS THE TREE'S OWN out/love (seed-universal U2: the host build
-# subsumed, the love-<arch> names dissolved). Two consequences ride here: the
-# lean tree's binary embeds an archive it must RE-CUT from itself (selfpack --
-# leg 4's compare is what holds that re-cut to the byte), and the claim compare
-# runs BEFORE the circle leg, whose `make dist` bakes the compared binary in
-# place.
-#
-# Two complete bootstraps and a self-rebuild -- minutes, not seconds. Opt-in, by name.
+# minutes, not seconds; opt-in by name.
 # usage: distboot.sh SOURCE_TGZ SEED_EXE
 set -u
 

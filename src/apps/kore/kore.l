@@ -59,7 +59,7 @@
 ;   kore timeout [-s SIG] [-k D] D CMD..   a command, and the clock that ends it (124)
 ;   kore which [-a] NAME..           the PATH walk; tty, clear and hostname the rest
 ;   kore sh [-c CMD | file]          the shell, lush (src/apps/lush.l; also `lush`, and an sh symlink)
-; (the C compiler is NO LONGER here -- it split into its own app `mooncc`, doc/misc/moon.md.)
+; the C compiler is its own app, `mooncc` (doc/misc/moon.md).
 ;
 ; loads LAST in the kore cat, when every tool main is defined, and its leave prunes the
 ; module down to the head below: every tool's <name>-main (the spelling lush's in-image lane

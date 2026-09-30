@@ -38,12 +38,8 @@
 ; writes through), a `tray`'s pin answers a COPY so it holds only tables that never change,
 ; and a `tablet` is the mutable map the bit cursor and the Huffman tables ride.
 ;
-; `+` is DYADIC: every sum here is infix. a prefix (+ a b c) is application, which
-; church-exponentiates and answers a bignum the size of the sky.
-;
 ; the wrap registers module 'gz whether borrowed or ridden in a cat, so the dist bake pays
-; the compile once and (borrow 'gz) is a splice afterwards. unwrapped, the names leaked into
-; the cat's layer, `borrow` found no module, and every caller recompiled this file.
+; the compile once and (borrow 'gz) is a splice afterwards.
 (module 'gz
 (borrow 'bytes)
 (:
@@ -56,8 +52,8 @@
    gz-crctab (star-tray '(256) (map gz-crcrow (jot 256)))
    (gz-crcwalk s)
     (: n #s
-       (go i c) (? (n <= i) (c ^ 4294967295)
-                   (go (i + 1) ((peep gz-crctab ((c ^ (s i)) & 255) 0) ^ (c >> 8))))
+       (go i c) (n <= i ? (c ^ 4294967295)
+                 (go (i + 1) (peep gz-crctab ((c ^ (s i)) & 255) 0 ^ (c >> 8))))
        (go 0 4294967295))
    ; --- the two doors ---------------------------------------------------------
    ; `lit?` is NOT a presence test: an unbound global scares when it is referenced, so
@@ -65,12 +61,12 @@
    ; the trap. and the probe is asked at first call, never at load -- this file is baked by
    ; a love that has the nifs, so a load-time answer is the baking love's, not the running
    ; one's. kept in a tablet for the process.
-   gz-door (tablet 0)
-   gz-crcprobe (\ _ (crc32 ""))              ; making the lambda references nothing
-   gz-infprobe (\ _ (inflate "" 0))
-   gz-feedprobe (\ _ (inflate-feed 0 ""))
-   gz-defprobe (\ _ (deflate ""))
-   gz-defbprobe (\ _ (deflate-best ""))
+   gz-door {}
+   gz-crcprobe (_ \ crc32 "")              ; making the lambda references nothing
+   gz-infprobe (_ \ inflate "" 0)
+   gz-feedprobe (_ \ inflate-feed 0 "")
+   gz-defprobe (_ \ deflate "")
+   gz-defbprobe (_ \ deflate-best "")
    (gz-nif k f)
     (: v (peep gz-door k ())
        (? (charm? v) v
@@ -81,7 +77,7 @@
    ; the C to, not as the fallback.
    ; `charm?`, not `?`: the crc of "" is 0, a true answer a truth test calls absent.
    (gz-crc32 s)
-    (? (gz-nif 0 gz-crcprobe) (: r (crc32 s) (? (charm? r) r (gz-crcwalk s)))
+    (? (gz-nif 0 gz-crcprobe) (crc32 s @ r (charm? r ? r (gz-crcwalk s)))
        (gz-crcwalk s))
 
    ; --- the bit sink ---------------------------------------------------------
@@ -91,7 +87,7 @@
    (gz-put j t v k)
     (: (go a n) (? (n < 8) (pin t 0 a, pin t 1 n, 0)
                     (say j (string (a & 255)), go (a >> 8) (n - 8)))
-       (go ((peep t 0 0) | ((v & ((1 << k) - 1)) << (peep t 1 0))) ((peep t 1 0) + k)))
+       (go (peep t 0 0 | ((v & ((1 << k) - 1)) << peep t 1 0)) (peep t 1 0 + k)))
    (gz-align j t)                          ; flush the tail byte, zero-padded
     (? (peep t 1 0)
        (say j (string ((peep t 0 0) & 255)), pin t 0 0, pin t 1 0, 0)
@@ -107,8 +103,8 @@
    gz-dext  (star-tray '(30) '(0 0 0 0 1 1 2 2 3 3 4 4 5 5 6 6 7 7 8 8 9 9 10 10 11 11 12 12 13 13))
    ; the ladders are short and walked from the top, so the first base at or below
    ; the value is its code -- no search structure earns its keep at 30 rows.
-   (gz-lcode v) (: (go i) (? (i < 1) 0 ((peep gz-lbase i 0) <= v) i (go (i - 1))) (go 28))
-   (gz-dcode v) (: (go i) (? (i < 1) 0 ((peep gz-dbase i 0) <= v) i (go (i - 1))) (go 29))
+   (gz-lcode v) (: (go i) (? (i < 1) 0 (peep gz-lbase i 0 <= v) i (go (i - 1))) (go 28))
+   (gz-dcode v) (: (go i) (? (i < 1) 0 (peep gz-dbase i 0 <= v) i (go (i - 1))) (go 29))
 
    ; --- 32-bit cells in a cask ----------------------------------------------
    ; the match finder's two arrays hold positions, which outgrow a byte and outgrow
@@ -164,7 +160,7 @@
                    _ (gz-c32! pa a (top + 1))   _ (gz-c32! pa b (top + 1))
                    (go (top + 1) li2 ii2)))
             (go nl 0 nl))
-       lens (tablet 0)
+       lens {}
        mx (: (go i m) (? (nl <= i) m
                          (: d (gz-hdep pa i 0)
                             _ (pin lens (gz-c32 sy i) d)
@@ -180,8 +176,8 @@
                         (go (i + 1) (? (gz-c32 c i) (k + 1) k)))
             (go 0 0))
        _ (? (2 <= u) 0
-            ((? (gz-c32 c 0) 0 (gz-c32! c 0 1)),
-             (? (gz-c32 c 1) 0 (gz-c32! c 1 1)), 0))
+            ((gz-c32 c 0 ? 0 (gz-c32! c 0 1)),
+             (gz-c32 c 1 ? 0 (gz-c32! c 1 1)), 0))
        (gz-hpass c nsym lim 0))
    ; canonical: shortest codes first, ties by symbol. the code goes in reversed, since
    ; a Huffman code is stored MSB-first and gz-put spends bits the other way.
@@ -210,8 +206,8 @@
    ; those lengths handed to the same builder -- and the decoder reads its tables off
    ; the same two rows.
    gz-fixlenl (star-tray '(288) (map (\ i (? (i < 144) 8 (i < 256) 9 (i < 280) 7 8))
-                                     (jot 288)))
-   gz-fixlend (star-tray '(30) (map (\ i 5) (jot 30)))
+                                     ^288))
+   gz-fixlend (star-tray '(30) (map (i \ 5) ^30))
    gz-fixcodl (gz-hcodes gz-fixlenl 288 9)
    gz-fixcodd (gz-hcodes gz-fixlend 30 5)
 
@@ -223,18 +219,18 @@
    gz-wsize 32768   gz-wmask 32767   gz-hmask 32767
    gz-maxmatch 258  gz-minmatch 3
    gz-chain 32      ; how far down a chain to look before taking what we have
-   (gz-hash s i) (((((s i) << 10) ^ ((s (i + 1)) << 5)) ^ (s (i + 2))) & gz-hmask)
+   (gz-hash s i) ((((s i << 10) ^ (s (i + 1) << 5)) ^ s (i + 2)) & gz-hmask)
    (gz-mlen s n i k lim)                   ; the run shared from i and from k
     (: (go l) (? (lim <= l) l
-                 (n <= (i + l)) l
-                 ((s (i + l)) = (s (k + l))) (go (l + 1))
+                 (n <= i + l) l
+                 (s (i + l) = s (k + l)) (go (l + 1))
                  l)
        (go 0))
    (gz-find s n i head prev)                ; -> (len dist), len 0 for no match
     (: lim (? ((n - i) < gz-maxmatch) (n - i) gz-maxmatch)
        (go k d bl bd)
-        (? (! k) [bl bd]
-           (! d) [bl bd]
+        (? !k [bl bd]
+           !d [bl bd]
            (: p (k - 1) dist (i - p)
               (? (gz-wsize < dist) [bl bd]
                  (: l (gz-mlen s n i p lim)
@@ -386,7 +382,7 @@
    (gz-tok fn s n head prev tok fl fd i k xb)  ; -> (i tokens extra-bits)
     (? (n <= i) [i k xb]
        (gz-tokmax <= k) [i k xb]
-       (: m (? ((i + gz-minmatch) <= n) (fn s n i head prev) '(0 0))
+       (: m (? (i + gz-minmatch <= n) (fn s n i head prev) '(0 0))
           l (? (<m = 3) (? (gz-toofar < <>m) 0 <m) <m)
           (? (l < gz-minmatch)
              (: c (s i)
@@ -414,7 +410,7 @@
    ; lengths in this permutation so the rarely-used ones sit at the tail and can be
    ; trimmed off. both sides read the same row.
    gz-clord (star-tray '(19) '(16 17 18 0 8 7 9 6 10 5 11 4 12 3 13 2 14 1 15))
-   (gz-clx sy) (? (sy = 16) 2 (sy = 17) 3 (sy = 18) 7 0)
+   (gz-clx sy) (sy @ 16 2 17 3 18 7 0)
    (gz-trim lens k lo) (? (k <= lo) lo (peep lens (k - 1) 0) k (gz-trim lens (k - 1) lo))
    (gz-run cl tot rl)                       ; -> how many entries rl holds
     (: (span v k) (? (tot <= k) k ((peep cl k 0) = v) (span v (k + 1)) k)
@@ -518,12 +514,12 @@
        fl (cask (286 * 4))   fd (cask (30 * 4))
        r (gz-tok fn s n head prev tok fl fd i 0 0)
        i2 <r   k <>r   xb <>>r
-       _ (gz-flush s j t tok k fl fd i i2 (? (n <= i2) 1 0) xb)
-       (? (n <= i2) 0 (gz-blocks fn s n j t head prev i2)))
+       _ (gz-flush s j t tok k fl fd i i2 (n <= i2) xb)
+       (n <= i2 ? 0 (gz-blocks fn s n j t head prev i2)))
 
    (gz-deflatel s)
     (: n #s
-       j (jug 0)   t (tablet 0)
+       j (jug 0)   t {}
        head (cask (32768 * 4))   prev (cask (32768 * 4))
        _ (gz-blocks (gz-finder n) s n j t head prev 0)
        _ (gz-align j t)
@@ -545,11 +541,11 @@
    ; inflate writes bytes and reads them back (a match copies out of what it has
    ; already produced), so its sink cannot be a jug -- a jug pours out, it does not
    ; index. a cask that doubles, then one exact copy at the end.
-   (gz-buf n) (: b (tablet 0) _ (pin b 0 (cask (? (n < 64) 64 n))) _ (pin b 1 0) b)
+   (gz-buf n) (: b {} _ (pin b 0 (cask (? (n < 64) 64 n))) _ (pin b 1 0) b)
    (gz-room b k)
     (: c (peep b 0 0) cap #c len (peep b 1 0)
-       (? ((len + k) <= cap) 0
-          (: big (: (go m) (? ((len + k) <= m) m (go (m * 2))) (go cap))
+       (? (len + k <= cap) 0
+          (: big (: (go m) (? (len + k <= m) m (go (m * 2))) (go cap))
              c2 (cask big)
              _ (? len (pour c2 0 (string c) 0 len) 0)
              _ (pin b 0 c2) 0)))
@@ -607,15 +603,15 @@
    ; order. decoding walks one bit at a time -- no lookup table, which is slower per
    ; symbol and is the whole of the algorithm rather than an index over it.
    (gz-huff lens nsym)
-    (: cnt (tablet 0)
+    (: cnt {}
        _ (: (go i) (? (nsym <= i) 0
-                       (: l (peep lens i 0) _ (pin cnt l ((peep cnt l 0) + 1)) (go (i + 1))))
+                       (: l (peep lens i 0) _ (pin cnt l (peep cnt l 0 + 1)) (go (i + 1))))
             (go 0))
        _ (pin cnt 0 0)                       ; a zero length is "no code", not a code
-       ofs (tablet 0)
-       _ (: (go l a) (? (15 < l) 0 (pin ofs l a, go (l + 1) (a + (peep cnt l 0))))
+       ofs {}
+       _ (: (go l a) (? (15 < l) 0 (pin ofs l a, go (l + 1) (a + peep cnt l 0)))
             (go 1 0))
-       sym (tablet 0)
+       sym {}
        _ (: (go i) (? (nsym <= i) 0
                        (: l (peep lens i 0)
                           _ (? l (: o (peep ofs l 0) _ (pin sym o i) _ (pin ofs l (o + 1)) 0) 0)
@@ -658,7 +654,7 @@
    (gz-codes s n t b lit dst)                ; the symbol loop, fixed or dynamic
     (: (go u)
         (: d (gz-dec s n t lit)
-           (? (! d) ()
+           (? !d ()
               (peep t 1 0) ()                                  ; ran off the end
               (: sy (<(>d))
                  (? (sy < 256) (gz-push b sy, go ())
@@ -667,7 +663,7 @@
                     (: lc (sy - 257)
                        l ((peep gz-lbase lc 0) + (gz-bits s n t (peep gz-lext lc 0)))
                        dd (gz-dec s n t dst)
-                       (? (! dd) ()
+                       (? !dd ()
                           (: dc (<(>dd))
                              (? (29 < dc) ()
                                 (: dist ((peep gz-dbase dc 0) + (gz-bits s n t (peep gz-dext dc 0)))
@@ -802,30 +798,30 @@
           (3 <= #b && !(b 0 = 31 && b 1 = 139 && b 2 = 8)) ()
           (: p (peep g 'rd () 0) (? (#p = 0) () (: _ (pin g 'buf (b + p)) (gz-headin g))))))
    (gz-next g)
-    (: m (peep g 'mode 'end)
-       (? (m = 'end) ""
-          (m = 'head)
-           (: h (gz-headin g)   b (peep g 'buf "")   hd (peep g 'hd ())
-              (? !h (? (peep g 'first 0) (gz-fin g 'nogz)
-                       (#(gz-more g 1) = 0) (gz-fin g [1 (hd 0) (hd 1) (peep g 'tot 0) (hd 2)])
-                       (gz-fin g ['trail (hd 0) (hd 1) (peep g 'tot 0) (hd 2)]))
-                 (: _ (? (peep g 'first 0) (pins g 'hd [(h 1) (h 2) (h 3)] 'first 0))
-                    _ (pins g 'st (inflate-new 0) 'crc 0 'n 0 'buf (snip b (h 3) #b) 'mode 'body)
-                    (gz-next g))))
-          (m = 'body)
-           (: b (peep g 'buf "")
-              r (inflate-feed (peep g 'st ()) (? (#b = 0) (peep g 'rd () 0) b))
-              _ (pin g 'buf "")
-              (? (two? r) (: o <r
-                             _ (pins g 'crc (crc32-on (peep g 'crc 0) o) 'n (peep g 'n 0 + #o) 'buf >r 'mode 'trail)
-                             (? (#o = 0) (gz-next g) o))
-                 (string? r) (: _ (pins g 'crc (crc32-on (peep g 'crc 0) r) 'n (peep g 'n 0 + #r))
-                                (? (#r = 0) (gz-next g) r))
-                 (gz-fin g (? (r = 1) 'big ()))))
-          (: t (gz-more g 8)   n (peep g 'n 0)        ; the trailer
-             (? (#t < 8 || !(rdle t 0 4 = peep g 'crc 0) || !(rdle t 4 4 = n & 4294967295)) (gz-fin g ())
-                (: _ (pins g 'buf (snip t 8 #t) 'tot (peep g 'tot 0 + n) 'mode 'head)
-                   (gz-next g))))))
+    (peep g 'mode 'end @
+     'end ""
+     'head
+     (: h (gz-headin g)   b (peep g 'buf "")   hd (peep g 'hd ())
+        (? !h (? (peep g 'first 0) (gz-fin g 'nogz)
+                 (#(gz-more g 1) = 0) (gz-fin g [1 (hd 0) (hd 1) (peep g 'tot 0) (hd 2)])
+                 (gz-fin g ['trail (hd 0) (hd 1) (peep g 'tot 0) (hd 2)]))
+           (: _ (? (peep g 'first 0) (pins g 'hd [(h 1) (h 2) (h 3)] 'first 0))
+              _ (pins g 'st (inflate-new 0) 'crc 0 'n 0 'buf (snip b (h 3) #b) 'mode 'body)
+              (gz-next g))))
+     'body
+     (: b (peep g 'buf "")
+        r (inflate-feed (peep g 'st ()) (? (#b = 0) (peep g 'rd () 0) b))
+        _ (pin g 'buf "")
+        (? (two? r) (: o <r
+                       _ (pins g 'crc (crc32-on (peep g 'crc 0) o) 'n (peep g 'n 0 + #o) 'buf >r 'mode 'trail)
+                       (#o @ 0 (gz-next g) o))
+           (string? r) (: _ (pins g 'crc (crc32-on (peep g 'crc 0) r) 'n (peep g 'n 0 + #r))
+                          (#r @ 0 (gz-next g) r))
+           (gz-fin g (r @ 1 'big))))
+    (: t (gz-more g 8)   n (peep g 'n 0)        ; the trailer
+       (? (#t < 8 || !(rdle t 0 4 = peep g 'crc 0) || !(rdle t 4 4 = n & 4294967295)) (gz-fin g ())
+          (: _ (pins g 'buf (snip t 8 #t) 'tot (peep g 'tot 0 + n) 'mode 'head)
+             (gz-next g)))))
    ; the same members written out: mk (stamp name) of the first header answers (1 w), w
    ; the writer every piece goes through, or () for 'no. what came out before a failure
    ; came out. a build without inflate-feed reads the whole input and answers through gz-unzip
@@ -839,7 +835,7 @@
                       (go p) (? (#p = 0) (peep g 'ans ()) (: _ (w p) (go (gz-next g))))
                       (go p)))))))
    (gz-unzipw rd mk)
-    (: (all a) (: p (rd 0) (? (#p = 0) a (all (p . a))))
+    (: (all a) (: p (rd 0) (#p @ 0 a (all (p . a))))
        s (cats (rev (all ())))   h (gz-head s)   u (h && gz-unzip s)
        (? !h 'nogz
           (u = 'big) 'big
@@ -949,10 +945,9 @@ no file, or a bare -, is the filter: stdin -> stdout"
    (gzc-stem p suf)                    ; -> (1 stem) | ()
     (: n #p
        (? (ends? p suf) [1 (snip p 0 (n - #suf))]
-          (ends? p ".tgz") [1 (snip p 0 (n - 4) + ".tar")]
-          ()))
+          (ends? p ".tgz") [1 (snip p 0 (n - 4) + ".tar")]))
 
-   (gzc-zip t s nom stamp) (? (peep t 'lvl 6 = 9) (gz-zip9 s nom stamp) (gz-zip s nom stamp))
+   (gzc-zip t s nom stamp) (peep t 'lvl 6 @ 9 (gz-zip9 s nom stamp) (gz-zip s nom stamp))
 
    ; --- one file, compressed -------------------------------------------------
    (gzc-zip1 t p)
@@ -983,7 +978,7 @@ no file, or a bare -, is the filter: stdin -> stdout"
    ; the members stream from the file to the output a piece at a time, so a member's size is
    ; no one's memory. the output is named, and opened, once the header says what it is (-N
    ; takes its name from there); a stream that fails partway takes the partial output away.
-   (gzc-rd q) (\ _ (: c (see q) (? (c < 0) "" (: _ (unsee q c) (chug q)))))
+   (gzc-rd q) (\ _ (see q @ c (c < 0 ? "" (unsee q c, chug q))))
    (gzc-dstat t nm u)                  ; the answer of gz-unzipf, said
     (? (u = 'big) (gzc-moan t (nm + gzc-big), 1)
        (u = 'nogz) (gzc-moan t (nm + ": not in gzip format"), 1)
@@ -1001,11 +996,11 @@ no file, or a bare -, is the filter: stdin -> stdout"
           (gzc-moan t (p + ": unknown suffix -- ignored"), 2)
        (: q (open p "r")
        (? !(hot? q) (gzc-moan t (p + ": No such file or directory"), 1)
-          (: k (tablet 0)
+          (: k {}
              (no w m) (pin k 'why w, gzc-moan t m, ())
              (mk stamp nom)
-              (? (peep t 't 0) [1 (\ s 0)]
-                 (peep t 'c 0) [1 (\ s (say out s))]
+              (? (peep t 't 0) [1 (s \ 0)]
+                 (peep t 'c 0) [1 (say out)]
                  (: N? (peep t 'N 0 && 0 < #nom)
                     (? (!stem0 && !N?) (no 2 (p + ": unknown suffix -- ignored"))
                        (: dst (N? ? (phead p + pbase nom) <>stem0)
