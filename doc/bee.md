@@ -34,9 +34,11 @@ bee - a coding agent in the terminal, and the protocol its sessions talk by
 - **read_file**, **write_file** and **edit_file**;
 - **shell**, which runs a command line in **lush -a** (this binary's shell, with love's own verbs ahead of PATH);
 - **list_sessions** and **send_message**, described under SESSIONS AND MESSAGES;
-- **start_job**, **check_job** and **stop_job**, and **spawn_bee** and **stop_bee**, described under JOBS AND WORKERS.
+- **start_job**, **check_job** and **stop_job**, and **spawn_bee** and **stop_bee**, described under JOBS AND WORKERS;
+- **lock_acquire**, **lock_release** and **lock_list**, described under LOCKS;
+- **queue_row**, **queue_lead**, **queue_land** and **queue_landed**, described under THE MERGE QUEUE.
 
-A write, an edit, a shell command, a job's start, a spawn and a stop of another bee ask y/n before they run, unless **-y** is given. The rest run without asking.
+A write, an edit, a shell command, a job's start, a message to another session, a queue write, a spawn and a stop of another bee ask y/n before they run, unless **-y** is given, and so does **read_file** of a path outside the working tree (a link out of it included). The rest run without asking. An ask shows the whole input, a control character as **^X**; on the full screen **y** runs it only once every row has been on the screen, and the arrows scroll it.
 
 Given a *prompt*, bee runs one turn and exits, streaming the answer to standard output. With no prompt, it opens its full screen on a terminal and a **>** loop elsewhere, or on a terminal too with **--plain**.
 
@@ -48,7 +50,7 @@ The system prompt tells the model where it is:
 - every merge queue under **refs/queue/**, as it stood at start (see THE MERGE QUEUE);
 - the project's own instructions: from **/** down to the working directory, each directory's **AGENTS.md** and then its **CLAUDE.md**, both where both exist.
 
-The settings are read from **~/.love/etc/bee.l** and then **./.bee.l**, one form per line: **(api anthropic)** or **(api openai)**, **(url** "...**)**, **(model** *name***)**, **(key-env** *var***)**, **(max-tokens** *n***)**, **(shell** *word* ...**)**, **(context** *n***)** and **(thinking off)**. A key goes out only over TLS, and only to a peer whose certificate this binary has verified. Plain HTTP reaches this machine alone.
+The settings are read from **~/.love/etc/bee.l**, one form per line: **(api anthropic)** or **(api openai)**, **(url** "...**)**, **(model** *name***)**, **(key-env** *var***)**, **(max-tokens** *n***)**, **(shell** *word* ...**)**, **(context** *n***)** and **(thinking off)**. A key goes out only over TLS, and only to a peer whose certificate this binary has verified. Plain HTTP reaches this machine alone, and not a port another login (uid 1000 and up) listens on. A tree's own **./.bee.l** travels with a clone, so it may set only **model**, **max-tokens**, **thinking**, **context** and **queue-watch** over them.
 
 # SESSIONS AND MESSAGES
 
@@ -87,7 +89,28 @@ It uses Claude Code's own tools and its own login, so no key is set in bee. Each
 
 **(claude-model** *name***)** picks the child's model. The card records the model the child reports and its Claude session id. When the child ends or is interrupted with esc, the next turn starts it again with **--resume**.
 
-The child reaches the bee and the hive through **love bee --mcp**, which its **mcp.json** names as the MCP server **bee**. That is a stdio JSON-RPC 2.0 server, one message a line, speaking as the session **BEE_AS** names. Its tools are **list_sessions**, **send_message** and **queue_row**, which the model sees as **mcp__bee__***, and **approve**, the child's permission prompt. **approve** allows at once when the bee runs with **-y** (**BEE_YES**). Otherwise it writes **asks/***id***.ask** in the bee's cell, holding the tool's name, input and **tool_use_id**, and waits **BEE_ASK_WAIT** seconds (600) for **asks/***id***.answer**. It denies when no answer comes. The bee's screen turns each ask into the y/n of the tool's own block, and the key writes the answer.
+The child reaches the bee and the hive through **love bee --mcp**, which its **mcp.json** names as the MCP server **bee**, speaking as the session **BEE_AS** names. **approve** is the child's permission prompt. It allows at once when the bee runs with **-y** (**BEE_YES**). Otherwise it writes **asks/***id***.ask** in the bee's cell, holding the tool's name, input and **tool_use_id**, and waits **BEE_ASK_WAIT** seconds (600) for **asks/***id***.answer**. It denies when no answer comes. The bee's screen turns each ask into the y/n of the tool's own block, and the key writes the answer.
+
+# THE MCP SERVER
+
+**love bee --mcp** is a stdio JSON-RPC 2.0 server, one message a line. It is how a Claude Code session takes part: as a bee's child, above, or on its own, from the project's **.mcp.json**, which in love's tree runs the tree's **out/love** when it is built and **love** on PATH otherwise. Both reach the hive by the one path. Its tools, which the model sees as **mcp__bee__***:
+
+- **list_sessions**, **send_message**, the four queue tools and the three lock tools, the same as a bee agent's;
+- **inbox**, which takes the messages waiting;
+- **set_name**, which moves the session to a name of its choosing;
+- **approve**, for a bee's child.
+
+A session's *initialize* answer carries instructions: its name, how its mail arrives, and the merge queue's rules with the queues as they stood.
+
+With **BEE_AS** set, the server speaks as that bee, which keeps the cell and watches the queues. Without it, the server is a session of its own:
+
+- It settles in the hive while it runs, under **BEE_NAME** when that is free, else the working directory's last part, with two hex digits added only when that name is taken. A restart therefore keeps its name.
+- Its card says **model claude-code**, and **love bee --list** shows it. It leaves the hive when its stdin ends.
+- It watches the queues for its rows, as a bee does.
+
+An MCP server cannot start a turn. Mail and queue-watch notices wait in the inbox, and every tool's answer carries what has arrived, appended as **\<message from="***name***"\>** blocks, as a bee's next request carries it. A bee's child gets its mail the same way while a turn runs. Whoever takes a message moves it to **read/** first, so a bee and its server never both take one.
+
+Asking stays with the caller. A bee's child asks through **approve**. A Claude Code session of its own asks through Claude Code's permission prompt, so the user says y before a message or a queue write goes out, unless that session runs without asking.
 
 # LOCKS
 
@@ -105,36 +128,97 @@ A child never inherits the bee's own open files: every fd above 2 is closed in i
 
 # THE MERGE QUEUE
 
-Sessions working in parallel often share one branch, and merge into it one at a time. bee does not impose a protocol for this: it reads one out of the version control. A *queue* is a text whose header states its rules, names its leader, and holds a row per merge, kept where it can move only by compare-and-swap. Either store will do:
+Sessions working in parallel often share one branch, the *base*, and merge into it one at a time through a *queue*. bee keeps one standard protocol for this, written here once. In love's tree, sessions take part in a queue only through bee's tools, from a bee agent or from Claude Code through **love bee --mcp**; nobody edits a queue by hand.
+
+## The store
+
+A queue is a text kept where it moves only by compare-and-swap. Either store will do; bee uses git when the directory is in a git repository, and sb otherwise.
 
 **git**
-:   Every ref under **refs/queue/**. Read it with **git cat-file -p refs/queue/***name*, and take the ref's sha as *old*. Write **git hash-object -w** *file*, then **git update-ref refs/queue/***name* *new* *old*.
+:   Every ref under **refs/queue/**. The queue **refs/queue/***name* merges into the branch *name*. Read it with **git cat-file -p refs/queue/***name*; a write is **git hash-object -w** *file*, then **git update-ref refs/queue/***name* *new* *old*.
 
 **sb**
-:   Every ledger under **queue/** in the *hub*: the nest named by **SB_HUB**, else the working directory when it holds a **.sb/**. Read it with **sb -C** *hub* **ledger queue/***name*, and take **--id** as *old*. Write **sb -C** *hub* **ledger queue/***name* **--was** *old* *file*. A ledger keeps every entry it ever held, with its writer, under **--log**, and it never travels in **sync**: sessions that share a queue name one hub.
+:   Every ledger under **queue/** in the *hub*: the nest named by **SB_HUB**, else the working directory when it holds a **.sb/**. Read it with **sb -C** *hub* **ledger queue/***name*; a write is **sb -C** *hub* **ledger queue/***name* **--was** *old* *file*. A ledger keeps every entry it ever held, with its writer, under **--log**, and it never travels in **sync**, so sessions that share a queue name one hub.
 
-bee quotes each queue in the system prompt as it stood at start, and tells the model to follow the rules and to read the queue fresh before acting on it. A row names its session. The model reaches a bee session with **send_message**, and asks the user to relay to any other.
+## The text
 
-The model writes a queue only through **queue_row**, never by hand; a small model given the text to edit once replaced a whole queue with its one row. The tool reads the queue and changes exactly one line: the bee's own row, keyed by its session name, in the header's format *position session branch gated-on gated-head state*, with an optional note after **#**. The model gives the state (**waiting**, **gating**, **green**, **folded-into-***N*, or **left**, which removes the row) and whichever other fields change, and the rest keep their values. A bee with no row joins at the bottom, one past the highest position. The write is a compare-and-swap, retried from a fresh read when someone wrote first. Only the bee named on the **leader** line may pass **session** to edit another's row, or **base** to move the base line (*branch* *sha*) when it lands; anyone else is refused.
+A queue is lines:
 
-A bee watches the queues for its rows. On the full screen and when serving, it reads every queue again every **(queue-watch** *n***)** seconds (20 unless set, 0 for never). A change that concerns its rows comes to it as a message from **queue-watch**:
+- a header of **#** lines that states the rules;
+- **leader** *session*, or **leader** *session* **acting**;
+- the base line, *branch* *sha*;
+- optionally **sync** *text*, what the queue lands toward, and **pre** *text* lines, conditions before that;
+- a row per merge: *position* *session* *branch* *gated-on* *gated-head* *state*, with an optional note after two spaces and **#**.
+
+*gated-on* is the base's sha for the head row, and the row above's *gated-head* for any other. *state* is **waiting**, **gating**, **green** or **folded-into-***N*. A field not known yet is **-**.
+
+When a queue does not exist yet, **queue_row** makes it on bee's standard header. That header states every rule below in the queue itself, because a queue outlives the bee that made it. The leader is the session **queue_row** names in **leader**, else the maker. The base line is the branch the queue is named for, at its sha.
+
+## The rules
+
+**Join.** A session adds its row at the bottom when its branch is ready to gate. The order is fixed at join, never by who finishes a gate first.
+
+**Stacked.** The head row gates its branch merged with the base. Row *k*+1 gates its branch merged with row *k*'s gated head, so when *k* lands the base already equals the tree *k*+1 certified, and *k*+1 lands without gating again. A failure, or a new head above, re-gates only the rows behind it.
+
+**A row says what is true.** It is written **gating**, with its head, in one write before the gate starts. It is **green** only when every lane has passed on that head, and **waiting** only when nothing runs. Lanes follow the files touched, not the intent: a cross-cutting lane is where a union goes red, and the project's instructions may map files to lanes. The slow lane runs last, on the exact tree that lands.
+
+**Land by sha.** The green head row lands its gated head with **git merge --no-ff** *sha*, and only when **git merge-tree --write-tree** of the base and *sha* gives *sha*'s own tree. After the landing, the base's tree must equal the gated tree. The lander then sends the next rows a *release note* naming what the merge removes, renames or moves. A session that cannot land (a sandbox that refuses the main checkout) hands the user the exact commands, with the shas and the tree each must print, so the landing can be checked without trusting it. It checks the checkout for someone's uncommitted edits first. On sb, the patch set that lands is exactly the set that was gated.
+
+**The leader.** The **leader** line names the one session that keeps the queue. Only the leader edits another's row, the base line, and the **sync** and **pre** lines. The leader:
+
+- writes a row for a session that cannot write its own;
+- places a join by when it was asked for;
+- drops a gone session's row and re-gates the rows behind it;
+- corrects a row that no longer matches its branch;
+- tells the sessions each such edit moves.
+
+The leader hands off by rewriting the line to a live session that agreed, and says so to everyone. While the leader has no live session, the head row's session writes **leader** *itself* **acting**. The leader never lands, reorders or gates on another's behalf.
+
+**Merge, not line up.** A waiting row folds into the earliest waiting row ahead of it, never into one that is gating, and a join while a row waits folds into that row. The leader writes **folded-into-***N* and tells both owners. The absorbing row merges every folded head onto its gated-on, gates the union of their lanes once, and lands one merge. A red in a folded branch's files goes to that branch's owner. A slow fix unfolds that branch so the rest can land. A merge-tree conflict between the heads goes to both owners with the hunk, and neither side is picked. That conflict, or an owner who objects, keeps the row its own slot, behind the fold. A re-cut row (a tree-wide rename) takes folds like any waiting row: its owner merges the join in the old layout, and the re-cut moves it.
+
+**The long queue.** A queue is *long* when two or more rows are waiting or gating, or when more sessions wait for a heavy lock than there are slots. Then, without being asked:
+
+- branches with one owner join as one union: each stops at its own light lanes, and the union gates once, the slow lane last;
+- sessions with neighbouring work offer each other a fold, and the leader places it;
+- a build seeds its **out/** from a built tree of its base;
+- nothing holds a heavy slot it is not using.
+
+**Say it, then verify it.** Tell the leader every change of state: join, gating, green, landed. The leader verifies from the store, not from the message. A restart may rename a session, which then asks the leader to correct its row and says so.
+
+## The tools
+
+Every tool reads the queue fresh and writes it by compare-and-swap, reading again when someone wrote first. The queue must be named **refs/queue/***name* or **queue/***name*. No field may hold a control character, and only a text field (a note, a sync or pre line, a release note) may hold a space, so one field cannot write another row. A tool that writes asks first, unless the session runs with **-y**.
+
+**queue_row** (*queue*, *state*, and any of *branch*, *gated_on*, *gated_head*, *note*)
+:   Sets exactly the caller's row, keyed by its session name. A session with no row joins at the bottom, one past the highest position, and **left** removes the row. Fields not given keep their values. It refuses:
+
+    - a state outside the list above;
+    - a fold by anyone but the leader;
+    - a fold into a row that is missing, not waiting, or not ahead;
+    - a fold of a row that others fold into.
+
+    Only the leader may pass **session** to edit another's row, **base** to move the base line, or **position** to place a new row at a number no row holds. **leader** names the leader of a queue being made. When the queue is long, the answer says so and tells the model to fold, not line up.
+
+**queue_lead** (*queue*, and any of *leader*, *sync*, *pre_add*, *pre_drop*)
+:   The leader's own lines, for the leader alone. **leader** hands the queue on. **sync** sets the sync line, and **-** removes it. **pre_add** adds a pre line, and **pre_drop** *n* drops the *n*th. The head row's session may pass itself as **leader** while the leader has no live session in the hive. That writes **leader** *itself* **acting**.
+
+**queue_land** (*queue*)
+:   Answers how to land the caller's row, on git, and changes nothing. The row must be green and at the head. The base branch must be where the base line says. **git merge-tree --write-tree** of the base and the gated head must give the gated tree. The answer is the checkout of the base, then **git rev-parse** of the base and the sha it must print, **git merge --no-ff** *sha*, and **git rev-parse 'HEAD^{tree}'** with the tree it must print.
+
+**queue_landed** (*queue*, optionally *release*)
+:   After the landing, it checks that the base holds the gated head and that the base's tree is the gated tree. Only then does it drop the row and the rows folded into it and move the base line to the base's new sha. A *release* note goes to the sessions of the next row and the rows folded into it. Without one, the answer names those sessions.
+
+## Watching
+
+bee quotes each queue in the system prompt as it stood at start, and tells the model to follow the rules and to read the queue fresh before acting on it. A session with rows watches the queues: a bee on its full screen or serving, and an MCP server of its own. It reads every queue again every **(queue-watch** *n***)** seconds (20 unless set, 0 for never), and a change that concerns its rows comes to it as a message from **queue-watch**:
 
 - its own row leaving the queue;
 - the row it stacks on (the nearest unfolded row above it) moving head or state, or leaving;
 - a row folding into it, or a folded row moving;
-- a new leader.
+- a new leader;
+- the queue turning long.
 
-The leader hears every row, with or without one of its own: each join, move and leaving. Its own edits to its own rows say nothing.
-
-The model is also given the queue's operating checks, learned running one. Each is meant to be checked mechanically, not just stated:
-
-- **The landed tree is the gated tree.** Before a landing, **git merge-tree --write-tree** *branch* *head* must print the gated head's own tree, and afterwards *branch***^{tree}** must equal it. On sb, the patch set that lands is exactly the set that was gated.
-- **Stacked.** A row gates its branch merged with the gated head of the row above. When that head moves, every row above it re-merges and re-gates.
-- **The row says what is true.** It is written **gating** together with the head being gated before the gate starts, **green** only when every lane has passed, and **waiting** only when nothing runs. A waiting row takes folds; a gating one cannot.
-- **Lanes follow the files touched**, not the intent. A cross-cutting lane is where a union goes red, and the project's own instructions may map files to lanes. The slow lane runs last, on the exact tree that lands.
-- **A fold conflict** goes to both owners with the hunk, and neither side is picked. A red in a folded branch's files belongs to its owner, and a slow fix unfolds that branch so the rest can land.
-- **A session that cannot land** (a sandbox that refuses the main checkout) hands the user the exact commands, with the expected base sha and tree hash, so the landing can be checked without trusting it. It checks the checkout for someone else's uncommitted edits first.
-- **The leader hears every change of state**: join, gating, green, landed. It verifies from the store, not from the message. A restart may rename a session, which then fixes its row and says so.
+The leader hears every row, with or without one of its own: each join, move and leaving. A session's own edits to its own rows say nothing.
 
 # EXAMPLES
 

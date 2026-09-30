@@ -65,24 +65,39 @@
    ; --- exclusive: a directory holding its owner, laid whole by a rename ---
    (lk-xdir root nm) (root + "/x/" + lk-slug nm)
    (lk-gone d) (: _ (unlink (d + "/owner")) (rmdir d))
-   ; a stale lock is renamed aside before it goes, so two sessions reclaiming it cannot both win
-   (lk-reclaim d who) (: g (d + ".gone-" + show who) (? !(rename d g) (lk-gone g) ()))
-   (lk-x-take root nm who note tries)
-    (: _ (lk-mkdirs (root + "/x"))
-       d (lk-xdir root nm)
+   ; an owner's own name, pid start and since, which no later owner shares
+   (lk-token o) (lk-slug (peep o "pid" "0") + "-" + lk-slug (peep o "start" "") + "-" + lk-slug (peep o "since" ""))
+   ; a stale lock is renamed aside only by the one reaper whose mkdir of d.reap-TOKEN won, and only
+   ; while d still holds that owner, so a live lock laid since is never moved. a marker goes after an hour
+   (lk-reclaim dir base o)
+    (: d (dir + "/" + base) k (lk-token o) pre (base + ".reap-") now (clock 0)
+       _ (map (\ n (: p (dir + "/" + n) s (stat p) (? (two? s && s 1 < now - 3600000) (rmdir p) 0)))
+              (filter (\ n (#pre <= #n && snip n 0 #pre = pre)) (: ns (readdir dir) (? (two? ns) ns ()))))
+       (? (mkdir (d + ".reap-" + k) 448) 0
+          ((lk-token (lk-parse (lk-read (d + "/owner")))) != k) 0
+          !(rename d (d + ".gone-" + k)) (lk-gone (d + ".gone-" + k))
+          0))
+   (lk-x-take dir base nm who note tries)
+    (: _ (lk-mkdirs dir)
+       d (dir + "/" + base)
        tmp (d + ".new-" + show who)
        _ (mkdir tmp 448)
-       _ (lk-write (tmp + "/owner") (lk-owner who note))
-       r (rename tmp d)
-       (? !r {"granted" 1 "lock" nm}
+       (? !(lk-write (tmp + "/owner") (lk-owner who note))
+           (: _ (lk-gone tmp) {"granted" 0 "lock" nm "error" "cannot write the owner"})
+          !(rename tmp d) {"granted" 1 "lock" nm}
           (: _ (lk-gone tmp)
-             o (lk-parse (lk-read (d + "/owner")))
+             t (lk-read (d + "/owner"))
+             o (lk-parse t)
              (? (lk-num (peep o "pid" "0") = who) {"granted" 1 "lock" nm}
-                (!(lk-live? o) && 0 < tries) (: _ (lk-reclaim d who) (lk-x-take root nm who note (tries - 1)))
+                (tries <= 0) {"granted" 0 "lock" nm "position" 1 "holder" (lk-view o)}
+                ; no owner: its holder is letting go, and a rename onto the empty dir takes it
+                !(string? t) (lk-x-take dir base nm who note (tries - 1))
+                !(lk-live? o) (: _ (lk-reclaim dir base o) (lk-x-take dir base nm who note (tries - 1)))
                 {"granted" 0 "lock" nm "position" 1 "holder" (lk-view o)}))))
-   (lk-x-drop root nm who)
-    (: d (lk-xdir root nm) o (lk-parse (lk-read (d + "/owner")))
+   (lk-x-free d who)
+    (: o (lk-parse (lk-read (d + "/owner")))
        (? (lk-num (peep o "pid" "0") = who) (: _ (lk-gone d) 1) ()))
+   (lk-x-drop root nm who) (lk-x-free (lk-xdir root nm) who)
 
    ; --- heavy: tickets, q/ waiting and h/ held, each a file holding its owner; a ticket is named
    ; by when it was asked for, so sorted names are the order of asking ---
@@ -99,24 +114,37 @@
     (: q (lk-hq root) h (lk-hh root)
        _ (lk-mkdirs q) _ (lk-mkdirs h)
        tag (lk-tag who nm)
-       held (lk-sweep h)
-       waiting (lk-sweep q)
-       mine (filter (\ n (lk-mine? n tag)) held)
-       (? (two? mine) {"granted" 1 "lock" nm}
-          (: have (filter (\ n (lk-mine? n tag)) waiting)
+       (mine? n) (lk-mine? n tag)
+       (? (two? (filter mine? (lk-names h))) {"granted" 1 "lock" nm}
+          (: have (filter mine? (lk-names q))
              t (? (two? have) <have
                   (: t (lk-pad (clock 0) + tag)
                      _ (lk-write (q + "/." + t) (lk-owner who note))
                      _ (rename (q + "/." + t) (q + "/" + t))
                      t))
-             ws (? (two? have) waiting (sort (t . waiting)))
-             pos (lk-at ws t 0)
-             mem (lk-mem 0)
-             (? (pos = 0 && #held < max && (? (() = floor) 1 (() = mem) 1 (floor <= mem)))
-                (? !(rename (q + "/" + t) (h + "/" + t)) {"granted" 1 "lock" nm}
-                   {"granted" 0 "lock" nm "position" 1 "held" #held "mem_gb" mem})
-                {"granted" 0 "lock" nm "position" (pos + 1) "held" #held "mem_gb" mem
-                 "holders" (map (\ n (lk-view (lk-parse (lk-read (h + "/" + n))))) held)}))))
+             ; the count and the move are one step under the pool's mutex, held by this process
+             me (getpid 0) mx (root + "/heavy")
+             got (lk-hold mx me 50)
+             r (lk-h-step root nm t floor max got)
+             _ (? got (lk-x-free (mx + "/mutex") me) 0)
+             r)))
+   (lk-hold mx me n)
+    (? (peep (lk-x-take mx "mutex" "mutex" me "" 1) "granted" 0) 1
+       (n <= 0) 0
+       (: _ (rest 20) (lk-hold mx me (n - 1))))
+   ; ticket t moved to h/ when may, it is first, and there is room and memory; else its place
+   (lk-h-step root nm t floor max may)
+    (: q (lk-hq root) h (lk-hh root)
+       held (lk-sweep h)
+       waiting (lk-sweep q)
+       ws (? (elem t waiting) waiting (sort (t . waiting)))
+       pos (lk-at ws t 0)
+       mem (lk-mem 0)
+       (? (may && pos = 0 && #held < max && (? (() = floor) 1 (() = mem) 1 (floor <= mem)))
+          (? !(rename (q + "/" + t) (h + "/" + t)) {"granted" 1 "lock" nm}
+             {"granted" 0 "lock" nm "position" 1 "held" #held "mem_gb" mem})
+          {"granted" 0 "lock" nm "position" (pos + 1) "held" #held "mem_gb" mem
+           "holders" (map (\ n (lk-view (lk-parse (lk-read (h + "/" + n))))) held)}))
    (lk-at l x k) (? !(two? l) -1 (<l = x) k (lk-at >l x (k + 1)))
    (lk-h-drop root nm who)
     (: tag (lk-tag who nm)
@@ -133,7 +161,7 @@
           "/tmp/love-locks"))
 
    (locks-acquire root nm kind who note floor max)
-    (kind @ 'exclusive (lk-x-take root nm who note 1)
+    (kind @ 'exclusive (lk-x-take (root + "/x") (lk-slug nm) nm who note 1)
             'heavy (lk-h-take root nm who note floor max)
             {"granted" 0 "error" "kind is exclusive or heavy"})
 
