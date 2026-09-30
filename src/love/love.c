@@ -123,8 +123,8 @@ lvm(lvm_help) {
 
 // reverse-lookup a nif value -> its source name or NULL (the printer renders nifs by name)
 char const *ai_nif_name(intptr_t x) {
- for (uintptr_t i = 0; i < countof(def1); i++) if (def1[i].v.x == x) return def1[i].n;
- return 0; }
+ intptr_t j = ai_def_index(x);
+ return j < 0 ? 0 : def1[j].n; }
 word ai_nif_word(char const *nm) {                 // strlen + memcmp: the boards link no strcmp
  size_t n = strlen(nm);
  for (uintptr_t i = 0; i < countof(def1); i++)
@@ -167,7 +167,7 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0) {
  memset(g, 0, sizeof(struct ai));
  g->len = len0;
  g->scare_a = g->scare_b = zero;        // v0..end is GC-walked: raw 0 is not a value
- g->hot_read = g->hot_numap = g->hot_arrange = g->hot_compose = g->hot_opfix = g->hot_show = g->hot_net = zero;   // unsealed: hot_hook traps until (seal-hook) fills them
+ g->hot_numap = g->hot_arrange = g->hot_compose = g->hot_opfix = g->hot_show = g->hot_net = zero;   // unsealed: hot_hook traps until (seal-hook) fills them
  g->hp = g->end, g->sp = (word*) g + len0, g->ip = (union u*) yield_c;
  // the rem set + major pool ride ai_alloc: a seat whose heap cannot supply them cannot run
  g->major_len = ai_major0;
@@ -281,6 +281,9 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0) {
                                   "payload", "<", "=", "int", "ceil", "lambda", "cask", "port", "coin" };
     for (int i = 0; ai_ok(g) && i < KnN; i++)
      if (ai_ok(g = intern(ai_strof(g, ns[i])))) g->knom[i] = ai_pop1(g); }
+  { char const *const ns[RnN] = { "\\", "list", "hash", "tuple", "tablet", "iota", "mono", "torn", "@", ",", "flow" };
+    for (int i = 0; ai_ok(g) && i < RnN; i++)
+     if (ai_ok(g = intern(ai_strof(g, ns[i])))) g->rnom[i] = ai_pop1(g); }
   if (ai_ok(g = map_new(g))) g->kreg = ai_pop1(g);
   // the 'missing tag needs nothing here (the raise sites mint it); the reader owns
   // no operator tables -- book['operators] is seeded by the prel and factored at compile time
@@ -292,7 +295,7 @@ word ai_err(struct ai *g, int e) {
  word v = ai_mapget(g, 0, putcharm(e), g->errs);
  return v ? v : ai_mapget(g, 0, zero, g->errs); }
 
-// THE system process. one of the two mutable globals the runtime keeps, and it is here
+// THE system process. a mutable global the runtime keeps, and it is here
 // rather than behind a per-seat hook because there is ONE artifact: kmain and main and gc
 // are objects in the same ELF, so a weak default and a seat's override are two bodies with
 // one name, not two sides. born below, and moved only by gen_grow, which is the only place
@@ -301,7 +304,34 @@ word ai_err(struct ai *g, int e) {
 // see the one that grew last; nothing in the tree does, and only /proc reads this.
 struct ai *ai_system;
 
+// the once-laid tables: filled before the first g by whichever start comes first (ai_ini, or
+// ai_image_load for a wake), read-only after, one copy however many g there are. the lock
+// makes a second start wait for the first. arm32 has no exchange lane, and its boards are one
+// core that starts before any interrupt, so a plain flag is the whole story there
+static int once_lock, once_done;
+static ai_inline void once_take(int *l) {
+#if !defined(__arm__)
+ while (__sync_lock_test_and_set(l, 1)) continue;
+#else
+ (void) l;
+#endif
+ }
+static ai_inline void once_give(int *l) {
+#if !defined(__arm__)
+ __sync_lock_release(l);
+#else
+ (void) l;
+#endif
+ }
+int ai_once(void) {
+ once_take(&once_lock);
+ if (!once_done) once_done = ai_ops_fill();
+ int ok = once_done;
+ once_give(&once_lock);
+ return ok; }
+
 struct ai *ai_ini(void) {
+ if (!ai_once()) return encode(NULL, ai_status_scare);
  uintptr_t const len0 = ai_minor0;   // initial minor pool; grows on demand (gen_grow)
  struct ai *g = ai_alloc(NULL, len0 * sizeof(word));
  if (g == NULL) return encode(g, ai_status_scare);

@@ -39,6 +39,8 @@
    ; glazeasm takes hook.l's assembler pins at install; unpinned, the module's own serves
    glazeasm {}
    letc (cite 'guts 'letc)                 ; ev.l's walked let, (letc rows . binds): the hook's twin carries it where a surface is missing
+   threadir (cite 'guts 'threadir)         ; post.l's reading of a thread, the input every thread lane takes
+   leafops '(+ - * // % & | ^ < <= > >= =)   ; the ops the integer lanes emit
    (le8 n) (: u (n < 0 ? (n + 18446744073709551616) n)                        ; & is broken on a bignum >= 2^63,
               ((: (go i) (i < 8 ? (u // i 256 % 256 . go (i + 1)) ())) 0))   ; so //% splits n into 8 LE bytes
    (le4 n) ((: (go i) (i < 4 ? ((n >> 8 * i) & 255 . go (i + 1)) ())) 0)  ; n -> 4 LE bytes (offsets < 2^31, & ok)
@@ -1149,12 +1151,32 @@
    (coreir tgt ps body deoptblk)
     (: AN (greg tgt 'anchor) S (greg tgt 'sp) A (greg tgt 'acc) IP (greg tgt 'ip) T (greg tgt 'tmp)
        ([['lea AN 'sp 0]] + (cgir tgt ps body) + [['adds A A A] '(br vs deopt) ['or A A 1] ['st S 0 A] ['add IP IP 16] ['ld T IP 0] ['jmpr T]] + deoptblk))
-   ; jitcore: assemble coreir for tgt and install as a nat of the given arity (deopt -> interp).
-   (jitcore tgt ps body deoptblk arity lam)
-    (nif (emit (asmt tgt (coreir tgt ps body deoptblk))) (ev lam) arity)
-   ; (jitir '(\ x E) tgt) -- an arity-1 leaf. (jitnir '(\ p0 .. E) tgt) -- arity>=2 (natn curries to saturation).
-   (jitir lam tgt)  (jitcore tgt [<>lam] <>>lam (deoptir tgt 0) 1 lam)
-   (jitnir lam tgt) (: ps (init >lam) body (last >lam) (jitcore tgt ps body (deoptir tgt 1) #ps lam))
+   ; (jitir '(\ x E) tgt) -- a leaf by hand: ev compiles it, the thread lane glazes what ev wrote
+   (jitir lam tgt)  (: f (ev lam) j (jitthread f tgt) (? (lit? j) j f))
+   (jitnir lam tgt) (jitir lam tgt)
+   ; the leaf off the thread: post.l's threadir reads an entry as [arity node], and a node in
+   ; the leaf grammar reads as the (\ p0 .. body) the leaf lane takes. 0 when it is not one
+   (tleaf? n x) (x @ ('p i) (0 <= i && i < n)
+                     ('k v) (charm? v)
+                     ('o op [a b]) (elem op leafops && tleaf? n a && tleaf? n b)
+                     ('c t a b) (tleaf? n t && tleaf? n a && tleaf? n b)
+                     0)
+   (tform ps x) (x @ ('p i) (ps i)
+                    ('k v) v
+                    ('o op as) (op . map (tform ps) as)
+                    ('c t a b) ['? (tform ps t) (tform ps a) (tform ps b)]
+                    0)
+   (pnames n) (map (\ i (name ("p" + show i))) (jot n))
+   ; a body that computes nothing, a param or a constant, runs faster than a native call
+   (thleaf t) (: n (? (two? t) (t 0) 0)
+               (? (0 < n && elem <(t 1) '(o c) && tleaf? n (t 1))
+                  (: ps (pnames n) ('\ . ps + [(tform ps (t 1))]))
+                  0))
+   ; an existing function glazed by the leaf lane, deopting to its own thread; 0 on decline
+   (jitthread e tgt) (: l (thleaf (threadir e leafops))
+                      (? (two? l) (: ps (init >l)
+                                   (nif (emit (asmt tgt (coreir tgt ps (last l) (deoptir tgt (#ps = 1 ? 0 1))))) e #ps))
+                         0))
 
    ; --- the loop-body neutral IR ------------------------------------------------------------------
    ; cgvir: cgir's grammar for the loop lanes, which leave no free reg for an anchor, so a guard deopts
@@ -1391,27 +1413,39 @@
                   (e @ (op a b) (elem op '(+ - * // % & | ^ < <= > >= =) && exprp a v && exprp b v)
                        ('? c a b) (exprp c v && exprp a v && exprp b v)
                        0))
-   ; --- leaf: (\ x E) ---
-   (qual ['\ x E]) (nom? x && exprp E x)
-   ; --- arity-N leaf: (\ p0 .. p_{n-1} E), E over the params (any distinct symbols) ---
-   (exprn ps e) (? (elem e ps) 1  (charm? e) 1  (atom? e) 0
-                   (e @ (op a b) (elem op '(+ - * // % & | ^ < <= > >= =) && exprn ps a && exprn ps b)
-                        ('? c a b) (exprn ps c && exprn ps a && exprn ps b)
-                        0))
    (distinctp l) (l @ (a . u) (!(elem a u) && distinctp u) 1)                ; no repeated param
-   (qualn ('\ . u)) (: ps (init u)  body (last u)
-                       (all nom? ps && 1 < #ps && distinctp ps && exprn ps body))
-   ; --- loop: the counted-sum skeleton (\ N ((: (go i a) (? (cmp i N) (go (+ i 1) (op a B)) a)) 0 a0)) ---
-   ;     the pattern is exact at every level: one extra operand anywhere is a different program
-   (loopinfo lam)
-    (lam @ ['\ N [[': [GO I A] ['? [cmp I N] [GO ['+ I 1] [op A B]] A]] 0 z2]]
-          (nom? N && nom? GO && nom? I && nom? A && I !== A
-           && elem cmp '(< <= > >= =)                             ; the loop-test comparison
-           && elem op '(+ *) && z2 = (foldinit op)                ; the fold op, a0 its identity (0 / 1)
-           && exprp B I                                              ; the summed term, over i
-           ? [B I op cmp] 0)
-          0)
-   ; --- call-out loop: loopinfo's shape, with the per-step term a call (F ARG) rather than arithmetic.
+   ; --- the loops off the thread: an outer of one param n that calls a lambda G over the frame
+   ;     (n v0..vk), n passed along and the inits constants; G's body (? T (G n U0..Uk) R), its
+   ;     self call known by identity. the letrec's (\ a a) wrapper reads through
+   (thspine x) (: (go x acc) (x @ ('a f as) (go f (as + acc)) [x acc]) (go x ()))
+   (thid? h) (h @ ('k v) (: t (threadir v leafops) (two? t && (t 0) = 1 && (t 1) = ['p 0])) 0)
+   (thcall h as) (? (thid? h && two? as) (: s (thspine <as) (thcall <s ((s 1) + >as))) [h as])
+   ; [n vars updates test result inits], forms over p0 .. pk, or 0
+   (thloop t)
+    (? !(two? t && (t 0) = 1) 0
+       (: s (thspine (t 1))  sp (thcall <s (s 1))  as (sp 1)
+          G ((sp 0) @ ('k v) v 0)
+          tg (? G (threadir G leafops) 0)
+          n (? (two? tg) (tg 0) 0)
+          (? !(1 < n && n < 5 && #as = n && (as 0) = ['p 0] && all (a \ a @ ('k c) (charm? c) 0) >as) 0
+             ((tg 1) @ ('c T S R)
+              (: ss (thspine S)  us (ss 1)
+                 (? (((ss 0) @ ('k v) (== v G) 0)
+                     && #us = n && (us 0) = ['p 0]
+                     && (T @ ('o cmp _) (elem cmp '(< <= > >= =)) 0)
+                     && tleaf? n T && all (tleaf? n) >us && tleaf? n R)
+                    (: ps (pnames n)
+                       [<ps >ps (map (tform ps) >us) (tform ps T) (tform ps R) (map (\ a (a 1)) >as)])
+                    0))
+              0))))
+   ; the counted sum inside it, as [B I op cmp]
+   (thcount l)
+    (l @ [N [I A] [U1 [op A2 B]] [cmp I2 N2] R [i0 z2]]
+       (? (U1 = ['+ I 1] && A2 = A && I2 = I && N2 = N && R = A && i0 = 0
+           && elem op '(+ *) && z2 = (foldinit op) && exprp B I)
+          [B I op cmp] 0)
+       0)
+   ; --- call-out loop: the counted sum's shape, with the per-step term a call (F ARG) rather than arithmetic.
    ; answers (F op i ARG); the caller resolves F and compiles arg for the callout arg (emit.l jitcalloutx).
    (calloutinfo lam)                                                    ; the one param means F is free, hence a global
     (lam @ ['\ N [[': [GO I A] ['? [cmp I N] [GO ['+ I 1] [op A [F ARG]]] A]] 0 z2]]
@@ -1435,70 +1469,10 @@
            && exprp ARG I
            ? [(posof F ps 0) (posof N ps 0) op ARG] 0)
           0))
-   (njit-loop lam B cv op cmp interp) (nif (emit (loopcode B cv op cmp arch)) interp 1)
-   ; --- general n-variable loop: (\ n ((: (go v0..vk) (? T (go U..) R)) I0..Ik)), up to 3 loop vars, arbitrary update exprs
-   (loopinfo-n lam)
-    (lam @ ['\ N ([': (GO . vars) ['? T (GO . updates) R]] . inits)]
-          (: fr (N . vars)                                            ; cgl frame: {n, v0..vk}
-             (nom? N && nom? GO && two? vars && all nom? vars && distinctp vars
-              && !(elem GO vars) && #vars < 4                      ; <= 3 loop vars (register limit)
-              && #updates = #vars && #inits = #vars
-              && elem <T '(< <= > >= =) && exprn fr T              ; test a comparison over {n,vars}
-              && all (u \ exprn fr u) updates && exprn fr R           ; updates + result exprs over {n,vars}
-              && all charm? inits                                     ; inits are fixnum consts
-              ? [vars updates T R inits] 0))
-          0)
-   ; --- c-finite bignum deopt: a linear recurrence with a canonical counter closes to m^n x0, on njit-loop-n's post-overflow
-   ;     path only. cf-lin reads linearity off the syntax (anything else declines to `interp`); the state's trailing 1 makes an affine update linear
-   (cf-nul? l)     !(two? l)
-   (cf-zeros m)    (? (m = 0) () (0 . cf-zeros (m - 1)))
-   (cf-unit m i)   (: (go j) (? (j < m) ((? (j = i) 1 0) . go (j + 1)) ()) (go 0))      ; e_i in dim m
-   (cf-const m k)  ((cf-zeros (m - 1)) + [k])                                             ; [0..0 k]
-   (cf-idx l v)    (: (go xs i) (? (cf-nul? xs) -1 (<xs = v) i (go >xs (i + 1))) (go l 0))
-   (cf-dot a b)    (? (cf-nul? a) 0 ((<a * <b) + (cf-dot >a >b)))
-   (cf-rowf f a b) (? (cf-nul? a) () (f <a <b . cf-rowf f >a >b))  ; elementwise
-   (cf-scale k r)  (map (x \ k * x) r)
-   (cf-const? r)   (all (x \ x = 0) (init r))                                              ; pure constant row
-   (cf-lin vs e)                                                                            ; e -> augmented coeff row, or () if not integer-affine
-    (: m (#vs + 1)
-       (? (whole? e) (cf-const m e)
-          (nom? e)  (: i (cf-idx vs e) (? (i < 0) () (cf-unit m i)))                        ; a state var -> e_i ; else (e.g. n) decline
-          (two? e && elem <e '(+ -) && 3 = #e)
-            (: a (cf-lin vs <>e) b (cf-lin vs <>>e)
-               (? (cf-nul? a || cf-nul? b) () (cf-rowf (? (<e = '+) (\ x y (x + y)) (\ x y (x - y))) a b)))
-          (two? e && (<e = '*) && 3 = #e)                                     ; a product is linear only if a side is constant
-            (: a (cf-lin vs <>e) b (cf-lin vs <>>e)
-               (? (cf-nul? a || cf-nul? b) ()
-                  (cf-const? a) (cf-scale (last a) b)
-                  (cf-const? b) (cf-scale (last b) a)
-                  ()))                                                                       ; var*var -> nonlinear -> decline
-          ()))
-   (cf-mat vs ups) (: m (#vs + 1) rows (map (u \ cf-lin vs u) ups)
-                      (? (any cf-nul? rows) () (rows + [(cf-unit m (m - 1))])))           ; () if any update is non-linear
-   (cf-id m)       (: (go i) (? (i < m) (cf-unit m i . go (i + 1)) ()) (go 0))
-   (cf-tpose M)    (? (cf-nul? <M) () (map cap M . cf-tpose (map cup M)))
-   (cf-mv M v)     (map (r \ cf-dot r v) M)
-   (cf-mul A B)    (: Bt (cf-tpose B) (map (r \ map (c \ cf-dot r c) Bt) A))
-   (cf-mpow M n)   (: D #M (go p acc base)
-                      (? (p = 0) acc (: b2 (cf-mul base base) (? (1 = (p % 2)) (go (p // 2) (cf-mul acc base) b2) (go (p // 2) acc b2))))
-                      (go n (cf-id D) M))                                                    ; m^n by repeated squaring, O(log n) matmuls
-   (cf-aug inits)  (inits + [1])                                                          ; x0 = [inits.. 1]
-   (cf-canon? lam vs ups test inits)                                                        ; counter c -> exactly n trips (the lambda param)?
-    ((two? test) && (<test = '<) && (3 = #test) && (<>>test = <>lam)
-     && (: c <>test i (cf-idx vs c)
-           ((i >= 0) && ((inits i) = 0)
-            && (: u (ups i) (two? u && (<u = '+) && 3 = #u && (<>u = c) && <>>u = 1)))))
-   ; matrix power if linear+canonical, else the caller's `interp` -- never (base-ev lam), which under the natjit hook re-enters ala
-   (cf-deopt lam vs ups test result inits interp)
-    (: M (cf-mat vs ups) rrow (cf-lin vs result)
-       (? (cf-canon? lam vs ups test inits && !(cf-nul? M) && !(cf-nul? rrow))
-          (n \ cf-dot rrow (cf-mv (cf-mpow M n) (cf-aug inits)))            ; bytecode under the hook: not leaf/loop grammar, so no re-entry
-          interp))
-   (njit-loop-n lam vars updates test result inits interp)
-    (nif (emit (loopcode-n <>lam vars updates test result inits arch)) (cf-deopt lam vars updates test result inits interp) 1)
-   ; --- captured-closure constructor (\ p (\ q E)): the flat 2-param native, whose partial at p is =/show-identical to the interpreter's
-   (qualc ['\ p ['\ q E]]) (nom? p && nom? q && p !== q && exprn [p q] E)
-   (flatc ['\ p ['\ q E]]) ['\ p q E]                          ; (\ p (\ q E)) -> (\ p q E)
+   (njit-loop B cv op cmp interp) (nif (emit (loopcode B cv op cmp arch)) interp 1)
+   ; interp is the loop's own thread, what show and = read the native back through
+   (njit-loop-n nv vars updates test result inits interp)
+    (nif (emit (loopcode-n nv vars updates test result inits arch)) interp 1)
    ; --- float-result leaf (\ x <fexpr>): boxes a gem. native cvtsi2sd's the param at every use, where the interpreter keeps an
    ;     int subexpression exact until a float forces it ((x * 3) + 1.5 diverges at 2^53+1), so allsafe rejects the param inside an I-typed compound
    (fty e v) (? (e = v) 'I  (gem? e) 'F  (charm? e) 'I                     ; param/int = I, float const = F
@@ -2396,25 +2370,12 @@
                                                      (map (y \ cw y bnd) x))))
                          (cw e ()))
                    e))
-   (auto-ev e) (? !x86? (? (qual e)  (memo e (l \ jitir l arch))        ; a64: integer + scalar-float lanes native
-                               (qualn e) (memo e (l \ jitnir l arch))
-                               (qualc e) (memo e (l \ jitnir (flatc l) arch))
-                               (qualfr e) (memo e (l \ jitfr l arch))      ; float-result leaf -> heap-boxed gem
-                               (: li (loopinfo e)                            ; counted loops (arch-aware loopcode)
-                                  (? li (memo e (l \ njit-loop l <li <>li <>>li <>>>li (base-ev l)))
-                                     (: ln (loopinfo-n e)
-                                        (? ln (memo e (l \ njit-loop-n l <ln <>ln <>>ln <>>>ln <>>>>ln (base-ev l)))
-                                           (base-ev (opfixed . autogroup (autonat (twolow (canon (opfix e)))))))))))   ; float-grid nest (scalar gridn, arch-aware) then group; castbuild (cask-fill) is x86-only so skipped
-                  (qual e)  (memo e (l \ jitir l arch))
-                  (qualn e) (memo e (l \ jitnir l arch))
-                  (qualc e) (memo e (l \ jitnir (flatc l) arch))
+   ; the integer leaf and the loops are the hook's, read off the thread base-ev writes
+   (auto-ev e) (? !x86? (? (qualfr e) (memo e (l \ jitfr l arch))      ; a64: scalar-float lanes native; float-result leaf -> heap-boxed gem
+                           (base-ev (opfixed . autogroup (autonat (twolow (canon (opfix e)))))))   ; float-grid nest (scalar gridn, arch-aware) then group; castbuild (cask-fill) is x86-only so skipped
                   (qualfr e) (memo e (l \ jitfr l arch))         ; float-result leaf -> heap-boxed gem (sound: param floated at first use)
-                  (: li (loopinfo e)
-                     (? li (memo e (l \ njit-loop l <li <>li <>>li <>>>li (base-ev l)))
-                        (: ln (loopinfo-n e)
-                           (? ln (memo e (l \ njit-loop-n l <ln <>ln <>>ln <>>>ln <>>>>ln (base-ev l)))
-                              ; fall-through: cask-build a string loop, lower a complex grid to real pairs, then a float-grid nest or an arith group, else interp
-                              (base-ev (opfixed . autogroup (autonat (twolow (castbuild (canon (opfix e))))))))))))
+                  ; fall-through: cask-build a string loop, lower a complex grid to real pairs, then a float-grid nest or an arith group, else interp
+                  (base-ev (opfixed . autogroup (autonat (twolow (castbuild (canon (opfix e))))))))
    ; `ev` is orth, which a module layer cannot write, so the boot installs (: ev (cite 'glaze 'ev)). a re-load hands the baked
    ; auto-ev back; a trampoline build (love-tco 0) stays the interpreter, since glazed code Continues by tail-jump, which only the threaded vm honors
    ev (? glaze-loaded? ev
@@ -2433,8 +2394,7 @@
     (: arch love-arch                                                     ; the runtime target ('x64 / 'a64), read on the actual binary
        G (cite 'glaze)                                                    ; not in the module (test_glaze re-cats it alone): every name arrives by key
        emit (G 'emit)  coreir (G 'coreir)  deoptir (G 'deoptir)
-       loopinfo (G 'loopinfo)  njit-loop (G 'njit-loop)
-       loopinfo-n (G 'loopinfo-n)  njit-loop-n (G 'njit-loop-n)
+       njit-loop (G 'njit-loop)  njit-loop-n (G 'njit-loop-n)
        calloutinfo (G 'calloutinfo)  jitcalloutx (G 'jitcalloutx)
        calloutinfo-frame (G 'calloutinfo-frame)  njit-calloutframe (G 'njit-calloutframe)
        qualfr (G 'qualfr)  jitfrx (G 'jitfrx)
@@ -2449,12 +2409,9 @@
        ; grp-ok?: autogroup's recognizer over the defs jitgroupirx compiles. jgir-ok? only says the ops exist -- a body past
        ; the grammar reaches cggir, whose ? chain ends in a silent () that emits no code
        (grp-ok? gds) (: cands (map (gd \ [<<gd (#<gd - 1)]) gds) (#(grpfix gds cands) = #gds))   ; (name arity)
-       (exprn ps e) (? (elem e ps) 1  (charm? e) 1  (atom? e) 0                    ; the leaf grammar, exact arity: (+ x 1 2) is a tower, not x + 1
-                       (e @ (op a b) (elem op '(+ - * // % & | ^ < <= > >= =) && exprn ps a && exprn ps b)
-                            ('? c a b) (exprn ps c && exprn ps a && exprn ps b)
-                            0))
        (opnd-ok? ps e) (? (two? e) (all (opnd-ok? ps) >e)  (nom? e) (elem e ps)  1)   ; every operand leaf a frame param: jgir has no slot for a free capture
        (gdefs-ok? gds) (all (gd \ opnd-ok? ><gd >gd) gds)                             ; ... and per def body, over that def's own params
+       threadir (G 'threadir)  leafops (G 'leafops)  thleaf (G 'thleaf)  thloop (G 'thloop)  thcount (G 'thcount)
        ; e = the bytecode entry (deopt target), s = the surface (\ frame.. body), a = arity, gv = ala's folded global resolver,
        ; farq = the letrec-local predicate (a farq name is wire-resolved: never gv it, the book namesake is stale), lams = the scope's
        ; lambda siblings ((name . cell)..; entry 0 declines), nm = the letrec name being bound (0 anonymous), ti/ta = ev.l's uninterned iop/apx markers, inl = the inner-closure record amble's site reads,
@@ -2463,13 +2420,15 @@
         (: _ (? (peep gvbox 0 0) 0 (pin gvbox 0 gv))
            _ (pin probebox 0 0)
            ps (init >s)  body (last >s)                                                ; the frame [imps args] + the surface body
-           (? !(all nom? ps) e                                                       ; a frame that is not all points (a pattern binder) declines every lane
-              (two? s && two? >>s && exprn ps body)                                   ; the leaf: >=1 param, a body in the grammar
-              (hit (nif (emit (peep (asm arch (coreir arch ps body (deoptir arch (a = 1 ? 0 1)))) 'bytes 0)) e a))
+           t (threadir e leafops)                                                            ; the thread ev wrote, read once for every thread lane
+           lf (thleaf t)
+           lp (? (two? lf) 0 (thloop t))
+           (? (two? lf) (hit (nif (emit (peep (asm arch (coreir arch (init >lf) (last lf) (deoptir arch (a = 1 ? 0 1)))) 'bytes 0)) e a))
+              (two? lp) (thcount lp @ [B I op cmp] (hit (njit-loop B I op cmp e))     ; the counted loop, then the n-var one: the back-edge is the win
+                         (hit (njit-loop-n (lp 0) (lp 1) (lp 2) (lp 3) (lp 4) (lp 5) e)))
+              !(all nom? ps) e                                                        ; a frame that is not all points (a pattern binder) declines every source lane
               (qualfr s) (hit (jitfrx s arch e))                                      ; the float-result leaf boxes a gem; deopt to e, never (ev s), which re-enters ala
-              (loopinfo s @ [B I op cmp] (hit (njit-loop s B I op cmp e))             ; the counted loop, then the n-var one: the back-edge is the win
-               (loopinfo-n s @ [vars ups T R inits] (hit (njit-loop-n s vars ups T R inits e))
-                (: ci (calloutinfo s)                                                 ; a counted sum over (F i), F a resolvable global: the stackless bridge
+                (: ci (calloutinfo s)                                               ; a counted sum over (F i), F a resolvable global: the stackless bridge
                    fv (ci && !(farq <ci) && gv <ci 0)
                    (? (lit? fv) (ci @ [_ op iv arg] (hit (jitcalloutx fv s op iv arg arch)))
                       (calloutinfo-frame s @ [F N op arg] (hit (njit-calloutframe s F N a e op arg arch))   ; ... F and the bound read from the frame
@@ -2488,7 +2447,7 @@
                              (hit (jitgroupirx agdefs osym arch e))
                              (: aj (njit-amble s a e gv farq lams nm ti ta inl arch)                 ; amble, the last lane: 0 on decline
                                 (? aj (hit aj)
-                                   (defer e s a gv farq lams nm ti ta inl rt))))))))))))
+                                   (defer e s a gv farq lams nm ti ta inl rt))))))))))
        ; a decline that a sibling not yet built may have caused: amble asked again as though every
        ; sibling were (entry 1), and if that would compile, a cell of a native's shape stands in
        ; (defercell) and the compile waits for the end of the form, where deferpatch lays it in. it
@@ -2510,7 +2469,9 @@
                        _ (pin rt 'defer ((\ _ (deferpatch L (natjit e s a gv farq lz nm ti ta inl 0))) . peep rt 'defer ()))
                        L)))))
        natjit)                                                            ; the inner : answers the closure; its aliases stay private
-   (fired? n) (n < peep fires () 0))                                       ; did the hook fire since count n?
+   (fired? n) (n < peep fires () 0)                                        ; did the hook fire since count n?
+   ; a function already built, glazed off its thread: the native, or f itself on a decline
+   (glaze-thread f) (: j ((cite 'glaze 'jitthread) f love-arch) (? (lit? j) j f)))
 
 ; walk -- re-declare the prel list walkers through the glazed compiler: the prel originals are egg-baked pre-glaze, these compile
 ; under the live natjit. bodies verbatim from src/love/boot/prel.l, caap spelled through cap (a free accessor head declines); egg-baked consumers keep the closures they folded

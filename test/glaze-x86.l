@@ -28,10 +28,11 @@
    emit (G 'emit)  fbits (G 'fbits)  fr (G 'fr)  grok (G 'grok)
    jit (G 'jit)  jit2 (G 'jit2)  jitf (G 'jitf)  jitfgrid (G 'jitfgrid)  jitfr (G 'jitfr)
    jitgroupir (G 'jitgroupir)  jitgroupirx (G 'jitgroupirx)  jitir (G 'jitir)  jitloop-n (G 'jitloop-n)  jitn (G 'jitn)
-   jitnir (G 'jitnir)  jitsum (G 'jitsum)  jitcalloutsum (G 'jitcalloutsum)  jitcalloutx (G 'jitcalloutx)  calloutir (G 'calloutir)  calloutframeir (G 'calloutframeir)  loopcode (G 'loopcode)  loopinfo (G 'loopinfo)
-   loopinfo-n (G 'loopinfo-n)  mkhir (G 'mkhir)  mkouterir (G 'mkouterir)
+   jitnir (G 'jitnir)  jitsum (G 'jitsum)  jitcalloutsum (G 'jitcalloutsum)  jitcalloutx (G 'jitcalloutx)  calloutir (G 'calloutir)  calloutframeir (G 'calloutframeir)  loopcode (G 'loopcode)
+   thloop (G 'thloop)  thcount (G 'thcount)  threadir (G 'threadir)  mkhir (G 'mkhir)  mkouterir (G 'mkouterir)
    occurs? (G 'occurs?)  plift (G 'plift)  qualfr (G 'qualfr)  twolow (G 'twolow)  canon (G 'canon)
-   nif (G 'nif))                                 ; the C install seam, a glaze member: every boot pulls it off the book
+   nif (G 'nif)                                  ; the C install seam, a glaze member: every boot pulls it off the book
+   (tloop f) (thloop (threadir (base-ev f) 0)))    ; a written loop, as the hook's thread lane reads what ev made of it
 (assert (lit? base-ev) (lit? autogroup) (lit? jitgroupir) (lit? assemble))
 (: tw twin)                                            ; a synonym, for canon's law below
 
@@ -353,29 +354,29 @@
     ; loop auto-detected -> native counted loop, =-identical + correct
     (: L1 '(\ n ((: (go i a) (? (< i n) (go (+ i 1) (+ a (* i 7))) a)) 0 0))
        f  (ev L1)
-       (&& (= f (ev L1)) (3496500 = (f 1000)) (two? (loopinfo L1))
+       (&& (= f (ev L1)) (3496500 = (f 1000)) (two? (thcount (tloop L1)))
            (= (ev L1) (ev L1))))                                  ; cache: same source -> same native (compiled once, memoized)
     ; loop with a conditional body (sum i for i<50, capped) auto-detected
     (: L2 '(\ n ((: (go i a) (? (< i n) (go (+ i 1) (+ a (? (< i 50) i 0))) a)) 0 0))
        h  (ev L2)  c ((: (go i a) (? (< i 1000) (go (+ i 1) (+ a (? (< i 50) i 0))) a)) 0 0)
-       (&& (two? (loopinfo L2)) (= c (h 1000))))
+       (&& (two? (thcount (tloop L2))) (= c (h 1000))))
     ; generalized loop -- a product fold (op=*, init 1): n! = prod_{i<n}(i+1)
     (: P '(\ n ((: (go i a) (? (< i n) (go (+ i 1) (* a (+ i 1))) a)) 0 1))
        f (ev P)  fi ((: (go i a) (? (< i 10) (go (+ i 1) (* a (+ i 1))) a)) 0 1)
-       (&& (two? (loopinfo P)) (3628800 = (f 10)) (= fi (f 10)) (= (ev P) (ev P))
+       (&& (two? (thcount (tloop P))) (3628800 = (f 10)) (= fi (f 10)) (= (ev P) (ev P))
            (15511210043330985984000000 = (f 25))))             ; overflow -> deopt -> bignum (transparent)
     ; generalized loop -- a <= comparison: sum_{i<=n} i
     (: Q '(\ n ((: (go i a) (? (<= i n) (go (+ i 1) (+ a i)) a)) 0 0))
-       g (ev Q)  (&& (two? (loopinfo Q)) (55 = (g 10))))        ; 0+1+..+10 = 55
+       g (ev Q)  (&& (two? (thcount (tloop Q))) (55 = (g 10))))        ; 0+1+..+10 = 55
     ; n-variable loop auto-detected: iterative fib (i,a,b -- updates b and a+b)
     (: F '(\ n ((: (go i a b) (? (< i n) (go (+ i 1) b (+ a b)) a)) 0 0 1))
-       nf (ev F)  (&& (two? (loopinfo-n F)) (832040 = (nf 30)) (= (ev F) (ev F))   ; fib(30)=832040, native+transparent
+       nf (ev F)  (&& (two? (tloop F)) (832040 = (nf 30)) (= (ev F) (ev F))   ; fib(30)=832040, native+transparent
                       (4660046610375530309 = (nf 91))                              ; fib(91) -> deopt -> bignum
-                      (354224848179261915075 = (nf 100))))                         ; fib(100) overflows -> c-finite matrix-power deopt, exact bignum
-    ; c-finite deopt on a constant-scaled (* 2 b) update: pell(60) overflows int64, so the native loop
-    ; deopts to the matrix-power closed form -- which must equal the interpreted loop (base-ev) exactly.
+                      (354224848179261915075 = (nf 100))                           ; fib(100) overflows -> deopt to the thread, exact bignum
+                      (40 = ((show nf) 0))))                                       ; the native shows as its lambda: the deopt is its thread
+    ; a constant-scaled (* 2 b) update: pell(60) overflows int64, and the deopted loop must equal the interpreted one exactly
     (: PL '(\ n ((: (go i a b) (? (< i n) (go (+ i 1) b (+ (* 2 b) a)) a)) 0 0 1))
-       pf (ev PL)  (&& (two? (loopinfo-n PL)) (= ((base-ev PL) 60) (pf 60)) (= 12 (pf 4))))  ; pell(60) deopt == interp; pell(4)=12 in-range
+       pf (ev PL)  (&& (two? (tloop PL)) (= ((base-ev PL) 60) (pf 60)) (= 12 (pf 4))))  ; pell(60) deopt == interp; pell(4)=12 in-range
     (= (ev '(\ x (+ x 1))) (ev '(\ x (+ x 1))))
     (: ad (ev '(\ x y (+ (* x x) y))) (&& (13 = (ad 3 4)) (13 = ((ad 3) 4)) ((\ x y (+ (* x x) y)) = ad)))  ; 2-arg leaf auto-natived
     (: a3 (ev '(\ x y z (+ (+ x y) (* z 3))))                                                  ; 3-arg leaf auto-natived, currying at any split

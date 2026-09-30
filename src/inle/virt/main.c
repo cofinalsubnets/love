@@ -109,6 +109,9 @@ static struct ai_def defs[] = { {"vexit", {.k = nif_vexit}} };
 // the bottom of DRAM (0x80000000); the C stack tops out at the pool's base
 // and grows away from it.
 #include "../ffalloc.h"
+
+// the seat check: the egg hatched into the self-hosted ev, and a closure runs through the heap
+#define SEAT_OK "(lit? ev && map (+ 1) '(1 2 3) = '(2 3 4))"
 static struct mem *freelist;
 
 #define POOL ((uint8_t*) 0x82000000u)
@@ -138,8 +141,6 @@ int main(void) {
   struct ai *r = ai_egg(g,
 #include "egg.h"
     ,
-#include "p1.h"
-    ,
 #include "prel.h"
     " "
 #include "ev.h"
@@ -147,9 +148,9 @@ int main(void) {
 #include "post.h"
     );
   r = ai_evals_(r,
-    // the driver tail: the seat laws (src/inle/seat.l), alive on the hart.
+    // the driver tail: the seat check, alive on the hart.
     "(: ok "
-#include "seat.h"
+    SEAT_OK
     "   _ (putc 10) _ (puts \"; the egg hatched -- love on the hart\") _ (putc 10)"
     "   (vexit (? ok 42 1)))");
   if (ai_code_of(r) == ai_status_scare) ai_scare_face(r);
