@@ -14,12 +14,13 @@
        chk ((: (go i a) (i < reps ? (go (i + 1) (work ())) a)) 0 0)
      (clock 0 - t0 . chk))
    (bench-loop work reps)                                             ; double until >= floor, then time it warm
-    (bench-run work reps @ r
+    (: r (bench-run work reps)
        (<r < bench-min-ms ? (bench-loop work (2 * reps)) (reps . bench-run work reps)))
    (bench name work)
-    (bench-loop work 1 @ (reps . ms . chk)
-     (puts name,       putc 32,
-      puts bench-lang, putc 32,
-      putx reps,       putc 32,
-      putx ms,         putc 32,
-      putx chk,        putc 10, 0)))
+    (: r    (bench-loop work 1)
+       reps <r ms (caup r) chk (cuup r)
+     (: _ (puts name)       _ (putc 32)
+        _ (puts bench-lang) _ (putc 32)
+        _ (putx reps)   _ (putc 32)
+        _ (putx ms)     _ (putc 32)
+        _ (putx chk)    _ (putc 10) 0)))

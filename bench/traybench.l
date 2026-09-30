@@ -7,11 +7,10 @@
    zs (iota n)
    ws (iota n * 3 % 11)
    idx (iota n * 37 % (n + 8))
-   (ms f) (: t0 (nclock 0)
-             (: (go k) (k < 1 ? 0 (f 0, go (k - 1))) (go reps),
-              (nclock 0 - t0 + 0.0) / reps / 1000000.0))
+   (ms f) (: t0 (nclock 0) _ (: (go k) (k < 1 ? 0 (f 0, go (k - 1))) (go reps))
+             ((nclock 0 - t0 + 0.0) / reps / 1000000.0))
    ; the best of three rounds: the collector's phase moves a mean by a third on the allocating rows
-   (row nm f) (min (ms f) (min (ms f) (ms f)) @ t (puts (nm + " " + show t + "\n")))
+   (row nm f) (: t (min (ms f) (min (ms f) (ms f))) (puts (nm + " " + show t + "\n")))
    (row "fadd" (_ \ xs + ys),
     row "fmul-scalar" (_ \ xs * 0.75),
     row "poly" (_ \ ((xs * 0.5 + 1.0) * xs - 0.25) * xs + 2.0),
