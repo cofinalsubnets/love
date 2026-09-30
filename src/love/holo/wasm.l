@@ -27,18 +27,18 @@
 (: ;; -- LEB128. unsigned rides // and % so a u64 past the fixnum stays exact; signed stops
    ;;    when the rest is the sign's own extension and the byte's bit 6 agrees. --
    (uleb n) (: b (n % 128) r (n // 128) (r @ 0 [b] (b + 128 . uleb r)))
-   (sleb n) (: m (n % 128) b (? (m < 0) (m + 128) m) r ((n - b) // 128)
-               (? ((r = 0 && b < 64) || (r = -1 && b >= 64)) [b] (b + 128 . sleb r)))
-   (wrap32 n) (? (n > 2147483647) (n - 4294967296) n)
+   (sleb n) (: m (n % 128) b (m < 0 ? (m + 128) m) r ((n - b) // 128)
+               (r = 0 && b < 64 || r = -1 && b >= 64 ? [b] (b + 128 . sleb r)))
+   (wrap32 n) (n > 2147483647 ? (n - 4294967296) n)
    (wbytes s) (map s ^#s)                 ; a string's bytes
    (wname s) (uleb #s + wbytes s)
    (wvec items) (uleb #items + catall items)   ; items: a list of byte lists
    ;; the big lanes are strings, never a cons per byte: a section, a function's entry, the
    ;; data segment. a byte list is coerced where it meets one; a jug joins many
    (wstr x) (? (string? x) x (two? x) (string x) "")
-   (wcat strs) (: j (jug 0) _ (map (x \ (string? x && say j x)) strs) (slurp j))
+   (wcat strs) (jug 0 @ j (map (x \ (string? x && say j x)) strs, slurp j))
    (wvecs items) (wcat ((string (uleb #items)) . map wstr items))   ; items: strings or byte lists
-   (wsect id bs) (: b (wstr bs) ((string (id . (uleb #b))) + b))
+   (wsect id bs) (wstr bs @ b (string (id . (uleb #b)) + b))
 
    ;; -- the types --
    wasm-vt {'i32 127 'i64 126 'f32 125 'f64 124 'funcref 112}
@@ -107,7 +107,7 @@
    (wins f)
     (: r (wasm-ops <f)
        g <>f
-       _ (? (atom? r) (scare 'bad-wasm-op <f) 0)
+       _ (atom? r ? (scare 'bad-wasm-op <f) 0)
        code (two? <r ? <r [<r])
        (r 1 @
         'n    code
@@ -126,7 +126,7 @@
 
    ;; -- the module --
    (wlimits l is64) (two? >l + (is64 ? 4 0) . uleb <l + (two? >l && uleb <>l))
-   (wfunctype t) (96 . wvec (map (\ x [(vt x)]) <t) + wvec (map (\ x [(vt x)]) <>t))
+   (wfunctype t) (96 . wvec (map (x \ [(vt x)]) <t) + wvec (map (x \ [(vt x)]) <>t))
    (wdesc d is64)
     (<d @ 'func   (0 . uleb (d 1))
          'table  (1 112 . wlimits [(d 1) (d 1)] 0)
@@ -137,10 +137,10 @@
    (wglobal g) ([(vt <g) (g 1)] + wexpr (g 2))
    (wexport e) (wname <e + [(kind <>e)] + uleb (e 2))
    (wentry ls body) (string (wvec (map (a . b . _ \ uleb a + [(vt b)]) ls) + wexpr body))   ; a function's entry, sizeless
-   (wcode f) (: e (? (string? <>f) <>f (wentry <>f <>>f))   ; (typeidx locals body), or (typeidx entry)
-                ((string (uleb #e)) + e))
+   (wcode f) (: e (string? <>f ? <>f (wentry <>f <>>f))   ; (typeidx locals body), or (typeidx entry)
+                (string (uleb #e) + e))
    (wdata d is64) (: bs (wstr >d)                             ; (off byte ..), or (off . string)
-                     ((string (0 . ((wexpr [[(? is64 'i64.const 'i32.const) <d]]) + (uleb #bs)))) + bs))
+                     (string (0 . (wexpr [[(is64 ? 'i64.const 'i32.const) <d]] + uleb #bs)) + bs))
    ;; presence is two?, never nil?: nil? is the falsy test, a net over the whole value, and a
    ;; body carrying the minimum i64 nets negative -- a section would vanish in silence
    (wsection id items f) (two? items && wsect id (wvecs (map f items)))
@@ -157,16 +157,16 @@
          (two? mem && wsect 5 (wvec [(wlimits mem is64)]))
          (wsection 6 (m 'globals) wglobal)
          (wsection 7 (m 'exports) wexport)
-         (? (start < 0) () (wsect 8 (uleb start)))
+         (start < 0 ? () (wsect 8 (uleb start)))
          (two? elem && wsect 9 (wvec [(0 . wexpr '((i32.const 0)) + wvec (map uleb elem))]))
          (wsection 10 (m 'funcs) wcode)
          (wsection 11 (m 'data) (d \ wdata d is64))
          (: ns (m 'names)                   ; the "name" custom section: a trap's stack names its function
             (two? ns ?
-             (: fm (wvec (map (m . n . _ \ uleb m + wname n) ns))
+             (wvec (map (m . n . _ \ uleb m + wname n) ns) @ fm
                 (wsect 0 (wname "name" + (1 . uleb #fm + fm))))))]))
    (wasm-hex m) (hexs (wbytes (wasm-emit m)))
    (wins-hex body) (hexs (catmap wins body))
-   (wasm-write path m) (: q (open path "w") (say q (wasm-emit m), close q))
+   (wasm-write path m) (open path "w" @ q (say q (wasm-emit m), close q))
 )
 ) ; module 'holo

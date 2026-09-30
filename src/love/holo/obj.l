@@ -36,7 +36,7 @@
 
    (o-has? tab k) (peep tab k 'no !== 'no)    ; is key k bound in the tablet?
    ; a lane's file size. not `tally`: an item may be a blob, one cell holding many bytes.
-   (o-blen l) (:- (go l 0) (go l n) (? !(two? l) n (go >l (n + item-len <l))))
+   (o-blen l) (:- (go l 0) (go l n) (!(two? l) ? n (go >l (n + item-len <l))))
    (o-strbytes s) (: (go i acc) (i < 0 ? acc (go (i - 1) (s i . acc)))
                      (go (#s - 1) ()))         ; a string -> its byte list. a real encode,
                      ; not a bytes-through-text leak: an ELF string table holds text.
@@ -49,15 +49,15 @@
    ; the addend is the fixup's aux, so a &arr[i] pointer's baked byte offset rides the RELA
    ; and the linker's S+a lands on the element. the `any` spares a laid blob a walk per byte.
    (o-walk be items labels wkset internal? rset)
-    (? (any fix? items) (o-walkr be items labels wkset internal? rset 0 () ())
+    (any fix? items ? (o-walkr be items labels wkset internal? rset 0 () ())
        [items ()])
    (o-walkr be items labels wkset internal? rset off bacc racc)
-    (? !(two? items) [(rev bacc) (rev racc)]
-       (: x <items
-          (? (fix? x)
+    (!(two? items) ? [(rev bacc) (rev racc)]
+       (<items @ x
+          (fix? x ?
               (: lbl (fix-l x) w (fix-w x) k (fix-k x)
-                 (? (internal? && elem k rset &&
-                     o-has? labels lbl && !(o-has? wkset lbl))          ; a weak target stays a reloc
+                 (internal? && elem k rset &&
+                  o-has? labels lbl && !(o-has? wkset lbl) ?          ; a weak target stays a reloc
                      (: tgt (peep labels lbl 0)
                         bs (patch-with be k tgt off w (fix-a x))
                         (o-walkr be >items labels wkset internal? rset (off + w)
@@ -94,17 +94,17 @@
    ; build that shape, so the two questions asked of a whole object are asked once here.
    ; o-where: a label -> (section-index offset), 1-based (ELF's shndx, 0 being undef), or ().
    (o-where lanes lbl)
-    (: (go ls i) (? !(two? ls) ()
-                    (: lb (<ls 6)
-                       (? (o-has? lb lbl) [i (peep lb lbl 0)] (go >ls (i + 1)))))
+    (: (go ls i) (!(two? ls) ? ()
+                    (<ls 6 @ lb
+                       (o-has? lb lbl ? [i (peep lb lbl 0)] (go >ls (i + 1)))))
        (go lanes 1))
    ; the externals: labels a relocation names that no lane defines -- each needs
    ; an undef symbol. unique, first-seen order.
    (o-exts lanes rels)
     (: seen {}
        (go rs acc)
-        (? !(two? rs) acc
-           (: lbl (<rs 2)
+        (!(two? rs) ? acc
+           (<rs 2 @ lbl
               (o-where lanes lbl || o-has? seen lbl ? (go >rs acc)
                (pin seen lbl 1, go >rs (lbl . acc)))))
        (rev (go rels ())))
@@ -117,8 +117,8 @@
    ; k-th name's offset is where it starts. shared for .strtab and .shstrtab.
    (o-strtab names)
     (: (go ns off bacc offs)
-        (? !(two? ns) [(rev bacc) (rev offs)]
-           (: bs (o-strbytes <ns + '(0))
+        (!(two? ns) ? [(rev bacc) (rev offs)]
+           (o-strbytes <ns + '(0) @ bs
               (go >ns (off + #bs) (rev bs + bacc) (off . offs))))
        (go names 1 '(0) ()))
 
@@ -151,10 +151,10 @@
        _ (0 >= nsec ? (scare 'obj-no-sections target))
        (exec? s) (0 < s 2 & 4)
        ; one section is one lay: the executable ones through the relaxer, the rest plain.
-       lanes (map (\ s
+       lanes (map (s \
                 (: fm (s 4)
-                   p (? (exec? s)
-                        (: r laylax
+                   p (exec? s ?
+                        (laylax @ r
                            (lit? laylax ? (r fm be 0 {} wkset)
                             (scare 'holo-bake-stale 'laylax)))
                         (lay (o-dal fm) be 0 () {}))
@@ -178,7 +178,7 @@
        (o-locs pick kinds)
         (: seen {}
            (go rs acc)
-            (? !(two? rs) acc
+            (!(two? rs) ? acc
                (: r <rs lbl (r 2)
                   w (elem (r 1) kinds ? (o-where lanes lbl))
                   (go >rs (? !(two? w) acc
@@ -209,16 +209,16 @@
         (? (o-has? globidx lbl) [(peep globidx lbl 0) aux]
            (o-has? fnidx lbl)   [(peep fnidx lbl 0) aux]
            (o-has? locidx lbl)  [(peep locidx lbl 0) aux]
-           (: w (o-where lanes lbl)
+           (o-where lanes lbl @ w
               (two? w ? [<w (<>w + aux)] [(peep extidx lbl 0) aux])))
        ; a movw16/movt16 (thumb2 la) target -> (symidx addend). the shape of a32loc, but
        ; the fixup's aux is Rd (not an addend), so the addend starts at 0.
        (mwloc lbl) (a32loc lbl 0)
        ; bake each abs32 field (addend + any section-relative offset) into the bytes..
        (bakeabs bytes rs)
-        (: (go rs bs) (? !(two? rs) bs
-                         (: r <rs
-                          (go >rs (<>r !== 'abs32 ? bs (: sl (a32loc <>>r <>>>r) (o-put32 bs <r <>sl))))))
+        (: (go rs bs) (!(two? rs) ? bs
+                         (<rs @ r
+                            (go >rs (<>r !== 'abs32 ? bs (a32loc <>>r <>>>r @ sl (o-put32 bs <r <>sl))))))
            (go rs bytes))
        ; ..and the same for a section-bound movw16/movt16, whose addend rides the imm16
        ; scatter (patch-with does the scatter; the linker adds S on top).
@@ -226,9 +226,9 @@
         (:- (go rs bytes) (go rs bs)
          (rs @- bs (r . u)
           (go u (nelem <>r '(movw16 movt16) ? bs
-           (: sl (mwloc <>>r)
-            (<>sl @ 0 bs (o-putbs bs <r (patch-with be <>r <>sl 0 4 <>>>r))))))))
-       lbytes (map (\ l (: rs (ln-rl l) (bakemw (bakeabs (ln-bs l) rs) rs))) lanes)
+           (mwloc <>>r @ sl
+              (<>sl @ 0 bs (o-putbs bs <r (patch-with be <>r <>sl 0 4 <>>>r))))))))
+       lbytes (map (l \ (ln-rl l @ rs (bakemw (bakeabs (ln-bs l) rs) rs))) lanes)
        symnames (map (string * cap) locs + funcnames + globnames + map string exts)
        str (o-strtab symnames)
        strblob <str stroffs <>str
@@ -236,19 +236,19 @@
        ; cross-object R_ARM_THM_CALL folds into T so the callee enters Thumb state -- m0 has
        ; no ARM state at all. data syms stay even. a named symbol's section is wherever its
        ; bytes went, so a global may live in a section the writer never heard of. --
-       (o-place nm) (: w (o-where lanes (name nm)) (two? w ? w '(1 0)))
+       (o-place nm) (o-where lanes (name nm) @ w (two? w ? w '(1 0)))
        symbytes
         (: lsyms (catall (o-mapi (\ i e (: si <>e off <>>e
-                                           (? (sec-exec? si)
+                                           (sec-exec? si ?
                                               (elf-sym32 (stroffs i) 0 2 si (off | 1) 0)   ; stb_local stt_func, +thumb bit
                                               (elf-sym32 (stroffs i) 0 1 si off 0))))      ; stb_local stt_object
                                  locs))
-           fsyms (catall (o-mapi (\ i fs (: w (o-place fs)
+           fsyms (catall (o-mapi (\ i fs (o-place fs @ w
                                             (elf-sym32 (stroffs (nloc + i))
                                                      (elem fs wknames ? 2 1)         ; stb_weak vs stb_global
                                                      2 <w (<>w | 1) 0)))                    ; stt_func, +thumb bit
                                  funcnames))
-           gsyms (catall (o-mapi (\ i gs (: w (o-place gs)
+           gsyms (catall (o-mapi (\ i gs (o-place gs @ w
                                             (elf-sym32 (stroffs (nloc + nfun + i))
                                                      (elem gs wknames ? 2 1) 1 <w <>w 0)))
                                  globnames))
@@ -272,10 +272,10 @@
         (catall (map (\ [off k lbl aux _]
           (k @ 'bl (o-rel32 off (fnsym lbl) r-thm-call)
                'b  (o-rel32 off (fnsym lbl) r-thm-jump24)   ; a B.W tail-jump to an external/weak fn
-               'abs32 (: sl (a32loc lbl aux) (o-rel32 off <sl r-arm-abs32))
+               'abs32 (a32loc lbl aux @ sl (o-rel32 off <sl r-arm-abs32))
                ('movw16 || 'movt16)
-                (: sl (mwloc lbl)
-                 (o-rel32 off <sl $ k == 'movw16 ? r-thm-movw r-thm-movt))
+                (mwloc lbl @ sl
+                   (o-rel32 off <sl $ k == 'movw16 ? r-thm-movw r-thm-movt))
                (scare 'obj32-reloc k)))
           rs))
        rels (map (o-rels32 * ln-rl) lanes)
@@ -306,14 +306,14 @@
        shs-off <>ro               shs-sz #shstrblob
        sht-off (shs-off + shs-sz)
        sht (catall ([(o-zeros 40)]                                             ; 0 NULL
-              + (o-mapi (\ i l (elf-shdr32 (shname i) (ln-ty l) (l 2)             ; 1..nsec the content sections
-                                     0 (coffs i) (o-blen (ln-bs l)) 0 0 (l 3) 0))
-                        lanes)
+              + o-mapi (\ i l (elf-shdr32 (shname i) (ln-ty l) (l 2)             ; 1..nsec the content sections
+                                    0 (coffs i) (o-blen (ln-bs l)) 0 0 (l 3) 0))
+                       lanes
               + [(elf-shdr32 (shname nsec) 2 0 0 sym-off sym-sz i-str (1 + nsec + nloc) 4 16)   ; .symtab link=.strtab info=first-global
                  (elf-shdr32 (shname (nsec + 1)) 3 0 0 str-off str-sz 0 0 1 0)]                   ; .strtab
-              + (o-mapi (\ i l (elf-shdr32 (shname (nsec + 2 + i)) 9 0                        ; one .rel per section, link=.symtab
-                                     0 (roffs i) (rcnt i * 8) i-sym (i + 1) 4 8))
-                        lanes)
+              + o-mapi (\ i l (elf-shdr32 (shname (nsec + 2 + i)) 9 0                        ; one .rel per section, link=.symtab
+                                    0 (roffs i) (rcnt i * 8) i-sym (i + 1) 4 8))
+                       lanes
               + [(elf-shdr32 (shname (2 * nsec + 2)) 3 0 0 shs-off shs-sz 0 0 1 0)]))           ; .shstrtab
        hdr (catall [
              '(127 69 76 70 1 1 1 0 0 0 0 0 0 0 0 0)                      ; e_ident: \x7fELF 32-bit LSB
@@ -358,7 +358,7 @@
      [".love.image"  1 3 16 imgforms]]
    ; a named section a compiler emits: progbits on the widest grain its globals ask for,
    ; allocated, writable unless ro says every global in it is const and reloc-free.
-   (objsec-named nm forms ro) [nm 1 (? ro 2 3) (o-dalign 8 forms) forms]
+   (objsec-named nm forms ro) [nm 1 (ro ? 2 3) (o-dalign 8 forms) forms]
    ; ..and the code twin, for a function that named its own section (love.c's data
    ; sentinels). flags 6 = alloc|execinstr, which also picks objsecs' internal-resolve lane.
    ; the grain is the caller's: a run of one-fn sections at grain N tiles at N, which is how
@@ -367,11 +367,11 @@
    ; a file-scope asm's sections, (name type flags forms) each: a name already laid takes the
    ; forms at its tail and keeps its own flags, a new one rides after the rest
    ; a data section's alignment pads with zeros, not the backend's nop
-   (o-dal fm) (map (f \ (? (two? f && <f == 'align) ['dalign (f 1)] f)) fm)
+   (o-dal fm) (map (f \ (two? f && <f == 'align ? ['dalign (f 1)] f)) fm)
    (objsec-merge secs xs)
     (foldl (\ a x (: nm <x fs (x 3)
-                     (? (any (s \ <s = nm) a)
-                        (map (s \ (? (<s = nm) [nm (s 1) (s 2) (o-dalign (s 3) fs) ((s 4) + fs)] s)) a)
+                     (any (s \ <s = nm) a ?
+                        (map (s \ (<s = nm ? [nm (s 1) (s 2) (o-dalign (s 3) fs) (s 4 + fs)] s)) a)
                         (a + [[nm (x 1) (x 2) (o-dalign 1 fs) fs]]))))
            secs xs)
    ; the arm32 twin of objsecs4: four lanes, because there is no .image at 32 bits (no bake),
@@ -389,16 +389,16 @@
    ; every tag and value here is under 128, so one byte apiece.
    (armattrs t)
     (: t1 (t == 'thumb1)
-       pairs ('(5) + o-strbytes (? t1 "6-M" "7E-M") + '(0)     ; Tag_CPU_name
-              + [6 (? t1 11 13)]                               ; Tag_CPU_arch: v6-M | v7E-M
+       pairs ('(5) + o-strbytes (t1 ? "6-M" "7E-M") + '(0)     ; Tag_CPU_name
+              + [6 (t1 ? 11 13)]                               ; Tag_CPU_arch: v6-M | v7E-M
               + '(7 77)                                        ; Tag_CPU_arch_profile: 'M'
-              + [9 (? t1 1 2)]                                 ; Tag_THUMB_ISA_use: 1 | 2
+              + [9 (t1 ? 1 2)]                                 ; Tag_THUMB_ISA_use: 1 | 2
               + (? (t == 'thumb2) '(10 8)                      ; Tag_FP_arch: FPv5/FP-D16
                    (t == 'thumb2sp) '(10 6 27 1) ())           ; ..VFPv4-D16, and SP only
               + '(18 4)                                        ; Tag_ABI_PCS_wchar_t
               + '(23 3)                                        ; Tag_ABI_FP_number_model: IEEE 754
               + '(26 1)                                        ; Tag_ABI_enum_size: small
-              + (? t1 () '(28 1)))                             ; Tag_ABI_VFP_args: VFP regs
+              + (t1 ? () '(28 1)))                             ; Tag_ABI_VFP_args: VFP regs
        sub ('(1) + le32 (5 + #pairs) + pairs)             ; Tag_File, over its own length
        ('(65) + le32 (10 + #sub) + o-strbytes "aeabi" + '(0) + sub))
 
@@ -412,12 +412,12 @@
       [".ARM.attributes" 1879048195 0 1 [['raw (armattrs target)]]]])   ; SHT_ARM_ATTRIBUTES
 
    (objelf target0 textforms dataforms funcnames globnames wknames nifforms imgforms locnames bssforms rodataforms)
-    (: target (arch-nom target0)
-     (? (arm32? target)
-       (objsecs32 target (objsecs3 target textforms dataforms nifforms imgforms bssforms rodataforms)
-                  funcnames globnames wknames)          ; locnames unrepresented on arm32
-       (objsecs target (objsecs4 textforms dataforms nifforms imgforms bssforms rodataforms)
-                funcnames globnames wknames locnames)))
+    (arch-nom target0 @ target
+       (arm32? target ?
+         (objsecs32 target (objsecs3 target textforms dataforms nifforms imgforms bssforms rodataforms)
+                    funcnames globnames wknames)          ; locnames unrepresented on arm32
+         (objsecs target (objsecs4 textforms dataforms nifforms imgforms bssforms rodataforms)
+                  funcnames globnames wknames locnames)))
 
    ; -- the general object: a list of sections, each (name type flags align forms). one
    ; section is one lay, which is what a section boundary means -- a branch inside resolves
@@ -428,7 +428,7 @@
     (: target (arch-nom target0)
        a64 (target = 'a64)
        rv (target = 'rv64)
-       _ (? (target = 'x64 || a64 || rv) 0 (scare 'obj-target target))
+       _ (target = 'x64 || a64 || rv ? 0 (scare 'obj-target target))
        ; the in-place-resolvable kinds. riscv's are pure byte deltas (auipc is byte
        ; pc-relative, no page math), so intra-.text la/call/jmp all resolve inside the .o.
        rset (? a64 '(b26 b19) rv '(j21 pcrel b13 cj cb) '(rel32 rel8))
@@ -437,8 +437,8 @@
        ; native backend only, and a cross target joins the cat at runtime. unregistered,
        ; `lay` lowers nothing and the object writes out whole with a 0-byte .text -- the
        ; failure would surface only as a link or a boot that goes nowhere.
-       be (: b (backends target)
-           (lit? b ? b (scare 'obj-no-backend target)))
+       be (backends target @ b
+             (lit? b ? b (scare 'obj-no-backend target)))
        ; a weak-defined function's callers must go through a relocation: an in-place resolve
        ; pins them to the local body past any strong override. built before lay -- the
        ; relaxer needs it too, a shortened branch never surviving as a relocation.
@@ -451,14 +451,14 @@
        ; hand-mixed script/binary pair: scare loud, never lay quietly long. the relaxer is
        ; the executable section's -- shortening a branch is sound only where it may resolve
        ; internally at all.
-       lanes (map (\ s
+       lanes (map (s \
                 (: fm (s 4)
-                   p (? (exec? s)
-                        (: r laylax
-                           (? (lit? r) (r fm be 0 {} wkset)
+                   p (exec? s ?
+                        (laylax @ r
+                           (lit? r ? (r fm be 0 {} wkset)
                               (scare 'holo-bake-stale 'laylax)))   ; assemble each section at org 0
                         (lay (o-dal fm) be 0 () {}))
-                   w (o-walk be <p >p wkset (? (exec? s) 1 ()) rset)
+                   w (o-walk be <p >p wkset (exec? s ? 1) rset)
                    [(s 0) (s 1) (s 2) (s 3) <w <>w >p]))
               secs)
        (ln i) (lanes i)
@@ -487,19 +487,19 @@
        ; relocations use, so a global may live in .image or .rodata or .bss unannounced.
        ; o-place's fallback is unreachable for a defined name -- it keeps a caller that
        ; names one it never laid pointing at the first section.
-       (o-place nm) (: w (o-where lanes (name nm)) (two? w ? w '(1 0)))
+       (o-place nm) (o-where lanes (name nm) @ w (two? w ? w '(1 0)))
        symbytes
         (: lsyms (catall (o-mapi (\ i ls (: w (o-place ls)                ; stb_local func
                                             (elf-sym (stroffs i) 0 2 <w <>w 0)))
                                  locnames))
-           fsyms (catall (o-mapi (\ i fs (: w (o-place fs)
+           fsyms (catall (o-mapi (\ i fs (o-place fs @ w
                                             (elf-sym (stroffs (nloc + i))
                                              (elem fs wknames ? 2 1)   ; stb_weak: a strong def elsewhere wins
                                              2 <w <>w 0)))
                                  funcnames))
            ; a data symbol honours wknames too: musl defines __stdout_used weakly so
            ; stdout.c's real one wins, where a strong binding makes the pair a link-dup
-           gsyms (catall (o-mapi (\ i gs (: w (o-place gs)
+           gsyms (catall (o-mapi (\ i gs (o-place gs @ w
                                             (elf-sym (stroffs (nloc + nfun + i))
                                                    (elem gs wknames ? 2 1) 1 <w <>w 0)))
                                  globnames))
@@ -524,7 +524,7 @@
        (secsym lbl)
         (? (o-has? wkset lbl && o-has? fnidx lbl) [(peep fnidx lbl 0) 0]
            (o-has? wkset lbl && o-has? gidx lbl)  [(peep gidx lbl 0) 0]
-           (: w (o-where lanes lbl) (? (two? w) w [(peep extidx lbl 0) 0])))
+           (o-where lanes lbl @ w (two? w ? w [(peep extidx lbl 0) 0])))
        rabs (? a64 ra-abs64 rv rr-64 r-64)
        (o-rels rs)
         (catall (map (\ [off k lbl aux pv]
@@ -595,25 +595,25 @@
        sht-off (shs-off + shs-sz)
 
        sht (catall ([(o-zeros 64)]                                         ; 0 NULL
-              + (o-mapi (\ i l (elf-shdr (shname i) (ln-ty l) (l 2)           ; 1..nsec the content sections
-                                   0 (coffs i) (o-blen (ln-bs l)) 0 0 (l 3) 0))
-                        lanes)
+              + o-mapi (\ i l (elf-shdr (shname i) (ln-ty l) (l 2)           ; 1..nsec the content sections
+                                  0 (coffs i) (o-blen (ln-bs l)) 0 0 (l 3) 0))
+                       lanes
               + [(elf-shdr (shname nsec) 2 0 0 sym-off sym-sz i-str ((1 + nsec) + nloc) 8 24)    ; .symtab link=.strtab info=first-global
                  (elf-shdr (shname (nsec + 1)) 3 0 0 str-off str-sz 0 0 1 0)]                    ; .strtab
-              + (o-mapi (\ i l (elf-shdr (shname (nsec + 2 + i)) 4 0                          ; one .rela per section, link=.symtab
-                                   0 (roffs i) (rcnt i * 24) i-sym (i + 1) 8 24))
-                        lanes)
-              + [(elf-shdr (shname ((2 * nsec) + 2)) 3 0 0 shs-off shs-sz 0 0 1 0)]))             ; .shstrtab
+              + o-mapi (\ i l (elf-shdr (shname (nsec + 2 + i)) 4 0                          ; one .rela per section, link=.symtab
+                                  0 (roffs i) (rcnt i * 24) i-sym (i + 1) 8 24))
+                       lanes
+              + [(elf-shdr (shname (2 * nsec + 2)) 3 0 0 shs-off shs-sz 0 0 1 0)]))             ; .shstrtab
 
        hdr (catall [
              '(127 69 76 70 2 1 1 0 0 0 0 0 0 0 0 0)                      ; e_ident: \x7fELF 64-bit LSB
              (le16 1) (le16 machine) (le32 1)                             ; et_rel, e_machine, version
              (le64 0) (le64 0) (le64 sht-off)                             ; e_entry=0, e_phoff=0, e_shoff
-             (le32 (? (machine = 243) 5 0)) (le16 64) (le16 0)            ; e_flags (riscv: RVC | FLOAT_ABI_DOUBLE), e_ehsize, e_phentsize=0
+             (le32 (machine = 243 ? 5 0)) (le16 64) (le16 0)            ; e_flags (riscv: RVC | FLOAT_ABI_DOUBLE), e_ehsize, e_phentsize=0
              (le16 0) (le16 64) (le16 nsh)                                ; e_phnum=0, e_shentsize=64, e_shnum
              (le16 i-shs)])                                               ; e_shstrndx
        (catall ([hdr]
-                + map (\ l (? (ln-ty l = 8) () (ln-bs l))) lanes           ; a NOBITS lane writes nothing
+                + map (l \ (ln-ty l = 8 ? () (ln-bs l))) lanes           ; a NOBITS lane writes nothing
                 + [symbytes strblob]
                 + relas
                 + [shstrblob sht]))))

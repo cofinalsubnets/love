@@ -35,30 +35,30 @@
 (module 'holo
 (: ;; --- the physical register file, both ways: a name -> (enc w), and (enc w) -> the name. the
    ;; low 8 have irregular byte/word names, so spell the rows; r8..r15 and xmm0..15 are uniform. ---
-   xa-regs  (tablet 0)
-   xa-names (tablet 0)
+   xa-regs  {}
+   xa-names {}
    ;; the prefix words a line may open with, each its own item ahead of the instruction
    xa-prefix {'lock 'lock 'rep 'rep 'repe 'rep 'repz 'rep 'repne 'repne 'repnz 'repne
               'cs 'cs 'ds 'ds 'es 'es 'ss 'ss}
    (xa-reg! nm e w) (pin xa-regs (name nm) [e w], pin xa-names (e * 32 + w) nm)
    _ (foldl (\ _ row
-               (: e (row 0)
-                  _ (xa-reg! (row 1) e 8) _ (xa-reg! (row 2) e 4)
-                  _ (xa-reg! (row 3) e 2) _ (xa-reg! (row 4) e 1) 0))
+               (row 0 @ e
+                  (xa-reg! (row 1) e 8, xa-reg! (row 2) e 4,
+                   xa-reg! (row 3) e 2, xa-reg! (row 4) e 1, 0)))
         0 '((0 "rax" "eax" "ax" "al")  (1 "rcx" "ecx" "cx" "cl")
              (2 "rdx" "edx" "dx" "dl")  (3 "rbx" "ebx" "bx" "bl")
              (4 "rsp" "esp" "sp" "spl") (5 "rbp" "ebp" "bp" "bpl")
              (6 "rsi" "esi" "si" "sil") (7 "rdi" "edi" "di" "dil")))
    _ (foldl (\ _ i
-               (: n ("r" + show i)
-                  _ (xa-reg! n i 8) _ (xa-reg! (n + "d") i 4)
-                  _ (xa-reg! (n + "w") i 2) _ (xa-reg! (n + "b") i 1) 0))
+               ("r" + show i @ n
+                  (xa-reg! n i 8, xa-reg! (n + "d") i 4,
+                   xa-reg! (n + "w") i 2, xa-reg! (n + "b") i 1, 0)))
         0 '(8 9 10 11 12 13 14 15))
    _ (foldl (\ _ i (xa-reg! ("xmm" + show i) i 16, 0)) 0 ^16)
    ;; the high bytes ah/ch/dh/bh share slots 4..7 with spl/bpl/sil/dil (REX tells them apart), so
    ;; they sit 16 above -- a value the encoder can see is not a byte it lays
    _ (foldl (\ _ r (xa-reg! <r <>r 1, 0)) 0 '(("ah" 20) ("ch" 21) ("dh" 22) ("bh" 23)))
-   (xa-reg nm) (: r (xa-regs (name nm)) (two? r ? ['rg <r <>r] ()))    ; a register operand, or ()
+   (xa-reg nm) (xa-regs (name nm) @ r (two? r ? ['rg <r <>r]))    ; a register operand, or ()
    (xa-regname o) (xa-names (<>o * 32 + <>>o))
    (xa-gpr? o) (<o = 'rg && <>>o < 16)
    (xa-cr s) (#s = 3 && s 0 = 99 && s 1 = 114 && digit? (s 2) ? ['cr (s 2 - 48)] ())   ; a control register
@@ -69,7 +69,7 @@
    (xa-expr? v) (#v > 0 && (v 0 = 40 || v 0 = 126 || ((v 0 = 45 || v 0 = 43) && #v > 1 && (v 1 = 40 || v 1 = 126))))
 
    ;; --- numerals: decimal, 0x-hex, optionally signed -- every byte, or it is not one. ---
-   (xa-hexd c) (: v (hexv c) (v < 0 ? (scare 'as-hexdigit c) v))
+   (xa-hexd c) (hexv c @ v (v < 0 ? (scare 'as-hexdigit c) v))
    (xa-decv s) (foldl (a \ i \ a * 10 + s i - 48) 0 ^#s)
    (xa-hexv s) (foldl (a \ i \ a * 16 + xa-hexd (s i)) 0 ^#s)
    (xa-neg? s) (#s > 0 && s 0 = 45)
@@ -77,7 +77,7 @@
    (xa-num s)  (? (xa-neg? s) (0 - xa-num (snip s 1 #s))
                   (xa-hex? s) (xa-hexv (snip s 2 #s))
                   (xa-decv s))
-   (xa-allof? s p k) (: n #s ((: (g i) (i >= n ? (n > k) (p (s i)) (g (i + 1)) 0)) k))
+   (xa-allof? s p k) (#s @ n ((: (g i) (i >= n ? (n > k) (p (s i)) (g (i + 1)) 0)) k))
    (xa-num? s) (? (xa-neg? s) (xa-num? (snip s 1 #s))
                   (xa-hex? s) (xa-allof? s ghex? 2)
                   (xa-allof? s digit? 0))
@@ -96,21 +96,21 @@
    (gdecv s) (foldl (a \ i \ a * 10 + s i - 48) 0 ^#s)
    (ghexv s) (foldl (a \ i \ a * 16 + hexv (s i)) 0 ^#s)
    (gtoks s) (: n #s
-      (span i p) ((: (g j) (? (j < n && p (s j)) (g (j + 1)) j)) i)
+      (span i p) ((: (g j) (j < n && p (s j) ? (g (j + 1)) j)) i)
       (go i acc)
-       (? (i >= n) (rev acc)
-          (: c (s i)
+       (i >= n ? (rev acc)
+          (s i @ c
              (? (blank? c) (go (i + 1) acc)
                 (c = 48 && i + 1 < n && (s (i + 1) = 120 || s (i + 1) = 88))
-                 (: j (span (i + 2) ghex?) (go j (['num (ghexv (snip s (i + 2) j))] . acc)))
+                 (span (i + 2) ghex? @ j (go j (['num (ghexv (snip s (i + 2) j))] . acc)))
                 (digit? c)
                  (: j (span i digit?) v (gdecv (snip s i j))
-                    (? (j < n && (s j = 102 || s j = 98) && (j + 1 >= n || !(gidc? (s (j + 1)))))
+                    (j < n && (s j = 102 || s j = 98) && (j + 1 >= n || !(gidc? (s (j + 1)))) ?
                        (go (j + 1) (['lref v (s j)] . acc))
                        (go j (['num v] . acc))))
-                (galpha? c) (: j (span i gidc?) (go j (['sym (snip s i j)] . acc)))
+                (galpha? c) (span i gidc? @ j (go j (['sym (snip s i j)] . acc)))
                 (c = 37 && i + 1 < n && galpha? (s (i + 1)))
-                 (: j (span (i + 1) gidc?) (go j (['pct (snip s (i + 1) j)] . acc)))
+                 (span (i + 1) gidc? @ j (go j (['pct (snip s (i + 1) j)] . acc)))
                 ((c = 60 || c = 62) && i + 1 < n && s (i + 1) = c)
                  (go (i + 2) (['op (snip s i (i + 2))] . acc))
                 ((c = 33 || c = 61 || c = 60 || c = 62) && i + 1 < n && s (i + 1) = 61)   ; != == <= >=
@@ -120,14 +120,14 @@
 
    ;; -- immediate expressions: C's operators over numbers, the way `$~(1 << 2)` and `#(3 << 20)`
    ;; are written. each level answers (value . rest) | 'bad. --
-   (gbad? x) (= x 'bad)
-   (gprim ts) (? !(two? ts) 'bad
-       (: t <ts
+   (gbad? x) (x = 'bad)
+   (gprim ts) (!(two? ts) ? 'bad
+       (<ts @ t
           (t @ ('num v) (v . >ts)
-               ('ch 40) (: r (gexpr >ts)
-                           (? (gbad? r || !(two? >r) || !(= <>r '(ch 41))) 'bad (<r . >>r)))
-               ('ch 126) (: r (gprim >ts) (? (gbad? r) 'bad ((<r ^ -1) . >r)))
-               ('ch 45) (: r (gprim >ts) (? (gbad? r) 'bad ((0 - <r) . >r)))
+               ('ch 40) (gexpr >ts @ r
+                           (gbad? r || !(two? >r) || !(<>r = '(ch 41)) ? 'bad (<r . >>r)))
+               ('ch 126) (gprim >ts @ r (gbad? r ? 'bad ((<r ^ -1) . >r)))
+               ('ch 45) (gprim >ts @ r (gbad? r ? 'bad ((0 - <r) . >r)))
                ('ch 43) (gprim >ts)
                'bad)))
    ; a comparison answers gas's -1 for true, 0 for false, and binds loosest (the kernel's
@@ -143,15 +143,15 @@
                         'or (a | b) 'xor (a ^ b) 'and (a & b) 'shl (a << b) 'shr (a >> b)
                         'add (a + b) 'sub (a - b) 'mul (a * b) 'div (a // b) (a % b))
    (gclimb lhs ts minp)
-    (? !(two? ts) (lhs . ts)
-       (: b (gbinop <ts)
-          (? (!(two? b) || <b < minp) (lhs . ts)
-             (: r (gprim >ts)
-                (? (gbad? r) 'bad
-                   (: r2 (gclimb <r >r (<b + 1))
-                      (? (gbad? r2) 'bad (gclimb (gapply <>b lhs <r2) >r2 minp))))))))
-   (gexpr ts) (: r (gprim ts) (? (gbad? r) 'bad (gclimb <r >r 1)))
-   (gimm ts) (: r (gexpr ts) (? (gbad? r || two? >r) (scare 'gas-immediate ts) <r))   ; the whole run, or nothing
+    (!(two? ts) ? (lhs . ts)
+       (gbinop <ts @ b
+          (!(two? b) || <b < minp ? (lhs . ts)
+             (gprim >ts @ r
+                (gbad? r ? 'bad
+                   (gclimb <r >r (<b + 1) @ r2
+                      (gbad? r2 ? 'bad (gclimb (gapply <>b lhs <r2) >r2 minp))))))))
+   (gexpr ts) (gprim ts @ r (gbad? r ? 'bad (gclimb <r >r 1)))
+   (gimm ts) (gexpr ts @ r (gbad? r || two? >r ? (scare 'gas-immediate ts) <r))   ; the whole run, or nothing
 
    ;; --- string helpers over the byte string. ---
    (xa-has? s c) ((: (g i) (? (i >= #s) 0 (s i = c) 1 (g (i + 1)))) 0)
@@ -170,32 +170,32 @@
                                     (!q && (s i = 35 || (s i = 47 && i + 1 < #s && s (i + 1) = 47))) (snip s 0 i)
                                     (g (i + 1) q))) 0 0)
    ;; a statement ends at a newline or, outside quotes, at `;` -- as GNU has it
-   (xa-lines s) (: n #s
-      ((: (g i st q acc) (? (i >= n) (rev (snip s st n . acc))
-                            (s i = 34) (g (i + 1) st !q acc)
-                            ((s i = 10) || (s i = 59 && !q)) (g (i + 1) (i + 1) 0 (snip s st i . acc))
-                            (g (i + 1) st q acc))) 0 0 0 ()))
+   (xa-lines s) (#s @ n
+                   ((: (g i st q acc) (? (i >= n) (rev (snip s st n . acc))
+                                         (s i = 34) (g (i + 1) st !q acc)
+                                         (s i = 10 || s i = 59 && !q) (g (i + 1) (i + 1) 0 (snip s st i . acc))
+                                         (g (i + 1) st q acc))) 0 0 0 ()))
    ;; split on a byte, trimming each field
-   (xa-split s c) (: n #s
-      ((: (g i st acc) (? (i >= n) (rev (xa-trim (snip s st n) . acc))
-                          (s i = c) (g (i + 1) (i + 1) (xa-trim (snip s st i) . acc))
-                          (g (i + 1) st acc))) 0 0 ()))
+   (xa-split s c) (#s @ n
+                     ((: (g i st acc) (? (i >= n) (rev (xa-trim (snip s st n) . acc))
+                                         (s i = c) (g (i + 1) (i + 1) (xa-trim (snip s st i) . acc))
+                                         (g (i + 1) st acc))) 0 0 ()))
    ;; the operand list splits on top-level commas only: a memory operand carries its own inside
    ;; its parens or brackets
-   (xa-oplist s) (: n #s
-      ((: (g i st d acc)
-          (? (i >= n) (rev (xa-trim (snip s st n) . acc))
-             (s i = 40 || s i = 91) (g (i + 1) st (d + 1) acc)
-             (s i = 41 || s i = 93) (g (i + 1) st (d - 1) acc)
-             (s i = 44 && d = 0) (g (i + 1) (i + 1) 0 (xa-trim (snip s st i) . acc))
-             (g (i + 1) st d acc))) 0 0 0 ()))
+   (xa-oplist s) (#s @ n
+                    ((: (g i st d acc)
+                        (? (i >= n) (rev (xa-trim (snip s st n) . acc))
+                           (s i = 40 || s i = 91) (g (i + 1) st (d + 1) acc)
+                           (s i = 41 || s i = 93) (g (i + 1) st (d - 1) acc)
+                           (s i = 44 && d = 0) (g (i + 1) (i + 1) 0 (xa-trim (snip s st i) . acc))
+                           (g (i + 1) st d acc))) 0 0 0 ()))
    (xa-ops rest) (0 = #rest ? () (xa-oplist rest))
    ;; the head word and the tail of a line
    (xa-cut s)   (: i (xa-idx s 32) j (xa-idx s 9)
                    (? (i < 0) j (j < 0) i (i < j) i j))
-   (xa-mnem s)  (: k (xa-cut s) (k < 0 ? s (snip s 0 k)))
-   (xa-rest s)  (: k (xa-cut s) (k < 0 ? "" (xa-trim (snip s k #s))))
-   (xa-join sep l) (? !(two? l) "" (foldl (\ a s (a + sep + s)) <l >l))
+   (xa-mnem s)  (xa-cut s @ k (k < 0 ? s (snip s 0 k)))
+   (xa-rest s)  (xa-cut s @ k (k < 0 ? "" (xa-trim (snip s k #s))))
+   (xa-join sep l) (!(two? l) ? "" (foldl (\ a s (a + sep + s)) <l >l))
 
    ;; --- the operand size. stated by an at&T suffix or an Intel PTR; else read off the
    ;; destination's GPR, else the first GPR's; 0 when nothing says. a stated size that disagrees
@@ -204,7 +204,7 @@
    (xa-wsfx w) (w @ 1 "b" 2 "w" 4 "l" 8 "q" "")
    (xa-gprw ops) (foldl (\ a o (a > 0 ? a (xa-gpr? o ? <>>o 0))) 0 ops)
    (xa-width sw ops)
-      (: rw (xa-gprw ops)
+      (xa-gprw ops @ rw
          (? (sw = 0) rw
             (rw > 0 && rw != sw) (scare 'as-widthclash [sw rw])
             sw))
@@ -243,7 +243,7 @@
    ;; --- the line shapes both dialects share: blank, `name:`, `.directive tail`. a line answers
    ;;     its items: none, one, or a prefix word's and then the instruction's ---
    (xa-line raw insn)
-      (: s (xa-trim (xa-decomment raw))
+      (xa-trim (xa-decomment raw) @ s
          (? (0 = #s) ()
             (s (#s - 1) = 58) [['label (name (xa-unquote (xa-trim (snip s 0 (#s - 1)))))]]
             (s 0 = 46)
@@ -253,12 +253,12 @@
                   [['dir mn rest]]))
             ;; the prefix words peel off the front, each its own item ahead of the instruction
             (: (pre mn rest acc)
-                 (: pfx (xa-prefix (name mn))
+                 (xa-prefix (name mn) @ pfx
                     (? !(nom? pfx) (rev ((insn mn rest) . acc))
                        (0 = #rest) (rev (['op pfx 0 ()] . acc))
                        (pre (xa-mnem rest) (xa-rest rest) (['op pfx 0 ()] . acc))))
                (pre (xa-mnem s) (xa-rest s) ()))))
-   (xa-read s insn) (catmap (\ l (xa-line l insn)) (xa-lines s))
+   (xa-read s insn) (catmap (l \ (xa-line l insn)) (xa-lines s))
    (xa-show items line)
       (foldl (\ a it (a + (<it @ 'label (show <>it + ":\n")
                                 'globl ("\t.globl\t" + show <>it + "\n")
@@ -268,41 +268,41 @@
 
    ;; ================================================================ at&T
    ;; --- operands: %reg, $imm, $sym, disp(base,index,scale), sym(%rip), sym+4(%rip), *ind, label ---
-   (at-reglook nm) (: r (xa-reg nm) (two? r ? r (scare 'as-badreg nm)))
-   (at-mreg f) (? (0 = #f) -1 <>(at-reglook (snip f 1 #f)))    ; a %reg field, or absent
+   (at-reglook nm) (xa-reg nm @ r (two? r ? r (scare 'as-badreg nm)))
+   (at-mreg f) (0 = #f ? -1 <>(at-reglook (snip f 1 #f)))    ; a %reg field, or absent
    (at-operand t)
       (? (t 0 = 42) ['ind (at-operand (snip t 1 #t))]
          (t 0 = 37 && xa-has? t 58) (: c (xa-idx t 58) o (at-operand (snip t (c + 1) #t))
                                        ['seg (name (snip t 1 c)) (<o = 'abs ? ['mem -1 -1 1 <>o] o)])
          (t 0 = 37) (: nm (snip t 1 #t) cr (xa-cr nm) dr (xa-dr nm) sr (xa-sr nm)
                        (? (two? cr) cr (two? dr) dr (two? sr) sr (at-reglook nm)))
-         (t 0 = 36) (: v (snip t 1 #t)
-                      (? (xa-num? v) ['im (xa-num v)]
-                         (xa-expr? v) ['im (gimm (gtoks v))]
-                         ; $1f / $1b: a numeric label's address, which gas-text names
-                         (1 < #v && (v (#v - 1) = 102 || v (#v - 1) = 98) && xa-allof? (snip v 0 (#v - 1)) digit? 0)
-                          ['ims (name v)]
-                         (digit? (v 0) || xa-neg? v) (scare 'as-badnum v)
-                         ['ims (name (xa-unquote v))]))
+         (t 0 = 36) (snip t 1 #t @ v
+                       (? (xa-num? v) ['im (xa-num v)]
+                          (xa-expr? v) ['im (gimm (gtoks v))]
+                          ; $1f / $1b: a numeric label's address, which gas-text names
+                          (1 < #v && (v (#v - 1) = 102 || v (#v - 1) = 98) && xa-allof? (snip v 0 (#v - 1)) digit? 0)
+                           ['ims (name v)]
+                          (digit? (v 0) || xa-neg? v) (scare 'as-badnum v)
+                          ['ims (name (xa-unquote v))]))
          (xa-has? t 40)
-         (: op ((: (g i) (? (i < 1 || t i = 40) i (g (i - 1)))) (#t - 1))   ; the last paren: `(2f)(%rip)`
+         (: op ((: (g i) (i < 1 || t i = 40 ? i (g (i - 1)))) (#t - 1))   ; the last paren: `(2f)(%rip)`
             d0 (snip t 0 op) n0 #d0
-            disp (? (1 < n0 && d0 0 = 40 && d0 (n0 - 1) = 41) (snip d0 1 (n0 - 1)) d0)
+            disp (1 < n0 && d0 0 = 40 && d0 (n0 - 1) = 41 ? (snip d0 1 (n0 - 1)) d0)
             inner (snip t (op + 1) (#t - 1))
-            (? (inner = "%rip") (? (0 = #disp) ['rip () 0]
-                                    (xa-num? disp) ['rip () (xa-num disp)]
-                                    (: so (xa-symoff disp) ['rip <so >so]))
+            (inner = "%rip" ? (? (0 = #disp) ['rip () 0]
+                                  (xa-num? disp) ['rip () (xa-num disp)]
+                                  (xa-symoff disp @ so ['rip <so >so]))
                (: fs (xa-split inner 44) k #fs
-                  so (? (0 = #disp || xa-num? disp) () (xa-symoff disp))   ; `table(,%rbx,8)`: an absolute symbol
+                  so (0 = #disp || xa-num? disp ? () (xa-symoff disp))   ; `table(,%rbx,8)`: an absolute symbol
                   d (? (0 = #disp) 0 (xa-num? disp) (xa-num disp) >so)
-                  (? (k > 3) (scare 'as-memform t)
+                  (k > 3 ? (scare 'as-memform t)
                      (['mem (at-mreg <fs) (k < 2 ? -1 (at-mreg (fs 1)))
-                            (k < 3 ? 1 (xa-imm (fs 2))) d] + (? (two? so) [<so] ()))))))
+                            (k < 3 ? 1 (xa-imm (fs 2))) d] + (two? so ? [<so]))))))
          (xa-num? t) ['abs (xa-num t)]
          ['lbl (name (xa-unquote t))])
    ;; ..which the instruction settles: a branch's target, else memory at that address
    xa-conds '(o no b ae e ne be a s ns p np l ge le g c nc z nz na nae nb nbe ng nge nl nle pe po)
-   (xa-cc? mn) (: t (show mn) (#t > 1 && t 0 = 106 && elem (name (snip t 1 #t)) xa-conds))
+   (xa-cc? mn) (show mn @ t (#t > 1 && t 0 = 106 && elem (name (snip t 1 #t)) xa-conds))
    (xa-abs mn o) (? !(<o = 'abs) o
                     (xa-branch? mn || xa-cc? mn) ['lbl <>o]
                     ['mem -1 -1 1 <>o])
@@ -337,7 +337,7 @@
             'ind ("*" + at-op <>o)
             'seg ("%" + show <>o + ":" + at-op <>>o)
             (: b (o 1) ix (o 2) sc (o 3) d (o 4)
-               (? (b < 0 && ix < 0) (show d)
+               (b < 0 && ix < 0 ? (show d)
                   ((d = 0 && b >= 0 ? "" (show d))
                    + "(" + (b < 0 ? "" ("%" + xa-names (b * 32 + 8)))
                    + (ix < 0 ? "" (",%" + xa-names (ix * 32 + 8) + (sc = 1 ? "" ("," + show sc))))
@@ -349,7 +349,7 @@
          (w > 0 && elem mn xa-sfxable && xa-gprw ops = 0) (show mn + xa-wsfx w)
          (show mn))
    (att-show items)
-      (xa-show items (\ it (: mn (it 1) w (it 2) ops (it 3)
+      (xa-show items (it \ (: mn (it 1) w (it 2) ops (it 3)
                              ("\t" + at-mn mn w ops
                               + (two? ops ? ("\t" + xa-join ", " (map at-op (rev ops))) "") + "\n"))))
 
@@ -360,7 +360,7 @@
       (: k (xa-cut l)
          sz (k < 0 ? 0 (xa-ptrsz (snip l 0 k)))
          r  (sz = 0 ? "" (xa-trim (snip l k #l)))
-         (? (sz > 0 && starts? r "ptr") (sz . (xa-trim (snip r 3 #r)))
+         (sz > 0 && starts? r "ptr" ? (sz . (xa-trim (snip r 3 #r)))
             (0 . l)))
    (in-term t) (: i (xa-idx t 42)                ; one bracket term -> (ix enc sc) (rg enc) (n v) (sym s) (rip)
       (? (t = "rip") ['rip]
@@ -370,38 +370,38 @@
                        (two? rb) ['ix <>rb (xa-imm a)]
                        (scare 'as-memform t)))
          (xa-num? t) ['n (xa-num t)]
-         (: r (xa-reg t) (two? r ? ['rg <>r] ['sym (name (xa-unquote t))]))))
+         (xa-reg t @ r (two? r ? ['rg <>r] ['sym (name (xa-unquote t))]))))
    ;; split the bracket's inside on + and -, each term with its sign
-   (in-terms s) (: n #s
-      ((: (g i st sg acc)
-          (? (i >= n) (rev ((sg . (snip s st n)) . acc))
-             (i > st && (s i = 43 || s i = 45))
-             (g (i + 1) (i + 1) (s i = 45 ? -1 1) ((sg . (snip s st i)) . acc))
-             (i = st && s i = 45) (g (i + 1) (i + 1) -1 acc)
-             (i = st && s i = 43) (g (i + 1) (i + 1) 1 acc)
-             (g (i + 1) st sg acc))) 0 0 1 ()))
+   (in-terms s) (#s @ n
+                   ((: (g i st sg acc)
+                       (? (i >= n) (rev ((sg . (snip s st n)) . acc))
+                          (i > st && (s i = 43 || s i = 45))
+                          (g (i + 1) (i + 1) (s i = 45 ? -1 1) ((sg . (snip s st i)) . acc))
+                          (i = st && s i = 45) (g (i + 1) (i + 1) -1 acc)
+                          (i = st && s i = 43) (g (i + 1) (i + 1) 1 acc)
+                          (g (i + 1) st sg acc))) 0 0 1 ()))
    (in-mem u)
       (: i (xa-idx u 91) j (xa-idx u 93)
          pre0 (xa-nows (snip u 0 i)) inner (xa-nows (snip u (i + 1) j))
-         sg (xa-has? pre0 58 ? (name (snip pre0 0 (xa-idx pre0 58))) ())      ; a segment: fs:[..]
+         sg (xa-has? pre0 58 ? (name (snip pre0 0 (xa-idx pre0 58))))      ; a segment: fs:[..]
          pre (nom? sg ? (snip pre0 (xa-idx pre0 58 + 1) #pre0) pre0)
          (wrap o) (nom? sg ? ['seg sg o] o)
          st {}                                    ; 'b 'ix 'sc 'd 'sym 'rip
          _ (pins st 'b -1 'ix -1 'sc 1 'd 0 'sym () 'rip 0)
          (take! sg t)
-            (: tm (in-term t)
+            (in-term t @ tm
                (<tm @ 'rip (pin st 'rip 1)
                      'n (pin st 'd (peep st 'd 0 + sg * <>tm))
                      'ix (pins st 'ix <>tm 'sc <>>tm)
                      'sym (pin st 'sym <>tm)
                      (peep st 'b -1 < 0 ? (pin st 'b <>tm) (pins st 'ix <>tm 'sc 1))))
-         _ (? (0 = #pre) 0
-              (xa-num? pre) (pin st 'd (xa-num pre))
-              (: so (xa-symoff pre) (pins st 'sym <so 'd >so)))
-         _ (foldl (\ _ p (take! <p >p)) 0 (in-terms inner))
-         (? (peep st 'rip 0) (wrap ['rip (peep st 'sym ()) (peep st 'd 0)])
-            (nom? (peep st 'sym ())) (scare 'as-symdisp u)
-            (wrap ['mem (peep st 'b -1) (peep st 'ix -1) (peep st 'sc 1) (peep st 'd 0)])))
+         ((? (0 = #pre) 0
+             (xa-num? pre) (pin st 'd (xa-num pre))
+             (xa-symoff pre @ so (pins st 'sym <so 'd >so))),
+          foldl (\ _ p (take! <p >p)) 0 (in-terms inner),
+          (? (peep st 'rip 0) (wrap ['rip (peep st 'sym ()) (peep st 'd 0)])
+             (nom? (peep st 'sym ())) (scare 'as-symdisp u)
+             (wrap ['mem (peep st 'b -1) (peep st 'ix -1) (peep st 'sc 1) (peep st 'd 0)]))))
    (in-operand mn0 t)                           ; -> (ptr-size . operand); mn0 settles a bare number
       (: l (lower t) p (in-ptr l) sz <p tail >p
          (? (starts? l "offset ")
@@ -410,7 +410,7 @@
                (0 . ['ims (name (xa-unquote v))]))
             (xa-has? t 91) (sz . (in-mem (snip t (#t - #tail) #t)))
             (xa-has? tail 58)                                     ; QWORD PTR fs:40 -- a segment, an address
-            (: c (xa-idx tail 58) (sz . ['seg (name (snip tail 0 c)) ['mem -1 -1 1 (xa-imm (snip tail (c + 1) #tail))]]))
+            (xa-idx tail 58 @ c (sz . ['seg (name (snip tail 0 c)) ['mem -1 -1 1 (xa-imm (snip tail (c + 1) #tail))]]))
             (sz > 0) (scare 'as-segment t)
             (xa-num? t) (0 . [(xa-branch? mn0 || xa-cc? mn0 ? 'lbl 'im) (xa-num t)])
             (xa-expr? t) (0 . ['im (gimm (gtoks t))])
@@ -456,17 +456,17 @@
             'ims ("OFFSET FLAT:" + show <>o)
             'lbl (show <>o)
             'ind (in-op mn w <>o k)
-            'seg (: sz (in-ptrsz mn w k)
+            'seg (in-ptrsz mn w k @ sz
                     ((sz > 0 ? (xa-ptrword sz + " PTR ") "") + show <>o + ":" + in-mem-op <>>o))
-            (: sz (in-ptrsz mn w k)
+            (in-ptrsz mn w k @ sz
                ((sz > 0 ? (xa-ptrword sz + " PTR ") "") + in-mem-op o)))
    (in-mn mn ops)
-      (? (xa-ext? mn && two? ops) (mn @ 'movsl "movsxd" (starts? (show mn) "movz" ? "movzx" "movsx"))
+      (xa-ext? mn && two? ops ? (mn @ 'movsl "movsxd" (starts? (show mn) "movz" ? "movzx" "movsx"))
          (show mn))
    (intel-show items)
       ("\t.intel_syntax noprefix\n"
-       + xa-show items (\ it (: mn (it 1) w (it 2) ops (it 3)
+       + xa-show items (it \ (: mn (it 1) w (it 2) ops (it 3)
                                ("\t" + in-mn mn ops
-                                + (two? ops ? ("\t" + xa-join ", " (map (\ i (in-op mn w (ops i) i)) ^#ops)) "")
+                                + (two? ops ? ("\t" + xa-join ", " (map (i \ (in-op mn w (ops i) i)) ^#ops)) "")
                                 + "\n")))))
 ) ; module 'holo

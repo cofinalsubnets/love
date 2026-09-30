@@ -9,7 +9,7 @@
 (borrow 'posix)
 (:
    (es-slurp p) (uread p @ [1 s] s ())
-   (es-le s i n) (: (go k a m) (? (k = n) a (go (k + 1) (a + peep s (i + k) 0 * m) (m * 256)))
+   (es-le s i n) (: (go k a m) (k = n ? a (go (k + 1) (a + peep s (i + k) 0 * m) (m * 256)))
                     (go 0 0 1))
    ; e_ident[4] is the class, 1 is 32 and 2 is 64; the rows are the same fields at their two
    ; spellings -- shoff shentsz shnum | sh_name sh_off sh_size, and e_shstrndx two past shnum.
@@ -24,11 +24,11 @@
        (sh i o w) (le (shoff + i * shentsz + o) w)
        (shf i k) (sh i (f k) (f (k + 1)))
        stro (shf shstrx 6)
-       (cstr i) (: (go j) (? (peep exe j 0 = 0) (snip exe i j) (go (j + 1))) (go i))
+       (cstr i) (: (go j) (peep exe j 0 = 0 ? (snip exe i j) (go (j + 1))) (go i))
        (go i) (? (i = shnum) ()
                  (nm = cstr (stro + shf i 4))
-                  (: o (shf i 6) [(snip exe o (o + shf i 8))])
+                  (shf i 6 @ o [(snip exe o (o + shf i 8))])
                  (go (i + 1)))
        (go 0))
-   (elfsec path nm) (: s (es-slurp path) (string? s && es-sec s nm))
+   (elfsec path nm) (es-slurp path @ s (string? s && es-sec s nm))
    )

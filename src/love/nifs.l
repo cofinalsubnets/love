@@ -188,17 +188,17 @@
    ; mod is the module the row is born in, () for the global book -- and no sweep in egg.l
    ; has to know it. the boot .l files compile against the bare book, so any name one of
    ; them spells has to stay global, which is what keeps that column near-empty.
-   (mod-of r) (? (4 < tally r) (r 4) ())
+   (mod-of r) (4 < tally r ? (r 4) ())
    (zip a b) (two? a ? ([<a <b] . zip >a >b))
    (nif-row at r)
     (: im (string <>>>r)
-       md (: m (mod-of r) (? m (cstrlit (string m)) "0"))
-       (? (nif-wide? r)
+       md (mod-of r @ m (m ? (cstrlit (string m)) "0"))
+       (nif-wide? r ?
           ("C(" + show at + ", " + show <>>r + ", " + cstrlit <>r + ", " + im + ", " + md + ")")
           ("P(" + show at + ", " + cstrlit <>r + ", " + im + ", " + md + ")")))
    (chunk n l)
-    (: (go i cur l) (? (two? l) (? (i = n) (rev cur . go 0 () l) (go (i + 1) (<l . cur) >l))
-                       (two? cur ? [(rev cur)] ()))
+    (: (go i cur l) (two? l ? (i = n ? (rev cur . go 0 () l) (go (i + 1) (<l . cur) >l))
+                       (two? cur ? [(rev cur)]))
      (go 0 () l))
    ; a macro body over several lines, each but the last ending in a continuation
    (nif-lines l) (l @ (h . t) (foldl (a \ s \ a + " \\" + nl + " " + s) ("\\" + nl + " " + h) t) "")
@@ -245,4 +245,4 @@
      + nif-macs + [nif-table nif-def1 nif-lvmmap] + nif-undefs)
    nifs-h (cats (map clay-show nif-forms))
    ; a shape check first: a malformed tree arrives as a codegen error naming nothing.
-   nifs-ok (? (any (c \ clay-ok? c != 1) nif-forms) 0 1))
+   nifs-ok (any (c \ clay-ok? c != 1) nif-forms ? 0 1))

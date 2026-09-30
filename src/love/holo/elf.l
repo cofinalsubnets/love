@@ -22,12 +22,12 @@
    ;; the table records: Elf64_Sym (24 bytes) and Elf64_Shdr (64), and the elf32 twins (16
    ;; and 40). Elf32_Sym puts st_value and st_size ahead of st_info/st_other/st_shndx.
    (elf-sym nameoff bind typ shndx value size)
-    (catall [(le32 nameoff) [((bind << 4) | typ) 0] (le16 shndx) (le64 value) (le64 size)])
+    (catall [(le32 nameoff) [(bind << 4 | typ) 0] (le16 shndx) (le64 value) (le64 size)])
    (elf-shdr nm ty fl ad off sz lk inf al es)
     (catall [(le32 nm) (le32 ty) (le64 fl) (le64 ad) (le64 off) (le64 sz)
              (le32 lk) (le32 inf) (le64 al) (le64 es)])
    (elf-sym32 nameoff bind typ shndx value size)
-    (catall [(le32 nameoff) (le32 value) (le32 size) [((bind << 4) | typ) 0] (le16 shndx)])
+    (catall [(le32 nameoff) (le32 value) (le32 size) [(bind << 4 | typ) 0] (le16 shndx)])
    (elf-shdr32 nm ty fl ad off sz lk inf al es)
     (catall [(le32 nm) (le32 ty) (le32 fl) (le32 ad) (le32 off) (le32 sz)
              (le32 lk) (le32 inf) (le32 al) (le32 es)])
@@ -124,7 +124,7 @@
    ;; the LINK -- an .o carries 0x05000000 whatever its abi, gcc's included, and ld derives
    ;; the executable's bit from the inputs' attributes. a seat with an fpu is hard-float
    ;; here, since mooncc has no softfp lane.
-   (arm-eflags target) (? (elem target '(thumb2 thumb2sp)) 83887104 83886080)
+   (arm-eflags target) (elem target '(thumb2 thumb2sp) ? 83887104 83886080)
 
    ;; elf64-at's twin at 32 bits. `entry` answers the code address, even -- the thumb bit
    ;; is the header's business, not an address you can compare or disassemble at.
@@ -153,6 +153,6 @@
                      (go >l (<l . acc)))
        ;; ..and an object with no blob in it goes out in one cask, untouched. the walk
        ;; that asks costs no cell, where running it through `go` would copy the lot twice.
-       _ (? (any string? bs) (go bs ()) (say q (cask bs)))
-       (close q)))
+       (any string? bs ? (go bs ()) (say q (cask bs)),
+        close q)))
 ) ; module 'holo

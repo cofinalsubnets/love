@@ -19,12 +19,12 @@
 (module 'holo
 (: ;; --- encoder primitives (physical, width-aware; x64.l is the form reference). ---
    (as-hi n) (n >> 3)  (as-lo n) (n & 7)
-   (as-rex f w r x b) (? (f > 0 || w > 0 || r > 0 || x > 0 || b > 0)   ; only when a bit is set,
-                         [(64 | ((w << 3) | ((r << 2) | ((x << 1) | b))))] ())    ; or f forces one
-   (as-mrm m r rm)  ((m << 6) | (((r & 7) << 3) | (rm & 7)))
-   (as-sib sc ix b) ((sc << 6) | (((ix & 7) << 3) | (b & 7)))
+   (as-rex f w r x b) (f > 0 || w > 0 || r > 0 || x > 0 || b > 0 ?   ; only when a bit is set,
+                         [(64 | (w << 3 | (r << 2 | (x << 1 | b))))] ())    ; or f forces one
+   (as-mrm m r rm)  (m << 6 | ((r & 7) << 3 | rm & 7))
+   (as-sib sc ix b) (sc << 6 | ((ix & 7) << 3 | b & 7))
    (as-scb s) (s @ 1 0 2 1 4 2 8 3 (scare 'as-badscale s))
-   (as-regn o) (? (<>o >= 16) (<>o - 16) <>o)            ; a register operand's encoding number (ah..bh: 4..7)
+   (as-regn o) (<>o >= 16 ? (<>o - 16) <>o)            ; a register operand's encoding number (ah..bh: 4..7)
    (as-regw o) (<o = 'rg ? <>>o 0)                      ; ... and its width, 0 if it isn't one
    ;; spl/bpl/sil/dil name the low four's bytes only under a REX -- bare, those slots spell
    ;; ah/ch/dh/bh -- so a byte operand in 4..7 forces an otherwise-empty one.
@@ -39,8 +39,8 @@
    ;; carries no addend, so a symbol with an offset cannot be spelled and is refused. ---
    (as-mem-rm rf o)
       (: b (o 1) ix (o 2) sc (o 3) d (o 4)
-         sy (? (5 < #o) (o 5) ())                            ; a symbol displacement: abs32, always four bytes
-         d4 (? sy [(fix 4 'abs32 sy d)] (le32 d))
+         sy (5 < #o ? (o 5) ())                            ; a symbol displacement: abs32, always four bytes
+         d4 (sy ? [(fix 4 'abs32 sy d)] (le32 d))
          (b < 0 ? ([(as-mrm 0 rf 4) (as-sib (as-scb sc) (ix < 0 ? 4 ix) 5)] + d4)
             (: md (? sy 2 (d = 0 && !(as-lo b = 5)) 0 (fits8 d) 1 2)
                dsp (md @ 0 () 1 [(byte d)] d4)
@@ -49,11 +49,11 @@
                      [(as-mrm md rf (as-lo b))])
                (hd + dsp))))
    (as-rm rf o) (<o @ 'mem (as-mem-rm rf o)
-                      'rip (? (nom? <>o) [(as-mrm 0 rf 5) (fix 4 'rel32 <>o <>>o)] ([(as-mrm 0 rf 5)] + le32 <>>o))   ; `0(%rip)`: a bare displacement
+                      'rip (nom? <>o ? [(as-mrm 0 rf 5) (fix 4 'rel32 <>o <>>o)] ([(as-mrm 0 rf 5)] + le32 <>>o))   ; `0(%rip)`: a bare displacement
                       'rg  [(as-mrm 3 rf (as-regn o))]
                       (scare 'as-notrm o))
-   (as-rm-x o)  (<o @ 'mem (: i <>>o (i < 0 ? 0 (as-hi i))) 0)
-   (as-rm-b o)  (<o @ 'mem (: b <>o (b < 0 ? 0 (as-hi b)))
+   (as-rm-x o)  (<o @ 'mem (<>>o @ i (i < 0 ? 0 (as-hi i))) 0)
+   (as-rm-b o)  (<o @ 'mem (<>o @ b (b < 0 ? 0 (as-hi b)))
                       'rip 0
                       (as-hi (as-regn o)))
    (as-mem? o)  (<o = 'mem || <o = 'rip)
@@ -91,7 +91,7 @@
    ;; mov $imm,%reg: the b0/b8+r short forms by width, movabs where a 64-bit immediate needs it,
    ;; c7 /0 id where it fits signed-32.
    (as-mov-ri d w frc imm)
-      (: rx (as-rex frc (as-rexw w) 0 0 (as-hi d))
+      (as-rex frc (as-rexw w) 0 0 (as-hi d) @ rx
          (? (w = 1) (catall [rx [(176 | as-lo d) (byte imm)]])
             (w = 2) (catall ['(102) rx [(184 | as-lo d)] (le16 imm)])
             (w = 4) (catall [rx [(184 | as-lo d)] (le32 imm)])
@@ -101,8 +101,8 @@
    ;; --- the per-instruction encoders (each -> a byte/fix item list), in at&T operand order. ---
    ;; a rip-relative operand with an immediate tail: x64-patch measures rel32 from the end of its
    ;; own field, so the fix's aux steps back over the n immediate bytes that follow it
-   (as-imt bs n o) (? (<o = 'rip) (as-riptail bs n) bs)       ; n immediate bytes after o's field
-   (as-riptail bs n) (map (x \ (? (two? x && <x = 'fix && x 2 = 'rel32) (fix (x 1) 'rel32 (x 3) (x 4 - n)) x)) bs)
+   (as-imt bs n o) (<o = 'rip ? (as-riptail bs n) bs)       ; n immediate bytes after o's field
+   (as-riptail bs n) (map (x \ (two? x && <x = 'fix && x 2 = 'rel32 ? (fix (x 1) 'rel32 (x 3) (x 4 - n)) x)) bs)
    (as-2 mn w a b)                                           ; two-operand: at&T src,dst
       (: ka <a kb <b frc (as-frcs [a b])
          alu (as-alu mn)
@@ -125,31 +125,31 @@
                      (as-alu-i <>alu w frc b im))
                ; the immediate's width as its encoder laid it: 80/83's byte, else the operand's
                n (? (opi > 0) (w @ 1 1 2 2 4) (w = 1 || fits8 im) 1 (w @ 2 2 4))
-               (? (<b = 'rip) (as-riptail bs n) bs))
+               (<b = 'rip ? (as-riptail bs n) bs))
             (scare 'as-op2-form [a b])))
    (as-1 mn w a)                                             ; one-operand
       (: k <a  frc (as-frc a)
          pw (w @ 2 2 0)                                  ; push/pop take 66 but never REX.W
          (? (mn = 'push)                                     ; ff /6
-            (k @ 'rg (: n (as-regn a)
-                      (as-p16 pw + (n >= 8 ? [65 (80 | as-lo n)] [(80 | n)])))
+            (k @ 'rg (as-regn a @ n
+                        (as-p16 pw + (n >= 8 ? [65 (80 | as-lo n)] [(80 | n)])))
                  (as-emit pw 0 '(255) 6 a))
             (mn = 'pop)                                      ; 8f /0
-            (k @ 'rg (: n (as-regn a)
-                      (as-p16 pw + (n >= 8 ? [65 (88 | as-lo n)] [(88 | n)])))
+            (k @ 'rg (as-regn a @ n
+                        (as-p16 pw + (n >= 8 ? [65 (88 | as-lo n)] [(88 | n)])))
                  (as-emit pw 0 '(143) 0 a))
             (elem mn '(neg not inc dec))
             (: opc (elem mn '(inc dec) ? 255 247)
                ext (mn @ 'neg 3 'not 2 'inc 0 1)
                (w @ 0 (scare 'as-nowidth [mn a]) (as-emit w frc [(as-opw opc w)] ext a)))
             (k = 'ind)                                       ; call/jmp through a register or memory
-            (: o (a 1)
+            (a 1 @ o
                (mn @ 'call (as-emit 0 0 '(255) 2 o)
                      'jmp  (as-emit 0 0 '(255) 4 o)
                      (scare 'as-op1 mn)))
             (elem mn '(call jmp))
-            (: sym (a 1) (mn @ 'call [232 (fix 4 'rel32 sym 0)] [233 (fix 4 'rel32 sym 0)]))
-            (as-cc mn) (: sym (a 1) [15 (peep as-cc mn 0) (fix 4 'rel32 sym 0)])
+            (a 1 @ sym (mn @ 'call [232 (fix 4 'rel32 sym 0)] [233 (fix 4 'rel32 sym 0)]))
+            (as-cc mn) (a 1 @ sym [15 (peep as-cc mn 0) (fix 4 'rel32 sym 0)])
             (scare 'as-op1 mn)))
    ;; --- the nullaries, by their one spelling: the reader folds at&T's c<from>t<to> family
    ;; (cltq, cltd, ..) and retq/leaveq/xlatb onto these. `int3' is what holo's own text calls trap.
@@ -214,8 +214,8 @@
               'movhps [() 23] 'movlps [() 19] 'movhpd [[102] 23] 'movlpd [[102] 19]}
    ; a cmov/set condition -> jcc's low byte, past a width suffix if it carries one; none is 0
    (as-ccl nm k) (: c (snip nm k #nm) v (peep as-cc (name ("j" + c)) 0)
-                    (? (0 < v || #c < 2) v (peep as-cc (name ("j" + snip c 0 (#c - 1))) 0)))
-   (as-sym o) (: so (xa-symoff (show <>o)) (fix 4 'abs32 <so >so))       ; `$sym+k` -> its fix
+                    (0 < v || #c < 2 ? v (peep as-cc (name ("j" + snip c 0 (#c - 1))) 0)))
+   (as-sym o) (xa-symoff (show <>o) @ so (fix 4 'abs32 <so >so))       ; `$sym+k` -> its fix
    (as-gp? o) (<o = 'rg && as-regw o < 16)
    (as-xw d s w) (? (w = 8) 1 (as-gp? d && as-regw d = 8) 1 (as-gp? s && as-regw s = 8) 1 0)
    (as-sse-op pf op wb rn rm)
@@ -237,8 +237,8 @@
           (n = 2 && <s = 'ims)
            (: fx (as-sym s) frc (as-frc d)
               (? (mn = 'mov && <d = 'rg && w <= 4) (catall [(as-rex frc 0 0 0 (as-hi (as-regn d))) [(184 | as-lo (as-regn d)) fx]])
-                 (mn = 'mov) (: bs (as-emit w frc '(199) 0 d + [fx]) (? (<d = 'rip) (as-riptail bs 4) bs))
-                 (two? (as-alu mn)) (: bs (as-emit w frc '(129) <>(as-alu mn) d + [fx]) (? (<d = 'rip) (as-riptail bs 4) bs))
+                 (mn = 'mov) (as-emit w frc '(199) 0 d + [fx] @ bs (<d = 'rip ? (as-riptail bs 4) bs))
+                 (two? (as-alu mn)) (as-emit w frc '(129) <>(as-alu mn) d + [fx] @ bs (<d = 'rip ? (as-riptail bs 4) bs))
                  ()))
           (n = 1 && mn = 'push && <d = 'ims) [104 (as-sym d)]
           (n = 1 && elem mn '(prefetchnta prefetcht0 prefetcht1 prefetcht2) && as-mem? d)   ; 0F 18 /0../3
@@ -249,9 +249,9 @@
                     (as-regn d) s)
           ; the imm8 SSE forms: at&T `$k, src, dst` arrives [dst src k]; a shift names one register
           (n = 3 && two? (peep as-ssi mn ()) && <(ops 2) = 'im)
-           (: r (as-ssi mn) (as-imt (as-sse-op <r <>r 0 (as-regn d) s + [(byte <>(ops 2))]) 1 s))
+           (as-ssi mn @ r (as-imt (as-sse-op <r <>r 0 (as-regn d) s + [(byte <>(ops 2))]) 1 s))
           (n = 2 && two? (peep as-ssh mn ()) && <s = 'im)
-           (: r (as-ssh mn) (as-sse-op [102] <r 0 <>r d + [(byte <>s)]))
+           (as-ssh mn @ r (as-sse-op [102] <r 0 <>r d + [(byte <>s)]))
           ; the shifts and rotates: by one, by an immediate, by %cl
           (charm? (peep as-shf mn ()))
            (: k (as-shf mn) frc (as-frc d) o8 (w = 1 ? 0 1)
@@ -260,10 +260,10 @@
                  (n = 2 && <s = 'rg && as-regn s = 1) (as-emit w frc [(210 + o8)] k d)
                  ()))
           (n = 1 && mn = 'bswap && <d = 'rg)
-           (: r (as-regn d) (catall [(as-rex 0 (as-rexw w) 0 0 (as-hi r)) [15 (200 + as-lo r)]]))
+           (as-regn d @ r (catall [(as-rex 0 (as-rexw w) 0 0 (as-hi r)) [15 (200 + as-lo r)]]))
           (n = 3 && elem mn '(shld shrd))
            (: c (ops 2) b (mn = 'shld ? 164 172)
-              (? (<c = 'im) (as-imt (as-emit w (as-frcs ops) [15 b] (as-regn s) d + [(byte <>c)]) 1 d)
+              (<c = 'im ? (as-imt (as-emit w (as-frcs ops) [15 b] (as-regn s) d + [(byte <>c)]) 1 d)
                  (as-emit w (as-frcs ops) [15 (b + 1)] (as-regn s) d)))
           (n = 2 && starts? nm "cmov" && 0 < as-ccl nm 4) (as-emit w (as-frcs ops) [15 (as-ccl nm 4 - 64)] (as-regn d) s)
           (n = 1 && starts? nm "set" && 0 < as-ccl nm 3) (as-emit 1 (as-frc d) [15 (as-ccl nm 3 + 16)] 0 d)
@@ -290,14 +290,14 @@
     (: mn (it 1 = 'movabs ? 'mov (it 1)) w (it 2) ops (it 3)
      ; a %fs:/%gs: operand: the override byte ahead of the same instruction over the bare operand
      sg (foldl (\ a o (? (two? a) a (two? o && <o = 'seg) o ())) () ops)
-     (? (two? sg) ([(<>sg @ 'fs 100 'gs 101 'es 38 'cs 46 'ss 54 62)]
-                    + as-instr ['op (it 1) w (map (o \ (two? o && <o = 'seg) ? <>>o o) ops)])
-     (: x (as-more mn w ops)
-     (? (two? x) x
-        (#ops @ 0 (as-0 mn)
-             1 (as-1 mn w <ops)
-             2 (as-2 mn w <>ops <ops)
-             n (scare 'as-arity [mn n]))))))
+     (two? sg ? ([(<>sg @ 'fs 100 'gs 101 'es 38 'cs 46 'ss 54 62)]
+                  + as-instr ['op (it 1) w (map (o \ (two? o && <o = 'seg) ? <>>o o) ops)])
+     (as-more mn w ops @ x
+        (two? x ? x
+           (#ops @ 0 (as-0 mn)
+                1 (as-1 mn w <ops)
+                2 (as-2 mn w <>ops <ops)
+                n (scare 'as-arity [mn n]))))))
 
    ;; --- pass one: walk the items, encode each, assign addresses, record labels + .globl. returns
    ;;     a tablet { 'items 'labels 'globls }. label defs emit no bytes; directives steer. ---
@@ -305,19 +305,19 @@
    (as-lay its)
       (: labels {}  globls {}  st {}
          (go its addr items)
-            (? !(two? its) (pins st 'items (rev items) 'labels labels 'globls globls)
-               (: it <its
+            (!(two? its) ? (pins st 'items (rev items) 'labels labels 'globls globls)
+               (<its @ it
                   (<it @ 'label (pin labels <>it addr, go >its addr items)
                         'globl (pin globls <>it 1, go >its addr items)
                         'dir (elem <>it as-dirs ? (go >its addr items)   ; M1: single .text section
                                 (scare 'as-directive <>it))
-                        (: r (revonto (as-instr it) items 0)
+                        (revonto (as-instr it) items 0 @ r
                            (go >its (addr + <r) >r)))))
          (go its 0 ()))
 
    ;; --- resolve intra-section fixups (near rel32) to final .text bytes, and the hex for goldens.
    ;;     as-text reads at&T; as-textv takes the value, so either dialect assembles. ---
-   (as-textv its) (: st (as-lay its)
+   (as-textv its) (as-lay its @ st
                      (resolve (st 'items) (peep st 'labels 0) (backends 'x64) 0))
    (as-text src) (as-textv (att-read src))
    (as-hexv its) (hexs (as-textv its))

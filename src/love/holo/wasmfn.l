@@ -26,7 +26,7 @@
 (module 'holo
 (: ;; -- the layout: register -> local. uni: r0..r7 0..7, f0..f7 8..15, then r8..r26 fp lr,
    ;;    lab (i32), A B V, f8..f19, FA FB. per-arity n: r0..r26 fp lr, lab, A B V, f0..f19, FA FB. --
-   w-st (tablet 0)                                   ; 'uni 'fl (1 after ucomisd) 'labs 'env 'k
+   w-st {}                                   ; 'uni 'fl (1 after ucomisd) 'labs 'env 'k
    (w-uni? _) (peep w-st 'uni 0)
    w-regs {'r0 0 'r1 1 'r2 2 'r3 3 'r4 4 'r5 5 'r6 6 'r7 7
            'r8 8 'r9 9 'r10 10 'r11 11 'r12 12 'r13 13 'r14 14
@@ -37,16 +37,16 @@
             'f8 8 'f9 9 'f10 10 'f11 11 'f12 12 'f13 13 'f14 14
             'f15 15 'f16 16 'f17 17 'f18 18 'f19 19}
    (w-reg r) (: n (peep w-regs r -1)                 ; r0 is 0, and 0 is falsy: a sentinel, never nil?
-                (? (n < 0) (scare 'wasm-badreg r) (w-uni? 0) (? (n < 8) n (n + 8)) n))
-   (w-freg r) (: n (peep w-fregs r -1)
-                 (? (n < 0) (scare 'wasm-badfreg r) (w-uni? 0) (? (n < 8) (n + 8) (n + 33)) (n + 33)))
-   (w-lab _) (? (w-uni? 0) 37 29)
-   (w-A _) (? (w-uni? 0) 38 30)  (w-B _) (? (w-uni? 0) 39 31)  (w-V _) (? (w-uni? 0) 40 32)
+                (? (n < 0) (scare 'wasm-badreg r) (w-uni? 0) (n < 8 ? n (n + 8)) n))
+   (w-freg r) (peep w-fregs r -1 @ n
+                 (? (n < 0) (scare 'wasm-badfreg r) (w-uni? 0) (n < 8 ? (n + 8) (n + 33)) (n + 33)))
+   (w-lab _) (w-uni? 0 ? 37 29)
+   (w-A _) (w-uni? 0 ? 38 30)  (w-B _) (w-uni? 0 ? 39 31)  (w-V _) (w-uni? 0 ? 40 32)
    w-FA 53  w-FB 54
-   (w-locals n) (? (w-uni? 0) '((21 i64) (1 i32) (3 i64) (14 f64))
+   (w-locals n) (w-uni? 0 ? '((21 i64) (1 i32) (3 i64) (14 f64))
                    [[(29 - n) 'i64] '(1 i32) '(3 i64) '(22 f64)])
    (w-val x) (? (x = 'sp) '((global.get 0)) (reg? x) [['local.get (w-reg x)]] [['i64.const x]])
-   (w-set r) (? (r = 'sp) '((global.set 0)) [['local.set (w-reg r)]])
+   (w-set r) (r = 'sp ? '((global.set 0)) [['local.set (w-reg r)]])
    (w-fval r) [['local.get (w-freg r)]]
    (w-fset r) [['local.set (w-freg r)]]
 
@@ -72,19 +72,19 @@
          'p  [['local.get w-FA] ['local.get w-FA] '(f64.eq) ['local.get w-FB] ['local.get w-FB] '(f64.eq) '(i32.and) '(i32.eqz)]
              (scare 'wasm-badfcond c))
    (w-cond c)                                        ; the condition as an i32 on the stack
-    (? (peep w-st 'fl 0) (w-fcond c)
+    (peep w-st 'fl 0 ? (w-fcond c)
        (c @ 's  [['local.get (w-A 0)] ['local.get (w-B 0)] '(i64.sub) '(i64.const 0) '(i64.lt_s)]
             'ns [['local.get (w-A 0)] ['local.get (w-B 0)] '(i64.sub) '(i64.const 0) '(i64.ge_s)]
             'vs [['local.get (w-V 0)] '(i64.const 0) '(i64.lt_s)]
             'vc [['local.get (w-V 0)] '(i64.const 0) '(i64.ge_s)]
-                (: op (peep w-cc c ())
-                   (? !(nom? op) (scare 'wasm-badcond c) [['local.get (w-A 0)] ['local.get (w-B 0)] [op]]))))
+                (peep w-cc c () @ op
+                   (!(nom? op) ? (scare 'wasm-badcond c) [['local.get (w-A 0)] ['local.get (w-B 0)] [op]]))))
    (w-flags a b) (pin w-st 'fl 0, w-val a + [['local.set (w-A 0)]] + w-val b + [['local.set (w-B 0)]])
    ;; adds/subs: d = a op b off saved operands (d may alias), V the overflow sign, flags d vs 0
    (w-addsub op d a b)
     (w-flags a b
      + [['local.get (w-A 0)] ['local.get (w-B 0)] [(w-alu op)]] + w-set d
-     + (? (op = 'add)
+     + (op = 'add ?
           (w-val d + [['local.get (w-A 0)] '(i64.xor)] + w-val d + [['local.get (w-B 0)] '(i64.xor)])
           ([['local.get (w-A 0)] ['local.get (w-B 0)] '(i64.xor) ['local.get (w-A 0)]] + w-val d + '((i64.xor))))
      + [['i64.and] ['local.set (w-V 0)]]
@@ -101,23 +101,23 @@
    (w-mulo d a b lbl dep) (w-mulo-cond d a b + '((if)) + w-jump lbl (dep + 1) + '((end)))
 
    ;; -- memory: (forms . memarg-offset); a negative displacement folds into the address --
-   (w-mem base off) (? (off < 0) ((w-val base + [['i64.const off] '(i64.add)]) . 0) ((w-val base) . off))
+   (w-mem base off) (off < 0 ? ((w-val base + [['i64.const off] '(i64.add)]) . 0) ((w-val base) . off))
    (w-memx base ix sc dp)
     (: a (w-val base + w-val ix + [['i64.const sc] '(i64.mul) '(i64.add)])
-       (? (dp < 0) ((a + [['i64.const dp] '(i64.add)]) . 0) (a . dp)))
+       (dp < 0 ? ((a + [['i64.const dp] '(i64.add)]) . 0) (a . dp)))
    w-ld {'ld '(i64.load 3) 'ld1 '(i64.load8_s 0) 'ld2 '(i64.load16_s 1) 'ld4 '(i64.load32_s 2)
          'ldu1 '(i64.load8_u 0) 'ldu2 '(i64.load16_u 1) 'ldu4 '(i64.load32_u 2)}
    w-st-ops {'st '(i64.store 3) 'st1 '(i64.store8 0) 'st2 '(i64.store16 1) 'st4 '(i64.store32 2)}
-   (w-load op m d) (: r (w-ld op) (<m + [[<r (r 1) >m]] + w-set d))
-   (w-store op m s) (: r (w-st-ops op) (<m + w-val s + [[<r (r 1) >m]]))
+   (w-load op m d) (w-ld op @ r (<m + [[<r (r 1) >m]] + w-set d))
+   (w-store op m s) (w-st-ops op @ r (<m + w-val s + [[<r (r 1) >m]]))
    ;; the shadow stack: push and pop move sp by 16, the arm family's law (the frame stays
    ;; 16-aligned; the word sits at the low end), and gen.l's frame offsets count on it
    (w-push s) ('((global.get 0) (i64.const 16) (i64.sub) (global.set 0) (global.get 0)) + w-val s + '((i64.store 3 0)))
    (w-pop d) ('((global.get 0) (i64.load 3 0)) + w-set d + '((global.get 0) (i64.const 16) (i64.add) (global.set 0)))
    ;; r0 <-> [r1], w bytes: the old value (sign-extended) lands in r0
    (w-xchg w)
-    (w-val 'r1 + [[(? (w = 4) 'i64.load32_s 'i64.load) (? (w = 4) 2 3) 0] ['local.set (w-A 0)]]
-     + w-val 'r1 + w-val 'r0 + [[(? (w = 4) 'i64.store32 'i64.store) (? (w = 4) 2 3) 0]]
+    (w-val 'r1 + [[(w = 4 ? 'i64.load32_s 'i64.load) (w = 4 ? 2 3) 0] ['local.set (w-A 0)]]
+     + w-val 'r1 + w-val 'r0 + [[(w = 4 ? 'i64.store32 'i64.store) (w = 4 ? 2 3) 0]]
      + [['local.get (w-A 0)]] + w-set 'r0)
 
    ;; -- symbols and calls. env: name -> (fn idx [n]) | (data addr). a call under uni hands
@@ -130,12 +130,12 @@
    w-fnbase (1 << 40)
    (w-fnaddr i) (w-fnbase + 8 * i)
    (w-sym x) (peep (peep w-st 'env {}) x ())
-   (w-args e) (? (w-uni? 0) (catmap (\ i [['local.get i]]) (jot 16))
-                 (catmap (\ i [['local.get i]]) (jot (e 2))))
-   (w-rets _) (? (w-uni? 0) [['local.set 9] ['local.set 8] ['local.set 1] ['local.set 0]] [['local.set 0]])
-   (w-indirect d op) (? (w-uni? 0) (w-args () + w-val d
-                                    + [['i64.const w-fnbase] ['i64.sub] ['i64.const 3] ['i64.shr_u]
-                                       ['i32.wrap_i64] [op 0 0]])
+   (w-args e) (w-uni? 0 ? (catmap (i \ [['local.get i]]) (jot 16))
+                 (catmap (i \ [['local.get i]]) ^(e 2)))
+   (w-rets _) (w-uni? 0 ? [['local.set 9] ['local.set 8] ['local.set 1] ['local.set 0]] [['local.set 0]])
+   (w-indirect d op) (w-uni? 0 ? (w-args () + w-val d
+                                  + [['i64.const w-fnbase] ['i64.sub] ['i64.const 3] ['i64.shr_u]
+                                     ['i32.wrap_i64] [op 0 0]])
                         (scare 'wasm-indirect-needs-uni d))
    (w-la d x)
     (w-sym x @- (scare 'wasm-la x)
@@ -143,19 +143,19 @@
      ('data . u . _) ([['i64.const u]] + w-set d)
      ('null . _) ([['i64.const 0]] + w-set d))
    (w-jump l d) (: labs (peep w-st 'labs {}) j (peep labs l -1)
-                   (? (j < 0) (scare 'wasm-nolabel l) [['i32.const j] ['local.set (w-lab 0)] ['br d]]))
+                   (j < 0 ? (scare 'wasm-nolabel l) [['i32.const j] ['local.set (w-lab 0)] ['br d]]))
    ;; a jmp names a label of this function, or a function: gen.l's direct tail call
    (w-jmp l d) (: labs (peep w-st 'labs {}) j (peep labs l -1)
-                  (? (0 <= j) (w-jump l d)
-                     (: e (w-sym l)
-                        (? (two? e && <e = 'fn && (w-uni? 0)) (w-args e + [['return_call (e 1)]])
+                  (0 <= j ? (w-jump l d)
+                     (w-sym l @ e
+                        (? (two? e && <e = 'fn && w-uni? 0) (w-args e + [['return_call (e 1)]])
                            (two? e && <e = 'null) '((unreachable))
                            (scare 'wasm-nolabel l)))))
-   (w-call x) (: e (w-sym x)
+   (w-call x) (w-sym x @ e
                  (? (two? e && <e = 'null) '((unreachable))         ; the C guards the call; reaching it is a trap
                     !(two? e && <e = 'fn) (scare 'wasm-nocall x)
                     (w-args e + [['call (e 1)]] + w-rets 0)))
-   (w-ret _) (? (w-uni? 0) '((local.get 0) (local.get 1) (local.get 8) (local.get 9) (return)) '((local.get 0) (return)))
+   (w-ret _) (w-uni? 0 ? '((local.get 0) (local.get 1) (local.get 8) (local.get 9) (return)) '((local.get 0) (return)))
 
    ;; -- one IR form, in segment depth d. what stays refused: sys (the wasm kernel is an import,
    ;;    __ai_sys, and nothing here issues it), tp, raw (inline asm), the 128-bit lane. --
@@ -194,7 +194,7 @@
      'ldxb (w-load 'ldu1 (w-memx (f 2) (f 3) (f 4) (f 5)) (f 1))
      'stxb (w-store 'st1 (w-memx (f 1) (f 2) (f 3) (f 4)) (f 5))
      ('lea || 'lean) (w-val (f 2) + [['i64.const (f 3)] '(i64.add)] + w-set (f 1))
-     'leax (: m (w-memx (f 2) (f 3) (f 4) (f 5)) (<m + [['i64.const >m] '(i64.add)] + w-set (f 1)))
+     'leax (w-memx (f 2) (f 3) (f 4) (f 5) @ m (<m + [['i64.const >m] '(i64.add)] + w-set (f 1)))
      ('la || 'lar) (w-la (f 1) (f 2))
      'push (w-push (f 1))
      'pop  (w-pop (f 1))
@@ -205,7 +205,7 @@
      ;; raw bytes are inline asm, refused -- except gen.l's own two rv64 idioms for the sync
      ;; builtins, which this one-thread machine lowers: the fence is nothing, the atomic
      ;; swap (amoswap.w/d.aq a0,a0,(a1)) an exchange through A
-     'raw (: bs (f 1)
+     'raw (f 1 @ bs
              (? (bs = '(15 0 16 3)) ()
                 (bs = '(47 165 165 12)) (w-xchg 4)
                 (bs = '(47 181 165 12)) (w-xchg 8)
@@ -226,18 +226,18 @@
      'movqrx (w-fval (f 2) + '((i64.reinterpret_f64)) + w-set (f 1))
      'cvtsd2ss (w-fval (f 2) + '((f32.demote_f64) (i32.reinterpret_f32) (i64.extend_i32_u) (f64.reinterpret_i64)) + w-fset (f 1))
      'cvtss2sd (w-fval (f 2) + '((i64.reinterpret_f64) (i32.wrap_i64) (f32.reinterpret_i32) (f64.promote_f32)) + w-fset (f 1))
-     'ldsd (: m (w-mem (f 2) (f 3)) (<m + [['f64.load 3 >m]] + w-fset (f 1)))
-     'stsd (: m (w-mem (f 1) (f 2)) (<m + w-fval (f 3) + [['f64.store 3 >m]]))
-     'ldss (: m (w-mem (f 2) (f 3)) (<m + [['i32.load 2 >m]] + '((i64.extend_i32_u) (f64.reinterpret_i64)) + w-fset (f 1)))
-     'stss (: m (w-mem (f 1) (f 2)) (<m + w-fval (f 3) + '((i64.reinterpret_f64) (i32.wrap_i64)) + [['i32.store 2 >m]]))
+     'ldsd (w-mem (f 2) (f 3) @ m (<m + [['f64.load 3 >m]] + w-fset (f 1)))
+     'stsd (w-mem (f 1) (f 2) @ m (<m + w-fval (f 3) + [['f64.store 3 >m]]))
+     'ldss (w-mem (f 2) (f 3) @ m (<m + [['i32.load 2 >m]] + '((i64.extend_i32_u) (f64.reinterpret_i64)) + w-fset (f 1)))
+     'stss (w-mem (f 1) (f 2) @ m (<m + w-fval (f 3) + '((i64.reinterpret_f64) (i32.wrap_i64)) + [['i32.store 2 >m]]))
            (scare 'wasm-noins <f))
    ;; split at the labels: (segments . label tablet), the entry segment 0, labels 1..k in order
    (w-segs prog)
     (: labs {}
        (go l cur segs k)
-        (? (atom? l) (rev ((rev cur) . segs))
-           (: ins <l
-              (? (<ins = 'label) (pin labs (ins 1) (k + 1), go >l () ((rev cur) . segs) (k + 1))
+        (atom? l ? (rev ((rev cur) . segs))
+           (<l @ ins
+              (<ins = 'label ? (pin labs (ins 1) (k + 1), go >l () ((rev cur) . segs) (k + 1))
                  (go >l (ins . cur) segs k))))
        ((go prog () () 0) . labs))
    ;; -- the relooper (rung 5b): the function as basic blocks and their graph, and structured
@@ -255,9 +255,9 @@
        labs {}
        (mk code kind tg cond) [(rev code) kind tg cond]
        (go l cur acc)
-        (? (atom? l) (rev (mk cur 'fall () () . acc))
+        (atom? l ? (rev (mk cur 'fall () () . acc))
            (: f <l op <f
-              (? (op = 'label) (: bs (mk cur 'fall () () . acc) _ (pin labs (f 1) #bs) (go >l () bs))
+              (? (op = 'label) (mk cur 'fall () () . acc @ bs (pin labs (f 1) #bs, go >l () bs))
                  ((op = 'jmp || op = 'jmp8) && labset (f 1)) (go >l () (mk cur 'jmp (f 1) () . acc))
                  (op = 'br || op = 'br8) (go >l () (mk cur 'br (f 2) (w-cond (f 1)) . acc))
                  (op = 'mulo) (go >l () (mk cur 'br (f 5) (w-mulo-cond (f 1) (f 2) (f 3)) . acc))
@@ -278,7 +278,7 @@
                             ()))
        ;; reverse postorder from the entry; what it misses is dead and never laid
        seen {}
-       (visit i acc) (? (seen i) acc (pin seen i 1, i . foldl (a \ j \ visit j a) acc (succs i)))
+       (visit i acc) (seen i ? acc (pin seen i 1, i . foldl (a \ j \ visit j a) acc (succs i)))
        rpo (visit 0 ())
        rpon (foldl (t \ k \ pin t (rpo k) k) {} ^#rpo)
        (rk i) (peep rpon i -1)
@@ -287,12 +287,12 @@
        dm (pin {} 0 0)
        (idom i) (peep dm i -1)
        (inter a b) (? (a = b) a (rk a > rk b) (inter (idom a) b) (inter a (idom b)))
-       (step _) (foldl (\ ch v (? (v = 0) ch
+       (step _) (foldl (\ ch v (v = 0 ? ch
                                  (: ps (filter (p \ 0 <= idom p) (pr v))
                                     nw (foldl inter <ps >ps)
-                                    (? (nw = idom v) ch (pin dm v nw, 1)))))
+                                    (nw = idom v ? ch (pin dm v nw, 1)))))
                        0 rpo)
-       (fix _) (? (step 0) (fix 0) 0)
+       (fix _) (step 0 ? (fix 0) 0)
        _ (fix 0)
        (dom? v u) (? (u = v) 1 (u = 0) 0 (dom? v (idom u)))          ; v dominates u
        ;; an edge back to a dominator is a loop's; any other edge against the order is
@@ -312,7 +312,7 @@
            body (within x (merge-kids x) c2)
            (hd ? ('((loop)) + body + '((end))) body))
        (within x ks ctx)
-        (? (two? ks) ('((block)) + within x >ks (('block . <ks) . ctx) + '((end)) + tree <ks ctx)
+        (two? ks ? ('((block)) + within x >ks (('block . <ks) . ctx) + '((end)) + tree <ks ctx)
            (bs x 0 + term x ctx))
        (branch x y ctx) (? (n <= y) '((unreachable)) (needs-br? x y) (br-to x y ctx) (tree y ctx))
        (term x ctx)
@@ -325,23 +325,23 @@
                                (needs-br? x t) (cc + [['br_if (depth (dom? t x ? ('loop . t) ('block . t)) ctx 0)]] + branch x nx ctx)
                                (needs-br? x nx) (cc + '((i32.eqz)) + [['br_if (depth (dom? nx x ? ('loop . nx) ('block . nx)) ctx 0)]] + tree t ctx)
                                (cc + '((if)) + tree t ('if . ctx) + '((else)) + branch x nx ('if . ctx) + '((end)))))))
-       (? reducible (tree 0 () + '((unreachable))) ()))
+       (reducible ? (tree 0 () + '((unreachable)))))
    ;; -> (locals . body). mode: 'uni, or the parameter count of the per-arity lane
    (wasm-fn prog mode env)
     (: uni (mode = 'uni)
-       _ (pin w-st 'uni (? uni 1 0)) _ (pin w-st 'fl 0) _ (pin w-st 'env env)
+       _ (pin w-st 'uni (uni ? 1 0)) _ (pin w-st 'fl 0) _ (pin w-st 'env env)
        _ (pin w-st 'labs {})
        r (w-abl? 'reloop ? () (w-reloop prog))
-       (? (two? r) ((w-locals (? uni 0 mode)) . r)
+       (two? r ? ((w-locals (uni ? 0 mode)) . r)
           (: _ (pin w-st 'fl 0)
              s (w-segs prog) segs <s k (#segs - 1)
              _ (pin w-st 'labs >s)
-             (seg j) (catmap (\ f (w-ins f (k - j))) (segs j))
-             ((w-locals (? uni 0 mode))
+             (seg j) (catmap (f \ (w-ins f (k - j))) (segs j))
+             ((w-locals (uni ? 0 mode))
               . [['i32.const 0] ['local.set (w-lab 0)] '(loop)]
-                + catmap (\ _ '((block))) (jot (k + 1))
-                + [['local.get (w-lab 0)] ['br_table (jot (k + 1)) 0]]
-                + catall (map (\ j ('((end)) + seg j)) (jot (k + 1)))
+                + catmap (_ \ '((block))) ^(k + 1)
+                + [['local.get (w-lab 0)] ['br_table ^(k + 1) 0]]
+                + catall (map (j \ ('((end)) + seg j)) ^(k + 1))
                 + '((end) (unreachable))))))
 
    ;; -- the hand lane's program: functions by name, one type per arity in use. --
@@ -349,24 +349,24 @@
    ;;        'memory (min [max]) 'data .. 'start name}
    (wasm-program p)
     (: imps (peep p 'imports ())  fns (peep p 'fns ())
-       ars (: t {} _ (map (\ i (pin t (i 2) 1)) imps) _ (map (\ f (pin t (f 1) 1)) fns) (sort (keys t)))
-       tyof (: t {} _ (map (i \ pin t (ars i) i) (jot #ars)) t)
+       ars ({} @ t (map (i \ (pin t (i 2) 1)) imps, map (f \ (pin t (f 1) 1)) fns, sort (keys t)))
+       tyof ({} @ t (map (i \ pin t (ars i) i) (jot #ars), t))
        (ty n) (peep tyof n ())
        env (: t {} ni #imps
-              _ (map (\ i (pin t (nom (imps i 1)) ['fn i (imps i 2)])) (jot ni))   ; a call names it by nom
-              _ (map (i \ pin t (fns i 0) ['fn (i + ni) (fns i 1)]) (jot #fns))
-              t)
-       (idx name) (: e (peep env name ()) (? (atom? e) (scare 'wasm-noname name) (e 1)))
+              (map (i \ (pin t (nom (imps i 1)) ['fn i (imps i 2)])) ^ni,   ; a call names it by nom
+               map (i \ pin t (fns i 0) ['fn (i + ni) (fns i 1)]) (jot #fns),
+               t))
+       (idx name) (peep env name () @ e (atom? e ? (scare 'wasm-noname name) (e 1)))
        n (#imps + #fns)
        start (peep p 'start ())
-       {'types (map (\ a [(map (\ _ 'i64) (jot a)) '(i64)]) ars)
-        'imports (map (\ i [(i 0) (i 1) ['func (ty (i 2))]]) imps)
-        'funcs (map (\ f (: r (wasm-fn (f 2) (f 1) env) [(ty (f 1)) <r >r])) fns)
-        'table n 'elem (jot n)
+       {'types (map (a \ [(map (_ \ 'i64) ^a) '(i64)]) ars)
+        'imports (map (i \ [(i 0) (i 1) ['func (ty (i 2))]]) imps)
+        'funcs (map (f \ (wasm-fn (f 2) (f 1) env @ r [(ty (f 1)) <r >r])) fns)
+        'table n 'elem ^n
         'memory (peep p 'memory '(1))
         'data (peep p 'data ())
-        'exports ((map (\ e [(show e) 'func (idx e)]) (peep p 'exports ())) + '(("mem" memory 0)))
-        'start (? (start = ()) -1 (idx start))})
+        'exports (map (e \ [(show e) 'func (idx e)]) (peep p 'exports ()) + '(("mem" memory 0)))
+        'start (start = () ? -1 (idx start))})
 
    ;; -- the whole program, off gen.l's objects (rung 4). a tu is cgen-obj's tuple with the
    ;;    weak names appended: (tforms dforms fnames gnames nforms iforms lnames xsecs bforms
@@ -374,15 +374,15 @@
    ;; the symbol positions: where a nom in a form is a label and not a register or an op
    (w-symap f ren)
     (: (m x) (peep ren x x)
-       (? (atom? f) f
+       (atom? f ? f
           (<f @ ('label || 'call || 'jmp || 'jmp8 || 'lapool) [<f (m (f 1))]
                 ('la || 'lar) [<f (f 1) (m (f 2))]
                 'br [<f (f 1) (m (f 2))]
                 'mulo [<f (f 1) (f 2) (f 3) (f 4) (m (f 5))]
-                'raw [<f (map (\ x (? (two? x && <x = 'fix) [<x (x 1) (x 2) (m (x 3)) (x 4)] x)) (f 1))]
+                'raw [<f (map (x \ (two? x && <x = 'fix ? [<x (x 1) (x 2) (m (x 3)) (x 4)] x)) (f 1))]
                 f)))
    ;; the noms a stream defines (its labels) and the ones it names
-   (w-labels-into t forms) (foldl (\ a f (? (two? f && <f = 'label) (pin a (f 1) 1) a)) t forms)
+   (w-labels-into t forms) (foldl (\ a f (two? f && <f = 'label ? (pin a (f 1) 1) a)) t forms)
    (w-labels forms) (w-labels-into {} forms)
    (w-refs forms t)
     (:- (foldl f1 t forms)
@@ -405,10 +405,10 @@
    (w-split forms fnset)
     (: als {}
        (go l cur name acc)
-        (? (atom? l) (rev (name = () ? acc ([name (rev cur)] . acc)))
-           (: f <l
+        (atom? l ? (rev (name = () ? acc ([name (rev cur)] . acc)))
+           (<l @ f
               (? (two? f && <f = 'label && fnset <>f)
-                 (? (name != () && atom? cur) (pin als <>f name, go >l cur name acc)
+                 (name != () && atom? cur ? (pin als <>f name, go >l cur name acc)
                     (go >l () <>f (name = () ? acc ([name (rev cur)] . acc))))
                  (two? f && <f = 'align) (go >l cur name acc)
                  (go >l (f . cur) name acc))))
@@ -420,7 +420,7 @@
    (w-lay-data forms addr syms items)
     (forms @- [addr items] (f . fs)
      (<f @ 'label (pin syms <>f ['data addr], w-lay-data >forms addr syms items)
-           'align (: n <>f a2 (addr + ((n - (addr % n)) % n))
+           'align (: n <>f a2 (addr + (n - addr % n) % n)
                           (w-lay-data >forms a2 syms items))
            ; a run of plain bytes lands as one string item, not a cons and an address per byte
            'raw (:- (go <>f addr items () addr) (go xs a acc run r0)
@@ -436,15 +436,15 @@
    ;; would cons per byte. () when the text is not an object.
    (wo-head text)                                   ; -> [(textlen bloblen ..) start]
     (:- (go 4 0 () 0) (go i n acc any)
-     (: c (text i)
+     (text i @ c
         (? (c = 10) [(rev (any ? (n . acc) acc)) (i + 1)]
            (c = 32) (go (i + 1) 0 (any ? (n . acc) acc) 0)
            (go (i + 1) (n * 10 + c - 48) acc 1))))
    (wo-blobs text lens at)
-    (:- (go lens at ()) (go ls a acc) (? (atom? ls) (rev acc) (go >ls (a + <ls) (snip text a (a + <ls) . acc))))
+    (:- (go lens at ()) (go ls a acc) (atom? ls ? (rev acc) (go >ls (a + <ls) (snip text a (a + <ls) . acc))))
    (wo-fill tu blobs)
-    (: (item x) (? (two? x && <x = 'blob) (blobs (x 1)) x)
-       (form f) (? (two? f && <f = 'raw) ['raw (map item (f 1))] f)
+    (: (item x) (two? x && <x = 'blob ? (blobs (x 1)) x)
+       (form f) (two? f && <f = 'raw ? ['raw (map item (f 1))] f)
        (<tu . (map form (tu 1)) . >>tu))
    (wasm-tu-read text)
     (: h (4 <= #text && snip text 0 4 = "wo1 " ? (wo-head text) ())
@@ -458,63 +458,63 @@
        ;; 1. per object: every tu-local label wears the tu's number, so two statics never meet,
        ;;    and the text streams split into functions at once. a part: [fns names gnames weaks
        ;;    dforms nforms iforms xsecs bforms rforms aliases]
-       parts (map (\ i (: tu (: t (tus0 i) (string? t ? (wasm-tu-read t) t))
+       parts (map (i \ (: tu (tus0 i @ t (string? t ? (wasm-tu-read t) t))
                           _ (two? tu || scare 'wasm-object i)
-                          glob (: t {} _ (map (s \ pin t (nom s) 1) (tu 2 + tu 3)) t)
+                          glob ({} @ t (map (s \ pin t (nom s) 1) (tu 2 + tu 3), t))
                           labs (w-labels (w-tu-streams tu))
                           r {}
-                          _ (map (\ l (? (peep glob l 0) 0 (pin r l (nom (show l + "." + show i))))) (keys labs))
-                          (rn forms) (map (\ f (w-symap f r)) forms)
+                          _ (map (l \ (peep glob l 0 ? 0 (pin r l (nom (show l + "." + show i))))) (keys labs))
+                          (rn forms) (map (f \ (w-symap f r)) forms)
                           ;; every label of a text stream that is a function symbol opens one (the
                           ;; rest are the function's own); a static wears its tu
-                          fs (: t {} _ (map (s \ pin t (peep r (nom s) (nom s)) 1) (tu 2 + tu 6))
-                                   _ (map (\ x (map (\ f (? (two? f && <f = 'label) (pin t (f 1) 1) 0)) (x 1))) (tu 10))
-                                   t)
-                          sp ((w-split (rn (tu 0)) fs) . map (\ x (w-split (rn (x 1)) fs)) (tu 10))
+                          fs ({} @ t (map (s \ pin t (peep r (nom s) (nom s)) 1) (tu 2 + tu 6),
+                                      map (x \ (map (f \ (two? f && <f = 'label ? (pin t (f 1) 1) 0)) (x 1))) (tu 10),
+                                      t))
+                          sp ((w-split (rn (tu 0)) fs) . map (x \ (w-split (rn (x 1)) fs)) (tu 10))
                           [(catmap cap sp) (tu 2) (tu 3) (tu 11)
-                           (rn (tu 1)) (rn (tu 4)) (rn (tu 5)) (map (\ x [(x 0) (rn (x 1)) (x 2)]) (tu 7))
+                           (rn (tu 1)) (rn (tu 4)) (rn (tu 5)) (map (x \ [(x 0) (rn (x 1)) (x 2)]) (tu 7))
                            (rn (tu 8)) (rn (tu 9))
-                           (catmap (\ s (map (\ k [k (peep >s k ())]) (keys >s))) sp)]))
+                           (catmap (s \ (map (k \ [k (peep >s k ())]) (keys >s))) sp)]))
                    ^ntu)
        ;; 2. weak against strong: a weak definition with a strong twin elsewhere keeps its
        ;;    body under a private name; two weak ones, the first stands. a function is renamed
        ;;    at its head, a data label in its stream
-       strong (: t {} _ (map (\ p (map (\ s (? (elem s (p 3)) 0 (pin t (nom s) 1))) (p 1 + p 2))) parts) t)
+       strong ({} @ t (map (p \ (map (s \ (elem s (p 3) ? 0 (pin t (nom s) 1))) (p 1 + p 2))) parts, t))
        wkseen {}
-       ren2 (map (\ i (: p (parts i) r {}
-                          _ (map (\ s (: l (nom s)
-                                         (? !(elem s (p 3)) 0
-                                            (peep strong l 0) (pin r l (nom (show l + ".wk." + show i)))
-                                            (peep wkseen l 0) (pin r l (nom (show l + ".wk." + show i)))
-                                            (pin wkseen l 1))))
-                                 (p 1 + p 2))
-                          r))
+       ren2 (map (i \ (: p (parts i) r {}
+                          (map (s \ (nom s @ l
+                                       (? !(elem s (p 3)) 0
+                                          (peep strong l 0) (pin r l (nom (show l + ".wk." + show i)))
+                                          (peep wkseen l 0) (pin r l (nom (show l + ".wk." + show i)))
+                                          (pin wkseen l 1))))
+                               (p 1 + p 2),
+                           r)))
                  ^ntu)
-       (rd i forms) (map (\ f (? (two? f && <f = 'label) (w-symap f (ren2 i)) f)) forms)   ; the definition alone
+       (rd i forms) (map (f \ (two? f && <f = 'label ? (w-symap f (ren2 i)) f)) forms)   ; the definition alone
        (r2 i x) (peep (ren2 i) x x)
        ;; 3. the functions, in tu order and stream order
-       fns (catmap (\ i (map (\ fn ((r2 i <fn) . >fn)) (parts i 0))) ^ntu)
-       als (catmap (\ i (map (\ a [(r2 i (a 0)) (r2 i (a 1))]) (parts i 10))) ^ntu)   ; (alias . name) pairs
-       (dl k) (map (\ i (rd i (parts i k))) ^ntu)                 ; one data lane across the tus
+       fns (catmap (i \ (map (\ fn ((r2 i <fn) . >fn)) (parts i 0))) ^ntu)
+       als (catmap (i \ (map (a \ [(r2 i (a 0)) (r2 i (a 1))]) (parts i 10))) ^ntu)   ; (alias . name) pairs
+       (dl k) (map (i \ (rd i (parts i k))) ^ntu)                 ; one data lane across the tus
        d1 (dl 4)  d4 (dl 5)  d5 (dl 6)  d8 (dl 8)  d9 (dl 9)
-       d7 (map (\ i (map (\ x [(x 0) (rd i (x 1)) (x 2)]) (parts i 7))) ^ntu)
+       d7 (map (i \ (map (x \ [(x 0) (rd i (x 1)) (x 2)]) (parts i 7))) ^ntu)
        ;; 4. the data, section-major across the tus: rodata, data, love_nifs, .love.image, then
        ;;    the named sections grouped by name, then every bss. a lane the ELF linker brackets
        ;;    (love_nifs, love_rela, every named section) gets its __start_/__stop_ pair here.
        syms {}
        base (peep opts 'base 4096)
-       (lay st forms) (: r (w-lay-data forms (aup <st 16) syms (st 1)) [<r (r 1)])
+       (lay st forms) (w-lay-data forms (aup <st 16) syms (st 1) @ r [<r (r 1)])
        (lane st forms) (foldl lay st forms)
        ;; a bracketed lane is read as an ARRAY of one struct, so its tus must BUTT: a
        ;; 16-align between two of them is a gap the stride knows nothing about, and the
        ;; drain then walks past the end. an explicit aligned(N) still lands, as its own form.
-       (snug st forms) (: r (w-lay-data forms <st syms (st 1)) [<r (r 1)])
+       (snug st forms) (w-lay-data forms <st syms (st 1) @ r [<r (r 1)])
        (bracket nm st forms)                          ; the pair around one lane's whole
         (: a (aup <st 16) r (foldl snug [a (st 1)] forms)
-           _ (pin syms (nom ("__start_" + nm)) ['data a])
-           _ (pin syms (nom ("__stop_" + nm)) ['data <r])
-           r)
-       xnames (: (go l acc) (? (atom? l) (rev acc) (go >l (? (elem <l acc) acc (<l . acc))))
+           (pin syms (nom ("__start_" + nm)) ['data a],
+            pin syms (nom ("__stop_" + nm)) ['data <r],
+            r))
+       xnames (: (go l acc) (atom? l ? (rev acc) (go >l (elem <l acc ? acc (<l . acc))))
                  (go (catmap (x \ map cap x) d7) ()))
        st1 (lane [base ()] d9)
        st2 (lane st1 d1)
@@ -534,40 +534,40 @@
        ;; 5. the index space: the imports the program names, then the functions. what is
        ;;    defined: every function's name and its own labels, every data label
        dlanes (d1 + d4 + d5 + d8 + d9 + catmap (xs \ map (x \ x 1) xs) d7)
-       defd (: t {} _ (map (\ fn (pin t <fn 1, w-labels-into t <>fn)) fns)
-               _ (map (\ d (w-labels-into t d)) dlanes)
-               t)
-       refs (keys (: t {} _ (map (\ fn (w-refs <>fn t)) fns) _ (map (\ d (w-refs d t)) dlanes) t))
+       defd ({} @ t (map (\ fn (pin t <fn 1, w-labels-into t <>fn)) fns,
+                     map (d \ (w-labels-into t d)) dlanes,
+                     t))
+       refs (keys ({} @ t (map (\ fn (w-refs <>fn t)) fns, map (d \ (w-refs d t)) dlanes, t)))
        owed0 (filter (x \ !(peep defd x 0) && atom? (peep syms x ())) refs)   ; a bracket is the link's
        ;; a weak reference nothing defines is null, as at a static link; the rest are imports
        wkall (foldl (\ a p (map (s \ pin a (nom s) 1) (p 3), a)) {} parts)
        _ (pin wkall 'main 1)                            ; a module with a face of its own has no main; the runtime's start never runs
-       _ (map (\ x (? (peep wkall x 0) (pin syms x '(null)) 0)) owed0)
-       owed (filter (\ x !(peep wkall x 0)) owed0)
+       _ (map (x \ (peep wkall x 0 ? (pin syms x '(null)) 0)) owed0)
+       owed (filter (x \ !(peep wkall x 0)) owed0)
        allowed (map nom (peep opts 'imports ()))
-       bad (filter (\ x !(elem x allowed)) owed)
-       _ (? (two? bad) (scare 'wasm-undefined bad) 0)
-       imps (filter (\ x (elem x owed)) allowed)
+       bad (filter (x \ !(elem x allowed)) owed)
+       _ (two? bad ? (scare 'wasm-undefined bad) 0)
+       imps (filter (x \ (elem x owed)) allowed)
        ni #imps
-       _ (map (i \ pin syms (imps i) ['fn i]) (jot ni))
+       _ (map (i \ pin syms (imps i) ['fn i]) ^ni)
        _ (map (i \ pin syms (fns i 0) ['fn (i + ni)]) (jot #fns))
-       _ (map (\ a (pin syms (a 0) (peep syms (a 1) ()))) (als + als))   ; twice: an alias of an alias
+       _ (map (a \ (pin syms (a 0) (peep syms (a 1) ()))) (als + als))   ; twice: an alias of an alias
        ;; 6. the data image, its pointers resolved. symidx is the module's own numbering (a
        ;; funcidx, what the export section wants); symval is the ADDRESS a data word holds,
        ;; which for a function is w-fnaddr's -- the same word w-la lays for it.
-       (symidx x) (: e (peep syms x ()) (? (atom? e) (scare 'wasm-unresolved x) (e 1)))
-       (symval x) (: e (peep syms x ())
+       (symidx x) (peep syms x () @ e (atom? e ? (scare 'wasm-unresolved x) (e 1)))
+       (symval x) (peep syms x () @ e
                      (? (atom? e) (scare 'wasm-unresolved x)
                         (<e = 'fn) (w-fnaddr (e 1))
                         (e 1)))
        dsize (dend - base)
        img (cask dsize)
-       _ (map (\ it (? (two? >it)                             ; (addr sym aux): an abs64 pointer
-                        (: v ((symval (it 1)) + (it 2)) a (<it - base)
-                           (map (j \ pin img (a + j) ((v // (256 ** j)) % 256)) ^8))
+       _ (map (it \ (? (two? >it)                             ; (addr sym aux): an abs64 pointer
+                        (: v (symval (it 1) + it 2) a (<it - base)
+                           (map (j \ pin img (a + j) ((v // 256 ** j) % 256)) ^8))
                         ; a run goes in whole; pour clamps to the image either side, so bss stays zero
                         (string? >it) (pour img (<it - base) >it 0 #>it)
-                        (? (<it < dend) (pin img (<it - base) >it) 0)))
+                        (<it < dend ? (pin img (<it - base) >it) 0)))
               items)
        ;; 7. the stack above the data, sp at its top; the memory holds it all
        stack (peep opts 'stack 4194304)
@@ -576,16 +576,16 @@
        exports (: e (peep opts 'exports 'all)
                   seen {}                                 ; a weak twin names the same export once
                   (ff s) (seen s @ () (pin seen s 1, two? (syms (nom s))))
-                  (? (e = 'all) (catmap (p \ filter ff (p 1)) parts) e))
+                  (e = 'all ? (catmap (p \ filter ff (p 1)) parts) e))
        ;; each function lowered and encoded as it comes: a body is a string from here on
-       funcs (map (\ f (: r (wasm-fn (f 1) 'uni syms) [0 (wentry <r >r)])) fns)
+       funcs (map (f \ (wasm-fn (f 1) 'uni syms @ r [0 (wentry <r >r)])) fns)
        {'types '(((i64 i64 i64 i64 i64 i64 i64 i64 f64 f64 f64 f64 f64 f64 f64 f64) (i64 i64 f64 f64)))
-        'imports (map (\ x ["env" (show x) '(func 0)]) imps)
+        'imports (map (x \ ["env" (show x) '(func 0)]) imps)
         'funcs funcs
-        'table (ni + tally fns) 'elem (jot (ni + tally fns))
+        'table (ni + tally fns) 'elem ^(ni + tally fns)
         'memory [pages]
         'globals [['i64 1 [['i64.const sp0]]]]
-        'exports ((map (\ s [s 'func (symidx (nom s))]) exports) + '(("mem" memory 0)))
+        'exports (map (s \ [s 'func (symidx (nom s))]) exports + '(("mem" memory 0)))
         'data [(base . string img)]
         'names (map (i \ [i (show (imps i))]) ^ni + map (i \ [(i + ni) (show (fns i 0))]) (jot #fns))
         'start -1}))
