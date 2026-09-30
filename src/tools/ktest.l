@@ -37,8 +37,11 @@
    ; machine + exit channel are per-arch. x64 quits qemu by writing the
    ; isa-debug-exit port; the two 'virt's have no such device, so k_reset goes
    ; out through PSCI / SBI and -no-reboot below turns that into the exit.
+   ; KTEST_A64_HOST names an arm box (ssh, qemu, /dev/kvm) the a64 elf lane boots on under
+   ; kvm instead of tcg here, ~100s
+   far  (: h (getenv "KTEST_A64_HOST") (arch = "a64" && elf? && string? h && 0 < #h ? h ()))
    mach (? (arch = "a64")
-           ["-M" "virt,gic-version=2" "-cpu" "cortex-a72" "-semihosting"]
+           ["-M" "virt,gic-version=2" "-cpu" (far ? "host" "cortex-a72") "-semihosting"]
            (arch = "rv64")
            ["-M" "virt"]
            ["-M" "q35" "-device" "isa-debug-exit,iobase=0xf4,iosize=0x04"
@@ -46,7 +49,7 @@
             "-device" "intel-hda" "-device" "hda-output,audiodev=snd" "-audiodev" "none,id=snd"])
    ; the two virts carry their disk on virtio-mmio; q35 on pci
    mmio? (arch = "a64" || arch = "rv64")
-   ; 1536M + 420s. the corpus outgrew 256M (a silent death mid-corpus), then
+   ; 1536M. the corpus outgrew 256M (a silent death mid-corpus), then
    ; 512M and then 768M (";; oom@len=N" at a deterministic dot) -- all the same
    ; wall: a major collection grows the pool by allocating a new contiguous 2x
    ; pair while the old pair still stands, so the ask (~78M at today's corpus)
@@ -77,8 +80,11 @@
    ; arm host whose gic cannot back v2 refuses the pairing rather than degrading.
    ; a box without /dev/kvm falls to tcg, so the verdict never rides on this.
    mach? (hark ["uname" "-m"])
-   kvm  (two? (stat "/dev/kvm") && arch = "x64" && has? >mach? "x86_64"
-         ? ["-enable-kvm" "-cpu" "host"] ())
+   kvm  (? far ["-enable-kvm"]
+           (two? (stat "/dev/kvm") && arch = "x64" && has? >mach? "x86_64") ["-enable-kvm" "-cpu" "host"]
+           ())
+   ; the wall ceiling: tcg on a shared box runs ~300s quiet and past 420s loaded
+   ceil (two? kvm ? "420" "900")
    ; the scratch disk (rung 5): a sparse raw image beside the artifact, virtio-blk
    ; to the kernel. truncate creates it and leaves an existing one's bytes alone
    ; (same size), so a marker written by one boot survives into the next -- the
@@ -93,9 +99,25 @@
                (d + ["-device" "virtio-blk-device,drive=d0"
                      "-global" "virtio-mmio.force-legacy=false"])
                (d + ["-device" "virtio-blk-pci,drive=d0"])))
-   r    (hark (["timeout" "420" ("qemu-system-" + arch-mach (intern arch)) "-m" "1536M"]
-               + mach + kvm + dargs
-               + ["-serial" "stdio" "-display" "none" "-no-reboot"] + media))
+   qemu (["timeout" ceil ("qemu-system-" + arch-mach (intern arch)) "-m" "1536M"]
+         + mach + kvm + dargs
+         + ["-serial" "stdio" "-display" "none" "-no-reboot"] + media)
+   ; far: the elf and its disk go to a scratch dir there, the same line runs in it, and the
+   ; dir goes after. paths are the basenames, so nothing of this tree's layout crosses
+   r    (? far
+           (: d ("/tmp/ktest-" + show (getpid 0))
+              b (: k (foldl (\ a i (iso i = 47 ? (i + 1) a)) 0 (jot #iso)) (snip iso k #iso))
+              rel (map (\ x (? (x = iso) b
+                                (sub-at x 0 "file=" 0) ("file=" + b + ".disk" + snip x (5 + #disk) #x)
+                                x))
+                       qemu)
+              _ (hark ["ssh" far ("mkdir -p " + d)])
+              _ (hark ["scp" "-q" iso (far + ":" + d + "/" + b)])
+              x (hark ["ssh" far ("cd " + d + " && truncate -s 35840000 " + b + ".disk && "
+                                  + foldl (\ a w (a + " '" + w + "'")) "" rel)])
+              _ (hark ["ssh" far ("rm -rf " + d)])
+              x)
+           (hark qemu))
    out  >r
    line (lineof out "tests pass")
    ; "0 tests pass" is a corpus that died before its first assert wearing a

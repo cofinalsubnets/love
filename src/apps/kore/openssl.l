@@ -1,8 +1,14 @@
-; src/apps/kore/openssl.l -- openssl: a small read-only face of the openssl command line.
+; src/apps/kore/openssl.l -- openssl: a small face of the openssl command line.
 ;
 ;   openssl x509 [-in F] [-inform PEM|DER] [-noout] [-text] [-subject] [-issuer] [-dates]
 ;                [-startdate] [-enddate] [-serial] [-fingerprint] [-md5|-sha1|-sha224|-sha256
 ;                |-sha384|-sha512] [-ext NAMES] [-pubkey] [-outform PEM|DER] [-out F]
+;   openssl x509 -req -in CSR (-CA F [-CAkey F] | -signkey F) [-days N] [-not_before T]
+;                [-not_after T] [-set_serial N] [-extfile F [-extensions S]] [-addext E]..
+;                [-copy_extensions copy] [-out F] ..and the printing flags above
+;   openssl genpkey -algorithm ed25519 | -algorithm EC -pkeyopt ec_paramgen_curve:P-256 [-out F]
+;   openssl req -new [-x509] (-key F | -newkey ed25519|ec [-pkeyopt ..] [-keyout F]) -subj /CN=..
+;                [-days N] [-not_before T] [-not_after T] [-set_serial N] [-addext E].. [-out F]
 ;   openssl s_client [-connect] HOST:PORT [-servername NAME] [-showcerts] [-verify_return_error]
 ;                [-brief] [-quiet]
 ;   openssl verify [-CAfile F] [-untrusted F] [CERT..]
@@ -13,8 +19,9 @@
 ;
 ; spelled and printed as openssl 3 does, so scripts carry over. the certificate is read here
 ; (its own total der walk, for printing); trust is the tls module's -- verify.l's chain-fail
-; against tls-roots or -CAfile, and client.l's handshake, tls 1.3 only. nothing is written but
-; the output: no keys, no requests, no signing.
+; against tls-roots or -CAfile, and client.l's handshake, tls 1.3 only. keys, requests and
+; certificates are made by the tls module's cert.l: ed25519 and p-256 keys, pkcs#8 and pkcs#10,
+; the extensions in openssl's config spelling (-addext, and -extfile's unnamed or named section).
 (module 'kore
 (borrow 'bytes)
 (borrow 'posix)
@@ -199,6 +206,11 @@
           (t = 160) "othername:<unsupported>"
           "<unsupported>"))
    (os-gns v) (: l (os-in v) (? (two? l) (join ", " (map os-gn l)) ()))
+   ; a name constraint's base: an address with its mask as openssl says it
+   (os-ncgn g)
+    (: b (os-body g)
+       (? (os-tag g = 135 && #b = 8) ("IP:" + join "." (map (i \ show (b i)) ^4) + "/" + join "." (map (i \ show (b (4 + i))) ^4))
+          (os-gn g)))
    ; an unknown value: its bytes, the unprintable ones as dots
    (os-raw v) (string (map (i \ (: c (v i) (? (c < 32 || 126 < c) 46 c))) ^#v))
    (os-extlines o v)
@@ -220,6 +232,13 @@
               (: l (os-in v) (? (two? l) [(join ", " (map (e \ (: d (os-oidof e) (peep os-ekus d d))) l))] ()))
              ("2.5.29.17" || "2.5.29.18") (: g (os-gns v) (? (string? g) [g] ()))
              "2.5.29.14" (? (os-tag v = 4) [(os-up (os-colon (os-body v)))] ())
+             "2.5.29.30"
+              (: l (os-in v)
+                 (? (atom? l) ()
+                    (catmap (p \ (: h (? (os-tag p = 160) "Permitted:" (os-tag p = 161) "Excluded:" "?")
+                                   gs (os-in ("0" + snip p 1 #p))
+                                   (h . (? (two? gs) (map (g \ "  " + (os-in g @ [b] (os-ncgn b) "?")) gs) ()))))
+                            l)))
              "2.5.29.35"
               (: l (os-in v)
                  (? (atom? l) ()
@@ -351,8 +370,11 @@
         (? (atom? a) 0
            (: w <a arg (? (two? >a) <>a ()) m (os-md w)
               (? (two? m) (pin st 'md m, go >a)
-                 (elem w ["-in" "-inform" "-outform" "-out" "-ext"])
+                 (elem w ["-in" "-inform" "-outform" "-out" "-ext" "-CA" "-CAkey" "-signkey" "-key" "-days"
+                          "-set_serial" "-extfile" "-extensions" "-not_before" "-not_after" "-copy_extensions"])
                   (? (string? arg) (pin st w arg, (w = "-ext" ? (pin st 'acts (w . st 'acts)) 0), go >>a) (os-bad "x509" w))
+                 (w = "-addext") (? (string? arg) (pin st 'addext (peep st 'addext () + [arg]), go >>a) (os-bad "x509" w))
+                 (w = "-req" || w = "-CAcreateserial") (pin st w 1, go >a)
                  (elem w ["-noout" "-text" "-subject" "-issuer" "-dates" "-startdate" "-enddate"
                           "-serial" "-fingerprint" "-pubkey" "-noout"])
                   (pin st 'acts (w . st 'acts), (w = "-noout" ? (pin st 'noout 1) 0), go >a)
@@ -361,10 +383,11 @@
        (? (r != 0) r
           (: src (peep st "-in" ())
              nm (? (string? src) src "<stdin>")
-             txt (os-slurp src)
-             d (? (string? txt) (os-der-in txt) ())
+             txt (? (st "-req") "" (os-slurp src))
+             d (? (st "-req") (os-issue st) (string? txt) (os-der-in txt) ())
              x (? (string? d) (os-cert d) ())
-             (? !(string? txt) (say err ("Could not open file or uri for loading certificate from " + nm + ": No such file or directory\n"), 1)
+             (? (two? d) (say err ("x509: " + <d + "\n"), 1)
+                !(string? txt) (say err ("Could not open file or uri for loading certificate from " + nm + ": No such file or directory\n"), 1)
                 !(string? d) (say err ("Could not find certificate from " + nm + "\n"), 1)
                 !(tablet? x) (say err ("Could not read certificate from " + nm + "\n"), 1)
                 (: p (os-sink (peep st "-out" ()))
@@ -389,6 +412,118 @@
              (? (atom? es) "No extensions in certificate\n"
                 (catmap (e \ os-lines (os-extblock e 0 4)) es)))
          "")
+
+   ; --- making: keys, requests and certificates, the tls module's cert.l doing the work ---
+   (os-keyfile f) (: t (os-slurp f) (? (string? t) (os-tls 'key-read t) ()))
+   ; s to file f, or stdout for none -> 1 | 0
+   (os-write f s) (: p (os-sink f) (? (hot? p) (say p s, os-close p f, 1) 0))
+   ; -algorithm and -pkeyopt -> 'ed25519 | 'p256 | ()
+   (os-kind alg opt)
+    (: a (upper alg)
+       (? (a = "ED25519") 'ed25519
+          (a = "EC" && elem opt ["ec_paramgen_curve:P-256" "ec_paramgen_curve:prime256v1"]) 'p256
+          ()))
+   ; a verb's words: vals take a value, ones stand alone, -addext gathers -> a tablet | ['bad w]
+   (os-flags as vals ones)
+    (: st {'addext ()}
+       (go a)
+        (? (atom? a) st
+           (: w <a
+              (? (elem w ones) (pin st w 1, go >a)
+                 (!(elem w vals) || atom? >a) ['bad w]
+                 (w = "-addext") (pin st 'addext (st 'addext + [<>a]), go >>a)
+                 (pin st w <>a, go >>a))))
+       (go as))
+   (os-hex? s) (0 < #s && all (c \ elem c (chars "0123456789abcdefABCDEF")) (chars s))
+   ; -set_serial: decimal or 0x hex -> n | ()
+   (os-serial s)
+    (? !(string? s) ()
+       (2 < #s && snip s 0 2 = "0x") (: h (snip s 2 #s) (? (os-hex? h) (os-num (hex2b (#h % 2 = 1 ? ("0" + h) h))) ()))
+       (unum s))
+   ; -days, -not_before, -not_after -> [nb na] | why not
+   (os-validity st)
+    (: now (os-now 0)
+       d (unum (peep st "-days" "30"))
+       nb (? (string? (st "-not_before")) (os-tls 'time-arg (st "-not_before")) now)
+       na (? (string? (st "-not_after")) (os-tls 'time-arg (st "-not_after")) (charm? d && charm? nb) (nb + d * 86400) ())
+       (? (!(charm? d) || d < 1) "-days wants a count of days"
+          !(charm? nb) "-not_before wants [CC]YYMMDDHHMMSSZ"
+          !(charm? na) "-not_after wants [CC]YYMMDDHHMMSSZ"
+          [nb na]))
+   ; an extfile's "name = value" lines, of section sec ("" the unnamed one)
+   (os-extfile t sec)
+    (: (go l cur acc)
+        (? (atom? l) (rev acc)
+           (: s (strip <l)
+              (? (s = "" || s 0 = 35) (go >l cur acc)
+                 (s 0 = 91) (go >l (strip (snip s 1 (max 1 (#s - 1)))) acc)
+                 (go >l cur (? (cur = sec) (s . acc) acc)))))
+       (go (lines t) "" ()))
+   ; x509 -req: the request, signed by -CA and -CAkey or self-signed by -signkey (-key) -> der | [why]
+   (os-issue st)
+    (: ct (os-slurp (st "-in"))
+       cd (? (string? ct) (: ds (os-tls 'pem-in ct "CERTIFICATE REQUEST") (? (two? ds) <ds ct)) ())
+       r (? (string? cd) (os-tls 'csr-read cd) "the request does not read")
+       caf (st "-CA") self (peep st "-signkey" (st "-key"))
+       ca (? (string? caf) (: t (os-slurp caf) (? (string? t) (os-der-in t) ())) ())
+       cx (? (string? ca) (os-tls 'x509 ca) ())
+       kf (? (string? caf) (peep st "-CAkey" caf) self)
+       k (? (string? kf) (os-keyfile kf) ())
+       v (os-validity st)
+       ef (st "-extfile")
+       et (? (string? ef) (os-slurp ef) ())
+       (? !(string? ct) [("cannot read the request " + (? (string? (st "-in")) (st "-in") "on stdin"))]
+          !(tablet? r) [r]
+          (string? v) [v]
+          (string? caf && !(tablet? cx)) [("cannot read the CA certificate " + caf)]
+          (!(string? caf) && !(string? self)) ["-CA with -CAkey, or -signkey, is wanted to sign"]
+          (atom? k) [("cannot read a private key from " + kf)]
+          (string? ef && !(string? et)) [("cannot read the extfile " + ef)]
+          (: sp (os-tls 'key-spki k)
+             cp (? (elem (peep st "-copy_extensions" "none") ["copy" "copyall"]) (filter two? (map (os-tls 'ext-pair) (r 'exts))) ())
+             fl (? (string? et) (os-extfile et (peep st "-extensions" "")) ())
+             (? (string? caf && sp != cx 'key 2) ["the CA key does not match the CA certificate"]
+                (!(string? caf) && sp != r 'spki) ["the key does not match the request"]
+                (os-tls 'cert-make {'subject (r 'subject) 'issuer (? (string? caf) (cx 'subject) (r 'subject))
+                                    'spki (r 'spki) 'key k 'nb <v 'na (v 1) 'serial (os-serial (st "-set_serial"))
+                                    'akid (? (string? ca) (os-tls 'cert-kid ca) ())
+                                    'exts (["subjectKeyIdentifier=hash" "authorityKeyIdentifier=keyid"] + cp + fl + st 'addext)})))))
+   ; the extensions openssl's configuration gives a self-signed certificate
+   os-ca-exts ["subjectKeyIdentifier=hash" "authorityKeyIdentifier=keyid:always" "basicConstraints=critical,CA:TRUE"]
+   ; --- genpkey ---
+   (os-genpkey as)
+    (: st (os-flags as ["-algorithm" "-pkeyopt" "-out"] [])
+       kind (? (tablet? st) (os-kind (peep st "-algorithm" "") (peep st "-pkeyopt" "")) ())
+       (? !(tablet? st) (os-bad "genpkey" (st 1))
+          !(elem kind ['ed25519 'p256]) (say err "genpkey: made here: -algorithm ed25519, or -algorithm EC -pkeyopt ec_paramgen_curve:P-256\n", 1)
+          (os-write (st "-out") (os-tls 'key-pem (os-tls 'key-new kind))) 0
+          (say err ("genpkey: cannot write " + st "-out" + "\n"), 1)))
+   ; --- req: a request, or with -x509 a self-signed certificate ---
+   (os-req as)
+    (: st (os-flags as ["-key" "-newkey" "-pkeyopt" "-keyout" "-subj" "-days" "-not_before" "-not_after"
+                        "-set_serial" "-addext" "-out" "-outform"]
+                    ["-new" "-x509" "-nodes" "-noenc" "-batch" "-sha256"])
+       kf (? (tablet? st) (st "-key") ()) nk (? (tablet? st) (st "-newkey") ())
+       kind (? (string? nk) (os-kind nk (peep st "-pkeyopt" "")) ())
+       k (? (string? kf) (os-keyfile kf) (elem kind ['ed25519 'p256]) (os-tls 'key-new kind) ())
+       nm (? (tablet? st && string? (st "-subj")) (os-tls 'name-der (st "-subj")) ())
+       v (? (tablet? st) (os-validity st) ())
+       (? !(tablet? st) (os-bad "req" (st 1))
+          (atom? k) (say err (? (string? kf) ("req: cannot read a private key from " + kf + "\n")
+                                "req: -key FILE, or -newkey ed25519 or ec with -pkeyopt ec_paramgen_curve:P-256, is wanted\n"), 1)
+          !(string? nm) (say err "req: -subj /CN=../O=.. is wanted (nothing is asked here)\n", 1)
+          (string? v) (say err ("req: " + v + "\n"), 1)
+          (: kw (? (string? kf) 1 (os-write (peep st "-keyout" "privkey.pem") (os-tls 'key-pem k)))
+             sp (os-tls 'key-spki k)
+             d (? (st "-x509")
+                  (os-tls 'cert-make {'subject nm 'issuer nm 'spki sp 'key k 'nb <v 'na (v 1)
+                                      'serial (os-serial (st "-set_serial")) 'exts (os-ca-exts + st 'addext)})
+                  (os-tls 'csr-make k nm (st 'addext)))
+             der? (upper (peep st "-outform" "PEM") = "DER")
+             (? (kw = 0) (say err "req: cannot write the key\n", 1)
+                !(string? d) (say err ("req: " + <d + "\n"), 1)
+                (os-write (st "-out") (? der? d (os-tls 'pem-out (? (st "-x509") "CERTIFICATE" "CERTIFICATE REQUEST") d))) 0
+                (say err ("req: cannot write " + st "-out" + "\n"), 1)))))
 
    ; --- verify's reasons, as openssl numbers and says them ---
    (os-vcode x k s)
@@ -626,6 +761,11 @@
 commands:
   x509 [-in F] [-inform PEM|DER] [-noout] [-text] [-subject] [-issuer] [-dates] [-serial]
        [-fingerprint] [-md5|-sha1|-sha256..] [-ext NAMES] [-pubkey] [-outform PEM|DER] [-out F]
+  x509 -req -in CSR (-CA F [-CAkey F] | -signkey F) [-days N] [-not_before T] [-not_after T]
+       [-set_serial N] [-extfile F [-extensions S]] [-addext E].. [-copy_extensions copy] [-out F]
+  genpkey -algorithm ed25519 | -algorithm EC -pkeyopt ec_paramgen_curve:P-256 [-out F]
+  req -new [-x509] (-key F | -newkey ed25519|ec [-pkeyopt ..] [-keyout F]) -subj /CN=..
+       [-days N] [-not_before T] [-not_after T] [-set_serial N] [-addext E].. [-outform PEM|DER] [-out F]
   s_client -connect HOST:PORT [-servername N] [-showcerts] [-verify_return_error] [-brief] [-quiet]
   verify [-CAfile F] [-untrusted F] [CERT..]
   dgst [-md5|-sha1|-sha224|-sha256|-sha384|-sha512] [-r] [FILE..]
@@ -641,6 +781,8 @@ commands:
                   "s_client" (os-sclient a)
                   "verify" (os-verify a)
                   "dgst" (os-dgst a)
+                  "genpkey" (os-genpkey a)
+                  "req" (os-req a)
                   "rand" (os-rand a)
                   ("base64" || "enc") (? (c = "enc" && !(elem "-base64" a)) (say err "enc: only -base64 is here\n", 1)
                                          (os-b64 (filter (w \ w != "-base64") a)))
