@@ -47,28 +47,27 @@
              (zswapdn gen-zswapdn) (zmaster gen-zmaster) (zins gen-zins)
              (znub gen-znub) (zdel gen-zdel))
    w2-nm {0 w2-gmap}
-   (w2-gen nm) (: p (assoc nm (w2-nm 0)) (two? p ? <>p nm))
+   (w2-gen nm) (assoc nm (w2-nm 0) @ p (two? p ? <>p nm))
    (wm2uu-as forms sigs gmap) (: _ (pin w2-nm 0 gmap)
                                   r (wm2uu forms sigs)
-                                  _ (pin w2-nm 0 w2-gmap)
-                                  r)
+                                  (pin w2-nm 0 w2-gmap, r))
    (w2-rk nm k) (nm @ 'zdel 'mstk k)
 
    ; --- the kind of a source expression (enough to steer the rules) ---
    (w2-kof e env sigs)
-    (? (nom? e) (: p (assoc e env) (two? p ? <>p 'top))
+    (? (nom? e) (assoc e env @ p (two? p ? <>p 'top))
        (charm? e) 'window
        (atom? e) 'top
        (: h <e
           (? (h = 'cap)
               (: a <>e
                (two? a && <a = 'cup ? 'wrow          ; a cap-of-cup chain: the up/down row
-                (: k (w2-kof a env sigs)
+                (w2-kof a env sigs @ k
                  (k @ 'zipper 'window 'wrow 'window 'top))))
              (h = 'cup)  'wrow
              (h = 'rev) 'wrow (w2-cat? h) 'wrow (w2-link? h) 'wrow
              (h = 'filter) 'wrow (w2-list? h) 'zipper
-             (: sg (w2-sigof sigs h) (two? sg ? <>>sg 'top)))))
+             (w2-sigof sigs h @ sg (two? sg ? <>>sg 'top)))))
 
    ; --- the translation. rk = the result kind at this position ---
    (w2-nil rk) (rk @ 'mstk '(ii1 tt) 'nnil)
@@ -85,12 +84,12 @@
     (: h <e
        (? (h = 'cap && two? <>e && <<>e = 'cup)
             ; the glued chains: <>z is (cap (cup z)) -> zup, <>>z one cup deeper -> zdn
-            (: in <><>e
-               (? (two? in && <in = 'cup)
-                  ['zdn (w2-tx <>in env sigs 'zipper)]
+            (<><>e @ in
+               (two? in && <in = 'cup
+                ? ['zdn (w2-tx <>in env sigs 'zipper)]
                   ['zup (w2-tx in env sigs 'zipper)]))
           (h = 'cap)
-            (: k (w2-kof <>e env sigs)
+            (w2-kof <>e env sigs @ k
                [(k @ 'zipper 'zfoc 'hd0) (w2-tx <>e env sigs k)])
           (h = 'cup) ['tl0 (w2-tx <>e env sigs 'wrow)]
           (w2-link? h) ['ncons (w2-tx <>e env sigs 'window)
@@ -106,7 +105,7 @@
                wex (<bd = '!= ? <>>bd <>><>bd)
                ['nfilt (w2-tx wex env sigs 'window)
                        (w2-tx <>>e env sigs 'wrow)])
-          (: sg (w2-sigof sigs h)
+          (w2-sigof sigs h @ sg
              (two? sg ? (w2-gen h . w2-args >e <>sg env sigs)
                         (h . map (a \ w2-tx a env sigs 'top) >e)))))
    (w2-args as ks env sigs)
@@ -120,9 +119,9 @@
     (? (two? t && w2-not? <t) (w2-if <>t else-x then-x env sigs rk)
        (two? t && <t = 'atom?) (w2-if ['two? <>t] else-x then-x env sigs rk)   ; two? with the arms traded
        (two? t && <t = 'two?)
-         (: x <>t
-            (? (w2-kof x env sigs = 'zipper)
-               (w2-tx then-x env sigs rk)                ; nonempty by kind: the ()-lane erases
+         (<>t @ x
+            (w2-kof x env sigs = 'zipper
+             ? (w2-tx then-x env sigs rk)                ; nonempty by kind: the ()-lane erases
                ['nat_rect ['lam 'gq (w2-mty rk)]
                   (w2-tx else-x env sigs rk)
                   ['lam 'gk ['lam 'gr (w2-tx then-x env sigs rk)]]
