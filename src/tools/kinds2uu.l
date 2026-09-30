@@ -22,7 +22,7 @@
    (k2-qdat q) (q 1)                         ; the symbol under a quote
 
    ; --- the code map, read off kinds.l's `rank` (its ? pairs), then str on top ---
-   (k2-rankmap body) (: (go cs) (? (atom? >cs) ()             ; the trailing -1 else: stop
+   (k2-rankmap body) (: (go cs) (atom? >cs ? ()               ; the trailing -1 else: stop
                           (: c <cs r <>cs
                              sym (k2-qdat (c 2))             ; c = (= k 'SYM)
                              ([sym r] . go >>cs)))
@@ -30,7 +30,7 @@
    (k2-max l) (foldl (\ a x (a < x ? x a)) 0 l)
    (k2-codes km) (map (p \ p 1) km)
    (k2-upto n) (: (go i) (i < n ? (i . go (i + 1))) (go 0))   ; 0..n-1
-   (k2-kc km s) (: p (assoc s km) (two? p ? (p 1) -1))
+   (k2-kc km s) (assoc s km @ p (two? p ? (p 1) -1))
    (k2-nom km c) (: (go l) (atom? l ? () (<l 1 = c ? <<l (go >l)))   ; the kind wearing code c
                     (go km))
 
@@ -82,20 +82,20 @@
                         pl ("   " + show <op),
                         pl ("   " + show (op 1) + close))
 
-   _ (puts "; test/uukind.l -- generated from test/proto/kinds.l by src/tools/kinds2uu.l. Do")
-   _ (pl "; not edit; refresh with `make uukind`. The abstract kinds-lattice join (and")
-   _ (pl "; its num? guard) compiled into uu over a nat-coded carrier, kind = its rank")
-   _ (pl "; (str the branch off the spine). test/uukindlaw.l proves the semilattice laws")
-   _ (pl "; of these terms at corpus time -- a law-breaking kinds.l edit fails a check.")
-   _ (pl "; Substrate: test/uu.l (natgtb / nateqb / andb / bool_rect).")
-   _ (pl "; a name is emitted per code, so test/uukindlaw.l cites a kind rather than its rank:")
-   _ (pl "; the ranks are kinds.l's to renumber, and a law spelling one as an integer would")
-   _ (pl "; go on passing about a different kind.")
-   _ (pl "(test")
-   _ (map (c \ pl (" (defn uk" + string (k2-nom km c) + " nat " + show c + ")")) ucodes)
-   _ (pdefn "numq" numq ")")
-   _ (pdefn "kjoin" kjoin "))")
-   ; the carrier codes 0..str, for the law file (derived, so drift follows kinds.l)
-   _ (pl ("(: uk-codes '" + show ucodes))
-   _ (puts ")\n")
-   0)
+   (puts "; test/uukind.l -- generated from test/proto/kinds.l by src/tools/kinds2uu.l. Do",
+    pl "; not edit; refresh with `make uukind`. The abstract kinds-lattice join (and",
+    pl "; its num? guard) compiled into uu over a nat-coded carrier, kind = its rank",
+    pl "; (str the branch off the spine). test/uukindlaw.l proves the semilattice laws",
+    pl "; of these terms at corpus time -- a law-breaking kinds.l edit fails a check.",
+    pl "; Substrate: test/uu.l (natgtb / nateqb / andb / bool_rect).",
+    pl "; a name is emitted per code, so test/uukindlaw.l cites a kind rather than its rank:",
+    pl "; the ranks are kinds.l's to renumber, and a law spelling one as an integer would",
+    pl "; go on passing about a different kind.",
+    pl "(test",
+    map (c \ pl (" (defn uk" + string (k2-nom km c) + " nat " + show c + ")")) ucodes,
+    pdefn "numq" numq ")",
+    pdefn "kjoin" kjoin "))",
+    ; the carrier codes 0..str, for the law file (derived, so drift follows kinds.l)
+    pl ("(: uk-codes '" + show ucodes),
+    puts ")\n",
+    0))
