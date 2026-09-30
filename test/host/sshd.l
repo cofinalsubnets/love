@@ -28,8 +28,17 @@
    _ (test ((ssh-authorized (dir + "/ak")) = [(id 1)]))
    (waitfor pid) (: s (gather pid) (? (two? s) s (nom? s) s (: _ (rest 2) (waitfor pid))))
    (has? t s) (0 <= (cite 'kore 'wg-find t s 0))
-   ; the server's sessions find love as scp: a link at the head of the PATH it inherits
-   _ (mkdir (dir + "/bin") 448) _ (symlink love (dir + "/bin/scp"))
+   ; the server's sessions find love as scp at the head of the PATH it inherits, and a
+   ; hostile scp for the three evil-* names: a name not asked for, setuid bits, a planted tree
+   _ (mkdir (dir + "/bin") 448)
+   _ (: q (open (dir + "/bin/scp") "w")
+        _ (say q ("#!/bin/sh\ncase \"$*\" in\n"
+                  + " *evil-name) printf 'C0644 6 .bashrc\\nhello\\n\\000' ;;\n"
+                  + " *evil-mode) printf 'C6777 6 evil-mode\\nhello\\n\\000' ;;\n"
+                  + " *evil-tree) printf 'D0700 0 .ssh\\nC0600 3 authorized_keys\\nhi\\n\\000E\\n' ;;\n"
+                  + " *) exec " + (love 0 = 47 ? love (cwd 0 + "/" + love)) + " kore scp \"$@\" ;;\nesac\n"))
+        (close q))
+   _ (chmod (dir + "/bin/scp") 493)
    path0 (getenv "PATH")
    _ (setenv "PATH" (dir + "/bin:" + path0))
    srv (tether [love "kore" "sshd" "-p" (show port) "-h" (dir + "/host") "-o" ("AuthorizedKeysFile=" + dir + "/ak")])
@@ -98,6 +107,17 @@
    _ (test (s1 1 = 0) ((got (dir + "/up/f1")) = "hello\n") ((stat (dir + "/up/f1") 1) = 981158400000)
            (s2 1 = 0) ((got (dir + "/down/src/f1")) = "hello\n") ((got (dir + "/down/src/sub/blob")) = blob)
            (s3 1 = 1) (has? <s3 "nope") (s4 1 = 1) (has? <s4 "scp: ") ((got (dir + "/up2/blob")) = blob))
+   ; the hostile server: a name not asked for is refused, a mode loses setuid, setgid and
+   ; the umask's bits, and a directory not asked for is not made
+   _ (mkdir (dir + "/ev") 448)
+   um (: u (umask 18) _ (umask u) u)
+   e1 (scp [(far + dir + "/src/evil-name") (dir + "/ev/")])
+   e2 (scp [(far + dir + "/src/evil-mode") (dir + "/ev/")])
+   e3 (scp ["-r" (far + dir + "/src/evil-tree") (dir + "/ev/")])
+   _ (test (e1 1 = 1) (atom? (stat (dir + "/ev/.bashrc")))
+           ((got (dir + "/ev/evil-mode")) = "hello\n")
+           ((stat (dir + "/ev/evil-mode") 2 & 4095) = (511 & (511 ^ um)))
+           (e3 1 = 1) (atom? (stat (dir + "/ev/.ssh"))))
    _ (? o (: r (tether ["scp" "-O" "-F" "/dev/null" "-o" "StrictHostKeyChecking=no" "-o" "UserKnownHostsFile=/dev/null"
                         "-o" "IdentitiesOnly=yes" "-o" "BatchMode=yes" "-o" "LogLevel=ERROR"
                         "-i" (dir + "/id") "-P" (show port) "-r" (dir + "/src") (far + dir + "/o/")])
