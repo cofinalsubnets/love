@@ -114,24 +114,37 @@
     (: q (lk-hq root) h (lk-hh root)
        _ (lk-mkdirs q) _ (lk-mkdirs h)
        tag (lk-tag who nm)
-       held (lk-sweep h)
-       waiting (lk-sweep q)
-       mine (filter (\ n (lk-mine? n tag)) held)
-       (? (two? mine) {"granted" 1 "lock" nm}
-          (: have (filter (\ n (lk-mine? n tag)) waiting)
+       (mine? n) (lk-mine? n tag)
+       (? (two? (filter mine? (lk-names h))) {"granted" 1 "lock" nm}
+          (: have (filter mine? (lk-names q))
              t (? (two? have) <have
                   (: t (lk-pad (clock 0) + tag)
                      _ (lk-write (q + "/." + t) (lk-owner who note))
                      _ (rename (q + "/." + t) (q + "/" + t))
                      t))
-             ws (? (two? have) waiting (sort (t . waiting)))
-             pos (lk-at ws t 0)
-             mem (lk-mem 0)
-             (? (pos = 0 && #held < max && (? (() = floor) 1 (() = mem) 1 (floor <= mem)))
-                (? !(rename (q + "/" + t) (h + "/" + t)) {"granted" 1 "lock" nm}
-                   {"granted" 0 "lock" nm "position" 1 "held" #held "mem_gb" mem})
-                {"granted" 0 "lock" nm "position" (pos + 1) "held" #held "mem_gb" mem
-                 "holders" (map (\ n (lk-view (lk-parse (lk-read (h + "/" + n))))) held)}))))
+             ; the count and the move are one step under the pool's mutex, held by this process
+             me (getpid 0) mx (root + "/heavy")
+             got (lk-hold mx me 50)
+             r (lk-h-step root nm t floor max got)
+             _ (? got (lk-x-free (mx + "/mutex") me) 0)
+             r)))
+   (lk-hold mx me n)
+    (? (peep (lk-x-take mx "mutex" "mutex" me "" 1) "granted" 0) 1
+       (n <= 0) 0
+       (: _ (rest 20) (lk-hold mx me (n - 1))))
+   ; ticket t moved to h/ when may, it is first, and there is room and memory; else its place
+   (lk-h-step root nm t floor max may)
+    (: q (lk-hq root) h (lk-hh root)
+       held (lk-sweep h)
+       waiting (lk-sweep q)
+       ws (? (elem t waiting) waiting (sort (t . waiting)))
+       pos (lk-at ws t 0)
+       mem (lk-mem 0)
+       (? (may && pos = 0 && #held < max && (? (() = floor) 1 (() = mem) 1 (floor <= mem)))
+          (? !(rename (q + "/" + t) (h + "/" + t)) {"granted" 1 "lock" nm}
+             {"granted" 0 "lock" nm "position" 1 "held" #held "mem_gb" mem})
+          {"granted" 0 "lock" nm "position" (pos + 1) "held" #held "mem_gb" mem
+           "holders" (map (\ n (lk-view (lk-parse (lk-read (h + "/" + n))))) held)}))
    (lk-at l x k) (? !(two? l) -1 (<l = x) k (lk-at >l x (k + 1)))
    (lk-h-drop root nm who)
     (: tag (lk-tag who nm)

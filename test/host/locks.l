@@ -96,6 +96,16 @@
    _ (test (all (\ r (r = [16 1])) (map round ^4)))
    0)
 
+; twelve pollers on a pool of one, each holding a moment when granted: never two in h/ at once,
+; and every one served in turn
+(: lr-h (lk-root + "-h")
+   ps (lr-kids lr-h 12 ("(: (poll k) (: a (locks-acquire rt \"heavy\" 'heavy me \"race\" () 1)\n"
+                        + "  (? (peep a \"granted\" 0) (: _ (rest 100) _ (locks-release rt \"heavy\" 'heavy me) 1)\n"
+                        + "     (k <= 0) 0 (: _ (rest 20) (poll (k - 1))))) (poll 1000))"))
+   r (lr-go lr-h ps 12 (\ _ #(lr-names (lr-h + "/heavy/h"))))
+   _ (test (1 = <r) (12 = #(r 1)) (all (\ a (a = "1")) (r 1)))
+   0)
+
 (hark ["rm" "-rf" lk-root])
 (test_fin ())
 (puts "locks: ok")
