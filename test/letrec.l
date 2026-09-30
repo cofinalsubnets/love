@@ -43,3 +43,13 @@
     (3 = (: f 2  (x f) f  (x 3)))
     (3 = (: x (f \ f)  f 2  (x 3)))
     (11 = (: f 2  (g f) (f + 1)  (g 10))))
+
+; a sibling that calls the one before it twice, fourteen deep: cprop inlines each whole into
+; the next, so a fuel spent per path alone lays 2^14 copies. the form's node budget holds it
+(: (lr-hn i) (name ("h" + show i))
+   (lr-defs i) (? (i < 1) ['(h0 x) '(x + 1)]
+                  (lr-defs (i - 1) + [[(lr-hn i) 'x] [(lr-hn (i - 1)) [(lr-hn (i - 1)) 'x]]]))
+   (lr-nodes x) (? (two? x) (1 + foldl (\ a y (a + lr-nodes y)) 0 x) 0)
+   lr-f (ev (': . lr-defs 14 + [(lr-hn 14)]))
+   lr-t ((cite 'guts 'threadir) lr-f 0)
+ (test (16384 = lr-f 0) (lr-nodes (lr-t 1) < 1000)))
