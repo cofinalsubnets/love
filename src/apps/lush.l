@@ -2404,6 +2404,7 @@
    (sh-dropcaps _)
      (each (sh-subfds ()) (\ e (close <e, catch >e, 0)),
       pin sh-subfds () (),
+      pin sh-online () 0,                      ; nor inside a line: its `exit` ends the child
       ; and no trap of its parent's: POSIX resets a caught condition in a subshell.
       ; sh-disarm drops the parent's signalfd and empties the mask with it -- an
       ; inherited block would be a subshell ^C cannot reach.
