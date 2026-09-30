@@ -360,6 +360,12 @@ intptr_t ai_op_index(intptr_t ap) {
  if (r < 0) return -1;
  uintptr_t k = op_kind(r), i = op_idx(r);
  return (intptr_t) (k == OpExtra ? i : k == OpDef ? countof(image_extra_aps) + i : ImageNLvm + i); }
+// the nif cell whose run a body fn is, 0 for none: a thread names a nif by that fn
+intptr_t ai_fn_nif(intptr_t f) {
+ intptr_t r = op_seek(f, OpMask(OpFn));
+ if (r < 0) return 0;
+ uintptr_t j = op_idx(r), d = ai_def1_n;
+ return j < d ? ai_def1[j].v.x : image_host_x(j - d); }
 // a def1 row's index by its value, -1 for none: the printer names a nif by its row
 intptr_t ai_def_index(intptr_t x) {
  intptr_t r = op_seek(x, OpMask(OpDef));

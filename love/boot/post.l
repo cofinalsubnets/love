@@ -332,27 +332,14 @@
 
 ; lamform -- a function read back off its thread into a source form that evaluates to an `=`
 ; function, or 0 when the thread is not one ev writes (a nif's body, a continuation). a
-; symbolic run of the stack machine: every value pushed is a slot, a fresh mint whose node
-; says how it was made, and the nodes render as source once the run is done.
+; symbolic run of the stack machine (ev.c's thrun): every value pushed is a slot, a fresh
+; mint whose node says how it was made, and the nodes render as source once the run is done.
 (: lamthr (:
    cur (pick 0 (+)) ret0 (pick 1 cap) unc (pick 0 (+ 1)) gcache {}
-   ; the load runs, a spec per load: a an arg operand, q a quote operand, a number an
-   ; immediate arg, (q v) an immediate quote. the flag says the last load carries the apply
-   lds (foldl (\ t r (pin t <r >r)) {}
-        [[lvm_arg '(a) 0] [lvm_quote '(q) 0] [lvm_argap '(a) 1] [lvm_quoteap '(q) 1]
-         [lvm_aa '(a a) 0] [lvm_aq '(a q) 0] [lvm_qa '(q a) 0] [lvm_qq '(q q) 0]
-         [lvm_aap '(a a) 1] [lvm_aqp '(a q) 1] [lvm_qap '(q a) 1] [lvm_qqp '(q q) 1]
-         [lvm_arg0 '(0) 0] [lvm_arg1 '(1) 0] [lvm_arg2 '(2) 0] [lvm_arg3 '(3) 0]
-         [lvm_quo0 '((q 0)) 0] [lvm_quo1 '((q 1)) 0] [lvm_quo2 '((q 2)) 0]
-         [lvm_quo3 '((q 3)) 0] [lvm_quom1 '((q -1)) 0] [lvm_quom2 '((q -2)) 0]])
-   ; an arg load fused with the nif that consumes it
-   fus (pins {} lvm_argcap 'cap lvm_argcup 'cup lvm_argtwo 'two?)
-   ; a nif's body op -> (name . arity), the shape ev's opof reads
-   nops (foldl (\ t v (: nm (nifnom v)
-                         b (? (string? nm) (? (ret0 == pick 1 v) (pick 0 v)
-                                              (cur == pick 0 v && ret0 == pick 3 v) (pick 2 v)))
-                         (? (? b (nil? (peep t b ()))) (pin t b ((name nm) . (? (ret0 == pick 1 v) 1 (peek 1 v)))) t)))
-               {} (catmap (\ l (map l (keys l))) (stack ())))
+   ; what thrun reads: a nif -> its name, then the node tags and the fused loads' names
+   thcfg [(foldl (\ t v (: nm (nifnom v) (? (string? nm) (pin t v (name nm)) t)))
+                 {} (catmap (\ l (map l (keys l))) (stack ())))
+          'k 'a 'o 'c 'g 'cap 'cup 'two?]
    ; ..and a nif's name -> the nif, to say one the egg moved off the book by its module
    nval (foldl (\ t v (: nm (nifnom v) (? (string? nm) (pin t (name nm) v) t)))
                {} (catmap (\ l (map l (keys l))) (stack ())))
@@ -375,52 +362,14 @@
    ; C is one reading's state: D a slot's node, B the let names in scope, R a let-bound
    ; closure's (name captures), memo a lambda already read -> its name, F a name's form,
    ; want a name recursion asked for
-   (lamform v) (: nm (nifnom v) r (? (string? nm) (nifn v (name nm)) (call-cc (\ k (: C {'k k 'D {} 'B {} 'R {} 'busy () 'memo {} 'F {} 'want {} 'pre {} 'obj {} 'objs () 'letE {} 'thene 0}
+   (lamform v) (: nm (nifnom v) r (? (string? nm) (nifn v (name nm)) (call-cc (\ k (: C {'k k 'D {} 'B {} 'R {} 'busy () 'memo {} 'F {} 'want {} 'pre {} 'obj {} 'objs () 'letE {}}
                                     (rename (cites (tie C (? (partp v) (rfn C (fbase v) . map (rk C) (pargs v)) (rlam C (unw v))))))))))
                  (? (== r 0) (: g (glob v) (? (!== g ()) g 0)) r))
    (fail C) (C 'k 0)
-   ; e lies past p, short of t -- within the thread, whose words past p span counts
-   (over p t e) (: (go q n) (? (n < 1) 0 (== q e) 1 (== q t) 0 (go (seek 1 q) (n - 1))) (go p (span p)))
-   (push C n S) (: s (mint 0) _ (pin (C 'D) s n) (s . S))
-
-   ; --- the run: S is the stack, a slot per value. it answers (r node), a return, or
-   ; (j at S), a jump to a join, and st is the join this stretch ends at
-   (run C p S st) (? (p == st) ['j p S] (step C p S st (pick 0 p)))
-   (step C p S st op) (: l (lds op)
-    (? (two? l) (: (go S sp i) (? (two? sp)
-                                (: s <sp (go (push C (? (charm? s) (S s) (s = 'a) (S (peek i p))
-                                                        (s = 'q) ['k (peek i p)] ['k <>s]) S)
-                                             >sp (? (charm? s) i (two? s) i (1 + i))))
-                                (? <>l (run C (seek i p) (push C ['a (S 1) [<S]] >>S) st)
-                                      (run C (seek i p) S st)))
-                    (go S <l 1))
-       (== op lvm_ret) ['r <S]
-       (== op lvm_tap) ['r ['a (S 1) [<S]]]
-       (== op lvm_argtap) (: S2 (push C (S (peek 1 p)) S) ['r ['a (S2 1) [<S2]]])
-       (== op lvm_tapn) (: n (peek 1 p) ['r ['a (S n) (tk n S)]])
-       (== op lvm_ap) (run C (seek 1 p) (push C ['a (S 1) [<S]] >>S) st)
-       (== op lvm_apn) (: n (peek 1 p) (run C (seek 2 p) (push C ['a (S n) (tk n S)] (dp (1 + n) S)) st))
-       ; a jump over the else arm ends a then arm at its join; any other is a cond the
-       ; compiler folded, its dead arm jumped over, and the reading goes on where it lands
-       (== op lvm_jump) (: t (peek 1 p) e (C 'thene)
-                         (? (== t st || (e && over p t e)) ['j t S] (run C t S st)))
-       (== op lvm_cond) (branch C <S (seek 2 p) (peek 1 p) >S st)
-       (== op lvm_argcond) (branch C (S (peek 1 p)) (seek 3 p) (peek 2 p) S st)
-       (== op lvm_argtwocond) (: _ (want? C 'two?) (branch C ['o 'two? [(S (peek 1 p))]] (seek 3 p) (peek 2 p) S st))
-       (== op lvm_index) (: _ (want? C 0) (run C (seek 2 p) (push C ['g (peek 1 p)] S) st))
-       (: f (peep fus op ())
-        (? f (: _ (want? C f) (run C (seek 2 p) (push C ['o f [(S (peek 1 p))]] S) st))
-           (: n (nops op)
-            (? (two? n) (: _ (want? C <n) (run C (seek 1 p) (push C ['o <n (tk >n S)] (dp >n S)) st))
-               (fail C)))))))
-   ; a reading told which ops it wants fails at the first it does not: a slot read or another op
-   (want? C n) (: v (peep C 'ops 0) (? (!v || elem n v) 0 (fail C)))
-   ; a cond: the then arm first, which finds the join if there is one; the else arm runs to it
-   (branch C t a e S st) (: th (C 'thene) _ (pin C 'thene e) r1 (run C a S st) _ (pin C 'thene th)
-    (? (<r1 = 'j) (: J (r1 1) _ (pin C 'thene 0) r2 (run C e S J) _ (pin C 'thene th)
-                   (? (<r2 = 'j) (run C J (push C ['c J t <(r1 2) <(r2 2)] S) st) (fail C)))
-       (: r2 (run C e S st)
-        (? (<r2 = 'r) ['r ['c 0 t (r1 1) (r2 1)]] (fail C)))))
+   ; the run from p over the frame's slots S0: its node, each slot it made pinned in D
+   (run C p S0) (: t (thrun p S0 0 thcfg)
+                   _ (? (== t 0) (fail C) (each >t (\ q (pin (C 'D) <q >q))))
+                   <t)
 
    ; --- rendering: a node to a source form, the binders still mints
    (res C x) (? (mint? x) (: b (peep (C 'B) x 0) d (peep (C 'D) x C)
@@ -518,8 +467,7 @@
     _ (pin (C 'pre) E pre)
     _ (? (two? pre) (pin (C 'letE) E 1) 0)
     S0 (: (ps i) (? (i < arity E) (? (i < #pre) (pre i . ps (1 + i)) (mint 0 . ps (1 + i))) ()) (ps 0))
-    r (run C (entry E) S0 ())
-    b (? (<r = 'r) [(dp #pre S0) (rv C (r 1))] (fail C))
+    b [(dp #pre S0) (rv C (run C (entry E) S0))]
     _ (pin (C 'letE) E le)
     _ (pin C 'busy bz)
     b)
@@ -701,18 +649,17 @@
    ; is 0 to read any thread, or the op names a caller can use: any other ends the reading
    (threadir v ops) (: e (unw v)
                  (? (!(fn? e) || string? (nifnom e)) 0
-                   (call-cc (\ k (: C {'k k 'D {} 'thene 0 'ops ops}
-                                    S0 (map (\ _ (mint 0)) (jot (arity e)))
-                                    r (run C (entry e) S0 ())
-                                    (? (<r = 'r) [#S0 (tnode C S0 (r 1))] 0))))))
-   (tnode C ps x) (: (ix m l i) (? (two? l) (? (== m <l) i (ix m >l (1 + i))) -1)
-                     (go x) (? (mint? x) (: d (peep (C 'D) x C) (? (== d C) ['p (ix x ps 0)] (go d)))
+                    (: S0 (map (\ _ (mint 0)) (jot (arity e)))
+                       t (thrun (entry e) S0 ops thcfg)
+                       (? (== t 0) 0 [#S0 (tnode (foldl (\ D q (pin D <q >q)) {} >t) S0 <t)]))))
+   (tnode D ps x) (: (ix m l i) (? (two? l) (? (== m <l) i (ix m >l (1 + i))) -1)
+                     (go x) (? (mint? x) (: d (peep D x D) (? (== d D) ['p (ix x ps 0)] (go d)))
                                (x @ ('k v) x
                                     ('g n) x
                                     ('o n as) ['o n (map go as)]
                                     ('a f as) ['a (go f) (map go as)]
                                     ('c _ t a b) ['c (go t) (go a) (go b)]
-                                    (fail C)))
+                                    ['x]))
                      (go x))
    [lamform threadir]))
 (: lamform (lamthr 0)  threadir (lamthr 1))

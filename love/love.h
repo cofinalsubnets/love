@@ -705,7 +705,7 @@ lvm_t lvm_kcall,
  lvm_sort,  lvm_sortby, lvm_tally, lvm_longp,
  lvm_pin, lvm_pull, lvm_tablet,   lvm_keys,  lvm_dig,
  lvm_unc, lvm_poke, lvm_peek, lvm_pick, lvm_place, lvm_stem, lvm_span,
- lvm_seek,  lvm_trim,   lvm_spin,   lvm_add,
+ lvm_seek,  lvm_trim,   lvm_spin,   lvm_thrun, lvm_add,
  lvm_mul,    lvm_quot,   lvm_fquot, lvm_rem,  lvm_arg,
  lvm_bmul_start,             // the resumable bignum multiply's entry; its loop bodies are num.c's
  lvm_quote, lvm_index,  lvm_eval,   lvm_cond, lvm_jump,   lvm_defglob,
@@ -1140,7 +1140,7 @@ void code_free(struct ai *g, char *code), code_fin(struct ai *g);
 int code_in(struct ai *g, uintptr_t v);
 // the instruction table (love/snap.c): an instruction word <-> its index; a negative index is
 // not an instruction, address 0 no such index. ai_nif_cell draws the line against a nif's run.
-intptr_t ai_op_index(intptr_t ap), ai_op_resolve(intptr_t i), ai_def_index(intptr_t x);
+intptr_t ai_op_index(intptr_t ap), ai_op_resolve(intptr_t i), ai_def_index(intptr_t x), ai_fn_nif(intptr_t f);
 int ai_nif_cell(union u const *k);
 // the once-laid tables (love.c): ai_once fills them before the first g, 0 when it could not
 int ai_once(void), ai_ops_fill(void);

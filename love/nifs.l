@@ -66,6 +66,7 @@
       (nif_place         "place"         3 lvm_place)
       (nif_trim          "trim"          1 lvm_trim)
       (nif_seek          "seek"          2 lvm_seek)
+      (nif_thrun         "thrun"         4 lvm_thrun)
       (nif_stem          "stem"          1 lvm_stem)
       (nif_span          "span"          1 lvm_span)
       (nif_saturate      "sat"           1 lvm_saturate)
