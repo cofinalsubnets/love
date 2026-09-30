@@ -1,6 +1,6 @@
 ; src/apps/moon/clay.l -- clay: C as love data. the AST moon has produced all along, given a name,
 ; a validator and a shower, so a piece of C can be generated from a love table rather than
-; transcribed by hand. the plan, the ranked slate and the gates are doc/misc/clay.md.
+; transcribed by hand. the plan and the gates are doc/misc/clay.md.
 ;
 ; a registered module: (borrow "src/apps/moon/clay.l"), then clay-show / clay-ok? / clay-tags.
 ; nothing here depends on the rest of moon -- a shower is pure AST -> text -- so a generator
