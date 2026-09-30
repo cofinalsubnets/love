@@ -1,5 +1,5 @@
 // test/gate/dtb.c -- the device-tree door on trees whose answers are written down here.
-// inle/dtb.h is the walk both boot doors ride (a64_dtb.c, rv64_dtb.c), and until
+// src/inle/dtb.h is the walk both boot doors ride (a64_dtb.c, rv64_dtb.c), and until
 // now the only thing that ever ran it was a qemu boot, which reaches exactly ONE tree:
 // virt's, with 2/2 cells and one bank. So this builds trees on the host -- the other
 // cell widths, a nested `reg` that is not memory, both clamps, a torn magic, a cmdline
@@ -15,7 +15,7 @@
 #include <string.h>
 
 // the two symbols an arch door borrows: kmain owns kboot, and the projection patches
-// k_image_top into the file (tools/kproject.l).
+// k_image_top into the file (src/tools/kproject.l).
 struct k_boot kboot;
 uintptr_t const k_image_top = 0x80210000;
 #define k1 0x80210000ull                 // ..page-aligned already, so k_image_top is it

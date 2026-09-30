@@ -11,7 +11,7 @@ slower.
 Three payoffs, in order:
 
 1. **cold start** for the whole runtime — every script run, every repl, every bench wall-clock.
-2. **the glaze bake is free.** Adding `love/boot/glaze.l` to the boot corpus costs
+2. **the glaze bake is free.** Adding `src/love/boot/glaze.l` to the boot corpus costs
    ~+810 ms when eval'd at startup. Inside a snapshot it is precompiled: always-on transparent
    JIT at zero startup cost, which is what makes the bake worth having at all.
 3. **no GC-footprint tax.** The image lives in an out-of-pool immortal region, so the moving
@@ -78,7 +78,7 @@ the image outgrows it, and no shipped zeros.
 It has to stay a real allocated section rather than loose bytes at EOF: `strip` (which
 `install -s` runs) keeps the section and drops a bare trailer.
 
-The rule `love/image.c` checks is only that **`.image` ENDS the segment carrying it**, which
+The rule `src/love/image.c` checks is only that **`.image` ENDS the segment carrying it**, which
 covers both shapes with the same arithmetic: a section alone in the highest `PT_LOAD` (ld/lld)
 and one riding the tail of the single segment holo lays. It reads that off the binary's own
 section headers rather than a build flag, so neither lane is told which it is, and a link that
@@ -91,7 +91,7 @@ whole point is WHERE it lands.
 ## l/host split
 
 The core owns the stdio-free buffer codec `ai_image_save` / `ai_image_load` (love.h); file I/O
-lives in `love/image.c`. The codec sits OUTSIDE the one `#if __STDC_HOSTED__` region, so it
+lives in `src/love/image.c`. The codec sits OUTSIDE the one `#if __STDC_HOSTED__` region, so it
 compiles into the freestanding kernel.
 
 ## `bake` and `wake`
@@ -105,7 +105,7 @@ the bake. `test_bakerep` holds that.
 
 A bake egg-boots whatever it is given, so the crew is never aboard when the snapshot is taken.
 `-l CAT` names the roster; with nothing named, the binary's own carried source is it (the
-`distlist` roster through `love/src.c`'s `ai_srcgz`), so **a raw love alone in an empty directory
+`distlist` roster through `src/love/src.c`'s `ai_srcgz`), so **a raw love alone in an empty directory
 bakes itself into the whole artifact.** That is what a cross-laid seed egg is for: a lay for
 another ISA cannot be baked here, so it ships raw and one `love bake` on the target finishes it.
 

@@ -1,7 +1,7 @@
 #!/bin/sh
 # test/gate/vec.sh -- the INTERRUPT gate.
 #
-# inle/mkvec.l lays the exception and IRQ entry points that used to be
+# src/inle/mkvec.l lays the exception and IRQ entry points that used to be
 # x64/x64.S and a64/a64.S. a green `make test_disk` already
 # proves most of that lay by running it: nothing boots without archinit's IDT,
 # and the corpus is FED over the serial line and CLOCKED by the timer, so
@@ -77,7 +77,7 @@ else
   fault_report() {
     : > "$work/out"
     rm -f "$work/in"; mkfifo "$work/in"
-    # 768M like tools/ktest.l: a major takes a contiguous 2x pool beside the old one,
+    # 768M like src/tools/ktest.l: a major takes a contiguous 2x pool beside the old one,
     # and whether it fits is a placement lottery -- 512M loses it and the boot says nothing.
     # shellcheck disable=SC2086
     $qemu $mach -m 768M -serial stdio -display none -no-reboot \

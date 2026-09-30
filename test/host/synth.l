@@ -9,6 +9,7 @@
 (borrow 'vi)      ; a buffer, for the loop's ex words
 (borrow 'harp)    ; the events, to ask a text read by
 (borrow 'play)    ; harp-read
+(borrow 'drift)   ; a walk's state, to stand the center somewhere
 
 (: d0 (synth-digits 0) d1 (synth-digits 1) s0 (synth-shifted 0)
    st (synth-new ())
@@ -115,6 +116,43 @@
  (test (2 = #right) (1 = #bdr) (qhalf = evwb (bdr 0))      ; the right side is the cycle turned round
        (4 = #gs) (0 < net (map (x \ (x != gs 0)) gs))       ; a swell, not the prel's sin of a span
        (3 = #(evs c)) (2 = #(evs m))))
+
+; --- the drift: d walks; k turns the row fixed, then following the center, then just
+; --- over it; a cycle's phrase rings, the knobs turn and stop, the screen draws the
+; --- lattice, and d again stops
+(: j (jug 0) st (synth-new ())
+   _ (synth-step st 100) on (st 'dr) pl (st 'on)
+   fix (synth-semis st [7 0 0])
+   _ (synth-step st 107) k1 (st 'km)
+   _ (pin st 'dnow {'tonic (5 /// 4) 'pos [0 1 0]}) fol (synth-semis st [7 0 0])
+   _ (pin st 'dnow (drift-new {}))
+   _ (synth-step st 107) k2 (st 'km)
+   fifth (synth-semis st [7 0 0]) third (synth-semis st [4 0 0]) sev (synth-semis st [10 0 1])
+   _ (synth-step st d0) lst (st 'last)
+   _ (each ^60 (i \ synth-feed st j)) out (slurp j)
+   loud (net (map (i \ (out (i * 97) != 0 ? 1 0)) ^(#out // 97)))
+   c1 (st 'cyc) ph (st 'dph)
+   _ (each ^20 (i \ synth-step st 46)) hi (st 'dsteer)
+   _ (each ^20 (i \ synth-step st 44)) lo (st 'dsteer)
+   _ (synth-step st 39) ln (st 'dlean)
+   _ (synth-step st 118) bk (st 'dbook)
+   _ (synth-step st 104) hm (st 'dhome)
+   f (synth-frame st)
+   _ (synth-step st 100) off (st 'dr) stop (st 'on)
+ (test (on = 1) (pl = 1)
+       (abs (fix - 7.0) < 0.001) (k1 = 1)                                ; fixed: the equal row
+       (abs (fol - 3.86314 - 7.0) < 0.001) (k2 = 2)                      ; follow: rooted on 5/4
+       (abs (fifth - 7.01955) < 0.001) (abs (third - 3.86314) < 0.001)   ; just: 3/2 and 5/4
+       (abs (sev - 9.68826) < 0.001)                                     ; alt: 7/4
+       (has? lst "1 C4")
+       (0 < c1) (0 < loud) (0 < #ph)
+       (hi = 2.0) (lo = -2.0) (ln = 2.0) (bk = 0) (abs (hm - 0.3) < 0.001)
+       (has? f "drift") (has? f "[") (has? f (st 'dph))
+       (off = 0) (stop = 0)
+       ; a point's name: along the fifths, a comma under or over, the sevenths
+       (synth-lname [0 0 0] = "C") (synth-lname [1 0 0] = "G") (synth-lname [-1 0 0] = "F")
+       (synth-lname [0 1 0] = "E-") (synth-lname [0 -1 0] = "Ab+") (synth-lname [0 0 1] = "Bb7")
+       (synth-lname [4 -1 0] = "C+")))
 
 (test_fin (),
  puts "synth: ok -- the keys bend as they should, the names are right, the turns stop, a strike rings, and the loop plays what the buffer says\n")

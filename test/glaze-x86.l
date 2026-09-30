@@ -1,4 +1,4 @@
-; glaze-x86 -- the x86-64 native-codegen self-tests for the glaze (love/boot/glaze.l),
+; glaze-x86 -- the x86-64 native-codegen self-tests for the glaze (src/love/boot/glaze.l),
 ; the executing counterpart to the arch-neutral test/glaze.l. host-x86 only: these install and
 ; execute native machine code, so only the x86-guarded `make test_glaze` runs them, and
 ; common.mk filters this file out of the arch-neutral corpus. it runs against the binary's

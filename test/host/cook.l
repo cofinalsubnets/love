@@ -1,4 +1,4 @@
-; the gate for cook's Makefile importer (apps/cook.l).
+; the gate for cook's Makefile importer (src/apps/cook.l).
 ;
 ; Run on the host binary:  out/love test/host/cook.l
 ; (wired into the build as one of test_hostnif's rows).
@@ -36,17 +36,17 @@
    ; ./Makefile -- so a positional fixture would read as a goal against this tree.
    (run-cook src tgt)
    (: _ (write-file (dir + "/Makefile") src)
-       r (hark [love "-l" "apps/cook.l" "-f" (dir + "/Makefile") tgt])
+       r (hark [love "-l" "src/apps/cook.l" "-f" (dir + "/Makefile") tgt])
        (two? r ? >r ""))
    ; ..under env's NAME=value words
    (run-cook-in env src tgt)
    (: _ (write-file (dir + "/Makefile") src)
-       r (hark ((["env"] + env) + [love "-l" "apps/cook.l" "-f" (dir + "/Makefile") tgt]))
+       r (hark ((["env"] + env) + [love "-l" "src/apps/cook.l" "-f" (dir + "/Makefile") tgt]))
        (two? r ? >r ""))
    ; --emit a fixture Makefile, return the generated Cookfile text (stdout).
    (run-emit src)
    (: _ (write-file (dir + "/Makefile") src)
-       r (hark [love "-l" "apps/cook.l" "--emit" "-f" (dir + "/Makefile")])
+       r (hark [love "-l" "src/apps/cook.l" "--emit" "-f" (dir + "/Makefile")])
        (two? r ? >r ""))
 
    _ (sh ("rm -rf " + dir + "; mkdir -p " + dir))
@@ -207,7 +207,7 @@
    (D2 f) (dir + f)
    (run-cookv src args)
    (: _ (write-file (dir + "/Makefile") src)
-       r (hark ([love "-l" "apps/cook.l" "-f" (dir + "/Makefile")] + args))
+       r (hark ([love "-l" "src/apps/cook.l" "-f" (dir + "/Makefile")] + args))
        (two? r ? >r ""))
    _ (setenv "COOKT_ENV" "from-env")
    env (run-cookv (mk '("COOKT_ENV ?= nope"
@@ -284,7 +284,7 @@
                        (dir + "/e/out.txt:") "\techo HI > $@"]))
    _ (write-file (dir + "/e/Cookfile") emc)
    _ (sh ("rm -f " + (dir + "/e/out.txt")))
-   _ (hark [love "-l" "apps/cook.l" "-f" (dir + "/e/Cookfile") "all"])
+   _ (hark [love "-l" "src/apps/cook.l" "-f" (dir + "/e/Cookfile") "all"])
    _ (ok "emit: round-trip cooks the emitted Cookfile" (0 = <(sh ("test -f " + (dir + "/e/out.txt")))))
 
    ; .DEFAULT_GOAL overrides "the first rule declared" as the default ticket --
@@ -295,10 +295,10 @@
                "first:"  "\techo FIRST"
                "second:" "\techo SECOND"))
    _ (write-file (dir + "/Makefile") dgsrc)
-   dgr (: r (hark [love "-l" "apps/cook.l" "-f" (dir + "/Makefile")]) (two? r ? >r ""))
+   dgr (: r (hark [love "-l" "src/apps/cook.l" "-f" (dir + "/Makefile")]) (two? r ? >r ""))
    _ (ok ".DEFAULT_GOAL is the default ticket" (has dgr "SECOND"))
    _ (write-file (dir + "/e/Cookfile") (run-emit dgsrc))
-   dgc (: r (hark [love "-l" "apps/cook.l" "-f" (dir + "/e/Cookfile")]) (two? r ? >r ""))
+   dgc (: r (hark [love "-l" "src/apps/cook.l" "-f" (dir + "/e/Cookfile")]) (two? r ? >r ""))
    _ (ok "emit: .DEFAULT_GOAL survives the round-trip" (has dgc "SECOND"))
 
    ; ------------------------------------------------- side-effect writes are seen
@@ -317,7 +317,7 @@
                 (D "/second: " + D "/shared.txt")
                 ("\tcp " + (D "/shared.txt" + (" " + D "/second")))])
    _ (write-file (D "/Makefile") sidesrc)
-   _ (: r (hark [love "-l" "apps/cook.l" "-f" (D "/Makefile") "all"]) 0)
+   _ (: r (hark [love "-l" "src/apps/cook.l" "-f" (D "/Makefile") "all"]) 0)
    side (: r (sh ("cat " + D "/second")) (two? r ? >r ""))
    _ (ok "a recipe's side-effect write invalidates the date cache" (has side "NEW"))
 
@@ -400,18 +400,22 @@
    _ (ok "SHELL: recipe lines ride lush"   (has shl "L1[lush]"))
    _ (ok "SHELL: $(shell) rides lush too"  (has shl "L2[lush]"))
    wld (run-cook (mk '("all:"
-                       "\t@echo \"WC[$(wildcard apps/lus*.l apps/zz-nope*.q)]\""))
+                       "\t@echo \"WC[$(wildcard src/apps/lus*.l src/apps/zz-nope*.q)]\""))
                  "all")
-   _ (ok "wildcard: pure-love glob, nullglob" (has wld "WC[apps/lush.l]"))
+   _ (ok "wildcard: pure-love glob, nullglob" (has wld "WC[src/apps/lush.l]"))
    ; a mode letter in .SHELLFLAGS is lush's mode for the line: a tr on PATH answers
-   ; "theirs", so -a (ours ahead of PATH) never meets it, and no letter (LUSHFLAGS unset,
-   ; gregarious) hands the line to PATH's sh and PATH's tr
+   ; "theirs", so -a (ours ahead of PATH) never meets it; no letter and LUSHFLAGS unset is
+   ; the default, autonomous, the same; LUSHFLAGS=-g hands the line to PATH's sh and
+   ; PATH's tr (a g in .SHELLFLAGS would reach that sh too, which knows no -g)
    _ (sh ("mkdir -p " + dir + "/tb; printf '#!/bin/sh\\necho theirs\\n' > " + dir + "/tb/tr; chmod 755 " + dir + "/tb/tr"))
    tenv [("PATH=" + dir + "/tb:" + getenv "PATH") "LUSHFLAGS="]
    am (run-cook-in tenv (mk [".SHELLFLAGS := -ac" "all:" "\t@tr a b </dev/null; echo M[a]"]) "all")
    _ (ok ".SHELLFLAGS -ac: autonomous, our tr" (has am "M[a]" && !(has am "theirs")))
-   gm (run-cook-in tenv (mk ["all:" "\t@tr a b </dev/null; echo M[g]"]) "all")
-   _ (ok "no mode letter: gregarious, PATH's tr" (has gm "theirs" && has gm "M[g]"))
+   gm (run-cook-in [("PATH=" + dir + "/tb:" + getenv "PATH") "LUSHFLAGS=-g"]
+                   (mk ["all:" "\t@tr a b </dev/null; echo M[g]"]) "all")
+   _ (ok "LUSHFLAGS=-g: gregarious, PATH's tr" (has gm "theirs" && has gm "M[g]"))
+   nm (run-cook-in tenv (mk ["all:" "\t@tr a b </dev/null; echo M[n]"]) "all")
+   _ (ok "no mode letter: autonomous, our tr" (has nm "M[n]" && !(has nm "theirs")))
    ; $(shell) takes .SHELLFLAGS as a recipe line does: -e stops at the false
    se (run-cook (mk [".SHELLFLAGS := -ec" "X := $(shell false; echo no)" "all:" "\t@echo \"SE[$(X)]\""]) "all")
    _ (ok "$(shell) rides .SHELLFLAGS" (has se "SE[]"))
@@ -422,6 +426,25 @@
                         "all:" "\t@echo \"SA[$(U)]\"" "\t@echo \"SB[$(X)]\""]) "all")
    _ (ok "$(shell) in this image: no PATH wanted" (has ea "SA[" && !(has ea "SA[]")))
    _ (ok "$(shell) in this image rides .SHELLFLAGS" (has ea "SB[]"))
+   ; a line run in this image forks warm children -- `sh FILE`, a ( ), a pipeline stage --
+   ; and each one's `exit` ends that child with its status, never the line above it
+   _ (write-file (dir + "/x0.sh") "true\nexit\n")
+   _ (write-file (dir + "/x3.sh") "f() { exit 3; }\nf\necho no\n")
+   xe (: _ (write-file (dir + "/Makefile")
+                       (mk ["all:" ("\t@sh " + dir + "/x0.sh; echo X0[$$?]")
+                            ("\t@sh " + dir + "/x3.sh; echo X3[$$?]")
+                            "\t@(exit 4); echo XS[$$?]"
+                            "\t@exit 5 | true; echo XP[$$?]"
+                            ("\t@sh " + dir + "/x0.sh")
+                            "\t@echo XE[end]"]))
+         (hark ["env" "PATH=/nonexistent" "LUSHFLAGS=-a" love "-l" "src/apps/cook.l"
+                "-f" (dir + "/Makefile") "all"]))
+   xo (two? xe ? >xe "")
+   _ (ok "sh FILE's exit ends the script: status 0" (has xo "X0[0]"))
+   _ (ok "exit 3 in a script's function: status 3" (has xo "X3[3]" && !(has xo "no")))
+   _ (ok "exit in a ( ): the subshell's status" (has xo "XS[4]"))
+   _ (ok "exit in a pipeline stage: that stage's" (has xo "XP[0]"))
+   _ (ok "a recipe line of sh FILE; exit: rc 0" (has xo "XE[end]" && two? xe && 0 = <xe))
    ; the build file's fd is closed before any recipe runs
    fdl (run-cook (mk ["all:" "\t@ls -l /proc/self/fd/ 2>/dev/null"]) "all")
    _ (ok "the Makefile's fd is not a recipe's" !(has fdl (dir + "/Makefile")))
@@ -433,7 +456,7 @@
    ; which is the one thing a gate cannot hold still.
    (run-cookj src tgt j)
    (: _ (write-file (dir + "/Makefile") src)
-       r (hark [love "-l" "apps/cook.l" "-j" j "-f" (dir + "/Makefile") tgt])
+       r (hark [love "-l" "src/apps/cook.l" "-j" j "-f" (dir + "/Makefile") tgt])
        (two? r ? >r ""))
    _ (sh ("mkdir -p " + D "/j"))
    jsrc (mk [".PHONY: all"
@@ -452,7 +475,7 @@
          (0 = <(sh ("test -f " + (D "/j/a" + (" && test -f " + (D "/j/b" + (" && test -f " + (D "/j/c" + (" && test -f " + D "/j/d"))))))))))
    ; a glued -jN is the same flag
    _ (sh ("rm -f " + D "/j/[abcd]"))
-   jg (: r (hark [love "-l" "apps/cook.l" "-j4" "-f" (dir + "/Makefile") "all"]) (two? r ? >r ""))
+   jg (: r (hark [love "-l" "src/apps/cook.l" "-j4" "-f" (dir + "/Makefile") "all"]) (two? r ? >r ""))
    _ (ok "-j4 glued reads as -j 4" (j1 = jg))
 
    ; an edge still orders: one must finish before two starts, however wide the pool.
@@ -473,13 +496,13 @@
              (D "/j/ok:") ("\t@sleep 1; echo OK > " + D "/j/ok")
              (D "/j/red:") "\t@exit 3"])
    _ (write-file (dir + "/Makefile") jred)
-   jrst (: r (hark [love "-l" "apps/cook.l" "-j" "4" "-f" (dir + "/Makefile") "all"]) (two? r ? <r 0))
+   jrst (: r (hark [love "-l" "src/apps/cook.l" "-j" "4" "-f" (dir + "/Makefile") "all"]) (two? r ? <r 0))
    _ (ok "-j4: a failed recipe fails the run" !(0 = jrst))
    _ (ok "-j4: outstanding jobs finish first" (0 = <(sh ("test -f " + D "/j/ok"))))
 
    ; the width is the caller's to say: a bare -j is make's "unlimited", and one
    ; translation unit here peaks at 2.3 GB, so cook asks for the number instead.
-   jbad (: r (hark [love "-l" "apps/cook.l" "-j" "x" "-f" (dir + "/Makefile") "all"]) (two? r ? <r 0))
+   jbad (: r (hark [love "-l" "src/apps/cook.l" "-j" "x" "-f" (dir + "/Makefile") "all"]) (two? r ? <r 0))
    _ (ok "-j wants a count" !(0 = jbad))
 
    ; ---------------------------------------------------------------- summary

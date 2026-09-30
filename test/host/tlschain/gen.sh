@@ -39,3 +39,24 @@ cert undernosign rsa nosign sha256 $NB $NA "$LEAF" "subjectAltName=DNS:good.test
 cert nosan rsa interr sha256 $NB $NA "$LEAF"
 root rootw p521 sha512
 cert leafw p384 rootw sha512 $NB $NA "$LEAF" "$SA" "subjectAltName=DNS:good.test"
+# name constraints: a root that may vouch for sb.test and 10/8 but not bad.sb.test, an issuer
+# for names under in.test only, and roots constraining email (no bearing) and a directory name
+# (a kind not checked)
+croot() { n=$1; shift; key p256 $n; ext "$CA" "$KU" "$@";
+  openssl req -new -key $n.key -subj "/CN=$n" -out $n.csr;
+  openssl x509 -req -in $n.csr -signkey $n.key -sha256 -not_before $NB -not_after $NA -extfile ext.cnf -out $n.pem 2>/dev/null; }
+croot rootn "nameConstraints=critical,permitted;DNS:sb.test,permitted;IP:10.0.0.0/255.0.0.0,excluded;DNS:bad.sb.test"
+cert leafn p256 rootn sha256 $NB $NA "$LEAF" "$SA" "subjectAltName=DNS:a.sb.test,DNS:sb.test,IP:10.1.2.3"
+cert leafno p256 rootn sha256 $NB $NA "$LEAF" "$SA" "subjectAltName=DNS:a.sb.test,DNS:evil.test"
+cert leafnx p256 rootn sha256 $NB $NA "$LEAF" "$SA" "subjectAltName=DNS:x.bad.sb.test"
+cert leafnw p256 rootn sha256 $NB $NA "$LEAF" "$SA" "subjectAltName=DNS:*.sb.test"
+cert leafnw2 p256 rootn sha256 $NB $NA "$LEAF" "$SA" "subjectAltName=DNS:*.ok.sb.test"
+cert leafni p256 rootn sha256 $NB $NA "$LEAF" "$SA" "subjectAltName=DNS:a.sb.test,IP:192.168.1.1"
+root rootp p256 sha256
+cert intern p256 rootp sha256 $NB $NA "$CA" "$KU" "nameConstraints=critical,permitted;DNS:.in.test"
+cert leafin p256 intern sha256 $NB $NA "$LEAF" "$SA" "subjectAltName=DNS:a.in.test"
+cert leafia p256 intern sha256 $NB $NA "$LEAF" "$SA" "subjectAltName=DNS:in.test"
+croot rootm "nameConstraints=critical,permitted;email:sb.test"
+cert leafm p256 rootm sha256 $NB $NA "$LEAF" "$SA" "subjectAltName=DNS:good.test"
+croot rootd "nameConstraints=critical,permitted;dirName:dir_sect" "[dir_sect]" "CN=x"
+cert leafd p256 rootd sha256 $NB $NA "$LEAF" "$SA" "subjectAltName=DNS:good.test"

@@ -10,7 +10,7 @@
 (borrow 'posix)
 (: K (cite 'kore)
    love <cmdline
-   dir ((cwd 0) + "/out/.smallweb")
+   dir ((cwd 0) + "/out/.smallweb-" + show (getpid 0))
    _ (hark ["rm" "-rf" dir]) _ (mkdir dir 448)
    home0 (getenv "HOME")
    _ (setenv "HOME" dir)
@@ -22,10 +22,10 @@
    (www u) (: r (hark ["sh" "-c" (love + " kore www '" + u + "' 2>&1")]) [(? (two? r) >r "") <r])
 
    ; -- gopher ---------------------------------------------------------------------------
-   gp 7470
+   gp (test-free 0)
    gs (show gp)
    _ (put (dir + "/hole.l") ("(borrow 'posix)
-(: l (listen " + gs + ")
+(: l (listen " + gs + ") _ (close (open \"" + dir + "/hole.up\" \"w\"))
    (ln x) (x + \"\\r\\n\")
    menu (ln \"iWelcome to the test hole\\tfake\\t(NULL)\\t0\" + ln \"i  ascii   art\\tfake\\t(NULL)\\t0\"
          + ln \"0About this hole\\t/about\\t127.0.0.1\\t" + gs + "\" + ln \"1A deeper menu\\t/deep\\t127.0.0.1\\t" + gs + "\"
@@ -41,7 +41,7 @@
    0)
 "))
    srv (tether [love (dir + "/hole.l")])
-   _ (rest 400)
+   _ (test-until (\ s !(two? s)) (\ _ (stat (dir + "/hole.up"))))   ; it listens: it takes three, so no probe
    m (www ("gopher://127.0.0.1:" + gs + "/"))
    a (www ("gopher://127.0.0.1:" + gs + "/0/about"))
    f (www ("gopher://127.0.0.1:" + gs + "/7/find?search=love+kore"))
@@ -57,7 +57,7 @@
    ; -- gemini ---------------------------------------------------------------------------
    py? (: q (open "/usr/bin/python3" "r") (? (hot? q) (close q, 1) 0))
    ssl? (: q (open "/usr/bin/openssl" "r") (? (hot? q) (close q, 1) 0))
-   gm 7471
+   gm (test-free 0)
    ms (show gm)
    base ("gemini://127.0.0.1:" + ms)
    (cert nm) (hark ["sh" "-c" ("openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -keyout " + dir + "/"
@@ -73,6 +73,7 @@ routes = {'/': '20 text/gemini\\r\\n' + page, '/doc': '20 text/plain\\r\\nplain 
           '/in': '10 Your name?\\r\\n', '/in?x%20y': '20 text/gemini\\r\\nhello x y\\n',
           '/go': '31 /doc\\r\\n', '/gone': '51 Not found\\r\\n'}
 srv = socket.create_server(('127.0.0.1', int(sys.argv[1])))
+open(sys.argv[2] + '.up', 'w').close()
 for _ in range(int(sys.argv[3])):
     c, _a = srv.accept()
     try:
@@ -92,7 +93,7 @@ for _ in range(int(sys.argv[3])):
    _ (? (py? && ssl?)
         (: _ (cert "one") _ (cert "two")
            s1 (serve "one" 8)
-           _ (rest 600)
+           _ (test-until (\ s !(two? s)) (\ _ (stat (dir + "/one.up"))))
            g (www (base + "/"))
            d (www (base + "/doc"))
            i (www (base + "/in"))
@@ -103,7 +104,7 @@ for _ in range(int(sys.argv[3])):
            pins (: q (open (dir + "/.love/gemini_hosts") "r") (? (hot? q) (: s (slurp q) _ (close q) s) ""))
            ; the same host with another certificate: refused, and taken once its line is gone
            s2 (serve "two" 2)
-           _ (rest 600)
+           _ (test-until (\ s !(two? s)) (\ _ (stat (dir + "/two.up"))))
            c (www (base + "/doc"))
            _ (hark ["rm" "-f" (dir + "/.love/gemini_hosts")])
            c2 (www (base + "/doc"))
@@ -117,6 +118,7 @@ for _ in range(int(sys.argv[3])):
                  (has? <c "has changed") !(c 1 = 0) (has? <c2 "plain doc")))
         0)
    _ (setenv "HOME" home0)
+   _ (hark ["rm" "-rf" dir])
    0)
 
 (test_fin (), puts "smallweb: ok", putc 10, 0)

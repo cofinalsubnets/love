@@ -1,5 +1,5 @@
-; --- test/lux.l: a runnable smoke test for lux's socket nif (love/sock.c) ---
-; love/sock.c links love0 as well as the final `love`, so this is a corpus law; it
+; --- test/lux.l: a runnable smoke test for lux's socket nif (src/love/sock.c) ---
+; src/love/sock.c links love0 as well as the final `love`, so this is a corpus law; it
 ; still reads standalone, like test/net.l:
 ;
 ;   cat test/00-init.l test/lux.l | out/love
@@ -18,5 +18,4 @@
   (test (nom? (connect ['unix "/tmp"])))                             ; a directory, not a socket
   (test ('badarg = connect ['unix 7]))                           ; not a string
   (test_fin ())
-  (say err "lux: ok\n")
 ) 0)

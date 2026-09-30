@@ -1,5 +1,5 @@
 ; --- test/host/sbhttp.l: svalbard pulling a store over a real socket ---
-; not in the test/*.l corpus: the socket nifs live in love/sock.c, which love0 does
+; not in the test/*.l corpus: the socket nifs live in src/love/sock.c, which love0 does
 ; not link, and this loads two crew files and splices their modules.
 ;
 ; the whole thing runs in one process, test/host/kiosko.l's shape: kiosko twirled
@@ -38,8 +38,9 @@
    nblob #(readdir ".sb/blob")
    _ (chdir home)
    ; --- kiosko over the origin's .sb/, in a task ---
-   port 7433
-   l (listen port)
+   pl (test-listen 0)
+   port <pl
+   l (pl 1)
    srv (twirl (\ _ ((: (g k) (: _ (await l)
                                 c (accept l)
                                 _ (hot? c ? (cite 'kiosko 'serve1 oroot () c, close c))

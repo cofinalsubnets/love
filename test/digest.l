@@ -1,6 +1,6 @@
-; --- test/digest.l: the digests in love/lib/hash.c, held to what publishes them ---
+; --- test/digest.l: the digests in src/love/lib/hash.c, held to what publishes them ---
 ; named digest, not hash, because test/hash.l is the tablet's.
-; apps/kore's checksum tools are these plus a line of output, and test/kore/sum.sh holds those to GNU coreutils -- so this file is
+; src/apps/kore's checksum tools are these plus a line of output, and test/kore/sum.sh holds those to GNU coreutils -- so this file is
 ; the half of the rope that does not need another implementation on the box.
 ;
 ;   vectors   RFC 1321's md5 suite, fips 180-4's sha examples and RFC 7693's blake2b
@@ -260,8 +260,4 @@
  (crc32-on (crc32-on 0 (hash-bytes 500)) (snip (hash-bytes 1000) 500 1000) = crc32 (hash-bytes 1000))
  (crc32-on 0 "123456789" = 3421780262))
 
-(: _ (test_fin ())
-   _ (puts "digest: ok -- md5, the shas, sha-3 and blake2b on their published vectors, each stream
-      against its one-shot, cksum and bsd sum against love walks
-")
-   0)
+(test_fin ())

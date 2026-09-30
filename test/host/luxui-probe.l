@@ -26,7 +26,7 @@
 ; loaded with -l, no test/00-init.l ahead of it -- so the posix door is borrowed here.
 (cite 'posix ? (borrow 'posix) ())
 
-(borrow 'xwire)   ; the X wire, apps/lux/wire.l
+(borrow 'xwire)   ; the X wire, src/apps/lux/wire.l
 (: (probe dpy)
    (: s (connect ['unix dpy])
       sc (x-setup s ())
@@ -389,11 +389,11 @@
       _ (fake 6 0 5 475) _ (rest 80)                                             ; the pointer to the left screen: a crossing makes its screen current
       _ (cmsg root a-cd 1 0 0)
       _ (waitp "screen-traded" (u \ (: g (x-getgeom s w6) (213 <= g 0 && g 0 + g 2 <= 426))) 50)
-      _ (must "screen-cur" ("2" = ask "(wscur (cap (lux-st ())))"))
-      _ (must "screen-vis" ("(2 1 3)" = ask "(wsvistags (cap (lux-st ())))"))
+      _ (waitp "screen-cur" (u \ "2" = ask "(wscur (cap (lux-st ())))") 50)              ; the crossing lands when it lands
+      _ (waitp "screen-vis" (u \ "(2 1 3)" = ask "(wsvistags (cap (lux-st ())))") 50)
       _ (cmsg root a-cd 0 0 0)
       _ (waitp "screen-back" (u \ (: g (x-getgeom s w6) (g 0 + g 2 <= 213))) 50)
-      _ (must "screen-vis-back" ("(1 2 3)" = ask "(wsvistags (cap (lux-st ())))"))
+      _ (waitp "screen-vis-back" (u \ "(1 2 3)" = ask "(wsvistags (cap (lux-st ())))") 50)
 
       ; --- 6e. the screen keys, on the third screen so the leg also proves n=2: mod+r
       ;     focuses screen 2 (tag 3) and warps the pointer onto it; a crossing back

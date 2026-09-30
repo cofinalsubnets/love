@@ -1,4 +1,4 @@
-; --- test/host/kitpng.l: kitty's f=100, a PNG laid into quay's store (love/quay/png.c) ---
+; --- test/host/kitpng.l: kitty's f=100, a PNG laid into quay's store (src/love/quay/png.c) ---
 ; one 13x7 picture, its alpha either side of half, written by magick every way a PNG is
 ; -- each colour type, 1 to 16 bits, a palette with tRNS, Adam7 -- sent as kitty sends it,
 ; and every pixel held to magick's own read of the same file: set where its alpha is half

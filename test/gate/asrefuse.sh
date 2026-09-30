@@ -12,7 +12,7 @@ n=0 leaked=0
 
 try() {   # try NAME SOURCE  -- SOURCE must RAISE
   n=$((n + 1))
-  { cat love/holo/holo.l love/holo/x64.l love/holo/dialect.l love/holo/as.l
+  { cat src/love/holo/holo.l src/love/holo/x64.l src/love/holo/dialect.l src/love/holo/as.l
     printf "(borrow 'holo)\n(: _ (puts (as-hex \"%s\")) _ 0)\n" "$2"
   } | $love > /dev/null 2>&1 &&
     { echo "FAIL asrefuse: $1 -- assembled, should have raised"; leaked=$((leaked + 1)); }

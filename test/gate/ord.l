@@ -16,8 +16,10 @@
     (: (go k bad) (? (reps <= k) bad
                      (go (k + 1) (? (n = net (f t)) bad (bad + 1))))
        b (go 0 0)
-       _ (? (0 < b) (puts ("FAIL ord: " + nm + " wrong in " + show b
-                           + " chunks of " + show reps + "\n")) ())
+       ; the corpus's marks: a green dot, or a red X and what went wrong
+       _ (? (0 < b) (puts ("\e[31mX\e[0m\nFAIL ord: " + nm + " wrong in " + show b
+                           + " chunks of " + show reps + "\n"))
+                    (puts "\e[32m.\e[0m"))
        b)
    bad (net [(sweep "t < hi"  (\ t (t < hi)))
              (sweep "t <= hi" (\ t (t <= hi)))
@@ -27,6 +29,5 @@
              (sweep "lo <= t" (\ t (lo <= t)))
              (sweep "hi > t"  (\ t (hi > t)))
              (sweep "hi >= t" (\ t (hi >= t)))])
-   _ (? (0 < bad) ()
-        (puts "  ord: ok -- the four orderings on a tray, either way round, under the collector\n"))
+   _ (0 < bad ? () (putc 10))
    (quit (0 < bad ? 1 0)))

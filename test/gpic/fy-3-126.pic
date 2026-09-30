@@ -1,0 +1,10 @@
+.PS
+x = 0.15
+y = .3
+z = 1
+arc
+circle color "red" "label" xslanted 0.1
+if -0.15 - x != .3 then { for j = 0.5 to 1.5 by *2 do { move "1" then left 0.75 } } else { x = ((.3 / 3)) }
+command "text " x
+if .3 + 3 != 0.15 then { move thick 2 }
+.PE

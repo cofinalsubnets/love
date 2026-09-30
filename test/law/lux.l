@@ -1,11 +1,11 @@
-; test/law/lux.l -- xmonad's QuickCheck properties for apps/lux/core.l, in exact arithmetic,
-; plus a seeded fuzz. Reads apps/lux/core.l's names off the row that loads them both
+; test/law/lux.l -- xmonad's QuickCheck properties for src/apps/lux/core.l, in exact arithmetic,
+; plus a seeded fuzz. Reads src/apps/lux/core.l's names off the row that loads them both
 ; (t/gates.l 'lux). Split into small independent top-level `:` forms -- each
 ; self-contained, nothing new leaks, and no single form grows big enough to stress the
 ; whole-form compiler.
 
 ; --- the zipper laws ---
-(borrow 'xwire)   ; the X wire, apps/lux/wire.l
+(borrow 'xwire)   ; the X wire, src/apps/lux/wire.l
 (borrow 'salt)    ; the config door, read below -- config.l splices it too, and a splice is not inherited
 (: z3 (zmk 2 '(1) '(3))                                                          ; row (1 2 3), 2 focused
    (test
@@ -160,7 +160,7 @@
          (all (w \ wstagof sF w = wscur sF) (wsring sF))                             ; and the ring holds exactly what lives here
          (wsrow sF = filter (w \ !(wsfloating? sF w)) (wsring sF))))                  ; the tiled row is the ring's float-free subsequence
 
-; --- the layout engine (apps/lux/layout.l): geometry is a partition ---
+; --- the layout engine (src/apps/lux/layout.l): geometry is a partition ---
 (: (area p) (p 3 * p 4)                                                ; a placement's w*h
    (sumarea ps) (foldl (\ a p (a + area p)) 0 ps)
    r (rct 0 0 800 600) full-area 480000
@@ -196,7 +196,7 @@
       ; a message ||| doesn't know (shrink) delegates to the active sublayout
       (ch-cur (lay-msg (choice [L1 full]) 'shrink z3) 2 = 0.48)))
 
-; --- the book (apps/lux/layout.l): one layout per tag, () = every tag on the default ---
+; --- the book (src/apps/lux/layout.l): one layout per tag, () = every tag on the default ---
 (: L1 (resizable-tall 1 0.02 0.5) b1 (lays-put () 2 full)
    (test
       (lays-of () 1 L1 = L1)                                                     ; no entry: the default
@@ -216,7 +216,7 @@
       (wincol <(lay-tile (tall 9) r z) = ws)
       !(wincol <(lay-tile (tall 2) r (zfrom ())))))
 
-; --- the layout modifiers (apps/lux/layout.l rung 4): each wraps a layout ---
+; --- the layout modifiers (src/apps/lux/layout.l rung 4): each wraps a layout ---
 (: (area p) (p 3 * p 4)
    (sumarea ps) (foldl (\ a p (a + area p)) 0 ps)
    r (rct 0 0 800 600) z3 (zfrom '(10 20 30)) z1 (zfrom '(10))
@@ -268,7 +268,7 @@
          ((#p = 1) && (#<p = 6)))
       (lay-msg (smart-borders Q) 'grow z3 1 1 = 60)))                  ; ... and a delegated message threads the closure's new state
 
-; --- the manageHook dsl (apps/lux/manage.l rung 5): combinators + float actions ---
+; --- the manageHook dsl (src/apps/lux/manage.l rung 5): combinators + float actions ---
 (: s0 (admit (admit (sheaf '(1 2 3)) 10) 20)                                     ; ws1 tiled (20 10); we manage 20
    c (mg-ctx 0 20 (rct 0 0 800 600) (rct 100 100 300 200))                      ; socket 0 (unused: pure actions/mocks), win 20, screen, geom
    yes (c \ 1) no (c \ 0)                                                        ; mock predicates
@@ -295,7 +295,7 @@
       ; manage-for is the assembled config hook -- a runnable closure (X-driven; not called here)
       (lit? manage-default) (lit? (manage-for '("a") '("b") '("c")))))
 
-; --- the Go/Swap zipper halves (apps/lux/core.l rung 6): focus/swap by NAME ---
+; --- the Go/Swap zipper halves (src/apps/lux/core.l rung 6): focus/swap by NAME ---
 (: z3 (zmk 2 '(1) '(3))                                                          ; row (1 2 3), 2 focused
    (test
       (zfoc (zfocto 3 z3) = 3) (zrow (zfocto 3 z3) = '(1 2 3))                   ; zfocto moves only the focus
@@ -305,7 +305,7 @@
       (zswapw 1 3 (zswapw 1 3 z3) = z3)                                          ; an involution
       (zswapw 1 9 z3 = z3)))                                                     ; a missing party: no-op
 
-; --- the keymap (apps/lux/keys.l rung 6): the table's shape, the union law, nextMatch ---
+; --- the keymap (src/apps/lux/keys.l rung 6): the table's shape, the union law, nextMatch ---
 (: (test
       ; every binding is (lib keysym action), the action a tagged list
       (all (r \ #r = 3 && two? (kb-act r) && name? <(kb-act r)) the-keys)
@@ -333,7 +333,7 @@
       (nm-pick '(10 20) 10 '(99 20 10) 1 = 20)                                   ; other-workspace history is ignored
       !(nm-pick '(10) 10 '(10) 1)))                                              ; nowhere to go
 
-; --- EWMH + docks (apps/lux/ewmh.l rung 7): strut arithmetic + wire encodings ---
+; --- EWMH + docks (src/apps/lux/ewmh.l rung 7): strut arithmetic + wire encodings ---
 (: (test
       ; _net_wm_strut_partial's 12 values ride whole; _net_wm_strut's 4 get whole-edge spans; short = none
       (strut-parse '(0 0 30 0 0 0 0 0 0 0 400 800) = '(0 0 30 0 0 0 0 0 0 0 400 800))
@@ -380,7 +380,7 @@
    (test (ewmh-cm-win pk = 9) (ewmh-cm-type pk = 5)
            (ewmh-cm-d0 pk = 2) (ewmh-cm-d1 pk = 7) (ewmh-cm-d2 pk = 8)))
 
-; --- the config (apps/lux/config.l rung 8): the transliteration's shape.
+; --- the config (src/apps/lux/config.l rung 8): the transliteration's shape.
 ;     every law here reads an empty tablet, never lux-conf: this gate must mean
 ;     the same thing on a machine that has written ~/.love/etc/lux.l. ---
 (: c0 (tablet 0)
@@ -398,7 +398,7 @@
       (#(keys-build supm 20 9 () ()) = 74) (lit? (manage-for '("a") '("b") ()))
       (<<(conf-roster c0 'startup '(("setxkbmap"))) = "setxkbmap")))
 
-; --- the config door (apps/libra/salt.l): every setting overrides, and its absence is
+; --- the config door (src/apps/libra/salt.l): every setting overrides, and its absence is
 ;     the value that used to be hardcoded. the tablet is built by hand -- salt
 ;     pins a setting's whole tail under its head, which is what salt-file writes. ---
 (: (st l) (foldl (\ t p (pin t <p >p)) {} l)                             ; a settings roster -> the tablet salt would answer
@@ -424,7 +424,7 @@
       (keys-find km altm 52 = '(view 4)) !(keys-find km altm 53)                 ; digit rows stop at the tag count
       (two? lux-tags) (two? lux-keymap) (lit? lux-manage) (two? lux-layout)))    ; and the live ones built, whatever this machine's file says
 
-; --- key specs (apps/lux/keys.l): the surface a config writes chords in ---
+; --- key specs (src/apps/lux/keys.l): the surface a config writes chords in ---
 (: c2 (foldl (\ t p (pin t <p >p)) (tablet 0)
              '((bind ((sup Return) (spawn "alacritty" "-e" "tmux"))
                      ((sup shift F1) (view 1))
@@ -452,7 +452,7 @@
       (keys-find km supm 120 = '(kill))                                          ; ... only what it names
       (#km = 75)))                                                          ; 74 stock, +3 new rows, -2 unbound (1 bind + 1 unbind unreadable)
 
-; --- ~/.Xauthority parsing (apps/lux/wire.l rung 8), on mock bytes ---
+; --- ~/.Xauthority parsing (src/apps/lux/wire.l rung 8), on mock bytes ---
 (: (be16 n) (string (n >> 8) + string (255 & n))                                        ; big-endian u16 as two appended bytes
    (fld t) (be16 #t + t)
    (entry num data) (be16 256 + fld "bee" + fld num + fld "MIT-MAGIC-COOKIE-1" + fld data)
@@ -472,7 +472,7 @@
            (b 20 = 94) (b 24 = 42) (b 36 = 68)                                   ; CreateGlyphCursor, cid, glyph 68
            (b 52 = 46) (b 60 = 2) (b 68 = 0) (b 69 = 64) (b 72 = 42)))           ; CloseFont; cwa mask 0x4000, value cid
 
-; --- minimize's targeted restore (a taskbar activate; apps/lux/layout.l rung 8) ---
+; --- minimize's targeted restore (a taskbar activate; src/apps/lux/layout.l rung 8) ---
 (: z3 (zfrom '(10 20 30)) r (rct 0 0 800 600)
    M (lay-msg (minimize (resizable-tall 1 0.02 0.5)) '(minimize-window 20) z3)
    (test

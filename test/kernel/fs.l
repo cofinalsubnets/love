@@ -4,27 +4,27 @@
 ; entry strings, because kore reads these and a divergence would be silent where an
 ; absence is loud (test/init.l holds the same laws against the real tree).
 ;
-; the initrd is flat -- rows for "apps/json.l" and none for "apps/kore" --
+; the initrd is flat -- rows for "src/apps/json.l" and none for "src/apps/kore" --
 ; so a directory is a prefix some path lies under, and the entries are the distinct next
-; components of those paths. That is why the root lists "apps" once and never a path.
+; components of those paths. That is why the root lists "src" once and never a path.
 ; the archive DOES carry directory members; ai_ustar_member takes typeflag 0 and 2 and
 ; not 5, so they are skipped and every directory here is synthesized.
 ;
 ; kernel only -- test/kernel/all.l's roster, never $t: on the host these paths are
 ; the real tree.
-; It runs after ramfs.l, which owns apps/json.l's bytes; the write laws here take
-; apps/dns.l instead (a file the boot never loads) and put it back.
+; It runs after ramfs.l, which owns src/apps/json.l's bytes; the write laws here take
+; src/apps/dns.l instead (a file the boot never loads) and put it back.
 ;
 ; the `:` has a body -- the test itself -- so the helpers stay local; and each
 ; law is its own assert argument, since test maps over its args and a `do` would
 ; report only the last one.
 
-(: f "apps/json.l" d "apps" g "/tmp/l-fs-dns.l"
+(: f "src/apps/json.l" d "src/apps" g "/tmp/l-fs-dns.l"
    (rd p) (: q (open p "r") s (slurp q) _ (close q) s)
    (wr p s) (: q (open p "w") (say q s, close q))
    st (stat f)
    sz #(rd f)
-   orig (rd "apps/dns.l")
+   orig (rd "src/apps/dns.l")
    _ (wr g orig)                                 ; the scratch: the tree itself refuses a write
    was (stat g)
    _ (wr g "abc")
@@ -52,15 +52,15 @@
    ; "" and "." are both the seat, the tree's top: its own top names, each deduped
    ; across every row beneath it. the root holds the home, empty, and tmp -- the scratch
    ; the rung-2 tree seeds at boot -- and no row of the tree, which lists under /proc/src
-   (elem "apps" (readdir "."))
-   (elem "apps" (readdir "/proc/src"))
+   (elem "src" (readdir "."))
+   (elem "src" (readdir "/proc/src"))
    (elem "test" (readdir "/proc/src"))
    (elem "src" (readdir "/proc"))
    (() = readdir "/home")
    (elem "home" (readdir "/"))
    (elem "tmp" (readdir "/"))
-   !(elem "apps" (readdir "/"))
-   ; the machine's own files (inle/rootfs/) stand at the root, no file of the tree
+   !(elem "src" (readdir "/"))
+   ; the machine's own files (src/inle/rootfs/) stand at the root, no file of the tree
    (elem "etc" (readdir "/"))
    !(elem "etc" (readdir "/proc/src"))
    (0 < tally (rd "/etc/profile"))
@@ -105,3 +105,8 @@
    ; milliseconds since the epoch here exactly as it does on the host -- an uptime
    ; in ticks is what it used to be, and would fail this by a factor of a thousand.
    (1600000000000 < clock 0)))
+
+; the tree's tls roots ride the initrd: where no host bundle is, src/apps/tls/verify.l reads
+; them here, under /proc/src
+(: r (: q (open "src/apps/tls/roots.pem" "r") s (slurp q) _ (close q) s)
+ (test (100 < #(filter (l \ l = "-----BEGIN CERTIFICATE-----") (split "\n" r)))))

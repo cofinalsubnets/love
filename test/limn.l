@@ -1,13 +1,13 @@
-; --- test/limn.l: the laws of apps/berth/limn.l, the cell painter ---
-; `glass` is cb's nif (love/quay/nif.c) and love0 links it too, so these
-; are corpus laws. `borrow` finds apps/berth/limn.l by the filesystem walk, which the
+; --- test/limn.l: the laws of src/apps/berth/limn.l, the cell painter ---
+; `glass` is cb's nif (src/love/quay/nif.c) and love0 links it too, so these
+; are corpus laws. `borrow` finds src/apps/berth/limn.l by the filesystem walk, which the
 ; hosted seats have; a seat without one will want a guard here.
 ;
 ;   cat test/00-init.l test/limn.l | out/love   ; exits 1 on fail
 ;
 ; the vocabulary under test: a grid of cb cells in, escapes out. origins are
 ; 0-based going in and 1-based on the wire, which is the one conversion here.
-(borrow "apps/berth/limn.l")
+(borrow "src/apps/berth/limn.l")
 
 ; `sub?` is each gate's own here (test/host/berth.l carries the same three lines) --
 ; it searches from i; `at?` is the exact-position twin, which is what counting wants
@@ -37,7 +37,7 @@
       (limn-across = utf8 9472)
       (limn-glyph 201 = limn-glyph 201))              ; cached, and equal to itself
 
-; --- the pen: a face byte and two colour words (love/quay/quay.h) as one number, and
+; --- the pen: a face byte and two colour words (src/love/quay/quay.h) as one number, and
 ;     one SGR per change, respecified from zero so it is never stale. a colour word's
 ;     top byte is its kind: 0 the outer terminal's default, 1 an index, 2 rgb ---
    _ (: (idx v) ((1 << 24) | v) (rgb v) ((2 << 24) | v)
@@ -93,7 +93,7 @@
            !(sub? f "\e[1;1H" 0)))                    ; never the home cell
 
 ; --- a blank cell is a space, so a pane always writes every cell it owns and no
-;     stale glyph can survive underneath it (apps/berth/limn.l's no-erase bargain) ---
+;     stale glyph can survive underneath it (src/apps/berth/limn.l's no-erase bargain) ---
    _ (: s (mkscr 1 4)
         _ (scribe s "z")
         f (paint s 1 4 0 0)
@@ -198,5 +198,4 @@
    _ (: j (jug 0) _ (limn-bars j ()) (test ("" = slurp j)))
    _ (: s (mkscr 1 4) (test ("" = paint s 0 4 0 0)))
 
-   _ (test_fin ())
-   _ (puts "limn: ok") _ (putc 10))
+   _ (test_fin ()))

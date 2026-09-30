@@ -1,5 +1,5 @@
 ; --- test/host/luxui.l: lux end to end under a headless X ---
-; not in the test/*.l corpus (connect/tether are love/*.c). spawns an Xvfb,
+; not in the test/*.l corpus (connect/tether are src/love/*.c). spawns an Xvfb,
 ; sails the real lux driver (the same eight modules `make install` cats into
 ; bin/lux) as one child, then a probe (test/host/luxui-probe.l) as another: the
 ; probe drives synthetic input -- xtest FakeInput for the super+drags, SendEvent
@@ -47,17 +47,17 @@
  luxhome ("out/.luxui-home-" + show (getpid 0))
  _ (mkdir luxhome 493)
  ph (tether ["env" ("DISPLAY=:" + show dn) ("HOME=" + luxhome)
-           "out/love" "-l" "apps/lux/core.l" "-l" "apps/lux/layout.l"
-           "-l" "apps/lux/wire.l" "-l" "apps/lux/ewmh.l"
-           "-l" "apps/lux/manage.l" "-l" "apps/lux/keys.l"
-           "-l" "apps/lux/config.l" "-l" "apps/lux/lux.l"])
+           "out/love" "-l" "src/apps/lux/core.l" "-l" "src/apps/lux/layout.l"
+           "-l" "src/apps/lux/wire.l" "-l" "src/apps/lux/ewmh.l"
+           "-l" "src/apps/lux/manage.l" "-l" "src/apps/lux/keys.l"
+           "-l" "src/apps/lux/config.l" "-l" "src/apps/lux/lux.l"])
  _ (must 'lux-up (two? ph))
  _ (enlist 'ph <ph)
 
  ; the probe: its own process and streams, waiting on _NET_SUPPORTED before it
  ; drives. its pty is echoed either way, so a red run tells its story here
- pr (tether ["out/love" "-l" "apps/lux/core.l" "-l" "apps/lux/layout.l"
-           "-l" "apps/lux/wire.l" "-l" "test/host/luxui-probe.l"
+ pr (tether ["out/love" "-l" "src/apps/lux/core.l" "-l" "src/apps/lux/layout.l"
+           "-l" "src/apps/lux/wire.l" "-l" "test/host/luxui-probe.l"
            "-e" ("(probe \"" + dpy + "\")")])
  _ (must 'probe-up (two? pr))
  _ (enlist 'pr <pr)

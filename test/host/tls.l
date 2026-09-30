@@ -21,7 +21,7 @@
 ;
 ; run:  cat test/00-init.l test/host/tls.l | out/love
 
-(borrow "apps/tls/tls.l")
+(borrow "src/apps/tls/tls.l")
 
 (test
  (elem 'tls (cite ()))
@@ -250,17 +250,20 @@
             0)
        _ (close c)
        got)
-   (hs-run port mode how)
-    (: l (listen ['tcp "127.0.0.1" port])
+   ; a loopback listener of this run's own, [port listener], for hs-run
+   (hs-seat u) (test-seat (\ p (listen ['tcp "127.0.0.1" p])))
+   (hs-run pl mode how)
+    (: port <pl
+       l (pl 1)
        s (twirl (_ \ hs-serve l mode) ())
        t (tls-open "127.0.0.1" port how)
        body (? (tablet? t) (: b (tls-slurp t) _ (close (t 's)) b) ())
        got (catch s)
        _ (close l)
        [body got (? (tablet? t) (t 'spki) t)])
-   ok (hs-run 7481 'honest 'none)
+   ok (hs-run (hs-seat 0) 'honest 'none)
    _ (test (<ok = "the stub says hi") (<(ok 1) = 22) ((ok 2) = (ked 2)))
-   _ (map (m \ (: r (hs-run (7482 + m 1) <m 'none)
+   _ (map (m \ (: r (hs-run (hs-seat 0) <m 'none)
                   (test !(<r) ((r 1) = [21 (u8 2 + u8 (m 2))]) (string? (r 2)))))
           [['badsig 0 51] ['otherkey 1 51] ['nocv 2 51] ['badfin 3 51] ['nocert 4 51]])
    ; the trust, with HOME and SSL_CERT_FILE the test's own
@@ -270,16 +273,19 @@
    _ (setenv "HOME" hdir)
    _ (setenv "SSL_CERT_FILE" ((cwd 0) + "/test/host/tlschain/roote.pem"))
    (pinfile l) (: q (open (hdir + "/.love/tls_pins") "w") _ (say q l) (close q))
-   un (hs-run 7487 'honest 'verify)
-   _ (pinfile ("# a comment\n127.0.0.1:7491 " + spki-pin (ked 2) + "\n"))
-   pn (hs-run 7491 'honest 'verify)
-   _ (pinfile ("127.0.0.1:7492 spki:" + sha256 "another key" + "\n"))
-   wp (hs-run 7492 'honest 'verify)
+   pu (hs-seat 0)
+   un (hs-run pu 'honest 'verify)
+   pp (hs-seat 0)
+   _ (pinfile ("# a comment\n127.0.0.1:" + show <pp + " " + spki-pin (ked 2) + "\n"))
+   pn (hs-run pp 'honest 'verify)
+   pw (hs-seat 0)
+   _ (pinfile ("127.0.0.1:" + show <pw + " spki:" + sha256 "another key" + "\n"))
+   wp (hs-run pw 'honest 'verify)
    _ (setenv "HOME" (? (string? home0) home0 ""))
    _ (setenv "SSL_CERT_FILE" (? (string? cf0) cf0 ""))
    _ (hark ["rm" "-rf" hdir])
    _ (test !(<un) ((un 1) = [21 (u8 2 + u8 48)])
-           (0 <= str-at (un 2) "not trusted" 0) (0 <= str-at (un 2) "127.0.0.1:7487 spki:" 0)
+           (0 <= str-at (un 2) "not trusted" 0) (0 <= str-at (un 2) ("127.0.0.1:" + show <pu + " spki:") 0)
            (<pn = "the stub says hi")
            !(<wp) ((wp 1) = [21 (u8 2 + u8 42)]) (0 <= str-at (wp 2) "not the one pinned" 0))
    0)
@@ -299,8 +305,10 @@
    (orun nm port)
     (: p (tether ["openssl" "s_server" "-quiet" "-tls1_3" "-naccept" "1" "-www" "-accept" ("127.0.0.1:" + show port)
                   "-key" (odir + "/" + nm + ".key") "-cert" (odir + "/" + nm + ".pem")])
-       _ (rest 500)
-       t (tls-open "127.0.0.1" port 'verify)
+       ; the server listens when it is ready, not after a fixed wait: under load it is slow
+       (open k) (: t (tls-open "127.0.0.1" port 'verify)
+                   (? (k < 40 && string? t && 0 <= str-at t "cannot connect" 0) (: _ (rest 250) (open (k + 1))) t))
+       t (open 0)
        b (? (tablet? t) (: _ (tls-say t "GET / HTTP/1.0\r\n\r\n") b (tls-slurp t) _ (close (t 's)) b) t)
        _ (? (tablet? t) 0 (still <p 15))
        _ (waitfor <p)
@@ -317,9 +325,9 @@
            _ (oleaf "rsa" "rsa:2048" "IP:127.0.0.1")
            _ (oleaf "other" "ec -pkeyopt ec_paramgen_curve:P-256" "DNS:other.test")
            _ (setenv "SSL_CERT_FILE" (odir + "/root.pem"))
-           e (orun "ed" 7488) p (orun "ec" 7489) q (orun "p384" 7493) r (orun "rsa" 7490) o (orun "other" 7494)
+           e (orun "ed" (test-free 0)) p (orun "ec" (test-free 0)) q (orun "p384" (test-free 0)) r (orun "rsa" (test-free 0)) o (orun "other" (test-free 0))
            _ (setenv "SSL_CERT_FILE" "/nonexistent/bundle.pem")
-           n (orun "rsa" 7495)
+           n (orun "rsa" (test-free 0))
            _ (setenv "SSL_CERT_FILE" (? (string? cf0) cf0 ""))
            _ (hark ["rm" "-rf" odir])
            (test (has e "TLSv1.3") (has p "TLSv1.3") (has q "TLSv1.3") (has r "TLSv1.3")
@@ -382,6 +390,30 @@
    _ (test (all (n \ !(tablet? (x509 (snip ir 0 n)))) ^#ir)
            (all (i \ (: x (x509 (tc-flip ir i)) (atom? x || tablet? x))) ^#ir)))
 
+;; --- name constraints: a root, or an issuer, vouches only for its own names ----------------
+(: nc-roots (map (n \ x509 (tc-ld n)) ["rootn" "rootp" "rootm" "rootd"])
+   (nc host l) (chain-ok? (map tc-ld l) nc-roots host tc-now)
+   rn (x509 (tc-ld "rootn"))
+   _ (test (#(rn 'ncp) = 2) (#(rn 'nce) = 1)                      ; sb.test and 10/8; not bad.sb.test
+           ((nc "a.sb.test" ["leafn"]) = 1) ((nc "10.1.2.3" ["leafn"]) = 1)
+           (tc-has (nc "a.sb.test" ["leafno"]) "\"rootn\": the name evil.test is outside the names it may vouch for")
+           (tc-has (nc "x.bad.sb.test" ["leafnx"]) "the name x.bad.sb.test is among the names it may not vouch for")
+           (tc-has (nc "a.sb.test" ["leafnw"]) "the name *.sb.test is among")    ; the wildcard reaches bad.sb.test
+           ((nc "a.ok.sb.test" ["leafnw2"]) = 1)
+           (tc-has (nc "a.sb.test" ["leafni"]) "the name 192.168.1.1 is outside")
+           ((nc "a.in.test" ["leafin" "intern"]) = 1)                        ; an issuer's own constraint
+           (tc-has (nc "in.test" ["leafia" "intern"]) "\"intern\": the name in.test is outside")
+           ((nc "good.test" ["leafm"]) = 1)                                  ; email bears on no server name
+           (tc-has (nc "good.test" ["leafd"]) "a kind of name not checked here")))
+
+;; --- the tree's roots: mozilla's, the last home, and carried in the binary for a host with none --
+(: t (carried-roots 0) f (uread tree-roots)
+   ds (? (string? t) (pem-ders t) ()) xs (filter tablet? (map x509 ds))
+   _ (test (string? t) (two? f) (<>f = t)                          ; the carried copy is the tree's
+           (100 < #xs) (#xs = #ds)                                 ; every root reads
+           (all (x \ (x 'ca) = 1) xs)
+           (elem ("/proc/src/" + tree-roots) root-homes)))
+
 ;; --- the roots: SSL_CERT_FILE names the bundle, read once; the host's own reads whole ----
 (: e0 (getenv "SSL_CERT_FILE")
    _ (setenv "SSL_CERT_FILE" "test/host/tlschain/roote.pem")
@@ -396,9 +428,191 @@
            ((r3 1) = ())
            (0 < <hn) (<hn = hn 1)))
 
+;; --- der written (cert.l): the reader's inverse, both ways round ----------------------------
+(borrow 'bytes)
+; a tree encodes and reads back to itself, lengths short and long; every fixture reads to a tree
+; that encodes to its own bytes
+(: mk-trees [[48 [[2 (string 1)] [4 "abc"] [48 ()] [160 [[6 "x"]]] [3 ""]]]
+             [4 (bytes 300 (i \ i & 255))] [48 [[4 (bytes 70000 (i \ 7))]]]
+             [49 [[48 [[6 (unhex "550403")] [12 "a name"]]]]] [5 ""]]
+   mk-fix (map tc-ld ["rootr" "interr" "leafr" "roote" "leafe" "rootw" "leafw" "rootn" "leafn" "intern" "rootd" "crit"])
+   _ (test (all (t \ der-tree (der-enc t) = t) mk-trees)
+           (all (d \ der-enc (der-tree d) = d) mk-fix)
+           ((map (n \ b2hex (der-enc (der-int n))) [0 127 128 255 256 65535])
+            = ["020100" "02017f" "02020080" "020200ff" "02020100" "020300ffff"])
+           !(der-tree "") !(der-tree (unhex "3003020100ff")) !(der-tree (unhex "3080"))
+           ; a time before 2050 is a UTCTime, from 2050 a GeneralizedTime, and x509-time reads both back
+           (<(der-time tc-now) = 23) (<(der-time (epoch-days 2050 1 1 * 86400)) = 24)
+           (all (s \ x509-time (der-enc (der-time s)) (der (der-enc (der-time s)) 0 20) = [s])
+                [0 tc-now (epoch-days 2049 12 31 * 86400 + 86399) (epoch-days 2050 1 1 * 86400) (epoch-days 2100 2 28 * 86400)])))
+
+;; --- p-256 signing (p256.l): rfc 6979 a.2.5, edge scalars, and verify.l's own verifier ----------
+; the key, nonces and signatures are the rfc's; every point is held to verify.l's bignum
+; arithmetic, a separate implementation; the complete addition to its exceptional cases
+(: mk-d (unhex "c9afa9d845ba75166b5c215767b1d6934e50c3db36e89b127b8a622b120f6721")
+   (mk-hx n) (b2hex (wrbe n 32))
+   (mk-sig m) (: rs (p256-sign mk-d m) [(mk-hx <rs) (mk-hx (rs 1))])
+   mk-n (curve-p256 1) mk-p (curve-p256 0)
+   ; d G by verify.l's jacobian ladder, affine
+   (mk-ref d) (: q (ec-twin curve-p256 d 0 [1 1 0]) zi (modpow (q 2) (mk-p - 2) mk-p)
+                 [(<q * zi * zi % mk-p) ((q 1) * zi * zi * zi % mk-p)])
+   (mk-b n) (wrbe n 32)
+   q (p256-pub mk-d)
+   _ (test ((mk-hx <q) = "60fed4ba255a9d31c961eb74c6356d68c049b8923b61fa6ce669622e60f29fb6")
+           ((mk-hx (q 1)) = "7903fe1008b8bc99a41ae9e95628bc64f2f1b20c2d7e9f5177a3c294d4462299")
+           ((b2hex (p256-nonce mk-d (p2-sha "sample"))) = "a6e3c57dd01abe90086538398355dd4c3b17aa873382b0f24d6129493d8aad60")
+           ((mk-sig "sample") = ["efd48b2aacb6a8fd1140dd9cd45e81d69d2c877b56aaf991c34d0ea84eaf3716"
+                                 "f7cb1c942d657c41d436c7a1b6e29f65f3e900dbb9aff4064dc4ab2f843acda8"])
+           ((b2hex (p256-nonce mk-d (p2-sha "test"))) = "d16b6ae827f17175e040871a1c7ec3500192c4c92677336ec2537acaee0008e0")
+           ((mk-sig "test") = ["f1abb023518351cd71d881567b1ea663ed3efcf6c5132b354f28d3b0b7d38367"
+                               "019f4113742a2b14bd25926b49c649155f267e60d3814b4c0cc84250e46f0083"]))
+   ; the scalars at the edges of [1, n-1], and a few more, against the reference
+   ds [1 2 3 15 16 17 255 256 (1 << 128) (1 << 255) (mk-n - 1) (mk-n - 2) (mk-n // 2) (be-num mk-d)]
+   _ (test (all (d \ p256-pub (mk-b d) = mk-ref d) ds)
+           ((p256-pub (mk-b 1)) = [(curve-p256 3) (curve-p256 4)])
+           ((p256-pub (mk-b (mk-n - 1))) = [(curve-p256 3) (mk-p - curve-p256 4)])
+           ; 0 < k < n, by masks
+           ((map (d \ p2-ok? (mk-b d)) [0 1 (mk-n - 1) mk-n (mk-n + 1) ((1 << 256) - 1)]) = [0 1 1 0 0 0]))
+   ; the complete addition: the identity either side, a point and its negation, a doubling
+   g p2-g o p2-o gn [<g (p2-fs p2-zero (g 1)) (g 2)]
+   (mk-aff pt) (? (pt 2 = p2-zero) 'o (p2-affine pt))
+   _ (test ((mk-aff (p2-add o o)) = 'o) ((mk-aff (p2-add g o)) = p2-affine g) ((mk-aff (p2-add o g)) = p2-affine g)
+           ((mk-aff (p2-add g gn)) = 'o) ((mk-aff (p2-add g g)) = mk-ref 2))
+   ; signatures of fresh keys over several messages verify under verify.l's ec-ok?; a changed
+   ; message or signature does not
+   (mk-der rs) (der-enc [48 [(der-int <rs) (der-int (rs 1))]])
+   ks (map (_ \ key-new 'p256) ^3)
+   _ (test (all (k \ (: d (k 1) pt (k 2) m ("m " + show pt)
+                        s (mk-der (p256-sign d m))
+                        (ec-ok? curve-p256 pt (p2-sha m) s = 1 && ec-ok? curve-p256 pt (p2-sha (m + "!")) s = 0
+                         && ec-ok? curve-p256 pt (p2-sha m) (tc-flip s 10) = 0 && p256-pub d = pt)))
+                ks)
+           (all (k \ p2-ok? (k 1) = 1 && #(k 1) = 32) ks)))
+
+;; --- certificates made (cert.l): an ed25519 root with name constraints over a p-256 issuer ------
+; the root may vouch for sb.test and 10/8 but not bad.sb.test; the intermediate has pathLen 0.
+; verify.l takes the good chain and refuses each broken rule by the check it breaks
+(: mk-now tc-now mk-nb (epoch-days 2025 1 1 * 86400) mk-na (epoch-days 2035 1 1 * 86400)   ; the fixtures' window
+   (mk-cert sub key iss ikey ca exts)
+    (cert-make {'subject (name-der sub) 'issuer (name-der (? (string? iss) iss sub)) 'spki (key-spki key)
+                'key (? (two? ikey) ikey key) 'nb mk-nb 'na mk-na
+                'akid (? (string? ca) (cert-kid ca) ()) 'exts (["subjectKeyIdentifier=hash" "authorityKeyIdentifier=keyid"] + exts)})
+   mk-rk (key-new 'ed25519) mk-ik (key-new 'p256) mk-lk (key-new 'p256) mk-ek (key-new 'ed25519)
+   mk-root (mk-cert "/CN=sb root/O=svalbard" mk-rk () () ()
+                    ["basicConstraints=critical,CA:TRUE" "keyUsage=critical,keyCertSign,cRLSign"
+                     "nameConstraints=critical,permitted;DNS:sb.test,permitted;IP:10.0.0.0/8,excluded;DNS:bad.sb.test"])
+   mk-inter (mk-cert "/CN=sb issuer" mk-ik "/CN=sb root/O=svalbard" mk-rk mk-root
+                     ["basicConstraints=critical,CA:TRUE,pathlen:0" "keyUsage=critical,keyCertSign"])
+   (mk-leaf san key) (mk-cert "/CN=a leaf" key "/CN=sb issuer" mk-ik mk-inter
+                              ["basicConstraints=critical,CA:FALSE" "keyUsage=critical,digitalSignature"
+                               "extendedKeyUsage=serverAuth" ("subjectAltName=" + san)])
+   mk-good (mk-leaf "DNS:a.sb.test,DNS:sb.test,IP:10.1.2.3" mk-lk)
+   mk-edleaf (mk-leaf "DNS:ed.sb.test" mk-ek)
+   mk-bad (mk-leaf "DNS:x.bad.sb.test" mk-lk)
+   mk-out (mk-leaf "DNS:a.sb.test,DNS:evil.test" mk-lk)
+   mk-ip (mk-leaf "DNS:a.sb.test,IP:192.168.1.1" mk-lk)
+   mk-sub (mk-cert "/CN=under" mk-lk "/CN=sb issuer" mk-ik mk-inter ["basicConstraints=critical,CA:TRUE" "keyUsage=keyCertSign"])
+   mk-deep (mk-cert "/CN=deep" mk-ek "/CN=under" mk-lk mk-sub ["subjectAltName=DNS:d.sb.test"])
+   mk-roots [(x509 mk-root)]
+   (mk-ok host l) (chain-ok? l mk-roots host mk-now)
+   rx (x509 mk-root) ix (x509 mk-inter) gx (x509 mk-good)
+   _ (test (all string? [mk-root mk-inter mk-good mk-edleaf mk-bad mk-out mk-ip mk-sub mk-deep])
+           (rx 'ca = 1) (rx 'plen = ()) (rx 'ku = (6 << 24)) (#(rx 'ncp) = 2) (#(rx 'nce) = 1) (rx 'bad = ())
+           (<(rx 'key) = 'ed25519) (<(ix 'key) = 'p256) (ix 'plen = 0) (rx 'subject = ix 'issuer)
+           (gx 'dns = ["a.sb.test" "sb.test"]) (gx 'ips = [(unhex "0a010203")]) (gx 'eku = [oid-server-auth])
+           (cert-kid mk-root = key-id (key-spki mk-rk))
+           ((mk-ok "a.sb.test" [mk-good mk-inter]) = 1)
+           ((mk-ok "10.1.2.3" [mk-good mk-inter]) = 1)
+           ((mk-ok "ed.sb.test" [mk-edleaf mk-inter]) = 1)
+           (tc-has (mk-ok "x.bad.sb.test" [mk-bad mk-inter]) "the name x.bad.sb.test is among the names it may not vouch for")
+           (tc-has (mk-ok "a.sb.test" [mk-out mk-inter]) "the name evil.test is outside the names it may vouch for")
+           (tc-has (mk-ok "a.sb.test" [mk-ip mk-inter]) "the name 192.168.1.1 is outside")
+           (tc-has (mk-ok "d.sb.test" [mk-deep mk-sub mk-inter]) "\"sb issuer\": its pathLen is exceeded")
+           (tc-has (mk-ok "a.sb.test" [(tc-flip mk-good (#mk-good - 3)) mk-inter]) "its signature does not verify")
+           (tc-has (mk-ok "a.sb.test" [mk-good]) "no issuer"))
+   ; what the extension parser refuses, and says why
+   ctx {'kid "k" 'akid "a"}
+   _ (test (all (l \ string? (ext-der l ctx))
+                ["keyUsage=keyCertSign,bogus" "basicConstraints=CA:TRUE,pathlen:x" "subjectAltName=DNS:"
+                 "subjectAltName=IP:1.2.3" "nameConstraints=permitted;IP:10.0.0.0" "nameConstraints=allowed;DNS:x"
+                 "noSuchExtension=1" "subjectKeyIdentifier=abc" "extendedKeyUsage=serverAuth,nope"])
+           ((ext-der "subjectAltName=IP:::1,IP:fe80::1:2" ctx 1) = der-enc [48 [[6 oid-san] [4 (der-enc [48 [[135 (unhex "00000000000000000000000000000001")] [135 (unhex "fe800000000000000000000000010002")]]])]]])
+           ((ip-net "10.0.0.0/8") = unhex "0a000000ff000000") ((ip-net "10.0.0.0/255.255.0.0") = unhex "0a000000ffff0000")
+           ((ip-net "192.168.1.0/23") = unhex "c0a80100fffffe00") !(ip-net "10.0.0.0/33") !(name-der "/XX=1"))
+   ; a request: made, read back with its signature checked, refused with one byte changed
+   csr (csr-make mk-lk (name-der "/CN=req") ["subjectAltName=DNS:r.sb.test"])
+   cr (csr-read csr)
+   _ (test (tablet? cr) (cr 'spki = key-spki mk-lk) (cr 'subject = name-der "/CN=req") (#(cr 'exts) = 1)
+           ((csr-read (tc-flip csr (#csr - 2))) = "the request's signature does not verify")
+           (string? (csr-read "junk")))
+   ; the keys, out and back
+   _ (test (all (k \ key-read (key-pem k) = k) [mk-rk mk-ik mk-lk]) !(key-read "junk")
+           ((key-read (key-der mk-ik)) = mk-ik))
+
+   ;; --- the host's openssl (where it is) verifies and parses what is made here, and hands keys
+   ; and a request of its own to be signed; its keys come from its genpkey, never the host's store
+   os? (two? (stat "/usr/bin/openssl"))
+   dir ((cwd 0) + "/out/.tlsca-" + show (getpid 0))
+   (put nm s) (: q (open (dir + "/" + nm) "w") _ (say q s) (close q))
+   (osh c) (hark ["sh" "-c" ("cd " + dir + " && " + c + " 2>&1")])
+   (sees r s) (two? r && tc-has >r s)
+   _ (? os?
+        (: _ (hark ["mkdir" "-p" dir])
+           _ (each [["root.pem" mk-root] ["inter.pem" mk-inter] ["good.pem" mk-good] ["ed.pem" mk-edleaf]
+                    ["bad.pem" mk-bad] ["out.pem" mk-out] ["deep.pem" mk-deep] ["sub.pem" mk-sub]]
+                   (e \ put <e (pem-out "CERTIFICATE" (e 1))))
+           _ (put "chain.pem" (pem-out "CERTIFICATE" mk-inter + pem-out "CERTIFICATE" mk-sub))
+           _ (put "p256.key" (key-pem mk-ik))
+           _ (put "ed.key" (key-pem mk-rk))
+           v (osh "openssl verify -CAfile root.pem -untrusted inter.pem good.pem ed.pem")
+           vb (osh "openssl verify -CAfile root.pem -untrusted inter.pem bad.pem")
+           vo (osh "openssl verify -CAfile root.pem -untrusted inter.pem out.pem")
+           vd (osh "openssl verify -CAfile root.pem -untrusted chain.pem deep.pem")
+           t (osh "openssl x509 -in root.pem -noout -text")
+           tl (osh "openssl x509 -in good.pem -noout -text")
+           pk (osh "openssl pkey -in p256.key -pubout -outform DER | od -An -tx1 | tr -d ' \\n'")
+           pe (osh "openssl pkey -in ed.key -pubout -outform DER | od -An -tx1 | tr -d ' \\n'")
+           ; a raw p-256 signature over a message, openssl's dgst the verifier
+           _ (put "msg" "a message for openssl")
+           _ (put "sig.der" (mk-der (p256-sign (mk-ik 1) "a message for openssl")))
+           _ (put "pub.pem" (pem-out "PUBLIC KEY" (key-spki mk-ik)))
+           dv (osh "openssl dgst -sha256 -verify pub.pem -signature sig.der msg")
+           ; openssl's own keys and request, signed here
+           _ (osh "openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 -out h.key && openssl genpkey -algorithm ed25519 -out he.key && openssl req -new -key h.key -subj /CN=host -addext subjectAltName=DNS:h.sb.test -out h.csr")
+           hk (key-read (: r (uread (dir + "/h.key")) (? (two? r) <>r "")))
+           hek (key-read (: r (uread (dir + "/he.key")) (? (two? r) <>r "")))
+           hr (csr-read <(pem-in (: r (uread (dir + "/h.csr")) (? (two? r) <>r "")) "CERTIFICATE REQUEST"))
+           hc (? (tablet? hr) (cert-make {'subject (hr 'subject) 'issuer (name-der "/CN=sb issuer") 'spki (hr 'spki) 'key mk-ik
+                                         'nb mk-nb 'na mk-na 'akid (cert-kid mk-inter)
+                                         'exts (["basicConstraints=critical,CA:FALSE"] + map ext-pair (hr 'exts))}) ())
+           hx (? (two? hk) (cert-make {'subject (name-der "/CN=host key") 'issuer (name-der "/CN=host key") 'spki (key-spki hk)
+                                       'key hk 'nb mk-nb 'na mk-na 'exts ["basicConstraints=critical,CA:TRUE"]}) ())
+           hy (? (two? hek) (cert-make {'subject (name-der "/CN=host ed") 'issuer (name-der "/CN=host ed") 'spki (key-spki hek)
+                                        'key hek 'nb mk-nb 'na mk-na 'exts ["basicConstraints=critical,CA:TRUE"]}) ())
+           _ (put "h.pem" (? (string? hc) (pem-out "CERTIFICATE" hc) ""))
+           _ (put "hx.pem" (? (string? hx) (pem-out "CERTIFICATE" hx) ""))
+           _ (put "hy.pem" (? (string? hy) (pem-out "CERTIFICATE" hy) ""))
+           vh (osh "openssl verify -CAfile root.pem -untrusted inter.pem h.pem")
+           vx (osh "openssl verify -CAfile hx.pem hx.pem && openssl verify -CAfile hy.pem hy.pem")
+           _ (hark ["rm" "-rf" dir])
+           (test (sees v "good.pem: OK") (sees v "ed.pem: OK")
+                 (sees vb "excluded subtree violation") (sees vo "permitted subtree violation")
+                 (sees vd "path length constraint exceeded")
+                 (sees t "X509v3 Name Constraints: critical") (sees t "Permitted:") (sees t "DNS:sb.test")
+                 (sees t "IP:10.0.0.0/255.0.0.0") (sees t "Excluded:") (sees t "DNS:bad.sb.test")
+                 (sees t "CA:TRUE") (sees t "Certificate Sign, CRL Sign") (sees t "Signature Algorithm: ED25519")
+                 (sees tl "ecdsa-with-SHA256") (sees tl "DNS:a.sb.test, DNS:sb.test, IP Address:10.1.2.3")
+                 (sees tl "TLS Web Server Authentication")
+                 (two? pk && >pk = b2hex (key-spki mk-ik)) (two? pe && >pe = b2hex (key-spki mk-rk))
+                 (sees dv "Verified OK")
+                 (two? hk && hk 0 = 'p256) (two? hek && hek 0 = 'ed25519) (tablet? hr) (string? hc)
+                 (sees vh "h.pem: OK") (sees vx "hx.pem: OK") (sees vx "hy.pem: OK")))
+        0)
+   0)
+
 ; the harness greps for this line, and that is the point: a reader stop exits 0
 ; with the asserts above never read, so only reaching here proves the file ran.
 (test_fin (),
- puts "apps/tls: ok -- chacha20 + poly1305 (rfc 8439 block, stream, counter, cipher, mac); the handshake's verify
+ puts "src/apps/tls: ok -- chacha20 + poly1305 (rfc 8439 block, stream, counter, cipher, mac); the handshake's verify; certificates made (der, ed25519, p-256 by rfc 6979)
 ",
  0)

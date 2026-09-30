@@ -48,7 +48,7 @@
   (#(show ev) < 200000)
   !(has? (show ev) "((mint ")                        ; every name it calls is bound
   ; ..and ev read back off its own show is an ev -- where its doors are nameable: an ev
-  ; closing over a door the mop dropped (love/boot/egg.l) reads back as a miss of that name
+  ; closing over a door the mop dropped (src/love/boot/egg.l) reads back as a miss of that name
   (trap (\ _ (3 = (ev <(sound (show ev))) '(+ 1 2))) ()
         (\ a b (a = 'missing && !(cite 'guts 'place) && !(elem b (names ())))))
   ; --- functions compare by their threads ---

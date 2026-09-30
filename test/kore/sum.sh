@@ -3,7 +3,7 @@
 . "$(dirname "$0")/common.sh"
 
 # cksum, sum and the digest tools against GNU. these are the tools whose entire
-# output is one number, so a single wrong byte in love/lib/hash.c is a wrong line here and
+# output is one number, so a single wrong byte in src/love/lib/hash.c is a wrong line here and
 # nowhere else. THE LENGTHS ARE THE POINT of the battery: a digest pads its last block
 # with the message length in the final 8 bytes, so 55/56 and 119/120 are where a pad
 # off by one shows (111/112 and 239/240 for sha-384/512's 128-byte block, 128 and 256
@@ -118,4 +118,14 @@ fi
 [ "$(printf abc | korerun sha3sum -a 256 -b)" = 3a985da74fe225b2045c172d6bd390bd855f086e3e9d525b46bfe24511431532 ] \
   || fail "kore sha3sum -a 256 of abc (fips 202)"
 korerun sha3sum -a 100 "$ck/a" 2>/dev/null; r=$?; [ $r -eq 1 ] || fail "kore sha3sum -a 100 is 1 (got $r)"
+# -c's companions: --quiet --status --ignore-missing --strict -w, the two warnings'
+# counts, a list with no good line; -b's star; b2sum the same; output and status
+D2=$PWD/$ho/.sumf; rm -rf "$D2"; mkdir "$D2"; echo a > "$D2/fa"; echo b > "$D2/fb"
+(cd "$D2" && md5sum fa fb > good && echo "d41d8cd98f00b204e9800998ecf8427e  nope" > good2 && cat good >> good2 && echo b2 > fb && printf 'junk line\n' >> good && b2sum fa > b2l)
+for c in "md5sum -c good" "md5sum -c --quiet good" "md5sum -c --status good" "md5sum -c --ignore-missing good2" "md5sum -c good2" \
+         "md5sum -c --strict good" "md5sum -c -w good" "md5sum -b fa" "sha256sum --check --quiet good" "b2sum -c --quiet b2l" "b2sum -b fa"; do
+  # shellcheck disable=SC2086
+  (cd "$D2" && { $c; echo "rc=$?"; }) > "$g" 2>&1; (cd "$D2" && { LOVE_NO_IMAGE= "$PWD/../../$m" kore $c; echo "rc=$?"; }) > "$o" 2>&1; same "$c"
+done
+rm -rf "$D2"
 echo "kore: checksums (cksum/sum/crc32/md5sum/sha*sum/b2sum/sha3sum over the block boundaries, -c both ways round) ok"

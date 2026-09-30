@@ -23,7 +23,7 @@
 # fail loudly, and the build has to come out the far side anyway.
 #
 # THE SEED CARRIES ITS OWN SOURCE. It holds the source tarball in .rodata
-# (tools/mksrc.l, love/src.c) and lays it out itself, so one downloaded file needs no tar
+# (src/tools/mksrc.l, src/love/src.c) and lays it out itself, so one downloaded file needs no tar
 # and no second fetch. "It unpacked something" is not the claim -- the tree it lays has to
 # BUILD, compilers poisoned. and `love seed` is what drives that build, not a bare make:
 # the tree carries no love of its own now, so make alone can only mean the ambient cc (and
@@ -71,7 +71,7 @@ echo "distboot: two bootstraps and a self-rebuild, this takes a few minutes"
 
 # ---- 1. SOURCE, through the machine's own compiler ---------------------------
 mkdir -p "$w/lean"
-"$love" "$R/tools/tgz.l" x "$src" "$w/lean" > /dev/null || fail "cannot unpack $src"
+"$love" "$R/src/tools/tgz.l" x "$src" "$w/lean" > /dev/null || fail "cannot unpack $src"
 lean=$(echo "$w"/lean/love-*/)
 [ -d "$lean" ] || fail "the source tarball unpacked no love-<ver>/ directory"
 [ -f "$lean/VERSION" ] || fail "the source tarball carries no VERSION (the binary would stamp 'unknown')"
@@ -105,7 +105,7 @@ selfd=$(echo "$w"/self/love-*/)
 [ ! -e "$selfd/bin" ] || fail "'love source' laid a bin/ -- the tree is source, nothing else"
 # THE BARE LINK, not `love seed`: the verb runs `make dist`, which BAKES, and leg 3
 # compares this against leg 1's unbaked out/love. So the target is named here and CC
-# with it -- which is the seed verb's own fallback spelled by hand (apps/source.l names
+# with it -- which is the seed verb's own fallback spelled by hand (src/apps/source.l names
 # `<selfpath> mooncc` where its probe finds no cc that works), and the same claim: this
 # tree builds with no ambient compiler anywhere.
 ( cd "$selfd" && PATH="$w/nocc:$PATH" LOVE_NO_IMAGE= \
@@ -139,7 +139,7 @@ fi
 # PATH IS THE POISON DIR ALONE, not $w/nocc:$PATH. src-cc walks every PATH entry for
 # each of cc/gcc/clang, so a prepended poison leaves the machine's real /usr/bin/cc
 # reachable and the probe rightly takes it -- the fallback would never fire. The farm
-# (apps/source.l) supplies make/sh/sed and the rest out of the binary itself.
+# (src/apps/source.l) supplies make/sh/sed and the rest out of the binary itself.
 # it seeds a FRESH tree rather than rebuilding $selfd, which leg 3 compared: nothing
 # here disturbs that artifact, and this leg no longer has to run after it.
 #

@@ -12,7 +12,7 @@
 # until a release.
 #
 # the path is NOT in the image -- `love-image` is the literal "<baked>" wherever the binary
-# carries its own .image section (love/main.c), and a bake unpins it besides. the two below run
+# carries its own .image section (src/love/main.c), and a bake unpins it besides. the two below run
 # at one path because that is the question's shape, bake THIS binary twice.
 #
 # usage: bakerep.sh OUTDIR
@@ -53,14 +53,21 @@ done
 cmp -s "$w/b3" "$w/b4" \
   || fail "the GC budget is in the image -- a bake must not care when collections fire"
 
-# ..and the hot-first bake the build runs (tools/hotbake.sh): its layout comes of a profile,
-# the chunks a few short runs of the tree woke, so the profile must be the tree's too
-for i in 5 6; do
-  sh tools/hotbake.sh "$w/seed" "$w/b$i" "$ho/.dist-cat.l" > "$w/hot.log" 2>&1 \
-    || { cat "$w/hot.log"; fail "hot bake $i failed"; }
-done
-cmp -s "$w/b5" "$w/b6" \
-  || fail "the hot-first bake is not reproducible -- its profile carries something of the machine"
+# ..and the hot-first bake the build runs (src/tools/hotbake.sh): its layout comes of the tree's
+# profile, so a profile taken now must be the one the tree holds. an eager build (HCC) and a
+# page other than 4 KiB profile differently, and are not asked
+ps=$(getconf PAGESIZE 2>/dev/null || echo 4096)
+prof() { sh src/tools/hotbake.sh -p "$ho/love.raw" "$w/$1" "$ho/.dist-cat.l" > "$w/hot.log" 2>&1; }
+if [ "$ps" != 4096 ]; then
+  echo "  (hot profile not compared: the page is $ps bytes)"
+elif ! prof p1; then
+  grep -q "woke eagerly" "$w/hot.log" || { cat "$w/hot.log"; fail "the profile failed"; }
+  echo "  (hot profile not compared: this build wakes eagerly)"
+else
+  prof p2 || { cat "$w/hot.log"; fail "the second profile failed"; }
+  cmp -s "$w/p1" "$w/p2" || fail "the hot profile is not reproducible -- it carries something of the machine"
+  cmp -s "$w/p1" src/tools/hot.prof || fail "src/tools/hot.prof is stale for this tree: make hotprof"
+fi
 
 # ..and the thing still has to WAKE: a bake that is reproducible and dead passes everything
 # above. GREP, never a whole-output compare -- `-e` prints the form's value as well as
@@ -69,7 +76,7 @@ out=$(cd "$w" && env -u LOVE_NO_IMAGE ./b1 -e '(puts (? (3 = 1 + 2) "wake-ok" "w
   || fail "the reproducible bake does not run"
 case $out in *wake-ok*) ;; *) fail "the reproducible bake woke wrong: [$out]" ;; esac
 
-# THE TWO STATES (love/image.c): a binary is baked or raw, and each state emits the other --
+# THE TWO STATES (src/love/image.c): a binary is baked or raw, and each state emits the other --
 # a bake takes the crew off the carried source where no -l names one, and -n lays the
 # section's stub back. the round trip has to land on the bytes it started from, both ways.
 # it runs in $w, with no tree in reach, because that is the claim: the source is aboard.

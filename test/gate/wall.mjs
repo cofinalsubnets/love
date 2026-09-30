@@ -3,14 +3,14 @@
 // its neturl is the guest's fetch door: any http(s) url, as the page's own script could
 // ask -- `love doom` in a page lays its tree off github, so that door stays open.
 // usage: node test/gate/wall.mjs
-import { pageurl, neturl } from '../../inle/wasm/cpu.mjs';
+import { pageurl, neturl } from '../../src/inle/wasm/cpu.mjs';
 
 let bad = 0;
 const law = (ok, m) => { if (ok) console.log('  ' + m); else bad++, console.log('FAIL wall: ' + m); };
-const here = 'https://love.example/inle/wasm/cpu.mjs';
+const here = 'https://love.example/src/inle/wasm/cpu.mjs';
 
 law(pageurl('/VERSION', here) === 'https://love.example/VERSION', 'a link\'s path on this origin is taken');
-law(pageurl('../../web/wasm/love.wasm', here) === 'https://love.example/web/wasm/love.wasm', 'a relative one too');
+law(pageurl('../../../web/wasm/love.wasm', here) === 'https://love.example/web/wasm/love.wasm', 'a relative one too');
 law(pageurl('https://love.example/x', here) === 'https://love.example/x', 'and this origin spelled whole');
 law(pageurl('https://evil.example/x.wasm', here) === null, 'a module off another origin is refused');
 law(pageurl('//evil.example/x', here) === null, 'a scheme-relative one too');

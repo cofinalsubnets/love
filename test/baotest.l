@@ -1,6 +1,6 @@
 ; --- test/baotest.l: the editor + repl + parseall unit battery ---
 ; the line editor (ed*), the history zipper (uphist/downhist/eddetach), joinln/splitat,
-; and parseall are cli's exports (love/boot/post.l), reached through the module
+; and parseall are cli's exports (src/love/boot/post.l), reached through the module
 ; tablet: (cite 'cli) hands the module back, (B 'edleft) reaches one, (keys B) lists them.
 ;
 ; cli is baked (in the host egg), so this file needs no -l:
@@ -172,4 +172,3 @@
    _ (test (50 < tally results)))
 
 (test_fin ())
-(puts "baotest: ok") (putc 10)

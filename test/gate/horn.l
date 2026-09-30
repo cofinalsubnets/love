@@ -1,7 +1,7 @@
 ; test/gate/horn.l -- what the machine played, read back on this side. test/kernel/horn.l writes
 ; a ramp through the horn port; inle.mjs's --horn takes what is played off the shared ring
 ; at the rate and lays it in the file named here. these bytes are the whole seam at once:
-; the port, inle/wasm/horn.c's hypercall, the worker's ring and the wrap in it, and the
+; the port, src/inle/wasm/horn.c's hypercall, the worker's ring and the wrap in it, and the
 ; drainer that an AudioWorklet is in a page. nothing else in the tree reads that path back.
 ; usage: love test/gate/horn.l <raw>
 (borrow 'kore)

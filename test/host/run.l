@@ -1,9 +1,9 @@
-; --- test/host/run.l: smoke test for the hark / herald nifs (love/main.c) ---
+; --- test/host/run.l: smoke test for the hark / herald nifs (src/love/main.c) ---
 ; (hark argv) forks, captures the child's stdout into a string, and answers
 ; (status . output). (herald argv) is the same answer, but relays each chunk to our
 ; stdout as it is read instead of holding it to the exit -- what make does, and
 ; what lets a long cook step show progress. The tee must not disturb the capture.
-; host-only (the nifs are love/*.c), so it runs standalone against the built
+; host-only (the nifs are src/love/*.c), so it runs standalone against the built
 ; binary like test/host/bake.l:
 ;   cat test/00-init.l test/host/run.l | out/love
 ;
@@ -66,7 +66,7 @@
 ;   rather than hanging, so this reddens as a slow run, not a wedged gate.
 ; 2. an ignored disposition survives exec, so a child that inherited it is a
 ;   `yes | head` that never stops. every fork site resets it: main.c's two exec
-;   sites by hand, and love/posix.c's sig_dfl_job for spawn/spawnio/spawnmap/tether.
+;   sites by hand, and src/love/posix.c's sig_dfl_job for spawn/spawnio/spawnmap/tether.
 ;   the law below reaches `hark`'s door only -- the posix.c half is lush's, and
 ;   shares the one line.
 ; the status has to come out of the pipeline, and $? there is head's, so love's
@@ -96,7 +96,7 @@
 ; waits for a connection only the wedged vm could still make), and a wedged gate is
 ; worse than a red one. 124 is the control's answer, and each law was verified by
 ; putting its own blocking call back.
-(: rc <(hark ["sh" "-c" "timeout 20 out/love test/host/nifpark.l"])
+(: rc <(hark ["sh" "-c" "cat test/00-init.l test/host/nifpark.l | timeout 20 out/love"])
    _ (test (rc = 0)))
 
 (puts "run nifpark: ok\n")
@@ -106,7 +106,7 @@
 ; the loopback. driven from here for the usual reason: a resolver whose deadline
 ; stops working does not redden, it hangs -- there is no answer coming and nothing
 ; to wake the caller.
-(: rc <(hark ["sh" "-c" "timeout 20 out/love test/host/dns.l"])
+(: rc <(hark ["sh" "-c" "cat test/00-init.l test/host/dns.l | timeout 20 out/love"])
    _ (test (rc = 0)))
 
 (test_fin ())

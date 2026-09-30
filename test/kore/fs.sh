@@ -236,4 +236,58 @@ korerun touch -c "$F/nothere"; [ ! -e "$F/nothere" ] || fail "kore touch -c"
 korerun touch -r "$F/s/f" "$F/tr" && [ "$(stat -c %Y "$F/tr")" = 1000000000 ] || fail "kore touch -r"
 korerun touch -d @1234567890 "$F/tr" && [ "$(stat -c %Y "$F/tr")" = 1234567890 ] || fail "kore touch -d @"
 rm -rf "$F"
+# pwd -L is $PWD, the way the shell came, when it names this directory; -P and a stale
+# $PWD are the path with no link in it
+P2=$PWD/$ho/.pwdl; rm -rf "$P2"; mkdir -p "$P2/real"; ln -s real "$P2/lnk"
+M=$PWD/$m
+(cd "$P2/lnk" && [ "$(PWD="$P2/lnk" LOVE_NO_IMAGE= "$M" kore pwd -L)" = "$P2/lnk" ] \
+  && [ "$(PWD="$P2/lnk" LOVE_NO_IMAGE= "$M" kore pwd -P)" = "$(PWD="$P2/lnk" /bin/pwd -P)" ] \
+  && [ "$(PWD=/ LOVE_NO_IMAGE= "$M" kore pwd -L)" = "$(PWD="$P2/lnk" /bin/pwd -P)" ]) || fail "kore pwd -L/-P"
+rm -rf "$P2"
+# cmp says where: the char and line (POSIX's words), -b the bytes, -l every one in
+# octal, an EOF on the shorter, -n -i and the SKIP operands; under LC_ALL=C, GNU's
+# single-byte face
+Q=$ho/.cmpq; printf 'abc\ndef\nghi\n' > "$Q.a"; printf 'abc\ndXf\nghZ\n' > "$Q.b"; printf 'abc\nd' > "$Q.c"; : > "$Q.e"; cp "$Q.a" "$Q.d"
+for c in "$Q.a $Q.b" "$Q.a $Q.d" "-s $Q.a $Q.b" "-l $Q.a $Q.b" "-b $Q.a $Q.b" "$Q.a $Q.c" "$Q.c $Q.a" "$Q.a $Q.e" "-l $Q.a $Q.c" \
+         "-n 4 $Q.a $Q.b" "-n 6 $Q.a $Q.b" "-i 5 $Q.a $Q.b" "-i 2:2 $Q.a $Q.b" "$Q.a $Q.b 5 5" "-bl $Q.a $Q.b"; do
+  # shellcheck disable=SC2086
+  (LC_ALL=C cmp $c > "$g" 2>&1; echo "rc=$?" >> "$g"); (korerun cmp $c > "$o" 2>&1; echo "rc=$?" >> "$o"); same "cmp $c"
+done
+rm -f "$Q".?
+# readlink's -f -e -m (all but the last there, all, none), a link to a link, a dangling
+# one, a loop, -n and -z, many operands; every row against GNU with its status
+R2=$PWD/$ho/.rlk; rm -rf "$R2"; mkdir -p "$R2/d/e"; : > "$R2/d/f"
+(cd "$R2" && ln -s d/f l1 && ln -s l1 l2 && ln -s nowhere dang && ln -s ../d d/up && ln -s cyc2 cyc1 && ln -s cyc1 cyc2)
+for c in "l2" "l1 l2" "d/f" "-f l2" "-f dang" "-e dang" "-m dang" "-f d/nope" "-e d/nope" "-m d/nope/x" "-f d/up/e" "-n l1" "-z l1 l2" "-f cyc1" "-m cyc1" "-e l2 dang"; do
+  # shellcheck disable=SC2086
+  (cd "$R2" && { readlink $c; echo "rc=$?"; }) > "$g" 2>&1
+  (cd "$R2" && { LOVE_NO_IMAGE= "$PWD/../../$m" kore readlink $c; echo "rc=$?"; }) > "$o" 2>&1
+  same "readlink $c"
+done
+rm -rf "$R2"
+# install's -m (octal and symbolic) -v -p -d -D (-v saying each parent) -t -T and SRC..
+# DIR: what it says, its status, and the tree it leaves (modes and sizes; times under -p)
+I2=$PWD/$ho/.inst; rm -rf "$I2"; mkdir -p "$I2"; echo a > "$I2/s1"; echo b > "$I2/s2"; touch -d @1000000000 "$I2/s1"
+ilay() { (cd "$I2/G" && find . -printf '%p %m %s\n' | sort); }
+for c in "../s1 x" "-m 640 ../s1 x" "-m u=rw,go=r ../s1 x" "-v ../s1 x" "-d a/b c" "-dv a/b" "-D ../s1 p/q/x" "-Dv ../s1 p/q/x" \
+         "-t . ../s1 ../s2" "../s1 ../s2 ." "-T ../s1 y"; do
+  rm -rf "$I2/G"; mkdir "$I2/G"
+  # shellcheck disable=SC2086
+  { (cd "$I2/G" && install $c; echo "rc=$?"); ilay; } > "$g" 2>&1
+  rm -rf "$I2/G"; mkdir "$I2/G"
+  # shellcheck disable=SC2086
+  { (cd "$I2/G" && LOVE_NO_IMAGE= "$PWD/../../../$m" kore install $c; echo "rc=$?"); ilay; } > "$o" 2>&1
+  same "install $c"
+done
+rm -rf "$I2/G"; mkdir "$I2/G"; (cd "$I2/G" && LOVE_NO_IMAGE= "$PWD/../../../$m" kore install -p ../s1 x) && [ "$(stat -c %Y "$I2/G/x")" = 1000000000 ] || fail "kore install -p"
+rm -rf "$I2"
+# realpath's --relative-to and --relative-base (together too), -L and -P through a link's
+# .., -q over misses, -z, -s; each against GNU with its status
+R3=$PWD/$ho/.rpt; rm -rf "$R3"; mkdir -p "$R3/a/b/c" "$R3/x"; ln -s a/b "$R3/lb"; : > "$R3/a/b/c/f"
+for c in "--relative-to=x a/b/c/f" "--relative-to=a a/b/c/f" "--relative-to=a/b/c/f a" "--relative-base=a a/b/c/f x" \
+         "--relative-base=a --relative-to=a/b a/b/c/f" "-L lb/.." "-P lb/.." "lb/.." "-q nosuch/x" "-e -q nope" "-z a x" "--relative-to=. ." "-s lb"; do
+  # shellcheck disable=SC2086
+  (cd "$R3" && { realpath $c; echo "rc=$?"; }) > "$g" 2>&1; (cd "$R3" && { LOVE_NO_IMAGE= "$PWD/../../$m" kore realpath $c; echo "rc=$?"; }) > "$o" 2>&1; same "realpath $c"
+done
+rm -rf "$R3"
 echo "kore: fs tools (mkdir/cp/mv/ln/touch/chmod/ls/pwd/rm/rmdir/install/cmp/readlink/realpath/link/test/chgrp/truncate/pathchk/mountpoint/shred/dircolors) ok"

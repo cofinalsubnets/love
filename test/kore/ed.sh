@@ -1,5 +1,5 @@
 #!/bin/sh
-# test/kore/ed.sh -- ed and ex (apps/kore/ed.l): the addresses, the commands, g's lists,
+# test/kore/ed.sh -- ed and ex (src/apps/kore/ed.l): the addresses, the commands, g's lists,
 # s's forms, undo, files and the shell, and ex's words, counts and registers. held to
 # answers read off by hand, not to a host editor: GNU ed is seldom installed, and vim's
 # ex carries on past an error where POSIX ends the script.

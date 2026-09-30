@@ -1,0 +1,9 @@
+.PS
+arc "A B" "A B" rjust "q" below
+[ "text\fB!\fP" ljust above; line <-; L0: [ spline ] ]
+boxwid = 2
+L0: "text\fB!\fP"
+ellipse at L0 diam 0.75 invis rad 0.05
+[ L0: "text\fB!\fP" rjust ljust ] with .L0.se at 1/2 of the way between last arc.se and L0.ne
+L1: box fill 0.9 ht 0.25
+.PE

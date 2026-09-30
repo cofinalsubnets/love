@@ -27,8 +27,8 @@
 ; exit 1 on any mismatch, naming the word, both spellings and the count.
 
 (borrow 'posix)
-(reads (open "love/holo/holo.l" "r"))
-(reads (open "love/holo/rv64.l" "r"))
+(reads (open "src/love/holo/holo.l" "r"))
+(reads (open "src/love/holo/rv64.l" "r"))
 
 (: _ (borrow (name "holo"))
    ;; the rv64 backend's test door -- the squeeze, the fixup writer and the cb base. holo's

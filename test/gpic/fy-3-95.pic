@@ -1,0 +1,12 @@
+.PS
+x = 0.25
+y = 3
+z = 1
+line down 0.75 thick 2
+box
+if 0.2 * 0.15 * 0.125 < 0.25 then { z = (2) } else { move cw }
+x = 0.1 - -3 * cos(0.3)
+line then up boxwid/2 dotted 0.05 down 0.5
+ellipse wid 0.5
+sprintf("%.2f", 0.5) below
+.PE

@@ -2,7 +2,7 @@
 ; (kernel, wasm) binds few of them, and an unbound mention raises missing at every
 ; define that names one. this file leads the corpus, so pin a no-op fallback for
 ; whichever are absent: every later mention compiles quiet, and absence answers ().
-; the posix doors are a module of their own now (love/posix.c's rows name it) and the
+; the posix doors are a module of their own now (src/love/posix.c's rows name it) and the
 ; corpus is ONE scope, so splicing it here is what lets every later file spell `open`
 ; plainly -- and it must come before the fallbacks, which read what is in scope. a seat
 ; without posix has no such module, and those fallbacks still cover it.
@@ -54,7 +54,28 @@
    ; files: a real filesystem underneath -- native AND inle (a ramfs), not the browser.
    ; word was this proxy while the wasm shim was 32-bit; the wasm64 module is 64-bit, so
    ; word is true there now and a filesystem law needs its own predicate.
-   files !(love-os = 'wasm))
+   files !(love-os = 'wasm)
+   ; (f 0) with stdout sent nowhere: the editor paints the terminal and asks it questions,
+   ; whose answers would land on the command line after the run
+   (test-mute f) (? !(hosted && elem 'openfd (names ())) (f 0)
+                    (: _ (flush out) s (dup 1) n (openfd "/dev/null" 1) _ (dup2 n 1, close n)
+                       (mind f () (\ _ (flush out, dup2 s 1, close s))))))
+; ports of this run's own: two runs at once, a gate's and a hand's, never share one. a
+; process takes its ports in turn from a block its pid picks, never one twice, and steps
+; past any already taken; a server another process opens is ready when it answers, not
+; after a fixed nap
+(: (test-next u) (: k (test_get 'port) _ (test_set 'port (k + 1)) (20000 + 64 * (getpid 0 % 600) + k))
+   (test-seat f) (: (try n) (: p (test-next 0) s (f p) (? (!(nom? s) || n <= 0) [p s] (try (n - 1))))
+                    (try 63))
+   (test-listen u) (test-seat listen)                       ; [port listener]
+   (test-bind u) (test-seat (\ p (bind ['udp p])))         ; [port socket]
+   (test-free u) (: q (test-listen 0) _ (close (q 1)) <q)   ; a port nothing listens on, yet
+   ; f again, a quarter second apart for up to ten, while (busy? answer) says not yet
+   (test-until busy? f) (: (go n) (: r (f 0) (? (n < 40 && busy? r) (: _ (rest 250) (go (n + 1))) r))
+                           (go 0))
+   ; a server that takes many connections is up when one lands on loopback at port p
+   (test-up p) (test-until nom? (\ _ (: c (connect ['tcp "127.0.0.1" p]) (? (nom? c) c (close c))))))
+
 (:: 'test (\ l
 (:
  (report x v) (do

@@ -1,0 +1,21 @@
+.PS
+copy "chem.pic"
+	textht = 0.16; textwid = .1; cwid = 0.12
+	lineht = 0.2; linewid = 0.2
+Last: 0,0
+
+#CH3
+Last: CH3: atom("CH\s-3\d3\u\s+3", 0.25, 0.2, 0.05, 0.16, 0.12, 0.015) with .L.w at Last.e
+
+#bond ; COOH
+Last: bond(0.2, 90, from Last.R.e )
+Last: COOH: atom("COOH", 0.4, 0.2, 0.05, 0.16, 0.12, 0.015) with .L.w at Last.end
+
+#bond down from CH3 ; BP
+Last: bond(0.2, 180, from CH3.C.s)
+Last: BP: "" ht 0 wid 0 with .n at Last.end
+
+#bond left from BP ; N(C2H5)2
+Last: bond(0.2, 270, from BP.w)
+Last: NC2H52: atom("N(C\s-3\d2\u\s+3H\s-3\d5\u\s+3)\s-3\d2\u\s+3", 0.55, 0.2, 0.15, 0.16, 0.12, 0.015) with .R.e at Last.end
+.PE

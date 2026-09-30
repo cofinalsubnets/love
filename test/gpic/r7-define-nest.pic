@@ -1,0 +1,5 @@
+.PS
+define a { box $1 }
+define b { a($1) ; a($2) }
+b(dashed, dotted)
+.PE

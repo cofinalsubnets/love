@@ -56,8 +56,9 @@
    _ (wput "/f.html" "<form action=\"sub/t.txt?x=1\"><input type=hidden name=lang value=en><input name=q value=\"old one\"><input type=submit value=Go></form><p><img src=l.png alt=\"logo\"> x</p><form method=post><input name=p></form>")
    _ (wput "/l.html" ("<meta charset=\"ISO-8859-1\"><p>caf" + string 233 + " " + string 147 + "q" + string 148 + "</p>"))
    _ (wput "/b.html" "<base href=\"/sub/\"><p><a href=\"t.txt\">t</a></p>")
-   port 7435
-   l (listen port)
+   pl (test-listen 0)
+   port <pl
+   l (pl 1)
    srv (twirl (\ _ ((: (g k) (: _ (await l)
                                 c (accept l)
                                 _ (hot? c ? ((cite 'kiosko 'serve1) sroot () c, close c) ())
@@ -65,8 +66,9 @@
                     0)) 0)
    at ("http://127.0.0.1:" + show port)
    ; a server that sends every request to file: -- www does not follow it
-   p3 7446
-   l3 (listen p3)
+   pl3 (test-listen 0)
+   p3 <pl3
+   l3 (pl3 1)
    (w3head c acc) (? (ends? acc "\r\n\r\n") acc (: ch (see c) (? (ch < 0) acc (w3head c (acc + string ch)))))
    srv3 (twirl (\ _ ((: (g k) (: _ (await l3)
                                  c (accept l3)
@@ -264,7 +266,7 @@
    (osh c) (hark ["sh" "-c" ("exec 2>/dev/null; cd " + odir + " && " + c)])
    (srv port) (: p (tether ["openssl" "s_server" "-quiet" "-tls1_3" "-naccept" "1" "-www" "-accept" ("127.0.0.1:" + show port)
                             "-key" (odir + "/leaf.key") "-cert" (odir + "/leaf.pem")])
-                 _ (rest 500) p)
+                 p)
    (reap p) (: _ (still <p 15) (: g (gather <p) (? (two? g || nom? g) g (rest 2, reap p))))
    cf0 (getenv "SSL_CERT_FILE") home0 (getenv "HOME")
    _ (? os? (: _ (hark ["mkdir" "-p" (odir + "/.love")])
@@ -274,13 +276,16 @@
                      + " && openssl req -new -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -keyout leaf.key -subj /CN=t-leaf -out leaf.csr"
                      + " && openssl x509 -req -in leaf.csr -CA root.pem -CAkey root.key -days 2 -extfile l.cnf -out leaf.pem")))
           0)
-   (page port) (: p (srv port) g (G ("https://127.0.0.1:" + show port + "/") 1) _ (reap p) g)
+   ; "cannot connect" is the server not listening yet
+   (page port) (: p (srv port)
+                  g (test-until (\ r (has (peep r 1 ()) "cannot connect")) (\ _ (G ("https://127.0.0.1:" + show port + "/") 1)))
+                  _ (reap p) g)
    (has s x) (string? s && 0 <= (cite 'kore 'wg-find) s x 0)
    _ (? os?
         (: _ (setenv "SSL_CERT_FILE" (odir + "/root.pem"))
-           a (page 7441)
+           a (page (test-free 0))
            _ (setenv "SSL_CERT_FILE" "/nonexistent/bundle.pem")
-           b (page 7442)
+           b (page (test-free 0))
            _ (setenv "SSL_CERT_FILE" (? (string? cf0) cf0 ""))
            _ (hark ["rm" "-rf" odir])
            (test (<a = 0) (has (a 3) "TLSv1.3") (<b = 1) (has (b 1) "no root certificates") (has (b 1) "tls_pins")))

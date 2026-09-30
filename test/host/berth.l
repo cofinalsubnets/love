@@ -1,5 +1,5 @@
 ; --- test/host/berth.l: the berth emulator's moor, end to end over a real pty ---
-; not in the test/*.l corpus (screen/scribe/tether live in love/*.c; love0 links
+; not in the test/*.l corpus (screen/scribe/tether live in src/love/*.c; love0 links
 ; none of them). loads the berth library off disk with reads, berths real
 ; children, and reads the grid back through the glass:
 ;
@@ -8,9 +8,9 @@
 ; interactive berthing (raw tty, keys, repaint) stays a live probe -- this
 ; verifies the moor: pty -> parser -> grid, replies riding home, exit status.
 
-(borrow "apps/berth/berth.l")
-(borrow "apps/berth/wharf.l")
-(borrow "apps/berth/limn.l")
+(borrow "src/apps/berth/berth.l")
+(borrow "src/apps/berth/wharf.l")
+(borrow "src/apps/berth/limn.l")
 
 (: (mkscr r c) (screen (cask (screen () r c)) r c)
    (chat s i) (2097151 & glass s i 0)             ; a cell's codepoint
@@ -77,7 +77,7 @@
 ; its own pty) says them back out as the same utf-8 ---
 (: (find h n i) ((i + #n) < (#h + 1) ? (n = snip h i (i + #n) ? 1 (find h n (i + 1))) 0)
  ; (the octal escapes ride through TWO love readers before sh: hence \\\\)
- md (tether ["out/love" "-l" "apps/berth/berth.l"
+ md (tether ["out/love" "-l" "src/apps/berth/berth.l"
            "-e" "(: _ (borrow 'berth) (berth [\"sh\" \"-c\" \"printf 'x\\\\342\\\\224\\\\200y\\\\303\\\\251z'; sleep 1\"]))"])
  outb (slurp >md)
  st (: (wf p) (: g2 (gather p) (two? g2 ? g2 (rest 2, wf p))) (wf <md))
@@ -286,7 +286,7 @@
 ; --- a stage on a real berth, over a real pty: its frame comes out through the
 ; painter, and its keys come in through edkey -- q is its last, and berth ends ---
 (: (sub? h n i) ((i + #n) < (#h + 1) ? (n = snip h i (i + #n) ? 1 (sub? h n (i + 1))) 0)
- md (tether ["out/love" "-l" "apps/berth/berth.l"
+ md (tether ["out/love" "-l" "src/apps/berth/berth.l"
              "-e" "(: _ (borrow 'berth) b {} (berth (berth-stage (\\ w h (\"\\e[Hstage \" + show w)) (\\ c (pin b () c)) (\\ _ (= 113 (peep b () 0))))))"])
  _ (test (two? md))
  m >md
@@ -306,7 +306,7 @@
 ; bar it draws comes back out in the frames. a fresh pty reports 0x0, so berth
 ; falls back to 24x80 and the geometry here is deterministic: 39 + bar + 40.
 (: (sub? h n i) ((i + #n) < (#h + 1) ? (n = snip h i (i + #n) ? 1 (sub? h n (i + 1))) 0)
- md (tether ["out/love" "-l" "apps/berth/berth.l"
+ md (tether ["out/love" "-l" "src/apps/berth/berth.l"
              "-e" "(: _ (borrow 'berth) (berth [\"sh\" \"-c\" \"sleep 5\"]))"])
  _ (test (two? md))
  m >md
@@ -330,7 +330,7 @@
  _ (setenv "BK" ("printf 'TOPMARK" + cats (map (\ _ "\\n") (jot 30)) + "'; stty raw -echo; "
                  + "printf '\\033[?1000h\\033[?1006h\\033[?2004h'; r=$(dd bs=1 count=33 2>/dev/null); "
                  + "printf '%s' \"$r\" | cat -v; sleep 1"))
- md (tether ["out/love" "-l" "apps/berth/berth.l"
+ md (tether ["out/love" "-l" "src/apps/berth/berth.l"
              "-e" "(: _ (borrow 'berth) (berth [\"sh\" \"-c\" \"eval \\\"$BK\\\"\"]))"])
  _ (test (two? md))
  m >md
@@ -353,7 +353,7 @@
    (count h n i k) (? ((i + #n) < (#h + 1)) (count h n (i + 1) (n = snip h i (i + #n) ? (k + 1) k)) k)
  _ (setenv "BK" ("sleep 1; printf '\\033P0;1;0q#0;2;100;0;0#0!10~-#0!10~\\033\\\\'; sleep 1; "
                  + "printf '\\033[5;1Hzz'; sleep 1; printf '\\033[2J\\033[H\\033P0;1;0q#0;2;0;100;0#0!7~\\033\\\\'; sleep 2"))
- md (tether ["out/love" "-l" "apps/berth/berth.l"
+ md (tether ["out/love" "-l" "src/apps/berth/berth.l"
              "-e" "(: _ (borrow 'berth) (berth [\"sh\" \"-c\" \"eval \\\"$BK\\\"\"]))"])
  _ (test (two? md))
  m >md
@@ -375,7 +375,7 @@
 (: (sub? h n i) ((i + #n) < (#h + 1) ? (n = snip h i (i + #n) ? 1 (sub? h n (i + 1))) 0)
    (count h n i k) (? ((i + #n) < (#h + 1)) (count h n (i + 1) (n = snip h i (i + #n) ? (k + 1) k)) k)
  _ (setenv "BS" "sleep 1; printf '\\033P0;1;0q#0;2;100;0;0#0!10~-#0!10~\\033\\\\'; sleep 1; printf '\\033[5;1Hzz'; sleep 1")
- md (tether ["out/love" "-l" "apps/berth/berth.l"
+ md (tether ["out/love" "-l" "src/apps/berth/berth.l"
              "-e" "(: _ (borrow 'berth) (berth [\"sh\" \"-c\" \"eval \\\"$BS\\\"\"]))"])
  _ (test (two? md))
  m >md

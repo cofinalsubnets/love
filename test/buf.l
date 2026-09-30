@@ -40,7 +40,7 @@
 ; --- peepv / pinv: a whole tray in or out, at a width and a stride -------------------
 ; the range doors above move bytes; these move ELEMENTS, and carry the two numbers a byte
 ; run cannot -- how wide one is and how far apart they sit. a stride wider than the width
-; is an interleave, which is the shape a frame of stereo PCM has (apps/harp/play.l's pack
+; is an interleave, which is the shape a frame of stereo PCM has (src/apps/harp/play.l's pack
 ; lays each channel with one call). they sit in `guts` beside peepw/pinw and are read the
 ; same way: through cite, never a (borrow 'guts) splice, the corpus being one scope. the
 ; bootstrap egg never mops, so ask the module first and the book after.

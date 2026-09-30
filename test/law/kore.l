@@ -2,7 +2,7 @@
 ; (the script spells both sides), minimality against an O(nm) lcs oracle, the u-floor and
 ; field/fs floors to their GNU faces, the regex floor (hand BRE laws + a seeded fuzz
 ; against an independent Brzozowski-derivative oracle), and a seeded fuzz over the diffs.
-; reads the leaked globals from the apps/kore/ toolboxes (the `make test_kore` cat).
+; reads the leaked globals from the src/apps/kore/ toolboxes (the `make test_kore` cat).
 
 ; --- the classic: Myers' own worked example, D = 5 ---
 (: A '(a b c a b b a) B '(c b a b a c) s (myers A B)
@@ -112,7 +112,7 @@
       (udiff "a" "b" "" "x\n" = "--- a\n+++ b\n@@ -0,0 +1 @@\n+x\n")
       (udiff "a" "b" "x\n" "" = "--- a\n+++ b\n@@ -1 +0,0 @@\n-x\n")))
 
-; --- the u-floor (apps/kore/u.l): the pure helpers under the line tools, each
+; --- the u-floor (src/apps/kore/u.l): the pure helpers under the line tools, each
 ; held to its GNU face -- the clips, the counter, the two path clips ---
 (: (test
       (uatoi "42" = 42) (uatoi "-7" = -7) (uatoi "0" = 0)
@@ -164,7 +164,7 @@
       (uset "α-γ日" = '(945 946 947 26085))                         ; code points, ranges too
       (uset "\\日-" = '(26085 45))))
 
-; --- the column floor (apps/kore/core.l): fold, expand and unexpand all count
+; --- the column floor (src/apps/kore/core.l): fold, expand and unexpand all count
 ; columns, which is the one thing they share and the one thing a byte count
 ; disagrees with -- so ucol is lawed first and the three faces over it after ---
 (: (test
@@ -191,7 +191,7 @@
       (uunexpand 8 0 "   \tab   cd" = "\tab   cd")                   ; no -a: the lead alone
       (uunexpand 8 1 "a        " = "a\t ")))                         ; a trailing run is a run
 
-; --- tac, the encodings and factor (apps/kore/core.l) ---
+; --- tac, the encodings and factor (src/apps/kore/core.l) ---
 (: (test
       ; the newline rides the line it followed, so a last line arriving without one
       ; comes back first without one -- which is the whole of tac's shape
@@ -212,13 +212,13 @@
       (ufactor 1234567 = '(127 9721)) (ufactor 2 = '(2))
       !(ufactor 1) !(ufactor 0)))
 
-; --- the fs-tool floor (apps/kore/fs.l): uoct reads chmod's octal, rp-parts cuts a
+; --- the fs-tool floor (src/apps/kore/fs.l): uoct reads chmod's octal, rp-parts cuts a
 ; path into the components realpath walks ---
 (: (test
       (uoct "755" = 493) (uoct "644" = 420) (uoct "0" = 0) (uoct "7" = 7)
       (rp-parts "/a//b/" = '("a" "b")) (rp-parts "a" = '("a")) !(rp-parts "///")))
 
-; --- the record floor (apps/kore/core.l): paste's delimiter list, split's suffix and
+; --- the record floor (src/apps/kore/core.l): paste's delimiter list, split's suffix and
 ; size words, join's field split, and od's three readings ---
 (: (test
       (udels ":|" = '(":" "|"))
@@ -240,7 +240,7 @@
       (uodtype "x1" = '(x 1 2)) (uodtype "o2" = '(o 2 6)) (uodtype "d4" = '(d 4 11))
       (uodtype "u1" = '(u 1 3)) (uodtype "c" = '(c 1 3)) !(uodtype "q")))
 
-; --- the report floor (apps/kore/fs.l): stat's permission face and timestamp, du's
+; --- the report floor (src/apps/kore/fs.l): stat's permission face and timestamp, du's
 ; three-figure human face (rounded up, which is GNU's rule and not a rounding) ---
 (: (test
       (ust-perm 33188 = "-rw-r--r--") (ust-perm 16877 = "drwxr-xr-x")
@@ -286,7 +286,7 @@
       (utsec 0 = "0.00") (utsec 5000 = "0.01") (utsec 4999 = "0.00")
       (utsec 1000000 = "1.00") (utsec 340000 = "0.34") (utsec 90200000 = "90.20")))
 
-; --- the expr floor (apps/kore/expr.l): every value is a text, a text that reads as a
+; --- the expr floor (src/apps/kore/expr.l): every value is a text, a text that reads as a
 ; whole number is a number where one is wanted, and the division truncates ---
 (: (e as) (<(ex-parse 0 as))
    (test
@@ -308,7 +308,7 @@
       (e '("0" "|" "3") = "3") (e '("0" "&" "2") = "0") (e '("1" "&" "2") = "1")
       (e '("length" "abcde") = "5") (e '("+" "length") = "length")))
 
-; --- the patch floor (apps/kore/patch.l): the hunk header, the body's counts and its
+; --- the patch floor (src/apps/kore/patch.l): the hunk header, the body's counts and its
 ; `\ No newline` mark, the -p walk, and the file<->pairs bridge ---
 (: p1 "--- a/x\n+++ b/x\n@@ -1,3 +1,3 @@\n one\n-two\n+TWO\n three\n"
    secs (pt-parse (lines p1))
@@ -336,7 +336,7 @@
       (pt-seek (pt-pairs "") () -1 = '(1 0))                              ; a create's -0,0
       !(pt-seek (pt-pairs "q\n") '("a") 0)))
 
-; --- the scan floor (love/boot/scan.l): the native byte scan against its own twin ---
+; --- the scan floor (src/love/boot/scan.l): the native byte scan against its own twin ---
 ; the kernel is hand-written machine code and the twin is the honest walk, so this
 ; is the differential that says the two agree. it sweeps the lengths that cross the
 ; align/word/tail boundaries, every start including one past the end, and charms
@@ -365,7 +365,7 @@
       (sc big 122 0 = (tw big 122 0))                          ; absent over 5000 bytes
       (sc (big + "z") 122 0 = 5000)))                          ; and present at the very last
 
-; --- the byte loops (apps/kore/core.l): the xlat nif and the kb64 kernel against
+; --- the byte loops (src/apps/kore/core.l): the xlat nif and the kb64 kernel against
 ; their love twins, the scan floor's shape: every length across the group and word
 ; boundaries, bytes with the high bit set, and a table that drops, squeezes and maps at
 ; once. kb64 is hand-written machine code, so this is its a64 gate too -- the register
@@ -394,7 +394,7 @@
       (ubenc ub64set 6 "hello, world" = "aGVsbG8sIHdvcmxk")     ; the coder over the kernel + tail
       (ubenc ub64set 6 "hello" = "aGVsbG8=")))
 
-; --- the regex floor (apps/kore/re.l): the BRE faces, held by hand ---
+; --- the regex floor (src/apps/kore/re.l): the BRE faces, held by hand ---
 (: (ok p s) (: r (rebre p) (two? r && rehas <>r s))
    (no p s) (: r (rebre p) (two? r && !(rehas <>r s)))
    (bad p) !(two? (rebre p))
@@ -568,7 +568,7 @@
    r (fzr 200 (wheel 13))
    (test (r = 'ok)))
 
-; --- the sed floor (apps/kore/sed.l): the substitution walk to its GNU face,
+; --- the sed floor (src/apps/kore/sed.l): the substitution walk to its GNU face,
 ; and the script parser's shapes -- what parses, what refuses ---
 (: (sub p r s g?) (: b (rebre p) <>(usub (recomp <>b) r s g?))
    (sp s) (sparse s ())                                          ; the BRE door, the default
@@ -599,7 +599,7 @@
       (sp "s/a\\{2\\}/x/" = (sparse "s/a{2}/x/" 1))              ; one tree, two inks
       (sp "/\\(a\\|b\\)c/p" = (sparse "/(a|b)c/p" 1))))
 
-; --- the /proc floor (apps/kore/proc.l): the stat-line split, the two clocks, the
+; --- the /proc floor (src/apps/kore/proc.l): the stat-line split, the two clocks, the
 ; terminal name and the uptime phrase. the faces over them cannot be lawed and are not
 ; smoked byte-for-byte either -- every number they read is a clock and the process
 ; table moves between two runs -- so this is where the family is actually held ---
@@ -622,7 +622,7 @@
       (usignum "-9" = 9) (usignum "-TERM" = 15) (usignum "-KILL" = 9)
       !(usignum "-nope") !(usignum "x") !(usignum "-")))
 
-; --- the prel's readers (love/boot/post.l): durations to milliseconds, ports, errnos ---
+; --- the prel's readers (src/love/boot/post.l): durations to milliseconds, ports, errnos ---
 (: (test
       (udur "2" = 2000) (udur "0" = 0) (udur "1s" = 1000)
       (udur "1.5" = 1500) (udur ".5" = 500) (udur "1." = 1000)
@@ -634,7 +634,7 @@
       (uerrno 'econnrefused = "Connection refused") (uerrno 'enoent = "No such file or directory")
       (uerrno 'exdev = "exdev")))
 
-; --- the find floor (apps/kore/find.l): the path join, the argument split and
+; --- the find floor (src/apps/kore/find.l): the path join, the argument split and
 ; the expression grammar. the walk itself is smoked against the system find ---
 (: (test
       (fi-join "a" "b" = "a/b") (fi-join "a/" "b" = "a/b") (fi-join "/" "b" = "/b")
@@ -658,7 +658,7 @@
       (fi-acts? ['print]) (fi-acts? ['and ['name "a"] ['print]])
       !(fi-acts? ['and ['name "a"] ['type "f"]]) !(fi-acts? ['prune])))
 
-; --- the awk floor (apps/kore/awk.l): the number faces C's printf owes, the
+; --- the awk floor (src/apps/kore/awk.l): the number faces C's printf owes, the
 ; strnum question, and the grammar's shapes. the language is smoked against gawk ---
 (: (test
       ; %f %e %g by hand -- `show` spells a double round-trip exact, awk owes %.6g
@@ -694,7 +694,7 @@
       (aw-program (aw-lex "BEGIN{x=1}") (tablet 0) () = '((begin ((expr (assign "=" (var "x") (num 1)))))))
       (aw-program (aw-lex "/a/,/b/{}") (tablet 0) () = '((range (ere "a") (ere "b") ())))))
 
-; --- the pager (apps/kore/less.l): every key below drives the pure engine, one
+; --- the pager (src/apps/kore/less.l): every key below drives the pure engine, one
 ; byte at a time, and reads the tablet back -- no tty, no port, no file ---
 (: (pg-bytes s) (: n #s (go i acc) (? (i < 0) acc (go (i - 1) (s i . acc))) (go (n - 1) ()))
    (pg-mk ls w h fl)
@@ -800,7 +800,7 @@
    _ (pgstep st 58) _ (pgstep st 112)
    (test (st 'fi = 0) (st 'doe = '("a.txt"))))
 
-; --- the bc floor (apps/kore/bc.l): the number tower and every scale rule in it,
+; --- the bc floor (src/apps/kore/bc.l): the number tower and every scale rule in it,
 ; the base writer, the numeral reader, the grammar's shapes, and a seeded fuzz over
 ; the algebra. the language itself is smoked against GNU bc ---
 (: st (bc-state 0)

@@ -2,7 +2,7 @@
 # test/kore/status.sh -- the status charm: mains answer, the image survives, the seat quits
 . "$(dirname "$0")/common.sh"
 
-# every main ANSWERS its status (apps/kore/core.l's urun) instead of quitting, so
+# every main ANSWERS its status (src/apps/kore/core.l's urun) instead of quitting, so
 # a caller staying in the image lives through a tool that fails -- the property the
 # seat hides, since the seat quits with the answer. one image, four tools whose
 # statuses are 1, 2 (a udie from deep inside), 0 and 0: the run must reach the last

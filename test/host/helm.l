@@ -17,13 +17,13 @@
 ;   underlay  the verb table laid as a directory of links onto selfpath, and a
 ;             child resolving `ls` through it with that directory as its whole PATH.
 ;   scatter   the carried source archive inflated to a tree, re-homed below the
-;             archive's top the way inle/kmain.c's k_untar does it.
+;             archive's top the way src/inle/kmain.c's k_untar does it.
 ; the mount half of both is pid 1's and root's, and is not asserted here: hunderlay
 ; answers the errno and lays in place, which is the lane this runs.
-(borrow "apps/helm/unit.l")
-(borrow "apps/helm/sup.l")
-(borrow "apps/helm/moor.l")
-(borrow "apps/helm/helm.l")
+(borrow "src/apps/helm/unit.l")
+(borrow "src/apps/helm/sup.l")
+(borrow "src/apps/helm/moor.l")
+(borrow "src/apps/helm/helm.l")
 (borrow 'helm)
 
 (test
@@ -160,7 +160,7 @@
    scd ("out/.helm-scatter-" + me)
    k   (hscatter scd)
    _   (test (0 < k))
-   _   (test (two? (stat (scd + "/apps/helm/helm.l"))))
+   _   (test (two? (stat (scd + "/src/apps/helm/helm.l"))))
    _   (test (atom? (stat (scd + "/love-0.1"))))  ; the top is dropped, not laid
    _   (hark [(selfpath 0) "rm" "-rf" scd])           ; 13M of tree, and out/ is not a nest
 

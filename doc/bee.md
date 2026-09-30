@@ -23,6 +23,10 @@ bee - a coding agent in the terminal, and the protocol its sessions talk by
 
 **love bee --serve** \[**-y**\] \[*prompt* ...\]
 
+**love bee --mcp**
+
+**love bee --lock** \[**--heavy**\] \[**--out** *dir*\] **--** *command* ...
+
 # DESCRIPTION
 
 **bee** puts a model to work in the current directory. The model's tools:
@@ -69,6 +73,28 @@ Messages are delivered at two points. While a turn runs, whatever has arrived jo
 
 The model's **list_sessions** tool reads the cards, and **send_message** writes a message as described above. From a shell, **love bee --list** prints the same list and **love bee --send** *name* *text* sends; the sender is **BEE_NAME**, else **cli-***user*.
 
+# THE CLAUDE CODE BACKEND
+
+With **(backend claude-code)** in the settings, bee is the harness and Claude Code does the work. Each bee session keeps one long-lived child:
+
+> **claude -p --input-format stream-json --output-format stream-json --verbose --include-partial-messages --permission-prompt-tool mcp__bee__approve --mcp-config** *cell***/mcp.json --append-system-prompt** ... **--session-id** *uuid*
+
+It uses Claude Code's own tools and its own login, so no key is set in bee. Each user turn goes to the child's stdin as one stream-json line. The child's lines come back and are drawn on the same screen:
+
+- its streamed text and thinking as they arrive;
+- its tool calls as tool blocks, each result under its block;
+- the usage for the gauge, and its **result** line's cost, summed beside the gauge.
+
+**(claude-model** *name***)** picks the child's model. The card records the model the child reports and its Claude session id. When the child ends or is interrupted with esc, the next turn starts it again with **--resume**.
+
+The child reaches the bee and the hive through **love bee --mcp**, which its **mcp.json** names as the MCP server **bee**. That is a stdio JSON-RPC 2.0 server, one message a line, speaking as the session **BEE_AS** names. Its tools are **list_sessions**, **send_message** and **queue_row**, which the model sees as **mcp__bee__***, and **approve**, the child's permission prompt. **approve** allows at once when the bee runs with **-y** (**BEE_YES**). Otherwise it writes **asks/***id***.ask** in the bee's cell, holding the tool's name, input and **tool_use_id**, and waits **BEE_ASK_WAIT** seconds (600) for **asks/***id***.answer**. It denies when no answer comes. The bee's screen turns each ask into the y/n of the tool's own block, and the key writes the answer.
+
+# LOCKS
+
+The machine is shared, and **src/apps/locks.l** keeps its locks: an exclusive lock per resource, such as one make per **out/**, and a pool of heavy tickets, at most **(heavy-max** *n***)** at once (2 unless set) and none granted while available memory is below **(mem-floor** *gb***)**. A lock is held by a pid, so it lives as long as its holder. A bee holds its locks under its own pid, the one on its card, even when its **--mcp** child asks for them. That way a lock outlives a Claude child that ends and dies with the bee.
+
+The model has **lock_acquire** (*name*, *kind* exclusive or heavy, *note*), **lock_release** and **lock_list**; the last two run without asking. An acquire answers at once: granted, or queued with its position, who holds it and how much memory is available. A queued lock is asked for again every 5 seconds, which keeps its place, and when it is granted a message from **lock-***name* says so. So a turn never waits on a lock. From a shell, **love bee --lock** waits for an exclusive lock on the command's **out/** (**./out** when there is one, or **--out** *dir*) and, with **--heavy**, for a heavy ticket. It then runs the command, releases both however the command ends, and exits with its status. A binary built without **src/apps/locks.l** says so.
+
 # JOBS AND WORKERS
 
 A *job* is a command line run in the background. **start_job** answers its id (**j1**, **j2** ...) at once and the turn goes on. The job runs in a process group of its own, with its output in *hive***/jobs/***name***/***id***.log**. When it ends, a message from **job-***id* reaches the bee that started it, carrying the exit status and the output's last lines. Like any message, it wakes an idle full screen and joins the next request of a running turn. **check_job** shows a job's state and output so far. **stop_job** ends its whole group: the shell and whatever it started. A job belongs to its bee's process: a one-shot **love bee** *prompt* exits when its turn does, and a job still running then goes on unwatched.
@@ -87,7 +113,9 @@ Sessions working in parallel often share one branch, and merge into it one at a 
 **sb**
 :   Every ledger under **queue/** in the *hub*: the nest named by **SB_HUB**, else the working directory when it holds a **.sb/**. Read it with **sb -C** *hub* **ledger queue/***name*, and take **--id** as *old*. Write **sb -C** *hub* **ledger queue/***name* **--was** *old* *file*. A ledger keeps every entry it ever held, with its writer, under **--log**, and it never travels in **sync**: sessions that share a queue name one hub.
 
-bee quotes each queue in the system prompt as it stood at start, and tells the model to follow the rules, to read the queue fresh before acting on it, and to write only its own row. When a write fails, someone wrote first: re-read and redo. A row names its session. The model reaches a bee session with **send_message**, and asks the user to relay to any other.
+bee quotes each queue in the system prompt as it stood at start, and tells the model to follow the rules and to read the queue fresh before acting on it. A row names its session. The model reaches a bee session with **send_message**, and asks the user to relay to any other.
+
+The model writes a queue only through **queue_row**, never by hand; a small model given the text to edit once replaced a whole queue with its one row. The tool reads the queue and changes exactly one line: the bee's own row, keyed by its session name, in the header's format *position session branch gated-on gated-head state*, with an optional note after **#**. The model gives the state (**waiting**, **gating**, **green**, **folded-into-***N*, or **left**, which removes the row) and whichever other fields change, and the rest keep their values. A bee with no row joins at the bottom, one past the highest position. The write is a compare-and-swap, retried from a fresh read when someone wrote first. Only the bee named on the **leader** line may pass **session** to edit another's row, or **base** to move the base line (*branch* *sha*) when it lands; anyone else is refused.
 
 A bee watches the queues for its rows. On the full screen and when serving, it reads every queue again every **(queue-watch** *n***)** seconds (20 unless set, 0 for never). A change that concerns its rows comes to it as a message from **queue-watch**:
 
@@ -96,7 +124,7 @@ A bee watches the queues for its rows. On the full screen and when serving, it r
 - a row folding into it, or a folded row moving;
 - a new leader.
 
-Its own edits to its own rows say nothing.
+The leader hears every row, with or without one of its own: each join, move and leaving. Its own edits to its own rows say nothing.
 
 The model is also given the queue's operating checks, learned running one. Each is meant to be checked mechanically, not just stated:
 

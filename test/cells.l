@@ -1,6 +1,6 @@
 ; --- test/cells.l: the cell doors -- peek/poke for values, pick/place for instructions ---
 ; the four are the compiler's own. the bootstrap egg (love0) runs this corpus before any mop,
-; so there they are the book's; a mopped image drops them outright (love/boot/egg.l), and
+; so there they are the book's; a mopped image drops them outright (src/love/boot/egg.l), and
 ; there every law below stands down -- test/host/mop.l holds that they are gone, and under
 ; LOVE_NO_MOP that they are back. read them through `cite`, never a (borrow 'guts) splice:
 ; the corpus is one scope and a splice here would reach every file after this one.

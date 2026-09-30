@@ -4,7 +4,7 @@
 # it is a development instrument, run by hand while working on gen.l, and what it
 # prints is three readings of the same source, not a verdict.
 #
-# THE SUBJECT is love/lib/hash.c and love/lib/gz.c -- sha-256, md5,
+# THE SUBJECT is src/love/lib/hash.c and src/love/lib/gz.c -- sha-256, md5,
 # crc32, cksum, DEFLATE and inflate. They are the widest C the tree owns and the
 # least like the rest of it: 32-bit rotates, a wrapping add carried over eight
 # registers, two table walks reading EIGHT INDEPENDENT lookups a step, a 64-bit
@@ -17,7 +17,7 @@
 # static, so a program that includes the source sees the algorithm whole and no
 # seam had to be cut into host/ to reach it. What the love-facing wrappers name is
 # stubbed (nif/stub.h) -- main() enters at the algorithm and the lvm ops are never
-# called, they only have to link. That trick works for any love/*.c nif.
+# called, they only have to link. That trick works for any src/love/*.c nif.
 #
 # THREE READINGS, and they answer different questions:
 #
@@ -67,9 +67,9 @@ export CCACHE_DISABLE=1
 [ "$(uname -m)" = x86_64 ] || { echo "ccnif: x86-64 only (mooncc emits x64)" >&2; exit 1; }
 
 rm -rf "$W"; mkdir -p "$W"
-inc="-Ilove -Iinle -Itest/libc"
+inc="-Isrc/love -Isrc/inle -Itest/libc"
 # the two subjects live in two folders now
-srcof() { case $1 in hash) echo love/lib/hash.c;; gz) echo love/lib/gz.c;; esac; }
+srcof() { case $1 in hash) echo src/love/lib/hash.c;; gz) echo src/love/lib/gz.c;; esac; }
 
 # the lanes, in report order; mooncc first so it is the numerator everywhere
 lanes="mooncc gcc-O2 clang-O2 gcc-O0"

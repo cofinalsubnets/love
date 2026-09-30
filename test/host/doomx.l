@@ -1,6 +1,6 @@
 ; --- test/host/doomx.l: doom on the host, in an X window, headless ---
 ; spawns an Xvfb and runs `love doom -frames 300` against it (the same window and
-; wire a desktop gets: apps/doom.l), holds an arrow key through xtest for a
+; wire a desktop gets: src/apps/doom.l), holds an arrow key through xtest for a
 ; second and a half of the run, and holds the run to exit 0 and its own frame count. no Xvfb on the box -> a polite skip. wants a doom=1 love and the iwad
 ; (test_doomx builds the first; the Makefile's doom lane says where the second goes).
 ;   cat test/00-init.l test/host/doomx.l | out/love
@@ -23,7 +23,7 @@
    ; the game: silent (HORN=none), 300 frames, then it says how many it drew
    ph (tether ["env" "HORN=none" ("DISPLAY=:" + show dn) "out/love" "doom" "-frames" "300"])
    ; while it runs, a held key through xtest on a wire of our own: a second and a half
-   ; of the up arrow (keycode 111), which the server repeats -- the path apps/doom.l's
+   ; of the up arrow (keycode 111), which the server repeats -- the path src/apps/doom.l's
    ; detectable autorepeat covers -- then the release. what this proves is that
    ; the key path and the xkb requests leave the wire in step: the frames still count.
    _ (rest 2500)
