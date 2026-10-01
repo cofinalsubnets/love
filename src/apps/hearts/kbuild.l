@@ -7,7 +7,7 @@
 ; a reference build's vmlinux.a and .cmd files.
 ;
 ; a hearts build is clean and one-shot: no fixdep, no .cmd, no if_changed, no recursion.
-(module (hearts-kbuild hk-top hk-prepare hk-build hk-walk hk-vmlinux hk-cmd hk-path)
+(module (hearts-kbuild hk-top hk-prepare hk-build hk-walk hk-vmlinux hk-rule hk-unit hk-plan hk-path)
 (borrow 'posix)
 (borrow 'cook)
 (borrow 'path)
@@ -50,21 +50,101 @@
   (: t (pins (hk-copy top) "obj" dir "need-builtin" "1" "need-modorder" "1")
      (pin t " rules" (hk-vars (hk-slurp (K + "/scripts/Makefile.build")) t), t))
 
- ; can path be had: in the tree, or made by one of the directory's rules -- by name, or by a %
- ; pattern whose own % prerequisite can be had in turn, as make's implicit search asks (so
- ; Makefile.lib's match-anything `$(obj)/%: $(src)/%_shipped` claims nothing it has no file for)
+ ; a word against a path: a % pattern's stem, "" for the very path, else ()
+ (hk-stem w path)
+  (: k (findsub w "%")
+     (k < 0 ? (w = path ? "" ())
+        (: pre (snip w 0 k) suf (snip w (k + 1) #w)
+           (#pre + #suf < #path && hk-pre? path pre && ends? path suf
+            ? (snip path #pre (#path - #suf)) ()))))
+ (hk-sub p s) (findsub p "%" @ k (k < 0 ? p (snip p 0 k + s + snip p (k + 1) #p)))
+ ; prerequisite words, the order-only ones past | left out
+ (hk-pre s) ((: (g l) (atom? l || <l = "|" ? () (<l . g >l))) (words s))
+ (hk-lastsl p) ((: (g i) (i < 0 ? -1 (p i = 47 ? i (g (i - 1))))) (#p - 1))
+
+ ; the directory's rules, targets and prerequisites expanded once: [targets prereqs steps
+ ; pattern], a static pattern rule (`$(objs): %.o: %.c`) keeping its target pattern apart
+ (hk-rx t)
+  (peep t " rx" 0 @ x (x ? x
+     (: (one r) (: ts (words (hk-expand (r 0) t)) ps (hk-expand (r 1) t) k (findsub ps ":")
+                   (0 < k ? [ts (hk-pre (snip ps (k + 1) #ps)) >>r (strip (snip ps 0 k))]
+                      [ts (hk-pre (k = 0 ? (snip ps 1 #ps) ps)) >>r ""]))
+        rs (map one (t " rules"))
+        (pin t " rx" rs, rs))))
+
+ ; can path be had: in the tree, or made here (n bounds the search)
  (hk-had? K t path n)
-  (: (stem w) (: k (findsub w "%")
-                 (k < 0 ? (w = path ? "" ())
-                    (: pre (snip w 0 k) suf (snip w (k + 1) #w)
-                       (#pre + #suf < #path && hk-pre? path pre && ends? path suf
-                        ? (snip path #pre (#path - #suf)) ()))))
-     (pq s r) (filter (p \ 0 <= findsub p "%") (words (hk-expand (r 1) t)) @
-                (p . _) (findsub p "%" @ k (hk-had? K t (snip p 0 k + s + snip p (k + 1) #p) (n - 1)))
-                1)
-     (two? (stat path) || two? (stat (K + "/" + path))
-      || 0 < n && any (r \ any (w \ stem w @ s (string? s && (s = "" || pq s r))) (words (hk-expand (r 0) t)))
-                      (t " rules")))
+  (two? (stat path) || two? (stat (K + "/" + path)) || 0 < n && two? (hk-rule K t path (n - 1)))
+
+ ; how make makes path here: [steps prereqs stem], () when no rule does. an explicit rule with
+ ; a recipe wins (the last, as make's override); else the pattern rule of shortest stem whose
+ ; % prerequisites can be had -- so Makefile.lib's match-anything `$(obj)/%: $(src)/%_shipped`
+ ; claims nothing it has no file for. recipe-less rules naming path add their prerequisites
+ (hk-rule K t path n)
+  (: rx (hk-rx t)
+     ex (filter (r \ elem path (r 0)) rx)
+     xp (catmap (r \ r 1) (filter (r \ atom? (r 2)) ex))
+     rec (filter (r \ two? (r 2)) ex)
+     (has% p) (0 <= findsub p "%")
+     (two? rec
+      ? (: r <(rev rec) s ((r 3) = "" ? "" (hk-stem (r 3) path))
+           [(r 2) (map (p \ hk-sub p s) (r 1) + xp) s])
+        (: (fit r w) (hk-stem w path @ s
+                       (string? s && s != "" && all (p \ !(has% p) || hk-had? K t (hk-sub p s) n) (r 1)
+                        ? [[s r]] ()))
+           cs (catmap (r \ catmap (w \ fit r w) (r 0)) (filter (r \ two? (r 2) && (r 3) = "") rx))
+           best (foldl (a \ c \ atom? a || #(c 0) < #(a 0) ? c a) () cs)
+           (two? best ? [(best 1 2) (map (p \ hk-sub p (best 0)) (best 1 1) + xp) (best 0)] ()))))
+
+ ; the target- and pattern-specific assignments for path, in the order they were written
+ (hk-tv t path)
+  (filter (v \ any (w \ string? (hk-stem w path)) (words (v 0))) (rev (peep t " tvars" ())))
+
+ ; the cmd_ names a recipe text runs, in order: [name saved?], saved? for the one kbuild
+ ; records in the .cmd (if_changed, cmd_and_fixdep, ..); if_changed_rule reads rule_NAME
+ (hk-calls t s)
+  (: k (findsub s "$(call ")
+     (k < 0 ? ()
+        (: r (snip s (k + 7) #s) c (findsub r ",") e (findsub r ")")
+           (c < 0 || e < c ? (hk-calls t r)
+              (: nm (strip (snip r 0 c)) a (strip (snip r (c + 1) e)) rest (snip r (e + 1) #r)
+                 (? (elem nm ["if_changed" "if_changed_dep" "cmd_and_savecmd" "cmd_and_fixdep"])
+                     ([a 1] . hk-calls t rest)
+                    (nm = "cmd") ([a 0] . hk-calls t rest)
+                    (nm = "if_changed_rule") (hk-calls t (peep t ("rule_" + a) "") + hk-calls t rest)
+                    (hk-calls t rest)))))))
+
+ ; one unit made as make would: the directory's tablet (a copy when target-specific variables
+ ; apply), the automatic variables pinned, the prerequisites found through VPATH. answers
+ ; [cmds prereqs], cmds [text saved?] in order with the empty ones dropped, or () with no rule
+ (hk-unit K t u)
+  (: tg (u 1) r (hk-rule K t tg 3)
+     (atom? r ? ()
+        (: tv (hk-tv t tg)
+           ut (two? tv ? (hk-copy t) t)
+           _ (each tv (v \ hk-vars (v 1) ut))
+           (vp p) (two? (stat p) || !(two? (stat (K + "/" + p))) ? p (K + "/" + p))
+           ps (map vp (r 1))
+           ap (join " " (uniq ps))
+           k (hk-lastsl tg)
+           _ (pins ut "@" tg "<" (two? ps ? <ps "") "^" ap "?" ap "*" (r 2)
+                      "@D" (k < 0 ? "." (snip tg 0 k)) "@F" (snip tg (k + 1) #tg))
+           body (join "\n" (map (s \ >>s) (r 0)))
+           cs (hk-calls ut body)
+           cmds (two? cs ? (map (c \ [(hk-expand ("$(cmd_" + c 0 + ")") ut) (c 1)]) cs)
+                   (map (s \ [(hk-expand >>s ut) 0]) (r 0)))
+           [(filter (c \ 0 < #(strip (c 0))) cmds) ps])))
+
+ ; a unit after the units its prerequisites need made here first: [[unit cmds] ..], build
+ ; order, each target once
+ (hk-plan K t u seen)
+  (peep seen (u 1) 0 ? ()
+     (: x (hk-unit K t u)
+        (pin seen (u 1) 1,
+         atom? x ? [[u ()]]
+           (: ph (hk-words t "PHONY")
+              (mine? p) (!(elem p ph) && !(hk-pre? p K) && two? (hk-rule K t p 3))
+              (catmap (p \ hk-plan K t [(u 0) p] seen) (filter mine? (x 1)) + [[u (x 0)]])))))
 
  ; the descent, as the recursive make walks it: Makefile.build over dir, f handed (dir t us)
  ; with the directory's own units, then each subdirectory real-obj-y names, in place. a unit
@@ -99,16 +179,5 @@
      heads (filter (l \ 0 < #l && l 0 != 35)
                    (map strip (lines (hk-slurp (K + "/scripts/head-object-list.txt") || ""))))
      (head? u) (hk-path (u 1) @ m (any (h \ 0 <= findsub m h) heads))
-     (filter head? us + filter (u \ !(head? u)) us))
-
- ; one unit's compile command, kbuild's own cmd_cc_o_c or cmd_as_o_S expanded with $@ $< $*
- ; set; the source is the tree's, else one a rule of the directory generates in the output dir
- (hk-cmd K t u)
-  (: d (u 0) tg (u 1) b (snip tg 0 (#tg - 2))
-     stem (hk-pre? b (d + "/") ? (snip b (#d + 1) #b) b)
-     sx (filter (x \ two? (stat (K + "/" + b + x))) [".c" ".S"])
-     gx (filter (x \ hk-had? K t (b + x) 3) [".c" ".S"])
-     src (two? sx ? (K + "/" + b + <sx) (b + (two? gx ? <gx ".c")))
-     (pins t "@" tg "<" src "*" stem,
-      hk-expand (ends? src ".S" ? "$(cmd_as_o_S)" "$(cmd_cc_o_c)") t)))
+     (filter head? us + filter (u \ !(head? u)) us)))
 ) ; module hearts-kbuild

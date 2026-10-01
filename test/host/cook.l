@@ -572,6 +572,11 @@
    ht (pins {} " shell" (c \ "<" + c + ">"))
    _ (hv "X := $(shell uname -m)\n" ht)
    _ (ok "cook-vars: a caller's $(shell) answerer" (ht "X" = "<uname -m>"))
+   ; target-specific assignments come back for a reader that scopes them, newest first
+   tt {}
+   _ (hv "T := a.o\n$(T) b.o: private X := 1\n%.p: Y += 2\n" tt)
+   _ (ok "cook-vars: target-specific assignments, modifiers off"
+         (tt " tvars" = [["%.p" "Y += 2"] ["a.o b.o" "X := 1"]]))
 
    ; ---------------------------------------------------------------- summary
    _ (sh ("rm -rf " + dir))

@@ -516,8 +516,12 @@
                            ; one variable table and cannot scope one to a target, so it is
                            ; recorded against its targets and refuses only if one is remade.
                            (? !(two? r) '(skip)
-                              (two? (parse assignP <>r)) ['tvar <r]
+                              (two? (parse assignP (tvar-text <>r))) ['tvar <r (tvar-text <>r)]
                               ('rule . r))))))))))
+   ; a target-specific assignment past its modifiers: `tgt: private x := y` assigns x
+   (tvar-text s)
+    (ltrim s @ t (first-word t @ w
+       (any (= w) '("private" "override" "export") && 0 < #(after-word t) ? (tvar-text (after-word t)) t)))
 
    ; -- nested-paren-aware variable expansion + make functions --
    ; the index of the ) that matches the ( just opened, counting nested $(..).
@@ -918,9 +922,11 @@
                   ; conditional inside a recipe block gates its lines via `on` above.
                   'defassign ((on ? (do-assign as (r1 c) "=" (r2 c)) 0),
                               loop rest (flushr cur rules) 0 cond)
-                  ; remember which targets carry one, so recur can refuse if one is remade
-                  'tvar ((on ? (each (split-ws (expand (r1 c) as 0))
-                                           (w \ pin tvarbox (unseat w) "1")) 0),
+                  ; remember which targets carry one, so recur can refuse if one is remade;
+                  ; " tvars" keeps (targets assignment) in order for a reader that scopes them
+                  'tvar ((on ? (expand (r1 c) as 0 @ ts
+                                  (each (split-ws ts) (w \ pin tvarbox (unseat w) "1"),
+                                   pin as " tvars" ([ts (r2 c)] . peep as " tvars" ()))) 0),
                          loop rest (flushr cur rules) 0 cond)
                   'expand ((on ? (expand (r1 c) as 0) 0), loop rest rules cur cond)
                   'ifeq   (loop rest rules cur (push-cond cond on (on && eval-ifeq (r1 c) as)))
