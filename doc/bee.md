@@ -27,6 +27,8 @@ bee - a coding agent in the terminal, and the protocol its sessions talk by
 
 **love bee --lock** \[**--heavy**\] \[**--out** *dir*\] **--** *command* ...
 
+**love bee --avatar** \[*name*\]
+
 # DESCRIPTION
 
 **bee** puts a model to work in the current directory. The model's tools:
@@ -50,7 +52,13 @@ The system prompt tells the model where it is:
 - every merge queue under **refs/queue/**, as it stood at start (see THE MERGE QUEUE);
 - the project's own instructions: from **/** down to the working directory, each directory's **AGENTS.md** and then its **CLAUDE.md**, both where both exist.
 
-The settings are read from **~/.love/etc/bee.l**, one form per line: **(api anthropic)** or **(api openai)**, **(url** "...**)**, **(model** *name***)**, **(key-env** *var***)**, **(max-tokens** *n***)**, **(shell** *word* ...**)**, **(context** *n***)** and **(thinking off)**. A key goes out only over TLS, and only to a peer whose certificate this binary has verified. Plain HTTP reaches this machine alone, and not a port another login (uid 1000 and up) listens on. A tree's own **./.bee.l** travels with a clone, so it may set only **model**, **max-tokens**, **thinking**, **context** and **queue-watch** over them.
+The settings are read from **~/.love/etc/bee.l**, one form per line: **(api anthropic)** or **(api openai)**, **(url** "...**)**, **(model** *name***)**, **(key-env** *var***)**, **(max-tokens** *n***)**, **(shell** *word* ...**)**, **(context** *n***)**, **(thinking off)** and **(avatar** *name***)**. A key goes out only over TLS, and only to a peer whose certificate this binary has verified. Plain HTTP reaches this machine alone, and not a port another login (uid 1000 and up) listens on. A tree's own **./.bee.l** travels with a clone, so it may set only **model**, **max-tokens**, **thinking**, **context** and **queue-watch** over them.
+
+# AVATARS
+
+The hello box shows an avatar: eight by eight pixels drawn as four rows of half-blocks, in 24-bit colour when **COLORTERM** is **truecolor** or **24bit** and the nearest of 256 otherwise. They are **bunny** (the default), **bee**, **baby**, **hare**, **honeybee**, **beeface**, and **moon**, drawn by **love pom** at start as the moon stands then (UTC). The accent -- the box's border, the title, the spinner, the session's name and the mail marker -- follows it: the colour most of its vivid pixels share, or most of all its pixels when none is vivid.
+
+**/avatar**, on the full screen or at the **>** prompt, draws them all with their names; **/avatar** *name* wears one at once, and **love bee --avatar** \[*name*\] does the same from a shell. The choice is kept as **(avatar** *name***)** in **~/.love/etc/bee.l**, replacing any before it; a tree's **./.bee.l** cannot set it. An unknown name is refused with the list of known ones.
 
 # SESSIONS AND MESSAGES
 
@@ -258,7 +266,7 @@ Send the same note with nothing but a shell:
 
 # EXIT STATUS
 
-**0** when the run ends normally. **1** when the settings name no usable endpoint, model or key, or when a message cannot be delivered. **2** for a malformed **--send**.
+**0** when the run ends normally. **1** when the settings name no usable endpoint, model or key, when a message cannot be delivered, or for an unknown **--avatar**. **2** for a malformed **--send**.
 
 # SEE ALSO
 
