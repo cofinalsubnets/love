@@ -412,9 +412,14 @@ ai_noinline struct ai *ai_please(struct ai *g, uintptr_t req0) {
  // fits. it must also come back down -- a nursery parked at its high-water stands above
  // the major's spare, and `major_free < g->len` then forces a major every collection,
  // generational in name only. shrink on 4x hysteresis, so a resize is not per-pass.
+ // the budget's appel cap still binds, as below: a tuned budget means the same nursery here
  { uintptr_t used0 = g->len - avail(g), req = req0 + used0 + (used0 >> 2),
              want = req < g->minor0 ? g->minor0 : req;
    if (req > (uintptr_t) g->len) return gen_grow(g, req);        // the floor still wins
+   if (g->budget) {
+    uintptr_t lv = 2 * g->major_live0, room = g->budget > lv ? (g->budget - lv) / 4 : 0;
+    if (room < want) room = want;
+    if ((uintptr_t) g->len > room) return gen_grow(g, room); }
    if ((uintptr_t) g->len > 4 * want) return gen_grow(g, want);
    return g; }
 #endif
