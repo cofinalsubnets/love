@@ -1716,7 +1716,7 @@ static union u const
   nif_ptyecho[]    = {{lvm_cur}, {.x = putcharm(2)}, {lvm_ptyecho}, {lvm_ret0}},
   nif_termios[]    = {{lvm_termios}, {lvm_ret0}},
   nif_settermios[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_settermios}, {lvm_ret0}};
-LvNif("tether", nif_tether, "posix");
+LvNif("tether", nif_tether, NULL);
 LvNif("tetherenv", nif_tetherenv, "posix");
 LvNif("gather", nif_reap, "posix");
 LvNif("still", nif_kill, NULL);

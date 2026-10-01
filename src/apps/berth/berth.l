@@ -21,7 +21,7 @@
 (module '(berth berth berth-stage harbour hberth hsail hopen hopen-stage moor waitfor
           hbox hmas hpid hstage hpty? hpane hsoil hrelay hframe hmoor hsplit hsteer hshut
           hfeed hkey oars hsize htide htick hswim hquick? hcopy hpaste hclip-text hscreen-text
-          hseq hmouse hpeer hpasted hdesks hgo hcycle hfresh hb64 hsub? hswap hpicker inle-launch inle-switch inle-hive inle-queues inle-barx inle-saver hwake hidle hidle? hsleep hin hout hlive? hgreet hbye hattach hdetach inle-harbour inle-open hopen-pipe hpiped? hrd hpipesize hput moorio inle-here inle-serve inle-attach inle-sock inle-dir inle-ls inle-size hname hname-of hlr hbarat hdrag hmice hbarline hbardesk hbartick hnote hhands inle-bee inle-main)
+          hseq hmouse hpeer hpasted hdesks hgo hcycle hfresh hb64 hsub? hswap hpicker inle-launch inle-switch inle-hive inle-queues inle-barx inle-saver hwake hidle hidle? hsleep hin hout hlive? hgreet hbye hattach hdetach inle-harbour inle-here inle-serve inle-attach inle-sock inle-dir inle-ls inle-size hname hname-of hlr hbarat hdrag hmice hbarline hbardesk hbartick hnote hhands inle-bee inle-main)
 (borrow ((cite 'wharf) @ m (m ? m "src/apps/berth/wharf.l")))   ; the baked module, else the tree's file
 (borrow ((cite 'limn) @ m (m ? m "src/apps/berth/limn.l")))
 (borrow 'posix)
@@ -33,23 +33,20 @@
  ; cap out near a megabyte a second, and a full-screen guest pours six
  ; the box is re-read every gulp on purpose: that is how a resize reaches a
  ; running moor with no signal, and why a pane's screen may be swapped freely.
- ; r is what the child writes, w where its screen's replies go: one port on a pty, two on
- ; a pipe pane
- (moor bx m dirty) (moorio bx m m dirty)
- (moorio bx r w dirty) (see r @ ch
+ (moor bx m dirty) (see m @ ch
                     (ch = -1 ? ()
                      (: s (peep bx () 0)
                         _ (scribe s ch)
                         b (cask 8192)
-                        _ (: (drain x) (swig r b @ n
+                        _ (: (drain x) (swig m b @ n
                                           (charm? n && 0 < n ? (scribe (peep bx () 0) (snip b 0 n), drain ()) 0))
                            (drain ()))
                         rep (reply (peep bx () 0))
                         ; a reply is a byte stream and its order is the whole content
                         ; of it -- and one say beats six puts.
-                        (rep ? (say w (foldl (a \ b \ a + string b) "" rep), flush w) 0,
+                        (rep ? (say m (foldl (a \ b \ a + string b) "" rep), flush m) 0,
                          dirty ? (pin dirty () 1) 0,
-                         moorio bx r w dirty))))
+                         moor bx m dirty))))
 
  (waitfor pid) (gather pid @ s (? (two? s) s (nom? s) s (do (rest 2) (waitfor pid))))
 
@@ -73,17 +70,6 @@
                          (snip w k #w))
                      (b = "love" && two? >argv ? <>argv b))
  (hpty? p) (() != hmas p)
- ; a pipe pane (no pty on this seat): its master is where keys go, its sixth word where
- ; the child's bytes come from
- (hpiped? p) (5 < #p)
- (hrd p) (? (5 < #p) (p 5) (hmas p))
- ; a pipe pane laid again: LNM on its new grid, and its size on both pipes -- a seat whose
- ; settty takes a pipe (the kernel's) makes them a terminal pair, so tty answers the pane
- (hpipesize p s r c) (scribe s "\e[20h", settty (hmas p) r c, settty (hrd p) r c, 0)
- ; a byte into a pane's child. ^C on a pipe pane is the terminal pair's: its foreground
- ; group is interrupted and the byte goes no further, as a pty's line discipline takes it
- (hput p ch) (: g (? (ch = 3 && hpiped? p) (ttypg (hmas p)) ())
-                (charm? g && 0 < g ? (still (0 - g) 2) (put (hmas p) ch)))
  ; the clip's text: a linewise register ends each line, a charwise one is as it is
  (hclip-text hb) (peep (hb 'clip) () () @ v
                     (? (atom? v) ""
@@ -116,17 +102,6 @@
 
  ; open a child on its own pty at r x c. tether's errno rides back out on a
  ; refusal -- a nom, never two?, which is how the caller tells it from a pane.
- ; a child on a pipe pair where no pty can be had -- the kernel's seat, where a program is
- ; a task wearing the pipes. it gets no size; the pane is what it is written into
- (hopen-pipe argv r c)
-  (: _ (setenv "TERM" "xterm-256color")
-     ki (pipe 0) ko (pipe 0)
-     p (spawnio argv <ki >ko >ko [>ki <ko] -1 0)
-     _ (close <ki) _ (close >ko)
-     (? (nom? p) (: _ (close >ki) _ (close <ko) p)
-        (: s (screen (cask (screen () r c)) r c)
-           _ (scribe s "\e[20h")                    ; LNM: a pipe has no tty to make \n a \r\n
-           [{s} (fdopen >ki) p () (hname-of argv) (fdopen <ko)])))
  (hopen argv r c) (: _ (setenv "TERM" "xterm-256color")   ; the dialect we actually speak
                      md (tether argv)
                      (atom? md ? md
@@ -166,7 +141,7 @@
                                  (nr = gaze s 1 && nc = gaze s 2 ? 0
                                   (regrid s (cask (screen () nr nc)) nr nc @ s2
                                      (pin bx () s2,
-                                      hpty? p ? (hpiped? p ? (hpipesize p s2 nr nc) (settty (hmas p) nr nc)) (hshow p))))))))
+                                      hpty? p ? (settty (hmas p) nr nc) (hshow p))))))))
                      bs,
                  pin hb 'lay bs,
                  hsoil hb))
@@ -275,7 +250,7 @@
  ; a pane's pump, twirled: moor runs until the child hangs up and the berth is
  ; shut for it. the handle is kept in 'jobs so the teardown can reap it.
  (hmoor hb id) (: p (hpane hb id)
-                  t (twirl (_ \ (moorio (hbox p) (hrd p) (hmas p) (hb 'dirt), hshut hb id)) 0)
+                  t (twirl (_ \ (moor (hbox p) (hmas p) (hb 'dirt), hshut hb id)) 0)
                   (pin hb 'jobs (t . hb 'jobs)))
 
  ; tie a pane up: the first takes the whole wharf, another splits the focused berth
@@ -301,7 +276,7 @@
  ; a berth on a desk not shown leaves that desk's plan, and an emptied desk is gone; the
  ; shown desk emptied hands the glass to the first desk left
  (hshut hb id) (: p (hpane hb id)
-                  _ (two? p && hpty? p ? (close (hmas p), hpiped? p ? (close (hrd p)) 0) 0)
+                  _ (two? p && hpty? p ? (close (hmas p)) 0)
                   _ (two? p && !(hpty? p) && hstage p 'shut ? (hstage p 'shut ()) 0)   ; a stage's own leavings
                   _ (pin (hb 'panes) id ())
                   (elem id (wharf-berths (hb 'plan)) ?
@@ -457,7 +432,7 @@
  ; key as a step and is painted again, or shut when the step was its last ---
  (hfeed hb ch) (hpane hb (hb 'focus) @ p
                   (? (atom? p) 0
-                     (hpty? p) (hhome hb p, (hput p ch, flush (hmas p)))
+                     (hpty? p) (hhome hb p, (put (hmas p) ch, flush (hmas p)))
                      (hstage p @ sg
                         (sg 'step ch,
                          sg 'over? () ? (hshut hb (hb 'focus))
@@ -669,8 +644,8 @@
       'type (t \ x \ (hpane-at hb t @ q
                         (? !(two? q) (miss t)
                            (mine? <q) [0 "that is your own pane"]
-                           (: p (q 1) bs (map (c \ (hpty? p && !(hpiped? p) && c = 10 ? 13 c)) (map x ^#x))
-                              (map (c \ (hpty? p ? (hput p c) (hstage p 'step c, hshow p))) bs,
+                           (: p (q 1) bs (map (c \ (hpty? p && c = 10 ? 13 c)) (map x ^#x))
+                              (map (c \ (hpty? p ? (put (hmas p) c) (hstage p 'step c, hshow p))) bs,
                                hpty? p ? (flush (hmas p)) 0,
                                hsoil hb,
                                [1 (hjoin (htail (hquiet p) 24))])))))
@@ -702,8 +677,8 @@
      names (filter (n \ elem n vs) inle-apps + filter (n \ !(elem n inle-apps)) vs)
      (hpicker hb "open"
               (map (n \ [n (? (n = "bee") (_ \ hopen-stage (inle-bee hb) 1 1)
-                                (n = "lush") (_ \ inle-open sh 1 1)
-                                (_ \ inle-open (string? me ? [me n] [n]) 1 1))])
+                                (n = "lush") (_ \ hopen sh 1 1)
+                                (_ \ hopen (string? me ? [me n] [n]) 1 1))])
                    names)))
  ; the switcher's: every pane on every desk, picking one shows its desk and gives it the keyboard
  (inle-switch hb)
@@ -753,15 +728,13 @@
  ; a harbour laid for inle at r x c: lush in its panes (argv, when given, in the first), the
  ; bar, the mouse, the saver and inle's keys; a server's has no tty until a client comes.
  ; answers it, or why it could not
- ; a pane for argv: on a pty, else on pipes (the kernel's seat has no /dev/ptmx)
- (inle-open argv r c) (hopen argv r c @ p (atom? p ? (hopen-pipe argv r c) p))
  (inle-harbour as r c serve)
   (: me (selfpath 0) sh (string? me ? [me "lush"] ["sh"])
-     p0 (inle-open (two? as ? as sh) r c)
+     p0 (hopen (two? as ? as sh) r c)
      (atom? p0 ? ("cannot start " + (two? as ? <as (sh 0)))
         (harbour r c @ hb
            (? serve (pins hb 'serve 1 'csize [r c] 'in () 'out ()) 0,
-            pin hb 'more (_ \ inle-open sh 1 1),
+            pin hb 'more (_ \ hopen sh 1 1),
             pins hb 'bar 1 'mouse 1 'barx (inle-barx 0) 'saver (inle-saver 0), hbartick hb, hrelay hb,
             pin (hb 'keys) 98 (_ \ hopen-stage (inle-bee hb) 1 1),
             pin (hb 'keys) 32 (_ \ inle-launch hb sh me),

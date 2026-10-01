@@ -1199,31 +1199,24 @@ ai_noinline int k_fs_stat(char const *p, uintptr_t pn, struct k_st *st, bool fol
 // while a writer is open and -1 when the last one closes, which is what the scheduler parks
 // on, and each end counts its holders so the queue frees when both reach zero. the queue
 // grows rather than capping: the writer's zputc retries once and then drops the byte.
-// rows and cols are a terminal pair's size: a harbour pins its pane's on the pipes the pane's
-// task wears (settty), and tty answers it from either end. 0 is a plain pipe, no terminal.
-// fg is the pair's foreground group (ttyfg), the tasks a harbour interrupts on ^C; 0 is none.
-struct k_pipe { unsigned char *buf; uintptr_t cap, rp, wp; int rrefs, wrefs; uint16_t rows, cols; intptr_t fg; };
+struct k_pipe { unsigned char *buf; uintptr_t cap, rp, wp; int rrefs, wrefs; };
 
 static struct k_pipe *k_pipe_of(int fd) {
   struct k_source *s = k_source(fd);
   return s ? s->state : NULL; }
 
-static intptr_t pipe_readn(int fd, unsigned char *dst, uintptr_t n) {
-  struct k_pipe *p = k_pipe_of(fd);
-  if (!p) return -1;
+// a queue's two motions, the pipe's and the pty's: up to n bytes out (0 when empty), and n
+// bytes in (-1 when memory refuses)
+static intptr_t q_get(struct k_pipe *p, unsigned char *dst, uintptr_t n) {
   uintptr_t a = p->wp - p->rp;
-  if (!a) return p->wrefs ? 0 : -1;             // quiet with a writer: park; else the end
+  if (!a) return 0;
   if (a > n) a = n;
   memcpy(dst, p->buf + p->rp, a);
   p->rp += a;
   if (p->rp == p->wp) p->rp = p->wp = 0;        // drained: the queue restarts at the front
   return (intptr_t) a; }
 
-static intptr_t pipe_writen(int fd, unsigned char const *src, uintptr_t n) {
-  struct k_pipe *p = k_pipe_of(fd);
-  // no readers is gone, not busy; with no SIGPIPE the writer only learns if it looks, so
-  // the run is dropped as the host drops one on EPIPE and a `yes` into a dead pipe spins.
-  if (!p || !p->rrefs) return -1;
+static intptr_t q_put(struct k_pipe *p, unsigned char const *src, uintptr_t n) {
   if (n > (uintptr_t) INTPTR_MAX - p->wp) return -1;   // the doubling below stays in range
   if (p->wp + n > p->cap) {
     if (p->rp) {                                // compact before growing
@@ -1241,13 +1234,22 @@ static intptr_t pipe_writen(int fd, unsigned char const *src, uintptr_t n) {
   p->wp += n;
   return (intptr_t) n; }
 
+static intptr_t pipe_readn(int fd, unsigned char *dst, uintptr_t n) {
+  struct k_pipe *p = k_pipe_of(fd);
+  if (!p) return -1;
+  if (p->wp == p->rp) return p->wrefs ? 0 : -1; // quiet with a writer: park; else the end
+  return q_get(p, dst, n); }
+
+static intptr_t pipe_writen(int fd, unsigned char const *src, uintptr_t n) {
+  struct k_pipe *p = k_pipe_of(fd);
+  // no readers is gone, not busy; with no SIGPIPE the writer only learns if it looks, so
+  // the run is dropped as the host drops one on EPIPE and a `yes` into a dead pipe spins.
+  if (!p || !p->rrefs) return -1;
+  return q_put(p, src, n); }
+
 static bool pipe_rready(int fd) {
   struct k_pipe *p = k_pipe_of(fd);
   return p && (p->wp > p->rp || !p->wrefs); }   // bytes, or the end -- both wake a reader
-
-// the pipe under a row, either end, or NULL
-static struct k_pipe *k_pipe_row(struct k_source const *s) {
-  return s && (s->readn == pipe_readn || s->writen == pipe_writen) ? s->state : NULL; }
 
 static void pipe_free(struct k_pipe *p) {
   if (p->rrefs || p->wrefs) return;
@@ -1272,6 +1274,163 @@ static void k_row_zero(int fd) {
   struct k_source *s = k_source(fd);
   if (s) *s = (struct k_source) {0}; }
 
+// --- the pty: a terminal where the host would hand out /dev/pts ----------------------
+// three rows over one k_pty. the master is the terminal's side, a harbour's pane: its writes
+// are keys, run through the line discipline into `in`, and its reads drain `out`. the slave
+// is the program's: it reads `in` and writes `out`, a \n going out as \r\n while opost
+// holds. a key that raises a signal (^C ^\ ^Z) puts its number on the signal row, which the
+// task that tethered the pane reads and answers with `still`: only love can end a task.
+// cooked, a read takes one line at most and none until it is whole; ^D on an empty line is
+// one read's end. raw (raw 1) clears icanon, echo, isig and icrnl, as the host's does.
+enum { pt_icanon = 1, pt_echo = 2, pt_isig = 4, pt_icrnl = 8, pt_opost = 16 };
+struct k_pty { struct k_pipe in, out, ed, sig; int mrefs, srefs, grefs, eofs;
+               unsigned flags; uint16_t rows, cols; intptr_t fg; };
+
+static struct k_pty *k_pty_of(int fd) {
+  struct k_source *s = k_source(fd);
+  return s ? s->state : NULL; }
+
+static void pty_free(struct k_pty *t) {
+  if (t->mrefs || t->srefs || t->grefs) return;
+  kfree(t->in.buf), kfree(t->out.buf), kfree(t->ed.buf), kfree(t->sig.buf);
+  kfree(t); }
+
+// what the program writes, and what the discipline echoes: \n as \r\n under opost
+static void pty_out(struct k_pty *t, unsigned char const *s, uintptr_t n) {
+  uintptr_t i = 0;
+  if (t->flags & pt_opost)
+    for (uintptr_t j = 0; j < n; j++)
+      if (s[j] == '\n') q_put(&t->out, s + i, j - i), q_put(&t->out, (unsigned char const*) "\r\n", 2), i = j + 1;
+  q_put(&t->out, s + i, n - i); }
+
+// a control key echoes as ^X, two columns
+static void pty_echo(struct k_pty *t, unsigned char c) {
+  if (!(t->flags & pt_echo)) return;
+  unsigned char e[2] = {'^', c == 127 ? '?' : c + 64};
+  if (c == 127 || (c < 32 && c != '\n' && c != '\t')) pty_out(t, e, 2);
+  else pty_out(t, &c, 1); }
+
+// the line's last character off, a whole utf-8 sequence, and off the glass too
+static bool pty_rub(struct k_pty *t) {
+  struct k_pipe *e = &t->ed;
+  if (e->wp == e->rp) return false;
+  do e->wp--; while (e->wp > e->rp && (e->buf[e->wp] & 0xc0) == 0x80);
+  unsigned char c = e->buf[e->wp];
+  for (int w = c < 32 && c != '\t' ? 2 : 1; w && t->flags & pt_echo; w--)
+    pty_out(t, (unsigned char const*) "\b \b", 3);
+  return true; }
+
+static unsigned char pty_last(struct k_pty *t) {
+  return t->ed.wp > t->ed.rp ? t->ed.buf[t->ed.wp - 1] : 0; }
+
+static void pty_commit(struct k_pty *t) {
+  q_put(&t->in, t->ed.buf + t->ed.rp, t->ed.wp - t->ed.rp);
+  t->ed.rp = t->ed.wp = 0; }
+
+static void pty_key(struct k_pty *t, unsigned char c) {
+  if (c == '\r' && t->flags & pt_icrnl) c = '\n';
+  if (t->flags & pt_isig && (c == 3 || c == 28 || c == 26)) {
+    unsigned char sg = c == 3 ? 2 : c == 28 ? 3 : 20;
+    t->ed.rp = t->ed.wp = 0, t->in.rp = t->in.wp = 0;   // what was typed goes with it
+    pty_echo(t, c);
+    if (t->fg) q_put(&t->sig, &sg, 1);
+    return; }
+  if (!(t->flags & pt_icanon)) { q_put(&t->in, &c, 1), pty_echo(t, c); return; }
+  if (c == 127 || c == 8) { pty_rub(t); return; }
+  if (c == 21) { while (pty_rub(t)) {} return; }               // ^U the line
+  if (c == 23) {                                                // ^W the word
+    while (pty_last(t) == ' ' && pty_rub(t)) {}
+    while (pty_last(t) && pty_last(t) != ' ' && pty_rub(t)) {}
+    return; }
+  if (c == 4) { if (t->ed.wp == t->ed.rp) t->eofs++; else pty_commit(t); return; }
+  q_put(&t->ed, &c, 1), pty_echo(t, c);
+  if (c == '\n') pty_commit(t); }
+
+static intptr_t pty_mreadn(int fd, unsigned char *dst, uintptr_t n) {
+  struct k_pty *t = k_pty_of(fd);
+  if (!t) return -1;
+  if (t->out.wp == t->out.rp) return t->srefs ? 0 : -1;
+  return q_get(&t->out, dst, n); }
+
+static intptr_t pty_mwriten(int fd, unsigned char const *src, uintptr_t n) {
+  struct k_pty *t = k_pty_of(fd);
+  if (!t || !t->srefs) return -1;
+  for (uintptr_t i = 0; i < n; i++) pty_key(t, src[i]);
+  return (intptr_t) n; }
+
+static bool pty_mready(int fd) {
+  struct k_pty *t = k_pty_of(fd);
+  return t && (t->out.wp > t->out.rp || !t->srefs); }
+
+static intptr_t pty_sreadn(int fd, unsigned char *dst, uintptr_t n) {
+  struct k_pty *t = k_pty_of(fd);
+  if (!t) return -1;
+  uintptr_t a = t->in.wp - t->in.rp;
+  if (a) {
+    unsigned char const *b = t->in.buf + t->in.rp, *nl = t->flags & pt_icanon ? memchr(b, '\n', a) : NULL;
+    if (nl) a = (uintptr_t) (nl - b) + 1;                      // one line at most
+    return q_get(&t->in, dst, a < n ? a : n); }
+  if (t->eofs) return t->eofs--, -1;
+  return t->mrefs ? 0 : -1; }
+
+static intptr_t pty_swriten(int fd, unsigned char const *src, uintptr_t n) {
+  struct k_pty *t = k_pty_of(fd);
+  if (!t || !t->mrefs) return -1;
+  pty_out(t, src, n);
+  return (intptr_t) n; }
+
+static bool pty_sready(int fd) {
+  struct k_pty *t = k_pty_of(fd);
+  return t && (t->in.wp > t->in.rp || t->eofs || !t->mrefs); }
+
+static intptr_t pty_greadn(int fd, unsigned char *dst, uintptr_t n) {
+  struct k_pty *t = k_pty_of(fd);
+  if (!t) return -1;
+  if (t->sig.wp == t->sig.rp) return t->mrefs ? 0 : -1;
+  return q_get(&t->sig, dst, n); }
+
+static bool pty_gready(int fd) {
+  struct k_pty *t = k_pty_of(fd);
+  return t && (t->sig.wp > t->sig.rp || !t->mrefs); }
+
+static void pty_mclose(int fd) {
+  struct k_pty *t = k_pty_of(fd);
+  k_row_zero(fd);
+  if (t) t->mrefs--, pty_free(t); }
+static void pty_sclose(int fd) {
+  struct k_pty *t = k_pty_of(fd);
+  k_row_zero(fd);
+  if (t) t->srefs--, pty_free(t); }
+static void pty_gclose(int fd) {
+  struct k_pty *t = k_pty_of(fd);
+  k_row_zero(fd);
+  if (t) t->grefs--, pty_free(t); }
+
+// the pty under a master or slave row, or NULL
+static struct k_pty *k_pty_row(intptr_t fd) {
+  struct k_source const *s = fd < 0 ? NULL : k_source((int) fd);
+  return s && (s->readn == pty_mreadn || s->readn == pty_sreadn) ? s->state : NULL; }
+
+// three fresh rows -- master, slave, signal -- cooked at 24x80
+static int k_fd_pty(int fds[3]) {
+  struct k_pty *t = kmallocw(b2w(sizeof *t));
+  if (!t) return -ENOMEM;
+  *t = (struct k_pty) { .mrefs = 1, .srefs = 1, .grefs = 1, .rows = 24, .cols = 80,
+                        .flags = pt_icanon | pt_echo | pt_isig | pt_icrnl | pt_opost };
+  struct k_source const rows[3] = {
+    { .readn = pty_mreadn, .writen = pty_mwriten, .ready = pty_mready, .close = pty_mclose, .state = t },
+    { .readn = pty_sreadn, .writen = pty_swriten, .ready = pty_sready, .close = pty_sclose, .state = t },
+    { .readn = pty_greadn, .ready = pty_gready, .close = pty_gclose, .state = t } };
+  for (int i = 0; i < 3; i++) {
+    int fd = k_fd_free();
+    struct k_source *r = k_source_open(fd);
+    if (!r) {
+      for (int j = 0; j < i; j++) k_row_zero(fds[j]);
+      kfree(t);
+      return -ENOMEM; }
+    *r = rows[i], fds[i] = fd; }
+  return 0; }
+
 // clone src's row into a fresh fd. a pipe end shares the queue and bumps its side's count; a
 // ramfs fd clones the handle, so the offset diverges where POSIX shares it; a boot twin gets
 // k_row_zero so its close frees the row.
@@ -1291,6 +1450,9 @@ ai_noinline static int k_dup_row(int src, int at) {
   if (h) t->state = h, k_ents[h->i].refs++;
   else if (s->readn == pipe_readn) ((struct k_pipe*) s->state)->rrefs++;
   else if (s->writen == pipe_writen) ((struct k_pipe*) s->state)->wrefs++;
+  else if (s->readn == pty_mreadn) ((struct k_pty*) s->state)->mrefs++;
+  else if (s->readn == pty_sreadn) ((struct k_pty*) s->state)->srefs++;
+  else if (s->readn == pty_greadn) ((struct k_pty*) s->state)->grefs++;
   else if (!t->close) t->close = k_row_zero;
   return fd; }
 // src/inle/sys.c's doors over the same motions: fcntl's F_DUPFD (at = the floor)
@@ -1859,52 +2021,72 @@ static intptr_t k_ttyfd(struct ai *g, word x) {
   if (*task_io(g) != zero) x = io_route(g, x);
   return charmp(x) ? getcharm(x) : ai_port_fd(x); }
 
-// a terminal pair's pipe behind an fd, or NULL: a pipe with no size is no terminal
-static struct k_pipe *k_tpair(intptr_t fd) {
-  struct k_pipe *p = fd < 0 ? NULL : k_pipe_row(k_source((int) fd));
-  return p && p->rows ? p : NULL; }
-
 ai_noinline static struct ai *k_tty(struct ai *g) {
   intptr_t fd = k_ttyfd(g, g->sp[0]);
   if (fd < 0) return g->sp[0] = ai_badarg(g), g;
   struct k_source const *s = k_source((int) fd);
-  struct k_pipe const *pp = k_pipe_row(s);
-  uintptr_t rows = pp ? pp->rows : kcb ? kcb->rows : 0, cols = pp ? pp->cols : kcb ? kcb->cols : 0;
-  if (!rows || !s || !(pp || s->putc == serial_putc1 || s->readn == kb_readn))
+  struct k_pty const *t = k_pty_row(fd);
+  uintptr_t rows = t ? t->rows : kcb ? kcb->rows : 0, cols = t ? t->cols : kcb ? kcb->cols : 0;
+  if (!rows || !s || !(t || s->putc == serial_putc1 || s->readn == kb_readn))
    return g->sp[0] = ai_err(g, ENOTTY), g;
   if (!ai_ok(g = ai_have(g, Width(struct ai_chain)))) return g;
   struct ai_chain *w = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
                                  putcharm(rows), putcharm(cols));
   return g->sp[0] = word(w), g; }
 
-// (settty fd rows cols) -- a pipe end becomes a terminal pair's, with this size (the
-// kernel's stand-in for a pty's TIOCSWINSZ); anything else is not a terminal here
+// (settty fd rows cols) -- a pty's size, from either side (TIOCSWINSZ)
 static lvm(lvm_ksettty) {
-  intptr_t fd = k_ttyfd(g, Sp[0]),
-           r = charmp(Sp[1]) ? getcharm(Sp[1]) : 0,
-           c = charmp(Sp[2]) ? getcharm(Sp[2]) : 0;
-  struct k_pipe *p = fd < 0 ? NULL : k_pipe_row(k_source((int) fd));
-  bool ok = p && 0 < r && r <= UINT16_MAX && 0 < c && c <= UINT16_MAX;
-  if (ok) p->rows = (uint16_t) r, p->cols = (uint16_t) c;
+  intptr_t r = charmp(Sp[1]) ? getcharm(Sp[1]) : 0, c = charmp(Sp[2]) ? getcharm(Sp[2]) : 0;
+  struct k_pty *t = k_pty_row(k_ttyfd(g, Sp[0]));
+  bool ok = t && 0 < r && r <= UINT16_MAX && 0 < c && c <= UINT16_MAX;
+  if (ok) t->rows = (uint16_t) r, t->cols = (uint16_t) c;
   Sp[2] = ok ? ZeroPoint : ai_err(g, ENOTTY);
   ai_musttail return Nextp(1, 2); }
 
-// (ttyfg pg) -- the group that owns the terminal on fd 0 from here: a task id, 0 or less the
-// shell itself (none). the console takes it and keeps nothing; a plain pipe is no terminal
+// the console answers the terminal doors and keeps nothing: its keys are its own
+static bool k_console_in(intptr_t fd) {
+  struct k_source const *s = fd < 0 ? NULL : k_source((int) fd);
+  return s && s->readn == kb_readn; }
+
+// (ttyfg pg) -- the group that owns the terminal on fd 0 from here, the one its ^C ends: a
+// task id, or 0 or less for the shell itself, which takes no signal
 static lvm(lvm_kttyfg) {
   intptr_t fd = k_ttyfd(g, putcharm(0)), pg = charmp(Sp[0]) ? getcharm(Sp[0]) : 0;
-  struct k_pipe *p = k_tpair(fd);
-  struct k_source const *s = fd < 0 ? NULL : k_source((int) fd);
-  if (p) p->fg = pg > 0 ? pg : 0;
-  Sp[0] = p || (s && s->readn == kb_readn) ? ZeroPoint : ai_err(g, ENOTTY);
+  struct k_pty *t = k_pty_row(fd);
+  if (t) t->fg = pg > 0 ? pg : 0;
+  Sp[0] = t || k_console_in(fd) ? ZeroPoint : ai_err(g, ENOTTY);
   ai_musttail return Next(1); }
 
 // (ttypg fd) -- the terminal's foreground group, () when the shell holds it
 static lvm(lvm_kttypg) {
-  intptr_t fd = k_ttyfd(g, Sp[0]);
-  struct k_pipe *p = k_tpair(fd);
-  Sp[0] = !p ? ai_err(g, ENOTTY) : p->fg ? putcharm(p->fg) : ZeroPoint;
+  struct k_pty *t = k_pty_row(k_ttyfd(g, Sp[0]));
+  Sp[0] = !t ? ai_err(g, ENOTTY) : t->fg ? putcharm(t->fg) : ZeroPoint;
   ai_musttail return Next(1); }
+
+// (raw on) -- the terminal on fd 0 raw (1) or cooked (0); () when there is one to set
+static lvm(lvm_kraw) {
+  intptr_t fd = k_ttyfd(g, putcharm(0));
+  struct k_pty *t = k_pty_row(fd);
+  unsigned const cooked = pt_icanon | pt_echo | pt_isig | pt_icrnl;
+  if (t) t->flags = charmp(Sp[0]) && getcharm(Sp[0]) ? t->flags & ~cooked : t->flags | cooked;
+  Sp[0] = t || k_console_in(fd) ? ZeroPoint : ai_err(g, ENOTTY);
+  ai_musttail return Next(1); }
+
+// (openpty _) -- a fresh pty as its rows: (master slave signal)
+ai_noinline static struct ai *k_openpty(struct ai *g) {
+  int fds[3];
+  int e = k_fd_pty(fds);
+  if (e) return g->sp[0] = ai_err(g, -e), g;
+  if (!ai_ok(g = ai_have(g, 3 * Width(struct ai_chain)))) {
+    for (int i = 0; i < 3; i++) k_row_close(fds[i]);
+    return g; }
+  word l = ZeroPoint;
+  for (int i = 2; i >= 0; i--)
+    l = word(ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)), putcharm(fds[i]), l));
+  return g->sp[0] = l, g; }
+
+static lvm(lvm_kopenpty) {
+  LvmCall(g, k_openpty) }
 
 static lvm(lvm_tty) {
   LvmCall(g, k_tty) }
@@ -1990,7 +2172,9 @@ static union u
   nif_tty[] = {{lvm_tty}, {lvm_ret0}},
   nif_ksettty[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_ksettty}, {lvm_ret0}},
   nif_kttyfg[] = {{lvm_kttyfg}, {lvm_ret0}},
-  nif_kttypg[] = {{lvm_kttypg}, {lvm_ret0}};
+  nif_kttypg[] = {{lvm_kttypg}, {lvm_ret0}},
+  nif_kraw[] = {{lvm_kraw}, {lvm_ret0}},
+  nif_kopenpty[] = {{lvm_kopenpty}, {lvm_ret0}};
 
 // link every free range kboot reports into the free list, in array order: kmem is the last
 // and the earlier ones link through ->next.
@@ -2067,6 +2251,8 @@ static struct ai_def const __attribute__((section("ai_knifs"), used)) defs[] = {
   {"settty", {.k = nif_ksettty}},
   {"ttyfg", {.k = nif_kttyfg}},
   {"ttypg", {.k = nif_kttypg}},
+  {"raw", {.k = nif_kraw}},
+  {"openpty", {.k = nif_kopenpty}},
   {"fetch", {.k = nif_fetch}},
   {"kexec", {.k = nif_kexec}} };
 
@@ -2300,10 +2486,11 @@ void kmain(void) {
  "                      (. (cap ks) (k-mem gp (cup ks)))"
  "                    (k-mem gp (cup ks)))"
  // kill at task granularity: a stop's signals and cont are nothing here, and every other
- // one ends the task where it stands, closing the ends it was handed. wait answers 128+sig
+ // one ends the task where it stands, closing the ends it was handed. wait answers 128+sig,
+// laid before the freeze: a close can yield, and the waiter wakes the moment the task is gone
  "   (k-stop t sig) (? (|| (= sig 18) (|| (= sig 19) (= sig 20))) 0"
- "     (: _ (freeze t) _ (each (peep k-ends t ()) close) _ (pull k-ends t 0)"
- "        (pin k-died t (+ 128 sig))))"
+ "     (: _ (pin k-died t (+ 128 sig)) _ (freeze t)"
+ "        _ (each (peep k-ends t ()) close) (pull k-ends t 0)))"
  "   (still p sig)"
  "     (? (|| (! (charm? p)) (! (charm? sig))) (nom 'badarg)"
  "        (: ts (? (< p 0) (k-members (- 0 p)) (landed? p) () (. p ()))"
@@ -2335,6 +2522,22 @@ void kmain(void) {
  "   (wait p) (: r (catch p) d (peep k-died p ())"
  "     _ (pull k-died p 0) _ (pull k-grp p 0) _ (pull k-ends p 0)"
  "     (? (charm? d) d r))"
+ // a child on a pty of its own, as the host's tether: it leads its own group, which takes the
+ // terminal, and a watcher answers a key's signal by stilling whichever group holds it then.
+ // the watcher ends with the master. -> (pid . master port)
+ "   (tether argv) (: fs (openpty 0)"
+ "     (? (! (two? fs)) fs"
+ "        (: m (cap fs) sl (cap (cup fs)) sg (cap (cup (cup fs)))"
+ "           w (worn ()) sp (fdopen (dup sl))"
+ "           _ (wear [sp sp sp])"
+ "           p (k-spawn1 argv sl sl sl 0 1)"
+ "           _ (wear w)"
+ "           _ (close sp) _ (close sl)"
+ "           _ (twirl (\\ _ (k-sigs (fdopen sg) m)) 0)"
+ "           (. p (fdopen m)))))"
+ "   (k-sigs q m) (: c (see q)"
+ "     (? (< c 0) (close q)"
+ "        (: g (ttypg m) _ (? (&& (charm? g) (< 0 g)) (still (- 0 g) c) 0) (k-sigs q m))))"
  // hark and herald on a seat with no fork: the capture is a scratch file worn as the child's
  // stdout and herald's relay is a dump at the end. stderr stays on the console.
  "   hark-n {}"
@@ -2375,9 +2578,9 @@ void kmain(void) {
   // an unbound mention raises missing at every define that names one, and bao's file-help
   // folds a real quit, so one absent nif in the cat resets the machine at load. pin a no-op
   // for whichever host nifs the cat mentions and this seat lacks -- self-retiring, since a
-  // rung landing the real nif takes its name off by existing. raw answers (), signal ignores.
+  // rung landing the real nif takes its name off by existing. signal ignores.
   r = ai_evals_(r,
-   "(: (raw m) () (signal n h) ())"
+   "(: (signal n h) ())"
    "(map (\\ n (? (elem n (names ())) () (ev [': [n 'x] ()])))"
    "     '(hardlink spawn spawnmap fork exec herald wait still"
    "       getpid getuid seal ttyfg setpg umask rusage rlimit setrlimit glean pipe fdopen dup dup2 connect listen"
