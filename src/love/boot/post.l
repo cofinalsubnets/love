@@ -601,12 +601,15 @@
    ; table outlives a reading and is rebuilt when a layer or a module gains or loses a name;
    ; a hit is held to the binding it came from, so a name since rebound rebuilds too. the
    ; hit is by `=`, its binding held by what it held when the table was built. a module's
-   ; name reads back as (cite 'module 'name), the book's as itself; () for none
+   ; name reads back as (cite 'module 'name), a call, so it names only the bound value
+   ; itself: an inner (\ a b (? (< a b) b a)) only `=` to glaze's amax is its own lambda. the
+   ; book's name reads back as itself, a quote of an `=` value; () for none
    (glob v) (tablet? v || hot? v ? (gcar v)
              (peep (gtab 0) v () @ e
                 (? !e ()
-                   (<>e <e == e 2) (spell e)
-                   (peep (gtab 1) v () @ e (two? e ? (spell e))))))
+                   (<>e <e == e 2) (held? v e ? (spell e) ())
+                   (peep (gtab 1) v () @ e (two? e && held? v e ? (spell e))))))
+   (held? v e) (!(e 3) || v == e 2 || v == unw (e 2))        ; a book name, or the bound value itself or its twin
    (spell e) (e 3 ? ['cite ['\ (e 3)] ['\ <e]] <e)
    ; a carrier is found by `==` down a list: its hash moves as it is written, so a table
    ; keyed by it misses one written since the build. the book's name first, then the best
