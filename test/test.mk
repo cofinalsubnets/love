@@ -213,10 +213,14 @@ hostnif_cold =                                   # empty: no gate needs the cold
 hostnif_tests += test/host/xz.l test/host/bz2.l   # the xz and bzip2 pulls against their whole-string reads
 # ev read back off its show names the doors ev closes over, which a mopped image has dropped
 hostnif_nomop = test/host/evback.l
+# gcpause's theorem is about a fresh heap: a path to this binary forks warm under lush, and the
+# child inherits the shell's heap and sizing; `env` is a foreign word, so the child execs fresh
+hostnif_exec = test/host/gcpause.l
 test_hostnif: host out$(hsuf)/lush
 	@for s in $(hostnif_tests); do echo "TEST $$s"; \
 	  case " $(hostnif_cold) " in *" $$s "*) L="env LOVE_NO_IMAGE=1 $m";; *) L="$m";; esac; \
 	  case " $(hostnif_nomop) " in *" $$s "*) L="env LOVE_NO_IMAGE=1 LOVE_NO_MOP=1 $m";; esac; \
+	  case " $(hostnif_exec) " in *" $$s "*) L="env $m";; esac; \
 	  cat test/00-init.l $$s | $(gsh) test/gate/run.sh hostnif "$$L" ": ok" \
 	    || { echo "  (the gate above is $$s)"; exit 1; }; \
 	done
