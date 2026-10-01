@@ -595,5 +595,23 @@
     (: (wf p) (gather p @ g2 (two? g2 ? g2 (rest 20, wf p))) (wf <md)),
     close >md))
 
+; --- a pipe pane, as on the kernel's seat: the child's bytes come up one pipe onto the
+; screen, keys go down the other, and its hanging up shuts the pane ---
+(: (sub? h n i) (i + #n < #h + 1 ? (n = snip h i (i + #n) ? 1 (sub? h n (i + 1))) 0)
+   (j ls) (foldl (a \ l \ a + l + "\n") "" ls)
+   hb (harbour 8 40)
+   p (hopen-pipe ["sh" "-c" "read x; echo got:$x; sleep 1"] 1 1)
+   _ (hberth hb 'stack 50 p)
+   _ (map (hfeed hb) [104 105 10])
+   _ (rest 400)
+   t (j (hscreen-text (hpane hb 1)))
+   hh (hhands hb {-1})
+   _ (rest 1200)
+   (test (hpiped? p) (hpty? p)
+         (sub? t "got:hi" 0)
+         (() = hpane hb 1)                                   ; hung up: shut
+         ("sh" = hname p),
+    map (t \ (landed? t ? (catch t) (freeze t))) (hb 'jobs)))
+
 (test_fin ())
 (puts "berth: ok")
