@@ -7,7 +7,8 @@
 ;
 ; C-a is the prefix, intercepted in the key pump below every guest: s/v split, h j k l
 ; steer, x shut, [ copy mode (the pane's screen as a vi buffer), ] paste, C-a a literal;
-; c a fresh desk, n p the next and last, 0-9 a desk by number (made when missing).
+; c a fresh desk, n p the next and last, 0-9 a desk by number (made when missing); a key
+; the caller pins in 'keys opens the pane its thunk answers, beside (inle's b, a model).
 ; the clip is the harbour's one register, vi's shape, shared by every vi buffer on it,
 ; and sent out to the outer terminal's clipboard (osc 52) when it changes.
 ; a guest may be a stage of this process -- cli's triple (show w h) (step k) (over? _) --
@@ -19,7 +20,7 @@
 (module '(berth berth berth-stage harbour hberth hsail hopen hopen-stage moor waitfor
           hbox hmas hpid hstage hpty? hpane hsoil hrelay hframe hmoor hsplit hsteer hshut
           hfeed hkey oars hsize htide htick hswim hquick? hcopy hpaste hclip-text hscreen-text
-          hseq hmouse hpeer hpasted hdesks hgo hcycle hfresh hb64 inle-main)
+          hseq hmouse hpeer hpasted hdesks hgo hcycle hfresh hb64 hnote hhands inle-bee inle-main)
 (borrow ((cite 'wharf) @ m (m ? m "src/apps/berth/wharf.l")))   ; the baked module, else the tree's file
 (borrow ((cite 'limn) @ m (m ? m "src/apps/berth/limn.l")))
 (borrow 'posix)
@@ -51,7 +52,7 @@
  ; --- the harbour: every berth's screen, pty and child, under one wharf plan ---
  ; a pane is (box master pid stage): a child's has its master and pid and no stage,
  ; a stage's the stage and neither. the harbour is a tablet, and the keys are the
- ; whole state: plan focus next rows cols panes lay dirt more jobs clip, and the desks --
+ ; whole state: plan focus next rows cols panes lay dirt more jobs clip keys, and the desks --
  ; desk the one shown, desks the others' [plan focus] by number, the shown one's never kept there.
  (hbox p) <p
  (hmas p) <>p
@@ -104,6 +105,10 @@
  (berth-stage show step over?) {'show show 'step step 'over? over?}
  (hshow p) (peep (hbox p) () 0 @ s
               (scribe s (hstage p 'show (gaze s 2) (gaze s 1))))
+ ; a note on its own stage, gone at any key
+ (hnote t) (: k {0}
+              (berth-stage (\ w h ("\e[H\e[2J" + t + "\r\n\r\n(a key closes this)"))
+                           (\ c (pin k () 1)) (\ _ (peep k () 0))))
  (hopen-stage sg r c) (: s (screen (cask (screen () r c)) r c)
                          p [{s} () () sg]
                          (hshow p,
@@ -232,6 +237,7 @@
  ; shown desk emptied hands the glass to the first desk left
  (hshut hb id) (: p (hpane hb id)
                   _ (two? p && hpty? p ? (close (hmas p)) 0)
+                  _ (two? p && !(hpty? p) && hstage p 'shut ? (hstage p 'shut ()) 0)   ; a stage's own leavings
                   _ (pin (hb 'panes) id ())
                   (elem id (wharf-berths (hb 'plan)) ?
                      (: pl (wharf-shut (hb 'plan) id)
@@ -387,7 +393,7 @@
                       110 (hcycle hb 1)                 ; n
                       112 (hcycle hb -1)                ; p
                       (d && 47 < d < 58) (hgo hb (d - 48))   ; 0-9
-                      0)))
+                      (peep (hb 'keys) k () @ f (f ? (f () @ p (two? p ? (hberth hb 'beside 50 p) 0)) 0)))))
  ; a child gets the bytes as typed, a sequence read whole when its ESC has company
  ; (a lone ESC is a key); a stage gets edkey's keys, as on cli's stage, or its own
  ; reader's; and the user's eof leaves it
@@ -441,7 +447,7 @@
  (harbour r c) ({} @ hb
                   (pins hb 'plan () 'focus () 'next 1 'rows r 'cols c 'panes {}
                         'more () 'dirt {1} 'jobs () 'lay () 'clip {} 'sent {} 'pics 0 'six {} 'opx ()
-                        'desk 0 'desks {} 'c52 "",
+                        'desk 0 'desks {} 'c52 "" 'keys {},
                    hb))
 
  ; --- sail: the harbour on the tty, raw and on the alternate screen, keys pumped
@@ -478,17 +484,74 @@
 
  ; --- inle: the os's own face on any terminal -- the harbour with lush in every pane a
  ; split or a desk opens, and argv, when given, in the first ---
+ ; --- hands: the harbour as a model's tools see it -- every pane by id on every desk, read
+ ; as text, typed into, opened, focused, shut. own boxes the model's own pane, which it
+ ; reads but never types into or shuts. every door answers [ok? text] ---
+ (hids hb) (wharf-berths (hb 'plan) + catmap (d \ wharf-berths <(hb 'desks d)) (hdesks hb))
+ (hdesk-of hb id) (elem id (wharf-berths (hb 'plan)) ? (hb 'desk)
+                     (: ds (filter (d \ elem id (wharf-berths <(hb 'desks d))) (hdesks hb)) (two? ds ? <ds ())))
+ (hjoin ls) (? (two? ls) (foldl (a \ l \ a + "\n" + l) <ls >ls) "")
+ ; the pane named by a model's id, a string
+ (hpane-at hb t) (: n (? (string? t && 0 < #t && all (c \ 47 < c < 58) (map t ^#t))
+                        (foldl (a \ c \ a * 10 + c - 48) 0 (map t ^#t)) -1)
+                    p (hpane hb n)
+                    (two? p ? [n p] ()))
+ ; rows of a pane until it holds still: twice alike 150 ms apart, 5 s at most
+ (hquiet p) (: (go a n) (: _ (rest 150) b (hscreen-text p) (? (b = a || n = 0) b (go b (n - 1))))
+               (go (hscreen-text p) 32))
+ (htail rs n) (: (cut l) (? (two? l && 0 = #(<l)) (cut >l) l)
+                 (rev (take n (cut (rev rs)))))
+ (hhands hb own)
+  (: (mine? n) (n = peep own () -1)
+     (miss t) [0 ("no pane " + show t)]
+     {'panes (_ \ [1 (hjoin (map (n \ (: p (hpane hb n) s (peep (hbox p) () 0)
+                                        (show n + "  desk " + show (hdesk-of hb n) + "  "
+                                         + (hpty? p ? ("a program, pid " + show (hpid p)) "a stage")
+                                         + "  " + show (gaze s 2) + "x" + show (gaze s 1)
+                                         + (n = hb 'focus && hdesk-of hb n = hb 'desk ? "  (the user's keyboard)" "")
+                                         + (mine? n ? "  (you)" ""))))
+                                  (sort (hids hb))))])
+      'read (t \ (hpane-at hb t @ q (two? q ? [1 (hjoin (hscreen-text (q 1)))] (miss t))))
+      'type (t \ x \ (hpane-at hb t @ q
+                        (? !(two? q) (miss t)
+                           (mine? <q) [0 "that is your own pane"]
+                           (: p (q 1) bs (map (c \ (hpty? p && c = 10 ? 13 c)) (map x ^#x))
+                              (map (c \ (hpty? p ? (put (hmas p) c) (hstage p 'step c, hshow p))) bs,
+                               hpty? p ? (flush (hmas p)) 0,
+                               hsoil hb,
+                               [1 (hjoin (htail (hquiet p) 24))])))))
+      'open (_ \ (hb 'more () @ p
+                    (? !(two? p) [0 "no pane opened"]
+                       (: n (hb 'next) f (hb 'focus)
+                          (hberth hb 'beside 50 p,
+                           charm? f ? (pin hb 'focus f, hsoil hb) 0,        ; the keyboard stays put
+                           [1 ("pane " + show n)])))))
+      'focus (t \ (hpane-at hb t @ q
+                     (? !(two? q) (miss t)
+                        (: d (hdesk-of hb <q) (hgo hb d, pin hb 'focus <q, hsoil hb, [1 ("pane " + t + " has the keyboard")])))))
+      'shut (t \ (hpane-at hb t @ q
+                    (? !(two? q) (miss t)
+                       (mine? <q) [0 "that is your own pane"]
+                       (hshut hb <q, [1 ("pane " + t + " is closed")]))))})
+
+ ; a model's pane: bee's full screen as a stage, a session of the hive, with the harbour's
+ ; hands; why not, as a note
+ (inle-bee hb) (: b (cite 'bee 'bee-main) own {-1}
+                 sg (? b (b ["--stage" (hhands hb own)]) "bee is not in this binary")
+                 _ (pin own () (hb 'next))                        ; the id hberth gives it next
+                 (? (tablet? sg) sg (hnote ("bee: " + (string? sg ? sg "cannot start")))))
  (inle-main as) (: me (selfpath 0) sh (string? me ? [me "lush"] ["sh"])
                    sz (hsize 0) r <sz c <>sz
                    p0 (hopen (two? as ? as sh) r c)
                    (atom? p0 ? (say err ("inle: cannot start " + (two? as ? <as (sh 0)) + "\n"), 1)
                       (harbour r c @ hb
                          (pin hb 'more (_ \ hopen sh 1 1),
+                          pin (hb 'keys) 98 (_ \ hopen-stage (inle-bee hb) 1 1),
                           hberth hb 'stack 50 p0,
                           hsail hb,
                           waitfor (hpid p0),
                           0))))
  inle-usage "usage: love inle [COMMAND ..]   the harbour, lush in its panes; COMMAND in the first
-  C-a: s v split, h j k l steer, x shut, [ ] copy and paste, c n p 0-9 desks, C-a a literal C-a"
+  C-a: s v split, h j k l steer, x shut, [ ] copy and paste, c n p 0-9 desks, b a model, C-a a literal C-a"
  _ (pins (cite 'verbs 'tab) 'inle (udoor 'inle inle-main inle-usage 1 1)))
 ) ; module berth

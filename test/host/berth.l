@@ -403,5 +403,38 @@
          !(sub? (hframe hb) "\e]52" 0)
          !(() = peep (cite 'verbs 'tab) 'inle ())))
 
+; --- hands: a model's tools on the harbour -- the panes listed on every desk, a child typed
+; into (a newline is Enter) and read back once quiet, its own pane refused, one opened with
+; the keyboard left where it was, focus across desks, and a pane shut ---
+(: (sub? h n i) (i + #n < #h + 1 ? (n = snip h i (i + #n) ? 1 (sub? h n (i + 1))) 0)
+   hb (harbour 12 40)
+   own {-1}
+   hh (hhands hb own)
+   _ (pin hb 'more (_ \ hopen ["sh" "-c" "stty -echo; cat"] 1 1))
+   _ (hberth hb 'stack 50 (hb 'more ()))                    ; 1: cat
+   _ (pin own () (hb 'next))
+   _ (hberth hb 'beside 50 (hopen-stage (berth-stage (\ w h "me") (\ c 0) (\ _ 0)) 1 1))   ; 2: the model
+   _ (hfresh hb)                                            ; 3: cat, on desk 1
+   l (hh 'panes ())
+   _ (rest 300)
+   t (hh 'type "1" "hello\n")
+   r (hh 'read "1")
+   mine (hh 'type "2" "x")
+   o (hh 'open ())
+   f0 (hb 'focus)
+   _ (hh 'focus "1")
+   (test <l (sub? (l 1) "1  desk 0  a program" 0) (sub? (l 1) "2  desk 0  a stage" 0)
+         (sub? (l 1) "(you)" 0) (sub? (l 1) "3  desk 1" 0)
+         <t (sub? (t 1) "hello" 0)
+         (sub? (r 1) "hello" 0)
+         !(<mine)
+         !(<(hh 'read "9")) !(<(hh 'read "x1"))
+         ("pane 4" = o 1) (3 = f0)                           ; opened on desk 1, the keyboard still on 3
+         (0 = hb 'desk) (1 = hb 'focus),
+    hh 'shut "3",
+    test (() = hpane hb 3) !(<(hh 'shut "2")),
+    map (n \ hshut hb n) [1 4],
+    map (t \ (landed? t ? (catch t) (freeze t))) (hb 'jobs)))
+
 (test_fin ())
 (puts "berth: ok")

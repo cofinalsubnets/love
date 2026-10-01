@@ -41,10 +41,13 @@ bee - a coding agent in the terminal, and the protocol its sessions talk by
 - **start_job**, **check_job** and **stop_job**, and **spawn_bee** and **stop_bee**, described under JOBS AND WORKERS;
 - **lock_acquire**, **lock_release** and **lock_list**, described under LOCKS;
 - **queue_row**, **queue_lead**, **queue_land** and **queue_landed**, described under THE MERGE QUEUE.
+- in a pane of **love inle**, **pane_list**, **pane_read**, **pane_type**, **pane_open**, **pane_focus** and **pane_close**: the desktop's other panes by id, read as text, typed into as keys (a newline is Enter, and the answer is the pane once quiet), opened beside, given the keyboard, closed. The model's own pane is never typed into or closed.
 
-A write, an edit, a shell command, a job's start, a message to another session, a queue write, a spawn and a stop of another bee ask y/n before they run, unless **-y** is given, and so does **read_file** of a path outside the working tree (a link out of it included). The rest run without asking. An ask shows the whole input, a control character as **^X**; on the full screen **y** runs it only once every row has been on the screen, and the arrows scroll it.
+A write, an edit, a shell command, a job's start, a message to another session, a queue write, a spawn and a stop of another bee, and typing into, opening, focusing or closing a pane ask y/n before they run, unless **-y** is given, and so does **read_file** of a path outside the working tree (a link out of it included). The rest run without asking. An ask shows the whole input, a control character as **^X**; on the full screen **y** runs it only once every row has been on the screen, and the arrows scroll it.
 
 Given a *prompt*, bee runs one turn and exits, streaming the answer to standard output. With no prompt, it opens its full screen on a terminal and a **>** loop elsewhere, or on a terminal too with **--plain**.
+
+The full screen is also a pane: **(bee-main ["--stage"])**, called from love, settles a session and answers it as a stage for **berth**'s harbour, so **love inle** opens one beside its shells (**C-a b**). A stage that cannot start answers why as a string. Closing the pane ends the session's turn and leaves the hive.
 
 The system prompt tells the model where it is:
 
