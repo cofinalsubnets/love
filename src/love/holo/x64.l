@@ -161,6 +161,13 @@
    (emit-ldxb d base index scale disp) (x64-memx 1 '(15 182) d base index scale disp)  ; 0F B6 movzx r64, BYTE (zero-extend)
    (emit-ldxw d base index scale disp) (x64-memx 0 '(139) d base index scale disp)     ; 8B    mov r32, DWORD (a 32-bit write zero-extends)
    (emit-ldxsw d base index scale disp) (x64-memx 1 '(99) d base index scale disp)     ; 63    movsxd r64, DWORD
+   ;; and/or/xor r32 by a DWORD (23/0B/33 /r): the 32-bit write zeroes the top
+   (emit-andx4 d base index scale disp) (x64-memx 0 '(35) d base index scale disp)
+   (emit-orx4 d base index scale disp) (x64-memx 0 '(11) d base index scale disp)
+   (emit-xorx4 d base index scale disp) (x64-memx 0 '(51) d base index scale disp)
+   (emit-andm4 d base off) (x64-mem () 0 '(35) d base off)
+   (emit-orm4 d base off) (x64-mem () 0 '(11) d base off)
+   (emit-xorm4 d base off) (x64-mem () 0 '(51) d base off)
    (emit-stxb base index scale disp s) (x64-memx 0 '(136) s base index scale disp)     ; 88    mov BYTE, sl (REX.W=0; mrex forces the prefix for s 4-7: spl/sil.., not ah/ch..)
 
    ;; a memory operand [base+disp]: Modrm (+ SIB for an rsp/r12 base) (+ displacement). picks the
@@ -637,6 +644,7 @@
          ('lea . emit-lea) ('lean . emit-lea)              ; lean: cc's consumed frame address -- same bytes, invisible to the sibcall escape gate
          ('ldx . emit-ldx) ('stx . emit-stx) ('leax . emit-leax)
          ('ldxb . emit-ldxb) ('stxb . emit-stxb) ('ldxw . emit-ldxw) ('ldxsw . emit-ldxsw)
+         ('andx4 . emit-andx4) ('orx4 . emit-orx4) ('xorx4 . emit-xorx4) ('andm4 . emit-andm4) ('orm4 . emit-orm4) ('xorm4 . emit-xorm4)
          ('ldsdx . emit-ldsdx) ('stsdx . emit-stsdx) ('ldssx . emit-ldssx) ('stssx . emit-stssx)
          ('ldsdl . emit-ldsdl)
          ('ld1 . emit-ld1) ('ld2 . emit-ld2) ('ld4 . emit-ld4)
@@ -759,7 +767,7 @@
         ;; 0, so neither writes for this purpose, and imul/idiv leave some undefined.
         'zeroxor 1
         'flagr '(br set cmov adc sbb)
-        'flagw '(cmp cmpm cmprm test add sub and or xor adds subs neg mulo ucomisd)
+        'flagw '(cmp cmpm cmprm test add sub and or xor andx4 orx4 xorx4 andm4 orm4 xorm4 adds subs neg mulo ucomisd)
         ;; branch relaxation: rel8 measures from the end of the 2-byte short form, so the distance
         ;; from the instruction itself is two more than the field carries. this RE-LOWERS rather than
         ;; rewriting its chunk -- an x86 short jump shares no bytes with its long twin.
