@@ -1901,7 +1901,8 @@
          tw (twirl (\ _ (watch 0)) 0)
          tl (twirl (\ _ (lock-poll 0)) 0)
          _ (pins c 'woke (clock 0) 'spun (clock 0))
-         {'show (\ w h (? (w < 20 || h < 8) "" (: _ (pins c 'rows h 'cols w) (frame c))))
+         {'name ("bee " + me 0)
+          'show (\ w h (? (w < 20 || h < 8) "" (: _ (pins c 'rows h 'cols w) (frame c))))
           'step (\ k (: _ (onkey c k) (soil c)))
           'over? (\ _ (c 'over))
           ; a frame when the turn or the inbox moved: the spinner's beat, mail about once a second

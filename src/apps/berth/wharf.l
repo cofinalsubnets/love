@@ -23,7 +23,7 @@
 ; and sizes rather than trusting the arithmetic: every rectangle sits inside the wharf,
 ; and no two overlap. the spans are half-open, so a zero-extent berth overlaps nothing
 ; -- including itself -- and neither law has to except it.
-(module '(wharf wharf-at wharf-bars wharf-berths wharf-col wharf-cols wharf-id wharf-lay wharf-row
+(module '(wharf wharf-at wharf-bars wharf-berths wharf-col wharf-cols wharf-drag wharf-id wharf-lay wharf-row
           wharf-rows wharf-show? wharf-shut wharf-split wharf-steer)
 (:
    ; --- reading a laid berth: (id row col rows cols), origins 0-based ----------
@@ -134,6 +134,22 @@
    (wharf-split p id d pct new)
     (two? p ? [<p <>p (wharf-split <>>p id d pct new) (wharf-split <>>>p id d pct new)]
        (p = id ? [d pct p new] p))
+
+   ; drag the bar through cell (ar ac) to row or column `to`: its split's share is the one
+   ; that lays the bar there, held to 1..99. a cell on no bar changes nothing
+   (wpct n k) (n < 3 ? 50 (: v ((k * 100 + n - 2) // (n - 1)) (? (v < 1) 1 (99 < v) 99 v)))
+   (wdrag p row col r c ar ac to)
+    (two? p ?
+       (p @ [d pct a b]
+        (d = 'stack ?
+           (: h (wcut r pct) t (wrest r h)
+              (? (0 < h && 0 < t && ar = row + h && col <= ac && ac < col + c) [d (wpct r (to - row)) a b]
+                 [d pct (wdrag a row col h c ar ac to) (wdrag b (row + h + 1) col t c ar ac to)]))
+           (: w (wcut c pct) t (wrest c w)
+              (? (0 < w && 0 < t && ac = col + w && row <= ar && ar < row + r) [d (wpct c (to - col)) a b]
+                 [d pct (wdrag a row col r w ar ac to) (wdrag b row (col + w + 1) r t ar ac to)]))))
+       p)
+   (wharf-drag p r c ar ac to) (() = p ? () (wdrag p 0 0 r c ar ac to))
 
    ; shut a berth; its sibling takes the whole of what the pair held, bar and all.
    ; shutting the last one answers () -- a wharf with nothing tied up at it.

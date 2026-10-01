@@ -436,5 +436,102 @@
     map (n \ hshut hb n) [1 4],
     map (t \ (landed? t ? (catch t) (freeze t))) (hb 'jobs)))
 
+; --- the bar: the bottom row, the panes laid above it; the desks with the shown one lit and
+; what has the keyboard; a click on a desk's label shows that desk; names off argv ---
+(: (sub? h n i) (i + #n < #h + 1 ? (n = snip h i (i + #n) ? 1 (sub? h n (i + 1))) 0)
+   hb (harbour 10 40)
+   _ (pins hb 'bar 1 'barx (_ \ "XTRA"))
+   _ (pin hb 'more (_ \ hopen-stage (berth-stage (\ w h "s") (\ c 0) (\ _ 0)) 1 1))
+   _ (hberth hb 'stack 50 (hopen-stage (pin (berth-stage (\ w h "s") (\ c 0) (\ _ 0)) 'name "TOPPANE") 1 1))
+   _ (hfresh hb)
+   _ (hfresh hb)                                     ; desks 0 1 2, 2 shown
+   _ (hbartick hb)
+   l (hbarline hb)
+   f (hframe hb)
+   b (<(filter (x \ wharf-id x = hb 'focus) (hb 'lay)))
+   _ (hmouse hb 0 2 10 0)                            ; a press on " 0 ", columns 0-2
+   (test (9 = hlr hb) (9 = wharf-rows b)               ; the panes stop above the bar
+         (sub? l " 0  1 " 0) (sub? l "\e[1;7m 2 " 0)
+         (sub? l "stage" 0) (sub? l "XTRA" 0)
+         (sub? f "\e[10;1H" 0)                         ; painted on the last row
+         (0 = hbardesk hb 0) (1 = hbardesk hb 4) (() = hbardesk hb 30)
+         (0 = hb 'desk) (sub? (hbarline hb) "TOPPANE" 0)
+         ("lush" = hname-of ["/x/out/love" "lush"]) ("vi" = hname-of ["/usr/bin/vi" "f"]) ("love" = hname-of ["love"])))
+
+; --- the picker: typed at, it narrows; enter makes it what its item opens, in its own
+; place; an item answering no pane, or esc, closes it ---
+(: (stg nm) (pin (berth-stage (\ w h nm) (\ c 0) (\ _ 0)) 'name nm)
+   hb (harbour 12 40)
+   _ (hberth hb 'stack 50 (hopen-stage (stg "base") 1 1))
+   went {0}
+   items [["alpha" (_ \ hopen-stage (stg "ALPHA") 1 1)]
+          ["beta" (_ \ hopen-stage (stg "BETA") 1 1)]
+          ["gone" (_ \ (pin went () 1, ()))]]
+   _ (hberth hb 'beside 50 (hpicker hb "open" items))         ; 2, with the keyboard
+   f0 (hscreen-text (hpane hb 2))
+   _ (map (hfeed hb) [101 116])                              ; "et": beta alone
+   f1 (hscreen-text (hpane hb 2))
+   _ (hfeed hb 13)
+   n2 (hname (hpane hb 2))
+   fc (hb 'focus)
+   _ (hberth hb 'beside 50 (hpicker hb "open" items))         ; 3
+   _ (map (hfeed hb) [-9 -9 10])                              ; down twice: gone
+   p3 (hpane hb 3)
+   _ (hberth hb 'beside 50 (hpicker hb "open" items))         ; 4
+   _ (hfeed hb 27)
+   (j ls) (foldl (a \ l \ a + l + "\n") "" ls)
+   (test (hsub? (j f0) "alpha") (hsub? (j f0) "gone")
+         !(hsub? (j f1) "alpha") (hsub? (j f1) "beta")
+         ("BETA" = n2) (2 = fc)                          ; in its own place, still focused
+         (1 = peep went () 0) (() = p3)
+         (() = hpane hb 4)
+         ([1 2] = sort (wharf-berths (hb 'plan)))))
+
+; --- the mouse on a bar: a press takes hold, a drag moves it and the panes with it, a
+; release lets go; with 'mouse on, drags are asked for even of a pane that wants none ---
+(: (stg nm) (berth-stage (\ w h nm) (\ c 0) (\ _ 0))
+   hb (harbour 10 40)
+   _ (pin hb 'mouse 1)
+   _ (hberth hb 'stack 50 (hopen-stage (stg "a") 1 1))
+   _ (hberth hb 'beside 50 (hopen-stage (stg "b") 1 1))
+   b0 (wharf-bars (hb 'plan) 10 40)
+   _ (hmouse hb 0 20 3 0)                                     ; press on the bar, col 19
+   g (hb 'drag)
+   _ (hmouse hb 32 11 3 0)                                    ; drag to col 10
+   _ (hmouse hb 0 11 3 1)                                     ; let go
+   b1 (wharf-bars (hb 'plan) 10 40)
+   _ (hmouse hb 32 30 3 0)                                    ; motion, nothing held
+   (test ('((down 0 19 10)) = b0)
+         ([2 19 'down] = g)
+         ('((down 0 10 10)) = b1)
+         ('((down 0 10 10)) = wharf-bars (hb 'plan) 10 40)
+         (() = hb 'drag)
+         (10 = wharf-cols <(hb 'lay))
+         ("\e[?1002h" = hmice hb 0)))
+
+; --- inle's bar text: the hive's live cards only, and a queue's rows and head ---
+(: d ("out/.inle-bar-" + show (getpid 0))
+   _ (hark ["sh" "-c" ("rm -rf " + d + "; mkdir -p " + d + "/hive/live " + d + "/hive/dead; "
+                       + "printf 'pid " + show (getpid 0) + "\\nstate idle\\n' > " + d + "/hive/live/card; "
+                       + "printf 'pid 999999\\n' > " + d + "/hive/dead/card; "
+                       + "git init -q " + d + "/repo; cd " + d + "/repo; "
+                       + "h=$(printf '# header\\nleader x\\n7 alice feat - - waiting  # n\\n8 bob b2 - - waiting\\n' | git hash-object -w --stdin); "
+                       + "git update-ref refs/queue/main $h")])
+   _ (setenv "BEE_HIVE" (d + "/hive"))
+   _ (setenv "GIT_DIR" (d + "/repo/.git"))
+   hv (inle-hive 0)
+   qs (inle-queues 0)
+   bx (inle-barx 0)
+   x1 (bx ())
+   _ (setenv "BEE_HIVE" (d + "/none"))
+   x2 (bx ())                                                ; within ten seconds: as it was
+   _ (setenv "BEE_HIVE" "")
+   _ (setenv "GIT_DIR" "")
+   _ (hark ["rm" "-rf" d])
+   (test (1 = hv)
+         (["main 2 rows, alice waiting"] = qs)
+         ("hive 1 · main 2 rows, alice waiting" = x1)
+         (x1 = x2)))
+
 (test_fin ())
 (puts "berth: ok")
