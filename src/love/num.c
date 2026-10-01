@@ -1649,6 +1649,35 @@ static ai_noinline void vbin_fill(struct ai_tray *r, word a, word b, int op, boo
       case vop_max: VBF(av>bv?av:bv); return; case vop_min: VBF(av<bv?av:bv); return; }
     #undef VBF
    }
+  } else if (fdom && (!atray || va->type <= ai_R) && (!btray || vb->type <= ai_R)) {
+   // a float op with an int tray on a side, a mask most often: the ints widened in the loop
+   bool az = atray && va->type == ai_Z, bz = btray && vb->type == ai_Z;
+   ai_flo_t sa = atray ? 0 : toflo(a), sb = btray ? 0 : toflo(b);
+   ai_flo_t *af = atray && !az ? (ai_flo_t*) tray_data(va) : 0, *bf = btray && !bz ? (ai_flo_t*) tray_data(vb) : 0;
+   intptr_t *ai = az ? (intptr_t*) tray_data(va) : 0, *bi = bz ? (intptr_t*) tray_data(vb) : 0;
+   #define VBX(AV, BV, BODY) for (uintptr_t p = 0; p < n; p++) { ai_flo_t av = (AV), bv = (BV); BODY; }
+   #define VBM(BODY) do { \
+    if (az && bz) VBX((ai_flo_t) ai[p], (ai_flo_t) bi[p], BODY) \
+    else if (az && bf) VBX((ai_flo_t) ai[p], bf[p], BODY) \
+    else if (az) VBX((ai_flo_t) ai[p], sb, BODY) \
+    else if (af) VBX(af[p], (ai_flo_t) bi[p], BODY) \
+    else VBX(sa, (ai_flo_t) bi[p], BODY) } while (0)
+   if (cmpf) { intptr_t *rp = (intptr_t*) tray_data(r);
+    #define VBF(E) VBM(rp[p] = (E) ? 1 : 0)
+    switch (op) { case vop_lt: VBF(av<bv); return; case vop_le: VBF(av<=bv); return;
+      case vop_gt: VBF(av>bv); return; case vop_ge: VBF(av>=bv); return;
+      case vop_eq: VBF(ai_same_flo(av,bv)); return; }
+    #undef VBF
+   } else { ai_flo_t *rp = (ai_flo_t*) tray_data(r);
+    #define VBF(E) VBM(rp[p] = (E))
+    switch (op) { case vop_add: VBF(av+bv); return; case vop_sub: VBF(av-bv); return;
+      case vop_mul: VBF(av*bv); return; case vop_quot: VBF(av/bv); return;
+      case vop_fquot: VBF(ai_trunc(av/bv)); return; case vop_rem: VBF(bv==0?av:ai_fmod(av,bv)); return;
+      case vop_max: VBF(av>bv?av:bv); return; case vop_min: VBF(av<bv?av:bv); return; }
+    #undef VBF
+   }
+   #undef VBM
+   #undef VBX
   } else if (!fdom && (!atray || va->type == ai_Z) && (!btray || vb->type == ai_Z)) {
    intptr_t sia = atray ? 0 : toint(a),
             sib = btray ? 0 : toint(b),
