@@ -358,6 +358,9 @@
         (: nm (vof <ts) r >ts
            (? (two? r && pv? <r ",") (defparams >r (nm . params) var?)
               (two? r && pv? <r ")") [(rev (nm . params)) var? >r]
+              ; gcc's named tail `fmt...`: __VA_ARGS__ under another name
+              (two? r && pv? <r "..." && two? >r && pv? <>r ")")
+               [(rev params) 1 (map (t \ idv? t nm ? ('id . "__VA_ARGS__" . >>t) t) >>r)]
               ()))
        ())
 

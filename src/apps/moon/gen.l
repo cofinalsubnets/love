@@ -5981,10 +5981,10 @@
                      (<l . iminsert x >l))
    (imsort ps) (: (go l acc) (!(two? l) ? acc (go >l (iminsert <l acc))) (go ps ()))
    (imflat ps total)                                ; sorted (off items).. -> total bytes, gaps zeroed
-    (: (go l pos acc)
-        (!(two? l) ? (acc + zeros (total - pos))
+    (: (go l pos acc)                               ; acc reversed: one rev at the end keeps it linear
+        (!(two? l) ? (rev (revcat (zeros (total - pos)) acc))
            (: p <l off <p items <>p
-              (go >l (off + imbytelen items) (acc + zeros (off - pos) + items))))
+              (go >l (off + imbytelen items) (revcat items (revcat (zeros (off - pos)) acc)))))
        (go ps 0 ()))
    ; a cast on a folded integer (C11 6.3.1.3): narrow types wrap and re-sign, word-sized keep the pattern
    (icast ty v)
