@@ -82,8 +82,9 @@
    (rep blank k scale) (snip blank 0 (k * 8 * scale * 4))
 
    ; base 256 on a fixed cols x rows terminal: a byte a pixel, two pixels a cell (a half
-   ; block, its top the foreground). the bytes run down each column, the rightmost first,
-   ; and black past the end is not written yet
+   ; block, its top the foreground). the top byte sits in the bottom right corner and the
+   ; rest fill each pixel row right to left, rows rising, so the number piles up like sand;
+   ; black above it is not written yet
    (b256 n) (: (go n acc) (n < 256 ? (n . acc) (go (n // 256) ((n % 256) . acc))) (go n ()))
    esc (string 27)
    upper (string [226 150 128])                                   ; u+2580, the upper half block
@@ -112,7 +113,7 @@
        _ (? (k < 0) (die ("B(n) has " + show #bs + " bytes, more than the window's "
                           + show (cols * H))))
        bs (string (bs + map (_ \ 0) ^k))
-       (pix y x) (bs ((cols - 1 - x) * H + y))                     ; down each column, right first
+       (pix y x) (bs ((H - 1 - y) * cols + cols - 1 - x))           ; rows right to left, bottom up
        scr (screen (cask (screen () rows cols)) rows cols)
        _ (each ^rows (r \ (: _ (scribe scr (esc + "[" + show (r + 1) + ";1H"))
                            (each ^cols (c \ (scribe scr (esc + "[38;2;" + sgr (pix (2 * r) c) + "m" + esc
