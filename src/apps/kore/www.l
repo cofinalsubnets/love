@@ -396,7 +396,7 @@
        (map (r \ pad + r) (pic-art im (cols0 - #pad) rows deep)))
    ; each drawn picture as [line rows], off the marks of the raw layout
    (ww-arts st p)
-    (: g (st 'page) base (ww-base (g 1) (g 3)) c (st 'imgs)
+    (: base (st 'base) c (st 'imgs)
        deep (pic-deep 0)
        rows (max 2 (pgbody st - 1))
        (foldl (\ acc m (: im (peep c (ww-resolve base (m 1)) 'none)
@@ -422,7 +422,7 @@
    (ww-pictures st)
     (: p (st 'raw) g (st 'page)
        (? (atom? p || two? (st 'sav)) 0
-          (: base (ww-base (g 1) (g 3)) c (st 'imgs) ins (st 'ins)
+          (: base (st 'base) c (st 'imgs) ins (st 'ins)
              top (pgtopline st) end (pglast st) reach (end + (end - top))
              due (filter (m \ (: l (ww-shift ins <m) u (ww-resolve base (m 1))
                                (top <= l <= reach && nil? (peep c u ()))))
@@ -517,7 +517,7 @@
    ; (top -1) at its fragment's place, else where its content starts, else at the top
    (ww-show st g push top)
     (: _ (? (push && #(st 'url)) (pin st 'hist ([(st 'url) (st 'top)] . st 'hist)) 0)
-       _ (pins st 'url (g 1) 'page g 'lw (pgwidth st))
+       _ (pins st 'url (g 1) 'page g 'base (ww-base (g 1) (g 3)) 'lw (pgwidth st))
        _ (ww-load st (ww-lay g (pgwidth st)))
        _ (pins st 'cur 0 'hi "")
        fr (ww-split (g 1) 4)
@@ -527,7 +527,7 @@
    (ww-new w h)
     (: st (pgnew (tablet 0) w h)
        _ (pins st 'url "" 'urls () 'anchors () 'links () 'hist () 'go () 'page () 'lw 0 'cur 0 'field "")
-       _ (pins st 'raw () 'ins () 'imgs (tablet 0))
+       _ (pins st 'raw () 'ins () 'imgs (tablet 0) 'base "")
        st)
    ; the window changed width: the page laid again at the new one, with the link that was
    ; first on the screen as far down it as before (the help, laid by less, just rewraps)
