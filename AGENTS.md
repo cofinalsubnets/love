@@ -28,3 +28,5 @@ Several sessions gate on one box. Two makes in one `out/` race, and a box short 
 Take part in a merge queue only through bee's tools: as a bee agent, or from Claude Code through the tree's `.mcp.json`, which loads `love bee --mcp` (`mcp__bee__queue_row`, `queue_lead`, `queue_land`, `queue_landed`, `inbox`). Never edit a queue by hand. The protocol is written once in `doc/bee.md`, THE MERGE QUEUE, and each queue's header states it.
 
 When the queue is long (two or more rows waiting or gating, or more heavy-lock waiters than slots), fold, don't line up. One owner's branches join as one union that gates once, and each branch runs only its light lanes.
+
+After a landing that changes bee, every live session restarts at its next convenient point: between tasks, never mid-gate, in the same directory. bee says so itself, in the release note and when its binary is replaced.

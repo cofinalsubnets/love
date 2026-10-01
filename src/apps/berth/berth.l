@@ -7,7 +7,8 @@
 ;
 ; C-a is the prefix, intercepted in the key pump below every guest: s/v split, h j k l
 ; steer, x shut, [ copy mode (the pane's screen as a vi buffer), ] paste, C-a a literal;
-; c a fresh desk, n p the next and last, 0-9 a desk by number (made when missing); a key
+; c a fresh desk, n p the next and last, 0-9 a desk by number (made when missing), z the
+; saver ('saver) now; a key
 ; the caller pins in 'keys opens the pane its thunk answers, beside (inle's b, a model).
 ; the clip is the harbour's one register, vi's shape, shared by every vi buffer on it,
 ; and sent out to the outer terminal's clipboard (osc 52) when it changes.
@@ -20,7 +21,7 @@
 (module '(berth berth berth-stage harbour hberth hsail hopen hopen-stage moor waitfor
           hbox hmas hpid hstage hpty? hpane hsoil hrelay hframe hmoor hsplit hsteer hshut
           hfeed hkey oars hsize htide htick hswim hquick? hcopy hpaste hclip-text hscreen-text
-          hseq hmouse hpeer hpasted hdesks hgo hcycle hfresh hb64 hnote hhands inle-bee inle-main)
+          hseq hmouse hpeer hpasted hdesks hgo hcycle hfresh hb64 hsub? hswap hpicker inle-launch inle-switch inle-hive inle-queues inle-barx inle-saver hwake hidle hidle? hsleep hname hname-of hlr hbarat hdrag hmice hbarline hbardesk hbartick hnote hhands inle-bee inle-main)
 (borrow ((cite 'wharf) @ m (m ? m "src/apps/berth/wharf.l")))   ; the baked module, else the tree's file
 (borrow ((cite 'limn) @ m (m ? m "src/apps/berth/limn.l")))
 (borrow 'posix)
@@ -52,12 +53,17 @@
  ; --- the harbour: every berth's screen, pty and child, under one wharf plan ---
  ; a pane is (box master pid stage): a child's has its master and pid and no stage,
  ; a stage's the stage and neither. the harbour is a tablet, and the keys are the
- ; whole state: plan focus next rows cols panes lay dirt more jobs clip keys, and the desks --
+ ; whole state: plan focus next rows cols panes lay dirt more jobs clip keys bar bart barx, and the desks --
  ; desk the one shown, desks the others' [plan focus] by number, the shown one's never kept there.
  (hbox p) <p
  (hmas p) <>p
  (hpid p) <>>p
  (hstage p) (p 3)
+ ; what runs there, for the bar: a program's name (love's verb when it is love), a stage's own
+ (hname p) (? (4 < #p) (p 4) "")
+ (hname-of argv) (: b (: w <argv k (: (go i) (? (i < 0) 0 (w i = 47) (i + 1) (go (i - 1))) (go (#w - 1)))
+                         (snip w k #w))
+                     (b = "love" && two? >argv ? <>argv b))
  (hpty? p) (() != hmas p)
  ; the clip's text: a linewise register ends each line, a charwise one is as it is
  (hclip-text hb) (peep (hb 'clip) () () @ v
@@ -98,7 +104,7 @@
                          s (screen (cask (screen () r c)) r c)
                          bx {s}
                          (settty m r c,
-                          [bx m <md ()]))))
+                          [bx m <md () (hname-of argv)]))))
 
  ; --- the stage door: a stage berths on a screen of its own, its frame scribed there
  ; at the pane's size, which the frame is asked for as w h
@@ -110,7 +116,7 @@
               (berth-stage (\ w h ("\e[H\e[2J" + t + "\r\n\r\n(a key closes this)"))
                            (\ c (pin k () 1)) (\ _ (peep k () 0))))
  (hopen-stage sg r c) (: s (screen (cask (screen () r c)) r c)
-                         p [{s} () () sg]
+                         p [{s} () () sg (peep sg 'name "stage")]
                          (hshow p,
                           p))
 
@@ -119,7 +125,9 @@
  ; held comes along; the rest is the guest's to repaint on its own sigwinch.
  ; a berth with no room still needs a valid screen (the nifs refuse a zero
  ; axis), so its grid is 1x1 and wharf-show? is what keeps it off the glass.
- (hrelay hb) (wharf-lay (hb 'plan) (hb 'rows) (hb 'cols) @ bs
+ ; the rows the panes share: all of them, less the bar's when it is up
+ (hlr hb) (hb 'rows - peep hb 'bar 0)
+ (hrelay hb) (wharf-lay (hb 'plan) (hlr hb) (hb 'cols) @ bs
                 (map (b \ (hpane hb (wharf-id b) @ p
                              (atom? p ? 0
                               (: nr (max 1 (wharf-rows b)) nc (max 1 (wharf-cols b))
@@ -136,12 +144,38 @@
  ; --- the frame -------------------------------------------------------------
  ; the painting is src/apps/berth/limn.l's: cells at an origin, and the bars off wharf-bars.
  ; what stays here is which grid goes where, which is the only half berth owns
- (hbars j hb) (limn-bars j (wharf-bars (hb 'plan) (hb 'rows) (hb 'cols)))
+ (hbars j hb) (limn-bars j (wharf-bars (hb 'plan) (hlr hb) (hb 'cols)))
+
+ ; --- the bar: the bottom row, when 'bar is 1 -- the desks (the shown one lit), what has
+ ; the keyboard, and on the right 'bart: the caller's 'barx text and the wall clock ---
+ (hdlabel d) (" " + show d + " ")
+ (hbarline hb)
+  (: w (hb 'cols) ds (sort (hb 'desk . hdesks hb))
+     dl (foldl (a \ d \ a + (d = hb 'desk ? ("\e[1;7m" + hdlabel d + "\e[22;27m") (hdlabel d))) "" ds)
+     dw (foldl (a \ d \ a + #(hdlabel d)) 0 ds)
+     p (hpane hb (hb 'focus)) nm (two? p ? (hname p) "")
+     rt (peep hb 'bart "") rw (edwide rt)
+     room (w - dw - 2)
+     nm2 (edcut nm (max 0 (room - (rw < room - 1 ? (rw + 1) 0))))
+     gap (max 0 (room - edwide nm2 - (rw < room - 1 ? rw 0)))
+     ("\e[0;48;5;236;38;5;250m" + dl + "  " + nm2 + edpad "" gap " " + (rw < room - 1 ? rt "") + "\e[0m"))
+ ; the desk under column c of the bar, or ()
+ (hbardesk hb c) (: (go ds x) (? (atom? ds) () (: x2 (x + #(hdlabel <ds)) (c < x2 ? <ds (go >ds x2))))
+                    (go (sort (hb 'desk . hdesks hb)) 0))
+ ; the clock, HH:MM in the local zone; "" where kore cannot say
+ (hclock hb) (: z (peep hb 'tz () @ z0 (two? z0 ? <z0 (: z1 (cite 'kore 'tz-zone) zz (? z1 (z1 0) ()) (pin hb 'tz [zz], zz))))
+                f (cite 'kore 'udatez) ms (clock 0)
+                (? (z && f) (f "%H:%M" ms (z (ms // 1000))) ""))
+ ; the right side again; a change is a frame
+ (hbartick hb) (? !(peep hb 'bar 0) 0
+                  (: x (peep hb 'barx () @ f (f ? (f ()) "")) t (x + (0 < #x ? "  " "") + hclock hb + " ")
+                     (t = peep hb 'bart "" ? 0 (pin hb 'bart t, hsoil hb))))
 
  ; the outer terminal's mouse follows the focused pane's wish (quay.h's flag bits); the
  ; reports always come as ?1006's, and `mouse` lays them into what the pane asked for
- (hmice f) (? (f & 4096) "\e[?1003h" (f & 2048) "\e[?1002h" (f & 1536) "\e[?1000h"
-              "\e[?1003l\e[?1002l\e[?1000l")
+ ; with 'mouse on the harbour wants presses and drags itself, for its bars and its bar
+ (hmice hb f) (? (f & 4096) "\e[?1003h" (f & 2048 || peep hb 'mouse 0) "\e[?1002h" (f & 1536) "\e[?1000h"
+                 "\e[?1003l\e[?1002l\e[?1000l")
 
  ; nothing is erased between frames, and nothing needs to be: panes and bars
  ; tile the wharf exactly (src/apps/berth/wharf.l's standing law), so every cell is written
@@ -193,6 +227,7 @@
       pk = 2 ? (pin hb 'six now) 0,
       pk = 1 ? (hfree j hb) 0,
       hbars j hb,
+      peep hb 'bar 0 ? (say j (limn-go (hb 'rows - 1) 0 + hbarline hb)) 0,
       (hclip-text hb @ ct
          (ct = hb 'c52 ? 0 (pin hb 'c52 ct, 0 < #ct ? (say j ("\e]52;c;" + hb64 ct + "\a")) 0))),
       (: p (hpane hb (hb 'focus)) b (hfind (hb 'lay) (hb 'focus))
@@ -201,7 +236,7 @@
                cr (w // c + gaze s 8)                      ; the cursor's row, under the view
                _ (say j (limn-go (wharf-row b + min cr (wharf-rows b - 1)) (wharf-col b + w % c)))
                _ (1 & f && cr < wharf-rows b ? (say j "\e[?25h") 0)     ; the guest's cursor wish
-               m (hmice f)
+               m (hmice hb f)
                (m = peep hb 'mice "" ? 0 (pin hb 'mice m, say j m)))
             0)),
       slurp j))
@@ -312,12 +347,27 @@
                  (<bs @ b
                     (wharf-row b <= r && r < wharf-row b + wharf-rows b
                      && wharf-col b <= c && c < wharf-col b + wharf-cols b ? b (hat >bs r c))))
+ ; a bar under the cell: ['across row col len] or ['down row col len], () for none
+ (hbarat hb r c) (: bs (filter (v \ (<v = 'across ? (<>v = r && <>>v <= c && c < <>>v + <>>>v)
+                                       (<>>v = c && <>v <= r && r < <>v + <>>>v)))
+                               (wharf-bars (hb 'plan) (hlr hb) (hb 'cols)))
+                    (two? bs ? <bs ()))
+ ; a drag moves the bar it took hold of, and the release lets go
+ (hdrag hb r c how) (: g (hb 'drag) dir (g 2) to (dir = 'across ? r c)
+                       (? (how = 1) (pin hb 'drag ())
+                          (how = 2) (pin hb 'plan (wharf-drag (hb 'plan) (hlr hb) (hb 'cols) <g <>g to),
+                                     pin hb 'drag (dir = 'across ? [to <>g dir] [<g to dir]),
+                                     hrelay hb)
+                          0))
  (hmouse hb b x y up)
   (: r (y - 1) c (x - 1)
      how (? up 1 (b & 32) 2 0)
      bb (b - (b & 32)) btn (bb - (bb & 28))
      at (hat (hb 'lay) r c)
-     (? ((how = 0) && (btn < 64) && (two? at) && !(wharf-id at = hb 'focus))
+     (? (two? (peep hb 'drag ())) (hdrag hb r c how)
+        (how = 0 && btn = 0 && atom? at && r < hlr hb) (hbarat hb r c @ v (two? v ? (pin hb 'drag [r c <v]) 0))
+        (peep hb 'bar 0 && r = hb 'rows - 1) (how = 0 && btn = 0 ? (hbardesk hb c @ d (charm? d ? (hgo hb d, hsoil hb) 0)) 0)
+        ((how = 0) && (btn < 64) && (two? at) && !(wharf-id at = hb 'focus))
         (pin hb 'focus (wharf-id at), hsoil hb)
         (: p (hpane hb (hb 'focus)) bf (hfind (hb 'lay) (hb 'focus))
            (? (atom? p || atom? bf || !(hpty? p)) 0
@@ -390,6 +440,7 @@
                       91  (hcopy hb)                    ; [
                       93  (hpaste hb)                   ; ]
                       99  (hfresh hb)                   ; c
+                      122 (hsleep hb)                   ; z
                       110 (hcycle hb 1)                 ; n
                       112 (hcycle hb -1)                ; p
                       (d && 47 < d < 58) (hgo hb (d - 48))   ; 0-9
@@ -401,10 +452,23 @@
               ch (? (two? p && !(hpty? p)) (peep (hstage p) 'key edkey in) (see in))
               (? (ch = -1) (hfeed hb 4)                 ; veof follows the user's own eof
                  (ch = -7) (hshut hb (hb 'focus))
+                 (hwake hb) (: _ (cite 'rove 'drain-keys ()) (oars hb))   ; the key that ends a saver is the saver's
                  ((? (ch = 1) (hkey hb)
                      (ch = 27 && hpty? p && cue? in) (hseq hb)
                      (hfeed hb ch)),
                   oars hb)))
+
+ ; --- idle: 'saver is a watch of src/apps/saver.l's, which has the glass after its minutes
+ ; without a key; the harbour's own frames wait under it, and are laid again whole after ---
+ ; a key: 1 when it woke a saver, which then is owed a whole frame
+ (hwake hb) (: w (peep hb 'saver ()) k (cite 'saver 'saver-key)
+               (? (tablet? w && k && k w (clock 0)) (: _ (hsoil hb) 1) 0))
+ ; the saver's escapes for now, "" when it has none; and whether it has the glass
+ (hidle hb) (: w (peep hb 'saver ()) t (cite 'saver 'saver-tick)
+               (? (tablet? w && t) (t w (clock 0) (hb 'rows) (hb 'cols) 0) ""))
+ (hidle? hb) (: w (peep hb 'saver ()) (tablet? w && (cite 'saver 'saver-on?) w))
+ ; at once, the clock wound past its minutes: C-a z
+ (hsleep hb) (: w (peep hb 'saver ()) (? (tablet? w && 0 < w 'idle) (pin w 'last (clock 0 - w 'idle)) 0))
 
  ; --- the tide: mirror the outer terminal's size onto the whole wharf -------
  ; the floor is not decoration, and it lives here so both callers share it: a
@@ -437,8 +501,10 @@
  ; and end when the last berth empties ---
  (hswim hb tick) (hb 'dirt @ b
                     (htick hb,
-                     ? (peep b () 0) (pin b () 0, say out (hframe hb), 0) 0,   ; say is the bulk lane
+                     (hidle hb @ f (0 < #f ? (say out f, flush out) 0)),
+                     ? (hidle? hb) 0 (peep b () 0) (pin b () 0, say out (hframe hb), 0) 0,   ; say is the bulk lane
                      ? (0 = tick % 16) (htide hb) 0,
+                     ? (0 = tick % 32) (hbartick hb) 0,
                      rest (hquick? hb ? 8 33),
                      two? (wharf-berths (hb 'plan)) ? (hswim hb (tick + 1)) ()))
 
@@ -447,7 +513,7 @@
  (harbour r c) ({} @ hb
                   (pins hb 'plan () 'focus () 'next 1 'rows r 'cols c 'panes {}
                         'more () 'dirt {1} 'jobs () 'lay () 'clip {} 'sent {} 'pics 0 'six {} 'opx ()
-                        'desk 0 'desks {} 'c52 "" 'keys {},
+                        'desk 0 'desks {} 'c52 "" 'keys {} 'bar 0 'mouse 0 'drag (),
                    hb))
 
  ; --- sail: the harbour on the tty, raw and on the alternate screen, keys pumped
@@ -484,6 +550,35 @@
 
  ; --- inle: the os's own face on any terminal -- the harbour with lush in every pane a
  ; split or a desk opens, and argv, when given, in the first ---
+ ; --- the picker: a stage that lists items, filters them as it is typed at, and on enter
+ ; becomes what its item opens, in place -- or, when the item answers no pane, simply goes.
+ ; an item is [label thunk]. ↑↓ (or ^p ^n) choose, backspace unsays, esc goes ---
+ (hsub? h n) (: (go i) (? (#h < i + #n) 0 (n = snip h i (i + #n)) 1 (go (i + 1))) (go 0))
+ ; a stage pane stands in for pane id: the old one's own leavings first. a pty's moor would
+ ; shut the id when its child hangs up, so only a stage's place is taken this way
+ (hswap hb id p) (: o (hpane hb id)
+                    (? (atom? o || hpty? o) 0
+                       (: _ (hstage o 'shut ? (hstage o 'shut ()) 0)
+                          (pin (hb 'panes) id p, hrelay hb, hpty? p ? (hmoor hb id) 0, hsoil hb))))
+ (hpicker hb title items)
+  (: st {'q "" 'sel 0} own {-1}
+     (shown _) (filter (it \ 0 = #(st 'q) || hsub? <it (st 'q)) items)
+     (go _) (hshut hb (peep own () -1))
+     (pick it) ((it 1) () @ p (two? p ? (hswap hb (peep own () -1) p) (go 0)))
+     (frame w h) (: xs (shown 0) n #xs sel (min (st 'sel) (max 0 (n - 1))) top (max 0 (sel - (h - 3)))
+                    ("\e[H\e[2J\e[1m" + title + "\e[22m " + st 'q + "\r\n"
+                     + foldl (a \ i \ a + (i = sel ? "\e[7m" "") + " " + edfit (<(xs i)) (max 1 (w - 2)) " " + " \e[27m\r\n")
+                             "" (filter (i \ top <= i && i < top + h - 2) (jot n))))
+     (step k) (? (k = 27) (go 0)
+                 (k = 10 || k = 13) (: xs (shown 0) (? (two? xs) (pick (xs (min (st 'sel) (#xs - 1)))) (go 0)))
+                 (k = -8 || k = 16) (pin st 'sel (max 0 (st 'sel - 1)))
+                 (k = -9 || k = 14) (pin st 'sel (min (max 0 (#(shown 0) - 1)) (st 'sel + 1)))
+                 (k = 127 || k = 8) (: q (st 'q) (pins st 'q (snip q 0 (max 0 (#q - 1))) 'sel 0))
+                 (31 < k && k < 127) (pins st 'q (st 'q + string k) 'sel 0)
+                 0)
+     sg (berth-stage frame step (_ \ 0))
+     (pin sg 'name title, pin own () (hb 'next), hopen-stage sg 1 1))
+
  ; --- hands: the harbour as a model's tools see it -- every pane by id on every desk, read
  ; as text, typed into, opened, focused, shut. own boxes the model's own pane, which it
  ; reads but never types into or shuts. every door answers [ok? text] ---
@@ -540,18 +635,78 @@
                  sg (? b (b ["--stage" (hhands hb own)]) "bee is not in this binary")
                  _ (pin own () (hb 'next))                        ; the id hberth gives it next
                  (? (tablet? sg) sg (hnote ("bee: " + (string? sg ? sg "cannot start")))))
+ ; the launcher's list: the desktop's apps first, where this binary has them, then every verb
+ inle-apps ["lush" "bee" "vi" "mc" "top" "less" "man" "synth" "manifest" "story" "design" "lupa"
+            "harp" "pom" "doom" "grass" "chucho"]
+ (inle-launch hb sh me)
+  (: vs (sort (map show (keys (cite 'verbs 'tab))))
+     names (filter (n \ elem n vs) inle-apps + filter (n \ !(elem n inle-apps)) vs)
+     (hpicker hb "open"
+              (map (n \ [n (? (n = "bee") (_ \ hopen-stage (inle-bee hb) 1 1)
+                                (n = "lush") (_ \ hopen sh 1 1)
+                                (_ \ hopen (string? me ? [me n] [n]) 1 1))])
+                   names)))
+ ; the switcher's: every pane on every desk, picking one shows its desk and gives it the keyboard
+ (inle-switch hb)
+  (hpicker hb "go to"
+           (map (n \ (: d (hdesk-of hb n) p (hpane hb n)
+                         [("desk " + show d + "  " + hname p + "  (" + show n + ")")
+                          (_ \ (hgo hb d, pin hb 'focus n, hsoil hb, ()))]))
+                (filter (n \ n != hb 'next) (sort (hids hb)))))
+ ; --- the bar's right side: the hive's live sessions, and each merge queue of this tree as
+ ; its rows and its head's session and state. read every ten seconds, not every tick:
+ ; the queue costs a git run ---
+ (inle-num t) (foldl (a \ c \ (47 < c && c < 58 ? (a * 10 + c - 48) a)) 0 (map t ^#t))
+ (inle-slurp p) (: f (open p "r") (? (hot? f) (: s (slurp f) _ (close f) s) ""))
+ (inle-live? card)
+  (: ls (filter (l \ 4 < #l && "pid " = snip l 0 4) (lines (inle-slurp card)))
+     n (two? ls ? (inle-num (snip <ls 4 #<ls)) 0)
+     (0 < n && !(nom? (still n 0))))
+ (inle-hive _)
+  (: e (getenv "BEE_HIVE") h (getenv "HOME")
+     d (? (string? e && 0 < #e) e (string? h) (h + "/.love/run/hive") "")
+     ns (readdir d)
+     (two? ns ? #(filter (n \ inle-live? (d + "/" + n + "/card")) ns) 0))
+ (inle-queues _)
+  (: r (hark ["git" "for-each-ref" "--format=%(refname)" "refs/queue"])
+     qs (two? r && 0 = <r ? (filter (l \ 0 < #l) (lines >r)) ())
+     (map (q \ (: t (hark ["git" "cat-file" "-p" q])
+                   rows (filter (l \ 0 < #l && 47 < l 0 && l 0 < 58) (lines (two? t && 0 = <t ? >t "")))
+                   ws (two? rows ? (filter (w \ 0 < #w) (cite 'kore 'usplit 32 <rows)) ())
+                   nm (snip q 11 #q)
+                   (? !(two? rows) (nm + " empty")
+                      (nm + " " + show #rows + (#rows = 1 ? " row" " rows") + ", " + (ws 1) + " " + (ws 5)))))
+          qs))
+ (inle-barx _)
+  (: t {'at 0 'x ""}
+     (_ \ (: now (clock 0)
+             (? (now - t 'at < 10000) (t 'x)
+                (: hv (inle-hive 0) qs (inle-queues 0)
+                   x ("hive " + show hv + foldl (a \ q \ a + " · " + q) "" qs)
+                   (pins t 'at now 'x x, x))))))
+ ; the saver as ~/.love/etc/inle.l names it: (screensaver NAME) (screensaver-idle MINUTES),
+ ; pom after 10 unless said; a name no saver has, or 0 minutes, is never
+ (inle-saver _) (: sf (cite 'salt 'salt-file) wf (cite 'saver 'saver-watch) h (getenv "HOME")
+                   c (? (sf && string? h) (sf (h + "/.love/etc/inle.l") {}) {})
+                   nm (peep c 'screensaver () @ v (two? v ? (: w <v (string? w ? w (show w))) "pom"))
+                   m (peep c 'screensaver-idle () @ v (two? v ? <v 10))
+                   (wf ? (wf nm m) ()))
  (inle-main as) (: me (selfpath 0) sh (string? me ? [me "lush"] ["sh"])
                    sz (hsize 0) r <sz c <>sz
                    p0 (hopen (two? as ? as sh) r c)
                    (atom? p0 ? (say err ("inle: cannot start " + (two? as ? <as (sh 0)) + "\n"), 1)
                       (harbour r c @ hb
                          (pin hb 'more (_ \ hopen sh 1 1),
+                          pins hb 'bar 1 'mouse 1 'barx (inle-barx 0) 'saver (inle-saver 0), hbartick hb, hrelay hb,
                           pin (hb 'keys) 98 (_ \ hopen-stage (inle-bee hb) 1 1),
+                          pin (hb 'keys) 32 (_ \ inle-launch hb sh me),
+                          pin (hb 'keys) 119 (_ \ inle-switch hb),
                           hberth hb 'stack 50 p0,
                           hsail hb,
                           waitfor (hpid p0),
                           0))))
  inle-usage "usage: love inle [COMMAND ..]   the harbour, lush in its panes; COMMAND in the first
-  C-a: s v split, h j k l steer, x shut, [ ] copy and paste, c n p 0-9 desks, b a model, C-a a literal C-a"
+  C-a: s v split, h j k l steer, x shut, [ ] copy and paste, c n p 0-9 desks, b a model,
+       space open an app, w go to a pane, z the screensaver now, C-a a literal C-a"
  _ (pins (cite 'verbs 'tab) 'inle (udoor 'inle inle-main inle-usage 1 1)))
 ) ; module berth

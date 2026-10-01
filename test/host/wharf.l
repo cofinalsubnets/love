@@ -135,5 +135,23 @@
 (: p '(beside 25 1 (stack 75 2 3))
  _ (test (p = wharf-shut (wharf-split p 3 'beside 50 4) 4)))
 
+; --- 12. a drag lays the bar it holds where it is let go, held inside the axis; a cell on
+; no bar changes nothing; the nested bar moves alone ---
+(: p '(beside 50 1 (stack 50 2 3))
+   b0 (wharf-bars p 24 80)                                     ; down at col 39, across at row 11
+   p1 (wharf-drag p 24 80 5 39 20)
+   p2 (wharf-drag p 24 80 11 60 4)
+   p3 (wharf-drag p 24 80 0 0 30)
+   p4 (wharf-drag p 24 80 5 39 0)
+   p5 (wharf-drag p 24 80 5 39 200)
+   (test (elem '(down 0 39 24) b0)
+         (elem '(down 0 20 24) (wharf-bars p1 24 80))
+         (elem '(across 4 40 40) (wharf-bars p2 24 80))
+         (<>p = <>p2)                                         ; the outer share kept
+         (p = p3)
+         (1 = <>p4) (99 = <>p5)
+         (3 = #(wharf-lay p4 24 80)) (1 = wharf-cols <(wharf-lay p4 24 80))
+         (() = wharf-drag () 24 80 0 0 5)))
+
 (test_fin ())
 (puts "wharf: ok")

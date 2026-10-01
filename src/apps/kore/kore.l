@@ -79,7 +79,7 @@
         diff-main as-main ar-main ld-main nm-main ed-main ex-main
         arch-main awk-main base32-main base64-main basename-main bracket-main cat-main
         chgrp-main chmod-main chomp chown-main chroot-main cksum-main cmp-main cnames comm-main cp-main cut-main
-        date-main dirname-main dos2unix-main dsplit du-main echo-main env-main expand-main expr-main
+        date-main tz-zone udatez dirname-main dos2unix-main dsplit du-main echo-main env-main expand-main expr-main
         mac2unix-main unix2dos-main
         factor-main false-main find-main fold-main column-main free-main getopt-main gfind grep-main groups-main hd-main hexdump-main
         head-main id-main install-main join-main killall-main kill-main lastn less-main lines link-main man-main html2text-main markdown-main
