@@ -76,3 +76,8 @@
     tl (slurp mp)
     (close mp,
      test (charm? p) ("hi\r\nhi\r\n" = t) (p = g) (130 = st) ("^C" = tl))))
+
+; the master closed is a hangup: a child that never reads still ends, as SIGHUP's 128+1
+(tether ["kore" "sleep" "100"] @ r
+ (: p <r _ (close >r) st (wait p)
+  (test (charm? p) (129 = st))))

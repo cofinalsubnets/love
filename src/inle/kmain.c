@@ -1393,10 +1393,12 @@ static bool pty_gready(int fd) {
   struct k_pty *t = k_pty_of(fd);
   return t && (t->sig.wp > t->sig.rp || !t->mrefs); }
 
+// the terminal gone is a hangup: SIGHUP onto the signal row, before the row's end
 static void pty_mclose(int fd) {
   struct k_pty *t = k_pty_of(fd);
   k_row_zero(fd);
-  if (t) t->mrefs--, pty_free(t); }
+  if (t && !--t->mrefs && t->srefs && t->grefs) q_put(&t->sig, (unsigned char const*) "\1", 1);
+  if (t) pty_free(t); }
 static void pty_sclose(int fd) {
   struct k_pty *t = k_pty_of(fd);
   k_row_zero(fd);
@@ -2057,9 +2059,12 @@ static lvm(lvm_kttyfg) {
   Sp[0] = t || k_console_in(fd) ? ZeroPoint : ai_err(g, ENOTTY);
   ai_musttail return Next(1); }
 
-// (ttypg fd) -- the terminal's foreground group, () when the shell holds it
+// (ttypg fd) -- the terminal's foreground group, () when the shell holds it; the signal
+// row answers too, so its reader can ask after the master is gone
 static lvm(lvm_kttypg) {
-  struct k_pty *t = k_pty_row(k_ttyfd(g, Sp[0]));
+  intptr_t fd = k_ttyfd(g, Sp[0]);
+  struct k_source const *s = fd < 0 ? NULL : k_source((int) fd);
+  struct k_pty *t = s && s->readn == pty_greadn ? s->state : k_pty_row(fd);
   Sp[0] = !t ? ai_err(g, ENOTTY) : t->fg ? putcharm(t->fg) : ZeroPoint;
   ai_musttail return Next(1); }
 
@@ -2524,7 +2529,7 @@ void kmain(void) {
  "     (? (charm? d) d r))"
  // a child on a pty of its own, as the host's tether: it leads its own group, which takes the
  // terminal, and a watcher answers a key's signal by stilling whichever group holds it then.
- // the watcher ends with the master. -> (pid . master port)
+ // the master closed is a hangup, to that group and to the child, and the watcher ends. -> (pid . master port)
  "   (tether argv) (: fs (openpty 0)"
  "     (? (! (two? fs)) fs"
  "        (: m (cap fs) sl (cap (cup fs)) sg (cap (cup (cup fs)))"
@@ -2533,11 +2538,14 @@ void kmain(void) {
  "           p (k-spawn1 argv sl sl sl 0 1)"
  "           _ (wear w)"
  "           _ (close sp) _ (close sl)"
- "           _ (twirl (\\ _ (k-sigs (fdopen sg) m)) 0)"
+ "           _ (twirl (\\ _ (k-sigs (fdopen sg) p)) 0)"
  "           (. p (fdopen m)))))"
- "   (k-sigs q m) (: c (see q)"
+ "   (k-sigs q p) (: c (see q)"
  "     (? (< c 0) (close q)"
- "        (: g (ttypg m) _ (? (&& (charm? g) (< 0 g)) (still (- 0 g) c) 0) (k-sigs q m))))"
+ "        (: g (ttypg q) _ (? (&& (charm? g) (< 0 g)) (still (- 0 g) c) 0)"
+ // a hangup reaches the child that holds the session as well as the group in front
+ "           _ (? (&& (= c 1) (! (= g p))) (still (- 0 p) c) 0)"
+ "           (k-sigs q p))))"
  // hark and herald on a seat with no fork: the capture is a scratch file worn as the child's
  // stdout and herald's relay is a dump at the end. stderr stays on the console.
  "   hark-n {}"
