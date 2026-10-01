@@ -106,6 +106,9 @@
             (op = 'add && reg? b)     (emit-leax d a b 1 0)
             (op = 'add && fits32 b)   (emit-lea d a b)
             (op = 'sub && fits32 (0 - b)) (emit-lea d a (0 - b))
+            ;; a fresh-dest mask of the low 8/16/32 bits is one movzx (or 32-bit mov), not mov + and
+            (op = 'and && reg? a && elem b '(255 65535 4294967295))
+             (emit-zxm (b @ 255 1 65535 2 4) d a)
             (emit-mov d a + alu-step rr ext d b)))
 
    ;; imul: the 3-operand reg<-reg<-imm (0x69 /r id) is a true three-address insn, no dance; the
@@ -156,6 +159,8 @@
    (emit-stx base index scale disp s)  (x64-memx 1 '(137) s base index scale disp)     ; 89    mov [base+index*scale+disp], r64
    (emit-leax d base index scale disp) (x64-memx 1 '(141) d base index scale disp)     ; 8D    lea r64, [base+index*scale+disp]
    (emit-ldxb d base index scale disp) (x64-memx 1 '(15 182) d base index scale disp)  ; 0F B6 movzx r64, BYTE (zero-extend)
+   (emit-ldxw d base index scale disp) (x64-memx 0 '(139) d base index scale disp)     ; 8B    mov r32, DWORD (a 32-bit write zero-extends)
+   (emit-ldxsw d base index scale disp) (x64-memx 1 '(99) d base index scale disp)     ; 63    movsxd r64, DWORD
    (emit-stxb base index scale disp s) (x64-memx 0 '(136) s base index scale disp)     ; 88    mov BYTE, sl (REX.W=0; mrex forces the prefix for s 4-7: spl/sil.., not ah/ch..)
 
    ;; a memory operand [base+disp]: Modrm (+ SIB for an rsp/r12 base) (+ displacement). picks the
@@ -360,6 +365,12 @@
        (w @ 1 ([(rex 1 (hi dn) 0 (hi dn)) 15 182] + [(modrm 3 (lo dn) (lo dn))])
             2 ([(rex 1 (hi dn) 0 (hi dn)) 15 183] + [(modrm 3 (lo dn) (lo dn))])
               ((hi dn = 0 ? () [(rex 0 1 0 1)]) + [139 (modrm 3 (lo dn) (lo dn))])))
+   ;; zxNm: d = s's low 8/16/32 bits, zero-extended -- movzx (0F B6/B7), or a 32-bit mov
+   (emit-zxm w d s)
+    (: dn (rn d) sn (rn s)
+       (w @ 1 ([(rex 1 (hi dn) 0 (hi sn)) 15 182] + [(modrm 3 (lo dn) (lo sn))])
+            2 ([(rex 1 (hi dn) 0 (hi sn)) 15 183] + [(modrm 3 (lo dn) (lo sn))])
+              ((hi dn = 0 && hi sn = 0 ? () [(rex 0 (hi dn) 0 (hi sn))]) + [139 (modrm 3 (lo dn) (lo sn))])))
    ;; shifts by a register count: d3 /ext, the count in cl -- so the IR contract
    ;; pins the count register to r1 (rcx) on every backend; d must differ.
    (emit-shiftv op d c)
@@ -395,6 +406,8 @@
    ;; (label)+(raw ..) is addressable with no new fixup kind.
    (emit-la d label)
     (rn d @ dn [(rex 1 (hi dn) 0 0) 141 (modrm 0 (lo dn) 5) (fix 4 'rel32 label 0)])
+   (emit-laa d label k)                                 ; the label's address plus k: the addend rides the fixup
+    (rn d @ dn [(rex 1 (hi dn) 0 0) 141 (modrm 0 (lo dn) 5) (fix 4 'rel32 label k)])
    ;; lia: the label's absolute (linked) address -- movabs, b8+rd io under REX.W.
    ;; `la` answers where the label is running, which is the same thing until the
    ;; two part company, and in the kernel's bring-up they do: the image is linked
@@ -623,7 +636,7 @@
          ('ld . emit-ld) ('st . emit-st)
          ('lea . emit-lea) ('lean . emit-lea)              ; lean: cc's consumed frame address -- same bytes, invisible to the sibcall escape gate
          ('ldx . emit-ldx) ('stx . emit-stx) ('leax . emit-leax)
-         ('ldxb . emit-ldxb) ('stxb . emit-stxb)
+         ('ldxb . emit-ldxb) ('stxb . emit-stxb) ('ldxw . emit-ldxw) ('ldxsw . emit-ldxsw)
          ('ldsdx . emit-ldsdx) ('stsdx . emit-stsdx) ('ldssx . emit-ldssx) ('stssx . emit-stssx)
          ('ldsdl . emit-ldsdl)
          ('ld1 . emit-ld1) ('ld2 . emit-ld2) ('ld4 . emit-ld4)
@@ -666,7 +679,7 @@
          ('rem . (\ d a b t (emit-div 1 1 d a b)))         ; (rem d a b t) -- the scratch t is rdx's job on x86
          ('urem . (\ d a b t (emit-div 1 0 d a b)))
          ('call . emit-call)
-         ('la . emit-la) ('lar . emit-la)                 ; lar == la on x86 (rip-rel lea, already translation-invariant); a64 differs (ADR vs ADRP)
+         ('la . emit-la) ('laa . emit-laa) ('lar . emit-la)                ; lar == la on x86 (rip-rel lea, already translation-invariant); a64 differs (ADR vs ADRP)
          ('lia . emit-lia) ('ldseg . emit-ldseg) ('stseg . emit-stseg) ('pushl . emit-pushl) ('segst . emit-segst) ('segld . emit-segld)
          ('cmppd . emit-cmppd) ('movmskpd . emit-movmskpd)
          ('cvtsi2sd . emit-cvtsi2sd) ('cvttsd2si . emit-cvttsd2si)

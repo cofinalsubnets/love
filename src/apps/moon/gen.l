@@ -38,7 +38,7 @@
    fldops '(ldsd ldss) fstops '(stsd stss)          ; the f-memory pair
    stops9 (gstops + fstops)                         ; every plain store (gp head first)
    leaops '(lea lean)                               ; the address makes (lean: consumed by its own use)
-   xops '(leax ldx ldxb)                            ; the indexed forms (base index scale disp)
+   xops '(leax ldx ldxb ldxw ldxsw)                 ; the indexed forms (base index scale disp); ldxw/ldxsw: the 32-bit loads, zero/sign-extending
    stxops '(stx stxb)                               ; the indexed stores
    fxops '(ldsdx ldssx) fstxops '(stsdx stssx)      ; the float twins (x64): no gp effect
    siops '(si si1 si2 si4)                          ; the store-immediates (the addressing fold + the asn/decl delivery lanes)
@@ -110,7 +110,7 @@
    fpark-a64 '(f17 f18 f19 f20 f21 f22 f23)          ; a64: past the narrow scratch f16, under the homes
    fregs16 '(f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15)
    ; the forms an arm may lay between a compare and its cmov: none writes a flag
-   fneu '(li mov lea lean leax ld ld1 ld2 ld4 ldu1 ldu2 ldu4 ldx ldxb sx1 sx2 sx4 zx1 zx2 zx4)
+   fneu '(li mov lea lean leax ld ld1 ld2 ld4 ldu1 ldu2 ldu4 ldx ldxb ldxw ldxsw sx1 sx2 sx4 zx1 zx2 zx4)
    ; the vreg shadow: ralloc mints a nom (%v0 ..) mapped in g 'vrt to a physical, and vrfix
    ; substitutes at build's last link. every g-table holds physicals; rp resolves a nom for the machine
    (rp g rz) (g 'vrt rz || rz)
@@ -3496,7 +3496,7 @@
           (op = 'cmprm) [[<>f <>>f] () ()]
           (elem op leaops) [[<>>f] [<>f] 1]
           (elem op xops) [[<>>f <>>>f] [<>f] 1]
-          (op = 'la) [() [<>f] 1]
+          (elem op '(la laa)) [() [<>f] 1]
           (op = 'set) [() [<>>f] 1]
           (op = 'cmov) [[<>>f <>>>f] [<>>f] 1]
           (elem op '(cmp test)) [(rg1 <>f + rg1 <>>f) () ()]
@@ -5290,10 +5290,10 @@
           ; a leax feeding the next ld/ldu1 base is the indexed load (base/index may alias a dying dest)
           ; ..and the float loads/stores take the same fold on x64, into their indexed twins
           lx (? !(two? f && <f = 'leax && two? nx  &&
-                  (elem <nx '(ld ldu1) || fidx? g && elem <nx fldops)) ()
+                  (elem <nx '(ld ldu1) || x64? g && !(abl? g 'ldxw) && elem <nx '(ldu4 ld4) || fidx? g && elem <nx fldops)) ()
                 (<>>nx != <>f) ()
                 !(charm? <>>>nx && charm? (f 5)) ()
-                [(<nx @ 'ld 'ldx 'ldu1 'ldxb 'ldsd 'ldsdx 'ldssx) <>nx <>>f <>>>f (f 4)
+                [(<nx @ 'ld 'ldx 'ldu1 'ldxb 'ldu4 'ldxw 'ld4 'ldxsw 'ldsd 'ldsdx 'ldssx) <>nx <>>f <>>>f (f 4)
                   (f 5 + <>>>nx)])
           ; ..and a store through the leax's dest further down (x64): the address forms and the
           ; store are kept apart by the value's computation. the window between may not touch
@@ -5374,15 +5374,22 @@
           ng (? (two? lx || two? sx || two? hit || two? sh || two? vh || two? vi) ()
                 !(two? f && <f = 'li && charm? <>>f && two? nx && <nx = 'neg && <>nx = <>f) ()
                 ['li <>f -<>>f])
+          ; a label's address plus a constant is one rip-relative lea (x64; &tab[k] off a global)
+          lk (? (two? lx || two? sx || two? hit || two? sh || two? vh || two? vi || two? ng) ()
+                !(x64? g && !(abl? g 'laa) && two? f && <f = 'la && two? nx && <nx = 'add) ()
+                (<>nx != <>f || <>>nx != <>f) ()
+                !(charm? <>>>nx && fits32 <>>>nx) ()
+                (: n2 (two? >r ? <(>r))     ; the add's flags: none may be read after it
+                   (two? n2 && elem <n2 '(br set cmov adc sbb) ? () ['laa <>f <>>f <>>>nx])))
           ; a constant index folds into the displacement, the indexed form collapsing to plain
-          xj (? (two? lx || two? sx || two? hit || two? sh || two? vh || two? vi || two? ng) ()
+          xj (? (two? lx || two? sx || two? hit || two? sh || two? vh || two? vi || two? ng || two? lk) ()
                 !(two? f && <f = 'li && charm? <>>f && two? nx) ()
                 (elem <nx '(ldx ldxb leax ldsdx ldssx))
                  (nx 5 + <>>f * nx 4 @ d9
                     (? (<>>>nx != <>f) () (<>>nx = <>f) ()
                        !(fits32 d9) ()
                        (<nx = 'leax && !(imma g 'add d9)) ()   ; the lea lands as an add imm
-                       [(<nx @ 'ldx 'ld 'ldxb 'ldu1 'ldsdx 'ldsd 'ldssx 'ldss 'lea) <>nx <>>nx d9]))
+                       [(<nx @ 'ldx 'ld 'ldxb 'ldu1 'ldxw 'ldu4 'ldxsw 'ld4 'ldsdx 'ldsd 'ldssx 'ldss 'lea) <>nx <>>nx d9]))
                 (elem <nx '(stx stxb stsdx stssx))
                  (nx 4 + <>>f * <>>>nx @ d9
                     (? (<>>nx != <>f) () (<>nx = <>f) () (nx 5 = <>f) ()
@@ -5429,6 +5436,7 @@
               (dead9 <>f >r ? (vi . addrf1 g all >r)
                  (f . vi . addrf1 g all >r))
              (two? ng) (ng . addrf1 g all >r)
+             (two? lk) (lk . addrf1 g all >r)
              (two? xj) (fuse xj)
              (two? aj) (fuse aj)
              (f . addrf1 g all r))))
@@ -5477,6 +5485,58 @@
                           (go ([<f (f 1) (f 2) (f 3 + nx 3)] . >>l))
                           (f . go >l))))
           (go fs)))
+
+   ; one table base per straight run (x64): a second (laa R L k) while R still holds L+k0 and is read
+   ; only as a memory base drops, the reads till R's next def taking k-k0 into their displacement
+   (laacse g fs)
+    (!(x64? g) || abl? g 'laacse ? fs
+       (: ; a memory form's [base-pos disp-pos index-pos], index-pos 0 for none
+          (bpos f) (? !(two? f) ()
+                      (elem <f (ldops9 + fldops)) [2 3 0]
+                      (elem <f (xops + fxops)) [2 5 3]
+                      (elem <f stops9) [1 2 0]
+                      (elem <f (stxops + fstxops)) [1 4 2])
+          ; R read in f only as its memory base, once
+          (baseonly R f rs)
+           (bpos f @ p (two? p && f <p = R && (<>>p = 0 || f <>>p != R) &&
+                        #(filter (x \ x == R) <rs) = 1))
+          ; can every read of R up to its next def take adj? the run must end in that def, or R die
+          (ok? R adj l)
+           (? !(two? l) 1
+              (rdsp g <l @ rs
+                 (? (rs = 'bar) (dies? g R l || dieb? g R fs l)
+                    (elem R <rs)
+                     (? !(baseonly R <l rs) ()
+                        !(fits32 (<l (<>(bpos <l)) + adj)) ()
+                        (elem R <>rs) 1
+                        (ok? R adj >l))
+                    (elem R <>rs) 1
+                    (ok? R adj >l))))
+          ; ..and take it
+          (shift R adj l)
+           (? !(two? l) l
+              (rdsp g <l @ rs
+                 (? (rs = 'bar) l
+                    (elem R <rs)
+                     (: f <l d (<>(bpos f))
+                        g2 (map (i \ i = d ? (f i + adj) (f i)) ^#f)
+                        (elem R <>rs ? (g2 . >l) (g2 . shift R adj >l)))
+                    (elem R <>rs) l
+                    (<l . shift R adj >l))))
+          (go l st)
+           (? !(two? l) l
+              (: f <l
+                    k9 (? !(two? f) () (<f = 'laa) <>>>f (<f = 'la) 0)   ; la is laa at 0
+                 (? (charm? k9)
+                     (? (two? st && <st = <>f && <>st = <>>f &&
+                         ok? <>f (k9 - <>>st) >l)
+                         (go (shift <>f (k9 - <>>st) >l) st)
+                         (f . go >l [<>f <>>f k9]))
+                    (rdsp g f @ rs
+                       (? (rs = 'bar) (f . go >l ())
+                          (two? st && elem <st <>rs) (f . go >l ())
+                          (f . go >l st))))))
+          (go fs ())))
 
    ; cmp load-op fusion: (ld X b o)(cmp X y) -> (cmpm b o y), (cmp r X) -> (cmprm r b o) when X
    ; dies beyond. after addrfold; x64 and full-word only (a narrow cmp's flags shift with the extension)
@@ -8475,7 +8535,7 @@
                      (cfoldir g irx))))))))))))))))
        ; the copy fold again after repack: a slot copied from a seat repack just minted forwards from it now
        (post irx) (deadst g (deaddef g (copyprop g (stld g (copyprop g (repack g irx))))))
-       (bad? irf ? irf (dp 'final (swrap g (tailarm g (jmpm g (csdrop g (cskeep g (unhome g (jr0 g (rvunframe g (unframe g (coal g (copyprop g (recse g (wpair g (dp 'post (post (dp 'deadlab (deadlab (swp irf)))))))))))))))))))))
+       (bad? irf ? irf (dp 'final (swrap g (tailarm g (jmpm g (csdrop g (cskeep g (unhome g (jr0 g (rvunframe g (unframe g (laacse g (coal g (copyprop g (recse g (wpair g (dp 'post (post (dp 'deadlab (deadlab (swp irf))))))))))))))))))))))
 
    ; the data tail -> (dataforms nifforms imgforms extras bssforms rodataforms) | 'bad, extras ((name forms
    ; ro?) ..) per other named section in declaration order. love_nifs packs for the linker's __start_/__stop_
