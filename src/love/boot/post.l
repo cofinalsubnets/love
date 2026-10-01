@@ -217,7 +217,6 @@
    (lower s) (string (map (c \ 65 <= c <= 90 ? (c + 32) c) (chars s)))
    (padl s n) (#s >= n ? s (padl (" " + s) n))
    (padr s n) (#s >= n ? s (padr (s + " ") n))
-   (cats ls) (foldr (+) () ls)                          ; the band-general fold: net is its number case
    (uniq l)  (: (go seen l) (? (atom? l) () (peep seen <l 0) (go seen >l)
                               (<l . go (pin seen <l 1) >l))
                 (go {} l))

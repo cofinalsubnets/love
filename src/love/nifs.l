@@ -165,7 +165,8 @@
       (nif_natp          "nat?"          1 lvm_natp)
       (nif_calloutresume "calloutresume" 1 lvm_calloutresume)
       (nif_sitsp         "sits?"         3 lvm_sitsp)
-      (nif_subidx        "subidx"        3 lvm_subidx))
+      (nif_subidx        "subidx"        3 lvm_subidx)
+      (nif_cats          "cats"          1 lvm_cats))
 
    ; --- the instructions the codegen emits. no name column and no arity: an
    ; instruction is jumped to, not applied, so its C symbol is its only spelling.

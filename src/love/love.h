@@ -315,6 +315,7 @@ struct ai {
      hot_show,    // 7: show a value as a string
      hot_net,     // 8: the measure of a compound value (prel's `measure`), what C's truth asks
      hot_flow,    // 9: a port as a charlist (post.l's `flow`), the reader's port door
+     hot_cats,    // 10: cats over a list no fast lane takes (prel's foldr of +)
      lib,        // the library: name -> book. `borrow` takes one onto the stack, `cite`
                  // reads one where it stands, `leave` checks the written one back in.
      errs,        // errno vocabulary: canonical number -> its nom; ai_err reads it

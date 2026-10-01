@@ -198,9 +198,11 @@
 (: (sortsplit l) (? (atom? l) (. l ()) (atom? (cup l)) (. l ())
                     (: r (sortsplit (cuup l)) (. (. (cap l) (cap r)) (. (caup l) (cup r)))))
 )
-; catmap folds with + rather than cat, so it is band-general: mapping to lists concatenates
-; them, mapping to strings joins them. () is the seed and the do-nothing unit of both.
-(: catmap (compose (flip foldr ()) (compose (+)))
+; cats (a nif) is the foldr of + over a list: one allocation when its pieces are all strings
+; or all lists, and this fold for the rest. so catmap is band-general: mapping to lists
+; concatenates them; mapping to strings joins them; () is the unit of both of them.
+(seal-hook 10 (\ l (foldr (+) () l)))
+(: (catmap f l) (cats (map f l))
    (assoc x l) (? (two? l) (? (= x (caap l)) (cap l) (assoc x (cup l))))
    ; assoc's identity twin, as eleq is elem's: a key that is a nom or a charm wants no
    ; structural walk, and `==` says so in one word.

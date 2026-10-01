@@ -1001,7 +1001,7 @@ static lvm(lvm_numtap) {
  Sp = dst; Ip = (union u*) numap_drive; ai_musttail return Continue(); }
 
 // (seal-hook n f): install f as core hook n (1 num-ap, 2 stack, 3 compose,
-// 4 opfix, 5 the help, 6 the task's stdio, 7 show, 8 measure, 9 flow). 5 and 6 are the dynamic slots and
+// 4 opfix, 5 the help, 6 the task's stdio, 7 show, 8 measure, 9 flow, 10 cats). 5 and 6 are the dynamic slots and
 // alone skip the lambda gate -- 5 takes a help or (), 6 a 3-chain or (); anything else
 // traps. a switch, not a table: a slot[] would be an address-taken local (the lvm
 // scratch rule).
@@ -1018,6 +1018,7 @@ lvm(lvm_seal) {
   case 7: g->hot_show = Sp[1]; break;
   case 8: g->hot_net = Sp[1]; break;
   case 9: g->hot_flow = Sp[1]; break;
+  case 10: g->hot_cats = Sp[1]; break;
   default: __builtin_trap(); }
  Sp += 1, Sp[0] = zero, Ip += 1;
  ai_musttail return Continue(); }
