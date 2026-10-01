@@ -1,4 +1,4 @@
-; chucho -- a mail reader in mutt's manner: a mailbox as an index, threaded, a message in the
+; chucho -- a mail reader after mutt's manner: a mailbox as an index, threaded, a message in the
 ; pager, mail written in your editor and handed to sendmail or an SMTP server.
 ;
 ;   index  j k / arrows  move      enter  read          d u  delete, undelete
