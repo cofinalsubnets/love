@@ -5,7 +5,7 @@
 ;   love src/tools/xbell.l                  post the next number if one is due
 ;   love src/tools/xbell.l --dry-run        draw it to next.png, post nothing
 ;   love src/tools/xbell.l --init N ID [AT] next is B(N), replying to post ID; B(N - 1) is
-;                                           due on post AT's day (else ID's)
+;                                           due on post AT's day (else ID's). never over a state
 ;   love src/tools/xbell.l --whoami         check the keys (one paid read)
 ;
 ; ~/.local/share/xbell/ ($XBELL_DIR) holds the keys, config.l, state.l, next.png and log. the
@@ -80,6 +80,42 @@
        (cite 'png 'png-encode W H (slurp j)))
    ; blank pixels for a short last line
    (rep blank k scale) (snip blank 0 (k * 8 * scale * 4))
+
+   ; base 65536 on a fixed cols x rows terminal: a digit a cell, a half block whose top
+   ; is the high byte's colour and bottom the low byte's. the number is right-aligned, so
+   ; its leading zeros are a black band above it
+   (b64k n) (: (go n acc) (n < 65536 ? (n . acc) (go (n // 65536) ((n % 65536) . acc))) (go n ()))
+   esc (string 27)
+   upper (string [226 150 128])                                   ; u+2580, the upper half block
+   ; a byte's colour: black up through indigo, crimson and gold to white, each step brighter
+   ; than the last (relative luminance) and all 256 distinct, so the picture reads back
+   stops [[0 0 0] [32 8 96] [120 16 128] [200 40 80] [245 100 20] [255 170 30] [255 230 110]
+          [255 255 255]]
+   (ramp v) (: i (min 6 (v * 7 // 255)) f (v * 7 - i * 255) a (stops i) b (stops (i + 1))
+               (map (k \ (a k * 255 + (b k - a k) * f + 127) // 255) ^3))
+   sgr (map (v \ (: c (ramp v) (show (c 0) + ";" + show (c 1) + ";" + show (c 2)))) ^256)
+   (cells n cols rows scale)
+    (: ds (b64k n) k (cols * rows - #ds)
+       _ (? (k < 0) (die ("B(n) has " + show #ds + " digits, more than the window's "
+                          + show (cols * rows))))
+       ds (foldl (a \ _ \ (0 . a)) ds ^k)
+       scr (screen (cask (screen () rows cols)) rows cols)
+       _ (each ^rows (r \ (: _ (scribe scr (esc + "[" + show (r + 1) + ";1H"))
+                           (each ^cols (c \ (: d (ds (r * cols + c))
+                                              (scribe scr (esc + "[38;2;" + sgr (d >> 8) + "m" + esc
+                                                           + "[48;2;" + sgr (d & 255) + "m" + upper))))))))
+       w (cols * 8) h (rows * 16)
+       buf (cask (w * h * 4))
+       _ (each ^rows (r \ dye scr buf w r -1 ()))
+       ; xrgb words to rgba bytes, each pixel scale times across and each line scale times down
+       (px i) (string [(peep buf (i + 2) 0) (peep buf (i + 1) 0) (peep buf i 0) 255])
+       j (jug 0)
+       _ (each ^h (y \ (: jl (jug 0)
+                          _ (each ^w (x \ say jl (rep2 (px (4 * (y * w + x))) scale)))
+                          l (slurp jl)
+                          (each ^scale (_ \ say j l)))))
+       (cite 'png 'png-encode (w * scale) (h * scale) (slurp j)))
+   (rep2 q k) (foldl (a \ _ \ a + q) "" ^k)
 
    ; oauth 1.0a
    unreserved "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~"
@@ -186,8 +222,9 @@
    ; the run
    (state _) (: s (file-read (dir + "state.l")) (s ? (read s) ()))
    (picture n row)
-    (draw (b36 <row) (cfg 'cols 0 || max 16 (int ((1 / 2) (2 * #(b36 <row))) + 1))
-          (cfg 'scale 2) (cfg 'fg 16777215) (cfg 'bg 0))
+    ((n >= cfg 'wide-from 1000000000) ? (cells <row (cfg 'wide-cols 36) (cfg 'wide-rows 32) (cfg 'wide-scale 2))
+     (draw (b36 <row) (cfg 'cols 0 || max 16 (int ((1 / 2) (2 * #(b36 <row))) + 1))
+          (cfg 'scale 2) (cfg 'fg 16777215) (cfg 'bg 0)))
    (caption n) (: f (cfg 'text "") (f @ "" "" (subst f "{n}" (show n))))
    (subst s a b) (: k (findsub s a) (k < 0 ? s (snip s 0 k + b + subst (snip s (k + #a) #s) a b)))
    (step _)
@@ -210,7 +247,8 @@
                   + ", due through B(" + show (due 0) + "), caption " + show (caption n)
                   + ", next.png " + show #png + " bytes\n")))
        ("--init" . n . id . more)
-        (: n (read n) at (more ? <more id) _ (file-write (dir + "state.l") ("'" + show [n id (row-at n)]))
+        (: _ (? (file-read (dir + "state.l")) (die "state.l is there already; move it aside to start again"))
+           n (read n) at (more ? <more id) _ (file-write (dir + "state.l") ("'" + show [n id (row-at n)]))
            _ (file-write (dir + "config.l")
                          ("{'anchor-n " + show (n - 1) + " 'anchor-day " + show (id-day at)
                           + "\n 'scale 2 'fg 16777215 'bg 0 'text \"\"}\n"))
