@@ -17,6 +17,7 @@
 ;   (tls-open host port how)   the same -> a session | why not, a string. how: 'verify, or
 ;                              'pin-only (the caller holds the pin: gemini), or 'none
 ;   (tls-open-as host port sni how)   the same, sni the name said and checked
+;   (tls-on s sni port how)    the same over a socket already connected (STARTTLS)
 ;   (tls-say t s)              send s as application data
 ;   (tls-hear t)               the next run of application data as it arrives, () at the
 ;                              peer's close_notify, a nom for a stream cut or forged, (t 'why)
@@ -263,79 +264,80 @@
    (tls-open host port how) (tls-open-as host port host how)
    ; ..naming sni to the server, and checking the certificate against it, not host
    (tls-open-as host port sni how)
-    (: s (dial host port)
-       (? !(hot? s) ("cannot connect to " + host + ":" + show port)
-          (: t (tablet 16)
-             _ (pin t 's s) _ (pin t 'pend "") _ (pin t 'hbuf "") _ (pin t 'tr "")
-             _ (pin t 'cseq 0) _ (pin t 'sseq 0)
-             priv (rnd 32)
-             ch (client-hello sni (x25519-pub priv) (rnd 32))
-             _ (pin t 'tr ch)
-             _ (wr t (u8 22 + u16 769 + u16 #ch + ch))
-             r (rdrec t)
-             (? (atom? r || <r != 22 || <>r 0 != 2) (quit-why t "the server did not answer with a tls 1.3 hello")
-                (: sh <>r
-                   _ (pin t 'tr (t 'tr + sh))
-                   ss (server-share (snip sh 4 #sh))
-                   (? (atom? ss) (quit-why t "the server chose nothing this client speaks")
-                      (: share <ss kl <>ss
-                         shared (x25519 priv share)
-                         weak (shared = zeros 32)                              ; RFC 8446 7.4.2: a small-order share
-                         early (hkdf-extract (zeros 32) (zeros 32))
-                         hs (hkdf-extract (derive early "derived" "") shared)
-                         chs (derive hs "c hs traffic" (t 'tr))
-                         shs (derive hs "s hs traffic" (t 'tr))
-                         _ (pin t 'ckey (hkdf-label chs "key" "" kl)) _ (pin t 'civ (hkdf-label chs "iv" "" 12))
-                         _ (pin t 'skey (hkdf-label shs "key" "" kl)) _ (pin t 'siv (hkdf-label shs "iv" "" 12))
-                         ; the server's flight: extensions, the certificate, its verify, finished.
-                         ; the leaf is kept as 'cert (its der) and its key as 'spki; the verify
-                         ; must be the leaf key's signature of the transcript through the
-                         ; certificate, and the finished the hmac of the transcript through the
-                         ; verify under the server's finished key. anything else ends the dial
-                         (flight _)
-                          (: tb (t 'tr) m (hs-next t)
-                             (? (atom? m) ()
-                                (<m = 20)
-                                 (? (t 'cv = 1 && ct-same? <>m (hmac (hkdf-label shs "finished" "" 32) (sha tb))) m
-                                    (alert t 51 "the server's Finished does not verify"))
-                                (<m = 11)
-                                 (: ds (cert-list <>m)
-                                    k (? (two? ds) (leaf-key <ds) ())
-                                    (? (two? k && !(t 'key))
-                                       (pins t 'chain ds 'cert <ds 'key k 'spki (k 2), flight 0)
-                                       (alert t 42 "the server's certificate does not read")))
-                                (<m = 15)
-                                 (: b <>m n (? (4 <= #b) (rd16 b 2) -1) k (t 'key)
-                                    (? (two? k && #b = 4 + n && !(t 'cv)
-                                        && cv-ok? k (rd16 b 0) (snip b 4 #b) (cv-msg (sha tb)) = 1)
-                                       (pin t 'cv 1, flight 0)
-                                       (alert t 51 "the server's CertificateVerify does not verify under its certificate's key")))
-                                ; a request for our certificate: its context kept
-                                (<m = 13) (pin t 'creq (snip <>m 1 (1 + <>m 0)), flight 0)
-                                (flight 0)))
-                         fin (? weak (pin t 'why "the server's key share is of small order", ()) (flight 0))
-                         why (? (atom? fin) () (trust-why sni port (t 'chain) (t 'spki) how))
-                         (? (atom? fin) (quit-why t "the handshake failed")
-                            (string? why) (: _ (alert t (? (0 <= str-at why "pinned" 0) 42 48) why) (quit-why t why))
-                            (: ; the client finished is over the transcript through the server's
-                               ; asked for one, we send an empty certificate (we have none),
-                               ; and our finished covers it; the traffic keys stop at the server's
-                               tr0 (t 'tr)
-                               cx (t 'creq)
-                               ccert (? (string? cx) (: b (u8 #cx + cx + u24 0) (u8 11 + u24 #b + b)) "")
-                               fkey (hkdf-label chs "finished" "" 32)
-                               vd (hmac fkey (sha (tr0 + ccert)))
-                               cfin (u8 20 + u24 32 + vd)
-                               _ (wr t (u8 20 + u16 771 + u16 1 + u8 1))          ; a CCS for the middleboxes
-                               _ (0 < #ccert ? (seal t 22 ccert) 0)
-                               _ (seal t 22 cfin)
-                               master (hkdf-extract (derive hs "derived" "") (zeros 32))
-                               cats (derive master "c ap traffic" tr0)
-                               sats (derive master "s ap traffic" tr0)
-                               _ (pin t 'ckey (hkdf-label cats "key" "" kl)) _ (pin t 'civ (hkdf-label cats "iv" "" 12))
-                               _ (pin t 'skey (hkdf-label sats "key" "" kl)) _ (pin t 'siv (hkdf-label sats "iv" "" 12))
-                               _ (pins t 'cseq 0 'sseq 0 'cats cats 'sats sats 'up 1)
-                               t)))))))))
+    (dial host port @ s (hot? s ? (tls-on s sni port how) ("cannot connect to " + host + ":" + show port)))
+   ; ..over a socket already connected, the way STARTTLS asks
+   (tls-on s sni port how)
+    (: t (tablet 16)
+       _ (pin t 's s) _ (pin t 'pend "") _ (pin t 'hbuf "") _ (pin t 'tr "")
+       _ (pin t 'cseq 0) _ (pin t 'sseq 0)
+       priv (rnd 32)
+       ch (client-hello sni (x25519-pub priv) (rnd 32))
+       _ (pin t 'tr ch)
+       _ (wr t (u8 22 + u16 769 + u16 #ch + ch))
+       r (rdrec t)
+       (? (atom? r || <r != 22 || <>r 0 != 2) (quit-why t "the server did not answer with a tls 1.3 hello")
+          (: sh <>r
+             _ (pin t 'tr (t 'tr + sh))
+             ss (server-share (snip sh 4 #sh))
+             (? (atom? ss) (quit-why t "the server chose nothing this client speaks")
+                (: share <ss kl <>ss
+                   shared (x25519 priv share)
+                   weak (shared = zeros 32)                              ; RFC 8446 7.4.2: a small-order share
+                   early (hkdf-extract (zeros 32) (zeros 32))
+                   hs (hkdf-extract (derive early "derived" "") shared)
+                   chs (derive hs "c hs traffic" (t 'tr))
+                   shs (derive hs "s hs traffic" (t 'tr))
+                   _ (pin t 'ckey (hkdf-label chs "key" "" kl)) _ (pin t 'civ (hkdf-label chs "iv" "" 12))
+                   _ (pin t 'skey (hkdf-label shs "key" "" kl)) _ (pin t 'siv (hkdf-label shs "iv" "" 12))
+                   ; the server's flight: extensions, the certificate, its verify, finished.
+                   ; the leaf is kept as 'cert (its der) and its key as 'spki; the verify
+                   ; must be the leaf key's signature of the transcript through the
+                   ; certificate, and the finished the hmac of the transcript through the
+                   ; verify under the server's finished key. anything else ends the dial
+                   (flight _)
+                    (: tb (t 'tr) m (hs-next t)
+                       (? (atom? m) ()
+                          (<m = 20)
+                           (? (t 'cv = 1 && ct-same? <>m (hmac (hkdf-label shs "finished" "" 32) (sha tb))) m
+                              (alert t 51 "the server's Finished does not verify"))
+                          (<m = 11)
+                           (: ds (cert-list <>m)
+                              k (? (two? ds) (leaf-key <ds) ())
+                              (? (two? k && !(t 'key))
+                                 (pins t 'chain ds 'cert <ds 'key k 'spki (k 2), flight 0)
+                                 (alert t 42 "the server's certificate does not read")))
+                          (<m = 15)
+                           (: b <>m n (? (4 <= #b) (rd16 b 2) -1) k (t 'key)
+                              (? (two? k && #b = 4 + n && !(t 'cv)
+                                  && cv-ok? k (rd16 b 0) (snip b 4 #b) (cv-msg (sha tb)) = 1)
+                                 (pin t 'cv 1, flight 0)
+                                 (alert t 51 "the server's CertificateVerify does not verify under its certificate's key")))
+                          ; a request for our certificate: its context kept
+                          (<m = 13) (pin t 'creq (snip <>m 1 (1 + <>m 0)), flight 0)
+                          (flight 0)))
+                   fin (? weak (pin t 'why "the server's key share is of small order", ()) (flight 0))
+                   why (? (atom? fin) () (trust-why sni port (t 'chain) (t 'spki) how))
+                   (? (atom? fin) (quit-why t "the handshake failed")
+                      (string? why) (: _ (alert t (? (0 <= str-at why "pinned" 0) 42 48) why) (quit-why t why))
+                      (: ; the client finished is over the transcript through the server's
+                         ; asked for one, we send an empty certificate (we have none),
+                         ; and our finished covers it; the traffic keys stop at the server's
+                         tr0 (t 'tr)
+                         cx (t 'creq)
+                         ccert (? (string? cx) (: b (u8 #cx + cx + u24 0) (u8 11 + u24 #b + b)) "")
+                         fkey (hkdf-label chs "finished" "" 32)
+                         vd (hmac fkey (sha (tr0 + ccert)))
+                         cfin (u8 20 + u24 32 + vd)
+                         _ (wr t (u8 20 + u16 771 + u16 1 + u8 1))          ; a CCS for the middleboxes
+                         _ (0 < #ccert ? (seal t 22 ccert) 0)
+                         _ (seal t 22 cfin)
+                         master (hkdf-extract (derive hs "derived" "") (zeros 32))
+                         cats (derive master "c ap traffic" tr0)
+                         sats (derive master "s ap traffic" tr0)
+                         _ (pin t 'ckey (hkdf-label cats "key" "" kl)) _ (pin t 'civ (hkdf-label cats "iv" "" 12))
+                         _ (pin t 'skey (hkdf-label sats "key" "" kl)) _ (pin t 'siv (hkdf-label sats "iv" "" 12))
+                         _ (pins t 'cseq 0 'sseq 0 'cats cats 'sats sats 'up 1)
+                         t)))))))
 
    ; --- the application half ---
    (tls-say t s)
