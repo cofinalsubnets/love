@@ -1833,15 +1833,18 @@
          _ (rest 33)
          (? (c 'over) 0 (swim c (tick + 1))))
 
-     (tui key yes)
+     (tnew key yes)
       (: c {'blocks () 'ed (ednew 0) 'scroll 0 'dirt {() 1} 'busy () 'asking () 'msgs ()
             'sock () 'over 0 'key key 'yes yes 'rows 24 'cols 80}
          _ (pin c 'face (tface c))
+         _ (push c {'k 'hello})
+         c)
+     (tui key yes)
+      (: c (tnew key yes)
          _ (pin c 'sv (sv-watch (setting 'screensaver "pom")
                                 (: m (peep bee-salt 'screensaver-idle ()) (two? m ? <m 10))))
          _ (twirl (\ _ (watch 0)) 0)                     ; the queues, mailed here when they move
          _ (twirl (\ _ (lock-poll 0)) 0)                   ; queued locks, mailed here when granted
-         _ (push c {'k 'hello})
          _ (tide c)
          _ (raw 1)
          _ (say out (esc + "[?1049h" + esc + "[2J" + esc + "[?2004h" + title-on 0))
@@ -1854,6 +1857,26 @@
          _ (flush out)
          _ (raw 0)
          0)
+
+     ; --- the stage: the full screen as a pane of a harbour (src/apps/berth/berth.l), which
+     ; owns the tty, the keys' reader and the clock. its frame is scribed into the pane's own
+     ; screen, so tui-fresh diffs against what that screen holds. no saver: idle is the harbour's
+     (tstage key yes)
+      (: c (tnew key yes)
+         tw (twirl (\ _ (watch 0)) 0)
+         tl (twirl (\ _ (lock-poll 0)) 0)
+         _ (pins c 'woke (clock 0) 'spun (clock 0))
+         {'show (\ w h (? (w < 20 || h < 8) "" (: _ (pins c 'rows h 'cols w) (frame c))))
+          'step (\ k (: _ (onkey c k) (soil c)))
+          'over? (\ _ (c 'over))
+          ; a frame when the turn or the inbox moved: the spinner's beat, mail about once a second
+          'tick (\ _ (: t (clock 0) b (c 'dirt)
+                        _ (? (c 'busy != () && 130 < t - c 'spun) (: _ (pin c 'spun t) (soil c)) 0)
+                        _ (? (c 'busy = () && 1000 < t - c 'woke) (: _ (pin c 'woke t) (wake c)) 0)
+                        (? (peep b () 0) (: _ (pin b () 0) 1) 0)))
+          'shut (\ _ (: _ (? (c 'busy != ()) (halt c) 0) _ (freeze tw) _ (freeze tl)
+                        _ (? (bee-cc 'live) (cc-stop 0) 0)
+                        (unsettle 0)))})
 
      ; --- the door ---
      ; a prompt on the command line runs once, plainly; with none, a terminal gets the full
@@ -2158,7 +2181,7 @@
      (serve-first key f p)
       (? (0 < #p) (: _ (state! "busy") m (turn key f [(user p)]) _ (state! "idle") (serve key f (two? m ? m ())))
          (serve key f ()))
-     bee-flags ["-y" "--plain" "--serve" "--mcp"]
+     bee-flags ["-y" "--plain" "--serve" "--mcp" "--stage"]
      (bee-go as)
       (: key (getenv bee-key-env)
          yes (elem "-y" as)
@@ -2169,10 +2192,14 @@
             (two? as && <as = "--lock") (bee-cli as yes)              ; its command's words stay as given
             (two? as && elem <as ["-s" "--screensaver"]) (cite 'saver 'saver-cli >as)   ; a saver, no session
             (two? words && elem <words ["--list" "--send" "--spawn" "--stop" "--avatar"]) (bee-cli words yes)
-            ; the api backend wants its endpoint, model and key; claude brings its own
-            (!bee-cc? && atom? bee-at) (say err ("bee: cannot read the url " + bee-url + "\n"), 1)
-            (!bee-cc? && #bee-model = 0) (say err "bee: name the model, (model NAME) in ~/.love/etc/bee.l\n", 1)
-            (!bee-cc? && !bee-local? && !(string? key && 0 < #key)) (say err ("bee: set " + bee-key-env + "\n"), 1)
+            ; the api backend wants its endpoint, model and key; claude brings its own. a stage
+            ; answers why as a string: a harbour shows it, stderr would land on its glass
+            (: why (? (!bee-cc? && atom? bee-at) ("cannot read the url " + bee-url)
+                      (!bee-cc? && #bee-model = 0) "name the model, (model NAME) in ~/.love/etc/bee.l"
+                      (!bee-cc? && !bee-local? && !(string? key && 0 < #key)) ("set " + bee-key-env)
+                      "")
+               (? (0 < #why) (elem "--stage" as ? why (say err ("bee: " + why + "\n"), 1))
+                  (elem "--stage" as) (: _ (settle bee-branch) _ (pin bee-cc 'yes yes) (tstage key yes))
             ; settled for the run, so other sessions can find it and write to it
             (: _ (settle bee-branch)
                _ (pin bee-cc 'yes yes)
@@ -2184,7 +2211,7 @@
                     (repl-go key (plain yes)))
                _ (? (bee-cc 'live) (cc-stop 0) 0)
                _ (unsettle 0)
-               r)))
+               r)))))
       (bee-go as))
    bee-usage "usage: love bee [-y] [--plain] [PROMPT ..]      one prompt, the screen, or a > loop
        love bee --list | --send NAME TEXT ..           the sessions, from a shell

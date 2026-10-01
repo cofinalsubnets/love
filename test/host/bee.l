@@ -633,5 +633,37 @@
            ("(model keep-me)\n(avatar hare)\n" = cr-get (d + "/.love/etc/bee.l")))
    0)
 
+; --- the stage: bee's full screen as a harbour's pane, in this process. it settles in the
+; hive, shows its frame at the size it is asked, takes keys as steps, runs a turn on its
+; own task, and leaves the hive when shut ---
+(: cr-s (cr-dir "stage" ("(api openai)\n(url \"" + cr-url + "/v1/chat/completions\")\n(model mock-model)\n"))
+   h0 (getenv "HOME")
+   _ (setenv "HOME" cr-s)
+   _ (setenv "BEE_HIVE" (cr-s + "/hive"))
+   _ (setenv "OPENAI_API_KEY" "sk-never-sent")
+   _ (cr-serves [(cr-ok (cr-sse [{"choices" [{"delta" {"content" "PONG"}}]}
+                                 {"choices" [{"delta" {} "finish_reason" "stop"}]} "[DONE]"]))])
+   sg ((cite 'bee 'bee-main) ["--stage"])
+   ns (readdir (cr-s + "/hive"))
+   f1 (sg 'show 80 24)
+   f0 (sg 'show 10 4)                                       ; too small for a frame: nothing
+   _ (map (\ k (sg 'step k)) [104 105 10])
+   (wait n) (? (n = 0 || cr-in (sg 'show 80 24) "PONG") n (: _ (rest 20) _ (sg 'tick ()) (wait (n - 1))))
+   w (wait 250)
+   h (cr-heard 0)
+   m (? (two? h) ((cr-body (h 0)) "messages") ())
+   _ (sg 'shut ())
+   ns2 (readdir (cr-s + "/hive"))
+   _ (setenv "HOME" (string? h0 ? h0 ""))
+   _ (setenv "BEE_HIVE" "")
+   (test (tablet? sg)
+         (1 = #ns)
+         (cr-in f1 "enter send") (cr-in f1 <ns)               ; the hints, led by its name
+         ("" = f0)
+         (0 < w)                                              ; the answer came, in a frame
+         (1 = #h)
+         (two? m && "hi" = m (#m - 1) "content")
+         !(two? ns2)))                                        ; shut: the cell is gone
+
 (hark ["rm" "-rf" cr-root])
 (test_fin (), puts "bee: ok", putc 10, 0)
