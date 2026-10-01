@@ -68,5 +68,34 @@
        (court-clock st = "13:00")
        (court-now () @ n (two? n && 0.0 < n 0))))
 
+; --- the battlements: the sun past the north wall's middle third, and stopped by a block
+; --- over an outer third; a block's face high enough sees over the far one
+(: s (unit [0.0 0.2 1.0]) b0 (0.0 - yard-b)
+ (test (sun-clear 0.0 12.6 b0 s = 1) (sun-clear 2.5 12.6 b0 s = 0)
+       (sun-clear 2.5 14.0 b0 s = 1) (sun-clear 2.5 12.6 b0 (unit [0.0 1.0 0.1]) = 1)
+       (sun-clear 0.0 1.0 0.0 (unit [0.0 -0.1 1.0]) = 0)))
+
+; --- the tree: the same seed the same tree; planted in the north-east quarter, leaning
+; --- toward the middle, forked in the third floor, every leaf inside the walls below their
+; --- tops, the crown from a metre under them (its fronds hanging lower) to well over;
+; --- and drawn: the frame with it is not the frame without
+(: t1 (tree-new 7) t2 (tree-new 7) t3 (tree-new 8) bs (t1 'base) segs (t1 'segs)
+   fork (segs 3 1) n (#(t1 'x))
+   (in? k lim) (aall (mag (t1 k) <= lim + 0.0001 + 99.0 * (wall-h <= t1 'y)))
+   st (pins (at 12.0) 'px -2.0 'pz -3.5 'th 0.6 'ph 0.9)
+   f1 (court-frame st) f2 (court-frame (pin st 'tree (tree-new 7 @ tr (pins tr 'segs () 'kind (tr 'kind * 0.0 - 1.0) 'x (tr 'x * 0.0 - 99.0)))))
+ (test (show (t1 'segs) = show (t2 'segs)) (aall (t1 'x = t2 'x)) (show (t1 'segs) != show (t3 'segs))
+       (0.0 < bs 0) (0.0 < bs 2) (mag (fork 0) < bs 0) (mag (fork 2) < bs 2)
+       (7.0 < fork 1 < 8.0) (#segs = 8) (5000 < n)
+       (in? 'x (yard-a - 0.1)) (in? 'z (yard-b - 0.1)) (aall (0.0 < t1 'y))
+       (aall (0 < (t1 'kind != 2.0) + (wall-h - 1.4 <= t1 'y))) (wall-h + 2.0 < amax (t1 'y))
+       (f1 != f2)))
+
+; --- the trunk stands in the way: walking into it, the player stays a body's width off
+(: st (at 12.0) bs (st 'tree 'base)
+   _ (pins st 'px (bs 0) 'pz (bs 2 - 1.5) 'th 0.0)
+   _ (keys! st (map (i \ 107) ^60))
+ (test (0.55 < sqrt (sq (st 'px - bs 0) + sq (st 'pz - bs 2)))))
+
 (test_fin ())
 (puts "court: ok")
