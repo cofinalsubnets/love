@@ -9,7 +9,7 @@
    _ (please 1)
    _ (tune (pin (tune ()) 0 (2 * peep (gauge 0) 8 0)))
    _ (please 1)
-   ord-m0 (peep (gauge 0) 11 0)
+   ord-m0 (peep (gauge 0) 3 0)
    ord-n 1600
    ord-reps 400
    ; ord-t is built once, so from here nearly every word taken is the mask a comparison
@@ -26,7 +26,7 @@
            (ord-ok (\ t (ord-lo <= t)))
            (ord-ok (\ t (ord-hi > t)))
            (ord-ok (\ t (ord-hi >= t))))
-   ord-minors (peep (gauge 0) 11 0 - ord-m0)
+   ord-gcs (peep (gauge 0) 3 0 - ord-m0)
    _ (tune ord-knobs)
    _ (please 1)
-   (test (100 < ord-minors)))
+   (test (100 < ord-gcs)))

@@ -584,5 +584,54 @@
            ("leader boss\nmain abc\n1 alice alice-br - - green\n" = qq))
    0)
 
+; the avatars: each four rows of eight cells, its sgr well formed in truecolor and in 256, the
+; accent from its pixels; --avatar kept in HOME's config beside the rest, a name unknown refused
+(: d (cr-dir "avatar" "(model keep-me)\n(avatar bee)\n")
+   ; [cells params]: the visible cells, and each escape's numbers, 'bad for a torn one
+   (av-end s j) (? (#s <= j) -1 (s j = 109) j (s j = 59 || 48 <= s j && s j < 58) (av-end s (j + 1)) -1)
+   (av-nums p) (: (go i n acc) (? (#p <= i) (rev (n . acc))
+                                  (p i = 59) (go (i + 1) 0 (n . acc))
+                                  (go (i + 1) (n * 10 + p i - 48) acc))
+                  (go 0 0 ()))
+   (av-scan s)
+    (: (go i n ps)
+        (? (#s <= i) [n (rev ps)]
+           (s i = 27) (: k (s (i + 1) = 91 ? (av-end s (i + 2)) -1)
+                         (k < 0 ? [n ('bad . ps)] (go (k + 1) n (av-nums (snip s (i + 2) k) . ps))))
+           (go (i + 1) (s i & 192 = 128 ? n (n + 1)) ps))
+       (go 0 0 ()))
+   ; a colour is 38 or 48, then 2 r g b or 5 n, each at most 255
+   (av-ok? l) (? (atom? l) 1
+                 (elem <l [38 48]) (: u >>l
+                                      (? (<>l = 5) (two? u && <u <= 255 && av-ok? >u)
+                                         (<>l = 2) (2 < #u && all (\ v (v <= 255)) (take 3 u) && av-ok? (drop 3 u))
+                                         0))
+                 (elem <l [0 1 2]) (av-ok? >l)
+                 0)
+   (av-sound? o) (all (\ p (p != 'bad && av-ok? p)) ((av-scan o) 1))
+   names ["bunny" "bee" "baby" "hare" "honeybee" "beeface" "moon"]
+   ; each worn in turn: its face, then its name on the second row
+   worn (map (\ nm (cr-run d "COLORTERM=" ("--avatar " + nm))) names)
+   (shape? nm r) (: ls (lines (r 1))
+                    (0 = <r && 4 = #ls && all (\ i (<(av-scan (ls i)) = (i = 1 ? (13 + #nm) 10))) ^4))
+   tc (cr-run d "COLORTERM=truecolor" "--avatar")
+   c8 (cr-run d "COLORTERM=" "--avatar")
+   set (cr-run d "COLORTERM=" "--avatar hare")
+   cfg (cr-get (d + "/.love/etc/bee.l"))
+   back (cr-run d "COLORTERM=" "--avatar")
+   bad (cr-run d "COLORTERM=" "--avatar nope")
+   _ (test (all (\ i (shape? (names i) (worn i))) ^#names)
+           (all (\ r (av-sound? (r 1))) (tc . c8 . worn))
+           (cr-in (tc 1) "38;2;") !(cr-in (tc 1) "38;5;")
+           (cr-in (c8 1) "38;5;") !(cr-in (c8 1) "38;2;")
+           ; bunny's soft pink ear, hare's blue
+           (cr-in (tc 1) "38;2;255;175;215mbunny") (cr-in (tc 1) "38;2;91;110;225mhare")
+           (cr-in (c8 1) "38;5;218mbunny") (cr-in (c8 1) "38;5;62mhare")
+           (0 = <set) ("(model keep-me)\n(avatar hare)\n" = cfg)
+           (cr-in (back 1) "[1;38;5;62mhare")
+           (1 = <bad) (cr-in (bad 1) "no avatar nope") (cr-in (bad 1) "honeybee")
+           ("(model keep-me)\n(avatar hare)\n" = cr-get (d + "/.love/etc/bee.l")))
+   0)
+
 (hark ["rm" "-rf" cr-root])
 (test_fin (), puts "bee: ok", putc 10, 0)

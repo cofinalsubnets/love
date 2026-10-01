@@ -15,7 +15,7 @@
          slop-step slop-push slop-key slop-tick slop-frame slop-flood slop-bar slop-bar-fit slop-road slop-turf slop-post
          slop-tune slop-song-speed slop-song-edge slop-song-vol slop-song-wave
          slop-song-new slop-song-feed song-wave-of frame-due?
-         slop-shore slop-sand slop-wet? slop-drift slop-pal slop-ramp-pen slop-under slop-face)
+         slop-shore slop-sand slop-wet? slop-drift slop-pal slop-ramp slop-ramp-pen slop-under slop-face)
 (borrow 'rove)
 ; the song wants harp's cycle algebra and play's voices -- vnum, venv, mixdown and pack.
 ; borrowing harp shadows prel's rev and every with the pattern ones, so the list
