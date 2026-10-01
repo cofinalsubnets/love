@@ -1,6 +1,6 @@
 ; view -- what a first-person level in half blocks rides: the screen as a camera on the
 ; state, the rays its columns cast, the pens said a change at a time, the tty loop that
-; runs a level, and the small arithmetic the scenes share. wade, dusk and shaft
+; runs a level, and the small arithmetic the scenes share. wade, dusk, shaft and court
 ; (src/apps/rove/) borrow it.
 (module (view esc pi clamp flo wrap min2 max2 over throw sgr view! view-hz view-size view-rays
          view-frame view-walk view-run)

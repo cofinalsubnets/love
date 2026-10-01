@@ -207,5 +207,9 @@
   slurp shm,
   waitfor <sh,
   test (840 <= #b1 // 3),                                   ; a frame's worth of half blocks came
+  ; the court, likewise: its maps laid, a frame of half blocks, and q ends it
+  (: cs (spawn "env HORN=none out/love court" 12 70) csm >cs
+     b2 (blocks csm "" 0 840)
+     ((say csm "q", flush csm), slurp csm, waitfor <cs, test (840 <= #b2 // 3))),
   test_fin (),
   puts "tty: ok"))

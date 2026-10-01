@@ -5,8 +5,8 @@
 ; each other across the shaft from the door wall carry a small red light, and the lights
 ; blink slowly together as a mast's do, with a halo on the plates around each when it
 ; is on; the door wall carries a lift door, shut -- all but the top one, which opens when
-; the player stands at it, and that ends the level. the player walks the floor and the
-; ledges as they like, jumps with the space bar and comes down under gravity; off a
+; the player stands at it, and that ends the level: the court (src/apps/rove/court.l)
+; takes the screen. the player walks the floor and the ledges as they like, jumps with the space bar and comes down under gravity; off a
 ; ledge's edge they fall to whatever is under them, the floor at worst, and are not
 ; hurt, but the screen flashes red, the harder the landing the more opaque and the
 ; slower it fades.
@@ -357,7 +357,7 @@
                             'frame shaft-frame 'key shaft-step 'tick shaft-move 'fps fps
                             'song (hn \ ((hn ? (shaft-song-new hn (wheel (clock 0)))) @ s
                                            (s ? (st \ (shaft-sfx s st, shaft-song-feed s)) (st \ pin st 'sfx ()))))
-                            'linger done-ms 'next ()})
+                            'linger done-ms 'next ['court 'court-walk]})
  (shaft-run _) (view-run shaft-walk)
  shaft-usage "usage: love shaft   (h l turn, k j step, space jumps or takes a ladder, u n look; q or esc leaves)"
  (shaft-main as) (as @ () (shaft-run ())

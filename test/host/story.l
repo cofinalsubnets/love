@@ -103,7 +103,8 @@
     keys! g3 "\r",                                    ; the say pages out; then (ask) opens the prompt
     test (g3 'win 'prompt),
     keys! g3 "look\r",
-    test (has? (last (g3 'win 'lines)) "story"),     ; the shelf's books, the newest line
+    ; the shelf's books, in the lines after the asking
+    test (has? (join " " (foldl (a \ l \ (snip l 0 2 = "> " ? () (a + [l]))) () (g3 'win 'lines))) "story"),
     keys! g3 "read story\r",
     test (has? (join " " (g3 'win 'lines)) "fiction engine"),     ; libra's lift of this file's header
     keys! g3 "(+ 1 2)\r",
