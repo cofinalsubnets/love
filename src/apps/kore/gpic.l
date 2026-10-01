@@ -16,7 +16,7 @@
 (:
    ; -- tables (at the head: a value binding sees only those above it) ------------------
    gp-pi 3.141592653589793
-   gp-r2 0.7071067811865476
+   gp-rt2 1.4142135623730951
    ; the predefined variables and their defaults
    gp-defaults [["arcrad" 0.25] ["arrowht" 0.1] ["arrowwid" 0.05] ["boxht" 0.5]
                 ["boxwid" 0.75] ["boxrad" 0.0] ["circlerad" 0.25] ["dashwid" 0.05]
@@ -425,10 +425,31 @@
                           (gp-op? g k ")") [(rev (v . acc)) (k + 1)] ())
                        ())
           (go (i + 1) ())))
+   ; sin and cos as glibc's, each the double nearest the true value, in grap's fixed point
+   ; (grap.l bakes first, for it)
+   ; atan(1/m) times 2^p
+   (gp-atanq m p)
+    (: m2 (m * m)
+       (go pw k acc) (pw = 0 ? acc (go (pw // m2) (k + 2) (k % 4 = 1 ? (acc + pw // k) (acc - pw // k))))
+       (go ((2 ** p) // m) 1 0))
+   ; [sin cos] of x: a turn's quarters off at as many bits as x has whole ones, and the
+   ; rest by its series
+   (gp-sincos x)
+    (? (abs x < 7.450580596923828e-9) [(gp-fl x) 1.0]
+       (: r (gr-rat (abs x)) p (gr-p + max 0 (gr-bits <r - gr-bits (r 1)) + 8) one (2 ** p)
+          X ((<r * one) // r 1)
+          hp ((16 * gp-atanq 5 (p + 4) - 4 * gp-atanq 239 (p + 4)) // 32)
+          k ((2 * X + hp) // (2 * hp)) R (X - k * hp) R2 ((R * R) // one)
+          ; the series' terms, each the last times -R^2/(j(j+1))
+          (ser t j acc) (t = 0 ? acc (ser ((0 - t * R2) // (one * j * (j + 1))) (j + 2) (acc + t)))
+          s (ser R 2 0) c (ser one 1 0)
+          q (k % 4) sg (x < 0 ? -1 1)
+          [(gr-dbl (sg * (? (q = 0) s (q = 1) c (q = 2) (0 - s) (0 - c))) one)
+           (gr-dbl (? (q = 0) c (q = 1) (0 - s) (q = 2) (0 - c) s) one)]))
    (gp-func g f as)
     (: n #as (a k) (as k)
        (need m) (n = m ? 0 (gp-err g ("wrong number of arguments to " + f)))
-       (f @ "sin" (need 1, sin (a 0)) "cos" (need 1, cos (a 0))
+       (f @ "sin" (need 1, <(gp-sincos (a 0))) "cos" (need 1, gp-sincos (a 0) 1)
             "atan2" (need 2, a 0 = 0 && a 1 = 0 ? (gp-err g "atan2 argument out of domain") (atan2 (a 0) (a 1)))
             "log" (need 1, a 0 <= 0 ? (gp-err g "log argument out of domain") (log (a 0) / log 10.0))
             "exp" (need 1, 10.0 ** a 0)
@@ -585,9 +606,9 @@
    ; an object is a tablet: 'ty box circle ellipse arc line spline move text block troff,
    ; 'kw what last and nth call it (arrow for a line with a head), 'c the centre, 'w 'h
    ; 'r, 'pts a path's points, 'st 'en, and how it is drawn
-   ; a corner's offset from the centre of a thing w by h, round or square
+   ; a corner's offset from the centre of a thing w by h, round (divided by root 2) or square
    (gp-off round w h c)
-    (: x (w / 2) y (h / 2) dx (round ? (x * gp-r2) x) dy (round ? (y * gp-r2) y)
+    (: x (w / 2) y (h / 2) dx (round ? (x / gp-rt2) x) dy (round ? (y / gp-rt2) y)
        (c @ 'n [0.0 y] 's [0.0 (0 - y)] 'e [x 0.0] 'w [(0 - x) 0.0]
             'ne [dx dy] 'nw [(0 - dx) dy] 'se [dx (0 - dy)] 'sw [(0 - dx) (0 - dy)]
             [0.0 0.0]))
@@ -1384,7 +1405,9 @@
     (: W (g 'W) H (g 'H)
        ; the arguments said again after one blank, however many they came after
        a2 (: (sp i) (i < #args && gp-blank? (args i) ? (sp (i + 1)) i) k (sp 0) (snip args k #args))
-       (gp-o g (".PS " + gp-in H + " " + gp-in W + (0 < #a2 ? (" " + a2) "") + "\n"),
+       ; each picture says its first fill again; the thickness carries over
+       (pin g 'cfill (),
+        gp-o g (".PS " + gp-in H + " " + gp-in W + (0 < #a2 ? (" " + a2) "") + "\n"),
         gp-o g (".\\\" " + gp-g (b 0) + " " + gp-g (b 1) + " " + gp-g (b 2) + " " + gp-g (b 3) + "\n"),
         gp-o g (".\\\" " + gp-in (gp-X g [(b 0) (b 1)]) + " " + gp-in (gp-Y g [(b 0) (b 1)]) + " "
                 + gp-in (gp-X g [(b 2) (b 3)]) + " " + gp-in (gp-Y g [(b 2) (b 3)]) + "\n"),
