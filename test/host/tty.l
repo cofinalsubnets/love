@@ -71,7 +71,7 @@
 ; sizeless climb falls back to a 22-row floor, which with the note and the bar is 24
 ; lines exactly, so the same grid comes out whether the tty was read or missed and
 ; the law at 24 rows is vacuous. 20x70 is nobody's fallback.
- a (run "out/love tower" "q" 20 70)
+ a (run "out/love lore tower" "q" 20 70)
  _ (test
     (has? <a "\e[?1049h")                                   ; the alternate screen
     ("finally, the tower" = snip (rowtx <>a 0) 0 18)         ; the note, no turn taken
@@ -82,7 +82,7 @@
 
 ; --- ..and a turn spends the note. the boot message stands until the first one, so a
 ;     blank row 0 is the climb saying it read a key -- nothing else here can say it
- b (run "out/love tower" "hjklq" 20 70)
+ b (run "out/love lore tower" "hjklq" 20 70)
  _ (test
     (blank? (rowtx <>b 0))
     ("the garden" = snip (rowtx <>b 19) 0 10)
@@ -91,7 +91,7 @@
 ; --- ..and an arrow's three bytes are one key. read as a bare ESC they would be quit
 ;     (the climb's own second quit key), the h behind them unread and the note still on
 ;     row 0 -- so a spent note is exactly the law that the csi was decoded
- c (run "out/love tower" "\e[Chq" 20 70)
+ c (run "out/love lore tower" "\e[Chq" 20 70)
  _ (test (blank? (rowtx <>c 0)) (has? <c "you leave the tower"))
 
 ; --- what was typed at the game is not typed at the shell ---
@@ -101,7 +101,7 @@
 ; the sign down, q leaves, and the four behind them are the ones that must not survive.
 ; the reader after it is non-blocking (min 0 time), so it answers whether or not there
 ; is anything there, which is the whole question.
- dr (: t (guard (tether ["sh" "-c" ("stty rows 20 columns 70 -echo; out/love tower; "
+ dr (: t (guard (tether ["sh" "-c" ("stty rows 20 columns 70 -echo; out/love lore tower; "
                                     + "stty -icanon min 0 time 3; cat")]))
        m >t
        ; the keys wait for raw mode: typed before it, the tty echoes them back and the
@@ -125,7 +125,7 @@
 ; box is one frame and the key that ends it buys one more -- the screen stood still for
 ; the whole of the wait. heard, the walk is swimming through all of it, and the frames
 ; it lays down while nobody is reading the pty fill the thing and stand at five.
- sgt (spawn "out/love slop phone 38" 14 64)
+ sgt (spawn "out/love lore slop phone 38" 14 64)
  sgm >sgt
  sgseen (wire sgm "-- any key --")
  _ (say sgm "z")                                            ; typed into the deaf half
@@ -139,7 +139,7 @@
     (has? sgtx "38 pennies")
     (has? sgtx "forward remains")                           ; ..the line, wrapped at 64
     (4 > count sgtx "\e[H"))                                ; ..and it stood while deaf
- sn (run "out/love slop" "q" 14 64)
+ sn (run "out/love lore slop" "q" 14 64)
  _ (test !(has? <sn "forward remains"))
 
 ; --- slop: the shimmer with a player under it, and only forward moves him ---
@@ -149,7 +149,7 @@
 ; nothing of it is on the screen, so unlike ink there is no painted cell to wait for --
 ; wait for the road's own pen instead. the climb line is row 7 and a square out here is
 ; one press.
- st (spawn "out/love slop" 12 40)
+ st (spawn "out/love lore slop" 12 40)
  sm >st
  sseen (wire sm "\e[38;5;94m")
  _ (say sm "k")                                             ; gap 19, cost 1: one square
@@ -171,11 +171,11 @@
                                                             ; starts a row of its own
 
 ; --- the story: a level file is a fixed map, so this one place is a law ---
- d (run "out/love story" ":q\r" 14 60)
+ d (run "out/love lore story" ":q\r" 14 60)
  _ (test
     (has? <d "the lighthouse")                               ; the status line names it
     ((8 . 6) = at <>d))                                      ; you stand where the level puts you
- e (run "out/love story" "k:q\r" 14 60)
+ e (run "out/love lore story" "k:q\r" 14 60)
  _ (test ((7 . 6) = at <>e))                                 ; ..and k is one row north
 ; --- the synth: alt is an escape before the key, and the two arrive in one write -- the
 ; --- quarter tone is struck, not an escape dropped and then a plain note. the key goes
@@ -200,12 +200,16 @@
                        (c < 0 ? acc
                         (: acc2 (acc + string c) l #acc2
                            (blocks m acc2 (k + (3 <= l && "▀" = snip acc2 (l - 3) l)) n))))
- sh (spawn "env HORN=none out/love shaft" 12 70)
+ sh (spawn "env HORN=none out/love lore shaft" 12 70)
  shm >sh
  b1 (blocks shm "" 0 840)
  ((say shm "q", flush shm),
   slurp shm,
   waitfor <sh,
   test (840 <= #b1 // 3),                                   ; a frame's worth of half blocks came
+  ; the courtyard, likewise: its maps laid, a frame of half blocks, and q ends it
+  (: cs (spawn "env HORN=none out/love lore tree" 12 70) csm >cs
+     b2 (blocks csm "" 0 840)
+     ((say csm "q", flush csm), slurp csm, waitfor <cs, test (840 <= #b2 // 3))),
   test_fin (),
   puts "tty: ok"))

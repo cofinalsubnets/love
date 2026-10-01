@@ -22,11 +22,11 @@
 ; and state out, and the song feeds any port -- gated headless by test/host/wade.l;
 ; only wade-walk and wade-run tie the tty and the horn.
 ;
-; run: love wade    h l or the arrows turn, k or up wades on, u n look up and down,
+; run: love lore wade    h l or the arrows turn, k or up wades on, u n look up and down,
 ;                   space walks on until pressed again; q or esc leaves. reaching the
 ;                   lamppost ends the level: the view turns to the lamp and pitches up
 ;                   to hold its flame, a moment passes, and the apartment takes the
-;                   screen (src/apps/rove/apartment.l) where the seat carries it.
+;                   screen (src/apps/lore/apartment.l) where the seat carries it.
 ;                   HORN=none plays silent on a seat with no sound device
 (module (wade wade-run wade-walk wade-main wade-new wade-step wade-move wade-frame wade-tables
          wade-size wade-song-new wade-song-feed moon-at swell rings-at tree-of rw sp loop fps
@@ -369,8 +369,8 @@
                                           (s ? (_ \ (wade-song-feed s)))))
                            'linger (settle-ms + done-ms) 'next ['apartment 'apartment-walk]})
  (wade-run _) (view-run wade-walk)
- wade-usage "usage: love wade   (h l turn, k j wade, u n look, space walks on to the lamppost; q or esc leaves)"
+ wade-usage "usage: love lore wade   (h l turn, k j wade, u n look, space walks on to the lamppost; q or esc leaves)"
  (wade-main as) (as @ () (wade-run ())
                       (say err ("wade: " + wade-usage + "\n"), flush err, 2))
- _ (pins (cite 'verbs 'tab) 'wade (udoor 'wade wade-main wade-usage 1 1)))
+ _ ((cite 'lore 'lore-enlist) 'wade (udoor 'wade wade-main wade-usage 1 1)))
 ) ; module wade

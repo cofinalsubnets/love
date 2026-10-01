@@ -86,17 +86,9 @@
  ; the phase this hour, utc, as pom reckons it
  (pom-now _) (: s (clock 0 // 1000) d (civil (s // 86400))
                 (pom-phase (s % 86400 // 3600) <>d <>>d <d))
- ; lit at (nx ny) on the unit disc: the terminator is an ellipse cos 2πp wide, waxing
- ; lights the right side and waning the left
- (saver-moon-lit? p nx ny) (: s (sqrt (max 0.0 (1.0 - ny * ny))) k (cos (2 * pi * p))
-                             (p < 0.5 ? (nx > k * s) (nx < 0 - k * s)))
- ; the seas, roughly where they lie: [x y radius] on the unit disc, north up
- maria [[-0.35 -0.45 0.28] [0.18 -0.38 0.17] [0.3 -0.05 0.2] [0.68 -0.3 0.12]
-        [-0.6 0.0 0.35] [-0.2 0.45 0.18] [0.55 0.2 0.14]]
- (mare? nx ny) (any (m \ ((nx - m 0) * (nx - m 0) + (ny - m 1) * (ny - m 1) < m 2 * m 2)) maria)
- (moon-pen p nx ny) (? (1.0 < nx * nx + ny * ny) ()
-                       (saver-moon-lit? p nx ny) (mare? nx ny ? 187 230)
-                       234)
+ ; the moon's face is pom's, so `pom -s` prints what this draws
+ saver-moon-lit? (cite 'pom 'pom-lit?)
+ moon-pen (cite 'pom 'pom-face)
  ; the disc on half cells, a cell two pixels each about as wide as it is tall, as
  ; [y x upper lower] for every cell it touches: laid once, it does not move
  (moon-cells p r c)

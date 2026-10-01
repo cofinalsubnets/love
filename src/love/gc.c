@@ -423,19 +423,24 @@ ai_noinline struct ai *ai_please(struct ai *g, uintptr_t req0) {
    if ((uintptr_t) g->len > 4 * want) return gen_grow(g, want);
    return g; }
 #endif
- g->win_alloc += seen_young, g->win_copied += copied;
+ // only a minor sizes the nursery. a major copies the whole tenured set, which no nursery
+ // size changes, and a nursery grown on one outgrows the room the major just made, so the
+ // next collection is a major too: the all-majors latch. grown on a minor, it costs one
+ // major, which sizes the pool to hold it (gen_major's slack), and the minors resume
  uintptr_t used = g->len - avail(g), req = req0 + used + (used >> 2), len1 = g->len, arena = len1;
  // grow stickiness: act only on two consecutive over-setpoint windows (lean counts them;
  // a window under it ends the streak). a resize is the costliest single act -- fresh pool,
  // full copy, every page refaulted -- so a spike self-corrects and only a real ramp confirms.
  // the nursery never shrinks for low overhead: a small one pays per-collection costs for
  // nothing, and a shrink rule oscillates on phased work, resizing every other collection.
- if (g->win_copied * ratio > g->win_alloc) {                   // overhead > 1/ratio: nursery too small
-  if ((g->lean = g->lean > 0 ? g->lean + 1 : 1) >= 2) {        // confirmed: grow
-   uintptr_t wa = g->win_alloc | 1;                            // grow until the projected overhead is under 1/ratio (| 1: guarantee progress)
-   while (g->win_copied * ratio > wa) arena <<= 1, wa <<= 1;    // (doubling the pool ~doubles alloc-between-GCs)
-   g->lean = 0, g->win_alloc = g->win_copied = 0; }
- } else if (g->win_alloc > 8 * len1) g->win_alloc = g->win_copied = 0, g->lean = 0;   // under it: cap the window; the streak dies
+ if (!major) {
+  g->win_alloc += seen_young, g->win_copied += copied;
+  if (g->win_copied * ratio > g->win_alloc) {                  // overhead > 1/ratio: nursery too small
+   if ((g->lean = g->lean > 0 ? g->lean + 1 : 1) >= 2) {       // confirmed: grow
+    uintptr_t wa = g->win_alloc | 1;                           // grow until the projected overhead is under 1/ratio (| 1: guarantee progress)
+    while (g->win_copied * ratio > wa) arena <<= 1, wa <<= 1;   // (doubling the pool ~doubles alloc-between-GCs)
+    g->lean = 0, g->win_alloc = g->win_copied = 0; }
+  } else if (g->win_alloc > 8 * len1) g->win_alloc = g->win_copied = 0, g->lean = 0; }   // under it: cap the window; the streak dies
  if (g->budget) {
   // appel cap, reserving room for the major that must hold the worst-case promotion
   // (live + this whole nursery): the nursery gets ~(budget - 2*live)/4

@@ -1,7 +1,7 @@
 ; design -- the level designer: a story's map painted where it is played. the map is
 ; tiles, a room is what you wall off, and a thing is a glyph placed on a tile; every
 ; edit is a key at the cursor, and the level is saved as the datum story.l plays
-; (src/apps/rove/levels). the words -- a thing's dialog -- are edited in vi on the file,
+; (src/apps/lore/levels). the words -- a thing's dialog -- are edited in vi on the file,
 ; and the level is played from here to try it.
 ;
 ;   hjkl yubn / arrows  the cursor        space  paint the brush here
@@ -16,7 +16,7 @@
 ; the designer gates headless (test/host/design.l); only design-run ties the tty, on
 ; cli's stage, and the prompts are cli's editor. the engine's words -- level, kind,
 ; thing, kind-of, load-level, save-level, story-run, pen -- are the story module's.
-; usage: love design [LEVEL.l]      the file to lay out (default src/apps/rove/levels/lighthouse.l)
+; usage: love lore design [LEVEL.l]      the file to lay out (default src/apps/lore/levels/lighthouse.l)
 (module (design design-main design-run design-new design-key design-frame)
 (borrow 'story)
 (:
@@ -144,12 +144,12 @@
                              d 'want @ 'vi (pin d 'want (), vi ? (visit (_ \ vi [p]), reload d) (tell d "no editor on this seat"))
                                        'play (pin d 'want (), visit (_ \ story-run (d 'lvl))))
                    (stage (w \ h \ design-frame d w h) step (_ \ (d 'over))))
- design-usage "usage: love design [LEVEL.l]"
+ design-usage "usage: love lore design [LEVEL.l]"
  ; the one operand is a level file -- a dash word would be opened as one
  (design-main as)
-  ((two? as ? <as "src/apps/rove/levels/lighthouse.l") @ f
+  ((two? as ? <as "src/apps/lore/levels/lighthouse.l") @ f
      (1 < #f && f 0 = 45 ?
         (say err ("design: unknown option " + f + "\n"), flush err, 2)
         (design-run f)))
- _ (pin (cite 'verbs 'tab) 'design (udoor 'design design-main design-usage 1 1)))
+ _ ((cite 'lore 'lore-enlist) 'design (udoor 'design design-main design-usage 1 1)))
 ) ; module design
