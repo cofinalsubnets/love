@@ -647,7 +647,8 @@
 ; --- text + sequence batteries ------------------------------------------------
 ; one copy of each, `sep` first so a partial application reads, and -1 for absent.
 (: (fsub s sub i)                                       ; first index >= i of sub in s, or -1
-    (? (i + #sub > #s) -1 (snip s i (i + #sub) = sub) i (fsub s sub (i + 1)))
+    (? (string? s && string? sub) (subidx s sub i)      ; two strings: subidx, in place
+       (i + #sub > #s) -1 (snip s i (i + #sub) = sub) i (fsub s sub (i + 1)))
 
    (join sep l)    (two? l ? (foldl (a \ x \ a + sep + x) <l >l) "")
    (split sep s)                                        ; always >= 1 piece; "" splits nowhere
@@ -995,7 +996,10 @@
    (run? x) (two? x ? (<x == rtag))
    (rlen r) (foldl (\ n q (padd n (alen q))) 0 r)
    ; a run's tests, one per anchor, laid from pos forwards or back from end
-   (lfwd r pos v) (atom? r ? () (: e (padd pos (alen <r)) (['= (atext <r) ['snip v pos e]] . lfwd >r e v)))
+   ; a literal anchor is sits?, compared in place; a pin's text is read at match time, so it snips.
+   ; the nif goes in as the head's value, not quoted: ev inlines a value head at its arity
+   (lfwd r pos v) (atom? r ? () (: e (padd pos (alen <r))
+                                   ((string? <r ? [sits? v pos <r] ['= (atext <r) ['snip v pos e]]) . lfwd >r e v)))
    (lbck r end v) (lfwd r (psub end (rlen r)) v)
    (meet? rs) (two? >rs ? (!(run? <rs) && !(run? <>rs) ? 1 (meet? >rs)))
    ; a literal among the pieces, no bracket, and no two free pieces side by side: anything
@@ -1019,7 +1023,7 @@
         (cut ms cur)
           (atom? >ms ? (pw <ms (part cur hi))
              (: rn ><>ms n (foldl acat "" (map atext rn))
-                at [(lit fsub) v n cur] e (padd at (rlen rn))
+                at [subidx v n cur] e (padd at (rlen rn))     ; v and the needle are strings by now
                 (wcat (wts [['<= 0 at] ['<= e hi]])
                       (wcat (pw <ms ['snip v cur at]) (cut >>ms e)))))
         (wcat (wts pre) (two? mid ? (cut mid lo) wnil)))

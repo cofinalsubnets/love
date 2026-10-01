@@ -594,7 +594,8 @@ int memcmp(void const*, void const*, size_t);
 void *malloc(size_t), free(void*),
  *memcpy(void*restrict, void const*restrict, size_t),
  *memmove(void*restrict, void const*restrict, size_t),
- *memset(void*, int, size_t);
+ *memset(void*, int, size_t),
+ *memchr(void const*, int, size_t);
 size_t strlen(char const*);
 
 // --- the machine ---

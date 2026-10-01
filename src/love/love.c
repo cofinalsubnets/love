@@ -31,7 +31,7 @@ static lvm_t
  lvm_apof, lvm_stack, lvm_cap, lvm_casknew, lvm_chainp, lvm_clock, lvm_cup,
  lvm_gauge, lvm_intf, lvm_key, lvm_kreg, lvm_link, lvm_mint, lvm_mintp, lvm_lib, lvm_namep,
  lvm_nclock, lvm_nomctor, lvm_nomp, lvm_packp, lvm_please, lvm_setstack, lvm_setp,
- lvm_snip, lvm_strp, lvm_sub, lvm_subn, lvm_sunp, lvm_tune, _lvm_help_scare, _lvm_yield_c;
+ lvm_snip, lvm_sitsp, lvm_subidx, lvm_strp, lvm_sub, lvm_subn, lvm_sunp, lvm_tune, _lvm_help_scare, _lvm_yield_c;
 static struct ai
  *ai_ini_0(struct ai*g, uintptr_t len0);
 static uintptr_t stringlen(struct ai *g, word x);
@@ -592,6 +592,33 @@ static lvm(lvm_snip) {
    memcpy(txt(t), txt(s) + i, j - i);
    Sp[2] = (word) t; } }
  ai_musttail return Nextp(1, 2); }
+
+// (sits? s i t): t's bytes sit in s at i -- (= t (snip s i (i + #t))) compared in place,
+// so a pattern's anchor costs no allocation. a string or cask s and a string t; anything
+// else is 0, and an empty t is 1 wherever it is asked, as the snip it stands for is.
+static lvm(lvm_sitsp) {
+ word v = zero;
+ if ((strp(Sp[0]) || caskp(Sp[0])) && strp(Sp[2])) {
+  struct ai_str *s = bytes_of(Sp[0]), *t = str(Sp[2]);
+  intptr_t i = oddp(Sp[1]) ? getcharm(Sp[1]) : 0, m = (intptr_t) len(t);
+  if (!m || (0 <= i && i + m <= (intptr_t) len(s) && !memcmp(txt(s) + i, txt(t), (size_t) m))) v = putcharm(1); }
+ ai_musttail return Answerp(2, v); }
+
+// (subidx s t i): the first index >= i where t sits in s, or -1 -- prel's fsub over two
+// strings, without a snip a position. an empty t is found at i itself while i <= #s.
+static lvm(lvm_subidx) {
+ intptr_t r = -1;
+ if (strp(Sp[0]) && strp(Sp[1])) {
+  struct ai_str *s = str(Sp[0]), *t = str(Sp[1]);
+  intptr_t n = (intptr_t) len(s), m = (intptr_t) len(t), i = oddp(Sp[2]) ? getcharm(Sp[2]) : 0;
+  if (!m) r = i <= n ? i : -1;
+  else for (intptr_t k = max(i, 0); k + m <= n; k++) {
+   char const *p = memchr(txt(s) + k, txt(t)[0], (size_t) (n - m - k + 1));
+   if (!p) break;
+   k = p - txt(s);
+   if (!memcmp(p, txt(t), (size_t) m)) { r = k; break; } } }
+ ai_musttail return Answerp(2, putcharm(r)); }
+
 
 
 // applying a cask behaves as 0 (yields 1); byte-identical to lvm_port_io, kept

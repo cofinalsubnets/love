@@ -150,8 +150,8 @@
 (: (chars s) (map s ^#s)                      ; a string is an atom, so map needs the indices
    (findsub s sub) (#sub = 0 ? 0 (fsub s sub 0))        ; -1 when absent
    (has? s sub)    (0 <= findsub s sub)
-   (starts? s p)   (#p <= #s && snip s 0 #p = p ? 1 0)          ; a ?-name owes a bit, and && gives ()
-   (ends? s p)     (#p <= #s && snip s (#s - #p) #s = p ? 1 0)
+   (starts? s p)   (string? s && string? p ? (sits? s 0 p) (#p <= #s && snip s 0 #p = p ? 1 0))   ; a ?-name owes a bit, and && gives ()
+   (ends? s p)     (string? s && string? p ? (sits? s (#s - #p) p) (#p <= #s && snip s (#s - #p) #s = p ? 1 0))
    (replace s cite to) (#cite = 0 ? s (join to (split cite s)))
    (ws? c)  (c = 32 || c = 9 || c = 10 || c = 13 ? 1 0)
    (digit? c) (48 <= c <= 57 ? 1 0)
