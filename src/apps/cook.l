@@ -697,13 +697,14 @@
          "flavor"    (peep origins (trim (ex1 at)) "undefined" @ o
                                (o = "undefined" ? "undefined" (peep flavors (trim (ex1 at)) "recursive")))
          ; the diagnostics: a guard spelled $(error ..) must not vanish into an empty string
+         ; eval queues its text for the parse to splice behind the line that asked, so it
+         ; works nested -- in a foreach, a call, an assignment. past the parse there is no rule
+         ; list to reach, and an empty answer would be rules quietly not existing.
+         "eval"      (peep as " parsing" 0 ? (pin as " evals" (ex1 at . peep as " evals" ()), "")
+                        (cook-gap "$(eval ..) outside the parse"))
          "info"      (puts (ex1 at), putc 10, "")
          "warning"   (say err ("cook: " + ex1 at), put err 10, "")
          "error"     (say err ("cook: *** " + ex1 at + ".  Stop.\n"), quit 2)
-         ; $(eval) inside an expansion ($(foreach f,..,$(eval CFLAGS_$(f) = ..))): its assignments
-         ; land in the same table; a rule cannot reach the rule list from here, so one refuses
-         "eval"      (build (text-lines (ex1 at)) as @ rs
-                        (two? rs ? (cook-gap "a rule inside a nested $(eval ..)") ""))
          ""))                                   ; unknown -> empty (make's own rule; see funcnames)
 
    ; a group body is a function call ($(name args)), a substitution reference
@@ -852,9 +853,15 @@
    (push-cond cond pon active) ([pon active active] . cond)
    (else-cond cond) (: f <cond pon <f taken <>f na (pon && !taken)
                        ([pon (taken || na) na] . >cond))
+   ; the text $(eval ..) queued while the last line expanded, as lines, oldest first
+   (evals-take as)
+    (peep as " evals" () @ q (two? q ? (pull as " evals" 0, catmap text-lines (rev q)) ()))
    (build cls as)
-   ((: (loop cs rules cur cond)
-       (!(two? cs) ? (rev (flushr cur rules))
+   (pin as " parsing" 1,
+    ((: (loop cs rules cur cond)
+       (evals-take as @ more
+          (? (two? more) (loop (more + cs) (flushr cur rules) 0 cond)
+             !(two? cs) (pull as " parsing" 0, rev (flushr cur rules))
           (: c <cs k <c rest >cs on (condon cond)
              ; a tab-led line is a recipe only while a rule is open; with none it is an ordinary
              ; line (mm/Makefile's indented obj-$(CONFIG_..) += under an ifdef)
@@ -885,27 +892,16 @@
                   'tvar ((on ? (each (split-ws (expand (r1 c) as 0))
                                            (w \ pin tvarbox (unseat w) "1")) 0),
                          loop rest (flushr cur rules) 0 cond)
-                  'expand (on && evalp (r1 c) ?
-                                   (text-lines (expand (eval-args (r1 c)) as 0) @ more
-                                      (loop (more + rest) (flushr cur rules) 0 cond))
-                                   ((on ? (expand (r1 c) as 0) 0), loop rest rules cur cond))
+                  'expand ((on ? (expand (r1 c) as 0) 0), loop rest rules cur cond)
                   'ifeq   (loop rest rules cur (push-cond cond on (on && eval-ifeq (r1 c) as)))
                   'ifneq  (loop rest rules cur (push-cond cond on (on && !(eval-ifeq (r1 c) as))))
                   'ifdef  (loop rest rules cur (push-cond cond on (on && eval-ifdef (r1 c) as)))
                   'ifndef (loop rest rules cur (push-cond cond on (on && !(eval-ifdef (r1 c) as))))
                   'else   (loop rest rules cur (else-cond cond))
                   'endif  (loop rest rules cur >cond)
-                  (loop rest (flushr cur rules) 0 cond)))))
-    cls 0 0 0)
+                  (loop rest (flushr cur rules) 0 cond))))))
+     cls 0 0 0))
 
-   ; `$(eval TEXT)` alone on a line: expand TEXT, then parse it, as the `include` splice does with
-   ; a string where the file was. nested in an expression only its assignments can land (the
-   ; "eval" function above): expand answers a string and cannot reach the rule list.
-   (evalp s) (#s @ n
-                (7 < n && s 0 = 36 && (s 1 = 40 || s 1 = 123)
-                 && snip s 2 6 = "eval" && chws (s 6)
-                 && findclose s 2 (s 1) (s 1 @ 40 41 125) = n - 1))
-   (eval-args s) (ltrim (snip s 6 (#s - 1)))
    ; a define body must survive verbatim, and classify strips comments, trims, and reads a
    ; tab-led line as a recipe -- so the walk takes those lines itself and hands over the rest.
    (text-lines src)

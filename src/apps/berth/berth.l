@@ -21,7 +21,7 @@
 (module '(berth berth berth-stage harbour hberth hsail hopen hopen-stage moor waitfor
           hbox hmas hpid hstage hpty? hpane hsoil hrelay hframe hmoor hsplit hsteer hshut
           hfeed hkey oars hsize htide htick hswim hquick? hcopy hpaste hclip-text hscreen-text
-          hseq hmouse hpeer hpasted hdesks hgo hcycle hfresh hb64 hsub? hswap hpicker inle-launch inle-switch inle-hive inle-queues inle-barx inle-saver hwake hidle hidle? hsleep hname hname-of hlr hbarat hdrag hmice hbarline hbardesk hbartick hnote hhands inle-bee inle-main)
+          hseq hmouse hpeer hpasted hdesks hgo hcycle hfresh hb64 hsub? hswap hpicker inle-launch inle-switch inle-hive inle-queues inle-barx inle-saver hwake hidle hidle? hsleep hin hout hlive? hgreet hbye hattach hdetach inle-harbour inle-here inle-serve inle-attach inle-sock inle-dir inle-ls inle-size hname hname-of hlr hbarat hdrag hmice hbarline hbardesk hbartick hnote hhands inle-bee inle-main)
 (borrow ((cite 'wharf) @ m (m ? m "src/apps/berth/wharf.l")))   ; the baked module, else the tree's file
 (borrow ((cite 'limn) @ m (m ? m "src/apps/berth/limn.l")))
 (borrow 'posix)
@@ -55,6 +55,11 @@
  ; a stage's the stage and neither. the harbour is a tablet, and the keys are the
  ; whole state: plan focus next rows cols panes lay dirt more jobs clip keys bar bart barx, and the desks --
  ; desk the one shown, desks the others' [plan focus] by number, the shown one's never kept there.
+ ; the harbour's own tty: 'in and 'out, the process's unless a client's (rung 5's server);
+ ; () when no client is attached, and then nothing is painted and the dirt waits
+ (hin hb) (peep hb 'in in)
+ (hout hb) (peep hb 'out out)
+ (hlive? hb) (hot? (hout hb))
  (hbox p) <p
  (hmas p) <>p
  (hpid p) <>>p
@@ -385,7 +390,7 @@
                               (t i = 59) (go (i + 1) 0 (n . acc))
                               (go (i + 1) (n * 10 + (t i - 48)) acc))
               (go 1 0 ()))                               ; past the <
- (hbracket u) (: (go acc) (see in @ b
+ (hbracket hb) (: (go acc) (see (hin hb) @ b
                              (b < 0 ? acc
                                 ((b . acc) @ a2
                                    (b = 126 && [126 49 48 50 91 27] = take 6 a2 ? (drop 6 a2) (go a2)))))
@@ -393,23 +398,28 @@
  (hsend hb t) (: (go i) (i < #t ? (hfeed hb (t i), go (i + 1)) 0) (go 0))
  ; an APC's body, to its ST: the one berth reads is the answer to its kitty query, which
  ; turns the pictures on
- (hapc hb) (: (go acc) (see in @ b
+ (hapc hb) (: (go acc) (see (hin hb) @ b
                           (? (b < 0) acc
-                             (b = 27) (see in @ b2 (b2 = 92 ? acc (go (acc + string b + string b2))))
+                             (b = 27) (see (hin hb) @ b2 (b2 = 92 ? acc (go (acc + string b + string b2))))
                              (go (acc + string b))))
               t (go "")
-              (t = "Gi=31;OK" ? (pin hb 'pics 1, hsoil hb) 0))
- (hseq hb) (see in @ b1
+              ; a client's size: inle;size;R;C
+              (? (t = "Gi=31;OK") (pin hb 'pics 1, hsoil hb)
+                 (11 < #t && "inle;size;" = snip t 0 10)
+                  (: ws (filter (w \ 0 < #w) (cite 'kore 'usplit 59 (snip t 10 #t)))
+                     (? (#ws = 2) (pin hb 'csize [(inle-num <ws) (inle-num (ws 1))], htide hb) 0))
+                 0))
+ (hseq hb) (see (hin hb) @ b1
               (? (b1 = 95) (hapc hb)
                  !(b1 = 91) (hfeed hb 27, -1 < b1 ? (hfeed hb b1) 0)
-                 (: (csi acc) (see in @ b (b < 0 || 63 < b && b < 127 ? [acc b] (csi (acc + string b))))
+                 (: (csi acc) (see (hin hb) @ b (b < 0 || 63 < b && b < 127 ? [acc b] (csi (acc + string b))))
                     q (csi "") a <q f <>q
                     (? (f < 0) (hsend hb ("\e[" + a))
                        ((f = 77 || f = 109) && 0 < #a && a 0 = 60)
                         (hnums a @ ns (#ns = 3 ? (hmouse hb <ns <>ns <>>ns (f = 109)) 0))
                        (f = 126 && a = "5;2") (hpeer hb (hhalf hb))
                        (f = 126 && a = "6;2") (hpeer hb (0 - hhalf hb))
-                       (f = 126 && a = "200") (hpasted hb (hbracket 0))
+                       (f = 126 && a = "200") (hpasted hb (hbracket hb))
                        ; the DA answer the query drew out: a 4 is sixels, where kitty said nothing
                        (f = 99 && 0 < #a && a 0 = 63)
                         (peep hb 'pics 0 = 0 && elem 4 (hnums a) ? (pin hb 'pics 2, hsoil hb) 0)
@@ -427,7 +437,7 @@
                         (sg 'step ch,
                          sg 'over? () ? (hshut hb (hb 'focus))
                            (hshow p, hsoil hb)))))
- (hkey hb) (see in @ k
+ (hkey hb) (see (hin hb) @ k
               (k < 0 ? ()
                  (k @ 1   (hfeed hb 1)                  ; C-a C-a: a literal one
                       115 (hsplit hb 'stack)            ; s
@@ -441,6 +451,7 @@
                       93  (hpaste hb)                   ; ]
                       99  (hfresh hb)                   ; c
                       122 (hsleep hb)                   ; z
+                      100 (peep hb 'serve 0 ? (hdetach hb) 0)   ; d, from a server
                       110 (hcycle hb 1)                 ; n
                       112 (hcycle hb -1)                ; p
                       (d && 47 < d < 58) (hgo hb (d - 48))   ; 0-9
@@ -448,15 +459,19 @@
  ; a child gets the bytes as typed, a sequence read whole when its ESC has company
  ; (a lone ESC is a key); a stage gets edkey's keys, as on cli's stage, or its own
  ; reader's; and the user's eof leaves it
- (oars hb) (: p (hpane hb (hb 'focus))
-              ch (? (two? p && !(hpty? p)) (peep (hstage p) 'key edkey in) (see in))
-              (? (ch = -1) (hfeed hb 4)                 ; veof follows the user's own eof
-                 (ch = -7) (hshut hb (hb 'focus))
-                 (hwake hb) (: _ (cite 'rove 'drain-keys ()) (oars hb))   ; the key that ends a saver is the saver's
-                 ((? (ch = 1) (hkey hb)
-                     (ch = 27 && hpty? p && cue? in) (hseq hb)
-                     (hfeed hb ch)),
-                  oars hb)))
+ ; g is the attach this pump serves: a later one (or a detach) ends it, so a client's eof
+ ; never touches the client after it
+ (oars hb g) (? (peep hb 'serve 0 && g != peep hb 'gen 0) 0
+              (: p (hpane hb (hb 'focus))
+                 ch (? (two? p && !(hpty? p)) (peep (hstage p) 'key edkey (hin hb)) (see (hin hb)))
+                 (? (ch = -1 && peep hb 'serve 0) (g = peep hb 'gen 0 ? (hdetach hb) 0)   ; a client's eof is its leaving
+                    (ch = -1) (hfeed hb 4)                 ; veof follows the user's own eof
+                    (ch = -7) (hshut hb (hb 'focus))
+                    (hwake hb) (: (dk _) (cue? (hin hb) ? (see (hin hb), dk 0) 0) (dk 0, oars hb g))   ; the key that ends a saver is the saver's
+                    ((? (ch = 1) (hkey hb)
+                        (ch = 27 && hpty? p && cue? (hin hb)) (hseq hb)
+                        (hfeed hb ch)),
+                     oars hb g))))
 
  ; --- idle: 'saver is a watch of src/apps/saver.l's, which has the glass after its minutes
  ; without a key; the harbour's own frames wait under it, and are laid again whole after ---
@@ -479,7 +494,7 @@
  (hsize u) (tty 1 @ ws
               [(two? ws && 5 < <ws ? <ws 24)
                (two? ws && 19 < >ws ? >ws 80)])
- (htide hb) (: sz (hsize 0) r <sz c <>sz
+ (htide hb) (: sz (peep hb 'serve 0 ? (peep hb 'csize [24 80]) (hsize 0)) r <sz c <>sz
                (r = hb 'rows && c = hb 'cols ? ()
                 (pin hb 'rows r, pin hb 'cols c, hrelay hb)))
 
@@ -501,8 +516,9 @@
  ; and end when the last berth empties ---
  (hswim hb tick) (hb 'dirt @ b
                     (htick hb,
-                     (hidle hb @ f (0 < #f ? (say out f, flush out) 0)),
-                     ? (hidle? hb) 0 (peep b () 0) (pin b () 0, say out (hframe hb), 0) 0,   ; say is the bulk lane
+                     ? (hlive? hb) (hidle hb @ f (0 < #f ? (say (hout hb) f, flush (hout hb)) 0)) 0,
+                     ? !(hlive? hb) 0 (hidle? hb) 0
+                       (peep b () 0) (pin b () 0, say (hout hb) (hframe hb), flush (hout hb), 0) 0,   ; say is the bulk lane
                      ? (0 = tick % 16) (htide hb) 0,
                      ? (0 = tick % 32) (hbartick hb) 0,
                      rest (hquick? hb ? 8 33),
@@ -518,23 +534,41 @@
 
  ; --- sail: the harbour on the tty, raw and on the alternate screen, keys pumped
  ; and frames painted until the last berth empties; the tty as it was after ---
+ ; the outer terminal taken: the alternate screen, the mouse's reports as ?1006's, pastes
+ ; bracketed. does it take kitty's pictures? a 1x1 query, then its cell's size, and DA behind
+ ; them so a terminal that ignores APC still answers something (and says whether it draws
+ ; sixels). asked only where a child has the keys: a stage's reader would take the answers
+ (hgreet hb) (: o (hout hb)
+                (say o "\e[?1049h\e[2J\e[?1006h\e[?2004h",
+                 hpty? (hpane hb (hb 'focus)) ? (say o "\e_Gi=31,s=1,v=1,a=q,t=d,f=24;AAAA\e\\\e[16t\e[c") 0,
+                 flush o))
+ ; ... and given back as it was
+ (hbye hb) (: o (hout hb)
+              (say o (peep hb 'pics 0 = 1 ? "\e_Ga=d,d=A,q=2\e\\" ""),   ; every picture sent, freed
+               say o "\e[0m\e[?25h\e[?1003l\e[?1002l\e[?1000l\e[?1006l\e[?2004l\e[?1049l",
+               flush o))
  (hsail hb) (: _ (raw 1)
-               _ (say out "\e[?1049h\e[2J\e[?1006h\e[?2004h")   ; the mouse's reports as ?1006's, pastes bracketed
-               ; does the outer terminal take kitty's pictures? a 1x1 query, then its cell's
-               ; size, and DA behind them so a terminal that ignores APC still answers something
-               ; (and says whether it draws sixels). asked only where a child has the keys: a
-               ; stage's reader would take the answers for keys
-               _ (hpty? (hpane hb (hb 'focus)) ? (say out "\e_Gi=31,s=1,v=1,a=q,t=d,f=24;AAAA\e\\\e[16t\e[c") 0)
-               _ (flush out)
-               up (twirl (_ \ oars hb) 0)
+               _ (hgreet hb)
+               up (twirl (_ \ oars hb 0) 0)
                (hswim hb 1,                 ; ... until the last berth empties
                 map (t \ landed? t ? (catch t) (freeze t)) (hb 'jobs),
                 landed? up ? (catch up) (freeze up),
-                say out (peep hb 'pics 0 = 1 ? "\e_Ga=d,d=A,q=2\e\\" ""),   ; every picture sent, freed
-                say out "\e[0m\e[?25h\e[?1003l\e[?1002l\e[?1000l\e[?1006l\e[?2004l\e[?1049l",
-                flush out,
+                hbye hb,
                 raw 0,
                 0))
+
+ ; --- the server (rung 5): the harbour with no tty of its own, a client's socket as its
+ ; 'in and 'out. one client at a time: an attach takes the glass from the last, and a
+ ; client's leaving -- its eof, or C-a d -- leaves the panes running and the dirt waiting ---
+ (hattach hb c) (: _ (hdetach hb)
+                   g (peep hb 'gen 0 + 1)
+                   _ (pins hb 'gen g 'in c 'out c 'mice "" 'pics 0 'sent {} 'six {})
+                   _ (hgreet hb)
+                   _ (hsoil hb)
+                   (twirl (_ \ oars hb g) 0))
+ (hdetach hb) (? !(hlive? hb) 0
+                 (: c (hout hb)
+                    (hbye hb, close c, pins hb 'in () 'out () 'gen (peep hb 'gen 0 + 1), 0)))
 
  ; --- berth: tie argv, or a stage, up. answers the first child's status pair (the
  ; one the caller named), or tether's errno if it never started; 0 after a stage ---
@@ -691,22 +725,99 @@
                    nm (peep c 'screensaver () @ v (two? v ? (: w <v (string? w ? w (show w))) "pom"))
                    m (peep c 'screensaver-idle () @ v (two? v ? <v 10))
                    (wf ? (wf nm m) ()))
- (inle-main as) (: me (selfpath 0) sh (string? me ? [me "lush"] ["sh"])
-                   sz (hsize 0) r <sz c <>sz
-                   p0 (hopen (two? as ? as sh) r c)
-                   (atom? p0 ? (say err ("inle: cannot start " + (two? as ? <as (sh 0)) + "\n"), 1)
-                      (harbour r c @ hb
-                         (pin hb 'more (_ \ hopen sh 1 1),
-                          pins hb 'bar 1 'mouse 1 'barx (inle-barx 0) 'saver (inle-saver 0), hbartick hb, hrelay hb,
-                          pin (hb 'keys) 98 (_ \ hopen-stage (inle-bee hb) 1 1),
-                          pin (hb 'keys) 32 (_ \ inle-launch hb sh me),
-                          pin (hb 'keys) 119 (_ \ inle-switch hb),
-                          hberth hb 'stack 50 p0,
-                          hsail hb,
-                          waitfor (hpid p0),
-                          0))))
- inle-usage "usage: love inle [COMMAND ..]   the harbour, lush in its panes; COMMAND in the first
+ ; a harbour laid for inle at r x c: lush in its panes (argv, when given, in the first), the
+ ; bar, the mouse, the saver and inle's keys; a server's has no tty until a client comes.
+ ; answers it, or why it could not
+ (inle-harbour as r c serve)
+  (: me (selfpath 0) sh (string? me ? [me "lush"] ["sh"])
+     p0 (hopen (two? as ? as sh) r c)
+     (atom? p0 ? ("cannot start " + (two? as ? <as (sh 0)))
+        (harbour r c @ hb
+           (? serve (pins hb 'serve 1 'csize [r c] 'in () 'out ()) 0,
+            pin hb 'more (_ \ hopen sh 1 1),
+            pins hb 'bar 1 'mouse 1 'barx (inle-barx 0) 'saver (inle-saver 0), hbartick hb, hrelay hb,
+            pin (hb 'keys) 98 (_ \ hopen-stage (inle-bee hb) 1 1),
+            pin (hb 'keys) 32 (_ \ inle-launch hb sh me),
+            pin (hb 'keys) 119 (_ \ inle-switch hb),
+            hberth hb 'stack 50 p0,
+            hb))))
+ ; in this process, on this tty: the harbour ends with the process's own last pane
+ (inle-here as) (: sz (hsize 0) hb (inle-harbour as <sz (sz 1) 0)
+                   (? (tablet? hb) (hsail hb, 0) (say err ("inle: " + hb + "\n"), 1)))
+
+ ; --- the server and its clients (rung 5): a harbour per name, listening on
+ ; INLE_RUN/NAME.sock (~/.love/run/inle), outliving every terminal that attaches ---
+ (inle-dir _) (: e (getenv "INLE_RUN") h (getenv "HOME")
+                 (? (string? e && 0 < #e) e (string? h) (h + "/.love/run/inle") "/tmp/inle"))
+ (inle-sock nm) (inle-dir 0 + "/" + nm + ".sock")
+ (inle-mkdirs p) (foldl (a \ w \ (: d (a + "/" + w) _ (mkdir d 448) d)) (0 < #p && p 0 = 47 ? "" ".")
+                        (filter (w \ 0 < #w) (cite 'kore 'usplit 47 p)))
+ (inle-serve nm as)
+  (: _ (inle-mkdirs (inle-dir 0)) path (inle-sock nm)
+     _ (unlink path)                                         ; a dead one's: a live one was asked first
+     l (listen ['unix path])
+     hb (? (hot? l) (inle-harbour as 24 80 1) ("cannot listen on " + path))
+     (? !(tablet? hb) (hot? l ? (close l, unlink path, 1) 1)
+        (: acc (twirl (_ \ (: (go _) (accept l @ c (hot? c ? (hattach hb c, go 0) 0)) (go 0))) 0)
+           (hswim hb 1,                                      ; ... until the last berth empties
+            hdetach hb,
+            map (t \ landed? t ? (catch t) (freeze t)) (hb 'jobs),
+            freeze acc, close l, unlink path,
+            0))))
+ ; a client: this tty's keys up the socket, the frames down it, and its size said as an APC
+ ; when it changes. answers 1 once the server lets go, () when none listens at path
+ (inle-size r c) ("\e_inle;size;" + show r + ";" + show c + "\e\\")
+ (inle-attach path)
+  (: s (connect ['unix path])
+     (? !(hot? s) ()
+        (: sz (hsize 0)
+           _ (raw 1)
+           _ (say s (inle-size <sz (sz 1)), flush s)
+           ; park on the first byte, then swig the rest of the gulp, as moor does
+           dn (twirl (_ \ (: b (cask 8192)
+                             (dr _) (swig s b @ n (charm? n && 0 < n ? (say out (snip b 0 n), dr 0) 0))
+                             (go _) (see s @ ch (ch < 0 ? 0 (put out ch, dr 0, flush out, go 0)))
+                             (go 0))) 0)
+           up (twirl (_ \ (: (dr _) (cue? in ? (put s (see in), dr 0) 0)
+                             (go _) (see in @ ch (ch < 0 ? 0 (put s ch, dr 0, flush s, go 0)))
+                             (go 0))) 0)
+           tk (twirl (_ \ (: (go z) (: _ (rest 500) z2 (hsize 0)
+                                       (? (z2 = z) (go z) (: _ (say s (inle-size <z2 (z2 1))) _ (flush s) (go z2))))
+                             (go sz))) 0)
+           _ (catch dn)
+           _ (freeze up) _ (freeze tk)
+           _ (close s)
+           _ (raw 0)
+           1)))
+ ; a server started detached -- its own session, no tty -- and attached to as it comes up
+ (inle-spawn nm as)
+  (: me (selfpath 0) nul (openfd "/dev/null" 0)
+     fds (: ns (readdir "/proc/self/fd") (two? ns ? (filter (n \ 2 < n) (map inle-num ns)) ()))   ; none of ours goes along
+     p (? (string? me) (spawnio ([me "setsid" me "inle" "--serve" nm] + as) nul nul nul fds 0 0) -1)
+     _ (? (0 <= nul) (close nul) 0)
+     (charm? p && 0 < p))
+ (inle-reattach path n) (? (n = 0) () (inle-attach path @ r (r = () ? (rest 50, inle-reattach path (n - 1)) r)))
+ (inle-ls _) (: d (inle-dir 0) fs (readdir d)
+                ns (filter (f \ 5 < #f && ".sock" = snip f (#f - 5) #f) (two? fs ? fs ()))
+                (map (f \ (: s (connect ['unix (d + "/" + f)])
+                             (puts (snip f 0 (#f - 5) + (hot? s ? (close s, "") "  (dead)") + "\n"))))
+                     (sort ns),
+                 flush out, 0))
+ ; love inle: attach to the harbour named main (or -n NAME), started when none is up; one
+ ; that cannot be served (a seat with no sockets) runs here instead. --here always does
+ (inle-main as)
+  (? (two? as && <as = "--serve" && two? >as) (inle-serve <>as >>as)
+     (two? as && <as = "--here") (inle-here >as)
+     (two? as && <as = "--ls") (inle-ls 0)
+     (: nm (two? as && <as = "-n" && two? >as ? <>as "main")
+        rest (two? as && <as = "-n" && two? >as ? >>as as)
+        path (inle-sock nm)
+        (? (inle-attach path) 0
+           (inle-spawn nm rest) (inle-reattach path 60 @ r (r = () ? (inle-here rest) 0))
+           (inle-here rest))))
+ inle-usage "usage: love inle [-n NAME] [COMMAND ..]   the harbour NAME (main), started when none is up;
+       COMMAND in its first pane. love inle --ls lists them; --here runs one in this process
   C-a: s v split, h j k l steer, x shut, [ ] copy and paste, c n p 0-9 desks, b a model,
-       space open an app, w go to a pane, z the screensaver now, C-a a literal C-a"
+       space open an app, w go to a pane, z the screensaver now, d detach, C-a a literal C-a"
  _ (pins (cite 'verbs 'tab) 'inle (udoor 'inle inle-main inle-usage 1 1)))
 ) ; module berth

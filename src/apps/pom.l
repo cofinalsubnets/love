@@ -4,10 +4,12 @@
 ;   pom -e       the date, the phase and the moon drawn to the terminal
 ;   pom -d       every hour of the month; with -e, redrawn in place
 ;   pom -p [N]   the moon now, N pixels square in half-blocks
+;   pom -s [N]   the moon now as the pom saver draws it, its seas and dark limb
 ;   pom [[[[[cc]yy]mm]dd]HH]  another hour, date(1)'s order
-; usage: love pom [-d] [-e] [[[[[[cc]yy]mm]dd]HH]] | -p [N]
+; usage: love pom [-d] [-e] [[[[[[cc]yy]mm]dd]HH]] | -p [N] | -s [N]
 (module (pom pom-main pom-julian pom-phase pom-name pom-percent pom-art
-             pom-pixels pom-now pom-cells pom-tint pom-tc pom-xterm pom-lit)
+             pom-pixels pom-now pom-cells pom-tint pom-tc pom-xterm pom-lit
+             pom-lit? pom-mare? pom-face pom-moon)
 (borrow 'cal)
 (:
  epoch 2444238.5                       ; 1980 january 0.0
@@ -101,6 +103,22 @@
                     (p < 0.5 ? (w * k < x) (x < 0 - w * k)) pom-lit
                     pom-dim))
      (map (i \ map (j \ px i j) ^n) ^n))
+ ; lit at (nx ny) on the unit disc: the terminator is an ellipse cos 2πp wide, waxing
+ ; lights the right side and waning the left
+ (pom-lit? p nx ny) (: s (sqrt (max 0.0 (1.0 - ny * ny))) k (cos (2 * pi * p))
+                      (p < 0.5 ? (nx > k * s) (nx < 0 - k * s)))
+ ; the seas, roughly where they lie: [x y radius] on the unit disc, north up
+ maria [[-0.35 -0.45 0.28] [0.18 -0.38 0.17] [0.3 -0.05 0.2] [0.68 -0.3 0.12]
+        [-0.6 0.0 0.35] [-0.2 0.45 0.18] [0.55 0.2 0.14]]
+ (pom-mare? nx ny) (any (m \ ((nx - m 0) * (nx - m 0) + (ny - m 1) * (ny - m 1) < m 2 * m 2)) maria)
+ ; the saver's moon at (nx ny): an xterm pen, sea or highland lit, the limb dark, () off it
+ (pom-face p nx ny) (? (1.0 < nx * nx + ny * ny) ()
+                      (pom-lit? p nx ny) (pom-mare? nx ny ? 187 230)
+                      234)
+ ; ..and n by n of it as rgb, for pom-cells
+ (pom-moon p n) (: (px i j) (pom-face p ((j + 0.5) * 2 / n - 1) ((i + 0.5) * 2 / n - 1)
+                              @ k (charm? k ? (xrgb k)))
+                   (map (i \ map (j \ px i j) ^n) ^n))
  (pom-now _) (: s (clock 0 // 1000) gt (civil (s // 86400))
                (pom-phase (s % 86400 // 3600) <>gt <>>gt <gt))
 
@@ -108,6 +126,10 @@
  ; ▀ alone for one, a space for none. truecolor when tc, else xterm's nearest of 256
  (pom-tc _) (elem (getenv "COLORTERM") ["truecolor" "24bit"])
  (rgb x) [(x // 65536) (x // 256 % 256) (x % 256)]
+ ; an xterm pen of the cube or the grey ramp as rgb, pom-xterm's inverse there
+ (xrgb k) (? (232 <= k) ((8 + 10 * (k - 232)) * 65793)
+             (: lv [0 95 135 175 215 255] c (k - 16)
+                (lv (c // 36) * 65536 + lv (c // 6 % 6) * 256 + lv (c % 6))))
  (pom-xterm x)
   (: c (rgb x) lv [0 95 135 175 215 255]
      q (map (v \ v < 48 ? 0 (v < 115 ? 1 ((v - 35) // 40))) c)
@@ -126,7 +148,7 @@
      (map (r \ foldl (\ s x (s + cell (g (2 * r) x) (g (2 * r + 1) x))) "" ^#<g) ^(#g // 2)))
 
  ; --- the runner ------------------------------------------------------------------
- pom-usage "usage: love pom [-d] [-e] [[[[[[cc]yy]mm]dd]HH]] | -p [N]"
+ pom-usage "usage: love pom [-d] [-e] [[[[[[cc]yy]mm]dd]HH]] | -p [N] | -s [N]"
  (dig? c) (48 <= c < 58)
  (digits? s) (#s ? (all dig? (map s ^#s)) 0)
  (env k) (getenv k @ v (string? v ? v ""))
@@ -149,14 +171,17 @@
         (go 1 d e)))
  ; the operand in pairs from the right: HH, then dd, mm, yy, cc
  (pairs op) (: (go i) (i < #op ? (snip op i (i + 2) . go (i + 2))) (rev (go 0)))
- ; -p [N]: the moon now, N pixels square, 8 unless said and rounded up to even
- (pom-show as)
+ ; -p [N]: the moon now, N pixels square, 8 unless said and rounded up to even; -s the
+ ; saver's moon the same way, 24 unless said
+ (pom-show draw d as)
   (? (two? as && (two? >as || !(digits? <as)))
      (say err (pom-usage + "\n"), flush err, 1)
-     (: n (two? as ? (max 2 (unum <as)) 8)
-        _ (each (pom-cells (pom-pixels (pom-now 0) (2 * ((n + 1) // 2))) (pom-tc 0)) (l \ puts (l + "\n")))
+     (: n (two? as ? (max 2 (unum <as)) d)
+        _ (each (pom-cells (draw (pom-now 0) (2 * ((n + 1) // 2))) (pom-tc 0)) (l \ puts (l + "\n")))
         (flush out, 0)))
- (pom-main as) (two? as && <as = "-p" ? (pom-show >as) (pom-date as))
+ (pom-main as) (? (two? as && <as = "-p") (pom-show pom-pixels 8 >as)
+                  (two? as && <as = "-s") (pom-show pom-moon 24 >as)
+                  (pom-date as))
  (pom-date as)
   (: fl (flags as 0 0)
      rest (two? fl ? <>>fl)

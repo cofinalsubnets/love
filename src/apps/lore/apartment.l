@@ -1,14 +1,14 @@
 ; apartment -- the level after the river: you wake in one of eight glass cubes on a
 ; grassy plain, a river through the middle. a stranger talks through your pane; when the
 ; talk ends the pane shatters, the plain goes to desert, the river runs dry, and the way
-; off the map is west along the bed into dusk (src/apps/rove/dusk.l).
+; off the map is west along the bed into dusk (src/apps/lore/dusk.l).
 ;
 ; a roguelike floor on rove, laid rather than delved; the painter is rove's, the keys the
 ; tower's. the talk is a tree of nodes and choices, data in chat-book.
 ; apartment-new/turn/frame are pure, gated by test/host/apartment.l; apartment-walk takes
 ; a raised stage, so wade hands over on the same screen.
 ;
-; run: love apartment    h j k l or the arrows walk, y u b n slant; q or esc leaves
+; run: love lore apartment    h j k l or the arrows walk, y u b n slant; q or esc leaves
 (module (apartment apartment-run apartment-walk apartment-main apartment-new apartment-turn
          apartment-frame apartment-bar apartment-lay apartment-face apartment-stride
          apartment-stir chat chat-key chat-node chat-end chat-book blocks blocks-name
@@ -399,8 +399,8 @@
     drain-keys (),
     raw 0,
     0))
- apartment-usage "usage: love apartment   (h j k l or the arrows walk, y u b n slant; q or esc leaves)"
+ apartment-usage "usage: love lore apartment   (h j k l or the arrows walk, y u b n slant; q or esc leaves)"
  (apartment-main as) (as @ () (apartment-run ())
                            (say err ("apartment: " + apartment-usage + "\n"), flush err, 2))
- _ (pins (cite 'verbs 'tab) 'apartment (udoor 'apartment apartment-main apartment-usage 1 1)))
+ _ ((cite 'lore 'lore-enlist) 'apartment (udoor 'apartment apartment-main apartment-usage 1 1)))
 ) ; module apartment

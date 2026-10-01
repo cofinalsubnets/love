@@ -1,4 +1,4 @@
-; test/host/roost.l -- the nest as a floor (src/apps/rove/roost.l), headless
+; test/host/roost.l -- the nest as a floor (src/apps/lore/roost.l), headless
 ; the plan is spelled here as src/apps/source.l's nest-plan lays one, so nothing touches a
 ; home: the opening sign, the perch asked both ways, a shelf turned, the door stayed at
 ; and then taken, and a frame that paints the room.
@@ -46,4 +46,4 @@
    _ (test (g 'over = 'apply))                             ; 1: do it
    f (roost-frame g)
    (test (string? f) (0 < #f),
-    puts "src/apps/rove/roost: ok -- the nest's floor (the perch, the shelves, the door)\n"))
+    puts "src/apps/lore/roost: ok -- the nest's floor (the perch, the shelves, the door)\n"))

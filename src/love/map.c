@@ -202,6 +202,35 @@ static lvm(lvm_gather) {
  for (uintptr_t i = 0; i < rank; i++) r->shape[i] = ki->shape[i];
  gather_fill(r, v, ki, zf, zi);
  ai_musttail return Answerp(2, word(r)); }
+// (pin tray idx vals) with idx an int tray: the scatter, gather's mirror. a fresh copy of
+// the tray with vals stored at idx in order, so a later index wins; vals a number or a
+// numeric tray as long as idx, an index out of range skipped. a complex or object tray,
+// a float index or vals of another length answer the tray unchanged
+static lvm(lvm_scatter) {
+ struct ai_tray *v = tray(Sp[0]), *ki = tray(Sp[1]);
+ word z = Sp[2];
+ bool zt = trayp(z);
+ if (v->type > ai_R || ki->type >= ai_R
+     || !(zt ? tray(z)->type <= ai_R && tray_nelem(tray(z)) == tray_nelem(ki) : (charmp(z) || gemp(z))))
+  ai_musttail return Answerp(2, Sp[0]);
+ uintptr_t req = b2w(ai_tray_bytes(v));
+ Have(req);
+ struct ai_tray *r = (struct ai_tray*) Hp; Hp += req;
+ memcpy(r, tray(Sp[0]), ai_tray_bytes(tray(Sp[0])));   // re-read post-Have
+ ki = tray(Sp[1]), z = Sp[2];
+ uintptr_t n = tray_nelem(ki), m = tray_nelem(r);
+ intptr_t *k = tray_data(ki);
+ struct ai_tray *zv = zt ? tray(z) : 0;
+ ai_flo_t zf = zt ? 0 : charmp(z) ? (ai_flo_t) getcharm(z) : gem_get(z);
+ intptr_t zi = zt ? 0 : charmp(z) ? getcharm(z) : (intptr_t) zf;
+ bool zr = zt && zv->type == ai_R;
+ if (r->type == ai_R) { ai_flo_t *d = tray_data(r);
+  for (uintptr_t i = 0; i < n; i++) { intptr_t j = k[i]; if (j >= 0 && (uintptr_t) j < m)
+   d[j] = !zt ? zf : zr ? ((ai_flo_t*) tray_data(zv))[i] : (ai_flo_t) ((intptr_t*) tray_data(zv))[i]; } }
+ else { intptr_t *d = tray_data(r);
+  for (uintptr_t i = 0; i < n; i++) { intptr_t j = k[i]; if (j >= 0 && (uintptr_t) j < m)
+   d[j] = !zt ? zi : zr ? (intptr_t) ((ai_flo_t*) tray_data(zv))[i] : ((intptr_t*) tray_data(zv))[i]; } }
+ ai_musttail return Answerp(2, word(r)); }
 
 lvm(lvm_peep) {                                // (peep coll key default): collection-first
  word x = Sp[0], k = Sp[1], z = Sp[2], n;
@@ -245,7 +274,8 @@ lvm(lvm_peep) {                                // (peep coll key default): colle
  ai_musttail return Answerp(2, z); }
 
 // (pin coll key val): a map or cask has a cell, so the write is in place and the same
-// collection answers; text, a chain and a tray have none and answer a fresh one. a rank-0
+// collection answers; text, a chain and a tray have none and answer a fresh one, a tray
+// keyed by a tray of indices scattering into it (lvm_scatter). a rank-0
 // scalar is the one kind peep reads and pin cannot write. out-of-range or wrong-kind is a
 // silent no-op answering coll, the byte ops' misuse convention.
 lvm(lvm_pin) {
@@ -278,6 +308,7 @@ lvm(lvm_pin) {
    ini_chain(w, Sp[2], B(l));                    // the pinned cell, then the old tail
    ai_musttail return Answerp(2, word(base)); }
   case DTray: {                                  // the whole payload copied, one slot stored
+   if (trayp(Sp[1])) ai_musttail return Ap(lvm_scatter, g);   // a tray of indices scatters
    intptr_t o = tray_off(tray(x), Sp[1]);
    if (o < 0) break;
    uintptr_t req = b2w(ai_tray_bytes(tray(x)));

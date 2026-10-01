@@ -266,9 +266,9 @@ $(ho)/love.raw $(ho)/love.cand.raw: $(host_o) $(seat_o) $(ho)/liblove.a $(ho)/.h
 else
 moonlibc_src = $(wildcard src/apps/moon/lib/moonlibc/*.c src/apps/moon/lib/moonlibc/*.h \
                         src/apps/moon/lib/moonlibc/*/*.c src/apps/moon/lib/moonlibc/*/*.h)
-# out/moonlibc.o LEADS: a job pool fills in prerequisite order, and this one is the long pole
-# (three ISAs' runtime members, ~30 s cold) -- behind the TU list it starts as they finish
-# and runs alone. ahead of them it rides beside them, and -j loses that time outright.
+# out/moonlibc.o LEADS: a job pool fills in prerequisite order, and its groups are the long
+# pole (three ISAs' runtime members, ~80 s of cpu cold) -- behind the TU list they start as
+# they finish and run alone. ahead of them they ride beside them, and -j loses that time.
 $(ho)/love.raw $(ho)/love.cand.raw: out/moonlibc.o $(moon_o) out/src.o out/rootfs.o out/lib/readme.bin $(moonlibc_src)
 	@echo 'MOON	'$@
 	@mkdir -p $(dir $@)
@@ -307,7 +307,7 @@ kore_arc = src/apps/gz.l src/apps/tar.l src/apps/xz.l src/apps/bz2.l src/apps/cp
 kore_net = src/apps/tls/bytes.l src/apps/tls/chacha.l src/apps/tls/poly1305.l src/apps/tls/verify.l src/apps/tls/client.l src/apps/tls/p256.l src/apps/tls/cert.l \
   src/apps/ssh/sha512.l src/apps/ssh/ed25519.l src/apps/ssh/aes.l src/apps/ssh/bcrypt.l src/apps/ssh/client.l \
   src/apps/ssh/server.l src/apps/ssh/cli.l \
-  src/apps/png.l src/apps/jpeg.l src/apps/gif.l src/apps/webp.l src/apps/kore/wget.l src/apps/kore/openssl.l src/apps/kore/gpic.l src/apps/kore/grap.l src/apps/kore/chem.l src/apps/kore/pic.l src/apps/kore/www.l src/apps/kore/net.l src/apps/kore/kore.l
+  src/apps/png.l src/apps/jpeg.l src/apps/gif.l src/apps/webp.l src/apps/kore/wget.l src/apps/kore/openssl.l src/apps/kore/grap.l src/apps/kore/gpic.l src/apps/kore/chem.l src/apps/kore/pic.l src/apps/kore/www.l src/apps/kore/net.l src/apps/kore/kore.l
 # the crew the artifact carries past kore and mooncc
 crewfiles = src/apps/json.l src/apps/sb/merge.l src/apps/sb/http.l src/apps/sb/sb.l src/apps/kiosko/kiosko.l \
   src/apps/fat.l \
@@ -315,7 +315,7 @@ crewfiles = src/apps/json.l src/apps/sb/merge.l src/apps/sb/http.l src/apps/sb/s
   src/apps/libra/salt.l src/apps/libra/libra.l src/apps/vi/hueweb.l src/apps/kiosko/web.l \
   src/apps/harp/harp.l src/apps/harp/play.l src/apps/harp/score.l \
   src/apps/harp/just.l src/apps/harp/drift.l src/apps/harp/tonnetz.l src/apps/harp/phrases.l \
-  src/apps/x11.l src/apps/manifest/manifest.l src/apps/rove/rove.l src/apps/rove/view.l src/apps/rove/tower.l src/apps/rove/story.l src/apps/rove/design.l src/apps/rove/slop.l src/apps/rove/grass.l src/apps/rove/wade.l src/apps/rove/apartment.l src/apps/rove/dusk.l src/apps/rove/garage.l src/apps/rove/shaft.l src/apps/rove/roost.l src/apps/harp/synth.l \
+  src/apps/x11.l src/apps/manifest/manifest.l src/apps/lore/lore.l src/apps/lore/rove.l src/apps/lore/view.l src/apps/lore/vec.l src/apps/lore/sky.l src/apps/lore/grove.l src/apps/lore/tower.l src/apps/lore/story.l src/apps/lore/design.l src/apps/lore/slop.l src/apps/lore/grass.l src/apps/lore/wade.l src/apps/lore/apartment.l src/apps/lore/dusk.l src/apps/lore/garage.l src/apps/lore/shaft.l src/apps/lore/tree.l src/apps/lore/roost.l src/apps/harp/synth.l \
   src/apps/berth/wharf.l src/apps/berth/limn.l src/apps/berth/berth.l src/apps/face.l src/apps/lux/wire.l src/apps/berth/pier.l src/apps/doom.l src/apps/lupa.l src/apps/mc.l \
   src/apps/chucho/mime.l src/apps/chucho/box.l src/apps/chucho/smtp.l src/apps/chucho/imap.l src/apps/chucho/chucho.l src/apps/pom.l src/apps/saver.l src/apps/locks.l src/apps/bee.l
 korefiles = $(kore_head) $(holo_obj) src/love/holo/copy.l $(kore_arc) $(kore_net)
@@ -412,9 +412,32 @@ rt_slice = $(wildcard src/apps/moon/include/*.h src/apps/moon/include/*/*.h \
                       src/apps/moon/lib/moonlibc/*.c src/apps/moon/lib/moonlibc/*.h \
                       src/apps/moon/lib/moonlibc/*/*.c src/apps/moon/lib/moonlibc/*/*.h \
                       src/apps/moon/lib/moonlibc/math/*.c)
-out/moonlibc.o: $(rt_slice) src/tools/mkrt.l $(rtlove_dep) $(love0)
+# the members compile in groups, one archive per (isa, group) under out/rt -- a directory
+# of moonlibc, or a letter range of sys/, so a file never changes group. each group
+# parses impl.h once; one process per member would pay it 630 times. the join lays them
+# in roster order, whichever object arch it is for.
+rt_lib = src/apps/moon/lib/moonlibc
+rt_h = $(wildcard src/apps/moon/include/*.h src/apps/moon/include/*/*.h $(rt_lib)/*.h $(rt_lib)/*/*.h)
+rt_isas = x64 a64 rv64
+rt_groups = sys-af sys-gl sys-mr sys-sz top net string signal fmt stdio math ctype mem proc dirent env
+rt_sysrange = $(filter $(foreach c,$(1),$(rt_lib)/sys/$c%),$(wildcard $(rt_lib)/sys/*.c))
+rt_src_sys-af = $(call rt_sysrange,a b c d e f)
+rt_src_sys-gl = $(call rt_sysrange,g h i j k l)
+rt_src_sys-mr = $(call rt_sysrange,m n o p q r)
+rt_src_sys-sz = $(call rt_sysrange,s t u v w x y z)
+rt_src_top = $(wildcard $(rt_lib)/*.c) src/apps/moon/lib/mksys.l
+rt_src = $(if $(rt_src_$(1)),$(rt_src_$(1)),$(wildcard $(rt_lib)/$(1)/*.c))
+rt_a = $(foreach i,$(rt_isas),$(foreach g,$(rt_groups),out/rt/$i/$g.a))
+define rtgroup
+out/rt/$(1)/$(2).a: $$(call rt_src,$(2)) $$(rt_h) src/tools/mkrt.l $$(rtlove_dep) $$(love0)
+	@echo 'MOON	'$$@
+	@mkdir -p $$(dir $$@)
+	@$$(rtlove) src/tools/mkrt.l -m $$@ $(1) $$(patsubst %/mksys.l,mksys,$$(call rt_src,$(2)))
+endef
+$(foreach i,$(rt_isas),$(foreach g,$(rt_groups),$(eval $(call rtgroup,$i,$g))))
+out/moonlibc.o: $(rt_a) $(rt_slice) src/tools/mkrt.l $(rtlove_dep) $(love0)
 	@echo 'HOLO	'$@
-	@$(rtlove) src/tools/mkrt.l $@ $(hosta)
+	@$(rtlove) src/tools/mkrt.l $@ $(hosta) $(rt_a)
 
 xqemu_x64  = qemu-x86_64
 xqemu_a64 = qemu-aarch64
@@ -441,9 +464,9 @@ $(xd)/src.o: $(dist_source) src/tools/mksrc.l $(holocat_dep) $(love0)
 $(xd)/rootfs.o: out/rootfs.tar src/tools/mkblob.l $(holocat_dep) $(love0)
 	@echo 'HOLO	'$@
 	@LOVE_NO_IMAGE= $(love0) $(holocat) src/tools/mkblob.l $< $@ ai_rootfs $(xa)
-$(xd)/moonlibc.o: $(rt_slice) src/tools/mkrt.l $(rtlove_dep) $(love0)
+$(xd)/moonlibc.o: $(rt_a) $(rt_slice) src/tools/mkrt.l $(rtlove_dep) $(love0)
 	@echo 'HOLO	'$@
-	@$(rtlove) src/tools/mkrt.l $@ $(xa)
+	@$(rtlove) src/tools/mkrt.l $@ $(xa) $(rt_a)
 $(xd)/love: $(x_o) $(xd)/src.o $(xd)/rootfs.o $(xd)/moonlibc.o out/lib/readme.bin
 	@echo 'MOON	'$@
 	@$(moonx) -pie $(x_o) $(xkart_o) $(xd)/src.o $(xd)/rootfs.o $(xd)/moonlibc.o -freadme=out/lib/readme.bin -o $@
@@ -608,10 +631,10 @@ kcc = $(mooncc) $(kcppflags) -t $a
 kernel: $(k_elf)
 
 $(k_odir)/love/cb.o: src/love/quay/quay.c src/love/quay/nif.c src/love/quay/quay.h src/love/quay/cp437.h src/love/quay/cpwidth.h src/love/quay/cpemoji.h src/love/quay/paint.c src/love/quay/cga_8x8.c src/love/quay/cleat_8x16.c
-$(k_odir)/moonlibc.o: $(rt_slice) src/tools/mkrt.l $(mdep)
+$(k_odir)/moonlibc.o: $(rt_a) $(rt_slice) src/tools/mkrt.l $(mdep)
 	@echo 'HOLO	'$@
 	@mkdir -p "$(dir $@)"
-	@$m src/tools/mkrt.l $@ $a
+	@$m src/tools/mkrt.l $@ $a $(rt_a)
 $(k_odir)/src.o: $(dist_source) src/tools/mksrc.l $(mdep)
 	@echo 'HOLO	'$@
 	@mkdir -p "$(dir $@)"
@@ -674,7 +697,7 @@ out/lib/korelist.h: Makefile
 # the crew roster, the same one line: these files are NOT in the kernel's cat, so the
 # order is all the kernel carries and the members come off /proc/src when a verb is asked
 # for. one line, because a name does not say which file holds it -- story lives in
-# src/apps/rove/, xwire in src/apps/lux/wire.l, and sb spans three that must load in order.
+# src/apps/lore/, xwire in src/apps/lux/wire.l, and sb spans three that must load in order.
 out/lib/crewlist.h: Makefile
 	@mkdir -p out/lib
 	@tf=$@.$$$$.tmp; printf '"%s"\n' '$(kcrewfiles)' > $$tf; \

@@ -1,14 +1,14 @@
 ; garage -- the level after the desert: the dry riverbed runs through a mall's parking
 ; garage, east wall to west. lanes, islands of bays, columns, wrecked cars; the middle
 ; where the bed runs is bare. rats wander, never hostile: bumping one is rat-interaction.
-; the way on is west along the bed, to the shaft (src/apps/rove/shaft.l).
+; the way on is west along the bed, to the shaft (src/apps/lore/shaft.l).
 ;
 ; a roguelike floor on rove, laid rather than delved; the painter is rove's, the keys the
 ; tower's. garage-new/turn/frame are pure, gated by test/host/garage.l; garage-walk takes
 ; a raised stage, so the dusk hands over on the same screen. the music is a harp loop,
 ; garage-tune, pulled a cycle at a time.
 ;
-; run: love garage    h j k l or the arrows walk, y u b n slant; q or esc leaves
+; run: love lore garage    h j k l or the arrows walk, y u b n slant; q or esc leaves
 (module (garage garage-run garage-walk garage-main garage-new garage-turn garage-frame
          garage-bar garage-lay garage-face garage-stride garage-stir rat-interaction
          car-cells bay-w bay-d bed-h rat-glyph garage-tune garage-song-new garage-song-feed
@@ -316,8 +316,8 @@
     drain-keys (),
     raw 0,
     0))
- garage-usage "usage: love garage   (h j k l or the arrows walk, y u b n slant; q or esc leaves)"
+ garage-usage "usage: love lore garage   (h j k l or the arrows walk, y u b n slant; q or esc leaves)"
  (garage-main as) (as @ () (garage-run ())
                         (say err ("garage: " + garage-usage + "\n"), flush err, 2))
- _ (pins (cite 'verbs 'tab) 'garage (udoor 'garage garage-main garage-usage 1 1)))
+ _ ((cite 'lore 'lore-enlist) 'garage (udoor 'garage garage-main garage-usage 1 1)))
 ) ; module garage

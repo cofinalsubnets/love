@@ -433,6 +433,12 @@ t \\- a thing
                  (htread "<p>a <img alt=\"no src\"> b</p>" = '((para ((text "a ") (img "no src" "") (text " b")))))
                  (htread "<div><img src=\"a&amp;b.png\"></div>" = '((para ((img "" "a&b.png")))))
                  (htread "<p><img></p>" = htread "<p></p>")
+                 ; a picture a reader without scripts never sees is not laid: one hidden, or
+                 ; of a class a <noscript>'s <style> hides by a plain .name, in <head> or not
+                 (htread "<head><noscript><style>.ph { visibility: hidden }</style></noscript></head><p><img class=\"x ph\" src=a alt=A><img hidden src=h alt=H><img src=b alt=B></p>"
+                  = '((para ((img "B" "b")))))
+                 (htread "<noscript><style>@media (x){.m{display:none}} .c, .d > i {display: none}</style></noscript><p><img class=m src=m alt=M><img class=c src=c alt=C><img class=d src=d alt=D></p>"
+                  = '((para ((img "M" "m") (img "D" "d")))))
                  (htread "<p>fish & chips, <a href=\"q?a=1&b=2&amp;c=3\">q</a></p>"
                   = '((para ((text "fish & chips, ") (link ((text "q")) "q?a=1&b=2&c=3")))))
                  (htread "<p><a href=/u/v title=\"a > b\">u</a> <span id=s>s</span></p>"
