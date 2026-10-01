@@ -1,12 +1,12 @@
-; rove -- quay's roguelike engine: the parts any game on the console rides.
+; rove -- lore's roguelike engine (src/apps/lore/lore.l): the parts any game on the console rides.
 ;
 ; a floor is tiles in a cask carved by delve, with a seen cask for what the player has
 ; been shown; fov is line-of-sight over bresenham strides; the painter says a frame of
 ; painted cells into any port, each cell's face the game's own function, so frames gate
 ; headless; the helm turns a key into a steer; the sign is a box over the frame; the
 ; words machine fills a line's ~ and {braces}; the keys are paced, so a key held
-; down is not a key pressed again; and the horn's lead is paced by the frame gap. the tower (src/apps/rove/tower.l) and the slop
-; (src/apps/rove/slop.l) borrow it; it gates headless in test/host/rove.l.
+; down is not a key pressed again; and the horn's lead is paced by the frame gap. the tower (src/apps/lore/tower.l) and the slop
+; (src/apps/lore/slop.l) borrow it; it gates headless in test/host/rove.l.
 (module (rove cell-of cells-cut cells-from clear? dat deal delve dice dput drain-keys due?
          fill first-n fit fit-in fov hole key-drain key-wait lead legible legible-gap legible-lum lim lit? mix mob-at note
          nth-on open-book open? pace! pacer pad page-foot paint paint-live pen pen-gap pen-lum pen-rgb pens repeat-gap rgb-pen roll

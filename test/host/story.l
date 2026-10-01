@@ -13,7 +13,7 @@
    (keys! g s) (each (map (i \ s i) ^#s) (c \ story-key g c))
 
    ; --- the level file, and its round trip ---
-   L (load-level "src/apps/rove/levels/lighthouse.l")
+   L (load-level "src/apps/lore/levels/lighthouse.l")
    _ (test L (13 = L 'w) (14 = L 'h) (6 = L 'sx) (8 = L 'sy)
              ('(lamp sign) = sort (keys (L 'things)))
              ("*" = L 'things 'lamp 'gl) (220 = L 'things 'lamp 'fg)
@@ -94,12 +94,12 @@
 
    ; --- the library: a shelf per wing, its books through libra, the interpreter ---
    LB (library "src/apps")
-   _ (test (10 < #(keys (LB 'things))) (LB 'things 'rove) (LB 'things 'lapiz) (LB 'things 'hatch)
-             ("|" = LB 'things 'rove 'gl) (LB 'things 'rove 'books 'story))
+   _ (test (10 < #(keys (LB 'things))) (LB 'things 'lore) (LB 'things 'lapiz) (LB 'things 'hatch)
+             ("|" = LB 'things 'lore 'gl) (LB 'things 'lore 'books 'story))
    g3 (story-new LB)
-   sh (LB 'things 'rove)
+   sh (LB 'things 'lore)
    (open-window g3 sh,
-    test (g3 'win) (has? <(g3 'win 'lines) "rove") !(g3 'win 'prompt),
+    test (g3 'win) (has? <(g3 'win 'lines) "lore") !(g3 'win 'prompt),
     keys! g3 "\r",                                    ; the say pages out; then (ask) opens the prompt
     test (g3 'win 'prompt),
     keys! g3 "look\r",

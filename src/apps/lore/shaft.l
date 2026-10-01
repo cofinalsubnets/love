@@ -5,7 +5,7 @@
 ; each other across the shaft from the door wall carry a small red light, and the lights
 ; blink slowly together as a mast's do, with a halo on the plates around each when it
 ; is on; the door wall carries a lift door, shut -- all but the top one, which opens when
-; the player stands at it, and that ends the level: the court (src/apps/rove/court.l)
+; the player stands at it, and that ends the level: the courtyard (src/apps/lore/tree.l)
 ; takes the screen. the player walks the floor and the ledges as they like, jumps with the space bar and comes down under gravity; off a
 ; ledge's edge they fall to whatever is under them, the floor at worst, and are not
 ; hurt, but the screen flashes red, the harder the landing the more opaque and the
@@ -25,7 +25,7 @@
 ; only shaft-walk and shaft-run tie the tty and the horn. shaft-walk takes a stage
 ; already raised, which is how the garage hands over on the same screen.
 ;
-; run: love shaft   h l or the arrows turn, k or up steps forward, j or down back -- a
+; run: love lore shaft   h l or the arrows turn, k or up steps forward, j or down back -- a
 ;                   held key repeats, which is a walk; space jumps, or at a ladder takes
 ;                   hold of it, and then k and j climb it and space lets go; u n look up
 ;                   and down; q or esc leaves.
@@ -357,10 +357,10 @@
                             'frame shaft-frame 'key shaft-step 'tick shaft-move 'fps fps
                             'song (hn \ ((hn ? (shaft-song-new hn (wheel (clock 0)))) @ s
                                            (s ? (st \ (shaft-sfx s st, shaft-song-feed s)) (st \ pin st 'sfx ()))))
-                            'linger done-ms 'next ['court 'court-walk]})
+                            'linger done-ms 'next ['tree 'tree-walk]})
  (shaft-run _) (view-run shaft-walk)
- shaft-usage "usage: love shaft   (h l turn, k j step, space jumps or takes a ladder, u n look; q or esc leaves)"
+ shaft-usage "usage: love lore shaft   (h l turn, k j step, space jumps or takes a ladder, u n look; q or esc leaves)"
  (shaft-main as) (as @ () (shaft-run ())
                        (say err ("shaft: " + shaft-usage + "\n"), flush err, 2))
- _ (pins (cite 'verbs 'tab) 'shaft (udoor 'shaft shaft-main shaft-usage 1 1)))
+ _ ((cite 'lore 'lore-enlist) 'shaft (udoor 'shaft shaft-main shaft-usage 1 1)))
 ) ; module shaft

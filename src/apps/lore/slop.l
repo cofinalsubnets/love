@@ -8,7 +8,7 @@
 ; and beach), so scrolling costs nothing; a row with no slop in it is painted once and
 ; kept by world row. the song is harp's, scheduled a cycle at a time at the walk's tempo.
 ;
-; run: love slop
+; run: love lore slop
 ; slop-new/key/tick/frame are pure, gated headless by test/host/slop.l; only slop-run ties
 ; the tty, so slop never joins the corpus. the other floors borrow the skin.
 (module (slop slop-run slop-walk slop-main slop-new slop-sy slop-gap slop-cost slop-rate
@@ -555,12 +555,12 @@
                   (puts (g 'over @ 'taken ("the slop has you, " + presses (g 'spent) + " in\n")
                                           ("you turn back, " + presses (g 'spent) + " in\n")),
                    0)))
- slop-usage "usage: love slop [token] [pennies]   (what you bring; forward is k or up, q or esc leaves)"
+ slop-usage "usage: love lore slop [token] [pennies]   (what you bring; forward is k or up, q or esc leaves)"
  ; the two optional words, in either order: a number is pennies and anything else is
  ; the token. given either, the walk opens on a sign saying what you came in with.
  (slop-args as) (:- (go as () ()) (go l tk pn) (atom? l ? [tk pn]
                  (: t <l n (unum t) (charm? n ? (go >l tk n) (go >l t pn)))))
  (slop-main as) (2 < #as ? (say err ("slop: " + slop-usage + "\n"), flush err, 2)
                     (slop-args as @ p (slop-run <p <>p)))
- _ (pins (cite 'verbs 'tab) 'slop (udoor 'slop slop-main slop-usage 1 1)))
+ _ ((cite 'lore 'lore-enlist) 'slop (udoor 'slop slop-main slop-usage 1 1)))
 ) ; module slop

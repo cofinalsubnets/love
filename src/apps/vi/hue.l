@@ -214,7 +214,7 @@
 
    ; --- the pens --------------------------------------------------------------
    ; one finished escape per class, built once, so painting a frame is a lookup
-   ; and never string-building per token (slop-pal's bargain, src/apps/rove/slop.l). the theme
+   ; and never string-building per token (slop-pal's bargain, src/apps/lore/slop.l). the theme
    ; is keyed by vim group and the class table joins the two, so swapping
    ; src/apps/vi/config.l's numbers for another colorscheme's moves the editor and
    ; leaves the generated syn file -- which links to the groups -- alone.

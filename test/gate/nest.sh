@@ -2,7 +2,7 @@
 # test/gate/nest.sh -- `love nest`, the binary laying itself as the user's love, in a
 # HOME of its own: the plan said (-n) and done (-y), the same build again, an older love,
 # a newer one, one of the same stamp with other bytes, and -f. off a terminal a bare
-# `love nest` is -y's; the floor (src/apps/rove/roost.l) is test/host/roost.l's. the installed love is a script where the
+# `love nest` is -y's; the floor (src/apps/lore/roost.l) is test/host/roost.l's. the installed love is a script where the
 # case wants a stamp no build here carries; it answers `verbs` and `nest --stamp`.
 #
 # usage: sh test/gate/nest.sh LOVE
