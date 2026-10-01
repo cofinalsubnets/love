@@ -3,9 +3,11 @@
 ;   pom          the moon now, one line
 ;   pom -e       the date, the phase and the moon drawn to the terminal
 ;   pom -d       every hour of the month; with -e, redrawn in place
+;   pom -p [N]   the moon now, N pixels square in half-blocks
 ;   pom [[[[[cc]yy]mm]dd]HH]  another hour, date(1)'s order
-; usage: love pom [-d] [-e] [[[[[[cc]yy]mm]dd]HH]]
-(module (pom pom-main pom-julian pom-phase pom-name pom-percent pom-art)
+; usage: love pom [-d] [-e] [[[[[[cc]yy]mm]dd]HH]] | -p [N]
+(module (pom pom-main pom-julian pom-phase pom-name pom-percent pom-art
+             pom-pixels pom-now pom-cells pom-tint pom-tc pom-xterm pom-lit)
 (borrow 'cal)
 (:
  epoch 2444238.5                       ; 1980 january 0.0
@@ -87,8 +89,44 @@
      (go y k) (y > -1 ? (line y k + go (y - inc) (k + 1)) "")
      (go (1 - inc / 2) 0))
 
+ ; --- pixels -----------------------------------------------------------------------
+ ; the moon n by n at phase p: the lit side on the right waxing, the left waning, the
+ ; dark limb dim so a new moon is still a disc, () outside it
+ pom-lit 0xffd787
+ pom-dim 0x4e4e4e
+ (pom-pixels p n)
+  (: k (cos (2 * pi * p))
+     (px i j) (: x ((j + 0.5) * 2 / n - 1) y ((i + 0.5) * 2 / n - 1) w (sqrt (1 - y * y))
+                 (? (1 < x * x + y * y) ()
+                    (p < 0.5 ? (w * k < x) (x < 0 - w * k)) pom-lit
+                    pom-dim))
+     (map (i \ map (j \ px i j) ^n) ^n))
+ (pom-now _) (: s (clock 0 // 1000) gt (civil (s // 86400))
+               (pom-phase (s % 86400 // 3600) <>gt <>>gt <gt))
+
+ ; a grid of rgb or (), two rows to a cell: ▀ in the top's ink on the bottom's ground, ▄ or
+ ; ▀ alone for one, a space for none. truecolor when tc, else xterm's nearest of 256
+ (pom-tc _) (elem (getenv "COLORTERM") ["truecolor" "24bit"])
+ (rgb x) [(x // 65536) (x // 256 % 256) (x % 256)]
+ (pom-xterm x)
+  (: c (rgb x) lv [0 95 135 175 215 255]
+     q (map (v \ v < 48 ? 0 (v < 115 ? 1 ((v - 35) // 40))) c)
+     y (: m (net c // 3) (238 < m ? 23 (max 0 ((m - 3) // 10))))
+     (d2 p) (net (map (i \ 2 (c i - p i)) ^3))
+     (d2 (map (_ \ 8 + 10 * y) ^3) < d2 (map lv q) ? (232 + y) (16 + 36 * q 0 + 6 * q 1 + q 2)))
+ ; the sgr for x as ink (g "38") or ground ("48")
+ (pom-tint x g tc) (: c (rgb x) (tc ? (g + ";2;" + show (c 0) + ";" + show (c 1) + ";" + show (c 2))
+                                  (g + ";5;" + show (pom-xterm x))))
+ (pom-cells g tc)
+  (: (sgr c s) ("\e[" + c + "m" + s + "\e[0m")
+     (cell t b) (? (!(charm? t) && !(charm? b)) " "
+                   !(charm? b) (sgr (pom-tint t "38" tc) "▀")
+                   !(charm? t) (sgr (pom-tint b "38" tc) "▄")
+                   (sgr (pom-tint t "38" tc + ";" + pom-tint b "48" tc) "▀"))
+     (map (r \ foldl (\ s x (s + cell (g (2 * r) x) (g (2 * r + 1) x))) "" ^#<g) ^(#g // 2)))
+
  ; --- the runner ------------------------------------------------------------------
- pom-usage "usage: love pom [-d] [-e] [[[[[[cc]yy]mm]dd]HH]]"
+ pom-usage "usage: love pom [-d] [-e] [[[[[[cc]yy]mm]dd]HH]] | -p [N]"
  (dig? c) (48 <= c < 58)
  (digits? s) (#s ? (all dig? (map s ^#s)) 0)
  (env k) (getenv k @ v (string? v ? v ""))
@@ -111,7 +149,15 @@
         (go 1 d e)))
  ; the operand in pairs from the right: HH, then dd, mm, yy, cc
  (pairs op) (: (go i) (i < #op ? (snip op i (i + 2) . go (i + 2))) (rev (go 0)))
- (pom-main as)
+ ; -p [N]: the moon now, N pixels square, 8 unless said and rounded up to even
+ (pom-show as)
+  (? (two? as && (two? >as || !(digits? <as)))
+     (say err (pom-usage + "\n"), flush err, 1)
+     (: n (two? as ? (max 2 (unum <as)) 8)
+        _ (each (pom-cells (pom-pixels (pom-now 0) (2 * ((n + 1) // 2))) (pom-tc 0)) (l \ puts (l + "\n")))
+        (flush out, 0)))
+ (pom-main as) (two? as && <as = "-p" ? (pom-show >as) (pom-date as))
+ (pom-date as)
   (: fl (flags as 0 0)
      rest (two? fl ? <>>fl)
      op (two? rest ? <rest "")
