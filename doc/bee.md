@@ -203,7 +203,7 @@ The leader hands off by rewriting the line to a live session that agreed, and sa
 
 - branches with one owner join as one union: each stops at its own light lanes, and the union gates once, the slow lane last;
 - sessions with neighbouring work offer each other a fold, and the leader places it;
-- a build seeds its **out/** from a built tree of its base;
+- a build seeds its **out/** from a built tree of its base with `cp -a`, which keeps file times -- never `cp -r`, which stamps every output newer than its sources so nothing rebuilds; when `cp -a` is refused, build clean;
 - nothing holds a heavy slot it is not using.
 
 **Say it, then verify it.** Tell the leader every change of state: join, gating, green, landed. The leader verifies from the store, not from the message. A restart may rename a session, which then asks the leader to correct its row and says so.

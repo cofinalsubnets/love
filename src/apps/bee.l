@@ -1529,7 +1529,8 @@
                                "G" 0x847e87 "H" 0x696a6a "D" 0x595652 "R" 0x663931 "L" 0x639bff]
          'px [".K....K." "..K..K.." "..K..K.." ".KWMMWK." ".GHKKHG." "BMDRRDMB" "LBYYYYBL" "Y......Y"]}]
        ; the moon as it is tonight, utc
-       + [{'name "moon" 'grid ((cite 'pom 'pom-pixels) ((cite 'pom 'pom-now) 0) 8)}])
+       + [{'name "moon" 'ink "L" 'pal ["L" (cite 'pom 'pom-lit)]
+           'grid ((cite 'pom 'pom-pixels) ((cite 'pom 'pom-now) 0) 8)}])
      bee-names (map (a \ a 'name) bee-avatars)
      (avatar nm) (: l (filter (a \ a 'name = nm) bee-avatars) (two? l ? <l ()))
      (draw a) (cells (a 'grid) bee-24?)
