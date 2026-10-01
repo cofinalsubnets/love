@@ -108,8 +108,8 @@ exp 1
 exp2 1
 log 1
 logn1 1
-sin 2
-cos 2
+sin 1
+cos 1
 atan2 3
 pow 7
 powrim 37
