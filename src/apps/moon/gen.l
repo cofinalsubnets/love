@@ -511,7 +511,7 @@
    (u32nar? g op ta tb sx) (u32bin? g ta tb && (elem op '(+ - *) || elem op '(| ^) && sx))
    ; what C calls the literal: an unsuffixed literal that fits is an int, so `uint x * <lit>`
    ; wraps; one too wide is long and the result must not wrap -- hence the range test
-   (numty n) (fits32 n ? 'int 'long)
+   (numty n) (? (fits32 n) 'int (n > 9223372036854775807) 'ulong 'long)   ; past long, only unsigned long holds it
    ; a literal through its written face: -1 is (un neg (num 1)), ~0 (un bnot (num 0)). litv
    ; folds it to (v) | (); numty9 types an operand as C reads the source, else the tuple's type
    (litv e) (e @ ('num n) [n]
@@ -819,7 +819,7 @@
    ; a constant double expression -> its value tuple | (). parse's cfold is the integer twin
    ; (array dims, case labels) and imgbytes' ffold the image-time one; this is the runtime one.
    (cgdfold g e)
-    (dbty e = 'double && (ffold e @ v (dfin? v ? (mkflo g v) ())))
+    (dbty e = 'double && (ffoldw !(t32? g) e @ v (dfin? v ? (mkflo g v) ())))
    ; result -> f0 as a double. t32: an unsigned word rides the U-converter, a pair source cvtlld
    (asflo g r) (? (flo? (vty r)) (vfs r)
                   (gcplx? (vty r))                  ; complex -> real reads re (C's implicit conversion)
@@ -2011,7 +2011,7 @@
               (mkv 'u128 'r0
                    [['li 'r0 (u % 18446744073709551616)]
                     ['li 'r2 (u // 18446744073709551616)]]))
-           (wnt || 'r0 @ W (mkv 'long W [['li W v]])))
+           (wnt || 'r0 @ W (mkv (v > 9223372036854775807 ? 'ulong 'long) W [['li W v]])))
        ('flo d) (mkflo g d)
        ('str s)
         (nlab g ".S" @ lbl
@@ -3186,7 +3186,7 @@
                               unsg (cmpu g ta9 tb9)                      ; divide and compare take the common type's signedness -- see cmpu
                               u32 (u32bin? g ta9 tb9)                  ; a 32-bit unsigned result wraps -- see u32bin?
                               nar (u32 ? '((zx4 r0)))               ; the shuttle always lands in r0 (back)
-                              nty (u32 ? 'uint 'long)
+                              nty (rbin g ta9 tb9)                      ; C's own result type, as every lane types it
                               (? (d128? ta || d128? tb)
                                   ; the wide shuttle: the left rides its cell, the right the r2:r0 protocol; a product with both hi halves zero is one mulq
                                   (? !(w128? g) (no128 g)
@@ -6200,22 +6200,36 @@
                      [<pb (<>pb + ka * imscale <>>pb) <>>pb]
                     'no))))
        'no)
-   ; a const float expression at image time -> gem | 'bad (love's doubles are the target's IEEE doubles)
-   (ffold e) (atom? e ? 'bad
+   ; a const float expression at image time -> gem | 'bad (love's doubles are the target's IEEE doubles).
+   ; an unsigned int subtree reads mod 2^width: icfold keeps a word's pattern, and (ulong)-1 is no -1.0
+   (ffold e) (ffoldw 1 e)
+   (ffoldw w64 e) (atom? e ? 'bad
      ; an int const subtree floats ((double)(1 << N))
      (icfold e @ iv
-        (iv != 'no ? (0.0 + iv)
+        (iv != 'no ? (0.0 + (uwid w64 e @ w (? !w iv (: m (1 << w) r (iv % m) (r < 0 ? (r + m) r)))))
         (<e @ 'flo <>e
             'num (0.0 + <>e)
-            'cast (flo? <>e ? (ffold <>>e) 'bad)
-            'un (ffold <>>e @ v (? (bad? v) 'bad (<>e = 'neg) (-1.0 * v) 'bad))   ; times -1: 0.0 - 0.0 is +0.0, and -0.0 is its own value
+            'cast (flo? <>e ? (ffoldw w64 <>>e) 'bad)
+            'un (ffoldw w64 <>>e @ v (? (bad? v) 'bad (<>e = 'neg) (-1.0 * v) 'bad))   ; times -1: 0.0 - 0.0 is +0.0, and -0.0 is its own value
             'bin
-            (: op <>e a (ffold <>>e) b (ffold <>>>e)
+            (: op <>e a (ffoldw w64 <>>e) b (ffoldw w64 <>>>e)
                (bad? a || bad? b ? 'bad
                (op @ '+ (a + b) '- (a - b) '* (a * b)
                   '/ (b = 0.0 ? 'bad (a / b))
                   'bad)))
            'bad))))
+   ; a constant int expression's C type, as parse reads the source (suffixed literals arrive cast) | ()
+   (icty w64 e)
+    (: (both a b) (icty w64 a @ ta (icty w64 b @ tb (ta && tb ? (puac w64 ta tb))))
+       (e @ ('num v) (fits32 v ? 'int 'long)
+            ('cast t _) (nom? t ? t)
+            ('un op x) (elem op '(neg bnot) ? (icty w64 x @ t (t ? (pprom t))) 'int)
+            ('bin op a b) (? (elem op '(shl shr)) (icty w64 a @ t (t ? (pprom t)))
+                             (elem op '(+ - * / % & | ^)) (both a b)
+                             'int)
+            ('cond _ a b) (both a b)
+            ()))
+   (uwid w64 e) (icty w64 e @ 'uint 32 'ulong (w64 ? 64 32) 'ullong 64 ())
    (fim ty v)                                       ; a float value's IEEE image as ty: 4 single bytes | 8 double bytes
     (ty = 'float ? (les 4 (fbits32 v)) (les 8 (fbits v)))
    (imgbytes g ty ini)                              ; a byte/fix list of length tsz(ty) | 'bad
@@ -6228,7 +6242,7 @@
                            (ty = 'bool) (imnum g ty (<>ini = 0 ? 0 1))   ; a bool image normalizes (C11 6.3.1.2)
                            (imnum g ty <>ini))
      (flo? ty && elem <ini '(bin un cast))       ; a const float expression: fold, then image
-      (ffold ini @ v
+      (ffoldw !(t32? g) ini @ v
          (bad? v ? 'bad (fim ty v)))
      (<ini = 'str && arr? ty)
       (: t <>ini n (tsz g ty)
