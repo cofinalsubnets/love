@@ -371,5 +371,37 @@
   (: (wf p) (gather p @ g2 (two? g2 ? g2 (rest 2, wf p))) (wf <md)),
   close m))
 
+; --- desks: each its own plan over one table of panes; one made on demand, put away and
+; brought back, a pane shut on a desk not shown, and an emptied desk handing over the glass
+(: (dsg tag) (berth-stage (\ w h tag) (\ c 0) (\ _ 0))
+   n {0}
+   hb (harbour 10 20)
+   _ (pin hb 'more (_ \ (pin n () (peep n () 0 + 1), hopen-stage (dsg ("pane" + show (peep n () 0))) 1 1)))
+   _ (hberth hb 'stack 50 (hb 'more ()))
+   _ (hsplit hb 'beside)
+   _ (test (0 = hb 'desk) ([1 2] = wharf-berths (hb 'plan)) (2 = hb 'focus))
+   _ (hfresh hb)
+   _ (test (1 = hb 'desk) ([3] = wharf-berths (hb 'plan)) ([0] = hdesks hb))
+   _ (hgo hb 5)
+   _ (test (5 = hb 'desk) ([0 1] = hdesks hb) ([4] = wharf-berths (hb 'plan)))
+   _ (hcycle hb 1)                                  ; past the last, round to desk 0
+   _ (test (0 = hb 'desk) (2 = hb 'focus) ([1 5] = hdesks hb) (2 = #(hb 'lay)))
+   _ (hshut hb 3)                                   ; desk 1's only pane: desk 1 is gone
+   _ (test ([5] = hdesks hb) ([1 2] = wharf-berths (hb 'plan)))
+   _ (hshut hb 1)
+   _ (hshut hb 2)                                   ; desk 0 emptied: desk 5 takes the glass
+   (test (5 = hb 'desk) (() = hdesks hb) ([4] = wharf-berths (hb 'plan)) (4 = hb 'focus)))
+
+; --- the clip goes out through osc 52 once when it changes, and inle is a verb ---
+(: (sub? h n i) (i + #n < #h + 1 ? (n = snip h i (i + #n) ? 1 (sub? h n (i + 1))) 0)
+   hb (harbour 4 10)
+   _ (hberth hb 'stack 50 (hopen-stage (berth-stage (\ w h "x") (\ c 0) (\ _ 0)) 1 1))
+   _ (test (["" "Zg==" "Zm8=" "Zm9v" "YQpi/w=="] = map hb64 ["" "f" "fo" "foo" "a\nb\xff"])
+           !(sub? (hframe hb) "\e]52" 0))
+   _ (pin (hb 'clip) () ['chr "hi"])
+   (test (sub? (hframe hb) "\e]52;c;aGk=\a" 0)
+         !(sub? (hframe hb) "\e]52" 0)
+         !(() = peep (cite 'verbs 'tab) 'inle ())))
+
 (test_fin ())
 (puts "berth: ok")
