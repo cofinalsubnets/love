@@ -4,7 +4,7 @@
 # each test/grap/*.g runs through plan9port's grap and through `love grap`: stdout and the
 # exit status must agree, and our pic must take what our grap wrote as groff's pic takes
 # what plan 9's wrote: the exit status the same, and how many draw the same byte for byte
-# counted (kore's pic still puts the odd dot of a dotted line a hair off groff's).
+# counted.
 # test/grap/open holds the cases not yet climbed: counted and named,
 # never failing the gate. fz-* are random graphs, kept once they came out the same; each
 # holds one graph, since plan 9's grap carries a freed mark from one graph to the next.
