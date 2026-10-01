@@ -4,6 +4,7 @@
 // gz-lbase/gz-lext/gz-dbase/gz-dext say the same numbers in love.
 #include "love.h"
 #include "bytes.h"
+#include "inf.h"
 #include <stdint.h>
 #include <string.h>
 
@@ -51,50 +52,13 @@ static const uint8_t gz_clord[19] = {
 #define DROOT 9
 #define CROOT 7
 
-// one canonical code: the counts and symbols the walk needs, and the table over them.
-// an entry is (symbol << 4) | length, and 0 -- no code is 0 bits -- means "walk it".
-struct inf_code { uint16_t cnt[16], sym[288], *tab; unsigned root; };
-
 // one block's decode tables: the three canonical codes and the table each indexes.
-// per-call scratch on inf_run's frame, 11 KB of it -- the tightest stack under that is
+// per-call scratch on inf_run's frame, 10 KB of it -- the tightest stack under that is
 // the kernel's 64 KiB boot one, where kmain inflates the source blob into its initrd.
 struct inf_tabs {
- uint16_t ltab[1 << LROOT], dtab[1 << DROOT], ctab[1 << CROOT];
+ uint16_t ltab[1 << LROOT], dtab[1 << DROOT], ctab[1 << CROOT], lsym[288], dsym[32], csym[19];
  struct inf_code lit, dst, cl;
  const uint8_t *dic; uintptr_t nd; };            // the preset dictionary behind the output, nd 0 for none
-
-static void inf_build(struct inf_code *c, const uint8_t *lens, unsigned nsym,
-                      uint16_t *tab, unsigned root) {
- unsigned ofs[16], l, i, code = 0, idx = 0, size = 1u << root;
- memset(c->cnt, 0, sizeof c->cnt);
- memset(c->sym, 0, sizeof c->sym);
- memset(tab, 0, (size_t) size * sizeof *tab);
- for (i = 0; i < nsym; i++) c->cnt[lens[i]]++;
- c->cnt[0] = 0;                                  // a zero length is no code, not a code
- ofs[1] = 0;
- for (l = 1; l < 15; l++) ofs[l + 1] = ofs[l] + c->cnt[l];
- for (i = 0; i < nsym; i++) if (lens[i]) c->sym[ofs[lens[i]]++] = (uint16_t) i;
- c->tab = tab; c->root = root;
- for (l = 1; l < 16; l++) {                      // canonical order, shortest first
-  for (i = 0; i < c->cnt[l]; i++, code++) {
-   unsigned s = c->sym[idx++], rev = 0, b, j;
-   if (l > root) continue;
-   for (b = 0; b < l; b++) rev |= ((code >> b) & 1) << (l - 1 - b);   // the code, as read
-   for (j = rev; j < size; j += 1u << l)
-    if (!tab[j]) tab[j] = (uint16_t) ((s << 4) | l); }
-  code <<= 1; } }
-
-// the twin's own decode, for the codes the table does not hold: a table entry, (symbol << 4) |
-// length, or -1 where gz-dec answers ()
-static int inf_walk(const struct inf_code *c, uint64_t bb) {
- int code = 0, first = 0, index = 0, cnt;
- unsigned l;
- for (l = 1; l < 16; l++) {
-  code |= (int) ((bb >> (l - 1)) & 1);
-  cnt = c->cnt[l];
-  if (code - cnt < first) return (int) c->sym[index + (code - first)] << 4 | (int) l;
-  index += cnt; first = (first + cnt) << 1; code <<= 1; }
- return -1; }
 
 // inf_run's fast lane. a literal is 15 bits at most, so the buffer is topped only when it
 // holds fewer, and a length, before it is taken, to the 48 a whole pair may take: one wide
@@ -200,9 +164,9 @@ static int64_t inf_rund(const uint8_t *in, uintptr_t n, uint8_t *out, uintptr_t 
 
   if (typ == 1) {                                // the fixed code, RFC 1951 §3.2.6
    for (i = 0; i < 288; i++) lens[i] = i < 144 ? 8 : i < 256 ? 9 : i < 280 ? 7 : 8;
-   inf_build(&t.lit, lens, 288, t.ltab, LROOT);
+   inf_build(&t.lit, lens, 288, t.lsym, t.ltab, LROOT);
    for (i = 0; i < 30; i++) lens[i] = 5;
-   inf_build(&t.dst, lens, 30, t.dtab, DROOT); }
+   inf_build(&t.dst, lens, 30, t.dsym, t.dtab, DROOT); }
   else {                                         // the block's own, read through a third
    unsigned hlit, hdist, hclen, tot, prev = 0;
    uint8_t cl[19];
@@ -210,7 +174,7 @@ static int64_t inf_rund(const uint8_t *in, uintptr_t n, uint8_t *out, uintptr_t 
    hlit += 257; hdist += 1; hclen += 4;
    memset(cl, 0, sizeof cl);
    for (i = 0; i < hclen; i++) { unsigned v; TAKE(3, v); cl[gz_clord[i]] = (uint8_t) v; }
-   inf_build(&t.cl, cl, 19, t.ctab, CROOT);
+   inf_build(&t.cl, cl, 19, t.csym, t.ctab, CROOT);
    memset(lens, 0, sizeof lens);
    tot = hlit + hdist;
    // a run may overshoot `tot` and the twin lets it: it writes into a tablet, which has
@@ -225,8 +189,8 @@ static int64_t inf_rund(const uint8_t *in, uintptr_t n, uint8_t *out, uintptr_t 
     else return -1;
     for (k = 0; k < r; k++) if (i + k < sizeof lens) lens[i + k] = (uint8_t) v;
     i += r; prev = v; }
-   inf_build(&t.lit, lens, hlit, t.ltab, LROOT);
-   inf_build(&t.dst, lens + hlit, hdist, t.dtab, DROOT); }
+   inf_build(&t.lit, lens, hlit, t.lsym, t.ltab, LROOT);
+   inf_build(&t.dst, lens + hlit, hdist, t.dsym, t.dtab, DROOT); }
 
   for (;;) {                                     // the symbol loop, fixed or dynamic
    unsigned sy, l, d, x;
@@ -337,12 +301,13 @@ struct inf_st {
  uint64_t magic, bb, tot;                       // tot: every byte out since the stream began
  uint32_t bc, mode, last, rem, hlit, hdist, hclen, i, prev, stage, sy, len, hp;   // hp: the ring's next seat
  uint8_t lens[320], cl[19];
- struct inf_tabs t;                              // its three tab pointers go stale when the cask moves:
+ struct inf_tabs t;                              // its tab and sym pointers go stale when the cask moves:
  uint8_t hist[IS_HIST]; };                       // inf_st_fix lays them again each feed. hist: the last
                                                  // 32 KiB out, a ring
 
 static void inf_st_fix(struct inf_st *S) {
- S->t.lit.tab = S->t.ltab, S->t.dst.tab = S->t.dtab, S->t.cl.tab = S->t.ctab; }
+ S->t.lit.tab = S->t.ltab, S->t.dst.tab = S->t.dtab, S->t.cl.tab = S->t.ctab;
+ S->t.lit.sym = S->t.lsym, S->t.dst.sym = S->t.dsym, S->t.cl.sym = S->t.csym; }
 
 // one feed's output, grown by doubling
 struct inf_acc { uint8_t *b; uintptr_t n, cap; };
@@ -452,9 +417,9 @@ static int inf_step(struct inf_st *S, const uint8_t *in, uintptr_t n, int eof, u
   else if (typ == 1) {                           // the fixed code, RFC 1951 §3.2.6
    unsigned i;
    for (i = 0; i < 288; i++) S->lens[i] = i < 144 ? 8 : i < 256 ? 9 : i < 280 ? 7 : 8;
-   inf_build(&S->t.lit, S->lens, 288, S->t.ltab, LROOT);
+   inf_build(&S->t.lit, S->lens, 288, S->t.lsym, S->t.ltab, LROOT);
    for (i = 0; i < 30; i++) S->lens[i] = 5;
-   inf_build(&S->t.dst, S->lens, 30, S->t.dtab, DROOT);
+   inf_build(&S->t.dst, S->lens, 30, S->t.dsym, S->t.dtab, DROOT);
    S->mode = IM_SYM, S->stage = 0; }
   else S->mode = IM_TABLE; }
   break;
@@ -480,7 +445,7 @@ static int inf_step(struct inf_st *S, const uint8_t *in, uintptr_t n, int eof, u
   break;
  case IM_CLENS:
   while (S->i < S->hclen) { NEED(3); S->cl[gz_clord[S->i++]] = (uint8_t) BITS(3); DROP(3); }
-  inf_build(&S->t.cl, S->cl, 19, S->t.ctab, CROOT);
+  inf_build(&S->t.cl, S->cl, 19, S->t.csym, S->t.ctab, CROOT);
   memset(S->lens, 0, sizeof S->lens), S->i = 0, S->prev = 0, S->stage = 0, S->mode = IM_LENS;
   break;
  case IM_LENS:
@@ -495,8 +460,8 @@ static int inf_step(struct inf_st *S, const uint8_t *in, uintptr_t n, int eof, u
    else goto bad;
    for (k = 0; k < r_; k++) if (S->i + k < sizeof S->lens) S->lens[S->i + k] = (uint8_t) v;
    S->i += r_, S->prev = v, S->stage = 0; }
-  inf_build(&S->t.lit, S->lens, S->hlit, S->t.ltab, LROOT);
-  inf_build(&S->t.dst, S->lens + S->hlit, S->hdist, S->t.dtab, DROOT);
+  inf_build(&S->t.lit, S->lens, S->hlit, S->t.lsym, S->t.ltab, LROOT);
+  inf_build(&S->t.dst, S->lens + S->hlit, S->hdist, S->t.dsym, S->t.dtab, DROOT);
   S->mode = IM_SYM, S->stage = 0;
   break;
  case IM_SYM:                                    // stage: 0 a symbol, 1 its length's extra, 2 the
