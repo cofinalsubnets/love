@@ -372,6 +372,18 @@
    ; an assigned name is make's: anything but whitespace, : = #, and the op leads + ? ! --
    ; obj-y, foo-$(CONFIG_X), CFLAGS_$(f) -- where `$X`'s one character is namech's
    (varch c)    !(chws c || elem c '(58 61 35 43 63 33))
+   ; ..read paren-aware: inside a $(..) or ${..} anything goes, obj-$(subst m,y,$(CONFIG_MMC))
+   (nameP s y n)
+    (: t <s i >s
+       (g j d) (? (#t <= j) j
+                  (0 < d) (? (t j = 40 || t j = 123) (g (1 + j) (d + 1))
+                             (t j = 41 || t j = 125) (g (1 + j) (d - 1))
+                             (g (1 + j) d))
+                  (t j = 36 && j + 1 < #t && (t (1 + j) = 40 || t (1 + j) = 123)) (g (2 + j) 1)
+                  (varch (t j)) (g (1 + j) 0)
+                  j)
+       k (g i 0)
+       (y (t . k) [(snip t i k)]))
    (anyc c)     1
    (ltrim s) (: i ((: (g j) (j < #s && chws (s j) ? (g (1 + j)) j)) 0)
                (snip s i #s))
@@ -446,7 +458,7 @@
    ; `!=` runs its value and takes the output, the portable spelling of $(shell ..): bmake and
    ; GNU both read it, where neither reads the other's conditionals.
    opP (alt (lit "::=") (alt (lit ":=") (alt (lit "?=") (alt (lit "+=") (alt (lit "!=") (lit "="))))))
-   assignP (seqs [(skip (span chws)) (span varch)
+   assignP (seqs [(skip (span chws)) nameP
                    (skip (span chws)) (pmap (x \ [<x]) opP)
                    (skip (span chws)) (span anyc)])
    ruleP (seqs [(skip (span chws)) (span notcolon) (skip (lit ":")) (span anyc)])
@@ -464,7 +476,7 @@
           (sil . ign . snip s i #s))) 0 0 0)
    (recipe-parse l) (parse-mods (snip l 1 #l))   ; drop the leading tab, then the modifier run
    (classify l)
-   (recipep l ? ['recipe (recipe-parse l)]
+   (recipep l ? ['recipe (recipe-parse l) l]
       (: t (strip-comment l) tt (trim t)
          (? (0 = #tt) '(skip)
             (: w (first-word tt) rest (after-word tt)
@@ -844,7 +856,12 @@
    ((: (loop cs rules cur cond)
        (!(two? cs) ? (rev (flushr cur rules))
           (: c <cs k <c rest >cs on (condon cond)
-             (k @ 'recipe (loop rest rules (on && cur ? (addstep cur (r1 c)) cur) cond)
+             ; a tab-led line is a recipe only while a rule is open; with none it is an ordinary
+             ; line (mm/Makefile's indented obj-$(CONFIG_..) += under an ifdef)
+             (k @ 'recipe (cur ? (loop rest rules (on ? (addstep cur (r1 c)) cur) cond)
+                             (loop (classify (ltrim (r2 c)) . rest) rules cur cond))
+                  ; a blank or comment line leaves the rule open, as make reads a recipe
+                  'skip   (loop rest rules cur cond)
                   'rule   (on ? (loop rest (flushr cur rules) (mkrule c) cond)
                                       (loop rest (flushr cur rules) 0 cond))
                   'assign ((on ? (do-assign as (r1 c) (r2 c) (r3 c)) 0), loop rest (flushr cur rules) 0 cond)
@@ -860,9 +877,8 @@
                   'sinc   (on ? (catmap (f \ exists? f ? (file-lines f) ()) (split-ws (expand (r1 c) as 0)) @ more
                                          (loop (more + rest) (flushr cur rules) 0 cond))
                                       (loop rest (flushr cur rules) 0 cond))
-                  ; conditionals thread `cur` rather than flushing it: a top-level rule is
-                  ; already flushed by the blank line before one, and a conditional inside a
-                  ; recipe block gates its lines via `on` above.
+                  ; conditionals thread `cur` rather than flushing it, as make's do: a
+                  ; conditional inside a recipe block gates its lines via `on` above.
                   'defassign ((on ? (do-assign as (r1 c) "=" (r2 c)) 0),
                               loop rest (flushr cur rules) 0 cond)
                   ; remember which targets carry one, so recur can refuse if one is remade

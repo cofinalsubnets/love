@@ -522,6 +522,13 @@
    ke (run-cook (mk '("$(foreach file,a b,$(eval V_$(file) := x$(file)))"
                      "all:" "\t@echo \"E[$(V_a)$(V_b)]\"")) "all")
    _ (ok "nested $(eval) under foreach's $(file)" (has ke "E[xaxb]"))
+   ; a name's $(..) may hold spaces; a tab-led line with no rule open is an ordinary line
+   kp (run-cook (mk ["M := m" "obj-$(subst m,y,$(M)) += host/" "ifdef M" "\tobj-y += tab.o" "endif"
+                     "all:" "\t@echo \"P[$(obj-y)]\""]) "all")
+   _ (ok "obj-$(subst ..) names obj-y; a tab line outside a rule" (has kp "P[host/ tab.o]"))
+   ; a blank line inside a recipe leaves the rule open
+   kb (run-cook (mk '("all:" "\t@echo \"B[one]\"" "" "\t@echo \"B[two]\"")) "all")
+   _ (ok "a blank line inside a recipe" (has kb "B[two]"))
 
    ; ---------------------------------------------------------------- summary
    _ (sh ("rm -rf " + dir))

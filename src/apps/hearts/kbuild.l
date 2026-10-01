@@ -9,6 +9,7 @@
 (module (hearts-kbuild hk-seed hk-dir hk-members hk-vmlinux)
 (borrow 'posix)
 (borrow 'cook)
+(borrow 'path)
 (:
  hk-vars (cite 'cook 'cook-vars)
  hk-expand (cite 'cook 'cook-expand)
@@ -17,6 +18,8 @@
  (hk-words t v) (words (hk-expand ("$(" + v + ")") t))
  (hk-dir? w) (ends? w "/")
  (hk-strip w) (snip w 0 (#w - 1))
+ ; a member as ar names it: arch/arm64/kvm/../../../virt/kvm/x.o is virt/kvm/x.o
+ (hk-path p) (join "/" (pclean (segs p) 0))
 
  ; the seed every directory starts from: the config, the tree's names, and the lists the
  ; top Makefile builds around the arch's (core-y and drivers-y empty, libs-y lib/ before it)
@@ -47,10 +50,10 @@
      oy (hk-words t "obj-y")
      (part m) (: b (snip m 0 (#m - 2))
                  ps (hk-words t (b + "-objs") + hk-words t (b + "-y"))
-                 (map (p \ pfx + p) (two? ps ? ps [m])))
+                 (map (p \ hk-path (pfx + p)) (two? ps ? ps [m])))
      (one m) (hk-dir? m ? <(hk-members K seed (pfx + hk-strip m)) (part m))
      lib (filter (m \ !(elem m oy)) (uniq (sort (hk-words t "lib-y" + hk-words t "lib-m"))))
-     [(uniq (catmap one oy)) (map (m \ pfx + m) lib)])
+     [(uniq (catmap one oy)) (map (m \ hk-path (pfx + m)) lib)])
 
  ; vmlinux.a: the root's built-in.a, then each libs-y directory's lib.a, the head objects
  ; (scripts/head-object-list.txt, matched as grep -F does) hoisted ahead in archive order
