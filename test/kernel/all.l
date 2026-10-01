@@ -32,7 +32,7 @@
            ["test/kernel/ramfs.l" "test/kernel/fs.l" "test/kernel/wfs.l"
             "test/kernel/kore0.l"
             "src/apps/kore/text.l" "src/apps/kore/u.l" "src/apps/kore/core.l" "src/apps/kore/fs.l"
-            "test/kernel/kore.l" "test/kernel/pipe.l"
+            "test/kernel/kore.l" "test/kernel/pipe.l" "test/kernel/pty.l"
             "test/kernel/sh0.l"
             "src/apps/lush.l"
             "test/kernel/sh.l"

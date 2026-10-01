@@ -137,8 +137,13 @@ values differ across Linux/*BSD/mac, so the `call_X` worker normalizes and love 
 shape.
 
 The shell's job control rides this: per-job process groups + tcsetpgrp handoff (`spawnio`
-pg/fg, `ttyfg`), ^C/^Z to the foreground job only, jobs/fg/bg/&. a stop signal to an
-ORPHANED group is discarded, so in-shell-pgrp children can never ^Z under a nested session.
+pg/fg, `ttyfg`, read back by `ttypg`), ^C/^Z to the foreground job only, jobs/fg/bg/&. a stop
+signal to an ORPHANED group is discarded, so in-shell-pgrp children can never ^Z under a nested
+session. On inle a process is a task and the same doors are the kernel's: `tether` puts a child on
+a kernel pty (`openpty`: master, slave and a signal row), whose line discipline echoes, edits a
+line at a time and turns ^C into a signal on the signal row; a watcher reads it and `still`s the
+group `ttyfg` gave the terminal. `still` ends a task or a group where it stands (a stop is
+nothing), and `raw` sets the slave's flags as the host's sets termios.
 Task-level `chill`/thaw stays separate — **tasks are not processes**: a task is an in-VM green
 thread (`spawn`/`chill`), a process is a host pid (`fork`/`still`). Never cross them.
 
