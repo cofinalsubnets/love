@@ -7,7 +7,7 @@
 ;   pom [[[[[cc]yy]mm]dd]HH]  another hour, date(1)'s order
 ; usage: love pom [-d] [-e] [[[[[[cc]yy]mm]dd]HH]] | -p [N]
 (module (pom pom-main pom-julian pom-phase pom-name pom-percent pom-art
-             pom-pixels pom-now pom-cells pom-tint pom-tc)
+             pom-pixels pom-now pom-cells pom-tint pom-tc pom-xterm)
 (borrow 'cal)
 (:
  epoch 2444238.5                       ; 1980 january 0.0

@@ -20,6 +20,8 @@
 ;   (claude-model NAME)   the model that child runs; claude's own default when unset
 ;   (mem-floor GB) (heavy-max N)   no heavy lock below GB available; N heavy locks at once, 2
 ;   (avatar NAME)       the face and its accent, bunny unless set; /avatar or --avatar sets it
+;   (screensaver NAME) (screensaver-idle N)   the screen's saver after N minutes without a key:
+;                         pom and 10, 0 for never; `love bee -s` names them (src/apps/saver.l)
 ; the answer streams: text prints as it comes. a key goes out only over tls, and only to a
 ; peer tls-open verified: its chain to a root the host trusts, and its name.
 (module (bee bee-main)
@@ -1440,7 +1442,7 @@
      esc (string 27)
      (sgr code s) (esc + "[" + code + "m" + s + esc + "[0m")
      (soil c) (pin (c 'dirt) () 1)
-     (push c b) (pins c 'blocks (b . c 'blocks) 'scroll 0)
+     (push c b) (pins c 'blocks (b . c 'blocks) 'scroll 0 'mails (peep c 'mails 0 + (b 'k = 'mail)))
 
      ; words of l as lines at most n wide; a word wider than n stands alone, cut at paint
      (wrap l n)
@@ -1505,6 +1507,7 @@
      ; names the accent where the pixels would choose badly
      cells (cite 'pom 'pom-cells)
      tinted (cite 'pom 'pom-tint)
+     xterm (cite 'pom 'pom-xterm)
      bee-24? ((cite 'pom 'pom-tc) 0)
      (tint x) (tinted x "38" bee-24?)
      (rgb x) [(x // 65536) (x // 256 % 256) (x % 256)]
@@ -1539,9 +1542,11 @@
          cs (map (x \ [(n x) (strength x) x]) (keys n))
          vs (filter (e \ vivid? (e 2)) cs)
          (string? k ? ((pal a) (k 0)) (<(rev (sort (two? vs ? vs cs))) 2)))
-     ; the avatar worn: its name, its face drawn, and the accent everything else takes
+     ; the avatar worn: its name, its face drawn, and the accent everything else takes, as
+     ; an sgr and as the nearest of 256 for the saver's canvas
      bee-look {}
-     (look! nm) (: a (avatar nm) (pins bee-look 'name nm 'face (draw a) 'ink (tint (ink-of a))))
+     (look! nm) (: a (avatar nm) k (ink-of a)
+                   (pins bee-look 'name nm 'face (draw a) 'ink (tint k) 'pen (xterm k)))
      _ (look! (: n (setting 'avatar "bunny") (tablet? (avatar n) ? n "bunny")))
      ; (avatar NAME) in ~/.love/etc/bee.l, in place of any before it
      (keep-avatar nm)
@@ -1802,13 +1807,25 @@
                     2 (pin c 'scroll (c 'scroll + page))
                     6 (pin c 'scroll (max 0 (c 'scroll - page)))
                     0))))
-     (keyloop c) (: k (edkey in) _ (onkey c k) _ (soil c) (? (c 'over) 0 (keyloop c)))
+     ; a key that wakes the saver is the saver's, and the screen is laid again whole
+     (keyloop c) (: k (edkey in)
+                    _ (? (sv-key (c 'sv) (clock 0)) (pin c 'lastr ()) (onkey c k))
+                    _ (soil c)
+                    (? (c 'over) 0 (keyloop c)))
 
      (tide c) (: ws (tty 1) r (two? ws && 5 < <ws ? <ws 24) w (two? ws && 19 < >ws ? >ws 80)
                  (? (r = c 'rows && w = c 'cols) 0 (: _ (pins c 'rows r 'cols w) (soil c))))
+     ; the saver, when it runs, has the screen; a turn goes on under it, and mail or an ask
+     ; puts a mark in its corner
+     sv-watch (cite 'saver 'saver-watch)
+     sv-tick (cite 'saver 'saver-tick)
+     sv-key (cite 'saver 'saver-key)
+     sv-on? (cite 'saver 'saver-on?)
      (swim c tick)
       (: b (c 'dirt)
-         _ (? (peep b () 0) (: _ (pin b () 0) _ (say out (frame c)) (flush out)) 0)
+         sv (sv-tick (pin (c 'sv) 'ink (bee-look 'pen)) (clock 0) (c 'rows) (c 'cols) (peep c 'mails 0 + tablet? (c 'asking)))
+         _ (? (0 < #sv) (: _ (say out sv) (flush out)) 0)
+         _ (? (peep b () 0 && !(sv-on? (c 'sv))) (: _ (pin b () 0) _ (say out (frame c)) (flush out)) 0)
          _ (? (tick % 16 = 0) (tide c) 0)
          _ (? (tick % 4 = 0 && c 'busy != ()) (soil c) 0)      ; the spinner turns
          _ (? (tick % 30 = 0 && c 'busy = ()) (wake c) 0)       ; the inbox, about once a second
@@ -1819,7 +1836,9 @@
       (: c {'blocks () 'ed (ednew 0) 'scroll 0 'dirt {() 1} 'busy () 'asking () 'msgs ()
             'sock () 'over 0 'key key 'yes yes 'rows 24 'cols 80}
          _ (pin c 'face (tface c))
-         _ (twirl (\ _ (watch 0)) 0)                       ; the queues, mailed here when they move
+         _ (pin c 'sv (sv-watch (setting 'screensaver "pom")
+                                (: m (peep bee-salt 'screensaver-idle ()) (two? m ? <m 10))))
+         _ (twirl (\ _ (watch 0)) 0)                     ; the queues, mailed here when they move
          _ (twirl (\ _ (lock-poll 0)) 0)                   ; queued locks, mailed here when granted
          _ (push c {'k 'hello})
          _ (tide c)
@@ -2147,6 +2166,7 @@
          words (filter (\ w !(elem w bee-flags)) as)
          (? (elem "--mcp" as) (: _ (mcp-serve in out) 0)             ; a claude child's own server
             (two? as && <as = "--lock") (bee-cli as yes)              ; its command's words stay as given
+            (two? as && elem <as ["-s" "--screensaver"]) (cite 'saver 'saver-cli >as)   ; a saver, no session
             (two? words && elem <words ["--list" "--send" "--spawn" "--stop" "--avatar"]) (bee-cli words yes)
             ; the api backend wants its endpoint, model and key; claude brings its own
             (!bee-cc? && atom? bee-at) (say err ("bee: cannot read the url " + bee-url + "\n"), 1)
@@ -2169,7 +2189,8 @@
        love bee --list | --send NAME TEXT ..           the sessions, from a shell
        love bee --spawn NAME DIR [-y] PROMPT ..         a bee serving detached in DIR
        love bee --stop NAME | --serve [-y] [PROMPT ..]
-       love bee --avatar [NAME]                        the avatars, or wear one"
+       love bee --avatar [NAME]                        the avatars, or wear one
+       love bee -s | --screensaver [NAME]               a screensaver until a key; none names them"
    _ (pins (cite 'verbs 'tab) 'bee (udoor 'bee bee-main bee-usage 1 0)))
 
 ; the seat: run as a file, `love src/apps/bee.l ..`, bee starts itself; as the verb, the
