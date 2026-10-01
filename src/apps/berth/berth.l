@@ -6,18 +6,20 @@
 ; (grid -> escapes); neither knows a pty, so the kernel console uses them too.
 ;
 ; C-a is the prefix, intercepted in the key pump below every guest: s/v split, h j k l
-; steer, x shut, [ copy mode (the pane's screen as a vi buffer), ] paste, C-a a literal.
-; the clip is the harbour's one register, vi's shape, shared by every vi buffer on it.
+; steer, x shut, [ copy mode (the pane's screen as a vi buffer), ] paste, C-a a literal;
+; c a fresh desk, n p the next and last, 0-9 a desk by number (made when missing).
+; the clip is the harbour's one register, vi's shape, shared by every vi buffer on it,
+; and sent out to the outer terminal's clipboard (osc 52) when it changes.
 ; a guest may be a stage of this process -- cli's triple (show w h) (step k) (over? _) --
 ; berthed like a child; a door 'key reads its keys, a door 'tick asks for a frame.
 ;
-; run: out/love -e "(: _ (borrow 'berth) (berth [\"sh\"]))"
+; run: out/love -e "(: _ (borrow 'berth) (berth [\"sh\"]))", or `love inle` for lush in it.
 ; host-only (screen/tether/tty ride src/love/*.c): never in the corpus; test/host/berth.l
 ; smokes it over a real pty. a module, so a guest that berths itself (vi's splits) cites it.
 (module '(berth berth berth-stage harbour hberth hsail hopen hopen-stage moor waitfor
           hbox hmas hpid hstage hpty? hpane hsoil hrelay hframe hmoor hsplit hsteer hshut
           hfeed hkey oars hsize htide htick hswim hquick? hcopy hpaste hclip-text hscreen-text
-          hseq hmouse hpeer hpasted)
+          hseq hmouse hpeer hpasted hdesks hgo hcycle hfresh hb64 inle-main)
 (borrow ((cite 'wharf) @ m (m ? m "src/apps/berth/wharf.l")))   ; the baked module, else the tree's file
 (borrow ((cite 'limn) @ m (m ? m "src/apps/berth/limn.l")))
 (borrow 'posix)
@@ -49,7 +51,8 @@
  ; --- the harbour: every berth's screen, pty and child, under one wharf plan ---
  ; a pane is (box master pid stage): a child's has its master and pid and no stage,
  ; a stage's the stage and neither. the harbour is a tablet, and the keys are the
- ; whole state: plan focus next rows cols panes lay dirt more jobs clip.
+ ; whole state: plan focus next rows cols panes lay dirt more jobs clip, and the desks --
+ ; desk the one shown, desks the others' [plan focus] by number, the shown one's never kept there.
  (hbox p) <p
  (hmas p) <>p
  (hpid p) <>>p
@@ -60,6 +63,17 @@
                     (? (atom? v) ""
                        (<v = 'lin) (foldl (a \ l \ a + l + "\n") "" <>v)
                        <>v))
+ ; base64, for the clip's trip out through osc 52
+ (hb64 s) (: t "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/" n #s j (jug 0)
+             (ch v) (string (t (v & 63)))
+             (at i) (i < n ? (s i) 0)
+             (go i) (? (n <= i) 0
+                       (: a (at i) b (at (i + 1)) c (at (i + 2))
+                          (say j (ch (a >> 2) + ch (a << 4 | b >> 4)
+                                  + (i + 1 < n ? (ch (b << 2 | c >> 6)) "=")
+                                  + (i + 2 < n ? (ch c) "=")),
+                           go (i + 3))))
+             (go 0, slurp j))
  ; a pane's history and screen as rows of text, each with its trailing blanks off; the
  ; glyphs come out as limn paints them
  (hscreen-text p) (: s (peep (hbox p) () 0) r (gaze s 1) c (gaze s 2) hn (gaze s 9)
@@ -174,6 +188,8 @@
       pk = 2 ? (pin hb 'six now) 0,
       pk = 1 ? (hfree j hb) 0,
       hbars j hb,
+      (hclip-text hb @ ct
+         (ct = hb 'c52 ? 0 (pin hb 'c52 ct, 0 < #ct ? (say j ("\e]52;c;" + hb64 ct + "\a")) 0))),
       (: p (hpane hb (hb 'focus)) b (hfind (hb 'lay) (hb 'focus))
          (two? p && two? b ?
             (: s (peep (hbox p) () 0) w (gaze s 0) c (gaze s 2) f (gaze s 3)
@@ -212,13 +228,45 @@
  ; shared, and the focus moves on if it was the one that left. shutting twice
  ; is safe -- the second finds no pane and closes nothing, which is what a child
  ; hanging up on a berth the user already shut looks like.
+ ; a berth on a desk not shown leaves that desk's plan, and an emptied desk is gone; the
+ ; shown desk emptied hands the glass to the first desk left
  (hshut hb id) (: p (hpane hb id)
                   _ (two? p && hpty? p ? (close (hmas p)) 0)
                   _ (pin (hb 'panes) id ())
-                  pl (wharf-shut (hb 'plan) id)
-                  (pin hb 'plan pl,
-                   ? (id = hb 'focus) (wharf-berths pl @ bs (pin hb 'focus (two? bs ? <bs ()))) 0,
-                   hrelay hb))
+                  (elem id (wharf-berths (hb 'plan)) ?
+                     (: pl (wharf-shut (hb 'plan) id)
+                        (pin hb 'plan pl,
+                         ? (id = hb 'focus) (wharf-berths pl @ bs (pin hb 'focus (two? bs ? <bs ()))) 0,
+                         (() = pl && two? (hdesks hb) ? (hgo hb <(hdesks hb)) (hrelay hb))))
+                     (hstow hb id)))
+ (hstow hb id) (map (d \ (hb 'desks d @ v
+                            (two? v && elem id (wharf-berths <v) ?
+                               (: pl (wharf-shut <v id)
+                                  f (<>v = id ? (wharf-berths pl @ bs (two? bs ? <bs ())) <>v)
+                                  (pin (hb 'desks) d (() = pl ? () [pl f])))
+                               0)))
+                    (keys (hb 'desks)))
+
+ ; --- the desks: each its own plan and focus over the one table of panes. a desk not
+ ; shown keeps its children running and its screens at the size they last had ---
+ (hdesks hb) (sort (filter (d \ two? (hb 'desks d)) (keys (hb 'desks))))
+ ; show desk n: the shown one is put away, n taken out; a desk not yet made opens a
+ ; pane off 'more, and stays unmade when that fails
+ (hgo hb n) (? (n = hb 'desk) 0
+               (: v (hb 'desks n)
+                  p (two? v ? () (hb 'more ()))
+                  (? (atom? v && atom? p) 0
+                     (pin (hb 'desks) (hb 'desk) (() = hb 'plan ? () [(hb 'plan) (hb 'focus)]),
+                      pin (hb 'desks) n (),
+                      pin hb 'desk n,
+                      (two? v ? (pin hb 'plan <v, pin hb 'focus <>v, hrelay hb)
+                         (pin hb 'plan (), pin hb 'focus (), hberth hb 'stack 50 p))))))
+ ; k desks along from the shown one, round the made ones in order
+ (hcycle hb k) (: ds (sort (hb 'desk . hdesks hb)) n #ds
+                  (pos i) (ds i = hb 'desk ? i (pos (i + 1)))
+                  (hgo hb (ds ((pos 0 + k + n) % n))))
+ (hfresh hb) (: (free i) (i = hb 'desk || two? (hb 'desks i) ? (free (i + 1)) i)
+                (hgo hb (free 0)))
 
  ; --- copy mode: the focused pane's screen as a vi buffer above it, on the clip;
  ; answers the buffer's state, or () on a seat with no vi. paste: the clip typed at
@@ -335,6 +383,10 @@
                       120 (hshut hb (hb 'focus))        ; x
                       91  (hcopy hb)                    ; [
                       93  (hpaste hb)                   ; ]
+                      99  (hfresh hb)                   ; c
+                      110 (hcycle hb 1)                 ; n
+                      112 (hcycle hb -1)                ; p
+                      (d && 47 < d < 58) (hgo hb (d - 48))   ; 0-9
                       0)))
  ; a child gets the bytes as typed, a sequence read whole when its ESC has company
  ; (a lone ESC is a key); a stage gets edkey's keys, as on cli's stage, or its own
@@ -388,7 +440,8 @@
  ; the caller's, a thunk answering the pane a prefix split ties up ---
  (harbour r c) ({} @ hb
                   (pins hb 'plan () 'focus () 'next 1 'rows r 'cols c 'panes {}
-                        'more () 'dirt {1} 'jobs () 'lay () 'clip {} 'sent {} 'pics 0 'six {} 'opx (),
+                        'more () 'dirt {1} 'jobs () 'lay () 'clip {} 'sent {} 'pics 0 'six {} 'opx ()
+                        'desk 0 'desks {} 'c52 "",
                    hb))
 
  ; --- sail: the harbour on the tty, raw and on the alternate screen, keys pumped
@@ -421,5 +474,21 @@
                      (pin hb 'more (stg ? (_ \ hopen ["sh"] 1 1) (_ \ hopen src 1 1)),
                       hberth hb 'stack 50 p0,
                       hsail hb,
-                      stg ? 0 (waitfor (hpid p0)))))))
+                      stg ? 0 (waitfor (hpid p0))))))
+
+ ; --- inle: the os's own face on any terminal -- the harbour with lush in every pane a
+ ; split or a desk opens, and argv, when given, in the first ---
+ (inle-main as) (: me (selfpath 0) sh (string? me ? [me "lush"] ["sh"])
+                   sz (hsize 0) r <sz c <>sz
+                   p0 (hopen (two? as ? as sh) r c)
+                   (atom? p0 ? (say err ("inle: cannot start " + (two? as ? <as (sh 0)) + "\n"), 1)
+                      (harbour r c @ hb
+                         (pin hb 'more (_ \ hopen sh 1 1),
+                          hberth hb 'stack 50 p0,
+                          hsail hb,
+                          waitfor (hpid p0),
+                          0))))
+ inle-usage "usage: love inle [COMMAND ..]   the harbour, lush in its panes; COMMAND in the first
+  C-a: s v split, h j k l steer, x shut, [ ] copy and paste, c n p 0-9 desks, C-a a literal C-a"
+ _ (pins (cite 'verbs 'tab) 'inle (udoor 'inle inle-main inle-usage 1 1)))
 ) ; module berth
