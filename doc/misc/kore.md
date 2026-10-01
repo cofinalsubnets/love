@@ -107,7 +107,7 @@ carry the rest of the userland the census counts: `cc` (mooncc, doc/misc/moon.md
 | man.l, the pages | man (a page found, decompressed, read as roff and laid out for a terminal) |
 | lens.l, the doors onto lapiz | html2text (the lens entered from the other surface), markdown (the lens run the way papel runs it) |
 | www.l, over wget.l, lapiz and less.l | www (a web page with its links numbered, followed by number; gopher and gemini too) |
-| pic.l, over png.l, jpeg.l and gif.l | pic (pictures printed in cells, two pixels a cell), picless (a viewer: zoom, pan, a gif played) |
+| pic.l, over png.l, jpeg.l, gif.l and webp.l | pic (pictures printed in cells, two pixels a cell), picless (a viewer: zoom, pan, a gif played) |
 | net.l | telnet (a remote terminal: nc with the protocol's options answered), telnetd (its server: a program on a pty per client), httpd (kiosko under busybox's flags), nslookup (a name's records, asked of a nameserver), ping and ping6 (icmp echoes, v4 and v6), traceroute and traceroute6 (the routers on the way) |
 | src/apps/lush.l | sh / lush |
 
@@ -729,7 +729,9 @@ groff, and `chem.pic` where there is none.
 
 The decoders: src/apps/png.l (every colour type and depth, Adam7), src/love/lib/jpeg.c (baseline and
 progressive, any sampling), src/love/lib/gif.c (LZW, interlace, transparency, and the three
-disposals across frames). A GIF keeps at most 1000 frames and 128 MB of them. The encoders:
+disposals across frames), src/love/lib/webp.c (lossy with its alpha plane, lossless, and an
+animation's first frame; libwebp's pixels, byte for byte). A GIF keeps at most 1000 frames and
+128 MB of them. The encoders:
 src/apps/png.l (a palette of 1 to 8 bits a pixel up to 256 colours, else RGBA; a row that
 repeats the one above filtered up, others sub), src/love/lib/jpeg.c (baseline), src/apps/gif.l (one
 frame, the palette also sixel's).

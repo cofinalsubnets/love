@@ -321,6 +321,35 @@
                               (sort fs)))))
      ; messages as the model reads them, each tagged with its sender
      (mail-text ms) (foldl (\ a m (a + "<message from=\"" + <m + "\">\n" + m 1 + "\n</message>\n")) "" ms)
+
+     ; --- the binary this bee runs, known by its stat (size, mtime, inode) at start. a build laid
+     ; over it is told once, a message from bee, or a note on the full screen; the stat at most
+     ; every BEE_SELF_WATCH seconds, 30 unless set ---
+     bee-restart ("at the next convenient point -- between tasks, never mid-gate -- "
+                  + "resuming in the same directory, so .mcp.json loads the new bee.")
+     bee-landed ("this landing changed bee: every live session restarts " + bee-restart)
+     bee-served "src/apps/bee.l src/apps/locks.l src/apps/saver.l src/apps/pom.l"   ; what bee runs
+     (self-id _) (: s (string? bee-self ? (stat bee-self)) (two? s ? (show [(s 0) (s 3) (s 8)])))
+     bee-selfw {'id (self-id 0) 'at (clock 0)}
+     bee-selfwait (: w (getenv "BEE_SELF_WATCH") (string? w && 0 < #w ? (digits w) 30))
+     (utc-minute t)
+      (: d (cite 'cal 'civil (t // 86400)) m (t % 86400 // 60) (two x) (x < 10 ? ("0" + show x) (show x))
+         (show <d + "-" + two <>d + "-" + two <>>d + " " + two (m // 60) + ":" + two (m % 60) + " utc"))
+     ; the notice when the binary moved since it was last seen, else ()
+     (self-news _)
+      (: now (clock 0) id0 (bee-selfw 'id)
+         (? (!(string? id0) || now - (bee-selfw 'at) < bee-selfwait * 1000) ()
+            (: _ (pin bee-selfw 'at now) id (self-id 0)
+               (? (!(string? id) || id = id0) ()
+                  (: _ (pin bee-selfw 'id id) s (stat bee-self)
+                     ("bee was updated: " + bee-self + " was replaced (built " + utc-minute ((s 3) // 1000000000)
+                      + "). this session still runs the old bee and works as before; restart " + bee-restart))))))
+     ; told once: to the full screen's note when it set 'tell, else as mail from bee. a bee's
+     ; own mcp child (BEE_AS) leaves it to the bee
+     (self-tell _)
+      (? bee-as? 0
+         (: t (self-news 0)
+            (? !(string? t) 0 (bee-selfw 'tell) ((bee-selfw 'tell) t) (post-as "bee" (me 0) t))))
      (sessions-text _)
       (: ps (settled 0)
          (? !(two? ps) "no bee sessions are running"
@@ -559,7 +588,8 @@
          (? (two? mine || lead?) (catmap one (sort mine) + (lead? ? (catmap all every) ()) + ln + lg) ()))
      bee-qseen (foldl (\ t s (pin t <s (s 1))) {} (q-sections bee-queues))
      (watch-tick _)
-      (: now (q-sections (lush-out bee-qcmd))
+      (: _ (self-tell 0)
+         now (q-sections (lush-out bee-qcmd))
          news (catmap (\ s (: nm <s old (peep bee-qseen nm ()) new (s 1)
                               _ (pin bee-qseen nm new)
                               ns (? (string? old && old != new) (q-news old new) ())
@@ -648,6 +678,8 @@
         "#   slot it is not using."
         "# sync TEXT: what the queue lands toward. pre TEXT: a condition before that. both are the leader's to keep."
         "# next N: the position the next join takes; numbers never repeat. the base line may carry a note after #."
+        "# restart: after a landing that changes bee, every live session restarts at its next convenient point --"
+        "#   between tasks, never mid-gate -- in the same directory, so .mcp.json loads the new bee."
         "# line: <position> <session> <branch> <gated-on> <gated-head> <state>  # note"
         "#   gated-on: the base's sha for the head, else the row above's gated-head; state waiting|gating|green|folded-into-N"
         ("leader " + lead)
@@ -884,25 +916,29 @@
                            + " merges " + g + " with the gated tree " + gt + ", and the tip's tree is " + git-tree br
                            + ": the row stays; tell the leader")]
                       (: gone (p . q-folds rows p) short (git1 ("rev-parse --short " + sq at))
+                         ; a landing that changes bee's served code ends the note with the restart line
+                         bz (? (0 < #from) (git1 ("diff --name-only " + from + " " + at + " -- " + bee-served)) "")
+                         rn (? (#bz = 0) rel (0 < #rel) (rel + " " + bee-landed) bee-landed)
                          t2 <(q-base (paras (filter (\ l !(q-row? l && elem <(words l) gone)) (lines text))) short)
                          (? (q-put q old t2)
                             (: rows2 (q-rows t2) h (q-head rows2)
                                to (filter (\ s (s != i)) (q-uniq (map (\ x ((rows2 x) 1)) (? h (h . q-folds rows2 h) ()))))
-                               sent (? (0 < #rel)
-                                       (map (\ s [s (post s ("row " + p + " landed on " + br + " at " + short + ": " + rel))]) to)
+                               sent (? (0 < #rn)
+                                       (map (\ s [s (post s ("row " + p + " landed on " + br + " at " + short + ": " + rn))]) to)
                                        ())
                                got (map (\ x <x) (filter (\ x (#(x 1) = 0)) sent))
                                lost (filter (\ x (0 < #(x 1))) sent)
                                [1 ("landed: " + q-rows-say gone + " left " + q + ", whose base line is now " + br + " " + short + ". "
                                    + (? !(two? to) "no row is behind it."
-                                        (0 < #rel)
+                                        (0 < #rn)
                                          ((two? got ? ("the release note went to " + q-and got + ".") "the release note reached no session.")
                                           + (? (two? lost)
                                                (" it could not reach " + q-and (map (\ x (x 0 + (starts? (x 1) "no session" ? " (not in the hive)" (" (" + x 1 + ")")))) lost)
                                                 + ": relay it to " + (#lost = 1 ? "that session" "those sessions") + " yourself.")
                                                ""))
                                         ("send the next rows' sessions (" + q-and to
-                                         + ") a release note naming what the merge removes, renames or moves.")))])
+                                         + ") a release note naming what the merge removes, renames or moves."))
+                                   + (0 < #bz ? (" " + bee-landed) ""))])
                             (n <= 0) [0 (q + " kept moving under the write; read it and try again")]
                             (: _ (rest 200) (try (n - 1)))))))))
          (try 5))
@@ -1835,7 +1871,8 @@
          (pin c 'busy t))
      ; idle, a message starts a turn of its own: its blocks, then the model reads it
      (wake c)
-      (: ms (take-mail 0)
+      (: _ (self-tell 0)
+         ms (take-mail 0)
          (? (two? ms)
             (: _ (map (\ m (push c {'k 'mail 'from <m 'text (m 1)})) ms)
                (launch c (mail-text ms)))
@@ -1915,6 +1952,7 @@
       (: c {'blocks () 'ed (ednew 0) 'scroll 0 'dirt {() 1} 'busy () 'asking () 'msgs ()
             'sock () 'over 0 'key key 'yes yes 'rows 24 'cols 80}
          _ (pin c 'face (tface c))
+         _ (pin bee-selfw 'tell (\ t (push c {'k 'note 'text t}, soil c)))   ; a new binary, a note here
          _ (push c {'k 'hello})
          c)
      (tui key yes)
@@ -1944,7 +1982,8 @@
          tw (twirl (\ _ (watch 0)) 0)
          tl (twirl (\ _ (lock-poll 0)) 0)
          _ (pins c 'woke (clock 0) 'spun (clock 0))
-         {'show (\ w h (? (w < 20 || h < 8) "" (: _ (pins c 'rows h 'cols w) (frame c))))
+         {'name ("bee " + me 0)
+          'show (\ w h (? (w < 20 || h < 8) "" (: _ (pins c 'rows h 'cols w) (frame c))))
           'step (\ k (: _ (onkey c k) (soil c)))
           'over? (\ _ (c 'over))
           ; a frame when the turn or the inbox moved: the spinner's beat, mail about once a second
@@ -2147,6 +2186,7 @@
               (nm = "set_name") (set-name a)
               (nm = "inbox") [1 ""]
               [0 ("no tool " + nm)])
+         _ (self-tell 0)
          ms (take-mail 0)
          t (? (two? ms) (#(r 1) = 0 ? (mail-text ms) (r 1 + "\n\n" + mail-text ms))
               (#(r 1) = 0 ? "no messages are waiting" (r 1)))
@@ -2250,7 +2290,8 @@
      ; serving: the first prompt, if any, then a turn for each message as it comes. the idle
      ; wait is a rest, so the jobs' tasks run beside it
      (serve key f msgs)
-      (: ms (take-mail 0)
+      (: _ (self-tell 0)
+         ms (take-mail 0)
          (? (two? ms)
             (: _ (map (\ m (f 'mail <m (m 1))) ms) _ (state! "busy")
                m (turn key f (user (mail-text ms) . msgs)) _ (state! "idle")
