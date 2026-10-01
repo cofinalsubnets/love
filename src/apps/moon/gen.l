@@ -1370,6 +1370,11 @@
              (elem k '(movqxr ldsd ldsdl cvtsi2sd) && <>lf = 'f0 && gpo? hd)
               [(hd + [(k . 'f1 . >>lf)]) 'f1]
              ())))
+   ; a left operand that needs no park: one read of an xmm home, or one pool constant -> its form | ()
+   (fleft g fs)
+    (? !(fsel? g) () (abl? g 'fleft) ()
+       (two? fs && !(two? >fs) && (<fs @ f (elem <f '(movapd ldsdl) && <>f = 'f0 && nom? <>>f))) <fs
+       ())
    (fshut g af bf)
     (? (t32? g) (af + '((movqrx r0 f0)) + spush2 + bf + spop2 'r2 'r3 + '((movqxr f1 r2)))
        (fsel? g && !(fclob? bf 'f1)) (af + '((movapd f1 f0)) + bf)
@@ -3278,9 +3283,18 @@
                               ; reads it direct, the left on f0; else the shuttle, f1 = left, f0 = right
                               (: af (asflo g av) bf (asflo g b)
                                  sim (fsel? g && elem op '(+ - * /) ? (fsimple g bf))
-                                 mid (two? sim ? () (fshut g af bf))
-                                 (two? sim ?
-                                    (mkv 'double 'r0 (af + <sim + [[(op @ '+ 'addsd '- 'subsd '* 'mulsd 'divsd) 'f0 <>sim]]))
+                                 ; a left that needs no park waits for the right: + and * read it direct
+                                 ; (a constant through f1), - and / take the right to f1 and load it on f0
+                                 lf (two? sim || !(elem op '(+ - * /)) ? () (fleft g af))
+                                 opn (op @ '+ 'addsd '- 'subsd '* 'mulsd 'divsd)
+                                 mid (two? sim || two? lf ? () (fshut g af bf))
+                                 (? (two? sim)
+                                    (mkv 'double 'r0 (af + <sim + [[opn 'f0 <>sim]]))
+                                    (two? lf)
+                                    (mkv 'double 'r0
+                                         (? (op = '- || op = '/) (bf + ['(movapd f1 f0) lf [opn 'f0 'f1]])
+                                            (<lf = 'movapd) (bf + [[opn 'f0 (lf 2)]])
+                                            (bf + [['ldsdl 'f1 (lf 2)] [opn 'f0 'f1]])))
                                  (op @ '+ (mkv 'double 'r0 (mid + '((addsd f0 f1))))
                                      '* (mkv 'double 'r0 (mid + '((mulsd f0 f1))))
                                      '- (mkv 'double 'r0 (mid + '((subsd f1 f0) (movsd f0 f1))))
