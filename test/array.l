@@ -198,4 +198,14 @@
  (aall (@(1.5 0.5) = peep @(0.5 1.5) @(1 0) 0)) (gem-tray = tier (peep @(0.5 1.5) @(1 0) 0))
  ('(2 2) = shape (peep @(7 8 9) (star-tray '(2 2) '(0 1 2 0)) 0))
  (star-tray = tier (peep @(7 8 9) @(1) 0.5))
- ('x = peep @(1 2) @(0) 'x) ('x = peep @(1 2) @(0.0) 'x))
+ ('x = peep @(1 2) @(0) 'x) ('x = peep @(1 2) @(0.0) 'x)
+ ; the scatter: pin by a tray of indices, a fresh tray of the same kind with the values
+ ; stored in order -- a later index wins -- a number filling, a miss skipped
+ (aall (@(10 9 30) = pin @(10 20 30) @(1) @(9)))
+ (aall (@(1 7 7) = pin @(1 2 3) @(2 1) 7))
+ (aall (@(0.0 2.5) = pin @(0.0 1.0) @(1) @(2.5))) (gem-tray = tier (pin @(0.0 1.0) @(1) 2))
+ (aall (@(5 0) = pin @(0 0) @(0 0) @(4 5)))
+ (aall (@(1 2) = pin @(1 2) @(-1 9) @(7 8)))
+ (star-tray = tier (pin @(1 2) @(0) @(3.5))) (aall (@(3 2) = pin @(1 2) @(0) @(3.5)))
+ (aall (@(1 2) = pin @(1 2) @(0 1) @(5)))                    ; values the wrong length: untouched
+ (: a @(1 2) _ (pin a @(0) 9) (aall (a = @(1 2)))))          ; the tray pinned is left as it was
