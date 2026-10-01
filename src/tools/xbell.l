@@ -157,6 +157,11 @@
    (upload ks png)
     (id-of "upload" (call ks "POST" "/2/media/upload"
                           (json-show {"media" (b64 png) "media_category" "tweet_image"})))
+   ; alt text on the image; a refusal is logged and the post goes on without it
+   (alt ks media n)
+    (: r (call ks "POST" "/2/media/metadata"
+               (json-show {"id" media "metadata" {"alt_text" {"text" (subst (cfg 'alt "B({n})") "{n}" (show n))}}}))
+       (? ((string? r) || (r 0 != 200)) (log ("alt: " + (string? r ? r (show (r 0) + " " + r 1)))) 0))
    (tweet ks text reply media)
     (id-of "post" (call ks "POST" "/2/tweets"
                         (json-show {"text" text "reply" {"in_reply_to_tweet_id" reply}
@@ -192,6 +197,7 @@
        (? (n > due 0) 0
           (: ks (secrets 0)
              media (upload ks (picture n row))
+             _ (alt ks media n)
              id (tweet ks (caption n) reply media)
              _ (file-write (dir + "state.l") ("'" + show [(n + 1) id (row-next row)]))
              (log ("posted B(" + show n + ") as " + id)))))
