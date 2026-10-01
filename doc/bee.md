@@ -172,7 +172,8 @@ A queue is lines:
 
 - a header of **#** lines that states the rules;
 - **leader** *session*, or **leader** *session* **acting**;
-- the base line, *branch* *sha*;
+- the base line, *branch* *sha*, with an optional note after **#**;
+- **next** *n*, the position the next join takes, so numbers never repeat;
 - optionally **sync** *text*, what the queue lands toward, and **pre** *text* lines, conditions before that;
 - a row per merge: *position* *session* *branch* *gated-on* *gated-head* *state*, with an optional note after two spaces and **#**.
 
@@ -188,7 +189,7 @@ When a queue does not exist yet, **queue_row** makes it on bee's standard header
 
 **A row says what is true.** It is written **gating**, with its head, in one write before the gate starts. It is **green** only when every lane has passed on that head, and **waiting** only when nothing runs. Lanes follow the files touched, not the intent: a cross-cutting lane is where a union goes red, and the project's instructions may map files to lanes. The slow lane runs last, on the exact tree that lands.
 
-**Land by sha.** The green head row lands its gated head with **git merge --no-ff** *sha*, and only when **git merge-tree --write-tree** of the base and *sha* gives *sha*'s own tree. After the landing, the base's tree must equal the gated tree. The lander then sends the next rows a *release note* naming what the merge removes, renames or moves. A session that cannot land (a sandbox that refuses the main checkout) hands the user the exact commands, with the shas and the tree each must print, so the landing can be checked without trusting it. It checks the checkout for someone's uncommitted edits first. On sb, the patch set that lands is exactly the set that was gated.
+**Land by sha.** The green head row lands its gated head with **git merge --no-ff** *sha*, and only when **git merge-tree --write-tree** of the base and *sha* gives *sha*'s own tree. After the landing, the base's first-parent line since the base line must hold a merge of *sha* with the gated tree. That merge, not the base's tip, is where the base line moves, so rows that land back to back are each recorded against their own merge. The lander then sends the next rows a *release note* naming what the merge removes, renames or moves. A session that cannot land (a sandbox that refuses the main checkout) hands the user the exact commands, with the shas and the tree each must print, so the landing can be checked without trusting it. It checks the checkout for someone's uncommitted edits first. On sb, the patch set that lands is exactly the set that was gated.
 
 **The leader.** The **leader** line names the one session that keeps the queue. Only the leader edits another's row, the base line, and the **sync** and **pre** lines. The leader:
 
@@ -216,7 +217,7 @@ The leader hands off by rewriting the line to a live session that agreed, and sa
 Every tool reads the queue fresh and writes it by compare-and-swap, reading again when someone wrote first. The queue must be named **refs/queue/***name* or **queue/***name*. No field may hold a control character, and only a text field (a note, a sync or pre line, a release note) may hold a space, so one field cannot write another row. A tool that writes asks first, unless the session runs with **-y**.
 
 **queue_row** (*queue*, *state*, and any of *branch*, *gated_on*, *gated_head*, *note*)
-:   Sets exactly the caller's row, keyed by its session name. A session with no row joins at the bottom, one past the highest position, and **left** removes the row. Fields not given keep their values. It refuses:
+:   Sets exactly the caller's row, keyed by its session name. A session with no row joins at the bottom, at the **next** line's position, and moves that line past it; a queue without the line starts one past the highest position and writes it. **left** removes the row. Fields not given keep their values. It refuses:
 
     - a state outside the list above;
     - a fold by anyone but the leader;
@@ -232,7 +233,7 @@ Every tool reads the queue fresh and writes it by compare-and-swap, reading agai
 :   Answers how to land the caller's row, on git, and changes nothing. The row must be green and at the head. The base branch must be where the base line says. **git merge-tree --write-tree** of the base and the gated head must give the gated tree. The answer is the checkout of the base, then **git rev-parse** of the base and the sha it must print, **git merge --no-ff** *sha*, and **git rev-parse 'HEAD^{tree}'** with the tree it must print.
 
 **queue_landed** (*queue*, optionally *release*)
-:   After the landing, it checks that the base holds the gated head and that the base's tree is the gated tree. Only then does it drop the row and the rows folded into it and move the base line to the base's new sha. A *release* note goes to the sessions of the next row and the rows folded into it. Without one, the answer names those sessions.
+:   After the landing, it walks the base's first-parent history since the base line (**git log --first-parent** *line*..*base*), oldest first, for a commit with the gated tree that merges the gated head: the head is one of its other parents, or an ancestor of one. Failing that, it takes the base's tip when the tip holds the gated head and has the gated tree. Only then does it drop the row and the rows folded into it and move the base line to that commit, keeping the line's note; when there is none, the row stays and the answer says what was checked. A *release* note goes to the sessions of the next row and the rows folded into it, and the answer names each session it reached and each it could not, for the caller to relay. Without one, the answer names those sessions.
 
 ## Watching
 

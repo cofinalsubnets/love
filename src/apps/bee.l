@@ -196,9 +196,11 @@
                            + "must print. It changes nothing.")
              {"queue" (prop "refs/queue/NAME") "session" (prop "the row's session, when not yours")}
              ["queue"])
-       (tool "queue_landed" ("After a landing on a git queue: check that the base branch holds your gated head and "
-                             + "its tree is the gated tree, then drop your row and the rows folded into it and move "
-                             + "the base line. release, when given, goes to the next rows' sessions as the release note.")
+       (tool "queue_landed" ("After a landing on a git queue: find the merge of your gated head with the gated tree on "
+                             + "the base branch's first-parent line since the base line, then drop your row and the "
+                             + "rows folded into it and move the base line to that merge. release, when given, goes "
+                             + "to the next rows' sessions as the release note; relay it to any the answer says it "
+                             + "could not reach.")
              {"queue" (prop "refs/queue/NAME")
               "release" (prop "what the merge removes, renames or moves, for the rows behind")
               "session" (prop "leader only: the row's session, when not yours")}
@@ -625,9 +627,9 @@
         "#   exact tree that lands."
         "# land by sha: the green head lands its gated head, git merge --no-ff SHA, only when merge-tree of the base and"
         "#   SHA gives SHA's own tree (queue_land answers the commands, with the sha and tree each must print); after it"
-        "#   the base's tree must equal the gated tree (queue_landed checks, drops the row and the rows folded into it,"
-        "#   and moves the base line). the lander sends the next rows a release note naming what the merge removes,"
-        "#   renames or moves."
+        "#   a merge of SHA on the base's first-parent line since the base line must have the gated tree (queue_landed"
+        "#   checks, drops the row and the rows folded into it, and moves the base line to that merge). the lander sends"
+        "#   the next rows a release note naming what the merge removes, renames or moves."
         "# leader: the leader line names the one session that keeps the queue. only the leader edits another's row, the"
         "#   base, sync and pre lines: it writes a row for a session that cannot, places a join by when it was asked"
         "#   for, drops a gone session's row and re-gates the ones behind, corrects a row that no longer matches its"
@@ -645,6 +647,7 @@
         "#   neighbours offer each other a fold; a build seeds out/ from a built tree of its base; nothing holds a heavy"
         "#   slot it is not using."
         "# sync TEXT: what the queue lands toward. pre TEXT: a condition before that. both are the leader's to keep."
+        "# next N: the position the next join takes; numbers never repeat. the base line may carry a note after #."
         "# line: <position> <session> <branch> <gated-on> <gated-head> <state>  # note"
         "#   gated-on: the base's sha for the head, else the row above's gated-head; state waiting|gating|green|folded-into-N"
         ("leader " + lead)
@@ -654,7 +657,10 @@
      (q-folds rows p) (sort (filter (\ f ((rows f) 5 = ("folded-into-" + p))) (keys rows)))
      (q-head rows) (: ps (filter (\ p !(q-folded? (rows p))) (keys rows))
                       (? (two? ps) (foldl (\ a p (q-num p < q-num a ? p a)) <ps >ps) ()))
-     (q-next rows) (show (1 + foldl (\ a p (max a (q-num p))) 0 (keys rows)))
+     ; the position the next join takes: the counter line, never below one past the highest row
+     (q-next text)
+      (: w (words (q-line text "next")) c (? (1 < #w && q-digits? (w 1)) (digits (w 1)) 0)
+         (show (max c (1 + foldl (\ a p (max a (q-num p))) 0 (keys (q-rows text))))))
      (q-digits? s) (0 < #s && !(two? (filter (\ c !(48 <= c <= 57)) (map s ^#s))))
      (q-fold-of st) (? (starts? st "folded-into-") (snip st 12 #st) "")
      (q-state? st) (elem st ["waiting" "gating" "green" "left"] || q-digits? (q-fold-of st))
@@ -674,7 +680,7 @@
      (q-refuse text who in new?)
       (: i (me 0) lead (q-leader text) rows (q-rows text) st (in "state")
          own (q-own rows who) ps (field in "position" "")
-         pos (? (own != ()) own (0 < #ps) ps (q-next rows))
+         pos (? (own != ()) own (0 < #ps) ps (q-next text))
          f (q-fold-of st) tgt (peep rows f ())
          (? (who != i && lead != i) ("only the leader, " + lead + ", edits another's row")
             (field in "base" "" != "" && lead != i) ("only the leader, " + lead + ", moves the base line")
@@ -696,7 +702,7 @@
                (go ls 0))
          st (in "state")
          old (? (0 <= at) (words (ls at)) ())
-         pos (? (two? old) <old (field in "position" (q-next (q-rows text))))
+         pos (? (two? old) <old (field in "position" (q-next text)))
          (pick k i) (field in k (? (two? old) (old i) "-"))
          note (field in "note" (? (0 <= at) (q-note (ls at)) ""))
          line (pos + " " + who + " " + pick "branch" 2 + " " + pick "gated_on" 3 + " " + pick "gated_head" 4
@@ -706,13 +712,26 @@
                              [(body (filter (\ l !(q-row? l && (words l) 1 = who)) ls)) "" ""])
             (0 <= at) [(body (map (\ i (i = at ? line (ls i))) ^#ls)) line ""]
             [(body (ls + [line])) line ""]))
-     ; the base line -- `<branch> <sha>`, neither a row nor the leader's, sync or pre -- moved to sha
-     (q-base? l) (: w (words l) (#w = 2 && !(q-row? l) && !(elem <w ["leader" "sync" "pre"]) && 0 < #<w && <w 0 != 35))
-     (q-base-line text) (: ls (filter q-base? (lines text)) (? (two? ls) (words <ls) ()))
+     ; where a line's trailing `  # note` starts, with its spaces; #l when it has none
+     (q-cut l) (: k (find l " #" 0) (back j) (? (0 < j && l (j - 1) = 32) (back (j - 1)) j) (? (k < 0) #l (back k)))
+     (q-bare l) (words (snip l 0 (q-cut l)))
+     ; the base line -- `<branch> <sha>`, a note allowed, neither a row nor the leader's, sync, pre
+     ; or next -- moved to sha, its note kept
+     (q-base? l) (: w (q-bare l) (#w = 2 && !(q-row? l) && !(elem <w ["leader" "sync" "pre" "next"]) && 0 < #<w && <w 0 != 35))
+     (q-base-line text) (: ls (filter q-base? (lines text)) (? (two? ls) (q-bare <ls) ()))
      (q-base text sha)
       (: ls (lines text)
          (? !(two? (filter q-base? ls)) [text "no base line"]
-            [(foldl (\ a l (a + (q-base? l ? (<(words l) + " " + sha) l) + "\n")) "" ls) ""]))
+            [(paras (map (\ l (q-base? l ? (<(q-bare l) + " " + sha + snip l (q-cut l) #l) l)) ls)) ""]))
+     ; the counter line, `next N`, set to n: in place, else before the first row
+     (q-count text n)
+      (: ls (lines text) l ("next " + n)
+         (next? x) (: w (words x) (two? w && <w = "next"))
+         at (foldl (\ a i (? (a < 0 && next? (ls i)) i a)) -1 ^#ls)
+         k (foldl (\ a i (? (a < 0 && q-row? (ls i)) i a)) -1 ^#ls)
+         (paras (? (0 <= at) (map (\ i (i = at ? l (ls i))) ^#ls)
+                   (k < 0) (ls + [l])
+                   (take k ls + [l] + drop k ls))))
      ; the tools: -> [ok? text]
      ; a row is one line of words: no field may hold a control character, nor a space but a text's
      bee-texts ["note" "sync" "pre_add" "release"]
@@ -734,7 +753,11 @@
              why (q-refuse text who in new?)
              (? (0 < #why) [0 why]
                 (: b (? (field in "base" "" = "") [text ""] (q-base text (in "base")))
-                   e (? (0 < #(b 1)) [text "" (b 1)] (q-edit <b who in))
+                   e0 (? (0 < #(b 1)) [text "" (b 1)] (q-edit <b who in))
+                   ; a join moves the counter past its position
+                   e (? (0 < #(e0 2) || (q-own (q-rows <b) who) != () || #(e0 1) = 0) e0
+                        (: p (q-num <(words (e0 1))) c (q-num (q-next <b))
+                           [(q-count <e0 (show (max c (p + 1)))) (e0 1) ""]))
                    (? (0 < #(e 2)) [0 (e 2)]
                       (q-put q old <e)
                        [1 ((new? ? ("made " + q + " on bee's standard header, led by " + q-leader <e + "\n") "")
@@ -796,6 +819,17 @@
          (go (lines (lush-out "git worktree list --porcelain")) ""))
      (q-joins ss) (? (two? ss) (foldl (\ a s (a + ", " + s)) <ss >ss) "")
      (q-uniq ss) (foldl (\ a s (elem s a ? a (a + [s]))) () ss)
+     ; "a", "a and b", "a, b and c"
+     (q-and ss) (? (atom? ss) "" (atom? >ss) <ss (q-joins (take (#ss - 1) ss) + " and " + ss (#ss - 1)))
+     (q-rows-say ps) ((two? >ps ? "rows " "row ") + q-and ps)
+     ; the commit on br's first-parent line since from that landed g: the oldest with g's tree
+     ; whose other parents reach g (or g itself); else the tip, when it holds g with that tree
+     (q-landed-at br from g gt)
+      (: cs (rev (map words (lines (lush-out ("git log --first-parent -n 512 --format='%H %T %P' "
+                                               + sq (0 < #from ? (from + ".." + br) br))))))
+         (lands? c) (two? c && c 1 = gt && (<c = g || two? (filter (\ x (q-on? g x)) (drop 3 c))))
+         ok (filter lands? cs)
+         (? (two? ok) (<ok 0) (q-on? g br && git-tree br = gt) (git-sha br) ""))
      ; the row a land tool acts on -> [pos row base] or why not
      (q-landing q who rows text)
       (: p (q-own rows who) r (? p (rows p) ()) base (q-base-line text) h (q-head rows)
@@ -841,24 +875,33 @@
              l (? (old = "none") ("no queue " + q) (who != i && lead != i) ("only the leader, " + lead + ", lands another's row")
                   (q-landing q who rows text))
              (? (string? l) [0 l]
-                (: p <l r (l 1) br <(l 2) g (git-sha (r 4)) cur (git-sha br) t (git-tree br) gt (git-tree g)
+                (: p <l r (l 1) br <(l 2) from (git-sha (l 2 1)) g (git-sha (r 4)) gt (git-tree g)
+                   at (? (#g = 0) "" (q-landed-at br from g gt))
                    (? (#g = 0) [0 ("no commit " + r 4 + " here")]
                       !(q-on? g br) [0 ("the gated head " + g + " is not on " + br + ": land it first, as queue_land says")]
-                      (t != gt) [0 ("the tree of " + br + " is " + t + ", not the gated tree " + gt + ": the row stays; tell the leader")]
-                      (: gone (p . q-folds rows p) short (git1 ("rev-parse --short " + sq cur))
+                      (#at = 0)
+                       [0 ("no commit on " + br + "'s first-parent line" + (0 < #from ? (" since " + l 2 1) "")
+                           + " merges " + g + " with the gated tree " + gt + ", and the tip's tree is " + git-tree br
+                           + ": the row stays; tell the leader")]
+                      (: gone (p . q-folds rows p) short (git1 ("rev-parse --short " + sq at))
                          t2 <(q-base (paras (filter (\ l !(q-row? l && elem <(words l) gone)) (lines text))) short)
                          (? (q-put q old t2)
                             (: rows2 (q-rows t2) h (q-head rows2)
                                to (filter (\ s (s != i)) (q-uniq (map (\ x ((rows2 x) 1)) (? h (h . q-folds rows2 h) ()))))
                                sent (? (0 < #rel)
-                                       (map (\ s (: e (post s ("row " + p + " landed on " + br + " at " + short + ": " + rel))
-                                                    (#e = 0 ? s ("not " + s + " (" + e + ")"))))
-                                            to)
+                                       (map (\ s [s (post s ("row " + p + " landed on " + br + " at " + short + ": " + rel))]) to)
                                        ())
-                               [1 ("landed: row " + q-joins gone + " left " + q + ", whose base line is now " + br + " " + short + ". "
+                               got (map (\ x <x) (filter (\ x (#(x 1) = 0)) sent))
+                               lost (filter (\ x (0 < #(x 1))) sent)
+                               [1 ("landed: " + q-rows-say gone + " left " + q + ", whose base line is now " + br + " " + short + ". "
                                    + (? !(two? to) "no row is behind it."
-                                        (0 < #rel) ("the release note went to " + q-joins sent + ".")
-                                        ("send the next rows' sessions (" + q-joins to
+                                        (0 < #rel)
+                                         ((two? got ? ("the release note went to " + q-and got + ".") "the release note reached no session.")
+                                          + (? (two? lost)
+                                               (" it could not reach " + q-and (map (\ x (x 0 + (starts? (x 1) "no session" ? " (not in the hive)" (" (" + x 1 + ")")))) lost)
+                                                + ": relay it to " + (#lost = 1 ? "that session" "those sessions") + " yourself.")
+                                               ""))
+                                        ("send the next rows' sessions (" + q-and to
                                          + ") a release note naming what the merge removes, renames or moves.")))])
                             (n <= 0) [0 (q + " kept moving under the write; read it and try again")]
                             (: _ (rest 200) (try (n - 1)))))))))

@@ -242,7 +242,7 @@
       (bq-in (said "s6") "row 1 is gating: a row folds only into a waiting row")
       (bq-in (said "s8") ("git merge --no-ff " + bq-out (bq-git (m 'w) ["rev-parse" "union"])))
       (bq-in (said "s8") "in the checkout of test, REPO:")
-      (bq-in (said "s9") "landed: row 1, 2 left refs/queue/test") (bq-in (said "s9") "the release note went to carol")
+      (bq-in (said "s9") "landed: rows 1 and 2 left refs/queue/test") (bq-in (said "s9") "the release note went to carol")
       (bq-in (said "s10") "more heavy-lock waiters than slots")
       (hears "ant" "queue-watch: - row 2 folds into yours: bob's bob at -")
       (hears "carol" "queue-watch: - row 1, which yours stacked on, has left the queue")
@@ -282,6 +282,62 @@
       (bq-in (b 9) "you lead it, acting, in place of queen")
       (bq-in q ("test " + bq-out (bq-git w ["rev-parse" "--short" "test"]) + "\nsync toward 0.3\npre two\n"))
       !(bq-in q "pre one") (bq-in q "leader carol acting") (bq-in q "7 dan dan - - waiting"))
+   0)
+
+; --- stacked landings recorded late, the counter, a noted base line, a release that misses ---
+; rows 1 and 2 land back to back before either is recorded: each is found by its own merge on
+; the base's first-parent line, and the base line steps through both. the emptied queue's next
+; join takes 3, not 1. a base line with a note still records a landing and keeps the note.
+; ant's release note goes to bob, who has no session, and the answer says so
+(: w (bq-box 'mcp 'w) stq "refs/queue/stack"
+   (git as) (bq-out (bq-git w as))
+   (calls nm cs)
+    (: f (w 'dir + "/" + nm + ".in")
+       _ (bq-put f (foldl (\ a c (a + json-show {"jsonrpc" "2.0" "id" <c "method" "tools/call"
+                                                "params" {"name" (c 1) "arguments" (pin (c 2) "queue" stq)}} + "\n"))
+                         "" cs))
+       r (bq-sh w ("env BEE_NAME=" + nm + " " + bq-sq bq-love + " " + bq-sq bq-app + " --mcp < " + bq-sq f))
+       (foldl (\ t l (: j (json-read l) (? (two? j) (pin t ((j 1) "id") ((j 1) "result" "content" 0 "text")) t)))
+              {} (filter (\ l (0 < #l)) (lines (r 1)))))
+   (commit br from f) (: _ (git ["checkout" "-q" "-b" br from]) _ (bq-put (w 'repo + "/" + f) (f + "\n"))
+                         _ (git ["add" f]) _ (git ["commit" "-q" "-m" f]) (git ["rev-parse" "HEAD"]))
+   (merge h nm) (: _ (git ["merge" "-q" "--no-ff" h "-m" nm]) (git ["rev-parse" "--short" "HEAD"]))
+   (queue _) (git ["cat-file" "-p" stq])
+   _ (git ["branch" "stack" "test"])
+   m (git ["rev-parse" "--short" "stack"])
+   g1 (commit "s1" "stack" "s1") g2 (commit "s2" "s1" "s2")
+   a (calls "ant" [[1 "queue_row" {"state" "green" "branch" "s1" "gated_on" m "gated_head" g1 "leader" "queen"}]])
+   b (calls "bob" [[2 "queue_row" {"state" "green" "branch" "s2" "gated_on" g1 "gated_head" g2}]])
+   _ (git ["checkout" "-q" "stack"])
+   m1 (merge g1 "row 1") m2 (merge g2 "row 2")
+   c (calls "ant" [[3 "queue_landed" {"release" "s1 is new"}]])
+   q1 (queue 0)
+   d (calls "bob" [[4 "queue_landed" {}]])
+   q2 (queue 0)
+   ; the leader's note on the base line
+   nf (w 'dir + "/stack.q")
+   _ (bq-put nf (foldl (\ a l (a + (starts? l "stack " ? (l + "  # the base, noted") l) + "\n")) "" (lines q2)))
+   _ (git ["update-ref" stq (git ["hash-object" "-w" nf])])
+   g3 (commit "s3" "stack" "s3")
+   e (calls "dan" [[5 "queue_row" {"state" "waiting" "branch" "s3"}]
+                   [6 "queue_row" {"state" "green" "gated_on" m2 "gated_head" g3}]])
+   q3 (queue 0)
+   _ (git ["checkout" "-q" "stack"])
+   m3 (merge g3 "row 3")
+   _ (git ["checkout" "-q" "test"])
+   f (calls "dan" [[7 "queue_landed" {}]])
+   q4 (queue 0)
+   _ (test
+      (bq-in (a 1) "row now: 1 ant s1") (bq-in (b 2) "row now: 2 bob s2")
+      (bq-in (c 3) ("landed: row 1 left refs/queue/stack, whose base line is now stack " + m1 + "."))
+      (bq-in (c 3) "the release note reached no session. it could not reach bob (not in the hive): relay it to that session yourself.")
+      (bq-in q1 ("\nstack " + m1 + "\n")) (bq-in q1 "2 bob s2")
+      (bq-in (d 4) ("landed: row 2 left refs/queue/stack, whose base line is now stack " + m2 + "."))
+      (bq-in q2 ("\nstack " + m2 + "\nnext 3")) !(bq-in q2 " bob ")
+      (bq-in (e 5) "row now: 3 dan s3 - - waiting")
+      (bq-in q3 ("\nstack " + m2 + "  # the base, noted\nnext 4\n3 dan s3 "))
+      (bq-in (f 7) ("landed: row 3 left refs/queue/stack, whose base line is now stack " + m3 + "."))
+      (bq-in q4 ("\nstack " + m3 + "  # the base, noted\nnext 4")))
    0)
 
 (hark ["rm" "-rf" bq-root])
