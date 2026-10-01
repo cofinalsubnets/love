@@ -4,7 +4,7 @@
 # each test/chem/*.chem runs through groff's chem and through `love chem`: stdout and the
 # exit status must agree, and our pic must take what our chem wrote as groff's pic takes
 # what groff's wrote: the exit status the same, and how many draw the same byte for byte
-# counted (kore's pic still puts the odd dot of a dotted line a hair off groff's).
+# counted.
 # test/chem/open holds the cases not yet climbed: counted and named,
 # never failing the gate. fz-* are random diagrams, kept once they came out the same. every
 # run is capped (2 GB, 20 s), one at a time. with -v, the first lines of each difference.
