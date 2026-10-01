@@ -469,7 +469,7 @@ export async function loveMachine(root) {
     spun += e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1);
     for (; Math.abs(spun) >= 48; spun -= Math.sign(spun) * 48) send(0, spun < 0 ? 64 : 65, e); },
     { passive: false });
-  cpu.postMessage({ wasm, ring, ram: Number(at('ram', 1024)), cmd: at('boot', 'sh --login'), fb, image },
+  cpu.postMessage({ wasm, ring, ram: Number(at('ram', 1024)), cmd: at('boot', 'inle'), fb, image },
                   image ? [wasm, image] : [wasm]);
   // the box reflowed -- the window resized, or the island's column did. the new size goes
   // into the ring and the kernel re-makes its console at it; the canvas itself is left

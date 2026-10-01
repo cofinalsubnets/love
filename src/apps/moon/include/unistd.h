@@ -71,5 +71,6 @@ long pread(int, void*, unsigned long, long);
 long pwrite(int, void const*, unsigned long, long);
 int  getpgrp(void);
 int  setpgid(pid_t, pid_t);
+pid_t tcgetpgrp(int);
 int  tcsetpgrp(int, pid_t);
 #endif

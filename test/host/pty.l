@@ -40,6 +40,16 @@
   slurp >r,
   waitfor <r))
 
+; --- (ttypg port): the group that owns the terminal -- a tethered child leads its own. the
+; echo back first, so the child is surely past taking the pty as its terminal ---
+(tether ["cat"] @ r
+ (put >r 120, put >r 10, flush >r, see >r,
+  test ((<r) = ttypg >r)
+       (nom? (ttypg "x")),
+  (pipe 0 @ pp (test (nom? (ttypg <pp)), close <pp, close >pp)),
+  still <r 9,
+  waitfor <r))
+
 ; --- (still pid sig) on a dead pid -> its errno nom, never () ---
 (: dead <(tether ["true"])       ; exits immediately
  (waitfor dead,                        ; gather it so the pid is truly gone (not a zombie)

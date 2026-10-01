@@ -61,7 +61,7 @@ processes, this surface answered against a ramfs.
 
 | POSIX                          | love surface / backing                                   |
 |--------------------------------|--------------------------------------------------------|
-| process / thread               | **task** — `spawn`/`wait`/`done?`/`chill` (the cooperative scheduler) |
+| process / thread               | **task** — `twirl`/`catch`/`landed?`/`freeze`/`pause` (the cooperative scheduler) |
 | `fork`/`exec`/`waitpid`/`_exit`| `fork` `exec` `wait` `quit` (src/love/posix.c)             |
 | file descriptor                | **port** via `ai_io_alloc` + the `k_sources[]` vtable  |
 | `open`/`read`/`write`/`close`  | `open`/`close` + getc/putc; `lseek` over the raw-fd `openfd` lane |
@@ -137,10 +137,17 @@ values differ across Linux/*BSD/mac, so the `call_X` worker normalizes and love 
 shape.
 
 The shell's job control rides this: per-job process groups + tcsetpgrp handoff (`spawnio`
-pg/fg, `ttyfg`), ^C/^Z to the foreground job only, jobs/fg/bg/&. a stop signal to an
-ORPHANED group is discarded, so in-shell-pgrp children can never ^Z under a nested session.
-Task-level `chill`/thaw stays separate — **tasks are not processes**: a task is an in-VM green
-thread (`spawn`/`chill`), a process is a host pid (`fork`/`still`). Never cross them.
+pg/fg, `ttyfg`, read back by `ttypg`), ^C/^Z to the foreground job only, jobs/fg/bg/&. a stop
+signal to an ORPHANED group is discarded, so in-shell-pgrp children can never ^Z under a nested
+session. On inle a process is a task and the same doors are the kernel's: `tether` puts a child on
+a kernel pty (`openpty`: master, slave and a signal row), whose line discipline echoes, edits a
+line at a time and turns ^C, ^\ and ^Z into a signal on the signal row; a watcher reads it and
+`still`s the group `ttyfg` gave the terminal, and the master's close is a hangup. `still` ends a
+task or a group where it stands, or holds it on a stop until a cont (`pause` and `resume`
+underneath, wait answering 256+sig as the host's does), and `raw` sets the slave's flags as the
+host's sets termios.
+Task-level `freeze`/`pause` stays separate — **tasks are not processes**: a task is an in-VM green
+thread (`twirl`/`freeze`), a process is a host pid (`fork`/`still`). Never cross them.
 
 ## Open
 
