@@ -22,8 +22,8 @@
                    (: c (s i) (? (47 < c && c < 58) (go (i + 1) ((a * 10) + (c - 48))) a)))
        (go 0 0))
    (wg-find s sub cite)                                                ; first index of sub at/after from, else -1
-    (: n #s m #sub
-       (go i) (? ((n - m) < i) -1 ((snip s i (i + m)) = sub) i (go (i + 1)))
+    (: n #s m #sub c (? m (sub 0) 0)
+       (go i) (? ((n - m) < i) -1 (!m || (s i = c && snip s i (i + m) = sub)) i (go (i + 1)))
        (go cite))
    (wg-lower s) (string (map (i \ (: c (s i) (? (64 < c && c < 91) (c + 32) c))) (jot #s)))
    ; what a peer said, fit for a terminal: the C0 controls but tab and newline, and DEL, out
