@@ -44,9 +44,8 @@
     (lk-paras [("pid " + show who) ("start " + lk-str (lk-start who)) ("since " + show (clock 0))
             ("note " + lk-str note)])
    (lk-parse t)
-    (foldl (\ o l (: k (lk-sp l 0) (0 < k ? (pin o (snip l 0 k) (snip l (k + 1) #l)) o)))
+    (foldl (\ o l (l @ ((k && 0 < #k) + " " + v) (pin o k v) o))
            {} (lines (lk-str t)))
-   (lk-sp l k) (? (#l <= k) -1 (l k = 32) k (lk-sp l (k + 1)))
    ; live: the pid answers a signal 0 (eperm is someone else's, and alive), and where a start
    ; time was kept it still matches
    (lk-live? o)

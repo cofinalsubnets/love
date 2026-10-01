@@ -81,7 +81,7 @@
     (: n #w
        (snl l b) (? (atom? l) () (<<l = b) <><l (snl >l b))
        (n < 2 || !(w 0 = 45) ? ()
-        (: b0 (snip w 1 n) b (starts? b0 "SIG" ? (snip b0 3 #b0) b0)   ; -SIGTERM too
+        (: b0 (snip w 1 n) b (b0 @ ("SIG" + s) s b0)   ; -SIGTERM too
            (usigdig? b 0 ? (uatoi b) (snl usignames b)))))
 
    ; -- kill: a signal (default TERM) onto every named pid, -PID a process group; -s SIG
