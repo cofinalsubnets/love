@@ -2541,6 +2541,18 @@
               (cgbin g env e wnt))))
    ; a targetable gp arg: a pure single-emission read (immediate, frame, home register, label) skips the cell and
    ; lands in its register after the spills -> ((ez i) forms) | ((ezm i rH) movforms ldforms) | 'no
+   ; a targetable double arg, when every arg is a pure leaf (no sibling evaluation can call out and take the xmm file):
+   ; a double read off its xmm home or its frame cell lands in its xmm register after the spills -> ((ezx i) forms) | 'no
+   (ezxarg g env e pty i)
+    (? (!(fsel? g) || abl? g 'ezx || !(g 'ezride) || 8 <= i || !(<e = 'var)) 'no
+       (vent g env <>e @ en
+          (? (bad? en || !(<>>en = 'double) || pty && pty != 'double) 'no
+             (<en = 'regv && elem <>en fregs16) [['ezx i] [['movapd (xmmreg i) <>en]]]
+             (<en = 'loc) [['ezx i] [['ldsd (xmmreg i) 'r4 <>en]]]
+             'no)))
+   (ezall g env e pty gpc xmmc va)
+    (: z (gpc < ngp g ? (ezarg g env e pty gpc) 'no)
+       (z != 'no || va ? z (ezxarg g env e pty xmmc)))
    (ezarg g env e pty i)
     (: rT (argr g i)
        (fin ty fs) (: aty (pty ? pty ty)
@@ -2590,8 +2602,9 @@
     (: (kls as i gpc xmmc ovc acc)                       ; classify + evaluate, L->R -> (((class idx) pushforms)..) | 'bad
         (!(two? as) ? (rev acc)
            ; a targetable leaf skips the cell ('ez/'ezm): emitted into its register after the spills
-           (: ez (gpc < ngp g ? (ezarg g env <as (pts i) gpc) 'no)
-              (ez != 'no ? (kls >as (i + 1) (gpc + 1) xmmc ovc (ez . acc))
+           (: ez (ezall g env <as (pts i) gpc xmmc va?)
+              (ez != 'no ? (<<ez = 'ezx ? (kls >as (i + 1) gpc (xmmc + 1) ovc (ez . acc))
+                              (kls >as (i + 1) (gpc + 1) xmmc ovc (ez . acc)))
            ; a direct &x / array / struct-var arg is presumed dead once the callee returns: argpos exempts its lea from fesc.
            ; aim the first cell arg at its seat (it evaluates last, nothing after writes it); dir only, never a home seat
            (: aim (: (psh9 pl) (two? pl ?
@@ -2769,7 +2782,7 @@
              pops (: (go4 l4 acc4)
                       (!(two? l4) ? acc4
                          (<<l4 @ kc
-                            (go4 >l4 (elem <kc '(ov ez ezm ezd) ? acc4 (acc4 +
+                            (go4 >l4 (elem <kc '(ov ez ezm ezd ezx) ? acc4 (acc4 +
                                       (<kc @ 'g (spop (argr g <>kc))
                                        'g2   ; the t32 pair: both words off one cell
                                         [['ld (argr g <>kc) 'sp 0]
@@ -2805,7 +2818,7 @@
                      (go4 kr ()))
              nxmm (: (go5 l5 n5) (!(two? l5) ? n5
                                     (go5 >l5 (: ce <<l5 kk <ce
-                                                     (kk @ 'x (n5 + 1) 'x2 (n5 + 2)
+                                                     (kk @ 'x (n5 + 1) 'ezx (n5 + 1) 'x2 (n5 + 2)
                                                            'p2 (n5 + (ce 1 = 'x) + (ce 3 = 'x))
                                                            n5))))
                      (go5 kr 0))
@@ -2848,7 +2861,7 @@
              ezf (: (go7 l7 a7) (!(two? l7) ? a7
                                    (go7 >l7
                                         (<<l7 @ kc
-                                           (? (<kc = 'ez) (a7 + <><l7)
+                                           (? (<kc = 'ez || <kc = 'ezx) (a7 + <><l7)
                                               !(<kc = 'ezm) a7
                                               (<>>kc @ rH
                                                  (elem rH ezt && rH != argr g <>kc ?
