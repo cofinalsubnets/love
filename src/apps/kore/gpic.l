@@ -426,7 +426,7 @@
                        ())
           (go (i + 1) ())))
    ; sin and cos as glibc's, each the double nearest the true value, in grap's fixed point
-   ; (grap.l bakes before this file for it)
+   ; (grap.l bakes first, for it)
    ; atan(1/m) times 2^p
    (gp-atanq m p)
     (: m2 (m * m)
