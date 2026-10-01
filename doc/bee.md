@@ -27,6 +27,10 @@ bee - a coding agent in the terminal, and the protocol its sessions talk by
 
 **love bee --lock** \[**--heavy**\] \[**--out** *dir*\] **--** *command* ...
 
+**love bee --avatar** \[*name*\]
+
+**love bee -s** \| **--screensaver** \[*name*\]
+
 # DESCRIPTION
 
 **bee** puts a model to work in the current directory. The model's tools:
@@ -50,7 +54,26 @@ The system prompt tells the model where it is:
 - every merge queue under **refs/queue/**, as it stood at start (see THE MERGE QUEUE);
 - the project's own instructions: from **/** down to the working directory, each directory's **AGENTS.md** and then its **CLAUDE.md**, both where both exist.
 
-The settings are read from **~/.love/etc/bee.l**, one form per line: **(api anthropic)** or **(api openai)**, **(url** "...**)**, **(model** *name***)**, **(key-env** *var***)**, **(max-tokens** *n***)**, **(shell** *word* ...**)**, **(context** *n***)** and **(thinking off)**. A key goes out only over TLS, and only to a peer whose certificate this binary has verified. Plain HTTP reaches this machine alone, and not a port another login (uid 1000 and up) listens on. A tree's own **./.bee.l** travels with a clone, so it may set only **model**, **max-tokens**, **thinking**, **context** and **queue-watch** over them.
+The settings are read from **~/.love/etc/bee.l**, one form per line: **(api anthropic)** or **(api openai)**, **(url** "...**)**, **(model** *name***)**, **(key-env** *var***)**, **(max-tokens** *n***)**, **(shell** *word* ...**)**, **(context** *n***)**, **(thinking off)** and **(avatar** *name***)**. A key goes out only over TLS, and only to a peer whose certificate this binary has verified. Plain HTTP reaches this machine alone, and not a port another login (uid 1000 and up) listens on. A tree's own **./.bee.l** travels with a clone, so it may set only **model**, **max-tokens**, **thinking**, **context** and **queue-watch** over them.
+
+# AVATARS
+
+The hello box shows an avatar: eight by eight pixels drawn as four rows of half-blocks, in 24-bit colour when **COLORTERM** is **truecolor** or **24bit** and the nearest of 256 otherwise. They are **bunny** (the default), **bee**, **baby**, **hare**, **honeybee**, **beeface**, and **moon**, drawn by **love pom** at start as the moon stands then (UTC). The accent -- the box's border, the title, the spinner, the session's name and the mail marker -- follows it: the colour most of its vivid pixels share, or most of all its pixels when none is vivid.
+
+**/avatar**, on the full screen or at the **>** prompt, draws them all with their names; **/avatar** *name* wears one at once, and **love bee --avatar** \[*name*\] does the same from a shell. The choice is kept as **(avatar** *name***)** in **~/.love/etc/bee.l**, replacing any before it; a tree's **./.bee.l** cannot set it. An unknown name is refused with the list of known ones.
+
+# SCREENSAVERS
+
+When the full screen has had no key for **(screensaver-idle** *n***)** minutes (10 unless set, 0 for never; a fraction is allowed), it plays the saver **(screensaver** *name***)**, **pom** unless set. Both are settings of **~/.love/etc/bee.l** alone: a look is the person's, not the tree's, so **./.bee.l** cannot set them. The **>** loop and **--plain** have none.
+
+Any key takes the saver down and lays the screen again as it was; that key goes nowhere else. A turn that is running goes on underneath it, and a message, a queue notice or a tool asking y/n leaves a small **✉** in its top right corner instead of waking it.
+
+- **pom**: the moon at this hour's phase (UTC, as **love pom** reckons it), large and centred on half cells, over a few dozen stars that brighten and dim each on its own slow cycle, its phase and how much is lit under it.
+- **slop**: the slop's skin from **love slop**, drifting, in its own gold and pink.
+- **life**: Conway's game of life on a torus of half cells, each cell's green its age, sown again when it settles.
+- **matrix**: green rain down the columns, each a drop of its own speed and length.
+
+A saver redraws only the cells that changed, at 8 to 15 frames a second, and skips a frame it is late for. **love bee -s** *name* plays one on its own, with no session, until a key; **-s** alone lists them, and a name it does not know lists them on standard error and exits 2.
 
 # SESSIONS AND MESSAGES
 
@@ -180,7 +203,7 @@ The leader hands off by rewriting the line to a live session that agreed, and sa
 
 - branches with one owner join as one union: each stops at its own light lanes, and the union gates once, the slow lane last;
 - sessions with neighbouring work offer each other a fold, and the leader places it;
-- a build seeds its **out/** from a built tree of its base;
+- a build seeds its **out/** from a built tree of its base with `cp -a`, which keeps file times -- never `cp -r`, which stamps every output newer than its sources so nothing rebuilds; when `cp -a` is refused, build clean;
 - nothing holds a heavy slot it is not using.
 
 **Say it, then verify it.** Tell the leader every change of state: join, gating, green, landed. The leader verifies from the store, not from the message. A restart may rename a session, which then asks the leader to correct its row and says so.
@@ -258,7 +281,7 @@ Send the same note with nothing but a shell:
 
 # EXIT STATUS
 
-**0** when the run ends normally. **1** when the settings name no usable endpoint, model or key, or when a message cannot be delivered. **2** for a malformed **--send**.
+**0** when the run ends normally. **1** when the settings name no usable endpoint, model or key, when a message cannot be delivered, or for an unknown **--avatar**. **2** for a malformed **--send**, or a screensaver **-s** does not know.
 
 # SEE ALSO
 
