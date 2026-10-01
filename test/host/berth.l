@@ -533,5 +533,28 @@
          ("hive 1 · main 2 rows, alice waiting" = x1)
          (x1 = x2)))
 
+; --- idle: the saver takes the glass after its minutes (C-a z winds them past), the
+; harbour's frames wait under it, and the key that wakes it is its own and owes a frame ---
+(: (sub? h n i) (i + #n < #h + 1 ? (n = snip h i (i + #n) ? 1 (sub? h n (i + 1))) 0)
+   hb (harbour 10 40)
+   _ (hberth hb 'stack 50 (hopen-stage (berth-stage (\ w h "x") (\ c 0) (\ _ 0)) 1 1))
+   _ (pin hb 'saver ((cite 'saver 'saver-watch) "life" 5))
+   f0 (hidle hb)
+   k0 (hwake hb)                                    ; a key with no saver up: activity only
+   f1 (hidle hb)
+   on1 (hidle? hb)
+   _ (hsleep hb)
+   f2 (hidle hb)
+   on2 (hidle? hb)
+   _ (pin (hb 'dirt) () 0)
+   k1 (hwake hb)
+   f3 (hidle hb)
+   (test ("" = f0) (0 = k0) ("" = f1) !on1
+         (sub? f2 "\e[?25l" 0) on2
+         (1 = k1) (1 = peep (hb 'dirt) () 0)
+         (sub? f3 "\e[?25h" 0) !(hidle? hb)
+         (() = (cite 'saver 'saver-watch "nosuch" 5) 'on)
+         (0 = hsleep (pins (harbour 4 10) 'saver ((cite 'saver 'saver-watch) "nosuch" 5)))))
+
 (test_fin ())
 (puts "berth: ok")

@@ -7,7 +7,8 @@
 ;
 ; C-a is the prefix, intercepted in the key pump below every guest: s/v split, h j k l
 ; steer, x shut, [ copy mode (the pane's screen as a vi buffer), ] paste, C-a a literal;
-; c a fresh desk, n p the next and last, 0-9 a desk by number (made when missing); a key
+; c a fresh desk, n p the next and last, 0-9 a desk by number (made when missing), z the
+; saver ('saver) now; a key
 ; the caller pins in 'keys opens the pane its thunk answers, beside (inle's b, a model).
 ; the clip is the harbour's one register, vi's shape, shared by every vi buffer on it,
 ; and sent out to the outer terminal's clipboard (osc 52) when it changes.
@@ -20,7 +21,7 @@
 (module '(berth berth berth-stage harbour hberth hsail hopen hopen-stage moor waitfor
           hbox hmas hpid hstage hpty? hpane hsoil hrelay hframe hmoor hsplit hsteer hshut
           hfeed hkey oars hsize htide htick hswim hquick? hcopy hpaste hclip-text hscreen-text
-          hseq hmouse hpeer hpasted hdesks hgo hcycle hfresh hb64 hsub? hswap hpicker inle-launch inle-switch inle-hive inle-queues inle-barx hname hname-of hlr hbarat hdrag hmice hbarline hbardesk hbartick hnote hhands inle-bee inle-main)
+          hseq hmouse hpeer hpasted hdesks hgo hcycle hfresh hb64 hsub? hswap hpicker inle-launch inle-switch inle-hive inle-queues inle-barx inle-saver hwake hidle hidle? hsleep hname hname-of hlr hbarat hdrag hmice hbarline hbardesk hbartick hnote hhands inle-bee inle-main)
 (borrow ((cite 'wharf) @ m (m ? m "src/apps/berth/wharf.l")))   ; the baked module, else the tree's file
 (borrow ((cite 'limn) @ m (m ? m "src/apps/berth/limn.l")))
 (borrow 'posix)
@@ -439,6 +440,7 @@
                       91  (hcopy hb)                    ; [
                       93  (hpaste hb)                   ; ]
                       99  (hfresh hb)                   ; c
+                      122 (hsleep hb)                   ; z
                       110 (hcycle hb 1)                 ; n
                       112 (hcycle hb -1)                ; p
                       (d && 47 < d < 58) (hgo hb (d - 48))   ; 0-9
@@ -450,10 +452,23 @@
               ch (? (two? p && !(hpty? p)) (peep (hstage p) 'key edkey in) (see in))
               (? (ch = -1) (hfeed hb 4)                 ; veof follows the user's own eof
                  (ch = -7) (hshut hb (hb 'focus))
+                 (hwake hb) (: _ (cite 'rove 'drain-keys ()) (oars hb))   ; the key that ends a saver is the saver's
                  ((? (ch = 1) (hkey hb)
                      (ch = 27 && hpty? p && cue? in) (hseq hb)
                      (hfeed hb ch)),
                   oars hb)))
+
+ ; --- idle: 'saver is a watch of src/apps/saver.l's, which has the glass after its minutes
+ ; without a key; the harbour's own frames wait under it, and are laid again whole after ---
+ ; a key: 1 when it woke a saver, which then is owed a whole frame
+ (hwake hb) (: w (peep hb 'saver ()) k (cite 'saver 'saver-key)
+               (? (tablet? w && k && k w (clock 0)) (: _ (hsoil hb) 1) 0))
+ ; the saver's escapes for now, "" when it has none; and whether it has the glass
+ (hidle hb) (: w (peep hb 'saver ()) t (cite 'saver 'saver-tick)
+               (? (tablet? w && t) (t w (clock 0) (hb 'rows) (hb 'cols) 0) ""))
+ (hidle? hb) (: w (peep hb 'saver ()) (tablet? w && (cite 'saver 'saver-on?) w))
+ ; at once, the clock wound past its minutes: C-a z
+ (hsleep hb) (: w (peep hb 'saver ()) (? (tablet? w && 0 < w 'idle) (pin w 'last (clock 0 - w 'idle)) 0))
 
  ; --- the tide: mirror the outer terminal's size onto the whole wharf -------
  ; the floor is not decoration, and it lives here so both callers share it: a
@@ -486,7 +501,8 @@
  ; and end when the last berth empties ---
  (hswim hb tick) (hb 'dirt @ b
                     (htick hb,
-                     ? (peep b () 0) (pin b () 0, say out (hframe hb), 0) 0,   ; say is the bulk lane
+                     (hidle hb @ f (0 < #f ? (say out f, flush out) 0)),
+                     ? (hidle? hb) 0 (peep b () 0) (pin b () 0, say out (hframe hb), 0) 0,   ; say is the bulk lane
                      ? (0 = tick % 16) (htide hb) 0,
                      ? (0 = tick % 32) (hbartick hb) 0,
                      rest (hquick? hb ? 8 33),
@@ -668,13 +684,20 @@
                 (: hv (inle-hive 0) qs (inle-queues 0)
                    x ("hive " + show hv + foldl (a \ q \ a + " · " + q) "" qs)
                    (pins t 'at now 'x x, x))))))
+ ; the saver as ~/.love/etc/inle.l names it: (screensaver NAME) (screensaver-idle MINUTES),
+ ; pom after 10 unless said; a name no saver has, or 0 minutes, is never
+ (inle-saver _) (: sf (cite 'salt 'salt-file) wf (cite 'saver 'saver-watch) h (getenv "HOME")
+                   c (? (sf && string? h) (sf (h + "/.love/etc/inle.l") {}) {})
+                   nm (peep c 'screensaver () @ v (two? v ? (: w <v (string? w ? w (show w))) "pom"))
+                   m (peep c 'screensaver-idle () @ v (two? v ? <v 10))
+                   (wf ? (wf nm m) ()))
  (inle-main as) (: me (selfpath 0) sh (string? me ? [me "lush"] ["sh"])
                    sz (hsize 0) r <sz c <>sz
                    p0 (hopen (two? as ? as sh) r c)
                    (atom? p0 ? (say err ("inle: cannot start " + (two? as ? <as (sh 0)) + "\n"), 1)
                       (harbour r c @ hb
                          (pin hb 'more (_ \ hopen sh 1 1),
-                          pins hb 'bar 1 'mouse 1 'barx (inle-barx 0), hbartick hb, hrelay hb,
+                          pins hb 'bar 1 'mouse 1 'barx (inle-barx 0) 'saver (inle-saver 0), hbartick hb, hrelay hb,
                           pin (hb 'keys) 98 (_ \ hopen-stage (inle-bee hb) 1 1),
                           pin (hb 'keys) 32 (_ \ inle-launch hb sh me),
                           pin (hb 'keys) 119 (_ \ inle-switch hb),
@@ -684,6 +707,6 @@
                           0))))
  inle-usage "usage: love inle [COMMAND ..]   the harbour, lush in its panes; COMMAND in the first
   C-a: s v split, h j k l steer, x shut, [ ] copy and paste, c n p 0-9 desks, b a model,
-       space open an app, w go to a pane, C-a a literal C-a"
+       space open an app, w go to a pane, z the screensaver now, C-a a literal C-a"
  _ (pins (cite 'verbs 'tab) 'inle (udoor 'inle inle-main inle-usage 1 1)))
 ) ; module berth
