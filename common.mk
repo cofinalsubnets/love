@@ -150,7 +150,7 @@ c_c = $(addprefix $S/apps/moon/lib/moonlibc/string/,memchr.c memcmp.c memcpy.c m
   $(addprefix $S/apps/moon/lib/moonlibc/dirent/,closedir.c opendir.c readdir.c) \
   $(addprefix $S/apps/moon/lib/moonlibc/signal/,grantpt.c posix_openpt.c ptsname.c \
     sigaction.c sigaddset.c sigemptyset.c signal.c signalfd.c sigprocmask.c \
-    tcgetattr.c tcsetattr.c tcsetpgrp.c unlockpt.c) \
+    tcgetattr.c tcgetpgrp.c tcsetattr.c tcsetpgrp.c unlockpt.c) \
   $(addprefix $S/apps/moon/lib/moonlibc/proc/,atexit.c execv.c execvp.c exit.c fexecve.c) \
   $(addprefix $S/apps/moon/lib/moonlibc/env/,getenv.c setenv.c unsetenv.c) \
   $(addprefix $S/apps/moon/lib/moonlibc/stdio/,fflush.c femit.c pad.c semit.c) \

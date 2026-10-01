@@ -621,6 +621,17 @@ static lvm(lvm_posix_ttyfg) {
   Sp[0] = host_posix_ttyfg(g, Sp[0]);
   ai_musttail return Next(1); }
 
+// (ttypg fd) -> the group that owns the terminal on fd, ttyfg's other half
+ai_noinline static word host_posix_ttypg(struct ai *g, word x) {
+ intptr_t fd = charmp(x) ? getcharm(x) : ai_port_fd(x);
+ if (fd < 0) return ai_badarg(g);
+ pid_t pg = tcgetpgrp((int) fd);
+ return pg < 0 ? ai_err(g, errno) : putcharm(pg); }
+
+static lvm(lvm_posix_ttypg) {
+  Sp[0] = host_posix_ttypg(g, Sp[0]);
+  ai_musttail return Next(1); }
+
 // (fdopen fd) -> a port over a raw fd -- pipe/openfd's other half. 'badarg on a non-charm
 // or negative fd. the port's GC finalizer owns the fd from here: do not also close it.
 static lvm(lvm_fdopen) {
@@ -1050,6 +1061,7 @@ static union u const
   nif_sigignp[]       = {{lvm_sigignp}, {lvm_ret0}},
   nif_posix_signal[]  = {{lvm_cur}, {.x = putcharm(2)}, {lvm_posix_signal}, {lvm_ret0}},
   nif_posix_ttyfg[]   = {{lvm_posix_ttyfg}, {lvm_ret0}},
+  nif_posix_ttypg[]   = {{lvm_posix_ttypg}, {lvm_ret0}},
   nif_posix_setpg[]   = {{lvm_cur}, {.x = putcharm(2)}, {lvm_posix_setpg}, {lvm_ret0}},
   nif_posix_setenv[]  = {{lvm_cur}, {.x = putcharm(2)}, {lvm_posix_setenv}, {lvm_ret0}},
   nif_posix_environ[] = {{lvm_posix_environ}, {lvm_ret0}};
@@ -1099,6 +1111,7 @@ LvNif("unlink", nif_posix_unlink, "posix");
 LvNif("lseek", nif_posix_lseek, "posix");
 LvNif("signal", nif_posix_signal, NULL);
 LvNif("ttyfg", nif_posix_ttyfg, NULL);
+LvNif("ttypg", nif_posix_ttypg, NULL);
 LvNif("setpg", nif_posix_setpg, NULL);
 LvNif("setenv", nif_posix_setenv, NULL);
 LvNif("environ", nif_posix_environ, NULL);
@@ -1708,7 +1721,7 @@ LvNif("tetherenv", nif_tetherenv, "posix");
 LvNif("gather", nif_reap, "posix");
 LvNif("still", nif_kill, NULL);
 LvNif("tty", nif_tty, NULL);
-LvNif("settty", nif_settty, "posix");
+LvNif("settty", nif_settty, NULL);
 LvNif("ptyecho", nif_ptyecho, "posix");
 LvNif("termios", nif_termios, "posix");
 LvNif("settermios", nif_settermios, "posix");

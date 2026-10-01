@@ -100,3 +100,39 @@
    s (slurp (fdopen <pb))
    r1 (wait p1) r2 (wait p2)
  (test (0 = r1) (0 = r2) (s = "1\n")))
+
+; a terminal pair: settty pins a pane's size on a pipe, and tty answers it from either end --
+; the kernel's stand-in for a pty's winsize. a plain pipe is no terminal, nor a size of 0
+(: pp (pipe 0) rfd <pp wfd >pp
+   t0 (tty wfd)
+   z (settty wfd 0 9)
+   r (settty wfd 5 9)
+   a (tty wfd) b (tty rfd)
+   _ (settty rfd 7 30)
+   c (tty wfd)
+   _ (close wfd, close rfd)
+ (test (nom? t0) (nom? z) !(nom? r)
+       ((5 . 9) = a) ((5 . 9) = b) ((7 . 30) = c)))
+
+; ^C's half: a job takes the terminal pair (ttyfg, off the fd 0 its shell wears), ttypg reads
+; the group from the harbour's end, and still ends it where it stands -- wait answers 128+sig
+; and the ends it was handed close behind it, so a reader of its output sees the end
+(: ki (pipe 0) ko (pipe 0)
+   _ (settty >ki 24 80)
+   ip (fdopen <ki)
+   w (worn ())
+   _ (wear [ip out err])
+   p (spawnmap ["kore" "cat"] [(0 . <ki) (1 . >ko)] () 0 1)
+   _ (wear w)
+   g (ttypg >ki)
+   _ (close >ko)
+   s (still (0 - p) 2)
+   st (wait p)
+   o (slurp (fdopen <ko))
+   e (still p 0)
+   _ (wear [ip out err])
+   _ (ttyfg 0)
+   _ (wear w)
+   h (ttypg >ki)
+   _ (close ip, close >ki)
+ (test (p = g) (0 = s) (130 = st) (o = "") (nom? e) (() = h) (nom? (ttypg >ko))))

@@ -21,7 +21,7 @@
 (module '(berth berth berth-stage harbour hberth hsail hopen hopen-stage moor waitfor
           hbox hmas hpid hstage hpty? hpane hsoil hrelay hframe hmoor hsplit hsteer hshut
           hfeed hkey oars hsize htide htick hswim hquick? hcopy hpaste hclip-text hscreen-text
-          hseq hmouse hpeer hpasted hdesks hgo hcycle hfresh hb64 hsub? hswap hpicker inle-launch inle-switch inle-hive inle-queues inle-barx inle-saver hwake hidle hidle? hsleep hin hout hlive? hgreet hbye hattach hdetach inle-harbour inle-open hopen-pipe hpiped? hrd moorio inle-here inle-serve inle-attach inle-sock inle-dir inle-ls inle-size hname hname-of hlr hbarat hdrag hmice hbarline hbardesk hbartick hnote hhands inle-bee inle-main)
+          hseq hmouse hpeer hpasted hdesks hgo hcycle hfresh hb64 hsub? hswap hpicker inle-launch inle-switch inle-hive inle-queues inle-barx inle-saver hwake hidle hidle? hsleep hin hout hlive? hgreet hbye hattach hdetach inle-harbour inle-open hopen-pipe hpiped? hrd hpipesize hput moorio inle-here inle-serve inle-attach inle-sock inle-dir inle-ls inle-size hname hname-of hlr hbarat hdrag hmice hbarline hbardesk hbartick hnote hhands inle-bee inle-main)
 (borrow ((cite 'wharf) @ m (m ? m "src/apps/berth/wharf.l")))   ; the baked module, else the tree's file
 (borrow ((cite 'limn) @ m (m ? m "src/apps/berth/limn.l")))
 (borrow 'posix)
@@ -77,6 +77,13 @@
  ; the child's bytes come from
  (hpiped? p) (5 < #p)
  (hrd p) (? (5 < #p) (p 5) (hmas p))
+ ; a pipe pane laid again: LNM on its new grid, and its size on both pipes -- a seat whose
+ ; settty takes a pipe (the kernel's) makes them a terminal pair, so tty answers the pane
+ (hpipesize p s r c) (scribe s "\e[20h", settty (hmas p) r c, settty (hrd p) r c, 0)
+ ; a byte into a pane's child. ^C on a pipe pane is the terminal pair's: its foreground
+ ; group is interrupted and the byte goes no further, as a pty's line discipline takes it
+ (hput p ch) (: g (? (ch = 3 && hpiped? p) (ttypg (hmas p)) ())
+                (charm? g && 0 < g ? (still (0 - g) 2) (put (hmas p) ch)))
  ; the clip's text: a linewise register ends each line, a charwise one is as it is
  (hclip-text hb) (peep (hb 'clip) () () @ v
                     (? (atom? v) ""
@@ -159,7 +166,7 @@
                                  (nr = gaze s 1 && nc = gaze s 2 ? 0
                                   (regrid s (cask (screen () nr nc)) nr nc @ s2
                                      (pin bx () s2,
-                                      hpty? p ? (hpiped? p ? (scribe s2 "\e[20h") (settty (hmas p) nr nc)) (hshow p))))))))
+                                      hpty? p ? (hpiped? p ? (hpipesize p s2 nr nc) (settty (hmas p) nr nc)) (hshow p))))))))
                      bs,
                  pin hb 'lay bs,
                  hsoil hb))
@@ -450,7 +457,7 @@
  ; key as a step and is painted again, or shut when the step was its last ---
  (hfeed hb ch) (hpane hb (hb 'focus) @ p
                   (? (atom? p) 0
-                     (hpty? p) (hhome hb p, (put (hmas p) ch, flush (hmas p)))
+                     (hpty? p) (hhome hb p, (hput p ch, flush (hmas p)))
                      (hstage p @ sg
                         (sg 'step ch,
                          sg 'over? () ? (hshut hb (hb 'focus))
@@ -663,7 +670,7 @@
                         (? !(two? q) (miss t)
                            (mine? <q) [0 "that is your own pane"]
                            (: p (q 1) bs (map (c \ (hpty? p && !(hpiped? p) && c = 10 ? 13 c)) (map x ^#x))
-                              (map (c \ (hpty? p ? (put (hmas p) c) (hstage p 'step c, hshow p))) bs,
+                              (map (c \ (hpty? p ? (hput p c) (hstage p 'step c, hshow p))) bs,
                                hpty? p ? (flush (hmas p)) 0,
                                hsoil hb,
                                [1 (hjoin (htail (hquiet p) 24))])))))

@@ -1199,7 +1199,10 @@ ai_noinline int k_fs_stat(char const *p, uintptr_t pn, struct k_st *st, bool fol
 // while a writer is open and -1 when the last one closes, which is what the scheduler parks
 // on, and each end counts its holders so the queue frees when both reach zero. the queue
 // grows rather than capping: the writer's zputc retries once and then drops the byte.
-struct k_pipe { unsigned char *buf; uintptr_t cap, rp, wp; int rrefs, wrefs; };
+// rows and cols are a terminal pair's size: a harbour pins its pane's on the pipes the pane's
+// task wears (settty), and tty answers it from either end. 0 is a plain pipe, no terminal.
+// fg is the pair's foreground group (ttyfg), the tasks a harbour interrupts on ^C; 0 is none.
+struct k_pipe { unsigned char *buf; uintptr_t cap, rp, wp; int rrefs, wrefs; uint16_t rows, cols; intptr_t fg; };
 
 static struct k_pipe *k_pipe_of(int fd) {
   struct k_source *s = k_source(fd);
@@ -1241,6 +1244,10 @@ static intptr_t pipe_writen(int fd, unsigned char const *src, uintptr_t n) {
 static bool pipe_rready(int fd) {
   struct k_pipe *p = k_pipe_of(fd);
   return p && (p->wp > p->rp || !p->wrefs); }   // bytes, or the end -- both wake a reader
+
+// the pipe under a row, either end, or NULL
+static struct k_pipe *k_pipe_row(struct k_source const *s) {
+  return s && (s->readn == pipe_readn || s->writen == pipe_writen) ? s->state : NULL; }
 
 static void pipe_free(struct k_pipe *p) {
   if (p->rrefs || p->wrefs) return;
@@ -1846,20 +1853,58 @@ bool k_fb(volatile uint32_t **p, int *w, int *h, int *pitch) {
 // nom. the operand routes as every io op's does: the rows are one table shared by every
 // task, and 0 1 2 are the numeric spellings of in/out/err, so a task wearing a pipe is
 // asked about the pipe. only a charm past 2 is a raw row.
-ai_noinline static struct ai *k_tty(struct ai *g) {
-  word x = g->sp[0];
+static intptr_t k_ttyfd(struct ai *g, word x) {
   if (charmp(x) && getcharm(x) >= 0 && getcharm(x) <= 2)
     x = word(getcharm(x) == 0 ? &ai_stdin : getcharm(x) == 1 ? &ai_stdout : &ai_stderr);
   if (*task_io(g) != zero) x = io_route(g, x);
-  intptr_t fd = charmp(x) ? getcharm(x) : ai_port_fd(x);
+  return charmp(x) ? getcharm(x) : ai_port_fd(x); }
+
+// a terminal pair's pipe behind an fd, or NULL: a pipe with no size is no terminal
+static struct k_pipe *k_tpair(intptr_t fd) {
+  struct k_pipe *p = fd < 0 ? NULL : k_pipe_row(k_source((int) fd));
+  return p && p->rows ? p : NULL; }
+
+ai_noinline static struct ai *k_tty(struct ai *g) {
+  intptr_t fd = k_ttyfd(g, g->sp[0]);
   if (fd < 0) return g->sp[0] = ai_badarg(g), g;
   struct k_source const *s = k_source((int) fd);
-  if (!kcb || !s || !(s->putc == serial_putc1 || s->readn == kb_readn))
+  struct k_pipe const *pp = k_pipe_row(s);
+  uintptr_t rows = pp ? pp->rows : kcb ? kcb->rows : 0, cols = pp ? pp->cols : kcb ? kcb->cols : 0;
+  if (!rows || !s || !(pp || s->putc == serial_putc1 || s->readn == kb_readn))
    return g->sp[0] = ai_err(g, ENOTTY), g;
   if (!ai_ok(g = ai_have(g, Width(struct ai_chain)))) return g;
   struct ai_chain *w = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
-                                 putcharm(kcb->rows), putcharm(kcb->cols));
+                                 putcharm(rows), putcharm(cols));
   return g->sp[0] = word(w), g; }
+
+// (settty fd rows cols) -- a pipe end becomes a terminal pair's, with this size (the
+// kernel's stand-in for a pty's TIOCSWINSZ); anything else is not a terminal here
+static lvm(lvm_ksettty) {
+  intptr_t fd = k_ttyfd(g, Sp[0]),
+           r = charmp(Sp[1]) ? getcharm(Sp[1]) : 0,
+           c = charmp(Sp[2]) ? getcharm(Sp[2]) : 0;
+  struct k_pipe *p = fd < 0 ? NULL : k_pipe_row(k_source((int) fd));
+  bool ok = p && 0 < r && r <= UINT16_MAX && 0 < c && c <= UINT16_MAX;
+  if (ok) p->rows = (uint16_t) r, p->cols = (uint16_t) c;
+  Sp[2] = ok ? ZeroPoint : ai_err(g, ENOTTY);
+  ai_musttail return Nextp(1, 2); }
+
+// (ttyfg pg) -- the group that owns the terminal on fd 0 from here: a task id, 0 or less the
+// shell itself (none). the console takes it and keeps nothing; a plain pipe is no terminal
+static lvm(lvm_kttyfg) {
+  intptr_t fd = k_ttyfd(g, putcharm(0)), pg = charmp(Sp[0]) ? getcharm(Sp[0]) : 0;
+  struct k_pipe *p = k_tpair(fd);
+  struct k_source const *s = fd < 0 ? NULL : k_source((int) fd);
+  if (p) p->fg = pg > 0 ? pg : 0;
+  Sp[0] = p || (s && s->readn == kb_readn) ? ZeroPoint : ai_err(g, ENOTTY);
+  ai_musttail return Next(1); }
+
+// (ttypg fd) -- the terminal's foreground group, () when the shell holds it
+static lvm(lvm_kttypg) {
+  intptr_t fd = k_ttyfd(g, Sp[0]);
+  struct k_pipe *p = k_tpair(fd);
+  Sp[0] = !p ? ai_err(g, ENOTTY) : p->fg ? putcharm(p->fg) : ZeroPoint;
+  ai_musttail return Next(1); }
 
 static lvm(lvm_tty) {
   LvmCall(g, k_tty) }
@@ -1942,7 +1987,10 @@ static union u
   nif_vmx_run[] = {{lvm_vmx_run}, {lvm_ret0}},
 #endif
   nif_fault[] = {{lvm_fault}, {lvm_ret0}},
-  nif_tty[] = {{lvm_tty}, {lvm_ret0}};
+  nif_tty[] = {{lvm_tty}, {lvm_ret0}},
+  nif_ksettty[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_ksettty}, {lvm_ret0}},
+  nif_kttyfg[] = {{lvm_kttyfg}, {lvm_ret0}},
+  nif_kttypg[] = {{lvm_kttypg}, {lvm_ret0}};
 
 // link every free range kboot reports into the free list, in array order: kmem is the last
 // and the earlier ones link through ->next.
@@ -2016,6 +2064,9 @@ static struct ai_def const __attribute__((section("ai_knifs"), used)) defs[] = {
   {"color", {.k = nif_color}},
   // the console's own size; the no-op roster below pins `tty` only where a seat lacks it
   {"tty", {.k = nif_tty}},
+  {"settty", {.k = nif_ksettty}},
+  {"ttyfg", {.k = nif_kttyfg}},
+  {"ttypg", {.k = nif_kttypg}},
   {"fetch", {.k = nif_fetch}},
   {"kexec", {.k = nif_kexec}} };
 
@@ -2144,7 +2195,8 @@ void kmain(void) {
  // k-prog maps argv onto a love main -- a registry verb, a tool's own <name>-main, or a .l
  // path off the ramfs evaled form by form (no fresh layer, so its defglobs land in the
  // session). k-spawn1 seats the pid's stdio in the parent, twirl not switching, so the seat
- // is laid before the child's first read. wait is catch; pg/fg/closes are ignored.
+ // is laid before the child's first read. wait is catch; closes are ignored. a group is
+// the pid of the task that leads it, and fg hands it the terminal on fd 0 (ttyfg).
   // the fs doors by value, off their module: a splice would sit above the kernel's own
   // shadows (raw, signal, setenv, environ, the no-op roster below), and those are why
   // this seat can run a crew written for a host.
@@ -2210,9 +2262,11 @@ void kmain(void) {
  // wears; anything higher is duped, the port owning the copy from there.
  "   (k-port w n f) (? (! (charm? f)) (k-slot w n) (f < 0) (k-slot w n)"
  "                     (f < 3) (k-slot w f) (fdopen (dup f)))"
- "   (k-spawn1 argv f0 f1 f2) (: pr (k-prog argv)"
+ "   (k-spawn1 argv f0 f1 f2 pg fg) (: pr (k-prog argv)"
  "     w (worn ())"
  "     kw [(k-port w 0 f0) (k-port w 1 f1) (k-port w 2 f2)]"
+ // the ends duped for the child are its own, the ones a stop closes for it
+ "     own (k-own [f0 f1 f2] kw)"
  // worn across the twirl, which does not switch tasks: the child inherits node[7] and
  // nothing of ours runs in between, so the parent takes its own back on the next line.
  "     _ (wear kw)"
@@ -2228,17 +2282,44 @@ void kmain(void) {
  "                     (quit (? (charm? r) r 0))))"
  "              0)"
  "     _ (wear w)"
+ "     _ (k-seat p own pg fg)"
  "     p)"
+ "   (k-own fs ps) (? (! (two? fs)) ()"
+ "                    (&& (charm? (cap fs)) (< 2 (cap fs))) (. (cap ps) (k-own (cup fs) (cup ps)))"
+ "                    (k-own (cup fs) (cup ps)))"
+ // what a stop needs of a task: its group, its own ends, and the status a stop leaves it
+ "   k-grp {} k-ends {} k-died {}"
+ "   (k-seat p own pg fg)"
+ "     (: gp (? (! (charm? pg)) () (< pg 0) () (= pg 0) p pg)"
+ "        _ (pin k-ends p own)"
+ "        _ (? (charm? gp) (pin k-grp p gp) 0)"
+ "        (? (&& (charm? gp) (&& (charm? fg) (< 0 fg))) (ttyfg gp) 0))"
+ "   (k-members gp) (k-mem gp (keys k-grp))"
+ "   (k-mem gp ks) (? (! (two? ks)) ()"
+ "                    (&& (= gp (peep k-grp (cap ks) ())) (! (landed? (cap ks))))"
+ "                      (. (cap ks) (k-mem gp (cup ks)))"
+ "                    (k-mem gp (cup ks)))"
+ // kill at task granularity: a stop's signals and cont are nothing here, and every other
+ // one ends the task where it stands, closing the ends it was handed. wait answers 128+sig
+ "   (k-stop t sig) (? (|| (= sig 18) (|| (= sig 19) (= sig 20))) 0"
+ "     (: _ (freeze t) _ (each (peep k-ends t ()) close) _ (pull k-ends t 0)"
+ "        (pin k-died t (+ 128 sig))))"
+ "   (still p sig)"
+ "     (? (|| (! (charm? p)) (! (charm? sig))) (nom 'badarg)"
+ "        (: ts (? (< p 0) (k-members (- 0 p)) (landed? p) () (. p ()))"
+ "           (? (! (two? ts)) (nom 'esrch)"
+ "              (= sig 0) 0"
+ "              (: _ (each ts (\\ t (k-stop t sig))) 0))))"
  "   (k-fdw x) (? (charm? x) (? (< x 0) (- 0 1) x) (- 0 1))"
- "   (spawn argv) (k-spawn1 argv (- 0 1) (- 0 1) (- 0 1))"
+ "   (spawn argv) (k-spawn1 argv (- 0 1) (- 0 1) (- 0 1) (- 0 1) 0)"
  // exec at task granularity: this task becomes the program and never comes back
  "   (exec argv) (: pr (k-prog argv)"
  "     (? (two? pr) (: r ((cap pr) (cup pr)) (quit (? (charm? r) r 0)))"
  "        (: _ (say err (+ (cap argv) \": not found\")) _ (put err 10) (quit 127))))"
- "   (spawnio argv i o e cl pg fg) (k-spawn1 argv (k-fdw i) (k-fdw o) (k-fdw e))"
+ "   (spawnio argv i o e cl pg fg) (k-spawn1 argv (k-fdw i) (k-fdw o) (k-fdw e) pg fg)"
  "   (spawnmap argv fdm cl pg fg)"
  "     ((: (go m a b c)"
- "          (? (atom? m) (k-spawn1 argv a b c)"
+ "          (? (atom? m) (k-spawn1 argv a b c pg fg)"
  "             (: e (cap m) cf (cap e) sf (cup e)"
  "                v (? (charm? sf)"
  "                     (? (&& (<= 0 sf) (< sf 3))"
@@ -2251,7 +2332,9 @@ void kmain(void) {
  "                   (go (cup m) a b c))))"
  "        go)"
  "      fdm (- 0 1) (- 0 1) (- 0 1))"
- "   (wait p) (catch p)"
+ "   (wait p) (: r (catch p) d (peep k-died p ())"
+ "     _ (pull k-died p 0) _ (pull k-grp p 0) _ (pull k-ends p 0)"
+ "     (? (charm? d) d r))"
  // hark and herald on a seat with no fork: the capture is a scratch file worn as the child's
  // stdout and herald's relay is a dump at the end. stderr stays on the console.
  "   hark-n {}"
