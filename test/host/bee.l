@@ -665,5 +665,51 @@
          (two? m && "hi" = m (#m - 1) "content")
          !(two? ns2)))                                        ; shut: the cell is gone
 
+; --- hands: a stage given a harbour's hands offers the pane tools and says where it is; a
+; look runs unasked, its answer goes back to the model; a stage without hands has none ---
+(: cr-h (cr-dir "hands" ("(api openai)\n(url \"" + cr-url + "/v1/chat/completions\")\n(model mock-model)\n"))
+   h0 (getenv "HOME")
+   _ (setenv "HOME" cr-h)
+   _ (setenv "BEE_HIVE" (cr-h + "/hive"))
+   _ (setenv "OPENAI_API_KEY" "sk-never-sent")
+   asked {0}
+   hands {'panes (_ \ [1 "1  desk 0  a program, pid 7  80x24"])
+          'type (_ \ _ \ (pin asked () 1, [1 "typed"]))}
+   _ (cr-serves
+      [(cr-ok (cr-sse [{"choices" [{"delta" {"tool_calls" [{"index" 0 "id" "p1" "type" "function"
+                                                             "function" {"name" "pane_list" "arguments" "{}"}}]}}]}
+                       {"choices" [{"delta" {} "finish_reason" "tool_calls"}]} "[DONE]"]))
+       (cr-ok (cr-sse [{"choices" [{"delta" {"content" "SEEN"}}]}
+                       {"choices" [{"delta" {} "finish_reason" "stop"}]} "[DONE]"]))])
+   sg ((cite 'bee 'bee-main) ["--stage" hands])
+   _ (sg 'show 80 24)
+   _ (map (\ k (sg 'step k)) [104 105 10])
+   (wait n) (? (n = 0 || cr-in (sg 'show 80 24) "SEEN") n (: _ (rest 20) _ (sg 'tick ()) (wait (n - 1))))
+   w (wait 250)
+   h (cr-heard 0)
+   b1 (cr-body (h 0)) m2 ((cr-body (h 1)) "messages")
+   names (map (\ t (t "function" "name")) (b1 "tools"))
+   tm (: t (filter (\ m (m "role" = "tool")) m2) (two? t ? <t {}))
+   _ (sg 'shut ())
+   bare ((cite 'bee 'bee-main) ["--stage"])
+   _ (cr-serves [(cr-ok (cr-sse [{"choices" [{"delta" {"content" "x"}}]}
+                                 {"choices" [{"delta" {} "finish_reason" "stop"}]} "[DONE]"]))])
+   _ (bare 'show 80 24)
+   _ (map (\ k (bare 'step k)) [104 10])
+   (wait2 n) (? (n = 0 || two? (cr-heard 0)) n (: _ (rest 20) _ (bare 'tick ()) (wait2 (n - 1))))
+   _ (wait2 250)
+   b3 (: hb (cr-heard 0) (two? hb ? (cr-body (hb 0)) {}))
+   _ (bare 'shut ())
+   _ (setenv "HOME" (string? h0 ? h0 ""))
+   _ (setenv "BEE_HIVE" "")
+   (test (0 < w)
+         (2 = #h)
+         (elem "pane_list" names) (elem "pane_type" names) (elem "pane_close" names)
+         (cr-in (b1 "messages" 0 "content") "## your desk")
+         ("p1" = tm "tool_call_id") (cr-in (tm "content") "a program, pid 7")
+         (0 = peep asked () 0)
+         !(elem "pane_list" (map (\ t (t "function" "name")) (peep b3 "tools" ())))
+         !(cr-in (peep b3 "messages" () @ m (two? m ? (m 0 "content") "")) "## your desk")))
+
 (hark ["rm" "-rf" cr-root])
 (test_fin (), puts "bee: ok", putc 10, 0)

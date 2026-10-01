@@ -81,6 +81,9 @@
                        (starts? bee-model "claude-haiku") 200000
                        1000000))
 
+     ; a harbour's hands, when this bee is one of its panes: a tablet of the panes' doors
+     ; (src/apps/berth/berth.l, hhands), each answering [ok? text]
+     bee-hands (: h (filter tablet? as) (two? h ? <h ()))
      (prop desc) {"type" "string" "description" desc}
      (tool name desc props req)
       {"name" name "description" desc "eager_input_streaming" json-true
@@ -98,8 +101,25 @@
      bee-shname (foldl (\ a w (a + " " + w)) <bee-shell >bee-shell)
      bee-verbs (foldl (\ a v (a + " " + v)) "" (sort (map show (keys (cite 'verbs 'tab)))))
 
+     bee-pane-tools
+      (? !(tablet? bee-hands) ()
+         [(tool "pane_list" ("The panes of the terminal desktop you are one pane of, on every desk: each "
+                             + "one's id, desk, what runs in it, which has the user's keyboard, and which is you.")
+                {} [])
+          (tool "pane_read" "A pane's screen and the history above it, as text."
+                {"id" (prop "the pane's id, as pane_list gives it")} ["id"])
+          (tool "pane_type" ("Type text into a pane as keys, as the user would; a newline presses Enter. "
+                             + "Waits until the pane is quiet (a few seconds at most) and answers its last rows. "
+                             + "Not your own pane.")
+                {"id" (prop "the pane's id") "text" (prop "the keys, as text")} ["id" "text"])
+          (tool "pane_open" "Open a new pane beside yours with a shell in it, and answer its id."
+                {} [])
+          (tool "pane_focus" "Give a pane the user's keyboard, showing its desk."
+                {"id" (prop "the pane's id")} ["id"])
+          (tool "pane_close" "Close a pane: its program is hung up on. Not your own pane."
+                {"id" (prop "the pane's id")} ["id"])])
      bee-tools
-      [(tool "read_file" "Read a file and answer its text."
+      (bee-pane-tools + [(tool "read_file" "Read a file and answer its text."
              {"path" (prop "the file's path")} ["path"])
        (tool "write_file" "Write text to a file, replacing it whole."
              {"path" (prop "the file's path") "content" (prop "the new text")} ["path" "content"])
@@ -182,7 +202,7 @@
              {"queue" (prop "refs/queue/NAME")
               "release" (prop "what the merge removes, renames or moves, for the rows behind")
               "session" (prop "leader only: the row's session, when not yours")}
-             ["queue"])]
+             ["queue"])])
 
      ; --- the project's own instructions ---
      ; from / down to the working directory, each directory's AGENTS.md and then its CLAUDE.md:
@@ -980,6 +1000,11 @@
        + (bee-ours? ? " That is lush, a POSIX shell, not bash: write POSIX sh." "")
        + (0 < #bee-env ? ("\n\n## environment\n" + bee-env) "")
        + "\n" + bee-brief + "\n" + bee-talk + bee-merge
+       + (tablet? bee-hands
+          ? ("\n## your desk\nYou are one pane of inle, a terminal desktop the user shares with you. "
+             + "The pane_ tools see and work its other panes -- shells, editors, any program -- as the "
+             + "user does: read a pane before typing into it, and leave the keyboard where it was unless asked.\n")
+          "")
        + (two? bee-instr
           ? ("\nThe project's instructions follow, from the root down; the nearer file wins.\n"
              + foldl (\ a p (a + "\n--- " + <p + " ---\n" + clip0 (p 1))) "" bee-instr)
@@ -1288,7 +1313,13 @@
           "queue_landed" (queue-landed in)
           "lock_acquire" (lock-acquire in)
           "lock_release" (lock-release in)
-          "lock_list" (lock-list 0)))
+          "lock_list" (lock-list 0)
+          "pane_list" (bee-hands 'panes ())
+          "pane_read" (: r (bee-hands 'read (in "id")) [<r (clip (r 1))])
+          "pane_type" (bee-hands 'type (in "id") (in "text"))
+          "pane_open" (bee-hands 'open ())
+          "pane_focus" (bee-hands 'focus (in "id"))
+          "pane_close" (bee-hands 'shut (in "id"))))
 
      ; a control character as ^X, so a shown text cannot move the cursor or hide a tail
      (ctl? c) ((c < 32 && c != 10 && c != 9) || c = 127)
@@ -1328,6 +1359,9 @@
                  "lock_acquire" (in "name" + " " + field in "kind" "exclusive")
                  "lock_release" (in "name")
                  "lock_list" ""
+                 ("pane_list" || "pane_open") ""
+                 ("pane_read" || "pane_focus" || "pane_close") (in "id")
+                 "pane_type" (in "id" + ": " + (: t (in "text") (#t <= 60 ? t (snip t 0 60 + "…"))))
                  "queue_row" (in "queue" + " " + (: s (peep in "session" ()) (string? s ? (s + " ") ""))
                               + in "state" + (: h (peep in "gated_head" ()) (string? h ? (" " + h) "")))
                  ("queue_lead" || "queue_land" || "queue_landed") (in "queue")
@@ -1336,7 +1370,8 @@
      ; own, or answer how to land without landing. read_file runs unasked inside the working tree
      ; only. a message or a queue write asks, since either can start a turn in a peer that acts
      ; without asking
-     bee-free ["list_sessions" "check_job" "stop_job" "lock_list" "lock_release" "queue_land"]
+     bee-free ["list_sessions" "check_job" "stop_job" "lock_list" "lock_release" "queue_land"
+               "pane_list" "pane_read"]
      (free? name in) (? (name = "read_file") (in-tree? (in "path")) (elem name bee-free))
 
      ; one tool_use block -> its tool_result, asking first unless yes or free

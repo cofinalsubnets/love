@@ -20,7 +20,7 @@
 (module '(berth berth berth-stage harbour hberth hsail hopen hopen-stage moor waitfor
           hbox hmas hpid hstage hpty? hpane hsoil hrelay hframe hmoor hsplit hsteer hshut
           hfeed hkey oars hsize htide htick hswim hquick? hcopy hpaste hclip-text hscreen-text
-          hseq hmouse hpeer hpasted hdesks hgo hcycle hfresh hb64 hnote inle-bee inle-main)
+          hseq hmouse hpeer hpasted hdesks hgo hcycle hfresh hb64 hnote hhands inle-bee inle-main)
 (borrow ((cite 'wharf) @ m (m ? m "src/apps/berth/wharf.l")))   ; the baked module, else the tree's file
 (borrow ((cite 'limn) @ m (m ? m "src/apps/berth/limn.l")))
 (borrow 'posix)
@@ -105,7 +105,7 @@
  (berth-stage show step over?) {'show show 'step step 'over? over?}
  (hshow p) (peep (hbox p) () 0 @ s
               (scribe s (hstage p 'show (gaze s 2) (gaze s 1))))
- ; a note on a stage of its own, gone at any key
+ ; a note on its own stage, gone at any key
  (hnote t) (: k {0}
               (berth-stage (\ w h ("\e[H\e[2J" + t + "\r\n\r\n(a key closes this)"))
                            (\ c (pin k () 1)) (\ _ (peep k () 0))))
@@ -484,9 +484,61 @@
 
  ; --- inle: the os's own face on any terminal -- the harbour with lush in every pane a
  ; split or a desk opens, and argv, when given, in the first ---
- ; a model's pane: bee's full screen as a stage, a session of the hive; why not, as a note
- (inle-bee _) (: b (cite 'bee 'bee-main)
-                 sg (? b (b ["--stage"]) "bee is not in this binary")
+ ; --- hands: the harbour as a model's tools see it -- every pane by id on every desk, read
+ ; as text, typed into, opened, focused, shut. own boxes the model's own pane, which it
+ ; reads but never types into or shuts. every door answers [ok? text] ---
+ (hids hb) (wharf-berths (hb 'plan) + catmap (d \ wharf-berths <(hb 'desks d)) (hdesks hb))
+ (hdesk-of hb id) (elem id (wharf-berths (hb 'plan)) ? (hb 'desk)
+                     (: ds (filter (d \ elem id (wharf-berths <(hb 'desks d))) (hdesks hb)) (two? ds ? <ds ())))
+ (hjoin ls) (? (two? ls) (foldl (a \ l \ a + "\n" + l) <ls >ls) "")
+ ; the pane named by a model's id, a string
+ (hpane-at hb t) (: n (? (string? t && 0 < #t && all (c \ 47 < c < 58) (map t ^#t))
+                        (foldl (a \ c \ a * 10 + c - 48) 0 (map t ^#t)) -1)
+                    p (hpane hb n)
+                    (two? p ? [n p] ()))
+ ; rows of a pane until it holds still: twice alike 150 ms apart, 5 s at most
+ (hquiet p) (: (go a n) (: _ (rest 150) b (hscreen-text p) (? (b = a || n = 0) b (go b (n - 1))))
+               (go (hscreen-text p) 32))
+ (htail rs n) (: (cut l) (? (two? l && 0 = #(<l)) (cut >l) l)
+                 (rev (take n (cut (rev rs)))))
+ (hhands hb own)
+  (: (mine? n) (n = peep own () -1)
+     (miss t) [0 ("no pane " + show t)]
+     {'panes (_ \ [1 (hjoin (map (n \ (: p (hpane hb n) s (peep (hbox p) () 0)
+                                        (show n + "  desk " + show (hdesk-of hb n) + "  "
+                                         + (hpty? p ? ("a program, pid " + show (hpid p)) "a stage")
+                                         + "  " + show (gaze s 2) + "x" + show (gaze s 1)
+                                         + (n = hb 'focus && hdesk-of hb n = hb 'desk ? "  (the user's keyboard)" "")
+                                         + (mine? n ? "  (you)" ""))))
+                                  (sort (hids hb))))])
+      'read (t \ (hpane-at hb t @ q (two? q ? [1 (hjoin (hscreen-text (q 1)))] (miss t))))
+      'type (t \ x \ (hpane-at hb t @ q
+                        (? !(two? q) (miss t)
+                           (mine? <q) [0 "that is your own pane"]
+                           (: p (q 1) bs (map (c \ (hpty? p && c = 10 ? 13 c)) (map x ^#x))
+                              (map (c \ (hpty? p ? (put (hmas p) c) (hstage p 'step c, hshow p))) bs,
+                               hpty? p ? (flush (hmas p)) 0,
+                               hsoil hb,
+                               [1 (hjoin (htail (hquiet p) 24))])))))
+      'open (_ \ (hb 'more () @ p
+                    (? !(two? p) [0 "no pane opened"]
+                       (: n (hb 'next) f (hb 'focus)
+                          (hberth hb 'beside 50 p,
+                           charm? f ? (pin hb 'focus f, hsoil hb) 0,        ; the keyboard stays put
+                           [1 ("pane " + show n)])))))
+      'focus (t \ (hpane-at hb t @ q
+                     (? !(two? q) (miss t)
+                        (: d (hdesk-of hb <q) (hgo hb d, pin hb 'focus <q, hsoil hb, [1 ("pane " + t + " has the keyboard")])))))
+      'shut (t \ (hpane-at hb t @ q
+                    (? !(two? q) (miss t)
+                       (mine? <q) [0 "that is your own pane"]
+                       (hshut hb <q, [1 ("pane " + t + " is closed")]))))})
+
+ ; a model's pane: bee's full screen as a stage, a session of the hive, with the harbour's
+ ; hands; why not, as a note
+ (inle-bee hb) (: b (cite 'bee 'bee-main) own {-1}
+                 sg (? b (b ["--stage" (hhands hb own)]) "bee is not in this binary")
+                 _ (pin own () (hb 'next))                        ; the id hberth gives it next
                  (? (tablet? sg) sg (hnote ("bee: " + (string? sg ? sg "cannot start")))))
  (inle-main as) (: me (selfpath 0) sh (string? me ? [me "lush"] ["sh"])
                    sz (hsize 0) r <sz c <>sz
@@ -494,7 +546,7 @@
                    (atom? p0 ? (say err ("inle: cannot start " + (two? as ? <as (sh 0)) + "\n"), 1)
                       (harbour r c @ hb
                          (pin hb 'more (_ \ hopen sh 1 1),
-                          pin (hb 'keys) 98 (_ \ hopen-stage (inle-bee 0) 1 1),
+                          pin (hb 'keys) 98 (_ \ hopen-stage (inle-bee hb) 1 1),
                           hberth hb 'stack 50 p0,
                           hsail hb,
                           waitfor (hpid p0),
