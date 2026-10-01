@@ -99,6 +99,8 @@ A session is live while its card's **pid** is. Whoever lists the hive removes a 
 
 Messages are delivered at two points. While a turn runs, whatever has arrived joins the next request, beside that request's tool results. On the full screen, an idle session checks its inbox about once a second, and a message starts a turn of its own. The model reads each message as **\<message from="***name***"\>** ... **\</message\>** inside a user turn, and is told that it comes from another agent and not from the user.
 
+A session also watches the binary it runs. At start it notes the binary's size, modification time and inode, and at most every **BEE_SELF_WATCH** seconds (30) it looks again. When another build has been laid there, it says so once, as a message from **bee** (on the full screen, a note): bee was updated, when the new build was written, and to restart at the next convenient point, between tasks and never mid-gate, in the same directory. Until then the session goes on as it was. A bee's own **--mcp** child leaves this to the bee. The notice means the binary changed, not that bee's code did: any make that relinks a tree's **out/love** tells every session running that file.
+
 The model's **list_sessions** tool reads the cards, and **send_message** writes a message as described above. From a shell, **love bee --list** prints the same list and **love bee --send** *name* *text* sends; the sender is **BEE_NAME**, else **cli-***user*.
 
 # THE CLAUDE CODE BACKEND
@@ -212,6 +214,8 @@ The leader hands off by rewriting the line to a live session that agreed, and sa
 
 **Say it, then verify it.** Tell the leader every change of state: join, gating, green, landed. The leader verifies from the store, not from the message. A restart may rename a session, which then asks the leader to correct its row and says so.
 
+**Restart onto a new bee.** After a landing that changes bee (**src/apps/bee.l**, **locks.l**, **saver.l** or **pom.l**), every live session restarts at its next convenient point: between tasks, never mid-gate, resuming in the same directory so **.mcp.json** loads the new bee. **queue_landed** ends the release note with this, and each session's own watch on its binary says it too.
+
 ## The tools
 
 Every tool reads the queue fresh and writes it by compare-and-swap, reading again when someone wrote first. The queue must be named **refs/queue/***name* or **queue/***name*. No field may hold a control character, and only a text field (a note, a sync or pre line, a release note) may hold a space, so one field cannot write another row. A tool that writes asks first, unless the session runs with **-y**.
@@ -233,7 +237,7 @@ Every tool reads the queue fresh and writes it by compare-and-swap, reading agai
 :   Answers how to land the caller's row, on git, and changes nothing. The row must be green and at the head. The base branch must be where the base line says. **git merge-tree --write-tree** of the base and the gated head must give the gated tree. The answer is the checkout of the base, then **git rev-parse** of the base and the sha it must print, **git merge --no-ff** *sha*, and **git rev-parse 'HEAD^{tree}'** with the tree it must print.
 
 **queue_landed** (*queue*, optionally *release*)
-:   After the landing, it walks the base's first-parent history since the base line (**git log --first-parent** *line*..*base*), oldest first, for a commit with the gated tree that merges the gated head: the head is one of its other parents, or an ancestor of one. Failing that, it takes the base's tip when the tip holds the gated head and has the gated tree. Only then does it drop the row and the rows folded into it and move the base line to that commit, keeping the line's note; when there is none, the row stays and the answer says what was checked. A *release* note goes to the sessions of the next row and the rows folded into it, and the answer names each session it reached and each it could not, for the caller to relay. Without one, the answer names those sessions.
+:   After the landing, it walks the base's first-parent history since the base line (**git log --first-parent** *line*..*base*), oldest first, for a commit with the gated tree that merges the gated head: the head is one of its other parents, or an ancestor of one. Failing that, it takes the base's tip when the tip holds the gated head and has the gated tree. Only then does it drop the row and the rows folded into it and move the base line to that commit, keeping the line's note; when there is none, the row stays and the answer says what was checked. A *release* note goes to the sessions of the next row and the rows folded into it, and the answer names each session it reached and each it could not, for the caller to relay. Without one, the answer names those sessions. When the landed range, from the base line's old sha to the landing, touches bee's served code, the note ends with the restart line, and goes out even without a *release*.
 
 ## Watching
 
@@ -276,6 +280,9 @@ Send the same note with nothing but a shell:
 
 **BEE_HIVE**
 :   The hive's directory, **~/.love/run/hive** when unset.
+
+**BEE_SELF_WATCH**
+:   Seconds between looks at the binary this session runs, 30 when unset.
 
 **SB_HUB**
 :   The sb nest whose **queue/** ledgers are the merge queues.
