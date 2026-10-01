@@ -208,4 +208,9 @@
  (aall (@(1 2) = pin @(1 2) @(-1 9) @(7 8)))
  (star-tray = tier (pin @(1 2) @(0) @(3.5))) (aall (@(3 2) = pin @(1 2) @(0) @(3.5)))
  (aall (@(1 2) = pin @(1 2) @(0 1) @(5)))                    ; values the wrong length: untouched
- (: a @(1 2) _ (pin a @(0) 9) (aall (a = @(1 2)))))          ; the tray pinned is left as it was
+ (: a @(1 2) _ (pin a @(0) 9) (aall (a = @(1 2))))           ; the tray pinned is left as it was
+ ; where: iota of a mask, the flat indices it holds at -- the index tray of both
+ (aall (@(1 2 4) = iota @(0 1 1 0 3))) (aall (@(0 2) = iota @(0.5 0.0 -1.0)))
+ (0 = #(iota @(0 0))) (star-tray = tier (iota (@(1.0 2.0) < 1.5)))
+ (aall (@(1 3) = iota (star-tray '(2 2) '(0 1 0 1))))
+ (: m (@(5 1 7 2) > 3) w (iota m) (aall (@(5 7) = peep @(5 1 7 2) w 0))))

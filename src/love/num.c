@@ -816,9 +816,28 @@ lvm(lvm_trayctor) {
   ai_musttail return Answerp(2, _res); }
  ai_musttail return Answerp(2, word(v)); }
 
+// (iota mask): where -- the flat indices of a real tray's nonzero elements, in order, as a
+// z-array: the gather's and the scatter's index tray. apl's iota underbar
+static lvm(lvm_where) {
+ struct ai_tray *m = tray(Sp[0]);
+ uintptr_t n = tray_nelem(m), k = 0;
+ for (uintptr_t i = 0; i < n; i++) k += m->type == ai_R ? tray_get_flo(m, i) != 0 : tray_get_int(m, i) != 0;
+ uintptr_t bytes = tray_bytes(ai_Z, 1, k);
+ Have(b2w(bytes));
+ m = tray(Sp[0]);                                   // re-read post-Have
+ struct ai_tray *v = (struct ai_tray*) Hp;
+ Hp += b2w(bytes);
+ ini_tray(v, ai_Z, 1);
+ v->shape[0] = k;
+ intptr_t *p = tray_data(v);
+ for (uintptr_t i = 0, j = 0; i < n; i++)
+  if (m->type == ai_R ? tray_get_flo(m, i) != 0 : tray_get_int(m, i) != 0) p[j++] = (intptr_t) i;
+ ai_musttail return Answer(word(v)); }
+
 // (iota n): a z-array of 0..n-1, the array twin of `jot`; n<0 or non-fixnum -> zero
 lvm(lvm_iota) {
  word nx = Sp[0];
+ if (packp(nx) && tray(nx)->rank && tray(nx)->type <= ai_R) ai_musttail return Ap(lvm_where, g);
  if (!charmp(nx) || getcharm(nx) < 0) ai_musttail return Answer(ZeroPoint);
  uintptr_t n = (uintptr_t) getcharm(nx),
            bytes = tray_bytes(ai_Z, 1, n);
