@@ -5632,7 +5632,40 @@
        (esc? (f . l))
         (two? f && elem <f '(lea lean) && <>>f = fb && <>f != 'sp ? 1 (esc? l))
        fs2 (stldp fb fs ())
-       (esc? fs2 ? (stlda fb fs2) (stldw g fb (stldkp g) fs2 ())))
+       (xret g (xmov g (esc? fs2 ? (stlda fb fs2) (stldw g fb (stldkp g) fs2 ())))))
+   ; an xmm move straight back over the move that set it is idle: (movapd A B) (movapd B A)
+   (xmov g fs)
+    (? (abl? g 'xmov) fs
+       (: (fx? f) (two? f && elem <f '(movapd movsd) && elem <>f fregs16 && elem <>>f fregs16)
+          (go (f . r)) (? !(two? r) (f . r)
+                          (fx? f && fx? <r && <><r = <>>f && <>><r = <>f) (f . go >r)
+                          (f . go r))
+          (two? fs ? (go fs) fs)))
+   ; a value built on f0 only to be moved to a home, with f0 written outright next, is built on
+   ; the home: the run from its start renames f0, and the move goes
+   (xret g fs)
+    (? (abl? g 'xret) fs
+       (: hs (ffile g)
+          (w0? f) (two? f && <>f = 'f0 && (elem <f '(ldsd ldsdl cvtsi2sd) || <f = 'movapd && elem <>>f fregs16 && <>>f != 'f0))
+          ; the run: arithmetic onto f0 off a register, or an xmm form that names no f0
+          (ch? f) (two? f && (elem <f '(addsd subsd mulsd divsd) && <>f = 'f0 && elem <>>f fregs16
+                              || elem <f '(addsd subsd mulsd divsd minsd maxsd movsd movapd ldsd ldsdl) && nelem 'f0 >f))
+          ; the home h may be read by none of it
+          (ok? l h) (? !(two? l) 1
+                       (<l @ f (<>f = 'f0 ? <>>f != h (nelem h >f))) (ok? >l h)
+                       ())
+          (span l acc) (two? l && ch? <l ? (span >l (<l . acc)) [(rev acc) l])
+          (rn f h) (map (x \ (x = 'f0 ? h x)) f)
+          (go l)
+           (? !(two? l) l
+              (w0? <l)
+               (: s <l sp (span >l ()) cs <sp tl <>sp e (two? tl ? <tl)
+                  h (two? e && <e = 'movapd && <>>e = 'f0 && elem <>e hs ? <>e)
+                  (h && two? >tl && w0? <>tl && ok? cs h ?
+                     (rn s h . map (f \ rn f h) cs + go >tl)
+                     (s . go >l)))
+              (<l . go >l))
+          (go fs)))
    ; the adjacent pair needs no aliasing story. the full-width frame pair stays with the lanes
    ; below (slot map, anchors); narrow pairs forward on any base, at the load's extension
    (fwext s l) (s @ 'st (l @ 'ld 'mov)
