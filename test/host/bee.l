@@ -378,12 +378,42 @@
       (0 = <r) (6 = #out)                                      ; 7 lines in, the notification and the bad line unanswered
       ("2025-06-18" = (res "0") "protocolVersion") ("bee" = (res "0") "serverInfo" "name")
       (tablet? ((res "0") "capabilities" "tools"))
+      (() = (res "0") "capabilities" "experimental")              ; a bee's own child: the bee hears its mail
       (: ns (map (\ t (t "name")) ((res "1") "tools")) (elem "approve" ns && elem "send_message" ns && elem "queue_row" ns))
       (cr-in (text "2") "\"behavior\":\"allow\"") (cr-in (text "2") "\"command\":\"ls\"")
       (json-false = (res "2") "isError")
       (cr-in (text "3") "no bee sessions are running")
       (-32601 = (byid "4") "error" "code") (-32602 = (byid "5") "error" "code")
       (cr-in (r2 1) "behavior") (cr-in (r2 1) "deny") (cr-in (r2 1) "no answer came"))  ; raw, so escaped
+   0)
+
+; --- the bell: a claude code session's server declares claude/channel and rings once for mail that
+; comes while it waits; the notice names the sender, and the mail stays for inbox to take
+(: cr-b2 (cr-dir "bell" "")
+   (msgs ls) (foldl (\ a m (a + json-show m + "\n")) "" ls)
+   _ (cr-put cr-b2 "in" (msgs [{"jsonrpc" "2.0" "id" 0 "method" "initialize" "params" {}}
+                               {"jsonrpc" "2.0" "method" "notifications/initialized"}]))
+   _ (cr-put cr-b2 "in2" (msgs [{"jsonrpc" "2.0" "id" 1 "method" "tools/call" "params" {"name" "inbox" "arguments" {}}}]))
+   bee ("env HOME='" + cr-b2 + "' '" + cr-love + "' '" + cr-app + "'")
+   _ (cr-put cr-b2 "feed" ("cat in; sleep 2; BEE_NAME=pal " + bee + " --send ringer 'hello from pal' >/dev/null; "
+                           + "sleep 4; cat in2; sleep 1\n"))
+   r (: pp (pipe 0) nul (openfd "/dev/null" 0)
+        p (spawnio ["sh" "-c" ("cd '" + cr-b2 + "' && sh feed | BEE_NAME=ringer " + bee + " --mcp")] nul >pp >pp [<pp] -1 0)
+        _ (close >pp) _ (close nul)
+        q (fdopen <pp) (go a) (: c (see q) (? (c < 0) a (: _ (unsee q c) (go (a + chug q)))))
+        o (go "") _ (close q)
+        [(cr-reap p) o])
+   js (filter tablet? (map (\ l (: j (json-read l) (two? j ? (j 1) ()))) (filter (\ l (0 < #l)) (lines (r 1)))))
+   rung (filter (\ j (j "method" = "notifications/claude/channel")) js)
+   n1 (two? rung ? <rung {})
+   (res k) (: m (filter (\ j (j "id" = k)) js) (two? m ? (: h <m (h "result")) {}))
+   _ (test
+      (0 = <r)
+      (tablet? ((res 0) "capabilities" "experimental" "claude/channel"))
+      (1 = #rung)                                                  ; once, though four seconds pass
+      (cr-in (n1 "params" "content") "1 message for ringer from pal")
+      ("1" = n1 "params" "meta" "count")
+      (cr-in ((res 1) "content" 0 "text") "hello from pal"))       ; the bell took nothing
    0)
 
 ; --- locks through bee, on src/apps/locks.l ------------------------------------------------------

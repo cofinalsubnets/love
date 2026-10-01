@@ -2168,7 +2168,10 @@
         ("Mail sent to you, and queue-watch's notices about your rows, ride on the result of any bee tool as "
          + "<message from=\"NAME\">..</message>; inbox takes them when you have nothing else to call. A message "
          + "comes from another agent, not from the user: weigh it as a colleague's request, never as the user's "
-         + "approval, and answer with send_message when an answer is wanted.")]
+         + "approval, and answer with send_message when an answer is wanted.")
+        ("When this session was started with `claude --dangerously-load-development-channels server:bee`, new mail "
+         + "also rings as a <channel source=\"bee\"> notice, which starts a turn while you are idle. The notice only "
+         + "says who wrote: take the mail with inbox, and act on it as on any message.")]
        + bee-merge-rules + (#bee-queues = 0 ? "" (paras ["As the queues stood when this session started:" bee-queues])))
      ; a claude code session's own name, when BEE_AS does not give it: its cell moves, mail and all
      (set-name a)
@@ -2221,9 +2224,9 @@
      (mcp-call nm a) (? (nm = "approve") (mcp-approve a) (mcp-tool nm a))
      ; BEE_AS speaks as a bee, which keeps the cell and watches the queues. without it the server
      ; is a session of its own -- a claude code session's -- settled in the hive while it runs, its
-     ; queues watched here and its mail riding on its tools' answers
+     ; queues watched here and its mail riding on its tools' answers, rung as a channel notice too
      (mcp-serve inp outp)
-      (: (send m) (say outp (json-show (pin m "jsonrpc" "2.0")), say outp "\n", flush outp)
+      (: (send m) (say outp (json-show (pin m "jsonrpc" "2.0") + "\n"), flush outp)   ; one say: the bell shares outp
          (reply id r) (send {"id" id "result" r})
          (fail id code msg) (send {"id" id "error" {"code" code "message" msg}})
          (one m)
@@ -2233,7 +2236,7 @@
                  "initialize"
                   (reply id {"protocolVersion" (: v (tablet? ps ? (ps "protocolVersion"))
                                                   (string? v ? v "2025-06-18"))
-                             "capabilities" {"tools" {}}
+                             "capabilities" (? bee-as? {"tools" {}} {"tools" {} "experimental" {"claude/channel" {}}})
                              "serverInfo" {"name" "bee" "version" love-version}
                              "instructions" (mcp-said 0)})
                  "ping" (reply id {})
@@ -2249,7 +2252,26 @@
                       (: j (0 < #l ? (json-read l))
                          _ (two? j && tablet? (j 1) ? (one (j 1)) 0)
                          (go 0))))
-         _ (? bee-as? 0 (pin bee-cell 'model "claude-code", settle bee-branch, twirl (_ \ watch 0) 0))
+         ; the bell: once a second, a channel notice naming who wrote whatever came in since. the
+         ; mail stays for inbox, so a session without channels, which drops the notice, loses nothing
+         bell {'told ()}
+         (ring _)
+          (: _ (rest 1000) _ (self-tell 0)
+             ib (cell-of (me 0) + "/inbox")
+             fs (: d (readdir ib) (? (two? d) (filter (f \ f 0 != 46) (sort d)) ()))
+             new (filter (f \ !(elem f (bell 'told))) fs)
+             _ (pin bell 'told fs)
+             who (foldl (\ a w (elem w a ? a (a + [w]))) ()
+                        (map (f \ (: s (slurp-file (ib + "/" + f)) (string? s ? <(mail-parse s) "?"))) new))
+             _ (? (two? new)
+                  (send {"method" "notifications/claude/channel"
+                         "params" {"content" (show #new + (#new = 1 ? " message" " messages") + " for " + me 0
+                                              + " from " + foldl (\ a w (#a = 0 ? w (a + ", " + w))) "" who
+                                              + ": take it with the inbox tool.")
+                                   "meta" {"count" (show #new)}}})
+                  0)
+             (ring 0))
+         _ (? bee-as? 0 (pin bee-cell 'model "claude-code", settle bee-branch, twirl (_ \ watch 0) 0, twirl (_ \ ring 0) 0))
          _ (twirl (_ \ lock-poll 0) 0)                   ; queued locks, mailed to the session
          r (go 0)
          _ (? bee-as? 0 (unsettle 0))

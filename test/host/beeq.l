@@ -187,11 +187,14 @@
    ss (foldl (\ t nm (pin t nm (bq-start w nm "--mcp" 1))) {} bq-names)
    box {'n 100}
    (line q) (: (go acc) (: c (see q) (? (c < 0 || c = 10) (string (rev acc)) (go (c . acc)))) (go ()))
+   ; the answer to request n, past the bell's notices, which carry no id
+   (answer q n) (: l (line q) j (json-read l)
+                   (? (#l = 0) () (two? j && peep (j 1) "id" () = n) j (answer q n)))
    (call nm tool in)
     (: s (ss nm) n (box 'n + 1) _ (pin box 'n n)
        _ (say (s 1) (json-show {"jsonrpc" "2.0" "id" n "method" "tools/call" "params" {"name" tool "arguments" in}}))
        _ (say (s 1) "\n") _ (flush (s 1))
-       j (json-read (line (s 2)))
+       j (answer (s 2) n)
        (? (two? j) ((peep (peep (j 1) "result" {}) "content" [{"text" ""}]) 0 "text") ""))
    _ (map (\ nm (: s (ss nm)
                    _ (say (s 1) (json-show {"jsonrpc" "2.0" "id" 0 "method" "initialize" "params" {"protocolVersion" "2025-06-18"}}))
