@@ -2453,6 +2453,8 @@ void kmain(void) {
  // wears; anything higher is duped, the port owning the copy from there.
  "   (k-port w n f) (? (! (charm? f)) (k-slot w n) (f < 0) (k-slot w n)"
  "                     (f < 3) (k-slot w f) (fdopen (dup f)))"
+ // what a signal needs of a task: its group, its own ends, and the status it leaves
+ "   k-grp {} k-ends {} k-died {} k-held {}"
  "   (k-spawn1 argv f0 f1 f2 pg fg) (: pr (k-prog argv)"
  "     w (worn ())"
  "     kw [(k-port w 0 f0) (k-port w 1 f1) (k-port w 2 f2)]"
@@ -2478,8 +2480,6 @@ void kmain(void) {
  "   (k-own fs ps) (? (! (two? fs)) ()"
  "                    (&& (charm? (cap fs)) (< 2 (cap fs))) (. (cap ps) (k-own (cup fs) (cup ps)))"
  "                    (k-own (cup fs) (cup ps)))"
- // what a stop needs of a task: its group, its own ends, and the status a stop leaves it
- "   k-grp {} k-ends {} k-died {}"
  "   (k-seat p own pg fg)"
  "     (: gp (? (! (charm? pg)) () (< pg 0) () (= pg 0) p pg)"
  "        _ (pin k-ends p own)"
@@ -2490,12 +2490,16 @@ void kmain(void) {
  "                    (&& (= gp (peep k-grp (cap ks) ())) (! (landed? (cap ks))))"
  "                      (. (cap ks) (k-mem gp (cup ks)))"
  "                    (k-mem gp (cup ks)))"
- // kill at task granularity: a stop's signals and cont are nothing here, and every other
- // one ends the task where it stands, closing the ends it was handed. wait answers 128+sig,
-// laid before the freeze: a close can yield, and the waiter wakes the moment the task is gone
- "   (k-stop t sig) (? (|| (= sig 18) (|| (= sig 19) (= sig 20))) 0"
- "     (: _ (pin k-died t (+ 128 sig)) _ (freeze t)"
- "        _ (each (peep k-ends t ()) close) (pull k-ends t 0)))"
+ // kill at task granularity: a stop holds the task (pause) and wait answers 256+sig for it,
+ // cont lets it go on (resume), and every other signal ends it where it stands, closing the ends
+ // it was handed, wait answering 128+sig. each status is laid before the task moves: a close
+ // can yield, and the waiter wakes the moment the task is held or gone
+ "   (k-stop t sig)"
+ "     (? (= sig 18) (: _ (pull k-held t 0) (resume t))"
+ "        (|| (= sig 19) (|| (= sig 20) (|| (= sig 21) (= sig 22))))"
+ "          (: _ (pin k-held t (+ 256 sig)) (pause t))"
+ "        (: _ (pin k-died t (+ 128 sig)) _ (pull k-held t 0) _ (freeze t)"
+ "           _ (each (peep k-ends t ()) close) (pull k-ends t 0)))"
  "   (still p sig)"
  "     (? (|| (! (charm? p)) (! (charm? sig))) (nom 'badarg)"
  "        (: ts (? (< p 0) (k-members (- 0 p)) (landed? p) () (. p ()))"
@@ -2524,9 +2528,11 @@ void kmain(void) {
  "                   (go (cup m) a b c))))"
  "        go)"
  "      fdm (- 0 1) (- 0 1) (- 0 1))"
- "   (wait p) (: r (catch p) d (peep k-died p ())"
- "     _ (pull k-died p 0) _ (pull k-grp p 0) _ (pull k-ends p 0)"
- "     (? (charm? d) d r))"
+ "   (wait p) (: r (catch p) h (peep k-held p ())"
+ "     (? (charm? h) h"
+ "        (: d (peep k-died p ())"
+ "           _ (pull k-died p 0) _ (pull k-grp p 0) _ (pull k-ends p 0)"
+ "           (? (charm? d) d r))))"
  // a child on a pty of its own, as the host's tether: it leads its own group, which takes the
  // terminal, and a watcher answers a key's signal by stilling whichever group holds it then.
  // the master closed is a hangup, to that group and to the child, and the watcher ends. -> (pid . master port)

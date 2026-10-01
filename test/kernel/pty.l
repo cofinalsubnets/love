@@ -81,3 +81,28 @@
 (tether ["kore" "sleep" "100"] @ r
  (: p <r _ (close >r) st (wait p)
   (test (charm? p) (129 = st))))
+
+; a task held where it stands: catch answers at once and it has not landed; resumed, it
+; finishes as it would have. nothing is held twice, or resumed that was not held
+(: t (twirl (_ \ (rest 30, 7)) 0)
+   h (pause t) h2 (pause t)
+   _ (catch t) _ (rest 60)
+   l (landed? t)
+   w (resume t) w2 (resume t)
+   r (catch t)
+ (test (1 = h) (() = h2) (0 = l) (1 = w) (() = w2) (7 = r) (() = pause 999999)))
+
+; ^Z holds the group in front -- wait answers 256+20, the host's stopped status -- and a
+; cont lets it go on where it stood: the line typed after it reads and comes back
+(tether ["kore" "cat"] @ r
+ (: p <r mp >r
+    _ (put mp 26, flush mp)
+    st (wait p)
+    e (pt-take mp 2)
+    c (still (0 - p) 18)
+    _ (say mp "go\r", flush mp)
+    t (pt-take mp 8)
+    _ (put mp 3, flush mp)
+    st2 (wait p)
+    (close mp,
+     test (276 = st) ("^Z" = e) (0 = c) ("go\r\ngo\r\n" = t) (130 = st2))))
