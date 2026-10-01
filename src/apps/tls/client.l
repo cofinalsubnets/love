@@ -199,7 +199,7 @@
        ; what a CertificateVerify may use is what verify.l checks: ecdsa p-256 and p-384, rsa-pss, ed25519.
        ; the chain's own signatures are named apart (50), so the server's pick of a leaf is not narrowed
        sigs (ext 13 (u16 10 + u16 1027 + u16 1283 + u16 2052 + u16 2053 + u16 2055))
-       csigs (ext 50 (u16 12 + u16 1027 + u16 2052 + u16 1025 + u16 2055 + u16 2053 + u16 1281))
+       csigs (ext 50 (u16 18 + u16 1027 + u16 1283 + u16 1539 + u16 2052 + u16 1025 + u16 2055 + u16 2053 + u16 1281 + u16 1537))
        vers (ext 43 (u8 2 + u16 772))
        modes (ext 45 (u8 1 + u8 1))
        share (ext 51 (u16 36 + u16 29 + u16 32 + pub))
