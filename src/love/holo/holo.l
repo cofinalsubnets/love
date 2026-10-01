@@ -165,7 +165,7 @@
              'push 1 'pop 1 'neg 1 'not 1 'inc 1 'dec 1 'tp 1
              'jmp 1 'jmp8 1 'jmpr 1 'jmpm 2 'jmpt 3 'callr 1 'call 1 'raw 1 'lapool 1
              'li 2 'mov 2 'cmp 2 'test 2 'set 2 'set1 2 'br 2 'br8 2
-             'la 2 'lar 2 'lia 2 'ldseg 2 'pushl 1 'stseg 2 'segst 3 'segld 3 'clz 2
+             'la 2 'laa 3 'lar 2 'lia 2 'ldseg 2 'pushl 1 'stseg 2 'segst 3 'segld 3 'clz 2
              'shl 2 'shr 2 'sar 2 'rol 2 'ror 2 'ror4 2
              'shlv 2 'shrv 2 'sarv 2 'rorv 2 'rorv4 2
              'movupd 2 'movsd 2 'movapd 2 'movhlps 2 'unpcklpd 2
@@ -193,7 +193,7 @@
              'ldu1 3 'ldu2 3 'ldu4 3
              'stsd 3 'ldsd 3 'stss 3 'ldss 3 'cmppd 3
              'rem 4 'urem 4 'umull 4 'smull 4 'mla 4
-             'ldx 5 'stx 5 'leax 5 'ldxb 5 'stxb 5 'mulo 5
+             'ldx 5 'stx 5 'leax 5 'ldxb 5 'stxb 5 'ldxw 5 'ldxsw 5 'mulo 5
              'ldsdx 5 'stsdx 5 'ldssx 5 'stssx 5 'ldsdl 2
              'minsd 2 'maxsd 2 'cmov 3}
    ;; an emitter row is (arity . emitter): `emsof` builds a backend's tablet from

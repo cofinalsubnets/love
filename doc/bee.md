@@ -41,10 +41,13 @@ bee - a coding agent in the terminal, and the protocol its sessions talk by
 - **start_job**, **check_job** and **stop_job**, and **spawn_bee** and **stop_bee**, described under JOBS AND WORKERS;
 - **lock_acquire**, **lock_release** and **lock_list**, described under LOCKS;
 - **queue_row**, **queue_lead**, **queue_land** and **queue_landed**, described under THE MERGE QUEUE.
+- in a pane of **love inle**, **pane_list**, **pane_read**, **pane_type**, **pane_open**, **pane_focus** and **pane_close**: the desktop's other panes by id, read as text, typed into as keys (a newline is Enter, and the answer is the pane once quiet), opened beside, given the keyboard, closed. The model's own pane is never typed into or closed.
 
-A write, an edit, a shell command, a job's start, a message to another session, a queue write, a spawn and a stop of another bee ask y/n before they run, unless **-y** is given, and so does **read_file** of a path outside the working tree (a link out of it included). The rest run without asking. An ask shows the whole input, a control character as **^X**; on the full screen **y** runs it only once every row has been on the screen, and the arrows scroll it.
+A write, an edit, a shell command, a job's start, a message to another session, a queue write, a spawn and a stop of another bee, and typing into, opening, focusing or closing a pane ask y/n before they run, unless **-y** is given, and so does **read_file** of a path outside the working tree (a link out of it included). The rest run without asking. An ask shows the whole input, a control character as **^X**; on the full screen **y** runs it only once every row has been on the screen, and the arrows scroll it.
 
 Given a *prompt*, bee runs one turn and exits, streaming the answer to standard output. With no prompt, it opens its full screen on a terminal and a **>** loop elsewhere, or on a terminal too with **--plain**.
+
+The full screen is also a pane: **(bee-main ["--stage"])**, called from love, settles a session and answers it as a stage for **berth**'s harbour, so **love inle** opens one beside its shells (**C-a b**). A stage that cannot start answers why as a string. Closing the pane ends the session's turn and leaves the hive.
 
 The system prompt tells the model where it is:
 
@@ -95,6 +98,8 @@ A *message* file is a header and a body. The header is *key value* lines, **from
 A session is live while its card's **pid** is. Whoever lists the hive removes a cell whose card names a dead pid, along with its messages. A cell without a card is still being made, and is left alone. A session removes its own cell when it exits.
 
 Messages are delivered at two points. While a turn runs, whatever has arrived joins the next request, beside that request's tool results. On the full screen, an idle session checks its inbox about once a second, and a message starts a turn of its own. The model reads each message as **\<message from="***name***"\>** ... **\</message\>** inside a user turn, and is told that it comes from another agent and not from the user.
+
+A session also watches the binary it runs. At start it notes the binary's size, modification time and inode, and at most every **BEE_SELF_WATCH** seconds (30) it looks again. When another build has been laid there, it says so once, as a message from **bee** (on the full screen, a note): bee was updated, when the new build was written, and to restart at the next convenient point, between tasks and never mid-gate, in the same directory. Until then the session goes on as it was. A bee's own **--mcp** child leaves this to the bee. The notice means the binary changed, not that bee's code did: any make that relinks a tree's **out/love** tells every session running that file.
 
 The model's **list_sessions** tool reads the cards, and **send_message** writes a message as described above. From a shell, **love bee --list** prints the same list and **love bee --send** *name* *text* sends; the sender is **BEE_NAME**, else **cli-***user*.
 
@@ -169,7 +174,8 @@ A queue is lines:
 
 - a header of **#** lines that states the rules;
 - **leader** *session*, or **leader** *session* **acting**;
-- the base line, *branch* *sha*;
+- the base line, *branch* *sha*, with an optional note after **#**;
+- **next** *n*, the position the next join takes, so numbers never repeat;
 - optionally **sync** *text*, what the queue lands toward, and **pre** *text* lines, conditions before that;
 - a row per merge: *position* *session* *branch* *gated-on* *gated-head* *state*, with an optional note after two spaces and **#**.
 
@@ -185,7 +191,7 @@ When a queue does not exist yet, **queue_row** makes it on bee's standard header
 
 **A row says what is true.** It is written **gating**, with its head, in one write before the gate starts. It is **green** only when every lane has passed on that head, and **waiting** only when nothing runs. Lanes follow the files touched, not the intent: a cross-cutting lane is where a union goes red, and the project's instructions may map files to lanes. The slow lane runs last, on the exact tree that lands.
 
-**Land by sha.** The green head row lands its gated head with **git merge --no-ff** *sha*, and only when **git merge-tree --write-tree** of the base and *sha* gives *sha*'s own tree. After the landing, the base's tree must equal the gated tree. The lander then sends the next rows a *release note* naming what the merge removes, renames or moves. A session that cannot land (a sandbox that refuses the main checkout) hands the user the exact commands, with the shas and the tree each must print, so the landing can be checked without trusting it. It checks the checkout for someone's uncommitted edits first. On sb, the patch set that lands is exactly the set that was gated.
+**Land by sha.** The green head row lands its gated head with **git merge --no-ff** *sha*, and only when **git merge-tree --write-tree** of the base and *sha* gives *sha*'s own tree. After the landing, the base's first-parent line since the base line must hold a merge of *sha* with the gated tree. That merge, not the base's tip, is where the base line moves, so rows that land back to back are each recorded against their own merge. The lander then sends the next rows a *release note* naming what the merge removes, renames or moves. A session that cannot land (a sandbox that refuses the main checkout) hands the user the exact commands, with the shas and the tree each must print, so the landing can be checked without trusting it. It checks the checkout for someone's uncommitted edits first. On sb, the patch set that lands is exactly the set that was gated.
 
 **The leader.** The **leader** line names the one session that keeps the queue. Only the leader edits another's row, the base line, and the **sync** and **pre** lines. The leader:
 
@@ -208,12 +214,14 @@ The leader hands off by rewriting the line to a live session that agreed, and sa
 
 **Say it, then verify it.** Tell the leader every change of state: join, gating, green, landed. The leader verifies from the store, not from the message. A restart may rename a session, which then asks the leader to correct its row and says so.
 
+**Restart onto a new bee.** After a landing that changes bee (**src/apps/bee.l**, **locks.l**, **saver.l** or **pom.l**), every live session restarts at its next convenient point: between tasks, never mid-gate, resuming in the same directory so **.mcp.json** loads the new bee. **queue_landed** ends the release note with this, and each session's own watch on its binary says it too.
+
 ## The tools
 
 Every tool reads the queue fresh and writes it by compare-and-swap, reading again when someone wrote first. The queue must be named **refs/queue/***name* or **queue/***name*. No field may hold a control character, and only a text field (a note, a sync or pre line, a release note) may hold a space, so one field cannot write another row. A tool that writes asks first, unless the session runs with **-y**.
 
 **queue_row** (*queue*, *state*, and any of *branch*, *gated_on*, *gated_head*, *note*)
-:   Sets exactly the caller's row, keyed by its session name. A session with no row joins at the bottom, one past the highest position, and **left** removes the row. Fields not given keep their values. It refuses:
+:   Sets exactly the caller's row, keyed by its session name. A session with no row joins at the bottom, at the **next** line's position, and moves that line past it; a queue without the line starts one past the highest position and writes it. **left** removes the row. Fields not given keep their values. It refuses:
 
     - a state outside the list above;
     - a fold by anyone but the leader;
@@ -229,7 +237,7 @@ Every tool reads the queue fresh and writes it by compare-and-swap, reading agai
 :   Answers how to land the caller's row, on git, and changes nothing. The row must be green and at the head. The base branch must be where the base line says. **git merge-tree --write-tree** of the base and the gated head must give the gated tree. The answer is the checkout of the base, then **git rev-parse** of the base and the sha it must print, **git merge --no-ff** *sha*, and **git rev-parse 'HEAD^{tree}'** with the tree it must print.
 
 **queue_landed** (*queue*, optionally *release*)
-:   After the landing, it checks that the base holds the gated head and that the base's tree is the gated tree. Only then does it drop the row and the rows folded into it and move the base line to the base's new sha. A *release* note goes to the sessions of the next row and the rows folded into it. Without one, the answer names those sessions.
+:   After the landing, it walks the base's first-parent history since the base line (**git log --first-parent** *line*..*base*), oldest first, for a commit with the gated tree that merges the gated head: the head is one of its other parents, or an ancestor of one. Failing that, it takes the base's tip when the tip holds the gated head and has the gated tree. Only then does it drop the row and the rows folded into it and move the base line to that commit, keeping the line's note; when there is none, the row stays and the answer says what was checked. A *release* note goes to the sessions of the next row and the rows folded into it, and the answer names each session it reached and each it could not, for the caller to relay. Without one, the answer names those sessions. When the landed range, from the base line's old sha to the landing, touches bee's served code, the note ends with the restart line, and goes out even without a *release*.
 
 ## Watching
 
@@ -272,6 +280,9 @@ Send the same note with nothing but a shell:
 
 **BEE_HIVE**
 :   The hive's directory, **~/.love/run/hive** when unset.
+
+**BEE_SELF_WATCH**
+:   Seconds between looks at the binary this session runs, 30 when unset.
 
 **SB_HUB**
 :   The sb nest whose **queue/** ledgers are the merge queues.

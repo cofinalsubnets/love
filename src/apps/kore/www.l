@@ -26,7 +26,7 @@
 ; a page asks for gzip and is unzipped (src/apps/gz.l); one in latin-1 or windows-1252, by its
 ; header or its own <meta>, is re-spelled as utf-8, and any other charset is taken as utf-8.
 ; a <base href> is what the links resolve against. an image is its alt text, and on a
-; terminal a png, jpeg or gif is drawn under it as it comes near the screen, two pixels a
+; terminal a png, jpeg, gif or webp is drawn under it as it comes near the screen, two pixels a
 ; cell (src/apps/kore/pic.l). the window changing width lays the page again, the same link at
 ; the top.
 ;
@@ -38,8 +38,8 @@
 ; on first use -- in ~/.love/gemini_hosts; a changed one is refused, and says which line
 ; to delete to take it.
 ;
-; out of scope, and said: forms that POST, scripts, cookies, pictures other than png, jpeg
-; and gif, and a gif's motion. an https server is verified as wget's is (its
+; out of scope, and said: forms that POST, scripts, cookies, pictures other than png, jpeg,
+; gif and webp, and an animation's motion. an https server is verified as wget's is (its
 ; client: a root in the host's bundle, or a pin in ~/.love/tls_pins), and a refusal says why.
 (module 'kore
 (borrow 'cli)
@@ -383,7 +383,7 @@
                        (: to (ww-resolve url loc) (? (ww-hop? url to) (ww-fetch url to (hops - 1)) ()))
                       (200 <= code < 300) (r 2)
                       ()))))))
-   ; bytes -> [w h rgba], or 'none for what cannot be drawn: a png, jpeg or gif (its first
+   ; bytes -> [w h rgba], or 'none for what cannot be drawn: a png, jpeg, gif or webp (its first
    ; frame) of up to 4 megapixels
    (ww-picture b)
     (: d (pic-size b)
@@ -396,7 +396,7 @@
        (map (r \ pad + r) (pic-art im (cols0 - #pad) rows deep)))
    ; each drawn picture as [line rows], off the marks of the raw layout
    (ww-arts st p)
-    (: g (st 'page) base (ww-base (g 1) (g 3)) c (st 'imgs)
+    (: base (st 'base) c (st 'imgs)
        deep (pic-deep 0)
        rows (max 2 (pgbody st - 1))
        (foldl (\ acc m (: im (peep c (ww-resolve base (m 1)) 'none)
@@ -422,7 +422,7 @@
    (ww-pictures st)
     (: p (st 'raw) g (st 'page)
        (? (atom? p || two? (st 'sav)) 0
-          (: base (ww-base (g 1) (g 3)) c (st 'imgs) ins (st 'ins)
+          (: base (st 'base) c (st 'imgs) ins (st 'ins)
              top (pgtopline st) end (pglast st) reach (end + (end - top))
              due (filter (m \ (: l (ww-shift ins <m) u (ww-resolve base (m 1))
                                (top <= l <= reach && nil? (peep c u ()))))
@@ -517,7 +517,7 @@
    ; (top -1) at its fragment's place, else where its content starts, else at the top
    (ww-show st g push top)
     (: _ (? (push && #(st 'url)) (pin st 'hist ([(st 'url) (st 'top)] . st 'hist)) 0)
-       _ (pins st 'url (g 1) 'page g 'lw (pgwidth st))
+       _ (pins st 'url (g 1) 'page g 'base (ww-base (g 1) (g 3)) 'lw (pgwidth st))
        _ (ww-load st (ww-lay g (pgwidth st)))
        _ (pins st 'cur 0 'hi "")
        fr (ww-split (g 1) 4)
@@ -527,7 +527,7 @@
    (ww-new w h)
     (: st (pgnew (tablet 0) w h)
        _ (pins st 'url "" 'urls () 'anchors () 'links () 'hist () 'go () 'page () 'lw 0 'cur 0 'field "")
-       _ (pins st 'raw () 'ins () 'imgs (tablet 0))
+       _ (pins st 'raw () 'ins () 'imgs (tablet 0) 'base "")
        st)
    ; the window changed width: the page laid again at the new one, with the link that was
    ; first on the screen as far down it as before (the help, laid by less, just rewraps)

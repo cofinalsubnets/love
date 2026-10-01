@@ -81,6 +81,9 @@
                        (starts? bee-model "claude-haiku") 200000
                        1000000))
 
+     ; a harbour's hands, when this bee is one of its panes: a tablet of the panes' doors
+     ; (src/apps/berth/berth.l, hhands), each answering [ok? text]
+     bee-hands (: h (filter tablet? as) (two? h ? <h ()))
      (prop desc) {"type" "string" "description" desc}
      (tool name desc props req)
       {"name" name "description" desc "eager_input_streaming" json-true
@@ -98,8 +101,25 @@
      bee-shname (foldl (\ a w (a + " " + w)) <bee-shell >bee-shell)
      bee-verbs (foldl (\ a v (a + " " + v)) "" (sort (map show (keys (cite 'verbs 'tab)))))
 
+     bee-pane-tools
+      (? !(tablet? bee-hands) ()
+         [(tool "pane_list" ("The panes of the terminal desktop you are one pane of, on every desk: each "
+                             + "one's id, desk, what runs in it, which has the user's keyboard, and which is you.")
+                {} [])
+          (tool "pane_read" "A pane's screen and the history above it, as text."
+                {"id" (prop "the pane's id, as pane_list gives it")} ["id"])
+          (tool "pane_type" ("Type text into a pane as keys, as the user would; a newline presses Enter. "
+                             + "Waits until the pane is quiet (a few seconds at most) and answers its last rows. "
+                             + "Not your own pane.")
+                {"id" (prop "the pane's id") "text" (prop "the keys, as text")} ["id" "text"])
+          (tool "pane_open" "Open a new pane beside yours with a shell in it, and answer its id."
+                {} [])
+          (tool "pane_focus" "Give a pane the user's keyboard, showing its desk."
+                {"id" (prop "the pane's id")} ["id"])
+          (tool "pane_close" "Close a pane: its program is hung up on. Not your own pane."
+                {"id" (prop "the pane's id")} ["id"])])
      bee-tools
-      [(tool "read_file" "Read a file and answer its text."
+      (bee-pane-tools + [(tool "read_file" "Read a file and answer its text."
              {"path" (prop "the file's path")} ["path"])
        (tool "write_file" "Write text to a file, replacing it whole."
              {"path" (prop "the file's path") "content" (prop "the new text")} ["path" "content"])
@@ -176,13 +196,15 @@
                            + "must print. It changes nothing.")
              {"queue" (prop "refs/queue/NAME") "session" (prop "the row's session, when not yours")}
              ["queue"])
-       (tool "queue_landed" ("After a landing on a git queue: check that the base branch holds your gated head and "
-                             + "its tree is the gated tree, then drop your row and the rows folded into it and move "
-                             + "the base line. release, when given, goes to the next rows' sessions as the release note.")
+       (tool "queue_landed" ("After a landing on a git queue: find the merge of your gated head with the gated tree on "
+                             + "the base branch's first-parent line since the base line, then drop your row and the "
+                             + "rows folded into it and move the base line to that merge. release, when given, goes "
+                             + "to the next rows' sessions as the release note; relay it to any the answer says it "
+                             + "could not reach.")
              {"queue" (prop "refs/queue/NAME")
               "release" (prop "what the merge removes, renames or moves, for the rows behind")
               "session" (prop "leader only: the row's session, when not yours")}
-             ["queue"])]
+             ["queue"])])
 
      ; --- the project's own instructions ---
      ; from / down to the working directory, each directory's AGENTS.md and then its CLAUDE.md:
@@ -299,6 +321,35 @@
                               (sort fs)))))
      ; messages as the model reads them, each tagged with its sender
      (mail-text ms) (foldl (\ a m (a + "<message from=\"" + <m + "\">\n" + m 1 + "\n</message>\n")) "" ms)
+
+     ; --- the binary this bee runs, known by its stat (size, mtime, inode) at start. a build laid
+     ; over it is told once, a message from bee, or a note on the full screen; the stat at most
+     ; every BEE_SELF_WATCH seconds, 30 unless set ---
+     bee-restart ("at the next convenient point -- between tasks, never mid-gate -- "
+                  + "resuming in the same directory, so .mcp.json loads the new bee.")
+     bee-landed ("this landing changed bee: every live session restarts " + bee-restart)
+     bee-served "src/apps/bee.l src/apps/locks.l src/apps/saver.l src/apps/pom.l"   ; what bee runs
+     (self-id _) (: s (string? bee-self ? (stat bee-self)) (two? s ? (show [(s 0) (s 3) (s 8)])))
+     bee-selfw {'id (self-id 0) 'at (clock 0)}
+     bee-selfwait (: w (getenv "BEE_SELF_WATCH") (string? w && 0 < #w ? (digits w) 30))
+     (utc-minute t)
+      (: d (cite 'cal 'civil (t // 86400)) m (t % 86400 // 60) (two x) (x < 10 ? ("0" + show x) (show x))
+         (show <d + "-" + two <>d + "-" + two <>>d + " " + two (m // 60) + ":" + two (m % 60) + " utc"))
+     ; the notice when the binary moved since it was last seen, else ()
+     (self-news _)
+      (: now (clock 0) id0 (bee-selfw 'id)
+         (? (!(string? id0) || now - (bee-selfw 'at) < bee-selfwait * 1000) ()
+            (: _ (pin bee-selfw 'at now) id (self-id 0)
+               (? (!(string? id) || id = id0) ()
+                  (: _ (pin bee-selfw 'id id) s (stat bee-self)
+                     ("bee was updated: " + bee-self + " was replaced (built " + utc-minute ((s 3) // 1000000000)
+                      + "). this session still runs the old bee and works as before; restart " + bee-restart))))))
+     ; told once: to the full screen's note when it set 'tell, else as mail from bee. a bee's
+     ; own mcp child (BEE_AS) leaves it to the bee
+     (self-tell _)
+      (? bee-as? 0
+         (: t (self-news 0)
+            (? !(string? t) 0 (bee-selfw 'tell) ((bee-selfw 'tell) t) (post-as "bee" (me 0) t))))
      (sessions-text _)
       (: ps (settled 0)
          (? !(two? ps) "no bee sessions are running"
@@ -537,7 +588,8 @@
          (? (two? mine || lead?) (catmap one (sort mine) + (lead? ? (catmap all every) ()) + ln + lg) ()))
      bee-qseen (foldl (\ t s (pin t <s (s 1))) {} (q-sections bee-queues))
      (watch-tick _)
-      (: now (q-sections (lush-out bee-qcmd))
+      (: _ (self-tell 0)
+         now (q-sections (lush-out bee-qcmd))
          news (catmap (\ s (: nm <s old (peep bee-qseen nm ()) new (s 1)
                               _ (pin bee-qseen nm new)
                               ns (? (string? old && old != new) (q-news old new) ())
@@ -605,9 +657,9 @@
         "#   exact tree that lands."
         "# land by sha: the green head lands its gated head, git merge --no-ff SHA, only when merge-tree of the base and"
         "#   SHA gives SHA's own tree (queue_land answers the commands, with the sha and tree each must print); after it"
-        "#   the base's tree must equal the gated tree (queue_landed checks, drops the row and the rows folded into it,"
-        "#   and moves the base line). the lander sends the next rows a release note naming what the merge removes,"
-        "#   renames or moves."
+        "#   a merge of SHA on the base's first-parent line since the base line must have the gated tree (queue_landed"
+        "#   checks, drops the row and the rows folded into it, and moves the base line to that merge). the lander sends"
+        "#   the next rows a release note naming what the merge removes, renames or moves."
         "# leader: the leader line names the one session that keeps the queue. only the leader edits another's row, the"
         "#   base, sync and pre lines: it writes a row for a session that cannot, places a join by when it was asked"
         "#   for, drops a gone session's row and re-gates the ones behind, corrects a row that no longer matches its"
@@ -625,6 +677,9 @@
         "#   neighbours offer each other a fold; a build seeds out/ from a built tree of its base; nothing holds a heavy"
         "#   slot it is not using."
         "# sync TEXT: what the queue lands toward. pre TEXT: a condition before that. both are the leader's to keep."
+        "# next N: the position the next join takes; numbers never repeat. the base line may carry a note after #."
+        "# restart: after a landing that changes bee, every live session restarts at its next convenient point --"
+        "#   between tasks, never mid-gate -- in the same directory, so .mcp.json loads the new bee."
         "# line: <position> <session> <branch> <gated-on> <gated-head> <state>  # note"
         "#   gated-on: the base's sha for the head, else the row above's gated-head; state waiting|gating|green|folded-into-N"
         ("leader " + lead)
@@ -634,7 +689,10 @@
      (q-folds rows p) (sort (filter (\ f ((rows f) 5 = ("folded-into-" + p))) (keys rows)))
      (q-head rows) (: ps (filter (\ p !(q-folded? (rows p))) (keys rows))
                       (? (two? ps) (foldl (\ a p (q-num p < q-num a ? p a)) <ps >ps) ()))
-     (q-next rows) (show (1 + foldl (\ a p (max a (q-num p))) 0 (keys rows)))
+     ; the position the next join takes: the counter line, never below one past the highest row
+     (q-next text)
+      (: w (words (q-line text "next")) c (? (1 < #w && q-digits? (w 1)) (digits (w 1)) 0)
+         (show (max c (1 + foldl (\ a p (max a (q-num p))) 0 (keys (q-rows text))))))
      (q-digits? s) (0 < #s && !(two? (filter (\ c !(48 <= c <= 57)) (map s ^#s))))
      (q-fold-of st) (? (starts? st "folded-into-") (snip st 12 #st) "")
      (q-state? st) (elem st ["waiting" "gating" "green" "left"] || q-digits? (q-fold-of st))
@@ -654,7 +712,7 @@
      (q-refuse text who in new?)
       (: i (me 0) lead (q-leader text) rows (q-rows text) st (in "state")
          own (q-own rows who) ps (field in "position" "")
-         pos (? (own != ()) own (0 < #ps) ps (q-next rows))
+         pos (? (own != ()) own (0 < #ps) ps (q-next text))
          f (q-fold-of st) tgt (peep rows f ())
          (? (who != i && lead != i) ("only the leader, " + lead + ", edits another's row")
             (field in "base" "" != "" && lead != i) ("only the leader, " + lead + ", moves the base line")
@@ -676,7 +734,7 @@
                (go ls 0))
          st (in "state")
          old (? (0 <= at) (words (ls at)) ())
-         pos (? (two? old) <old (field in "position" (q-next (q-rows text))))
+         pos (? (two? old) <old (field in "position" (q-next text)))
          (pick k i) (field in k (? (two? old) (old i) "-"))
          note (field in "note" (? (0 <= at) (q-note (ls at)) ""))
          line (pos + " " + who + " " + pick "branch" 2 + " " + pick "gated_on" 3 + " " + pick "gated_head" 4
@@ -686,13 +744,26 @@
                              [(body (filter (\ l !(q-row? l && (words l) 1 = who)) ls)) "" ""])
             (0 <= at) [(body (map (\ i (i = at ? line (ls i))) ^#ls)) line ""]
             [(body (ls + [line])) line ""]))
-     ; the base line -- `<branch> <sha>`, neither a row nor the leader's, sync or pre -- moved to sha
-     (q-base? l) (: w (words l) (#w = 2 && !(q-row? l) && !(elem <w ["leader" "sync" "pre"]) && 0 < #<w && <w 0 != 35))
-     (q-base-line text) (: ls (filter q-base? (lines text)) (? (two? ls) (words <ls) ()))
+     ; where a line's trailing `  # note` starts, with its spaces; #l when it has none
+     (q-cut l) (: k (find l " #" 0) (back j) (? (0 < j && l (j - 1) = 32) (back (j - 1)) j) (? (k < 0) #l (back k)))
+     (q-bare l) (words (snip l 0 (q-cut l)))
+     ; the base line -- `<branch> <sha>`, a note allowed, neither a row nor the leader's, sync, pre
+     ; or next -- moved to sha, its note kept
+     (q-base? l) (: w (q-bare l) (#w = 2 && !(q-row? l) && !(elem <w ["leader" "sync" "pre" "next"]) && 0 < #<w && <w 0 != 35))
+     (q-base-line text) (: ls (filter q-base? (lines text)) (? (two? ls) (q-bare <ls) ()))
      (q-base text sha)
       (: ls (lines text)
          (? !(two? (filter q-base? ls)) [text "no base line"]
-            [(foldl (\ a l (a + (q-base? l ? (<(words l) + " " + sha) l) + "\n")) "" ls) ""]))
+            [(paras (map (\ l (q-base? l ? (<(q-bare l) + " " + sha + snip l (q-cut l) #l) l)) ls)) ""]))
+     ; the counter line, `next N`, set to n: in place, else before the first row
+     (q-count text n)
+      (: ls (lines text) l ("next " + n)
+         (next? x) (: w (words x) (two? w && <w = "next"))
+         at (foldl (\ a i (? (a < 0 && next? (ls i)) i a)) -1 ^#ls)
+         k (foldl (\ a i (? (a < 0 && q-row? (ls i)) i a)) -1 ^#ls)
+         (paras (? (0 <= at) (map (\ i (i = at ? l (ls i))) ^#ls)
+                   (k < 0) (ls + [l])
+                   (take k ls + [l] + drop k ls))))
      ; the tools: -> [ok? text]
      ; a row is one line of words: no field may hold a control character, nor a space but a text's
      bee-texts ["note" "sync" "pre_add" "release"]
@@ -714,7 +785,11 @@
              why (q-refuse text who in new?)
              (? (0 < #why) [0 why]
                 (: b (? (field in "base" "" = "") [text ""] (q-base text (in "base")))
-                   e (? (0 < #(b 1)) [text "" (b 1)] (q-edit <b who in))
+                   e0 (? (0 < #(b 1)) [text "" (b 1)] (q-edit <b who in))
+                   ; a join moves the counter past its position
+                   e (? (0 < #(e0 2) || (q-own (q-rows <b) who) != () || #(e0 1) = 0) e0
+                        (: p (q-num <(words (e0 1))) c (q-num (q-next <b))
+                           [(q-count <e0 (show (max c (p + 1)))) (e0 1) ""]))
                    (? (0 < #(e 2)) [0 (e 2)]
                       (q-put q old <e)
                        [1 ((new? ? ("made " + q + " on bee's standard header, led by " + q-leader <e + "\n") "")
@@ -776,6 +851,17 @@
          (go (lines (lush-out "git worktree list --porcelain")) ""))
      (q-joins ss) (? (two? ss) (foldl (\ a s (a + ", " + s)) <ss >ss) "")
      (q-uniq ss) (foldl (\ a s (elem s a ? a (a + [s]))) () ss)
+     ; "a", "a and b", "a, b and c"
+     (q-and ss) (? (atom? ss) "" (atom? >ss) <ss (q-joins (take (#ss - 1) ss) + " and " + ss (#ss - 1)))
+     (q-rows-say ps) ((two? >ps ? "rows " "row ") + q-and ps)
+     ; the commit on br's first-parent line since from that landed g: the oldest with g's tree
+     ; whose other parents reach g (or g itself); else the tip, when it holds g with that tree
+     (q-landed-at br from g gt)
+      (: cs (rev (map words (lines (lush-out ("git log --first-parent -n 512 --format='%H %T %P' "
+                                               + sq (0 < #from ? (from + ".." + br) br))))))
+         (lands? c) (two? c && c 1 = gt && (<c = g || two? (filter (\ x (q-on? g x)) (drop 3 c))))
+         ok (filter lands? cs)
+         (? (two? ok) (<ok 0) (q-on? g br && git-tree br = gt) (git-sha br) ""))
      ; the row a land tool acts on -> [pos row base] or why not
      (q-landing q who rows text)
       (: p (q-own rows who) r (? p (rows p) ()) base (q-base-line text) h (q-head rows)
@@ -821,25 +907,38 @@
              l (? (old = "none") ("no queue " + q) (who != i && lead != i) ("only the leader, " + lead + ", lands another's row")
                   (q-landing q who rows text))
              (? (string? l) [0 l]
-                (: p <l r (l 1) br <(l 2) g (git-sha (r 4)) cur (git-sha br) t (git-tree br) gt (git-tree g)
+                (: p <l r (l 1) br <(l 2) from (git-sha (l 2 1)) g (git-sha (r 4)) gt (git-tree g)
+                   at (? (#g = 0) "" (q-landed-at br from g gt))
                    (? (#g = 0) [0 ("no commit " + r 4 + " here")]
                       !(q-on? g br) [0 ("the gated head " + g + " is not on " + br + ": land it first, as queue_land says")]
-                      (t != gt) [0 ("the tree of " + br + " is " + t + ", not the gated tree " + gt + ": the row stays; tell the leader")]
-                      (: gone (p . q-folds rows p) short (git1 ("rev-parse --short " + sq cur))
+                      (#at = 0)
+                       [0 ("no commit on " + br + "'s first-parent line" + (0 < #from ? (" since " + l 2 1) "")
+                           + " merges " + g + " with the gated tree " + gt + ", and the tip's tree is " + git-tree br
+                           + ": the row stays; tell the leader")]
+                      (: gone (p . q-folds rows p) short (git1 ("rev-parse --short " + sq at))
+                         ; a landing that changes bee's served code ends the note with the restart line
+                         bz (? (0 < #from) (git1 ("diff --name-only " + from + " " + at + " -- " + bee-served)) "")
+                         rn (? (#bz = 0) rel (0 < #rel) (rel + " " + bee-landed) bee-landed)
                          t2 <(q-base (paras (filter (\ l !(q-row? l && elem <(words l) gone)) (lines text))) short)
                          (? (q-put q old t2)
                             (: rows2 (q-rows t2) h (q-head rows2)
                                to (filter (\ s (s != i)) (q-uniq (map (\ x ((rows2 x) 1)) (? h (h . q-folds rows2 h) ()))))
-                               sent (? (0 < #rel)
-                                       (map (\ s (: e (post s ("row " + p + " landed on " + br + " at " + short + ": " + rel))
-                                                    (#e = 0 ? s ("not " + s + " (" + e + ")"))))
-                                            to)
+                               sent (? (0 < #rn)
+                                       (map (\ s [s (post s ("row " + p + " landed on " + br + " at " + short + ": " + rn))]) to)
                                        ())
-                               [1 ("landed: row " + q-joins gone + " left " + q + ", whose base line is now " + br + " " + short + ". "
+                               got (map (\ x <x) (filter (\ x (#(x 1) = 0)) sent))
+                               lost (filter (\ x (0 < #(x 1))) sent)
+                               [1 ("landed: " + q-rows-say gone + " left " + q + ", whose base line is now " + br + " " + short + ". "
                                    + (? !(two? to) "no row is behind it."
-                                        (0 < #rel) ("the release note went to " + q-joins sent + ".")
-                                        ("send the next rows' sessions (" + q-joins to
-                                         + ") a release note naming what the merge removes, renames or moves.")))])
+                                        (0 < #rn)
+                                         ((two? got ? ("the release note went to " + q-and got + ".") "the release note reached no session.")
+                                          + (? (two? lost)
+                                               (" it could not reach " + q-and (map (\ x (x 0 + (starts? (x 1) "no session" ? " (not in the hive)" (" (" + x 1 + ")")))) lost)
+                                                + ": relay it to " + (#lost = 1 ? "that session" "those sessions") + " yourself.")
+                                               ""))
+                                        ("send the next rows' sessions (" + q-and to
+                                         + ") a release note naming what the merge removes, renames or moves."))
+                                   + (0 < #bz ? (" " + bee-landed) ""))])
                             (n <= 0) [0 (q + " kept moving under the write; read it and try again")]
                             (: _ (rest 200) (try (n - 1)))))))))
          (try 5))
@@ -980,6 +1079,11 @@
        + (bee-ours? ? " That is lush, a POSIX shell, not bash: write POSIX sh." "")
        + (0 < #bee-env ? ("\n\n## environment\n" + bee-env) "")
        + "\n" + bee-brief + "\n" + bee-talk + bee-merge
+       + (tablet? bee-hands
+          ? ("\n## your desk\nYou are one pane of inle, a terminal desktop the user shares with you. "
+             + "The pane_ tools see and work its other panes -- shells, editors, any program -- as the "
+             + "user does: read a pane before typing into it, and leave the keyboard where it was unless asked.\n")
+          "")
        + (two? bee-instr
           ? ("\nThe project's instructions follow, from the root down; the nearer file wins.\n"
              + foldl (\ a p (a + "\n--- " + <p + " ---\n" + clip0 (p 1))) "" bee-instr)
@@ -1288,7 +1392,13 @@
           "queue_landed" (queue-landed in)
           "lock_acquire" (lock-acquire in)
           "lock_release" (lock-release in)
-          "lock_list" (lock-list 0)))
+          "lock_list" (lock-list 0)
+          "pane_list" (bee-hands 'panes ())
+          "pane_read" (: r (bee-hands 'read (in "id")) [<r (clip (r 1))])
+          "pane_type" (bee-hands 'type (in "id") (in "text"))
+          "pane_open" (bee-hands 'open ())
+          "pane_focus" (bee-hands 'focus (in "id"))
+          "pane_close" (bee-hands 'shut (in "id"))))
 
      ; a control character as ^X, so a shown text cannot move the cursor or hide a tail
      (ctl? c) ((c < 32 && c != 10 && c != 9) || c = 127)
@@ -1328,6 +1438,9 @@
                  "lock_acquire" (in "name" + " " + field in "kind" "exclusive")
                  "lock_release" (in "name")
                  "lock_list" ""
+                 ("pane_list" || "pane_open") ""
+                 ("pane_read" || "pane_focus" || "pane_close") (in "id")
+                 "pane_type" (in "id" + ": " + (: t (in "text") (#t <= 60 ? t (snip t 0 60 + "…"))))
                  "queue_row" (in "queue" + " " + (: s (peep in "session" ()) (string? s ? (s + " ") ""))
                               + in "state" + (: h (peep in "gated_head" ()) (string? h ? (" " + h) "")))
                  ("queue_lead" || "queue_land" || "queue_landed") (in "queue")
@@ -1336,7 +1449,8 @@
      ; own, or answer how to land without landing. read_file runs unasked inside the working tree
      ; only. a message or a queue write asks, since either can start a turn in a peer that acts
      ; without asking
-     bee-free ["list_sessions" "check_job" "stop_job" "lock_list" "lock_release" "queue_land"]
+     bee-free ["list_sessions" "check_job" "stop_job" "lock_list" "lock_release" "queue_land"
+               "pane_list" "pane_read"]
      (free? name in) (? (name = "read_file") (in-tree? (in "path")) (elem name bee-free))
 
      ; one tool_use block -> its tool_result, asking first unless yes or free
@@ -1757,7 +1871,8 @@
          (pin c 'busy t))
      ; idle, a message starts a turn of its own: its blocks, then the model reads it
      (wake c)
-      (: ms (take-mail 0)
+      (: _ (self-tell 0)
+         ms (take-mail 0)
          (? (two? ms)
             (: _ (map (\ m (push c {'k 'mail 'from <m 'text (m 1)})) ms)
                (launch c (mail-text ms)))
@@ -1833,15 +1948,19 @@
          _ (rest 33)
          (? (c 'over) 0 (swim c (tick + 1))))
 
-     (tui key yes)
+     (tnew key yes)
       (: c {'blocks () 'ed (ednew 0) 'scroll 0 'dirt {() 1} 'busy () 'asking () 'msgs ()
             'sock () 'over 0 'key key 'yes yes 'rows 24 'cols 80}
          _ (pin c 'face (tface c))
+         _ (pin bee-selfw 'tell (\ t (push c {'k 'note 'text t}, soil c)))   ; a new binary, a note here
+         _ (push c {'k 'hello})
+         c)
+     (tui key yes)
+      (: c (tnew key yes)
          _ (pin c 'sv (sv-watch (setting 'screensaver "pom")
                                 (: m (peep bee-salt 'screensaver-idle ()) (two? m ? <m 10))))
          _ (twirl (\ _ (watch 0)) 0)                     ; the queues, mailed here when they move
          _ (twirl (\ _ (lock-poll 0)) 0)                   ; queued locks, mailed here when granted
-         _ (push c {'k 'hello})
          _ (tide c)
          _ (raw 1)
          _ (say out (esc + "[?1049h" + esc + "[2J" + esc + "[?2004h" + title-on 0))
@@ -1854,6 +1973,27 @@
          _ (flush out)
          _ (raw 0)
          0)
+
+     ; --- the stage: the full screen as a pane of a harbour (src/apps/berth/berth.l), which
+     ; owns the tty, the keys' reader and the clock. its frame is scribed into the pane's own
+     ; screen, so tui-fresh diffs against what that screen holds. no saver: idle is the harbour's
+     (tstage key yes)
+      (: c (tnew key yes)
+         tw (twirl (\ _ (watch 0)) 0)
+         tl (twirl (\ _ (lock-poll 0)) 0)
+         _ (pins c 'woke (clock 0) 'spun (clock 0))
+         {'name ("bee " + me 0)
+          'show (\ w h (? (w < 20 || h < 8) "" (: _ (pins c 'rows h 'cols w) (frame c))))
+          'step (\ k (: _ (onkey c k) (soil c)))
+          'over? (\ _ (c 'over))
+          ; a frame when the turn or the inbox moved: the spinner's beat, mail about once a second
+          'tick (\ _ (: t (clock 0) b (c 'dirt)
+                        _ (? (c 'busy != () && 130 < t - c 'spun) (: _ (pin c 'spun t) (soil c)) 0)
+                        _ (? (c 'busy = () && 1000 < t - c 'woke) (: _ (pin c 'woke t) (wake c)) 0)
+                        (? (peep b () 0) (: _ (pin b () 0) 1) 0)))
+          'shut (\ _ (: _ (? (c 'busy != ()) (halt c) 0) _ (freeze tw) _ (freeze tl)
+                        _ (? (bee-cc 'live) (cc-stop 0) 0)
+                        (unsettle 0)))})
 
      ; --- the door ---
      ; a prompt on the command line runs once, plainly; with none, a terminal gets the full
@@ -2046,6 +2186,7 @@
               (nm = "set_name") (set-name a)
               (nm = "inbox") [1 ""]
               [0 ("no tool " + nm)])
+         _ (self-tell 0)
          ms (take-mail 0)
          t (? (two? ms) (#(r 1) = 0 ? (mail-text ms) (r 1 + "\n\n" + mail-text ms))
               (#(r 1) = 0 ? "no messages are waiting" (r 1)))
@@ -2149,7 +2290,8 @@
      ; serving: the first prompt, if any, then a turn for each message as it comes. the idle
      ; wait is a rest, so the jobs' tasks run beside it
      (serve key f msgs)
-      (: ms (take-mail 0)
+      (: _ (self-tell 0)
+         ms (take-mail 0)
          (? (two? ms)
             (: _ (map (\ m (f 'mail <m (m 1))) ms) _ (state! "busy")
                m (turn key f (user (mail-text ms) . msgs)) _ (state! "idle")
@@ -2158,7 +2300,7 @@
      (serve-first key f p)
       (? (0 < #p) (: _ (state! "busy") m (turn key f [(user p)]) _ (state! "idle") (serve key f (two? m ? m ())))
          (serve key f ()))
-     bee-flags ["-y" "--plain" "--serve" "--mcp"]
+     bee-flags ["-y" "--plain" "--serve" "--mcp" "--stage"]
      (bee-go as)
       (: key (getenv bee-key-env)
          yes (elem "-y" as)
@@ -2169,10 +2311,14 @@
             (two? as && <as = "--lock") (bee-cli as yes)              ; its command's words stay as given
             (two? as && elem <as ["-s" "--screensaver"]) (cite 'saver 'saver-cli >as)   ; a saver, no session
             (two? words && elem <words ["--list" "--send" "--spawn" "--stop" "--avatar"]) (bee-cli words yes)
-            ; the api backend wants its endpoint, model and key; claude brings its own
-            (!bee-cc? && atom? bee-at) (say err ("bee: cannot read the url " + bee-url + "\n"), 1)
-            (!bee-cc? && #bee-model = 0) (say err "bee: name the model, (model NAME) in ~/.love/etc/bee.l\n", 1)
-            (!bee-cc? && !bee-local? && !(string? key && 0 < #key)) (say err ("bee: set " + bee-key-env + "\n"), 1)
+            ; the api backend wants its endpoint, model and key; claude brings its own. a stage
+            ; answers why as a string: a harbour shows it, stderr would land on its glass
+            (: why (? (!bee-cc? && atom? bee-at) ("cannot read the url " + bee-url)
+                      (!bee-cc? && #bee-model = 0) "name the model, (model NAME) in ~/.love/etc/bee.l"
+                      (!bee-cc? && !bee-local? && !(string? key && 0 < #key)) ("set " + bee-key-env)
+                      "")
+               (? (0 < #why) (elem "--stage" as ? why (say err ("bee: " + why + "\n"), 1))
+                  (elem "--stage" as) (: _ (settle bee-branch) _ (pin bee-cc 'yes yes) (tstage key yes))
             ; settled for the run, so other sessions can find it and write to it
             (: _ (settle bee-branch)
                _ (pin bee-cc 'yes yes)
@@ -2184,7 +2330,7 @@
                     (repl-go key (plain yes)))
                _ (? (bee-cc 'live) (cc-stop 0) 0)
                _ (unsettle 0)
-               r)))
+               r)))))
       (bee-go as))
    bee-usage "usage: love bee [-y] [--plain] [PROMPT ..]      one prompt, the screen, or a > loop
        love bee --list | --send NAME TEXT ..           the sessions, from a shell
