@@ -579,7 +579,6 @@
    (doto? p) (#p @ n (2 < n && p (n - 2) = 46 && p (n - 1) = 111))
    (dotim? p) (#p @ n (6 < n && snip p (n - 6) n = ".image"))
    (dotcid? p) (#p @ n (4 < n && snip p (n - 4) n = ".cid"))
-   (dotrto? p) (#p @ n (4 < n && snip p (n - 4) n = ".rto"))
    ; the build tree keeps the images in the love's own directory, an installed nest one rung
    ; over in lib/love/ -- the two seats mseat already knows. not point-free: the mapped
    ; lambda reads `d` to build the path it hashes, so dropping the parameter leaves that read
@@ -686,15 +685,12 @@
    ; on a hit is for: a write time would evict the identity you link with daily.
    (mcsweep d)
     (: mckeep 32                                       ; ~400K each, so ~13M held.
-       ; a member object is a rung finer and there are ~600 to a generation, so its own room
-       ; is two of those -- the state you are on and the one you flip back to. ~2.5K each.
-       mckeepo 1200
        ; the live set is one generation per (worktree, lane, target) -- a tree carries the
        ; shim's love+mooncc.image and the build's love0+mooncc0.image as two distinct
-       ; compilers -- so the room here is deliberate. three shapes are kept: the archives,
-       ; the members they index, and the .cid memos naming the compiler that cut them, each
-       ; bounded on its own count. anything else goes.
-       _ (foldl (a \ f \ dota? f || dotcid? f || dotrto? f ? a (unlink (d + f), a)) 0 (readdir d))
+       ; compilers -- so the room here is deliberate. two shapes are kept: the archives and
+       ; the .cid memos naming the compiler that cut them, each bounded on its own count.
+       ; anything else goes.
+       _ (foldl (a \ f \ dota? f || dotcid? f ? a (unlink (d + f), a)) 0 (readdir d))
        (ages pk) (foldl (a \ f \ stat (d + f) @ st
                                    (pk f && two? st ? (a + [[(st 1) f]]) a))
                         () (readdir d))
@@ -704,7 +700,6 @@
                            go >l (k + 1) most)))
        (old pk most) (go (sortby (a \ b \ <b <= <a) (ages pk)) 0 most)
        (old dota? mckeep,
-        old dotrto? mckeepo,
         old dotcid? mckeep))
    ; the compiled runtime as one archive: the cache when it can answer, the compiler
    ; otherwise -- and the compile is what fills the cache. a cache that cannot open is
@@ -755,7 +750,7 @@
              hit (string? k && mcget cd (k + ".a") "!<arch>\n")
              _ (two? hit && utime (cd + k + ".a") (clock ()))        ; the sweep orders by use
              bs (two? hit ? <>hit
-                   (arbytes (rtmems home tgt os vb id) @ b
+                   (arbytes (rtmems home tgt os vb) @ b
                       (string? k && mcput cd (k + ".a") b,
                        b)))
              (string? cd && mcsweep cd,
@@ -797,25 +792,14 @@
    ; the members compile under the link's os (impl.h's table opens on it), and the sys
    ; leaf is the os's own -- freebsd rides the x64 machine.
    (rtflags tgt os vb is) (pin (pin (pin (fseed tgt 'moon) 'os os) 'is is) 'vb vb)
-   ; one member, through a cache cut a rung finer than the archive's: the same tree id
-   ; and target, plus the member's own name. an edit anywhere in the slice still moves the
-   ; id, and so every member. no cache (cd ()) is a plain compile, which is mkrt's lane.
-   (rtmem1 tgt os vb id cd e)
+   ; one member of the roster, compiled -> [name bytes]. the archive is the cache; a member
+   ; alone is make's to keep (src/tools/mkrt.l's groups).
+   (rtmem1 tgt os vb e)
     (: nm (e 0) src (e 1) is (e 2)
-       k (string? cd && string? id
-          && (sha256 $ id + "\n" + nm + "\n" + show tgt + "\n" + show os))
-       hit (string? k && mcget cd (k + ".rto") "rto1\n")
-       (two? hit && utime (cd + k + ".rto") (clock ()),        ; the sweep orders by use
-        two? hit ? [nm (snip <>hit 5 #<>hit)]
-          (: b (!#src ? (string (mksys-bytes tgt))
-                        (string (cc-objbytes src (rtflags tgt os vb is))))
-             (string? k && mcput cd (k + ".rto") ("rto1\n" + b),
-              [nm b]))))
+       [nm (!#src ? (string (mksys-bytes tgt))
+                    (string (cc-objbytes src (rtflags tgt os vb is))))])
    ; every member compiled, ready to index -- our own sources reaching only our own headers.
-   ; the id is the caller's: it already cut one to key the archive, and mcid walks the slice.
-   (rtmems home tgt os vb id)
-    (string? id && mcdir () @ cd
-       (map (e \ rtmem1 tgt os vb id cd e) (rtplan home tgt os vb)))
+   (rtmems home tgt os vb) (map (rtmem1 tgt os vb) (rtplan home tgt os vb))
    (rtpull srcs tgt os nostd vb)
     (: mach (peep elf-machines tgt 0)
        lg (ldledger srcs mach) dt <lg owed <>lg
@@ -859,7 +843,7 @@
        hit (string? k && mcget cd (k + ".wrt") "wrt1\n")
        _ (two? hit && utime (cd + k + ".wrt") (clock ()))
        txt (two? hit ? (snip <>hit 5 #<>hit)
-              (show (rtmems home 'wasm os vb id) @ s
+              (show (rtmems home 'wasm os vb) @ s
                  (string? k && mcput cd (k + ".wrt") ("wrt1\n" + s),
                   s)))
        <(sound txt))

@@ -428,29 +428,13 @@ rt_src_sys-sz = $(call rt_sysrange,s t u v w x y z)
 rt_src_top = $(wildcard $(rt_lib)/*.c) src/apps/moon/lib/mksys.l
 rt_src = $(if $(rt_src_$(1)),$(rt_src_$(1)),$(wildcard $(rt_lib)/$(1)/*.c))
 rt_a = $(foreach i,$(rt_isas),$(foreach g,$(rt_groups),out/rt/$i/$g.a))
-# one rule per group, the isa its stem. an eval inside a foreach is not cook's
 define rtgroup
-$$(foreach i,$$(rt_isas),out/rt/$$i/$(1).a): out/rt/%/$(1).a: $$(call rt_src,$(1)) $$(rt_h) src/tools/mkrt.l $$(rtlove_dep) $$(love0)
+out/rt/$(1)/$(2).a: $$(call rt_src,$(2)) $$(rt_h) src/tools/mkrt.l $$(rtlove_dep) $$(love0)
 	@echo 'MOON	'$$@
 	@mkdir -p $$(dir $$@)
-	@$$(rtlove) src/tools/mkrt.l -m $$@ $$* $$(patsubst %/mksys.l,mksys,$$(call rt_src,$(1)))
+	@$$(rtlove) src/tools/mkrt.l -m $$@ $(1) $$(patsubst %/mksys.l,mksys,$$(call rt_src,$(2)))
 endef
-$(eval $(call rtgroup,sys-af))
-$(eval $(call rtgroup,sys-gl))
-$(eval $(call rtgroup,sys-mr))
-$(eval $(call rtgroup,sys-sz))
-$(eval $(call rtgroup,top))
-$(eval $(call rtgroup,net))
-$(eval $(call rtgroup,string))
-$(eval $(call rtgroup,signal))
-$(eval $(call rtgroup,fmt))
-$(eval $(call rtgroup,stdio))
-$(eval $(call rtgroup,math))
-$(eval $(call rtgroup,ctype))
-$(eval $(call rtgroup,mem))
-$(eval $(call rtgroup,proc))
-$(eval $(call rtgroup,dirent))
-$(eval $(call rtgroup,env))
+$(foreach i,$(rt_isas),$(foreach g,$(rt_groups),$(eval $(call rtgroup,$i,$g))))
 out/moonlibc.o: $(rt_a) $(rt_slice) src/tools/mkrt.l $(rtlove_dep) $(love0)
 	@echo 'HOLO	'$@
 	@$(rtlove) src/tools/mkrt.l $@ $(hosta) $(rt_a)

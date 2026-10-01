@@ -236,6 +236,21 @@
                        "all:"
                        "\techo \"G[$(g)]\"")) "all")
    _ (ok "$(call) binds $1..$n over the body" (has cal "G[hi-a-b]"))
+   evl (run-cook (mk '("define grp"
+                       "$(1)-$(2):"
+                       "\t@echo \"E[$(1) $(2) $$(src_$(2))]\""
+                       "endef"
+                       "src_a = x"
+                       "$(foreach d,b,$(eval src_$d = y$d))"
+                       "$(foreach i,i1 i2,$(foreach g,a b,$(eval $(call grp,$i,$g))))"
+                       "v := $(eval w = in-assign)"
+                       "all: i1-a i2-b"
+                       "\t@echo \"W[$(w)]\"")) "all")
+   _ (ok "$(eval) nested in a foreach lays rules" (has evl "E[i1 a x]" && has evl "E[i2 b yb]"))
+   _ (ok "$(eval) inside an assignment runs" (has evl "W[in-assign]"))
+   _ (write-file (dir + "/Makefile") (mk '("all:" "\t@echo $(eval z = 1)")))
+   evr (: r (hark [love "-l" "src/apps/cook.l" "-f" (dir + "/Makefile") "all"]) (two? r ? <r 0))
+   _ (ok "$(eval) in a recipe refuses" !(0 = evr))
 
    ; ------------------------------------------------- @D/@F, wildcard, abspath
    adf (run-cook (mk '("all: foo/bar.o"

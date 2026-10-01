@@ -40,7 +40,7 @@
        want (map (f \ f = "mksys" ? "" f) srcs)
        es (filter (e \ elem (e 1) want) ((cite 'moon 'rtplan) rt-home tgt 'linux ()))
        _ (#es < #want && rt-die (show tgt + ": a source outside the roster in " + show srcs))
-       (cite 'holo 'write-bytes dst [((cite 'holo 'arbytes) (map (e \ m1 tgt 'linux () () () e) es))]))   ; one blob
+       (cite 'holo 'write-bytes dst [((cite 'holo 'arbytes) (map (m1 tgt 'linux ()) es))]))   ; one blob
    ; a group archive's members, ((name bytes)..), past the index and the long-name table
    (rt-armems s)
     (: fld (cite 'holo 'ld-arfld)
