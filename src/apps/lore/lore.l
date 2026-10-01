@@ -6,7 +6,7 @@
 ;   rove   the roguelike floor: tiles, fov, the painter, the signs, the paced keys
 ;   view   the first-person screen in half blocks: rays, pens, frames, the tty loop
 ;   vec    triples of numbers or trays: vectors, colours, and the hash's value noise
-;   sky    the sun by the date, the hour and the latitude, its light, clouds and stars
+;   sky    the sun by date, hour and latitude, and the weather: clear to overcast, smooth or in pixels
 ;   grove  trees grown from a seed, drawn as wood and points, and the shade they cast
 ; a game registers with (lore-enlist NAME MAIN), MAIN taking the args after its name.
 (module (lore lore-enlist lore-games lore-main)

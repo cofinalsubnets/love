@@ -7,10 +7,11 @@
 ; the long walls run north and south with four windows a floor; the short walls carry
 ; two narrow ones a floor and the stair's three between the floors, and over their outer
 ; thirds a battlement each. the tree is grove's, grown afresh each run, its trunk leaning
-; toward the middle; the sky is sky's, the sun and the clouds at this hour of this day at
-; a fixed latitude, and runs on faster than the clock: the sun comes in over the rim
-; where it can, low and orange on the top of a wall at either end of the day, and
-; windows come on and go off with the hours.
+; toward the middle; the sky is sky's, the sun at this hour of this day at a fixed
+; latitude under the weather -- clear, partly or mostly cloudy, or overcast, the sky
+; drawn smooth or in the grass game's pixels -- and runs on faster than the clock: the
+; sun comes in over the rim where it can, low and orange on the top of a wall at either
+; end of the day, and windows come on and go off with the hours.
 ;
 ; every pixel casts its own ray, so the look tilts as far as the neck does. the scene is
 ; trays a frame wide: what each ray meets, the stuff there, the sun on it past the rim,
@@ -19,7 +20,9 @@
 ; only tree-walk and tree-run tie the tty. tree-walk takes a stage already raised.
 ;
 ; run: love lore tree   h l or the arrows turn, k j step, u n look up and down;
-;                       [ ] an hour back or on, t the time's pace; q or esc leaves
+;                       [ ] an hour back or on, t the time's pace, c the cloud, v the
+;                       sky smooth or in pixels; q or esc leaves
+;      love lore tree [clear|partly|mostly|overcast] [smooth|pixel]   the weather to start
 (module (tree tree-run tree-walk tree-main tree-new tree-size tree-step tree-move
          tree-frame tree-sun tree-light tree-clock tree-now tree-pens tree-maps
          tree-grow sun-clear top-h block-h
@@ -54,12 +57,14 @@
                      (p2 hh + ":" + p2 mm))
  ; the sun as [east up north] and its light, at the scene's hour
  (tree-sun st) (sky-sun (st 'sim) (st 'dst) lat)
- (tree-light st) (sky-light (tree-sun st))
+ (tree-light st) (sky-light (tree-sun st) (st 'wx) (st 'sim))
  ; --- the state: the screen as view lays it, where the player stands and looks ('th the
  ; bearing, 'ph the pitch), the clock, its pace, and the pixels' rays ---
+ ; the weather a run starts under, unless it is said: the cover thrown, the sky smooth
  (tree-new w h now) (: st {'px 0.0 'pz (0.0 - yard-b + 1.4) 'th 0.0 'ph 0.5
                             'sim (now 0) 'dst (now 1) 'pace 0 'shown 40 't 0
-                            'deep 0 'done 0 'tree (tree-grow (int (now 0)))}
+                            'deep 0 'done 0 'tree (tree-grow (int (now 0)))
+                            'wx (sky-weather (throw (int (now 0)) 7 71 4) 'smooth)}
                        (tree-size st w (h // 2)))
  ; the screen w cells by r rows, and each pixel's offsets from the middle, and its dither
  (tree-size st w r) (: h (2 * r) n (w * h) i (iota n) x (i % w) y (i // w)
@@ -84,6 +89,8 @@
         91 (tell (pin st 'sim (st 'sim - 3600.0)))
         93 (tell (pin st 'sim (st 'sim + 3600.0)))
         116 (tell (pin st 'pace ((st 'pace + 1) % #paces)))
+        99 (tell (pin st 'wx (sky-weather ((st 'wx 'cover + 1) % 4) (st 'wx 'style))))
+        118 (tell (pin st 'wx (sky-weather (st 'wx 'cover) (st 'wx 'style = 'pixel ? 'smooth 'pixel))))
         st))
  (tree-move st) (pin st 'sim (st 'sim + paces (st 'pace) / fps))
  ; --- the maps: the walls and the floor, laid once a run in texels
@@ -280,7 +287,7 @@
    G (iota (1 - sky)) S (iota sky) (only ix v) (peep v ix 0)
    sf (surface (only G px) (only G py) (only G pz) (only G isx) (only G isz) (only G gnd) (only G endf)
                (only G sgn) (only G ze) (only G dx) (only G dz))
-   hv (sky-colour lt (only S dx) (only S dy) (only S dz) ex ez (st 'sim) t0 {})
+   hv (sky-colour lt (st 'wx) (only S dx) (only S dy) (only S dz) ex ez (st 'sim) t0)
    z0 (dx * 0.0)
    col0 (map (c \ pin (pin z0 G (sf c)) S (hv c)) ^3)
    ; ..and the tree, drawn over all of it where it is nearer
@@ -294,18 +301,27 @@
  (tree-frame st) (: w (st 'w) h (st 'h) c (tree-pens st) deep (st 'deep)
    px (deep ? (view-deep-pens c) (view-cube-pens c (st 'bay)))
    pace (paces (st 'pace))
-   txt (" " + tree-clock st + (pace = 0.0 ? "  still " (pace = 1.0 ? "  " ("  x" + show (int pace) + " "))))
+   wx (st 'wx)
+   txt (" " + tree-clock st + (pace = 0.0 ? "  still" (pace = 1.0 ? "" ("  x" + show (int pace))))
+        + "  " + sky-says (wx 'cover) + (wx 'style = 'pixel ? ", in pixels " " "))
    bands (st 't < st 'shown ? {0 [1 txt (deep ? 249660 255) (deep ? 33288 235)]} {})
    (deep ? (view-deep-frame w h px bands)
       (view-frame w h (y \ peep px (iota w + w * y) 0) bands)))
  ; --- the walk, on view's loop; tree-run raises the stage ---
- (tree-walk _) (view-walk {'new (w \ h \ pin (tree-new w h (tree-now ())) 'deep
-                                         (elem (getenv "COLORTERM") ["truecolor" "24bit"]))
+ ; ..wx the weather to start under, or () for the run's own
+ (tree-walk wx) (view-walk {'new (w \ h \ (: st (pin (tree-new w h (tree-now ())) 'deep
+                                                     (elem (getenv "COLORTERM") ["truecolor" "24bit"]))
+                                              (wx ? (pin st 'wx wx) st)))
                             'size tree-size 'frame tree-frame 'key tree-step 'tick tree-move
                             'fps fps 'song (hn \ ()) 'linger 0 'next ()})
- (tree-run _) (view-run tree-walk)
- tree-usage "usage: love lore tree   (h l turn, k j step, u n look, [ ] an hour, t the pace; q or esc leaves)"
- (tree-main as) (as @ () (tree-run ())
-                       (say err ("tree: " + tree-usage + "\n"), flush err, 2))
+ (tree-run wx) (view-run (_ \ tree-walk wx))
+ tree-usage "usage: love lore tree [clear|partly|mostly|overcast] [smooth|pixel]   (h l turn, k j step, u n look, [ ] an hour, t the pace, c the cloud, v the sky's style; q or esc leaves)"
+ ; the words, in either order: a cover, a style, or both
+ (tree-main as) (: (ix l w) (: (go i) (i < #l ? (l i = name w ? i (go (i + 1))) ()) (go 0))
+   (cov w) (ix sky-covers w) (sty w) (ix sky-styles w)
+   cs (filter charm? (map cov as)) ss (filter charm? (map sty as))
+   (? (2 < #as || #as != #cs + #ss || 1 < #cs || 1 < #ss)
+      (say err ("tree: " + tree-usage + "\n"), flush err, 2)
+      (tree-run (#as ? (sky-weather (#cs ? <cs (throw (int (tree-now () 0)) 7 71 4)) (#ss ? sky-styles <ss 'smooth))))))
  _ ((cite 'lore 'lore-enlist) 'tree (udoor 'tree tree-main tree-usage 1 1)))
 ) ; module tree

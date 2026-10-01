@@ -99,5 +99,32 @@
    _ (keys! st (map (i \ 107) ^60))
  (test (0.55 < sqrt (sq (st 'px - bs 0) + sq (st 'pz - bs 2)))))
 
+(borrow 'sky)
+
+; --- the weather: c steps the cover, v the style; the more cover, the more of the sky is
+; --- cloud in either style; under overcast the sun is all but off the walls; and the
+; --- styles draw different skies
+(: st (at 13.0)
+   _ (pin st 'wx (sky-weather 0 'smooth))
+   _ (keys! st [99]) w1 (st 'wx)
+   _ (keys! st [118]) w2 (st 'wx)
+   _ (keys! st [99 99 99]) w3 (st 'wx)
+   clear (sky-light (tree-sun st) (sky-weather 0 'smooth) (st 'sim))
+   oc (sky-light (tree-sun st) (sky-weather 3 'smooth) (st 'sim))
+   ; the sky above 25 degrees, a golden spiral of rays: the share of it that is not the
+   ; clear sky's colour
+   n 3000 i (iota n) y (0.42 + 0.58 * (i + 0.5) / n) r (sqrt (1.0 - y * y))
+   dx (r * cos (i * 2.39996)) dz (r * sin (i * 2.39996)) sim (st 'sim) s (tree-sun st)
+   (cloud c sty) (: wx (sky-weather c sty) lt (sky-light s wx sim)
+                    k (sky-colour lt wx dx y dz 0.0 0.0 sim 0)
+                    k0 (sky-colour lt (sky-weather 0 sty) dx y dz 0.0 0.0 sim 0)
+                    (net (0.15 < mag (k 0 - k0 0) + mag (k 1 - k0 1) + mag (k 2 - k0 2)) / (1.0 * n)))
+   (rises sty) (: f (map (c \ cloud c sty) [1 2 3]) (f 0 < f 1 && f 1 < f 2 && 0.1 < f 0 && 0.9 < f 2))
+   sm (tree-frame (pins (at 15.0) 'ph 1.4 'wx (sky-weather 2 'smooth)))
+   px (tree-frame (pins (at 15.0) 'ph 1.4 'wx (sky-weather 2 'pixel)))
+ (test (w1 'cover = 1) (w1 'style = 'smooth) (w2 'cover = 1) (w2 'style = 'pixel)
+       (w3 'cover = 0) (w3 'style = 'pixel)
+       (oc 'sunk < 0.25 * clear 'sunk) (clear 'cover < oc 'cover)
+       (rises 'smooth) (rises 'pixel) (sm != px)))
 (test_fin ())
 (puts "tree: ok")
