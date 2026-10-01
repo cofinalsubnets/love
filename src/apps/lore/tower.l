@@ -1,4 +1,4 @@
-; tower -- the climb, on quay's roguelike engine (src/apps/rove/rove.l).
+; tower -- the climb, on quay's roguelike engine (src/apps/lore/rove.l).
 ;
 ; each tier is built of its own stuff and its litter is the cell's own dice, so a floor
 ; reproduces with its rooms: the garden, the middle and heaven, pennies underfoot and a
@@ -9,7 +9,7 @@
 ; a floor's music is a rule and not a recording, built off the cycle number through the
 ; same dice that strews it, and fed to the card from the climb's own loop.
 ;
-; run: love tower. the climb gates headless in test/host/rove.l; only tower-run ties the
+; run: love lore tower. the climb gates headless in test/host/rove.l; only tower-run ties the
 ; tty, and test/host/tty.l plays it on a pty.
 (module (tower tower-run tower-main tap-key bell-row bell-open bell-key cell-face
          live-cells crawl-new crawl-turn crawl-frame crawl-bar mob-new mob-set stock mend
@@ -1667,10 +1667,10 @@
                                'dead (fill w-lost [(here g)])
                                (fill w-fled [(g 'p 'penny)])) + "\n"),
               0))
- tower-usage "usage: love tower   (no options; q or esc leaves the tower)"
+ tower-usage "usage: love lore tower   (no options; q or esc leaves the tower)"
 
  ; tower takes nothing: a word here is a mistake, and the climb would swallow it
  (tower-main as) (atom? as ? (tower-run ())
                     (say err (fill w-args [<as]), flush err, 2))
- _ (pins (cite 'verbs 'tab) 'tower (udoor 'tower tower-main tower-usage 1 1)))
+ _ ((cite 'lore 'lore-enlist) 'tower (udoor 'tower tower-main tower-usage 1 1)))
 ) ; module tower

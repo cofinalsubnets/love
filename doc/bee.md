@@ -72,7 +72,7 @@ When the full screen has had no key for **(screensaver-idle** *n***)** minutes (
 Any key takes the saver down and lays the screen again as it was; that key goes nowhere else. A turn that is running goes on underneath it, and a message, a queue notice or a tool asking y/n leaves a small **✉** in its top right corner instead of waking it.
 
 - **pom**: the moon at this hour's phase (UTC, as **love pom** reckons it), large and centred on half cells, over a few dozen stars that brighten and dim each on its own slow cycle, its phase and how much is lit under it.
-- **slop**: the slop's skin from **love slop**, drifting, in its own gold and pink.
+- **slop**: the slop's skin from **love lore slop**, drifting, in its own gold and pink.
 - **life**: Conway's game of life on a torus of half cells, each cell's green its age, sown again when it settles.
 - **matrix**: green rain down the columns, each a drop of its own speed and length.
 

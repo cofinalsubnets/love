@@ -1,7 +1,7 @@
 ; dusk -- the level after the apartment: a dry river through the desert at sunset, first
 ; person in half blocks. the sun arcs down ahead as the player walks the bed and sets
 ; behind a parking garage; walking into the hole in its face ends the level, and the
-; garage (src/apps/rove/garage.l) takes the screen.
+; garage (src/apps/lore/garage.l) takes the screen.
 ;
 ; the screen is view.l's, ninety degrees wide. nothing is stored: a bush is a hash of its
 ; bank and place along the looping river, a mesa a hash of its bearing. the music is a
@@ -9,7 +9,7 @@
 ; dusk-new/step/move/frame are pure, gated by test/host/dusk.l; only dusk-walk and
 ; dusk-run tie the tty and horn. dusk-walk takes a raised stage, so the apartment hands over.
 ;
-; run: love dusk    h l or the arrows turn, k or up walks on, u n look up and down,
+; run: love lore dusk    h l or the arrows turn, k or up walks on, u n look up and down,
 ;                   space walks on until pressed again; q or esc leaves.
 ;                   HORN=none plays silent on a seat with no sound device
 (module (dusk dusk-run dusk-walk dusk-main dusk-new dusk-size dusk-step dusk-move dusk-settle
@@ -254,8 +254,8 @@
                                           (s ? (_ \ (dusk-song-feed s)))))
                            'linger done-ms 'next ['garage 'garage-walk]})
  (dusk-run _) (view-run dusk-walk)
- dusk-usage "usage: love dusk   (h l turn, k walks on, u n look, space walks on to the garage; q or esc leaves)"
+ dusk-usage "usage: love lore dusk   (h l turn, k walks on, u n look, space walks on to the garage; q or esc leaves)"
  (dusk-main as) (as @ () (dusk-run ())
                      (say err ("dusk: " + dusk-usage + "\n"), flush err, 2))
- _ (pins (cite 'verbs 'tab) 'dusk (udoor 'dusk dusk-main dusk-usage 1 1)))
+ _ ((cite 'lore 'lore-enlist) 'dusk (udoor 'dusk dusk-main dusk-usage 1 1)))
 ) ; module dusk
