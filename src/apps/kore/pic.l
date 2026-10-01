@@ -1,5 +1,5 @@
-; src/apps/kore/pic.l -- pictures on a terminal and between formats. png, jpeg and gif are read
-; (src/apps/png.l, src/apps/jpeg.l, src/apps/gif.l); png, jpeg, gif and sixel are written.
+; src/apps/kore/pic.l -- pictures on a terminal and between formats. png, jpeg, gif and webp are
+; read (src/apps/png.l, jpeg.l, gif.l, webp.l); png, jpeg, gif and sixel are written.
 ;
 ;   pic [cat] [-g MODE] [-w COLS] [-h ROWS] [FILE..]
 ;         each picture as wide as the terminal (or COLS, or 80) and no taller than ROWS,
@@ -20,7 +20,7 @@
 ;         the blocks' text itself
 ;   pic [-nCSU] [-t [-cz]] [FILE..]
 ;         classic pic, the troff preprocessor (src/apps/kore/gpic.l): a bare pic with one of
-;         GNU pic's flags, or whose first input is not a png, jpeg or gif. -g -w -h are
+;         GNU pic's flags, or whose first input is not a png, jpeg, gif or webp. -g -w -h are
 ;         pic cat's
 ;
 ; www draws a page's pictures through pic-art too.
@@ -40,12 +40,13 @@
    ; -- reading -----------------------------------------------------------------
    (pic-le16 b i) (b i + 256 * b (i + 1))
    (pic-be32 b i) (((b i * 256 + b (i + 1)) * 256 + b (i + 2)) * 256 + b (i + 3))
-   ; bytes -> 'png 'jpeg 'gif | ()
+   ; bytes -> 'png 'jpeg 'gif 'webp | ()
    (pic-kind b)
     (? !(string? b && 8 <= #b) ()
        (snip b 1 4 = "PNG") 'png
        (b 0 = 255 && b 1 = 216) 'jpeg
        (snip b 0 4 = "GIF8") 'gif
+       (12 <= #b && snip b 0 4 = "RIFF" && snip b 8 12 = "WEBP") 'webp
        ())
    ; -> [w h] off the header | why not
    (pic-size b)
@@ -53,13 +54,15 @@
        (? (k = 'png) (24 <= #b ? [(pic-be32 b 16) (pic-be32 b 20)] "cut short")
           (k = 'jpeg) (cite 'jpeg 'jpeg-size b)
           (k = 'gif) [(pic-le16 b 6) (pic-le16 b 8)]
+          (k = 'webp) (cite 'webp 'webp-size b)
           "not a picture"))
-   ; -> [w h rgba] | why not; a gif's first frame
+   ; -> [w h rgba] | why not; a gif's or an animated webp's first frame
    (pic-decode b)
     (pic-kind b @ k
        (? (k = 'png) (cite 'png 'png-decode b)
           (k = 'jpeg) (cite 'jpeg 'jpeg-decode b)
           (k = 'gif) (cite 'gif 'gif-decode b)
+          (k = 'webp) (cite 'webp 'webp-decode b)
           "not a picture"))
    ; -> [w h [[rgba ms] ..]] | why not: a gif's frames, as many as fit 128 MB, and a still
    ; one frame of no time
@@ -254,7 +257,7 @@
            "help" (say out (pic-usage + "\n"), 0)
            (pic-route as))
    ; a bare pic: a flag of cat's (-g -w -h) is pictures, one of GNU pic's is classic pic
-   ; (src/apps/kore/gpic.l); with neither the first input decides, a png, jpeg or gif being
+   ; (src/apps/kore/gpic.l); with neither the first input decides, a png, jpeg, gif or webp being
    ; a picture and anything else a document with .PS/.PE in it. stdin is read once
    (pic-route as)
     (: (flags l) (atom? l || <l = "--" || <l = "-" || !(0 < #<l && <l 0 = 45) ? () (<l . flags >l))
