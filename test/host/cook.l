@@ -544,6 +544,34 @@
    ; a blank line inside a recipe leaves the rule open
    kb (run-cook (mk '("all:" "\t@echo \"B[one]\"" "" "\t@echo \"B[two]\"")) "all")
    _ (ok "a blank line inside a recipe" (has kb "B[two]"))
+   ; else ifeq chains: the first true arm, and a taken arm closes the rest
+   kc (run-cook (mk ["A := 2" "ifeq ($(A),1)" "R := one" "else ifeq ($(A),2)" "R := two"
+                     "else" "R := other" "endif"
+                     "ifeq ($(A),2)" "T := first" "else ifeq ($(A),2)" "T := second" "endif"
+                     "ifdef NOPE" "Q := a" "else ifndef NOPE" "Q := b" "endif"
+                     "$(info C[$(R) $(T) $(Q)])" "all: ;@:"]) "all")
+   _ (ok "else ifeq / else ifndef chains" (has kc "C[two first b]"))
+   ; an expanded value keeps its $: a :=, a call's argument, a foreach's word, $(value)
+   kd (run-cook (mk ["x := $$y" "w := $(call f,$$p,q)" "v := $(foreach i,$$k,<$(i)>)" "u := $x"
+                     "u += $$m" "define f" "$(1)-$(2)" "endef"
+                     "$(info D[$(x)] [$(call f,$$p,q)] [$(v)] [$(value x)] [$(u)])" "all: ;@:"]) "all")
+   _ (ok "$$ survives := call foreach value +=" (has kd "D[$y] [$p-q] [<$k>] [$y] [$y $m]"))
+   ; define's value stops before the newline that precedes endef
+   kf (run-cook (mk ["define g" "a" "b" "endef" "$(info F[$(g)])" "all: ;@:"]) "all")
+   _ (ok "define drops the newline before endef" (has kf "F[a\nb]"))
+   ; $(intcmp): gt falls back to eq; two args answer the number when equal
+   ki (run-cook (mk ["$(info I[$(intcmp 1,2,lt,eq,gt) $(intcmp 3,2,lt,eq) $(intcmp 3,2,lt,eq,gt) $(intcmp 2,2)])"
+                     "all: ;@:"]) "all")
+   _ (ok "$(intcmp ..)" (has ki "I[lt eq gt 2]"))
+   ; $(file <f) reads a file less its last newline, as kbuild's read-file does
+   _ (write-file (dir + "/rf.txt") "hi there\n")
+   kr (run-cook (mk [("R := $(file <" + dir + "/rf.txt)") "$(info R[$(R)])" "all: ;@:"]) "all")
+   _ (ok "$(file <f)" (has kr "R[hi there]"))
+   ; a caller of cook-vars may answer $(shell ..) itself
+   hv (cite 'cook 'cook-vars)
+   ht (pins {} " shell" (c \ "<" + c + ">"))
+   _ (hv "X := $(shell uname -m)\n" ht)
+   _ (ok "cook-vars: a caller's $(shell) answerer" (ht "X" = "<uname -m>"))
 
    ; ---------------------------------------------------------------- summary
    _ (sh ("rm -rf " + dir))

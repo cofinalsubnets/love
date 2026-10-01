@@ -407,17 +407,19 @@
                   #s)
                (snip s 0 i))
    (uncont s)
-   ((: (g i acc rec bol)
-       (i >= #s ? acc
-          (s i @ c
-             (? (c = 92 && 1 + i < #s && s (1 + i) = 10)
-                (rec ? (2 + i @ j (g (j < #s && s j = 9 ? (1 + j) j) acc rec 0))
-                   (: j ((: (h k) (k < #s && (s k = 32 || s k = 9) ? (h (1 + k)) k))
-                         (2 + i))
-                      (g j (rtws acc + " ") rec 0)))
-                (c = 10) (g (1 + i) (acc + "\n") rec 1)
-                (g (1 + i) (acc + string c) (bol ? (c = 9) rec) 0)))))
-    0 "" 0 1)
+    (: (cont? l) (0 < #l && l (#l - 1) = 92)
+       (lead l) ((: (h k) (k < #l && (l k = 32 || l k = 9) ? (h (1 + k)) k)) 0)
+       (glue rec cur l)
+        (: c (snip cur 0 (#cur - 1))
+           (rec ? (c + (0 < #l && l 0 = 9 ? (snip l 1 #l) l))
+              (rtws c + " " + snip l (lead l) #l)))
+       ; one logical line off the head: [text rest]
+       (one rec cur ls) (cont? cur && two? ls ? (one rec (glue rec cur <ls) >ls) [cur ls])
+       (g ls acc)
+        (atom? ls ? (join "\n" (rev acc))
+           (: l <ls
+              (one (0 < #l && l 0 = 9) l >ls @ [x r] (g r (x . acc)))))
+       (g (lines s) ()))
    (lines s)
    ((: (g i st acc)
        (i >= #s ? (rev (snip s st i . acc))
@@ -434,6 +436,7 @@
    (sub s a b) (a < b ? (snip s a b) "")
    ; strip a make comment (an unescaped #) from a non-recipe line; \# is a literal #.
    (strip-comment l)
+   (findc l 0 35 = #l && findc l 0 92 = #l ? l
    ((: (g i acc)
        (i >= #l ? acc
           (l i @ c
@@ -442,7 +445,7 @@
                             (l (1 + i) @ d (d @ 35 (g (2 + i) (acc + "#")) (g (2 + i) (acc + "\\" + string d))))
                             (acc + "\\"))
                 (g (1 + i) (acc + string c))))))
-    0 "")
+    0 ""))
    ; split on a top-level `ch`: parens and braces balance, so a delimiter inside $(..) / ${..}
    ; does not split (function args, the static-pattern colon).
    (splittop s ch)
@@ -566,8 +569,12 @@
    (chomp s) ((: (g i) (0 < i && s (i - 1) = 10 ? (g (i - 1)) (snip s 0 i))) #s)
    (nl->sp s) ((: (g i acc) (i >= #s ? acc (g (1 + i) (acc + string (s i @ 10 32 (s i)))))) 0 "")
    ; $(shell) and != ride SHELL and .SHELLFLAGS as a recipe line does, captured: in this
-   ; image where the line would (inimg), else spawned
+   ; image where the line would (inimg), else spawned. a caller's function under " shell"
+   ; answers instead: the seat that keeps a build's probes off the host
    (fn-shell as cmd)
+    (: hook (peep as " shell" 0)
+       (lit? hook ? (hook cmd) (fn-shell1 as cmd)))
+   (fn-shell1 as cmd)
     (: sh (shname as) fl (shflags as) cap (cite 'lush 'sh-onecap)
        o (inimg sh fl && lit? cap ? (cap fl cmd))
        r (two? o ? o (hark ([sh] + fl + [cmd])))
@@ -629,11 +636,11 @@
                "abspath" "realpath" "call" "origin"
                ; a name off this list is a variable: `$(foo bar)` answers empty, make's own rule
                "findstring" "join" "wordlist" "foreach" "value" "flavor"
-               "error" "warning" "info" "eval")
+               "error" "warning" "info" "eval" "intcmp" "file")
    ; ..but a name make implements and we do not refuses instead: make never takes the variable
    ; branch for these, so an empty answer is a rule quietly not existing, and no output diff
    ; sees a target that was never made. the list is GNU's roster minus ours.
-   gapnames '("file" "let" "intcmp" "guile")
+   gapnames '("let" "guile")
    (cook-gap what)
     (say err ("cook: " + what + " is not implemented.\n"),
      quit 2)
@@ -644,7 +651,7 @@
       body (peep as fname "")
       n ((: (g l i) (two? l ? (g >l (1 + i)) i)) args 0)
       olds ((: (g i acc) (i < n ? (g (1 + i) ((show i . peep as (show i) 'cook.undef) . acc)) acc)) 0 0)
-      _ ((: (g i l) (two? l ? (pin as (show i) <l, g (1 + i) >l) 0)) 0 args)
+      _ ((: (g i l) (two? l ? (pin as (show i) (esc <l), g (1 + i) >l) 0)) 0 args)
       r (expand body as (1 + d))
       (each olds (pr \ nom? >pr ? (pull as <pr 0) (pin as <pr >pr)),
        r))
@@ -673,6 +680,15 @@
          "word"      (: a (argl 0) ws (split-ws (peep a 1 "")) n (sound (trim (peep a 0 "")) @ r (two? r ? <r 0)) (peep ws (n - 1) ""))
          "words"     (show #(split-ws (ex1 at)))
          "if"        (: a (rawl 0) c (trim (ex1 (peep a 0 ""))) (0 < tally c ? (ex1 (peep a 1 "")) (ex1 (peep a 2 ""))))
+         ; $(intcmp l,r,lt,eq,gt): gt falls back to eq; with two args, l when equal, else empty
+         "intcmp"    (: a (rawl 0) l (num1 (ex1 (peep a 0 ""))) r (num1 (ex1 (peep a 1 "")))
+                        (#a < 3 ? (l = r ? (show l) "")
+                           (ex1 (peep a (l < r ? 2 (l = r || #a < 5 ? 3 4)) ""))))
+         ; $(file <f): the text less one trailing newline, a missing file empty; writes refuse
+         "file"      (ltrim (ex1 at) @ s
+                        (0 < #s && s 0 = 60
+                         ? (uread (trim (snip s 1 #s)) @ [1 x] (0 < #x && x (#x - 1) = 10 ? (snip x 0 (#x - 1)) x) "")
+                         (cook-gap "$(file >..)")))
          "or"        (fn-or (rawl 0) as d)
          "and"       (fn-and (rawl 0) as d)
          "call"      (fn-call (argl 0) as d)
@@ -688,12 +704,13 @@
                                v (trim (ex1 (peep a 0 "")))
                                body (peep a 2 "")
                                old (peep as v "")
-                               r (join " " (map (w \ (pin as v w, ex1 body))
+                               r (join " " (map (w \ (pin as v (esc w), ex1 body))
                                                 (split-ws (ex1 (peep a 1 "")))))
                                (pin as v old,              ; put the outer binding back
                                 r))
          ; value/flavor read the variable without expanding it -- the one pair that must not ex1
-         "value"     (peep as (trim (ex1 at)) "")
+         "value"     (trim (ex1 at) @ v (peep as v "" @ x
+                        (peep flavors v "" = "simple" ? (strrep "$$" "$" x) x)))
          "flavor"    (peep origins (trim (ex1 at)) "undefined" @ o
                                (o = "undefined" ? "undefined" (peep flavors (trim (ex1 at)) "recursive")))
          ; the diagnostics: a guard spelled $(error ..) must not vanish into an empty string
@@ -816,6 +833,9 @@
    ; otherwise silences every file assignment to that name, ?= and += included -- make's rule).
    ; origins records provenance for $(origin); an unfired ?= leaves value and origin alone.
    (do-assign as nm op val) (assign1 as nm op val 0)
+   ; an expanded value kept where a reference expands it again ($(x) of a :=, a call's $(1),
+   ; a foreach's word) keeps its $ as $$, so the second expansion answers the value itself
+   (esc s) (strrep "$" "$$" s)
    ; the name is expanded first, as make does: mmu-$(CONFIG_MMU) := .. names mmu-y
    (assign1 as nm0 op val ov)
    (expand nm0 as 0 @ nm
@@ -825,13 +845,13 @@
          ; same text afterwards, so nothing in the value itself can answer $(flavor).
          (org f) (pin origins nm (ov ? "override" "file"), pin flavors nm f)
          (op @ "!="  (pin as nm (fn-shell as (expand v as 0)), org "simple")
-               ":="  (pin as nm (expand v as 0), org "simple")
-               "::=" (pin as nm (expand v as 0), org "simple")
+               ":="  (pin as nm (esc (expand v as 0)), org "simple")
+               "::=" (pin as nm (esc (expand v as 0)), org "simple")
                "?="  (peep as nm 'cook.undef @ cur
                       (nom? cur ? (pin as nm v, org "recursive") 0))
                ; onto a simple variable the value expands now, and the variable stays simple
                "+="  (: o (peep as nm "") f (peep flavors nm "recursive")
-                        w (f = "simple" ? (expand v as 0) v)
+                        w (f = "simple" ? (esc (expand v as 0)) v)
                         (pin as nm (0 < tally o ? (o + " " + w) w), org f))
             (pin as nm v, org "recursive")))))
 
@@ -851,8 +871,18 @@
       (r1 c . (<sc . inl)))
    (condon cond) (two? cond ? <>><cond 1)
    (push-cond cond pon active) ([pon active active] . cond)
-   (else-cond cond) (: f <cond pon <f taken <>f na (pon && !taken)
-                       ([pon (taken || na) na] . >cond))
+   ; `else ifeq ..` chains: the tail's test runs only while no earlier arm was taken
+   (else-cond cond tail as)
+    (: f <cond pon <f taken <>f
+       q (0 < #tail ? (classify tail) 0)
+       na (pon && !taken && (!q || cond-test q as))
+       ([pon (taken || na) na] . >cond))
+   (cond-test q as)
+    (<q @ 'ifeq (eval-ifeq (r1 q) as)
+          'ifneq !(eval-ifeq (r1 q) as)
+          'ifdef (eval-ifdef (r1 q) as)
+          'ifndef !(eval-ifdef (r1 q) as)
+          (cook-gap ("else " + show <q)))
    ; the text $(eval ..) queued while the last line expanded, as lines, oldest first
    (evals-take as)
     (peep as " evals" () @ q (two? q ? (pull as " evals" 0, catmap text-lines (rev q)) ()))
@@ -897,7 +927,7 @@
                   'ifneq  (loop rest rules cur (push-cond cond on (on && !(eval-ifeq (r1 c) as))))
                   'ifdef  (loop rest rules cur (push-cond cond on (on && eval-ifdef (r1 c) as)))
                   'ifndef (loop rest rules cur (push-cond cond on (on && !(eval-ifdef (r1 c) as))))
-                  'else   (loop rest rules cur (else-cond cond))
+                  'else   (loop rest rules cur (else-cond cond (trim (r1 c)) as))
                   'endif  (loop rest rules cur >cond)
                   (loop rest (flushr cur rules) 0 cond))))))
      cls 0 0 0))
@@ -910,10 +940,11 @@
            (trim (strip-comment <l) @ t
               (first-word t = "define" ?
                  (: nm (trim (after-word t))
+                    ; the body's lines joined: the newline before endef is not the value's
                     (body r bs) (? (atom? r) (udie 2 "cook: define with no endef.  Stop.")
-                                    (trim (strip-comment <r) = "endef") [>r bs]
-                                    (body >r (bs + <r + "\n")))
-                    p (body >l "")
+                                    (trim (strip-comment <r) = "endef") [>r (join "\n" (rev bs))]
+                                    (body >r (<r . bs)))
+                    p (body >l ())
                     (g <p (['defassign nm <>p] . acc)))
                  (g >l (classify <l . acc))))))
      (lines (uncont src)) ())
