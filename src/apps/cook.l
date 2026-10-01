@@ -349,10 +349,10 @@
                 (lit? g && lit? o ? (pat \ g pat (o #pat)))))
 
 ; the whole importer lives in one body-having `:`, so none of its many helper names leak; it
-; reads the outer globals freely and its body answers cook-main (args -> the whole job, answering
-; its status; a failure leaves by udie). the outer `:` binds cook-main as the one public -- the multi-call `kore`
-; calls it as `make` -- and the seat at the bottom fires it when this file was invoked.
-(: cook-main (:
+; reads the outer globals freely and its body answers its two publics: cook-main (args -> the whole
+; job, answering its status; a failure leaves by udie), which the multi-call `kore` calls as `make`
+; and the seat at the bottom fires when this file was invoked, and cook-vars/cook-expand (below).
+(: cook-pubs (:
    ; --emit: when set, expand-steps emits a serializable ("sh" "-c" cmd) step instead of a
    ; sh-line thunk, so the resolved cards can be shown back as a Cookfile (emit-cookfile below).
    emitp {}
@@ -369,6 +369,9 @@
    ; `a.out b.out: src` is one rule with two targets. assignP runs first, so assignment lines
    ; never reach this span.
    (notcolon c) (c != 58)
+   ; an assigned name is make's: anything but whitespace, : = #, and the op leads + ? ! --
+   ; obj-y, foo-$(CONFIG_X), CFLAGS_$(f) -- where `$X`'s one character is namech's
+   (varch c)    !(chws c || elem c '(58 61 35 43 63 33))
    (anyc c)     1
    (ltrim s) (: i ((: (g j) (j < #s && chws (s j) ? (g (1 + j)) j)) 0)
                (snip s i #s))
@@ -443,7 +446,7 @@
    ; `!=` runs its value and takes the output, the portable spelling of $(shell ..): bmake and
    ; GNU both read it, where neither reads the other's conditionals.
    opP (alt (lit "::=") (alt (lit ":=") (alt (lit "?=") (alt (lit "+=") (alt (lit "!=") (lit "="))))))
-   assignP (seqs [(skip (span chws)) (span namech)
+   assignP (seqs [(skip (span chws)) (span varch)
                    (skip (span chws)) (pmap (x \ [<x]) opP)
                    (skip (span chws)) (span anyc)])
    ruleP (seqs [(skip (span chws)) (span notcolon) (skip (lit ":")) (span anyc)])
@@ -466,8 +469,8 @@
          (? (0 = #tt) '(skip)
             (: w (first-word tt) rest (after-word tt)
                (? (w = "include") ['inc rest]
-                  (w = "-include") ['inc rest]
-                  (w = "sinclude") ['inc rest]
+                  (w = "-include") ['sinc rest]      ; make's optional include: a missing file is no error
+                  (w = "sinclude") ['sinc rest]
                   ; `override NAME op VAL` assigns past a command-line VAR=VAL;
                   ; `export NAME [op VAL]` assigns (when an op is there) and hands the
                   ; final value to the process environment, so recipes inherit it.
@@ -614,7 +617,7 @@
                "abspath" "realpath" "call" "origin"
                ; a name off this list is a variable: `$(foo bar)` answers empty, make's own rule
                "findstring" "join" "wordlist" "foreach" "value" "flavor"
-               "error" "warning" "info")
+               "error" "warning" "info" "eval")
    ; ..but a name make implements and we do not refuses instead: make never takes the variable
    ; branch for these, so an empty answer is a rule quietly not existing, and no output diff
    ; sees a target that was never made. the list is GNU's roster minus ours.
@@ -685,6 +688,10 @@
          "info"      (puts (ex1 at), putc 10, "")
          "warning"   (say err ("cook: " + ex1 at), put err 10, "")
          "error"     (say err ("cook: *** " + ex1 at + ".  Stop.\n"), quit 2)
+         ; $(eval) inside an expansion ($(foreach f,..,$(eval CFLAGS_$(f) = ..))): its assignments
+         ; land in the same table; a rule cannot reach the rule list from here, so one refuses
+         "eval"      (build (text-lines (ex1 at)) as @ rs
+                        (two? rs ? (cook-gap "a rule inside a nested $(eval ..)") ""))
          ""))                                   ; unknown -> empty (make's own rule; see funcnames)
 
    ; a group body is a function call ($(name args)), a substitution reference
@@ -692,7 +699,8 @@
    (eval-group body as d)
    (: sp (findws body)
       nm (snip body 0 (sp < #body ? sp #body))
-      ((any (= nm) gapnames ? (cook-gap ("$(" + nm + " ..)")) 0),
+      ; a call only with an argument: a bare $(file) is a variable (a foreach's loop name)
+      ((sp < #body && any (= nm) gapnames ? (cook-gap ("$(" + nm + " ..)")) 0),
        (sp < #body && funcp (snip body 0 sp) ?
           (apply-func (snip body 0 sp) (ltrim (snip body (1 + sp) #body)) as d)
           (: eb (expand body as (1 + d)) ci (findc eb 0 58)
@@ -795,7 +803,9 @@
    ; otherwise silences every file assignment to that name, ?= and += included -- make's rule).
    ; origins records provenance for $(origin); an unfired ?= leaves value and origin alone.
    (do-assign as nm op val) (assign1 as nm op val 0)
-   (assign1 as nm op val ov)
+   ; the name is expanded first, as make does: mmu-$(CONFIG_MMU) := .. names mmu-y
+   (assign1 as nm0 op val ov)
+   (expand nm0 as 0 @ nm
    (!ov && peep origins nm "undefined" = "command line" ? 0
       (: v (trim val)
          ; the flavor rides beside the origin: an expanded `:=` and a stored `=` are the
@@ -806,10 +816,11 @@
                "::=" (pin as nm (expand v as 0), org "simple")
                "?="  (peep as nm 'cook.undef @ cur
                       (nom? cur ? (pin as nm v, org "recursive") 0))
-               "+="  (peep as nm "" @ o
-                        (pin as nm (0 < tally o ? (o + " " + v) v),
-                         org (peep flavors nm "recursive")))
-            (pin as nm v, org "recursive"))))
+               ; onto a simple variable the value expands now, and the variable stays simple
+               "+="  (: o (peep as nm "") f (peep flavors nm "recursive")
+                        w (f = "simple" ? (expand v as 0) v)
+                        (pin as nm (0 < tally o ? (o + " " + w) w), org f))
+            (pin as nm v, org "recursive")))))
 
    ; -- fold classified lines into a rules list, mutating `as`. The conditional
    ; stack is a list of frames (pon taken active); `on` is the top frame's active
@@ -846,6 +857,9 @@
                   'inc    (on ? (catmap file-lines (split-ws (expand (r1 c) as 0)) @ more
                                          (loop (more + rest) (flushr cur rules) 0 cond))
                                       (loop rest (flushr cur rules) 0 cond))
+                  'sinc   (on ? (catmap (f \ exists? f ? (file-lines f) ()) (split-ws (expand (r1 c) as 0)) @ more
+                                         (loop (more + rest) (flushr cur rules) 0 cond))
+                                      (loop rest (flushr cur rules) 0 cond))
                   ; conditionals thread `cur` rather than flushing it: a top-level rule is
                   ; already flushed by the blank line before one, and a conditional inside a
                   ; recipe block gates its lines via `on` above.
@@ -869,8 +883,8 @@
     cls 0 0 0)
 
    ; `$(eval TEXT)` alone on a line: expand TEXT, then parse it, as the `include` splice does with
-   ; a string where the file was. nested in an expression it cannot work -- expand answers a
-   ; string and cannot reach the rule list.
+   ; a string where the file was. nested in an expression only its assignments can land (the
+   ; "eval" function above): expand answers a string and cannot reach the rule list.
    (evalp s) (#s @ n
                 (7 < n && s 0 = 36 && (s 1 = 40 || s 1 = 123)
                  && snip s 2 6 = "eval" && chws (s 6)
@@ -1311,7 +1325,17 @@
           (two? pos) (udie 1 "cook: no Cards.l, Cookfile or Makefile found")
           0)))
 
-   cook-main))
+   ; make text read on make's own terms into the caller's tablet, the variable layer alone:
+   ; assignments, conditionals, include, define, $(eval). answers the rules, unregistered, as
+   ; (targets prereqs . steps) texts -- for a reader that owns its graph (hearts' kbuild).
+   ; cook-expand reads a text against that tablet as make would
+   (cook-vars src as) (build (text-lines src) as)
+   (cook-expand s as) (expand s as 0)
+
+   [cook-main cook-vars cook-expand])
+   cook-main (cook-pubs 0)
+   cook-vars (cook-pubs 1)
+   cook-expand (cook-pubs 2))
 
 ; the seat (src/apps/nc.l's shape): fire cook-main iff this file -- or the installed `cook` symlink
 ; -- sits in the program seat of the real command line, taking the args after the seat. cmdline

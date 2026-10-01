@@ -505,6 +505,24 @@
    jbad (: r (hark [love "-l" "src/apps/cook.l" "-j" "x" "-f" (dir + "/Makefile") "all"]) (two? r ? <r 0))
    _ (ok "-j wants a count" !(0 = jbad))
 
+   ; ------------------------------------------------------- kbuild's make
+   ; a name is make's: hyphens, and a computed part expanded before it is assigned
+   kn (run-cook (mk '("X := y" "obj-y := a.o" "obj-$(X) += b.o" "obj- += c.o"
+                     "all:" "\t@echo \"N[$(obj-y)]\"")) "all")
+   _ (ok "obj-$(X) names obj-y" (has kn "N[a.o b.o]"))
+   ; += onto a simple variable expands its value now (u is unset at that line)
+   ks (run-cook (mk '("s := 1" "t = $(u)" "s += [$(t)]" "u = late"
+                     "all:" "\t@echo \"S[$(s)]\"")) "all")
+   _ (ok "+= onto := expands now" (has ks "S[1 []]"))
+   ; -include of a missing file is no error, include of a present one still splices
+   ko (run-cook (mk [("-include " + dir + "/no-such.mk") "sinclude /no/such/either.mk"
+                     "all:" "\t@echo \"O[ok]\""]) "all")
+   _ (ok "-include of a missing file" (has ko "O[ok]"))
+   ; $(file) bare is a variable (a foreach's), and $(eval) inside the foreach assigns
+   ke (run-cook (mk '("$(foreach file,a b,$(eval V_$(file) := x$(file)))"
+                     "all:" "\t@echo \"E[$(V_a)$(V_b)]\"")) "all")
+   _ (ok "nested $(eval) under foreach's $(file)" (has ke "E[xaxb]"))
+
    ; ---------------------------------------------------------------- summary
    _ (sh ("rm -rf " + dir))
    np (peep pass 0 0) nf (peep fail 0 0)
