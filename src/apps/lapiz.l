@@ -569,8 +569,47 @@
    ; an id is the other attribute the middle keeps: it becomes a mark, inside a tag whose
    ; content is a line and ahead of any other. `ba` is 1 while an <a> with no href is open:
    ; that is an anchor, not a link, so its tags go and only its mark and its text stay.
+   ; what a reader without scripts never sees: the classes a <style> inside a <noscript>
+   ; hides (display:none or visibility:hidden) by a plain .name selector, @-blocks skipped.
+   ; a rule holds for the pictures after it, read as the scrub meets it
+   (hhas s pat) (: m #pat (go k) (? (#s < k + m) 0 (snip s k (k + m) = pat) 1 (go (k + 1))) (go 0))
+   (hcss b)
+    (:- (go 0 0 ()) n #b
+     (shut i d) (? (n <= i) n (b i = 125) (d = 1 ? (i + 1) (shut (i + 1) (d - 1)))
+                   (b i = 123) (shut (i + 1) (d + 1)) (shut (i + 1) d))
+     (cls x) (: w (words x) c <w
+                (? (#w = 1 && 1 < #c && c 0 = 46 && !(hhas c ":") && !(hhas c "[")
+                    && !(hhas (snip c 1 #c) ".")) [(snip c 1 #c)] ()))
+     (go i st acc)
+      (? (n <= i) acc
+         (b i != 123) (go (i + 1) st acc)
+         (: sel (snip b st i) w (words sel)
+            (? (two? w && <w 0 = 64) (shut (i + 1) 1 @ z (go z z acc))
+               (: z (hfind b (i + 1) "}")
+                  t (snip b (i + 1) (z - 1))
+                  d (lower (string (filter (c \ !(elem c '(32 9 10 13))) (map (j \ t j) ^#t))))
+                  hide (hhas d "display:none" || hhas d "visibility:hidden")
+                  (go z z (? hide (foldl (\ a x (cls x + a)) acc (split "," sel)) acc)))))))
+   (hnoshow s i e)
+    (:- (go i ()) n #s
+     (go i acc)
+      (? (e <= i) acc
+         (s i = 60 && i + 6 < n && hlow (snip s i (i + 6)) = "<style")
+          (: b (hfind s i ">") z (hfind s b "</style") (go z (hcss (snip s b (z - 7)) + acc)))
+         (go (i + 1) acc)))
+   ; ..and the same off each <noscript> inside a <head>, which the scrub deletes whole
+   (hheadns s i e)
+    (:- (go i ()) n #s
+     (go i acc)
+      (? (e <= i) acc
+         (s i = 60 && i + 9 < n && (s (i + 1) = 110 || s (i + 1) = 78) && hlow (snip s i (i + 9)) = "<noscript")
+          (: b (hfind s i ">") z (hpast s b "noscript") (go z (hnoshow s b z + acc)))
+         (go (i + 1) acc)))
+   (hshown? s k e hid)
+    (!(hflag s k e "hidden") && !(two? hid && (hattr s k e "class" @ c
+                                              (string? c && two? (filter (x \ elem x hid) (words c))))))
    (htscrub s)
-    (:- (go 0 0) n #s o (jug 0) fs (pin {} 'f {})
+    (:- (go 0 0) n #s o (jug 0) fs (pins {} 'f {} 'hid ())
      (field i) (peep (fs 'f) i "")
      (go i ba)
       (? (n <= i) (slurp o)
@@ -586,7 +625,11 @@
                   (? (t = "form") (pin fs 'f (op? ? (hform s k (e - 1) e) {}), say o mk, go e ba)
                      (t = "input") (say o (mk + field i), go e ba)
                      (t = "textarea") (say o (mk + field i), go (op? ? (hpast s e t) e) ba)
-                     (t = "img") (say o (mk + (op? ? (himg s k (e - 1)) "")), go e ba)
+                     (t = "img") (say o (mk + (op? && hshown? s k (e - 1) (fs 'hid) ? (himg s k (e - 1)) "")), go e ba)
+                     (t = "head" && op?)
+                      (: z (hpast s e t) (pin fs 'hid (hheadns s e z + fs 'hid), go z ba))
+                     (t = "noscript" && op?)
+                      (: z (hpast s e t) (pin fs 'hid (hnoshow s e z + fs 'hid), go z ba))
                      (elem t hkill) (go (op? ? (hpast s e t) e) ba)
                      (elem t hbare) (say o mk, go e ba)
                      (t = "br") (say o "</p><p>", go e ba)
