@@ -266,9 +266,9 @@ $(ho)/love.raw $(ho)/love.cand.raw: $(host_o) $(seat_o) $(ho)/liblove.a $(ho)/.h
 else
 moonlibc_src = $(wildcard src/apps/moon/lib/moonlibc/*.c src/apps/moon/lib/moonlibc/*.h \
                         src/apps/moon/lib/moonlibc/*/*.c src/apps/moon/lib/moonlibc/*/*.h)
-# out/moonlibc.o LEADS: a job pool fills in prerequisite order, and this one is the long pole
-# (three ISAs' runtime members, ~30 s cold) -- behind the TU list it starts as they finish
-# and runs alone. ahead of them it rides beside them, and -j loses that time outright.
+# out/moonlibc.o LEADS: a job pool fills in prerequisite order, and its groups are the long
+# pole (three ISAs' runtime members, ~80 s of cpu cold) -- behind the TU list they start as
+# they finish and run alone. ahead of them they ride beside them, and -j loses that time.
 $(ho)/love.raw $(ho)/love.cand.raw: out/moonlibc.o $(moon_o) out/src.o out/rootfs.o out/lib/readme.bin $(moonlibc_src)
 	@echo 'MOON	'$@
 	@mkdir -p $(dir $@)
@@ -412,9 +412,48 @@ rt_slice = $(wildcard src/apps/moon/include/*.h src/apps/moon/include/*/*.h \
                       src/apps/moon/lib/moonlibc/*.c src/apps/moon/lib/moonlibc/*.h \
                       src/apps/moon/lib/moonlibc/*/*.c src/apps/moon/lib/moonlibc/*/*.h \
                       src/apps/moon/lib/moonlibc/math/*.c)
-out/moonlibc.o: $(rt_slice) src/tools/mkrt.l $(rtlove_dep) $(love0)
+# the members compile in groups, one archive per (isa, group) under out/rt -- a directory
+# of moonlibc, or a letter range of sys/, so a file never changes group. each group
+# parses impl.h once; one process per member would pay it 630 times. the join lays them
+# in roster order, whichever object arch it is for.
+rt_lib = src/apps/moon/lib/moonlibc
+rt_h = $(wildcard src/apps/moon/include/*.h src/apps/moon/include/*/*.h $(rt_lib)/*.h $(rt_lib)/*/*.h)
+rt_isas = x64 a64 rv64
+rt_groups = sys-af sys-gl sys-mr sys-sz top net string signal fmt stdio math ctype mem proc dirent env
+rt_sysrange = $(filter $(foreach c,$(1),$(rt_lib)/sys/$c%),$(wildcard $(rt_lib)/sys/*.c))
+rt_src_sys-af = $(call rt_sysrange,a b c d e f)
+rt_src_sys-gl = $(call rt_sysrange,g h i j k l)
+rt_src_sys-mr = $(call rt_sysrange,m n o p q r)
+rt_src_sys-sz = $(call rt_sysrange,s t u v w x y z)
+rt_src_top = $(wildcard $(rt_lib)/*.c) src/apps/moon/lib/mksys.l
+rt_src = $(if $(rt_src_$(1)),$(rt_src_$(1)),$(wildcard $(rt_lib)/$(1)/*.c))
+rt_a = $(foreach i,$(rt_isas),$(foreach g,$(rt_groups),out/rt/$i/$g.a))
+# one rule per group, the isa its stem. an eval inside a foreach is not cook's
+define rtgroup
+$$(foreach i,$$(rt_isas),out/rt/$$i/$(1).a): out/rt/%/$(1).a: $$(call rt_src,$(1)) $$(rt_h) src/tools/mkrt.l $$(rtlove_dep) $$(love0)
+	@echo 'MOON	'$$@
+	@mkdir -p $$(dir $$@)
+	@$$(rtlove) src/tools/mkrt.l -m $$@ $$* $$(patsubst %/mksys.l,mksys,$$(call rt_src,$(1)))
+endef
+$(eval $(call rtgroup,sys-af))
+$(eval $(call rtgroup,sys-gl))
+$(eval $(call rtgroup,sys-mr))
+$(eval $(call rtgroup,sys-sz))
+$(eval $(call rtgroup,top))
+$(eval $(call rtgroup,net))
+$(eval $(call rtgroup,string))
+$(eval $(call rtgroup,signal))
+$(eval $(call rtgroup,fmt))
+$(eval $(call rtgroup,stdio))
+$(eval $(call rtgroup,math))
+$(eval $(call rtgroup,ctype))
+$(eval $(call rtgroup,mem))
+$(eval $(call rtgroup,proc))
+$(eval $(call rtgroup,dirent))
+$(eval $(call rtgroup,env))
+out/moonlibc.o: $(rt_a) $(rt_slice) src/tools/mkrt.l $(rtlove_dep) $(love0)
 	@echo 'HOLO	'$@
-	@$(rtlove) src/tools/mkrt.l $@ $(hosta)
+	@$(rtlove) src/tools/mkrt.l $@ $(hosta) $(rt_a)
 
 xqemu_x64  = qemu-x86_64
 xqemu_a64 = qemu-aarch64
@@ -441,9 +480,9 @@ $(xd)/src.o: $(dist_source) src/tools/mksrc.l $(holocat_dep) $(love0)
 $(xd)/rootfs.o: out/rootfs.tar src/tools/mkblob.l $(holocat_dep) $(love0)
 	@echo 'HOLO	'$@
 	@LOVE_NO_IMAGE= $(love0) $(holocat) src/tools/mkblob.l $< $@ ai_rootfs $(xa)
-$(xd)/moonlibc.o: $(rt_slice) src/tools/mkrt.l $(rtlove_dep) $(love0)
+$(xd)/moonlibc.o: $(rt_a) $(rt_slice) src/tools/mkrt.l $(rtlove_dep) $(love0)
 	@echo 'HOLO	'$@
-	@$(rtlove) src/tools/mkrt.l $@ $(xa)
+	@$(rtlove) src/tools/mkrt.l $@ $(xa) $(rt_a)
 $(xd)/love: $(x_o) $(xd)/src.o $(xd)/rootfs.o $(xd)/moonlibc.o out/lib/readme.bin
 	@echo 'MOON	'$@
 	@$(moonx) -pie $(x_o) $(xkart_o) $(xd)/src.o $(xd)/rootfs.o $(xd)/moonlibc.o -freadme=out/lib/readme.bin -o $@
@@ -608,10 +647,10 @@ kcc = $(mooncc) $(kcppflags) -t $a
 kernel: $(k_elf)
 
 $(k_odir)/love/cb.o: src/love/quay/quay.c src/love/quay/nif.c src/love/quay/quay.h src/love/quay/cp437.h src/love/quay/cpwidth.h src/love/quay/cpemoji.h src/love/quay/paint.c src/love/quay/cga_8x8.c src/love/quay/cleat_8x16.c
-$(k_odir)/moonlibc.o: $(rt_slice) src/tools/mkrt.l $(mdep)
+$(k_odir)/moonlibc.o: $(rt_a) $(rt_slice) src/tools/mkrt.l $(mdep)
 	@echo 'HOLO	'$@
 	@mkdir -p "$(dir $@)"
-	@$m src/tools/mkrt.l $@ $a
+	@$m src/tools/mkrt.l $@ $a $(rt_a)
 $(k_odir)/src.o: $(dist_source) src/tools/mksrc.l $(mdep)
 	@echo 'HOLO	'$@
 	@mkdir -p "$(dir $@)"

@@ -553,8 +553,8 @@
    ; one archive per (compiler, target), keyed on everything that decides its bytes -- an
    ; archive because the ranlib index is what each member defines, written once rather than
    ; recomputed per warm link, and because one file is one generation. the carried archives
-   ; (rtcarried) answer every stock tree, so what is left for this cache is src/tools/mkrt.l
-   ; cutting that set under love0, and a toolchain edited past the stamp.
+   ; (rtcarried) answer every stock tree, so what is left for this cache is a toolchain
+   ; edited past the stamp. src/tools/mkrt.l cuts the carried set past it, under make.
    ; the compiler is one of those inputs and the costly one to get wrong -- a stale entry is
    ; an old codegen worn silently, and the gates that compile moonlibc by hand (test_raw,
    ; test_libc, test_fixpoint) would pass against it. its identity is the baked image, which
@@ -798,10 +798,8 @@
    ; leaf is the os's own -- freebsd rides the x64 machine.
    (rtflags tgt os vb is) (pin (pin (pin (fseed tgt 'moon) 'os os) 'is is) 'vb vb)
    ; one member, through a cache cut a rung finer than the archive's: the same tree id
-   ; and target, plus the member's own name. what that buys is a fan -- ~600 compiles
-   ; that read nothing of each other, so any number of children can fill this and the
-   ; parent reads every one back. an edit anywhere in the slice still moves the id, and so
-   ; every member.
+   ; and target, plus the member's own name. an edit anywhere in the slice still moves the
+   ; id, and so every member. no cache (cd ()) is a plain compile, which is mkrt's lane.
    (rtmem1 tgt os vb id cd e)
     (: nm (e 0) src (e 1) is (e 2)
        k (string? cd && string? id
@@ -818,23 +816,6 @@
    (rtmems home tgt os vb id)
     (string? id && mcdir () @ cd
        (map (e \ rtmem1 tgt os vb id cd e) (rtplan home tgt os vb)))
-   ; fill the member cache for one residue of the roster, over every target named --
-   ; what a forked child runs. a child's whole answer is the entries it writes, so
-   ; nothing is returned and the parent reads them back through rtmems; with no cache in
-   ; reach the call is a no-op.
-   ; the residue is contiguous runs, not one member in w: cpp.l's header memo keys on a
-   ; TU's first include and holds three, so roster neighbours hit it where a stride misses --
-   ; 597 members cost 682 G instructions split sixteen ways, 490 G taken in runs.
-   (rtwarm home tgts os vb w i)
-    (: run 8                     ; long enough to keep the memo, short enough to spread
-       id (string? home && mcid home)
-       cd (string? id && mcdir ())
-       (!(string? cd) ? 0
-          (each tgts
-                (t \ (: (go l k) (!(two? l) ? 0
-                                    (i = k // run % w && rtmem1 t os vb id cd <l,
-                                     go >l (k + 1)))
-                        (go (rtplan home t os vb) 0))))))
    (rtpull srcs tgt os nostd vb)
     (: mach (peep elf-machines tgt 0)
        lg (ldledger srcs mach) dt <lg owed <>lg

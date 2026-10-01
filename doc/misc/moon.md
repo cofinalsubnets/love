@@ -284,9 +284,9 @@ the same face.
 
 **The CARRIED archive is asked first, and on a stock tree it is the whole answer** — the
 binary's own stamped bytes cannot be improved on by a cache entry, so the key is cut only where
-they were refused. That leaves the cache two populations: `src/tools/mkrt.l` cutting the carried set
-under love0, which carries none, and a toolchain edited past the stamp. Both are a checkout,
-which is why the cache seats itself at `out/` and `make clean` reaches it.
+they were refused. That leaves the cache one population: a toolchain edited past the stamp. The
+carried set itself is cut by make, a group of members per rule under `out/rt/`, past the cache.
+Either is a checkout, which is why the cache seats itself at `out/` and `make clean` reaches it.
 
 **The carried archives are per-ISA and kernel-neutral.** All three are cut under `-os linux`
 and the pin does not reach the bytes: `impl.h` parts linux, freebsd and netbsd at RUN time on
