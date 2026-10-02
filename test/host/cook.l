@@ -122,6 +122,13 @@
    _ (write-file (dir + "/mk/common.mk") "FROM_INC = included-ok\n")
    inc (run-cook (mk [("include " + (dir + "/mk/common.mk")) "all:" "\techo \"I[$(FROM_INC)]\""]) "all")
    _ (ok "include" (has inc "I[included-ok]"))
+   sinc (run-cook (mk [("-include " + (dir + "/mk/nosuch.mk " + dir + "/mk/common.mk"))
+                       ("sinclude " + dir + "/mk/nosuch2.mk")
+                       "all:" "\techo \"S[$(FROM_INC)]\""]) "all")
+   _ (ok "-include and sinclude pass over a missing file" (has sinc "S[included-ok]"))
+   _ (write-file (dir + "/Makefile") (mk [("include " + dir + "/mk/nosuch.mk") "all:" "\techo x"]))
+   hinc (: r (hark [love "-l" "src/apps/cook.l" "-f" (dir + "/Makefile") "all"]) (two? r ? <r 0))
+   _ (ok "include of a missing file fails" !(0 = hinc))
 
    ; ----------------------------------------------------- automatic vars + dir
    av (run-cook (mk '("all: foo/bar.o"
