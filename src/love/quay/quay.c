@@ -665,7 +665,7 @@ static void cb_six_cmd(struct cb *c) {
 static void cb_six(struct cb *c, uint8_t i) {
   if (c->sm) {
     if (i >= '0' && i <= '9') { if (c->arg < 6553) c->arg = (uint16_t) (c->arg * 10 + (i - '0')); return; }
-    if (c->pn < 8) c->pv[c->pn++] = c->arg;
+    if (c->pn < cb_pmax) c->pv[c->pn++] = c->arg;
     c->arg = 0;
     if (i == ';') return;
     cb_six_cmd(c); }
@@ -1117,13 +1117,13 @@ static void cb_put1(struct cb *c, uint8_t i) {
       if (c->arg < 6553) c->arg = (uint16_t) (c->arg * 10 + (i - '0'));
       return; }
     if (i == ';' || i == ':') {              // ':' -- colon-form SGR subparameters
-      if (c->pn < 8) c->pv[c->pn++] = c->arg;
+      if (c->pn < cb_pmax) c->pv[c->pn++] = c->arg;
       c->arg = 0;
       return; }
     if (i == '>') { c->flag |= cb_gt; return; }     // the secondary-DA marker
     if (i == '?' || i == '=' || i == '<') { c->flag |= cb_priv; return; }
     if (i <= '/') { c->flag |= cb_junk, c->ci = i; return; }  // an intermediate: kept for DECRQM
-    if (c->pn < 8) c->pv[c->pn++] = c->arg;        // the final parameter
+    if (c->pn < cb_pmax) c->pv[c->pn++] = c->arg;        // the final parameter
     c->esc = 0;
     if (c->flag & cb_junk) {
       int const priv = !!(c->flag & cb_priv);
@@ -1149,9 +1149,9 @@ static void cb_put1(struct cb *c, uint8_t i) {
    case 9:                                  // a DCS's parameters: 'q' is sixel, anything else swallowed
     if (i == 27) { c->esc = 5; return; }
     if (i >= '0' && i <= '9') { if (c->arg < 6553) c->arg = (uint16_t) (c->arg * 10 + (i - '0')); return; }
-    if (i == ';') { if (c->pn < 8) c->pv[c->pn++] = c->arg; c->arg = 0; return; }
+    if (i == ';') { if (c->pn < cb_pmax) c->pv[c->pn++] = c->arg; c->arg = 0; return; }
     if (i < 0x40) { if (i >= 0x20) c->esc = 3; return; }   // an intermediate: none of ours
-    if (c->pn < 8) c->pv[c->pn++] = c->arg;
+    if (c->pn < cb_pmax) c->pv[c->pn++] = c->arg;
     if (i != 'q') { c->esc = 3; return; }
     c->sp2 = (uint8_t) (c->pn > 1 ? c->pv[1] : 0), c->pn = 0, c->arg = 0;
     c->esc = 10;
