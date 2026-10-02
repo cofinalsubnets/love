@@ -6,6 +6,7 @@
 ;   love bee --list | --send NAME TEXT ..    the sessions, from a shell
 ;   love bee --avatar [NAME]                 the avatars, or wear one
 ;   love bee --keygen root | box [NAME]      the lineage's root, or this box's key and card
+;   love bee --ticket [DAYS] | --enrol TOKEN [NAME] | --admit | --enrolled   a box joins a lineage
 ;
 ; the settings are ~/.love/etc/bee.l's, each a form per line; ./.bee.l may set model,
 ; max-tokens, thinking, context and queue-watch over them:
@@ -2359,8 +2360,7 @@
      ; that made it, and this box's key with its card, the root's word for whose key it is ---
      (sl nm) (cite 'seals nm)
      bee-keys (: h (getenv "HOME") ((string? h ? h "/tmp") + "/.love/etc/bee"))
-     bee-hostname (: r (uread "/proc/sys/kernel/hostname") s (two? r ? <>r "")
-                 (snip s 0 (0 < #s && s (#s - 1) = 10 ? #s - 1 #s)))
+     bee-hostname (: u (uname 0) (two? u && string? (u 1) ? (u 1) ""))
      ; a name a card can carry: no space, newline or @
      (card-name? s) (0 < #s && all (c \ 32 < c && c != 64) (map s ^#s))
      ; --keygen root | box [NAME] -> [1 what to print] | [0 why not]
@@ -2409,10 +2409,77 @@
                _ (rename (d + "/.cert") (d + "/cert"))
                [k ch])))
 
+     ; --- enrolment: the root's box mints a ticket, good once; a new box answers it with its own
+     ; key; the root's box spends the ticket and answers a card. each step is a pipe's stage:
+     ;   love bee --enrol TOKEN | ssh STEM love bee --admit | love bee --enrolled ---
+     bee-tickets (bee-keys + "/tickets")
+     (hex? s n) (string? s && #s = 2 * n && cite 'tls 'hex (cite 'tls 'unhex s) = s)
+     ; key value lines as a tablet, the first spelling of a key kept
+     (kv-lines s) (foldl (\ t l (l @ ((k && 0 < #k) + " " + v) (? (string? (peep t k ())) t (pin t k v)) t)) {} (lines s))
+     (root-key _) (sl 'seal-keyread (bee-keys + "/root.key"))
+     ; --ticket [DAYS] -> [1 TOKEN]: the lineage and the ticket, the ticket's hash kept here
+     (mint ws)
+      (: hx (cite 'tls 'hex) r (root-key 0) days (two? ws ? (digits <ws) 7)
+         (? !(two? r) [0 "no root here: a ticket is minted where root.key is"]
+            !(0 < days) [0 "usage: love bee --ticket [DAYS]"]
+            (: t (cite 'tls 'rnd 32) _ (mkdirs bee-tickets)
+               (? (spit-file (bee-tickets + "/" + sha256 t) ("expires " + show (clock 0 // 1000 + days * 86400) + "\n"))
+                  [1 (hx (r 1) + "-" + hx t)]
+                  [0 "cannot write the ticket"]))))
+     ; --enrol TOKEN [NAME] -> [1 REQUEST]: this box's key, made when there is none, signing its
+     ; name, its pub and the ticket. the lineage is kept, and one box answers to one lineage
+     (enrol ws)
+      (: hx (cite 'tls 'hex) tok (two? ws ? <ws "")
+         root (snip tok 0 64) tk (snip tok 65 #tok)
+         nm (#ws > 1 ? <>ws bee-hostname)
+         lf (bee-keys + "/lineage") had (slurp-file lf)
+         (? !(#tok = 129 && tok 64 = 45 && hex? root 32 && hex? tk 32) [0 "usage: love bee --enrol TOKEN [NAME]"]
+            !(card-name? nm) [0 ("not a box name: '" + nm + "'")]
+            (string? had && had != root + "\n") [0 "this box is of another lineage"]
+            (: _ (mkdirs bee-keys)
+               _ (? (string? had) 0 (spit-file lf (root + "\n")))
+               bk (bee-keys + "/box.key")
+               k (: r (sl 'seal-keyread bk) (? (two? r) r (: _ (sl 'seal-keywrite bk (sl 'seal-key 0)) (sl 'seal-keyread bk))))
+               body ("name " + nm + "\npub " + hx (k 1) + "\nticket " + tk + "\n")
+               (? !(two? k) [0 k]
+                  [1 (body + "sig " + hx (cite 'ssh 'ed-sign <k (k 1) body) + "\n")]))))
+     ; --admit, a request on stdin -> [1 CARD]: its sig by the key it names, its ticket minted
+     ; here, in date and spent now -- an exclusive create, so two admits cannot share one
+     (admit s)
+      (: hx (cite 'tls 'hex) ux (cite 'tls 'unhex) r (root-key 0) f (kv-lines s)
+         k (find s "\nsig " 0) body (? (0 <= k) (snip s 0 (k + 1)) "")
+         tk (f "ticket") tf (? (hex? tk 32) (bee-tickets + "/" + sha256 (ux tk)) "")
+         tt (? (0 < #tf) (slurp-file tf))
+         now (clock 0 // 1000)
+         (? !(two? r) [0 "no root here: a box is admitted where root.key is"]
+            !(hex? (f "pub") 32 && hex? (f "sig") 64 && string? (f "name") && card-name? (f "name"))
+             [0 "the request is not name, pub, ticket and sig"]
+            !(cite 'ssh 'ed-verify (ux (f "pub")) body (ux (f "sig"))) [0 "the request's sig does not check"]
+            !(string? tt) [0 "no such ticket here"]
+            !(now < digits (peep (kv-lines tt) "expires" "0")) [0 "the ticket is out of date"]
+            (: fd (openfd (tf + ".spent") 3)
+               (? !(charm? fd) [0 "the ticket is spent"]
+                  (: p (fdopen fd) _ (say p ("name " + f "name" + "\npub " + f "pub" + "\nspent " + show now + "\n")) _ (close p)
+                     [1 (sl 'seal-card r [["lineage" (hx (r 1))] ["name" (f "name")] ["kind" "box"] ["pub" (f "pub")]
+                                         ["issued" (show now)] ["expires" (show (now + 365 * 86400))]])])))))
+     ; --enrolled, the card on stdin: kept as box.card when it checks against the lineage and
+     ; names this box's key
+     (enrolled s)
+      (: hx (cite 'tls 'hex) lf (slurp-file (bee-keys + "/lineage"))
+         k (sl 'seal-keyread (bee-keys + "/box.key"))
+         t (? (string? lf) (sl 'seal-check s (snip lf 0 64) (clock 0 // 1000) ()) "no lineage here: enrol first")
+         (? (string? t) [0 ("the card does not check: " + t)]
+            !(two? k) [0 k]
+            (t "kind" != "box" || t "pub" != hx (k 1)) [0 "the card is not for this box's key"]
+            (spit-file (bee-keys + "/box.card") s) [1 ("enrolled: " + t "name" + " in lineage " + snip lf 0 64)]
+            [0 "cannot write box.card"]))
+
      ; --list, --send, --spawn and --stop speak to the hive from a shell and settle nowhere;
      ; a sender there is BEE_NAME, else cli- and the user
      (bee-cli as yes)
       (: say1 (\ e ok (? (#e = 0) (puts (ok + "\n"), 0) (say err ("bee: " + e + "\n"), 1)))
+         ; [1 text] printed, [0 why] said on stderr
+         say-r (\ r (? <r (: _ (puts (r 1 + (ends? (r 1) "\n" ? "" "\n"))) 0) (say err ("bee: " + r 1 + "\n"), 1)))
          (<as @
           "--list" (: s (sessions-text 0) (puts (s + (#s && s (#s - 1) = 10 ? "" "\n")), 0))
           "--send" (? (#as < 3) (say err "usage: love bee --send NAME TEXT ..\n", 2)
@@ -2446,6 +2513,10 @@
                     (? !<r (say err ("bee: " + r 1 + "\n"), 1)
                        (elem "--cmd" as) (: _ (puts (r 1 + "\n")) 0)
                        (: p (spawn ["sh" "-c" (r 1)]) (charm? p && 0 <= p ? (wait p) 127))))))
+          "--ticket" (say-r (mint >as))
+          "--enrol" (say-r (enrol >as))
+          "--admit" (say-r (admit (slurp in)))
+          "--enrolled" (say-r (enrolled (slurp in)))
           "--keygen" (: r (keygen >as) (? <r (: _ (puts (r 1 + (ends? (r 1) "\n" ? "" "\n"))) 0) (say err ("bee: " + r 1 + "\n"), 1)))
           "--stop" (? (#as < 2) (say err "usage: love bee --stop NAME\n", 2)
                       (: e (stop-bee <>as) (? (starts? e "stopped") (: _ (puts (e + "\n")) 0) (say err ("bee: " + e + "\n"), 1))))
@@ -2473,7 +2544,7 @@
          (? (elem "--mcp" as) (: _ (mcp-serve in out) 0)             ; a claude child's own server
             (two? as && <as = "--lock") (bee-cli as yes)              ; its command's words stay as given
             (two? as && elem <as ["-s" "--screensaver"]) (cite 'saver 'saver-cli >as)   ; a saver, no session
-            (two? words && elem <words ["--list" "--send" "--spawn" "--stop" "--avatar" "--resume" "--keygen"]) (bee-cli words yes)
+            (two? words && elem <words ["--list" "--send" "--spawn" "--stop" "--avatar" "--resume" "--keygen" "--ticket" "--enrol" "--admit" "--enrolled"]) (bee-cli words yes)
             ; the api backend wants its endpoint, model and key; claude brings its own. a stage
             ; answers why as a string: a harbour shows it, stderr would land on its glass
             (: why (? (!bee-cc? && atom? bee-at) ("cannot read the url " + bee-url)
