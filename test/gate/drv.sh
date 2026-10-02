@@ -78,4 +78,29 @@ printf 'int main(void){return 0;}' | moonc -xc -c -o "$d/in.o" - \
 # ..and -x stays LOUD on a language we are not: taking c++ for C is -std='s own hazard.
 moonc -x c++ -c "$d/b.c" -o "$d/x.o" 2>/dev/null && fail "-x c++ did not refuse"
 
-echo "test_drv: CC=mooncc -- the cc flag soup rides through, the runtime pulls by need, the configure probe answers, -shared/-nostdlib stay loud"
+# 5: -E, the preprocessor alone, gcc's shape: a configure script reads it for every header
+# probe, and gnulib finds the header it wraps by the `# N "path"` marker it leaves. a missing
+# header fails, as the probe for one must.
+mkdir -p "$d/inc"
+printf '#define SIDE 7\n' > "$d/inc/side.h"
+printf '#include "side.h"\n#define TWICE(x) ((x)*2)\nint v = TWICE(SIDE);\n' > "$d/e.c"
+moonc -E -I "$d/inc" "$d/e.c" > "$d/e.i" || fail "-E did not preprocess"
+grep -q 'int v = ( ( 7 ) \* 2 ) ;' "$d/e.i" || fail "-E did not expand the macros: $(grep 'int v' "$d/e.i")"
+grep -q "^# 1 \"$d/inc/side.h\"" "$d/e.i" || fail "-E left no marker for the included header"
+printf '#include <no_such_header.h>\n' > "$d/e2.c"
+moonc -E "$d/e2.c" > /dev/null 2>&1 && fail "-E did not refuse a missing header"
+
+# 6: the dependency rule beside an object -- -MD / -MMD, and kbuild's -Wp,-MMD,FILE, which
+# every kernel hostprog compile passes. -MMD leaves our own headers out, as gcc leaves the
+# system's; the user's stay. -MT names the target, -MP adds an empty rule per header.
+printf '#include <stdio.h>\n#include "side.h"\nint w = SIDE;\n' > "$d/m.c"
+moonc -MMD -I "$d/inc" -c "$d/m.c" -o "$d/m.o" || fail "-MMD did not compile"
+grep -q "side.h" "$d/m.d" || fail "-MMD's rule lacks the user's header"
+grep -q "stdio.h" "$d/m.d" && fail "-MMD's rule names our own header"
+moonc -MD -I "$d/inc" -c "$d/m.c" -o "$d/m.o" && grep -q "stdio.h" "$d/m.d" || fail "-MD's rule lacks the system header"
+moonc -Wp,-MMD,"$d/k.d" -I "$d/inc" -c "$d/m.c" -o "$d/m.o" || fail "-Wp,-MMD,FILE did not compile"
+head -1 "$d/k.d" | grep -q "^$d/m.o: $d/m.c" || fail "-Wp,-MMD,FILE wrote no rule for the object: $(head -1 "$d/k.d")"
+moonc -MMD -MP -MT tgt -MF "$d/p.d" -I "$d/inc" -c "$d/m.c" -o "$d/m.o" || fail "-MP -MT -MF did not compile"
+grep -q "^tgt: " "$d/p.d" && grep -q "side.h:$" "$d/p.d" || fail "-MT / -MP not in the rule: $(cat "$d/p.d")"
+
+echo "test_drv: CC=mooncc -- the cc flag soup rides through, the runtime pulls by need, the configure probe answers, -E and -MD speak gcc, -shared/-nostdlib stay loud"

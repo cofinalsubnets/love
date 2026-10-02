@@ -47,7 +47,7 @@
    ; splice). doinc brackets each included run with these; parse's ctag pass
    ; reads them into its position table and strips them, so no later stage
    ; ever sees one. 'in carries the header's name, 'out pops back.
-   (fmin name) ['fmark 'in name]
+   (fmin name path) ['fmark 'in name path]
    fmout ['fmark 'out ()]
    (idt? ('id . _)) 1
    ; the value is a guard, never a second pattern variable: `(pv? ('p v) v)` rebinds
@@ -589,7 +589,7 @@
                 ; after them. the marks are minted here, never memoized -- they
                 ; carry the spelling this #include used.
                 (rejoin toks)
-                 (cppgo rest macs cond () (fmout . rev toks + (fmin name . out)) incf)
+                 (cppgo rest macs cond () (fmout . rev toks + (fmin name ipath . out)) incf)
                 d0 #(peep cppdeps 'l ())
                 (two? got ? (mrestore macs <>>>>got, pin cppdeps 'l (got 5 + peep cppdeps 'l ()), rejoin <>>>got)
                    (: _ (0 < #ipath && pin cppdeps 'l (ipath . peep cppdeps 'l ()))
@@ -622,8 +622,9 @@
        (pv? <body "<") (: (go l acc) (? (atom? l) () (pv? <l ">") acc (go >l (acc + spell <l))) (go >body ""))
        ())
 
-   (cpp toks incf fname)                              ; -> (1 out) | a gripe (test with okv?, never two?)
-    (: macs ({} @ t
+   ; the table a TU's preprocessing starts from: the language's and the compiler's predefines
+   (cppmacs fname)
+           ({} @ t
                (pin t "__STDC__" ['obj [(tok 'num 1 0)]],
                ; who is compiling. every other predefine here says something about
                ; the language or the machine; this one says the compiler, and it is
@@ -679,6 +680,8 @@
                 pin t "true"  ['obj [(tok 'num 1 0)]],
                 pin t "false" ['obj [(tok 'num 0 0)]],
                 t))
+   (cpp toks incf fname)                              ; -> (1 out) | a gripe (test with okv?, never two?)
+    (: macs (cppmacs fname)
        r (cppgo toks macs () () () incf)
        ; the spans ride the stream's head as one marker token, so cpp keeps its
        ; single (1 out) channel and parse peels them in O(1). a caller that
@@ -686,5 +689,30 @@
        (gripe? r ? r
           (: _ (pin spanacc 'l ())
              out (strcat-pass r 0 ())
-             [1 (tok 'fspans (rev (spanacc 'l)) 0 . out)]))))       ; an empty token list is a valid empty TU, not a failure -- only a gripe fails
+             [1 (tok 'fspans (rev (spanacc 'l)) 0 . out)])))       ; an empty token list is a valid empty TU, not a failure -- only a gripe fails
+
+   ; -E: the TU preprocessed, as text -- gcc -E's shape, which configure scripts read: the
+   ; tokens by line, and a `# N "file"` marker on entering a file and wherever the file changes
+   ; or the line jumps, an included file named by its resolved path (gnulib finds the header it
+   ; wraps that way).
+   ; -> (1 text) | a gripe
+   (cpp-text toks incf fname)
+    (: r (cppgo toks (cppmacs fname) () () () incf)
+       (qesc s) ("\"" + string (catmap (c \ (c @ 34 [92 34] 92 [92 92] 10 [92 110] 9 [92 116]
+                                                   (c < 32 || 126 < c ? (c & 255 @ o [92 (48 + (o >> 6)) (48 + ((o >> 3) & 7)) (48 + (o & 7))]) [c])))
+                                        (chars s)) + "\"")
+       (sp t) (? (kof t = 'str) (0 < #(sof t) ? (sof t) (qesc (vof t))) (spell t))
+       (mark l f) ("\n# " + show (l < 1 ? 1 l) + " \"" + f + "\"\n")
+       ; files: the stack of open paths; cl the line the text stands on, cf its file
+       (go ts files cl cf acc)
+        (atom? ts ? (join "" (rev ("\n" . acc)))
+           (<ts @ t
+              (? (fmark? t) (vof t = 'in ? (go >ts ((t 3) . files) 1 (t 3) (mark 1 (t 3) . acc))
+                                             (go >ts >files 0 () acc))
+                 (kof t = 'pmark) (go >ts files cl cf acc)
+                 (: f (two? files ? <files fname) l (lof t)
+                    (? (f != cf || l < cl || cl + 8 < l) (go >ts files l f (sp t . mark l f . acc))
+                       (l > cl) (go >ts files l f (sp t . string (map (_ \ 10) ^(l - cl)) . acc))
+                       (go >ts files l f (sp t . " " . acc)))))))
+       (gripe? r ? r [1 (go r () 1 fname [(mark 1 fname)])])))
 ) ; module 'moon

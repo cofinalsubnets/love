@@ -376,14 +376,18 @@
    ; fatal exit. the -D lines prepend to the source text before the one lex, so a define body
    ; runs to its line's end and the numbering stays whole -- clexat stamps them 1-k..0 and
    ; the source itself from 1, so every stamped line is true with no pay-back pass.
-   (cc-parse src {'is is 'ds ds 'tgt tgt 'os os 'vb vb 'dia dia})
-    (: ds9 (archdefs tgt + osdefs os + featdefs tgt + stddefs tgt
+   ; the -D lines a TU starts from: the machine's, the OS's, the libc's and the dialect's, then
+   ; the command line's
+   (cc-defs {'ds ds 'tgt tgt 'os os 'dia dia})
+    (archdefs tgt + osdefs os + featdefs tgt + stddefs tgt
                  ; our libc is the one in this link and carries its whole surface on every
                  ; kernel: a source asks it what it may call, never the kernel.
                  + '("LvMoonlibc=1")
                  + (dia = 'moon && '("__moon__=1"))       ; the dialect's own macro: extensions on
                  +   ; ds9, not ds: a :-local shadows the param over the whole scope (the boxfix cell trap)
                  (elem tgt '(x64 a64) ? ("__SIZEOF_INT128__=16" . ds) ds))       ; the wide pair (gen's d128 lane); love.c's limb seam reads it, and gcc says the same on both
+   (cc-parse src (t @ {'is is 'ds ds 'tgt tgt 'os os 'vb vb 'dia dia}))
+    (: ds9 (cc-defs t)
        ; `-` is read here and nowhere else, so every door onto a TU gets stdin for free; cdir
        ; answers "" for it, which is the cwd, gcc's rule for a source with no directory.
        ; the source may instead live in the carried table (a runtime member on the blob
@@ -443,6 +447,19 @@
        (udie 1 ("cc: the parser answered an unexpected shape for " + src)))
    ; a wasm object is the gen tuple as TEXT (above), so it goes to the port whole:
    ; write-bytes walks a byte list, and a string handed to it lands as an empty file.
+   ; -E: the source preprocessed, to -o or stdout; a refusal exits as a compile's does, which is
+   ; how a configure script tells a header that is there from one that is not
+   (cc-pre src dst (t @ {'is is 'vb vb}))
+    (: ds9 (cc-defs t)
+       r (src = "-" ? [1 (slurp in)]
+            (uread src @ q (? (two? q) q !vb () (vb src @ h (string? h && [1 h])))))
+       _ (two? r || udie 1 ("cc: cannot open " + src))
+       lx (clexat (deftext ds9 + <>r) (1 - #ds9))
+       _ (okv? lx || ccdie lx src ("cc: lex error in " + src))
+       pp (cpp-text <>lx (name \ sys? \ incload vb is (cdir src) name sys?) src)
+       _ (okv? pp || ccdie pp src ("cc: preprocessor error in " + src))
+       (dst ? (open dst "w" @ q (!(hot? q) ? (udie 1 ("cc: cannot write " + dst)), say q <>pp, close q))
+              (puts <>pp, flush out)))
    (cc-obj src dst (t @ {'tgt tgt}))
     (pin cppdeps 'l (),
      cc-objbytes src t @ b
@@ -461,7 +478,7 @@
        hs (filter (p \ !(t 'mmd && sys? p)) (uniq (rev (peep cppdeps 'l ()))))
        df (t 'mf || (dst @ (b + ".o") (b + ".d") (dst + ".d")))
        txt ((t 'mt || dst) + ": " + join " \\\n  " (src . hs) + "\n"
-            + (t 'mp ? join "" (map (h \ "\n" + h + ":\n") hs) ""))
+            + (t 'mp ? (join "" (map (h \ "\n" + h + ":\n") hs)) ""))
        (open df "w" @ q
           (!(hot? q) ? (udie 1 ("cc: cannot write " + df)),
            say q txt,
@@ -1035,7 +1052,7 @@
    ; would answer the zero point. the literal has to be complete and is wanted at two sites,
    ; so it is spelled once rather than wrapped on `{}`.
    (fseed tgt dia) {'c () 'is () 'ds () 'o () 'ins () 'tgt tgt 'os () 'pie () 'org () 'dorg ()
-                    'nostd () 'vb () 'ni () 'rdme () 'relo () 'dia dia 'md () 'mmd () 'mf () 'mt () 'mp ()}
+                    'nostd () 'vb () 'ni () 'rdme () 'relo () 'dia dia 'md () 'mmd () 'mf () 'mt () 'mp () 'E ()}
    (flags as t)
     (!(two? as) ?
        (pin t 'is (rev (t 'is)),
@@ -1044,6 +1061,7 @@
         t)
        (: a <as r >as
           (? (a = "-c") (flags r (pin t 'c 1))
+             (a = "-E") (flags r (pin t 'E 1))
              ; the same string love answers, because they are one artifact: mooncc is a
              ; verb on the love binary, not a separate program, and two reported versions
              ; would report a thing that cannot happen.
@@ -1162,6 +1180,8 @@
        ; configure script writes, and it has to bind a libc. the arms are ordered and two of
        ; them are not about `ins` at all, so the scrutinee carries flag guards beside its
        ; shapes: `(? g)` fits anything g holds for, and a guard that fails falls through.
+       (? (f 'E) (: (go l) (? !(two? l) 0 (cc-pre <l o f, go >l))
+                    (two? ins ? (go ins) (udie 2 usage)))
        (ins @
         []      (udie 2 usage)
         (? o)   (c ? (two? >ins ? (udie 2 "cc: -o takes one input")
@@ -1180,7 +1200,7 @@
                              !(dotsrc? <l) (udie 2 ("cc: not a .c or .s input: " + <l))
                              (cc-obj <l (obase <l) f, go >l))
                    (go ins))
-                (cc-link ins "a.out" f, 0))))
+                (cc-link ins "a.out" f, 0)))))
 
 ; the seat: fire moon-main iff mooncc sits in the program seat of the real command line
 ; -- the positional program, or a `-l` preload (the installed shebang) -- taking the
