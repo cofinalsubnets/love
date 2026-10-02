@@ -610,6 +610,16 @@
    _ (hv ("D := " + lw + "\n") lt)
    _ (ok "a := of a long value is linear" (clock 0 - t0 < 3000 && #(words (lt "D")) = 4000))
 
+   ; a caller's command line, named under " cl", beats a file's assignment as make's does --
+   ; = and += pass it by, override does not, and $(origin) says so
+   tc (pins {} " cl" ["CC" "W"] "CC" "mine" "W" "a")
+   _ (hv "CC = clang\nW += b\nO = x\noverride CC2 = y\nOC := $(origin CC) $(origin O)\n" tc)
+   _ (ok "cook-vars: the caller's command line beats the file" (tc "CC" = "mine" && tc "W" = "a"))
+   _ (ok "cook-vars: $(origin) of a caller's command-line name" (tc "OC" = "command line file"))
+   tc2 (pins {} " cl" ["CC"] "CC" "mine")
+   _ (hv "override CC = clang\n" tc2)
+   _ (ok "cook-vars: override beats the command line" (tc2 "CC" = "clang"))
+
    ; ---------------------------------------------------------------- summary
    _ (sh ("rm -rf " + dir))
    np (peep pass 0 0) nf (peep fail 0 0)

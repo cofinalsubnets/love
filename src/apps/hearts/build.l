@@ -11,6 +11,8 @@
 ; $HEARTS_PRIOR  1: an earlier build's .cmd files stand as the prior state (hk-make's " prior")
 ; $KBUILD_BUILD_USER/HOST/VERSION/TIMESTAMP  the build's identity, handed in as the command
 ;                line's, so no clock or host name reaches the image
+; $HEARTS_HOSTCC the compiler the host programs build with (kconfig's conf, fixdep, dtc, ..),
+;                as `make HOSTCC=` names it; unset, kbuild's own (clang under LLVM=1)
 (: argv cmdline
    memo {}
    jobs {}
@@ -94,7 +96,8 @@
          _ (uwrite (hd + "/bin/hk-make") ("#!/bin/sh\nHEARTS_JOBS=1 exec " + q (argv 0) + " " + q (argv 1) + " --sub \"$@\"\n"))
          _ (hark ["chmod" "+x" (hd + "/bin/hk-make")])
          id (filter (n \ string? (getenv n)) ["KBUILD_BUILD_USER" "KBUILD_BUILD_HOST" "KBUILD_BUILD_VERSION" "KBUILD_BUILD_TIMESTAMP"])
-         cl (foldl (a \ n \ pin a n (getenv n)) (pins {} "ARCH" "arm64" "LLVM" "1") id)
+         cl0 (foldl (a \ n \ pin a n (getenv n)) (pins {} "ARCH" "arm64" "LLVM" "1") id)
+         cl (getenv "HEARTS_HOSTCC" @ h (string? h ? (pin cl0 "HOSTCC" h) cl0))
          goals (words (getenv "HEARTS_GOALS" || "defconfig syncconfig Image"))
          (one g) (peep made " failed" 0 ? 0
                    (: top (hk-topgoal K here cl sh g)

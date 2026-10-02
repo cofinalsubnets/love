@@ -701,7 +701,7 @@
          "or"        (fn-or (rawl 0) as d)
          "and"       (fn-and (rawl 0) as d)
          "call"      (fn-call (argl 0) as d)
-         "origin"    (peep origins (trim (ex1 at)) "undefined")
+         "origin"    (trim (ex1 at) @ v (elem v (peep as " cl" ()) ? "command line" (peep origins v "undefined")))
          ("abspath" || "realpath") (join " " (map fabs (split-ws (ex1 at))))
          "findstring" (argl 0 @ a (0 <= findsub (peep a 1 "") (peep a 0 "") ? (peep a 0 "") ""))
          "join"      (argl 0 @ a (fn-join (split-ws (peep a 0 "")) (split-ws (peep a 1 ""))))
@@ -850,7 +850,9 @@
    ; the name is expanded first, as make does: mmu-$(CONFIG_MMU) := .. names mmu-y
    (assign1 as nm0 op val ov)
    (expand nm0 as 0 @ nm
-   (!ov && peep origins nm "undefined" = "command line" ? 0
+   ; a caller of cook-vars names its own command line under " cl", and those beat a file's
+   ; assignment just as cook's own do
+   (!ov && (peep origins nm "undefined" = "command line" || elem nm (peep as " cl" ())) ? 0
       ; a define's body is kept as written, its leading tab too ($(eval)'s recipe lines); the
       ; op falls to the recursive arm below
       (: v (op = "define" ? val (trim val))
