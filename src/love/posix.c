@@ -799,6 +799,25 @@ static lvm(lvm_newns) { Sp[0] = ai_err(g, ENOSYS); ai_musttail return Next(1); }
 // (lseek fd off whence) -> the new offset | a nom | 'badarg misuse. raw fds, the openfd
 //                   lane -- not ports (a port's read buffer would desync under a seek).
 //                   whence: 0 SET, 1 CUR, 2 END, a stranger 'einval and not a quiet SET.
+// /love's answer in stat's shape: 1 the path is the tree's (mode 0 where it is absent), 0 the OS's.
+// read-only and this process's own; a directory takes the tree's first row's date.
+static int lovefs_stat(char const *p, struct stat *st) {
+ char rel[256];
+ uintptr_t rn, n;
+ intptr_t i = ai_lovefs_at(p, rel, &rn);
+ if (i == -1) return 0;
+ memset(st, 0, sizeof *st);
+ if (i == -2) return 1;
+ struct ai_lovefs const *e = ai_lovefs_rows(&n);
+ intptr_t ms = i >= 0 ? (intptr_t) e[i].ms : n ? (intptr_t) e[0].ms : 0;
+ st->st_mode = i >= 0 ? S_IFREG | 0444 : S_IFDIR | 0555;
+ st->st_size = i >= 0 ? (off_t) e[i].len : 0;
+ st->st_nlink = 1, st->st_uid = getuid(), st->st_gid = getgid();
+ st->st_ino = (ino_t) (i >= 0 ? i + 1 : 0);
+ st->st_blocks = (blkcnt_t) ((st->st_size + 511) / 512), st->st_blksize = 4096;
+ st->st_mtim.tv_sec = st->st_atim.tv_sec = st->st_ctim.tv_sec = (time_t) (ms / 1000);
+ return 1; }
+
 ai_noinline static struct ai *host_stat_tuple(struct ai *g, int follow) {
  word x = g->sp[0];
  struct stat st;
@@ -808,7 +827,9 @@ ai_noinline static struct ai *host_stat_tuple(struct ai *g, int follow) {
  else {
   char const *p = str_c(x);
   if (!p) return g->sp[0] = ai_badarg(g), g;
-  if (follow ? stat(p, &st) : lstat(p, &st)) return g->sp[0] = ai_err(g, errno), g; }
+  if (lovefs_stat(p, &st)) {
+   if (st.st_mode == 0) return g->sp[0] = ai_err(g, ENOENT), g; }
+  else if (follow ? stat(p, &st) : lstat(p, &st)) return g->sp[0] = ai_err(g, errno), g; }
  intptr_t ms = (intptr_t) st.st_mtim.tv_sec * 1000 + st.st_mtim.tv_nsec / 1000000,
           ns = (intptr_t) st.st_mtim.tv_sec * 1000000000 + st.st_mtim.tv_nsec,
           as = (intptr_t) st.st_atim.tv_sec * 1000000000 + st.st_atim.tv_nsec,
@@ -919,9 +940,38 @@ ai_noinline static struct ai *host_posix_rusage(struct ai *g) {
 static lvm(lvm_posix_rusage) {
  LvmCall(g, host_posix_rusage) }
 
+// /love's listing: each row under the directory gives its next component, once
+ai_noinline static struct ai *lovefs_readdir(struct ai *g, char const *rel, uintptr_t rn) {
+ uintptr_t n;
+ struct ai_lovefs const *e = ai_lovefs_rows(&n);
+ g->sp[0] = ZeroPoint;
+ for (uintptr_t i = 0; i < n; i++) {
+  char const *q = e[i].path;
+  if (rn && (memcmp(q, rel, rn) || q[rn] != '/')) continue;
+  q += rn ? rn + 1 : 0;
+  uintptr_t cl = 0;
+  while (q[cl] && q[cl] != '/') cl++;
+  bool seen = false;
+  for (word l = g->sp[0]; chainp(l) && !seen; l = B(l))
+   seen = len(A(l)) == cl && !memcmp(txt(A(l)), q, cl);
+  if (seen) continue;
+  if (!ai_ok(g = str0(g, cl))) return g;                     // pushes: name over acc
+  memcpy(txt(g->sp[0]), q, cl);
+  if (!ai_ok(g = ai_have(g, Width(struct ai_chain)))) return g;
+  struct ai_chain *w = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
+                                 g->sp[0], g->sp[1]);
+  g->sp[1] = word(w);
+  g->sp += 1; }
+ return g; }
+
 static ai_inline struct ai *host_posix_readdir(struct ai *g) {
  char const *p = str_c(g->sp[0]);
  if (!p) return g->sp[0] = ai_badarg(g), g;
+ { char rel[256];
+   uintptr_t rn;
+   intptr_t i = ai_lovefs_at(p, rel, &rn);
+   if (i == -3) return lovefs_readdir(g, rel, rn);
+   if (i != -1) return g->sp[0] = ai_err(g, i == -2 ? ENOENT : ENOTDIR), g; }
  DIR *d = opendir(p);
  if (!d) return g->sp[0] = ai_err(g, errno), g;
  g->sp[0] = ZeroPoint;                                        // the accumulator, over the path
@@ -1149,6 +1199,9 @@ ai_noinline static struct ai *host_posix_readlink(struct ai *g) {
  char const *p = str_c(g->sp[0]);
  char b[4096];
  if (!p) return g->sp[0] = ai_badarg(g), g;
+ uintptr_t rn;
+ intptr_t i = ai_lovefs_at(p, b, &rn);                        // the tree holds no links
+ if (i != -1) return g->sp[0] = ai_err(g, i == -2 ? ENOENT : EINVAL), g;
  ssize_t n = readlink(p, b, sizeof b - 1);
  if (n < 0) return g->sp[0] = ai_err(g, errno), g;
  b[n] = 0;
@@ -1639,7 +1692,8 @@ static lvm(lvm_swig) {
 
 // --- the port doors: (open path mode) and (close p) --------------------------
 // on inle the open(2)/close(2) below land in src/inle/sys.c's arms, so the ramfs answers the
-// same nif. `open`'s presence in the book is what lights up prel's module walk
+// same nif; on the host a path under /love is the carried tree's (src/love/lovefs.c), as it is
+// for stat, lstat, readdir and readlink. `open`'s presence in the book is what lights up prel's module walk
 // (src/love/boot/prel.l's fsopen, by peep) and salt's config read, both gating on the name.
 
 // mode is a l string; only the first byte is consulted: r read, w truncate-or-create,
@@ -1663,6 +1717,17 @@ static int mk_open(struct ai *g, void *env) { (void) env; return call_open(str(g
 // heap and stack ride registers under ai_tco, and a seat whose open reports them (inle's
 // /proc/gauge) reads them off the struct: LvmCallp's Pack is that write-back.
 ai_noinline static struct ai *host_open(struct ai *g) {
+  { char rel[256];
+    uintptr_t rn;
+    struct ai_str *mv = str(g->sp[1]);
+    intptr_t i = ai_lovefs_at(str(g->sp[0])->bytes, rel, &rn);
+    if (i != -1) {                                // /love: read-only, a port over the row's bytes
+      char m = mv->len ? mv->bytes[0] : 0;
+      word e = m != 'r' && m != 'w' && m != 'a' ? ai_badarg(g)
+             : m != 'r' ? ai_err(g, EROFS)
+             : i == -2 ? ai_err(g, ENOENT)
+             : i == -3 ? ai_err(g, EISDIR) : ZeroPoint;
+      return e != ZeroPoint ? ai_push(g, 1, e) : ai_lovefs_port(g, (uintptr_t) i); } }
   int fd = mk_open(g, NULL);
   if (!ai_ok(g = ai_fd_retry(g, &fd, mk_open, NULL))) return g;
   if (fd < 0) return ai_push(g, 1, fd == -1 ? ai_badarg(g) : ai_err(g, -fd));
