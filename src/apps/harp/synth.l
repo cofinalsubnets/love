@@ -190,7 +190,7 @@
       st))
 
  ; --- the screen: what stands, and what the row plays now, six keys to a line; so
- ; many rows, which is what the keys' pane is given on the harbour --------------------
+ ; many rows, which is what the keys' pane is given on the mitty --------------------
  synth-rows 16
  (synth-frame st) (: tm (synth-timbres (st 'tim))
    (cell i) (synth-name (synth-semis st [i 0 0]) @ n
@@ -261,14 +261,14 @@
     raw 0,
     0))
  synth-usage "usage: love synth [LOOP]   (1 .. = play, shift and alt bend, tab the timbre, up and down the octave, p e [ ] the loop, q leaves)"
- ; --- the harbour: the keys a stage over the buffer, a vi stage on the loop's text.
+ ; --- the mitty: the keys a stage over the buffer, a vi stage on the loop's text.
  ; the keys' tick feeds the card; e sends the buffer; q ends both panes ---
  (synth-mitty br vi f) (: _ (synth-warm ()) st (synth-new ())
    hn (horn song-rate 2 @ h (nom? h ? () h))
    pace (pacer ())
    (feed _) (lead-of (pace! pace) @ l
                (hn ? (song-fill hn l (_ \ (synth-feed st hn))) 0))
-   sz (br 'hsize 0) hb (br 'harbour <sz <>sz)
+   sz (br 'hsize 0) hb (br 'mitty-up <sz <>sz)
    buf (vi 'vi-open f)
    _ (pin buf 'exmore '("send" "play" "stop" "cps"))
    face (vi 'vi-face buf {'ex (synth-ex st) 'reg (hb 'clip)})

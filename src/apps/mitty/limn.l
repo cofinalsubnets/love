@@ -4,8 +4,8 @@
 ; says a grid's cells at an origin. cells are the currency all three speak.
 ; a module: `(borrow 'limn)` on the artifact, `(borrow "src/apps/mitty/limn.l")` off the tree.
 ;
-; it takes a grid and an origin, never a plan and never a harbour: the bars come in as
-; wharf-bars' list, so nothing here knows what a berth or a buffer is, and one painter
+; it takes a grid and an origin, never a plan and never a mitty: the bars come in as
+; wharf-bars' list, so nothing here knows what a pane or a buffer is, and one painter
 ; serves panes of ptys and splits of one process alike.
 ;
 ; nothing is erased, and nothing needs to be -- a caller whose panes and bars tile its

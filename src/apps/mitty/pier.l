@@ -5,8 +5,8 @@
 ; the same moor as mitty -- a child on a pty, its bytes through a quay screen -- but the
 ; screen is painted as pixels: `dye` lays a row into a 32bpp cask with the console's own
 ; painter (src/love/quay/paint.c, the one inle's framebuffer takes), so pier draws what the
-; console draws -- truecolour, the faces, wide chars, sixel and kitty pictures, and a face
-; off FONT.hex (src/apps/face.l) for what cp437 lacks. the rows the screen names dirty go out
+; console draws -- truecolour, the faces, wide chars, sixel and kitty pictures, and a font
+; off FONT.hex (src/apps/font.l) for what cp437 lacks. the rows the screen names dirty go out
 ; in PutImage bands over lux's wire. keys come back as KeyPress, keysym to terminal bytes,
 ; and the pointer as the reports a program turns on (?1000 and kin, the `mouse` nif); a
 ; paste asks the X selection for its text and sends it, bracketed when ?2004 asks; a
@@ -18,7 +18,7 @@
 (borrow 'xwire)
 (borrow 'posix)
 (borrow 'mitty)
-(borrow 'face)
+(borrow 'font)
 (:
    ; --- the requests the wire does not carry: a window of ours, a GC, a title, the delete
    ;     protocol, and PutImage ---
@@ -101,7 +101,7 @@
     (: (bits d base i acc) (i < 32 ? (bits d base (i + 1) (d >> i & 1 ? ((base + i) . acc) acc)) acc)
        (go k acc) (k < 8 ? (go (k + 1) (bits (wet sc k) (32 * k) 0 acc)) acc)
        (go 0 ()))
-   (pier-paint s win gc depth bx fx face all last)
+   (pier-paint s win gc depth bx fx font all last)
     (: sc (peep bx () 0) fb (peep fx () 0)
        r (gaze sc 1) c (gaze sc 2) w (c * 8)
        cur (gaze sc 3 & 1 ? (gaze sc 0) -1)
@@ -112,7 +112,7 @@
        _ (-1 < cur && cur // c + v < r ? (pin rows (cur // c + v) 1) 0)
        _ (-1 < last && last != cur && last // c + v < r ? (pin rows (last // c + v) 1) 0)
        ys (sort (keys rows))
-       _ (map (y \ dye sc fb w y cur face) ys)
+       _ (map (y \ dye sc fb w y cur font) ys)
        ; each run of rows one band
        (run a b rest) (two? rest ?
                          (<rest = b + 1 ? (run a <rest >rest)
@@ -121,16 +121,16 @@
                          (pier-ship s win gc depth fb w (a * 16) ((b - a + 1) * 16)))
        (two? ys ? (run <ys <ys >ys) 0,
         cur))
-   (pier-paints s win gc depth bx fx face dirty last)
+   (pier-paints s win gc depth bx fx font dirty last)
     (: d (peep dirty () 0)
        l2 (0 < d ?
              (: _ (pier-hold dirty) _ (pin dirty () 0)
-                l (pier-paint s win gc depth bx fx face (d = 2) last)
+                l (pier-paint s win gc depth bx fx font (d = 2) last)
                 (pier-let dirty,
                  l))
              last)
        (rest 8,                                      ; a keystroke's echo within ~10 ms
-        pier-paints s win gc depth bx fx face dirty l2))
+        pier-paints s win gc depth bx fx font dirty l2))
 
    ; --- a resize: the window manager retiled us. the grid laid across to fit, a fresh
    ;     frame, and the pty learns its size (the kernel raises SIGWINCH) ---
@@ -308,9 +308,9 @@
                  0),
               code = 33 && dl = u32 (ev-raw e) 12 ? () (pier-watch s m km dl bx fx dirty)))))
 
-   ; --- pier: argv tied up at the shore, on display socket path, the face () or a laid one.
+   ; --- pier: argv tied up at the shore, on display socket path, the font () or a laid one.
    ;     answers the child's status pair, or a nom naming what refused ---
-   (pier argv path auth face)
+   (pier argv path auth font)
     (x-connect path @ s
        (? !(hot? s) 'no-display
           (x-setup s auth @ sc
@@ -332,7 +332,7 @@
                          dirty {1}                   ; the painter's cue at (), and what the tasks share
                          _ (pins dirty 'win win 'utf8 ut 'clip cb 'prop pp 'targets tg 'incr ic)
                          up (twirl (_ \ (moor bx m dirty, seal s 0)) 0)
-                         pnt (twirl (_ \ (pier-paints s win gc depth bx fx face dirty -1)) 0)
+                         pnt (twirl (_ \ (pier-paints s win gc depth bx fx font dirty -1)) 0)
                          (pier-watch s m km dl bx fx dirty,
                           freeze pnt,
                           landed? up ? (catch up) (still pid 15, freeze up),
@@ -349,11 +349,11 @@
        dn (: d (string? disp ? disp "") b (1 < #d ? (snip d 1 #d) "0")
              (: (go i) (i = #b || b i = 46 ? (snip b 0 i) (go (i + 1))) (go 0)))
        fp (opt as "-f" ())
-       face (string? fp ? (uread fp @ t (two? t ? (face-hex <>t))))
+       font (string? fp ? (uread fp @ t (two? t ? (font-hex <>t))))
        argv (rest2 as @ a (two? a ? a [(getenv "SHELL" @ sh (0 < #sh ? sh "sh"))]))
        home (getenv "HOME")
        xa (getenv "XAUTHORITY" @ v (0 < #v ? v (home + "/.Xauthority")))
-       st (pier argv ("/tmp/.X11-unix/X" + dn) (xauth-cookie xa dn) face)
+       st (pier argv ("/tmp/.X11-unix/X" + dn) (xauth-cookie xa dn) font)
        (two? st ? <st (say err ("pier: " + show st + "\n"), 1)))
 
    door (udoor 'pier pier-main pier-usage 1 1)

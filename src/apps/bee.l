@@ -81,7 +81,7 @@
                        (starts? bee-model "claude-haiku") 200000
                        1000000))
 
-     ; a harbour's hands, when this bee is one of its panes: a tablet of the panes' doors
+     ; a mitty's hands, when this bee is one of its panes: a tablet of the panes' doors
      ; (src/apps/mitty/mitty.l, hhands), each answering [ok? text]
      bee-hands (: h (filter tablet? as) (two? h ? <h ()))
      (prop desc) {"type" "string" "description" desc}
@@ -103,8 +103,8 @@
 
      bee-pane-tools
       (? !(tablet? bee-hands) ()
-         [(tool "pane_list" ("The panes of the terminal desktop you are one pane of, on every desk: each "
-                             + "one's id, desk, what runs in it, which has the user's keyboard, and which is you.")
+         [(tool "pane_list" ("The panes of the terminal desktop you are one pane of, on every window: each "
+                             + "one's id, window, what runs in it, which has the user's keyboard, and which is you.")
                 {} [])
           (tool "pane_read" "A pane's screen and the history above it, as text."
                 {"id" (prop "the pane's id, as pane_list gives it")} ["id"])
@@ -114,7 +114,7 @@
                 {"id" (prop "the pane's id") "text" (prop "the keys, as text")} ["id" "text"])
           (tool "pane_open" "Open a new pane beside yours with a shell in it, and answer its id."
                 {} [])
-          (tool "pane_focus" "Give a pane the user's keyboard, showing its desk."
+          (tool "pane_focus" "Give a pane the user's keyboard, showing its window."
                 {"id" (prop "the pane's id")} ["id"])
           (tool "pane_close" "Close a pane: its program is hung up on. Not your own pane."
                 {"id" (prop "the pane's id")} ["id"])])
@@ -1104,7 +1104,7 @@
        + (0 < #bee-env ? ("\n\n## environment\n" + bee-env) "")
        + "\n" + bee-brief + "\n" + bee-talk + bee-merge
        + (tablet? bee-hands
-          ? ("\n## your desk\nYou are one pane of inle, a terminal desktop the user shares with you. "
+          ? ("\n## your window\nYou are one pane of inle, a terminal desktop the user shares with you. "
              + "The pane_ tools see and work its other panes -- shells, editors, any program -- as the "
              + "user does: read a pane before typing into it, and leave the keyboard where it was unless asked.\n")
           "")
@@ -1998,9 +1998,9 @@
          _ (raw 0)
          0)
 
-     ; --- the stage: the full screen as a pane of a harbour (src/apps/mitty/mitty.l), which
+     ; --- the stage: the full screen as a pane of a mitty (src/apps/mitty/mitty.l), which
      ; owns the tty, the keys' reader and the clock. its frame is scribed into the pane's own
-     ; screen, so tui-fresh diffs against what that screen holds. no saver: idle is the harbour's
+     ; screen, so tui-fresh diffs against what that screen holds. no saver: idle is the mitty's
      (tstage key yes)
       (: c (tnew key yes)
          tw (twirl (\ _ (watch 0)) 0)
@@ -2390,7 +2390,7 @@
             (two? as && elem <as ["-s" "--screensaver"]) (cite 'saver 'saver-cli >as)   ; a saver, no session
             (two? words && elem <words ["--list" "--send" "--spawn" "--stop" "--avatar" "--resume"]) (bee-cli words yes)
             ; the api backend wants its endpoint, model and key; claude brings its own. a stage
-            ; answers why as a string: a harbour shows it, stderr would land on its glass
+            ; answers why as a string: a mitty shows it, stderr would land on its glass
             (: why (? (!bee-cc? && atom? bee-at) ("cannot read the url " + bee-url)
                       (!bee-cc? && #bee-model = 0) "name the model, (model NAME) in ~/.love/etc/bee.l"
                       (!bee-cc? && !bee-local? && !(string? key && 0 < #key)) ("set " + bee-key-env)
