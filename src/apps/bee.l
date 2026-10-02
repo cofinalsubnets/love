@@ -8,6 +8,7 @@
 ;   love bee --keygen root | box [NAME]      the lineage's root, or this box's key and card
 ;   love bee --ticket [DAYS] | --enrol TOKEN [NAME] | --admit | --enrolled   a box joins a lineage
 ;   love bee --deliver | --ledger            a sealed message, or queue call, from another box, on stdin
+;   love bee --revoke PUB|NAME | --revocations | --revoked   the lineage's revoked keys
 ;
 ; the settings are ~/.love/etc/bee.l's, each a form per line; ./.bee.l may set model,
 ; max-tokens, thinking, context and queue-watch over them:
@@ -335,7 +336,7 @@
      ; its stdin -> [exit output]
      bee-relay (: v (peep bee-salt 'relay ()) (two? v ? (map word v) ["ssh" "-T"]))
      (relay box msg verb)
-      (: r (box-route box) f (cell-of (me 0) + "/.relay")
+      (: r (box-route box) _ (mkdirs bee-hive) f (bee-hive + "/.relay-" + show (getpid 0))
          _ (spit-file f msg)
          fd (openfd f 0) pp (pipe 0)
          p (spawnio (bee-relay + [<r (r 1) "bee" verb]) fd >pp >pp (open-fds 0) -1 0)
@@ -380,7 +381,7 @@
          (? !(string? sg) [from body ""]
             !(two? b) [from body ""]
             (: ch (: c (hv "cert") (string? c ? (cite 'ssh 'b64d c) ()))
-               t (? (string? ch) (sl 'seal-check ch (b 1 "lineage") (clock 0 // 1000) ()))
+               t (? (string? ch) (sl 'seal-check ch (b 1 "lineage") (clock 0 // 1000) (bee-revoked 0)))
                signed (foldl (\ a l (a + l + "\n")) "" (take (#ls - 1) ls) + "\n" + body)
                (? (&& (starts? (ls (#ls - 1)) "sig ") (tablet? t) (t "kind" = "cell")
                       (starts? (t "name") (from + "@")) (elem (hv "to") [who (who + "@" + b 1 "name")]) (hv "id" = id)
@@ -2488,7 +2489,7 @@
          k (? (two? b) (: r (sl 'seal-keyread kp)
                           (? (two? r) r (: _ (sl 'seal-keywrite kp (sl 'seal-key 0)) (sl 'seal-keyread kp)))))
          cur (slurp-file (d + "/cert"))
-         (fresh? s) (: t (sl 'seal-check s (b 1 "lineage") (now + 3600) ()) (&& (tablet? t) (t "pub" = hx (k 1))))
+         (fresh? s) (: t (sl 'seal-check s (b 1 "lineage") (now + 3600) (bee-revoked 0)) (&& (tablet? t) (t "pub" = hx (k 1))))
          (? !(two? k) ()
             (? (string? cur) (fresh? cur) 0) [k cur]
             (: card (sl 'seal-card (b 2) [["lineage" (b 1 "lineage")] ["name" (me 0 + "@" + b 1 "name")] ["kind" "cell"]
@@ -2544,6 +2545,7 @@
             !(hex? (f "pub") 32 && hex? (f "sig") 64 && string? (f "name") && card-name? (f "name"))
              [0 "the request is not name, pub, ticket and sig"]
             !(cite 'ssh 'ed-verify (ux (f "pub")) body (ux (f "sig"))) [0 "the request's sig does not check"]
+            (elem (f "pub") (bee-revoked 0)) [0 "that key is revoked"]
             !(string? tt) [0 "no such ticket here"]
             !(now < digits (peep (kv-lines tt) "expires" "0")) [0 "the ticket is out of date"]
             (: fd (openfd (tf + ".spent") 3)
@@ -2556,12 +2558,71 @@
      (enrolled s)
       (: hx (cite 'tls 'hex) lf (slurp-file (bee-keys + "/lineage"))
          k (sl 'seal-keyread (bee-keys + "/box.key"))
-         t (? (string? lf) (sl 'seal-check s (snip lf 0 64) (clock 0 // 1000) ()) "no lineage here: enrol first")
+         t (? (string? lf) (sl 'seal-check s (snip lf 0 64) (clock 0 // 1000) (bee-revoked 0)) "no lineage here: enrol first")
          (? (string? t) [0 ("the card does not check: " + t)]
             !(two? k) [0 k]
             (t "kind" != "box" || t "pub" != hx (k 1)) [0 "the card is not for this box's key"]
             (spit-file (bee-keys + "/box.card") s) [1 ("enrolled: " + t "name" + " in lineage " + snip lf 0 64)]
             [0 "cannot write box.card"]))
+
+     ; --- revocation: the root's box keeps a list of keys no longer vouched for, signed by the
+     ; root and numbered; a box keeps the newest it has seen. a card under a listed key fails
+     ; every check: mail, deliveries, ledger calls and admissions ---
+     ; the lineage this box trusts: its card's, else what it enrolled under, else its own root
+     (lineage-root _)
+      (: b (box-seal 0) lf (slurp-file (bee-keys + "/lineage")) r (root-key 0)
+         (? (two? b) (b 1 "lineage") (string? lf && 64 <= #lf) (snip lf 0 64)
+            (two? r) (cite 'tls 'hex (r 1)) ""))
+     ; a list's text -> [serial pubs] when the lineage's root signed it, else ()
+     (revoked-of s root)
+      (: k (find s "\nsig " 0) body (? (0 <= k) (snip s 0 (k + 1)) "")
+         f (kv-lines s) sg (f "sig")
+         pubs (filter (p \ hex? p 32) (map (l \ snip l 8 (min #l 72)) (filter (l \ starts? l "revoked ") (lines body))))
+         (? (&& (0 < #body) (hex? root 32) (f "lineage" = root) (string? (f "serial")) (hex? sg 64)
+                (cite 'ssh 'ed-verify (cite 'tls 'unhex root) body (cite 'tls 'unhex sg)))
+            [(digits (f "serial")) pubs]))
+     ; the keys this box refuses
+     (bee-revoked _)
+      (: s (slurp-file (bee-keys + "/revoked")) l (? (string? s) (revoked-of s (lineage-root 0)))
+         (two? l ? (l 1) ()))
+     ; --revoke PUB|NAME: on the root's box, the list again with one more key, its serial up by
+     ; one, then carried to every box in boxes -> [1 what happened]
+     (revoke ws)
+      (: hx (cite 'tls 'hex) r (root-key 0) root (? (two? r) (hx (r 1)) "")
+         w (two? ws ? <ws "")
+         ; a box's name -> the pub its spent ticket admitted
+         byname (: fs (readdir bee-tickets)
+                   hits (filter two? (map (f \ (? (ends? f ".spent")
+                                                  (: t (kv-lines (: x (slurp-file (bee-tickets + "/" + f)) (string? x ? x "")))
+                                                     (? (t "name" = w) [(t "pub")]))))
+                                         (two? fs ? fs ())))
+                   (two? hits ? <<hits ()))
+         pub (? (hex? w 32) w byname)
+         cur (: s (slurp-file (bee-keys + "/revoked")) (? (string? s) (revoked-of s root)))
+         serial (two? cur ? (<cur + 1) 1)
+         olds (two? cur ? (cur 1) ())
+         (? !(two? r) [0 "no root here: keys are revoked where root.key is"]
+            !(string? pub) [0 ("no key or admitted box named '" + w + "'")]
+            (pub = root) [0 "the root is not revoked: make a new lineage"]
+            (: body ("lineage " + root + "\nserial " + show serial + "\n"
+                     + foldl (\ a p (a + "revoked " + p + "\n")) "" (olds + (elem pub olds ? () [pub])))
+               txt (body + "sig " + hx (cite 'ssh 'ed-sign <r (r 1) body) + "\n")
+               _ (spit-file (bee-keys + "/revoked") txt)
+               sent (map (b \ (: x (relay b txt "--revocations") (b + (<x = 0 ? ": taken" (": not taken (" + chomp (x 1) + ")")))))
+                         (bee-boxes 0))
+               [1 ("revoked " + pub + ", serial " + show serial + foldl (\ a l (a + "\n" + l)) "" sent)])))
+     ; the boxes this one knows the way to
+     (bee-boxes _)
+      (: s (slurp-file (bee-keys + "/boxes"))
+         (filter (n \ 0 < #n) (map (l \ (: w (words l) (two? w ? <w ""))) (? (string? s) (lines s) ()))))
+     ; --revocations, a list on stdin: kept when the root signed it and it is newer than this box's
+     (revocations s)
+      (: root (lineage-root 0) l (revoked-of s root)
+         cur (: c (slurp-file (bee-keys + "/revoked")) (? (string? c) (revoked-of c root)))
+         (? !(two? l) [0 "the list is not signed by this box's root"]
+            (two? cur && <l <= <cur) [0 ("not newer: this box has serial " + show <cur)]
+            (spit-file (bee-keys + "/revoked") s) [1 ("serial " + show <l + ", " + show #(l 1) + " revoked")]
+            [0 "cannot write the list"]))
 
      ; --list, --send, --spawn and --stop speak to the hive from a shell and settle nowhere;
      ; a sender there is BEE_NAME, else cli- and the user
@@ -2606,6 +2667,9 @@
           "--enrol" (say-r (enrol >as))
           "--admit" (say-r (admit (slurp in)))
           "--deliver" (say-r (deliver (slurp in)))
+          "--revoke" (say-r (revoke >as))
+          "--revocations" (say-r (revocations (slurp in)))
+          "--revoked" (: s (slurp-file (bee-keys + "/revoked")) (say-r (string? s ? [1 s] [0 "no list here"])))
           "--ledger" (say-r (ledger (slurp in)))
           "--enrolled" (say-r (enrolled (slurp in)))
           "--keygen" (: r (keygen >as) (? <r (: _ (puts (r 1 + (ends? (r 1) "\n" ? "" "\n"))) 0) (say err ("bee: " + r 1 + "\n"), 1)))
@@ -2635,7 +2699,7 @@
          (? (elem "--mcp" as) (: _ (mcp-serve in out) 0)             ; a claude child's own server
             (two? as && <as = "--lock") (bee-cli as yes)              ; its command's words stay as given
             (two? as && elem <as ["-s" "--screensaver"]) (cite 'saver 'saver-cli >as)   ; a saver, no session
-            (two? words && elem <words ["--list" "--send" "--spawn" "--stop" "--avatar" "--resume" "--keygen" "--ticket" "--enrol" "--admit" "--enrolled" "--deliver" "--ledger"]) (bee-cli words yes)
+            (two? words && elem <words ["--list" "--send" "--spawn" "--stop" "--avatar" "--resume" "--keygen" "--ticket" "--enrol" "--admit" "--enrolled" "--deliver" "--ledger" "--revoke" "--revocations" "--revoked"]) (bee-cli words yes)
             ; the api backend wants its endpoint, model and key; claude brings its own. a stage
             ; answers why as a string: a harbour shows it, stderr would land on its glass
             (: why (? (!bee-cc? && atom? bee-at) ("cannot read the url " + bee-url)

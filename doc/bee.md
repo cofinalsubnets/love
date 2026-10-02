@@ -35,6 +35,8 @@ bee - a coding agent in the terminal, and the protocol its sessions talk by
 
 **love bee --deliver** \| **--ledger**
 
+**love bee --revoke** *pub* \| *name* \| **--revocations** \| **--revoked**
+
 **love bee -s** \| **--screensaver** \[*name*\]
 
 # DESCRIPTION
@@ -179,6 +181,8 @@ Where **box.key** and **box.card** are, a session seals what it sends. Its first
 Mail goes to another box of the lineage when the name is *name***@***box* and *box* is not this one. It leaves only sealed. The sender runs **(relay** *word* ...**)** (**ssh -T** unless set) with the host and the remote **love**, then **bee --deliver**, and the message on its standard input. **~/.love/etc/bee/boxes** names the way to each box, a line each, *box* *host* \[*love*\]: the host is the box's name and the remote program **love** when there is no line. On the far box, **--deliver** keeps the message in the named session's inbox only when it is addressed to that box, the session is live, its id is not taken there, and its seal checks; it says why not otherwise and exits 1. A login meant only for mail can be held to it by the far box's sshd, with OpenSSH's **command="love bee --deliver",restrict** before the key in **authorized_keys**. The reply goes back the same way, to *name***@***box* as the **sealed** attribute gave it.
 
 A queue lives in one box's hub, and the others reach it as **queue/***name***@***box* or **refs/queue/***name***@***box*. A call from another box goes there sealed, as a message to **ledger@***box* holding the tool and its input, by the same **(relay** ...**)**, to **bee --ledger**. That box checks the seal, takes the id once (**ledger-ids/**), and runs the tool in **(ledger-dir** *path***)**, else its HOME, as the session the seal names, *name***@***box*. So a row belongs to its sealed name, and the queue's rules hold across boxes as they do on one. Notices about a row on another box are not sent yet.
+
+A key is revoked on the root's box: **love bee --revoke** *pub* or *name*, a name being a box admitted there. It writes **revoked** again, the lineage, a **serial** one higher and a **revoked** *pub* line for each key, signed by the root, and carries it by **(relay** ...**)** to **bee --revocations** on every box in **boxes**, saying which took it. A box keeps a list only when its root signed it and its serial is higher than the one it has; **--revocations** takes one on standard input, and **--revoked** prints this box's. Every check of a chain refuses a card whose key, or whose signer's key, is listed: mail is set aside, **--deliver** and **--ledger** refuse, **--admit** will not admit the key again, and a session's own card is not signed again. The root itself is not revoked; a lineage whose root is lost is made anew.
 
 # JOBS AND WORKERS
 
