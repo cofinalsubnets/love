@@ -9,7 +9,7 @@
 ; a hearts build is clean and one-shot: no fixdep, no .cmd, no if_changed. hk-make runs kbuild's
 ; own goals as make would, sub-makes and all; an earlier build's .cmd files are read only as the
 ; prior state a differential starts from.
-(module (hearts-kbuild hk-top hk-prepare hk-build hk-walk hk-vmlinux hk-rule hk-unit hk-plan hk-make hk-submake hk-envmake hk-path)
+(module (hearts-kbuild hk-top hk-topgoal hk-prepare hk-build hk-walk hk-vmlinux hk-rule hk-unit hk-plan hk-make hk-submake hk-envmake hk-path)
 (borrow 'posix)
 (borrow 'cook)
 (borrow 'path)
@@ -29,10 +29,13 @@
  ; the command line (ARCH, LLVM, ..) and sh answers every $(shell ..), so no probe reaches the
  ; host unasked. answers the tablet each directory's build starts from, its rules under " rules".
  ; cl's variables are exported, as the environment's are to make's recipes (the build's identity,
- ; KBUILD_BUILD_*, arrives there), and so is what the outer make of an O= build exports to it
- (hk-top K cur cl sh)
+ ; KBUILD_BUILD_*, arrives there), and so is what the outer make of an O= build exports to it.
+ ; goals are the command line's: a config goal (defconfig, syncconfig) reads the Makefile as
+ ; kbuild's config-build pass does
+ (hk-top K cur cl sh) (hk-topgoal K cur cl sh "vmlinux")
+ (hk-topgoal K cur cl sh goals)
   (: t (pins (hk-copy cl) "MAKE_VERSION" "4.4.1" ".FEATURES" hk-features
-             "MAKEFLAGS" "rR --no-print-directory" "MAKECMDGOALS" "vmlinux"
+             "MAKEFLAGS" "rR --no-print-directory" "MAKECMDGOALS" goals
              "MAKEFILE_LIST" (K + "/Makefile") "CURDIR" cur "LC_COLLATE" "C" "LC_NUMERIC" "C"
              "sub_make_done" "1" "objtree" "." "KBUILD_EXTMOD" "" " shell" sh "MAKE" "hk-make"
              " cl" (sort (keys cl))
@@ -200,6 +203,9 @@
            (? (atom? x) 0
               (!(elem g ph) && two? (stat g) && !(any (p \ elem p ph) (x 2))) 0
               (: _ (each (x 2) (p \ hk-make K (x 3) p made seen run))
+                 ; a runner that makes in parallel answers made's " wait": the prerequisites'
+                 ; jobs are done before this recipe starts
+                 _ (peep made " wait" 0 @ w (lit? w ? (each (x 2) (p \ w (hk-dot p))) 0))
                  ; an earlier build's state, when made carries one under " prior" (target -> the
                  ; command its .cmd saved): a target there, its saved command the same, and no
                  ; prerequisite remade this run is up to date -- if_changed's law, mtimes aside
