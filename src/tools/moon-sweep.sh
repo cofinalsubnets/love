@@ -44,7 +44,7 @@ rm -rf "$d"; mkdir -p "$d/logs"
 # names arrive as `libgzip_a-cloexec.$(OBJEXT)` (or with a subdir); strip the
 # directory, the `libfoo_a-` per-target prefix, and the object suffix.
 awk '
-  /^(am_)?lib[A-Za-z0-9_]*_a_OBJECTS[ \t]*=/ { inobj = 1 }
+  /^(lm_)?lib[A-Za-z0-9_]*_a_OBJECTS[ \t]*=/ { inobj = 1 }
   inobj {
     line = $0
     n = split(line, w, /[ \t]+/)

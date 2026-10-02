@@ -1,7 +1,7 @@
 // io.c -- io. one translation unit of the runtime;
 // the shared layouts and the cross-TU seam are src/love/love.h.
 #include "love.h"
-double am_strtod(char const*, char**);   // correctly rounded read: the printer's twin
+double lm_strtod(char const*, char**);   // correctly rounded read: the printer's twin
 #ifndef NAN
 #define NAN (__builtin_nanf(""))
 #endif
@@ -699,7 +699,7 @@ static ai_noinline double strtod_wrap(struct ai*g, word x) {
  if (s->len >= (uintptr_t) ((char*) top - b)) return NAN;
  memcpy(b, s->bytes, s->len);
  b[s->len] = 0;
- double r = am_strtod(b, &e);
+ double r = lm_strtod(b, &e);
  return e != b && *e == 0 ? (ai_flo_t) r : (ai_flo_t) NAN; }
 
 // (gem s): parse a string as a decimal float -> a box if the whole string parses,
@@ -996,7 +996,7 @@ static bool rd_float(char const *t, uintptr_t n, double *d) {
  char c = n && (*t == '+' || *t == '-') ? t[1] : *t;   // the NUL past a lone sign leads nothing
  if (!(c >= '0' && c <= '9') && c != '.') return false;
  char *e;
- *d = am_strtod(t, &e);
+ *d = lm_strtod(t, &e);
  return e != t && *e == 0 && *d == *d; }
 static bool rd_numeral(struct ai_str *s) {
  double d;

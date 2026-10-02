@@ -157,7 +157,7 @@ cat <<'CC'
 <code>love</code> with <i>no gcc, glibc, or ld</i> &mdash; mooncc lays every object,
 <code>mksys</code> emits the syscall leaf, and our own linker (<code>src/love/holo/</code>)
 binds the executable. The <b>build</b> row is the wall-clock to compile every C
-translation unit (<code>src/love/love.c</code> + <code>src/love/*.c</code> + the <code>am</code> math
+translation unit (<code>src/love/love.c</code> + <code>src/love/*.c</code> + the <code>lm</code> math
 floor) and link a working binary; the <b>test</b> row runs the full corpus (the same
 files <code>test_host</code>/<code>test_raw</code> feed) through the binary that build
 produced. All three lanes egg-boot (no baked image), so the corpus runs off the freshly

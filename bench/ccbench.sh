@@ -58,7 +58,7 @@ build_cc() { # $1=compiler $2=binpath $3=extra flags ; objects under $WORK/o-<bi
   ( cd "$R" || exit 1
     for b in $love_tu; do
       $cc $CFLAGS $xf -c "src/love/$b.c" -o "$od/$b.o" || exit 1; done
-    $cc $CFLAGS $xf -c src/apps/moon/lib/moonlibc/math/am.c -o "$od/am.o" || exit 1
+    $cc $CFLAGS $xf -c src/apps/moon/lib/moonlibc/math/lm.c -o "$od/lm.o" || exit 1
     for f in $host_cs; do b=$(basename "$f" .c)
       $cc $CFLAGS $xf -c "$f" -o "$od/host/$b.o" || exit 1; done
     $cc $CFLAGS $xf $LDFLAGS -o "$bin" "$od"/*.o "$od"/host/*.o ) || return 1

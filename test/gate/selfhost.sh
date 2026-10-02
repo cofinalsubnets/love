@@ -27,7 +27,7 @@ for f in $gate_love_c $gate_host_c $gate_seat_c; do
   "$m" mooncc -D ai_tco=1 -I"$ho" -I. -Isrc/love -Isrc/inle -Iout/lib -c "$f" "$d/obj/`basename $f .c`.o" \
     || fail "mooncc -c $f"
 done
-"$m" mooncc -Isrc/apps/moon/include -c src/apps/moon/lib/moonlibc/math/am.c "$d/obj/am.o" || fail "mooncc -c am.c"
+"$m" mooncc -Isrc/apps/moon/include -c src/apps/moon/lib/moonlibc/math/lm.c "$d/obj/lm.o" || fail "mooncc -c lm.c"
 
 for f in `find src/apps/moon/lib/moonlibc -name '*.c' | LC_ALL=C sort`; do
   b=`echo "$f" | sed 's#src/apps/moon/lib/moonlibc/##; s#/#_#g; s#\.c$##'`

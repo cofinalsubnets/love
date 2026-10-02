@@ -45,28 +45,28 @@ long strtol(char const *s, char **endptr, int base) {
   if (over) { errno = ERANGE; return sign < 0 ? LONG_MIN : LONG_MAX; }
   return (long) (sign < 0 ? 0UL - rc : rc); }
 double atof(char const *s) { return strtod(s, 0); }
-/* the libc math faces over the am floor (am.c's seven transcendentals ride
+/* the libc math faces over the lm floor (lm.c's seven transcendentals ride
  * m_am.o in every ladder link); the rest are exact derivations. tan and the
  * arc trio are DERIVED (a few ulp looser than a dedicated kernel) -- enough
- * for the ladder; a consumer that measures gets its own am kernel. */
-double am_sqrt(double), am_exp(double), am_log(double);
-double am_sin(double), am_cos(double), am_atan2(double, double), am_pow(double, double);
-double sqrt(double x) { return am_sqrt(x); }
-double exp(double x) { return am_exp(x); }
-double log(double x) { return am_log(x); }
-double sin(double x) { return am_sin(x); }
-double cos(double x) { return am_cos(x); }
-double tan(double x) { return am_sin(x) / am_cos(x); }
-double pow(double x, double y) { return am_pow(x, y); }
-double atan2(double y, double x) { return am_atan2(y, x); }
-double atan(double x) { return am_atan2(x, 1.0); }
-double asin(double x) { return am_atan2(x, am_sqrt(1.0 - x * x)); }
-double acos(double x) { return am_atan2(am_sqrt(1.0 - x * x), x); }
-double log2(double x) { return am_log(x) * 1.4426950408889634; }
-double log10(double x) { return am_log(x) * 0.4342944819032518; }
-double sinh(double x) { double e = am_exp(x); return (e - 1.0 / e) / 2.0; }
-double cosh(double x) { double e = am_exp(x); return (e + 1.0 / e) / 2.0; }
-double tanh(double x) { double e = am_exp(2.0 * x); return (e - 1.0) / (e + 1.0); }
+ * for the ladder; a consumer that measures gets its own lm kernel. */
+double lm_sqrt(double), lm_exp(double), lm_log(double);
+double lm_sin(double), lm_cos(double), lm_atan2(double, double), lm_pow(double, double);
+double sqrt(double x) { return lm_sqrt(x); }
+double exp(double x) { return lm_exp(x); }
+double log(double x) { return lm_log(x); }
+double sin(double x) { return lm_sin(x); }
+double cos(double x) { return lm_cos(x); }
+double tan(double x) { return lm_sin(x) / lm_cos(x); }
+double pow(double x, double y) { return lm_pow(x, y); }
+double atan2(double y, double x) { return lm_atan2(y, x); }
+double atan(double x) { return lm_atan2(x, 1.0); }
+double asin(double x) { return lm_atan2(x, lm_sqrt(1.0 - x * x)); }
+double acos(double x) { return lm_atan2(lm_sqrt(1.0 - x * x), x); }
+double log2(double x) { return lm_log(x) * 1.4426950408889634; }
+double log10(double x) { return lm_log(x) * 0.4342944819032518; }
+double sinh(double x) { double e = lm_exp(x); return (e - 1.0 / e) / 2.0; }
+double cosh(double x) { double e = lm_exp(x); return (e + 1.0 / e) / 2.0; }
+double tanh(double x) { double e = lm_exp(2.0 * x); return (e - 1.0) / (e + 1.0); }
 double fabs(double x) { return x <= 0 ? 0.0 - x : x; }
 static double __trunc9(double x) {                 /* |x| < 2^52 assumed */
   double t = (double) (long) x;
@@ -128,18 +128,18 @@ double ldexp(double x, int n) {                    /* x * 2^n, clamped through t
   else if (n < -1022) { x *= __e2d(-969); n += 969;
     if (n < -1022) { x *= __e2d(-969); n += 969; if (n < -1022) n = -1022; } }
   return x * __e2d(n); }
-/* the math floor's exact reader (src/apps/moon/lib/moonlibc/math/am.c -- linked wherever
+/* the math floor's exact reader (src/apps/moon/lib/moonlibc/math/lm.c -- linked wherever
    moonlibc is: the raw love build and the whole moon userland): correctly
    rounded, so read(show x) = x holds off-glibc too. The naive accumulator
    that lived here parsed "0.3" one ulp off -- masked until love's printer
    went shortest-roundtrip, then loud in test_raw. */
-double am_strtod(char const *, char **);
-/* THE LIBC FACE IS NOT am_strtod's FACE, and the wrapper is where they part:
- * am_strtod is love's float reader, and the reader hands it a whole TOKEN, so
+double lm_strtod(char const *, char **);
+/* THE LIBC FACE IS NOT lm_strtod's FACE, and the wrapper is where they part:
+ * lm_strtod is love's float reader, and the reader hands it a whole TOKEN, so
  * it skips no leading space. C's strtod owes that, and owes endptr = the
- * ORIGINAL nptr when nothing converts. doing it here keeps am.c exactly what
+ * ORIGINAL nptr when nothing converts. doing it here keeps lm.c exactly what
  * love wants -- correctly rounded and nothing else. found by test/libc/num.c.
- * the SIGN of a zero needs nothing: am_strtod gets -0.0 right on its own.
+ * the SIGN of a zero needs nothing: lm_strtod gets -0.0 right on its own.
  * it did not while mooncc lowered -d as 0.0 - d (src/apps/moon/gen.l), and a
  * wrapper that "fixed" it here would now flip the sign BACK, since -0.0 == 0.0
  * tests true. */
@@ -147,7 +147,7 @@ double strtod(char const *s, char **end) {
   char const *p = s;
   while (*p == 32 || (*p >= 9 && *p <= 13)) p++;
   char *e = (char *) p;
-  double v = am_strtod(p, &e);
+  double v = lm_strtod(p, &e);
   if (e == p) { if (end) *end = (char *) s; return 0.0; }   /* no conversion: the ORIGINAL s */
   if (end) *end = e;
   return v; }

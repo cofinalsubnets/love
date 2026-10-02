@@ -6,7 +6,7 @@
 // bake wants a >512 KB arena) -- this is the TOOLCHAIN on silicon. Boot,
 // first-light the LED, banner the self-reported core clock over the ST-LINK
 // VCP, then run an on-board self-check battery: softened doubles, floats,
-// 64-bit pairs, the am math floor (bit-exact expectations, the same values
+// 64-bit pairs, the lm math floor (bit-exact expectations, the same values
 // test_thumb2sp pins against gcc on qemu-M4), composites and varargs. Every
 // check prints; the tally is the story. A -D QSMOKE build leaves through
 // qemu semihosting with the tally as the exit code (100+n names the first
@@ -26,15 +26,15 @@ static void putu(uint32_t v) { bput_n(serial_putc, v, 10); }
 
 // --- the battery ----------------------------------------------------------
 // volatile inputs keep every operand a runtime value; expectations are exact
-// (the am values are the bit-identical ones harnessam.c pins vs gcc).
+// (the lm values are the bit-identical ones harnesslm.c pins vs gcc).
 static volatile double da = 2.5, db = -1.25, one = 1.0, two = 2.0, big = 1e9;
 static volatile float ff = 1.5f;
 static volatile long long p64 = 0x123456789ABLL, q64 = 100000LL;
 static volatile unsigned long long u64 = 0xFEDCBA9876543210ULL;
 static volatile int i7 = 7, i2 = 2;
 
-double am_sin(double), am_cos(double), am_sqrt(double), am_exp(double),
-       am_log(double), am_atan2(double, double);
+double lm_sin(double), lm_cos(double), lm_sqrt(double), lm_exp(double),
+       lm_log(double), lm_atan2(double, double);
 
 struct zn { double re, im; };
 static struct zn zmake(double re, double im) {
@@ -75,14 +75,14 @@ static int run(void) {
   CK(u64 >> 16 == 0xFEDCBA987654ULL);
   CK((long long)u64 == -81985529216486896LL);
   CK(u64 / 1000ULL == 18364758544493064ULL);
-  // the am math floor, bit-exact (harnessam.c's values)
-  CK(am_sin(one) == 0.8414709848078965);
-  CK(am_cos(two) == -0.41614683654714241);
-  CK(am_sqrt(two) == 1.4142135623730951);
-  CK(am_exp(one) == 2.7182818284590455);
-  CK(am_log(two) == 0.69314718055994529);
-  CK(am_atan2(one, two) == 0.46364760900080609);
-  CK(am_sin(big) == 0.54584344944869956);      // the big-argument reduction
+  // the lm math floor, bit-exact (harnesslm.c's values)
+  CK(lm_sin(one) == 0.8414709848078965);
+  CK(lm_cos(two) == -0.41614683654714241);
+  CK(lm_sqrt(two) == 1.4142135623730951);
+  CK(lm_exp(one) == 2.7182818284590455);
+  CK(lm_log(two) == 0.69314718055994529);
+  CK(lm_atan2(one, two) == 0.46364760900080609);
+  CK(lm_sin(big) == 0.54584344944869956);      // the big-argument reduction
   // composites + varargs (the AAPCS-VFP shapes test_thumb2sp gates vs gcc)
   { struct zn z = zmake(da, db);
     CK(z.re == da && z.im == db);

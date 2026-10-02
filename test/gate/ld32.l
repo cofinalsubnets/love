@@ -27,7 +27,7 @@
                           (nu + (sx = 0 && 0 < #nm ? 1 0)))))
       w (swalk 0 0 0)
       _ (0 < <w ? 0 (scare 'ld32-no-funcs p))
-      _ (0 < <>w ? 0 (scare 'ld32-no-undefs p))          ; am.c calls __aeabi_*
+      _ (0 < <>w ? 0 (scare 'ld32-no-undefs p))          ; lm.c calls __aeabi_*
       ; the only two kinds a thumb1 object mints -- and the addend slot empty on
       ; every one, because a rel keeps its addend in the field. a kind outside the
       ; set means the writer grew one the reader was never told about.

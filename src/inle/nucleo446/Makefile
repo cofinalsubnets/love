@@ -16,8 +16,8 @@ include ../port.mk
 
 nu_cc = $(MOONCC) -t thumb2sp -D __STDC_HOSTED__=0 -I.
 
-objs  = $(R)/$(o)/nucleo446.o $(R)/$(o)/main.o $(R)/$(o)/am.o $(R)/$(o)/rt.o $(R)/$(o)/boot.o
-qobjs = $(R)/$(o)/nucleo446-q.o $(R)/$(o)/main-q.o $(R)/$(o)/am.o $(R)/$(o)/rt.o $(R)/$(o)/boot.o
+objs  = $(R)/$(o)/nucleo446.o $(R)/$(o)/main.o $(R)/$(o)/lm.o $(R)/$(o)/rt.o $(R)/$(o)/boot.o
+qobjs = $(R)/$(o)/nucleo446-q.o $(R)/$(o)/main-q.o $(R)/$(o)/lm.o $(R)/$(o)/rt.o $(R)/$(o)/boot.o
 
 .PHONY: nucleo446 smoke flash
 default: nucleo446

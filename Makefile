@@ -1173,7 +1173,7 @@ web/favicon.png: src/love/quay/cga_8x8.c src/tools/mkicon.l src/apps/vi/config.l
 .PHONY: ulp
 ulp:
 	@mkdir -p out
-	@$(CC) -O2 -o out/ulp $S/tools/ulp.c $S/apps/moon/lib/moonlibc/math/am.c -lm
+	@$(CC) -O2 -o out/ulp $S/tools/ulp.c $S/apps/moon/lib/moonlibc/math/lm.c -lm
 	@out/ulp
 out/perf.data: host
 	cat $t | perf record -o $@ $m

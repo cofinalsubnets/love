@@ -8,7 +8,7 @@
 # lcat'd headers to delegate to the root.
 #
 # Answers: R o MOONCC lv, .DELETE_ON_ERROR, clean, FORCE and its three delegations, the
-# lay_l/link_l/copy_l cats, the am.o and ocopy.l rules, and the p_obj/p_lay/p_link shapes.
+# lay_l/link_l/copy_l cats, the lm.o and ocopy.l rules, and the p_obj/p_lay/p_link shapes.
 
 R := ../../..
 # the shared variables, love_tu among them: a port reads the membership rather than
@@ -105,11 +105,11 @@ libc_m    = memchr memcmp memcpy memmove memset strlen
 libc_dep  = $(S)/apps/moon/lib/moonlibc/impl.h $(lv)
 libc_o    = $(addprefix $(R)/$(o)/,$(addsuffix .o,$(libc_m)))
 
-# the am math floor: the one object every port compiles exactly alike.
-$(R)/$(o)/am.o: $(S)/apps/moon/lib/moonlibc/math/am.c $(lv)
+# the lm math floor: the one object every port compiles exactly alike.
+$(R)/$(o)/lm.o: $(S)/apps/moon/lib/moonlibc/math/lm.c $(lv)
 	@echo 'MOON	'$@
 	@mkdir -p $(R)/$(o)
-	@cd $(R) && $(MOONCC) -t $(p_tgt) -Isrc/apps/moon/lib/moonlibc/math -Isrc/apps/moon/include -c src/apps/moon/lib/moonlibc/math/am.c $(o)/am.o
+	@cd $(R) && $(MOONCC) -t $(p_tgt) -Isrc/apps/moon/lib/moonlibc/math -Isrc/apps/moon/include -c src/apps/moon/lib/moonlibc/math/lm.c $(o)/lm.o
 
 # the compiler runtime: the calls mooncc's own lowering makes where the machine has no
 # instruction (v6-M has neither FPU nor umull nor clz nor a variable 64-bit shift; a
