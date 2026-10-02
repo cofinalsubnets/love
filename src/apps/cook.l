@@ -467,8 +467,8 @@
          (? (0 = #tt) '(skip)
             (: w (first-word tt) rest (after-word tt)
                (? (w = "include") ['inc rest]
-                  (w = "-include") ['inc rest]
-                  (w = "sinclude") ['inc rest]
+                  (w = "-include") ['sinc rest]
+                  (w = "sinclude") ['sinc rest]
                   ; `override NAME op VAL` assigns past a command-line VAR=VAL;
                   ; `export NAME [op VAL]` assigns (when an op is there) and hands the
                   ; final value to the process environment, so recipes inherit it.
@@ -855,7 +855,8 @@
                             loop rest (flushr cur rules) 0 cond)
                   'xname   ((on ? (setenv (r1 c) (expand (peep as (r1 c) "") as 0)) 0),
                             loop rest (flushr cur rules) 0 cond)
-                  'inc    (on ? (catmap file-lines (split-ws (expand (r1 c) as 0)) @ more
+                  ('inc || 'sinc)
+                          (on ? (catmap (k = 'inc ? file-lines sfile-lines) (split-ws (expand (r1 c) as 0)) @ more
                                          (loop (more + rest) (flushr cur rules) 0 cond))
                                       (loop rest (flushr cur rules) 0 cond))
                   ; conditionals thread `cur` rather than flushing it: a top-level rule is
@@ -896,6 +897,7 @@
    ; read a file whole (for `include`), then split it into classified lines.
    (slurp-of path) (uread path @ [1 s] s (udie 1 ("cook: cannot read " + path)))
    (file-lines ip) (text-lines (slurp-of ip))
+   (sfile-lines ip) (uread ip @ [1 s] (text-lines s) ())     ; -include: a missing file is no lines
 
    ; seed the variable table as make does: the environment first (every NAME=value, origin
    ; "environment"), then the builtin defaults for whatever it left unsaid, then the command
