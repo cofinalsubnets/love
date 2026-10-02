@@ -1227,7 +1227,7 @@
        + (0 < #bee-env ? ("\n\n## environment\n" + bee-env) "")
        + "\n" + bee-brief + "\n" + bee-talk + bee-merge
        + (tablet? bee-hands
-          ? ("\n## your window\nYou are one pane of inle, a terminal desktop the user shares with you. "
+          ? ("\n## your window\nYou are one pane of mitty, a terminal desktop the user shares with you. "
              + "The pane_ tools see and work its other panes -- shells, editors, any program -- as the "
              + "user does: read a pane before typing into it, and leave the keyboard where it was unless asked.\n")
           "")
