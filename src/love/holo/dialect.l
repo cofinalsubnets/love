@@ -272,8 +272,8 @@
    (at-mreg f) (0 = #f ? -1 <>(at-reglook (snip f 1 #f)))    ; a %reg field, or absent
    (at-operand t)
       (? (t 0 = 42) ['ind (at-operand (snip t 1 #t))]
-         (t 0 = 37 && xa-has? t 58) (: c (xa-idx t 58) o (at-operand (snip t (c + 1) #t))
-                                       ['seg (name (snip t 1 c)) (<o = 'abs ? ['mem -1 -1 1 <>o] o)])
+         (t 0 = 37 && xa-has? t 58) (t @ ("%" + s + ":" + r)
+                                       (at-operand r @ o ['seg (name s) (<o = 'abs ? ['mem -1 -1 1 <>o] o)]))
          (t 0 = 37) (: nm (snip t 1 #t) cr (xa-cr nm) dr (xa-dr nm) sr (xa-sr nm)
                        (? (two? cr) cr (two? dr) dr (two? sr) sr (at-reglook nm)))
          (t 0 = 36) (snip t 1 #t @ v
@@ -361,15 +361,14 @@
          sz (k < 0 ? 0 (xa-ptrsz (snip l 0 k)))
          r  (sz = 0 ? "" (xa-trim (snip l k #l)))
          (r @ ("ptr" + (q && sz > 0)) (sz . (xa-trim q)) (0 . l)))
-   (in-term t) (: i (xa-idx t 42)                ; one bracket term -> (ix enc sc) (rg enc) (n v) (sym s) (rip)
-      (? (t = "rip") ['rip]
-         (i >= 0) (: a (snip t 0 i) b (snip t (i + 1) #t)
-                    ra (xa-reg a) rb (xa-reg b)
-                    (? (two? ra) ['ix <>ra (xa-imm b)]
-                       (two? rb) ['ix <>rb (xa-imm a)]
-                       (scare 'as-memform t)))
-         (xa-num? t) ['n (xa-num t)]
-         (xa-reg t @ r (two? r ? ['rg <>r] ['sym (name (xa-unquote t))]))))
+   (in-term t)                                    ; one bracket term -> (ix enc sc) (rg enc) (n v) (sym s) (rip)
+      (t @ "rip" ['rip]
+         (a + "*" + b) (: ra (xa-reg a) rb (xa-reg b)
+                           (? (two? ra) ['ix <>ra (xa-imm b)]
+                              (two? rb) ['ix <>rb (xa-imm a)]
+                              (scare 'as-memform t)))
+         (? (xa-num? t)) ['n (xa-num t)]
+         (xa-reg t @ r (two? r ? ['rg <>r] ['sym (name (xa-unquote t))])))
    ;; split the bracket's inside on + and -, each term with its sign
    (in-terms s) (#s @ n
                    ((: (g i st sg acc)
@@ -409,7 +408,7 @@
                (0 . ['ims (name (xa-unquote v))]))
             (xa-has? t 91) (sz . (in-mem (snip t (#t - #tail) #t)))
             (xa-has? tail 58)                                     ; QWORD PTR fs:40 -- a segment, an address
-            (xa-idx tail 58 @ c (sz . ['seg (name (snip tail 0 c)) ['mem -1 -1 1 (xa-imm (snip tail (c + 1) #tail))]]))
+            (tail @ (s + ":" + r) (sz . ['seg (name s) ['mem -1 -1 1 (xa-imm r)]]))
             (sz > 0) (scare 'as-segment t)
             (xa-num? t) (0 . [(xa-branch? mn0 || xa-cc? mn0 ? 'lbl 'im) (xa-num t)])
             (xa-expr? t) (0 . ['im (gimm (gtoks t))])

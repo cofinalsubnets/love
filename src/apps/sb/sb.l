@@ -380,8 +380,7 @@
     (mk (),
      (? (0 < dirty ())
         (say err "sb: working tree has changes; record or revert first\n", 0)
-        (: base (? (snip peer (#peer - 1) #peer = "/")
-                   (snip peer 0 (#peer - 1)) peer)        ; one trailing slash, ours to add
+        (: base (peer @ (s + "/") s peer)        ; one trailing slash, ours to add
            r (pull-http base)
            (? (atom? r) 0
               (: st (settle (readdir ".sb/patch"))

@@ -23,8 +23,7 @@
                'kh (home + "/.ssh/known_hosts") 'shk "ask" 'pty -1,
         o))
    (cl-opt prog o kv)
-    (: i (: (go i) (? (#kv <= i) i (kv i = 61) i (go (i + 1))) (go 0))
-       k (snip kv 0 i) v (snip kv (i + 1) #kv)
+    ((kv @ (k + "=" + v) [k v] [kv ""]) @ [k v]
        (? (k = "UserKnownHostsFile") (pin o 'kh v)
           (k = "StrictHostKeyChecking")                    ; ask (the default), accept-new, yes, no
            (: w (v = "off" ? "no" v)
@@ -163,8 +162,7 @@
     o (tablet 8)
     _ (pins o 'port 22 'quiet 0 'ak (home + "/.ssh/authorized_keys"))
     (opt kv)
-     (: i (: (go i) (? (#kv <= i) i (kv i = 61) i (go (i + 1))) (go 0))
-        k (snip kv 0 i) v (snip kv (i + 1) #kv)
+     ((kv @ (k + "=" + v) [k v] [kv ""]) @ [k v]
         (? (k = "AuthorizedKeysFile") (pin o 'ak v) (die ("unsupported option " + k))))
     (parse as)
      (? (atom? as) 0
@@ -306,11 +304,10 @@
         io))
    ; "[user@]host:path" -> [user host path], or () for a local path (no colon, or a slash first)
    (sc-remote s)
-    (: c ((: (g i) (? (#s <= i) -1 (s i = 58) i (s i = 47) -1 (g (i + 1)))) 0)
-       (? (c < 1) ()
-          (: uh (snip s 0 c) path (snip s (c + 1) #s)
-             at (split uh 64)
-             [(two? >at ? (join "@" (rev >(rev at))) ()) (last at) (0 < #path ? path ".")]))))
+    (s @ ((uh && 0 < #uh && fsub uh "/" 0 < 0) + ":" + path)
+       (: at (split uh 64)
+          [(two? >at ? (join "@" (rev >(rev at))) ()) (last at) (0 < #path ? path ".")])
+       ()))
 
 ; the client's end: sources and a target, one side remote -> the status
 (: (scp-client o ops rec pres)

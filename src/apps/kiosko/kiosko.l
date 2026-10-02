@@ -324,7 +324,7 @@
    ; came before.
    (serve root port quiet before) (serve5 root port quiet before ())
    (serve5 root port quiet before make)
-   (: r (ends? root "/" ? (snip root 0 (#root - 1)) root)
+   (: r (root @ (s + "/") s root)
       a (charm? port ? ["127.0.0.1" port] port)
       l (listen ['tcp <a <>a])
     (hot? l ?

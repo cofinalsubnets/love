@@ -732,15 +732,12 @@
          (w k @ c
           (scan (k + 1) (q? || c = 39)
                 (hard? || (ushq-ctl? c) || elem c '(34 36 92 96)))))
-       (sq k o)
-        (n <= k ? (slurp o)
-         (w k @ c
-          ((? (c = 39) (say o "'\\''")
-              (ushq-ctl? c) (say o ("'$'\\" + ushq-esc c + "''"))
-              (put o c)),
-           sq (k + 1) o)))
+       (sq _) (jug 0 @ o (each ^n (k \ (w k @ c (? (c = 39) (say o "'\\''")
+                                                  (ushq-ctl? c) (say o ("'$'\\" + ushq-esc c + "''"))
+                                                  (put o c)))),
+                          slurp o))
        r (scan 0 0 0)
-       (<r && !<>r ? ("\"" + w + "\"") ("'" + sq 0 (jug 0) + "'")))
+       (<r && !<>r ? ("\"" + w + "\"") ("'" + sq 0 + "'")))
    (ust-name p md)
     (ushq p @ q
      (!(40960 = md & 61440) ? q
@@ -1071,11 +1068,10 @@
    (udf-show rows mins lefts)           ; lefts: the columns that read left
     (: n #<rows
        ws (map (k \ foldl (w \ r \ (#(r k) @ c (w < c ? c w))) (mins k) rows) ^n)
-       (line r) (: (go k acc) (n <= k ? acc
-                               (: s (r k)
-                                  p (? (k + 1 = n) s (elem k lefts) (urpad (ws k) s) (upad (ws k) s))
-                                  (go (k + 1) (k ? (acc + " " + p) p))))
-                   (go 0 ""))
+       (line r) (foldl (\ acc k (: s (r k)
+                                     p (? (k + 1 = n) s (elem k lefts) (urpad (ws k) s) (upad (ws k) s))
+                                     (k ? (acc + " " + p) p)))
+                       "" ^n)
        (go rs) (two? rs ? (say out (line <rs), put out 10, go >rs) 0)
        (go rows))
    ; -T wears each mount's type after its name, -t TYPE takes only those types and -x
@@ -1539,15 +1535,14 @@ EXEC 01;32
    ; GNU's quoting: a ' closes and reopens, a : or = after an odd run of \ and ^ is escaped
    (udc-q s)
     (: o (jug 0) n #s
-       (go k nb) (n <= k ? (slurp o)
-                  (: c (s k)
-                     nb2 (? (c = 39) (say o "'\\'", 1)
-                            (c = 92 || c = 94) !nb
-                            (c = 58 || c = 61) (nb ? (put o 92) 0, 1)
-                            1)
-                     (put o c,
-                      go (k + 1) nb2)))
-       (go 0 1))
+       (foldl (\ nb k (: c (s k)
+                         nb2 (? (c = 39) (say o "'\\'", 1)
+                                (c = 92 || c = 94) !nb
+                                (c = 58 || c = 61) (nb ? (put o 92) 0, 1)
+                                1)
+                         (put o c, nb2)))
+              1 ^n,
+        slurp o))
    (udc-parse txt nm)                   ; -> [ok [key val]..]
     (: term (getenv "TERM" @ t (string? t && 0 < #t ? t "none"))
        cterm (getenv "COLORTERM" @ t (string? t ? t ""))
@@ -1914,9 +1909,9 @@ EXEC 01;32
        _ (two? >fs && atom? >>>>fs ? () (udie 2 "usage: cmp [-bls] [-n N] [-i SKIP[:SKIP]] A B [SKIP1 [SKIP2]]"))
        (num w) (unum w @ v (charm? v ? v (udie 2 ("cmp: invalid number: '" + w + "'"))))
        iv (uoptv t 105)
-       k (iv ? (findsub iv ":") -1)
-       sk1 (? (two? >>fs) (num (fs 2)) iv (num (k < 0 ? iv (snip iv 0 k))) 0)
-       sk2 (? (two? >>>fs) (num (fs 3)) iv (num (k < 0 ? iv (snip iv (k + 1) #iv))) 0)
+       ab (iv ? (iv @ (a + ":" + b) [a b] [iv iv]))
+       sk1 (? (two? >>fs) (num (fs 2)) iv (num <ab) 0)
+       sk2 (? (two? >>>fs) (num (fs 3)) iv (num <>ab) 0)
        lim (t 110 ? (num (uoptv t 110)))
        (rd f) (f = "-" ? [1 (slurp in)] (uread f))
        ra (rd <fs) rb (rd <>fs)

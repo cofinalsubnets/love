@@ -155,12 +155,7 @@
    (ushuf n k seat dot)                ; the first k of a shuffle of seats 0..n-1, each to dot
     (: t {}
        (at i) (peep t i (seat i))
-       (go i) (i < k ?
-               (: j (i + rand (n - i)) a (at i) b (at j)
-                  (pin t j a, pin t i b, dot b,
-                   go (i + 1)))
-               0)
-       (go 0))
+       (each ^k (i \ (: j (i + rand (n - i)) a (at i) b (at j) (pin t j a, pin t i b, dot b))), 0))
    (shuf-main as)
     (: t {}
        (sdie m) (udie 1 ("shuf: " + m))
@@ -180,9 +175,8 @@
                     (go l i) (two? l ? (pin lt i <l, go >l (i + 1)) [i (i \ (lt i))])
                     (go ls 0))
        (range s) (: n #s
-                    m ((: (go i) (? (n <= i) -1 (s i = 45) i (go (i + 1)))) 0)
-                    lo (0 < m ? (unum (snip s 0 m)))
-                    hi (0 < m ? (unum (snip s (m + 1) n)))
+                    lh (s @ ((a && 0 < #a) + "-" + b) [(unum a) (unum b)] [() ()])
+                    lo <lh hi <>lh
                     (charm? lo && charm? hi && lo <= hi + 1 ? [(hi - lo + 1) (+ lo)]
                      (sdie ("invalid input range: " + s))))
        (input _) (: j (jug 0)
@@ -506,10 +500,7 @@
          (sk i) (en <= i || !(usort-blank? (ln i)) ? i (sk (i + 1)))
          s2 (b? ? (sk st) st)
          (en <= s2 ? "" (snip ln s2 en)))))
-   (usort-up s) (: n #s o (jug 0)
-                   (go k) (n <= k ? (slurp o)
-                             (s k @ c (put o (97 <= c <= 122 ? (c - 32) c), go (k + 1))))
-                   (go 0))
+   (usort-up s) (jug 0 @ o (each ^#s (k \ (s k @ c (put o (97 <= c <= 122 ? (c - 32) c)))), slurp o))
    ; -n reads a VALUE, and reads it exactly: 10000000000000000001 sorts above ...0
    ; and no double can say so. the reading is the digits -- sign, then the integer
    ; part's length, then its digits, then the fractions padded against each other.
@@ -686,9 +677,7 @@
        ; a numeric reading as a sortable triple: the sign class, the integer (negated
        ; when negative), and the fraction's digits -- complemented when negative, so
        ; the byte order of the trimmed digits is the numeric one either way
-       (ncomp s) (: n #s o (jug 0)
-                    (go k) (n <= k ? (slurp o) (put o (105 - s k), go (k + 1)))
-                    (go 0))
+       (ncomp s) (jug 0 @ o (each ^#s (k \ put o (105 - s k)), slurp o))
        (ntrip p flip) (: neg <p ip <>p fp <>>p
                          sc (? (!#ip && !#fp) 0 neg -1 1)
                          iv (#ip ? <(sound ip) 0)
@@ -809,7 +798,7 @@
    ; number (-5, -.5) ends the flags, so a negative FIRST is not one --
    (useqd w)                                   ; -> [int scale] | ()
     (: neg (0 < #w && w 0 = 45) b (0 < #w && (w 0 = 45 || w 0 = 43) ? (snip w 1 #w) w)
-       k (findsub b ".") ip (k < 0 ? b (snip b 0 k)) fp (k < 0 ? "" (snip b (k + 1) #b))
+       pf (b @ (i + "." + f) [i f] [b ""]) ip <pf fp <>pf
        ds (ip + fp)
        (0 < #ds && all digit? (chars ds) ? [(neg ? (0 - unum ds) (unum ds)) #fp]))
    (seq-main as)
@@ -1670,7 +1659,7 @@
    ub64url "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
    ub32hex "0123456789ABCDEFGHIJKLMNOPQRSTUV"
    ubz85 "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ.-:+=^!/*?&<>()[]{}@%$#"
-   (ubeach s f) (: o (jug 0) n #s (go k) (n <= k ? (slurp o) (f o (s k), go (k + 1))) (go 0))
+   (ubeach s f) (jug 0 @ o (each ^#s (k \ f o (s k)), slurp o))
    (ub16enc s) (ubeach s (o \ c \ (put o ("0123456789ABCDEF" (c >> 4)), put o ("0123456789ABCDEF" (c & 15)))))
    (ub2enc s msb) (ubeach s (o \ c \ map (i \ (put o (48 + (c >> (msb ? (7 - i) i) & 1)))) ^8))
    (ubz85enc s)
@@ -2146,8 +2135,8 @@
                 (v = "auto") (: c1 (two? l1 ? #(ujfs sep <l1) 0) c2 (two? l2 ? #(ujfs sep <l2) 0)
                                 ('k . map (i \ [1 i]) (filter (i \ !(i = n1)) (map (+ 1) ^c1))
                                  + map (i \ [2 i]) (filter (i \ !(i = n2)) (map (+ 1) ^c2))))
-                (map (w \ (w = "0" ? 'k (findsub w "." @ d (d < 0 ? (udie 1 ("join: invalid field specifier: '" + w + "'"))
-                                                            [(uatoi (snip w 0 d)) (uatoi (snip w (d + 1) #w))]))))
+                (map (w \ (w = "0" ? 'k (w @ (a + "." + b) [(uatoi a) (uatoi b)]
+                                              (udie 1 ("join: invalid field specifier: '" + w + "'")))))
                      (filter (w \ 0 < #w) (usplit 44 (replace v " " ","))))))
        (cell f i) ((two? f ? (unth f i)) @ v (string? v ? v empty))
        (row ps) (say out (ujoinc jsep ps), put out 10)
@@ -2243,10 +2232,7 @@
                      120 (zpad 6 (radix k 16))
                      (zpad 7 (radix k 8)))
        (val blk k)                      ; the little-endian item at k, short reads zeroed
-        (: n #blk
-           (go i acc) (sz <= i ? acc
-                       (go (i + 1) (acc + (k + i < n ? (blk (k + i)) 0) * (8 * i) 2)))
-           (go 0 0))
+        (: n #blk (foldl (\ acc i (acc + (k + i < n ? (blk (k + i)) 0) * (8 * i) 2)) 0 ^sz))
        (cell blk k)
         (kd @ 'c (upad 3 (uodesc (blk k)))
               'a (upad 3 (uodname (blk k)))
@@ -2258,9 +2244,7 @@
        (rowof blk cnt)
         (: items (byte? ? cnt (((cnt + sz) - 1) // sz))
            o (jug 0)
-           (go i) (items <= i ? (slurp o)
-                   (put o 32, say o (cell blk (i * step)), go (i + 1)))
-           (go 0))
+           (each ^items (i \ (put o 32, say o (cell blk (i * step)))), slurp o))
        ; left is -1 for no -N; the walk answers the byte count, for the closing offset
        (walk k left prev star)
         (left = 0 ? k
@@ -2290,14 +2274,9 @@
     (: n #blk o (jug 0)
        (hx v w) (zpad w (radix v 16) @ h (upper? ? (upper h) h))
        _ (say o (hx off 8)) _ (say o ": ")
-       (hex i) (c <= i ? 0
-                (i < n ? (say o (hx (blk i) 2)) (say o "  "),
-                 0 = (i + 1) % g ? (put o 32) 0,
-                 hex (i + 1)))
-       _ (hex 0) _ (0 = c % g ? 0 (put o 32)) _ (put o 32)
-       (asc i) (c <= i || n <= i ? 0 (put o (uxx-esc (blk i)), asc (i + 1)))
-       (asc 0,
-        slurp o))
+       _ (each ^c (i \ ((i < n ? (say o (hx (blk i) 2)) (say o "  ")), (0 = (i + 1) % g ? (put o 32) 0))))
+       _ (0 = c % g ? 0 (put o 32)) _ (put o 32)
+       (each ^(min c n) (i \ put o (uxx-esc (blk i))), slurp o))
    ; -r reads the dump back: the offset up to the colon is skipped, the gutter past
    ; two spaces is not hex and stops the row. a line with no colon is all hex
    (uxx-unrow ln)
@@ -2456,9 +2435,8 @@
            (? (two? ex) <ex (atom? pre) 'none (atom? >pre) <pre ['many (map cap pre)]))
        (long w dash rest opts)               ; -> (rest opts)
         (: body (snip w #dash #w)
-           e ((: (go i) (? (#body <= i) -1 (body i = 61) i (go (i + 1)))) 0)
-           key (e < 0 ? body (snip body 0 e))
-           val (e < 0 ? () (snip body (e + 1) #body))
+           kv (body @ (k + "=" + v) [k v] [body ()])
+           key <kv val <>kv
            r (lmatch key)
            (? (r = 'none) (gerr ("unrecognized option '" + w + "'"), [rest opts])
               (two? r && <r = 'many)

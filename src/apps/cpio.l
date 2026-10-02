@@ -54,9 +54,7 @@
    (cpio-head ino nom mode mtime uid gid nb)
     (: nz (#nom + 1)
        h (cask 110)
-       (txt! o s) (: n #s
-                     (go i) (n <= i ? 0 (pin h (o + i) (s i), go (i + 1)))
-                     (go 0))
+       (txt! o s) (each ^#s (i \ pin h (o + i) (s i)), 0)
        (txt! 0 cpio-mag,
         cpio-hex! h 6 ino, cpio-hex! h 14 mode,
         cpio-hex! h 22 uid, cpio-hex! h 30 gid,
@@ -336,7 +334,7 @@
        (? !o 2
           (peep t 'h 0) (say out (cpioc-usage + "\n"), flush out, 0)
           (peep t 'vers 0)
-           (say out ("cpio (love " + love-version + ")\n"), flush out, 0)
+           (say out (uvers "cpio" + "\n"), flush out, 0)
           (t 'mode @ m
              (two? <>o && cpioc-moan "the names come in on stdin, not on the line",
               (m @ 'o (cpioc-o t) 'i (cpioc-i t) 't (cpioc-t t) (cpioc-moan cpioc-usage, 2))))))

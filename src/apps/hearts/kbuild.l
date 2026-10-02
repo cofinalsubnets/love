@@ -62,12 +62,11 @@
 
  ; a word against a path: a % pattern's stem, "" for the very path, else ()
  (hk-stem w path)
-  (: k (findsub w "%")
-     (k < 0 ? (w = path ? "" ())
-        (: pre (snip w 0 k) suf (snip w (k + 1) #w)
-           (#pre + #suf < #path && hk-pre? path pre && ends? path suf
-            ? (snip path #pre (#path - #suf)) ()))))
- (hk-sub p s) (findsub p "%" @ k (k < 0 ? p (snip p 0 k + s + snip p (k + 1) #p)))
+  (w @ (pre + "%" + suf)
+       (#pre + #suf < #path && hk-pre? path pre && ends? path suf
+        ? (snip path #pre (#path - #suf)) ())
+     (w = path ? "" ()))
+ (hk-sub p s) (p @ (a + "%" + b) (a + s + b) p)
  ; a file name as make keeps it: ./foo is foo
  (hk-dot w) (hk-pre? w "./" && 2 < #w ? (snip w 2 #w) w)
  ; prerequisite words, the order-only ones past | left out
@@ -81,9 +80,10 @@
  ; pattern], a static pattern rule (`$(objs): %.o: %.c`) keeping its target pattern apart
  (hk-rx t)
   (peep t " rx" 0 @ x (x ? x
-     (: (one r) (: ts (map hk-dot (words (hk-expand (r 0) t))) ps (hk-expand (r 1) t) k (findsub ps ":")
-                   (0 < k ? [ts (hk-pre (snip ps (k + 1) #ps)) >>r (hk-dot (strip (snip ps 0 k)))]
-                      [ts (hk-pre (k = 0 ? (snip ps 1 #ps) ps)) >>r ""]))
+     (: (one r) (: ts (map hk-dot (words (hk-expand (r 0) t))) ps (hk-expand (r 1) t)
+                   (ps @ ((h && 0 < #h) + ":" + q) [ts (hk-pre q) >>r (hk-dot (strip h))]
+                         (":" + q) [ts (hk-pre q) >>r ""]
+                         [ts (hk-pre ps) >>r ""]))
         rs (map one (t " rules"))
         (pin t " rx" rs, rs))))
 
@@ -238,7 +238,7 @@
                       (g >l f vs (<l . gs)))
      a (g (aft (words line)) (K + "/Makefile") () ())
      ev (hk-env t)
-     lv (map (v \ findsub v "=" @ k [(snip v 0 k) (snip v (k + 1) #v)]) (a 1))
+     lv (map (v \ v @ (k + "=" + w) [k w] ["" v]) (a 1))
      cl (uniq (peep t " cl" ()) + map (v \ v 0) lv)
      nt (foldl (n \ k \ pin n k (peep t k "")) {} ["MAKE_VERSION" ".FEATURES" "MAKEFLAGS" "MAKE" "CURDIR" " shell"])
      _ (each (ev + map (n \ [n (peep t n "")]) (peep t " cl" ()) + lv) (v \ pin nt (v 0) (v 1)))
@@ -256,7 +256,7 @@
  ; make's are, then the command line read as a $(MAKE) line is. prior as hk-make's (or ()).
  ; answers the failed target or 0
  (hk-envmake K args sh run prior)
-  (: t (foldl (a \ e \ findsub e "=" @ i (0 < i ? (pin a (snip e 0 i) (snip e (i + 1) #e)) a)) {} (environ 0))
+  (: t (foldl (a \ e \ e @ ((k && 0 < #k) + "=" + v) (pin a k v) a) {} (environ 0))
      made (lit? prior ? (pins {} " prior" prior) {})
      (pull t "SHELL" 0, pins t " shell" sh "MAKE" "hk-make" " exports" (sort (filter (k \ !(hk-pre? k " ")) (keys t))),
       hk-submake K t (join " " ("hk-make" . args)) made run, peep made " failed" 0))

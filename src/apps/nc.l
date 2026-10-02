@@ -68,8 +68,7 @@
     ; outbound bytes: with -C each newline goes as crlf
     (crlf b) (t 67 ? (replace b "\n" "\r\n") b)
     ; s cut after each newline
-    (pieces s) (findsub s "\n" @ k
-                  (k < 0 || #s <= k + 1 ? [s] (. (snip s 0 (k + 1)) (pieces (snip s (k + 1) #s)))))
+    (pieces s) (s @ (a + "\n" + (r && 0 < #r)) ((a + "\n") . pieces r) [s])
     ; s out through f: whole, or with -i a line at a time, i ms apart
     (paced f s) (i < 0 ? (f s) (map (l \ (f l, pin seen 0 (clock 0), rest i)) (pieces s)))
 
@@ -199,10 +198,10 @@
                                        m))
                          (0 < foldl one 0 ports ? 0 (uleave 1)))
     ; a port or a lo-hi range -> its ports
-    (span a) (findsub a "-" @ k
-                (k < 0 ? [(portof a)]
-                   (: lo (portof (snip a 0 k)) hi (portof (snip a (k + 1) #a))
-                      (hi < lo ? (die ("not a range: " + a)) (map (+ lo) (jot (hi - lo + 1)))))))
+    (span a) (a @ (l + "-" + h)
+                (: lo (portof l) hi (portof h)
+                   (hi < lo ? (die ("not a range: " + a)) (map (+ lo) (jot (hi - lo + 1)))))
+                [(portof a)])
 
     (? (uoptbad as t "CdiklNnopqsUuwvz") (die usage)
        (t 117 && (t 107 || t 122)) (die "-u takes neither -k nor -z")

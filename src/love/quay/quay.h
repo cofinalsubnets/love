@@ -10,7 +10,7 @@
 //       bits 24..31  face bits (bold / underline / reverse / ..)
 //   fg, bg           a colour: the top byte its kind, the low 24 bits its value
 // cb only stores these -- the renderer maps a codepoint to a glyph (cb_437 for
-// the built-in faces), a colour to pixels, and faces to whatever it can afford.
+// the built-in fonts), a colour to pixels, and faces to whatever it can afford.
 // cb_putc stamps each cell with the current pen (cur_fg, cur_bg, cur_face).
 struct cb_cell { uint32_t g, fg, bg; };
 
@@ -168,13 +168,13 @@ uint8_t cb_437(uint32_t cp);       // the cp437 glyph that draws cp: 0xfe, the �
 uint8_t cb_width(uint32_t cp);     // the columns cp takes: 0 1 or 2, 'text's wcwidth
 int cb_437x(uint32_t cp);          // cb_437, but -1 where the page has no glyph
 
-// a loaded face, as src/apps/face.l lays it: "qf1\0", the cell's w and h (8 16), npages and
+// a loaded font, as src/apps/font.l lays it: "qf1\0", the cell's w and h (8 16), npages and
 // nglyphs, then a u16 page per 256 code points, the pages (glyph + 1 per code point, 0 for
-// none), and 16 little-endian u16 rows a glyph, the leftmost pixel high. cb_face_ok vets
-// every index once, so cb_face_rows may trust them; a face is only ever read.
+// none), and 16 little-endian u16 rows a glyph, the leftmost pixel high. cb_font_ok vets
+// every index once, so cb_font_rows may trust them; a font is only ever read.
 enum { cb_qf_dir = 4352, cb_qf_head = 12 };
-int cb_face_ok(uint8_t const *b, uintptr_t n);
-uint8_t const *cb_face_rows(uint8_t const *b, uint32_t cp);   // 32 bytes, or 0
+int cb_font_ok(uint8_t const *b, uintptr_t n);
+uint8_t const *cb_font_rows(uint8_t const *b, uint32_t cp);   // 32 bytes, or 0
 
 struct font { uint8_t const *glyphs, w, h; };
 extern uint8_t const cga_8x8[256][8], cleat_8x16[256][16];
@@ -183,11 +183,11 @@ extern uint8_t const cga_8x8[256][8], cleat_8x16[256][16];
 // pitch/w/h are all in PIXELS -- a screen paints at an ORIGIN inside it, so one
 // target can carry several panes rather than exactly one screen.
 // scale is how many of this target's pixels a GLYPH pixel gets, so a cell covers
-// f->w*scale by f->h*scale. it is the screen's number and not the face's: a bitmap
+// f->w*scale by f->h*scale. it is the screen's number and not the font's: a bitmap
 // stays sharp on a dense display by growing whole pixels, where the alternative is
 // resampling somebody else does. 1 is the bitmap as drawn; 0 paints nothing.
 struct cb_paper { volatile uint32_t *px; uintptr_t pitch, w, h, scale; };
-// qf: a face cb_face_ok passed, or 0 -- the chain is the built-in face, then qf, then the ■
+// qf: a font cb_font_ok passed, or 0 -- the chain is the built-in font, then qf, then the ■
 void cb_paint(struct cb_paper const*, struct cb const*, struct font const*,
               uint8_t const *qf, uint16_t row, uintptr_t x0, uintptr_t y0, uint32_t cur);
 #endif

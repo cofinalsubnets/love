@@ -112,7 +112,7 @@ cmp -s "$w/names" "$w/verb" || fail "-v did not name every member on err"
 # only, so -v still writes the archive rather than a version line
 ( cd "$t" && "$L" cpio -o --quiet < "$w/names" ) > "$w/pO.cpio" 2> /dev/null || fail "cpio -o"
 cmp -s "$w/pO.cpio" "$w/vO.cpio" || fail "-v did not write the archive"
-"$L" cpio --version 2> /dev/null | grep -q '(love ' || fail "cpio --version"
+"$L" cpio --version 2> /dev/null | grep -q '^cpio / love ' || fail "cpio --version"
 "$L" cpio --help 2> /dev/null | grep -q '^usage: cpio' || fail "cpio --help"
 # -u overwrites; without it a newer file on disk stays. the archive's mtimes are the
 # tree's own, so "newer" here is arranged with touch and not with luck

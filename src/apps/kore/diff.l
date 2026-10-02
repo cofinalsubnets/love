@@ -105,8 +105,7 @@
         (t <= s ? (pin ln t bl, pin pv t bp, ())
          ((jof s < jof t ? (1 + peep ln s 0) 0) @ c
             (bl < c ? (gos t (s + 1) c s) (gos t (s + 1) bl bp))))
-       (got t) (n <= t ? () (gos t 0 1 -1, got (t + 1)))
-       _ (got 0)
+       _ (each ^n (t \ gos t 0 1 -1))
        (gom t best bt) (n <= t ? bt                             ; the longest chain's tail
                         (peep ln t 0 @ c
                            (best < c ? (gom (t + 1) c t) (gom (t + 1) best bt))))

@@ -414,7 +414,7 @@
        p (filter (g \ <g = t) (x 'ncp)) e (filter (g \ <g = t) (x 'nce))
        (in? g) (t = 130 ? (dns-in? (g 1) v) (ip-in? (g 1) v))
        (reach? g) (v @ ("*." + (r && 0 < #r && t = 130))
-                     (: b (lower (g 1)) k (fsub b "." 0) (0 < k && snip b (k + 1) #b = lower r))
+                     (lower (g 1) @ ((h && 0 < #h) + "." + t) (t = lower r) 0)
                      0)
        (? (two? p && !(any in? p)) "is outside the names it may vouch for"
           (any (g \ in? g || reach? g) e) "is among the names it may not vouch for"

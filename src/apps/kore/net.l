@@ -146,8 +146,7 @@
        (go 0 "" ""))
    ; the pty's bytes for the wire: a 255 doubled
    (td-esc s) (fsub s (string 255) 0 < 0 ? s
-               ((: (go i a) (#s <= i ? a (go (i + 1) (a + (s i = 255 ? (string 255 + string 255) (string (s i)))))))
-                0 ""))
+               (jug 0 @ j (each ^#s (i \ say j (s i = 255 ? (string 255 + string 255) (string (s i)))), slurp j)))
    ; one connection: the program's output to the client in this task, the client's bytes
    ; to the program in another; the program's end is the session's, and the client's going
    ; hangs the program up
@@ -188,11 +187,11 @@
        (portof s) (uport s @ n (n ? n (udie 2 ("telnetd: not a port: " + s))))
        ; -b ADDR[:PORT], a quad; -p PORT
        bv (uoptv t 98)
-       bk (string? bv ? ((: (g i) (? (#bv <= i) -1 (bv i = 58) i (g (i + 1)))) 0) -1)
-       addr (string? bv ? (bk < 0 ? bv (snip bv 0 bk)))
+       ap (string? bv ? (bv @ (a + ":" + p) [a p] [bv ()]))
+       addr <ap
        _ (? !addr 0 (two? (cite 'dns 'dns-quad addr)) 0 (udie 2 ("telnetd: -b takes a dotted quad, not " + addr)))
        pv (uoptv t 112)
-       port (? (string? pv) (portof pv) (0 <= bk) (portof (snip bv (bk + 1) #bv)) 23)
+       port (? (string? pv) (portof pv) (string? <>ap) (portof <>ap) 23)
        l (!addr ? (listen port) (listen ['tcp addr port]))
        _ (hot? l ? 0 (udie 1 ("telnetd: cannot listen on port " + show port + " (" + show l + ")")))
        _ (login = "/bin/login" ? 0
@@ -201,8 +200,7 @@
        issue (open ip "r" @ q
                 (hot? q ? (slurp q @ s
                              (close q,
-                              ((: (go i a) (#s <= i ? a (go (i + 1) (a + (s i = 10 ? "\r\n" (string (s i)))))))
-                               0 "")))
+                              (jug 0 @ j (each ^#s (i \ say j (s i = 10 ? "\r\n" (string (s i)))), slurp j))))
                  ""))
        (td-loop l [login] issue))
 
@@ -229,9 +227,7 @@
        _ (0 < #ops < 3 ? 0 (udie 2 ns-usage))
        ; -type=T (or -query=T) and -port=N, each NAME=VALUE; anything else is refused by name
        (bad w) (udie 2 ("nslookup: unknown option " + w + "\n" + ns-usage))
-       kvs (map (w \ (((: (g i) (? (#w <= i) -1 (w i = 61) i (g (i + 1)))) 0) @ k
-                        (k < 0 ? (bad w) [(snip w 1 k) (snip w (k + 1) #w) w])))
-                fl)
+       kvs (map (w \ w @ (k + "=" + v) [(snip k 1 #k) v w] (bad w)) fl)
        tys (map (x \ (ns-assoc (wg-lower (x 1)) ns-types @ t (!t ? (bad (x 2)) t)))
                 (filter (x \ <x = "type" || <x = "query") kvs))
        port (filter (x \ <x = "port") kvs @ ps

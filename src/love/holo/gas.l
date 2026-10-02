@@ -667,9 +667,7 @@
               (? (w = ".macro")
                   (: b (grab >l '(".macro") ".endm")
                      ws (filter (x \ 0 < #x) (xa-split (string (map (c \ (c = 44 ? 32 c)) (chars r))) 32))
-                     specs (map (x \ (: k (xa-idx x 58) q (xa-idx x 61)
-                                       (? (0 <= k) [(snip x 0 k) ""] (0 <= q) [(snip x 0 q) (snip x (q + 1) #x)] [x ""])))
-                                >ws)
+                     specs (map (x \ x @ (a + ":" + _) [a ""] (a + "=" + b) [a b] [x ""]) >ws)
                      (pin mac <ws [specs <b],
                       go <>b acc))
                  (w = ".purgem") (go >l acc)

@@ -988,6 +988,9 @@
       ; one trailing newline on the way out, whether the shower left one or not
       (lensnl h = (h + "\n")) (lensnl r = r) (lensnl "" = "\n")))
 
+; the --version answer: one spelling, name / love VERSION, for a symbol or a string name
+(test (uvers 'cat = "cat / love " + love-version) (uvers "mooncc" = "mooncc / love " + love-version))
+
 (test_fin ())                                        ; no zz-fin here: quit before claiming ok
 (say err "test/law/kore: myers + patience + lines/unlines + unified hunks + the u-floor + the regex floor + the find, awk, pager, man, markdown and bc floors -- projections + minimality (lcs oracle) + anchors + seeded fuzz (lcs + brzozowski oracles) ok
 ")
