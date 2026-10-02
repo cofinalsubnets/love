@@ -572,6 +572,16 @@
    ht (pins {} " shell" (c \ "<" + c + ">"))
    _ (hv "X := $(shell uname -m)\n" ht)
    _ (ok "cook-vars: a caller's $(shell) answerer" (ht "X" = "<uname -m>"))
+   ; `export A B` exports each, and a recipe sees both
+   kx (run-cook (mk ["A := a1" "B = b$(A)" "export A B" "all:" "\t@echo \"X[$$A $$B]\""]) "all")
+   _ (ok "export A B exports each" (has kx "X[a1 ba1]"))
+   ; an included file is on MAKEFILE_LIST while it is read
+   _ (write-file (dir + "/inc.mk") "ME := $(lastword $(MAKEFILE_LIST))\n")
+   km (run-cook (mk [("include " + dir + "/inc.mk") "$(info M[$(notdir $(ME))])" "all: ;@:"]) "all")
+   _ (ok "MAKEFILE_LIST names the file being read" (has km "M[inc.mk]"))
+   ; a define body's tab-led lines join as a variable's: one space, the whitespace around it gone
+   kj (run-cook (mk ["define v" "\tone two  \\" "\t\tthree" "endef" "$(info J[$(v)])" "all: ;@:"]) "all")
+   _ (ok "a define's continuation folds as a variable's" (has kj "J[\tone two three]"))
    ; target-specific assignments come back for a reader that scopes them, newest first
    tt {}
    _ (hv "T := a.o\n$(T) b.o: private X := 1\n%.p: Y += 2\n" tt)

@@ -415,11 +415,16 @@
               (rtws c + " " + snip l (lead l) #l)))
        ; one logical line off the head: [text rest]
        (one rec cur ls) (cont? cur && two? ls ? (one rec (glue rec cur <ls) >ls) [cur ls])
-       (g ls acc)
+       ; a define body is a variable's value however its lines lead: its joins are a
+       ; variable's, never a recipe's (filechk_version.h's tab-led lines)
+       (indef d x) (: t (trim x) w (first-word t)
+                      (d ? (w != "endef")
+                         (w = "define" || (w = "override" || w = "export") && first-word (after-word t) = "define")))
+       (g ls acc d)
         (atom? ls ? (join "\n" (rev acc))
            (: l <ls
-              (one (0 < #l && l 0 = 9) l >ls @ [x r] (g r (x . acc)))))
-       (g (lines s) ()))
+              (one (!d && 0 < #l && l 0 = 9) l >ls @ [x r] (g r (x . acc) (indef d x)))))
+       (g (lines s) () 0))
    (lines s)
    ((: (g i st acc)
        (i >= #s ? (rev (snip s st i . acc))
@@ -844,7 +849,9 @@
    (assign1 as nm0 op val ov)
    (expand nm0 as 0 @ nm
    (!ov && peep origins nm "undefined" = "command line" ? 0
-      (: v (trim val)
+      ; a define's body is kept as written, its leading tab too ($(eval)'s recipe lines); the
+      ; op falls to the recursive arm below
+      (: v (op = "define" ? val (trim val))
          ; the flavor rides beside the origin: an expanded `:=` and a stored `=` are the
          ; same text afterwards, so nothing in the value itself can answer $(flavor).
          (org f) (pin origins nm (ov ? "override" "file"), pin flavors nm f)
@@ -873,6 +880,14 @@
       rec (two? >sc ? (join ";" >sc) "")
       inl (0 < tally (trim rec) ? [(parse-mods (trim rec))] 0)
       (r1 c . (<sc . inl)))
+   ; an exported name: into this process's environment, which recipes inherit, and kept under
+   ; " exports" for a reader that runs commands itself
+   (xport as nm)
+    (setenv nm (expand (peep as nm "") as 0),
+     peep as " exports" () @ xs (elem nm xs ? 0 (pin as " exports" (nm . xs))))
+   ; an included file joins MAKEFILE_LIST before its lines are read, so its
+   ; $(lastword $(MAKEFILE_LIST)) names itself
+   (mklist as f) (peep as "MAKEFILE_LIST" "" @ l (pin as "MAKEFILE_LIST" (0 < #l ? (l + " " + f) f)))
    (condon cond) (two? cond ? <>><cond 1)
    (push-cond cond pon active) ([pon active active] . cond)
    ; `else ifeq ..` chains: the tail's test runs only while no earlier arm was taken
@@ -908,19 +923,20 @@
                   'assign ((on ? (do-assign as (r1 c) (r2 c) (r3 c)) 0), loop rest (flushr cur rules) 0 cond)
                   'oassign ((on ? (assign1 as (r1 c) (r2 c) (r3 c) 1) 0), loop rest (flushr cur rules) 0 cond)
                   'xassign ((on ? (assign1 as (r1 c) (r2 c) (r3 c) 0,
-                                   setenv (r1 c) (expand (peep as (r1 c) "") as 0)) 0),
+                                   xport as (expand (r1 c) as 0)) 0),
                             loop rest (flushr cur rules) 0 cond)
-                  'xname   ((on ? (setenv (r1 c) (expand (peep as (r1 c) "") as 0)) 0),
+                  ; `export A B C` exports each
+                  'xname   ((on ? (each (split-ws (expand (r1 c) as 0)) (n \ xport as n)) 0),
                             loop rest (flushr cur rules) 0 cond)
-                  'inc    (on ? (catmap file-lines (split-ws (expand (r1 c) as 0)) @ more
+                  'inc    (on ? (catmap (f \ (mklist as f, file-lines f)) (split-ws (expand (r1 c) as 0)) @ more
                                          (loop (more + rest) (flushr cur rules) 0 cond))
                                       (loop rest (flushr cur rules) 0 cond))
-                  'sinc   (on ? (catmap (f \ exists? f ? (file-lines f) ()) (split-ws (expand (r1 c) as 0)) @ more
+                  'sinc   (on ? (catmap (f \ exists? f ? (mklist as f, file-lines f) ()) (split-ws (expand (r1 c) as 0)) @ more
                                          (loop (more + rest) (flushr cur rules) 0 cond))
                                       (loop rest (flushr cur rules) 0 cond))
                   ; conditionals thread `cur` rather than flushing it, as make's do: a
                   ; conditional inside a recipe block gates its lines via `on` above.
-                  'defassign ((on ? (do-assign as (r1 c) "=" (r2 c)) 0),
+                  'defassign ((on ? (do-assign as (r1 c) "define" (r2 c)) 0),
                               loop rest (flushr cur rules) 0 cond)
                   ; remember which targets carry one, so recur can refuse if one is remade;
                   ; " tvars" keeps (targets assignment) in order for a reader that scopes them
