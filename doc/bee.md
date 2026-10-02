@@ -33,7 +33,7 @@ bee - a coding agent in the terminal, and the protocol its sessions talk by
 
 **love bee --ticket** \[*days*\] \| **--enrol** *token* \[*name*\] \| **--admit** \| **--enrolled**
 
-**love bee --deliver**
+**love bee --deliver** \| **--ledger**
 
 **love bee -s** \| **--screensaver** \[*name*\]
 
@@ -63,7 +63,7 @@ The system prompt tells the model where it is:
 - every merge queue under **refs/queue/**, as it stood at start (see THE MERGE QUEUE);
 - the project's own instructions: from **/** down to the working directory, each directory's **AGENTS.md** and then its **CLAUDE.md**, both where both exist.
 
-The settings are read from **~/.love/etc/bee.l**, one form per line: **(api anthropic)** or **(api openai)**, **(url** "...**)**, **(model** *name***)**, **(key-env** *var***)**, **(max-tokens** *n***)**, **(shell** *word* ...**)**, **(context** *n***)**, **(thinking off)**, **(avatar** *name***)** and **(relay** *word* ...**)**. A key goes out only over TLS, and only to a peer whose certificate this binary has verified. Plain HTTP reaches this machine alone, and not a port another login (uid 1000 and up) listens on. A tree's own **./.bee.l** travels with a clone, so it may set only **model**, **max-tokens**, **thinking**, **context** and **queue-watch** over them.
+The settings are read from **~/.love/etc/bee.l**, one form per line: **(api anthropic)** or **(api openai)**, **(url** "...**)**, **(model** *name***)**, **(key-env** *var***)**, **(max-tokens** *n***)**, **(shell** *word* ...**)**, **(context** *n***)**, **(thinking off)**, **(avatar** *name***)**, **(relay** *word* ...**)** and **(ledger-dir** *path***)**. A key goes out only over TLS, and only to a peer whose certificate this binary has verified. Plain HTTP reaches this machine alone, and not a port another login (uid 1000 and up) listens on. A tree's own **./.bee.l** travels with a clone, so it may set only **model**, **max-tokens**, **thinking**, **context** and **queue-watch** over them.
 
 # AVATARS
 
@@ -177,6 +177,8 @@ On the box with **root.key**, **love bee --ticket** \[*days*\] mints a ticket, g
 Where **box.key** and **box.card** are, a session seals what it sends. Its first message makes it a key, *cell***/key**, and **box.key** signs it a card named *name***@***box*, good for a day and signed again when it has less than an hour left; the chain, that card then **box.card**, is *cell***/cert**. A sealed message adds **to**, **id** (its file's name) and **cert** (the chain in base64) to its header, and ends the header with **sig**: the cell key's signature over every header line above it, the blank line and the text. A reader whose box has a card checks the chain against its lineage, then the signature, the **to**, the **id**, and that the card is named for the **from**. The model then reads the message as **\<message from="***name***" sealed="***name***@***box***"\>**. A message that fails is left in **read/** and shown only as a note from **bee**; so is one whose id was already taken. Plain mail, and any mail where the reader's box has no card, reads as before.
 
 Mail goes to another box of the lineage when the name is *name***@***box* and *box* is not this one. It leaves only sealed. The sender runs **(relay** *word* ...**)** (**ssh -T** unless set) with the host and the remote **love**, then **bee --deliver**, and the message on its standard input. **~/.love/etc/bee/boxes** names the way to each box, a line each, *box* *host* \[*love*\]: the host is the box's name and the remote program **love** when there is no line. On the far box, **--deliver** keeps the message in the named session's inbox only when it is addressed to that box, the session is live, its id is not taken there, and its seal checks; it says why not otherwise and exits 1. A login meant only for mail can be held to it by the far box's sshd, with OpenSSH's **command="love bee --deliver",restrict** before the key in **authorized_keys**. The reply goes back the same way, to *name***@***box* as the **sealed** attribute gave it.
+
+A queue lives in one box's hub, and the others reach it as **queue/***name***@***box* or **refs/queue/***name***@***box*. A call from another box goes there sealed, as a message to **ledger@***box* holding the tool and its input, by the same **(relay** ...**)**, to **bee --ledger**. That box checks the seal, takes the id once (**ledger-ids/**), and runs the tool in **(ledger-dir** *path***)**, else its HOME, as the session the seal names, *name***@***box*. So a row belongs to its sealed name, and the queue's rules hold across boxes as they do on one. Notices about a row on another box are not sent yet.
 
 # JOBS AND WORKERS
 

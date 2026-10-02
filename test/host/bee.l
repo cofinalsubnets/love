@@ -906,5 +906,31 @@
            (1 = <elsewhere) (cr-in (elsewhere 1) "not addressed to this box"))
    0)
 
+; --- the queue across boxes: refs/queue/main@near, written from far, lands in near's repo as a
+; row of far's sealed session; the same call again, and a call to a box that is not this one, fail
+(: nb (cr-dir "qnear" "") fb (cr-dir "qfar" "") repo (nb + "/repo")
+   _ (cr-run nb "" "--keygen root") _ (cr-run nb "" "--keygen box near")
+   tk (: r (cr-run nb "" "--ticket") (snip (r 1) 0 129))
+   _ (cr-put fb "req" ((cr-run fb "" ("--enrol " + tk + " far")) 1))
+   _ (cr-put fb "card" ((cr-run nb "" ("--admit < '" + fb + "/req'")) 1))
+   _ (cr-run fb "" ("--enrolled < '" + fb + "/card'"))
+   _ (mkdir repo 493) _ (hark ["git" "-C" repo "init" "-q"])
+   _ (cr-put (nb + "/.love/etc") "bee.l" ("(ledger-dir " + repo + ")\n"))
+   ; the stand-in ssh: HOST LOVE bee VERB, run as the near box
+   _ (cr-put fb "ssh" ("exec env HOME='" + nb + "' '" + cr-love + "' '" + cr-app + "' \"$4\"\n"))
+   _ (cr-put (fb + "/.love/etc") "bee.l" ("(relay sh " + fb + "/ssh)\n"))
+   (msgs ls) (foldl (\ a m (a + json-show m + "\n")) "" ls)
+   (call id nm args) {"jsonrpc" "2.0" "id" id "method" "tools/call" "params" {"name" nm "arguments" args}}
+   _ (cr-put fb "row" (msgs [(call 1 "queue_row" {"queue" "refs/queue/main@near" "state" "waiting" "branch" "b1" "note" "from far"})]))
+   r1 (cr-run fb "BEE_NAME=ant" ("--mcp < '" + fb + "/row'"))
+   _ (hark ["sh" "-c" ("git -C '" + repo + "' cat-file -p refs/queue/main > '" + nb + "/q.txt'")])
+   qt (cr-get (nb + "/q.txt"))
+   _ (cr-put nb "plain" "from ant\nsent 1\nto ledger@near\nid 9-ant-00\n\n{}\n")
+   plain (cr-run nb "" ("--ledger < '" + nb + "/plain'"))
+   _ (test (1 = <plain) (cr-in (plain 1) "seal does not check"))
+   _ (test (0 = <r1) (cr-in (r1 1) "row now:") (cr-in (r1 1) "ant@far")
+           (string? qt) (cr-in qt " ant@far b1 ") (cr-in qt "from far"))
+   0)
+
 (hark ["rm" "-rf" cr-root])
 (test_fin (), puts "bee: ok", putc 10, 0)

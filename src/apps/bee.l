@@ -7,7 +7,7 @@
 ;   love bee --avatar [NAME]                 the avatars, or wear one
 ;   love bee --keygen root | box [NAME]      the lineage's root, or this box's key and card
 ;   love bee --ticket [DAYS] | --enrol TOKEN [NAME] | --admit | --enrolled   a box joins a lineage
-;   love bee --deliver                       a sealed message from another box, on stdin
+;   love bee --deliver | --ledger            a sealed message, or queue call, from another box, on stdin
 ;
 ; the settings are ~/.love/etc/bee.l's, each a form per line; ./.bee.l may set model,
 ; max-tokens, thinking, context and queue-watch over them:
@@ -21,7 +21,8 @@
 ;   (queue-watch N)       seconds between readings of the merge queues; 20, and 0 for never
 ;   (backend claude-code) a `claude -p` child thinks and runs the tools, bee the harness; api else
 ;   (claude-model NAME)   the model that child runs; claude's own default when unset
-;   (relay WORD ..)       what carries mail to another box: HOST LOVE bee --deliver follow; ssh -T
+;   (relay WORD ..)       what carries mail to another box: HOST LOVE bee VERB follow; ssh -T
+;   (ledger-dir PATH)     where a queue call from another box runs; HOME
 ;   (mem-floor GB) (heavy-max N)   no heavy lock below GB available; N heavy locks at once, 2
 ;   (avatar NAME)       the face and its accent, bunny unless set; /avatar or --avatar sets it
 ;   (screensaver NAME) (screensaver-idle N)   the screen's saver after N minutes without a key:
@@ -304,19 +305,24 @@
      ; a message from one name into another's inbox -> "" when it is there, else why not. a
      ; sealed one adds to, id and cert (its chain, base64) and ends its header with the sig
      ; over every line above it, the blank line and the text
+     ; [id text] of a message, sealed when seal is [key chain]: then it adds to, id and cert (its
+     ; chain, base64) and ends its header with the sig over every line above, the blank line and the text
+     (sealed-msg from to text seal)
+      (: id (show (clock 0) + "-" + from + "-" + hex2 (clock 0 % 256))
+         hd ("from " + from + "\nsent " + show (clock 0 // 1000) + "\n"
+             + (two? seal ? ("to " + to + "\nid " + id + "\ncert " + cite 'ssh 'b64e (seal 1) 1 + "\n") ""))
+         sg (? (two? seal) ("sig " + cite 'tls 'hex (cite 'ssh 'ed-sign <<seal (<seal 1) (hd + "\n" + text)) + "\n") "")
+         [id (hd + sg + "\n" + text)])
      (post-with from to text seal)
       (: at (find to "@" 0) nm (at < 0 ? to (snip to 0 at)) box (? (0 < at) (snip to (at + 1) #to) "")
          b (box-seal 0)
          away (0 < #box && !(two? b && b 1 "name" = box))
          c (card-of nm) ib (cell-of nm + "/inbox")
-         id (show (clock 0) + "-" + from + "-" + hex2 (clock 0 % 256))
-         hd ("from " + from + "\nsent " + show (clock 0 // 1000) + "\n"
-             + (two? seal ? ("to " + to + "\nid " + id + "\ncert " + cite 'ssh 'b64e (seal 1) 1 + "\n") ""))
-         sg (? (two? seal) ("sig " + cite 'tls 'hex (cite 'ssh 'ed-sign <<seal (<seal 1) (hd + "\n" + text)) + "\n") "")
-         (? away (? (two? seal) (relay box (hd + sg + "\n" + text))
+         m (sealed-msg from to text seal) id <m
+         (? away (? (two? seal) (: r (relay box (m 1) "--deliver") (? (<r = 0) "" ("cannot deliver to " + box + ": " + r 1)))
                     ("mail leaves this box only sealed, and nothing here can seal it for " + to))
             !(tablet? c && alive? (card-pid c)) ("no session named " + to)
-            !(spit-file (ib + "/." + id) (hd + sg + "\n" + text)) ("cannot write to " + to)
+            !(spit-file (ib + "/." + id) (m 1)) ("cannot write to " + to)
             (nom? (rename (ib + "/." + id) (ib + "/" + id))) ("cannot deliver to " + to)
             ""))
      ; the way to another box: ~/.love/etc/bee/boxes, a line each, NAME HOST [LOVE] -> [host love]
@@ -325,21 +331,21 @@
          hit (filter (w \ two? w && <w = nm) (map words (? (string? s) (lines s) ())))
          w (two? hit ? <hit [nm])
          [(#w > 1 ? (w 1) nm) (#w > 2 ? (w 2) "love")])
-     ; a sealed message carried to another box: (relay CMD ..) HOST LOVE bee --deliver, the
-     ; message on its stdin -> "" | why not
+     ; a sealed message carried to another box: (relay CMD ..) HOST LOVE bee VERB, the message on
+     ; its stdin -> [exit output]
      bee-relay (: v (peep bee-salt 'relay ()) (two? v ? (map word v) ["ssh" "-T"]))
-     (relay box msg)
+     (relay box msg verb)
       (: r (box-route box) f (cell-of (me 0) + "/.relay")
          _ (spit-file f msg)
          fd (openfd f 0) pp (pipe 0)
-         p (spawnio (bee-relay + [<r (r 1) "bee" "--deliver"]) fd >pp >pp (open-fds 0) -1 0)
+         p (spawnio (bee-relay + [<r (r 1) "bee" verb]) fd >pp >pp (open-fds 0) -1 0)
          _ (close >pp) _ (? (0 <= fd) (close fd) 0)
          q (fdopen <pp)
          (go acc) (: c (see q) (? (c < 0) acc (: _ (unsee q c) (go (acc + chug q)))))
          o (go "")
          _ (close q)
          st (reap p) _ (unlink f)
-         (? (st = 0) "" ("cannot deliver to " + box + " (exit " + show st + "): " + o)))
+         [st o])
      ; --deliver, a sealed message on stdin from another box: kept in the inbox it names when it
      ; is addressed here, to a live session, under an id not yet taken, and its seal checks
      (deliver s)
@@ -872,6 +878,42 @@
       (? !(q-name? (in "queue")) [0 "a queue is refs/queue/NAME or queue/NAME"]
          (two? (q-bad in)) [0 ("a field holds a control character, or a space outside a text: " + <(q-bad in))]
          (go in))
+     ; --- the queue across boxes: queue/NAME@BOX lives in BOX's hub. a call to it goes there
+     ; sealed, to ledger@BOX, and that box's --ledger runs it as the session the seal names ---
+     (q-route tool in run)
+      (: q (field in "queue" "") at (find q "@" 0) box (? (0 < at) (snip q (at + 1) #q) "")
+         b (box-seal 0)
+         (? (#box = 0) (run in)
+            (two? b && b 1 "name" = box) (run (pin in "queue" (snip q 0 at)))
+            (: seal (cell-seal 0)
+               (? !(two? seal) [0 "a queue on another box is written only sealed, and nothing here can seal"]
+                  (: m (sealed-msg (me 0) ("ledger@" + box) (json-show {"tool" tool "in" (pin in "queue" (snip q 0 at))}) seal)
+                     r (relay box (m 1) "--ledger")
+                     [(<r = 0 ? 1 0) (chomp (r 1))])))))
+     ; --ledger, a sealed call on stdin: run in (ledger-dir PATH), else HOME, as the sealed name.
+     ; each id is taken once
+     bee-ledger-tools ["queue_row" "queue_lead" "queue_land" "queue_landed"]
+     (ledger s)
+      (: k (find s "\n\n" 0) hd (? (k < 0) s (snip s 0 k)) body (? (k < 0) "" (snip s (k + 2) #s))
+         (hv key) (: fl (filter (\ l (starts? l (key + " "))) (lines hd)) (? (two? fl) (snip <fl (#key + 1) #<fl)))
+         to (: t (hv "to") (string? t ? t "")) id (: i (hv "id") (string? i ? i ""))
+         b (box-seal 0) ids (bee-keys + "/ledger-ids")
+         sealed (: m (mail-check s id "ledger") (string? (m 2) && 0 < #(m 2) ? (m 2) ""))
+         j (json-read body) call (two? j && tablet? (j 1) ? (j 1) {})
+         tool (peep call "tool" "") in (peep call "in" ())
+         (? !(two? b) [0 "this box has no card"]
+            (to != "ledger@" + b 1 "name") [0 ("not a ledger call for this box: '" + to + "'")]
+            !(0 < #id && id 0 != 46 && find id "/" 0 < 0) [0 "a bad id"]
+            (#sealed = 0) [0 "the seal does not check"]
+            !(elem tool bee-ledger-tools && tablet? in) [0 "a ledger call is a queue tool and its input"]
+            (: _ (mkdirs ids) fd (openfd (ids + "/" + id) 3)
+               (? !(charm? fd) [0 "that id is taken"]
+                  (: _ (close fd)
+                     _ (pin bee-who 'name sealed)
+                     dir (setting 'ledger-dir (: h (getenv "HOME") (string? h ? h ".")))
+                     _ (chdir dir)
+                     (tool @ "queue_row" (queue-row in) "queue_lead" (queue-lead in)
+                             "queue_land" (queue-land in) (queue-landed in)))))))
      (queue-row in) (q-check in queue-row1)
      ; a queue not made yet is made on bee's standard header, led by the leader given, else this session
      (queue-row1 in)
@@ -1487,10 +1529,10 @@
                                          + (f 'yes ? "" ", reading only") + "; send_message reaches it")]
                             [0 e]))
           "stop_bee" [1 (stop-bee (in "name"))]
-          "queue_row" (queue-row in)
-          "queue_lead" (queue-lead in)
-          "queue_land" (queue-land in)
-          "queue_landed" (queue-landed in)
+          "queue_row" (q-route "queue_row" in queue-row)
+          "queue_lead" (q-route "queue_lead" in queue-lead)
+          "queue_land" (q-route "queue_land" in queue-land)
+          "queue_landed" (q-route "queue_landed" in queue-landed)
           "lock_acquire" (lock-acquire in)
           "lock_release" (lock-release in)
           "lock_list" (lock-list 0)
@@ -2564,6 +2606,7 @@
           "--enrol" (say-r (enrol >as))
           "--admit" (say-r (admit (slurp in)))
           "--deliver" (say-r (deliver (slurp in)))
+          "--ledger" (say-r (ledger (slurp in)))
           "--enrolled" (say-r (enrolled (slurp in)))
           "--keygen" (: r (keygen >as) (? <r (: _ (puts (r 1 + (ends? (r 1) "\n" ? "" "\n"))) 0) (say err ("bee: " + r 1 + "\n"), 1)))
           "--stop" (? (#as < 2) (say err "usage: love bee --stop NAME\n", 2)
@@ -2592,7 +2635,7 @@
          (? (elem "--mcp" as) (: _ (mcp-serve in out) 0)             ; a claude child's own server
             (two? as && <as = "--lock") (bee-cli as yes)              ; its command's words stay as given
             (two? as && elem <as ["-s" "--screensaver"]) (cite 'saver 'saver-cli >as)   ; a saver, no session
-            (two? words && elem <words ["--list" "--send" "--spawn" "--stop" "--avatar" "--resume" "--keygen" "--ticket" "--enrol" "--admit" "--enrolled" "--deliver"]) (bee-cli words yes)
+            (two? words && elem <words ["--list" "--send" "--spawn" "--stop" "--avatar" "--resume" "--keygen" "--ticket" "--enrol" "--admit" "--enrolled" "--deliver" "--ledger"]) (bee-cli words yes)
             ; the api backend wants its endpoint, model and key; claude brings its own. a stage
             ; answers why as a string: a harbour shows it, stderr would land on its glass
             (: why (? (!bee-cc? && atom? bee-at) ("cannot read the url " + bee-url)
