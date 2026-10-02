@@ -130,12 +130,13 @@
                     (k-mem gp >ks))
    ; kill at task granularity: a stop holds the task (pause), wait answering 256+sig for it; a
    ; cont lets it go on (resume); any other signal ends it where it stands, closing the ends it
-   ; was handed, wait answering 128+sig. each status is laid before the task moves: a close can
-   ; yield, and the waiter wakes the moment the task is held or gone
+   ; was handed, wait answering 128+sig. each status is laid before the task moves, since the
+   ; waiter wakes the moment the task is held or gone -- and an end closes before it is gone, so
+   ; a waiter that reads it next finds the end, however the closes yield
    (k-stop t sig)
      (? (sig = 18) (pull k-held t 0, resume t)
-        (sig = 19 || sig = 20 || sig = 21 || sig = 22) (pin k-held t (256 + sig), pause t)
-        (pin k-died t (128 + sig), pull k-held t 0, freeze t, each (k-ends t) close, pull k-ends t 0))
+        (19 <= sig <= 22) (pin k-held t (256 + sig), pause t)
+        (pin k-died t (128 + sig), pull k-held t 0, each (k-ends t) close, pull k-ends t 0, freeze t))
    (still p sig)
      (!(charm? p) || !(charm? sig) ? (nom 'badarg)
         ((? (p < 0) (k-members -p) (landed? p) () [p]) @ ts
