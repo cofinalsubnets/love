@@ -1,28 +1,64 @@
 // src/love/src.c -- the archives the artifact carries: its own source, and moonlibc per ISA
 #include "love.h"
+#include "lib/srctree.h"
 #include <string.h>
 
-// (source-gz ()) -> the embedded love-<ver>.tar.gz | (); post.l's `source` inflates it.
+// (tree-tar name) -> that section of the carried source as a tar of its own; (tree-tar 0) ->
+// every section joined, the whole tar the tree cut to. () where none is carried, the name
+// is no section's, or it will not decode.
+// (tree-head 0) -> the sections, [name codec raw packed crc32 decoded?] each, the index first.
 // (runtime-gz "x64"|"a64"|"rv64") -> that ISA's moonlibc archive, deflated;
 // (runtime-gz "id") -> the pure tree-slice hash they were cut from (moon.l's rtcid),
 // which moon.l's rtcarried consumes. () when none is carried.
-// src/tools/mksrc.l lays the first and src/tools/mkrt.l the rest; a link that takes neither
+// src/tools/mksrc.l lays the source and src/tools/mkrt.l the rest; a link that takes neither
 // object names src/love/noblob.c instead, so the length alone says whether anything is aboard.
+// the source opens through src/love/lovefs.c, the tree /love serves.
 extern const unsigned char
- ai_rtgz_x64[], ai_rtgz_a64[], ai_rtgz_rv64[], ai_rtgz_id[], ai_srcgz[];
+ ai_rtgz_x64[], ai_rtgz_a64[], ai_rtgz_rv64[], ai_rtgz_id[];
 extern const uintptr_t
- ai_rtgz_x64_len, ai_rtgz_a64_len, ai_rtgz_rv64_len, ai_rtgz_id_len, ai_srcgz_len;
+ ai_rtgz_x64_len, ai_rtgz_a64_len, ai_rtgz_rv64_len, ai_rtgz_id_len;
 
-// inlined into their wrappers: no buffer and nothing address-taken, so the tail still jumps
-static ai_inline struct ai *host_srcgz(struct ai *g) {
- const unsigned char *p = ai_srcgz;
- uintptr_t n = ai_srcgz_len;
- if (!n) return g->sp[0] = ZeroPoint, g;
- if (!ai_ok(g = str0(g, n))) return g;             // pushes: the archive over the arg
- memcpy(txt(g->sp[0]), p, (size_t) n);             // .rodata: no re-read after the collect
+// a section alone ends in the two zero blocks a tar ends with; the last carries its own
+static ai_noinline struct ai *host_tree_tar(struct ai *g) {
+ struct ai_tree *t = ai_tree_carried();
+ word a = g->sp[0];
+ intptr_t one = -1;
+ if (t && strp(a)) {
+  char nm[9] = {0};
+  if (len(a) < sizeof nm) memcpy(nm, txt(a), len(a)), one = ai_tree_named(t, nm);
+  if (one < 1) t = NULL; }
+ uint32_t lo = one > 0 ? (uint32_t) one : 1, hi = one > 0 ? lo + 1 : t ? t->ns : 0;
+ uintptr_t n = one > 0 ? 1024 : 0;
+ for (uint32_t i = lo; t && i < hi; i++)
+  if (ai_tree_sec(t, i)) n += t->s[i].raw;
+  else t = NULL;
+ if (!t) return g->sp[0] = ZeroPoint, g;
+ if (!ai_ok(g = str0(g, n))) return g;             // pushes: the tar over the arg
+ unsigned char *o = (unsigned char*) txt(g->sp[0]);
+ for (uint32_t i = lo; i < hi; i++) memcpy(o, t->s[i].bytes, t->s[i].raw), o += t->s[i].raw;
+ if (one > 0) memset(o, 0, 1024);
  return g->sp[1] = g->sp[0], g->sp += 1, g; }
 
+static ai_noinline struct ai *host_tree_head(struct ai *g) {
+ struct ai_tree *t = ai_tree_carried();
+ if (!t) return g->sp[0] = ZeroPoint, g;
+ uintptr_t w = 0;
+ for (uint32_t i = 0; i < t->ns; i++)
+  w += str_width(strlen(t->s[i].name)) + 7 * Width(struct ai_chain);
+ if (!ai_ok(g = ai_have(g, w))) return g;
+ word l = ZeroPoint;
+ for (uint32_t i = t->ns; i--;) {
+  struct ai_tree_sec const *s = t->s + i;
+  uintptr_t nl = strlen(s->name);
+  struct ai_str *nm = ini_str(bump(g, str_width(nl)), nl);
+  memcpy(nm->bytes, s->name, nl);
+  word f[6] = { (word) nm, putcharm(s->codec), putcharm(s->raw), putcharm(s->packed),
+                putcharm(s->crc), putcharm(s->bytes ? 1 : 0) }, r = ZeroPoint;
+  for (int k = 6; k--;) r = word(ini_chain(bump(g, Width(struct ai_chain)), f[k], r));
+  l = word(ini_chain(bump(g, Width(struct ai_chain)), r, l)); }
+ return g->sp[0] = l, g; }
 
+// inlined into its wrapper: no buffer and nothing address-taken, so the tail still jumps
 static ai_inline struct ai *host_rtgz(struct ai *g) {
  const unsigned char *p = 0;
  uintptr_t n = 0;
@@ -42,11 +78,14 @@ static ai_inline struct ai *host_rtgz(struct ai *g) {
  return g->sp[1] = g->sp[0], g->sp += 1, g; }
 
 static lvm(lvm_rtgz) LvmCall(g, host_rtgz)
-static lvm(lvm_srcgz) LvmCall(g, host_srcgz)
+static LvmWrap(lvm_tree_tar, host_tree_tar)
+static LvmWrap(lvm_tree_head, host_tree_head)
 
 static union u const
- nif_srcgz[] = {{lvm_srcgz}, {lvm_ret0}},
+ nif_tree_tar[] = {{lvm_tree_tar}, {lvm_ret0}},
+ nif_tree_head[] = {{lvm_tree_head}, {lvm_ret0}},
  nif_rtgz[] = {{lvm_rtgz}, {lvm_ret0}};
 
-LvNif("source-gz", nif_srcgz, NULL);
+LvNif("tree-tar", nif_tree_tar, NULL);
+LvNif("tree-head", nif_tree_head, NULL);
 LvNif("runtime-gz", nif_rtgz, NULL);

@@ -10,8 +10,8 @@
 // empty -- a zero-length array is not a definition every compiler will lay.
 #include "love.h"
 
-const unsigned char ai_srcgz[1] = {0};
-const uintptr_t ai_srcgz_len = 0;
+const unsigned char ai_srctree[1] = {0};
+const uintptr_t ai_srctree_len = 0;
 const unsigned char ai_rootfs[1] = {0};
 const uintptr_t ai_rootfs_len = 0;
 const unsigned char ai_rtgz_x64[1] = {0};

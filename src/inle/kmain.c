@@ -485,21 +485,24 @@ void kfree(void *p) { ff_free(&kmem, p); }
 // kmallocw/kfree rather than ai_alloc: a vt method is handed an fd and nothing else, so g
 // is out of reach at the door that grows a file. ms is the source's baked mtime.
 struct k_file { char const *path, *bytes; uintptr_t len, ms; };
-// the initrd is the source blob: the artifact carries its whole tree as ai_srcgz, so the
-// kernel inflates that and walks the tar; rows point into the inflated block.
-static struct k_file const *k_bakes;
-static int k_bakes_n;
+// the initrd is the source the artifact carries (ai_srctree): its index lays the rows at
+// boot, and each section decodes into the kernel heap at the first read of a file in it.
+// such a row has no bytes until then; tree is its place in the index.
 #include "lib/ustar.h"
+#include "lib/srctree.h"
+struct k_brow { struct k_file f; struct ai_tree_row const *tree; };
+static struct k_brow const *k_bakes;
+static int k_bakes_n;
+static struct ai_tree k_src;
+static void *k_grab(uintptr_t n) { return kmallocw(b2w(n)); }
 // the tree's rows live under /love, read-only, so a module loads from bytes the shell
 // cannot have edited. the root holds src/inle/rootfs/, a second tar walked with no prefix.
 static char const k_home[] = "home";
 static char const k_tree[] = "love";
 #define k_tree_n (sizeof k_tree - 1)
-// one ustar pass: count with rows NULL, fill on the second. paths re-home below the archive's
-// top and under pre. a symlink lands as a row whose target rides lnks[k] -- lib/'s door to
-// the crew modules is symlinks, and dropping them would lose every module behind it.
-static int k_tar_walk(unsigned char const *t, uintptr_t n, struct k_file *rows, char **lnks,
-                      char const *pre, uintptr_t pn) {
+// one ustar pass over the rootfs: count with rows NULL, fill on the second. a symlink lands
+// as a row whose target rides lnks[k].
+static int k_tar_walk(unsigned char const *t, uintptr_t n, struct k_brow *rows, char **lnks) {
   int k = 0;
   for (uintptr_t o = 0; o + 512 <= n && t[o];) {
     unsigned char const *h = t + o;
@@ -508,14 +511,12 @@ static int k_tar_walk(unsigned char const *t, uintptr_t n, struct k_file *rows, 
       if (rows) {
         char nm[256];
         uintptr_t ln = ai_ustar_name(h, nm, sizeof nm);      // TOP stripped
-        uintptr_t at = pn ? pn + 1 : 0;
-        char *p = kmallocw(b2w(at + ln + 1));
+        char *p = kmallocw(b2w(ln + 1));
         if (!p) return -1;
-        if (pn) memcpy(p, pre, pn), p[pn] = '/';
-        memcpy(p + at, nm, ln);
-        p[at + ln] = 0;
-        rows[k] = (struct k_file) { .path = p, .bytes = (char const *) t + o + 512,
-                                    .len = sz, .ms = 1000 * ai_ustar_octal(h + 136, 12) };
+        memcpy(p, nm, ln);
+        p[ln] = 0;
+        rows[k] = (struct k_brow) { { .path = p, .bytes = (char const *) t + o + 512,
+                                      .len = sz, .ms = 1000 * ai_ustar_octal(h + 136, 12) } };
         if (ai_ustar_islink(h)) {
           char tgt[101], cn[256];
           tgt[ai_ustar_link(h, tgt, sizeof tgt - 1)] = 0;
@@ -529,32 +530,35 @@ static int k_tar_walk(unsigned char const *t, uintptr_t n, struct k_file *rows, 
     o += 512 + ((sz + 511) & ~511ull); }
   return k; }
 static bool k_untar(void) {
-  uintptr_t o = 0, un = 0;
-  if (!ai_gz_body(ai_srcgz, ai_srcgz_len, &o, &un)) return false;
-  unsigned char *t = kmallocw(b2w(un + 1));
-  if (!t || ai_inflate_raw(ai_srcgz + o, ai_srcgz_len - o - 8, t, un) != (intptr_t) un)
-    return false;
-  int n1 = k_tar_walk(t, un, NULL, NULL, k_tree, k_tree_n);
+  if (!ai_tree_open(&k_src, ai_srctree, ai_srctree_len, k_grab)) return false;
+  int n1 = (int) k_src.n;
   if (n1 <= 0) return false;
   // the machine's own rows ride a second, plain tar (src/inle/rootfs/ through src/tools/mkrootfs.l)
-  int n2 = ai_rootfs_len ? k_tar_walk(ai_rootfs, ai_rootfs_len, NULL, NULL, "", 0) : 0;
+  int n2 = ai_rootfs_len ? k_tar_walk(ai_rootfs, ai_rootfs_len, NULL, NULL) : 0;
   if (n2 < 0) return false;
   int n = n1 + n2;
-  struct k_file *rows = kmallocw(b2w((uintptr_t) n * sizeof *rows));
+  struct k_brow *rows = kmallocw(b2w((uintptr_t) n * sizeof *rows));
   char **lnks = kmallocw(b2w((uintptr_t) n * sizeof *lnks));
   if (!rows || !lnks) return false;
   memset(lnks, 0, (uintptr_t) n * sizeof *lnks);
-  if (k_tar_walk(t, un, rows, lnks, k_tree, k_tree_n) != n1) return false;
-  if (n2 && k_tar_walk(ai_rootfs, ai_rootfs_len, rows + n1, lnks + n1, "", 0) != n2) return false;
-  // resolve the symlinks against the rows (two passes cover a link to a link), then compact:
-  // a dangling or directory link has no bytes to serve.
+  for (int i = 0; i < n1; i++) {
+    struct ai_tree_row const *r = k_src.rows + i;
+    uintptr_t ln = strlen(r->path);
+    char *p = kmallocw(b2w(k_tree_n + 1 + ln + 1));
+    if (!p) return false;
+    memcpy(p, k_tree, k_tree_n), p[k_tree_n] = '/';
+    memcpy(p + k_tree_n + 1, r->path, ln + 1);
+    rows[i] = (struct k_brow) { { .path = p, .len = r->len, .ms = 1000 * (uintptr_t) r->mtime }, r }; }
+  if (n2 && k_tar_walk(ai_rootfs, ai_rootfs_len, rows + n1, lnks + n1) != n2) return false;
+  // resolve the rootfs's symlinks against the rows (two passes cover a link to a link), then
+  // compact: a dangling or directory link has no bytes to serve.
   for (int pass = 0; pass < 2; pass++)
     for (int i = 0; i < n; i++)
       if (lnks[i])
         for (int j = 0; j < n; j++)
-          if (!lnks[j] && !strcmp(rows[j].path, lnks[i])) {
-            rows[i].bytes = rows[j].bytes, rows[i].len = rows[j].len;
-            rows[i].ms = rows[j].ms;
+          if (!lnks[j] && !strcmp(rows[j].f.path, lnks[i])) {
+            char const *p = rows[i].f.path;
+            rows[i] = rows[j], rows[i].f.path = p;
             lnks[i] = NULL;
             break; }
   int m = 0;
@@ -572,7 +576,11 @@ static struct k_file const *k_extra;
 static int k_extra_n;
 // what bake row i is: the initrd's, then the linked-in ones behind it.
 static struct k_file const *k_bake_row(int i) {
-  return i < k_bakes_n ? &k_bakes[i] : &k_extra[i - k_bakes_n]; }
+  return i < k_bakes_n ? &k_bakes[i].f : &k_extra[i - k_bakes_n]; }
+// ..and its bytes: a tree row's section decodes at the first ask, NULL where it will not
+static unsigned char const *k_bake_bytes(int i) {
+  return i < k_bakes_n && k_bakes[i].tree ? ai_tree_bytes(&k_src, k_bakes[i].tree)
+       : (unsigned char const *) k_bake_row(i)->bytes; }
 
 // the tree (rung 2): entries in the kernel heap, one per baked row at first touch, growing
 // as create and mkdir add paths. `own` has to be a bit: an emptied file is {NULL, 0}, what
@@ -647,7 +655,7 @@ static bool k_fs_init(void) {
   if (!t) return false;
   for (int i = 0; i < n; i++) {
     struct k_file const *f = k_bake_row(i);
-    // a dateless blob row reads as this boot: the dist tarball stamps mtime 0, and 0 is
+    // a dateless blob row reads as this boot: the carried tree stamps mtime 0, and 0 is
     // how a stat says "not there" -- cook then refuses to make a leaf that is right there.
     t[i] = (struct k_ent) { .path = f->path, .bake = i,
                             .ms = f->ms ? f->ms : k_clock_ms(), .mode = 0644, .live = true }; }
@@ -746,12 +754,17 @@ static ai_inline struct k_fh *k_fh(int fd) {
   struct k_source *s = k_source(fd);
   return s && s->readn == ram_readn ? s->state : NULL; }
 
-// what entry i reads as: the heap copy once there is one, the baked blob until then.
+// what entry i reads as: the heap copy once there is one, the baked bytes until then
+// (empty where a tree section will not decode).
 static unsigned char const *k_blob(int i, uintptr_t *len) {
   struct k_ent const *e = &k_ents[i];
   if (e->own) return *len = e->len, e->bytes;
-  struct k_file const *f = k_bake_row(e->bake);
-  return *len = f->len, (unsigned char const*) f->bytes; }
+  unsigned char const *b = k_bake_bytes(e->bake);
+  return *len = b ? k_bake_row(e->bake)->len : 0, b ? b : (unsigned char const*) ""; }
+// ..and its length alone, which decodes nothing: a stat or a seek reads no bytes
+static uintptr_t k_size(int i) {
+  struct k_ent const *e = &k_ents[i];
+  return e->own ? e->len : k_bake_row(e->bake)->len; }
 
 // src/inle/sys.c's seek: a negative errno, the sign every C face here wears; whence is SEEK_*.
 long k_fd_lseek(int fd, long off, int whence) {
@@ -759,8 +772,7 @@ long k_fd_lseek(int fd, long off, int whence) {
   struct k_fh *h = k_fh(fd);
   if (!h) return -29;                                    // ESPIPE: a console or a pipe
   if (whence < 0 || whence > 2) return -22;              // EINVAL
-  uintptr_t len;
-  k_blob(h->i, &len);
+  uintptr_t len = k_size(h->i);
   intptr_t at = off + (whence == 1 ? (intptr_t) h->pos
                      : whence == 2 ? (intptr_t) len : 0);
   if (at < 0) return -22;
@@ -908,11 +920,12 @@ static bool k_fit(int i, uintptr_t need) {
   struct k_ent *e = &k_ents[i];
   if (need > (uintptr_t) INTPTR_MAX) return false;   // the doubling below stays in range
   if (!e->own) {
-    struct k_file const *f = k_bake_row(e->bake);
-    uintptr_t n = f->len, cap = n > need ? n : need;
+    unsigned char const *b = k_bake_bytes(e->bake);
+    if (!b) return false;
+    uintptr_t n = k_bake_row(e->bake)->len, cap = n > need ? n : need;
     unsigned char *p = cap ? kmallocw(b2w(cap)) : NULL;
     if (cap && !p) return false;
-    if (n) memcpy(p, f->bytes, n);
+    if (n) memcpy(p, b, n);
     e->bytes = p, e->len = n, e->cap = cap, e->own = true;
     return true; }
   if (e->cap >= need) return true;
@@ -1149,7 +1162,7 @@ ai_noinline int k_fs_open(char const *p, uintptr_t pn, char m) {
   int ps = m != 'r' ? 0 : k_proc_slot(cp, (uintptr_t) cn);
   if (ps) k_proc_read(i, ps);                    // and the machine, as of this open
   if (m == 'w') e->own = true, e->len = 0, e->ms = k_clock_ms();
-  if (m == 'a') k_blob(i, &len);
+  if (m == 'a') len = k_size(i);
   e->refs++;
   *h = (struct k_fh) { .i = i, .vt = vt, .pos = len, .w = m != 'r' };
   *s = (struct k_source) { .readn = ram_readn, .writen = ram_writen,
@@ -1189,7 +1202,7 @@ ai_noinline int k_fs_stat(char const *p, uintptr_t pn, struct k_st *st, bool fol
     if (vt) k_vt_read(i, vt);                        // so a size is the pen's, not the last read's
     int ps = k_proc_slot(cp, (uintptr_t) cn);
     if (ps) k_proc_read(i, ps);
-    k_blob(i, &st->size), st->ms = k_ents[i].ms,
+    st->size = k_size(i), st->ms = k_ents[i].ms,
     st->mode = k_mode_file | k_ents[i].mode; }
   else if (i >= 0) {
     st->mode = k_mode_dir | k_ents[i].mode;     // an explicit directory: its own date,
@@ -1571,7 +1584,7 @@ long k_fd_stat(int fd, struct k_st *st) {
   *st = (struct k_st) { 0, 0, 0 };
   if (s->readn == ram_readn) {
     struct k_fh *h = s->state;
-    k_blob(h->i, &st->size);
+    st->size = k_size(h->i);
     st->ms = k_ents[h->i].ms;
     st->mode = k_mode_file | k_ents[h->i].mode;
     return 0; }

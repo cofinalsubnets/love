@@ -830,10 +830,10 @@ $(eval $(call moon_pkg,lua,LUASRC,host))
 $(eval $(call moon_pkg,sqlite,SQLSRC,moon-sqlite))
 $(eval $(call moon_pkg,gzip,GZIPSRC,host))
 $(eval $(call moon_pkg,bzip2,BZIP2SRC,host))
-# test_distboot -- the release claim: take either artifact, type make, get the same binary.
-# source bootstraps through the machine's cc; seed lays the source it carries in .rodata and
-# builds it with cc/gcc/clang shadowed by scripts that fail loudly, so "no ambient compiler
-# did the work" is proved. then the circle: `love seed` with nothing on PATH that compiles,
+# test_distboot -- the release claim: lay the source the binary carries, type make, get the
+# same binary by either road. one lay bootstraps through the machine's cc; the other builds
+# with cc/gcc/clang shadowed by scripts that fail loudly, so "no ambient compiler did the
+# work" is proved. then the circle: `love seed` with nothing on PATH that compiles,
 # taking its own mooncc. the claim holds because the local cc builds love0 and nothing else.
 # three full builds and still NOT a superset of test_seed -- no leg here runs a default
 # `love seed`, so the deference decision goes untested. minutes, opt-in, by name.
@@ -845,7 +845,7 @@ test_bakerep: host
 	@$(gsh) test/gate/bakerep.sh $(ho)
 test_distboot: dist
 	@echo TEST test/gate/distboot.sh
-	@sh test/gate/distboot.sh $(dist_source) $(ho)/love
+	@sh test/gate/distboot.sh $(ho)/love
 # test_gz -- src/apps/tar.l + src/apps/gz.l against the two programs they replace. the laws
 # are test/host/gz.l; this is the half only the OUTSIDE can say, and it is separate because
 # a coder and decoder by one hand round-trip cleanly through a format nobody else speaks.
