@@ -1,12 +1,13 @@
 ; meadow -- the grass game's field in three dimensions: the eye a few inches off the dirt
-; behind your blade, looking north along the row, the meadow running on behind it to the
-; haze, the sky over all of it. the game is grass's and unchanged: its state is drawn
+; behind your blade, looking north along the row, the meadow running on behind it to green
+; hills paling into the air, the sky over all of it. the game is grass's and unchanged: its state is drawn
 ; here as it stands, each blade bent by its own lean, stretch and bow, the field behind
 ; swaying on the same wind, the shadows thrown along the sun, and the day's cover as the
 ; sky's weather. south of the line, so the sun crosses the sky in front, east on the right
 ; as the flat field has it.
 ;
-; a frame is trays a picture wide: the ground or the sky behind every pixel, then the
+; a frame is trays a picture wide: the land or the sky behind every pixel -- where each ray
+; meets the land is found once, the eye and the hills holding still -- then the
 ; blades drawn over it far to near, a point a pixel -- a scatter's later write wins, so
 ; the order is the depth.
 (module (meadow meadow-new meadow-size meadow-pens meadow-frame meadow-sky meadow-light
@@ -33,15 +34,39 @@
    dx0 U dy0 (sp + V * cp) dz0 (cp - V * sp)
    ln (sqrt (dx0 * dx0 + dy0 * dy0 + dz0 * dz0))
    dx (dx0 / ln) dy (dy0 / ln) dz (dz0 / ln)
-   gnd (dy < -0.0005) t (over 0.0 gnd ((0.0 - eye 1) / min dy -0.0005))
+   ; where each ray meets the land, marched once: the eye and the hills hold still, so a
+   ; frame only lights what this found
+   hit (march dx dy dz) gnd (hit 0) t (hit 1)
+   gx (eye 0 + t * dx) gz (eye 2 + t * dz)
+   e 0.05 hy0 (hill gx gz)
+   nrm (unit [(hy0 - hill (gx + e) gz) e (hy0 - hill gx (gz + e))])
+   _ (pins st 'nx (nrm 0) 'ny (nrm 1) 'nz (nrm 2) 'dist t)
    ; ..and the sky through a lens: the strip over the horizon a blade's eye sees is
    ; lifted and stretched to show the sky high overhead, so the clouds stand large and
    ; the sun crosses the picture, as they do on the flat field
    hl (sqrt (dx * dx + dz * dz)) el (lift-lo + lift * atan (max dy 0.0 / sqrt (max (1.0 - dy * dy) 1e-6))) cl (cos el)
    _ (pins st 'sdx (dx / hl * cl) 'sdy (sin el) 'sdz (dz / hl * cl))
    (pins st 'w w 'h h 'foc (w / 2.0) 'dx dx 'dy dy 'dz dz 'gnd gnd
-            'gx (eye 0 + t * dx) 'gz (eye 2 + t * dz) 'G (iota gnd) 'S (iota (1 - gnd))
+            'gx gx 'gz gz 'G (iota gnd) 'S (iota (1 - gnd))
             'bay (view-bayer w h) 'f [0.0 sp cp] 'u [0.0 cp (0.0 - sp)]))
+ ; --- the land: flat about the row and the meadow, then gentle hills, broad crests a few
+ ; metres high some tens of metres off, rising out of the flat by a smooth step ---
+ (hill x z) (: r (sat ((z - 4.0) / 18.0)) a (r * r * (3.0 - 2.0 * r))
+   (a * max 0.0 (4.0 + 3.0 * sin (x * 0.035 + 0.3) * cos (z * 0.025) + 1.4 * sin (x * 0.08 - z * 0.04 + 1.1)
+                 + 0.3 * sin (x * 0.21 + z * 0.15))))
+ ; a ray against the land: stepped out geometrically to some hundreds of metres, the first
+ ; step under the land bracketing the meeting, and the bracket halved down to it. answers
+ ; [met t]: met 0 is the sky
+ march-n 70 march-k 1.14 march-t0 0.05
+ (march dx dy dz) (:
+   (under t) (eye 1 + t * dy < hill (eye 0 + t * dx) (eye 2 + t * dz))
+   z0 (dx * 0.0)
+   (go k t0 lo hi met) (? (march-n <= k) [lo hi met]
+     (: t (t0 * march-k) u (under t) nw (u * (1 - met))
+        (go (k + 1) t (over lo nw t0) (over hi nw t) (max met u))))
+   b (go 0 march-t0 z0 (z0 + 1e9) (z0 * 0))
+   (halve k lo hi) (k < 10 ? (: m ((lo + hi) / 2.0) u (under m) (halve (k + 1) (over m u lo) (over hi u m))) hi)
+   [(b 2) (over 1e9 (b 2) (halve 0 (b 0) (over 1.0 (b 2) (b 1))))])
  ; --- the meadow behind the row: blades thrown once, each as the points it is drawn by,
  ; more of them the nearer it stands, the whole far to near ---
  (rnd g) (: s ((g 's * 1103515245 + 12345) % 2147483648) (pin g 's s, s / 2147483648.0))
@@ -87,8 +112,13 @@
    dot (throw ix iz 17 7 = 0)
    base (c* 0.45 (pick dirts pk))
    peb (c* 0.7 (rgb 0xaf875f))
-   haze (sat ((gz - 1.2) / (deep-z - 1.2)))
-   (cmix (cmix base peb dot) [0.1 0.22 0.05] (0.85 * haze)))
+   (cmix base peb dot))
+ ; ..and the turf beyond, the hills' green: broad patches lighter and darker, and a finer
+ ; mottle under them
+ (turf gx gz) (: m (0.6 * vn (gx * 0.07) (gz * 0.07) 41 + 0.4 * vn (gx * 0.6) (gz * 0.6) 42)
+   (cmix [0.07 0.24 0.03] [0.2 0.5 0.06] m))
+ ; the ground's own colour: dirt about the row, turf from the meadow out
+ (land gx gz) (cmix (dirt gx gz) (turf gx gz) (sat ((gz - 1.0) / 2.5)))
  ; --- the frame's colours, three trays a picture wide ---
  (meadow-pens st g wx) (: lt (meadow-light g wx) s (lt 'sun) sim (cloud-sim g) t0 (g 'fr)
    w (st 'w) h (st 'h) G (st 'G) S (st 'S) (only ix v) (peep v ix 0.0)
@@ -96,7 +126,8 @@
    ; the sky behind, and the dirt under, each where it shows
    hv (sky-colour lt wx (only S (st 'sdx)) (only S (st 'sdy)) (only S (st 'sdz)) (eye 0) (eye 2) sim t0)
    gx (only G (st 'gx)) gz (only G (st 'gz))
-   alb (dirt gx gz)
+   alb (land gx gz)
+   nx (only G (st 'nx)) ny (only G (st 'ny)) nz (only G (st 'nz))
    ; ..the shadows, the blades' points thrown down the sun onto the dirt
    sunup (0.02 < s 1)
    fd (st 'field) c (g 'c)
@@ -122,8 +153,13 @@
    (cast p) (: k (p 1 / max (s 1) 0.05) [(p 0 - k * s 0) 0.0 (p 2 - k * s 2)])
    shp (sunup ? (pin (pin (iota (w * h) * 0) (to-screen st (cast fp) 0) 1) (to-screen st (cast rp) 0) 1) (iota (w * h) * 0))
    shg (only G shp)
-   irr (c+ (c* 0.95 (lt 'amb)) (c* ((1 - shg) * lt 'sunk * max (s 1) 0.0) (lt 'sunc)))
-   gc (cm alb irr)
+   ; ..lit as it faces: the sky's light most on what looks up, the sun on what turns to it
+   nd (max 0.0 (nx * s 0 + ny * s 1 + nz * s 2))
+   irr (c+ (c* (0.95 * (0.55 + 0.45 * ny)) (lt 'amb)) (c* ((1 - shg) * lt 'sunk * nd) (lt 'sunc)))
+   ; ..and the far hills paling into the air
+   far (1.0 - exp (0.0 - only G (st 'dist) / 160.0))
+   hazec (c+ (c* 1.05 (lt 'amb)) (c* (0.2 * lt 'sunk) (lt 'sunc)))
+   gc (cmix (cm alb irr) hazec far)
 
    z0 (st 'dx * 0.0)
    col0 (map (k \ pin (pin z0 G (gc k)) S (hv k)) ^3)
@@ -150,5 +186,5 @@
  (meadow-frame st g wx deep) (: w (st 'w) h (st 'h) c (meadow-pens st g wx)
    px (deep ? (view-deep-pens c) (view-cube-pens c (st 'bay * 0.5 + 0.25)))
    (deep ? (view-deep-frame w h px {}) (view-frame w h (y \ peep px (iota w + w * y) 0) {})))
- (meadow-sky g) (meadow-weather g 'pixel))
+ (meadow-sky g) (meadow-weather g 'smooth))
 ) ; module meadow
