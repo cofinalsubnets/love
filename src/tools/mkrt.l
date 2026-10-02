@@ -1,11 +1,13 @@
 ; src/tools/mkrt.l -- lay the compiled moonlibc runtime into an ELF object, one
 ; deflated archive per hosted ISA, so a bare `love cc` links without compiling
-; 197 members first (moon.l's rtcarried; src/love/src.c answers runtime-gz).
+; 210 members first (moon.l's rtcarried; src/love/src.c answers runtime-gz).
 ;
-;   love wake out/mooncc0.image src/tools/mkrt.l out.o [arch]
+;   love wake out/mooncc0.image src/tools/mkrt.l -m GRP.a ISA SRC..   one group's members
+;   love wake out/mooncc0.image src/tools/mkrt.l out.o ARCH GRP.a..   the join
 ;
-; the object holds, per name in {id, x64, a64, rv64}, mksrc.l's pair
-; shape 8-aligned:
+; the makefile owns the fan: a group is a few members of one ISA (out/rt/<isa>/<grp>.a,
+; a plain archive), and the join reads every group, the ISA off each one's directory.
+; the object holds, per name in {id, x64, a64, rv64}, mksrc.l's pair shape 8-aligned:
 ;
 ;   ai_rtgz_<nm>_len   an 8-byte little-endian length
 ;   ai_rtgz_<nm>       the bytes, right behind it (a .a under DEFLATE; `id`
@@ -13,7 +15,7 @@
 ;
 ; a link carrying no runtime (love0, the gate links) names src/love/noblob.c instead. arbytes
 ; and rtcid are pure of the machine, so the seed's fixpoint carries this object unchanged.
-; this rides the mooncc image (wake), since the archives are mooncc compiles; arch names the
+; this rides the mooncc image (wake), since the members are mooncc compiles; arch names the
 ; object format (the link's arch), and a cross backend joins from its tree text.
 
 (borrow 'posix)
@@ -27,47 +29,39 @@
           q (open f "r")
           (hot? q ? (rt-rdev (flow q), close q)
              (rt-die ("no backend aboard and no text at " + f)))))
-   (rt-bytes s i acc) (i < 0 ? acc (rt-bytes s (i - 1) (s i . acc)))
    (rt-le8 v i acc) (i = 8 ? acc (rt-le8 (v >> 8) (i + 1) (acc + [(v & 255)])))
-   (rt-zeros k acc) (k < 1 ? acc (rt-zeros (k - 1) (0 . acc)))
 
-   ; the fan's width: cook's COOKJOBS, a hint only. a width of 1 is no signal (cook says 1
-   ; with no -j, and a plain make exports nothing), so then read the machine instead
-   (rt-width _)
-    (: w ("" + getenv "COOKJOBS")
-       n #w
-       (go k a) (? (n <= k) a
-                   (w k < 48 || 57 < w k) 0
-                   (go (k + 1) (a * 10 + w k - 48)))
-       v (0 < n ? (go 0 0) 0)
-       (1 < v ? v (rt-cores 0)))
-   ; half the online cores, plus one -- the same width rule cook's bare -j takes. a driving
-   ; LOVE may predate sysconf, and reads /proc/cpuinfo instead; no count is 1, the serial fan.
-   (rt-cores _)
-    (: sc (cite 'posix 'sysconf)
-       n (sc ? (sc () @ (_ . _ . c . _) (charm? c ? c 0) 0) (rt-cpuinfo 0))
-       (0 < n ? (n // 2 + 1) 1))
-   (rt-cpuinfo _)
-    (: q (open "/proc/cpuinfo" "r")
-       (!(hot? q) ? 0
-          (slurp q @ s
-             (close q, foldl (a \ l \ 9 <= #l && snip l 0 9 = "processor" ? (a + 1) a) 0 (lines s)))))
-   ; ~600 member compiles and none reads another, so a pool of children fills the member
-   ; cache and `one` below indexes the archives out of it. the cache is the join; a fork
-   ; refused leaves its residue to `one`, that much slower.
-   (rt-fan rtwarm cd ts)
-    (!(string? cd) ? ()
-       (: w (rt-width 0)
-          _ (flush out, flush err)
-          ps (rt-kids rtwarm ts w 1 ())
-          ; the parent's own share runs beside the children, never after the wait
-          (rtwarm "src/apps/moon/" ts 'linux () w 0, foldl (_ \ wait) 0 ps)))
-   (rt-kids rtwarm ts w i acc)
-    (w <= i ? acc
-       (fork 0 @ p
-          (? (p = 0) (rtwarm "src/apps/moon/" ts 'linux () w i, quit 0)
-             (0 < p) (rt-kids rtwarm ts w (i + 1) (p . acc))
-             (rt-kids rtwarm ts w (i + 1) acc))))
+   ; a group: its members out of the roster, in roster order, compiled past every cache --
+   ; make is the cache now. "mksys" names the laid member, which has no source.
+   rt-home "src/apps/moon/"
+   (rt-group dst tgt srcs)
+    (: _ (rt-be tgt)
+       m1 (cite 'moon 'rtmem1)
+       want (map (f \ f = "mksys" ? "" f) srcs)
+       es (filter (e \ elem (e 1) want) ((cite 'moon 'rtplan) rt-home tgt 'linux ()))
+       _ (#es < #want && rt-die (show tgt + ": a source outside the roster in " + show srcs))
+       (cite 'holo 'write-bytes dst [((cite 'holo 'arbytes) (map (m1 tgt 'linux ()) es))]))   ; one blob
+   ; a group archive's members, ((name bytes)..), past the index and the long-name table
+   (rt-armems s)
+    (: fld (cite 'holo 'ld-arfld)
+       next (cite 'holo 'ld-arnext)
+       mem (cite 'holo 'ld-armem)
+       lt ((cite 'holo 'ld-arlong) s)
+       (go off acc) (? (#s < (off + 60)) (rev acc)
+                       (elem (fld s off 16) '("/" "//")) (go (next s off) acc)
+                       (go (next s off) ((mem s off lt) . acc)))
+       (go 8 ()))
+   (rt-read p)
+    (: q (open p "r")
+       (hot? q ? (slurp q @ s (close q, s)) (rt-die ("no group at " + p))))
+   ; one ISA's archive, laid from the groups in roster order: the bytes of the old fan's
+   (rt-isa tgt grps)
+    (: (add t p) (foldl (t \ m \ pin t <m <>m) t (rt-armems (rt-read p)))
+       t (foldl (t \ p \ (rev (split "/" p) 1 = string tgt ? (add t p) t)) {} grps)
+       ms (map (e \ peep t <e () @ b
+                     (string? b ? [<e b] (rt-die (show tgt + ": no group carries " + <e))))
+               ((cite 'moon 'rtplan) rt-home tgt 'linux ()))
+       ((cite 'holo 'arbytes) ms))
 
    ; one member: label len, label bytes, zero-padded so the next len lands
    ; 8-aligned (a riscv core may trap an unaligned word; the pad is free)
@@ -82,35 +76,22 @@
         ['raw [s (rt-zerostr pad "")]]])
    (rt-zerostr k acc) (k < 1 ? acc (rt-zerostr (k - 1) (string 0 + acc)))
 
-   (mkrt arch dst)
+   (mkrt arch dst grps)
     ; every archive arch joins, not just the object's: the image bakes the
     ; native backend only, and each ISA's members ride its own obj writer
-    (: _ (rt-be 'x64, rt-be 'a64, rt-be 'rv64, rt-be arch)
-       rtcid (cite 'moon 'rtcid)
-       rtarch (cite 'moon 'rtarch)
-       rtwarm (cite 'moon 'rtwarm)
+    (: _ (rt-be arch)
        objelf (cite 'holo 'objelf)
-       cid (rtcid "src/apps/moon/")
+       cid ((cite 'moon 'rtcid) rt-home)
        _ (!(string? cid) ? (rt-die "no src/apps/moon/ slice to hash -- run from the tree root"))
-       ; through rtarch, so the runtime cache serves a repeat build (~instant)
-       ; and only a real slice or compiler change recompiles the members --
-       ; without this every seed and rebake paid three full runtime compiles.
-       cd (cite 'moon 'mcdir ())
-       _ (rt-fan rtwarm cd '(x64 a64 rv64))
        ; deflated: ~1.5 MB of archive across the three ISAs becomes ~210 kB,
        ; and rtcarried pays one inflate for the ISA it wants.
-       (one tgt) (: a (rtarch "src/apps/moon/" tgt 'linux ())
-                    _ (!(string? a) ? (rt-die (show tgt + ": no archive (a member refused?)")))
-                    z (deflate a)
+       (one tgt) (: z (deflate (rt-isa tgt grps))
                     _ (!(string? z) ? (rt-die (show tgt + ": deflate refused the archive")))
                     z)
-       zx (one 'x64)
-       za (one 'a64)
-       zr (one 'rv64)
        forms (rt-forms "id" cid
-              + rt-forms "x64" zx
-              + rt-forms "a64" za
-              + rt-forms "rv64" zr)
+              + rt-forms "x64" (one 'x64)
+              + rt-forms "a64" (one 'a64)
+              + rt-forms "rv64" (one 'rv64))
        xs '("ai_rtgz_id" "ai_rtgz_id_len"
             "ai_rtgz_x64" "ai_rtgz_x64_len"
             "ai_rtgz_a64" "ai_rtgz_a64_len"
@@ -119,8 +100,8 @@
        (cite 'holo 'write-bytes dst ob))        ; ob is a byte list, not a string
 
    (mkrt-main av)
-    (#av @ n
-       (1 <= n ? (mkrt (2 <= n ? (name <>av) 'x64) <av)
-        (rt-die "usage: love wake out/mooncc0.image src/tools/mkrt.l OUT.o [ARCH]")))
+    (? (3 <= #av && <av = "-m") (rt-group (av 1) (name (av 2)) >>>av)
+       (3 <= #av) (mkrt (name (av 1)) <av >>av)
+       (rt-die "usage: mkrt.l -m GRP.a ISA SRC.. | mkrt.l OUT.o ARCH GRP.a.."))
 
    (mkrt-main >argv))

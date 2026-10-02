@@ -1,6 +1,6 @@
 ; test/host/design.l -- the level designer, headless: a map painted from keys alone (brush, walls,
 ; a new tile kind, a thing in three prompts, the start), saved as the datum story.l plays and
-; loaded back the same, and the frame. the runner stays a live probe: `love design`.
+; loaded back the same, and the frame. the runner stays a live probe: `love lore design`.
 ; run: cat test/00-init.l test/host/design.l | out/love
 
 (borrow 'story)

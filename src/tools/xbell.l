@@ -5,7 +5,7 @@
 ;   love src/tools/xbell.l                  post the next number if one is due
 ;   love src/tools/xbell.l --dry-run        draw it to next.png, post nothing
 ;   love src/tools/xbell.l --init N ID [AT] next is B(N), replying to post ID; B(N - 1) is
-;                                           due on post AT's day (else ID's)
+;                                           due on post AT's day (else ID's). never over a state
 ;   love src/tools/xbell.l --whoami         check the keys (one paid read)
 ;
 ; ~/.local/share/xbell/ ($XBELL_DIR) holds the keys, config.l, state.l, next.png and log. the
@@ -80,6 +80,56 @@
        (cite 'png 'png-encode W H (slurp j)))
    ; blank pixels for a short last line
    (rep blank k scale) (snip blank 0 (k * 8 * scale * 4))
+
+   ; base 256 on a fixed cols x rows terminal: a byte a pixel, two pixels a cell (a half
+   ; block, its top the foreground). the top byte sits in the bottom right corner and the
+   ; rest fill each pixel row right to left, rows rising, so the number piles up like sand;
+   ; black above it is not written yet
+   (b256 n) (: (go n acc) (n < 256 ? (n . acc) (go (n // 256) ((n % 256) . acc))) (go n ()))
+   esc (string 27)
+   upper (string [226 150 128])                                   ; u+2580, the upper half block
+   ; a byte's colour: matplotlib's magma with 0 pure black, each step brighter than the last
+   ; (relative luminance) and all 256 distinct, so the picture reads back
+   magma (foldl (a \ x \ a + x) "" ["00000001000501010601010802010902020b02020d03030f03031204041405041606051806051a07061c08071e090720"
+              "0a08220b09240c09260d0a290e0b2b100b2d110c2f120d31130d34140e36150e38160f3b180f3d19103f1a10421c1044"
+              "1d11471e114920114b21114e22115024125325125527125829115a2a115c2c115f2d11612f1163311165331067341069"
+              "36106b38106c390f6e3b0f703d0f713f0f72400f74420f75440f764510774710784910784a10794c117a4e117b4f127b"
+              "51127c52137c54137d56147d57157e59157e5a167e5c167f5d177f5f187f601880621980641a80651a80671b80681c81"
+              "6a1c816b1d816d1d816e1e81701f81721f817320817521817621817822817922827b23827c23827e2482802582812581"
+              "8326818426818627818827818928818b29818c29818e2a81902a81912b81932b80942c80962c80982d80992d809b2e7f"
+              "9c2e7f9e2f7fa02f7fa1307ea3307ea5317ea6317da8327daa337dab337cad347cae347bb0357bb2357bb3367ab5367a"
+              "b73779b83779ba3878bc3978bd3977bf3a77c03a76c23b75c43c75c53c74c73d73c83e73ca3e72cc3f71cd4071cf4070"
+              "d0416fd2426fd3436ed5446dd6456cd8456cd9466bdb476adc4869de4968df4a68e04c67e24d66e34e65e44f64e55064"
+              "e75263e85362e95462ea5661eb5760ec5860ed5a5fee5b5eef5d5ef05f5ef1605df2625df2645cf3655cf4675cf4695c"
+              "f56b5cf66c5cf66e5cf7705cf7725cf8745cf8765cf9785df9795df97b5dfa7d5efa7f5efa815ffb835ffb8560fb8761"
+              "fc8961fc8a62fc8c63fc8e64fc9065fd9266fd9467fd9668fd9869fd9a6afd9b6bfe9d6cfe9f6dfea16efea36ffea571"
+              "fea772fea973feaa74feac76feae77feb078feb27afeb47bfeb67cfeb77efeb97ffebb81febd82febf84fec185fec287"
+              "fec488fec68afec88cfeca8dfecc8ffecd90fecf92fed194fed395fed597fed799fed89afdda9cfddc9efddea0fde0a1"
+              "fde2a3fde3a5fde5a7fde7a9fde9aafdebacfcecaefceeb0fcf0b2fcf2b4fcf4b6fcf6b8fcf7b9fcf9bbfcfbbdfcfdbf"])
+   sgr (map (v \ (: c (hex2b (snip magma (6 * v) (6 * v + 6)))
+                    (show (c 0) + ";" + show (c 1) + ";" + show (c 2)))) ^256)
+   (cells n cols rows scale)
+    (: bs (b256 n) H (rows * 2) k (cols * H - #bs)
+       _ (? (k < 0) (die ("B(n) has " + show #bs + " bytes, more than the window's "
+                          + show (cols * H))))
+       bs (string (bs + map (_ \ 0) ^k))
+       (pix y x) (bs ((H - 1 - y) * cols + cols - 1 - x))           ; rows right to left, bottom up
+       scr (screen (cask (screen () rows cols)) rows cols)
+       _ (each ^rows (r \ (: _ (scribe scr (esc + "[" + show (r + 1) + ";1H"))
+                           (each ^cols (c \ (scribe scr (esc + "[38;2;" + sgr (pix (2 * r) c) + "m" + esc
+                                                        + "[48;2;" + sgr (pix (2 * r + 1) c) + "m" + upper)))))))
+       w (cols * 8) h (rows * 16)
+       buf (cask (w * h * 4))
+       _ (each ^rows (r \ dye scr buf w r -1 ()))
+       ; xrgb words to rgba bytes, each pixel scale times across and each line scale times down
+       (px i) (string [(peep buf (i + 2) 0) (peep buf (i + 1) 0) (peep buf i 0) 255])
+       j (jug 0)
+       _ (each ^h (y \ (: jl (jug 0)
+                          _ (each ^w (x \ say jl (rep2 (px (4 * (y * w + x))) scale)))
+                          l (slurp jl)
+                          (each ^scale (_ \ say j l)))))
+       (cite 'png 'png-encode (w * scale) (h * scale) (slurp j)))
+   (rep2 q k) (foldl (a \ _ \ a + q) "" ^k)
 
    ; oauth 1.0a
    unreserved "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~"
@@ -186,8 +236,9 @@
    ; the run
    (state _) (: s (file-read (dir + "state.l")) (s ? (read s) ()))
    (picture n row)
-    (draw (b36 <row) (cfg 'cols 0 || max 16 (int ((1 / 2) (2 * #(b36 <row))) + 1))
-          (cfg 'scale 2) (cfg 'fg 16777215) (cfg 'bg 0))
+    ((n >= cfg 'wide-from 1000000000) ? (cells <row (cfg 'wide-cols 36) (cfg 'wide-rows 32) (cfg 'wide-scale 2))
+     (draw (b36 <row) (cfg 'cols 0 || max 16 (int ((1 / 2) (2 * #(b36 <row))) + 1))
+          (cfg 'scale 2) (cfg 'fg 16777215) (cfg 'bg 0)))
    (caption n) (: f (cfg 'text "") (f @ "" "" (subst f "{n}" (show n))))
    (subst s a b) (: k (findsub s a) (k < 0 ? s (snip s 0 k + b + subst (snip s (k + #a) #s) a b)))
    (step _)
@@ -210,7 +261,8 @@
                   + ", due through B(" + show (due 0) + "), caption " + show (caption n)
                   + ", next.png " + show #png + " bytes\n")))
        ("--init" . n . id . more)
-        (: n (read n) at (more ? <more id) _ (file-write (dir + "state.l") ("'" + show [n id (row-at n)]))
+        (: _ (? (file-read (dir + "state.l")) (die "state.l is there already; move it aside to start again"))
+           n (read n) at (more ? <more id) _ (file-write (dir + "state.l") ("'" + show [n id (row-at n)]))
            _ (file-write (dir + "config.l")
                          ("{'anchor-n " + show (n - 1) + " 'anchor-day " + show (id-day at)
                           + "\n 'scale 2 'fg 16777215 'bg 0 'text \"\"}\n"))

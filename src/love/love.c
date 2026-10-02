@@ -31,7 +31,7 @@ static lvm_t
  lvm_apof, lvm_stack, lvm_cap, lvm_casknew, lvm_chainp, lvm_clock, lvm_cup,
  lvm_gauge, lvm_intf, lvm_key, lvm_kreg, lvm_link, lvm_mint, lvm_mintp, lvm_lib, lvm_namep,
  lvm_nclock, lvm_nomctor, lvm_nomp, lvm_packp, lvm_please, lvm_setstack, lvm_setp,
- lvm_snip, lvm_strp, lvm_sub, lvm_subn, lvm_sunp, lvm_tune, _lvm_help_scare, _lvm_yield_c;
+ lvm_snip, lvm_sitsp, lvm_subidx, lvm_cats, lvm_strp, lvm_sub, lvm_subn, lvm_sunp, lvm_tune, _lvm_help_scare, _lvm_yield_c;
 static struct ai
  *ai_ini_0(struct ai*g, uintptr_t len0);
 static uintptr_t stringlen(struct ai *g, word x);
@@ -167,7 +167,7 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0) {
  memset(g, 0, sizeof(struct ai));
  g->len = len0;
  g->scare_a = g->scare_b = zero;        // v0..end is GC-walked: raw 0 is not a value
- g->hot_numap = g->hot_arrange = g->hot_compose = g->hot_opfix = g->hot_show = g->hot_net = g->hot_flow = zero;   // unsealed: hot_hook traps until (seal-hook) fills them
+ g->hot_numap = g->hot_arrange = g->hot_compose = g->hot_opfix = g->hot_show = g->hot_net = g->hot_flow = g->hot_cats = zero;   // unsealed: hot_hook traps until (seal-hook) fills them
  g->hp = g->end, g->sp = (word*) g + len0, g->ip = (union u*) yield_c;
  // the rem set + major pool ride ai_alloc: a seat whose heap cannot supply them cannot run
  g->major_len = ai_major0;
@@ -592,6 +592,81 @@ static lvm(lvm_snip) {
    memcpy(txt(t), txt(s) + i, j - i);
    Sp[2] = (word) t; } }
  ai_musttail return Nextp(1, 2); }
+
+// (sits? s i t): t's bytes sit in s at i -- (= t (snip s i (i + #t))) compared in place,
+// so a pattern's anchor costs no allocation. a string or cask s and a string t; anything
+// else is 0; an empty t is 1 anywhere, as its snip is.
+static lvm(lvm_sitsp) {
+ word v = zero;
+ if ((strp(Sp[0]) || caskp(Sp[0])) && strp(Sp[2])) {
+  struct ai_str *s = bytes_of(Sp[0]), *t = str(Sp[2]);
+  intptr_t i = oddp(Sp[1]) ? getcharm(Sp[1]) : 0, m = (intptr_t) len(t);
+  if (!m || (0 <= i && i + m <= (intptr_t) len(s) && !memcmp(txt(s) + i, txt(t), (size_t) m))) v = putcharm(1); }
+ ai_musttail return Answerp(2, v); }
+
+// (subidx s t i): the first index >= i where t sits in s, or -1 -- prel's fsub over two
+// strings, without a snip a position. an empty t is found at i itself while i <= #s.
+static lvm(lvm_subidx) {
+ intptr_t r = -1;
+ if (strp(Sp[0]) && strp(Sp[1])) {
+  struct ai_str *s = str(Sp[0]), *t = str(Sp[1]);
+  intptr_t n = (intptr_t) len(s), m = (intptr_t) len(t), i = oddp(Sp[2]) ? getcharm(Sp[2]) : 0;
+  if (!m) r = i <= n ? i : -1;
+  else for (intptr_t k = max(i, 0); k + m <= n; k++) {
+   char const *p = memchr(txt(s) + k, txt(t)[0], (size_t) (n - m - k + 1));
+   if (!p) break;
+   k = p - txt(s);
+   if (!memcmp(p, txt(t), (size_t) m)) { r = k; break; } } }
+ ai_musttail return Answerp(2, putcharm(r)); }
+
+// (cats l): the foldr of + over l, in one allocation where its pieces are all of a kind.
+// strings (and ()s) join into one fresh string, a lone string answering as itself; lists
+// (and ()s) append, every spine copied but the last, which is shared as + shares it.
+// anything else -- numbers, trays, a string beside a list, an improper l -- is hook 10's.
+static lvm(lvm_cats) {
+ uintptr_t nstr = 0, nlist = 0, other = 0, bytes = 0, cells = 0, lastn = 0;
+ word p = Sp[0], one = ZeroPoint;
+ for (; chainp(p) && !nomp(p); p = B(p)) {
+  word x = A(p);
+  if (x == ZeroPoint) continue;
+  if (strp(x)) nstr++, bytes += len(x), one = x;
+  else if (chainp(x) && !nomp(x)) {
+   uintptr_t k = 0;
+   word q = x;
+   for (; chainp(q) && !nomp(q); q = B(q)) k++;
+   if (q != ZeroPoint) other++;                                  // an improper piece is the fold's to judge
+   else nlist++, cells += lastn, lastn = k, one = x; }
+  else other++; }
+ if (p != ZeroPoint || other || (nstr && nlist)) {               // the general fold, in love
+  Have(2);
+  word h = hot_hook(g->hot_cats), l = Sp[0], *dst = Sp - 2;
+  dst[0] = l, dst[1] = h, dst[2] = word(Ip + 1);
+  Sp = dst, Ip = (union u*) callout_drive;
+  ai_musttail return Continue(); }
+ if (nstr + nlist <= 1) ai_musttail return Answer(one);          // () or a lone piece, as itself
+ if (nstr) {
+  if (!bytes) ai_musttail return Answer(EmptyString);
+  Have(str_width(bytes));
+  struct ai_str *t = ini_str(str(Hp), bytes);
+  Hp += str_width(bytes);
+  char *w = txt(t);
+  for (p = Sp[0]; chainp(p); p = B(p))                           // re-read: a collection may have moved it
+   if (strp(A(p))) memcpy(w, txt(A(p)), len(A(p))), w += len(A(p));
+  ai_musttail return Answer(word(t)); }
+ Have(cells * Width(struct ai_chain));
+ struct ai_chain *w = (struct ai_chain*) Hp, *prev = 0;
+ Hp += cells * Width(struct ai_chain);
+ word head = ZeroPoint;
+ uintptr_t k = 0;
+ for (p = Sp[0]; chainp(p); p = B(p)) {
+  word x = A(p);
+  if (x == ZeroPoint) continue;
+  if (++k == nlist) { prev->b = x; break; }                      // the last piece is shared, as + shares it
+  for (; chainp(x); x = B(x), w++) {
+   ini_chain(w, A(x), ZeroPoint);
+   if (prev) prev->b = word(w); else head = word(w);
+   prev = w; } }
+ ai_musttail return Answer(head); }
 
 
 // applying a cask behaves as 0 (yields 1); byte-identical to lvm_port_io, kept

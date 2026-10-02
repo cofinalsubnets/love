@@ -92,6 +92,16 @@
  ('same = (@ "x/x" (a + "/" + a) 'same 'diff))              ; a repeated nom, non-linearly
  ('diff = (@ "x/y" (a + "/" + a) 'same 'diff))
  ('lisp = (@ "a.lisp" ((_ + ".l") || (_ + ".lisp")) 'lisp 'other))
+ ; an anchor is (sits? s i t) and a needle (subidx s t i), compared in place: each the snip
+ ; it stands for, held against that snip over every position, in and out of range
+ (: ss ["" "a" "ab" "abab" "xaba" "aaa"] ts ["" "a" "ab" "ba" "aba" "abab" "x"] is [-2 -1 0 1 2 3 4 5 6]
+    (old s t i) (? (i + #t > #s) -1 (snip s i (i + #t) = t) i (old s t (i + 1)))
+    (all (s \ all (t \ all (i \ (sits? s i t) = ((snip s i (i + #t) = t) ? 1 0)
+                                    && subidx s t i = old s t i) is) ts) ss))
+ ('no = (@ "a" ("ab" + x) x 'no))                           ; an anchor longer than the text
+ ("" = (@ "ab" ("ab" + x) x 'no))
+ ('("a" "") = (@ "a==" (k + "==" + v) [k v] 'no))           ; a needle at the very end
+ ('no = (@ "a=" (k + "==" + v) [k v] 'no))
  ; with no literal among the pieces, + is what it was: a bracket splits a list, else the form
  ('no = (@ "xy.l" (a + b + ".l") 'split 'no))                ; ..nor when two free pieces meet
  ('form = (@ '(+ 1 2) (a + b) 'form 'no))

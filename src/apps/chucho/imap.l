@@ -23,7 +23,7 @@
 
  (imap-url u)
   (: tls? (starts? u "imaps://")
-     r (? tls? (snip u 8 #u) (starts? u "imap://") (snip u 7 #u) ())
+     r (u @ ("imaps://" + x) x ("imap://" + x) x ())
      (? !(string? r) ()
         (: k (findsub r "/")
            auth (k < 0 ? r (snip r 0 k))

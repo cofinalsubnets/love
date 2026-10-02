@@ -2035,7 +2035,7 @@
        sw (tf 97 ? (uatoi (need 97 "a width")) 2)
        d? (? (tf 120) 'x (tf 100) 1 0)
        sfx2 (tf 1001 ? (uoptv tf 1001) "")
-       nw (uoptv tf 110 @ v (? !v () (starts? v "l/") ['l (uatoi (snip v 2 #v))] ['b (uatoi v)]))
+       nw (uoptv tf 110 @ v (? !v () (v @ ("l/" + n) ['l (uatoi n)] ['b (uatoi v)])))
        cb (tf 67 ? (usize (need 67 "a size")))
        nl (charm? ln ? ln 1000)
        src (two? fs ? <fs "-")
@@ -2558,10 +2558,7 @@
    ; back with the data in place (lseek here takes a raw fd, and a port's buffer
    ; desyncs under one). the record report goes to err, GNU's shape; status=none
    ; holds it, status=noxfer the byte line --
-   (udd-eq w)                          ; "bs=512" -> ("bs" "512"), () for a bare word
-    (: n #w
-       (go k) (? (n <= k) () (w k = 61) [(snip w 0 k) (snip w (k + 1) n)] (go (k + 1)))
-       (go 0))
+   (udd-eq w) (w @ (k + "=" + v) [k v] ())   ; "bs=512" -> ("bs" "512"), () for a bare word
    (dd-main as)
     (: t {'ibs 512 'obs 512 'count () 'skip 0 'seek 0 'if () 'of () 'quiet 0 'conv () 'iflag () 'oflag ()}
        (words1 v) (filter (w \ 0 < #w) (usplit 44 v))

@@ -556,5 +556,44 @@
          (() = (cite 'saver 'saver-watch "nosuch" 5) 'on)
          (0 = hsleep (pins (harbour 4 10) 'saver ((cite 'saver 'saver-watch) "nosuch" 5)))))
 
+; --- the server: a harbour on a socket outlives its clients. a client says its size, types,
+; and leaves; the next sees what the first left on the screen; the last pane's exit ends
+; the server, its socket with it ---
+(: (sub? h n i) (i + #n < #h + 1 ? (n = snip h i (i + #n) ? 1 (sub? h n (i + 1))) 0)
+   d ("out/.inle-srv-" + show (getpid 0))
+   _ (hark ["rm" "-rf" d])
+   _ (setenv "INLE_RUN" d)
+   path (d + "/s.sock")
+   md (tether ["out/love" "inle" "--serve" "s"])
+   ; what the server says for ms milliseconds, or until it closes
+   (rd s ms) (: (go acc t) (? (t <= 0) acc
+                               (cue? s) (see s @ b (b < 0 ? acc (go (acc + string b) t)))
+                               (: _ (rest 50) (go acc (t - 50))))
+                (go "" ms))
+   (up n) (? (n = 0) () (: s (connect ['unix path]) (hot? s ? s (: _ (rest 50) (up (n - 1))))))
+   s1 (up 60)
+   _ (say s1 (inle-size 12 50), flush s1)
+   o1 (rd s1 1500)
+   _ (say s1 "echo HAR''BOUR\r", flush s1)
+   o1b (rd s1 1500)
+   _ (close s1)                                              ; a client leaves
+   _ (rest 300)
+   s2 (up 20)
+   _ (say s2 (inle-size 12 50), flush s2)
+   o2 (rd s2 1500)
+   _ (say s2 "exit\r", flush s2)
+   o3 (rd s2 4000)
+   _ (rest 300)
+   gone !(two? (stat path))
+   _ (setenv "INLE_RUN" "")
+   _ (hark ["rm" "-rf" d])
+   (test (hot? s1) (sub? o1 "\e[?1049h" 0)                   ; greeted
+         (sub? o1b "HARBOUR" 0)
+         (hot? s2) (sub? o2 "HARBOUR" 0)                     ; the screen kept
+         (sub? o3 "\e[?1049l" 0)                             ; given back as it was
+         gone,
+    (: (wf p) (gather p @ g2 (two? g2 ? g2 (rest 20, wf p))) (wf <md)),
+    close >md))
+
 (test_fin ())
 (puts "berth: ok")

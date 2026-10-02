@@ -34,5 +34,11 @@
          (all (\ j (3 < j)) (pm-side fq lit)) (all (\ j (j < 4)) (pm-side fq dim))
          (all (\ j (j < 4)) (pm-side lq lit)) (all (\ j (3 < j)) (pm-side lq dim))
          (two? (pm-side fq lit)) (two? (pm-side lq lit))
-         (4 = #drawn) (all (\ l (8 = pm-cells l)) drawn),
+         (4 = #drawn) (all (\ l (8 = pm-cells l)) drawn)
+         ; the saver's moon, -s: a disc in the saver's own pens, seas on the lit side, the
+         ; limb dark, the same face the saver draws
+         (sort (pm-cols (pom-moon 0.45 24)) = [0x1c1c1c 0xd7d7af 0xffffd7])
+         (12 = #(pom-cells (pom-moon 0.45 24) 0))
+         (187 = pom-face 0.45 0.3 -0.05) (230 = pom-face 0.45 0.0 0.0)
+         (234 = pom-face 0.45 -0.99 0.0) (() = pom-face 0.45 0.0 2.0),
     puts "pom: ok\n"))

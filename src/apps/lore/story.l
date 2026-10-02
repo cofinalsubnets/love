@@ -1,6 +1,6 @@
 ; story -- rove's fiction engine: a roguelike map to walk, and dialog windows to talk in.
 ;
-; a level is a datum in a file (src/apps/rove/levels) the reader and printer round-trip,
+; a level is a datum in a file (src/apps/lore/levels) the reader and printer round-trip,
 ; so the designer (design.l) edits what this file plays:
 ;   (level TITLE (start X Y) (map ROW ..)
 ;     (tiles (CH GLYPH FG BG SOLID) ..) (things (ID X Y GLYPH FG BG NAME STEP ..) ..))
@@ -11,7 +11,7 @@
 ; (test/host/story.l); its keys are cli's edkey codes.
 ; (library ROOT) lays a hall with a shelf per crew module, each book a file.
 ;
-; usage: love story [LEVEL.l | ROOT]      a level file (default src/apps/rove/levels/lighthouse.l),
+; usage: love lore story [LEVEL.l | ROOT]      a level file (default src/apps/lore/levels/lighthouse.l),
 ;                                         or a root to lift the library from (apps)
 (module (story story-main story-run story-new story-key story-frame open-window window-say
          level kind thing level-of data-of level-text load-level save-level library
@@ -252,10 +252,10 @@
  (story-run lvl) (story-new lvl @ g
                     (stage (w \ h \ story-frame g w h) (c \ story-key g c) (_ \ g 'over)))
  ; the verb: a level file, or the library under a root; the page has its own door (web.l)
- story-usage "usage: love story [LEVEL.l | DIR]"
+ story-usage "usage: love lore story [LEVEL.l | DIR]"
  (story-main as)
-  (: p (two? as ? <as "src/apps/rove/levels/lighthouse.l")
+  (: p (two? as ? <as "src/apps/lore/levels/lighthouse.l")
      lvl (two? (readdir p) ? (library p) (load-level p))
      (lvl ? (story-run lvl) (say err ("story: not a level: " + p + "\n"), 1)))
- _ (pin (cite 'verbs 'tab) 'story (udoor 'story story-main story-usage 1 1)))
+ _ ((cite 'lore 'lore-enlist) 'story (udoor 'story story-main story-usage 1 1)))
 ) ; module story
