@@ -1,7 +1,7 @@
 ; src/apps/lux/ewmh.l -- EWMH + docks: the protocol tax that separates "manages my windows"
 ; from "my taskbar, pager, and fullscreen video work". Three pieces:
 ;   * a support window advertising _net_supporting_wm_check + _net_wm_name
-;     ("LG3D (lux / love 0.3)" -- java's awt takes an LG3D-prefixed wm as non-reparenting);
+;     ("LG3D (lux / love VERSION)" -- java's awt takes an LG3D-prefixed wm as non-reparenting);
 ;   * root properties a pager reads (_NET_SUPPORTED/_NET_CLIENT_LIST/
 ;     _net_active_window/_net_current_desktop/_net_wm_desktop), re-published by
 ;     ewmh-sync whenever the sheaf changes (a change-guard skips the no-ops);

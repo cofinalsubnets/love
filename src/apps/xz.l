@@ -391,7 +391,7 @@ no file, or a bare -, is the filter: stdin -> stdout"
     (: o (xzc-opts as t)
        r (? !o 1
             (peep t 'h 0) (say out (xzc-help + "\n"), 0)
-            (peep t 'V 0) (say out ("xz (love " + love-version + ")\n"), 0)
+            (peep t 'V 0) (say out (uvers "xz" + "\n"), 0)
             (filter (p \ p != "-") <>o @ fs
                (atom? fs ? (xzc-filter t)
                   (foldl (acc \ p \ xzc-worse acc (xzc-one t p)) 0 fs))))

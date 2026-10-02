@@ -257,7 +257,7 @@
                                (say err ("harp: cannot read " + <>l + "\n"), 1)))
                ("-h" || "--help") (puts (harp-usage + "\n"), flush out, 0)
                ("-v" || "--version")
-                (puts ("harp (love " + love-version + ")\n"), flush out, 0)
+                (puts (uvers "harp" + "\n"), flush out, 0)
                a (go >l o (a . ps))))
        (go as {'rate 48000 'cps 0.5 'from 0 'print 0 'gain 1.0} ()))
    (harp-fire o ps)
