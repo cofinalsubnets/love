@@ -68,7 +68,7 @@
               (near "prst" ["-define" "jpeg:restart-interval=1" "-interlace" "JPEG"] 1)
               (near "q10" ["-quality" "10"] 1)
               (near "one" ["-resize" "1x1!"] 1))
-        (puts "jpeg: no magick, decodes against it skipped\n"))
+        (gate-partly "jpeg: no magick, decodes against it skipped"))
    ; scans that carry no data stop at once, and past a thousand scans the rest are left:
    ; 1100 empty dc scans over 2048x2048 once cost a whole frame walk each. then a dc scan
    ; shifted by 13 whose predictor climbs past what an int holds after the shift

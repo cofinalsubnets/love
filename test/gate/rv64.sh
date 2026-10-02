@@ -14,6 +14,7 @@
 # NOT set -e: both halves capture $? to compare them.
 #
 # usage: rv64.sh OUTDIR LOVE
+. test/gate/skip.sh
 set -u
 
 ho=$1
@@ -24,8 +25,7 @@ moonrun() { LOVE_NO_IMAGE= "$m" mooncc "$@"; }
 
 echo "RISCV test/cc battery (mooncc -t rv64 vs native x64, under qemu-riscv64)"
 if ! command -v qemu-riscv64 > /dev/null 2>&1 || [ "$(uname -m)" != x86_64 ]; then
-  echo "test_rv64: skipped (needs qemu-riscv64 + an x64 host)"
-  exit 0
+  gate_skip "test_rv64: skipped (needs qemu-riscv64 + an x64 host)"
 fi
 
 d=$ho/riscv

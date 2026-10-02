@@ -21,6 +21,7 @@
 # NOT set -e: every lane captures $? to report the exit code it got.
 #
 # usage: thumb.sh TARGET OUTDIR
+. test/gate/skip.sh
 set -u
 
 tgt=$1
@@ -42,7 +43,7 @@ moonc() { LOVE_NO_IMAGE= "$ho/love" mooncc "$@"; }
 
 for tool in arm-none-eabi-gcc arm-none-eabi-ld qemu-system-arm; do
   command -v $tool > /dev/null 2>&1 || {
-    echo "$name: no arm-none-eabi toolchain / qemu-system-arm, skipped"; exit 0; }
+    gate_skip "$name: no arm-none-eabi toolchain / qemu-system-arm, skipped"; }
 done
 
 echo "$banner $ho/$tgt"

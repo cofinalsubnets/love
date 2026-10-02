@@ -5,9 +5,10 @@
 # skips without gcc.
 #
 # usage: dialect.sh LOVE OUTDIR      (from the repo root; LOVE is a word list, not a path)
+. test/gate/skip.sh
 set -u
 love=$1 ho=$2
-command -v gcc > /dev/null 2>&1 || { echo "test/holo/dialect: no gcc, skipped"; exit 0; }
+command -v gcc > /dev/null 2>&1 || gate_skip "test/holo/dialect: no gcc, skipped"
 d=$ho/.dialect
 mkdir -p $d/att $d/intel
 : > $d/pairs

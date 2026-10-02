@@ -2,6 +2,8 @@
 # root first, so these resolve from any cwd; output lands in $R/out/<frontend>/.
 R ?= .
 S = $(R)/src
+# dl/ is untracked, so a worktree has none and reads the main checkout's
+dl := $(firstword $(wildcard $(R)/dl) $(dir $(shell git rev-parse --git-common-dir 2>/dev/null))dl)
 
 # the recipe tag column is `@echo 'MOON<TAB>'$@`, and the quote is load-bearing: a bare tab
 # only separates argv, which echo rejoins with a space. one line per target and nothing else,

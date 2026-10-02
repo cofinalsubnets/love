@@ -32,6 +32,7 @@
 # is stopped as soon as its report lands rather than waited out.
 #
 # usage: vec.sh ARCH ELF OBJ
+. test/gate/skip.sh
 set -u
 arch=$1; elf=$2; obj=$3
 work=${TMPDIR:-/tmp}/vec.$$
@@ -57,7 +58,7 @@ if [ "$arch" = x64 ] && [ -e /dev/kvm ] && [ "$(uname -m)" = x86_64 ]; then
 fi
 
 if ! have "$qemu"; then
-  echo "  (vec $arch: fault boots skipped, no $qemu)"
+  gate_partly "  (vec $arch: fault boots skipped, no $qemu)"
 else
   # only a NEWLINE-TERMINATED report counts: rip=/err=/cr2= land after the marker,
   # so waking on the marker alone kills qemu mid-line and the gate reads a PREFIX of
@@ -137,7 +138,7 @@ fi
 
 # -- the static half: the stubs no boot reaches ------------------------------
 if ! have llvm-objdump; then
-  echo "  (vec $arch: object checks skipped, no llvm-objdump)"
+  gate_partly "  (vec $arch: object checks skipped, no llvm-objdump)"
 elif [ ! -f "$obj" ]; then
   fail "$obj was never laid"
 else

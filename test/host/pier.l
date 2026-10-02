@@ -7,7 +7,7 @@
 ; run: cat test/00-init.l test/host/pier.l | out/love
 (: xv (tether ["Xvfb" "-displayfd" "1" "-screen" "0" "800x600x24" "-nolisten" "tcp"])
    (wfx p) (gather p @ g2 (two? g2 ? g2 (rest 2, wfx p)))
-   _ (!(two? xv) ? (puts "pier: ok (no Xvfb, skipped)\n", quit 0) 0)
+   _ (!(two? xv) ? (gate-skip "pier: ok (no Xvfb, skipped)") 0)
    (rdnum p) ((: (go n st) (see p @ c
                               (? (c = -1) ()
                                  (c = 13) (go n st)

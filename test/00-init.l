@@ -10,6 +10,15 @@
 (map (n \ elem n (names ()) ? () (ev [': [n 'x] ()])) '(quit close run getenv))
 (elem 'open (names ()) ? () (ev '(: (open x y) ())))
 
+; test/gate/skip.sh's twin: a test that cannot run here says why through these, and on a
+; box marked strict (~/.love/etc/gate-strict, or LOVE_GATE_STRICT) the skip is red
+(: (gate-strict? _) (? (getenv "LOVE_GATE_STRICT")
+                      1 (open ((getenv "HOME") + "/.love/etc/gate-strict") "r" @ q (hot? q ? (close q, 1) 0)))
+   (gate-skip m) (gate-strict? 0 ? (puts (m + " -- REFUSED: a strict box runs every lane\n"), quit 1)
+                  (puts (m + "\n"), quit 0))
+   (gate-partly m) (gate-strict? 0 ? (puts (m + " -- REFUSED: a strict box runs every leg\n"), quit 1)
+                    (puts (m + "\n"))))
+
 ; the reader under test -- the socket. every print->read
 ; differential in the tree reads through this one binding (test/roundtrip.l,
 ; test/fuzz.l, test/host/rdiff.l), so the whole set moves by rebinding it here

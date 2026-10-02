@@ -12,6 +12,7 @@
 # on a64 the local half of each comparison runs under qemu-aarch64, and skips without it.
 # provisioning the boxes: doc/misc/osbox.md.
 # usage: osbox.sh OUTDIR LOVE0 freebsd|netbsd [x64|a64]
+. test/gate/skip.sh
 set -u
 
 ho=$1
@@ -28,14 +29,14 @@ esac
 t=test_$os; [ "$arch" = x64 ] || t=test_${os}_${arch}
 d=$ho/$os-$arch
 
-[ -n "$box" ] || { echo "$t: skipped (no box in the env)"; exit 0; }
+[ -n "$box" ] || gate_skip "$t: skipped (no box in the env)"
 
 # the LOCAL half of each comparison: native where the arch is this machine's,
 # qemu-user where it is not. The point of the leg is ONE binary under TWO
 # kernels, so the emulator stands in for linux/arm64 hardware and nothing else.
 if [ "$arch" = a64 ]; then
   qemu=$(command -v qemu-aarch64 2>/dev/null || true)
-  [ -n "$qemu" ] || { echo "$t: skipped (no qemu-aarch64 for the local half)"; exit 0; }
+  [ -n "$qemu" ] || gate_skip "$t: skipped (no qemu-aarch64 for the local half)"
   run() { "$qemu" "$@"; }
 else
   run() { "$@"; }

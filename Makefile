@@ -315,7 +315,7 @@ crewfiles = src/apps/json.l src/apps/sb/merge.l src/apps/sb/http.l src/apps/sb/s
   src/apps/libra/salt.l src/apps/libra/libra.l src/apps/vi/hueweb.l src/apps/kiosko/web.l \
   src/apps/harp/harp.l src/apps/harp/play.l src/apps/harp/score.l \
   src/apps/harp/just.l src/apps/harp/drift.l src/apps/harp/tonnetz.l src/apps/harp/phrases.l \
-  src/apps/x11.l src/apps/manifest/manifest.l src/apps/lore/lore.l src/apps/lore/rove.l src/apps/lore/view.l src/apps/lore/vec.l src/apps/lore/sky.l src/apps/lore/grove.l src/apps/lore/tower.l src/apps/lore/story.l src/apps/lore/design.l src/apps/lore/slop.l src/apps/lore/grass.l src/apps/lore/wade.l src/apps/lore/apartment.l src/apps/lore/dusk.l src/apps/lore/garage.l src/apps/lore/shaft.l src/apps/lore/tree.l src/apps/lore/roost.l src/apps/harp/synth.l \
+  src/apps/x11.l src/apps/manifest/manifest.l src/apps/lore/lore.l src/apps/lore/rove.l src/apps/lore/view.l src/apps/lore/vec.l src/apps/lore/sky.l src/apps/lore/grove.l src/apps/lore/meadow.l src/apps/lore/tower.l src/apps/lore/story.l src/apps/lore/design.l src/apps/lore/slop.l src/apps/lore/grass.l src/apps/lore/grass99.l src/apps/lore/wade.l src/apps/lore/apartment.l src/apps/lore/dusk.l src/apps/lore/garage.l src/apps/lore/shaft.l src/apps/lore/tree.l src/apps/lore/roost.l src/apps/harp/synth.l \
   src/apps/berth/wharf.l src/apps/berth/limn.l src/apps/berth/berth.l src/apps/face.l src/apps/lux/wire.l src/apps/berth/pier.l src/apps/doom.l src/apps/lupa.l src/apps/mc.l \
   src/apps/chucho/mime.l src/apps/chucho/box.l src/apps/chucho/smtp.l src/apps/chucho/imap.l src/apps/chucho/chucho.l src/apps/pom.l src/apps/saver.l src/apps/locks.l src/apps/bee.l
 korefiles = $(kore_head) $(holo_obj) src/love/holo/copy.l $(kore_arc) $(kore_net)
@@ -584,7 +584,7 @@ k_free_c = $S/inle/kmain.c $S/inle/blk.c $S/inle/hda.c $S/inle/sys.c
 # are fixed where the rule is read, and every rule that links these is above that lane
 ifdef DOOM
 k_free_c += $S/inle/doom.c $S/inle/doomsnd.c
-doom_d = $R/dl/doomgeneric/doomgeneric
+doom_d = $(dl)/doomgeneric/doomgeneric
 doom_drop = $(wildcard $(doom_d)/doomgeneric_*.c $(doom_d)/i_allegro*.c $(doom_d)/i_sdl*.c)
 doom_c = $(filter-out $(doom_drop),$(wildcard $(doom_d)/*.c))
 endif
@@ -766,7 +766,7 @@ $(k_odir)/doom/%.o: $(doom_d)/%.c $(mooncc_dep)
 	@echo 'DOOM	'$@
 	@mkdir -p "$(dir $@)"
 	@$(kcc) -c $< -o $@
-$(k_odir)/doom/wad.o: $R/dl/doom1.wad src/tools/mkblob.l $(mdep)
+$(k_odir)/doom/wad.o: $(dl)/doom1.wad src/tools/mkblob.l $(mdep)
 	@echo 'HOLO	'$@
 	@mkdir -p "$(dir $@)"
 	@LOVE_NO_IMAGE= $m src/tools/mkblob.l $< $@ doom_wad $a
@@ -781,7 +781,7 @@ $(moon_d)/doom/%.o: $(doom_d)/%.c $(moon0_dep)
 	@echo 'DOOM	'$@
 	@mkdir -p "$(dir $@)"
 	@$(moon0) $(kart_inc) -c $< $@
-$(moon_d)/doom/wad.o: $R/dl/doom1.wad src/tools/mkblob.l $(holocat_dep) $(love0)
+$(moon_d)/doom/wad.o: $(dl)/doom1.wad src/tools/mkblob.l $(holocat_dep) $(love0)
 	@echo 'HOLO	'$@
 	@mkdir -p "$(dir $@)"
 	@LOVE_NO_IMAGE= $(love0) $(holocat) src/tools/mkblob.l $< $@ doom_wad $(hosta)

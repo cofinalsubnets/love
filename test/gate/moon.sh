@@ -9,6 +9,7 @@
 # NOT set -e: nearly every check captures $? to report it in its own message.
 #
 # usage: moon.sh OUTDIR LOVE LOVE0
+. test/gate/skip.sh
 set -u
 
 ho=$1
@@ -54,8 +55,7 @@ echo "CC src/love/holo/text.l (love0 lane)"
 
 arch=$(uname -m)
 if [ "$arch" != x64 ] && [ "$arch" != x86_64 ]; then
-  echo "mooncc: cc (laws only -- x64 e2e skipped on $arch) ok"
-  exit 0
+  gate_skip "mooncc: cc (laws only -- x64 e2e skipped on $arch) ok"
 fi
 
 cc_g=$(command -v gcc || command -v cc)

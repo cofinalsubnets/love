@@ -82,7 +82,7 @@ for n in (2, 4, 16, 256):
                           && got 2 = >want)
                          1 (puts ("png: " + n + " differs from magick\n"), 0)))
            (test (filter (n \ !(one n)) names = ())))
-        (puts "png: no python3 PIL or magick, images skipped\n"))
+        (gate-partly "png: no python3 PIL or magick, images skipped"))
 
    ; -- refusals -------------------------------------------------------------------------
    good (ok? ? (rd (dir + "/c8.png")) "")

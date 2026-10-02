@@ -20,6 +20,7 @@
 # NOT set -e: every gate captures $? to report the code it got.
 #
 # usage: boot.sh GATE MAKE
+. test/gate/skip.sh
 set -u
 
 gate=$1
@@ -67,10 +68,9 @@ echo "$banner"
 for tool in $need; do
   command -v "$tool" > /dev/null 2>&1 || {
     case $gate in
-      virt|rvboot) echo "$name: no qemu-system-riscv64, skipped" ;;
-      *)    echo "$name: no arm-none-eabi toolchain / qemu-system-arm, skipped" ;;
-    esac
-    exit 0; }
+      virt|rvboot) gate_skip "$name: no qemu-system-riscv64, skipped" ;;
+      *)    gate_skip "$name: no arm-none-eabi toolchain / qemu-system-arm, skipped" ;;
+    esac; }
 done
 
 case $gate in
@@ -80,7 +80,7 @@ case $gate in
              # the image is baked ON qemu, so without qemu at bake time there is
              # nothing to wake -- a skip, not a failure
              test -s out/mps2/love.img || {
-               echo "$name: empty image (no qemu at bake), skipped"; exit 0; } ;;
+               gate_skip "$name: empty image (no qemu at bake), skipped"; } ;;
   nucleo446_smoke) $mk -C src/inle/nucleo446 smoke || fail "nucleo446 smoke build" ;;
   virt)      $mk -C src/inle/virt || fail "virt build" ;;
 esac

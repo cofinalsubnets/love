@@ -10,7 +10,7 @@
 ; getenv the value or (), setenv () or 'badarg (a non-string value unsets), environ the raw
 ; "NAME=value" strings
 (: envt {}
-   _ (pin envt 0 [("HOME" . "/home")])
+   _ (pin envt 0 [("HOME" . "/home") ("COLORTERM" . "truecolor")])   ; the console is quay, which keeps 24-bit colour
    (envget l n) (two? l ? (n = <<l ? ><l (envget >l n)))
    (envcut l n) (two? l ? (n = <<l ? (envcut >l n) (<l . envcut >l n)))
    (getenv n) (string? n ? (envget (envt 0) n))

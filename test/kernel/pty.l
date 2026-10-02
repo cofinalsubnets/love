@@ -82,6 +82,19 @@
  (: p <r _ (close >r) st (wait p)
   (test (charm? p) (129 = st))))
 
+; a child's quit leaves its parent's terminal be: a shell on a pty runs `cat` on a directory
+; as a task of its own, which wears the shell's own slave port, and reads the next line after
+; it -- a line typed once the first has run, since the shell holds a whole line it has read
+(tether ["sh"] @ r
+ (: p <r mp >r
+    _ (say mp "cat /tmp\r", flush mp)
+    _ (rest 1500)
+    _ (say mp "echo \"a\"\"live\"; exit 3\r", flush mp)
+    tl (slurp mp)
+    st (wait p)
+    (close mp,
+     test (charm? p) (0 <= subidx tl "alive" 0) (3 = st))))
+
 ; a task held where it stands: catch answers at once and it has not landed; resumed, it
 ; finishes as it would have. nothing is held twice, or resumed that was not held
 (: t (twirl (_ \ (rest 30, 7)) 0)
