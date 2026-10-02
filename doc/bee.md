@@ -144,6 +144,8 @@ A session of its own also rings. Its server declares Claude Code's **claude/chan
 
 and drops the notice in silence otherwise, which then costs nothing: that session gets its mail as before, on its next tool call. Start every Claude Code session in love's tree this way, a resume included. The restart notice above rings too, since it comes as mail. A bee's own child (**BEE_AS**) declares no channel; its bee hears the mail.
 
+A session of its own also leaves its way back. Its server writes **.resume/***name* in the hive, holding Claude Code's session id (**CLAUDE_CODE_SESSION_ID**) and its directory; unlike the card, it outlives the session, and **set_name** moves it. **love bee --resume** lists the names it can bring back, and **love bee --resume** *name* [*prompt*] relaunches one: in its directory, as **BEE_NAME=***name*, with the channel flag, and with an MCP config that runs bee from the binary that ran **--resume**, so a worktree whose **out/love** predates the bell still rings. A live name is refused. **--cmd** prints the line instead of running it, for a script or a terminal multiplexer to run.
+
 Asking stays with the caller. A bee's child asks through **approve**. A Claude Code session of its own asks through Claude Code's permission prompt, so the user says y before a message or a queue write goes out, unless that session runs without asking.
 
 # LOCKS

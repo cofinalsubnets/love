@@ -5,7 +5,8 @@
 printf 'abc\nxbz\nzzz\nq4\nw5\n' > "$ho/.sd1"
 for sc in 's/b/X/' 's/z/Q/g' '2d' '/x/,/q/d' '$d' '2q' 's/x*/-/g' 's/\(b*\)z/[\1]/' \
           's/b/[&]/' 's|z|_|g' 's/a/1/; s/b/2/' 's/q\(.\)/<\1>/' \
-          's/a\|z/Y/g' 's/[[:digit:]]/#/g' 's/b\{2\}/B/' '/a\|q/d' 's/\(a\|x\)b/@/'; do
+          's/a\|z/Y/g' 's/[[:digit:]]/#/g' 's/b\{2\}/B/' '/a\|q/d' 's/\(a\|x\)b/@/' \
+          '/x/!d' '2! d' '$!s/z/Q/g' '2,4!d' '/^q4$/!s/[a-z].*/_/'; do
   sed "$sc" "$ho/.sd1" > "$g"; a=$?
   korerun sed "$sc" "$ho/.sd1" > "$o"; b=$?
   cmp -s "$g" "$o" && [ $a -eq $b ] || fail "kore sed '$sc' vs GNU"

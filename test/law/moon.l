@@ -1855,6 +1855,7 @@
             (lea r5 r9 8) (lean r5 r9 8)
             (leax r5 r9 r10 8 0) (ldx r5 r9 r10 8 0) (ldxb r5 r9 r10 8 0)
             (ldxw r5 r9 r10 4 0) (ldxsw r5 r9 r10 4 0) (laa r5 zz9 8)
+            (andx4 r5 r9 r10 4 0) (orx4 r5 r9 r10 4 0) (xorx4 r5 r9 r10 4 0) (andm4 r5 r9 8) (orm4 r5 r9 8) (xorm4 r5 r9 8)
             (la r5 zz9) (set eq r5) (cmp r5 r9) (test r5 1)
             (neg r5) (not r5) (sx1 r5) (sx2 r5) (sx4 r5) (zx1 r5) (zx2 r5) (zx4 r5)
             (movqxr f0 r5) (movqrx r5 f0)
@@ -1868,7 +1869,7 @@
             (shlv r5 r1) (shrv r5 r1) (sarv r5 r1) (rorv r5 r1) (rorv4 r5 r1))
    heads (map (f9 \ <f9) shapes)
    rostered (aluops + divops + vshops + unops + ldops9 + gstops + stxops + siops +
-             leaops + xops + fxops + fstxops + fldops + fstops + xmmops +
+             leaops + xops + x4ops + m4ops + fxops + fstxops + fldops + fstops + xmmops +
              '(li mov push pop shl shr sar rol ror ror4 cmpm cmprm la laa ldsdl set cmov cmp test
                movqxr movqrx cvtsi2sd cvttsd2si))
    ; the forward carrier: seed the map with (mov orig sub) and let the pass itself rewrite the
@@ -1895,13 +1896,13 @@
    bad2 (catmap bwd shapes)
    (test
       ; the carrier is what it says it is, and every shape is one both halves already accept
-      (90 = #shapes)
+      (96 = #shapes)
       (atom? (filter (f9 \ (rdsp gX f9) = 'bar) shapes))
       (all emits? shapes)
       (atom? (filter (o9 \ nelem o9 heads) rostered))      ; the drift gate
-      (405 = nfwd) (720 = nbwd)                               ; a silent narrowing shows up here
+      (405 = nfwd) (810 = nbwd)                               ; a silent narrowing shows up here
       (atom? bad1)                                            ; forward: 405 renames, all encodable
-      (atom? bad2)                                            ; backward: 720 folds, all encodable
+      (atom? bad2)                                            ; backward: 810 folds, all encodable
       ; the two shapes the guards exist for, refused by holo itself, plus the alias emit-alu
       ; welcomes when the op commutes -- coal's decline there is conservative, not necessary
       !(emits? '(sub r0 r12 r0)) !(emits? '(shlv r5 r9))

@@ -469,9 +469,13 @@
              (k = 'addr) (ptype ps <>e @ it (it ? ['ptr it]))
              ; a call through a named function: its 'sigs return type (the
              ; complex promotion below needs clog's answer to type complex)
-             (k = 'call) (two? <>e && <<>e = 'var ?
-                            (peep (ps 'sigs) <><>e () @ sg
-                               (two? sg ? <sg)))
+             (k = 'call) (: sg (two? <>e && <<>e = 'var ? (peep (ps 'sigs) <><>e ()))
+                            (two? sg ? <sg
+                               ; else through the callee's own type: a function, or a pointer to one
+                               (ptype ps <>e @ ft
+                                  (? (two? ft && <ft = 'fn) <>ft
+                                     (two? ft && <ft = 'ptr && two? <>ft && <<>ft = 'fn) <><>ft
+                                     ()))))
              (k = 'str) ['arr 'char (#<>e + 1)]     ; a literal is its array (cpp pasted phase 6; the lexer decoded escapes) -- sizeof("ab") folds to 3, an array bound
              ; a literal: sizeof('T') is sizeof(int) (musl's _IOW ioctl codes);
              ; a plain decimal past int32 is a long (suffixed forms arrive cast)
@@ -497,7 +501,7 @@
              ; ?: arms meet by puac (6.5.15); same non-arithmetic type rides
              ; through whole (sizeof(c ? s1 : s2) over one struct type)
              (k = 'cond)
-              (: a (ptype ps <>>e) b (ptype ps <>>>e)
+              (: a (tdecay (ptype ps <>>e)) b (tdecay (ptype ps <>>>e))   ; an array arm decays (6.5.15)
                  (? (parith? a && parith? b) (puac !(pst32? ps) a b)
                     (two? a && a = b) a
                     ; C11 6.5.15p6: with one operand a null pointer constant the result
@@ -1569,8 +1573,8 @@
                 node (atom? >subs && atom? <<subs ? <sub ['init sub])
                 ([(<h = 'f ? 'dfield 'didx) <>h node] . dbuild <>gr)))))
    ; -> (((path value)..) rest) | () -- a list, because a range designator is one item per
-   ; index. gcc takes a range as an array designator only and only alone; capped, so a wide
-   ; one refuses rather than imaging thousands of elements in silence
+   ; index. gcc takes a range as an array designator only and only alone; capped at 64k
+   ; items (a hash table's 1 << 14 heads, NR_CPUS) so a runaway bound refuses
    (rng1? p) (two? p && atom? >p && two? <p && <<p = 'r)
    (rexp lo hi v acc) (hi < lo ? (rev acc) (rexp (lo + 1) hi v ([[['i lo]] v] . acc)))
    (pinititem ps ts)
@@ -1583,7 +1587,7 @@
                     (rng1? pth)
                      (: lo <><pth hi <>><pth
                         (? (hi < lo) (blame ts "an empty range designator")
-                           (1024 < hi - lo) (blame ts "range designator too wide")
+                           (65536 < hi - lo) (blame ts "range designator too wide")
                            [(rexp lo hi <v ()) <>v]))
                     [[[pth <v]] <>v]))))
        (pinit ps ts @ v
