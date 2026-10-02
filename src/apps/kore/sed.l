@@ -15,6 +15,7 @@
 (module 'kore
 (borrow 'cli)
 (borrow 'posix)
+(borrow 'text)
 
 (:
    ; -- the substitution: replace matches of nodes in ln by repl (g? = all) --
@@ -44,15 +45,15 @@
        (walk i acc ate hit k)
         (refindm nodes ln i @ [_ ms me sp]
           (ate && me = ms && ms = i ?
-             (i < n ? (walk (i + 1) (acc + snip ln i (i + 1)) () hit k)
+             (i < n ? (cpnext ln i @ j (walk j (acc + snip ln i j) () hit k))
               [hit acc])
              (: rep? (nth <= k)
                 acc2 (acc + snip ln i ms + (rep? ? (expand ms me sp) (snip ln ms me)))
                 hit2 (rep? ? 1 hit)
                 (? (rep? && !g?) [1 (acc2 + snip ln me n)]
-                   ; g at an empty match: keep one charm and step past it
+                   ; g at an empty match: keep one character and step past it
                    (me = ms) (me < n ?
-                                (walk (me + 1) (acc2 + snip ln me (me + 1)) () hit2 (k + 1))
+                                (cpnext ln me @ j (walk j (acc2 + snip ln me j) () hit2 (k + 1)))
                                 [hit2 acc2])
                    (walk me acc2 1 hit2 (k + 1)))))
           [hit (acc + snip ln i n)])
