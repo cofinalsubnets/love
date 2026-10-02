@@ -23,7 +23,7 @@
       sup (x-getprop-atoms s root (x-intern s "_NET_SUPPORTING_WM_CHECK") @ c (two? c ? <c 0))
       _ (must "wm-name" (x-getprop s sup (x-intern s "_NET_WM_NAME") @ [8 n b]
                           (foldl (a \ c \ a + string c) "" b @ nm
-                             (snip nm 0 10 = "lux (love " && snip nm (n - 1) n = ")"))))
+                             (snip nm 0 11 = "lux / love " && n > 11))))
       ; --- the desktop's shape (ewmh 1.4): geometry is the root, a viewport and a workarea row
       ;     per desktop, and the names are the tags as NUL-terminated strings ---
       nd (x-getprop-atoms s root (x-intern s "_NET_NUMBER_OF_DESKTOPS") @ d (two? d ? <d 0))

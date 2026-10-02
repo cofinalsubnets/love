@@ -1,7 +1,7 @@
 ; src/apps/lux/ewmh.l -- EWMH + docks: the protocol tax that separates "manages my windows"
 ; from "my taskbar, pager, and fullscreen video work". Three pieces:
 ;   * a support window advertising _net_supporting_wm_check + _net_wm_name
-;     ("lux (love 0.3)");
+;     ("lux / love VERSION");
 ;   * root properties a pager reads (_NET_SUPPORTED/_NET_CLIENT_LIST/
 ;     _net_active_window/_net_current_desktop/_net_wm_desktop), re-published by
 ;     ewmh-sync whenever the sheaf changes (a change-guard skips the no-ops);
@@ -81,7 +81,7 @@
                    (map (nm \ peep at nm 0) (filter (nm \ snip nm 0 5 = "_NET_") ewmh-atoms)),
         x-chprop32 s root (a "_NET_SUPPORTING_WM_CHECK") 33 [idbase],                     ; type window(33)
         x-chprop32 s idbase (a "_NET_SUPPORTING_WM_CHECK") 33 [idbase],
-        x-chprop8 s idbase (a "_NET_WM_NAME") utf8 ("lux (love " + love-version + ")"),
+        x-chprop8 s idbase (a "_NET_WM_NAME") utf8 ("lux / love " + love-version),
         x-chprop32 s root (a "_NET_NUMBER_OF_DESKTOPS") 6 [#tags],                        ; type cardinal(6)
         x-chprop32 s root (a "_NET_DESKTOP_VIEWPORT") 6 (ewmh-per tags '(0 0)),           ; no large desktops: every viewport (0 0)
         x-chprop8 s root (a "_NET_DESKTOP_NAMES") utf8 (ewmh-names tags),
