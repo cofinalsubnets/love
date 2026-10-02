@@ -715,7 +715,7 @@
            ("(model keep-me)\n(avatar hare)\n" = cr-get (d + "/.love/etc/bee.l")))
    0)
 
-; --- the stage: bee's full screen as a harbour's pane, in this process. it settles in the
+; --- the stage: bee's full screen as a mitty's pane, in this process. it settles in the
 ; hive, shows its frame at the size it is asked, takes keys as steps, runs a turn on its
 ; own task, and leaves the hive when shut ---
 (: cr-s (cr-dir "stage" ("(api openai)\n(url \"" + cr-url + "/v1/chat/completions\")\n(model mock-model)\n"))
@@ -747,7 +747,7 @@
          (two? m && "hi" = m (#m - 1) "content")
          !(two? ns2)))                                        ; shut: the cell is gone
 
-; --- hands: a stage given a harbour's hands offers the pane tools and says where it is; a
+; --- hands: a stage given a mitty's hands offers the pane tools and says where it is; a
 ; look runs unasked, its answer goes back to the model; a stage without hands has none ---
 (: cr-h (cr-dir "hands" ("(api openai)\n(url \"" + cr-url + "/v1/chat/completions\")\n(model mock-model)\n"))
    h0 (getenv "HOME")
@@ -755,7 +755,7 @@
    _ (setenv "BEE_HIVE" (cr-h + "/hive"))
    _ (setenv "OPENAI_API_KEY" "sk-never-sent")
    asked {0}
-   hands {'panes (_ \ [1 "1  desk 0  a program, pid 7  80x24"])
+   hands {'panes (_ \ [1 "1  window 0  a program, pid 7  80x24"])
           'type (_ \ _ \ (pin asked () 1, [1 "typed"]))}
    _ (cr-serves
       [(cr-ok (cr-sse [{"choices" [{"delta" {"tool_calls" [{"index" 0 "id" "p1" "type" "function"
@@ -787,11 +787,11 @@
    (test (0 < w)
          (2 = #h)
          (elem "pane_list" names) (elem "pane_type" names) (elem "pane_close" names)
-         (cr-in (b1 "messages" 0 "content") "## your desk")
+         (cr-in (b1 "messages" 0 "content") "## your window")
          ("p1" = tm "tool_call_id") (cr-in (tm "content") "a program, pid 7")
          (0 = peep asked () 0)
          !(elem "pane_list" (map (\ t (t "function" "name")) (peep b3 "tools" ())))
-         !(cr-in (peep b3 "messages" () @ m (two? m ? (m 0 "content") "")) "## your desk")))
+         !(cr-in (peep b3 "messages" () @ m (two? m ? (m 0 "content") "")) "## your window")))
 
 (hark ["rm" "-rf" cr-root])
 (test_fin (), puts "bee: ok", putc 10, 0)

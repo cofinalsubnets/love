@@ -1,5 +1,5 @@
-; test/host/vi.l -- vi on mitty's harbour, over a real pty
-; not in the test/*.l corpus (the harbour rides screen/scribe/tether in src/love/*.c). the
+; test/host/vi.l -- vi on a mitty, over a real pty
+; not in the test/*.l corpus (the mitty rides screen/scribe/tether in src/love/*.c). the
 ; engine's laws are test/law/vi.l; this is the visit: a buffer berthed as a stage,
 ; :vs and :sp opening another beside or under it, the prefix steering the focus, and
 ; :q shutting the one it is typed in until the last leaves.
@@ -32,7 +32,7 @@
    b7 (say! m ":q\r")                      ; ... and shut again
    ba (say! m "yy\x01l")                    ; the first line yanked, over to the second pane
    bb (say! m "p")                          ; ..and put under its line: the one register
-   bc (say! m "\x01]")                      ; C-a ]: the same put, the harbour's way
+   bc (say! m "\x01]")                      ; C-a ]: the same put, the mitty's way
    b8 (say! m "\x01h:q!\r")                ; the first, dirty
    b9 (say! m ":q!\r")                     ; the last one leaves, and so does vi
    st (: (wf p) (gather p @ g2 (two? g2 ? g2 (rest 2, wf p))) (wf <md))
@@ -47,4 +47,4 @@
        (two? st)))
 
 (test_fin ())
-(puts "vi: ok -- a buffer is a berth, :vs and :sp open another, and :q shuts the one it is in\n")
+(puts "vi: ok -- a buffer is a pane, :vs and :sp open another, and :q shuts the one it is in\n")

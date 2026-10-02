@@ -4,7 +4,7 @@
 ; loads after core.l/re.l/vi core in the kore cat and rides the u-floor (uread,
 ; udie) and text.l's lines/unlines.
 ;
-; the visit is mitty's harbour where the seat carries one -- each buffer a stage in a
+; the visit is a mitty where the seat carries one -- each buffer a stage in a
 ; pane, split by :sp/:vs or the prefix -- and cli's `stage` otherwise: raw tty, the
 ; alternate screen, one key a step through cli's edkey (arrows, alt letters, a bare
 ; escape after a beat), and port EOF leaves -- a piped script (the smoke lane) ends
@@ -48,7 +48,7 @@
               vmsg s2 (two? r ? (nm + ": " + show #(s2 'lines) + " lines")
                           (nm + ": new file"))))))
    ; the ex split requests: (dir name) means another buffer, on name or fresh, beside
-   ; or under this one. split is the harbour's door, or () on a seat with no harbour
+   ; or under this one. split is the mitty's door, or () on a seat with no mitty
    (dos s2 split)
     (s2 'dos @ rq
        (atom? rq ? s2
@@ -87,7 +87,7 @@
        _ (pins st 'dirty dirty 'row (0 < row ? (row - 1) 0))
        fc (vi-face st {})
        (stage (fc 0) (fc 1) (fc 2)))
-   ; the visit: on a harbour where the seat has one -- every buffer a stage in a pane
+   ; the visit: on a mitty where the seat has one -- every buffer a stage in a pane
    ; of its own, :sp and :vs and the prefix's C-a s and C-a v opening another, :q
    ; shutting the one it is typed in, one register between them -- else cli's stage,
    ; one buffer full screen
@@ -98,7 +98,7 @@
        st (vi-open f)
        br (cite 'mitty)
        (tablet? br ?
-          (: sz (br 'hsize 0) hb (br 'harbour <sz <>sz)
+          (: sz (br 'hsize 0) hb (br 'mitty-up <sz <>sz)
              (stage-of s) (: fc (vi-face s {'split split 'reg (hb 'clip)})
                               sg (br 'mitty-stage (fc 0) (fc 1) (fc 2))
                               (pin sg 'paste (fc 3), sg))
