@@ -1,5 +1,5 @@
 # Teensy 4.1 (i.MX RT1062) build -- love compiled END TO END by mooncc. `make -C
-# src/inle/teensy41` from the project root. Every C file -- the runtime's seven, the am
+# src/inle/teensy41` from the project root. Every C file -- the runtime's seven, the lm
 # floor, libc, teensy41.c, main.c -- goes through `mooncc -t thumb2`; boot.o (the
 # ROM-facing FlexSPI/IVT/vector blocks + crt0 + the asm helpers) is laid from holo IR by
 # mkboot.l, the baked heap image by mkimg.l, tlink.l LINKS over holo's ldbare32 and
@@ -18,7 +18,7 @@ include ../port.mk
 
 te_cc = $(MOONCC) -t thumb2 -D ai_tco=1 -D __STDC_HOSTED__=0 -I. -Isrc/love -Iout/lib
 
-objs = $(love_o) $(heap_o) $(R)/$(o)/am.o $(libc_o) \
+objs = $(love_o) $(heap_o) $(R)/$(o)/lm.o $(libc_o) \
   $(R)/$(o)/teensy41.o $(R)/$(o)/psram.o $(R)/$(o)/main.o $(R)/$(o)/boot.o \
   $(R)/$(o)/love-img.o
 

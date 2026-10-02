@@ -5,11 +5,12 @@
 # oracle for what the bytes say; test/holo/decode.l is the judge. skips without gcc or objdump.
 #
 # usage: decode.sh LOVE OUTDIR      (from the repo root; LOVE is a word list, not a path)
+. test/gate/skip.sh
 set -u
 love=$1 ho=$2
-command -v gcc > /dev/null 2>&1 || { echo "test/holo/decode: no gcc, skipped"; exit 0; }
-command -v objdump > /dev/null 2>&1 || { echo "test/holo/decode: no objdump, skipped"; exit 0; }
-command -v objcopy > /dev/null 2>&1 || { echo "test/holo/decode: no objcopy, skipped"; exit 0; }
+command -v gcc > /dev/null 2>&1 || gate_skip "test/holo/decode: no gcc, skipped"
+command -v objdump > /dev/null 2>&1 || gate_skip "test/holo/decode: no objdump, skipped"
+command -v objcopy > /dev/null 2>&1 || gate_skip "test/holo/decode: no objcopy, skipped"
 d=$ho/.decode
 mkdir -p $d
 : > $d/pairs

@@ -8,13 +8,14 @@
 # on boxes where test_thumb1/2 skip.
 #
 # usage: elf32.sh OUTDIR
+. test/gate/skip.sh
 set -u
 
 ho=$1
 name=test_elf32
 fail() { echo "FAIL $*" >&2; exit 1; }
 
-command -v qemu-arm > /dev/null 2>&1 || { echo "$name: no qemu-arm, skipped"; exit 0; }
+command -v qemu-arm > /dev/null 2>&1 || gate_skip "$name: no qemu-arm, skipped"
 
 echo "ELF32 $ho/elf32"
 d=$ho/elf32

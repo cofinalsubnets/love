@@ -26,6 +26,7 @@
 # usage: gate_love_c=.. gate_host_c=.. gate_arch_c=.. gate_kern_c=.. gate_seat_c=..
 #        xfixpoint.sh OUTDIR LOVE0 QEMU XTGT MKSYS TCO XOD XA OBJ...
 # XOD is the x-lane's object root, where make lays mkvec.l and the objects it passes
+. test/gate/skip.sh
 set -u
 
 ho=$1
@@ -40,7 +41,7 @@ shift 8
 d=$xod/fix
 cat=$ho/.mooncc-cat.l
 
-command -v "$qemu" >/dev/null 2>&1 || { echo "test_xfixpoint: skipped (needs $qemu)"; exit 0; }
+command -v "$qemu" >/dev/null 2>&1 || gate_skip "test_xfixpoint: skipped (needs $qemu)"
 
 fail() { echo "FAIL test_xfixpoint: $*" >&2; exit 1; }
 

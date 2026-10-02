@@ -16,6 +16,7 @@
 # .SHELLFLAGS := -ec for the tree as a whole -- 96 sites do this).
 #
 # usage: raw-bake.sh OUTDIR CORPUS.l ..
+. test/gate/skip.sh
 set -u
 
 ho=$1
@@ -23,8 +24,7 @@ shift
 
 arch=$(uname -m)
 if [ "$arch" != x86_64 ]; then                 # the kernel's spelling, not the tree's
-  echo "test_raw_bake: x86-64 only, skipped on $arch"
-  exit 0
+  gate_skip "test_raw_bake: x86-64 only, skipped on $arch"
 fi
 
 fail() { echo "FAIL test_raw_bake: $*" >&2; exit 1; }

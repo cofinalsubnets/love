@@ -324,6 +324,43 @@
       (cr-in qq "# the rules: one row each") (cr-in qq "main c0ffee1") !(cr-in qq " ant "))
    0)
 
+; --- a row per branch: a session's second branch joins a row of its own, so a fold it already made
+; stays put; a write that cannot say which row is refused, as is pulling a folded row onto another
+; branch; the leader moves the base line through queue_lead, touching no row
+(: cr-rb (cr-dir "rows" "")
+   (g as) (hark (["git" "-C" cr-rb "-c" "user.name=t" "-c" "user.email=t@t"] + as))
+   _ (g ["init" "-q" "-b" "main"]) _ (g ["commit" "-q" "--allow-empty" "-m" "one"])
+   (row id a) {"jsonrpc" "2.0" "id" id "method" "tools/call" "params" {"name" "queue_row" "arguments" (pin a "queue" "refs/queue/r")}}
+   (lead id a) {"jsonrpc" "2.0" "id" id "method" "tools/call" "params" {"name" "queue_lead" "arguments" (pin a "queue" "refs/queue/r")}}
+   _ (cr-put cr-rb "in" (foldl (\ a m (a + json-show m + "\n")) ""
+                              [(row 1 {"state" "waiting" "branch" "a"})
+                               (row 2 {"state" "green" "gated_head" "h1"})
+                               (row 3 {"state" "waiting" "branch" "b"})
+                               (row 4 {"state" "gating"})
+                               (row 5 {"state" "waiting" "branch" "a"})
+                               (row 6 {"state" "folded-into-1" "branch" "b"})
+                               (row 7 {"state" "waiting" "branch" "c"})
+                               (row 8 {"state" "waiting" "row" "2" "branch" "d"})
+                               (lead 9 {"base" "c0ffee1"})]))
+   r (cr-run cr-rb "BEE_NAME=ant BEE_YES=1" ("--mcp < '" + cr-rb + "/in'"))
+   byid (foldl (\ t l (: j (json-read l) (? (two? j && tablet? (j 1)) (pin t (show ((j 1) "id")) (j 1)) t)))
+               {} (filter (\ l (0 < #l)) (lines (r 1))))
+   (text k) (peep byid k {} @ m (peep m "result" {} @ x (peep x "content" () @ c (two? c ? (<c "text") ""))))
+   q (: x (g ["cat-file" "-p" "refs/queue/r"]) >x)
+   _ (test
+      (0 = <r)
+      (cr-in (text "1") "row now: 1 ant a - - waiting")
+      (cr-in (text "2") "row now: 1 ant a - h1 green")             ; the only row, no branch named
+      (cr-in (text "3") "row now: 2 ant b - - waiting")            ; a second branch joins
+      (cr-in (text "4") "you hold rows 1 and 2: pass branch or row")
+      (cr-in (text "6") "row now: 2 ant b - - folded-into-1")
+      (cr-in (text "7") "row now: 3 ant c - - waiting")            ; the fold stays put
+      (cr-in (text "8") "row 2 carries b and is folded-into-1")
+      (cr-in (text "9") "the change is in refs/queue/r")
+      (cr-in q "2 ant b - - folded-into-1") (cr-in q "3 ant c - - waiting")
+      (cr-in q "\nr c0ffee1") !(cr-in q "4 ant"))                ; the base moved, no row made
+   0)
+
 ; --- the leader hears every row -----------------------------------------------------------
 ; queen leads with no row of her own, and hears a row join
 (: cr-lw (cr-dir "leadwatch" ("(api anthropic)\n(url \"" + cr-url + "/v1/messages\")\n(model claude-mock)\n"))
@@ -414,6 +451,21 @@
       (cr-in (n1 "params" "content") "1 message for ringer from pal")
       ("1" = n1 "params" "meta" "count")
       (cr-in ((res 1) "content" 0 "text") "hello from pal"))       ; the bell took nothing
+   0)
+
+; --- the way back: a claude code session's server keeps its claude session id and directory past
+; its card, and --resume lists it and says how to relaunch it, ringing, under the same name
+(: cr-r2 (cr-dir "resume" "")
+   _ (cr-put cr-r2 "in" (json-show {"jsonrpc" "2.0" "id" 0 "method" "initialize" "params" {}} + "\n"))
+   m (cr-run cr-r2 "BEE_NAME=back CLAUDE_CODE_SESSION_ID=sid-42" ("--mcp < '" + cr-r2 + "/in'"))
+   ls (cr-run cr-r2 "" "--resume")
+   c (cr-run cr-r2 "" "--resume back --cmd go on")
+   no (cr-run cr-r2 "" "--resume nobody")
+   _ (test
+      (0 = <m) (0 = <ls) (cr-in (ls 1) "back")
+      (0 = <c) (cr-in (c 1) "BEE_NAME='back'") (cr-in (c 1) "--resume 'sid-42' 'go on'")
+      (cr-in (c 1) "--dangerously-load-development-channels server:bee") (cr-in (c 1) "--mcp-config ")
+      (1 = <no) (cr-in (no 1) "no session to resume named nobody"))
    0)
 
 ; --- locks through bee, on src/apps/locks.l ------------------------------------------------------

@@ -16,6 +16,7 @@
 # actually cost, and a refusal spelled as an internal error reads as a bug.
 #
 # usage: reloc32.sh OUTDIR MOONCC
+. test/gate/skip.sh
 set -u
 
 ho=$1
@@ -25,7 +26,7 @@ fail() { echo "FAIL $name: $*" >&2; exit 1; }
 
 for tool in arm-none-eabi-objcopy arm-none-eabi-readelf; do
   command -v $tool > /dev/null 2>&1 || {
-    echo "$name: no arm-none-eabi toolchain, skipped"; exit 0; }
+    gate_skip "$name: no arm-none-eabi toolchain, skipped"; }
 done
 
 d=$ho/reloc32

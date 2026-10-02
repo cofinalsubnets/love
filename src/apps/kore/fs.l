@@ -1119,15 +1119,15 @@
          (two? r ? (udf-holds ms p @ m (atom? m ? acc ((typed (m 2) (udf-cells <m <>m r h? i?)) . acc)))
           (say err ("df: " + p + ": "
                          + (r = 'eacces ? "Permission denied" "No such file or directory")), put err 10, pin t 'bad 1, acc)))
-       ; a filesystem the call refuses (a mount someone else owns) is dropped from the
-       ; bare face and kept by -a, its figures dashed -- there is nothing to report and
-       ; a row of zeroes would read as an answer.
+       ; a filesystem the call refuses or cannot find (a mount someone else owns) is
+       ; dropped from the bare face and kept by -a, its figures dashed -- a row of zeroes
+       ; would read as an answer. any other failure (a dead fuse mount) is said and dropped.
        (scan mm acc)
         (atom? mm ? acc
          (: m <mm r (statfs <>m)
             (scan >mm (? (two? r) (a? || (r 1) ? ((typed (m 2) (udf-cells <m <>m r h? i?)) . acc) acc)
-                         a? ((typed (m 2) [<m "-" "-" "-" "-" <>m]) . acc)
-                         acc))))
+                         (r = 'eacces || r = 'enoent) (a? ? ((typed (m 2) [<m "-" "-" "-" "-" <>m]) . acc) acc)
+                         (say err ("df: " + <>m + ": " + uerrno r), put err 10, pin t 'bad 1, acc)))))
        rows (rev (two? fs ? (foldl (a \ p \ named p a) () fs) (scan ms ())))
        (two? rows ? (udf-show (hdr . rows) mins (T? ? '(0 1) '(0))),
         flush out,

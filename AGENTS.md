@@ -22,6 +22,7 @@ Several sessions gate on one box. Two makes in one `out/` race, and a box short 
 
 - heavy: `test_slow` `test_extra` `test_inle` `test_kernel_%` `test_gcstress` `test_boards`, and a `make out/love` from a clean `out/`
 - one make at a time in an `out/`: an exclusive lock named by its path
+- a lane that boots on another box takes that box's slot, not a heavy one: `KTEST_A64_HOSTS="six.lan:3 pi.lan:1"` (host:slots, fastest first) gives the a64 kernel lane kvm there, and each slot is an exclusive lock `a64host-HOST-N`. without it the lane runs tcg here, and is heavy. `KTEST_VMX_HOSTS` (tau.lan, network infra: one slot) is the VT-x box `test_kernel_vmx` boots on, in `test_extra` only
 
 ## the merge queue
 
@@ -29,6 +30,6 @@ Take part in a merge queue only through bee's tools: as a bee agent, or from Cla
 
 When the queue is long (two or more rows waiting or gating, or more heavy-lock waiters than slots), fold, don't line up. One owner's branches join as one union that gates once, and each branch runs only its light lanes.
 
-Start a Claude Code session in this tree as `claude --dangerously-load-development-channels server:bee` (a resume too), so bee's mail wakes it when idle; `doc/bee.md` says how. Without the flag, mail waits for the session's next bee tool call.
+Start a Claude Code session in this tree as `claude --dangerously-load-development-channels server:bee` (a resume too), so bee's mail wakes it when idle; `doc/bee.md` says how. Without the flag, mail waits for the session's next bee tool call. To bring a session back after a restart or a crash, `love bee --resume NAME` (the names: `love bee --resume`) relaunches it under its own name, ringing.
 
 After a landing that changes bee, every live session restarts at its next convenient point: between tasks, never mid-gate, in the same directory. bee says so itself, in the release note and when its binary is replaced.

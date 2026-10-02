@@ -21,6 +21,7 @@
 # NOT set -e: every lane captures $? to report the exit code it got.
 #
 # usage: thumb.sh TARGET OUTDIR
+. test/gate/skip.sh
 set -u
 
 tgt=$1
@@ -42,7 +43,7 @@ moonc() { LOVE_NO_IMAGE= "$ho/love" mooncc "$@"; }
 
 for tool in arm-none-eabi-gcc arm-none-eabi-ld qemu-system-arm; do
   command -v $tool > /dev/null 2>&1 || {
-    echo "$name: no arm-none-eabi toolchain / qemu-system-arm, skipped"; exit 0; }
+    gate_skip "$name: no arm-none-eabi toolchain / qemu-system-arm, skipped"; }
 done
 
 echo "$banner $ho/$tgt"
@@ -107,8 +108,8 @@ lane() { # lane TAG LIBSRC HARNESSSRC MOONFLAGS WANT TIMEOUT MSG TAIL
   fi
 }
 
-am=src/apps/moon/lib/moonlibc/math/am.c
-aminc="-Isrc/apps/moon/lib/moonlibc/math -Isrc/apps/moon/include"
+lm=src/apps/moon/lib/moonlibc/math/lm.c
+lminc="-Isrc/apps/moon/lib/moonlibc/math -Isrc/apps/moon/include"
 
 # ---- the smoke lane: written here because it IS the target's own feature list ----
 if [ "$tgt" = thumb1 ]; then
@@ -175,8 +176,8 @@ thumb1)
     " = every differential check vs gcc; 100+n names the first miss -- see test/thumb2/harness64.c; the v6-M lanes ride ADCS/SBCS inline + __aeabi_lmul/shift + __u/divdi3 libcalls"
   lane d  test/thumb2/libd.c  test/thumb2/harnessd.c  "" 45 30 "thumb1 soft doubles" \
     " = every differential check vs gcc's base-ABI soft float; 100+n names the first miss -- see test/thumb2/harnessd.c; doubles ride gp pairs at every seam, f0/f1/f15 are frame cells inside a fn (soften6)"
-  lane am "$am" test/thumb2/harnessam.c "$aminc" 9 60 "thumb1 am.c" \
-    " = the seven transcendentals BIT-IDENTICAL to the host am floor through the shared __aeabi soft float, incl. the Payne-Hanek big-argument reduction"
+  lane lm "$lm" test/thumb2/harnesslm.c "$lminc" 9 60 "thumb1 lm.c" \
+    " = the seven transcendentals BIT-IDENTICAL to the host lm floor through the shared __aeabi soft float, incl. the Payne-Hanek big-argument reduction"
   lane f  test/thumb1/libf.c  test/thumb1/harnessf.c  "" 7  30 "thumb1 bare floats" \
     " = every differential check vs gcc; 100+n names the first miss -- see test/thumb1/harnessf.c; a bare float is ONE WORD on v6-M (ai_flo_t IS float on a 32-bit love -- the widened-pair mismatch here kept the egg from hatching)"
   lane a  test/thumb2/liba.c  test/thumb2/harnessa.c  "" 6  30 "thumb1 aligned(N)" \
@@ -192,15 +193,15 @@ thumb1)
     echo "(borrow 'kore)"                 # ld32.l reads uread; the floors above register 'kore
     cat src/apps/kore/asbook.l \
         src/love/holo/elf.l src/love/holo/obj.l src/love/holo/link.l test/gate/ld32.l
-    echo "(ld32-check \"$d/am.lib.o\")"; } | "$ho/love" || fail "ld-read of $d/am.lib.o"
-  echo "test_thumb1: mooncc -t thumb1 -c -> ELF32/EM_ARM (R_ARM_THM_CALL + soft divide + la/R_ARM_ABS32 + 32-bit struct layout + leax + AAPCS32 varargs + 64-bit pairs + soft doubles + am.c bit-exact + aligned(N) section grain + composites vs gcc), ld binds, runs on qemu Cortex-M0; holo's own ld-read reads the object back" ;;
+    echo "(ld32-check \"$d/lm.lib.o\")"; } | "$ho/love" || fail "ld-read of $d/lm.lib.o"
+  echo "test_thumb1: mooncc -t thumb1 -c -> ELF32/EM_ARM (R_ARM_THM_CALL + soft divide + la/R_ARM_ABS32 + 32-bit struct layout + leax + AAPCS32 varargs + 64-bit pairs + soft doubles + lm.c bit-exact + aligned(N) section grain + composites vs gcc), ld binds, runs on qemu Cortex-M0; holo's own ld-read reads the object back" ;;
 thumb2)
   lane p  test/thumb2/lib64.c test/thumb2/harness64.c "" 48 30 "thumb2 64-bit pairs" \
     " = every differential check vs gcc; 100+n names the first miss -- see test/thumb2/harness64.c"
   lane d  test/thumb2/libd.c  test/thumb2/harnessd.c  "" 45 30 "thumb2 VFP doubles" \
     " = every differential check vs gcc -mfloat-abi=hard; 100+n names the first miss -- see test/thumb2/harnessd.c"
-  lane am "$am" test/thumb2/harnessam.c "$aminc" 9 60 "thumb2 am.c" \
-    " = the seven transcendentals BIT-IDENTICAL to the host am floor, incl. the Payne-Hanek big-argument reduction"
+  lane lm "$lm" test/thumb2/harnesslm.c "$lminc" 9 60 "thumb2 lm.c" \
+    " = the seven transcendentals BIT-IDENTICAL to the host lm floor, incl. the Payne-Hanek big-argument reduction"
   lane a  test/thumb2/liba.c  test/thumb2/harnessa.c  "" 6  30 "thumb2 aligned(N)" \
     " = every aligned(N) global lands on its N after the link; 100+n names the first miss -- see test/thumb2/harnessa.c. the pad inside a section is laid by mooncc either way, so a miss here is sh_addralign: objsecs3's data lanes handing the linker a grain narrower than the stream asked for"
   lane f  test/thumb2/libf.c  test/thumb2/harnessf.c "" 16 30 "thumb2 bare floats" \
@@ -209,13 +210,13 @@ thumb2)
     " = HFA d-pairs + 8B blob + <=4B int one + the AAPCS32 word walk, gcc<->mooncc both directions; 100+n names the first miss -- see test/thumb2/harnessz.c"
   lane r  test/thumb2/libr.c  test/thumb2/harnessr.c "" 13 30 "thumb2 memory returns" \
     " = every composite past 4 bytes that is no HFA returns through the hidden pointer in r0, gcc<->mooncc both directions; 100+n names the first miss -- see test/thumb2/harnessr.c"
-  echo "test_thumb2: mooncc -t thumb2 -c -> ELF32/EM_ARM (la + pairs + VFP + am.c bit-exact + aligned(N) section grain + AAPCS-VFP floats + composites/varargs + memory returns: 48+45+9+16+6+18+13 differential checks), ld binds, runs on qemu Cortex-M7" ;;
+  echo "test_thumb2: mooncc -t thumb2 -c -> ELF32/EM_ARM (la + pairs + VFP + lm.c bit-exact + aligned(N) section grain + AAPCS-VFP floats + composites/varargs + memory returns: 48+45+9+16+6+18+13 differential checks), ld binds, runs on qemu Cortex-M7" ;;
 thumb2sp)
   lane p  test/thumb2/lib64.c test/thumb2/harness64.c "" 48 30 "thumb2sp 64-bit pairs" \
     " = every differential check vs gcc; 100+n names the first miss -- see test/thumb2/harness64.c"
   lane d  test/thumb2/libd.c  test/thumb2/harnessd.c  "" 45 30 "thumb2sp doubles" \
     "; 100+n names the first miss -- soft f64 vs gcc's __aeabi"
-  lane am "$am" test/thumb2/harnessam.c "$aminc" 9 60 "thumb2sp am.c" \
+  lane lm "$lm" test/thumb2/harnesslm.c "$lminc" 9 60 "thumb2sp lm.c" \
     " = BIT-identical through the shared __aeabi helpers"
   lane f  test/thumb2/libf.c  test/thumb2/harnessf.c "" 16 30 "thumb2sp bare floats" \
     " = AAPCS-VFP placement vs gcc -mfloat-abi=hard: s0..s15 with back-fill around the doubles, the stack past them, s0 for the return; 100+n names the first miss -- see test/thumb2/harnessf.c"

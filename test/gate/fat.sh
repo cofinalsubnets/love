@@ -11,6 +11,7 @@
 # an arm carries every spelling of one ISA. the gate looks its arm up by that.
 #
 # usage: fat.sh FAT NATIVE_ARCH XARCH XQEMU BOOT_LOVE HO XD XUNAME
+. test/gate/skip.sh
 set -u
 
 fat=$1; a=$2; xa=$3; xqemu=$4; boot=$5; ho=$6; xd=$7; xu=$8
@@ -45,6 +46,6 @@ if command -v "$xqemu" >/dev/null 2>&1; then
   [ $? -eq 7 ] || fail "foreign member did not answer under $xqemu"
   echo "test_fat: ok -- native + cache + determinism + $xa under $xqemu"
 else
-  echo "test_fat: ok -- native + cache + determinism ($xa leg skipped: no $xqemu)"
+  gate_partly "test_fat: ok -- native + cache + determinism ($xa leg skipped: no $xqemu)"
 fi
 rm -rf "$d"

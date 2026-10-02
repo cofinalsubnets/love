@@ -5,7 +5,7 @@
 (: _ (elem 'doom-start (names ()) ? 0 (puts "doomx: FAIL -- this love carries no doom (build with DOOM=1)", putc 10, quit 1))
    xv (tether ["Xvfb" "-displayfd" "1" "-screen" "0" "800x600x24" "-nolisten" "tcp"])
    (wfx p) (gather p @ g2 (two? g2 ? g2 (rest 2, wfx p)))
-   _ (!(two? xv) ? (puts "doomx: ok (no Xvfb, skipped)", quit 0) 0)
+   _ (!(two? xv) ? (gate-skip "doomx: ok (no Xvfb, skipped)") 0)
    (rdnum p) ((: (go n st) (see p @ c
                               (? (c = -1) ()
                                  (c = 13) (go n st)

@@ -1,28 +1,28 @@
 // arr.c -- generic-op lane, rng, eq, obin. one translation unit of the runtime;
 // the shared layouts and the cross-TU seam are src/love/love.h.
 #include "love.h"
-// the math floor is ours on every frontend (src/apps/moon/lib/moonlibc/math/am.c); the 32-bit
+// the math floor is ours on every frontend (src/apps/moon/lib/moonlibc/math/lm.c); the 32-bit
 // lane computes in binary64 and narrows.
 #if Bits == 64
-double am_sin(double), am_cos(double), am_atan2(double, double),
-       am_sqrt(double), am_exp(double), am_log(double), am_pow(double, double);
-#define ai_sin   am_sin
-#define ai_cos   am_cos
-#define ai_atan2 am_atan2
-#define ai_sqrt  am_sqrt
-#define ai_exp   am_exp
-#define ai_log   am_log
-#define ai_pow   am_pow
+double lm_sin(double), lm_cos(double), lm_atan2(double, double),
+       lm_sqrt(double), lm_exp(double), lm_log(double), lm_pow(double, double);
+#define ai_sin   lm_sin
+#define ai_cos   lm_cos
+#define ai_atan2 lm_atan2
+#define ai_sqrt  lm_sqrt
+#define ai_exp   lm_exp
+#define ai_log   lm_log
+#define ai_pow   lm_pow
 #else
-float am_sinf(float), am_cosf(float), am_atan2f(float, float), am_sqrtf(float),
-      am_expf(float), am_logf(float), am_powf(float, float);
-#define ai_sin   am_sinf
-#define ai_cos   am_cosf
-#define ai_atan2 am_atan2f
-#define ai_sqrt  am_sqrtf
-#define ai_exp   am_expf
-#define ai_log   am_logf
-#define ai_pow   am_powf
+float lm_sinf(float), lm_cosf(float), lm_atan2f(float, float), lm_sqrtf(float),
+      lm_expf(float), lm_logf(float), lm_powf(float, float);
+#define ai_sin   lm_sinf
+#define ai_cos   lm_cosf
+#define ai_atan2 lm_atan2f
+#define ai_sqrt  lm_sqrtf
+#define ai_exp   lm_expf
+#define ai_log   lm_logf
+#define ai_pow   lm_powf
 #endif
 static ai_inline ai_flo_t ai_tan(ai_flo_t x) { return ai_sin(x) / ai_cos(x); }
 static ai_inline ai_flo_t ai_atan(ai_flo_t x) { return ai_atan2(x, (ai_flo_t) 1); }

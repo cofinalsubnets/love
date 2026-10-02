@@ -166,8 +166,9 @@
        (tool "lock_list" "The machine's locks: who holds what, who waits, memory available and load."
              {} [])
        (tool "queue_row" ("Write your row in a merge queue -- the only way to write one; never edit a "
-                          + "queue by hand. It reads the queue, sets exactly your row (joining at the "
-                          + "bottom if you have none, leaving it when state is left) and writes back by "
+                          + "queue by hand. It reads the queue, sets exactly one row of yours -- the one row names, else the one "
+                          + "carrying branch, else your only row; a branch you hold no row for joins a new row at the "
+                          + "bottom; state left removes it -- and writes back by "
                           + "compare-and-swap. Fields you omit keep their value. A queue not made yet is made "
                           + "on bee's standard header. It refuses what the protocol forbids: a fold into a row "
                           + "that is not waiting, or anyone but the leader editing another's row, the base "
@@ -177,6 +178,7 @@
               "state" (prop "waiting, gating (write it with the head before the gate starts), green (every lane passed on that head), folded-into-N (leader only, into a waiting row ahead), or left")
               "branch" (prop "your branch") "gated_on" (prop "the sha your branch was merged with")
               "gated_head" (prop "the sha you are gating") "note" (prop "a short note: what the row carries, which lanes")
+              "row" (prop "the row to set, when you hold more than one; else branch picks it, and a branch you hold no row for joins a new one")
               "session" (prop "leader only: the row's session, when not yours")
               "base" (prop "leader only: the new sha for the base line")
               "position" (prop "leader only: a new row's position, one no row holds")
@@ -185,10 +187,11 @@
        (tool "queue_lead" ("The leader's own lines of a merge queue: leader hands the queue to a live session "
                            + "that agreed (or, from the head's session while the leader has no live session, "
                            + "takes it, acting); sync sets what the queue lands toward (- removes it); pre_add "
-                           + "adds a pre-release condition and pre_drop N drops the Nth. Only the leader may.")
+                           + "adds a pre-release condition and pre_drop N drops the Nth; base moves the base line. Only the leader may.")
              {"queue" (prop "refs/queue/NAME or queue/NAME") "leader" (prop "the session to lead")
               "sync" (prop "the sync line's text, or - to remove it") "pre_add" (prop "a pre line's text")
-              "pre_drop" (prop "the pre line to drop, counting from 1")}
+              "pre_drop" (prop "the pre line to drop, counting from 1")
+              "base" (prop "the new sha for the base line")}
              ["queue"])
        (tool "queue_land" ("Land by sha, on a git queue: for your green row at its head, check that the base branch "
                            + "is where the base line says and that git merge-tree of it and your gated head gives "
@@ -646,8 +649,8 @@
            ("# read:  sb -C HUB ledger " + q + "   (HUB: SB_HUB, the one nest every session names)"))
         "# write: only through bee's tools -- queue_row, queue_lead, queue_land, queue_landed -- from a bee, or from"
         "#   claude code through love bee --mcp. each write is a compare-and-swap and refuses what these rules forbid."
-        "# join: add your row at the bottom when your branch is ready to gate. the order is fixed at join, never by who"
-        "#   finishes a gate first."
+        "# join: add your row at the bottom when your branch is ready to gate -- a row per branch, so a second branch"
+        "#   joins its own row and a fold already made stays. the order is fixed at join, never by who finishes a gate first."
         "# stacked: the head gates its branch merged with the base; row k+1 gates its branch merged with row k's gated"
         "#   head, so when k lands the base equals the tree k+1 certified and k+1 lands with no re-gate. a failure, or a"
         "#   new head above, re-gates only the rows behind it."
@@ -684,7 +687,24 @@
         ("leader " + lead)
         (<base + " " + base 1)])
      ; the rows of a text, and what they say
-     (q-own rows who) (: ps (filter (\ p ((rows p) 1 = who)) (keys rows)) (? (two? ps) <ps ()))
+     ; a session may hold a row per branch: its rows by position, and the one a land tool acts on --
+     ; its head row when it is the head, else its first
+     (q-owns rows who) (sort (filter (\ p ((rows p) 1 = who)) (keys rows)))
+     (q-own rows who)
+      (: ps (q-owns rows who) h (q-head rows)
+         (? !(two? ps) () (elem h ps) h (foldl (\ a p (q-num p < q-num a ? p a)) <ps >ps)))
+     ; the row a write sets -> its position, () for a join, or why not: `row` names one, else the
+     ; row carrying `branch`, else the session's only row. a branch it has no row for joins anew
+     (q-pick rows who in)
+      (: rp (field in "row" "") br (field in "branch" "") ps (q-owns rows who)
+         mine (filter (\ p ((rows p) 2 = br)) ps)
+         (? (0 < #rp) (? !(two? (peep rows rp ())) ("no row " + rp)
+                         ((rows rp) 1 != who) ("row " + rp + " is " + (rows rp) 1 + "'s")
+                         rp)
+            (0 < #br) (two? mine ? <mine ())
+            !(two? ps) ()
+            !(two? >ps) <ps
+            ("you hold rows " + q-and ps + ": pass branch or row to say which")))
      (q-folds rows p) (sort (filter (\ f ((rows f) 5 = ("folded-into-" + p))) (keys rows)))
      (q-head rows) (: ps (filter (\ p !(q-folded? (rows p))) (keys rows))
                       (? (two? ps) (foldl (\ a p (q-num p < q-num a ? p a)) <ps >ps) ()))
@@ -708,9 +728,9 @@
                       + (b ? "more heavy-lock waiters than slots" "") + "): " + bee-long)
             ""))
      ; why the input may not be written by this session, "" when it may
-     (q-refuse text who in new?)
+     (q-refuse text who in new? own)
       (: i (me 0) lead (q-leader text) rows (q-rows text) st (in "state")
-         own (q-own rows who) ps (field in "position" "")
+         ps (field in "position" "") br (field in "branch" "") cur (? own (rows own) ())
          pos (? (own != ()) own (0 < #ps) ps (q-next text))
          f (q-fold-of st) tgt (peep rows f ())
          (? (who != i && lead != i) ("only the leader, " + lead + ", edits another's row")
@@ -720,6 +740,8 @@
             (0 < #ps && (own != () || !(q-digits? ps) || two? (peep rows ps ())))
              "a position places a new row, at a number no row holds"
             !(q-state? st) "state is waiting, gating, green, folded-into-N or left"
+            (two? cur && 0 < #br && br != cur 2 && (q-folded? cur || cur 5 = "gating"))
+             ("row " + own + " carries " + cur 2 + " and is " + cur 5 + ": pass branch " + br + " without row to join a new row")
             (0 < #f && lead != i) ("only the leader, " + lead + ", writes a fold")
             (0 < #f && !(two? tgt)) ("no row " + f + " to fold into")
             (0 < #f && tgt 5 != "waiting") ("row " + f + " is " + tgt 5 + ": a row folds only into a waiting row")
@@ -727,9 +749,9 @@
             (0 < #f && two? (q-folds rows pos)) ("rows fold into row " + pos + ": fold them on first")
             ""))
      ; the text with who's row set from the input, or its row gone when state is left -> [text line why]
-     (q-edit text who in)
+     (q-edit text who in own)
       (: ls (lines text)
-         at (: (go l i) (? (atom? l) -1 (q-row? <l && (words <l) 1 = who) i (go >l (i + 1)))
+         at (: (go l i) (? (atom? l) -1 (string? own && q-row? <l && (words <l) 0 = own) i (go >l (i + 1)))
                (go ls 0))
          st (in "state")
          old (? (0 <= at) (words (ls at)) ())
@@ -740,7 +762,7 @@
                + " " + st + (0 < #note ? ("  # " + note) ""))
          (body xs) (foldl (\ a l (a + l + "\n")) "" xs)
          (? (st = "left") (? (at < 0) [text "" ("no row for " + who)]
-                             [(body (filter (\ l !(q-row? l && (words l) 1 = who)) ls)) "" ""])
+                             [(body (map (\ i (ls i)) (filter (\ i (i != at)) ^#ls))) "" ""])
             (0 <= at) [(body (map (\ i (i = at ? line (ls i))) ^#ls)) line ""]
             [(body (ls + [line])) line ""]))
      ; where a line's trailing `  # note` starts, with its spaces; #l when it has none
@@ -781,12 +803,13 @@
          (try n)
           (: rd (q-read q) old <rd new? (old = "none")
              text (? new? (q-standard q (field in "leader" (me 0)) (q-base-of q)) (rd 1))
-             why (q-refuse text who in new?)
+             own (q-pick (q-rows text) who in)
+             why (? (string? own && !(q-digits? own)) own (q-refuse text who in new? own))
              (? (0 < #why) [0 why]
                 (: b (? (field in "base" "" = "") [text ""] (q-base text (in "base")))
-                   e0 (? (0 < #(b 1)) [text "" (b 1)] (q-edit <b who in))
+                   e0 (? (0 < #(b 1)) [text "" (b 1)] (q-edit <b who in own))
                    ; a join moves the counter past its position
-                   e (? (0 < #(e0 2) || (q-own (q-rows <b) who) != () || #(e0 1) = 0) e0
+                   e (? (0 < #(e0 2) || own != () || #(e0 1) = 0) e0
                         (: p (q-num <(words (e0 1))) c (q-num (q-next <b))
                            [(q-count <e0 (show (max c (p + 1)))) (e0 1) ""]))
                    (? (0 < #(e 2)) [0 (e 2)]
@@ -806,6 +829,7 @@
          (ins ls k l) (take (k + 1) ls + [l] + drop (k + 1) ls)
          (after ls ps l) (: k (foldl (\ a p (? (0 <= a) a (last ls p))) -1 ps) (ins ls k l))
          nl (field in "leader" "") sy (field in "sync" "") pa (field in "pre_add" "") pd (field in "pre_drop" "")
+         ba (field in "base" "")
          pres (filter (\ i (kind (ls0 i) = "pre")) ^#ls0)
          ls1 (? (#nl = 0) ls0 (map (\ l (kind l = "leader" ? ("leader " + nl + (acting ? " acting" "")) l)) ls0))
          ls2 (? (#sy = 0) ls1
@@ -818,7 +842,7 @@
                    (? (at < 0) () (take at ls2 + drop (at + 1) ls2))))
          ls4 (? (#pa = 0) ls3
                 (after ls3 [(\ l (kind l = "pre")) (\ l (kind l = "sync")) q-base? (\ l (kind l = "leader"))] ("pre " + pa)))
-         (? (#nl + #sy + #pa + #pd = 0) [text "name leader, sync, pre_add or pre_drop"]
+         (? (#nl + #sy + #pa + #pd + #ba = 0) [text "name leader, sync, pre_add, pre_drop or base"]
             (#pd && !(two? ls3)) [text ("no pre line " + pd)]
             [(paras ls4) ""]))
      (queue-lead in) (q-check in queue-lead1)
@@ -831,7 +855,8 @@
                 (lead != i && !acting)
                  [0 ("only the leader, " + lead + ", edits the leader, sync and pre lines"
                      + (nl = i ? "; the head's session takes the queue, acting, only while the leader has no live session" ""))]
-                (: e (q-lead-edit text in acting)
+                (: b (? (field in "base" "" = "") [text ""] (q-base text (in "base")))
+                   e (? (0 < #(b 1)) b (q-lead-edit <b in acting))
                    (? (0 < #(e 1)) [0 (e 1)]
                       (q-put q old <e) [1 ("the change is in " + q + (acting ? ("; you lead it, acting, in place of " + lead) ""))]
                       (n <= 0) [0 (q + " kept moving under the write; read it and try again")]
@@ -2179,9 +2204,33 @@
             !(string? nm && name-ok? nm) [0 "a name is letters, digits, - _ and ., at most 64"]
             (nm = was) [1 ("you are " + nm)]
             (tablet? c && alive? (card-pid c)) [0 ("a live session is already named " + nm)]
-            (: ms (take-mail 0) _ (unsettle 0) _ (pin bee-who 'name nm) _ (settle bee-branch)
+            (: ms (take-mail 0) _ (unsettle 0) _ (pin bee-who 'name nm) _ (settle bee-branch) _ (remember 0)
                [1 ("you are " + nm + " in the hive; a queue row under " + was + " keeps that name, so ask the leader to correct it"
                    + (two? ms ? ("\n\n" + mail-text ms) ""))])))
+     ; a claude code session's way back, kept past its card: its claude session id and directory,
+     ; so `love bee --resume NAME` relaunches it under the same name, ringing, on this bee
+     bee-resumes (bee-hive + "/.resume")
+     (remember _)
+      (: id (getenv "CLAUDE_CODE_SESSION_ID")
+         (? (string? id && 0 < #id)
+            (: _ (mkdirs bee-resumes) (spit-file (bee-resumes + "/" + me 0) (paras [("claude " + id) ("cwd " + bee-cwd)])))
+            0))
+     ; NAME's relaunch line -> [ok text]; the mcp config it names runs bee from this binary, so a
+     ; worktree whose out/love predates the bell still rings
+     (resume-cmd nm prompt)
+      (: s (slurp-file (bee-resumes + "/" + nm))
+         r (? (string? s) (foldl (\ t l (l @ ((k && 0 < #k) + " " + v) (pin t k v) t)) {} (lines s)))
+         k (card-of nm)
+         mc (bee-resumes + "/mcp.json")
+         (? !(tablet? r && string? (peep r "claude" ())) [0 ("no session to resume named " + nm)]
+            (tablet? k && alive? (card-pid k)) [0 (nm + " is live")]
+            (: _ (spit-file mc (json-show {"mcpServers" {"bee" {"command" bee-me "args" ["bee" "--mcp"]}}}))
+               [1 ("cd " + sq (r "cwd") + " && BEE_NAME=" + sq nm + " exec claude"
+                   + " --dangerously-load-development-channels server:bee --strict-mcp-config --mcp-config " + sq mc
+                   + " --resume " + sq (r "claude") + (0 < #prompt ? (" " + sq prompt) ""))])))
+     (resumable _)
+      (: ns (readdir bee-resumes)
+         (? (two? ns) (filter (n \ n 0 != 46 && n != "mcp.json") (sort ns)) ()))
      ; a tool's answer with the mail that waits appended, as a turn's next request carries it
      (mcp-tool nm a)
       (: r (? (elem nm mcp-shared) (run (plain 1) () nm a)
@@ -2270,7 +2319,7 @@
                                    "meta" {"count" (show #new)}}})
                   0)
              (ring 0))
-         _ (? bee-as? 0 (pin bee-cell 'model "claude-code", settle bee-branch, twirl (_ \ watch 0) 0, twirl (_ \ ring 0) 0))
+         _ (? bee-as? 0 (pin bee-cell 'model "claude-code", settle bee-branch, remember 0, twirl (_ \ watch 0) 0, twirl (_ \ ring 0) 0))
          _ (twirl (_ \ lock-poll 0) 0)                   ; queued locks, mailed to the session
          r (go 0)
          _ (? bee-as? 0 (unsettle 0))
@@ -2305,6 +2354,14 @@
           "--avatar" (: r (avatar-cmd (joinw as) 80)
                         _ (say (<r ? out err) (foldl (\ a l (a + l + "\n")) (<r ? "" "bee: ") (r 1)))
                         (<r ? 0 1))
+          ; --resume lists who can come back; --resume NAME [PROMPT] relaunches one, --cmd only says how
+          "--resume"
+           (: ws (filter (w \ w != "--cmd") >as)
+              (? !(two? ws) (: _ (map (n \ puts (n + "\n")) (resumable 0)) 0)
+                 (: r (resume-cmd <ws (joinw >ws))
+                    (? !<r (say err ("bee: " + r 1 + "\n"), 1)
+                       (elem "--cmd" as) (: _ (puts (r 1 + "\n")) 0)
+                       (: p (spawn ["sh" "-c" (r 1)]) (charm? p && 0 <= p ? (wait p) 127))))))
           "--stop" (? (#as < 2) (say err "usage: love bee --stop NAME\n", 2)
                       (: e (stop-bee <>as) (? (starts? e "stopped") (: _ (puts (e + "\n")) 0) (say err ("bee: " + e + "\n"), 1))))
           2))
@@ -2331,7 +2388,7 @@
          (? (elem "--mcp" as) (: _ (mcp-serve in out) 0)             ; a claude child's own server
             (two? as && <as = "--lock") (bee-cli as yes)              ; its command's words stay as given
             (two? as && elem <as ["-s" "--screensaver"]) (cite 'saver 'saver-cli >as)   ; a saver, no session
-            (two? words && elem <words ["--list" "--send" "--spawn" "--stop" "--avatar"]) (bee-cli words yes)
+            (two? words && elem <words ["--list" "--send" "--spawn" "--stop" "--avatar" "--resume"]) (bee-cli words yes)
             ; the api backend wants its endpoint, model and key; claude brings its own. a stage
             ; answers why as a string: a harbour shows it, stderr would land on its glass
             (: why (? (!bee-cc? && atom? bee-at) ("cannot read the url " + bee-url)

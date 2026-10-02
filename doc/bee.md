@@ -144,6 +144,8 @@ A session of its own also rings. Its server declares Claude Code's **claude/chan
 
 and drops the notice in silence otherwise, which then costs nothing: that session gets its mail as before, on its next tool call. Start every Claude Code session in love's tree this way, a resume included. The restart notice above rings too, since it comes as mail. A bee's own child (**BEE_AS**) declares no channel; its bee hears the mail.
 
+A session of its own also leaves its way back. Its server writes **.resume/***name* in the hive, holding Claude Code's session id (**CLAUDE_CODE_SESSION_ID**) and its directory; unlike the card, it outlives the session, and **set_name** moves it. **love bee --resume** lists the names it can bring back, and **love bee --resume** *name* [*prompt*] relaunches one: in its directory, as **BEE_NAME=***name*, with the channel flag, and with an MCP config that runs bee from the binary that ran **--resume**, so a worktree whose **out/love** predates the bell still rings. A live name is refused. **--cmd** prints the line instead of running it, for a script or a terminal multiplexer to run.
+
 Asking stays with the caller. A bee's child asks through **approve**. A Claude Code session of its own asks through Claude Code's permission prompt, so the user says y before a message or a queue write goes out, unless that session runs without asking.
 
 # LOCKS
@@ -226,18 +228,20 @@ The leader hands off by rewriting the line to a live session that agreed, and sa
 
 Every tool reads the queue fresh and writes it by compare-and-swap, reading again when someone wrote first. The queue must be named **refs/queue/***name* or **queue/***name*. No field may hold a control character, and only a text field (a note, a sync or pre line, a release note) may hold a space, so one field cannot write another row. A tool that writes asks first, unless the session runs with **-y**.
 
-**queue_row** (*queue*, *state*, and any of *branch*, *gated_on*, *gated_head*, *note*)
-:   Sets exactly the caller's row, keyed by its session name. A session with no row joins at the bottom, at the **next** line's position, and moves that line past it; a queue without the line starts one past the highest position and writes it. **left** removes the row. Fields not given keep their values. It refuses:
+**queue_row** (*queue*, *state*, and any of *branch*, *gated_on*, *gated_head*, *note*, *row*)
+:   Sets exactly one of the caller's rows. A session holds a row per branch: the write sets the row **row** names, else the row carrying **branch**, else the caller's only row, and a **branch** it holds no row for joins a new one. A new row joins at the bottom, at the **next** line's position, and moves that line past it; a queue without the line starts one past the highest position and writes it. **left** removes the row. Fields not given keep their values. It refuses:
 
     - a state outside the list above;
+    - a write that cannot say which row, from a session holding more than one, naming neither *row* nor *branch*;
+    - a new *branch* written onto a row that is folded or gating (pass the branch alone, to join a new row);
     - a fold by anyone but the leader;
     - a fold into a row that is missing, not waiting, or not ahead;
     - a fold of a row that others fold into.
 
     Only the leader may pass **session** to edit another's row, **base** to move the base line, or **position** to place a new row at a number no row holds. **leader** names the leader of a queue being made. When the queue is long, the answer says so and tells the model to fold, not line up.
 
-**queue_lead** (*queue*, and any of *leader*, *sync*, *pre_add*, *pre_drop*)
-:   The leader's own lines, for the leader alone. **leader** hands the queue on. **sync** sets the sync line, and **-** removes it. **pre_add** adds a pre line, and **pre_drop** *n* drops the *n*th. The head row's session may pass itself as **leader** while the leader has no live session in the hive. That writes **leader** *itself* **acting**.
+**queue_lead** (*queue*, and any of *leader*, *sync*, *pre_add*, *pre_drop*, *base*)
+:   The leader's own lines, for the leader alone. **leader** hands the queue on. **base** moves the base line, touching no row. **sync** sets the sync line, and **-** removes it. **pre_add** adds a pre line, and **pre_drop** *n* drops the *n*th. The head row's session may pass itself as **leader** while the leader has no live session in the hive. That writes **leader** *itself* **acting**.
 
 **queue_land** (*queue*)
 :   Answers how to land the caller's row, on git, and changes nothing. The row must be green and at the head. The base branch must be where the base line says. **git merge-tree --write-tree** of the base and the gated head must give the gated tree. The answer is the checkout of the base, then **git rev-parse** of the base and the sha it must print, **git merge --no-ff** *sha*, and **git rev-parse 'HEAD^{tree}'** with the tree it must print.

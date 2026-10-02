@@ -1,22 +1,22 @@
-// src/apps/moon/lib/moonlibc/math/am.c -- the math floor: our own transcendentals, ONE file on
+// src/apps/moon/lib/moonlibc/math/lm.c -- the math floor: our own transcendentals, ONE file on
 // every frontend (host, love0, kernel, wasm, the gcc-free raw build -- the last
 // vendored math, fdlibm, retired here). binary64, portable C in the mooncc subset:
 // unions for bit access, uint64 arithmetic, no fma/int128/builtins. coefficients
 // are TAYLOR/exact-rational (re-derivable, no minimax magic) at mpmath-verified
 // double roundings; constants carry hi/lo splits where a product must stay exact.
 //
-// the surface is the seven love.c consumes (its ai_* defines): am_sqrt EXACT
-// (IEEE-correct rounding); am_exp/am_log <= 1 ulp; am_sin/am_cos <= 2 ulp at
-// EVERY magnitude (compact Payne-Hanek -- no domain stance); am_atan2 <= 3 ulp;
-// am_pow <= 2 ulp typical, degrading ~linearly in |y ln x| toward the
+// the surface is the seven love.c consumes (its ai_* defines): lm_sqrt EXACT
+// (IEEE-correct rounding); lm_exp/lm_log <= 1 ulp; lm_sin/lm_cos ~0.74 ulp at
+// EVERY magnitude (compact Payne-Hanek -- no domain stance); lm_atan2 <= 3 ulp;
+// lm_pow <= 2 ulp typical, degrading ~linearly in |y ln x| toward the
 // representable rim (~40 ulp at 1e+-300) -- the one documented stance -- with
 // the algebraic exponents (y in {2, 1, -1, 1/2}) EXACT: the spec's power-is-
-// application identities ride am_pow. measured against glibc by the differential
+// application identities ride lm_pow. measured against glibc by the differential
 // ulp harness (2M+ deterministic samples a function, src/tools/ulp.c), and the
 // mooncc-compiled object is GATED to measure identical to the system cc's --
 // test_ulp, both sweep modes. that second half was a hand check and a header
 // claim until 2026-07-29, when it turned out to be false and two mooncc bugs
-// were living behind it (a lost 4th parameter segfaulting am_sin above 2^19,
+// were living behind it (a lost 4th parameter segfaulting lm_sin above 2^19,
 // and an unsigned 64-bit word converting to double SIGNED, which cost rbig
 // 1609 ulp). float bits are where a codegen fault hides best: the corpus, the
 // C battery and every other gate stayed green through both.
@@ -41,11 +41,17 @@ static void dmul(double a, double b, double *hi, double *lo) {
  *hi = a * b;
  *lo = ((ah * bh - *hi) + ah * bl + al * bh) + al * bl; }
 
+// (a, b) -> s + e exactly
+static void tsum(double a, double b, double *s, double *e) {
+ *s = a + b;
+ double bb = *s - a;
+ *e = (a - (*s - bb)) + (b - bb); }
+
 // ============================== sqrt ==============================
 // Newton in double from a bit-level seed, then a CORRECT-ROUNDING fixup:
 // candidates y and its ulp neighbor, pick whichever square (evaluated
 // exactly via Dekker) sits nearer x. Ties are perfect squares (r == 0).
-double am_sqrt(double x) {
+double lm_sqrt(double x) {
  uint64_t ux = mku(x);
  if (x != x) return DNan;
  if (ux == 0 || ux == 0x8000000000000000ull) return x;      // +-0
@@ -87,7 +93,7 @@ static double scale2k(double y, int k) {                     // y * 2^k, k in [-
  while (k > 1023)  { y *= 0x1p1023;  k -= 1023; }
  while (k < -1022) { y *= 0x1p-1022; k += 1022; }
  return y * mkd((uint64_t)(k + 1023) << 52); }
-double am_exp(double x) {
+double lm_exp(double x) {
  if (x != x) return x;
  if (x >  709.782712893383996) return DInf;                 // overflow
  if (x < -745.133219101941222) return 0.0;                   // underflow to 0
@@ -111,7 +117,7 @@ double am_exp(double x) {
 // ============================== log ==============================
 // x = 2^k m, m in [sqrt2/2, sqrt2); s = (m-1)/(m+1); ln m = 2 atanh s =
 // 2s(1 + s^2/3 + ... + s^22/23); result k ln2_hi + (ln m + k ln2_lo).
-double am_log(double x) {
+double lm_log(double x) {
  uint64_t ux = mku(x);
  if (x != x) return x;
  if (ux == 0 || ux == 0x8000000000000000ull) return -DInf;  // +-0 -> -inf
@@ -143,7 +149,7 @@ double am_log(double x) {
 // ============================ sin / cos ============================
 // reduction: j = round(x 2/pi), r = x - j pi/2 by a THREE-PART Cody-Waite
 // (33+33+rest bits), remainder carried hi+lo; kernels are Taylor to r^17 /
-// r^16 on |r| <= pi/4 with the lo word folded in linearly. the reduction is
+// r^16 on |r| <= pi/4 with the lo word folded in through cos r and sin r. the reduction is
 // honest to a MEASURED |x| bound (the redscan) -- that bound is the stance.
 static const double INVPIO2 = 0x1.45f306dc9c883p-1,
   PIO2_1 = 0x1.921fb54400000p+0, PIO2_2 = 0x1.0b4611a600000p-34,
@@ -201,9 +207,13 @@ static int rbig(double ax, double *r, double *rlo) {
  if (G0 >> 63) {                                             // frac >= 1/2: round to the NEXT multiple
   j = (j + 1) & 3; neg = 1;
   G2 = ~G2 + 1; G1 = ~G1 + (G2 == 0); G0 = ~G0 + (G1 == 0 && G2 == 0); }
- double fh = (double) G0 * 0x1p-64 + (double) G1 * 0x1p-128; // |frac| as hi+low tail
- double ft = (double) G2 * 0x1p-192;
- double sh = fh + ft, sl = (fh - sh) + ft;                   // normalize the pair
+ // |frac| as three 53-bit chunks, each exact as a double, summed without loss
+ double fa = (double) (int64_t) (G0 >> 11) * 0x1p-53;
+ double fb = (double) (int64_t) (((G0 & 0x7ff) << 42) | (G1 >> 22)) * 0x1p-106;
+ double fc = (double) (int64_t) (((G1 & 0x3fffff) << 31) | (G2 >> 33)) * 0x1p-159;
+ double sh, sl;
+ tsum(fa, fb, &sh, &sl);
+ sl += fc;
  if (neg) { sh = -sh; sl = -sl; }
  double ph, pl;                                              // r = frac * pi/2, in dd
  dmul(sh, PIO2_HI, &ph, &pl);
@@ -224,10 +234,11 @@ static int rpio2(double x, double *r, double *rlo) {
  int64_t j = (int64_t) dj;
  double fj = (double) j;
  double w1 = x - fj * PIO2_1;                  // exact: j < 2^20 against 33-bit parts
- double w2 = w1 - fj * PIO2_2;
+ double w2, e2;
+ tsum(w1, -(fj * PIO2_2), &w2, &e2);           // the product exact, the sum's residue kept
  double t  = fj * PIO2_3;
  *r = w2 - t;
- *rlo = (w2 - *r) - t;
+ *rlo = ((w2 - *r) - t) + e2;
  return (int)(j & 3); }
 // sin on the reduced (r, rlo), |r| <= ~pi/4
 static double ksin(double r, double rlo) {
@@ -239,7 +250,7 @@ static double ksin(double r, double rlo) {
       + z * (0x1.6124613a86d09p-33
       + z * (-0x1.ae7f3e733b81fp-41
       + z *  0x1.952c77030ad4ap-49)))));
- return r + (z * (r * (-0x1.5555555555555p-3 + z * p)) + rlo); }
+ return r + (z * (r * (-0x1.5555555555555p-3 + z * p)) + rlo * (1.0 - 0.5 * z)); }   // rlo cos r
 // cos on the reduced (r, rlo)
 static double kcos(double r, double rlo) {
  double z = r * r;
@@ -250,13 +261,14 @@ static double kcos(double r, double rlo) {
       + z * (0x1.1eed8eff8d898p-29
       + z * (-0x1.93974a8c07c9dp-37
       + z *  0x1.ae7f3e733b81fp-45)))));
- double hz = 0.5 * z;
- return (1.0 - hz) + (z * (z * p) - r * rlo);
+ double hz = 0.5 * z, w = 1.0 - hz;
+ return w + (((1.0 - w) - hz) + (z * (z * p) - rlo * (r - r * z * 0x1.5555555555555p-3)));   // 1 - hz's rounding kept, rlo sin r
 }
-double am_sin(double x) {
+double lm_sin(double x) {
  if (x != x) return x;
  uint64_t ax = mku(x) & 0x7fffffffffffffffull;
  if (ax >= 0x7ff0000000000000ull) return DNan;              // +-inf
+ if (ax < 0x3e40000000000000ull) return x;                  // below 2^-27 sin x rounds to x, sign kept
  double r, rl;
  int j = rpio2(x, &r, &rl);
  switch (j) {
@@ -264,10 +276,11 @@ double am_sin(double x) {
   case 1: return kcos(r, rl);
   case 2: return -ksin(r, rl);
   default: return -kcos(r, rl); } }
-double am_cos(double x) {
+double lm_cos(double x) {
  if (x != x) return x;
  uint64_t ax = mku(x) & 0x7fffffffffffffffull;
  if (ax >= 0x7ff0000000000000ull) return DNan;
+ if (ax < 0x3e40000000000000ull) return 1.0;                // and cos x to 1
  double r, rl;
  int j = rpio2(x, &r, &rl);
  switch (j) {
@@ -301,7 +314,7 @@ static double katan(double t) {                              // t in [0, 1]
       + z *  0x1.8618618618618p-5))))))));
  double a = u + u * z * p;
  return i ? ATC_H[i] + (ATC_L[i] + a) : a; }
-static double am_atan(double x) {
+static double lm_atan(double x) {
  uint64_t ax = mku(x) & 0x7fffffffffffffffull;
  if (x != x) return x;
  double t = mkd(ax), r;
@@ -310,7 +323,7 @@ static double am_atan(double x) {
  else r = 0x1.921fb54442d18p+0 + (0x1.1a62633145c07p-54 - katan(1.0 / t));
  return x < 0 ? -r : r; }
 static const double PI_H = 0x1.921fb54442d18p+1, PI_L = 0x1.1a62633145c07p-53;
-double am_atan2(double y, double x) {
+double lm_atan2(double y, double x) {
  if (x != x || y != y) return DNan;
  uint64_t uy = mku(y), ux2 = mku(x);
  int sy = (int)(uy >> 63), sx = (int)(ux2 >> 63);
@@ -322,7 +335,7 @@ double am_atan2(double y, double x) {
   double q = ay == 0x7ff0000000000000ull ? (sx ? 3 * PI_H / 4 : PI_H / 4) : (sx ? PI_H : 0.0);
   return sy ? -q : q; }
  if (ay == 0x7ff0000000000000ull) return sy ? -0x1.921fb54442d18p+0 : 0x1.921fb54442d18p+0;
- double a = am_atan(mkd(ay) / mkd(ax));                      // |y/x| angle in [0, pi/2]
+ double a = lm_atan(mkd(ay) / mkd(ax));                      // |y/x| angle in [0, pi/2]
  if (sx) a = PI_H - (a - PI_L);                              // second quadrant
  return sy ? -a : a; }
 
@@ -330,7 +343,7 @@ double am_atan2(double y, double x) {
 // |x|^y = exp(y ln|x|) with the log carried HI+LO (the series' s already has
 // its division residue; k ln2 is exact by the split), y*ln in dd, and exp
 // taking the lo linearly. sign/edge cases walk the IEEE table first.
-static int am_oddint(double y) {                             // 2 even int, 1 odd int, 0 not int
+static int lm_oddint(double y) {                             // 2 even int, 1 odd int, 0 not int
  if (y != y || y - y != 0) return 0;                         // nan/inf
  double ay = y < 0 ? -y : y;
  if (ay >= 0x1p53) return 2;                                 // huge: every double there is even
@@ -366,13 +379,13 @@ static void dd_log(double x, double *hi, double *lo) {       // x > 0, finite: l
  double e = (k * LN2_HI - h) + t;                            // the add's residue
  *hi = h;
  *lo = e + tl + k * LN2_LO; }
-double am_pow(double x, double y) {
+double lm_pow(double x, double y) {
  if (y == 0.0) return 1.0;
  if (x == 1.0) return 1.0;
  if (x != x || y != y) return DNan;
  uint64_t ux = mku(x), uy = mku(y);
  uint64_t axb = ux & 0x7fffffffffffffffull, ayb = uy & 0x7fffffffffffffffull;
- int oi = am_oddint(y);
+ int oi = lm_oddint(y);
  if (ayb == 0x7ff0000000000000ull) {                         // y = +-inf
   if (axb == 0x3ff0000000000000ull) return 1.0;              // |x| = 1
   int big = axb > 0x3ff0000000000000ull;
@@ -393,7 +406,7 @@ double am_pow(double x, double y) {
  if (y == 2.0)  return x * x;
  if (y == 1.0)  return neg ? -x : x;
  if (y == -1.0) return neg ? -1.0 / x : 1.0 / x;
- if (y == 0.5)  return am_sqrt(x);                           // x > 0 here
+ if (y == 0.5)  return lm_sqrt(x);                           // x > 0 here
  double lh, ll;
  dd_log(x, &lh, &ll);
  double wh, wl, qh, ql;                                      // w = y * ln x, dd
@@ -403,7 +416,7 @@ double am_pow(double x, double y) {
  double w = wh + wl, we = (wh - w) + wl;                     // renormalize: |we| <= ulp(w)
  if (w >  709.782712893383996) return neg ? -DInf : DInf;
  if (w < -745.133219101941222) return neg ? -0.0 : 0.0;
- double e = am_exp(w);
+ double e = lm_exp(w);
  e = e + e * we;                                             // now the linear step is honest
  return neg ? -e : e; }
 
@@ -411,16 +424,16 @@ double am_pow(double x, double y) {
 // narrow once -- correct within a float ulp, and the dispatch can still take
 // their ADDRESS (love.c hands ai_sin to lvm_math1 as a pointer, so the 32-bit
 // ai_* must be real functions, not casting macros). --
-float am_sinf(float x) { return (float) am_sin(x); }
-float am_cosf(float x) { return (float) am_cos(x); }
-float am_atan2f(float y, float x) { return (float) am_atan2(y, x); }
-float am_sqrtf(float x) { return (float) am_sqrt(x); }
-float am_expf(float x) { return (float) am_exp(x); }
-float am_logf(float x) { return (float) am_log(x); }
-float am_powf(float x, float y) { return (float) am_pow(x, y); }
+float lm_sinf(float x) { return (float) lm_sin(x); }
+float lm_cosf(float x) { return (float) lm_cos(x); }
+float lm_atan2f(float y, float x) { return (float) lm_atan2(y, x); }
+float lm_sqrtf(float x) { return (float) lm_sqrt(x); }
+float lm_expf(float x) { return (float) lm_exp(x); }
+float lm_logf(float x) { return (float) lm_log(x); }
+float lm_powf(float x, float y) { return (float) lm_pow(x, y); }
 
 
-// -- am_strtod: correctly rounded decimal -> binary64, the READ half of the
+// -- lm_strtod: correctly rounded decimal -> binary64, the READ half of the
 // shortest-roundtrip pair (love.c's printer is the SHOW half; the two share
 // one mental model). a naive seed lands within a bounded ulp distance; the
 // walk then compares the INPUT DIGITS -- exactly, as decimal integers under
@@ -431,23 +444,23 @@ float am_powf(float x, float y) { return (float) am_pow(x, y); }
 // exact and the same answer on every target: glibc's strtod leaves the
 // trusted base, and the naive accumulator that read "0.3" one ulp off
 // (moonlibc's num.c) delegates here now.
-enum { am_dgmax = 800 };   // a boundary expansion: 17 digits + one per x5 step (<= 1076)
-static void am_dgmul(unsigned char *d, int *n, int k) {   // k = 2 or 5
+enum { lm_dgmax = 800 };   // a boundary expansion: 17 digits + one per x5 step (<= 1076)
+static void lm_dgmul(unsigned char *d, int *n, int k) {   // k = 2 or 5
  int c = 0;
  for (int i = 0; i < *n; i++) { int t = d[i] * k + c; d[i] = t % 10; c = t / 10; }
  while (c) d[(*n)++] = c % 10, c /= 10; }
-static void am_dgexp(unsigned char *d, int *n, uint64_t m, int e2) {
+static void lm_dgexp(unsigned char *d, int *n, uint64_t m, int e2) {
  *n = 0;
  if (!m) d[(*n)++] = 0;
  while (m) d[(*n)++] = m % 10, m /= 10;
- for (; e2 > 0; e2--) am_dgmul(d, n, 2);
- for (; e2 < 0; e2++) am_dgmul(d, n, 5); }
+ for (; e2 > 0; e2--) lm_dgmul(d, n, 2);
+ for (; e2 < 0; e2++) lm_dgmul(d, n, 5); }
 // input digits a (LSB first, shifted up by sh virtual zeros, sticky marking a
 // truncated nonzero tail) vs boundary digits b: -1 / 0 / +1
-static int am_dgcmp(unsigned char const *a, int na, int sh, int sticky,
+static int lm_dgcmp(unsigned char const *a, int na, int sh, int sticky,
                     unsigned char const *b, int nb) {
  if (sh < 0) {                                   // mirrored: shift b instead
-  int r = am_dgcmp(b, nb, -sh, 0, a, na);
+  int r = lm_dgcmp(b, nb, -sh, 0, a, na);
   return r ? -r : (sticky ? 1 : 0); }
  if (na + sh != nb) return na + sh < nb ? -1 : 1;
  for (int i = nb - 1; i >= 0; i--) {
@@ -458,7 +471,7 @@ static int am_dgcmp(unsigned char const *a, int na, int sh, int sticky,
 // there is no decimal->binary search here at all: collect the digits, round once.
 // m keeps up to 60 bits and a sticky bit carries the rest, which is enough --
 // digits below the 53rd can break a tie but never create one.
-static double am_hexflo(uint64_t m, int e2, int sticky, int sign) {
+static double lm_hexflo(uint64_t m, int e2, int sticky, int sign) {
  if (!m) return sign > 0 ? 0.0 : -0.0;
  while (!(m >> 63)) m <<= 1, e2--;               // normalize: MSB to bit 63
  int E = e2 + 63;                                // value in [2^E, 2^(E+1))
@@ -480,7 +493,7 @@ static double am_hexflo(uint64_t m, int e2, int sticky, int sign) {
  if (E > 1023) return sign > 0 ? DInf : -DInf;
  double d = mkd(((uint64_t) (E + 1023) << 52) | (sig & (((uint64_t) 1 << 52) - 1)));
  return sign > 0 ? d : -d; }
-double am_strtod(char const *s, char **end) {
+double lm_strtod(char const *s, char **end) {
  char const *p = s;
  int sign = 1;
  if (*p == '-') sign = -1, p++;
@@ -514,7 +527,7 @@ double am_strtod(char const *s, char **end) {
      while ('0' <= *r && *r <= '9') { if (pv < 100000) pv = pv * 10 + (*r - '0'); r++; }
      he += es * pv;
      if (end) *end = (char*) r; } }
-   return am_hexflo(hm, he, hst, sign); } }
+   return lm_hexflo(hm, he, hst, sign); } }
  // significant digits: up to 780 kept exactly (din, MSB collected then
  // reversed -- correct rounding can genuinely need ~768 digits; a mere sticky
  // bit cannot carry a truncated tail's MAGNITUDE through a mid-comparison,
@@ -564,7 +577,7 @@ double am_strtod(char const *s, char **end) {
    v0 = e < 0 ? v0 / sc : v0 * sc; }
  db b; b.d = v0;
  if (b.u >= 0x7ff0000000000000ull) b.u = 0x7fefffffffffffffull;   // seed stays finite
- unsigned char dg[am_dgmax]; int ndg;
+ unsigned char dg[lm_dgmax]; int ndg;
  for (;;) {
   uint64_t mant = b.u & ((1ull << 52) - 1);
   int be = (int) (b.u >> 52);
@@ -576,10 +589,10 @@ double am_strtod(char const *s, char **end) {
   int cl, ch;
   if (!m) cl = 1;                                // zero: any positive input clears its floor
   else {
-   am_dgexp(dg, &ndg, 4 * m - (lo2 ? 1 : 2), e2 - 2);
-   cl = am_dgcmp(din, nin, sh, sticky, dg, ndg); }
-  am_dgexp(dg, &ndg, m ? 4 * m + 2 : 2, e2 - 2);
-  ch = am_dgcmp(din, nin, sh, sticky, dg, ndg);
+   lm_dgexp(dg, &ndg, 4 * m - (lo2 ? 1 : 2), e2 - 2);
+   cl = lm_dgcmp(din, nin, sh, sticky, dg, ndg); }
+  lm_dgexp(dg, &ndg, m ? 4 * m + 2 : 2, e2 - 2);
+  ch = lm_dgcmp(din, nin, sh, sticky, dg, ndg);
   if ((cl > 0 || (cl == 0 && even)) && (ch < 0 || (ch == 0 && even))) break;
   if (ch >= 0) {                                 // at or past the upper midpoint: up one ulp
    if (b.u >= 0x7fefffffffffffffull) { b.u = 0x7ff0000000000000ull; break; }

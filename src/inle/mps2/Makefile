@@ -1,5 +1,5 @@
 # qemu MPS2+ AN500 (Cortex-M7) build -- love compiled END TO END by mooncc. `make -C
-# src/inle/mps2` from the project root. Every C file -- the runtime's seven, the am math
+# src/inle/mps2` from the project root. Every C file -- the runtime's seven, the lm math
 # floor, libc, main.c -- goes through `mooncc -t thumb2`, start.o is laid from holo IR
 # by mkstart.l, and mooncc's own -Ttext/-Tdata drive the link over holo's 32-bit lane:
 # no arm-none-eabi anywhere.
@@ -21,7 +21,7 @@ mps2_ld = $(MOONCC) -t thumb2 -Ttext 0 -Tdata 0x20000000 -nostdlib
 # the five faces share a skeleton and differ in main.o alone: the plain kernel, the BAKER
 # that dumps a heap image through semihosting, the WAKER that boots one back, and the two
 # -pd twins carrying the rune+cas corpus.
-skel = $(R)/$(o)/start.o $(love_o) $(heap_o) $(R)/$(o)/am.o $(libc_o)
+skel = $(R)/$(o)/start.o $(love_o) $(heap_o) $(R)/$(o)/lm.o $(libc_o)
 objs        = $(skel) $(R)/$(o)/main.o
 baker_objs  = $(skel) $(R)/$(o)/main-baker.o
 waker_objs  = $(skel) $(R)/$(o)/main-waker.o
@@ -107,7 +107,7 @@ $(R)/$(o)/love-pd.img: $(R)/$(o)/baker-pd.elf $(R)/$(o)/waker-pd.elf
 mps2t1_cc = $(MOONCC) -t thumb1 -D ai_tco=0 -D __STDC_HOSTED__=0 -I. -Isrc/love -Iout/lib
 t1_libc_o = $(addprefix $(R)/$(o)/,$(addsuffix -t1.o,$(libc_m)))
 t1_love_o = $(addprefix $(R)/$(o)/,$(addsuffix -t1.o,$(love_m)))
-t1_objs = $(R)/$(o)/start.o $(t1_love_o) $(R)/$(o)/alloc-t1.o $(R)/$(o)/am-t1.o $(R)/$(o)/rt-t1.o $(t1_libc_o) \
+t1_objs = $(R)/$(o)/start.o $(t1_love_o) $(R)/$(o)/alloc-t1.o $(R)/$(o)/lm-t1.o $(R)/$(o)/rt-t1.o $(t1_libc_o) \
   $(R)/$(o)/main-t1.o
 
 $(foreach u,$(love_m),$(eval $(call p_obj,$u-t1,src/love/$u.c,\
@@ -116,7 +116,7 @@ $(eval $(call p_heap,$(mps2t1_cc),-t1))
 $(foreach m,$(libc_m),$(eval $(call p_obj,$m-t1,src/apps/moon/lib/moonlibc/string/$m.c,\
   $(S)/apps/moon/lib/moonlibc/string/$m.c $(libc_dep),$(mps2t1_cc) -Isrc/apps/moon/include)))
 $(eval $(call p_obj,main-t1,src/inle/mps2/main.c,$(mainc),$(mps2t1_cc)))
-$(eval $(call p_obj,am-t1,src/apps/moon/lib/moonlibc/math/am.c,$(S)/apps/moon/lib/moonlibc/math/am.c $(mc),\
+$(eval $(call p_obj,lm-t1,src/apps/moon/lib/moonlibc/math/lm.c,$(S)/apps/moon/lib/moonlibc/math/lm.c $(mc),\
   $(MOONCC) -t thumb1 -Isrc/apps/moon/lib/moonlibc/math -Isrc/apps/moon/include))
 $(eval $(call p_obj,rt-t1,src/apps/moon/lib/rt.c,$(S)/apps/moon/lib/rt.c $(mc),\
   $(MOONCC) -t thumb1 -Isrc/apps/moon/include))

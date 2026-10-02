@@ -19,12 +19,13 @@
 # there), a deep path, and incompressible bytes beside compressible ones.
 #
 # Skips cleanly where either tool is missing, and takes the love binary as $1.
+. test/gate/skip.sh
 set -e
 
 love=${1:-b/love}
 [ -x "$love" ] || { echo "targz: no $love -- run 'make host'"; exit 1; }
-command -v tar  >/dev/null 2>&1 || { echo "targz: no system tar, skipped";  exit 0; }
-command -v gzip >/dev/null 2>&1 || { echo "targz: no system gzip, skipped"; exit 0; }
+command -v tar  >/dev/null 2>&1 || gate_skip "targz: no system tar, skipped"
+command -v gzip >/dev/null 2>&1 || gate_skip "targz: no system gzip, skipped"
 
 w=$(mktemp -d)
 trap 'rm -rf "$w"' EXIT

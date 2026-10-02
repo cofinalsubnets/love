@@ -265,7 +265,7 @@
         && off (foldl (a \ x \ (a + <x)) "" (fs 2)) m = 0))
    ((magick? ?
        (test (anim-of "None") (anim-of "Background") (anim-of "Previous"))
-       (puts "pic: no magick, disposals against it skipped\n")),
+       (gate-partly "pic: no magick, disposals against it skipped")),
     hark ["rm" "-rf" dir],
     0))
 

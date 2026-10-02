@@ -11,13 +11,14 @@
 # as test_raw lays it. the load table rides love_data.ld; the -pie reloc table is empty.
 #
 # usage: gate_love_c=.. gate_host_c=.. gate_seat_c=.. selfhost.sh OUTDIR LOVE CORPUS.l ..
+. test/gate/skip.sh
 set -u
 ho=$1
 m=$2
 shift 2
 fail() { echo "FAIL selfhost: $*" >&2; exit 1; }
 
-if [ "`uname -m`" != x86_64 ]; then echo "test_selfhost: x86-64 only, skipped on `uname -m`"; exit 0; fi
+if [ "`uname -m`" != x86_64 ]; then gate_skip "test_selfhost: x86-64 only, skipped on `uname -m`"; fi
 d=$ho/selfhost
 mkdir -p "$d/obj" "$d/libc"
 rm -f "$d/obj/"*.o "$d/libc/"*.o "$d/libmoon.a"
@@ -26,7 +27,7 @@ for f in $gate_love_c $gate_host_c $gate_seat_c; do
   "$m" mooncc -D ai_tco=1 -I"$ho" -I. -Isrc/love -Isrc/inle -Iout/lib -c "$f" "$d/obj/`basename $f .c`.o" \
     || fail "mooncc -c $f"
 done
-"$m" mooncc -Isrc/apps/moon/include -c src/apps/moon/lib/moonlibc/math/am.c "$d/obj/am.o" || fail "mooncc -c am.c"
+"$m" mooncc -Isrc/apps/moon/include -c src/apps/moon/lib/moonlibc/math/lm.c "$d/obj/lm.o" || fail "mooncc -c lm.c"
 
 for f in `find src/apps/moon/lib/moonlibc -name '*.c' | LC_ALL=C sort`; do
   b=`echo "$f" | sed 's#src/apps/moon/lib/moonlibc/##; s#/#_#g; s#\.c$##'`

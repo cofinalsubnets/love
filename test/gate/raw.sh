@@ -1,7 +1,7 @@
 #!/bin/sh
 # test/gate/raw.sh -- the GCC-FREE fixpoint, for one target. Everything test_selfhost
 # builds, PLUS our own raw libc (src/apps/moon/lib/moonlibc/: raw-syscall wrappers, mini
-# stdio, mmap malloc), the math floor (src/apps/moon/lib/moonlibc/math/am.c, ours), and sys.o (the
+# stdio, mmap malloc), the math floor (src/apps/moon/lib/moonlibc/math/lm.c, ours), and sys.o (the
 # syscall trampoline + our sigsetjmp/longjmp, laid by src/apps/moon/lib/mksys.l) -- then
 # OUR OWN static linker (src/love/holo/link.l, via `mooncc a.o..`) binds them. No gcc, no
 # glibc, no ld anywhere: the whole chain is love. Corpus green over the fresh egg.
@@ -24,6 +24,7 @@
 # the failure the weak defaults used to hide.
 #
 # usage: gate_love_c=.. gate_host_c=.. raw.sh TARGET OUTDIR LOVE CORPUS.l ..
+. test/gate/skip.sh
 set -u
 gate_sentinel=${gate_sentinel-}
 
@@ -54,12 +55,10 @@ fail() { echo "FAIL $name: $*" >&2; exit 1; }
 # against `x64` skips this lane on every machine there is.
 if [ -z "$need" ]; then
   if [ "$gate_hosta" != x64 ]; then
-    echo "$name: x86-64 only, skipped on ${gate_hosta:-unknown}"
-    exit 0
+    gate_skip "$name: x86-64 only, skipped on ${gate_hosta:-unknown}"
   fi
 elif ! command -v "$need" > /dev/null 2>&1; then
-  echo "$name: no $need, skipped"
-  exit 0
+  gate_skip "$name: no $need, skipped"
 fi
 
 echo "RAW $ho/$bin"
@@ -115,6 +114,6 @@ tail -1 "$ho/$out"
   || fail "no sentinel /$gate_sentinel/ -- a file was skipped or read past"
 
 case $target in
-  x64) echo "test_raw: the src/*.c lanes + moonlibc + am math + sys.o, our linker, no gcc/glibc/ld -- corpus passes" ;;
+  x64) echo "test_raw: the src/*.c lanes + moonlibc + lm math + sys.o, our linker, no gcc/glibc/ld -- corpus passes" ;;
   *)   echo "$name: the gcc-free $pretty love -- mooncc objects, $mksys, our linker, corpus under qemu" ;;
 esac

@@ -173,9 +173,9 @@ Anything without `-c` is a **link**, through `src/love/holo/link.l`.
   matters. glued only: a bare `-l` refuses, since taking it would eat the next word as a
   library name and the one after it as an input;
 - an exe link still owing strong symbols pulls the runtime **by need**, archive-fashion — moonlibc
-  + the am math + the mksys leaf, taken from the archive the binary CARRIES, or compiled from
+  + the lm math + the mksys leaf, taken from the archive the binary CARRIES, or compiled from
   the toolchain root and cached under `out/cache/moon/` (below), so a set carrying its own
-  `am.o` never meets a twin;
+  `lm.o` never meets a twin;
 - `-nostdlib`/`-nodefaultlibs`/`-ffreestanding` turn that pull off;
 - `-ffreestanding` ALSO says the standard's own word: it makes `__STDC_HOSTED__` 0, which is how
   a source asks (love.c asks it to choose the W^X mmap arena over the freestanding heap copy).
@@ -279,7 +279,7 @@ the same face.
   signal mask in `buf[8]`, saved/restored by rt_sigprocmask — love.c's fault barrier is
   `sigsetjmp(env,1)`, so the mask is load-bearing), and `__ai_sigret` (the SA_RESTORER tail).
   Every encoding objdump-checked, the holo house rule.
-* **math/am.c** — our transcendentals. sqrt exact, the seven within a few ulp; `make ulp` is the
+* **math/lm.c** — our transcendentals. sqrt exact, the seven within a few ulp; `make ulp` is the
   differential gate. `-lm` appears in no link.
 
 **The CARRIED archive is asked first, and on a stock tree it is the whole answer** — the

@@ -2,6 +2,8 @@
 # root first, so these resolve from any cwd; output lands in $R/out/<frontend>/.
 R ?= .
 S = $(R)/src
+# dl/ is untracked, so a worktree has none and reads the main checkout's
+dl := $(firstword $(wildcard $(R)/dl) $(dir $(shell git rev-parse --git-common-dir 2>/dev/null))dl)
 
 # the recipe tag column is `@echo 'MOON<TAB>'$@`, and the quote is load-bearing: a bare tab
 # only separates argv, which echo rejoins with a space. one line per target and nothing else,
@@ -113,7 +115,7 @@ love_tu = love.c gc.c ev.c task.c io.c map.c snap.c num.c arr.c
 love_codec = lib/gz.c
 core_tu = $(love_tu) $(love_codec)
 love_tu_c = $(patsubst %,$S/love/%,$(core_tu))
-love_c = $(love_tu_c) $S/apps/moon/lib/moonlibc/math/am.c
+love_c = $(love_tu_c) $S/apps/moon/lib/moonlibc/math/lm.c
 # the per-ISA set ONE machine's build takes; the directory is the roster, empty on an arch with
 # no seat, which is what the rebuild gates read to skip their kernel half.
 hosta_c = $(wildcard $S/inle/$(hosta)/*.c)

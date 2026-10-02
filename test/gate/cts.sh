@@ -31,6 +31,7 @@
 # NOT set -e: the checks report their own failures with context.
 #
 # usage: cts.sh ARCH OUTDIR LOVE     (ARCH: x64 | a64 | rv64 | wasm)
+. test/gate/skip.sh
 set -u
 
 arch=$1
@@ -90,27 +91,27 @@ causeof() { printf '%s\n%s\n' "$roster_refuses" "$roster_wrong" | grep "^$1 " | 
 
 if [ -n "$qemu" ]; then
   QEMU=$(command -v "$qemu" 2>/dev/null || true)
-  [ -n "$QEMU" ] || { echo "$name: skipped (need $qemu)"; exit 0; }
+  [ -n "$QEMU" ] || gate_skip "$name: skipped (need $qemu)"
 fi
 # the wasm machine is node under the loader's kernel (loader.js run as a program), in qemu's seat
 if [ "$arch" = wasm ]; then
   NODE=$(command -v node 2>/dev/null || true)
-  [ -n "$NODE" ] || { echo "$name: skipped (need node)"; exit 0; }
+  [ -n "$NODE" ] || gate_skip "$name: skipped (need node)"
   QEMU="$NODE $PWD/src/inle/wasm/loader.js"
 fi
 
-# the corpus, first hit wins: an explicit CTSSRC, then the tree-local dl/, then the
-# cache. Answers empty when nothing matches, which the skip below reads.
+# the corpus, first hit wins: an explicit CTSSRC, then the tree-local dl/, the main
+# checkout's when this is a worktree, then the cache. empty when nothing matches.
 cts=${CTSSRC:-}
+gitdl=$(git rev-parse --git-common-dir 2>/dev/null)/../dl
 if [ -z "$cts" ]; then
-  for c in dl/c-testsuite "${MOONSRC:-$HOME/src}"/c-testsuite; do
+  for c in dl/c-testsuite "$gitdl"/c-testsuite "${MOONSRC:-$HOME/src}"/c-testsuite; do
     [ -f "$c/tests/single-exec/00001.c" ] && { cts=$c; break; }
   done
 fi
 if [ -z "$cts" ] || [ ! -f "$cts/tests/single-exec/00001.c" ]; then
-  echo "$name: no c-testsuite here (looked in dl and ${MOONSRC:-$HOME/src}) -- skipped."
   echo "          \`make dl/c-testsuite\` fetches it, or set CTSSRC=<a clone>."
-  exit 0
+  gate_skip "$name: no c-testsuite here (looked in dl and ${MOONSRC:-$HOME/src}) -- skipped."
 fi
 
 d=$ho/cts-$arch

@@ -332,8 +332,56 @@
        !(nom? h) (: hd (charm? h || two? h ? 0 (feels h))
                           (hd ? (hd x) (apx . 0 . x)))
        (elem h bnd) (apx . 0 . x)                    ; a shadowed name: local head
-       (: v (gv h ()) hd (feels v)
-        (hd ? (hd x) (apx . napof v >x . x)))))
+       (: v (gv h ()) hd (feels v) jf (nom? v ? () (jotfuse v)) n (two? jf ? (jotn x jf bnd) ())
+        (? (two? n) (apx . napof v >x . ['\ (jf 2)] . jotsub >x <jf <n)   ; a walker over jot: its twin
+           hd (hd x)
+           (apx . napof v >x . x)))))
+   ; the walked operand of a walker call is (jot N), as fold leaves it: (apx 0 jot N), the head
+   ; book's jot by name or by value -> [N], else ()
+   (jotn x jf bnd) (: a (two? jf && jf 1 = #>x && >x <jf) j (jotfuse 'jot)
+    (two? a && <a == apx && 4 = #a && <>a == 0
+     && (: h <>>a (h == j || h == 'jot && !(elem 'jot bnd) && gv 'jot () == j)) ? [<>>>a] ()))
+   (jotsub as k n) (k = 0 ? (n . >as) (<as . jotsub >as (k - 1) n))
+   ; jotin: a walker over (jot N) whose step is a lambda literal -> a counted loop with the step's
+   ; body inline, the twin kept for a list N. it reads cprop's macro-free output, so \ and : are
+   ; the only binders; the loop's own names are fresh and its ops spliced as values, so the body
+   ; captures nothing. a fold's Z and N trade places only when one of them is plain
+   (jotin x bnd) (? (atom? x) x
+                    (<x == '\) (atom? >>x ? x (: r (lp x) (relam x r (jotin >r (jsyms <r + bnd)))))
+                    (<x == ':) (atom? >x ? x (keep x (jotinb >x (ln >x + bnd)) ':))
+                    (jotx (mapi (e \ jotin e bnd) x) bnd))
+   (jotinb bs bnd) (? (atom? bs) bs
+                      (atom? >bs) (keep1 bs (jotin <bs bnd))
+                      (keep3 bs <bs (jotin <>bs (two? <bs ? (jsyms <bs + bnd) bnd)) (jotinb >>bs bnd)))
+   (jsyms p) (? (nom? p) [p] (atom? p) () (jsyms <p + jsyms >p))
+   (jplain? e) (atom? e || <e == '\ && atom? >>e)
+   ; the step's params when it is (\ p.. B) with np distinct plain names, else ()
+   (jstep s np) (two? s && <s == '\ && #s = np + 2 && (: ps (init >s)
+                  (all (p \ nom? p && p != ()) ps && #ps = #(foldl (a \ p \ (elem p a ? a (p . a))) () ps))) ? (init >s) ())
+   (jotx y bnd) (: h <y ops (jotfuse 'ops)
+                   jf (nom? h && !(elem h bnd) && two? ops ? (gv h () @ v (nom? v ? () (jotfuse v))) ())
+                   (? (two? jf && (jf 1) = #>y) (jotk y jf (jsrc (>y <jf) bnd) ops bnd) y))
+   ; the source operand (jot N), the book's jot by name or by value -> [N], else ()
+   (jsrc L bnd) (two? L && 2 = #L && (: j (jotfuse 'jot) h <L (h == j || h == 'jot && !(elem 'jot bnd) && gv 'jot () == j)) ? [<>L] ())
+   (jotk y jf n ops bnd) (: as >y k <jf
+                        (? !(two? n) y
+                           (: kind (? (jf == jotfuse 'foldl) 0 (jf == jotfuse 'foldr) 1 (jf == jotfuse 'each) 2 3)
+                              F (as (k = 0 ? 1 0))
+                              ps (jstep F (kind < 2 ? 2 1))
+                              (? !(two? ps) y
+                                 (kind < 2 && !(jplain? <n || jplain? (as 1))) y
+                                 (jotloop kind F ps (last F) <n (as 1) ['\ (jf 2)] ops (jnum? <n bnd ops))))))
+   ; N is a number for certain -- a numeric literal, or a book tally -- so no list can reach the loop
+   (jnum? N bnd ops) (charm? N || two? N && 2 = #N && (: T (ops 6) h <N (h == T || h == 'tally && !(elem 'tally bnd) && gv 'tally () == T)))
+   (jotloop kind F ps B N Z tw ops num) (jotloop1 kind F ps B N Z tw ops @ [b n f l] (num ? (b + [l]) (b + [['? [<ops n] f l]])))
+   ; -> [(: n N z Z) awaiting its body, n, the twin's call, the loop]
+   (jotloop1 kind F ps B N Z tw ops)
+    (: t2 <ops sat <>ops lt <>>ops pl (ops 3) cons (ops 4) rv (ops 5)
+       n (nom 0) z (nom 0) go (nom 0) m (nom 0) e (nom 0) a (nom 0) I (kind = 1 ? <ps (ps (#ps - 1))) A <ps
+       (? (kind = 0) [[': n N z Z] n [tw F z n] [': m [sat n] [go I A] ['? [lt I m] [go [pl I 1] B] A] [go 0 z]]]
+          (kind = 1) [[': n N z Z] n [tw F z n] [': m [sat n] [go I] ['? [lt I m] [': (ps 1) [go [pl I 1]] B] z] [go 0]]]
+          (kind = 2) [[': n N] n [tw n F] [': m [sat n] [go I] ['? [lt I m] [': e B [go [pl I 1]]]] [go 0]]]
+          [[': n N] n [tw F n] [': m [sat n] [go I a] ['? [lt I m] [go [pl I 1] [cons B a]] [rv a]] [go 0 ()]]]))
    ; cprop: the partial-evaluation pre-pass. threads a static value env `se` (name . const-form),
    ; propagating a constant-bound var and folding a pure-fn call on constant args; pureset is the
    ; fold license and a bnd-shadowed head never folds (the alpha law). it prunes no conds (wxc
@@ -551,7 +599,7 @@
    (fuel? fl lam) (: n (nsz (last lam)) _ (pin >fl 'z n) (0 < <fl && n <= left fl))   ; z: the size asked, for burn
    (burn fl) (: b >fl _ (pin b 0 (left fl - peep b 'z 0)) ((<fl - 1) . b))
    (nsz y) (? (two? y) (nsz <y + nsz >y) 1)
-   (wx (cprop x () (64 . {0 [x]}) 0 () ()) ()))   ; bnd seeds (): a 0 seed rode `list + 0` into every binder set
+   (wx (jotin (cprop x () (64 . {0 [x]}) 0 () ()) ()) ()))   ; bnd seeds (): a 0 seed rode `list + 0` into every binder set
   ; a bare symbol is a variable reference -- except the zero point, which reads as a nom? literal;
   ; routing it to ava captures it as a spurious import, an under-saturated partial. the test is
   ; ==-the-zero-point, not nil?: boxfix's cell names are fresh nameless mints (also nil?) bound
