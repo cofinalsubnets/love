@@ -19,6 +19,7 @@
 # which is exactly why love0's clang lane never caught any of it.
 #
 # usage: hdiff.sh CC..
+. test/gate/skip.sh
 set -u
 fail() { echo "FAIL test_hdiff: $*" >&2; exit 1; }
 
@@ -42,9 +43,9 @@ printf '%s\n' \
 
 ran=""
 for cc in "$@"; do
-  command -v "$cc" > /dev/null 2>&1 || { echo "test_hdiff: no $cc, skipped"; continue; }
+  command -v "$cc" > /dev/null 2>&1 || { gate_partly "test_hdiff: no $cc, skipped"; continue; }
   "$cc" -c "$mtc" -o "$mtc".o > /dev/null 2>&1 || {
-    echo "test_hdiff: $cc has no musttail -- ai_tco=1 is this lane's point, so SKIPPED, not passed"
+    gate_partly "test_hdiff: $cc has no musttail -- ai_tco=1 is this lane's point, so SKIPPED, not passed"
     continue; }
   echo "  $cc: building love (HCC=1, ai_tco=1)"
   make --no-print-directory HCC=1 CC="$cc" host > /dev/null 2>&1 \
@@ -65,5 +66,5 @@ done
 rm -f "$mtc" "$mtc".o
 # the summary names what RAN. a line that says "gcc and clang" after skipping both
 # is the same silence this gate exists to end, one level up.
-[ -n "$ran" ] || { echo "test_hdiff: no cc here could run this lane -- nothing was proved"; exit 0; }
+[ -n "$ran" ] || gate_skip "test_hdiff: no cc here could run this lane -- nothing was proved"
 echo "test_hdiff:$ran each build love, pass the host suite and tail-jump clean"

@@ -5,6 +5,7 @@
 # out/cc is cleared first: its stamp keys on the cc, not the flags, so objects an earlier
 # lane laid would be taken as they are and read by no one.
 # usage: ccwarn.sh CC..
+. test/gate/skip.sh
 set -u
 fail() { echo "FAIL test_ccwarn: $*" >&2; exit 1; }
 
@@ -20,9 +21,9 @@ printf '%s\n' \
 
 ran=""
 for cc in "$@"; do
-  command -v "$cc" > /dev/null 2>&1 || { echo "test_ccwarn: no $cc, skipped"; continue; }
+  command -v "$cc" > /dev/null 2>&1 || { gate_partly "test_ccwarn: no $cc, skipped"; continue; }
   "$cc" -c "$mtc" -o "$mtc".o > /dev/null 2>&1 || {
-    echo "test_ccwarn: $cc has no musttail, so it cannot build the vm -- SKIPPED, not passed"
+    gate_partly "test_ccwarn: $cc has no musttail, so it cannot build the vm -- SKIPPED, not passed"
     continue; }
   log=out/.ccwarn-$cc.log
   rm -rf out/cc
@@ -34,5 +35,5 @@ for cc in "$@"; do
 done
 
 rm -f "$mtc" "$mtc".o
-[ -n "$ran" ] || { echo "test_ccwarn: no cc here could run this lane -- nothing was proved"; exit 0; }
+[ -n "$ran" ] || gate_skip "test_ccwarn: no cc here could run this lane -- nothing was proved"
 echo "test_ccwarn:$ran each build love0 and the hosted vm without a warning"

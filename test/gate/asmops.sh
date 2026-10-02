@@ -30,6 +30,7 @@
 # header, and the encodings themselves are frozen in test/holo/golden.l.
 #
 # usage: asmops.sh HOSTDIR
+. test/gate/skip.sh
 set -u
 ho=$1
 probe=test/gate/asmops.c
@@ -105,7 +106,7 @@ for a in x64 a64 rv64; do
   fi
 
   if ! have llvm-objdump; then
-    echo "  (asmops $a: sequence checks skipped, no llvm-objdump)"; continue
+    gate_partly "  (asmops $a: sequence checks skipped, no llvm-objdump)"; continue
   fi
   seq "$work/$a-moon.o" $t > "$work/$a-moon.seq"
   # every op the object carries must have emitted at least one privileged
@@ -119,11 +120,11 @@ for a in x64 a64 rv64; do
 
   # 3. the two halves against each other
   if ! have clang; then
-    echo "  (asmops $a: clang differential skipped, no clang)"; continue
+    gate_partly "  (asmops $a: clang differential skipped, no clang)"; continue
   fi
   if ! clang -target $ctarget -ffreestanding -nostdinc -O0 -c $inc "$probe" \
              -o "$work/$a-clang.o" 2>"$work/$a.cerr"; then
-    echo "  (asmops $a: clang differential skipped, no $ctarget support)"; continue
+    gate_partly "  (asmops $a: clang differential skipped, no $ctarget support)"; continue
   fi
   seq "$work/$a-clang.o" $t > "$work/$a-clang.seq"
   eval "skip=\$divergent_$a"

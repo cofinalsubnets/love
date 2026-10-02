@@ -21,12 +21,13 @@
 # and says the shower's tokens both ways, paged by \vsplit with a number under each page.
 #
 # skips where TeX Live is missing; takes the love binary as $1.
+. test/gate/skip.sh
 set -e
 
 love=${1:-out/love}
 [ -x "$love" ] || { echo "caja: no $love -- run 'make host'"; exit 1; }
 for t in tex kpsewhich pltotf; do
-  command -v $t >/dev/null 2>&1 || { echo "caja: no $t (TeX Live), skipped"; exit 0; }
+  command -v $t >/dev/null 2>&1 || gate_skip "caja: no $t (TeX Live), skipped"
 done
 r=$(pwd)
 L=$r/$love
@@ -38,12 +39,12 @@ fail() { echo "FAIL caja: $*"; exit 1; }
 fonts=""
 for f in cmr10 cmbx12 cmr10 cmtt10 cmsl9 ecrm1000; do
   p=$(kpsewhich $f.tfm) || true
-  [ -n "$p" ] || { echo "caja: no $f.tfm, skipped"; exit 0; }
+  [ -n "$p" ] || gate_skip "caja: no $f.tfm, skipped"
   fonts="$fonts $p"
 done
 
 hy=$(kpsewhich hyphen.tex) || true
-[ -n "$hy" ] || { echo "caja: no hyphen.tex, skipped"; exit 0; }
+[ -n "$hy" ] || gate_skip "caja: no hyphen.tex, skipped"
 pltotf test/caja/cajalig.pl "$w/cajalig.tfm" >/dev/null 2>&1 || fail "pltotf refused test/caja/cajalig.pl"
 
 # run SCRIPT SEED N ARGS..: the script's pages through TeX and through caja
@@ -69,7 +70,7 @@ echo "  caja: paragraphs -- the fixed pages and 400 random ones, DVI identical t
 dfonts=""
 for f in cmr10 cmbx10 cmti10 cmtt10 cmbx12 cmbx12 cmsy10; do
   p=$(kpsewhich $f.tfm) || true
-  [ -n "$p" ] || { echo "caja: no $f.tfm, documents skipped"; echo "  caja: ok"; exit 0; }
+  [ -n "$p" ] || gate_skip "caja: no $f.tfm, documents skipped"
   dfonts="$dfonts $p"
 done
 # doc FILE: one document through the shower and through TeX

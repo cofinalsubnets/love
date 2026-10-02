@@ -11,10 +11,11 @@
 # then) leaves its case without an oracle. with -v, the first lines of each difference.
 #
 # skips where groff's pic is missing; takes the love binary as $1.
+. test/gate/skip.sh
 love=${1:-out/love}
 [ -x "$love" ] || { echo "gpic: no $love -- run 'make host'"; exit 1; }
 ref=/usr/bin/pic
-[ -x "$ref" ] || { echo "gpic: no $ref (groff), skipped"; exit 0; }
+[ -x "$ref" ] || gate_skip "gpic: no $ref (groff), skipped"
 verbose=$2
 r=$(pwd)
 L=$r/$love

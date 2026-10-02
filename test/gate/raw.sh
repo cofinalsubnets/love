@@ -24,6 +24,7 @@
 # the failure the weak defaults used to hide.
 #
 # usage: gate_love_c=.. gate_host_c=.. raw.sh TARGET OUTDIR LOVE CORPUS.l ..
+. test/gate/skip.sh
 set -u
 gate_sentinel=${gate_sentinel-}
 
@@ -54,12 +55,10 @@ fail() { echo "FAIL $name: $*" >&2; exit 1; }
 # against `x64` skips this lane on every machine there is.
 if [ -z "$need" ]; then
   if [ "$gate_hosta" != x64 ]; then
-    echo "$name: x86-64 only, skipped on ${gate_hosta:-unknown}"
-    exit 0
+    gate_skip "$name: x86-64 only, skipped on ${gate_hosta:-unknown}"
   fi
 elif ! command -v "$need" > /dev/null 2>&1; then
-  echo "$name: no $need, skipped"
-  exit 0
+  gate_skip "$name: no $need, skipped"
 fi
 
 echo "RAW $ho/$bin"

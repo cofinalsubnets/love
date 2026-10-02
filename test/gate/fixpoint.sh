@@ -20,6 +20,7 @@
 #
 # usage: gate_love_c=.. gate_host_c=.. gate_arch_c=.. gate_kern_c=.. gate_seat_c=..
 #        fixpoint.sh OUTDIR LOVE0 HOSTA ODIR OBJ...
+. test/gate/skip.sh
 set -u
 
 ho=$1
@@ -39,7 +40,7 @@ case "$ha" in
   x64)  mks=mksys-x64 ;;
   a64) mks=mksys-a64 ;;
   rv64) mks=mksys-rv64 ;;
-  *) echo "test_fixpoint: no seed for $ha, skipped"; exit 0
+  *) gate_skip "test_fixpoint: no seed for $ha, skipped"
 esac
 
 fail() { echo "FAIL test_fixpoint: $*" >&2; exit 1; }

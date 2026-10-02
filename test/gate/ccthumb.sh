@@ -18,6 +18,7 @@
 # timeout's. not set -e: the checks report their own failures.
 #
 # usage: ccthumb.sh TARGET OUTDIR LOVE     (TARGET: thumb1 | thumb2)
+. test/gate/skip.sh
 set -u
 
 tgt=$1
@@ -37,7 +38,7 @@ moonrun() { LOVE_NO_IMAGE= "$m" mooncc "$@"; }
 
 for tool in arm-none-eabi-gcc arm-none-eabi-ld qemu-system-arm; do
   command -v $tool > /dev/null 2>&1 || {
-    echo "$name: no arm-none-eabi toolchain / qemu-system-arm, skipped"; exit 0; }
+    gate_skip "$name: no arm-none-eabi toolchain / qemu-system-arm, skipped"; }
 done
 
 # cleared at the start, not the end: the last run stays for a post-mortem

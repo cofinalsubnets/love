@@ -10,18 +10,19 @@
 # the refusals and tftopl's corrections are held too, not only the files that are fine.
 #
 # skips where TeX Live is missing; takes the love binary as $1.
+. test/gate/skip.sh
 set -e
 
 love=${1:-out/love}
 [ -x "$love" ] || { echo "tfm: no $love -- run 'make host'"; exit 1; }
 for t in tftopl etex kpsewhich; do
-  command -v $t >/dev/null 2>&1 || { echo "tfm: no $t (TeX Live), skipped"; exit 0; }
+  command -v $t >/dev/null 2>&1 || gate_skip "tfm: no $t (TeX Live), skipped"
 done
 r=$(pwd)
 L=$r/$love
 G=$r/test/gate/tfm.l
 tfms=$(kpsewhich -var-value TEXMFDIST)/fonts/tfm
-[ -d "$tfms" ] || { echo "tfm: no $tfms, skipped"; exit 0; }
+[ -d "$tfms" ] || gate_skip "tfm: no $tfms, skipped"
 
 w=$(mktemp -d)
 trap 'rm -rf "$w"' EXIT

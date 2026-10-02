@@ -7,14 +7,14 @@
 # skips whole rather than passing quietly.
 #
 # usage: sh test/gate/spin.sh LOVE
+. test/gate/skip.sh
 set -u
 
 love=$1
 ceiling=25            # per cent of one core: a waiting machine spends ~0, a spinning one 100
 
 if [ ! -r /proc/self/stat ]; then
-  echo "  spin: skipped (no /proc to weigh the machine with)"
-  exit 0
+  gate_skip "  spin: skipped (no /proc to weigh the machine with)"
 fi
 
 "$love" test/gate/spin.l > /dev/null 2>&1 &
