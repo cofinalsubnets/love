@@ -4,18 +4,16 @@
 
 (borrow 'grass)   ; the artifact's module, warm from the tree
 (borrow 'score)   ; the tune's reader, for the song laws
-(borrow 'meadow)  ; the field's pens, for the three-dimensional laws
 
 (: (ticks g n) (0 < n ? (grass-tick g, ticks g (n - 1)) g)
    ; a row in cells: a glyph's tail bytes ride the lead that began it
    (wide s) (:- (go 0 0) (go i n) (i >= #s ? n (go (i + 1) (n + (128 <= s i < 192 ? 0 1)))))
    (count s n) (:- (go 0 0) (go i k) (i + #n <= #s ? (go (i + 1) (k + (n = snip s i (i + #n)))) k))
    ; a known week: mild days and every blade equally thirsty, so the laws below do not
-   ; ride the dice. the field flat, as the laws of its rows read it; (solid) stands it up
+   ; ride the dice
    (fresh _) (grass-new 23 80 (wheel 12) @ g
               (each (g 'bs) (b \ pins b 'wf 1.0 'hy 80.0),
-               pins g 'tdays '(58.0 58.0 58.0 58.0 58.0 58.0 58.0) 'covers '(0.5 0.5 0.5 0.5 0.5 0.5 0.5) 'flat 1))
-   (solid _) (fresh () @ g (pin g 'flat 0)))
+               pins g 'tdays '(58.0 58.0 58.0 58.0 58.0 58.0 58.0) 'covers '(0.5 0.5 0.5 0.5 0.5 0.5 0.5))))
 
 ; --- the clock and the sky ---
 (fresh () @ g
@@ -179,26 +177,5 @@
        (count p0 "\r\n" = 23) (count p1 "\r\n" < 16) (count p2 "\r\n" < 16)
        (cells a n = cells b n)))
 
-; --- the field in three dimensions: the same rows, the hud and the bar either side of the
-;     meadow; noon is not midnight; your lean moves the picture; v lays it flat and back;
-;     every pen a number in the eye's range, at noon and at night, with the field wilting
-(: (mkscr r c) (screen (cask (screen () r c)) r c)
-   (chat s i) (2097151 & glass s i 0)
-   (sane c) (all (k \ aall (0.0 <= c k) && aall (c k <= 1.0)) ^3)
-   g (solid ()) me (g 'me)
-   _ (pin g 'h 12.0) noon (grass-frame g)
-   _ (pins me 'th 0.8 'ht 4.0) leant (grass-frame g)
-   _ (pin g 'h 1.0) night (grass-frame g)
-   _ (each (g 'bs) (b \ pin b 'hy 15.0))
-   dry (sane (meadow-pens (g 'mv) g (meadow-sky g)))
-   _ (pin g 'h 12.0) dryday (sane (meadow-pens (g 'mv) g (meadow-sky g)))
-   _ (grass-key g 118 0) flat (g 'flat) fl (grass-frame g)
-   _ (grass-key g 118 0) back (g 'flat)
-   s (mkscr 24 80)
-   (scribe s night,
-    test (count noon "\r\n" = 23) (count night "\r\n" = 23) !(noon = night) !(noon = leant)
-         dry dryday (flat = 1) (back = 0) !(fl = night) (count fl "\r\n" = 23)
-         (chat s 79 != 0) (chat s (22 * 80 + 79) != 0)))     ; the hud's last cell, the meadow's last row
-
 (test_fin (),
- puts "grass: ok -- the tune reads, the week waters, the frame paints day and night, the kept rows say the same, a paint is the rows that moved, and the field stands up in three dimensions\n")
+ puts "grass: ok -- the tune reads, the week waters, the frame paints day and night, the kept rows say the same, and a paint is the rows that moved\n")
