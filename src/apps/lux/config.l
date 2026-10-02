@@ -81,7 +81,7 @@
                           (conf-roster lux-conf 'bind ()) (conf-roster lux-conf 'unbind ()))
 
    ; startupHook = spawn "setxkbmap -option ctrl:nocaps -option compose:rctrl"
-   ;   (setWMName "LG3D (XMonad)" rides ewmh-init; the cursor is x-cursor).
+   ;   (setWMName "LG3D" rides ewmh-init; the cursor is x-cursor).
    ;   lux_nostartup skips the spawns -- a headless harness wants no keyboard
    ;   churn on its bare Xvfb
    lux-startup (getenv "LUX_NOSTARTUP" ? ()
