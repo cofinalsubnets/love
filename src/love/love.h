@@ -596,7 +596,7 @@ void *malloc(size_t), free(void*),
  *memcpy(void*restrict, void const*restrict, size_t),
  *memmove(void*restrict, void const*restrict, size_t),
  *memset(void*, int, size_t),
- *memchr(void const*, int, size_t);
+ *(memchr)(void const*, int, size_t);   // parenthesized: c23 glibc spells memchr as a macro
 size_t strlen(char const*);
 
 // --- the machine ---
