@@ -480,6 +480,30 @@
       (#<(lay-tile (lay-msg M '(restore-window 20) z3) r z3) = 3)           ; named restore brings it back
       !(lay-msg M '(restore-window 30) z3)))                                     ; not minimized -> unhandled ()
 
+; --- bsp: mitty's wharf plan as a layout. the row and the plan stay in step, every
+;     placement sits inside the rect, none overlap, and the messages move the focus's split ---
+(: r (rct 10 20 800 600)
+   (bz row foc) (zmk foc (rev (take (posof foc row) row)) (drop (posof foc row + 1) row))
+   (tile lay row foc) (lay-tile lay r (bz row foc))
+   (inside p) (rx r <= p 1 && p 1 + p 3 <= rx r + rw r && ry r <= p 2 && p 2 + p 4 <= ry r + rh r)
+   (apart p q) (p 1 + p 3 <= q 1 || q 1 + q 3 <= p 1 || p 2 + p 4 <= q 2 || q 2 + q 4 <= p 2)
+   (sound pls) (all inside pls && all (p \ all (q \ p 0 = q 0 || apart p q) pls) pls)
+   (grow lay row foc) (tile lay row foc @ [pls l2] [pls l2])
+   s1 (grow (bsp 'beside 50 4) [1] 1)
+   s2 (grow (s1 1) [1 2] 1)
+   s3 (grow (lay-msg (s2 1) 'split-stack (bz [1 2] 2)) [1 2 3] 2)
+   s4 (grow (s3 1) [1 3] 3)
+   (test
+      ('((1 10 20 800 600)) = <s1)                                           ; one window, the whole rect
+      (sound <s2) (sound <s3) (sound <s4)
+      ([1 2] = sort (map (p \ p 0) <s2)) ([1 2 3] = sort (map (p \ p 0) <s3))
+      ([1 3] = sort (cite 'wharf 'wharf-panes (s4 1 1)))                                   ; a gone window leaves the plan
+      (<s2 0 3 + 4 + <s2 1 3 = 800)                                             ; the gap is spent between the halves
+      (#(filter (p \ p 0 = 3 && p 2 > 20) <s3) = 1)                             ; split-stack: 3 under 2
+      (lay-msg (s4 1) 'expand (bz [1 3] 3) @ e (e 1 1 = 55 || e 1 1 = 45))      ; expand moves the focus's split
+      (lay-msg (s4 1) 'rotate (bz [1 3] 3) @ t (t 1 0 = 'stack))
+      !(lay-msg (s4 1) 'nonsense (bz [1 3] 3))))                                ; unhandled -> ()
+
 (test_fin ())                                        ; no zz-fin here: quit before claiming ok
 (say err "test/law/lux: StackSet zipper + sheaf + floating + layout + modifier + manage + keymap + ewmh + config laws ok
 ")
