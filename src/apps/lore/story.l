@@ -231,7 +231,7 @@
    cols 6 rowsn ((n + cols - 1) // cols)
    ; the hall: a shelf every 4 columns and 3 rows, a border of wall, the hatch at the foot
    w (2 + 4 * cols + 1) h (3 + 3 * rowsn + 2)
-   (line y) (: (go x acc) (x < w ? (go (x + 1) (acc + (y = 0 || y = h - 1 || x = 0 || x = w - 1 ? "#" "."))) acc) (go 0 ""))
+   (line y) (jug 0 @ j (each ^w (x \ say j (y = 0 || y = h - 1 || x = 0 || x = w - 1 ? "#" ".")), slurp j))
    rows (map line ^h)
    ; a wing is a folder of files or one lone file; b is where its books lie, and its
    ; header is b/<name>.l either way (ROOT/d/d.l or ROOT/d.l)

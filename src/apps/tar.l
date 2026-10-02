@@ -32,7 +32,7 @@
    (tar-txt! b o n s)                       ; a text field, NUL-filled, never overrun
     (: k #s (go i) (n > i ? (pin b (o + i) (i < k ? (s i) 0), go (i + 1))) (go 0))
    (tar-sum b)                              ; the header checksum, own field as spaces
-    (: (go i a) (tar-blk <= i ? a (go (i + 1) (a + (148 <= i < 156 ? 32 (peep b i 0))))) (go 0 0))
+    (foldl (\ a i (a + (148 <= i < 156 ? 32 (peep b i 0)))) 0 ^tar-blk)
 
    ; --- the field peeks ------------------------------------------------------
    (tar-oct s o n) (rdoct s o n)            ; octal digits until a non-digit
@@ -56,8 +56,7 @@
    (tar-split m)                          ; -> (prefix name) | ()
     (#m @ n
      (n < 101 ? ["" m]
-      (: (go i best) (n <= i ? best (go (i + 1) (m i = 47 && i < 156 && n - i - 1 < 101 ? i best)))
-         k (go 0 -1)
+      (: k (foldl (\ best i (m i = 47 && i < 156 && n - i - 1 < 101 ? i best)) -1 ^n)
        (k >= 0 ? (: p (cask k)
                     q (pour p 0 m 0 k, cask (n - k - 1))
         (pour q 0 m (k + 1) (n - k - 1),

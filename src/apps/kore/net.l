@@ -146,8 +146,7 @@
        (go 0 "" ""))
    ; the pty's bytes for the wire: a 255 doubled
    (td-esc s) (wg-find s (string 255) 0 < 0 ? s
-               ((: (go i a) (#s <= i ? a (go (i + 1) (a + (s i = 255 ? (string 255 + string 255) (string (s i)))))))
-                0 ""))
+               (jug 0 @ j (each ^#s (i \ say j (s i = 255 ? (string 255 + string 255) (string (s i)))), slurp j)))
    ; one connection: the program's output to the client in this task, the client's bytes
    ; to the program in another; the program's end is the session's, and the client's going
    ; hangs the program up
@@ -201,8 +200,7 @@
        issue (open ip "r" @ q
                 (hot? q ? (slurp q @ s
                              (close q,
-                              ((: (go i a) (#s <= i ? a (go (i + 1) (a + (s i = 10 ? "\r\n" (string (s i)))))))
-                               0 "")))
+                              (jug 0 @ j (each ^#s (i \ say j (s i = 10 ? "\r\n" (string (s i)))), slurp j))))
                  ""))
        (td-loop l [login] issue))
 

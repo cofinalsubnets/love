@@ -138,11 +138,10 @@
     (: L <lr  R >lr  c (cask (n * 4))
        lay (cite 'guts 'pinv)
        whole (lay && tray? L && tray? R && #L = n && #R = n)
-       (go i) (i >= n ? c
-                 (: l (clip g (peep L i 0))  r (clip g (peep R i 0))  o (i * 4)
-                    ((pins c o      (l & 255) (o + 1) (l >> 8 & 255)
-                            (o + 2) (r & 255) (o + 3) (r >> 8 & 255)),
-                     go (i + 1))))
+       (go _) (each ^n (i \ (: l (clip g (peep L i 0))  r (clip g (peep R i 0))  o (i * 4)
+                               (pins c o      (l & 255) (o + 1) (l >> 8 & 255)
+                                       (o + 2) (r & 255) (o + 3) (r >> 8 & 255)))),
+               c)
        (whole ? (lay c 0 2 4 (clipv g L),
                  lay c 2 2 4 (clipv g R),
                  string c)
@@ -237,8 +236,7 @@
    (harp-read a) (harp-lead a @ i
                     (i < #a && 40 = a i ? (harp-splice (), sound a @ (f . _) (ev f) hush)
                                           (hit (mini a))))
-   (harp-atoi s) (:- (go 0 0) n #s
-                  (go i acc) (i >= n ? acc (go (i + 1) (acc * 10 + (s i - 48)))))
+   (harp-atoi s) (foldl (\ acc i (acc * 10 + (s i - 48))) 0 ^#s)
    (harp-atof s) (sound s @ (r . _) r 0)
    (harp-main as)
     (: (go l o ps)

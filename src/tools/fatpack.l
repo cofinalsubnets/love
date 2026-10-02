@@ -15,7 +15,7 @@
    (fp-blocks n) ((n + bs - 1) // bs)              ; // outranks +, so the sum keeps its parens
    (fp-pad n) ("\x00" * (fp-blocks n * bs - n))
    ; the members' sha, 16 hex -- the cache name's content half
-   (fp-id16 h) (: (go i a) (i < 16 ? (go (i + 1) (a + string (h i))) a) (go 0 ""))
+   (fp-id16 h) (jug 0 @ j (each ^16 (i \ say j (string (h i))), slurp j))
    ; `uname -m` is not the ISA word (amd64 on the BSDs, arm64 on freebsd), so each case arm
    ; takes every spelling of its ISA, common.mk's table. an arch with no row would refuse
    ; a text the prefix is carrying.

@@ -24,14 +24,11 @@
    ;; the pt_loads as (fileoff filesz paddr) -- all a flat image needs of them.
    (oc-segs fs s)
     (: n (ld-f fs s 0 'e-phnum) po (ld-f fs s 0 'e-phoff) e (ld-n fs 'ph-ent)
-       (go i acc)
-        (n <= i ? (rev acc)
-           (po + i * e @ h
-              (go (i + 1) (ld-f fs s h 'ph-type = 1 ?
-                             ([(ld-f fs s h 'ph-off) (ld-f fs s h 'ph-fsz)
-                               (ld-f fs s h 'ph-pa)] . acc)
-                             acc))))
-       (go 0 ()))
+       (rev (foldl (\ acc i (po + i * e @ h
+                               (ld-f fs s h 'ph-type = 1 ?
+                                  ([(ld-f fs s h 'ph-off) (ld-f fs s h 'ph-fsz) (ld-f fs s h 'ph-pa)] . acc)
+                                  acc)))
+                   () ^n)))
    (oc-lma id segs off)
     (: (go ps) (atom? ps ? (scare 'copy-unmapped-section off)
                   (<ps @ p

@@ -19,7 +19,7 @@
 (module 'holo
 (: ;; --- bytes and fields: reads past the end answer 0, and `fin` refuses the instruction ---
    (dc-at s k) (k < #s ? (s k) 0)
-   (dc-le s i n) ((: (g k a) (k < n ? (g (k + 1) (a + (dc-at s (i + k) << 8 * k))) a)) 0 0)
+   (dc-le s i n) (foldl (\ a k (a + (dc-at s (i + k) << 8 * k))) 0 ^n)
    (dc-sx v n) (1 << 8 * n - 1 @ m (v >= m ? (v - (m << 1)) v))
    (dc-imm s i n) (dc-sx (dc-le s i n) n)                     ; a signed immediate of n bytes
    dc-hexd "0123456789abcdef"

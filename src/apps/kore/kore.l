@@ -310,14 +310,12 @@
     (: shoff (ld-f fs b 0 'e-shoff) n (ld-f fs b 0 'e-shnum) e (ld-n fs 'sh-ent)
        sx (ld-f fs b 0 'e-shstrx)
        stro (sx < n ? (ld-f fs b (shoff + sx * e) 'sh-off) 0)
-       (go i acc)
-        (n <= i ? (rev acc)
-         (shoff + i * e @ h
-            (go (i + 1) ([i (ld-cstr b (stro + ld-f fs b h 'sh-name)) (ld-f fs b h 'sh-type)
-                          (ld-f fs b h 'sh-flags) (ld-f fs b h 'sh-off) (ld-f fs b h 'sh-size)
-                          (ld-f fs b h 'sh-link) (ld-f fs b h 'sh-info) (ld-f fs b h 'sh-align)
-                          (snip b h (h + e))] . acc))))
-       (go 0 ()))
+       (map (i \ (shoff + i * e @ h
+                    [i (ld-cstr b (stro + ld-f fs b h 'sh-name)) (ld-f fs b h 'sh-type)
+                     (ld-f fs b h 'sh-flags) (ld-f fs b h 'sh-off) (ld-f fs b h 'sh-size)
+                     (ld-f fs b h 'sh-link) (ld-f fs b h 'sh-info) (ld-f fs b h 'sh-align)
+                     (snip b h (h + e))]))
+            ^n))
    ; binutils' berkeley sums: allocated code or read-only is text, allocated with bytes
    ; is data, allocated without is bss
    (bu-berk b)
@@ -419,11 +417,9 @@
                   ([eh (snip b ehs base)] + <>>lay + [(ld-zeros (shoff - <lay))] + hdrs)))))
    (bu-symfix fs s nx)                 ; a kept symbol table's section numbers, renumbered
     (: e (ld-n fs 'sy-ent) n (#s // e)
-       (go i acc)
-        (n <= i ? acc
-         (: h (snip s (i * e) (i * e + e)) x (ld-f fs h 0 'sy-shndx)
-            (go (i + 1) (acc + (0 < x && x < 65280 ? (bu-put fs h 'sy-shndx (nx x)) h)))))
-       (go 0 ""))
+       (foldl (\ acc i (: h (snip s (i * e) (i * e + e)) x (ld-f fs h 0 'sy-shndx)
+                         (acc + (0 < x && x < 65280 ? (bu-put fs h 'sy-shndx (nx x)) h))))
+              "" ^n))
    (strip-main as)
     (: dbg (foldl (\ a w (a || elem w '("-g" "-S" "-d" "--strip-debug"))) 0 as)
        (go a o fs)
@@ -1187,9 +1183,7 @@ every tool answers --help and --version, and -h where the letter is free
   hostid | dnsdomainname                       ... and what the host's name resolves to
 "
    (usage _) (say err kore-usage, 2)
-   (bn p) (: n #p
-             (go k r) (k < n ? (go (k + 1) (p k = 47 ? (k + 1) r)) (snip p r n))
-             (go 0 0))
+   (bn p) (: n #p (snip p (foldl (\ r k (p k = 47 ? (k + 1) r)) 0 ^n) n))
 
    ; -- the dispatch (this form's body) --
    ; the spellings kore answers to: itself, its file, and every applet -- the symlink
