@@ -466,23 +466,28 @@
        v (? (<r = 0) <(sound >r) 0)
        (charm? v ? v 0))
    (nest-read p) (uread p @ [1 s] (s + "") ())
-   ; the tools a symlink to love serves by its own name, the argv[0] door
-   nest-tools ["lush" "kore" "sb" "cook" "libra" "mooncc"]
-   ; lux is a script over love, so it is written beside it, not linked: the modules the
-   ; Makefile cats, off the source this binary carries, so the wm and its love never skew
-   nest-luxfiles ["core" "layout" "wire" "ewmh" "manage" "keys" "config" "lux"]
-   (nest-lux _)
-    (: gz (source-gz "x")
-       u (string? gz ? (gz-unzip gz))
-       t (two? u ? (tar-unpack <>u))
-       es (two? t ? <>t)
-       top (two? es ? (src-top es) "")
-       (pick nm) (: want (top + "/src/apps/lux/" + nm + ".l")
-                    (go l) (? !(two? l) () (tar-get <l 'nom "" = want) (tar-get <l 'body "") (go >l))
-                    (go es))
-       bs (map pick nest-luxfiles)
-       (two? es && !(any (b \ !(string? b)) bs) ?
-          (foldl (a \ b \ a + b) "#!/usr/bin/env -S love -l\n" bs)))
+   ; the one tool linked to love by its own name, the argv[0] door: lush, autonomous by
+   ; default, runs every other verb by name (`lush -c 'mooncc ..'`), PATH or no PATH
+   nest-tools ["lush"]
+   nest-keep ["love" "lush"]
+   ; what an earlier nest or install laid that the one install no longer keeps: a link to
+   ; love by another name, the lux script, the bao launcher, the papel link to its source.
+   ; anything else in the nest is not ours to judge, and stays
+   (nest-laid? p)
+    (readlink p @ l
+       (? (string? l) (l = "love" || (#l > 17 && snip l (#l - 17) #l = "/src/apps/papel.l"))
+          (nest-read p @ s
+             (string? s && (snip s 0 41 = "#!/usr/bin/env -S love -l\n; src/apps/lux/"
+                            || 0 <= fsub s "((cite 'cli 'shell) 0)" 0)))))
+   (nest-stale bin)
+    (filter (nm \ 0 < #nm && nm 0 != 46 && !(elem nm nest-keep) && nest-laid? (bin + "/" + nm))
+            (two? (stat bin) ? (readdir bin) ()))
+   ; a ~/.local/bin link into the nest whose name the nest no longer holds, or will not
+   (nest-stale-compat home bin gone)
+    (: d (home + "/.local/bin")
+       (filter (nm \ 0 < #nm && nm 0 != 46 && readlink (d + "/" + nm) = bin + "/" + nm
+                     && (elem nm gone || !(two? (stat (bin + "/" + nm)))))
+               (two? (stat d) ? (readdir d) ())))
 
    ; the plan: what is there, what this build is, and what to do about each. the verdict
    ; says how the two builds stand -- 'fresh (none there) 'older 'same (these very bytes)
@@ -504,10 +509,10 @@
        (tool nm) (: p (bin + "/" + nm) l (readlink p)
                     was (? (string? l) l (two? (stat p)) "a file" "")
                     {'nm nm 'was was 'act (was = "love" ? 'keep 'link)})
-       lux (nest-lux 0)
-       luxact (? !(string? lux) 'none (nest-read (bin + "/lux") = lux) 'keep 'lay)
+       gone (nest-stale bin)
        {'home home 'bin bin 'dst dst 'me me 'new new 'mine mine 'theirs theirs 'verdict vd
-        'lay (lay ? 'lay 'keep) 'tools (map tool nest-tools) 'lux lux 'luxact luxact})
+        'lay (lay ? 'lay 'keep) 'tools (map tool nest-tools)
+        'gone gone 'gonec (nest-stale-compat home bin gone)})
    ; the verdict, said
    (nest-verdict pl) (pl 'verdict @
     'fresh "the nest has no love yet"
@@ -530,12 +535,8 @@
       (pl 'lay = 'lay ? "lay this build as ~/.love/bin/love" "leave ~/.love/bin/love as it is")
       "the tools:"]
      + map (t \ "  " + nest-tool-line pl t) (pl 'tools)
-     + nest-lux-lines pl)
-   ; lux follows the love that stays: written only when that is this build
-   (nest-ours? pl) (pl 'lay = 'lay || pl 'verdict = 'same)
-   (nest-lux-lines pl) (pl 'luxact @
-    'lay [("  lux      " + (nest-ours? pl ? "written from this build" "kept, beside the nest's love"))]
-    'keep ["  lux      this build's"])
+     + map (nm \ "  " + fill1 8 nm + "laid by an earlier install, removed") (pl 'gone)
+     + map (nm \ "  ~/.local/bin/" + nm + " removed") (pl 'gonec))
    ; ~/.local/bin is already on PATH where ~/.love/bin is not; a name there that is not
    ; ours already is left alone
    (nest-compat home bin nm)
@@ -565,18 +566,12 @@
                    (unlink p, symlink "love" p,
                     readlink p = "love"))
        ls (there ? (filter (t \ t 'act = 'link && link t) (pl 'tools)))
-       ; the script takes its name by rename, as the love does: a torn write never runs
-       wrote (there && nest-ours? pl && pl 'luxact = 'lay ?
-                (: p (bin + "/lux") tmp (bin + "/.lux.new")
-                   q (open tmp "w")
-                   _ (hot? q ? (say q (pl 'lux), close q) (src-die ("nest: cannot write " + tmp)))
-                   _ (chmod tmp 493)
-                   e (rename tmp p)
-                   ((!e ? 0 (unlink tmp, src-die ("nest: cannot rename over " + p))),
-                    ["wrote ~/.love/bin/lux from this build"])))
-       luxed (two? (stat (bin + "/lux")))
-       ((there ? (each ("love" . (map (t \ t 'nm) (pl 'tools) + (luxed ? ["lux"]))) (nest-compat home bin)) 0),
-        laid + (two? ls ? [("linked " + foldl (a \ t \ a + " " + t 'nm) (<ls 'nm) >ls)]) + wrote))
+       _ (each (pl 'gone) (nm \ unlink (bin + "/" + nm)))
+       _ (each (pl 'gonec) (nm \ unlink (home + "/.local/bin/" + nm)))
+       gn (pl 'gone + map (nm \ "~/.local/bin/" + nm) (pl 'gonec))
+       ((there ? (each ("love" . map (t \ t 'nm) (pl 'tools)) (nest-compat home bin)) 0),
+        laid + (two? ls ? [("linked " + foldl (a \ t \ a + " " + t 'nm) (<ls 'nm) >ls)])
+        + (two? gn ? [("removed " + foldl (a \ n \ a + " " + n) <gn >gn)])))
    (nest-usage _)
     (say err "usage: love nest [-f] [-y | -n] [--stamp]
   lay this binary as ~/.love/bin/love and link its tools beside it. on a terminal the
@@ -621,6 +616,23 @@
               sayall (map (l \ "love nest: " + l) (nest-apply pl)),
               0))))
 
+   ; -- lux: the window manager, a verb over the source this binary carries. its modules
+   ;    read in the Makefile's order (luxfiles), so the wm and its love never skew; it
+   ;    restarts by exec'ing its own argv, which comes back here --
+   lux-modules ["core" "layout" "wire" "ewmh" "manage" "keys" "config" "lux"]
+   (lux-main as)
+    (: gz (source-gz "x")
+       _ (string? gz ? 0 (src-die "lux: this love carries no source"))
+       u (gz-unzip gz)
+       t (two? u ? (tar-unpack <>u))
+       _ (two? t ? 0 (src-die "lux: the carried source is torn"))
+       es <>t top (src-top es)
+       cat (foldl (a \ m \ a + kern-pick es top ("src/apps/lux/" + m + ".l")) "" lux-modules)
+       (reads (tap ((: (g i) (i < #cat ? (peep cat i 0 . g (1 + i)))) 0))))
+   lux-usage "usage: love lux
+  the window manager, over the display DISPLAY names; settings ride ~/.love/etc/lux.l
+"
+
    ; a binding, not a body: the letrec stays body-less, so every name above is the
    ; module's -- (cite 'source 'src-arm) for serve and doom -- and the pins still run at load
    _ (pins (cite 'verbs 'tab)
@@ -628,6 +640,7 @@
       'src    source-main
       'seed   seed-main
       'kernel kernel-main
-      'nest   nest-main))
+      'nest   nest-main
+      'lux    (udoor 'lux lux-main lux-usage 1 1)))
 
 ) ; module 'source

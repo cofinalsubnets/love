@@ -82,7 +82,7 @@ Transpile a Makefile to a resolved Cookfile:
 > cook --emit -f Makefile > Cookfile
 > ```
 
-Without the installed symlink, loading cook by hand:
+From the tree, without an installed love, loading cook by hand:
 
 > ```
 > love -l src/apps/cook.l Makefile host
