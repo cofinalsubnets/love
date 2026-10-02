@@ -128,9 +128,7 @@
          put out c,
          pin st 'col (peep st 'col 0 + 1))))
    (bc-say st t)
-    (: n #t
-       (go k) (n <= k ? 0 (bc-put st (t k), go (k + 1)))
-       (go 0))
+    (each ^#t (k \ bc-put st (t k)), 0)
    (bc-print st n) (pin st 'last n, bc-say st (bc-show st n))
 
    ; -- the complaints --------------------------------------------------------
@@ -209,10 +207,8 @@
    ; 1. every other numeral clamps a figure at or above the base to base-1
    (bc-numeral t ib)
     (: n #t
-       (dot j) (? (n <= j) n (t j = 46) j (dot (j + 1)))
-       i (dot 0)
-       ip (snip t 0 i)
-       fp (i < n ? (snip t (i + 1) n) "")
+       pf (t @ (a + "." + b) [a b] [t ""])
+       ip <pf fp <>pf
        one (n = 1 && 0 <= bc-dv (t 0))
        (dg c) (bc-dv c @ d (? one d (d < ib) d (ib - 1)))
        (acc s j v) (#s <= j ? v (acc s (j + 1) (v * ib + dg (s j))))
@@ -926,13 +922,13 @@ define j(n, x) {
        (go a acc)
         (atom? a ? (rev acc)
          (: w <a n #w
-            (? (w = "-e" || w = "--expression") (two? >a ? (go >>a ([0 <>a] . acc)) (usage "option requires an argument -- 'e'"))
-               (13 < n && snip w 0 13 = "--expression=") (go >a ([0 (snip w 13 n)] . acc))
-               (2 < n && snip w 0 2 = "-e") (go >a ([0 (snip w 2 n)] . acc))
-               (w = "-f" || w = "--file") (two? >a ? (go >>a ([1 <>a] . acc)) (usage "option requires an argument -- 'f'"))
-               (7 < n && snip w 0 7 = "--file=") (go >a ([1 (snip w 7 n)] . acc))
-               (w = "--") (rev acc + map (f \ [1 f]) >a)
-               (1 < n && w 0 = 45) (usage ("invalid option -- '" + string (w 1) + "'"))
+            (w @ ("-e" || "--expression") (two? >a ? (go >>a ([0 <>a] . acc)) (usage "option requires an argument -- 'e'"))
+               ("--expression=" + (v && 0 < #v)) (go >a ([0 v] . acc))
+               ("-e" + v) (go >a ([0 v] . acc))
+               ("-f" || "--file") (two? >a ? (go >>a ([1 <>a] . acc)) (usage "option requires an argument -- 'f'"))
+               ("--file=" + (v && 0 < #v)) (go >a ([1 v] . acc))
+               "--" (rev acc + map (f \ [1 f]) >a)
+               (? (1 < n && w 0 = 45)) (usage ("invalid option -- '" + string (w 1) + "'"))
                (go >a ([1 w] . acc)))))
        jobs (go as ())
        ; stdin read a line at a time (a string may run on over several), so that ?

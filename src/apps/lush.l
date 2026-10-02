@@ -1353,11 +1353,9 @@
      (two? segs ?
       (: h <segs
        (<h = 'lit ?
-        (: t >h p (sh-eqpos t 0)
-         (? !p ()
-            !(sh-asnname? (snip t 0 p)) ()
-            (snip t 0 p .  (: rest (snip t (p + 1) #t)
-                            (? #rest (('lit . rest) . >segs) >segs))))))))
+        (>h @ ((n && 0 < #n && sh-asnname? n) + "=" + rest)
+           (n . (? #rest (('lit . rest) . >segs) >segs))
+           ()))))
    (sh-peel ws acc)
      (two? ws ?
         (: a (sh-asn? <ws)
@@ -1410,9 +1408,7 @@
    ; this binary. `set --autonomous` and its kin, else the flag word, else LUSHFLAGS'
    ; last a, g or p. the entry pins the box once; an unseated caller (cook, a -e) reads
    ; the environment at the ask and pins nothing, which would bake in its answer.
-   (sh-envflag _) (: s ("" + (getenv "LUSHFLAGS")) n #s
-                     (go k v) (n <= k ? v (go (k + 1) (s k @ 97 0 103 1 112 2 _ v)))
-                     (go 0 0))
+   (sh-envflag _) (: s ("" + (getenv "LUSHFLAGS")) (foldl (\ v k (s k @ 97 0 103 1 112 2 _ v)) 0 ^#s))
    (sh-mode _) (peep sh-mflag () 'no @ 'no (sh-envflag 0) v v) ; peep: a pinned 0 is a verdict, not an absence
    sh-modes {"--autonomous" 0 "--gregarious" 1 "--precarious" 2}
    ; a new mode asks each word again: the in-image and fork verdicts were the old one's
@@ -1651,7 +1647,7 @@
    ; reset form: `trap INT` is `trap - INT`. sh-cond normalises before anything is stored.
    (sh-cond w)
      (: u (sh-upper w)
-        v (? (#u > 3 && snip u 0 3 = "SIG") (snip u 3 #u) u)
+        v (u @ ("SIG" + (s && 0 < #s)) s u)
         (? (v = "0") "EXIT" v))
    (sh-upper s)                                 ; an index walk: foldl does not take a string
      ((: (g i acc)
@@ -1725,10 +1721,8 @@
            'verb (" is a verb of " + v 1)
                  (" is " + v 1))
    (sh-localb args)
-     (each args (\ w (: p (sh-eqpos w 0) nm (? p (snip w 0 p) w)
-                        (? (sh-ro? nm) (sh-rosay nm)
-                           !p (pin sh-vars w "")
-                           (pin sh-vars nm (snip w (p + 1) #w))))),
+     (each args (\ w (w @ ((nm && 0 < #nm) + "=" + v) (? (sh-ro? nm) (sh-rosay nm) (pin sh-vars nm v))
+                        (? (sh-ro? w) (sh-rosay w) (pin sh-vars w "")))),
       0)
    (sh-waitb args)                              ; wait [pid..] -> the last one's status
      (? (two? args)
@@ -1757,7 +1751,7 @@
    ; the three that act on this process or its tables, which is what makes a builtin:
    ; kill knows the jobs, umask sets the shell's own mask, getopts writes its variables
    (sh-sigof s)                                 ; TERM, SIGTERM or 15 -> 15; () for none
-     (: b (3 < #s && snip s 0 3 = "SIG" ? (snip s 3 #s) s)
+     (: b (s @ ("SIG" + (n && 0 < #n)) n s)
         (sh-digits? b ? (sh-int b) (sh-signum b @ 0 () n n)))
    ; kill [-s SIG | -SIG | -N] PID|%JOB..: a job is its group when it leads one, else
    ; each pid of it; a negative pid wants the -- that keeps it from reading as a signal.
@@ -1839,9 +1833,7 @@
      (? (!(two? args) || <args = "-p")
         (each (sort (keys sh-rovars))
               (nm \ puts ("readonly " + nm + (sh-vget nm @ (_ . v) ("='" + v + "'") "") + "\n")), 0)
-        (foldl (a \ w \ (: p (sh-eqpos w 0)
-                          nm (? p (snip w 0 p) w)
-                          _ (? p (sh-setvar nm (snip w (p + 1) #w)) 0)
+        (foldl (a \ w \ (: nm (w @ ((n && 0 < #n) + "=" + v) (sh-setvar n v, n) w)
                           _ (pin sh-rovars nm 1)
                           a))
                0 args))
@@ -1850,12 +1842,11 @@
    (sh-aliassay ws) (each ws (w \ puts ("alias " + w + "='" + sh-aliases w + "'\n")))
    (sh-aliasb args)
      (? !(two? args) (sh-aliassay (sort (keys sh-aliases)), 0)
-        (foldl (a \ w \ (: p (sh-eqpos w 0)
-                          (? !p (? (string? (sh-aliases w)) (sh-aliassay [w], a)
-                                   (say err ("lush: alias: " + w + ": not found\n"), 1))
-                             (: v (snip w (p + 1) #w)
-                                (? (two? (sh-aliasws v)) (pin sh-aliases (snip w 0 p) v, a)
-                                   (say err ("lush: alias: " + (snip w 0 p) + ": words only, no operators\n"), 1))))))
+        (foldl (a \ w \ (w @ ((n && 0 < #n) + "=" + v)
+                          (? (two? (sh-aliasws v)) (pin sh-aliases n v, a)
+                             (say err ("lush: alias: " + n + ": words only, no operators\n"), 1))
+                          (? (string? (sh-aliases w)) (sh-aliassay [w], a)
+                             (say err ("lush: alias: " + w + ": not found\n"), 1))))
                0 args))
    (sh-unaliasb args)
      (? (two? args && <args = "-a") (sh-tclear sh-aliases, 0)
@@ -2873,7 +2864,7 @@ no file and no -c is a shell: a repl on a tty, cooked script off stdin otherwise
               ; the long forms only: -h is `set -h` in every shell, and -v is `set -v`
               "--help" (puts (sh-usage + "\n"), flush out, quit 0)
               "--version"
-               (puts $ "lush (love " + love-version + ")\n", flush out, quit 0)
+               (puts (uvers "lush" + "\n"), flush out, quit 0)
               ; -- ends the options, which is the only way to name a file that starts
               ; with a dash: every other dash word is a flag word, ours or a mistake
               "--" (two? >args ? (sh-file <>args >>args) (sh 0))

@@ -50,7 +50,7 @@
    ; read a file's top-level forms as data (the reader strips ; comments)
 
    ; a uu name -> a Lean identifier: prefix uu_, kebab '-' -> '_'
-   (sanit s) (:- (g 0 "") (g i acc) (i >= #s ? acc (g (1 + i) (acc + string (s i @ 45 95 c c)))))
+   (sanit s) (jug 0 @ j (each ^#s (i \ say j (string (s i @ 45 95 c c))), slurp j))
    (leann nm) ("uu_" + sanit (string nm))
 
    ; --- collect (kind nm T t) entries from the uu.l forms (defns live inside asserts) ---

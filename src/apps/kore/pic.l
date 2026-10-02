@@ -190,15 +190,15 @@
    (pic-past s i) (#s <= i || !(47 < s i < 58) ? i (pic-past s (i + 1)))
    ; DA1's answer in s as ";p;..;p;", or "" before it is whole
    (pic-da s)
-    (: i (wg-find s (string 27 + "[?") 0)
+    (: i (fsub s (string 27 + "[?") 0)
        (go j) (? (i < 0 || #s <= j) "" (s j = 99) (";" + snip s (i + 3) j + ";")
                  (s j = 59 || 47 < s j < 58) (go (j + 1)) "")
        (go (i + 3)))
    ; the answers to pic-ask -> {'kitty 'sixel 'cw 'ch}, cw and ch 0 when not said
    (pic-heard s)
-    (wg-find s (string 27 + "[6;") 0 @ c
-       {'kitty (0 <= wg-find s (string 27 + "_Gi=31;OK") 0)
-        'sixel (0 <= wg-find (pic-da s) ";4;" 0)
+    (fsub s (string 27 + "[6;") 0 @ c
+       {'kitty (0 <= fsub s (string 27 + "_Gi=31;OK") 0)
+        'sixel (0 <= fsub (pic-da s) ";4;" 0)
         'ch (c < 0 ? 0 (pic-digits s (c + 4)))
         'cw (c < 0 ? 0 (pic-digits s (pic-past s (c + 4) + 1)))})
    ; the terminal on stdin and stdout asked, raw for at most a second

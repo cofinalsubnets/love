@@ -160,10 +160,7 @@
    ; sweep-order-free.
    (vlive bt n succ cur lt escn)
     (: lv {}
-       rwt (: t {}
-              (go i) (n <= i ? t
-                        (pin t i (vrw (bt i) (peep cur i 0) lt), go (i + 1)))
-              (go 0))
+       rwt (foldl (\ t i (pin t i (vrw (bt i) (peep cur i 0) lt))) {} ^n)
        (out ss seed)
         (? (vall? seed) 'all
            (atom? ss) seed

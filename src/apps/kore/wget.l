@@ -21,26 +21,18 @@
        (go i a) (? (n <= i) a
                    (: c (s i) (? (47 < c && c < 58) (go (i + 1) ((a * 10) + (c - 48))) a)))
        (go 0 0))
-   (wg-find s sub cite)                                                ; first index of sub at/after from, else -1
-    (: n #s m #sub c (? m (sub 0) 0)
-       (go i) (? ((n - m) < i) -1 (!m || (s i = c && snip s i (i + m) = sub)) i (go (i + 1)))
-       (go cite))
    (wg-lower s) (string (map (i \ (: c (s i) (? (64 < c && c < 91) (c + 32) c))) (jot #s)))
    ; what a peer said, fit for a terminal: the C0 controls but tab and newline, and DEL, out
    (wg-plain s) (string (filter (c \ !((c < 32 && c != 9 && c != 10) || c = 127)) (map (i \ s i) ^#s)))
    ; "https://host[:port]/path" -> (tls? host port path) | ()
    (wg-url u)
-    (: tls? (8 <= #u && (snip u 0 8) = "https://")
-       plain? (7 <= #u && (snip u 0 7) = "http://")
-       (? (!tls? && !plain?) ()
-          (: r (snip u (tls? ? 8 7) #u) m #r
-             k (: (sl i) (? (m <= i) m (r i = 47) i (sl (i + 1))) (sl 0))
-             auth (snip r 0 k)
-             path (? (k < m) (snip r k m) "/")
-             c (: a #auth (cn i) (? (a <= i) -1 (auth i = 58) i (cn (i + 1))) (cn 0))
-             host (? (c < 0) auth (snip auth 0 c))
-             port (? (c < 0) (tls? ? 443 80) (wg-digits (snip auth (c + 1) #auth)))
-             (? (0 < #host && 0 < port) [tls? host port path] ()))))
+    (u @ ("https://" + r) (wg-url-at 1 r) ("http://" + r) (wg-url-at 0 r) ())
+   (wg-url-at tls? r)
+          (: ap (r @ (a + "/" + p) [a ("/" + p)] [r "/"])
+             auth <ap path <>ap
+             hp (auth @ (h + ":" + p) [h (wg-digits p)] [auth (tls? ? 443 80)])
+             host <hp port <>hp
+             (? (0 < #host && 0 < port) [tls? host port path] ()))
    ; a Location may be bare: a path on the same origin
    (wg-resolve base loc)
     (? (5 <= #loc && (snip loc 0 4) = "http") loc
@@ -49,16 +41,16 @@
              ((<b ? "https://" "http://") + (b 1) + ":" + show (b 2) + (loc 0 = 47 ? loc ("/" + loc))))))
    ; the header block's value for a name, lowercase both sides; () when absent
    (wg-header hd name)
-    (: h (wg-lower hd) k (wg-find h ("\r\n" + name + ":") 0)
+    (: h (wg-lower hd) k (fsub h ("\r\n" + name + ":") 0)
        (? (k < 0) ()
           (: a (k + 3 + #name)
-             e (wg-find hd "\r\n" a)
+             e (fsub hd "\r\n" a)
              v (snip hd a (e < 0 ? #hd e))
              (: (trim s) (? (0 < #s && (s 0 = 32)) (trim (snip s 1 #s)) s) (trim v)))))
    ; a chunked body, unchunked: size line, data, crlf, until a zero size; () if it ends first
    (wg-unchunk b)
     (: j (jug 0)
-       (go i) (: e (wg-find b "\r\n" i)
+       (go i) (: e (fsub b "\r\n" i)
                  (? (e < 0) 0
                     (: n (: (hexn s) (: (go2 k a) (? (k >= #s) a
                                                      (: c (s k)
@@ -93,11 +85,11 @@
                     (: _ (say s req) _ (flush s) r (slurp s) _ (close s) r))))
        (? (two? raw) (raw 1)                                   ; the tls refusal, said
           !(string? raw) ()
-          (: k (wg-find raw "\r\n\r\n" 0)
+          (: k (fsub raw "\r\n\r\n" 0)
              (? (k < 0) ()
                 (: head (snip raw 0 k)
                    body (snip raw (k + 4) #raw)
-                   sp (wg-find head " " 0)
+                   sp (fsub head " " 0)
                    code (? (sp < 0) 0 (wg-digits (snip head (sp + 1) (sp + 4))))
                    te (wg-header head "transfer-encoding")
                    cl (wg-header head "content-length") n (? (string? cl) (wg-digits cl) -1)
@@ -111,7 +103,7 @@
        (? (atom? u) [1 ("wget: not a url: " + url)]
           (: _ (? (<u && how = 'none && !quiet) (say err ("wget: not checking the certificate of " + (u 1) + "\n")) 0)
              r (wg-ask-how <u (u 1) (u 2) (u 3) "" how)
-             (? (string? r) [(? (0 = wg-find r "cannot connect" 0) 1 (0 = wg-find r "the answer from" 0) 4 5) ("wget: " + r)]
+             (? (string? r) [(? (0 = fsub r "cannot connect" 0) 1 (0 = fsub r "the answer from" 0) 4 5) ("wget: " + r)]
                 (atom? r) [1 ("wget: no answer from " + (u 1))]
                 (: code <r
                    loc (wg-header (r 1) "location")
@@ -127,7 +119,7 @@
     (: u (wg-url url)
        p (? (two? u) (u 3) "/")
        nm (pbase p)
-       q (wg-find nm "?" 0)
+       q (fsub nm "?" 0)
        nm2 (? (q < 0) nm (snip nm 0 q))
        (? (0 < #nm2) nm2 "index.html"))
    (wget-main as)

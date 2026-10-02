@@ -316,8 +316,8 @@ crewfiles = src/apps/json.l src/apps/sb/merge.l src/apps/sb/http.l src/apps/sb/s
   src/apps/harp/harp.l src/apps/harp/play.l src/apps/harp/score.l \
   src/apps/harp/just.l src/apps/harp/drift.l src/apps/harp/tonnetz.l src/apps/harp/phrases.l \
   src/apps/x11.l src/apps/manifest/manifest.l src/apps/lore/lore.l src/apps/lore/rove.l src/apps/lore/view.l src/apps/lore/vec.l src/apps/lore/sky.l src/apps/lore/grove.l src/apps/lore/meadow.l src/apps/lore/tower.l src/apps/lore/story.l src/apps/lore/design.l src/apps/lore/slop.l src/apps/lore/grass.l src/apps/lore/grass99.l src/apps/lore/wade.l src/apps/lore/apartment.l src/apps/lore/dusk.l src/apps/lore/garage.l src/apps/lore/shaft.l src/apps/lore/tree.l src/apps/lore/roost.l src/apps/harp/synth.l \
-  src/apps/berth/wharf.l src/apps/berth/limn.l src/apps/berth/berth.l src/apps/face.l src/apps/lux/wire.l src/apps/berth/pier.l src/apps/doom.l src/apps/lupa.l src/apps/mc.l \
-  src/apps/chucho/mime.l src/apps/chucho/box.l src/apps/chucho/smtp.l src/apps/chucho/imap.l src/apps/chucho/chucho.l src/apps/pom.l src/apps/saver.l src/apps/locks.l src/apps/bee.l
+  src/apps/mitty/wharf.l src/apps/mitty/limn.l src/apps/mitty/mitty.l src/apps/font.l src/apps/lux/wire.l src/apps/mitty/pier.l src/apps/doom.l src/apps/lupa.l src/apps/mc.l \
+  src/apps/chucho/mime.l src/apps/chucho/box.l src/apps/chucho/smtp.l src/apps/chucho/imap.l src/apps/chucho/chucho.l src/apps/pom.l src/apps/saver.l src/apps/locks.l src/apps/seals.l src/apps/bee.l
 korefiles = $(kore_head) $(holo_obj) src/love/holo/copy.l $(kore_arc) $(kore_net)
 # the KERNEL's crew: the host's, and the compiler ahead of it. a metal seat has no
 # ambient toolchain, so the one it carries is the only one there is -- `love seed` and
@@ -393,7 +393,7 @@ out/src.o: $(dist_source) src/tools/mksrc.l $(holocat_dep) $(love0)
 	@echo 'HOLO	'$@
 	@$(love0) $(holocat) src/tools/mksrc.l $(dist_source) $@ $(hosta)
 # the machine's own files (src/inle/rootfs/): a second initrd, walked at the root of every inle
-# boot where the tree's is walked under /proc/src. one tar, carried under ai_rootfs
+# boot where the tree's is walked under /love. one tar, carried under ai_rootfs
 # beside the source blob on every link that carries one.
 rootfs_files = $(wildcard src/inle/rootfs/* src/inle/rootfs/*/* src/inle/rootfs/*/*/*)
 out/rootfs.tar: $(rootfs_files) src/tools/mkrootfs.l $(love0)
@@ -695,7 +695,7 @@ out/lib/korelist.h: Makefile
 	 $(note)
 
 # the crew roster, the same one line: these files are NOT in the kernel's cat, so the
-# order is all the kernel carries and the members come off /proc/src when a verb is asked
+# order is all the kernel carries and the members come off /love when a verb is asked
 # for. one line, because a name does not say which file holds it -- story lives in
 # src/apps/lore/, xwire in src/apps/lux/wire.l, and sb spans three that must load in order.
 out/lib/crewlist.h: Makefile
@@ -729,7 +729,7 @@ kmain_o: $(k_free_o)
 kart_inc = -I$(ho) -I. -Isrc/love -Isrc/inle -Iout/lib -I$R \
   -I$S/love/quay -I$S/apps/moon/include
 # kmain.c's own bake is the two ROSTERS -- the kore cat's order, and the crew's, which it
-# carries the order of and reads the members of off /proc/src -- and the seat text. the egg
+# carries the order of and reads the members of off /love -- and the seat text. the egg
 # and the module set are src/love/cats.c's, and that object rides the host lane above.
 kart_bake = out/lib/korelist.h out/lib/crewlist.h out/lib/seat.h
 define kart
@@ -946,14 +946,14 @@ endif
 # spellings of a list is how they drift.
 binnames = $(BIN) kore sb mooncc cook papel libra lux bao lush
 mannames = $(BIN) cook lush
-# the default nest lays itself: `love nest -y` (src/apps/source.l) copies the binary in, newer
-# builds only, and links the tools it serves by name. the rest keep their rules below, and
-# a real PREFIX, DESTDIR or BIN keeps them all
-nestnames = $(BIN) kore sb mooncc cook libra lush
+# the default nest is the one install: `love nest -y` (src/apps/source.l) copies the binary
+# in, newer builds only, and links lush, which runs every other verb by name. a real PREFIX,
+# DESTDIR or BIN keeps the whole roster as files
+nestnames = $(BIN) lush
 ifeq ($(BIN)|$(PREFIX)|$(DESTDIR),love|.love/|$(HOME)/)
 nested = 1
 endif
-rulenames = $(if $(nested),$(filter-out $(nestnames),$(binnames)),$(binnames))
+rulenames = $(if $(nested),,$(binnames))
 installs = $(patsubst %,$d/bin/%,$(rulenames)) \
   $(patsubst %,$d/share/man/man1/%.1,$(mannames)) \
   $v/ftdetect/love.vim $v/syntax/love.vim $v/ftplugin/love.vim

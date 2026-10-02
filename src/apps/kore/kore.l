@@ -70,7 +70,7 @@
 ; every path answers a charm through core.l's urun, so an in-image caller lives through a
 ; tool that would have quit -- the SEAT below is the one site that quits, and a main here
 ; leaves deep through `udie`.
-(module (kore kore-main wget-main openssl-main wg-digits wg-find wg-lower wg-url wg-resolve wg-header wg-unchunk wg-once wg-fetch wg-name
+(module (kore kore-main wget-main openssl-main wg-digits wg-lower wg-url wg-resolve wg-header wg-unchunk wg-once wg-fetch wg-name
         www-main ww-split ww-resolve ww-arg ww-get ww-lay ww-dump ww-new ww-show ww-step ww-body ww-fit
         ww-art ww-splice ww-marks ww-pictures ww-hop? wg-plain
         pic-main gpic-main gp-run grap-main gr-run chem-main ch-run pic-cat pic-convert pic-pixelize pic-blocky pic-sample pic-sixel pic-kitty pic-kits pic-near pic-ans pic-type pic-ask pic-heard picless-main pic-kind pic-size pic-decode pic-frames pic-art pic-view pic-deep pic-cells pic-fit pic-probe pic-pick lens-pics
@@ -310,14 +310,12 @@
     (: shoff (ld-f fs b 0 'e-shoff) n (ld-f fs b 0 'e-shnum) e (ld-n fs 'sh-ent)
        sx (ld-f fs b 0 'e-shstrx)
        stro (sx < n ? (ld-f fs b (shoff + sx * e) 'sh-off) 0)
-       (go i acc)
-        (n <= i ? (rev acc)
-         (shoff + i * e @ h
-            (go (i + 1) ([i (ld-cstr b (stro + ld-f fs b h 'sh-name)) (ld-f fs b h 'sh-type)
-                          (ld-f fs b h 'sh-flags) (ld-f fs b h 'sh-off) (ld-f fs b h 'sh-size)
-                          (ld-f fs b h 'sh-link) (ld-f fs b h 'sh-info) (ld-f fs b h 'sh-align)
-                          (snip b h (h + e))] . acc))))
-       (go 0 ()))
+       (map (i \ (shoff + i * e @ h
+                    [i (ld-cstr b (stro + ld-f fs b h 'sh-name)) (ld-f fs b h 'sh-type)
+                     (ld-f fs b h 'sh-flags) (ld-f fs b h 'sh-off) (ld-f fs b h 'sh-size)
+                     (ld-f fs b h 'sh-link) (ld-f fs b h 'sh-info) (ld-f fs b h 'sh-align)
+                     (snip b h (h + e))]))
+            ^n))
    ; binutils' berkeley sums: allocated code or read-only is text, allocated with bytes
    ; is data, allocated without is bss
    (bu-berk b)
@@ -419,11 +417,9 @@
                   ([eh (snip b ehs base)] + <>>lay + [(ld-zeros (shoff - <lay))] + hdrs)))))
    (bu-symfix fs s nx)                 ; a kept symbol table's section numbers, renumbered
     (: e (ld-n fs 'sy-ent) n (#s // e)
-       (go i acc)
-        (n <= i ? acc
-         (: h (snip s (i * e) (i * e + e)) x (ld-f fs h 0 'sy-shndx)
-            (go (i + 1) (acc + (0 < x && x < 65280 ? (bu-put fs h 'sy-shndx (nx x)) h)))))
-       (go 0 ""))
+       (foldl (\ acc i (: h (snip s (i * e) (i * e + e)) x (ld-f fs h 0 'sy-shndx)
+                         (acc + (0 < x && x < 65280 ? (bu-put fs h 'sy-shndx (nx x)) h))))
+              "" ^n))
    (strip-main as)
     (: dbg (foldl (\ a w (a || elem w '("-g" "-S" "-d" "--strip-debug"))) 0 as)
        (go a o fs)
@@ -1187,9 +1183,7 @@ every tool answers --help and --version, and -h where the letter is free
   hostid | dnsdomainname                       ... and what the host's name resolves to
 "
    (usage _) (say err kore-usage, 2)
-   (bn p) (: n #p
-             (go k r) (k < n ? (go (k + 1) (p k = 47 ? (k + 1) r)) (snip p r n))
-             (go 0 0))
+   (bn p) (: n #p (snip p (foldl (\ r k (p k = 47 ? (k + 1) r)) 0 ^n) n))
 
    ; -- the dispatch (this form's body) --
    ; the spellings kore answers to: itself, its file, and every applet -- the symlink
@@ -1271,7 +1265,7 @@ every tool answers --help and --version, and -h where the letter is free
                  (f ? (koredoor n f >t)
                     (uask t 1 1
                      @ 'help (puts kore-usage, flush out, 0)
-                       'vers (puts ("kore (love " + love-version + ")\n"), flush out, 0)
+                       'vers (puts (uvers "kore" + "\n"), flush out, 0)
                        (usage ())))))))))
 ; the seat: file mode (cat | love) dispatches on the real command line and quits with
 ; the status. the -l bake preload seats a flag, not kore, so the scan answers () and

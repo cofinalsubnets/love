@@ -107,8 +107,7 @@
               2)
    (vclw c) (c = 32 || c = 9 ? 0 1)            ; the WORD class: blank / everything else
    (vupc c) (? (97 <= c <= 122) (c - 32) (65 <= c <= 90) (c + 32) c)   ; ~'s flip
-   (vflip t) (: n #t (go i acc) (n <= i ? acc (go (i + 1) (acc + string (vupc (t i)))))
-                (go 0 ""))
+   (vflip t) (jug 0 @ j (each ^#t (i \ say j (string (vupc (t i)))), slurp j))
    (vlead ln) (: n #ln                         ; the leading blanks, as a count
                  (go i) (i < n && (ln i = 32 || ln i = 9) ? (go (i + 1)) i)
                  (go 0))
@@ -218,10 +217,7 @@
                  (c = 41) 40 (c = 93) 91 (c = 125) 123 60)
    (vdelims st r o cl)                             ; ([col char] ..) on row r, ascending
     (: ln (st 'lines r) n #ln sk (vskips st r)
-       (go i acc) (n <= i ? (rev acc)
-                     (ln i @ c
-                        (go (i + 1) ((c = o || c = cl) && vcode? sk i ? ([i c] . acc) acc))))
-       (go 0 ()))
+       (rev (foldl (\ acc i (ln i @ c ((c = o || c = cl) && vcode? sk i ? ([i c] . acc) acc))) () ^n)))
    ; the mate of the delimiter at (r c): rows are scanned whole, outward, and only
    ; this pair's own two characters count, so a ( inside [] is nesting and a [ is not
    (vmate st r c o cl)
@@ -608,11 +604,8 @@
    ; * and # -- the word under the cursor becomes the search. a name in this tree
    ; is full of BRE metacharacters (`map*`, `1.5`, `\`), so every one of them is
    ; spelled out, and 'patw asks the hunt for the boundaries the engine has no node for
-   (vbesc t) (: n #t
-                (go i acc) (n <= i ? acc
-                              (go (i + 1) (acc + (elem (t i) '(46 42 91 92 94 36) ? "\\" "")
-                                               + string (t i))))
-                (go 0 ""))
+   (vbesc t) (jug 0 @ j (each ^#t (i \ say j ((elem (t i) '(46 42 91 92 94 36) ? "\\" "") + string (t i))),
+                          slurp j))
    (vstar st dir)
     (: ln (vln st) len #ln col (st 'col)
        (fx i) (? (len <= i) () (vcl (ln i) = 1) i (fx (i + 1)))

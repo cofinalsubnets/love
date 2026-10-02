@@ -1,10 +1,10 @@
-; test/host/berth.l -- the berth emulator's moor over a real pty: pty -> parser -> grid, replies
+; test/host/mitty.l -- the mitty emulator's moor over a real pty: pty -> parser -> grid, replies
 ; riding home, exit status. interactive berthing stays a live probe.
-; not in the corpus: the screen nifs are not in love0. run: cat test/00-init.l test/host/berth.l | out/love
+; not in the corpus: the screen nifs are not in love0. run: cat test/00-init.l test/host/mitty.l | out/love
 
-(borrow "src/apps/berth/berth.l")
-(borrow "src/apps/berth/wharf.l")
-(borrow "src/apps/berth/limn.l")
+(borrow "src/apps/mitty/mitty.l")
+(borrow "src/apps/mitty/wharf.l")
+(borrow "src/apps/mitty/limn.l")
 
 (: (mkscr r c) (screen (cask (screen () r c)) r c)
    (chat s i) (2097151 & glass s i 0)             ; a cell's codepoint
@@ -65,12 +65,12 @@
   close >md))
 
 ; --- the utf-8 round trip, all the way through the painter: a guest says
-; ─ and é; the grid holds their codepoints; full berth (painter and all, on
+; ─ and é; the grid holds their codepoints; full mitty (painter and all, on
 ; its own pty) says them back out as the same utf-8 ---
 (: (find h n i) (i + #n < #h + 1 ? (n = snip h i (i + #n) ? 1 (find h n (i + 1))) 0)
  ; (the octal escapes ride through TWO love readers before sh: hence \\\\)
- md (tether ["out/love" "-l" "src/apps/berth/berth.l"
-           "-e" "(: _ (borrow 'berth) (berth [\"sh\" \"-c\" \"printf 'x\\\\342\\\\224\\\\200y\\\\303\\\\251z'; sleep 1\"]))"])
+ md (tether ["out/love" "-l" "src/apps/mitty/mitty.l"
+           "-e" "(: _ (borrow 'mitty) (mitty [\"sh\" \"-c\" \"printf 'x\\\\342\\\\224\\\\200y\\\\303\\\\251z'; sleep 1\"]))"])
  outb (slurp >md)
  st (: (wf p) (gather p @ g2 (two? g2 ? g2 (rest 2, wf p))) (wf <md))
  (test (two? st)
@@ -78,12 +78,12 @@
        (find outb "\xc3\xa9z" 0),        ; ... and the é
   close >md))
 
-; --- the harbour: many berths on one wharf ---------------------------------
-; the multiplexing half. berth's own entry needs a tty (raw/tty) and blocks
-; until the last child leaves, so these drive the harbour directly -- the same
-; pieces berth wires up, minus the terminal. a pane is (box master pid).
+; --- the mitty: many panes on one wharf ---------------------------------
+; the multiplexing half. mitty's own entry needs a tty (raw/tty) and blocks
+; until the last child leaves, so these drive the mitty directly -- the same
+; pieces mitty wires up, minus the terminal. a pane is (box master pid).
 (: (sub? h n i) (i + #n < #h + 1 ? (n = snip h i (i + #n) ? 1 (sub? h n (i + 1))) 0)
-   ; berth's own opening, with the tty parts left out
+   ; mitty's own opening, with the tty parts left out
    (mkhb r c argv)
     (: p0 (hopen argv r c)
        panes {}
@@ -97,7 +97,7 @@
         hb))
    (scrof hb id) (peep (hbox (hpane hb id)) () 0)
 
- ; --- one berth is the whole wharf, and its frame starts at the home cell ---
+ ; --- one pane is the whole wharf, and its frame starts at the home cell ---
  hb (mkhb 10 20 ["sh" "-c" "printf hi"])
  _ (moor (hbox (hpane hb 1)) (hmas (hpane hb 1)) ())
  f (hframe hb)
@@ -120,7 +120,7 @@
     (2 = #lay)
     (10 = wharf-cols <lay) (10 = wharf-cols <>lay)
     (0 = wharf-col <lay)   (11 = wharf-col <>lay)
-    (2 = hb2 'focus)                    ; the new berth takes the focus
+    (2 = hb2 'focus)                    ; the new pane takes the focus
     (10 = gaze (scrof hb2 1) 2)         ; pane 1 was re-opened, not left at 21
     (10 = gaze (scrof hb2 2) 2)
     (10 = gaze (scrof hb2 1) 1))        ; the undivided axis is untouched
@@ -151,8 +151,8 @@
        ('((1 0 0 10 21)) = hb2 'lay)
        (21 = gaze (scrof hb2 1) 2),     ; and it took the bar's column too
   hshut hb2 1,
-  test (() = hb2 'plan)                    ; the empty wharf ends berth's swim
-       (() = wharf-berths (hb2 'plan))
+  test (() = hb2 'plan)                    ; the empty wharf ends mitty's swim
+       (() = wharf-panes (hb2 'plan))
        (() = hb2 'focus),
   waitfor p1, waitfor p2,                 ; hshut hangs their ptys up; reap, or they outlive the file
   map (t \ (landed? t ? (catch t) (freeze t))) (hb2 'jobs)))
@@ -164,10 +164,10 @@
 (: (sub? h n i) (i + #n < #h + 1 ? (n = snip h i (i + #n) ? 1 (sub? h n (i + 1))) 0)
    (scrof hb id) (peep (hbox (hpane hb id)) () 0)
    keys {} ticks {}
-   sg (berth-stage (w \ h \ ("\e[H\e[2J" + show w + "x" + show h + " k" + show (peep keys () 0) + " t" + show (peep ticks () 0)))
+   sg (mitty-stage (w \ h \ ("\e[H\e[2J" + show w + "x" + show h + " k" + show (peep keys () 0) + " t" + show (peep ticks () 0)))
                    (c \ (pin keys () c))
                    (_ \ (113 = peep keys () 0)))
-   ; the harbour's opening with a stage as its first berth, the tty parts left out
+   ; the mitty's opening with a stage as its first pane, the tty parts left out
    (mkhb r c sg argv)
     (: p0 (hopen-stage sg r c)
        panes {}
@@ -215,8 +215,8 @@
     map (t \ (landed? t ? (catch t) (freeze t))) (hb 'jobs)))
 
 ; --- the clip: copy mode is a vi buffer of the focused pane's screen, a yank in it
-; --- is the harbour's register, and a paste is the text typed at a child or handed
-; --- to a stage's paste door; a child is copied in a headless harbour with its
+; --- is the mitty's register, and a paste is the text typed at a child or handed
+; --- to a stage's paste door; a child is copied in a headless mitty with its
 ; --- output moored first, and a stage's door in another
 (: (sub? h n i) (i + #n < #h + 1 ? (n = snip h i (i + #n) ? 1 (sub? h n (i + 1))) 0)
    (mkhb r c p0 argv)
@@ -236,7 +236,7 @@
    rows (hscreen-text (hpane hb 1))
    t0 (hclip-text hb)
    st (hcopy hb)                            ; C-a [: the copy buffer, focused, above
-   _ (hfeed hb 121, hfeed hb 121)           ; yy in it: the harbour's register
+   _ (hfeed hb 121, hfeed hb 121)           ; yy in it: the mitty's register
    clip (peep (hb 'clip) () ())
    t1 (hclip-text hb)
    _ (hfeed hb 106, hfeed hb 121, hfeed hb 119)         ; j yw: a word, charwise
@@ -259,7 +259,7 @@
    _ (waitfor p2)
    ; a paste into a stage: its door takes the register's value
    got {}
-   sg (berth-stage (w \ h \ "\e[Hstage") (c \ 0) (_ \ 0))
+   sg (mitty-stage (w \ h \ "\e[Hstage") (c \ 0) (_ \ 0))
    _ (pin sg 'paste (v \ (pin got () v)))
    hb3 (mkhb 10 20 (hopen-stage sg 10 20) ["sh" "-c" "sleep 30"])
    (pin (hb3 'clip) () ['lin ["a" "b"]],
@@ -268,53 +268,53 @@
          ('lin = <(got ())) (["a" "b"] = <>(got ())),
     map (t \ (landed? t ? (catch t) (freeze t))) (hb2 'jobs)))
 
-; --- a stage on a real berth, over a real pty: its frame comes out through the
-; painter, and its keys come in through edkey -- q is its last, and berth ends ---
+; --- a stage on a real pane, over a real pty: its frame comes out through the
+; painter, and its keys come in through edkey -- q is its last, and mitty ends ---
 (: (sub? h n i) (i + #n < #h + 1 ? (n = snip h i (i + #n) ? 1 (sub? h n (i + 1))) 0)
- md (tether ["out/love" "-l" "src/apps/berth/berth.l"
-             "-e" "(: _ (borrow 'berth) b {} (berth (berth-stage (\\ w h (\"\\e[Hstage \" + show w)) (\\ c (pin b () c)) (\\ _ (= 113 (peep b () 0))))))"])
+ md (tether ["out/love" "-l" "src/apps/mitty/mitty.l"
+             "-e" "(: _ (borrow 'mitty) b {} (mitty (mitty-stage (\\ w h (\"\\e[Hstage \" + show w)) (\\ c (pin b () c)) (\\ _ (= 113 (peep b () 0))))))"])
  _ (test (two? md))
  m >md
  _ (rest 1200)
  _ (put m 113, flush m)                   ; q: the stage's last key
  outb (slurp m)
  (test (sub? outb "stage 80" 0)              ; the frame, painted at the wharf's width
-       (sub? outb "\e[?1049l" 0),         ; ... and berth left
+       (sub? outb "\e[?1049l" 0),         ; ... and mitty left
   (: (wf p) (gather p @ g2 (two? g2 ? g2 (rest 2, wf p))) (wf <md)),
   close m))
 
-; --- C-a v, on a real berth, over a real pty -------------------------------
-; the prefix intercept is the one piece the harbour laws above cannot reach: it
-; lives in the key pump, and a key has to arrive to exercise it. so berth runs
+; --- C-a v, on a real pane, over a real pty -------------------------------
+; the prefix intercept is the one piece the mitty laws above cannot reach: it
+; lives in the key pump, and a key has to arrive to exercise it. so mitty runs
 ; on its own pty and the split is typed -- two bytes onto the master -- and the
-; bar it draws comes back out in the frames. a fresh pty reports 0x0, so berth
+; bar it draws comes back out in the frames. a fresh pty reports 0x0, so mitty
 ; falls back to 24x80 and the geometry here is deterministic: 39 + bar + 40.
 (: (sub? h n i) (i + #n < #h + 1 ? (n = snip h i (i + #n) ? 1 (sub? h n (i + 1))) 0)
- md (tether ["out/love" "-l" "src/apps/berth/berth.l"
-             "-e" "(: _ (borrow 'berth) (berth [\"sh\" \"-c\" \"sleep 5\"]))"])
+ md (tether ["out/love" "-l" "src/apps/mitty/mitty.l"
+             "-e" "(: _ (borrow 'mitty) (mitty [\"sh\" \"-c\" \"sleep 5\"]))"])
  _ (test (two? md))
  m >md
- _ (rest 1200)                            ; let berth come up and moor its first child
+ _ (rest 1200)                            ; let mitty come up and moor its first child
  ; the order is the content: "v C-a" is not the prefix, so the two puts are sequenced
  _ (put m 1, put m 118, flush m)           ; C-a v: split beside
- outb (slurp m)                           ; ... until both children leave and berth ends
+ outb (slurp m)                           ; ... until both children leave and mitty ends
  (test (sub? outb "\e[1;40H" 0)              ; the bar's column, 39 zero-based
        (sub? outb limn-down 0)                   ; ... drawn with the box glyph
        (sub? outb "\e[2;41H" 0),          ; the new pane's second row, past the bar
   (: (wf p) (gather p @ g2 (two? g2 ? g2 (rest 2, wf p))) (wf <md)),
   close m))
 
-; --- the outer terminal's sequences, on a real berth over a real pty: the child scrolls
+; --- the outer terminal's sequences, on a real pane over a real pty: the child scrolls
 ; TOPMARK away and shift+PgUp brings it back; the child asks for the mouse and a
-; bracketed paste, berth asks the outer terminal for the mouse in turn, and a click and
+; bracketed paste, mitty asks the outer terminal for the mouse in turn, and a click and
 ; a paste sent as the outer terminal sends them reach the child as it asked -- it says
 ; them back through cat -v. the child's script rides BK, past three layers of quoting ---
 (: (sub? h n i) (i + #n < #h + 1 ? (n = snip h i (i + #n) ? 1 (sub? h n (i + 1))) 0)
  _ (setenv "BK" ("printf 'TOPMARK" + cats (map (_ \ "\\n") (jot 30)) + "'; stty raw -echo; "
                  + "printf '\\033[?1000h\\033[?1006h\\033[?2004h'; r=$(dd bs=1 count=33 2>/dev/null); "
                  + "printf '%s' \"$r\" | cat -v; sleep 1"))
- md (tether ["out/love" "-l" "src/apps/berth/berth.l"
-             "-e" "(: _ (borrow 'berth) (berth [\"sh\" \"-c\" \"eval \\\"$BK\\\"\"]))"])
+ md (tether ["out/love" "-l" "src/apps/mitty/mitty.l"
+             "-e" "(: _ (borrow 'mitty) (mitty [\"sh\" \"-c\" \"eval \\\"$BK\\\"\"]))"])
  _ (test (two? md))
  m >md
  _ (rest 1200)
@@ -328,21 +328,21 @@
   (: (wf p) (gather p @ g2 (two? g2 ? g2 (rest 2, wf p))) (wf <md)),
   close m))
 
-; --- the pictures themselves: the test answers berth's kitty query as a kitty terminal
+; --- the pictures themselves: the test answers mitty's kitty query as a kitty terminal
 ; would, and a sixel the child draws goes out as kitty's own a=t and a=p; cleared away and
 ; swept by the next, it is freed there ---
 (: (sub? h n i) (i + #n < #h + 1 ? (n = snip h i (i + #n) ? 1 (sub? h n (i + 1))) 0)
    (count h n i k) (i + #n < #h + 1 ? (count h n (i + 1) (n = snip h i (i + #n) ? (k + 1) k)) k)
  _ (setenv "BK" ("sleep 1; printf '\\033P0;1;0q#0;2;100;0;0#0!10~-#0!10~\\033\\\\'; sleep 1; "
                  + "printf '\\033[5;1Hzz'; sleep 1; printf '\\033[2J\\033[H\\033P0;1;0q#0;2;0;100;0#0!7~\\033\\\\'; sleep 2"))
- md (tether ["out/love" "-l" "src/apps/berth/berth.l"
-             "-e" "(: _ (borrow 'berth) (berth [\"sh\" \"-c\" \"eval \\\"$BK\\\"\"]))"])
+ md (tether ["out/love" "-l" "src/apps/mitty/mitty.l"
+             "-e" "(: _ (borrow 'mitty) (mitty [\"sh\" \"-c\" \"eval \\\"$BK\\\"\"]))"])
  _ (test (two? md))
  m >md
  _ (rest 500)
  _ (say m "\e_Gi=31;OK\e\\") _ (flush m)             ; yes, kitty
  outb (slurp m)
- (test (sub? outb "\e_Gi=31,s=1,v=1,a=q" 0)                ; berth asked
+ (test (sub? outb "\e_Gi=31,s=1,v=1,a=q" 0)                ; mitty asked
        (1 = count outb "\e_Ga=t,f=32,s=10,v=12," 0 0)      ; the picture, sent once while shown
        (sub? outb "\e_Ga=p,i=" 0)                          ; and placed
        (sub? outb "\e_Ga=t,f=32,s=7,v=6," 0)               ; the next, sent
@@ -356,14 +356,14 @@
 (: (sub? h n i) (i + #n < #h + 1 ? (n = snip h i (i + #n) ? 1 (sub? h n (i + 1))) 0)
    (count h n i k) (i + #n < #h + 1 ? (count h n (i + 1) (n = snip h i (i + #n) ? (k + 1) k)) k)
  _ (setenv "BS" "sleep 1; printf '\\033P0;1;0q#0;2;100;0;0#0!10~-#0!10~\\033\\\\'; sleep 1; printf '\\033[5;1Hzz'; sleep 1")
- md (tether ["out/love" "-l" "src/apps/berth/berth.l"
-             "-e" "(: _ (borrow 'berth) (berth [\"sh\" \"-c\" \"eval \\\"$BS\\\"\"]))"])
+ md (tether ["out/love" "-l" "src/apps/mitty/mitty.l"
+             "-e" "(: _ (borrow 'mitty) (mitty [\"sh\" \"-c\" \"eval \\\"$BS\\\"\"]))"])
  _ (test (two? md))
  m >md
  _ (rest 500)
  _ (say m "\e[6;24;12t\e[?62;4;22c") _ (flush m)       ; no kitty: a cell 12x24, and sixels
  outb (slurp m)
- (test (sub? outb "\e[16t\e[c" 0)                         ; berth asked
+ (test (sub? outb "\e[16t\e[c" 0)                         ; mitty asked
        (1 = count outb "\eP0;0;0q\"1;1;" 0 0)             ; the picture, laid once
        (sub? outb "#180;2;100;0;0" 0)
        (sub? outb "zz" 0)                                  ; though the frames went on
@@ -371,31 +371,31 @@
   (: (wf p) (gather p @ g2 (two? g2 ? g2 (rest 2, wf p))) (wf <md)),
   close m))
 
-; --- desks: each its own plan over one table of panes; one made on demand, put away and
-; brought back, a pane shut on a desk not shown, and an emptied desk handing over the glass
-(: (dsg tag) (berth-stage (\ w h tag) (\ c 0) (\ _ 0))
+; --- faces: each its own plan over one table of panes; one made on demand, put away and
+; brought back, a pane shut on a face not shown, and an emptied face handing over the glass
+(: (dsg tag) (mitty-stage (\ w h tag) (\ c 0) (\ _ 0))
    n {0}
-   hb (harbour 10 20)
+   hb (mitty-up 10 20)
    _ (pin hb 'more (_ \ (pin n () (peep n () 0 + 1), hopen-stage (dsg ("pane" + show (peep n () 0))) 1 1)))
    _ (hberth hb 'stack 50 (hb 'more ()))
    _ (hsplit hb 'beside)
-   _ (test (0 = hb 'desk) ([1 2] = wharf-berths (hb 'plan)) (2 = hb 'focus))
+   _ (test (0 = hb 'face) ([1 2] = wharf-panes (hb 'plan)) (2 = hb 'focus))
    _ (hfresh hb)
-   _ (test (1 = hb 'desk) ([3] = wharf-berths (hb 'plan)) ([0] = hdesks hb))
+   _ (test (1 = hb 'face) ([3] = wharf-panes (hb 'plan)) ([0] = hfaces hb))
    _ (hgo hb 5)
-   _ (test (5 = hb 'desk) ([0 1] = hdesks hb) ([4] = wharf-berths (hb 'plan)))
-   _ (hcycle hb 1)                                  ; past the last, round to desk 0
-   _ (test (0 = hb 'desk) (2 = hb 'focus) ([1 5] = hdesks hb) (2 = #(hb 'lay)))
-   _ (hshut hb 3)                                   ; desk 1's only pane: desk 1 is gone
-   _ (test ([5] = hdesks hb) ([1 2] = wharf-berths (hb 'plan)))
+   _ (test (5 = hb 'face) ([0 1] = hfaces hb) ([4] = wharf-panes (hb 'plan)))
+   _ (hcycle hb 1)                                  ; past the last, round to face 0
+   _ (test (0 = hb 'face) (2 = hb 'focus) ([1 5] = hfaces hb) (2 = #(hb 'lay)))
+   _ (hshut hb 3)                                   ; face 1's only pane: face 1 is gone
+   _ (test ([5] = hfaces hb) ([1 2] = wharf-panes (hb 'plan)))
    _ (hshut hb 1)
-   _ (hshut hb 2)                                   ; desk 0 emptied: desk 5 takes the glass
-   (test (5 = hb 'desk) (() = hdesks hb) ([4] = wharf-berths (hb 'plan)) (4 = hb 'focus)))
+   _ (hshut hb 2)                                   ; face 0 emptied: face 5 takes the glass
+   (test (5 = hb 'face) (() = hfaces hb) ([4] = wharf-panes (hb 'plan)) (4 = hb 'focus)))
 
 ; --- the clip goes out through osc 52 once when it changes, and inle is a verb ---
 (: (sub? h n i) (i + #n < #h + 1 ? (n = snip h i (i + #n) ? 1 (sub? h n (i + 1))) 0)
-   hb (harbour 4 10)
-   _ (hberth hb 'stack 50 (hopen-stage (berth-stage (\ w h "x") (\ c 0) (\ _ 0)) 1 1))
+   hb (mitty-up 4 10)
+   _ (hberth hb 'stack 50 (hopen-stage (mitty-stage (\ w h "x") (\ c 0) (\ _ 0)) 1 1))
    _ (test (["" "Zg==" "Zm8=" "Zm9v" "YQpi/w=="] = map hb64 ["" "f" "fo" "foo" "a\nb\xff"])
            !(sub? (hframe hb) "\e]52" 0))
    _ (pin (hb 'clip) () ['chr "hi"])
@@ -403,18 +403,18 @@
          !(sub? (hframe hb) "\e]52" 0)
          !(() = peep (cite 'verbs 'tab) 'inle ())))
 
-; --- hands: a model's tools on the harbour -- the panes listed on every desk, a child typed
+; --- hands: a model's tools on the mitty -- the panes listed on every face, a child typed
 ; into (a newline is Enter) and read back once quiet, its own pane refused, one opened with
-; the keyboard left where it was, focus across desks, and a pane shut ---
+; the keyboard left where it was, focus across faces, and a pane shut ---
 (: (sub? h n i) (i + #n < #h + 1 ? (n = snip h i (i + #n) ? 1 (sub? h n (i + 1))) 0)
-   hb (harbour 12 40)
+   hb (mitty-up 12 40)
    own {-1}
    hh (hhands hb own)
    _ (pin hb 'more (_ \ hopen ["sh" "-c" "stty -echo; cat"] 1 1))
    _ (hberth hb 'stack 50 (hb 'more ()))                    ; 1: cat
    _ (pin own () (hb 'next))
-   _ (hberth hb 'beside 50 (hopen-stage (berth-stage (\ w h "me") (\ c 0) (\ _ 0)) 1 1))   ; 2: the model
-   _ (hfresh hb)                                            ; 3: cat, on desk 1
+   _ (hberth hb 'beside 50 (hopen-stage (mitty-stage (\ w h "me") (\ c 0) (\ _ 0)) 1 1))   ; 2: the model
+   _ (hfresh hb)                                            ; 3: cat, on face 1
    l (hh 'panes ())
    _ (rest 300)
    t (hh 'type "1" "hello\n")
@@ -423,28 +423,28 @@
    o (hh 'open ())
    f0 (hb 'focus)
    _ (hh 'focus "1")
-   (test <l (sub? (l 1) "1  desk 0  a program" 0) (sub? (l 1) "2  desk 0  a stage" 0)
-         (sub? (l 1) "(you)" 0) (sub? (l 1) "3  desk 1" 0)
+   (test <l (sub? (l 1) "1  window 0  a program" 0) (sub? (l 1) "2  window 0  a stage" 0)
+         (sub? (l 1) "(you)" 0) (sub? (l 1) "3  window 1" 0)
          <t (sub? (t 1) "hello" 0)
          (sub? (r 1) "hello" 0)
          !(<mine)
          !(<(hh 'read "9")) !(<(hh 'read "x1"))
-         ("pane 4" = o 1) (3 = f0)                           ; opened on desk 1, the keyboard still on 3
-         (0 = hb 'desk) (1 = hb 'focus),
+         ("pane 4" = o 1) (3 = f0)                           ; opened on face 1, the keyboard still on 3
+         (0 = hb 'face) (1 = hb 'focus),
     hh 'shut "3",
     test (() = hpane hb 3) !(<(hh 'shut "2")),
     map (n \ hshut hb n) [1 4],
     map (t \ (landed? t ? (catch t) (freeze t))) (hb 'jobs)))
 
-; --- the bar: the bottom row, the panes laid above it; the desks with the shown one lit and
-; what has the keyboard; a click on a desk's label shows that desk; names off argv ---
+; --- the bar: the bottom row, the panes laid above it; the faces with the shown one lit and
+; what has the keyboard; a click on a face's label shows that face; names off argv ---
 (: (sub? h n i) (i + #n < #h + 1 ? (n = snip h i (i + #n) ? 1 (sub? h n (i + 1))) 0)
-   hb (harbour 10 40)
+   hb (mitty-up 10 40)
    _ (pins hb 'bar 1 'barx (_ \ "XTRA"))
-   _ (pin hb 'more (_ \ hopen-stage (berth-stage (\ w h "s") (\ c 0) (\ _ 0)) 1 1))
-   _ (hberth hb 'stack 50 (hopen-stage (pin (berth-stage (\ w h "s") (\ c 0) (\ _ 0)) 'name "TOPPANE") 1 1))
+   _ (pin hb 'more (_ \ hopen-stage (mitty-stage (\ w h "s") (\ c 0) (\ _ 0)) 1 1))
+   _ (hberth hb 'stack 50 (hopen-stage (pin (mitty-stage (\ w h "s") (\ c 0) (\ _ 0)) 'name "TOPPANE") 1 1))
    _ (hfresh hb)
-   _ (hfresh hb)                                     ; desks 0 1 2, 2 shown
+   _ (hfresh hb)                                     ; faces 0 1 2, 2 shown
    _ (hbartick hb)
    l (hbarline hb)
    f (hframe hb)
@@ -454,14 +454,14 @@
          (sub? l " 0  1 " 0) (sub? l "\e[1;7m 2 " 0)
          (sub? l "stage" 0) (sub? l "XTRA" 0)
          (sub? f "\e[10;1H" 0)                         ; painted on the last row
-         (0 = hbardesk hb 0) (1 = hbardesk hb 4) (() = hbardesk hb 30)
-         (0 = hb 'desk) (sub? (hbarline hb) "TOPPANE" 0)
+         (0 = hbarface hb 0) (1 = hbarface hb 4) (() = hbarface hb 30)
+         (0 = hb 'face) (sub? (hbarline hb) "TOPPANE" 0)
          ("lush" = hname-of ["/x/out/love" "lush"]) ("vi" = hname-of ["/usr/bin/vi" "f"]) ("love" = hname-of ["love"])))
 
 ; --- the picker: typed at, it narrows; enter makes it what its item opens, in its own
 ; place; an item answering no pane, or esc, closes it ---
-(: (stg nm) (pin (berth-stage (\ w h nm) (\ c 0) (\ _ 0)) 'name nm)
-   hb (harbour 12 40)
+(: (stg nm) (pin (mitty-stage (\ w h nm) (\ c 0) (\ _ 0)) 'name nm)
+   hb (mitty-up 12 40)
    _ (hberth hb 'stack 50 (hopen-stage (stg "base") 1 1))
    went {0}
    items [["alpha" (_ \ hopen-stage (stg "ALPHA") 1 1)]
@@ -485,12 +485,12 @@
          ("BETA" = n2) (2 = fc)                          ; in its own place, still focused
          (1 = peep went () 0) (() = p3)
          (() = hpane hb 4)
-         ([1 2] = sort (wharf-berths (hb 'plan)))))
+         ([1 2] = sort (wharf-panes (hb 'plan)))))
 
 ; --- the mouse on a bar: a press takes hold, a drag moves it and the panes with it, a
 ; release lets go; with 'mouse on, drags are asked for even of a pane that wants none ---
-(: (stg nm) (berth-stage (\ w h nm) (\ c 0) (\ _ 0))
-   hb (harbour 10 40)
+(: (stg nm) (mitty-stage (\ w h nm) (\ c 0) (\ _ 0))
+   hb (mitty-up 10 40)
    _ (pin hb 'mouse 1)
    _ (hberth hb 'stack 50 (hopen-stage (stg "a") 1 1))
    _ (hberth hb 'beside 50 (hopen-stage (stg "b") 1 1))
@@ -534,10 +534,10 @@
          (x1 = x2)))
 
 ; --- idle: the saver takes the glass after its minutes (C-a z winds them past), the
-; harbour's frames wait under it, and the key that wakes it is its own and owes a frame ---
+; mitty's frames wait under it, and the key that wakes it is its own and owes a frame ---
 (: (sub? h n i) (i + #n < #h + 1 ? (n = snip h i (i + #n) ? 1 (sub? h n (i + 1))) 0)
-   hb (harbour 10 40)
-   _ (hberth hb 'stack 50 (hopen-stage (berth-stage (\ w h "x") (\ c 0) (\ _ 0)) 1 1))
+   hb (mitty-up 10 40)
+   _ (hberth hb 'stack 50 (hopen-stage (mitty-stage (\ w h "x") (\ c 0) (\ _ 0)) 1 1))
    _ (pin hb 'saver ((cite 'saver 'saver-watch) "life" 5))
    f0 (hidle hb)
    k0 (hwake hb)                                    ; a key with no saver up: activity only
@@ -554,9 +554,26 @@
          (1 = k1) (1 = peep (hb 'dirt) () 0)
          (sub? f3 "\e[?25h" 0) !(hidle? hb)
          (() = (cite 'saver 'saver-watch "nosuch" 5) 'on)
-         (0 = hsleep (pins (harbour 4 10) 'saver ((cite 'saver 'saver-watch) "nosuch" 5)))))
+         (0 = hsleep (pins (mitty-up 4 10) 'saver ((cite 'saver 'saver-watch) "nosuch" 5)))))
 
-; --- the server: a harbour on a socket outlives its clients. a client says its size, types,
+; --- quiet: the saver's clock runs only while every pane on the shown face is a bare shell, at its
+; prompt with no job in front, and with no pane at all; a stage or a program holds it off
+(: (wound hb) (: w ((cite 'saver 'saver-watch) "life" 5) _ (pin hb 'saver w) _ (pin w 'last (clock 0 - 3600000))
+                 _ (hidle hb) (hidle? hb))
+   (closed hb) (map (id \ hshut hb id) (wharf-panes (hb 'plan)))
+   e (mitty-up 10 40)
+   st (mitty-up 10 40) _ (hberth st 'stack 50 (hopen-stage (mitty-stage (\ w h "x") (\ c 0) (\ _ 0)) 1 1))
+   ca (mitty-up 10 40) _ (hberth ca 'stack 50 (hopen ["cat"] 10 40))
+   sh (mitty-up 10 40) _ (hberth sh 'stack 50 (hopen ["sh"] 10 40))
+   (settled n) (? (hquiet? sh || n <= 0) (hquiet? sh) (: _ (rest 50) (settled (n - 1))))
+   q3 (settled 40)
+   r (: s1 (hquiet? e) s2 (hquiet? st) s3 (hquiet? ca) [s1 s2 s3])
+   on (map (h \ (wound h ? 1 0)) [e st ca sh])
+   _ (map closed [st ca sh])
+   (test (r 0) !(r 1) !(r 2) q3
+         (on = [1 0 0 1])))
+
+; --- the server: a mitty on a socket outlives its clients. a client says its size, types,
 ; and leaves; the next sees what the first left on the screen; the last pane's exit ends
 ; the server, its socket with it ---
 (: (sub? h n i) (i + #n < #h + 1 ? (n = snip h i (i + #n) ? 1 (sub? h n (i + 1))) 0)
@@ -596,4 +613,4 @@
     close >md))
 
 (test_fin ())
-(puts "berth: ok")
+(puts "mitty: ok")

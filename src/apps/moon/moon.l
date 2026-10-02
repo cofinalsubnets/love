@@ -61,7 +61,7 @@
                    (m ? (cask m @ c (pour c 0 s o m, string c)) ""))
    ; noms are "[./]<top>/apps/moon/.."; the top strips per-entry (the archive
    ; leads with "./")
-   (strip1 nom) (: s (starts? nom "./" ? (snip nom 2 #nom) nom)
+   (strip1 nom) (: s (nom @ ("./" + t) t nom)
                    m #s
                    (go i) (? (m <= i) ""
                              (s i = 47) (snip s (i + 1) m)
@@ -154,11 +154,7 @@
    ; a -D definition as #define text: the first = becomes the space, so
    ; -dx -> "X" (defined 1 below), -dx=v -> "X v", -df(x)=x -> "F(x) x"
    ; (the glued ( survives the lex, so it stays function-like).
-   (eqsp d) (: n #d
-               (go i) (? (n <= i) (d + " 1")
-                         (d i = 61) (snip d 0 i + " " + snip d (i + 1) n)
-                         (go (i + 1)))
-               (go 0))
+   (eqsp d) (d @ (k + "=" + v) (k + " " + v) (d + " 1"))
    ; each entry is one line, so the -D/-U run keeps clexat's skew exact. a -U rides
    ; as ('u name), which is how the two stay in the order the command line gave them
    (deftext ds) (foldl (a \ d \ a + (string? d ? ("#define " + eqsp d)
@@ -577,8 +573,8 @@
    (dotS? p) (#p @ n (2 < n && p (n - 2) = 46 && p (n - 1) = 83))    ; ..that the preprocessor reads first
    (dotsrc? p) (dotc? p || dots? p || dotS? p)                         ; a source this compiler lays an object from
    (doto? p) (#p @ n (2 < n && p (n - 2) = 46 && p (n - 1) = 111))
-   (dotim? p) (#p @ n (6 < n && snip p (n - 6) n = ".image"))
-   (dotcid? p) (#p @ n (4 < n && snip p (n - 4) n = ".cid"))
+   (dotim? p) (p @ ((s && 0 < #s) + ".image") 1 0)
+   (dotcid? p) (p @ ((s && 0 < #s) + ".cid") 1 0)
    ; the build tree keeps the images in the love's own directory, an installed nest one rung
    ; over in lib/love/ -- the two seats mseat already knows. not point-free: the mapped
    ; lambda reads `d` to build the path it hashes, so dropping the parameter leaves that read
@@ -769,10 +765,7 @@
        (dotobj n) (dotc? n ? (snip n 0 (#n - 2) + ".o") n)
        (swap47 s) (: n #s c (cask n)
                      _ (pour c 0 s 0 n)
-                     (go i) (n <= i ? (string c)
-                               (peep c i 0 = 47 && pin c i 95,
-                                go (i + 1)))
-                     (go 0))
+                     (each ^n (i \ peep c i 0 = 47 && pin c i 95), string c))
        (nlmems d)
         (disk ?
            (foldl (a \ e \ d + e @ p
@@ -991,9 +984,8 @@
     (: (go l dia acc)
         (!(two? l) ? [dia (rev acc)]
            (<l @ a
-              (starts? a "-std=" ?
-                 (: w (snip a 5 #a)
-                    d (stdof w)
+              (a @ ("-std=" + w)
+                 (: d (stdof w)
                     (d || udie 2 ("cc: unknown -std=" + w + " -- mooncc reads: " + stdnames ()),
                      go >l d acc))
                  (go >l dia (a . acc)))))
@@ -1040,7 +1032,7 @@
              ; verb on the love binary, not a separate program, and two reported versions
              ; would report a thing that cannot happen.
              (a = "--version" || a = "-v")
-              (puts ("mooncc (love " + love-version + ")"), putc 10, flush out, uleave 0)
+              (puts (uvers "mooncc"), putc 10, flush out, uleave 0)
              (a = "--help" || a = "-h")
               (puts usage, putc 10, flush out, uleave 0)
              (a = "-pie") (flags r (pin t 'pie 1))
@@ -1068,7 +1060,7 @@
              ; ELF to carry it and it is ignored. ahead of tol?, which swallows every other
              ; -f.
              (starts? a "-freadme=")
-              (: f (snip a 9 #a) rt (uread f)
+              (: f (a @ ("-freadme=" + f) f) rt (uread f)
                  (two? rt ? (flags r (pin t 'rdme <>rt))
                             (udie 1 ("cc: cannot open " + f))))
              (glu? a 73) (flags r (fpush t 'is (snip a 2 #a)))

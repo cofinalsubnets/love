@@ -25,15 +25,13 @@
   (: tls? (starts? u "imaps://")
      r (u @ ("imaps://" + x) x ("imap://" + x) x ())
      (? !(string? r) ()
-        (: k (findsub r "/")
-           auth (k < 0 ? r (snip r 0 k))
-           box (k < 0 ? "INBOX" (snip r (k + 1) #r))
+        (: ab (r @ (a + "/" + b) [a b] [r "INBOX"])
+           auth <ab box <>ab
            at (: (go i) (? (i < 0) -1 (auth i = 64) i (go (i - 1))) (go (#auth - 1)))
            user (at < 0 ? "" (replace (snip auth 0 at) "%40" "@"))
            hp (snip auth (at + 1) #auth)
-           c (findsub hp ":")
-           host (c < 0 ? hp (snip hp 0 c))
-           port (c < 0 ? (tls? ? 993 143) (mime-num (snip hp (c + 1) #hp)))
+           hpt (hp @ (h + ":" + t) [h (mime-num t)] [hp (tls? ? 993 143)])
+           host <hpt port <>hpt
            (#host && 0 < port ? [tls? user host port (#box ? box "INBOX")] ()))))
  (imap-quote s) ("\"" + replace (replace s "\\" "\\\\") "\"" "\\\"" + "\"")
 
@@ -101,8 +99,8 @@
          (? (atom? segs) (pin c 'dead 1, ["" (rev acc) "the server went away"])
             (: l <segs
                (? (starts? l (tag + " "))
-                   (: r (snip l (#tag + 1) #l) k (findsub r " ")
-                      [(upper (k < 0 ? r (snip r 0 k))) (rev acc) (k < 0 ? "" (snip r (k + 1) #r))])
+                   (: r (snip l (#tag + 1) #l)
+                      (r @ (a + " " + b) [(upper a) (rev acc) b] [(upper r) (rev acc) ""]))
                   (starts? l "+") (? (string? lit) (smtp-put c (lit + "\r\n"), go acc) (go acc))
                   (go ((imap-parse segs) . acc))))))
      (go ()))

@@ -18,15 +18,14 @@
   (: tls? (starts? u "smtps://")
      r (u @ ("smtps://" + x) x ("smtp://" + x) x ())
      (? !(string? r) ()
-        (: h (findsub r "/" @ k (k < 0 ? r (snip r 0 k)))
-           h2 (findsub h "@" @ k (k < 0 ? h (snip h (k + 1) #h)))
-           c (findsub h2 ":")
-           host (c < 0 ? h2 (snip h2 0 c))
-           port (c < 0 ? (tls? ? 465 587) (sm-num (snip h2 (c + 1) #h2)))
+        (: h (r @ (a + "/" + _) a r)
+           h2 (h @ (_ + "@" + b) b h)
+           hpt (h2 @ (a + ":" + t) [a (sm-num t)] [h2 (tls? ? 465 587)])
+           host <hpt port <>hpt
            (#host && 0 < port ? [tls? host port] ()))))
  ; crlf on every line, a leading dot doubled, and the end of data after
  (smtp-wire raw)
-  (: t (replace raw "\r\n" "\n") t2 (ends? t "\n" ? (snip t 0 (#t - 1)) t)
+  (: t (replace raw "\r\n" "\n") t2 (t @ (a + "\n") a t)
      (join "\r\n" (map (l \ #l && l 0 = 46 ? ("." + l) l) (split "\n" t2)) + "\r\n"))
 
  ; --- a connection: a socket, maybe a tls session over it, and the bytes read ahead -------
@@ -38,9 +37,8 @@
      (see (c 's) @ b (b = -1 ? () (string b + chug (c 's)))))
  ; the next line without its crlf, () at the end of the stream
  (smtp-line c)
-  (: b (c 'buf) k (findsub b "\n")
-     (? (0 <= k) (pin c 'buf (snip b (k + 1) #b),
-                  snip b 0 (0 < k && b (k - 1) = 13 ? (k - 1) k))
+  (: b (c 'buf)
+     (b @ (a + "\n" + r) (pin c 'buf r, (a @ (x + "\r") x a))
         (sm-more c @ m (string? m ? (pin c 'buf (b + m), smtp-line c) ()))))
  ; the next n bytes exactly, () when the stream ends first: an imap literal
  (smtp-take c n)

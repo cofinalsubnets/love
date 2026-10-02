@@ -60,7 +60,6 @@
        [(be-num (der-body s t))])
 
    ; small string helpers: the first index of sub from i or -1, ascii lower case, a quad's bytes
-   (str-at s sub i) (: n #s m #sub (go j) (? (n - m < j) -1 (snip s j (j + m) = sub) j (go (j + 1))) (go i))
    (lower s) (string (map (i \ (s i @ c (64 < c < 91 ? (c + 32) c))) ^#s))
    (be-num-dec p) (foldl (a \ i \ a * 10 + p i - 48) 0 ^#p)
    (quad-bytes h)
@@ -85,8 +84,8 @@
    pem-end "-----END CERTIFICATE-----"
    (pem-ders t)
     (: (go i acc)
-        (: b (str-at t pem-begin i)
-           e (b < 0 ? -1 (str-at t pem-end (b + #pem-begin)))
+        (: b (fsub t pem-begin i)
+           e (b < 0 ? -1 (fsub t pem-end (b + #pem-begin)))
            (e < 0 ? (rev acc)
               (go (e + #pem-end) (b64-dec t (b + #pem-begin) e . acc))))
        (go 0 ()))
@@ -375,7 +374,7 @@
    ; a certificate's common name for a person to read, or its subject's length
    (x509-name x)
     (: s (x 'subject)
-       (go i) (str-at s oid-cn i @ j
+       (go i) (fsub s oid-cn i @ j
                  (j < 0 ? ("a certificate of " + show #s + " bytes of subject")
                     (der s (j + #oid-cn) #s @ t (two? t ? ("\"" + der-body s t + "\"") (go (j + 1))))))
        (go 0))
@@ -386,7 +385,7 @@
        (? (p = h) 1
           (#p < 3 || snip p 0 2 != "*.") 0
           (: rest (snip p 1 #p)                          ; ".example.com"
-             k (str-at h "." 0)
+             k (fsub h "." 0)
              (? (k < 1 || elem 42 (map (i \ rest i) ^#rest)) 0
                 (#(split "." rest) < 3) 0                 ; "*.com" names a whole suffix
                 (snip h k #h = rest ? 1 0)))))
@@ -414,8 +413,8 @@
     (: t <nm v (nm 1)
        p (filter (g \ <g = t) (x 'ncp)) e (filter (g \ <g = t) (x 'nce))
        (in? g) (t = 130 ? (dns-in? (g 1) v) (ip-in? (g 1) v))
-       (reach? g) (t = 130 && 2 < #v && snip v 0 2 = "*." ?
-                     (: b (lower (g 1)) k (str-at b "." 0) (0 < k && snip b (k + 1) #b = lower (snip v 2 #v)))
+       (reach? g) (v @ ("*." + (r && 0 < #r && t = 130))
+                     (lower (g 1) @ ((h && 0 < #h) + "." + t) (t = lower r) 0)
                      0)
        (? (two? p && !(any in? p)) "is outside the names it may vouch for"
           (any (g \ in? g || reach? g) e) "is among the names it may not vouch for"
@@ -432,12 +431,12 @@
    ; --- the roots: the host's bundle, read once a process ---
    ; SSL_CERT_FILE, else the first of the linux and bsd homes that reads, else the tree's own:
    ; mozilla's roots for serving tls as curl extracts them, src/apps/tls/roots.pem, which inle and
-   ; the wasm seat read under /proc/src and a host with no bundle out of the source its binary
+   ; the wasm seat read under /love and a host with no bundle out of the source its binary
    ; carries
    tree-roots "src/apps/tls/roots.pem"
    root-homes ["/etc/ssl/certs/ca-certificates.crt" "/etc/ssl/cert.pem"
                "/etc/pki/tls/certs/ca-bundle.crt" "/usr/local/share/certs/ca-root-nss.crt"
-               ("/proc/src/" + tree-roots)]
+               ("/love/" + tree-roots)]
    roots-box {}
    (root-file _)
     (getenv "SSL_CERT_FILE" @ e

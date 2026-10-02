@@ -42,8 +42,8 @@
    threadir (cite 'guts 'threadir)         ; post.l's reading of a thread, the input every thread lane takes
    leafops '(+ - * // % & | ^ < <= > >= =)   ; the ops the integer lanes emit
    (le8 n) (: u (n < 0 ? (n + 18446744073709551616) n)                        ; & is broken on a bignum >= 2^63,
-              ((: (go i) (i < 8 ? (u // i 256 % 256 . go (i + 1)) ())) 0))   ; so //% splits n into 8 LE bytes
-   (le4 n) ((: (go i) (i < 4 ? ((n >> 8 * i) & 255 . go (i + 1)) ())) 0)  ; n -> 4 LE bytes (offsets < 2^31, & ok)
+              (map (i \ u // i 256 % 256) ^8))   ; so //% splits n into 8 LE bytes
+   (le4 n) (map (i \ (n >> 8 * i) & 255) ^4)  ; n -> 4 LE bytes (offsets < 2^31, & ok)
    (emit l) (cask l)                       ; the charlist lane fills in C
    (jit lam) (jitir lam 'x64)            ; (jit '(\ x E)): an arity-1 arith leaf -> the neutral-IR lane
    (argix e ps i) (atom? ps ? 0 (e = <ps) i (argix e >ps (i + 1)))   ; a param -> its frame index
@@ -201,8 +201,8 @@
    (jitcalloutx clos src op iv arg tgt)
     (: fop (op = '* ? (*) (+))  a0 (foldinit op)                             ; the fold op as a value -- a bare `* +` mid-list mis-factors -- and its identity
        argfn (nom? arg ? 0 (ev ['\ iv arg]))                               ; a computed arg -> a closure (\ counter ARG); a bare one needs none
-       twin (nom? arg ? (n \ (: (go i a) (i < n ? (go (i + 1) (fop a (clos i))) a)) 0 a0)            ; bare: clos applied to the counter
-                         (n \ (: (go i a) (i < n ? (go (i + 1) (fop a (clos (argfn i)))) a)) 0 a0))   ; computed: clos applied to arg(counter)
+       twin (nom? arg ? (n \ foldl (\ a i (fop a (clos i))) a0 ^n)            ; bare: clos applied to the counter
+                         (n \ foldl (\ a i (fop a (clos (argfn i)))) a0 ^n))   ; computed: clos applied to arg(counter)
        (nifx (emit (asmt tgt (calloutir tgt op arg))) twin 1 clos))   ; value[1] = the twin (image-revert-clean); clos = the extras slot
    ; --- the captured / multi-arg call-out ------------------------------------------------------
    ; the same sum over (F i), F and N read from the frame at Sp[8*idx]. a is the whole frame size
@@ -729,7 +729,7 @@
                + [['ld X SP cso] ['test X 1] ['br 'ne sw]
                   ['ld T X 0] (reach tgt SC 9) ['cmp T SC] ['br 'ne sw]                               ; entry = lvm_cur?
                   ['ld T X 8] ['cmp T (2 * n + 1)] ['br 'ne sw]]                                 ; arity = n?
-               + (: (gsl j) (j < n ? ([['ld A SP (spill (d + j))] ['st SP (8 * j - 8 * w) A]] + gsl (j + 1)) ()) (gsl 0))
+               + catmap (j \ [['ld A SP (spill (d + j))] ['st SP (8 * j - 8 * w) A]]) ^n
                + [(reach tgt T 8) ['add T T 8] ['st SP (8 * n - 8 * w) T]                         ; cont = &resume[1]
                   ['lar T bb] ['lar A 'entry0] ['subs T T A] ['leax T T T 1 1] ['st SP (8 * (n + 1) - 8 * w) T]
                   ['st SP (8 * (n + 2) - 8 * w) A]
@@ -818,8 +818,7 @@
                        (op = amble-lam) (asite as d)
                        (op = go) (ago as d)
                        (acall op as d))))
-             initR (: (goi j) (j < R ? ([['st SP (8 * j) T]] + goi (j + 1)) ())
-                      ([['li T 1]] + goi 0))                                                          ; every reserved slot a valid value before any call (GC walks them)
+             initR ([['li T 1]] + map (j \ ['st SP (8 * j) T]) ^R)                                                          ; every reserved slot a valid value before any call (GC walks them)
              unpk ([['ld T IP 8] ['st SP seo T]]                                                  ; Se = value[1] = e (plain -- image-revert-clean)
                    + (a = 1 ? [['st SP soo IP]] [['mov T IP] ['sub T T 16] ['st SP soo T]])     ; So = the own cell (= Ip, or Ip-16 past the cur pair) -- the self-drive callee
                    + [['ld T IP 32]                                                               ; T = the nifx extras chain

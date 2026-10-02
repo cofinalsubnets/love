@@ -112,14 +112,14 @@
                       (go <ks >ks (from < <ks ? (snip s from <ks . acc) acc))))
    (tac-noarg _) (udie 1 "tac: option requires an argument -- 's'")
    (tac-opts t l)                      ; -> the operands; -b -r -s take clusters and long names
-    (? (atom? l) ()
-       (<l = "--") >l
-       (<l = "--before") (pin t 'b 1, tac-opts t >l)
-       (<l = "--regex") (pin t 'r 1, tac-opts t >l)
-       (<l = "--separator") (two? >l ? (pin t 's <>l, tac-opts t >>l) (tac-noarg ()))
-       (12 < #<l && snip <l 0 12 = "--separator=") (pin t 's (snip <l 12 #<l), tac-opts t >l)
-       (1 < #<l && <l 0 = 45 && <l 1 = 45) (udie 1 ("tac: unrecognized option '" + <l + "'"))
-       (1 < #<l && <l 0 = 45)
+    (atom? l ? ()
+     (<l @ "--" >l
+       "--before" (pin t 'b 1, tac-opts t >l)
+       "--regex" (pin t 'r 1, tac-opts t >l)
+       "--separator" (two? >l ? (pin t 's <>l, tac-opts t >>l) (tac-noarg ()))
+       ("--separator=" + (s && 0 < #s)) (pin t 's s, tac-opts t >l)
+       (? (1 < #<l && <l 0 = 45 && <l 1 = 45)) (udie 1 ("tac: unrecognized option '" + <l + "'"))
+       (? (1 < #<l && <l 0 = 45))
         (:- (go 1) w <l (go k)
          (?- (udie 1 ("tac: invalid option -- '" + string (w k) + "'"))
           (#w <= k) (tac-opts t >l)
@@ -128,7 +128,7 @@
           (w k = 115) (? (k + 1 < #w) (pin t 's (snip w (k + 1) #w), tac-opts t >l)
                          (two? >l) (pin t 's <>l, tac-opts t >>l)
                          (tac-noarg ()))))
-       (<l . tac-opts t >l))
+       (<l . tac-opts t >l)))
    (tac-main as)
     (: t {'s "\n"}
        fs (tac-opts t as)
@@ -155,12 +155,7 @@
    (ushuf n k seat dot)                ; the first k of a shuffle of seats 0..n-1, each to dot
     (: t {}
        (at i) (peep t i (seat i))
-       (go i) (i < k ?
-               (: j (i + rand (n - i)) a (at i) b (at j)
-                  (pin t j a, pin t i b, dot b,
-                   go (i + 1)))
-               0)
-       (go 0))
+       (each ^k (i \ (: j (i + rand (n - i)) a (at i) b (at j) (pin t j a, pin t i b, dot b))), 0))
    (shuf-main as)
     (: t {}
        (sdie m) (udie 1 ("shuf: " + m))
@@ -180,9 +175,8 @@
                     (go l i) (two? l ? (pin lt i <l, go >l (i + 1)) [i (i \ (lt i))])
                     (go ls 0))
        (range s) (: n #s
-                    m ((: (go i) (? (n <= i) -1 (s i = 45) i (go (i + 1)))) 0)
-                    lo (0 < m ? (unum (snip s 0 m)))
-                    hi (0 < m ? (unum (snip s (m + 1) n)))
+                    lh (s @ ((a && 0 < #a) + "-" + b) [(unum a) (unum b)] [() ()])
+                    lo <lh hi <>lh
                     (charm? lo && charm? hi && lo <= hi + 1 ? [(hi - lo + 1) (+ lo)]
                      (sdie ("invalid input range: " + s))))
        (input _) (: j (jug 0)
@@ -506,10 +500,7 @@
          (sk i) (en <= i || !(usort-blank? (ln i)) ? i (sk (i + 1)))
          s2 (b? ? (sk st) st)
          (en <= s2 ? "" (snip ln s2 en)))))
-   (usort-up s) (: n #s o (jug 0)
-                   (go k) (n <= k ? (slurp o)
-                             (s k @ c (put o (97 <= c <= 122 ? (c - 32) c), go (k + 1))))
-                   (go 0))
+   (usort-up s) (jug 0 @ o (each ^#s (k \ (s k @ c (put o (97 <= c <= 122 ? (c - 32) c)))), slurp o))
    ; -n reads a VALUE, and reads it exactly: 10000000000000000001 sorts above ...0
    ; and no double can say so. the reading is the digits -- sign, then the integer
    ; part's length, then its digits, then the fractions padded against each other.
@@ -686,9 +677,7 @@
        ; a numeric reading as a sortable triple: the sign class, the integer (negated
        ; when negative), and the fraction's digits -- complemented when negative, so
        ; the byte order of the trimmed digits is the numeric one either way
-       (ncomp s) (: n #s o (jug 0)
-                    (go k) (n <= k ? (slurp o) (put o (105 - s k), go (k + 1)))
-                    (go 0))
+       (ncomp s) (jug 0 @ o (each ^#s (k \ put o (105 - s k)), slurp o))
        (ntrip p flip) (: neg <p ip <>p fp <>>p
                          sc (? (!#ip && !#fp) 0 neg -1 1)
                          iv (#ip ? <(sound ip) 0)
@@ -809,7 +798,7 @@
    ; number (-5, -.5) ends the flags, so a negative FIRST is not one --
    (useqd w)                                   ; -> [int scale] | ()
     (: neg (0 < #w && w 0 = 45) b (0 < #w && (w 0 = 45 || w 0 = 43) ? (snip w 1 #w) w)
-       k (findsub b ".") ip (k < 0 ? b (snip b 0 k)) fp (k < 0 ? "" (snip b (k + 1) #b))
+       pf (b @ (i + "." + f) [i f] [b ""]) ip <pf fp <>pf
        ds (ip + fp)
        (0 < #ds && all digit? (chars ds) ? [(neg ? (0 - unum ds) (unum ds)) #fp]))
    (seq-main as)
@@ -1027,14 +1016,14 @@
    ; -- basename and dirname: the two path clips --
    ; GNU's forms: -a many names, -s SUF (which means -a), -z NUL-ended, -- ends the options
    (ubn-opts as t)                             ; -> the operands
-    (? (atom? as) ()
-       (<as = "--") >as
-       (<as = "-a" || <as = "--multiple") (pin t 'a 1, ubn-opts >as t)
-       (<as = "-z" || <as = "--zero") (pin t 'z 1, ubn-opts >as t)
-       (<as = "-s" && two? >as) (pins t 's <>as 'a 1, ubn-opts >>as t)
-       (2 < #<as && snip <as 0 2 = "-s") (pins t 's (snip <as 2 #<as) 'a 1, ubn-opts >as t)
-       (9 < #<as && snip <as 0 9 = "--suffix=") (pins t 's (snip <as 9 #<as) 'a 1, ubn-opts >as t)
-       as)
+    (atom? as ? ()
+     (<as @ "--" >as
+       ("-a" || "--multiple") (pin t 'a 1, ubn-opts >as t)
+       ("-z" || "--zero") (pin t 'z 1, ubn-opts >as t)
+       ("-s" && two? >as) (pins t 's <>as 'a 1, ubn-opts >>as t)
+       ("-s" + (s && 0 < #s)) (pins t 's s 'a 1, ubn-opts >as t)
+       ("--suffix=" + (s && 0 < #s)) (pins t 's s 'a 1, ubn-opts >as t)
+       as))
    (ubn-say t ns f) ((peep t 'z 0 ? 0 10) @ end
                      (each ns (n \ (say out (f n), put out end)),
                       flush out, 0))
@@ -1055,32 +1044,31 @@
    ; end with a NUL; -n is taken, the characters being whole already --
    (cut-args as)                       ; -> (delim fields chars b? s? files comp od z)
     (: st {'comp 0 'od () 'z 0}
-       (long? h p) (#p @ n (n < #h && snip h 0 n = p))
        (fl a d f c b? s?)
         (atom? a ? [d f c b? s? a]
          (<a @ h
-          (? (h = "--") [d f c b? s? >a]
-             (h = "-s" || h = "--only-delimited") (fl >a d f c b? 1)
-             (h = "--complement") (pin st 'comp 1, fl >a d f c b? s?)
-             (h = "-z" || h = "--zero-terminated") (pin st 'z 1, fl >a d f c b? s?)
-             (h = "-n") (fl >a d f c b? s?)
-             (long? h "--output-delimiter=") (pin st 'od (snip h 19 #h), fl >a d f c b? s?)
-             (long? h "--delimiter=") (fl >a (h 12) f c b? s?)
-             (long? h "--fields=") (fl >a d (snip h 9 #h) c b? s?)
-             (long? h "--characters=") (fl >a d f (snip h 13 #h) 0 s?)
-             (long? h "--bytes=") (fl >a d f (snip h 8 #h) 1 s?)
-             (h = "-d") (two? >a ? (fl >>a (<>a 0) f c b? s?)
-                         (udie 2 "cut: -d wants a delimiter"))
-             (h = "-f") (two? >a ? (fl >>a d <>a c b? s?)
-                         (udie 2 "cut: -f wants a list"))
-             (h = "-c") (two? >a ? (fl >>a d f <>a 0 s?)
-                         (udie 2 "cut: -c wants a list"))
-             (h = "-b") (two? >a ? (fl >>a d f <>a 1 s?)
-                         (udie 2 "cut: -b wants a list"))
-             (2 < #h && snip h 0 2 = "-d") (fl >a (h 2) f c b? s?)
-             (2 < #h && snip h 0 2 = "-f") (fl >a d (snip h 2 #h) c b? s?)
-             (2 < #h && snip h 0 2 = "-c") (fl >a d f (snip h 2 #h) 0 s?)
-             (2 < #h && snip h 0 2 = "-b") (fl >a d f (snip h 2 #h) 1 s?)
+          (h @ "--" [d f c b? s? >a]
+             ("-s" || "--only-delimited") (fl >a d f c b? 1)
+             "--complement" (pin st 'comp 1, fl >a d f c b? s?)
+             ("-z" || "--zero-terminated") (pin st 'z 1, fl >a d f c b? s?)
+             "-n" (fl >a d f c b? s?)
+             ("--output-delimiter=" + (v && 0 < #v)) (pin st 'od v, fl >a d f c b? s?)
+             ("--delimiter=" + (v && 0 < #v)) (fl >a (v 0) f c b? s?)
+             ("--fields=" + (v && 0 < #v)) (fl >a d v c b? s?)
+             ("--characters=" + (v && 0 < #v)) (fl >a d f v 0 s?)
+             ("--bytes=" + (v && 0 < #v)) (fl >a d f v 1 s?)
+             "-d" (two? >a ? (fl >>a (<>a 0) f c b? s?)
+                   (udie 2 "cut: -d wants a delimiter"))
+             "-f" (two? >a ? (fl >>a d <>a c b? s?)
+                   (udie 2 "cut: -f wants a list"))
+             "-c" (two? >a ? (fl >>a d f <>a 0 s?)
+                   (udie 2 "cut: -c wants a list"))
+             "-b" (two? >a ? (fl >>a d f <>a 1 s?)
+                   (udie 2 "cut: -b wants a list"))
+             ("-d" + v) (fl >a (v 0) f c b? s?)
+             ("-f" + v) (fl >a d v c b? s?)
+             ("-c" + v) (fl >a d f v 0 s?)
+             ("-b" + v) (fl >a d f v 1 s?)
              [d f c b? s? a])))
        r (fl as 9 () () 0 0)
        (r + [(st 'comp) (st 'od) (st 'z)]))
@@ -1671,7 +1659,7 @@
    ub64url "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
    ub32hex "0123456789ABCDEFGHIJKLMNOPQRSTUV"
    ubz85 "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ.-:+=^!/*?&<>()[]{}@%$#"
-   (ubeach s f) (: o (jug 0) n #s (go k) (n <= k ? (slurp o) (f o (s k), go (k + 1))) (go 0))
+   (ubeach s f) (jug 0 @ o (each ^#s (k \ f o (s k)), slurp o))
    (ub16enc s) (ubeach s (o \ c \ (put o ("0123456789ABCDEF" (c >> 4)), put o ("0123456789ABCDEF" (c & 15)))))
    (ub2enc s msb) (ubeach s (o \ c \ map (i \ (put o (48 + (c >> (msb ? (7 - i) i) & 1)))) ^8))
    (ubz85enc s)
@@ -1718,18 +1706,18 @@
        (go a o)
         (atom? a ? o
          (: w <a n #w
-            (? (w = "--") (pin o 'fs (o 'fs + >a), o)
-               (elem w encs) (pin o 'e w, go >a o)
-               (w = "-d" || w = "--decode") (pin o 'd 1, go >a o)
-               (w = "-i" || w = "--ignore-garbage") (pin o 'i 1, go >a o)
-               (w = "-w" || w = "--wrap") (two? >a ? (pin o 'w <>a, go >>a o) (usage "option requires an argument -- 'w'"))
-               (7 < n && snip w 0 7 = "--wrap=") (pin o 'w (snip w 7 n), go >a o)
-               (2 < n && snip w 0 2 = "-w") (pin o 'w (snip w 2 n), go >a o)
-               (2 < n && snip w 0 2 = "--") (usage ("unrecognized option '" + w + "'"))
-               (1 < n && w 0 = 45 && elem (w 1) "di")
+            (w @ "--" (pin o 'fs (o 'fs + >a), o)
+               (? (elem w encs)) (pin o 'e w, go >a o)
+               ("-d" || "--decode") (pin o 'd 1, go >a o)
+               ("-i" || "--ignore-garbage") (pin o 'i 1, go >a o)
+               ("-w" || "--wrap") (two? >a ? (pin o 'w <>a, go >>a o) (usage "option requires an argument -- 'w'"))
+               ("--wrap=" + (v && 0 < #v)) (pin o 'w v, go >a o)
+               ("-w" + v) (pin o 'w v, go >a o)
+               ("--" + _) (usage ("unrecognized option '" + w + "'"))
+               (? (1 < n && w 0 = 45 && elem (w 1) "di"))
                 (map (c \ (elem c "di" ? (pin o (c @ 100 'd 'i) 1) (usage ("invalid option -- '" + string c + "'")))) (map w (drop 1 ^n)),
                  go >a o)
-               (1 < n && w 0 = 45) (usage ("invalid option -- '" + string (w 1) + "'"))
+               (? (1 < n && w 0 = 45)) (usage ("invalid option -- '" + string (w 1) + "'"))
                (pin o 'fs (o 'fs + [w]), go >a o))))
        o (go as {'fs ()})
        e (o 'e)
@@ -1945,13 +1933,12 @@
    ; file along one row instead, which is the transpose and not a variant --
    (paste-main as)
     (: (fl a d s?)
-        (? (atom? a) [d s? a]
-           (<a = "-s") (fl >a d 1)
-           (<a = "-d") (two? >a ? (fl >>a (udels <>a) s?)
-                        (udie 2 "paste: -d wants a list"))
-           ((2 < tally <a) && (snip <a 0 2 = "-d"))
-            (fl >a (udels (snip <a 2 #<a)) s?)
-           [d s? a])
+        (atom? a ? [d s? a]
+         (<a @ "-s" (fl >a d 1)
+               "-d" (two? >a ? (fl >>a (udels <>a) s?)
+                     (udie 2 "paste: -d wants a list"))
+               ("-d" + l) (fl >a (udels l) s?)
+               [d s? a]))
        p (fl as '("\t") 0)
        ds <p s? <>p
        fs (ustray "paste" as <>>p @ r (two? r ? r '("-")))
@@ -2110,10 +2097,11 @@
     (: fo (uflags "join" as '(49 50 116 97 118 111 101) "12aeiotv")
        tf <fo fs (fo 1)
        ; -a may come twice, and the tablet keeps one, so its values are read off the words
-       av (: (go a acc) (? (atom? a) acc (<a = "--") acc
-                           (<a = "-a" && two? >a) (go >>a (<>a . acc))
-                           (2 < #<a && snip <a 0 2 = "-a") (go >a (snip <a 2 #<a . acc))
-                           (go >a acc))
+       av (: (go a acc) (atom? a ? acc
+                         (<a @ "--" acc
+                               ("-a" && two? >a) (go >>a (<>a . acc))
+                               ("-a" + (v && 0 < #v)) (go >a (v . acc))
+                               (go >a acc)))
              (go as ()))
        _ (atom? >fs ? (udie 2 "usage: join [-i] [-1 F] [-2 F] [-t C] [-a 1|2] [-v 1|2] [-e S] [-o FORMAT] FILE1 FILE2"))
        sep (uoptv tf 116 @ v (v ? (v 0)))
@@ -2147,8 +2135,8 @@
                 (v = "auto") (: c1 (two? l1 ? #(ujfs sep <l1) 0) c2 (two? l2 ? #(ujfs sep <l2) 0)
                                 ('k . map (i \ [1 i]) (filter (i \ !(i = n1)) (map (+ 1) ^c1))
                                  + map (i \ [2 i]) (filter (i \ !(i = n2)) (map (+ 1) ^c2))))
-                (map (w \ (w = "0" ? 'k (findsub w "." @ d (d < 0 ? (udie 1 ("join: invalid field specifier: '" + w + "'"))
-                                                            [(uatoi (snip w 0 d)) (uatoi (snip w (d + 1) #w))]))))
+                (map (w \ (w = "0" ? 'k (w @ (a + "." + b) [(uatoi a) (uatoi b)]
+                                              (udie 1 ("join: invalid field specifier: '" + w + "'")))))
                      (filter (w \ 0 < #w) (usplit 44 (replace v " " ","))))))
        (cell f i) ((two? f ? (unth f i)) @ v (string? v ? v empty))
        (row ps) (say out (ujoinc jsep ps), put out 10)
@@ -2244,10 +2232,7 @@
                      120 (zpad 6 (radix k 16))
                      (zpad 7 (radix k 8)))
        (val blk k)                      ; the little-endian item at k, short reads zeroed
-        (: n #blk
-           (go i acc) (sz <= i ? acc
-                       (go (i + 1) (acc + (k + i < n ? (blk (k + i)) 0) * (8 * i) 2)))
-           (go 0 0))
+        (: n #blk (foldl (\ acc i (acc + (k + i < n ? (blk (k + i)) 0) * (8 * i) 2)) 0 ^sz))
        (cell blk k)
         (kd @ 'c (upad 3 (uodesc (blk k)))
               'a (upad 3 (uodname (blk k)))
@@ -2259,9 +2244,7 @@
        (rowof blk cnt)
         (: items (byte? ? cnt (((cnt + sz) - 1) // sz))
            o (jug 0)
-           (go i) (items <= i ? (slurp o)
-                   (put o 32, say o (cell blk (i * step)), go (i + 1)))
-           (go 0))
+           (each ^items (i \ (put o 32, say o (cell blk (i * step)))), slurp o))
        ; left is -1 for no -N; the walk answers the byte count, for the closing offset
        (walk k left prev star)
         (left = 0 ? k
@@ -2291,14 +2274,9 @@
     (: n #blk o (jug 0)
        (hx v w) (zpad w (radix v 16) @ h (upper? ? (upper h) h))
        _ (say o (hx off 8)) _ (say o ": ")
-       (hex i) (c <= i ? 0
-                (i < n ? (say o (hx (blk i) 2)) (say o "  "),
-                 0 = (i + 1) % g ? (put o 32) 0,
-                 hex (i + 1)))
-       _ (hex 0) _ (0 = c % g ? 0 (put o 32)) _ (put o 32)
-       (asc i) (c <= i || n <= i ? 0 (put o (uxx-esc (blk i)), asc (i + 1)))
-       (asc 0,
-        slurp o))
+       _ (each ^c (i \ ((i < n ? (say o (hx (blk i) 2)) (say o "  ")), (0 = (i + 1) % g ? (put o 32) 0))))
+       _ (0 = c % g ? 0 (put o 32)) _ (put o 32)
+       (each ^(min c n) (i \ put o (uxx-esc (blk i))), slurp o))
    ; -r reads the dump back: the offset up to the colon is skipped, the gutter past
    ; two spaces is not hex and stops the row. a line with no colon is all hex
    (uxx-unrow ln)
@@ -2325,7 +2303,7 @@
        t <fo fs (fo 1)
        (num c d) (uoptv t c @ v
                   (!v ? d
-                   (: h (starts? v "0x") w (h ? (snip v 2 #v) v)
+                   (: h (starts? v "0x") w (v @ ("0x" + x) x v)
                       n (h ? (foldl (a \ ch \ a * 16 + hexv ch) 0 (chars w)) (unum w))
                       (charm? n && (!h || all (ch \ 0 <= hexv ch) (chars w)) ? n (udie 1 ("xxd: invalid number: " + v))))))
        p? (t 112) i? (t 105)
@@ -2457,9 +2435,8 @@
            (? (two? ex) <ex (atom? pre) 'none (atom? >pre) <pre ['many (map cap pre)]))
        (long w dash rest opts)               ; -> (rest opts)
         (: body (snip w #dash #w)
-           e ((: (go i) (? (#body <= i) -1 (body i = 61) i (go (i + 1)))) 0)
-           key (e < 0 ? body (snip body 0 e))
-           val (e < 0 ? () (snip body (e + 1) #body))
+           kv (body @ (k + "=" + v) [k v] [body ()])
+           key <kv val <>kv
            r (lmatch key)
            (? (r = 'none) (gerr ("unrecognized option '" + w + "'"), [rest opts])
               (two? r && <r = 'many)
@@ -2518,15 +2495,14 @@
    ; object file: the noms come out and the code does not --
    (ustr-ink? c) ((32 <= c && c < 127) || c = 9)
    (strings-main as)
-    (: (fl a n fs) (? (atom? a) [n (rev fs)]
-                      (<a = "-n") (two? >a ? (fl >>a (uatoi <>a) fs)
-                                   (udie 2 "strings: -n wants a length"))
-                      (2 < #<a && (snip <a 0 2 = "-n"))
-                       (fl >a (uatoi (snip <a 2 #<a)) fs)
-                      ; -a is GNU's default here: there are no sections to choose between
-                      (<a = "-a") (fl >a n fs)
-                      (1 < #<a && (<a 0) = 45) (udie 2 ("strings: unknown option " + <a))
-                      (fl >a n (<a . fs)))
+    (: (fl a n fs) (atom? a ? [n (rev fs)]
+                    (<a @ "-n" (two? >a ? (fl >>a (uatoi <>a) fs)
+                                (udie 2 "strings: -n wants a length"))
+                          ("-n" + k) (fl >a (uatoi k) fs)
+                          ; -a is GNU's default here: there are no sections to choose between
+                          "-a" (fl >a n fs)
+                          (? (1 < #<a && (<a 0) = 45)) (udie 2 ("strings: unknown option " + <a))
+                          (fl >a n (<a . fs))))
        p (fl as 4 ())
        lo <p fs <>p
        rd (urdb (f \ (udie 1 ("strings: cannot open " + f))) fs)

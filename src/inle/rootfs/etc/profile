@@ -8,7 +8,7 @@
 cat <<'EOF'
 welcome to inle, the love operating system.
 this is lush, the love command shell.
-the system source code is mounted under /proc/src.
+the system source code is mounted under /love.
 various unix commands such as `vi` are available.
 - type `love` to get a love repl.
 - type `tower` or `grass` to play a game.

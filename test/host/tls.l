@@ -318,16 +318,16 @@
           [['badsig 0 51] ['otherkey 1 51] ['nocv 2 51] ['badfin 3 51] ['nocert 4 51]])
    ; RFC 8446 7.4.2: an all-zero shared secret is refused
    zs (hs-run (hs-seat 0) 'zeroshare 'none)
-   _ (test !(<zs) (0 <= str-at (zs 2) "small order" 0))
+   _ (test !(<zs) (0 <= fsub (zs 2) "small order" 0))
    ; the end: a cut, a forged plaintext alert, a bitten tag each a nom and a reason; a ticket
    ; passed, a key update taken and answered (4.6.3)
    tr (hs-run (hs-seat 0) 'trunc 'none)
    ij (hs-run (hs-seat 0) 'inject 'none)
    bt (hs-run (hs-seat 0) 'badtag 'none)
    ku (hs-run (hs-seat 0) 'keyupdate 'none)
-   _ (test (<tr = 'eof) (0 <= str-at (tr 3) "without a close_notify" 0)
-           (<ij = 'bad) (0 <= str-at (ij 3) "plaintext" 0)
-           (<bt = 'bad) (0 <= str-at (bt 3) "tag does not verify" 0)
+   _ (test (<tr = 'eof) (0 <= fsub (tr 3) "without a close_notify" 0)
+           (<ij = 'bad) (0 <= fsub (ij 3) "plaintext" 0)
+           (<bt = 'bad) (0 <= fsub (bt 3) "tag does not verify" 0)
            (<ku = "the stub says hi") ((ku 1) = [[22 (hs-msg 24 (u8 0))] [23 "after"]]))
    ; wget: a body short of its Content-Length is exit 4 and no file, close_notify or not
    _ (test (hs-wget 'wtrunc () = [4 -1]) (hs-wget 'wshort () = [4 -1]) (hs-wget 'wfull () = [0 3000]))
@@ -358,9 +358,9 @@
    _ (setenv "SSL_CERT_FILE" (? (string? cf0) cf0 ""))
    _ (hark ["rm" "-rf" hdir])
    _ (test !(<un) ((un 1) = [21 (u8 2 + u8 48)])
-           (0 <= str-at (un 2) "not trusted" 0) (0 <= str-at (un 2) ("127.0.0.1:" + show <pu + " spki:") 0)
+           (0 <= fsub (un 2) "not trusted" 0) (0 <= fsub (un 2) ("127.0.0.1:" + show <pu + " spki:") 0)
            (<pn = "the stub says hi")
-           !(<wp) ((wp 1) = [21 (u8 2 + u8 42)]) (0 <= str-at (wp 2) "not the one pinned" 0))
+           !(<wp) ((wp 1) = [21 (u8 2 + u8 42)]) (0 <= fsub (wp 2) "not the one pinned" 0))
    0)
 
 ;; --- a real server: openssl's s_server over each kind of key, where openssl is here ----
@@ -380,13 +380,13 @@
                   "-key" (odir + "/" + nm + ".key") "-cert" (odir + "/" + nm + ".pem")])
        ; the server listens when it is ready, not after a fixed wait: under load it is slow
        (open k) (: t (tls-open "127.0.0.1" port 'verify)
-                   (? (k < 40 && string? t && 0 <= str-at t "cannot connect" 0) (: _ (rest 250) (open (k + 1))) t))
+                   (? (k < 40 && string? t && 0 <= fsub t "cannot connect" 0) (: _ (rest 250) (open (k + 1))) t))
        t (open 0)
        b (? (tablet? t) (: _ (tls-say t "GET / HTTP/1.0\r\n\r\n") b (tls-slurp t) _ (close (t 's)) b) t)
        _ (? (tablet? t) 0 (still <p 15))
        _ (waitfor <p)
        b)
-   (has b s) (string? b && 0 <= str-at b s 0)
+   (has b s) (string? b && 0 <= fsub b s 0)
    _ (? os?
         (: cf0 (getenv "SSL_CERT_FILE")
            _ (hark ["mkdir" "-p" odir])
@@ -419,7 +419,7 @@
    tc-roots (map (n \ x509 (tc-ld n)) ["rootr" "roote" "rootw"])
    (tc host l) (chain-ok? (map tc-ld l) tc-roots host tc-now)
    (tc-flip d i) (snip d 0 i + string ((d i) ^ 1) + snip d (i + 1) #d)
-   (tc-has r s) (string? r && (0 <= str-at r s 0))
+   (tc-has r s) (string? r && (0 <= fsub r s 0))
    _ (test ((tc "good.test" ["leafr" "interr"]) = 1)
            ((tc "good.test" ["leafe" "intere"]) = 1)                ; p-256 under p-384
            ((tc "good.test" ["leafw"]) = 1)                          ; p-384 under p-521, sha-512
@@ -485,7 +485,7 @@
    _ (test (string? t) (two? f) (<>f = t)                          ; the carried copy is the tree's
            (100 < #xs) (#xs = #ds)                                 ; every root reads
            (all (x \ (x 'ca) = 1) xs)
-           (elem ("/proc/src/" + tree-roots) root-homes)))
+           (elem ("/love/" + tree-roots) root-homes)))
 
 ;; --- the roots: SSL_CERT_FILE names the bundle, read once; the host's own reads whole ----
 (: e0 (getenv "SSL_CERT_FILE")

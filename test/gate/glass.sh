@@ -3,7 +3,7 @@
 # a scale go into the machine (src/inle/wasm/arch.c's k_start), and rows and columns come back
 # out of tty (test/kernel/glass.l) after kmain has settled them. what each boot should
 # answer is worked out HERE and not read off the kernel, so the law gets two readings: an
-# 8x16 face at `scale` pixels a glyph pixel, and the scale itself either the door's or the
+# 8x16 font at `scale` pixels a glyph pixel, and the scale itself either the door's or the
 # largest that still leaves 80 columns and 24 rows.
 # it also asks what the console does to its TEXT when the grid is re-made under it: two
 # boots print the same line, the second re-scaling the glyphs after it, and test/gate/ink.l
@@ -66,15 +66,15 @@ ink 2 "$out/ink-scaled.ppm"
 "$love" test/gate/ink.l 2 "$out/ink-plain.ppm" "$out/ink-scaled.ppm" || bad=1
 
 # A LOADED FACE DRAWS WHAT THE BUILT-IN ONE LACKS. two boots print 世 and Ā, their glyphs
-# solid in the first face written to /proc/vt/face and empty in the second; the pictures
+# solid in the first font written to /proc/vt/font and empty in the second; the pictures
 # differ by exactly those glyphs, 世 two cells wide.
-face() {
+font() {
   INLE_RAM=256 "$node" src/inle/wasm/inle.mjs --fb 640x400 --scale 1 --dump "$2" \
-    --image "$image" "$wasm" test/kernel/face.l $1 < /dev/null > "$log" 2>&1
+    --image "$image" "$wasm" test/kernel/font.l $1 < /dev/null > "$log" 2>&1
 }
-face full "$out/face-full.ppm"
-face empty "$out/face-empty.ppm"
-"$love" test/gate/lit.l face 384 "$out/face-full.ppm" "$out/face-empty.ppm" || bad=1   # 16x16 + 8x16
+font full "$out/font-full.ppm"
+font empty "$out/font-empty.ppm"
+"$love" test/gate/lit.l font 384 "$out/font-full.ppm" "$out/font-empty.ppm" || bad=1   # 16x16 + 8x16
 
 # A SIXEL PICTURE PAINTS OFF THE STORE, A PIXEL A PIXEL. a 16x16 square, white then black
 # (the console's ground): the pictures differ by exactly its 256 pixels, two tiles wide.
@@ -101,4 +101,4 @@ kit empty "$out/kit-empty.ppm"
 "$love" test/gate/lit.l kitty 256 "$out/kit-full.ppm" "$out/kit-empty.ppm" || bad=1
 
 [ $bad = 0 ] || exit 1
-echo "  glass: ok -- real pixels in, rows and columns out, the text and a picture across a new grid, a loaded face, and sixel and kitty pictures"
+echo "  glass: ok -- real pixels in, rows and columns out, the text and a picture across a new grid, a loaded font, and sixel and kitty pictures"

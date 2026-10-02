@@ -432,10 +432,7 @@
                 (walk o mty)
                  (? (flo? mty) (mark o 'sse)
                     (arr? mty)
-                     (: esz (tsz g <>mty)
-                        (go i) (<>>mty <= i ? 1
-                                  (walk (o + i * esz) <>mty, go (i + 1)))
-                        (go 0))
+                     (: esz (tsz g <>mty) (each ^(<>>mty) (i \ walk (o + i * esz) <>mty), 1))
                     (stru? mty)
                      (peep (g 'stag) <>mty 0 @ e2
                         (!(two? e2) ? 1 (fields o <e2)))
@@ -1272,9 +1269,7 @@
                     (rfree g (vreg c),
                      fs))))))))))
    ; n little-endian bytes of a constant (the global initializer image)
-   (les n v) (: (go i acc) (n <= i ? (rev acc)
-                              (go (i + 1) ((v >> (8 * i)) & 255 . acc)))
-               (go 0 ()))
+   (les n v) (map (i \ (v >> (8 * i)) & 255) ^n)
    (zeros n) (n >= 1 ? (0 . zeros (n - 1)))
    ; a straight-line block copy of sz bytes, src in r0, dest in r1, r2 the scratch
    (bcopy g off sz acc)                              ; a word at a time (8, 4 on t32), then a byte tail
@@ -2850,11 +2845,8 @@
                                        's    ; a float: the cell holds the widened double, the slot takes it narrowed
                                         ([['ldsd 'f15 'sp 0]] + vfpst <>kc 'f15 + '((add sp sp 16)))
                                        'sn   ; n float words into n consecutive slots, off the same cell
-                                        (: (go i acc5)
-                                            (<>>kc <= i ? acc5
-                                               (go (i + 1) (acc5 + [['ld 'r12 'sp (4 * i)]
-                                                                    ['movsnxr (<>kc + i) 'r12]])))
-                                           (go 0 () + '((add sp sp 16))))
+                                        (catmap (i \ [['ld 'r12 'sp (4 * i)] ['movsnxr (<>kc + i) 'r12]]) ^(<>>kc)
+                                         + '((add sp sp 16)))
                                        (arm? g ? [['ldsd (xmmreg <>kc) 'sp 0] '(add sp sp 16)]   ; a lone double
                                           (spop 'r0 + [['movqxr (xmmreg <>kc) 'r0]]))))))))
                      (go4 kr ()))
@@ -4952,11 +4944,7 @@
                          jrf (vany (f \ (two? f && <f = 'jmpr)) fs)
                          cswr (lot9 @ 'no ()
                                       (: t {}
-                                         (go i) (n2 <= i ? 0
-                                                   (foldl (_ \ r \ elem r (csregs g) ? (pin t r 1) 0)
-                                                          0 (dft9 i),
-                                                    go (i + 1)))
-                                         (go 0,
+                                         (each ^n2 (i \ foldl (_ \ r \ elem r (csregs g) ? (pin t r 1) 0) 0 (dft9 i)),
                                           t)))
                          cspool9 (jrf || lot9 = 'no ? ()
                                     (filter (r \ !(peep cswr r 0)) csx64))
@@ -6306,8 +6294,7 @@
          (bad? v ? 'bad (fim ty v)))
      (<ini = 'str && arr? ty)
       (: t <>ini n (tsz g ty)
-         (bs i acc) (n <= i ? (rev acc) (bs (i + 1) ((i < tally t ? (t i) 0) . acc)))
-         (bs 0 ()))
+         (map (i \ (i < tally t ? (t i) 0)) ^n))
      (clarr? ty ini) (imgbytes g ty <>>ini)          ; a wide literal at file scope: its init is the image
      ; a compound literal of the object's own aggregate (DEFINE_SPINLOCK's `(spinlock_t){..}`, gcc's
      ; constant-literal extension): its init is the image
@@ -6642,7 +6629,7 @@
               h (0 < n ? (c 0) 0)
               c2 (1 < n && c 1 = 38 ? (snip c 2 n) (snip c 1 n))    ; "=&r": the early clobber is the picking rule already
               k (h @ (61 || 43) (asmc g c2) 'bad)
-              fc (3 < #c2 && snip c2 0 3 = "@cc" ? (peep asmflags (snip c2 3 #c2) ()))
+              fc (c2 @ ("@cc" + (f && 0 < #f)) (peep asmflags f ()) ())
               gv (<><l @ ('var nm) (two? (peep (g 'gregs) nm ())) ())
               ; the stack-pointer register variable ("+r"(current_stack_pointer): the asm uses the
               ; stack) is that register as it stands -- nothing loads it or stores it back
@@ -7415,15 +7402,13 @@
           !(immok g 'cmp (span - 1)) 'no
           (!(lo = 0) && !(imma g 'sub lo)) 'no
           (: tv (foldl (t \ e2 \ pin t (cfit g (vty c) <e2) <>e2) {} cases)
-             (ent i acc) (span <= i ? (rev acc)
-                            (ent (i + 1) ([['fix 4 'rel32 (peep tv (lo + i) dflt) 0]] . acc)))
              labs (foldl (l \ e2 \ elem <>e2 l ? l (<>e2 . l)) [dflt] cases)
              tl (nlab g ".J")
              rI (wr? g cr9 ? cr9 (ralloc g))
              (!rI ? 'no
                 (ralloc g @ rT
                    (!rT ? (rpeq? g rI cr9 ? () (rfree g rI), 'no)
-                      (pin g 'jtabs ([tl (catall (ent 0 ()))] . g 'jtabs),
+                      (pin g 'jtabs ([tl (catall (map (i \ [['fix 4 'rel32 (peep tv (lo + i) dflt) 0]]) ^span))] . g 'jtabs),
                        rfree g rT,
                        rpeq? g rI cr9 ? () (rfree g rI),
                        (lo = 0 ? (rpeq? g rI cr9 ? () [['mov rI cr9]])
@@ -8201,9 +8186,8 @@
                      k (vfpn xmmi n 1)
                      (k < 0 ? (nolane g ("no lane for a float HFA param past the register file" + ontgt g))
                         (: off (nslot g (tsz g pty <= 8 ? 8 16))
-                           (go i acc9) (n <= i ? acc9
-                                          (go (i + 1) (acc9 + vfpsv (k + i) 'r4 (off + 4 * i))))
-                           (spill hp >ps gpi (vfpm xmmi k n) ovi ([<p off pty] . env) (acc + go 0 ())))))
+                           (spill hp >ps gpi (vfpm xmmi k n) ovi ([<p off pty] . env)
+                                  (acc + catmap (i \ vfpsv (k + i) 'r4 (off + 4 * i)) ^n)))))
                  (t32f? g && sse2? g pty)                  ; a two-double HFA: an adjacent d-pair
                   (vfpn xmmi 4 2 @ k
                      (k < 0 ? (nolane g ("no lane for an HFA param past the register file" + ontgt g))

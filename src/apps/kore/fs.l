@@ -732,15 +732,12 @@
          (w k @ c
           (scan (k + 1) (q? || c = 39)
                 (hard? || (ushq-ctl? c) || elem c '(34 36 92 96)))))
-       (sq k o)
-        (n <= k ? (slurp o)
-         (w k @ c
-          ((? (c = 39) (say o "'\\''")
-              (ushq-ctl? c) (say o ("'$'\\" + ushq-esc c + "''"))
-              (put o c)),
-           sq (k + 1) o)))
+       (sq _) (jug 0 @ o (each ^n (k \ (w k @ c (? (c = 39) (say o "'\\''")
+                                                  (ushq-ctl? c) (say o ("'$'\\" + ushq-esc c + "''"))
+                                                  (put o c)))),
+                          slurp o))
        r (scan 0 0 0)
-       (<r && !<>r ? ("\"" + w + "\"") ("'" + sq 0 (jug 0) + "'")))
+       (<r && !<>r ? ("\"" + w + "\"") ("'" + sq 0 + "'")))
    (ust-name p md)
     (ushq p @ q
      (!(40960 = md & 61440) ? q
@@ -895,17 +892,16 @@
                      go (j + 1))))
        (go 0))
    (stat-main as)
-    (: (long? w n s) ((n < tally w) && (snip w 0 n = s))
-       fsm {'f 0}
+    (: fsm {'f 0}
        (fl a fmt L pf fs)
-        (? (atom? a) [fmt L pf (rev fs)]
-           (<a = "-L") (fl >a fmt 1 pf fs)
-           (<a = "-f" || <a = "--file-system") (pin fsm 'f 1, fl >a fmt L pf fs)
-           (<a = "-c") (two? >a ? (fl >>a <>a L 0 fs) (udie 2 "stat: -c wants a format"))
-           (2 < #<a && snip <a 0 2 = "-c") (fl >a (snip <a 2 #<a) L 0 fs)
-           (long? <a 9 "--format=") (fl >a (snip <a 9 #<a) L 0 fs)
-           (long? <a 9 "--printf=") (fl >a (snip <a 9 #<a) L 1 fs)
-           (fl >a fmt L pf (<a . fs)))
+        (atom? a ? [fmt L pf (rev fs)]
+         (<a @ "-L" (fl >a fmt 1 pf fs)
+               ("-f" || "--file-system") (pin fsm 'f 1, fl >a fmt L pf fs)
+               "-c" (two? >a ? (fl >>a <>a L 0 fs) (udie 2 "stat: -c wants a format"))
+               ("-c" + f) (fl >a f L 0 fs)
+               ("--format=" + (f && 0 < #f)) (fl >a f L 0 fs)
+               ("--printf=" + (f && 0 < #f)) (fl >a f L 1 fs)
+               (fl >a fmt L pf (<a . fs))))
        p (fl as () 0 0 ())
        fmt <p L? <>p pf? <>>p fs (ustray "stat" as (p 3))
        _ (two? fs ? () (udie 2 "usage: stat [-L] [-c FORMAT | --printf=FORMAT] FILE.."))
@@ -1072,11 +1068,10 @@
    (udf-show rows mins lefts)           ; lefts: the columns that read left
     (: n #<rows
        ws (map (k \ foldl (w \ r \ (#(r k) @ c (w < c ? c w))) (mins k) rows) ^n)
-       (line r) (: (go k acc) (n <= k ? acc
-                               (: s (r k)
-                                  p (? (k + 1 = n) s (elem k lefts) (urpad (ws k) s) (upad (ws k) s))
-                                  (go (k + 1) (k ? (acc + " " + p) p))))
-                   (go 0 ""))
+       (line r) (foldl (\ acc k (: s (r k)
+                                     p (? (k + 1 = n) s (elem k lefts) (urpad (ws k) s) (upad (ws k) s))
+                                     (k ? (acc + " " + p) p)))
+                       "" ^n)
        (go rs) (two? rs ? (say out (line <rs), put out 10, go >rs) 0)
        (go rows))
    ; -T wears each mount's type after its name, -t TYPE takes only those types and -x
@@ -1084,15 +1079,16 @@
    (df-main as)
     (: t {'t () 'x ()}
        (val a k fs) (two? >a ? (pin t k (<>a . t k), fl >>a fs) (udie 2 "df: an option wants a type"))
-       (fl a fs) (? (atom? a) (rev fs)
-                    (<a = "--") (rev fs + >a)
-                    (<a = "-t" || <a = "-x") (val a (<a = "-t" ? 't 'x) fs)
-                    (<a = "-T" || <a = "--print-type") (pin t 'T 1, fl >a fs)
-                    (<a = "-H" || <a = "--si") (pin t 'h 'si, fl >a fs)
-                    (2 < #<a && (snip <a 0 2 = "-t" || snip <a 0 2 = "-x")) ((<a 1 = 116 ? 't 'x) @ k (pin t k ((snip <a 2 #<a) . t k), fl >a fs))
-                    (7 < #<a && snip <a 0 7 = "--type=") (pin t 't ((snip <a 7 #<a) . t 't), fl >a fs)
-                    (15 < #<a && snip <a 0 15 = "--exclude-type=") (pin t 'x ((snip <a 15 #<a) . t 'x), fl >a fs)
-                    (#<a < 2 || <a 0 != 45) (fl >a (<a . fs))
+       (fl a fs) (atom? a ? (rev fs)
+                  (<a @ "--" (rev fs + >a)
+                    ("-t" || "-x") (val a (<a = "-t" ? 't 'x) fs)
+                    ("-T" || "--print-type") (pin t 'T 1, fl >a fs)
+                    ("-H" || "--si") (pin t 'h 'si, fl >a fs)
+                    ("-t" + v) (pin t 't (v . t 't), fl >a fs)
+                    ("-x" + v) (pin t 'x (v . t 'x), fl >a fs)
+                    ("--type=" + (v && 0 < #v)) (pin t 't (v . t 't), fl >a fs)
+                    ("--exclude-type=" + (v && 0 < #v)) (pin t 'x (v . t 'x), fl >a fs)
+                    (? (#<a < 2 || <a 0 != 45)) (fl >a (<a . fs))
                     (:- (cl 1) w <a (cl k) (#w <= k ? (fl >a fs) (w k @
                      104 (pin t 'h (t 'h = 'si ? 'si 1), cl (k + 1))
                      84 (pin t 'T 1, cl (k + 1))
@@ -1101,7 +1097,7 @@
                      97 (pin t 'a 1, cl (k + 1))
                      107 (cl (k + 1))   ; -k is the default, and -P names this very face
                      80 (cl (k + 1))    ; (posix's, and the only one laid out here)
-                     c (udie 2 $ "df: unknown option -" + string c)))))
+                     c (udie 2 $ "df: unknown option -" + string c))))))
        fs (fl as ())
        h? (t 'h) i? (t 'i) a? (t 'a) T? (t 'T)
        hdr0 (? i? '("Filesystem" "Inodes" "IUsed" "IFree" "IUse%" "Mounted on")
@@ -1199,15 +1195,15 @@
        (go a)
         (atom? a ? ()
          (: w <a n #w
-            (? (w = "--") >a
-               (w = "--no-create") (pin t 'c 1, go >a)
-               (w = "--io-blocks") (pin t 'o 1, go >a)
-               (w = "--size" || w = "--reference")
+            (w @ "--" >a
+               "--no-create" (pin t 'c 1, go >a)
+               "--io-blocks" (pin t 'o 1, go >a)
+               ("--size" || "--reference")
                 (two? >a ? (pin t (w 2 = 115 ? 's 'r) <>a, go >>a)
                  (udie 1 ("truncate: option '" + w + "' requires an argument")))
-               (7 < n && snip w 0 7 = "--size=") (pin t 's (snip w 7 n), go >a)
-               (12 < n && snip w 0 12 = "--reference=") (pin t 'r (snip w 12 n), go >a)
-               (1 < n && w 0 = 45 && !(w 1 = 45))
+               ("--size=" + (v && 0 < #v)) (pin t 's v, go >a)
+               ("--reference=" + (v && 0 < #v)) (pin t 'r v, go >a)
+               (? (1 < n && w 0 = 45 && !(w 1 = 45)))
                 (: (cl k) (n <= k ? (go >a)
                            (w k @ c
                             (c @ 99 (pin t 'c 1, cl (k + 1))
@@ -1539,15 +1535,14 @@ EXEC 01;32
    ; GNU's quoting: a ' closes and reopens, a : or = after an odd run of \ and ^ is escaped
    (udc-q s)
     (: o (jug 0) n #s
-       (go k nb) (n <= k ? (slurp o)
-                  (: c (s k)
-                     nb2 (? (c = 39) (say o "'\\'", 1)
-                            (c = 92 || c = 94) !nb
-                            (c = 58 || c = 61) (nb ? (put o 92) 0, 1)
-                            1)
-                     (put o c,
-                      go (k + 1) nb2)))
-       (go 0 1))
+       (foldl (\ nb k (: c (s k)
+                         nb2 (? (c = 39) (say o "'\\'", 1)
+                                (c = 92 || c = 94) !nb
+                                (c = 58 || c = 61) (nb ? (put o 92) 0, 1)
+                                1)
+                         (put o c, nb2)))
+              1 ^n,
+        slurp o))
    (udc-parse txt nm)                   ; -> [ok [key val]..]
     (: term (getenv "TERM" @ t (string? t && 0 < #t ? t "none"))
        cterm (getenv "COLORTERM" @ t (string? t ? t ""))
@@ -1772,14 +1767,14 @@ EXEC 01;32
        (go a o)
         (atom? a ? o
          (: w <a n #w
-            (? (w = "--") (pin o 'fs (o 'fs + >a), o)
-               (elem w ["--force" "--exact" "--verbose" "--zero"])
+            (w @ "--" (pin o 'fs (o 'fs + >a), o)
+               ("--force" || "--exact" || "--verbose" || "--zero")
                 (pin o (w 2 @ 102 'f 101 'x 118 'v 'z) 1, go >a o)
-               (w = "--remove" || w = "-u") (pin o 'u 1, go >a o)
-               (13 < n && snip w 0 13 = "--iterations=") (pin o 'n (num (snip w 13 n) "passes"), go >a o)
-               (7 < n && snip w 0 7 = "--size=") (pin o 's (size (snip w 7 n)), go >a o)
-               (2 < n && snip w 0 2 = "--") (usage ("unrecognized option '" + w + "'"))
-               (1 < n && w 0 = 45)
+               ("--remove" || "-u") (pin o 'u 1, go >a o)
+               ("--iterations=" + (v && 0 < #v)) (pin o 'n (num v "passes"), go >a o)
+               ("--size=" + (v && 0 < #v)) (pin o 's (size v), go >a o)
+               ("--" + _) (usage ("unrecognized option '" + w + "'"))
+               (? (1 < n && w 0 = 45))
                 (: (cl k) (? (n <= k) (go >a o)
                              (w k = 110) (go <(arg o (k + 1) w a 'n (v \ num v "passes")) o)
                              (w k = 115) (go <(arg o (k + 1) w a 's size) o)
@@ -1871,21 +1866,21 @@ EXEC 01;32
    (mktemp-main as)
     (: sf {'s ""}
        (fl a d u q dir fs)
-        (? (atom? a) [d u q dir (rev fs)]
-           (<a = "-d" || <a = "--directory") (fl >a 1 u q dir fs)
-           (<a = "-u" || <a = "--dry-run") (fl >a d 1 q dir fs)
-           (<a = "-q" || <a = "--quiet") (fl >a d u 1 dir fs)
-           (<a = "--tmpdir") (fl >a d u q (getenv "TMPDIR" @ e (string? e ? e "/tmp")) fs)
-           (9 < #<a && snip <a 0 9 = "--tmpdir=") (fl >a d u q (snip <a 9 #<a) fs)
-           (9 < #<a && snip <a 0 9 = "--suffix=") (pin sf 's (snip <a 9 #<a), fl >a d u q dir fs)
-           (<a = "--suffix") (two? >a ? (pin sf 's <>a, fl >>a d u q dir fs) (udie 1 "mktemp: --suffix wants a suffix"))
-           (<a = "-t") (fl >a d u q (dir ? dir (getenv "TMPDIR")) fs)
-           (<a = "-p") (two? >a ? (fl >>a d u q <>a fs) (udie 1 "mktemp: -p wants a directory"))
-           (2 < #<a && snip <a 0 2 = "-p") (fl >a d u q (snip <a 2 #<a) fs)
-           ; anything else is the template -- unless it still looks like a flag, which
-           ; would name a temporary file after the option someone meant
-           (1 < #<a && <a 0 = 45) (udie 1 ("mktemp: unknown option " + <a))
-           (fl >a d u q dir (<a . fs)))
+        (atom? a ? [d u q dir (rev fs)]
+         (<a @ ("-d" || "--directory") (fl >a 1 u q dir fs)
+               ("-u" || "--dry-run") (fl >a d 1 q dir fs)
+               ("-q" || "--quiet") (fl >a d u 1 dir fs)
+               "--tmpdir" (fl >a d u q (getenv "TMPDIR" @ e (string? e ? e "/tmp")) fs)
+               ("--tmpdir=" + (v && 0 < #v)) (fl >a d u q v fs)
+               ("--suffix=" + (v && 0 < #v)) (pin sf 's v, fl >a d u q dir fs)
+               "--suffix" (two? >a ? (pin sf 's <>a, fl >>a d u q dir fs) (udie 1 "mktemp: --suffix wants a suffix"))
+               "-t" (fl >a d u q (dir ? dir (getenv "TMPDIR")) fs)
+               "-p" (two? >a ? (fl >>a d u q <>a fs) (udie 1 "mktemp: -p wants a directory"))
+               ("-p" + v) (fl >a d u q v fs)
+               ; anything else is the template -- unless it still looks like a flag, which
+               ; would name a temporary file after the option someone meant
+               (? (1 < #<a && <a 0 = 45)) (udie 1 ("mktemp: unknown option " + <a))
+               (fl >a d u q dir (<a . fs))))
        p (fl as 0 0 0 () ())
        d? <p u? <>p q? <>>p pdir (p 3) fs (p 4)
        tm (string? pdir ? pdir (getenv "TMPDIR" @ e (string? e ? e "/tmp")))
@@ -1914,9 +1909,9 @@ EXEC 01;32
        _ (two? >fs && atom? >>>>fs ? () (udie 2 "usage: cmp [-bls] [-n N] [-i SKIP[:SKIP]] A B [SKIP1 [SKIP2]]"))
        (num w) (unum w @ v (charm? v ? v (udie 2 ("cmp: invalid number: '" + w + "'"))))
        iv (uoptv t 105)
-       k (iv ? (findsub iv ":") -1)
-       sk1 (? (two? >>fs) (num (fs 2)) iv (num (k < 0 ? iv (snip iv 0 k))) 0)
-       sk2 (? (two? >>>fs) (num (fs 3)) iv (num (k < 0 ? iv (snip iv (k + 1) #iv))) 0)
+       ab (iv ? (iv @ (a + ":" + b) [a b] [iv iv]))
+       sk1 (? (two? >>fs) (num (fs 2)) iv (num <ab) 0)
+       sk2 (? (two? >>>fs) (num (fs 3)) iv (num <>ab) 0)
        lim (t 110 ? (num (uoptv t 110)))
        (rd f) (f = "-" ? [1 (slurp in)] (uread f))
        ra (rd <fs) rb (rd <>fs)

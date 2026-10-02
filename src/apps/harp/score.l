@@ -39,8 +39,7 @@
                        {} ws)
  ; [C#m7/G#]: the bass is g sharp, an octave under middle c's
  (score-chord t) (: in (snip t 1 (#t - 1))
-                    (cut i) (i >= #in ? in (in i = 47 ? (snip in (i + 1) #in) (cut (i + 1))))
-                    p (score-pc (cut 0) {})
+                    p (score-pc (in @ (_ + "/" + b) b in) {})
                     (two? p ? (<p - 12) ()))
  (score-words s) (:- (go 0 () "") (go i ws w)
    (? (i >= #s || s i = 59) (0 < #w ? (lrev (w . ws)) (lrev ws))

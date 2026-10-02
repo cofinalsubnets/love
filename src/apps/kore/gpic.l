@@ -153,7 +153,7 @@
        (i < n && (t i = 101 || t i = 69) ?
         (: sg (t (i + 1) = 45 ? -1 1) j (t (i + 1) = 45 || t (i + 1) = 43 ? (i + 2) (i + 1))
            e (: (go k a) (k < n ? (go (k + 1) (a * 10 + t k - 48)) a) (go j 0))
-           p (: (go k a) (k < e ? (go (k + 1) (a * 10.0)) a) (go 0 1.0))
+           p (foldl (\ a k (a * 10.0)) 1.0 ^e)
            (sg < 0 ? (v * (1.0 / p)) (v * p)))
         v))
    ; a number off the text: digits, a fraction, an exponent; a trailing i is inches and
@@ -281,8 +281,8 @@
                 ; with -c a dot line goes through as a backslash one, and .ps sets the pen
                 ((s 'bol) && s 'k = 'file && c = 46 && g 'cflag)
                  (: t (gp-rest-line g) _ (gp-c g = 10 ? (gp-adv g) 0)
-                    (gp-starts? t ".ps" && (#t = 3 || gp-blank? (t 3)) ?
-                     (tok 'cps (gp-words (snip t 3 #t) @ ws (two? ws ? (int (gem <ws)))))
+                    (t @ (".ps" + (r && (#r = 0 || gp-blank? (r 0))))
+                     (tok 'cps (gp-words r @ ws (two? ws ? (int (gem <ws)))))
                      (tok 'troff t)))
                 (gp-blank? c) (gp-adv g, gp-lex g)
                 (c = 92 && c1 = 10) (gp-adv g, gp-adv g, gp-lex g)
@@ -1440,7 +1440,7 @@
      (lt @ 'dashed ("da " + gp-3 (gp-dw g o)) 'dotted ("dt " + gp-3 (gp-dw g o)) "fp"))
    (gp-tx-obj g o)
     (: ty (o 'ty) vis (gp-visible? o) fill (o 'fill != () || o 'shaded != ()) gray (o 'fill != () && o 'shaded = ())
-       ((? (ty = 'troff) (gp-o g ((g 'cflag && gp-starts? (o 'line) "." ? ("\\" + snip (o 'line) 1 #(o 'line)) (o 'line)) + "%\n"))
+       ((? (ty = 'troff) (gp-o g ((g 'cflag && starts? (o 'line) "." ? ("\\" + snip (o 'line) 1 #(o 'line)) (o 'line)) + "%\n"))
            (ty = 'block) (map (x \ gp-tx-obj g x) (o 'objs))
            (ty = 'box && 0 < peep o 'rad 0.0) (gp-tx-rbox g o)
            (ty = 'box)
@@ -1601,7 +1601,6 @@
         (gp-tr-picture g os args, 1)))
 
    ; -- the document -------------------------------------------------------------------
-   (gp-starts? l w) (#w <= #l && snip l 0 #w = w)
    ; troff's .lf N [FILE] between pictures -> [N FILE-or-()]: the next line is N of FILE
    (gp-lf l)
     (gp-words l @ ws
@@ -1609,7 +1608,7 @@
       (: n (>ws 0) ok (0 < #n && (: (all i) (? (#n <= i) 1 (gp-dig? (n i)) (all (i + 1)) 0) (all 0)))
          (ok ? [(int (gem n)) (two? >>ws ? (>>ws 0))]))))
    ; a .PS, .PE line: the macro and then a blank or the end, or anything with -C
-   (gp-macro? g l w) (gp-starts? l w && (#l = #w || g 'Cflag || gp-blank? (l #w)))
+   (gp-macro? g l w) (starts? l w && (#l = #w || g 'Cflag || gp-blank? (l #w)))
    (gp-end? g l) (gp-macro? g l ".PE" || gp-macro? g l ".PF" || gp-macro? g l ".PY")
    (gp-doc g nm text)
     (: ls (lines text) n #ls
@@ -1666,7 +1665,7 @@
        (flags l)
         (? (atom? l) ()
            (<l = "--") >l
-           (<l = "-" || !(gp-starts? <l "-")) l
+           (<l = "-" || !(starts? <l "-")) l
            (<l = "-T") (flags >>l)
            (<l @ w (map (k \ flag (w (k + 1))) ^(#w - 1), flags >l)))
        fs (flags as)

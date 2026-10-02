@@ -181,7 +181,7 @@
 ; --- quarter tone is struck, not an escape dropped and then a plain note. the key goes
 ; --- in once the legend's first cell is on the wire, so the tty is raw and the keys'
 ; --- pane painted by then, and q a breath after it, so the key's answer has been
-; --- painted; the harbour puts the keys over a buffer, so the rows are what holds the
+; --- painted; the mitty puts the keys over a buffer, so the rows are what holds the
 ; --- whole of the keys' frame. a screen that never shows the answer fails the law
  sq (synth-new ())
  c4 (synth-digits 0 . synth-name (synth-semis sq [0 0 0]))  ; the first key and its note, as the legend cells them

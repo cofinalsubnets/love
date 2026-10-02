@@ -142,7 +142,7 @@
         upcopy r 0 b,
         upcopy r 8 e,
         [(string r) ((lower? b ? 8 0) + (lower? e ? 16 0))]))))
-   (cksum n11) ((: (go i s) (i >= 11 ? s (go (i + 1) (255 & n11 i + ((s & 1) << 7) + (s >> 1))))) 0 0)
+   (cksum n11) (foldl (\ s i (255 & n11 i + ((s & 1) << 7) + (s >> 1))) 0 ^11)
    ; the ~N alias: up to 6 plain upcased chars + "~" + N, unique among taken raw11s
    (alias gs s)
     (: base ((: (go i acc) (i = #s || 6 <= #acc ? acc

@@ -25,7 +25,7 @@
 
    ; ---- text by the column ------------------------------------------------------
    ; a column is a byte that does not continue a utf-8 sequence
-   (tr-w s) (: n #s (go k a) (n <= k ? a (go (k + 1) (128 <= s k < 192 ? a (a + 1)))) (go 0 0))
+   (tr-w s) (foldl (\ a k (128 <= s k < 192 ? a (a + 1))) 0 ^#s)
    (tr-cut s w)                        ; the longest head of s within w columns
     (: n #s
        (go k a) (? (n <= k) s

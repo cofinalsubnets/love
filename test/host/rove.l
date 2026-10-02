@@ -1,6 +1,6 @@
 ; test/host/rove.l -- the rove engine and its climb, headless: delve, fov, the painter, each
 ; floor's make, the helm decoder, the words, the opening sign, and the climb end to end. the tty
-; runner is berth-thin over this and test/host/tty.l plays it.
+; runner is mitty-thin over this and test/host/tty.l plays it.
 ; not in the corpus: it leaks its helpers. run: cat test/00-init.l test/host/rove.l | out/love
 
 (borrow 'rove)   ; the artifact's modules, warm from the tree

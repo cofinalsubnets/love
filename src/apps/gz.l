@@ -30,15 +30,9 @@
    ; --- crc32 (IEEE 802.3: reflected, polynomial 0xedb88320) -----------------
    ; built once at load into a tray, read with peep. the final xor is the same
    ; 0xffffffff the register starts at.
-   (gz-crcrow n)
-    (: (go k c) (8 <= k ? c (go (k + 1) (c & 1 ? (c >> 1 ^ 3988292384) (c >> 1))))
-       (go 0 n))
+   (gz-crcrow n) (foldl (\ c k (c & 1 ? (c >> 1 ^ 3988292384) (c >> 1))) n ^8)
    gz-crctab (star-tray '(256) (map gz-crcrow (jot 256)))
-   (gz-crcwalk s)
-    (: n #s
-       (go i c) (n <= i ? (c ^ 4294967295)
-                 (go (i + 1) (peep gz-crctab ((c ^ s i) & 255) 0 ^ c >> 8)))
-       (go 0 4294967295))
+   (gz-crcwalk s) (foldl (\ c i (peep gz-crctab ((c ^ s i) & 255) 0 ^ c >> 8)) 4294967295 ^#s ^ 4294967295)
    ; --- the two doors ---------------------------------------------------------
    ; `lit?` is NOT a presence test: an unbound global scares when it is referenced, so
    ; `(lit? crc32)` on a binary without the nif is the scare it was written to avoid. hence
@@ -109,11 +103,7 @@
    ; needs no comparator and the tie goes to the lower symbol.
    (gz-hkeys f i a) (i < 0 ? a
                        (gz-c32 f i @ c (gz-hkeys f (i - 1) (c ? (((c << 9) + i) . a) a))))
-   (gz-hcopy f nsym) (cask (nsym * 4) @ c
-                        ((: (go i) (nsym <= i ? 0
-                                      (gz-c32! c i (gz-c32 f i), go (i + 1)))
-                            (go 0)),
-                         c))
+   (gz-hcopy f nsym) (cask (nsym * 4) @ c (each ^nsym (i \ gz-c32! c i (gz-c32 f i)), c))
    (gz-hdep pa i d) (gz-c32 pa i @ p (p ? (gz-hdep pa (p - 1) (d + 1)) d))
    ; halving the counts and rebuilding walks a code back under the depth the format allows,
    ; and always terminates: all-ones is a balanced tree, nine deep over the literal alphabet.
@@ -145,20 +135,14 @@
                     go (top + 1) li2 ii2)))
             (go nl 0 nl))
        lens {}
-       mx (: (go i m) (nl <= i ? m
-                         (gz-hdep pa i 0 @ d
-                            (pin lens (gz-c32 sy i) d,
-                             go (i + 1) (m < d ? d m))))
-             (go 0 0))
+       mx (foldl (\ m i (gz-hdep pa i 0 @ d (pin lens (gz-c32 sy i) d, m < d ? d m))) 0 ^nl)
        ((lim < mx) & (pass < 32) ? (gz-hhalve f nsym 0, gz-hpass f nsym lim (pass + 1))
           [lens mx]))
    ; a code needs two symbols even where the block used one or none: a lone symbol wants a
    ; zero-bit code and the format cannot spell one. the two cheapest are conjured at count 1.
    (gz-hlens f nsym lim)
     (: c (gz-hcopy f nsym)                  ; halving is destructive; the caller's
-       u (: (go i k) (nsym <= i ? k       ; counts are still owed to the cost sums
-                        (go (i + 1) (gz-c32 c i ? (k + 1) k)))
-            (go 0 0))
+       u (foldl (\ k i (gz-c32 c i ? (k + 1) k)) 0 ^nsym)   ; counts are still owed to the cost sums
        ((2 <= u ? 0
            ((gz-c32 c 0 ? 0 (gz-c32! c 0 1)),
             (gz-c32 c 1 ? 0 (gz-c32! c 1 1)), 0)),
@@ -167,23 +151,14 @@
    ; a Huffman code is stored MSB-first and gz-put spends bits the other way.
    (gz-hcodes lens nsym mx)
     (: cnt {}
-       _ (: (go i) (nsym <= i ? 0
-                      (peep lens i 0 @ l
-                         ((l ? (pin cnt l (peep cnt l 0 + 1)) 0),
-                          go (i + 1))))
-            (go 0))
+       _ (each ^nsym (i \ (peep lens i 0 @ l (l ? (pin cnt l (peep cnt l 0 + 1)) 0))))
        nxt {}
        _ (: (go l c) (mx < l ? 0
                         (pin nxt l c, go (l + 1) (c + peep cnt l 0 << 1)))
             (go 1 0))
        code {}
-       ((: (go i) (nsym <= i ? 0
-                     (peep lens i 0 @ l
-                        ((l ? (peep nxt l 0 @ c
-                                 (pin code i (gz-rev c l), pin nxt l (c + 1), 0))
-                            0),
-                         go (i + 1))))
-           (go 0)),
+       (each ^nsym (i \ (peep lens i 0 @ l
+                            (l ? (peep nxt l 0 @ c (pin code i (gz-rev c l), pin nxt l (c + 1), 0)) 0))),
         code))
 
    ; the fixed code (RFC 1951 3.2.6) is canonical over four runs of length, so it is
@@ -345,7 +320,7 @@
            gz-c32! head h (i + 1), 0))
        0)
    (gz-fill s n head prev i l)              ; index every position a match covered
-    (: (go k) (l <= k ? 0 (gz-ins s n (i + k) head prev, go (k + 1))) (go 0))
+    (each ^l (k \ gz-ins s n (i + k) head prev))
 
    ; --- the token buffer -----------------------------------------------------
    ; a block is tokenized first and coded second, because a code of the block's own
@@ -439,7 +414,7 @@
         gz-put j t (len & 255) 8, gz-put j t (len >> 8 & 255) 8,
         gz-put j t ((len ^ 65535) & 255) 8,
         gz-put j t ((len ^ 65535) >> 8 & 255) 8,
-        (: (go k) (len <= k ? 0 (gz-put j t (s (i0 + k)) 8, go (k + 1))) (go 0))))
+        each ^len (k \ gz-put j t (s (i0 + k)) 8)))
 
    ; three ways to spell one block, and the cheapest in bits wins. the tree the third
    ; must declare ahead of itself is the only reason the other two still win anything:
@@ -450,18 +425,12 @@
        rd (gz-hlens fd 30 15)    lend <rd   mxd <>rd
        hlit (gz-trim lenl 286 257)   hdist (gz-trim lend 30 1)
        cl {}                        ; the two length runs, laid end to end
-       _ (: (go i) (hlit <= i ? 0 (pin cl i (peep lenl i 0), go (i + 1))) (go 0))
-       _ (: (go i) (hdist <= i ? 0
-                      (pin cl (hlit + i) (peep lend i 0), go (i + 1)))
-            (go 0))
+       _ (each ^hlit (i \ pin cl i (peep lenl i 0)))
+       _ (each ^hdist (i \ pin cl (hlit + i) (peep lend i 0)))
        rlb (cask (320 * 4))
        nr (gz-run cl (hlit + hdist) rlb)
        fc (cask (19 * 4))
-       _ (: (go i) (nr <= i ? 0
-                      (gz-c32 rlb i >> 7 @ sy
-                         (gz-c32! fc sy (gz-c32 fc sy + 1),
-                          go (i + 1))))
-            (go 0))
+       _ (each ^nr (i \ (gz-c32 rlb i >> 7 @ sy (gz-c32! fc sy (gz-c32 fc sy + 1)))))
        rc (gz-hlens fc 19 7)   lenc <rc   mxc <>rc
        hclen (: (go i) (? (i <= 4) 4 (peep lenc (peep gz-clord (i - 1) 0) 0) i (go (i - 1)))
                 (go 19))
@@ -479,16 +448,10 @@
              (gz-put j t (last ? 1 0) 1, gz-put j t 2 2,
               gz-put j t (hlit - 257) 5, gz-put j t (hdist - 1) 5,
               gz-put j t (hclen - 4) 4,
-              (: (go i) (hclen <= i ? 0
-                           (gz-put j t (peep lenc (peep gz-clord i 0) 0) 3,
-                            go (i + 1)))
-                 (go 0)),
-              (: (go i) (nr <= i ? 0
-                           (: v (gz-c32 rlb i)   sy (v >> 7)
-                              (gz-put j t (peep codc sy 0) (peep lenc sy 0),
-                               (gz-clx sy @ b (b ? (gz-put j t (v & 127) b) 0)),
-                               go (i + 1))))
-                 (go 0)),
+              each ^hclen (i \ gz-put j t (peep lenc (peep gz-clord i 0) 0) 3),
+              each ^nr (i \ (: v (gz-c32 rlb i)   sy (v >> 7)
+                               (gz-put j t (peep codc sy 0) (peep lenc sy 0),
+                                (gz-clx sy @ b (b ? (gz-put j t (v & 127) b) 0))))),
               gz-wtoks j t tok k codl lenl codd lend 0))))
 
    ; the window and the chains outlive the block: a match may reach back into any
@@ -588,19 +551,13 @@
    ; symbol and is the whole of the algorithm rather than an index over it.
    (gz-huff lens nsym)
     (: cnt {}
-       _ (: (go i) (nsym <= i ? 0
-                       (peep lens i 0 @ l (pin cnt l (peep cnt l 0 + 1), go (i + 1))))
-            (go 0))
+       _ (each ^nsym (i \ (peep lens i 0 @ l (pin cnt l (peep cnt l 0 + 1)))))
        _ (pin cnt 0 0)                       ; a zero length is "no code", not a code
        ofs {}
        _ (: (go l a) (15 < l ? 0 (pin ofs l a, go (l + 1) (a + peep cnt l 0)))
             (go 1 0))
        sym {}
-       ((: (go i) (nsym <= i ? 0
-                      (peep lens i 0 @ l
-                         ((l ? (peep ofs l 0 @ o (pin sym o i, pin ofs l (o + 1), 0)) 0),
-                          go (i + 1))))
-           (go 0)),
+       (each ^nsym (i \ (peep lens i 0 @ l (l ? (peep ofs l 0 @ o (pin sym o i, pin ofs l (o + 1), 0)) 0))),
         [cnt sym]))
    ; ..and the decode walks up to fifteen bits for one symbol, which is where the
    ; per-bit cursor cost lands hardest -- so it takes the position in hand too, and
@@ -629,10 +586,9 @@
              nl (s (p + 2) + (s (p + 3) << 8))
              (((len ^ 65535) & 65535 = nl) & 1 ?
                 (n < p + 4 + len ? ()
-                   (: (go k) (len <= k ? 1 (gz-push b (s (p + 4 + k)), go (k + 1)))
-                      (go 0,
-                       pin t 0 ((p + 4 + len) * 8),
-                       1)))))))
+                   (each ^len (k \ gz-push b (s (p + 4 + k))),
+                    pin t 0 ((p + 4 + len) * 8),
+                    1))))))
 
    (gz-codes s n t b lit dst)                ; the symbol loop, fixed or dynamic
     (: (go u)
@@ -662,13 +618,11 @@
        hdist (gz-bits s n t 5 + 1)
        hclen (gz-bits s n t 4 + 4)
        cl {}
-       _ (: (go i) (hclen <= i ? 0
-                      (pin cl (peep gz-clord i 0) (gz-bits s n t 3), go (i + 1)))
-            (go 0))
+       _ (each ^hclen (i \ pin cl (peep gz-clord i 0) (gz-bits s n t 3)))
        ch (gz-huff cl 19)
        tot (hlit + hdist)
        lens {}
-       (rep i r v) (: (go k) (r <= k ? 0 (pin lens (i + k) v, go (k + 1))) (go 0))
+       (rep i r v) (each ^r (k \ pin lens (i + k) v))
        (rd i prev)
         (? (tot <= i) 1
            (peep t 1 0) ()
@@ -684,8 +638,7 @@
           ; the distance lengths sit after the literal ones in the same run, and
           ; gz-huff counts from 0, so they are carried down into a table of their own.
           (: dl {}
-             _ (:- (go 0) (go k) (hdist <= k ? 0
-                            (pin dl k (peep lens (hlit + k) 0), go (k + 1))))
+             _ (each ^hdist (k \ pin dl k (peep lens (hlit + k) 0)))
              lit (gz-huff lens hlit)
              dst (gz-huff dl hdist)
              (gz-codes s n t b lit dst))))
@@ -926,9 +879,7 @@ no file, or a bare -, is the filter: stdin -> stdout"
    ; --- the suffix rules -----------------------------------------------------
    ; .gz (or -S's) comes off; .tgz answers .tar, which is the one rename gzip does.
    (gzc-stem p suf)                    ; -> (1 stem) | ()
-    (#p @ n
-       (? (ends? p suf) [1 (snip p 0 (n - #suf))]
-          (ends? p ".tgz") [1 (snip p 0 (n - 4) + ".tar")]))
+    (p @ (s + ^suf + "") [1 s] (s + ".tgz") [1 (s + ".tar")] ())
 
    (gzc-zip t s nom stamp) (peep t 'lvl 6 @ 9 (gz-zip9 s nom stamp) (gz-zip s nom stamp))
 
@@ -1060,7 +1011,7 @@ no file, or a bare -, is the filter: stdin -> stdout"
        (? !o 1
           (peep t 'h 0) (say out (gzc-help + "\n"), flush out, 0)
           (peep t 'V 0)
-           (say out ("gzip (love " + love-version + ")\n"), flush out, 0)
+           (say out (uvers "gzip" + "\n"), flush out, 0)
           (filter (p \ !(p = "-")) <>o @ fs
              ((? (peep t 'l 0) 0 (peep t 't 0) (pin t 'd 1) 0),
               (? !(two? fs) (peep t 'l 0 ? (gzc-moan t "-l wants a file", 1)

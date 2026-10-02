@@ -46,7 +46,7 @@
    (kn i) ("mx" + string (kinds i))                  ; mxkcharm ..
    ; the table spells a lane as its C symbol (lvm_addn); the prefix says nothing
    ; here, so it comes off -- mxLaddn, matching mx.v's Laddn.
-   (ln x) (string x @ t ("mxL" + ("lvm_" = snip t 0 4 ? (snip t 4 #t) t)))
+   (ln x) (string x @ t ("mxL" + (t @ ("lvm_" + r) r t)))
    lanes ((: (go rows acc)                           ; distinct lanes, appearance order
             (atom? rows ? (rev acc)
                (go >rows (foldl (\ a x (elem x a ? a (x . a))) acc <rows))))

@@ -107,10 +107,7 @@
                  a (:- (f 0) (f i) (i < n && s i = 45 ? (f (i + 1)) i))
                  b (:- (f n) (f i) (a < i && s (i - 1) = 45 ? (f (i - 1)) i))
                  (snip s a b))
-   (slug s)   (: raw (:- (g 0 "")
-                         (g i acc) (i < #s ?
-                                      (s i @ c (g (i + 1) (acc + (alnum? c ? (string (down c)) "-"))))
-                                      acc))
+   (slug s)   (: raw (jug 0 @ j (each ^#s (i \ (s i @ c (say j (alnum? c ? (string (down c)) "-")))), slurp j))
                  out (trimd (squash raw))
                  (0 < #out ? out "section")))
 
@@ -164,10 +161,9 @@
 ; builds. anything absolute, anchored, or pointing outside stays exactly as written --
 ; papel will not manufacture a dead link that the markdown did not already have.
 (: (mdurl known u)
-   (? (has? u "://") u
-      !(ends? u ".md") u
-      (pbase u @ b
-         (peep known b 0 ? (snip u 0 (#u - 3) + ".html") u)))
+   (u @ (? (has? u "://")) u
+        (s + ".md") (pbase u @ b (peep known b 0 ? (s + ".html") u))
+        u)
    (rli f l)  (map (x \ (<x @ 'link ['link (rli f <>x) (f <>>x)]
                               ('strong || 'em) [<x (rli f <>x)]
                               x)) l)

@@ -68,7 +68,7 @@
    ; other-display lux answers and keeps its socket.
    (lux-sweep own)
     (: dir (lux-rundir ())
-       (sockish? n) (snip n 0 4 = "lux-" && snip n (#n - 5) #n = ".sock")
+       (sockish? n) (n @ ("lux-" + _ + ".sock") 1 0)
        (dead? p) (connect ['unix p] @ c (hot? c ? (close c, 0) 1))
        (go ns acc) (? !(two? ns) acc
                     (dir + ("/" + <ns) @ p
@@ -87,8 +87,11 @@
    ; the exact original argv first (exec is execvp, so `love` re-resolves off
    ; PATH -- an upgraded binary lands on the first restart, and a dev pile of
    ; -l modules re-runs whole); the script and the seat itself as fallbacks.
+   ; the argv a restart execs: run as the verb (`love lux`), this very binary as that verb
+   ; again -- PATH may hold another lux, or none -- else the original argv
+   (lux-argv u) (<argv = "lux" ? ((selfpath 0) . argv) argv)
    (lux-restart u) (say out "lux: restart over the moor -- exec\n", flush out,
-                    exec argv,
+                    exec (lux-argv ()),
                     exec [(lux-self ())],
                     exec [(selfpath 0) (lux-self ())],
                     'restart-failed)
@@ -330,7 +333,7 @@
           (k = 'quit) (line "lux: quit")                                          ; fall out of the loop
           (k = 'restart)                                                         ; restart-in-place: exec the original argv (execvp, so love
           (line ("lux: restart -- exec, pid " + show (getpid 0)),            ; re-resolves off PATH -- an upgraded binary lands first try,
-           exec argv,                                                        ; and a dev pile of -l modules re-runs whole; exec'ing
+           exec (lux-argv ()),                                               ; and a dev pile of -l modules re-runs whole; exec'ing
            exec [(lux-self ())],                                            ; the seat path would pin a deleted build forever). the
            exec [(selfpath 0) (lux-self ())],                               ; cloexec'd socket drops, the redirect releases, the new
            line "lux: restart failed",

@@ -30,18 +30,18 @@
        ; shebang's way (env -S 'cmd a b'); then the assignments
        st {'nul 0 'dir ()}
        (unset-all e) (atom? e ? 0 (: k <e i (eqat k) (setenv (i ? (snip k 0 i) k) (), unset-all >e)))
-       (opts a) (? (atom? a) a
-                  (<a = "-i" || <a = "-" || <a = "--ignore-environment") (unset-all (environ 0), opts >a)
-                  (<a = "-u") (two? >a ? (setenv <>a (), opts >>a) (udie 125 "env: -u needs a name"))
-                  (<a = "-0" || <a = "--null") (pin st 'nul 1, opts >a)
-                  (<a = "-C") (two? >a ? (pin st 'dir <>a, opts >>a) (udie 125 "env: -C needs a directory"))
-                  (starts? <a "--chdir=") (pin st 'dir (snip <a 8 #<a), opts >a)
-                  (<a = "-S") (two? >a ? (opts (words <>a + >>a)) (udie 125 "env: -S needs a string"))
-                  (2 < #<a && starts? <a "-S") (opts (words (snip <a 2 #<a) + >a))
-                  (starts? <a "--split-string=") (opts (words (snip <a 15 #<a) + >a))
-                  (<a = "--") >a
-                  (1 < #<a && <a 0 = 45) (udie 125 ("env: unknown option " + <a))
-                  a)
+       (opts a) (atom? a ? a
+                 (<a @ ("-i" || "-" || "--ignore-environment") (unset-all (environ 0), opts >a)
+                       "-u" (two? >a ? (setenv <>a (), opts >>a) (udie 125 "env: -u needs a name"))
+                       ("-0" || "--null") (pin st 'nul 1, opts >a)
+                       "-C" (two? >a ? (pin st 'dir <>a, opts >>a) (udie 125 "env: -C needs a directory"))
+                       ("--chdir=" + d) (pin st 'dir d, opts >a)
+                       "-S" (two? >a ? (opts (words <>a + >>a)) (udie 125 "env: -S needs a string"))
+                       ("-S" + s) (opts (words s + >a))
+                       ("--split-string=" + s) (opts (words s + >a))
+                       "--" >a
+                       (? (1 < #<a && <a 0 = 45)) (udie 125 ("env: unknown option " + <a))
+                       a))
        rest (setp (opts as))
        ((st 'dir ? (two? rest ? (chdir (st 'dir) ? (udie 125 ("env: cannot change directory to '" + st 'dir + "'")) 0)
                     (udie 125 "env: must specify command with --chdir (-C)")) 0),
@@ -122,8 +122,8 @@
    ; (EST5EDT,M3.2.0,M11.1.0); an empty TZ, or nothing readable, is utc
    ; the day a second falls in, floored: before the epoch // would round toward it
    (tzday0 s) (s // 86400 @ q (s < q * 86400 ? (q - 1) q))
-   (tzs s k n) (: (go i a) (n <= i ? a (go (i + 1) (a * 256 + s (k + i)))) (go 0 (s k >= 128 ? -1 0)))
-   (tzu s k n) (: (go i a) (n <= i ? a (go (i + 1) (a * 256 + s (k + i)))) (go 0 0))
+   (tzs s k n) (foldl (\ a i (a * 256 + s (k + i))) (s k >= 128 ? -1 0) ^n)
+   (tzu s k n) (foldl (\ a i (a * 256 + s (k + i))) 0 ^n)
    (tzp-to s i c) (#s <= i || s i = c ? i (tzp-to s (i + 1) c))
    (tzp-alpha s i) (i < #s && (65 <= s i <= 90 || 97 <= s i <= 122) ? (tzp-alpha s (i + 1)) i)
    (tzp-name s i)
@@ -296,12 +296,8 @@
    (ucal-weeks y m)
     (: lead (wday (epoch-days y m 1)) len (mdays y m)
        (cell d) (d < 1 || len < d ? "  " (upad 2 (show d)))
-       (row r) (: o (jug 0)
-                  (go c) (7 <= c ? (slurp o)
-                          (c ? (put o 32) 0, say o (cell ((7 * r + c) - (lead - 1))), go (c + 1)))
-                  (go 0))
-       (go r acc) (6 <= r ? (rev acc) (go (r + 1) ((row r) . acc)))
-       (go 0 ()))
+       (row r) (jug 0 @ o (each ^7 (c \ ((c ? (put o 32) 0), say o (cell ((7 * r + c) - (lead - 1))))), slurp o))
+       (map row ^6))
    (ucal-say l) (say out l, put out 10)
    (ucal-tri a b c) (a + "   " + b + "   " + c)     ; three columns -> the 66-wide line
    (cal-main as)
@@ -322,9 +318,7 @@
            w1 <ws w2 <>ws w3 <>>ws
            _ (ucal-say (ucal-tri <ts <>ts <>>ts))
            _ (ucal-say (ucal-tri ucal-hdr ucal-hdr ucal-hdr))
-           (go r) (6 <= r ? 1
-                   (ucal-say (ucal-tri (w1 r) (w2 r) (w3 r)), go (r + 1)))
-           (go 0))
+           (each ^6 (r \ ucal-say (ucal-tri (w1 r) (w2 r) (w3 r))), 1))
        ((m = 'all ?
          (ucal-say (ucal-mid 66 (show y)), put out 10,
           (: (go k) (12 < k ? 1 (quarter k, go (k + 3))) (go 1)))
@@ -394,13 +388,13 @@
        (go a adj)
         (atom? a ? [adj ()]
          (: w <a n #w
-            (? (w = "--") [adj >a]
-               (1 < n && w 0 = 45 && num? w (w 1 = 45 || w 1 = 43 ? 2 1)) (go >a (snip w 1 n))
-               (w = "-n" || w = "--adjustment")
+            (w @ "--" [adj >a]
+               (? (1 < n && w 0 = 45 && num? w (w 1 = 45 || w 1 = 43 ? 2 1))) (go >a (snip w 1 n))
+               ("-n" || "--adjustment")
                 (two? >a ? (go >>a <>a) (udie 125 "nice: option requires an argument -- 'n'"))
-               (2 < n && snip w 0 2 = "-n") (go >a (snip w 2 n))
-               (13 < n && snip w 0 13 = "--adjustment=") (go >a (snip w 13 n))
-               (1 < n && w 0 = 45) (udie 125 ("nice: invalid option -- '" + string (w 1) + "'\nTry 'nice --help' for more information."))
+               ("-n" + v) (go >a v)
+               ("--adjustment=" + (v && 0 < #v)) (go >a v)
+               (? (1 < n && w 0 = 45)) (udie 125 ("nice: invalid option -- '" + string (w 1) + "'\nTry 'nice --help' for more information."))
                [adj a])))
        r (go as ())
        adj <r cmd <>r
@@ -502,7 +496,7 @@
                   a (two? ws ? (uhw-quad <ws))
                   (charm? a && elem h >ws ? [a <>ws]))
        (two? r ? (filter two? (map row (lines <>r)) @ hits (two? hits ? <hits))))
-   (uhw-hex s) (: (go k a) (#s <= k ? a (s k @ c (go (k + 1) (a * 16 + (? (c < 58) (c - 48) (c < 71) (c - 55) (c - 87)))))) (go 0 0))
+   (uhw-hex s) (foldl (\ a k (s k @ c (a * 16 + (? (c < 58) (c - 48) (c < 71) (c - 55) (c - 87))))) 0 ^#s)
    (uhw-local _)                        ; the host's own ipv4s, by interface index
     (: fr (uread "/proc/net/fib_trie")
        ls (two? fr ? (lines <>fr))
@@ -535,8 +529,7 @@
    (dnsdomainname-main as)
     (: _ (uflags "dnsdomainname" as () "")
        c <>(uhw-self 0)
-       k (findsub c ".")
-       (0 <= k ? (say out (snip c (k + 1) #c + "\n")) 0,
+       (c @ (_ + "." + d) (say out (d + "\n")) 0,
         flush out, 0))
 
    ; -- setsid: the command in a session of its own. a group leader cannot start one,
@@ -589,17 +582,17 @@
        (go a o)
         (atom? a ? (pin o 'cmd (), o)
          (: x <a n #x
-            (? (x = "--") (pin o 'cmd >a, o)
-               (x = "-n" || x = "--interval")
+            (x @ "--" (pin o 'cmd >a, o)
+               ("-n" || "--interval")
                 (two? >a ? (pin o 'n (secs <>a), go >>a o) (usage "option requires an argument -- 'n'"))
-               (11 < n && snip x 0 11 = "--interval=") (pin o 'n (secs (snip x 11 n)), go >a o)
-               (x = "--no-title") (pin o 't 1, go >a o)
-               (x = "--exec") (pin o 'x 1, go >a o)
-               (x = "--beep") (pin o 'b 1, go >a o)
-               (x = "--errexit") (pin o 'e 1, go >a o)
-               (x = "--chgexit") (pin o 'g 1, go >a o)
-               (2 < n && snip x 0 2 = "--") (usage ("unrecognized option '" + x + "'"))
-               (1 < n && x 0 = 45)
+               ("--interval=" + (v && 0 < #v)) (pin o 'n (secs v), go >a o)
+               "--no-title" (pin o 't 1, go >a o)
+               "--exec" (pin o 'x 1, go >a o)
+               "--beep" (pin o 'b 1, go >a o)
+               "--errexit" (pin o 'e 1, go >a o)
+               "--chgexit" (pin o 'g 1, go >a o)
+               ("--" + _) (usage ("unrecognized option '" + x + "'"))
+               (? (1 < n && x 0 = 45))
                 (: (cl k)
                     (? (n <= k) (go >a o)
                        (x k = 110) (? (k + 1 < n) (pin o 'n (secs (snip x (k + 1) n)), go >a o)
@@ -774,12 +767,12 @@
        (go a all gs dev ss)
         (atom? a ? [all gs dev (rev ss)]
          (<a @ w
-          (? (w = "-a" || w = "--all") (go >a 1 gs dev ss)
-             (w = "-g" || w = "--save") (go >a all 1 dev ss)
-             (w = "-F" || w = "--file")
+          (w @ ("-a" || "--all") (go >a 1 gs dev ss)
+             ("-g" || "--save") (go >a all 1 dev ss)
+             ("-F" || "--file")
               (two? >a ? (go >>a all gs <>a ss) (udie 1 "stty: option requires an argument -- 'F'"))
-             (7 < #w && snip w 0 7 = "--file=") (go >a all gs (snip w 7 #w) ss)
-             (2 < #w && snip w 0 2 = "-F") (go >a all gs (snip w 2 #w) ss)
+             ("--file=" + (d && 0 < #d)) (go >a all gs d ss)
+             ("-F" + d) (go >a all gs d ss)
              (go >a all gs dev (w . ss)))))
        o (go as 0 0 () ())
        all <o gs <>o dev <>>o ss (o 3)
@@ -1102,9 +1095,7 @@
     (uread (("/proc/" + show pid) + "/cmdline") @ r
      (atom? r ? ()
       (: s <>r n #s
-         (go k acc) (n <= k ? acc
-                     (go (k + 1) (acc + ((s k) = 0 ? " " (string (s k))))))
-         o (go 0 "")
+         o (jug 0 @ j (each ^n (k \ say j ((s k) = 0 ? " " (string (s k)))), slurp j))
          z #o
          (? (0 = z) () (o (z - 1) = 32) (snip o 0 (z - 1)) o))))
    ; argv[0]'s basename, for pidof -- the raw clip, since a kernel comm never
@@ -1136,12 +1127,7 @@
    (umeminfo _)                        ; /proc/meminfo -> a tablet, the kB counts by name
     (: r (uread "/proc/meminfo")
        t {}
-       (one ln) (: n #ln
-                   (go k) (? (n <= k) -1 (ln k = 58) k (go (k + 1)))
-                   i (go 0)
-                   (i < 0 ? 0
-                    (words (snip ln (i + 1) n) @ ws
-                     (two? ws ? (pin t (intern (snip ln 0 i)) (uatoi <ws)) 0))))
+       (one ln) (ln @ (k + ":" + v) (words v @ ws (two? ws ? (pin t (intern k) (uatoi <ws)) 0)) 0)
        (two? r ? (foldl (_ \ ln \ one ln) 0 (lines <>r)) 0,
         t))
 
@@ -1219,10 +1205,10 @@
        now (clock 0 // 1000)
        b {'up up 'now now 'boot (now - up) 'mem (peep (umeminfo 0) 'MemTotal 1)}
        cols (ups-cols b)
-       spec (? (t 111) (map (w \ (: k (findsub w "=") nm (k < 0 ? w (snip w 0 k))
+       spec (? (t 111) (map (w \ (: kh (w @ (k + "=" + h) [k h] [w ()]) nm <kh
                                     c (cols (intern nm))
                                     (? !c (udie 1 ("ps: unknown key " + nm))
-                                       (k < 0) c [(snip w (k + 1) #w) (c 1) (c 2) (c 3)])))
+                                       !(string? <>kh) c [<>kh (c 1) (c 2) (c 3)])))
                              (csv 111))
                (t 102) ([(cols 'user @ c ["UID" (c 1) (c 2) (c 3)])] + map cols '(pid ppid c stime tty8 time cmd))
                (elem 117 bl) (map cols '(user pid pcpu pmem vsz rss tty8 stat start bsdtime args))

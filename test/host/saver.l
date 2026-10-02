@@ -6,7 +6,7 @@
 (borrow 'saver)
 
 (: sv-love (: l <cmdline (l 0 = 47 ? l (cwd 0 + "/" + l)))
-   sv-find (cite 'kore 'wg-find)
+   sv-find fsub
    (sv-has? h n) (0 <= sv-find h n 0)
    (sv-num s) (: (go i a) (? (i < #s) (? (48 <= s i < 58) (go (i + 1) (a * 10 + s i - 48)) -1) a)
                  (#s ? (go 0 0) -1))
@@ -106,7 +106,7 @@
         _ (say p "(api openai)\n(url \"http://127.0.0.1:9/v1/chat/completions\")\n(model mock)\n(screensaver pom)\n(screensaver-idle 0.02)\n")
         (close p))
    md (tether ["sh" "-c" ("cd '" + dir + "' && HOME='" + dir + "' BEE_HIVE='" + dir + "/hive' BEE_NAME=svtest PWD='" + dir
-                         + "' exec '" + sv-love + "' bee")])
+                         + "' exec '" + sv-love + "' bee --chat")])
    m >md
    _ (settty m 24 80)
    box {'s ""}
