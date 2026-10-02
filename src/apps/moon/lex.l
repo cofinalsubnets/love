@@ -49,7 +49,7 @@
    ; never (/ mant (ipow 10 k)) in floats: that rounds twice, and 10^310 is an
    ; infinity before the divide ever runs -- 1e-310 folded to 0, 1e-308 to -inf,
    ; 1e-307 came out a ulp light, every one of them silent. hand the exact digits
-   ; to the reader: am_strtod under `sound` is the tree's one correctly-rounded
+   ; to the reader: lm_strtod under `sound` is the tree's one correctly-rounded
    ; decimal->binary, the same one love's own literals ride, and it carries the
    ; whole range including the subnormals. the `e` keeps the answer a gem however
    ; integral the digits look.

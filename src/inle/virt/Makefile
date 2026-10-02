@@ -19,7 +19,7 @@ include ../port.mk
 
 virt_cc = $(MOONCC) -t rv64 -D ai_tco=1 -D __STDC_HOSTED__=0 -I. -Isrc/love -Iout/lib
 
-objs = $(R)/$(o)/start.o $(love_o) $(heap_o) $(R)/$(o)/am.o $(libc_o) $(R)/$(o)/main.o
+objs = $(R)/$(o)/start.o $(love_o) $(heap_o) $(R)/$(o)/lm.o $(libc_o) $(R)/$(o)/main.o
 
 .PHONY: virt
 default: virt

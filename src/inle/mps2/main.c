@@ -2,7 +2,7 @@
 // and the clock ride ARM semihosting (qemu -semihosting), so where teensy41
 // talks LPUART and rp2040 talks UART0, this port's "metal" is qemu itself:
 // the same CPU as both boards (a Cortex-M7), none of the wiring. It is also
-// the first love built END TO END by mooncc: love.c + the am math floor +
+// the first love built END TO END by mooncc: love.c + the lm math floor +
 // libc + this file all compile -t thumb2 (src/inle/mps2/Makefile); only start.S
 // (vectors + the semihosting trampoline) and the final ld are arm-none-eabi.
 // The boot bakes the egg from source on the M7 -- the whole self-hosting

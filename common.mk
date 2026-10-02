@@ -115,7 +115,7 @@ love_tu = love.c gc.c ev.c task.c io.c map.c snap.c num.c arr.c
 love_codec = lib/gz.c
 core_tu = $(love_tu) $(love_codec)
 love_tu_c = $(patsubst %,$S/love/%,$(core_tu))
-love_c = $(love_tu_c) $S/apps/moon/lib/moonlibc/math/am.c
+love_c = $(love_tu_c) $S/apps/moon/lib/moonlibc/math/lm.c
 # the per-ISA set ONE machine's build takes; the directory is the roster, empty on an arch with
 # no seat, which is what the rebuild gates read to skip their kernel half.
 hosta_c = $(wildcard $S/inle/$(hosta)/*.c)

@@ -174,7 +174,7 @@
                                    (ls-suffix d ".o"))
                       (map (f \ d + "/" + f) keep + [(d + "/love.o") (d + "/m_am.o")]))
                    (d + "/host" @ hd
-                      ([(d + "/love.o") (d + "/am.o")]
+                      ([(d + "/love.o") (d + "/lm.o")]
                        + (isdir? hd ? (map (f \ hd + "/" + f) (ls-suffix hd ".o"))))))
              live (filter (p \ two? (stat p)) os)
              (two? live ? (objsyms live)))))

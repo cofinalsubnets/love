@@ -137,7 +137,7 @@
  ; finite gem. the word guard: these faces are the double tier's -- a 32-bit ai_flo_t's differ
  (word ? ("0.30000000000000004" = show (0.1 + 0.2)) 1) ("0.3" = show 0.3)
  (word ? ("5e-324" = show 5e-324) 1) (word ? ("1e23" = show 1e23) 1)
- ; ..and the read side is correctly rounded too (am_strtod, no glibc): neighbors stay distinct
+ ; ..and the read side is correctly rounded too (lm_strtod, no glibc): neighbors stay distinct
  (word ? !(0.3 = 0.30000000000000004) 1) (word ? (0.5 = 0.49999999999999999999) 1)
  ; ..and C99's hex lane rides the same reader, exact by construction (the significand is already
  ; binary); the rows that catch a slip are the subnormal floor and the exact tie under it
