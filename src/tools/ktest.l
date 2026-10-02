@@ -37,9 +37,29 @@
    ; machine + exit channel are per-arch. x64 quits qemu by writing the
    ; isa-debug-exit port; the two 'virt's have no such device, so k_reset goes
    ; out through PSCI / SBI and -no-reboot below turns that into the exit.
-   ; KTEST_A64_HOST names an arm box (ssh, qemu, /dev/kvm) the a64 elf lane boots on under
-   ; kvm instead of tcg here, ~100s
-   far  (getenv "KTEST_A64_HOST" @ h (arch = "a64" && elf? && string? h && 0 < #h ? h ()))
+   ; KTEST_A64_HOSTS lists arm boxes (ssh, qemu, /dev/kvm) the a64 elf lane boots on under
+   ; kvm instead of tcg here, ~100s: "host:slots ..", fastest first. KTEST_A64_HOST is one
+   ; host, one slot. a slot is an exclusive lock, a64host-HOST-N, so two lanes never crowd
+   ; one box past what its memory holds; with every slot taken the lane waits
+   (env-of k) (getenv k @ v (string? v && 0 < #v ? v ()))
+   (num s) (foldl (\ a i (a * 10 + s i - 48)) 0 ^#s)
+   hosts (? !(arch = "a64" && elf?) ()
+            (env-of "KTEST_A64_HOSTS" @ l
+               (? (string? l) (map (w \ (cite 'kore 'usplit 58 w @ p [<p (two? >p ? (num <>p) 1)]))
+                         (filter (w \ 0 < #w) (cite 'kore 'usplit 32 l)))
+                  (env-of "KTEST_A64_HOST" @ h (string? h ? [[h 1]] ())))))
+   lroot ((cite 'locks 'locks-root) 0)
+   (try-slot h i) (: nm ("a64host-" + <h + "-" + show i)
+                     g ((cite 'locks 'locks-acquire) lroot nm 'exclusive (getpid 0) ("ktest " + iso) () 1)
+                     (peep g "granted" 0 ? [<h nm] ()))
+   (try-host h) (foldl (\ a i (two? a ? a (try-slot h i))) () (map (+ 1) (jot (h 1))))
+   (take-slot n) (: s (foldl (\ a h (two? a ? a (try-host h))) () hosts)
+                    (? (two? s) s
+                       (: _ (? (n = 0) (say err "ktest: every a64 host slot is taken; waiting\n") 0)
+                          _ (rest 5000)
+                          (take-slot (n + 1)))))
+   slot (two? hosts ? (take-slot 0) ())
+   far  (two? slot ? <slot ())
    mach (arch @ "a64"
            ["-M" "virt,gic-version=2" "-cpu" (far ? "host" "cortex-a72") "-semihosting"]
            "rv64"
@@ -118,6 +138,7 @@
               _ (hark ["ssh" far ("rm -rf " + d)])
               x)
            (hark qemu))
+   _    (two? slot ? ((cite 'locks 'locks-release) lroot (slot 1) 'exclusive (getpid 0)) 0)
    out  >r
    line (lineof out "tests pass")
    ; "0 tests pass" is a corpus that died before its first assert wearing a

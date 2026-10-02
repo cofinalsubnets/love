@@ -22,6 +22,7 @@ Several sessions gate on one box. Two makes in one `out/` race, and a box short 
 
 - heavy: `test_slow` `test_extra` `test_inle` `test_kernel_%` `test_gcstress` `test_boards`, and a `make out/love` from a clean `out/`
 - one make at a time in an `out/`: an exclusive lock named by its path
+- a lane that boots on another box takes that box's slot, not a heavy one: `KTEST_A64_HOSTS="six.lan:3 pi.lan:1"` (host:slots, fastest first) gives the a64 kernel lane kvm there, and each slot is an exclusive lock `a64host-HOST-N`. without it the lane runs tcg here, and is heavy
 
 ## the merge queue
 
