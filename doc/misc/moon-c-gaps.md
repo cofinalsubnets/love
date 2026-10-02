@@ -103,7 +103,8 @@ each one came from.
 
 The more surprising half, and all of it on every target unless the parity table below says
 otherwise: designated initialisers (both `.field =` and `[i] =`), compound literals, K&R
-definitions, bitfields including compound assignment and postfix `++`/`--` (194-bitfpost.c), flexible array members, variadic macros,
+definitions, bitfields including compound assignment and postfix `++`/`--` (194-bitfpost.c), flexible array members, variadic macros
+(gcc's named `fmt...` too) and range designators to 64k items (216-namedvarargs.c),
 `long long`, hex floats, anonymous unions, `restrict`, `static inline`, mixed declarations,
 `for`-scoped declarations, `_Static_assert` (including `&&`/`||`/`?:` in the constant),
 `_Generic` and `_Alignof`, `__builtin_choose_expr`/`object_size`/`prefetch`/`return_address`/
@@ -116,7 +117,7 @@ on t32) and `__builtin_isdigit` (parse writes it as `(unsigned)(c - '0') < 10`; 
 string-literal concatenation, self-referential structs, enum trailing commas, multidimensional
 arrays, statement expressions (`({ .. })`), `__auto_type`, named asm operands (`%[x]`),
 `asm inline`, `asm goto`, a file-scope asm (holo's gas-top: sections, labels, data words over
-`sym - .`; 178-toplevelasm.c), `__section__` beside `section`, `x ?: y` (x read once), `typeof` over a qualified type-name,
+`sym - .`; 178-toplevelasm.c), `__section__` beside `section`, `x ?: y` (x read once; a pointer call's against a string, 174-elvis.c), `typeof` over a qualified type-name,
 `__builtin_offsetof` over a runtime index (the address itself; a constant index before a
 member still folds), a variably modified object at file scope refused by name,
 `__attribute__((cleanup(f)))` on a local (parse.l's pcln lays f(&v) on every way out of the

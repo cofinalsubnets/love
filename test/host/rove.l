@@ -845,8 +845,14 @@
 (test (song-lead-of 0.0 = song-lead) (song-lead-of 33.0 = song-lead)
       (song-lead < song-lead-of 200.0 < song-lead-max) (song-lead-of 200.0 = int (0.5 * song-rate))
       (song-lead-of 5000.0 = song-lead-max))
-(: p (pacer ()) g0 (pace! p) _ (rest 60) g1 (pace! p) _ (rest 5) g2 (pace! p)
- (test (g0 < 5.0) (55.0 <= g1) (g1 * 0.9 < g2 <= g1)))   ; a long gap held over a short one after it
+; the gaps are read off the pacer's own clock, so a box under load moves them but not the law
+(: p (pacer ()) t0 (p 't) g0 (pace! p) t1 (p 't) _ (rest 60) g1 (pace! p) t2 (p 't)
+   _ (rest 5) g2 (pace! p) t3 (p 't)
+   (law held d) (: v ((d / 2000.0) 0.5 * held) (v < d ? d v))
+   d2 (1.0 * (t3 - t2))
+ (test (g0 = law 0.0 (1.0 * (t1 - t0))) (g1 = law g0 (1.0 * (t2 - t1))) (g2 = law g1 d2)
+       (55.0 <= g1)
+       (d2 < 300.0 && d2 < g1 * 0.9 ? (g1 * 0.9 < g2 <= g1) 1)))   ; a long gap held over a short one after it
 ; ..and the filler: feeds until the lag is at the lead, none at a lead already met, and a
 ; lead the card's ring cannot hold is still a bounded number of feeds. the lag counts
 ; what the port still holds for the device, so a run past the ring is not lost to it:
@@ -859,9 +865,11 @@
    k2 (nom? h ? 0 (song-fill h 0 feed))
    k3 (nom? h ? 1 (song-fill h 100000000 feed))
    big (string (cask (4 * 2 * song-rate)))
+   c0 (clock 0)
    l0 (nom? h ? 0 (horn-lag h))
    l (nom? h ? (2 * song-rate) (say h big, horn-lag h))
- (test (0 < k1) (k2 = 0) (0 < k3) (2 * song-rate - 4800 < l - l0 <= 2 * song-rate)))
+   played ((clock 0 - c0 + 1) * song-rate // 1000)    ; the most the rate plays between the reads
+ (test (0 < k1) (k2 = 0) (0 < k3) (2 * song-rate - played <= l - l0 <= 2 * song-rate)))
 
 ; --- the sign: the tower holds one up before a step is taken, the first key buys its
 ; coming down and nothing else, and the bar under it is never covered

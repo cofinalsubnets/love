@@ -70,7 +70,7 @@
                 (string? j1) (#j1 = #(grad 2)) (mse j1 (grad 2) < 4)
                 (string? j2) (#j2 = #(noise 2))
                 (string? j3) (mse j1 (grad 2) < mse j3 (grad 2))))
-       (puts "imgenc: no magick, decodes skipped\n")),
+       (gate-partly "imgenc: no magick, decodes skipped")),
     hark ["rm" "-rf" dir],
     0))
 

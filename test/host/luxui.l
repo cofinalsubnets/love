@@ -15,7 +15,7 @@
    (must tag v) (v ? v (strike (),
                         puts "luxui: FAIL ", putx tag, putc 10,
                         quit 1))
- _ (atom? xv ? (puts "luxui: ok (no Xvfb, skipped)", quit 0))
+ _ (atom? xv ? (gate-skip "luxui: ok (no Xvfb, skipped)"))
  _ (enlist 'xv <xv)
  (rdnum p) (:- (go 0 0) (go n st)
             (see p @ -1 () 13 (go n st) 10 (st @ 1 n (go 0 0))

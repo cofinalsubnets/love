@@ -13,6 +13,7 @@
 # nothing with us, so a fault the two targets agree on is loud here. `EMCC=` names one.
 #
 # usage: ccwasm.sh OUTDIR LOVE
+. test/gate/skip.sh
 set -u
 
 ho=$1
@@ -32,12 +33,10 @@ moonrun() { LOVE_NO_IMAGE= "$m" mooncc "$@"; }
 
 NODE=$(command -v node 2>/dev/null || true)
 if [ -z "$NODE" ]; then
-  echo "$name: skipped (need node)"
-  exit 0
+  gate_skip "$name: skipped (need node)"
 fi
 if [ "$(uname -m)" != x86_64 ]; then
-  echo "$name: skipped (the reference build is native x86-64)"
-  exit 0
+  gate_skip "$name: skipped (the reference build is native x86-64)"
 fi
 # the OPTIONAL extra oracle, found as src/inle/wasm/Makefile finds it
 EMCC=${EMCC:-$(command -v emcc 2>/dev/null || true)}

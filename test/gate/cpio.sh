@@ -18,11 +18,12 @@
 # file and an empty DIRECTORY both carry filesize 0 while meaning different things.
 #
 # Skips cleanly where cpio is missing, and takes the love binary as $1.
+. test/gate/skip.sh
 set -e
 
 love=${1:-b/love}
 [ -x "$love" ] || { echo "cpio: no $love -- run 'make host'"; exit 1; }
-command -v cpio >/dev/null 2>&1 || { echo "cpio: no system cpio, skipped"; exit 0; }
+command -v cpio >/dev/null 2>&1 || gate_skip "cpio: no system cpio, skipped"
 r=$(pwd)
 L=$r/$love
 

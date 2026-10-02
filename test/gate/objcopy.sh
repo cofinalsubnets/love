@@ -15,12 +15,13 @@
 # verifies (test_teensy41 / test_nucleo446 / test_rp2040) still read what we wrote.
 #
 # usage: objcopy.sh OUTDIR
+. test/gate/skip.sh
 set -u
 
 ho=$1
 name=test_objcopy
 oc=`command -v llvm-objcopy 2>/dev/null || command -v objcopy 2>/dev/null || true`
-[ -n "$oc" ] || { echo "$name: no objcopy, skipped"; exit 0; }
+[ -n "$oc" ] || gate_skip "$name: no objcopy, skipped"
 
 d=$ho/objcopy
 rm -rf "$d"; mkdir -p "$d"

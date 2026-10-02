@@ -13,10 +13,11 @@
 # switching anything off -- either is a red, not a quiet table.
 #
 # usage: sh test/gate/glazebench.sh LOVE ARCH
+. test/gate/skip.sh
 set -u
 love=${1:-b/love} arch=${2:-x64}
 d=out/.glazebench && mkdir -p $d
-[ -d bench/benches ] || { echo "glazebench: skipped (no bench/ in this tree)"; exit 0; }
+[ -d bench/benches ] || gate_skip "glazebench: skipped (no bench/ in this tree)"
 fails=0
 
 # <bench> <floor>: the glazed run must be at least <floor> times faster than LOVE_NO_GLAZE=1.

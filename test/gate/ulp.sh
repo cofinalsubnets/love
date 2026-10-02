@@ -36,6 +36,7 @@
 # NOT set -e: the checks report their own failures with context.
 #
 # usage: ulp.sh OUTDIR LOVE
+. test/gate/skip.sh
 set -u
 
 ho=$1
@@ -47,14 +48,12 @@ fail() { echo "FAIL test_ulp: $*" >&2; exit 1; }
 moonrun() { LOVE_NO_IMAGE= "$m" mooncc "$@"; }
 
 arch=$(uname -m)
-if [ "$arch" != x64 ]; then
-  echo "test_ulp: x86-64 only (mooncc emits x64), skipped on $arch"
-  exit 0
+if [ "$arch" != x64 ] && [ "$arch" != x86_64 ]; then
+  gate_skip "test_ulp: x86-64 only (mooncc emits x64), skipped on $arch"
 fi
 cc_g=$(command -v gcc || command -v cc) || true
 if [ -z "${cc_g:-}" ]; then
-  echo "test_ulp: no system cc for the oracle, skipped"
-  exit 0
+  gate_skip "test_ulp: no system cc for the oracle, skipped"
 fi
 
 am=src/apps/moon/lib/moonlibc/math/am.c
@@ -108,8 +107,8 @@ exp 1
 exp2 1
 log 1
 logn1 1
-sin 2
-cos 2
+sin 1
+cos 1
 atan2 3
 pow 7
 powrim 37

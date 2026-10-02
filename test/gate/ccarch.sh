@@ -15,6 +15,7 @@
 #
 # skips whole without the target's qemu. not set -e: the checks report their own failures.
 # usage: ccarch.sh ARCH OUTDIR LOVE     (ARCH: a64 | rv64)
+. test/gate/skip.sh
 set -u
 
 arch=$1
@@ -51,12 +52,10 @@ moonrun() { LOVE_NO_IMAGE= "$m" mooncc "$@"; }
 
 QEMU=$(command -v "$qemu" 2>/dev/null || true)
 if [ -z "$QEMU" ]; then
-  echo "$name: skipped (need $qemu)"
-  exit 0
+  gate_skip "$name: skipped (need $qemu)"
 fi
 if [ "$(uname -m)" != x86_64 ]; then
-  echo "$name: skipped (the reference build is native x86-64)"
-  exit 0
+  gate_skip "$name: skipped (the reference build is native x86-64)"
 fi
 
 # the OPTIONAL extra oracle: a cross gcc with a static libc, if this box has one

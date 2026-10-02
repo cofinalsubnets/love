@@ -6,7 +6,7 @@
 // double roundings; constants carry hi/lo splits where a product must stay exact.
 //
 // the surface is the seven love.c consumes (its ai_* defines): am_sqrt EXACT
-// (IEEE-correct rounding); am_exp/am_log <= 1 ulp; am_sin/am_cos <= 2 ulp at
+// (IEEE-correct rounding); am_exp/am_log <= 1 ulp; am_sin/am_cos ~0.74 ulp at
 // EVERY magnitude (compact Payne-Hanek -- no domain stance); am_atan2 <= 3 ulp;
 // am_pow <= 2 ulp typical, degrading ~linearly in |y ln x| toward the
 // representable rim (~40 ulp at 1e+-300) -- the one documented stance -- with
@@ -40,6 +40,12 @@ static void dmul(double a, double b, double *hi, double *lo) {
  dsplit(a, &ah, &al); dsplit(b, &bh, &bl);
  *hi = a * b;
  *lo = ((ah * bh - *hi) + ah * bl + al * bh) + al * bl; }
+
+// (a, b) -> s + e exactly
+static void tsum(double a, double b, double *s, double *e) {
+ *s = a + b;
+ double bb = *s - a;
+ *e = (a - (*s - bb)) + (b - bb); }
 
 // ============================== sqrt ==============================
 // Newton in double from a bit-level seed, then a CORRECT-ROUNDING fixup:
@@ -143,7 +149,7 @@ double am_log(double x) {
 // ============================ sin / cos ============================
 // reduction: j = round(x 2/pi), r = x - j pi/2 by a THREE-PART Cody-Waite
 // (33+33+rest bits), remainder carried hi+lo; kernels are Taylor to r^17 /
-// r^16 on |r| <= pi/4 with the lo word folded in linearly. the reduction is
+// r^16 on |r| <= pi/4 with the lo word folded in through cos r and sin r. the reduction is
 // honest to a MEASURED |x| bound (the redscan) -- that bound is the stance.
 static const double INVPIO2 = 0x1.45f306dc9c883p-1,
   PIO2_1 = 0x1.921fb54400000p+0, PIO2_2 = 0x1.0b4611a600000p-34,
@@ -201,9 +207,13 @@ static int rbig(double ax, double *r, double *rlo) {
  if (G0 >> 63) {                                             // frac >= 1/2: round to the NEXT multiple
   j = (j + 1) & 3; neg = 1;
   G2 = ~G2 + 1; G1 = ~G1 + (G2 == 0); G0 = ~G0 + (G1 == 0 && G2 == 0); }
- double fh = (double) G0 * 0x1p-64 + (double) G1 * 0x1p-128; // |frac| as hi+low tail
- double ft = (double) G2 * 0x1p-192;
- double sh = fh + ft, sl = (fh - sh) + ft;                   // normalize the pair
+ // |frac| as three 53-bit chunks, each exact as a double, summed without loss
+ double fa = (double) (int64_t) (G0 >> 11) * 0x1p-53;
+ double fb = (double) (int64_t) (((G0 & 0x7ff) << 42) | (G1 >> 22)) * 0x1p-106;
+ double fc = (double) (int64_t) (((G1 & 0x3fffff) << 31) | (G2 >> 33)) * 0x1p-159;
+ double sh, sl;
+ tsum(fa, fb, &sh, &sl);
+ sl += fc;
  if (neg) { sh = -sh; sl = -sl; }
  double ph, pl;                                              // r = frac * pi/2, in dd
  dmul(sh, PIO2_HI, &ph, &pl);
@@ -224,10 +234,11 @@ static int rpio2(double x, double *r, double *rlo) {
  int64_t j = (int64_t) dj;
  double fj = (double) j;
  double w1 = x - fj * PIO2_1;                  // exact: j < 2^20 against 33-bit parts
- double w2 = w1 - fj * PIO2_2;
+ double w2, e2;
+ tsum(w1, -(fj * PIO2_2), &w2, &e2);           // the product exact, the sum's residue kept
  double t  = fj * PIO2_3;
  *r = w2 - t;
- *rlo = (w2 - *r) - t;
+ *rlo = ((w2 - *r) - t) + e2;
  return (int)(j & 3); }
 // sin on the reduced (r, rlo), |r| <= ~pi/4
 static double ksin(double r, double rlo) {
@@ -239,7 +250,7 @@ static double ksin(double r, double rlo) {
       + z * (0x1.6124613a86d09p-33
       + z * (-0x1.ae7f3e733b81fp-41
       + z *  0x1.952c77030ad4ap-49)))));
- return r + (z * (r * (-0x1.5555555555555p-3 + z * p)) + rlo); }
+ return r + (z * (r * (-0x1.5555555555555p-3 + z * p)) + rlo * (1.0 - 0.5 * z)); }   // rlo cos r
 // cos on the reduced (r, rlo)
 static double kcos(double r, double rlo) {
  double z = r * r;
@@ -250,13 +261,14 @@ static double kcos(double r, double rlo) {
       + z * (0x1.1eed8eff8d898p-29
       + z * (-0x1.93974a8c07c9dp-37
       + z *  0x1.ae7f3e733b81fp-45)))));
- double hz = 0.5 * z;
- return (1.0 - hz) + (z * (z * p) - r * rlo);
+ double hz = 0.5 * z, w = 1.0 - hz;
+ return w + (((1.0 - w) - hz) + (z * (z * p) - rlo * (r - r * z * 0x1.5555555555555p-3)));   // 1 - hz's rounding kept, rlo sin r
 }
 double am_sin(double x) {
  if (x != x) return x;
  uint64_t ax = mku(x) & 0x7fffffffffffffffull;
  if (ax >= 0x7ff0000000000000ull) return DNan;              // +-inf
+ if (ax < 0x3e40000000000000ull) return x;                  // below 2^-27 sin x rounds to x, sign kept
  double r, rl;
  int j = rpio2(x, &r, &rl);
  switch (j) {
@@ -268,6 +280,7 @@ double am_cos(double x) {
  if (x != x) return x;
  uint64_t ax = mku(x) & 0x7fffffffffffffffull;
  if (ax >= 0x7ff0000000000000ull) return DNan;
+ if (ax < 0x3e40000000000000ull) return 1.0;                // and cos x to 1
  double r, rl;
  int j = rpio2(x, &r, &rl);
  switch (j) {

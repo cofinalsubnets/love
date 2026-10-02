@@ -93,7 +93,7 @@ open(d + '/8.rgba', 'wb').write(Image.open(d + '/8.webp').convert('RGBA').tobyte
    _ (pil? ? (: r (hark ["python3" (dir + "/mk.py") dir])
                 (test (<r = 0) (same 0) (same 1) (same 2) (same 3) (same 4) (same 5) (same 6)
                       (same 7) (same 8)))
-        (puts "webp: no python3 PIL with webp, its pictures skipped\n"))
+        (gate-partly "webp: no python3 PIL with webp, its pictures skipped"))
 
    ; -- the refusals --------------------------------------------------------------------
    (flip s i) (cask #s @ c (map (k \ pin c k (s k)) (jot #s), pin c i (255 - s i), string c))

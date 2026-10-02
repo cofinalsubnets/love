@@ -315,7 +315,7 @@ crewfiles = src/apps/json.l src/apps/sb/merge.l src/apps/sb/http.l src/apps/sb/s
   src/apps/libra/salt.l src/apps/libra/libra.l src/apps/vi/hueweb.l src/apps/kiosko/web.l \
   src/apps/harp/harp.l src/apps/harp/play.l src/apps/harp/score.l \
   src/apps/harp/just.l src/apps/harp/drift.l src/apps/harp/tonnetz.l src/apps/harp/phrases.l \
-  src/apps/x11.l src/apps/manifest/manifest.l src/apps/lore/lore.l src/apps/lore/rove.l src/apps/lore/view.l src/apps/lore/vec.l src/apps/lore/sky.l src/apps/lore/grove.l src/apps/lore/tower.l src/apps/lore/story.l src/apps/lore/design.l src/apps/lore/slop.l src/apps/lore/grass.l src/apps/lore/wade.l src/apps/lore/apartment.l src/apps/lore/dusk.l src/apps/lore/garage.l src/apps/lore/shaft.l src/apps/lore/tree.l src/apps/lore/roost.l src/apps/harp/synth.l \
+  src/apps/x11.l src/apps/manifest/manifest.l src/apps/lore/lore.l src/apps/lore/rove.l src/apps/lore/view.l src/apps/lore/vec.l src/apps/lore/sky.l src/apps/lore/grove.l src/apps/lore/meadow.l src/apps/lore/tower.l src/apps/lore/story.l src/apps/lore/design.l src/apps/lore/slop.l src/apps/lore/grass.l src/apps/lore/grass99.l src/apps/lore/wade.l src/apps/lore/apartment.l src/apps/lore/dusk.l src/apps/lore/garage.l src/apps/lore/shaft.l src/apps/lore/tree.l src/apps/lore/roost.l src/apps/harp/synth.l \
   src/apps/berth/wharf.l src/apps/berth/limn.l src/apps/berth/berth.l src/apps/face.l src/apps/lux/wire.l src/apps/berth/pier.l src/apps/doom.l src/apps/lupa.l src/apps/mc.l \
   src/apps/chucho/mime.l src/apps/chucho/box.l src/apps/chucho/smtp.l src/apps/chucho/imap.l src/apps/chucho/chucho.l src/apps/pom.l src/apps/saver.l src/apps/locks.l src/apps/bee.l
 korefiles = $(kore_head) $(holo_obj) src/love/holo/copy.l $(kore_arc) $(kore_net)
@@ -584,7 +584,7 @@ k_free_c = $S/inle/kmain.c $S/inle/blk.c $S/inle/hda.c $S/inle/sys.c
 # are fixed where the rule is read, and every rule that links these is above that lane
 ifdef DOOM
 k_free_c += $S/inle/doom.c $S/inle/doomsnd.c
-doom_d = $R/dl/doomgeneric/doomgeneric
+doom_d = $(dl)/doomgeneric/doomgeneric
 doom_drop = $(wildcard $(doom_d)/doomgeneric_*.c $(doom_d)/i_allegro*.c $(doom_d)/i_sdl*.c)
 doom_c = $(filter-out $(doom_drop),$(wildcard $(doom_d)/*.c))
 endif
@@ -703,10 +703,16 @@ out/lib/crewlist.h: Makefile
 	@tf=$@.$$$$.tmp; printf '"%s"\n' '$(kcrewfiles)' > $$tf; \
 	 $(note)
 
+# the seat text kmain.c runs on both lanes, one literal like the ports' prel and post
+out/lib/seat.h: src/inle/seat.l src/tools/lcat.l $(love0)
+	@echo 'LOVE	'$@
+	@mkdir -p out/lib
+	@$(lcat_love) src/tools/lcat.l $< > $@
+
 # every $(k_c) source, wherever in the tree it lives, lands under $(k_odir) by its path.
 # `test -s`: an empty object reaches the link as a shape error naming neither file, and
 # no object of either flavour is ever legitimately empty.
-$(k_odir)/%.o: $(S)/%.c $(k_h) $(mooncc_dep) out/lib/baked.h out/lib/distlist.h out/lib/korelist.h out/lib/crewlist.h
+$(k_odir)/%.o: $(S)/%.c $(k_h) $(mooncc_dep) out/lib/baked.h out/lib/distlist.h out/lib/korelist.h out/lib/crewlist.h out/lib/seat.h
 	@echo 'MOON	'$@
 	@mkdir -p "$(dir $@)"
 	@$(kcc) -c $< -o $@ && test -s $@
@@ -722,10 +728,10 @@ kmain_o: $(k_free_o)
 # carries no seat and its roster is empty.
 kart_inc = -I$(ho) -I. -Isrc/love -Isrc/inle -Iout/lib -I$R \
   -I$S/love/quay -I$S/apps/moon/include
-# kmain.c's own bake is the two ROSTERS now -- the kore cat's order, and the crew's, which
-# it carries the order of and reads the members of off /proc/src. the egg and the module set
-# are src/love/cats.c's, and that object rides the host lane above.
-kart_bake = out/lib/korelist.h out/lib/crewlist.h
+# kmain.c's own bake is the two ROSTERS -- the kore cat's order, and the crew's, which it
+# carries the order of and reads the members of off /proc/src -- and the seat text. the egg
+# and the module set are src/love/cats.c's, and that object rides the host lane above.
+kart_bake = out/lib/korelist.h out/lib/crewlist.h out/lib/seat.h
 define kart
 $(1)_h = $$(love_h) $$S/inle/k.h $$S/love/lib/ustar.h $$(wildcard $$S/inle/$$($(4))/*.h)
 $(1)_arch_o = $$(patsubst $$S/%.c,$$($(2))/%.o,$$(wildcard $$S/inle/$$($(4))/*.c))
@@ -760,7 +766,7 @@ $(k_odir)/doom/%.o: $(doom_d)/%.c $(mooncc_dep)
 	@echo 'DOOM	'$@
 	@mkdir -p "$(dir $@)"
 	@$(kcc) -c $< -o $@
-$(k_odir)/doom/wad.o: $R/dl/doom1.wad src/tools/mkblob.l $(mdep)
+$(k_odir)/doom/wad.o: $(dl)/doom1.wad src/tools/mkblob.l $(mdep)
 	@echo 'HOLO	'$@
 	@mkdir -p "$(dir $@)"
 	@LOVE_NO_IMAGE= $m src/tools/mkblob.l $< $@ doom_wad $a
@@ -775,7 +781,7 @@ $(moon_d)/doom/%.o: $(doom_d)/%.c $(moon0_dep)
 	@echo 'DOOM	'$@
 	@mkdir -p "$(dir $@)"
 	@$(moon0) $(kart_inc) -c $< $@
-$(moon_d)/doom/wad.o: $R/dl/doom1.wad src/tools/mkblob.l $(holocat_dep) $(love0)
+$(moon_d)/doom/wad.o: $(dl)/doom1.wad src/tools/mkblob.l $(holocat_dep) $(love0)
 	@echo 'HOLO	'$@
 	@mkdir -p "$(dir $@)"
 	@LOVE_NO_IMAGE= $(love0) $(holocat) src/tools/mkblob.l $< $@ doom_wad $(hosta)

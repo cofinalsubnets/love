@@ -10,10 +10,11 @@
 # run is capped (2 GB, 20 s), one at a time. with -v, the first lines of each difference.
 #
 # skips where groff's chem is missing; takes the love binary as $1.
+. test/gate/skip.sh
 love=${1:-out/love}
 [ -x "$love" ] || { echo "chem: no $love -- run 'make host'"; exit 1; }
 ref=/usr/bin/chem
-[ -x "$ref" ] || { echo "chem: no $ref (groff), skipped"; exit 0; }
+[ -x "$ref" ] || gate_skip "chem: no $ref (groff), skipped"
 verbose=$2
 r=$(pwd)
 L=$r/$love

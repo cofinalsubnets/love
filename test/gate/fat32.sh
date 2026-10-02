@@ -16,6 +16,7 @@
 # clusters the type IS FAT16. every image here is 40 MB for that reason, not for room.
 #
 # usage: fat32.sh OUTDIR LOVE
+. test/gate/skip.sh
 set -u
 ho=$1
 m=$2
@@ -130,7 +131,7 @@ if command -v mdir > /dev/null 2>&1 && command -v mcopy > /dev/null 2>&1; then
   fi
   echo "fat: mtools interop (their reader on our format, our reader on their writes) ok"
 else
-  echo "fat: mtools not on PATH -- the interop half skipped"
+  gate_partly "fat: mtools not on PATH -- the interop half skipped"
 fi
 
 rm -rf "$W"

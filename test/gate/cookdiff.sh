@@ -11,14 +11,15 @@
 # the first sweep of this file.
 #
 # usage: cookdiff.sh LOVE     (LOVE = a binary whose `kore make` verb is cook)
+. test/gate/skip.sh
 set -u
 K=${1:?usage: cookdiff.sh LOVE}
 K=$(cd "$(dirname "$K")" && pwd)/$(basename "$K")
 
-command -v make >/dev/null 2>&1 || { echo "cookdiff: no ambient make -- skipped"; exit 0; }
+command -v make >/dev/null 2>&1 || gate_skip "cookdiff: no ambient make -- skipped"
 case "$(make --version 2>/dev/null | head -1)" in
   *"GNU Make"*) ;;
-  *) echo "cookdiff: ambient make is not GNU make -- skipped"; exit 0 ;;
+  *) gate_skip "cookdiff: ambient make is not GNU make -- skipped" ;;
 esac
 
 # THE ORACLE RUNS TOP-LEVEL. under `make -jN` the outer make exports MAKEFLAGS with

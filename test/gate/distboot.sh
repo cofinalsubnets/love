@@ -14,6 +14,7 @@
 #
 # minutes, not seconds; opt-in by name.
 # usage: distboot.sh SOURCE_TGZ SEED_EXE
+. test/gate/skip.sh
 set -u
 
 src=$1
@@ -21,7 +22,7 @@ seed=$2
 
 [ -f "$src" ] || { echo "distboot: no $src -- run 'make dist'"; exit 1; }
 [ -x "$seed" ] || { echo "distboot: no $seed -- run 'make dist'"; exit 1; }
-command -v make >/dev/null 2>&1 || { echo "distboot: no make, skipped"; exit 0; }
+command -v make >/dev/null 2>&1 || gate_skip "distboot: no make, skipped"
 
 R=$(pwd)
 w=$(mktemp -d)

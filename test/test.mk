@@ -206,16 +206,14 @@ test_front: $(ho)/front $(ho)/frontseat
 # cats.c is the catalog love0 lacks; it is not idempotent and love0 evaluates twice; or its
 # regression is a HANG, wanting a timeout a corpus cannot give -- a wedged gate is worse than
 # a red one. gate = exit 0 and a "<name>: ok"; a cold lane opts in via hostnif_cold.
-hostnif_tests = test/host/gcpause.l test/host/mop.l test/host/deepeq.l test/host/wharf.l test/host/cb.l test/host/manifest.l test/host/rune.l test/host/pty.l test/host/loader.l test/host/rdiff.l test/host/run.l test/host/luxui.l test/host/sh.l test/host/berth.l test/host/vi.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/tty.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/web.l test/host/sbhttp.l test/host/salt.l test/host/libra.l test/host/clay.l test/host/tls.l test/host/tlsc.l test/host/ssh.l test/host/sshd.l test/host/gz.l test/host/gzc.l test/host/png.l test/host/imgenc.l test/host/jpeg.l test/host/webp.l test/host/pic.l test/host/grap.l test/host/chem.l test/host/face.l test/host/story.l test/host/evback.l test/host/design.l test/host/slop.l test/host/score.l test/host/grass.l test/host/wade.l test/host/apartment.l test/host/garage.l test/host/roost.l test/host/shaft.l test/host/tree.l test/host/lore.l test/host/synth.l test/host/lupa.l test/host/mc.l test/host/chucho.l test/host/pom.l test/host/saver.l test/host/helm.l test/host/wget.l test/host/www.l test/host/smallweb.l test/host/net.l test/host/ed.l test/host/cook.l test/host/x11.l test/host/pier.l test/host/kitpng.l test/host/bee.l test/host/beeq.l test/host/locks.l test/host/showbig.l
+hostnif_tests = test/host/gcpause.l test/host/gcroom.l test/host/mop.l test/host/deepeq.l test/host/wharf.l test/host/cb.l test/host/manifest.l test/host/rune.l test/host/pty.l test/host/loader.l test/host/rdiff.l test/host/run.l test/host/luxui.l test/host/sh.l test/host/berth.l test/host/vi.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/tty.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/web.l test/host/sbhttp.l test/host/salt.l test/host/libra.l test/host/clay.l test/host/tls.l test/host/tlsc.l test/host/ssh.l test/host/sshd.l test/host/gz.l test/host/gzc.l test/host/png.l test/host/imgenc.l test/host/jpeg.l test/host/webp.l test/host/pic.l test/host/grap.l test/host/chem.l test/host/face.l test/host/story.l test/host/evback.l test/host/design.l test/host/slop.l test/host/score.l test/host/grass.l test/host/grass99.l test/host/wade.l test/host/apartment.l test/host/garage.l test/host/roost.l test/host/shaft.l test/host/tree.l test/host/lore.l test/host/synth.l test/host/lupa.l test/host/mc.l test/host/chucho.l test/host/pom.l test/host/saver.l test/host/helm.l test/host/wget.l test/host/www.l test/host/smallweb.l test/host/net.l test/host/ed.l test/host/cook.l test/host/x11.l test/host/pier.l test/host/kitpng.l test/host/bee.l test/host/beeq.l test/host/locks.l test/host/showbig.l
 # out/lush: test/host/sh.l drives the built shell end to end, via out/love and
 # never env's PATH love -- the tree's nifs, not the nest's.
 hostnif_cold =                                   # empty: no gate needs the cold lane
 hostnif_tests += test/host/xz.l test/host/bz2.l   # the xz and bzip2 pulls against their whole-string reads
 # ev read back off its show names the doors ev closes over, which a mopped image has dropped
 hostnif_nomop = test/host/evback.l
-# gcpause's theorem is about a fresh heap: a path to this binary forks warm under lush, and the
-# child inherits the shell's heap and sizing; `env` is a foreign word, so the child execs fresh
-hostnif_exec = test/host/gcpause.l
+hostnif_exec =                                   # empty: the gc gates run warm, in the fork lane
 test_hostnif: host out$(hsuf)/lush
 	@for s in $(hostnif_tests); do echo "TEST $$s"; \
 	  case " $(hostnif_cold) " in *" $$s "*) L="env LOVE_NO_IMAGE=1 $m";; *) L="$m";; esac; \
@@ -243,7 +241,7 @@ test_glaze: host
 	  | $(gsh) test/gate/run.sh glaze "env LOVE_NO_IMAGE=1 $m" "test/glaze-x86:"
 else
 test_glaze:
-	@echo "test_glaze: skipped (host arch $a is not x64)"
+	@sh test/gate/skip.sh gate-skip "test_glaze: skipped (host arch $a is not x64)"
 endif
 # test_hook -- the natjit creation-hook laws: every law claims both the answer and that the hook
 # owned it (`fired?`), twice over the hook's two lives -- the image's ($m, what ships) and the
@@ -256,7 +254,7 @@ test_hook: host
 	@$(gsh) test/gate/run.sh -a hook "env LOVE_NO_IMAGE=1 $m" "glaze-hook: ok" test/glaze-hook.l
 else
 test_hook:
-	@echo "test_hook: skipped (the hook emits for x64 / a64; host arch is $a)"
+	@sh test/gate/skip.sh gate-skip "test_hook: skipped (the hook emits for x64 / a64; host arch is $a)"
 endif
 # test_glazebench -- the glaze pays on the benches, through the lanes a user runs: each bench
 # source as spelled (bench/bench.l + bench/benches/<b>.l), glazed against LOVE_NO_GLAZE=1, by
@@ -269,7 +267,7 @@ test_glazebench: host
 	@$(gsh) test/gate/glazebench.sh $m $a
 else
 test_glazebench:
-	@echo "test_glazebench: skipped (the glaze emits for x64 / a64; host arch is $a)"
+	@sh test/gate/skip.sh gate-skip "test_glazebench: skipped (the glaze emits for x64 / a64; host arch is $a)"
 endif
 # test_glazefuzz -- the glaze's differential fuzz (test/gate/glazefuzz.l): 3000 random closures
 # run twice against the same binary (plain, then LOVE_NO_GLAZE=1), stdouts byte-identical.
@@ -301,7 +299,7 @@ test_glazefuzz: host
 	  echo "  $$fon closures native-backed, `wc -l < $$on.body` cases, all agree"
 else
 test_glazefuzz:
-	@echo "test_glazefuzz: skipped (the glaze emits for x64 / a64; host arch is $a)"
+	@sh test/gate/skip.sh gate-skip "test_glazefuzz: skipped (the glaze emits for x64 / a64; host arch is $a)"
 endif
 # src/apps/sat/ -- the CDCL SAT solver app. Portable love (no glaze), so it runs on every arch.
 # Gate = exit 0 and the sentinels. cold on purpose -- the one app gate that is: the
@@ -766,7 +764,7 @@ test_teensy41: host
 test_nucleo446: host
 	@echo TEST out/nucleo446/firm.hex
 	@if ! command -v arm-none-eabi-gcc >/dev/null 2>&1; then \
-	   echo "test_nucleo446: no arm-none-eabi toolchain, skipped"; exit 0; fi; \
+	   sh test/gate/skip.sh gate-skip "test_nucleo446: no arm-none-eabi toolchain, skipped"; exit $$?; fi; \
 	  $(MAKE) -C src/inle/nucleo446 || { echo "FAIL nucleo446 build (the boot-image verify is inside)"; exit 1; }; \
 	  echo "test_nucleo446: firmware (all-mooncc thumb2sp), OUR linker and flatten, no linker script, boot image verified"
 # test_rp2040 -- the Pico firmware build, nucleo446-shaped, and the one port with no .S:
@@ -970,8 +968,8 @@ test_gcheck: host $(love0) out/mooncc0.image
 	@$(MAKE) --no-print-directory hsuf=/gck GCDBG=-DLvGcCheck test_hostegg
 # test_gcstress: the mutator's side -- whether the C around the collector holds a raw pointer
 # across a call that collects. LvGcStress always collects, poisons the vacated nursery, and
-# majors every 32nd. ~12 min, own tree -- the baked leg tracks the glaze, since every major
-# walks it, and costs 3.4x the egg one for it (429 s against 126 s).
+# majors every 32nd. over two hours on its own tree, most of it the stress build's bake and
+# the baked leg, which tracks the glaze since every major walks it -- so it runs last.
 test_gcstress: host $(love0) out/mooncc0.image
 	@$(MAKE) --no-print-directory hsuf=/gcs GCDBG=-DLvGcStress test_host
 	@$(MAKE) --no-print-directory hsuf=/gcs GCDBG=-DLvGcStress test_hostegg
@@ -987,7 +985,7 @@ dclean = rm -f $(foreach n,$1,test/proof/rocq/$n_ref.ml test/proof/rocq/$n_ref.m
 
 ifeq ($(COQC),)
 test_proof test_gc test_gen test_uugen test_mx:
-	@echo "$@: skipped (needs rocq/coqc)"
+	@sh test/gate/skip.sh gate-skip "$@: skipped (needs rocq/coqc)"
 else
 # spec.v -- love's headline laws (the numeral / function / absence core of test/spec.l) as Rocq
 # theorems, axiom-free and universe-checked: the executable spec upgraded from shown to proved.
@@ -1035,7 +1033,7 @@ endif
 
 ifeq ($(and $(COQC),$(OCAMLOPT)),)
 test_extract test_big test_encver:
-	@echo "$@: skipped (needs coqc + ocamlopt)"
+	@sh test/gate/skip.sh gate-skip "$@: skipped (needs coqc + ocamlopt)"
 else
 # extract.v's normalizer (on spec.v's PROVEN subst/shift) extracted to OCaml and fuzzed against
 # ev. run the oracle once, into a file (2>&1 too): grep it, then cat it -- a second run
@@ -1095,7 +1093,7 @@ endif
 # by two unrelated implementations. Regenerated every run.
 ifeq ($(LEAN),)
 test_uulean:
-	@echo "test_uulean: skipped (needs lean)"
+	@sh test/gate/skip.sh gate-skip "test_uulean: skipped (needs lean)"
 else
 test_uulean: host
 	@mkdir -p test/proof/lean
@@ -1118,7 +1116,7 @@ test_holofuzz: host
 	@if command -v llvm-mc >/dev/null 2>&1; then \
 	   $m test/holo/fuzz/sysdiff.l \
 	     || { echo "FAIL sysdiff -- a holo SYSTEM encoding disagrees with llvm-mc"; exit 1; }; \
-	 else echo "  (sysdiff skipped: no llvm-mc)"; fi
+	 else . test/gate/skip.sh; gate_partly "  (sysdiff skipped: no llvm-mc)"; fi
 	@$m test/holo/fuzz/rvc.l \
 	  || { echo "FAIL rvc -- an RVC squeeze changes what the word means"; exit 1; }
 # the committed generated corpora, one shape four times over: a design's own code
@@ -1195,7 +1193,7 @@ test_wgetnet: host
 test_doomx: $(R)/test/host/doomx.l
 	@$(MAKE) -s host DOOM=1
 	@echo TEST test/host/doomx.l "(doom on X, 300 frames under Xvfb, a held key)"
-	@cat test/00-init.l test/host/doomx.l | $(gsh) test/gate/run.sh doomx "$m" "doomx: ok"
+	@cat test/00-init.l test/host/doomx.l | $(gsh) test/gate/run.sh doomx "$R/out/doom/love" "doomx: ok"
 
 test_kverb: host
 	@$(MAKE) -s $(k_elf)
@@ -1214,13 +1212,13 @@ test_kboot: host $(S)/tools/kboot.l
 	@$m $(S)/tools/kboot.l $(k_elf) "sh -c \"kore ls /proc/src/src/apps/kore | kore wc -l\"" $$(ls $(S)/apps/kore | wc -l)
 else
 test_disk test_kboot:
-	@echo "$@: skipped (host arch $a is not x64)"
+	@sh test/gate/skip.sh gate-skip "$@: skipped (host arch $a is not x64)"
 endif
 
-OVMF_X64 := $(wildcard dl/edk2-ovmf/ovmf-code-x86_64.fd)
+OVMF_X64 := $(wildcard $(dl)/edk2-ovmf/ovmf-code-x86_64.fd)
 ifeq ($(and $(filter x64,$a),$(OVMF_X64)),)
 test_uefi:
-	@echo "test_uefi: skipped (x64 + dl/edk2-ovmf/ovmf-code-x86_64.fd needed)"
+	@sh test/gate/skip.sh gate-skip "test_uefi: skipped (x64 + dl/edk2-ovmf/ovmf-code-x86_64.fd needed)"
 else
 test_uefi: host $(S)/tools/ktest.l
 	@$(MAKE) -s $(ko)/esp-x64/EFI/BOOT/BOOTX64.EFI $(ko)/esp-x64/love.elf $(ko)/esp-x64/love.cmd
@@ -1228,11 +1226,11 @@ test_uefi: host $(S)/tools/ktest.l
 	@$m $(S)/tools/ktest.l $(ko)/esp-x64 $(OVMF_X64) x64
 endif
 
-OVMF_A64 := $(wildcard dl/edk2-ovmf/ovmf-code-aarch64.fd)
+OVMF_A64 := $(wildcard $(dl)/edk2-ovmf/ovmf-code-aarch64.fd)
 QEMU_A64 ?= $(shell command -v qemu-system-aarch64 2>/dev/null)
 ifeq ($(and $(OVMF_A64),$(QEMU_A64)),)
 test_uefi_a64:
-	@echo "test_uefi_a64: skipped (qemu-system-aarch64 + dl/edk2-ovmf/ovmf-code-aarch64.fd needed)"
+	@sh test/gate/skip.sh gate-skip "test_uefi_a64: skipped (qemu-system-aarch64 + dl/edk2-ovmf/ovmf-code-aarch64.fd needed)"
 else
 test_uefi_a64: host $(S)/tools/ktest.l
 	@$(MAKE) -s a=a64 $(ko)/esp-a64/EFI/BOOT/BOOTAA64.EFI $(ko)/esp-a64/love.elf $(ko)/esp-a64/love.cmd
@@ -1253,18 +1251,18 @@ test_inle:
 
 ifeq ($(QEMU_A64),)
 test_kernel_a64:
-	@echo "test_kernel_a64: skipped (need qemu-system-aarch64)"
+	@sh test/gate/skip.sh gate-skip "test_kernel_a64: skipped (need qemu-system-aarch64)"
 else
 test_kernel_a64: host $(S)/tools/ktest.l
 	@$(MAKE) -s a=a64 $(ko)/love-a64.elf
-	@echo TEST $(ko)/love-a64.elf "(the WARM lane: serial, headless, -kernel; TCG, ceiling 900s, or kvm on $$KTEST_A64_HOST)"
+	@echo TEST $(ko)/love-a64.elf "(the WARM lane: serial, headless, -kernel; TCG, ceiling 900s, or kvm on $${KTEST_A64_HOSTS:-$$KTEST_A64_HOST})"
 	@$m $(S)/tools/ktest.l $(ko)/love-a64.elf - a64
 endif
 
 QEMU_RV64 ?= $(shell command -v qemu-system-riscv64 2>/dev/null)
 ifeq ($(QEMU_RV64),)
 test_kernel_rv64:
-	@echo "test_kernel_rv64: skipped (need qemu-system-riscv64)"
+	@sh test/gate/skip.sh gate-skip "test_kernel_rv64: skipped (need qemu-system-riscv64)"
 else
 test_kernel_rv64: host $(S)/tools/ktest.l
 	@$(MAKE) -s a=rv64 $(ko)/love-rv64.elf
@@ -1283,7 +1281,7 @@ NODE ?= $(shell command -v node 2>/dev/null)
 # src/tools/ktest.l reads off qemu, with no qemu and no browser.
 ifeq ($(NODE),)
 test_kernel_wasm:
-	@echo "test_kernel_wasm: skipped (needs node)"
+	@sh test/gate/skip.sh gate-skip "test_kernel_wasm: skipped (needs node)"
 else
 test_kernel_wasm: host
 	@$(MAKE) -s wasm
@@ -1357,7 +1355,7 @@ endif
 # out/doom is what the sub-make built, and out/ beside it is the plain seat kexec boots.
 ifeq ($(NODE),)
 test_doomwasm:
-	@echo "test_doomwasm: skipped (needs node)"
+	@sh test/gate/skip.sh gate-skip "test_doomwasm: skipped (needs node)"
 else
 test_doomwasm:
 	@$(MAKE) -s wasm DOOM=1
@@ -1399,7 +1397,7 @@ endif
 # artifact, interpreted.
 ifeq ($(NODE),)
 test_seedwasm:
-	@echo "test_seedwasm: skipped (needs node)"
+	@sh test/gate/skip.sh gate-skip "test_seedwasm: skipped (needs node)"
 else
 test_seedwasm: host
 	@$(MAKE) -s wasm
@@ -1422,7 +1420,7 @@ endif
 # page. ~15 minutes, opt-in by name.
 ifeq ($(NODE),)
 test_nestwasm:
-	@echo "test_nestwasm: skipped (needs node)"
+	@sh test/gate/skip.sh gate-skip "test_nestwasm: skipped (needs node)"
 else
 test_nestwasm:
 	@$(MAKE) -s wasm
@@ -1447,7 +1445,7 @@ wasmopt_flags = --enable-memory64 --enable-bulk-memory --enable-nontrapping-floa
 holo_wasm = out/.holo.wasm out/.holo2.wasm out/.holo3.wasm
 ifeq ($(NODE),)
 test_holowasm:
-	@echo "test_holowasm: skipped (needs node)"
+	@sh test/gate/skip.sh gate-skip "test_holowasm: skipped (needs node)"
 else
 test_holowasm: host
 	@echo TEST test/holo/wasm.l
@@ -1465,7 +1463,7 @@ endif
 OBJDUMP_ANY := $(shell command -v objdump 2>/dev/null || command -v llvm-objdump 2>/dev/null)
 ifeq ($(OBJDUMP_ANY),)
 vmret: host
-	@echo "vmret: skipped (needs objdump or llvm-objdump)"
+	@sh test/gate/skip.sh gate-skip "vmret: skipped (needs objdump or llvm-objdump)"
 else
 vmret: host
 	@$m src/tools/vmret.l $m
@@ -1474,7 +1472,7 @@ endif
 WAITS_C := $(shell git ls-files '*.c' 2>/dev/null)
 ifeq ($(WAITS_C),)
 waits: host
-	@echo "waits: skipped (needs a git checkout to enumerate the .c files)"
+	@sh test/gate/skip.sh gate-skip "waits: skipped (needs a git checkout to enumerate the .c files)"
 else
 waits: host
 	@$m src/tools/waits.l $(WAITS_C)

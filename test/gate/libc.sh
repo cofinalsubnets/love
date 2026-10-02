@@ -25,6 +25,7 @@
 # NOT set -e: the checks report their own failures with context.
 #
 # usage: libc.sh OUTDIR LOVE
+. test/gate/skip.sh
 set -u
 
 ho=$1
@@ -39,13 +40,11 @@ moonrun() { LOVE_NO_IMAGE= "$m" mooncc "$@"; }
 arch=$(uname -m)
 # uname's spelling, not the tree's `x64` -- the two part company here
 if [ "$arch" != x86_64 ]; then
-  echo "test_libc: x86-64 only (mooncc emits x64), skipped on $arch"
-  exit 0
+  gate_skip "test_libc: x86-64 only (mooncc emits x64), skipped on $arch"
 fi
 cc_g=$(command -v gcc || command -v cc) || true
 if [ -z "${cc_g:-}" ]; then
-  echo "test_libc: no system cc for the second opinion, skipped"
-  exit 0
+  gate_skip "test_libc: no system cc for the second opinion, skipped"
 fi
 
 n=0
