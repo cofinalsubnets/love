@@ -560,7 +560,7 @@
 ; prompt with no job in front, and with no pane at all; a stage or a program holds it off
 (: (wound hb) (: w ((cite 'saver 'saver-watch) "life" 5) _ (pin hb 'saver w) _ (pin w 'last (clock 0 - 3600000))
                  _ (hidle hb) (hidle? hb))
-   (closed hb) (map (id \ hshut hb id) (wharf-berths (hb 'plan)))
+   (closed hb) (map (id \ hshut hb id) (wharf-panes (hb 'plan)))
    e (mitty-up 10 40)
    st (mitty-up 10 40) _ (hberth st 'stack 50 (hopen-stage (mitty-stage (\ w h "x") (\ c 0) (\ _ 0)) 1 1))
    ca (mitty-up 10 40) _ (hberth ca 'stack 50 (hopen ["cat"] 10 40))

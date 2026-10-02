@@ -484,7 +484,7 @@
  hshells ["lush" "sh" "bash" "zsh" "dash" "ksh" "mksh" "fish" "tcsh"]
  (hbare? p) (&& (two? p) (hpty? p) (elem (hname p) hshells)
                 (: g (ttypg (hmas p)) (charm? g && g = hpid p)))
- (hquiet? hb) (all (id \ hbare? (hpane hb id)) (wharf-berths (hb 'plan)))
+ (hquiet? hb) (all (id \ hbare? (hpane hb id)) (wharf-panes (hb 'plan)))
  ; the saver's escapes for now, "" when it has none; and whether it has the glass. C-a z
  ; ('forced) brings it whatever the panes hold
  (hidle hb) (: w (peep hb 'saver ()) t (cite 'saver 'saver-tick)
