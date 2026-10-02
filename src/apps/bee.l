@@ -235,7 +235,7 @@
      (card-of nm)
       (: s (slurp-file (cell-of nm + "/card"))
          (? (string? s)
-            (foldl (\ t l (: k (find l " " 0) (? (0 < k) (pin t (snip l 0 k) (snip l (k + 1) #l)) t)))
+            (foldl (\ t l (l @ ((k && 0 < #k) + " " + v) (pin t k v) t))
                    {"name" nm} (lines s))))
      (card-pid c) (digits (peep c "pid" "0"))
      ; a gone session's cell, messages and all. a cell with no card yet is being made, and stays
@@ -536,10 +536,9 @@
       (: (go ls cur acc)
           (? (atom? ls) (rev (? (two? cur) (cur . acc) acc))
              (: l <ls n #l
-                (? (8 < n && starts? l "--- " && snip l (n - 4) n = " ---")
-                   (go >ls [(snip l 4 (n - 4)) ""] (? (two? cur) (cur . acc) acc))
-                   (two? cur) (go >ls [<cur (cur 1 + l + "\n")] acc)
-                   (go >ls cur acc))))
+                (l @ ("--- " + (h && 0 < #h) + " ---")
+                   (go >ls [h ""] (? (two? cur) (cur . acc) acc))
+                   (two? cur ? (go >ls [<cur (cur 1 + l + "\n")] acc) (go >ls cur acc)))))
          (go (lines s) () ()))
      ; a queue's rows, position -> its first six words
      (q-rows text)
@@ -628,7 +627,7 @@
      (q-note l) (: k (find l "  # " 0) (? (k < 0) "" (snip l (k + 4) #l)))
      (q-leader text) (: w (words (q-line text "leader")) (? (1 < #w) (w 1) ""))
      (field in k d) (: v (peep in k ()) (? (string? v && 0 < #v) v d))
-     (q-short q) (? (starts? q "refs/queue/") (snip q 11 #q) (starts? q "queue/") (snip q 6 #q) "")
+     (q-short q) (q @ ("refs/queue/" + n) n ("queue/" + n) n "")
      (git1 a) (chomp (lush-out ("git " + a)))
      ; a commit's or a tree's full sha, "" when there is none
      (git-sha x) (git1 ("rev-parse --verify -q " + sq (x + "^{commit}")))
@@ -694,7 +693,7 @@
       (: w (words (q-line text "next")) c (? (1 < #w && q-digits? (w 1)) (digits (w 1)) 0)
          (show (max c (1 + foldl (\ a p (max a (q-num p))) 0 (keys (q-rows text))))))
      (q-digits? s) (0 < #s && !(two? (filter (\ c !(48 <= c <= 57)) (map s ^#s))))
-     (q-fold-of st) (? (starts? st "folded-into-") (snip st 12 #st) "")
+     (q-fold-of st) (st @ ("folded-into-" + n) n "")
      (q-state? st) (elem st ["waiting" "gating" "green" "left"] || q-digits? (q-fold-of st))
      ; the long-queue rule: two or more rows waiting or gating, or more heavy-lock waiters than slots
      (q-long? text) (: rs (q-rows text) (1 < #(filter (\ p (elem ((rs p) 5) ["waiting" "gating"])) (keys rs))))

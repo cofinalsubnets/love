@@ -16,7 +16,7 @@
  (sm-num s) (mime-num s)
  (smtp-url u)
   (: tls? (starts? u "smtps://")
-     r (? tls? (snip u 8 #u) (starts? u "smtp://") (snip u 7 #u) ())
+     r (u @ ("smtps://" + x) x ("smtp://" + x) x ())
      (? !(string? r) ()
         (: h (findsub r "/" @ k (k < 0 ? r (snip r 0 k)))
            h2 (findsub h "@" @ k (k < 0 ? h (snip h (k + 1) #h)))

@@ -1284,10 +1284,8 @@
    ; export NAME=VAL -> setenv; export NAME promotes the shell var
    (sh-eqpos s i) (#s @ ^i () (s i @ 61 i (sh-eqpos s (i + 1))))
    (sh-export w)
-     (: p (sh-eqpos w 0)
-        (? !p (setenv w (sh-vval w))
-           (sh-ro? (snip w 0 p)) (sh-rosay (snip w 0 p))
-           (setenv (snip w 0 p) (snip w (p + 1) #w))))
+     (w @ ((n && 0 < #n) + "=" + v) (? (sh-ro? n) (sh-rosay n) (setenv n v))
+        (setenv w (sh-vval w)))
 
    (cmderr msg) (say err ("lush: " + (msg + "\n")), pin sh-status () 1, 1)
    ; a child that cannot exec has no voice -- only _exit(127) -- so an unfindable
@@ -2435,9 +2433,7 @@
            (each now (\ e (? (sh-smem? e old) 0
                              (: p (sh-eqpos e 0)
                                 (setenv (? !p e (snip e 0 p)) ())))),
-            each old (\ e (: p (sh-eqpos e 0)
-                             (? !p 0
-                                (setenv (snip e 0 p) (snip e (p + 1) #e))))),
+            each old (\ e (e @ ((n && 0 < #n) + "=" + v) (setenv n v) 0)),
             0)))
    (sh-subsave _)
      [(cwd 0) (sh-tabsnap sh-vars) (sh-tabsnap sh-funcs) (sh-pos ()) (sh-arg0 ())
