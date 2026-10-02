@@ -970,8 +970,8 @@ test_gcheck: host $(love0) out/mooncc0.image
 	@$(MAKE) --no-print-directory hsuf=/gck GCDBG=-DLvGcCheck test_hostegg
 # test_gcstress: the mutator's side -- whether the C around the collector holds a raw pointer
 # across a call that collects. LvGcStress always collects, poisons the vacated nursery, and
-# majors every 32nd. ~12 min, own tree -- the baked leg tracks the glaze, since every major
-# walks it, and costs 3.4x the egg one for it (429 s against 126 s).
+# majors every 32nd. over two hours on its own tree, most of it the stress build's bake and
+# the baked leg, which tracks the glaze since every major walks it -- so it runs last.
 test_gcstress: host $(love0) out/mooncc0.image
 	@$(MAKE) --no-print-directory hsuf=/gcs GCDBG=-DLvGcStress test_host
 	@$(MAKE) --no-print-directory hsuf=/gcs GCDBG=-DLvGcStress test_hostegg
