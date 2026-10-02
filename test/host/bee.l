@@ -805,7 +805,7 @@
            (1 = <again)
            (1 = <bad)
            (0 = <bx) (string? card)
-           (: t ((cite 'seal 'seal-check) card (snip (rt 1) 8 72) (clock 0 // 1000) ())
+           (: t ((cite 'seals 'seal-check) card (snip (rt 1) 8 72) (clock 0 // 1000) ())
               (&& (tablet? t) (t "name" = "tau") (t "kind" = "box")))
            ; the keys are the owner's alone
            (: s (stat (kd + "/root.key")) (&& (two? s) (s 2 & 511 = 384)))

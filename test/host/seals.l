@@ -1,9 +1,9 @@
-; --- test/host/seal.l: the hive's keys and cards (src/apps/seal.l) ------------------------
+; --- test/host/seals.l: the hive's keys and cards (src/apps/seals.l) ------------------------
 ; a root, a box under it and a cell under that, then each way a chain can lie. run
 ; standalone from the repo root:
-;   cat test/00-init.l test/host/seal.l | out/love
+;   cat test/00-init.l test/host/seals.l | out/love
 
-(borrow 'seal)
+(borrow 'seals)
 (borrow 'posix)
 
 (: sl-t-hex (cite 'tls 'hex)
@@ -71,4 +71,4 @@
       (: c (seal-card sl-t-root (filter (f \ <f != "expires") (sl-t-fields "tau" "box" sl-t-box 100 900)))
          (ends? (sl-t-why c) "lacks a field")))
 
-(puts "seal: ok\n")
+(puts "seals: ok\n")

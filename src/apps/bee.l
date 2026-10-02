@@ -332,7 +332,7 @@
      bee-restart ("at the next convenient point -- between tasks, never mid-gate -- "
                   + "resuming in the same directory, so .mcp.json loads the new bee.")
      bee-landed ("this landing changed bee: every live session restarts " + bee-restart)
-     bee-served "src/apps/bee.l src/apps/locks.l src/apps/seal.l src/apps/saver.l src/apps/pom.l"   ; what bee runs
+     bee-served "src/apps/bee.l src/apps/locks.l src/apps/seals.l src/apps/saver.l src/apps/pom.l"   ; what bee runs
      (self-id _) (: s (string? bee-self ? (stat bee-self)) (two? s ? (show [(s 0) (s 3) (s 8)])))
      bee-selfw {'id (self-id 0) 'at (clock 0)}
      bee-selfwait (: w (getenv "BEE_SELF_WATCH") (string? w && 0 < #w ? (digits w) 30))
@@ -2328,7 +2328,7 @@
 
      ; --- the keys (doc/bee.md, KEYS): ~/.love/etc/bee/ holds the lineage's root on the box
      ; that made it, and this box's key with its card, the root's word for whose key it is ---
-     (sl nm) (cite 'seal nm)
+     (sl nm) (cite 'seals nm)
      bee-keys (: h (getenv "HOME") ((string? h ? h "/tmp") + "/.love/etc/bee"))
      bee-hostname (: r (uread "/proc/sys/kernel/hostname") s (two? r ? <>r "")
                  (snip s 0 (0 < #s && s (#s - 1) = 10 ? #s - 1 #s)))

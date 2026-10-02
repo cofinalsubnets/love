@@ -1,4 +1,4 @@
-; src/apps/seal.l -- the hive's keys and cards. a key is an ed25519 pair a box or a session
+; src/apps/seals.l -- the hive's keys and cards. a key is an ed25519 pair a box or a session
 ; holds; a card is `key value` lines, signed by the key above it, saying whose a public key
 ; is. a chain is a leaf's card, then its signer's, up to a card the lineage's root signed,
 ; and checking one needs only that root's public key (doc/bee.md, KEYS).
@@ -15,7 +15,7 @@
 ; then the signer's parent and sig, which seal-card writes. keys are lowercase hex, 64
 ; digits; sig is 128. cards in a chain are parted by a blank line. a cell's name is
 ; NAME@BOX, BOX its signer's name, so no box speaks for another's sessions.
-(module (seal seal-key seal-keytext seal-keyof seal-keywrite seal-keyread seal-card seal-chain seal-check)
+(module (seals seal-key seal-keytext seal-keyof seal-keywrite seal-keyread seal-card seal-chain seal-check)
 (borrow 'posix)
 
 (: sl-hex (cite 'tls 'hex)
@@ -98,4 +98,4 @@
        (? (string? cs) cs
           !(sl-hex? root 32) "the root is not a key"
           (: e (filter string? (map link ^#cs)) (two? e ? <e <<cs)))))
-) ; module seal
+) ; module seals
