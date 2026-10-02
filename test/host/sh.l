@@ -2,7 +2,7 @@
 ; functions, the job-control nifs (signal / wait's stop lane / sigfd's signal
 ; list: doc/misc/posix.md step 4, signals arriving as conditions), and the built
 ; shell driven end to end through out/love (never env's PATH love). the
-; interactive loop needs a pty (probed live, the berth pattern); everything
+; interactive loop needs a pty (probed live, the mitty pattern); everything
 ; beneath it gates headless here. the one file reads bare; its seat stays
 ; quiet under the corpus (no lush on cmdline).
 ; run: cat test/00-init.l test/host/sh.l | out/love

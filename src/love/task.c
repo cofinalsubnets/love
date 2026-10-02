@@ -291,7 +291,7 @@ lvm(lvm_yield_sw) {
  prev->m = parking ? g->tasks->m : N;
  // Pack first: ai_young reads g->hp, and the live Hp runs ahead of the last Pack --
  // against a stale g->hp the fresh node reads as old, the barrier drops the edge, and
- // the next minor eats the ring (berth+ink froze in seconds on exactly this).
+ // the next minor eats the ring (mitty+ink froze in seconds on exactly this).
  Pack(g);
  gen_wb(g, (word) prev, (word) prev->m);   // task ring: an old node now links to the fresh (young) yield snapshot
  if (parking) {

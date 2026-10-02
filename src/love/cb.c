@@ -30,3 +30,4 @@ LvNif("pasted", nif_pasted, NULL);
 LvNif("select", nif_select, NULL);
 LvNif("copied", nif_copied, NULL);
 LvNif("picture", nif_picture, NULL);
+LvNif("limned", nif_limned, NULL);

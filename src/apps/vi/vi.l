@@ -4,7 +4,7 @@
 ; loads after core.l/re.l/vi core in the kore cat and rides the u-floor (uread,
 ; udie) and text.l's lines/unlines.
 ;
-; the visit is berth's harbour where the seat carries one -- each buffer a stage in a
+; the visit is mitty's harbour where the seat carries one -- each buffer a stage in a
 ; pane, split by :sp/:vs or the prefix -- and cli's `stage` otherwise: raw tty, the
 ; alternate screen, one key a step through cli's edkey (arrows, alt letters, a bare
 ; escape after a beat), and port EOF leaves -- a piped script (the smoke lane) ends
@@ -96,11 +96,11 @@
        ; vi reads no options: a dash word would open a new file named after it
        _ (1 < #f && f 0 = 45 ? (udie 2 ("vi: unknown option " + f)))
        st (vi-open f)
-       br (cite 'berth)
+       br (cite 'mitty)
        (tablet? br ?
           (: sz (br 'hsize 0) hb (br 'harbour <sz <>sz)
              (stage-of s) (: fc (vi-face s {'split split 'reg (hb 'clip)})
-                              sg (br 'berth-stage (fc 0) (fc 1) (fc 2))
+                              sg (br 'mitty-stage (fc 0) (fc 1) (fc 2))
                               (pin sg 'paste (fc 3), sg))
              (split d nm) (br 'hberth hb d 50 (br 'hopen-stage (stage-of (vi-open nm)) 1 1))
              (pin hb 'more (_ \ (br 'hopen-stage (stage-of (vi-open "")) 1 1)),
