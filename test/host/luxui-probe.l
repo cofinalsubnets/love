@@ -19,11 +19,11 @@
 
       ; --- lux is up when ewmh-init has stamped the root ---
       _ (waitp "wm-up" (u \ two? (x-getprop-atoms s root (x-intern s "_NET_SUPPORTED"))) 100)
-      ; --- the wm's name: awt takes an LG3D-prefixed wm as non-reparenting ---
+      ; --- the wm's name ---
       sup (x-getprop-atoms s root (x-intern s "_NET_SUPPORTING_WM_CHECK") @ c (two? c ? <c 0))
       _ (must "wm-name" (x-getprop s sup (x-intern s "_NET_WM_NAME") @ [8 n b]
                           (foldl (a \ c \ a + string c) "" b @ nm
-                             (snip nm 0 10 = "LG3D (lux " && snip nm (n - 1) n = ")"))))
+                             (snip nm 0 10 = "lux (love " && snip nm (n - 1) n = ")"))))
       ; --- the desktop's shape (ewmh 1.4): geometry is the root, a viewport and a workarea row
       ;     per desktop, and the names are the tags as NUL-terminated strings ---
       nd (x-getprop-atoms s root (x-intern s "_NET_NUMBER_OF_DESKTOPS") @ d (two? d ? <d 0))
@@ -62,6 +62,13 @@
         x-flush s)
       (getfocus u) (: _ (x-w8 s 43, x-w8 s 0, x-w16 s 1, x-flush s)
                       hdr (x-reply s) (u32 hdr 8))
+      ; a window's parent (QueryTree), and its geometry as the screen sees it: lux
+      ; frames what it manages, so that is the frame's rect, else the window's own
+      (parent w) (: _ (x-w8 s 15, x-w8 s 0, x-w16 s 2, x-w32 s w, x-flush s)
+                    hdr (x-reply s) _ (<hdr = 1 ? (x-rbytes s (u32 hdr 4 * 4)) 0)
+                    (<hdr = 1 ? (u32 hdr 12) 0))
+      (top w) (parent w @ p (p = root || p = 0 ? w p))                       ; the root's child that holds w
+      (rgeo w) (x-getgeom s (top w))
       ; our own toplevel: InputOutput off the connection's id base, white back
       (mkwin s2 wid rt) (x-w8 s2 1, x-w8 s2 0, x-w16 s2 9,
                            x-w32 s2 wid, x-w32 s2 rt,
@@ -78,20 +85,24 @@
       ; --- 1. manage: map -> lux tiles the lone window over the screen ---
       w1 (scr-idbase sc)
       _ (mkwin s w1 root)
-      _ (waitp "w1-tiled" (u \ 600 < x-getgeom s w1 2) 100)
+      _ (waitp "w1-tiled" (u \ 600 < rgeo w1 2) 100)
+      ; --- 1b. framed: w1 rides in a frame of its own size at (0 0), no extents ---
+      _ (must "framed" (parent w1 @ p (p != root && p != 0)))
+      _ (must "framed-at-origin" (x-getgeom s w1 @ g (rgeo w1 @ fg (<g = 0 && <>g = 0 && g 2 = fg 2 && g 3 = fg 3))))
+      _ (must "frame-extents" ('(0 0 0 0) = x-getprop-atoms s w1 (x-intern s "_NET_FRAME_EXTENTS")))
       _ (waitp "w1-focused" (u \ w1 = getfocus ()) 50)
 
       ; --- 2. maximize add/remove while tiled (a float's toggle is a no-op
       ;     by design: float-state is the proxy) -- the stamp goes on and off ---
       _ (cmsg w1 a-st 1 a-mv a-mh)
-      _ (waitp "maximized" (u \ x-getgeom s w1 @ g
+      _ (waitp "maximized" (u \ rgeo w1 @ g
                                    (0 = g 0 && 600 < g 2)) 50)
       _ (waitp "max-stamped" (u \ 2 = #(x-getprop-atoms s w1 a-st)) 50)
       _ (cmsg w1 a-st 0 a-mv a-mh)
       _ (waitp "unmax-stamped" (u \ !(x-getprop-atoms s w1 a-st)) 50)
 
       ; --- 3. super+btn1 drag: float + move, the delta lands exact ---
-      g0 (x-getgeom s w1)
+      g0 (rgeo w1)
       cx (g0 0 + g0 2 // 2) cy (g0 1 + g0 3 // 2)
       _ (fake 6 0 cx cy, rest 80,
          fake 2 sk 0 0, rest 80,
@@ -100,11 +111,11 @@
          fake 6 0 (cx + 75) (cy + 45), rest 100,
          fake 5 1 (cx + 75) (cy + 45), rest 100,
          fake 3 sk 0 0, rest 80)
-      _ (waitp "moved-exact" (u \ (x-getgeom s w1 @ g
+      _ (waitp "moved-exact" (u \ (rgeo w1 @ g
                                      (g 0 = g0 0 + 75 && g 1 = g0 1 + 45 && g 2 = g0 2))) 50)
 
       ; --- 4. super+btn3 drag: resize, the delta lands exact ---
-      g1 (x-getgeom s w1)
+      g1 (rgeo w1)
       rx (g1 0 + g1 2 // 2) ry (g1 1 + g1 3 // 2)
       _ (fake 6 0 rx ry, rest 80,
          fake 2 sk 0 0, rest 80,
@@ -112,7 +123,7 @@
          fake 6 0 (rx + 50) (ry + 30), rest 100,
          fake 5 3 (rx + 50) (ry + 30), rest 100,
          fake 3 sk 0 0, rest 80)
-      _ (waitp "resized-exact" (u \ (x-getgeom s w1 @ g
+      _ (waitp "resized-exact" (u \ (rgeo w1 @ g
                                      (g 2 = g1 2 + 50 && g 3 = g1 3 + 30))) 50)
       _ (waitp "float-focused" (u \ w1 = getfocus ()) 50)
 
@@ -125,7 +136,7 @@
       sc2 (x-setup s2 ())
       w2 (scr-idbase sc2)
       _ (mkwin s2 w2 root)
-      _ (waitp "w2-tiled" (u \ 300 < x-getgeom s w2 2) 100)           ; w1 floats, so w2 owns the tiling alone
+      _ (waitp "w2-tiled" (u \ 300 < rgeo w2 2) 100)           ; w1 floats, so w2 owns the tiling alone
       _ (cmsg w2 a-cl 0 0 0)
       s3 (connect ['unix dpy])
       sc3 (x-setup s3 ())
@@ -141,7 +152,7 @@
       a-fs (x-intern s "_NET_WM_STATE_FULLSCREEN")
       wt (w1 + 1)                                                                ; a tile under the pointer: a crossing focuses whatever
       _ (mkwin s wt root)                                                        ; it lands on, tile or float, by the same path
-      _ (waitp "wt-tiled" (u \ 600 < x-getgeom s wt 2) 100)
+      _ (waitp "wt-tiled" (u \ 600 < rgeo wt 2) 100)
       wv (w1 + 2)
       _ (x-w8 s 1, x-w8 s 0, x-w16 s 9,                               ; create (unmapped): white 300x200 toplevel
          x-w32 s wv, x-w32 s root,
@@ -157,7 +168,7 @@
                                                                                  ; off its near-fullscreen tiled rect, leaves only this strip):
                                                                                  ; the withdraw's crossing must land in the tile to render
       _ (mapv ())
-      _ (waitp "wv-fullscreen" (u \ 600 < x-getgeom s wv 2) 50)
+      _ (waitp "wv-fullscreen" (u \ 600 < rgeo wv 2) 50)
       (withdraw u) (x-unmap s wv,                                           ; the real unmap, then the courtesy synthetic to the root
                     x-w8 s 25, x-w8 s 0, x-w16 s 11, x-w32 s root, x-w32 s 1572864,
                     x-w8 s 18, x-w8 s 0, x-w16 s 0, x-w32 s root, x-w32 s wv,
@@ -167,8 +178,9 @@
       _ (waitp "wv-withdraw-unstamped" (u \ atom? (x-getprop-atoms s wv (x-intern s "WM_STATE"))) 50)
       _ (rest 300)                                                               ; let any resurrecting render land before the read
       _ (waitp "wv-withdraw-unmapped" (u \ 0 = mstv ()) 50)
+      _ (must "wv-unframed" (parent wv = root))                                    ; withdrawn: back on the root, its frame gone
       _ (mapv ())
-      _ (waitp "wv-reshow-fullscreen" (u \ 2 = mstv () && 600 < x-getgeom s wv 2 && two? (x-getprop-atoms s wv (x-intern s "WM_STATE"))) 50)
+      _ (waitp "wv-reshow-fullscreen" (u \ 2 = mstv () && 600 < rgeo wv 2 && two? (x-getprop-atoms s wv (x-intern s "WM_STATE"))) 50)
       _ (withdraw ())                                                            ; leave it withdrawn: the moor leg leans on nothing here
       _ (waitp "wv-rewithdraw" (u \ = 0 (mstv ())) 50)
 
@@ -215,7 +227,7 @@
       ;     every window on the view, float or tile), so the assert is that
       ;     the keyboard lands on a live client and not on the corpse, the
       ;     root, or PointerRoot ---
-      gf (x-getgeom s w1)
+      gf (rgeo w1)
       _ (fake 6 0 (gf 0 + gf 2 // 2) (gf 1 + gf 3 // 2), rest 100)
       _ (cmsg wt a-aw 0 0 0)                                                     ; activate the victim: two tiles, wt holds the focus
       _ (waitp "victim-focused" (u \ = wt (getfocus ())) 50)
@@ -260,7 +272,7 @@
       (mstf u) <(x-attrs s wf)
       (actw u) (x-getprop-atoms s root a-aw @ a (two? a ? <a -1))          ; _net_active_window: what a taskbar highlights
       _ (mkdlg wf)
-      _ (waitp "wf-floated" (u \ 200 = x-getgeom s wf 2) 100)                 ; a float keeps its own size; a tile would be stretched
+      _ (waitp "wf-floated" (u \ 200 = rgeo wf 2) 100)                 ; a float keeps its own size; a tile would be stretched
       _ (cmsg wf a-wd 1 0 0)                                                     ; send it to desktop 1, alone there
       _ (waitp "wf-emigrated" (u \ 0 = mstf ()) 50)
       _ (fake 6 0 5 5, rest 100)                                                 ; park the pointer off the centred float
@@ -370,14 +382,14 @@
       ;     screens, so the window lands in the middle rect; back again, the left ---
       w6 (w1 + 9)
       _ (mkwin s w6 root)
-      _ (waitp "screen-tiled" (u \ (x-getgeom s w6 @ g (g 0 + g 2 <= 213 && 50 < g 2))) 50)
+      _ (waitp "screen-tiled" (u \ (rgeo w6 @ g (g 0 + g 2 <= 213 && 50 < g 2))) 50)
       _ (fake 6 0 5 475, rest 80)                                                ; the pointer to the left screen: a crossing makes its screen current
       _ (cmsg root a-cd 1 0 0)
-      _ (waitp "screen-traded" (u \ (x-getgeom s w6 @ g (213 <= g 0 && g 0 + g 2 <= 426))) 50)
+      _ (waitp "screen-traded" (u \ (rgeo w6 @ g (213 <= g 0 && g 0 + g 2 <= 426))) 50)
       _ (waitp "screen-cur" (u \ "2" = ask "(wscur (cap (lux-st ())))") 50)              ; the crossing lands when it lands
       _ (waitp "screen-vis" (u \ "(2 1 3)" = ask "(wsvistags (cap (lux-st ())))") 50)
       _ (cmsg root a-cd 0 0 0)
-      _ (waitp "screen-back" (u \ (x-getgeom s w6 @ g (g 0 + g 2 <= 213))) 50)
+      _ (waitp "screen-back" (u \ (rgeo w6 @ g (g 0 + g 2 <= 213))) 50)
       _ (waitp "screen-vis-back" (u \ "(1 2 3)" = ask "(wsvistags (cap (lux-st ())))") 50)
 
       ; --- 6d2. a dock's strut reaches only the screens its span meets, and follows the
@@ -393,9 +405,9 @@
       _ (prop32 wd (x-intern s "_NET_WM_WINDOW_TYPE") 4 [(x-intern s "_NET_WM_WINDOW_TYPE_DOCK")])
       _ (prop32 wd a-sp 6 '(0 0 40 0 0 0 0 0 0 212 0 0))
       _ (x-map s wd, x-flush s)
-      _ (waitp "strut-left" (u \ (x-getgeom s w6 @ g (40 <= g 1 && g 1 + g 3 <= 480))) 50)
+      _ (waitp "strut-left" (u \ (rgeo w6 @ g (40 <= g 1 && g 1 + g 3 <= 480))) 50)
       _ (prop32 wd a-sp 6 '(0 0 40 0 0 0 0 0 426 639 0 0))
-      _ (waitp "strut-moved" (u \ (x-getgeom s w6 @ g (g 1 < 40 && 440 < g 3))) 50)
+      _ (waitp "strut-moved" (u \ (rgeo w6 @ g (g 1 < 40 && 440 < g 3))) 50)
       _ (x-w8 s 4, x-w8 s 0, x-w16 s 2, x-w32 s wd, x-flush s)                             ; DestroyWindow: the dock goes
 
       ; --- 6e. the screen keys, on the third screen so the leg also proves n=2: mod+r
@@ -415,13 +427,13 @@
       _ (press 0 rk)
       _ (waitp "key-screen-2" (u \ "3" = curtag ()) 50)
       _ (must "key-warped" (426 <= ptrx ()))
-      g6 (x-getgeom s w6)
+      g6 (rgeo w6)
       _ (fake 6 0 (g6 0 + g6 2 // 2) (g6 1 + g6 3 // 2), rest 100)              ; the pointer onto w6: its screen is current again, nothing trades
       _ (waitp "key-cross-back" (u \ "1" = curtag () && show w6 = ask "(wsfoc (cap (lux-st ())))") 50)
       _ (must "key-cross-no-trade" ("(1 2 3)" = ask "(wsvistags (cap (lux-st ())))"))
       _ (press 1 rk)
       _ (waitp "key-sent" (u \ "3" = ask ("(wstagof (cap (lux-st ())) " + show w6 + ")")) 50)
-      _ (waitp "key-sent-painted" (u \ 426 <= x-getgeom s w6 0) 50)
+      _ (waitp "key-sent-painted" (u \ 426 <= rgeo w6 0) 50)
       _ (must "key-sent-stays" ("1" = curtag ()))
       _ (x-w8 s 4, x-w8 s 0, x-w16 s 2, x-w32 s w6, x-flush s)                 ; DestroyWindow: lux evicts it
       _ (waitp "screen-window-gone" (u \ "0" = ask ("(wsknownw? (cap (lux-st ())) " + show w6 + ")")) 50)
@@ -434,7 +446,7 @@
       w7 (w1 + 10)
       _ (mkwin s w7 root)
       _ (waitp "lands-on-pointer-screen" (u \ "3" = ask ("(wstagof (cap (lux-st ())) " + show w7 + ")")) 50)
-      _ (waitp "lands-painted-there" (u \ 426 <= x-getgeom s w7 0) 50)
+      _ (waitp "lands-painted-there" (u \ 426 <= rgeo w7 0) 50)
       _ (must "lands-current" ("3" = curtag ()))
 
       ; --- 6g. a float's home follows its screen: w7 floated near the right screen's
@@ -451,13 +463,13 @@
       _ (fake 6 0 320 240, rest 100)
       _ (mkwin s w8 root)                                                        ; the middle: w8 tiles tag 2
       _ (waitp "w8-on-mid" (u \ "2" = ask ("(wstagof (cap (lux-st ())) " + show w8 + ")")) 50)
-      _ (waitp "w8-painted" (u \ 213 <= x-getgeom s w8 0) 50)
+      _ (waitp "w8-painted" (u \ 213 <= rgeo w8 0) 50)
       _ (ask ("(float! " + show w7 + " '(427 10 200 150))"))                     ; centre 527: still screen 2's
       _ (nudge ())
       _ (waitp "float-on-right" (u \ "3" = ask ("(wstagof (cap (lux-st ())) " + show w7 + ")")) 50)
       _ (fake 6 0 600 100, rest 100)                                             ; the pointer onto w7's body: focused, tag 3 current
       _ (waitp "float-focused-under-pointer" (u \ show w7 = ask "(wsfoc (cap (lux-st ())))" && "3" = curtag ()) 50)
-      (above? lo hi) (x-querytree s root @ [1 t] (: (go l) (? !(two? l) 0 (<l = lo) (any (= hi) >l) (go >l)) (go t)) 0)
+      (above? lo hi) (x-querytree s root @ [1 t] (: (go l) (? !(two? l) 0 (<l = top lo) (any (= top hi) >l) (go >l)) (go t)) 0)
       _ (must "float-above-right-tile" (above? w9 w7))
       _ (press 0 lk, press 0 lk)                                                 ; x 387: the body leaves the pointer, which lands on w9
       _ (rest 200)
@@ -470,10 +482,10 @@
       _ (waitp "float-rehomed" (u \ "2" = ask ("(wstagof (cap (lux-st ())) " + show w7 + ")")) 50)
       _ (must "float-rehome-focus" (show w7 = ask "(wsfoc (cap (lux-st ())))"))
       _ (must "float-rehome-current" ("2" = curtag ()))
-      _ (must "float-rehome-painted" (307 = x-getgeom s w7 0))
+      _ (must "float-rehome-painted" (307 = rgeo w7 0))
       _ (must "float-above-mid-tile" (above? w8 w7))                             ; over w8 now, and on top of it
       _ (press 0 lk)                                                             ; one more on the new screen: still the float that moves
-      _ (waitp "float-moves-on" (u \ 287 = x-getgeom s w7 0) 50)
+      _ (waitp "float-moves-on" (u \ 287 = rgeo w7 0) 50)
       _ (must "float-still-above" (above? w8 w7))
       _ (map (w \ (x-w8 s 4, x-w8 s 0, x-w16 s 2, x-w32 s w, x-flush s)) [w7 w8 w9])   ; DestroyWindow
       _ (waitp "w7-gone" (u \ "0" = ask ("(wsknownw? (cap (lux-st ())) " + show w7 + ")")) 50)
