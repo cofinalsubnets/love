@@ -375,6 +375,24 @@
       _ (waitp "screen-back" (u \ (x-getgeom s w6 @ g (g 0 + g 2 <= 213))) 50)
       _ (waitp "screen-vis-back" (u \ "(1 2 3)" = ask "(wsvistags (cap (lux-st ())))") 50)
 
+      ; --- 6d2. a dock's strut reaches only the screens its span meets, and follows the
+      ;     dock when it rewrites the strut in place (a panel changing outputs never
+      ;     remaps): a top-40 strut over the left screen, then moved to the right one ---
+      wd (w1 + 20)
+      (prop32 w a ty vals) (x-w8 s 18, x-w8 s 0, x-w16 s (6 + #vals), x-w32 s w, x-w32 s a,   ; ChangeProperty Replace, format 32
+                            x-w32 s ty, x-w8 s 32, x-w8 s 0, x-w16 s 0, x-w32 s #vals,
+                            map (x-w32 s) vals, x-flush s)
+      a-sp (x-intern s "_NET_WM_STRUT_PARTIAL")
+      _ (x-w8 s 1, x-w8 s 0, x-w16 s 8, x-w32 s wd, x-w32 s root,                        ; CreateWindow 213x40 at the top, no values
+         x-w16 s 0, x-w16 s 0, x-w16 s 213, x-w16 s 40, x-w16 s 0, x-w16 s 1, x-w32 s 0, x-w32 s 0, x-flush s)
+      _ (prop32 wd (x-intern s "_NET_WM_WINDOW_TYPE") 4 [(x-intern s "_NET_WM_WINDOW_TYPE_DOCK")])
+      _ (prop32 wd a-sp 6 '(0 0 40 0 0 0 0 0 0 212 0 0))
+      _ (x-map s wd, x-flush s)
+      _ (waitp "strut-left" (u \ (x-getgeom s w6 @ g (40 <= g 1 && g 1 + g 3 <= 480))) 50)
+      _ (prop32 wd a-sp 6 '(0 0 40 0 0 0 0 0 426 639 0 0))
+      _ (waitp "strut-moved" (u \ (x-getgeom s w6 @ g (g 1 < 40 && 440 < g 3))) 50)
+      _ (x-w8 s 4, x-w8 s 0, x-w16 s 2, x-w32 s wd, x-flush s)                             ; DestroyWindow: the dock goes
+
       ; --- 6e. the screen keys, on the third screen so the leg also proves n=2: mod+r
       ;     focuses screen 2 (tag 3) and warps the pointer onto it; a crossing back
       ;     onto w6 makes the left screen current without a trade; mod+shift+r sends
