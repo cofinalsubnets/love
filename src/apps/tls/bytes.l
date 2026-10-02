@@ -26,9 +26,7 @@
 
    ; an n-byte string, byte i being (f i). the one constructor everything uses.
    (bytes n f)
-    (: b (cask n)
-       (go i) (n <= i ? (string b) (pin b i (f i), go (i + 1)))
-       (go 0))
+    (: b (cask n) (each ^n (i \ pin b i (f i)), string b))
 
    ; lowercase hex, and back. the tests speak hex because the RFCs do.
    (hex s) (b2hex s)

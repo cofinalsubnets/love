@@ -120,8 +120,7 @@
        n #msg
        nfull (n // 16)
        rem (n - nfull * 16)
-       (go i h) (nfull <= i ? h (go (i + 1) (po-mul (po-absorb h msg (i * 16) hib) r)))
-       hf (go 0 [0 0 0 0 0])
+       hf (foldl (\ h i (po-mul (po-absorb h msg (i * 16) hib) r)) [0 0 0 0 0] ^nfull)
        ; the short final block is padded into sixteen with its 0x01 in place, so
        ; the same absorb serves -- with no high bit, since the 1 is already inside.
        ht (rem < 1 ? hf
