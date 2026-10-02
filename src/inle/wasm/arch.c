@@ -36,9 +36,15 @@ extern long __ai_sys(long n, long a, long b, long c, long d, long e, long f);
 void archinit(void) { }
 void serial_init(void) { }
 
+// the serial line goes to the worker a line or a buffer at a time, never a byte: each
+// hypercall is a decode and a crossing, and a screenful of escapes is tens of thousands
+// of bytes. what is held goes out before any sleep or reset, so nothing waits on it
+static struct { unsigned char b[2048]; unsigned n; } ser;   // the arch's one held line
+static void serial_drain(void) {
+  if (ser.n) __ai_sys(hc_write, 1, (long) ser.b, ser.n, 0, 0, 0), ser.n = 0; }
 void serial_putc(int c) {
-  unsigned char b = (unsigned char) c;
-  __ai_sys(hc_write, 1, (long) &b, 1, 0, 0, 0); }
+  ser.b[ser.n++] = (unsigned char) c;
+  if (c == '\n' || ser.n == sizeof ser.b) serial_drain(); }
 
 // the two clocks the worker keeps: 0 the wall, 1 monotonic since the page loaded
 static uint64_t clock_ms(long which) {
@@ -102,6 +108,7 @@ void k_scan_sync(void) {
 // away; the worker skips the sleep while its ring holds more
 void k_idle(void) {
   long ts[2] = { 0, 10 * 1000000 };
+  serial_drain();
   __ai_sys(hc_nanosleep, (long) ts, 0, 0, 0, 0, 0);
   k_kb_poll();
   // the codes go out whether or not a game armed the tap, and the worker holds its sleep
@@ -114,6 +121,7 @@ void k_idle(void) {
 // a sleep under the tick, exact: kmain's k_sleep asks before it rounds to ticks
 bool k_nap(uintptr_t ms) {
   long ts[2] = { 0, (long) ms * 1000000 };
+  serial_drain();
   __ai_sys(hc_nanosleep, (long) ts, 0, 0, 0, 0, 0);
   k_kb_poll();
   k_tick_sync();
@@ -142,7 +150,7 @@ long k_fetch(char const *url, uintptr_t un, char const *path, uintptr_t pn) {
   return r; }
 
 // the reset: the worker unwinds the module and boots it again
-void k_reset(void) { for (;;) __ai_sys(hc_reboot, 0, 0, 0, 0, 0, 0); }
+void k_reset(void) { serial_drain(); for (;;) __ai_sys(hc_reboot, 0, 0, 0, 0, 0, 0); }
 // ..and into another module: the path and the boot line go into the lift slot, and the
 // worker reads the file at the reset the way it lifts one, then boots those bytes
 long k_kexec(char const *p, uintptr_t pn, char const *cmd, uintptr_t cn) {
