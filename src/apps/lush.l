@@ -1651,7 +1651,7 @@
    ; reset form: `trap INT` is `trap - INT`. sh-cond normalises before anything is stored.
    (sh-cond w)
      (: u (sh-upper w)
-        v (? (#u > 3 && snip u 0 3 = "SIG") (snip u 3 #u) u)
+        v (u @ ("SIG" + (s && 0 < #s)) s u)
         (? (v = "0") "EXIT" v))
    (sh-upper s)                                 ; an index walk: foldl does not take a string
      ((: (g i acc)
@@ -1757,7 +1757,7 @@
    ; the three that act on this process or its tables, which is what makes a builtin:
    ; kill knows the jobs, umask sets the shell's own mask, getopts writes its variables
    (sh-sigof s)                                 ; TERM, SIGTERM or 15 -> 15; () for none
-     (: b (3 < #s && snip s 0 3 = "SIG" ? (snip s 3 #s) s)
+     (: b (s @ ("SIG" + (n && 0 < #n)) n s)
         (sh-digits? b ? (sh-int b) (sh-signum b @ 0 () n n)))
    ; kill [-s SIG | -SIG | -N] PID|%JOB..: a job is its group when it leads one, else
    ; each pid of it; a negative pid wants the -- that keeps it from reading as a signal.

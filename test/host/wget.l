@@ -96,7 +96,7 @@
                       rc (test-until (\ r (r = 1)) (\ _ (W (as + ["-q" "-O" o ("https://127.0.0.1:" + show port + "/")]))))
                       _ (reap p)
                       [rc (: r (uread o) (? (two? r) <>r ""))])
-   (has s x) (0 <= (cite 'kore 'wg-find) s x 0)
+   (has s x) (0 <= fsub s x 0)
    _ (? os?
         (: _ (setenv "SSL_CERT_FILE" (odir + "/root.pem"))
            a (fetch (test-free 0) [])

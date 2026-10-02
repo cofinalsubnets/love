@@ -21,9 +21,9 @@
    (hues-skip s i)  (hues-run s i hues-bl?)
    (hues-idend s i) (hues-run s i hues-idc?)
    (hues-cssend s i) (hues-run s i (c \ hues-idc? c || c = 45))
-   (hues-nmend s i) (hues-run s i (c \ hues-idc? c || hue-has? "-:." c))
+   (hues-nmend s i) (hues-run s i (c \ hues-idc? c || elem c "-:."))
    (hues-mkw s i)   (hues-run s i (c \ hues-alf? c || c = 45))
-   (hues-wend s i)  (hues-run s i (c \ 32 < c && !(hue-has? ";|&()<>`'\"$\\" c)))
+   (hues-wend s i)  (hues-run s i (c \ 32 < c && !(elem c ";|&()<>`'\"$\\")))
    (hues-find s i t) (: n #s (go j) (? (n <= j) n (hue-at? s j t) j (go (j + 1))) (go i))
    (hues-ati? s i t)                                   ; t in lower case
     (: n #s m #t
@@ -47,7 +47,7 @@
        (go j) (n <= j ? j
                  (s j @ c
                     (? (hues-idc? c || c = 46) (go (j + 1))
-                       ((c = 43 || c = 45) && !hex && hue-has? "eEpP" (s (j - 1))) (go (j + 1))
+                       ((c = 43 || c = 45) && !hex && elem (s (j - 1)) "eEpP") (go (j + 1))
                        j)))
        (go (i + 1)))
    (hues-kws rows) (foldl (b \ r \ foldl (b2 \ w \ pin b2 w <r) b (words <>r)) (tablet ()) rows)
@@ -76,7 +76,7 @@
    ; a / at i opens a regex when no operand stands before it
    (hues-rx? s i)
     ((: (go j) (? (j < 0) j (hues-bl? (s j)) (go (j - 1)) j) (go (i - 1))) @ p
-       (p < 0 || hue-has? "(,=~!&|{};:?[" (s p)))
+       (p < 0 || elem (s p) "(,=~!&|{};:?["))
 
    (hues-cl sp s in keep)
     (: n #s kw (sp 'kw) qs (sp 'q) ln (sp 'ln)
@@ -105,8 +105,8 @@
                  (c = 47 && sp 'rx && hues-rx? s i)
                   (: j (hues-qend s (i + 1) 47 92) e (j ? j n) (w e (emit acc 'string i e)))
                  (c = 35 && sp 'cpp && i = lead) (pre i acc)
-                 (c = 96 && hue-has? qs c) (tq (i + 1) i acc)
-                 (hue-has? qs c) (: j (hues-qend s (i + 1) c 92) e (j ? j n) (w e (emit acc 'string i e)))
+                 (c = 96 && elem c qs) (tq (i + 1) i acc)
+                 (elem c qs) (: j (hues-qend s (i + 1) c 92) e (j ? j n) (w e (emit acc 'string i e)))
                  (hues-dig? c || c = 46 && hues-dig? d) (hues-numend s i @ j (w j (emit acc 'number i j)))
                  (hues-alf? c) (: j (hues-idend s i) k (kw (snip s i j)) (w j (nom? k ? (emit acc k i j) acc)))
                  (w (i + 1) acc))))
@@ -123,7 +123,7 @@
        (cm i a acc m)
         (hues-find s i "*/" @ j
          (n <= j ? [(rev (emit acc 'comment a n)) (m + 1)] (w (j + 2) (emit acc 'comment a (j + 2)) m)))
-       (segend i) (n <= i || hue-has? "{;}" (s i) ? i (segend (i + 1)))
+       (segend i) (n <= i || elem (s i) "{;}" ? i (segend (i + 1)))
        (start i acc)
         (: j (hues-cssend s i) k (hues-skip s j) e (segend i)
            (i < j && k < n && s k = 58 && !(e < n && s e = 123) ?
@@ -150,7 +150,7 @@
                  (hue-at? s i "/*") (cm (i + 2) i acc (m @ 2 2 0))
                  (c = 34 || c = 39)
                   (: j (hues-qend s (i + 1) c 92) e (j ? j n) (w e (emit acc 'string i e) m))
-                 (hue-has? "{;}" c) (w (i + 1) acc 0)
+                 (elem c "{;}") (w (i + 1) acc 0)
                  (m = 0) (start i acc)
                  (c = 64) (hues-cssend s (i + 1) @ j (w j (emit acc 'pre i j) m))
                  (m = 1) (sel i c acc)
@@ -216,7 +216,7 @@
    (hues-shx mk s in keep)
     (: n #s
        (emit acc k a b) (keep && a < b ? ([k a b] . acc) acc)
-       (brk? c) (hue-has? " \t;|&()<>`" c)
+       (brk? c) (elem c " \t;|&()<>`")
        (wstart? i) (i < 1 || brk? (s (i - 1)))
        (out hd) (string? hd ? hd 0)
        (dol i)                                         ; s i is $: past the parameter, or i
@@ -225,7 +225,7 @@
               (c = 40) (mk ? (hues-close s j) (j + 1))
               (hues-alf? c) (hues-idend s j)
               (mk && c = 36 && j + 1 < n && hues-alf? (s (j + 1))) (hues-idend s (j + 1))  ; $$x, the shell's
-              (hue-has? (mk ? "0123456789?@#$!*-<^+%|" "0123456789?@#$!*-") c) (j + 1)
+              (elem c (mk ? "0123456789?@#$!*-<^+%|" "0123456789?@#$!*-")) (j + 1)
               i))
        (sq i a acc hd)
         (hues-find s i "'" @ j
@@ -240,9 +240,9 @@
        (here i acc hd)                                 ; <<[-]['"]word
         (: d (hue-at? s i "<<-" ? 3 2)
            j (hues-skip s (i + d))
-           q (j < n && hue-has? "'\"\\" (s j) ? 1 0)
+           q (j < n && elem (s j) "'\"\\" ? 1 0)
            e (hues-wend s (j + q))
-           f (0 < q && e < n && hue-has? "'\"" (s e) ? (e + 1) e)
+           f (0 < q && e < n && elem (s e) "'\"" ? (e + 1) e)
            (j + q < e ? (w f (emit acc 'pre i f) (snip s (j + q) e)) (w (i + d) acc hd)))
        (w i acc hd)
         (n <= i ? [(rev acc) (out hd)]
@@ -271,9 +271,9 @@
    ; a tab-led line is a recipe and reads as sh. otherwise the head decides: a
    ; directive, a NAME = of any flavour, or the targets before a rule's colon
    hues-mkdirs (words "include -include sinclude ifeq ifneq ifdef ifndef else endif define endef export unexport override undefine vpath private")
-   (hues-mkref s i) (i + 1 @ j (? (#s <= j) j (hue-has? "({" (s j)) (hues-close s j) (j + 1)))
+   (hues-mkref s i) (i + 1 @ j (? (#s <= j) j (elem (s j) "({") (hues-close s j) (j + 1)))
    (hues-assign s i)                                   ; the name's end, or ()
-    (: j (hues-run s i (\ c !(hue-has? " \t:=?+!#" c))) k (hues-skip s j)
+    (: j (hues-run s i (\ c !(elem c " \t:=?+!#"))) k (hues-skip s j)
        (? ((i < j) && any (hue-at? s k) '("=" ":=" "::=" "?=" "+=" "!=")) j ()))
    (hues-colon s i)                                    ; a rule's colon, or ()
     (: n #s
@@ -329,8 +329,8 @@
        k (? (n < 1) ()
             (any (hue-at? s 0) hues-dhead) 'type
             (hue-at? s 0 "@@") ()
-            (hue-has? "+>" (s 0)) 'added
-            (hue-has? "-<" (s 0)) 'removed
+            (elem (s 0) "+>") 'added
+            (elem (s 0) "-<") 'removed
             (s 0 = 92) 'comment)
        e (hue-at? s 0 "@@" ? (hues-find s 2 "@@" @ j (j < n ? (j + 2) n)) 0)
        [(? !keep () (0 < e) [['ent 0 e]] (nom? k) [[k 0 n]] ()) 0])
@@ -341,10 +341,10 @@
     (: n #s c (i + 1 < n ? (s (i + 1)) 0) d (i + 2) a (d < n ? (s d) 0)
        e (? (c = 40) (i + 4)
             (c = 91) (hues-find s d "]" @ k (k < n ? (k + 1) n))
-            (hue-has? "fFsnk*$gmM" c)
+            (elem c "fFsnk*$gmM")
              (? (a = 40) (d + 3)
                 (a = 91) (hues-find s d "]" @ k (k < n ? (k + 1) n))
-                (c = 115 && hue-has? "+-" a) (d + 2)
+                (c = 115 && elem a "+-") (d + 2)
                 (d + 1))
             d)
        (n < e ? n e))
@@ -359,7 +359,7 @@
                  (q && c = 34) (: k (hues-find s (i + 1) "\"") e (k < n ? (k + 1) n)
                                 (w e (emit acc 'string i e) q))
                  (w (i + 1) acc q))))
-       (0 < n && hue-has? ".'" (s 0) ?
+       (0 < n && elem (s 0) ".'" ?
            (: j (hues-skip s 1) e (hues-run s j (c \ 32 < c && c != 92))
               (hue-at? s j "\\\"" ? [(rev (emit () 'comment 0 n)) 0]
                  (w e (emit () 'keyword 0 e) 1)))
@@ -379,10 +379,10 @@
    (hues-reg? t)
     (: n #t
        (tail k) (hues-run t k hues-dig? @ j
-                   (k < j && (j = n || j + 1 = n && t 0 = 114 && hue-has? "dwb" (t j))))
+                   (k < j && (j = n || j + 1 = n && t 0 = 114 && elem (t j) "dwb")))
        (? (n < 2) ()
           (any (p \ hue-at? t 0 p && tail #p) '("xmm" "ymm" "zmm" "cr" "dr" "st")) 1
-          (hue-has? "rxwvqdsbhatfk" (t 0)) (tail 1)
+          (elem (t 0) "rxwvqdsbhatfk") (tail 1)
           ()))
    (hues-asm s in keep)
     (: n #s
@@ -480,11 +480,11 @@
                  (inl (i + 1) acc))))
        ; a list marker, - * + or 1. 1) then a blank: its end, or ()
        (item i) (: c (i < n ? (s i) 0) j (hues-run s i hues-dig?)
-                   e (? (hue-has? "-*+" c) (i + 1)
-                        (i < j && j < n && hue-has? ".)" (s j)) (j + 1))
+                   e (? (elem c "-*+") (i + 1)
+                        (i < j && j < n && elem (s j) ".)") (j + 1))
                    (e && (n <= e || hues-bl? (s e)) ? e))
        (rule? i) ((i < n ? (s i) 0) @ c            ; --- === *** ___, blanks between
-                    (hue-has? "-=*_" c && hues-run s i (x \ x = c || hues-bl? x) = n
+                    (elem c "-=*_" && hues-run s i (x \ x = c || hues-bl? x) = n
                      && 2 < #(filter (k \ s k = c) ^n)))
        (open x)
         (: f (fence lead) hs (hues-run s lead (= 35)) it (item lead)

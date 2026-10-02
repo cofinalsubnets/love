@@ -47,7 +47,7 @@
    (k-slurp p) (open p "r" @ q (port? q ? (slurp q @ t (close q, t))))
    (k-run-text t) (as \ ((: (go cl) (sound cl @ r (two? r ? (ev <r, go >r) 0))) t))
    (k-tool nm as) (elem nm (names ()) ? (ev nm . as))
-   ; the crew load reads the roster's files off /proc/src, each file's own (module ..) form
+   ; the crew load reads the roster's files off /love, each file's own (module ..) form
    ; registering it. it hangs off the registry's miss (verbs' fills): lush answers "not found"
    ; from its own lookup, so a retry at the spawn never runs. `source` says the load is done.
    (cwords s i j acc)
@@ -55,7 +55,7 @@
                                          (cwords s (j + 1) (j + 1) acc))
                                   (cwords s i (j + 1) acc))
                (i < j ? (rev (snip s i j . acc)) (rev acc)))
-   (cload p) (open ("/proc/src/" + p) "r" @ q
+   (cload p) (open ("/love/" + p) "r" @ q
                (port? q ? (: t (slurp q) _ (close q)
                              (go cl) (sound cl @ r (two? r ? (ev <r, go >r) 0))
                              (go t))
@@ -84,8 +84,8 @@
                                (two? (stat a0)) (k-progf a0 as h)
                                ; a path the seat has not got is looked for on the tarball, so
                                ; `love test/kernel/all.l` names the corpus from any seat
-                               (!(47 = peep a0 0 0) && two? (stat ("/proc/src/" + a0)))
-                                 (k-progf ("/proc/src/" + a0) as h)
+                               (!(47 = peep a0 0 0) && two? (stat ("/love/" + a0)))
+                                 (k-progf ("/love/" + a0) as h)
                                ()))))
    (k-progf a0 as h) (: t (k-slurp a0)
                         g (0 < h ? (k-bangv t a0 as))

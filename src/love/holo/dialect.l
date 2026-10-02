@@ -360,8 +360,7 @@
       (: k (xa-cut l)
          sz (k < 0 ? 0 (xa-ptrsz (snip l 0 k)))
          r  (sz = 0 ? "" (xa-trim (snip l k #l)))
-         (sz > 0 && starts? r "ptr" ? (sz . (xa-trim (snip r 3 #r)))
-            (0 . l)))
+         (r @ ("ptr" + (q && sz > 0)) (sz . (xa-trim q)) (0 . l)))
    (in-term t) (: i (xa-idx t 42)                ; one bracket term -> (ix enc sc) (rg enc) (n v) (sym s) (rip)
       (? (t = "rip") ['rip]
          (i >= 0) (: a (snip t 0 i) b (snip t (i + 1) #t)

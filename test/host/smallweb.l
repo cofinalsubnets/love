@@ -14,7 +14,7 @@
    _ (hark ["rm" "-rf" dir]) _ (mkdir dir 448)
    home0 (getenv "HOME")
    _ (setenv "HOME" dir)
-   (has? t s) (0 <= (K 'wg-find) t s 0)
+   (has? t s) (0 <= fsub t s 0)
    (waitfor pid) (: s (gather pid) (? (two? s) s (nom? s) s (rest 2, waitfor pid)))
    (put p s) (: q (open p "w") _ (say q s) (close q))
    ; www on a pipe, where it pours the page and its references (on a pty it would wait for
