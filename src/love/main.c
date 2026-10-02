@@ -450,12 +450,22 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake, char const *ba
 
   g = ai_evals_(g,
     "(: spawn0 spawn  spawnio0 spawnio  spawnmap0 spawnmap  wait0 wait"
-    "   seat-doors (: t (tablet 4) _ (pin t 0 spawn0) _ (pin t 1 spawnio0)"
-    "                 _ (pin t 2 spawnmap0) _ (pin t 3 wait0) t)"
+    "   tether0 tether  still0 still  tty0 tty  settty0 settty  raw0 raw  ttyfg0 ttyfg  ttypg0 ttypg"
+    "   seat-doors (: t (tablet 11) _ (pin t 0 spawn0) _ (pin t 1 spawnio0)"
+    "                 _ (pin t 2 spawnmap0) _ (pin t 3 wait0)"
+    "                 _ (pin t 4 tether0) _ (pin t 5 still0) _ (pin t 6 tty0) _ (pin t 7 settty0)"
+    "                 _ (pin t 8 raw0) _ (pin t 9 ttyfg0) _ (pin t 10 ttypg0) t)"
     "   (spawn argv) (peep seat-doors 0 0 argv)"
     "   (spawnio argv i o e cl pg fg) (peep seat-doors 1 0 argv i o e cl pg fg)"
     "   (spawnmap argv fdm cl pg fg) (peep seat-doors 2 0 argv fdm cl pg fg)"
-    "   (wait p) (peep seat-doors 3 0 p))");
+    "   (wait p) (peep seat-doors 3 0 p)"
+    "   (tether argv) (peep seat-doors 4 0 argv)"
+    "   (still p sig) (peep seat-doors 5 0 p sig)"
+    "   (tty fd) (peep seat-doors 6 0 fd)"
+    "   (settty fd r c) (peep seat-doors 7 0 fd r c)"
+    "   (raw on) (peep seat-doors 8 0 on)"
+    "   (ttyfg pg) (peep seat-doors 9 0 pg)"
+    "   (ttypg fd) (peep seat-doors 10 0 fd))");
 
   // FIXME why are we pulling from book here, that's what mop is for
   g = ai_evals_(g, bake

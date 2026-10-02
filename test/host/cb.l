@@ -225,7 +225,9 @@
  _ (scribe s "\e[23;25;28;29mt")
  _ (test (8 = cface s 10))                       ; ..each with its own off
  _ (scribe s "\e[1;22mu")
- _ (test (0 = cface s 11)))                      ; 22 ends bold and dim both
+ _ (test (0 = cface s 11))                       ; 22 ends bold and dim both
+ _ (scribe s "\e[38;2;10;20;30;48;2;40;50;60m▀")    ; two rgb pens in one SGR: ten parameters
+ _ (test ([10 20 30] = cfg s 12) ([40 50 60] = cbg s 12)))
 
 ; --- 12. save/restore (ESC 7/8 and CSI s/u carry cursor + pen) ---
 (: s (mkscr 4 10)

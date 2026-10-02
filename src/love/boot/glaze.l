@@ -2498,3 +2498,16 @@
            (last l) (? (two? (cup l)) (last (cup l)) (cap l))
            (ldel x l) (? (two? l) (? (= (cap l) x) (cup l) (. (cap l) (ldel x (cup l)))))))
    0)
+; jot's counted twins again under the live natjit, verbatim from prel, and each walker keyed to
+; its twin (prel's jotfuse): the ones re-declared above, by their new values; jotin's rev too
+(0 < love-tco ?
+   (: jf (cite 'guts 'jotfuse)
+      tw (ev '(: (foldn f z x) (? (two? x) (foldl f z (jot x)) (: n (saturate x) (go i a) (? (< i n) (go (+ i 1) (f a i)) a) (go 0 z)))
+                 (foldrn f z x) (? (two? x) (foldr f z (jot x)) (: n (saturate x) (go i) (? (< i n) (f i (go (+ i 1))) z) (go 0)))
+                 (eachn x f) (? (two? x) (each (jot x) f) (: n (saturate x) (go i) (? (< i n) (: _ (f i) (go (+ i 1)))) (go 0)))
+                 (mapn f x) (? (two? x) (map f (jot x)) (: n (saturate x) (go i a) (? (< i n) (go (+ i 1) (. (f i) a)) (rev a)) (go 0 ())))
+                 (list foldn foldrn eachn mapn)))
+      (each [['foldl foldl 0] ['foldr foldr 1] ['each each 2] ['map map 3]]
+            ([nm w i] \ (jf nm @ e (pin jf nm [<e (e 1) (tw i)], pin jf w (jf nm)))),
+       (jf 'ops @ o (pin jf 'ops (take 5 o + [rev] + drop 6 o)))))
+   0)
