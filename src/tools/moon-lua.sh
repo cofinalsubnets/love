@@ -1,7 +1,7 @@
 #!/bin/sh
 # moon-lua.sh -- build Lua 5.4 with mooncc + moonlibc + the holo linker (no
 # gcc/glibc/ld) and prove it runs: a battery over closures, strings, tables, the
-# math floor (am.c under the libc faces), integer/bitwise ops, pcall + coroutines
+# math floor (lm.c under the libc faces), integer/bitwise ops, pcall + coroutines
 # (setjmp/longjmp through sys.o's leaves), metatables, gc, os time/date, io, and load.
 # every package source compiles unpatched.
 #
@@ -70,7 +70,7 @@ for f in "$LUASRC"/src/*.c; do
   objs="$objs $d/$b.o"
 done
 
-# the rung-4 libc floor: am math + the syscall leaf (mksys lays sys.o). NO moonlibc
+# the rung-4 libc floor: lm math + the syscall leaf (mksys lays sys.o). NO moonlibc
 # object -- the link owes its symbols and the driver's runtime table pulls
 # src/apps/moon/lib/moonlibc/ MEMBER BY NEED (the Makefile says the same of love itself).
 # Naming an object would take every member instead.

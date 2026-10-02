@@ -58,7 +58,7 @@ for l in $LANES; do
             $(ls "$W"/mooncc/*.o | grep -vE '/(love|moonlibc|sys|m_[a-z0-9]+)\.o$') > "$TD/own.$l"
   else
     od=$W/o-love-$l
-    objsyms "$od/love.o" "$od/am.o" "$od"/host/*.o > "$TD/own.$l"
+    objsyms "$od/love.o" "$od/lm.o" "$od"/host/*.o > "$TD/own.$l"
   fi
 done
 

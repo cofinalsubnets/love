@@ -4,7 +4,7 @@
 ; our static linker (src/love/holo/link.l) with crt0 and the runtime, into -o's exe or a.out.
 ; our headers are the only standard set: no /usr/include tail, so a header we do not carry is
 ; refused. advisory gcc flags (-W -O -g -std= -f -pipe -static) are ignored, save -fno-inline,
-; which bars every splice. a link owing libc symbols pulls moonlibc + am math + sys by need;
+; which bars every splice. a link owing libc symbols pulls moonlibc + lm math + sys by need;
 ; -nostdlib/-ffreestanding turn that off. errors exit 1, usage 2. moon-main is the program's
 ; tail seat; moon-run is the same compile answering its status, for a caller in the image.
 (module 'moon
@@ -522,10 +522,10 @@
               (call main)
               (li r7 94) (sys))
    ; the driver's libc: a link still owing strong symbols after the given objects is the cue
-   ; every cc answers by supplying the runtime -- ours is moonlibc + the am math + the sys
+   ; every cc answers by supplying the runtime -- ours is moonlibc + the lm math + the sys
    ; leaf, compiled from the sources beside us and pulled member by need, archive-fashion: a
    ; member whose every def the link already carries stays out, so a set bringing its own
-   ; am.o (love0's does) never meets a twin. the lane engages exactly where a nom is owed;
+   ; lm.o (love0's does) never meets a twin. the lane engages exactly where a nom is owed;
    ; the -nostdlib family leaves it off whole. the sources come from the toolchain root
    ; (mhome above).
    ; the link came up short: noms that no input object defines and that no runtime member

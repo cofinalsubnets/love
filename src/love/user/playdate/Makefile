@@ -55,7 +55,7 @@ mc_ld_alt = -t thumb2sp -Ttext 0x100000 -nostdlib --emit-relocs
 lib_hs = $(patsubst %,$(R)/out/lib/%.h,egg prel ev post rune)
 pd_h = $(love_h) $(wildcard $(S)/love/quay/*.h) $(o)/cas.h $(lib_hs)
 
-# the split: mooncc carries src/love/love.c + am + quay + main.c; gcc carries pdglue.c
+# the split: mooncc carries src/love/love.c + lm + quay + main.c; gcc carries pdglue.c
 # (the pd_api.h owner) + the SDK's setup.c. the sim build compiles everything
 # hosted, so pd_src keeps the full wildcard.
 pd_local_c = $(wildcard *.c)

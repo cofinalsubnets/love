@@ -176,7 +176,7 @@ int main(void) {
 EOF
 $mc $tflag -Isrc/apps/moon/include -I"$SQLSRC" -c "$d/drv.c" "$d/drv.o" || { echo "FAIL mooncc -c drv.c"; exit 1; }
 
-# the rung-4 libc floor: am math + the syscall leaf (mksys lays sys.o). NO moonlibc
+# the rung-4 libc floor: lm math + the syscall leaf (mksys lays sys.o). NO moonlibc
 # object -- the link owes its symbols and the driver's runtime table pulls
 # src/apps/moon/lib/moonlibc/ MEMBER BY NEED (the Makefile says the same of love itself).
 # Naming an object would take every member instead.

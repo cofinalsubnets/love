@@ -16,7 +16,7 @@ make flash                           # teensy_loader_cli --mcu=TEENSY41 -w -v ..
 ```
 
 Compiled END TO END by **mooncc** (`love mooncc -t thumb2`, built by the
-root Makefile): love.c, the am math floor, libc, and the port's own C all go
+root Makefile): love.c, the lm math floor, libc, and the port's own C all go
 through the repo's compiler, and `mkboot.l` lays the ROM-facing FlexSPI/IVT/
 vector blocks + crt0 + the barrier helpers from holo IR -- there is no `.S`
 here and nothing assembles them. `tlink.l` binds the image over holo's

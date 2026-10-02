@@ -19,7 +19,7 @@ include ../port.mk
 
 rp_cc = $(MOONCC) -t thumb1 -D __STDC_HOSTED__=0 -I.
 
-objs = $(R)/$(o)/boot2.o $(R)/$(o)/rp2040.o $(R)/$(o)/main.o $(R)/$(o)/am.o $(R)/$(o)/rt.o
+objs = $(R)/$(o)/boot2.o $(R)/$(o)/rp2040.o $(R)/$(o)/main.o $(R)/$(o)/lm.o $(R)/$(o)/rt.o
 
 .PHONY: objs bin
 default: bin

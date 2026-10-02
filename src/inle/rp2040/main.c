@@ -31,8 +31,8 @@ static volatile unsigned long long u64 = 0xFEDCBA9876543210ULL;
 static volatile int i7 = 7, i2 = 2, i1000 = 1000, im7 = -7;
 static volatile unsigned u9 = 900000007u;
 
-double am_sin(double), am_cos(double), am_sqrt(double), am_exp(double),
-       am_log(double), am_atan2(double, double);
+double lm_sin(double), lm_cos(double), lm_sqrt(double), lm_exp(double),
+       lm_log(double), lm_atan2(double, double);
 
 struct zn { double re, im; };
 static struct zn zmake(double re, double im) {
@@ -71,14 +71,14 @@ static int run(void) {
   CK(u64 >> 16 == 0xFEDCBA987654ULL);
   CK((long long)u64 == -81985529216486896LL);
   CK(u64 / 1000ULL == 18364758544493064ULL);
-  // the am math floor, bit-exact (the values harnessam.c pins against gcc)
-  CK(am_sin(one) == 0.8414709848078965);
-  CK(am_cos(two) == -0.41614683654714241);
-  CK(am_sqrt(two) == 1.4142135623730951);
-  CK(am_exp(one) == 2.7182818284590455);
-  CK(am_log(two) == 0.69314718055994529);
-  CK(am_atan2(one, two) == 0.46364760900080609);
-  CK(am_sin(big) == 0.54584344944869956);      // the big-argument reduction
+  // the lm math floor, bit-exact (the values harnesslm.c pins against gcc)
+  CK(lm_sin(one) == 0.8414709848078965);
+  CK(lm_cos(two) == -0.41614683654714241);
+  CK(lm_sqrt(two) == 1.4142135623730951);
+  CK(lm_exp(one) == 2.7182818284590455);
+  CK(lm_log(two) == 0.69314718055994529);
+  CK(lm_atan2(one, two) == 0.46364760900080609);
+  CK(lm_sin(big) == 0.54584344944869956);      // the big-argument reduction
   // a composite through memory, the shape AAPCS returns via the sret pointer
   { struct zn z = zmake(da, db);
     CK(z.re == da && z.im == db);

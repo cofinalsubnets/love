@@ -545,7 +545,7 @@ dl/c-testsuite:
 test_libc: host
 	@$(gsh) test/gate/libc.sh $(ho) $m
 # test_ulp -- the math floor, built by both compilers and required to agree. `make ulp`
-# measures am.c's accuracy for the $(CC) build alone, which asks whether the algorithm is
+# measures lm.c's accuracy for the $(CC) build alone, which asks whether the algorithm is
 # right, never whether our compiler builds it -- and float bits are where codegen hides.
 test_ulp: host
 	@$(gsh) test/gate/ulp.sh $(ho) $m
@@ -567,7 +567,7 @@ test_selfhost: host
 	@echo TEST $(ho)/love-selfhost
 	@$(raw_env) $(gsh) test/gate/selfhost.sh $(ho) $m $t
 # the rung-4 gate: the gcc-free fixpoint. everything test_selfhost builds plus our own raw
-# libc (moonlibc/), math floor (am.c) and sys.o, bound by our static linker -- no gcc, no
+# libc (moonlibc/), math floor (lm.c) and sys.o, bound by our static linker -- no gcc, no
 # glibc, no ld anywhere. in test_slow, x86-64 only; supersedes test_selfhost. the two cross
 # twins below take the same roster, so it is spelled once.
 raw_env = gate_love_c='$(love_tu_c)' gate_host_c='$(host_c)' gate_arch_c='$(hosta_c)' gate_hosta='$(hosta)' gate_seat_c='$(S)/love/user/nokern.c $(S)/love/noblob.c'

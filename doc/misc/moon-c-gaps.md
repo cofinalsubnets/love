@@ -730,7 +730,7 @@ helper call at all), all shifts across the word
 boundary, every relation (SUBS/SBCS, exact at the 2^53 tie), widen/narrow, `__builtin_clzll`,
 pair args (AAPCS32 even-odd pairs, 8-aligned stack slots) and pair returns, pair
 globals/locals/members/derefs. VFP doubles on thumb2 (fpv5-d16 scalar, f0..f15 → d0..d15, d15
-the reserved converter scratch; VCMP+VMRS for NaN-honest flags), with `am.c` running
+the reserved converter scratch; VCMP+VMRS for NaN-honest flags), with `lm.c` running
 BIT-IDENTICAL to the host on the M7. By-value composites + varargs on thumb2 (a {double,double}
 HFA rides d-pairs per the AAPCS32-VFP rule; va_list is gcc's one running pointer). `la` on
 thumb2 lowers to the MOVW/MOVT absolute pair, and `leax` to `ADD.W Rd,Rn,Rm,LSL#n`.
