@@ -24,6 +24,7 @@
 (borrow 'score)                         ; the tune as text
 (borrow 'play)                          ; the voices, the mix
 (borrow 'posix)    ; close, for the horn
+(borrow 'meadow)                        ; the field in three dimensions
 (:
  esc (string 27)
  fps (love-arch @ 'wasm 15 30)          ; the page's machine paints every cell in the interpreter: half the frames there
@@ -67,6 +68,7 @@
  open-ttl "leaves of grass simulator 1989"
  open-rows '(""
              "hjkl or arrows keys to dance"
+             "v the field flat or not"
              "q or esc to quit"
              ""
              "-- any key --")
@@ -116,7 +118,8 @@
    {'r r 'c c 'h week-start 'fr 0 'sb sb 'bs bs 'me me 'tdays tdays 'covers covers 'clouds clouds
     'wind (3.0 + roll sb 10) 'wt 8.0 'head (roll sb 360 * 1.0) 'gust 1.0 'drift 0.0 'kept {} 'cm () 'last ()
     'songs songs 'sang -1 'cue 0
-    'dewday 0 'pts 0 'combo 0 'dk 0 'dms 0 'lk 0 'lt 0 'over 0 'msg ""})
+    'dewday 0 'pts 0 'combo 0 'dk 0 'dms 0 'lk 0 'lt 0 'over 0 'msg ""
+    'flat (love-arch @ 'wasm 1 0) 'mv () 'deep 0})      ; the page draws in the interpreter: flat there
 
  ; --- the helm: an arrow or hjkl pushes your blade, q or esc leaves ---------------
  ; a press within the gap of the last, on another key, grows the combo; the combo
@@ -126,6 +129,7 @@
  (grass-key g k now) (: mv (steer k) me (g 'me)
    (? (g 'over) g
       (k @ (113 || 27) 1 0) (pins g 'over 'fled 'msg "")
+      (k = 118) (pins g 'flat (1 - g 'flat) 'last ())     ; v: the field flat, or in three dimensions
       (atom? mv) g
       (: dx <mv dy <>mv
          combo (k != g 'dk && now - g 'dms < dance-gap ? (1 + g 'combo) 1)
@@ -350,10 +354,18 @@
    ; field -- and its erase falls on that spare column, where it costs nothing
    (esc + "[0m" + fit (grass-hud g) c + "\r\n"
     . map line (map (+ 1) ^(r - 1)) + [(esc + "[0m" + fit (grass-bar g) (c - 1) + esc + "[K")]))
- (grass-frame g) (jug 0 @ j (say j (esc + "[H"), each (grass-rows g) (say j), slurp j))
+ (grass-frame g) (g 'flat ? (jug 0 @ j (say j (esc + "[H"), each (grass-rows g) (say j), slurp j))
+                    (esc + "[H" + grass-solid g))
+ ; ..in three dimensions: the hud, the meadow under the rows between, and the bar. the
+ ; meadow's screen is laid at the first frame, its own blades thrown from the week's first day
+ (grass-solid g) (: r (g 'r) c (g 'c)
+   mv (g 'mv @ m (tablet? m ? m (meadow-new (int (g 'tdays 0 * 977.0)) c (2 * (r - 1)) @ m2 (pin g 'mv m2, m2))))
+   (esc + "[0m" + fit (grass-hud g) c + "\r\n" + meadow-frame mv g (meadow-sky g) (g 'deep)
+    + "\r\n" + esc + "[0m" + fit (grass-bar g) (c - 1) + esc + "[K"))
  ; the rows that changed since the last paint, each under its cursor move; the first
  ; paint, and one after a sign stood over the screen, is the whole frame
- (grass-paint g) (: rs (grass-rows g) j (jug 0)
+ (grass-paint g) (g 'flat ? (grass-paint-flat g) (grass-frame g))
+ (grass-paint-flat g) (: rs (grass-rows g) j (jug 0)
    last (g 'last @ t (tablet? t ? t (pin g 'last {}, g 'last)))
    (go l i) (two? l ?
                (<l @ s
@@ -371,7 +383,7 @@
    gap (g 'c - wide l - wide r @ n (n < 2 ? 2 n))
    (l + gap (t \ t + " ") "" + r))
  (grass-bar g) (g 'me 'hy < 12.0 ? ("you are wilting  " + g 'msg)
-                  (g 'msg || "dance: arrows or hjkl   q leaves"))
+                  (g 'msg || "dance: arrows or hjkl   v the view   q leaves"))
  (grass-final g) (g 'over @ 'done ("seven days: " + show (g 'pts) + " points, " + fx1 (g 'me 'ht) + "inches tall")
                                   ("you left the field on day " + show (1 + grass-day g)))
 
@@ -446,6 +458,7 @@
    r (two? ws && 7 < <ws ? (<ws - 1) 23)
    c (two? ws && 19 < <>ws ? <>ws 80)
    g (grass-new r c (wheel (clock 0)))
+   _ (pin g 'deep (elem (getenv "COLORTERM") ["truecolor" "24bit"]))
    bs (filter (b \ !(b 'err)) (score-parse ls))
    hn (bs ? (horn song-rate 2 @ h (nom? h ? () h)))
    sng (hn ? (grass-song-new bs hn (wheel (clock 0))))
@@ -493,7 +506,7 @@
                    drain-keys (),
                    raw 0,
                    (puts (grass-final g + "\n"), 0)))
- grass-usage "usage: love lore grass   (dance: arrows, hjkl, or tap about your blade; q or esc leaves)"
+ grass-usage "usage: love lore grass   (dance: arrows, hjkl, or tap about your blade; v the field flat or not; q or esc leaves)"
  (grass-main as) (as @ () (grass-run score)
                        (say err ("grass: " + grass-usage + "\n"), flush err, 2))
  _ ((cite 'lore 'lore-enlist) 'grass (udoor 'grass grass-main grass-usage 1 1)))
