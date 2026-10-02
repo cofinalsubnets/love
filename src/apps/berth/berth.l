@@ -731,7 +731,7 @@
  (inle-harbour as r c serve)
   (: me (selfpath 0) sh (string? me ? [me "lush"] ["sh"])
      p0 (hopen (two? as ? as sh) r c)
-     (atom? p0 ? ("cannot start " + (two? as ? <as (sh 0)))
+     (atom? p0 ? ("cannot start " + (two? as ? <as (sh 0)) + ": " + show p0)
         (harbour r c @ hb
            (? serve (pins hb 'serve 1 'csize [r c] 'in () 'out ()) 0,
             pin hb 'more (_ \ hopen sh 1 1),

@@ -43,7 +43,7 @@ test_extra: test_filemode waits test_front test_proof test_gen test_uugen test_u
 	test_uukind test_gc test_gcheck test_gcstress test_extract test_big test_mx \
 	test_tools test_web test_hostnif test_doc test_glaze test_hook test_sat test_holo test_holowasm test_as \
 	test_holofuzz test_glazefuzz test_encver test_kore test_refuzz test_sb test_vi \
-	test_clay test_moonfuzz test_forge test_gates \
+	test_clay test_moonfuzz test_forge test_gates test_kernel_vmx \
 	test_cts test_libc test_ulp test_softfp test_reloc32 \
 	test_drv test_hdiff test_ccwarn test_tco0 nettest test_wake test_gz test_cpio test_tfm test_caja test_gpic test_grap test_chem test_fat32 test_root \
 	test_uuhomgen test_uusplgen test_uumx test_uuvallaw \
@@ -1210,8 +1210,19 @@ test_kboot: host $(S)/tools/kboot.l
 	@$m $(S)/tools/kboot.l $(k_elf) "kore wc /proc/src/src/apps/json.l" "/proc/src/src/apps/json.l" $$(wc -c < $(S)/apps/json.l)
 	@$m $(S)/tools/kboot.l $(k_elf) "sh -c \"cd /proc/src/src/apps/kore; pwd\"" "/proc/src/src/apps/kore"
 	@$m $(S)/tools/kboot.l $(k_elf) "sh -c \"kore ls /proc/src/src/apps/kore | kore wc -l\"" $$(ls $(S)/apps/kore | wc -l)
+
+# the vmx laws want VT-x, which this box need not have: the elf boots on KTEST_VMX_HOSTS (a VT-x
+# box, kvm, -cpu host) with a roster of the harness and vmx.l alone, and the guest must run.
+# test_extra's only, the box being shared
+test_kernel_vmx: host $(S)/tools/ktest.l
+	@if [ -z "$$KTEST_VMX_HOSTS" ]; then \
+	   sh test/gate/skip.sh gate-skip "test_kernel_vmx: skipped (no KTEST_VMX_HOSTS, a VT-x box to boot on)"; exit $$?; fi; \
+	 $(MAKE) -s $(k_elf) && \
+	 echo TEST $(k_elf) "(the vmx lane: kvm and -cpu host on $$KTEST_VMX_HOSTS)" && \
+	 KTEST_X64_HOSTS="$$KTEST_VMX_HOSTS" KTEST_CORPUS=test/kernel/vmx-lane.l \
+	   $m $(S)/tools/ktest.l $(k_elf) - $a "vmx: guest ran, cpuid exited"
 else
-test_disk test_kboot:
+test_disk test_kboot test_kernel_vmx:
 	@sh test/gate/skip.sh gate-skip "$@: skipped (host arch $a is not x64)"
 endif
 

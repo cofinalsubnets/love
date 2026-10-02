@@ -37,25 +37,27 @@
    ; machine + exit channel are per-arch. x64 quits qemu by writing the
    ; isa-debug-exit port; the two 'virt's have no such device, so k_reset goes
    ; out through PSCI / SBI and -no-reboot below turns that into the exit.
-   ; KTEST_A64_HOSTS lists arm boxes (ssh, qemu, /dev/kvm) the a64 elf lane boots on under
-   ; kvm instead of tcg here, ~100s: "host:slots ..", fastest first. KTEST_A64_HOST is one
-   ; host, one slot. a slot is an exclusive lock, a64host-HOST-N, so two lanes never crowd
+   ; KTEST_<ARCH>_HOSTS lists boxes (ssh, qemu, /dev/kvm) an elf lane boots on under kvm instead
+   ; of here: a64's are arm boxes, ~100s against tcg; x64's a VT-x box for the vmx laws, which
+   ; test_kernel_vmx fills from KTEST_VMX_HOSTS. "host:slots ..", fastest first; KTEST_<ARCH>_HOST
+   ; is one host, one slot. a slot is an exclusive lock, ARCHhost-HOST-N, so two lanes never crowd
    ; one box past what its memory holds; with every slot taken the lane waits
    (env-of k) (getenv k @ v (string? v && 0 < #v ? v ()))
    (num s) (foldl (\ a i (a * 10 + s i - 48)) 0 ^#s)
-   hosts (? !(arch = "a64" && elf?) ()
-            (env-of "KTEST_A64_HOSTS" @ l
+   pfx (arch @ "a64" "KTEST_A64_" "x64" "KTEST_X64_" ())
+   hosts (? !(elf? && string? pfx) ()
+            (env-of (pfx + "HOSTS") @ l
                (? (string? l) (map (w \ (cite 'kore 'usplit 58 w @ p [<p (two? >p ? (num <>p) 1)]))
                          (filter (w \ 0 < #w) (cite 'kore 'usplit 32 l)))
-                  (env-of "KTEST_A64_HOST" @ h (string? h ? [[h 1]] ())))))
+                  (env-of (pfx + "HOST") @ h (string? h ? [[h 1]] ())))))
    lroot ((cite 'locks 'locks-root) 0)
-   (try-slot h i) (: nm ("a64host-" + <h + "-" + show i)
+   (try-slot h i) (: nm (arch + "host-" + <h + "-" + show i)
                      g ((cite 'locks 'locks-acquire) lroot nm 'exclusive (getpid 0) ("ktest " + iso) () 1)
                      (peep g "granted" 0 ? [<h nm] ()))
    (try-host h) (foldl (\ a i (two? a ? a (try-slot h i))) () (map (+ 1) (jot (h 1))))
    (take-slot n) (: s (foldl (\ a h (two? a ? a (try-host h))) () hosts)
                     (? (two? s) s
-                       (: _ (? (n = 0) (say err "ktest: every a64 host slot is taken; waiting\n") 0)
+                       (: _ (? (n = 0) (say err ("ktest: every " + arch + " host slot is taken; waiting\n")) 0)
                           _ (rest 5000)
                           (take-slot (n + 1)))))
    slot (two? hosts ? (take-slot 0) ())
@@ -92,7 +94,7 @@
    ; at all. ramfb's lands in ordinary ram, so the console paints at memory
    ; speed and the lane costs nothing.
    gfx  (arch = "a64" ? ["-device" "ramfb"] ())
-   media (? elf? ["-kernel" iso "-append" "test/kernel/all.l"]
+   media (? elf? ["-kernel" iso "-append" (env-of "KTEST_CORPUS" @ c (string? c ? c "test/kernel/all.l"))]   ; KTEST_CORPUS: a lane's own roster
             dir? (fw + below4g + gfx + ["-drive" ("format=raw,file=fat:rw:" + iso)])
             (scare 'ktest-media iso))
    ; kvm where the host can back it: 7x on this corpus (50s of TCG against 7s).
@@ -100,7 +102,7 @@
    ; arm host whose gic cannot back v2 refuses the pairing rather than degrading.
    ; a box without /dev/kvm falls to tcg, so the verdict never rides on this.
    mach? (hark ["uname" "-m"])
-   kvm  (? far ["-enable-kvm"]
+   kvm  (? far (arch = "x64" ? ["-enable-kvm" "-cpu" "host"] ["-enable-kvm"])   ; x64's -cpu host hands the guest VT-x
            (two? (stat "/dev/kvm") && arch = "x64" && has? >mach? "x86_64") ["-enable-kvm" "-cpu" "host"]
            ())
    ; the wall ceiling: tcg on a shared box runs ~300s quiet and past 420s loaded
