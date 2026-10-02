@@ -7,6 +7,7 @@
 ;   love bee --avatar [NAME]                 the avatars, or wear one
 ;   love bee --keygen root | box [NAME]      the lineage's root, or this box's key and card
 ;   love bee --ticket [DAYS] | --enrol TOKEN [NAME] | --admit | --enrolled   a box joins a lineage
+;   love bee --deliver                       a sealed message from another box, on stdin
 ;
 ; the settings are ~/.love/etc/bee.l's, each a form per line; ./.bee.l may set model,
 ; max-tokens, thinking, context and queue-watch over them:
@@ -20,6 +21,7 @@
 ;   (queue-watch N)       seconds between readings of the merge queues; 20, and 0 for never
 ;   (backend claude-code) a `claude -p` child thinks and runs the tools, bee the harness; api else
 ;   (claude-model NAME)   the model that child runs; claude's own default when unset
+;   (relay WORD ..)       what carries mail to another box: HOST LOVE bee --deliver follow; ssh -T
 ;   (mem-floor GB) (heavy-max N)   no heavy lock below GB available; N heavy locks at once, 2
 ;   (avatar NAME)       the face and its accent, bunny unless set; /avatar or --avatar sets it
 ;   (screensaver NAME) (screensaver-idle N)   the screen's saver after N minutes without a key:
@@ -303,21 +305,66 @@
      ; sealed one adds to, id and cert (its chain, base64) and ends its header with the sig
      ; over every line above it, the blank line and the text
      (post-with from to text seal)
-      (: c (card-of to) ib (cell-of to + "/inbox")
+      (: at (find to "@" 0) nm (at < 0 ? to (snip to 0 at)) box (? (0 < at) (snip to (at + 1) #to) "")
+         b (box-seal 0)
+         away (0 < #box && !(two? b && b 1 "name" = box))
+         c (card-of nm) ib (cell-of nm + "/inbox")
          id (show (clock 0) + "-" + from + "-" + hex2 (clock 0 % 256))
          hd ("from " + from + "\nsent " + show (clock 0 // 1000) + "\n"
              + (two? seal ? ("to " + to + "\nid " + id + "\ncert " + cite 'ssh 'b64e (seal 1) 1 + "\n") ""))
          sg (? (two? seal) ("sig " + cite 'tls 'hex (cite 'ssh 'ed-sign <<seal (<seal 1) (hd + "\n" + text)) + "\n") "")
-         (? !(tablet? c && alive? (card-pid c)) ("no session named " + to)
+         (? away (? (two? seal) (relay box (hd + sg + "\n" + text))
+                    ("mail leaves this box only sealed, and nothing here can seal it for " + to))
+            !(tablet? c && alive? (card-pid c)) ("no session named " + to)
             !(spit-file (ib + "/." + id) (hd + sg + "\n" + text)) ("cannot write to " + to)
             (nom? (rename (ib + "/." + id) (ib + "/" + id))) ("cannot deliver to " + to)
             ""))
+     ; the way to another box: ~/.love/etc/bee/boxes, a line each, NAME HOST [LOVE] -> [host love]
+     (box-route nm)
+      (: s (slurp-file (bee-keys + "/boxes"))
+         hit (filter (w \ two? w && <w = nm) (map words (? (string? s) (lines s) ())))
+         w (two? hit ? <hit [nm])
+         [(#w > 1 ? (w 1) nm) (#w > 2 ? (w 2) "love")])
+     ; a sealed message carried to another box: (relay CMD ..) HOST LOVE bee --deliver, the
+     ; message on its stdin -> "" | why not
+     bee-relay (: v (peep bee-salt 'relay ()) (two? v ? (map word v) ["ssh" "-T"]))
+     (relay box msg)
+      (: r (box-route box) f (cell-of (me 0) + "/.relay")
+         _ (spit-file f msg)
+         fd (openfd f 0) pp (pipe 0)
+         p (spawnio (bee-relay + [<r (r 1) "bee" "--deliver"]) fd >pp >pp (open-fds 0) -1 0)
+         _ (close >pp) _ (? (0 <= fd) (close fd) 0)
+         q (fdopen <pp)
+         (go acc) (: c (see q) (? (c < 0) acc (: _ (unsee q c) (go (acc + chug q)))))
+         o (go "")
+         _ (close q)
+         st (reap p) _ (unlink f)
+         (? (st = 0) "" ("cannot deliver to " + box + " (exit " + show st + "): " + o)))
+     ; --deliver, a sealed message on stdin from another box: kept in the inbox it names when it
+     ; is addressed here, to a live session, under an id not yet taken, and its seal checks
+     (deliver s)
+      (: k (find s "\n\n" 0) hd (? (k < 0) s (snip s 0 k))
+         (hv key) (: fl (filter (\ l (starts? l (key + " "))) (lines hd)) (? (two? fl) (snip <fl (#key + 1) #<fl)))
+         to (: t (hv "to") (string? t ? t "")) id (: i (hv "id") (string? i ? i ""))
+         at (find to "@" 0) nm (? (0 < at) (snip to 0 at) "")
+         b (box-seal 0) d (cell-of nm) c (card-of nm)
+         (? !(two? b) [0 "this box has no card"]
+            !(0 < at && snip to (at + 1) #to = b 1 "name") [0 ("not addressed to this box: '" + to + "'")]
+            !(0 < #id && id 0 != 46 && find id "/" 0 < 0) [0 "a bad id"]
+            !(tablet? c && alive? (card-pid c)) [0 ("no session named " + nm)]
+            (two? (stat (d + "/inbox/" + id)) || two? (stat (d + "/read/" + id))) [0 "that id is taken"]
+            !(string? ((mail-check s id nm) 2) && 0 < #((mail-check s id nm) 2)) [0 "the seal does not check"]
+            !(spit-file (d + "/inbox/." + id) s) [0 ("cannot write to " + nm)]
+            (nom? (rename (d + "/inbox/." + id) (d + "/inbox/" + id))) [0 ("cannot deliver to " + nm)]
+            [1 ("delivered to " + to)]))
      (post-as from to text) (post-with from to text ())
      (post to text) (post-with (me 0) to text (? (bee-cell 'state || bee-as?) (cell-seal 0)))
      ; a message file, by its id -> [from text seal]: headers to the first blank line, then the
      ; text. seal is the sender's card name when its sig checks against this box's root, "" for
-     ; plain mail or where there is no root to check by, and () when a sig fails
-     (mail-parse s id)
+     ; plain mail or where there is no root to check by, and () when a sig fails. it is addressed
+     ; to who, bare or at this box
+     (mail-parse s id) (mail-check s id (me 0))
+     (mail-check s id who)
       (: k (find s "\n\n" 0) hd (? (k < 0) s (snip s 0 k)) body (? (k < 0) "" (snip s (k + 2) #s))
          ls (lines hd)
          (hv key) (: fl (filter (\ l (starts? l (key + " "))) ls) (? (two? fl) (snip <fl (#key + 1) #<fl)))
@@ -330,7 +377,7 @@
                t (? (string? ch) (sl 'seal-check ch (b 1 "lineage") (clock 0 // 1000) ()))
                signed (foldl (\ a l (a + l + "\n")) "" (take (#ls - 1) ls) + "\n" + body)
                (? (&& (starts? (ls (#ls - 1)) "sig ") (tablet? t) (t "kind" = "cell")
-                      (starts? (t "name") (from + "@")) (hv "to" = me 0) (hv "id" = id)
+                      (starts? (t "name") (from + "@")) (elem (hv "to") [who (who + "@" + b 1 "name")]) (hv "id" = id)
                       (cite 'ssh 'ed-verify (cite 'tls 'unhex (t "pub")) signed (cite 'tls 'unhex sg)))
                   [from body (t "name")] [from body ()]))))
      ; a mail that fails its seal is kept in read/, and the model is told only that it came
@@ -2516,6 +2563,7 @@
           "--ticket" (say-r (mint >as))
           "--enrol" (say-r (enrol >as))
           "--admit" (say-r (admit (slurp in)))
+          "--deliver" (say-r (deliver (slurp in)))
           "--enrolled" (say-r (enrolled (slurp in)))
           "--keygen" (: r (keygen >as) (? <r (: _ (puts (r 1 + (ends? (r 1) "\n" ? "" "\n"))) 0) (say err ("bee: " + r 1 + "\n"), 1)))
           "--stop" (? (#as < 2) (say err "usage: love bee --stop NAME\n", 2)
@@ -2544,7 +2592,7 @@
          (? (elem "--mcp" as) (: _ (mcp-serve in out) 0)             ; a claude child's own server
             (two? as && <as = "--lock") (bee-cli as yes)              ; its command's words stay as given
             (two? as && elem <as ["-s" "--screensaver"]) (cite 'saver 'saver-cli >as)   ; a saver, no session
-            (two? words && elem <words ["--list" "--send" "--spawn" "--stop" "--avatar" "--resume" "--keygen" "--ticket" "--enrol" "--admit" "--enrolled"]) (bee-cli words yes)
+            (two? words && elem <words ["--list" "--send" "--spawn" "--stop" "--avatar" "--resume" "--keygen" "--ticket" "--enrol" "--admit" "--enrolled" "--deliver"]) (bee-cli words yes)
             ; the api backend wants its endpoint, model and key; claude brings its own. a stage
             ; answers why as a string: a harbour shows it, stderr would land on its glass
             (: why (? (!bee-cc? && atom? bee-at) ("cannot read the url " + bee-url)

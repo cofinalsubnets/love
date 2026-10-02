@@ -869,5 +869,42 @@
            (1 = <nr) (cr-in (nr 1) "no root here"))
    0)
 
+; --- the link: a sealed message to NAME@BOX leaves by (relay ..), here a stand-in for ssh that runs
+; the far box's --deliver; the far reader sees the seal. plain mail, mail for another box and a
+; replayed id are refused at the door
+(: nb (cr-dir "near" "") fb (cr-dir "far" "")
+   _ (cr-run nb "" "--keygen root") _ (cr-run nb "" "--keygen box near")
+   tk (: r (cr-run nb "" "--ticket") (snip (r 1) 0 129))
+   _ (cr-put fb "req" ((cr-run fb "" ("--enrol " + tk + " far")) 1))
+   _ (cr-put fb "card" ((cr-run nb "" ("--admit < '" + fb + "/req'")) 1))
+   _ (cr-run fb "" ("--enrolled < '" + fb + "/card'"))
+   ; the stand-in ssh: HOST LOVE bee --deliver, run as the far box
+   _ (cr-put nb "ssh" ("exec env HOME='" + fb + "' '" + cr-love + "' '" + cr-app + "' --deliver\n"))
+   _ (cr-put (nb + "/.love/etc") "bee.l" ("(relay sh " + nb + "/ssh)\n"))
+   _ (cr-put (nb + "/.love/etc/bee") "boxes" "far far.example\n")
+   hv (fb + "/.love/run/hive") pc (hv + "/peer")
+   _ (map (\ p (mkdir p 448)) [(fb + "/.love/run") hv pc (pc + "/inbox") (pc + "/read")])
+   _ (cr-put pc "card" ("pid " + show (getpid 0) + "\ncwd /x\nstate idle\n"))
+   (msgs ls) (foldl (\ a m (a + json-show m + "\n")) "" ls)
+   (call id nm args) {"jsonrpc" "2.0" "id" id "method" "tools/call" "params" {"name" nm "arguments" args}}
+   _ (cr-put nb "send" (msgs [(call 1 "send_message" {"to" "peer@far" "text" "hello from near"})]))
+   _ (cr-put fb "take" (msgs [(call 2 "inbox" {})]))
+   s1 (cr-run nb "BEE_NAME=sender" ("--mcp < '" + nb + "/send'"))
+   ib (: fs (readdir (pc + "/inbox")) (two? fs ? fs ()))
+   m (? (two? ib) (cr-get (pc + "/inbox/" + <ib)) "")
+   t1 (cr-run fb "BEE_AS=peer" ("--mcp < '" + fb + "/take'"))
+   _ (cr-put fb "again" m)
+   replay (cr-run fb "" ("--deliver < '" + fb + "/again'"))
+   _ (cr-put fb "plain" "from sender\nsent 1\nto peer@far\nid 9-sender-00\n\nunsealed\n")
+   plain (cr-run fb "" ("--deliver < '" + fb + "/plain'"))
+   elsewhere (cr-run nb "" ("--deliver < '" + fb + "/again'"))
+   _ (test (0 = <s1) (cr-in (s1 1) "sent to peer@far") (1 = #ib)
+           (cr-in m "\nto peer@far\n")
+           (cr-in (t1 1) "sealed=\\\"sender@near\\\"") (cr-in (t1 1) "hello from near")
+           (1 = <replay) (cr-in (replay 1) "taken")
+           (1 = <plain) (cr-in (plain 1) "seal does not check")
+           (1 = <elsewhere) (cr-in (elsewhere 1) "not addressed to this box"))
+   0)
+
 (hark ["rm" "-rf" cr-root])
 (test_fin (), puts "bee: ok", putc 10, 0)
