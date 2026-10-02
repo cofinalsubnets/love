@@ -913,6 +913,7 @@
          'ehostunreach "No route to host" 'enetunreach "Network is unreachable"
          'econnreset "Connection reset by peer" 'eaddrinuse "Address already in use"
          'eaddrnotavail "Cannot assign requested address"
+         'enotconn "Transport endpoint is not connected"
          (show e))
    ; say m on err and leave with code c
    (udie c m) (say err m, put err 10, uleave c))
