@@ -28,21 +28,37 @@ case $out in *"the nest has no love yet"*"lush     absent -> love"*) ;; *) fail 
 out=$(nest -y); st=$?
 [ $st = 0 ] || fail "a fresh nest exits $st: $out"
 cmp -s "$love" "$H/.love/bin/love" || fail "a fresh nest did not lay this binary"
-for t in lush kore sb cook libra mooncc; do
-  [ "$(readlink "$H/.love/bin/$t")" = love ] || fail "$t is not linked to love"
+[ "$(readlink "$H/.love/bin/lush")" = love ] || fail "lush is not linked to love"
+for t in kore sb cook libra mooncc lux; do
+  [ -e "$H/.love/bin/$t" ] || [ -L "$H/.love/bin/$t" ] && fail "the one install laid $t"
 done
 [ "$(readlink "$H/.local/bin/lush")" = "$H/.love/bin/lush" ] || fail "no ~/.local/bin compat link"
 [ "$("$H/.love/bin/lush" -c 'echo ok')" = ok ] || fail "the linked lush does not run"
-{ echo '#!/usr/bin/env -S love -l'; for m in core layout wire ewmh manage keys config lux; do cat src/apps/lux/$m.l; done; } > "$H/lux.want"
-cmp -s "$H/lux.want" "$H/.love/bin/lux" || fail "a fresh nest did not write lux as the Makefile cats it"
-[ -x "$H/.love/bin/lux" ] || fail "lux is not executable"
-[ "$(readlink "$H/.local/bin/lux")" = "$H/.love/bin/lux" ] || fail "no ~/.local/bin compat link for lux"
+[ "$("$H/.love/bin/lush" -ac 'kore echo ok')" = ok ] || fail "lush -ac does not run a verb"
 
-echo '; a stale lux' > "$H/.love/bin/lux"
+# what earlier installs laid goes: tool links, the lux script, bao, the papel link, and
+# their ~/.local/bin links -- a file the nest did not lay stays, and so does its link
+b=$H/.love/bin l=$H/.local/bin
+for t in kore mooncc ai; do ln -sf love "$b/$t"; ln -sf "$b/$t" "$l/$t"; done
+{ echo '#!/usr/bin/env -S love -l'; cat src/apps/lux/core.l; } > "$b/lux"; ln -sf "$b/lux" "$l/lux"
+printf '#!/bin/sh\nexec "$h/love" -e "((cite '"'"'cli '"'"'shell) 0)" "$@"\n' > "$b/bao"
+ln -sf "$PWD/src/apps/papel.l" "$b/papel"
+echo 'mine' > "$b/seed"; ln -sf "$b/seed" "$l/seed"
+ln -sf "$b/gone" "$l/gone"
+out=$(nest -n)
+case $out in *"kore     laid by an earlier install, removed"*) ;; *) fail "-n did not plan the pruning: $out";; esac
+out=$(nest); st=$?
+[ $st = 0 ] || fail "the pruning nest exits $st: $out"
+for t in kore mooncc ai lux bao papel; do
+  [ -e "$b/$t" ] || [ -L "$b/$t" ] && fail "$t was not pruned"
+done
+for t in kore mooncc ai lux gone; do [ -L "$l/$t" ] && fail "~/.local/bin/$t was not pruned"; done
+[ "$(cat "$b/seed")" = mine ] || fail "a file the nest did not lay was touched"
+[ "$(readlink "$l/seed")" = "$b/seed" ] || fail "a link to a file the nest did not lay was touched"
+
 out=$(nest); st=$?
 [ $st = 0 ] || fail "the same build again exits $st"
 case $out in *"this build already"*) ;; *) fail "the same build again said: $out";; esac
-cmp -s "$H/lux.want" "$H/.love/bin/lux" || fail "the same build again left a stale lux"
 
 printf '#!/bin/sh\nexit 1\n' > "$H/.love/bin/love"     # older than nest: no verbs to ask
 out=$(nest); st=$?
@@ -66,4 +82,4 @@ out=$(nest -z); st=$?
 
 rm -rf "$H"
 [ $fails = 0 ] || { echo "FAIL nest ($fails)"; exit 1; }
-echo "nest: the binary lays itself newer-only, links its tools, and -f overrides"
+echo "nest: the binary lays itself newer-only, links lush, prunes what earlier installs laid, and -f overrides"

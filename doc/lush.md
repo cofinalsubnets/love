@@ -68,7 +68,7 @@ It is deliberately **not** spelled `love`. A builtin shadows its PATH twin, and 
 
 # MAKING IT YOUR SHELL
 
-Point a terminal emulator at `lush` (installed on PATH by `make install`) -- terminal shells are interactive non-login, so *~/.lushrc* is the file to season. For **chsh**(1), add the absolute path (`~/.local/bin/lush` resolves to the nest) to */etc/shells* and `chsh -s` it; a display manager or **login**(1) then spawns it with a dash `argv[0]` that the shebang drops, so a login-shell entry is best expressed as a two-line wrapper script `exec lush --login "$@"` -- or by sourcing your profile from *~/.lushrc*.
+Point a terminal emulator at `lush` -- terminal shells are interactive non-login, so *~/.lushrc* is the file to season. **love nest** (and `make install`, which runs it) is the one install: `love` and `lush` on PATH and nothing else, since every other verb is a word lush runs by name, autonomous by default -- `lush -c 'mooncc -o t t.c'`, `lush -ac lux` from an *~/.xinitrc*, where **-a** guards against an inherited `LUSHFLAGS`. For **chsh**(1), add the absolute path (`~/.local/bin/lush` resolves to the nest) to */etc/shells* and `chsh -s` it; a display manager or **login**(1) then spawns it with a dash `argv[0]` that the shebang drops, so a login-shell entry is best expressed as a two-line wrapper script `exec lush --login "$@"` -- or by sourcing your profile from *~/.lushrc*.
 
 # EXIT STATUS
 

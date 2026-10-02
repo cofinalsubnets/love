@@ -946,14 +946,14 @@ endif
 # spellings of a list is how they drift.
 binnames = $(BIN) kore sb mooncc cook papel libra lux bao lush
 mannames = $(BIN) cook lush
-# the default nest lays itself: `love nest -y` (src/apps/source.l) copies the binary in, newer
-# builds only, and links the tools it serves by name. the rest keep their rules below, and
-# a real PREFIX, DESTDIR or BIN keeps them all
-nestnames = $(BIN) kore sb mooncc cook libra lush
+# the default nest is the one install: `love nest -y` (src/apps/source.l) copies the binary
+# in, newer builds only, and links lush, which runs every other verb by name. a real PREFIX,
+# DESTDIR or BIN keeps the whole roster as files
+nestnames = $(BIN) lush
 ifeq ($(BIN)|$(PREFIX)|$(DESTDIR),love|.love/|$(HOME)/)
 nested = 1
 endif
-rulenames = $(if $(nested),$(filter-out $(nestnames),$(binnames)),$(binnames))
+rulenames = $(if $(nested),,$(binnames))
 installs = $(patsubst %,$d/bin/%,$(rulenames)) \
   $(patsubst %,$d/share/man/man1/%.1,$(mannames)) \
   $v/ftdetect/love.vim $v/syntax/love.vim $v/ftplugin/love.vim
