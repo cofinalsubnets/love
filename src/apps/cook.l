@@ -365,6 +365,7 @@
    (digitp c)   (48 <= c <= 57)
    (alphap c)   (65 <= c <= 90 || 97 <= c <= 122)
    (namech c)   (alphap c || digitp c || c = 95 || c = 46)
+   (varch c)    (namech c || c = 45)          ; an assigned name may hold a dash, as make's may
    ; notcolon admits whitespace: a rule's target text runs to the first colon, and
    ; `a.out b.out: src` is one rule with two targets. assignP runs first, so assignment lines
    ; never reach this span.
@@ -443,7 +444,7 @@
    ; `!=` runs its value and takes the output, the portable spelling of $(shell ..): bmake and
    ; GNU both read it, where neither reads the other's conditionals.
    opP (alt (lit "::=") (alt (lit ":=") (alt (lit "?=") (alt (lit "+=") (alt (lit "!=") (lit "="))))))
-   assignP (seqs [(skip (span chws)) (span namech)
+   assignP (seqs [(skip (span chws)) (span varch)
                    (skip (span chws)) (pmap (x \ [<x]) opP)
                    (skip (span chws)) (span anyc)])
    ruleP (seqs [(skip (span chws)) (span notcolon) (skip (lit ":")) (span anyc)])
