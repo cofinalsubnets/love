@@ -37,20 +37,20 @@
    (string? <(readdir d))
    ; "" and "." are both the seat, the tree's top: its own top names, each deduped
    ; across every row beneath it. the root holds the home, empty, and tmp -- the scratch
-   ; the rung-2 tree seeds at boot -- and no row of the tree, which lists under /proc/src
+   ; the rung-2 tree seeds at boot -- and no row of the tree, which lists under /love
    (elem "src" (readdir "."))
-   (elem "src" (readdir "/proc/src"))
-   (elem "test" (readdir "/proc/src"))
-   (elem "src" (readdir "/proc"))
+   (elem "src" (readdir "/love"))
+   (elem "test" (readdir "/love"))
+   (elem "love" (readdir "/"))
    (() = readdir "/home")
    (elem "home" (readdir "/"))
    (elem "tmp" (readdir "/"))
    (nelem "src" (readdir "/"))
    ; the machine's own files (src/inle/rootfs/) stand at the root, no file of the tree
    (elem "etc" (readdir "/"))
-   (nelem "etc" (readdir "/proc/src"))
+   (nelem "etc" (readdir "/love"))
    (0 < tally (rd "/etc/profile"))
-   (nelem f (readdir "/proc/src"))              ; components, never whole paths
+   (nelem f (readdir "/love"))              ; components, never whole paths
    ; a file is no directory, and neither is a prefix nothing lies under
    (readdir f = 'enotdir)
    (readdir (d + "/nope") = 'enoent)
@@ -93,6 +93,6 @@
    (1600000000000 < clock 0)))
 
 ; the tree's tls roots ride the initrd: where no host bundle is, src/apps/tls/verify.l reads
-; them here, under /proc/src
+; them here, under /love
 (: r (: q (open "src/apps/tls/roots.pem" "r") s (slurp q) (close q, s))
  (test (100 < #(filter (l \ l = "-----BEGIN CERTIFICATE-----") (split "\n" r)))))

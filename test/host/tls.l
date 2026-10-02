@@ -485,7 +485,7 @@
    _ (test (string? t) (two? f) (<>f = t)                          ; the carried copy is the tree's
            (100 < #xs) (#xs = #ds)                                 ; every root reads
            (all (x \ (x 'ca) = 1) xs)
-           (elem ("/proc/src/" + tree-roots) root-homes)))
+           (elem ("/love/" + tree-roots) root-homes)))
 
 ;; --- the roots: SSL_CERT_FILE names the bundle, read once; the host's own reads whole ----
 (: e0 (getenv "SSL_CERT_FILE")
