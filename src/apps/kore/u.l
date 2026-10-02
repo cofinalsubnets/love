@@ -182,7 +182,7 @@
     (: day 86400000
        units {"sec" 1000 "second" 1000 "min" 60000 "minute" 60000 "hour" 3600000 "day" day
               "week" (7 * day) "fortnight" (14 * day) "month" 'm "year" 'y}
-       (unit w) (units w @ v (? v v (ends? w "s") (units (snip w 0 (#w - 1))) ()))
+       (unit w) (units w @ v (? v v (w @ (s + "s") (units s) ())))
        (mon w) ((3 <= #w ? (findsub "janfebmaraprmayjunjulaugsepoctnovdec" (snip w 0 3)) -1) @ k
                   (0 <= k && k % 3 = 0 && (#w = 3 || starts? (lower (monl (k // 3))) w) ? (k // 3 + 1)))
        (ymd a b c) (uint a && uint b && uint c ? [(uint a) (uint b) (uint c)])
@@ -200,7 +200,7 @@
                    (: h (uint <p) m (uint <>p) sc (#p = 3 ? (uint (p 2)) 0)
                       (charm? h && charm? m && charm? sc && 0 <= h < 24 && 0 <= m < 60 && 0 <= sc < 61 ? [h m sc z]))))
        ; the words, a date and its time split at a T
-       ws (foldl (\ l w (findsub w "t" @ k (0 < k && isod (snip w 0 k) ? (l + [(snip w 0 k) (snip w (k + 1) #w)]) (l + [w]))))
+       ws (foldl (\ l w (w @ ((d && 0 < #d && isod d) + "t" + tm) (l + [d tm]) (l + [w])))
                  () (words (lower (replace s "," " "))))
        st {'d () 't () 'tz () 'at () 'ms 0 'mo 0 'last () 'ok 1}
        (rel q k) ((? (k = 'm) (pin st 'mo (st 'mo + q)) (k = 'y) (pin st 'mo (st 'mo + 12 * q)) (pin st 'ms (st 'ms + q * k))) @ v
@@ -310,13 +310,8 @@
    ; cut's list -> ((lo hi)..): N, N-M, N- (open above), -M (from 1)
    (uspec s)
     (: (one p)
-        (: n #p
-           (dash k) (k >= n ? -1 (p k @ 45 k (dash (k + 1))))
-           i (dash 0)
-           (i < 0 ? (uatoi p @ v [v v])
-            (: lo (i @ 0 1 (uatoi (snip p 0 i)))
-               hi (i + 1 = n ? 536870911 (uatoi (snip p (i + 1) n)))
-             [lo hi])))
+        (p @ (a + "-" + b) [(a = "" ? 1 (uatoi a)) (b = "" ? 536870911 (uatoi b))]
+           (uatoi p @ v [v v]))
        (map one (usplit 44 s)))
    ; does 1-based seat k sit in the spec
    (upick spec k)

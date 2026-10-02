@@ -1353,11 +1353,9 @@
      (two? segs ?
       (: h <segs
        (<h = 'lit ?
-        (: t >h p (sh-eqpos t 0)
-         (? !p ()
-            !(sh-asnname? (snip t 0 p)) ()
-            (snip t 0 p .  (: rest (snip t (p + 1) #t)
-                            (? #rest (('lit . rest) . >segs) >segs))))))))
+        (>h @ ((n && 0 < #n && sh-asnname? n) + "=" + rest)
+           (n . (? #rest (('lit . rest) . >segs) >segs))
+           ()))))
    (sh-peel ws acc)
      (two? ws ?
         (: a (sh-asn? <ws)
@@ -1723,10 +1721,8 @@
            'verb (" is a verb of " + v 1)
                  (" is " + v 1))
    (sh-localb args)
-     (each args (\ w (: p (sh-eqpos w 0) nm (? p (snip w 0 p) w)
-                        (? (sh-ro? nm) (sh-rosay nm)
-                           !p (pin sh-vars w "")
-                           (pin sh-vars nm (snip w (p + 1) #w))))),
+     (each args (\ w (w @ ((nm && 0 < #nm) + "=" + v) (? (sh-ro? nm) (sh-rosay nm) (pin sh-vars nm v))
+                        (? (sh-ro? w) (sh-rosay w) (pin sh-vars w "")))),
       0)
    (sh-waitb args)                              ; wait [pid..] -> the last one's status
      (? (two? args)
@@ -1837,9 +1833,7 @@
      (? (!(two? args) || <args = "-p")
         (each (sort (keys sh-rovars))
               (nm \ puts ("readonly " + nm + (sh-vget nm @ (_ . v) ("='" + v + "'") "") + "\n")), 0)
-        (foldl (a \ w \ (: p (sh-eqpos w 0)
-                          nm (? p (snip w 0 p) w)
-                          _ (? p (sh-setvar nm (snip w (p + 1) #w)) 0)
+        (foldl (a \ w \ (: nm (w @ ((n && 0 < #n) + "=" + v) (sh-setvar n v, n) w)
                           _ (pin sh-rovars nm 1)
                           a))
                0 args))
@@ -1848,12 +1842,11 @@
    (sh-aliassay ws) (each ws (w \ puts ("alias " + w + "='" + sh-aliases w + "'\n")))
    (sh-aliasb args)
      (? !(two? args) (sh-aliassay (sort (keys sh-aliases)), 0)
-        (foldl (a \ w \ (: p (sh-eqpos w 0)
-                          (? !p (? (string? (sh-aliases w)) (sh-aliassay [w], a)
-                                   (say err ("lush: alias: " + w + ": not found\n"), 1))
-                             (: v (snip w (p + 1) #w)
-                                (? (two? (sh-aliasws v)) (pin sh-aliases (snip w 0 p) v, a)
-                                   (say err ("lush: alias: " + (snip w 0 p) + ": words only, no operators\n"), 1))))))
+        (foldl (a \ w \ (w @ ((n && 0 < #n) + "=" + v)
+                          (? (two? (sh-aliasws v)) (pin sh-aliases n v, a)
+                             (say err ("lush: alias: " + n + ": words only, no operators\n"), 1))
+                          (? (string? (sh-aliases w)) (sh-aliassay [w], a)
+                             (say err ("lush: alias: " + w + ": not found\n"), 1))))
                0 args))
    (sh-unaliasb args)
      (? (two? args && <args = "-a") (sh-tclear sh-aliases, 0)

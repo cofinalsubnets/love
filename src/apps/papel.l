@@ -161,10 +161,9 @@
 ; builds. anything absolute, anchored, or pointing outside stays exactly as written --
 ; papel will not manufacture a dead link that the markdown did not already have.
 (: (mdurl known u)
-   (? (has? u "://") u
-      !(ends? u ".md") u
-      (pbase u @ b
-         (peep known b 0 ? (snip u 0 (#u - 3) + ".html") u)))
+   (u @ (? (has? u "://")) u
+        (s + ".md") (pbase u @ b (peep known b 0 ? (s + ".html") u))
+        u)
    (rli f l)  (map (x \ (<x @ 'link ['link (rli f <>x) (f <>>x)]
                               ('strong || 'em) [<x (rli f <>x)]
                               x)) l)

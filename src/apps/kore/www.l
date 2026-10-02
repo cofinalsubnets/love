@@ -72,11 +72,9 @@
    (ww-schc? c) ((96 < c < 123) || (64 < c < 91) || (47 < c < 58) || c = 43 || c = 45 || c = 46)
    (ww-split u)
     (: fr (ww-cut u "#") qr (ww-cut <fr "?") r <qr
-       c (fsub r ":" 0)
-       sc? (0 < c && (64 < (r 0) < 91 || 96 < (r 0) < 123)
-                  && (: (g i) (? (c <= i) 1 (ww-schc? (r i)) (g (i + 1)) 0) (g 0)))
-       sc (? sc? (wg-lower (snip r 0 (c + 1))) "")
-       t (? sc? (snip r (c + 1) #r) r)
+       st (r @ ((s && 0 < #s && (64 < s 0 < 91 || 96 < s 0 < 123) && all ww-schc? (chars s)) + ":" + t)
+               [(wg-lower (s + ":")) t] ["" r])
+       sc <st t <>st
        au? (1 < #t && t 0 = 47 && t 1 = 47)
        k (? au? (: j (fsub t "/" 2) (? (j < 0) #t j)) 0)
        [sc (snip t 0 k) (snip t k #t) <>qr <>fr])

@@ -225,7 +225,7 @@
  (library root) (:
    es (readdir root)
    dirs (filter (d \ two? (readdir (root + "/" + d))) es)
-   lone (map (f \ snip f 0 (#f - 2)) (filter (f \ ends? f ".l") es))   ; a one-file wing: ROOT/x.l
+   lone (catmap (f \ f @ (s + ".l") [s] ()) es)   ; a one-file wing: ROOT/x.l
    wings (sort (dirs + lone))
    n #wings
    cols 6 rowsn ((n + cols - 1) // cols)

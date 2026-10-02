@@ -529,8 +529,7 @@
    (dnsdomainname-main as)
     (: _ (uflags "dnsdomainname" as () "")
        c <>(uhw-self 0)
-       k (findsub c ".")
-       (0 <= k ? (say out (snip c (k + 1) #c + "\n")) 0,
+       (c @ (_ + "." + d) (say out (d + "\n")) 0,
         flush out, 0))
 
    ; -- setsid: the command in a session of its own. a group leader cannot start one,
@@ -1128,12 +1127,7 @@
    (umeminfo _)                        ; /proc/meminfo -> a tablet, the kB counts by name
     (: r (uread "/proc/meminfo")
        t {}
-       (one ln) (: n #ln
-                   (go k) (? (n <= k) -1 (ln k = 58) k (go (k + 1)))
-                   i (go 0)
-                   (i < 0 ? 0
-                    (words (snip ln (i + 1) n) @ ws
-                     (two? ws ? (pin t (intern (snip ln 0 i)) (uatoi <ws)) 0))))
+       (one ln) (ln @ (k + ":" + v) (words v @ ws (two? ws ? (pin t (intern k) (uatoi <ws)) 0)) 0)
        (two? r ? (foldl (_ \ ln \ one ln) 0 (lines <>r)) 0,
         t))
 
@@ -1211,10 +1205,10 @@
        now (clock 0 // 1000)
        b {'up up 'now now 'boot (now - up) 'mem (peep (umeminfo 0) 'MemTotal 1)}
        cols (ups-cols b)
-       spec (? (t 111) (map (w \ (: k (findsub w "=") nm (k < 0 ? w (snip w 0 k))
+       spec (? (t 111) (map (w \ (: kh (w @ (k + "=" + h) [k h] [w ()]) nm <kh
                                     c (cols (intern nm))
                                     (? !c (udie 1 ("ps: unknown key " + nm))
-                                       (k < 0) c [(snip w (k + 1) #w) (c 1) (c 2) (c 3)])))
+                                       !(string? <>kh) c [<>kh (c 1) (c 2) (c 3)])))
                              (csv 111))
                (t 102) ([(cols 'user @ c ["UID" (c 1) (c 2) (c 3)])] + map cols '(pid ppid c stime tty8 time cmd))
                (elem 117 bl) (map cols '(user pid pcpu pmem vsz rss tty8 stat start bsdtime args))

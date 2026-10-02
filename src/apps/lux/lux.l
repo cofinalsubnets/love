@@ -68,7 +68,7 @@
    ; other-display lux answers and keeps its socket.
    (lux-sweep own)
     (: dir (lux-rundir ())
-       (sockish? n) (snip n 0 4 = "lux-" && snip n (#n - 5) #n = ".sock")
+       (sockish? n) (n @ ("lux-" + _ + ".sock") 1 0)
        (dead? p) (connect ['unix p] @ c (hot? c ? (close c, 0) 1))
        (go ns acc) (? !(two? ns) acc
                     (dir + ("/" + <ns) @ p
