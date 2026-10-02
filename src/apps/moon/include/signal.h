@@ -89,6 +89,10 @@ int sigemptyset(sigset_t*);
 #define SIGIO     29
 #define SIGPWR    30
 #define SIGSYS    31
+/* one past the highest signal, as glibc counts them (the real-time ones too): a size for a
+   table indexed by signal number */
+#define NSIG      65
+#define _NSIG     NSIG
 int kill(pid_t, int);
 int sigaddset(sigset_t*, int);
 int sigismember(sigset_t const*, int);

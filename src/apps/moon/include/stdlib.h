@@ -6,6 +6,7 @@
 #define EXIT_SUCCESS 0
 #define EXIT_FAILURE 1
 typedef unsigned long size_t;
+typedef int wchar_t;
 void *malloc(size_t);
 void *calloc(size_t, size_t);
 void *realloc(void*, size_t);
@@ -44,4 +45,11 @@ int  rand(void);
 void srand(unsigned int);
 long random(void);
 void srandom(unsigned int);
+/* the C locale's multibyte face: one byte a character, ascii only (wchar.h says more) */
+#define MB_CUR_MAX ((size_t) 1)
+int mblen(char const *, size_t);
+int mbtowc(wchar_t *, char const *, size_t);
+int wctomb(char *, wchar_t);
+size_t mbstowcs(wchar_t *, char const *, size_t);
+size_t wcstombs(char *, wchar_t const *, size_t);
 #endif

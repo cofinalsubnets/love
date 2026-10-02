@@ -49,6 +49,10 @@ long   ftell(FILE*);
 typedef struct { long pos; } fpos_t;
 int    fgetpos(FILE*, fpos_t*);
 int    fsetpos(FILE*, fpos_t const*);
+int    fpurge(FILE*);
+#include <sys/types.h>
+int    fseeko(FILE*, off_t, int);
+off_t  ftello(FILE*);
 void   rewind(FILE*);
 int    fflush(FILE*);
 void   perror(char const*);
