@@ -1003,5 +1003,17 @@
         (go 0))
    (test (has? s " 0 ") (has? s " 2 ") (all (w \ !(has? s (" " + w + " "))) ["3" "4" "5" "6" "7" "8" "9"])))
 
+; a builtin's redirect while the shell wears an `out` of its own -- a pane's pty, inle's
+; console -- lands in the file and not in the port: fd 1 moved, the worn port did not
+(: sw-f "/tmp/lush-wear-law"
+   sw-j (jug 0) sw-w (worn ())
+   _ (wear [() sw-j ()])
+   _ ((cite 'lush 'sh-line) ("echo a >" + sw-f + "; echo b"))
+   _ (flush out)
+   _ (wear sw-w)
+   sw-q (open sw-f "r") sw-t (slurp sw-q) _ (close sw-q) _ (unlink sw-f)
+   sw-o (slurp sw-j)
+   (test ("a\n" = sw-t) ("b\n" = sw-o)))
+
 (test_fin ())
 (puts "sh: ok") (putc 10)

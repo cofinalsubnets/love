@@ -2102,15 +2102,19 @@
               r (sh-simple2 argv rs)
               _ (each saves sh-tmprestore)
               r)))
-   ; under a forkless capture `out` is a port over the pipe, not fd 1: a map that moves
-   ; fd 1 wears a port over the moved fd for the thunk's length
+   ; `out` and `err` are ports, and fd 1 and 2 only what a port over them writes to: a
+   ; forkless capture's pipe, a pane's own pty, inle's console written straight. so a map
+   ; that moves fd 1 or 2 wears a port over each moved fd for the thunk's length
    (sh-outrs fdmap th)
-     (? (atom? (sh-subfds ()) || !(elem 1 (map cap fdmap))) (th ())
-        (: fd (dup 1)
-           (? (nom? fd) (th ())
-              (: po (fdopen fd) w0 (worn ())
-                 _ (sh-wearout po)
-                 (mind th () (\ _ (flush out, wear w0, close po)))))))
+     (: ks (map cap fdmap)
+        (? !(elem 1 ks || elem 2 ks) (th ())
+           (: w0 (worn ())
+              (port k) (elem k ks ? (dup k @ fd (nom? fd ? () [(fdopen fd)])) ())
+              (keep n) (two? w0 ? (w0 n) ())
+              po (port 1) pe (port 2)
+              _ (wear [(keep 0) (two? po ? <po (keep 1)) (two? pe ? <pe (keep 2))])
+              (mind th () (\ _ (flush out, flush err, wear w0,
+                                each [po pe] (p \ two? p ? (close <p) 0)))))))
    ; run a thunk with redirects laid over our own fds (dup saves, dup2 swaps,
    ; swap back after) -- functions and builtins take their > < this way
    (sh-withrs rs th)

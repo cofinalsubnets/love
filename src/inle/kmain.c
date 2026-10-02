@@ -2126,15 +2126,26 @@ static lvm(lvm_fault) {
 // lands dormant with the code as its retval, which is what `wait` (catch) answers. unseated,
 // the exit is the machine's: reset -- test/kernel/kore0.l pins (: (quit n) n) one door deeper.
 static union u const k_exit_body[] = { {lvm_task_exit} };
+// whether a task on either ring other than the running one wears port x
+static bool k_wears(word l, word x) {
+  for (int i = 0; i < 3 && chainp(l); i++, l = B(l)) if (A(l) == x) return true;
+  return false; }
+static bool k_worn_elsewhere(struct ai *g, word x) {
+  union u *me = g->tasks, *h = g->parked;
+  for (union u *n = me[0].m; n && n != me; n = n[0].m) if (k_wears(n[7].x, x)) return true;
+  if (h) { union u *n = h; do { if (k_wears(n[7].x, x)) return true; n = n[0].m; } while (n != h); }
+  return false; }
 // the spawned half: shut the rows this task's worn stdio names -- a pipe's write end has to
 // close here for the reader to see EOF -- and clear the yield intentions. the port is
-// neutered as its row goes. -> nonzero when the task has a pid, so the wrapper knows the room.
+// neutered as its row goes. a port another task still wears is the parent's, handed down
+// (a console-numbered slot): its row stays, or a pane's shell loses its terminal to the
+// exit of every child. -> nonzero when the task has a pid, so the wrapper knows the room.
 ai_noinline static int k_task_exit(struct ai *g) {
   if (!k_cur_pid(g)) return 0;
   word l = *task_io(g);
   for (int i = 0; i < 3 && chainp(l); i++, l = B(l)) {
     word x = A(l);
-    if (!iop(x)) continue;
+    if (!iop(x) || k_worn_elsewhere(g, x)) continue;
     struct ai_fio *f = (struct ai_fio*) x;
     intptr_t fd = ai_io_fd(&f->io);
     if (fd > 2) k_row_close((int) fd), f->fd = putcharm(-1); }

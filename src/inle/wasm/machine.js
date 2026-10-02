@@ -86,8 +86,9 @@ export function glass(canvas, cols = 80, ratio = 0) {
   const cap = reservation(r);
   while (r > 1 && w * h * r * r > Math.min(cap, frame_cap)) r--;
   // 1..8 is the kernel's own range for a glyph scale (kmain's fbscale, and what
-  // k_fb_reseat will take): past it a huge screen would be refused outright
-  const scale = Math.min(8, Math.max(1, Math.ceil(w / (8 * n))) * r);
+  // k_fb_reseat will take): past it a huge screen would be refused outright. the zoom is
+  // taken in device pixels, so the grid comes as near the asked columns as a whole zoom allows
+  const scale = Math.min(8, Math.max(1, Math.ceil(w * r / (8 * n))));
   return { w: w * r, h: h * r, scale, cap }; }
 
 // --- the scan lane: the keyboard as a keyboard -----------------------------------------
