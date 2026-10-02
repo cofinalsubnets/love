@@ -2430,7 +2430,7 @@ void kmain(void) {
    "      (quit (? (charm? r) r 0)))"
    "   0)");
   r = ai_evals_(r,
-   "(: pr (k-prog (. \"inle\" (. \"--here\" ())))"
+   "(: pr (k-prog (. \"mitty\" (. \"--here\" ())))"
    "   (? (two? pr) (trap (\\ _ ((cap pr) (cup pr))) () (\\ a b 0)) 0))");
   r = ai_evals_(r, "(cite 'cli 'shell 0)");
   // a terminal scare gets the honest face on the serial console before reset
