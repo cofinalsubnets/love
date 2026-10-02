@@ -21,6 +21,14 @@
    _ (each (g 'bs) (b \ pin b 'hy 15.0))
    dry (sane (meadow-pens (g 'mv) g (meadow-sky g)))
    _ (pin g 'h 12.0) dryday (sane (meadow-pens (g 'mv) g (meadow-sky g)))
+   ; the sun and the moon: the sun up at noon and warm at its middle, gone at midnight; the
+   ; moon somewhere in the sky across the week, its phase a fraction of its round
+   _ (pins g 'h 12.0 'covers '(0.0 0.0 0.0 0.0 0.0 0.0 0.0))         ; clear: no cloud over the sun
+   bn (meadow-bodies (g 'mv) g) cn (meadow-pens (g 'mv) g (meadow-sky g))   sun (bn 0) si (two? sun ? (int (sun 1) * 80 + int (sun 0)) -1)
+   warm (0 <= si && peep (cn 2) si 1.0 + 0.15 < peep (cn 0) si 0.0)
+   _ (pin g 'h 24.0) bm (meadow-bodies (g 'mv) g)
+   seen (any (h \ (pin g 'h h, meadow-bodies (g 'mv) g 1 @ m two? m)) (map (k \ 6.0 + k * 3.0) ^56))
+   ph (bn 2)
    s (mkscr 24 80)
    bars (score-parse score99)
    ; the song's voice: a note through the tuner sounds, in range, and the same frames the same
@@ -30,6 +38,7 @@
    (scribe s night,
     test (count noon "\r\n" = 23) (count night "\r\n" = 23) !(noon = night) !(noon = leant)
          dry dryday
+         (two? sun) warm !(two? (bm 0)) seen (0.0 <= ph < 1.0)
          (chat s 79 != 0) (chat s (22 * 80 + 79) != 0)     ; the hud's last cell, the meadow's last row
          (8 = #bars) !(any (b \ b 'err) bars) sung (grass99-look 'voice = "cher")))
 

@@ -1,29 +1,30 @@
 ; meadow -- the grass game's field in three dimensions: the eye a few inches off the dirt
-; behind your blade, looking north along the row, the meadow running on behind it to green
-; hills paling into the air, the sky over all of it. the game is grass's and unchanged: its state is drawn
-; here as it stands, each blade bent by its own lean, stretch and bow, the field behind
-; swaying on the same wind, the shadows thrown along the sun, and the day's cover as the
-; sky's weather. south of the line, so the sun crosses the sky in front, east on the right
-; as the flat field has it.
+; behind your blade, looking south along the row, the meadow running on behind it to green
+; hills paling into the air, the sky over all of it, the sun and the moon crossing it. the
+; game is grass's and unchanged: its state is drawn here as it stands, each blade bent by
+; its own lean, stretch and bow, the field behind swaying on the same wind, the shadows
+; thrown along the sun, and the day's cover as the sky's weather. new york's sky, seen in
+; a mirror: east on the right, as the flat field has it.
 ;
 ; a frame is trays a picture wide: the land or the sky behind every pixel -- where each ray
 ; meets the land is found once, the eye and the hills holding still -- then the
 ; blades drawn over it far to near, a point a pixel -- a scatter's later write wins, so
 ; the order is the depth.
 (module (meadow meadow-new meadow-size meadow-pens meadow-frame meadow-sky meadow-light
-         meadow-weather cellm eye)
+         meadow-weather meadow-bodies cellm eye)
 (borrow 'view)
 (borrow 'vec)
 (borrow 'sky)
 (:
  cellm 0.00635                          ; a flat cell's width, a quarter inch, in metres
  inch 0.0254
- lat (-34.6 * pi / 180.0)               ; south of the line: the sun in the north
+ lat (40.7 * pi / 180.0)
  ; the equinox, so the sun is up from six to six as the game's daylight has it
  day0 (86400.0 * 20532.0)
  eye [0.0 0.1 -0.22]                    ; four inches up, nine back
  pitch -0.08
- lift-lo 0.12 lift 2.6                  ; the sky's lens: the horizon at 7 degrees, each degree over it 2.6
+ sky-lo -0.01                           ; the sky's lens: the land's edge a hair under the horizon
+ az-lift 2.1                            ; ..and each degree across 2.1, so the sun rises at one edge and sets at the other
  near-z 0.12                           ; the bare dirt behind the row, before the meadow
  deep-z 2.6                             ; how far the meadow's own blades run
  field-n 700
@@ -41,14 +42,36 @@
    e 0.05 hy0 (hill gx gz)
    nrm (unit [(hy0 - hill (gx + e) gz) e (hy0 - hill gx (gz + e))])
    _ (pins st 'nx (nrm 0) 'ny (nrm 1) 'nz (nrm 2) 'dist t)
-   ; ..and the sky through a lens: the strip over the horizon a blade's eye sees is
-   ; lifted and stretched to show the sky high overhead, so the clouds stand large and
-   ; the sun crosses the picture, as they do on the flat field
-   hl (sqrt (dx * dx + dz * dz)) el (lift-lo + lift * atan (max dy 0.0 / sqrt (max (1.0 - dy * dy) 1e-6))) cl (cos el)
-   _ (pins st 'sdx (dx / hl * cl) 'sdy (sin el) 'sdz (dz / hl * cl))
+   ; ..and the sky through a lens: in each column, the sky from the land's edge up to the
+   ; picture's top shows the whole of it from the horizon to overhead, and across, the
+   ; sky from sunrise to sunset -- so the clouds stand large, the sun comes up off the
+   ; hilltops and crosses the picture, as on the flat field. k the column's sky rows
+   sky (1 - gnd)
+   kc (gem-tray [w] (map (c \ 1.0 * net (peep sky (iota h * w + c) 0)) ^w))
+   kx (max (peep kc x 0.0) 1.0) f ((kx - y - 0.5) / kx)
+   el (sky-lo + f * (0.5 * pi - sky-lo) * 0.97) az (az-lift * atan U) cl (cos el)
+   _ (pins st 'kc kc 'sdx (cl * sin az) 'sdy (sin el) 'sdz (cl * cos az))
    (pins st 'w w 'h h 'foc (w / 2.0) 'dx dx 'dy dy 'dz dz 'gnd gnd
             'gx gx 'gz gz 'G (iota gnd) 'S (iota (1 - gnd))
             'bay (view-bayer w h) 'f [0.0 sp cp] 'u [0.0 cp (0.0 - sp)]))
+ (asin v) (atan (v / sqrt (max (1.0 - v * v) 1e-9)))
+ (at2 y x) (? (0.0 < x) (atan (y / x)) (x < 0.0) (atan (y / x) + (y < 0.0 ? (0.0 - pi) pi)) (y < 0.0 ? (-0.5 * pi) (0.5 * pi)))
+ ; ..and back: a direction in the sky to the place on the screen the lens shows it, [x y]
+ ; in pixels, or () when the lens puts it under the horizon or off the sides
+ (on-screen st q) (: w (st 'w) as (at2 (q 0) (q 2) / az-lift)
+   f ((asin (q 1) - sky-lo) / ((0.5 * pi - sky-lo) * 0.97))
+   x (0.5 * w * (1.0 + sin as / cos as))
+   (mag as < 1.4 && -4.0 < x && x < w + 4.0 && -0.1 < f ?
+      [x (peep (st 'kc) (min2 (w - 1) (max2 0 (int x))) 1.0 * (1.0 - f))] ()))
+ ; the pixels of a disc r across at c, off the land: [idx du dv], du dv its own
+ ; coordinates, -1 to 1, up and to the right
+ (disc st c r) (: w (st 'w) h (st 'h) x0 (max2 0 (int (c 0 - r) - 1)) x1 (min2 (w - 1) (int (c 0 + r) + 1))
+   y0 (max2 0 (int (c 1 - r) - 1)) y1 (min2 (h - 1) (int (c 1 + r) + 1)) bw (x1 - x0 + 1) bh (y1 - y0 + 1)
+   (bw < 1 || bh < 1 ? ()
+      (: i (iota (bw * bh)) px (x0 + i % bw) py (y0 + i // bw) idx (py * w + px)
+         du ((px + 0.5 - c 0) / r) dv ((c 1 - py - 0.5) / r)
+         in ((du * du + dv * dv < 1.0) * (1 - peep (st 'gnd) idx 1))
+         [(int (over -1 in idx)) du dv])))              ; the land's mask is a float: an index must not be
  ; --- the land: flat about the row and the meadow, then gentle hills, broad crests a few
  ; metres high some tens of metres off, rising out of the flat by a smooth step ---
  (hill x z) (: r (sat ((z - 4.0) / 18.0)) a (r * r * (3.0 - 2.0 * r))
@@ -84,7 +107,14 @@
  (meadow-new seed w h) (: st (meadow-size {'seed seed} w h)
                           (pin st 'field (field seed (st 'foc))))
  ; --- the hour and the weather from the game ---
- (meadow-sun g) (sky-sun (day0 + (g 'h % 24.0) * 3600.0) 0.0 lat)
+ ; the sky's [east up north] seen facing south in the mirror: [right up ahead]
+ (mirror v) [(v 0) (v 1) (0.0 - v 2)]
+ (meadow-sun g) (mirror (sky-sun (day0 + (g 'h % 24.0) * 3600.0) 0.0 lat))
+ ; the moon: a phase thrown with the week, and a round of it every 29.53 days. it rides
+ ; the sun's track, as many hours behind it as its phase is of a day
+ (meadow-phase st g) (frac (st 'seed * 0.6180339 + g 'h / 24.0 / 29.530588))
+ (meadow-moon st g) (: p (meadow-phase st g)
+   (mirror (sky-body (day0 + (g 'h % 24.0) * 3600.0) lat (-24.0 * p) (365.2422 * p))))
  ; the clouds ride a clock of their own, a slow one: the game's day is a minute
  (cloud-sim g) (g 'fr * 2.0)
  (meadow-weather g style) (: d (int (g 'h / 24.0) @ v (6 < v ? 6 v)) c (g 'covers d)
@@ -162,7 +192,29 @@
    gc (cmix (cm alb irr) hazec far)
 
    z0 (st 'dx * 0.0)
-   col0 (map (k \ pin (pin z0 G (gc k)) S (hv k)) ^3)
+   col00 (map (k \ pin (pin z0 G (gc k)) S (hv k)) ^3)
+   ; --- the sun and the moon, discs where the lens shows them, the land in front of them ---
+   (put col d c) (: ix (d 0) (map (k \ pin (col k) ix (c k)) ^3))
+   (behind col d) (: ix (d 0) (map (k \ peep (col k) ix 0.0) ^3))
+   ; the sun: hot at the middle, its colour the light's, and behind a cloud dimmed
+   sc (on-screen st s) sd (s 1 < -0.03 || !sc ? () (disc st sc 2.4))
+   col01 (two? sd ? (: rr (sd 1 * sd 1 + sd 2 * sd 2) fall (sat ((1.0 - rr) * 3.0) * (1.0 - 0.85 * lt 'csun))
+                       core (c* 1.4 (cmix [1.0 0.42 0.08] [1.0 0.8 0.28] (sat ((s 1 - 0.02) / 0.3))))
+                       (put col00 sd (cmix (behind col00 sd) core fall)))
+              col00)
+   ; the moon: its lit side toward the sun and as wide as the phase, seas on it, pale by day,
+   ; behind a cloud dimmed, and its dark side hiding the stars
+   mo (meadow-moon st g) ph (meadow-phase st g)
+   mcs (on-screen st mo) md (mo 1 < -0.03 || !mcs ? () (disc st mcs 2.8))
+   col0 (two? md ? (: du (md 1) dv (md 2)
+                     sg (? (0.0 < wrap (at2 (s 0) (s 2) - at2 (mo 0) (mo 2))) 1.0 -1.0)
+                     lit (sg * du > cos (2.0 * pi * ph) * sqrt (max (1.0 - dv * dv) 0.0))
+                     sea (0.72 + 0.28 * vn ((du + 3.0) * 2.3) ((dv + 3.0) * 2.3) 77)
+                     cl (sky-cloud wx (mo 0) (mo 1) (mo 2) (eye 0) (eye 2) sim)
+                     k (sea * (0.5 + 0.9 * (1.0 - lt 'day)) * (1.0 - 0.85 * cl))
+                     sk (behind col01 md)
+                     (put col01 md (c+ (c* (1.0 - 0.6 * (1 - lit) * (1.0 - lt 'day)) sk) (c* (lit * k) [0.95 0.93 0.82]))))
+             col01)
    ; --- the blades, far to near: the meadow's, then the row's ---
    (green hue u wilt mu) (: base (cmix [0.05 0.16 0.03] [0.16 0.4 0.07] u)
                             tint (c+ base (c* (hue * 0.06) [0.6 0.4 -0.1]))
@@ -186,5 +238,9 @@
  (meadow-frame st g wx deep) (: w (st 'w) h (st 'h) c (meadow-pens st g wx)
    px (deep ? (view-deep-pens c) (view-cube-pens c (st 'bay * 0.5 + 0.25)))
    (deep ? (view-deep-frame w h px {}) (view-frame w h (y \ peep px (iota w + w * y) 0) {})))
- (meadow-sky g) (meadow-weather g 'smooth))
+ (meadow-sky g) (meadow-weather g 'smooth)
+ ; where the sun and the moon stand on the screen, [x y] or (), and the moon's phase
+ (meadow-bodies st g) [(meadow-sun g @ s (s 1 < -0.03 ? () (on-screen st s)))
+                       (meadow-moon st g @ m (m 1 < -0.03 ? () (on-screen st m)))
+                       (meadow-phase st g)])
 ) ; module meadow
