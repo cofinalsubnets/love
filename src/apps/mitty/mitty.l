@@ -514,14 +514,14 @@
                   (wharf-berths (hb 'plan)))
  ; --- the swim: repaint on dirt at ~30fps, feel the tide every half second,
  ; and end when the last berth empties ---
- (hswim hb tick) (hb 'dirt @ b
+ (hswim hb tick) (: b (hb 'dirt) t0 (clock ())
                     (htick hb,
                      ? (hlive? hb) (hidle hb @ f (0 < #f ? (say (hout hb) f, flush (hout hb)) 0)) 0,
                      ? !(hlive? hb) 0 (hidle? hb) 0
                        (peep b () 0) (pin b () 0, say (hout hb) (hframe hb), flush (hout hb), 0) 0,   ; say is the bulk lane
                      ? (0 = tick % 16) (htide hb) 0,
                      ? (0 = tick % 32) (hbartick hb) 0,
-                     rest (hquick? hb ? 8 33),
+                     rest (max 1 ((hquick? hb ? 8 33) - (clock () - t0))),   ; the turn's own time counts toward it
                      two? (wharf-berths (hb 'plan)) ? (hswim hb (tick + 1)) ()))
 
  ; --- the harbour, empty, at r x c: born dirty, so frame one is painted; 'more is
