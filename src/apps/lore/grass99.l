@@ -10,16 +10,18 @@
 (borrow 'meadow)                        ; the field in three dimensions
 (:
  esc (string 27)
- ; the tune as a score, read as grass reads its own: a bar to the line, in G minor
+ ; the tune as a score, read as grass reads its own: a bar to the line, in B flat. gwen's
+ ; melody, picked out on synth's row as 6 8 - 4 3 / 3 6 0 8 6, is the first four bars;
+ ; the last four answer it, the climb going on to d, the sigh an octave up, the walk home
  score99 '("key Bb Eb"
-           "[Gm] G4 .5 Bb4 .5 D5 1 - .5 D5 .5 C5 1"
-           "[Eb] Bb4 .5 C5 .5 Eb5 1 - .5 D5 .5 C5 1"
-           "[Bb] D5 .75 - .25 D5 .5 F5 .5 D5 1 C5 1"
-           "[F] C5 .5 A4 .5 F4 1 - 2"
-           "[Gm] G4 .5 Bb4 .5 D5 1 - .5 G5 .5 F5 1"
-           "[Eb] Eb5 .5 D5 .5 C5 1 - .5 Bb4 .5 C5 1"
-           "[Cm] D5 1.5 C5 .5 Bb4 1 A4 1"
-           "[D] A4 .5 Bb4 .5 A4 1 G4 2")
+           "[Bb] F4 .5 G4 .5 Bb4 3"
+           "[Gm] Eb4 1.5 D4 2.5"
+           "[Dm] D4 .5 F4 .5 A4 3"
+           "[F] G4 1.5 F4 2.5"
+           "[Bb] F4 .5 G4 .5 Bb4 1 C5 .5 D5 1.5"
+           "[Gm] Eb5 1.5 D5 2.5"
+           "[F] D5 .5 C5 .5 Bb4 1 A4 2"
+           "[Bb] G4 1 A4 1 Bb4 2")
  ttl99 "leaves of grass simulator 1999"
  rows99 '(""
           "hjkl or arrows keys to dance"

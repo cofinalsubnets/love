@@ -74,9 +74,9 @@
          [(int (over -1 in idx)) du dv])))              ; the land's mask is a float: an index must not be
  ; --- the land: flat about the row and the meadow, then gentle hills, broad crests a few
  ; metres high some tens of metres off, rising out of the flat by a smooth step ---
- (hill x z) (: r (sat ((z - 4.0) / 18.0)) a (r * r * (3.0 - 2.0 * r))
-   (a * max 0.0 (4.0 + 3.0 * sin (x * 0.035 + 0.3) * cos (z * 0.025) + 1.4 * sin (x * 0.08 - z * 0.04 + 1.1)
-                 + 0.3 * sin (x * 0.21 + z * 0.15))))
+ (hill x z) (: r (sat ((z - 8.0) / 38.0)) a (r * r * (3.0 - 2.0 * r))
+   (a * max 0.0 (4.2 + 2.0 * sin (x * 0.03 + 0.3) * cos (z * 0.02) + 1.0 * sin (x * 0.06 - z * 0.035 + 1.1)
+                 + 0.5 * cos (z * 0.08 + x * 0.015))))
  ; a ray against the land: stepped out geometrically to some hundreds of metres, the first
  ; step under the land bracketing the meeting, and the bracket halved down to it. answers
  ; [met t]: met 0 is the sky
