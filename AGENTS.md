@@ -30,6 +30,6 @@ Take part in a merge queue only through bee's tools: as a bee agent, or from Cla
 
 When the queue is long (two or more rows waiting or gating, or more heavy-lock waiters than slots), fold, don't line up. One owner's branches join as one union that gates once, and each branch runs only its light lanes.
 
-Start a Claude Code session in this tree as `claude --dangerously-load-development-channels server:bee` (a resume too), so bee's mail wakes it when idle; `doc/bee.md` says how. Without the flag, mail waits for the session's next bee tool call.
+Start a Claude Code session in this tree as `claude --dangerously-load-development-channels server:bee` (a resume too), so bee's mail wakes it when idle; `doc/bee.md` says how. Without the flag, mail waits for the session's next bee tool call. To bring a session back after a restart or a crash, `love bee --resume NAME` (the names: `love bee --resume`) relaunches it under its own name, ringing.
 
 After a landing that changes bee, every live session restarts at its next convenient point: between tasks, never mid-gate, in the same directory. bee says so itself, in the release note and when its binary is replaced.
