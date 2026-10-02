@@ -8,11 +8,14 @@
 # the tree's own bytes. termios proper needs a real tty and is not here.
 #
 # the box arrives by env: FBSD_SSH, NBSD_SSH, FBSD_ARM64_SSH, NBSD_ARM64_SSH, each a
-# command prefix ("ssh -p 2222 -i key root@host"); without one the gate skips loudly.
+# command prefix ("ssh -p 2222 -i key root@host"). a caller that exports none gets them from
+# $OSBOX_ENV (default ~/bin/osbox-env) when it exists; without a box the gate skips loudly.
 # on a64 the local half of each comparison runs under qemu-aarch64, and skips without it.
 # provisioning the boxes: doc/misc/osbox.md.
 # usage: osbox.sh OUTDIR LOVE0 freebsd|netbsd [x64|a64]
 . test/gate/skip.sh
+oe=${OSBOX_ENV:-$HOME/bin/osbox-env}
+[ -n "${FBSD_SSH:-}${NBSD_SSH:-}${FBSD_ARM64_SSH:-}${NBSD_ARM64_SSH:-}" ] || [ ! -r "$oe" ] || . "$oe"
 set -u
 
 ho=$1
