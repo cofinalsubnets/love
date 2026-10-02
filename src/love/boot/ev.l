@@ -332,8 +332,16 @@
        !(nom? h) (: hd (charm? h || two? h ? 0 (feels h))
                           (hd ? (hd x) (apx . 0 . x)))
        (elem h bnd) (apx . 0 . x)                    ; a shadowed name: local head
-       (: v (gv h ()) hd (feels v)
-        (hd ? (hd x) (apx . napof v >x . x)))))
+       (: v (gv h ()) hd (feels v) jf (nom? v ? () (jotfuse v)) n (two? jf ? (jotn x jf bnd) ())
+        (? (two? n) (apx . napof v >x . ['\ (jf 2)] . jotsub >x <jf <n)   ; a walker over jot: its twin
+           hd (hd x)
+           (apx . napof v >x . x)))))
+   ; the walked operand of a walker call is (jot N), as fold leaves it: (apx 0 jot N), the head
+   ; book's jot by name or by value -> [N], else ()
+   (jotn x jf bnd) (: a (two? jf && jf 1 = #>x && >x <jf) j (jotfuse 'jot)
+    (two? a && <a == apx && 4 = #a && <>a == 0
+     && (: h <>>a (h == j || h == 'jot && !(elem 'jot bnd) && gv 'jot () == j)) ? [<>>>a] ()))
+   (jotsub as k n) (k = 0 ? (n . >as) (<as . jotsub >as (k - 1) n))
    ; cprop: the partial-evaluation pre-pass. threads a static value env `se` (name . const-form),
    ; propagating a constant-bound var and folding a pure-fn call on constant args; pureset is the
    ; fold license and a bnd-shadowed head never folds (the alpha law). it prunes no conds (wxc
