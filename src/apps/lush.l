@@ -1410,9 +1410,7 @@
    ; this binary. `set --autonomous` and its kin, else the flag word, else LUSHFLAGS'
    ; last a, g or p. the entry pins the box once; an unseated caller (cook, a -e) reads
    ; the environment at the ask and pins nothing, which would bake in its answer.
-   (sh-envflag _) (: s ("" + (getenv "LUSHFLAGS")) n #s
-                     (go k v) (n <= k ? v (go (k + 1) (s k @ 97 0 103 1 112 2 _ v)))
-                     (go 0 0))
+   (sh-envflag _) (: s ("" + (getenv "LUSHFLAGS")) (foldl (\ v k (s k @ 97 0 103 1 112 2 _ v)) 0 ^#s))
    (sh-mode _) (peep sh-mflag () 'no @ 'no (sh-envflag 0) v v) ; peep: a pinned 0 is a verdict, not an absence
    sh-modes {"--autonomous" 0 "--gregarious" 1 "--precarious" 2}
    ; a new mode asks each word again: the in-image and fork verdicts were the old one's

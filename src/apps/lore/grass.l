@@ -77,7 +77,7 @@
  (fx1 x) (int (x * 10.0 + 0.5) @ n (show (n // 10) + "." + show (n % 10)))
  (two-dig n) (n < 10 ? ("0" + show n) (show n))
  ; what a row is worth in cells: a glyph's tail bytes belong to the lead that began it
- (wide s) (:- (go 0 0) (go i n) (i >= #s ? n (go (i + 1) (n + lead (s i)))))
+ (wide s) (foldl (\ n i (n + lead (s i))) 0 ^#s)
  sgrs {}
  (sgr f b) (: k [f b] s (sgrs k)
               (string? s ? s

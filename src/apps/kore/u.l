@@ -128,8 +128,7 @@
    ; after an operand
    (ustray who as rest) (uoptstray as rest @ w (!w ? rest (udie 2 (who + ": unknown option " + w))))
    ; octal text -> a charm ("755" is 493), chmod's one argument shape
-   (uoct s) (:- (go 0 0) n #s (go i acc)
-    (i >= n ? acc (go (i + 1) (8 * acc + s i - 48))))
+   (uoct s) (foldl (\ acc i (8 * acc + s i - 48)) 0 ^#s)
    ; a mode word onto the mode cur: octal whole, or chmod's symbolic clauses, `who` of
    ; ugoa then +-= runs of rwxXst or one of ugo to copy (u+x,go-w,a=rX). no who is all
    ; three less the umask um. a directory keeps its setuid and setgid bits through = and

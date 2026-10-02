@@ -1198,7 +1198,7 @@ static void cb_put1(struct cb *c, uint8_t i) {
     if (i < ' ') return cb_ctl(c, i);
     return cb_glyph(c, i); } }
 
-// the built-in faces draw the cp437 page (cp437.h, laid by quay.l): a codepoint's
+// the built-in fonts draw the cp437 page (cp437.h, laid by quay.l): a codepoint's
 // glyph is ascii as itself, else the fold's -- the classic page plus aliases that
 // MEAN one of ours. anything else, astral planes included, wears the ■.
 int cb_437x(uint32_t cp) {
@@ -1215,9 +1215,9 @@ uint8_t cb_437(uint32_t cp) { int g = cb_437x(cp); return g < 0 ? 0xfe : (uint8_
 
 static uint32_t cb_rd16(uint8_t const *b, uintptr_t i) { return (uint32_t) b[i] | (uint32_t) b[i + 1] << 8; }
 
-// a face is 12 bytes of head, the directory, the pages and the glyphs, each index in
-// range: a page names a real page, a glyph a real glyph. anything else is no face
-int cb_face_ok(uint8_t const *b, uintptr_t n) {
+// a font is 12 bytes of head, the directory, the pages and the glyphs, each index in
+// range: a page names a real page, a glyph a real glyph. anything else is no font
+int cb_font_ok(uint8_t const *b, uintptr_t n) {
   if (!b || n < cb_qf_head + 2u * cb_qf_dir) return 0;
   if (b[0] != 'q' || b[1] != 'f' || b[2] != '1' || b[3] || b[4] != 8 || b[5] != 16) return 0;
   uint32_t const np = cb_rd16(b, 6), ng = cb_rd16(b, 8) | cb_rd16(b, 10) << 16;
@@ -1230,8 +1230,8 @@ int cb_face_ok(uint8_t const *b, uintptr_t n) {
     if (cb_rd16(b, pg0 + 2u * k) > ng) return 0;
   return 1; }
 
-// cp's 16 rows in a vetted face, or 0
-uint8_t const *cb_face_rows(uint8_t const *b, uint32_t cp) {
+// cp's 16 rows in a vetted font, or 0
+uint8_t const *cb_font_rows(uint8_t const *b, uint32_t cp) {
   if (!b || cp >= 0x110000u) return 0;
   uint32_t const np = cb_rd16(b, 6), p = cb_rd16(b, cb_qf_head + 2u * (cp >> 8));
   if (p == 0xffff) return 0;

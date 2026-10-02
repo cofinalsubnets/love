@@ -128,9 +128,7 @@
          put out c,
          pin st 'col (peep st 'col 0 + 1))))
    (bc-say st t)
-    (: n #t
-       (go k) (n <= k ? 0 (bc-put st (t k), go (k + 1)))
-       (go 0))
+    (each ^#t (k \ bc-put st (t k)), 0)
    (bc-print st n) (pin st 'last n, bc-say st (bc-show st n))
 
    ; -- the complaints --------------------------------------------------------

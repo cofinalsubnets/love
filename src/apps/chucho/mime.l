@@ -92,15 +92,10 @@
 
  ; --- charsets: latin-1 and windows-1252 widen to utf-8, the rest pass as they are -------
  (mime-latin s w?)
-  (: j (jug 0) n #s
-     (go i)
-      (n <= i ? (slurp j)
-         (s i @ c
-            ((? (c < 128) (put j c)
-                (w? && c < 160 && 0 < mime-1252 (c - 128)) (say j (utf8 (mime-1252 (c - 128))))
-                (say j (utf8 c))),
-             go (i + 1))))
-     (go 0))
+  (jug 0 @ j (each ^#s (i \ (s i @ c (? (c < 128) (put j c)
+                                        (w? && c < 160 && 0 < mime-1252 (c - 128)) (say j (utf8 (mime-1252 (c - 128))))
+                                        (say j (utf8 c))))),
+              slurp j))
  (mime-ascii? s) (: (go i) (? (#s <= i) 1 (127 < s i) 0 (go (i + 1))) (go 0))
  (mime-utf8 s cs)
   (lower cs @ c

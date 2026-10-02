@@ -46,7 +46,7 @@
    ; read a file's top-level forms as data (the reader strips ; comments)
 
    ; a uu name -> a Rocq identifier: prefix uu_, kebab '-' -> '_'
-   (sanit s) (: (g i acc) (i < #s ? (g (1 + i) (acc + string (s i @ c (c = 45 ? 95 c)))) acc) (g 0 ""))
+   (sanit s) (jug 0 @ j (each ^#s (i \ say j (string (s i @ c (c = 45 ? 95 c)))), slurp j))
    (rocqn nm) ("uu_" + sanit (string nm))
 
    ; --- collect (kind nm T t) entries from the uu.l forms (defns live inside asserts) ---

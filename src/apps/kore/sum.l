@@ -102,12 +102,7 @@
    ; a checksum line, and a file of prose then reads as a list of failures instead of
    ; the "no checksum lines here" it is. an upper-case list is a list.
    (sum-lower s)
-    (: n #s
-       o (jug 0)
-       (go k) (n <= k ? (slurp o)
-               (s k @ c
-                  (put o (64 < c && c < 71 ? (c + 32) c), go (k + 1))))
-       (go 0))
+    (jug 0 @ o (each ^#s (k \ (s k @ c (put o (64 < c && c < 71 ? (c + 32) c)))), slurp o))
    (sum-hex? l n)
     (: (go k) (n <= k ? 1
                (l k @ c
