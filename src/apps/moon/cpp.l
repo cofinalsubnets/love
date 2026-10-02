@@ -63,7 +63,7 @@
                 (go l ()))
 
    ; -- the spelling of a token, for ## paste and # stringize --
-   numks '(num unum ulnum llnum ullnum flo flof iflo)
+   numks '(num unum lnum ulnum llnum ullnum flo flof iflo)
    (spell t) (: k (kof t) s (sof t)
                 (? (0 < #s) s                            ; the spelling the lexer kept
                    (elem k numks) (show (vof t))           ; ..or a cpp-minted decimal
@@ -283,7 +283,7 @@
    (cprim ts)
     (atom? ts ? [(cv 0 0) ()]
        (<ts @ t
-          (? (elem (kof t) '(num unum ulnum llnum ullnum))
+          (? (elem (kof t) '(num unum lnum ulnum llnum ullnum))
               ; a U suffix says unsigned, and so does a value past intmax's top --
               ; 0xffffffffffffffff has no signed type to land in (C11 6.4.4.1)
               [(cv (vof t) (elem (kof t) '(unum ulnum ullnum) || h64 <= vof t)) >ts]
