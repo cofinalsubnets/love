@@ -2368,7 +2368,8 @@ void kmain(void) {
  // -- getenv the value | (), setenv () | 'badarg (a non-string value unsets), environ the
  // raw "NAME=value" strings.
  "(: envt (tablet 0)"
- "   _ (pin envt 0 (. (. \"HOME\" \"/home\") ()))"
+ // the console is quay, which keeps a cell's 24-bit colour, and says so
+ "   _ (pin envt 0 (. (. \"HOME\" \"/home\") (. (. \"COLORTERM\" \"truecolor\") ())))"
  "   (envget l n) (? (two? l) (? (= n (cap (cap l))) (cup (cap l)) (envget (cup l) n)) ())"
  "   (envcut l n) (? (two? l) (? (= n (cap (cap l))) (envcut (cup l) n)"
  "                              (. (cap l) (envcut (cup l) n))) ())"
