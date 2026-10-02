@@ -20,6 +20,7 @@
 #     second base, diffed word for word (test/gate/pdreloc.l)
 #
 # usage: playdate.sh MAKE LOVE
+. test/gate/skip.sh
 set -u
 
 mk=$1
@@ -31,8 +32,7 @@ $mk -C src/love/user/playdate probe || fail "the device main does not compile"
 
 echo "TEST out/playdate/love.pdx"
 if [ -z "${PLAYDATE_SDK_PATH:-}" ]; then
-  echo "test_playdate: the device main compiles; no PLAYDATE_SDK_PATH, the pdx half skipped"
-  exit 0
+  gate_skip "test_playdate: the device main compiles; no PLAYDATE_SDK_PATH, the pdx half skipped"
 fi
 
 $mk -C src/love/user/playdate || fail "build"

@@ -7,7 +7,7 @@
 ;   cat test/00-init.l test/host/kitpng.l | out/love
 (borrow 'posix)
 (: magick? (open "/usr/bin/magick" "r" @ q (hot? q ? (close q, 1) 0))
-   _ (magick? ? 0 (puts "kitpng: ok (no magick, skipped)\n", quit 0))
+   _ (magick? ? 0 (gate-skip "kitpng: ok (no magick, skipped)"))
    dir (cwd 0 + "/out/.kitpng")
    _ (hark ["rm" "-rf" dir], mkdir dir 448)
    (put p s) (open p "w" @ q (say q s, close q))

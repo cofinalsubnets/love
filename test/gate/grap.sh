@@ -12,10 +12,11 @@
 # difference.
 #
 # skips where plan 9's grap is missing; takes the love binary as $1.
+. test/gate/skip.sh
 love=${1:-out/love}
 [ -x "$love" ] || { echo "grap: no $love -- run 'make host'"; exit 1; }
 ref=/usr/lib/plan9/bin/grap
-[ -x "$ref" ] || { echo "grap: no $ref (plan9port), skipped"; exit 0; }
+[ -x "$ref" ] || gate_skip "grap: no $ref (plan9port), skipped"
 verbose=$2
 r=$(pwd)
 L=$r/$love
