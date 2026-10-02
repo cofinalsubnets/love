@@ -83,7 +83,7 @@
                        1000000))
 
      ; a harbour's hands, when this bee is one of its panes: a tablet of the panes' doors
-     ; (src/apps/berth/berth.l, hhands), each answering [ok? text]
+     ; (src/apps/mitty/mitty.l, hhands), each answering [ok? text]
      bee-hands (: h (filter tablet? as) (two? h ? <h ()))
      (prop desc) {"type" "string" "description" desc}
      (tool name desc props req)
@@ -1999,7 +1999,7 @@
          _ (raw 0)
          0)
 
-     ; --- the stage: the full screen as a pane of a harbour (src/apps/berth/berth.l), which
+     ; --- the stage: the full screen as a pane of a harbour (src/apps/mitty/mitty.l), which
      ; owns the tty, the keys' reader and the clock. its frame is scribed into the pane's own
      ; screen, so tui-fresh diffs against what that screen holds. no saver: idle is the harbour's
      (tstage key yes)

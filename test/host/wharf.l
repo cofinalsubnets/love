@@ -1,8 +1,8 @@
-; test/host/wharf.l -- the laws of src/apps/berth/wharf.l, quay's layout algebra, arithmetic over
+; test/host/wharf.l -- the laws of src/apps/mitty/wharf.l, quay's layout algebra, arithmetic over
 ; lists. a rectangle is (id row col rows cols), 0-based; a bar is (dir row col len), dir 'across
 ; or 'down. not in the corpus: borrow finds wharf.l on the filesystem, and love0's second
 ; evaluation stops inside it. run: cat test/00-init.l test/host/wharf.l | out/love
-(borrow "src/apps/berth/wharf.l")
+(borrow "src/apps/mitty/wharf.l")
 
 ; --- the two standing laws, checked rather than trusted ---
 ; spans are half-open, so a zero-extent berth is inside everything and overlaps

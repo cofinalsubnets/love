@@ -1,8 +1,8 @@
-; test/kernel/pane.l -- a berth pane on the kernel, as the harbour opens one: hopen tethers a
+; test/kernel/pane.l -- a mitty pane on the kernel, as the harbour opens one: hopen tethers a
 ; child on a pty of its own at the pane's size, moor scribes what the master reads onto the
-; pane's grid until the child is gone, and hscreen-text reads the grid back. the crew's berth,
+; pane's grid until the child is gone, and hscreen-text reads the grid back. the crew's mitty,
 ; the one `inle` boots: on a woken image its doors were bound on the host. kernel corpus only.
-(borrow 'berth)
+(borrow 'mitty)
 
 ; a pane's rows once its child has ended; a watchdog stills the child's group should it hang,
 ; so a wedged pane fails its law and the corpus goes on

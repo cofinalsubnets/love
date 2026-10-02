@@ -1,15 +1,15 @@
-; --- test/limn.l: the laws of src/apps/berth/limn.l, the cell painter ---
+; --- test/limn.l: the laws of src/apps/mitty/limn.l, the cell painter ---
 ; `glass` is cb's nif (src/love/quay/nif.c) and love0 links it too, so these
-; are corpus laws. `borrow` finds src/apps/berth/limn.l by the filesystem walk, which the
+; are corpus laws. `borrow` finds src/apps/mitty/limn.l by the filesystem walk, which the
 ; hosted seats have; a seat without one will want a guard here.
 ;
 ;   cat test/00-init.l test/limn.l | out/love   ; exits 1 on fail
 ;
 ; the vocabulary under test: a grid of cb cells in, escapes out. origins are
 ; 0-based going in and 1-based on the wire, which is the one conversion here.
-(borrow "src/apps/berth/limn.l")
+(borrow "src/apps/mitty/limn.l")
 
-; `sub?` is each gate's own here (test/host/berth.l carries the same three lines) --
+; `sub?` is each gate's own here (test/host/mitty.l carries the same three lines) --
 ; it searches from i; `at?` is the exact-position twin, which is what counting wants
 (: (at? h n i) (((i + #n) <= #h) && n = snip h i (i + #n))
    (sub? h n i) (? ((i + #n) < (#h + 1))
@@ -53,6 +53,17 @@
            (sub? (limn-sgr (limn-pen (16 << 24) 0 0)) ";3" 0)
            (sub? (limn-sgr (limn-pen (32 << 24) 0 0)) ";9" 0)))
 
+; --- limned says a run of cells as limn-sgr and limn-glyph would, one SGR per pen
+;     change, nothing for a wide char's tail, and answers the cells done and the pen ---
+   _ (: s (mkscr 1 8)
+        _ (scribe s "\e[1;3;7;9;38;5;200;48;2;9;8;7mA\e[0;2;4;5;8mB\e[m\u{4e16}c")
+        r (limned s 0 8 -1 0 0)
+        (pen k) (limn-pen (glass s k 0) (glass s k 1) (glass s k 2))
+        _ (test
+           ((limn-sgr (pen 0) + "A" + limn-sgr (pen 1) + "B" + limn-sgr (pen 2) + limn-glyph 19990
+             + "c   ") = <r)
+           ([8 0 0 0] = >r)))
+
 ; --- through a screen: truecolour and a codepoint the cp437 page lacks both come
 ;     back out as they went in ---
    _ (: s (mkscr 1 4)
@@ -93,7 +104,7 @@
            !(sub? f "\e[1;1H" 0)))                    ; never the home cell
 
 ; --- a blank cell is a space, so a pane always writes every cell it owns and no
-;     stale glyph can survive underneath it (src/apps/berth/limn.l's no-erase bargain) ---
+;     stale glyph can survive underneath it (src/apps/mitty/limn.l's no-erase bargain) ---
    _ (: s (mkscr 1 4)
         _ (scribe s "z")
         f (paint s 1 4 0 0)

@@ -1,8 +1,8 @@
-; src/apps/berth/pier.l -- berth steps ashore: the terminal emulator in its own X window.
+; src/apps/mitty/pier.l -- mitty steps ashore: the terminal emulator in its own X window.
 ;
 ;   love pier [-f FONT.hex] [-display :N] [CMD ARG..]     CMD defaults to $SHELL, else sh
 ;
-; the same moor as berth -- a child on a pty, its bytes through a quay screen -- but the
+; the same moor as mitty -- a child on a pty, its bytes through a quay screen -- but the
 ; screen is painted as pixels: `dye` lays a row into a 32bpp cask with the console's own
 ; painter (src/love/quay/paint.c, the one inle's framebuffer takes), so pier draws what the
 ; console draws -- truecolour, the faces, wide chars, sixel and kitty pictures, and a face
@@ -17,7 +17,7 @@
 (module '(pier pier pier-keybytes pier-keysyms pier-main)
 (borrow 'xwire)
 (borrow 'posix)
-(borrow 'berth)
+(borrow 'mitty)
 (borrow 'face)
 (:
    ; --- the requests the wire does not carry: a window of ours, a GC, a title, the delete
