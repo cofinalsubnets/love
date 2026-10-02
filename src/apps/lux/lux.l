@@ -188,19 +188,88 @@
    ;     ICCCM courtesy synthetic ever comes (a toolkit that skips it still
    ;     gets evicted instead of a window that can never disappear). ---
    mapd (tablet 8) owed (tablet 8)
-   (map! w) (pin mapd w 1, x-map s w)
-   (hide! w) (peep mapd w 0 ? (pin owed w (1 + peep owed w 0)) 0,              ; only a mapped window echoes -- an unmap of the
+   (map! w) (pin mapd w 1, x-map s w, fwin w @ f (f = w ? 0 (x-map s f)))
+   (hide! w) (fwin w @ f (f = w ? 0 (x-unmap s f)),
+              peep mapd w 0 ? (pin owed w (1 + peep owed w 0)) 0,              ; only a mapped window echoes -- an unmap of the
               pull mapd w 0, x-unmap s w)                                        ; already-hidden fires no event, so no count
+
+   ; --- frames: a managed window rides in a frame of its own size, the client at
+   ;     (0 0) inside -- a reparenting wm, so a toolkit that assumes one (java's awt)
+   ;     places itself right. the frame takes the client's depth and visual (a
+   ;     compositor reads alpha off the top-level), wears the border, moves and
+   ;     stacks; override-redirect, so a restart's sweep never adopts a stale one.
+   ;     the client is resized only when its size changes and told its root
+   ;     geometry (ICCCM 4.2.3) when the frame moves; an unchanged place sends nothing.
+   ;     a frame record: 'f the frame, 'own its own visual, 'g (x y w h bw), 'px.
+   ;     the root's children are frames now: a client's parent is its frame, at (0 0) ---
+   frm (tablet 8) fidc {'n 16 'free ()} cmaps (tablet 4)
+   (fid u) (fidc 'free @ fr (two? fr ? (pin fidc 'free >fr, <fr)
+                               (fidc 'n @ n (pin fidc 'n (n + 1), scr-idbase sc + n))))
+   (fwin w) (peep frm w () @ r (r ? (r 'f) w))                                    ; what moves and stacks: the frame, else the window
+   (visdepth w)                                                                  ; -> (visual depth) | ()
+    (: _ (x-w8 s 3, x-w8 s 0, x-w16 s 2, x-w32 s w, x-flush s)                   ; GetWindowAttributes: the visual at byte 8
+       a (x-reply s) _ (<a = 1 ? (x-rbytes s (u32 a 4 * 4)) 0)
+       _ (x-w8 s 14, x-w8 s 0, x-w16 s 2, x-w32 s w, x-flush s)                  ; GetGeometry: the depth at byte 1
+       g (x-reply s)
+       (<a = 1 && <g = 1 ? [(u32 a 8) (g 1)] ()))
+   (frame! w g)                                                                  ; g: the client's root rect
+    (visdepth w @ vd
+       (? !vd 0
+          (: f (fid ()) own (vd 1 != scr-depth sc || <vd != scr-visual sc)
+             cm (? !own 0 (peep cmaps <vd 0) (peep cmaps <vd 0)
+                   (fid () @ m (x-w8 s 78, x-w8 s 0, x-w16 s 4, x-w32 s m, x-w32 s root, x-w32 s <vd,   ; CreateColormap, alloc None
+                                pin cmaps <vd m, m)))
+             (x-w8 s 1, x-w8 s (own ? (vd 1) 0), x-w16 s (own ? 12 10), x-w32 s f, x-w32 s root,      ; CreateWindow, no background
+              x-w16 s (g 0), x-w16 s (g 1), x-w16 s (mx2 1 (g 2)), x-w16 s (mx2 1 (g 3)), x-w16 s 0, x-w16 s 1,
+              x-w32 s (own ? <vd 0),
+              (own ? (x-w32 s 10760, x-w32 s 0, x-w32 s 1, x-w32 s 1572864, x-w32 s cm)   ; border-pixel, override-redirect,
+                     (x-w32 s 2560, x-w32 s 1, x-w32 s 1572864)),                          ; event-mask (substructure redirect+notify), colormap
+              peep mapd w 0 ? (pin owed w (1 + peep owed w 0)) 0,               ; reparenting a mapped window unmaps it: an echo owed
+              x-w8 s 6, x-w8 s 0, x-w16 s 2, x-w32 s w,                          ; ChangeSaveSet Insert: our exit hands it back to the root
+              x-border s w 0,
+              x-w8 s 7, x-w8 s 0, x-w16 s 4, x-w32 s w, x-w32 s f, x-w16 s 0, x-w16 s 0,   ; ReparentWindow into the frame at (0 0)
+              x-chprop32 s w (ewmh-atom "_NET_FRAME_EXTENTS") 6 '(0 0 0 0),
+              pin frm w {'f f 'own own 'g [(g 0) (g 1) (g 2) (g 3) 0] 'px -1},
+              f))))
+   (unframe! w back)                                                             ; the frame goes; back: the client returns to the root first
+    (peep frm w () @ r
+       (r ? (: f (r 'f) g (r 'g)
+               (back ? (x-w8 s 7, x-w8 s 0, x-w16 s 4, x-w32 s w, x-w32 s root, x-w16 s (g 0), x-w16 s (g 1),
+                        x-w8 s 6, x-w8 s 1, x-w16 s 2, x-w32 s w) 0,               ; ChangeSaveSet Delete
+                x-w8 s 4, x-w8 s 0, x-w16 s 2, x-w32 s f,                         ; DestroyWindow
+                pin fidc 'free (f . fidc 'free), pull frm w 0)) 0))
+   (synconf w x y cw ch)                                                         ; a synthetic ConfigureNotify: the client's root geometry
+    (x-w8 s 25, x-w8 s 0, x-w16 s 11, x-w32 s w, x-w32 s 131072,                 ; SendEvent, mask StructureNotify
+     x-w8 s 22, x-w8 s 0, x-w16 s 0, x-w32 s w, x-w32 s w,
+     x-w32 s 0, x-w16 s x, x-w16 s y, x-w16 s cw, x-w16 s ch,
+     x-w16 s 0, x-w16 s 0, x-w32 s 0)
+   (tell! w) (peep frm w () @ r                                                  ; a ConfigureRequest overruled: its answer
+               (r ? (r 'g @ g (synconf w (g 0 + g 4) (g 1 + g 4) (g 2) (g 3))) (x-confnotify s w)))
+   (geom w) (peep frm w () @ r (r ? (take 4 (r 'g)) (x-getgeom s w)))           ; (x y w h) as the screen sees it
+   (bord! w bw px)
+    (peep frm w () @ r
+       (? !r (x-border s w bw, x-borderpix s w px)
+          (: f (r 'f) p (r 'own ? (px | 4278190080) px)                          ; a 32-bit frame's border pixel carries opaque alpha
+             (r 'g 4 = bw ? 0 (x-border s f bw, pin r 'g (take 4 (r 'g) + [bw])),
+              r 'px = p ? 0 (x-borderpix s f p, pin r 'px p)))))
+   (move! w x y cw ch)
+    (peep frm w () @ r
+       (? !r (x-configure s w x y cw ch)
+          (: g (r 'g) bw (g 4)
+             ([x y cw ch bw] = g ? 0
+                (x-configure s (r 'f) x y cw ch,
+                 g 2 = cw && g 3 = ch ? 0 (x-configure s w 0 0 cw ch),
+                 pin r 'g [x y cw ch bw],
+                 synconf w (x + bw) (y + bw) cw ch)))))
    (unled! w) (pull mapd w 0, pull owed w 0)                              ; the window left management: clear its ledger
    (render sh lays)                                                               ; every screen: its tag's placements configured, the dropped unmapped, floats on top
     (: f (wsfoc sh)                                                              ; the focus is the sheaf's, float or tile alike
        (tiles p)                                                                 ; one screen (tag rect): tile the tag into its rect, answer the placed
         (: t <p pls <(lay-tile (lay-at lays t) (trect-of <>p) (wstilezof sh t))
            _ (map (q \ (: w (q 0) bw (#q < 6 ? lux-border (q 5))                ; smartBorders sets 0 on a singleton/fullscreen
-                         (x-border s w bw,
-                          x-borderpix s w (w = f ? fpix npix),                   ; focusedBorderColor / normalBorderColor
-                          x-configure s w (q 1) (q 2)                            ; the border sits outside the frame: shave it off
-                                      (mx2 1 (q 3 - 2 * bw)) (mx2 1 (q 4 - 2 * bw))))) pls)
+                         (bord! w bw (w = f ? fpix npix),                        ; focusedBorderColor / normalBorderColor
+                          move! w (q 1) (q 2)                                    ; the border sits outside the frame: shave it off
+                                (mx2 1 (q 3 - 2 * bw)) (mx2 1 (q 4 - 2 * bw))))) pls)
            (map cap pls))
        placed (foldl (a \ p \ a + tiles p) () (wsvis sh))
        (map (w \ any (= w) placed || wsfloating? sh w ? 0 (hide! w)) (wsonscreen sh),     ; tiles the layouts dropped (Full/minimize): hide them
@@ -208,9 +277,9 @@
         map (p \ (<>p @ r                                                        ; floating windows at home on a screen: place, map, raise above the tiles
                    (map (fp \ (: w <fp fr <>fp
                                  bw (fr = r ? 0 lux-border)                      ; a fullscreen float (its screen is its rect) wears no border
-                                 (x-border s w bw, x-borderpix s w (w = f ? fpix npix),
-                                  x-configure s w (fr 0) (fr 1) (fr 2) (fr 3),
-                                  map! w, x-raise s w))) (wsvisflof sh <p)))) (wsvis sh),
+                                 (bord! w bw (w = f ? fpix npix),
+                                  move! w (fr 0) (fr 1) (fr 2) (fr 3),
+                                  map! w, x-raise s (fwin w)))) (wsvisflof sh <p)))) (wsvis sh),
         x-clear-enters s))                                                       ; the crossings this paint caused are not the user's
    (refocus sh) (wsfoc sh @ f                                                   ; an empty view takes the root: PointerRoot would
                    (x-focus s (f ? f root), x-flush s))                         ; hand the keys to whatever the pointer sits over
@@ -277,7 +346,7 @@
           (k = 'float-toggle)
           (? !fw (loop sh lays hist)
              (wsfloating? sh fw) (relay (wssink sh fw) lays)
-             (line ("lux: float " + show fw), relay (wsdofloat sh fw (x-getgeom s fw)) lays))
+             (line ("lux: float " + show fw), relay (wsdofloat sh fw (geom fw)) lays))
           (k = 'next-match)
           (nm-pick (wsring sh) fw hist <>a @ t                                   ; the whole ring -- floats too, anchored at the focus
              (t ? (relay (wsmap sh (zfocto t)) lays) (loop sh lays hist)))
@@ -307,7 +376,7 @@
        (? !e g0                                                                 ; display gone: keep the start rect
           (ev-code e = 6) (: pkt (ev-raw e)                                     ; MotionNotify: reconfigure live
                                 g1 (drag-rect mode g0 rx0 ry0 (u16 pkt 20) (u16 pkt 22))
-                                (x-configure s w (g1 0) (g1 1) (g1 2) (g1 3), x-flush s,
+                                (move! w (g1 0) (g1 1) (g1 2) (g1 3), x-flush s,
                                  drag mode w g0 rx0 ry0))
           (ev-code e = 5) (ev-raw e @ pkt (drag-rect mode g0 rx0 ry0 (u16 pkt 20) (u16 pkt 22)))       ; ButtonRelease: settle
           (drag mode w g0 rx0 ry0)))                                            ; anything else mid-drag: ignore
@@ -365,6 +434,7 @@
                    (wsknownw? sh2 win ?                                          ; managed (tiled or floated) -> place it
                       (x-chprop32 s win (x-intern s "WM_STATE") (x-intern s "WM_STATE") '(1 0),    ; the ICCCM stamp: a restart finds us even hidden
                        watch win,
+                       frame! win (x-getgeom s win),
                        render sh2 lays,
                        map! win,
                        refocus sh2,                                        ; admit focused it: a fresh window takes the keyboard
@@ -381,7 +451,7 @@
                        loop sh2 lays hist)))
                 (code = 19) (win = wsfoc sh ? (x-focus s win, x-flush s), loop sh lays hist)          ; MapNotify: focus if it's the top
                 (code = 17)                                                      ; DestroyNotify: unmanage + tile
-                (ewmh-untrack win, unled! win,
+                (ewmh-untrack win, unled! win, unframe! win 0,
                  (? !(wsknownw? sh win) (loop sh lays hist)
                   (evict sh win @ sh2
                      (line ("lux: - " + show win + " " + show (wsrow sh2)),
@@ -395,6 +465,7 @@
                             _ (x-delprop s win (x-intern s "WM_STATE"))          ; unstamp: a restart must not re-adopt the withdrawn
                             sh2 (evict sh win)                                   ; (the tray ghost); a re-map arrives as a fresh MapRequest
                             (x-unmap s win,                                      ; a crossing's render in the event gap may have re-mapped
+                             unframe! win 1,                                      ; back to the root, as it came
                              unled! win,                                         ; it (telegram's media viewer): withdrawn means unmapped
                              line ("lux: withdraw " + show win),
                              relay sh2 lays)))))
@@ -407,9 +478,9 @@
                 (code = 4)                                                      ; ButtonPress via the sync grab: super+drag moves/resizes a
                 (: pkt (ev-raw e) w (u32 pkt 12) btn (ev-detail e) st (ev-state e)   ; float (xmonad mouseBindings); a plain click focuses
                    (? (st & lux-mod && wsknownw? sh w && (btn = 1 || btn = 3))    ; mod+btn1 move, mod+btn3 resize -- float first, then drag
-                      (: sh2 (wsfloating? sh w ? sh (wsdofloat sh w (x-getgeom s w)))
-                         g0 (x-getgeom s w) rx0 (u16 pkt 20) ry0 (u16 pkt 22)
-                         _ (x-focus s w) _ (x-raise s w)
+                      (: sh2 (wsfloating? sh w ? sh (wsdofloat sh w (geom w)))
+                         g0 (geom w) rx0 (u16 pkt 20) ry0 (u16 pkt 22)
+                         _ (x-focus s w) _ (x-raise s (fwin w))
                          _ (x-grabptr s w) _ (x-allow-async s) _ (x-flush s)     ; capture motion, thaw the sync freeze without replaying
                          gf (drag (btn @ 1 'move 'resize) w g0 rx0 ry0)
                          (x-ungrabptr s, x-flush s,
@@ -450,14 +521,14 @@
                       (loop sh lays hist)))
                 (code = 23)                                              ; ConfigureRequest: tiled -> the layout answers, and the
                 (? (wsknownw? sh win && !(wsfloating? sh win))           ; client is told so -- a synthetic ConfigureNotify with the
-                   (render sh lays, x-confnotify s win, x-flush s,        ; real geometry (silence leaves VTE drawing a phantom grid)
+                   (render sh lays, tell! win, x-flush s,        ; real geometry (silence leaves VTE drawing a phantom grid)
                     loop sh lays hist)
-                   (: pkt (ev-raw e) mask (u16 pkt 26) g (x-getgeom s win)       ; unmanaged (pre-map): grant it -- a client waits on
+                   (: pkt (ev-raw e) mask (u16 pkt 26) g (geom win)       ; unmanaged (pre-map): grant it -- a client waits on
                       gx (mask & 1 ? (u16 pkt 16) (g 0))                   ; this configure before mapping (deny = no MapRequest,
                       gy (mask & 2 ? (u16 pkt 18) (g 1))                   ; the 1x1 deadlock); fields absent from the value-mask
                       gw (mask & 4 ? (u16 pkt 20) (g 2))                   ; keep their current geometry
                       gh (mask & 8 ? (u16 pkt 22) (g 3))
-                      _ (x-configure s win gx gy gw gh) _ (x-flush s)
+                      _ (move! win gx gy gw gh) _ (x-flush s)
                       sh2 (wsfloating? sh win ? (wsdofloat sh win [gx gy gw gh]) sh)    ; a float's request is granted too, and the
                       (loop sh2 lays hist)))                                      ; sheaf's rect follows it (xmonad: grant + re-float)
                 (code = 33)                                                      ; ClientMessage: EWMH requests ride SendEvent to the root
@@ -551,6 +622,7 @@
        (map (w \ x-chprop32 s w (x-intern s "WM_STATE") (x-intern s "WM_STATE") '(1 0)) ws,
         map watch ws,                                                 ; survivors get the mouse wires too
         map (w \ x-manageable? s w ? (pin mapd w 1) 0) ws,                   ; the viewable adoptees are mapped
+        map (w \ frame! w (x-getgeom s w)) ws,
         sh2))
    (settle sh ws tag)                                                           ; paint a batch and say so
     (render sh (),

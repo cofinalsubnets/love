@@ -29,7 +29,15 @@
    sizes '((24 80) (1 1) (2 2) (3 3) (1 80) (80 1) (5 7) (200 300))
  _ (test
     (0 = #(filter (p \ !(foldl (a \ s \ (a && sound? p <s <>s)) 1 sizes))
-                        plans))))
+                        plans)))
+ ; a gap of g units between halves, as lux's bsp lays pixels: g 1 is the cell lay exactly,
+ ; and a wider gap keeps both laws at every size
+ (gsound? p r c g) (wharf-layg p r c g @ bs
+                      (0 = clashes bs && 0 = strays r c bs && #bs = #(wharf-panes p)))
+ _ (test
+    (all (p \ all (s \ wharf-layg p <s <>s 1 = wharf-lay p <s <>s) sizes) plans)
+    (all (p \ all (s \ all (g \ gsound? p <s <>s g) [2 4 9]) sizes) plans)
+    ('((1 0 0 24 38) (2 0 42 24 38)) = wharf-layg '(beside 50 1 2) 24 80 4)))
 
 ; --- 1. a lone pane is the whole wharf, and wears no bar ---
 (: _ (test
