@@ -598,9 +598,9 @@
            w2 (q? ? (snip w 0 (n - 1)) w)
            j (eq 0)
            nm (charm? j ? (snip w2 0 j) w2)
-           no? (2 < #nm && snip nm 0 2 = "no")
+           yes (nm @ ("no" + (b && 0 < #b)) b ())
            key (: (look l) (? (atom? l) () (<(<l) = nm) <>(<l) (look >l)) (look edx-opts))
-           key2 (!key && no? ? (: (look l) (? (atom? l) () (<(<l) = snip nm 2 #nm) <>(<l) (look >l)) (look edx-opts)) key)
+           key2 (!key && yes ? (: (look l) (? (atom? l) () (<(<l) = yes) <>(<l) (look >l)) (look edx-opts)) key)
            (? !key2 (ed-fail ("unknown option: " + nm))
               q? (say out (says key2), put out 10)
               (charm? j) (unum (snip w2 (j + 1) #w2) @ v
@@ -854,11 +854,11 @@
     (: e (ed-new ())
        (opts l) (atom? l ? ()
                  (<l @ a
-                  (? (a = "-s" || a = "-") (pin e 'silent 1, opts >l)
-                     (a = "-p") (two? >l ? (pins e 'prompt <>l 'pon 1, opts >>l) (udie 2 ed-usage))
-                     (2 < #a && snip a 0 2 = "-p") (pins e 'prompt (snip a 2 #a) 'pon 1, opts >l)
-                     (a = "--") >l
-                     (1 < #a && a 0 = 45) (udie 2 ("ed: unknown option " + a))
+                  (a @ ("-s" || "-") (pin e 'silent 1, opts >l)
+                     "-p" (two? >l ? (pins e 'prompt <>l 'pon 1, opts >>l) (udie 2 ed-usage))
+                     ("-p" + p) (pins e 'prompt p 'pon 1, opts >l)
+                     "--" >l
+                     (? (1 < #a && a 0 = 45)) (udie 2 ("ed: unknown option " + a))
                      l)))
        fs (opts as)
        (two? fs && two? >fs ? (udie 2 ed-usage) 0,
@@ -868,14 +868,14 @@
        _ (pin e 'pon 1)
        (opts l cs) (atom? l ? [() (rev cs)]
                     (<l @ a
-                     (? (a = "-s" || a = "-") (pins e 'silent 1 'pon (), opts >l cs)
-                        (a = "-R") (pin e 'ro 1, opts >l cs)
-                        (a = "-v") (opts >l ("visual" . cs))       ; ex -v is vi
-                        (a = "-c") (two? >l ? (opts >>l (<>l . cs)) (udie 2 ex-usage))
-                        (2 < #a && snip a 0 2 = "-c") (opts >l (snip a 2 #a . cs))
-                        (0 < #a && a 0 = 43) (opts >l ((1 < #a ? (snip a 1 #a) "$") . cs))
-                        (a = "--") [>l (rev cs)]
-                        (1 < #a && a 0 = 45) (udie 2 ("ex: unknown option " + a))
+                     (a @ ("-s" || "-") (pins e 'silent 1 'pon (), opts >l cs)
+                        "-R" (pin e 'ro 1, opts >l cs)
+                        "-v" (opts >l ("visual" . cs))       ; ex -v is vi
+                        "-c" (two? >l ? (opts >>l (<>l . cs)) (udie 2 ex-usage))
+                        ("-c" + c) (opts >l (c . cs))
+                        ("+" + c) (opts >l ((0 < #c ? c "$") . cs))
+                        "--" [>l (rev cs)]
+                        (? (1 < #a && a 0 = 45)) (udie 2 ("ex: unknown option " + a))
                         [l (rev cs)])))
        r (opts as ())
        fs <r

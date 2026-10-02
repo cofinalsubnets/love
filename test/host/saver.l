@@ -6,7 +6,7 @@
 (borrow 'saver)
 
 (: sv-love (: l <cmdline (l 0 = 47 ? l (cwd 0 + "/" + l)))
-   sv-find (cite 'kore 'wg-find)
+   sv-find fsub
    (sv-has? h n) (0 <= sv-find h n 0)
    (sv-num s) (: (go i a) (? (i < #s) (? (48 <= s i < 58) (go (i + 1) (a * 10 + s i - 48)) -1) a)
                  (#s ? (go 0 0) -1))

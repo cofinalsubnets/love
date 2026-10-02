@@ -145,7 +145,7 @@
     (: (go i d r) (#s <= i ? [d r] (td-byte st (s i) pty @ x (go (i + 1) (d + <x) (r + x 1))))
        (go 0 "" ""))
    ; the pty's bytes for the wire: a 255 doubled
-   (td-esc s) (wg-find s (string 255) 0 < 0 ? s
+   (td-esc s) (fsub s (string 255) 0 < 0 ? s
                (jug 0 @ j (each ^#s (i \ say j (s i = 255 ? (string 255 + string 255) (string (s i)))), slurp j)))
    ; one connection: the program's output to the client in this task, the client's bytes
    ; to the program in another; the program's end is the session's, and the client's going

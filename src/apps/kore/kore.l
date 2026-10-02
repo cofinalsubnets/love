@@ -70,7 +70,7 @@
 ; every path answers a charm through core.l's urun, so an in-image caller lives through a
 ; tool that would have quit -- the SEAT below is the one site that quits, and a main here
 ; leaves deep through `udie`.
-(module (kore kore-main wget-main openssl-main wg-digits wg-find wg-lower wg-url wg-resolve wg-header wg-unchunk wg-once wg-fetch wg-name
+(module (kore kore-main wget-main openssl-main wg-digits wg-lower wg-url wg-resolve wg-header wg-unchunk wg-once wg-fetch wg-name
         www-main ww-split ww-resolve ww-arg ww-get ww-lay ww-dump ww-new ww-show ww-step ww-body ww-fit
         ww-art ww-splice ww-marks ww-pictures ww-hop? wg-plain
         pic-main gpic-main gp-run grap-main gr-run chem-main ch-run pic-cat pic-convert pic-pixelize pic-blocky pic-sample pic-sixel pic-kitty pic-kits pic-near pic-ans pic-type pic-ask pic-heard picless-main pic-kind pic-size pic-decode pic-frames pic-art pic-view pic-deep pic-cells pic-fit pic-probe pic-pick lens-pics

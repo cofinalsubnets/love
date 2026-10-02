@@ -57,11 +57,10 @@
    ; a token ends only on whitespace, a bracket, or a reader operator
    hue-stop (hue-brk + "\"';,")
 
-   (hue-has? t c) (: n #t (go i) (? (n <= i) () (t i = c) 1 (go (i + 1))) (go 0))
    (hue-blank? c) (c = 32 || c = 9)
-   (hue-delim? c) (hue-has? hue-brk c)
-   (hue-term? c)  (c < 33 || hue-has? hue-stop c)
-   (hue-sig? c)   (hue-has? hue-sigils c)
+   (hue-delim? c) (elem c hue-brk)
+   (hue-term? c)  (c < 33 || elem c hue-stop)
+   (hue-sig? c)   (elem c hue-sigils)
    (hue-at? s i t)                                         ; does s carry t at i?
     (: n #s m #t
        (go k) (? (m <= k) 1 (n <= i + k) () (s (i + k) = t k) (go (k + 1)) ())

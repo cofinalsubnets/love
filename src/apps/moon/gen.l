@@ -6629,7 +6629,7 @@
               h (0 < n ? (c 0) 0)
               c2 (1 < n && c 1 = 38 ? (snip c 2 n) (snip c 1 n))    ; "=&r": the early clobber is the picking rule already
               k (h @ (61 || 43) (asmc g c2) 'bad)
-              fc (3 < #c2 && snip c2 0 3 = "@cc" ? (peep asmflags (snip c2 3 #c2) ()))
+              fc (c2 @ ("@cc" + (f && 0 < #f)) (peep asmflags f ()) ())
               gv (<><l @ ('var nm) (two? (peep (g 'gregs) nm ())) ())
               ; the stack-pointer register variable ("+r"(current_stack_pointer): the asm uses the
               ; stack) is that register as it stands -- nothing loads it or stores it back

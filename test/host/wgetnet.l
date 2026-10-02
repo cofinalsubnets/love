@@ -10,6 +10,6 @@
    got (open out1 "r" @ p (hot? p ? (slurp p @ s (close p, s)) ""))
    (unlink out1,
     ; the page opens with a few blank lines before its doctype
-    test (0 = rc) (10000 < #got) (0 <= (cite 'kore 'wg-find) (snip got 0 200) "<!DOCTYPE html>" 0)))
+    test (0 = rc) (10000 < #got) (0 <= fsub (snip got 0 200) "<!DOCTYPE html>" 0)))
 
 (test_fin (), puts "wgetnet: ok", putc 10, 0)

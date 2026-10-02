@@ -61,7 +61,7 @@
                    (m ? (cask m @ c (pour c 0 s o m, string c)) ""))
    ; noms are "[./]<top>/apps/moon/.."; the top strips per-entry (the archive
    ; leads with "./")
-   (strip1 nom) (: s (starts? nom "./" ? (snip nom 2 #nom) nom)
+   (strip1 nom) (: s (nom @ ("./" + t) t nom)
                    m #s
                    (go i) (? (m <= i) ""
                              (s i = 47) (snip s (i + 1) m)
@@ -988,9 +988,8 @@
     (: (go l dia acc)
         (!(two? l) ? [dia (rev acc)]
            (<l @ a
-              (starts? a "-std=" ?
-                 (: w (snip a 5 #a)
-                    d (stdof w)
+              (a @ ("-std=" + w)
+                 (: d (stdof w)
                     (d || udie 2 ("cc: unknown -std=" + w + " -- mooncc reads: " + stdnames ()),
                      go >l d acc))
                  (go >l dia (a . acc)))))
@@ -1065,7 +1064,7 @@
              ; ELF to carry it and it is ignored. ahead of tol?, which swallows every other
              ; -f.
              (starts? a "-freadme=")
-              (: f (snip a 9 #a) rt (uread f)
+              (: f (a @ ("-freadme=" + f) f) rt (uread f)
                  (two? rt ? (flags r (pin t 'rdme <>rt))
                             (udie 1 ("cc: cannot open " + f))))
              (glu? a 73) (flags r (fpush t 'is (snip a 2 #a)))

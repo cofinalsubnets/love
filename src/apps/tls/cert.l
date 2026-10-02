@@ -70,7 +70,7 @@
         + "-----END " + label + "-----\n"))
    (pem-in t label)
     (: b ("-----BEGIN " + label + "-----") e ("-----END " + label + "-----")
-       (go i acc) (: p (str-at t b i) q (p < 0 ? -1 (str-at t e (p + #b)))
+       (go i acc) (: p (fsub t b i) q (p < 0 ? -1 (fsub t e (p + #b)))
                      (q < 0 ? (rev acc) (go (q + #e) (b64-dec t (p + #b) q . acc))))
        (string? t ? (go 0 ())))
 
@@ -118,7 +118,7 @@
    ; --- names ---
    (name-der s)
     (: ps (0 < #s && s 0 = 47 ? (split "/" (snip s 1 #s)) (split "," s))
-       (rdn p) (: k (str-at p "=" 0)
+       (rdn p) (: k (fsub p "=" 0)
                   a (0 < k ? (strip (snip p 0 k)) "") v (0 < k ? (strip (snip p (k + 1) #p)) "")
                   o (peep name-oids a ())
                   st (? (elem a ["C" "serialNumber"]) 19 (elem a ["emailAddress" "DC"]) 22 12)
@@ -133,17 +133,17 @@
    (h16 p) (foldl (a \ c \ (a < 0 || hexd c < 0 ? -1 (a * 16 + hexd c))) 0 (chars p) @ v
               (0 < #p && #p < 5 ? v -1))
    (ip6-bytes s)
-    (: k (str-at s "::" 0)
+    (: k (fsub s "::" 0)
        (grp t) (t = "" ? () (map h16 (split ":" t)))
        hd (k < 0 ? (grp s) (grp (snip s 0 k)))
        tl (k < 0 ? () (grp (snip s (k + 2) #s)))
        gap (8 - #hd - #tl)
-       (str-at s ":" 0 < 0 || any (w \ w < 0) (hd + tl) || k < 0 && gap != 0 || 0 <= k && gap < 1 ? ()
+       (fsub s ":" 0 < 0 || any (w \ w < 0) (hd + tl) || k < 0 && gap != 0 || 0 <= k && gap < 1 ? ()
           (catmap (w \ wrbe w 2) (hd + (map (_ \ 0) ^(0 <= k ? gap 0)) + tl))))
    (ip-bytes s) (quad-bytes s @ q (string? q ? q (ip6-bytes s)))
    ; an address and its mask, "10.0.0.0/255.0.0.0" or "10.0.0.0/8"
    (ip-net s)
-    (: k (str-at s "/" 0)
+    (: k (fsub s "/" 0)
        a (k < 0 ? () (ip-bytes (snip s 0 k)))
        t (k < 0 ? "" (snip s (k + 1) #s))
        m (: b (ip-bytes t) n (unum t)
@@ -154,7 +154,7 @@
        (string? a && string? m && #a = #m ? (a + m)))
    ; "DNS:x" "IP:a" "email:x" "URI:x" -> a GeneralName; net? reads an IP as an address and mask
    (gname s net?)
-    (: k (str-at s ":" 0) ty (0 < k ? (snip s 0 k) "") v (0 < k ? (snip s (k + 1) #s) "")
+    (: k (fsub s ":" 0) ty (0 < k ? (snip s 0 k) "") v (0 < k ? (snip s (k + 1) #s) "")
        (? (ty = "DNS" && 0 < #v) [130 v]
           (ty = "IP") ((net? ? (ip-net v) (ip-bytes v)) @ b (string? b ? [135 b]))
           (ty = "email" && 0 < #v) [129 v]
@@ -183,7 +183,7 @@
            (map (w \ gname w 0) ws @ gs
               (two? gs && all two? gs ? [48 gs] "subjectAltName takes DNS:, IP:, email: and URI: names"))
           "nameConstraints"
-           (: (item w) (: k (str-at w ";" 0) h (0 < k ? (snip w 0 k) "") g (0 < k ? (gname (snip w (k + 1) #w) 1))
+           (: (item w) (: k (fsub w ";" 0) h (0 < k ? (snip w 0 k) "") g (0 < k ? (gname (snip w (k + 1) #w) 1))
                           (elem h ["permitted" "excluded"] && two? g ? [h g]))
               its (map item ws)
               (part h tag) (map (i \ [48 [(i 1)]]) (filter (i \ <i = h) its) @ gs (two? gs ? [[tag gs]]))
@@ -197,7 +197,7 @@
           ("no extension " + nm + " here"))
    ; "name=value", "critical," leading the value when it is -> [oid der] | why not
    (ext-der line ctx)
-    (: k (str-at line "=" 0)
+    (: k (fsub line "=" 0)
        nm (0 < k ? (strip (snip line 0 k)) "")
        ws0 (0 < k ? (map strip (split "," (snip line (k + 1) #line))))
        crit (two? ws0 ? (<ws0 = "critical") 0)

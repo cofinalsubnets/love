@@ -444,7 +444,7 @@
              z <ab beta <>ab alpha <>>ab
              (sc k) (: a (at k) sw (((at (k + 3) * z // 256 + at (k + 2) * z) // 256 + at (k + 1) * z) // beta)
                        (? (a = 0) sw (a = 255) (sw - alpha) 'bad))
-             (table base cnt) (: t {} (go i) (i < cnt ? (pin t i (sc (base + 4 * i)), go (i + 1)) t) (go 0))
+             (table base cnt) (foldl (\ t i (pin t i (sc (base + 4 * i)))) {} ^cnt)
              ci (: t {} (go c) (c <= ec ? (pin t c (q (cb + 4 * (c - bc))), go (c + 1)) t) (go bc))
              (exists c) (bc <= c && c <= ec && 0 < <(ci c))
              ; the char_info checks, a charlist cycle included
@@ -455,7 +455,7 @@
                                || tg = 2 && (d < bc || d > ec || cycle? c d))))
                       (map (+ bc) ^(ec - bc + 1)))
              dims (map (x \ table (x 0) (x 1)) [[wb nw] [hb nh] [db nd] [ib ni]])
-             lig (: t {} (go i) (i < nl ? (pin t i (q (lb + 4 * i)), go (i + 1)) t) (go 0))
+             lig (foldl (\ t i (pin t i (q (lb + 4 * i)))) {} ^nl)
              bchar (0 < nl && at lb = 255 ? (at (lb + 1)) 256)
              (lok i) (: e (lig i) a <e b <>e c <>>e d <>>>e
                         (a > 128 ? (256 * c + d < nl)
@@ -465,7 +465,7 @@
              last (0 < nl ? (lig (nl - 1)) [0 0 0 0])
              blabel (<last = 255 ? (256 * <>>last + <>>>last) 32767)
              kern (table kb nk)
-             ext (: t {} (go i) (i < ne ? (pin t i (q (eb + 4 * i)), go (i + 1)) t) (go 0))
+             ext (foldl (\ t i (pin t i (q (eb + 4 * i)))) {} ^ne)
              eok (all (i \ (: e (ext i) (all (x \ x = 0 || exists x) (take 3 e)) && exists (e 3))) ^ne)
              slant (: v (at pb) sv (127 < v ? (v - 256) v)
                       (((sv * 256 + at (pb + 1)) * 256 + at (pb + 2)) * 16 + at (pb + 3) // 16))

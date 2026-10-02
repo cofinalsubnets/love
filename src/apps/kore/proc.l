@@ -30,18 +30,18 @@
        ; shebang's way (env -S 'cmd a b'); then the assignments
        st {'nul 0 'dir ()}
        (unset-all e) (atom? e ? 0 (: k <e i (eqat k) (setenv (i ? (snip k 0 i) k) (), unset-all >e)))
-       (opts a) (? (atom? a) a
-                  (<a = "-i" || <a = "-" || <a = "--ignore-environment") (unset-all (environ 0), opts >a)
-                  (<a = "-u") (two? >a ? (setenv <>a (), opts >>a) (udie 125 "env: -u needs a name"))
-                  (<a = "-0" || <a = "--null") (pin st 'nul 1, opts >a)
-                  (<a = "-C") (two? >a ? (pin st 'dir <>a, opts >>a) (udie 125 "env: -C needs a directory"))
-                  (starts? <a "--chdir=") (pin st 'dir (snip <a 8 #<a), opts >a)
-                  (<a = "-S") (two? >a ? (opts (words <>a + >>a)) (udie 125 "env: -S needs a string"))
-                  (2 < #<a && starts? <a "-S") (opts (words (snip <a 2 #<a) + >a))
-                  (starts? <a "--split-string=") (opts (words (snip <a 15 #<a) + >a))
-                  (<a = "--") >a
-                  (1 < #<a && <a 0 = 45) (udie 125 ("env: unknown option " + <a))
-                  a)
+       (opts a) (atom? a ? a
+                 (<a @ ("-i" || "-" || "--ignore-environment") (unset-all (environ 0), opts >a)
+                       "-u" (two? >a ? (setenv <>a (), opts >>a) (udie 125 "env: -u needs a name"))
+                       ("-0" || "--null") (pin st 'nul 1, opts >a)
+                       "-C" (two? >a ? (pin st 'dir <>a, opts >>a) (udie 125 "env: -C needs a directory"))
+                       ("--chdir=" + d) (pin st 'dir d, opts >a)
+                       "-S" (two? >a ? (opts (words <>a + >>a)) (udie 125 "env: -S needs a string"))
+                       ("-S" + s) (opts (words s + >a))
+                       ("--split-string=" + s) (opts (words s + >a))
+                       "--" >a
+                       (? (1 < #<a && <a 0 = 45)) (udie 125 ("env: unknown option " + <a))
+                       a))
        rest (setp (opts as))
        ((st 'dir ? (two? rest ? (chdir (st 'dir) ? (udie 125 ("env: cannot change directory to '" + st 'dir + "'")) 0)
                     (udie 125 "env: must specify command with --chdir (-C)")) 0),
@@ -388,13 +388,13 @@
        (go a adj)
         (atom? a ? [adj ()]
          (: w <a n #w
-            (? (w = "--") [adj >a]
-               (1 < n && w 0 = 45 && num? w (w 1 = 45 || w 1 = 43 ? 2 1)) (go >a (snip w 1 n))
-               (w = "-n" || w = "--adjustment")
+            (w @ "--" [adj >a]
+               (? (1 < n && w 0 = 45 && num? w (w 1 = 45 || w 1 = 43 ? 2 1))) (go >a (snip w 1 n))
+               ("-n" || "--adjustment")
                 (two? >a ? (go >>a <>a) (udie 125 "nice: option requires an argument -- 'n'"))
-               (2 < n && snip w 0 2 = "-n") (go >a (snip w 2 n))
-               (13 < n && snip w 0 13 = "--adjustment=") (go >a (snip w 13 n))
-               (1 < n && w 0 = 45) (udie 125 ("nice: invalid option -- '" + string (w 1) + "'\nTry 'nice --help' for more information."))
+               ("-n" + v) (go >a v)
+               ("--adjustment=" + (v && 0 < #v)) (go >a v)
+               (? (1 < n && w 0 = 45)) (udie 125 ("nice: invalid option -- '" + string (w 1) + "'\nTry 'nice --help' for more information."))
                [adj a])))
        r (go as ())
        adj <r cmd <>r
@@ -583,17 +583,17 @@
        (go a o)
         (atom? a ? (pin o 'cmd (), o)
          (: x <a n #x
-            (? (x = "--") (pin o 'cmd >a, o)
-               (x = "-n" || x = "--interval")
+            (x @ "--" (pin o 'cmd >a, o)
+               ("-n" || "--interval")
                 (two? >a ? (pin o 'n (secs <>a), go >>a o) (usage "option requires an argument -- 'n'"))
-               (11 < n && snip x 0 11 = "--interval=") (pin o 'n (secs (snip x 11 n)), go >a o)
-               (x = "--no-title") (pin o 't 1, go >a o)
-               (x = "--exec") (pin o 'x 1, go >a o)
-               (x = "--beep") (pin o 'b 1, go >a o)
-               (x = "--errexit") (pin o 'e 1, go >a o)
-               (x = "--chgexit") (pin o 'g 1, go >a o)
-               (2 < n && snip x 0 2 = "--") (usage ("unrecognized option '" + x + "'"))
-               (1 < n && x 0 = 45)
+               ("--interval=" + (v && 0 < #v)) (pin o 'n (secs v), go >a o)
+               "--no-title" (pin o 't 1, go >a o)
+               "--exec" (pin o 'x 1, go >a o)
+               "--beep" (pin o 'b 1, go >a o)
+               "--errexit" (pin o 'e 1, go >a o)
+               "--chgexit" (pin o 'g 1, go >a o)
+               ("--" + _) (usage ("unrecognized option '" + x + "'"))
+               (? (1 < n && x 0 = 45))
                 (: (cl k)
                     (? (n <= k) (go >a o)
                        (x k = 110) (? (k + 1 < n) (pin o 'n (secs (snip x (k + 1) n)), go >a o)
@@ -768,12 +768,12 @@
        (go a all gs dev ss)
         (atom? a ? [all gs dev (rev ss)]
          (<a @ w
-          (? (w = "-a" || w = "--all") (go >a 1 gs dev ss)
-             (w = "-g" || w = "--save") (go >a all 1 dev ss)
-             (w = "-F" || w = "--file")
+          (w @ ("-a" || "--all") (go >a 1 gs dev ss)
+             ("-g" || "--save") (go >a all 1 dev ss)
+             ("-F" || "--file")
               (two? >a ? (go >>a all gs <>a ss) (udie 1 "stty: option requires an argument -- 'F'"))
-             (7 < #w && snip w 0 7 = "--file=") (go >a all gs (snip w 7 #w) ss)
-             (2 < #w && snip w 0 2 = "-F") (go >a all gs (snip w 2 #w) ss)
+             ("--file=" + (d && 0 < #d)) (go >a all gs d ss)
+             ("-F" + d) (go >a all gs d ss)
              (go >a all gs dev (w . ss)))))
        o (go as 0 0 () ())
        all <o gs <>o dev <>>o ss (o 3)
