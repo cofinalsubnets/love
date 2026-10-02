@@ -108,8 +108,7 @@
     (: t (snip s i (i + n))
        (go k) (0 < k && t (k - 1) = 32 ? (go (k - 1)) (snip t 0 k))
        (go n))
-   (ld-arnum t) (: (go k a) (#t <= k ? a (go (k + 1) (10 * a + t k - 48)))
-                   (go 0 0))
+   (ld-arnum t) (foldl (\ a k (10 * a + t k - 48)) 0 ^#t)
    (ld-arsz s off) (ld-arnum (ld-arfld s (off + 48) 10))
    (ld-arnext s off) (ld-arsz s off @ z (off + 60 + z + z % 2))
    (ld-be32 s i) ((s i << 8 | s (i + 1)) << 16 | (s (i + 2) << 8 | s (i + 3)))
@@ -254,15 +253,12 @@
        syms {} _ (pin ob 'syms syms)
        nsym (symt 1 // ld-n fs 'sy-ent)
        _ (pin ob 'nsym nsym)
-       _ (: (go i) (nsym <= i ? 0
-                      (: e (symt 0 + i * ld-n fs 'sy-ent)
-                         info (ld-f fs s e 'sy-info)
-                         (pin syms i [(ld-cstr s (stro + ld-f fs s e 'sy-name))
-                                       (info >> 4) (info & 15)
-                                       (ld-f fs s e 'sy-shndx) (ld-f fs s e 'sy-val)
-                                       (ld-f fs s e 'sy-size)],
-                          go (i + 1))))
-            (go 0))
+       _ (each ^nsym (i \ (: e (symt 0 + i * ld-n fs 'sy-ent)
+                              info (ld-f fs s e 'sy-info)
+                              (pin syms i [(ld-cstr s (stro + ld-f fs s e 'sy-name))
+                                            (info >> 4) (info & 15)
+                                            (ld-f fs s e 'sy-shndx) (ld-f fs s e 'sy-val)
+                                            (ld-f fs s e 'sy-size)]))))
        ; a .rela whose target was dropped is dropped with it; a target neither placed nor
        ; dropped scares. a rel has no addend column, so the slot arrives empty and the patch
        ; stage pulls it from the field per kind -- asked by presence, never by a zero addend.
@@ -389,8 +385,7 @@
    ; a __start_X/__stop_X pair is the linker's to answer (ldres), so the ledger leaves it --
    ; a bracket over a lane that never lays still scares, at the link.
    (ld-bracket? nm)
-    (#nm @ z (8 < z && snip nm 0 8 = "__start_" ||
-              7 < z && snip nm 0 7 = "__stop_"))
+    (nm @ ("__start_" + (s && 0 < #s)) 1 ("__stop_" + (s && 0 < #s)) 1 0)
    (ldledger srcs mach)
     (: duos (map (p \ (dusyms <p <>p mach)) srcs)
        dt {}
@@ -539,11 +534,9 @@
           (nm = "__stop_love_nifs") n1
           (nm = "__start_love_rela") r0
           (nm = "__stop_love_rela") r1
-          (: z #nm
-             x (? (8 < z && snip nm 0 8 = "__start_")
-                   (xt (name (snip nm 8 z)) @ v (two? v ? [<v]))
-                  (7 < z && snip nm 0 7 = "__stop_")
-                   (xt (name (snip nm 7 z)) @ v (two? v ? [<>v])))
+          (: x (nm @ ("__start_" + (s && 0 < #s)) (xt (name s) @ v (two? v ? [<v]))
+                     ("__stop_" + (s && 0 < #s)) (xt (name s) @ v (two? v ? [<>v]))
+                     ())
              (two? x ? <x (scare 'link-undef nm)))))
 
    ; patch one object's one section: stream its bytes, splicing each relocation's field. a

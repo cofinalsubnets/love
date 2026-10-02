@@ -33,9 +33,9 @@
    ; a write bigger than the baked blob grows the copy
    (wr f (orig + orig) "w")
    (orig + orig = rd f)
-   ; the tree under /proc/src is what a module loads from, and nobody's to write
-   (0 < tally (rd "/proc/src/src/apps/json.l"))
-   !(wr "/proc/src/src/apps/json.l" "no" "w")
+   ; the tree under /love is what a module loads from, and nobody's to write
+   (0 < tally (rd "/love/src/apps/json.l"))
+   !(wr "/love/src/apps/json.l" "no" "w")
    ; put it back, and the tree reads as the bake left it
    (wr f orig "w")
    (orig = rd f)))
@@ -101,6 +101,11 @@
    ("hi" = rd "/sbin/hello")
    ("hi" = rd "/usr/sbin/hello")
    ("/usr/bin" = readlink "/bin")              ; the target as WRITTEN, unfollowed
+   ; the tree's old name is a link onto it, read-only through either
+   ("/love" = readlink "/proc/src")
+   (0 < tally (rd "/proc/src/VERSION"))
+   (rd "/proc/src/VERSION" = rd "/love/VERSION")
+   (0 = wr "/proc/src/VERSION" "no")
    ; a link of our own, then a link to that link
    !(symlink "/usr/bin" "/opt")
    ("hi" = rd "/opt/hello")

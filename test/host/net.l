@@ -71,7 +71,7 @@
    ; type only once the greeting is up: by then the echo is taken and the terminal raw
    ; what the pty has shown up to the first pat, or "" at its end
    (upto pat t) (see m @ b (b < 0 ? ""
-                              (t + string b @ t2 (0 <= (K 'wg-find) t2 pat 0 ? t2 (upto pat t2)))))
+                              (t + string b @ t2 (0 <= fsub t2 pat 0 ? t2 (upto pat t2)))))
    seen (upto "hello" "")
    _ (test (0 < #seen))
    _ (say m "x\r", flush m)
@@ -82,16 +82,16 @@
    _ (waitfor <srv)
    got (open (dir + "/got") "r" @ q (hot? q ? (slurp q @ g (close q, g)) ""))
    _ (test (got = iac 253 1 + "x\r\n")
-           (0 <= (K 'wg-find) txt "Connected to 127.0.0.1." 0)
-           (0 <= (K 'wg-find) txt "got it" 0)
-           (0 <= (K 'wg-find) txt "Connection closed by foreign host." 0)
+           (0 <= fsub txt "Connected to 127.0.0.1." 0)
+           (0 <= fsub txt "got it" 0)
+           (0 <= fsub txt "Connection closed by foreign host." 0)
            (<st2 = 0))
    ; nothing listening: a refusal and exit 1; a bad port is a usage error
    r2 (tether [love "kore" "telnet" "127.0.0.1" "1"])
    t2 (slurp >r2)
-   _ (test (0 <= (K 'wg-find) t2 "telnet: cannot connect to 127.0.0.1 port 1" 0) (<(waitfor <r2) = 1))
+   _ (test (0 <= fsub t2 "telnet: cannot connect to 127.0.0.1 port 1" 0) (<(waitfor <r2) = 1))
    r3 (tether [love "kore" "telnet" "127.0.0.1" "http"])
-   (test (0 <= (K 'wg-find) (slurp >r3) "telnet: not a port: http" 0) (<(waitfor <r3) = 2),
+   (test (0 <= fsub (slurp >r3) "telnet: not a port: http" 0) (<(waitfor <r3) = 2),
     0))
 
 ; -- telnetd -------------------------------------------------------------------------------
@@ -122,9 +122,9 @@
    _ (still <srv 15)
    log (slurp >srv)
    (waitfor <srv,
-    test (0 <= (K 'wg-find) txt "td-42" 0)
-         (0 <= (K 'wg-find) txt "Connection closed by foreign host." 0) (<st2 = 0)
-         (0 <= (K 'wg-find) log ("no login: whoever reaches port " + show port + " runs /bin/sh") 0)))
+    test (0 <= fsub txt "td-42" 0)
+         (0 <= fsub txt "Connection closed by foreign host." 0) (<st2 = 0)
+         (0 <= fsub log ("no login: whoever reaches port " + show port + " runs /bin/sh") 0)))
 
 ; -- microcom ------------------------------------------------------------------------------
 ; the serial line is a pty whose far end is a sleeping sh, its path off sh's tty; microcom
@@ -150,7 +150,7 @@
    _ (waitfor <dv)
    bad (: r (tether [love "kore" "microcom" "-d" "5" path]) t (slurp >r) [t <(waitfor <r)])
    (test (got = "ping") (shown = "pong") (<st = 0)
-         (0 <= cite 'kore 'wg-find <bad "microcom: -d is not supported" 0) (bad 1 = 1)))
+         (0 <= fsub <bad "microcom: -d is not supported" 0) (bad 1 = 1)))
 
 ; -- nslookup and ping --------------------------------------------------------------------
 ; nslookup against a nameserver that is a process of its own (the pty read holds this one):
@@ -185,7 +185,7 @@
        close p))
    (waitfor pid) (gather pid @ s (? (two? s) s (nom? s) s (rest 2, waitfor pid)))
    (run args) (: r (tether (love . "kore" . args)) t (slurp >r) [t <(waitfor <r)])
-   (has? t s) (0 <= (K 'wg-find) t s 0)
+   (has? t s) (0 <= fsub t s 0)
    srv (tether [love nfile])
    _ (test-until (s \ !(two? s)) (_ \ (stat (nfile + ".up"))))   ; its bind, before our queries
    a (run ["nslookup" ("-port=" + show np) "box.test" "127.0.0.1"])
@@ -269,12 +269,12 @@ kill $R $D
 ",
        close p))
    (waitfor pid) (gather pid @ s (? (two? s) s (nom? s) s (rest 2, waitfor pid)))
-   (has? t s) (0 <= (K 'wg-find) t s 0)
-   (count t s) ((: (g i k) (K 'wg-find t s i @ j (j < 0 ? k (g (j + 1) (k + 1))))) 0 0)
+   (has? t s) (0 <= fsub t s 0)
+   (count t s) ((: (g i k) (fsub t s i @ j (j < 0 ? k (g (j + 1) (k + 1))))) 0 0)
    r (tether ["/bin/sh" "-c" ("unshare -rn true 2>/dev/null || exit 99; exec unshare -rn sh " + sfile + " " + love)])
    txt (slurp >r)
    st <(waitfor <r)
-   k (K 'wg-find txt "== echo" 0)
+   k (fsub txt "== echo" 0)
    halves (0 <= k ? [(snip txt 0 k) (snip txt k #txt)] ["" ""])
    _ (st = 99 ? 0
       (map (h \ test (has? h " 1  10.1.0.2  ") (has? h " 2  10.2.0.2  ") (has? h " 1  fd01::2  ")
@@ -301,10 +301,10 @@ kill $R $D
    b (run ["-c" "/etc/httpd.conf"])
    c (run ["-h" (root + "/none")])
    d (run ["extra"])
-   _ (test (0 <= (K 'wg-find) <a "httpd: cannot listen on nohost:8080" 0) (a 1 = 1)
-           (0 <= (K 'wg-find) <b "httpd: -c is not supported" 0) (b 1 = 2)
-           (0 <= (K 'wg-find) <c "httpd: not a directory" 0) (c 1 = 1)
-           (0 <= (K 'wg-find) <d "usage: httpd" 0) (d 1 = 2))
+   _ (test (0 <= fsub <a "httpd: cannot listen on nohost:8080" 0) (a 1 = 1)
+           (0 <= fsub <b "httpd: -c is not supported" 0) (b 1 = 2)
+           (0 <= fsub <c "httpd: not a directory" 0) (c 1 = 1)
+           (0 <= fsub <d "usage: httpd" 0) (d 1 = 2))
    ; a page off -h on -p, fetched by wget's round trip; -f taken, 0.0.0.0: and :PORT too
    port (test-free 0)
    (fetch _) (K 'wg-once 0 "127.0.0.1" port "/")

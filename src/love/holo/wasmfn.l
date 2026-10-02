@@ -447,7 +447,7 @@
        (form f) (two? f && <f = 'raw ? ['raw (map item (f 1))] f)
        (<tu . (map form (tu 1)) . >>tu))
    (wasm-tu-read text)
-    (: h (4 <= #text && snip text 0 4 = "wo1 " ? (wo-head text) ())
+    (: h (text @ ("wo1 " + _) (wo-head text) ())
        r (sound (two? h ? (snip text <>h (<>h + <<h)) text))
        (? !(two? r && two? <r) () (two? h) (wo-fill <r (wo-blobs text >(<h) (<>h + <<h))) <r))
    ;; opts: 'imports (name ..) the functions the environment supplies; 'exports (name ..) | 'all;

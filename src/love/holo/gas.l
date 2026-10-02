@@ -111,7 +111,7 @@
                       (tgt = 'rv64) ("0(" + gas-reg tgt r 8 0 + ")")
                       ("[" + gas-reg tgt r 8 0 + "]"))
    (gas-regname tgt s)                              ; gas's own `%rdx` names the register too (the kernel's __get_user)
-    (name (starts? s "%" ? (snip s 1 #s) s) @ k
+    (name (s @ ("%" + r) r s) @ k
        (? (tgt = 'x64) (peep gx-regs k () @ e (two? e ? <e))
           (tgt = 'a64) (peep a64-names k ())
           (tgt = 'rv64) (peep rv-names k ())
@@ -168,7 +168,7 @@
                  (jb below) (jc below) (jnae below) (ja above) (jnbe above)
                  (jae ae) (jnb ae) (jnc ae) (jbe be) (jna be) (js s) (jns ns) (jo vs) (jno vc)))
    ;; set<cc> -> its condition, the jump's suffix read off the table above
-   (gx-setcc m) (show m @ t (#t > 3 && starts? t "set" ? (gx-cc (name ("j" + snip t 3 #t))) ()))
+   (gx-setcc m) (show m @ t (t @ ("set" + (c && 0 < #c)) (gx-cc (name ("j" + c))) ()))
    gx-mem2 '(vmxon vmclear vmptrld sgdt sidt lgdt lidt invlpg)
    gx-rmw '(xadd cmpxchg xchg add or and sub xor cmp test inc dec not neg bt bts btr btc adc sbb)
    ; a memory operand -> (base off): a register base, or 'rip and (sym k) for `sym+k(%rip)` and

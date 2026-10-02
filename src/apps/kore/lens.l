@@ -36,10 +36,11 @@
    (lens-has s p) (: n #p (g i) (? (#s < i + n) 0 (snip s i (i + n) = p) 1 (g (i + 1))) (g 0))
    ; an image's src -> the file it names, () for one on the web
    (lens-path dir src)
-    (? (snip src 0 7 = "file://") (snip src 7 #src)
-       (lens-has src "://" || snip src 0 5 = "data:") ()
-       (src 0 = 47) src
-       (dir + src))
+    (src @ ("file://" + p) p
+           ("data:" + _) ()
+           (? (lens-has src "://")) ()
+           (? (src 0 = 47)) src
+           (dir + src))
    ; a doc laid at w for a terminal, each local picture drawn under its image's line, no
    ; taller than the screen
    (lens-pics d w p)
@@ -48,11 +49,12 @@
        deep (cite 'kore 'pic-deep 0) dir (lens-dir p)
        (draw t a)
         (<a @ nm
-           (!(5 < #nm && snip nm 0 5 = " img ") ? t
-              (: f (lens-path dir (snip nm 5 #nm))
+           (nm @ (" img " + (s && 0 < #s))
+              (: f (lens-path dir s)
                  rd (string? f ? (uread f))
                  im (two? rd ? (cite 'kore 'pic-decode <>rd))
-                 (two? im ? (pin t (a 1) (peep t (a 1) () + cite 'kore 'ww-art im w rows deep)) t))))
+                 (two? im ? (pin t (a 1) (peep t (a 1) () + cite 'kore 'ww-art im w rows deep)) t))
+              t))
        pics (foldl draw {} (r 1))
        (catmap (i \ (ls i) + "\n" + catmap (x \ x + "\n") (pics i)) ^#ls))
 

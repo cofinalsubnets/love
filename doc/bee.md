@@ -29,6 +29,8 @@ bee - a coding agent in the terminal, and the protocol its sessions talk by
 
 **love bee --avatar** \[*name*\]
 
+**love bee --keygen root** \| **box** \[*name*\]
+
 **love bee -s** \| **--screensaver** \[*name*\]
 
 # DESCRIPTION
@@ -153,6 +155,12 @@ Asking stays with the caller. A bee's child asks through **approve**. A Claude C
 The machine is shared, and **src/apps/locks.l** keeps its locks: an exclusive lock per resource, such as one make per **out/**, and a pool of heavy tickets, at most **(heavy-max** *n***)** at once (2 unless set) and none granted while available memory is below **(mem-floor** *gb***)**. A lock is held by a pid, so it lives as long as its holder. A bee holds its locks under its own pid, the one on its card, even when its **--mcp** child asks for them. That way a lock outlives a Claude child that ends and dies with the bee.
 
 The model has **lock_acquire** (*name*, *kind* exclusive or heavy, *note*), **lock_release** and **lock_list**; the last two run without asking. An acquire answers at once: granted, or queued with its position, who holds it and how much memory is available. A queued lock is asked for again every 5 seconds, which keeps its place, and when it is granted a message from **lock-***name* says so. So a turn never waits on a lock. From a shell, **love bee --lock** waits for an exclusive lock on the command's **out/** (**./out** when there is one, or **--out** *dir*) and, with **--heavy**, for a heavy ticket. It then runs the command, releases both however the command ends, and exits with its status. A binary built without **src/apps/locks.l** says so.
+
+# KEYS
+
+Sessions on several boxes are to know each other by keys. A *lineage* is the boxes one root vouches for: the root is an ed25519 key, and its public half names the lineage. **src/apps/seals.l** makes the keys and *cards*. A card is *key value* lines, like a message's header: **lineage**, **name**, **kind** (**box** or **cell**), **pub**, **issued** and **expires** (epoch seconds), then **parent**, the signer's public key, and **sig**, the signer's signature over every line above it. Keys are lowercase hex. A *chain* is a card, then its signer's, each after a blank line, ending at a card the root signed. It holds when every card is in date, of the lineage, not revoked, and signed by the next card's key, and the next is a box. A cell's name is *name***@***box*, after the box that signed it.
+
+The keys live in **~/.love/etc/bee/**. **love bee --keygen root** makes **root.key** and prints the lineage. **love bee --keygen box** \[*name*\] makes **box.key**, naming the box after the host unless a name is given. Where **root.key** is on the same box, it also signs **box.card** for a year and prints it; elsewhere it prints the box's public key, to be enrolled. A key file is created 0600 and never written over. Nothing yet signs or checks messages.
 
 # JOBS AND WORKERS
 
@@ -302,7 +310,7 @@ Send the same note with nothing but a shell:
 
 # EXIT STATUS
 
-**0** when the run ends normally. **1** when the settings name no usable endpoint, model or key, when a message cannot be delivered, or for an unknown **--avatar**. **2** for a malformed **--send**, or a screensaver **-s** does not know.
+**0** when the run ends normally. **1** when the settings name no usable endpoint, model or key, when a message cannot be delivered, or for an unknown **--avatar**, or when **--keygen** cannot make a key. **2** for a malformed **--send**, or a screensaver **-s** does not know.
 
 # SEE ALSO
 
