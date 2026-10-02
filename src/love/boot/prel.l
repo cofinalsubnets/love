@@ -222,6 +222,22 @@
    (take n l) (? n (? (two? l) (. (cap l) (take (- n 1) (cup l)))))   ; stop at end-of-list (else it pads past it)
 )
 
+; jot's counted twins: ev's fold calls one in a walker's place when its list operand is (jot x),
+; the same calls in the same order, the range never built. x as jot reads it, a list by jot itself.
+; jotfuse is keyed by the walker's value, [k arity twin], k the list operand's place; by name too,
+; and 'jot -> jot, which a walker's value never is. the glaze keys the walkers it re-declares
+(: jotfuse (tablet 0)
+   _ (: (foldn f z x) (? (two? x) (foldl f z (jot x)) (: n (saturate x) (go i a) (? (< i n) (go (+ i 1) (f a i)) a) (go 0 z)))
+        (foldrn f z x) (? (two? x) (foldr f z (jot x)) (: n (saturate x) (go i) (? (< i n) (f i (go (+ i 1))) z) (go 0)))
+        (eachn x f) (? (two? x) (each (jot x) f) (: n (saturate x) (go i) (? (< i n) (: _ (f i) (go (+ i 1)))) (go 0)))
+        (mapn f x) (? (two? x) (map f (jot x)) (: n (saturate x) (go i a) (? (< i n) (go (+ i 1) (. (f i) a)) (rev a)) (go 0 ())))
+        (fuse w nm k ar t) (: e (. k (. ar (. t ()))) _ (pin jotfuse nm e) (pin jotfuse w e))
+        _ (pin jotfuse 'jot jot)
+        _ (fuse foldl 'foldl 2 3 foldn)
+        _ (fuse foldr 'foldr 2 3 foldrn)
+        _ (fuse each 'each 0 2 eachn)
+        (fuse map 'map 1 2 mapn)))
+
 (: l (foldr (\ a l (. (.) (. a (. l ())))) ()) (:: 'list l))
 ; both are connectives: they answer one of their operands, never an invented value -- && the
 ; first falsy one, || the first truthy one, either falling through to the last; a form operand
@@ -645,6 +661,8 @@
    (pin book 'opfix opfix))
 ; the last seal: opfix joins the other four in the g->hot_* fields, so no later rebind can reach it.
 (seal-hook 4 opfix)
+; the ops ev's jotin splices into a loop, as values: none a loop's body can shadow
+(pin jotfuse 'ops [two? saturate (<) (+) (.) rev tally])
 
 ; --- text + sequence batteries ------------------------------------------------
 ; one copy of each, `sep` first so a partial application reads, and -1 for absent.
