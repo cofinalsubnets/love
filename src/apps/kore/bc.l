@@ -128,9 +128,7 @@
          put out c,
          pin st 'col (peep st 'col 0 + 1))))
    (bc-say st t)
-    (: n #t
-       (go k) (n <= k ? 0 (bc-put st (t k), go (k + 1)))
-       (go 0))
+    (each ^#t (k \ bc-put st (t k)), 0)
    (bc-print st n) (pin st 'last n, bc-say st (bc-show st n))
 
    ; -- the complaints --------------------------------------------------------
@@ -209,10 +207,8 @@
    ; 1. every other numeral clamps a figure at or above the base to base-1
    (bc-numeral t ib)
     (: n #t
-       (dot j) (? (n <= j) n (t j = 46) j (dot (j + 1)))
-       i (dot 0)
-       ip (snip t 0 i)
-       fp (i < n ? (snip t (i + 1) n) "")
+       pf (t @ (a + "." + b) [a b] [t ""])
+       ip <pf fp <>pf
        one (n = 1 && 0 <= bc-dv (t 0))
        (dg c) (bc-dv c @ d (? one d (d < ib) d (ib - 1)))
        (acc s j v) (#s <= j ? v (acc s (j + 1) (v * ib + dg (s j))))

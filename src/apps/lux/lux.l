@@ -68,7 +68,7 @@
    ; other-display lux answers and keeps its socket.
    (lux-sweep own)
     (: dir (lux-rundir ())
-       (sockish? n) (snip n 0 4 = "lux-" && snip n (#n - 5) #n = ".sock")
+       (sockish? n) (n @ ("lux-" + _ + ".sock") 1 0)
        (dead? p) (connect ['unix p] @ c (hot? c ? (close c, 0) 1))
        (go ns acc) (? !(two? ns) acc
                     (dir + ("/" + <ns) @ p
@@ -358,7 +358,7 @@
                 (line ("lux: remap " + show win), loop sh lays hist)          ; (mapping it here would paint it OVER a workspace it
                 (code = 20)                                                      ; isn't on -- the "one window on two workspaces" bug)
                                                                                  ; MapRequest: admit tiled, run the manageHook, then place
-                (: _ (ewmh-track s win ? (line ("lux: strut " + show win)) 0)   ; a dock's strut shrinks the tiling rect
+                (: st (ewmh-track s win) _ (st ? (line ("lux: strut " + show win)) 0)   ; a dock's strut shrinks the tiling rect
                    sh1 (admit (under-pointer sh) win)                          ; a new window lands where the pointer is
                    c (mg-ctx s win (cur-rect sh) (x-getgeom s win))
                    sh2 (manage-window lux-manage c sh1)
@@ -371,7 +371,9 @@
 
                        line ("lux: + " + show win + " " + show (wsrow sh2)),
                        loop sh2 lays hist)
-                      (x-map s win,                                         ; ignored: map raw -- a desktop under everything, a dock/notification on top
+                      (x-cwa-events s win 4194304,                         ; PropertyChange: a dock may move its strut later
+                       x-map s win,                                         ; ignored: map raw -- a desktop under everything, a dock/notification on top
+                       st ? (render sh2 lays) 0,                              ; a strut reshapes the tiles now, not at the next event
                        x-has-atom s win "_NET_WM_WINDOW_TYPE" "_NET_WM_WINDOW_TYPE_DESKTOP" ?
                          (x-lower s win) (x-raise s win),
                        x-flush s,
@@ -440,6 +442,11 @@
                       (: _ (pin scrc 0 r) _ (line ("lux: screen " + show (r 2) + "x" + show (r 3)))
                          sh2 (rescreen sh)
                          (render sh2 lays, loop sh2 lays hist))
+                      (loop sh lays hist)))
+                (code = 28)                                              ; PropertyNotify (window@4, atom@8): a panel changing outputs
+                (: pkt (ev-raw e) w (u32 pkt 4) a (u32 pkt 8)             ; rewrites its strut in place, never remapping
+                   (a = ewmh-atom "_NET_WM_STRUT_PARTIAL" || a = ewmh-atom "_NET_WM_STRUT" ?
+                      (ewmh-untrack w, ewmh-track s w, render sh lays, loop sh lays hist)
                       (loop sh lays hist)))
                 (code = 23)                                              ; ConfigureRequest: tiled -> the layout answers, and the
                 (? (wsknownw? sh win && !(wsfloating? sh win))           ; client is told so -- a synthetic ConfigureNotify with the
@@ -533,6 +540,7 @@
    kids (filter (nil? * furniture?)
                 (filter (w \ x-manageable? s w || ghostly? w) twins))
    _ (map (ewmh-track s) twins)                                          ; a pre-existing dock's strut still shrinks the rect
+   _ (map (w \ furniture? w ? (x-cwa-events s w 4194304) 0) twins, x-flush s)   ; and follows the dock's later moves (PropertyChange)
    (adopt-tag w) (: d (x-getprop-atoms s w (x-intern s "_NET_WM_DESKTOP"))       ; the last generation wrote each window's tag on the window
                     t (two? d ? (1 + <d) 1)                                    ; (floats wear their HOME tag too, so they come back to it,
                     (0 < t && #lux-tags >= t ? t 1))                 ; tiled; out of range -> tag 1)

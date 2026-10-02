@@ -293,11 +293,11 @@ no file, or a bare -, is the filter: stdin -> stdout"
    ; .xz and .lzma come off; .txz and .tlz answer .tar
    (xzc-stem t p)
     (: suf (t 'suf)
-       (? (suf && ends? p suf) [1 (snip p 0 (#p - #suf))]
-          (ends? p ".xz") [1 (snip p 0 (#p - 3))]
-          (ends? p ".lzma") [1 (snip p 0 (#p - 5))]
-          (ends? p ".txz" || ends? p ".tlz") [1 (snip p 0 (#p - 4) + ".tar")]
-          ()))
+       (p @ (s + ^suf + "") [1 s]
+            (s + ".xz") [1 s]
+            (s + ".lzma") [1 s]
+            ((s + ".txz") || (s + ".tlz")) [1 (s + ".tar")]
+            ()))
    (xzc-put t p dst bytes st)           ; the output laid, the input's mode and time carried
     (? (two? (lstat dst) && !(peep t 'f 0)) (xzc-moan t (dst + ": File exists"), 1)
        !(uwrite dst bytes) (xzc-moan t (dst + ": Cannot write"), 1)
@@ -391,7 +391,7 @@ no file, or a bare -, is the filter: stdin -> stdout"
     (: o (xzc-opts as t)
        r (? !o 1
             (peep t 'h 0) (say out (xzc-help + "\n"), 0)
-            (peep t 'V 0) (say out ("xz (love " + love-version + ")\n"), 0)
+            (peep t 'V 0) (say out (uvers "xz" + "\n"), 0)
             (filter (p \ p != "-") <>o @ fs
                (atom? fs ? (xzc-filter t)
                   (foldl (acc \ p \ xzc-worse acc (xzc-one t p)) 0 fs))))

@@ -16,7 +16,7 @@
    (src-dash? w) (#w @ n (0 < n && w 0 = 45))
    (src-help? ("-h" || "--help" || "-help" || "help")) 1
    (src-vers? ("-v" || "--version")) 1
-   (src-vers m) (puts (m + " (love " + love-version + ")\n"), quit 0)
+   (src-vers m) (puts (uvers m + "\n"), quit 0)
    (src-not-dir m w)
     (src-die (w + " is not a directory -- `love " + m + " help` for usage"))
 

@@ -50,18 +50,18 @@
 //   (wet scr k)          -> n    dirty-row bits, read-and-cleared
 //   (tilepx scr i x y)   -> n    pixel (x,y) of cell i's tile: 0xff over its rgb where
 //                                the picture set it, 0 where not; () for no tile
-//   (dye scr buf w row cur face) -> scr   grid row `row` painted into cask buf, a
+//   (dye scr buf w row cur font) -> scr   grid row `row` painted into cask buf, a
 //                                32bpp picture w pixels wide, by the console's own
-//                                painter (paint.c) in the built-in 8x16, face a
-//                                loaded one (as facerow takes) or (); cur the cell
+//                                painter (paint.c) in the built-in 8x16, font a
+//                                loaded one (as fontrow takes) or (); cur the cell
 //                                the cursor wears, -1 for none; () misuse
 //   (limned scr k n f fg bg) -> (s took f fg bg)   cells k..k+n-1 as the escapes an
 //                                outer terminal paints them by (src/apps/mitty/limn.l's
 //                                row): the pen f fg bg carried in (f -1 for none) and out,
 //                                stopping short at a picture's tile, took the cells done
-//   (facerow f cp r)     -> n    row r of cp's glyph in face f (a string or cask as
-//                                src/apps/face.l lays it), the leftmost pixel bit 15;
-//                                () when f is no face (cb_face_ok) or lacks cp
+//   (fontrow f cp r)     -> n    row r of cp's glyph in font f (a string or cask as
+//                                src/apps/font.l lays it), the leftmost pixel bit 15;
+//                                () when f is no font (cb_font_ok) or lacks cp
 #include "love.h"
 #include "quay.h"
 
@@ -251,9 +251,9 @@ static struct ai_str *nif_bytes(word x) {
  if (((union u*) x)->ap == lvm_cask) return ((struct ai_cask*) x)->str;
  return 0; }
 
-// (dye scr buf w row cur face): one row of the screen as pixels, the same draw the
-// kernel's framebuffer takes. the paper is buf, clipped to its own bytes; a face that
-// fails its vetting is no face. no allocation, so every pointer holds throughout
+// (dye scr buf w row cur font): one row of the screen as pixels, the same draw the
+// kernel's framebuffer takes. the paper is buf, clipped to its own bytes; a font that
+// fails its vetting is no font. no allocation, so every pointer holds throughout
 static lvm(lvm_dye) {
  struct cb *c = scr_ok(Sp[0]);
  struct ai_str *b = !(Sp[1] & 1) && ((union u*) Sp[1])->ap == lvm_cask ? ((struct ai_cask*) Sp[1])->str : 0;
@@ -262,7 +262,7 @@ static lvm(lvm_dye) {
   intptr_t const w = getcharm(Sp[2]), row = getcharm(Sp[3]), cur = getcharm(Sp[4]);
   if (w > 0 && row >= 0 && row < c->rows) {
    struct ai_str *f = nif_bytes(Sp[5]);
-   uint8_t const *qf = f && cb_face_ok((uint8_t const*) f->bytes, f->len) ? (uint8_t const*) f->bytes : 0;
+   uint8_t const *qf = f && cb_font_ok((uint8_t const*) f->bytes, f->len) ? (uint8_t const*) f->bytes : 0;
    struct cb_paper const p = { (uint32_t*) b->bytes, (uintptr_t) w, (uintptr_t) w, b->len / 4u / (uintptr_t) w, 1 };
    struct font const ft = { (uint8_t const*) cleat_8x16, 8, 16 };
    cb_paint(&p, c, &ft, qf, (uint16_t) row, 0, 0, cur < 0 ? ~0u : (uint32_t) cur);
@@ -270,16 +270,16 @@ static lvm(lvm_dye) {
  Sp[5] = out;
  Sp += 5; Ip += 1; ai_musttail return Continue(); }
 
-// (facerow f cp r): the painter's own reading of a face, vetting and all
-static lvm(lvm_facerow) {
+// (fontrow f cp r): the painter's own reading of a font, vetting and all
+static lvm(lvm_fontrow) {
  word f = Sp[0], out = ZeroPoint;
  struct ai_str *s = 0;
  if (!(f & 1) && strp(f)) s = str(f);
  else if (!(f & 1) && ((union u*) f)->ap == lvm_cask) s = ((struct ai_cask*) f)->str;
- if (s && (Sp[1] & 1) && (Sp[2] & 1) && cb_face_ok((uint8_t const*) s->bytes, s->len)) {
+ if (s && (Sp[1] & 1) && (Sp[2] & 1) && cb_font_ok((uint8_t const*) s->bytes, s->len)) {
   intptr_t cp = getcharm(Sp[1]), r = getcharm(Sp[2]);
   uint8_t const *g = cp >= 0 && r >= 0 && r < 16
-                     ? cb_face_rows((uint8_t const*) s->bytes, (uint32_t) cp) : 0;
+                     ? cb_font_rows((uint8_t const*) s->bytes, (uint32_t) cp) : 0;
   if (g) out = putcharm((uintptr_t) g[2 * r] | (uintptr_t) g[2 * r + 1] << 8); }
  Sp[2] = out;
  Sp += 2; Ip += 1; ai_musttail return Continue(); }
@@ -488,7 +488,7 @@ static union u const
   nif_gaze[]   = {{lvm_cur}, {.x = putcharm(2)}, {lvm_gaze},   {lvm_ret0}},
   nif_reply[]  = {{lvm_reply}, {lvm_ret0}},
   nif_damage[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_damage}, {lvm_ret0}},
-  nif_facerow[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_facerow}, {lvm_ret0}},
+  nif_fontrow[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_fontrow}, {lvm_ret0}},
   nif_tilepx[]  = {{lvm_cur}, {.x = putcharm(4)}, {lvm_tilepx},  {lvm_ret0}},
   nif_dye[]     = {{lvm_cur}, {.x = putcharm(6)}, {lvm_dye},     {lvm_ret0}},
   nif_regrid[]  = {{lvm_cur}, {.x = putcharm(4)}, {lvm_regrid},  {lvm_ret0}},

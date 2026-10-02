@@ -36,7 +36,7 @@ static uint32_t k_sn(uintptr_t rows, uintptr_t cols) {
 static uint32_t k_hl(uintptr_t cols) {
   uint32_t const most = (uint32_t) ((1u << 20) / cb_hsize(1, cols));
   return most < 500u ? most : 500u; }
-static uint8_t *kqf;   // the loaded face (/proc/vt/face), vetted, or 0
+static uint8_t *kqf;   // the loaded font (/proc/vt/font), vetted, or 0
 
 
 static struct {
@@ -67,7 +67,7 @@ static int kqpop(void) {                   // dequeue one byte, -1 if empty
   int b = kkb.q[kkb.qh];
   return kkb.qh = (kkb.qh + 1) & 63, b; }
 
-// the console's face: glyphs and their size; kfb.scale says how large, paint.c the palette.
+// the console's font: glyphs and their size; kfb.scale says how large, paint.c the palette.
 static struct font const kface = { (uint8_t const*) cleat_8x16, 8, 16 };
 
 
@@ -591,10 +591,10 @@ static int k_ents_n, k_ents_cap;
 
 // /proc/vt -- the console's colours as files, xterm-256 indices in decimal. an ordinary
 // entry each: the open refreshes a read off the live pen, the close applies a write.
-// face takes a face src/apps/face.l laid, for the code points the built-in one lacks; an
+// font takes a font src/apps/font.l laid, for the code points the built-in one lacks; an
 // empty write drops it.
 static char const k_vtfg[] = "proc/vt/fg", k_vtbg[] = "proc/vt/bg",
-                  k_vtscale[] = "proc/vt/scale", k_vtface[] = "proc/vt/face";
+                  k_vtscale[] = "proc/vt/scale", k_vtfont[] = "proc/vt/font";
 // /proc/lift -- a path written here asks the seat to carry that file out of the machine
 // (the page saves a download); a seat with nowhere to put it does nothing.
 static char const k_plift[] = "proc/lift";
@@ -619,13 +619,13 @@ static intptr_t k_null_writen(int fd, unsigned char const *src, uintptr_t n) {
   return (intptr_t) n; }
 static bool k_dev_ready(int fd) { return true; }
 
-// 0 is neither, 1 the foreground, 2 the background, 3 the glyph scale, 4 the lift, 5 the face.
+// 0 is neither, 1 the foreground, 2 the background, 3 the glyph scale, 4 the lift, 5 the font.
 static int k_vt_slot(char const *p, uintptr_t n) {
   if (n == sizeof k_vtfg - 1 && !memcmp(p, k_vtfg, n)) return 1;
   if (n == sizeof k_vtbg - 1 && !memcmp(p, k_vtbg, n)) return 2;
   if (n == sizeof k_vtscale - 1 && !memcmp(p, k_vtscale, n)) return 3;
   if (n == sizeof k_plift - 1 && !memcmp(p, k_plift, n)) return 4;
-  if (n == sizeof k_vtface - 1 && !memcmp(p, k_vtface, n)) return 5;
+  if (n == sizeof k_vtfont - 1 && !memcmp(p, k_vtfont, n)) return 5;
   return 0; }
 
 static char *k_strdup(char const *p, uintptr_t n);   // below, with the entry doors
@@ -666,8 +666,8 @@ static bool k_fs_init(void) {
   // compat loop below starts where the numbered rows stop.
   t[n + 8] = (struct k_ent) { .path = k_vtscale, .bake = -1, .ms = k_clock_ms(),
                               .mode = 0644, .own = true, .live = true };
-  // ..and the face, written and never read, at n + 15 past the home
-  t[n + 15] = (struct k_ent) { .path = k_vtface, .bake = -1, .ms = k_clock_ms(),
+  // ..and the font, written and never read, at n + 15 past the home
+  t[n + 15] = (struct k_ent) { .path = k_vtfont, .bake = -1, .ms = k_clock_ms(),
                                .mode = 0644, .own = true, .live = true };
   // and the two the open fills: read-only, since nothing here is anyone's to set.
   t[n + 3] = (struct k_ent) { .path = k_pmem, .bake = -1, .ms = k_clock_ms(),
@@ -725,7 +725,7 @@ static bool k_ro(char const *cp, uintptr_t cn) {
 
 // ..and a move or a removal leaves these be besides: a special row, and every directory
 // above one or above the tree, whose rename would carry them out from under their names
-static char const *const k_pins[] = { k_tree, k_vtfg, k_vtbg, k_vtscale, k_vtface, k_plift,
+static char const *const k_pins[] = { k_tree, k_vtfg, k_vtbg, k_vtscale, k_vtfont, k_plift,
                                       k_pmem, k_pgauge, k_pcmd, k_dnull, k_dzero };
 static bool k_pinned(char const *cp, uintptr_t cn) {
   if (k_ro(cp, cn)) return true;
@@ -929,7 +929,7 @@ static bool k_fit(int i, uintptr_t need) {
 // content standing: a stale number is answerable, an open that failed here would not be.
 static void k_vt_read(int i, int slot) {
   // serial-only: no console to ask, so the file reads empty rather than the last write
-  if (!kcb || slot >= 4) { k_ents[i].len = 0; return; }   // ..and the lift and the face are written, never read
+  if (!kcb || slot >= 4) { k_ents[i].len = 0; return; }   // ..and the lift and the font are written, never read
   // the colours come off the pen, the scale off the paper
   unsigned v = slot == 3 ? kfb.scale : cb_val(slot == 1 ? kcb->def_fg : kcb->def_bg) & 255u;
   char d[4]; int n = 0;
@@ -941,12 +941,12 @@ static void k_vt_read(int i, int slot) {
   memcpy(k_ents[i].bytes, d, (uintptr_t) n);
   k_ents[i].len = (uintptr_t) n; }
 
-// the face <- a write's bytes: vetted, then copied out of the entry, whose bytes move on
-// the next write. a face that fails the vetting leaves the one in use; none drops it.
-static void k_vt_face(unsigned char const *b, uintptr_t n) {
+// the font <- a write's bytes: vetted, then copied out of the entry, whose bytes move on
+// the next write. a font that fails the vetting leaves the one in use; none drops it.
+static void k_vt_font(unsigned char const *b, uintptr_t n) {
   uint8_t *q = 0;
   if (n) {
-    if (!cb_face_ok(b, n) || !(q = kmallocw(b2w(n)))) return;
+    if (!cb_font_ok(b, n) || !(q = kmallocw(b2w(n)))) return;
     memcpy(q, b, n); }
   if (kqf) kfree(kqf);
   kqf = q;
@@ -962,7 +962,7 @@ static void k_vt_write(int i, int slot) {
     while (len && (b[len - 1] == '\n' || b[len - 1] == '\r')) len--;
     if (len) k_lift_ask(b, len);
     return; }
-  if (slot == 5) return k_vt_face(b, len);
+  if (slot == 5) return k_vt_font(b, len);
   if (!kcb) return;
   unsigned v = 0;
   while (j < len && b[j] >= '0' && b[j] <= '9' && v < 256) v = v * 10 + (unsigned) (b[j++] - '0');
@@ -1280,7 +1280,7 @@ static void k_row_zero(int fd) {
   if (s) *s = (struct k_source) {0}; }
 
 // --- the pty: a terminal where the host would hand out /dev/pts ----------------------
-// three rows over one k_pty. the master is the terminal's side, a harbour's pane: its writes
+// three rows over one k_pty. the master is the terminal's side, a mitty's pane: its writes
 // are keys, run through the line discipline into `in`, and its reads drain `out`. the slave
 // is the program's: it reads `in` and writes `out`, a \n going out as \r\n while opost
 // holds. a key that raises a signal (^C ^\ ^Z) puts its number on the signal row, which the

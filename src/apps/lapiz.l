@@ -291,7 +291,7 @@
    (mdread t) (bmrg (runp (seqs [(opt b-meta) (many mdblock) (skip (many blankline))]) (endnl t))))
 
 ; ---------------------------------------------------------------- markdown, show
-(: (mq s) (:- (g 0 "") (g i acc) (i >= #s ? acc (s i @ c (g (i + 1) (acc + (spec? c ? "\\" "") + string c)))))
+(: (mq s) (jug 0 @ j (each ^#s (i \ (s i @ c (say j ((spec? c ? "\\" "") + string c)))), slurp j))
    ; a text ending in `!` ahead of a link wears one backslash, else the pair reads as an image
    (mdi l)  (atom? l ? ""
                (mdi1 <l @ s
@@ -332,8 +332,7 @@
    (mdshow d) (join "\n" (map mdb d)))                        ; each block ends in \n, so \n between = a blank line
 
 ; ---------------------------------------------------------------- html, show
-(: (hq s) (:- (g 0 "") (g i acc) (i >= #s ? acc (s i @ c (g (i + 1)
-           (acc + (c @ 38 "&amp;" 60 "&lt;" 62 "&gt;" (string c)))))))
+(: (hq s) (jug 0 @ j (each ^#s (i \ (s i @ c (say j (c @ 38 "&amp;" 60 "&lt;" 62 "&gt;" (string c))))), slurp j))
    (hti l)  (catmap hti1 l)
    (hti1 x) (<x @ 'text   (hq <>x)
                   'code   ("<code>" + hq <>x + "</code>")
@@ -413,8 +412,7 @@
    halias '(("b" "strong") ("i" "em") ("u" "em") ("strike" "em") ("s" "em") ("q" "em")
             ("tt" "code") ("kbd" "code") ("samp" "code") ("var" "code") ("dfn" "em")
             ("h7" "h6") ("h8" "h6") ("menu" "ul") ("dir" "ul"))
-   (hlow t) (:- (go 0) n #t o (jug 0) (go i)
-             (n <= i ? (slurp o) (t i @ c (put o (64 < c < 91 ? (c + 32) c), go (i + 1)))))
+   (hlow t) (jug 0 @ o (each ^#t (i \ (t i @ c (put o (64 < c < 91 ? (c + 32) c)))), slurp o))
    ; the tag starting at i: [name end-index open?], or () where none does
    (htag s i)
     (#s @ n
@@ -484,13 +482,10 @@
    ; a form's name or value as a query spells it: space a +, the rest past the unreserved %XX
    (hpe s)
     (: o (jug 0) hx "0123456789ABCDEF"
-       (go i) (#s <= i ? (slurp o)
-                 (s i @ c
-                    ((? (96 < c < 123 || 64 < c < 91 || 47 < c < 58 || elem c '(45 46 95 126)) (put o c)
-                        (c = 32) (put o 43)
-                        (put o 37, put o (hx (c // 16)), put o (hx (c % 16)))),
-                     go (i + 1))))
-       (go 0))
+       (each ^#s (i \ (s i @ c (? (96 < c < 123 || 64 < c < 91 || 47 < c < 58 || elem c '(45 46 95 126)) (put o c)
+                                  (c = 32) (put o 43)
+                                  (put o 37, put o (hx (c // 16)), put o (hx (c % 16)))))),
+        slurp o))
    ; an attribute's value decoded, or "" where there is none
    (hval s k e nm) (hattr s k e nm @ v (string? v ? (hdec v) ""))
    ; the option a <select> sends: the selected one, else the first; its value, else its text
@@ -561,11 +556,9 @@
    ; s with each byte the table names spelled its way
    (hesc tb s)
     (: o (jug 0)
-       (go i) (#s <= i ? (slurp o)
-                 (: c (s i) r ((: (g l) (? (atom? l) () (<(<l) = c) <>(<l) (g >l))) tb)
-                    ((r ? (say o r) (put o c)),
-                     go (i + 1))))
-       (go 0))
+       (each ^#s (i \ (: c (s i) r ((: (g l) (? (atom? l) () (<(<l) = c) <>(<l) (g >l))) tb)
+                         (r ? (say o r) (put o c)))),
+        slurp o))
    ; an id is the other attribute the middle keeps: it becomes a mark, inside a tag whose
    ; content is a line and ahead of any other. `ba` is 1 while an <a> with no href is open:
    ; that is an anchor, not a link, so its tags go and only its mark and its text stay.

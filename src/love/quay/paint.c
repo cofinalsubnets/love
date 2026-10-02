@@ -17,7 +17,7 @@ static uint32_t cb_mid(uint32_t a, uint32_t b) {
 
 // one TILE onto the paper at pixel (x,y): its piece of the picture, a pixel a glyph pixel
 // (so a scale square each), the cell's bg where the picture set nothing. a picture is laid
-// in the screen's cell grain, so a face of another size paints the tile as bare ground
+// in the screen's cell grain, so a font of another size paints the tile as bare ground
 static void cb_tpx(struct cb_paper const *p, struct cb const *c, struct font const *f,
                    struct cb_cell const *cell, uintptr_t x, uintptr_t y) {
   uintptr_t const s = p->scale;
@@ -35,15 +35,15 @@ static void cb_tpx(struct cb_paper const *p, struct cb const *c, struct font con
         uint32_t const o = v >> 24 ? v & 0xffffffu : bg;
         for (uintptr_t e = 0; e < s; e++) px[k * s + e] = o; } } } }
 
-// cp's glyph in the chain: the built-in face's where the cp437 page has cp, else a loaded
-// face's (qf, the 8x16 cell only). cb_row reads row r of it left-aligned in 32 bits, bit 31
-// the leftmost pixel, and 0 for a glyph neither face has
+// cp's glyph in the chain: the built-in font's where the cp437 page has cp, else a loaded
+// font's (qf, the 8x16 cell only). cb_row reads row r of it left-aligned in 32 bits, bit 31
+// the leftmost pixel, and 0 for a glyph neither font has
 struct cb_look { uint8_t const *bmp, *rows; };
 static struct cb_look cb_look(struct font const *f, uint8_t const *qf, uint32_t cp) {
   uintptr_t const bpr = ((uintptr_t) f->w + 7) / 8;
   int const g = cb_437x(cp);
   return (struct cb_look) { g < 0 ? 0 : f->glyphs + bpr * f->h * (uint32_t) g,
-                            g < 0 && qf && f->w == 8 && f->h == 16 ? cb_face_rows(qf, cp) : 0 }; }
+                            g < 0 && qf && f->w == 8 && f->h == 16 ? cb_font_rows(qf, cp) : 0 }; }
 
 static uint32_t cb_row(struct font const *f, struct cb_look l, uint8_t r) {
   uintptr_t const bpr = ((uintptr_t) f->w + 7) / 8;

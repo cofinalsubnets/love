@@ -1,21 +1,21 @@
-; src/apps/face.l -- a bitmap face for quay's painter, laid from unifont's .hex.
+; src/apps/font.l -- a bitmap font for quay's painter, laid from unifont's .hex.
 ;
-;   (face-hex s)        the face a .hex text makes, as the bytes src/love/quay/quay.h's
-;                       struct cb_face reads; () when s holds no glyph
-;   (face-rows f cp)    cp's glyph in face f: its 16 rows, each a 16-bit word with the
-;                       leftmost pixel high, or () when the face lacks it
+;   (font-hex s)        the font a .hex text makes, as the bytes src/love/quay/quay.h's
+;                       struct cb_font reads; () when s holds no glyph
+;   (font-rows f cp)    cp's glyph in font f: its 16 rows, each a 16-bit word with the
+;                       leftmost pixel high, or () when the font lacks it
 ;
 ; a .hex line is `XXXX:bits`: the code point, then 32 hex digits for an 8x16 glyph or 64
 ; for a 16x16 one, a row at a time. unifont ships its whole plane this way; the file is not
-; in the image. on inle the console takes a face written to /proc/vt/face. a glyph index is
-; a u16, so a face holds at most 65535 glyphs: unifont's plane 0 fits, not with its upper.
+; in the image. on inle the console takes a font written to /proc/vt/font. a glyph index is
+; a u16, so a font holds at most 65535 glyphs: unifont's plane 0 fits, not with its upper.
 ;
 ; the bytes, little-endian, all u16 unless said:
 ;   "qf1\0"  magic;  w h (bytes: the half-width cell, 8 16);  npages;  nglyphs (u32)
 ;   dir[4352]            code point >> 8 -> its page, 0xffff for none
 ;   pages[npages][256]   code point & 255 -> glyph + 1, 0 for none
 ;   glyphs[nglyphs][16]  the rows, a narrow glyph in each word's high byte
-(module '(face face-hex face-rows)
+(module '(font font-hex font-rows)
 (:
    (le16 v) (string (v & 255) + string (v >> 8 & 255))
    (le32 v) (le16 (v & 65535) + le16 (v >> 16 & 65535))
@@ -23,7 +23,7 @@
    (hexn s a b) (foldl (n \ i \ n * 16 + hexv (s i)) 0 (map (+ a) ^(b - a)))
 
    ; one line: (cp rows) or () -- rows the 16 words; a narrow glyph's byte shifts high
-   (face-line l)
+   (font-line l)
     (: k (findsub l ":")
        n (#l - k - 1)
        (k < 1 || !(n = 32 || n = 64) ? ()
@@ -35,8 +35,8 @@
                        ^16)
              [cp rows])))
 
-   (face-hex s)
-    (sort (filter two? (map face-line (lines s))) @ gs ; by code point
+   (font-hex s)
+    (sort (filter two? (map font-line (lines s))) @ gs ; by code point
        (!(two? gs) ? ()
           (: pages (uniq (map (g \ <g >> 8) gs))
              slot {}
@@ -50,7 +50,7 @@
              ("qf1" + string 0 + string 8 + string 16 + le16 #pages + le32 #gs
               + dir + pgs + bits))))
 
-   (face-rows f cp)
+   (font-rows f cp)
     (: np (rd16 f 6)
        pg (cp < 1114112 ? (rd16 f (12 + 2 * (cp >> 8))) 65535)
        (pg @ 65535 ()
@@ -58,4 +58,4 @@
          gi (8716 + np * 512 + (gi - 1) * 32 @ at
              (map (r \ rd16 f (at + 2 * r)) ^16)))))
 )
-) ; module face
+) ; module font

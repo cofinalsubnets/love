@@ -879,9 +879,7 @@ no file, or a bare -, is the filter: stdin -> stdout"
    ; --- the suffix rules -----------------------------------------------------
    ; .gz (or -S's) comes off; .tgz answers .tar, which is the one rename gzip does.
    (gzc-stem p suf)                    ; -> (1 stem) | ()
-    (#p @ n
-       (? (ends? p suf) [1 (snip p 0 (n - #suf))]
-          (ends? p ".tgz") [1 (snip p 0 (n - 4) + ".tar")]))
+    (p @ (s + ^suf + "") [1 s] (s + ".tgz") [1 (s + ".tar")] ())
 
    (gzc-zip t s nom stamp) (peep t 'lvl 6 @ 9 (gz-zip9 s nom stamp) (gz-zip s nom stamp))
 
@@ -1013,7 +1011,7 @@ no file, or a bare -, is the filter: stdin -> stdout"
        (? !o 1
           (peep t 'h 0) (say out (gzc-help + "\n"), flush out, 0)
           (peep t 'V 0)
-           (say out ("gzip (love " + love-version + ")\n"), flush out, 0)
+           (say out (uvers "gzip" + "\n"), flush out, 0)
           (filter (p \ !(p = "-")) <>o @ fs
              ((? (peep t 'l 0) 0 (peep t 't 0) (pin t 'd 1) 0),
               (? !(two? fs) (peep t 'l 0 ? (gzc-moan t "-l wants a file", 1)

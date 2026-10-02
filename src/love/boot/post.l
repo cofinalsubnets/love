@@ -120,8 +120,8 @@
       (bare? t) ((: (go ks) (two? ks ? (nom? <ks ? 0 (go >ks)) 1)) (keys t))
       (mname s) (: n #s
                    b (foldl (\ r k (47 = peep s k 0 ? (k + 1) r)) 0 ^n)
-                   e ((2 < n - b ? (".l" = snip s (n - 2) n) 0) ? (n - 2) n)
-                   (intern (snip s b e)))
+                   t (snip s b n)
+                   (intern (t @ ((x && 0 < #x) + ".l") x t)))
       fsopen (cite 'posix 'open)       ; the host's open nif, off its module -- see above
       (m \ (? (tablet? m) (prior m)
               (string? m)
@@ -3074,7 +3074,7 @@
 ; heap. the shadow rule lives in one place, verbs' `word`.
 
 (module '(cli read reads forms shell welp edraw edln edlnc edlay cli-rail cli-line stage edkey edtap edgc
-          uopt uopt1 uoptv uoptun uoptbad uoptstray uoptp uoptlast uask udoor edcmd edsgr edwide edcut edpad edfit
+          uopt uopt1 uoptv uoptun uoptbad uoptstray uoptp uoptlast uask uvers udoor edcmd edsgr edwide edcut edpad edfit
           ednew edstep edput ednl edclear edempty? edchars edtext edcol edparses? edframe edload
           edleft edright edbsp eddel edhome edend edtop edbot edup eddown uphist downhist eddetach
           joinln splitat parseall)
@@ -3502,13 +3502,9 @@
        ; one long word into the shape uopt1 answers for a short cluster, so `eat` walks
        ; either: the word alone, or the word and the value glued behind its `=`.
        (long1 a)
-        (: n #a
-           e ((: (go i) (? (n <= i) -1 (a i = 61) i (go (i + 1)))) 2)
-           c (lgot (snip a 2 (e < 0 ? n e)))
-           (? !c ()
-              (e < 0) [a]
-              (elem c vals) [(snip a 0 e) (snip a (e + 1) n)]
-              ()))
+        (a @ ("--" + nm + "=" + v) (lgot nm @ c (c && elem c vals ? [("--" + nm) v] ()))
+             ("--" + nm) (lgot nm @ c (c ? [a] ()))
+             ())
        ; the exploded word, then the argv tail behind it. a value key ends its chain, so
        ; at most one element of `bs` is ever a value and it is the last.
        (eat bs rest es)
@@ -3602,12 +3598,13 @@
    ; an applet as the world calls it: nm is its name, u its usage text, and h?/v? whether the
    ; bare letters are free -- posix or gnu has spoken for one in a few places, and there the
    ; long form is the only answer. answers the main a verb registry takes.
+   (uvers nm) (string nm + " / love " + love-version)                           ; the --version answer, one spelling for every tool
    (udoor nm f u h? v?)
     (: (say1 x) (: n #x                       ; a page that ends in a newline keeps just the one
                    (puts (n && x (n - 1) = 10 ? x (x + "\n")), flush out, 0))
        (as \ (uask as h? v?
               @ 'help (say1 (u || "usage: " + string nm))
-                'vers (say1 (string nm + " (love " + love-version + ")"))
+                'vers (say1 (uvers nm))
                 (f as))))
 
    ps1 "> "
