@@ -1411,6 +1411,11 @@
              (elem k '(movqxr ldsd ldsdl cvtsi2sd) && <>lf = 'f0 && gpo? hd)
               [(hd + [(k . 'f1 . >>lf)]) 'f1]
              ())))
+   ; a left operand that needs no park: one read of an xmm home, or one pool constant -> its form | ()
+   (fleft g fs)
+    (? !(fsel? g) () (abl? g 'fleft) ()
+       (two? fs && !(two? >fs) && (<fs @ f (elem <f '(movapd ldsdl) && <>f = 'f0 && nom? <>>f))) <fs
+       ())
    (fshut g af bf)
     (? (t32? g) (af + '((movqrx r0 f0)) + spush2 + bf + spop2 'r2 'r3 + '((movqxr f1 r2)))
        (fsel? g && !(fclob? bf 'f1)) (af + '((movapd f1 f0)) + bf)
@@ -2578,6 +2583,18 @@
               (cgbin g env e wnt))))
    ; a targetable gp arg: a pure single-emission read (immediate, frame, home register, label) skips the cell and
    ; lands in its register after the spills -> ((ez i) forms) | ((ezm i rH) movforms ldforms) | 'no
+   ; a targetable double arg, when every arg is a pure leaf (no sibling evaluation can call out and take the xmm file):
+   ; a double read off its xmm home or its frame cell lands in its xmm register after the spills -> ((ezx i) forms) | 'no
+   (ezxarg g env e pty i)
+    (? (!(fsel? g) || abl? g 'ezx || !(g 'ezride) || 8 <= i || !(<e = 'var)) 'no
+       (vent g env <>e @ en
+          (? (bad? en || !(<>>en = 'double) || pty && pty != 'double) 'no
+             (<en = 'regv && elem <>en fregs16) [['ezx i] [['movapd (xmmreg i) <>en]]]
+             (<en = 'loc) [['ezx i] [['ldsd (xmmreg i) 'r4 <>en]]]
+             'no)))
+   (ezall g env e pty gpc xmmc va)
+    (: z (gpc < ngp g ? (ezarg g env e pty gpc) 'no)
+       (z != 'no || va ? z (ezxarg g env e pty xmmc)))
    (ezarg g env e pty i)
     (: rT (argr g i)
        (fin ty fs) (: aty (pty ? pty ty)
@@ -2627,8 +2644,9 @@
     (: (kls as i gpc xmmc ovc acc)                       ; classify + evaluate, L->R -> (((class idx) pushforms)..) | 'bad
         (!(two? as) ? (rev acc)
            ; a targetable leaf skips the cell ('ez/'ezm): emitted into its register after the spills
-           (: ez (gpc < ngp g ? (ezarg g env <as (pts i) gpc) 'no)
-              (ez != 'no ? (kls >as (i + 1) (gpc + 1) xmmc ovc (ez . acc))
+           (: ez (ezall g env <as (pts i) gpc xmmc va?)
+              (ez != 'no ? (<<ez = 'ezx ? (kls >as (i + 1) gpc (xmmc + 1) ovc (ez . acc))
+                              (kls >as (i + 1) (gpc + 1) xmmc ovc (ez . acc)))
            ; a direct &x / array / struct-var arg is presumed dead once the callee returns: argpos exempts its lea from fesc.
            ; aim the first cell arg at its seat (it evaluates last, nothing after writes it); dir only, never a home seat
            (: aim (: (psh9 pl) (two? pl ?
@@ -2806,7 +2824,7 @@
              pops (: (go4 l4 acc4)
                       (!(two? l4) ? acc4
                          (<<l4 @ kc
-                            (go4 >l4 (elem <kc '(ov ez ezm ezd) ? acc4 (acc4 +
+                            (go4 >l4 (elem <kc '(ov ez ezm ezd ezx) ? acc4 (acc4 +
                                       (<kc @ 'g (spop (argr g <>kc))
                                        'g2   ; the t32 pair: both words off one cell
                                         [['ld (argr g <>kc) 'sp 0]
@@ -2842,7 +2860,7 @@
                      (go4 kr ()))
              nxmm (: (go5 l5 n5) (!(two? l5) ? n5
                                     (go5 >l5 (: ce <<l5 kk <ce
-                                                     (kk @ 'x (n5 + 1) 'x2 (n5 + 2)
+                                                     (kk @ 'x (n5 + 1) 'ezx (n5 + 1) 'x2 (n5 + 2)
                                                            'p2 (n5 + (ce 1 = 'x) + (ce 3 = 'x))
                                                            n5))))
                      (go5 kr 0))
@@ -2885,7 +2903,7 @@
              ezf (: (go7 l7 a7) (!(two? l7) ? a7
                                    (go7 >l7
                                         (<<l7 @ kc
-                                           (? (<kc = 'ez) (a7 + <><l7)
+                                           (? (<kc = 'ez || <kc = 'ezx) (a7 + <><l7)
                                               !(<kc = 'ezm) a7
                                               (<>>kc @ rH
                                                  (elem rH ezt && rH != argr g <>kc ?
@@ -3320,9 +3338,18 @@
                               ; reads it direct, the left on f0; else the shuttle, f1 = left, f0 = right
                               (: af (asflo g av) bf (asflo g b)
                                  sim (fsel? g && elem op '(+ - * /) ? (fsimple g bf))
-                                 mid (two? sim ? () (fshut g af bf))
-                                 (two? sim ?
-                                    (mkv 'double 'r0 (af + <sim + [[(op @ '+ 'addsd '- 'subsd '* 'mulsd 'divsd) 'f0 <>sim]]))
+                                 ; a left that needs no park waits for the right: + and * read it direct
+                                 ; (a constant through f1), - and / take the right to f1 and load it on f0
+                                 lf (two? sim || !(elem op '(+ - * /)) ? () (fleft g af))
+                                 opn (op @ '+ 'addsd '- 'subsd '* 'mulsd 'divsd)
+                                 mid (two? sim || two? lf ? () (fshut g af bf))
+                                 (? (two? sim)
+                                    (mkv 'double 'r0 (af + <sim + [[opn 'f0 <>sim]]))
+                                    (two? lf)
+                                    (mkv 'double 'r0
+                                         (? (op = '- || op = '/) (bf + ['(movapd f1 f0) lf [opn 'f0 'f1]])
+                                            (<lf = 'movapd) (bf + [[opn 'f0 (lf 2)]])
+                                            (bf + [['ldsdl 'f1 (lf 2)] [opn 'f0 'f1]])))
                                  (op @ '+ (mkv 'double 'r0 (mid + '((addsd f0 f1))))
                                      '* (mkv 'double 'r0 (mid + '((mulsd f0 f1))))
                                      '- (mkv 'double 'r0 (mid + '((subsd f1 f0) (movsd f0 f1))))
@@ -5743,7 +5770,40 @@
        (esc? (f . l))
         (two? f && elem <f '(lea lean) && <>>f = fb && <>f != 'sp ? 1 (esc? l))
        fs2 (stldp fb fs ())
-       (esc? fs2 ? (stlda fb fs2) (stldw g fb (stldkp g) fs2 ())))
+       (xret g (xmov g (esc? fs2 ? (stlda fb fs2) (stldw g fb (stldkp g) fs2 ())))))
+   ; an xmm move straight back over the move that set it is idle: (movapd A B) (movapd B A)
+   (xmov g fs)
+    (? (abl? g 'xmov) fs
+       (: (fx? f) (two? f && elem <f '(movapd movsd) && elem <>f fregs16 && elem <>>f fregs16)
+          (go (f . r)) (? !(two? r) (f . r)
+                          (fx? f && fx? <r && <><r = <>>f && <>><r = <>f) (f . go >r)
+                          (f . go r))
+          (two? fs ? (go fs) fs)))
+   ; a value built on f0 only to be moved to a home, with f0 written outright next, is built on
+   ; the home: the run from its start renames f0, and the move goes
+   (xret g fs)
+    (? (abl? g 'xret) fs
+       (: hs (ffile g)
+          (w0? f) (two? f && <>f = 'f0 && (elem <f '(ldsd ldsdl cvtsi2sd) || <f = 'movapd && elem <>>f fregs16 && <>>f != 'f0))
+          ; the run: arithmetic onto f0 off a register, or an xmm form that names no f0
+          (ch? f) (two? f && (elem <f '(addsd subsd mulsd divsd) && <>f = 'f0 && elem <>>f fregs16
+                              || elem <f '(addsd subsd mulsd divsd minsd maxsd movsd movapd ldsd ldsdl) && nelem 'f0 >f))
+          ; the home h may be read by none of it
+          (ok? l h) (? !(two? l) 1
+                       (<l @ f (<>f = 'f0 ? <>>f != h (nelem h >f))) (ok? >l h)
+                       ())
+          (span l acc) (two? l && ch? <l ? (span >l (<l . acc)) [(rev acc) l])
+          (rn f h) (map (x \ (x = 'f0 ? h x)) f)
+          (go l)
+           (? !(two? l) l
+              (w0? <l)
+               (: s <l sp (span >l ()) cs <sp tl <>sp e (two? tl ? <tl)
+                  h (two? e && <e = 'movapd && <>>e = 'f0 && elem <>e hs ? <>e)
+                  (h && two? >tl && w0? <>tl && ok? cs h ?
+                     (rn s h . map (f \ rn f h) cs + go >tl)
+                     (s . go >l)))
+              (<l . go >l))
+          (go fs)))
    ; the adjacent pair needs no aliasing story. the full-width frame pair stays with the lanes
    ; below (slot map, anchors); narrow pairs forward on any base, at the load's extension
    (fwext s l) (s @ 'st (l @ 'ld 'mov)

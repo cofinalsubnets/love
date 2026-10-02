@@ -195,16 +195,16 @@
     (catch a, catch b,
      1 = peep t 'flag 0))
 
- ; --- chill ---
+ ; --- freeze ---
 
- ; chill on an unknown pid: 0, no-op.
+ ; freeze on an unknown pid: 0, no-op.
  (0 = freeze 99999)
- ; chill on a non-numeric pid: 0.
+ ; freeze on a non-numeric pid: 0.
  (0 = freeze ())
- ; chill on self (main = 0): 0 (self-chill impossible by construction).
+ ; freeze on self (main = 0): 0 (self-freeze impossible by construction).
  (0 = freeze 0)
 
- ; chill a running task: returns 1. The task is gone from the ring, so
+ ; freeze a running task: returns 1. The task is gone from the ring, so
  ; wait on its pid returns 0 (unknown).
  (: t {}
     _ (pin t 'flag 0)
@@ -212,13 +212,13 @@
     r (freeze p)
     (1 = r && 0 = catch p))
 
- ; chill a dormant task (already finished): also returns 1, then wait sees 0.
+ ; freeze a dormant task (already finished): also returns 1, then wait sees 0.
  (twirl (_ \ 42) 0 @ p
   (rest 0,
    ; p is dormant now (landed? would be 1).
    (1 = freeze p) && (0 = catch p)))
 
- ; double-chill: second chill is a no-op since the pid is gone from the ring.
+ ; double freeze: the second is a no-op since the pid is gone from the ring.
  (twirl (_ \ (: (loop _) (rest 0, loop 0) (loop 0))) 0 @ p
   ((1 = freeze p) && (0 = freeze p)))
 
@@ -229,6 +229,26 @@
     _ (freeze a)
     rb (catch b)
     ((0 = catch a) && 70 = rb))
+
+ ; --- pause ---
+
+ ; a paused task is held where it stands: catch answers at once, it has not landed, and
+ ; a peer runs on; resumed, it finishes as it would have, its sleep kept
+ (: t {}
+    p (twirl (_ \ (rest 20, pin t 'a 1, 7)) 0)
+    h (pause p)
+    _ (catch p)
+    q (twirl (_ \ pin t 'b 1) 0)
+    _ (catch q, rest 60)
+    l (landed? p) a (peep t 'a 0)
+    w (resume p)
+    r (catch p)
+    (1 = h && 0 = l && 0 = a && 1 = peep t 'b 0 && 1 = w && 7 = r && 1 = peep t 'a 0))
+
+ ; nothing is paused twice, or resumed that was not paused; never the running task
+ (twirl (_ \ (: (loop _) (rest 0, loop 0) (loop 0))) 0 @ p
+  (1 = pause p && () = pause p && 1 = resume p && () = resume p
+   && () = pause 0 && () = pause 99999 && 1 = freeze p))
 
  ; --- yieldable bignum multiply ---
 

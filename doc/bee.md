@@ -136,7 +136,13 @@ With **BEE_AS** set, the server speaks as that bee, which keeps the cell and wat
 - Its card says **model claude-code**, and **love bee --list** shows it. It leaves the hive when its stdin ends.
 - It watches the queues for its rows, as a bee does.
 
-An MCP server cannot start a turn. Mail and queue-watch notices wait in the inbox, and every tool's answer carries what has arrived, appended as **\<message from="***name***"\>** blocks, as a bee's next request carries it. A bee's child gets its mail the same way while a turn runs. Whoever takes a message moves it to **read/** first, so a bee and its server never both take one.
+Mail and queue-watch notices wait in the inbox, and every tool's answer carries what has arrived, appended as **\<message from="***name***"\>** blocks, as a bee's next request carries it. A bee's child gets its mail the same way while a turn runs. Whoever takes a message moves it to **read/** first, so a bee and its server never both take one.
+
+A session of its own also rings. Its server declares Claude Code's **claude/channel** capability, and once a second, when new mail has come, it sends one **notifications/claude/channel** notice naming who wrote: *n* **messages for** *name* **from** *senders***: take it with the inbox tool.** A notice starts a turn in an idle session, so the hive wakes itself and nobody has to be nagged. The notice is a bell, not the mail: the mail stays in the inbox for **inbox** or the next tool's answer. Claude Code hears a channel only from a session started with
+
+> **claude --dangerously-load-development-channels server:bee**
+
+and drops the notice in silence otherwise, which then costs nothing: that session gets its mail as before, on its next tool call. Start every Claude Code session in love's tree this way, a resume included. The restart notice above rings too, since it comes as mail. A bee's own child (**BEE_AS**) declares no channel; its bee hears the mail.
 
 Asking stays with the caller. A bee's child asks through **approve**. A Claude Code session of its own asks through Claude Code's permission prompt, so the user says y before a message or a queue write goes out, unless that session runs without asking.
 

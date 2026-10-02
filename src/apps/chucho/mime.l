@@ -32,7 +32,7 @@
  (mime-split m)
   (: t (replace m "\r\n" "\n")
      (? (#t && t 0 = 10) ["" (snip t 1 #t)]
-        (findsub t "\n\n" @ k (k < 0 ? [t ""] [(snip t 0 k) (snip t (k + 2) #t)]))))
+        (t @ (h + "\n\n" + b) [h b] [t ""])))
  ; a header's name owes no space: an mbox "From " line is not one
  (mime-heads h)
   (: (fold ls acc)

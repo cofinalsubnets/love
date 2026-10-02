@@ -248,6 +248,10 @@
                        "\t@echo \"W[$(w)]\"")) "all")
    _ (ok "$(eval) nested in a foreach lays rules" (has evl "E[i1 a x]" && has evl "E[i2 b yb]"))
    _ (ok "$(eval) inside an assignment runs" (has evl "W[in-assign]"))
+   dsh (run-cook (mk '("src_sys-af = one" "x-y := two" "k = sys-af"
+                       "all:"
+                       "\t@echo \"N[$(src_sys-af) $(x-y) $(src_$(k))]\"")) "all")
+   _ (ok "a variable name may hold a dash" (has dsh "N[one two one]"))
    _ (write-file (dir + "/Makefile") (mk '("all:" "\t@echo $(eval z = 1)")))
    evr (: r (hark [love "-l" "src/apps/cook.l" "-f" (dir + "/Makefile") "all"]) (two? r ? <r 0))
    _ (ok "$(eval) in a recipe refuses" !(0 = evr))

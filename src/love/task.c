@@ -65,16 +65,19 @@ static ai_inline union u *run_splice_at(struct ai *g, union u *tail, union u *n)
  gen_wb(g, (word) tail, (word) tail->m);
  return n; }
 
+// a held task (pause) keeps its deadline negated: never due, and back whole at resume
+static ai_inline int held(union u const *n) { return getcharm(n[3].x) < 0; }
+
 // is the task named by pid still live? the ring head is the running task, whose
 // saved ip is stale -- me_live carries its own yield's answer. a pid with no node
 // is gone, not live: a catcher must not wait on a ghost.
 static ai_inline int task_live(struct ai *g, union u *head, intptr_t pid, int me_live) {
  if (getcharm(head[2].x) == pid) return me_live;
  for (union u *n = head->m; n != head; n = n->m)
-  if (getcharm(n[2].x) == pid) return n[1].m->ap != lvm_task_exit;
+  if (getcharm(n[2].x) == pid) return n[1].m->ap != lvm_task_exit && !held(n);
  union u *prev;   // and the parked ring: a caught task blocked on an fd is live, and
  union u *p = parked_find(g, pid, &prev);   // a catcher told otherwise stops waiting.
- return p ? p[1].m->ap != lvm_task_exit : 0; }
+ return p ? p[1].m->ap != lvm_task_exit && !held(p) : 0; }
 
 // readiness the wait already answered: poll(2) reports every ready fd in its set.
 // -> 1 ready, 0 not, -1 don't know (no block, or fd not in it). match on the
@@ -165,14 +168,14 @@ static ai_noinline union u *yield_sw_wait(struct ai *g, uintptr_t my_wake, int m
  uintptr_t min_wake = my_wake;
  int nfds = my_wait_fd >= 0;
  for (union u *n = g->tasks->m; n != g->tasks; n = n->m)
-  if (n[1].m->ap != lvm_task_exit) {
+  if (n[1].m->ap != lvm_task_exit && !held(n)) {
    uintptr_t wa = (uintptr_t) getcharm(n[3].x);
    if (wa && (!min_wake || wa < min_wake)) min_wake = wa; }
  if (g->parked) {
   union u *q = g->parked;
   do { uintptr_t wa = (uintptr_t) getcharm(q[3].x);
-       if (wa && (!min_wake || wa < min_wake)) min_wake = wa;
-       if (getcharm(q[4].x) >= 0) nfds++;
+       if (!held(q) && wa && (!min_wake || wa < min_wake)) min_wake = wa;
+       if (!held(q) && getcharm(q[4].x) >= 0) nfds++;
        q = q->m; } while (q != g->parked); }
  if (!min_wake && !nfds) return NULL;
  uintptr_t now = ai_clock(), ticks = min_wake ? min_wake - now : 0;
@@ -196,7 +199,7 @@ static ai_noinline union u *yield_sw_wait(struct ai *g, uintptr_t my_wake, int m
    if (g->parked) {
     union u *q = g->parked;
     do { int wf = (int) getcharm(q[4].x);
-         if (wf >= 0)
+         if (wf >= 0 && !held(q))
           fds[k].fd = wf, fds[k].revents = 0, fds[k++].events = (short) getcharm(q[5].x);
          q = q->m; } while (q != g->parked); }
    ai_wait_fds(fds, k, ticks);
@@ -341,6 +344,7 @@ lvm(lvm_wait) {
    Pack(g);   // sync: ai_young reads g->hp (see lvm_yield_sw)
    gen_wb(g, (word) prev, (word) prev->m);   // task ring: unsplicing relinks an old node to a (maybe young) successor
    break; }
+  if (held(node)) break;   // held: the catcher hears now, and the zero point
    // still running: yield without advancing Ip -- both halves of the park (the
    // re-entry on resume, and the record: Ip here says "parked in catch", Sp[0]
    // names the peer). clear both wait intentions: a stale fd would gate the park.
@@ -350,7 +354,7 @@ lvm(lvm_wait) {
  // and the parked ring, or catching a task merely blocked on an fd answers the
  // zero point at once; it is live, so park exactly as above.
  { union u *prev, *p = parked_find(g, target, &prev);
-   if (p) { g->next_wake_at = 0; g->next_wait_fd = -1; ai_musttail return Ap(lvm_yield_sw, g); } }
+   if (p && !held(p)) { g->next_wake_at = 0; g->next_wait_fd = -1; ai_musttail return Ap(lvm_yield_sw, g); } }
  ai_musttail return Answer(ret); }
 
 lvm(lvm_donep) {
@@ -408,6 +412,33 @@ lvm(lvm_hush) {
  Sp[0] = result;
  Ip += 1;
  ai_musttail return Continue(); }
+
+// (pause pid) -- a task held where it stands, on whichever ring it is: off the clock until
+// resume, catch answering its catcher at once. never the running task. -> 1, or () when there
+// is no such task to hold. (resume pid) puts it back with the deadline it had.
+static union u *task_node(struct ai *g, intptr_t pid) {
+ for (union u *n = g->tasks->m; n != g->tasks; n = n->m)
+  if (getcharm(n[2].x) == pid) return n;
+ union u *prev;
+ return parked_find(g, pid, &prev); }
+
+static lvm(lvm_pause) {
+ union u *n = charmp(Sp[0]) ? task_node(g, getcharm(Sp[0])) : NULL;
+ int ok = n && n[1].m->ap != lvm_task_exit && !held(n);
+ if (ok) n[3].x = putcharm(-getcharm(n[3].x) - 1);
+ Sp[0] = ok ? putcharm(1) : ZeroPoint;
+ ai_musttail return Next(1); }
+
+static lvm(lvm_resume) {
+ union u *n = charmp(Sp[0]) ? task_node(g, getcharm(Sp[0])) : NULL;
+ int ok = n && held(n);
+ if (ok) n[3].x = putcharm(-getcharm(n[3].x) - 1);
+ Sp[0] = ok ? putcharm(1) : ZeroPoint;
+ ai_musttail return Next(1); }
+
+static union u const nif_pause[] = {{lvm_pause}, {lvm_ret0}}, nif_resume[] = {{lvm_resume}, {lvm_ret0}};
+LvNif("pause", nif_pause, NULL);
+LvNif("resume", nif_resume, NULL);
 
 lvm(lvm_sleep) {
  word n = Sp[0];
