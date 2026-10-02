@@ -67,6 +67,7 @@
       (parent w) (: _ (x-w8 s 15, x-w8 s 0, x-w16 s 2, x-w32 s w, x-flush s)
                     hdr (x-reply s) _ (<hdr = 1 ? (x-rbytes s (u32 hdr 4 * 4)) 0)
                     (<hdr = 1 ? (u32 hdr 12) 0))
+      ; a framed client reads (0 0) off its own geometry: rgeo is the frame's, which the screen sees
       (top w) (parent w @ p (p = root || p = 0 ? w p))                       ; the root's child that holds w
       (rgeo w) (x-getgeom s (top w))
       ; our own toplevel: InputOutput off the connection's id base, white back

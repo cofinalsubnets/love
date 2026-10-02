@@ -200,7 +200,8 @@
    ;     stacks; override-redirect, so a restart's sweep never adopts a stale one.
    ;     the client is resized only when its size changes and told its root
    ;     geometry (ICCCM 4.2.3) when the frame moves; an unchanged place sends nothing.
-   ;     a frame record: 'f the frame, 'own its own visual, 'g (x y w h bw), 'px ---
+   ;     a frame record: 'f the frame, 'own its own visual, 'g (x y w h bw), 'px.
+   ;     the root's children are frames now: a client's parent is its frame, at (0 0) ---
    frm (tablet 8) fidc {'n 16 'free ()} cmaps (tablet 4)
    (fid u) (fidc 'free @ fr (two? fr ? (pin fidc 'free >fr, <fr)
                                (fidc 'n @ n (pin fidc 'n (n + 1), scr-idbase sc + n))))
