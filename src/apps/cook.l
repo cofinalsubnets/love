@@ -521,12 +521,14 @@
                            ; one variable table and cannot scope one to a target, so it is
                            ; recorded against its targets and refuses only if one is remade.
                            (? !(two? r) '(skip)
-                              (two? (parse assignP (tvar-text <>r))) ['tvar <r (tvar-text <>r)]
+                              (two? (parse assignP (tvar-text <>r 1))) ['tvar <r (tvar-text <>r 0)]
                               ('rule . r))))))))))
-   ; a target-specific assignment past its modifiers: `tgt: private x := y` assigns x
-   (tvar-text s)
+   ; a target-specific assignment past its modifiers: `tgt: private x := y` assigns x. kept (x?
+   ; 0) it holds its `export`, so applying it exports too (vmlinux: export LDFLAGS_vmlinux = ..)
+   (tvar-text s x?)
     (ltrim s @ t (first-word t @ w
-       (any (= w) '("private" "override" "export") && 0 < #(after-word t) ? (tvar-text (after-word t)) t)))
+       (any (= w) (x? ? '("private" "override" "export") '("private" "override")) && 0 < #(after-word t)
+        ? (tvar-text (after-word t) x?) t)))
 
    ; -- nested-paren-aware variable expansion + make functions --
    ; the index of the ) that matches the ( just opened, counting nested $(..).
@@ -620,11 +622,9 @@
    (sortu l) (dedup (sort l))
    (strrep frm to s)
    (0 = #frm ? s
-      ((: (g i acc)
-          (i + #frm > #s ? (acc + sub s i #s)
-             (frm = sub s i (i + #frm) ? (g (i + #frm) (acc + to))
-                (g (1 + i) (acc + string (s i))))))
-       0 ""))
+      ((: (g i acc) (subidx s frm i @ k (k < 0 ? (join "" (rev (snip s i #s . acc)))
+                                           (g (k + #frm) (to . snip s i k . acc)))))
+       0 ()))
    (fn-or args as d)  ((: (g l) (two? l ? (expand <l as (1 + d) @ v (0 < #(trim v) ? v (g >l))) "")) args)
    (fn-and args as d) ((: (g l last) (two? l ? (expand <l as (1 + d) @ v (0 < #(trim v) ? (g >l v) "")) last)) args "")
    ; -- the helpers the added builtins stand on ------------------------------------
@@ -748,21 +748,23 @@
    ; expansion: $(..) / ${..} groups (functions / subst refs / vars), the single-char
    ; $V form (including the automatic vars $@ $< $^ $*, which live in the table during
    ; recipe expansion), and $$ -> $.
+   ; the text between references is copied a run at a time and the pieces joined once, so a long
+   ; value (a .cmd's deps_ line, thousands of words) expands in linear time
    (expand s as d)
    (d > 100 ? s
       ((: (g i acc)
-          (i >= #s ? acc
-             (s i = 36 && 1 + i < #s ?
-                (s (1 + i) @ nx
-                   (? (nx = 40 || nx = 123)
-                      (: close (nx = 40 ? 41 125) j (findclose s (2 + i) nx close)
-                         (g (1 + j) (acc + eval-group (snip s (2 + i) j) as d)))
-                      (nx = 36) (g (2 + i) (acc + "$"))
-                      (namech nx || nx = 64 || nx = 60 || nx = 94 || nx = 42 || nx = 63)
-                      (g (2 + i) (acc + expand (peep as (snip s (1 + i) (2 + i)) "") as (1 + d)))
-                      (g (1 + i) (acc + string (s i)))))
-                (g (1 + i) (acc + string (s i))))))
-       0 ""))
+          (findc s i 36 @ k
+             (k + 1 >= #s ? (join "" (rev (snip s i #s . acc)))
+                (: pa (snip s i k . acc)
+                   (s (1 + k) @ nx
+                      (? (nx = 40 || nx = 123)
+                         (: close (nx = 40 ? 41 125) j (findclose s (2 + k) nx close)
+                            (g (1 + j) (eval-group (snip s (2 + k) j) as d . pa)))
+                         (nx = 36) (g (2 + k) ("$" . pa))
+                         (namech nx || nx = 64 || nx = 60 || nx = 94 || nx = 42 || nx = 63)
+                         (g (2 + k) (expand (peep as (snip s (1 + k) (2 + k)) "") as (1 + d) . pa))
+                         (g (1 + k) ("$" . pa))))))))
+       0 ()))
    (expand-words ws as) (catmap (w \ split-ws (expand w as 0)) ws)
    ; a recipe line leading with the shell's `exec` is interactive: it replaces the shell, so make
    ; already runs it on the real tty, and cook runs it through the exec nif to match.
