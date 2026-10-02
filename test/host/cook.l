@@ -406,10 +406,9 @@
    ; the repo's own shell is the fixture's shell: make-with-lush, the rung-4
    ; distro loop closed. $(wildcard) is lush's pure glob at the repo root
    ; (sorted; a no-match pattern contributes nothing -- nullglob).
-   ; out/lush is a love script, so naming it as SHELL runs it through its shebang --
-   ; the nest's love on PATH, not the tree's. the shim spells the tree's out/love out
-   ; loud, the way sh.l does, so the law reads the shell this build made.
-   _ (write-file (dir + "/lushsh") "#!/bin/sh\nexec out/love out/lush \"$@\"\n")
+   ; SHELL names a path, so the shim is one: it runs the lush this binary carries
+   ; (`love lush`), spelled through the tree's out/love so the law reads this build.
+   _ (write-file (dir + "/lushsh") "#!/bin/sh\nexec out/love lush \"$@\"\n")
    _ (sh ("chmod +x " + (dir + "/lushsh")))
    shl (run-cook (mk [("SHELL := " + (dir + "/lushsh"))
                       "all:"
