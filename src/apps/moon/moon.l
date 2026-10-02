@@ -444,12 +444,28 @@
    ; a wasm object is the gen tuple as TEXT (above), so it goes to the port whole:
    ; write-bytes walks a byte list, and a string handed to it lands as an empty file.
    (cc-obj src dst (t @ {'tgt tgt}))
-    (cc-objbytes src t @ b
+    (pin cppdeps 'l (),
+     cc-objbytes src t @ b
        (tgt != 'wasm ? (write-bytes dst b)
         (open dst "w" @ q
            (!(hot? q) ? (udie 1 ("cc: cannot write " + dst)),
             say q b,
-            close q))))
+            close q))),
+     t 'md && cc-deps src dst t)
+   ; the rule -MD asks for: the object, then its source and every file the #includes opened,
+   ; in the order they opened, each once; -MMD leaves our own headers out. -MF names the file,
+   ; else the object's with .d; -MT the target, else the object
+   (cc-deps src dst t)
+    (: ours (map (r \ r + "include/") (mroots ()))
+       (sys? p) (any (d \ starts? p d) ours || (t 'vb && starts? p "include/"))
+       hs (filter (p \ !(t 'mmd && sys? p)) (uniq (rev (peep cppdeps 'l ()))))
+       df (t 'mf || (dst @ (b + ".o") (b + ".d") (dst + ".d")))
+       txt ((t 'mt || dst) + ": " + join " \\\n  " (src . hs) + "\n"
+            + (t 'mp ? join "" (map (h \ "\n" + h + ":\n") hs) ""))
+       (open df "w" @ q
+          (!(hot? q) ? (udie 1 ("cc: cannot write " + df)),
+           say q txt,
+           close q)))
    ; the link path (rung 3, src/love/holo/link.l): every input lands as object bytes (a .c
    ; compiled here, a .o read off disk), crt0 rides first -- its text is the entry -- and
    ; ldlink binds the static exe, no system linker. the entry hands the OS stack pointer
@@ -1019,7 +1035,7 @@
    ; would answer the zero point. the literal has to be complete and is wanted at two sites,
    ; so it is spelled once rather than wrapped on `{}`.
    (fseed tgt dia) {'c () 'is () 'ds () 'o () 'ins () 'tgt tgt 'os () 'pie () 'org () 'dorg ()
-                    'nostd () 'vb () 'ni () 'rdme () 'relo () 'dia dia}
+                    'nostd () 'vb () 'ni () 'rdme () 'relo () 'dia dia 'md () 'mmd () 'mf () 'mt () 'mp ()}
    (flags as t)
     (!(two? as) ?
        (pin t 'is (rev (t 'is)),
@@ -1063,6 +1079,16 @@
               (: f (a @ ("-freadme=" + f) f) rt (uread f)
                  (two? rt ? (flags r (pin t 'rdme <>rt))
                             (udie 1 ("cc: cannot open " + f))))
+             ; the dependency rule gcc writes beside an object: -MD, -MMD (our own headers left
+             ; out, as gcc leaves the system's), -MF its file, -MT / -MQ its target, -MP an
+             ; empty rule per header -- and kbuild's -Wp,-MD,FILE / -Wp,-MMD,FILE spelling
+             (a = "-MD") (flags r (pin t 'md 1))
+             (a = "-MMD") (flags r (pin (pin t 'md 1) 'mmd 1))
+             (a = "-MP") (flags r (pin t 'mp 1))
+             (a = "-MF") (two? r ? (flags >r (pin t 'mf <r)) (udie 2 usage))
+             (a = "-MT" || a = "-MQ") (two? r ? (flags >r (pin t 'mt <r)) (udie 2 usage))
+             (starts? a "-Wp,-MD,") (flags r (pin (pin t 'md 1) 'mf (snip a 8 #a)))
+             (starts? a "-Wp,-MMD,") (flags r (pin (pin (pin t 'md 1) 'mmd 1) 'mf (snip a 9 #a)))
              (glu? a 73) (flags r (fpush t 'is (snip a 2 #a)))
              (glu? a 68) (flags r (fpush t 'ds (snip a 2 #a)))
              (glu? a 116) (flags r (pin t 'tgt (totgt (snip a 2 #a))))

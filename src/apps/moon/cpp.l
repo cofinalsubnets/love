@@ -444,6 +444,10 @@
    ; both snapshots -- and a header that expanded it would bake the recording
    ; TU's name into every replay, which mleak? declines at record time.
    memo {}                                       ; 'l -> the entries, newest first
+   ; the files a TU's #includes opened, newest first: the driver resets it before a compile and
+   ; reads it after (-MD). an entry of the memo carries its own header's share, so a replayed
+   ; header still says what it opened.
+   cppdeps {}
    (mkey? k) (string? k && !(k = "__FILE__"))
    (msnap macs)                                  ; the table as a value `=` can compare
     (sortby (a \ b \ <a <= <b)
@@ -586,7 +590,9 @@
                 ; carry the spelling this #include used.
                 (rejoin toks)
                  (cppgo rest macs cond () (fmout . rev toks + (fmin name . out)) incf)
-                (two? got ? (mrestore macs <>>>>got, rejoin <>>>got)
+                d0 #(peep cppdeps 'l ())
+                (two? got ? (mrestore macs <>>>>got, pin cppdeps 'l (got 5 + peep cppdeps 'l ()), rejoin <>>>got)
+                   (: _ (0 < #ipath && pin cppdeps 'l (ipath . peep cppdeps 'l ()))
                    (clex <>txt @ lr
                       ; okv?, not two? -- a gripe is a pair, and a two? here would read
                       ; a refusal as a token list and walk it. a located refusal is the
@@ -607,8 +613,9 @@
                             ; drops its accumulated `out` and reorders the stream).
                              gripe? raw ? (gripein raw name)
                                (? (nth = 0 && !(mleak? raw (peep macs 'fname "")))
-                                  (mput [ipath <>txt pre raw (msnap macs)]) 0,
-                                rejoin raw))))))))))
+                                  (mput [ipath <>txt pre raw (msnap macs)
+                                         (peep cppdeps 'l () @ l (take (#l - d0) l))]) 0,
+                                rejoin raw)))))))))))
    (incname body)                                     ; the header name from #include tokens
     (? (atom? body) ()
        (kof <body = 'str) (vof <body)         ; "file"
