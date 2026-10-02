@@ -142,6 +142,15 @@ int main(void) {
  say_s("strdup.empty", d);
  free(d);
 
+ /* --- strndup / strnlen: n short of, at, and past the string --- */
+ d = strndup("abcdef", 3); say_s("strndup.short", d); free(d);
+ d = strndup("abc", 3); say_s("strndup.at", d); free(d);
+ d = strndup("abc", 99); say_s("strndup.past", d); free(d);
+ d = strndup("abc", 0); say_s("strndup.zero", d); free(d);
+ say_u("strnlen.short", strnlen("abcdef", 3));
+ say_u("strnlen.past", strnlen("abc", 99));
+ say_u("strnlen.zero", strnlen("abc", 0));
+
  /* --- strerror: the TEXT is not compared. ours is the canonical POSIX
     wording (m4's check suite string-compares it) and glibc's mostly agrees,
     but that agreement is not a law worth gating -- what is gated is that

@@ -10,6 +10,8 @@ enum { E0 = 0 ?: 5, E1 = 3 ?: 9 };
 static int bound[2 ?: 7];
 static long sinit = 0 ?: 40;
 static const char *name(const char *s) { return s ?: "none"; }
+static const char *same(const char *s) { calls++; return s; }
+static const char *(*through)(const char *) = same;
 
 struct S { int x; int y; };
 
@@ -36,6 +38,12 @@ int main(void) {
   if (sizeof((char)0 ?: 300L) != sizeof(long) || ((char)0 ?: 300L) != 300) bad |= 1024;
   if ((d ?: 2.5) != 2.5 || (1.5 ?: 2.5) != 1.5) bad |= 2048;
   if ((bump(0) ?: bump(0) ?: 21) != 21 || calls != 4) bad |= 4096;
+
+
+  /* a call's pointer meets a string's array: the array arm decays, through a pointer too */
+  calls = 0;
+  if ((same(0) ?: "lit")[0] != 'l' || (through("y") ?: "z")[0] != 'y' || calls != 2) bad |= 8192;
+  if (sizeof(k ? "abc" : "de") != sizeof(char *)) bad |= 16384;
 
   return bad;
 }

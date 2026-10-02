@@ -349,10 +349,10 @@
                 (lit? g && lit? o ? (pat \ g pat (o #pat)))))
 
 ; the whole importer lives in one body-having `:`, so none of its many helper names leak; it
-; reads the outer globals freely and its body answers cook-main (args -> the whole job, answering
-; its status; a failure leaves by udie). the outer `:` binds cook-main as the one public -- the multi-call `kore`
-; calls it as `make` -- and the seat at the bottom fires it when this file was invoked.
-(: cook-main (:
+; reads the outer globals freely and its body answers its two publics: cook-main (args -> the whole
+; job, answering its status; a failure leaves by udie), which the multi-call `kore` calls as `make`
+; and the seat at the bottom fires when this file was invoked, and cook-vars/cook-expand (below).
+(: cook-pubs (:
    ; --emit: when set, expand-steps emits a serializable ("sh" "-c" cmd) step instead of a
    ; sh-line thunk, so the resolved cards can be shown back as a Cookfile (emit-cookfile below).
    emitp {}
@@ -365,11 +365,25 @@
    (digitp c)   (48 <= c <= 57)
    (alphap c)   (65 <= c <= 90 || 97 <= c <= 122)
    (namech c)   (alphap c || digitp c || c = 95 || c = 46)
-   (varch c)    (namech c || c = 45)          ; an assigned name may hold a dash, as make's may
    ; notcolon admits whitespace: a rule's target text runs to the first colon, and
    ; `a.out b.out: src` is one rule with two targets. assignP runs first, so assignment lines
    ; never reach this span.
    (notcolon c) (c != 58)
+   ; an assigned name is make's: anything but whitespace, : = #, and the op leads + ? ! --
+   ; obj-y, foo-$(CONFIG_X), CFLAGS_$(f) -- where `$X`'s one character is namech's
+   (varch c)    !(chws c || elem c '(58 61 35 43 63 33))
+   ; ..read paren-aware: inside a $(..) or ${..} anything goes, obj-$(subst m,y,$(CONFIG_MMC))
+   (nameP s y n)
+    (: t <s i >s
+       (g j d) (? (#t <= j) j
+                  (0 < d) (? (t j = 40 || t j = 123) (g (1 + j) (d + 1))
+                             (t j = 41 || t j = 125) (g (1 + j) (d - 1))
+                             (g (1 + j) d))
+                  (t j = 36 && j + 1 < #t && (t (1 + j) = 40 || t (1 + j) = 123)) (g (2 + j) 1)
+                  (varch (t j)) (g (1 + j) 0)
+                  j)
+       k (g i 0)
+       (y (t . k) [(snip t i k)]))
    (anyc c)     1
    (ltrim s) (: i ((: (g j) (j < #s && chws (s j) ? (g (1 + j)) j)) 0)
                (snip s i #s))
@@ -393,17 +407,24 @@
                   #s)
                (snip s 0 i))
    (uncont s)
-   ((: (g i acc rec bol)
-       (i >= #s ? acc
-          (s i @ c
-             (? (c = 92 && 1 + i < #s && s (1 + i) = 10)
-                (rec ? (2 + i @ j (g (j < #s && s j = 9 ? (1 + j) j) acc rec 0))
-                   (: j ((: (h k) (k < #s && (s k = 32 || s k = 9) ? (h (1 + k)) k))
-                         (2 + i))
-                      (g j (rtws acc + " ") rec 0)))
-                (c = 10) (g (1 + i) (acc + "\n") rec 1)
-                (g (1 + i) (acc + string c) (bol ? (c = 9) rec) 0)))))
-    0 "" 0 1)
+    (: (cont? l) (0 < #l && l (#l - 1) = 92)
+       (lead l) ((: (h k) (k < #l && (l k = 32 || l k = 9) ? (h (1 + k)) k)) 0)
+       (glue rec cur l)
+        (: c (snip cur 0 (#cur - 1))
+           (rec ? (c + (0 < #l && l 0 = 9 ? (snip l 1 #l) l))
+              (rtws c + " " + snip l (lead l) #l)))
+       ; one logical line off the head: [text rest]
+       (one rec cur ls) (cont? cur && two? ls ? (one rec (glue rec cur <ls) >ls) [cur ls])
+       ; a define body is a variable's value however its lines lead: its joins are a
+       ; variable's, never a recipe's (filechk_version.h's tab-led lines)
+       (indef d x) (: t (trim x) w (first-word t)
+                      (d ? (w != "endef")
+                         (w = "define" || (w = "override" || w = "export") && first-word (after-word t) = "define")))
+       (g ls acc d)
+        (atom? ls ? (join "\n" (rev acc))
+           (: l <ls
+              (one (!d && 0 < #l && l 0 = 9) l >ls @ [x r] (g r (x . acc) (indef d x)))))
+       (g (lines s) () 0))
    (lines s)
    ((: (g i st acc)
        (i >= #s ? (rev (snip s st i . acc))
@@ -420,6 +441,7 @@
    (sub s a b) (a < b ? (snip s a b) "")
    ; strip a make comment (an unescaped #) from a non-recipe line; \# is a literal #.
    (strip-comment l)
+   (findc l 0 35 = #l && findc l 0 92 = #l ? l
    ((: (g i acc)
        (i >= #l ? acc
           (l i @ c
@@ -428,7 +450,7 @@
                             (l (1 + i) @ d (d @ 35 (g (2 + i) (acc + "#")) (g (2 + i) (acc + "\\" + string d))))
                             (acc + "\\"))
                 (g (1 + i) (acc + string c))))))
-    0 "")
+    0 ""))
    ; split on a top-level `ch`: parens and braces balance, so a delimiter inside $(..) / ${..}
    ; does not split (function args, the static-pattern colon).
    (splittop s ch)
@@ -444,7 +466,7 @@
    ; `!=` runs its value and takes the output, the portable spelling of $(shell ..): bmake and
    ; GNU both read it, where neither reads the other's conditionals.
    opP (alt (lit "::=") (alt (lit ":=") (alt (lit "?=") (alt (lit "+=") (alt (lit "!=") (lit "="))))))
-   assignP (seqs [(skip (span chws)) (span varch)
+   assignP (seqs [(skip (span chws)) nameP
                    (skip (span chws)) (pmap (x \ [<x]) opP)
                    (skip (span chws)) (span anyc)])
    ruleP (seqs [(skip (span chws)) (span notcolon) (skip (lit ":")) (span anyc)])
@@ -462,12 +484,12 @@
           (sil . ign . snip s i #s))) 0 0 0)
    (recipe-parse l) (parse-mods (snip l 1 #l))   ; drop the leading tab, then the modifier run
    (classify l)
-   (recipep l ? ['recipe (recipe-parse l)]
+   (recipep l ? ['recipe (recipe-parse l) l]
       (: t (strip-comment l) tt (trim t)
          (? (0 = #tt) '(skip)
             (: w (first-word tt) rest (after-word tt)
                (? (w = "include") ['inc rest]
-                  (w = "-include") ['sinc rest]
+                  (w = "-include") ['sinc rest]      ; make's optional include: a missing file is no error
                   (w = "sinclude") ['sinc rest]
                   ; `override NAME op VAL` assigns past a command-line VAR=VAL;
                   ; `export NAME [op VAL]` assigns (when an op is there) and hands the
@@ -499,8 +521,12 @@
                            ; one variable table and cannot scope one to a target, so it is
                            ; recorded against its targets and refuses only if one is remade.
                            (? !(two? r) '(skip)
-                              (two? (parse assignP <>r)) ['tvar <r]
+                              (two? (parse assignP (tvar-text <>r))) ['tvar <r (tvar-text <>r)]
                               ('rule . r))))))))))
+   ; a target-specific assignment past its modifiers: `tgt: private x := y` assigns x
+   (tvar-text s)
+    (ltrim s @ t (first-word t @ w
+       (any (= w) '("private" "override" "export") && 0 < #(after-word t) ? (tvar-text (after-word t)) t)))
 
    ; -- nested-paren-aware variable expansion + make functions --
    ; the index of the ) that matches the ( just opened, counting nested $(..).
@@ -552,8 +578,12 @@
    (chomp s) ((: (g i) (0 < i && s (i - 1) = 10 ? (g (i - 1)) (snip s 0 i))) #s)
    (nl->sp s) ((: (g i acc) (i >= #s ? acc (g (1 + i) (acc + string (s i @ 10 32 (s i)))))) 0 "")
    ; $(shell) and != ride SHELL and .SHELLFLAGS as a recipe line does, captured: in this
-   ; image where the line would (inimg), else spawned
+   ; image where the line would (inimg), else spawned. a caller's function under " shell"
+   ; answers instead: the seat that keeps a build's probes off the host
    (fn-shell as cmd)
+    (: hook (peep as " shell" 0)
+       (lit? hook ? (hook cmd) (fn-shell1 as cmd)))
+   (fn-shell1 as cmd)
     (: sh (shname as) fl (shflags as) cap (cite 'lush 'sh-onecap)
        o (inimg sh fl && lit? cap ? (cap fl cmd))
        r (two? o ? o (hark ([sh] + fl + [cmd])))
@@ -615,11 +645,11 @@
                "abspath" "realpath" "call" "origin"
                ; a name off this list is a variable: `$(foo bar)` answers empty, make's own rule
                "findstring" "join" "wordlist" "foreach" "value" "flavor"
-               "error" "warning" "info" "eval")
+               "error" "warning" "info" "eval" "intcmp" "file")
    ; ..but a name make implements and we do not refuses instead: make never takes the variable
    ; branch for these, so an empty answer is a rule quietly not existing, and no output diff
    ; sees a target that was never made. the list is GNU's roster minus ours.
-   gapnames '("file" "let" "intcmp" "guile")
+   gapnames '("let" "guile")
    (cook-gap what)
     (say err ("cook: " + what + " is not implemented.\n"),
      quit 2)
@@ -630,7 +660,7 @@
       body (peep as fname "")
       n ((: (g l i) (two? l ? (g >l (1 + i)) i)) args 0)
       olds ((: (g i acc) (i < n ? (g (1 + i) ((show i . peep as (show i) 'cook.undef) . acc)) acc)) 0 0)
-      _ ((: (g i l) (two? l ? (pin as (show i) <l, g (1 + i) >l) 0)) 0 args)
+      _ ((: (g i l) (two? l ? (pin as (show i) (esc <l), g (1 + i) >l) 0)) 0 args)
       r (expand body as (1 + d))
       (each olds (pr \ nom? >pr ? (pull as <pr 0) (pin as <pr >pr)),
        r))
@@ -659,6 +689,15 @@
          "word"      (: a (argl 0) ws (split-ws (peep a 1 "")) n (sound (trim (peep a 0 "")) @ r (two? r ? <r 0)) (peep ws (n - 1) ""))
          "words"     (show #(split-ws (ex1 at)))
          "if"        (: a (rawl 0) c (trim (ex1 (peep a 0 ""))) (0 < tally c ? (ex1 (peep a 1 "")) (ex1 (peep a 2 ""))))
+         ; $(intcmp l,r,lt,eq,gt): gt falls back to eq; with two args, l when equal, else empty
+         "intcmp"    (: a (rawl 0) l (num1 (ex1 (peep a 0 ""))) r (num1 (ex1 (peep a 1 "")))
+                        (#a < 3 ? (l = r ? (show l) "")
+                           (ex1 (peep a (l < r ? 2 (l = r || #a < 5 ? 3 4)) ""))))
+         ; $(file <f): the text less one trailing newline, a missing file empty; writes refuse
+         "file"      (ltrim (ex1 at) @ s
+                        (0 < #s && s 0 = 60
+                         ? (uread (trim (snip s 1 #s)) @ [1 x] (0 < #x && x (#x - 1) = 10 ? (snip x 0 (#x - 1)) x) "")
+                         (cook-gap "$(file >..)")))
          "or"        (fn-or (rawl 0) as d)
          "and"       (fn-and (rawl 0) as d)
          "call"      (fn-call (argl 0) as d)
@@ -674,12 +713,13 @@
                                v (trim (ex1 (peep a 0 "")))
                                body (peep a 2 "")
                                old (peep as v "")
-                               r (join " " (map (w \ (pin as v w, ex1 body))
+                               r (join " " (map (w \ (pin as v (esc w), ex1 body))
                                                 (split-ws (ex1 (peep a 1 "")))))
                                (pin as v old,              ; put the outer binding back
                                 r))
          ; value/flavor read the variable without expanding it -- the one pair that must not ex1
-         "value"     (peep as (trim (ex1 at)) "")
+         "value"     (trim (ex1 at) @ v (peep as v "" @ x
+                        (peep flavors v "" = "simple" ? (strrep "$$" "$" x) x)))
          "flavor"    (peep origins (trim (ex1 at)) "undefined" @ o
                                (o = "undefined" ? "undefined" (peep flavors (trim (ex1 at)) "recursive")))
          ; the diagnostics: a guard spelled $(error ..) must not vanish into an empty string
@@ -698,7 +738,8 @@
    (eval-group body as d)
    (: sp (findws body)
       nm (snip body 0 (sp < #body ? sp #body))
-      ((any (= nm) gapnames ? (cook-gap ("$(" + nm + " ..)")) 0),
+      ; a call only with an argument: a bare $(file) is a variable (a foreach's loop name)
+      ((sp < #body && any (= nm) gapnames ? (cook-gap ("$(" + nm + " ..)")) 0),
        (sp < #body && funcp (snip body 0 sp) ?
           (apply-func (snip body 0 sp) (ltrim (snip body (1 + sp) #body)) as d)
           (: eb (expand body as (1 + d)) ci (findc eb 0 58)
@@ -801,21 +842,29 @@
    ; otherwise silences every file assignment to that name, ?= and += included -- make's rule).
    ; origins records provenance for $(origin); an unfired ?= leaves value and origin alone.
    (do-assign as nm op val) (assign1 as nm op val 0)
-   (assign1 as nm op val ov)
+   ; an expanded value kept where a reference expands it again ($(x) of a :=, a call's $(1),
+   ; a foreach's word) keeps its $ as $$, so the second expansion answers the value itself
+   (esc s) (strrep "$" "$$" s)
+   ; the name is expanded first, as make does: mmu-$(CONFIG_MMU) := .. names mmu-y
+   (assign1 as nm0 op val ov)
+   (expand nm0 as 0 @ nm
    (!ov && peep origins nm "undefined" = "command line" ? 0
-      (: v (trim val)
+      ; a define's body is kept as written, its leading tab too ($(eval)'s recipe lines); the
+      ; op falls to the recursive arm below
+      (: v (op = "define" ? val (trim val))
          ; the flavor rides beside the origin: an expanded `:=` and a stored `=` are the
          ; same text afterwards, so nothing in the value itself can answer $(flavor).
          (org f) (pin origins nm (ov ? "override" "file"), pin flavors nm f)
          (op @ "!="  (pin as nm (fn-shell as (expand v as 0)), org "simple")
-               ":="  (pin as nm (expand v as 0), org "simple")
-               "::=" (pin as nm (expand v as 0), org "simple")
+               ":="  (pin as nm (esc (expand v as 0)), org "simple")
+               "::=" (pin as nm (esc (expand v as 0)), org "simple")
                "?="  (peep as nm 'cook.undef @ cur
                       (nom? cur ? (pin as nm v, org "recursive") 0))
-               "+="  (peep as nm "" @ o
-                        (pin as nm (0 < tally o ? (o + " " + v) v),
-                         org (peep flavors nm "recursive")))
-            (pin as nm v, org "recursive"))))
+               ; onto a simple variable the value expands now, and the variable stays simple
+               "+="  (: o (peep as nm "") f (peep flavors nm "recursive")
+                        w (f = "simple" ? (esc (expand v as 0)) v)
+                        (pin as nm (0 < tally o ? (o + " " + w) w), org f))
+            (pin as nm v, org "recursive")))))
 
    ; -- fold classified lines into a rules list, mutating `as`. The conditional
    ; stack is a list of frames (pon taken active); `on` is the top frame's active
@@ -831,10 +880,28 @@
       rec (two? >sc ? (join ";" >sc) "")
       inl (0 < tally (trim rec) ? [(parse-mods (trim rec))] 0)
       (r1 c . (<sc . inl)))
+   ; an exported name: into this process's environment, which recipes inherit, and kept under
+   ; " exports" for a reader that runs commands itself
+   (xport as nm)
+    (setenv nm (expand (peep as nm "") as 0),
+     peep as " exports" () @ xs (elem nm xs ? 0 (pin as " exports" (nm . xs))))
+   ; an included file joins MAKEFILE_LIST before its lines are read, so its
+   ; $(lastword $(MAKEFILE_LIST)) names itself
+   (mklist as f) (peep as "MAKEFILE_LIST" "" @ l (pin as "MAKEFILE_LIST" (0 < #l ? (l + " " + f) f)))
    (condon cond) (two? cond ? <>><cond 1)
    (push-cond cond pon active) ([pon active active] . cond)
-   (else-cond cond) (: f <cond pon <f taken <>f na (pon && !taken)
-                       ([pon (taken || na) na] . >cond))
+   ; `else ifeq ..` chains: the tail's test runs only while no earlier arm was taken
+   (else-cond cond tail as)
+    (: f <cond pon <f taken <>f
+       q (0 < #tail ? (classify tail) 0)
+       na (pon && !taken && (!q || cond-test q as))
+       ([pon (taken || na) na] . >cond))
+   (cond-test q as)
+    (<q @ 'ifeq (eval-ifeq (r1 q) as)
+          'ifneq !(eval-ifeq (r1 q) as)
+          'ifdef (eval-ifdef (r1 q) as)
+          'ifndef !(eval-ifdef (r1 q) as)
+          (cook-gap ("else " + show <q)))
    ; the text $(eval ..) queued while the last line expanded, as lines, oldest first
    (evals-take as)
     (peep as " evals" () @ q (two? q ? (pull as " evals" 0, catmap text-lines (rev q)) ()))
@@ -845,35 +912,44 @@
           (? (two? more) (loop (more + cs) (flushr cur rules) 0 cond)
              !(two? cs) (pull as " parsing" 0, rev (flushr cur rules))
           (: c <cs k <c rest >cs on (condon cond)
-             (k @ 'recipe (loop rest rules (on && cur ? (addstep cur (r1 c)) cur) cond)
+             ; a tab-led line is a recipe only while a rule is open; with none it is an ordinary
+             ; line (mm/Makefile's indented obj-$(CONFIG_..) += under an ifdef)
+             (k @ 'recipe (cur ? (loop rest rules (on ? (addstep cur (r1 c)) cur) cond)
+                             (loop (classify (ltrim (r2 c)) . rest) rules cur cond))
+                  ; a blank or comment line leaves the rule open, as make reads a recipe
+                  'skip   (loop rest rules cur cond)
                   'rule   (on ? (loop rest (flushr cur rules) (mkrule c) cond)
                                       (loop rest (flushr cur rules) 0 cond))
                   'assign ((on ? (do-assign as (r1 c) (r2 c) (r3 c)) 0), loop rest (flushr cur rules) 0 cond)
                   'oassign ((on ? (assign1 as (r1 c) (r2 c) (r3 c) 1) 0), loop rest (flushr cur rules) 0 cond)
                   'xassign ((on ? (assign1 as (r1 c) (r2 c) (r3 c) 0,
-                                   setenv (r1 c) (expand (peep as (r1 c) "") as 0)) 0),
+                                   xport as (expand (r1 c) as 0)) 0),
                             loop rest (flushr cur rules) 0 cond)
-                  'xname   ((on ? (setenv (r1 c) (expand (peep as (r1 c) "") as 0)) 0),
+                  ; `export A B C` exports each
+                  'xname   ((on ? (each (split-ws (expand (r1 c) as 0)) (n \ xport as n)) 0),
                             loop rest (flushr cur rules) 0 cond)
-                  ('inc || 'sinc)
-                          (on ? (catmap (k = 'inc ? file-lines sfile-lines) (split-ws (expand (r1 c) as 0)) @ more
+                  'inc    (on ? (catmap (f \ (mklist as f, file-lines f)) (split-ws (expand (r1 c) as 0)) @ more
                                          (loop (more + rest) (flushr cur rules) 0 cond))
                                       (loop rest (flushr cur rules) 0 cond))
-                  ; conditionals thread `cur` rather than flushing it: a top-level rule is
-                  ; already flushed by the blank line before one, and a conditional inside a
-                  ; recipe block gates its lines via `on` above.
-                  'defassign ((on ? (do-assign as (r1 c) "=" (r2 c)) 0),
+                  'sinc   (on ? (catmap (f \ exists? f ? (mklist as f, file-lines f) ()) (split-ws (expand (r1 c) as 0)) @ more
+                                         (loop (more + rest) (flushr cur rules) 0 cond))
+                                      (loop rest (flushr cur rules) 0 cond))
+                  ; conditionals thread `cur` rather than flushing it, as make's do: a
+                  ; conditional inside a recipe block gates its lines via `on` above.
+                  'defassign ((on ? (do-assign as (r1 c) "define" (r2 c)) 0),
                               loop rest (flushr cur rules) 0 cond)
-                  ; remember which targets carry one, so recur can refuse if one is remade
-                  'tvar ((on ? (each (split-ws (expand (r1 c) as 0))
-                                           (w \ pin tvarbox (unseat w) "1")) 0),
+                  ; remember which targets carry one, so recur can refuse if one is remade;
+                  ; " tvars" keeps (targets assignment) in order for a reader that scopes them
+                  'tvar ((on ? (expand (r1 c) as 0 @ ts
+                                  (each (split-ws ts) (w \ pin tvarbox (unseat w) "1"),
+                                   pin as " tvars" ([ts (r2 c)] . peep as " tvars" ()))) 0),
                          loop rest (flushr cur rules) 0 cond)
                   'expand ((on ? (expand (r1 c) as 0) 0), loop rest rules cur cond)
                   'ifeq   (loop rest rules cur (push-cond cond on (on && eval-ifeq (r1 c) as)))
                   'ifneq  (loop rest rules cur (push-cond cond on (on && !(eval-ifeq (r1 c) as))))
                   'ifdef  (loop rest rules cur (push-cond cond on (on && eval-ifdef (r1 c) as)))
                   'ifndef (loop rest rules cur (push-cond cond on (on && !(eval-ifdef (r1 c) as))))
-                  'else   (loop rest rules cur (else-cond cond))
+                  'else   (loop rest rules cur (else-cond cond (trim (r1 c)) as))
                   'endif  (loop rest rules cur >cond)
                   (loop rest (flushr cur rules) 0 cond))))))
      cls 0 0 0))
@@ -886,10 +962,11 @@
            (trim (strip-comment <l) @ t
               (first-word t = "define" ?
                  (: nm (trim (after-word t))
+                    ; the body's lines joined: the newline before endef is not the value's
                     (body r bs) (? (atom? r) (udie 2 "cook: define with no endef.  Stop.")
-                                    (trim (strip-comment <r) = "endef") [>r bs]
-                                    (body >r (bs + <r + "\n")))
-                    p (body >l "")
+                                    (trim (strip-comment <r) = "endef") [>r (join "\n" (rev bs))]
+                                    (body >r (<r . bs)))
+                    p (body >l ())
                     (g <p (['defassign nm <>p] . acc)))
                  (g >l (classify <l . acc))))))
      (lines (uncont src)) ())
@@ -897,7 +974,6 @@
    ; read a file whole (for `include`), then split it into classified lines.
    (slurp-of path) (uread path @ [1 s] s (udie 1 ("cook: cannot read " + path)))
    (file-lines ip) (text-lines (slurp-of ip))
-   (sfile-lines ip) (uread ip @ [1 s] (text-lines s) ())     ; -include: a missing file is no lines
 
    ; seed the variable table as make does: the environment first (every NAME=value, origin
    ; "environment"), then the builtin defaults for whatever it left unsaid, then the command
@@ -1314,7 +1390,17 @@
           (two? pos) (udie 1 "cook: no Cards.l, Cookfile or Makefile found")
           0)))
 
-   cook-main))
+   ; make text read on make's own terms into the caller's tablet, the variable layer alone:
+   ; assignments, conditionals, include, define, $(eval). answers the rules, unregistered, as
+   ; (targets prereqs . steps) texts -- for a reader that owns its graph (hearts' kbuild).
+   ; cook-expand reads a text against that tablet as make would
+   (cook-vars src as) (build (text-lines src) as)
+   (cook-expand s as) (expand s as 0)
+
+   [cook-main cook-vars cook-expand])
+   cook-main (cook-pubs 0)
+   cook-vars (cook-pubs 1)
+   cook-expand (cook-pubs 2))
 
 ; the seat (src/apps/nc.l's shape): fire cook-main iff this file -- or the installed `cook` symlink
 ; -- sits in the program seat of the real command line, taking the args after the seat. cmdline

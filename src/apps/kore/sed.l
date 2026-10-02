@@ -116,16 +116,19 @@
                  (comma && atom? a1 ? ()               ; a , with no left leg
                   ((comma ? (raddr (j2 + 1)) [() j2]) @ r2
                      (atom? r2 || comma && atom? <r2 ? ()
-                      (: a2 <r2 j3 (spc <>r2)
+                      (: a2 <r2 j0 (spc <>r2)
+                         ; `addr!verb`: the verb runs on the lines the address does not select
+                         bang (j0 < n && sc j0 = 33)
+                         j3 (bang ? (spc (j0 + 1)) j0)
                          (n <= j3 ? ()
                           (: v (sc j3)
                              plain (verb \ (sepend? (j3 + 1) ?
-                                              (rcmd (j3 + 1) ([a1 a2 verb ()] . acc))))
+                                              (rcmd (j3 + 1) ([a1 a2 verb () bang] . acc))))
                              (? (v = 112) (plain 'p)
                                 (v = 100) (plain 'd)
                                 (v = 113) (two? a2 ? () (plain 'q))
                                 (v = 115) (rsub j3 @ [pay j4]
-                                            (rcmd j4 ([a1 a2 's pay] . acc))
+                                            (rcmd j4 ([a1 a2 's pay bang] . acc))
                                             ())
                                 ()))))))))
               ())))
@@ -161,7 +164,7 @@
        ; one line through the commands -> (kind ps): 0 flows, 1 deleted, 2 quits
        (rline cs idx ps no q last?)
         (cs @ (c . more)
-           (!(sel? c idx no ps last?) ? (rline more (idx + 1) ps no q last?)
+           (!(sel? c idx no ps last? @ s (c 4 ? !s s)) ? (rline more (idx + 1) ps no q last?)
               (<>>c @ v
                  (? (v = 'd) [1 ps]
                     (v = 'q) [2 ps]
