@@ -37,7 +37,7 @@
          dry dryday
          (two? sun) warm !(two? (bm 0)) seen (0.0 <= ph < 1.0)
          (chat s 79 != 0) (chat s (22 * 80 + 79) != 0)     ; the hud's last cell, the meadow's last row
-         (1 = #bars) !(any (b \ b 'err) bars)))
+         (2 = #bars) !(any (b \ b 'err) bars)))
 
 (test_fin (),
  puts "grass99: ok -- the week stands up in three dimensions, day and night, its pens in range as the field dries, and its tune reads\n")

@@ -11,8 +11,10 @@
 (:
  esc (string 27)
  ; the tune as a score, read as grass reads its own: gwen's bar, picked out on synth's row
- ; as 3 6 0 8 6, on the music box alone
- score99 '("D4 .5 F4 .5 A4 1 G4 1 F4 1")
+ ; as 3 6 0 8 6, on the music box alone -- spread over two bars, so at grass's tempo it
+ ; goes half as fast, and an octave under, the box's own low end and the chimes' with it
+ score99 '("D3 1.5 F3 1.5 A3 1"
+           "G3 1.5 F3 2.5")
  ttl99 "leaves of grass simulator 1999"
  rows99 '(""
           "hjkl or arrows keys to dance"
