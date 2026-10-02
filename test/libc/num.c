@@ -104,10 +104,10 @@ int main(void) {
  say_n("abs.zero", abs(0));
  say_n("labs", labs(-1234567890123L));
 
- /* --- strtod: ours is am_strtod, correctly rounded, and the reader's float
+ /* --- strtod: ours is lm_strtod, correctly rounded, and the reader's float
     lane rides it on every target. compared through its BITS, because a
     decimal reprint would hide a one-ulp difference -- which is the whole
-    thing am_strtod exists to get right. --- */
+    thing lm_strtod exists to get right. --- */
  double d;
  /* ..and C99 7.20.1.3's HEX lane, where the exponent is optional and the
     significand is already binary: the ties and the subnormal floor are the

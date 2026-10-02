@@ -30,7 +30,7 @@ silicon; this is where the thumb backends verify.
 ST Nucleo-F446RE (STM32F446RE, Cortex-M4F @ 180 MHz, 128 KB SRAM -- firmware
 only, no love). All C through `mooncc -t thumb2sp`: cold boot, 180 MHz PLL
 with bounded ready-waits falling back to HSI, USART2 console on the ST-LINK
-VCP, and a 28-check on-silicon battery (soft doubles, 64-bit, am math,
+VCP, and a 28-check on-silicon battery (soft doubles, 64-bit, lm math,
 composites). `make flash` via st-flash; gate test_nucleo446 boots the
 semihosting face on qemu's netduinoplus2 (STM32F405 -- same UART/RCC map).
 

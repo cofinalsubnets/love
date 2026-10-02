@@ -1,5 +1,5 @@
 // qemu -M virt (rv64) frontend for love -- the SIM port, and the first
-// port with NO foreign toolchain anywhere: love.c + the am math floor + libc
+// port with NO foreign toolchain anywhere: love.c + the lm math floor + libc
 // + this file all compile `mooncc -t rv64`, start.o is laid straight from
 // holo IR (mkstart.l), and OUR linker binds the ELF (-Ttext puts the first
 // text byte exactly at 0x80000000, where the board's mask ROM jumps -- see

@@ -11,8 +11,8 @@
  * rounded whole -- the assertions below check the exact bit patterns, not a
  * tolerance.
  *
- * found by the am.c ulp differential's REDUCTION scan (test_ulp) and by
- * nothing else. am.c's rbig builds a 192-bit fraction whose middle word
+ * found by the lm.c ulp differential's REDUCTION scan (test_ulp) and by
+ * nothing else. lm.c's rbig builds a 192-bit fraction whose middle word
  * crosses 2^63 on most inputs, so sin/cos drifted to 1609 ulp above the
  * Payne-Hanek handoff at 2^19 -- while every argument BELOW it stayed exact,
  * which is why the ordinary sweeps and the whole corpus stayed green.
@@ -48,7 +48,7 @@ int main(void)
 	r += bits(u2d(0xffffffffffffffffUL)) == 0x43f0000000000000UL;
 	r += bits(u2d(0xfffffffffffff800UL)) == 0x43efffffffffffffUL;
 
-	/* the word am.c's rbig actually produced when this was found */
+	/* the word lm.c's rbig actually produced when this was found */
 	r += bits(u2d(0xb81669940ac0e972UL)) == 0x43e702cd3281581dUL;
 
 	/* the sign is the coarsest symptom: nothing unsigned converts negative */

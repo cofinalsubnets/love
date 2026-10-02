@@ -11,11 +11,11 @@
  *
  * this is a SILENT wrong answer before it is ever a crash: with both stores
  * aimed at the same valid address nothing faults, one variable just never gets
- * written. it reached the shipping binary through am.c's mul64, whose `lo`
- * out-pointer became a wild address -- am_sin then segfaulted for every
+ * written. it reached the shipping binary through lm.c's mul64, whose `lo`
+ * out-pointer became a wild address -- lm_sin then segfaulted for every
  * |x| >= 2^19, i.e. `(sine 1e20)` in out/love, under a green test_slow.
  *
- * found by the am.c ulp differential (test_ulp), which is the only thing in
+ * found by the lm.c ulp differential (test_ulp), which is the only thing in
  * the tree that had ever compared mooncc's float output against another
  * compiler's. it lives HERE because it is a codegen law about parameters and
  * has nothing to do with math.
@@ -23,7 +23,7 @@
  * the register pressure is load-bearing: with a short body the allocator never
  * wants the arrival register and the fault does not appear. keep the temps. */
 
-/* the exact shape from src/apps/moon/lib/moonlibc/math/am.c -- 64x64 -> 128 without
+/* the exact shape from src/apps/moon/lib/moonlibc/math/lm.c -- 64x64 -> 128 without
  * __int128, four params, the last two out-pointers */
 static void mul64(unsigned long a, unsigned long b,
                   unsigned long *hi, unsigned long *lo)
@@ -72,7 +72,7 @@ int main(void)
 	unsigned long hi = 0, lo = 0, x = 0, y = 0, z = 0;
 	int r = 0;
 
-	/* the am.c case, at the window values rbig actually produces */
+	/* the lm.c case, at the window values rbig actually produces */
 	mul64(0x1e42d130773b76UL, 0x27bac7ebe5f17b3dUL, &hi, &lo);
 	r += hi == 0x4b2420c3281b4UL;
 	r += lo == 0xf30205e35e10dd1eUL;
