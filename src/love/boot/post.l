@@ -1797,8 +1797,8 @@
    (cpnext s i) (i + max 1 (cpn s i))
    (cpat s i)
     (: m (cpn s i)
-       (go k a) (m <= k ? a (go (k + 1) (a * 64 + (s (i + k) & 63))))
-       (? (m = 0) 65533 (m = 1) (s i) (go 1 (s i & 127 >> m))))
+       (? (m = 0) 65533 (m = 1) (s i)
+          (foldl (\ a k (a * 64 + (s (i + k + 1) & 63))) (s i & 127 >> m) ^(m - 1))))
    (cps s) (: n #s (go i acc) (n <= i ? (rev acc) (go (cpnext s i) (cpat s i . acc))) (go 0 ()))
    (cplen s) (: n #s (go i k) (n <= i ? k (go (cpnext s i) (k + 1))) (go 0 0))
    (cpoff s i k) (: n #s (go i k) (n <= i || k < 1 ? i (go (cpnext s i) (k - 1))) (go i k))
@@ -2934,8 +2934,7 @@
        _ (gall cs 0)
        (gpick i) (? (i < 1) 1 (peep ok i 1) (i + 1) (gpick (i - 1)))
        k (gpick (mx - 1))
-       (gwid j) (k <= j ? () ((peep aw ((k - 1) * mx + j) gmin) . (gwid (j + 1))))
-       (gwid 0))
+       (map (j \ peep aw ((k - 1) * mx + j) gmin) ^k))
    ; down the columns: a row is cell r, r + rows, r + 2 * rows, ..
    (gdown v n cw)
     (: rows ((n + #cw - 1) // #cw)
@@ -2944,8 +2943,7 @@
            (n <= nj ? s
               (cw col @ mw
                  (row nj (col + 1) (pos + mw) (s + gind (pos + >c) (pos + mw))))))
-       (go r) (rows <= r ? () ((row r 0 0 "") . (go (r + 1))))
-       (go 0))
+       (map (r \ row r 0 0 "") ^rows))
    ; across the rows: a row is a run of #cw cells, in order
    (gacross v n cw)
     (: k #cw
