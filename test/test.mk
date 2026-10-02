@@ -1257,7 +1257,7 @@ test_kernel_a64:
 else
 test_kernel_a64: host $(S)/tools/ktest.l
 	@$(MAKE) -s a=a64 $(ko)/love-a64.elf
-	@echo TEST $(ko)/love-a64.elf "(the WARM lane: serial, headless, -kernel; TCG, ceiling 900s, or kvm on $$KTEST_A64_HOST)"
+	@echo TEST $(ko)/love-a64.elf "(the WARM lane: serial, headless, -kernel; TCG, ceiling 900s, or kvm on $${KTEST_A64_HOSTS:-$$KTEST_A64_HOST})"
 	@$m $(S)/tools/ktest.l $(ko)/love-a64.elf - a64
 endif
 
