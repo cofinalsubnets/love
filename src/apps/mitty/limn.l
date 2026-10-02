@@ -118,8 +118,7 @@
                            (pin t sl (two? e ? [<e <>e (e 2) (e 3) (max (e 4) i) (max (e 5) q)]
                                         [i q (g >> 8 & 255) (g & 255) i q])))
                         0))
-       (row i) (i < r ? (map (q \ cell i q) (jot c), row (i + 1)) 0)
-       (row 0,
+       (each ^r (i \ each ^c (q \ cell i q)),
         t))
    ; what each picture's tiles show: [slot gen row col x y pw ph nc nr], its top-left tile
    ; at row col of the pane, the part of it x y pw ph in its own pixels, over nc x nr cells
@@ -215,8 +214,6 @@
    (limn-bars j bs)
     (map ([d row col n] \
           (d = 'across ? (say j (limn-go row col), limn-run j n limn-across)
-             (:- (down 0)
-                 (down i) (i < n ? (say j (limn-go (row + i) col), say j limn-down, down (i + 1))
-                             0))))
+             (each ^n (i \ (say j (limn-go (row + i) col), say j limn-down)))))
          bs))
 ) ; module limn

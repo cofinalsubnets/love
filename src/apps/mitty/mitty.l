@@ -395,7 +395,7 @@
                                 ((b . acc) @ a2
                                    (b = 126 && [126 49 48 50 91 27] = take 6 a2 ? (drop 6 a2) (go a2)))))
                  (string (rev (go ()))))
- (hsend hb t) (: (go i) (i < #t ? (hfeed hb (t i), go (i + 1)) 0) (go 0))
+ (hsend hb t) (each ^#t (i \ hfeed hb (t i)), 0)
  ; an APC's body, to its ST: the one mitty reads is the answer to its kitty query, which
  ; turns the pictures on
  (hapc hb) (: (go acc) (see (hin hb) @ b
