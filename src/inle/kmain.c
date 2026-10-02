@@ -2366,7 +2366,10 @@ void kmain(void) {
   r = ai_evals_(r,
    "(? (elem 'seat-doors (names ()))"
    "   (: _ (pin seat-doors 0 spawn) _ (pin seat-doors 1 spawnio)"
-   "      _ (pin seat-doors 2 spawnmap) (pin seat-doors 3 wait))"
+   "      _ (pin seat-doors 2 spawnmap) _ (pin seat-doors 3 wait)"
+   "      _ (pin seat-doors 4 tether) _ (pin seat-doors 5 still) _ (pin seat-doors 6 tty)"
+   "      _ (pin seat-doors 7 settty) _ (pin seat-doors 8 raw) _ (pin seat-doors 9 ttyfg)"
+   "      (pin seat-doors 10 ttypg))"
    "   0)");
   // the session: a fresh writable layer, so the shell's defglobs never land in the base
   r = ai_open(r);
