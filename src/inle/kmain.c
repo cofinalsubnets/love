@@ -490,10 +490,10 @@ struct k_file { char const *path, *bytes; uintptr_t len, ms; };
 static struct k_file const *k_bakes;
 static int k_bakes_n;
 #include "lib/ustar.h"
-// the tree's rows live under /proc/src, read-only, so a module loads from bytes the shell
+// the tree's rows live under /love, read-only, so a module loads from bytes the shell
 // cannot have edited. the root holds src/inle/rootfs/, a second tar walked with no prefix.
 static char const k_home[] = "home";
-static char const k_tree[] = "proc/src";
+static char const k_tree[] = "love";
 #define k_tree_n (sizeof k_tree - 1)
 // one ustar pass: count with rows NULL, fill on the second. paths re-home below the archive's
 // top and under pre. a symlink lands as a row whose target rides lnks[k] -- lib/'s door to
@@ -642,7 +642,7 @@ static bool k_fs_init(void) {
     struct k_file *xr = kmallocw(b2w((uintptr_t) xn * sizeof *xr));
     if (!xr) return false;
     k_extra = xr, k_extra_n = k_baked(xr, xn); }
-  int n = k_bakes_n + k_extra_n, cap = n + 16;
+  int n = k_bakes_n + k_extra_n, cap = n + 17;
   struct k_ent *t = kmallocw(b2w((uintptr_t) cap * sizeof *t));
   if (!t) return false;
   for (int i = 0; i < n; i++) {
@@ -698,6 +698,11 @@ static bool k_fs_init(void) {
                             .mode = 0777, .own = true, .live = true,
                             .dir = !to, .to = to };
     m++; }
+  // and the tree's old name, a link onto it for one release
+  char *to = k_strdup("/love", 5);
+  t[n + 16] = (struct k_ent) { .path = "proc/src", .bake = -1, .ms = k_clock_ms(),
+                               .mode = 0777, .own = true, .live = true,
+                               .dir = !to, .to = to };
   k_ents = t, k_ents_n = cap, k_ents_cap = cap;
   return true; }
 
@@ -2280,7 +2285,7 @@ static char const src_seat[] =
 #include "seat.h"
 ;
 // the crew roster: not in the kernel's cat, so the kernel carries the order and the members
-// are read off /proc/src at the first ask. a path list, because a module's name does not say
+// are read off /love at the first ask. a path list, because a module's name does not say
 // which file holds it and sb spans three that load in the order given.
 static char const src_crewlist[] =
 #include "crewlist.h"
@@ -2384,7 +2389,7 @@ void kmain(void) {
    "       getpid getuid seal ttyfg setpg umask rusage rlimit setrlimit glean pipe fdopen dup dup2 connect listen"
    "       bind accept recv send farend hark tty))");
   // then the kore cat through the stream shell: the line is seatless here, so every member's
-  // own seat sits out and the whole userland lands. built off /proc/src, korelist being the
+  // own seat sits out and the whole userland lands. built off /love, korelist being the
   // baked roster. egg lane only: re-loading over a woken image re-pins every sealed verb.
   if (!woke) {
   r = ai_evals_(r,
@@ -2395,7 +2400,7 @@ void kmain(void) {
    "          (kwords s i (+ j 1) acc))"
    "       (? (< i j) (rev (. (snip s i j) acc)) (rev acc)))"
    "   open (cite 'posix 'open) close (cite 'posix 'close)"    // by value, as above
-   "   (kslurp p) (: h (open (+ \"/proc/src/\" p) \"r\") s (slurp h) _ (close h) s)"
+   "   (kslurp p) (: h (open (+ \"/love/\" p) \"r\") s (slurp h) _ (close h) s)"
    "   (kcat l) (? (two? l) (+ (kslurp (cap l)) (kcat (cup l))) \"\")"
    "   korecat (kcat (kwords korelist 0 0 ())))");
   r = ai_evals_(r, "(reads (tap ((: (g i) (? (< i (tally korecat)) (. (peep korecat i 0) (g (+ 1 i))))) 0)))");

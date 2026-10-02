@@ -318,7 +318,7 @@
                    fin (? weak (pin t 'why "the server's key share is of small order", ()) (flight 0))
                    why (? (atom? fin) () (trust-why sni port (t 'chain) (t 'spki) how))
                    (? (atom? fin) (quit-why t "the handshake failed")
-                      (string? why) (: _ (alert t (? (0 <= str-at why "pinned" 0) 42 48) why) (quit-why t why))
+                      (string? why) (: _ (alert t (? (0 <= fsub why "pinned" 0) 42 48) why) (quit-why t why))
                       (: ; the client finished is over the transcript through the server's
                          ; asked for one, we send an empty certificate (we have none),
                          ; and our finished covers it; the traffic keys stop at the server's

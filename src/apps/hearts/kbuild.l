@@ -6,8 +6,10 @@
 ; those tablets; hearts owns the walk, the archives and the link, and its answers are held to
 ; a reference build's vmlinux.a and .cmd files.
 ;
-; a hearts build is clean and one-shot: no fixdep, no .cmd, no if_changed, no recursion.
-(module (hearts-kbuild hk-top hk-prepare hk-build hk-walk hk-vmlinux hk-rule hk-unit hk-plan hk-make hk-submake hk-path)
+; a hearts build is clean and one-shot: no fixdep, no .cmd, no if_changed. hk-make runs kbuild's
+; own goals as make would, sub-makes and all; an earlier build's .cmd files are read only as the
+; prior state a differential starts from.
+(module (hearts-kbuild hk-top hk-prepare hk-build hk-walk hk-vmlinux hk-rule hk-unit hk-plan hk-make hk-submake hk-envmake hk-path)
 (borrow 'posix)
 (borrow 'cook)
 (borrow 'path)
@@ -25,12 +27,16 @@
 
  ; the top Makefile evaluated as kbuild's final make sees it, in the output dir `cur`: cl holds
  ; the command line (ARCH, LLVM, ..) and sh answers every $(shell ..), so no probe reaches the
- ; host unasked. answers the tablet each directory's build starts from, its rules under " rules"
+ ; host unasked. answers the tablet each directory's build starts from, its rules under " rules".
+ ; cl's variables are exported, as the environment's are to make's recipes (the build's identity,
+ ; KBUILD_BUILD_*, arrives there), and so is what the outer make of an O= build exports to it
  (hk-top K cur cl sh)
   (: t (pins (hk-copy cl) "MAKE_VERSION" "4.4.1" ".FEATURES" hk-features
              "MAKEFLAGS" "rR --no-print-directory" "MAKECMDGOALS" "vmlinux"
-             "MAKEFILE_LIST" (K + "/Makefile") "CURDIR" cur
-             "sub_make_done" "1" "objtree" "." "KBUILD_EXTMOD" "" " shell" sh "MAKE" "hk-make")
+             "MAKEFILE_LIST" (K + "/Makefile") "CURDIR" cur "LC_COLLATE" "C" "LC_NUMERIC" "C"
+             "sub_make_done" "1" "objtree" "." "KBUILD_EXTMOD" "" " shell" sh "MAKE" "hk-make"
+             " cl" (sort (keys cl))
+             " exports" (sort (keys cl) + ["sub_make_done" "objtree" "srcroot" "LC_COLLATE" "LC_NUMERIC"]))
      (pin t " rules" (hk-vars (hk-slurp (K + "/Makefile")) t), t))
 
  ; the prepare chain's recipe lines that only $(eval) into the top's variables, run once the
@@ -78,35 +84,47 @@
         rs (map one (t " rules"))
         (pin t " rx" rs, rs))))
 
+ ; rx by target, as make hashes its files: [{target -> its rules, in order} pattern-rules-with-recipes]
+ (hk-ix t)
+  (peep t " ix" 0 @ x (two? x ? x
+     (: rx (hk-rx t)
+        ix {}
+        (one r) (: sn {} (each (r 0) (w \ peep sn w 0 ? 0 (pin sn w 1, pin ix w (r . peep ix w ())))))
+        _ (each (rev rx) one)
+        x [ix (filter (r \ two? (r 2) && (r 3) = "" && any (w \ 0 <= findsub w "%") (r 0)) rx)]
+        (pin t " ix" x, x))))
+
  ; can path be had: in the tree, or made here (n bounds the search)
  (hk-had? K t path n)
   (two? (stat path) || two? (stat (K + "/" + path)) || 0 < n && two? (hk-rule K t path (n - 1)))
 
- ; how make makes path here: [steps prereqs stem], () when no rule does. an explicit rule with
+ ; how make makes path here: [steps prereqs stem siblings], () when no rule does -- siblings the
+ ; other targets of the pattern rule that made it, which one run makes together. an explicit rule with
  ; a recipe wins (the last, as make's override); else the pattern rule of shortest stem whose
  ; % prerequisites can be had -- so Makefile.lib's match-anything `$(obj)/%: $(src)/%_shipped`
  ; claims nothing it has no file for. recipe-less rules naming path add their prerequisites,
  ; every explicit rule's in the order the rules were written
  (hk-rule K t path n)
-  (: rx (hk-rx t)
-     ex (filter (r \ elem path (r 0)) rx)
-     xp (catmap (r \ r 1) (filter (r \ atom? (r 2)) ex))
+  (: ix (hk-ix t)
+     ex (peep (ix 0) path ())
+     (st r) ((r 3) = "" ? "" (hk-stem (r 3) path))
+     xp (catmap (r \ map (p \ hk-sub p (st r)) (r 1)) (filter (r \ atom? (r 2)) ex))
      rec (filter (r \ two? (r 2)) ex)
      (has% p) (0 <= findsub p "%")
-     (st r) ((r 3) = "" ? "" (hk-stem (r 3) path))
      ; the recipe's rule leads, so its first prerequisite is $<, as make orders them
      (two? rec
       ? (: rr <(rev rec)
-           [(rr 2) (catmap (r \ map (p \ hk-sub p (st r)) (r 1)) (rr . filter (r \ r != rr) ex)) (st rr)])
+           [(rr 2) (catmap (r \ map (p \ hk-sub p (st r)) (r 1)) (rr . filter (r \ r != rr) ex)) (st rr) ()])
         (: (fit r w) (hk-stem w path @ s
                        (string? s && s != "" && all (p \ !(has% p) || hk-had? K t (hk-sub p s) n) (r 1)
                         ? [[s r]] ()))
-           cs (catmap (r \ catmap (w \ fit r w) (r 0)) (filter (r \ two? (r 2) && (r 3) = "") rx))
+           cs (catmap (r \ catmap (w \ fit r w) (r 0)) (ix 1))
            best (foldl (a \ c \ atom? a || #(c 0) < #(a 0) ? c a) () cs)
            ; no recipe anywhere: a target named only by recipe-less rules is still made -- its
            ; prerequisites, then nothing (prepare: prepare0)
-           (? (two? best) [(best 1 2) (map (p \ hk-sub p (best 0)) (best 1 1) + xp) (best 0)]
-              (two? ex) [() xp ""]
+           (? (two? best) [(best 1 2) (map (p \ hk-sub p (best 0)) (best 1 1) + xp) (best 0)
+                           (filter (w \ w != path) (map (w \ hk-sub w (best 0)) (best 1 0)))]
+              (two? ex) [() xp "" ()]
               ()))))
 
  ; the target- and pattern-specific assignments for path, in the order they were written
@@ -151,14 +169,15 @@
            (auto _) (pins ut "@" tg "<" (two? ps ? <ps "") "^" ap "?" ap "*" (r 2)
                              "@D" (k < 0 ? "." (snip tg 0 k)) "@F" (snip tg (k + 1) #tg))
            (call c) [(c 2) (c 1) (_ \ (auto 0, foldl (i \ a \ (pin ut (show i) a, i + 1)) 1 (c 3),
-                                        hk-mods (hk-expand ("$(" + c 0 + ")") ut)))]
-           (lit kd b) [kd 0 (_ \ (auto 0, hk-mods (hk-expand b ut)))]
-           (line b) (? (hk-pre? (strip b) "$(eval") [['eval 0 (_ \ (hk-vars (strip b) t, ""))]]
+                                        hk-mods (hk-expand ("$(" + c 0 + ")") ut))) ut]
+           (lit kd b) [kd 0 (_ \ (auto 0, hk-mods (hk-expand b ut))) ut]
+           (line b) (? (hk-pre? (strip b) "$(eval") [['eval 0 (_ \ (hk-vars (strip b) t, "")) ut]]
                        (0 <= findsub b "$(MAKE)") [(lit 'make b)]
                        (: cs (hk-calls ut b) (two? cs ? (map call cs) [(lit 'run b)])))
            ; the prerequisites twice: found through VPATH (as $< $^ read them) and as named --
-           ; the name is what gets made, and a phony one (scripts) is never searched for
-           [(catmap (s \ line >>s) (r 0)) ps (r 1)])))
+           ; the name is what gets made, and a phony one (scripts) is never searched for. and
+           ; the unit's tablet: its prerequisites, sub-makes and environment see its variables
+           [(catmap (s \ line >>s) (r 0)) ps (r 1) ut (r 3)])))
  ; a command's text, expanded now; `:` is nothing to run
  (hk-text c) (strip (c 2 0) @ x (x = ":" ? "" x))
  ; the environment a make hands its recipes: each exported variable's value now
@@ -174,18 +193,36 @@
   (: g (hk-dot goal)
      (peep seen g 0 || peep made g 0 || peep made " failed" 0 ? 0
         (: _ (pin seen g 1)
-           ph (hk-words t "PHONY")
+           ph (map hk-dot (hk-words t "PHONY"))
            x (hk-unit K t ["" g])
+           ; made's " trace", when given, sees each goal with its tablet and unit
+           _ (peep made " trace" 0 @ f (lit? f ? (f g t x) 0))
            (? (atom? x) 0
               (!(elem g ph) && two? (stat g) && !(any (p \ elem p ph) (x 2))) 0
-              (: _ (each (x 2) (p \ hk-make K t p made seen run))
+              (: _ (each (x 2) (p \ hk-make K (x 3) p made seen run))
+                 ; an earlier build's state, when made carries one under " prior" (target -> the
+                 ; command its .cmd saved): a target there, its saved command the same, and no
+                 ; prerequisite remade this run is up to date -- if_changed's law, mtimes aside
+                 pr (peep made " prior" 0)
+                 sv (filter (c \ c 1) (x 0))
+                 (new? p) (peep made (" new " + hk-dot p) 0)
+                 ; compared as kbuild's cmd-check does, by words
+                 fresh (lit? pr && two? (stat g) && two? sv && !(any new? (x 2))
+                        && (pr g @ p (string? p && words p = words (hk-text <sv))))
+                 ; run answers 0 when it went well, 'same when a filechk left the file as it was
                  (one c) (peep made " failed" 0 ? 0
-                           (c 0 = 'make ? (hk-submake K t (hk-text c) made run)
-                              (hk-text c @ s (0 < #s ? (run g (c 0) (c 1) s (hk-env t) @ st (st = 0 ? 0 (pin made " failed" g))) 0))))
-                 (each (x 0) one, elem g ph ? 0 (pin made g 1), 0))))))
+                           (c 0 = 'make ? (hk-submake K (c 3) (hk-text c) made run)
+                              (hk-text c @ s (0 < #s ? (run g (c 0) (c 1) s (hk-env (c 3)) @ st
+                                                         (? (st = 0) (pin made (" new " + g) 1)
+                                                            (st = 'same) 0
+                                                            (pin made " failed" g)))
+                                               0))))
+                 (fresh ? 0 (each (x 0) one), elem g ph ? 0 (pin made g 1),
+                  each (x 4) (w \ (pin made w 1, peep made (" new " + g) 0 ? (pin made (" new " + w) 1) 0)), 0))))))
 
  ; a recipe's $(MAKE) line as the sub-make it starts: -f FILE, VAR=VALUE, goals (else the file's
- ; first target). it starts from this make's tablet, its rules its own
+ ; first target). it starts as make's does: the variables this make exports, its command line's
+ ; (under " cl", handed down as MAKEFLAGS hands them) and the line's own, and make's built-ins
  (hk-submake K t line made run)
   (: (aft l) (atom? l ? () (ends? <l "hk-make" ? >l (aft >l)))
      (g l f vs gs) (? (atom? l) [f (rev vs) (rev gs)]
@@ -194,13 +231,29 @@
                       (0 < findsub <l "=") (g >l f (<l . vs) gs)
                       (g >l f vs (<l . gs)))
      a (g (aft (words line)) (K + "/Makefile") () ())
-     nt (pins (hk-copy t) " rules" () " rx" 0 " tvars" () "MAKEFILE_LIST" (a 0))
-     _ (each (a 1) (v \ findsub v "=" @ k (pin nt (snip v 0 k) (snip v (k + 1) #v))))
+     ev (hk-env t)
+     lv (map (v \ findsub v "=" @ k [(snip v 0 k) (snip v (k + 1) #v)]) (a 1))
+     cl (uniq (peep t " cl" ()) + map (v \ v 0) lv)
+     nt (foldl (n \ k \ pin n k (peep t k "")) {} ["MAKE_VERSION" ".FEATURES" "MAKEFLAGS" "MAKE" "CURDIR" " shell"])
+     _ (each (ev + map (n \ [n (peep t n "")]) (peep t " cl" ()) + lv) (v \ pin nt (v 0) (v 1)))
+     _ (pins nt "MAKEFILE_LIST" (a 0) "MAKECMDGOALS" (join " " (a 2)) " cl" cl " exports" (uniq (map (v \ v 0) ev + cl)))
      _ (pin nt " rules" (hk-vars (hk-slurp (a 0)) nt))
-     (first r) (filter (w \ !(hk-pre? w ".") && findsub w "%" < 0) (r 0))
+     ; the default goal: a special target (.PHONY) starts with a dot and holds no slash; ./ is
+     ; Makefile.build's $(obj)/ with obj=.
+     (first r) (filter (w \ !(hk-pre? w "." && findsub w "/" < 0) && findsub w "%" < 0) (r 0))
      gs (two? (a 2) ? (a 2) (take 1 (catmap first (hk-rx nt))))
      seen {}
      (each gs (x \ hk-make K nt x made seen run), 0))
+
+ ; a make started from the environment, as a recipe's own script starts one (link-vmlinux.sh's
+ ; ${MAKE} -f scripts/Makefile.build obj=init ..): each environment variable a variable, as
+ ; make's are, then the command line read as a $(MAKE) line is. prior as hk-make's (or ()).
+ ; answers the failed target or 0
+ (hk-envmake K args sh run prior)
+  (: t (foldl (a \ e \ findsub e "=" @ i (0 < i ? (pin a (snip e 0 i) (snip e (i + 1) #e)) a)) {} (environ 0))
+     made (lit? prior ? (pins {} " prior" prior) {})
+     (pull t "SHELL" 0, pins t " shell" sh "MAKE" "hk-make" " exports" (sort (filter (k \ !(hk-pre? k " ")) (keys t))),
+      hk-submake K t (join " " ("hk-make" . args)) made run, peep made " failed" 0))
 
  ; a unit after the units its prerequisites need made here first: [[unit cmds] ..], build
  ; order, each target once, cmds [text saved? kind] expanded now (nothing in a directory's

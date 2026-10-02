@@ -68,17 +68,17 @@
    ; -- the url arithmetic (RFC 3986 5.2) ---------------------------------------
    ; a url -> [scheme auth path query frag], each part keeping its delimiter ("https:"
    ; "//host" "?q" "#f") and "" when absent, so the parts concatenate back to the url
-   (ww-cut s c) (: k (wg-find s c 0) (? (k < 0) [s ""] [(snip s 0 k) (snip s k #s)]))
+   (ww-cut s c) (: k (fsub s c 0) (? (k < 0) [s ""] [(snip s 0 k) (snip s k #s)]))
    (ww-schc? c) ((96 < c < 123) || (64 < c < 91) || (47 < c < 58) || c = 43 || c = 45 || c = 46)
    (ww-split u)
     (: fr (ww-cut u "#") qr (ww-cut <fr "?") r <qr
-       c (wg-find r ":" 0)
+       c (fsub r ":" 0)
        sc? (0 < c && (64 < (r 0) < 91 || 96 < (r 0) < 123)
                   && (: (g i) (? (c <= i) 1 (ww-schc? (r i)) (g (i + 1)) 0) (g 0)))
        sc (? sc? (wg-lower (snip r 0 (c + 1))) "")
        t (? sc? (snip r (c + 1) #r) r)
        au? (1 < #t && t 0 = 47 && t 1 = 47)
-       k (? au? (: j (wg-find t "/" 2) (? (j < 0) #t j)) 0)
+       k (? au? (: j (fsub t "/" 2) (? (j < 0) #t j)) 0)
        [sc (snip t 0 k) (snip t k #t) <>qr <>fr])
    (ww-join p) ((p 0) + (p 1) + (p 2) + (p 3) + (p 4))
    ; . and .. out of an absolute path; a path ending in either keeps its trailing slash
@@ -115,7 +115,7 @@
    (ww-nohop url to) [1 ("www: " + wg-plain url + " sends us to " + wg-plain to + ", which is not followed")]
    ; what a person typed -> a url: a scheme stays, a file here opens as file:, the rest is https
    (ww-arg s)
-    (? (0 <= wg-find s "://" 0) s
+    (? (0 <= fsub s "://" 0) s
        (two? (uread s)) ("file://" + ww-dots (? (0 < #s && s 0 = 47) s (cwd 0 + "/" + s)))
        ("https://" + s))
 
@@ -124,7 +124,7 @@
    ; 'html or 'text, else [1 complaint]. quiet: the screen is raw while this runs
    (ww-kind ct)
     (: t (wg-lower ct)
-       (? (!(#t) || 0 <= wg-find t "html" 0) 'html (0 <= wg-find t "text/" 0) 'text ()))
+       (? (!(#t) || 0 <= fsub t "html" 0) 'html (0 <= fsub t "text/" 0) 'text ()))
    (ww-get url hops)
     (: p (ww-split url) sc <p u0 (ww-nofrag url)
        (? (sc = "file:")
@@ -193,9 +193,9 @@
               port (: n (? (3 < #f) (unum (f 3)) ()) (? (charm? n) n 70))
               (? (t = 105 || t = 51) (pin run 's (run 's + disp + "\n"))
                  (: _ (flush-run 0)
-                    href (? (t = 104 && starts? sel "URL:") (snip sel 4 #sel)
-                            (t = 55) ("form:" + ww-gurl host port t sel + "?search=")
-                            (ww-gurl host port t sel))
+                    href (sel @ ("URL:" + (u && t = 104)) u
+                              (? (t = 55) ("form:" + ww-gurl host port t sel + "?search=")
+                                 (ww-gurl host port t sel)))
                     (say o ("<p>" + ww-gkind t + " " + ww-link href disp + "</p>\n"))))))
        (go ls) (? (two? ls) (? (<ls = ".") 0 (line <ls, go >ls)) 0)
        _ (go (ww-lns s))
@@ -203,7 +203,7 @@
        (slurp o))
    ; a text item's lines, its ".." back to "." and its closing "." gone
    (ww-gtxt s) (: ls (ww-lns s)
-                  (go l) (? (atom? l) () (<l = ".") () ((? (starts? <l "..") (snip <l 1 #<l) <l) . go >l))
+                  (go l) (? (atom? l) () (<l = ".") () ((<l @ (".." + r) ("." + r) <l) . go >l))
                   (unlines (go ls)))
    (ww-gopher url)
     (: p (ww-split url) hp (ww-hostport url 70) path (p 2) q (p 3)
@@ -247,9 +247,9 @@
         (? ((st 'pre) = 1)
             (? (starts? l "```") (block 0, pin st 'pre 0)
                (pin st 'buf (st 'buf + l + "\n")))
-           (starts? l "```") (ul 0, pin st 'pre 1)
-           (starts? l "* ") (ul 1, say o ("<li>" + ww-esc (trim (snip l 2 #l)) + "</li>\n"))
-           (ul 0, (l @ ("=>" + x)
+           (l @ ("* " + x) (ul 1, say o ("<li>" + ww-esc (trim x) + "</li>\n"))
+           (ul 0, (l @ ("```" + _) (pin st 'pre 1)
+                  ("=>" + x)
                   (: r (trim x)
                      k ((: (g i) (? (#r <= i || (r i = 32) || (r i = 9)) i (g (i + 1)))) 0)
                      href (snip r 0 k) lab (trim (snip r k #r))
@@ -258,7 +258,7 @@
                  ("##" + x) (say o ("<h2>" + ww-esc (trim x) + "</h2>\n"))
                  ("#" + x) (say o ("<h1>" + ww-esc (trim x) + "</h1>\n"))
                  (">" + x) (say o ("<blockquote>\n<p>" + ww-esc (trim x) + "</p>\n</blockquote>\n"))
-                 (0 < #(trim l) ? (say o ("<p>" + ww-esc l + "</p>\n")) 0))))
+                 (0 < #(trim l) ? (say o ("<p>" + ww-esc l + "</p>\n")) 0)))))
        _ (map line (ww-lns s))
        _ (? ((st 'pre) = 1) (block 0) (ul 0))
        (slurp o))
@@ -273,7 +273,7 @@
                 (: _ (cite 'tls 'tls-say t (u + "\r\n"))
                    b0 (cite 'tls 'tls-slurp t) _ (close (t 's))
                    b (? (string? b0) b0 "")
-                   k (wg-find b "\r\n" 0)
+                   k (fsub b "\r\n" 0)
                    hd (? (k < 0) "" (snip b 0 k)) body (? (k < 0) "" (snip b (k + 2) #b))
                    code (? (2 <= #hd) (unum (snip hd 0 2)) ())
                    meta (? (3 < #hd) (snip hd 3 #hd) "")
@@ -303,7 +303,7 @@
              (? (elem cs ww-latins) (ww-latin t) t))))
    ; the charset a content type or a <meta> names, lower case, or ""
    (ww-cs s)
-    (: t (wg-lower s) k (wg-find t "charset=" 0)
+    (: t (wg-lower s) k (fsub t "charset=" 0)
        (? (k < 0) ""
           (: i (k + 8) i2 (? (i < #t && elem (t i) '(34 39)) (i + 1) i)
              (snip t i2 ((: (g j) (? (#t <= j || elem (t j) '(34 39 59 32 62 47 9 10 13)) j (g (j + 1)))) i2)))))
@@ -317,13 +317,13 @@
        (go 0 0))
    ; what a page's links resolve against: its <base href>, else the page itself
    (ww-base url b)
-    (: k (: k1 (wg-find b "<base" 0) (? (0 <= k1) k1 (wg-find b "<BASE" 0)))
-       e (? (k < 0) -1 (wg-find b ">" k))
+    (: k (: k1 (fsub b "<base" 0) (? (0 <= k1) k1 (fsub b "<BASE" 0)))
+       e (? (k < 0) -1 (fsub b ">" k))
        t (? (e < 0) "" (snip b k e))
-       j (wg-find (wg-lower t) "href=" 0)
+       j (fsub (wg-lower t) "href=" 0)
        h (? (j < 0) ""
             (: i (j + 5) q (? (i < #t) (t i) 0)
-               (? (elem q '(34 39)) (: z (wg-find t (string q) (i + 1)) (? (z < 0) "" (snip t (i + 1) z)))
+               (? (elem q '(34 39)) (: z (fsub t (string q) (i + 1)) (? (z < 0) "" (snip t (i + 1) z)))
                   (snip t i ((: (g x) (? (#t <= x || elem (t x) '(32 9 10 13)) x (g (x + 1)))) i)))))
        (? #h (ww-resolve url h) url))
    ; a link off the page made absolute. a form field's (form:ACTION?PAIRS) resolves its
@@ -368,7 +368,7 @@
    ; two pixels a cell: the upper the colour of a ▀, the lower its background. one is
    ; fetched when it comes near the screen, and kept by url for the session
    (ww-marks p)
-    (foldl (\ acc a (? (starts? <a " img ") ([(a 1) (snip <a 5 #<a)] . acc) acc)) () (rev (p 2)))
+    (foldl (\ acc a (<a @ (" img " + s) ([(a 1) s] . acc) acc)) () (rev (p 2)))
    ; an image's bytes, redirects followed, or (). a file: picture only on a file: page
    (ww-fetch from url hops)
     (: p (ww-split url) sc <p

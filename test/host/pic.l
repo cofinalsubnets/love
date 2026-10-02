@@ -14,7 +14,7 @@
    _ (hark ["rm" "-rf" dir], mkdir dir 448)
    (put p s) (open p "w" @ q (say q s, close q))
    (bytes l) (foldl (a \ b \ (a + string b)) "" l)
-   (has s p) (0 <= (K 'wg-find) s p 0)
+   (has s p) (0 <= fsub s p 0)
    red [255 0 0 255] blue [0 0 255 255]
 
    ; -- two frames by hand: 2x1, red blue then blue red, 100 and 200 ms ----------------

@@ -594,9 +594,21 @@
    _ (ok "a define's continuation folds as a variable's" (has kj "J[\tone two three]"))
    ; target-specific assignments come back for a reader that scopes them, newest first
    tt {}
-   _ (hv "T := a.o\n$(T) b.o: private X := 1\n%.p: Y += 2\n" tt)
-   _ (ok "cook-vars: target-specific assignments, modifiers off"
-         (tt " tvars" = [["%.p" "Y += 2"] ["a.o b.o" "X := 1"]]))
+   _ (hv "T := a.o\n$(T) b.o: private X := 1\n%.p: Y += 2\nv: export Z = 3\n" tt)
+   _ (ok "cook-vars: target-specific assignments, private off, export kept"
+         (tt " tvars" = [["v" "export Z = 3"] ["%.p" "Y += 2"] ["a.o b.o" "X := 1"]]))
+   ; expansion copies the text between references whole: $$, a one-letter name, a stray $ and
+   ; a trailing one each keep their place
+   ce (cite 'cook 'cook-expand)
+   _ (ok "expand: the text around references" (ce "x$(A)y$$z$Bw$,v$" (pins {} "A" "1" "B" "2") = "x1y$z2w$,v$"))
+   _ (ok "$(subst): every match, an empty from changes nothing"
+         (ce "$(subst ab,X,abcabab)|$(subst ,X,abc)" {} = "XcXX|abc"))
+   ; a .cmd's deps_ line is thousands of words: a := of it is linear (it was 20 s at 4000)
+   lw (join " " (map (i \ "/k/include/linux/h" + show i + ".h $(wildcard include/config/C" + show i + ")") ^4000))
+   lt {}
+   t0 (clock 0)
+   _ (hv ("D := " + lw + "\n") lt)
+   _ (ok "a := of a long value is linear" (clock 0 - t0 < 3000 && #(words (lt "D")) = 4000))
 
    ; ---------------------------------------------------------------- summary
    _ (sh ("rm -rf " + dir))

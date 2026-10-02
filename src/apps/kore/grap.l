@@ -702,7 +702,7 @@
                  (s i != 37) (put o (s i), go (i + 1))
                  (n <= i + 1) (slurp o)
                  (s (i + 1) = 37) (put o 37, go (i + 2))
-                 (: (spec j) (j < n && (0 <= wg-find "-+ #0123456789." (string (s j)) 0) ? (spec (j + 1)) j)
+                 (: (spec j) (j < n && (0 <= fsub "-+ #0123456789." (string (s j)) 0) ? (spec (j + 1)) j)
                     j (spec (i + 1))
                     (n <= j ? (slurp o)
                      (: f (snip s i (j + 1)) c (s j)
@@ -977,8 +977,7 @@
        (string? t ? (gr-push g (gr-src (t + "\n") 'text)) 0))
 
    ; -- the document -------------------------------------------------------------------
-   (gr-starts? l w) (#w <= #l && snip l 0 #w = w)
-   (gr-macro? l w) (gr-starts? l w && (#l = #w || gr-blank? (l #w)))
+   (gr-macro? l w) (starts? l w && (#l = #w || gr-blank? (l #w)))
    ; the statements of a graph body run, the graph's pic said
    (gr-run-body g t ln)
     (: f (gr-src t 'file)
@@ -1039,7 +1038,7 @@
    (gr-run as sin)
     (: g {'macros {} 'vars {} 'o (jug 0) 'status 0 'defs 0 'seed 1 'mark "\\(bu" 'skew 0}
        _ (gr-setvar g "margin" 0.07)
-       fs (filter (a \ !(gr-starts? a "-") || a = "-") as)
+       fs (filter (a \ !(starts? a "-") || a = "-") as)
        (go l) (atom? l ? 0
                (: f <l
                   t (f = "-" ? (string? sin ? sin (slurp in)) (uread f @ r (two? r ? <>r)))

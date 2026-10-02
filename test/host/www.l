@@ -77,7 +77,7 @@
                                   g k)))
                      0)) 0)
    gf (get ("http://127.0.0.1:" + show p3 + "/") 8)
-   _ (test (<gf = 1) (0 <= (K 'wg-find) <>gf "file:///etc/passwd, which is not followed" 0))
+   _ (test (<gf = 1) (0 <= fsub <>gf "file:///etc/passwd, which is not followed" 0))
    ga (get (at + "/a.html") 8)
    ; the redirect is followed, and the page answers where it ended: its links resolve there
    gs (get (at + "/sub") 8)
@@ -91,10 +91,10 @@
            (<(get "ftp://x/y" 8) = 1) (<(get "http://127.0.0.1:1/" 8) = 1))
    ; the dump: the page plain, then its references
    _ (: p (lay ga 60) d (dump <p (p 1))
-        (test (0 <= (K 'wg-find) d "go [1]down, [2]here or [3]mail" 0)
-              (0 <= (K 'wg-find) d "References\n\n  1. " 0)
-              (0 <= (K 'wg-find) d ("  1. " + at + "/sub\n  2. " + at + "/a.html#here\n  3. mailto:x@y\n") 0)
-              (K 'wg-find d (string 27) 0 < 0)))
+        (test (0 <= fsub d "go [1]down, [2]here or [3]mail" 0)
+              (0 <= fsub d "References\n\n  1. " 0)
+              (0 <= fsub d ("  1. " + at + "/sub\n  2. " + at + "/a.html#here\n  3. mailto:x@y\n") 0)
+              (fsub d (string 27) 0 < 0)))
    ; the keys: a count and return follows, U names, B goes back, o opens, h and q are the help
    wkeys (st \ s \ (map (i \ wstep st (s i)) ^#s))
    ; the face's half of a request: take 'go, land the page it fetched
@@ -130,13 +130,13 @@
     wkeys st "oexample.com/q\r",
     test (st 'go = ["https://example.com/q" 1 -1]) (st 'mode = 'n),
     (: _ (pin st 'go (), wkeys st "h") ls (st 'ls)
-       (test (st 'file = "HELP") (0 <= (K 'wg-find) <ls "kore www" 0))),
+       (test (st 'file = "HELP") (0 <= fsub <ls "kore www" 0))),
     wkeys st "q",
     test (st 'file = at + "/a.html") !(st 'quit),
     ; a page opened fresh opens at its <main>, past the menu; g is the top and m goes back.
     ; one with no main says so, and a reload keeps where the reader was
     (: s3 (wnew 60 20) _ (wland s3 (get (at + "/m.html") 8)) t0 (s3 'top)
-       (test (0 < t0) (0 <= (K 'wg-find) (s3 'ls (s3 'top)) "Body" 0),
+       (test (0 < t0) (0 <= fsub (s3 'ls (s3 'top)) "Body" 0),
         wkeys s3 "g", test (s3 'top = 0),
         wkeys s3 "m", test (s3 'top = t0),
         wkeys s3 "gr", test (s3 'go = [(at + "/m.html") 0 0]),
@@ -162,8 +162,8 @@
     (: s5 (wnew 60 20) gf (get (at + "/f.html") 8) _ (wland s5 gf)
        (unlines l) (catmap (x \ x + "\n") l)
        (test (s5 'urls = [("form:" + at + "/sub/t.txt?lang=en&q=old+one")])
-             (0 <= (K 'wg-find) (unlines (s5 'ls)) "[1][old one_____]" 0)
-             (0 <= (K 'wg-find) (unlines (s5 'ls)) "[logo] x" 0),
+             (0 <= fsub (unlines (s5 'ls)) "[1][old one_____]" 0)
+             (0 <= fsub (unlines (s5 'ls)) "[logo] x" 0),
         wkeys s5 "1\r", test (s5 'mode = 'c) (s5 'lead = "q: ") (s5 'cmd = "old one") (s5 'go = ()),
         map (_ \ wstep s5 127) ^7,
         wkeys s5 "caf\xc3\xa9 & tea\r",
@@ -177,18 +177,18 @@
     (: s6 (wnew 60 3) _ (wland s6 (get (at + "/a.html#here") 8))
        ; link 5 sits on the page's last line, which a screen of two rows shows
        (seen? l) (s6 'top <= l < s6 'top + 2)
-       _ (test (seen? (s6 'links 4)) (0 <= (K 'wg-find) (s6 'ls (s6 'links 4)) "here it is" 0))
+       _ (test (seen? (s6 'links 4)) (0 <= fsub (s6 'ls (s6 'links 4)) "here it is" 0))
        n0 (s6 'nl)
        (pin s6 'w 30, K 'ww-fit s6,
         test (s6 'lw = 30) (n0 < s6 'nl) (seen? (s6 'links 4))
-             (0 <= (K 'wg-find) (s6 'ls (s6 'links 4)) "here it is" 0)
+             (0 <= fsub (s6 'ls (s6 'links 4)) "here it is" 0)
              (aall (map (l \ #l <= 30) (s6 'ls))),
         test (K 'ww-fit s6 = 0))),
     ; a latin-1 file by its own <meta> reads as utf-8 (kiosko's header says utf-8, and a
     ; header wins), and a body by its header; a gzip body unzips, and a torn one is no page;
     ; a <base> is what links resolve against
     (: gl (get ("file://" + sroot + "/l.html") 8) body (K 'ww-body)
-       (test (0 <= (K 'wg-find) (gl 3) "caf\xc3\xa9 \xe2\x80\x9cq\xe2\x80\x9d" 0)
+       (test (0 <= fsub (gl 3) "caf\xc3\xa9 \xe2\x80\x9cq\xe2\x80\x9d" 0)
              (body "text/html; charset=\"windows-1252\"" () (string 128) = "\xe2\x82\xac")
              (body "text/html; charset=utf-8" () "caf\xc3\xa9" = "caf\xc3\xa9")
              (body "text/html" "gzip" (cite 'gz 'gz-zip "<p>hi</p>" "" 0) = "<p>hi</p>")
@@ -219,15 +219,15 @@
        s7 (wnew 60 20)
        _ (wland s7 (get ("file://" + sroot + "/p.html") 8))
        l0 (s7 'links 0) n0 (s7 'nl)
-       (cells? l) (0 <= (K 'wg-find) l "\xe2\x96\x80" 0)
-       m <>(<(filter (a \ (K 'wg-find) <a " img " 0 = 0) (s7 'anchors)))
+       (cells? l) (0 <= fsub l "\xe2\x96\x80" 0)
+       m <>(<(filter (a \ fsub <a " img " 0 = 0) (s7 'anchors)))
        _ (K 'ww-pictures s7)
        ls (s7 'ls)
        _ (test (s7 'links 0 = l0 + 3) (s7 'nl = n0 + 3)
-               (0 <= (K 'wg-find) (ls m) "[dot]" 0) !(cells? (ls m))
+               (0 <= fsub (ls m) "[dot]" 0) !(cells? (ls m))
                (cells? (ls (m + 1))) (cells? (ls (m + 3))) !(cells? (ls (m + 4)))
-               (0 <= (K 'wg-find) (ls (m + 1)) "\e[38;2;0;0;200m\e[48;2;0;40;200m" 0)
-               (0 <= (K 'wg-find) (ls (s7 'links 0)) "after" 0)
+               (0 <= fsub (ls (m + 1)) "\e[38;2;0;0;200m\e[48;2;0;40;200m" 0)
+               (0 <= fsub (ls (s7 'links 0)) "after" 0)
                (s7 'imgs ("file://" + sroot + "/nope.png") = 'none))
        _ (pin s7 'w 30, K 'ww-fit s7)
        _ (test (#(filter cells? (s7 'ls)) = 3))
@@ -282,7 +282,7 @@
    (page port) (: p (srv port)
                   g (test-until (r \ (has (r 1) "cannot connect")) (_ \ (G ("https://127.0.0.1:" + show port + "/") 1)))
                   (reap p, g))
-   (has s x) (string? s && 0 <= (cite 'kore 'wg-find) s x 0)
+   (has s x) (string? s && 0 <= fsub s x 0)
    ((os? ?
        (: _ (setenv "SSL_CERT_FILE" (odir + "/root.pem"))
           a (page (test-free 0))

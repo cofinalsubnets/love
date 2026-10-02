@@ -75,13 +75,8 @@
     (: out (cc-block (cc-init key nonce ctr n))
        b (cask (n * 64))
        (wd j i) (peep (peep out j 0) i 0)
-       (go i)      ; i counts blocks
-        (n <= i ? b
-         (: (gw j) ; j counts words within block i
-             (15 < j ? 0
-                (le32! b (i * 64 + j * 4) (wd j i), gw (j + 1)))
-          (gw 0, go (i + 1))))
-       (go 0, string b))
+       ; block i, then its word j
+       (each ^n (i \ each ^16 (j \ le32! b (i * 64 + j * 4) (wd j i))), string b))
 
    ; encrypt or decrypt (they are the same act): xor `txt` with the keystream from
    ; block `ctr` on. answers a string of the same length.

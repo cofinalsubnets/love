@@ -52,7 +52,7 @@
    (kn i) (show (kinds i))                              ; kcharm ...
    ; lane nom -> Coq ctor. the table spells lanes as their C symbols (lvm_addn), and
    ; the prefix says nothing here, so it comes off: Laddn, not Llvm_addn.
-   (ln x) (show x @ t ("L" + ("lvm_" = snip t 0 4 ? (snip t 4 #t) t)))
+   (ln x) (show x @ t ("L" + (t @ ("lvm_" + r) r t)))
    lanes ((: (go rows acc)                              ; distinct lanes, appearance order
             (atom? rows ? (rev acc)
                (go >rows (foldl (\ a x (elem x a ? a (x . a))) acc <rows))))

@@ -18,7 +18,7 @@
    _ (mkdir bq-root 493)
    (bq-put p s) (: f (open p "w") _ (say f s) (close f))
    (bq-get p) (: f (open p "r") (hot? f ? (: s (slurp f) _ (close f) s) ""))
-   bq-find (cite 'kore 'wg-find)
+   bq-find fsub
    (bq-in s p) (0 <= bq-find s p 0)
    (bq-reap p) (: s (gather p) (? (two? s) <s (nom? s) -1 (: _ (rest 5) (bq-reap p))))
    (bq-chomp s) (: n #s (? (0 < n && s (n - 1) = 10) (snip s 0 (n - 1)) s))

@@ -866,11 +866,12 @@
 ;   {'f x}  (hash 'f x)    a map carrying key 'f -- the key an expression, the value a
 ;                          pattern, matched by subset (the one place a pattern is looser)
 ;   @(a b)  (tuple a b)    a tray of exactly two
-;   (pat & g)              a guard, left to right: pat must fit and g must hold, and it
-;                          chains: (c & 0 < c & c < 10). `&&` is the same tag.
-;   (? g pat)              the guard the other way round; (& ..) lowers to exactly this
+;   (pat && g)             a guard, left to right: pat must fit and g must hold, and it
+;                          chains: (c && 0 < c && c < 10)
+;   (? g pat)              the guard the other way round; (&& ..) lowers to exactly this
 ;   (? g)                  the guard alone -- fits anything g holds for
-;   (p1 | p2)              alternatives: either shape fits. `||` is the same tag
+;   (p1 || p2)             alternatives: either shape fits. the single & and | are no tags:
+;                          they are the bit operators, which a pattern may come to destructure
 ;   (v @ pat)              the as-pattern, haskell's v@pat, and the only and-pattern: both
 ;                          sides patterns, neither privileged. spaced -- glued v@pat is one
 ;                          nom, and glued @( is the tray above.
