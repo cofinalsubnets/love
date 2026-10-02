@@ -15,10 +15,11 @@
 # carries its own .image section (src/love/main.c), and a bake unpins it besides. the two below run
 # at one path because that is the question's shape, bake THIS binary twice.
 #
-# usage: bakerep.sh OUTDIR
+# usage: bakerep.sh OUTDIR PROFRAW  (the link the profile is taken of, the Makefile's prof_raw)
 set -u
 
 ho=$(cd "$1" && pwd) || exit 1
+praw=${2:?bakerep.sh OUTDIR PROFRAW}
 w=$(mktemp -d)
 trap 'rm -rf "$w"' EXIT
 fail() { echo "FAIL test_bakerep: $*" >&2; exit 1; }
@@ -57,7 +58,7 @@ cmp -s "$w/b3" "$w/b4" \
 # profile, so a profile taken now must be the one the tree holds. an eager build (HCC) and a
 # page other than 4 KiB profile differently, and are not asked
 ps=$(getconf PAGESIZE 2>/dev/null || echo 4096)
-prof() { sh src/tools/hotbake.sh -p "$ho/love.raw" "$w/$1" "$ho/.dist-cat.l" > "$w/hot.log" 2>&1; }
+prof() { sh src/tools/hotbake.sh -p "$praw" "$w/$1" "$ho/.dist-cat.l" > "$w/hot.log" 2>&1; }
 if [ "$ps" != 4096 ]; then
   echo "  (hot profile not compared: the page is $ps bytes)"
 elif ! prof p1; then

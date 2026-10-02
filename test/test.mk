@@ -840,9 +840,9 @@ $(eval $(call moon_pkg,bzip2,BZIP2SRC,host))
 # test_bakerep -- A bake is a function OF the tree. Seconds, and it rides the slow gate
 # because test_distboot proves the same law over the whole circle but is opt-in and
 # minutes long; a regression would otherwise wait for a release to surface.
-test_bakerep: host
+test_bakerep: host $(prof_raw)
 	@echo TEST test/gate/bakerep.sh
-	@$(gsh) test/gate/bakerep.sh $(ho)
+	@$(gsh) test/gate/bakerep.sh $(ho) $(prof_raw)
 test_distboot: dist
 	@echo TEST test/gate/distboot.sh
 	@sh test/gate/distboot.sh $(dist_source) $(ho)/love

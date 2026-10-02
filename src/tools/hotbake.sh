@@ -6,8 +6,10 @@
 # the profile is kept in the tree so the image is a function of the tree alone, not of the
 # page size or libc of the machine that bakes it. a change to anything baked moves the
 # heap under it: `make hotprof` writes it again, and test_bakerep fails while it is stale.
+# the RAW profiled is the Makefile's prof_raw, a link carrying the tree less hot.prof: the
+# profile never measures itself, so one pass is its fixed point.
 # profiling bakes RAW with page-sized stream chunks and runs the fixed workloads below on
-# that, each recording the chunks it woke (LOVE_TOUCH_OUT). both bakes are of the one tree,
+# that, each recording the chunks it woke (LOVE_TOUCH_OUT). both bakes are of the one crew,
 # so their heaps agree word for word. the workloads read only files made here, under an
 # empty environment, and the binary runs as `love` off PATH: a verb is found by the name it
 # is run as, so any other name touches other slots.
