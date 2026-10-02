@@ -793,5 +793,24 @@
          !(elem "pane_list" (map (\ t (t "function" "name")) (peep b3 "tools" ())))
          !(cr-in (peep b3 "messages" () @ m (two? m ? (m 0 "content") "")) "## your desk")))
 
+; --- the keys: a root, a box it signs, and neither made twice ------------------------------
+(: cr-k (cr-dir "keys" "")
+   kd (cr-k + "/.love/etc/bee")
+   rt (cr-run cr-k "" "--keygen root")
+   again (cr-run cr-k "" "--keygen root")
+   bad (cr-run cr-k "" "--keygen box 'a b'")
+   bx (cr-run cr-k "" "--keygen box tau")
+   card (cr-get (kd + "/box.card"))
+   _ (test (0 = <rt) (starts? (rt 1) "lineage ")
+           (1 = <again)
+           (1 = <bad)
+           (0 = <bx) (string? card)
+           (: t ((cite 'seal 'seal-check) card (snip (rt 1) 8 72) (clock 0 // 1000) ())
+              (&& (tablet? t) (t "name" = "tau") (t "kind" = "box")))
+           ; the keys are the owner's alone
+           (: s (stat (kd + "/root.key")) (&& (two? s) (s 2 & 511 = 384)))
+           (: s (stat (kd + "/box.key")) (&& (two? s) (s 2 & 511 = 384))))
+   ())
+
 (hark ["rm" "-rf" cr-root])
 (test_fin (), puts "bee: ok", putc 10, 0)

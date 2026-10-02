@@ -5,6 +5,7 @@
 ;   love bee [-y] [--plain] [prompt ..]      one prompt, the screen, or a > loop
 ;   love bee --list | --send NAME TEXT ..    the sessions, from a shell
 ;   love bee --avatar [NAME]                 the avatars, or wear one
+;   love bee --keygen root | box [NAME]      the lineage's root, or this box's key and card
 ;
 ; the settings are ~/.love/etc/bee.l's, each a form per line; ./.bee.l may set model,
 ; max-tokens, thinking, context and queue-watch over them:
@@ -331,7 +332,7 @@
      bee-restart ("at the next convenient point -- between tasks, never mid-gate -- "
                   + "resuming in the same directory, so .mcp.json loads the new bee.")
      bee-landed ("this landing changed bee: every live session restarts " + bee-restart)
-     bee-served "src/apps/bee.l src/apps/locks.l src/apps/saver.l src/apps/pom.l"   ; what bee runs
+     bee-served "src/apps/bee.l src/apps/locks.l src/apps/seal.l src/apps/saver.l src/apps/pom.l"   ; what bee runs
      (self-id _) (: s (string? bee-self ? (stat bee-self)) (two? s ? (show [(s 0) (s 3) (s 8)])))
      bee-selfw {'id (self-id 0) 'at (clock 0)}
      bee-selfwait (: w (getenv "BEE_SELF_WATCH") (string? w && 0 < #w ? (digits w) 30))
@@ -2325,6 +2326,36 @@
          _ (? bee-as? 0 (unsettle 0))
          r)
 
+     ; --- the keys (doc/bee.md, KEYS): ~/.love/etc/bee/ holds the lineage's root on the box
+     ; that made it, and this box's key with its card, the root's word for whose key it is ---
+     (sl nm) (cite 'seal nm)
+     bee-keys (: h (getenv "HOME") ((string? h ? h "/tmp") + "/.love/etc/bee"))
+     bee-hostname (: r (uread "/proc/sys/kernel/hostname") s (two? r ? <>r "")
+                 (snip s 0 (0 < #s && s (#s - 1) = 10 ? #s - 1 #s)))
+     ; a name a card can carry: no space, newline or @
+     (card-name? s) (0 < #s && all (c \ 32 < c && c != 64) (map s ^#s))
+     ; --keygen root | box [NAME] -> [1 what to print] | [0 why not]
+     (keygen ws)
+      (: _ (mkdirs bee-keys)
+         hx (cite 'tls 'hex)
+         rk (bee-keys + "/root.key")
+         (? (ws = ["root"])
+            (: k (sl 'seal-key 0) w (sl 'seal-keywrite rk k)
+               (? (string? w) [0 w] [1 ("lineage " + hx (k 1))]))
+            (two? ws && <ws = "box" && #ws <= 2)
+            (: nm (two? >ws ? <>ws bee-hostname)
+               k (sl 'seal-key 0)
+               (? !(card-name? nm) [0 ("not a box name: '" + nm + "'")]
+                  (: w (sl 'seal-keywrite (bee-keys + "/box.key") k) r (sl 'seal-keyread rk)
+                     now (clock 0 // 1000)
+                     c (? (two? r) (sl 'seal-card r [["lineage" (hx (r 1))] ["name" nm] ["kind" "box"] ["pub" (hx (k 1))]
+                                                     ["issued" (show now)] ["expires" (show (now + 365 * 86400))]]))
+                     (? (string? w) [0 w]
+                        !c [1 ("pub " + hx (k 1) + "\nno root here: " + nm + " waits to be enrolled")]
+                        (spit-file (bee-keys + "/box.card") c) [1 c]
+                        [0 "cannot write box.card"]))))
+            [0 "usage: love bee --keygen root | box [NAME]"]))
+
      ; --list, --send, --spawn and --stop speak to the hive from a shell and settle nowhere;
      ; a sender there is BEE_NAME, else cli- and the user
      (bee-cli as yes)
@@ -2362,6 +2393,7 @@
                     (? !<r (say err ("bee: " + r 1 + "\n"), 1)
                        (elem "--cmd" as) (: _ (puts (r 1 + "\n")) 0)
                        (: p (spawn ["sh" "-c" (r 1)]) (charm? p && 0 <= p ? (wait p) 127))))))
+          "--keygen" (: r (keygen >as) (? <r (: _ (puts (r 1 + (ends? (r 1) "\n" ? "" "\n"))) 0) (say err ("bee: " + r 1 + "\n"), 1)))
           "--stop" (? (#as < 2) (say err "usage: love bee --stop NAME\n", 2)
                       (: e (stop-bee <>as) (? (starts? e "stopped") (: _ (puts (e + "\n")) 0) (say err ("bee: " + e + "\n"), 1))))
           2))
@@ -2388,7 +2420,7 @@
          (? (elem "--mcp" as) (: _ (mcp-serve in out) 0)             ; a claude child's own server
             (two? as && <as = "--lock") (bee-cli as yes)              ; its command's words stay as given
             (two? as && elem <as ["-s" "--screensaver"]) (cite 'saver 'saver-cli >as)   ; a saver, no session
-            (two? words && elem <words ["--list" "--send" "--spawn" "--stop" "--avatar" "--resume"]) (bee-cli words yes)
+            (two? words && elem <words ["--list" "--send" "--spawn" "--stop" "--avatar" "--resume" "--keygen"]) (bee-cli words yes)
             ; the api backend wants its endpoint, model and key; claude brings its own. a stage
             ; answers why as a string: a harbour shows it, stderr would land on its glass
             (: why (? (!bee-cc? && atom? bee-at) ("cannot read the url " + bee-url)
