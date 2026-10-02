@@ -25,6 +25,11 @@ this doc is the interface over it: *what you type*, not *what the objects are*.
 
 `-C DIR` before any verb runs it in the nest at DIR.
 
+A hunk is `(path old new)`, each side the path's state: absent, its blob's hash, or the hash
+with an `x` after it when the owner's execute bit is set. So a chmod is a change like an edit,
+and lands as the bit: x wherever r, or no x at all. Sides merge three ways, the mode on its
+own, so one nest's chmod and the other's edit both survive, a binary file's too.
+
 `sync` is the star. Making it the single verb for clone / pull / push /
 multi-machine-union is what realizes "distribution == cloning" at the CLI: whether the other
 end is a peer machine or a release CDN, the operation is the same — *exchange patch sets*.
