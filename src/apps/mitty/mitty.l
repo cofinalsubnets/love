@@ -21,7 +21,7 @@
 (module '(mitty mitty mitty-stage harbour hberth hsail hopen hopen-stage moor waitfor
           hbox hmas hpid hstage hpty? hpane hsoil hrelay hframe hmoor hsplit hsteer hshut
           hfeed hkey oars hsize htide htick hswim hquick? hcopy hpaste hclip-text hscreen-text
-          hseq hmouse hpeer hpasted hdesks hgo hcycle hfresh hb64 hsub? hswap hpicker inle-launch inle-switch inle-hive inle-queues inle-barx inle-saver hwake hidle hidle? hsleep hin hout hlive? hgreet hbye hattach hdetach inle-harbour inle-here inle-serve inle-attach inle-sock inle-dir inle-ls inle-size hname hname-of hlr hbarat hdrag hmice hbarline hbardesk hbartick hnote hhands inle-bee inle-main)
+          hseq hmouse hpeer hpasted hdesks hgo hcycle hfresh hb64 hsub? hswap hpicker inle-launch inle-switch inle-hive inle-queues inle-barx inle-saver hwake hidle hidle? hsleep hquiet? hin hout hlive? hgreet hbye hattach hdetach inle-harbour inle-here inle-serve inle-attach inle-sock inle-dir inle-ls inle-size hname hname-of hlr hbarat hdrag hmice hbarline hbardesk hbartick hnote hhands inle-bee inle-main)
 (borrow ((cite 'wharf) @ m (m ? m "src/apps/mitty/wharf.l")))   ; the baked module, else the tree's file
 (borrow ((cite 'limn) @ m (m ? m "src/apps/mitty/limn.l")))
 (borrow 'posix)
@@ -476,14 +476,24 @@
  ; --- idle: 'saver is a watch of src/apps/saver.l's, which has the glass after its minutes
  ; without a key; the harbour's own frames wait under it, and are laid again whole after ---
  ; a key: 1 when it woke a saver, which then is owed a whole frame
- (hwake hb) (: w (peep hb 'saver ()) k (cite 'saver 'saver-key)
+ (hwake hb) (: w (peep hb 'saver ()) k (cite 'saver 'saver-key) _ (pin hb 'forced 0)
                (? (tablet? w && k && k w (clock 0)) (: _ (hsoil hb) 1) 0))
- ; the saver's escapes for now, "" when it has none; and whether it has the glass
+ ; quiet: every pane on the shown face a bare shell, one at its prompt with no job in
+ ; front -- its terminal's group its own -- and no face at all quiet too. only then does
+ ; the saver's clock run; anything else on the glass holds it off, as a key would
+ hshells ["lush" "sh" "bash" "zsh" "dash" "ksh" "mksh" "fish" "tcsh"]
+ (hbare? p) (&& (two? p) (hpty? p) (elem (hname p) hshells)
+                (: g (ttypg (hmas p)) (charm? g && g = hpid p)))
+ (hquiet? hb) (all (id \ hbare? (hpane hb id)) (wharf-berths (hb 'plan)))
+ ; the saver's escapes for now, "" when it has none; and whether it has the glass. C-a z
+ ; ('forced) brings it whatever the panes hold
  (hidle hb) (: w (peep hb 'saver ()) t (cite 'saver 'saver-tick)
-               (? (tablet? w && t) (t w (clock 0) (hb 'rows) (hb 'cols) 0) ""))
+               (? !(tablet? w && t) ""
+                  (: _ (? ((cite 'saver 'saver-on?) w || peep hb 'forced 0 || hquiet? hb) 0 (pin w 'last (clock 0)))
+                     (t w (clock 0) (hb 'rows) (hb 'cols) 0))))
  (hidle? hb) (: w (peep hb 'saver ()) (tablet? w && (cite 'saver 'saver-on?) w))
  ; at once, the clock wound past its minutes: C-a z
- (hsleep hb) (: w (peep hb 'saver ()) (? (tablet? w && 0 < w 'idle) (pin w 'last (clock 0 - w 'idle)) 0))
+ (hsleep hb) (: w (peep hb 'saver ()) (? (tablet? w && 0 < w 'idle) (: _ (pin hb 'forced 1) (pin w 'last (clock 0 - w 'idle))) 0))
 
  ; --- the tide: mirror the outer terminal's size onto the whole wharf -------
  ; the floor is not decoration, and it lives here so both callers share it: a

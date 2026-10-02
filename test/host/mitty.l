@@ -556,6 +556,23 @@
          (() = (cite 'saver 'saver-watch "nosuch" 5) 'on)
          (0 = hsleep (pins (harbour 4 10) 'saver ((cite 'saver 'saver-watch) "nosuch" 5)))))
 
+; --- quiet: the saver's clock runs only while every pane on the shown face is a bare shell, at its
+; prompt with no job in front, and with no pane at all; a stage or a program holds it off
+(: (wound hb) (: w ((cite 'saver 'saver-watch) "life" 5) _ (pin hb 'saver w) _ (pin w 'last (clock 0 - 3600000))
+                 _ (hidle hb) (hidle? hb))
+   (closed hb) (map (id \ hshut hb id) (wharf-berths (hb 'plan)))
+   e (harbour 10 40)
+   st (harbour 10 40) _ (hberth st 'stack 50 (hopen-stage (mitty-stage (\ w h "x") (\ c 0) (\ _ 0)) 1 1))
+   ca (harbour 10 40) _ (hberth ca 'stack 50 (hopen ["cat"] 10 40))
+   sh (harbour 10 40) _ (hberth sh 'stack 50 (hopen ["sh"] 10 40))
+   (settled n) (? (hquiet? sh || n <= 0) (hquiet? sh) (: _ (rest 50) (settled (n - 1))))
+   q3 (settled 40)
+   r (: s1 (hquiet? e) s2 (hquiet? st) s3 (hquiet? ca) [s1 s2 s3])
+   on (map (h \ (wound h ? 1 0)) [e st ca sh])
+   _ (map closed [st ca sh])
+   (test (r 0) !(r 1) !(r 2) q3
+         (on = [1 0 0 1])))
+
 ; --- the server: a harbour on a socket outlives its clients. a client says its size, types,
 ; and leaves; the next sees what the first left on the screen; the last pane's exit ends
 ; the server, its socket with it ---
