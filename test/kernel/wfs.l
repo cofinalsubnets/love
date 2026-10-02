@@ -94,8 +94,9 @@
    ('badarg = chmod 7 384)
    ('enoent = chmod (d + "/ghost") 384)
    ; -- the environment: a tablet behind the host's three doors. the seat carries
-   ; HOME from the boot, one row before anything is set --
+   ; HOME and COLORTERM from the boot, two rows before anything is set --
    ("/home" = getenv "HOME")
+   ("truecolor" = getenv "COLORTERM")
    (getenv "WFS" = ())                      ; unset is the real ()
    !(setenv "WFS" "1")
    ("1" = getenv "WFS")
@@ -103,10 +104,10 @@
    ("2" = getenv "WFS")
    (elem "WFS=2" (environ 0))
    !(setenv "WFS2" "x")
-   (3 = #(environ 0))
+   (4 = #(environ 0))
    !(setenv "WFS2" ())                  ; a non-string value unsets
    (getenv "WFS2" = ())
-   (2 = #(environ 0))
+   (3 = #(environ 0))
    ('badarg = setenv 7 "x")
    (getenv 7 = ())
    ; -- which kernel this is: the name a hosted seat probes for, said outright here --

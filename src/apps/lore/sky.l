@@ -11,15 +11,18 @@
 ; a scene's time is local seconds 'sim and the summer offset 'dst; its rays are trays of
 ; unit directions [east up north]. the weather is a tablet, (sky-weather cover style):
 ; cover 0 to 3, style 'smooth or 'pixel
-(module (sky sky-sun sky-light sky-maps sky-weather sky-cover sky-cloud sky-colour sky-tone
+(module (sky sky-sun sky-body sky-light sky-maps sky-weather sky-cover sky-cloud sky-colour sky-tone
          sky-covers sky-styles sky-says bil cloud-n star-n day-secs)
 (borrow 'view)
 (borrow 'vec)
 (:
  (day-secs s) (s - 86400.0 * floor (s / 86400.0))
  ; the sun as [east up north], a unit vector, by solar time and the day of the year
- (sky-sun sim dst lat) (: s (sim - dst) hr (day-secs s / 3600.0)
-   doy (s / 86400.0 - 10957.0 - 365.2422 * floor ((s / 86400.0 - 10957.0) / 365.2422))
+ (sky-sun sim dst lat) (sky-body (sim - dst) lat 0.0 0.0)
+ ; ..and a body on the sun's own track, its hour dh hours on from the sun's and its day of
+ ; the year dd days: the moon, a phase p round, is the sun's hour -24p and its day +365p
+ (sky-body s lat dh dd) (: hr (day-secs s / 3600.0 + dh)
+   doy (s / 86400.0 - 10957.0 - 365.2422 * floor ((s / 86400.0 - 10957.0) / 365.2422) + dd)
    dec (-0.4091 * cos (2.0 * pi * (doy + 10.0) / 365.2422))
    ha ((hr - 12.0) * pi / 12.0)
    [(0.0 - cos dec * sin ha)
