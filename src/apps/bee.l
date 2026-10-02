@@ -37,7 +37,7 @@
      tsay (cite 'tls 'tls-say)
      hear (cite 'tls 'tls-hear)
      topen (cite 'tls 'tls-open)                             ; () on a binary that cannot verify
-     find (cite 'kore 'wg-find)
+     find fsub
      header (cite 'kore 'wg-header)
      digits (cite 'kore 'wg-digits)
 
@@ -871,8 +871,9 @@
      (q-on? g br) (0 <= find (lush-out ("git merge-base --is-ancestor " + sq g + " " + sq br + " && echo yes")) "yes" 0)
      ; the working tree that has branch br checked out, "" when none does
      (q-checkout br)
-      (: (go ls wt) (? (atom? ls) "" (starts? <ls "worktree ") (go >ls (snip <ls 9 #<ls))
-                       (<ls = ("branch refs/heads/" + br)) wt (go >ls wt))
+      (: (go ls wt) (atom? ls ? "" (<ls @ ("worktree " + w) (go >ls w)
+                                          (? (<ls = ("branch refs/heads/" + br))) wt
+                                          (go >ls wt)))
          (go (lines (lush-out "git worktree list --porcelain")) ""))
      (q-joins ss) (? (two? ss) (foldl (\ a s (a + ", " + s)) <ss >ss) "")
      (q-uniq ss) (foldl (\ a s (elem s a ? a (a + [s]))) () ss)

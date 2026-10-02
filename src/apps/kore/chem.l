@@ -45,8 +45,7 @@
    (ch-upper? c) (65 <= c <= 90)
    (ch-chars w) (map (i \ w i) ^#w)
    (ch-blank? c) (c = 32 || c = 9)
-   (ch-starts? l w) (#w <= #l && snip l 0 #w = w)
-   (ch-macro? l w) (ch-starts? l w && (#l = #w || ch-blank? (l #w)))
+   (ch-macro? l w) (starts? l w && (#l = #w || ch-blank? (l #w)))
    ; words split on blanks
    (ch-words s)
     (: n #s
@@ -158,7 +157,7 @@
            (<l = "put" && two? >l && two? >>l && >>l 0 = "at" && two? >>>l)
             (go >>>>l (pin r 'puts ([(ch-int (>>>l 0)) <>l] . r 'puts)))
            (<l = "double")
-            (: (pairs m acc) (two? m && 0 <= wg-find <m "," 0 ? (pairs >m (<m . acc)) [m (rev acc)])
+            (: (pairs m acc) (two? m && 0 <= fsub <m "," 0 ? (pairs >m (<m . acc)) [m (rev acc)])
                pr (pairs >l ())
                (go <pr (pin r 'dbl (r 'dbl + pr 1))))
            (pin r 'extra (cats (map (w \ " " + w) l))))
@@ -210,7 +209,7 @@
        w0 (two? ws ? <ws "")
        (? (atom? ws) 0
           (w0 0 = 35) 0
-          (w0 = "pic") (wg-find l "pic" 0 @ i
+          (w0 = "pic") (fsub l "pic" 0 @ i
                         (ch-ol s (ch-trim (snip l (i + 3) #l)),
                          pin s 'last 'other))
           (elem w0 ch-settings) (ch-set s w0 (<(rev ws)))
@@ -241,8 +240,8 @@
                           go >l "" 0))
        (go cs (lab = () ? "" (lab + ": ")) 1))
    ; the rings: ring, benzene and flatring six-sided, ringN N-sided by its last figure, 1 to 8
-   (ch-ring? w) (elem w ["benzene" "flatring"] || ch-starts? w "ring")
-   (ch-ring-sides w) ((ch-starts? w "ring" && 4 < #w ? (w (#w - 1) - 48) 6) @ d (1 <= d <= 8 ? d 6))
+   (ch-ring? w) (elem w ["benzene" "flatring"] || starts? w "ring")
+   (ch-ring-sides w) ((starts? w "ring" && 4 < #w ? (w (#w - 1) - 48) 6) @ d (1 <= d <= 8 ? d 6))
    (ch-bond? ws) (<ws @ w (w = "bond" || (ch-bond-kinds w != () && two? >ws && <>ws = "bond")))
    (ch-thing s pre ws line lab)
     (: w <ws kind (? (w = ";") (<>ws = "BP" ? 'bp 'moiety) (ch-bond? ws) 'bond
@@ -283,7 +282,7 @@
         (atom? l ? 0
          (: x <l t (ch-trim x) ws (ch-words t)
             (? (mode = 'chem)
-                (? (ch-starts? t ".cend") (ch-ol s ".PE", go >l 'text)
+                (? (starts? t ".cend") (ch-ol s ".PE", go >l 'text)
                    (troff? t) (ch-ol s t, go >l mode)
                    (ch-line s x, go >l mode))
                (mode = 'begin)
@@ -308,7 +307,7 @@
    (ch-run as sin)
     (: s {'o (jug 0) 'names {} 'begun 0 'last 'start 'dir 90 'ring ()}
        _ (ch-size s 1.0)
-       fs (filter (a \ !(ch-starts? a "-") || a = "-") as)
+       fs (filter (a \ !(starts? a "-") || a = "-") as)
        (go l) (atom? l ? 0
                (: f <l
                   t (f = "-" ? (string? sin ? sin (slurp in)) (uread f @ r (two? r ? <>r)))

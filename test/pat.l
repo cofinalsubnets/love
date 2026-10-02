@@ -161,9 +161,16 @@
  (0 = (@ @(1 1) @(a (? (1 < b) b)) b 0))
  ('(3 4) = (@ '(1 2 3 4) (? (a < b) ([a b] + t)) t 'short))     ; ..a split included
  ('short = (@ '(1 2 3 4) (? (b < a) ([a b] + t)) t 'short))
- ; `&` and `|` are bitwise, never tags, so either one in a pattern is an untagged form and
- ; falls to the lax shape -- it fits nothing here, and says so silently. this is the pin.
+ ; `&` and `|` are no tags: they are the bit operators, which a pattern may come to
+ ; destructure. these say only that neither is the guard or the alternative
  ('n = (@ 5 (3 | 5) 'y 'n))       ('n = (@ 5 (c & 0 < c) 'y 'n))
+ ; ..and where it bites, a string split: the guard is a piece's &&, the choice is ||
+ ('g = (@ "-fx" ("-f" + (v && 0 < #v)) 'g 'n))  ('n = (@ "-f" ("-f" + (v && 0 < #v)) 'g 'n))
+ ('g = (@ "-fx" (("-f" + v) && 0 < #v) 'g 'n))
+ ('g != (@ "-fx" ("-f" + v & 0 < #v) 'g 'n))
+ ('alt = (@ "-e" ("-e" || "--expression") 'alt 'n))
+ ('alt = (@ "--expression" ("-e" || "--expression") 'alt 'n))
+ ('alt != (@ "-e" ("-e" | "--expression") 'alt 'n))
  ; --- alternatives: (p1 || p2) fits when either does.
  ('binder = (@ 'sig ('lam || 'pi || 'sig) 'binder 'other))
  ('other = (@ 'app ('lam || 'pi || 'sig) 'binder 'other))
