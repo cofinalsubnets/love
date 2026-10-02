@@ -106,7 +106,7 @@
         _ (say p "(api openai)\n(url \"http://127.0.0.1:9/v1/chat/completions\")\n(model mock)\n(screensaver pom)\n(screensaver-idle 0.02)\n")
         (close p))
    md (tether ["sh" "-c" ("cd '" + dir + "' && HOME='" + dir + "' BEE_HIVE='" + dir + "/hive' BEE_NAME=svtest PWD='" + dir
-                         + "' exec '" + sv-love + "' bee")])
+                         + "' exec '" + sv-love + "' bee --chat")])
    m >md
    _ (settty m 24 80)
    box {'s ""}
