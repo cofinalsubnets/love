@@ -801,6 +801,12 @@
    bad (cr-run cr-k "" "--keygen box 'a b'")
    bx (cr-run cr-k "" "--keygen box tau")
    card (cr-get (kd + "/box.card"))
+   ; with no name the box is named for its host
+   cr-k2 (cr-dir "keys2" "")
+   _ (cr-run cr-k2 "" "--keygen root")
+   bh (cr-run cr-k2 "" "--keygen box")
+   host (: u (uname 0) (u 1))
+   _ (test (0 = <bh) (cr-in (bh 1) ("\nname " + host + "\n")))
    _ (test (0 = <rt) (starts? (rt 1) "lineage ")
            (1 = <again)
            (1 = <bad)

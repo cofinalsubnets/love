@@ -2330,8 +2330,7 @@
      ; that made it, and this box's key with its card, the root's word for whose key it is ---
      (sl nm) (cite 'seals nm)
      bee-keys (: h (getenv "HOME") ((string? h ? h "/tmp") + "/.love/etc/bee"))
-     bee-hostname (: r (uread "/proc/sys/kernel/hostname") s (two? r ? <>r "")
-                 (snip s 0 (0 < #s && s (#s - 1) = 10 ? #s - 1 #s)))
+     bee-hostname (: u (uname 0) (two? u && string? (u 1) ? (u 1) ""))
      ; a name a card can carry: no space, newline or @
      (card-name? s) (0 < #s && all (c \ 32 < c && c != 64) (map s ^#s))
      ; --keygen root | box [NAME] -> [1 what to print] | [0 why not]
