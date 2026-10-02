@@ -75,9 +75,11 @@ const reservation = (r) => Math.min(pixel_cap,
 // a page may also ASK for fewer pixels than its screen has (`ratio`): halving the ratio
 // doubles the zoom to match, which is the same grid, and the frame the machine swizzles
 // each time is a quarter the bytes. on a phone that is the difference between a floor
-// that repaints and a horn that keeps up
-export function glass(canvas, cols = 80, ratio = 0) {
-  const n = cols > 0 ? cols : 80;             // a query string's nonsense falls back, never NaN
+// that repaints and a horn that keeps up. the default cap is wide enough that a desktop
+// monitor's box (up to 1920) opens at zoom 2
+export const cols_n = 120;
+export function glass(canvas, cols = cols_n, ratio = 0) {
+  const n = cols > 0 ? cols : cols_n;            // a query string's nonsense falls back, never NaN
   const box = canvas.getBoundingClientRect();
   // the floor is a floor and not the column target: a narrow screen gets FEWER columns,
   // never a canvas wider than the box it was laid in
@@ -433,7 +435,7 @@ export async function loveMachine(root) {
   // the ratio is one: the console's glyphs are integer-scaled bitmaps, so the compositor's
   // doubling to the screen's density is the same grid, and the machine's thread swizzles a
   // box's worth of pixels a frame instead of the screen's. `ratio=0` asks for the device's
-  const cols = Number(at('cols', 80));
+  const cols = Number(at('cols', cols_n));
   const ratio = Number(at('ratio', 1));
   const fb = { ...glass(canvas, cols, ratio), post: true };
   // A TAP IS A PLACE: the pointer goes to the console as the cell it is over, and the
