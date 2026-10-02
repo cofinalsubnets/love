@@ -10,18 +10,9 @@
 (borrow 'meadow)                        ; the field in three dimensions
 (:
  esc (string 27)
- ; the tune as a score, read as grass reads its own: a bar to the line, in B flat. gwen's
- ; melody, picked out on synth's row as 6 8 - 4 3 / 3 6 0 8 6, is the first four bars;
- ; the last four answer it, the climb going on to d, the sigh an octave up, the walk home
- score99 '("key Bb Eb"
-           "[Bb] F4 .5 G4 .5 Bb4 3"
-           "[Gm] Eb4 1.5 D4 2.5"
-           "[Dm] D4 .5 F4 .5 A4 3"
-           "[F] G4 1.5 F4 2.5"
-           "[Bb] F4 .5 G4 .5 Bb4 1 C5 .5 D5 1.5"
-           "[Gm] Eb5 1.5 D5 2.5"
-           "[F] D5 .5 C5 .5 Bb4 1 A4 2"
-           "[Bb] G4 1 A4 1 Bb4 2")
+ ; the tune as a score, read as grass reads its own: gwen's bar, picked out on synth's row
+ ; as 3 6 0 8 6, on the music box alone
+ score99 '("D4 .5 F4 .5 A4 1 G4 1 F4 1")
  ttl99 "leaves of grass simulator 1999"
  rows99 '(""
           "hjkl or arrows keys to dance"
@@ -39,9 +30,8 @@
    mv (g 'mv @ m (tablet? m ? m (lay g)))
    (esc + "[H" + esc + "[0m" + fit (grass-hud g) c + "\r\n" + meadow-frame mv g (meadow-sky g) (mv 'deep)
     + "\r\n" + esc + "[0m" + fit (grass-bar g) (c - 1) + esc + "[K"))
- ; ..painted whole every tick: no row of it stands still for long; the song sung through the
- ; tuner
- grass99-look {'ttl ttl99 'rows rows99 'frame grass99-frame 'paint grass99-frame 'voice "cher"}
+ ; ..painted whole every tick: no row of it stands still for long
+ grass99-look {'ttl ttl99 'rows rows99 'frame grass99-frame 'paint grass99-frame}
  grass99-usage "usage: love lore grass99   (dance: arrows, hjkl, or tap about your blade; q or esc leaves)"
  (grass99-main as) (as @ () (grass-run grass99-look score99)
                          (say err ("grass99: " + grass99-usage + "\n"), flush err, 2))

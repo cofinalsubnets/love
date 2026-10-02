@@ -12,7 +12,7 @@
 ; 'line}; score-tune makes harp's pattern of them at a tempo, on the music box; score-check
 ; prints what is wrong, or with all every bar. `love harp -s FILE` plays one and
 ; `love harp --check FILE` reads it back. laws in test/host/score.l.
-(module (score score-parse score-tune score-voiced score-check score-file score-lines score-bar
+(module (score score-parse score-tune score-check score-file score-lines score-bar
          score-strings score-words score-note score-num score-pc score-chord score-key
          score-beats)
 (borrow 'harp)
@@ -103,13 +103,11 @@
 
  ; the score as harp's pattern at cps bars a second: the melody on the music box, a
  ; note's ring a little past its written length, the bass a bar long under it
- (score-tune bs cps) (score-voiced bs cps "box")
- ; ..and with the melody on a voice of its own, the bass still on the box
- (score-voiced bs cps vo) (:
+ (score-tune bs cps) (:
    (secs b n) (n * 1.25 / (cps * b 'beats * 4.0))    ; n sixteenths of this bar, in seconds
    mel (slowcat (map (b \ pset (pset (note (mini (b 'notes)))
                                     (legato (pmap (n \ secs b n) (mini (b 'legs)))))
-                              (hit (pure vo)))
+                              (hit (pure "box")))
                      bs))
    low (slowcat (map (b \ (b 'bass = () ? (mini "~")
                              (pset (pset (pset (note (pure (b 'bass))) (legato (pure (1.0 / cps))))

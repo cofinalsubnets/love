@@ -70,30 +70,13 @@
    ; a wind chime's tube, two octaves up: inharmonic partials over a long ring
    (i-chime t ix ph) (ph * tau * 4.0 @ w
                        (sin w + 0.5 * sin (w * 2.76) * exp (t * -2.0) + 0.25 * sin (w * 5.4) * exp (t * -4.0)))
-   ; a voice under hard pitch correction, the sound of 1998: each note scoops up into its
-   ; pitch in whole semitone stairs, cher-steps a stair, then holds dead flat. the stairs'
-   ; phase is a geometric series, so it is closed form as every shape here is; the note's
-   ; own pitch is what the held phase says of it, ph over t. the throat is an "ah": the
-   ; harmonics weighed by its three formants, a little brighter than a voice
-   cher-steps 3 cher-stair 0.035
-   (formant hz) (: (pk c bw) (1.0 / (1.0 + sq ((hz - c) / bw)))
-                  (pk 730.0 110.0 + 0.6 * pk 1090.0 130.0 + 0.4 * pk 2440.0 200.0 + 0.08))
-   (sq x) (x * x)
-   (i-cher t ix ph) (: f (ph / max t 1e-6) s cher-steps dt cher-stair
-                       i (min (floor (t / dt)) s)
-                       up (exp (i * ln2-12)) b0 (exp (0.0 - s * ln2-12))
-                       ps (f * b0 * (dt * (up - 1.0) / (exp ln2-12 - 1.0) + up * (t - i * dt)))
-                       w (ps * tau)
-                       (go h acc) (h > 10 ? acc (go (h + 1) (acc + formant (h * f * b0 * up) * sin (w * h) / sqrt h)))
-                       (0.45 * go 1 0.0))
    ; name -> [default-duration pitched? shape]
    (instr nm) (nm @
     "bd"  [0.55 0 i-bd]   "sn"  [0.35 0 i-sn]   "hh"  [0.09 0 i-hh]
     "oh"  [0.35 0 i-oh]   "cp"  [0.35 0 i-cp]   "rim" [0.06 0 i-rim]
     "tom" [0.45 0 i-tom]  "sin" [0.30 1 i-sin]  "saw" [0.30 1 i-saw] 
     "sqr" [0.30 1 i-sqr]
-    "tri" [0.30 1 i-tri]  "box" [1.20 1 i-box]  "chime" [3.0 1 i-chime]
-    "cher" [0.60 1 i-cher])
+    "tri" [0.30 1 i-tri]  "box" [1.20 1 i-box]  "chime" [3.0 1 i-chime])
 
    ; --- an event's value -> a voice ------------------------------------------
    ; the value is a tablet from the control words, a bare string from `hit`, or a

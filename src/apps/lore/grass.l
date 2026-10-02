@@ -17,7 +17,7 @@
 ; run: love lore grass
 (module (grass grass-run grass-look grass-main grass-new grass-key grass-tick grass-frame grass-hud
          grass-bar grass-rows grass-paint grass-hour grass-day grass-temp grass-wind-x grass-lay grass-clouds
-         grass-tune grass-song-new grass-song-sung grass-song-feed grass-song-cue grass-final grass-tap score song-chunk
+         grass-tune grass-song-new grass-song-feed grass-song-cue grass-final grass-tap score song-chunk
          daylight sky-pen compass fx1 week-hours dh fps dance-cost)
 (borrow 'rove)
 (borrow 'harp)                          ; the cycle algebra the song is scheduled by
@@ -384,11 +384,9 @@
  ; the song's state over a horn h: the tune and how many bars it runs, the pitches the
  ; chimes may ring, a die of its own. mode is 'chimes or 'song; a cue starts the song at
  ; the write head, and when its last bar is scheduled the chimes come back under it
- (grass-song-new bs h st) (grass-song-sung bs h st "box")     ; st is a wheel: a bare number rolls nothing
- ; ..the melody on the voice vo
- (grass-song-sung bs h st vo)
+ (grass-song-new bs h st)                  ; st is a wheel: a bare number rolls nothing
   (foldl (acc \ b \ foldl (a \ p \ (elem p a ? a (p . a))) acc (b 'pitches)) () bs @ ps
-   {'tune (score-voiced bs song-cps vo) 'bars #bs 'set (sort ps) 'sb {st} 'h h
+   {'tune (score-tune bs song-cps) 'bars #bs 'set (sort ps) 'sb {st} 'h h
     'fpos 0 'cyc 0 'next 0 'vs () 'mode 'chimes 'chimes 1 'cap chime-cap})
  (grass-song-cue s) (pins s 'mode 'song 'cyc 0 'next (s 'fpos))
  ; chimes a second: a few in a calm, many in a blow
@@ -453,7 +451,7 @@
    g (grass-new r c (wheel (clock 0)))
    bs (filter (b \ !(b 'err)) (score-parse ls))
    hn (bs ? (horn song-rate 2 @ h (nom? h ? () h)))
-   sng (hn ? (grass-song-sung bs hn (wheel (clock 0)) (peep lk 'voice "box")))
+   sng (hn ? (grass-song-new bs hn (wheel (clock 0))))
    ; THE QUEUE MUST OUTLAST THE GAP BETWEEN FEEDS, and on a slow seat that gap is one
    ; frame's painting: a fifth of a second is a desktop's answer and a phone's silence.
    ; so the gap is measured, held at its recent worst -- halving every two seconds, by
