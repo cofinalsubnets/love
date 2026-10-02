@@ -15,7 +15,7 @@
 ; the song is harp's, a music box, out the horn when the seat has one.
 ;
 ; run: love lore grass
-(module (grass grass-run grass-main grass-new grass-key grass-tick grass-frame grass-hud
+(module (grass grass-run grass-look grass-main grass-new grass-key grass-tick grass-frame grass-hud
          grass-bar grass-rows grass-paint grass-hour grass-day grass-temp grass-wind-x grass-lay grass-clouds
          grass-tune grass-song-new grass-song-feed grass-song-cue grass-final grass-tap score song-chunk
          daylight sky-pen compass fx1 week-hours dh fps dance-cost)
@@ -436,13 +436,16 @@
  ; either way, since a beat is what feeds the horn. deaf by the clock and not by beats:
  ; a card takes its first chunks at once, so the beats say nothing about the time
  sign-deaf 500                                          ; ms a sign is deaf for
- (sign g ttl rows beat) (: _ (say out (sign-over (grass-frame g) ttl rows 0 (g 'r) (g 'c)), flush out)
+ (sign lk g ttl rows beat) (: _ (say out (sign-over (lk 'frame g) ttl rows 0 (g 'r) (g 'c)), flush out)
                            t0 (clock 0)
                            (deaf _) (clock t0 < sign-deaf ? (drain-keys (), beat (), deaf ()))
                            (wait _) (cue? 0 ? (edkey in) (beat (), wait ()))
                            (deaf (),
                             (wait (), pin g 'last ())))     ; the box stood over the screen: the next paint is whole
- (grass-week ls) (: ws (tty 1)
+ ; ..lk the look: the title and the opening's rows, the frame a sign stands over, and the
+ ; paint a tick says -- the flat field's, or a sequel's
+ grass-look {'ttl open-ttl 'rows open-rows 'frame grass-frame 'paint grass-paint}
+ (grass-week lk ls) (: ws (tty 1)
    r (two? ws && 7 < <ws ? (<ws - 1) 23)
    c (two? ws && 19 < <>ws ? <>ws 80)
    g (grass-new r c (wheel (clock 0)))
@@ -471,30 +474,30 @@
                                                        (grass-key g k (clock 0)))),
             grass-tick g,
             cue (),
-            late < tick-ms ? (say out (grass-paint g), flush out),
+            late < tick-ms ? (say out (lk 'paint g), flush out),
             swim (n + 1)))))
    (say out (esc + "[?25l"),
-    sign g open-ttl open-rows beat,
+    sign lk g (lk 'ttl) (lk 'rows) beat,
     pin g 't0 (clock 0),
     swim 0,
     g 'over = 'done ?
       (pin g 'cue 1, cue (),
-       sign g end-ttl ["" ("final score   " + show (g 'pts))
+       sign lk g end-ttl ["" ("final score   " + show (g 'pts))
                        ("final height  " + fx1 (g 'me 'ht) + " in") "" "-- any key --"] beat),
     hn ? (flush hn, close hn),
     g))
  ; the screen raised and put back here; a terminal is asked for its taps too (xterm's
  ; SGR mouse reports, which cli's edkey reads as the key -12)
- (grass-run ls) (: _ (raw 1)
+ (grass-run lk ls) (: _ (raw 1)
                   _ (say out (esc + "[?1049h" + esc + "[2J" + esc + "[?1000h" + esc + "[?1006h"))
-                  g (grass-week ls)
+                  g (grass-week lk ls)
                   (say out (esc + "[?1006l" + esc + "[?1000l" + esc + "[0m" + esc + "[?25h" + esc + "[?1049l"),
                    flush out,
                    drain-keys (),
                    raw 0,
                    (puts (grass-final g + "\n"), 0)))
  grass-usage "usage: love lore grass   (dance: arrows, hjkl, or tap about your blade; q or esc leaves)"
- (grass-main as) (as @ () (grass-run score)
+ (grass-main as) (as @ () (grass-run grass-look score)
                        (say err ("grass: " + grass-usage + "\n"), flush err, 2))
  _ ((cite 'lore 'lore-enlist) 'grass (udoor 'grass grass-main grass-usage 1 1)))
 ) ; module grass
