@@ -40,9 +40,8 @@
          (<ls @ l
             (? (#l = 0) (fold >ls acc)
                (ws? (l 0)) (fold >ls (acc @ ([n v] . r) ([n (v + " " + strip l)] . r) acc))
-               (findsub l ":" @ k
-                  (? (k < 1 || has? (snip l 0 k) " ") (fold >ls acc)
-                     (fold >ls ([(lower (snip l 0 k)) (strip (snip l (k + 1) #l))] . acc)))))))
+               (l @ ((k && 0 < #k && !(has? k " ")) + ":" + v) (fold >ls ([(lower k) (strip v)] . acc))
+                  (fold >ls acc)))))
      (fold (lines h) ()))
  (mime-get hs n) (: (go l) (l @ ([k v] . r) (k = n ? v (go r)) "") (go hs))
 
@@ -92,15 +91,10 @@
 
  ; --- charsets: latin-1 and windows-1252 widen to utf-8, the rest pass as they are -------
  (mime-latin s w?)
-  (: j (jug 0) n #s
-     (go i)
-      (n <= i ? (slurp j)
-         (s i @ c
-            ((? (c < 128) (put j c)
-                (w? && c < 160 && 0 < mime-1252 (c - 128)) (say j (utf8 (mime-1252 (c - 128))))
-                (say j (utf8 c))),
-             go (i + 1))))
-     (go 0))
+  (jug 0 @ j (each ^#s (i \ (s i @ c (? (c < 128) (put j c)
+                                        (w? && c < 160 && 0 < mime-1252 (c - 128)) (say j (utf8 (mime-1252 (c - 128))))
+                                        (say j (utf8 c))))),
+              slurp j))
  (mime-ascii? s) (: (go i) (? (#s <= i) 1 (127 < s i) 0 (go (i + 1))) (go 0))
  (mime-utf8 s cs)
   (lower cs @ c
@@ -157,16 +151,15 @@
             (put j (s i), go (i + 1))))
      (go 0))
  (mime-2231 v)
-  (: a (findsub v "'") b (a < 0 ? -1 (fsub v "'" (a + 1)))
-     (b < 0 ? v (mime-utf8 (mime-pct (snip v (b + 1) #v)) (snip v 0 a))))
+  (v @ (cs + "'" + _ + "'" + r) (mime-utf8 (mime-pct r) cs) v)
  (mime-ctype v)
   (: ps (mime-semis v)
      t (lower (strip <ps))
      (add m p)
-      (findsub p "=" @ k
-         (? (k < 0) m
-            (: nm (lower (strip (snip p 0 k))) val (mime-unq (strip (snip p (k + 1) #p)))
-               (ends? nm "*" ? (pin m (snip nm 0 (#nm - 1)) (mime-2231 val)) (pin m nm val)))))
+      (p @ (n + "=" + vl)
+         (: nm (lower (strip n)) val (mime-unq (strip vl))
+            (nm @ (b + "*") (pin m b (mime-2231 val)) (pin m nm val)))
+         m)
      [(#t ? t "text/plain") (foldl add {} >ps)])
 
  ; --- the multipart walk ----------------------------------------------------------------

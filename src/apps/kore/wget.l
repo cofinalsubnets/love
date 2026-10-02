@@ -28,13 +28,10 @@
    (wg-url u)
     (u @ ("https://" + r) (wg-url-at 1 r) ("http://" + r) (wg-url-at 0 r) ())
    (wg-url-at tls? r)
-          (: m #r
-             k (: (sl i) (? (m <= i) m (r i = 47) i (sl (i + 1))) (sl 0))
-             auth (snip r 0 k)
-             path (? (k < m) (snip r k m) "/")
-             c (: a #auth (cn i) (? (a <= i) -1 (auth i = 58) i (cn (i + 1))) (cn 0))
-             host (? (c < 0) auth (snip auth 0 c))
-             port (? (c < 0) (tls? ? 443 80) (wg-digits (snip auth (c + 1) #auth)))
+          (: ap (r @ (a + "/" + p) [a ("/" + p)] [r "/"])
+             auth <ap path <>ap
+             hp (auth @ (h + ":" + p) [h (wg-digits p)] [auth (tls? ? 443 80)])
+             host <hp port <>hp
              (? (0 < #host && 0 < port) [tls? host port path] ()))
    ; a Location may be bare: a path on the same origin
    (wg-resolve base loc)

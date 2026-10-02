@@ -578,7 +578,7 @@
 
    ; -- function helpers --
    (chomp s) ((: (g i) (0 < i && s (i - 1) = 10 ? (g (i - 1)) (snip s 0 i))) #s)
-   (nl->sp s) ((: (g i acc) (i >= #s ? acc (g (1 + i) (acc + string (s i @ 10 32 (s i)))))) 0 "")
+   (nl->sp s) (jug 0 @ j (each ^#s (i \ say j (string (s i @ 10 32 (s i)))), slurp j))
    ; $(shell) and != ride SHELL and .SHELLFLAGS as a recipe line does, captured: in this
    ; image where the line would (inimg), else spawned. a caller's function under " shell"
    ; answers instead: the seat that keeps a build's probes off the host
@@ -659,7 +659,7 @@
    (: fname (trim (peep args 0 ""))
       body (peep as fname "")
       n ((: (g l i) (two? l ? (g >l (1 + i)) i)) args 0)
-      olds ((: (g i acc) (i < n ? (g (1 + i) ((show i . peep as (show i) 'cook.undef) . acc)) acc)) 0 0)
+      olds (foldl (\ acc i ((show i . peep as (show i) 'cook.undef) . acc)) 0 ^n)
       _ ((: (g i l) (two? l ? (pin as (show i) (esc <l), g (1 + i) >l) 0)) 0 args)
       r (expand body as (1 + d))
       (each olds (pr \ nom? >pr ? (pull as <pr 0) (pin as <pr >pr)),
@@ -1253,7 +1253,7 @@
    ; existing file may be the build file, but only where discovery would find nothing else or
    ; would find that very file. everywhere else, and always with -f, a positional is a recipe.
    (bye s) (puts s, putc 10, flush out, uleave 0)
-   (version _) (bye ("cook (love " + love-version + ")"))
+   (version _) (bye (uvers "cook"))
    (usage _) (bye ("usage: cook [-C DIR] [-f FILE] [-j [N]] [--emit] [-v] [-h] [VAR=VAL ...] [RECIPE ...]\n"
                    + "  -C, --directory DIR  cook in DIR\n"
                    + "  -f, --file FILE   the build file (Makefile or Cookfile); else discovered\n"

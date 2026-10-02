@@ -20,7 +20,7 @@ LvNif("glass", nif_glass, NULL);
 LvNif("gaze", nif_gaze, NULL);
 LvNif("reply", nif_reply, NULL);
 LvNif("wet", nif_damage, NULL);
-LvNif("facerow", nif_facerow, NULL);
+LvNif("fontrow", nif_fontrow, NULL);
 LvNif("tilepx", nif_tilepx, NULL);
 LvNif("dye", nif_dye, NULL);
 LvNif("regrid", nif_regrid, NULL);

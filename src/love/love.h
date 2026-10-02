@@ -493,6 +493,12 @@ intptr_t ai_inflate_raw(unsigned char const*, uintptr_t, unsigned char*, uintptr
          ai_deflate_dict(struct ai*, unsigned char const*, uintptr_t, unsigned char const*, uintptr_t, unsigned char*, uintptr_t);
 extern unsigned char const ai_srcgz[];
 extern uintptr_t const ai_srcgz_len;
+// /love on the host (src/love/lovefs.c): the carried tree's rows, a path's place in them
+// (-1 not the tree's, -2 absent, -3 a directory, else its row), and a read port over one
+struct ai_lovefs { char const *path; unsigned char const *bytes; uintptr_t len, ms; };
+struct ai_lovefs const *ai_lovefs_rows(uintptr_t *n);
+intptr_t ai_lovefs_at(char const *p, char *rel, uintptr_t *rn);
+struct ai *ai_lovefs_port(struct ai *g, uintptr_t i);
 extern unsigned char const ai_rootfs[];          // src/inle/rootfs/ as a plain tar (src/tools/mkrootfs.l)
 extern uintptr_t const ai_rootfs_len;
 

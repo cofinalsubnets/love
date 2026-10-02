@@ -163,7 +163,7 @@ no file, or a bare -, is the filter: stdin -> stdout"
     (: o (bzc-opts as t)
        r (? !o 1
             (peep t 'h 0) (say out (bzc-help + "\n"), 0)
-            (peep t 'V 0) (say out ("bzip2 (love " + love-version + ")\n"), 0)
+            (peep t 'V 0) (say out (uvers "bzip2" + "\n"), 0)
             (filter (!= "-") <>o @ fs
                (pin t 'w (foldl (a \ p \ max a #p) 7 fs),
                 (atom? fs ? (bzc-filter t)

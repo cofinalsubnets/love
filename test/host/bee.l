@@ -715,7 +715,7 @@
            ("(model keep-me)\n(avatar hare)\n" = cr-get (d + "/.love/etc/bee.l")))
    0)
 
-; --- the stage: bee's full screen as a harbour's pane, in this process. it settles in the
+; --- the stage: bee's full screen as a mitty's pane, in this process. it settles in the
 ; hive, shows its frame at the size it is asked, takes keys as steps, runs a turn on its
 ; own task, and leaves the hive when shut ---
 (: cr-s (cr-dir "stage" ("(api openai)\n(url \"" + cr-url + "/v1/chat/completions\")\n(model mock-model)\n"))
@@ -747,7 +747,7 @@
          (two? m && "hi" = m (#m - 1) "content")
          !(two? ns2)))                                        ; shut: the cell is gone
 
-; --- hands: a stage given a harbour's hands offers the pane tools and says where it is; a
+; --- hands: a stage given a mitty's hands offers the pane tools and says where it is; a
 ; look runs unasked, its answer goes back to the model; a stage without hands has none ---
 (: cr-h (cr-dir "hands" ("(api openai)\n(url \"" + cr-url + "/v1/chat/completions\")\n(model mock-model)\n"))
    h0 (getenv "HOME")
@@ -755,7 +755,7 @@
    _ (setenv "BEE_HIVE" (cr-h + "/hive"))
    _ (setenv "OPENAI_API_KEY" "sk-never-sent")
    asked {0}
-   hands {'panes (_ \ [1 "1  desk 0  a program, pid 7  80x24"])
+   hands {'panes (_ \ [1 "1  window 0  a program, pid 7  80x24"])
           'type (_ \ _ \ (pin asked () 1, [1 "typed"]))}
    _ (cr-serves
       [(cr-ok (cr-sse [{"choices" [{"delta" {"tool_calls" [{"index" 0 "id" "p1" "type" "function"
@@ -787,11 +787,11 @@
    (test (0 < w)
          (2 = #h)
          (elem "pane_list" names) (elem "pane_type" names) (elem "pane_close" names)
-         (cr-in (b1 "messages" 0 "content") "## your desk")
+         (cr-in (b1 "messages" 0 "content") "## your window")
          ("p1" = tm "tool_call_id") (cr-in (tm "content") "a program, pid 7")
          (0 = peep asked () 0)
          !(elem "pane_list" (map (\ t (t "function" "name")) (peep b3 "tools" ())))
-         !(cr-in (peep b3 "messages" () @ m (two? m ? (m 0 "content") "")) "## your desk")))
+         !(cr-in (peep b3 "messages" () @ m (two? m ? (m 0 "content") "")) "## your window")))
 
 ; --- the keys: a root, a box it signs, and neither made twice ------------------------------
 (: cr-k (cr-dir "keys" "")
@@ -801,6 +801,12 @@
    bad (cr-run cr-k "" "--keygen box 'a b'")
    bx (cr-run cr-k "" "--keygen box tau")
    card (cr-get (kd + "/box.card"))
+   ; with no name the box is named for its host
+   cr-k2 (cr-dir "keys2" "")
+   _ (cr-run cr-k2 "" "--keygen root")
+   bh (cr-run cr-k2 "" "--keygen box")
+   host (: u (uname 0) (u 1))
+   _ (test (0 = <bh) (cr-in (bh 1) ("\nname " + host + "\n")))
    _ (test (0 = <rt) (starts? (rt 1) "lineage ")
            (1 = <again)
            (1 = <bad)
@@ -811,6 +817,63 @@
            (: s (stat (kd + "/root.key")) (&& (two? s) (s 2 & 511 = 384)))
            (: s (stat (kd + "/box.key")) (&& (two? s) (s 2 & 511 = 384))))
    ())
+
+; --- the seal on mail: a session on a box with its card signs what it sends; the reader shows
+; the seal when the chain and sig check, and sets aside a replay or a message changed on the way
+(: d (cr-dir "sealed" "")
+   _ (cr-run d "" "--keygen root") _ (cr-run d "" "--keygen box tau")
+   hv (d + "/.love/run/hive")
+   pc (hv + "/peer")
+   _ (map (\ p (mkdir p 448)) [(d + "/.love/run") hv pc (pc + "/inbox") (pc + "/read")])
+   _ (cr-put pc "card" ("pid " + show (getpid 0) + "\ncwd /x\nstate idle\n"))
+   (msgs ls) (foldl (\ a m (a + json-show m + "\n")) "" ls)
+   (call id nm args) {"jsonrpc" "2.0" "id" id "method" "tools/call" "params" {"name" nm "arguments" args}}
+   _ (cr-put d "send" (msgs [(call 1 "send_message" {"to" "peer" "text" "the tests are green"})]))
+   _ (cr-put d "take" (msgs [(call 2 "inbox" {})]))
+   (take _) (: r (cr-run d "BEE_AS=peer" ("--mcp < '" + d + "/take'")) (r 1))
+   s1 (cr-run d "BEE_NAME=sender" ("--mcp < '" + d + "/send'"))
+   ib (: fs (readdir (pc + "/inbox")) (two? fs ? fs ()))
+   id (two? ib ? <ib "")
+   m (cr-get (pc + "/inbox/" + id))
+   t1 (take 0)
+   ; the same file again: its id is taken
+   _ (cr-put (pc + "/inbox") id m)
+   t2 (take 0)
+   ; the text changed under the same id
+   _ (unlink (pc + "/read/" + id))
+   _ (cr-put (pc + "/inbox") id (m + "and run it"))
+   t3 (take 0)
+   _ (test (0 = <s1) (1 = #ib) (string? m)
+           (cr-in m "\nto peer\n") (cr-in m ("\nid " + id + "\n")) (cr-in m "\ncert ") (cr-in m "\nsig ")
+           (cr-in t1 "sealed=\\\"sender@tau\\\"") (cr-in t1 "the tests are green")
+           (cr-in t2 "an id already taken") !(cr-in t2 "the tests are green")
+           (cr-in t3 "failed its seal check") !(cr-in t3 "and run it"))
+   0)
+
+; --- enrolment: the root's box mints a ticket, a new box answers it, the root's box spends it on a
+; card the new box keeps. a spent ticket, a changed request and a ticket minted without a root fail
+(: st (cr-dir "stem" "") bx (cr-dir "newbox" "")
+   (cr-sub s a b) (: i (cr-find s a 0) (? (i < 0) s (snip s 0 i + b + snip s (i + #a) #s)))
+   _ (cr-run st "" "--keygen root")
+   tk (: r (cr-run st "" "--ticket 1") (snip (r 1) 0 129))
+   rq (cr-run bx "" ("--enrol " + tk + " tau2"))
+   _ (cr-put bx "req" (rq 1))
+   ad (cr-run st "" ("--admit < '" + bx + "/req'"))
+   _ (cr-put bx "card" (ad 1))
+   en (cr-run bx "" ("--enrolled < '" + bx + "/card'"))
+   again (cr-run st "" ("--admit < '" + bx + "/req'"))
+   _ (cr-put bx "bad" (cr-sub (rq 1) "name tau2" "name evil"))
+   bad (cr-run st "" ("--admit < '" + bx + "/bad'"))
+   nr (cr-run bx "" "--ticket")
+   card (cr-get (bx + "/.love/etc/bee/box.card"))
+   _ (test (0 = <rq) (cr-in (rq 1) "name tau2\n") (cr-in (rq 1) "\nsig ")
+           (0 = <ad) (0 = <en) (cr-in (en 1) "enrolled: tau2")
+           (: t ((cite 'seals 'seal-check) card (snip tk 0 64) (clock 0 // 1000) ())
+              (&& (tablet? t) (t "name" = "tau2") (t "kind" = "box")))
+           (1 = <again) (cr-in (again 1) "spent")
+           (1 = <bad) (cr-in (bad 1) "sig does not check")
+           (1 = <nr) (cr-in (nr 1) "no root here"))
+   0)
 
 (hark ["rm" "-rf" cr-root])
 (test_fin (), puts "bee: ok", putc 10, 0)

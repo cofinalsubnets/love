@@ -46,7 +46,7 @@
          ['note ""]
          q-clay]))
 
-   ; --- the cp437 page: what codepoint each glyph of the built-in faces draws. a cell
+   ; --- the cp437 page: what codepoint each glyph of the built-in fonts draws. a cell
    ;     holds the codepoint; the painter asks the fold which glyph wears it ---
    q-page '(0 9786 9787 9829 9830 9827 9824 8226 9688 9675 9689 9794 9792 9834 9835 9788
             9658 9668 8597 8252 182 167 9644 8616 8593 8595 8594 8592 8735 8596 9650 9660

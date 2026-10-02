@@ -103,9 +103,7 @@ usage: helm [-c CONF] [-s SOCK] [-q]     supervise (pid 1 lays the machine first
    ; the archive's top, dropped: the entry that IS the top has no slash and re-homes
    ; to nothing, which is how it stops being a directory at the root.
    (hbelow nom)
-    (: n #nom
-       (go i) (? (n <= i) "" (nom i = 47) (snip nom (i + 1) n) (go (i + 1)))
-       (go 0))
+    (nom @ (_ + "/" + b) b "")
    (hscatter root)
     (source-gz "x" @ gz
        (? !(string? gz) (hnote "scatter: this love carries no source", 0)

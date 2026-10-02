@@ -26,7 +26,7 @@
 (borrow 'posix)    ; close, for the horn
 (:
  esc (string 27)
- fps (love-arch @ 'wasm 15 30)          ; the page's machine paints every cell in the interpreter: half the frames there
+ fps 30
  week-secs 420.0                        ; a minute a day
  week-start 6.0                         ; monday, dawn
  week-hours 174.0                       ; ..to the next monday's dawn: seven days
@@ -77,7 +77,7 @@
  (fx1 x) (int (x * 10.0 + 0.5) @ n (show (n // 10) + "." + show (n % 10)))
  (two-dig n) (n < 10 ? ("0" + show n) (show n))
  ; what a row is worth in cells: a glyph's tail bytes belong to the lead that began it
- (wide s) (:- (go 0 0) (go i n) (i >= #s ? n (go (i + 1) (n + lead (s i)))))
+ (wide s) (foldl (\ n i (n + lead (s i))) 0 ^#s)
  sgrs {}
  (sgr f b) (: k [f b] s (sgrs k)
               (string? s ? s
@@ -429,8 +429,7 @@
  ; the clock paces the ticks, thirty a second, and the horn is fed by its lag: chunks go
  ; out until a lead stands queued, ahead of anything else the loop does. a frame is
  ; painted only when the tick it shows is on time -- a seat too slow to draw every tick
- ; (the page draws one in forty milliseconds) still ticks at the clock's rate and still
- ; sounds, and gives up frames rather than either.
+ ; still ticks at the clock's rate and still sounds, and gives up frames rather than either.
  tick-ms (1000.0 / fps)
  ; a sign stands deaf for half a second, then waits for a key; the song plays under it
  ; either way, since a beat is what feeds the horn. deaf by the clock and not by beats:
