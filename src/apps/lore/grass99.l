@@ -37,8 +37,9 @@
    mv (g 'mv @ m (tablet? m ? m (lay g)))
    (esc + "[H" + esc + "[0m" + fit (grass-hud g) c + "\r\n" + meadow-frame mv g (meadow-sky g) (mv 'deep)
     + "\r\n" + esc + "[0m" + fit (grass-bar g) (c - 1) + esc + "[K"))
- ; ..painted whole every tick: no row of it stands still for long
- grass99-look {'ttl ttl99 'rows rows99 'frame grass99-frame 'paint grass99-frame}
+ ; ..painted whole every tick: no row of it stands still for long; the song sung through the
+ ; tuner
+ grass99-look {'ttl ttl99 'rows rows99 'frame grass99-frame 'paint grass99-frame 'voice "cher"}
  grass99-usage "usage: love lore grass99   (dance: arrows, hjkl, or tap about your blade; q or esc leaves)"
  (grass99-main as) (as @ () (grass-run grass99-look score99)
                          (say err ("grass99: " + grass99-usage + "\n"), flush err, 2))
