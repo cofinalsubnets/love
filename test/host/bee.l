@@ -27,6 +27,11 @@
    cr-digits (cite 'kore 'wg-digits)
    cr-find fsub
    (cr-in s p) (0 <= cr-find s p 0)
+   ; a line without its sgr escapes
+   (cr-plain l) (: (go i acc) (? (#l <= i) acc
+                                  (l i = 27) (: (skip j) (? (#l <= j || (64 <= l j && l j <= 126 && j > i + 1)) (go (j + 1) acc) (skip (j + 1))) (skip (i + 1)))
+                                  (go (i + 1) (acc + string [(l i)])))
+                   (go 0 ""))
    (cr-hex n) (? (n < 16) (string ("0123456789abcdef" n)) (cr-hex (n // 16) + cr-hex (n % 16)))
    (cr-head c a) (: b (see c) (? (b < 0) a
                                  (: a2 (a + string b) (? (cr-in a2 "\r\n\r\n") a2 (cr-head c a2)))))
@@ -967,6 +972,26 @@
            (0 = <rv) (cr-in (rv 1) "serial 1") (cr-in (rv 1) "two: taken")
            (1 = <again) (cr-in (again 1) "not newer")
            (cr-in (after 1) "seal does not check") !(cr-in (after 1) "sent to peer@two"))
+   0)
+
+; --- the hud: --hud prints it once. a fixture queue with a fold: the fold sits under the row it
+; joins, the head is marked, the long queue said; no model is named and no session is settled
+(: d (cr-dir "hud" "")
+   _ (hark ["git" "-C" d "init" "-q"])
+   _ (cr-put d "q.txt" ("# a queue\nleader g\nmain abc1234\n31 ant hearts abc1234 def5678 gating  # a\n"
+                        + "32 bob seal abc1234 0123456 folded-into-31  # b\n33 carol mitty abc1234 fedcba9 waiting  # c\n"))
+   _ (hark ["sh" "-c" ("cd '" + d + "' && git update-ref refs/queue/main $(git hash-object -w q.txt)")])
+   r (cr-run d ("BEE_LOCKS='" + d + "/locks'") "--hud")
+   ls (map (\ l (cr-plain l)) (lines (r 1)))
+   at (\ p (: is (filter (\ i (cr-in (ls i) p)) ^#ls) (two? is ? <is -1)))
+   _ (test (0 = <r)
+           (cr-in (r 1) "refs/queue/main") (cr-in (r 1) "long: fold")
+           (cr-in (r 1) "base main abc1234") (cr-in (r 1) "leader g")
+           (0 <= at "31  ant") (at "32  bob" = at "31  ant" + 1) (at "33  carol" = at "32  bob" + 1)
+           (starts? (ls (at "31  ant")) "▸ 31")
+           (starts? (ls (at "32  bob")) "      32")
+           (cr-in (r 1) "heavy 0/2") (cr-in (r 1) "sessions")
+           !(two? (readdir (d + "/.love/run/hive"))))
    0)
 
 (hark ["rm" "-rf" cr-root])

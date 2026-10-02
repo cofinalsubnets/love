@@ -2,7 +2,9 @@
 ; read_file, write_file, edit_file, shell, and list_sessions and send_message, which speak to
 ; the other bees on this machine (doc/bee.md). a write, an edit or a command asks y/n first.
 ;
-;   love bee [-y] [--plain] [prompt ..]      one prompt, the screen, or a > loop
+;   love bee                                 on a terminal, the hud: queues, locks, sessions
+;   love bee --chat [-y] | --hud             the chat's full screen; the hud once, as text
+;   love bee [-y] [--plain] [prompt ..]      one prompt, or a > loop
 ;   love bee --list | --send NAME TEXT ..    the sessions, from a shell
 ;   love bee --avatar [NAME]                 the avatars, or wear one
 ;   love bee --keygen root | box [NAME]      the lineage's root, or this box's key and card
@@ -2140,6 +2142,89 @@
                         _ (? (bee-cc 'live) (cc-stop 0) 0)
                         (unsettle 0)))})
 
+     ; --- the hud: what a bare `love bee` on a terminal shows. the queues, the locks and the
+     ; hive, read again every (queue-watch N) seconds; no model and no key, and it settles no
+     ; session, so it is in no list and takes no mail. c or enter opens the chat, q quits ---
+     (hud-short s) (string? s && 9 < #s ? (snip s 0 9) s)
+     (hud-nums ks) (map show (sort (map digits ks)))
+     ; a queue's lines: its name, base and leader, then each row, a fold under the row it joins
+     (hud-queue nm text)
+      (: rows (q-rows text) h (q-head rows) b (q-base-line text) lead (q-leader text)
+         (row p ind)
+          (: r (rows p) st (r 5)
+             (ind + (p = h ? (sgr "1" "▸ ") "  ") + edfit (r 0) 4 " " + edfit (r 1) 10 " " + " " + edfit (r 2) 18 " "
+              + " " + edfit (hud-short (r 3)) 10 " " + edfit (hud-short (r 4)) 10 " "
+              + (st @ "green" (sgr "32" st) "gating" (sgr "33" st) "waiting" st (sgr "2" st))))
+         top (filter (p \ !(q-folded? (rows p))) (hud-nums (keys rows)))
+         ([((sgr "1" nm) + (q-long? text ? (sgr "33" "  long: fold, not line up") ""))]
+          + [("  base " + (two? b ? (<b + " " + b 1) "-") + "   leader " + (0 < #lead ? lead "-"))]
+          + (two? top ? (catmap (p \ [(row p "")] + map (f \ row f "    ") (hud-nums (q-folds rows p))) top)
+                        ["  no rows"])))
+     (hud-locks _)
+      (? !(locks? 0) ["locks are not in this binary"]
+         (: t (lk 'locks-list (lk 'locks-root 0))
+            (who h) (show (peep h "pid" "?") + " " + peep h "note" "")
+            ex (peep t "exclusive" ()) hv (peep t "heavy" ()) wt (peep t "waiting" ())
+            hosts (filter (e \ starts? <e "a64host-") ex) outs (filter (e \ !(starts? <e "a64host-")) ex)
+            ([((sgr "1" "locks") + sgr "2" ("  " + (: m (peep t "mem_gb" ()) (? (m = ()) "?" (show (int (m * 10) / 10)))) + " GB free, load "
+                                                + (: l (peep t "load" "?") (string? l ? l (show l)))))]
+             + [("  heavy " + show #hv + "/" + show bee-hmax + (two? hv ? (": " + foldl (\ a h (a + (#a ? ", " "") + who h)) "" hv) ""))]
+             + (two? wt ? [("  waiting: " + foldl (\ a h (a + (#a ? ", " "") + who h)) "" wt)] ())
+             + map (e \ "  " + <e + "  " + who (e 1)) outs
+             + map (e \ "  " + <e + "  " + who (e 1)) hosts)))
+     (hud-sessions _)
+      (: ps (settled 0)
+         ([(sgr "1" "sessions")]
+          + (two? ps ? (map (p \ (: c (p 1) st (peep c "state" "?")
+                                  ("  " + edfit <p 12 " " + (st = "busy" ? (sgr "33" st) st) + "  "
+                                   + (: b (peep c "branch" "") (0 < #b ? b "-")) + "  " + sgr "2" (peep c "cwd" ""))))
+                          ps)
+                       ["  none"])))
+     ; the whole of it, as lines
+     (hud-lines _)
+      (: qs (q-sections (lush-out bee-qcmd))
+         (catmap (s \ hud-queue <s (s 1) + [""]) qs + hud-locks 0 + [""] + hud-sessions 0))
+     (hud-frame c)
+      (: w (c 'cols) h (c 'rows) ls (c 'lines)
+         top (max 0 (min (c 'top) (#ls - (h - 1))))
+         win (take (h - 1) (drop top ls))
+         rows (map (l \ edfit l w " ") (win + map (_ \ "") ^(h - 1 - #win)))
+         stat (edfit (sgr "2" ("  bee · read " + utc-minute (c 'read // 1000) + " · c chat · r read again · ↑↓ scroll · q quit"
+                                + (#ls > h - 1 ? ("   " + show (top + 1) + "-" + show (top + #win) + " of " + show #ls) "")))
+                     w " ")
+         (cite 'tui 'tui-fresh c h [w h] () rows stat h 1))
+     (hud-read c) (: _ (pins c 'lines (hud-lines 0) 'read (clock 0)) (soil c))
+     (hud-keys c)
+      (: k (edkey in)
+         _ (? (elem k [113 81 3 4 -7]) (pin c 'over 1)
+              (elem k [99 67 13 10]) (pins c 'chat 1 'over 1)
+              (elem k [114 82]) (hud-read c)
+              (elem k [-9 106 6]) (: _ (pin c 'top (c 'top + (k = 6 ? (c 'rows // 2) 1))) (soil c))
+              (elem k [-8 107 2]) (: _ (pin c 'top (max 0 (c 'top - (k = 2 ? (c 'rows // 2) 1)))) (soil c))
+              0)
+         (? (c 'over) 0 (hud-keys c)))
+     (hud-swim c tick)
+      (: b (c 'dirt)
+         _ (? (peep b () 0) (: _ (pin b () 0) _ (say out (hud-frame c)) (flush out)) 0)
+         _ (? (tick % 16 = 0) (tide c) 0)
+         _ (? ((0 < bee-qwatch ? bee-qwatch 20) * 1000 < clock 0 - c 'read) (hud-read c) 0)
+         _ (rest 33)
+         (? (c 'over) 0 (hud-swim c (tick + 1))))
+     ; -> 1 when the chat was asked for
+     (hud _)
+      (: c {'rows 24 'cols 80 'over 0 'chat 0 'top 0 'lines () 'read 0 'dirt {() 1}}
+         _ (hud-read c) _ (tide c)
+         _ (raw 1)
+         _ (say out (esc + "[?1049h" + esc + "[2J" + esc + "[?25l" + esc + "[22;0t" + esc + "]2;bee" + string 7))
+         _ (flush out)
+         up (twirl (\ _ (hud-keys c)) 0)
+         _ (hud-swim c 0)
+         _ (? (landed? up) 0 (freeze up))
+         _ (say out (esc + "[0m" + esc + "[?25h" + esc + "[?1049l" + title-off 0))
+         _ (flush out)
+         _ (raw 0)
+         (c 'chat))
+
      ; --- the door ---
      ; a prompt on the command line runs once, plainly; with none, a terminal gets the full
      ; screen and anything else the > loop. --plain asks for the loop on a terminal too
@@ -2690,7 +2775,7 @@
      (serve-first key f p)
       (? (0 < #p) (: _ (state! "busy") m (turn key f [(user p)]) _ (state! "idle") (serve key f (two? m ? m ())))
          (serve key f ()))
-     bee-flags ["-y" "--plain" "--serve" "--mcp" "--stage"]
+     bee-flags ["-y" "--plain" "--serve" "--mcp" "--stage" "--chat" "--hud"]
      (bee-go as)
       (: key (getenv bee-key-env)
          yes (elem "-y" as)
@@ -2700,6 +2785,10 @@
          (? (elem "--mcp" as) (: _ (mcp-serve in out) 0)             ; a claude child's own server
             (two? as && <as = "--lock") (bee-cli as yes)              ; its command's words stay as given
             (two? as && elem <as ["-s" "--screensaver"]) (cite 'saver 'saver-cli >as)   ; a saver, no session
+            (elem "--hud" as) (: _ (puts (foldl (\ a l (a + l + "\n")) "" (hud-lines 0))) 0)   ; once, as text
+            ; a bare bee on a terminal is the hud; the chat is behind c, or --chat
+            (!pl && !sv && !(two? words) && !(elem "--chat" as) && !(elem "--stage" as) && two? (tty 1))
+             (? (hud 0) (bee-go (as + ["--chat"])) 0)
             (two? words && elem <words ["--list" "--send" "--spawn" "--stop" "--avatar" "--resume" "--keygen" "--ticket" "--enrol" "--admit" "--enrolled" "--deliver" "--ledger" "--revoke" "--revocations" "--revoked"]) (bee-cli words yes)
             ; the api backend wants its endpoint, model and key; claude brings its own. a stage
             ; answers why as a string: a mitty shows it, stderr would land on its glass
@@ -2722,7 +2811,9 @@
                _ (unsettle 0)
                r)))))
       (bee-go as))
-   bee-usage "usage: love bee [-y] [--plain] [PROMPT ..]      one prompt, the screen, or a > loop
+   bee-usage "usage: love bee                                  on a terminal, the hud: queues, locks, sessions
+       love bee --chat [-y] | --hud                  the chat's full screen; the hud once, as text
+       love bee [-y] [--plain] [PROMPT ..]           one prompt, or a > loop
        love bee --list | --send NAME TEXT ..           the sessions, from a shell
        love bee --spawn NAME DIR [-y] PROMPT ..         a bee serving detached in DIR
        love bee --stop NAME | --serve [-y] [PROMPT ..]
