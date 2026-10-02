@@ -393,7 +393,7 @@ out/src.o: $(dist_source) src/tools/mksrc.l $(holocat_dep) $(love0)
 	@echo 'HOLO	'$@
 	@$(love0) $(holocat) src/tools/mksrc.l $(dist_source) $@ $(hosta)
 # the machine's own files (src/inle/rootfs/): a second initrd, walked at the root of every inle
-# boot where the tree's is walked under /proc/src. one tar, carried under ai_rootfs
+# boot where the tree's is walked under /love. one tar, carried under ai_rootfs
 # beside the source blob on every link that carries one.
 rootfs_files = $(wildcard src/inle/rootfs/* src/inle/rootfs/*/* src/inle/rootfs/*/*/*)
 out/rootfs.tar: $(rootfs_files) src/tools/mkrootfs.l $(love0)
@@ -695,7 +695,7 @@ out/lib/korelist.h: Makefile
 	 $(note)
 
 # the crew roster, the same one line: these files are NOT in the kernel's cat, so the
-# order is all the kernel carries and the members come off /proc/src when a verb is asked
+# order is all the kernel carries and the members come off /love when a verb is asked
 # for. one line, because a name does not say which file holds it -- story lives in
 # src/apps/lore/, xwire in src/apps/lux/wire.l, and sb spans three that must load in order.
 out/lib/crewlist.h: Makefile
@@ -729,7 +729,7 @@ kmain_o: $(k_free_o)
 kart_inc = -I$(ho) -I. -Isrc/love -Isrc/inle -Iout/lib -I$R \
   -I$S/love/quay -I$S/apps/moon/include
 # kmain.c's own bake is the two ROSTERS -- the kore cat's order, and the crew's, which it
-# carries the order of and reads the members of off /proc/src -- and the seat text. the egg
+# carries the order of and reads the members of off /love -- and the seat text. the egg
 # and the module set are src/love/cats.c's, and that object rides the host lane above.
 kart_bake = out/lib/korelist.h out/lib/crewlist.h out/lib/seat.h
 define kart

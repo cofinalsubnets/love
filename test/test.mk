@@ -1206,10 +1206,10 @@ test_kverb: host
 test_kboot: host $(S)/tools/kboot.l
 	@$(MAKE) -s $(k_elf)
 	@echo TEST $(k_elf) "(the kore cat off cmdline; 4 boots, ceiling 420s each)"
-	@$m $(S)/tools/kboot.l $(k_elf) "kore ls /proc/src/src/apps/kore" "kore.l"
-	@$m $(S)/tools/kboot.l $(k_elf) "kore wc /proc/src/src/apps/json.l" "/proc/src/src/apps/json.l" $$(wc -c < $(S)/apps/json.l)
-	@$m $(S)/tools/kboot.l $(k_elf) "sh -c \"cd /proc/src/src/apps/kore; pwd\"" "/proc/src/src/apps/kore"
-	@$m $(S)/tools/kboot.l $(k_elf) "sh -c \"kore ls /proc/src/src/apps/kore | kore wc -l\"" $$(ls $(S)/apps/kore | wc -l)
+	@$m $(S)/tools/kboot.l $(k_elf) "kore ls /love/src/apps/kore" "kore.l"
+	@$m $(S)/tools/kboot.l $(k_elf) "kore wc /love/src/apps/json.l" "/love/src/apps/json.l" $$(wc -c < $(S)/apps/json.l)
+	@$m $(S)/tools/kboot.l $(k_elf) "sh -c \"cd /love/src/apps/kore; pwd\"" "/love/src/apps/kore"
+	@$m $(S)/tools/kboot.l $(k_elf) "sh -c \"kore ls /love/src/apps/kore | kore wc -l\"" $$(ls $(S)/apps/kore | wc -l)
 else
 test_disk test_kboot:
 	@sh test/gate/skip.sh gate-skip "$@: skipped (host arch $a is not x64)"
@@ -1318,7 +1318,7 @@ test_kernel_wasm: host
 	@$m $(R)/test/gate/horn.l out/wasm/horn.raw || { echo "FAIL test_kernel_wasm"; exit 1; }
 	@echo TEST "the fetch door (wget aboard, off --origin, the tree standing in for the page)"
 	@INLE_RAM=256 $(NODE) $(S)/inle/wasm/inle.mjs --origin $(R) --image out/wasm/love.image $(R)/out/love.wasm \
-	   sh -c 'mkdir -p /s; wget -O /s/v /VERSION && cmp /s/v /proc/src/VERSION && echo fetch: ok; wget -q -O /s/no /no-such-file; echo missing: $$?' \
+	   sh -c 'mkdir -p /s; wget -O /s/v /VERSION && cmp /s/v /love/VERSION && echo fetch: ok; wget -q -O /s/no /no-such-file; echo missing: $$?' \
 	   < /dev/null > out/wasm/fetch.log 2>&1; \
 	 grep -q "fetch: ok" out/wasm/fetch.log && grep -q "missing: 4" out/wasm/fetch.log \
 	   || { tail -8 out/wasm/fetch.log; echo "FAIL test_kernel_wasm (the fetch door)"; exit 1; }

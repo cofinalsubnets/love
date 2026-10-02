@@ -432,12 +432,12 @@
    ; --- the roots: the host's bundle, read once a process ---
    ; SSL_CERT_FILE, else the first of the linux and bsd homes that reads, else the tree's own:
    ; mozilla's roots for serving tls as curl extracts them, src/apps/tls/roots.pem, which inle and
-   ; the wasm seat read under /proc/src and a host with no bundle out of the source its binary
+   ; the wasm seat read under /love and a host with no bundle out of the source its binary
    ; carries
    tree-roots "src/apps/tls/roots.pem"
    root-homes ["/etc/ssl/certs/ca-certificates.crt" "/etc/ssl/cert.pem"
                "/etc/pki/tls/certs/ca-bundle.crt" "/usr/local/share/certs/ca-root-nss.crt"
-               ("/proc/src/" + tree-roots)]
+               ("/love/" + tree-roots)]
    roots-box {}
    (root-file _)
     (getenv "SSL_CERT_FILE" @ e
