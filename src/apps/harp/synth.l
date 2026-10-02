@@ -263,7 +263,7 @@
  synth-usage "usage: love synth [LOOP]   (1 .. = play, shift and alt bend, tab the timbre, up and down the octave, p e [ ] the loop, q leaves)"
  ; --- the harbour: the keys a stage over the buffer, a vi stage on the loop's text.
  ; the keys' tick feeds the card; e sends the buffer; q ends both panes ---
- (synth-berth br vi f) (: _ (synth-warm ()) st (synth-new ())
+ (synth-mitty br vi f) (: _ (synth-warm ()) st (synth-new ())
    hn (horn song-rate 2 @ h (nom? h ? () h))
    pace (pacer ())
    (feed _) (lead-of (pace! pace) @ l
@@ -272,11 +272,11 @@
    buf (vi 'vi-open f)
    _ (pin buf 'exmore '("send" "play" "stop" "cps"))
    face (vi 'vi-face buf {'ex (synth-ex st) 'reg (hb 'clip)})
-   keys (br 'berth-stage (w \ h \ (pin st 'dirty 0, synth-frame st))
+   keys (br 'mitty-stage (w \ h \ (pin st 'dirty 0, synth-frame st))
                          (k \ (k = 101 ? (synth-send st (synth-text (buf 'lines))) (synth-step st k)))
                          (_ \ (st 'over)))
    _ (pins keys 'tick (_ \ (feed (), st 'dirty)) 'key synth-key)   ; alt on any key, the row's own reading
-   text (br 'berth-stage (face 0) (face 1) (_ \ (buf 'quit || st 'over)))
+   text (br 'mitty-stage (face 0) (face 1) (_ \ (buf 'quit || st 'over)))
    _ (pin text 'paste (face 3))
    share (min 90 ((100 * (synth-rows + 1) + <sz - 1) // <sz))   ; the keys' rows, and one over
    (pin hb 'more (_ \ (br 'hopen ["sh"] 1 1)),
@@ -286,9 +286,9 @@
     br 'hsail hb,
     hn ? (flush hn, close hn),
     0))
- (synth-main as) (: br (cite 'berth) vi (cite 'vi)
+ (synth-main as) (: br (cite 'mitty) vi (cite 'vi)
    (? (1 < #as) (say err ("synth: " + synth-usage + "\n"), flush err, 2)
-      (tablet? br && tablet? vi) (synth-berth br vi (two? as ? <as ""))
+      (tablet? br && tablet? vi) (synth-mitty br vi (two? as ? <as ""))
       (synth-run ())))
  _ (pins (cite 'verbs 'tab) 'synth (udoor 'synth synth-main synth-usage 1 1)))
 ) ; module synth

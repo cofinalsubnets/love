@@ -47,7 +47,7 @@ A write, an edit, a shell command, a job's start, a message to another session, 
 
 Given a *prompt*, bee runs one turn and exits, streaming the answer to standard output. With no prompt, it opens its full screen on a terminal and a **>** loop elsewhere, or on a terminal too with **--plain**.
 
-The full screen is also a pane: **(bee-main ["--stage"])**, called from love, settles a session and answers it as a stage for **berth**'s harbour, so **love inle** opens one beside its shells (**C-a b**). A stage that cannot start answers why as a string. Closing the pane ends the session's turn and leaves the hive.
+The full screen is also a pane: **(bee-main ["--stage"])**, called from love, settles a session and answers it as a stage for **mitty**'s harbour, so **love inle** opens one beside its shells (**C-a b**). A stage that cannot start answers why as a string. Closing the pane ends the session's turn and leaves the hive.
 
 The system prompt tells the model where it is:
 

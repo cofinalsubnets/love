@@ -1,9 +1,9 @@
-; src/apps/berth/wharf.l -- a wharf is where several vessels berth: the layout algebra under
+; src/apps/mitty/wharf.l -- a wharf is where several vessels berth: the layout algebra under
 ; quay's panes, and the one piece every seat shares. it answers rectangles in cells,
-; never pixels -- berth seats them with \e[r;cH, the kernel console multiplies them by
+; never pixels -- mitty seats them with \e[r;cH, the kernel console multiplies them by
 ; the font's width and height, and neither has to know what the other does with them.
 ; cells are the only currency both speak, and the one `gaze` already answers in.
-; a module: `(borrow 'wharf)` on the artifact, `(borrow "src/apps/berth/wharf.l")` off the tree.
+; a module: `(borrow 'wharf)` on the artifact, `(borrow "src/apps/mitty/wharf.l")` off the tree.
 ;
 ; a plan is a binary tree. a leaf is a berth's id; a node is one split:
 ;
