@@ -334,7 +334,7 @@
        (? !o 2
           (peep t 'h 0) (say out (cpioc-usage + "\n"), flush out, 0)
           (peep t 'vers 0)
-           (say out ("cpio (love " + love-version + ")\n"), flush out, 0)
+           (say out (uvers "cpio" + "\n"), flush out, 0)
           (t 'mode @ m
              (two? <>o && cpioc-moan "the names come in on stdin, not on the line",
               (m @ 'o (cpioc-o t) 'i (cpioc-i t) 't (cpioc-t t) (cpioc-moan cpioc-usage, 2))))))

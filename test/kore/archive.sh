@@ -45,7 +45,7 @@ korerun gunzip -c "$ho/.arc99.gz" | cmp -s - "$ho/.arc9" || fail "kore gzip -9 |
 if command -v gzip >/dev/null 2>&1; then
   gzip -dc "$ho/.arc99.gz" | cmp -s - "$ho/.arc9" || fail "GNU gunzip of kore's gzip -9"
 fi
-hv "gzip --version" '^gzip (love' korerun gzip --version
+hv "gzip --version" '^gzip / love ' korerun gzip --version
 hv "gzip --help"    '^gzip -- the' korerun gzip --help
 hv "cpio --help"    '^usage: cpio {' korerun cpio --help
 hv "tar --help"     '^usage: tar '   korerun tar --help
@@ -187,7 +187,7 @@ korerun bzip2 -cx "$F/a" 2> "$o" && fail "kore bzip2 -cx was taken"
 grep -q 'Bad flag `-cx' "$o" || fail "kore bzip2 -cx: the word not named"
 korerun gzip --suffix 2> "$o" && fail "kore gzip --suffix with no value was taken"
 grep -q -- '--suffix wants' "$o" || fail "kore gzip --suffix: not named"
-hv "bzip2 -V" '^bzip2 (love' korerun bzip2 -V
+hv "bzip2 -V" '^bzip2 / love ' korerun bzip2 -V
 ( cd "$ho" && printf '.arc1\n' | "$K" kore cpio -o > "$F/c.cpio" ) || fail "kore cpio -o for the flags"
 korerun cpio -t --file="$F/c.cpio" > "$o" 2>/dev/null; grep -q '\.arc1' "$o" || fail "kore cpio --file=F"
 korerun cpio --format=odc -t < "$F/c.cpio" 2> "$o" && fail "kore cpio --format=odc was taken"

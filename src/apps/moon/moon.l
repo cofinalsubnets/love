@@ -1036,7 +1036,7 @@
              ; verb on the love binary, not a separate program, and two reported versions
              ; would report a thing that cannot happen.
              (a = "--version" || a = "-v")
-              (puts ("mooncc (love " + love-version + ")"), putc 10, flush out, uleave 0)
+              (puts (uvers "mooncc"), putc 10, flush out, uleave 0)
              (a = "--help" || a = "-h")
               (puts usage, putc 10, flush out, uleave 0)
              (a = "-pie") (flags r (pin t 'pie 1))

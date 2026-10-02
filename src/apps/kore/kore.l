@@ -1265,7 +1265,7 @@ every tool answers --help and --version, and -h where the letter is free
                  (f ? (koredoor n f >t)
                     (uask t 1 1
                      @ 'help (puts kore-usage, flush out, 0)
-                       'vers (puts ("kore (love " + love-version + ")\n"), flush out, 0)
+                       'vers (puts (uvers "kore" + "\n"), flush out, 0)
                        (usage ())))))))))
 ; the seat: file mode (cat | love) dispatches on the real command line and quits with
 ; the status. the -l bake preload seats a flag, not kore, so the scan answers () and

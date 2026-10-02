@@ -1253,7 +1253,7 @@
    ; existing file may be the build file, but only where discovery would find nothing else or
    ; would find that very file. everywhere else, and always with -f, a positional is a recipe.
    (bye s) (puts s, putc 10, flush out, uleave 0)
-   (version _) (bye ("cook (love " + love-version + ")"))
+   (version _) (bye (uvers "cook"))
    (usage _) (bye ("usage: cook [-C DIR] [-f FILE] [-j [N]] [--emit] [-v] [-h] [VAR=VAL ...] [RECIPE ...]\n"
                    + "  -C, --directory DIR  cook in DIR\n"
                    + "  -f, --file FILE   the build file (Makefile or Cookfile); else discovered\n"

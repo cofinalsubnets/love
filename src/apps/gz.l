@@ -1013,7 +1013,7 @@ no file, or a bare -, is the filter: stdin -> stdout"
        (? !o 1
           (peep t 'h 0) (say out (gzc-help + "\n"), flush out, 0)
           (peep t 'V 0)
-           (say out ("gzip (love " + love-version + ")\n"), flush out, 0)
+           (say out (uvers "gzip" + "\n"), flush out, 0)
           (filter (p \ !(p = "-")) <>o @ fs
              ((? (peep t 'l 0) 0 (peep t 't 0) (pin t 'd 1) 0),
               (? !(two? fs) (peep t 'l 0 ? (gzc-moan t "-l wants a file", 1)

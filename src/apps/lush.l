@@ -2871,7 +2871,7 @@ no file and no -c is a shell: a repl on a tty, cooked script off stdin otherwise
               ; the long forms only: -h is `set -h` in every shell, and -v is `set -v`
               "--help" (puts (sh-usage + "\n"), flush out, quit 0)
               "--version"
-               (puts $ "lush (love " + love-version + ")\n", flush out, quit 0)
+               (puts (uvers "lush" + "\n"), flush out, quit 0)
               ; -- ends the options, which is the only way to name a file that starts
               ; with a dash: every other dash word is a flag word, ours or a mistake
               "--" (two? >args ? (sh-file <>args >>args) (sh 0))
