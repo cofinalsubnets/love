@@ -1,4 +1,4 @@
-; berth -- quay's terminal multiplexer: where programs tie up.
+; mitty -- quay's terminal multiplexer: where programs tie up.
 ;
 ; each child rides its own pty (tether); its bytes pour through a quay cb screen (the
 ; kernel console's vt parser, hosted by src/love/cb.c) and the grids repaint the outer
@@ -15,15 +15,15 @@
 ; a guest may be a stage of this process -- cli's triple (show w h) (step k) (over? _) --
 ; berthed like a child; a door 'key reads its keys, a door 'tick asks for a frame.
 ;
-; run: out/love -e "(: _ (borrow 'berth) (berth [\"sh\"]))", or `love inle` for lush in it.
-; host-only (screen/tether/tty ride src/love/*.c): never in the corpus; test/host/berth.l
+; run: out/love -e "(: _ (borrow 'mitty) (mitty [\"sh\"]))", or `love inle` for lush in it.
+; host-only (screen/tether/tty ride src/love/*.c): never in the corpus; test/host/mitty.l
 ; smokes it over a real pty. a module, so a guest that berths itself (vi's splits) cites it.
-(module '(berth berth berth-stage harbour hberth hsail hopen hopen-stage moor waitfor
+(module '(mitty mitty mitty-stage harbour hberth hsail hopen hopen-stage moor waitfor
           hbox hmas hpid hstage hpty? hpane hsoil hrelay hframe hmoor hsplit hsteer hshut
           hfeed hkey oars hsize htide htick hswim hquick? hcopy hpaste hclip-text hscreen-text
           hseq hmouse hpeer hpasted hdesks hgo hcycle hfresh hb64 hsub? hswap hpicker inle-launch inle-switch inle-hive inle-queues inle-barx inle-saver hwake hidle hidle? hsleep hin hout hlive? hgreet hbye hattach hdetach inle-harbour inle-here inle-serve inle-attach inle-sock inle-dir inle-ls inle-size hname hname-of hlr hbarat hdrag hmice hbarline hbardesk hbartick hnote hhands inle-bee inle-main)
-(borrow ((cite 'wharf) @ m (m ? m "src/apps/berth/wharf.l")))   ; the baked module, else the tree's file
-(borrow ((cite 'limn) @ m (m ? m "src/apps/berth/limn.l")))
+(borrow ((cite 'wharf) @ m (m ? m "src/apps/mitty/wharf.l")))   ; the baked module, else the tree's file
+(borrow ((cite 'limn) @ m (m ? m "src/apps/mitty/limn.l")))
 (borrow 'posix)
 (:
  ; --- the moor: pump the master through the screen until the child hangs up.
@@ -113,12 +113,12 @@
 
  ; --- the stage door: a stage berths on a screen of its own, its frame scribed there
  ; at the pane's size, which the frame is asked for as w h
- (berth-stage show step over?) {'show show 'step step 'over? over?}
+ (mitty-stage show step over?) {'show show 'step step 'over? over?}
  (hshow p) (peep (hbox p) () 0 @ s
               (scribe s (hstage p 'show (gaze s 2) (gaze s 1))))
  ; a note on its own stage, gone at any key
  (hnote t) (: k {0}
-              (berth-stage (\ w h ("\e[H\e[2J" + t + "\r\n\r\n(a key closes this)"))
+              (mitty-stage (\ w h ("\e[H\e[2J" + t + "\r\n\r\n(a key closes this)"))
                            (\ c (pin k () 1)) (\ _ (peep k () 0))))
  (hopen-stage sg r c) (: s (screen (cask (screen () r c)) r c)
                          p [{s} () () sg (peep sg 'name "stage")]
@@ -147,8 +147,8 @@
                  hsoil hb))
 
  ; --- the frame -------------------------------------------------------------
- ; the painting is src/apps/berth/limn.l's: cells at an origin, and the bars off wharf-bars.
- ; what stays here is which grid goes where, which is the only half berth owns
+ ; the painting is src/apps/mitty/limn.l's: cells at an origin, and the bars off wharf-bars.
+ ; what stays here is which grid goes where, which is the only half mitty owns
  (hbars j hb) (limn-bars j (wharf-bars (hb 'plan) (hlr hb) (hb 'cols)))
 
  ; --- the bar: the bottom row, when 'bar is 1 -- the desks (the shown one lit), what has
@@ -183,7 +183,7 @@
                  "\e[?1003l\e[?1002l\e[?1000l")
 
  ; nothing is erased between frames, and nothing needs to be: panes and bars
- ; tile the wharf exactly (src/apps/berth/wharf.l's standing law), so every cell is written
+ ; tile the wharf exactly (src/apps/mitty/wharf.l's standing law), so every cell is written
  ; every frame and no stale glyph can survive a layout change.
  ; a picture kitty holds (pics 1) whose pane's screen keeps it no longer -- the pane gone, or
  ; the store swept it -- is freed there, data and all, and forgotten, so it goes again if seen
@@ -323,7 +323,7 @@
                      rows (hscreen-text p)
                      _ (pin st 'lines (two? rows ? rows [""]))
                      fc (vi 'vi-face st {'reg (hb 'clip)})
-                     sg (berth-stage (fc 0) (fc 1) (fc 2))
+                     sg (mitty-stage (fc 0) (fc 1) (fc 2))
                      (pin sg 'paste (fc 3),
                       hberth hb 'stack 50 (hopen-stage sg 1 1),
                       st))))
@@ -396,7 +396,7 @@
                                    (b = 126 && [126 49 48 50 91 27] = take 6 a2 ? (drop 6 a2) (go a2)))))
                  (string (rev (go ()))))
  (hsend hb t) (: (go i) (i < #t ? (hfeed hb (t i), go (i + 1)) 0) (go 0))
- ; an APC's body, to its ST: the one berth reads is the answer to its kitty query, which
+ ; an APC's body, to its ST: the one mitty reads is the answer to its kitty query, which
  ; turns the pictures on
  (hapc hb) (: (go acc) (see (hin hb) @ b
                           (? (b < 0) acc
@@ -570,9 +570,9 @@
                  (: c (hout hb)
                     (hbye hb, close c, pins hb 'in () 'out () 'gen (peep hb 'gen 0 + 1), 0)))
 
- ; --- berth: tie argv, or a stage, up. answers the first child's status pair (the
+ ; --- mitty: tie argv, or a stage, up. answers the first child's status pair (the
  ; one the caller named), or tether's errno if it never started; 0 after a stage ---
- (berth src) (: sz (hsize 0) r <sz c <>sz
+ (mitty src) (: sz (hsize 0) r <sz c <>sz
                  stg (tablet? src)
                  p0 (stg ? (hopen-stage src r c) (hopen src r c))
                  (atom? p0 ? p0
@@ -610,7 +610,7 @@
                  (k = 127 || k = 8) (: q (st 'q) (pins st 'q (snip q 0 (max 0 (#q - 1))) 'sel 0))
                  (31 < k && k < 127) (pins st 'q (st 'q + string k) 'sel 0)
                  0)
-     sg (berth-stage frame step (_ \ 0))
+     sg (mitty-stage frame step (_ \ 0))
      (pin sg 'name title, pin own () (hb 'next), hopen-stage sg 1 1))
 
  ; --- hands: the harbour as a model's tools see it -- every pane by id on every desk, read
@@ -820,4 +820,4 @@
   C-a: s v split, h j k l steer, x shut, [ ] copy and paste, c n p 0-9 desks, b a model,
        space open an app, w go to a pane, z the screensaver now, d detach, C-a a literal C-a"
  _ (pins (cite 'verbs 'tab) 'inle (udoor 'inle inle-main inle-usage 1 1)))
-) ; module berth
+) ; module mitty

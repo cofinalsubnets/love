@@ -1,4 +1,4 @@
-; test/host/vi.l -- vi on berth's harbour, over a real pty
+; test/host/vi.l -- vi on mitty's harbour, over a real pty
 ; not in the test/*.l corpus (the harbour rides screen/scribe/tether in src/love/*.c). the
 ; engine's laws are test/law/vi.l; this is the visit: a buffer berthed as a stage,
 ; :vs and :sp opening another beside or under it, the prefix steering the focus, and

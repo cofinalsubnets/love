@@ -1,15 +1,15 @@
-; src/apps/berth/limn.l -- to limn is to paint: cb cells onto an outer terminal, as escapes.
+; src/apps/mitty/limn.l -- to limn is to paint: cb cells onto an outer terminal, as escapes.
 ; the third piece of the pane story and the one every seat needs -- cb says what is
-; in a grid (bytes in, cells out), src/apps/berth/wharf.l says where the rectangle is, and this
+; in a grid (bytes in, cells out), src/apps/mitty/wharf.l says where the rectangle is, and this
 ; says a grid's cells at an origin. cells are the currency all three speak.
-; a module: `(borrow 'limn)` on the artifact, `(borrow "src/apps/berth/limn.l")` off the tree.
+; a module: `(borrow 'limn)` on the artifact, `(borrow "src/apps/mitty/limn.l")` off the tree.
 ;
 ; it takes a grid and an origin, never a plan and never a harbour: the bars come in as
 ; wharf-bars' list, so nothing here knows what a berth or a buffer is, and one painter
 ; serves panes of ptys and splits of one process alike.
 ;
 ; nothing is erased, and nothing needs to be -- a caller whose panes and bars tile its
-; wharf (src/apps/berth/wharf.l's standing law) writes every cell every frame, so no stale glyph
+; wharf (src/apps/mitty/wharf.l's standing law) writes every cell every frame, so no stale glyph
 ; can survive a layout change. a caller that leaves gaps owns them.
 ;
 ; host-only: `glass` is cb's nif (src/love/quay/nif.c), so this never joins the corpus --
