@@ -2,11 +2,15 @@
 ; read_file, write_file, edit_file, shell, and list_sessions and send_message, which speak to
 ; the other bees on this machine (doc/bee.md). a write, an edit or a command asks y/n first.
 ;
-;   love bee [-y] [--plain] [prompt ..]      one prompt, the screen, or a > loop
+;   love bee                                 on a terminal, the hud: queues, locks, sessions
+;   love bee --chat [-y] | --hud             the chat's full screen; the hud once, as text
+;   love bee [-y] [--plain] [prompt ..]      one prompt, or a > loop
 ;   love bee --list | --send NAME TEXT ..    the sessions, from a shell
 ;   love bee --avatar [NAME]                 the avatars, or wear one
 ;   love bee --keygen root | box [NAME]      the lineage's root, or this box's key and card
 ;   love bee --ticket [DAYS] | --enrol TOKEN [NAME] | --admit | --enrolled   a box joins a lineage
+;   love bee --deliver | --ledger            a sealed message, or queue call, from another box, on stdin
+;   love bee --revoke PUB|NAME | --revocations | --revoked   the lineage's revoked keys
 ;
 ; the settings are ~/.love/etc/bee.l's, each a form per line; ./.bee.l may set model,
 ; max-tokens, thinking, context and queue-watch over them:
@@ -20,6 +24,8 @@
 ;   (queue-watch N)       seconds between readings of the merge queues; 20, and 0 for never
 ;   (backend claude-code) a `claude -p` child thinks and runs the tools, bee the harness; api else
 ;   (claude-model NAME)   the model that child runs; claude's own default when unset
+;   (relay WORD ..)       what carries mail to another box: HOST LOVE bee VERB follow; ssh -T
+;   (ledger-dir PATH)     where a queue call from another box runs; HOME
 ;   (mem-floor GB) (heavy-max N)   no heavy lock below GB available; N heavy locks at once, 2
 ;   (avatar NAME)       the face and its accent, bunny unless set; /avatar or --avatar sets it
 ;   (screensaver NAME) (screensaver-idle N)   the screen's saver after N minutes without a key:
@@ -302,22 +308,72 @@
      ; a message from one name into another's inbox -> "" when it is there, else why not. a
      ; sealed one adds to, id and cert (its chain, base64) and ends its header with the sig
      ; over every line above it, the blank line and the text
-     (post-with from to text seal)
-      (: c (card-of to) ib (cell-of to + "/inbox")
-         id (show (clock 0) + "-" + from + "-" + hex2 (clock 0 % 256))
+     ; [id text] of a message, sealed when seal is [key chain]: then it adds to, id and cert (its
+     ; chain, base64) and ends its header with the sig over every line above, the blank line and the text
+     (sealed-msg from to text seal)
+      (: id (show (clock 0) + "-" + from + "-" + hex2 (clock 0 % 256))
          hd ("from " + from + "\nsent " + show (clock 0 // 1000) + "\n"
              + (two? seal ? ("to " + to + "\nid " + id + "\ncert " + cite 'ssh 'b64e (seal 1) 1 + "\n") ""))
          sg (? (two? seal) ("sig " + cite 'tls 'hex (cite 'ssh 'ed-sign <<seal (<seal 1) (hd + "\n" + text)) + "\n") "")
-         (? !(tablet? c && alive? (card-pid c)) ("no session named " + to)
-            !(spit-file (ib + "/." + id) (hd + sg + "\n" + text)) ("cannot write to " + to)
+         [id (hd + sg + "\n" + text)])
+     (post-with from to text seal)
+      (: at (find to "@" 0) nm (at < 0 ? to (snip to 0 at)) box (? (0 < at) (snip to (at + 1) #to) "")
+         b (box-seal 0)
+         away (0 < #box && !(two? b && b 1 "name" = box))
+         c (card-of nm) ib (cell-of nm + "/inbox")
+         m (sealed-msg from to text seal) id <m
+         (? away (? (two? seal) (: r (relay box (m 1) "--deliver") (? (<r = 0) "" ("cannot deliver to " + box + ": " + r 1)))
+                    ("mail leaves this box only sealed, and nothing here can seal it for " + to))
+            !(tablet? c && alive? (card-pid c)) ("no session named " + to)
+            !(spit-file (ib + "/." + id) (m 1)) ("cannot write to " + to)
             (nom? (rename (ib + "/." + id) (ib + "/" + id))) ("cannot deliver to " + to)
             ""))
+     ; the way to another box: ~/.love/etc/bee/boxes, a line each, NAME HOST [LOVE] -> [host love]
+     (box-route nm)
+      (: s (slurp-file (bee-keys + "/boxes"))
+         hit (filter (w \ two? w && <w = nm) (map words (? (string? s) (lines s) ())))
+         w (two? hit ? <hit [nm])
+         [(#w > 1 ? (w 1) nm) (#w > 2 ? (w 2) "love")])
+     ; a sealed message carried to another box: (relay CMD ..) HOST LOVE bee VERB, the message on
+     ; its stdin -> [exit output]
+     bee-relay (: v (peep bee-salt 'relay ()) (two? v ? (map word v) ["ssh" "-T"]))
+     (relay box msg verb)
+      (: r (box-route box) _ (mkdirs bee-hive) f (bee-hive + "/.relay-" + show (getpid 0))
+         _ (spit-file f msg)
+         fd (openfd f 0) pp (pipe 0)
+         p (spawnio (bee-relay + [<r (r 1) "bee" verb]) fd >pp >pp (open-fds 0) -1 0)
+         _ (close >pp) _ (? (0 <= fd) (close fd) 0)
+         q (fdopen <pp)
+         (go acc) (: c (see q) (? (c < 0) acc (: _ (unsee q c) (go (acc + chug q)))))
+         o (go "")
+         _ (close q)
+         st (reap p) _ (unlink f)
+         [st o])
+     ; --deliver, a sealed message on stdin from another box: kept in the inbox it names when it
+     ; is addressed here, to a live session, under an id not yet taken, and its seal checks
+     (deliver s)
+      (: k (find s "\n\n" 0) hd (? (k < 0) s (snip s 0 k))
+         (hv key) (: fl (filter (\ l (starts? l (key + " "))) (lines hd)) (? (two? fl) (snip <fl (#key + 1) #<fl)))
+         to (: t (hv "to") (string? t ? t "")) id (: i (hv "id") (string? i ? i ""))
+         at (find to "@" 0) nm (? (0 < at) (snip to 0 at) "")
+         b (box-seal 0) d (cell-of nm) c (card-of nm)
+         (? !(two? b) [0 "this box has no card"]
+            !(0 < at && snip to (at + 1) #to = b 1 "name") [0 ("not addressed to this box: '" + to + "'")]
+            !(0 < #id && id 0 != 46 && find id "/" 0 < 0) [0 "a bad id"]
+            !(tablet? c && alive? (card-pid c)) [0 ("no session named " + nm)]
+            (two? (stat (d + "/inbox/" + id)) || two? (stat (d + "/read/" + id))) [0 "that id is taken"]
+            !(string? ((mail-check s id nm) 2) && 0 < #((mail-check s id nm) 2)) [0 "the seal does not check"]
+            !(spit-file (d + "/inbox/." + id) s) [0 ("cannot write to " + nm)]
+            (nom? (rename (d + "/inbox/." + id) (d + "/inbox/" + id))) [0 ("cannot deliver to " + nm)]
+            [1 ("delivered to " + to)]))
      (post-as from to text) (post-with from to text ())
      (post to text) (post-with (me 0) to text (? (bee-cell 'state || bee-as?) (cell-seal 0)))
      ; a message file, by its id -> [from text seal]: headers to the first blank line, then the
      ; text. seal is the sender's card name when its sig checks against this box's root, "" for
-     ; plain mail or where there is no root to check by, and () when a sig fails
-     (mail-parse s id)
+     ; plain mail or where there is no root to check by, and () when a sig fails. it is addressed
+     ; to who, bare or at this box
+     (mail-parse s id) (mail-check s id (me 0))
+     (mail-check s id who)
       (: k (find s "\n\n" 0) hd (? (k < 0) s (snip s 0 k)) body (? (k < 0) "" (snip s (k + 2) #s))
          ls (lines hd)
          (hv key) (: fl (filter (\ l (starts? l (key + " "))) ls) (? (two? fl) (snip <fl (#key + 1) #<fl)))
@@ -327,10 +383,10 @@
          (? !(string? sg) [from body ""]
             !(two? b) [from body ""]
             (: ch (: c (hv "cert") (string? c ? (cite 'ssh 'b64d c) ()))
-               t (? (string? ch) (sl 'seal-check ch (b 1 "lineage") (clock 0 // 1000) ()))
+               t (? (string? ch) (sl 'seal-check ch (b 1 "lineage") (clock 0 // 1000) (bee-revoked 0)))
                signed (foldl (\ a l (a + l + "\n")) "" (take (#ls - 1) ls) + "\n" + body)
                (? (&& (starts? (ls (#ls - 1)) "sig ") (tablet? t) (t "kind" = "cell")
-                      (starts? (t "name") (from + "@")) (hv "to" = me 0) (hv "id" = id)
+                      (starts? (t "name") (from + "@")) (elem (hv "to") [who (who + "@" + b 1 "name")]) (hv "id" = id)
                       (cite 'ssh 'ed-verify (cite 'tls 'unhex (t "pub")) signed (cite 'tls 'unhex sg)))
                   [from body (t "name")] [from body ()]))))
      ; a mail that fails its seal is kept in read/, and the model is told only that it came
@@ -825,6 +881,42 @@
       (? !(q-name? (in "queue")) [0 "a queue is refs/queue/NAME or queue/NAME"]
          (two? (q-bad in)) [0 ("a field holds a control character, or a space outside a text: " + <(q-bad in))]
          (go in))
+     ; --- the queue across boxes: queue/NAME@BOX lives in BOX's hub. a call to it goes there
+     ; sealed, to ledger@BOX, and that box's --ledger runs it as the session the seal names ---
+     (q-route tool in run)
+      (: q (field in "queue" "") at (find q "@" 0) box (? (0 < at) (snip q (at + 1) #q) "")
+         b (box-seal 0)
+         (? (#box = 0) (run in)
+            (two? b && b 1 "name" = box) (run (pin in "queue" (snip q 0 at)))
+            (: seal (cell-seal 0)
+               (? !(two? seal) [0 "a queue on another box is written only sealed, and nothing here can seal"]
+                  (: m (sealed-msg (me 0) ("ledger@" + box) (json-show {"tool" tool "in" (pin in "queue" (snip q 0 at))}) seal)
+                     r (relay box (m 1) "--ledger")
+                     [(<r = 0 ? 1 0) (chomp (r 1))])))))
+     ; --ledger, a sealed call on stdin: run in (ledger-dir PATH), else HOME, as the sealed name.
+     ; each id is taken once
+     bee-ledger-tools ["queue_row" "queue_lead" "queue_land" "queue_landed"]
+     (ledger s)
+      (: k (find s "\n\n" 0) hd (? (k < 0) s (snip s 0 k)) body (? (k < 0) "" (snip s (k + 2) #s))
+         (hv key) (: fl (filter (\ l (starts? l (key + " "))) (lines hd)) (? (two? fl) (snip <fl (#key + 1) #<fl)))
+         to (: t (hv "to") (string? t ? t "")) id (: i (hv "id") (string? i ? i ""))
+         b (box-seal 0) ids (bee-keys + "/ledger-ids")
+         sealed (: m (mail-check s id "ledger") (string? (m 2) && 0 < #(m 2) ? (m 2) ""))
+         j (json-read body) call (two? j && tablet? (j 1) ? (j 1) {})
+         tool (peep call "tool" "") in (peep call "in" ())
+         (? !(two? b) [0 "this box has no card"]
+            (to != "ledger@" + b 1 "name") [0 ("not a ledger call for this box: '" + to + "'")]
+            !(0 < #id && id 0 != 46 && find id "/" 0 < 0) [0 "a bad id"]
+            (#sealed = 0) [0 "the seal does not check"]
+            !(elem tool bee-ledger-tools && tablet? in) [0 "a ledger call is a queue tool and its input"]
+            (: _ (mkdirs ids) fd (openfd (ids + "/" + id) 3)
+               (? !(charm? fd) [0 "that id is taken"]
+                  (: _ (close fd)
+                     _ (pin bee-who 'name sealed)
+                     dir (setting 'ledger-dir (: h (getenv "HOME") (string? h ? h ".")))
+                     _ (chdir dir)
+                     (tool @ "queue_row" (queue-row in) "queue_lead" (queue-lead in)
+                             "queue_land" (queue-land in) (queue-landed in)))))))
      (queue-row in) (q-check in queue-row1)
      ; a queue not made yet is made on bee's standard header, led by the leader given, else this session
      (queue-row1 in)
@@ -1441,10 +1533,10 @@
                                          + (f 'yes ? "" ", reading only") + "; send_message reaches it")]
                             [0 e]))
           "stop_bee" [1 (stop-bee (in "name"))]
-          "queue_row" (queue-row in)
-          "queue_lead" (queue-lead in)
-          "queue_land" (queue-land in)
-          "queue_landed" (queue-landed in)
+          "queue_row" (q-route "queue_row" in queue-row)
+          "queue_lead" (q-route "queue_lead" in queue-lead)
+          "queue_land" (q-route "queue_land" in queue-land)
+          "queue_landed" (q-route "queue_landed" in queue-landed)
           "lock_acquire" (lock-acquire in)
           "lock_release" (lock-release in)
           "lock_list" (lock-list 0)
@@ -2050,6 +2142,89 @@
                         _ (? (bee-cc 'live) (cc-stop 0) 0)
                         (unsettle 0)))})
 
+     ; --- the hud: what a bare `love bee` on a terminal shows. the queues, the locks and the
+     ; hive, read again every (queue-watch N) seconds; no model and no key, and it settles no
+     ; session, so it is in no list and takes no mail. c or enter opens the chat, q quits ---
+     (hud-short s) (string? s && 9 < #s ? (snip s 0 9) s)
+     (hud-nums ks) (map show (sort (map digits ks)))
+     ; a queue's lines: its name, base and leader, then each row, a fold under the row it joins
+     (hud-queue nm text)
+      (: rows (q-rows text) h (q-head rows) b (q-base-line text) lead (q-leader text)
+         (row p ind)
+          (: r (rows p) st (r 5)
+             (ind + (p = h ? (sgr "1" "▸ ") "  ") + edfit (r 0) 4 " " + edfit (r 1) 10 " " + " " + edfit (r 2) 18 " "
+              + " " + edfit (hud-short (r 3)) 10 " " + edfit (hud-short (r 4)) 10 " "
+              + (st @ "green" (sgr "32" st) "gating" (sgr "33" st) "waiting" st (sgr "2" st))))
+         top (filter (p \ !(q-folded? (rows p))) (hud-nums (keys rows)))
+         ([((sgr "1" nm) + (q-long? text ? (sgr "33" "  long: fold, not line up") ""))]
+          + [("  base " + (two? b ? (<b + " " + b 1) "-") + "   leader " + (0 < #lead ? lead "-"))]
+          + (two? top ? (catmap (p \ [(row p "")] + map (f \ row f "    ") (hud-nums (q-folds rows p))) top)
+                        ["  no rows"])))
+     (hud-locks _)
+      (? !(locks? 0) ["locks are not in this binary"]
+         (: t (lk 'locks-list (lk 'locks-root 0))
+            (who h) (show (peep h "pid" "?") + " " + peep h "note" "")
+            ex (peep t "exclusive" ()) hv (peep t "heavy" ()) wt (peep t "waiting" ())
+            hosts (filter (e \ starts? <e "a64host-") ex) outs (filter (e \ !(starts? <e "a64host-")) ex)
+            ([((sgr "1" "locks") + sgr "2" ("  " + (: m (peep t "mem_gb" ()) (? (m = ()) "?" (show (int (m * 10) / 10)))) + " GB free, load "
+                                                + (: l (peep t "load" "?") (string? l ? l (show l)))))]
+             + [("  heavy " + show #hv + "/" + show bee-hmax + (two? hv ? (": " + foldl (\ a h (a + (#a ? ", " "") + who h)) "" hv) ""))]
+             + (two? wt ? [("  waiting: " + foldl (\ a h (a + (#a ? ", " "") + who h)) "" wt)] ())
+             + map (e \ "  " + <e + "  " + who (e 1)) outs
+             + map (e \ "  " + <e + "  " + who (e 1)) hosts)))
+     (hud-sessions _)
+      (: ps (settled 0)
+         ([(sgr "1" "sessions")]
+          + (two? ps ? (map (p \ (: c (p 1) st (peep c "state" "?")
+                                  ("  " + edfit <p 12 " " + (st = "busy" ? (sgr "33" st) st) + "  "
+                                   + (: b (peep c "branch" "") (0 < #b ? b "-")) + "  " + sgr "2" (peep c "cwd" ""))))
+                          ps)
+                       ["  none"])))
+     ; the whole of it, as lines
+     (hud-lines _)
+      (: qs (q-sections (lush-out bee-qcmd))
+         (catmap (s \ hud-queue <s (s 1) + [""]) qs + hud-locks 0 + [""] + hud-sessions 0))
+     (hud-frame c)
+      (: w (c 'cols) h (c 'rows) ls (c 'lines)
+         top (max 0 (min (c 'top) (#ls - (h - 1))))
+         win (take (h - 1) (drop top ls))
+         rows (map (l \ edfit l w " ") (win + map (_ \ "") ^(h - 1 - #win)))
+         stat (edfit (sgr "2" ("  bee · read " + utc-minute (c 'read // 1000) + " · c chat · r read again · ↑↓ scroll · q quit"
+                                + (#ls > h - 1 ? ("   " + show (top + 1) + "-" + show (top + #win) + " of " + show #ls) "")))
+                     w " ")
+         (cite 'tui 'tui-fresh c h [w h] () rows stat h 1))
+     (hud-read c) (: _ (pins c 'lines (hud-lines 0) 'read (clock 0)) (soil c))
+     (hud-keys c)
+      (: k (edkey in)
+         _ (? (elem k [113 81 3 4 -7]) (pin c 'over 1)
+              (elem k [99 67 13 10]) (pins c 'chat 1 'over 1)
+              (elem k [114 82]) (hud-read c)
+              (elem k [-9 106 6]) (: _ (pin c 'top (c 'top + (k = 6 ? (c 'rows // 2) 1))) (soil c))
+              (elem k [-8 107 2]) (: _ (pin c 'top (max 0 (c 'top - (k = 2 ? (c 'rows // 2) 1)))) (soil c))
+              0)
+         (? (c 'over) 0 (hud-keys c)))
+     (hud-swim c tick)
+      (: b (c 'dirt)
+         _ (? (peep b () 0) (: _ (pin b () 0) _ (say out (hud-frame c)) (flush out)) 0)
+         _ (? (tick % 16 = 0) (tide c) 0)
+         _ (? ((0 < bee-qwatch ? bee-qwatch 20) * 1000 < clock 0 - c 'read) (hud-read c) 0)
+         _ (rest 33)
+         (? (c 'over) 0 (hud-swim c (tick + 1))))
+     ; -> 1 when the chat was asked for
+     (hud _)
+      (: c {'rows 24 'cols 80 'over 0 'chat 0 'top 0 'lines () 'read 0 'dirt {() 1}}
+         _ (hud-read c) _ (tide c)
+         _ (raw 1)
+         _ (say out (esc + "[?1049h" + esc + "[2J" + esc + "[?25l" + esc + "[22;0t" + esc + "]2;bee" + string 7))
+         _ (flush out)
+         up (twirl (\ _ (hud-keys c)) 0)
+         _ (hud-swim c 0)
+         _ (? (landed? up) 0 (freeze up))
+         _ (say out (esc + "[0m" + esc + "[?25h" + esc + "[?1049l" + title-off 0))
+         _ (flush out)
+         _ (raw 0)
+         (c 'chat))
+
      ; --- the door ---
      ; a prompt on the command line runs once, plainly; with none, a terminal gets the full
      ; screen and anything else the > loop. --plain asks for the loop on a terminal too
@@ -2400,7 +2575,7 @@
          k (? (two? b) (: r (sl 'seal-keyread kp)
                           (? (two? r) r (: _ (sl 'seal-keywrite kp (sl 'seal-key 0)) (sl 'seal-keyread kp)))))
          cur (slurp-file (d + "/cert"))
-         (fresh? s) (: t (sl 'seal-check s (b 1 "lineage") (now + 3600) ()) (&& (tablet? t) (t "pub" = hx (k 1))))
+         (fresh? s) (: t (sl 'seal-check s (b 1 "lineage") (now + 3600) (bee-revoked 0)) (&& (tablet? t) (t "pub" = hx (k 1))))
          (? !(two? k) ()
             (? (string? cur) (fresh? cur) 0) [k cur]
             (: card (sl 'seal-card (b 2) [["lineage" (b 1 "lineage")] ["name" (me 0 + "@" + b 1 "name")] ["kind" "cell"]
@@ -2456,6 +2631,7 @@
             !(hex? (f "pub") 32 && hex? (f "sig") 64 && string? (f "name") && card-name? (f "name"))
              [0 "the request is not name, pub, ticket and sig"]
             !(cite 'ssh 'ed-verify (ux (f "pub")) body (ux (f "sig"))) [0 "the request's sig does not check"]
+            (elem (f "pub") (bee-revoked 0)) [0 "that key is revoked"]
             !(string? tt) [0 "no such ticket here"]
             !(now < digits (peep (kv-lines tt) "expires" "0")) [0 "the ticket is out of date"]
             (: fd (openfd (tf + ".spent") 3)
@@ -2468,12 +2644,71 @@
      (enrolled s)
       (: hx (cite 'tls 'hex) lf (slurp-file (bee-keys + "/lineage"))
          k (sl 'seal-keyread (bee-keys + "/box.key"))
-         t (? (string? lf) (sl 'seal-check s (snip lf 0 64) (clock 0 // 1000) ()) "no lineage here: enrol first")
+         t (? (string? lf) (sl 'seal-check s (snip lf 0 64) (clock 0 // 1000) (bee-revoked 0)) "no lineage here: enrol first")
          (? (string? t) [0 ("the card does not check: " + t)]
             !(two? k) [0 k]
             (t "kind" != "box" || t "pub" != hx (k 1)) [0 "the card is not for this box's key"]
             (spit-file (bee-keys + "/box.card") s) [1 ("enrolled: " + t "name" + " in lineage " + snip lf 0 64)]
             [0 "cannot write box.card"]))
+
+     ; --- revocation: the root's box keeps a list of keys no longer vouched for, signed by the
+     ; root and numbered; a box keeps the newest it has seen. a card under a listed key fails
+     ; every check: mail, deliveries, ledger calls and admissions ---
+     ; the lineage this box trusts: its card's, else what it enrolled under, else its own root
+     (lineage-root _)
+      (: b (box-seal 0) lf (slurp-file (bee-keys + "/lineage")) r (root-key 0)
+         (? (two? b) (b 1 "lineage") (string? lf && 64 <= #lf) (snip lf 0 64)
+            (two? r) (cite 'tls 'hex (r 1)) ""))
+     ; a list's text -> [serial pubs] when the lineage's root signed it, else ()
+     (revoked-of s root)
+      (: k (find s "\nsig " 0) body (? (0 <= k) (snip s 0 (k + 1)) "")
+         f (kv-lines s) sg (f "sig")
+         pubs (filter (p \ hex? p 32) (map (l \ snip l 8 (min #l 72)) (filter (l \ starts? l "revoked ") (lines body))))
+         (? (&& (0 < #body) (hex? root 32) (f "lineage" = root) (string? (f "serial")) (hex? sg 64)
+                (cite 'ssh 'ed-verify (cite 'tls 'unhex root) body (cite 'tls 'unhex sg)))
+            [(digits (f "serial")) pubs]))
+     ; the keys this box refuses
+     (bee-revoked _)
+      (: s (slurp-file (bee-keys + "/revoked")) l (? (string? s) (revoked-of s (lineage-root 0)))
+         (two? l ? (l 1) ()))
+     ; --revoke PUB|NAME: on the root's box, the list again with one more key, its serial up by
+     ; one, then carried to every box in boxes -> [1 what happened]
+     (revoke ws)
+      (: hx (cite 'tls 'hex) r (root-key 0) root (? (two? r) (hx (r 1)) "")
+         w (two? ws ? <ws "")
+         ; a box's name -> the pub its spent ticket admitted
+         byname (: fs (readdir bee-tickets)
+                   hits (filter two? (map (f \ (? (ends? f ".spent")
+                                                  (: t (kv-lines (: x (slurp-file (bee-tickets + "/" + f)) (string? x ? x "")))
+                                                     (? (t "name" = w) [(t "pub")]))))
+                                         (two? fs ? fs ())))
+                   (two? hits ? <<hits ()))
+         pub (? (hex? w 32) w byname)
+         cur (: s (slurp-file (bee-keys + "/revoked")) (? (string? s) (revoked-of s root)))
+         serial (two? cur ? (<cur + 1) 1)
+         olds (two? cur ? (cur 1) ())
+         (? !(two? r) [0 "no root here: keys are revoked where root.key is"]
+            !(string? pub) [0 ("no key or admitted box named '" + w + "'")]
+            (pub = root) [0 "the root is not revoked: make a new lineage"]
+            (: body ("lineage " + root + "\nserial " + show serial + "\n"
+                     + foldl (\ a p (a + "revoked " + p + "\n")) "" (olds + (elem pub olds ? () [pub])))
+               txt (body + "sig " + hx (cite 'ssh 'ed-sign <r (r 1) body) + "\n")
+               _ (spit-file (bee-keys + "/revoked") txt)
+               sent (map (b \ (: x (relay b txt "--revocations") (b + (<x = 0 ? ": taken" (": not taken (" + chomp (x 1) + ")")))))
+                         (bee-boxes 0))
+               [1 ("revoked " + pub + ", serial " + show serial + foldl (\ a l (a + "\n" + l)) "" sent)])))
+     ; the boxes this one knows the way to
+     (bee-boxes _)
+      (: s (slurp-file (bee-keys + "/boxes"))
+         (filter (n \ 0 < #n) (map (l \ (: w (words l) (two? w ? <w ""))) (? (string? s) (lines s) ()))))
+     ; --revocations, a list on stdin: kept when the root signed it and it is newer than this box's
+     (revocations s)
+      (: root (lineage-root 0) l (revoked-of s root)
+         cur (: c (slurp-file (bee-keys + "/revoked")) (? (string? c) (revoked-of c root)))
+         (? !(two? l) [0 "the list is not signed by this box's root"]
+            (two? cur && <l <= <cur) [0 ("not newer: this box has serial " + show <cur)]
+            (spit-file (bee-keys + "/revoked") s) [1 ("serial " + show <l + ", " + show #(l 1) + " revoked")]
+            [0 "cannot write the list"]))
 
      ; --list, --send, --spawn and --stop speak to the hive from a shell and settle nowhere;
      ; a sender there is BEE_NAME, else cli- and the user
@@ -2517,6 +2752,11 @@
           "--ticket" (say-r (mint >as))
           "--enrol" (say-r (enrol >as))
           "--admit" (say-r (admit (slurp in)))
+          "--deliver" (say-r (deliver (slurp in)))
+          "--revoke" (say-r (revoke >as))
+          "--revocations" (say-r (revocations (slurp in)))
+          "--revoked" (: s (slurp-file (bee-keys + "/revoked")) (say-r (string? s ? [1 s] [0 "no list here"])))
+          "--ledger" (say-r (ledger (slurp in)))
           "--enrolled" (say-r (enrolled (slurp in)))
           "--keygen" (: r (keygen >as) (? <r (: _ (puts (r 1 + (ends? (r 1) "\n" ? "" "\n"))) 0) (say err ("bee: " + r 1 + "\n"), 1)))
           "--stop" (? (#as < 2) (say err "usage: love bee --stop NAME\n", 2)
@@ -2535,7 +2775,7 @@
      (serve-first key f p)
       (? (0 < #p) (: _ (state! "busy") m (turn key f [(user p)]) _ (state! "idle") (serve key f (two? m ? m ())))
          (serve key f ()))
-     bee-flags ["-y" "--plain" "--serve" "--mcp" "--stage"]
+     bee-flags ["-y" "--plain" "--serve" "--mcp" "--stage" "--chat" "--hud"]
      (bee-go as)
       (: key (getenv bee-key-env)
          yes (elem "-y" as)
@@ -2545,7 +2785,11 @@
          (? (elem "--mcp" as) (: _ (mcp-serve in out) 0)             ; a claude child's own server
             (two? as && <as = "--lock") (bee-cli as yes)              ; its command's words stay as given
             (two? as && elem <as ["-s" "--screensaver"]) (cite 'saver 'saver-cli >as)   ; a saver, no session
-            (two? words && elem <words ["--list" "--send" "--spawn" "--stop" "--avatar" "--resume" "--keygen" "--ticket" "--enrol" "--admit" "--enrolled"]) (bee-cli words yes)
+            (elem "--hud" as) (: _ (puts (foldl (\ a l (a + l + "\n")) "" (hud-lines 0))) 0)   ; once, as text
+            ; a bare bee on a terminal is the hud; the chat is behind c, or --chat
+            (!pl && !sv && !(two? words) && !(elem "--chat" as) && !(elem "--stage" as) && two? (tty 1))
+             (? (hud 0) (bee-go (as + ["--chat"])) 0)
+            (two? words && elem <words ["--list" "--send" "--spawn" "--stop" "--avatar" "--resume" "--keygen" "--ticket" "--enrol" "--admit" "--enrolled" "--deliver" "--ledger" "--revoke" "--revocations" "--revoked"]) (bee-cli words yes)
             ; the api backend wants its endpoint, model and key; claude brings its own. a stage
             ; answers why as a string: a mitty shows it, stderr would land on its glass
             (: why (? (!bee-cc? && atom? bee-at) ("cannot read the url " + bee-url)
@@ -2567,7 +2811,9 @@
                _ (unsettle 0)
                r)))))
       (bee-go as))
-   bee-usage "usage: love bee [-y] [--plain] [PROMPT ..]      one prompt, the screen, or a > loop
+   bee-usage "usage: love bee                                  on a terminal, the hud: queues, locks, sessions
+       love bee --chat [-y] | --hud                  the chat's full screen; the hud once, as text
+       love bee [-y] [--plain] [PROMPT ..]           one prompt, or a > loop
        love bee --list | --send NAME TEXT ..           the sessions, from a shell
        love bee --spawn NAME DIR [-y] PROMPT ..         a bee serving detached in DIR
        love bee --stop NAME | --serve [-y] [PROMPT ..]

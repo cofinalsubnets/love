@@ -27,6 +27,11 @@
    cr-digits (cite 'kore 'wg-digits)
    cr-find fsub
    (cr-in s p) (0 <= cr-find s p 0)
+   ; a line without its sgr escapes
+   (cr-plain l) (: (go i acc) (? (#l <= i) acc
+                                  (l i = 27) (: (skip j) (? (#l <= j || (64 <= l j && l j <= 126 && j > i + 1)) (go (j + 1) acc) (skip (j + 1))) (skip (i + 1)))
+                                  (go (i + 1) (acc + string [(l i)])))
+                   (go 0 ""))
    (cr-hex n) (? (n < 16) (string ("0123456789abcdef" n)) (cr-hex (n // 16) + cr-hex (n % 16)))
    (cr-head c a) (: b (see c) (? (b < 0) a
                                  (: a2 (a + string b) (? (cr-in a2 "\r\n\r\n") a2 (cr-head c a2)))))
@@ -873,6 +878,120 @@
            (1 = <again) (cr-in (again 1) "spent")
            (1 = <bad) (cr-in (bad 1) "sig does not check")
            (1 = <nr) (cr-in (nr 1) "no root here"))
+   0)
+
+; --- the link: a sealed message to NAME@BOX leaves by (relay ..), here a stand-in for ssh that runs
+; the far box's --deliver; the far reader sees the seal. plain mail, mail for another box and a
+; replayed id are refused at the door
+(: nb (cr-dir "near" "") fb (cr-dir "far" "")
+   _ (cr-run nb "" "--keygen root") _ (cr-run nb "" "--keygen box near")
+   tk (: r (cr-run nb "" "--ticket") (snip (r 1) 0 129))
+   _ (cr-put fb "req" ((cr-run fb "" ("--enrol " + tk + " far")) 1))
+   _ (cr-put fb "card" ((cr-run nb "" ("--admit < '" + fb + "/req'")) 1))
+   _ (cr-run fb "" ("--enrolled < '" + fb + "/card'"))
+   ; the stand-in ssh: HOST LOVE bee --deliver, run as the far box
+   _ (cr-put nb "ssh" ("exec env HOME='" + fb + "' '" + cr-love + "' '" + cr-app + "' --deliver\n"))
+   _ (cr-put (nb + "/.love/etc") "bee.l" ("(relay sh " + nb + "/ssh)\n"))
+   _ (cr-put (nb + "/.love/etc/bee") "boxes" "far far.example\n")
+   hv (fb + "/.love/run/hive") pc (hv + "/peer")
+   _ (map (\ p (mkdir p 448)) [(fb + "/.love/run") hv pc (pc + "/inbox") (pc + "/read")])
+   _ (cr-put pc "card" ("pid " + show (getpid 0) + "\ncwd /x\nstate idle\n"))
+   (msgs ls) (foldl (\ a m (a + json-show m + "\n")) "" ls)
+   (call id nm args) {"jsonrpc" "2.0" "id" id "method" "tools/call" "params" {"name" nm "arguments" args}}
+   _ (cr-put nb "send" (msgs [(call 1 "send_message" {"to" "peer@far" "text" "hello from near"})]))
+   _ (cr-put fb "take" (msgs [(call 2 "inbox" {})]))
+   s1 (cr-run nb "BEE_NAME=sender" ("--mcp < '" + nb + "/send'"))
+   ib (: fs (readdir (pc + "/inbox")) (two? fs ? fs ()))
+   m (? (two? ib) (cr-get (pc + "/inbox/" + <ib)) "")
+   t1 (cr-run fb "BEE_AS=peer" ("--mcp < '" + fb + "/take'"))
+   _ (cr-put fb "again" m)
+   replay (cr-run fb "" ("--deliver < '" + fb + "/again'"))
+   _ (cr-put fb "plain" "from sender\nsent 1\nto peer@far\nid 9-sender-00\n\nunsealed\n")
+   plain (cr-run fb "" ("--deliver < '" + fb + "/plain'"))
+   elsewhere (cr-run nb "" ("--deliver < '" + fb + "/again'"))
+   _ (test (0 = <s1) (cr-in (s1 1) "sent to peer@far") (1 = #ib)
+           (cr-in m "\nto peer@far\n")
+           (cr-in (t1 1) "sealed=\\\"sender@near\\\"") (cr-in (t1 1) "hello from near")
+           (1 = <replay) (cr-in (replay 1) "taken")
+           (1 = <plain) (cr-in (plain 1) "seal does not check")
+           (1 = <elsewhere) (cr-in (elsewhere 1) "not addressed to this box"))
+   0)
+
+; --- the queue across boxes: refs/queue/main@near, written from far, lands in near's repo as a
+; row of far's sealed session; the same call again, and a call to a box that is not this one, fail
+(: nb (cr-dir "qnear" "") fb (cr-dir "qfar" "") repo (nb + "/repo")
+   _ (cr-run nb "" "--keygen root") _ (cr-run nb "" "--keygen box near")
+   tk (: r (cr-run nb "" "--ticket") (snip (r 1) 0 129))
+   _ (cr-put fb "req" ((cr-run fb "" ("--enrol " + tk + " far")) 1))
+   _ (cr-put fb "card" ((cr-run nb "" ("--admit < '" + fb + "/req'")) 1))
+   _ (cr-run fb "" ("--enrolled < '" + fb + "/card'"))
+   _ (mkdir repo 493) _ (hark ["git" "-C" repo "init" "-q"])
+   _ (cr-put (nb + "/.love/etc") "bee.l" ("(ledger-dir " + repo + ")\n"))
+   ; the stand-in ssh: HOST LOVE bee VERB, run as the near box
+   _ (cr-put fb "ssh" ("exec env HOME='" + nb + "' '" + cr-love + "' '" + cr-app + "' \"$4\"\n"))
+   _ (cr-put (fb + "/.love/etc") "bee.l" ("(relay sh " + fb + "/ssh)\n"))
+   (msgs ls) (foldl (\ a m (a + json-show m + "\n")) "" ls)
+   (call id nm args) {"jsonrpc" "2.0" "id" id "method" "tools/call" "params" {"name" nm "arguments" args}}
+   _ (cr-put fb "row" (msgs [(call 1 "queue_row" {"queue" "refs/queue/main@near" "state" "waiting" "branch" "b1" "note" "from far"})]))
+   r1 (cr-run fb "BEE_NAME=ant" ("--mcp < '" + fb + "/row'"))
+   _ (hark ["sh" "-c" ("git -C '" + repo + "' cat-file -p refs/queue/main > '" + nb + "/q.txt'")])
+   qt (cr-get (nb + "/q.txt"))
+   _ (cr-put nb "plain" "from ant\nsent 1\nto ledger@near\nid 9-ant-00\n\n{}\n")
+   plain (cr-run nb "" ("--ledger < '" + nb + "/plain'"))
+   _ (test (1 = <plain) (cr-in (plain 1) "seal does not check"))
+   _ (test (0 = <r1) (cr-in (r1 1) "row now:") (cr-in (r1 1) "ant@far")
+           (string? qt) (cr-in qt " ant@far b1 ") (cr-in qt "from far"))
+   0)
+
+; --- revocation: the root's box revokes a box by name and carries the list to the others; a box
+; takes only a newer list its root signed, and a sealed message from the revoked box is refused
+(: st (cr-dir "rstem" "") b1 (cr-dir "rb1" "") b2 (cr-dir "rb2" "")
+   _ (cr-run st "" "--keygen root") _ (cr-run st "" "--keygen box stem")
+   (join b nm) (: tk (snip ((cr-run st "" "--ticket") 1) 0 129)
+                  _ (cr-put b "req" ((cr-run b "" ("--enrol " + tk + " " + nm)) 1))
+                  _ (cr-put b "card" ((cr-run st "" ("--admit < '" + b + "/req'")) 1))
+                  (cr-run b "" ("--enrolled < '" + b + "/card'")))
+   _ (join b1 "one") _ (join b2 "two")
+   _ (cr-put st "ssh" ("exec env HOME='" + b2 + "' '" + cr-love + "' '" + cr-app + "' \"$4\"\n"))
+   _ (cr-put b1 "ssh" ("exec env HOME='" + b2 + "' '" + cr-love + "' '" + cr-app + "' \"$4\"\n"))
+   _ (cr-put (st + "/.love/etc") "bee.l" ("(relay sh " + st + "/ssh)\n"))
+   _ (cr-put (b1 + "/.love/etc") "bee.l" ("(relay sh " + b1 + "/ssh)\n"))
+   _ (cr-put (st + "/.love/etc/bee") "boxes" "two two.example\n")
+   hv (b2 + "/.love/run/hive") pc (hv + "/peer")
+   _ (map (\ p (mkdir p 448)) [(b2 + "/.love/run") hv pc (pc + "/inbox") (pc + "/read")])
+   _ (cr-put pc "card" ("pid " + show (getpid 0) + "\ncwd /x\nstate idle\n"))
+   (msgs ls) (foldl (\ a m (a + json-show m + "\n")) "" ls)
+   _ (cr-put b1 "send" (msgs [{"jsonrpc" "2.0" "id" 1 "method" "tools/call"
+                               "params" {"name" "send_message" "arguments" {"to" "peer@two" "text" "before"}}}]))
+   before (cr-run b1 "BEE_NAME=x" ("--mcp < '" + b1 + "/send'"))
+   rv (cr-run st "" "--revoke one")
+   _ (cr-put st "list" ((cr-run st "" "--revoked") 1))
+   again (cr-run b2 "" ("--revocations < '" + st + "/list'"))
+   after (cr-run b1 "BEE_NAME=x" ("--mcp < '" + b1 + "/send'"))
+   _ (test (cr-in (before 1) "sent to peer@two")
+           (0 = <rv) (cr-in (rv 1) "serial 1") (cr-in (rv 1) "two: taken")
+           (1 = <again) (cr-in (again 1) "not newer")
+           (cr-in (after 1) "seal does not check") !(cr-in (after 1) "sent to peer@two"))
+   0)
+
+; --- the hud: --hud prints it once. a fixture queue with a fold: the fold sits under the row it
+; joins, the head is marked, the long queue said; no model is named and no session is settled
+(: d (cr-dir "hud" "")
+   _ (hark ["git" "-C" d "init" "-q"])
+   _ (cr-put d "q.txt" ("# a queue\nleader g\nmain abc1234\n31 ant hearts abc1234 def5678 gating  # a\n"
+                        + "32 bob seal abc1234 0123456 folded-into-31  # b\n33 carol mitty abc1234 fedcba9 waiting  # c\n"))
+   _ (hark ["sh" "-c" ("cd '" + d + "' && git update-ref refs/queue/main $(git hash-object -w q.txt)")])
+   r (cr-run d ("BEE_LOCKS='" + d + "/locks'") "--hud")
+   ls (map (\ l (cr-plain l)) (lines (r 1)))
+   at (\ p (: is (filter (\ i (cr-in (ls i) p)) ^#ls) (two? is ? <is -1)))
+   _ (test (0 = <r)
+           (cr-in (r 1) "refs/queue/main") (cr-in (r 1) "long: fold")
+           (cr-in (r 1) "base main abc1234") (cr-in (r 1) "leader g")
+           (0 <= at "31  ant") (at "32  bob" = at "31  ant" + 1) (at "33  carol" = at "32  bob" + 1)
+           (starts? (ls (at "31  ant")) "▸ 31")
+           (starts? (ls (at "32  bob")) "      32")
+           (cr-in (r 1) "heavy 0/2") (cr-in (r 1) "sessions")
+           !(two? (readdir (d + "/.love/run/hive"))))
    0)
 
 (hark ["rm" "-rf" cr-root])
