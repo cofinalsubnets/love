@@ -780,7 +780,7 @@
       (pgframe (pg-mk '("ab") 20 3 "") = "\e[Hab\e[K\r\n~\e[K\r\n\e[7m< 1-1/1  100%  (END)\e[0m\e[K\e[3;21H")
       (pgmark "\e" "[1]" "a [1]x [11] [1]" = "a \e[7m[1]\e[27mx [11] \e[7m[1]\e[27m")
       (pg-mk '("see [2]b") 20 3 "" @ st (pin st 'hi "[2]",
-                                         0 <= wg-find (pgframe st) "see \e[7m[2]\e[27mb" 0))
+                                         0 <= fsub (pgframe st) "see \e[7m[2]\e[27mb" 0))
       (pgstat (pg-mk '("ab") 20 3 "") = "t  1-1/1  100%  (END)")
       (pgstat (pg-mk ten 20 5 "") = "t  1-4/10  40%")
       ; and what a search paints on the rows it found

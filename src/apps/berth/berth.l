@@ -404,9 +404,9 @@
                              (go (acc + string b))))
               t (go "")
               ; a client's size: inle;size;R;C
-              (? (t = "Gi=31;OK") (pin hb 'pics 1, hsoil hb)
-                 (11 < #t && "inle;size;" = snip t 0 10)
-                  (: ws (filter (w \ 0 < #w) (cite 'kore 'usplit 59 (snip t 10 #t)))
+              (t @ "Gi=31;OK" (pin hb 'pics 1, hsoil hb)
+                 ("inle;size;" + (r && 1 < #r))
+                  (: ws (filter (w \ 0 < #w) (cite 'kore 'usplit 59 r))
                      (? (#ws = 2) (pin hb 'csize [(inle-num <ws) (inle-num (ws 1))], htide hb) 0))
                  0))
  (hseq hb) (see (hin hb) @ b1

@@ -1288,8 +1288,7 @@
    (: cpus (sysconf () @ (_ . _ . c . _) (charm? c ? c 0) 0)   ; the online count
       mls (jobfile "/proc/meminfo")
       free (!(two? mls) ? 0
-              (foldl (a \ l \ ((13 <= tally l) && (snip l 0 13 = "MemAvailable:")
-                               ? (jobnum (snip l 13 #l)) a)) 0 mls))
+              (foldl (a \ l \ (l @ ("MemAvailable:" + v) (jobnum v) a)) 0 mls))
       room (0 < free ? (free // 524288) 0)               ; kB -> 512 MB slots
       want (0 < cpus ? (cpus // 2 + 1) 0)
       n (? (0 = want) 1 (0 = room) want (room < want) room want)

@@ -7,7 +7,7 @@
 (: K (cite 'kore)
    run (K 'ch-run)
    (chem t) (run ["-"] t @ r (<r = 0 ? (r 1) ""))
-   (has s p) (0 <= (K 'wg-find) s p 0)
+   (has s p) (0 <= fsub s p 0)
    love (cwd 0 + "/out/love")
    dir (cwd 0 + "/out/.chemtest-" + show (getpid 0))
    _ (hark ["rm" "-rf" dir], mkdir dir 448)

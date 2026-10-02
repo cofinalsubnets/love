@@ -448,8 +448,8 @@
    ; -set_serial: decimal or 0x hex -> n | ()
    (os-serial s)
     (? !(string? s) ()
-       (2 < #s && snip s 0 2 = "0x") (: h (snip s 2 #s) (? (os-hex? h) (os-num (hex2b (#h % 2 = 1 ? ("0" + h) h))) ()))
-       (unum s))
+       (s @ ("0x" + (h && 0 < #h)) (? (os-hex? h) (os-num (hex2b (#h % 2 = 1 ? ("0" + h) h))) ())
+            (unum s)))
    ; -days, -not_before, -not_after -> [nb na] | why not
    (os-validity st)
     (: now (os-now 0)

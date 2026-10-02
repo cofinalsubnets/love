@@ -27,7 +27,7 @@
                                               + ssh-publine (id 1) "id")) (close q))
    _ (test ((ssh-authorized (dir + "/ak")) = [(id 1)]))
    (waitfor pid) (: s (gather pid) (? (two? s) s (nom? s) s (: _ (rest 2) (waitfor pid))))
-   (has? t s) (0 <= (cite 'kore 'wg-find t s 0))
+   (has? t s) (0 <= (fsub t s 0))
    ; the server's sessions find love as scp at the head of the PATH it inherits, and a
    ; hostile scp for the three evil-* names: a name not asked for, setuid bits, a planted tree
    _ (mkdir (dir + "/bin") 448)

@@ -25,7 +25,7 @@
    cr-l (cr-pl 1)
    cr-header (cite 'kore 'wg-header)
    cr-digits (cite 'kore 'wg-digits)
-   cr-find (cite 'kore 'wg-find)
+   cr-find fsub
    (cr-in s p) (0 <= cr-find s p 0)
    (cr-hex n) (? (n < 16) (string ("0123456789abcdef" n)) (cr-hex (n // 16) + cr-hex (n % 16)))
    (cr-head c a) (: b (see c) (? (b < 0) a

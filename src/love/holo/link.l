@@ -389,8 +389,7 @@
    ; a __start_X/__stop_X pair is the linker's to answer (ldres), so the ledger leaves it --
    ; a bracket over a lane that never lays still scares, at the link.
    (ld-bracket? nm)
-    (#nm @ z (8 < z && snip nm 0 8 = "__start_" ||
-              7 < z && snip nm 0 7 = "__stop_"))
+    (nm @ ("__start_" + (s && 0 < #s)) 1 ("__stop_" + (s && 0 < #s)) 1 0)
    (ldledger srcs mach)
     (: duos (map (p \ (dusyms <p <>p mach)) srcs)
        dt {}
@@ -539,11 +538,9 @@
           (nm = "__stop_love_nifs") n1
           (nm = "__start_love_rela") r0
           (nm = "__stop_love_rela") r1
-          (: z #nm
-             x (? (8 < z && snip nm 0 8 = "__start_")
-                   (xt (name (snip nm 8 z)) @ v (two? v ? [<v]))
-                  (7 < z && snip nm 0 7 = "__stop_")
-                   (xt (name (snip nm 7 z)) @ v (two? v ? [<>v])))
+          (: x (nm @ ("__start_" + (s && 0 < #s)) (xt (name s) @ v (two? v ? [<v]))
+                     ("__stop_" + (s && 0 < #s)) (xt (name s) @ v (two? v ? [<>v]))
+                     ())
              (two? x ? <x (scare 'link-undef nm)))))
 
    ; patch one object's one section: stream its bytes, splicing each relocation's field. a
