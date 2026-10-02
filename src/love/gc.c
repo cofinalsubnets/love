@@ -267,12 +267,12 @@ struct ai *gen_major(struct ai *g, uintptr_t req0, bool *tight) {
  uintptr_t used = (uintptr_t)(g->major_hp - g->major_base), young = (uintptr_t)(g->hp - (word*) g->end),
            need = used + young,
  // grow/shrink by a whole step (= ai_major0): one step at a time prevents thrash, and
- // snapping down reclaims floated dead promotions. headroom is 25% or a whole nursery
- // plus the pending request, whichever is larger -- the second is ai_please's forcing
- // test verbatim, and a pool sized under it leaves that test true after the major it
- // just forced, so every later collection is a major too.
+ // snapping down reclaims floated dead promotions. headroom is a whole nursery plus the
+ // pending request -- ai_please's forcing test verbatim, so the major it just forced is
+ // not followed by another -- and 25% on top, the minors' room to promote into: the
+ // reserve is spent by the first promotion, so it can't be that room, whatever the nursery
            slack = (uintptr_t) g->len + req0 + 16, head = need >> 2,
-           step = g->major0, want = need + (head > slack ? head : slack) + 16,
+           step = g->major0, want = need + slack + head + 16,
            to_len = ((want + step - 1) / step) * step;
  if (to_len < step) to_len = step;
  uintptr_t free_len = to_len,                                   // the size asked for, before any clamp

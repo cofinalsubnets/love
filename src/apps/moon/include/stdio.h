@@ -35,6 +35,8 @@ int    ungetc(int, FILE*);
 int    getc(FILE*);
 int    getchar(void);
 char  *fgets(char*, int, FILE*);
+long   getline(char**, size_t*, FILE*);           /* ssize_t */
+long   getdelim(char**, size_t*, int, FILE*);
 /* no gets: C11 removed it, there is nothing safe to point it at, and a
  * declaration with no definition is a link trap wearing a promise. */
 FILE  *fopen(char const*, char const*);

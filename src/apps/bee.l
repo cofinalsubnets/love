@@ -2179,9 +2179,33 @@
             !(string? nm && name-ok? nm) [0 "a name is letters, digits, - _ and ., at most 64"]
             (nm = was) [1 ("you are " + nm)]
             (tablet? c && alive? (card-pid c)) [0 ("a live session is already named " + nm)]
-            (: ms (take-mail 0) _ (unsettle 0) _ (pin bee-who 'name nm) _ (settle bee-branch)
+            (: ms (take-mail 0) _ (unsettle 0) _ (pin bee-who 'name nm) _ (settle bee-branch) _ (remember 0)
                [1 ("you are " + nm + " in the hive; a queue row under " + was + " keeps that name, so ask the leader to correct it"
                    + (two? ms ? ("\n\n" + mail-text ms) ""))])))
+     ; a claude code session's way back, kept past its card: its claude session id and directory,
+     ; so `love bee --resume NAME` relaunches it under the same name, ringing, on this bee
+     bee-resumes (bee-hive + "/.resume")
+     (remember _)
+      (: id (getenv "CLAUDE_CODE_SESSION_ID")
+         (? (string? id && 0 < #id)
+            (: _ (mkdirs bee-resumes) (spit-file (bee-resumes + "/" + me 0) (paras [("claude " + id) ("cwd " + bee-cwd)])))
+            0))
+     ; NAME's relaunch line -> [ok text]; the mcp config it names runs bee from this binary, so a
+     ; worktree whose out/love predates the bell still rings
+     (resume-cmd nm prompt)
+      (: s (slurp-file (bee-resumes + "/" + nm))
+         r (? (string? s) (foldl (\ t l (l @ ((k && 0 < #k) + " " + v) (pin t k v) t)) {} (lines s)))
+         k (card-of nm)
+         mc (bee-resumes + "/mcp.json")
+         (? !(tablet? r && string? (peep r "claude" ())) [0 ("no session to resume named " + nm)]
+            (tablet? k && alive? (card-pid k)) [0 (nm + " is live")]
+            (: _ (spit-file mc (json-show {"mcpServers" {"bee" {"command" bee-me "args" ["bee" "--mcp"]}}}))
+               [1 ("cd " + sq (r "cwd") + " && BEE_NAME=" + sq nm + " exec claude"
+                   + " --dangerously-load-development-channels server:bee --strict-mcp-config --mcp-config " + sq mc
+                   + " --resume " + sq (r "claude") + (0 < #prompt ? (" " + sq prompt) ""))])))
+     (resumable _)
+      (: ns (readdir bee-resumes)
+         (? (two? ns) (filter (n \ n 0 != 46 && n != "mcp.json") (sort ns)) ()))
      ; a tool's answer with the mail that waits appended, as a turn's next request carries it
      (mcp-tool nm a)
       (: r (? (elem nm mcp-shared) (run (plain 1) () nm a)
@@ -2270,7 +2294,7 @@
                                    "meta" {"count" (show #new)}}})
                   0)
              (ring 0))
-         _ (? bee-as? 0 (pin bee-cell 'model "claude-code", settle bee-branch, twirl (_ \ watch 0) 0, twirl (_ \ ring 0) 0))
+         _ (? bee-as? 0 (pin bee-cell 'model "claude-code", settle bee-branch, remember 0, twirl (_ \ watch 0) 0, twirl (_ \ ring 0) 0))
          _ (twirl (_ \ lock-poll 0) 0)                   ; queued locks, mailed to the session
          r (go 0)
          _ (? bee-as? 0 (unsettle 0))
@@ -2305,6 +2329,14 @@
           "--avatar" (: r (avatar-cmd (joinw as) 80)
                         _ (say (<r ? out err) (foldl (\ a l (a + l + "\n")) (<r ? "" "bee: ") (r 1)))
                         (<r ? 0 1))
+          ; --resume lists who can come back; --resume NAME [PROMPT] relaunches one, --cmd only says how
+          "--resume"
+           (: ws (filter (w \ w != "--cmd") >as)
+              (? !(two? ws) (: _ (map (n \ puts (n + "\n")) (resumable 0)) 0)
+                 (: r (resume-cmd <ws (joinw >ws))
+                    (? !<r (say err ("bee: " + r 1 + "\n"), 1)
+                       (elem "--cmd" as) (: _ (puts (r 1 + "\n")) 0)
+                       (: p (spawn ["sh" "-c" (r 1)]) (charm? p && 0 <= p ? (wait p) 127))))))
           "--stop" (? (#as < 2) (say err "usage: love bee --stop NAME\n", 2)
                       (: e (stop-bee <>as) (? (starts? e "stopped") (: _ (puts (e + "\n")) 0) (say err ("bee: " + e + "\n"), 1))))
           2))
@@ -2331,7 +2363,7 @@
          (? (elem "--mcp" as) (: _ (mcp-serve in out) 0)             ; a claude child's own server
             (two? as && <as = "--lock") (bee-cli as yes)              ; its command's words stay as given
             (two? as && elem <as ["-s" "--screensaver"]) (cite 'saver 'saver-cli >as)   ; a saver, no session
-            (two? words && elem <words ["--list" "--send" "--spawn" "--stop" "--avatar"]) (bee-cli words yes)
+            (two? words && elem <words ["--list" "--send" "--spawn" "--stop" "--avatar" "--resume"]) (bee-cli words yes)
             ; the api backend wants its endpoint, model and key; claude brings its own. a stage
             ; answers why as a string: a harbour shows it, stderr would land on its glass
             (: why (? (!bee-cc? && atom? bee-at) ("cannot read the url " + bee-url)

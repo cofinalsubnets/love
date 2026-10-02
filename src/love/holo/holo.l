@@ -194,6 +194,7 @@
              'stsd 3 'ldsd 3 'stss 3 'ldss 3 'cmppd 3
              'rem 4 'urem 4 'umull 4 'smull 4 'mla 4
              'ldx 5 'stx 5 'leax 5 'ldxb 5 'stxb 5 'ldxw 5 'ldxsw 5 'mulo 5
+             'andx4 5 'orx4 5 'xorx4 5 'andm4 3 'orm4 3 'xorm4 3
              'ldsdx 5 'stsdx 5 'ldssx 5 'stssx 5 'ldsdl 2
              'minsd 2 'maxsd 2 'cmov 3}
    ;; an emitter row is (arity . emitter): `emsof` builds a backend's tablet from

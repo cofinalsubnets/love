@@ -122,6 +122,13 @@
    _ (write-file (dir + "/mk/common.mk") "FROM_INC = included-ok\n")
    inc (run-cook (mk [("include " + (dir + "/mk/common.mk")) "all:" "\techo \"I[$(FROM_INC)]\""]) "all")
    _ (ok "include" (has inc "I[included-ok]"))
+   sinc (run-cook (mk [("-include " + (dir + "/mk/nosuch.mk " + dir + "/mk/common.mk"))
+                       ("sinclude " + dir + "/mk/nosuch2.mk")
+                       "all:" "\techo \"S[$(FROM_INC)]\""]) "all")
+   _ (ok "-include and sinclude pass over a missing file" (has sinc "S[included-ok]"))
+   _ (write-file (dir + "/Makefile") (mk [("include " + dir + "/mk/nosuch.mk") "all:" "\techo x"]))
+   hinc (: r (hark [love "-l" "src/apps/cook.l" "-f" (dir + "/Makefile") "all"]) (two? r ? <r 0))
+   _ (ok "include of a missing file fails" !(0 = hinc))
 
    ; ----------------------------------------------------- automatic vars + dir
    av (run-cook (mk '("all: foo/bar.o"
@@ -406,10 +413,9 @@
    ; the repo's own shell is the fixture's shell: make-with-lush, the rung-4
    ; distro loop closed. $(wildcard) is lush's pure glob at the repo root
    ; (sorted; a no-match pattern contributes nothing -- nullglob).
-   ; out/lush is a love script, so naming it as SHELL runs it through its shebang --
-   ; the nest's love on PATH, not the tree's. the shim spells the tree's out/love out
-   ; loud, the way sh.l does, so the law reads the shell this build made.
-   _ (write-file (dir + "/lushsh") "#!/bin/sh\nexec out/love out/lush \"$@\"\n")
+   ; SHELL names a path, so the shim is one: it runs the lush this binary carries
+   ; (`love lush`), spelled through the tree's out/love so the law reads this build.
+   _ (write-file (dir + "/lushsh") "#!/bin/sh\nexec out/love lush \"$@\"\n")
    _ (sh ("chmod +x " + (dir + "/lushsh")))
    shl (run-cook (mk [("SHELL := " + (dir + "/lushsh"))
                       "all:"
@@ -523,6 +529,74 @@
    ; translation unit here peaks at 2.3 GB, so cook asks for the number instead.
    jbad (: r (hark [love "-l" "src/apps/cook.l" "-j" "x" "-f" (dir + "/Makefile") "all"]) (two? r ? <r 0))
    _ (ok "-j wants a count" !(0 = jbad))
+
+   ; ------------------------------------------------------- kbuild's make
+   ; a name is make's: hyphens, and a computed part expanded before it is assigned
+   kn (run-cook (mk '("X := y" "obj-y := a.o" "obj-$(X) += b.o" "obj- += c.o"
+                     "all:" "\t@echo \"N[$(obj-y)]\"")) "all")
+   _ (ok "obj-$(X) names obj-y" (has kn "N[a.o b.o]"))
+   ; += onto a simple variable expands its value now (u is unset at that line)
+   ks (run-cook (mk '("s := 1" "t = $(u)" "s += [$(t)]" "u = late"
+                     "all:" "\t@echo \"S[$(s)]\"")) "all")
+   _ (ok "+= onto := expands now" (has ks "S[1 []]"))
+   ; -include of a missing file is no error, include of a present one still splices
+   ko (run-cook (mk [("-include " + dir + "/no-such.mk") "sinclude /no/such/either.mk"
+                     "all:" "\t@echo \"O[ok]\""]) "all")
+   _ (ok "-include of a missing file" (has ko "O[ok]"))
+   ; $(file) bare is a variable (a foreach's), and $(eval) inside the foreach assigns
+   ke (run-cook (mk '("$(foreach file,a b,$(eval V_$(file) := x$(file)))"
+                     "all:" "\t@echo \"E[$(V_a)$(V_b)]\"")) "all")
+   _ (ok "nested $(eval) under foreach's $(file)" (has ke "E[xaxb]"))
+   ; a name's $(..) may hold spaces; a tab-led line with no rule open is an ordinary line
+   kp (run-cook (mk ["M := m" "obj-$(subst m,y,$(M)) += host/" "ifdef M" "\tobj-y += tab.o" "endif"
+                     "all:" "\t@echo \"P[$(obj-y)]\""]) "all")
+   _ (ok "obj-$(subst ..) names obj-y; a tab line outside a rule" (has kp "P[host/ tab.o]"))
+   ; a blank line inside a recipe leaves the rule open
+   kb (run-cook (mk '("all:" "\t@echo \"B[one]\"" "" "\t@echo \"B[two]\"")) "all")
+   _ (ok "a blank line inside a recipe" (has kb "B[two]"))
+   ; else ifeq chains: the first true arm, and a taken arm closes the rest
+   kc (run-cook (mk ["A := 2" "ifeq ($(A),1)" "R := one" "else ifeq ($(A),2)" "R := two"
+                     "else" "R := other" "endif"
+                     "ifeq ($(A),2)" "T := first" "else ifeq ($(A),2)" "T := second" "endif"
+                     "ifdef NOPE" "Q := a" "else ifndef NOPE" "Q := b" "endif"
+                     "$(info C[$(R) $(T) $(Q)])" "all: ;@:"]) "all")
+   _ (ok "else ifeq / else ifndef chains" (has kc "C[two first b]"))
+   ; an expanded value keeps its $: a :=, a call's argument, a foreach's word, $(value)
+   kd (run-cook (mk ["x := $$y" "w := $(call f,$$p,q)" "v := $(foreach i,$$k,<$(i)>)" "u := $x"
+                     "u += $$m" "define f" "$(1)-$(2)" "endef"
+                     "$(info D[$(x)] [$(call f,$$p,q)] [$(v)] [$(value x)] [$(u)])" "all: ;@:"]) "all")
+   _ (ok "$$ survives := call foreach value +=" (has kd "D[$y] [$p-q] [<$k>] [$y] [$y $m]"))
+   ; define's value stops before the newline that precedes endef
+   kf (run-cook (mk ["define g" "a" "b" "endef" "$(info F[$(g)])" "all: ;@:"]) "all")
+   _ (ok "define drops the newline before endef" (has kf "F[a\nb]"))
+   ; $(intcmp): gt falls back to eq; two args answer the number when equal
+   ki (run-cook (mk ["$(info I[$(intcmp 1,2,lt,eq,gt) $(intcmp 3,2,lt,eq) $(intcmp 3,2,lt,eq,gt) $(intcmp 2,2)])"
+                     "all: ;@:"]) "all")
+   _ (ok "$(intcmp ..)" (has ki "I[lt eq gt 2]"))
+   ; $(file <f) reads a file less its last newline, as kbuild's read-file does
+   _ (write-file (dir + "/rf.txt") "hi there\n")
+   kr (run-cook (mk [("R := $(file <" + dir + "/rf.txt)") "$(info R[$(R)])" "all: ;@:"]) "all")
+   _ (ok "$(file <f)" (has kr "R[hi there]"))
+   ; a caller of cook-vars may answer $(shell ..) itself
+   hv (cite 'cook 'cook-vars)
+   ht (pins {} " shell" (c \ "<" + c + ">"))
+   _ (hv "X := $(shell uname -m)\n" ht)
+   _ (ok "cook-vars: a caller's $(shell) answerer" (ht "X" = "<uname -m>"))
+   ; `export A B` exports each, and a recipe sees both
+   kx (run-cook (mk ["A := a1" "B = b$(A)" "export A B" "all:" "\t@echo \"X[$$A $$B]\""]) "all")
+   _ (ok "export A B exports each" (has kx "X[a1 ba1]"))
+   ; an included file is on MAKEFILE_LIST while it is read
+   _ (write-file (dir + "/inc.mk") "ME := $(lastword $(MAKEFILE_LIST))\n")
+   km (run-cook (mk [("include " + dir + "/inc.mk") "$(info M[$(notdir $(ME))])" "all: ;@:"]) "all")
+   _ (ok "MAKEFILE_LIST names the file being read" (has km "M[inc.mk]"))
+   ; a define body's tab-led lines join as a variable's: one space, the whitespace around it gone
+   kj (run-cook (mk ["define v" "\tone two  \\" "\t\tthree" "endef" "$(info J[$(v)])" "all: ;@:"]) "all")
+   _ (ok "a define's continuation folds as a variable's" (has kj "J[\tone two three]"))
+   ; target-specific assignments come back for a reader that scopes them, newest first
+   tt {}
+   _ (hv "T := a.o\n$(T) b.o: private X := 1\n%.p: Y += 2\n" tt)
+   _ (ok "cook-vars: target-specific assignments, modifiers off"
+         (tt " tvars" = [["%.p" "Y += 2"] ["a.o b.o" "X := 1"]]))
 
    ; ---------------------------------------------------------------- summary
    _ (sh ("rm -rf " + dir))
