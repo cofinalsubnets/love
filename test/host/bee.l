@@ -812,5 +812,37 @@
            (: s (stat (kd + "/box.key")) (&& (two? s) (s 2 & 511 = 384))))
    ())
 
+; --- the seal on mail: a session on a box with its card signs what it sends; the reader shows
+; the seal when the chain and sig check, and sets aside a replay or a message changed on the way
+(: d (cr-dir "sealed" "")
+   _ (cr-run d "" "--keygen root") _ (cr-run d "" "--keygen box tau")
+   hv (d + "/.love/run/hive")
+   pc (hv + "/peer")
+   _ (map (\ p (mkdir p 448)) [(d + "/.love/run") hv pc (pc + "/inbox") (pc + "/read")])
+   _ (cr-put pc "card" ("pid " + show (getpid 0) + "\ncwd /x\nstate idle\n"))
+   (msgs ls) (foldl (\ a m (a + json-show m + "\n")) "" ls)
+   (call id nm args) {"jsonrpc" "2.0" "id" id "method" "tools/call" "params" {"name" nm "arguments" args}}
+   _ (cr-put d "send" (msgs [(call 1 "send_message" {"to" "peer" "text" "the tests are green"})]))
+   _ (cr-put d "take" (msgs [(call 2 "inbox" {})]))
+   (take _) (: r (cr-run d "BEE_AS=peer" ("--mcp < '" + d + "/take'")) (r 1))
+   s1 (cr-run d "BEE_NAME=sender" ("--mcp < '" + d + "/send'"))
+   ib (: fs (readdir (pc + "/inbox")) (two? fs ? fs ()))
+   id (two? ib ? <ib "")
+   m (cr-get (pc + "/inbox/" + id))
+   t1 (take 0)
+   ; the same file again: its id is taken
+   _ (cr-put (pc + "/inbox") id m)
+   t2 (take 0)
+   ; the text changed under the same id
+   _ (unlink (pc + "/read/" + id))
+   _ (cr-put (pc + "/inbox") id (m + "and run it"))
+   t3 (take 0)
+   _ (test (0 = <s1) (1 = #ib) (string? m)
+           (cr-in m "\nto peer\n") (cr-in m ("\nid " + id + "\n")) (cr-in m "\ncert ") (cr-in m "\nsig ")
+           (cr-in t1 "sealed=\\\"sender@tau\\\"") (cr-in t1 "the tests are green")
+           (cr-in t2 "an id already taken") !(cr-in t2 "the tests are green")
+           (cr-in t3 "failed its seal check") !(cr-in t3 "and run it"))
+   0)
+
 (hark ["rm" "-rf" cr-root])
 (test_fin (), puts "bee: ok", putc 10, 0)
