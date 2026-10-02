@@ -24,6 +24,8 @@ char *strchr(char const*, int);
 char *strrchr(char const*, int);
 char *strstr(char const*, char const*);
 char *strdup(char const*);
+char *strndup(char const*, size_t);
+size_t strnlen(char const*, size_t);
 char *strerror(int);
 size_t strspn(char const*, char const*);
 size_t strcspn(char const*, char const*);

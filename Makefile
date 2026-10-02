@@ -703,10 +703,16 @@ out/lib/crewlist.h: Makefile
 	@tf=$@.$$$$.tmp; printf '"%s"\n' '$(kcrewfiles)' > $$tf; \
 	 $(note)
 
+# the seat text kmain.c runs on both lanes, one literal like the ports' prel and post
+out/lib/seat.h: src/inle/seat.l src/tools/lcat.l $(love0)
+	@echo 'LOVE	'$@
+	@mkdir -p out/lib
+	@$(lcat_love) src/tools/lcat.l $< > $@
+
 # every $(k_c) source, wherever in the tree it lives, lands under $(k_odir) by its path.
 # `test -s`: an empty object reaches the link as a shape error naming neither file, and
 # no object of either flavour is ever legitimately empty.
-$(k_odir)/%.o: $(S)/%.c $(k_h) $(mooncc_dep) out/lib/baked.h out/lib/distlist.h out/lib/korelist.h out/lib/crewlist.h
+$(k_odir)/%.o: $(S)/%.c $(k_h) $(mooncc_dep) out/lib/baked.h out/lib/distlist.h out/lib/korelist.h out/lib/crewlist.h out/lib/seat.h
 	@echo 'MOON	'$@
 	@mkdir -p "$(dir $@)"
 	@$(kcc) -c $< -o $@ && test -s $@
@@ -722,10 +728,10 @@ kmain_o: $(k_free_o)
 # carries no seat and its roster is empty.
 kart_inc = -I$(ho) -I. -Isrc/love -Isrc/inle -Iout/lib -I$R \
   -I$S/love/quay -I$S/apps/moon/include
-# kmain.c's own bake is the two ROSTERS now -- the kore cat's order, and the crew's, which
-# it carries the order of and reads the members of off /proc/src. the egg and the module set
-# are src/love/cats.c's, and that object rides the host lane above.
-kart_bake = out/lib/korelist.h out/lib/crewlist.h
+# kmain.c's own bake is the two ROSTERS -- the kore cat's order, and the crew's, which it
+# carries the order of and reads the members of off /proc/src -- and the seat text. the egg
+# and the module set are src/love/cats.c's, and that object rides the host lane above.
+kart_bake = out/lib/korelist.h out/lib/crewlist.h out/lib/seat.h
 define kart
 $(1)_h = $$(love_h) $$S/inle/k.h $$S/love/lib/ustar.h $$(wildcard $$S/inle/$$($(4))/*.h)
 $(1)_arch_o = $$(patsubst $$S/%.c,$$($(2))/%.o,$$(wildcard $$S/inle/$$($(4))/*.c))

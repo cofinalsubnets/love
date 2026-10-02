@@ -416,6 +416,21 @@
       (cr-in ((res 1) "content" 0 "text") "hello from pal"))       ; the bell took nothing
    0)
 
+; --- the way back: a claude code session's server keeps its claude session id and directory past
+; its card, and --resume lists it and says how to relaunch it, ringing, under the same name
+(: cr-r2 (cr-dir "resume" "")
+   _ (cr-put cr-r2 "in" (json-show {"jsonrpc" "2.0" "id" 0 "method" "initialize" "params" {}} + "\n"))
+   m (cr-run cr-r2 "BEE_NAME=back CLAUDE_CODE_SESSION_ID=sid-42" ("--mcp < '" + cr-r2 + "/in'"))
+   ls (cr-run cr-r2 "" "--resume")
+   c (cr-run cr-r2 "" "--resume back --cmd go on")
+   no (cr-run cr-r2 "" "--resume nobody")
+   _ (test
+      (0 = <m) (0 = <ls) (cr-in (ls 1) "back")
+      (0 = <c) (cr-in (c 1) "BEE_NAME='back'") (cr-in (c 1) "--resume 'sid-42' 'go on'")
+      (cr-in (c 1) "--dangerously-load-development-channels server:bee") (cr-in (c 1) "--mcp-config ")
+      (1 = <no) (cr-in (no 1) "no session to resume named nobody"))
+   0)
+
 ; --- locks through bee, on src/apps/locks.l ------------------------------------------------------
 ; the test holds the one heavy ticket (heavy-max 1) under its own pid, so bee's ask queues behind
 ; a live holder; an exclusive lock is granted, listed and released; releasing what it does not
