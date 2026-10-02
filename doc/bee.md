@@ -31,6 +31,8 @@ bee - a coding agent in the terminal, and the protocol its sessions talk by
 
 **love bee --keygen root** \| **box** \[*name*\]
 
+**love bee --ticket** \[*days*\] \| **--enrol** *token* \[*name*\] \| **--admit** \| **--enrolled**
+
 **love bee -s** \| **--screensaver** \[*name*\]
 
 # DESCRIPTION
@@ -160,7 +162,17 @@ The model has **lock_acquire** (*name*, *kind* exclusive or heavy, *note*), **lo
 
 Sessions on several boxes are to know each other by keys. A *lineage* is the boxes one root vouches for: the root is an ed25519 key, and its public half names the lineage. **src/apps/seals.l** makes the keys and *cards*. A card is *key value* lines, like a message's header: **lineage**, **name**, **kind** (**box** or **cell**), **pub**, **issued** and **expires** (epoch seconds), then **parent**, the signer's public key, and **sig**, the signer's signature over every line above it. Keys are lowercase hex. A *chain* is a card, then its signer's, each after a blank line, ending at a card the root signed. It holds when every card is in date, of the lineage, not revoked, and signed by the next card's key, and the next is a box. A cell's name is *name***@***box*, after the box that signed it.
 
-The keys live in **~/.love/etc/bee/**. **love bee --keygen root** makes **root.key** and prints the lineage. **love bee --keygen box** \[*name*\] makes **box.key**, naming the box after the host unless a name is given. Where **root.key** is on the same box, it also signs **box.card** for a year and prints it; elsewhere it prints the box's public key, to be enrolled. A key file is created 0600 and never written over. Nothing yet signs or checks messages.
+The keys live in **~/.love/etc/bee/**. **love bee --keygen root** makes **root.key** and prints the lineage. **love bee --keygen box** \[*name*\] makes **box.key**, naming the box after the host unless a name is given. Where **root.key** is on the same box, it also signs **box.card** for a year and prints it; elsewhere it prints the box's public key, to be enrolled. A key file is created 0600 and never written over.
+
+A box joins a lineage by enrolment, three steps that make one pipe:
+
+> ```
+> love bee --enrol TOKEN | ssh STEM love bee --admit | love bee --enrolled
+> ```
+
+On the box with **root.key**, **love bee --ticket** \[*days*\] mints a ticket, good once and for *days* (7). It prints a token, the lineage and the ticket, and keeps only the ticket's hash, in **tickets/**. On the new box, **--enrol** *token* \[*name*\] keeps the lineage in **lineage**, makes **box.key** if there is none, and prints a request: **name**, **pub** and **ticket**, signed by that key. A box is of one lineage, and a token of another is refused. **--admit** reads the request on its standard input, back on the root's box. It checks the signature, and that the ticket was minted there and is in date, then spends it, a file made once in **tickets/**, and prints the box's card for a year. **--enrolled** reads the card and keeps it as **box.card** when it checks against the lineage and names this box's key.
+
+Where **box.key** and **box.card** are, a session seals what it sends. Its first message makes it a key, *cell***/key**, and **box.key** signs it a card named *name***@***box*, good for a day and signed again when it has less than an hour left; the chain, that card then **box.card**, is *cell***/cert**. A sealed message adds **to**, **id** (its file's name) and **cert** (the chain in base64) to its header, and ends the header with **sig**: the cell key's signature over every header line above it, the blank line and the text. A reader whose box has a card checks the chain against its lineage, then the signature, the **to**, the **id**, and that the card is named for the **from**. The model then reads the message as **\<message from="***name***" sealed="***name***@***box***"\>**. A message that fails is left in **read/** and shown only as a note from **bee**; so is one whose id was already taken. Plain mail, and any mail where the reader's box has no card, reads as before.
 
 # JOBS AND WORKERS
 
