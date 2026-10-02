@@ -40,9 +40,8 @@
          (<ls @ l
             (? (#l = 0) (fold >ls acc)
                (ws? (l 0)) (fold >ls (acc @ ([n v] . r) ([n (v + " " + strip l)] . r) acc))
-               (findsub l ":" @ k
-                  (? (k < 1 || has? (snip l 0 k) " ") (fold >ls acc)
-                     (fold >ls ([(lower (snip l 0 k)) (strip (snip l (k + 1) #l))] . acc)))))))
+               (l @ ((k && 0 < #k && !(has? k " ")) + ":" + v) (fold >ls ([(lower k) (strip v)] . acc))
+                  (fold >ls acc)))))
      (fold (lines h) ()))
  (mime-get hs n) (: (go l) (l @ ([k v] . r) (k = n ? v (go r)) "") (go hs))
 
@@ -157,16 +156,15 @@
             (put j (s i), go (i + 1))))
      (go 0))
  (mime-2231 v)
-  (: a (findsub v "'") b (a < 0 ? -1 (fsub v "'" (a + 1)))
-     (b < 0 ? v (mime-utf8 (mime-pct (snip v (b + 1) #v)) (snip v 0 a))))
+  (v @ (cs + "'" + _ + "'" + r) (mime-utf8 (mime-pct r) cs) v)
  (mime-ctype v)
   (: ps (mime-semis v)
      t (lower (strip <ps))
      (add m p)
-      (findsub p "=" @ k
-         (? (k < 0) m
-            (: nm (lower (strip (snip p 0 k))) val (mime-unq (strip (snip p (k + 1) #p)))
-               (ends? nm "*" ? (pin m (snip nm 0 (#nm - 1)) (mime-2231 val)) (pin m nm val)))))
+      (p @ (n + "=" + vl)
+         (: nm (lower (strip n)) val (mime-unq (strip vl))
+            (nm @ (b + "*") (pin m b (mime-2231 val)) (pin m nm val)))
+         m)
      [(#t ? t "text/plain") (foldl add {} >ps)])
 
  ; --- the multipart walk ----------------------------------------------------------------

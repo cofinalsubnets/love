@@ -180,9 +180,8 @@
                     (go l i) (two? l ? (pin lt i <l, go >l (i + 1)) [i (i \ (lt i))])
                     (go ls 0))
        (range s) (: n #s
-                    m ((: (go i) (? (n <= i) -1 (s i = 45) i (go (i + 1)))) 0)
-                    lo (0 < m ? (unum (snip s 0 m)))
-                    hi (0 < m ? (unum (snip s (m + 1) n)))
+                    lh (s @ ((a && 0 < #a) + "-" + b) [(unum a) (unum b)] [() ()])
+                    lo <lh hi <>lh
                     (charm? lo && charm? hi && lo <= hi + 1 ? [(hi - lo + 1) (+ lo)]
                      (sdie ("invalid input range: " + s))))
        (input _) (: j (jug 0)
@@ -809,7 +808,7 @@
    ; number (-5, -.5) ends the flags, so a negative FIRST is not one --
    (useqd w)                                   ; -> [int scale] | ()
     (: neg (0 < #w && w 0 = 45) b (0 < #w && (w 0 = 45 || w 0 = 43) ? (snip w 1 #w) w)
-       k (findsub b ".") ip (k < 0 ? b (snip b 0 k)) fp (k < 0 ? "" (snip b (k + 1) #b))
+       pf (b @ (i + "." + f) [i f] [b ""]) ip <pf fp <>pf
        ds (ip + fp)
        (0 < #ds && all digit? (chars ds) ? [(neg ? (0 - unum ds) (unum ds)) #fp]))
    (seq-main as)
@@ -2146,8 +2145,8 @@
                 (v = "auto") (: c1 (two? l1 ? #(ujfs sep <l1) 0) c2 (two? l2 ? #(ujfs sep <l2) 0)
                                 ('k . map (i \ [1 i]) (filter (i \ !(i = n1)) (map (+ 1) ^c1))
                                  + map (i \ [2 i]) (filter (i \ !(i = n2)) (map (+ 1) ^c2))))
-                (map (w \ (w = "0" ? 'k (findsub w "." @ d (d < 0 ? (udie 1 ("join: invalid field specifier: '" + w + "'"))
-                                                            [(uatoi (snip w 0 d)) (uatoi (snip w (d + 1) #w))]))))
+                (map (w \ (w = "0" ? 'k (w @ (a + "." + b) [(uatoi a) (uatoi b)]
+                                              (udie 1 ("join: invalid field specifier: '" + w + "'")))))
                      (filter (w \ 0 < #w) (usplit 44 (replace v " " ","))))))
        (cell f i) ((two? f ? (unth f i)) @ v (string? v ? v empty))
        (row ps) (say out (ujoinc jsep ps), put out 10)
@@ -2456,9 +2455,8 @@
            (? (two? ex) <ex (atom? pre) 'none (atom? >pre) <pre ['many (map cap pre)]))
        (long w dash rest opts)               ; -> (rest opts)
         (: body (snip w #dash #w)
-           e ((: (go i) (? (#body <= i) -1 (body i = 61) i (go (i + 1)))) 0)
-           key (e < 0 ? body (snip body 0 e))
-           val (e < 0 ? () (snip body (e + 1) #body))
+           kv (body @ (k + "=" + v) [k v] [body ()])
+           key <kv val <>kv
            r (lmatch key)
            (? (r = 'none) (gerr ("unrecognized option '" + w + "'"), [rest opts])
               (two? r && <r = 'many)

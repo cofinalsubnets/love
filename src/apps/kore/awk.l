@@ -1519,10 +1519,7 @@
                    (put o c, go (k + 1)))))
        (go 0))
    (aw-cmdas E a)
-    (: n #a
-       (fnd k) (a k = 61 ? k (fnd (k + 1)))
-       i (fnd 0)
-       (aw-put E (snip a 0 i) (aw-mk (aw-unesc (snip a (i + 1) n)))))
+    (a @ (k + "=" + v) (aw-put E k (aw-mk (aw-unesc v))))
    ; the operands ride the u-floor's line reader, a record at a time: awk never
    ; wants the whole input, and uread + lines held four copies of it to hand over
    ; the first one

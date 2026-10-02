@@ -100,7 +100,7 @@
  (mb-mmsg t a e)
   (: nl (fsub t "\n" a) fe (nl < 0 || e < nl ? e nl)
      raw (snip t (fe < e ? (fe + 1) e) e)
-     raw2 (ends? raw "\n" ? (snip raw 0 (#raw - 1)) raw)
+     raw2 (raw @ (r + "\n") r raw)
      hs (mime-heads (mb-head (replace raw2 "\r\n" "\n")))
      m (mb-msg hs (mb-sflags hs) #raw2)
      (pins m 'from (snip t a fe) 'raw raw2 'old (has? (mime-get hs "status") "O"), m))
@@ -164,6 +164,6 @@
      (? (k = 'maildir) (mb-dappend p raw fl)
         (k = 'imap) "an imap box takes a message with its password (imap-append)"
         (k = 'mbox || (!k && !(ends? p "/"))) (mb-mappend p raw fl)
-        (mb-mkdir (? (ends? p "/") (snip p 0 (#p - 1)) p)) (mb-dappend (? (ends? p "/") (snip p 0 (#p - 1)) p) raw fl)
+        (mb-mkdir (p @ (q + "/") q p)) (mb-dappend (p @ (q + "/") q p) raw fl)
         ("cannot make " + p))))
 ) ; module mailbox

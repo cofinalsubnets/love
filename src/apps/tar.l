@@ -473,12 +473,12 @@
              !(two? rest) (tarc-die ("option requires an argument -- '" + string (w k) + "'"))
              (tarc-set t row <rest, tarc-cluster t w (k + 1) dash >rest))))
    (tarc-long t w rest)                ; --name, --name=V, --name V -> the words left
-    (: eq (: (go k) (? (#w <= k) () (w k = 61) k (go (k + 1))) (go 0))
-       nm (eq ? (snip w 0 eq) w)
+    (: nv (w @ ((n && 0 < #n) + "=" + v) [n v] [w ()])
+       nm <nv
        row (tarc-row nm tarc-longs)
        (? !row (tarc-die ("unrecognized option '--" + w + "'"))
           !(row 2 = 'arg) (tarc-set t row 0, rest)
-          eq (tarc-set t row (snip w (eq + 1) #w), rest)
+          (string? <>nv) (tarc-set t row <>nv, rest)
           !(two? rest) (tarc-die ("option '--" + nm + "' requires an argument"))
           (tarc-set t row <rest, >rest)))
    (tarc-opts t as)                    ; the bundled key first, then anything in any order
@@ -500,8 +500,7 @@
                         (nom = m2 || #m2 < #nom && snip nom 0 (#m2 + 1) = m2 + "/"))
    ; --strip-components: the first n segments off, a member with no more dropped
    (tarc-cut nom n) (n < 1 ? nom
-                       (: (go k) (? (#nom <= k) () (nom k = 47) (tarc-cut (snip nom (k + 1) #nom) (n - 1)) (go (k + 1)))
-                          (go 0)))
+                       (nom @ (_ + "/" + r) (tarc-cut r (n - 1)) ()))
    ; which members the words pick, asked of each as it comes: (1 e) with its name cut, or ()
    ; to pass it by. the words no member answered are said after, by tarc-unseen
    (tarc-want t)

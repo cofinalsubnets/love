@@ -30,10 +30,7 @@
     (!(charm? p) ? (ubase nm "")
        (: (go s k)
            (k < 1 ? s
-            (: n #s
-               (at i) (? (n <= i) -1 (s i = 47) i (at (i + 1)))
-               i (at 0)
-               (i < 0 ? s (go (snip s (i + 1) n) (k - 1)))))
+            (s @ (_ + "/" + r) (go r (k - 1)) s))
           (go nm p)))
    ; "@@ -1,8 +3 @@ .." -> (ostart ocount nstart ncount) | ()
    (pt-side w)

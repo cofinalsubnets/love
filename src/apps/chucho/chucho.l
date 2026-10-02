@@ -534,7 +534,7 @@
      from (mime-get hs "from") fa (mime-addrs from)
      sender (two? fa ? (fa 0 1) (ch-me s))
      rc (map (a \ a 1) (mime-addrs (mime-get hs "to") + mime-addrs (mime-get hs "cc") + mime-addrs (mime-get hs "bcc")))
-     dom (findsub sender "@" @ k (k < 0 ? "localhost" (snip sender (k + 1) #sender)))
+     dom (sender @ (_ + "@" + d) d "localhost")
      addr? (n \ elem n ["from" "to" "cc" "reply-to"])
      keep (filter (h \ h @ [n v] (#(strip v) && n != "bcc") 0) hs)
      hd (map (h \ h @ [n v] (ch-cap n + ": " + (? (addr? n) (ch-enc-addrs v) (n = "subject") (mime-head-enc v) v))) keep)
