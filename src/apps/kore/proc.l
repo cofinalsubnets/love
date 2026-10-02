@@ -122,8 +122,8 @@
    ; (EST5EDT,M3.2.0,M11.1.0); an empty TZ, or nothing readable, is utc
    ; the day a second falls in, floored: before the epoch // would round toward it
    (tzday0 s) (s // 86400 @ q (s < q * 86400 ? (q - 1) q))
-   (tzs s k n) (: (go i a) (n <= i ? a (go (i + 1) (a * 256 + s (k + i)))) (go 0 (s k >= 128 ? -1 0)))
-   (tzu s k n) (: (go i a) (n <= i ? a (go (i + 1) (a * 256 + s (k + i)))) (go 0 0))
+   (tzs s k n) (foldl (\ a i (a * 256 + s (k + i))) (s k >= 128 ? -1 0) ^n)
+   (tzu s k n) (foldl (\ a i (a * 256 + s (k + i))) 0 ^n)
    (tzp-to s i c) (#s <= i || s i = c ? i (tzp-to s (i + 1) c))
    (tzp-alpha s i) (i < #s && (65 <= s i <= 90 || 97 <= s i <= 122) ? (tzp-alpha s (i + 1)) i)
    (tzp-name s i)
@@ -296,12 +296,8 @@
    (ucal-weeks y m)
     (: lead (wday (epoch-days y m 1)) len (mdays y m)
        (cell d) (d < 1 || len < d ? "  " (upad 2 (show d)))
-       (row r) (: o (jug 0)
-                  (go c) (7 <= c ? (slurp o)
-                          (c ? (put o 32) 0, say o (cell ((7 * r + c) - (lead - 1))), go (c + 1)))
-                  (go 0))
-       (go r acc) (6 <= r ? (rev acc) (go (r + 1) ((row r) . acc)))
-       (go 0 ()))
+       (row r) (jug 0 @ o (each ^7 (c \ ((c ? (put o 32) 0), say o (cell ((7 * r + c) - (lead - 1))))), slurp o))
+       (map row ^6))
    (ucal-say l) (say out l, put out 10)
    (ucal-tri a b c) (a + "   " + b + "   " + c)     ; three columns -> the 66-wide line
    (cal-main as)
@@ -322,9 +318,7 @@
            w1 <ws w2 <>ws w3 <>>ws
            _ (ucal-say (ucal-tri <ts <>ts <>>ts))
            _ (ucal-say (ucal-tri ucal-hdr ucal-hdr ucal-hdr))
-           (go r) (6 <= r ? 1
-                   (ucal-say (ucal-tri (w1 r) (w2 r) (w3 r)), go (r + 1)))
-           (go 0))
+           (each ^6 (r \ ucal-say (ucal-tri (w1 r) (w2 r) (w3 r))), 1))
        ((m = 'all ?
          (ucal-say (ucal-mid 66 (show y)), put out 10,
           (: (go k) (12 < k ? 1 (quarter k, go (k + 3))) (go 1)))
@@ -502,7 +496,7 @@
                   a (two? ws ? (uhw-quad <ws))
                   (charm? a && elem h >ws ? [a <>ws]))
        (two? r ? (filter two? (map row (lines <>r)) @ hits (two? hits ? <hits))))
-   (uhw-hex s) (: (go k a) (#s <= k ? a (s k @ c (go (k + 1) (a * 16 + (? (c < 58) (c - 48) (c < 71) (c - 55) (c - 87)))))) (go 0 0))
+   (uhw-hex s) (foldl (\ a k (s k @ c (a * 16 + (? (c < 58) (c - 48) (c < 71) (c - 55) (c - 87))))) 0 ^#s)
    (uhw-local _)                        ; the host's own ipv4s, by interface index
     (: fr (uread "/proc/net/fib_trie")
        ls (two? fr ? (lines <>fr))
@@ -1102,9 +1096,7 @@
     (uread (("/proc/" + show pid) + "/cmdline") @ r
      (atom? r ? ()
       (: s <>r n #s
-         (go k acc) (n <= k ? acc
-                     (go (k + 1) (acc + ((s k) = 0 ? " " (string (s k))))))
-         o (go 0 "")
+         o (jug 0 @ j (each ^n (k \ say j ((s k) = 0 ? " " (string (s k)))), slurp j))
          z #o
          (? (0 = z) () (o (z - 1) = 32) (snip o 0 (z - 1)) o))))
    ; argv[0]'s basename, for pidof -- the raw clip, since a kernel comm never

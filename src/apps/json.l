@@ -169,9 +169,7 @@
                 (c < 32 ? ("\\u00" + jhexd (c // 16) + jhexd (c % 16))
                           (string c)))
 
-   (jqt s) (#s @ n
-              ((: (go k acc) (k < n ? (go (k + 1) (acc + jqc (s k))) (acc + "\"")))
-               0 "\""))
+   (jqt s) (jug 0 @ j (say j "\"", each ^#s (k \ say j (jqc (s k))), say j "\"", slurp j))
 
    (jjoin xs) (atom? xs ? ""
                  ((: (go l acc) (two? l ? (go >l (acc + "," + <l)) acc)) >xs <xs))

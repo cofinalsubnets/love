@@ -153,7 +153,7 @@
        (i < n && (t i = 101 || t i = 69) ?
         (: sg (t (i + 1) = 45 ? -1 1) j (t (i + 1) = 45 || t (i + 1) = 43 ? (i + 2) (i + 1))
            e (: (go k a) (k < n ? (go (k + 1) (a * 10 + t k - 48)) a) (go j 0))
-           p (: (go k a) (k < e ? (go (k + 1) (a * 10.0)) a) (go 0 1.0))
+           p (foldl (\ a k (a * 10.0)) 1.0 ^e)
            (sg < 0 ? (v * (1.0 / p)) (v * p)))
         v))
    ; a number off the text: digits, a fraction, an exponent; a trailing i is inches and

@@ -26,7 +26,7 @@
    (skip-hex   s i) (i >= #s || !(hex? (peep s i 0)) ? i (skip-hex   s (i + 1)))
    (skip-nonws s i) (i >= #s ||   ws? (peep s i 0)  ? i (skip-nonws s (i + 1)))
    ; one past the last non-ws char (0 if the line is all whitespace).
-   (trim-end s) ((: (f i e) (i < #s ? (f (i + 1) (ws? (peep s i 0) ? e (i + 1))) e)) 0 0)
+   (trim-end s) (foldl (\ e i (ws? (peep s i 0) ? e (i + 1))) 0 ^#s)
    (dash? a) (0 < #a && 45 = peep a 0 0))
 
 ; --- line classifiers ---------------------------------------------
@@ -89,14 +89,12 @@
 ; Addresses can be high-half (a kernel image links at 0xffffffff80000000), which
 ; overflows a fixnum -- so u64/big/hex->int use `+`/`*` (which promote to bignum),
 ; never bitwise `<<`/`|` (which would not), keeping the values exact.
-(: (hex->int s) ((: (f i acc)
-                    (i >= #s ? acc
-                       (: c (peep s i 0)
-                          v (? (48 <= c <= 57)  (c - 48)
-                               (97 <= c <= 102) (c - 87)
-                               (65 <= c <= 70)  (c - 55) 0)
-                          (f (i + 1) (acc * 16 + v)))))
-                 0 0)
+(: (hex->int s) (foldl (\ acc i (: c (peep s i 0)
+                                   v (? (48 <= c <= 57)  (c - 48)
+                                        (97 <= c <= 102) (c - 87)
+                                        (65 <= c <= 70)  (c - 55) 0)
+                                   (acc * 16 + v)))
+                       0 ^#s)
    BIG (4294967296 * 4294967296)                          ; 2^64: above any real address
    (parse-header-addr line)                               ; the <addr> before <name>:, as an int
      (: i (skip-ws line 0) j (skip-hex line i)

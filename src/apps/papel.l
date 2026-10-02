@@ -107,10 +107,7 @@
                  a (:- (f 0) (f i) (i < n && s i = 45 ? (f (i + 1)) i))
                  b (:- (f n) (f i) (a < i && s (i - 1) = 45 ? (f (i - 1)) i))
                  (snip s a b))
-   (slug s)   (: raw (:- (g 0 "")
-                         (g i acc) (i < #s ?
-                                      (s i @ c (g (i + 1) (acc + (alnum? c ? (string (down c)) "-"))))
-                                      acc))
+   (slug s)   (: raw (jug 0 @ j (each ^#s (i \ (s i @ c (say j (alnum? c ? (string (down c)) "-")))), slurp j))
                  out (trimd (squash raw))
                  (0 < #out ? out "section")))
 

@@ -33,11 +33,11 @@
    x-r8 see
    (x-r16 s) (: a (see s) b (see s) (a | b << 8))
    (x-r32 s) (: a (x-r16 s) b (x-r16 s) (a | b << 16))
-   (x-skip s n) (: (go i) (i < n ? (see s, go (i + 1))) (go 0))
-   (x-rstr s n) (: (go i acc) (i >= n ? acc (go (i + 1) (acc + string (see s)))) (go 0 ""))
+   (x-skip s n) (each ^n (i \ see s))
+   (x-rstr s n) (jug 0 @ j (each ^n (i \ say j (string (see s))), slurp j))
    (x-pad4 n) (padk n 4)
-   (x-wname s t) (: (go i) (i < #t ? (put s (t i), go (i + 1))) (go 0))
-   (x-rbytes s n) (: (go i acc) (i >= n ? (rev acc) (go (i + 1) (see s . acc))) (go 0 ()))       ; n raw bytes -> a list
+   (x-wname s t) (each ^#t (i \ put s (t i)))
+   (x-rbytes s n) (map (i \ see s) ^n)       ; n raw bytes -> a list
    (u16 l off) (rdle l off 2)                                          ; little-endian reads out of a byte list
    (u32 l off) (rdle l off 4)
 

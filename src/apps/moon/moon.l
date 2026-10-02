@@ -769,10 +769,7 @@
        (dotobj n) (dotc? n ? (snip n 0 (#n - 2) + ".o") n)
        (swap47 s) (: n #s c (cask n)
                      _ (pour c 0 s 0 n)
-                     (go i) (n <= i ? (string c)
-                               (peep c i 0 = 47 && pin c i 95,
-                                go (i + 1)))
-                     (go 0))
+                     (each ^n (i \ peep c i 0 = 47 && pin c i 95), string c))
        (nlmems d)
         (disk ?
            (foldl (a \ e \ d + e @ p

@@ -11,7 +11,7 @@
   (gget i) (peep (gauge 0) i 0)
   (pct a b) (b @ 0 0 (a * 100 // b))                             ; a/b as an integer percent
   (per a b) (b @ 0 0 (a // b))                                     ; integer a/b
-  (runk work k) ((: (go i a) (i < k ? (go (i + 1) (work 0)) a)) 0 0)  ; run work k times -> last chk
+  (runk work k) (foldl (\ a i (work 0)) 0 ^k)  ; run work k times -> last chk
 
   ; run `work` k times between two gauge reads; print the window's churn.
   (gcwin name k work)
@@ -35,7 +35,7 @@
   ; fib: naive recursion -- integer, allocation-free call churn.
   (fib n) (n < 2 ? n (fib (n - 1) + fib (n - 2)))
   ; mapchurn: map a fresh n-list M times -- pure infant mortality (M-1 lists die).
-  (mapchurn n m) ((: (go i l) (i >= m ? #l (go (i + 1) (map (+ 1) l)))) 0 ^n)
+  (mapchurn n m) #(foldl (\ l i (map (+ 1) l)) ^n ^m)
   ; revbig: fold a jot into a fresh reversed list -- n cons cells, then dropped.
   (revbig n) #(foldl (flip (.)) () ^n)
 
