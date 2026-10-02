@@ -73,32 +73,25 @@
    ; ground for one to lie over
    (limn-bare s k) ("\e[0;" + limn-ink 48 (glass s k 2) + "m ")
 
-   ; the rest of a cluster, after its base
-   (limn-marks j s k m) (glass s k m @ v
-                           (m < 12 && 0 < v ? (say j (utf8 v), limn-marks j s k (m + 1)) 0))
-   ; a wide lead with more to it -- VS16 or a ZWJ sequence widened it (?2027), or a mark
-   ; rides it: an outer terminal may draw it one column or several, so its two cells are
-   ; erased first and the cursor comes back and steps two past it after
-   (limn-gc? s g k) (g >> 21 & 3 = 1 && 0 < glass s k 3)
-
-   ; paint row i cell by cell, threading the pen. a wide char's tail says nothing: the
-   ; outer terminal steps two columns for its lead. a selected cell wears the reverse face,
-   ; and a tile is a ▀ (pk 0), bare ground for kitty's picture (1), or stepped over, a
-   ; sixel's pixels being in the text layer (2)
-   (limn-row j s c i q p pk) (q < c ?
-                           (: k (i * c + q)
-                              g (glass s k 0 @ g0 ((gaze s 10) <= k < (gaze s 11) ? (g0 ^ 67108864) g0))
-                              (? (g >> 21 & 3 = 2) (limn-row j s c i (q + 1) p pk)
-                                 (g >> 23 & 1 = 1) (say j (pk @- (limn-tile s k) 1 (limn-bare s k) 2 "\e[C"),
-                                                      limn-row j s c i (q + 1) -1 pk)
-                                 (: p2 (limn-pen g (glass s k 1) (glass s k 2)) vs (limn-gc? s g k)
-                                    (p = p2 ? 0 (say j (limn-sgr p2)),
-                                     vs ? (say j "\e[2X\e7") 0,
-                                     say j (limn-glyph (g & 2097151)),
-                                     limn-marks j s k 3,
-                                     vs ? (say j "\e8\e[2C") 0,
-                                     limn-row j s c i (q + 1) p2 pk))))
-                           p)
+   ; paint row i from column q, threading the pen. the cells go out through limned
+   ; (src/love/quay/nif.c): a pen change as limn-sgr says it, a glyph and the rest of its
+   ; cluster, a selected cell in reverse, nothing for a wide char's tail, and a wide lead
+   ; with more to it (VS16, a ZWJ sequence, a mark) erased first and stepped past after,
+   ; since an outer terminal may draw it one column or several. it stops at a tile: a ▀
+   ; here (pk 0), bare ground for kitty's picture (1), or stepped over, a sixel's pixels
+   ; being in the text layer (2)
+   (limn-row j s c i q p pk)
+    (q < c ?
+       (([b t f fg bg] \
+         (say j b,
+          (q + t < c ?
+             ((i * c + q + t) @ k
+                (say j (pk @- (limn-tile s k) 1 (limn-bare s k) 2 "\e[C"),
+                 limn-row j s c i (q + t + 1) -1 pk))
+             (f < 0 ? -1 (f | fg << 8 | bg << 34)))))
+        (limned s (i * c + q) (c - q) (p < 0 ? -1 (p & 255)) (p < 0 ? 0 (p >> 8 & 67108863))
+                (p < 0 ? 0 (p >> 34))))
+       p)
 
    ; one pane: every grid row addressed at its own origin, which is the whole
    ; difference between painting a rectangle and painting a run of full lines.

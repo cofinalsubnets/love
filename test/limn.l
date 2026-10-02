@@ -53,6 +53,17 @@
            (sub? (limn-sgr (limn-pen (16 << 24) 0 0)) ";3" 0)
            (sub? (limn-sgr (limn-pen (32 << 24) 0 0)) ";9" 0)))
 
+; --- limned says a run of cells as limn-sgr and limn-glyph would, one SGR per pen
+;     change, nothing for a wide char's tail, and answers the cells done and the pen ---
+   _ (: s (mkscr 1 8)
+        _ (scribe s "\e[1;3;7;9;38;5;200;48;2;9;8;7mA\e[0;2;4;5;8mB\e[m\u{4e16}c")
+        r (limned s 0 8 -1 0 0)
+        (pen k) (limn-pen (glass s k 0) (glass s k 1) (glass s k 2))
+        _ (test
+           ((limn-sgr (pen 0) + "A" + limn-sgr (pen 1) + "B" + limn-sgr (pen 2) + limn-glyph 19990
+             + "c   ") = <r)
+           ([8 0 0 0] = >r)))
+
 ; --- through a screen: truecolour and a codepoint the cp437 page lacks both come
 ;     back out as they went in ---
    _ (: s (mkscr 1 4)

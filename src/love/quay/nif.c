@@ -55,6 +55,10 @@
 //                                painter (paint.c) in the built-in 8x16, face a
 //                                loaded one (as facerow takes) or (); cur the cell
 //                                the cursor wears, -1 for none; () misuse
+//   (limned scr k n f fg bg) -> (s took f fg bg)   cells k..k+n-1 as the escapes an
+//                                outer terminal paints them by (src/apps/mitty/limn.l's
+//                                row): the pen f fg bg carried in (f -1 for none) and out,
+//                                stopping short at a picture's tile, took the cells done
 //   (facerow f cp r)     -> n    row r of cp's glyph in face f (a string or cask as
 //                                src/apps/face.l lays it), the leftmost pixel bit 15;
 //                                () when f is no face (cb_face_ok) or lacks cp
@@ -398,6 +402,85 @@ static lvm(lvm_pasted) {
  Sp[1] = word(s);
  Sp += 1; Ip += 1; ai_musttail return Continue(); }
 
+// limn's row in C: cells k.. as the escapes an outer terminal paints them by, the pen
+// threaded through (pn[0] the face, -1 for none said yet; 1 the fg; 2 the bg). it stops
+// at a picture's tile, which src/apps/mitty/limn.l paints its own way. o 0 only counts
+static uintptr_t limn_s(uint8_t *o, uintptr_t at, char const *s) {
+ for (; *s; s++, at++) if (o) o[at] = (uint8_t) *s;
+ return at; }
+static uintptr_t limn_n(uint8_t *o, uintptr_t at, uint32_t v) {
+ char b[10]; int i = 0;
+ do b[i++] = (char) ('0' + v % 10), v /= 10; while (v);
+ while (i--) { if (o) o[at] = (uint8_t) b[i]; at++; }
+ return at; }
+static uintptr_t limn_u8(uint8_t *o, uintptr_t at, uint32_t cp) {
+ uint8_t b[4]; int n;
+ if (!cp) cp = ' ';
+ if (cp < 0x80) b[0] = (uint8_t) cp, n = 1;
+ else if (cp < 0x800) b[0] = (uint8_t) (0xc0 | cp >> 6), b[1] = (uint8_t) (0x80 | (cp & 63)), n = 2;
+ else if (cp < 0x10000) b[0] = (uint8_t) (0xe0 | cp >> 12), b[1] = (uint8_t) (0x80 | (cp >> 6 & 63)),
+                        b[2] = (uint8_t) (0x80 | (cp & 63)), n = 3;
+ else b[0] = (uint8_t) (0xf0 | cp >> 18), b[1] = (uint8_t) (0x80 | (cp >> 12 & 63)),
+      b[2] = (uint8_t) (0x80 | (cp >> 6 & 63)), b[3] = (uint8_t) (0x80 | (cp & 63)), n = 4;
+ for (int i = 0; i < n; i++, at++) if (o) o[at] = b[i];
+ return at; }
+// a colour word's SGR, base 38 for the fg and 48 for the bg
+static uintptr_t limn_ink(uint8_t *o, uintptr_t at, uint32_t base, uint32_t k) {
+ uint32_t const v = k & 0xffffffu;
+ switch (k >> 24 & 3) {
+  case cb_idx: return limn_n(o, limn_s(o, limn_n(o, at, base), ";5;"), v);
+  case cb_rgb: at = limn_s(o, limn_n(o, at, base), ";2;");
+   at = limn_s(o, limn_n(o, at, v >> 16), ";");
+   return limn_n(o, limn_s(o, limn_n(o, at, v >> 8 & 255), ";"), v & 255);
+  default: return limn_n(o, at, base + 1); } }
+static uintptr_t limn_cells(struct cb const *c, uint8_t *o, intptr_t k, intptr_t n, intptr_t pn[3], intptr_t *took) {
+ static uint8_t const bit[8] = { cb_bold, cb_dim, cb_ital, cb_under, cb_blink, cb_rev, cb_hide, cb_strike };
+ static char const *const on[8] = { ";1", ";2", ";3", ";4", ";5", ";7", ";8", ";9" };
+ uintptr_t at = 0;
+ intptr_t i = 0;
+ for (; i < n; i++) {
+  struct cb_cell const *e = cb_at(c, k + i);
+  if (!e) continue;
+  uint32_t const *v = cb_clu(c, e->g);
+  uint32_t g = v ? (e->g & 0xffe00000u) | cb_cp(v[0]) : e->g;
+  if (c->sel0 <= k + i && k + i < c->sel1) g ^= (uint32_t) cb_rev << 24;
+  if (cb_wide(g) == cb_tail) continue;
+  if (g & cb_pic) break;
+  intptr_t const fa = g >> 24, fg = e->fg & ~cb_soft & 0x3ffffffu, bg = e->bg;
+  if (pn[0] != fa || pn[1] != fg || pn[2] != bg) {
+   at = limn_s(o, at, "\033[0");
+   for (int b = 0; b < 8; b++) if (fa & bit[b]) at = limn_s(o, at, on[b]);
+   at = limn_ink(o, limn_s(o, at, ";"), 38, (uint32_t) fg);
+   at = limn_s(o, limn_ink(o, limn_s(o, at, ";"), 48, (uint32_t) bg), "m");
+   pn[0] = fa, pn[1] = fg, pn[2] = bg; }
+  int const vs = cb_wide(g) == cb_lead && v && cb_cp(v[1]);
+  if (vs) at = limn_s(o, at, "\033[2X\0337");
+  at = limn_u8(o, at, cb_cp(g));
+  for (int m = 1; v && m < cb_clun && cb_cp(v[m]); m++) at = limn_u8(o, at, cb_cp(v[m]));
+  if (vs) at = limn_s(o, at, "\0338\033[2C"); }
+ *took = i;
+ return at; }
+
+// (limned scr k n f fg bg): counted, then laid after ai_have, which may move the cask
+ai_noinline static struct ai *host_limned(struct ai *g) {
+ word *a = g->sp;
+ struct cb *c = scr_ok(a[0]);
+ if (!c || !(a[1] & a[2] & a[3] & a[4] & a[5] & 1)) { a[0] = ZeroPoint; return g; }
+ intptr_t const k = getcharm(a[1]), n = getcharm(a[2]);
+ intptr_t pn[3] = { getcharm(a[3]), getcharm(a[4]), getcharm(a[5]) }, took = 0;
+ uintptr_t const len = limn_cells(c, 0, k, n, pn, &took);
+ if (!ai_ok(g = ai_have(g, str_width(len) + 5 * chain_req))) return g;
+ a = g->sp, c = scr_ok(a[0]);
+ pn[0] = getcharm(a[3]), pn[1] = getcharm(a[4]), pn[2] = getcharm(a[5]);
+ struct ai_str *s = ini_str(bump(g, str_width(len)), len);
+ limn_cells(c, (uint8_t*) txt(s), k, n, pn, &took);
+ intptr_t const tail[4] = { took, pn[0], pn[1], pn[2] };
+ word l = ZeroPoint;
+ for (int i = 4; i-- > 0;) l = word(ini_chain((struct ai_chain*) bump(g, chain_req), putcharm(tail[i]), l));
+ a[0] = word(ini_chain((struct ai_chain*) bump(g, chain_req), word(s), l));
+ return g; }
+static lvm(lvm_limned) { LvmCallp(g, 5, host_limned) }
+
 static union u const
   nif_screen[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_screen}, {lvm_ret0}},
   nif_scribe[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_scribe}, {lvm_ret0}},
@@ -414,4 +497,5 @@ static union u const
   nif_pasted[]  = {{lvm_cur}, {.x = putcharm(2)}, {lvm_pasted},  {lvm_ret0}},
   nif_select[]  = {{lvm_cur}, {.x = putcharm(4)}, {lvm_select},  {lvm_ret0}},
   nif_copied[]  = {{lvm_cur}, {.x = putcharm(3)}, {lvm_copied},  {lvm_ret0}},
-  nif_picture[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_picture}, {lvm_ret0}};
+  nif_picture[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_picture}, {lvm_ret0}},
+  nif_limned[]  = {{lvm_cur}, {.x = putcharm(6)}, {lvm_limned},  {lvm_ret0}};
