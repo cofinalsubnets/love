@@ -360,24 +360,28 @@
                   (all (p \ nom? p && p != ()) ps && #ps = #(foldl (a \ p \ (elem p a ? a (p . a))) () ps))) ? (init >s) ())
    (jotx y bnd) (: h <y ops (jotfuse 'ops)
                    jf (nom? h && !(elem h bnd) && two? ops ? (gv h () @ v (nom? v ? () (jotfuse v))) ())
-                   (? (two? jf && (jf 1) = #>y) (jotk y jf (jsrc (>y <jf) bnd) ops) y))
+                   (? (two? jf && (jf 1) = #>y) (jotk y jf (jsrc (>y <jf) bnd) ops bnd) y))
    ; the source operand (jot N), the book's jot by name or by value -> [N], else ()
    (jsrc L bnd) (two? L && 2 = #L && (: j (jotfuse 'jot) h <L (h == j || h == 'jot && !(elem 'jot bnd) && gv 'jot () == j)) ? [<>L] ())
-   (jotk y jf n ops) (: as >y k <jf
+   (jotk y jf n ops bnd) (: as >y k <jf
                         (? !(two? n) y
                            (: kind (? (jf == jotfuse 'foldl) 0 (jf == jotfuse 'foldr) 1 (jf == jotfuse 'each) 2 3)
                               F (as (k = 0 ? 1 0))
                               ps (jstep F (kind < 2 ? 2 1))
                               (? !(two? ps) y
                                  (kind < 2 && !(jplain? <n || jplain? (as 1))) y
-                                 (jotloop kind F ps (last F) <n (as 1) ['\ (jf 2)] ops)))))
-   (jotloop kind F ps B N Z tw ops)
+                                 (jotloop kind F ps (last F) <n (as 1) ['\ (jf 2)] ops (jnum? <n bnd ops))))))
+   ; N is a number for certain -- a numeric literal, or a book tally -- so no list can reach the loop
+   (jnum? N bnd ops) (charm? N || two? N && 2 = #N && (: T (ops 6) h <N (h == T || h == 'tally && !(elem 'tally bnd) && gv 'tally () == T)))
+   (jotloop kind F ps B N Z tw ops num) (jotloop1 kind F ps B N Z tw ops @ [b n f l] (num ? (b + [l]) (b + [['? [<ops n] f l]])))
+   ; -> [(: n N z Z) awaiting its body, n, the twin's call, the loop]
+   (jotloop1 kind F ps B N Z tw ops)
     (: t2 <ops sat <>ops lt <>>ops pl (ops 3) cons (ops 4) rv (ops 5)
        n (nom 0) z (nom 0) go (nom 0) m (nom 0) e (nom 0) a (nom 0) I (kind = 1 ? <ps (ps (#ps - 1))) A <ps
-       (? (kind = 0) [': n N z Z ['? [t2 n] [tw F z n] [': m [sat n] [go I A] ['? [lt I m] [go [pl I 1] B] A] [go 0 z]]]]
-          (kind = 1) [': n N z Z ['? [t2 n] [tw F z n] [': m [sat n] [go I] ['? [lt I m] [': (ps 1) [go [pl I 1]] B] z] [go 0]]]]
-          (kind = 2) [': n N ['? [t2 n] [tw n F] [': m [sat n] [go I] ['? [lt I m] [': e B [go [pl I 1]]]] [go 0]]]]
-          [': n N ['? [t2 n] [tw F n] [': m [sat n] [go I a] ['? [lt I m] [go [pl I 1] [cons B a]] [rv a]] [go 0 ()]]]]))
+       (? (kind = 0) [[': n N z Z] n [tw F z n] [': m [sat n] [go I A] ['? [lt I m] [go [pl I 1] B] A] [go 0 z]]]
+          (kind = 1) [[': n N z Z] n [tw F z n] [': m [sat n] [go I] ['? [lt I m] [': (ps 1) [go [pl I 1]] B] z] [go 0]]]
+          (kind = 2) [[': n N] n [tw n F] [': m [sat n] [go I] ['? [lt I m] [': e B [go [pl I 1]]]] [go 0]]]
+          [[': n N] n [tw F n] [': m [sat n] [go I a] ['? [lt I m] [go [pl I 1] [cons B a]] [rv a]] [go 0 ()]]]))
    ; cprop: the partial-evaluation pre-pass. threads a static value env `se` (name . const-form),
    ; propagating a constant-bound var and folding a pure-fn call on constant args; pureset is the
    ; fold license and a bnd-shadowed head never folds (the alpha law). it prunes no conds (wxc

@@ -2509,5 +2509,5 @@
                  (list foldn foldrn eachn mapn)))
       (each [['foldl foldl 0] ['foldr foldr 1] ['each each 2] ['map map 3]]
             ([nm w i] \ (jf nm @ e (pin jf nm [<e (e 1) (tw i)], pin jf w (jf nm)))),
-       pin jf 'ops (init (jf 'ops) + [rev])))
+       (jf 'ops @ o (pin jf 'ops (take 5 o + [rev] + drop 6 o)))))
    0)

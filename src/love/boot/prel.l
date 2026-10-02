@@ -660,7 +660,7 @@
 ; the last seal: opfix joins the other four in the g->hot_* fields, so no later rebind can reach it.
 (seal-hook 4 opfix)
 ; the ops ev's jotin splices into a loop, as values: none a loop's body can shadow
-(pin jotfuse 'ops [two? saturate (<) (+) (.) rev])
+(pin jotfuse 'ops [two? saturate (<) (+) (.) rev tally])
 
 ; --- text + sequence batteries ------------------------------------------------
 ; one copy of each, `sep` first so a partial application reads, and -1 for absent.

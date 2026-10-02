@@ -119,7 +119,7 @@
       ; 31337 the parent chain) sit in every layer and are not noms.
       (bare? t) ((: (go ks) (two? ks ? (nom? <ks ? 0 (go >ks)) 1)) (keys t))
       (mname s) (: n #s
-                   b ((: (go k r) (k >= n ? r (go (k + 1) (47 = peep s k 0 ? (k + 1) r)))) 0 0)
+                   b (foldl (\ r k (47 = peep s k 0 ? (k + 1) r)) 0 ^n)
                    e ((2 < n - b ? (".l" = snip s (n - 2) n) 0) ? (n - 2) n)
                    (intern (snip s b e)))
       fsopen (cite 'posix 'open)       ; the host's open nif, off its module -- see above
@@ -732,9 +732,7 @@
         (c >= 32 ? (put o c)
                    (say o "\\x", put o (hexd (c // 16)),
                     put o (hexd (c - 16 * (c // 16))))))
-  (pstr o s) (: n #s
-                (go i) (i < n ? (esc o (peep s i 0), go (1 + i)) 0)
-                (put o 34, go 0, put o 34))
+  (pstr o s) (put o 34, each ^#s (i \ esc o (peep s i 0)), put o 34)
 
   ; --- gems: the shortest roundtrip, exact steele & white. 4m and the midpoints 4m±2 are
   ; bignums at one shared scale and `//` does the rest.
@@ -777,9 +775,8 @@
            e < 0 ? (put o 45) 0,
            say o (dstr (e < 0 ? -e e))))
        (0 < dxp)                                  ; 1 <= v < 1e16: the point sits inside or after
-       (: (go i) (i < dxp ? (put o (i < sig ? (peep ss i 0) 48), go (1 + i)) 0)
-          (go 0, put o 46,
-           dxp < sig ? (say o (snip ss dxp sig)) (put o 48)))   ; integral: force "X.0", never a fixnum face
+       (each ^dxp (i \ put o (i < sig ? (peep ss i 0) 48)), put o 46,
+        dxp < sig ? (say o (snip ss dxp sig)) (put o 48))   ; integral: force "X.0", never a fixnum face
        (say o "0.", zeros o (0 - dxp), say o ss)))
   ; the sign is the bit, not v < 0: -0.0 < 0 is false, and a comparison there prints "0.0".
   (pgem o v)
@@ -811,12 +808,9 @@
   (ptray o v sn) (: ty (atype v) sh (shape v) n (foldl (*) 1 sh)
     (pel i) (peep v (coord sh i) 0 @ e
                (ty = 3 && (nom? e || two? e) ? (put o 39) 0, px o e sn))
-    (go i f) (i < n ? ((f ? 0 (put o 32)), pel i, go (1 + i) 0) 0)
     (gs l f) (two? l ? ((f ? 0 (put o 32)), pnum o <l, gs >l 0) 0)
-    (rank v = 1 ? (say o "@(", go 0 1, put o 41)
-       (: _ (say o "(array '(") _ (gs sh 1) _ (put o 41)
-          (ge i) (i < n ? (put o 32, pel i, ge (1 + i)) 0)
-          (ge 0, put o 41))))
+    (rank v = 1 ? (say o "@(", each ^n (i \ ((0 < i ? (put o 32) 0), pel i)), put o 41)
+       (say o "(array '(", gs sh 1, put o 41, each ^n (i \ (put o 32, pel i)), put o 41)))
 
   ; --- maps print {k v …}, the empty one {}; both read straight back. a map is
   ; mutable and can hold itself, so the path is carried and matched by identity.
@@ -853,9 +847,8 @@
                         (gn ? (say o (string gn))
                            (lamform v @ s
                               (? (s !== 0) (px o s sn)
-                                 (partp v) (: n (nargs v)
-                                              (go i) (i < n ? (put o 32, px o (farg v i n) sn, go (1 + i)) 0)
-                                              (put o 40, pfn o (fbase v) sn, go 0, put o 41))
+                                 (partp v) (nargs v @ n (put o 40, pfn o (fbase v) sn,
+                                                         each ^n (i \ (put o 32, px o (farg v i n) sn)), put o 41))
                                  (put o 92, pnum o (abs (dig v)))))))))   ; opaque: the digest, a distinguisher and nothing more
 
   (px o x sn) (? (charm? x) (pnum o x)
@@ -1134,7 +1127,7 @@
 
 (module '(bytes rdle rdbe rdoct wrle wrbe padk zbytes b2hex hex2b xorb)
 (: (rdle s i n) (n < 1 ? 0 (s i + (rdle s (i + 1) (n - 1) << 8)))
-   (rdbe s i n) (: (go k a) (n <= k ? a (go (k + 1) ((a << 8) + s (i + k)))) (go 0 0))
+   (rdbe s i n) (foldl (\ a k ((a << 8) + s (i + k))) 0 ^n)
    (rdoct s i n) (: (go k a) (n <= k ? a (s (i + k) @ c (48 <= c < 56 ? (go (k + 1) (a * 8 + c - 48)) a)))
                     (go 0 0))
    (wrle v n) (n < 1 ? "" (string (v & 255) + wrle (v >> 8) (n - 1)))
