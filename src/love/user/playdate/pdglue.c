@@ -4,7 +4,7 @@
 // flattening either way: a pointer's own parameter list places an argument and
 // a result is read from s0, so getCrankAngle answers straight.
 #include "pd_api.h"
-#include "../../love.h"                   // ai_alloc, the runtime's one heap door
+#include "../../love.h"                   // alloc, the runtime's one heap door
 #include "pdglue.h"
 #include "../../hornring.h"
 
@@ -73,7 +73,7 @@ void pdg_horn_close(void) { h_ring.rd = h_ring.wr = 0; }
 // setup.c on the simulator -- but which translation unit happens to answer that name is
 // not a thing this seat should have to depend on, so it says so here and links no
 // src/love/alloc.c. (src/love/love.h names the door; src/love/alloc.c is what a malloc-heap seat links.)
-void *ai_alloc(void *p, size_t n) {
+void *alloc(void *p, size_t n) {
   return n ? pdg_realloc(NULL, n) : (pdg_realloc(p, 0), NULL); }
 
 static int pd_event(PlaydateAPI *pd, PDSystemEvent event, uint32_t arg) {

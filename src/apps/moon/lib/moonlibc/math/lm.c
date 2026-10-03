@@ -5,7 +5,7 @@
 // are TAYLOR/exact-rational (re-derivable, no minimax magic) at mpmath-verified
 // double roundings; constants carry hi/lo splits where a product must stay exact.
 //
-// the surface is the seven love.c consumes (its ai_* defines): lm_sqrt EXACT
+// the surface is the seven love.c consumes (its love_* defines): lm_sqrt EXACT
 // (IEEE-correct rounding); lm_exp/lm_log <= 1 ulp; lm_sin/lm_cos ~0.74 ulp at
 // EVERY magnitude (compact Payne-Hanek -- no domain stance); lm_atan2 <= 3 ulp;
 // lm_pow <= 2 ulp typical, degrading ~linearly in |y ln x| toward the
@@ -422,8 +422,8 @@ double lm_pow(double x, double y) {
 
 // -- the float twins (the 32-bit lane: wasm, the MCUs): compute in binary64,
 // narrow once -- correct within a float ulp, and the dispatch can still take
-// their ADDRESS (love.c hands ai_sin to lvm_math1 as a pointer, so the 32-bit
-// ai_* must be real functions, not casting macros). --
+// their ADDRESS (love.c hands love_sin to lvm_math1 as a pointer, so the 32-bit
+// love_* must be real functions, not casting macros). --
 float lm_sinf(float x) { return (float) lm_sin(x); }
 float lm_cosf(float x) { return (float) lm_cos(x); }
 float lm_atan2f(float y, float x) { return (float) lm_atan2(y, x); }

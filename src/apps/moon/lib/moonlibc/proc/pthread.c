@@ -10,12 +10,12 @@ struct __pthread { void *(*fn)(void *); void *arg; void *ret; void *map; unsigne
 #define PtMain ((pthread_t) 1)  /* the first thread: no record, and no record sits at 1 */
 
 pthread_t pthread_self(void) {
-  if (!__ai_mt.threads) return PtMain;
+  if (!__love_mt.threads) return PtMain;
 #if defined(__x86_64__)
   void *tp = 0;
   sc2(NR_arch_prctl, 0x1003, (long) &tp);   /* ARCH_GET_FS */
 #else
-  void *tp = __ai_tp();
+  void *tp = __love_tp();
 #endif
   return tp ? (pthread_t) tp : PtMain; }
 
@@ -32,7 +32,7 @@ void pthread_exit(void *v) {
 static void __pt_start(struct __pthread *d) { pthread_exit(d->fn(d->arg)); }
 
 int pthread_create(pthread_t *t, pthread_attr_t const *at, void *(*fn)(void *), void *arg) {
-  if (__ai_osv >= 2) return EAGAIN;           /* the BSDs: thr_new and _lwp_create are not spoken here */
+  if (__love_osv >= 2) return EAGAIN;           /* the BSDs: thr_new and _lwp_create are not spoken here */
   void *m = mmap(0, (long) PtStack, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
   if (m == (void *) -1) return EAGAIN;
   mprotect(m, 4096, PROT_NONE);               /* a guard page under the stack */
@@ -40,8 +40,8 @@ int pthread_create(pthread_t *t, pthread_attr_t const *at, void *(*fn)(void *), 
   d->fn = fn; d->arg = arg; d->ret = 0; d->map = m; d->len = PtStack; d->tid = 0;
   void **sp = (void **) (((unsigned long) d - 16) & ~15UL);
   sp[0] = (void *) __pt_start; sp[1] = d;     /* the leaf calls sp[0](sp[1]) */
-  __ai_mt.threads = 1;                        /* before the child can reach malloc */
-  long r = __ai_clone(PtFlags, sp, (int *) &d->tid, (int *) &d->tid, d);
+  __love_mt.threads = 1;                        /* before the child can reach malloc */
+  long r = __love_clone(PtFlags, sp, (int *) &d->tid, (int *) &d->tid, d);
   if (r < 0) { munmap(m, (long) PtStack); return EAGAIN; }
   *t = (pthread_t) d;
   return 0; }

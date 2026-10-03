@@ -4,7 +4,7 @@
 # index range); a -pie ET_DYN loads high and clears it. Reuses test_raw's objects,
 # links them PIE, bakes the post-warm image into the binary's OWN .image (src/love/image.c
 # self-patch), then WAKES that image and runs the corpus over the woken heap. This is
-# the ONLY gate that exercises ai_image_load on a mooncc binary -- the seam where an
+# the ONLY gate that exercises love_image_load on a mooncc binary -- the seam where an
 # odd-addressed lvm_* ap mis-encodes as a fixnum, invisible to every egg-boot gate.
 #
 # The SPLIT: make owns the dependency graph and the file lists; this file owns the
@@ -50,6 +50,6 @@ cat "$@" > "$ho/.corpus-baked.l"
 s=$?
 tail -1 "$out"
 [ $s -eq 0 ] && grep -q "tests pass" "$out" \
-  || fail "the woken corpus (exit $s) -- ai_image_load desync?"
+  || fail "the woken corpus (exit $s) -- love_image_load desync?"
 
 echo "test_raw_bake: the mooncc-PIE binary bakes its own image and WAKES it -- corpus passes on the woken heap"

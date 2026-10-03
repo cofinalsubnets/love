@@ -9,13 +9,13 @@ struct mem {
   uintptr_t len;
   uintptr_t _[]; };
 
-static ai_inline struct mem *after(struct mem *r) {
+static love_inline struct mem *after(struct mem *r) {
   return (struct mem*) ((uintptr_t*) r + r->len); }
 
 // n words off the top of the first block that holds them, NULL when none does. a block with
 // no room left for a header of its own after the carve goes whole, so a freed block is taken
 // back at its own size
-static ai_inline void *ff_alloc(struct mem **fl, uintptr_t n) {
+static love_inline void *ff_alloc(struct mem **fl, uintptr_t n) {
   if (!n) return NULL;
   void *p = NULL;
   struct mem *r = NULL, *t;
@@ -40,7 +40,7 @@ static ai_inline void *ff_alloc(struct mem **fl, uintptr_t n) {
     *fl = t;
   return p; }
 
-static ai_inline void ff_free(struct mem **fl, void *p) {
+static love_inline void ff_free(struct mem **fl, void *p) {
   if (!p) return;
   struct mem *m = (struct mem*)p - 1, *r = NULL, *t;
   while (*fl && *fl < m)

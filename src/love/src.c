@@ -14,52 +14,52 @@
 // object names src/love/noblob.c instead, so the length alone says whether anything is aboard.
 // the source opens through src/love/lovefs.c, the tree /love serves.
 extern const unsigned char
- ai_rtgz_x64[], ai_rtgz_a64[], ai_rtgz_rv64[], ai_rtgz_id[];
+ rtgz_x64[], rtgz_a64[], rtgz_rv64[], rtgz_id[];
 extern const uintptr_t
- ai_rtgz_x64_len, ai_rtgz_a64_len, ai_rtgz_rv64_len, ai_rtgz_id_len;
+ rtgz_x64_len, rtgz_a64_len, rtgz_rv64_len, rtgz_id_len;
 
 // a section alone ends in the two zero blocks a tar ends with; the last carries its own
-static ai_noinline struct ai *host_tree_tar(struct ai *g) {
- struct ai_tree *t = ai_tree_carried();
+static love_noinline struct g *host_tree_tar(struct g *g) {
+ struct tree *t = tree_carried();
  word a = g->sp[0];
  intptr_t one = -1;
  if (t && strp(a)) {
   char nm[9] = {0};
-  if (len(a) < sizeof nm) memcpy(nm, txt(a), len(a)), one = ai_tree_named(t, nm);
+  if (len(a) < sizeof nm) memcpy(nm, txt(a), len(a)), one = tree_named(t, nm);
   if (one < 1) t = NULL; }
  uint32_t lo = one > 0 ? (uint32_t) one : 1, hi = one > 0 ? lo + 1 : t ? t->ns : 0;
  uintptr_t n = one > 0 ? 1024 : 0;
  for (uint32_t i = lo; t && i < hi; i++)
-  if (ai_tree_sec(t, i)) n += t->s[i].raw;
+  if (tree_sec(t, i)) n += t->s[i].raw;
   else t = NULL;
  if (!t) return g->sp[0] = ZeroPoint, g;
- if (!ai_ok(g = str0(g, n))) return g;             // pushes: the tar over the arg
+ if (!ok(g = str0(g, n))) return g;             // pushes: the tar over the arg
  unsigned char *o = (unsigned char*) txt(g->sp[0]);
  for (uint32_t i = lo; i < hi; i++) memcpy(o, t->s[i].bytes, t->s[i].raw), o += t->s[i].raw;
  if (one > 0) memset(o, 0, 1024);
  return g->sp[1] = g->sp[0], g->sp += 1, g; }
 
-static ai_noinline struct ai *host_tree_head(struct ai *g) {
- struct ai_tree *t = ai_tree_carried();
+static love_noinline struct g *host_tree_head(struct g *g) {
+ struct tree *t = tree_carried();
  if (!t) return g->sp[0] = ZeroPoint, g;
  uintptr_t w = 0;
  for (uint32_t i = 0; i < t->ns; i++)
-  w += str_width(strlen(t->s[i].name)) + 7 * Width(struct ai_chain);
- if (!ai_ok(g = ai_have(g, w))) return g;
+  w += str_width(strlen(t->s[i].name)) + 7 * Width(struct chain);
+ if (!ok(g = have(g, w))) return g;
  word l = ZeroPoint;
  for (uint32_t i = t->ns; i--;) {
-  struct ai_tree_sec const *s = t->s + i;
+  struct tree_sec const *s = t->s + i;
   uintptr_t nl = strlen(s->name);
-  struct ai_str *nm = ini_str(bump(g, str_width(nl)), nl);
+  struct str *nm = ini_str(bump(g, str_width(nl)), nl);
   memcpy(nm->bytes, s->name, nl);
   word f[6] = { (word) nm, putcharm(s->codec), putcharm(s->raw), putcharm(s->packed),
                 putcharm(s->crc), putcharm(s->bytes ? 1 : 0) }, r = ZeroPoint;
-  for (int k = 6; k--;) r = word(ini_chain(bump(g, Width(struct ai_chain)), f[k], r));
-  l = word(ini_chain(bump(g, Width(struct ai_chain)), r, l)); }
+  for (int k = 6; k--;) r = word(ini_chain(bump(g, Width(struct chain)), f[k], r));
+  l = word(ini_chain(bump(g, Width(struct chain)), r, l)); }
  return g->sp[0] = l, g; }
 
 // inlined into its wrapper: no buffer and nothing address-taken, so the tail still jumps
-static ai_inline struct ai *host_rtgz(struct ai *g) {
+static love_inline struct g *host_rtgz(struct g *g) {
  const unsigned char *p = 0;
  uintptr_t n = 0;
  word a = g->sp[0];
@@ -68,12 +68,12 @@ static ai_inline struct ai *host_rtgz(struct ai *g) {
   uintptr_t sl = len(a);
   // the canonical ISA words (src/love/boot/prel.l's arch-canon); the width is spelled
   // beside the name and has to travel with it -- a shorter word here answers nothing
-  if      (sl == 3 && !memcmp(s, "x64",   3)) p = ai_rtgz_x64,   n = ai_rtgz_x64_len;
-  else if (sl == 3 && !memcmp(s, "a64",   3)) p = ai_rtgz_a64,   n = ai_rtgz_a64_len;
-  else if (sl == 4 && !memcmp(s, "rv64",  4)) p = ai_rtgz_rv64,  n = ai_rtgz_rv64_len;
-  else if (sl == 2 && !memcmp(s, "id",    2)) p = ai_rtgz_id,    n = ai_rtgz_id_len; }
+  if      (sl == 3 && !memcmp(s, "x64",   3)) p = rtgz_x64,   n = rtgz_x64_len;
+  else if (sl == 3 && !memcmp(s, "a64",   3)) p = rtgz_a64,   n = rtgz_a64_len;
+  else if (sl == 4 && !memcmp(s, "rv64",  4)) p = rtgz_rv64,  n = rtgz_rv64_len;
+  else if (sl == 2 && !memcmp(s, "id",    2)) p = rtgz_id,    n = rtgz_id_len; }
  if (!n) return g->sp[0] = ZeroPoint, g;
- if (!ai_ok(g = str0(g, n))) return g;
+ if (!ok(g = str0(g, n))) return g;
  memcpy(txt(g->sp[0]), p, (size_t) n);          // .rodata: no re-read after the collect
  return g->sp[1] = g->sp[0], g->sp += 1, g; }
 

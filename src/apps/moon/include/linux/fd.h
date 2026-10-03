@@ -1,5 +1,5 @@
-#ifndef _AI_LINUX_FD_H
-#define _AI_LINUX_FD_H
+#ifndef _LOVE_LINUX_FD_H
+#define _LOVE_LINUX_FD_H
 /* freestanding linux/fd.h for cc: just FDFLUSH, the one floppy ioctl tar's
    compare.c reaches for (`#ifdef FDFLUSH` guards its use). the real kernel
    header carries bitfield structs (struct floppy_fdc_state) mooncc can't yet

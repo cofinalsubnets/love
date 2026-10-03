@@ -1,5 +1,5 @@
-#ifndef _AI_FLOAT_H
-#define _AI_FLOAT_H
+#ifndef _LOVE_FLOAT_H
+#define _LOVE_FLOAT_H
 /* freestanding <float.h> for cc: the IEEE-754 characteristics for this ABI.
  * float = binary32, double = binary64, and long double IS double -- cc gives it
  * 8 bytes and a 53-bit significand, which is what __LDBL_MANT_DIG__ says and what

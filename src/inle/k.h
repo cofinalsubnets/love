@@ -55,7 +55,7 @@ struct k_boot {
   uint32_t cap_px;
  } fb;
  bool has_fb; // FIXME how is this different from fb.base == NULL
- // the wall date at boot, UNIX SECONDS -- what makes ai_clock a clock and not an
+ // the wall date at boot, UNIX SECONDS -- what makes love_clock a clock and not an
  // uptime. NO door answers it now, so every one falls back to the machine's RTC
  // in kmain -- a door that learns a date may still fill this. 0 is "nobody
  // knew", not midnight 1970: a stat
@@ -67,7 +67,7 @@ struct k_boot {
  // seatless and the console shell takes over.
  char cmdline[256];
  // a heap image the door carries (the wasm page fetches one beside the module and hands it
- // over): kmain wakes it before it asks ai_baked_pick. 0 = none, ask.
+ // over): kmain wakes it before it asks baked_pick. 0 = none, ask.
  void const *image;
  uintptr_t image_len; };
 

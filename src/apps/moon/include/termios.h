@@ -1,5 +1,5 @@
-#ifndef _AI_TERMIOS_H
-#define _AI_TERMIOS_H
+#ifndef _LOVE_TERMIOS_H
+#define _LOVE_TERMIOS_H
 #include <sys/types.h>   /* pid_t, for the tc[gs]etpgrp pair */
 typedef unsigned int  tcflag_t;
 typedef unsigned char cc_t;

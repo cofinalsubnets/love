@@ -1,5 +1,5 @@
-#ifndef _AI_SGTTY_H
-#define _AI_SGTTY_H
+#ifndef _LOVE_SGTTY_H
+#define _LOVE_SGTTY_H
 /* freestanding sgtty.h for cc: the old BSD v7 terminal interface. modern code
  * only reaches it through legacy guards; provide the struct + the classic
  * ioctls so a HAVE_SGTTY_H build type-checks without the glibc header. */

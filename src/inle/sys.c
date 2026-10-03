@@ -1,7 +1,7 @@
 // src/inle/sys.c -- inle's syscall door, and the whole of it. moonlibc's 76 sys/* members reach
-// one seam (impl.h's sc0..sc6 -> __ai_call), and __ai_call parts its callers by __ai_osv:
+// one seam (impl.h's sc0..sc6 -> __love_call), and __love_call parts its callers by __love_osv:
 // a hosted kernel takes the mksys.l lay that issues `syscall` or `svc`, a negative osv --
-// written at kmain, where we are the kernel -- takes __ai_inle, this file's C answer.
+// written at kmain, where we are the kernel -- takes __love_inle, this file's C answer.
 // the numbers are linux's, per arch, straight off impl.h's NR_*: the tree carries those
 // tables already and inle owes compatibility to nobody, so nothing is translated.
 // an unmapped number answers -ENOSYS, the same refusal mount and unshare wear off linux.
@@ -10,7 +10,7 @@
 #include <sys/utsname.h>
 
 // the C runtime is moonlibc's core.c: errno, the streams, the mmap-arena malloc. what a
-// hosted __ai_start would arm the kernel arms here -- an empty environment and the std
+// hosted __love_start would arm the kernel arms here -- an empty environment and the std
 // streams write-through on fds 1 and 2 at cap 0. a task's C-level printf reaches the
 // console where its own port reaches the pipe. kmain calls this after the osv.
 static char *k_env0[] = { 0 };
@@ -128,7 +128,7 @@ static long k_utimeat(long dfd, char const *p, struct timespec const *ts, long f
 // the rows are exercised through the ordinary nifs, which issue them -- (open)
 // openat, (stat) newfstatat and fstat, (readdir) getdents64, (dup) fcntl. the
 // argument-refusal arms below have no caller in the tree: defensive, not covered.
-long __ai_inle(long n, long a, long b, long c, long d, long e, long f) {
+long __love_inle(long n, long a, long b, long c, long d, long e, long f) {
  long r;
  switch (n) {
   case NR_write: return k_fd_write((int) a, (void const*) b, c);
@@ -222,7 +222,7 @@ long __ai_inle(long n, long a, long b, long c, long d, long e, long f) {
   // page already is, so answer that and refuse the exec ask rather than tell a caller
   // whose next move is a jump that it succeeded.
   case NR_mprotect: return (c & 4) ? -EACCES : 0;
-  // one clock, the wall: ai_clock's body is clock_gettime now (src/love/posix.c),
+  // one clock, the wall: love_clock's body is clock_gettime now (src/love/posix.c),
   // so this arm is where the kernel's scale becomes a timespec.
   case NR_clock_gettime: {
    if (a) return -EINVAL;                    // CLOCK_REALTIME only

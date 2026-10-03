@@ -2772,7 +2772,7 @@
                                             ([['ov ov8 8]
                                               (aval + pstw 'sp ov8 'r0 'r1)] . acc)))))
                              (v6m? g && aty = 'float)    ; v6-M base ABI: a bare float arg is one word (binary32,
-                              (: av1 (asflo g a              ;  the gcc shape -- ai_flo_t is float on a 32-bit love)
+                              (: av1 (asflo g a              ;  the gcc shape -- flo_t is float on a 32-bit love)
                                       + '((cvtsd2ss f0 f0) (movqrx r0 f0)))
                                  (gpc < ngp g ?
                                     (kls >as (i + 1) (gpc + 1) xmmc ovc

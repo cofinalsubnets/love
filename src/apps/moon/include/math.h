@@ -1,5 +1,5 @@
-#ifndef _AI_MATH_H
-#define _AI_MATH_H
+#ifndef _LOVE_MATH_H
+#define _LOVE_MATH_H
 double sin(double), cos(double), tan(double);
 double asin(double), acos(double), atan(double);
 double sinh(double), cosh(double), tanh(double);

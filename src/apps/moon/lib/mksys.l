@@ -1,15 +1,15 @@
 ; src/apps/moon/lib/mksys.l -- lay sys.o, the raw seam's hand-written machine tail: the
 ; functions C cannot say. everything else in the gcc-free link is C compiled by mooncc; these are
 ; the register-exact leaves under it:
-;   __ai_sys(n,a,b,c,d,e,f)  the 7-slot syscall trampoline (moonlibc calls nothing else)
+;   __love_sys(n,a,b,c,d,e,f)  the 7-slot syscall trampoline (moonlibc calls nothing else)
 ;   __sigsetjmp / siglongjmp our own jmp_buf inside the glibc-sized 25-long buffer:
 ;                            [0..5] rbx rbp r12 r13 r14 r15, [6] rsp, [7] rip, [8] the signal
 ;                            mask (love.c's fault barrier is sigsetjmp(env,1): the mask is load-bearing)
-;   __ai_sigret              the sa_restorer tail (rt_sigreturn) moonlibc's sigaction installs
+;   __love_sigret              the sa_restorer tail (rt_sigreturn) moonlibc's sigaction installs
 ; (mksys-x64 dst), (mksys-a64 dst), (mksys-rv64 dst) all seed mksys-as, which picks the arch's IR
 ; table. the x64 object serves linux and freebsd: cf cleared before the insn and a carry answer
-; parked below linux's band as -(errno+4096), so impl.h's __ai_call reads one law; the sigprocmask
-; leaves branch on __ai_osv between rt_sigprocmask 14 and sigprocmask 340.
+; parked below linux's band as -(errno+4096), so impl.h's __love_call reads one law; the sigprocmask
+; leaves branch on __love_osv between rt_sigprocmask 14 and sigprocmask 340.
 ; the Makefile cats this after kore's text/u/asbook and holo's elf/obj (out/.mksys-cat.l).
 ; holo registers: r0=rax r1=rcx r2=rdx r3=rbx r4=rbp r5=rsi r6=rdi r7=r8 r8=r9 r9=r10 r10=r11
 ; r11=r12 r12=r13 r13=r14 r14=r15.
@@ -34,14 +34,14 @@
    (mksys-bytes arch)
     (: ir (? (arch = 'x64)
          '(
-         ; -- __ai_sys: SysV args (rdi rsi rdx rcx r8 r9 [rsp+8]) -> the kernel's
+         ; -- __love_sys: SysV args (rdi rsi rdx rcx r8 r9 [rsp+8]) -> the kernel's
          ;    (rax rdi rsi rdx r10 r8 r9). each mov reads a slot the previous one
          ;    just drained, so the chain needs no scratch. the tail is OS-BLIND:
          ;    cf goes in clear (linux hands it back untouched through r11), and a
          ;    carry answer -- freebsd's error, +errno in rax ('below IS jc) --
-         ;    parks below linux's band as -(errno+4096). impl.h's __ai_call
+         ;    parks below linux's band as -(errno+4096). impl.h's __love_call
          ;    unparks; the tail never learns which kernel answered.
-         (label __ai_sys)
+         (label __love_sys)
          (mov r0 r6)                 ; rax <- n
          (mov r6 r5)                 ; rdi <- a
          (mov r5 r2)                 ; rsi <- b
@@ -55,12 +55,12 @@
          (ret)                       ; rax rides out (-errno included; C wraps it)
          (label sys-err)
          (neg r0)
-         (lea r0 r0 -4096)           ; -(errno+4096): parked for __ai_call
+         (lea r0 r0 -4096)           ; -(errno+4096): parked for __love_call
          (ret)
 
          ; -- __sigsetjmp(buf, save): pin the callee-saved file + the return seam,
          ;    then read the current mask into buf[8] by the kernel under us
-         ;    (__ai_osv, os.c's probe): rt_sigprocmask(0, NULL, &buf[8], 8), or
+         ;    (__love_osv, os.c's probe): rt_sigprocmask(0, NULL, &buf[8], 8), or
          ;    freebsd's sigprocmask(1, NULL, &buf[8]) -- a 16-byte set, so it
          ;    takes buf[8..9] (the glibc-sized buffer has room).
          (label __sigsetjmp)
@@ -76,7 +76,7 @@
          (st r6 48 r0)
          (lea r2 r6 64)              ; rdx = &buf[8] (oldset)
          (li r5 0)                   ; rsi = NULL (read only)
-         (la r1 __ai_osv)
+         (la r1 __love_osv)
          (ld r1 r1 0)
          (cmp r1 2)
          (br eq sj-fb)
@@ -112,7 +112,7 @@
          (mov r3 r6)                 ; rbx <- buf
          (lea r5 r6 64)              ; rsi = &buf[8] (the saved mask)
          (li r2 0)                   ; rdx = NULL
-         (la r1 __ai_osv)
+         (la r1 __love_osv)
          (ld r1 r1 0)
          (cmp r1 2)
          (br eq lj-fb)
@@ -148,18 +148,18 @@
          (label lj-live)
          (jmpr r1)
 
-         ; -- __ai_sigret: the restorer a kernel sigaction wants under sa_restorer.
+         ; -- __love_sigret: the restorer a kernel sigaction wants under sa_restorer.
          ;    linux's number: only linux's sigaction installs it -- freebsd has no
          ;    sa_restorer, a handler there returns on the kernel's own trampoline.
-         (label __ai_sigret)
+         (label __love_sigret)
          (li r0 15)                  ; rt_sigreturn
          (sys)
 
-         ; -- __ai_clone(flags, sp, ptid, ctid, tls): linux's clone takes the same order
+         ; -- __love_clone(flags, sp, ptid, ctid, tls): linux's clone takes the same order
          ;    (rdi rsi rdx r10 r8). the parent returns the tid or -errno; the child
          ;    wakes on sp, where its caller laid [fn arg], and calls fn(arg), which
          ;    never returns -- the exit after it (this thread alone) is the backstop.
-         (label __ai_clone)
+         (label __love_clone)
          (mov r9 r1)                 ; r10 <- ctid
          (li r0 56)                  ; clone
          (sys)
@@ -174,10 +174,10 @@
          (label clone-out)
          (ret)
 
-         ; -- __ai_sys7(n,a..g): the wide door for netbsd's classic pads -- the
+         ; -- __love_sys7(n,a..g): the wide door for netbsd's classic pads -- the
          ;    kernel reads a seventh argument at [rsp+8], so g overwrites the
          ;    incoming f slot (drained into r9 first; a callee owns its stack args).
-         (label __ai_sys7)
+         (label __love_sys7)
          (mov r0 r6)                 ; rax <- n
          (mov r6 r5)                 ; rdi <- a
          (mov r5 r2)                 ; rsi <- b
@@ -196,11 +196,11 @@
          (lea r0 r0 -4096)
          (ret)
 
-         ; -- __ai_nb_sigtramp: netbsd's return path -- the kernel calls the
+         ; -- __love_nb_sigtramp: netbsd's return path -- the kernel calls the
          ;    handler directly and leaves the ucontext in r15; the registered
          ;    tramp (version 2) returns through setcontext, and a fall-through
          ;    exits loudly rather than wandering.
-         (label __ai_nb_sigtramp)
+         (label __love_nb_sigtramp)
          (mov r6 r14)                ; rdi <- r15 (the ucontext)
          (li r0 308)                 ; setcontext
          (sys)
@@ -217,19 +217,19 @@
          ; d8..d15 (AAPCS saves the LOW HALVES only -- str dN is exactly that),
          ; [21] the signal mask. rt_sigprocmask is 135; the kernel preserves every
          ; register but x0 across svc, so buf/val stage in x9/x10 and ride through.
-         ; __ai_sigret stays laid (rt_sigreturn 139) though a64's sigaction never
+         ; __love_sigret stays laid (rt_sigreturn 139) though a64's sigaction never
          ; points at it -- the kernel supplies its own vdso trampoline (moonlibc gates
          ; sa_restorer off); the symbol keeps the two sys.o surfaces identical.
          ('(
-         ; -- __ai_sys: args x0..x6 (n,a..f) -> the kernel's x8=nr, x0..x5.
+         ; -- __love_sys: args x0..x6 (n,a..f) -> the kernel's x8=nr, x0..x5.
          ;    x8 drains first, then each mov reads the slot ahead of it. the tail
          ;    is OS-BLIND, as x64's is: the BSDs answer an error by setting the
          ;    carry with a positive errno in x0, and linux preserves nzcv across
          ;    svc (it rides SPSR through the eret), so a carry going in clear can
          ;    only have been raised by a BSD. clearing it takes a borrow --
          ;    a64's cmp is subs, and subtracting 0 leaves C set.
-         (label __ai_sys)
-         (la r9 __ai_osv)            ; netbsd wants the number in the instruction
+         (label __love_sys)
+         (la r9 __love_osv)            ; netbsd wants the number in the instruction
          (ld r9 r9 0)
          (cmp r9 3)
          (br eq sys-nb)
@@ -247,7 +247,7 @@
          (ret)                       ; x0 rides out (-errno included; C wraps it)
          (label sys-err)
          (neg r0)
-         (lea r0 r0 -4096)           ; -(errno+4096): parked for __ai_call
+         (lea r0 r0 -4096)           ; -(errno+4096): parked for __love_call
          (ret)
 
          ; -- the netbsd lane: the same shuffle, then a branch into the stub for
@@ -265,7 +265,7 @@
          (mov r3 r4)
          (mov r4 r5)
          (mov r5 r6)
-         (la r9 __ai_nbsvc)
+         (la r9 __love_nbsvc)
          (shl r10 3)                 ; 8 bytes a stub
          (add r9 r9 r10)
          (push lr)
@@ -283,11 +283,11 @@
          (li r0 -38)                 ; -enosys, canonically
          (ret)
 
-         ; -- __ai_sys7(n,a..g): the wide door netbsd's classic pads want. On
+         ; -- __love_sys7(n,a..g): the wide door netbsd's classic pads want. On
          ;    a64 the seventh argument is just another register -- the kernel
          ;    reads x0..x7 -- so unlike x64 nothing rides the stack.
-         (label __ai_sys7)
-         (la r9 __ai_osv)
+         (label __love_sys7)
+         (la r9 __love_osv)
          (ld r9 r9 0)
          (cmp r9 3)
          (br eq sys7-nb)
@@ -321,7 +321,7 @@
          (mov r4 r5)
          (mov r5 r6)
          (mov r6 r7)
-         (la r9 __ai_nbsvc)
+         (la r9 __love_nbsvc)
          (shl r10 3)
          (add r9 r9 r10)
          (push lr)
@@ -363,7 +363,7 @@
          (lea r2 r0 168)             ; x2 = &buf[21] (oldset)
          (li r1 0)                   ; x1 = NULL (read only)
          (li r3 8)                   ; x3 = sigsetsize (linux's fourth)
-         (la r9 __ai_osv)
+         (la r9 __love_osv)
          (ld r9 r9 0)
          (cmp r9 2)
          (br eq sj-fb)
@@ -399,7 +399,7 @@
          (lea r1 r19 168)            ; x1 = &buf[21] (the saved mask)
          (li r2 0)                   ; x2 = NULL (oset)
          (li r3 8)                   ; x3 = sigsetsize (linux's fourth)
-         (la r9 __ai_osv)
+         (la r9 __love_osv)
          (ld r9 r9 0)
          (cmp r9 2)
          (br eq lj-fb)
@@ -447,14 +447,14 @@
          (ld r19 r19 0)
          (ret)                       ; ret x30 = the saved return pc
 
-         ; -- __ai_sigret: rt_sigreturn, laid for surface parity (see above).
-         (label __ai_sigret)
+         ; -- __love_sigret: rt_sigreturn, laid for surface parity (see above).
+         (label __love_sigret)
          (li r8 139)                 ; rt_sigreturn
          (sys)
 
-         ; -- __ai_clone(flags, sp, ptid, ctid, tls): arm64's clone wants tls before
+         ; -- __love_clone(flags, sp, ptid, ctid, tls): arm64's clone wants tls before
          ;    ctid, so x3/x4 swap; then as x64's: the child calls sp[0](sp[1]).
-         (label __ai_clone)
+         (label __love_clone)
          (mov r9 r3)                 ; x9 <- ctid
          (mov r3 r4)                 ; x3 <- tls
          (mov r4 r9)                 ; x4 <- ctid
@@ -470,22 +470,22 @@
          (sys)
          (label clone-out)
          (ret)
-         ; -- __ai_tp: the thread pointer clone set (zero on the first thread)
-         (label __ai_tp)
+         ; -- __love_tp: the thread pointer clone set (zero on the first thread)
+         (label __love_tp)
          (raw (64 208 59 213))       ; mrs x0, tpidr_el0
          (ret)
 
-         ; -- the netbsd leaves. __ai_nb_sigtramp is read off the box's own libc
+         ; -- the netbsd leaves. __love_nb_sigtramp is read off the box's own libc
          ;    (nm + objdump: `mov x0, x28; svc #0x134'): the kernel calls the
          ;    handler directly and leaves the ucontext in x28 -- a64's r15 --
          ;    and setcontext is the way back. a fall-through exits loudly.
-         (label __ai_nb_sigtramp)
+         (label __love_nb_sigtramp)
          (mov r0 r28)
          (svcn 308)                  ; setcontext
          (li r0 1)
          (svcn 1)                    ; exit, never reached
 
-         ; -- the OS probe's two doors, asked before __ai_osv is known and so in
+         ; -- the OS probe's two doors, asked before __love_osv is known and so in
          ;    a form two kernels can answer at once: x8 and the immediate carry
          ;    the same number, linux ignores the immediate and runs x8, netbsd
          ;    reads the immediate. `20' is getpid on netbsd (positive) and
@@ -495,16 +495,16 @@
          ; freebsd may never hear either: it signals sigill/ill_illopn for any
          ;    svc immediate but zero. It is out before this runs -- crt0 knows it
          ;    by the entry protocol and answers 2 without asking anyone.
-         (label __ai_nbp20)
+         (label __love_nbp20)
          (li r8 20)
          (svcn 20)
          (ret)
-         (label __ai_nbp202)
+         (label __love_nbp202)
          (li r8 202)
          (svcn 202)
          (ret)
 
-         (label __ai_nbsvc))
+         (label __love_nbsvc))
           + nb-tab 511 ())       ; 512 stubs: 0 .. 511
 
          ; the rv64 lane: the same four leaves on the same asm-generic table
@@ -517,9 +517,9 @@
          ; fp file is all caller-saved (fa/ft; the fs bank is unmapped), so no
          ; mooncc-compiled frame can hold a live double in one across a call.
          '(
-         ; -- __ai_sys: args a0..a6 (n,a..f) -> the kernel's a7=nr, a0..a5.
+         ; -- __love_sys: args a0..a6 (n,a..f) -> the kernel's a7=nr, a0..a5.
          ;    a7 drains n first, then each mov reads the slot ahead of it.
-         (label __ai_sys)
+         (label __love_sys)
          (mov r7 r0)                 ; a7 <- n
          (mov r0 r1)                 ; a0 <- a
          (mov r1 r2)                 ; a1 <- b
@@ -588,14 +588,14 @@
          (ld lr r8 0)                ; the saved return pc
          (ret)                       ; jalr x0, 0(ra)
 
-         ; -- __ai_sigret: rt_sigreturn, laid for surface parity (riscv's
+         ; -- __love_sigret: rt_sigreturn, laid for surface parity (riscv's
          ;    sigaction rides the kernel's vdso trampoline, like a64).
-         (label __ai_sigret)
+         (label __love_sigret)
          (li r7 139)                 ; rt_sigreturn
          (sys)
 
-         ; -- __ai_clone, __ai_tp: as a64's (riscv's clone also wants tls before ctid)
-         (label __ai_clone)
+         ; -- __love_clone, __love_tp: as a64's (riscv's clone also wants tls before ctid)
+         (label __love_clone)
          (mov r8 r3)                 ; t0 <- ctid
          (mov r3 r4)                 ; a3 <- tls
          (mov r4 r8)                 ; a4 <- ctid
@@ -611,7 +611,7 @@
          (sys)
          (label clone-out)
          (ret)
-         (label __ai_tp)
+         (label __love_tp)
          (raw (19 5 2 0))            ; addi a0, tp, 0
          (ret)))
        ; what each lane exports, and the three differ: the wide door rides wherever
@@ -620,10 +620,10 @@
        ; the whole of what impl.h's LvOsTranslate says to the C.
        (objelf arch ir ()
                (? (arch = 'x64)
-                  '("__ai_sys" "__ai_sys7" "__sigsetjmp" "siglongjmp" "__ai_sigret" "__ai_nb_sigtramp" "__ai_clone")
+                  '("__love_sys" "__love_sys7" "__sigsetjmp" "siglongjmp" "__love_sigret" "__love_nb_sigtramp" "__love_clone")
                   (arch = 'a64)
-                  '("__ai_sys" "__ai_sys7" "__sigsetjmp" "siglongjmp" "__ai_sigret"
-                    "__ai_nb_sigtramp" "__ai_nbp20" "__ai_nbp202" "__ai_clone" "__ai_tp")
-                  '("__ai_sys" "__sigsetjmp" "siglongjmp" "__ai_sigret" "__ai_clone" "__ai_tp"))
+                  '("__love_sys" "__love_sys7" "__sigsetjmp" "siglongjmp" "__love_sigret"
+                    "__love_nb_sigtramp" "__love_nbp20" "__love_nbp202" "__love_clone" "__love_tp")
+                  '("__love_sys" "__sigsetjmp" "siglongjmp" "__love_sigret" "__love_clone" "__love_tp"))
                () () () () () () ())))
 ) ; module 'moon

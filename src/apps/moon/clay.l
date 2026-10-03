@@ -16,9 +16,9 @@
 ; (cgen-obj ..) unchanged:
 ;
 ;   (fn name params body RET ATTRS)    the return type, absent = int; then attribute
-;                                      spellings ("ai_noinline"), call-shaped as love.h's
+;                                      spellings ("love_noinline"), call-shaped as love.h's
 ;   (proto name PARAMS RET ATTRS)      the same three on a forward declaration
-;   (ret e PRE)                        a prefix spelling: `ai_musttail return ..`
+;   (ret e PRE)                        a prefix spelling: `love_musttail return ..`
 ;   (gdecl decls STOR)                 (static) / (extern) / (), absent = ()
 ;   (restrict t)                       the qualifier beside (const t) -- pointers only
 ;   (sassert e "msg")                  a _Static_assert, which cparse reduces to (tdef)
@@ -345,7 +345,7 @@
         ['note x] (cnote n x)
         ['decl d] (line n (cdecls d + ";"))
         ['sdecl d] (line n ("static " + cdecls d + ";"))
-        ; ret's pre slot is a spelling -- `ai_musttail return ..`. presence is the
+        ; ret's pre slot is a spelling -- `love_musttail return ..`. presence is the
         ; arity, never the value, so the two spellings are two arms, longest first.
         ['ret x tag] (line n (ctag tag + " " + (two? x ? ("return " + ce x 0 + ";") "return;")))
         ['ret x] (line n (two? x ? ("return " + ce x 0 + ";") "return;"))

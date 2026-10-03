@@ -127,7 +127,7 @@
          (= (map ifr '(1 2 3)) (map fr '(1 2 3)))                         ; composes with map, == interp
          (= (ifr (:)) (fr (:)))))                                         ; non-fixnum arg -> fxv deopt -> interp
   (: frz (jitfr '(\ x (/ (- x x) (- x x))) 'x64) (&& (gem? (frz 5)) (0.0 = (frz 5))))   ; 0/0 -> NaN -> 0.0 (mk_gem's law)
-  ; gc-safety: a native-written box is a normal ai_gem (kind=lvm_gembox, 2 words) -> the cheney copier
+  ; gc-safety: a native-written box is a normal gem (kind=lvm_gembox, 2 words) -> the cheney copier
   ; traces/moves it like any gem. hold one across a big alloc (forces GC), and box thousands under
   ; pressure -- if the box were malformed or the bump corrupted Sp's region, these would diverge/crash.
   (: gfr (jitfr '(\ x (+ (* x 1.5) 2.0)) 'x64)  b (gfr 4)  _ (tally (jot 200000))  (8.0 = b))   ; the box survives a forced GC
@@ -486,7 +486,7 @@
                (count 2 30))
        (&& !(= (autogroup rpr) rpr) (10 = (ev rpr)) (= (base-ev rpr) (ev rpr))))
     ; string lane: a recursive (peep s i) byte processor glazes from source -- s a string param (passed
-    ; raw, no sar; the native reads the plain ai_str's bytes at s+16), (tally s) -> the len at s+8.
+    ; raw, no sar; the native reads the plain str's bytes at s+16), (tally s) -> the len at s+8.
     (: rsl '(: data (string [72 105 90 33 65])
                (bsum s i) (? (< i 0) 0 (+ (peep s i 0) (bsum s (- i 1))))
                (bsum data 4))

@@ -1,5 +1,5 @@
-#ifndef _AI_POLL_H
-#define _AI_POLL_H
+#ifndef _LOVE_POLL_H
+#define _LOVE_POLL_H
 struct pollfd { int fd; short events; short revents; };
 typedef unsigned long nfds_t;
 #define POLLIN   1

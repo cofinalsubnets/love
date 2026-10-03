@@ -1,5 +1,5 @@
-#ifndef _AI_LIBINTL_H
-#define _AI_LIBINTL_H
+#ifndef _LOVE_LIBINTL_H
+#define _LOVE_LIBINTL_H
 /* freestanding libintl for cc: no message catalogs -- gettext is the identity, the
  * domain/binding calls are no-ops. matches a build with NLS enabled but no libintl. */
 #define gettext(Msgid)                     (Msgid)

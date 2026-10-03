@@ -278,7 +278,7 @@
               (align 2) (label main) (li r0 42) (ret)))
       (two? (cgn "int main() { int x=1; while (x<5) x++; return x; }"))
       ; a ret-position call tail-jumps: the epilogue is (jmp F), no (call F), so deep tail
-      ; recursion runs flat and the lvm shape continues by jmp at ai_tco=1.
+      ; recursion runs flat and the lvm shape continues by jmp at tco=1.
       (elem '(jmp rec) <>(cgn "int rec(int n){ if(n==0) return 5; return rec(n-1); } int main(){ return rec(3); }"))
       !(elem '(call rec) <>(cgn "int rec(int n){ if(n==0) return 5; return rec(n-1); } int main(){ return rec(3); }"))
       ; a frame-escaping fn keeps the plain call (the address outlives the frame); g's static
@@ -1331,7 +1331,7 @@
    ; -- the riscv frame: a body naming no sp, fp or lr and making no call lays no frame; on wasm a call
    ; leaves every local but its answers, so there a call keeps no frame either, a home off the argument
    ; registers rides it unspilled, and a cs seat is unsaved and priced as a pool seat
-   ufs "typedef long word; struct ai; union u { struct ai *(*ap)(struct ai *, union u *, word *, word *); word x; union u *m; }; struct ai { union u *ip; word *hp, *sp; word pad[4]; word b; }; struct ai *lvm_gc(struct ai *g, union u *Ip, word *Hp, word *Sp); struct ai *uf(struct ai *g, union u *Ip, word *Hp, word *Sp) { if (Sp < Hp + 1) { g->b = 1; return lvm_gc(g, Ip, Hp, Sp); } *--Sp = Ip[1].x; Ip = Ip[2].m; return Ip->ap(g, Ip, Hp, Sp); } int main() { return 0; }"
+   ufs "typedef long word; struct g; union u { struct g *(*ap)(struct g *, union u *, word *, word *); word x; union u *m; }; struct g { union u *ip; word *hp, *sp; word pad[4]; word b; }; struct g *lvm_gc(struct g *g, union u *Ip, word *Hp, word *Sp); struct g *uf(struct g *g, union u *Ip, word *Hp, word *Sp) { if (Sp < Hp + 1) { g->b = 1; return lvm_gc(g, Ip, Hp, Sp); } *--Sp = Ip[1].x; Ip = Ip[2].m; return Ip->ap(g, Ip, Hp, Sp); } int main() { return 0; }"
    ufr (fnf 'uf <>(cgt ufs 'rv64))
    ufw (fnf 'uf <>(cgt ufs 'wasm))
    hks "long k(long); long h(long a) { long b = a * 3; k(a); k(b); return b + a; } int main() { return 0; }"
@@ -1745,7 +1745,7 @@
       (elem '(cmp r0 70000) (addrfold g4 '((li r1 70000) (cmp r0 r1) (ret)))))
    ; end to end: the pointp shape (the vm's hottest compare chain) runs slot-free -- p rides
    ; its park through both compares and the dead store sweeps
-   irE (cgn "typedef long word; typedef struct ai { long x; } ai_t; typedef void lvm_t(ai_t *); typedef struct cell { lvm_t *ap; } cell_t; static void lvm_sym(ai_t *g) { g->x = 1; } static void lvm_nom(ai_t *g) { g->x = 2; } static inline int lamp(word x) { return !(x & 1) && x != 0; } static inline cell_t *cell(word x) { return (cell_t *)x; } static inline int pointp(word x) { lvm_t *p; return lamp(x) && ((p = cell(x)->ap) == lvm_sym || p == lvm_nom); } long probe(word a, word b) { if (((a & b & 1)) || pointp(a) || pointp(b)) return a == b; return 7; } int main() { return (int)probe(3, 5); }")
+   irE (cgn "typedef long word; typedef struct g { long x; } love_t; typedef void lvm_t(love_t *); typedef struct cell { lvm_t *ap; } cell_t; static void lvm_sym(love_t *g) { g->x = 1; } static void lvm_nom(love_t *g) { g->x = 2; } static inline int lamp(word x) { return !(x & 1) && x != 0; } static inline cell_t *cell(word x) { return (cell_t *)x; } static inline int pointp(word x) { lvm_t *p; return lamp(x) && ((p = cell(x)->ap) == lvm_sym || p == lvm_nom); } long probe(word a, word b) { if (((a & b & 1)) || pointp(a) || pointp(b)) return a == b; return 7; } int main() { return (int)probe(3, 5); }")
    pbf (fnf 'probe <>irE)
    (test
       (two? irE)

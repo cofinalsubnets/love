@@ -9,8 +9,8 @@
 ; a plain archive), and the join reads every group, the ISA off each one's directory.
 ; the object holds, per name in {id, x64, a64, rv64}, mksrc.l's pair shape 8-aligned:
 ;
-;   ai_rtgz_<nm>_len   an 8-byte little-endian length
-;   ai_rtgz_<nm>       the bytes, right behind it (a .a under DEFLATE; `id`
+;   rtgz_<nm>_len   an 8-byte little-endian length
+;   rtgz_<nm>       the bytes, right behind it (a .a under DEFLATE; `id`
 ;                      is moon.l's rtcid of the tree slice, plain text)
 ;
 ; a link carrying no runtime (love0, the gate links) names src/love/noblob.c instead. arbytes
@@ -70,9 +70,9 @@
    (rt-forms nm s)
     (: n #s
        pad (8 - (n & 7) & 7)
-       [['label (name ("ai_rtgz_" + nm + "_len"))]
+       [['label (name ("rtgz_" + nm + "_len"))]
         ['raw (rt-le8 n 0 ())]
-        ['label (name ("ai_rtgz_" + nm))]
+        ['label (name ("rtgz_" + nm))]
         ['raw [s (rt-zerostr pad "")]]])
    (rt-zerostr k acc) (k < 1 ? acc (rt-zerostr (k - 1) (string 0 + acc)))
 
@@ -92,10 +92,10 @@
               + rt-forms "x64" (one 'x64)
               + rt-forms "a64" (one 'a64)
               + rt-forms "rv64" (one 'rv64))
-       xs '("ai_rtgz_id" "ai_rtgz_id_len"
-            "ai_rtgz_x64" "ai_rtgz_x64_len"
-            "ai_rtgz_a64" "ai_rtgz_a64_len"
-            "ai_rtgz_rv64" "ai_rtgz_rv64_len")
+       xs '("rtgz_id" "rtgz_id_len"
+            "rtgz_x64" "rtgz_x64_len"
+            "rtgz_a64" "rtgz_a64_len"
+            "rtgz_rv64" "rtgz_rv64_len")
        ob (objelf arch () () () xs () () () () () forms)
        (cite 'holo 'write-bytes dst ob))        ; ob is a byte list, not a string
 

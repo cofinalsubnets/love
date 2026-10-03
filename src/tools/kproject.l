@@ -1,6 +1,6 @@
 ; src/tools/kproject.l -- the metal projection: the artifact is one hosted -pie love, and a boot
 ; door eats a fixed-address image. re-base every PT_LOAD at the kernel base, apply the love_rela
-; table there (__ai_reloc's law, run ahead of time), lay and patch boot.o below the image, write
+; table there (__love_reloc's law, run ahead of time), lay and patch boot.o below the image, write
 ; k_image_top, and emit the flat ELF. cat after src/love/holo/{elf,obj,link}.l:
 ;
 ;   love <cat> in.pie boot.o out.elf arch

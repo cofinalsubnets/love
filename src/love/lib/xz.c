@@ -103,10 +103,10 @@ static int out_room(struct lz_out *o, uintptr_t k) {
  if (o->n + k > XZ_MAX) return o->big = 1, 0;
  uintptr_t c = o->cap < 65536 ? 65536 : o->cap;
  while (c < o->n + k) c *= 2;
- uint8_t *nb = ai_alloc(NULL, c);
+ uint8_t *nb = alloc(NULL, c);
  if (!nb) return 0;
  if (o->n) memcpy(nb, o->b, o->n);
- if (o->b) ai_alloc(o->b, 0);
+ if (o->b) alloc(o->b, 0);
  o->b = nb; o->cap = c; return 1; }
 
 // decode until `lim` bytes stand in the output or, with eopm, the end marker says so.
@@ -193,9 +193,9 @@ static int lz_run(struct lz_model *m, struct lz_rd *r, struct lz_out *o, uintptr
    if (!out_room(o, len)) { rc = 0; break; }
    ob = o->b; }
   uint8_t *dp = ob + n, *sp = dp - r0 - 1, *de = dp + len;
-#if ai_wideld
+#if wideld
   if (r0 >= 7 && o->cap - n >= len + 8)              // whole words, the last running into room
-   for (; dp < de; dp += 8, sp += 8) ai_st64(dp, ai_ld64(sp));
+   for (; dp < de; dp += 8, sp += 8) st64(dp, ld64(sp));
   else
 #endif
   for (; dp < de; dp++, sp++) *dp = *sp;
@@ -687,15 +687,15 @@ static intptr_t l2_step(struct l2_st *S, uint8_t *win, const uint8_t *s, uintptr
  *o0 = S->n, S->n = o.n;
  return (intptr_t) u; }
 
-// the lzma model with room for lc + lp up to lim, from ai_alloc -> or NULL
+// the lzma model with room for lc + lp up to lim, from alloc -> or NULL
 static struct lz_model *lz_new(unsigned lclp) {
- struct lz_model *m = ai_alloc(NULL, sizeof *m + ((uintptr_t) 0x300 << lclp) * sizeof(lzp));
+ struct lz_model *m = alloc(NULL, sizeof *m + ((uintptr_t) 0x300 << lclp) * sizeof(lzp));
  if (m) m->lit = (lzp*) (m + 1);
  return m; }
 
 #ifndef XZ_STANDALONE
 // ===== the nifs: str0 may collect, so a string is re-read off the stack after it =====
-ai_noinline static struct ai *host_lzma2len(struct ai *g) {
+love_noinline static struct g *host_lzma2len(struct g *g) {
  word sw = g->sp[0];
  uintptr_t end;
  g->sp[0] = strp(sw) && l2_walk((const uint8_t*) txt(sw), len(sw), &end) >= 0
@@ -704,28 +704,28 @@ ai_noinline static struct ai *host_lzma2len(struct ai *g) {
 
 // a raw LZMA2 stream into exactly cap bytes of out, for a C caller with no g (src/love/lib/srctree.c)
 // -> cap, or -1 for one that is torn or says more or less than that
-intptr_t ai_lzma2_into(unsigned char const *s, uintptr_t n, unsigned char *out, uintptr_t cap) {
+intptr_t lzma2_into(unsigned char const *s, uintptr_t n, unsigned char *out, uintptr_t cap) {
  uintptr_t end;
  if (l2_walk(s, n, &end) != (int64_t) cap) return -1;
  struct lz_model *m = lz_new(4);
  int ok = m && !l2_dec(s, out, cap, m);
- if (m) ai_alloc(m, 0);
+ if (m) alloc(m, 0);
  return ok ? (intptr_t) cap : -1; }
 
-ai_noinline static struct ai *host_lzma2d(struct ai *g) {
+love_noinline static struct g *host_lzma2d(struct g *g) {
  word sw = g->sp[0];
  uintptr_t end;
  int64_t want = strp(sw) ? l2_walk((const uint8_t*) txt(sw), len(sw), &end) : -1;
  if (want < 0) { g->sp[0] = ZeroPoint; return g; }
  if ((uint64_t) want > XZ_MAX) { g->sp[0] = putcharm(1); return g; }
- if (!ai_ok(g = str0(g, (uintptr_t) want))) return g;   // pushes: out over s
+ if (!ok(g = str0(g, (uintptr_t) want))) return g;   // pushes: out over s
  struct lz_model *m = lz_new(4);
  int ok = m && !l2_dec((const uint8_t*) txt(g->sp[1]), (uint8_t*) txt(g->sp[0]), (uintptr_t) want, m);
- if (m) ai_alloc(m, 0);
+ if (m) alloc(m, 0);
  g->sp[1] = ok ? g->sp[0] : ZeroPoint;
  return g->sp++, g; }
 
-ai_noinline static struct ai *host_lzma2e(struct ai *g) {
+love_noinline static struct g *host_lzma2e(struct g *g) {
  word sw = g->sp[0], dw = g->sp[1];
  if (!strp(sw) || !oddp(dw) || getcharm(dw) < 4096 || getcharm(dw) > (1l << 30)) {
   g->sp[1] = ZeroPoint, g->sp += 1; return g; }
@@ -733,21 +733,21 @@ ai_noinline static struct ai *host_lzma2e(struct ai *g) {
  uint32_t dict = (uint32_t) getcharm(dw), wmask;
  if (n <= dict) w = n ? n : 1, wmask = ~(uint32_t) 0;      // the whole input in reach: no wrap
  else { while (w < dict) w <<= 1; wmask = (uint32_t) (w - 1); }
- struct xe_arena *a = ai_alloc(NULL, sizeof *a);
- uint32_t *son = ai_alloc(NULL, 2 * w * sizeof *son);
- uint8_t *out = ai_alloc(NULL, cap);
+ struct xe_arena *a = alloc(NULL, sizeof *a);
+ uint32_t *son = alloc(NULL, 2 * w * sizeof *son);
+ uint8_t *out = alloc(NULL, cap);
  int64_t got = a && son && out
                ? xe_go((const uint8_t*) txt(sw), n, dict, out, cap, a, son, wmask) : -1;
- if (a) ai_alloc(a, 0);
- if (son) ai_alloc(son, 0);
- if (got >= 0 && ai_ok(g = str0(g, (uintptr_t) got))) {  // pushes: out over the two
+ if (a) alloc(a, 0);
+ if (son) alloc(son, 0);
+ if (got >= 0 && ok(g = str0(g, (uintptr_t) got))) {  // pushes: out over the two
   memcpy(txt(g->sp[0]), out, (size_t) got);
   g->sp[2] = g->sp[0], g->sp += 2; }
- else if (ai_ok(g)) g->sp[1] = ZeroPoint, g->sp += 1;
- if (out) ai_alloc(out, 0);
+ else if (ok(g)) g->sp[1] = ZeroPoint, g->sp += 1;
+ if (out) alloc(out, 0);
  return g; }
 
-ai_noinline static struct ai *host_lzmad(struct ai *g) {
+love_noinline static struct g *host_lzmad(struct g *g) {
  word sw = g->sp[0], pw = g->sp[1], nw = g->sp[3];
  struct lz_model *m = NULL;
  struct lz_model pm;
@@ -761,39 +761,39 @@ ai_noinline static struct ai *host_lzmad(struct ai *g) {
  struct lz_rd r;
  int rc = 0;
  if (want >= 0 && (uintptr_t) want > XZ_MAX) {
-  ai_alloc(m, 0);
+  alloc(m, 0);
   g->sp[3] = putcharm(1), g->sp += 3; return g; }
  if (want >= 0) {                                   // the size is known: straight into the string
-  if (!ai_ok(g = str0(g, (uintptr_t) want))) { ai_alloc(m, 0); return g; }
+  if (!ok(g = str0(g, (uintptr_t) want))) { alloc(m, 0); return g; }
   struct lz_out o = { (uint8_t*) txt(g->sp[0]), 0, (uintptr_t) want, 0, 0, 0 };
   const uint8_t *s = (const uint8_t*) txt(g->sp[1]);
   rc = rd_init(&r, s, s + len(g->sp[1])) && lz_run(m, &r, &o, (uintptr_t) want, 0) && !r.bad;
-  ai_alloc(m, 0);
+  alloc(m, 0);
   g->sp[4] = rc ? g->sp[0] : ZeroPoint, g->sp += 4;
   return g; }
  struct lz_out o = { NULL, 0, 0, 0, 1, 0 };
  const uint8_t *s = (const uint8_t*) txt(sw);
  rc = rd_init(&r, s, s + len(sw)) && lz_run(m, &r, &o, 0, 1) == 2;
- ai_alloc(m, 0);
- if (rc && ai_ok(g = str0(g, o.n))) {
+ alloc(m, 0);
+ if (rc && ok(g = str0(g, o.n))) {
   if (o.n) memcpy(txt(g->sp[0]), o.b, o.n);
   g->sp[4] = g->sp[0], g->sp += 4; }
- else if (ai_ok(g)) g->sp[3] = o.big ? putcharm(1) : ZeroPoint, g->sp += 3;
- if (o.b) ai_alloc(o.b, 0);
+ else if (ok(g)) g->sp[3] = o.big ? putcharm(1) : ZeroPoint, g->sp += 3;
+ if (o.b) alloc(o.b, 0);
  return g; }
 
-ai_noinline static struct ai *host_crc64(struct ai *g) {
+love_noinline static struct g *host_crc64(struct g *g) {
  if (!strp(g->sp[0])) { g->sp[0] = ZeroPoint; return g; }
- if (!ai_ok(g = str0(g, 8))) return g;
+ if (!ok(g = str0(g, 8))) return g;
  uint64_t c = xz_crc64((const uint8_t*) txt(g->sp[1]), len(g->sp[1]));
  for (int i = 0; i < 8; i++) ((uint8_t*) txt(g->sp[0]))[i] = (uint8_t) (c >> 8 * i);
  g->sp[1] = g->sp[0];
  return g->sp++, g; }
 
-ai_noinline static struct ai *host_crc64_on(struct ai *g) {
+love_noinline static struct g *host_crc64_on(struct g *g) {
  word cw = g->sp[0], sw = g->sp[1];
  if (!strp(cw) || len(cw) != 8 || !strp(sw)) return g->sp[1] = ZeroPoint, g->sp += 1, g;
- if (!ai_ok(g = str0(g, 8))) return g;              // pushes: out over c and s
+ if (!ok(g = str0(g, 8))) return g;              // pushes: out over c and s
  uint64_t c = 0;
  for (int i = 0; i < 8; i++) c |= (uint64_t) ((const uint8_t*) txt(g->sp[1]))[i] << 8 * i;
  c = xz_crc64_on(c, (const uint8_t*) txt(g->sp[2]), len(g->sp[2]));
@@ -801,34 +801,34 @@ ai_noinline static struct ai *host_crc64_on(struct ai *g) {
  return g->sp[2] = g->sp[0], g->sp += 2, g; }
 
 #define L2_HEAD ((sizeof(struct l2_st) + 7) & ~(uintptr_t) 7)
-static struct ai_str *l2_cask(word x) {
+static struct str *l2_cask(word x) {
  if (charmp(x) || ((union u*) x)->ap != lvm_cask) return NULL;
- struct ai_str *s = cask(x)->str;
+ struct str *s = cask(x)->str;
  struct l2_st *S = s && s->len > L2_HEAD ? (struct l2_st*) s->bytes : NULL;
  return S && S->magic == L2_MAGIC && S->cap == s->len - L2_HEAD ? s : NULL; }
-ai_noinline static struct ai *host_lzma2_new(struct ai *g) {
+love_noinline static struct g *host_lzma2_new(struct g *g) {
  word dw = g->sp[0];
  if (!oddp(dw) || getcharm(dw) < 4096 || (uintptr_t) getcharm(dw) > XZ_MAX) return g->sp[0] = ZeroPoint, g;
  uintptr_t dict = (uintptr_t) getcharm(dw), n = L2_HEAD + dict + L2_ROOM,
-           sreq = str_width(n), breq = Width(struct ai_cask) + Width(struct ai_tag);
- if (!ai_ok(g = ai_have(g, sreq + breq))) return g;
- struct ai_str *s = ini_str(bump(g, sreq), n);
+           sreq = str_width(n), breq = Width(struct cask) + Width(struct tag);
+ if (!ok(g = have(g, sreq + breq))) return g;
+ struct str *s = ini_str(bump(g, sreq), n);
  memset(s->bytes, 0, L2_HEAD);
  struct l2_st *S = (struct l2_st*) s->bytes;
  S->magic = L2_MAGIC, S->cap = dict + L2_ROOM, S->dict = dict, S->needdict = S->needprops = 1;
  union u *k = bump(g, breq);
  cask(k)->ap = lvm_cask, cask(k)->str = s;
- tagthread(k, Width(struct ai_cask));
+ tagthread(k, Width(struct cask));
  return g->sp[0] = word(k), g; }
-ai_noinline static struct ai *host_lzma2_chunk(struct ai *g) {
- struct ai_str *cs = l2_cask(g->sp[0]);
+love_noinline static struct g *host_lzma2_chunk(struct g *g) {
+ struct str *cs = l2_cask(g->sp[0]);
  if (!cs || !strp(g->sp[1])) return g->sp[1] = ZeroPoint, g->sp += 1, g;
  struct l2_st *S = (struct l2_st*) cs->bytes;
  S->m.lit = S->lit;                                 // the cask moves: the pointer is laid again
  uintptr_t o0 = 0;
  intptr_t got = l2_step(S, (uint8_t*) cs->bytes + L2_HEAD, (const uint8_t*) txt(g->sp[1]), len(g->sp[1]), &o0);
  if (got < 0) return g->sp[1] = ZeroPoint, g->sp += 1, g;
- if (!ai_ok(g = str0(g, (uintptr_t) got))) return g;   // pushes: out over st and c
+ if (!ok(g = str0(g, (uintptr_t) got))) return g;   // pushes: out over st and c
  memcpy(txt(g->sp[0]), l2_cask(g->sp[1])->bytes + L2_HEAD + o0, (uintptr_t) got);
  return g->sp[2] = g->sp[0], g->sp += 2, g; }
 
