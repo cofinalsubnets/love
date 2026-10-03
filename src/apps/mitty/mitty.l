@@ -474,7 +474,7 @@
                         (hfeed hb ch)),
                      oars hb g))))
 
- ; --- idle: 'saver is a watch of src/apps/saver.l's, which has the glass after its minutes
+ ; --- idle: 'saver is a watch of src/apps/mitty/saver.l's, which has the glass after its minutes
  ; without a key; the mitty's own frames wait under it, and are laid again whole after ---
  ; a key: 1 when it woke a saver, which then is owed a whole frame
  (hwake hb) (: w (peep hb 'saver ()) k (cite 'saver 'saver-key) _ (pin hb 'forced 0)
@@ -718,11 +718,12 @@
                 (: hv (mitty-hive 0) qs (mitty-queues 0)
                    x ("hive " + show hv + foldl (a \ q \ a + " · " + q) "" qs)
                    (pins t 'at now 'x x, x))))))
- ; the saver as ~/.love/etc/mitty.l names it: (screensaver NAME) (screensaver-idle MINUTES),
- ; pom after 10 unless said; a name no saver has, or 0 minutes, is never
+ ; the saver as ~/.love/etc/mitty.l names it: (screensaver NAME [STYLE]) (screensaver-idle
+ ; MINUTES), cycle after 10 unless said; a name no saver has, or 0 minutes, is never
  (mitty-saver _) (: sf (cite 'salt 'salt-file) wf (cite 'saver 'saver-watch) h (getenv "HOME")
                    c (? (sf && string? h) (sf (h + "/.love/etc/mitty.l") {}) {})
-                   nm (peep c 'screensaver () @ v (two? v ? (: w <v (string? w ? w (show w))) "pom"))
+                   (word w) (string? w ? w (show w))
+                   nm (peep c 'screensaver () @ v (two? v ? (join " " (map word v)) "cycle"))
                    m (peep c 'screensaver-idle () @ v (two? v ? <v 10))
                    (wf ? (wf nm m) ()))
  ; a mitty laid for the shell at r x c: lush in its panes (argv, when given, in the first), the
@@ -813,6 +814,7 @@
   (? (two? as && <as = "--serve" && two? >as) (mitty-serve <>as >>as)
      (two? as && <as = "--here") (mitty-here >as)
      (two? as && <as = "--ls") (mitty-ls 0)
+     (two? as && elem <as ["-s" "--screensaver"]) ((cite 'saver 'saver-cli) >as)   ; a saver, no mitty
      (: nm (two? as && <as = "-n" && two? >as ? <>as "main")
         rest (two? as && <as = "-n" && two? >as ? >>as as)
         path (mitty-sock nm)
@@ -821,7 +823,8 @@
            (mitty-spawn nm rest) (mitty-reattach path 60 @ r (r = () ? (mitty-here rest) 0))
            (mitty-here rest))))
  mitty-usage "usage: love mitty [-n NAME] [COMMAND ..]   the mitty NAME (main), started when none is up;
-       COMMAND in its first pane. love mitty --ls lists them; --here runs one in this process
+       COMMAND in its first pane. love mitty --ls lists them; --here runs one in this process;
+       -s [NAME] a screensaver until a key, -s alone names them
   C-a: s v split, h j k l steer, x shut, [ ] copy and paste, c n p 0-9 faces, b a model,
        space open an app, w go to a pane, z the screensaver now, d detach, C-a a literal C-a"
  _ (pins (cite 'verbs 'tab) 'mitty (udoor 'mitty mitty-main mitty-usage 1 1)))

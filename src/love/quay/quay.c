@@ -292,7 +292,16 @@ static void cb_ctl(struct cb *c, uint8_t i) {
    case '\t': { uint32_t nx = (col / 8u + 1u) * 8u;
     if (nx > cs - 1u) nx = cs - 1u;
     c->wpos += nx - col; return; }
+   case 14: c->gset |= cb_so; return;                       // SO: G1 into GL
+   case 15: c->gset &= (uint8_t) ~cb_so; return;            // SI: G0 back
    default: return; } }  // BEL and the rest of C0: swallowed whole
+
+// DEC special graphics, 0x5f..0x7e: what ncurses' ACS letters draw -- q a line, x a
+// bar, l k m j the corners, t u v w n the tees and the cross
+static uint16_t const cb_decgfx[32] = {
+  0x00a0, 0x25c6, 0x2592, 0x2409, 0x240c, 0x240d, 0x240a, 0x00b0, 0x00b1, 0x2424, 0x240b,
+  0x2518, 0x2510, 0x250c, 0x2514, 0x253c, 0x23ba, 0x23bb, 0x2500, 0x23bc, 0x23bd, 0x251c,
+  0x2524, 0x2534, 0x252c, 0x2502, 0x2264, 0x2265, 0x03c0, 0x2260, 0x00a3, 0x00b7 };
 
 // a printing glyph. a pending wrap fires FIRST (deferred autowrap: the
 // glyph that landed on the last column left the cursor there; the next
@@ -610,6 +619,7 @@ void cb_regrid(struct cb *c, struct cb const *old, uint16_t rows, uint16_t cols,
   cb_restock(c, old);
   c->wpos = cb_carry(old->wpos, ocols, from, rows, cols);
   c->spos = cb_carry(old->spos, ocols, from, rows, cols);
+  c->gset = old->gset, c->sgset = old->sgset;
   cb_dirt(c, 0, rows - 1u); }
 
 // --- sixel: DECSIXEL into a canvas at the store's top, tiles at the cursor at the end ---
@@ -899,6 +909,7 @@ static void cb_kit_end(struct cb *c) {
 // console (the kernel set it at boot), not to the program resetting.
 static void cb_ris(struct cb *c) {
   uint16_t lnm = c->flag & cb_lnm;
+  c->gset = c->sgset = 0;
   c->cur_fg = c->cur_bg = cb_ink(cb_def, 0), c->cur_face = 0;
   c->top = 0, c->bot = c->rows - 1u;
   c->flag = (uint16_t) (cb_show | cb_wrap | lnm);
@@ -906,13 +917,20 @@ static void cb_ris(struct cb *c) {
   c->esc = 0, c->pn = 0, c->arg = 0, c->on = 0, c->un = 0, c->ol = 0, c->sslot = 0, c->sm = 0, c->kopen = 0;
   cb_clear(c); }
 
-static void cb_save(struct cb *c) {  // DECSC: cursor + pen
-  c->spos = c->wpos;
+static void cb_save(struct cb *c) {  // DECSC: cursor + pen + charsets
+  c->spos = c->wpos, c->sgset = c->gset;
   c->sfg = c->cur_fg, c->sbg = c->cur_bg, c->sface = c->cur_face; }
 
 static void cb_restore(struct cb *c) {  // DECRC
-  c->wpos = c->spos, c->flag &= (uint16_t) ~cb_pend;
+  c->wpos = c->spos, c->gset = c->sgset, c->flag &= (uint16_t) ~cb_pend;
   c->cur_fg = c->sfg, c->cur_bg = c->sbg, c->cur_face = c->sface; }
+
+// DECSTR, the soft reset: the pen, the region, origin mode, the saved cursor and the
+// charsets back to the floor; the screen and the cursor stay
+static void cb_decstr(struct cb *c) {
+  c->cur_fg = c->cur_bg = cb_ink(cb_def, 0), c->cur_face = 0;
+  c->top = 0, c->bot = c->rows - 1u, c->flag &= (uint16_t) ~cb_origin;
+  c->gset = c->sgset = 0, c->spos = 0, c->sfg = c->sbg = c->cur_fg, c->sface = 0; }
 
 // SGR: the pen. colours by index (8 + bright 8 + 256) or 38;2 rgb, faces in
 // the glyph word's top byte.
@@ -1099,7 +1117,9 @@ static void cb_put1(struct cb *c, uint8_t i) {
      case 'P': c->esc = 9, c->pn = 0, c->arg = 0; return;  // DCS: its parameters, then its final
      case '^': c->esc = 3; return;                          // PM: swallow
      case '_': c->esc = 12; return;                         // APC: kitty's G, else swallowed
-     case '(': case ')': case '*': case '+': c->esc = 4; return;  // charset designator
+     case '(': c->esc = 4; return;          // G0's charset
+     case ')': c->esc = 16; return;         // G1's
+     case '*': case '+': c->esc = 17; return;  // G2 G3: designated and never invoked
      case '#': c->esc = 6; return;
      case '7': return cb_save(c);           // DECSC
      case '8': return cb_restore(c);        // DECRC
@@ -1129,6 +1149,7 @@ static void cb_put1(struct cb *c, uint8_t i) {
       int const priv = !!(c->flag & cb_priv);
       c->flag &= (uint16_t) ~(cb_junk | cb_priv | cb_gt);
       if (c->ci == '$' && i == 'p') cb_rqm(c, priv);
+      if (c->ci == '!' && i == 'p') cb_decstr(c);
       return; }
     return cb_csi(c, i);
    case 3:                                  // a DCS/PM/APC body on its way to ST
@@ -1145,7 +1166,11 @@ static void cb_put1(struct cb *c, uint8_t i) {
     c->esc = 0;
     if (i == '\\') return cb_oscq(c);
     return;
-   case 4: c->esc = 0; return;              // the designated charset: discarded
+   case 4:                                  // G0 designated: 0 graphics, B (or any other) ascii
+    c->esc = 0, c->gset = (uint8_t) (i == '0' ? c->gset | cb_g0 : c->gset & ~cb_g0); return;
+   case 16:
+    c->esc = 0, c->gset = (uint8_t) (i == '0' ? c->gset | cb_g1 : c->gset & ~cb_g1); return;
+   case 17: c->esc = 0; return;
    case 9:                                  // a DCS's parameters: 'q' is sixel, anything else swallowed
     if (i == 27) { c->esc = 5; return; }
     if (i >= '0' && i <= '9') { if (c->arg < 6553) c->arg = (uint16_t) (c->arg * 10 + (i - '0')); return; }
@@ -1196,6 +1221,8 @@ static void cb_put1(struct cb *c, uint8_t i) {
     if (i == 27) { c->esc = 1; return; }    // ESC: begin a sequence
     if (i == 127) return;                   // DEL: nothing, anywhere
     if (i < ' ') return cb_ctl(c, i);
+    if (i >= 0x5f && i <= 0x7e && c->gset & (c->gset & cb_so ? cb_g1 : cb_g0))
+      return cb_glyph(c, cb_decgfx[i - 0x5f]);              // DEC graphics in GL
     return cb_glyph(c, i); } }
 
 // the built-in fonts draw the cp437 page (cp437.h, laid by quay.l): a codepoint's

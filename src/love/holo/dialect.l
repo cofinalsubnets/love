@@ -140,7 +140,7 @@
                    ('ch 42) '(7 mul) ('ch 47) '(7 div) ('ch 37) '(7 mod) ())
    (gapply op a b) (op @ 'gt (a > b ? -1 0) 'lt (a < b ? -1 0) 'ge (a >= b ? -1 0) 'le (a <= b ? -1 0)
                         'eq (a = b ? -1 0) 'ne (a = b ? 0 -1)
-                        'or (a | b) 'xor (a ^ b) 'and (a & b) 'shl (a << b) 'shr (a >> b)
+                        'or (a | b) 'xor (a ^ b) 'and (a & b) 'shl (a << b) 'shr (u64 a >> b)
                         'add (a + b) 'sub (a - b) 'mul (a * b) 'div (a // b) (a % b))
    (gclimb lhs ts minp)
     (!(two? ts) ? (lhs . ts)

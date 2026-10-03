@@ -155,6 +155,25 @@
          (li r0 15)                  ; rt_sigreturn
          (sys)
 
+         ; -- __ai_clone(flags, sp, ptid, ctid, tls): linux's clone takes the same order
+         ;    (rdi rsi rdx r10 r8). the parent returns the tid or -errno; the child
+         ;    wakes on sp, where its caller laid [fn arg], and calls fn(arg), which
+         ;    never returns -- the exit after it (this thread alone) is the backstop.
+         (label __ai_clone)
+         (mov r9 r1)                 ; r10 <- ctid
+         (li r0 56)                  ; clone
+         (sys)
+         (cmp r0 0)
+         (br ne clone-out)
+         (ld r6 sp 8)                ; rdi <- arg
+         (ld r1 sp 0)                ; fn
+         (callr r1)
+         (li r6 0)
+         (li r0 60)                  ; exit
+         (sys)
+         (label clone-out)
+         (ret)
+
          ; -- __ai_sys7(n,a..g): the wide door for netbsd's classic pads -- the
          ;    kernel reads a seventh argument at [rsp+8], so g overwrites the
          ;    incoming f slot (drained into r9 first; a callee owns its stack args).
@@ -433,6 +452,29 @@
          (li r8 139)                 ; rt_sigreturn
          (sys)
 
+         ; -- __ai_clone(flags, sp, ptid, ctid, tls): arm64's clone wants tls before
+         ;    ctid, so x3/x4 swap; then as x64's: the child calls sp[0](sp[1]).
+         (label __ai_clone)
+         (mov r9 r3)                 ; x9 <- ctid
+         (mov r3 r4)                 ; x3 <- tls
+         (mov r4 r9)                 ; x4 <- ctid
+         (li r8 220)                 ; clone
+         (sys)
+         (cmp r0 0)
+         (br ne clone-out)
+         (ld r0 sp 8)                ; x0 <- arg
+         (ld r9 sp 0)                ; fn
+         (callr r9)
+         (li r0 0)
+         (li r8 93)                  ; exit
+         (sys)
+         (label clone-out)
+         (ret)
+         ; -- __ai_tp: the thread pointer clone set (zero on the first thread)
+         (label __ai_tp)
+         (raw (64 208 59 213))       ; mrs x0, tpidr_el0
+         (ret)
+
          ; -- the netbsd leaves. __ai_nb_sigtramp is read off the box's own libc
          ;    (nm + objdump: `mov x0, x28; svc #0x134'): the kernel calls the
          ;    handler directly and leaves the ucontext in x28 -- a64's r15 --
@@ -550,17 +592,38 @@
          ;    sigaction rides the kernel's vdso trampoline, like a64).
          (label __ai_sigret)
          (li r7 139)                 ; rt_sigreturn
-         (sys)))
+         (sys)
+
+         ; -- __ai_clone, __ai_tp: as a64's (riscv's clone also wants tls before ctid)
+         (label __ai_clone)
+         (mov r8 r3)                 ; t0 <- ctid
+         (mov r3 r4)                 ; a3 <- tls
+         (mov r4 r8)                 ; a4 <- ctid
+         (li r7 220)                 ; clone
+         (sys)
+         (cmp r0 0)
+         (br ne clone-out)
+         (ld r0 sp 8)                ; a0 <- arg
+         (ld r8 sp 0)                ; fn
+         (callr r8)
+         (li r0 0)
+         (li r7 93)                  ; exit
+         (sys)
+         (label clone-out)
+         (ret)
+         (label __ai_tp)
+         (raw (19 5 2 0))            ; addi a0, tp, 0
+         (ret)))
        ; what each lane exports, and the three differ: the wide door rides wherever
        ; a BSD does (x64 through the stack, arm64 through x6), and riscv exports
        ; neither it nor the netbsd pair -- nothing has laid that tail, which is
        ; the whole of what impl.h's LvOsTranslate says to the C.
        (objelf arch ir ()
                (? (arch = 'x64)
-                  '("__ai_sys" "__ai_sys7" "__sigsetjmp" "siglongjmp" "__ai_sigret" "__ai_nb_sigtramp")
+                  '("__ai_sys" "__ai_sys7" "__sigsetjmp" "siglongjmp" "__ai_sigret" "__ai_nb_sigtramp" "__ai_clone")
                   (arch = 'a64)
                   '("__ai_sys" "__ai_sys7" "__sigsetjmp" "siglongjmp" "__ai_sigret"
-                    "__ai_nb_sigtramp" "__ai_nbp20" "__ai_nbp202")
-                  '("__ai_sys" "__sigsetjmp" "siglongjmp" "__ai_sigret"))
+                    "__ai_nb_sigtramp" "__ai_nbp20" "__ai_nbp202" "__ai_clone" "__ai_tp")
+                  '("__ai_sys" "__sigsetjmp" "siglongjmp" "__ai_sigret" "__ai_clone" "__ai_tp"))
                () () () () () () ())))
 ) ; module 'moon
