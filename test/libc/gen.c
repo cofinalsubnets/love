@@ -9,6 +9,8 @@
 #include <stdio_ext.h>
 #include <dirent.h>
 #include <stdint.h>
+#include <stdlib.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include "say.h"
@@ -49,6 +51,10 @@ int main(void) {
   say_n("INT_FAST32_MAX", INT_FAST32_MAX); say_n("INT_FAST64_MIN", INT_FAST64_MIN);
   say_n("UINT_FAST16_MAX.top", (long) (UINT_FAST16_MAX >> 1)); say_n("UINT_FAST8_MAX", UINT_FAST8_MAX);
   say_n("fast.sizes", (long) (sizeof(int_fast8_t) * 1000 + sizeof(int_fast16_t) * 100 + sizeof(int_fast32_t) * 10 + sizeof(int_fast64_t)));
+  { char sm[2]; char *g = getcwd(sm, sizeof sm); say_n("getcwd.small", g == 0 && errno == ERANGE);
+    errno = 0; g = getcwd(sm, 0); say_n("getcwd.size0", g == 0 && errno == EINVAL);
+    g = getcwd(0, 0); char *h = getcwd(0, 4096);
+    say_n("getcwd.alloc", g && h && strcmp(g, h) == 0); free(g); free(h); }
   int fd = open("/", O_RDONLY);
   DIR *d = fdopendir(fd);
   say_n("fdopendir", d != 0); say_n("dirfd", dirfd(d) == fd);
