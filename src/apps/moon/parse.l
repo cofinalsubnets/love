@@ -306,6 +306,7 @@
                  pin t 'sigs {},          ; fn/proto name -> (rettype (paramty..)) for the call ABI
                  pin t 'anon 0,                   ; the anonymous-tag counter
                  pin t 'sfns {},          ; top-level `static` fn names: local symbols in the .o
+                 pin t 'c99inl {},        ; fn name -> 'inl while every file-scope declaration says plain `inline`
                  pin t 'svars {},         ; top-level `static` globals: internal linkage, never exported
                  pin t 'sects {},         ; global name -> its __attribute__((section "..")) string
                  pin t 'consts {},        ; global name -> 1 when `const` names the object and it has an initializer
@@ -2432,6 +2433,7 @@
      (peep ps 'curweak () ? () (wkany? ts ? (pin ps 'curweak 1))),
      (peep ps 'curinl () ? () (inlany? ts ? (pin ps 'curinl 1))),
      (peep ps 'curnoinl () ? () (noinlany? ts ? (pin ps 'curnoinl 1))),
+     (peep ps 'curlink () ? () (pin ps 'curlink (leadkw? ps ts 'inline && !(leadextern? ps ts) ? 'inl 'ext))),
      (peep ps 'curalign () ? () (alignat? ps ts @ an (an ? (pin ps 'curalign an)))),
      ptop9 ps ts)
    (ptop9 ps ts)
@@ -2672,6 +2674,10 @@
               (pin ps 'ainl (<>f . ps 'ainl)),
             peep ps 'curnoinl () && fnp ?
               (pin ps 'noinl (<>f . ps 'noinl)),
+            ; C11 6.7.4p7: a function every file-scope declaration of which is plain `inline` has
+            ; an inline definition here and no external one -- the TU saying `extern` lays that
+            fnp ? (pin (ps 'c99inl) <>f (peep (ps 'c99inl) <>f 'inl = 'inl && ps 'curlink = 'inl ? 'inl 'ext)),
+            pin ps 'curlink (),
            ; the restrict params, filed under this function and never a bare name set: `p` may
            ; be restrict in one function and plain in the next
             (ps 'currstr @ rs
@@ -2688,9 +2694,10 @@
        (tops ts2 acc)
         ; the hoisted block-scope externs lead the program: gen's global pass reads them, and
         ; C's tentative rule lets a real definition later in the TU take the entry back
-        (atom? ts2 ? [1 ['prog (ps 'hoist + rev acc)] (ps 'stag) (ps 'sigs) (ps 'weaks)  ; empty acc = a valid empty TU (crypt.c), not a parse failure
+        (atom? ts2 ? ((map (nm \ (peep (ps 'c99inl) nm () = 'inl ? (pin (ps 'sfns) nm 1))) (keys (ps 'c99inl))),
+                      [1 ['prog (ps 'hoist + rev acc)] (ps 'stag) (ps 'sigs) (ps 'weaks)  ; empty acc = a valid empty TU (crypt.c), not a parse failure
                             (ps 'sfns) (ps 'svars) (ps 'sects) (ps 'alias) (ps 'aligns) (ps 'ainl) (ps 'noinl)
-                            (ps 'consts) (ps 'rstrs) (ps 'gregs) vol]
+                            (ps 'consts) (ps 'rstrs) (ps 'gregs) vol])
            (ptop ps ts2 @ r
               (two? r ? (note <r, tops <>r (<r . acc)) (pfail ps ts2 spans toks))))
        (tops toks ())))

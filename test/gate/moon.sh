@@ -367,6 +367,14 @@ grep -q "incomplete type 't'" "$ho/.cc7.out" || fail "mooncc incomplete member m
 printf 'struct u;\nint main(void) { return sizeof (struct u); }\n' > "$ho/.cc8.c"
 moonrun "$ho/.cc8.c" "$ho/.ccx" > "$ho/.cc8.out" 2>&1
 grep -q "sizeof an incomplete type" "$ho/.cc8.out" || fail "mooncc sizeof incomplete must refuse: $(head -1 "$ho/.cc8.out")"
+# C11 6.7.4p7: a plain `inline` definition in a header lays no external symbol, so two TUs
+# including it link; the one saying `extern inline` lays it (gnulib's _GL_INLINE)
+printf 'inline int twice(int x) { return 2 * x; }\n' > "$ho/.inl.h"
+printf '#include "%s"\nint a(int x) { return twice(x); }\n' "$ho/.inl.h" > "$ho/.inla.c"
+printf '#include "%s"\nint b(int x) { return twice(x); }\n' "$ho/.inl.h" > "$ho/.inlb.c"
+printf '#include "%s"\nextern inline int twice(int);\nint a(int), b(int);\nint main(void) { int (*p)(int) = twice; return a(1) + b(2) + p(3) != 12; }\n' "$ho/.inl.h" > "$ho/.inlm.c"
+moonrun -o "$ho/.inlx" "$ho/.inla.c" "$ho/.inlb.c" "$ho/.inlm.c" > "$ho/.inl.out" 2>&1 && "$ho/.inlx" \
+  || fail "mooncc c99 inline across TUs: $(head -1 "$ho/.inl.out")"
 # ..and the shape it must NOT refuse: a function's address IS a constant
 cat > "$ho/.cc5.c" <<'EOF'
 int puts(char const*);
