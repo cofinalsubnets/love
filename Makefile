@@ -397,7 +397,7 @@ dist: dist-seed   # the binary, carrying its own source
 dist_drop = bench
 # the codec of each src.tree section (selfpack -c): deflate where a run reads (index, moon,
 # bake, seat), the denser coders where only a full lay or a cold read pays their decode
-tree_codecs = lisp=bzip2,c=bzip2,rest=lzma2
+tree_codecs = lisp=lzma2,c=lzma2,rest=lzma2
 .PHONY: force_src
 force_src: ;
 # force_src: the artifact packs the tree as it is, so make cannot know the prerequisites;
