@@ -811,6 +811,249 @@
           (<r = "--was" && #r = 3) (lg-swap nm <>r <>>r)
           2)))                                             ; malformed: the dispatcher says the usage
 
+; --- ssh: sync with a nest on another box. the far side is `sb serve DIR` on stdio, each
+;     word framed as a decimal length, a newline and the bytes. the near side drives: it
+;     learns what the far store lacks by asking, a level of its tip walk a round, and the
+;     far side walks its own tips down to what the near store holds, so the cost goes with
+;     what differs. the far nest is held for the whole talk ---
+(:
+   (ssh? p) (6 < #p && snip p 0 6 = "ssh://")
+   (ssh-env k d) (: v (getenv k) (? (string? v && 0 < #v) v d))
+   (ssh-words s) (filter (w \ 0 < #w) (cite 'kore 'usplit 32 s))
+   ; a far path the far shell reads as one word
+   (ssh-pc? c) (? (97 <= c <= 122) 1 (65 <= c <= 90) 1 (48 <= c <= 57) 1 (elem c [47 46 95 45 126 43 44 61 64 58]) 1 0)
+   (ssh-path? s) (: (go i) (? (#s <= i) 1 (ssh-pc? (s i)) (go (i + 1)) 0) (0 < #s && go 0))
+   ; ssh://[USER@]HOST[:PORT]/PATH -> the argv of the far `sb serve PATH` | (); /~/ is the far home.
+   ; SB_SSH is the ssh words (ssh -T), SB_LOVE the far binary (love)
+   (ssh-argv p)
+    (: r (snip p 6 #p) k (fsub r "/" 0)
+       (? (k <= 0) ()
+          (: hp (snip r 0 k) pt (snip r k #r)
+             path (? (3 <= #pt && snip pt 0 3 = "/~/") (snip pt 1 #pt) pt)
+             c (fsub hp ":" 0)
+             (? !(ssh-path? path) ()
+                ((ssh-words (ssh-env "SB_SSH" "ssh -T"))
+                 + (? (c < 0) [hp] ["-p" (snip hp (c + 1) #hp) (snip hp 0 c)])
+                 + [(ssh-env "SB_LOVE" "love") "sb" "serve" path])))))
+   ; --- the frames
+   (fr-put w s) (say w (show #s + "\n" + s))
+   (fr-get q)                                                 ; the next frame's text | () at the end
+    (: (hd n k) (: c (see q) (? (c < 0) () (c = 10) (k ? n ()) (48 <= c <= 57 && k < 12) (hd (n * 10 + c - 48) (k + 1)) ()))
+       n (hd 0 0)
+       (? (charm? n) (fr-n q n) ()))
+   (fr-n q n)
+    (: (go k acc) (? (k <= 0) (cats (rev acc))
+          (: c (see q)
+             (? (c < 0) ()
+                (: _ (unsee q c) s (chug q) m #s
+                   (? (m <= k) (go (k - m) (s . acc))
+                      (: _ (unchug q (m - k)) (go 0 ((snip s 0 k) . acc))))))))
+       (? (n = 0) "" (go n ())))
+   (ssh-line v l) (cats ([v] + catmap (i \ [" " i]) l))
+   (ssh-form r) (? (string? r) (readform r))
+   (ssh-sides f) (? (two? f && sb-sound? f) (catmap (h \ [(sd-h <>h) (sd-h <>>h)]) (fld f 'hunks)) ())
+   (ssh-deps t) (: f (readform t) (? (two? f) (fld f 'deps) ()))
+   ; the hashes some patch texts name, each once
+   (ssh-hashes ts) (: u {} _ (map (t \ map (h \ (? (sb-hex? h) (pin u h 1) ())) (ssh-sides (readform t))) ts)
+                     (sort (keys u)))
+   ; --- the near side
+   (ssh-open av)                                              ; {'p 'w 'q} | ()
+    (: pi (pipe 0) po (pipe 0)
+       p (spawnio av <pi >po -1 [>pi <po] -1 0)
+       _ (close <pi) _ (close >po)
+       (? (charm? p && 0 < p) {'p p 'w (fdopen >pi) 'q (fdopen <po)}
+          (: _ (close >pi) _ (close <po) ())))
+   (ssh-ask c s) (: _ (fr-put (c 'w) s) _ (flush (c 'w)) (fr-get (c 'q)))
+   (ssh-shut c) (: _ (close (c 'w)) _ (close (c 'q)) (wait (c 'p)))
+   ; ids asked in rounds of 1024 -> a 0 or 1 apiece, or 0 when the far side stops answering
+   (ssh-bits c v ids)
+    (: (go l acc) (? (atom? l) acc
+          (: b (take 1024 l) r (ssh-ask c (ssh-line v b))
+             (? (string? r && #r = #b) (go (drop 1024 l) (acc + map (i \ (? (r i = 49) 1 0)) ^#b)) 0)))
+       (go ids ()))
+   ; our patches the far store lacks, and the ones it holds where the walk met it -> (lacks
+   ; holds) | 0. a level of the walk a round: work far ahead costs rounds, never a list of all
+   (ssh-lacks c)
+    (: seen {}
+       (deps i) (: f (form (".sb/patch/" + i)) (? (two? f) (fld f 'deps) ()))
+       (go f lk hd)
+        (? (atom? f) [lk hd]
+           (: bs (ssh-bits c "has" f)
+              (? (charm? bs) 0
+                 (: (pass f bs nf lk hd)
+                     (? (atom? f) (go nf lk hd)
+                        (<bs = 1) (pass >f >bs nf lk (<f . hd))
+                        (: nx (filter (d \ !(peep seen d 0)) (deps <f))
+                           _ (map (d \ pin seen d 1) nx)
+                           (pass >f >bs (nx + nf) (<f . lk) hd)))
+                    (pass f bs () lk hd)))))
+       t0 (tips ())
+       _ (map (i \ pin seen i 1) t0)
+       (go t0 () ()))
+   ; blobs by hash, rounds of 256 -> {hash (1 text)} | 0
+   (ssh-blobs c hs)
+    (: bc {} q (c 'q)
+       (go l) (? (atom? l) bc
+          (: b (take 256 l) r (ssh-ask c (ssh-line "blobs" b))
+             (? !(string? r && #r = #b) 0
+                (: (rd i m) (? (two? m) (: _ (? (r i = 49) (: t (fr-get q) (? (string? t) (pin bc <m [1 t]) ())) ())
+                                           (rd (i + 1) >m)))
+                   _ (rd 0 b)
+                   (go (drop 256 l))))))
+       (go hs))
+   ; the far side's patches beyond hd, and the blobs we lack of theirs, laid by gap over its
+   ; tips -> gap's count | 0
+   (ssh-pull c hd ft)
+    (: n (: r (ssh-ask c (ssh-line "want" hd)) (? (string? r) (dv-num r)))
+       (? !(charm? n) 0
+          (: pc {} q (c 'q)
+             _ (: (go k) (? (0 < k) (: t (fr-get q) _ (? (string? t) (pin pc (sha256 t) [1 t]) ()) (go (k - 1))))
+                  (go n))
+             hs (filter (h \ !(two? (stat (".sb/blob/" + h)))) (ssh-hashes (map (k \ <>(pc k)) (keys pc))))
+             bc (ssh-blobs c hs)
+             (? (tablet? bc) (gap (\ id (peep pc id ())) (\ h (peep bc h ())) ft ".") 0))))
+   ; our patches lk, with the blobs the far store lacks of theirs -> [laid bad blobs ok] | ()
+   (ssh-push c lk)
+    (: ts (filter string? (map (i \ (: t (look (".sb/patch/" + i)) (? (two? t) <>t ()))) lk))
+       hs (filter (h \ two? (stat (".sb/blob/" + h))) (ssh-hashes ts))
+       bs (ssh-bits c "hasb" hs)
+       (? (charm? bs) ()
+          (: send (: (go l b acc) (? (atom? l) acc (go >l >b (? (<b = 1) acc (<l . acc))))
+                     (go hs bs ()))
+             w (c 'w)
+             (each l) (? (two? l) (: _ (fr-put w <l) (each >l)) ())
+             _ (fr-put w ("put " + show #ts + " " + show #send))
+             _ (each ts)
+             _ (each (map (h \ <>(look (".sb/blob/" + h))) send))
+             _ (flush w)
+             (ssh-form (fr-get (c 'q))))))
+   (sync-ssh peer keep)
+    (mk (),
+     (? (!keep && 0 < dirty ())
+        (say err "sb: working tree has changes; record or revert first\n", 0)
+        (: av (ssh-argv peer)
+           (? (atom? av) (say err ("sb: cannot read " + peer + " -- ssh://[USER@]HOST[:PORT]/PATH\n"), 0)
+              (: c (ssh-open av)
+                 (? !(tablet? c) (say err ("sb: cannot run " + <av + "\n"), 0)
+                    (: r (ssh-sync c peer keep) _ (ssh-shut c) r)))))))
+   ; sync-with's exchange over the wire: pull, push onto a clean far nest (or deposit), the
+   ; refs both ways, then both heads to their union
+   (ssh-sync c peer keep)
+    (: hi (ssh-form (ssh-ask c (? keep "hello" "hello dirty")))
+       (? !(two? hi && sb-all? sb-hex? <hi && sb-all? sb-hex? <>hi)
+          (say err ("sb: no nest answers at " + peer + "\n"), 0)
+          (: ft <hi fh <>hi theirs <>>hi pd (? keep 0 (hi 3))
+             ng (ssh-lacks c)
+             (? (charm? ng) (say err ("sb: " + peer + " stopped answering\n"), 0)
+                (: gi (ssh-pull c <>ng ft)
+                   got (? (tablet? gi) (gi 'ok) 0)
+                   po (? (got && (keep || pd = 0)) (ssh-push c <ng) ())
+                   pushed (? (two? po) (0 = po 1 && po 3) 0)
+                   ru (refadd (refs ()) theirs 1)
+                   _ (two? <ru ? (lay ".sb/refs" (show <ru)))
+                   _ (? pushed (ssh-ask c ("refs " + show (refs ()))) ())
+                   nin (? (tablet? gi) (gi 'laid) 0) nout (? pushed (po 0) 0)
+                   nb ((? (tablet? gi) (gi 'blobs) 0) + (? (two? po) (po 2) 0))
+                   (? !got (say err ("sb: some objects did not arrive from " + peer + " -- the sync is INCOMPLETE\n"), 0)
+                      keep (: _ (puts ("sb: deposited -- " + show nin + " patches in, " + show nout + " out, "
+                                       + show nb + " blobs\n"))
+                              (? pushed 1 0))
+                      (ssh-settle c pushed pd fh nin nout nb <>ru)))))))
+   (ssh-settle c pushed pd fh nin nout nb nref)
+    (: u (head () + fh)
+       st (settle u)
+       nleft (tell <>>st)
+       pst (? pushed (ssh-form (ssh-ask c (ssh-line "take" u))) ())
+       took (two? pst && 0 <= pst 2)
+       _ (puts ("sb: synced -- " + show <st + " patches (" + show nin + " in, " + show nout + " out), "
+                + show nb + " blobs, " + show <>st + " files here"
+                + (? took (", " + show <>pst + " files there") "")
+                + (nleft @ 0 "" (", " + show nleft + " conflicted"))
+                + (nref @ 0 "" (", " + show nref + " ref clash" + (nref @ 1 "" "es"))) + "\n"))
+       _ (? took ()
+            (say err ("sb: pulled only -- the peer "
+                      + (? (0 < pd) "has unrecorded changes" "would not take the write")
+                      + "; run sync from its side to finish\n")))
+       _ (nleft @ 0 () (say err "sb: settle the flagged paths, then record\n"))
+       _ (nref @ 0 () (say err "sb: a banked name is immutable\n"))
+       (? (took && 0 = nleft && 0 = nref && 0 = pst 2) <st 0))
+   ; --- the far side: one answer per word asked, nothing else on stdout
+   (sv-has d l) (cats (map (i \ (? (sb-hex? i && two? (stat (d + i))) "1" "0")) l))
+   (sv-each l) (? (two? l) (: _ (fr-put out <l) (sv-each >l)) ())
+   ; a set's closure as a test: the walk down from it, stopping at a kept derive that lies
+   ; within it -> [test] | ()
+   (reach1 want base)
+    (: got {} hit {}
+       _ (: (go st) (? (atom? st) ()
+             (: id <st
+                (? (0 <= dv-dep base id) (: _ (pin hit id 1) (go >st))
+                   (peep got id 0) (go >st)
+                   !(sb-hex? id) (go >st)
+                   (: f (form (".sb/patch/" + id)) _ (pin got id 1)
+                      (go (? (two? f) (fld f 'deps + >st) >st))))))
+            (go want))
+       (? (sb-all? (t \ peep hit t 0) (base 'tips)) [(\ id (peep got id 0 || 0 <= dv-dep base id))] ()))
+   (reach want)
+    (: (try bs) (? (atom? bs) <(reach1 want (dv-new 0))
+                   (: b (dv-read (".sb/derive/" + <bs)) r (? (tablet? b) (reach1 want b) ())
+                      (? (two? r) <r (try >bs))))
+       (try (dv-bases ())))
+   ; the patches our tips reach that a store holding hs's closure lacks, as texts
+   (sv-want hs)
+    (: in? (reach hs) seen {}
+       (go st acc) (? (atom? st) acc
+          (: id <st
+             (? (peep seen id 0) (go >st acc)
+                (: _ (pin seen id 1)
+                   (? (in? id) (go >st acc)
+                      (: t (look (".sb/patch/" + id))
+                         (? (two? t) (go (ssh-deps <>t + >st) (<>t . acc)) (go >st acc))))))))
+       (go (tips ()) ()))
+   ; put NP NB: that many patch frames, then blob frames, laid by gap -> [laid bad blobs ok]
+   (sv-put ns)
+    (: np (? (two? ns) (dv-num <ns) 0) nb (? (two? >ns) (dv-num <>ns) 0)
+       pc {} bc {}
+       (rd k t) (? (0 < k) (: s (fr-get in) _ (? (string? s) (pin t (sha256 s) [1 s]) ()) (rd (k - 1) t)) t)
+       _ (rd np pc) _ (rd nb bc)
+       g (gap (\ id (peep pc id ())) (\ h (peep bc h ())) (sort (keys pc)) ".")
+       [(g 'laid) (g 'bad) (g 'blobs) (g 'ok)])
+   (sv-refs a) (: pu (refadd (refs ()) (readform a) ()) _ (? (two? <pu) (lay ".sb/refs" (show <pu)) ()) (show <>pu))
+   ; take TIPS: the head to that set, on a clean tree -> [patches files conflicts], -1 conflicts
+   ; when the tree is dirty, -2 when a tip is not here
+   (sv-take ids)
+    (? (0 < dirty ()) [0 0 -1]
+       !(two? ids && sb-all? (i \ sb-hex? i && two? (stat (".sb/patch/" + i))) ids) [0 0 -2]
+       (: st (settle ids) [<st <>st #(filter (e \ 0 < <>e) <>>st)]))
+   (sv-do v a ids)
+    (v @ "hello" (fr-put out (show [(tips ()) (head ()) (refs ()) (? (elem "dirty" ids) (dirty ()) 0)]))
+         "has" (fr-put out (sv-has ".sb/patch/" ids))
+         "hasb" (fr-put out (sv-has ".sb/blob/" ids))
+         "want" (: ps (sv-want (filter (i \ sb-hex? i && two? (stat (".sb/patch/" + i))) ids))
+                   _ (fr-put out (show #ps))
+                   (sv-each ps))
+         "blobs" (: bs (map (h \ (? (sb-hex? h) (look (".sb/blob/" + h)) ())) ids)
+                    _ (fr-put out (cats (map (b \ (? (two? b) "1" "0")) bs)))
+                    (sv-each (map (b \ <>b) (filter two? bs))))
+         "put" (fr-put out (show (sv-put ids)))
+         "refs" (fr-put out (sv-refs a))
+         "take" (fr-put out (show (sv-take ids)))
+         (fr-put out (show ["unknown" v])))
+   (sv-loop _)
+    (: r (fr-get in)
+       (? !(string? r) 1
+          (: k (fsub r " " 0) v (? (k < 0) r (snip r 0 k)) a (? (k < 0) "" (snip r (k + 1) #r))
+             _ (sv-do v a (ssh-words a))
+             _ (flush out)
+             (sv-loop ()))))
+   ; serve [DIR]: a nest's side of an ssh sync, on stdin and stdout, until the near side hangs up
+   (sb-serve as)
+    (: d (? (two? as) <as ".")
+       h (ssh-env "HOME" "/")
+       dir (? (2 <= #d && snip d 0 2 = "~/") (h + snip d 1 #d) d)
+       (? ((chdir dir) != ()) (: _ (say err ("sb: cannot enter " + d + "\n")) 1)
+          !(two? (stat ".sb")) (: _ (say err ("sb: no nest at " + d + "\n")) 1)
+          (? (held "." (_ \ sv-loop ())) 0 1))))
+
 ; --- the CLI face: usage + the verb dispatcher (cook-main's shape) ---
 (:
    sb-usage "sb -- svalbard, the patch-set vcs (doc/misc/sb.md)
@@ -823,7 +1066,10 @@ usage: sb VERB ..
                   the union of their HEADS. two patches on one path three-way
                   merge; a true overlap lands in markers and exits 1 -- resolve,
                   then record. --keep only deposits: both stores fill, no head
-                  moves, so a hub holds work it has not taken
+                  moves, so a hub holds work it has not taken.
+                  ssh://[USER@]HOST[:PORT]/PATH is a nest on another box, its
+                  side `sb serve PATH` (SB_SSH the ssh words, SB_LOVE the far love)
+  serve [DIR]     the far side of an ssh sync, on stdin and stdout
   take ID..       grow the HEAD by a set (a ref, or patches by prefix, with
                   their deps) and lay the tree: what a hub does to land work
   ls [-l]         the head's paths; -l puts each one's side (blob hash, x when
@@ -861,7 +1107,9 @@ usage: sb VERB ..
            "record" (: _ (held "." (_ \ sb-record (two? >as ? <>as ""))) 0)
            "ledger" (: r (sb-ledger >as) (? (r = 2) (usage ()) !r))
            "sync" (: pr (filter (w \ w != "--keep") >as)
-                     (atom? pr ? (usage ()) !(held "." (_ \ sync-with <pr (elem "--keep" >as)))))
+                     (atom? pr ? (usage ())
+                      !(held "." (_ \ (? (ssh? <pr) sync-ssh sync-with) <pr (elem "--keep" >as)))))
+           "serve" (sb-serve >as)
            "apply" !(held "." (_ \ sb-apply >as))
            "take" (atom? >as ? (usage ()) !(held "." (_ \ sb-take >as)))
            "bank" (atom? >as ? (usage ()) !(held "." (_ \ sb-bank >as)))

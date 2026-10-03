@@ -15,7 +15,7 @@ this doc is the interface over it: *what you type*, not *what the objects are*.
 | verb | does | vcs hat | distro hat |
 |---|---|---|---|
 | **`record [NOTE]`** | working changes → a patch in the DAG | commit | — |
-| **`sync [--keep] PEER`** | union patch sets with another nest (peer dir *or* http URL) | the divergent-tips → set-union payoff | clone / pull / fetch-a-release are all this |
+| **`sync [--keep] PEER`** | union patch sets with another nest (peer dir, `ssh://` nest, *or* http URL) | the divergent-tips → set-union payoff | clone / pull / fetch-a-release are all this |
 | **`take ID..`** | grow the head by a set already in the store | merge, as a hub lands work | land a row |
 | **`apply [ID..]`** | set the head to a dep-consistent subset of the local store | checkout / cherry-pick, one act | select which release a nest realizes |
 | **`bank NAME`** | freeze the current head (its tip **set**) → a named, immutable release | tag | the unit you propagate |
@@ -75,6 +75,18 @@ trees are identical, from whichever side you ran it. The peer's half needs its t
 writable; when it is not, sync still pulls (always safe), leaves the peer's store **whole**
 rather than half-fed, and says so with exit 1. An `http://` remote is pull-only — any static
 file tree serving a `.sb/` is a complete remote, and it takes no push.
+
+**A nest on another box** is `ssh://[USER@]HOST[:PORT]/PATH` (`/~/` is the far home). sync runs
+`ssh -T HOST love sb serve PATH` (`SB_SSH` replaces the ssh words, `SB_LOVE` the far binary)
+and the exchange is the same, over the far side's stdin and stdout: each word is a decimal
+length, a newline and the bytes. The near side asks which of its patches the far store holds,
+one level of its tip walk a round, so the rounds go with the length of the work the far side
+lacks. The far side then walks its own tips down to the closure of the ones it holds (stopping
+at a kept derive within it) and sends what lies above, with the blobs asked for after. The
+near side pushes only onto a clean far tree (or deposits with `--keep`), and settles the far
+head with `take`. `sb serve [DIR]` holds the far nest for the whole talk and prints nothing
+but its answers. The far path must be one word to the far shell: letters, digits and
+`/._-~+,=@:`.
 
 **What a peer can and cannot do.** Every blob and patch is checked against its sha256 name, and
 a patch is refused whole if a hunk names an absolute path, a `.`/`..`/empty segment, a control

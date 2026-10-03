@@ -647,6 +647,48 @@
  btook bsnap
  ((b3 - b2) * 4 < b1 - b0))
 
+; --- ssh: the exchange with a nest on another box, here a stand-in for ssh that drops the host
+;     and runs the far `sb serve` on this one. chains on both sides, a deposit, a far tree with
+;     unrecorded work that takes no push, a ref carried over, a path the far shell would split ---
+(: sl (: l <cmdline (l 0 = 47 ? l (sb-home + "/" + l)))
+   here (cwd 0) far (here + "/mrg/sf") url ("ssh://box" + far)
+   _ (lay "mrg/ssh" "shift\nexec \"$@\"\n")
+   _ (setenv "SB_SSH" ("sh " + here + "/mrg/ssh"))
+   _ (setenv "SB_LOVE" sl)
+   _ (mkdir "mrg/sf" 493) _ (mkdir "mrg/sn" 493)
+   _ (chdir "mrg/sf") _ (mk ()) _ (lay "far" "f0\n") _ (sb-record "far: f0")
+   _ (lay "far" "f0\nf1\n") _ (sb-record "far: f1")
+   _ (chdir "../sn") _ (mk ())
+   _ (lay "near" "n0\n") _ (sb-record "near: n0")
+   _ (lay "near" "n0\nn1\n") _ (sb-record "near: n1")
+   _ (lay "near" "n0\nn1\nn2\n") _ (sb-record "near: n2")
+   _ (sb-bank ["r1"])
+   s1 (sync-ssh url 0)
+   ssame (seq (snap ()) (form (far + "/.sb/snap")))
+   shead (psid (head ()) = psid (head-in far))
+   sref (two? (refof-in (form (far + "/.sb/refs")) "r1"))
+   ; a deposit: both stores fill, neither head moves
+   _ (lay "near" "n0\nn1\nn2\nn3\n") nk (sb-record "near: kept")
+   _ (chdir far) _ (lay "far2" "f\n") fk (sb-record "far: kept") _ (chdir (here + "/mrg/sn"))
+   s2 (sync-ssh url 1)
+   kin (two? (stat (".sb/patch/" + fk))) kout (two? (stat (far + "/.sb/patch/" + nk)))
+   kstill (!(elem nk (head-in far)) && !(elem fk (head ())))
+   ; unrecorded work there: we take theirs, they take nothing
+   _ (lay (far + "/scratch") "unrecorded\n")
+   _ (lay "near" "n4\n") nd (sb-record "near: late")
+   s3 (sync-ssh url 0)
+   dgot (two? (look "far2"))
+   dnot !(two? (stat (far + "/.sb/patch/" + nd)))
+   s4 (sync-ssh "ssh://box/a b" 0)
+   avok (seq (ssh-argv "ssh://u@h:2222/~/hub") ["sh" (here + "/mrg/ssh") "-p" "2222" "u@h" sl "sb" "serve" "~/hub"])
+   _ (chdir "../.."))
+
+(test
+ (0 < s1) ssame shead sref                   ; one exchange, the same tree and head on both ends
+ s2 kin kout kstill                          ; deposited both ways, no head moved
+ (0 = s3) dgot dnot                          ; pulled only
+ (0 = s4) avok)                             ; refused before any ssh ran; the words it runs
+
 (chdir sb-home)
 (hark ["rm" "-rf" sb-dir])
 (puts "sb: ok", putc 10, 0)
