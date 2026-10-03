@@ -875,7 +875,7 @@
            (0 = <ad) (0 = <en) (cr-in (en 1) "enrolled: tau2")
            (: t ((cite 'seals 'seal-check) card (snip tk 0 64) (clock 0 // 1000) ())
               (&& (tablet? t) (t "name" = "tau2") (t "kind" = "box")))
-           (1 = <again) (cr-in >again "spent")
+           (1 = <again) (cr-in (again 1) "spent")
            (1 = <bad) (cr-in (bad 1) "sig does not check")
            (1 = <nr) (cr-in (nr 1) "no root here"))
    0)
@@ -970,7 +970,7 @@
    after (cr-run b1 "BEE_NAME=x" ("--mcp < '" + b1 + "/send'"))
    _ (test (cr-in (before 1) "sent to peer@two")
            (0 = <rv) (cr-in (rv 1) "serial 1") (cr-in (rv 1) "two: taken")
-           (1 = <again) (cr-in >again "not newer")
+           (1 = <again) (cr-in (again 1) "not newer")
            (cr-in (after 1) "seal does not check") !(cr-in (after 1) "sent to peer@two"))
    0)
 
@@ -1014,7 +1014,9 @@
    _ (test (cr-in busy "state busy") (cr-in busy "turn ") (cr-in busy ("parent " + me))
            (cr-in nap "state busy") (cr-in idle "state idle") !(cr-in idle "state busy"))
    ; the hud on a pty, as tess
-   md (tether ["sh" "-c" ("cd '" + d + "' && HOME='" + d + "' USER=tess PWD='" + d + "' exec '" + cr-love + "' '" + cr-app + "'")])
+   ; no git discovery above the scratch dir: the hud would show the tree's own queues
+   md (tether ["sh" "-c" ("cd '" + d + "' && HOME='" + d + "' USER=tess PWD='" + d + "' GIT_CEILING_DIRECTORIES='" + cr-root
+                         + "' exec '" + cr-love + "' '" + cr-app + "'")])
    m >md
    _ (settty m 24 100)
    box {'s ""}
@@ -1060,24 +1062,24 @@
 
 ; --- a worker nest: --nest DIR makes DIR from the hub SB_HUB names -- its store deposited, its
 ; head taken, out/ seeded from its build -- and refuses a DIR that is there or a hub that is not ---
-(: hub (cr-root + "/nhub") wk (cr-root + "/nwork")
-   (sb d as) (hark ([cr-love "sb" "-C" d] + as))
-   (run env args) (hark ["sh" "-c" ("cd '" + cr-root + "' && exec env " + env + " '" + cr-love + "' '" + cr-app + "' " + args + " 2>&1")])
-   _ (mkdir hub 493) _ (mkdir (hub + "/out") 493)
-   _ (cr-put hub "f" "the hub's\n") _ (cr-put (hub + "/out") "built" "x\n")
-   _ (sb hub ["record" "one"])
-   _ (cr-put hub "g" "the hub's too\n") _ (sb hub ["record" "two"])
-   hp (snip >(sb hub ["psid"]) 0 64)
-   ok (run ("SB_HUB='" + hub + "'") ("--nest '" + wk + "'"))
-   wp (snip >(sb wk ["psid"]) 0 64)
-   again (run ("SB_HUB='" + hub + "'") ("--nest '" + wk + "'"))
-   nohub (run "SB_HUB=" ("--nest '" + cr-root + "/nother'"))
+(: nn-hub (cr-root + "/nhub") nn-wk (cr-root + "/nwork")
+   (nn-sb d as) (hark ([cr-love "sb" "-C" d] + as))
+   (nn-run env args) (hark ["sh" "-c" ("cd '" + cr-root + "' && exec env " + env + " '" + cr-love + "' '" + cr-app + "' " + args + " 2>&1")])
+   _ (mkdir nn-hub 493) _ (mkdir (nn-hub + "/out") 493)
+   _ (cr-put nn-hub "f" "the hub's\n") _ (cr-put (nn-hub + "/out") "built" "x\n")
+   _ (nn-sb nn-hub ["record" "one"])
+   _ (cr-put nn-hub "g" "the hub's too\n") _ (nn-sb nn-hub ["record" "two"])
+   nn-hp (snip >(nn-sb nn-hub ["psid"]) 0 64)
+   nn-ok (nn-run ("SB_HUB='" + nn-hub + "'") ("--nest '" + nn-wk + "'"))
+   nn-wp (snip >(nn-sb nn-wk ["psid"]) 0 64)
+   nn-again (nn-run ("SB_HUB='" + nn-hub + "'") ("--nest '" + nn-wk + "'"))
+   nn-nohub (nn-run "SB_HUB=" ("--nest '" + cr-root + "/nother'"))
    _ (test
-      (<ok = 0) (cr-in >ok ("a worker nest at " + wk + " on the hub's head " + hp))
-      (wp = hp) (cr-get (wk + "/f") = "the hub's\n") (cr-get (wk + "/g") = "the hub's too\n")
-      (cr-get (wk + "/out/built") = "x\n")
-      (<again = 1) (cr-in >again "is there already")
-      (<nohub = 2) (cr-in >nohub "SB_HUB names no nest"))
+      (<nn-ok = 0) (cr-in >nn-ok ("a worker nest at " + nn-wk + " on the hub's head " + nn-hp))
+      (nn-wp = nn-hp) (cr-get (nn-wk + "/f") = "the hub's\n") (cr-get (nn-wk + "/g") = "the hub's too\n")
+      (cr-get (nn-wk + "/out/built") = "x\n")
+      (<nn-again = 1) (cr-in >nn-again "is there already")
+      (<nn-nohub = 2) (cr-in >nn-nohub "SB_HUB names no nest"))
    0)
 
 (hark ["rm" "-rf" cr-root])
