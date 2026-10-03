@@ -1,11 +1,15 @@
 /* libgen's basename and dirname (posix's, writing into their argument), isascii and toascii,
  * fgetpos / fsetpos and fseeko / ftello round-tripping a position through a file, and the
- * stdio_ext queries both libcs answer alike: pending output, reading or writing */
+ * stdio_ext queries both libcs answer alike: pending output, reading or writing, and a
+ * directory stream over an open fd, read twice across a rewind */
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
 #include <libgen.h>
 #include <stdio_ext.h>
+#include <dirent.h>
+#include <fcntl.h>
+#include <unistd.h>
 #include "say.h"
 
 int main(void) {
@@ -40,4 +44,16 @@ int main(void) {
   FILE *r = fopen("/dev/null", "r");
   say_n("freading", __freading(r) != 0); say_n("fwriting.r", __fwriting(r) != 0);
   fclose(r);
+  int fd = open("/", O_RDONLY);
+  DIR *d = fdopendir(fd);
+  say_n("fdopendir", d != 0); say_n("dirfd", dirfd(d) == fd);
+  int a = 0, b = 0;
+  while (readdir(d)) a++;
+  rewinddir(d);
+  while (readdir(d)) b++;
+  say_n("rewinddir", a > 2 && a == b);
+  say_n("closedir", closedir(d));
+  int nf = open("/dev/null", O_RDONLY);
+  say_n("fdopendir.file", fdopendir(nf) == 0);
+  close(nf);
   return 0; }

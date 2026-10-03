@@ -562,9 +562,9 @@
    (fmem g ty name)
     (!(stru? ty) ? 'bad
      (g 'stag <>ty @ e
-      (atom? e ? 'bad
+      (atom? e ? (nolane g ("member '" + name + "' of an incomplete type '" + <>ty + "'"))
        (assoc name <e @ f
-        (atom? f ? 'bad [<>f <>>f])))))
+        (atom? f ? (nolane g ("no member '" + name + "' in '" + <>ty + "'")) [<>f <>>f])))))
    (lg2 n) (: (go k v) (v <= 1 ? k (go (k + 1) (v >> 1))) (go 0 n))   ; a true log2 -- a pointer diff over a >8-byte struct needs sar 4+, not a capped 3
    (imby g rX sz) (arm? g ? [['li 'r3 sz] ['imul rX rX 'r3]] [['imul rX rX sz]])   ; arm mul has no imm form: the size rides r3 (free mid-expression)
    (homable? pty) (ptr? pty || elem pty '(long ulong))       ; an 8-byte gp scalar: what a register home can carry

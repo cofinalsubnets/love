@@ -356,6 +356,13 @@ moonrun "$ho/.cc4.c" "$ho/.ccx" > "$ho/.cc4.out" 2>&1; r=$?
 [ $r -eq 1 ] || fail "mooncc undeclared-in-initializer exit (rc $r)"
 grep -q "undeclared 'nosuchthing'" "$ho/.cc4.out" \
   || fail "mooncc undeclared-in-initializer must name it: $(head -1 "$ho/.cc4.out")"
+# a member the struct lacks, or of a struct never completed, is named too
+printf 'struct s { int y; };\nint f(struct s *p) { return p->x; }\nint main(void) { return 0; }\n' > "$ho/.cc6.c"
+moonrun "$ho/.cc6.c" "$ho/.ccx" > "$ho/.cc6.out" 2>&1
+grep -q "no member 'x' in 's'" "$ho/.cc6.out" || fail "mooncc missing member must name it: $(head -1 "$ho/.cc6.out")"
+printf 'struct t;\nint f(struct t *p) { return p->x; }\nint main(void) { return 0; }\n' > "$ho/.cc7.c"
+moonrun "$ho/.cc7.c" "$ho/.ccx" > "$ho/.cc7.out" 2>&1
+grep -q "incomplete type 't'" "$ho/.cc7.out" || fail "mooncc incomplete member must name it: $(head -1 "$ho/.cc7.out")"
 # ..and the shape it must NOT refuse: a function's address IS a constant
 cat > "$ho/.cc5.c" <<'EOF'
 int puts(char const*);
