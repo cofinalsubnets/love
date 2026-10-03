@@ -184,10 +184,23 @@
                        (i < p ?                            ; punct inside a name is the name
                            (w p (emit acc (glued? p ? 'mono 'dyad) i p))
                           (w j acc)))))))
+       ; a hole, "a \(x) b", painted with its text: past its closer, strings and
+       ; holes inside it walked whole, or n when the line ends first
+       (hole k d) (? (n <= k) n
+                     (: c (s k)
+                        (? (c = 40 || c = 91 || c = 123) (hole (k + 1) (d + 1))
+                           (c = 41 || c = 93 || c = 125) (d = 1 ? (k + 1) (hole (k + 1) (d - 1)))
+                           (c = hue-str) (hole (sbody (k + 1)) d)
+                           (hole (k + 1) d))))
+       (sbody k) (? (n <= k) n
+                    (s k = hue-str) (k + 1)
+                    (s k = hue-esc) ((k + 1 < n && s (k + 1) = 40) ? (sbody (hole (k + 1) 0)) (sbody (k + 2)))
+                    (sbody (k + 1)))
        (wstr i a acc)                                      ; inside "..."
         (n <= i ? [(rev (emit acc 'string a n)) 1]
            (s i @ c
-              (? (c = hue-esc) (wstr (i + 2) a acc)
+              (? (c = hue-esc && i + 1 < n && s (i + 1) = 40) (wstr (hole (i + 1) 0) a acc)
+                 (c = hue-esc) (wstr (i + 2) a acc)
                  (c = hue-str) (w (i + 1) (emit acc 'string a (i + 1)))
                  (wstr (i + 1) a acc))))
        ; a raw text: three or more quotes, closed by as many. one that ends its opening

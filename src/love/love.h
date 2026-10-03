@@ -244,7 +244,7 @@ extern const struct ai_mint ai_mint_zero;
 struct ai_port_vt;   // the port's kind, in its head; spelled out with the ports
 // the reader's names (g->rnom): its wraps, its two lone chars, the torn answer, and the
 // flow a port is read through
-enum { RnQuote, RnList, RnHash, RnTuple, RnTablet, RnIota, RnMono, RnTorn, RnAt, RnComma, RnN };
+enum { RnQuote, RnList, RnHash, RnTuple, RnTablet, RnIota, RnMono, RnTorn, RnAt, RnComma, RnWeave, RnN };
 struct ai {
  union u *ip;
  word *hp, *sp;

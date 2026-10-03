@@ -48,6 +48,30 @@
        (? (s < n && src s = 10) (many (nl s))
           (s + 1 < n && src s = 13 && src (s + 1) = 10) (many (nl s))
           (one e)))
+   ; --- holes ---------------------------------------------------------------
+   ; "a \(x) b": a hole is code to its closer, and the text runs on past it.
+   ; (lhole src n i), i at the (, is the index past the closer, n when there is none;
+   ; strings, raw texts and comments inside it are walked whole
+   (lhole src n i)
+    (: (eol k) (? (n <= k) n (src k = 10) (k + 1) (eol (k + 1)))
+       (code k d)
+        (? (n <= k) n
+           (: c (src k)
+              (? (c = 40 || c = 91 || c = 123) (code (k + 1) (d + 1))
+                 (c = 41 || c = 93 || c = 125) (d = 1 ? (k + 1) (code (k + 1) (d - 1)))
+                 (c = 34) (code (lraw? src n k ? (lraw src n k || n) (lstr src n (k + 1))) d)
+                 (c = 59) (code (eol k) d)
+                 (code (k + 1) d))))
+       (code i 0))
+   ; a string's body from k: the index past its closing quote, or n
+   (lstr src n k)
+    (? (n <= k) n
+       (src k = 34) (k + 1)
+       (src k = 92) ((k + 1 < n && src (k + 1) = 40) ? (lstr src n (lhole src n (k + 1))) (lstr src n (k + 2)))
+       (lstr src n (k + 1)))
+   ; a hole's frame: it closes back into its text, and its parens are the hole's own
+   (lholef stk line col sl sc)
+    ({'cl 41 'ln line 'co col 'ne 0 'e1 0 'pl 0 'qd 0 'am 0 'pd () 'hole 1 'sl sl 'sc sc} . stk)
    ; [line col] at j, from [line col] at i
    (lpos src i j line col)
     (i < j ? (lpos src (i + 1) j (src i = 10 ? (line + 1) line) (src i = 10 ? 1 (col + 1)))
@@ -175,7 +199,9 @@
                      w1 stk)))
            (src i @ c
               (? (st = 'str)                                    ; inside "..."
-                  (c @ 92 (w (i + 2) 'str stk line (col + 2) sl sc 0 ti tc warns)   ; \ escape: skip next
+                  (c @ 92 ((i + 1 < n && src (i + 1) = 40) ?                   ; \( opens a hole
+                             (w (i + 2) 'code (lholef stk line col sl sc) line (col + 2) sl sc 0 ti tc warns)
+                             (w (i + 2) 'str stk line (col + 2) sl sc 0 ti tc warns))   ; \ escape: skip next
                        34 (w (i + 1) 'code stk line (col + 1) sl sc 0 ti tc warns)
                        10 (w (i + 1) 'str stk (line + 1) 1 sl sc 0 ti tc warns)
                           (w (i + 1) 'str stk line (col + 1) sl sc 0 ti tc warns))
@@ -206,6 +232,9 @@
                   ; token before it, where the two are one datum
                   (w (i + 1) 'code (lpush (it ? stk (lelem stk i)) c i line col src it ti)
                      line (col + 1) sl sc 0 ti tc
+                     (it ? (lend line tc ti i warns) warns))
+                 ((c = 41 || c = 93 || c = 125) && two? stk && <stk 'hole)    ; a hole's closer: the text runs on
+                  (w (i + 1) 'str >stk line (col + 1) (<stk 'sl) (<stk 'sc) 0 ti tc
                      (it ? (lend line tc ti i warns) warns))
                  (c = 41 || c = 93 || c = 125)                                 ; ) ] }  -- match
                   ((it ? (lend line tc ti i warns) warns) @ w0
@@ -249,7 +278,9 @@
       (n <= i ? (rev (st @ 'cmt (shut i cl cc ti ck acc) acc))
        (src i @ c
         (st @
-         'str (c @ 92 (w (i + 2) 'str line (col + 2) cl cc ti ck acc)
+         'str (c @ 92 ((i + 1 < n && src (i + 1) = 40) ?
+                         (lhole src n (i + 1) @ j (lpos src i j line col @ lc (w j 'str <lc <>lc cl cc ti ck acc)))
+                         (w (i + 2) 'str line (col + 2) cl cc ti ck acc))
                    34 (w (i + 1) 'code line (col + 1) cl cc ti ck acc)
                    10 (w (i + 1) 'str (line + 1) 1 cl cc ti ck acc)
                       (w (i + 1) 'str line (col + 1) cl cc ti ck acc))

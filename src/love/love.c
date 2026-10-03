@@ -281,7 +281,7 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0) {
                                   "payload", "<", "=", "int", "ceil", "lambda", "cask", "port", "coin" };
     for (int i = 0; ai_ok(g) && i < KnN; i++)
      if (ai_ok(g = intern(ai_strof(g, ns[i])))) g->knom[i] = ai_pop1(g); }
-  { char const *const ns[RnN] = { "\\", "list", "hash", "tuple", "tablet", "iota", "mono", "torn", "@", "," };
+  { char const *const ns[RnN] = { "\\", "list", "hash", "tuple", "tablet", "iota", "mono", "torn", "@", ",", "weave" };
     for (int i = 0; ai_ok(g) && i < RnN; i++)
      if (ai_ok(g = intern(ai_strof(g, ns[i])))) g->rnom[i] = ai_pop1(g); }
   if (ai_ok(g = map_new(g))) g->kreg = ai_pop1(g);
