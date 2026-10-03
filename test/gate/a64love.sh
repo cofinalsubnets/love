@@ -27,7 +27,7 @@ a64_jobs "$r"
 cp "$xl" "$r/love"
 cp "$cat" "$r/cat.l"
 cat "$@" > "$r/corpus.l"
-a64_tree || fail "out/love would not lay its carried tree"
+a64_tree || fail "$m would not lay its carried tree"
 # the egg, the bake, the wake: three jobs, one trip. a bake that fails leaves no love.b,
 # and the wake's job answers 127 for it
 a64_job egg  "cd tree && LOVE_NO_IMAGE=1 timeout 1200 \$RUN ../love ../corpus.l"
