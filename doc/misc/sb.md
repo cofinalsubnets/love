@@ -15,15 +15,33 @@ this doc is the interface over it: *what you type*, not *what the objects are*.
 | verb | does | vcs hat | distro hat |
 |---|---|---|---|
 | **`record [NOTE]`** | working changes → a patch in the DAG | commit | — |
-| **`sync PEER`** | union patch sets with another nest (peer dir *or* http URL) | the divergent-tips → set-union payoff | clone / pull / fetch-a-release are all this |
-| **`apply [ID..]`** | realize a dep-consistent subset of the local store into the working tree | checkout / cherry-pick, one act | select which release a nest realizes |
+| **`sync [--keep] PEER`** | union patch sets with another nest (peer dir *or* http URL) | the divergent-tips → set-union payoff | clone / pull / fetch-a-release are all this |
+| **`take ID..`** | grow the head by a set already in the store | merge, as a hub lands work | land a row |
+| **`apply [ID..]`** | set the head to a dep-consistent subset of the local store | checkout / cherry-pick, one act | select which release a nest realizes |
 | **`bank NAME`** | freeze the current head (its tip **set**) → a named, immutable release | tag | the unit you propagate |
 | **`undo ID [NOTE]`** | add the *inverse* patch — revert as growth, never deletion | revert | rollback-by-superset |
-| **`log`** | the patches, newest first (`*` marks a tip); each ref with its psid | inspect | inspect |
+| **`log`** | the patches, newest first (`*` marks a tip of the head); each ref with its psid | inspect | inspect |
+| **`ls`** | the head's paths | ls-files | inspect |
 | **`diff`** | working tree vs the recorded state (unified; exit 1 on change) | inspect | inspect |
 | **`ledger NAME ..`** | a named value that moves only by compare-and-swap, every entry kept | a ref moved by `update-ref NEW OLD` | the shared queue sessions coordinate by |
 
 `-C DIR` before any verb runs it in the nest at DIR.
+
+A nest's tree realizes its *head*, the tips of a set kept in `.sb/head`, and its store may
+hold more: work deposited by another nest and not yet taken. `.sb/tips` stays the store's
+tips. `record` grows the head by its patch, `apply` sets it, `take` grows it by a set, and
+`sync` moves both nests' heads to the union of the two. A nest from before heads has no
+`.sb/head` and realizes its whole store. Every verb that writes holds the nest's lock,
+`.sb/lock`, a directory holding its holder's pid: its own process's again, a live other's
+waited on, a dead one's taken; `sync` holds the peer's as well.
+
+A set's tree is the fold of its patches ordered by depth (the longest dep chain beneath a
+patch), then id, each path on its own. A patch's key is its own, so a set derived once is a
+base: `.sb/derive/PSID` keeps the head's derive and the four newest banks', and a settle
+folds only what it adds onto the head's, or another kept one inside the set, reading those
+patches alone. A path the new work writes under a later base writer folds again from its own
+writers. The answer is the whole replay's, byte for byte; over 20,000 patches a take onto the
+head costs under a second.
 
 A hunk is `(path old new)`, each side the path's state: absent, its blob's hash, or the hash
 with an `x` after it when the owner's execute bit is set. So a chmod is a change like an edit,
@@ -40,9 +58,12 @@ tree), which the network exchange isn't.
 
 `sync PEER` **exchanges** patch sets with a peer nest (a directory holding a `.sb/`) — it is
 not a fetch: pull the blobs + patches we lack, push the ones the peer lacks (content-addressed,
-so a union in either direction just fills gaps), then **settle both nests** — re-derive tips +
-snap from the *whole* patch set (order-free — the DAG is a pure function of its patches) and
-materialize onto a **clean** working tree (a dirty tree refuses, exit 1). Because the derive is
+so a union in either direction just fills gaps), then **settle both nests** on the union of
+their heads — re-derive the snap from that set (order-free — the DAG is a pure function of its
+patches) and materialize onto a **clean** working tree (a dirty tree refuses, exit 1). Each
+direction walks back from the source's tips through deps and stops at a patch the other side
+holds, so its cost goes with what differs. `sync --keep PEER` only deposits: both stores
+fill and neither head moves, which is how a worker hands a hub work the hub has not taken. Because the derive is
 a pure function of the patch set, both ends land on the *same* snap: after one sync the two
 trees are identical, from whichever side you ran it. The peer's half needs its tree clean and
 writable; when it is not, sync still pulls (always safe), leaves the peer's store **whole**

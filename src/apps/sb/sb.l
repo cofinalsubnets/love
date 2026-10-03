@@ -18,12 +18,35 @@
                              () (_ \ close q))))
 
    ; --- the store ---
-   (mk _) (mkdir ".sb" 493, mkdir ".sb/blob" 493, mkdir ".sb/patch" 493, ())
-   (snap _) (form ".sb/snap")                            ; ((path side pid) ..) sorted
-   (tips _) (form ".sb/tips")                            ; (id ..)
+   ; a new nest's head is empty; a nest from before heads has none, and realizes its whole store
+   (mk _) (: new !(two? (stat ".sb"))
+             _ (mkdir ".sb" 493, mkdir ".sb/blob" 493, mkdir ".sb/patch" 493)
+             (? new (lay ".sb/head" "()") ()))
+   (snap _) (form ".sb/snap")                            ; ((path side pid) ..) sorted, the head's tree
+   (tips _) (form ".sb/tips")                            ; (id ..), the store's: every patch it holds
+   ; the head: the tips of the set this nest's tree realizes, which the store may hold more than
+   (head-in d) (? (two? (stat (d + "/.sb/head"))) (form (d + "/.sb/head")) (form (d + "/.sb/tips")))
+   (head _) (head-in ".")
+   ; the nest's lock, a directory made atomically and holding its holder's pid, as a ledger's.
+   ; it is this process's own when it holds it already, so a verb may call another
+   (nest-hold d tries)
+    (: l (d + "/.sb/lock")
+       (? ((mkdir l 448) = ()) (: _ (lay (l + "/pid") (show (getpid 0))) 'took)
+          (: t (look (l + "/pid")) p (? (two? t) (: s <>t (go i a) (? (i < #s && 48 <= s i <= 57) (go (i + 1) (a * 10 + s i - 48)) a) (go 0 0)) 0)
+             (? (p = getpid 0) 'again
+                (0 < p && nom? (still p 0)) (: _ (unlink (l + "/pid")) _ (rmdir l) (nest-hold d tries))
+                (tries <= 0) ()
+                (: _ (rest 20) (nest-hold d (tries - 1)))))))
+   (nest-free d) (: _ (unlink (d + "/.sb/lock/pid")) (rmdir (d + "/.sb/lock")))
+   (held d f)
+    (: _ (? (d = ".") (mk ()) 0)                                   ; the lock lives in the nest
+       h (nest-hold d 500)
+       (? !h (: _ (say err ("sb: the nest at " + d + " is held by another writer\n")) 0)
+          (: r (f 0) _ (? (h = 'took) (nest-free d) 0) r)))
    ; the patch-set ID: the name of a head DAG state. the tips are a set -- sort
    ; before hashing, or the same head reads two ways.
-   (psid tp) (sha256 (show (sort tp)))
+   (psid tp) (sha256 (ids-text (sort tp)))
+   (ids-text l) (? (atom? l) "()" (cats (["(\"" <l "\""] + catmap (i \ [" \"" i "\""]) >l + [")"])))  ; = show, faster
    (blob h) (: k (sd-h h) t (? (sb-hex? k) (look (".sb/blob/" + k))) (two? t ? <>t))
    ; a side is a path's state: () absent, its blob's hash for a plain file, the hash and an
    ; x for an executable one. so a chmod is a change, and a context names the mode too
@@ -147,7 +170,8 @@
              _ (lay (".sb/patch/" + pid) ptext)
              _ (lay ".sb/snap" (show (snap+ sn hunks pid ())))
              tp (filter (t \ !(elem t deps)) (tips ()))
-             _ (lay ".sb/tips" (show (sort (pid . tp))))
+             _ (lay ".sb/tips" (ids-text (sort (pid . tp))))
+             _ (lay ".sb/head" (ids-text (sort (pid . filter (t \ !(elem t deps)) (head ())))))
              _ (puts ("sb: recorded " + snip pid 0 12 + " (" + show #hunks + " paths)\n"))
              pid)))
 
@@ -163,12 +187,12 @@
                             (snap+ sn >hs pid (? !nw acc ([<h nw pid] . acc))))
              (snap+ >sn hs pid (<sn . acc)))))
 
-   ; --- log: the patches newest first; * marks a tip ---
+   ; --- log: the patches newest first; * marks a tip of the head ---
    (ins e l) (? (atom? l) [e]                                 ; insert desc by time (seat 0)
               (<<l <= <e) (e . l)
               (<l . ins e >l))
    (sb-log _)
-    (: tp (tips ())
+    (: tp (head ())
        (go m acc)
         (atom? m ? acc
          (: id <m f (patch id)
@@ -221,7 +245,7 @@
    ; -> {'laid 'bad 'read 'blobs 'ok}: read the patches fetched, ok when every tip arrived whole
    (gap pat blb tips to)
     (: tp (to + "/.sb/patch/") tb (to + "/.sb/blob/")
-       seen {} n {'laid 0 'bad 0 'read 0 'blobs 0}
+       seen {} n {'laid 0 'bad 0 'read 0 'blobs 0 'ids ()}
        (bump k) (pin n k (1 + n k))
        (each f l) (foldl (\ a x (: r (f x) (a && r))) 1 l)   ; every one runs: && would stop at a miss
        (blob1 h)
@@ -243,10 +267,15 @@
                             !(sb-sound? f) (sb-refuse id, bump 'bad, 0)
                             (: dk (each one (fld f 'deps))
                                bk (each blob1 (catmap (h \ [(sd-h <>h) (sd-h <>>h)]) (fld f 'hunks)))
-                               (? (dk && bk && lay (tp + id) <>t) (bump 'laid, 1) 0)))))
+                               (? (dk && bk && lay (tp + id) <>t) (bump 'laid, pin n 'ids (id . n 'ids), 1) 0)))))
                  _ (pin seen id r)
                  r)))
        _ (pin n 'ok (each one (? (sb-all? sb-hex? tips) tips ())))
+       ; to's store tips: what was laid joins them, and whatever a laid patch depends on leaves
+       _ (? (0 < n 'laid)
+            (: deps (catmap (i \ fld (form (tp + i)) 'deps) (n 'ids))
+               old (form (to + "/.sb/tips"))
+               (lay (to + "/.sb/tips") (show (sort (filter (t \ !(elem t deps)) ((two? old ? old ()) + n 'ids)))))))
        n)
    ; a nest's patches and blobs by name, (1 text) | ()
    (dir-pat d) (\ id (look (d + "/.sb/patch/" + id)))
@@ -259,44 +288,174 @@
                     ("sb: " + (k @ 0 "merged " "CONFLICT in ") + p + " -- " + <>>e + "\n"))
              (go >m (k @ 0 n (n + 1)))))
        (go cfs 0))
-   (settle ids0)
-    (: ids (filter (i \ (? (sb-bad? i) (sb-refuse i, 0) 1)) ids0)
+   ; the tree moved to realize the set want closes over, which becomes the head: (n nf cfs)
+   (settle want)
+    (: d (dv-derive want)
        oldsnap (snap ())
-       _ (lay ".sb/tips" (show (derive-tips ids)))
-       dr (derive-snap ids)
-       newsnap <dr
-       ; the derive replays the whole set every time
+       sn (d 'snap) cf (d 'cf)
+       newsnap (map (p \ (: e (sn p) [p <e <>e])) (sort (keys sn)))
        ix (: (go m t) (two? m ? (pin t <<m <><m, go >m t) t))
-       op (ix oldsnap {}) np (ix newsnap {})
-       cfs (filter (e \ 0 < <>e || op <e != np <e) <>dr)
+       op (ix oldsnap {})
+       cfs (filter (e \ 0 < <>e || op <e != <(sn <e))
+                   (map (p \ (: e (cf p) [p <e <>e])) (sort (keys cf))))
+       _ (lay ".sb/head" (ids-text (sort (d 'tips))))
        _ (lay ".sb/snap" (show newsnap))
+       _ (dv-write d)
+       _ (dv-prune (d 'tips))
        nf (mater oldsnap newsnap)
-       [#ids nf cfs])
-   (derive-tips ids)                                          ; the ids nobody depends on
-    (: dep {}
-       _ (: (go m) (two? m ?
-               (: f (patch <m)
-                  _ (: (gd d) (? (two? d) (pin dep <d 1, gd >d) ()) (gd (fld f 'deps)))
-                  (go >m)))
-            (go ids))
-       (sort (filter (i \ !(peep dep i 0)) ids)))
-   (topo ids)                                                 ; deps before dependents, ties by sorted id
-    (: have {} idl (sort ids)
-       (ready _)
-        (: (go m a) (? (atom? m) (rev a)
-             (: id <m
-                (? (peep have id 0) (go >m a)
-                   (: f (patch id)
-                      ok (: (gd d) (? (atom? d) 1 (? (peep have <d 0) (gd >d) 0)) (gd (fld f 'deps)))
-                      (go >m (? ok (id . a) a))))))
-           (go idl ()))
-       (pass acc)
-        (: b (ready ())
-           (? (atom? b) acc
-              ((: (mk m) (two? m ? (pin have <m 1, mk >m)) (mk b)),
-               pass (acc + b))))
-       (pass ()))
-   ; --- a diverged write: two patches wrote one path from a shared base
+       [(dv-count d) nf cfs])
+   (derive-snap ids)                                          ; the full fold -> (snap conflicts)
+    (: d (dv-derive1 ids (dv-new 0))
+       sn (d 'snap) cf (d 'cf)
+       [(map (p \ (: e (sn p) [p <e <>e])) (sort (keys sn)))
+        (map (p \ (: e (cf p) [p <e <>e])) (sort (keys cf)))])
+
+   ; --- the derive. a set's tree is the fold of its patches ordered by (depth, id), depth the
+   ;     longest dep chain beneath a patch, and each path folds on its own. the key is the
+   ;     patch's own, so a set derived once is a base the rest folds onto: a path the rest
+   ;     writes after the base's last writer of it takes the rest's hunks, and a path it writes
+   ;     under one folds again from its writers. .sb/derive/PSID keeps a derived set: its tips,
+   ;     members and depths, snap, conflicts, and each path's last writer and writers, a line
+   ;     apiece; settle keeps the head's and the newest four banks' ---
+   (dv-new _) {'tips () 'n 0 'raw "" 'probes 0 'mem {} 'add {} 'snap {} 'cf {} 'last {} 'hist {} 'new {} 'refold 0}
+   (dv-num s) (foldl (\ a i (a * 10 + s i - 48)) 0 ^#s)
+   (dv-path tp) (".sb/derive/" + psid tp)
+   (dv-key< a b) (<a < <b || (<a = <b && a 1 < b 1))
+   (dv-count d) (d 'n + #(keys (d 'add)))
+   (dv-hist d p) (peep (d 'new) p () + filter (w \ 0 < #w) (cite 'kore 'usplit 32 (peep (d 'hist) p "")))
+   (dv-cut l) (: (go i acc) (: k (fsub l "\t" i) (? (k < 0) (rev ((snip l i #l) . acc)) (go (k + 1) ((snip l i k) . acc))))
+                 (go 0 ()))
+   ; a member's depth, -1 for none: the raw block is searched until searching costs more than
+   ; reading it whole
+   (dv-dep d id)
+    (: m (d 'mem) v (peep m id -1)
+       (? (0 <= v) v
+          (d 'probes < 64)
+           (: _ (pin d 'probes (d 'probes + 1)) r (d 'raw) k (fsub r (id + " ") 0)
+              (? (k < 0) -1 (: e (fsub r "\n" k) (dv-num (snip r (k + 65) e)))))
+          (d 'probes = 64)
+           (: _ (pin d 'probes 65)
+              _ (map (l \ (? (65 < #l) (pin m (snip l 0 64) (dv-num (snip l 65 #l))))) (lines (d 'raw)))
+              (peep m id -1))
+          -1))
+   (dv-read p)
+    (: t (look p) x (? (two? t) <>t "") k (fsub x "\nM\n" 0)
+       (? (k < 0) ()
+          (: d (dv-new 0) sn (d 'snap) cf (d 'cf) la (d 'last) hi (d 'hist)
+             _ (pin d 'raw (snip x (k + 3) #x))
+             _ (map (l \ (? (#l < 3) ()
+                           (: v (dv-cut l)
+                              (l 0 @ 119 (pin hi (v 1) (v 2))                              ; w
+                                     116 (pin d 'tips ((v 1) . d 'tips))                   ; t
+                                     115 (pin sn (v 1) [(v 2) (v 3)])                      ; s
+                                     99 (pin cf (v 1) [(dv-num (v 2)) (v 3)])              ; c
+                                     108 (pin la (v 1) [(dv-num (v 2)) (v 3)])             ; l
+                                     110 (pin d 'n (dv-num (v 1)))                         ; n
+                                     ()))))
+                    (lines (snip x 0 (k + 1))))
+             d)))
+   (dv-write d)
+    (: (kv f t) (catmap (k \ f k (t k)) (keys t))
+       hi (d 'hist) nu (d 'new)
+       s (cats (["n\t" (show (dv-count d)) "\n"]
+                + catmap (i \ ["t\t" i "\n"]) (d 'tips)
+                + kv (\ k v ["s\t" k "\t" <v "\t" <>v "\n"]) (d 'snap)
+                + kv (\ k v ["c\t" k "\t" (show <v) "\t" <>v "\n"]) (d 'cf)
+                + kv (\ k v ["l\t" k "\t" (show <v) "\t" <>v "\n"]) (d 'last)
+                + catmap (p \ (: ws (peep nu p ()) o (peep hi p "")
+                                ["w\t" p "\t" (cats (catmap (i \ [i " "]) ws)) o "\n"]))
+                         (keys (d 'last))
+                + ["M\n" (d 'raw)]
+                + kv (\ k v [k " " (show v) "\n"]) (d 'add)))
+       p (dv-path (d 'tips))
+       _ (mkdir ".sb/derive" 493)
+       (lay (p + ".new") s && !(nom? (rename (p + ".new") p))))
+   (dv-prune tp)                                              ; keep the head's and four banks'
+    (: rs (sort (map (r \ [<>>r <>r]) (refs ())))            ; (time tips), oldest first
+       ks ((psid tp) . map (r \ psid <>r) (drop (max 0 (#rs - 4)) rs))
+       (map (f \ (? (#f = 64 && !(elem f ks)) (unlink (".sb/derive/" + f)) ()))
+            (readdir ".sb/derive")))
+   ; the bases to try: the head's, then any other kept, at most two
+   (dv-bases _)
+    (: hp (psid (head ()))
+       fs (filter (f \ #f = 64) (readdir ".sb/derive"))
+       (take 2 ((elem hp fs ? [hp] ()) + filter (f \ f != hp) fs)))
+   (dv-derive want)
+    (: (go bs) (? (atom? bs) (dv-derive1 want (dv-new 0))
+                  (: b (dv-read (".sb/derive/" + <bs))
+                     d (? (tablet? b) (dv-derive1 want b))
+                     (tablet? d ? d (go >bs))))
+       (go (dv-bases ())))
+   ; want's set folded onto base: () when base is not within it
+   (dv-derive1 want base)
+    (: fs {} got {} hit {}
+       ; the walk: from want down the deps, stopping at the base and at what it has read
+       _ (:- (go want) (go st) (? (atom? st) ()
+             (: id <st
+                (? (0 <= dv-dep base id) (pin hit id 1, go >st)
+                   (peep got id 0) (go >st)
+                   !(sb-hex? id) (sb-refuse id, go >st)
+                   (: f (form (".sb/patch/" + id))
+                      (? (two? f && !(sb-sound? f)) (sb-refuse id, go >st)
+                         (pin got id 1, pin fs id f, go (fld f 'deps + >st))))))))
+       (? !(sb-all? (t \ peep hit t 0) (base 'tips)) ()
+          (: xs (keys got)
+             ; depths, deps before dependents; a patch over one never read never readies
+             n {} kids {} dp {}
+             _ (map (x \ (: ds (fld (fs x) 'deps)
+                           _ (pin n x (? (sb-all? (y \ peep got y 0 || 0 <= dv-dep base y) ds)
+                                         #(filter (y \ peep got y 0) ds) -1))
+                           _ (pin dp x (foldl (\ a y (max a (dv-dep base y + 1))) 0 ds))
+                           (map (y \ (? (peep got y 0) (pin kids y (x . peep kids y ())) ())) ds)))
+                    xs)
+             order (:- (go (filter (x \ n x = 0) xs) ()) (go q acc)
+                       (? (atom? q) (sort acc)
+                          (: x <q
+                             nq (foldl (\ a k (: _ (pin dp k (max (dp k) (dp x + 1)))
+                                                 _ (pin n k (n k - 1))
+                                                 (n k = 0 ? (k . a) a)))
+                                       >q (peep kids x ()))
+                             (go nq ([(dp x) x] . acc)))))
+             _ (dv-fold base order fs)
+             depd {}
+             _ (map (k \ map (y \ pin depd y 1) (fld (fs (k 1)) 'deps)) order)
+             _ (pin base 'tips (filter (t \ !(peep depd t 0)) (base 'tips + map (k \ k 1) order)))
+             base)))
+   ; one hunk folded onto a path: the expected base or a convergent write lands, a diverged one merges
+   (dv-step sn cf p old nw pid)
+    (: cur (peep sn p ()) curh (two? cur ? <cur) curpid (two? cur ? <>cur)
+       (? (curh = old || nw = curh)
+          (pull cf p 0, (!nw ? (pull sn p 0) (pin sn p [nw pid])))  ; a later patch can settle an earlier clash
+          (: mm (mend old curh nw curpid pid)
+             (pin sn p [<mm pid], pin cf p [<>mm <>>mm]))))
+   ; order folded onto d, whose paths the order writes under their last writer fold again whole
+   (dv-fold d order fs)
+    (: sn (d 'snap) cf (d 'cf) la (d 'last) nu (d 'new) q {}
+       _ (:- (go order) (go m) (? (two? m)
+             (: k <m
+                _ (:- (h1 (fld (fs (k 1)) 'hunks)) (h1 hs) (? (two? hs)
+                      (: lw (peep la <<hs ()) _ (? (two? lw && dv-key< k lw) (pin q <<hs 1)) (h1 >hs))))
+                (go >m))))
+       _ (:- (go order) (go m) (? (two? m)
+             (: k <m pid (k 1)
+                _ (pin (d 'mem) pid <k) _ (pin (d 'add) pid <k)
+                _ (:- (h1 (fld (fs pid) 'hunks)) (h1 hs) (? (two? hs)
+                      (: h <hs p <h
+                         _ (pin nu p (pid . peep nu p ()))
+                         _ (? (peep q p 0) () (dv-step sn cf p <>h <>>h pid))
+                         _ (pin la p k)
+                         (h1 >hs))))
+                (go >m))))
+       _ (pin d 'refold #(keys q))
+       (map (p \ (: ks (sort (map (i \ [(dv-dep d i) i]) (dv-hist d p)))
+                    _ (pull sn p 0) _ (pull cf p 0)
+                    _ (pin la p (ks (#ks - 1)))
+                    (:- (go ks) (go m) (? (two? m)
+                          (: i (<m 1) f (peep fs i ()) g (? (two? f) f (form (".sb/patch/" + i)))
+                             h <(filter (e \ <e = p) (fld g 'hunks))
+                             _ (dv-step sn cf p <>h <>>h i)
+                             (go >m))))))
+            (keys q)))
    (bin? s) (: n #s (go i) (? (n <= i) 0 (s i = 0) 1 (go (i + 1))) (go 0))
    (sh h) (? h (snip h 0 12) "()")
    (bl h) (: k (sd-h h) (? !k '(1 "") (sb-hex? k) (look (".sb/blob/" + k))))  ; (1 text) | () -- presence, not net
@@ -319,28 +478,6 @@
                    mh (keep <r) n <>r
                    (n @ 0 [(sd mh x) 0 "both sides kept"]
                     [(sd mh x) n (show n + " region" + (? (1 = n) "" "s") + " left in markers")]))))))
-   (derive-snap ids)                                          ; fold the DAG -> (snap conflicts)
-    (: order (topo ids) snap {} cf {}
-       _ (:- (go order) (go m) (? (atom? m) ()
-               (: pid <m f (patch pid)
-                  _ (:- (h1 (fld f 'hunks)) (h1 hs) (? (atom? hs) ()
-                          (: h <hs p <h old <>h nw <>>h
-                             cur (snap p) curh (two? cur ? <cur)
-                             curpid (two? cur ? <>cur)
-                             _ (? (curh = old || nw = curh)    ; the expected base, or convergent
-                                  (pull cf p 0,               ; a later patch can settle an earlier clash
-                                   (!nw ? (pull snap p 0) (pin snap p [nw pid])))
-                                  (: m (mend old curh nw curpid pid)
-                                     (pin snap p [<m pid],
-                                      pin cf p [<>m <>>m],
-                                      ())))
-                             (h1 >hs))))
-                  (go >m))))
-       (: (em ps a) (? (atom? ps) (rev a)
-            (: p <ps e (peep snap p ()) (em >ps [p <e <>e . a])))
-          (cm ps a) (? (atom? ps) (rev a)
-            (: p <ps e (peep cf p ()) (cm >ps [p <e <>e . a])))
-          [(em (sort (keys snap)) ()) (cm (sort (keys cf)) ())]))
    (mkparents p)                                              ; mkdir every "/"-prefix of a nested path
     (:- (go 0) (go i) (i < #p ? (p i @ 47 (mkdir (snip p 0 i) 493), go (i + 1))))
    (mater oldsnap newsnap)                                    ; make the tree match newsnap; #files touched
@@ -374,16 +511,19 @@
                    theirs (two? rt ? (readform <>rt))
                    ru (refadd (refs ()) theirs 1)
                    _ (two? <ru ? (lay ".sb/refs" (show <ru)))
-                   [(g 'ok) (g 'laid) (g 'blobs) <>ru])))))
+                   hh (http-fetch base "/head")
+                   rh (two? hh ? (readform <>hh) tips)
+                   [(g 'ok) (g 'laid) (g 'blobs) <>ru (sb-all? sb-hex? rh ? rh tips)])))))
 
-   (sync-url peer)
+   (sync-url peer keep)
     (mk (),
-     (? (0 < dirty ())
+     (? (!keep && 0 < dirty ())
         (say err "sb: working tree has changes; record or revert first\n", 0)
         (: base (peer @ (s + "/") s peer)        ; one trailing slash, ours to add
            r (pull-http base)
            (? (atom? r) 0
-              (: st (settle (readdir ".sb/patch"))
+              keep (: _ (puts ("sb: deposited -- " + show (r 1) + " patches in, " + show (r 2) + " blobs\n")) (? <r 1 0))
+              (: st (settle (head () + r 4))
                  nleft (tell <>>st)
                  nref <>>>r
                  _ (puts ("sb: pulled -- " + show <st + " patches (" + show <>r
@@ -395,20 +535,26 @@
                  (? (<r && (0 = nleft) && (0 = nref)) <st 0))))))
 
    ; sync is the exchange, and an exchange has two ends: pull what the peer has
-   ; that we lack, push what we have that it lacks, then settle both nests. the
-   ; derive is a pure function of the patch set, so two nests over one union land
-   ; on the same snap -- after a sync the trees are identical, which is the whole
-   ; "distribution == cloning" claim made good. the peer's half needs its tree
-   ; clean and writable; when it is not we still pull (always safe) and say so,
-   ; leaving the peer's store untouched rather than half-fed.
-   (sb-sync peer)
-    (? (url? peer) (sync-url peer)
+   ; that we lack, push what we have that it lacks, then settle both nests on the
+   ; union of their heads. the derive is a pure function of the patch set, so two
+   ; nests over one union land on the same snap -- after a sync the trees are
+   ; identical, which is the whole "distribution == cloning" claim made good. the
+   ; peer's half needs its tree clean and writable; when it is not we still pull
+   ; (always safe) and say so, leaving the peer's store untouched rather than
+   ; half-fed. --keep only deposits: both stores fill and neither head moves, so a
+   ; hub can hold work it has not taken
+   (sb-sync peer) (sync-with peer 0)
+   (sb-deposit peer) (sync-with peer 1)
+   (sync-with peer keep)
+    (? (url? peer) (sync-url peer keep)
     (mk (),
-     (? (0 < dirty ())
+     (? (!keep && 0 < dirty ())
         (say err "sb: working tree has changes; record or revert first\n", 0)
         (: home (cwd 0)
-           pd (chdir peer @ c (c ? -1 (: _ (mk ()) d (dirty ()) (chdir home, d))))
+           pd (chdir peer @ c (c ? -1 (: _ (mk ()) d (? keep 0 (dirty ())) (chdir home, d))))
            (? (pd < 0) (say err ("sb: cannot reach " + peer + "\n"), 0)
+              (held peer (_ \ sync2 peer keep pd home)))))))
+   (sync2 peer keep pd home)
               (: gi (gap (dir-pat peer) (dir-blb peer) (form (peer + "/.sb/tips")) ".")
                  ; the push: only onto a clean peer, and only if every write lands
                  go (pd @ 0 (gap (dir-pat ".") (dir-blb ".") (tips ()) peer) {'laid 0 'bad 0 'blobs 0})
@@ -421,11 +567,19 @@
                  _ (? !pushed ()
                       (: pu (refadd theirs (refs ()) ())
                          (? (two? <pu) (lay (peer + "/.sb/refs") (show <pu)) ())))
-                 st (settle (readdir ".sb/patch"))
+                 (? keep
+                    (: _ (puts ("sb: deposited -- " + show (gi 'laid) + " patches in, " + show (go 'laid) + " out, "
+                                + show (gi 'blobs + go 'blobs) + " blobs\n"))
+                       (pushed ? 1 0))
+                    (sync3 peer pd home gi go pushed ru)))
+   ; both heads move to their union, and both trees to its derive
+   (sync3 peer pd home gi go pushed ru)
+              (: u (head () + head-in peer)
+                 st (settle u)
                  nleft (tell <>>st)
                  nref <>ru
                  pst (? !pushed ()                             ; settle the far end too
-                        (: c (chdir peer) r (settle (readdir ".sb/patch")) _ (chdir home) r))
+                        (: c (chdir peer) r (settle u) _ (chdir home) r))
                  _ (puts ("sb: synced -- " + show <st + " patches ("
                           + show (gi 'laid) + " in, " + show (go 'laid) + " out), "
                           + show (gi 'blobs + go 'blobs) + " blobs, " + show <>st + " files here"
@@ -441,7 +595,7 @@
                     (say err "sb: settle the flagged paths, then record\n"))
                  _ (nref @ 0 ()
                     (say err "sb: a banked name is immutable\n"))
-                 (? (pushed && 0 = nleft && 0 = nref) <st 0)))))))
+                 (? (pushed && 0 = nleft && 0 = nref) <st 0))
 
    ; --- apply: realize a dep-consistent subset of the store into the working
    (idpfx pfx)                                                   ; one patch from a prefix | ()
@@ -452,10 +606,6 @@
           (say err ("sb: " + show #hits + " patches match " + pfx + "\n"), ())))
    (idsof a)                                                     ; a ref -> its whole tip set;
     (refof a @ r (two? r ? r (idpfx a @ i (i ? [i]))))
-   (closure ids)                                                 ; ids + every dep, transitively
-    (:- (go ids, sort (keys seen)) seen {}
-     (go m) (two? m ?  (<m @ id (peep seen id 0 ? (go >m)
-                                (pin seen id 1, go (fld (patch id) 'deps), go >m)))))
    (sb-apply args)
     (mk (),
      (? (0 < dirty ())
@@ -464,16 +614,33 @@
            want (: (go m acc) (atom? m ? acc (: l (idsof <m) (two? l ? (go >m (acc + l)))))
                    (go args ()))
            (? (two? args && atom? want) 0                 ; a prefix failed to resolve; it said so
-              (: ids (two? args ? (closure want) all)
-                 st (settle ids)
+              (: st (settle (two? args ? want all))
                  nleft (tell <>>st)
                  _ (puts ("sb: applied " + show <st + " of " + show #all
                           + " patches, " + show <>st + " files updated"
-                          + (? (#ids = #all) " (the whole store)" "")
+                          + (? (<st = #all) " (the whole store)" "")
                           + (? (0 = nleft) "" (", " + show nleft + " conflicted")) + "\n"))
                  _ (? (0 = nleft) ()
                       (say err "sb: settle the flagged paths, then record -- the resolution is a patch\n"))
-                 (? (0 = nleft) #ids 0))))))
+                 (? (0 = nleft) <st 0))))))
+
+   ; --- take: grow the head by a set -- a ref, or patches by prefix, their deps with them --
+   ;     and lay the tree it realizes. what a hub does to land work it holds ---
+   (sb-take args)
+    (mk (),
+     (? (0 < dirty ())
+        (say err "sb: working tree has changes; record or revert first\n", 0)
+        (: want (: (go m acc) (atom? m ? acc (: l (idsof <m) (two? l ? (go >m (acc + l)))))
+                   (go args ()))
+           (? (atom? want) 0                               ; a name failed to resolve; it said so
+              (: st (settle (head () + want))
+                 nleft (tell <>>st)
+                 _ (puts ("sb: took " + show #want + " tip" + (? (1 = #want) "" "s") + ", the head now "
+                          + sh (psid (head ())) + ", " + show <>st + " files updated"
+                          + (? (0 = nleft) "" (", " + show nleft + " conflicted")) + "\n"))
+                 (? (0 = nleft) 1 0))))))
+   ; --- ls: the head's paths, a line each ---
+   (sb-ls _) (: sn (snap ()) _ (map (e \ puts (<e + "\n")) sn) #sn)
 
    ; --- bank: freeze the current head under a NAME -- an immutable release, the
    (refs _) (form ".sb/refs")                                  ; ((name (id..) time)..) | ()
@@ -500,7 +667,7 @@
           (say err "sb: bank needs a name\n", 0)
           (0 < dirty ())
           (say err "sb: working tree has changes; record or revert first\n", 0)
-          (: tp (sort (tips ()))
+          (: tp (sort (head ()))
              (? (atom? tp) (say err "sb: nothing recorded to bank\n", 0)
                 (: old (refof nm)
                    (? (two? old && show old != show tp)
@@ -627,13 +794,18 @@
    sb-usage "sb -- svalbard, the patch-set vcs (doc/misc/sb.md)
 usage: sb VERB ..
   record [NOTE]   working changes -> a patch in the store (.sb/)
-  sync PEER       EXCHANGE patch sets with a peer nest (a dir holding .sb/),
+  sync [--keep] PEER  EXCHANGE patch sets with a peer nest (a dir holding .sb/),
                   or PULL from an http:// remote -- any static file tree serving
                   a .sb/ is a complete one, and it takes no push.
                   pull what it has, push what it lacks, settle BOTH trees to
-                  the union. two patches on one path three-way merge; a true
-                  overlap lands in markers and exits 1 -- resolve, then record
-  apply [ID..]    realize a dep-consistent SUBSET into the working tree (an ID
+                  the union of their HEADS. two patches on one path three-way
+                  merge; a true overlap lands in markers and exits 1 -- resolve,
+                  then record. --keep only deposits: both stores fill, no head
+                  moves, so a hub holds work it has not taken
+  take ID..       grow the HEAD by a set (a ref, or patches by prefix, with
+                  their deps) and lay the tree: what a hub does to land work
+  ls              the head's paths
+  apply [ID..]    make the HEAD a dep-consistent SUBSET, laid in the tree (an ID
                   may be a prefix; its deps come along). checkout and cherry-pick
                   are one act here. no ID realizes the whole store -- the way back
   bank NAME       freeze the current head -- its whole TIP SET -- as an immutable
@@ -642,7 +814,7 @@ usage: sb VERB ..
   undo ID [NOTE]  add the INVERSE of a patch -- revert as growth, never deletion.
                   a path that moved on since three-way merges instead of being
                   clobbered: P's write is lifted OUT, later edits stay
-  log             the patches, newest first (* marks a tip)
+  log             the patches, newest first (* marks a tip of the head)
   diff            working tree vs the recorded state (unified; exit 1 on change)
   ledger [NAME]   a named value that moves only by compare-and-swap, its every
                   entry kept. no NAME lists them; NAME prints what it holds
@@ -659,13 +831,16 @@ usage: sb VERB ..
     (<as @ "-C" (? (atom? >as) (usage ())
                    ((chdir <>as) = ()) (sb-main >>as)
                    (say err ("sb: cannot enter " + <>as + "\n"), 1))
-           "record" (sb-record (two? >as ? <>as ""), 0)
+           "record" (: _ (held "." (_ \ sb-record (two? >as ? <>as ""))) 0)
            "ledger" (: r (sb-ledger >as) (? (r = 2) (usage ()) !r))
-           "sync" (atom? >as ? (usage ()) !(sb-sync <>as))
-           "apply" !(sb-apply >as)
-           "bank" (atom? >as ? (usage ()) !(sb-bank >as))
-           "undo" (atom? >as ? (usage ()) !(sb-undo >as))
+           "sync" (: pr (filter (w \ w != "--keep") >as)
+                     (atom? pr ? (usage ()) !(held "." (_ \ sync-with <pr (elem "--keep" >as)))))
+           "apply" !(held "." (_ \ sb-apply >as))
+           "take" (atom? >as ? (usage ()) !(held "." (_ \ sb-take >as)))
+           "bank" (atom? >as ? (usage ()) !(held "." (_ \ sb-bank >as)))
+           "undo" (atom? >as ? (usage ()) !(held "." (_ \ sb-undo >as)))
            "log" (sb-log (), 0)
+           "ls" (sb-ls (), 0)
            "diff" (0 < sb-diff ())
            (usage ()))))
 
