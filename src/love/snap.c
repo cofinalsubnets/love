@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <sys/mman.h>
 #else
 #define ImageLazy 0
 #endif
@@ -1232,7 +1233,7 @@ static int img_walk(word *base, uintptr_t lo, uintptr_t hi, char *code, int lazy
 // when a page of it is first touched
 struct img_lazy {
  word *base; char *code; word const *dict; unsigned char const *z;
- uint64_t *t; unsigned char *run, *st;
+ uint64_t *t; unsigned char *run, *st, *want;
  uintptr_t nw, nch, left, ps, pg0, pg1; int clazy; };
 
 // the segment's table, checked to tile the image, into a fresh img_lazy. NULL refuses
@@ -1260,6 +1261,7 @@ static struct img_lazy *img_lazy_new(word *base, uintptr_t nw, unsigned char con
  L->t[3 * nch] = nw, L->t[3 * nch + 1] = rn, L->t[3 * nch + 2] = zn;
  memset(L->st, 0, (uintptr_t) nch);
  L->nw = nw, L->nch = (uintptr_t) nch, L->left = (uintptr_t) nch, L->ps = 0, L->pg0 = L->pg1 = 0;
+ L->want = NULL;
  return L; }
 
 // chunk k into its words: inflated into the scratch run, expanded, walked. 0 refuses
@@ -1301,6 +1303,7 @@ static int img_lazy_open(struct img_lazy *L, uintptr_t k) {
  if (pb > L->pg1) pb = L->pg1;
  if (pa < pb && mprotect((void*) pa, pb - pa, 3)) return 0;       // read and write
  if (!img_chunk(L, k)) return 0;
+ if (L->want) L->want[k] = 1;
  if (pa < pb && pa < s && !img_page_live(L, pa)) mprotect((void*) pa, L->ps, 0);
  if (pa < pb && pb > e && pb - L->ps >= pa && !img_page_live(L, pb - L->ps)) mprotect((void*) (pb - L->ps), L->ps, 0);
  return 1; }
@@ -1321,6 +1324,14 @@ static void img_fault(int sig, siginfo_t *si, void *uc) {
  (void) uc;
  if (L && a >= L->pg0 && a < L->pg1 && img_lazy_seat(L, a)) return;
  signal(sig, SIG_DFL); }                          // not the image's: the access retries into the default
+
+// before a warm fork: the chunks any process of this image has woken, woken here too. a
+// child's wakes die with it, so without this each child decodes them again; want is shared
+// across the fork, so the first child's wakes are the second's start
+void ai_image_warm(void) {
+ struct img_lazy *L = img_lazy_on;
+ if (!L || !L->want || !L->left) return;
+ for (uintptr_t k = 0; k < L->nch; k++) if (L->want[k] && !L->st[k] && !img_lazy_open(L, k)) return; }
 
 // a syscall the kernel refused for an address asleep: everything woken, so it can go again
 int __ai_efault(void) {
@@ -1352,6 +1363,7 @@ static void img_touch_atexit(void) { if (img_lazy_on) img_touch_out(img_lazy_on)
 
 static void img_lazy_disarm(struct img_lazy *L) {
  if (L->pg0 < L->pg1) mprotect((void*) L->pg0, L->pg1 - L->pg0, 3);
+ if (L->want) munmap(L->want, L->nch), L->want = NULL;
  img_lazy_on = NULL; }
 
 // the pool the lazy image lives in is being given up: every page opened, the state gone.
@@ -1377,6 +1389,8 @@ static int img_lazy_arm(struct img_lazy *L) {
  sigemptyset(&sa.sa_mask);
  if (sigaction(SIGSEGV, &sa, NULL) || sigaction(SIGBUS, &sa, NULL)) return 0;
  if (mprotect((void*) L->pg0, L->pg1 - L->pg0, 0)) return 0;
+ void *w = mmap(NULL, L->nch, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+ L->want = w == MAP_FAILED ? NULL : w;                     // none: a fork's child wakes alone
  img_lazy_on = L;
  if ((b < L->pg0 && !img_lazy_seat(L, b)) || (L->pg1 < e && !img_lazy_seat(L, L->pg1)))   // the ragged edges
   return img_lazy_disarm(L), 0;
@@ -1384,6 +1398,7 @@ static int img_lazy_arm(struct img_lazy *L) {
  return 1; }
 #else
 void ai_image_drop(word const *pool) { (void) pool; }
+void ai_image_warm(void) {}
 static int img_lazy_arm(struct img_lazy *L) { (void) L; return 0; }
 #endif
 

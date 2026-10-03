@@ -25,7 +25,7 @@ EMCC=${EMCC:-$(command -v emcc 2>/dev/null || true)}
 RUN=$R/src/inle/wasm/loader.js
 
 rm -rf "$W"; mkdir -p "$W"
-inc="-I$R/love -I$R/inle -I$R/test/libc -I$R/bench/nif"
+inc="-I$R/src/love -I$R/src/inle -I$R/test/libc -I$R/bench/nif"
 lanes="mooncc emcc-O2 emcc-O0"
 have=mooncc; [ -z "$EMCC" ] || have="$have emcc-O2 emcc-O0"
 echo "ccwasm: lanes: $have   reps=$REPS samples=$SAMPLES   (emcc: ${EMCC:-none})"

@@ -1,4 +1,4 @@
-; grass99 -- leaves of grass simulator 1999: the sequel. the same week as a blade of
+; grass99 -- grass simulator 1999: the sequel. the same week as a blade of
 ; grass, the same field, the same weather and the same dance -- grass's own state and
 ; rules, ticked by grass's own loop -- stood up in three dimensions by meadow, with a
 ; tune of its own.
@@ -15,7 +15,7 @@
  ; goes half as fast, and an octave under, the box's own low end and the chimes' with it
  score99 '("D3 1.5 F3 1.5 A3 1"
            "G3 1.5 F3 2.5")
- ttl99 "leaves of grass simulator 1999"
+ ttl99 "grass simulator 1999"
  rows99 '(""
           "hjkl or arrows keys to dance"
           "q or esc to quit"
