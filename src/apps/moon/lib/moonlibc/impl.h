@@ -640,7 +640,7 @@ extern unsigned char __obuf[8192];
 /* threads (proc/pthread.c): the process's thread state lives in mem/free.c (see there).
  * sys.o's clone leaf starts the child on its own stack, calling sp[0](sp[1]); __ai_tp (a64,
  * rv64) reads the thread pointer clone set to the thread's record */
-struct __ai_mt { int threads, lock; };
+struct __ai_mt { int threads, lock, klock; void (*dtor[128])(void *); unsigned char key[128]; void *tsd[128]; };   /* klock guards the keys: their destructors, which are taken, and the first thread's values */
 extern struct __ai_mt __ai_mt;
 long __ai_clone(long flags, void *sp, int *ptid, int *ctid, void *tls);
 void *__ai_tp(void);
