@@ -2213,9 +2213,9 @@
                 dr (pdtor ps <>br <br)
                 (atom? dr ? ()
                    ; a parameter of array type decays to a pointer, so `int a[]` and a
-                   ; va_list (an array typedef) both ride as pointers
+                   ; va_list (an array typedef) both ride as pointers; one of function type likewise
                    (: e0 <dr ty0 <>e0
-                      entry (arr? ty0 ? [<e0 (tdecay ty0)] e0)
+                      entry (? (arr? ty0) [<e0 (tdecay ty0)] (fn? ty0) [<e0 (pdecay ty0)] e0)
                       _ (peep ps 'sawrstr () && <e0 ?   ; a named restrict param: file it for note
                            (pin ps 'currstr (<e0 . peep ps 'currstr ())) 0)
                       _ (!<e0 ? 0                         ; a named param stages its mark like a local's

@@ -6177,7 +6177,7 @@
               (? (flo? <>e) 'no
                  !(v = 'no) (icast <>e v)
                  (ffold <>>e @ f
-                    (? (bad? f) 'no
+                    (? (bad? f || nan? f) 'no
                        (<>e = 'bool) (f = 0.0 ? 0 1)          ; to _Bool is a compare, never a truncation
                        (icast <>e (ceil (f // 1)))))))
        'un
@@ -6251,6 +6251,7 @@
    ; a const float expression at image time -> gem | 'bad (love's doubles are the target's IEEE doubles).
    ; an unsigned int subtree reads mod 2^width: icfold keeps a word's pattern, and (ulong)-1 is no -1.0
    (ffold e) (ffoldw 1 e)
+   (nan? v) (elem v '(nan -nan))                    ; ffoldw's nan, with its sign
    (ffoldw w64 e) (atom? e ? 'bad
      ; an int const subtree floats ((double)(1 << N))
      (icfold e @ iv
@@ -6258,13 +6259,17 @@
         (<e @ 'flo <>e
             'num (0.0 + <>e)
             'cast (flo? <>e ? (ffoldw w64 <>>e) 'bad)
-            'un (ffoldw w64 <>>e @ v (? (bad? v) 'bad (<>e = 'neg) (-1.0 * v) 'bad))   ; times -1: 0.0 - 0.0 is +0.0, and -0.0 is its own value
+            'un (ffoldw w64 <>>e @ v (? (bad? v) 'bad (<>e != 'neg) 'bad
+                                        (nan? v) (v = 'nan ? '-nan 'nan)
+                                        (-1.0 * v)))   ; times -1: 0.0 - 0.0 is +0.0, and -0.0 is its own value
             'bin
             (: op <>e a (ffoldw w64 <>>e) b (ffoldw w64 <>>>e)
-               (bad? a || bad? b ? 'bad
-               (op @ '+ (a + b) '- (a - b) '* (a * b)
-                  '/ (b = 0.0 ? 'bad (a / b))
-                  'bad)))
+               (? (bad? a || bad? b) 'bad
+                  !(elem op '(+ - * /)) 'bad
+                  (nan? a) a
+                  (nan? b) b
+                  ; love has no nan: an invalid operation (0/0, inf-inf, 0*inf) answers (), and C's is +qnan
+                  ((op @ '+ (a + b) '- (a - b) '* (a * b) (a / b)) @ v (gem? v ? v 'nan))))
            'bad))))
    ; a constant int expression's C type, as parse reads the source (suffixed literals arrive cast) | ()
    (icty w64 e)
@@ -6279,7 +6284,9 @@
             ()))
    (uwid w64 e) (icty w64 e @ 'uint 32 'ulong (w64 ? 64 32) 'ullong 64 ())
    (fim ty v)                                       ; a float value's IEEE image as ty: 4 single bytes | 8 double bytes
-    (ty = 'float ? (les 4 (fbits32 v)) (les 8 (fbits v)))
+    (? (nan? v) (: neg (v = '-nan) (ty = 'float ? (les 4 (neg ? 4290772992 2143289344)) (les 8 (neg ? -2251799813685248 9221120237041090560))))
+       (ty = 'float) (les 4 (fbits32 v))
+       (les 8 (fbits v)))
    (imgbytes g ty ini)                              ; a byte/fix list of length tsz(ty) | 'bad
     (?- 'bad
      (atom? ini) (zeros (tsz g ty))

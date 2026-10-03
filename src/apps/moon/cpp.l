@@ -89,6 +89,7 @@
    ; defined -- so an ordinary keyword token pays one lookup only in a TU that did
    (macnm t) (kof t = 'kw ? (show (vof t)) (vof t))
    (macat? t macs) (idt? t ? 1 (kof t = 'kw && macs 'kwmac))
+   (pnm t) (idt? t ? (vof t) (kof t = 'kw ? (show (vof t)) ()))   ; a parameter's name: a keyword may be one (gnulib's `signed`)
    (mobj? ('obj . _)) 1
    (mfun? ('fun . _)) 1
 
@@ -155,13 +156,13 @@
            (mb i @ t
               (? (pv? t "#" && i + 1 < #mb)        ; # param -> stringize
                   (: p (mb (i + 1))
-                     pi (idt? p ? (paramidx params (vof p)) -1)
+                     pi (paramidx params (pnm p))
                      va (var? && idv? p "__VA_ARGS__")
                      (-1 < pi || va ?
                         (go (i + 2) (tok 'str (spellcat (va ? (vaargs args params) (args pi))) line . acc))
                         (go (i + 1) (t . acc))))
-                 (idt? t && -1 < paramidx params (vof t))       ; a named parameter
-                  (: pi (paramidx params (vof t))
+                 (-1 < paramidx params (pnm t))                 ; a named parameter
+                  (: pi (paramidx params (pnm t))
                      raw (args pi)
                      ; an empty argument beside a ## is a placemarker, not nothing
                      sub (? !(adjh i) (expand raw macs)
@@ -354,8 +355,8 @@
     (? (atom? ts) ()
        (pv? <ts ")") [(rev params) var? >ts]    ; F() -- empty params; body follows the )
        (pv? <ts "...") (>ts @ r (two? r && pv? <r ")" ? [(rev params) 1 >r]))
-       (idt? <ts)
-        (: nm (vof <ts) r >ts
+       (pnm <ts)
+        (: nm (pnm <ts) r >ts
            (? (two? r && pv? <r ",") (defparams >r (nm . params) var?)
               (two? r && pv? <r ")") [(rev (nm . params)) var? >r]
               ; gcc's named tail `fmt...`: __VA_ARGS__ under another name

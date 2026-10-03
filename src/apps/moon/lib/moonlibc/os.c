@@ -172,6 +172,8 @@ static short const os_nr[][3] = {
   {NR_setpgid,       NR_fb_setpgid,      82},
   {NR_setsid,        NR_fb_setsid,      147},
   {NR_setgroups,     NR_fb_setgroups,    80},
+  {NR_setresuid,     NR_fb_setresuid,    -1},   /* netbsd has none */
+  {NR_setresgid,     NR_fb_setresgid,    -1},
   {NR_getpgid,       NR_fb_getpgid,     207},
   {NR_chroot,        NR_fb_chroot,       61},
   {NR_getdents64,    NR_fb_getdirentries, 390}, /* the member repacks the record */
