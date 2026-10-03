@@ -87,7 +87,9 @@
           'span
            (: q (string a) e (string (hue-rule r 2))
               (line ("syn region " + g + " start='" + q + "' skip='" + e + e + e + e
-                     + "\\|" + e + e + q + "' end='" + q + "'")))
+                     + "\\|" + e + e + q + "' end='" + q + "'"),
+               ; a raw text: three or more quotes and as many to close, no escapes
+               line ("syn region " + g + " start='\\z(" + q + "\\{3,}\\)' end='\\z1'")))
           'mark
            (line ("syn match " + g + " \"" + string a + "[^" + stop + "]*\""))
           ; sep: one byte standing alone, and a tag of its own because both

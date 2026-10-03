@@ -155,7 +155,8 @@
    ; --- the lexer -------------------------------------------------------------
    ; (hue-lex bk s in keep) answers [runs out]: the classified runs over the one
    ; line s, each [class from to] with `to` exclusive, and the string state at
-   ; the line's end -- 0 code, 1 still inside a string, which is what carries a
+   ; the line's end -- 0 code, 1 still inside a string, a raw text's quote count
+   ; inside one, which is what carries a
    ; multi-line literal (src/apps/papel.l's css is forty lines of one string)
    ; onto the next line.
    ;
@@ -189,11 +190,25 @@
               (? (c = hue-esc) (wstr (i + 2) a acc)
                  (c = hue-str) (w (i + 1) (emit acc 'string a (i + 1)))
                  (wstr (i + 1) a acc))))
+       ; a raw text: three or more quotes, closed by as many. one that ends its opening
+       ; line carries the count, and closes at a line of blanks and the quotes
+       (qrun i) (i < n && s i = hue-str ? (qrun (i + 1)) i)
+       (bl i) (i < n && hue-blank? (s i) ? (bl (i + 1)) i)
+       (raw i acc)
+        (: e (qrun i)
+           q (e - i)
+           (find j) (? (n <= j) () (s j != hue-str) (find (j + 1)) (qrun j @ r (r - j < q ? (find r) r)))
+           (? (bl e = n) [(rev (emit acc 'string i n)) q]
+              (find e @ r (r ? (w r (emit acc 'string i r)) [(rev (emit acc 'string i n)) q]))))
+       (wraw q acc)
+        (bl 0 @ t
+           (qrun t - t < q ? [(rev (emit acc 'string 0 n)) q] (w (t + q) (emit acc 'string 0 (t + q)))))
        (w i acc)
         (n <= i ? [(rev acc) 0]
            (s i @ c
               (? (hue-blank? c) (w (i + 1) acc)
                  (any (t \ hue-at? s i t) hue-eols) [(rev (emit acc 'comment i n)) 0]
+                 (c = hue-str && i + 2 < n && s (i + 1) = hue-str && s (i + 2) = hue-str) (raw i acc)
                  (c = hue-str) (wstr (i + 1) i acc)
                  (c = hue-quo) (tend (i + 1) @ j (w j (emit acc 'atom i j)))
                  (hue-delim? c) (w (i + 1) (emit acc 'paren i (i + 1)))
@@ -202,7 +217,7 @@
                  ; and that is what leaves `word` the i<j it walks on
                  (hue-term? c) (w (i + 1) acc)
                  (word i (tend i) acc))))
-       (in ? (wstr 0 0 ()) (w 0 ())))
+       (? (in = 1) (wstr 0 0 ()) (charm? in && 2 < in) (wraw in ()) (w 0 ())))
 
    ; one start-state per line: fold a lexer (lx s in keep) down the buffer,
    ; keeping nothing. hue-lex over a book is one; src/apps/vi/hues.l has the rest
