@@ -206,7 +206,7 @@ test_front: $(ho)/front $(ho)/frontseat
 # cats.c is the catalog love0 lacks; it is not idempotent and love0 evaluates twice; or its
 # regression is a HANG, wanting a timeout a corpus cannot give -- a wedged gate is worse than
 # a red one. gate = exit 0 and a "<name>: ok"; a cold lane opts in via hostnif_cold.
-hostnif_tests = test/host/gcpause.l test/host/gcroom.l test/host/mop.l test/host/deepeq.l test/host/wharf.l test/host/cb.l test/host/manifest.l test/host/rune.l test/host/pty.l test/host/loader.l test/host/rdiff.l test/host/run.l test/host/luxui.l test/host/sh.l test/host/mitty.l test/host/vi.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/tty.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/web.l test/host/sbhttp.l test/host/salt.l test/host/libra.l test/host/clay.l test/host/tls.l test/host/tlsc.l test/host/ssh.l test/host/sshd.l test/host/gz.l test/host/gzc.l test/host/png.l test/host/imgenc.l test/host/jpeg.l test/host/webp.l test/host/pic.l test/host/grap.l test/host/chem.l test/host/font.l test/host/story.l test/host/evback.l test/host/design.l test/host/slop.l test/host/score.l test/host/grass.l test/host/grass99.l test/host/wade.l test/host/apartment.l test/host/garage.l test/host/roost.l test/host/shaft.l test/host/tree.l test/host/lore.l test/host/synth.l test/host/lupa.l test/host/mc.l test/host/chucho.l test/host/pom.l test/host/saver.l test/host/helm.l test/host/wget.l test/host/www.l test/host/smallweb.l test/host/net.l test/host/ed.l test/host/cook.l test/host/x11.l test/host/pier.l test/host/kitpng.l test/host/bee.l test/host/beeq.l test/host/locks.l test/host/seals.l test/host/showbig.l test/host/lovefs.l
+hostnif_tests = test/host/gcpause.l test/host/gcroom.l test/host/mop.l test/host/deepeq.l test/host/wharf.l test/host/cb.l test/host/manifest.l test/host/rune.l test/host/pty.l test/host/loader.l test/host/rdiff.l test/host/run.l test/host/luxui.l test/host/sh.l test/host/mitty.l test/host/vi.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/tty.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/web.l test/host/sbhttp.l test/host/salt.l test/host/libra.l test/host/clay.l test/host/tls.l test/host/tlsc.l test/host/ssh.l test/host/sshd.l test/host/gz.l test/host/gzc.l test/host/png.l test/host/imgenc.l test/host/jpeg.l test/host/webp.l test/host/pic.l test/host/grap.l test/host/chem.l test/host/font.l test/host/story.l test/host/evback.l test/host/design.l test/host/slop.l test/host/score.l test/host/grass.l test/host/grass99.l test/host/wade.l test/host/apartment.l test/host/garage.l test/host/roost.l test/host/shaft.l test/host/tree.l test/host/lore.l test/host/synth.l test/host/lupa.l test/host/seek.l test/host/mc.l test/host/chucho.l test/host/pom.l test/host/saver.l test/host/helm.l test/host/wget.l test/host/www.l test/host/smallweb.l test/host/net.l test/host/ed.l test/host/cook.l test/host/x11.l test/host/pier.l test/host/kitpng.l test/host/bee.l test/host/beeq.l test/host/locks.l test/host/hosts.l test/host/seals.l test/host/showbig.l test/host/lovefs.l
 # out/lush: test/host/sh.l drives the built shell end to end, via out/love and
 # never env's PATH love -- the tree's nifs, not the nest's.
 hostnif_cold =                                   # empty: no gate needs the cold lane
@@ -681,14 +681,14 @@ test_xfixpoint: $(x_o) $(x_seat_o) $(xkart_o) $(love0) out/mooncc0.image
 test_fat: dist-fat
 	@sh test/gate/fat.sh $(fat) $a $(xa) $(xqemu) "$(love0)" $(ho) $(xd) $(uname_$(xa))
 # the multi-OS gate: one default-lane
-# binary answers every kernel with the same text. the box arrives by env --
-# FBSD_SSH / NBSD_SSH = "ssh -p 2222 -i key root@host" -- and without one the
-# gate skips loudly. opt-in by name, like test_distboot; FBSD_SEED=1 /
+# binary answers every kernel with the same text. the box is a host bee knows with the cap
+# freebsd-x64 or netbsd-x64 (doc/bee.md, HOSTS), or FBSD_SSH / NBSD_SSH for a release, and
+# without one the gate skips loudly. opt-in by name, like test_distboot; FBSD_SEED=1 /
 # NBSD_SEED=1 adds the on-box `love seed` trophy leg (minutes).
 .PHONY: test_freebsd test_netbsd test_freebsd_a64 test_netbsd_a64
 test_freebsd test_netbsd: test_%: host $(love0) out/mooncc0.image
 	@$(gsh) test/gate/osbox.sh $(ho) $(love0) $*
-# the second ISA: {F,N}BSD_ARM64_SSH name aarch64 boxes and the local half of each
+# the second ISA: freebsd-a64 and netbsd-a64 hosts are aarch64 boxes, and the local half of each
 # comparison rides qemu-aarch64, so one binary answers all three kernels on an ISA this
 # machine is not. the door netbsd needs there is the svc immediate. skips loudly without.
 test_freebsd_a64 test_netbsd_a64: test_%_a64: host $(love0) out/mooncc0.image
@@ -1233,15 +1233,15 @@ test_kboot: host $(S)/tools/kboot.l
 	@$m $(S)/tools/kboot.l $(k_elf) "sh -c \"cd /love/src/apps/kore; pwd\"" "/love/src/apps/kore"
 	@$m $(S)/tools/kboot.l $(k_elf) "sh -c \"kore ls /love/src/apps/kore | kore wc -l\"" $$(ls $(S)/apps/kore | wc -l)
 
-# the vmx laws want VT-x, which this box need not have: the elf boots on KTEST_VMX_HOSTS (a VT-x
-# box, kvm, -cpu host) with a roster of the harness and vmx.l alone, and the guest must run.
+# the vmx laws want VT-x, which this box need not have: the elf boots on a host with the cap
+# vt-x (kvm, -cpu host) with a roster of the harness and vmx.l alone, and the guest must run.
 # test_extra's only, the box being shared
 test_kernel_vmx: host $(S)/tools/ktest.l
-	@if [ -z "$$KTEST_VMX_HOSTS" ]; then \
-	   sh test/gate/skip.sh gate-skip "test_kernel_vmx: skipped (no KTEST_VMX_HOSTS, a VT-x box to boot on)"; exit $$?; fi; \
+	@if ! $m bee --on vt-x --probe; then \
+	   sh test/gate/skip.sh gate-skip "test_kernel_vmx: skipped (no host with vt-x answers, a VT-x box to boot on)"; exit $$?; fi; \
 	 $(MAKE) -s $(k_elf) && \
-	 echo TEST $(k_elf) "(the vmx lane: kvm and -cpu host on $$KTEST_VMX_HOSTS)" && \
-	 KTEST_X64_HOSTS="$$KTEST_VMX_HOSTS" KTEST_CORPUS=test/kernel/vmx-lane.l \
+	 echo TEST $(k_elf) "(the vmx lane: kvm and -cpu host on a vt-x host)" && \
+	 KTEST_CAP=vt-x KTEST_CORPUS=test/kernel/vmx-lane.l \
 	   $m $(S)/tools/ktest.l $(k_elf) - $a "vmx: guest ran, cpuid exited"
 
 # an empty boot line is a mitty on the console: keys in through qemu's monitor, lush in its
@@ -1296,7 +1296,7 @@ test_kernel_a64:
 else
 test_kernel_a64: host $(S)/tools/ktest.l
 	@$(MAKE) -s a=a64 $(ko)/love-a64.elf
-	@echo TEST $(ko)/love-a64.elf "(the WARM lane: serial, headless, -kernel; TCG, ceiling 900s, or kvm on $${KTEST_A64_HOSTS:-$$KTEST_A64_HOST})"
+	@echo TEST $(ko)/love-a64.elf "(the WARM lane: serial, headless, -kernel; kvm on a kvm-a64 host, else TCG, ceiling 900s)"
 	@$m $(S)/tools/ktest.l $(ko)/love-a64.elf - a64
 endif
 

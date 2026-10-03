@@ -1,5 +1,5 @@
 # test/gate/a64run.sh -- where an a64 lane's binaries run: on an a64 host when one answers
-# (a64exec.l, bee's `--on a64-exec` in waiting), else under qemu-aarch64 here. sourced after
+# (`love bee --on a64-exec`, doc/bee.md HOSTS), else under qemu-aarch64 here. sourced after
 # skip.sh; the binaries are built HERE either way, and the answers are compared here.
 #
 #   a64_how LOVE        a64_via = host | qemu | "" (neither: the lane skips, as it always has);
@@ -13,7 +13,7 @@
 #                       and res/page with the host's page size
 #   a64_one LOVE BIN [ARG..]   one binary, its output and status as a local run's
 a64_where=${a64_where-}
-a64x() { LOVE_NO_IMAGE= "$a64_love" test/gate/a64exec.l --on a64-exec ${a64_where:+--where "$a64_where"} "$@"; }
+a64x() { "$a64_love" bee --on a64-exec ${a64_where:+--where "$a64_where"} "$@"; }
 a64_how() {
   a64_love=$1
   a64_qemu=$(command -v qemu-aarch64 2>/dev/null || true)
