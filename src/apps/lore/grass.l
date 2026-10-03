@@ -14,7 +14,7 @@
 ; in and state out, gated headless by test/host/grass.l; only grass-run ties the tty.
 ; the song is harp's, a music box, out the horn when the seat has one.
 ;
-; run: love lore grass
+; run: love lore grass88 (or grass)
 (module (grass grass-run grass-look grass-main grass-new grass-key grass-tick grass-frame grass-hud
          grass-bar grass-rows grass-paint grass-hour grass-day grass-temp grass-wind-x grass-lay grass-clouds
          grass-tune grass-song-new grass-song-feed grass-song-cue grass-final grass-tap score song-chunk
@@ -495,8 +495,9 @@
                    drain-keys (),
                    raw 0,
                    (puts (grass-final g + "\n"), 0)))
- grass-usage "usage: love lore grass   (dance: arrows, hjkl, or tap about your blade; q or esc leaves)"
+ grass-usage "usage: love lore grass88   (dance: arrows, hjkl, or tap about your blade; q or esc leaves)"
  (grass-main as) (as @ () (grass-run grass-look score)
                        (say err ("grass: " + grass-usage + "\n"), flush err, 2))
- _ ((cite 'lore 'lore-enlist) 'grass (udoor 'grass grass-main grass-usage 1 1)))
+ _ ((cite 'lore 'lore-enlist) 'grass88 (udoor 'grass88 grass-main grass-usage 1 1))
+ _ ((cite 'lore 'lore-alias) 'grass 'grass88))
 ) ; module grass
