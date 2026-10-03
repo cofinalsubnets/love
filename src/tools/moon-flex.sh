@@ -20,7 +20,7 @@ conf_m4
 conf_pkg flex-2.6.4.tar.gz e87aae032bf07c26f85ac0ed3250998c37621d95f8bd748b31f15b33c45ee995 \
   https://github.com/westes/flex/releases/download/v2.6.4/flex-2.6.4.tar.gz
 export M4=$m4
-conf_build flex-2.6.4 --disable-nls
+conf_build flex-2.6.4 --disable-nls --disable-shared   # mooncc lays no shared objects
 fx=$d/flex-2.6.4/src/flex
 
 # the scanners, laid twice from one relative layout (the names reach the output's #line

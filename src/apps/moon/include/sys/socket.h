@@ -20,6 +20,7 @@ struct sockaddr_storage { sa_family_t ss_family; char __pad[126]; };
 #define SOCK_DGRAM  2
 #define SOCK_RAW    3
 #define SOCK_SEQPACKET 5
+#define SOMAXCONN 4096
 #define SOCK_NONBLOCK 2048
 #define SOCK_CLOEXEC 524288
 #define SOL_SOCKET 1
