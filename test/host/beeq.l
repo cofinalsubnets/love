@@ -428,7 +428,8 @@
        _ (bq-put f (foldl (\ a c (a + json-show {"jsonrpc" "2.0" "id" <c "method" "tools/call"
                                                 "params" {"name" (c 1) "arguments" (pin (c 2) "queue" lq)}} + "\n"))
                          "" cs))
-       r (bq-sh w ("env SB_HUB=" + bq-sq hub + " BEE_NAME=" + nm + " " + bq-sq bq-love + " " + bq-sq bq-app + " --mcp < " + bq-sq f))
+       r (bq-sh w ("env SB_HUB=" + bq-sq hub + " GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t"
+                   + " BEE_NAME=" + nm + " " + bq-sq bq-love + " " + bq-sq bq-app + " --mcp < " + bq-sq f))
        (foldl (\ t l (: j (json-read l) (? (two? j) (pin t ((j 1) "id") ((j 1) "result" "content" 0 "text")) t)))
               {} (filter (\ l (0 < #l)) (lines (r 1)))))
    _ (map (\ d (mkdir d 493)) [hub wa wb])
@@ -446,7 +447,21 @@
    _ (sb wa ["sync" "--keep" hub])                                ; deposited: the hub holds it
    b (calls "ant" [[4 "queue_land" {}] [5 "queue_landed" {}]])
    _ (sb hub ["take" g])
+   ; the git mirror: refused on a branch checked out elsewhere, then written to sbm, whose
+   ; parent's web/ it keeps and whose other paths it drops
+   _ (bq-git w ["checkout" "-q" "-b" "sbm" "test"]) _ (hark ["mkdir" "-p" (w 'repo + "/web")])
+   _ (bq-put (w 'repo + "/web/keep.txt") "kept\n") _ (bq-put (w 'repo + "/old.txt") "old\n")
+   _ (bq-git w ["add" "web/keep.txt" "old.txt"]) _ (bq-git w ["commit" "-q" "-m" "the mirror's parent"])
+   _ (bq-git w ["checkout" "-q" "test"])
+   mp (bq-out (bq-git w ["rev-parse" "sbm"]))
+   m1 (calls "queen" [[7 "queue_lead" {"mirror" (w 'repo + " test")}]])
+   c0 (calls "ant" [[8 "queue_landed" {}]])
+   m2 (calls "queen" [[9 "queue_lead" {"mirror" (w 'repo + " sbm web/")}]])
    c (calls "ant" [[6 "queue_landed" {"release" "a and b are in"}]])
+   mt (bq-out (bq-git w ["ls-tree" "-r" "--name-only" "sbm"]))
+   mparent (bq-out (bq-git w ["rev-parse" "sbm^"]))
+   mmsg (bq-out (bq-git w ["log" "-1" "--format=%B" "sbm"]))
+   mbee (bq-out (bq-git w ["show" "sbm:src/apps/bee.l"]))
    q (sb hub ["ledger" lq])
    _ (test
       (#m = 64) (#g = 64) (m != g)
@@ -456,6 +471,10 @@
       (bq-in (b 5) ("not the gated set " + g))
       (bq-in (c 6) ("landed: row 1 left queue/sbq, whose base line is now sbq " + g + "."))
       (bq-in (c 6) "this landing changed bee: every live session restarts")
+      (bq-in (m1 7) "the change is in") (bq-in (c0 8) "is checked out at") (bq-in (c0 8) "the row stays")
+      (bq-in (c 6) "the mirror: a commit")
+      (mt = "a\nb\nf\nsrc/apps/bee.l\nweb/keep.txt") (mparent = mp) (mbee = "src/apps/bee.l")
+      (bq-in mmsg "Merge queue row 1 (ant)") (bq-in mmsg ("sb psid " + g))
       (bq-in q "land by psid") (bq-in q ("\nsbq " + g + "\n")) !(bq-in q " ant ")
       (sb hub ["psid"] = g)
       (bq-get (hub + "/a") = "a\n") (bq-get (hub + "/b") = "b\n"))

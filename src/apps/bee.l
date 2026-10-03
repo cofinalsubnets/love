@@ -198,11 +198,13 @@
        (tool "queue_lead" ("The leader's own lines of a merge queue: leader hands the queue to a live session "
                            + "that agreed (or, from the head's session while the leader has no live session, "
                            + "takes it, acting); sync sets what the queue lands toward (- removes it); pre_add "
-                           + "adds a pre-release condition and pre_drop N drops the Nth; base moves the base line. Only the leader may.")
+                           + "adds a pre-release condition and pre_drop N drops the Nth; base moves the base line; mirror "
+                           + "names the git repository and branch an sb queue's landings are written to. Only the leader may.")
              {"queue" (prop "refs/queue/NAME or queue/NAME") "leader" (prop "the session to lead")
               "sync" (prop "the sync line's text, or - to remove it") "pre_add" (prop "a pre line's text")
               "pre_drop" (prop "the pre line to drop, counting from 1")
-              "base" (prop "the new sha for the base line")}
+              "base" (prop "the new sha for the base line")
+              "mirror" (prop "on an sb queue: PATH BRANCH [KEEP..] -- the git repository at PATH, its branch, and the path prefixes the parent's tree keeps there; - to remove it")}
              ["queue"])
        (tool "queue_land" ("Land by sha (git) or psid (sb): for your green row at its head, check that the base "
                            + "is where the base line says and that landing your gated head gives the gated tree -- "
@@ -949,7 +951,7 @@
      (q-bare l) (words (snip l 0 (q-cut l)))
      ; the base line -- `<branch> <sha>`, a note allowed, neither a row nor the leader's, sync, pre
      ; or next -- moved to sha, its note kept
-     (q-base? l) (: w (q-bare l) (#w = 2 && !(q-row? l) && !(elem <w ["leader" "sync" "pre" "next"]) && 0 < #<w && <w 0 != 35))
+     (q-base? l) (: w (q-bare l) (#w = 2 && !(q-row? l) && !(elem <w ["leader" "sync" "pre" "next" "mirror"]) && 0 < #<w && <w 0 != 35))
      (q-base-line text) (: ls (filter q-base? (lines text)) (? (two? ls) (q-bare <ls) ()))
      (q-base text sha)
       (: ls (lines text)
@@ -966,7 +968,7 @@
                    (take k ls + [l] + drop k ls))))
      ; the tools: -> [ok? text]
      ; a row is one line of words: no field may hold a control character, nor a space but a text's
-     bee-texts ["note" "sync" "pre_add" "release"]
+     bee-texts ["note" "sync" "pre_add" "release" "mirror"]
      (q-bad in) (filter (\ k (: v (in k) (string? v && two? (filter (\ c (c < 32 || c = 127 || (c = 32 && !(elem k bee-texts))))
                                                                   (map v ^#v)))))
                         (keys in))
@@ -1044,7 +1046,7 @@
          (ins ls k l) (take (k + 1) ls + [l] + drop (k + 1) ls)
          (after ls ps l) (: k (foldl (\ a p (? (0 <= a) a (last ls p))) -1 ps) (ins ls k l))
          nl (field in "leader" "") sy (field in "sync" "") pa (field in "pre_add" "") pd (field in "pre_drop" "")
-         ba (field in "base" "")
+         ba (field in "base" "") mi (: m (peep in "mirror" "") (string? m ? m ""))
          pres (filter (\ i (kind (ls0 i) = "pre")) ^#ls0)
          ls1 (? (#nl = 0) ls0 (map (\ l (kind l = "leader" ? ("leader " + nl + (acting ? " acting" "")) l)) ls0))
          ls2 (? (#sy = 0) ls1
@@ -1057,9 +1059,14 @@
                    (? (at < 0) () (take at ls2 + drop (at + 1) ls2))))
          ls4 (? (#pa = 0) ls3
                 (after ls3 [(\ l (kind l = "pre")) (\ l (kind l = "sync")) q-base? (\ l (kind l = "leader"))] ("pre " + pa)))
-         (? (#nl + #sy + #pa + #pd + #ba = 0) [text "name leader, sync, pre_add, pre_drop or base"]
+         ls5 (? (#mi = 0) ls4
+                (mi = "-") (filter (\ l (kind l != "mirror")) ls4)
+                (0 <= last ls4 (\ l (kind l = "mirror"))) (map (\ l (kind l = "mirror" ? ("mirror " + mi) l)) ls4)
+                (after ls4 [(\ l (kind l = "pre")) (\ l (kind l = "sync")) q-base? (\ l (kind l = "leader"))] ("mirror " + mi)))
+         (? (#nl + #sy + #pa + #pd + #ba + #mi = 0) [text "name leader, sync, pre_add, pre_drop, base or mirror"]
             (#pd && !(two? ls3)) [text ("no pre line " + pd)]
-            [(paras ls4) ""]))
+            (0 < #mi && mi != "-" && #(words mi) < 2) [text "mirror is PATH BRANCH [KEEP..]"]
+            [(paras ls5) ""]))
      (queue-lead in) (q-check in queue-lead1)
      (queue-lead1 in)
       (: q (in "queue") i (me 0) nl (field in "leader" "")
@@ -1175,6 +1182,54 @@
          (? (cur != g) ("the hub's head is " + (0 < #cur ? cur "unreadable") + ", not the gated set " + g
                         + ": land it first, as queue_land says")
             [g (: ws (words bee-served) (q-joins (filter (\ x (elem x ws)) (lines (q-sb ("paths " + sq was + " " + sq g + " 2>/dev/null"))))))]))
+     ; --- the git mirror of an sb queue: a landing written as one commit of the hub's tree on the
+     ; mirror line's branch -- its paths from the hub's blobs, and the parent's paths under the
+     ; KEEP prefixes kept, what the hub's store leaves out. a tip that has the tree already is
+     ; left as it is, so a landing recorded again writes nothing twice ---
+     (q-mirror-of text) (: w (words (q-line text "mirror")) (? (2 < #w) >w ()))   ; [path branch keep..]
+     (q-abs d) (chomp (lush-out ("cd " + sq d + " && pwd -P")))
+     (q-mirror m msg)
+      (: path <m br (m 1) keep (drop 2 m) hub (q-abs (q-hub 0)) tmp (bee-hive + "/.mirror-" + me 0)
+         ; a branch checked out elsewhere would move under that checkout's index
+         wts (lines (lush-out ("git -C " + sq path + " worktree list --porcelain")))
+         held (: (go ls wt) (? (atom? ls) ""
+                              (starts? <ls "worktree ") (go >ls (snip <ls 9 #<ls))
+                              (<ls = ("branch refs/heads/" + br)) wt
+                              (go >ls wt))
+                 (go wts ""))
+         ents (filter two? (map (\ l (: k (find l "\t" 0) (? (k = 64 || k = 65) [(snip l 0 k) (snip l (k + 1) #l)] ())))
+                                (lines (q-sb "ls -l"))))
+         _ (mkdirs bee-hive)
+         _ (spit-file (tmp + ".blobs") (cats (catmap (\ e [hub "/.sb/blob/" (snip <e 0 64) "\n"]) ents)))
+         gs (? (two? ents) (lines (lush-out ("git -C " + sq path + " hash-object -w --stdin-paths < " + sq (tmp + ".blobs")))) ())
+         _ (spit-file (tmp + ".info") (cats (catmap (\ i (: e (ents i) [(#<e = 65 ? "100755" "100644") " " (gs i) "\t" (e 1) "\n"]))
+                                                   ^#ents)))
+         _ (spit-file (tmp + ".msg") msg)
+         _ (spit-file (tmp + ".sh")
+             (paras ["set -e" ("cd " + sq path) ("GIT_INDEX_FILE=" + sq (tmp + ".index") + "; export GIT_INDEX_FILE")
+                     "rm -f \"$GIT_INDEX_FILE\""
+                     ("par=$(git rev-parse -q --verify " + sq ("refs/heads/" + br + "^{commit}") + " || true)")
+                     (? (two? keep)
+                        ("if [ -n \"$par\" ]; then git read-tree \"$par\"; git ls-files | grep -v"
+                         + foldl (\ a k (a + " -e " + sq ("^" + k))) "" keep
+                         + " | git update-index --force-remove --stdin; else git read-tree --empty; fi")
+                        "git read-tree --empty")
+                     ("git update-index --add --index-info < " + sq (tmp + ".info"))
+                     "t=$(git write-tree)"
+                     "if [ -n \"$par\" ] && [ \"$(git rev-parse \"$par^{tree}\")\" = \"$t\" ]; then echo \"same $par\"; exit 0; fi"
+                     ("if [ -n \"$par\" ]; then c=$(git commit-tree \"$t\" -p \"$par\" -F " + sq (tmp + ".msg") + "); "
+                      + "else c=$(git commit-tree \"$t\" -F " + sq (tmp + ".msg") + "); fi")
+                     ("git update-ref " + sq ("refs/heads/" + br) + " \"$c\" \"$par\"")
+                     "echo \"made $c\""]))
+         o (? (0 < #held && q-abs held != hub) ""
+              (#gs != #ents) ""
+              (chomp (lush-out ("sh " + sq (tmp + ".sh") + " 2>&1"))))
+         _ (map (\ x (unlink (tmp + x))) [".blobs" ".info" ".msg" ".sh" ".index"])
+         (? (0 < #held && q-abs held != hub)
+             [0 ("the mirror's branch " + br + " is checked out at " + held + ", not the hub: it would move under that checkout")]
+            (#gs != #ents) [0 ("the mirror at " + path + " could not store the hub's blobs")]
+            (starts? o "made " || starts? o "same ") [1 o]
+            [0 ("the mirror at " + path + " did not take the landing: " + o)]))
      ; --- a worker nest: DIR made from the hub (SB_HUB) at its head -- the hub's store deposited,
      ; its head taken, out/ seeded from the hub's build -- where a session works, as in a worktree ---
      (nest-ids t) (filter (\ w (#w = 64)) (words (foldl (\ a c (a + (elem c [34 40 41] ? " " (string c)))) "" (map t ^#t))))
@@ -1207,7 +1262,14 @@
              (? (string? l) [0 l]
                 (: p <l r (l 1) br <(l 2)
                    lk (? (q-git? q) (q-landed-git br (l 2 1) (r 4)) (q-landed-sb (l 2 1) (r 4)))
+                   ; on sb, the landing is written to the git mirror, when the queue names one
+                   mi (? (q-git? q) () (q-mirror-of text))
+                   mr (? (string? lk || !(two? mi)) [1 ""]
+                         (q-mirror mi ("Merge queue row " + p + " (" + who + "): "
+                                       + (: ls (filter (\ x (q-row? x && <(words x) = p)) (lines text)) (? (two? ls) (q-note <ls) ""))
+                                       + "\n\nsb psid " + r 4 + "\n")))
                    (? (string? lk) [0 lk]
+                      !(<mr) [0 ("the hub took " + r 4 + ", but " + mr 1 + ": the row stays; tell the leader")]
                       (: gone (p . q-folds rows p) short <lk
                          ; a landing that changes bee's served code ends the note with the restart line
                          bz (lk 1)
@@ -1222,6 +1284,7 @@
                                got (map (\ x <x) (filter (\ x (#(x 1) = 0)) sent))
                                lost (filter (\ x (0 < #(x 1))) sent)
                                [1 ("landed: " + q-rows-say gone + " left " + q + ", whose base line is now " + br + " " + short + ". "
+                                   + (? (0 < #(mr 1)) ("the mirror: " + (? (starts? (mr 1) "made ") ("a commit " + snip (mr 1) 5 #(mr 1)) "the tip had the tree already") + ". ") "")
                                    + (? !(two? to) "no row is behind it."
                                         (0 < #rn)
                                          ((two? got ? ("the release note went to " + q-and got + ".") "the release note reached no session.")

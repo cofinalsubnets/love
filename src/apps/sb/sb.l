@@ -662,7 +662,7 @@
                           + (? (0 = nleft) "" (", " + show nleft + " conflicted")) + "\n"))
                  (? (0 = nleft) 1 0))))))
    ; --- ls: the head's paths, a line each ---
-   (sb-ls _) (: sn (snap ()) _ (map (e \ puts (<e + "\n")) sn) #sn)
+   (sb-ls long) (: sn (snap ()) _ (map (e \ puts ((? long (<>e + "\t") "") + <e + "\n")) sn) #sn)   ; -l: side, tab, path
 
    ; --- bank: freeze the current head under a NAME -- an immutable release, the
    (refs _) (form ".sb/refs")                                  ; ((name (id..) time)..) | ()
@@ -826,7 +826,8 @@ usage: sb VERB ..
                   moves, so a hub holds work it has not taken
   take ID..       grow the HEAD by a set (a ref, or patches by prefix, with
                   their deps) and lay the tree: what a hub does to land work
-  ls              the head's paths
+  ls [-l]         the head's paths; -l puts each one's side (blob hash, x when
+                  executable) and a tab before it
   psid [SET]      the name of a set's state: the head's, or SET's (a ref, a
                   patch, a psid, or head)
   paths A B       the paths sets A and B lay differently, a line each
@@ -866,7 +867,7 @@ usage: sb VERB ..
            "bank" (atom? >as ? (usage ()) !(held "." (_ \ sb-bank >as)))
            "undo" (atom? >as ? (usage ()) !(held "." (_ \ sb-undo >as)))
            "log" (sb-log (), 0)
-           "ls" (sb-ls (), 0)
+           "ls" (sb-ls (elem "-l" >as), 0)
            "psid" !(sb-psid >as)
            "paths" (#>as = 2 ? (: _ (sb-paths <>as <>>as) 0) (usage ()))
            "within" (#>as = 2 ? !(sb-within <>as <>>as) (usage ()))

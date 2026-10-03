@@ -21,7 +21,7 @@ this doc is the interface over it: *what you type*, not *what the objects are*.
 | **`bank NAME`** | freeze the current head (its tip **set**) → a named, immutable release | tag | the unit you propagate |
 | **`undo ID [NOTE]`** | add the *inverse* patch — revert as growth, never deletion | revert | rollback-by-superset |
 | **`log`** | the patches, newest first (`*` marks a tip of the head); each ref with its psid | inspect | inspect |
-| **`ls`** | the head's paths | ls-files | inspect |
+| **`ls [-l]`** | the head's paths; `-l` with each one's side | ls-files | inspect |
 | **`psid [SET]`** | the name of a set's state: the head's, or SET's | rev-parse | name a release |
 | **`paths A B`** | the paths two sets lay differently | diff --name-only | what an upgrade touches |
 | **`within A B`** | exit 0 when set A lies inside set B | merge-base --is-ancestor | is it newer |
