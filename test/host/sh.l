@@ -148,6 +148,11 @@
 (: _ (setenv "LUSH_HD" "quay")
    r (hark ["out/love" "out/lush" "-c" "cat <<EOF | tr a-z A-Z\nhd $LUSH_HD\nEOF"])
    (test ("HD QUAY\n" = >r)))
+; \c quotes c: a lone \* never globs; any quote or \ in a heredoc's delimiter quotes the body
+(: r (hark ["out/love" "out/lush" "-c" "cd src/apps; echo \\* lus\\*.l; expr 6 \\* 2"])
+   (test ("* lus*.l\n12\n" = >r)))
+(: r (hark ["out/love" "out/lush" "-c" "X=1; cat <<\\E\n$X\nE\ncat <<E\"O\"F\n$X\nEOF\ncat <<E\n$X\nE"])
+   (test ("$X\n$X\n1\n" = >r)))
 (: r (hark ["out/love" "out/lush" "-c" "( exit 5 ); echo sub=$?"])
    (test ("sub=5\n" = >r)))
 (: r (hark ["out/love" "out/lush" "-c" "set -u; echo $LUSH_UNDEF_QQ; echo no"])
