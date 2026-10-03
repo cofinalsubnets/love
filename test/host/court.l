@@ -99,6 +99,28 @@
    _ (keys! st (map (i \ 107) ^60))
  (test (0.55 < sqrt (sq (st 'px - bs 0) + sq (st 'pz - bs 2)))))
 
+; --- the floor's litter: the sticks lie in a ring round the trunk's foot, the leaves flat on
+; --- the ground, all of it inside the walls; and the leaves a falling one starts from, high in the crown
+(: st (at 12.0) bs (st 'tree 'base) L (st 'litter) P (L 'pts) X (P 'x) Y (P 'y) Z (P 'z)
+   d (sq (X - bs 0) + sq (Z - bs 2)) raised (0.01 < Y)
+   off ((1 - raised) * (P 'up < 1.0) + raised * (1 - (0.09 < d) * (d < 0.5625)))
+   out ((yard-a < mag X) + (yard-b < mag Z))
+   tops (L 'tops) ty (map (q \ q 1) tops)
+ (test (100 < net raised) (1000 < net (1 - raised)) (0 = net off) (0 = net out)
+       (two? tops) (all (y \ amax (st 'tree 'y) - 1.5 < y) ty)))
+
+; --- falling leaves: now and then one lets go of the top of the crown and comes down, and
+; --- it lies on the floor where it lands, inside the walls; the frame draws them
+(: st (at 12.0) seen {}
+   (tick k) (pin st 't k, court-move st,
+             (two? (st 'fall) ? (pin seen 'fell (cat (peep seen 'fell ()) [(rev (st 'fall) 0 1)]))))
+   _ (each ^1500 tick)
+   ys (peep seen 'fell ()) fl (st 'fallen)
+   f (court-frame st)
+ (test (two? ys) (two? fl) (all (q \ q 1 < 0.01) fl)
+       (all (q \ mag (q 0) < yard-a && mag (q 2) < yard-b) fl)
+       (5.0 < foldl (a \ b \ a < b ? b a) 0.0 ys) (foldl (a \ b \ a < b ? a b) 99.0 ys < 1.0) (rows f = 24)))
+
 (borrow 'sky)
 
 ; --- the weather: c steps the cover, v the style; the more cover, the more of the sky is
@@ -127,4 +149,4 @@
        (oc 'sunk < 0.25 * clear 'sunk) (clear 'cover < oc 'cover)
        (rises 'smooth) (rises 'pixel) (sm != px)))
 (test_fin ())
-(puts "tree: ok")
+(puts "court: ok")

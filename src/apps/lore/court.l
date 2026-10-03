@@ -25,7 +25,7 @@
 ;      love lore court [clear|partly|mostly|overcast] [smooth|pixel]   the weather to start
 (module (court court-run court-walk court-main court-new court-size court-step court-move
          court-frame court-sun court-light court-clock court-now court-pens court-maps
-         tree-grow sun-clear top-h block-h
+         tree-grow sun-clear top-h block-h crown-y
          fps yard-a yard-b floor-h floors wall-h eye-h body-r lat paces)
 (borrow 'rove)
 (borrow 'view)                          ; the screen, the pens, the hash, the loop
@@ -45,6 +45,11 @@
  walk-v 1.4 turn-step 0.07 tilt-step 0.06
  lat (40.7 * pi / 180.0)
  paces [60.0 600.0 1.0 0.0]             ; seconds of the sky a second, t steps through them
+ ; the litter and the falling leaves: sticks in the ring, leaves on the ground, how low a
+ ; leaf lies, how many landed are kept, a leaf let go about one frame in so many, how fast
+ ; it falls; and the leaves' colours, dry yellow, tan, brown, a few still green
+ stick-n 22 leaf-n 420 leaf-y 0.006 fallen-n 400 drop-every 70 fall-v 0.45
+ hues [[0.6 0.5 0.17] [0.5 0.39 0.19] [0.36 0.26 0.14] [0.33 0.38 0.13]]
  bay (2.0 * yard-b / 4.0)               ; a long wall's window bay
  ; --- the time: 'sim is the wall clock's local seconds, 'dst what summer adds to it ---
  ; now, as [local-seconds dst]: the zone's offset now, against the least of it a season on, two and three
@@ -61,10 +66,11 @@
  ; --- the state: the screen as view lays it, where the player stands and looks ('th the
  ; bearing, 'ph the pitch), the clock, its pace, and the pixels' rays ---
  ; the weather a run starts under, unless it is said: the cover thrown, the sky smooth
- (court-new w h now) (: st {'px 0.0 'pz (0.0 - yard-b + 1.4) 'th 0.0 'ph 0.5
+ (court-new w h now) (: sd (int (now 0)) tr (tree-grow sd)
+                        st {'px 0.0 'pz (0.0 - yard-b + 1.4) 'th 0.0 'ph 0.5
                             'sim (now 0) 'dst (now 1) 'pace 0 'shown 40 't 0
-                            'deep 0 'done 0 'tree (tree-grow (int (now 0)))
-                            'wx (sky-weather (throw (int (now 0)) 7 71 4) 'smooth)}
+                            'deep 0 'done 0 'tree tr 'litter (litter tr sd) 'fall () 'fallen ()
+                            'wx (sky-weather (throw sd 7 71 4) 'smooth)}
                        (court-size st w (h // 2)))
  ; the screen w cells by r rows, and each pixel's offsets from the middle, and its dither
  (court-size st w r) (: h (2 * r) n (w * h) i (iota n) x (i % w) y (i // w)
@@ -92,7 +98,17 @@
         99 (tell (pin st 'wx (sky-weather ((st 'wx 'cover + 1) % 4) (st 'wx 'style))))
         118 (tell (pin st 'wx (sky-weather (st 'wx 'cover) (st 'wx 'style = 'pixel ? 'smooth 'pixel))))
         st))
- (court-move st) (pin st 'sim (st 'sim + paces (st 'pace) / fps))
+ ; a frame's motion: the clock, and the leaves -- now and then one lets go of the top of
+ ; the crown, drifts down and lies where it lands
+ (court-move st) (: t (st 't) tops (st 'litter 'tops)
+   born (? (throw t 3 97 drop-every = 0 && two? tops)
+           (tops (throw t 5 89 #tops) @ p [[(p 0) (p 1) (p 2) (throw t 7 83 628 / 100.0) (throw t 9 79 3)]])
+           ())
+   moved (map (q \ fall-step q t) (cat born (st 'fall)))
+   down (filter (q \ q 1 <= leaf-y) moved)
+   (pins st 'sim (st 'sim + paces (st 'pace) / fps)
+            'fall (filter (q \ leaf-y < q 1) moved)
+            'fallen (newest fallen-n (cat down (st 'fallen)))))
  ; --- the maps: the walls and the floor, laid once a run in texels
  ; and gathered from by every frame, so no hash is thrown a frame ---
  ts 0.04                                ; a texel's side
@@ -215,6 +231,77 @@
                      base [(rr 1.3 1.8) 0.0 (rr 2.2 2.9)]
                      (grove-new {'seed seed 'base base 'toward [0.0 0.0] 'crown crown-y
                                  'inside inside 'keep? (p \ !(in-wall? p))}))
+ ; --- what lies under it: a ring of sticks round the foot of the trunk, and the leaves the
+ ; crown has dropped, laid once a run from the tree's own seed; and the high leaves a
+ ; falling one may start from. a point is [x y z r g b up], up 1 for one lying flat ---
+ (newest n l) (n < 1 || atom? l ? () (<l . newest (n - 1) >l))
+ (cat* ls) (foldl (acc \ l \ cat acc l) () ls)
+ ; a leaf lying at x z, turned ang: its stalk and a leaflet either side, six along
+ (lying x z ang c) (: ca (cos ang) sa (sin ang)
+   (cat* (map (j \ (: u ((j - 2.5) * 0.012)
+                     (map (v \ [(x + u * ca - v * sa) leaf-y (z + u * sa + v * ca) (c 0) (c 1) (c 2) 1.0])
+                          [-0.01 0.0 0.01]))) ^6)))
+ (litter tr seed) (: g {'s (seed % 2147483647 + 7)}
+   (rr lo hi) (: v ((g 's * 1103515245 + 12345) % 2147483648) (pin g 's v, lo + (hi - lo) * v / 2147483648.0))
+   bs (tr 'base) X (tr 'x) Y (tr 'y) Z (tr 'z) K (tr 'kind) n #X top (amax Y)
+   ; a leaf of the crown, thrown for until one comes up, or the first point
+   (pick k ok?) (: i (int (rr 0.0 (n - 0.5))) ((k < 1 || (peep K i 0.0 = 2.0 && ok? i)) ? i (pick (k - 1) ok?)))
+   ; ..each stick lies across the ring, tilted off it a little: two rows of points, bark
+   ; brown or weathered grey
+   (stick i) (: a (i * 2.0 * pi / stick-n + rr -0.12 0.12) rad (rr 0.46 0.56)
+                cx (bs 0 + rad * cos a) cz (bs 2 + rad * sin a)
+                yaw (a + pi / 2.0 + rr -0.45 0.45) ln (rr 0.28 0.48) k (int (ln / 0.008))
+                cy (cos yaw) sy (sin yaw) th (rr 0.012 0.02)
+                c (c* (rr 0.75 1.15) (rr 0.0 1.0 < 0.3 ? [0.42 0.38 0.33] [0.34 0.24 0.15]))
+                ; ..three strands wide and three high, the top one the lightest
+                (cat* (map (j \ (: u (((j + 0.5) / k - 0.5) * ln)
+                                   (cat* (map (v \ (map (m \ [(cx + u * cy - v * sy) (0.01 + m * th) (cz + u * sy + v * cy)
+                                                               ((0.8 + 0.12 * m) * c 0) ((0.8 + 0.12 * m) * c 1) ((0.8 + 0.12 * m) * c 2) 1.0])
+                                                         ^3))
+                                              [(0.0 - th) 0.0 th])))) ^k)))
+   ; ..each leaf under one of the crown's, blown a little way off, kept off the walls
+   (leaf _) (: i (pick 40 (j \ 1)) x (clamp (peep X i 0.0 + rr -0.4 0.4) (0.08 - yard-a) (yard-a - 0.08))
+               z (clamp (peep Z i 0.0 + rr -0.4 0.4) (0.08 - yard-b) (yard-b - 0.08))
+               ang (rr 0.0 (2.0 * pi)) c (c* (rr 0.8 1.1) (hues (int (rr 0.0 3.99))))
+               (lying x z ang c))
+   l (cat (cat* (map stick ^stick-n)) (cat* (map leaf ^leaf-n)))
+   hi (filter (i \ peep K i 0.0 = 2.0 && top - 1.5 < peep Y i 0.0) ^n)
+   tops (two? hi ? (map (q \ hi (int (rr 0.0 (#hi - 0.5))) @ i [(peep X i 0.0) (peep Y i 0.0) (peep Z i 0.0)]) ^120) ())
+   {'pts (bits l) 'tops tops})
+ ; points as the trays bits! draws
+ (bits l) (: m #l (col k) (gem-tray [m] (map (q \ 1.0 * q k) l))
+             {'x (col 0) 'y (col 1) 'z (col 2) 'r (col 3) 'g (col 4) 'b (col 5) 'up (col 6)})
+ ; a falling leaf, [x y z ph hue]: down at its own pace, swung side to side as it goes, and
+ ; kept inside the walls; it lands at the floor
+ (fall-step q t) (: x (q 0) y (q 1) z (q 2) ph (q 3) w (1.0 * t * 0.11 + ph)
+   [(clamp (x + 0.3 * sin w / fps) (0.08 - yard-a) (yard-a - 0.08)) (max2 leaf-y (y - fall-v / fps))
+    (clamp (z + 0.3 * cos (w * 0.7) / fps) (0.08 - yard-b) (yard-b - 0.08)) ph (q 4)])
+ ; the leaves loose on the scene as points: those falling, turning as they go, and those landed
+ (loose st) (: t (st 't)
+   (falling q) (: a (q 3 + 1.0 * t * 0.3) c (hues (q 4))
+                  (map (j \ [(q 0 + (j - 1.5) * 0.012 * cos a) (q 1 + (j - 1.5) * 0.006 * sin (a * 1.3))
+                              (q 2 + (j - 1.5) * 0.012 * sin a) (c 0) (c 1) (c 2) 0.0]) ^4))
+   (landed q) (lying (q 0) (q 2) (q 3) (hues (q 4)))
+   l (cat (cat* (map falling (st 'fall))) (cat* (map landed (st 'fallen))))
+   (two? l ? (bits l) ()))
+ ; points drawn into the buffers, a point a pixel where nearer, lit as the floor is: the
+ ; sun where it gets in and the tree lets it through, and the sky's light
+ (bits! P cam lt sm buf) (: e (cam 'e) f (cam 'f) rt (cam 'r) uv (cam 'u) w (cam 'w) h (cam 'h) foc (cam 'foc)
+   s (lt 'sun) X (P 'x) Y (P 'y) Z (P 'z)
+   qx (X - e 0) qy (Y - e 1) qz (Z - e 2)
+   zc (qx * f 0 + qy * f 1 + qz * f 2) zs (max zc 0.1)
+   cx (floor (w / 2.0 + foc * (qx * rt 0 + qy * rt 1 + qz * rt 2) / zs))
+   cy (floor (h / 2.0 - foc * (qx * uv 0 + qy * uv 1 + qz * uv 2) / zs))
+   dist (sqrt (qx * qx + qy * qy + qz * qz))
+   ok ((0.1 < zc) * (0 <= cx) * (cx < w) * (0 <= cy) * (cy < h))
+   idx (over -1 ok (cy * w + cx))
+   i2 (over -1 (dist < peep (buf 't) idx 1e9) idx)
+   up (P 'up) face (up * max2 (s 1) 0.0 + (1.0 - up) * 0.5)
+   lit (sun-clear X Y Z s * (1.0 - grove-shade sm X Y Z) * lt 'sunk * face * 0.9)
+   irr (c+ (c* 0.42 (lt 'amb)) (c* lit (lt 'sunc)))
+   cl (cm [(P 'r) (P 'g) (P 'b)] irr)
+   (pins buf 't (pin (buf 't) i2 dist) 'r (pin (buf 'r) i2 (cl 0))
+             'g (pin (buf 'g) i2 (cl 1)) 'b (pin (buf 'b) i2 (cl 2))))
  ; --- the frame ---
  ; the lit share of the windows by the hour of the evening
  (lit-share hr) (? (hr < 5.0) 6 (hr < 6.5) 12 (hr < 9.0) 35 (hr < 16.0) 4 (hr < 18.0) 25 (hr < 23.0) 60 25)
@@ -295,6 +382,8 @@
         'w (st 'w) 'h (st 'h) 'foc (st 'foc) 'dx dx 'dy dy 'dz dz}
    buf {'t (over t sky 1e9) 'r (col0 0) 'g (col0 1) 'b (col0 2)}
    _ (grove-wood! tr cam lt sun-clear buf) _ (grove-leaves! tr cam lt sun-clear buf t0)
+   ; ..and what lies on the floor, and the leaves falling
+   _ (bits! (st 'litter 'pts) cam lt sm buf) _ (loose st @ P (tablet? P ? (bits! P cam lt sm buf)))
    ; ..and the eye's gain and shoulder
    (sky-tone lt [(buf 'r) (buf 'g) (buf 'b)]))
  ; the frame: the clock in the corner for a while after the time is touched
