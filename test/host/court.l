@@ -194,7 +194,7 @@
        (day (o 'now) = (cite 'cal 'epoch-days) 2026 10 25) (int (o 'now 0) % 86400 = 59400)
        (o 'now 1 = 3600) (court-clock {'sim (o 'now 0)} = "16:30")
        (w 'wx 'cover = 1) (w 'wx 'style = 'smooth) (w 'pace = ()) (n 'wx = ()) (two? (n 'now))
-       (day (d 'now) = (cite 'cal 'epoch-days) 2026 7 4) (int (d 'now 0) % 86400 = int (dn 0) % 86400)
+       (day (d 'now) = (cite 'cal 'epoch-days) 2026 7 4) ((int (d 'now 0) - int (dn 0)) % 86400 @ x (abs x <= 2 || 86398 <= abs x))   ; two reads of the clock
        (all (v \ v = ()) bad)
        ; ..a cover said holds the weather; a style alone leaves it to the season
        (o 'fix = 1) (w 'fix = 1) (court-opts ["--sky" "pixel"] @ k (k 'fix = 0 && k 'wx 'style = 'pixel))))
