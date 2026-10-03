@@ -11,6 +11,7 @@
 #include <dirent.h>
 #include <stdint.h>
 #include <sys/mman.h>
+#include <sys/wait.h>
 #include <stdlib.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -61,6 +62,12 @@ int main(void) {
     long n = copy_file_range(fileno(a), 0, fileno(b), 0, 100, 0);
     char cb[32] = {0}; pread(fileno(b), cb, sizeof cb - 1, 0);
     say_n("copy_file_range", n); say_s("copied", cb); fclose(a); fclose(b); }
+  /* exit flushes every open stream: a child writes an fopen'd file it never closes */
+  { char tp[] = "/tmp/gexitXXXXXX"; int tfd = mkstemp(tp); close(tfd);
+    if (fork() == 0) { FILE *w = fopen(tp, "wb"); fputs("flushed at exit", w); exit(0); }
+    int st; wait(&st);
+    FILE *rd = fopen(tp, "r"); char eb[32] = {0}; fgets(eb, sizeof eb, rd); fclose(rd); unlink(tp);
+    say_s("exit.flush", eb); }
   { char sm[2]; char *g = getcwd(sm, sizeof sm); say_n("getcwd.small", g == 0 && errno == ERANGE);
     errno = 0; g = getcwd(sm, 0); say_n("getcwd.size0", g == 0 && errno == EINVAL);
     g = getcwd(0, 0); char *h = getcwd(0, 4096);

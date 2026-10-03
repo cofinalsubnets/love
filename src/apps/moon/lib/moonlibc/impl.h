@@ -80,6 +80,7 @@ struct _IO_FILE {
   unsigned char *buf;
   int rp, rl, rcap;                          /* a read-only stream's buffer: rb[rp..rl) is read ahead */
   unsigned char *rb;
+  struct _IO_FILE *next;                     /* the open streams past the standard three (stdio/fflush.c) */
 };
 
 /* ---- the syscall numbers. freebsd's table first, UNCONDITIONAL and named
@@ -646,6 +647,7 @@ void *__ai_tp(void);
 extern unsigned char __ibuf[4096];
 /* the read side (stdio/rbuf.c): fill an empty read buffer -> bytes now ahead (0 at end, -1 on error);
  * how far the stream sits behind its fd; and putting the fd back at the stream's position */
+void __ai_fopened(FILE *f);
 long __rfill(FILE *f);
 long __rahead(FILE *f);
 int __rsync(FILE *f);
