@@ -13,6 +13,7 @@
 ;   love bee --revoke PUB|NAME | --revocations | --revoked   the lineage's revoked keys
 ;   love bee --state busy|idle [--pid P]     a claude code session's hooks say its state
 ;   love bee --on CAP [--where K=V] [--ship DIR] (--probe | --ssh | -- CMD ..) | --hosts   work on another host
+;   love bee --nest DIR                      a worker nest from the hub (SB_HUB), at its head
 ;
 ; the settings are ~/.love/etc/bee.l's, each a form per line; ./.bee.l may set model,
 ; max-tokens, thinking, context and queue-watch over them:
@@ -1174,6 +1175,28 @@
          (? (cur != g) ("the hub's head is " + (0 < #cur ? cur "unreadable") + ", not the gated set " + g
                         + ": land it first, as queue_land says")
             [g (: ws (words bee-served) (q-joins (filter (\ x (elem x ws)) (lines (q-sb ("paths " + sq was + " " + sq g + " 2>/dev/null"))))))]))
+     ; --- a worker nest: DIR made from the hub (SB_HUB) at its head -- the hub's store deposited,
+     ; its head taken, out/ seeded from the hub's build -- where a session works, as in a worktree ---
+     (nest-ids t) (filter (\ w (#w = 64)) (words (foldl (\ a c (a + (elem c [34 40 41] ? " " (string c)))) "" (map t ^#t))))
+     (nest-cmd as)
+      (: d (? (two? >as) <>as "") hub (: h (getenv "SB_HUB") (? (string? h) h ""))
+         (? (#d = 0) (: _ (say err "usage: love bee --nest DIR\n") 2)
+            !(0 < #hub && two? (stat (hub + "/.sb")))
+             (: _ (say err "bee: SB_HUB names no nest: it names the hub a worker nest is made from\n") 2)
+            (two? (stat d)) (: _ (say err ("bee: " + d + " is there already\n")) 1)
+            (: _ (mkdirs d)
+               dep (lush-out ("sb -C " + sq d + " sync --keep " + sq hub + " >/dev/null && echo ok"))
+               ht (: f (hub + "/.sb/head") t (slurp-file (? (two? (stat f)) f (hub + "/.sb/tips"))) (? (string? t) (nest-ids t) ()))
+               tk (? (two? ht) (lush-out ("sb -C " + sq d + " take" + foldl (\ a i (a + " " + i)) "" ht + " >/dev/null && echo ok")) "ok")
+               ps (chomp (lush-out ("sb -C " + sq d + " psid")))
+               ob (? (two? (stat (hub + "/out")) && !(two? (stat (d + "/out"))))
+                     (lush-out ("cp -a " + sq (hub + "/out") + " " + sq (d + "/out") + " && echo ok")) "")
+               (? (find dep "ok" 0 < 0) (: _ (say err ("bee: the hub's store did not come into " + d + "\n")) 1)
+                  (find tk "ok" 0 < 0) (: _ (say err ("bee: " + d + " holds the hub's store but could not take its head\n")) 1)
+                  (: _ (puts ("a worker nest at " + d + " on the hub's head " + ps
+                              + (find ob "ok" 0 < 0 ? "" ", out/ seeded from the hub's") + ".\n"
+                              + "work there; sb record, then sb bank NAME and sb sync --keep " + hub + " to hand the hub the set you gated.\n"))
+                     0)))))
      (queue-landed in) (q-check in queue-landed1)
      (queue-landed1 in)
       (: q (in "queue") i (me 0) who (field in "session" i) rel (field in "release" "")
@@ -2976,6 +2999,7 @@
          (? (elem "--mcp" as) (: _ (mcp-serve in out) 0)             ; a claude child's own server
             (two? as && <as = "--lock") (bee-cli as yes)              ; its command's words stay as given
             (two? as && elem <as ["--on" "--hosts"]) ((cite 'hosts 'hosts-on) as)   ; so do --on's
+            (two? as && <as = "--nest") (nest-cmd as)
             ; ahead of --hud, which the hooks add so that a bee older than --state only prints its hud
             (two? as && <as = "--state") (: _ (state-cmd as) 0)
             (two? as && elem <as ["-s" "--screensaver"]) (cite 'saver 'saver-cli >as)   ; a saver, no session
@@ -3014,6 +3038,7 @@
        love bee --state busy|idle [--pid P]          a claude code session's hooks say its state
        love bee --on CAP [--where K=V] [--ship DIR] (--probe | --ssh | -- CMD ..)   a command on a host that can
        love bee --hosts                              the hosts this box knows
+       love bee --nest DIR                           a worker nest made from the hub (SB_HUB) at its head
        love bee --avatar [NAME]                        the avatars, or wear one
        love bee -s | --screensaver [NAME]               a screensaver until a key; none names them"
    _ (pins (cite 'verbs 'tab) 'bee (udoor 'bee bee-main bee-usage 1 0)))

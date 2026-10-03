@@ -1505,10 +1505,10 @@ vmret: host
 	@$m src/tools/vmret.l $m
 endif
 
-WAITS_C := $(shell git ls-files '*.c' 2>/dev/null)
+WAITS_C := $(shell git ls-files '*.c' 2>/dev/null || $m sb ls 2>/dev/null | grep '\.c$$')
 ifeq ($(WAITS_C),)
 waits: host
-	@sh test/gate/skip.sh gate-skip "waits: skipped (needs a git checkout to enumerate the .c files)"
+	@sh test/gate/skip.sh gate-skip "waits: skipped (needs a git checkout or an sb nest to enumerate the .c files)"
 else
 waits: host
 	@$m src/tools/waits.l $(WAITS_C)

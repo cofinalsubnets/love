@@ -1109,7 +1109,7 @@ $v/syntax/love.vim: $(ho)/syntax.vim
 all: host kernel wasm dist
 
 lint: $(mdep)
-	@$m $S/apps/libra/libra.l $$(git ls-files '*.l') && echo "lint: parens balance"
+	@$m $S/apps/libra/libra.l $$(git ls-files '*.l' 2>/dev/null || $m sb ls | grep '\.l$$') && echo "lint: parens balance"
 
 
 crewtools = $(wildcard src/apps/*.l) $(foreach d,$(wildcard src/apps/*),$(wildcard $d/$(notdir $d).l))

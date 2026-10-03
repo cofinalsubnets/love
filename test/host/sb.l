@@ -546,6 +546,7 @@
    head4 (head ())
    ns (sb-sync "../w")                                   ; the union of the two heads
    back (look "work") wmore (look "../w/more")
+   hfile (look ".sb/head") hps (psid (head ()))         ; the head file's sha256 is its psid
    own (nest-hold "." 2)                                 ; a free lock, taken
    again (nest-hold "." 2)                               ; ...and this process's own again
    _ (nest-free ".")
@@ -566,6 +567,7 @@
  (0 < na) !(two? gone) (show head3 = show [nb])
  (show head4 = show (sort [nb nm]))
  (0 < ns) (<>back = "the worker's\n") (<>wmore = "the hub's again\n")
+ (sha256 <>hfile = hps)                                ; what lush's prompt shows
  (own = 'took) (again = 'again) (other = ()) (dead = 'took)
  (show old = show (sort [nb nm nwk])))
 

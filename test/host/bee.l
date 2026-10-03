@@ -875,7 +875,7 @@
            (0 = <ad) (0 = <en) (cr-in (en 1) "enrolled: tau2")
            (: t ((cite 'seals 'seal-check) card (snip tk 0 64) (clock 0 // 1000) ())
               (&& (tablet? t) (t "name" = "tau2") (t "kind" = "box")))
-           (1 = <again) (cr-in (again 1) "spent")
+           (1 = <again) (cr-in >again "spent")
            (1 = <bad) (cr-in (bad 1) "sig does not check")
            (1 = <nr) (cr-in (nr 1) "no root here"))
    0)
@@ -970,7 +970,7 @@
    after (cr-run b1 "BEE_NAME=x" ("--mcp < '" + b1 + "/send'"))
    _ (test (cr-in (before 1) "sent to peer@two")
            (0 = <rv) (cr-in (rv 1) "serial 1") (cr-in (rv 1) "two: taken")
-           (1 = <again) (cr-in (again 1) "not newer")
+           (1 = <again) (cr-in >again "not newer")
            (cr-in (after 1) "seal does not check") !(cr-in (after 1) "sent to peer@two"))
    0)
 
@@ -1055,6 +1055,29 @@
    _ (test (cr-in (r 1) "from=\\\"tess\\\" kind=\\\"user\\\"")
            (cr-in (r 1) "from=\\\"mallory\\\">") !(cr-in (r 1) "from=\\\"mallory\\\" kind")
            (cr-in (r 1) "tess is a user's name"))
+   0)
+
+
+; --- a worker nest: --nest DIR makes DIR from the hub SB_HUB names -- its store deposited, its
+; head taken, out/ seeded from its build -- and refuses a DIR that is there or a hub that is not ---
+(: hub (cr-root + "/nhub") wk (cr-root + "/nwork")
+   (sb d as) (hark ([cr-love "sb" "-C" d] + as))
+   (run env args) (hark ["sh" "-c" ("cd '" + cr-root + "' && exec env " + env + " '" + cr-love + "' '" + cr-app + "' " + args + " 2>&1")])
+   _ (mkdir hub 493) _ (mkdir (hub + "/out") 493)
+   _ (cr-put hub "f" "the hub's\n") _ (cr-put (hub + "/out") "built" "x\n")
+   _ (sb hub ["record" "one"])
+   _ (cr-put hub "g" "the hub's too\n") _ (sb hub ["record" "two"])
+   hp (snip >(sb hub ["psid"]) 0 64)
+   ok (run ("SB_HUB='" + hub + "'") ("--nest '" + wk + "'"))
+   wp (snip >(sb wk ["psid"]) 0 64)
+   again (run ("SB_HUB='" + hub + "'") ("--nest '" + wk + "'"))
+   nohub (run "SB_HUB=" ("--nest '" + cr-root + "/nother'"))
+   _ (test
+      (<ok = 0) (cr-in >ok ("a worker nest at " + wk + " on the hub's head " + hp))
+      (wp = hp) (cr-get (wk + "/f") = "the hub's\n") (cr-get (wk + "/g") = "the hub's too\n")
+      (cr-get (wk + "/out/built") = "x\n")
+      (<again = 1) (cr-in >again "is there already")
+      (<nohub = 2) (cr-in >nohub "SB_HUB names no nest"))
    0)
 
 (hark ["rm" "-rf" cr-root])

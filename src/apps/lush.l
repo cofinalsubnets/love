@@ -2646,7 +2646,14 @@
      (? (sh-gitup ("" + cwd 0))
         (: r (hark ["git" "symbolic-ref" "--short" "-q" "HEAD"])
            (<r @ 0 (sh-chomp >r) ""))
-        "")
+        (sh-sbhead ("" + cwd 0)))
+   ; an sb nest up the walk: its head's psid, which is the sha256 of the head file's text
+   (sh-sbhead d)
+     (? (two? (stat (d + "/.sb")))
+        (: f (d + "/.sb/head") g (? (two? (stat f)) f (d + "/.sb/tips")) q (open g "r")
+           (? (hot? q) (: t (slurp q) _ (close q) ("sb " + snip (sha256 ("" + t)) 0 12)) ""))
+        (: k (sh-rfind d 47)
+           (? (k < 1) "" (sh-sbhead (snip d 0 k)))))
    ; the prompt's pens: a failing status red, the cwd the crew's cyan, the branch dim.
    ; no tty test guards them -- sh-loop is reached only when (raw 1) answered (), so the
    ; prompt is on a terminal. edlnc measures with edwide, so the escapes cost no column.

@@ -47,6 +47,8 @@ bee - a coding agent in the terminal, and the protocol its sessions talk by
 
 **love bee --hosts**
 
+**love bee --nest** *dir*
+
 **love bee -s** \| **--screensaver** \[*name*\]
 
 # DESCRIPTION
@@ -283,6 +285,8 @@ When a queue does not exist yet, **queue_row** makes it on bee's standard header
 **Land by sha.** The green head row lands its gated head with **git merge --no-ff** *sha*, and only when **git merge-tree --write-tree** of the base and *sha* gives *sha*'s own tree. After the landing, the base's first-parent line since the base line must hold a merge of *sha* with the gated tree. That merge, not the base's tip, is where the base line moves, so rows that land back to back are each recorded against their own merge. The lander then sends the next rows a *release note* naming what the merge removes, renames or moves. A session that cannot land (a sandbox that refuses the main checkout) hands the user the exact commands, with the shas and the tree each must print, so the landing can be checked without trusting it. It checks the checkout for someone's uncommitted edits first.
 
 **Land by psid.** On an sb ledger a row's gated head is the *psid* of the patch set it gated: the worker banks that set (**sb bank** *name*) and deposits it in the hub (**sb sync --keep** *hub*), and the bank travels with it. The green head row lands it with **sb -C** *hub* **take** *psid*, and only when the hub's head is the base line and lies inside that set. The hub's tree is a pure function of the set it realizes, so the hub then realizes exactly the set that was gated, and there is no merge to check. After the landing the hub's head must be that psid, and the base line moves to it.
+
+A session works in a *worker nest*, as it would in a git worktree: **love bee --nest** *dir* makes *dir* from the hub **SB_HUB** names, depositing the hub's store there, taking the hub's head, and seeding *dir*/**out/** from the hub's build. It refuses a *dir* that is already there.
 
 **The leader.** The **leader** line names the one session that keeps the queue. Only the leader edits another's row, the base line, and the **sync** and **pre** lines. The leader:
 
