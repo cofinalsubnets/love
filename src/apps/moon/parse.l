@@ -2618,6 +2618,19 @@
        (atom? t ? (gripe () () () "parse error at end of input")
           (gripe (two? dt ? (filof t) (filat spans i0)) <>>t ()
                  (why ? why ("parse error near " + spell t)))))
+   ; C11 6.7p4: a redeclared file-scope object keeps a compatible type. what is compared is the
+   ; shape -- scalar against pointer against struct, and two different arithmetic types --
+   ; which is what autoconf's suffix probes ask (`extern ptrdiff_t foo; extern int foo;`)
+   (tyshape t) (? (atom? t) t (ptr? t) 'ptr (arr? t) 'arr (stru? t) t (fn? t) 'fn 'other)
+   (tyclash? a b) (? (fn? a || fn? b) () (atom? a && atom? b) (a != b) (tyshape a != tyshape b))
+   (redecl ps f)
+    (? !(elem <f '(gdecl xdecl)) ()
+       (: (go prs) (atom? prs ? ()
+                     (<prs @ pr
+                        (peep (ps 'globals) <pr () @ old
+                           (two? pr && old && <>pr && tyclash? old <>pr ?
+                              ("conflicting types for '" + <pr + "'") (go >prs)))))
+          (go <>f)))
    (cparse ts) (cparse-t ts 'x64)          ; the law tests + any bare caller: 64-bit widths (unchanged behavior)
    (cparse-t ts tgt) (cparse-d ts tgt 'moon)  ; ..and the default dialect, which is what a bare caller means
    (cparse-d ts tgt dia)
@@ -2699,6 +2712,9 @@
                             (ps 'sfns) (ps 'svars) (ps 'sects) (ps 'alias) (ps 'aligns) (ps 'ainl) (ps 'noinl)
                             (ps 'consts) (ps 'rstrs) (ps 'gregs) vol])
            (ptop ps ts2 @ r
-              (two? r ? (note <r, tops <>r (<r . acc)) (pfail ps ts2 spans toks))))
+              (? !(two? r) (pfail ps ts2 spans toks)
+                 (redecl ps <r @ why
+                    (why ? (gripe (filat spans (#toks - #ts2)) (<>><ts2) () why)
+                       (note <r, tops <>r (<r . acc)))))))
        (tops toks ())))
 ) ; module 'moon

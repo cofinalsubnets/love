@@ -367,6 +367,13 @@ grep -q "incomplete type 't'" "$ho/.cc7.out" || fail "mooncc incomplete member m
 printf 'struct u;\nint main(void) { return sizeof (struct u); }\n' > "$ho/.cc8.c"
 moonrun "$ho/.cc8.c" "$ho/.ccx" > "$ho/.cc8.out" 2>&1
 grep -q "sizeof an incomplete type" "$ho/.cc8.out" || fail "mooncc sizeof incomplete must refuse: $(head -1 "$ho/.cc8.out")"
+# C11 6.7p4: an object redeclared at file scope keeps its type -- autoconf finds a type's
+# literal suffix by redeclaring one (`extern ptrdiff_t foo; extern int foo;` must refuse)
+printf 'extern long foo;\nextern int foo;\nint main(void) { return 0; }\n' > "$ho/.cc9.c"
+moonrun "$ho/.cc9.c" "$ho/.ccx" > "$ho/.cc9.out" 2>&1
+grep -q "conflicting types for 'foo'" "$ho/.cc9.out" || fail "mooncc redeclared type must refuse: $(head -1 "$ho/.cc9.out")"
+printf 'extern int a[];\nint a[4];\nint x;\nint x = 3;\nint main(void) { return x - 3; }\n' > "$ho/.cc10.c"
+moonrun "$ho/.cc10.c" "$ho/.cc10" > /dev/null 2>&1 && "$ho/.cc10" || fail "mooncc compatible redeclarations"
 # C11 6.7.4p7: a plain `inline` definition in a header lays no external symbol, so two TUs
 # including it link; the one saying `extern inline` lays it (gnulib's _GL_INLINE)
 printf 'inline int twice(int x) { return 2 * x; }\n' > "$ho/.inl.h"
