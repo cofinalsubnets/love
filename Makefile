@@ -963,7 +963,7 @@ endif
 
 # ONE roster each: the compat-symlink block below reads the same two names, and two
 # spellings of a list is how they drift.
-binnames = $(BIN) kore sb mooncc cook papel libra lux bao lush
+binnames = $(BIN) kore sb mooncc cook libra lux bao lush
 mannames = $(BIN) cook lush
 # the default nest is the one install: `love nest -y` (src/apps/source.l) copies the binary
 # in, newer builds only, and links lush, which runs every other verb by name. a real PREFIX,
@@ -1013,18 +1013,15 @@ $d/bin/$(BIN): $(ho)/love
 # layered crew chain riding it), so the plain-copy install keeps the warm wake and every verb.
 
 # the single-file shebang tools, one shape: the `#!/usr/bin/env -S love -l` line re-execs
-# the installed interpreter, and each file's own SEAT fires on its name. papel and libra
-# READ their siblings rather than being -l'd beside them -- two tool files cannot both be
-# -l'd, since each one's seat would fire on the other's command line -- and they find them
-# by READLINK'ing this very symlink back to the source tree, so the link on PATH and the
-# crew directory need not be neighbours. libra's siblings are named ((borrow 'lint),
-# (borrow 'salt), and (borrow 'lapiz) on the doc verb alone) and ride the baked image.
+# the installed interpreter, and each file's own SEAT fires on its name. libra borrows
+# its siblings by name rather than being -l'd beside them -- two tool files cannot both be
+# -l'd, since each one's seat would fire on the other's command line -- ((borrow 'lint),
+# (borrow 'salt), and (borrow 'lapiz) on the doc verb alone), and they ride the baked image.
 # each source sits FIRST on its own line: instool reads $<, and a prerequisite added on
 # the grouped line below lands ahead of it -- which installs the kore shim as `cook`.
 $d/bin/cook:    src/apps/cook.l    $(ho)/love
-$d/bin/papel:   src/apps/papel.l  $(ho)/love
 $d/bin/libra:   src/apps/libra/libra.l  $(ho)/love
-$d/bin/cook $d/bin/papel $d/bin/libra:
+$d/bin/cook $d/bin/libra:
 	@echo $(instag)	$(abspath $@)
 	@mkdir -p $(@D)
 	@$(call instool,$<,$@)
