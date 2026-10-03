@@ -12,7 +12,7 @@
 ; unit directions [east up north]. the weather is a tablet, (sky-weather cover style):
 ; cover 0 to 3, style 'smooth or 'pixel; and what falls from it, 'fall 0 nothing, 1 rain,
 ; 2 snow (nothing unless said), drawn into a scene by sky-fall!
-(module (sky sky-sun sky-body sky-light sky-maps sky-weather sky-cover sky-cloud sky-colour sky-tone
+(module (sky sky-sun sky-body sky-light sky-maps sky-weather sky-cover sky-cloud sky-colour sky-near sky-tone
          sky-covers sky-styles sky-says sky-falls sky-fall sky-fall! bil cloud-n star-n day-secs)
 (borrow 'view)
 (borrow 'vec)
@@ -120,8 +120,10 @@
    amb (c* (f = 1 ? 0.8 1.0) (cmix amb0 grey (0.7 * oc)))
    {'sun s 'day day 'tw tw 'sunk sunk 'sunc sunc 'amb amb 'cover oc 'csun csun
     'expo (1.0 + 1.2 * (1.0 - day) + 0.3 * oc)})
- ; --- the smooth sky ---
- (smooth lt wx dx dy dz ex ez sim t0) (: mp (sky-maps ())
+ ; --- the smooth sky. far weighs what lies past the moon, the stars and the sun's own disc:
+ ; 0 is the sky nearer than it, what a body in front of them shows ---
+ (smooth lt wx dx dy dz ex ez sim t0) (smooth-of lt wx dx dy dz ex ez sim t0 1.0)
+ (smooth-of lt wx dx dy dz ex ez sim t0 far) (: mp (sky-maps ())
    s (lt 'sun) sx (s 0) sy (s 1) sz (s 2) oc (lt 'cover)
    mu (dx * sx + dy * sy + dz * sz)
    up (sat dy)
@@ -131,7 +133,7 @@
    dusk (c* (lt 'tw * (1.0 - 0.5 * lt 'day)) (c+ (c* (warm * warm * warm) [0.9 0.38 0.16]) [0.22 0.12 0.28]))
    disc (sat ((mu - 0.9995) * 4000.0))
    halo (0.35 * lt 'day * exp ((mu - 1.0) * 60.0))
-   sky0 (c+ (c+ (cmix dark blue (lt 'day)) dusk) (c* (halo + 3.0 * disc * lt 'sunk) (lt 'sunc)))
+   sky0 (c+ (c+ (cmix dark blue (lt 'day)) dusk) (c* (halo + 3.0 * far * disc * lt 'sunk) (lt 'sunc)))
    d (deck-at dx dy dz ex ez sim) th (thick mp (d 0) (d 1) sim 0.3)
    cl0 (sat (0.5 + (th - edge wx sim 0.3) * 10.0))
    cl (wx 'cover = 3 ? (max cl0 0.93) cl0)        ; overcast: no sky through it
@@ -142,7 +144,7 @@
                       (c* (lt 'tw) [0.5 0.22 0.14]))
                   (c* (1.0 - lt 'day) [0.06 0.05 0.045])))
    qs (40.0 / max dy 0.05) sk ((floor (dz * qs) % star-n + star-n) % star-n * star-n + (floor (dx * qs) % star-n + star-n) % star-n)
-   star (peep (mp 'stars) sk 0.0 * (0.75 + 0.25 * sin (t0 * 0.9 + sk)) * sat (1.0 - lt 'day * 3.0) * (1.0 - cl))
+   star (peep (mp 'stars) sk 0.0 * (0.75 + 0.25 * sin (t0 * 0.9 + sk)) * sat (1.0 - lt 'day * 3.0) * (1.0 - cl) * far)
    (c+ (cmix sky0 cloudc cl) [star star star]))
  ; --- the pixel sky: the grass game's. its colours are xterm pens, said here as they
  ; are to show, and put back through the eye's tone so the frame shows them so ---
@@ -197,6 +199,9 @@
  ; lt and the weather wx, at the time sim and the frame's clock t0 (in frames)
  (sky-colour lt wx dx dy dz ex ez sim t0)
   (wx 'style = 'pixel ? (pixel lt wx dx dy dz ex ez sim t0) (smooth lt wx dx dy dz ex ez sim t0))
+ ; ..and the sky nearer than the moon: no stars and no sun's disc
+ (sky-near lt wx dx dy dz ex ez sim)
+  (wx 'style = 'pixel ? (pixel lt wx dx dy dz ex ez sim 0.0) (smooth-of lt wx dx dy dz ex ez sim 0.0 0.0))
  ; --- what falls: rain in streaks and snow in flakes, drawn into a scene's buffers -- 't
  ; the depth, 'r 'g 'b the colour -- through a camera (grove's: 'e 'f 'r 'u 'w 'h 'foc),
  ; at sec seconds of the scene's own clock. no state: a drop is where its number and the
