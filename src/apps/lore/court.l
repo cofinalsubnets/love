@@ -16,7 +16,7 @@
 ; every pixel casts its own ray, so the look tilts as far as the neck does. the scene is
 ; trays a frame wide: what each ray meets, the stuff there, the sun on it past the rim,
 ; and the colour out -- 24-bit where COLORTERM says so, else the 256 palette dithered.
-; court-new, court-step, court-move and court-frame are pure, gated by test/host/tree.l;
+; court-new, court-step, court-move and court-frame are pure, gated by test/host/court.l;
 ; only court-walk and court-run tie the tty. court-walk takes a stage already raised.
 ;
 ; run: love lore court  h l or the arrows turn, k j step, u n look up and down;
