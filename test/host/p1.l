@@ -191,6 +191,54 @@
                               p1-dval (cap (p1-cup (p1-cup r)))) acc)))
             (p1-str (p1-cup r) (. (p1-esc <r) acc)))))
 
+   ; --- raw texts ------------------------------------------------------------
+   ; three or more quotes open one and as many close it, no escapes. on one line a
+   ; longer closing run keeps its extra quotes. when the opener ends its line, the
+   ; text closes on a line of only spaces and the quotes, that line's indent comes off
+   ; every line (at most that many spaces or tabs), and the breaks beside the quotes
+   ; are not the text's. cl is at the first quote
+   (p1-hws? c) (c = 32 ? 1 (c = 9))
+   (p1-qrun cl k) ((two? cl ? (cap cl = 34)) ? (p1-qrun (p1-cup cl) (k + 1)) (. k cl))
+   (p1-lead cl k) ((two? cl ? (p1-hws? <cl)) ? (p1-lead (p1-cup cl) (k + 1)) (. k cl))
+   (p1-reps c k acc) (0 < k ? (p1-reps c (k - 1) (. c acc)) acc)
+   (p1-raw cl)
+     (p1-qrun cl 0 @ qr
+        (: q <qr r >qr s >(p1-lead r 0)
+           crlf (two? s ? (cap s = 13 ? (two? (p1-cup s) ? (cap (p1-cup s) = 10))))
+           (? (two? s ? (cap s = 10)) (p1-rawml (p1-cup s) q ())
+              crlf (p1-rawml (p1-cup (p1-cup s)) q ())
+              (p1-raw1 r q ()))))
+   (p1-raw1 cl q acc)
+     (? (atom? cl) 'torn
+        (!= <cl 34) (p1-raw1 (p1-cup cl) q (. <cl acc))
+        (p1-qrun cl 0 @ rr
+           (<rr < q ? (p1-raw1 >rr q (p1-reps 34 <rr acc))
+            (. (string (p1-rev (p1-reps 34 (<rr - q) acc) ())) >rr))))
+   ; a line -> (its chars . rest past the break), the break's \r not the line's
+   (p1-line cl acc)
+     (? (atom? cl) 'torn
+        (cap cl = 10) (. (p1-rev acc ()) (p1-cup cl))
+        (cap cl = 13 ? (two? (p1-cup cl) ? (cap (p1-cup cl) = 10)))
+          (. (p1-rev acc ()) (p1-cup (p1-cup cl)))
+        (p1-line (p1-cup cl) (. <cl acc)))
+   ; lines is last first, each (its chars . its break), the break 10 or 13
+   (p1-rawml cl q lines)
+     (p1-lead cl 0 @ lr
+        (p1-qrun >lr 0 @ rr
+           (? (q <= <rr) (. (p1-rawtxt (p1-rev lines ()) <lr ()) (p1-drop >lr q))
+              (p1-line cl () @ la
+                 (atom? la ? 'torn
+                  (p1-rawml >la q (. (. <la (p1-crlf? cl la)) lines)))))))
+   ; whether the line at cl, read into la, broke on \r\n
+   (p1-crlf? cl la) (p1-drop cl (p1-len <la 0) @ e (cap e = 13 ? 13 10))
+   (p1-len l k) (two? l ? (p1-len >l (k + 1)) k)
+   (p1-strip l w) ((0 < w ? (two? l ? (p1-hws? <l))) ? (p1-strip >l (w - 1)) l)
+   (p1-rawtxt ls w acc)
+     (? (atom? ls) (string (p1-rev acc ()))
+        (: line (p1-rev (p1-strip <<ls w) acc)
+           (atom? >ls ? (p1-rawtxt >ls w line)
+            (p1-rawtxt >ls w (>(cap ls) = 13 ? (. 10 (. 13 line)) (. 10 line))))))
+
    ; --- the wraps -----------------------------------------------------------
    ; the value surface, the printer's read-back contract: ' and @ each wrap the
    ; next datum. a splicing wrap (hash tuple list) over a list splices instead:
@@ -224,7 +272,8 @@
             (? (c = 40) (p1-list r 1 ())
                (p1-cls c & 16) (p1-open (c @ 91 'list 'hash) r)
                (p1-cls c & 32) ()
-               (c = 34) (p1-str r ())
+               (c = 34) ((two? r ? (cap r = 34 ? (two? (p1-cup r) ? (cap (p1-cup r) = 34)))) ?
+                           (p1-raw cl) (p1-str r ()))
                (c = 39) (p1-lift (nom "\\") r head)
                ; @ glued to an operator char is an operator run (@- and friends), not the
                ; tuple sigil: a datum cannot start with one. the run's own shed rule keeps

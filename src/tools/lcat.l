@@ -76,7 +76,8 @@
                ? (c = 92 ? (g >>cs 0 1 (<>cs . c . out))
                     (g >cs 0 (c = 34 ? 0 1) (c . out)))
                  (c = 32
-                  ? (redundant? ctx >cs
+                  ; a space between two strings is never redundant: three quotes open a raw text
+                  ? (!(two? out && <out = 34 && two? >cs && <>cs = 34) && redundant? ctx >cs
                      ? (g >cs ctx 0 out)                          ; drop the space; ctx keeps accruing
                        (g >cs 0 0 (c . out)))                     ; keep it: a real boundary
                     ; a terminal ' is a prime, not a quote: `x'` is one name, so the byte

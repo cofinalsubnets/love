@@ -7,7 +7,7 @@
 # defines; the root Makefile names only its own verbs.
 .PHONY: \
   moon-bzip2 moon-bzip2-a64 moon-bzip2-rv64 moon-gzip moon-gzip-a64 moon-gzip-rv64 \
-  moon-lua moon-lua-a64 moon-lua-rv64 moon-m4 moon-m4-a64 moon-m4-rv64 moon-sqlite \
+  moon-bison moon-flex moon-lua moon-lua-a64 moon-lua-rv64 moon-m4 moon-m4-a64 moon-m4-rv64 moon-sqlite \
   moon-sqlite-a64 moon-sqlite-rv64 moon-tar moon-tar-a64 moon-tar-rv64 mx nettest test \
   test_as test_asmops test_bakerep test_big test_boards test_cca64 test_ccrv64 test_ccwasm test_ccthumb1 \
   test_ccthumb2 test_clay test_cli test_nest test_cookdiff test_cpio test_cts test_cts_a64 test_tfm test_caja test_gpic test_grap test_chem \
@@ -833,7 +833,7 @@ define moon_pkg
 moon-$1: host
 moon-$1-a64 moon-$1-rv64: $3
 moon-$1 moon-$1-a64 moon-$1-rv64:
-	@$2="$$($2)" ./tools/moon-$1.sh $$(moon_arch_$$(patsubst moon-$1-%,%,$$@))
+	@$2="$$($2)" ./src/tools/moon-$1.sh $$(moon_arch_$$(patsubst moon-$1-%,%,$$@))
 endef
 $(eval $(call moon_pkg,tar,TARSRC,host))
 $(eval $(call moon_pkg,m4,M4SRC,host))
@@ -841,6 +841,11 @@ $(eval $(call moon_pkg,lua,LUASRC,host))
 $(eval $(call moon_pkg,sqlite,SQLSRC,moon-sqlite))
 $(eval $(call moon_pkg,gzip,GZIPSRC,host))
 $(eval $(call moon_pkg,bzip2,BZIP2SRC,host))
+# flex 2.6.4 and bison 3.8.2, each on m4 1.4.21, from pinned tarballs: configured with
+# CC=mooncc (no gcc even in the probes), built, and held byte-identical to the host's own
+# flex and bison on the scanners and grammars their tarballs carry. hearts' LEX and YACC.
+moon-flex moon-bison: host
+	@./src/tools/$@.sh
 # test_distboot -- the release claim: lay the source the binary carries, type make, get the
 # same binary by either road. one lay bootstraps through the machine's cc; the other builds
 # with cc/gcc/clang shadowed by scripts that fail loudly, so "no ambient compiler did the

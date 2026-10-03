@@ -18,4 +18,6 @@ int isupper(int);
 int isxdigit(int);
 int tolower(int);
 int toupper(int);
+int isascii(int);
+int toascii(int);
 #endif
