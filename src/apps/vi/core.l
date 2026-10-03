@@ -56,9 +56,10 @@
    ; every edit to 'lines bumps the generation, which is what lets the paint's
    ; string carry be recomputed once per edit instead of once per keystroke
    (vgen st) (pin st 'hlgen (st 'hlgen + 1))
-   (vput st r ln) (pin st 'lines (: (go l i) (two? l ?
-                                                ((i = r ? ln <l) . go >l (i + 1)))
-                                    (go (st 'lines) 0)),
+   (vput st r ln) (pins st 'lines (: (go l i) (two? l ?
+                                                 ((i = r ? ln <l) . go >l (i + 1)))
+                                     (go (st 'lines) 0))
+                         'dirty 1,
                    vgen st)
    ; -- characters: 'col is a byte, always a character's first, and the screen counts
    ; columns -- a wide character two, a combining mark none, an ascii byte one (a tab
@@ -889,7 +890,8 @@
               ("q" "q") ("w" "w") ("wq" "wq") ("x" "x")
               ("e" "edit") ("o" "edit") ("edit" "edit")
               ("hl" "hl") ("set" "set") ("lint" "lint")
-              ("sp" "split") ("split" "split") ("vs" "vsplit") ("vsplit" "vsplit"))
+              ("sp" "split") ("split" "split") ("vs" "vsplit") ("vsplit" "vsplit")
+              ("find" "find") ("grep" "grep") ("explore" "explore"))
    ; the word as typed when it is one, else the meaning of the one word it heads;
    ; ('many ..) when the heads mean different things, and the word itself when none
    (vexfull st w)
@@ -934,6 +936,10 @@
             (w = "edit") (vedit st nm bang)
             (w = "split") (pin st 'dos ['stack arg])
             (w = "vsplit") (pin st 'dos ['beside arg])
+            ; a picker over the tree here, the face's to open: its files, or every line
+            (w = "find" || w = "grep") (pin st 'dof [w arg])
+            ; a browser beside this buffer, on arg or the working directory: the face's door
+            (w = "explore") (pin st 'dex [arg])
             (w = "hl") (pin st 'hl (st 'hl ? () 1),
                         vmsg st (st 'hl ? "syntax on" "syntax off"))
             ; :set knows one option, which is the one > and < need a number for

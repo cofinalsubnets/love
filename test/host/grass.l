@@ -1,4 +1,4 @@
-; test/host/grass.l -- leaves of grass, headless: the clock and sky, water given and taken by the
+; test/host/grass.l -- grass simulator 1988, headless: the clock and sky, water given and taken by the
 ; weather, a blade growing, the dance, the words, the helm, the week's end, the song, the frame.
 ; not in the corpus: a crew module. run: cat test/00-init.l test/host/grass.l | out/love
 

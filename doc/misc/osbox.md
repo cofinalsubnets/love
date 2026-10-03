@@ -1,7 +1,9 @@
 # osbox guests
 
-`test/gate/osbox.sh` runs against a box named in the env (`FBSD_SSH`, `NBSD_SSH`,
-`FBSD_ARM64_SSH`, `NBSD_ARM64_SSH`), each an ssh command prefix.
+`test/gate/osbox.sh` runs against a host bee knows with the cap `freebsd-x64`, `netbsd-x64`,
+`freebsd-a64` or `netbsd-a64` (doc/bee.md, HOSTS), reached by its `reach` words. For a release
+the env still names one (`FBSD_SSH`, `NBSD_SSH`, `FBSD_ARM64_SSH`, `NBSD_ARM64_SSH`), each an
+ssh command prefix.
 
 ## freebsd x64
 

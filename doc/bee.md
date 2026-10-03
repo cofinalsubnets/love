@@ -43,7 +43,9 @@ bee - a coding agent in the terminal, and the protocol its sessions talk by
 
 **love bee --state busy** \| **idle** \[**--pid** *pid*\]
 
-**love bee -s** \| **--screensaver** \[*name*\]
+**love bee --on** *cap* \[**--where** *key***=***value*\] \[**--ship** *dir*\] **--probe** \| **--ssh** \| **--** *command* ...
+
+**love bee --hosts**
 
 # DESCRIPTION
 
@@ -61,7 +63,7 @@ A write, an edit, a shell command, a job's start, a message to another session, 
 
 Given a *prompt*, bee runs one turn and exits, streaming the answer to standard output. With no prompt, on a terminal it shows the *hud*; elsewhere, or on a terminal with **--plain**, it runs a **>** loop. **--chat** opens the full screen, the chat with the model, directly.
 
-The hud needs no model or key. It shows each merge queue: the base line and the leader, then every row (position, session, branch, gated-on, head and state), a folded row indented under the row it joins, the head row marked, and a note when the queue is long. Below the queues are the locks (the heavy tickets against **(heavy-max** *n***)**, the waiters, the **out/** locks and the **a64host-** slots, memory and load) and the sessions: each one's state and how long it has held it, and the time since its last bee tool call. It reads them all again every **(queue-watch** *n***)** seconds, 20 unless set, and on **r**. **q** quits; the arrows, **j** and **k** scroll. **--hud** prints it once, as text.
+The hud needs no model or key. It shows each merge queue: the base line and the leader, then every row (position, session, branch, gated-on, head and state), a folded row indented under the row it joins, the head row marked, and a note when the queue is long. Below the queues are the locks (the heavy tickets against **(heavy-max** *n***)**, the waiters, the **out/** locks and the hosts' **host-** slots, memory and load) and the sessions: each one's state and how long it has held it, and the time since its last bee tool call. It reads them all again every **(queue-watch** *n***)** seconds, 20 unless set, and on **r**. **q** quits; the arrows, **j** and **k** scroll. **--hud** prints it once, as text.
 
 While it is open, the hud holds the *user's card*, at the login's name (**USER**), and the user talks to the hive through it. **c** or Enter opens a line to a session, the first queue's leader at first: Enter sends what is typed, Tab names the next session, and Esc goes back to looking. The talk shows under the queues, with whatever comes back to the user's name. A second hud for one login has no card, and only looks.
 
@@ -82,19 +84,6 @@ The settings are read from **~/.love/etc/bee.l**, one form per line: **(api anth
 The hello box shows an avatar: eight by eight pixels drawn as four rows of half-blocks, in 24-bit colour when **COLORTERM** is **truecolor** or **24bit** and the nearest of 256 otherwise. They are **bunny** (the default), **bee**, **baby**, **hare**, **honeybee**, **beeface**, and **moon**, drawn by **love pom** at start as the moon stands then (UTC). The accent -- the box's border, the title, the spinner, the session's name and the mail marker -- follows it: the colour most of its vivid pixels share, or most of all its pixels when none is vivid.
 
 **/avatar**, on the full screen or at the **>** prompt, draws them all with their names; **/avatar** *name* wears one at once, and **love bee --avatar** \[*name*\] does the same from a shell. The choice is kept as **(avatar** *name***)** in **~/.love/etc/bee.l**, replacing any before it; a tree's **./.bee.l** cannot set it. An unknown name is refused with the list of known ones.
-
-# SCREENSAVERS
-
-When the full screen has had no key for **(screensaver-idle** *n***)** minutes (10 unless set, 0 for never; a fraction is allowed), it plays the saver **(screensaver** *name***)**, **pom** unless set. Both are settings of **~/.love/etc/bee.l** alone: a look is the person's, not the tree's, so **./.bee.l** cannot set them. The **>** loop and **--plain** have none.
-
-Any key takes the saver down and lays the screen again as it was; that key goes nowhere else. A turn that is running goes on underneath it, and a message, a queue notice or a tool asking y/n leaves a small **✉** in its top right corner instead of waking it.
-
-- **pom**: the moon at this hour's phase (UTC, as **love pom** reckons it), large and centred on half cells, over a few dozen stars that brighten and dim each on its own slow cycle, its phase and how much is lit under it.
-- **slop**: the slop's skin from **love lore slop**, drifting, in its own gold and pink.
-- **life**: Conway's game of life on a torus of half cells, each cell's green its age, sown again when it settles.
-- **matrix**: green rain down the columns, each a drop of its own speed and length.
-
-A saver redraws only the cells that changed, at 8 to 15 frames a second, and skips a frame it is late for. **love bee -s** *name* plays one on its own, with no session, until a key; **-s** alone lists them, and a name it does not know lists them on standard error and exits 2.
 
 # SESSIONS AND MESSAGES
 
@@ -174,6 +163,40 @@ Asking stays with the caller. A bee's child asks through **approve**. A Claude C
 The machine is shared, and **src/apps/locks.l** keeps its locks: an exclusive lock per resource, such as one make per **out/**, and a pool of heavy tickets, at most **(heavy-max** *n***)** at once (2 unless set) and none granted while available memory is below **(mem-floor** *gb***)**. A lock is held by a pid, so it lives as long as its holder. A bee holds its locks under its own pid, the one on its card, even when its **--mcp** child asks for them. That way a lock outlives a Claude child that ends and dies with the bee.
 
 The model has **lock_acquire** (*name*, *kind* exclusive or heavy, *note*), **lock_release** and **lock_list**; the last two run without asking. An acquire answers at once: granted, or queued with its position, who holds it and how much memory is available. A queued lock is asked for again every 5 seconds, which keeps its place, and when it is granted a message from **lock-***name* says so. So a turn never waits on a lock. From a shell, **love bee --lock** waits for an exclusive lock on the command's **out/** (**./out** when there is one, or **--out** *dir*) and, with **--heavy**, for a heavy ticket. It then runs the command, releases both however the command ends, and exits with its status. A binary built without **src/apps/locks.l** says so.
+
+# HOSTS
+
+Work this box cannot do, or should not, runs on another: an a64 binary on an arm box, a kernel under kvm, a test on a BSD guest. The hosts a session may use are a registry, **~/.love/etc/bee/hosts** (**BEE_HOSTS** names another file), kept by **src/apps/hosts.l**. It holds a paragraph a host, each a run of *key value* lines like a card's, with a blank line between and **#** lines left out:
+
+**name**
+:   The host's name, which its locks carry.
+
+**reach**
+:   The words of the ssh that reaches it, **ssh** *name* unless given. bee adds batch mode and a short connect timeout just before the last word, so an option given here comes first and stands.
+
+**slots**
+:   How many pieces of work it takes at once, 1 unless given. Each slot is an exclusive lock, **host-***name***-***n*, so two lanes never crowd one box.
+
+**caps**
+:   What it can do, as words: **a64-exec** (runs linux/arm64 binaries), **kvm-a64** (boots an a64 guest under kvm), **vt-x** (boots an x64 guest that uses VT-x), **freebsd-x64**, **netbsd-x64**, **freebsd-a64**, **netbsd-a64** (that system, to test against).
+
+Any other line is a *fact*, such as **isa**, **os** or **page** (its page size in bytes). For example:
+
+```
+# a pi 5 on the network, a 16K-page kernel
+name arm1.lan
+slots 3
+caps a64-exec kvm-a64
+page 16384
+
+name bsd-guest
+reach ssh -p 2222 root@127.0.0.1
+caps freebsd-x64
+```
+
+**love bee --on** *cap* \[**--where** *key***=***value*\] \[**--ship** *dir*\] **--** *command* ... picks a host with *cap* that answers ssh, and whose fact *key* is *value* when **--where** asks; a **page** the registry does not give is asked of the host. It waits for a free slot on one, lays *dir*'s files in a scratch directory there in one tar over the one ssh, runs *command* in it with only **PATH**, **HOME** and **LANG=C**, removes the directory, frees the slot, and exits with the command's status. Its output comes back on this side's. **--probe** in place of the command exits 0 when such a host answers and 75 when none does; **--ssh** prints the words that reach it. **love bee --hosts** lists the registry.
+
+The lanes ask for hosts this way: the a64 kernel lane boots on a **kvm-a64** host, the a64 lanes' binaries run on an **a64-exec** one, **test_kernel_vmx** boots on **vt-x**, and the BSD lanes find their boxes by their caps. A lane with a fallback takes 75 as its cue; one without skips loudly, which a strict box makes red. For one release the environment still names hosts, and a cap it names takes its hosts over the registry's: **KTEST_A64_HOSTS** (*host***:***slots* ...) for **a64-exec** and **kvm-a64**, **KTEST_VMX_HOSTS** for **vt-x**, and **FBSD_SSH**, **NBSD_SSH**, **FBSD_ARM64_SSH** and **NBSD_ARM64_SSH** (an ssh prefix each) for the four systems. A box joins the hive's lineage by enrolment (KEYS), and its registry entry says how its work reaches it.
 
 # KEYS
 
@@ -265,7 +288,7 @@ The leader hands off by rewriting the line to a live session that agreed, and sa
 
 **Say it, then verify it.** Tell the leader every change of state: join, gating, green, landed. The leader verifies from the store, not from the message. A restart may rename a session, which then asks the leader to correct its row and says so.
 
-**Restart onto a new bee.** After a landing that changes bee (**src/apps/bee.l**, **locks.l**, **saver.l** or **pom.l**), every live session restarts at its next convenient point: between tasks, never mid-gate, resuming in the same directory so **.mcp.json** loads the new bee. **queue_landed** ends the release note with this, and each session's own watch on its binary says it too.
+**Restart onto a new bee.** After a landing that changes bee (**src/apps/bee.l**, **locks.l** or **seals.l**), every live session restarts at its next convenient point: between tasks, never mid-gate, resuming in the same directory so **.mcp.json** loads the new bee. **queue_landed** ends the release note with this, and each session's own watch on its binary says it too.
 
 ## The tools
 
@@ -340,12 +363,15 @@ Send the same note with nothing but a shell:
 **SB_HUB**
 :   The sb nest whose **queue/** ledgers are the merge queues.
 
+**BEE_HOSTS**
+:   The host registry, **~/.love/etc/bee/hosts** when unset.
+
 **ANTHROPIC_API_KEY**, **OPENAI_API_KEY**
 :   The key, by default; **(key-env** *var***)** names another.
 
 # EXIT STATUS
 
-**0** when the run ends normally. **1** when the settings name no usable endpoint, model or key, when a message cannot be delivered, or for an unknown **--avatar**, or when **--keygen** cannot make a key. **2** for a malformed **--send**, or a screensaver **-s** does not know.
+**0** when the run ends normally. **--on** exits with its command's status, **75** when no host with the cap answers and **255** when ssh or the host fails. **1** when the settings name no usable endpoint, model or key, when a message cannot be delivered, or for an unknown **--avatar**, or when **--keygen** cannot make a key. **2** for a malformed **--send**.
 
 # SEE ALSO
 

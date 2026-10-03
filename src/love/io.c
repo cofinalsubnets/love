@@ -778,8 +778,8 @@ lvm(lvm_string) {
 // (rd_call) and is run again from the last position it committed, over a copy that holds
 // the answer, so a walk can always start over.
 enum { RdCur, RdCnt, RdVal, RdSrc, RdRegs };
-enum { RkOne, RkAll, RkParen, RkList, RkHash, RkTuple, RkQuote, RkLift, RkMono };
-enum { RsStart, RsRead, RsClose, RsDatum, RsAll };
+enum { RkOne, RkAll, RkParen, RkList, RkHash, RkTuple, RkHole, RkWeave, RkQuote, RkLift, RkMono };
+enum { RsStart, RsRead, RsClose, RsDatum, RsAll, RsWeave };
 #define RdHdr(k, n) putcharm((k) | (intptr_t) (n) << 4)
 #define RdKind(h) ((int) (getcharm(h) & 15))
 #define RdUnder(h) ((uintptr_t) getcharm(h) >> 4)
@@ -806,9 +806,9 @@ static unsigned char const rd_cls[257] = {
  ['5'] = RcDig, ['6'] = RcDig, ['7'] = RcDig, ['8'] = RcDig, ['9'] = RcDig };
 
 static lvm(lvm_rd_start); static lvm(lvm_rd_read); static lvm(lvm_rd_close);
-static lvm(lvm_rd_datum); static lvm(lvm_rd_all); static lvm(lvm_rd_called);
+static lvm(lvm_rd_datum); static lvm(lvm_rd_all); static lvm(lvm_rd_called); static lvm(lvm_rd_weave);
 static union u const
- rd_k[] = { {lvm_rd_start}, {lvm_rd_read}, {lvm_rd_close}, {lvm_rd_datum}, {lvm_rd_all} },
+ rd_k[] = { {lvm_rd_start}, {lvm_rd_read}, {lvm_rd_close}, {lvm_rd_datum}, {lvm_rd_all}, {lvm_rd_weave} },
  rd_call_k[] = { {lvm_ap}, {lvm_rd_called} },
  rd_reads_k[] = { {lvm_sounds}, {lvm_ret0} };   // the boot's, the same run as the nif's
 
@@ -929,8 +929,9 @@ static struct ai *rd_start(struct ai *g) {
 // a text's escapes: n t r e 0, \xhh as two chars hex or not, \u{h..} one to six hex
 // digits naming a code point outside the surrogates (else a plain u), any other char
 // itself. counts the bytes, and lays them too when d is given; -1 torn, -2 a promise to
-// force (in *end), else the count with *end past the closing quote
-static intptr_t rd_strw(word src, word p, char *d, word *end) {
+// force (in *end), else the count with *end past the closing quote, or past the ( of a
+// \( hole with *hole set
+static intptr_t rd_strw(word src, word p, char *d, word *end, bool *hole) {
  intptr_t k = 0;
  word n, q;
 #define Put(b) ((void) (d && (d[k] = (char) (b))), k++)
@@ -943,6 +944,7 @@ static intptr_t rd_strw(word src, word p, char *d, word *end) {
   if (c != '\\') { Put(rd_byte(src, p)), p = n; continue; }
   if ((c = rd_at(src, q = n)) < 0) return -1;
   Over(n, q);
+  if (c == '(') return *hole = true, *end = n, k;
   if (c == 'x') {
    word h;
    if (rd_at(src, n) < 0) return -1;
@@ -1034,21 +1036,37 @@ static struct ai *rd_rawstr(struct ai *g) {
  g->sp[RdVal] = s ? word(s) : EmptyString, g->sp[RdCur] = e;
  return RdGo(RsDatum); }
 
+// a text's run up to its closing quote or a hole, from the position in the cursor: onto
+// the weave's pile, and the hole opened or the weave shut. a text with no hole is itself,
+// and one with holes (weave [run (hole) run ..]), each hole read as a list is
+static struct ai *rd_weave(struct ai *g) {
+ word e;
+ bool hole = false;
+ intptr_t k = rd_strw(g->sp[RdSrc], g->sp[RdCur], NULL, &e, &hole);
+ if (k == -1) return rd_torn(g);
+ if (k == -2) return rd_call(g, e, ZeroPoint, e);
+ uintptr_t cnt = getcharm(g->sp[RdCnt]);
+ if (!ai_ok(g = ai_have(g, str_width(k) + (cnt + 4) * chain_req + RdSlack))) return g;
+ struct ai_str *s = k ? ini_str(bump(g, str_width(k)), k) : NULL;
+ rd_strw(g->sp[RdSrc], g->sp[RdCur], s ? txt(s) : NULL, &e, &hole);
+ g->sp[RdCur] = e;
+ if (s) rd_open(g, 1), g->sp[RdRegs] = word(s), g->sp[RdCnt] = putcharm(++cnt);
+ if (hole) return rd_frame(g, RkHole), RdGo(RsRead);
+ word const h = g->sp[RdRegs + cnt], one = cnt == 1 && strp(g->sp[RdRegs]) ? g->sp[RdRegs] : ZeroPoint;
+ word l = ZeroPoint;
+ for (uintptr_t i = 0; i < cnt; i++) l = rd_cons(g, g->sp[RdRegs + i], l);
+ rd_shut(g, cnt + 1), g->sp[RdCnt] = putcharm(RdUnder(h));
+ g->sp[RdVal] = !cnt ? EmptyString : one != ZeroPoint ? one
+  : rd_cons(g, g->rnom[RnWeave], rd_cons(g, rd_cons(g, g->rnom[RnList], l), ZeroPoint));
+ return RdGo(RsDatum); }
+
 static struct ai *rd_str(struct ai *g) {
  word src = g->sp[RdSrc], n, e;
  RdStep(n, g->sp[RdCur]);
  if (rd_at(src, n) == '"') {
   RdStep(e, n);
   if (rd_at(src, e) == '"') return rd_rawstr(g); }
- intptr_t k = rd_strw(src, n, NULL, &e);
- if (k == -1) return rd_torn(g);
- if (k == -2) return rd_call(g, e, ZeroPoint, e);
- if (!ai_ok(g = ai_have(g, str_width(k) + RdSlack))) return g;
- src = g->sp[RdSrc], n = rd_next(g->sp[RdCur]);
- struct ai_str *s = k ? ini_str(bump(g, str_width(k)), k) : NULL;
- rd_strw(src, n, s ? txt(s) : NULL, &e);
- g->sp[RdVal] = s ? word(s) : EmptyString, g->sp[RdCur] = e;
- return RdGo(RsDatum); }
+ return rd_frame(g, RkWeave), g->sp[RdCur] = n, RdGo(RsWeave); }
 
 // a token's text: an integer in any of the three bases, the named infinities, or a float
 // if it leads like one (a digit or a dot, past a sign) and parses whole. mk_gem's () for a
@@ -1158,7 +1176,7 @@ static struct ai *rd_read(struct ai *g) {
   int const k = RdKind(h);
   unsigned const m = c < 0 ? RcClose : rd_cls[c];
   if (m & RcClose)                                       // the end of the text or of a list
-   return k >= RkParen && k <= RkTuple ? (c < 0 ? rd_torn(g) : RdGo(RsClose))
+   return k >= RkParen && k <= RkHole ? (c < 0 ? rd_torn(g) : RdGo(RsClose))
         : k == RkOne ? rd_done(g, ZeroPoint)
         : k == RkAll ? RdGo(RsAll)
         : rd_torn(g);
@@ -1191,7 +1209,7 @@ static struct ai *rd_close(struct ai *g) {
  for (uintptr_t i = 0; i < cnt; i++) l = rd_cons(g, g->sp[RdRegs + i], l);
  rd_shut(g, cnt + 1), g->sp[RdCnt] = putcharm(RdUnder(h)), g->sp[RdCur] = n;
  int const k = RdKind(h);
- g->sp[RdVal] = k == RkParen ? l
+ g->sp[RdVal] = k == RkParen || k == RkHole ? l
   : l == ZeroPoint && k != RkList ? rd_cons(g, g->rnom[k == RkHash ? RnTablet : RnIota], rd_cons(g, putcharm(0), ZeroPoint))
   : rd_cons(g, g->rnom[k == RkList ? RnList : k == RkHash ? RnHash : RnTuple], l);
  return RdGo(RsDatum); }
@@ -1219,7 +1237,7 @@ static struct ai *rd_datum(struct ai *g) {
    return rd_done(g, rd_cons(g, g->sp[RdVal], r)); }
   if (k < RkQuote) {                                     // a list's, or the whole text's
    rd_open(g, 1), g->sp[RdRegs] = v, g->sp[RdCnt] = putcharm(cnt + 1);
-   return RdGo(RsRead); }
+   return RdGo(k == RkWeave ? RsWeave : RsRead); }
   word const o = g->sp[RdRegs + 1];
   rd_shut(g, k == RkMono ? 2 : 1), g->sp[RdCnt] = putcharm(RdUnder(h));
   g->sp[RdVal] =
@@ -1244,6 +1262,7 @@ static lvm(lvm_rd_read) LvmResume(g, rd_read)
 static lvm(lvm_rd_close) LvmResume(g, rd_close)
 static lvm(lvm_rd_datum) LvmResume(g, rd_datum)
 static lvm(lvm_rd_all) LvmResume(g, rd_all)
+static lvm(lvm_rd_weave) LvmResume(g, rd_weave)
 static lvm(lvm_rd_called) LvmResume(g, rd_called)
 
 ////

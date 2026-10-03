@@ -787,5 +787,26 @@
  _ (scribe s "\e[2;1H\e[L")
  _ (test (14 = (14 & wet s 0))))      ; il at row 1: rows 1..3
 
+; --- 31. DEC special graphics, as ncurses draws its ACS lines: ESC ( 0 puts G0 on the box
+; --- glyphs and ESC ( B takes it back; ESC ) 0 then SO and SI do the same through G1; the
+; --- letters below _ stay themselves; G2 and G3 designate nothing we show; DECSC and DECRC
+; --- keep the charsets, and RIS and DECSTR put ascii back ---
+(: (cps s a n) (map (\ i (chat s (a + i))) (jot n))
+   s (mkscr 4 10)
+   _ (scribe s "\e(0lqqk\r\nx  x\r\nmqqj\e(B\r\nq")
+   s2 (mkscr 2 10) _ (scribe s2 "\e)0a\x0eqtnwA\x0fq")
+   s3 (mkscr 2 10) _ (scribe s3 "\e(0\e7\e(B\e[1;3Hq\e8q")
+   s4 (mkscr 2 10) _ (scribe s4 "\e(0\ecq")
+   s5 (mkscr 2 10) _ (scribe s5 "\e(0\e[!pq")
+   s6 (mkscr 2 10) _ (scribe s6 "\e*0\e+0q")
+ _ (test
+    ([9484 9472 9472 9488] = cps s 0 4)      ; l q q k: the top of a box
+    ([9474 32 32 9474] = cps s 10 4)         ; x  x
+    ([9492 9472 9472 9496] = cps s 20 4)     ; m q q j
+    (113 = chat s 30)                        ; ascii again after ESC ( B
+    ([97 9472 9500 9532 9516 65 113] = cps s2 0 7)   ; SO: q t n w through G1, A itself; SI: q
+    (113 = chat s3 2) (9472 = chat s3 0)     ; ascii at col 3; DECRC brought the graphics back
+    (113 = chat s4 0) (113 = chat s5 0) (113 = chat s6 0)))
+
 (test_fin ())
 (puts "cb: ok")

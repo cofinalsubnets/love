@@ -53,6 +53,40 @@
     (s2 'dos @ rq
        (atom? rq ? s2
           (pin s2 'dos (), split ? (split <rq <>rq) (vmsg s2 "no splits on this seat"), s2)))
+   ; the picker requests: (word query) opens seek over the tree under the working directory
+   ; -- :find its files, :grep every line of them -- in the buffer's place on the screen.
+   ; a pick opens the file there, a line's on its row; esc goes back to the buffer
+   (dof s2)
+    (s2 'dof @ rq
+       (atom? rq ? s2
+          (: _ (pin s2 'dof ())
+             find? (<rq = "find")
+             fs (cite 'seek 'seek-files ".")
+             d (? find? (cite 'seek 'seek-new fs (f \ f) (f \ f) "find")
+                  (cite 'seek 'seek-new (cite 'seek 'seek-lines fs) (it \ it 2) (cite 'seek 'seek-label ".") "grep"))
+             (0 < #(<>rq) ? (cite 'seek 'seek-q d (<>rq)) 0,
+              pin s2 'seek d, s2))))
+   ; the picked: a file, or [file line text]; the buffer's own file just moves the cursor
+   (vpicked s2 it)
+    (: f (string? it ? it (it 0))
+       row (string? it ? 0 (it 1 - 1))
+       (? (f = s2 'file) (pins s2 'row row 'col 0)
+          (s2 'dirty) (vmsg s2 "no write since last change")
+          (uread f @ r
+             (vload s2 (two? r ? (lines <>r)) f,
+              pins s2 'row row 'col 0,
+              vmsg s2 (f + ": " + show #(s2 'lines) + " lines")))))
+   ; a key while the picker is up is the picker's; when it goes the buffer is drawn whole
+   (vseek s2 c)
+    (: d (s2 'seek)
+       ((cite 'seek 'seek-key) d c,
+        d 'over ? (pins s2 'seek () 'lastr (), d 'pick @ it (it ? (vpicked s2 it) 0)) 0))
+   ; the explore requests: (dir) goes to the face's 'explore door (state dir), which lays
+   ; mc beside the buffer; a seat with no such door has no explorer
+   (dex s2 ex)
+    (s2 'dex @ rq
+       (atom? rq ? s2
+          (pin s2 'dex (), ex ? (ex s2 <rq) (vmsg s2 "no explorer on this seat"), s2)))
    ; the ex words the engine does not know: (word arg) goes to the face's ex door,
    ; which answers true when it took it and the complaint stands otherwise
    (dox s2 ex)
@@ -62,9 +96,10 @@
            ex ? (s2 'msg @ m (pin s2 'msg "", ex s2 <rq <>rq ? 0 (pin s2 'msg m))) 0,
            s2)))
    ; the face: cli's triple over a state and a paste, with the doors a host lends it
-   ; -- 'split (dir name), 'ex (state word arg) and 'reg, a box the register is kept
-   ; in between steps so every buffer on a wharf shares one; any may be missing. the
-   ; paste takes a register's value: a put in normal mode, the text typed in insert.
+   ; -- 'split (dir name), 'ex (state word arg), 'explore (state dir) and 'reg, a box the
+   ; register is kept in between steps so every buffer on a wharf shares one; any may be
+   ; missing. the paste takes a register's value: a put in normal mode, the text typed in
+   ; insert.
    ; the stage hides the cursor; vi's frame places it, so the frame shows it. vfresh,
    ; not vframe: a full redraw a keystroke is what the flicker is, and it writes only
    ; the rows that changed since the last
@@ -74,8 +109,9 @@
        (keep _) (box ? (pin box () (st 'reg)) 0)
        (text v) (? (atom? v) "" (<v = 'lin) (foldl (a \ l \ a + l + "\n") "" <>v) <>v)
        (type s) (map (c \ vstep st c) (map (i \ s i) ^#s))
-     [(w \ h \ (pins st 'w w 'h h, "\e[?25h" + vfresh st))
-      (c \ (load (), vstep st c, keep (), dow st, doe st, dos st (doors 'split), dox st (doors 'ex)))
+     [(w \ h \ (pins st 'w w 'h h, st 'seek @ d (nil? d ? ("\e[?25h" + vfresh st) (cite 'seek 'seek-frame d w h))))
+      (c \ (nil? (st 'seek) ? (load (), vstep st c, keep (), dow st, doe st, dos st (doors 'split), dox st (doors 'ex), dof st, dex st (doors 'explore))
+               (vseek st c)))
       (_ \ (st 'quit))
       (v \ (? (elem (st 'mode) '(i c s)) (type (text v))
               (pin st 'reg v, vstep st 112, keep ())))])
@@ -99,12 +135,23 @@
        br (cite 'mitty)
        (tablet? br ?
           (: sz (br 'hsize 0) hb (br 'mitty-up <sz <>sz)
-             (stage-of s) (: fc (vi-face s {'split split 'reg (hb 'clip)})
+             (stage-of s) (: fc (vi-face s {'split split 'explore explore 'reg (hb 'clip)})
                               sg (br 'mitty-stage (fc 0) (fc 1) (fc 2))
                               (pin sg 'paste (fc 3), sg))
-             (split d nm) (br 'hberth hb d 50 (br 'hopen-stage (stage-of (vi-open nm)) 1 1))
-             (pin hb 'more (_ \ (br 'hopen-stage (stage-of (vi-open "")) 1 1)),
-              br 'hberth hb 'stack 50 (br 'hopen-stage (stage-of st) <sz <>sz),
+             ; a buffer's pane, kept on it so a door working on the buffer can show it again
+             (berth-of s r c) (br 'hopen-stage (stage-of s) r c @ p (pin s 'vpane p, p))
+             (split d nm) (br 'hberth hb d 50 (berth-of (vi-open nm) 1 1))
+             ; :ex -- mc in a pane beside, its enter on a file opening that file in s
+             (explore s d) (: mc (cite 'mc)
+                              dir (0 < #d ? d ("" + cwd 0))
+                              ms ((mc 'mc-new) dir dir)
+                              _ (pin ms 'open (f \ (vpicked s f,
+                                                      s 'vpane @ p (nil? p ? 0 (br 'hshow p)),
+                                                      br 'hsoil hb)))
+                              sg (br 'mitty-stage (w \ h \ (mc 'mc-frame) ms w h) (c \ (mc 'mc-key) ms c) (_ \ ms 'over))
+                              (pin sg 'name "mc", br 'hberth hb 'beside 35 (br 'hopen-stage sg 1 1)))
+             (pin hb 'more (_ \ (berth-of (vi-open "") 1 1)),
+              br 'hberth hb 'stack 50 (berth-of st <sz <>sz),
               br 'hsail hb))
           (vi-face st {} @ fc (stage (fc 0) (fc 1) (fc 2))))))
 ) ; module 'vi

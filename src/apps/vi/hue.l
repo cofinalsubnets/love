@@ -184,10 +184,30 @@
                        (i < p ?                            ; punct inside a name is the name
                            (w p (emit acc (glued? p ? 'mono 'dyad) i p))
                           (w j acc)))))))
+       ; a hole, "a \(x) b": past its closer, strings and holes inside it walked
+       ; whole, or () when the line ends first. its \( and closer paint as brackets
+       ; and what is between as code
+       (hole k d) (? (n <= k) ()
+                     (: c (s k)
+                        (? (c = 40 || c = 91 || c = 123) (hole (k + 1) (d + 1))
+                           (c = 41 || c = 93 || c = 125) (d = 1 ? (k + 1) (hole (k + 1) (d - 1)))
+                           (c = hue-str) (hole (sbody (k + 1)) d)
+                           (hole (k + 1) d))))
+       (sbody k) (? (n <= k) n
+                    (s k = hue-str) (k + 1)
+                    (s k = hue-esc) ((k + 1 < n && s (k + 1) = 40) ? (sbody (hole (k + 1) 0 || n)) (sbody (k + 2)))
+                    (sbody (k + 1)))
        (wstr i a acc)                                      ; inside "..."
         (n <= i ? [(rev (emit acc 'string a n)) 1]
            (s i @ c
-              (? (c = hue-esc) (wstr (i + 2) a acc)
+              (? (c = hue-esc && i + 1 < n && s (i + 1) = 40)
+                   (: e (hole (i + 1) 0)
+                      o (i + 2)
+                      in1 <(hue-lex bk (snip s o (e ? (e - 1) n)) 0 keep)
+                      acc1 (foldl (\ b r ([<r (r 1 + o) (r 2 + o)] . b))
+                                  (emit (emit acc 'string a i) 'paren i o) in1)
+                      (e ? (wstr e e (emit acc1 'paren (e - 1) e)) [(rev acc1) 0]))
+                 (c = hue-esc) (wstr (i + 2) a acc)
                  (c = hue-str) (w (i + 1) (emit acc 'string a (i + 1)))
                  (wstr (i + 1) a acc))))
        ; a raw text: three or more quotes, closed by as many. one that ends its opening

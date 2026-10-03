@@ -1014,7 +1014,9 @@
    _ (test (cr-in busy "state busy") (cr-in busy "turn ") (cr-in busy ("parent " + me))
            (cr-in nap "state busy") (cr-in idle "state idle") !(cr-in idle "state busy"))
    ; the hud on a pty, as tess
-   md (tether ["sh" "-c" ("cd '" + d + "' && HOME='" + d + "' USER=tess PWD='" + d + "' exec '" + cr-love + "' '" + cr-app + "'")])
+   ; no git discovery above the scratch dir: the hud would show the tree's own queues
+   md (tether ["sh" "-c" ("cd '" + d + "' && HOME='" + d + "' USER=tess PWD='" + d + "' GIT_CEILING_DIRECTORIES='" + cr-root
+                         + "' exec '" + cr-love + "' '" + cr-app + "'")])
    m >md
    _ (settty m 24 100)
    box {'s ""}
