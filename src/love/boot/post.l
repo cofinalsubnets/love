@@ -870,6 +870,8 @@
 ; form; it answers its operand, so it drops into any sequence.
 (: (print o x) (px o x (), x)
    (show x) (jug 0 @ o (px o x (), slurp o))
+   ; a text with holes, "a \(x) b": its runs verbatim, a string verbatim, the rest shown
+   (weave l) (jug 0 @ o (each l (x \ string? x ? (say o x) (px o x ())), slurp o))
    (dot x) (string? x || hot? x && !(port? x) ? (say out x) (px out x ()), flush out, x)
    putx (print out))
 
