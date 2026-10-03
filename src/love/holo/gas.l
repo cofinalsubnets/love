@@ -15,7 +15,9 @@
 ; what a line may say is what the neutral IR can carry: 64-bit register ops, immediates, base +
 ; displacement memory, labels local to the template (GNU's `1:` / `1f` / `1b` included), and the
 ; system lane. x64's 32-bit forms ride the 64-bit op plus a zero-extend; the 8/16-bit register
-; forms and indexed memory refuse. a line that fits nothing scares, so a typo never drops out.
+; forms and indexed memory refuse. a64 lays its own word where the IR's would not be gas's: W ops,
+; written-back and indexed addresses, an X op the IR spells longer. a line that fits nothing
+; scares, so a typo never drops out.
 ; a multi-instruction template separates on `\n` or `;`, as GNU does. the x64 text is read by
 ; src/love/holo/dialect.l's att-read -- the same parsed instruction as.l encodes and the Intel
 ; dialect shows -- and only lowered here; the other dialects still parse their own lines.
@@ -318,12 +320,23 @@
             (gx-locals (att-read src)))
 
    ;; -- a64, the ARM dialect: dst first, xN/wN/sp/xzr, #imm, [base, #off], b.cond. --
-   ;; operands: (reg rN w) | zr | (imm n) | (mem base off) | (sym s) -- a sysreg, an option, a label
+   ;; operands: (reg rN w) | (imm n) | (mem base off) | (memw base off), pre-indexed |
+   ;; (memx base idx option shift) | (sym s) -- a sysreg, an option, a label. what the IR's
+   ;; 64-bit rows cannot say -- a W-register op, a written-back or indexed address, `ret xN`, an
+   ;; X op they would spell in two words -- lands as gas's own word; an unread operand scares.
    (ga-reg s) (name s @ k
                  (? (nom? (peep a64-names k ())) ['reg (a64-names k) 8]
-                    (k = 'xzr || k = 'wzr) 'zr
+                    (k = 'wzr) ['reg 'zr 4]
                     (#s > 1 && s 0 = 119 && digit? (s 1)) ['reg (peep a64-names (name ("x" + snip s 1 #s)) ()) 4]
                     ()))
+   ga-exts {'uxtw 2 'lsl 3 'sxtw 6 'sxtx 7}
+   (ga-index b ps toks)                             ; [b, rM{, lsl|uxtw|sxtw|sxtx {#s}}]
+    (: i (<ps @ (('sym m)) (ga-reg m) ())
+       ex (two? >ps ? <>ps ())
+       o (ex @ (('sym e) . _) (peep ga-exts (name e) ()) (atom? ex ? 3 ()))
+       s (ex @ (('sym _) . ('ch 35) . v) (gimm v) -1)
+       (#ps > 2 || !(charm? o) || <>>i != (o & 1 ? 8 4) ? (scare 'gas-a64-operand toks)
+          ['memx b <>i o s]))
    (ga-opnd toks)
     (toks @ (('ch 35) . rest) ['imm (gimm rest)]
             (('num _) . _) ['imm (gimm toks)]
@@ -332,13 +345,24 @@
             (('sym s)) (ga-reg s @ r (two? r || nom? r ? r ['sym (name s)]))
             (('ch 91) ('sym b) ('ch 93)) ['mem (<>(ga-reg b)) 0]
             (('ch 91) . ('sym b) . ('ch 44) . rest)
-             (: r (ga-reg b) n #rest
-                (atom? r || !(rest (n - 1) = '(ch 93)) ? (scare 'gas-a64-operand toks)
-                   ['mem <>r (<>(ga-opnd (rev >(rev rest))))]))
+             (: wb (two? rest && <(rev rest) = '(ch 33))            ; `]!`, pre-indexed
+                body (wb ? (rev >(rev rest)) rest)
+                r (ga-reg b) n #body
+                (atom? r || n < 2 || !(body (n - 1) = '(ch 93)) ? (scare 'gas-a64-operand toks)
+                   (gops (rev >(rev body)) @ ps
+                      (? (ps @ ((('sym s)) . _) (two? (ga-reg s)) 0)
+                          (wb ? (scare 'gas-a64-operand toks) (ga-index <>r ps toks))
+                         (#ps > 1) (scare 'gas-a64-operand toks)
+                         [(wb ? 'memw 'mem) <>r (<>(ga-opnd <ps))]))))
             (scare 'gas-a64-operand toks))
-   (ga-r o) (o @ ('reg x _) x 'zr 'zr (scare 'gas-a64-register o))
+   (ga-r o) (o @ ('reg x _) x (scare 'gas-a64-register o))
    (ga-rw o) (o @ ('reg x w) [x w] (scare 'gas-a64-register o))
-   (ga-v o) (o @ ('imm n) n ('reg x _) x 'zr 'zr (scare 'gas-a64-operand o))   ; a register or an immediate
+   (ga-v o) (o @ ('imm n) n ('reg x _) x (scare 'gas-a64-operand o))   ; a register or an immediate
+   (ga-hw r) (r @ 'sp 31 'zr 31 'fp 29 'lr 30 (xa-num (snip (show r) 1 #(show r))))
+   (ga-raw w) [['raw (le32 w)]]
+   ;; 4 when an op's registers are all W, 8 when all X; a mix is no instruction
+   (ga-wide os) (: ws (filter (w \ w > 0) (map (o \ o @ ('reg _ w) w 0) os))
+                   (? (all (w \ w = 4) ws) (two? ws ? 4 8) (all (w \ w = 8) ws) 8 (scare 'gas-a64-width os)))
    ga-cc (gtab '((eq eq) (ne ne) (cs ae) (hs ae) (cc below) (lo below) (mi s) (pl ns)
                  (vs vs) (vc vc) (hi above) (ls be) (ge ge) (lt lt) (gt gt) (le le)))
    ga-nils (gtab '((nop nop) (wfi wfi) (wfe wfe) (isb isb) (eret eret) (ret ret)))
@@ -348,12 +372,102 @@
    ga-ld (gtab '((ldr (ld ldu4)) (ldrb (ldu1 ldu1)) (ldrh (ldu2 ldu2)) (ldrsb (ld1 ld1)) (ldrsh (ld2 ld2)) (ldrsw (ld4 ld4))))
    ga-st (gtab '((str (st st4)) (strb (st1 st1)) (strh (st2 st2))))
    ga-sh (gtab '((lsl shl) (lsr shr) (asr sar) (ror ror)))
+   ga-arity {'mov 2 'movz 2 'cmp 2 'tst 2 'neg 2 'mvn 2 'mrs 2 'msr 2
+             'b 1 'bl 1 'br 1 'blr 1 'dsb 1 'dmb 1}
+   ;; the W forms' words: register form, then immediate (add/sub imm12, the logicals a bitmask)
+   ga-walu {'add [0x0B000000 0x11000000] 'sub [0x4B000000 0x51000000]
+            'adds [0x2B000000 0x31000000] 'subs [0x6B000000 0x71000000]
+            'and [0x0A000000 0x12000000] 'orr [0x2A000000 0x32000000]
+            'eor [0x4A000000 0x52000000] 'ands [0x6A000000 0x72000000]}
+   ga-flip {'add 'sub 'sub 'add 'adds 'subs 'subs 'adds}
+   ;; a logical immediate at width z -> N:immr:imms at [22:10]: a rotated run of ones in a
+   ;; 2..z-bit element repeated across the register; () when it is none
+   (ga-bm v z)
+    (: u (u64 v % (1 << z))
+       e ((: (el e) (: h (e // 2) m ((1 << h) - 1) (h >= 2 && u & m = (u >> h & m) ? (el h) e))) z)
+       m ((1 << e) - 1) x (u & m)
+       s (net (map (k \ x >> k & 1) ^e))
+       (ror y r) ((y >> r | y << (e - r)) & m)
+       r (filter (r \ ror ((1 << s) - 1) r = x) ^e)
+       (x = 0 || x = m || atom? r ? ()
+          ((e = 64 ? 1 0) << 22 | <r << 16 | (((63 ^ (2 * e - 1)) & 63) | (s - 1)) << 10)))
+   (ga-wimm m d n v)
+    (? (nom? (peep ga-flip m ()))
+        (: f (v < 0 ? (ga-flip m) m) u (v < 0 ? (0 - v) v) b (<>(ga-walu f))
+           (? (n = 31 || d = 31 && elem m '(add sub)) (scare 'gas-a64-operand [m v])   ; 31 would be wsp
+              (u <= 4095) (b | u << 10 | n << 5 | d)
+              (u % 4096 = 0 && u >> 12 <= 4095) (b | 1 << 22 | (u >> 12) << 10 | n << 5 | d)
+              (scare 'imm12-range v)))
+       (ga-bm v 32 @ f (!(charm? f) || d = 31 && m != 'ands ? (scare 'a64-bitmask-imm v)
+                          (<>(ga-walu m) | f | n << 5 | d))))
+   ;; mov rD, #v in one word as gas picks it -- movz, movn, else an orr bitmask -- or ()
+   (ga-movi z d v)
+    (: top ((1 << z) - 1) u (u64 v % (1 << z)) n (u ^ top) sf (z = 64 ? 0x80000000 0)
+       (lanes x) (filter (h \ (x >> (16 * h)) % 65536 != 0) ^(z // 16))
+       (wide base x l) (: h (two? l ? <l 0) (sf | base | h << 21 | ((x >> (16 * h)) % 65536) << 5 | d))
+       (? (#(lanes u) <= 1) (wide 0x52800000 u (lanes u))
+          (#(lanes n) <= 1) (wide 0x12800000 n (lanes n))
+          (ga-bm u z @ f (charm? f ? (sf | 0x320003E0 | f | d) ()))))
+   (ga-sp? o) (o @ ('reg x _) (x = 'sp) 0)
+   (ga-dp m os z)                                   ; a data op laid as its own word, z bits wide
+    (: k #os (r i) (ga-hw (ga-r (os i))) sf (z = 64 ? 0x80000000 0) top (z - 1)
+       (? (m = 'mov) ((os 1) @ ('imm v) (ga-movi z (r 0) v @ w (charm? w ? (ga-raw w) (scare 'gas-a64-mov-imm v)))
+                                (ga-raw (0x2A0003E0 | r 1 << 16 | r 0)))
+          (m = 'neg) (ga-raw (sf | 0x4B0003E0 | r 1 << 16 | r 0))
+          (m = 'mvn) (ga-raw (sf | 0x2A2003E0 | r 1 << 16 | r 0))
+          (elem m '(cmp tst))
+           (: op (m = 'cmp ? 'subs 'ands)
+              ((os 1) @ ('imm v) (ga-raw (ga-wimm op 31 (r 0) v))
+                        (ga-raw (<(ga-walu op) | r 1 << 16 | r 0 << 5 | 31))))
+          (k != 3) (scare 'gas-a64-operand os)
+          (m = 'mul) (ga-raw (0x1B007C00 | r 2 << 16 | r 1 << 5 | r 0))
+          (two? (peep ga-walu m ()))
+           ((os 2) @ ('imm v) (ga-raw (ga-wimm m (r 0) (r 1) v))
+                     (ga-raw (<(ga-walu m) | r 2 << 16 | r 1 << 5 | r 0)))
+          ((os 2) @ ('imm s)                       ; the shifts: a bitfield move by an immediate
+             (s < 0 || s > top ? (scare 'gas-a64-operand os)
+                (ga-raw ((m @ 'lsl (0x53000000 | ((z - s) % z) << 16 | (top - s) << 10)
+                              'lsr (0x53000000 | s << 16 | top << 10)
+                              'asr (0x13000000 | s << 16 | top << 10)
+                              (0x13800000 | r 1 << 16 | s << 10))
+                         | sf | (z = 64 ? 0x400000 0) | r 1 << 5 | r 0)))
+             (ga-raw (sf | (m @ 'lsl 0x1AC02000 'lsr 0x1AC02400 'asr 0x1AC02800 0x1AC02C00)   ; ..and by a register
+                       | r 2 << 16 | r 1 << 5 | r 0)))))
+   ;; a load or store's unscaled word, X target then W; the access size rides bits [31:30]
+   ga-ldst {'ldr [0xF8400000 0xB8400000] 'ldrb [() 0x38400000] 'ldrh [() 0x78400000]
+            'ldrsb [0x38800000 0x38C00000] 'ldrsh [0x78800000 0x78C00000] 'ldrsw [0xB8800000 ()]
+            'str [0xF8000000 0xB8000000] 'strb [() 0x38000000] 'strh [() 0x78000000]}
+   (ga-wb lb ix t b v)                              ; post- (ix 1) or pre-indexed (ix 3): imm9, the base written back
+    (charm? v && -256 <= v <= 255 ? (ga-raw (lb | (v & 511) << 12 | ix << 10 | ga-hw b << 5 | t))
+       (scare 'gas-a64-operand v))
+   (ga-ls m os)
+    (: k #os rw (ga-rw (os 0)) t (ga-hw <rw) row (ga-ldst m) lb (<>rw = 8 ? <row <>row)
+       lg (charm? lb ? (lb >> 30) 0)
+       st? (elem m '(str strb strh))
+       ir? (<>rw = 8 || !(elem m '(ldrsb ldrsh)))   ; the IR's rows say all but a W sign-extend
+       (? (!(charm? lb)) (scare 'gas-a64-width os)
+          (k = 3) ((os 1) @ ('mem b 0) ((os 2) @ ('imm v) (ga-wb lb 1 t b v) (scare 'gas-a64-operand os))
+                             (scare 'gas-a64-operand os))
+          (k != 2) (scare 'gas-a64-operand os)
+          ((os 1) @ ('mem b o)
+             (? ir? (st? ? [[(ga-st m (<>rw = 8 ? 0 1)) b o <rw]] [[(ga-ld m (<>rw = 8 ? 0 1)) <rw b o]])
+                (charm? o && o >= 0 && o % (1 << lg) = 0 && o >> lg <= 4095)      ; scaled imm12
+                 (ga-raw (lb | 0x01000000 | (o >> lg) << 10 | ga-hw b << 5 | t))
+                (charm? o && -256 <= o <= 255) (ga-raw (lb | (o & 511) << 12 | ga-hw b << 5 | t))
+                (scare 'gas-a64-operand os))
+             ('memw b o) (ga-wb lb 3 t b o)
+             ('memx b i x s)
+              (s != -1 && s != 0 && s != lg ? (scare 'gas-a64-operand os)
+                 (ga-raw (lb | 0x00200800 | ga-hw i << 16 | x << 13 | (s = lg ? 1 0) << 12 | ga-hw b << 5 | t)))
+             (scare 'gas-a64-operand os))))
    (ga-bcond s) (show s @ t (#t > 2 && t 0 = 98 && t 1 = 46 ? (peep ga-cc (name (snip t 2 #t)) ()) ()))
    (ga-inplace op d s) (d = s ? () [['mov d s]])       ; the IR's unary ops work in place
    (ga-ins m os)
     (#os @ k
-       (? (ghas? ga-nils m) [[(ga-nils m)]]
-          (nom? (ga-bcond m)) [['br (ga-bcond m) (<>(os 0))]]
+       (? (charm? (peep ga-arity m ()) && k != ga-arity m) (scare 'gas-a64-operand [m os])
+          (m = 'ret && k = 1) (ga-r (os 0) @ r (r = 'lr ? '((ret)) (ga-raw (0xD65F0000 | ga-hw r << 5))))
+          (ghas? ga-nils m) (k = 0 ? [[(ga-nils m)]] (scare 'gas-a64-operand [m os]))
+          (nom? (ga-bcond m)) (k = 1 ? [['br (ga-bcond m) (<>(os 0))]] (scare 'gas-a64-operand [m os]))
           (m = 'b) [['jmp (<>(os 0))]]
           (m = 'bl) [['call (<>(os 0))]]
           (m = 'br) [['jmpr (ga-r (os 0))]]
@@ -364,6 +478,12 @@
           (elem m ga-sys) [[m (<>(os 0)) (k > 1 ? (ga-r (os 1)) 'zr)]]
           (ghas? ga-exc m) [[(ga-exc m) (k > 0 ? (<>(os 0)) 0)]]
           (m = 'svc) (: n (k > 0 ? (<>(os 0)) 0) (n = 0 ? '((sys)) [['svcn n]]))
+          (two? (peep ga-ldst m ())) (ga-ls m os)
+          (elem m '(mov cmp tst neg mvn mul add sub and orr eor adds subs ands lsl lsr asr ror) && ga-wide os = 4)
+           (ga-dp m os 32)
+          (elem m '(neg mvn lsl lsr asr ror) && !(any ga-sp? os)) (ga-dp m os 64)
+          (m = 'mov && !(ga-sp? (os 0)) && ((os 1) @ ('imm v) (constellation? v && charm? (ga-movi 64 0 v)) 0))
+           (ga-dp m os 64)
           (m = 'mov)
            (: d (ga-r (os 0)) s (os 1)
               (s @ ('imm n) [['li d n]]
@@ -377,12 +497,9 @@
           (m = 'mvn) (ga-r (os 0) @ d (ga-inplace 'not d (ga-r (os 1)) + [['not d]]))
           (ghas? ga-sh m)
            (: d (ga-r (os 0)) s (ga-r (os 1)) c (os 2)
-              (c @ ('imm n) (ga-inplace m d s + [[(ga-sh m) d n]])
-                   (d = s ? [[(name (show (ga-sh m) + "v")) d (ga-r c)]] (scare 'gas-a64-operand os))))
-          (two? (peep ga-ld m ()))
-           (ga-rw (os 0) @ r ((os 1) @ ('mem b o) [[(ga-ld m (<>r = 8 ? 0 1)) <r b o]] (scare 'gas-a64-operand os)))
-          (two? (peep ga-st m ()))
-           (ga-rw (os 0) @ r ((os 1) @ ('mem b o) [[(ga-st m (<>r = 8 ? 0 1)) b o <r]] (scare 'gas-a64-operand os)))
+              (k != 3 ? (scare 'gas-a64-operand os)
+                 (c @ ('imm n) (ga-inplace m d s + [[(ga-sh m) d n]])
+                      (d = s ? [[(name (show (ga-sh m) + "v")) d (ga-r c)]] (scare 'gas-a64-operand os)))))
           (scare 'gas-a64-op m)))
    (ga-line toks)
     (gline toks @ l
@@ -621,10 +738,12 @@
                               (w = close && d = 0 ? [(rev acc) >l]
                                  (go >l (? (elem w opens) (d + 1) (w = close) (d - 1) d) (<l . acc)))))
            (go l 0 ()))
-       ; an .if body split at its own .else
+       ; an .if body split at its own .else; an .elseif opens the rest as an .if of its own
        (split l) (: (go l d acc) (atom? l ? [(rev acc) ()]
                                     (dname <l @ w
-                                       (w = ".else" && d = 0 ? [(rev acc) >l]
+                                       (? (w = ".else" && d = 0) [(rev acc) >l]
+                                          (w = ".elseif" && d = 0)
+                                           [(rev acc) (("\t.if " + xa-rest (xa-trim <l)) . >l + ["\t.endif"])]
                                           (go >l (? (elem w gf-ifs) (d + 1) (w = ".endif") (d - 1) d) (<l . acc)))))
                     (go l 0 ()))
        ; a .set symbol reads as its value
