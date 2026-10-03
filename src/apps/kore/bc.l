@@ -10,8 +10,9 @@
 ;   ^    min(sa * b, max(scale, sa))  sqrt  max(scale, sa)
 ;
 ; the dialect is GNU's: POSIX bc plus multi-character names, print, else, halt, last
-; (and `.`), && || !, and the # comment. not here: read() (the program and its answer
-; share one stdin), -s and -w, and a lexer-time quit -- quit runs as a statement.
+; (and `.`), && || !, the # comment, and read(): a number from the next line of stdin, which
+; the program read from stdin shares a line at a time. not here: -s and -w, and a lexer-time
+; quit -- quit runs as a statement.
 (module 'kore
 (borrow 'posix)
 
@@ -261,7 +262,9 @@
                       (bc-want r3 ")" ("expected ) after " + v))]
                      ()))
                (elem v bc-regs) [['reg (name v)] r]
-               (v = "read") (bc-syn "read() is out of dialect")
+               (v = "read")
+                (bc-want r "(" "expected ( after read" @ r2
+                   [['read] (bc-want r2 ")" "expected ) after read(")])
                (bc-syn ("`" + v + "' is not an expression")))
            (bc-op? ts "(")
             (bc-expr (bc-nl r) @ [e r2]
@@ -459,6 +462,12 @@
    (bc-ev st nd)
     (bc-sc st @ sc
        (<nd @ 'num (bc-numeral <>nd (peep st 'ibase 10))
+             'read (urd-line (bc-rd st) @ l
+                     (: t (string (filter (c \ !(c = 32 || c = 9 || c = 13)) (chars (atom? l ? "" <l))))
+                        neg (0 < #t && t 0 = 45)
+                        t2 (neg ? (snip t 1 #t) t)
+                        _ (all (c \ c = 46 || 48 <= c <= 57 || 65 <= c <= 90) (chars t2) ? 0 (bc-err "read(): not a number"))
+                        (#t2 ? (bc-numeral t2 (peep st 'ibase 10) @ v (neg ? [(0 - <v) <>v] v)) bn-zero)))
              'grp (bc-ev st <>nd)
              'var (peep (bc-vars st) <>nd bn-zero)
              'arr (peep (bc-arr st <>nd) (bn-int (bc-ev st <>>nd)) bn-zero)
@@ -638,8 +647,10 @@
                       (go ts 0)))
               ()
               (\ a b 1))))
+   ; stdin's one reader, for the program and read() alike
+   (bc-rd st) (peep st 'rd 0 @ r (r = 0 ? (urd in @ n (pin st 'rd n, n)) r))
    (bc-stdin st)
-    (: rd (urd in)
+    (: rd (bc-rd st)
        (go acc)
         (urd-line rd @ l
            (atom? l ? (0 < #acc ? (bc-source st acc) 0)

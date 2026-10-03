@@ -1,14 +1,30 @@
 #!/bin/sh
-# test/kore/sed.sh -- sed: s///gp, d/p/q, addresses, -E/-e/-i and the per-file model
+# test/kore/sed.sh -- sed: s///gp, y, {}, d/p/q, addresses, -E/-e/-i and the per-file model
 . "$(dirname "$0")/common.sh"
 
 printf 'abc\nxbz\nzzz\nq4\nw5\n' > "$ho/.sd1"
 for sc in 's/b/X/' 's/z/Q/g' '2d' '/x/,/q/d' '$d' '2q' 's/x*/-/g' 's/\(b*\)z/[\1]/' \
           's/b/[&]/' 's|z|_|g' 's/a/1/; s/b/2/' 's/q\(.\)/<\1>/' \
           's/a\|z/Y/g' 's/[[:digit:]]/#/g' 's/b\{2\}/B/' '/a\|q/d' 's/\(a\|x\)b/@/' \
-          '/x/!d' '2! d' '$!s/z/Q/g' '2,4!d' '/^q4$/!s/[a-z].*/_/'; do
+          '/x/!d' '2! d' '$!s/z/Q/g' '2,4!d' '/^q4$/!s/[a-z].*/_/' \
+          'y/abz/ABZ/' 'y,b/,\n_,' '2y/z/\\/;s/z/y/'; do
   sed "$sc" "$ho/.sd1" > "$g"; a=$?
   korerun sed "$sc" "$ho/.sd1" > "$o"; b=$?
+  cmp -s "$g" "$o" && [ $a -eq $b ] || fail "kore sed '$sc' vs GNU"
+done
+# { } groups under an address, nested and negated; a bracket holds the delimiter as a byte
+printf 'a/b]c:d\nxbz\nzzz\n' > "$ho/.sd2"
+for sc in '/b/{s/b/X/;p}' '/b/!{p;p}' '2,3{/z/d;p}' '/a/{/b/{s/a/Q/};s/c/C/;p}' '$!{$!d};p' \
+          '/x/,/z/{p;}' '{};p' 's/[/]/X/p' 's:[:]:X:p' 's/[]/]/X/gp' 's/[^]/]/X/gp' \
+          's:[[:alpha:]]:Q:gp' '/[/]/s/a/A/p' '{p' 'p}' 's/[/X/'; do
+  sed -n "$sc" "$ho/.sd2" > "$g" 2>/dev/null; a=$?
+  korerun sed -n "$sc" "$ho/.sd2" > "$o" 2>/dev/null; b=$?
+  cmp -s "$g" "$o" && [ $a -eq $b ] || fail "kore sed -n '$sc' vs GNU"
+done
+# a y whose sets differ in length, or with a tail, is refused: exit 1, nothing out
+for sc in 'y/ab/c/' 'y/a/b/x'; do
+  sed "$sc" "$ho/.sd1" > "$g" 2>/dev/null; a=$?
+  korerun sed "$sc" "$ho/.sd1" > "$o" 2>/dev/null; b=$?
   cmp -s "$g" "$o" && [ $a -eq $b ] || fail "kore sed '$sc' vs GNU"
 done
 # -E moves the backslashes; the dialect must reach BOTH an address and an s
@@ -84,5 +100,5 @@ for i in -i.bak --in-place=.orig -i -ni; do
 done
 korerun sed -f "$S/nosuch" "$S/in" > /dev/null 2>&1; r=$?; [ $r -eq 4 ] || fail "kore sed -f of no file (rc $r)"
 rm -rf "$S"
-echo "kore: sed (s///gp + d/p/q + addresses + -E/-e/-i, the per-file model, GNU-identical, exits 1/2) ok"
+echo "kore: sed (s///gp + y + {} + d/p/q + addresses + -E/-e/-i, the per-file model, GNU-identical, exits 1/2) ok"
 echo "kore: the missing final newline is data (sed/rev/head/tail, and head -N) ok"

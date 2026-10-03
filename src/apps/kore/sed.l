@@ -5,7 +5,7 @@
 ;
 ; commands split by ; or newlines, each [addr[,addr]] verb. addresses: N, $, /re/ (BRE, or
 ; ERE under -E). verbs: p d q, and s/re/repl/[g][p] with any delimiter; the replacement
-; knows &, \1..\9 and \x. -e stacks scripts; once any -e is given every word is a file.
+; knows &, \1..\9 and \x; y/abc/xyz/ maps bytes; addr{ .. } groups. -e stacks scripts; once any -e is given every word is a file.
 ; -i makes each file its own stream (numbers restart, $ per file); `srun` takes its output
 ; port, which is the whole of how -i captures. not here: empty-pattern reuse, \n in a
 ; replacement, the hold space.
@@ -61,7 +61,7 @@
 
    ; -- the script parser: text -> (1 cmds) | (). a command is
    ; (a1 a2 verb payload); an address is () | ('ln N) | ('last) | ('re nodes);
-   ; an s payload is (nodes repl g? p?). ere? picks the regex dialect --
+   ; an s payload is (nodes repl g? p?), a y payload a byte table. ere? picks the regex dialect --
    (sparse sc ere?)
     (: n #sc
        (rx p) ((ere? ? reere rebre) p)
@@ -80,24 +80,40 @@
                (c = 92 && i + 1 < n)
                 (until (i + 2) d (acc + string 92 + string (sc (i + 1))))
                (until (i + 1) d (acc + string c)))))
+       ; a regex to d: as until, but a bracket is copied whole -- a d inside it is no delimiter
+       (bkend i)                                 ; i just past the [ -> just past its ]
+        (: j0 (i < n && sc i = 94 ? (i + 1) i)
+           j1 (j0 < n && sc j0 = 93 ? (j0 + 1) j0)
+           (cls j e) (n <= j + 1 ? n (sc j = e && sc (j + 1) = 93 ? (j + 2) (cls (j + 1) e)))
+           (go j) (? (n <= j) n
+                     (sc j = 93) (j + 1)
+                     (sc j = 91 && j + 1 < n && elem (sc (j + 1)) '(58 46 61)) (go (cls (j + 2) (sc (j + 1))))
+                     (go (j + 1)))
+           (go j1))
+       (untilre i d acc)
+        (n <= i ? ()
+         (sc i = 91 && d != 91 ? (bkend (i + 1) @ e (untilre e d (acc + snip sc i e)))
+          (sc i = 92 && i + 1 < n && sc (i + 1) != d ? (untilre (i + 2) d (acc + snip sc i (i + 2)))
+           (sc i = 92 && i + 1 < n ? (untilre (i + 2) d (acc + string d))
+            (sc i = d ? [acc (i + 1)] (untilre (i + 1) d (acc + string (sc i))))))))
        ; one address or none: (addr j) | () malformed
        (raddr i)
         (n <= i ? [() i]
          (sc i @ c
             (? (dig? c) (num i 0 @ [v j] [['ln v] j])
                (c = 36) ['(last) (i + 1)]
-               (c = 47) (until (i + 1) 47 "" @ [txt j]
+               (c = 47) (untilre (i + 1) 47 "" @ [txt j]
                           (rx txt @ [_ nds _] [['re (recomp nds)] j] ())
                           ())
                [() i])))
-       (sepend? j) (n <= j || sep? (sc j))
+       (sepend? j) (n <= j || sep? (sc j) || sc j = 125)
        ; the s command's tail past the verb: delimiter, regex, replacement,
        ; flags -> (payload j) | ()
        (rsub j3)
         (n <= j3 + 1 ? ()
          (sc (j3 + 1) @ dl
             (dl = 92 || dl = 10 ? ()
-             (until (j3 + 2) dl "" @ [re j4]
+             (untilre (j3 + 2) dl "" @ [re j4]
                (rx re @ [_ nds _]
                  (until j4 dl "" @ [rp j5]
                    (: (fgo k g? p?)
@@ -109,9 +125,31 @@
                    ())
                  ())
                ()))))
+       ; y's tail: two equal-length sets, \\ and \n spelled as themselves -> (table j) | ()
+       (yun t) ((: (g i acc) (i >= #t ? (rev acc)
+                              (t i = 92 && i + 1 < #t ? (g (i + 2) ((t (i + 1) = 110 ? 10 (t (i + 1))) . acc))
+                                 (g (i + 1) (t i . acc))))) 0 ())
+       (ry j3)
+        (n <= j3 + 1 ? ()
+         (sc (j3 + 1) @ dl
+            (dl = 92 || dl = 10 ? ()
+             (until (j3 + 2) dl "" @ [a j4]
+               (until j4 dl "" @ [b j5]
+                 (yun a @ xa (yun b @ xb
+                   (#xa = #xb && sepend? j5 ? [(foldl (t \ i \ pin t (xa i) (xb i)) {} (rev ^#xa)) j5] ())))
+                 ())
+               ()))))
+       ; } closes the nearest open {, whose payload becomes the count of commands inside it
+       (open? c) (c 2 = 'blk && !(charm? (c 3)))
+       (close acc)
+        ((: (g l k pre) (l @ (c . more)
+                          (open? c ? (foldl (t \ x \ x . t) ([(c 0) (c 1) 'blk k (c 4)] . more) pre)
+                             (g more (k + 1) (c . pre)))
+                          ())) acc 0 ())
        (rcmd i acc)
         (skip i @ j
-           (n <= j ? [1 (rev acc)]
+           (n <= j ? (any open? acc ? () [1 (rev acc)])
+            (sc j = 125 ? (close acc @ a (atom? a ? () (rcmd (j + 1) a)))
             (raddr j @ [a1 j2]
               (j2 < n && sc j2 = 44 @ comma
                  (comma && atom? a1 ? ()               ; a , with no left leg
@@ -131,8 +169,12 @@
                                 (v = 115) (rsub j3 @ [pay j4]
                                             (rcmd j4 ([a1 a2 's pay bang] . acc))
                                             ())
+                                (v = 121) (ry j3 @ [pay j4]
+                                            (rcmd j4 ([a1 a2 'y pay bang] . acc))
+                                            ())
+                                (v = 123) (rcmd (j3 + 1) ([a1 a2 'blk () bang] . acc))
                                 ()))))))))
-              ())))
+              ()))))
        (rcmd 0 ()))
 
    ; -- the cycle. op is the output port, which is how -i captures a file's own
@@ -165,11 +207,16 @@
        ; one line through the commands -> (kind ps): 0 flows, 1 deleted, 2 quits
        (rline cs idx ps no q last?)
         (cs @ (c . more)
-           (!(sel? c idx no ps last? @ s (c 4 ? !s s)) ? (rline more (idx + 1) ps no q last?)
+           (!(sel? c idx no ps last? @ s (c 4 ? !s s))
+            ? (c 2 = 'blk                             ; an unselected { skips what it holds
+               ? ((: (g l k i) (k < 1 ? (rline l i ps no q last?) (g >l (k - 1) (i + 1)))) more (c 3) (idx + 1))
+               (rline more (idx + 1) ps no q last?))
               (<>>c @ v
                  (? (v = 'd) [1 ps]
                     (v = 'q) [2 ps]
                     (v = 'p) (say q ps, put q 10, rline more (idx + 1) ps no q last?)
+                    (v = 'blk) (rline more (idx + 1) ps no q last?)
+                    (v = 'y) (rline more (idx + 1) (string (map (ch \ peep <>>>c ch ch) (chars ps))) no q last?)
                     (: pay <>>>c
                        pr >>pay
                        r (usub <pay <>pay ps <pr)
