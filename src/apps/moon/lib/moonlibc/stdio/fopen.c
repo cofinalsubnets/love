@@ -15,4 +15,5 @@ FILE *fopen(char const *path, char const *mode) {
   f->wr = wr;
   f->heap = 1;
   if (wr) { f->buf = (unsigned char *) (f + 1); f->cap = 4096; }
+  else { f->rb = (unsigned char *) (f + 1); f->rcap = 4096; }
   return f; }

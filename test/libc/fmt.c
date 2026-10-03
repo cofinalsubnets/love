@@ -109,4 +109,19 @@ int main(void) {
  memset(b, '#', sizeof b);
  F("vsnprintf.cut", vtest(b, 4, "%s/%d", "vvv", 9));
 
+ /* --- widths and precisions from the arguments, a negative width left-justifying --- */
+ F("star", snprintf(b, sizeof b, "[%*d|%-*d|%.*f|%*s|%*d]", 5, 3, 4, 7, 2, 3.14159, 6, "ab", -4, 1));
+ F("star.prec.neg", snprintf(b, sizeof b, "[%.*d]", -1, 42));
+ /* --- every length: hh and h truncate, j z t and L read their own widths --- */
+ F("hh.h", snprintf(b, sizeof b, "%hhd %hhu %hd %hu", 300, 300, 70000, 70000));
+ F("jztL", snprintf(b, sizeof b, "%jd %zu %td %lld %Lf", (long long) -9, (size_t) 7, (long) -3, 1LL << 40, (long double) 1.5));
+ /* --- %n stores the count so far, at its own width --- */
+ { int n = -1; signed char hn = -1; F("n", snprintf(b, sizeof b, "abc%n%hhnde", &n, &hn)); say_n("n.int", n); say_n("n.hh", hn); }
+ /* --- POSIX's numbered arguments, reused and reordered, a numbered width --- */
+ F("pos", snprintf(b, sizeof b, "%2$s %1$d %2$s %3$*4$d", 9, "pos", 7, 3));
+ /* --- a null pointer is glibc's (nil); the counts printf and fprintf answer --- */
+ F("p.nil", snprintf(b, sizeof b, "[%p|%8p]", (void *) 0, (void *) 0));
+ say_n("printf.count", printf("%s", ""));
+ say_n("fprintf.count", fprintf(stdout, "%d%s", 12, "") );
+
  return 0; }

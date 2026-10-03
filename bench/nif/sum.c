@@ -24,6 +24,18 @@
 #include "stub.h"
 #include "say.h"
 
+/* the one-shot hex face, over hash.c's one digest engine */
+static void dig_hex(const struct digspec *d, const void *p, uintptr_t n, char *out)
+{
+	uint32_t h[16];
+	uint8_t buf[128];
+	dig_h0(h, d);
+	blk_done(h, buf, blk_feed(h, buf, 0, d, p, n), (uint64_t) n, d);
+	blk_hex(h, d->outw, d->be, out);
+}
+static void sha256_hex(const void *p, uintptr_t n, char *out) { dig_hex(&dig_sha, p, n, out); }
+static void md5_hex(const void *p, uintptr_t n, char *out) { dig_hex(&dig_md5, p, n, out); }
+
 /* NOT rand(): the two builds carry different libcs, so the corpus has to be
  * this file's own arithmetic or the programs do not see the same bytes. */
 static void fill(unsigned char *b, unsigned n, unsigned seed)
@@ -51,23 +63,24 @@ static void oneshot(unsigned char const *p, unsigned n)
 static void stream(struct digspec const *d, unsigned char const *p, unsigned n,
                    unsigned chunk, char *out)
 {
-	uint8_t st[ShaSt];
-	uint32_t h[8];
+	uint8_t st[DigSt(16, 128, 1)];
+	uint32_t h[16];
 	uint64_t len;
+	unsigned rem = 4 * d->words + 8;          /* hash.c's dig_feed: the count, then the remainder */
 	memset(st, 0, d->st);
-	dig_st(st, d->h0, d->words, 0);
+	dig_h0(h, d);
+	dig_st(st, h, d->words, 0);
 	for (unsigned i = 0; i < n; ) {
 		unsigned k = n - i < chunk ? n - i : chunk;
 		dig_ld(st, h, d->words, &len);
 		len += k;
-		st[d->remoff] = (uint8_t) blk_feed(h, st + d->bufoff, st[d->remoff],
-		                                   d->f, p + i, k);
+		st[rem] = (uint8_t) blk_feed(h, st + rem + 1, st[rem], d, p + i, k);
 		dig_st(st, h, d->words, len);
 		i += k;
 	}
 	dig_ld(st, h, d->words, &len);
-	blk_done(h, st + d->bufoff, st[d->remoff], len, d->f, d->be);
-	blk_hex(h, d->words, d->be, out);
+	blk_done(h, st + rem + 1, st[rem], len, d);
+	blk_hex(h, d->outw, d->be, out);
 }
 
 static uint32_t ckstream(unsigned char const *p, unsigned n, unsigned chunk)
@@ -192,19 +205,19 @@ int main(int argc, char **argv)
 	 * endian one way and little the other. an 8 KB message only reaches bit
 	 * 16 of it, so the high half is laid by hand here --- */
 	{
-		uint32_t h[8];
+		uint32_t h[16];
 		uint8_t rem[64];
 		memset(rem, 0x5a, sizeof rem);
 		static uint64_t const lens[] = {0, 1, 0xffull, 0x100ull, 0xffffull,
 		                                0x1ffffffffull, 0x123456789abcull,
 		                                0x1fffffffffffffffull};
 		for (unsigned i = 0; i < sizeof lens / sizeof *lens; i++) {
-			memcpy(h, sha_h0, sizeof sha_h0);
-			blk_done(h, rem, 13, lens[i], sha_block, 1);
+			dig_h0(h, &dig_sha);
+			blk_done(h, rem, 13, lens[i], &dig_sha);
 			blk_hex(h, 8, 1, a);
 			say_s("pad.be", a);
-			memcpy(h, md5_h0, sizeof md5_h0);
-			blk_done(h, rem, 13, lens[i], md5_block, 0);
+			dig_h0(h, &dig_md5);
+			blk_done(h, rem, 13, lens[i], &dig_md5);
 			blk_hex(h, 4, 0, a);
 			say_s("pad.le", a);
 		}
@@ -213,7 +226,7 @@ int main(int argc, char **argv)
 	/* --- the state serializer on its own: big-endian words and a big-endian
 	 * count, whatever the digest's own order --- */
 	{
-		uint8_t st[ShaSt];
+		uint8_t st[DigSt(8, 64, 0)];
 		uint32_t h[8], k[8];
 		uint64_t len;
 		for (unsigned i = 0; i < 8; i++) h[i] = 0x80000000u >> i | (i + 1);

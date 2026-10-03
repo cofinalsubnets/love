@@ -78,6 +78,8 @@ struct _IO_FILE {
   int un;                                    /* ungetc's pushback byte + 1 (0 = none) */
   int len, cap;
   unsigned char *buf;
+  int rp, rl, rcap;                          /* a read-only stream's buffer: rb[rp..rl) is read ahead */
+  unsigned char *rb;
 };
 
 /* ---- the syscall numbers. freebsd's table first, UNCONDITIONAL and named
@@ -96,6 +98,7 @@ struct _IO_FILE {
 #define NR_fb_mprotect       74
 #define NR_fb_munmap         73
 #define NR_fb_madvise        75
+#define NR_fb_mincore        78
 #define NR_fb_rt_sigaction  416   /* sigaction; no restorer, another ksigaction (rung 3) */
 #define NR_fb_rt_sigprocmask 340  /* sigprocmask; 16-byte set, no size arg (rung 3) */
 #define NR_fb_ioctl          54   /* the numbers it takes are another encoding (rung 3) */
@@ -105,6 +108,9 @@ struct _IO_FILE {
 #define NR_fb_setuid         23
 #define NR_fb_setgid        181
 #define NR_fb_setgroups      80
+#define NR_fb_setresuid     311
+#define NR_fb_sigaltstack    53   /* stack_t orders size before flags (rung 3) */
+#define NR_fb_setresgid     312
 #define NR_fb_geteuid        25
 #define NR_fb_sendfile      393   /* another signature (rung 3) */
 #define NR_fb_pselect6      522   /* pselect; the 6th arg is a plain sigset* (rung 3) */
@@ -191,6 +197,9 @@ struct _IO_FILE {
 #define NR_nanosleep      101
 #define NR_setgid         144
 #define NR_setgroups      159
+#define NR_setresuid      147
+#define NR_sigaltstack    132
+#define NR_setresgid      149
 #define NR_setuid         146
 #define NR_geteuid        175
 #define NR_symlinkat       36
@@ -262,6 +271,7 @@ struct _IO_FILE {
 #define NR_mmap           222
 #define NR_mprotect       226
 #define NR_madvise        233
+#define NR_mincore        232
 #define NR_wait4          260
 #define NR_getrusage      165
 #define NR_getrlimit      163
@@ -284,6 +294,7 @@ struct _IO_FILE {
 #define NR_mprotect        10
 #define NR_munmap          11
 #define NR_madvise         28
+#define NR_mincore         27
 #define NR_rt_sigaction    13
 #define NR_rt_sigprocmask  14
 #define NR_ioctl           16
@@ -295,6 +306,9 @@ struct _IO_FILE {
 #define NR_setuid         105
 #define NR_setgid         106
 #define NR_setgroups      116
+#define NR_setresuid      117
+#define NR_sigaltstack    131
+#define NR_setresgid      119
 #define NR_geteuid        107
 #define NR_sendfile        40
 #define NR_pselect6       270
@@ -609,4 +623,10 @@ void __semit(void *ctx, int c);
  * the stream table is named by whoever opens one. */
 extern FILE __stdf[3];
 extern unsigned char __obuf[8192];
+extern unsigned char __ibuf[4096];
+/* the read side (stdio/rbuf.c): fill an empty read buffer -> bytes now ahead (0 at end, -1 on error);
+ * how far the stream sits behind its fd; and putting the fd back at the stream's position */
+long __rfill(FILE *f);
+long __rahead(FILE *f);
+int __rsync(FILE *f);
 #endif

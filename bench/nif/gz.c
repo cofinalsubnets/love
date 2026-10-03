@@ -56,11 +56,11 @@ static int64_t roll(unsigned n)
 	say_u("in.len", n);
 	say_u("in.fnv", fnv(src, n));
 
-	want = df_go(src, n, 0, (uintptr_t) -1, (uint8_t *) arena);
+	want = df_go(src, 0, n, 0, (uintptr_t) -1, (uint8_t *) arena, 1);
 	say_n("df.count", (long) want);
 	if (want < 0) return want;
 
-	got = df_go(src, n, out, (uintptr_t) want, (uint8_t *) arena);
+	got = df_go(src, 0, n, out, (uintptr_t) want, (uint8_t *) arena, 1);
 	say_n("df.emit", (long) got);
 	say_n("df.exact", got == want ? 1 : 0);
 	if (got < 0) return got;
@@ -121,12 +121,12 @@ static int spin(char const *what, unsigned reps)
 		src[i] = (t >> 16 & 15) ? (unsigned char) line[j] : (unsigned char) (t >> 20);
 		if (!line[++j]) j = 0;
 	}
-	dn = df_go(src, SPIN, out, OUT, (uint8_t *) arena);
+	dn = df_go(src, 0, SPIN, out, OUT, (uint8_t *) arena, 1);
 	if (dn < 0) return 2;
 	for (i = 0; i < reps; i++) {
 		switch (*what) {
-		case 'd': k = df_go(src, SPIN, out, OUT, (uint8_t *) arena); break;
-		case 'c': k = df_go(src, SPIN, 0, (uintptr_t) -1, (uint8_t *) arena); break;
+		case 'd': k = df_go(src, 0, SPIN, out, OUT, (uint8_t *) arena, 1); break;
+		case 'c': k = df_go(src, 0, SPIN, 0, (uintptr_t) -1, (uint8_t *) arena, 1); break;
 		case 'i': k = inf_run(out, (uintptr_t) dn, back, OUT); break;
 		default: return 2;
 		}
@@ -219,7 +219,7 @@ int main(int argc, char **argv)
 		s = 31337u;
 		for (n = 0; n < 4000; n++)
 			src[n] = (unsigned char) ('a' + (lcg(&s) >> 16) % 26);
-		got = df_go(src, 4000, out, OUT, (uint8_t *) arena);
+		got = df_go(src, 0, 4000, out, OUT, (uint8_t *) arena, 1);
 		say_n("cut.len", (long) got);
 
 		/* every truncation: the bit reader runs out at a different place in

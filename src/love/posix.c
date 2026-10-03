@@ -11,6 +11,7 @@
 // the argv marshal lives beside the spawns that consume it; main.c wants it, not static.
 #define _GNU_SOURCE     // unshare / CLONE_* (newns), posix_openpt/grantpt/unlockpt/ptsname
 #include "love.h"
+#include "lib/srctree.h"   // the carried tree, under /love (lovefs.c)
 #include <unistd.h>     // fork execvp _exit read close getuid/getgid symlink readlink chown
 #include <stdio.h>      // fflush, rename
 #include <stdlib.h>     // setenv/unsetenv, posix_openpt grantpt unlockpt ptsname
@@ -661,6 +662,7 @@ static lvm(lvm_getgid) { Sp[0] = putcharm(getgid()); ai_musttail return Next(1);
 static ai_inline word host_fork(struct ai *g) {
  fflush(NULL);
  stdin_exact(g);
+ ai_image_warm(), code_warm(g);   // what earlier children woke, so this one starts with it
  pid_t pid = fork();
  return pid < 0 ? ai_err(g, errno) : putcharm(pid); }
 static lvm(lvm_fork) { Sp[0] = host_fork(g); ai_musttail return Next(1); }
@@ -808,14 +810,16 @@ static int lovefs_stat(char const *p, struct stat *st) {
  if (i == -1) return 0;
  memset(st, 0, sizeof *st);
  if (i == -2) return 1;
- struct ai_lovefs const *e = ai_lovefs_rows(&n);
- intptr_t ms = i >= 0 ? (intptr_t) e[i].ms : n ? (intptr_t) e[0].ms : 0;
+ struct ai_tree const *t = ai_tree_carried();
+ struct ai_tree_row const *e = t->rows;
+ n = t->n;
+ time_t at = i >= 0 ? (time_t) e[i].mtime : n ? (time_t) e[0].mtime : 0;
  st->st_mode = i >= 0 ? S_IFREG | 0444 : S_IFDIR | 0555;
  st->st_size = i >= 0 ? (off_t) e[i].len : 0;
  st->st_nlink = 1, st->st_uid = getuid(), st->st_gid = getgid();
  st->st_ino = (ino_t) (i >= 0 ? i + 1 : 0);
  st->st_blocks = (blkcnt_t) ((st->st_size + 511) / 512), st->st_blksize = 4096;
- st->st_mtim.tv_sec = st->st_atim.tv_sec = st->st_ctim.tv_sec = (time_t) (ms / 1000);
+ st->st_mtim.tv_sec = st->st_atim.tv_sec = st->st_ctim.tv_sec = at;
  return 1; }
 
 ai_noinline static struct ai *host_stat_tuple(struct ai *g, int follow) {
@@ -942,8 +946,9 @@ static lvm(lvm_posix_rusage) {
 
 // /love's listing: each row under the directory gives its next component, once
 ai_noinline static struct ai *lovefs_readdir(struct ai *g, char const *rel, uintptr_t rn) {
- uintptr_t n;
- struct ai_lovefs const *e = ai_lovefs_rows(&n);
+ struct ai_tree const *t = ai_tree_carried();
+ struct ai_tree_row const *e = t->rows;
+ uintptr_t n = t->n;
  g->sp[0] = ZeroPoint;
  for (uintptr_t i = 0; i < n; i++) {
   char const *q = e[i].path;
@@ -1595,6 +1600,12 @@ static const unsigned tio_baud[][2] = {
  {576000, 4102}, {921600, 4103}, {1000000, 4104}, {1152000, 4105}, {1500000, 4106},
  {2000000, 4107}, {2500000, 4108}, {3000000, 4109}, {3500000, 4110}, {4000000, 4111}};
 #define TIO_NB (sizeof tio_baud / sizeof *tio_baud)
+// the libcs whose struct termios names the speeds (musl's are __c_ispeed, kept private)
+#if defined __moonlibc__ || defined _HAVE_STRUCT_TERMIOS_C_OSPEED
+#define TIO_SPEEDS 1
+#else
+#define TIO_SPEEDS 0
+#endif
 ai_noinline static struct ai *host_termios(struct ai *g) {
  word x = g->sp[0];
  intptr_t fd = charmp(x) ? getcharm(x) : ai_port_fd(x);
@@ -1602,7 +1613,10 @@ ai_noinline static struct ai *host_termios(struct ai *g) {
  if (fd < 0) return g->sp[0] = ai_badarg(g), g;
  memset(&t, 0, sizeof t);
  if (tcgetattr((int) fd, &t)) return g->sp[0] = ai_err(g, errno), g;
- intptr_t sp = (intptr_t) t.c_ospeed;
+ intptr_t sp = 0;
+#if TIO_SPEEDS
+ sp = (intptr_t) t.c_ospeed;
+#endif
  if (!sp) for (unsigned k = 0; k < TIO_NB; k++)
   if (tio_baud[k][1] == (t.c_cflag & 4111u)) sp = tio_baud[k][0];
  size_t const C = Width(struct ai_chain);
@@ -1630,7 +1644,10 @@ ai_noinline static word host_settermios(struct ai *g, word x, word l) {
   t.c_cflag &= ~4111u;
   for (unsigned k = 0; k < TIO_NB; k++)
    if (tio_baud[k][0] == (unsigned) v[4]) t.c_cflag |= tio_baud[k][1];
-  t.c_ispeed = t.c_ospeed = (speed_t) v[4]; }
+#if TIO_SPEEDS
+  t.c_ispeed = t.c_ospeed = (speed_t) v[4];
+#endif
+  }
  for (int k = 0; k < 17; k++) t.c_cc[k] = (cc_t) v[5 + k];
  return tcsetattr((int) fd, TCSADRAIN, &t) ? ai_err(g, errno) : ZeroPoint; }
 static lvm(lvm_settermios) {

@@ -1,16 +1,9 @@
-// FIXME this file is too short. combined header shared by main/kmain?
-// ustar.h -- decoding the carried source blob (src/love/src.c's ai_srcgz): a gzip member
-// wrapping a ustar archive. two callers WALK it differently and decode it identically --
-// a carried-source bake (main.c) mmaps and wants one member, the kernel's ram fs (kmain.c)
-// kmallocs and wants every one -- so the walk stays theirs and the header reading is here.
+// ustar.h -- reading ustar headers and walking paths: the kernel's rootfs (src/inle/kmain.c)
+// and the carried source's links (src/love/lib/srctree.c). the walks stay their callers'.
 #ifndef AI_USTAR_H
 #define AI_USTAR_H
 #include <stdint.h>
 #include <stdbool.h>
-
-// the gzip frame: check the magic, step the optional fields, and answer where the raw
-// deflate stream starts and what ISIZE says it inflates to. the caller allocates.
-bool ai_gz_body(unsigned char const *z, uintptr_t zn, uintptr_t *off, uintptr_t *isize);
 
 // a ustar header field, octal, NUL/space terminated -- size at +124, mtime at +136.
 uintptr_t ai_ustar_octal(unsigned char const *p, int n);

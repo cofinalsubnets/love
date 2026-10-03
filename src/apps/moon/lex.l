@@ -455,7 +455,10 @@
                        (in1? c)                        ; a '(' GLUED to a preceding id (no space) carries a 4th field: the function-macro paren
                         (c = 40 && 0 < i && idc? (src (i - 1)) @ gl
                            (go (i + 1) line ((gl ? ['p (string c) line 1] ['p (string c) line]) . acc)))
-                       asm (go (i + 1) line (['p (string c) line] . acc))     ; gas reads what C would not
+                       ; gas reads what C would not; and C's preprocessor reads $ @ ` \ too, as the
+                       ; pp-tokens C11 6.4 keeps for a character no token spells -- harmless in a
+                       ; skipped group or an #error's text, and a parse error if one reaches C
+                       (asm || elem c '(36 64 92 96)) (go (i + 1) line (['p (string c) line] . acc))
                        ())))))
        (go 0 ln0 ())))
 ) ; module 'moon

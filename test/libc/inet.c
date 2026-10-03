@@ -50,4 +50,13 @@ int main(void) {
  errno = 0;
  say_n("badaf", inet_pton(12345, "1.2.3.4", b));
  say_n("badaf-errno", errno == EAFNOSUPPORT);
+ /* --- the SOL_SOCKET names: each a distinct option the kernel answers on a fresh stream socket --- */
+ int s = socket(AF_INET, SOCK_STREAM, 0), v = 0;
+ int names[] = { SO_DEBUG, SO_DONTROUTE, SO_BROADCAST, SO_KEEPALIVE, SO_OOBINLINE, SO_ACCEPTCONN,
+                 SO_PROTOCOL, SO_DOMAIN, SO_TYPE, SO_ERROR, SO_REUSEADDR };
+ for (unsigned i = 0; i < sizeof names / sizeof *names; i++) {
+   socklen_t n = sizeof v; v = -1;
+   say_n("getsockopt", getsockopt(s, SOL_SOCKET, names[i], &v, &n)); say_n("  value", v); }
+ v = 1; say_n("setsockopt", setsockopt(s, SOL_SOCKET, SO_BROADCAST, &v, sizeof v));
+ { socklen_t n = sizeof v; getsockopt(s, SOL_SOCKET, SO_BROADCAST, &v, &n); say_n("broadcast", v); }
  return 0; }

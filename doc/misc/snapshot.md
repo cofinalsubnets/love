@@ -105,7 +105,7 @@ the bake. `test_bakerep` holds that.
 
 A bake egg-boots whatever it is given, so the crew is never aboard when the snapshot is taken.
 `-l CAT` names the roster; with nothing named, the binary's own carried source is it (the
-`distlist` roster through `src/love/src.c`'s `ai_srcgz`), so **a raw love alone in an empty directory
+`distlist` roster, the bake section of `ai_srctree`), so **a raw love alone in an empty directory
 bakes itself into the whole artifact.** That is what a cross-laid seed egg is for: a lay for
 another ISA cannot be baked here, so it ships raw and one `love bake` on the target finishes it.
 

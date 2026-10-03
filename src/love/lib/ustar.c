@@ -3,20 +3,6 @@
 #include "ustar.h"
 #include <string.h>
 
-bool ai_gz_body(unsigned char const *z, uintptr_t zn, uintptr_t *off, uintptr_t *isize) {
-  if (zn < 18 || z[0] != 0x1f || z[1] != 0x8b || z[2] != 8) return false;
-  uintptr_t o = 10;
-  unsigned f = z[3];
-  if (f & 4) o += 2 + (uintptr_t) z[o] + ((uintptr_t) z[o + 1] << 8);   // FEXTRA
-  if (f & 8) { while (o < zn && z[o]) o++; o++; }                       // FNAME
-  if (f & 16) { while (o < zn && z[o]) o++; o++; }                      // FCOMMENT
-  if (f & 2) o += 2;                                                    // FHCRC
-  if (o + 8 >= zn) return false;
-  *off = o;
-  *isize = (uintptr_t) z[zn - 4] | (uintptr_t) z[zn - 3] << 8
-         | (uintptr_t) z[zn - 2] << 16 | (uintptr_t) z[zn - 1] << 24;
-  return true; }
-
 uintptr_t ai_ustar_octal(unsigned char const *p, int n) {
   uintptr_t v = 0;
   for (int i = 0; i < n && p[i] >= '0' && p[i] <= '7'; i++) v = v * 8 + (uintptr_t)(p[i] - '0');

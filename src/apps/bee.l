@@ -12,6 +12,7 @@
 ;   love bee --deliver | --ledger            a sealed message, or queue call, from another box, on stdin
 ;   love bee --revoke PUB|NAME | --revocations | --revoked   the lineage's revoked keys
 ;   love bee --state busy|idle [--pid P]     a claude code session's hooks say its state
+;   love bee --on CAP [--where K=V] [--ship DIR] (--probe | --ssh | -- CMD ..) | --hosts   work on another host
 ;
 ; the settings are ~/.love/etc/bee.l's, each a form per line; ./.bee.l may set model,
 ; max-tokens, thinking, context and queue-watch over them:
@@ -491,7 +492,7 @@
      bee-restart ("at the next convenient point -- between tasks, never mid-gate -- "
                   + "resuming in the same directory, so .mcp.json loads the new bee.")
      bee-landed ("this landing changed bee: every live session restarts " + bee-restart)
-     bee-served "src/apps/bee.l src/apps/locks.l src/apps/seals.l"   ; what bee runs
+     bee-served "src/apps/bee.l src/apps/locks.l src/apps/hosts.l src/apps/seals.l"   ; what bee runs
      (self-id _) (: s (string? bee-self ? (stat bee-self)) (two? s ? (show [(s 0) (s 3) (s 8)])))
      bee-selfw {'id (self-id 0) 'at (clock 0)}
      bee-selfwait (: w (getenv "BEE_SELF_WATCH") (string? w && 0 < #w ? (digits w) 30))
@@ -619,14 +620,16 @@
             t))
      ; the date and platform from love's own verbs; the git summary only where the host has git
      bee-env
-      (lush-out ("echo \"date: $(date '+%Y-%m-%d %A %H:%M %Z')\"\n"
-                 + "echo \"platform: $(uname -s -r -m)\"\n"
-                 + "if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then\n"
-                 + " echo \"git branch: $(git branch --show-current)\"\n"
-                 + " s=$(git status --short 2>/dev/null | head -n 20)\n"
-                 + " echo \"git status, first 20 lines:\"; echo \"${s:-(clean)}\"\n"
-                 + " echo \"recent commits:\"; git log --oneline -5 2>/dev/null | cut -c1-120\n"
-                 + "fi\n"))
+      (lush-out """
+         echo "date: $(date '+%Y-%m-%d %A %H:%M %Z')"
+         echo "platform: $(uname -s -r -m)"
+         if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+          echo "git branch: $(git branch --show-current)"
+          s=$(git status --short 2>/dev/null | head -n 20)
+          echo "git status, first 20 lines:"; echo "${s:-(clean)}"
+          echo "recent commits:"; git log --oneline -5 2>/dev/null | cut -c1-120
+         fi
+         """)
 
      (paras ls) (foldl (\ a l (a + l + "\n")) "" ls)
      bee-me (string? bee-self ? bee-self "love")
@@ -679,15 +682,17 @@
      ; every merge queue there is, as it stands at start: git's refs/queue/*, and the queue/*
      ; ledgers of sb's hub nest -- SB_HUB, else this directory when it holds a .sb
      bee-qcmd
-      ("for r in $(git for-each-ref --format='%(refname)' refs/queue 2>/dev/null); do\n"
-       + " echo \"--- git $r ---\"; git cat-file -p \"$r\"\n"
-       + "done\n"
-       + "hub=${SB_HUB:-}; [ -z \"$hub\" ] && [ -d .sb ] && hub=.\n"
-       + "if [ -n \"$hub\" ]; then\n"
-       + " for n in $(sb -C \"$hub\" ledger 2>/dev/null | cut -d' ' -f1); do\n"
-       + "  case $n in queue/*) echo \"--- sb ledger $n, in the nest at $hub ---\"; sb -C \"$hub\" ledger \"$n\";; esac\n"
-       + " done\n"
-       + "fi\n")
+      """
+      for r in $(git for-each-ref --format='%(refname)' refs/queue 2>/dev/null); do
+       echo "--- git $r ---"; git cat-file -p "$r"
+      done
+      hub=${SB_HUB:-}; [ -z "$hub" ] && [ -d .sb ] && hub=.
+      if [ -n "$hub" ]; then
+       for n in $(sb -C "$hub" ledger 2>/dev/null | cut -d' ' -f1); do
+        case $n in queue/*) echo "--- sb ledger $n, in the nest at $hub ---"; sb -C "$hub" ledger "$n";; esac
+       done
+      fi
+      """
      bee-queues (lush-out bee-qcmd)
 
      ; --- queue watching: every (queue-watch N) seconds, 20 unless set and 0 for never, the
@@ -2233,7 +2238,7 @@
          (: t (lk 'locks-list (lk 'locks-root 0))
             (who h) (show (peep h "pid" "?") + " " + peep h "note" "")
             ex (peep t "exclusive" ()) hv (peep t "heavy" ()) wt (peep t "waiting" ())
-            hosts (filter (e \ starts? <e "a64host-") ex) outs (filter (e \ !(starts? <e "a64host-")) ex)
+            hosts (filter (e \ starts? <e "host-") ex) outs (filter (e \ !(starts? <e "host-")) ex)
             ([((sgr "1" "locks") + sgr "2" ("  " + (: m (peep t "mem_gb" ()) (? (m = ()) "?" (show (int (m * 10) / 10)))) + " GB free, load "
                                                 + (: l (peep t "load" "?") (string? l ? l (show l)))))]
              + [("  heavy " + show #hv + "/" + show bee-hmax + (two? hv ? (": " + foldl (\ a h (a + (#a ? ", " "") + who h)) "" hv) ""))]
@@ -2915,6 +2920,7 @@
          words (filter (\ w !(elem w bee-flags)) as)
          (? (elem "--mcp" as) (: _ (mcp-serve in out) 0)             ; a claude child's own server
             (two? as && <as = "--lock") (bee-cli as yes)              ; its command's words stay as given
+            (two? as && elem <as ["--on" "--hosts"]) ((cite 'hosts 'hosts-on) as)   ; so do --on's
             ; ahead of --hud, which the hooks add so that a bee older than --state only prints its hud
             (two? as && <as = "--state") (: _ (state-cmd as) 0)
             (elem "--hud" as) (: _ (puts (foldl (\ a l (a + l + "\n")) "" (hud-lines 0))) 0)   ; once, as text
@@ -2950,6 +2956,8 @@
        love bee --spawn NAME DIR [-y] PROMPT ..         a bee serving detached in DIR
        love bee --stop NAME | --serve [-y] [PROMPT ..]
        love bee --state busy|idle [--pid P]          a claude code session's hooks say its state
+       love bee --on CAP [--where K=V] [--ship DIR] (--probe | --ssh | -- CMD ..)   a command on a host that can
+       love bee --hosts                              the hosts this box knows
        love bee --avatar [NAME]                        the avatars, or wear one"
    _ (pins (cite 'verbs 'tab) 'bee (udoor 'bee bee-main bee-usage 1 0)))
 
