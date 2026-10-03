@@ -98,6 +98,8 @@ struct _IO_FILE {
 #define NR_fb_mprotect       74
 #define NR_fb_munmap         73
 #define NR_fb_madvise        75
+#define NR_fb_msync          65
+#define NR_fb_copy_file_range 569
 #define NR_fb_mincore        78
 #define NR_fb_rt_sigaction  416   /* sigaction; no restorer, another ksigaction (rung 3) */
 #define NR_fb_rt_sigprocmask 340  /* sigprocmask; 16-byte set, no size arg (rung 3) */
@@ -274,6 +276,8 @@ struct _IO_FILE {
 #define NR_mmap           222
 #define NR_mprotect       226
 #define NR_madvise        233
+#define NR_msync          227
+#define NR_copy_file_range 285
 #define NR_mincore        232
 #define NR_wait4          260
 #define NR_getrusage      165
@@ -297,6 +301,8 @@ struct _IO_FILE {
 #define NR_mprotect        10
 #define NR_munmap          11
 #define NR_madvise         28
+#define NR_msync           26
+#define NR_copy_file_range 326
 #define NR_mincore         27
 #define NR_rt_sigaction    13
 #define NR_rt_sigprocmask  14

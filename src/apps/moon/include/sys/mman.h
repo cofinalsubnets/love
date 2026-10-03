@@ -17,6 +17,10 @@
 #define MADV_DONTFORK 10
 #define MADV_DOFORK   11
 int madvise(void*, long, int);
+#define MS_ASYNC      1
+#define MS_INVALIDATE 2
+#define MS_SYNC       4
+int msync(void*, unsigned long, int);
 int mincore(void*, unsigned long, unsigned char*);
 void *mmap(void*, long, int, int, int, long);
 int munmap(void*, long);

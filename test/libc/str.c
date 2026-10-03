@@ -127,6 +127,13 @@ int main(void) {
  /* --- strtok: the hidden state, the run of separators, the tail --- */
  strcpy(b2, "  one,,two  three,");
  for (char *t = strtok(b2, " ,"); t; t = strtok(0, " ,")) say_s("strtok", t);
+ /* --- strchrnul: a miss lands on the terminator --- */
+ say_n("strchrnul.hit", strchrnul("hello", 'l') - "hello" >= 0);
+ { char const *h = "hello"; say_n("strchrnul.at", strchrnul(h, 'l') - h); say_n("strchrnul.miss", strchrnul(h, 'z') - h); }
+ /* --- strsep: an empty field is a field, and the cursor ends null --- */
+ { char sb[] = "a,,b;c", *sp = sb, *f;
+   while ((f = strsep(&sp, ",;"))) say_s("strsep", f);
+   say_n("strsep.done", sp == 0); }
  /* --- strtok_r: the state is the caller's, so two walks interleave --- */
  char r1[] = "a:b:c", r2[] = "x y", *s1 = 0, *s2 = 0;
  char *t1 = strtok_r(r1, ":", &s1), *t2 = strtok_r(r2, " ", &s2);
