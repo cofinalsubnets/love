@@ -18,7 +18,7 @@
   test_host test_hostegg test_hostnif test_inle test_kboot test_kmitty test_kernel_a64 test_kernel_rv64 test_kernel_vmx test_kernel_wasm test_kore \
   test_kverb test_libc test_love0 test_lux test_moon test_moonfuzz test_mps2 test_mps2_t1 \
   test_mps2_build test_mps2_wake test_mx test_netbsd test_netbsd_a64 test_nucleo446 test_nucleo446_smoke \
-  test_objcopy test_playdate test_proof test_raw test_raw_a64 test_raw_bake test_raw_rv64 \
+  test_objcopy test_playdate test_proof test_raw test_raw_a64 test_raw_bake test_raw_rv64 test_love_a64 \
   test_refuzz test_reloc32 test_root test_rv64 test_rp2040 test_rvboot test_sat test_sb test_seat test_seed \
   test_doomwasm test_nestwasm test_seedwasm test_selfhost test_slow test_softfp test_spin test_stdinbuf test_stdincorpus test_tco0 test_teensy41 test_thumb1 \
   test_thumb2 test_thumb2sp test_tools test_uefi test_uefi_a64 test_ulp test_uugen \
@@ -50,7 +50,7 @@ test_extra: test_filemode waits test_front test_proof test_gen test_uugen test_u
 	test_fixpoint test_xfixpoint test_raw_bake test_drat test_vec \
 	test_asmops test_dtb test_rvboot test_elf32 test_objcopy test_distboot test_fat \
 	test_cca64 test_ccrv64 test_ccwasm test_ccthumb1 test_ccthumb2 test_cts_a64 test_cts_rv64 test_cts_wasm \
-	test_raw_a64 test_raw_rv64 \
+	test_raw_a64 test_raw_rv64 test_love_a64 \
 	test_virt test_thumb1 test_thumb2 test_thumb2sp \
 	test_mps2 test_mps2_t1 test_mps2_wake test_nucleo446_smoke test_links \
 	test_freebsd test_netbsd test_freebsd_a64 test_netbsd_a64 \
@@ -716,6 +716,17 @@ test_raw_rv64: host
 test_raw_a64: host
 	@$(raw_env) gate_sentinel='test/a64/callout:.* ok' \
 	  $(gsh) test/gate/raw.sh a64 $(ho) $m $t test/a64/callout.l
+# test_love_a64 -- the whole a64 artifact ($(xd)/love, cross-built here) on a64 hardware:
+# the corpus over the egg, its own bake there, the corpus on the wake. a 16K-page host
+# first, any a64 host next, qemu-user last (test/gate/a64love.sh). on an a64 box test_host
+# is this lane already.
+ifeq ($(xa),a64)
+test_love_a64: host $(xd)/love $(ho)/.dist-cat.l
+	@$(gsh) test/gate/a64love.sh $(ho) $m $(xd)/love $(ho)/.dist-cat.l $t
+else
+test_love_a64:
+	@echo "test_love_a64: this box is $(a); test_host is the native lane here"
+endif
 # the ELF32/EM_ARM object writer (src/love/holo/obj.l objsecs32) and the 32-bit data model:
 # a cross-object BL, the inline v6-M soft divide/rem, a literal-pool `la`, a gcc-built
 # struct read back field-wise, and a named section holding a function-pointer table --
@@ -840,9 +851,9 @@ $(eval $(call moon_pkg,bzip2,BZIP2SRC,host))
 # test_bakerep -- A bake is a function OF the tree. Seconds, and it rides the slow gate
 # because test_distboot proves the same law over the whole circle but is opt-in and
 # minutes long; a regression would otherwise wait for a release to surface.
-test_bakerep: host
+test_bakerep: host $(prof_raw)
 	@echo TEST test/gate/bakerep.sh
-	@$(gsh) test/gate/bakerep.sh $(ho)
+	@$(gsh) test/gate/bakerep.sh $(ho) $(prof_raw)
 test_distboot: dist
 	@echo TEST test/gate/distboot.sh
 	@sh test/gate/distboot.sh $(dist_source) $(ho)/love
