@@ -353,14 +353,14 @@
    ; the source itself from 1, so every stamped line is true with no pay-back pass.
    ; the -D lines a TU starts from: the machine's, the OS's, the libc's and the dialect's, then
    ; the command line's
-   (cc-defs {'ds ds 'tgt tgt 'os os 'dia dia})
-    (archdefs tgt + osdefs os + featdefs tgt + stddefs tgt
+   (cc-defs {'ds ds 'tgt tgt 'os os 'dia dia 'undef un})
+    (un ? (stddefs tgt + ds) (archdefs tgt + osdefs os + featdefs tgt + stddefs tgt
                  ; our libc is the one in this link and carries its whole surface on every
                  ; kernel: a source asks it what it may call, never the kernel.
                  + '("LvMoonlibc=1")
                  + (dia = 'moon && '("__moon__=1"))       ; the dialect's own macro: extensions on
                  +   ; ds9, not ds: a :-local shadows the param over the whole scope (the boxfix cell trap)
-                 (elem tgt '(x64 a64) ? ("__SIZEOF_INT128__=16" . ds) ds))       ; the wide pair (gen's d128 lane); love.c's limb seam reads it, and gcc says the same on both
+                 (elem tgt '(x64 a64) ? ("__SIZEOF_INT128__=16" . ds) ds)))      ; the wide pair (gen's d128 lane); love.c's limb seam reads it, and gcc says the same on both
    (cc-parse src (t @ {'is is 'ds ds 'tgt tgt 'os os 'vb vb 'dia dia}))
     (: ds9 (cc-defs t)
        ; `-` is read here and nowhere else, so every door onto a TU gets stdin for free; cdir
@@ -424,14 +424,14 @@
    ; write-bytes walks a byte list, and a string handed to it lands as an empty file.
    ; -E: the source preprocessed, to -o or stdout; a refusal exits as a compile's does, which is
    ; how a configure script tells a header that is there from one that is not
-   (cc-pre src dst (t @ {'is is 'vb vb}))
-    (: ds9 (cc-defs t)
+   (cc-pre src dst (t @ {'is is 'vb vb 'xasm xasm}))
+    (: ds9 (xasm ? ("__ASSEMBLER__=1" . cc-defs t) (cc-defs t))
        r (src = "-" ? [1 (slurp in)]
             (uread src @ q (? (two? q) q !vb () (vb src @ h (string? h && [1 h])))))
        _ (two? r || udie 1 ("cc: cannot open " + src))
-       lx (clexat (deftext ds9 + <>r) (1 - #ds9))
+       lx (xasm ? (clexm (deftext ds9 + <>r) (1 - #ds9) 2 1) (clexat (deftext ds9 + <>r) (1 - #ds9)))
        _ (okv? lx || ccdie lx src ("cc: lex error in " + src))
-       pp (cpp-text <>lx (name \ sys? \ incload vb is (cdir src) name sys?) src)
+       pp (cpp-text <>lx (name \ sys? \ incload vb is (cdir src) name sys?) src xasm)
        _ (okv? pp || ccdie pp src ("cc: preprocessor error in " + src))
        (dst ? (open dst "w" @ q (!(hot? q) ? (udie 1 ("cc: cannot write " + dst)), say q <>pp, close q))
               (puts <>pp, flush out)))
@@ -1000,7 +1000,7 @@
        (go as 'moon ()))          ; unsaid means moon: our C, extensions and all
    ; `none` is gcc's word for "read the suffix again", which for us is the default.
    (xlang? w) (w = "c" || w = "none")
-   (xdie w) ("cc: -x " + w + " -- mooncc reads: c none")
+   (xdie w) ("cc: -x " + w + " -- mooncc reads: c none assembler-with-cpp")
    (tol? a) (a = "-pipe" || a = "-static" ||
              starts? a "-g" || starts? a "-O" ||
              starts? a "-f" || glu? a 108 || glu? a 76 ||
@@ -1027,7 +1027,7 @@
    ; would answer the zero point. the literal has to be complete and is wanted at two sites,
    ; so it is spelled once rather than wrapped on `{}`.
    (fseed tgt dia) {'c () 'is () 'ds () 'o () 'ins () 'tgt tgt 'os () 'pie () 'org () 'dorg ()
-                    'nostd () 'vb () 'ni () 'rdme () 'relo () 'dia dia 'md () 'mmd () 'mf () 'mt () 'mp () 'E ()}
+                    'nostd () 'vb () 'ni () 'rdme () 'relo () 'dia dia 'md () 'mmd () 'mf () 'mt () 'mp () 'E () 'xasm () 'undef ()}
    (flags as t)
     (!(two? as) ?
        (pin t 'is (rev (t 'is)),
@@ -1103,9 +1103,16 @@
              ; may arrive with no suffix to read. loud like -std=: `-x c++` and `-x
              ; assembler` name compilers we are not, and taking either for C would read one
              ; language as another.
-             (a = "-x") (two? r ? (xlang? <r ? (flags >r t) (udie 2 (xdie <r))) (udie 2 usage))
+             ; assembler-with-cpp is the preprocessor's half of a .S: -E reads it that way (a
+             ; device tree's dts is the user kbuild has)
+             (a = "-x") (two? r ? (<r = "assembler-with-cpp" ? (flags >r (pin t 'xasm 1))
+                                   (xlang? <r ? (flags >r (pin t 'xasm ())) (udie 2 (xdie <r)))) (udie 2 usage))
              (glu? a 120) (snip a 2 #a @ w
-                             (xlang? w ? (flags r t) (udie 2 (xdie w))))
+                             (? (w = "assembler-with-cpp") (flags r (pin t 'xasm 1))
+                                (xlang? w) (flags r (pin t 'xasm ()))
+                                (udie 2 (xdie w))))
+             ; -undef: none of the system's or the compiler's predefines, only the standard's
+             (a = "-undef") (flags r (pin t 'undef 1))
              (tol? a) (flags r t)
              ; ahead of the dash refusal, and the only arg that is: a bare `-` is an
              ; input, the source on stdin, which every configure probe writes before it

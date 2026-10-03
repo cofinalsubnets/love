@@ -12,7 +12,9 @@
 ; $KBUILD_BUILD_USER/HOST/VERSION/TIMESTAMP  the build's identity, handed in as the command
 ;                line's, so no clock or host name reaches the image
 ; $HEARTS_HOSTCC the compiler the host programs build with (kconfig's conf, fixdep, dtc, ..),
-;                as `make HOSTCC=` names it; unset, kbuild's own (clang under LLVM=1)
+;                as `make HOSTCC=` names it; unset, mooncc through .hearts/bin/hk-hostcc, which
+;                hands the programs in `borrowed` below to clang
+; $HEARTS_LEX, $HEARTS_YACC  the flex and bison the build runs (`make LEX= YACC=`); unset, kbuild's
 (: argv cmdline
    memo {}
    jobs {}
@@ -86,6 +88,27 @@
              f (hd + "/job." + show (bump 'n))
              pid (spawn ["/bin/sh" "-c" ("{ " + pre + text + "\n} > " + q f + " 2>&1")])
              (pin pids pid [tg f], pin jobs tg pid, bump 'live, 0))))
+   ; the host programs mooncc cannot build yet, and why: they take the borrowed clang
+   borrowed ["certs/extract-cert"]                    ; links openssl's libcrypto
+   ; mooncc finds its headers and runtime at <its binary>/../lib/love/moon: a seat under .hearts,
+   ; a copy of this love beside the tree's own src/apps/moon (build.l sits in src/apps/hearts)
+   (seat _)
+    (: sd (hd + "/seat") apps (dir (dir (argv 1)))
+       moon ((apps 0 = 47 ? apps (here + "/" + apps)) + "/moon")
+       (hark ["mkdir" "-p" (sd + "/bin") (sd + "/lib/love")],
+        hark ["cp" "-f" (selfpath 0) (sd + "/bin/love")],
+        hark ["ln" "-sfn" moon (sd + "/lib/love/moon")],
+        uwrite (hd + "/bin/hk-hostcc")
+               ("#!/bin/sh\n# the host compiler: mooncc, but for what build.l borrows clang for\ncase \" $* \" in\n"
+                + join "" (map (b \ "  *\" -o " + b + " \"*) exec clang \"$@\";;\n") borrowed)
+                + "esac\nexec " + q (sd + "/bin/love") + " mooncc \"$@\"\n"),
+        hark ["chmod" "+x" (hd + "/bin/hk-hostcc")],
+        ; perl: the one script the build runs is ported (perlasm.l, pinned by hash); any other refuses
+        uwrite (hd + "/bin/perl")
+               ("#!/bin/sh\n# the build's perl: perlasm.l for sha2-armv8.pl, nothing else\ncase \"$1\" in\n"
+                + "  */sha2-armv8.pl) exec " + q (sd + "/bin/love") + " " + q (dir (argv 1) + "/perlasm.l") + " \"$@\";;\n"
+                + "esac\necho \"hearts: no perl here for $1\" >&2\nexit 1\n"),
+        hark ["chmod" "+x" (hd + "/bin/perl")]))
    (after l) (atom? l ? () (<l = "--sub" ? >l (after >l)))
    sub (after argv)
    _ (pins made " prior" (getenv "HEARTS_PRIOR" = "1" ? prior ()) " wait" waitfor)
@@ -95,9 +118,12 @@
          _ (hark ["mkdir" "-p" (hd + "/bin")])
          _ (uwrite (hd + "/bin/hk-make") ("#!/bin/sh\nHEARTS_JOBS=1 exec " + q (argv 0) + " " + q (argv 1) + " --sub \"$@\"\n"))
          _ (hark ["chmod" "+x" (hd + "/bin/hk-make")])
+         _ (seat 0)
          id (filter (n \ string? (getenv n)) ["KBUILD_BUILD_USER" "KBUILD_BUILD_HOST" "KBUILD_BUILD_VERSION" "KBUILD_BUILD_TIMESTAMP"])
          cl0 (foldl (a \ n \ pin a n (getenv n)) (pins {} "ARCH" "arm64" "LLVM" "1") id)
-         cl (getenv "HEARTS_HOSTCC" @ h (string? h ? (pin cl0 "HOSTCC" h) cl0))
+         cl1 (pin cl0 "HOSTCC" (getenv "HEARTS_HOSTCC" @ h (string? h ? h (hd + "/bin/hk-hostcc"))))
+         cl (foldl (a \ kv \ (getenv (kv 0) @ v (string? v ? (pin a (kv 1) v) a))) cl1
+                   [["HEARTS_LEX" "LEX"] ["HEARTS_YACC" "YACC"]])
          goals (words (getenv "HEARTS_GOALS" || "defconfig syncconfig Image"))
          (one g) (peep made " failed" 0 ? 0
                    (: top (hk-topgoal K here cl sh g)
