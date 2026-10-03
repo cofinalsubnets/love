@@ -44,3 +44,6 @@
    ls (help-lines r)
    _ (test (#ls = 3) (ls 0 = [(r + "/a.l") 1 "one"]) (ls 1 = [(r + "/a.l") 2 "two stage"])
            (ls 2 = [(r + "/b/c.l") 1 "stage three"])))
+
+(test_fin ())
+(puts "src/apps/seek: ok -- the query narrows, case and all, and widens again; the choice and its window; help's line table\n")
