@@ -65,6 +65,8 @@ enum {              // flag bits: the console's modes
 enum { cb_mice = cb_mx10 | cb_mbtn | cb_mdrag | cb_many };
 
 enum { cb_outn = 64 };  // the reply queue's capacity (cb_reply's buffer size)
+// the charsets: G0 and G1 each ascii or DEC special graphics, and SO's shift to G1
+enum { cb_g0 = 1, cb_g1 = 2, cb_so = 4 };
 enum { cb_pmax = 16 };  // CSI parameters kept: two rgb pens in one SGR are ten
 enum { cb_mousen = 36 };  // a mouse report's longest: ESC [ < and three 10-digit fields, 2 ; and M
 
@@ -73,10 +75,10 @@ struct cb {
   uint16_t rows, cols, flag, arg;  // arg: the CSI parameter being collected
   uint32_t cur_fg, cur_bg, def_fg, def_bg;  // the pen, and what a default colour means
   uint32_t sfg, sbg;  // the saved pen (DECSC), with sface
-  uint8_t cur_face, sface, esc;  // esc: escape-parser state
+  uint8_t cur_face, sface, esc, gset;  // esc: escape-parser state; gset: the charsets (cb_g0 cb_g1 cb_so)
   uint16_t pv[cb_pmax]; uint8_t pn, ci;  // pv/pn: collected CSI parameters, ci its intermediate
   uint16_t top, bot;  // the scroll region, inclusive rows
-  uint8_t out[cb_outn], on;  // the reply queue (DSR/DA answers ride home here)
+  uint8_t out[cb_outn], on, sgset;  // the reply queue (DSR/DA answers ride home here); DECSC's charsets
   uint32_t ucp; uint8_t un;  // utf-8 in flight: the codepoint, continuations to come
   uint8_t ob[6], ol;  // an OSC body's head: enough to recognize the colour asks
   uint32_t dmg[8];  // dirty rows, one bit each (row 255 stands for 255-and-past);
