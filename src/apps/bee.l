@@ -176,6 +176,10 @@
              {"name" (prop "the lock's name")} ["name"])
        (tool "lock_list" "The machine's locks: who holds what, who waits, memory available and load."
              {} [])
+       (tool "queue_read" ("A merge queue's text as it stands: its header, rules, leader and rows. "
+                           + "queue/NAME@BOX reads the queue in BOX's hub, as the other queue tools reach it.")
+             {"queue" (prop "refs/queue/NAME for git, queue/NAME for an sb ledger in the hub, or either @BOX")}
+             ["queue"])
        (tool "queue_row" ("Write your row in a merge queue -- the only way to write one; never edit a "
                           + "queue by hand. It reads the queue, sets exactly one row of yours -- the one row names, else the one "
                           + "carrying branch, else your only row; a branch you hold no row for joins a new row at the "
@@ -819,7 +823,7 @@
        [("# " + q-short q + " merge queue, on bee's standard protocol (doc/bee.md, THE MERGE QUEUE): the state every")
         "#   session reads; messages only announce changes to it."
         (? (q-git? q) ("# read:  git cat-file -p " + q)
-           ("# read:  sb -C HUB ledger " + q + "   (HUB: SB_HUB, the one nest every session names)"))
+           ("# read:  queue_read, or sb -C HUB ledger " + q + "   (HUB: SB_HUB, the one nest every session names)"))
         "# write: only through bee's tools -- queue_row, queue_lead, queue_land, queue_landed -- from a bee, or from"
         "#   claude code through love bee --mcp. each write is a compare-and-swap and refuses what these rules forbid."
         "# join: add your row at the bottom when your branch is ready to gate -- a row per branch, so a second branch"
@@ -991,7 +995,7 @@
                      [(<r = 0 ? 1 0) (chomp (r 1))])))))
      ; --ledger, a sealed call on stdin: run in (ledger-dir PATH), else HOME, as the sealed name.
      ; each id is taken once
-     bee-ledger-tools ["queue_row" "queue_lead" "queue_land" "queue_landed"]
+     bee-ledger-tools ["queue_read" "queue_row" "queue_lead" "queue_land" "queue_landed"]
      (ledger s)
       (: k (find s "\n\n" 0) hd (? (k < 0) s (snip s 0 k)) body (? (k < 0) "" (snip s (k + 2) #s))
          (hv key) (: fl (filter (\ l (starts? l (key + " "))) (lines hd)) (? (two? fl) (snip <fl (#key + 1) #<fl)))
@@ -1011,8 +1015,9 @@
                      _ (pins bee-who 'name sealed 'remote 1)
                      dir (setting 'ledger-dir (: h (getenv "HOME") (string? h ? h ".")))
                      _ (chdir dir)
-                     (tool @ "queue_row" (queue-row in) "queue_lead" (queue-lead in)
+                     (tool @ "queue_read" (queue-read in) "queue_row" (queue-row in) "queue_lead" (queue-lead in)
                              "queue_land" (queue-land in) (queue-landed in)))))))
+     (queue-read in) (q-check in (\ in (: rd (q-read (in "queue")) (? (<rd = "none") [0 ("no queue " + in "queue")] [1 (rd 1)]))))
      (queue-row in) (q-check in queue-row1)
      ; a queue not made yet is made on bee's standard header, led by the leader given, else this session
      (queue-row1 in)
@@ -1286,15 +1291,18 @@
          nest (setting 'nest (bee-home + "/g"))
          etc (bee-home + "/.love/etc")
          route (? (0 < #bx) (box-route bx) ["" ""])
-         pub (: ks (filter (\ f (&& (starts? f "id_") (ends? f ".pub"))) (? (two? (readdir (bee-home + "/.ssh"))) (readdir (bee-home + "/.ssh")) ()))
-                (? (two? ks) (chomp (: t (slurp-file (bee-home + "/.ssh/" + <ks)) (string? t ? t ""))) ""))
+         ; the key ssh offers the box: its identityfiles as ssh -G reads them, the first with a .pub
+         pub (: ids (? (0 < #(route 0)) (filter (\ l (starts? l "identityfile ")) (lines (lush-out ("ssh -G " + sq (route 0) + " 2>/dev/null")))) ())
+                fs (map (\ l (: f (snip l 13 #l) (? (starts? f "~/") (bee-home + snip f 1 #f) f))) ids)
+                ks (filter (\ f (string? (slurp-file (f + ".pub")))) fs)
+                (? (two? ks) (chomp (slurp-file (<ks + ".pub"))) ""))
          door (\ _ (? (0 < #bx) (relay bx "" "--door") [1 ""]))
          [["love, nested in ~/.love/bin"
            (\ _ (two? (stat (bee-home + "/.love/bin/love")) && two? (stat (bee-home + "/.love/bin/lush"))))
            (\ _ "in a love tree (a seed, or love source DIR): make, then ./out/love nest -y")]
           ["the hub named: (hub NAME@BOX) in ~/.love/etc/bee.l"
            (\ _ (0 < at && 0 < #bx))
-           (\ _ ("echo '(hub hub@BOX)' >> " + etc + "/bee.l   # BOX: the box that keeps the queue's hub"))]
+           (\ _ ("mkdir -p " + etc + " && echo '(hub hub@BOX)' >> " + etc + "/bee.l   # BOX: the box that keeps the queue's hub"))]
           [("the way to " + bx + ": a line in ~/.love/etc/bee/boxes")
            (\ _ (: t (slurp-file (bee-keys + "/boxes")) (two? (filter (\ l (two? (words l) && <(words l) = bx)) (? (string? t) (lines t) ())))))
            (\ _ ("mkdir -p " + bee-keys + " && echo '" + bx + " HOST' >> " + bee-keys + "/boxes   # HOST: what ssh reaches it as"))]
@@ -1326,11 +1334,15 @@
             (? ((st 1) 0) (: _ (puts ("ok    " + <st + "\n")) (node-walk >m))
                (: _ (puts ("next  " + <st + "\n  " + ((st 2) 0) + "\n")) 1))))
      (node-done _)
-      (: hub (setting 'hub "") nest (setting 'nest (bee-home + "/g"))
+      (: hub (setting 'hub "") nest (setting 'nest (bee-home + "/g")) bx (snip hub (find hub "@" 0 + 1) #hub)
+         ; the hub's queues, as its door's hello lists them
+         r (relay bx "" "--door")
+         qs (? (<r = 0) (filter (\ w (1 < #w && <w = "ledger")) (map words (lines (r 1)))) ())
          _ (puts ("this box is a node. start a session in the nest, and read doc/bee.md, NEW NODE and THE MERGE QUEUE:\n"
                   + "  cd " + nest + " && claude --dangerously-load-development-channels server:bee\n"
-                  + "its queues are the hub's, as queue/NAME@" + snip hub (find hub "@" 0 + 1) #hub
-                  + " (love bee --door there, or this box's love bee --node, lists them)\n"))
+                  + (? (two? qs) ("its queues are the hub's, read with queue_read:\n"
+                                  + foldl (\ a w (a + "  " + w 1 + "@" + bx + "\n")) "" qs)
+                       ("the hub keeps no queue yet; one made there is queue/NAME@" + bx + "\n"))))
          0)
      (queue-landed in) (q-check in queue-landed1)
      (queue-landed1 in)
@@ -1475,8 +1487,9 @@
          + "queue that moves only by compare-and-swap: a git ref under refs/queue/, or an sb ledger "
          + "under queue/ in a shared nest. Its header holds the rules, the leader and a row per merge; "
          + "follow them. A queue bee makes is laid on bee's standard protocol (doc/bee.md, THE MERGE "
-         + "QUEUE), which its header states in full. Read it fresh before acting on it: `git cat-file -p "
-         + "refs/queue/NAME`, or `sb -C HUB ledger queue/NAME` for a ledger in the hub.")
+         + "QUEUE), which its header states in full. Read it fresh before acting on it: queue_read, which "
+         + "reaches queue/NAME@BOX on another box too, or `git cat-file -p refs/queue/NAME`, or "
+         + "`sb -C HUB ledger queue/NAME` for a ledger in the hub.")
         ("Take part only through bee's queue tools, never by editing a queue by hand. queue_row sets "
          + "exactly your row -- joining (making the queue when there is none), moving its state and head, "
          + "leaving -- and does the compare-and-swap for you, so no one else's row or the header can be "
@@ -1827,6 +1840,7 @@
                                          + (f 'yes ? "" ", reading only") + "; send_message reaches it")]
                             [0 e]))
           "stop_bee" [1 (stop-bee (in "name"))]
+          "queue_read" (q-route "queue_read" in queue-read)
           "queue_row" (q-route "queue_row" in queue-row)
           "queue_lead" (q-route "queue_lead" in queue-lead)
           "queue_land" (q-route "queue_land" in queue-land)
@@ -1884,13 +1898,13 @@
                  "pane_type" (in "id" + ": " + (: t (in "text") (#t <= 60 ? t (snip t 0 60 + "…"))))
                  "queue_row" (in "queue" + " " + (: s (peep in "session" ()) (string? s ? (s + " ") ""))
                               + in "state" + (: h (peep in "gated_head" ()) (string? h ? (" " + h) "")))
-                 ("queue_lead" || "queue_land" || "queue_landed") (in "queue")
+                 ("queue_read" || "queue_lead" || "queue_land" || "queue_landed") (in "queue")
                  (in "path")))
      ; the tools that run without asking: they look, or stop a job or free a lock of this bee's
      ; own, or answer how to land without landing. read_file runs unasked inside the working tree
      ; only. a message or a queue write asks, since either can start a turn in a peer that acts
      ; without asking
-     bee-free ["list_sessions" "check_job" "stop_job" "lock_list" "lock_release" "queue_land"
+     bee-free ["list_sessions" "check_job" "stop_job" "lock_list" "lock_release" "queue_read" "queue_land"
                "pane_list" "pane_read"]
      (free? name in) (? (name = "read_file") (in-tree? (in "path")) (elem name bee-free))
 
@@ -2727,7 +2741,7 @@
      ; child runs to reach its bee and the hive. the ports are arguments, so a test drives a
      ; whole conversation without a child. an id is presence, not truth: requests count from 0 ---
      (line-of p) (:- (go ()) (go acc) (see p @ -1 (two? acc ? (string (rev acc))) 10 (string (rev acc)) c (go (c . acc))))
-     mcp-shared ["list_sessions" "send_message" "queue_row" "queue_lead" "queue_land" "queue_landed"
+     mcp-shared ["list_sessions" "send_message" "queue_read" "queue_row" "queue_lead" "queue_land" "queue_landed"
                  "lock_acquire" "lock_release" "lock_list"]
      mcp-tools
       ([{"name" "approve"

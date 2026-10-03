@@ -64,7 +64,7 @@ bee - a coding agent in the terminal, and the protocol its sessions talk by
 - **list_sessions** and **send_message**, described under SESSIONS AND MESSAGES;
 - **start_job**, **check_job** and **stop_job**, and **spawn_bee** and **stop_bee**, described under JOBS AND WORKERS;
 - **lock_acquire**, **lock_release** and **lock_list**, described under LOCKS;
-- **queue_row**, **queue_lead**, **queue_land** and **queue_landed**, described under THE MERGE QUEUE.
+- **queue_read**, **queue_row**, **queue_lead**, **queue_land** and **queue_landed**, described under THE MERGE QUEUE.
 - in a pane of **love mitty**, **pane_list**, **pane_read**, **pane_type**, **pane_open**, **pane_focus** and **pane_close**: the desktop's other panes by id, read as text, typed into as keys (a newline is Enter, and the answer is the pane once quiet), opened beside, given the keyboard, closed. The model's own pane is never typed into or closed.
 
 A write, an edit, a shell command, a job's start, a message to another session, a queue write, a spawn and a stop of another bee, and typing into, opening, focusing or closing a pane ask y/n before they run, unless **-y** is given, and so does **read_file** of a path outside the working tree (a link out of it included). The rest run without asking. An ask shows the whole input, a control character as **^X**; on the full screen **y** runs it only once every row has been on the screen, and the arrows scroll it.
@@ -258,7 +258,7 @@ On the new box, in order:
 7. **love built in the nest.** **make** there; the cc on PATH builds the bootstrap, love builds the rest.
 8. **Claude Code**, on PATH, and the tree's **.mcp.json** and **.claude/settings.json** in the nest, which come with the hub's head.
 
-Then start a session in the nest as above (THE MCP SERVER) and work as in a worker nest. The hub's queues are **queue/***name***@***box*: a queue tool call goes there sealed and runs on the hub's box as *session***@***node* (KEYS). A row's head is the psid of the banked set that gated: **sb bank** *name*, then **sb sync --keep hub@***box* deposits it in the hub. **queue_land** called from another box does the hub's **take** itself, since only the hub's box can, and answers the head it reached; **queue_landed** follows as on one box. **sb sync --take hub@***box* brings the nest up to the hub's head after a landing.
+Once every step is done, **--node** lists the hub's queues, as the door's hello names them. Then start a session in the nest as above (THE MCP SERVER) and work as in a worker nest. The hub's queues are **queue/***name***@***box*: **queue_read** reads one, and a queue tool call goes there sealed and runs on the hub's box as *session***@***node* (KEYS). A row's head is the psid of the banked set that gated: **sb bank** *name*, then **sb sync --keep hub@***box* deposits it in the hub. **queue_land** called from another box does the hub's **take** itself, since only the hub's box can, and answers the head it reached; **queue_landed** follows as on one box. **sb sync --take hub@***box* brings the nest up to the hub's head after a landing.
 
 # JOBS AND WORKERS
 
@@ -341,6 +341,9 @@ The leader hands off by rewriting the line to a live session that agreed, and sa
 ## The tools
 
 Every tool reads the queue fresh and writes it by compare-and-swap, reading again when someone wrote first. The queue must be named **refs/queue/***name* or **queue/***name*. No field may hold a control character, and only a text field (a note, a sync or pre line, a release note) may hold a space, so one field cannot write another row. A tool that writes asks first, unless the session runs with **-y**.
+
+**queue_read** (*queue*)
+:   The queue's text as it stands: header, rules, leader and rows. It writes nothing and runs without asking. A queue on another box (**@***box*) is read there, like any queue call, so a node reads the hub's queues with it.
 
 **queue_row** (*queue*, *state*, and any of *branch*, *gated_on*, *gated_head*, *note*, *row*)
 :   Sets exactly one of the caller's rows. A session holds a row per branch: the write sets the row **row** names, else the row carrying **branch**, else the caller's only row, and a **branch** it holds no row for joins a new one. A new row joins at the bottom, at the **next** line's position, and moves that line past it; a queue without the line starts one past the highest position and writes it. **left** removes the row. Fields not given keep their values. It refuses:

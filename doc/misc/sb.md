@@ -25,6 +25,7 @@ this doc is the interface over it: *what you type*, not *what the objects are*.
 | **`psid [SET]`** | the name of a set's state: the head's, or SET's | rev-parse | name a release |
 | **`paths A B`** | the paths two sets lay differently | diff --name-only | what an upgrade touches |
 | **`within A B`** | exit 0 when set A lies inside set B | merge-base --is-ancestor | is it newer |
+| **`stamp [SET]`** | the newest of a set's patch times, in seconds | log -1 --format=%ct | a build's stamp |
 | **`diff`** | working tree vs the recorded state (unified; exit 1 on change) | inspect | inspect |
 | **`ledger NAME ..`** | a named value that moves only by compare-and-swap, every entry kept | a ref moved by `update-ref NEW OLD` | the shared queue sessions coordinate by |
 
@@ -39,7 +40,8 @@ tips. `record` grows the head by its patch, `apply` sets it, `take` grows it by 
 waited on, a dead one's taken; `sync` holds the peer's as well.
 
 A verb that takes a set names it by a ref, a patch (by id or prefix, its deps with it), a
-psid the nest knows (a ref's, the head's, or a kept derive's), or `head`.
+psid the nest knows (a ref's, a kept derive's, or any set its head has stood at, each kept by its
+tips in `.sb/sets/PSID`), or `head`. A name that resolves to no set fails the verb.
 
 A set's tree is the fold of its patches ordered by depth (the longest dep chain beneath a
 patch), then id, each path on its own. A patch's key is its own, so a set derived once is a

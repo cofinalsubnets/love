@@ -463,6 +463,17 @@
    mmsg (bq-out (bq-git w ["log" "-1" "--format=%B" "sbm"]))
    mbee (bq-out (bq-git w ["show" "sbm:src/apps/bee.l"]))
    q (sb hub ["ledger" lq])
+   ; a second row, docs only, landed with the hub's derives gone: the base line still names a
+   ; set, so the landed paths are d's alone and no restart line goes out; queue_read reads it
+   _ (sb wb ["sync" hub]) _ (put wb "d") _ (sb wb ["record" "d"]) _ (sb wb ["bank" "docs"])
+   g2 (sb wb ["psid"])
+   _ (sb wb ["sync" "--keep" hub])
+   d (calls "bob" [[10 "queue_row" {"state" "waiting" "branch" "docs"}]
+                   [11 "queue_row" {"state" "green" "gated_on" g "gated_head" g2}]])
+   _ (sb hub ["take" g2])
+   _ (hark ["sh" "-c" ("rm -f " + bq-sq hub + "/.sb/derive/*")])
+   e (calls "bob" [[12 "queue_landed" {"release" "d is in"}]])
+   rd (calls "bob" [[13 "queue_read" {}]])
    _ (test
       (#m = 64) (#g = 64) (m != g)
       (bq-in (a 1) "made queue/sbq on bee's standard header, led by queen")
@@ -476,8 +487,10 @@
       (mt = "a\nb\nf\nsrc/apps/bee.l\nweb/keep.txt") (mparent = mp) (mbee = "src/apps/bee.l")
       (bq-in mmsg "Merge queue row 1 (ant)") (bq-in mmsg ("sb psid " + g))
       (bq-in q "land by psid") (bq-in q ("\nsbq " + g + "\n")) !(bq-in q " ant ")
-      (sb hub ["psid"] = g)
-      (bq-get (hub + "/a") = "a\n") (bq-get (hub + "/b") = "b\n"))
+      (sb hub ["psid"] = g2)
+      (bq-get (hub + "/a") = "a\n") (bq-get (hub + "/b") = "b\n")
+      (#g2 = 64) (bq-in (e 12) ("whose base line is now sbq " + g2 + ".")) !(bq-in (e 12) "restarts")
+      (bq-in (rd 13) ("\nsbq " + g2 + "\n")) (bq-in (rd 13) "land by psid"))
    0)
 
 (hark ["rm" "-rf" bq-root])

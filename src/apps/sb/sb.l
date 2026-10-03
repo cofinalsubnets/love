@@ -27,6 +27,8 @@
    ; the head: the tips of the set this nest's tree realizes, which the store may hold more than
    (head-in d) (? (two? (stat (d + "/.sb/head"))) (form (d + "/.sb/head")) (form (d + "/.sb/tips")))
    (head _) (head-in ".")
+   ; the head moved to a set, kept as .sb/sets/PSID too, so every set a head stood at stays a name
+   (head-to tp) (: t (ids-text (sort tp)) _ (mkdir ".sb/sets" 493) _ (lay (".sb/sets/" + sha256 t) t) (lay ".sb/head" t))
    ; the nest's lock, a directory made atomically and holding its holder's pid, as a ledger's.
    ; it is this process's own when it holds it already, so a verb may call another
    (nest-hold d tries)
@@ -171,7 +173,7 @@
              _ (lay ".sb/snap" (show (snap+ sn hunks pid ())))
              tp (filter (t \ !(elem t deps)) (tips ()))
              _ (lay ".sb/tips" (ids-text (sort (pid . tp))))
-             _ (lay ".sb/head" (ids-text (sort (pid . filter (t \ !(elem t deps)) (head ())))))
+             _ (head-to (pid . filter (t \ !(elem t deps)) (head ())))
              _ (puts ("sb: recorded " + snip pid 0 12 + " (" + show #hunks + " paths)\n"))
              pid)))
 
@@ -298,7 +300,7 @@
        op (ix oldsnap {})
        cfs (filter (e \ 0 < <>e || op <e != <(sn <e))
                    (map (p \ (: e (cf p) [p <e <>e])) (sort (keys cf))))
-       _ (lay ".sb/head" (ids-text (sort (d 'tips))))
+       _ (head-to (d 'tips))
        _ (lay ".sb/snap" (show newsnap))
        _ (dv-write d)
        _ (dv-prune (d 'tips) was)
@@ -609,25 +611,35 @@
                     (a = "head") (head ())
                     (sb-hex? a && !(two? (stat (".sb/patch/" + a)))) (psid-ids a)
                     (idpfx a @ i (i ? [i]))))
-   ; a set by its psid: a ref's, the head's, or a kept derive's
+   ; a set by its psid: a ref's, the head's, a kept derive's, or one a head stood at
    (psid-ids s)
     (: r (filter (e \ psid <>e = s) (refs ()))
        (? (two? r) <><r
           (s = psid (head ())) (head ())
           (: d (dv-read (".sb/derive/" + s))
-             (? (tablet? d) (d 'tips) (say err ("sb: no set " + s + " here\n"), ())))))
+             (? (tablet? d) (d 'tips)
+                (two? (stat (".sb/sets/" + s))) (form (".sb/sets/" + s))
+                (say err ("sb: no set " + s + " here\n"), ())))))
    ; --- psid: the name of a set -- the head's, or a named one's; paths: the paths two sets'
    ;     trees differ on; within: whether one set lies inside another ---
    (sb-psid args)
     (: ts (? (two? args) (idsof <args) (head ()))
        (? (two? args && atom? ts) 0 (: _ (puts (psid ts + "\n")) 1)))
-   (sb-paths a b)
-    (: sa ((dv-derive (idsof a)) 'snap) sb ((dv-derive (idsof b)) 'snap) u {}
-       _ (map (p \ pin u p 1) (keys sa + keys sb))
-       ps (sort (filter (p \ <(sa p) != <(sb p)) (keys u)))
-       _ (map (p \ puts (p + "\n")) ps)
-       #ps)
-   (sb-within a b) (: d (dv-derive (idsof b)) (sb-all? (t \ 0 <= dv-dep d t) (idsof a)))
+   ; a named set -> [ids], () when the name resolves to none (it said so); the empty set is a set
+   (setof a) (: l (idsof a) (? (two? l || a = "head" || a = psid ()) [l]))
+   (sb-paths a b)                                             ; -> exit status
+    (: x (setof a) y (setof b)
+       (? (atom? x || atom? y) 1
+          (: sa ((dv-derive <x) 'snap) sb ((dv-derive <y) 'snap) u {}
+             _ (map (p \ pin u p 1) (keys sa + keys sb))
+             ps (sort (filter (p \ <(sa p) != <(sb p)) (keys u)))
+             _ (map (p \ puts (p + "\n")) ps)
+             0)))
+   ; a set's stamp: its newest tip's time in seconds, which orders two builds of a tree
+   (sb-stamp args)
+    (: x (setof (two? args ? <args "head"))
+       (? (two? x) (: _ (puts (show (foldl (\ a i (: f (patch i) (? (two? f) (max a (<(fld f 'time) // 1000)) a))) 0 <x) + "\n")) 1)))
+   (sb-within a b) (: x (setof a) y (setof b) (? (two? x && two? y) (: d (dv-derive <y) (sb-all? (t \ 0 <= dv-dep d t) <x))))
    (sb-apply args)
     (mk (),
      (? (0 < dirty ())
@@ -1114,6 +1126,7 @@ usage: sb VERB ..
                   patch, a psid, or head)
   paths A B       the paths sets A and B lay differently, a line each
   within A B      exit 0 when set A lies inside set B
+  stamp [SET]     the newest of a set's patch times, in seconds: the head's, or SET's
   apply [ID..]    make the HEAD a dep-consistent SUBSET, laid in the tree (an ID
                   may be a prefix; its deps come along). checkout and cherry-pick
                   are one act here. no ID realizes the whole store -- the way back
@@ -1157,7 +1170,8 @@ usage: sb VERB ..
            "log" (sb-log (), 0)
            "ls" (sb-ls (elem "-l" >as), 0)
            "psid" !(sb-psid >as)
-           "paths" (#>as = 2 ? (: _ (sb-paths <>as <>>as) 0) (usage ()))
+           "stamp" !(sb-stamp >as)
+           "paths" (#>as = 2 ? (sb-paths <>as <>>as) (usage ()))
            "within" (#>as = 2 ? !(sb-within <>as <>>as) (usage ()))
            "diff" (0 < sb-diff ())
            (usage ()))))
