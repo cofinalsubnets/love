@@ -142,6 +142,22 @@
        ; ..and the season leaves the light alone: the yard at noon is not dark
        (court-pens (on 10 25) @ c (0.1 < net (c 0) / #(c 0)))))
 
+(borrow 'sky)
+
+; --- the weather by season: january's odds lean overcast and july's clear; left to the
+; --- season it drifts a notch at a time as the hours turn; a cover chosen holds
+(: (odds m) (map (k \ court-wx-pick m k) ^20) jan (odds 1) jul (odds 7)
+   (n c l) #(filter (x \ x = c) l)
+   st (on 1 15) seen {}
+   (hop k) (pin st 'sim (st 'sim + 3600.0), court-move st, pin seen k (st 'wx 'cover))
+   _ (each ^300 hop)
+   cs (map (k \ seen k) ^300) steps (map (k \ cs (k + 1) - cs k) ^299)
+   fx (on 1 15) _ (pins fx 'drift 0 'wx (sky-weather 2 'smooth))
+   _ (each ^300 (k \ (pin fx 'sim (fx 'sim + 3600.0), court-move fx)))
+ (test (#jan = 20) (n 3 jul < n 3 jan) (n 0 jan < n 0 jul)
+       (all (d \ -1 <= d && d <= 1) steps) (any (d \ d != 0) steps)
+       (fx 'wx 'cover = 2) (court-month day0 = 10)))
+
 ; --- the words: a date, a time, a pace and the weather, in any order, each at most once;
 ; --- a date alone keeps now's hour; a pace leads the paces t steps through; words it cannot
 ; --- read refuse
@@ -156,7 +172,9 @@
        (o 'now 1 = 3600) (court-clock {'sim (o 'now 0)} = "16:30")
        (w 'wx 'cover = 1) (w 'wx 'style = 'smooth) (w 'pace = ()) (n 'wx = ()) (two? (n 'now))
        (day (d 'now) = (cite 'cal 'epoch-days) 2026 7 4) (int (d 'now 0) % 86400 = int (dn 0) % 86400)
-       (all (v \ v = ()) bad)))
+       (all (v \ v = ()) bad)
+       ; ..a cover said holds the weather; a style alone leaves it to the season
+       (o 'fix = 1) (w 'fix = 1) (court-opts ["--sky" "pixel"] @ k (k 'fix = 0 && k 'wx 'style = 'pixel))))
 
 (borrow 'sky)
 

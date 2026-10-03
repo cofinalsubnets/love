@@ -25,7 +25,7 @@
 ;      love lore court [clear|partly|mostly|overcast] [smooth|pixel]   the weather to start
 (module (court court-run court-walk court-main court-new court-size court-step court-move
          court-frame court-sun court-light court-clock court-now court-local court-doy court-season
-         court-opts court-pens court-maps
+         court-opts court-wx-pick court-month court-pens court-maps
          tree-grow sun-clear top-h block-h crown-y
          fps yard-a yard-b floor-h floors wall-h eye-h body-r lat paces)
 (borrow 'rove)
@@ -51,6 +51,10 @@
  ; yellow, tan, brown, a few still green
  stick-n 22 leaf-n 420 leaf-y 0.006 fallen-n 400 fall-v 0.45
  hues [[0.6 0.5 0.17] [0.5 0.39 0.19] [0.36 0.26 0.14] [0.33 0.38 0.13]]
+ ; the weather's odds by month, in twentieths: clear, partly, mostly cloudy, overcast --
+ ; grey winters, clear late summers and falls
+ wx-odds [[4 5 4 7] [4 5 4 7] [4 5 5 6] [4 6 5 5] [4 7 5 4] [5 7 5 3]
+          [5 8 4 3] [6 7 4 3] [7 7 3 3] [7 6 3 4] [5 5 4 6] [4 5 4 7]]
  bay (2.0 * yard-b / 4.0)               ; a long wall's window bay
  ; --- the time: 'sim is the wall clock's local seconds, 'dst what summer adds to it ---
  ; now, as [local-seconds dst]: the zone's offset now, against the least of it a season on, two and three
@@ -87,7 +91,8 @@
                         st {'px 0.0 'pz (0.0 - yard-b + 1.4) 'th 0.0 'ph 0.5
                             'sim (now 0) 'dst (now 1) 'pace 0 'paces paces 'shown 40 't 0
                             'deep 0 'done 0 'tree tr 'litter (litter tr sd) 'fall () 'fallen ()
-                            'wx (sky-weather (throw sd 7 71 4) 'smooth)}
+                            'wx (sky-weather (court-wx-pick (court-month (now 0)) (throw sd 7 71 20)) 'smooth)
+                            'drift 1 'hour (int (now 0 // 3600))}
                        (court-size st w (h // 2)))
  ; the screen w cells by r rows, and each pixel's offsets from the middle, and its dither
  (court-size st w r) (: h (2 * r) n (w * h) i (iota n) x (i % w) y (i // w)
@@ -112,7 +117,7 @@
         91 (tell (pin st 'sim (st 'sim - 3600.0)))
         93 (tell (pin st 'sim (st 'sim + 3600.0)))
         116 (tell (pin st 'pace ((st 'pace + 1) % #(st 'paces))))
-        99 (tell (pin st 'wx (sky-weather ((st 'wx 'cover + 1) % 4) (st 'wx 'style))))
+        99 (tell (pins st 'wx (sky-weather ((st 'wx 'cover + 1) % 4) (st 'wx 'style)) 'drift 0))
         118 (tell (pin st 'wx (sky-weather (st 'wx 'cover) (st 'wx 'style = 'pixel ? 'smooth 'pixel))))
         st))
  ; a frame's motion: the clock, and the leaves -- now and then one lets go of the top of
@@ -125,9 +130,23 @@
            ())
    moved (map (q \ fall-step q t) (cat born (st 'fall)))
    down (filter (q \ q 1 <= leaf-y) moved)
-   (pins st 'sim (st 'sim + st 'paces (st 'pace) / fps)
-            'fall (filter (q \ leaf-y < q 1) moved)
-            'fallen (newest fallen-n (cat down (st 'fallen)))))
+   _ (pins st 'sim (st 'sim + st 'paces (st 'pace) / fps)
+             'fall (filter (q \ leaf-y < q 1) moved)
+             'fallen (newest fallen-n (cat down (st 'fallen))))
+   (court-drift st))
+ ; --- the weather's month and its drift: a month's odds pick a cover from k in 0..19; and
+ ; while the weather is the season's own, about one sky hour in four it steps a notch
+ ; toward a cover the month's odds draw ---
+ (court-month sim) ((cite 'cal 'civil) (int sim // 86400) 1)
+ (court-wx-pick m k) (: o (wx-odds (m - 1))
+   (go i a) (i < 3 && a + o i <= k ? (go (i + 1) (a + o i)) i)
+   (go 0 0))
+ (court-drift st) (: h (int (st 'sim // 3600))
+   (? (h = st 'hour) st
+      !(st 'drift) (pin st 'hour h)
+      (throw h 11 67 4 != 0) (pin st 'hour h)
+      (: c (st 'wx 'cover) to (court-wx-pick (court-month (st 'sim)) (throw h 13 59 20))
+         (pins st 'hour h 'wx (sky-weather (c + (to < c ? -1 (c < to ? 1 0))) (st 'wx 'style))))))
  ; --- the maps: the walls and the floor, laid once a run in texels
  ; and gathered from by every frame, so no hash is thrown a frame ---
  ts 0.04                                ; a texel's side
@@ -427,7 +446,7 @@
    (view-walk {'new (w \ h \ (: st (pin (court-new w h (opt 'now @ n (n ? n (court-now ())))) 'deep
                                          (elem (getenv "COLORTERM") ["truecolor" "24bit"]))
                                   wx (opt 'wx) p (opt 'pace)
-                                  _ (wx ? (pin st 'wx wx))
+                                  _ (wx ? (pins st 'wx wx 'drift (opt 'fix ? 0 1)))
                                   (charm? p ? (pins st 'paces (p . paces) 'pace 0) st)))
                'size court-size 'frame court-frame 'key court-step 'tick court-move
                'fps fps 'song (hn \ ()) 'linger 0 'next ()}))
@@ -466,9 +485,10 @@
                 (court-local (86400 * (d = () ? (l0 // 86400) ((cite 'cal 'epoch-days) (d 0) (d 1) (d 2)))
                               + (t = () ? (l0 % 86400) t))))
          c (r 'cov) y (r 'sty)
-         {'now now 'pace (r 'pace)
+         {'now now 'pace (r 'pace) 'fix (c = () ? 0 1)
           'wx (c = () && y = () ? ()
-                 (sky-weather (c = () ? (throw (int (now 0)) 7 71 4) c) (y = () ? 'smooth (sky-styles y))))})))
+                 (sky-weather (c = () ? (court-wx-pick (court-month (now 0)) (throw (int (now 0)) 7 71 20)) c)
+                              (y = () ? 'smooth (sky-styles y))))})))
  (court-main as) (court-opts as @ o
    (tablet? o ? (court-run o) (say err ("court: " + court-usage + "\n"), flush err, 2)))
  _ ((cite 'lore 'lore-enlist) 'court (udoor 'court court-main court-usage 1 1)))
