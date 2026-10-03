@@ -12,6 +12,7 @@
 ;   love bee --deliver | --ledger            a sealed message, or queue call, from another box, on stdin
 ;   love bee --revoke PUB|NAME | --revocations | --revoked   the lineage's revoked keys
 ;   love bee --state busy|idle [--pid P]     a claude code session's hooks say its state
+;   love bee --on CAP [--where K=V] [--ship DIR] (--probe | --ssh | -- CMD ..) | --hosts   work on another host
 ;
 ; the settings are ~/.love/etc/bee.l's, each a form per line; ./.bee.l may set model,
 ; max-tokens, thinking, context and queue-watch over them:
@@ -493,7 +494,7 @@
      bee-restart ("at the next convenient point -- between tasks, never mid-gate -- "
                   + "resuming in the same directory, so .mcp.json loads the new bee.")
      bee-landed ("this landing changed bee: every live session restarts " + bee-restart)
-     bee-served "src/apps/bee.l src/apps/locks.l src/apps/seals.l src/apps/saver.l src/apps/pom.l"   ; what bee runs
+     bee-served "src/apps/bee.l src/apps/locks.l src/apps/hosts.l src/apps/seals.l src/apps/saver.l src/apps/pom.l"   ; what bee runs
      (self-id _) (: s (string? bee-self ? (stat bee-self)) (two? s ? (show [(s 0) (s 3) (s 8)])))
      bee-selfw {'id (self-id 0) 'at (clock 0)}
      bee-selfwait (: w (getenv "BEE_SELF_WATCH") (string? w && 0 < #w ? (digits w) 30))
@@ -2248,7 +2249,7 @@
          (: t (lk 'locks-list (lk 'locks-root 0))
             (who h) (show (peep h "pid" "?") + " " + peep h "note" "")
             ex (peep t "exclusive" ()) hv (peep t "heavy" ()) wt (peep t "waiting" ())
-            hosts (filter (e \ starts? <e "a64host-") ex) outs (filter (e \ !(starts? <e "a64host-")) ex)
+            hosts (filter (e \ starts? <e "host-") ex) outs (filter (e \ !(starts? <e "host-")) ex)
             ([((sgr "1" "locks") + sgr "2" ("  " + (: m (peep t "mem_gb" ()) (? (m = ()) "?" (show (int (m * 10) / 10)))) + " GB free, load "
                                                 + (: l (peep t "load" "?") (string? l ? l (show l)))))]
              + [("  heavy " + show #hv + "/" + show bee-hmax + (two? hv ? (": " + foldl (\ a h (a + (#a ? ", " "") + who h)) "" hv) ""))]
@@ -2930,6 +2931,7 @@
          words (filter (\ w !(elem w bee-flags)) as)
          (? (elem "--mcp" as) (: _ (mcp-serve in out) 0)             ; a claude child's own server
             (two? as && <as = "--lock") (bee-cli as yes)              ; its command's words stay as given
+            (two? as && elem <as ["--on" "--hosts"]) ((cite 'hosts 'hosts-on) as)   ; so do --on's
             ; ahead of --hud, which the hooks add so that a bee older than --state only prints its hud
             (two? as && <as = "--state") (: _ (state-cmd as) 0)
             (two? as && elem <as ["-s" "--screensaver"]) (cite 'saver 'saver-cli >as)   ; a saver, no session
@@ -2966,6 +2968,8 @@
        love bee --spawn NAME DIR [-y] PROMPT ..         a bee serving detached in DIR
        love bee --stop NAME | --serve [-y] [PROMPT ..]
        love bee --state busy|idle [--pid P]          a claude code session's hooks say its state
+       love bee --on CAP [--where K=V] [--ship DIR] (--probe | --ssh | -- CMD ..)   a command on a host that can
+       love bee --hosts                              the hosts this box knows
        love bee --avatar [NAME]                        the avatars, or wear one
        love bee -s | --screensaver [NAME]               a screensaver until a key; none names them"
    _ (pins (cite 'verbs 'tab) 'bee (udoor 'bee bee-main bee-usage 1 0)))
