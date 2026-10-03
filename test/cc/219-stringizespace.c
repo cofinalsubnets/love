@@ -3,15 +3,17 @@
  * none at either end. the kernel's __stringify of asm text leans on it -- ".pushsection"
  * spelled ". pushsection" is no directive. */
 
-#include <string.h>
-
 #define S_(x) #x
 #define S(x) S_(x)
 #define SV_(...) #__VA_ARGS__
 #define SV(...) SV_(__VA_ARGS__)
 #define SEC .pushsection .rodata.str,"aMS",%progbits,1; 1: .long 1b - .;
 
-static int same(const char *a, const char *b) { return strcmp(a, b) == 0; }
+static int same(const char *a, const char *b)
+{
+    while (*a && *a == *b) a++, b++;
+    return *a == *b;
+}
 
 int main(void)
 {
