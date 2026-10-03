@@ -1595,6 +1595,12 @@ static const unsigned tio_baud[][2] = {
  {576000, 4102}, {921600, 4103}, {1000000, 4104}, {1152000, 4105}, {1500000, 4106},
  {2000000, 4107}, {2500000, 4108}, {3000000, 4109}, {3500000, 4110}, {4000000, 4111}};
 #define TIO_NB (sizeof tio_baud / sizeof *tio_baud)
+// the libcs whose struct termios names the speeds (musl's are __c_ispeed, kept private)
+#if defined __moonlibc__ || defined _HAVE_STRUCT_TERMIOS_C_OSPEED
+#define TIO_SPEEDS 1
+#else
+#define TIO_SPEEDS 0
+#endif
 ai_noinline static struct ai *host_termios(struct ai *g) {
  word x = g->sp[0];
  intptr_t fd = charmp(x) ? getcharm(x) : ai_port_fd(x);
@@ -1602,7 +1608,10 @@ ai_noinline static struct ai *host_termios(struct ai *g) {
  if (fd < 0) return g->sp[0] = ai_badarg(g), g;
  memset(&t, 0, sizeof t);
  if (tcgetattr((int) fd, &t)) return g->sp[0] = ai_err(g, errno), g;
- intptr_t sp = (intptr_t) t.c_ospeed;
+ intptr_t sp = 0;
+#if TIO_SPEEDS
+ sp = (intptr_t) t.c_ospeed;
+#endif
  if (!sp) for (unsigned k = 0; k < TIO_NB; k++)
   if (tio_baud[k][1] == (t.c_cflag & 4111u)) sp = tio_baud[k][0];
  size_t const C = Width(struct ai_chain);
@@ -1630,7 +1639,10 @@ ai_noinline static word host_settermios(struct ai *g, word x, word l) {
   t.c_cflag &= ~4111u;
   for (unsigned k = 0; k < TIO_NB; k++)
    if (tio_baud[k][0] == (unsigned) v[4]) t.c_cflag |= tio_baud[k][1];
-  t.c_ispeed = t.c_ospeed = (speed_t) v[4]; }
+#if TIO_SPEEDS
+  t.c_ispeed = t.c_ospeed = (speed_t) v[4];
+#endif
+  }
  for (int k = 0; k < 17; k++) t.c_cc[k] = (cc_t) v[5 + k];
  return tcsetattr((int) fd, TCSADRAIN, &t) ? ai_err(g, errno) : ZeroPoint; }
 static lvm(lvm_settermios) {
