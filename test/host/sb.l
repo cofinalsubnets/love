@@ -522,6 +522,53 @@
  !(th 'ok) (0 = th 'laid) !tlaid                          ; no blob, no patch
  (32 = tdone) (<>tf0 = "one more\n") (<>tf1 = "no blob\n"))  ; and it all arrives once the blob is back
 
+; --- the head: a nest's tree realizes its head, a tip set, and its store may hold more. a worker's
+;     patch deposited in a hub sits in the hub's store and not its tree until the hub takes it;
+;     apply sets the head and it stays set; sync settles both nests on the union of their heads.
+;     the nest's lock is its own process's again, a live other's to wait on, a dead one's to take.
+;     a nest from before heads realizes its whole store ---
+(: _ (mkdir "mrg/n" 493) _ (mkdir "mrg/n/hub" 493) _ (mkdir "mrg/n/w" 493)
+   _ (chdir "mrg/n/hub") _ (mk ())
+   _ (lay "base" "the hub's\n") nb (sb-record "base")
+   _ (chdir "../w") nw0 (sb-sync "../hub")
+   _ (lay "work" "the worker's\n") nwk (sb-record "work")
+   nd (sb-deposit "../hub")
+   _ (chdir "../hub")
+   held1 (look "work")                                   ; deposited: not in the hub's tree
+   inst (two? (patch nwk))                               ; ...but in its store
+   tips1 (tips ()) head1 (head ())
+   nt (sb-take [nwk])
+   took (look "work") head2 (head ())
+   nls (sb-ls ())
+   na (sb-apply [nb])                                    ; back to the base alone
+   gone (look "work") head3 (head ())
+   _ (lay "more" "the hub's again\n") nm (sb-record "more")
+   head4 (head ())
+   ns (sb-sync "../w")                                   ; the union of the two heads
+   back (look "work") wmore (look "../w/more")
+   own (nest-hold "." 2)                                 ; a free lock, taken
+   again (nest-hold "." 2)                               ; ...and this process's own again
+   _ (nest-free ".")
+   live (spawn ["sleep" "30"])                           ; a live other holder
+   _ (mkdir ".sb/lock" 448) _ (lay ".sb/lock/pid" (show live))
+   other (nest-hold "." 2)
+   _ (still live 9) _ (wait live)
+   _ (lay ".sb/lock/pid" "999999")                       ; a gone one
+   dead (nest-hold "." 2)
+   _ (nest-free ".")
+   _ (unlink ".sb/head") old (head ())                   ; a nest from before heads
+   _ (chdir "../../.."))
+
+(test
+ (0 < nw0) (1 = nd)
+ !(two? held1) inst (elem nwk tips1) !(elem nwk head1)
+ (1 = nt) (<>took = "the worker's\n") (elem nwk head2) (2 = nls)
+ (0 < na) !(two? gone) (show head3 = show [nb])
+ (show head4 = show (sort [nb nm]))
+ (0 < ns) (<>back = "the worker's\n") (<>wmore = "the hub's again\n")
+ (own = 'took) (again = 'again) (other = ()) (dead = 'took)
+ (show old = show (sort [nb nm nwk])))
+
 (chdir sb-home)
 (hark ["rm" "-rf" sb-dir])
 (puts "sb: ok", putc 10, 0)

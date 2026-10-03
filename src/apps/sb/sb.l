@@ -18,9 +18,31 @@
                              () (_ \ close q))))
 
    ; --- the store ---
-   (mk _) (mkdir ".sb" 493, mkdir ".sb/blob" 493, mkdir ".sb/patch" 493, ())
-   (snap _) (form ".sb/snap")                            ; ((path side pid) ..) sorted
-   (tips _) (form ".sb/tips")                            ; (id ..)
+   ; a new nest's head is empty; a nest from before heads has none, and realizes its whole store
+   (mk _) (: new !(two? (stat ".sb"))
+             _ (mkdir ".sb" 493, mkdir ".sb/blob" 493, mkdir ".sb/patch" 493)
+             (? new (lay ".sb/head" "()") ()))
+   (snap _) (form ".sb/snap")                            ; ((path side pid) ..) sorted, the head's tree
+   (tips _) (form ".sb/tips")                            ; (id ..), the store's: every patch it holds
+   ; the head: the tips of the set this nest's tree realizes, which the store may hold more than
+   (head-in d) (? (two? (stat (d + "/.sb/head"))) (form (d + "/.sb/head")) (form (d + "/.sb/tips")))
+   (head _) (head-in ".")
+   ; the nest's lock, a directory made atomically and holding its holder's pid, as a ledger's.
+   ; it is this process's own when it holds it already, so a verb may call another
+   (nest-hold d tries)
+    (: l (d + "/.sb/lock")
+       (? ((mkdir l 448) = ()) (: _ (lay (l + "/pid") (show (getpid 0))) 'took)
+          (: t (look (l + "/pid")) p (? (two? t) (: s <>t (go i a) (? (i < #s && 48 <= s i <= 57) (go (i + 1) (a * 10 + s i - 48)) a) (go 0 0)) 0)
+             (? (p = getpid 0) 'again
+                (0 < p && nom? (still p 0)) (: _ (unlink (l + "/pid")) _ (rmdir l) (nest-hold d tries))
+                (tries <= 0) ()
+                (: _ (rest 20) (nest-hold d (tries - 1)))))))
+   (nest-free d) (: _ (unlink (d + "/.sb/lock/pid")) (rmdir (d + "/.sb/lock")))
+   (held d f)
+    (: _ (? (d = ".") (mk ()) 0)                                   ; the lock lives in the nest
+       h (nest-hold d 500)
+       (? !h (: _ (say err ("sb: the nest at " + d + " is held by another writer\n")) 0)
+          (: r (f 0) _ (? (h = 'took) (nest-free d) 0) r)))
    ; the patch-set ID: the name of a head DAG state. the tips are a set -- sort
    ; before hashing, or the same head reads two ways.
    (psid tp) (sha256 (show (sort tp)))
@@ -148,6 +170,7 @@
              _ (lay ".sb/snap" (show (snap+ sn hunks pid ())))
              tp (filter (t \ !(elem t deps)) (tips ()))
              _ (lay ".sb/tips" (show (sort (pid . tp))))
+             _ (lay ".sb/head" (show (sort (pid . filter (t \ !(elem t deps)) (head ())))))
              _ (puts ("sb: recorded " + snip pid 0 12 + " (" + show #hunks + " paths)\n"))
              pid)))
 
@@ -163,12 +186,12 @@
                             (snap+ sn >hs pid (? !nw acc ([<h nw pid] . acc))))
              (snap+ >sn hs pid (<sn . acc)))))
 
-   ; --- log: the patches newest first; * marks a tip ---
+   ; --- log: the patches newest first; * marks a tip of the head ---
    (ins e l) (? (atom? l) [e]                                 ; insert desc by time (seat 0)
               (<<l <= <e) (e . l)
               (<l . ins e >l))
    (sb-log _)
-    (: tp (tips ())
+    (: tp (head ())
        (go m acc)
         (atom? m ? acc
          (: id <m f (patch id)
@@ -221,7 +244,7 @@
    ; -> {'laid 'bad 'read 'blobs 'ok}: read the patches fetched, ok when every tip arrived whole
    (gap pat blb tips to)
     (: tp (to + "/.sb/patch/") tb (to + "/.sb/blob/")
-       seen {} n {'laid 0 'bad 0 'read 0 'blobs 0}
+       seen {} n {'laid 0 'bad 0 'read 0 'blobs 0 'ids ()}
        (bump k) (pin n k (1 + n k))
        (each f l) (foldl (\ a x (: r (f x) (a && r))) 1 l)   ; every one runs: && would stop at a miss
        (blob1 h)
@@ -243,10 +266,15 @@
                             !(sb-sound? f) (sb-refuse id, bump 'bad, 0)
                             (: dk (each one (fld f 'deps))
                                bk (each blob1 (catmap (h \ [(sd-h <>h) (sd-h <>>h)]) (fld f 'hunks)))
-                               (? (dk && bk && lay (tp + id) <>t) (bump 'laid, 1) 0)))))
+                               (? (dk && bk && lay (tp + id) <>t) (bump 'laid, pin n 'ids (id . n 'ids), 1) 0)))))
                  _ (pin seen id r)
                  r)))
        _ (pin n 'ok (each one (? (sb-all? sb-hex? tips) tips ())))
+       ; to's store tips: what was laid joins them, and whatever a laid patch depends on leaves
+       _ (? (0 < n 'laid)
+            (: deps (catmap (i \ fld (form (tp + i)) 'deps) (n 'ids))
+               old (form (to + "/.sb/tips"))
+               (lay (to + "/.sb/tips") (show (sort (filter (t \ !(elem t deps)) ((two? old ? old ()) + n 'ids)))))))
        n)
    ; a nest's patches and blobs by name, (1 text) | ()
    (dir-pat d) (\ id (look (d + "/.sb/patch/" + id)))
@@ -259,10 +287,11 @@
                     ("sb: " + (k @ 0 "merged " "CONFLICT in ") + p + " -- " + <>>e + "\n"))
              (go >m (k @ 0 n (n + 1)))))
        (go cfs 0))
+   ; the tree moved to realize ids, a dep-closed set, which becomes the head
    (settle ids0)
     (: ids (filter (i \ (? (sb-bad? i) (sb-refuse i, 0) 1)) ids0)
        oldsnap (snap ())
-       _ (lay ".sb/tips" (show (derive-tips ids)))
+       _ (lay ".sb/head" (show (derive-tips ids)))
        dr (derive-snap ids)
        newsnap <dr
        ; the derive replays the whole set every time
@@ -374,16 +403,19 @@
                    theirs (two? rt ? (readform <>rt))
                    ru (refadd (refs ()) theirs 1)
                    _ (two? <ru ? (lay ".sb/refs" (show <ru)))
-                   [(g 'ok) (g 'laid) (g 'blobs) <>ru])))))
+                   hh (http-fetch base "/head")
+                   rh (two? hh ? (readform <>hh) tips)
+                   [(g 'ok) (g 'laid) (g 'blobs) <>ru (sb-all? sb-hex? rh ? rh tips)])))))
 
-   (sync-url peer)
+   (sync-url peer keep)
     (mk (),
-     (? (0 < dirty ())
+     (? (!keep && 0 < dirty ())
         (say err "sb: working tree has changes; record or revert first\n", 0)
         (: base (peer @ (s + "/") s peer)        ; one trailing slash, ours to add
            r (pull-http base)
            (? (atom? r) 0
-              (: st (settle (readdir ".sb/patch"))
+              keep (: _ (puts ("sb: deposited -- " + show (r 1) + " patches in, " + show (r 2) + " blobs\n")) (? <r 1 0))
+              (: st (settle (closure (head () + r 4)))
                  nleft (tell <>>st)
                  nref <>>>r
                  _ (puts ("sb: pulled -- " + show <st + " patches (" + show <>r
@@ -395,20 +427,26 @@
                  (? (<r && (0 = nleft) && (0 = nref)) <st 0))))))
 
    ; sync is the exchange, and an exchange has two ends: pull what the peer has
-   ; that we lack, push what we have that it lacks, then settle both nests. the
-   ; derive is a pure function of the patch set, so two nests over one union land
-   ; on the same snap -- after a sync the trees are identical, which is the whole
-   ; "distribution == cloning" claim made good. the peer's half needs its tree
-   ; clean and writable; when it is not we still pull (always safe) and say so,
-   ; leaving the peer's store untouched rather than half-fed.
-   (sb-sync peer)
-    (? (url? peer) (sync-url peer)
+   ; that we lack, push what we have that it lacks, then settle both nests on the
+   ; union of their heads. the derive is a pure function of the patch set, so two
+   ; nests over one union land on the same snap -- after a sync the trees are
+   ; identical, which is the whole "distribution == cloning" claim made good. the
+   ; peer's half needs its tree clean and writable; when it is not we still pull
+   ; (always safe) and say so, leaving the peer's store untouched rather than
+   ; half-fed. --keep only deposits: both stores fill and neither head moves, so a
+   ; hub can hold work it has not taken
+   (sb-sync peer) (sync-with peer 0)
+   (sb-deposit peer) (sync-with peer 1)
+   (sync-with peer keep)
+    (? (url? peer) (sync-url peer keep)
     (mk (),
-     (? (0 < dirty ())
+     (? (!keep && 0 < dirty ())
         (say err "sb: working tree has changes; record or revert first\n", 0)
         (: home (cwd 0)
-           pd (chdir peer @ c (c ? -1 (: _ (mk ()) d (dirty ()) (chdir home, d))))
+           pd (chdir peer @ c (c ? -1 (: _ (mk ()) d (? keep 0 (dirty ())) (chdir home, d))))
            (? (pd < 0) (say err ("sb: cannot reach " + peer + "\n"), 0)
+              (held peer (_ \ sync2 peer keep pd home)))))))
+   (sync2 peer keep pd home)
               (: gi (gap (dir-pat peer) (dir-blb peer) (form (peer + "/.sb/tips")) ".")
                  ; the push: only onto a clean peer, and only if every write lands
                  go (pd @ 0 (gap (dir-pat ".") (dir-blb ".") (tips ()) peer) {'laid 0 'bad 0 'blobs 0})
@@ -421,11 +459,19 @@
                  _ (? !pushed ()
                       (: pu (refadd theirs (refs ()) ())
                          (? (two? <pu) (lay (peer + "/.sb/refs") (show <pu)) ())))
-                 st (settle (readdir ".sb/patch"))
+                 (? keep
+                    (: _ (puts ("sb: deposited -- " + show (gi 'laid) + " patches in, " + show (go 'laid) + " out, "
+                                + show (gi 'blobs + go 'blobs) + " blobs\n"))
+                       (pushed ? 1 0))
+                    (sync3 peer pd home gi go pushed ru)))
+   ; both heads move to their union, and both trees to its derive
+   (sync3 peer pd home gi go pushed ru)
+              (: u (head () + head-in peer)
+                 st (settle (closure u))
                  nleft (tell <>>st)
                  nref <>ru
                  pst (? !pushed ()                             ; settle the far end too
-                        (: c (chdir peer) r (settle (readdir ".sb/patch")) _ (chdir home) r))
+                        (: c (chdir peer) r (settle (closure u)) _ (chdir home) r))
                  _ (puts ("sb: synced -- " + show <st + " patches ("
                           + show (gi 'laid) + " in, " + show (go 'laid) + " out), "
                           + show (gi 'blobs + go 'blobs) + " blobs, " + show <>st + " files here"
@@ -441,7 +487,7 @@
                     (say err "sb: settle the flagged paths, then record\n"))
                  _ (nref @ 0 ()
                     (say err "sb: a banked name is immutable\n"))
-                 (? (pushed && 0 = nleft && 0 = nref) <st 0)))))))
+                 (? (pushed && 0 = nleft && 0 = nref) <st 0))
 
    ; --- apply: realize a dep-consistent subset of the store into the working
    (idpfx pfx)                                                   ; one patch from a prefix | ()
@@ -475,6 +521,24 @@
                       (say err "sb: settle the flagged paths, then record -- the resolution is a patch\n"))
                  (? (0 = nleft) #ids 0))))))
 
+   ; --- take: grow the head by a set -- a ref, or patches by prefix, their deps with them --
+   ;     and lay the tree it realizes. what a hub does to land work it holds ---
+   (sb-take args)
+    (mk (),
+     (? (0 < dirty ())
+        (say err "sb: working tree has changes; record or revert first\n", 0)
+        (: want (: (go m acc) (atom? m ? acc (: l (idsof <m) (two? l ? (go >m (acc + l)))))
+                   (go args ()))
+           (? (atom? want) 0                               ; a name failed to resolve; it said so
+              (: st (settle (closure (head () + want)))
+                 nleft (tell <>>st)
+                 _ (puts ("sb: took " + show #want + " tip" + (? (1 = #want) "" "s") + ", the head now "
+                          + sh (psid (head ())) + ", " + show <>st + " files updated"
+                          + (? (0 = nleft) "" (", " + show nleft + " conflicted")) + "\n"))
+                 (? (0 = nleft) 1 0))))))
+   ; --- ls: the head's paths, a line each ---
+   (sb-ls _) (: sn (snap ()) _ (map (e \ puts (<e + "\n")) sn) #sn)
+
    ; --- bank: freeze the current head under a NAME -- an immutable release, the
    (refs _) (form ".sb/refs")                                  ; ((name (id..) time)..) | ()
    (refof nm) (refof-in (refs ()) nm)
@@ -500,7 +564,7 @@
           (say err "sb: bank needs a name\n", 0)
           (0 < dirty ())
           (say err "sb: working tree has changes; record or revert first\n", 0)
-          (: tp (sort (tips ()))
+          (: tp (sort (head ()))
              (? (atom? tp) (say err "sb: nothing recorded to bank\n", 0)
                 (: old (refof nm)
                    (? (two? old && show old != show tp)
@@ -627,13 +691,18 @@
    sb-usage "sb -- svalbard, the patch-set vcs (doc/misc/sb.md)
 usage: sb VERB ..
   record [NOTE]   working changes -> a patch in the store (.sb/)
-  sync PEER       EXCHANGE patch sets with a peer nest (a dir holding .sb/),
+  sync [--keep] PEER  EXCHANGE patch sets with a peer nest (a dir holding .sb/),
                   or PULL from an http:// remote -- any static file tree serving
                   a .sb/ is a complete one, and it takes no push.
                   pull what it has, push what it lacks, settle BOTH trees to
-                  the union. two patches on one path three-way merge; a true
-                  overlap lands in markers and exits 1 -- resolve, then record
-  apply [ID..]    realize a dep-consistent SUBSET into the working tree (an ID
+                  the union of their HEADS. two patches on one path three-way
+                  merge; a true overlap lands in markers and exits 1 -- resolve,
+                  then record. --keep only deposits: both stores fill, no head
+                  moves, so a hub holds work it has not taken
+  take ID..       grow the HEAD by a set (a ref, or patches by prefix, with
+                  their deps) and lay the tree: what a hub does to land work
+  ls              the head's paths
+  apply [ID..]    make the HEAD a dep-consistent SUBSET, laid in the tree (an ID
                   may be a prefix; its deps come along). checkout and cherry-pick
                   are one act here. no ID realizes the whole store -- the way back
   bank NAME       freeze the current head -- its whole TIP SET -- as an immutable
@@ -642,7 +711,7 @@ usage: sb VERB ..
   undo ID [NOTE]  add the INVERSE of a patch -- revert as growth, never deletion.
                   a path that moved on since three-way merges instead of being
                   clobbered: P's write is lifted OUT, later edits stay
-  log             the patches, newest first (* marks a tip)
+  log             the patches, newest first (* marks a tip of the head)
   diff            working tree vs the recorded state (unified; exit 1 on change)
   ledger [NAME]   a named value that moves only by compare-and-swap, its every
                   entry kept. no NAME lists them; NAME prints what it holds
@@ -659,13 +728,16 @@ usage: sb VERB ..
     (<as @ "-C" (? (atom? >as) (usage ())
                    ((chdir <>as) = ()) (sb-main >>as)
                    (say err ("sb: cannot enter " + <>as + "\n"), 1))
-           "record" (sb-record (two? >as ? <>as ""), 0)
+           "record" (: _ (held "." (_ \ sb-record (two? >as ? <>as ""))) 0)
            "ledger" (: r (sb-ledger >as) (? (r = 2) (usage ()) !r))
-           "sync" (atom? >as ? (usage ()) !(sb-sync <>as))
-           "apply" !(sb-apply >as)
-           "bank" (atom? >as ? (usage ()) !(sb-bank >as))
-           "undo" (atom? >as ? (usage ()) !(sb-undo >as))
+           "sync" (: pr (filter (w \ w != "--keep") >as)
+                     (atom? pr ? (usage ()) !(held "." (_ \ sync-with <pr (elem "--keep" >as)))))
+           "apply" !(held "." (_ \ sb-apply >as))
+           "take" (atom? >as ? (usage ()) !(held "." (_ \ sb-take >as)))
+           "bank" (atom? >as ? (usage ()) !(held "." (_ \ sb-bank >as)))
+           "undo" (atom? >as ? (usage ()) !(held "." (_ \ sb-undo >as)))
            "log" (sb-log (), 0)
+           "ls" (sb-ls (), 0)
            "diff" (0 < sb-diff ())
            (usage ()))))
 
