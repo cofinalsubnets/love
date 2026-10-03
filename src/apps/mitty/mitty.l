@@ -473,7 +473,7 @@
                         (hfeed hb ch)),
                      oars hb g))))
 
- ; --- idle: 'saver is a watch of src/apps/saver.l's, which has the glass after its minutes
+ ; --- idle: 'saver is a watch of src/apps/mitty/saver.l's, which has the glass after its minutes
  ; without a key; the mitty's own frames wait under it, and are laid again whole after ---
  ; a key: 1 when it woke a saver, which then is owed a whole frame
  (hwake hb) (: w (peep hb 'saver ()) k (cite 'saver 'saver-key) _ (pin hb 'forced 0)
@@ -823,6 +823,7 @@
   (? (two? as && <as = "--serve" && two? >as) (mitty-serve <>as >>as)
      (two? as && <as = "--here") (mitty-here >as)
      (two? as && <as = "--ls") (mitty-ls 0)
+     (two? as && elem <as ["-s" "--screensaver"]) ((cite 'saver 'saver-cli) >as)   ; a saver, no mitty
      (: nm (two? as && <as = "-n" && two? >as ? <>as "main")
         rest (two? as && <as = "-n" && two? >as ? >>as as)
         path (mitty-sock nm)
@@ -831,7 +832,8 @@
            (mitty-spawn nm rest) (mitty-reattach path 60 @ r (r = () ? (mitty-here rest) 0))
            (mitty-here rest))))
  mitty-usage "usage: love mitty [-n NAME] [COMMAND ..]   the mitty NAME (main), started when none is up;
-       COMMAND in its first pane. love mitty --ls lists them; --here runs one in this process
+       COMMAND in its first pane. love mitty --ls lists them; --here runs one in this process;
+       -s [NAME] a screensaver until a key, -s alone names them
   C-a: s v split, h j k l steer, x shut, [ ] copy and paste, c n p 0-9 faces, b a model,
        space open an app, w go to a pane, z the screensaver now, d detach, C-a a literal C-a"
  _ (pins (cite 'verbs 'tab) 'mitty (udoor 'mitty mitty-main mitty-usage 1 1)))

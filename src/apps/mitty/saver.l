@@ -1,15 +1,19 @@
-; src/apps/saver.l -- screensavers for a full screen. a saver draws into a canvas of cells at
-; a time t, and a painter sends only the cells that changed since the last frame.
+; src/apps/mitty/saver.l -- mitty's screensavers. a saver draws into a canvas of cells at a
+; time t, and a painter sends only the cells that changed since the last frame.
 ;
-;   love bee -s NAME     a saver on its own, until a key; -s alone names them
+;   love mitty -s NAME     a saver on its own, until a key; -s alone names them
 ;
-; bee starts one when its screen has had no key for (screensaver-idle N) minutes, and the
-; watch below is all it holds. the frames are pure in (rows cols t phase): saver-frame and
-; saver-canvas are the headless doors, gated by test/host/saver.l.
+; mitty starts one when its glass has had no key for (screensaver-idle N) minutes, as
+; ~/.love/etc/mitty.l says with (screensaver NAME) -- pom and 10 unless said, 0 for never --
+; and the watch below is all it holds. the frames are pure in (rows cols t phase):
+; saver-frame and saver-canvas are the headless doors, gated by test/host/saver.l.
 ;   pom     the moon at its phase, over stars that twinkle
 ;   slop    slop's skin, slop-drift, in its own gold and pink
 ;   life    conway's life on the half cells, aged in greens
 ;   matrix  green rain down the columns
+;   court   lore's courtyard: a day and an hour thrown, the season's weather, the eye
+;           somewhere in the yard turning slowly, the hours running on
+;   grass99 grass simulator 1999's week, from a thrown hour of it, the field on its own
 (module (saver saver-names saver-frame saver-canvas saver-cell saver-moon-lit?
          saver-watch saver-tick saver-key saver-on? saver-cli)
 (borrow 'posix)
@@ -193,8 +197,51 @@
          (upto n cell))
      (upto (cv 'c) col))
 
+ ; --- the lore scenes: a screen of pixels two to a cell, drawn as half blocks in the
+ ; scene's own dithered pens; the scene ticked as many frames as the clock owes it, a few
+ ; at most, so a slow frame skips the time rather than chasing it ---
+ (halves cv px) (: r (cv 'r) c (cv 'c) d (cv 'b)
+   (upto r (y \ upto c (x \ cv-set d (y * c + x) hb (int (peep px (2 * y * c + x) 16))
+                                      (int (peep px ((2 * y + 1) * c + x) 16))))))
+ (owe s want tick) (: (go k) (? (k < 4 && s 'done < want) (: _ (tick 0) _ (pin s 'done (s 'done + 1)) (go (k + 1))) 0)
+                      _ (go 0)
+                      (pin s 'done (max (s 'done) (want - 4))))
+ ; ..court: a day of this year and an hour thrown -- by day three times in four, any hour
+ ; else -- the season's weather, the eye somewhere in the yard and not in the trunk,
+ ; looking a little up; the sky's hours at 600 a second
+ (court-new r c seed p)
+  (: (rr k m) (dice k 5 seed m)
+     y <((cite 'cal 'civil) (clock 0 // 86400000))
+     hr (rr 7 4 = 0 ? (rr 1 24) (7 + rr 1 12))
+     l (86400.0 * (cite 'cal 'epoch-days) y 1 1 + 86400.0 * rr 0 365 + 3600.0 * hr + 60.0 * rr 2 60)
+     st ((cite 'court 'court-new) c (2 * r) ((cite 'court 'court-local) l))
+     ya (cite 'court 'yard-a) yb (cite 'court 'yard-b) bs (st 'tree 'base)
+     x (ya * (rr 3 160 / 100.0 - 0.8)) z0 (yb * (rr 4 160 / 100.0 - 0.8))
+     z ((x - bs 0) * (x - bs 0) + (z0 - bs 2) * (z0 - bs 2) < 0.6 ? (z0 - 1.5) z0)
+     _ (pins st 'px x 'pz z 'th (rr 5 628 / 100.0) 'ph (rr 6 70 / 100.0 + 0.15) 'pace 1 'deep 0)
+     {'st st 'done 0 'th (st 'th)})
+ (court-draw s cv t)
+  (: st (s 'st)
+     _ (owe s (t * 20 // 1000) (_ \ (pin st 't (st 't + 1), (cite 'court 'court-move) st)))
+     _ (pin st 'th (s 'th + t * 0.00003))
+     (halves cv ((cite 'view 'view-cube-pens) ((cite 'court 'court-pens) st) (st 'bay))))
+ ; ..grass99: the week from a thrown hour of it, a field its own; at the week's end another
+ (meadow-new r c seed p)
+  (: g ((cite 'grass 'grass-new) r c seed)
+     _ (pin g 'h (6.0 + dice 0 9 seed 160 + dice 1 9 seed 100 / 100.0))
+     {'g g 'm ((cite 'meadow 'meadow-new) (seed % 9973) c (2 * r)) 'done 0 'seed seed 'r r 'c c})
+ (meadow-draw s cv t)
+  (: _ (owe s (t * (cite 'grass 'fps) // 1000) (_ \ (cite 'grass 'grass-tick) (s 'g)))
+     _ (? ((cite 'grass 'week-hours) <= s 'g 'h)
+          (: n (meadow-new (s 'r) (s 'c) (s 'seed + 1) ()) (pins s 'g (n 'g) 'm (n 'm) 'seed (n 'seed))) 0)
+     g (s 'g) m (s 'm)
+     (halves cv ((cite 'view 'view-cube-pens) ((cite 'meadow 'meadow-pens) m g ((cite 'meadow 'meadow-sky) g))
+                                               (m 'bay * 0.5 + 0.25))))
+
  ; --- the savers, by name ---
  savers {"pom" {'fps 8 'new pom-new 'draw pom-draw}
+         "court" {'fps 8 'new court-new 'draw court-draw}
+         "grass99" {'fps 8 'new meadow-new 'draw meadow-draw}
          "slop" {'fps 12 'new slop-new 'draw slop-draw}
          "life" {'fps 10 'new life-new 'draw life-draw}
          "matrix" {'fps 15 'new rain-new 'draw rain-draw}}
@@ -239,15 +286,15 @@
         (r != s 'r || c != s 'c) (saver-step (fresh (s 't0)) now (news-pen w news))
         (now < s 'next) ""
         (saver-step s now (news-pen w news))))
- ; the mail mark's pen once news came, the watch's 'ink (bee's accent) or a soft pink
+ ; the mail mark's pen once news came, the watch's 'ink or a soft pink
  (news-pen w news) (w 'n0 < news ? (peep w 'ink 218) 0)
 
- ; --- the door: love bee -s NAME ---
+ ; --- the door: love mitty -s NAME ---
  (saver-cli as)
   (: nm (two? as ? <as ())
      names (foldl (\ a n (a + n + "\n")) "" saver-names)
      (? (nm = ()) (puts names, 0)
-        (peep savers nm () = ()) (say err ("bee: no screensaver " + nm + "; there are\n" + names), flush err, 2)
+        (peep savers nm () = ()) (say err ("mitty: no screensaver " + nm + "; there are\n" + names), flush err, 2)
         (saver-run nm)))
  (size _) (: ws (tty 1) [(two? ws && 1 < <ws ? <ws 24) (two? ws && 1 < >ws ? >ws 80)])
  ; until a key: a frame when one is due, a rest until the next
