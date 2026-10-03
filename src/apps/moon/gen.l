@@ -2519,7 +2519,8 @@
                  sig (direct ? (g 'sigs <>head))
                  ; the param types, a function-pointer type's included: a widened float arg is indistinguishable from a double
                  ptys (? (two? sig) <>sig direct () (fnpts (hdty9 g env head)))
-                 rt (two? sig ? <sig 'long)
+                 ; an indirect callee's result type is its pointer's: a memory return owes the hidden argument either way
+                 rt (? (two? sig) <sig direct 'long (fnret (hdty9 g env head)))
                  variadic (two? sig ? (sig 2))
                  ; the arity check, direct only (the gripe spells a name). 0 < nps exempts the empty list: `int f()` and
                  ; `int f(void)` both park an empty ptys and the sigs row cannot tell them apart
@@ -2556,7 +2557,7 @@
                     (aone g (vty cr) = 'int)    ; a small int aggregate result: park rax
                      (nslot g 16 @ toff
                         (mkv (vty cr) 'r0 (vfs cr + [['st 'r4 toff 'r0] ['lean 'r0 'r4 toff]])))
-                    'bad))))
+                    (nolane g ("no lane for receiving a " + show (tsz g (vty cr)) + "-byte struct by value" + ontgt g))))))
        ; a statement expression: the statements in place, then the value as an ordinary expression (keeps its register);
        ; 'inlining is raised over the statements so stq stops ticking and each wears the conservative wrapset
        ('sexpr items ve ty)
@@ -2928,7 +2929,8 @@
                           (mkv (fnret (vty hr)) 'r0 (pf + tor0 g hr + [['st 'r4 pko 'r0]] +
                                     spills + ezf + pops + setal + [['ld pk 'r4 pko] ['callr pk]] + fres + clean + relods)))
                       (mkv (fnret (vty hr)) 'r0 (pf + tor0 g hr + [['mov pk 'r0]] +
-                                spills + ezf + pops + setal + [['callr pk]] + clean + relods))))))))
+                                spills + ezf + pops + setal + (sr6 ? [['lea (argr g 0) 'r4 sroff]] ()) + [['callr pk]] +
+                                (sr6 ? [['lea 'r0 'r4 sroff]] ()) + clean + relods))))))))
    ; the C99 complex lane (x64): a complex value is its two-member struct, so it flows as one. arithmetic parks each
    ; side in a double-pair temp (the other side may call), f0..f3 carry (a.re a.im b.re b.im), the answer is a fresh temp's address
    (cxb ty) (<>ty = "__cplx_float" ? 'float 'double)
