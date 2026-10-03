@@ -622,14 +622,16 @@
             t))
      ; the date and platform from love's own verbs; the git summary only where the host has git
      bee-env
-      (lush-out ("echo \"date: $(date '+%Y-%m-%d %A %H:%M %Z')\"\n"
-                 + "echo \"platform: $(uname -s -r -m)\"\n"
-                 + "if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then\n"
-                 + " echo \"git branch: $(git branch --show-current)\"\n"
-                 + " s=$(git status --short 2>/dev/null | head -n 20)\n"
-                 + " echo \"git status, first 20 lines:\"; echo \"${s:-(clean)}\"\n"
-                 + " echo \"recent commits:\"; git log --oneline -5 2>/dev/null | cut -c1-120\n"
-                 + "fi\n"))
+      (lush-out """
+         echo "date: $(date '+%Y-%m-%d %A %H:%M %Z')"
+         echo "platform: $(uname -s -r -m)"
+         if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+          echo "git branch: $(git branch --show-current)"
+          s=$(git status --short 2>/dev/null | head -n 20)
+          echo "git status, first 20 lines:"; echo "${s:-(clean)}"
+          echo "recent commits:"; git log --oneline -5 2>/dev/null | cut -c1-120
+         fi
+         """)
 
      (paras ls) (foldl (\ a l (a + l + "\n")) "" ls)
      bee-me (string? bee-self ? bee-self "love")
@@ -682,15 +684,17 @@
      ; every merge queue there is, as it stands at start: git's refs/queue/*, and the queue/*
      ; ledgers of sb's hub nest -- SB_HUB, else this directory when it holds a .sb
      bee-qcmd
-      ("for r in $(git for-each-ref --format='%(refname)' refs/queue 2>/dev/null); do\n"
-       + " echo \"--- git $r ---\"; git cat-file -p \"$r\"\n"
-       + "done\n"
-       + "hub=${SB_HUB:-}; [ -z \"$hub\" ] && [ -d .sb ] && hub=.\n"
-       + "if [ -n \"$hub\" ]; then\n"
-       + " for n in $(sb -C \"$hub\" ledger 2>/dev/null | cut -d' ' -f1); do\n"
-       + "  case $n in queue/*) echo \"--- sb ledger $n, in the nest at $hub ---\"; sb -C \"$hub\" ledger \"$n\";; esac\n"
-       + " done\n"
-       + "fi\n")
+      """
+      for r in $(git for-each-ref --format='%(refname)' refs/queue 2>/dev/null); do
+       echo "--- git $r ---"; git cat-file -p "$r"
+      done
+      hub=${SB_HUB:-}; [ -z "$hub" ] && [ -d .sb ] && hub=.
+      if [ -n "$hub" ]; then
+       for n in $(sb -C "$hub" ledger 2>/dev/null | cut -d' ' -f1); do
+        case $n in queue/*) echo "--- sb ledger $n, in the nest at $hub ---"; sb -C "$hub" ledger "$n";; esac
+       done
+      fi
+      """
      bee-queues (lush-out bee-qcmd)
 
      ; --- queue watching: every (queue-watch N) seconds, 20 unless set and 0 for never, the
