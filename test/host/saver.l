@@ -42,6 +42,13 @@
          (z \ (: r <z c (z 1) s (sv-scan (saver-frame nm r c 1500 0.4) r c)
                  (test <s (s 1 = r * c))))))
 
+   ; --- a style after the name: pom natural covers the screen too, and is not pom's own
+   ; --- face; a style a saver has not is never one ---
+   nat (saver-frame "pom natural" 24 80 1500 0.4)
+   _ (test (sv-scan nat 24 80 @ s (<s && s 1 = 24 * 80)) (nat != saver-frame "pom" 24 80 1500 0.4)
+           (0 < (saver-watch "pom natural" 5) 'idle) (0 = (saver-watch "pom fancy" 5) 'idle)
+           (0 = (saver-watch "life natural" 5) 'idle))
+
    ; --- the lore scenes are pictures: half blocks over the whole canvas, in many pens ---
    (pic? nm) (: cv (saver-canvas nm 24 80 1500 ()) cs (map (i \ saver-cell cv (i // 80) (i % 80)) ^(24 * 80))
                 pens (foldl (t \ k \ pin t (k 1) 1) {} cs)
@@ -99,8 +106,9 @@
    ls (sv-run [sv-love "mitty" "-s"])
    bad (sv-run [sv-love "mitty" "-s" "nope"])
    bad2 (sv-run [sv-love "mitty" "--screensaver" "nope"])
+   bad3 (sv-run [sv-love "mitty" "-s" "pom" "fancy"])
    _ (test (0 = <ls) (all (n \ sv-has? (ls 1) n) saver-names)
            (2 = <bad) (sv-has? (bad 1) "no screensaver nope") (all (n \ sv-has? (bad 1) n) saver-names)
-           (2 = <bad2))
+           (2 = <bad2) (2 = <bad3) (sv-has? (ls 1) "pom [natural]"))
 
    (test_fin (), puts "saver: ok", putc 10, 0))

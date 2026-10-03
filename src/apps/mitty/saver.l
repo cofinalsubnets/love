@@ -7,7 +7,7 @@
 ; ~/.love/etc/mitty.l says with (screensaver NAME) -- pom and 10 unless said, 0 for never --
 ; and the watch below is all it holds. the frames are pure in (rows cols t phase):
 ; saver-frame and saver-canvas are the headless doors, gated by test/host/saver.l.
-;   pom     the moon at its phase, over stars that twinkle
+;   pom     the moon at its phase, over stars that twinkle; pom natural draws it as pom -n
 ;   slop    slop's skin, slop-drift, in its own gold and pink
 ;   life    conway's life on the half cells, aged in greens
 ;   matrix  green rain down the columns
@@ -93,24 +93,26 @@
  ; the moon's face is pom's, so `pom -s` prints what this draws
  saver-moon-lit? (cite 'pom 'pom-lit?)
  moon-pen (cite 'pom 'pom-face)
+ ; ..or as pom -n draws it, its nearest pen
+ (natural-pen p nx ny) ((cite 'pom 'pom-glow) p nx ny @ v (charm? v ? ((cite 'pom 'pom-xterm) v)))
  ; the disc on half cells, a cell two pixels each about as wide as it is tall, as
  ; [y x upper lower] for every cell it touches: laid once, it does not move
- (moon-cells p r c)
+ (moon-cells p r c pen0)
   (: rad (0.45 * min (2 * r - 4) c)
      cy (r - 1.0) cx (c / 2.0)
      y0 (max 0 (floor ((cy - rad) / 2) - 1)) y1 (min (r - 1) (floor ((cy + rad) / 2) + 1))
      x0 (max 0 (floor (cx - rad) - 1)) x1 (min c (floor (cx + rad) + 2))
-     (pen x py) (moon-pen p ((x + 0.5 - cx) / rad) ((py + 0.5 - cy) / rad))
+     (pen x py) (pen0 p ((x + 0.5 - cx) / rad) ((py + 0.5 - cy) / rad))
      (cell y x) (: u (pen x (2 * y)) l (pen x (2 * y + 1))
                    (? (u = () && l = ()) () [y x (u = () ? sky u) (l = () ? sky l)]))
      (? (rad <= 0) ()
         (filter two? (catmap (y \ map (x \ cell y x) (map (+ x0) ^(x1 - x0))) (map (+ y0) ^(y1 - y0))))))
  ; a few dozen stars, each [y x period phase], off the caption's row
- (pom-new r c seed p0)
+ (pom-new r c seed p0 sty)
   (: n (min 64 (max 16 (r * c // 50)))
      h (max 1 (r - 1))
      p (p0 = () ? (pom-now 0) p0)
-     {'p p 'moon (moon-cells p r c)
+     {'p p 'moon (moon-cells p r c (sty = "natural" ? natural-pen moon-pen))
       'stars (map (i \ [(dice i 0 seed h) (dice i 1 seed c) (1500 + dice i 2 seed 5000) (dice i 3 seed 628 / 100.0)]) ^n)})
  (star cv s t) (: b (sin (2 * pi * t / s 2 + s 3))
                   (? (b < -0.4) (cv-put cv <s (s 1) 46 238 sky)
@@ -128,7 +130,7 @@
  slop-drift (cite 'slop 'slop-drift)
  ramp (star-tray [#(cite 'slop 'slop-ramp)] (cite 'slop 'slop-ramp))
  ; each cell's upper and lower sample, as flat indices into the field's 2r by c
- (slop-new r c seed p)
+ (slop-new r c seed p sty)
   (: n (r * c) up ((iota n // c) * (2 * c) + iota n % c)
      {'f (slop-drift r c) 'up up 'lo (up + c)})
  ; the skin's [-4 4] read onto the ramp's 24 steps, slop's own reading, at a calmer clock;
@@ -143,7 +145,7 @@
 
  ; --- life: conway's, on a torus of half cells, each cell's age its green ---
  ; a step is eight gathers and a few tray ops, C doing every cell
- (life-new r c seed p)
+ (life-new r c seed p sty)
   (: h (2 * r) w c n (h * w)
      ys (iota n // w) xs (iota n % w)
      (nb dy dx) ((ys + dy + h) % h * w + (xs + dx + w) % w)
@@ -179,7 +181,7 @@
 
  ; --- matrix: green rain, each column a drop of its own speed, length and gap; the head
  ; and every glyph a pure function of the column, the row and the clock ---
- (rain-new r c seed p) {'seed seed}
+ (rain-new r c seed p sty) {'seed seed}
  (rain-pen d n) (? (d = 0) 231 (4 * d < n) 46 (2 * d < n) 40 (4 * d < 3 * n) 34 22)
  (rain-draw st cv t)
   (: r (cv 'r) sd (st 'seed)
@@ -209,7 +211,7 @@
  ; ..court: a day of this year and an hour thrown -- by day three times in four, any hour
  ; else -- the season's weather, the eye somewhere in the yard and not in the trunk,
  ; looking a little up; the sky's hours at 600 a second
- (court-new r c seed p)
+ (court-new r c seed p sty)
   (: (rr k m) (dice k 5 seed m)
      y <((cite 'cal 'civil) (clock 0 // 86400000))
      hr (rr 7 4 = 0 ? (rr 1 24) (7 + rr 1 12))
@@ -226,14 +228,14 @@
      _ (pin st 'th (s 'th + t * 0.00003))
      (halves cv ((cite 'view 'view-cube-pens) ((cite 'court 'court-pens) st) (st 'bay))))
  ; ..grass99: the week from a thrown hour of it, a field its own; at the week's end another
- (meadow-new r c seed p)
+ (meadow-new r c seed p sty)
   (: g ((cite 'grass 'grass-new) r c seed)
      _ (pin g 'h (6.0 + dice 0 9 seed 160 + dice 1 9 seed 100 / 100.0))
      {'g g 'm ((cite 'meadow 'meadow-new) (seed % 9973) c (2 * r)) 'done 0 'seed seed 'r r 'c c})
  (meadow-draw s cv t)
   (: _ (owe s (t * (cite 'grass 'fps) // 1000) (_ \ (cite 'grass 'grass-tick) (s 'g)))
      _ (? ((cite 'grass 'week-hours) <= s 'g 'h)
-          (: n (meadow-new (s 'r) (s 'c) (s 'seed + 1) ()) (pins s 'g (n 'g) 'm (n 'm) 'seed (n 'seed))) 0)
+          (: n (meadow-new (s 'r) (s 'c) (s 'seed + 1) () ()) (pins s 'g (n 'g) 'm (n 'm) 'seed (n 'seed))) 0)
      g (s 'g) m (s 'm)
      (halves cv ((cite 'view 'view-cube-pens) ((cite 'meadow 'meadow-pens) m g ((cite 'meadow 'meadow-sky) g))
                                                (m 'bay * 0.5 + 0.25))))
@@ -246,9 +248,15 @@
          "life" {'fps 10 'new life-new 'draw life-draw}
          "matrix" {'fps 15 'new rain-new 'draw rain-draw}}
  saver-names (sort (keys savers))
+ ; a name may carry a style after a space, "pom natural": the saver's, then the word
+ (base nm) (nm @ (b + " " + _) b _ nm)
+ (style nm) (nm @ (_ + " " + w) w _ ())
+ ; the styles a saver draws in besides its own
+ styles {"pom" ["natural"]}
+ (known? nm) (peep savers (base nm) () != () && (style nm = () || elem (style nm) (peep styles (base nm) ())))
  (saver-make nm r c seed p)
-  (: d (savers nm) nw (d 'new)
-     {'d d 'r r 'c c 'st (nw r c (seed % 65536) p) 'cv (cv-new r c) 'pv (cv-new r c) 'all 1 't0 0 'next 0})
+  (: d (savers (base nm)) nw (d 'new)
+     {'d d 'r r 'c c 'st (nw r c (seed % 65536) p (style nm)) 'cv (cv-new r c) 'pv (cv-new r c) 'all 1 't0 0 'next 0})
  ; the frame at t, ms into the saver; a mark, a pen, puts a small ✉ in the top right corner
  (saver-show s t mark)
   (: cv (s 'cv) dr ((s 'd) 'draw) all (s 'all)
@@ -270,7 +278,7 @@
  ; the key that wakes it is the saver's; news is a count the screen keeps of what arrived
  (saver-watch nm mins)
   {'nm nm 'last () 'on () 'bye 0 'n0 0
-   'idle (? (peep savers nm () = ()) 0 (charm? mins || gem? mins) (int (mins * 60000)) 0)}
+   'idle (? !(known? nm) 0 (charm? mins || gem? mins) (int (mins * 60000)) 0)}
  (saver-on? w) (w 'on != ())
  (saver-key w now) (? (saver-on? w) (pins w 'on () 'bye 1 'last now, 1) (pin w 'last now, 0))
  ; -> the escapes to send now: a frame while a saver runs, the cursor back as it ends,
@@ -289,12 +297,12 @@
  ; the mail mark's pen once news came, the watch's 'ink or a soft pink
  (news-pen w news) (w 'n0 < news ? (peep w 'ink 218) 0)
 
- ; --- the door: love mitty -s NAME ---
+ ; --- the door: love mitty -s NAME [STYLE] ---
  (saver-cli as)
-  (: nm (two? as ? <as ())
-     names (foldl (\ a n (a + n + "\n")) "" saver-names)
+  (: nm (two? as ? (two? >as ? (<as + " " + <>as) <as) ())
+     names (foldl (\ a n (a + n + (peep styles n () @ ss (two? ss ? (" [" + join "|" ss + "]") "")) + "\n")) "" saver-names)
      (? (nm = ()) (puts names, 0)
-        (peep savers nm () = ()) (say err ("mitty: no screensaver " + nm + "; there are\n" + names), flush err, 2)
+        (2 < #as || !(known? nm)) (say err ("mitty: no screensaver " + nm + "; there are\n" + names), flush err, 2)
         (saver-run nm)))
  (size _) (: ws (tty 1) [(two? ws && 1 < <ws ? <ws 24) (two? ws && 1 < >ws ? >ws 80)])
  ; until a key: a frame when one is due, a rest until the next
