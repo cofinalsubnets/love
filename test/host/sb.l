@@ -494,6 +494,34 @@
  xundo (<>ut = <>bt) ux !ubx                                 ; the undo lifts only the modes
  (sb-oid? xside) !(sb-oid? (snip xside 0 64 + "y")) !(sb-oid? (xside + "x")))
 
+; --- sync walks from the tips: a store holds every patch's deps, so the walk stops at a patch
+;     the other side holds. against thirty patches, one new one is the one patch read. a patch
+;     whose blob will not come is not laid, so what is laid keeps its closure ---
+(: _ (mkdir "mrg/t" 493) _ (mkdir "mrg/t/a" 493) _ (mkdir "mrg/t/b" 493)
+   _ (chdir "mrg/t/a") _ (mk ())
+   _ (: (go i) (? (i < 30) (: _ (lay ("f" + show (i % 3)) ("rev " + show i + "\n")) _ (sb-record ("r" + show i)) (go (i + 1))) 0) (go 0))
+   _ (chdir "../b") _ (mk ())
+   tfull (sb-sync "../a")
+   _ (chdir "../a") _ (lay "f0" "one more\n") tnew (sb-record "one more") _ (chdir "../b")
+   tg (gap (dir-pat "../a") (dir-blb "../a") (form "../a/.sb/tips") ".")
+   tsame (gap (dir-pat "../a") (dir-blb "../a") (form "../a/.sb/tips") ".")
+   _ (chdir "../a") _ (lay "f1" "no blob\n") tlost (sb-record "its blob goes") _ (chdir "../b")
+   tbh (sha256 "no blob\n")
+   _ (rename ("../a/.sb/blob/" + tbh) "../held")
+   th (gap (dir-pat "../a") (dir-blb "../a") (form "../a/.sb/tips") ".")
+   tlaid (two? (stat (".sb/patch/" + tlost)))
+   _ (rename "../held" ("../a/.sb/blob/" + tbh))
+   tdone (sb-sync "../a")
+   tf0 (look "f0") tf1 (look "f1")
+   _ (chdir "../../.."))
+
+(test
+ (30 = tfull)
+ (1 = tg 'read) (1 = tg 'laid) (1 = tg 'blobs) (tg 'ok)     ; one patch, its one blob
+ (0 = tsame 'read) (0 = tsame 'laid) (tsame 'ok)          ; held already: nothing read
+ !(th 'ok) (0 = th 'laid) !tlaid                          ; no blob, no patch
+ (32 = tdone) (<>tf0 = "one more\n") (<>tf1 = "no blob\n"))  ; and it all arrives once the blob is back
+
 (chdir sb-home)
 (hark ["rm" "-rf" sb-dir])
 (puts "sb: ok", putc 10, 0)

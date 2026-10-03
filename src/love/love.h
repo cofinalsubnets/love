@@ -244,7 +244,7 @@ extern const struct ai_mint ai_mint_zero;
 struct ai_port_vt;   // the port's kind, in its head; spelled out with the ports
 // the reader's names (g->rnom): its wraps, its two lone chars, the torn answer, and the
 // flow a port is read through
-enum { RnQuote, RnList, RnHash, RnTuple, RnTablet, RnIota, RnMono, RnTorn, RnAt, RnComma, RnN };
+enum { RnQuote, RnList, RnHash, RnTuple, RnTablet, RnIota, RnMono, RnTorn, RnAt, RnComma, RnWeave, RnN };
 struct ai {
  union u *ip;
  word *hp, *sp;
@@ -554,6 +554,9 @@ struct ai
  *ai_image_load(void const *buf, uintptr_t len, int kept);   // kept: buf outlives the session; 2: and the image may wake lazily
 // a lazy image's pool given up (a major's copy done, a session's end): its pages open, its state gone
 void ai_image_drop(word const *pool);
+// before a warm fork: what any process of this image woke or seated, done here as well
+void ai_image_warm(void);
+void code_warm(struct ai *g);
 
 // the terminal scare face: ";; a b\n" (show forms) to the err port from the stashed
 // condition data; the bare oom prints ";; oom@len=N\n".

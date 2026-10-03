@@ -1,4 +1,4 @@
-; test/host/grass99.l -- leaves of grass simulator 1999, headless: grass's week stood up in
+; test/host/grass99.l -- grass simulator 1999, headless: grass's week stood up in
 ; three dimensions -- the rows of the frame, noon and night, a lean, the pens in range with
 ; the field wilting, a console that keeps its last column -- and the sequel's tune reads.
 ; not in the corpus: a crew module. run: cat test/00-init.l test/host/grass99.l | out/love

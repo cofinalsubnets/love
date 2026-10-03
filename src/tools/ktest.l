@@ -37,31 +37,15 @@
    ; machine + exit channel are per-arch. x64 quits qemu by writing the
    ; isa-debug-exit port; the two 'virt's have no such device, so k_reset goes
    ; out through PSCI / SBI and -no-reboot below turns that into the exit.
-   ; KTEST_<ARCH>_HOSTS lists boxes (ssh, qemu, /dev/kvm) an elf lane boots on under kvm instead
-   ; of here: a64's are arm boxes, ~100s against tcg; x64's a VT-x box for the vmx laws, which
-   ; test_kernel_vmx fills from KTEST_VMX_HOSTS. "host:slots ..", fastest first; KTEST_<ARCH>_HOST
-   ; is one host, one slot. a slot is an exclusive lock, ARCHhost-HOST-N, so two lanes never crowd
-   ; one box past what its memory holds; with every slot taken the lane waits
+   ; an elf lane boots under kvm on a host bee knows (src/apps/hosts.l) with the lane's cap:
+   ; kvm-a64 for a64, ~100s against tcg, and KTEST_CAP names another (test_kernel_vmx's
+   ; vt-x). a slot is the host's lock, so two lanes never crowd one box past what its memory
+   ; holds; with every slot taken the lane waits, and with no host it boots here
    (env-of k) (getenv k @ v (string? v && 0 < #v ? v ()))
-   (num s) (foldl (\ a i (a * 10 + s i - 48)) 0 ^#s)
-   pfx (arch @ "a64" "KTEST_A64_" "x64" "KTEST_X64_" ())
-   hosts (? !(elf? && string? pfx) ()
-            (env-of (pfx + "HOSTS") @ l
-               (? (string? l) (map (w \ (cite 'kore 'usplit 58 w @ p [<p (two? >p ? (num <>p) 1)]))
-                         (filter (w \ 0 < #w) (cite 'kore 'usplit 32 l)))
-                  (env-of (pfx + "HOST") @ h (string? h ? [[h 1]] ())))))
-   lroot ((cite 'locks 'locks-root) 0)
-   (try-slot h i) (: nm (arch + "host-" + <h + "-" + show i)
-                     g ((cite 'locks 'locks-acquire) lroot nm 'exclusive (getpid 0) ("ktest " + iso) () 1)
-                     (peep g "granted" 0 ? [<h nm] ()))
-   (try-host h) (foldl (\ a i (two? a ? a (try-slot h i))) () (map (+ 1) (jot (h 1))))
-   (take-slot n) (: s (foldl (\ a h (two? a ? a (try-host h))) () hosts)
-                    (? (two? s) s
-                       (: _ (? (n = 0) (say err ("ktest: every " + arch + " host slot is taken; waiting\n")) 0)
-                          _ (rest 5000)
-                          (take-slot (n + 1)))))
-   slot (two? hosts ? (take-slot 0) ())
-   far  (two? slot ? <slot ())
+   cap  (env-of "KTEST_CAP" @ c (string? c ? c (arch = "a64" ? "kvm-a64" ())))
+   hosts (? (elf? && string? cap) ((cite 'hosts 'hosts-live) ((cite 'hosts 'hosts-with) cap ())) ())
+   slot (two? hosts ? ((cite 'hosts 'hosts-take) hosts (getpid 0) ("ktest " + iso)) ())
+   far  (two? slot)
    mach (arch @ "a64"
            ["-M" "virt,gic-version=2" "-cpu" (far ? "host" "cortex-a72") "-semihosting"]
            "rv64"
@@ -124,8 +108,9 @@
    qemu (["timeout" ceil ("qemu-system-" + arch-mach (intern arch)) "-m" "1536M"]
          + mach + kvm + dargs
          + ["-serial" "stdio" "-display" "none" "-no-reboot"] + media)
-   ; far: the elf and its disk go to a scratch dir there, the same line runs in it, and the
-   ; dir goes after. paths are the basenames, so nothing of this tree's layout crosses
+   ; far: the elf goes over in a dir of its own, the disk is made beside it there, the same
+   ; line runs in it, and the dir goes after. paths are the basenames, so nothing of this
+   ; tree's layout crosses
    r    (far ?
            (: d ("/tmp/ktest-" + show (getpid 0))
               b (foldl (\ a i (iso i = 47 ? (i + 1) a)) 0 (jot #iso) @ k (snip iso k #iso))
@@ -133,14 +118,14 @@
                                 (sub-at x 0 "file=" 0) ("file=" + b + ".disk" + snip x (5 + #disk) #x)
                                 x))
                        qemu)
-              _ (hark ["ssh" far ("mkdir -p " + d)])
-              _ (hark ["scp" "-q" iso (far + ":" + d + "/" + b)])
-              x (hark ["ssh" far ("cd " + d + " && truncate -s 35840000 " + b + ".disk && "
-                                  + foldl (\ a w (a + " '" + w + "'")) "" rel)])
-              _ (hark ["ssh" far ("rm -rf " + d)])
+              _ (hark ["mkdir" "-p" d]) _ (hark ["cp" iso (d + "/" + b)])
+              x (hark ["sh" "-c" ((cite 'hosts 'hosts-line) <slot d
+                                    ["sh" "-c" ("truncate -s 35840000 " + b + ".disk && exec"
+                                                + foldl (\ a w (a + " '" + w + "'")) "" rel)])])
+              _ (hark ["rm" "-rf" d])
               x)
            (hark qemu))
-   _    (two? slot ? ((cite 'locks 'locks-release) lroot (slot 1) 'exclusive (getpid 0)) 0)
+   _    (far ? ((cite 'hosts 'hosts-free) slot (getpid 0)) 0)
    out  >r
    line (lineof out "tests pass")
    ; "0 tests pass" is a corpus that died before its first assert wearing a

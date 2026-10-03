@@ -23,11 +23,13 @@ const struct ai_mint ai_mint_zero = {0, 0};
 
 struct ai *ai_strof(struct ai *g, const char *s) { return g; }
 struct ai *str0(struct ai *g, uintptr_t n) { return g; }
+struct ai *ai_please(struct ai *g, uintptr_t n) { return g; }   // ai_have()'s slow path
 
 lvm(lvm_ret0) { return g; }
 lvm(lvm_cur) { return g; }
 lvm(lvm_cask) { return g; }
 lvm(lvm_str) { return g; }              // love.h's inline strp() names it, so every nif does
+lvm(lvm_chain) { return g; }
 lvm(_lvm_ghelp) { return g; }
 
 #endif

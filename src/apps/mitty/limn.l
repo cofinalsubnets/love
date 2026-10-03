@@ -26,9 +26,8 @@
    ; default, an xterm-256 index, or rgb
    (limn-ink base k) (k & 16777215 @ v
                         ((k >> 24) @- (show (base + 1))
-                         1 (show base + ";5;" + show v)
-                         2 (show base + ";2;" + show (v >> 16) + ";" + show (v >> 8 & 255)
-                            + ";" + show (v & 255))))
+                         1 "\(base);5;\(v)"
+                         2 "\(base);2;\(v >> 16);\(v >> 8 & 255);\(v & 255)"))
    (limn-sgr p) (p & 255 @ fa
                  ("\e[0" + (fa & 1 ? ";1" "") + (fa & 8 ? ";2" "") + (fa & 16 ? ";3" "")
                   + (fa & 2 ? ";4" "") + (fa & 64 ? ";5" "") + (fa & 4 ? ";7" "")
@@ -43,7 +42,7 @@
                        ((cp = 0 ? " " (utf8 cp)) @ s
                           (pin limn-glyphs cp s, s))))
 
-   (limn-go row col) ("\e[" + show (row + 1) + ";" + show (col + 1) + "H")
+   (limn-go row col) "\e[\(row + 1);\(col + 1)H"
    limn-down (utf8 9474)                      ; │
    limn-across (utf8 9472)                    ; ─
 
@@ -62,7 +61,7 @@
     (: w (gaze s 6) h (gaze s 7)
        top (limn-half s k 0 (h // 2) w)
        bot (limn-half s k (h // 2) h w)
-       (rgb c) (show <c + ";" + show <>c + ";" + show <>>c)
+       (rgb c) "\(<c);\(<>c);\(<>>c)"
        bg (limn-ink 48 (glass s k 2))
        ; ▀ a top over what is under it, ▄ a bottom alone, a space for a tile the picture left bare
        (? (two? top) ("\e[0;38;2;" + rgb top + ";" + (two? bot ? ("48;2;" + rgb bot) bg) + "m" + utf8 9600)
@@ -135,7 +134,7 @@
     (: n #b
        (go i) (i < n ?
                  (min n (i + 4096) @ e
-                    (say j ((i = 0 ? ("\e_Ga=t,f=32,s=" + show w + ",v=" + show h + ",i=" + show id + ",q=2,") "\e_G")
+                    (say j ((i = 0 ? "\e_Ga=t,f=32,s=\(w),v=\(h),i=\(id),q=2," "\e_G")
                             + "m=" + (e < n ? "1" "0") + ";" + snip b i e + "\e\\"),
                      go e))
                  0)
@@ -145,9 +144,7 @@
           (ib * 1048576 + (g & 1048575) @ id
              (peep sent id 0 ? 0
                 (limn-send j id (picture s sl 0) (picture s sl 1) (picture s sl 3), pin sent id 1),
-              say j (limn-go (row0 + row) (col0 + col) + "\e_Ga=p,i=" + show id + ",p=1,q=2,C=1,x=" + show x
-                     + ",y=" + show y + ",w=" + show pw + ",h=" + show ph + ",c=" + show nc
-                     + ",r=" + show nr + "\e\\"))))
+              say j (limn-go (row0 + row) (col0 + col) + "\e_Ga=p,i=\(id),p=1,q=2,C=1,x=\(x),y=\(y),w=\(pw),h=\(ph),c=\(nc),r=\(nr)\e\\"))))
          (limn-placed s r c))
 
    ; --- the pictures as sixels, for an outer terminal that draws those and not kitty's:
@@ -159,9 +156,9 @@
    (limn-reg r g b) (: hi (max r (max g b)) lo (min r (min g b))
                        (hi - lo < 12 ? (216 + ((r + g + b) * 23 + 382) // 765)
                           ((r * 5 + 127) // 255 * 36 + ((g * 5 + 127) // 255 * 6 + (b * 5 + 127) // 255))))
-   (limn-rgb n) (n < 216 ? (show (n // 36 * 20) + ";" + show (n // 6 % 6 * 20) + ";" + show (n % 6 * 20))
-                   ((n - 216) * 100 // 23 @ v (show v + ";" + show v + ";" + show v)))
-   (limn-sixrun j ch n) (? (n < 1) 0 (n < 4) (say j (cats (map (_ \ ch) (jot n)))) (say j ("!" + show n + ch)))
+   (limn-rgb n) (n < 216 ? "\(n // 36 * 20);\(n // 6 % 6 * 20);\(n % 6 * 20)"
+                   ((n - 216) * 100 // 23 @ v "\(v);\(v);\(v)"))
+   (limn-sixrun j ch n) (? (n < 1) 0 (n < 4) (say j (cats (map (_ \ ch) (jot n)))) (say j "!\(n)\(ch)"))
    ; one register's row of a band, off its [x bits] ascending: runs of one char, a gap '?'
    (limn-sixrow j l pos ch n)
     (two? l ?
@@ -181,13 +178,13 @@
        (band y0) ({} @ t
                     (map (tx \ (col tx y0 0 {} @ cs (map (n \ pin t n ([tx (cs n)] . peep t n ())) (keys cs))))
                          (jot tw),
-                     map (n \ (say j (peep def n 0 ? ("#" + show n) (pin def n 1, "#" + show n + ";2;" + limn-rgb n)),
+                     map (n \ (say j (peep def n 0 ? "#\(n)" (pin def n 1, "#\(n);2;\(limn-rgb n)")),
                                limn-sixrow j (rev (t n)) 0 "" 0,
                                say j "$"))
                          (sort (keys t)),
                      say j "-"))
        (bands y0) (y0 < th ? (band y0, bands (y0 + 6)) 0)
-       (say j ("\eP0;0;0q\"1;1;" + show tw + ";" + show th),
+       (say j "\eP0;0;0q\"1;1;\(tw);\(th)",
         bands 0,
         say j "\e\\",
         slurp j))
@@ -205,7 +202,7 @@
    ; the cells placements ps covered, erased: a sixel goes with the text under it
    (limn-unsix j ps row0 col0)
     (map ([sl g row col x y pw ph nc nr] \
-          (map (i \ say j (limn-go (row0 + (row + i)) (col0 + col) + "\e[" + show nc + "X")) (jot nr)))
+          (map (i \ say j (limn-go (row0 + (row + i)) (col0 + col) + "\e[\(nc)X")) (jot nr)))
          ps)
 
    (limn-run j n s) (0 < n ? (say j s, limn-run j (n - 1) s) 0)
