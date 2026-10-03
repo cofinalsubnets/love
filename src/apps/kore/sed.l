@@ -5,7 +5,7 @@
 ;
 ; commands split by ; or newlines, each [addr[,addr]] verb. addresses: N, $, /re/ (BRE, or
 ; ERE under -E). verbs: p d q, and s/re/repl/[g][p] with any delimiter; the replacement
-; knows &, \1..\9 and \x; y/abc/xyz/ maps bytes; addr{ .. } groups. -e stacks scripts; once any -e is given every word is a file.
+; knows &, \1..\9 and \x; y/abc/xyz/ maps bytes; addr{ .. } groups; # comments. -e stacks scripts; once any -e is given every word is a file.
 ; -i makes each file its own stream (numbers restart, $ per file); `srun` takes its output
 ; port, which is the whole of how -i captures. not here: empty-pattern reuse, \n in a
 ; replacement, the hold space.
@@ -66,7 +66,10 @@
     (: n #sc
        (rx p) ((ere? ? reere rebre) p)
        (sep? c) (c = 32 || c = 9 || c = 10 || c = 59)
-       (skip i) (i < n && sep? (sc i) ? (skip (i + 1)) i)
+       (eol i) (i < n && sc i != 10 ? (eol (i + 1)) i)
+       (skip i) (? (i < n && sep? (sc i)) (skip (i + 1))
+                   (i < n && sc i = 35) (skip (eol i))   ; a # comment runs to the line's end
+                   i)
        (spc i) (i < n && (sc i = 32 || sc i = 9) ? (spc (i + 1)) i)
        (dig? c) (48 <= c && c <= 57)
        (num i v) (i < n && dig? (sc i) ? (num (i + 1) (10 * v + (sc i - 48))) [v i])
@@ -106,7 +109,7 @@
                           (rx txt @ [_ nds _] [['re (recomp nds)] j] ())
                           ())
                [() i])))
-       (sepend? j) (n <= j || sep? (sc j) || sc j = 125)
+       (sepend? j) (n <= j || sep? (sc j) || sc j = 125 || sc j = 35)
        ; the s command's tail past the verb: delimiter, regex, replacement,
        ; flags -> (payload j) | ()
        (rsub j3)

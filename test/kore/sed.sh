@@ -21,6 +21,9 @@ for sc in '/b/{s/b/X/;p}' '/b/!{p;p}' '2,3{/z/d;p}' '/a/{/b/{s/a/Q/};s/c/C/;p}' 
   korerun sed -n "$sc" "$ho/.sd2" > "$o" 2>/dev/null; b=$?
   cmp -s "$g" "$o" && [ $a -eq $b ] || fail "kore sed -n '$sc' vs GNU"
 done
+# -f takes a commented script: whole-line comments, and one after a command
+printf '#!/bin/sed -f\n# drop the b lines\n\n/b/d   # gone\ns/z/Z/g;# then this\n' > "$ho/.sd3"
+sed -f "$ho/.sd3" "$ho/.sd2" > "$g"; korerun sed -f "$ho/.sd3" "$ho/.sd2" > "$o"; same "sed -f with # comments"
 # a y whose sets differ in length, or with a tail, is refused: exit 1, nothing out
 for sc in 'y/ab/c/' 'y/a/b/x'; do
   sed "$sc" "$ho/.sd1" > "$g" 2>/dev/null; a=$?
