@@ -2831,13 +2831,13 @@
    ; the character past ascii at i, if p takes its code point
    (rewide p s i sp k tail) (cpn s i @ m (0 < m && p (cpat s i) ? (tail s (i + m) sp k)))
    ; the repeat: try one more (progress required), else the tail once fed. an empty iteration
-   ; cannot repeat -- that guard is what stops `\(\)*` spinning -- but it still satisfies the
-   ; minimum, all at once, or `a*\+\+` demands an `a`: the inner a* matches empty, the empty
-   ; is refused, and the outer's lo=1 is never met.
+   ; cannot repeat -- that guard is what stops `\(\)*` spinning -- but it ends the loop with its
+   ; groups set, as glibc's does (`()*` reports its group, empty), and it satisfies the minimum
+   ; all at once, or `a*\+\+` would demand an `a`.
    (rrepc ab lo hi tail s i sp k cnt)
     (: more (!hi || cnt < hi ?
                (ab s i sp
-                   (\ j sp2 (j = i ? (cnt < lo && tail s j sp2 k)
+                   (\ j sp2 (j = i ? (tail s j sp2 k)
                              (rrepc ab lo hi tail s j sp2 k (cnt + 1))))))
        (? more more
           (cnt < lo) ()
@@ -2850,7 +2850,7 @@
        _ (n < 1 ? (scare 'regex-too-costly (relimit ())) (pin b 0 (n - 1)))
        more (!hi || cnt < hi ?
              (ab s i sp
-              (\ j sp2 (j = i ? (cnt < lo ? (tail s j sp2 k))
+              (\ j sp2 (j = i ? (tail s j sp2 k)
                          (rrepb b ab lo hi tail s j sp2 k (cnt + 1))))))
        (? more more
           (cnt < lo) ()
@@ -2869,19 +2869,25 @@
    ; the node-list faces: they compile and then match, for a caller with one text to
    ; ask about. a caller with many -- grep, sed, awk -- holds the matcher instead
    (rehas ns s) (rehasm (recomp ns) s)
-   ; the leftmost span at-or-after i whose (start end) passes p: (1 start end spans) | () --
-   ; uread's success shape, since the empty match at 0 is the span (0 0), blue by measure.
-   ; p rides inside the continuation, which is the whole trick: a span it rejects makes `rem`
-   ; answer (), and the greedy backtracker then tries the other lengths at that start before
-   ; the start moves on. a filter over refind's answer only ever sees the greedy span.
+   ; the leftmost-longest span at-or-after i whose (start end) passes p: (1 start end spans) |
+   ; () -- uread's success shape, since the empty match at 0 is the span (0 0), blue by measure.
+   ; posix's rule, as glibc and GNU sed answer it: of the matches at the leftmost start, the
+   ; longest, its groups those of the first path (greedy first) to reach that end. the
+   ; continuation keeps the farthest end and answers (), so the backtracker walks every path at
+   ; this start; a match reaching the text's end stops it, as nothing is longer. p rides inside
+   ; the continuation too: a span it rejects is never kept, and the other lengths are still tried.
    (refindpm m s i p)
     (: f <m n (<>m ? i #s)                        ; anchored: the walk ends where it starts
        sk <>>m
-       (cite j) (f s j () (\ e sp (p j e ? [1 e sp])) @ [_ e sp] [1 j e sp]
+       (at j) (: b (tablet 0)
+                 r (f s j () (\ e sp (p j e && peep b 0 -1 < e
+                                       ? (pin b 0 e, pin b 1 sp, e = #s && [1 e sp]) ())))
+                 (two? r ? r (peep b 0 -1 < 0 ? () [1 (b 0) (b 1)])))
+       (cite j) (at j @ [_ e sp] [1 j e sp]
                   (j < n ? (cite (j + 1)) ()))
        (jump j) (: j2 (sk s j n)                  ; only the positions that could open
                    (n <= j2 ? ()
-                      (f s j2 () (\ e sp (p j2 e ? [1 e sp])) @ [_ e sp] [1 j2 e sp]
+                      (at j2 @ [_ e sp] [1 j2 e sp]
                         (jump (j2 + 1)))))
        (!sk || <>m ? (cite i) (jump i)))
    (refindm m s i) (refindpm m s i (\ a b 1))
