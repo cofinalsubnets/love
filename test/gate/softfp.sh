@@ -15,6 +15,7 @@
 #
 # usage: softfp.sh OUTDIR LOVE
 . test/gate/skip.sh
+. test/gate/a64run.sh
 set -u
 
 ho=$1
@@ -43,14 +44,20 @@ if moonrun -I. test/gate/softfp.c "$d/native" > "$d/native.err" 2>&1; then
   head -11 "$d/native.out"
 else fail "mooncc build of softfp.c"; sed -n 1,5p "$d/native.err"; fi
 
-# ..and the cross backends, each under its own qemu-user. A missing qemu skips that leg;
-# a mooncc that cannot BUILD it does not.
+# ..and the cross backends: a64 on an a64 host where one answers, else each under its own
+# qemu-user. A missing runner skips that leg; a mooncc that cannot BUILD it does not.
+a64_how "$m"
 for t in a64 rv64; do
   case $t in a64) q=qemu-aarch64 ;; rv64) q=qemu-riscv64 ;; esac
   moonrun -t $t -I. test/gate/softfp.c "$d/$t" > "$d/$t.err" 2>&1 \
     || { fail "mooncc -t $t build of softfp.c"; sed -n 1,5p "$d/$t.err"; continue; }
-  command -v $q >/dev/null 2>&1 || { gate_partly "softfp: no $q, the $t leg skipped"; continue; }
-  $q "$d/$t" > "$d/$t.out" 2>&1 || fail "softfp -t $t: $(tail -1 "$d/$t.out")"
+  if [ $t = a64 ]; then
+    [ -n "$a64_via" ] || { gate_partly "softfp: no $q and no a64 host, the a64 leg skipped"; continue; }
+    a64_one "$m" "$d/$t" > "$d/$t.out" 2>&1 || fail "softfp -t $t ($a64_via): $(tail -1 "$d/$t.out")"
+  else
+    command -v $q >/dev/null 2>&1 || { gate_partly "softfp: no $q, the $t leg skipped"; continue; }
+    $q "$d/$t" > "$d/$t.out" 2>&1 || fail "softfp -t $t: $(tail -1 "$d/$t.out")"
+  fi
   echo "$t: $(tail -1 "$d/$t.out")"
 done
 
