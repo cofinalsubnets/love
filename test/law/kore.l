@@ -477,6 +477,13 @@
       (refind <>(rebre "\\(b*\\)c") "abbc" 0 = '(1 1 4 ((1 1 3))))
       (refind <>(rebre "\\(a\\(b\\)\\)") "ab" 0 = '(1 0 2 ((1 0 2) (2 1 2))))
       (refind <>(rebre "\\(ab\\)*x") "ababx" 0 = '(1 0 5 ((1 2 4) (1 0 2))))
+      ; leftmost-longest, posix's and GNU's: of the matches at the leftmost start the longest,
+      ; whichever branch or count reaches it -- not the first path that matches
+      (refind <>(reere "a|ab") "abc" 0 = '(1 0 2 ()))
+      (refind <>(reere "x*|b") "b" 0 = '(1 0 1 ()))
+      (refind <>(reere "(a|ab)(c|bcd)") "abcd" 0 = '(1 0 4 ((2 1 4) (1 0 1))))
+      (refind <>(reere "(a|ab){1,2}") "aab" 0 = '(1 0 3 ((1 1 3) (1 0 1))))
+      (refind <>(reere "()*x") "x" 0 = '(1 0 1 ((1 0 0))))         ; an empty iteration reports its group
       (<>>(rebre "\\(a\\)\\(b\\)") = 2)                        ; rebre counts its groups
       (<>>(rebre "ab") = 0)))
 
@@ -581,6 +588,8 @@
       (sub "x*" "-" "abc" 1 = "-a-b-c-")                         ; the empty-match step rule
       (sub "x*" "-" "xbz" 1 = "-b-z-")                           ; ... and the discard after a real match
       (sub "x*" "-" "xx" 1 = "-")
+      (sub "x*" "-" "a…b" 1 = "-a-…-b-")                         ; the step is a character, never a byte of one
+      (sub "\\(a\\|ab\\)b*" "<&>" "abb" () = "<abb>")              ; the longest match is the one replaced
       (sub "b" "[&]" "abc" () = "a[b]c")                         ; & is the whole match
       (sub "\\(b*\\)c" "[\\1]" "xbbc" () = "x[bb]")              ; \1 reads the group span
       (sub "a\\(b\\)\\?c" "<\\1>" "ac" () = "<>")                ; an unmatched group is ""

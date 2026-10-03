@@ -392,7 +392,7 @@
    _ (hshut hb 2)                                   ; face 0 emptied: face 5 takes the glass
    (test (5 = hb 'face) (() = hfaces hb) ([4] = wharf-panes (hb 'plan)) (4 = hb 'focus)))
 
-; --- the clip goes out through osc 52 once when it changes, and inle is a verb ---
+; --- the clip goes out through osc 52 once when it changes, and mitty is a verb ---
 (: (sub? h n i) (i + #n < #h + 1 ? (n = snip h i (i + #n) ? 1 (sub? h n (i + 1))) 0)
    hb (mitty-up 4 10)
    _ (hberth hb 'stack 50 (hopen-stage (mitty-stage (\ w h "x") (\ c 0) (\ _ 0)) 1 1))
@@ -401,7 +401,7 @@
    _ (pin (hb 'clip) () ['chr "hi"])
    (test (sub? (hframe hb) "\e]52;c;aGk=\a" 0)
          !(sub? (hframe hb) "\e]52" 0)
-         !(() = peep (cite 'verbs 'tab) 'inle ())))
+         !(() = peep (cite 'verbs 'tab) 'mitty ())))
 
 ; --- hands: a model's tools on the mitty -- the panes listed on every face, a child typed
 ; into (a newline is Enter) and read back once quiet, its own pane refused, one opened with
@@ -509,8 +509,8 @@
          (10 = wharf-cols <(hb 'lay))
          ("\e[?1002h" = hmice hb 0)))
 
-; --- inle's bar text: the hive's live cards only, and a queue's rows and head ---
-(: d ("out/.inle-bar-" + show (getpid 0))
+; --- the shell's bar text: the hive's live cards only, and a queue's rows and head ---
+(: d ("out/.mitty-bar-" + show (getpid 0))
    _ (hark ["sh" "-c" ("rm -rf " + d + "; mkdir -p " + d + "/hive/live " + d + "/hive/dead; "
                        + "printf 'pid " + show (getpid 0) + "\\nstate idle\\n' > " + d + "/hive/live/card; "
                        + "printf 'pid 999999\\n' > " + d + "/hive/dead/card; "
@@ -519,9 +519,9 @@
                        + "git update-ref refs/queue/main $h")])
    _ (setenv "BEE_HIVE" (d + "/hive"))
    _ (setenv "GIT_DIR" (d + "/repo/.git"))
-   hv (inle-hive 0)
-   qs (inle-queues 0)
-   bx (inle-barx 0)
+   hv (mitty-hive 0)
+   qs (mitty-queues 0)
+   bx (mitty-barx 0)
    x1 (bx ())
    _ (setenv "BEE_HIVE" (d + "/none"))
    x2 (bx ())                                                ; within ten seconds: as it was
@@ -576,12 +576,22 @@
 ; --- the server: a mitty on a socket outlives its clients. a client says its size, types,
 ; and leaves; the next sees what the first left on the screen; the last pane's exit ends
 ; the server, its socket with it ---
+
+; --- a pane never attaches to the mitty it is in: MITTY names that one, and asking for it
+; again is refused, with nothing attached and nothing started
+(: d ("out/.mitty-in-" + show (getpid 0))
+   _ (setenv "MITTY_RUN" d)
+   _ (setenv "MITTY" (mitty-sock "zz"))
+   r (mitty-main ["-n" "zz"])
+   _ (setenv "MITTY" "") _ (setenv "MITTY_RUN" "")
+   (test (1 = r) !(two? (stat (d + "/zz.sock")))))
+
 (: (sub? h n i) (i + #n < #h + 1 ? (n = snip h i (i + #n) ? 1 (sub? h n (i + 1))) 0)
-   d ("out/.inle-srv-" + show (getpid 0))
+   d ("out/.mitty-srv-" + show (getpid 0))
    _ (hark ["rm" "-rf" d])
-   _ (setenv "INLE_RUN" d)
+   _ (setenv "MITTY_RUN" d)
    path (d + "/s.sock")
-   md (tether ["out/love" "inle" "--serve" "s"])
+   md (tether ["out/love" "mitty" "--serve" "s"])
    ; what the server says for ms milliseconds, or until it closes
    (rd s ms) (: (go acc t) (? (t <= 0) acc
                                (cue? s) (see s @ b (b < 0 ? acc (go (acc + string b) t)))
@@ -589,20 +599,20 @@
                 (go "" ms))
    (up n) (? (n = 0) () (: s (connect ['unix path]) (hot? s ? s (: _ (rest 50) (up (n - 1))))))
    s1 (up 60)
-   _ (say s1 (inle-size 12 50), flush s1)
+   _ (say s1 (mitty-size 12 50), flush s1)
    o1 (rd s1 1500)
    _ (say s1 "echo HAR''BOUR\r", flush s1)
    o1b (rd s1 1500)
    _ (close s1)                                              ; a client leaves
    _ (rest 300)
    s2 (up 20)
-   _ (say s2 (inle-size 12 50), flush s2)
+   _ (say s2 (mitty-size 12 50), flush s2)
    o2 (rd s2 1500)
    _ (say s2 "exit\r", flush s2)
    o3 (rd s2 4000)
    _ (rest 300)
    gone !(two? (stat path))
-   _ (setenv "INLE_RUN" "")
+   _ (setenv "MITTY_RUN" "")
    _ (hark ["rm" "-rf" d])
    (test (hot? s1) (sub? o1 "\e[?1049h" 0)                   ; greeted
          (sub? o1b "HARBOUR" 0)
