@@ -1,4 +1,4 @@
-; grass -- leaves of grass simulator 1989: you are a blade of grass, for one week.
+; grass -- grass simulator 1988: you are a blade of grass, for one week.
 ;
 ; the field is a row of blades on a strip of dirt under a sky, drawn in coarse colour
 ; cells: the sky's ground turns with the hour, clouds ride the wind, stars come out
@@ -64,7 +64,7 @@
  dirt-night '(94 94 58 95)      dot-night '(95 130)
  twinkles '("." "+" "*")
 
- open-ttl "leaves of grass simulator 1989"
+ open-ttl "grass simulator 1988"
  open-rows '(""
              "hjkl or arrows keys to dance"
              "q or esc to quit"
