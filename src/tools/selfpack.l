@@ -8,8 +8,9 @@
 ; the same bytes (test_distboot holds a re-cut to the byte). `build` rides in as top/STAMP, and
 ; roster names the files a carried-source bake reads (the Makefile's distfiles).
 ; the container is the one src/love/lib/srctree.h reads: a header, an index, and the tar in
-; sections, each deflated alone. the id is the sha of the joined tar, kept in src.tree.sha; the
-; quiet pass (tar-thin? + tar-hash) answers "has the tree moved" off stat alone.
+; sections, each packed alone: deflate where a run reads, bzip2 or lzma2 where none does. the
+; id is the sha of the joined tar, kept in src.tree.sha; the quiet pass (tar-thin? + tar-hash)
+; answers "has the tree moved" off stat alone.
 ; the borrows name paths, in dependency order: a module name has nothing to find under love0,
 ; and `-l FILE` whose basename names a verb seats it (`-l src/apps/sb/sb.l` would run sb).
 (borrow "src/apps/gz.l")
@@ -43,14 +44,22 @@
 
    ; the sections, in the order they join: the frame (the root, top, STAMP and every
    ; directory) with moon's toolchain slice behind it, what a nestless compile reads (moon.l's
-   ; mblob); the bake roster; the other .l; C and asm; the rest. each keeps the walk's order.
-   sp-secs ["moon" "bake" "lisp" "c" "rest"]
+   ; mblob); the bake roster; what a seat reads at run time; the other .l; C and asm; the
+   ; rest. each keeps the walk's order.
+   sp-secs ["moon" "bake" "seat" "lisp" "c" "rest"]
+   sp-seat ["src/apps/tls/roots.pem"]                  ; tls/verify.l's roots, off /love
+   ; the codec of each (srctree.h's numbers): the cold three decode at ~10x inflate's cost,
+   ; paid by a full lay or a read of a file no run reads
+   sp-codecs {"lisp" 2 "c" 2 "rest" 3}
+   (sp-pack nm s) (peep sp-codecs nm 1 @ c
+                    (? (c = 2) (bz2e s 9) (c = 3) (lzma2e s 8388608) (gz-deflate-best s)))
    (sp-slice? e) (: n (tar-get e 'nom "")
                     (starts? n "src/apps/moon/include/" || starts? n "src/apps/moon/lib/"
                      || n = "src/apps/moon/include" || n = "src/apps/moon/lib"))
    (sp-sec ros e) (: n (tar-get e 'nom "")
                      (? (tar-get e 'kind 'file = 'dir || sp-slice? e) "moon"
                         (ros n) "bake"
+                        (any (= n) sp-seat) "seat"
                         (ends? n ".l") "lisp"
                         (any (x \ ends? n x) [".c" ".h" ".S" ".s"]) "c"
                         "rest"))
@@ -101,12 +110,12 @@
     (: idx (cats (map (i \ sp-recs (i + 1) (secs i)) ^#secs))
        raws (idx . frags)
        names ("index" . sp-secs)
-       packs (map gz-deflate-best raws)
-       (row i) (cats [(sp-name (names i)) (sp-le 1 4) (sp-le #(raws i) 4) (sp-le #(packs i) 4)
+       packs (map (i \ sp-pack (names i) (raws i)) ^#raws)
+       (row i) (cats [(sp-name (names i)) (sp-le (peep sp-codecs (names i) 1) 4) (sp-le #(raws i) 4) (sp-le #(packs i) 4)
                       (sp-le (gz-crc32 (raws i)) 4)])
        (cats (["lovetree" (sp-le #raws 4)] + map row ^#raws + packs)))
    ; the sidecar names the format with the digest, so a cut under another layout is not fresh
-   sp-fmt "tree1 "
+   sp-fmt "tree2 "
 
    ; the cut that reads: pack, hash, and write when the content actually moved.
    (sp-cut out side top stamp build rules ros)
