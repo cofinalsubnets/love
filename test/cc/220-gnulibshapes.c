@@ -2,7 +2,7 @@
  * `signed`), a constant 0.0/0.0 in a static initializer (isnan's probe) laid as the IEEE quiet
  * nan with its sign, a parameter of function type, which is a pointer to one, a scalar
  * initializer in braces (PTHREAD_ONCE_INIT's), and unary + promoting (INT_PROMOTE's _Generic) */
-typedef unsigned long u64;
+typedef unsigned long long u64;
 typedef unsigned int u32;
 
 #define MAXOF(signed, bits, zero) (((((zero) + 1) << ((bits) - 1 - (signed))) - 1) * 2 + 1)
@@ -25,7 +25,7 @@ static long sevenbr = { 7 };
 
 int main(void) {
   int bad = 0;
-  if (MAXOF(0, 64, 0ul) != 0xffffffffffffffffull) bad |= 1;
+  if (MAXOF(0, 64, 0ull) != 0xffffffffffffffffull) bad |= 1;
   if (MAXOF(1, 32, 0) != 0x7fffffff) bad |= 2;
   if (STR(x)[0] != 'x') bad |= 4;
   if (bits(qn) != 0x7ff8000000000000ull || bits(nqn) != 0xfff8000000000000ull) bad |= 8;
