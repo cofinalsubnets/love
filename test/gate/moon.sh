@@ -363,6 +363,10 @@ grep -q "no member 'x' in 's'" "$ho/.cc6.out" || fail "mooncc missing member mus
 printf 'struct t;\nint f(struct t *p) { return p->x; }\nint main(void) { return 0; }\n' > "$ho/.cc7.c"
 moonrun "$ho/.cc7.c" "$ho/.ccx" > "$ho/.cc7.out" 2>&1
 grep -q "incomplete type 't'" "$ho/.cc7.out" || fail "mooncc incomplete member must name it: $(head -1 "$ho/.cc7.out")"
+# sizeof a struct never completed is not a size (autoconf's type probes ask exactly this)
+printf 'struct u;\nint main(void) { return sizeof (struct u); }\n' > "$ho/.cc8.c"
+moonrun "$ho/.cc8.c" "$ho/.ccx" > "$ho/.cc8.out" 2>&1
+grep -q "sizeof an incomplete type" "$ho/.cc8.out" || fail "mooncc sizeof incomplete must refuse: $(head -1 "$ho/.cc8.out")"
 # ..and the shape it must NOT refuse: a function's address IS a constant
 cat > "$ho/.cc5.c" <<'EOF'
 int puts(char const*);
