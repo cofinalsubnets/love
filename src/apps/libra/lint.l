@@ -30,6 +30,29 @@
    (ltok-at src n i) (: (go k) (k < n && ltkc? (src k) ? (go (k + 1)) k)
                         (snip src i (go i)))
 
+   ; --- raw texts -------------------------------------------------------------
+   ; three or more quotes open one and as many close it, no escapes; when the opener
+   ; ends its line the closer is a line of only spaces and the quotes. (lraw src n i)
+   ; is the index past its closer, () when it never closes. a longer run that closes one
+   ; line keeps its extra quotes as text, so a one-line raw text may end in a quote
+   (lraw? src n i) (i + 2 < n && src (i + 1) = 34 && src (i + 2) = 34)
+   (lraw src n i)
+    (: (qs k) (k < n && src k = 34 ? (qs (k + 1)) k)
+       (hws k) (k < n && (src k = 32 || src k = 9) ? (hws (k + 1)) k)
+       (nl k) (? (n <= k) n (src k = 10) (k + 1) (nl (k + 1)))
+       e (qs i)
+       q (e - i)
+       s (hws e)
+       (one k) (? (n <= k) () (src k != 34) (one (k + 1)) (qs k @ r (r - k < q ? (one r) r)))
+       (many k) (? (n <= k) () (hws k @ t (qs t - t < q ? (many (nl t)) (t + q))))
+       (? (s < n && src s = 10) (many (nl s))
+          (s + 1 < n && src s = 13 && src (s + 1) = 10) (many (nl s))
+          (one e)))
+   ; [line col] at j, from [line col] at i
+   (lpos src i j line col)
+    (i < j ? (lpos src (i + 1) j (src i = 10 ? (line + 1) line) (src i = 10 ? 1 (col + 1)))
+     [line col])
+
    ; --- the config the rules read --------------------------------------------
    ; a plain tablet read with peep, never src/apps/libra/salt.l: vi cats this file directly
    ; (test/test.mk) and a module it had to carry along would break that.
@@ -165,6 +188,13 @@
                  (c = 35 && i + 1 < n && src (i + 1) = 33)                     ; #! shebang, to eol
                   (w (i + 2) 'cmt stk line (col + 2) sl sc 0 ti tc
                      (it ? (lend line tc ti i warns) warns))
+                 (c = 34 && lraw? src n i)                                     ; """ -- a raw text, whole
+                  (: w0 (it ? (lend line tc ti i warns) warns)
+                     s0 (it ? stk (lelem stk i))
+                     (lraw src n i @ j
+                        (j ? (lpos src i j line col @ lc
+                                (w j 'code s0 <lc <>lc sl sc 0 ti tc w0))
+                           (w n 'str s0 line col line col 0 ti tc w0))))
                  (c = 34)                                                      ; " -- start string
                   (w (i + 1) 'str (it ? stk (lelem stk i)) line (col + 1) line col 0 ti tc
                      (it ? (lend line tc ti i warns) warns))
@@ -228,7 +258,11 @@
          (c @ 59 (w (i + 1) 'cmt line (col + 1) line col (i + 1) 'semi acc)
               (35 && i + 1 < n && src (i + 1) = 33)
                (w (i + 2) 'cmt line (col + 2) line col (i + 2) 'bang acc)
-              34 (w (i + 1) 'str line (col + 1) cl cc ti ck acc)
+              34 (? (lraw? src n i)
+                       (lraw src n i @ j
+                          (j ? (lpos src i j line col @ lc (w j 'code <lc <>lc cl cc ti ck acc))
+                             (w n 'code line col cl cc ti ck acc)))
+                       (w (i + 1) 'str line (col + 1) cl cc ti ck acc))
               10 (w (i + 1) 'code (line + 1) 1 cl cc ti ck acc)
                  (w (i + 1) 'code line (col + 1) cl cc ti ck acc))))))
 )) ; module lint

@@ -974,9 +974,72 @@ static intptr_t rd_strw(word src, word p, char *d, word *end) {
 #undef Over
 }
 
+// a raw text: three or more quotes open it and as many close it, with no escapes. one
+// line: a longer closing run keeps its extra quotes. many lines, when the opener ends its
+// line: it closes on a line of only spaces and the quotes, and that line's indent comes off
+// every line, at most that many spaces or tabs each; the breaks beside the quotes are not
+// the text's. *w is the indent, -1 until a walk finds it. counts as rd_strw does
+static intptr_t rd_raww(word src, word p, char *d, intptr_t *w, word *end) {
+ intptr_t k = 0, q = 0, c, r, lead;
+ word s, t;
+#define Put(b) ((void) (d && (d[k] = (char) (b))), k++)
+#define Over(n, p) if (rd_lit(n = rd_next(p))) return *end = n, -2
+#define Hws(c) ((c) == ' ' || (c) == '\t')
+ for (; (c = rd_at(src, p)) == '"'; q++) Over(p, p);
+ for (s = p; Hws(c); c = rd_at(src, s)) Over(s, s);
+ if (c == '\r') { Over(t, s); if (rd_at(src, t) == '\n') s = t, c = '\n'; }
+ if (c != '\n') for (;;) {                             // one line
+  if ((c = rd_at(src, p)) < 0) return -1;
+  if (c != '"') { Put(rd_byte(src, p)); Over(p, p); continue; }
+  for (r = 0, s = p; rd_at(src, s) == '"'; r++) Over(s, s);
+  if (r >= q) {
+   for (r -= q; r--; ) Put('"');
+   if (*w < 0) *w = 0;
+   return *end = s, k; }
+  while (r--) Put('"');
+  p = s; }
+ Over(p, s);
+ for (int brk = 0;;) {                                  // many lines: p at one's start, brk the break before it
+  for (lead = 0, s = p; Hws(rd_at(src, s)); lead++) Over(s, s);
+  for (r = 0, t = s; r < q && rd_at(src, t) == '"'; r++) Over(t, t);
+  if (r == q) {
+   if (*w < 0) *w = lead;
+   return *end = t, k; }
+  if (brk == 2) Put('\r');
+  if (brk) Put('\n');
+  for (r = 0; r < lead; r++, p = s) {
+   if (r >= *w) Put(rd_byte(src, p));
+   Over(s, p); }
+  for (brk = 1;; p = s) {
+   if ((c = rd_at(src, p)) < 0) return -1;
+   Over(s, p);
+   if (c == '\n') break;
+   if (c == '\r' && rd_at(src, s) == '\n') { brk = 2; Over(s, s); break; }
+   Put(rd_byte(src, p)); }
+  p = s; }
+#undef Put
+#undef Over
+#undef Hws
+}
+
+static struct ai *rd_rawstr(struct ai *g) {
+ word e;
+ intptr_t w = -1, k = rd_raww(g->sp[RdSrc], g->sp[RdCur], NULL, &w, &e);
+ if (k == -1) return rd_torn(g);
+ if (k == -2) return rd_call(g, e, ZeroPoint, e);
+ k = rd_raww(g->sp[RdSrc], g->sp[RdCur], NULL, &w, &e);
+ if (!ai_ok(g = ai_have(g, str_width(k) + RdSlack))) return g;
+ struct ai_str *s = k ? ini_str(bump(g, str_width(k)), k) : NULL;
+ rd_raww(g->sp[RdSrc], g->sp[RdCur], s ? txt(s) : NULL, &w, &e);
+ g->sp[RdVal] = s ? word(s) : EmptyString, g->sp[RdCur] = e;
+ return RdGo(RsDatum); }
+
 static struct ai *rd_str(struct ai *g) {
  word src = g->sp[RdSrc], n, e;
  RdStep(n, g->sp[RdCur]);
+ if (rd_at(src, n) == '"') {
+  RdStep(e, n);
+  if (rd_at(src, e) == '"') return rd_rawstr(g); }
  intptr_t k = rd_strw(src, n, NULL, &e);
  if (k == -1) return rd_torn(g);
  if (k == -2) return rd_call(g, e, ZeroPoint, e);

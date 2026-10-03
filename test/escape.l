@@ -64,3 +64,27 @@
   ("\u{d800}" = "u{d800}")        ("\u{dfff}" = "u{dfff}")        ; a surrogate is no character
   ("\u{0000041}" = "u{0000041}")  ("\u{4g}" = "u{4g}")            ; seven digits, a non-digit
   ('torn = sound '(34 92 117 123 52 49)))                         ; input ending inside one
+
+; raw texts: three or more quotes open one and as many close it, and nothing escapes.
+; when the opener ends its line the closer's indent comes off every line, and the
+; breaks beside the quotes are not the text's
+(test
+  ("""a\nb""" = "a\\nb")          ("""say "hi"""" = "say \"hi\"")
+  (""""has """ in"""" = "has \"\"\" in")
+  ("""
+   one
+     two
+
+   three
+   """ = "one\n  two\n\nthree")
+  ("""
+  a
+""" = "  a")
+  ("""
+   """ = "")
+  ("""
+   a """ b
+   """ = "a \"\"\" b")
+  ((sound "\"\" \"x\"" @ r [<r <(sound >r)]) = ["" "x"])          ; two strings, spaced
+  ('torn = sound '(34 34 34 10 32 97 10))                         ; no closing line
+  ('torn = sound '(34 34 34 97 98)))
