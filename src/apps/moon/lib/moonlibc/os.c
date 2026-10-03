@@ -175,6 +175,7 @@ static short const os_nr[][3] = {
   {NR_setresuid,     NR_fb_setresuid,    -1},   /* netbsd has none */
   {NR_setresgid,     NR_fb_setresgid,    -1},
   {NR_getpgid,       NR_fb_getpgid,     207},
+  {NR_sigaltstack,   NR_fb_sigaltstack, 281},   /* the member builds the OS shape */
   {NR_chroot,        NR_fb_chroot,       61},
   {NR_getdents64,    NR_fb_getdirentries, 390}, /* the member repacks the record */
   {NR_clock_gettime, NR_fb_clock_gettime, 427}, /* the member translates the id */

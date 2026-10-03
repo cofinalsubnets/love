@@ -97,4 +97,11 @@ int kill(pid_t, int);
 int sigaddset(sigset_t*, int);
 int sigismember(sigset_t const*, int);
 int sigprocmask(int, sigset_t const*, sigset_t*);
+/* an alternate signal stack, in linux's shape on every arch (sigaltstack.c reorders it for the BSDs) */
+typedef struct { void *ss_sp; int ss_flags; size_t ss_size; } stack_t;
+#define SS_ONSTACK  1
+#define SS_DISABLE  2
+#define MINSIGSTKSZ 2048
+#define SIGSTKSZ    8192
+int sigaltstack(stack_t const*, stack_t*);
 #endif

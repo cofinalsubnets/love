@@ -8,9 +8,3 @@ DIR *fdopendir(int fd) {
   if (!d) return 0;
   d->fd = fd; d->pos = 0; d->len = 0;
   return d; }
-
-int dirfd(DIR *d) { return d->fd; }
-
-void rewinddir(DIR *d) {
-  lseek(d->fd, 0, SEEK_SET);
-  d->pos = 0; d->len = 0; }

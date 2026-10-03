@@ -106,6 +106,7 @@ struct _IO_FILE {
 #define NR_fb_setgid        181
 #define NR_fb_setgroups      80
 #define NR_fb_setresuid     311
+#define NR_fb_sigaltstack    53   /* stack_t orders size before flags (rung 3) */
 #define NR_fb_setresgid     312
 #define NR_fb_geteuid        25
 #define NR_fb_sendfile      393   /* another signature (rung 3) */
@@ -194,6 +195,7 @@ struct _IO_FILE {
 #define NR_setgid         144
 #define NR_setgroups      159
 #define NR_setresuid      147
+#define NR_sigaltstack    132
 #define NR_setresgid      149
 #define NR_setuid         146
 #define NR_geteuid        175
@@ -300,6 +302,7 @@ struct _IO_FILE {
 #define NR_setgid         106
 #define NR_setgroups      116
 #define NR_setresuid      117
+#define NR_sigaltstack    131
 #define NR_setresgid      119
 #define NR_geteuid        107
 #define NR_sendfile        40
