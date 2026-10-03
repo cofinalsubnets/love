@@ -81,8 +81,9 @@ else
     # 768M like src/tools/ktest.l: a major takes a contiguous 2x pool beside the old one,
     # and whether it fits is a placement lottery -- 512M loses it and the boot says nothing.
     # shellcheck disable=SC2086
+    # the boot line `love` asks for the plain console: an empty one is a mitty, no `> ` prompt
     $qemu $mach -m 768M -serial stdio -display none -no-reboot \
-          -kernel "$elf" < "$work/in" > "$work/out" 2>/dev/null &
+          -kernel "$elf" -append love < "$work/in" > "$work/out" 2>/dev/null &
     qp=$!
     exec 3> "$work/in"
     typed=0 i=0
