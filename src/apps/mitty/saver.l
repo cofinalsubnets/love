@@ -4,7 +4,7 @@
 ;   love mitty -s NAME     a saver on its own, until a key; -s alone names them
 ;
 ; mitty starts one when its glass has had no key for (screensaver-idle N) minutes, as
-; ~/.love/etc/mitty.l says with (screensaver NAME) -- pom and 10 unless said, 0 for never --
+; ~/.love/etc/mitty.l says with (screensaver NAME) -- cycle and 10 unless said, 0 for never --
 ; and the watch below is all it holds. the frames are pure in (rows cols t phase):
 ; saver-frame and saver-canvas are the headless doors, gated by test/host/saver.l.
 ;   pom     the moon at its phase, over stars that twinkle; pom natural draws it as pom -n
@@ -14,6 +14,7 @@
 ;   court   lore's courtyard: a day and an hour thrown, the season's weather, the eye
 ;           somewhere in the yard turning slowly, the hours running on
 ;   grass99 grass simulator 1999's week, from a thrown hour of it, the field on its own
+;   cycle   each of the above in turn, the next at each start and every five minutes
 (module (saver saver-names saver-frame saver-canvas saver-cell saver-moon-lit?
          saver-watch saver-tick saver-key saver-on? saver-cli)
 (borrow 'posix)
@@ -248,15 +249,18 @@
          "life" {'fps 10 'new life-new 'draw life-draw}
          "matrix" {'fps 15 'new rain-new 'draw rain-draw}}
  saver-names (sort (keys savers))
+ ; cycle plays each saver in turn: the next at each start, and the next again each cycle-ms
+ cycle-ms 300000
+ (pick nm k) (nm = "cycle" ? (saver-names (k % #saver-names)) nm)
  ; a name may carry a style after a space, "pom natural": the saver's, then the word
  (base nm) (nm @ (b + " " + _) b _ nm)
  (style nm) (nm @ (_ + " " + w) w _ ())
  ; the styles a saver draws in besides its own
  styles {"pom" ["natural"]}
- (known? nm) (peep savers (base nm) () != () && (style nm = () || elem (style nm) (peep styles (base nm) ())))
+ (known? nm) (nm = "cycle" || peep savers (base nm) () != () && (style nm = () || elem (style nm) (peep styles (base nm) ())))
  (saver-make nm r c seed p)
   (: d (savers (base nm)) nw (d 'new)
-     {'d d 'r r 'c c 'st (nw r c (seed % 65536) p (style nm)) 'cv (cv-new r c) 'pv (cv-new r c) 'all 1 't0 0 'next 0})
+     {'nm nm 'd d 'r r 'c c 'st (nw r c (seed % 65536) p (style nm)) 'cv (cv-new r c) 'pv (cv-new r c) 'all 1 't0 0 'next 0})
  ; the frame at t, ms into the saver; a mark, a pen, puts a small ✉ in the top right corner
  (saver-show s t mark)
   (: cv (s 'cv) dr ((s 'd) 'draw) all (s 'all)
@@ -277,7 +281,7 @@
  ; --- the idle watch: a saver after mins without a key, and any key back ---
  ; the key that wakes it is the saver's; news is a count the screen keeps of what arrived
  (saver-watch nm mins)
-  {'nm nm 'last () 'on () 'bye 0 'n0 0
+  {'nm nm 'last () 'on () 'bye 0 'n0 0 'k (clock 0 // 1000)
    'idle (? !(known? nm) 0 (charm? mins || gem? mins) (int (mins * 60000)) 0)}
  (saver-on? w) (w 'on != ())
  (saver-key w now) (? (saver-on? w) (pins w 'on () 'bye 1 'last now, 1) (pin w 'last now, 0))
@@ -285,13 +289,15 @@
  ; else ""
  (saver-tick w now r c news)
   (: s (w 'on)
-     (fresh t0) (: s2 (saver-make (w 'nm) r c now ()) (pins s2 't0 t0 'next now, pin w 'on s2, s2))
+     (fresh t0 nm) (: s2 (saver-make nm r c now ()) (pins s2 't0 t0 'next now, pin w 'on s2, s2))
+     (turn _) (: k (w 'k + 1) (pin w 'k k, pick (w 'nm) k))
      (? (w 'last = ()) (pin w 'last now, "")
         (w 'bye) (pin w 'bye 0, esc + "[0m" + esc + "[?25h")
         (s = ()) (? (0 < w 'idle && w 'idle <= now - w 'last)
-                    (: s2 (fresh now) (pin w 'n0 news, esc + "[?25l" + saver-step s2 now 0))
+                    (: s2 (fresh now (turn 0)) (pin w 'n0 news, esc + "[?25l" + saver-step s2 now 0))
                     "")
-        (r != s 'r || c != s 'c) (saver-step (fresh (s 't0)) now (news-pen w news))
+        (r != s 'r || c != s 'c) (saver-step (fresh (s 't0) (s 'nm)) now (news-pen w news))
+        (w 'nm = "cycle" && cycle-ms <= now - s 't0) (saver-step (fresh now (turn 0)) now (news-pen w news))
         (now < s 'next) ""
         (saver-step s now (news-pen w news))))
  ; the mail mark's pen once news came, the watch's 'ink or a soft pink
@@ -300,29 +306,33 @@
  ; --- the door: love mitty -s NAME [STYLE] ---
  (saver-cli as)
   (: nm (two? as ? (two? >as ? (<as + " " + <>as) <as) ())
-     names (foldl (\ a n (a + n + (peep styles n () @ ss (two? ss ? (" [" + join "|" ss + "]") "")) + "\n")) "" saver-names)
+     names (foldl (\ a n (a + n + (peep styles n () @ ss (two? ss ? (" [" + join "|" ss + "]") "")) + "\n")) "" saver-names
+            + "cycle\n")
      (? (nm = ()) (puts names, 0)
         (2 < #as || !(known? nm)) (say err ("mitty: no screensaver " + nm + "; there are\n" + names), flush err, 2)
         (saver-run nm)))
  (size _) (: ws (tty 1) [(two? ws && 1 < <ws ? <ws 24) (two? ws && 1 < >ws ? >ws 80)])
  ; until a key: a frame when one is due, a rest until the next
  (saver-run nm)
-  (: (go s)
+  (: (go s k)
       (? (cue? 0) 0
          (: now (clock 0) z (size 0)
-            s2 (? (<z = s 'r && z 1 = s 'c) s
-                  (: n (saver-make nm <z (z 1) now ()) (pins n 't0 (s 't0) 'next now, n)))
+            k2 (nm = "cycle" && cycle-ms <= now - s 't0 ? (k + 1) k)
+            s2 (? (k2 != k) (: n (saver-make (pick nm k2) <z (z 1) now ()) (pins n 't0 now 'next now, n))
+                  (<z = s 'r && z 1 = s 'c) s
+                  (: n (saver-make (s 'nm) <z (z 1) now ()) (pins n 't0 (s 't0) 'next now, n)))
             _ (? (s2 'next <= now) (: f (saver-step s2 now 0) (say out f, flush out)) 0)
             _ (rest (max 5 (s2 'next - clock 0)))
-            (go s2)))
+            (go s2 k2)))
      _ (raw 1)
      _ (say out (esc + "[?1049h" + esc + "[?25l" + esc + "[2J"))
      _ (flush out)
      _ (drain-keys ())
      z (size 0)
-     s0 (saver-make nm <z (z 1) (clock 0) ())
+     k0 (clock 0 // 1000)
+     s0 (saver-make (pick nm k0) <z (z 1) (clock 0) ())
      _ (pins s0 't0 (clock 0) 'next (clock 0))
-     _ (go s0)
+     _ (go s0 k0)
      _ (drain-keys ())
      _ (say out (esc + "[0m" + esc + "[?25h" + esc + "[?1049l"))
      _ (flush out)

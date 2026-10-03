@@ -729,11 +729,11 @@
                    x ("hive " + show hv + foldl (a \ q \ a + " · " + q) "" qs)
                    (pins t 'at now 'x x, x))))))
  ; the saver as ~/.love/etc/mitty.l names it: (screensaver NAME [STYLE]) (screensaver-idle
- ; MINUTES), pom after 10 unless said; a name no saver has, or 0 minutes, is never
+ ; MINUTES), cycle after 10 unless said; a name no saver has, or 0 minutes, is never
  (mitty-saver _) (: sf (cite 'salt 'salt-file) wf (cite 'saver 'saver-watch) h (getenv "HOME")
                    c (? (sf && string? h) (sf (h + "/.love/etc/mitty.l") {}) {})
                    (word w) (string? w ? w (show w))
-                   nm (peep c 'screensaver () @ v (two? v ? (join " " (map word v)) "pom"))
+                   nm (peep c 'screensaver () @ v (two? v ? (join " " (map word v)) "cycle"))
                    m (peep c 'screensaver-idle () @ v (two? v ? <v 10))
                    (wf ? (wf nm m) ()))
  ; a mitty laid for the shell at r x c: lush in its panes (argv, when given, in the first), the

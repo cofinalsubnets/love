@@ -96,6 +96,18 @@
            (: w0 (saver-watch "pom" 0) _ (saver-tick w0 0 24 80 0) ("" = saver-tick w0 (999 * mn) 24 80 0))   ; 0 is never
            (: wn (saver-watch "nope" 1) _ (saver-tick wn 0 24 80 0) ("" = saver-tick wn (9 * mn) 24 80 0))   ; nor a name it lacks
            (: wf (saver-watch "pom" 0.5) _ (saver-tick wf 0 24 80 0) (0 < #(saver-tick wf 30000 24 80 0))))
+   ; cycle: a saver of the roster at each start, and the next once five minutes have run
+   wc (saver-watch "cycle" 1)
+   _ (saver-tick wc 0 24 80 0)
+   _ (saver-tick wc mn 24 80 0)
+   c1 ((wc 'on) 'nm)
+   _ (saver-tick wc (6 * mn + 1) 24 80 0)
+   c2 ((wc 'on) 'nm)
+   _ (saver-key wc (7 * mn))
+   _ (saver-tick wc (7 * mn + 1) 24 80 0)
+   _ (saver-tick wc (9 * mn) 24 80 0)
+   c3 ((wc 'on) 'nm)
+   _ (test (elem c1 saver-names) (elem c2 saver-names) (elem c3 saver-names) (c1 != c2) (c2 != c3))
 
    ; --- love mitty -s: the names, and an unknown one exits 2 naming them ---
    (sv-run argv) (: md (tether argv) o (slurp >md)
@@ -109,6 +121,6 @@
    bad3 (sv-run [sv-love "mitty" "-s" "pom" "fancy"])
    _ (test (0 = <ls) (all (n \ sv-has? (ls 1) n) saver-names)
            (2 = <bad) (sv-has? (bad 1) "no screensaver nope") (all (n \ sv-has? (bad 1) n) saver-names)
-           (2 = <bad2) (2 = <bad3) (sv-has? (ls 1) "pom [natural]"))
+           (2 = <bad2) (2 = <bad3) (sv-has? (ls 1) "pom [natural]") (sv-has? (ls 1) "cycle"))
 
    (test_fin (), puts "saver: ok", putc 10, 0))
