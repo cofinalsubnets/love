@@ -9,6 +9,8 @@
    (rows s) (1 + count s "\r\n")
    day0 (1.0 * 1790812800)                          ; 2026-10-01, midnight on the wall clock
    (at hr) (court-new 80 48 [(day0 + hr * 3600.0) 3600])
+   ; ..and on another day of 2026, at noon
+   (on m d) (court-new 80 48 [(86400.0 * (cite 'cal 'epoch-days) 2026 m d + 12.0 * 3600.0) 3600])
    (near? a b) (a - b @ d (d * d < 0.0001))
    (keys! st ks) (each ks (k \ court-step st k)))
 
@@ -102,16 +104,17 @@
 ; --- the floor's litter: the sticks lie in a ring round the trunk's foot, the leaves flat on
 ; --- the ground, all of it inside the walls; and the leaves a falling one starts from, high in the crown
 (: st (at 12.0) bs (st 'tree 'base) L (st 'litter) P (L 'pts) X (P 'x) Y (P 'y) Z (P 'z)
-   d (sq (X - bs 0) + sq (Z - bs 2)) raised (0.01 < Y)
-   off ((1 - raised) * (P 'up < 1.0) + raised * (1 - (0.09 < d) * (d < 0.5625)))
-   out ((yard-a < mag X) + (yard-b < mag Z))
+   d (sq (X - bs 0) + sq (Z - bs 2)) G (L 'leaves)
+   (out Q) ((yard-a < mag (Q 'x)) + (yard-b < mag (Q 'z)))
    tops (L 'tops) ty (map (q \ q 1) tops)
- (test (100 < net raised) (1000 < net (1 - raised)) (0 = net off) (0 = net out)
+ (test (100 < #X) (0 = net (Y < 0.009)) (0 = net (1 - (0.09 < d) * (d < 0.5625)))
+       (1000 < #(G 'x)) (0 = net (0.01 < G 'y)) (0 = net (G 'up < 1.0))
+       (0 = net (out P)) (0 = net (out G))
        (two? tops) (all (y \ amax (st 'tree 'y) - 1.5 < y) ty)))
 
 ; --- falling leaves: now and then one lets go of the top of the crown and comes down, and
 ; --- it lies on the floor where it lands, inside the walls; the frame draws them
-(: st (at 12.0) seen {}
+(: st (on 10 25) seen {}
    (tick k) (pin st 't k, court-move st,
              (two? (st 'fall) ? (pin seen 'fell (cat (peep seen 'fell ()) [(rev (st 'fall) 0 1)]))))
    _ (each ^1500 tick)
@@ -120,6 +123,40 @@
  (test (two? ys) (two? fl) (all (q \ q 1 < 0.01) fl)
        (all (q \ mag (q 0) < yard-a && mag (q 2) < yard-b) fl)
        (5.0 < foldl (a \ b \ a < b ? b a) 0.0 ys) (foldl (a \ b \ a < b ? a b) 99.0 ys < 1.0) (rows f = 24)))
+
+; --- the seasons: bare in january with last fall's leaves thick on the ground, leafing out
+; --- in may, green and full in july with little underfoot, gold by late october and
+; --- dropping fast; no leaf falls from a bare tree; and the crown is drawn as the season has it
+(: jan (court-season (on 1 15)) may (court-season (on 5 1)) jul (court-season (on 7 4))
+   oct (court-season (on 10 25)) dec (court-season (on 12 20))
+   bare (on 1 15) _ (each ^800 (k \ (pin bare 't k, court-move bare)))
+   (look st) (court-frame (pins st 'tree (court-new 80 48 [(day0 + 12.0 * 3600.0) 3600] 'tree)
+                                   'px 0.0 'pz (0.0 - yard-b + 1.0) 'th 0.4 'ph 1.0))
+ (test (jan 'share = 0.0) (0.8 < jan 'ground) (jan 'every = 0)
+       (0.0 < may 'share) (may 'share < 1.0) (may 'turn = 0.0)
+       (jul 'share = 1.0) (jul 'turn = 0.0) (jul 'ground < 0.2) (0 < jul 'every)
+       (oct 'turn = 1.0) (0.0 < oct 'share) (oct 'share < 1.0) (0 < oct 'every) (oct 'every < jul 'every)
+       (dec 'share = 0.0) (0.9 < dec 'ground)
+       !(two? (bare 'fall)) !(two? (bare 'fallen))
+       (look (on 7 4) != look (on 1 15)) (look (on 7 4) != look (on 10 25))
+       ; ..and the season leaves the light alone: the yard at noon is not dark
+       (court-pens (on 10 25) @ c (0.1 < net (c 0) / #(c 0)))))
+
+; --- the words: a date, a time, a pace and the weather, in any order, each at most once;
+; --- a date alone keeps now's hour; a pace leads the paces t steps through; words it cannot
+; --- read refuse
+(: o (court-opts ["--date" "2026-10-25" "--time" "16:30" "--pace" "120" "--weather" "overcast" "--sky" "pixel"])
+   w (court-opts ["partly"]) n (court-opts [])
+   d (court-opts ["--date" "2026-07-04"]) dn (court-now ())
+   bad (map court-opts [["--date" "2026-13-01"] ["--time" "25:00"] ["--pace" "x"] ["--pace"]
+                        ["clear" "--weather" "mostly"] ["--sky" "smooth" "pixel"] ["nope"]])
+   (day v) (int (v 0) // 86400)
+ (test (o 'pace = 120.0) (o 'wx 'cover = 3) (o 'wx 'style = 'pixel)
+       (day (o 'now) = (cite 'cal 'epoch-days) 2026 10 25) (int (o 'now 0) % 86400 = 59400)
+       (o 'now 1 = 3600) (court-clock {'sim (o 'now 0)} = "16:30")
+       (w 'wx 'cover = 1) (w 'wx 'style = 'smooth) (w 'pace = ()) (n 'wx = ()) (two? (n 'now))
+       (day (d 'now) = (cite 'cal 'epoch-days) 2026 7 4) (int (d 'now 0) % 86400 = int (dn 0) % 86400)
+       (all (v \ v = ()) bad)))
 
 (borrow 'sky)
 
