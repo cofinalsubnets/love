@@ -51,11 +51,8 @@
                        (go (i + 1) st ps))
        (jn l a) (!(two? l) ? a (jn >l (<l + (#a ? ("/" + a) a))))
        (jn (go 0 0 ()) ""))
-   ; the carried archive is a .gz, opened by src/apps/gz.l's gz-unzip -- cited at the call, as a
-   ; `borrow` here would tie moon to the bake order. a love without 'gz carries no archive.
-   (gzbody s) (: f (cite 'gz 'gz-unzip) r (lit? f ? (f s)) (two? r ? <>r ()))
-   ; ..and a read-only ustar walk: nom (prefix + name), size, body -- all this
-   ; needs. src/apps/tar.l stays the whole law; this reads the slice and nothing else.
+   ; a read-only ustar walk: nom (prefix + name), size, body -- all this needs.
+   ; src/apps/tar.l stays the whole law; this reads the slice and nothing else.
    (ttxt s o k) (: (go i) (k <= i || s (o + i) = 0 ? i (go (i + 1)))
                    m (go 0)
                    (m ? (cask m @ c (pour c 0 s o m, string c)) ""))
@@ -81,39 +78,17 @@
                                 acc)
                         (go (o + 512 + 512 * ((sz + 511) // 512)) acc2)))
        (go 0 ()))
-   ; no nest on disk, but a love carries its whole tree (source-gz): the toolchain slice --
-   ; include/ and lib/, what the Makefile ships -- as an in-memory table, key the
-   ; nest-relative path, value the bytes. nothing is written anywhere; () when there is
-   ; nothing to carry (love0), and the owed-nest diagnostic stands.
-   ; the slice leads the archive (src/tools/selfpack.l lays it so), so it is streamed -- gz.l's
-   ; gz-pull under tar.l's walk -- and the read stops at the first file past it, rather than
-   ; inflating the tree. where those doors are not aboard the whole archive is read as before
+   ; no nest on disk, but a love carries its whole tree: the toolchain slice -- include/
+   ; and lib/, what the Makefile ships -- as an in-memory table, key the nest-relative path,
+   ; value the bytes. nothing is written anywhere; () when there is nothing to carry (love0),
+   ; and the owed-nest diagnostic stands. the slice is the tree's moon section
+   ; (src/tools/selfpack.l), decoded alone.
    (msub nom) (: rel (strip1 nom) sub (starts? rel mtree ? (snip rel #mtree #rel) "")
                  (starts? sub "include/" || starts? sub "lib/" ? sub))
    (mblob _)
-    (: gz (source-gz "x")
-       pull (cite 'gz 'gz-pull)   walk (cite 'tar 'tar-walk)
-       (? !(string? gz) ()
-          !(lit? pull && lit? walk) (mblob-whole gz)
-          (: next (cite 'gz 'gz-next)   body (cite 'tar 'tar-body)
-             t {0 0}                                   ; fed a slice at a time, so the walk's stop stops the inflate
-             g (pull (_ \ peep t 0 0 @ o (#gz <= o ? "" (pin t 0 (o + 65536), snip gz o (min #gz (o + 65536))))))
-             s (cite 'tar 'tar-src (_ \ next g))
-             a {}   seen {0 0}
-             (walk s (e \ b \ msub (e 'nom) @ sub
-                                 (!sub ? (peep seen 0 0 ? 'stop 1)
-                                    ({0 ()} @ ps
-                                       (e 'kind = 'file ?
-                                          (: _ (body s b (x \ pin ps 0 (x . peep ps 0 ())))
-                                             l (ps 0)
-                                             (pin a sub (two? l ? (cats (rev l)) ""))),
-                                        pin seen 0 1,
-                                        1)))),
-              a))))
-   (mblob-whole gz)
-    (gzbody gz @ u
-       (!(string? u) ? ()
-          (foldl (a \ e \ msub <e @ sub (sub ? (pin a sub <>e) a)) {} (tarfiles u))))
+    (tree-tar "moon" @ s
+       (!(string? s) ? ()
+          (foldl (a \ e \ msub <e @ sub (sub ? (pin a sub <>e) a)) {} (tarfiles s))))
    ; the first three of a name list, comma-joined, with a count of the rest --
    ; a diagnostic wants a taste, not the whole bag
    (mfew ns)

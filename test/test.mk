@@ -841,10 +841,10 @@ $(eval $(call moon_pkg,lua,LUASRC,host))
 $(eval $(call moon_pkg,sqlite,SQLSRC,moon-sqlite))
 $(eval $(call moon_pkg,gzip,GZIPSRC,host))
 $(eval $(call moon_pkg,bzip2,BZIP2SRC,host))
-# test_distboot -- the release claim: take either artifact, type make, get the same binary.
-# source bootstraps through the machine's cc; seed lays the source it carries in .rodata and
-# builds it with cc/gcc/clang shadowed by scripts that fail loudly, so "no ambient compiler
-# did the work" is proved. then the circle: `love seed` with nothing on PATH that compiles,
+# test_distboot -- the release claim: lay the source the binary carries, type make, get the
+# same binary by either road. one lay bootstraps through the machine's cc; the other builds
+# with cc/gcc/clang shadowed by scripts that fail loudly, so "no ambient compiler did the
+# work" is proved. then the circle: `love seed` with nothing on PATH that compiles,
 # taking its own mooncc. the claim holds because the local cc builds love0 and nothing else.
 # three full builds and still NOT a superset of test_seed -- no leg here runs a default
 # `love seed`, so the deference decision goes untested. minutes, opt-in, by name.
@@ -856,7 +856,7 @@ test_bakerep: host $(prof_raw)
 	@$(gsh) test/gate/bakerep.sh $(ho) $(prof_raw)
 test_distboot: dist
 	@echo TEST test/gate/distboot.sh
-	@sh test/gate/distboot.sh $(dist_source) $(ho)/love
+	@sh test/gate/distboot.sh $(ho)/love
 # test_hearts -- hearts (src/apps/hearts) builds the arm64 defconfig kernel Image from the pinned
 # linux tarball, byte-identical to kbuild+clang's, both at one canonical path (/var/tmp/hearts).
 # two kernel builds on the host's borrowed toolchain: heavy, opt-in by name.

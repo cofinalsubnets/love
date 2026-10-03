@@ -428,6 +428,7 @@ static uint32_t crc32_run(uint32_t c, const uint8_t *p, uintptr_t n) {
  return c; }
 
 static uint32_t crc32_of(const uint8_t *p, uintptr_t n) { return ~crc32_run(0xffffffff, p, n); }
+uint32_t ai_crc32(unsigned char const *p, uintptr_t n) { return crc32_of(p, n); }
 
 static ai_inline struct ai *host_crc32(struct ai *g) {
  if (!strp(g->sp[0])) return g->sp[0] = ZeroPoint, g;

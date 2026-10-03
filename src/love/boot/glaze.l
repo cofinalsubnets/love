@@ -663,6 +663,13 @@
                  ['st SP -16 T] ['st SP -8 X]
                  (reach tgt IP 8) ['sub SP SP 32] ['ld T IP 0] ['jmpr T]                  ; -> lvm_ap -> callee -> lvm_resume -> bb
                  ['label bb] ['ld A SP 0] ['add SP SP 8]])                                            ; resume: result at Sp[0], pop it
+             ; the partial in A applied to the value at Sp[so], by the same walkable resume
+             (adrivep so) (: bb (mint 0)
+              [['st SP -24 A] ['ld A SP so] ['st SP -32 A]
+                 ['lar T bb] ['lar X 'entry0] ['subs T T X] ['leax T T T 1 1]
+                 ['st SP -16 T] ['st SP -8 X]
+                 (reach tgt IP 8) ['sub SP SP 32] ['ld T IP 0] ['jmpr T]
+                 ['label bb] ['ld A SP 0] ['add SP SP 8]])
              (achain as cso d) (atom? >as
                                   ? (acg <as d + adrive cso)
                                     (acg <as d + adrive cso + [['st SP (spill d) A]]
@@ -728,7 +735,8 @@
               (agous as 0 d
                + [['ld X SP cso] ['test X 1] ['br 'ne sw]
                   ['ld T X 0] (reach tgt SC 9) ['cmp T SC] ['br 'ne sw]                               ; entry = lvm_cur?
-                  ['ld T X 8] ['cmp T (2 * n + 1)] ['br 'ne sw]]                                 ; arity = n?
+                  ['ld T X 8] ['cmp T (2 * n + 1)] ['br 'ne sw]                                  ; arity = n?
+                  ['lea T HP (8 * (w + 8))] ['cmp SP T] ['br 'below sw]]                            ; room for the frame + floor: a call-out may have spent the entry guard's
                + catmap (j \ [['ld A SP (spill (d + j))] ['st SP (8 * j - 8 * w) A]]) ^n
                + [(reach tgt T 8) ['add T T 8] ['st SP (8 * n - 8 * w) T]                         ; cont = &resume[1]
                   ['lar T bb] ['lar A 'entry0] ['subs T T A] ['leax T T T 1 1] ['st SP (8 * (n + 1) - 8 * w) T]
@@ -763,8 +771,9 @@
              (asmv j d) (j >= 0 ? ([['ld A SP (spill (d + j))] ['st SP (fro + 8 * (ni + j)) A]] + asmv (j - 1) d))
              ; aselfcall: a saturated non-tail self-call enters the own blob on the frame [imports.. args..
              ; resume tag(bb-entry0) entry0], Ip off So; its hand-rolled ret returns through lvm_resume to bb
-             (aselfcall as d) (: bb (mint 0)  w (a + 3)
+             (aselfcall as d) (: bb (mint 0)  ch (mint 0)  dn (mint 0)  w (a + 3)
               (agous as 0 d
+               + [['lea T HP (8 * (w + 8))] ['cmp SP T] ['br 'below ch]]                           ; no room for the frame: the chain below
                + (: (gimp l i) (two? l ? ([['ld T SP (voff <l)] ['st SP (8 * i - 8 * w) T]] + gimp >l (i + 1)) ()) (gimp simp 0))
                + (: (garg j) (j < a - ni ? ([['ld T SP (spill (d + j))] ['st SP (8 * (ni + j) - 8 * w) T]] + garg (j + 1)) ()) (garg 0))
                + [(reach tgt T 8) ['add T T 8] ['st SP (8 * a - 8 * w) T]                          ; cont = &resume[1]: ret jumps the cell's word 0 = lvm_resume
@@ -773,7 +782,10 @@
                   ['ld IP SP soo]]
                + (a = 1 ? () [['add IP IP 16]])
                + [['sub SP SP (8 * w)] ['jmp 'entry0]
-                  ['label bb] ['ld A SP 0] ['add SP SP 8]]))
+                  ['label bb] ['ld A SP 0] ['add SP SP 8] ['jmp dn]
+                  ['label ch] ['ld A SP soo]]
+               + catmap (i \ adrivep (voff i)) simp + catmap (j \ adrivep (spill (d + j))) ^(a - ni)
+               + [['label dn]]))
              (aselfgo as d) (agous as 0 d + asmv (a - ni - 1) d + [['jmp 'sgo]])               ; saturated tail self-call: new args (spilled first) over the arg slots (imports keep), jump the body top
              (acqt st sth sel d) (: le (mint 0)  ln (mint 0)  tr (atruth 0)                          ; acq, tails threaded
               (acg st d + <tr + [['cmp A 1] ['br 'le le]]

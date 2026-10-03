@@ -1,13 +1,15 @@
-; src/tools/selfpack.l -- cut the source archive from the tree itself.
+; src/tools/selfpack.l -- cut the source container from the tree itself.
 ;
-;   love src/tools/selfpack.l archive.tar.gz top [stamp [build [drop..]]]
+;   love src/tools/selfpack.l src.tree top stamp build roster [drop..]
 ;
 ; the tree on disk is the source, checkout and seed-laid tree alike. it leaves out sb's law
 ; (.sbignore plus sb's built-ins, so the vcs walk and this cut agree), sp-own's structural skips
 ; and each drop. the walk is sorted and every mtime pinned to stamp, so the same files answer
-; the same bytes (test_distboot holds a re-cut to the byte). `build` rides in as top/STAMP.
-; the id is the sha of the leveled tar, kept in archive.sha; the quiet pass (tar-thin? +
-; tar-hash) answers "has the tree moved" off stat alone, and only the cut writes the sidecar.
+; the same bytes (test_distboot holds a re-cut to the byte). `build` rides in as top/STAMP, and
+; roster names the files a carried-source bake reads (the Makefile's distfiles).
+; the container is the one src/love/lib/srctree.h reads: a header, an index, and the tar in
+; sections, each deflated alone. the id is the sha of the joined tar, kept in src.tree.sha; the
+; quiet pass (tar-thin? + tar-hash) answers "has the tree moved" off stat alone.
 ; the borrows name paths, in dependency order: a module name has nothing to find under love0,
 ; and `-l FILE` whose basename names a verb seats it (`-l src/apps/sb/sb.l` would run sb).
 (borrow "src/apps/gz.l")
@@ -39,61 +41,107 @@
     (atom? es ? (rev acc)
        (<es @ e (pin e 'nom (top + "/" + tar-get e 'nom ""), sp-take >es top (e . acc))))
 
-   ; the root leads, top follows wearing its mode, then STAMP, then moon's toolchain slice
-   ; (include/ and lib/, what src/apps/moon/moon.l's mblob reads when there is no nest), then
-   ; the rest, each re-homed under top: a nestless compile stops reading past the slice
-   ; instead of inflating the tree for it. shared by both passes, so their digests compare.
+   ; the sections, in the order they join: the frame (the root, top, STAMP and every
+   ; directory) with moon's toolchain slice behind it, what a nestless compile reads (moon.l's
+   ; mblob); the bake roster; the other .l; C and asm; the rest. each keeps the walk's order.
+   sp-secs ["moon" "bake" "lisp" "c" "rest"]
    (sp-slice? e) (: n (tar-get e 'nom "")
                     (starts? n "src/apps/moon/include/" || starts? n "src/apps/moon/lib/"
                      || n = "src/apps/moon/include" || n = "src/apps/moon/lib"))
-   (sp-lev es top stamp build)
+   (sp-sec ros e) (: n (tar-get e 'nom "")
+                     (? (tar-get e 'kind 'file = 'dir || sp-slice? e) "moon"
+                        (ros n) "bake"
+                        (ends? n ".l") "lisp"
+                        (any (x \ ends? n x) [".c" ".h" ".S" ".s"]) "c"
+                        "rest"))
+   ; -> each section's entries, leveled and re-homed under top. shared by both passes, so
+   ; their digests compare.
+   (sp-lev es top stamp build ros)
     (: root <es
        te (tar-entry top 'dir "")
        _ (pin te 'mode (tar-get root 'mode 493))
        se (tar-entry "STAMP" 'file (build + "\n"))
-       rest (filter sp-slice? >es + filter (e \ !(sp-slice? e)) >es)
-       (tar-level (root . te . sp-take (se . rest) top ()) stamp))
+       ; tagged before any is re-homed: sp-take pins the new nom into the entry itself
+       tag (map (e \ [(sp-sec ros e) e]) >es)
+       parts (map (nm \ sp-take (map (p \ p 1) (filter (p \ <p = nm) tag)) top ()) sp-secs)
+       (map (l \ tar-level l stamp) (([root te] + sp-take [se] top () + <parts) . >parts)))
+
+   ; --- the container ---
+   sp-nul (string (cask 1))
+   (sp-le v k) (: c (cask k)
+                  (go i x) (i < k ? (pin c i (x & 255), go (i + 1) (x >> 8)))
+                  (go 0 v, string c))
+   (sp-name nm) (nm + string (cask (8 - #nm)))         ; NUL-filled to the header's 8
+   (sp-rel nom) (: (go i) (? (#nom <= i) "" (nom i = 47) (snip nom (i + 1) #nom) (go (i + 1)))
+                   (go 0))
+   (sp-pad n) (512 * ((n + 511) // 512))
+   ; section k's index records, each entry's bytes at their offset in its tar. a directory,
+   ; the root and top have no record: a path's directories are what lies under them.
+   (sp-recs k es)
+    (: (go l at acc)
+        (atom? l ? (cats (rev acc))
+           (: e <l   kind (tar-get e 'kind 'file)   n (sp-rel (tar-get e 'nom ""))
+              len (kind = 'file ? #(tar-get e 'body "") 0)
+              r (kind = 'dir || !#n ? ""
+                   (cats [(sp-le k 1) (kind = 'link ? "2" "0") (sp-le (tar-get e 'mode 420) 2)
+                          (sp-le (at + 512) 4) (sp-le len 4) (sp-le (tar-get e 'mtime 0) 4)
+                          n sp-nul (kind = 'link ? (tar-get e 'to "") "") sp-nul]))
+              (go >l (at + 512 + sp-pad len) (r . acc))))
+       (go es 0 ()))
+   ; each section's tar is tar-pack's less the end blocks, which only the last keeps: joined,
+   ; they are the one archive the tree cut to
+   (sp-frags secs)
+    (: n #secs
+       (map (i \ tar-pack (secs i) @ a
+                 (!a ? (sp-die "cannot pack (a path too long for ustar?)")
+                    (i + 1 = n ? a (snip a 0 (#a - 1024)))))
+            ^n))
+   ; -> the container: the header row of each section, then them, packed, the index first
+   (sp-tree secs frags)
+    (: idx (cats (map (i \ sp-recs (i + 1) (secs i)) ^#secs))
+       raws (idx . frags)
+       names ("index" . sp-secs)
+       packs (map gz-deflate-best raws)
+       (row i) (cats [(sp-name (names i)) (sp-le 1 4) (sp-le #(raws i) 4) (sp-le #(packs i) 4)
+                      (sp-le (gz-crc32 (raws i)) 4)])
+       (cats (["lovetree" (sp-le #raws 4)] + map row ^#raws + packs)))
+   ; the sidecar names the format with the digest, so a cut under another layout is not fresh
+   sp-fmt "tree1 "
 
    ; the cut that reads: pack, hash, and write when the content actually moved.
-   (sp-cut arch side top stamp build rules)
+   (sp-cut out side top stamp build rules ros)
     (: g (tar-gather? (sp-keep? rules) "." "")
        _ (!g ? (sp-die "cannot read the tree"))
-       lev (sp-lev <>g top stamp build)
-       a (tar-pack lev)
-       _ (!a ? (sp-die "cannot pack (a path too long for ustar?)"))
-       h (sha256 a)
+       secs (sp-lev <>g top stamp build ros)
+       frags (sp-frags secs)
+       h (sp-fmt + sha256 (cats frags))
        old (sp-read side)
-       have (sp-read arch)
-       fresh (two? old && two? have && <>old = h)
-       ; an archive with no sidecar (a seed-laid tree) is adopted when its content is
-       ; this content -- no rewrite, so its mtime holds and nothing downstream re-links.
-       adopt (fresh || atom? have ? 0
-                (gz-unzip <>have @ u (two? u && <>u = a)))
-       (? fresh 0
-          adopt (sp-write side h)
-          (gz-zip9 a "" 0 @ z                  ; written once, carried in every artifact: the harder coder
-             (puts ("LOVE\t" + arch), putc 10, sp-write arch z, sp-write side h, 0))))
+       have (sp-read out)
+       (? (two? old && two? have && <>old = h) 0
+          (puts ("LOVE\t" + out), putc 10, sp-write out (sp-tree secs frags), sp-write side h, 0)))
 
    (sp-main av)
     (: n #av
-       _ (n < 2 ? (sp-die "usage: selfpack ARCHIVE.tar.gz TOP [STAMP [BUILD [DROP..]]]"))
-       arch <av
+       _ (n < 5 ? (sp-die "usage: selfpack SRC.TREE TOP STAMP BUILD ROSTER [DROP..]"))
+       out <av
        top <>av
-       stamp (3 <= n ? <(sound <>>av) 0)
-       build (4 <= n ? (av 3) "0")
+       stamp <(sound <>>av)
+       build (av 3)
+       ros (sp-read (av 4) @ [1 s] (foldl (t \ w \ pin t w 1) {} (words s))
+              (sp-die ("cannot read the roster " + av 4)))
        ; top joins the drops: a release untarred at the root would otherwise ride the
        ; next blob, and the artifact would swallow a whole second love.
-       drops (top . (4 <= n ? >>>>av ()))
-       side (arch + ".sha")
-       ; `stat`, not a read: the question is only whether the archive is there. a ()
+       drops (top . >>>>>av)
+       side (out + ".sha")
+       ; `stat`, not a read: the question is only whether the container is there. a ()
        ; from the thin pass (a torn read, a nom too long for ustar) is not an answer
        ; and falls through to the cut, which reads each file once.
        rules (sp-rules drops)
        t (tar-thin? (sp-keep? rules) "." "")
        _ (!t ? (sp-die "cannot read the tree"))
-       hq (tar-hash (sp-lev <>t top stamp build))
+       hq (tar-hash (foldl (+) () (sp-lev <>t top stamp build ros)))
        old (sp-read side)
-       quiet (string? hq && two? old && <>old = hq && two? (stat arch))
-       (quiet ? 0 (sp-cut arch side top stamp build rules)))
+       quiet (string? hq && two? old && <>old = sp-fmt + hq && two? (stat out))
+       (quiet ? 0 (sp-cut out side top stamp build rules ros)))
 
    (sp-main >argv))
