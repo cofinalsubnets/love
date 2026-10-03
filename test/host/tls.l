@@ -480,7 +480,8 @@
            (tc-has (nc "good.test" ["leafd"]) "a kind of name not checked here")))
 
 ;; --- the tree's roots: mozilla's, the last home, and carried in the binary for a host with none --
-(: t (carried-roots 0) f (uread tree-roots)
+(: c (uread ("/love/" + tree-roots)) f (uread tree-roots)
+   t (two? c ? (<>c + ""))
    ds (? (string? t) (pem-ders t) ()) xs (filter tablet? (map x509 ds))
    _ (test (string? t) (two? f) (<>f = t)                          ; the carried copy is the tree's
            (100 < #xs) (#xs = #ds)                                 ; every root reads

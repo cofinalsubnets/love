@@ -994,5 +994,68 @@
            !(two? (readdir (d + "/.love/run/hive"))))
    0)
 
+; --- the user's card. --state moves a claude code session's card, found by the parent it names. the
+; hud on a terminal holds a card at the login's name, kind user: c talks to a session as the user,
+; the mail marked kind user, and an answer to that name shows there. closed, the card stays away
+; and mail to it waits. kind="user" reaches a model only from a user's card, and no agent takes the name
+(: d (cr-dir "user" "")
+   hv (d + "/.love/run/hive")
+   _ (map (\ p (mkdir p 448)) [(d + "/.love/run") hv])
+   (cell nm card) (: c (hv + "/" + nm) _ (map (\ p (mkdir p 448)) [c (c + "/inbox") (c + "/read")])
+                     _ (? (string? card) (cr-put c "card" card) 0) c)
+   me (show (getpid 0))
+   cc (cell "cc" ("pid " + me + "\ncwd /x\nmodel claude-code\nstate idle\nsince 0\nparent " + me + "\n"))
+   _ (cr-run d "" ("--state busy --pid " + me + " --hud"))
+   busy (cr-get (cc + "/card"))
+   _ (cr-run d "" ("--state nap --pid " + me + " --hud"))
+   nap (cr-get (cc + "/card"))
+   _ (cr-run d "" ("--state idle --pid " + me + " --hud"))
+   idle (cr-get (cc + "/card"))
+   _ (test (cr-in busy "state busy") (cr-in busy "turn ") (cr-in busy ("parent " + me))
+           (cr-in nap "state busy") (cr-in idle "state idle") !(cr-in idle "state busy"))
+   ; the hud on a pty, as tess
+   md (tether ["sh" "-c" ("cd '" + d + "' && HOME='" + d + "' USER=tess PWD='" + d + "' exec '" + cr-love + "' '" + cr-app + "'")])
+   m >md
+   _ (settty m 24 100)
+   box {'s ""}
+   rd (twirl (_ \ (: (go _) (: b (see m) (? (b < 0) 0 (: _ (unsee m b) _ (pin box 's (box 's + chug m)) (go 0))))
+                     (go 0))) 0)
+   (upto n pat) (? (cr-in (box 's) pat) 1 (n <= 0) 0 (: _ (rest 50) (upto (n - 1) pat)))
+   (key s) (: _ (say m s) (flush m) (rest 100))
+   up (upto 100 "sessions")
+   held (cr-get (hv + "/tess/card"))
+   _ (key "c")
+   typing (upto 60 "to cc")
+   _ (key "hello there") _ (key (string 13))
+   (sent n) (: fs (readdir (cc + "/inbox")) (? (two? fs) (cr-get (cc + "/inbox/" + <fs)) (n <= 0) () (: _ (rest 50) (sent (n - 1)))))
+   got (sent 60)
+   _ (cr-put (hv + "/tess/inbox") "1-cc-00" "from cc\nsent 0\n\nwell met, tess\n")
+   shown (upto 100 "well met, tess")
+   _ (key (string 27)) _ (rest 600) _ (key "q")      ; an esc and a key at once is alt and the key
+   st (: (wf p n) (gather p @ g (? (two? g) g (n <= 0) (: _ (still p 9) [-1]) (: _ (rest 20) (wf p (n - 1))))) (wf <md 250))
+   _ (close m)
+   away (cr-get (hv + "/tess/card"))
+   took (two? (readdir (hv + "/tess/read")))
+   ls (cr-run d "" "--list")
+   sd (cr-run d "" "--send tess are you there")
+   kept (two? (readdir (hv + "/tess/inbox")))
+   _ (test up typing shown (two? st && <st = 0)
+           (cr-in held "kind user") (cr-in held ("pid " + show <md))
+           (string? got) (cr-in got "from tess") (cr-in got "kind user") (cr-in got "hello there")
+           took (cr-in away "state away") (cr-in away "pid 0")
+           (cr-in (ls 1) "tess  user away") (0 = <sd) kept)
+   ; what a model reads: kind="user" from the user's card, not from a name that only says so
+   c2 (cell "cc2" ())
+   _ (cr-put (c2 + "/inbox") "1-tess-00" "from tess\nsent 0\nkind user\n\nthe user's own\n")
+   _ (cr-put (c2 + "/inbox") "2-mallory-00" "from mallory\nsent 0\nkind user\n\nnot the user\n")
+   (msgs ls) (foldl (\ a m (a + json-show m + "\n")) "" ls)
+   _ (cr-put d "in" (msgs [{"jsonrpc" "2.0" "id" 1 "method" "tools/call" "params" {"name" "inbox" "arguments" {}}}
+                          {"jsonrpc" "2.0" "id" 2 "method" "tools/call" "params" {"name" "set_name" "arguments" {"name" "tess"}}}]))
+   r (cr-run d "BEE_NAME=cc2 USER=tess" ("--mcp < '" + d + "/in'"))
+   _ (test (cr-in (r 1) "from=\\\"tess\\\" kind=\\\"user\\\"")
+           (cr-in (r 1) "from=\\\"mallory\\\">") !(cr-in (r 1) "from=\\\"mallory\\\" kind")
+           (cr-in (r 1) "tess is a user's name"))
+   0)
+
 (hark ["rm" "-rf" cr-root])
 (test_fin (), puts "bee: ok", putc 10, 0)

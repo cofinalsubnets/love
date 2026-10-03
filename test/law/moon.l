@@ -737,13 +737,13 @@
                    ((? (k = 'wstr) "L\"" (k = 'str16) "u\"" "U\"") + (<>t + "\""))
                   (k = 'num || k = 'kw) (show <>t)
                   <>t))
-   (pps src) (cpp <>(clex src) () "<law>" @ r
+   (pps src) (cpp <>(clexw src 1) () "<law>" @ r
               (!(okv? r) ? 'FAIL
                  (: (go l) (atom? l ? "" ((spell1 <l) + ((two? >l ? " " "") + (go >l))))
                     (go (fsbody <>r)))))          ; peel cpp's leading spans marker (parse.l fsbody)
    ; the refusal side of the same door: the message a cpp gripe carries, and its line
-   (cppno src) (cpp <>(clex src) () "<law>" @ r (gripe? r ? <>>>>r 'FAIL))
-   (cppline src) (cpp <>(clex src) () "<law>" @ r (gripe? r ? <>>r 'FAIL))
+   (cppno src) (cpp <>(clexw src 1) () "<law>" @ r (gripe? r ? <>>>>r 'FAIL))
+   (cppline src) (cpp <>(clexw src 1) () "<law>" @ r (gripe? r ? <>>r 'FAIL))
    (test
       ((pps "#define N 42\nN + 1") = "42 + 1")                         ; object macro
       ((pps "#define A B\n#define B 7\nA") = "7")                      ; rescan to fixpoint
@@ -778,7 +778,7 @@
       ((pps "#define M a /* one \\\n   two */ b\nM") = "a b")          ; a \<nl> inside a comment splices (phase 2 before 3): the directive holds together (m4 regex.c)
       ((pps "L\"a\" \"b\"") = "L\"ab\"")                               ; phase 6 joins across a prefix: the wide side wins (C11 6.4.5p5)
       ((pps "\"a\" u\"b\" \"c\"") = "u\"abc\"")
-      (okv? (cpp <>(clex "#ifdef NOPE\nx\n#endif") () "<law>"))        ; a fully-skipped file is a valid empty TU (crypt.c), not a failure
+      (okv? (cpp <>(clexw "#ifdef NOPE\nx\n#endif" 1) () "<law>"))        ; a fully-skipped file is a valid empty TU (crypt.c), not a failure
       ((pps "#define E\nE + E") = "+")                                 ; empty macro body vanishes
       ; a refusal is a gripe, and a gripe is a pair -- so these ask okv?/cppno,
       ; where a `!` would read every one of them as success.
@@ -792,7 +792,7 @@
       ((cppline "a\nb\n#error late") = 3)                              ; the gripe carries the directive's line
       ((cppline "#if 1\na\nb") = 1)                                    ; ..and an unterminated one carries its opener's
       ((cppline "#if 0\na\n#else\nb") = 1)                             ; ..which an #else does not reset
-      (okv? (cpp <>(clex "#\n#pragma x\n# 4 \"f.c\"\nz") () "<law>"))          ; null, pragma and gcc's line marker all pass
+      (okv? (cpp <>(clexw "#\n#pragma x\n# 4 \"f.c\"\nz" 1) () "<law>"))          ; null, pragma and gcc's line marker all pass
       ; #pragma push_macro/pop_macro: the save comes back through an #undef + redefine
       ((pps "#define A 1\n#pragma push_macro(\"A\")\n#undef A\n#define A 2\nA\n#pragma pop_macro(\"A\")\nA") = "2 1")
       ((pps "#pragma pop_macro(\"A\")\nok") = "ok")                     ; nothing saved: a no-op
@@ -803,7 +803,7 @@
 ; the gripe carrier is ('gripe file line col msg); file () means the TU itself,
 ; which the driver (moon.l ccdie) fills the source path in for.
 (: (inc txt) (n \ s \ [1 txt])
-   (ppi src txt) (cpp <>(clex src) (inc txt) "<law>" @ r (two? r ? <>r 'FAIL))
+   (ppi src txt) (cpp <>(clexw src 1) (inc txt) "<law>" @ r (two? r ? <>r 'FAIL))
    (pgi src txt) (cparse (ppi src txt))
    (gfile g) <>g (gline g) <>>g
    hdr "int a(void);\nint b(void);\nint c(void);\n"

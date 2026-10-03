@@ -74,5 +74,21 @@ int main(void)
 #endif
     if (n != 31) return 3;
 
+    /* 4 -- an L suffix is a signed long, a number like any other */
+    n = 0;
+#if 5L == 5
+    n |= 1;
+#endif
+#if 201112L < 202311L
+    n |= 2;      /* the __STDC_VERSION__ idiom */
+#endif
+#if 0x10L == 16 && -1L < 0
+    n |= 4;
+#endif
+#if 0L
+    n |= 8;      /* must NOT fire */
+#endif
+    if (n != 7) return 4;
+
     return 0;
 }

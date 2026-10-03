@@ -26,12 +26,14 @@
 #
 # Skips whole (exit 0, with the clone line) when the corpus is not here -- it is an
 # imported tree like the package rungs, found under dl/ then $MOONSRC (~/src), and
-# `make dl/c-testsuite` fetches it. The cross lanes skip without their qemu.
+# `make dl/c-testsuite` fetches it. The cross lanes skip without their qemu -- a64's
+# runs on an a64 host instead where one answers (test/gate/a64run.sh).
 # make owns the dependency graph; this owns the procedure.
 # NOT set -e: the checks report their own failures with context.
 #
 # usage: cts.sh ARCH OUTDIR LOVE     (ARCH: x64 | a64 | rv64 | wasm)
 . test/gate/skip.sh
+. test/gate/a64run.sh
 set -u
 
 arch=$1
@@ -89,15 +91,20 @@ $1 "*) echo wrong; return;; esac
 }
 causeof() { printf '%s\n%s\n' "$roster_refuses" "$roster_wrong" | grep "^$1 " | cut -d' ' -f2-; }
 
-if [ -n "$qemu" ]; then
-  QEMU=$(command -v "$qemu" 2>/dev/null || true)
-  [ -n "$QEMU" ] || gate_skip "$name: skipped (need $qemu)"
-fi
+# where the binaries run: natively for x64, node for wasm, qemu-user for rv64, and for
+# a64 a host where one answers, else qemu-user
+if [ "$arch" = a64 ]; then
+  a64_how "$m"
+  [ -n "$a64_via" ] || gate_skip "$name: skipped (need $qemu or an a64 host)"
+elif [ -n "$qemu" ]; then
+  a64_qemu=$(command -v "$qemu" 2>/dev/null || true); a64_via=qemu
+  [ -n "$a64_qemu" ] || gate_skip "$name: skipped (need $qemu)"
+else a64_qemu=; a64_via=qemu; fi
 # the wasm machine is node under the loader's kernel (loader.js run as a program), in qemu's seat
 if [ "$arch" = wasm ]; then
   NODE=$(command -v node 2>/dev/null || true)
   [ -n "$NODE" ] || gate_skip "$name: skipped (need node)"
-  QEMU="$NODE $PWD/src/inle/wasm/loader.js"
+  a64_qemu="$NODE $PWD/src/inle/wasm/loader.js"
 fi
 
 # the corpus, first hit wins: an explicit CTSSRC, then the tree-local dl/, the main
@@ -117,14 +124,18 @@ fi
 d=$ho/cts-$arch
 rm -rf "$d"; mkdir -p "$d"
 
+# three passes, ccarch.sh's: build every program, run the built ones as one batch (one ssh
+# on a host), then judge each against its roster line
+a64_jobs "$d/run"
 npass=0; nref=0; nwrong=0
+built=
 for f in "$cts"/tests/single-exec/*.c; do
   b=$(basename "$f" .c)
   want=$(kindof "$b")
   [ -f "$f.expected" ] || fail "$b: the corpus has no .expected for it"
 
   # take the status on its own line: after `if ! cmd`, $? is the `!`, not the cmd.
-  moonrun $tflag -o "$d/$b.bin" "$f" > "$d/$b.cclog" 2>&1; st=$?
+  moonrun $tflag -o "$d/run/$b.bin" "$f" > "$d/$b.cclog" 2>&1; st=$?
   if [ $st -ne 0 ]; then
     case $want in
       pass)  fail "$b: mooncc refused a program that must pass -- $(head -1 "$d/$b.cclog")" ;;
@@ -138,16 +149,21 @@ for f in "$cts"/tests/single-exec/*.c; do
   [ "$want" != refuses ] \
     || fail "$b: mooncc BUILT a program rostered as refusing ($(causeof "$b")) -- take its line out of this script"
 
-  # in its own subshell: two of the rostered-wrong ones SEGFAULT, and the shell
-  # announcing that on stderr would read as the gate itself dying. the trailing
-  # `exit $?` is load-bearing -- a lone command in a subshell is exec'd into it, so
-  # the SIGSEGV lands on the subshell and the parent does the announcing instead.
-  # AND IN $d, not here: 00187 writes fred.txt beside itself and reads it back, so a
-  # run from the tree root litters the tree root (fred.txt was .gitignore'd rather than
-  # confined). the subshell's cd keeps the outer paths below unchanged.
-  ( cd "$d" && timeout 60 ${QEMU:-} "./$b.bin" > "$b.out" 2>&1; exit $? ) 2>/dev/null; r=$?
-  [ $r -ne 124 ] || fail "$b: timed out"
-  if [ $r -eq 0 ] && cmp -s "$f.expected" "$d/$b.out"; then
+  # in the batch's dir, not here: 00187 writes fred.txt beside itself and reads it back.
+  # two of the rostered-wrong ones SEGFAULT; the batch's own stderr is dropped, so the
+  # shell announcing that does not read as the gate dying
+  a64_job "$b" "timeout 60 \$RUN ./$b.bin"
+  built="$built $b"
+done
+
+a64_run "$d/run" || fail "the $pretty batch did not come back"
+
+for b in $built; do
+  f=$cts/tests/single-exec/$b.c
+  want=$(kindof "$b")
+  r=$(cat "$d/run/res/$b.rc" 2>/dev/null) || fail "$b: no answer from the batch"
+  [ "$r" -ne 124 ] || fail "$b: timed out"
+  if [ "$r" -eq 0 ] && cmp -s "$f.expected" "$d/run/res/$b.out"; then
     [ "$want" != wrong ] \
       || fail "$b: now answers right, but is rostered wrong ($(causeof "$b")) -- take its line out of this script"
     npass=$((npass + 1)); continue
@@ -155,7 +171,7 @@ for f in "$cts"/tests/single-exec/*.c; do
 
   [ "$want" = wrong ] || {
     echo "--- $b: exit $r, and ours vs the corpus's own .expected ---" >&2
-    diff "$f.expected" "$d/$b.out" 2>/dev/null | head -20 >&2
+    diff "$f.expected" "$d/run/res/$b.out" 2>/dev/null | head -20 >&2
     fail "$b: compiled clean and answered wrong -- a MISCOMPILE, not a gap"; }
   nwrong=$((nwrong + 1))
 done

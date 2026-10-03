@@ -28,11 +28,11 @@ static void bz_crcs(uint32_t *t) {               // CRC-32/BZIP2: cksum's msb-fi
  for (uint32_t i = 0; i < 256; i++) t[i] = crc_msb(0, (uint8_t) i); }
 
 // --- a growing byte sink, msb-first bits -----------------------------------------------------
-struct bz_w { uint8_t *p; uintptr_t n, cap; uint64_t acc; unsigned k; int bad, big; };
+struct bz_w { uint8_t *p; uintptr_t n, cap; uint64_t acc; unsigned k; int bad, big, fix; };   // fix: p is the caller's, never grown
 
 static void bw_byte(struct bz_w *w, uint8_t b) {
  if (w->n == w->cap) {
-  if (w->n >= BZ_OUTMAX) { w->bad = w->big = 1; return; }
+  if (w->fix || w->n >= BZ_OUTMAX) { w->bad = 1, w->big = !w->fix; return; }
   uintptr_t c = w->cap ? w->cap * 2 : 4096;
   uint8_t *q = w->bad ? NULL : ai_alloc(NULL, c);
   if (!q) { w->bad = 1; return; }
@@ -471,6 +471,12 @@ ai_noinline static struct ai *host_bz2e(struct ai *g) {
  else if (ai_ok(g)) g->sp[1] = ZeroPoint, g->sp += 1;
  if (w.p) ai_alloc(w.p, 0);
  return g; }
+
+// every stream in s into exactly cap bytes of out, for a C caller with no g (src/love/lib/srctree.c)
+// -> cap, or -1 for a stream that is torn or says more or less than that
+intptr_t ai_bz2_into(unsigned char const *s, uintptr_t n, unsigned char *out, uintptr_t cap) {
+ struct bz_w w = { .p = out, .cap = cap, .fix = 1 };
+ return bz_dec(s, n, &w) || w.n != cap ? -1 : (intptr_t) cap; }
 
 ai_noinline static struct ai *host_bz2d(struct ai *g) {
  word sw = g->sp[0];

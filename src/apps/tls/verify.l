@@ -430,9 +430,9 @@
 
    ; --- the roots: the host's bundle, read once a process ---
    ; SSL_CERT_FILE, else the first of the linux and bsd homes that reads, else the tree's own:
-   ; mozilla's roots for serving tls as curl extracts them, src/apps/tls/roots.pem, which inle and
-   ; the wasm seat read under /love and a host with no bundle out of the source its binary
-   ; carries
+   ; mozilla's roots for serving tls as curl extracts them, src/apps/tls/roots.pem, which every
+   ; seat reads under /love -- inle and the wasm seat mounted, a host out of the source its
+   ; binary carries
    tree-roots "src/apps/tls/roots.pem"
    root-homes ["/etc/ssl/certs/ca-certificates.crt" "/etc/ssl/cert.pem"
                "/etc/pki/tls/certs/ca-bundle.crt" "/usr/local/share/certs/ca-root-nss.crt"
@@ -442,27 +442,15 @@
     (getenv "SSL_CERT_FILE" @ e
        (string? e && 0 < #e ? e
           (filter (p \ two? (stat p)) root-homes @ l (two? l ? <l))))
-   ; the tree's roots out of the carried source, the archive's paths under one top word ->
-   ; the pem text | ()
-   (carried-roots _)
-    (: unzip (cite 'gz 'gz-unzip) unpack (cite 'tar 'tar-unpack) a (source-gz 0)
-       u (lit? unzip && string? a && 0 < #a ? (unzip a))
-       es (lit? unpack && two? u ? (unpack <>u))
-       (at? e) (: n (e 'nom) k (#n - #tree-roots)
-                  (string? n && 0 < k && n (k - 1) = 47 && snip n k #n = tree-roots))
-       hit (two? es ? (filter at? <>es))
-       (two? hit ? (<hit 'body)))
-   ; the anchors, x509s, for the bundle in force -> [path anchors] ; () anchors when none reads.
-   ; the carried copy answers the path "<carried>"
+   ; the anchors, x509s, for the bundle in force -> [path anchors] ; () anchors when none reads
    (tls-roots _)
     (: p (root-file 0)
-       key (string? p ? p "<carried>")
-       c (roots-box key)
-       (two? c ? [key <c]
-          (: t (string? p ? (uread p @ r (two? r ? <>r)) (carried-roots 0))
+       c (string? p ? (roots-box p))
+       (two? c ? [p <c]
+          (: t (string? p ? (uread p @ r (two? r ? <>r)))
              xs (string? t ? (filter tablet? (map x509 (pem-ders t))))
-             (pin roots-box key [xs],
-              [(? (string? p) p (two? xs) key ()) xs]))))
+             (string? p ? (pin roots-box p [xs]),
+              [p xs]))))
 
    ; --- the path: leaf, issuers, an anchor ---
    chain-depth 8

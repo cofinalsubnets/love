@@ -538,6 +538,16 @@ ai_noinline static struct ai *host_lzma2len(struct ai *g) {
             ? putcharm((intptr_t) end) : ZeroPoint;
  return g; }
 
+// a raw LZMA2 stream into exactly cap bytes of out, for a C caller with no g (src/love/lib/srctree.c)
+// -> cap, or -1 for one that is torn or says more or less than that
+intptr_t ai_lzma2_into(unsigned char const *s, uintptr_t n, unsigned char *out, uintptr_t cap) {
+ uintptr_t end;
+ if (l2_walk(s, n, &end) != (int64_t) cap) return -1;
+ struct lz_model *m = lz_new(4);
+ int ok = m && !l2_dec(s, out, cap, m);
+ if (m) ai_alloc(m, 0);
+ return ok ? (intptr_t) cap : -1; }
+
 ai_noinline static struct ai *host_lzma2d(struct ai *g) {
  word sw = g->sp[0];
  uintptr_t end;

@@ -86,6 +86,14 @@ out/lib/readme.bin: $(love0) $(S)/love/boot/post.l $(R)/VERSION
 	@echo 'LOVE	'$@
 
 ho = out$(hsuf)
+# the link the hot profile is taken of: love.raw less the hot.prof it carries, so the profile is
+# a function of the rest of the tree, never of itself, and one pass is its fixed point. an eager
+# build (HCC) records no profile, and profiles its own link only to say so
+ifneq ($(HCC),)
+prof_raw = $(ho)/love.raw
+else
+prof_raw = $(ho)/love.praw
+endif
 h_o = $(love_c:$(S)/%.c=$(ho)/o/%.o)
 host_o = $(host_c:$(S)/%.c=$(ho)/o/%.o)
 # the three a LINK names rather than the directory, one per thing it does without:
@@ -116,8 +124,8 @@ $(ho)/love $(ho)/love.cand: $(ho)/%: $(ho)/%.raw $(ho)/.dist-cat.l src/tools/hot
 	@sh src/tools/hotbake.sh $< $@ $(ho)/.dist-cat.l
 
 .PHONY: hotprof
-hotprof: $(ho)/love.raw $(ho)/.dist-cat.l
-	@sh src/tools/hotbake.sh -p $(ho)/love.raw src/tools/hot.prof $(ho)/.dist-cat.l
+hotprof: $(prof_raw) $(ho)/.dist-cat.l
+	@sh src/tools/hotbake.sh -p $(prof_raw) src/tools/hot.prof $(ho)/.dist-cat.l
 
 .PHONY: candidate
 candidate: $(ho)/love.cand
@@ -156,8 +164,10 @@ $(ho)/o/%.o: $(S)/%.c $(love_h) $(ho)/.hostcc
 $(ho)/o/love/cats.o: out/lib/baked.h
 $(ho)/o/love/main.o: out/lib/distlist.h
 $(ho)/o/love/love.o: out/lib/love_version.h
-# the carried-blob reader both a carried-source bake and the kernel's ram fs decode with
-$(ho)/o/love/main.o $(ho)/o/love/lib/ustar.o: $(S)/love/lib/ustar.h
+# the carried tree's reader, and the ustar walk under it and the kernel's rootfs
+$(ho)/o/love/main.o $(ho)/o/love/lib/ustar.o $(ho)/o/love/lib/srctree.o: $(S)/love/lib/ustar.h
+$(ho)/o/love/main.o $(ho)/o/love/lib/srctree.o $(ho)/o/love/lovefs.o $(ho)/o/love/posix.o \
+  $(ho)/o/love/src.o: $(S)/love/lib/srctree.h
 # src/love/cb.c rides the src/love/quay sources by unity include -- recompile when they move.
 $(ho)/o/love/cb.o: src/love/quay/quay.c src/love/quay/nif.c src/love/quay/quay.h src/love/quay/cp437.h src/love/quay/cpwidth.h src/love/quay/cpemoji.h src/love/quay/paint.c src/love/quay/cga_8x8.c src/love/quay/cleat_8x16.c
 
@@ -273,6 +283,11 @@ $(ho)/love.raw $(ho)/love.cand.raw: out/moonlibc.o $(moon_o) out/src.o out/rootf
 	@echo 'MOON	'$@
 	@mkdir -p $(dir $@)
 	@$(moon0) -pie $(moon_o) $(kart_o) out/src.o out/rootfs.o out/moonlibc.o -freadme=out/lib/readme.bin -o $@
+# prof_raw: love.raw less the hot.prof it carries
+$(ho)/love.praw: out/moonlibc.o $(moon_o) out/prof/src.o out/rootfs.o out/lib/readme.bin $(moonlibc_src)
+	@echo 'MOON	'$@
+	@mkdir -p $(dir $@)
+	@$(moon0) -pie $(moon_o) $(kart_o) out/prof/src.o out/rootfs.o out/moonlibc.o -freadme=out/lib/readme.bin -o $@
 endif
 
 $(ho)/love.1 $(ho)/cook.1 $(ho)/lush.1: $(ho)/%.1: doc/%.md src/tools/mkman.l src/apps/lapiz.l out/lib/love_version.h $(mdep)
@@ -362,19 +377,18 @@ out/lib/distlist.h: Makefile
 	@mkdir -p out/lib
 	@tf=$@.$$$$.tmp; printf '"%s"\n' '$(distfiles)' > $$tf; \
 	 $(note)
-.PHONY: dist dist-source dist-seed
+.PHONY: dist dist-seed
 
 dist_ver  := $(love_base)
 dist_stamp ?= 0
-dist_source = out/dist/love-$(dist_ver).tar.gz
-dist-source: $(dist_source)
+src_tree = out/src.tree
 ifneq ($(HCC),)
 dist-seed:
 	$(error dist: the HCC flavor is a differential, not the artifact -- drop HCC=)
 else
 dist-seed: $(ho)/love
 endif
-dist: dist-source dist-seed   # a release is both
+dist: dist-seed   # the binary, carrying its own source
 
 # what a release is not: the benches and the board seats. the wasm seat rides -- a
 # laid tree serves its own page (`love web`) -- and the page's generated files are
@@ -383,15 +397,22 @@ dist: dist-source dist-seed   # a release is both
 dist_drop = bench
 .PHONY: force_src
 force_src: ;
-# force_src: a release packs the tree as it is, so make cannot know the prerequisites;
-# selfpack rewrites the archive only when the content moved, and says so only then
-$(dist_source): force_src $(love0)
+# force_src: the artifact packs the tree as it is, so make cannot know the prerequisites;
+# selfpack rewrites the container only when the content moved, and says so only then.
+# the roster is the bake section, what a carried-source bake decodes alone (main.c).
+$(src_tree): force_src $(love0) $(ho)/.dist.list
 	@mkdir -p $(dir $@)
-	@LOVE_NO_IMAGE= LOVE_BUDGET_MB=256 $(love0) src/tools/selfpack.l $@ love-$(dist_ver) $(dist_stamp) $(love_stamp) $(dist_drop)
+	@LOVE_NO_IMAGE= LOVE_BUDGET_MB=256 $(love0) src/tools/selfpack.l $@ love-$(dist_ver) $(dist_stamp) $(love_stamp) $(ho)/.dist.list $(dist_drop)
 
-out/src.o: $(dist_source) src/tools/mksrc.l $(holocat_dep) $(love0)
+out/src.o: $(src_tree) src/tools/mksrc.l $(holocat_dep) $(love0)
 	@echo 'HOLO	'$@
-	@$(love0) $(holocat) src/tools/mksrc.l $(dist_source) $@ $(hosta)
+	@$(love0) $(holocat) src/tools/mksrc.l $(src_tree) $@ $(hosta)
+out/prof/src.tree: force_src $(love0) $(ho)/.dist.list
+	@mkdir -p $(dir $@)
+	@LOVE_NO_IMAGE= LOVE_BUDGET_MB=256 $(love0) src/tools/selfpack.l $@ love-$(dist_ver) $(dist_stamp) $(love_stamp) $(ho)/.dist.list $(dist_drop) src/tools/hot.prof
+out/prof/src.o: out/prof/src.tree src/tools/mksrc.l $(holocat_dep) $(love0)
+	@echo 'HOLO	'$@
+	@$(love0) $(holocat) src/tools/mksrc.l out/prof/src.tree $@ $(hosta)
 # the machine's own files (src/inle/rootfs/): a second initrd, walked at the root of every inle
 # boot where the tree's is walked under /love. one tar, carried under ai_rootfs
 # beside the source blob on every link that carries one.
@@ -458,9 +479,9 @@ xos ?=
 moonx = $(moon0) -t $(xa) $(if $(xos),-os $(xos))
 $(eval $(call moonlane,x,xod,moonx,xa))
 
-$(xd)/src.o: $(dist_source) src/tools/mksrc.l $(holocat_dep) $(love0)
+$(xd)/src.o: $(src_tree) src/tools/mksrc.l $(holocat_dep) $(love0)
 	@echo 'HOLO	'$@
-	@$(love0) $(holocat) src/tools/mksrc.l $(dist_source) $@ $(xa)
+	@$(love0) $(holocat) src/tools/mksrc.l $(src_tree) $@ $(xa)
 $(xd)/rootfs.o: out/rootfs.tar src/tools/mkblob.l $(holocat_dep) $(love0)
 	@echo 'HOLO	'$@
 	@LOVE_NO_IMAGE= $(love0) $(holocat) src/tools/mkblob.l $< $@ ai_rootfs $(xa)
@@ -598,7 +619,7 @@ k_libc_c = $(c_c)
 # rather than copying it is what lets a new src/inle/<app>.c reach the kernel with no rule edit.
 k_c = $(love_c) \
   $(k_libc_c) $(k_arch_c) $(k_free_c) $(host_c)
-k_h = $(love_h) $(S)/love/lib/ustar.h $(wildcard $(S)/inle/*.h) $(wildcard $(S)/inle/$a/*.h)
+k_h = $(love_h) $(S)/love/lib/ustar.h $(S)/love/lib/srctree.h $(wildcard $(S)/inle/*.h) $(wildcard $(S)/inle/$a/*.h)
 
 k_odir = $(ko)/$a
 k_elf = $(ko)/love-$a.elf
@@ -635,10 +656,10 @@ $(k_odir)/moonlibc.o: $(rt_a) $(rt_slice) src/tools/mkrt.l $(mdep)
 	@echo 'HOLO	'$@
 	@mkdir -p "$(dir $@)"
 	@$m src/tools/mkrt.l $@ $a $(rt_a)
-$(k_odir)/src.o: $(dist_source) src/tools/mksrc.l $(mdep)
+$(k_odir)/src.o: $(src_tree) src/tools/mksrc.l $(mdep)
 	@echo 'HOLO	'$@
 	@mkdir -p "$(dir $@)"
-	@LOVE_NO_IMAGE= $m src/tools/mksrc.l $(dist_source) $@ $a
+	@LOVE_NO_IMAGE= $m src/tools/mksrc.l $(src_tree) $@ $a
 $(k_odir)/rootfs.o: out/rootfs.tar src/tools/mkblob.l $(mdep)
 	@echo 'HOLO	'$@
 	@mkdir -p "$(dir $@)"
@@ -733,7 +754,7 @@ kart_inc = -I$(ho) -I. -Isrc/love -Isrc/inle -Iout/lib -I$R \
 # and the module set are src/love/cats.c's, and that object rides the host lane above.
 kart_bake = out/lib/korelist.h out/lib/crewlist.h out/lib/seat.h
 define kart
-$(1)_h = $$(love_h) $$S/inle/k.h $$S/love/lib/ustar.h $$(wildcard $$S/inle/$$($(4))/*.h)
+$(1)_h = $$(love_h) $$S/inle/k.h $$S/love/lib/ustar.h $$S/love/lib/srctree.h $$(wildcard $$S/inle/$$($(4))/*.h)
 $(1)_arch_o = $$(patsubst $$S/%.c,$$($(2))/%.o,$$(wildcard $$S/inle/$$($(4))/*.c))
 $(1)_kern_o = $$(k_free_c:$$S/%.c=$$($(2))/%.o)
 $(1)_o = $$(if $$($(1)_arch_o),$$($(1)_kern_o) \
@@ -944,7 +965,7 @@ endif
 
 # ONE roster each: the compat-symlink block below reads the same two names, and two
 # spellings of a list is how they drift.
-binnames = $(BIN) kore sb mooncc cook papel libra lux bao lush
+binnames = $(BIN) kore sb mooncc cook libra lux bao lush
 mannames = $(BIN) cook lush
 # the default nest is the one install: `love nest -y` (src/apps/source.l) copies the binary
 # in, newer builds only, and links lush, which runs every other verb by name. a real PREFIX,
@@ -994,18 +1015,15 @@ $d/bin/$(BIN): $(ho)/love
 # layered crew chain riding it), so the plain-copy install keeps the warm wake and every verb.
 
 # the single-file shebang tools, one shape: the `#!/usr/bin/env -S love -l` line re-execs
-# the installed interpreter, and each file's own SEAT fires on its name. papel and libra
-# READ their siblings rather than being -l'd beside them -- two tool files cannot both be
-# -l'd, since each one's seat would fire on the other's command line -- and they find them
-# by READLINK'ing this very symlink back to the source tree, so the link on PATH and the
-# crew directory need not be neighbours. libra's siblings are named ((borrow 'lint),
-# (borrow 'salt), and (borrow 'lapiz) on the doc verb alone) and ride the baked image.
+# the installed interpreter, and each file's own SEAT fires on its name. libra borrows
+# its siblings by name rather than being -l'd beside them -- two tool files cannot both be
+# -l'd, since each one's seat would fire on the other's command line -- ((borrow 'lint),
+# (borrow 'salt), and (borrow 'lapiz) on the doc verb alone), and they ride the baked image.
 # each source sits FIRST on its own line: instool reads $<, and a prerequisite added on
 # the grouped line below lands ahead of it -- which installs the kore shim as `cook`.
 $d/bin/cook:    src/apps/cook.l    $(ho)/love
-$d/bin/papel:   src/apps/papel.l  $(ho)/love
 $d/bin/libra:   src/apps/libra/libra.l  $(ho)/love
-$d/bin/cook $d/bin/papel $d/bin/libra:
+$d/bin/cook $d/bin/libra:
 	@echo $(instag)	$(abspath $@)
 	@mkdir -p $(@D)
 	@$(call instool,$<,$@)

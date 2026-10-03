@@ -30,6 +30,13 @@
    ; below hands it on. () on a token the cpp minted itself (__LINE__, defined ..),
    ; where the value is the spelling. parse reuses this slot once cpp is done.
    (sof t) (4 < #t ? <>>>>t)
+   (spaced? t) (5 < #t)                         ; clexw's mark: whitespace followed it
+   ; a rebuild hands the mark on; bare drops it, so parse meets the shapes it always has
+   (retok t l h) (spaced? t ? [(kof t) (vof t) l h (sof t) 1] [(kof t) (vof t) l h (sof t)])
+   (bare t) (? !(spaced? t) t
+               !(() = sof t) [(kof t) (vof t) (lof t) (hof t) (sof t)]
+               !(() = hof t) [(kof t) (vof t) (lof t) (hof t)]
+               [(kof t) (vof t) (lof t)])
    (tok k v l) [k v l]
    ; -- #line (C11 6.10.4) -- the delta rides `macs`, the one state already threaded
    ; through every arm of cppgo, so no signature moves. applied where active tokens
@@ -56,14 +63,14 @@
    (pv? ('p . v . _) s) ?(v = s)
    (kwv? ('kw . v . _) s) ?(v = s)
    (addhide t hs)                                   ; union hs into t's hideset
-    [(kof t) (vof t) (lof t) (dedup (hof t + hs)) (sof t)]
+    (retok t (lof t) (dedup (hof t + hs)))
    (dedup l) (: (go l seen) (? (atom? l) ()
                               (elem <l seen) (go >l seen)
                               (<l . go >l (<l . seen)))
                 (go l ()))
 
    ; -- the spelling of a token, for ## paste and # stringize --
-   numks '(num unum ulnum llnum ullnum flo flof iflo)
+   numks '(num unum lnum ulnum llnum ullnum flo flof iflo)
    (spell t) (: k (kof t) s (sof t)
                 (? (0 < #s) s                            ; the spelling the lexer kept
                    (elem k numks) (show (vof t))           ; ..or a cpp-minted decimal
@@ -75,11 +82,12 @@
    ; C11 6.10.3.2's stringize: the argument's own spelling, quotes and escapes and
    ; all. the standard's extra \ before each " and \ buys a text that RE-LEXES to
    ; this; we hand the value straight to codegen and never re-lex it, so the
-   ; spelling is the answer. whitespace: one space between every pair of tokens,
-   ; where C keeps `a+1` tight -- the lexer would have to record what it dropped.
-   (spellcat ts) (: (go l acc) (atom? l ? acc
-                                  (go >l (acc + (acc = "" ? "" " ") + spell <l)))
-                    (go ts ""))
+   ; spelling is the answer. whitespace: one space where the source had any, none
+   ; where it had none (`a+1` stays tight), none before the first token
+   (spellcat ts) (: (go l acc gap) (atom? l ? acc
+                                      (go >l (acc + (gap && acc != "" ? " " "") + spell <l)
+                                          (spaced? <l)))
+                    (go ts "" 0))
 
    ; -- macro table entries: (obj body) | (fun params body variadic?) --
    (mdef macs name) (macs name)
@@ -107,18 +115,19 @@
                        (go toks ()))
 
    ; -- collect function-macro arguments: ts is positioned just after '('.
-   ; returns (args rest) with args a list of token-lists (commas at depth 1
-   ; split; nested parens preserved), rest past the closing ')'. () on error. --
+   ; returns (args rest seps) with args a list of token-lists (commas at depth 1
+   ; split; nested parens preserved), rest past the closing ')', and the commas
+   ; split at, whose spacing #__VA_ARGS__ spells. () on error. --
    (collargs ts)
-    (: (go ts depth cur args)
+    (: (go ts depth cur args seps)
         (atom? ts ? ()
            (<ts @ t
-              (? (depth = 1 && pv? t ")") [(rev (rev cur . args)) >ts]
-                 (depth = 1 && pv? t ",") (go >ts depth () (rev cur . args))
-                 (pv? t "(") (go >ts (depth + 1) (t . cur) args)
-                 (pv? t ")") (go >ts (depth - 1) (t . cur) args)
-                 (go >ts depth (t . cur) args))))
-       (go ts 1 () ()))
+              (? (depth = 1 && pv? t ")") [(rev (rev cur . args)) >ts (rev seps)]
+                 (depth = 1 && pv? t ",") (go >ts depth () (rev cur . args) (t . seps))
+                 (pv? t "(") (go >ts (depth + 1) (t . cur) args seps)
+                 (pv? t ")") (go >ts (depth - 1) (t . cur) args seps)
+                 (go >ts depth (t . cur) args seps))))
+       (go ts 1 () () ()))
    (paramidx params name) (: (go l i) (? (atom? l) -1 (<l = name) i (go >l (i + 1)))
                              (go params 0))
 
@@ -148,7 +157,7 @@
    ; (adjh is a closure-local, not a sibling -- a lambda PARAMETER named after a
    ; sibling :-local gets shadowed by boxfix's shared cell, so the macro-body
    ; array rides as `mb`, a nom bound nowhere else, and its ## check is inlined.)
-   (subst mb params args var? line macs)
+   (subst mb params args var? line macs seps)
     (: (adjh i) (0 < i && pv? (mb (i - 1)) "##" ||
                  i + 1 < #mb && pv? (mb (i + 1)) "##")
        (go i acc)
@@ -159,7 +168,7 @@
                      pi (paramidx params (pnm p))
                      va (var? && idv? p "__VA_ARGS__")
                      (-1 < pi || va ?
-                        (go (i + 2) (tok 'str (spellcat (va ? (vaargs args params) (args pi))) line . acc))
+                        (go (i + 2) (tok 'str (spellcat (va ? (vaargs args params seps) (args pi))) line . acc))
                         (go (i + 1) (t . acc))))
                  (-1 < paramidx params (pnm t))                 ; a named parameter
                   (: pi (paramidx params (pnm t))
@@ -170,7 +179,7 @@
                             [(tok 'pmark "" line)])
                      (go (i + 1) (revcat sub acc)))
                  (var? && idv? t "__VA_ARGS__")                 ; the variadic tail
-                  (: va (vaargs args params)
+                  (: va (vaargs args params seps)
                      prevhh (0 < i && pv? (mb (i - 1)) "##")
                      commahh ((prevhh && 1 < i) && pv? (mb (i - 2)) ",")
                      (? commahh                                 ; GNU `, ## __VA_ARGS__` elision: the ## is a marker, not a paste
@@ -183,13 +192,14 @@
                         (go (i + 1) (revcat (expand va macs) acc))))
                  (go (i + 1) (t . acc)))))
        (paste (go 0 ()) line))
-   (vaargs args params)                             ; the arg token-lists past the named params, comma-joined
+   (vaargs args params seps)                        ; the arg token-lists past the named params, comma-joined
     (: np #params
        (skip l k) (k < 1 || atom? l ? l (skip >l (k - 1)))
-       (join l) (? (atom? l) ()
-                   (atom? >l) <l
-                   (<l + (tok 'p "," 0 . join >l)))
-       (join (skip args np)))
+       (comma c) (two? c && spaced? <c ? ['p "," 0 () () 1] (tok 'p "," 0))
+       (join l cs) (? (atom? l) ()
+                      (atom? >l) <l
+                      (<l + (comma cs . join >l (two? cs ? >cs))))
+       (join (skip args np) (skip seps np)))
 
    ; -- the expander: rescan toks, replacing macro invocations (honoring
    ; hidesets), fully. mutually recursive with subst via expand-of-arg. --
@@ -211,12 +221,12 @@
                                 (: args <ca after <>ca
                                    params <>m mbody <>>m mvar <>>>m
                                    hs (nm . hof t)
-                                   body (subst mbody params args mvar (lof t) macs)
+                                   body (subst mbody params args mvar (lof t) macs <>>ca)
                                    (expand (mapadd body hs (lof t) + after) macs))))
                          (t . expand rest macs))))))))
    (mapadd toks hs line)                            ; give body tokens the hideset + the invocation line
     (atom? toks ? ()
-       (<toks @ t ([(kof t) (vof t) line (dedup (hof t + hs)) (sof t)] . mapadd >toks hs line)))
+       (<toks @ t (retok t line (dedup (hof t + hs)) . mapadd >toks hs line)))
    ; -- #line's operand: a digit sequence, or what one macro-expands to (C11 6.10.4p3).
    ; () when it is neither, which is the directive doing nothing. --
    (lnum body macs)
@@ -284,7 +294,7 @@
    (cprim ts)
     (atom? ts ? [(cv 0 0) ()]
        (<ts @ t
-          (? (elem (kof t) '(num unum ulnum llnum ullnum))
+          (? (elem (kof t) '(num unum lnum ulnum llnum ullnum))
               ; a U suffix says unsigned, and so does a value past intmax's top --
               ; 0xffffffffffffffff has no signed type to land in (C11 6.4.4.1)
               [(cv (vof t) (elem (kof t) '(unum ulnum ullnum) || h64 <= vof t)) >ts]
@@ -412,9 +422,9 @@
        (<ts @ t
           (? (fmark? t)
               (fmpush t files @ fs (spanat n fs, strcat-pass >ts n fs))
-             !(strk? (kof t)) (t . strcat-pass >ts (n + 1) files)
+             !(strk? (kof t)) (bare t . strcat-pass >ts (n + 1) files)
              (: sr (skipfm >ts files) nxt <sr fs <>sr
-                (!(two? nxt && strk? (kof <nxt)) ? (t . strcat-pass >ts (n + 1) files)
+                (!(two? nxt && strk? (kof <nxt)) ? (bare t . strcat-pass >ts (n + 1) files)
                    ; the marks we just consumed take effect after the merged token
                    (? (fmtop fs = fmtop files) () (spanat (n + 1) fs),
                     strcat-pass (tok (jork (kof t) (kof <nxt)) (vof t + vof <nxt) (lof t) . >nxt) n fs))))))
@@ -594,7 +604,7 @@
                 d0 #(peep cppdeps 'l ())
                 (two? got ? (mrestore macs <>>>>got, pin cppdeps 'l (got 5 + peep cppdeps 'l ()), rejoin <>>>got)
                    (: _ (0 < #ipath && pin cppdeps 'l (ipath . peep cppdeps 'l ()))
-                   (clex <>txt @ lr
+                   (clexw <>txt 1 @ lr
                       ; okv?, not two? -- a gripe is a pair, and a two? here would read
                       ; a refusal as a token list and walk it. a located refusal is the
                       ; header's own and takes its name; a bare one is knowable only at

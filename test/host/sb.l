@@ -448,6 +448,52 @@
  !(lg-name? "../x") !(lg-name? "q.lock") (lg-name? "queue/main")
  (two? carried) ("none" = theirs))                       ; the patch travelled, the ledger did not
 
+; --- the x bit: a side is a blob, or a blob and an x, so a chmod is a change that records,
+;     travels and lands, and a mode merges three ways on its own -- one nest's chmod and the
+;     other's edit both survive, a binary's too. undo of a chmod gives the mode back ---
+(: _ (mkdir "mrg/x" 493) _ (mkdir "mrg/x/a" 493) _ (mkdir "mrg/x/b" 493)
+   _ (chdir "mrg/x/a") _ (mk ())
+   _ (lay "run.sh" "#!/bin/sh\necho hi\n") _ (chmod "run.sh" 493)
+   _ (lay "plain" "not run\n")
+   _ (lay "bin" (string [0 1 2 3]))
+   xp1 (sb-record "a script")
+   xh1 (fld (patch xp1) 'hunks)
+   xside (: (go m) (? (atom? m) () (<<m = "run.sh") <>><m (go >m)) (go xh1))
+   pside (: (go m) (? (atom? m) () (<<m = "plain") <>><m (go >m)) (go xh1))
+   _ (chmod "run.sh" 420)
+   xdirty (dirty ())
+   xp2 (sb-record "not a script")
+   xh2 (fld (patch xp2) 'hunks)
+   _ (chmod "run.sh" 493) _ (sb-record "a script again")
+   _ (chdir "../b")
+   xgot (sb-sync "../a")
+   bexe (sd-exe? "run.sh") bplain (sd-exe? "plain")
+   ; the two sides move apart: b edits run.sh and bin, a takes run.sh's x and gives bin one
+   _ (lay "run.sh" "#!/bin/sh\necho there\n") _ (lay "bin" (string [0 1 2 4]))
+   _ (sb-record "b: the text")
+   _ (chdir "../a") _ (chmod "run.sh" 420) _ (chmod "bin" 493)
+   xp3 (sb-record "a: the modes")
+   _ (chdir "../b")
+   xmerge (sb-sync "../a")
+   bt (look "run.sh") bx (sd-exe? "run.sh") bbin (look "bin") bbx (sd-exe? "bin")
+   _ (chdir "../a")
+   at (look "run.sh") ax (sd-exe? "run.sh") abx (sd-exe? "bin")
+   xundo (sb-undo [xp3])
+   ut (look "run.sh") ux (sd-exe? "run.sh") ubx (sd-exe? "bin")
+   _ (chdir "../../.."))
+
+(test
+ (65 = #xside) (120 = xside 64) (64 = #pside)                ; the script's side carries its x
+ (1 = xdirty) (1 = #xh2)                                     ; a chmod alone is a change
+ (sd-h <><xh2 = sd-h <>><xh2) (sd-x? <><xh2) !(sd-x? <>><xh2) ; ...one blob, two modes
+ (0 < xgot) bexe !bplain                                     ; the mode landed with the text
+ (0 < xmerge)                                                ; no conflict: the sides are disjoint
+ (<>bt = "#!/bin/sh\necho there\n") !bx                     ; b's text, a's mode
+ (<>bbin = string [0 1 2 4]) bbx                             ; a binary merges when one side kept the text
+ (<>at = <>bt) (ax = bx) (abx = bbx)                         ; both nests on one tree
+ xundo (<>ut = <>bt) ux !ubx                                 ; the undo lifts only the modes
+ (sb-oid? xside) !(sb-oid? (snip xside 0 64 + "y")) !(sb-oid? (xside + "x")))
+
 (chdir sb-home)
 (hark ["rm" "-rf" sb-dir])
 (puts "sb: ok", putc 10, 0)

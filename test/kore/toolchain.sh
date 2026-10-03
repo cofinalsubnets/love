@@ -125,17 +125,12 @@ if command -v readelf >/dev/null 2>&1; then
   korerun readelf -h "$ho/.kore-re-x64.o" "$ho/.kore-re-a64.o" > "$o" 2>&1; same "readelf over two files"
 fi
 # a compile with no nest and no tree takes moon's toolchain off the source the binary carries:
-# the slice leads that archive (src/tools/selfpack.l), so the read stops past it. from a scratch
-# dir outside the tree, a stdio hello compiles, links and runs; and the slice is what leads
+# the slice is its own section (src/tools/selfpack.l), decoded alone. from a scratch dir
+# outside the tree, a stdio hello compiles, links and runs
 if [ "$(uname -m)" = x86_64 ]; then
   N=$ho/.kore-nonest; rm -rf "$N"; mkdir -p "$N"
   printf '#include <stdio.h>\nint main(void){printf("carried\\n");return 0;}\n' > "$N/h.c"
   ( cd "$N" && "$K" cc h.c -o h ) > "$o" 2>&1 || { cat "$o"; fail "love cc off the carried source"; }
   [ "$("$N/h")" = carried ] || fail "love cc off the carried source: the program"
-  src=$(ls "$ho"/dist/love-*.tar.gz 2>/dev/null | head -1)
-  if [ -n "$src" ]; then
-    gzip -dc "$src" | tar tf - 2>/dev/null | sed -n 4p | grep -q '/apps/moon/include' \
-      || fail "the carried archive does not lead with moon's slice"
-  fi
 fi
 echo "kore: diff (GNU-identical) + argv0 symlink + usage + as + ar + ld + objcopy + nm + size + strip + ranlib + readelf ok"

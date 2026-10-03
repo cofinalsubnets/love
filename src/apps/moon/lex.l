@@ -66,7 +66,10 @@
        v)
 
    (clex src) (clexat src 1)
-   (clexat src ln0) (clexm src ln0 ())
+   (clexat src ln0) (clexm src ln0 () ())
+   ; ..and for the preprocessor: a token whitespace follows carries a 6th cell, so # can
+   ; spell the gaps the source had (C11 6.10.3.2); cpp drops it on the way out
+   (clexw src ln0) (clexm src ln0 () 1)
    ; ..and an assembly source's (a .S the preprocessor reads first): a digit-led label
    ; reference (1b, 2f) is one word, $ @ \ ` are punctuators, and `#` past a line's first token
    ; -- or opening a line with no directive after it -- starts gas's comment
@@ -74,15 +77,17 @@
    ; punctuator, so the text spelled back breaks where the source did even past an expansion
    ; (whose tokens keep their definition's lines); a directive line takes none
    (clexasm src ln0)
-    (: r (clexm src ln0 1)
+    (: r (clexm src ln0 1 1)
        (go l ln acc) (atom? l ? (rev acc)
                         (<l @ t
                            (? (<>>t = ln) (go >l ln (t . acc))
                               (<t = 'p && <>t = "#") (go >l <>>t (t . acc))
                               (go >l <>>t (t . ['p "\n" <>>t] . acc)))))
        (okv? r ? [1 (go <>r (ln0 - 1) ())] r))
-   (clexm src ln0 asm)
+   (clexm src ln0 asm wm)
     (: n #src
+       (wpad t) (#t @ k (? (k = 3) (t + [() () 1]) (k = 4) (t + [() 1]) (t + [1])))
+       (spc acc) (? (!wm || atom? acc || 5 < #<acc) acc (wpad <acc . >acc))
        kws '(auto break case char const continue default do double else enum
              extern float for goto if inline int long register restrict return
              short signed sizeof static struct switch typedef union unsigned
@@ -329,12 +334,12 @@
        (go i line acc)
         (n <= i ? [1 (rev acc)]
            (src i @ c
-              (? (c = 10) (go (i + 1) (line + 1) acc)
+              (? (c = 10) (go (i + 1) (line + 1) (spc acc))
                  (c = 92 && i + 1 < n && src (i + 1) = 10)         ; \<nl> splice: one logical line
                   (go (i + 2) line acc)                                    ; (line unadvanced so a directive stays grouped)
                  (c = 92 && i + 2 < n && src (i + 1) = 13 && src (i + 2) = 10)          ; \<cr><nl>
                   (go (i + 3) line acc)
-                 (ws? c) (go (i + 1) line acc)
+                 (ws? c) (go (i + 1) line (spc acc))
                  ; gas's comment: `#` after code, or opening a line that names no directive
                  (asm && c = 35 && (two? acc && <>><acc = line ? !(dirline? acc line) !(asmdir? (i + 1))))
                   (: (eat j) (n <= j || src j = 10 ? j (eat (j + 1)))
@@ -347,7 +352,7 @@
                  ; per character otherwise)
                  (c = 47 && at? i "//")
                   (: (eat j) (n <= j || src j = 10 ? j (eat (j + 1)))
-                     (go (eat i) line acc))
+                     (go (eat i) line (spc acc)))
                  (c = 47 && at? i "/*")
                   (: ; a \<nl> inside a comment is a splice (C phase 2 runs before
                      ; comments), so it stays on the logical line -- a #define whose
@@ -359,7 +364,7 @@
                                               (at? j "*/") [(j + 2) l2]
                                               (eat (j + 1) (src j = 10 && !(spliced? j) ? (l2 + 1) l2)))
                                 r (eat (i + 2) line)
-                                (charm? <r ? (go <r <>r acc)))
+                                (charm? <r ? (go <r <>r (spc acc))))
                  (c = 34) (strbody (i + 1) 34 () @ r          ; a string literal
                              (two? r ? (go <>r line (['str <r line () (snip src i <>r)] . acc))))
                  ; a character constant: chars and escapes up to the closing quote.
