@@ -127,6 +127,12 @@ int main(void) {
  /* --- strtok: the hidden state, the run of separators, the tail --- */
  strcpy(b2, "  one,,two  three,");
  for (char *t = strtok(b2, " ,"); t; t = strtok(0, " ,")) say_s("strtok", t);
+ /* --- strtok_r: the state is the caller's, so two walks interleave --- */
+ char r1[] = "a:b:c", r2[] = "x y", *s1 = 0, *s2 = 0;
+ char *t1 = strtok_r(r1, ":", &s1), *t2 = strtok_r(r2, " ", &s2);
+ while (t1 || t2) {
+   if (t1) { say_s("strtok_r.1", t1); t1 = strtok_r(0, ":", &s1); }
+   if (t2) { say_s("strtok_r.2", t2); t2 = strtok_r(0, " ", &s2); } }
  strcpy(b2, "solo");
  say_s("strtok.solo", strtok(b2, ","));
  say_s("strtok.done", strtok(0, ","));             /* exhausted -> null */

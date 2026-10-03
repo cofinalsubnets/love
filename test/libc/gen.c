@@ -8,6 +8,7 @@
 #include <libgen.h>
 #include <stdio_ext.h>
 #include <dirent.h>
+#include <stdint.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include "say.h"
@@ -44,6 +45,10 @@ int main(void) {
   FILE *r = fopen("/dev/null", "r");
   say_n("freading", __freading(r) != 0); say_n("fwriting.r", __fwriting(r) != 0);
   fclose(r);
+  say_n("INT_FAST8_MIN", INT_FAST8_MIN); say_n("INT_FAST16_MIN", INT_FAST16_MIN);
+  say_n("INT_FAST32_MAX", INT_FAST32_MAX); say_n("INT_FAST64_MIN", INT_FAST64_MIN);
+  say_n("UINT_FAST16_MAX.top", (long) (UINT_FAST16_MAX >> 1)); say_n("UINT_FAST8_MAX", UINT_FAST8_MAX);
+  say_n("fast.sizes", (long) (sizeof(int_fast8_t) * 1000 + sizeof(int_fast16_t) * 100 + sizeof(int_fast32_t) * 10 + sizeof(int_fast64_t)));
   int fd = open("/", O_RDONLY);
   DIR *d = fdopendir(fd);
   say_n("fdopendir", d != 0); say_n("dirfd", dirfd(d) == fd);

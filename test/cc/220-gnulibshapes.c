@@ -1,6 +1,7 @@
 /* shapes gnulib leans on: a macro parameter spelled like a keyword (its stdint.h names one
  * `signed`), a constant 0.0/0.0 in a static initializer (isnan's probe) laid as the IEEE quiet
- * nan with its sign, and a parameter of function type, which is a pointer to one */
+ * nan with its sign, a parameter of function type, which is a pointer to one, a scalar
+ * initializer in braces (PTHREAD_ONCE_INIT's), and unary + promoting (INT_PROMOTE's _Generic) */
 typedef unsigned long u64;
 typedef unsigned int u32;
 
@@ -19,6 +20,8 @@ static int const *first(char const *ctx, char const *arg) { return &seven; }
 static int take(pick p, char *arg, u64 no) { return *p("opt", arg + no); }
 static int twice(int f(int), int x) { return f(f(x)); }
 static int inc(int x) { return x + 1; }
+int once = {0};
+static long sevenbr = { 7 };
 
 int main(void) {
   int bad = 0;
@@ -29,5 +32,9 @@ int main(void) {
   if (bits(inv) != 0x7ff8000000000000ull || bits(inf) != 0x7ff0000000000000ull) bad |= 16;
   if (fbits(fqn) != 0x7fc00000u || qn == qn) bad |= 32;
   if (take(first, "x", 0) != 7 || twice(inc, 1) != 3) bad |= 64;
+  int z = {4}; char const *p = {"ab"}; char c = 1; short h = 2;
+  if (once != 0 || sevenbr != 7 || z != 4 || p[1] != 'b') bad |= 128;
+  if (_Generic(+c, int: 0, default: 1) || _Generic(+h, int: 0, default: 1) || _Generic(c, char: 0, default: 1)) bad |= 256;
+  if (sizeof(+c) != sizeof(int)) bad |= 512;
   return bad;
 }

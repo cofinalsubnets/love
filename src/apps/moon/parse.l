@@ -1370,7 +1370,10 @@
                             (atom? r ? ()
                                (nulloff ps <r @ n   ; the offsetof idiom folds to a constant
                                   (charm? n ? [['num n] <>r] [['addr <r] <>r]))))
-             (tp? t "+") (punary ps >ts)
+             (tp? t "+") (punary ps >ts @ r          ; +x is x promoted (_Generic reads the difference)
+                            (atom? r ? ()
+                               (ptype ps <r @ ty
+                                  (ty && pprom ty != ty ? [['cast (pprom ty) <r] <>r] r))))
              (tp? t "-") (punary ps >ts @ r
                             (two? r ? [['un 'neg <r] <>r]))
              (tp? t "!") (punary ps >ts @ r
@@ -1483,6 +1486,11 @@
                    r)))))
    ; a `[]` bound completes from the initializer (C11 6.7.9p22, 6.5.2.5p22 for a
    ; compound literal); one that implies no count leaves the type as it stands
+   ; C11 6.7.9p11: a scalar's initializer may stand in braces, `int x = {0};` (PTHREAD_ONCE_INIT's)
+   (scini ty ini)
+    (? (arr? ty || stru? ty || varr? ty) ini
+       (ini @ ('init (x)) (two? x && elem <x '(dfield didx init) ? ini x)   ; one level: {{0}} is not a scalar's
+              ini))
    (fillarr ps ty ini)
     (arr? ty && <>>ty = 0 && charm? (initcount ps <>ty ini) ?
        ['arr <>ty (initcount ps <>ty ini)] ty)
@@ -1827,7 +1835,7 @@
                                     (old = 'none ? (pull (ps 'locals) name 0) (pin (ps 'locals) name old),
                                      atom? r ? ()
                                        (<r @ ini
-                                          [([name (fillarr ps ty ini) ini] + pinl) <>r])))   ; [] local: infer size
+                                          [([name (fillarr ps ty ini) (scini ty ini)] + pinl) <>r])))   ; [] local: infer size
                                  [([name ty ()] + pinl) ts3])))))
                    (more ts2 acc)
                     (one ts2 @ r
@@ -2516,7 +2524,7 @@
                                        ; (`more` runs pdtor first, so t2 is the whole array type and
                                        ; ts3 sits on the `=`), where the first still has its `[`
                                        ; ahead of it -- so a lone [] bound is filled in here too
-                                       [[nm (fillarr ps t2 <r) <r] <>r]))
+                                       [[nm (fillarr ps t2 <r) (scini t2 <r)] <>r]))
                                 ; a global register variable's row was pinned before its type was
                                 ; in hand; fill it in here, where the declarator is done
                                 (peep (ps 'gregs) nm () @ gv

@@ -31,6 +31,7 @@ size_t strspn(char const*, char const*);
 size_t strcspn(char const*, char const*);
 char *strpbrk(char const*, char const*);
 char *strtok(char*, char const*);
+char *strtok_r(char*, char const*, char**);
 char *strncat(char*, char const*, size_t);
 int strcoll(char const*, char const*);
 #endif
