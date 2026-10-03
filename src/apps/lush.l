@@ -1437,9 +1437,31 @@
    ; exec takes that file and the child is still named as spelled. a seat with none
    ; (the kernel) hands the bare word to its registry
    (sh-spawnv argv) (: w <argv exe (sh-seat ())
-                       (? (!(string? exe) || sh-slashed? w) argv
+                       (? (!(string? exe)) argv
+                          (sh-slashed? w) (sh-asverb w >argv @ v (two? v ? v argv))
                           (!(sh-dotl? w) && sh-verbours? w) (exe . argv)
-                          (: r (sh-whichp w) (? (two? r) ((<>r . w) . >argv) argv))))
+                          (: r (sh-whichp w)
+                             (? (two? r) (sh-asverb <>r >argv @ v (two? v ? v ((<>r . w) . >argv))) argv))))
+   ; a file's #! line as words, or () -- bounded, since an elf has no first line
+   (sh-iline p)
+     (: h (open p "r")
+        (? !(hot? h) ()
+           (: (go k acc) (see h @ c (? (c < 0 || c = 10 || 255 < k) acc (go (k + 1) (acc + string c))))
+              a (see h)
+              ln (? (a = 35 && see h = 33) (go 0 "") ())
+              _ (close h)
+              (? (string? ln) (filter (w \ 0 < #w) (cite 'kore 'usplit 32 ln)) ()))))
+   ; under -a a script's interpreter is a word: #!/bin/sh, #!/usr/bin/env sh and #!/usr/bin/awk -f
+   ; run as our verb when the basename is one, as the bare word would -> that argv, or ()
+   (sh-asverb p rest)
+     (? !(sh-mode 0 = 0) ()
+        (: ws (sh-iline p)
+           (base x) ((: (g i) (i < 0 ? x (x i = 47 ? (snip x (i + 1) #x) (g (i - 1))))) (#x - 1))
+           env? (two? ws && base <ws = "env")
+           iv (? env? (? (two? >ws && <>ws = "-S") >>ws >ws) ws)
+           (? (two? iv && !(sh-dotl? p) && sh-verbw? (base <iv))
+              ((sh-seat ()) . (base <iv) . (>iv + (p . rest)))
+              ())))
    ; --- what would run: the answer `command -v`, `which` and `type` share -------
    ; the verdict walks sh-simple2's own ladder, so what it names is what would run:
    ; ('resw) ('fn) ('bi) ('verb path) ('path path), or () for a word nothing answers.

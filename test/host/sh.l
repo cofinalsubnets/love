@@ -619,6 +619,16 @@
              set --precarious; p=$PATH; PATH=/nonexistent; tr 2>/dev/null; s=$?; PATH=$p; echo st=$s; rm -r $d"])
    (test ("theirs\nst=2\ntheirs\nst=127\n" = >r)))
 
+; under -a a script's #! interpreter is a word: a basename that is our verb runs as ours, so
+; an interpreter at no path at all still runs; -g and -p exec it as spelled, and fail
+(: r (hark ["out/love" "out/lush" "-a" "-c"
+            "d=/tmp/lush-t-bang; mkdir -p $d
+             printf '#!/nonexistent/sh\\necho sh $1\\n' > $d/a; printf '#!/nonexistent/env sh\\necho env\\n' > $d/b
+             printf '#!/nonexistent/awk -f\\nBEGIN { print \"awk\" }\\n' > $d/c; printf '#!/nonexistent/notaverb\\necho no\\n' > $d/e
+             chmod 755 $d/a $d/b $d/c $d/e; $d/a x; $d/b; $d/c; PATH=$d:$PATH; a y; $d/e 2>/dev/null || echo st=$?
+             LUSHFLAGS=-g sh -c '$d/a 2>/dev/null || echo g=$?'; LUSHFLAGS=-p sh -c '$d/a 2>/dev/null || echo p=$?'; rm -r $d"])
+   (test ("sh x\nenv\nawk\nsh y\nst=127\ng=127\np=127\n" = >r)))
+
 ; `which` and `type` -- one verdict (sh-verdict) walks sh-simple2's own ladder, so
 ; what they name is what would run, and `command -v` reads the same answer. the
 ; classifications first: a reserved word, a builtin and a function are all things
