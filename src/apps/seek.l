@@ -3,9 +3,11 @@
 ; test drives it headless. an item is anything: text-of answers the string a query is matched
 ; against, label-of what its row shows. a query's words must each sit in the text, case and
 ; all, and a query that only grows narrows the last hits instead of reading every item again.
+; a tree is one too: its files (seek-files) or every line of them (seek-lines).
 ;   ↑↓ ^p ^n  a row     ^b ^f  a page     home end  the ends     ^u  a fresh query
 ;   enter  this one     esc ^c  none
-(module (seek seek-new seek-q seek-key seek-frame seek-run seek-match)
+(module (seek seek-new seek-q seek-key seek-frame seek-run seek-match seek-files seek-lines seek-label)
+(borrow 'posix)
 (:
  ; the words of a query, spaces apart
  (seek-words q) (filter (w \ 0 < #w) (cite 'kore 'usplit 32 q))
@@ -54,6 +56,32 @@
                            + edfit ((d 'label) it) w " " + "\e[27m")))
                  "" (zip ^#vis vis))
      ("\e[H\e[2J" + head + body + "\e[1;" + show (min w (#q + 1)) + "H\e[?25h"))
+
+ ; --- a tree as items. the files under root, in name order: a name starting with a dot is
+ ; passed by, and a link is not followed, so a link back up cannot loop. root "." answers
+ ; names relative to it
+ (seek-files root)
+  (: (go p) (lstat (p = "" ? "." p) @ st
+               (? !(two? st) ()
+                  (16384 = (st 2) & 61440)
+                   (readdir (p = "" ? "." p) @ ns
+                      (atom? ns ? () (catmap (n \ 46 = n 0 ? () (go (p = "" ? n (p + "/" + n)))) (sort ns))))
+                  (32768 = (st 2) & 61440) [p]
+                  ()))
+     (go (root = "." ? "" root)))
+ ; [path line text] for every line of every file, numbered from 1; a file holding a NUL is
+ ; not text
+ (seek-split s) (cite 'kore 'usplit 10 s @ ls (two? ls && #(last ls) = 0 ? (butlast ls) ls))
+ (seek-lines fs)
+  (catmap (f \ uread f @
+             [1 s] (? (0 <= subidx s (string 0) 0) ()
+                      (seek-split s @ ls (map (p \ [f (<p + 1) >p]) (zip ^#ls ls))))
+             ())
+          fs)
+ ; a line's row: its path less the root's, the number, the text with tabs as spaces
+ (seek-label root it)
+  ((starts? (it 0) (root + "/") ? (snip (it 0) (#root + 1) #(it 0)) (it 0)) + ":" + show (it 1) + ": "
+   + string (map (c \ c = 9 ? 32 c) (chars (it 2))))
 
  ; full screen on cli's stage until a choice or esc: the item, or () for none
  (seek-run d)
