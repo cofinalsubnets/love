@@ -7,6 +7,7 @@
 #define PROT_EXEC  4
 #define MAP_SHARED    1
 #define MAP_PRIVATE   2
+#define MAP_FILE      0
 #define MAP_FIXED     16
 #define MAP_ANONYMOUS 32
 #define MAP_ANON      32
@@ -16,6 +17,7 @@
 #define MADV_DONTFORK 10
 #define MADV_DOFORK   11
 int madvise(void*, long, int);
+int mincore(void*, unsigned long, unsigned char*);
 void *mmap(void*, long, int, int, int, long);
 int munmap(void*, long);
 int mprotect(void*, long, int);

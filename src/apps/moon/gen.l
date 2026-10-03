@@ -562,9 +562,9 @@
    (fmem g ty name)
     (!(stru? ty) ? 'bad
      (g 'stag <>ty @ e
-      (atom? e ? 'bad
+      (atom? e ? (nolane g ("member '" + name + "' of an incomplete type '" + <>ty + "'"))
        (assoc name <e @ f
-        (atom? f ? 'bad [<>f <>>f])))))
+        (atom? f ? (nolane g ("no member '" + name + "' in '" + <>ty + "'")) [<>f <>>f])))))
    (lg2 n) (: (go k v) (v <= 1 ? k (go (k + 1) (v >> 1))) (go 0 n))   ; a true log2 -- a pointer diff over a >8-byte struct needs sar 4+, not a capped 3
    (imby g rX sz) (arm? g ? [['li 'r3 sz] ['imul rX rX 'r3]] [['imul rX rX sz]])   ; arm mul has no imm form: the size rides r3 (free mid-expression)
    (homable? pty) (ptr? pty || elem pty '(long ulong))       ; an 8-byte gp scalar: what a register home can carry
@@ -2519,7 +2519,8 @@
                  sig (direct ? (g 'sigs <>head))
                  ; the param types, a function-pointer type's included: a widened float arg is indistinguishable from a double
                  ptys (? (two? sig) <>sig direct () (fnpts (hdty9 g env head)))
-                 rt (two? sig ? <sig 'long)
+                 ; an indirect callee's result type is its pointer's: a memory return owes the hidden argument either way
+                 rt (? (two? sig) <sig direct 'long (fnret (hdty9 g env head)))
                  variadic (two? sig ? (sig 2))
                  ; the arity check, direct only (the gripe spells a name). 0 < nps exempts the empty list: `int f()` and
                  ; `int f(void)` both park an empty ptys and the sigs row cannot tell them apart
@@ -2556,7 +2557,7 @@
                     (aone g (vty cr) = 'int)    ; a small int aggregate result: park rax
                      (nslot g 16 @ toff
                         (mkv (vty cr) 'r0 (vfs cr + [['st 'r4 toff 'r0] ['lean 'r0 'r4 toff]])))
-                    'bad))))
+                    (nolane g ("no lane for receiving a " + show (tsz g (vty cr)) + "-byte struct by value" + ontgt g))))))
        ; a statement expression: the statements in place, then the value as an ordinary expression (keeps its register);
        ; 'inlining is raised over the statements so stq stops ticking and each wears the conservative wrapset
        ('sexpr items ve ty)
@@ -2928,7 +2929,8 @@
                           (mkv (fnret (vty hr)) 'r0 (pf + tor0 g hr + [['st 'r4 pko 'r0]] +
                                     spills + ezf + pops + setal + [['ld pk 'r4 pko] ['callr pk]] + fres + clean + relods)))
                       (mkv (fnret (vty hr)) 'r0 (pf + tor0 g hr + [['mov pk 'r0]] +
-                                spills + ezf + pops + setal + [['callr pk]] + clean + relods))))))))
+                                spills + ezf + pops + setal + (sr6 ? [['lea (argr g 0) 'r4 sroff]] ()) + [['callr pk]] +
+                                (sr6 ? [['lea 'r0 'r4 sroff]] ()) + clean + relods))))))))
    ; the C99 complex lane (x64): a complex value is its two-member struct, so it flows as one. arithmetic parks each
    ; side in a double-pair temp (the other side may call), f0..f3 carry (a.re a.im b.re b.im), the answer is a fresh temp's address
    (cxb ty) (<>ty = "__cplx_float" ? 'float 'double)
@@ -6177,7 +6179,7 @@
               (? (flo? <>e) 'no
                  !(v = 'no) (icast <>e v)
                  (ffold <>>e @ f
-                    (? (bad? f) 'no
+                    (? (bad? f || nan? f) 'no
                        (<>e = 'bool) (f = 0.0 ? 0 1)          ; to _Bool is a compare, never a truncation
                        (icast <>e (ceil (f // 1)))))))
        'un
@@ -6251,6 +6253,7 @@
    ; a const float expression at image time -> gem | 'bad (love's doubles are the target's IEEE doubles).
    ; an unsigned int subtree reads mod 2^width: icfold keeps a word's pattern, and (ulong)-1 is no -1.0
    (ffold e) (ffoldw 1 e)
+   (nan? v) (elem v '(nan -nan))                    ; ffoldw's nan, with its sign
    (ffoldw w64 e) (atom? e ? 'bad
      ; an int const subtree floats ((double)(1 << N))
      (icfold e @ iv
@@ -6258,13 +6261,17 @@
         (<e @ 'flo <>e
             'num (0.0 + <>e)
             'cast (flo? <>e ? (ffoldw w64 <>>e) 'bad)
-            'un (ffoldw w64 <>>e @ v (? (bad? v) 'bad (<>e = 'neg) (-1.0 * v) 'bad))   ; times -1: 0.0 - 0.0 is +0.0, and -0.0 is its own value
+            'un (ffoldw w64 <>>e @ v (? (bad? v) 'bad (<>e != 'neg) 'bad
+                                        (nan? v) (v = 'nan ? '-nan 'nan)
+                                        (-1.0 * v)))   ; times -1: 0.0 - 0.0 is +0.0, and -0.0 is its own value
             'bin
             (: op <>e a (ffoldw w64 <>>e) b (ffoldw w64 <>>>e)
-               (bad? a || bad? b ? 'bad
-               (op @ '+ (a + b) '- (a - b) '* (a * b)
-                  '/ (b = 0.0 ? 'bad (a / b))
-                  'bad)))
+               (? (bad? a || bad? b) 'bad
+                  !(elem op '(+ - * /)) 'bad
+                  (nan? a) a
+                  (nan? b) b
+                  ; love has no nan: an invalid operation (0/0, inf-inf, 0*inf) answers (), and C's is +qnan
+                  ((op @ '+ (a + b) '- (a - b) '* (a * b) (a / b)) @ v (gem? v ? v 'nan))))
            'bad))))
    ; a constant int expression's C type, as parse reads the source (suffixed literals arrive cast) | ()
    (icty w64 e)
@@ -6279,7 +6286,9 @@
             ()))
    (uwid w64 e) (icty w64 e @ 'uint 32 'ulong (w64 ? 64 32) 'ullong 64 ())
    (fim ty v)                                       ; a float value's IEEE image as ty: 4 single bytes | 8 double bytes
-    (ty = 'float ? (les 4 (fbits32 v)) (les 8 (fbits v)))
+    (? (nan? v) (: neg (v = '-nan) (ty = 'float ? (les 4 (neg ? 4290772992 2143289344)) (les 8 (neg ? -2251799813685248 9221120237041090560))))
+       (ty = 'float) (les 4 (fbits32 v))
+       (les 8 (fbits v)))
    (imgbytes g ty ini)                              ; a byte/fix list of length tsz(ty) | 'bad
     (?- 'bad
      (atom? ini) (zeros (tsz g ty))

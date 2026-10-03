@@ -4,7 +4,7 @@
 ;   love src/tools/tgz.l t archive.tar.gz        list, one path a line
 ;
 ; the verbs are tar's own letters because the muscle memory is worth more than a
-; better name. the pack direction lives in src/tools/selfpack.l, the one cutter.
+; better name. the artifact carries no tarball (src/tools/selfpack.l cuts a container).
 (borrow 'tar)
 (borrow 'gz)
 

@@ -67,7 +67,7 @@ static ai_inline size_t b2w(size_t b) {
 #  define ai_avail_floor 8
 # endif
 #endif
-// LvBakeSrc -- this link can bake the crew from the source it carries (src/love/src.c's ai_srcgz),
+// LvBakeSrc -- this link can bake the crew from the source it carries (ai_srctree's bake section),
 // so a raw binary emits its baked state with no tree. love0 lays that blob rather than carrying
 // one, and the wasm seat has no self on disk to lay over.
 #if !defined(Love0) && !defined(__wasm__)
@@ -244,7 +244,7 @@ extern const struct ai_mint ai_mint_zero;
 struct ai_port_vt;   // the port's kind, in its head; spelled out with the ports
 // the reader's names (g->rnom): its wraps, its two lone chars, the torn answer, and the
 // flow a port is read through
-enum { RnQuote, RnList, RnHash, RnTuple, RnTablet, RnIota, RnMono, RnTorn, RnAt, RnComma, RnN };
+enum { RnQuote, RnList, RnHash, RnTuple, RnTablet, RnIota, RnMono, RnTorn, RnAt, RnComma, RnWeave, RnN };
 struct ai {
  union u *ip;
  word *hp, *sp;
@@ -486,17 +486,21 @@ int image_bake(struct ai*, char const *out, int bare), ai_baked_pick(void const 
 struct ai *image_load(char const*), *image_dump(struct ai*, char const*);
 extern uint64_t ai_baked_image[];
 extern uintptr_t ai_baked_image_len;
-// ..l/gz.c, and src/love/src.c's own source (weak zero without a blob)
+// ..l/gz.c, the other codecs' doors, and the source the link carries (src/love/noblob.c's zero without one)
 intptr_t ai_inflate_raw(unsigned char const*, uintptr_t, unsigned char*, uintptr_t),
          ai_inflate_dict(unsigned char const*, uintptr_t, unsigned char*, uintptr_t, unsigned char const*, uintptr_t),
          ai_deflate_raw(struct ai*, unsigned char const*, uintptr_t, unsigned char*, uintptr_t),
          ai_deflate_dict(struct ai*, unsigned char const*, uintptr_t, unsigned char const*, uintptr_t, unsigned char*, uintptr_t);
-extern unsigned char const ai_srcgz[];
-extern uintptr_t const ai_srcgz_len;
-// /love on the host (src/love/lovefs.c): the carried tree's rows, a path's place in them
-// (-1 not the tree's, -2 absent, -3 a directory, else its row), and a read port over one
-struct ai_lovefs { char const *path; unsigned char const *bytes; uintptr_t len, ms; };
-struct ai_lovefs const *ai_lovefs_rows(uintptr_t *n);
+intptr_t ai_bz2_into(unsigned char const*, uintptr_t, unsigned char*, uintptr_t),     // ..l/bz2.c
+         ai_lzma2_into(unsigned char const*, uintptr_t, unsigned char*, uintptr_t);  // ..l/xz.c
+uint32_t ai_crc32(unsigned char const*, uintptr_t);                                    // ..l/hash.c
+// the carried source, a container src/love/lib/srctree.h reads
+extern unsigned char const ai_srctree[];
+extern uintptr_t const ai_srctree_len;
+// /love on the host (src/love/lovefs.c): the process's one open tree (NULL where none is
+// carried), a path's place in it (-1 not the tree's, -2 absent, -3 a directory, else its
+// row), and a read port over one row
+struct ai_tree *ai_tree_carried(void);
 intptr_t ai_lovefs_at(char const *p, char *rel, uintptr_t *rn);
 struct ai *ai_lovefs_port(struct ai *g, uintptr_t i);
 extern unsigned char const ai_rootfs[];          // src/inle/rootfs/ as a plain tar (src/tools/mkrootfs.l)

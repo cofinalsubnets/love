@@ -121,6 +121,7 @@ static short const os_nr[][3] = {
   {NR_ioctl,         NR_fb_ioctl,        54},   /* the member translates requests */
   {NR_pread64,       NR_fb_pread64,     173},   /* nb: (fd buf n PAD off) */
   {NR_pwrite64,      NR_fb_pwrite64,    174},
+  {NR_mincore,       NR_fb_mincore,      78},
   {NR_madvise,       NR_fb_madvise,      75},
   {NR_nanosleep,     NR_fb_nanosleep,   430},
   {NR_getpid,        NR_fb_getpid,       20},
@@ -172,7 +173,10 @@ static short const os_nr[][3] = {
   {NR_setpgid,       NR_fb_setpgid,      82},
   {NR_setsid,        NR_fb_setsid,      147},
   {NR_setgroups,     NR_fb_setgroups,    80},
+  {NR_setresuid,     NR_fb_setresuid,    -1},   /* netbsd has none */
+  {NR_setresgid,     NR_fb_setresgid,    -1},
   {NR_getpgid,       NR_fb_getpgid,     207},
+  {NR_sigaltstack,   NR_fb_sigaltstack, 281},   /* the member builds the OS shape */
   {NR_chroot,        NR_fb_chroot,       61},
   {NR_getdents64,    NR_fb_getdirentries, 390}, /* the member repacks the record */
   {NR_clock_gettime, NR_fb_clock_gettime, 427}, /* the member translates the id */
@@ -521,9 +525,23 @@ int __ai_sofb(long *lv, long *op) {
   if (*lv != 1) return 0;
   *lv = 0xffff;
   switch (*op) {
+    case 1: *op = 1; return 0;          /* SO_DEBUG */
     case 2: *op = 4; return 0;          /* SO_REUSEADDR */
     case 3: *op = 0x1008; return 0;     /* SO_TYPE */
     case 4: *op = 0x1007; return 0;     /* SO_ERROR */
-    case 9: *op = 8; return 0; }        /* SO_KEEPALIVE */
+    case 5: *op = 0x10; return 0;       /* SO_DONTROUTE */
+    case 6: *op = 0x20; return 0;       /* SO_BROADCAST */
+    case 7: *op = 0x1001; return 0;     /* SO_SNDBUF */
+    case 8: *op = 0x1002; return 0;     /* SO_RCVBUF */
+    case 9: *op = 8; return 0;          /* SO_KEEPALIVE */
+    case 10: *op = 0x100; return 0;     /* SO_OOBINLINE */
+    case 13: *op = 0x80; return 0;      /* SO_LINGER */
+    case 18: *op = 0x1004; return 0;    /* SO_RCVLOWAT */
+    case 19: *op = 0x1003; return 0;    /* SO_SNDLOWAT */
+    case 20: *op = __ai_osv == 3 ? 0x100c : 0x1006; return 0;   /* SO_RCVTIMEO */
+    case 21: *op = __ai_osv == 3 ? 0x100b : 0x1005; return 0;   /* SO_SNDTIMEO */
+    case 30: *op = 2; return 0;         /* SO_ACCEPTCONN */
+    case 38: if (__ai_osv == 3) return -1; *op = 0x1016; return 0;   /* SO_PROTOCOL: freebsd's alone */
+    case 39: if (__ai_osv == 3) return -1; *op = 0x1019; return 0; } /* SO_DOMAIN */
   return -1; }
 #endif

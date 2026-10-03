@@ -24,14 +24,14 @@ smoke)
   rm -rf "$s"; mkdir -p "$s"
 
   run "$dist" kore true                            || fail "kore true (the nested dispatch)"
-  # the source door, cheaply: the seed lays its tree and the very archive it carried,
-  # and lays NOTHING ELSE -- no binary beside the source. the fixpoint stays
+  # the source door, cheaply: the seed lays its tree and NOTHING ELSE -- no binary
+  # beside the source, and no archive. the fixpoint stays
   # test_distboot's; THIS is the leg that keeps the verb from going dark between releases.
   ( cd "$s" && run "$dabs" source ) > "$s/src.log" 2>&1 \
                                                    || { tail -3 "$s/src.log"; fail "love source did not lay"; }
   srcd=$(echo "$s"/love-*/)
   [ ! -e "$srcd/bin" ]                             || fail "love source laid a bin/ -- the tree is source, nothing else"
-  ls "$srcd"/out/dist/love-*.tar.gz >/dev/null 2>&1 || fail "love source laid no archive"
+  [ ! -e "$srcd/out" ]                             || fail "love source laid an out/ beside the tree"
   run "$dist" sb 2>&1 | grep -q "patch-set vcs"  || fail "sb usage"
   run "$dist" mooncc 2>&1 | grep -q "usage: mooncc" || fail "mooncc verb usage"
   # the CC-under-make lane: the build recipes hand this command its image back
