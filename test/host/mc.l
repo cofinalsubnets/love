@@ -94,6 +94,12 @@
    _ (test (0 = s 'over))
    s2 (mc-new R R) _ (mc-key s2 113, test (1 = s2 'over))
    s3 (mc-new R R) _ (mc-key s3 -7, test (1 = s3 'over))
+   ; enter on a file goes to 'open when whoever runs mc lent one, and does nothing without
+   s4 (mc-new R R) got {0}
+   _ (pin s4 'open (f \ pin got () f))
+   _ (each ^4 (_ \ mc-key s4 106), mc-key s4 13, test ((peep got () 0) = (R + "/plain.txt")) (R = s4 'l 'dir))
+   s5 (mc-new R R)
+   _ (each ^4 (_ \ mc-key s5 106), mc-key s5 13, test (R = s5 'l 'dir) (0 = s5 'over))
 
    ; --- the frame: every row exactly the screen's width -----------------------------
    f (mc-frame (mc-new R R) 70 14)
