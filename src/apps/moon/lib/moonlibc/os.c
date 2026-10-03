@@ -121,6 +121,7 @@ static short const os_nr[][3] = {
   {NR_ioctl,         NR_fb_ioctl,        54},   /* the member translates requests */
   {NR_pread64,       NR_fb_pread64,     173},   /* nb: (fd buf n PAD off) */
   {NR_pwrite64,      NR_fb_pwrite64,    174},
+  {NR_mincore,       NR_fb_mincore,      78},
   {NR_madvise,       NR_fb_madvise,      75},
   {NR_nanosleep,     NR_fb_nanosleep,   430},
   {NR_getpid,        NR_fb_getpid,       20},

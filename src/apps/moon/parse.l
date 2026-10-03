@@ -1340,11 +1340,15 @@
                            ; sizeof of a VLA type (struct T[n+1], if_nameindex's malloc):
                            ; the runtime multiply dim * sizeof(elt)
                            (varr? <tr) [['bin '* <>><tr ['num (tsz ps <><tr)]] <>tr]
-                           [['cast (szty ps) ['num (tsz ps <tr)]] <>tr]))
+                           (tsz ps <tr @ n
+                              (charm? n ? [['cast (szty ps) ['num n]] <>tr]
+                                 (blame r1 "sizeof an incomplete type")))))
                     (punary ps r1 @ r                 ; sizeof unary-expr | sizeof(expr) -- gen sizes from the type
                        (two? r ? (ptype ps <r @ ty
-                                    (ty && !(varr? ty) ?      ; a VLA's size is runtime: defer to gen's szof
-                                       [['cast (szty ps) ['num (tsz ps ty)]] <>r] [['szof <r] <>r]))))))
+                                    (? (!ty || varr? ty) [['szof <r] <>r]      ; a VLA's size is runtime: defer to gen's szof
+                                       (tsz ps ty @ n
+                                          (charm? n ? [['cast (szty ps) ['num n]] <>r]
+                                             (blame r1 "sizeof an incomplete type")))))))))
              ; _Alignof (C11 6.5.3.4) through talign, the door playout lays members with, so it
              ; cannot drift. the expression operand is gcc's __alignof__ alone, C11's a type-name.
              (tkk t = 'id && elem (tkv t) '("_Alignof" "__alignof__"))

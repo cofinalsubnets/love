@@ -16,6 +16,7 @@
 #define MADV_DONTFORK 10
 #define MADV_DOFORK   11
 int madvise(void*, long, int);
+int mincore(void*, unsigned long, unsigned char*);
 void *mmap(void*, long, int, int, int, long);
 int munmap(void*, long);
 int mprotect(void*, long, int);
