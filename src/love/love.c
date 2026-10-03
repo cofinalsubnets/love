@@ -808,6 +808,12 @@ static int code_wopen(struct ai_code *c, char *p, size_t n, int seal) {
  return c->own ? 0 : code_open(p, n, seal ? PROT_READ | PROT_EXEC : PROT_READ | PROT_WRITE); }
 static void code_drop(struct ai *g, struct ai_code *c) {
  if (c->own) ai_alloc(c->own, 0); else munmap(c->base, c->len); }
+// a byte a chunk, shared across fork: which chunks any process of this image has seated.
+// none where we are the kernel, whose fork is a no-op
+static unsigned char *code_wants(size_t n) {
+ void *b = __ai_osv < 0 ? MAP_FAILED : mmap(0, n, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+ return b == MAP_FAILED ? NULL : b; }
+static void code_unwant(unsigned char *w, size_t n) { if (w) munmap(w, n); }
 #else
 // freestanding: RAM runs as it is; blobs live in the heap (lvm_nif) and an image's segment in the allocator
 int code_in(struct ai *g, uintptr_t v) { return 0; }
@@ -824,6 +830,8 @@ static struct ai_code *code_region(struct ai *g, size_t n, char **w) {
  c->base = c->own = *w = b, c->len = c->used = n, c->fixed = 1, c->lz = NULL, c->next = g->code, g->code = c;
  return c; }
 static int code_wopen(struct ai_code *c, char *p, size_t n, int seal) { return 0; }
+static unsigned char *code_wants(size_t n) { return NULL; }
+static void code_unwant(unsigned char *w, size_t n) { }
 #endif
 // a packed segment, seated whole
 char *code_adopt(struct ai *g, char const *src, size_t n) {
@@ -837,7 +845,7 @@ char *code_adopt(struct ai *g, char const *src, size_t n) {
 // a segment deflated a chunk at a time, each seated when a native in it first runs: tab
 // holds where each chunk starts in the segment and in z, two words apiece. every chunk was
 // deflated against dic, nd bytes, a preset dictionary
-struct ai_lazy { unsigned char const *z, *dz; char *w; unsigned char *seated, *dic; uintptr_t n, nz, nch, nd, ndz; uint64_t tab[]; };
+struct ai_lazy { unsigned char const *z, *dz; char *w; unsigned char *seated, *dic, *want; uintptr_t n, nz, nch, nd, ndz; uint64_t tab[]; };
 static int code_seat1(struct ai_code *c, uintptr_t k) {
  struct ai_lazy *l = c->lz;
  if (l->seated[k]) return 0;
@@ -849,6 +857,7 @@ static int code_seat1(struct ai_code *c, uintptr_t k) {
      || ai_inflate_dict(l->z + za, zb - za, (unsigned char*) l->w + a, b - a, l->dic, l->nd) != (intptr_t)(b - a)
      || code_wopen(c, c->base + a, b - a, 1)) return -1;
  ai_code_sync(c->base + a, c->base + b);
+ if (l->want) l->want[k] = 1;
  return l->seated[k] = 1, 0; }
 // kept: z outlives the session, else every chunk is seated now. NULL on a table that does
 // not describe n bytes from nz
@@ -861,11 +870,13 @@ char *code_lazy(struct ai *g, size_t n, unsigned char const *z, size_t nz, unsig
  l->z = z, l->w = w, l->n = n, l->nz = nz, l->nch = nch, l->seated = (unsigned char*)(l->tab + 2 * nch);
  l->dic = l->seated + nch, l->nd = nd, l->dz = nd ? dz : NULL, l->ndz = ndz;
  memcpy(l->tab, tab, 2 * nch * sizeof(uint64_t)), memset(l->seated, 0, nch);
+ l->want = NULL;
  c->lz = l;
  for (uintptr_t k = 0; k < nch; k++) {
   uint64_t a = l->tab[2 * k], za = l->tab[2 * k + 1],
            b = k + 1 < nch ? l->tab[2 * k + 2] : n, zb = k + 1 < nch ? l->tab[2 * k + 3] : nz;
   if (a >= b || za >= zb || b > n || zb > nz || (k == 0 && a)) return NULL; }
+ if (kept) l->want = code_wants(nch);
  if (!kept)
   for (uintptr_t k = 0; k < nch; k++) if (code_seat1(c, k)) return NULL;
  return c->base; }
@@ -877,12 +888,17 @@ int code_seat(struct ai *g, char const *a) {
    while (hi - lo > 1) { uintptr_t m = (lo + hi) / 2; if (c->lz->tab[2 * m] <= off) lo = m; else hi = m; }
    return code_seat1(c, lo); }
  return 0; }
+// before a warm fork: every chunk some process of this image seated, seated here as well
+void code_warm(struct ai *g) {
+ for (struct ai_code *c = g->code; c; c = c->next)
+  if (c->lz && c->lz->want)
+   for (uintptr_t k = 0; k < c->lz->nch; k++) if (c->lz->want[k] && !c->lz->seated[k] && code_seat1(c, k)) return; }
 // the arena is the session's, not the collector's: no root names a chunk, so nothing but
 // the end of the session can free one. blobs still live are dead code by then.
 void code_fin(struct ai *g) {
  for (struct ai_code *c = g->code, *n; c; c = n) {
   n = c->next, code_drop(g, c);
-  if (c->lz) ai_alloc(c->lz, 0);
+  if (c->lz) code_unwant(c->lz->want, c->lz->nch), ai_alloc(c->lz, 0);
   ai_alloc(c, 0); }
  for (struct ai_cfree *f = g->cfree, *n; f; f = n) n = f->next, ai_alloc(f, 0);
  g->code = NULL, g->cfree = NULL; }

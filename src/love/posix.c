@@ -662,6 +662,7 @@ static lvm(lvm_getgid) { Sp[0] = putcharm(getgid()); ai_musttail return Next(1);
 static ai_inline word host_fork(struct ai *g) {
  fflush(NULL);
  stdin_exact(g);
+ ai_image_warm(), code_warm(g);   // what earlier children woke, so this one starts with it
  pid_t pid = fork();
  return pid < 0 ? ai_err(g, errno) : putcharm(pid); }
 static lvm(lvm_fork) { Sp[0] = host_fork(g); ai_musttail return Next(1); }
