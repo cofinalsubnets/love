@@ -7,16 +7,15 @@
 # UV-pty, and with FBSD_SEED=1 / NBSD_SEED=1 (minutes) `love seed` on the box answering
 # the tree's own bytes. termios proper needs a real tty and is not here.
 #
-# the box arrives by env: FBSD_SSH, NBSD_SSH, FBSD_ARM64_SSH, NBSD_ARM64_SSH, each a
-# command prefix ("ssh -p 2222 -i key root@host"). a caller that exports none gets them from
-# $OSBOX_ENV (default ~/bin/osbox-env) when it exists; without a box the gate skips loudly.
+# the box is a host bee knows with the cap freebsd-x64, netbsd-x64, freebsd-a64 or netbsd-a64
+# (doc/bee.md, HOSTS), its ssh words from `love bee --on CAP --ssh`; FBSD_SSH, NBSD_SSH,
+# FBSD_ARM64_SSH and NBSD_ARM64_SSH still name one for a release. without a box the gate
+# skips loudly.
 # on a64 the local half of each comparison runs on an a64 host where one answers, else
 # under qemu-aarch64, and skips with neither.
 # provisioning the boxes: doc/misc/osbox.md.
 # usage: osbox.sh OUTDIR LOVE0 freebsd|netbsd [x64|a64]
 . test/gate/skip.sh
-oe=${OSBOX_ENV:-$HOME/bin/osbox-env}
-[ -n "${FBSD_SSH:-}${NBSD_SSH:-}${FBSD_ARM64_SSH:-}${NBSD_ARM64_SSH:-}" ] || [ ! -r "$oe" ] || . "$oe"
 set -u
 
 ho=$1
@@ -30,6 +29,7 @@ case "$os-$arch" in
   netbsd-a64)  box=${NBSD_ARM64_SSH:-}; sd=${NBSD_ARM64_SEED:-} ;;
   *) echo "osbox: no box is defined for $os on $arch" >&2; exit 1 ;;
 esac
+[ -n "$box" ] || box=$("$ho/love" bee --on "$os-$arch" --ssh 2>/dev/null) || box=
 t=test_$os; [ "$arch" = x64 ] || t=test_${os}_${arch}
 d=$ho/$os-$arch
 
