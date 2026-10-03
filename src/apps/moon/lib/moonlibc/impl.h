@@ -235,6 +235,9 @@ struct _IO_FILE {
 #define NR_fdatasync       83
 #define NR_utimensat       88
 #define NR_exit_group      94
+#define NR_exit            93    /* this thread alone */
+#define NR_futex           98
+#define NR_sched_yield    124
 #define NR_unshare         97
 #define NR_clock_gettime  113
 #define NR_kill           129
@@ -360,6 +363,10 @@ struct _IO_FILE {
 #define NR_getdents64     217
 #define NR_clock_gettime  228
 #define NR_exit_group     231
+#define NR_exit            60    /* this thread alone */
+#define NR_futex          202
+#define NR_sched_yield     24
+#define NR_arch_prctl     158
 #define NR_openat         257
 #define NR_mkdirat        258
 #define NR_mknodat        259
@@ -623,6 +630,12 @@ void __semit(void *ctx, int c);
  * the stream table is named by whoever opens one. */
 extern FILE __stdf[3];
 extern unsigned char __obuf[8192];
+/* threads (proc/pthread.c): __ai_threads is set once a second thread exists, and the allocator
+ * locks from then on. sys.o's clone leaf starts the child on its own stack, calling sp[0](sp[1]);
+ * __ai_tp (a64, rv64) reads the thread pointer clone set to the thread's record */
+extern int __ai_threads;
+long __ai_clone(long flags, void *sp, int *ptid, int *ctid, void *tls);
+void *__ai_tp(void);
 extern unsigned char __ibuf[4096];
 /* the read side (stdio/rbuf.c): fill an empty read buffer -> bytes now ahead (0 at end, -1 on error);
  * how far the stream sits behind its fd; and putting the fd back at the stream's position */
