@@ -21,4 +21,5 @@ DIR *fdopendir(int);
 struct dirent *readdir(DIR*);
 int closedir(DIR*);
 int dirfd(DIR*);
+void rewinddir(DIR*);
 #endif

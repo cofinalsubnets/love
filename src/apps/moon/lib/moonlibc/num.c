@@ -255,6 +255,7 @@ FILE *popen(char const *cmd, char const *mode) {
   f->heap = 1;
   f->pid = pid;
   if (!rd) { f->buf = (unsigned char *) (f + 1); f->cap = 4096; }
+  else { f->rb = (unsigned char *) (f + 1); f->rcap = 4096; }
   return f; }
 int pclose(FILE *f) {
   int pid = f->pid, st = 0;
@@ -294,6 +295,18 @@ char *mktemp(char *tmpl) {
     if (access(tmpl, 0) < 0) return tmpl; }
   tmpl[0] = 0;
   return tmpl; }
+/* mkstemp: mktemp's names, but the open is the test -- O_EXCL takes a free one, 0600 */
+int mkstemp(char *tmpl) {
+  size_t n = strlen(tmpl);
+  if (n < 6 || strcmp(tmpl + n - 6, "XXXXXX")) { errno = EINVAL; return -1; }
+  char *x = tmpl + n - 6;
+  unsigned long v = (unsigned long) getpid() * 2654435761u;
+  for (int k = 0; k < 1000; k++, v += 7777) {
+    unsigned long w = v;
+    for (int i = 0; i < 6; i++) { x[i] = 'a' + w % 26; w /= 26; }
+    int fd = open(tmpl, O_RDWR | O_CREAT | O_EXCL, 384);
+    if (fd >= 0 || errno != EEXIST) return fd; }
+  return -1; }
 /* one fixed "C" locale, so setlocale just answers its name. */
 char *setlocale(int cat, char const *loc) { return (char *) "C"; }
 struct lconv *localeconv(void) {                   /* the C locale's table: "." and empties */
@@ -302,11 +315,14 @@ struct lconv *localeconv(void) {                   /* the C locale's table: "." 
     (char *) "", (char *) "", 127, 127, 127, 127, 127, 127, 127, 127 };
   return &c; }
 
-/* getc/fputs/ferror over the unbuffered read streams; fscanf reads char-by-char
+/* getc/fputs/ferror; a read-write stream reads unbuffered. fscanf reads char-by-char
  * (no ungetc, so it consumes the field terminator -- tar's lone use is "%d"). */
 int getc(FILE *f) {
   unsigned char c;
   if (f->un) { int r = f->un - 1; f->un = 0; return r; }
+  if (f->rcap) {
+    if (f->rp == f->rl && __rfill(f) <= 0) return EOF;
+    return f->rb[f->rp++]; }
   long k = read(f->fd, &c, 1);
   if (k <= 0) { if (k < 0) f->err = 1; else f->eof = 1; return EOF; }
   return c; }

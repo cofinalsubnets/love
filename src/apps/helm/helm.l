@@ -9,14 +9,13 @@
 ; the config defaults to /etc/helm.l, the socket to $XDG_RUNTIME_DIR/helm.sock else
 ; /run/helm.sock. src/apps/helm/sample.l shows the whole language.
 ; as pid 1 it lays a machine that needs no disk: the early filesystems, /usr/bin as links
-; onto this binary (argv[0] is the door), then the carried source inflated to a tree --
+; onto this binary (argv[0] is the door), then the carried source laid out as a tree --
 ; inle's boot in userspace. src/apps/init/ is not joined to it yet.
 ;
 ; run from the tree:
 ;   love -l src/apps/helm/unit.l -l src/apps/helm/sup.l -l src/apps/helm/moor.l \
 ;        -l src/apps/helm/helm.l -e '(helm-main ["-c" "src/apps/helm/sample.l"])'
 (module 'helm
-(borrow 'gz)
 (borrow 'tar)
 
 (borrow 'path)
@@ -92,32 +91,30 @@ usage: helm [-c CONF] [-s SOCK] [-q]     supervise (pid 1 lays the machine first
              (hnote ("underlay " + show n + " names on " + exe),
               n)))))
    ; --- the scatter: the carried tree, inflated into RAM -----------------------
-   ; inle's ramfs IS this archive (k_untar in src/inle/kmain.c): the artifact carries
-   ; its own source and the machine inflates it at boot, so a disk was never what the
-   ; tree was on. the same blob is here, so a hosted pid 1 lays the same tree.
+   ; inle's ramfs IS this tree (k_untar in src/inle/kmain.c): the artifact carries
+   ; its own source and the machine reads it at boot, so a disk was never what the
+   ; tree was on. the same tree is here, so a hosted pid 1 lays it too.
    ;
-   ; paths re-home below the archive's top, as k_tar_walk does it, so the tree reads
-   ; from inside the way a checkout does -- /apps/helm/helm.l, not /love-0.1/apps/..
-   ; a love linked without its source (the raw distro base) carries an empty blob and
+   ; paths re-home below the tar's top, as the kernel's rows do, so the tree reads
+   ; from inside the way a checkout does -- /src/apps/helm/helm.l, not /love-0.1/src/..
+   ; a love linked without its source (the raw distro base) carries none and
    ; says so; the underlay above stands on its own and does not want this.
-   ; the archive's top, dropped: the entry that IS the top has no slash and re-homes
+   ; the tar's top, dropped: the entry that IS the top has no slash and re-homes
    ; to nothing, which is how it stops being a directory at the root.
    (hbelow nom)
     (nom @ (_ + "/" + b) b "")
    (hscatter root)
-    (source-gz "x" @ gz
-       (? !(string? gz) (hnote "scatter: this love carries no source", 0)
-          (gz-unzip gz @ u
-             (atom? u ? (hnote "scatter: the carried archive did not inflate", 0)
-                (tar-unpack <>u @ t
-                   (atom? t ? (hnote "scatter: the carried archive is torn", 0)
-                      (: es (filter (e \ (0 < #(tar-get e 'nom "")))
-                                    (map (e \ pin e 'nom (hbelow (tar-get e 'nom ""))) <>t))
-                         _  (hmkdirs root)
-                         w  (tar-scatter root es)
-                         (atom? w ? (hnote ("scatter: can't write " + root), 0)
-                            (hnote ("scatter " + show <>w + " files under " + root),
-                             <>w)))))))))
+    (tree-tar 0 @ a
+       (? !(string? a) (hnote "scatter: this love carries no source", 0)
+          (tar-unpack a @ t
+             (atom? t ? (hnote "scatter: the carried tree is torn", 0)
+                (: es (filter (e \ (0 < #(tar-get e 'nom "")))
+                              (map (e \ pin e 'nom (hbelow (tar-get e 'nom ""))) <>t))
+                   _  (hmkdirs root)
+                   w  (tar-scatter root es)
+                   (atom? w ? (hnote ("scatter: can't write " + root), 0)
+                      (hnote ("scatter " + show <>w + " files under " + root),
+                       <>w)))))))
    (helm-pid1 _)
     (getpid 0 @ me
        (me != 1 ? 0

@@ -70,6 +70,9 @@ i = 0.5 -1                   ; complex numbers
 i = (0 ~ 1)                  ; a ~ b = (twin a b), the complex builder
 [1 2 3] = sort [3 1 2]       ; [x y z] = (list x y z)
 {'a 1 'b 2}                  ; {k v ..} = (hash k v ..), a tablet
+"a \"q\"" = """a "q""""      ; three or more quotes: a raw text, no escapes. one ending
+                             ; its line closes on a line of its own, whose indent comes off
+"7 of 3" = "\(c) of \(#l)"   ; \( a hole: a form to its closer; a string laid as is, the rest shown
 [2 3 4] = map (+ 1) [1 2 3]
 12 = +[3 4 5]                ; +x = (net x)
 3 = #[3 1 2]                 ; #x = (tally x)

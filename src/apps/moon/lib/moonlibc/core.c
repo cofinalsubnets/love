@@ -162,5 +162,7 @@ void __ai_start(long *sp, long osv) {
   stdout->line = isatty(1);
   stderr->fd = 2;
   stderr->wr = 1;
+  stdin->rb = __ibuf;
+  stdin->rcap = sizeof __ibuf;
   exit(main((int) argc, argv)); }
 

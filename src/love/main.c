@@ -16,7 +16,6 @@
 #include <stdnoreturn.h>
 #include <signal.h>
 #include <sys/wait.h>
-#include <sys/mman.h>    // the carried source's inflate buffer (mmap, no malloc)
 
 // ai_clock lives in src/love/posix.c, one body for this frontend and the kernel's.
 // the fine clock's real source (the weak default in love.c degrades to ms*1e6)
@@ -316,74 +315,44 @@ static struct ai *run_program(struct ai *g, bool replp) {
 struct ai *boot(struct ai *g, bool argp, char const *bake, char const *bake_load, char const *bake_out);
 #else
 #ifdef LvBakeSrc
-#include "lib/ustar.h"
+#include "lib/srctree.h"
 static char const src_distlist[] =
 #include "distlist.h"
  ;
 
-// inflate the carried blob (gzip: skip the header fields, ISIZE names the tar)
-static unsigned char *bsrc_untar(uintptr_t *outn) {
-  uintptr_t o = 0, un = 0;
-  if (!ai_gz_body(ai_srcgz, ai_srcgz_len, &o, &un)) return NULL;
-  unsigned char *t = mmap(NULL, un ? un : 1, PROT_READ | PROT_WRITE,
-                          MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-  if (t == MAP_FAILED) return NULL;
-  if (ai_inflate_raw(ai_srcgz + o, ai_srcgz_len - o - 8, t, un) != (intptr_t) un)
-    return munmap(t, un), NULL;
-  return *outn = un, t; }
-
-// find a tree-relative path in the ustar block. the archive's paths carry a top component,
-// so match past it; a symlink member chases its target against its own directory.
-static unsigned char const *bsrc_find(unsigned char const *t, uintptr_t n,
-                                    char const *path, uintptr_t *len, int hop) {
-  uintptr_t pl = strlen(path);
-  if (hop > 3 || !pl) return NULL;
-  for (uintptr_t o = 0; o + 512 <= n && t[o];) {
-    unsigned char const *h = t + o;
-    uintptr_t sz = ai_ustar_octal(h + 124, 12);
-    if (ai_ustar_member(h)) {
-      char nm[256];
-      uintptr_t ln = ai_ustar_name(h, nm, sizeof nm);
-      if (ln == pl && !memcmp(nm, path, pl)) {
-        if (!ai_ustar_islink(h)) return *len = sz, t + o + 512;
-        char tgt[101], cn[256];
-        tgt[ai_ustar_link(h, tgt, sizeof tgt - 1)] = 0;
-        cn[ai_lnk_canon(path, tgt, cn, sizeof cn - 1)] = 0;
-        return bsrc_find(t, n, cn, len, hop + 1); } }
-    o += 512 + ((sz + 511) & ~(uintptr_t) 511); }
-  return NULL; }
-
 // lay the roster cat from the carried source, beside `at`: the crew a binary bakes when
 // no -l names one, which is how a raw love emits its baked state with no tree to hand.
-// 1 laid, 0 refused -- no blob aboard, nowhere to write, or a roster name the archive
-// does not carry. per-process, for the reason the bake's scratch is (src/love/image.c).
+// the roster is the tree's bake section, so that is the one decoded. 1 laid, 0 refused --
+// no source aboard, nowhere to write, or a roster name the tree does not carry.
+// per-process, for the reason the bake's scratch is (src/love/image.c).
 static int bsrc_lay_cat(char *cat, size_t n, char const *at) {
   char exe[4096];                                    // the kernel's own PATH_MAX, not a cap of ours
-  if (ai_srcgz_len < 18) return 0;                   // src/love/noblob.c's zero: this link carries no source
+  if (!ai_srctree_len) return 0;                     // src/love/noblob.c's zero: this link carries no source
   if (!at && !(at = host_selfpath(exe, sizeof exe) ? exe : NULL)) return 0;
-  uintptr_t un = 0;
-  unsigned char *t = bsrc_untar(&un);
-  if (!t) return fprintf(stderr, "love: bake: the carried source will not inflate\n"), 0;
+  struct ai_tree *t = ai_tree_carried();
+  if (!t) return fprintf(stderr, "love: bake: the carried source will not open\n"), 0;
   snprintf(cat, n, "%s.bakecat.%ld.l", at, (long) getpid());
   int fd = open(cat, O_WRONLY | O_CREAT | O_TRUNC, 0600);
   if (fd < 0) {                                      // a read-only seat -- /usr/bin, a container layer
     fprintf(stderr, "love: bake: %s is not writable\n", cat);
-    return munmap(t, un), 0; }
+    return 0; }
   for (char const *p = src_distlist; *p;) {
     while (*p == ' ' || *p == '\n') p++;
     char w[256]; size_t wl = 0;
     while (*p && *p != ' ' && *p != '\n' && wl < 255) w[wl++] = *p++;
     if (!wl) break;
     w[wl] = 0;
-    uintptr_t ml = 0;
-    unsigned char const *m = bsrc_find(t, un, w, &ml, 0);
-    // a roster name the archive does not carry (a stale distlist), or a full filesystem
+    intptr_t i = ai_tree_find(t, w, wl);
+    unsigned char const *m = i < 0 ? NULL : ai_tree_bytes(t, t->rows + i);
+    uintptr_t ml = i < 0 ? 0 : t->rows[i].len;
+    // a roster name the tree does not carry (a stale distlist), one that will not decode,
+    // or a full filesystem
     if (!m || (ml && write(fd, m, ml) != (ssize_t) ml)) {
       fprintf(stderr, "love: bake: %s %s\n", w,
-              m ? "would not write" : "is not in the carried source");
-      close(fd), unlink(cat), munmap(t, un);
+              i < 0 ? "is not in the carried source" : m ? "would not write" : "will not decode");
+      close(fd), unlink(cat);
       return 0; } }
-  return close(fd), munmap(t, un), 1; }
+  return close(fd), 1; }
 #else
 #define bsrc_lay_cat(cat, n, at) 0
 #endif

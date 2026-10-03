@@ -213,25 +213,44 @@
 
    ; --- sync: union a peer nest's store. blobs + patches are immutable and
    (dirty _) #(scan (sort (walk () (igs ()) ())) (snap ()) ())
-   ; one direction of the store exchange: copy the sha256-named files `to` lacks,
-   ; verifying every address on the way. a nest root is "." or a peer path.
-   ; answers (ncopied nfailed) -- a failed write is a peer we cannot push to.
-   (copy sub cite to)
-    (: fd (cite + "/.sb/" + sub + "/") td (to + "/.sb/" + sub + "/")
-       (go m n bad)
-        (? !(two? m) [n bad]
-           (: h <m
-              (? !(sb-hex? h) (go >m n bad)                 ; only the sha256-named files
-                 (two? (look (td + h))) (go >m n bad)         ; already there
-                 (: t (look (fd + h))
-                    (? (atom? t) (go >m n bad)
-                       (sha256 <>t != h)
-                        (say err ("sb: bad address " + h + "\n"), go >m n (bad + 1))
-                       (sub = "patch" && !(sb-sound? (readform <>t)))
-                        (sb-refuse h, go >m n (bad + 1))
-                       (lay (td + h) <>t) (go >m (n + 1) bad)
-                       (go >m n (bad + 1)))))))
-       (go (readdir fd) 0 0))
+   ; one direction of the store exchange: the patches `to` lacks, walked back from the
+   ; source's tips through their deps. a store holds every patch's deps, so the walk stops
+   ; at a patch `to` already holds, and lays each patch after its deps and blobs, which keeps
+   ; that so: the cost goes with what differs, never with the store. pat and blb get a store
+   ; object by name, (1 text) | (); every one is checked against its name on the way.
+   ; -> {'laid 'bad 'read 'blobs 'ok}: read the patches fetched, ok when every tip arrived whole
+   (gap pat blb tips to)
+    (: tp (to + "/.sb/patch/") tb (to + "/.sb/blob/")
+       seen {} n {'laid 0 'bad 0 'read 0 'blobs 0}
+       (bump k) (pin n k (1 + n k))
+       (each f l) (foldl (\ a x (: r (f x) (a && r))) 1 l)   ; every one runs: && would stop at a miss
+       (blob1 h)
+        (? (!h || two? (stat (tb + h))) 1
+           (: t (blb h)
+              (? (atom? t) (say err ("sb: cannot fetch blob " + sh h + "\n"), 0)
+                 (sha256 <>t != h) (say err ("sb: bad address " + h + "\n"), bump 'bad, 0)
+                 (lay (tb + h) <>t) (bump 'blobs, 1)
+                 0)))
+       (one id)
+        (: r0 (peep seen id ())
+           (? (r0 != ()) r0
+              (: r (? !(sb-hex? id) (sb-refuse id, bump 'bad, 0)
+                      (two? (stat (tp + id))) 1
+                      (: t (pat id) _ (bump 'read)
+                         f (? (two? t && sha256 <>t = id) (readform <>t))
+                         (? (atom? t) (say err ("sb: cannot fetch patch " + sh id + "\n"), 0)
+                            (sha256 <>t != id) (say err ("sb: bad address " + id + "\n"), bump 'bad, 0)
+                            !(sb-sound? f) (sb-refuse id, bump 'bad, 0)
+                            (: dk (each one (fld f 'deps))
+                               bk (each blob1 (catmap (h \ [(sd-h <>h) (sd-h <>>h)]) (fld f 'hunks)))
+                               (? (dk && bk && lay (tp + id) <>t) (bump 'laid, 1) 0)))))
+                 _ (pin seen id r)
+                 r)))
+       _ (pin n 'ok (each one (? (sb-all? sb-hex? tips) tips ())))
+       n)
+   ; a nest's patches and blobs by name, (1 text) | ()
+   (dir-pat d) (\ id (look (d + "/.sb/patch/" + id)))
+   (dir-blb d) (\ h (look (d + "/.sb/blob/" + h)))
    ; bring this nest to the state a given patch set implies
    (tell cfs)
     (: (go m n) (? (atom? m) n
@@ -346,53 +365,16 @@
        (w + d))
    ; --- the http remote: pull only
    (pull-http base)
-    (: n {}
-       seen {}
-       (bump k) (pin n k (1 + peep n k 0))
-       (getblob h)                                     ; ensure a blob is local
-        (? !h 1
-           !(sb-hex? h) 0
-           (two? (look (".sb/blob/" + h))) 1
-           (: b (http-fetch base ("/blob/" + h))
-              (? (atom? b) (say err ("sb: cannot fetch blob " + sh h + "\n"), 0)
-                 (sha256 <>b = h) (lay (".sb/blob/" + h) <>b, bump 'b, 1)
-                 (say err ("sb: bad address on blob " + sh h + "\n"), 0))))
-       (getpatch id)                                   ; ensure a patch is local; answer its form
-        (: local (? (sb-hex? id) (look (".sb/patch/" + id)))
-           f (two? local ? (readform <>local))
-           (? !(sb-hex? id) (sb-refuse id, ())
-              (two? local) (? (sb-sound? f) f (sb-refuse id, ()))
-              (: b (http-fetch base ("/patch/" + id))
-                 f2 (two? b ? (readform <>b))
-                 (? (atom? b) (say err ("sb: cannot fetch patch " + sh id + "\n"), ())
-                    (sha256 <>b != id) (say err ("sb: bad address on patch " + sh id + "\n"), ())
-                    !(sb-sound? f2) (sb-refuse id, ())
-                    (lay (".sb/patch/" + id) <>b, bump 'p, f2)))))
-       (walk ids ok)                                   ; the transitive closure, by reading as we go
-        (? (atom? ids) ok
-           (: id <ids
-              (? (seen id) (walk >ids ok)
-                 (: _ (pin seen id 1)
-                    f (getpatch id)
-                    (? (atom? f) (walk >ids 0)
-                       (: hs (fld f 'hunks)
-                          ; fetch first, then combine: && short-circuits, so folding the
-                          ; calls into the accumulator would stop fetching at the first miss
-                          bo (: (hb m a) (? !(two? m) a
-                                   (: h <m x (getblob (sd-h <>h)) y (getblob (sd-h <>>h))
-                                      (hb >m (a && x && y))))
-                                (hb hs 1))
-                          (walk (fld f 'deps + >ids) (ok && bo))))))))
-       tt (http-fetch base "/tips")
+    (: tt (http-fetch base "/tips")
        (? (atom? tt) (say err ("sb: no store at " + base + " (no /tips)\n"), ())
           (: tips (readform <>tt)
              (? (atom? tips) (say err ("sb: " + base + " has no tips\n"), ())
-                (: ok (walk tips 1)
+                (: g (gap (\ id (http-fetch base ("/patch/" + id))) (\ h (http-fetch base ("/blob/" + h))) tips ".")
                    rt (http-fetch base "/refs")             ; the refs ride along
                    theirs (two? rt ? (readform <>rt))
                    ru (refadd (refs ()) theirs 1)
                    _ (two? <ru ? (lay ".sb/refs" (show <ru)))
-                   [ok (peep n 'p 0) (peep n 'b 0) <>ru])))))
+                   [(g 'ok) (g 'laid) (g 'blobs) <>ru])))))
 
    (sync-url peer)
     (mk (),
@@ -427,11 +409,10 @@
         (: home (cwd 0)
            pd (chdir peer @ c (c ? -1 (: _ (mk ()) d (dirty ()) (chdir home, d))))
            (? (pd < 0) (say err ("sb: cannot reach " + peer + "\n"), 0)
-              (: inb (copy "blob" peer ".") inp (copy "patch" peer ".")
+              (: gi (gap (dir-pat peer) (dir-blb peer) (form (peer + "/.sb/tips")) ".")
                  ; the push: only onto a clean peer, and only if every write lands
-                 out1 (pd @ 0 (copy "blob" "." peer) '(0 0))
-                 out2 (pd @ 0 (copy "patch" "." peer) '(0 0))
-                 pushed (0 = pd && 0 = <>out1 && 0 = <>out2)
+                 go (pd @ 0 (gap (dir-pat ".") (dir-blb ".") (tips ()) peer) {'laid 0 'bad 0 'blobs 0})
+                 pushed (0 = pd && 0 = go 'bad)
                  ; the refs travel too -- a release is only "the unit you
                  ; propagate" if the NAME reaches the other nest with it
                  theirs (form (peer + "/.sb/refs"))
@@ -446,8 +427,8 @@
                  pst (? !pushed ()                             ; settle the far end too
                         (: c (chdir peer) r (settle (readdir ".sb/patch")) _ (chdir home) r))
                  _ (puts ("sb: synced -- " + show <st + " patches ("
-                          + show <inp + " in, " + show <out2 + " out), "
-                          + show (<inb + <out1) + " blobs, " + show <>st + " files here"
+                          + show (gi 'laid) + " in, " + show (go 'laid) + " out), "
+                          + show (gi 'blobs + go 'blobs) + " blobs, " + show <>st + " files here"
                           + (? (two? pst) (", " + show <>pst + " files there") "")
                           + (nleft @ 0 "" (", " + show nleft + " conflicted"))
                           + (nref @ 0 "" (", " + show nref + " ref clash"

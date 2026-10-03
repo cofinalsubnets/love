@@ -28,6 +28,8 @@ int  fchown(int, unsigned int, unsigned int);
 int  lchown(char const*, unsigned int, unsigned int);
 int  setuid(unsigned int);
 int  setgid(unsigned int);
+int  setresuid(unsigned int, unsigned int, unsigned int);
+int  setresgid(unsigned int, unsigned int, unsigned int);
 int  seteuid(unsigned int);
 int  setegid(unsigned int);
 int  chdir(char const*);
