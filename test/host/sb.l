@@ -626,7 +626,7 @@
 
 (test
  dsame (0 < dre) (dre < 12)                ; equal every time, some paths folded again or none
- dtrip dkept dsnap dclean (1 = dbases))
+ dtrip dkept dsnap dclean (2 = dbases))           ; the head's derive and the one before it
 
 
 ; --- the bank's worth: over twenty thousand patches, a take onto the cached head folds only what
