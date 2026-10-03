@@ -117,6 +117,8 @@ A session keeps one directory in the hive, its *cell*, *hive***/***name***/**:
 **read/**
 :   The messages the session has taken, moved there from **inbox/**.
 
+The reading of cells and cards that every client shares (**mitty**'s bar counts the live sessions with it) is the module **hive**, **src/apps/hive.l**.
+
 A *message* file is a header and a body. The header is *key value* lines, **from** *name* and **sent** *seconds* among them; a blank line ends it, and everything after the blank line is the text. To send, write the file as **inbox/.***id* and then rename it to **inbox/***id*. A reader ignores dot files, so it never sees a message half written. Messages are taken in the order their ids sort, so an id should begin with the time in milliseconds; bee's own are *ms***-***sender***-***hex*.
 
 A session is live while its card's **pid** is. Whoever lists the hive removes a cell whose card names a dead pid, along with its messages. A cell without a card is still being made, and is left alone. A session removes its own cell when it exits.

@@ -237,44 +237,23 @@
      ; `inbox/` holds what was sent to it, a file each, and `read/` what it has taken. a message
      ; is written as inbox/.ID and renamed to inbox/ID, so a reader never sees half of one.
      ; doc/bee.md is the protocol, for anything else that wants to speak it
-     bee-hive (: r (getenv "BEE_HIVE") h (getenv "HOME")
-                   (? (string? r && 0 < #r) r (string? h) (h + "/.love/run/hive") "/tmp/bee-hive"))
-     (cell-of nm) (bee-hive + "/" + nm)
+     ; doc/bee.md is the protocol, for anything else that wants to speak it; src/apps/hive.l reads it
+     bee-hive (cite 'hive 'hive-root 0)
+     cell-of (cite 'hive 'hive-cell)
+     card-of (cite 'hive 'hive-card)                        ; () when there is none
+     card-pid (cite 'hive 'hive-pid)
+     alive? (cite 'hive 'hive-alive?)
      (mkdirs p) (foldl (\ a s (: d (a + "/" + s) _ (mkdir d 448) d)) ""
                        (filter (\ s (0 < #s)) (cite 'kore 'usplit 47 p)))
      (hex2 n) (string [("0123456789abcdef" (n // 16)) ("0123456789abcdef" (n % 16))])
-     (alive? p) (charm? p && 0 < p && !(nom? (still p 0)))
-     ; a card as a tablet, "name" included; () when there is none
-     (card-of nm)
-      (: s (slurp-file (cell-of nm + "/card"))
-         (? (string? s)
-            (foldl (\ t l (l @ ((k && 0 < #k) + " " + v) (pin t k v) t))
-                   {"name" nm} (lines s))))
-     (card-pid c) (digits (peep c "pid" "0"))
      ; a user's card: the person at this login, in the hive through bee's hud, with no model
      ; behind it. it is never swept, so mail to it waits while no hud is open
      bee-login (: u (getenv "USER") (? (string? u && 0 < #u) u "user"))
-     (user-card? c) (tablet? c && peep c "kind" "" = "user")
-     (taken? c) (tablet? c && (user-card? c || alive? (card-pid c)))   ; a name no one else may settle as
-     ; a gone session's cell, messages and all. a cell with no card yet is being made, and stays
-     (sweep nm)
-      (: d (cell-of nm)
-         _ (map (\ sub (: q (d + "/" + sub) fs (readdir q)
-                          _ (? (two? fs) (map (\ f (unlink (q + "/" + f))) fs) 0)
-                          (rmdir q)))
-                ["inbox" "read"])
-         _ (map (\ f (unlink (d + "/" + f))) ["key" "cert" ".cert" "seen"])
-         _ (unlink (d + "/card"))
-         (rmdir d))
+     user-card? (cite 'hive 'hive-user?)
+     taken? (cite 'hive 'hive-taken?)                       ; a name no one else may settle as
+     sweep (cite 'hive 'hive-sweep)
      ; the live sessions, [name card] each by name; a card whose pid is gone is swept
-     (settled _)
-      (: ns (readdir bee-hive)
-         (? !(two? ns) ()
-            (filter two? (map (\ nm (: c (card-of nm)
-                                       (? !(tablet? c) ()
-                                          (user-card? c || alive? (card-pid c)) [nm c]
-                                          (: _ (sweep nm) ()))))
-                              (sort ns)))))
+     settled (cite 'hive 'hive-settled)
      ; this session's name: BEE_NAME, else the working directory's last part; two hex digits
      ; follow when that is taken by a live session
      ; BEE_AS is exactly the session to act as, live or not: a bee's own MCP server, run by
@@ -494,7 +473,7 @@
      bee-restart ("at the next convenient point -- between tasks, never mid-gate -- "
                   + "resuming in the same directory, so .mcp.json loads the new bee.")
      bee-landed ("this landing changed bee: every live session restarts " + bee-restart)
-     bee-served "src/apps/bee.l src/apps/locks.l src/apps/hosts.l src/apps/seals.l src/apps/saver.l src/apps/pom.l src/apps/mitty/chat.l src/apps/mitty/avatar.l"   ; what bee runs
+     bee-served "src/apps/bee.l src/apps/locks.l src/apps/hosts.l src/apps/seals.l src/apps/hive.l src/apps/saver.l src/apps/pom.l src/apps/mitty/chat.l src/apps/mitty/avatar.l"   ; what bee runs
      (self-id _) (: s (string? bee-self ? (stat bee-self)) (two? s ? (show [(s 0) (s 3) (s 8)])))
      bee-selfw {'id (self-id 0) 'at (clock 0)}
      bee-selfwait (: w (getenv "BEE_SELF_WATCH") (string? w && 0 < #w ? (digits w) 30))

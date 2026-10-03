@@ -691,16 +691,9 @@
  ; its rows and its head's session and state. read every ten seconds, not every tick:
  ; the queue costs a git run ---
  (mitty-num t) (foldl (a \ c \ (47 < c && c < 58 ? (a * 10 + c - 48) a)) 0 (map t ^#t))
- (mitty-slurp p) (: f (open p "r") (? (hot? f) (: s (slurp f) _ (close f) s) ""))
- (mitty-live? card)
-  (: ls (filter (l \ 4 < #l && "pid " = snip l 0 4) (lines (mitty-slurp card)))
-     n (two? ls ? (mitty-num (snip <ls 4 #<ls)) 0)
-     (0 < n && !(nom? (still n 0))))
- (mitty-hive _)
-  (: e (getenv "BEE_HIVE") h (getenv "HOME")
-     d (? (string? e && 0 < #e) e (string? h) (h + "/.love/run/hive") "")
-     ns (readdir d)
-     (two? ns ? #(filter (n \ mitty-live? (d + "/" + n + "/card")) ns) 0))
+ ; the sessions whose pid is live, as src/apps/hive.l reads the cards
+ (mitty-hive _) (: pid (cite 'hive 'hive-pid) alive? (cite 'hive 'hive-alive?)
+                  #(filter (p \ alive? (pid (p 1))) (cite 'hive 'hive-cards 0)))
  (mitty-queues _)
   (: r (hark ["git" "for-each-ref" "--format=%(refname)" "refs/queue"])
      qs (two? r && 0 = <r ? (filter (l \ 0 < #l) (lines >r)) ())
