@@ -41,6 +41,8 @@ bee - a coding agent in the terminal, and the protocol its sessions talk by
 
 **love bee --revoke** *pub* \| *name* \| **--revocations** \| **--revoked**
 
+**love bee --state busy** \| **idle** \[**--pid** *pid*\]
+
 **love bee -s** \| **--screensaver** \[*name*\]
 
 # DESCRIPTION
@@ -53,15 +55,17 @@ bee - a coding agent in the terminal, and the protocol its sessions talk by
 - **start_job**, **check_job** and **stop_job**, and **spawn_bee** and **stop_bee**, described under JOBS AND WORKERS;
 - **lock_acquire**, **lock_release** and **lock_list**, described under LOCKS;
 - **queue_row**, **queue_lead**, **queue_land** and **queue_landed**, described under THE MERGE QUEUE.
-- in a pane of **love inle**, **pane_list**, **pane_read**, **pane_type**, **pane_open**, **pane_focus** and **pane_close**: the desktop's other panes by id, read as text, typed into as keys (a newline is Enter, and the answer is the pane once quiet), opened beside, given the keyboard, closed. The model's own pane is never typed into or closed.
+- in a pane of **love mitty**, **pane_list**, **pane_read**, **pane_type**, **pane_open**, **pane_focus** and **pane_close**: the desktop's other panes by id, read as text, typed into as keys (a newline is Enter, and the answer is the pane once quiet), opened beside, given the keyboard, closed. The model's own pane is never typed into or closed.
 
 A write, an edit, a shell command, a job's start, a message to another session, a queue write, a spawn and a stop of another bee, and typing into, opening, focusing or closing a pane ask y/n before they run, unless **-y** is given, and so does **read_file** of a path outside the working tree (a link out of it included). The rest run without asking. An ask shows the whole input, a control character as **^X**; on the full screen **y** runs it only once every row has been on the screen, and the arrows scroll it.
 
 Given a *prompt*, bee runs one turn and exits, streaming the answer to standard output. With no prompt, on a terminal it shows the *hud*; elsewhere, or on a terminal with **--plain**, it runs a **>** loop. **--chat** opens the full screen, the chat with the model, directly.
 
-The hud is read-only. It needs no model or key, and it settles no session, so it is in no list and takes no mail. It shows each merge queue: the base line and the leader, then every row (position, session, branch, gated-on, head and state), a folded row indented under the row it joins, the head row marked, and a note when the queue is long. Below the queues are the locks (the heavy tickets against **(heavy-max** *n***)**, the waiters, the **out/** locks and the **a64host-** slots, memory and load) and the live sessions. It reads them all again every **(queue-watch** *n***)** seconds, 20 unless set, and on **r**. **c** or Enter opens the chat in its place, settling then; **q** quits; the arrows, **j** and **k** scroll. **--hud** prints it once, as text.
+The hud needs no model or key. It shows each merge queue: the base line and the leader, then every row (position, session, branch, gated-on, head and state), a folded row indented under the row it joins, the head row marked, and a note when the queue is long. Below the queues are the locks (the heavy tickets against **(heavy-max** *n***)**, the waiters, the **out/** locks and the **a64host-** slots, memory and load) and the sessions: each one's state and how long it has held it, and the time since its last bee tool call. It reads them all again every **(queue-watch** *n***)** seconds, 20 unless set, and on **r**. **q** quits; the arrows, **j** and **k** scroll. **--hud** prints it once, as text.
 
-The full screen is also a pane: **(bee-main ["--stage"])**, called from love, settles a session and answers it as a stage for a **mitty**, so **love inle** opens one beside its shells (**C-a b**). A stage that cannot start answers why as a string. Closing the pane ends the session's turn and leaves the hive.
+While it is open, the hud holds the *user's card*, at the login's name (**USER**), and the user talks to the hive through it. **c** or Enter opens a line to a session, the first queue's leader at first: Enter sends what is typed, Tab names the next session, and Esc goes back to looking. The talk shows under the queues, with whatever comes back to the user's name. A second hud for one login has no card, and only looks.
+
+The full screen is also a pane: **(bee-main ["--stage"])**, called from love, settles a session and answers it as a stage for a **mitty**, so **love mitty** opens one beside its shells (**C-a b**). A stage that cannot start answers why as a string. Closing the pane ends the session's turn and leaves the hive.
 
 The system prompt tells the model where it is:
 
@@ -99,7 +103,7 @@ Every running bee is a *session* with a name. It is **BEE_NAME** when that is se
 A session keeps one directory in the hive, its *cell*, *hive***/***name***/**:
 
 **card**
-:   Who the session is, one *key value* pair a line: **pid**, **cwd**, **branch**, **model**, **state** (**idle**, **busy** or **asking**) and **since** (epoch seconds). It is rewritten whole, through a rename, on every change of state.
+:   Who the session is, one *key value* pair a line: **pid**, **cwd**, **branch**, **model**, **state** (**idle**, **busy** or **asking**) and **since** (epoch seconds), and for a Claude Code session **turn**, when its state last moved, and **parent**, the pid of the Claude Code it serves. It is rewritten whole, through a rename, on every change of state.
 
 **inbox/**
 :   The messages sent to the session, one file each.
@@ -111,7 +115,9 @@ A *message* file is a header and a body. The header is *key value* lines, **from
 
 A session is live while its card's **pid** is. Whoever lists the hive removes a cell whose card names a dead pid, along with its messages. A cell without a card is still being made, and is left alone. A session removes its own cell when it exits.
 
-Messages are delivered at two points. While a turn runs, whatever has arrived joins the next request, beside that request's tool results. On the full screen, an idle session checks its inbox about once a second, and a message starts a turn of its own. The model reads each message as **\<message from="***name***"\>** ... **\</message\>** inside a user turn, and is told that it comes from another agent and not from the user.
+A *user's card* is the person at a login, in the hive through the hud. It says **kind user** and **model user**, its name is the login's, and its **state** is **here** while a hud holds it (its pid the hud's) and **away** after. It is never removed, so mail to the user waits in its inbox until a hud opens. One login has one, no agent may settle or be named as it, and **love bee --list** shows it as **user**. A message the hud sends says **kind user** in its header.
+
+Messages are delivered at two points. While a turn runs, whatever has arrived joins the next request, beside that request's tool results. On the full screen, an idle session checks its inbox about once a second, and a message starts a turn of its own. The model reads each message as **\<message from="***name***"\>** ... **\</message\>** inside a user turn, and is told that it comes from another agent and not from the user. A message that says **kind user** from a user's card reads as **\<message from="***name***" kind="user"\>**, and the model is told that it is the user, typing into the hud at this machine under the same login, to be taken as the user's own words and answered with **send_message** to that name. The login is the boundary of trust here: the hive is files any process of that uid can write, and the user's name is reserved against accidents, not against that uid.
 
 A session also watches the binary it runs. At start it notes the binary's size, modification time and inode, and at most every **BEE_SELF_WATCH** seconds (30) it looks again. When another build has been laid there, it says so once, as a message from **bee** (on the full screen, a note): bee was updated, when the new build was written, and to restart at the next convenient point, between tasks and never mid-gate, in the same directory. Until then the session goes on as it was. A bee's own **--mcp** child leaves this to the bee. The notice means the binary changed, not that bee's code did: any make that relinks a tree's **out/love** tells every session running that file.
 
@@ -148,6 +154,7 @@ With **BEE_AS** set, the server speaks as that bee, which keeps the cell and wat
 
 - It settles in the hive while it runs, under **BEE_NAME** when that is free, else the working directory's last part, with two hex digits added only when that name is taken. A restart therefore keeps its name.
 - Its card says **model claude-code**, and **love bee --list** shows it. It leaves the hive when its stdin ends.
+- Its state is its Claude Code's turns, which the server cannot see. Love's tree carries **.claude/settings.json**, whose hooks run **love bee --state busy** when a prompt is submitted and **--state idle** when the turn stops, each with **--pid** of the Claude Code that ran it, in the background and quietly. They add **--hud**, which **--state** ignores, so a bee too old to know **--state** prints its hud and does nothing else. **--state** finds the session whose card's **parent** is that pid or one of its parents, else **BEE_NAME**'s, else the one Claude Code session in its directory, and moves the card's **state** and **turn**. Each tool call also touches *cell***/seen**, so the hud can say how long a session has been quiet even without the hooks.
 - It watches the queues for its rows, as a bee does.
 
 Mail and queue-watch notices wait in the inbox, and every tool's answer carries what has arrived, appended as **\<message from="***name***"\>** blocks, as a bee's next request carries it. A bee's child gets its mail the same way while a turn runs. Whoever takes a message moves it to **read/** first, so a bee and its server never both take one.

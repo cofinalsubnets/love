@@ -15,7 +15,7 @@
   test_elf32 test_encver test_extra test_extract test_fat test_fat32 test_filemode test_fixpoint \
   test_forge test_freebsd test_freebsd_a64 test_front test_gc test_gcheck test_gcstress \
   test_gates test_gen test_glaze test_glazebench test_glazefuzz test_gz test_harp test_hearts test_hdiff test_ccwarn test_holo test_holofuzz test_holowasm test_hook \
-  test_host test_hostegg test_hostnif test_inle test_kboot test_kernel_a64 test_kernel_rv64 test_kernel_wasm test_kore \
+  test_host test_hostegg test_hostnif test_inle test_kboot test_kmitty test_kernel_a64 test_kernel_rv64 test_kernel_vmx test_kernel_wasm test_kore \
   test_kverb test_libc test_love0 test_lux test_moon test_moonfuzz test_mps2 test_mps2_t1 \
   test_mps2_build test_mps2_wake test_mx test_netbsd test_netbsd_a64 test_nucleo446 test_nucleo446_smoke \
   test_objcopy test_playdate test_proof test_raw test_raw_a64 test_raw_bake test_raw_rv64 \
@@ -1227,8 +1227,15 @@ test_kernel_vmx: host $(S)/tools/ktest.l
 	 echo TEST $(k_elf) "(the vmx lane: kvm and -cpu host on $$KTEST_VMX_HOSTS)" && \
 	 KTEST_X64_HOSTS="$$KTEST_VMX_HOSTS" KTEST_CORPUS=test/kernel/vmx-lane.l \
 	   $m $(S)/tools/ktest.l $(k_elf) - $a "vmx: guest ran, cpuid exited"
+
+# an empty boot line is a mitty on the console: keys in through qemu's monitor, lush in its
+# first pane, exit to the console shell, a reset out -- test/gate/kmitty.l
+test_kmitty: host test/gate/kmitty.l
+	@$(MAKE) -s $(k_elf)
+	@echo TEST $(k_elf) "(the console a mitty: an empty boot line, keys by sendkey)"
+	@$m test/gate/kmitty.l $(k_elf)
 else
-test_disk test_kboot test_kernel_vmx:
+test_disk test_kboot test_kernel_vmx test_kmitty:
 	@sh test/gate/skip.sh gate-skip "$@: skipped (host arch $a is not x64)"
 endif
 
@@ -1259,6 +1266,7 @@ test_inle:
 	@$(MAKE) -s test_disk
 	@$(MAKE) -s test_uefi
 	@$(MAKE) -s test_kboot
+	@$(MAKE) -s test_kmitty
 	@$(MAKE) -s test_kverb
 	@$(MAKE) -s test_kernel_a64
 	@$(MAKE) -s test_uefi_a64

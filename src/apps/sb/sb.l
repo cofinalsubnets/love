@@ -19,12 +19,23 @@
 
    ; --- the store ---
    (mk _) (mkdir ".sb" 493, mkdir ".sb/blob" 493, mkdir ".sb/patch" 493, ())
-   (snap _) (form ".sb/snap")                            ; ((path chash pid) ..) sorted
+   (snap _) (form ".sb/snap")                            ; ((path side pid) ..) sorted
    (tips _) (form ".sb/tips")                            ; (id ..)
    ; the patch-set ID: the name of a head DAG state. the tips are a set -- sort
    ; before hashing, or the same head reads two ways.
    (psid tp) (sha256 (show (sort tp)))
-   (blob h) (: t (? (sb-hex? h) (look (".sb/blob/" + h))) (two? t ? <>t))
+   (blob h) (: k (sd-h h) t (? (sb-hex? k) (look (".sb/blob/" + k))) (two? t ? <>t))
+   ; a side is a path's state: () absent, its blob's hash for a plain file, the hash and an
+   ; x for an executable one. so a chmod is a change, and a context names the mode too
+   (sd-h s) (? (sd-x? s) (snip s 0 64) s)                      ; the side's blob
+   (sd-x? s) (string? s && #s = 65)
+   (sd h x) (? (h && x) (h + "x") h)
+   (sd-exe? p) (: st (stat p) (two? st && 0 < (64 & <>>st)))  ; the owner's x bit
+   ; an x side gives x wherever there is r; a plain one takes every x away
+   (sd-chmod p x)
+    (: st (stat p) m (? (two? st) (4095 & <>>st) 0)
+       m2 (? x (m | ((m & 292) // 4)) (m - (m & 73)))
+       (? (two? st && m != m2) (chmod p m2)))
    (keep s) (: h (sha256 s) _ (lay (".sb/blob/" + h) s) h)
    (patch id) (: f (? (sb-hex? id) (form (".sb/patch/" + id))) (sb-sound? f ? f))
    (fld f k) (:- (go >f) (go m) (? (atom? m) () (two? <m && <<m = k) ><m (go >m)))
@@ -58,7 +69,8 @@
        (go i) (? (n <= i) (ln? p) (p i = 47) (ln? (snip p 0 i) || go (i + 1)) (go (i + 1)))
        (go 0))
    (sb-all? f l) (? (atom? l) (l = ()) (f <l && sb-all? f >l))
-   (sb-oid? x) (x = () || sb-hex? x)                             ; a hunk side: absent or a blob
+   (sb-oid? x) (x = () || sb-hex? x                              ; a hunk side: absent, a blob,
+                || (sd-x? x && x 64 = 120 && sb-hex? (sd-h x)))   ; or a blob and an x
    (sb-hunk? h) (two? h && #h = 3 && string? <h && sb-rel? <h && sb-oid? <>h && sb-oid? <>>h)
    (sb-sound? f) (sb-all? sb-hunk? (fld f 'hunks) && sb-all? sb-hex? (fld f 'deps))
    (sb-bad? id) (!(sb-hex? id) || (: f (form (".sb/patch/" + id)) (two? f && !(sb-sound? f))))
@@ -91,11 +103,11 @@
        (go es acc))
 
    ; --- the scan: working tree vs snap -> the hunks, path-sorted. pure (no
-   ;     blob writes); a hunk is (path old new), old/new content hashes | () ---
+   ;     blob writes); a hunk is (path old new), old and new its sides ---
    (h1 p e)                                                   ; one path vs its snap entry|()
     (: t (look p)
        (atom? t ? (two? e ? [p <>e ()])                 ; unreadable: dead if known
-        (: h (sha256 <>t)
+        (: h (sd (sha256 <>t) (sd-exe? p))
            (? (atom? e) [p () h]                               ; born
               (<>e = h) ()                                   ; unchanged
               [p <>e h]))))                                  ; changed
@@ -268,11 +280,16 @@
    ; --- a diverged write: two patches wrote one path from a shared base
    (bin? s) (: n #s (go i) (? (n <= i) 0 (s i = 0) 1 (go (i + 1))) (go 0))
    (sh h) (? h (snip h 0 12) "()")
-   (bl h) (? !h '(1 "") (sb-hex? h) (look (".sb/blob/" + h)))      ; (1 text) | () -- presence, not net
+   (bl h) (: k (sd-h h) (? !k '(1 "") (sb-hex? k) (look (".sb/blob/" + k))))  ; (1 text) | () -- presence, not net
    (mend old curh nw curpid pid)
     (: bw (bl old) ow (bl curh) tw (bl nw)
+       bh (sd-h old) oh (sd-h curh) th (sd-h nw)
+       ; the mode merges by itself: the incoming side's when it moved it, else ours
+       x (? (sd-x? nw = sd-x? old) (sd-x? curh) (sd-x? nw))
        (? !nw [curh 1 ("kept the edit -- " + sh pid + " deletes what " + sh curpid + " wrote")]
           !curh [nw 1 ("kept the edit -- " + sh pid + " writes what was deleted here")]
+          (oh = th || th = bh) [(sd oh x) 0 "both sides kept"]     ; the texts agree, or theirs is the base's
+          (oh = bh) [(sd th x) 0 "both sides kept"]                ; ours is the base's
           !(two? ow && two? tw)
              [curh 1 ("a blob is missing, cannot merge -- kept " + sh curh)]
           (: bt (? (two? bw) <>bw "") ot <>ow tt <>tw
@@ -281,8 +298,8 @@
                 (: r (diff3 bt ot tt ("recorded (" + sh curpid + ")")
                                       ("incoming (" + sh pid + ")"))
                    mh (keep <r) n <>r
-                   (n @ 0 [mh 0 "both sides kept"]
-                    [mh n (show n + " region" + (? (1 = n) "" "s") + " left in markers")]))))))
+                   (n @ 0 [(sd mh x) 0 "both sides kept"]
+                    [(sd mh x) n (show n + " region" + (? (1 = n) "" "s") + " left in markers")]))))))
    (derive-snap ids)                                          ; fold the DAG -> (snap conflicts)
     (: order (topo ids) snap {} cf {}
        _ (:- (go order) (go m) (? (atom? m) ()
@@ -312,13 +329,14 @@
        _ (: (go m) (two? m ? (pin np <<m <><m, go >m)) (go newsnap))
        w (: (go m n) (? (atom? m) n
               (: e <m p <e ch <>e
-                 ok (sb-rel? p && sb-hex? ch && !(sb-link? p))
-                 bl (? ok (look (".sb/blob/" + ch)))   ; presence, not net: an empty blob is real
+                 ok (sb-rel? p && sb-oid? ch && string? ch && !(sb-link? p))
+                 bh (sd-h ch) x (sd-x? ch)
+                 bl (? ok (look (".sb/blob/" + bh)))   ; presence, not net: an empty blob is real
                  cur (? ok (look p)) curh (? (two? cur) (sha256 <>cur) ())
                  (? !ok (say err ("sb: will not write " + show p + " from " + show ch + "\n"), go >m n)
-                    (atom? bl) (say err ("sb: missing blob " + ch + "\n"), go >m n)
-                    (curh = ch) (go >m n)
-                    (mkparents p, lay p <>bl, go >m (n + 1)))))
+                    (atom? bl) (say err ("sb: missing blob " + bh + "\n"), go >m n)
+                    (curh = bh) (? (x = sd-exe? p) (go >m n) (sd-chmod p x, go >m (n + 1)))
+                    (mkparents p, lay p <>bl, sd-chmod p x, go >m (n + 1)))))
             (go newsnap 0))
        d (: (go m n) (? !(two? m) n
               (: p <<m (? (peep np p 0) (go >m n)
@@ -361,7 +379,7 @@
                           ; fetch first, then combine: && short-circuits, so folding the
                           ; calls into the accumulator would stop fetching at the first miss
                           bo (: (hb m a) (? !(two? m) a
-                                   (: h <m x (getblob <>h) y (getblob <>>h)
+                                   (: h <m x (getblob (sd-h <>h)) y (getblob (sd-h <>>h))
                                       (hb >m (a && x && y))))
                                 (hb hs 1))
                           (walk (fld f 'deps + >ids) (ok && bo))))))))
@@ -526,24 +544,30 @@
                  nc (:- (go hs 0) (go m n)
                         (atom? m ? n
                            (: h <m p <h pold <>h pnew <>>h
-                              cur (sn p)             ; the index maps path -> chash directly
+                              cur (sn p)             ; the index maps path -> side directly
                               (? (sb-link? p)
                                  (say err $ "sb: CONFLICT on " + p + " -- it lies through a link; kept what is there\n",
                                   go >m (n + 1))
                                  (cur = pnew)                ; P still owns the path: a clean lift
                                  ((? !pold (unlink p)
-                                     (mkparents p, lay p (blob pold))),
+                                     (mkparents p, lay p (blob pold), sd-chmod p (sd-x? pold))),
                                   go >m n)
                                  ; it moved on -- merge P's write out of what is there now
                                  (: bw (bl pnew) ow (bl cur) tw (bl pold)
-                                    (? !(two? bw && two? ow && two? tw)
+                                    bh (sd-h pnew) oh (sd-h cur) th (sd-h pold)
+                                    x (? (sd-x? pnew = sd-x? cur) (sd-x? pold) (sd-x? cur))
+                                    (? (pold && cur && th = bh)     ; P moved only the mode
+                                       (sd-chmod p x, go >m n)
+                                       (pold && cur && oh = bh)     ; only the mode moved on since
+                                       (lay p (blob pold), sd-chmod p x, go >m n)
+                                       !(two? bw && two? ow && two? tw)
                                        (say err $ "sb: CONFLICT on " + p + " -- a birth or death moved on; kept what is there\n",
                                         go >m (n + 1))
                                        (bin? <>bw || bin? <>ow || bin? <>tw)
                                        (say err $ "sb: CONFLICT on " + p + " -- binary, cannot merge; kept what is there\n",
                                         go >m (n + 1))
                                        (: r (diff3 <>bw <>ow <>tw "here now" ("undone " + sh id))
-                                          _ (lay p <r)
+                                          _ (lay p <r, sd-chmod p x)
                                           k <>r
                                           _ (? (0 = k) (puts ("sb: merged " + p + " -- the later edits kept\n"))
                                                (say err ("sb: CONFLICT in " + p + " -- " + show k

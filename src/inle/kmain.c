@@ -2416,7 +2416,8 @@ void kmain(void) {
     r = ai_evals_(r, "(crewload 0)");
     k_bake(r, kboot.cmdline + 5); }
   // now the line wears its real shape and the program word dispatches off the registry.
-  // an empty line falls to the console shell, the toolbox warm.
+  // an empty line is a mitty on the console, lush in its first pane; when its last pane
+  // ends, or it cannot start, the console shell stands in, the toolbox warm.
   r = ai_evals_(r, "(: cmdline (. \"love\" bootargv) argv cmdline)");
   r = ai_evals_(r,
    "(? (two? bootargv)"
@@ -2428,6 +2429,9 @@ void kmain(void) {
    "           (: _ (say err (+ (cap bootargv) \": not found\")) _ (put err 10) 127))"
    "      (quit (? (charm? r) r 0)))"
    "   0)");
+  r = ai_evals_(r,
+   "(: pr (k-prog (. \"mitty\" (. \"--here\" ())))"
+   "   (? (two? pr) (trap (\\ _ ((cap pr) (cup pr))) () (\\ a b 0)) 0))");
   r = ai_evals_(r, "(cite 'cli 'shell 0)");
   // a terminal scare gets the honest face on the serial console before reset
   if (ai_code_of(r) == ai_status_scare) ai_scare_face(r);

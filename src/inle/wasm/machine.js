@@ -13,7 +13,7 @@
 // with a service worker and one reload. no isolation, no machine -- said, not left blank.
 // the module and its image are fetched from web/wasm/ -- where the tracked, committed
 // pair lives -- unless data-wasm/data-image name them; data-boot is the boot line (default
-// a login shell, which says its /etc/profile and waits; a program named instead is booted
+// mitty, the shell, lush in its first pane; a program named instead is booted
 // again when it exits, so `sh -c "tower; sh"` is a game and then a shell), data-ram the
 // RAM in MiB, data-cols the most columns worth reading, which is what settles how large a
 // glyph is drawn. a query string names the same four (?boot=tower) and wins where it
@@ -472,7 +472,7 @@ export async function loveMachine(root) {
     spun += e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1);
     for (; Math.abs(spun) >= 48; spun -= Math.sign(spun) * 48) send(0, spun < 0 ? 64 : 65, e); },
     { passive: false });
-  cpu.postMessage({ wasm, ring, ram: Number(at('ram', 1024)), cmd: at('boot', 'inle'), fb, image },
+  cpu.postMessage({ wasm, ring, ram: Number(at('ram', 1024)), cmd: at('boot', 'mitty'), fb, image },
                   image ? [wasm, image] : [wasm]);
   // the box reflowed -- the window resized, or the island's column did. the new size goes
   // into the ring and the kernel re-makes its console at it; the canvas itself is left

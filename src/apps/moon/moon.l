@@ -395,7 +395,7 @@
                   (vb src @ h (string? h && [1 h])))))
        _ (two? r || udie 1 ("cc: cannot open " + src))
        txt (? (dotS? src) (asmcpp src <>r ds9 is vb) (dots? src) (asmwrap <>r) <>r)
-       lx (clexat (deftext ds9 + txt) (1 - #ds9))
+       lx (clexw (deftext ds9 + txt) (1 - #ds9))
        _ (okv? lx || ccdie lx src ("cc: lex error in " + src))
        pp (cpp <>lx (name \ sys? \ incload vb is (cdir src) name sys?) src)
        _ (okv? pp || ccdie pp src ("cc: preprocessor error in " + src))
