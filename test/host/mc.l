@@ -98,6 +98,13 @@
    s4 (mc-new R R) got {0}
    _ (pin s4 'open (f \ pin got () f))
    _ (each ^4 (_ \ mc-key s4 106), mc-key s4 13, test ((peep got () 0) = (R + "/plain.txt")) (R = s4 'l 'dir))
+   ; / : the files under the pane's directory, no link followed; a pick takes the pane there
+   s6 (mc-new R R)
+   _ (mc-key s6 47, test (!(nil? (s6 'seek))) (((s6 'seek) 'items) = [(R + "/plain.txt") (R + "/run.sh") (R + "/sub/deep.txt")]))
+   _ (test (has? (plain (mc-frame s6 70 14)) "sub/deep.txt"))
+   _ (each (map (i \ "deep" i) ^4) (c \ mc-key s6 c), mc-key s6 13)
+   _ (test (nil? (s6 'seek)) ((R + "/sub") = s6 'l 'dir) (1 = s6 'l 'cur))
+   _ (mc-key s6 47, mc-key s6 27, test (nil? (s6 'seek)) ((R + "/sub") = s6 'l 'dir))
    s5 (mc-new R R)
    _ (each ^4 (_ \ mc-key s5 106), mc-key s5 13, test (R = s5 'l 'dir) (0 = s5 'over))
 
