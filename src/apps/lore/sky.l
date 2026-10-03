@@ -112,7 +112,7 @@
    tw (sat (1.0 - mag (sy + 0.03) / 0.2) * (1.0 - 0.7 * oc))
    ; ..rain or snow takes the most of the sun, and rain the light's edge besides
    f (sky-fall wx)
-   sunk (sat ((sy + 0.005) / 0.05) * (1.0 - 0.75 * csun) * (f = 0 ? 1.0 0.3))
+   sunk (sat ((sy + 0.005) / 0.05) * (1.0 - 0.75 * csun - 0.2 * csun * csun * csun * csun) * (f = 0 ? 1.0 0.3))
    sunc (cmix [1.0 0.4 0.1] [1.0 0.93 0.82] (sat ((sy - 0.04) / 0.4) @ k (k * k * (3.0 - 2.0 * k))))
    night [0.05 0.055 0.075]
    amb0 (c+ (cmix night [0.42 0.47 0.56] day) (c* (tw * (1.0 - 0.5 * day)) [0.1 0.05 0.07]))
