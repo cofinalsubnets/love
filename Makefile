@@ -405,9 +405,10 @@ $(dist_source): force_src $(love0)
 out/src.o: $(dist_source) src/tools/mksrc.l $(holocat_dep) $(love0)
 	@echo 'HOLO	'$@
 	@$(love0) $(holocat) src/tools/mksrc.l $(dist_source) $@ $(hosta)
+# the build stamp is 0, not the last commit's time: committing hot.prof moves that stamp
 out/prof/src.tar.gz: force_src $(love0)
 	@mkdir -p $(dir $@)
-	@LOVE_NO_IMAGE= LOVE_BUDGET_MB=256 $(love0) src/tools/selfpack.l $@ love-$(dist_ver) $(dist_stamp) $(love_stamp) $(dist_drop) src/tools/hot.prof
+	@LOVE_NO_IMAGE= LOVE_BUDGET_MB=256 $(love0) src/tools/selfpack.l $@ love-$(dist_ver) $(dist_stamp) 0 $(dist_drop) src/tools/hot.prof
 out/prof/src.o: out/prof/src.tar.gz src/tools/mksrc.l $(holocat_dep) $(love0)
 	@echo 'HOLO	'$@
 	@$(love0) $(holocat) src/tools/mksrc.l out/prof/src.tar.gz $@ $(hosta)
