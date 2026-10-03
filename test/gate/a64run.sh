@@ -5,7 +5,7 @@
 #   a64_how LOVE        a64_via = host | qemu | "" (neither: the lane skips, as it always has);
 #                       a64_where=K=V first asks for a host with that fact (page=16384)
 #   a64_jobs DIR        a fresh batch in DIR: what the binaries need goes in DIR, nothing else
-#   a64_tree TGZ        the tree goes too: TGZ (the carried source, out/dist's) unpacks to
+#   a64_tree            the tree goes too: out/love's carried source (tree-tar) unpacks to
 #                       DIR/tree first, for a corpus that reads the tree beside it
 #   a64_job NAME CMD    CMD runs in DIR, $RUN before each binary (empty on a host), stdin
 #                       closed; its output lands in DIR/res/NAME.out and its status in NAME.rc
@@ -28,8 +28,8 @@ a64_jobs() {
   : > "$a64_batch"
 }
 a64_tree() {
-  cp "$1" "$(dirname "$a64_batch")/tree.tgz"
-  echo 'mkdir tree && tar xzf tree.tgz -C tree --strip-components=1 && rm tree.tgz && mkdir tree/out' >> "$a64_batch"
+  LOVE_NO_IMAGE= out/love -e "(borrow 'posix) (: q (open \"$(dirname "$a64_batch")/tree.tar\" \"w\") (say q (tree-tar 0), close q, quit 0))" || return 1
+  echo 'mkdir tree && tar xf tree.tar -C tree --strip-components=1 && rm tree.tar && mkdir tree/out' >> "$a64_batch"
 }
 a64_job() {
   n=$1; shift

@@ -113,7 +113,7 @@ if [ "$target" = a64 ]; then
   # the corpus reads the tree beside it, so the carried source goes over and it runs there
   a64_jobs "$ho/raw-a64-run"
   cp "$ho/$bin" "$ho/.corpus.l" "$ho/raw-a64-run/"
-  a64_tree "$(ls out/dist/love-*.tar.gz | head -1)"
+  a64_tree || fail "out/love would not lay its carried tree"
   a64_job corpus "cd tree && LOVE_NO_IMAGE=1 timeout 420 \$RUN ../$bin ../.corpus.l"
   a64_run "$ho/raw-a64-run" || fail "the a64 run did not come back"
   cp "$ho/raw-a64-run/res/corpus.out" "$ho/$out"
