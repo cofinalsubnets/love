@@ -9,19 +9,19 @@
 ; steer, x shut, [ copy mode (the pane's screen as a vi buffer), ] paste, C-a a literal;
 ; c a fresh face, n p the next and last, 0-9 a face by number (made when missing), z the
 ; saver ('saver) now; a key
-; the caller pins in 'keys opens the pane its thunk answers, beside (inle's b, a model).
+; the caller pins in 'keys opens the pane its thunk answers, beside (love mitty's b, a model).
 ; the clip is the mitty's one register, vi's shape, shared by every vi buffer on it,
 ; and sent out to the outer terminal's clipboard (osc 52) when it changes.
 ; a guest may be a stage of this process -- cli's triple (show w h) (step k) (over? _) --
 ; berthed like a child; a door 'key reads its keys, a door 'tick asks for a frame.
 ;
-; run: out/love -e "(: _ (borrow 'mitty) (mitty [\"sh\"]))", or `love inle` for lush in it.
+; run: out/love -e "(: _ (borrow 'mitty) (mitty [\"sh\"]))", or `love mitty` for lush in it.
 ; host-only (screen/tether/tty ride src/love/*.c): never in the corpus; test/host/mitty.l
 ; smokes it over a real pty. a module, so a guest that berths itself (vi's splits) cites it.
 (module '(mitty mitty mitty-stage mitty-up hberth hsail hopen hopen-stage moor waitfor
           hbox hmas hpid hstage hpty? hpane hsoil hrelay hframe hmoor hsplit hsteer hshut
           hfeed hkey oars hsize htide htick hswim hquick? hcopy hpaste hclip-text hscreen-text
-          hseq hmouse hpeer hpasted hfaces hgo hcycle hfresh hb64 hsub? hswap hpicker inle-launch inle-switch inle-hive inle-queues inle-barx inle-saver hwake hidle hidle? hsleep hquiet? hin hout hlive? hgreet hbye hattach hdetach inle-mitty inle-here inle-serve inle-attach inle-sock inle-dir inle-ls inle-size hname hname-of hlr hbarat hdrag hmice hbarline hbarface hbartick hnote hhands inle-bee inle-main)
+          hseq hmouse hpeer hpasted hfaces hgo hcycle hfresh hb64 hsub? hswap hpicker mitty-launch mitty-switch mitty-hive mitty-queues mitty-barx mitty-saver hwake hidle hidle? hsleep hquiet? hin hout hlive? hgreet hbye hattach hdetach mitty-lush mitty-here mitty-serve mitty-attach mitty-sock mitty-dir mitty-ls mitty-size hname hname-of hlr hbarat hdrag hmice hbarline hbarface hbartick hnote hhands mitty-bee mitty-main)
 (borrow ((cite 'wharf) @ m (m ? m "src/apps/mitty/wharf.l")))   ; the baked module, else the tree's file
 (borrow ((cite 'limn) @ m (m ? m "src/apps/mitty/limn.l")))
 (borrow 'posix)
@@ -403,11 +403,11 @@
                              (b = 27) (see (hin hb) @ b2 (b2 = 92 ? acc (go (acc + string b + string b2))))
                              (go (acc + string b))))
               t (go "")
-              ; a client's size: inle;size;R;C
+              ; a client's size: mitty;size;R;C
               (t @ "Gi=31;OK" (pin hb 'pics 1, hsoil hb)
-                 ("inle;size;" + (r && 1 < #r))
+                 ("mitty;size;" + (r && 1 < #r))
                   (: ws (filter (w \ 0 < #w) (cite 'kore 'usplit 59 r))
-                     (? (#ws = 2) (pin hb 'csize [(inle-num <ws) (inle-num (ws 1))], htide hb) 0))
+                     (? (#ws = 2) (pin hb 'csize [(mitty-num <ws) (mitty-num (ws 1))], htide hb) 0))
                  0))
  (hseq hb) (see (hin hb) @ b1
               (? (b1 = 95) (hapc hb)
@@ -592,7 +592,7 @@
                       hsail hb,
                       stg ? 0 (waitfor (hpid p0))))))
 
- ; --- inle: the os on any terminal -- the mitty with lush in every pane a
+ ; --- love mitty: the shell on any terminal -- lush in every pane a
  ; split or a face opens, and argv, when given, in the first ---
  ; --- the picker: a stage that lists items, filters them as it is typed at, and on enter
  ; becomes what its item opens, in place -- or, when the item answers no pane, simply goes.
@@ -675,23 +675,23 @@
 
  ; a model's pane: bee's full screen as a stage, a session of the hive, with the mitty's
  ; hands; why not, as a note
- (inle-bee hb) (: b (cite 'bee 'bee-main) own {-1}
+ (mitty-bee hb) (: b (cite 'bee 'bee-main) own {-1}
                  sg (? b (b ["--stage" (hhands hb own)]) "bee is not in this binary")
                  _ (pin own () (hb 'next))                        ; the id hberth gives it next
                  (? (tablet? sg) sg (hnote ("bee: " + (string? sg ? sg "cannot start")))))
  ; the launcher's list: the desktop's apps first, where this binary has them, then every verb
- inle-apps ["lush" "bee" "vi" "mc" "top" "less" "man" "synth" "manifest" "story" "design" "lupa"
+ mitty-apps ["lush" "bee" "vi" "mc" "top" "less" "man" "synth" "manifest" "story" "design" "lupa"
             "harp" "pom" "doom" "grass" "chucho"]
- (inle-launch hb sh me)
+ (mitty-launch hb sh me)
   (: vs (sort (map show (keys (cite 'verbs 'tab))))
-     names (filter (n \ elem n vs) inle-apps + filter (n \ !(elem n inle-apps)) vs)
+     names (filter (n \ elem n vs) mitty-apps + filter (n \ !(elem n mitty-apps)) vs)
      (hpicker hb "open"
-              (map (n \ [n (? (n = "bee") (_ \ hopen-stage (inle-bee hb) 1 1)
+              (map (n \ [n (? (n = "bee") (_ \ hopen-stage (mitty-bee hb) 1 1)
                                 (n = "lush") (_ \ hopen sh 1 1)
                                 (_ \ hopen (string? me ? [me n] [n]) 1 1))])
                    names)))
  ; the switcher's: every pane on every face, picking one shows its face and gives it the keyboard
- (inle-switch hb)
+ (mitty-switch hb)
   (hpicker hb "go to"
            (map (n \ (: d (hface-of hb n) p (hpane hb n)
                          [("face " + show d + "  " + hname p + "  (" + show n + ")")
@@ -700,18 +700,18 @@
  ; --- the bar's right side: the hive's live sessions, and each merge queue of this tree as
  ; its rows and its head's session and state. read every ten seconds, not every tick:
  ; the queue costs a git run ---
- (inle-num t) (foldl (a \ c \ (47 < c && c < 58 ? (a * 10 + c - 48) a)) 0 (map t ^#t))
- (inle-slurp p) (: f (open p "r") (? (hot? f) (: s (slurp f) _ (close f) s) ""))
- (inle-live? card)
-  (: ls (filter (l \ 4 < #l && "pid " = snip l 0 4) (lines (inle-slurp card)))
-     n (two? ls ? (inle-num (snip <ls 4 #<ls)) 0)
+ (mitty-num t) (foldl (a \ c \ (47 < c && c < 58 ? (a * 10 + c - 48) a)) 0 (map t ^#t))
+ (mitty-slurp p) (: f (open p "r") (? (hot? f) (: s (slurp f) _ (close f) s) ""))
+ (mitty-live? card)
+  (: ls (filter (l \ 4 < #l && "pid " = snip l 0 4) (lines (mitty-slurp card)))
+     n (two? ls ? (mitty-num (snip <ls 4 #<ls)) 0)
      (0 < n && !(nom? (still n 0))))
- (inle-hive _)
+ (mitty-hive _)
   (: e (getenv "BEE_HIVE") h (getenv "HOME")
      d (? (string? e && 0 < #e) e (string? h) (h + "/.love/run/hive") "")
      ns (readdir d)
-     (two? ns ? #(filter (n \ inle-live? (d + "/" + n + "/card")) ns) 0))
- (inle-queues _)
+     (two? ns ? #(filter (n \ mitty-live? (d + "/" + n + "/card")) ns) 0))
+ (mitty-queues _)
   (: r (hark ["git" "for-each-ref" "--format=%(refname)" "refs/queue"])
      qs (two? r && 0 = <r ? (filter (l \ 0 < #l) (lines >r)) ())
      (map (q \ (: t (hark ["git" "cat-file" "-p" q])
@@ -721,52 +721,54 @@
                    (? !(two? rows) (nm + " empty")
                       (nm + " " + show #rows + (#rows = 1 ? " row" " rows") + ", " + (ws 1) + " " + (ws 5)))))
           qs))
- (inle-barx _)
+ (mitty-barx _)
   (: t {'at 0 'x ""}
      (_ \ (: now (clock 0)
              (? (now - t 'at < 10000) (t 'x)
-                (: hv (inle-hive 0) qs (inle-queues 0)
+                (: hv (mitty-hive 0) qs (mitty-queues 0)
                    x ("hive " + show hv + foldl (a \ q \ a + " · " + q) "" qs)
                    (pins t 'at now 'x x, x))))))
- ; the saver as ~/.love/etc/inle.l names it: (screensaver NAME) (screensaver-idle MINUTES),
+ ; the saver as ~/.love/etc/mitty.l names it: (screensaver NAME) (screensaver-idle MINUTES),
  ; pom after 10 unless said; a name no saver has, or 0 minutes, is never
- (inle-saver _) (: sf (cite 'salt 'salt-file) wf (cite 'saver 'saver-watch) h (getenv "HOME")
-                   c (? (sf && string? h) (sf (h + "/.love/etc/inle.l") {}) {})
+ (mitty-saver _) (: sf (cite 'salt 'salt-file) wf (cite 'saver 'saver-watch) h (getenv "HOME")
+                   c (? (sf && string? h) (sf (h + "/.love/etc/mitty.l") {}) {})
                    nm (peep c 'screensaver () @ v (two? v ? (: w <v (string? w ? w (show w))) "pom"))
                    m (peep c 'screensaver-idle () @ v (two? v ? <v 10))
                    (wf ? (wf nm m) ()))
- ; a mitty laid for inle at r x c: lush in its panes (argv, when given, in the first), the
- ; bar, the mouse, the saver and inle's keys; a server's has no tty until a client comes.
+ ; a mitty laid for the shell at r x c: lush in its panes (argv, when given, in the first), the
+ ; bar, the mouse, the saver and the shell's keys; a server's has no tty until a client comes.
  ; answers it, or why it could not
- (inle-mitty as r c serve)
+ (mitty-lush as r c serve)
   (: me (selfpath 0) sh (string? me ? [me "lush"] ["sh"])
      p0 (hopen (two? as ? as sh) r c)
      (atom? p0 ? ("cannot start " + (two? as ? <as (sh 0)) + ": " + show p0)
         (mitty-up r c @ hb
            (? serve (pins hb 'serve 1 'csize [r c] 'in () 'out ()) 0,
             pin hb 'more (_ \ hopen sh 1 1),
-            pins hb 'bar 1 'mouse 1 'barx (inle-barx 0) 'saver (inle-saver 0), hbartick hb, hrelay hb,
-            pin (hb 'keys) 98 (_ \ hopen-stage (inle-bee hb) 1 1),
-            pin (hb 'keys) 32 (_ \ inle-launch hb sh me),
-            pin (hb 'keys) 119 (_ \ inle-switch hb),
+            pins hb 'bar 1 'mouse 1 'barx (mitty-barx 0) 'saver (mitty-saver 0), hbartick hb, hrelay hb,
+            pin (hb 'keys) 98 (_ \ hopen-stage (mitty-bee hb) 1 1),
+            pin (hb 'keys) 32 (_ \ mitty-launch hb sh me),
+            pin (hb 'keys) 119 (_ \ mitty-switch hb),
             hberth hb 'stack 50 p0,
             hb))))
- ; in this process, on this tty: the mitty ends with the process's own last pane
- (inle-here as) (: sz (hsize 0) hb (inle-mitty as <sz (sz 1) 0)
-                   (? (tablet? hb) (hsail hb, 0) (say err ("inle: " + hb + "\n"), 1)))
+ ; in this process, on this tty: the mitty ends with the process's own last pane. MITTY
+ ; says to every child that it runs inside one: --here, or the socket of a served one
+ (mitty-here as) (: _ (setenv "MITTY" "--here") sz (hsize 0) hb (mitty-lush as <sz (sz 1) 0)
+                   (? (tablet? hb) (hsail hb, 0) (say err ("mitty: " + hb + "\n"), 1)))
 
  ; --- the server and its clients (rung 5): a mitty per name, listening on
- ; INLE_RUN/NAME.sock (~/.love/run/inle), outliving every terminal that attaches ---
- (inle-dir _) (: e (getenv "INLE_RUN") h (getenv "HOME")
-                 (? (string? e && 0 < #e) e (string? h) (h + "/.love/run/inle") "/tmp/inle"))
- (inle-sock nm) (inle-dir 0 + "/" + nm + ".sock")
- (inle-mkdirs p) (foldl (a \ w \ (: d (a + "/" + w) _ (mkdir d 448) d)) (0 < #p && p 0 = 47 ? "" ".")
+ ; MITTY_RUN/NAME.sock (~/.love/run/mitty), outliving every terminal that attaches ---
+ (mitty-dir _) (: e (getenv "MITTY_RUN") h (getenv "HOME")
+                 (? (string? e && 0 < #e) e (string? h) (h + "/.love/run/mitty") "/tmp/mitty"))
+ (mitty-sock nm) (mitty-dir 0 + "/" + nm + ".sock")
+ (mitty-mkdirs p) (foldl (a \ w \ (: d (a + "/" + w) _ (mkdir d 448) d)) (0 < #p && p 0 = 47 ? "" ".")
                         (filter (w \ 0 < #w) (cite 'kore 'usplit 47 p)))
- (inle-serve nm as)
-  (: _ (inle-mkdirs (inle-dir 0)) path (inle-sock nm)
+ (mitty-serve nm as)
+  (: _ (mitty-mkdirs (mitty-dir 0)) path (mitty-sock nm)
+     _ (setenv "MITTY" path)
      _ (unlink path)                                         ; a dead one's: a live one was asked first
      l (listen ['unix path])
-     hb (? (hot? l) (inle-mitty as 24 80 1) ("cannot listen on " + path))
+     hb (? (hot? l) (mitty-lush as 24 80 1) ("cannot listen on " + path))
      (? !(tablet? hb) (hot? l ? (close l, unlink path, 1) 1)
         (: acc (twirl (_ \ (: (go _) (accept l @ c (hot? c ? (hattach hb c, go 0) 0)) (go 0))) 0)
            (hswim hb 1,                                      ; ... until the last pane empties
@@ -776,13 +778,13 @@
             0))))
  ; a client: this tty's keys up the socket, the frames down it, and its size said as an APC
  ; when it changes. answers 1 once the server lets go, () when none listens at path
- (inle-size r c) ("\e_inle;size;" + show r + ";" + show c + "\e\\")
- (inle-attach path)
+ (mitty-size r c) ("\e_mitty;size;" + show r + ";" + show c + "\e\\")
+ (mitty-attach path)
   (: s (connect ['unix path])
      (? !(hot? s) ()
         (: sz (hsize 0)
            _ (raw 1)
-           _ (say s (inle-size <sz (sz 1)), flush s)
+           _ (say s (mitty-size <sz (sz 1)), flush s)
            ; park on the first byte, then swig the rest of the gulp, as moor does
            dn (twirl (_ \ (: b (cask 8192)
                              (dr _) (swig s b @ n (charm? n && 0 < n ? (say out (snip b 0 n), dr 0) 0))
@@ -792,7 +794,7 @@
                              (go _) (see in @ ch (ch < 0 ? 0 (put s ch, dr 0, flush s, go 0)))
                              (go 0))) 0)
            tk (twirl (_ \ (: (go z) (: _ (rest 500) z2 (hsize 0)
-                                       (? (z2 = z) (go z) (: _ (say s (inle-size <z2 (z2 1))) _ (flush s) (go z2))))
+                                       (? (z2 = z) (go z) (: _ (say s (mitty-size <z2 (z2 1))) _ (flush s) (go z2))))
                              (go sz))) 0)
            _ (catch dn)
            _ (freeze up) _ (freeze tk)
@@ -800,34 +802,37 @@
            _ (raw 0)
            1)))
  ; a server started detached -- its own session, no tty -- and attached to as it comes up
- (inle-spawn nm as)
+ (mitty-spawn nm as)
   (: me (selfpath 0) nul (openfd "/dev/null" 0)
-     fds (: ns (readdir "/proc/self/fd") (two? ns ? (filter (n \ 2 < n) (map inle-num ns)) ()))   ; none of ours goes along
-     p (? (string? me) (spawnio ([me "setsid" me "inle" "--serve" nm] + as) nul nul nul fds 0 0) -1)
+     fds (: ns (readdir "/proc/self/fd") (two? ns ? (filter (n \ 2 < n) (map mitty-num ns)) ()))   ; none of ours goes along
+     p (? (string? me) (spawnio ([me "setsid" me "mitty" "--serve" nm] + as) nul nul nul fds 0 0) -1)
      _ (? (0 <= nul) (close nul) 0)
      (charm? p && 0 < p))
- (inle-reattach path n) (? (n = 0) () (inle-attach path @ r (r = () ? (rest 50, inle-reattach path (n - 1)) r)))
- (inle-ls _) (: d (inle-dir 0) fs (readdir d)
+ (mitty-reattach path n) (? (n = 0) () (mitty-attach path @ r (r = () ? (rest 50, mitty-reattach path (n - 1)) r)))
+ (mitty-ls _) (: d (mitty-dir 0) fs (readdir d)
                 ns (filter (f \ 5 < #f && ".sock" = snip f (#f - 5) #f) (two? fs ? fs ()))
                 (map (f \ (: s (connect ['unix (d + "/" + f)])
                              (puts (snip f 0 (#f - 5) + (hot? s ? (close s, "") "  (dead)") + "\n"))))
                      (sort ns),
                  flush out, 0))
- ; love inle: attach to the mitty named main (or -n NAME), started when none is up; one
- ; that cannot be served (a seat with no sockets) runs here instead. --here always does
- (inle-main as)
-  (? (two? as && <as = "--serve" && two? >as) (inle-serve <>as >>as)
-     (two? as && <as = "--here") (inle-here >as)
-     (two? as && <as = "--ls") (inle-ls 0)
+ ; love mitty: attach to the mitty named main (or -n NAME), started when none is up; one
+ ; that cannot be served (a seat with no sockets) runs here instead. --here always does. a
+ ; pane of mitty NAME never attaches to NAME: it would take the glass from the terminal
+ ; showing it, and show the mitty inside itself
+ (mitty-main as)
+  (? (two? as && <as = "--serve" && two? >as) (mitty-serve <>as >>as)
+     (two? as && <as = "--here") (mitty-here >as)
+     (two? as && <as = "--ls") (mitty-ls 0)
      (: nm (two? as && <as = "-n" && two? >as ? <>as "main")
         rest (two? as && <as = "-n" && two? >as ? >>as as)
-        path (inle-sock nm)
-        (? (inle-attach path) 0
-           (inle-spawn nm rest) (inle-reattach path 60 @ r (r = () ? (inle-here rest) 0))
-           (inle-here rest))))
- inle-usage "usage: love inle [-n NAME] [COMMAND ..]   the mitty NAME (main), started when none is up;
-       COMMAND in its first pane. love inle --ls lists them; --here runs one in this process
+        path (mitty-sock nm)
+        (? (getenv "MITTY" = path) (say err ("mitty: already inside mitty " + nm + "; -n another, or --here to nest\n"), 1)
+           (mitty-attach path) 0
+           (mitty-spawn nm rest) (mitty-reattach path 60 @ r (r = () ? (mitty-here rest) 0))
+           (mitty-here rest))))
+ mitty-usage "usage: love mitty [-n NAME] [COMMAND ..]   the mitty NAME (main), started when none is up;
+       COMMAND in its first pane. love mitty --ls lists them; --here runs one in this process
   C-a: s v split, h j k l steer, x shut, [ ] copy and paste, c n p 0-9 faces, b a model,
        space open an app, w go to a pane, z the screensaver now, d detach, C-a a literal C-a"
- _ (pins (cite 'verbs 'tab) 'inle (udoor 'inle inle-main inle-usage 1 1)))
+ _ (pins (cite 'verbs 'tab) 'mitty (udoor 'mitty mitty-main mitty-usage 1 1)))
 ) ; module mitty

@@ -11,6 +11,7 @@
 ; means unhandled, so a modifier stack (rung 4) falls through cleanly. This rung
 ; ships xmonad's ResizableTall (nmaster/ratio/per-slave heights), Full, and the
 ; ||| choice + NextLayout. a body-less `:` -- the vocabulary leaks to the driver.
+(borrow 'wharf)    ; the bsp layout's plan algebra, src/apps/mitty/wharf.l
 (:
    ; --- geometry: a rect is (x y w h); splits return rect lists ---
    (rct x y w h) [x y w h]
@@ -86,6 +87,40 @@
    (dw-tile lay rect z) [(dw-go rect (zrow z) (lay 1) 0) lay]
    (dw-msg lay msg z) (msg @ 'expand (rt-set lay 1 (lay 1 * 1.1))       ; expand/shrink nudge the spiral ratio
                              'shrink (rt-set lay 1 (mx2 1.05 (lay 1 / 1.1))))
+
+   ; --- BSP: mitty's wharf plan (src/apps/mitty/wharf.l) as a layout -- a binary tree of
+   ;     splits over the row's windows, kept in step with the row on every tile: a new
+   ;     window splits the focused one (else the last) along `dir` at `pct`, a gone one
+   ;     gives its half back to its sibling. gap is what a split spends between its
+   ;     halves, in the rect's own units: a cell in mitty, pixels here ---
+   ; the record: ['bsp plan dir pct gap], plan () until the first tile meets a window
+   (bsp dir pct gap) ['bsp () dir pct gap]
+   (bsp-sync plan row foc dir pct)
+    (: p1 (foldl (p \ w \ elem w row ? p (wharf-shut p w)) plan (wharf-panes plan))
+       (foldl (p \ w \ (wharf-panes p @ ws
+                          (? (elem w ws) p (() = p) w
+                             (wharf-split p (elem foc ws ? foc (last ws)) dir pct w))))
+              p1 row))
+   (bsp-tile lay rect z)
+    (: plan (bsp-sync (lay 1) (zrow z) (zfoc z) (lay 2) (lay 3))
+       bs (filter wharf-show? (wharf-layg plan (rh rect) (rw rect) (lay 4)))
+       [(map (b \ [(wharf-id b) (rx rect + wharf-col b) (ry rect + wharf-row b) (wharf-cols b) (wharf-rows b)]) bs)
+        ['bsp plan (lay 2) (lay 3) (lay 4)]])
+   ; the split holding the leaf id as a direct child, through f: f takes the node and the
+   ; side the leaf is on (0 the first half, 1 the second) and answers the node anew
+   (bsp-at p id f) (two? p ? (p @ [d pct a b] (? (a = id) (f p 0) (b = id) (f p 1)
+                                                  [d pct (bsp-at a id f) (bsp-at b id f)]))
+                      p)
+   (bsp-grow by) (n \ s \ (n @ [d pct a b] [d (mn2 95 (mx2 5 (s = 0 ? (pct + by) (pct - by)))) a b]))
+   (bsp-msg lay msg z)
+    (: plan (lay 1) foc (zfoc z)
+       (put p) ['bsp p (lay 2) (lay 3) (lay 4)]
+       (msg @ 'split-beside ['bsp plan 'beside (lay 3) (lay 4)]
+              'split-stack ['bsp plan 'stack (lay 3) (lay 4)]
+              'expand (put (bsp-at plan foc (bsp-grow 5)))
+              'shrink (put (bsp-at plan foc (bsp-grow -5)))
+              'rotate (put (bsp-at plan foc (n \ s \ (n @ [d pct a b] [(d = 'stack ? 'beside 'stack) pct a b]))))
+              ()))
 
    ; --- modifiers: layout -> layout. a modifier record holds an inner layout;
    ;     it transforms the inner's placements and/or intercepts its own messages,
@@ -189,6 +224,7 @@
     'rtall (rt-tile lay rect z)
     'full  (full-tile lay rect z)
     'dwindle (dw-tile lay rect z)
+    'bsp (bsp-tile lay rect z)
     'smart (sb-tile lay rect z)
     'mirror (mir-tile lay rect z)
     'toggle-lay (tf-tile lay rect z)
@@ -199,6 +235,7 @@
     'rtall (rt-msg lay msg z)
     'full  ()
     'dwindle (dw-msg lay msg z)
+    'bsp (bsp-msg lay msg z)
     'smart (sb-msg lay msg z)
     'mirror (mir-msg lay msg z)
     'toggle-lay (tf-msg lay msg z)

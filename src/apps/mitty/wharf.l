@@ -23,8 +23,8 @@
 ; and sizes rather than trusting the arithmetic: every rectangle sits inside the wharf,
 ; and no two overlap. the spans are half-open, so a zero-extent pane overlaps nothing
 ; -- including itself -- and neither law has to except it.
-(module '(wharf wharf-at wharf-bars wharf-panes wharf-col wharf-cols wharf-drag wharf-id wharf-lay wharf-row
-          wharf-rows wharf-show? wharf-shut wharf-split wharf-steer)
+(module '(wharf wharf-at wharf-bars wharf-panes wharf-col wharf-cols wharf-drag wharf-id wharf-lay wharf-layg
+          wharf-row wharf-rows wharf-show? wharf-shut wharf-split wharf-steer)
 (:
    ; --- reading a laid pane: (id row col rows cols), origins 0-based ----------
    (wharf-id b)    <b
@@ -34,31 +34,33 @@
    (wharf-cols b)  <>>>>b
    (wharf-show? b) (0 < wharf-rows b && 0 < wharf-cols b)
 
-   ; a's share of n cells at pct, the bar's cell already spent. both halves get
-   ; at least one; under three there is no split to make and a takes it all.
-   (wcut n pct) (n < 3 ? n
-                   ((n - 1) * pct // 100 @ k
-                      (? (k < 1) 1 (n - 2 < k) (n - 2) k)))
-   (wrest n a) (n < 3 ? 0 (n - 1 - a))
+   ; a's share of n units at pct, the bar's g already spent. both halves get at least
+   ; one; under g + 2 there is no split to make and a takes it all. cells spend a bar of
+   ; one; a pixel layout (lux's bsp) names its own gap
+   (wcut n pct g) (n < g + 2 ? n
+                     ((n - g) * pct // 100 @ k
+                        (? (k < 1) 1 (n - g - 1 < k) (n - g - 1) k)))
+   (wrest n a g) (n < g + 2 ? 0 (n - g - a))
 
    ; --- the lay: every pane's rectangle, in plan order -----------------------
    ; a half with no room lays at its parent's corner, not past the bar that was never
    ; spent, so a caller may do arithmetic on an origin without asking if it is real.
-   (wlay p row col r c)
+   (wlay p row col r c g)
     (two? p ?
        (p @ [d pct a b]
         (d = 'stack ?
-           (: h (wcut r pct) t (wrest r h)
-              (cat (wlay a row col h c)
-                   (wlay b (0 < t ? (row + h + 1) row) col t c)))
-           (: w (wcut c pct) t (wrest c w)
-              (cat (wlay a row col r w)
-                   (wlay b row (0 < t ? (col + w + 1) col) r t)))))
+           (: h (wcut r pct g) t (wrest r h g)
+              (cat (wlay a row col h c g)
+                   (wlay b (0 < t ? (row + h + g) row) col t c g)))
+           (: w (wcut c pct g) t (wrest c w g)
+              (cat (wlay a row col r w g)
+                   (wlay b row (0 < t ? (col + w + g) col) r t g)))))
        [[p row col r c]])
    ; () is the empty wharf, never a pane named (): wharf-shut answers it when the last
    ; one leaves, and a door that missed this hands back a phantom pane wearing the
    ; empty name. the same guard rides bars and panes below.
-   (wharf-lay p r c) (() = p ? () (wlay p 0 0 r c))
+   (wharf-lay p r c) (() = p ? () (wlay p 0 0 r c 1))
+   (wharf-layg p r c g) (() = p ? () (wlay p 0 0 r c g))
 
    ; --- the bars: (dir row col len), 'across spanning cols, 'down spanning rows
    ; a bar rides only where a split actually happened -- both halves showable --
@@ -67,11 +69,11 @@
     (two? p ?
        (p @ [d pct a b]
         (d = 'stack ?
-           (: h (wcut r pct) t (wrest r h)
+           (: h (wcut r pct 1) t (wrest r h 1)
               (cat (0 < h && 0 < t ? [['across (row + h) col c]] ())
                    (cat (wbars a row col h c)
                         (wbars b (row + h + 1) col t c))))
-           (: w (wcut c pct) t (wrest c w)
+           (: w (wcut c pct 1) t (wrest c w 1)
               (cat (0 < w && 0 < t ? [['down row (col + w) r]] ())
                    (cat (wbars a row col r w)
                         (wbars b row (col + w + 1) r t)))))))
@@ -142,10 +144,10 @@
     (two? p ?
        (p @ [d pct a b]
         (d = 'stack ?
-           (: h (wcut r pct) t (wrest r h)
+           (: h (wcut r pct 1) t (wrest r h 1)
               (? (0 < h && 0 < t && ar = row + h && col <= ac && ac < col + c) [d (wpct r (to - row)) a b]
                  [d pct (wdrag a row col h c ar ac to) (wdrag b (row + h + 1) col t c ar ac to)]))
-           (: w (wcut c pct) t (wrest c w)
+           (: w (wcut c pct 1) t (wrest c w 1)
               (? (0 < w && 0 < t && ac = col + w && row <= ar && ar < row + r) [d (wpct c (to - col)) a b]
                  [d pct (wdrag a row col r w ar ac to) (wdrag b row (col + w + 1) r t ar ac to)]))))
        p)
