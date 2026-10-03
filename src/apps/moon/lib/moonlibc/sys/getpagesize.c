@@ -1,3 +1,3 @@
 #include "../impl.h"
 
-int getpagesize(void) { return 4096; }
+int getpagesize(void) { return (int) sysconf(_SC_PAGESIZE); }

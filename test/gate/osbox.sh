@@ -10,7 +10,8 @@
 # the box arrives by env: FBSD_SSH, NBSD_SSH, FBSD_ARM64_SSH, NBSD_ARM64_SSH, each a
 # command prefix ("ssh -p 2222 -i key root@host"). a caller that exports none gets them from
 # $OSBOX_ENV (default ~/bin/osbox-env) when it exists; without a box the gate skips loudly.
-# on a64 the local half of each comparison runs under qemu-aarch64, and skips without it.
+# on a64 the local half of each comparison runs on an a64 host where one answers, else
+# under qemu-aarch64, and skips with neither.
 # provisioning the boxes: doc/misc/osbox.md.
 # usage: osbox.sh OUTDIR LOVE0 freebsd|netbsd [x64|a64]
 . test/gate/skip.sh
@@ -34,13 +35,14 @@ d=$ho/$os-$arch
 
 [ -n "$box" ] || gate_skip "$t: skipped (no box in the env)"
 
-# the LOCAL half of each comparison: native where the arch is this machine's,
-# qemu-user where it is not. The point of the leg is ONE binary under TWO
-# kernels, so the emulator stands in for linux/arm64 hardware and nothing else.
+# the LOCAL half of each comparison: native where the arch is this machine's, else
+# linux/arm64 itself on an a64 host, or qemu-user standing in for it. The point of the
+# leg is ONE binary under TWO kernels, so the runner is linux and nothing else.
 if [ "$arch" = a64 ]; then
-  qemu=$(command -v qemu-aarch64 2>/dev/null || true)
-  [ -n "$qemu" ] || gate_skip "$t: skipped (no qemu-aarch64 for the local half)"
-  run() { "$qemu" "$@"; }
+  . test/gate/a64run.sh
+  a64_how "$ho/love"
+  [ -n "$a64_via" ] || gate_skip "$t: skipped (no qemu-aarch64 and no a64 host for the local half)"
+  run() { a64_one "$ho/love" "$@"; }
 else
   run() { "$@"; }
 fi

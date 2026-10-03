@@ -40,12 +40,15 @@ static long bsd_long(int a, int b) {
   if (sysctl(mib, 2, &v, &n, 0, 0)) return -1;
   return n == sizeof(int) ? (long) *(int *) &v : (long) v; }
 
+/* the kernel's page, AT_PAGESZ: 16K on a pi 5's kernel, 4K where no auxv says (inle) */
+static long page_size(void) { unsigned long p = getauxval(6); return p ? (long) p : 4096; }
+
 /* linux answers from /sys and sysinfo(2), the BSDs from hw.*; inle has no answer yet */
 long sysconf(int name) {
   long v = __ai_osv;
   if (!v) v = __ai_osv = __ai_osdetect();
   switch (name) {
-  case _SC_PAGESIZE: return 4096;
+  case _SC_PAGESIZE: return page_size();
   case _SC_NPROCESSORS_CONF:
   case _SC_NPROCESSORS_ONLN:
    if (v >= 2) return bsd_long(CTL_HW, HW_NCPU);
@@ -56,9 +59,9 @@ long sysconf(int name) {
    if (v >= 2) {
     if (name == _SC_AVPHYS_PAGES) break;                    /* no fixed mib on either BSD */
     long m = bsd_long(CTL_HW, v == 3 ? HW_PHYSMEM64 : HW_PHYSMEM);
-    return m < 0 ? -1 : m / 4096; }
+    return m < 0 ? -1 : m / page_size(); }
    { struct lx_sysinfo si;
      if (er(sc1(NR_sysinfo, (long) &si)) < 0) return -1;
      unsigned long u = si.mem_unit ? si.mem_unit : 1;
-     return (long) ((name == _SC_PHYS_PAGES ? si.totalram : si.freeram) * u / 4096); } }
+     return (long) ((name == _SC_PHYS_PAGES ? si.totalram : si.freeram) * u / page_size()); } }
   __errno_v = EINVAL; return -1; }

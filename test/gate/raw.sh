@@ -6,7 +6,8 @@
 # OUR OWN static linker (src/love/holo/link.l, via `mooncc a.o..`) binds them. No gcc, no
 # glibc, no ld anywhere: the whole chain is love. Corpus green over the fresh egg.
 #
-# THREE targets, ONE procedure: x64 native, rv64 and a64 under qemu-user. They
+# THREE targets, ONE procedure: x64 native, rv64 under qemu-user, and a64 on an a64 host
+# where one answers (test/gate/a64run.sh), else under qemu-user. They
 # were three near-identical recipes; what actually differs is four things -- the -t
 # flag, whether the holo backend has to be loaded for mksys (the host bake carries
 # only the native one), which mksys entry lays the syscall leaf, and the runner. A
@@ -25,6 +26,7 @@
 #
 # usage: gate_love_c=.. gate_host_c=.. raw.sh TARGET OUTDIR LOVE CORPUS.l ..
 . test/gate/skip.sh
+. test/gate/a64run.sh
 set -u
 gate_sentinel=${gate_sentinel-}
 
@@ -57,6 +59,9 @@ if [ -z "$need" ]; then
   if [ "$gate_hosta" != x64 ]; then
     gate_skip "$name: x86-64 only, skipped on ${gate_hosta:-unknown}"
   fi
+elif [ "$target" = a64 ]; then
+  a64_how "$m"
+  [ -n "$a64_via" ] || gate_skip "$name: no $need and no a64 host, skipped"
 elif ! command -v "$need" > /dev/null 2>&1; then
   gate_skip "$name: no $need, skipped"
 fi
@@ -104,8 +109,19 @@ moonc "$d"/*.o -o "$ho/$bin" || fail "our-linker bind $bin"
 # (test/test.mk): the corpus TESTS stdin, and `reads` no longer drains stdin ahead of the
 # first form, so a piped corpus has test/io.l's see/unsee poking the script it is riding on.
 cat "$@" > "$ho/.corpus.l"
-LOVE_NO_IMAGE=1 timeout 420 $run "$ho/$bin" "$ho/.corpus.l" </dev/null > "$ho/$out" 2>&1
-s=$?
+if [ "$target" = a64 ]; then
+  # the corpus reads the tree beside it, so the carried source goes over and it runs there
+  a64_jobs "$ho/raw-a64-run"
+  cp "$ho/$bin" "$ho/.corpus.l" "$ho/raw-a64-run/"
+  a64_tree "$(ls out/dist/love-*.tar.gz | head -1)"
+  a64_job corpus "cd tree && LOVE_NO_IMAGE=1 timeout 420 \$RUN ../$bin ../.corpus.l"
+  a64_run "$ho/raw-a64-run" || fail "the a64 run did not come back"
+  cp "$ho/raw-a64-run/res/corpus.out" "$ho/$out"
+  s=$(cat "$ho/raw-a64-run/res/corpus.rc")
+else
+  LOVE_NO_IMAGE=1 timeout 420 $run "$ho/$bin" "$ho/.corpus.l" </dev/null > "$ho/$out" 2>&1
+  s=$?
+fi
 tail -1 "$ho/$out"
 [ $s -eq 0 ] && grep -q "tests pass" "$ho/$out" || fail "corpus (exit $s)"
 # a file named past the corpus answers with its own line: the summary alone cannot say it
@@ -115,5 +131,6 @@ tail -1 "$ho/$out"
 
 case $target in
   x64) echo "test_raw: the src/*.c lanes + moonlibc + lm math + sys.o, our linker, no gcc/glibc/ld -- corpus passes" ;;
+  a64) echo "$name: the gcc-free $pretty love -- mooncc objects, $mksys, our linker, corpus $([ "$a64_via" = host ] && echo "on an a64 host" || echo "under qemu")" ;;
   *)   echo "$name: the gcc-free $pretty love -- mooncc objects, $mksys, our linker, corpus under qemu" ;;
 esac

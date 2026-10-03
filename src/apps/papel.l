@@ -26,8 +26,7 @@
 ; because lapiz has nowhere to put an id. everything else is `htb`, lapiz's own block
 ; shower.
 ;
-; usage:  papel [-o out] [-t title] [src ..]        (with the `papel` script on PATH)
-;     or: love -l src/apps/papel.l [-o out] [src ..]
+; usage:  love -l src/apps/papel.l [-o out] [-t title] [src ..]       (make site runs it)
 ; src is a .md file or a directory of them; with none, this tree's own docs (README.md
 ; and doc/). out defaults to out/site. papel writes out/<name>.html per source, out/
 ; papel.css, and out/index.html -- the last only when no source is itself an index.md.
@@ -37,34 +36,26 @@
 
 ; --- the modules papel stands on ---------------------------------------------------------
 ; papel loads its siblings itself rather than being handed them: two tool files cannot both
-; be -l'd, since each one's seat would fire on the other's command line, so the `papel`
-; script -l's this file alone. the crew root comes off our own seat word, which means an
-; installed script pointing at the source tree finds its siblings wherever that tree is --
-; `want` hands the loader that PATH ((borrow "src/apps/lapiz.l")), which loads it as a
-; module and splices it. a module already registered (the gate, a host embedding) is
-; left alone. `root` is exactly the kind of name a leak makes dangerous, and
+; be -l'd, since each one's seat would fire on the other's command line, so make site -l's
+; this file alone. the root comes off our own seat word, so the siblings are read from the
+; tree this papel sits in -- `want` hands the loader that PATH ((borrow "src/apps/lapiz.l")),
+; which loads it as a module and splices it. a module already registered (the gate, a host
+; embedding) is left alone. `root` is exactly the kind of name a leak makes dangerous, and
 ; it stays wherever this file's layer is -- never orth.
 (borrow 'path)
 (borrow 'posix)
 (: (findme (a . u)) ; the word that named this file, if any
     (pbase a @ ("papel" || "papel.l") a (findme u))
-   (up p) (#p @ n (0 < n ? (phead (snip p 0 (n - 1))) p))   ; "a/b/" -> "a/"
-   ; ..and follow a symlink to it. `papel` installs the way cook does, as a link on PATH
-   ; pointing at this source file, so the name we were invoked by lives in ~/.local/bin
-   ; and the siblings do not. readlink is what turns the link back into the source tree.
-   root (: me (findme >cmdline)
-           tgt (me ? (readlink me || me))
-         (tgt ? (up (phead tgt)) "src/apps/"))                           ; src/apps/papel.l -> src/apps/
-   ; want: the sibling module, wherever this papel lives -- beside this file in
-   ; the source tree (root came off our own seat), else by NAME off the registry
-   ; an installed love baked. the tree lane probes first, so a tree papel running
-   ; under an installed love reads its own siblings, never the baked older copies.
+   root (findme >cmdline @ me (me ? (phead me) "src/apps/"))          ; src/apps/papel.l -> src/apps/
+   ; want: the sibling module beside this file, else by NAME off the registry an installed
+   ; love baked. the tree lane probes first, so a tree papel running under an installed
+   ; love reads its own siblings, never the baked older copies.
    (want nm f) (cite nm ? 1
                   (open (root + f) "r" @ q
                      (hot? q ? (close q, borrow (root + f), 1)
                         (borrow nm, 1))))
-   _ (want 'lapiz "lapiz/lapiz.l")
-   _ (want 'cook "cook/cook.l")
+   _ (want 'lapiz "lapiz.l")
+   _ (want 'cook "cook.l")
    _ (want 'hueweb "vi/hueweb.l"))
 
 ; --- the two seams -------------------------------------------------------------------

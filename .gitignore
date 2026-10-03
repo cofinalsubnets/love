@@ -2,7 +2,9 @@
 notes
 vgcore.*
 .gdb_history
-.claude/
+# the tree's claude code hooks are checked in; the rest is each session's own
+.claude/*
+!.claude/settings.json
 /out/
 # the build stamp, written by selfpack into the archive and read back by an unpacked release
 /STAMP

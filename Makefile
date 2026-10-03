@@ -86,6 +86,14 @@ out/lib/readme.bin: $(love0) $(S)/love/boot/post.l $(R)/VERSION
 	@echo 'LOVE	'$@
 
 ho = out$(hsuf)
+# the link the hot profile is taken of: love.raw less the hot.prof it carries, so the profile is
+# a function of the rest of the tree, never of itself, and one pass is its fixed point. an eager
+# build (HCC) records no profile, and profiles its own link only to say so
+ifneq ($(HCC),)
+prof_raw = $(ho)/love.raw
+else
+prof_raw = $(ho)/love.praw
+endif
 h_o = $(love_c:$(S)/%.c=$(ho)/o/%.o)
 host_o = $(host_c:$(S)/%.c=$(ho)/o/%.o)
 # the three a LINK names rather than the directory, one per thing it does without:
@@ -116,8 +124,8 @@ $(ho)/love $(ho)/love.cand: $(ho)/%: $(ho)/%.raw $(ho)/.dist-cat.l src/tools/hot
 	@sh src/tools/hotbake.sh $< $@ $(ho)/.dist-cat.l
 
 .PHONY: hotprof
-hotprof: $(ho)/love.raw $(ho)/.dist-cat.l
-	@sh src/tools/hotbake.sh -p $(ho)/love.raw src/tools/hot.prof $(ho)/.dist-cat.l
+hotprof: $(prof_raw) $(ho)/.dist-cat.l
+	@sh src/tools/hotbake.sh -p $(prof_raw) src/tools/hot.prof $(ho)/.dist-cat.l
 
 .PHONY: candidate
 candidate: $(ho)/love.cand
@@ -275,6 +283,11 @@ $(ho)/love.raw $(ho)/love.cand.raw: out/moonlibc.o $(moon_o) out/src.o out/rootf
 	@echo 'MOON	'$@
 	@mkdir -p $(dir $@)
 	@$(moon0) -pie $(moon_o) $(kart_o) out/src.o out/rootfs.o out/moonlibc.o -freadme=out/lib/readme.bin -o $@
+# prof_raw: love.raw less the hot.prof it carries
+$(ho)/love.praw: out/moonlibc.o $(moon_o) out/prof/src.o out/rootfs.o out/lib/readme.bin $(moonlibc_src)
+	@echo 'MOON	'$@
+	@mkdir -p $(dir $@)
+	@$(moon0) -pie $(moon_o) $(kart_o) out/prof/src.o out/rootfs.o out/moonlibc.o -freadme=out/lib/readme.bin -o $@
 endif
 
 $(ho)/love.1 $(ho)/cook.1 $(ho)/lush.1: $(ho)/%.1: doc/%.md src/tools/mkman.l src/apps/lapiz.l out/lib/love_version.h $(mdep)
@@ -394,6 +407,12 @@ $(src_tree): force_src $(love0) $(ho)/.dist.list
 out/src.o: $(src_tree) src/tools/mksrc.l $(holocat_dep) $(love0)
 	@echo 'HOLO	'$@
 	@$(love0) $(holocat) src/tools/mksrc.l $(src_tree) $@ $(hosta)
+out/prof/src.tree: force_src $(love0) $(ho)/.dist.list
+	@mkdir -p $(dir $@)
+	@LOVE_NO_IMAGE= LOVE_BUDGET_MB=256 $(love0) src/tools/selfpack.l $@ love-$(dist_ver) $(dist_stamp) $(love_stamp) $(ho)/.dist.list $(dist_drop) src/tools/hot.prof
+out/prof/src.o: out/prof/src.tree src/tools/mksrc.l $(holocat_dep) $(love0)
+	@echo 'HOLO	'$@
+	@$(love0) $(holocat) src/tools/mksrc.l out/prof/src.tree $@ $(hosta)
 # the machine's own files (src/inle/rootfs/): a second initrd, walked at the root of every inle
 # boot where the tree's is walked under /love. one tar, carried under ai_rootfs
 # beside the source blob on every link that carries one.
@@ -946,7 +965,7 @@ endif
 
 # ONE roster each: the compat-symlink block below reads the same two names, and two
 # spellings of a list is how they drift.
-binnames = $(BIN) kore sb mooncc cook papel libra lux bao lush
+binnames = $(BIN) kore sb mooncc cook libra lux bao lush
 mannames = $(BIN) cook lush
 # the default nest is the one install: `love nest -y` (src/apps/source.l) copies the binary
 # in, newer builds only, and links lush, which runs every other verb by name. a real PREFIX,
@@ -996,18 +1015,15 @@ $d/bin/$(BIN): $(ho)/love
 # layered crew chain riding it), so the plain-copy install keeps the warm wake and every verb.
 
 # the single-file shebang tools, one shape: the `#!/usr/bin/env -S love -l` line re-execs
-# the installed interpreter, and each file's own SEAT fires on its name. papel and libra
-# READ their siblings rather than being -l'd beside them -- two tool files cannot both be
-# -l'd, since each one's seat would fire on the other's command line -- and they find them
-# by READLINK'ing this very symlink back to the source tree, so the link on PATH and the
-# crew directory need not be neighbours. libra's siblings are named ((borrow 'lint),
-# (borrow 'salt), and (borrow 'lapiz) on the doc verb alone) and ride the baked image.
+# the installed interpreter, and each file's own SEAT fires on its name. libra borrows
+# its siblings by name rather than being -l'd beside them -- two tool files cannot both be
+# -l'd, since each one's seat would fire on the other's command line -- ((borrow 'lint),
+# (borrow 'salt), and (borrow 'lapiz) on the doc verb alone), and they ride the baked image.
 # each source sits FIRST on its own line: instool reads $<, and a prerequisite added on
 # the grouped line below lands ahead of it -- which installs the kore shim as `cook`.
 $d/bin/cook:    src/apps/cook.l    $(ho)/love
-$d/bin/papel:   src/apps/papel.l  $(ho)/love
 $d/bin/libra:   src/apps/libra/libra.l  $(ho)/love
-$d/bin/cook $d/bin/papel $d/bin/libra:
+$d/bin/cook $d/bin/libra:
 	@echo $(instag)	$(abspath $@)
 	@mkdir -p $(@D)
 	@$(call instool,$<,$@)
