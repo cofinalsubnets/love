@@ -20,12 +20,14 @@
 ; only court-walk and court-run tie the tty. court-walk takes a stage already raised.
 ;
 ; run: love lore court  h l or the arrows turn, k j step, u n look up and down;
-;                       [ ] an hour back or on, t the time's pace, c the cloud, v the
-;                       sky smooth or in pixels; q or esc leaves
-;      love lore court [clear|partly|mostly|overcast] [smooth|pixel]   the weather to start
+;                       [ ] an hour back or on, t the time's pace, c the cloud, p rain
+;                       or snow, v the sky smooth or in pixels; q or esc leaves
+;      love lore court [--date YYYY-MM-DD] [--time HH:MM] [--pace N] [--weather COVER]
+;                      [--sky smooth|pixel] [--fall none|rain|snow]   how to start; the
+;                      cover, the style, rain and snow words may stand alone
 (module (court court-run court-walk court-main court-new court-size court-step court-move
          court-frame court-sun court-light court-clock court-now court-local court-doy court-season
-         court-opts court-pens court-maps
+         court-opts court-wx-pick court-fall-pick court-month court-pens court-maps
          tree-grow sun-clear top-h block-h crown-y
          fps yard-a yard-b floor-h floors wall-h eye-h body-r lat paces)
 (borrow 'rove)
@@ -50,7 +52,15 @@
  ; leaf lies, how many landed are kept, how fast one falls; and the leaves' colours, dry
  ; yellow, tan, brown, a few still green
  stick-n 22 leaf-n 420 leaf-y 0.006 fallen-n 400 fall-v 0.45
+ snowc [0.88 0.9 0.94]
  hues [[0.6 0.5 0.17] [0.5 0.39 0.19] [0.36 0.26 0.14] [0.33 0.38 0.13]]
+ ; the weather's odds by month, in twentieths: clear, partly, mostly cloudy, overcast --
+ ; grey winters, clear late summers and falls
+ wx-odds [[4 5 4 7] [4 5 4 7] [4 5 5 6] [4 6 5 5] [4 7 5 4] [5 7 5 3]
+          [5 8 4 3] [6 7 4 3] [7 7 3 3] [7 6 3 4] [5 5 4 6] [4 5 4 7]]
+ ; ..and under an overcast sky the twentieths it rains or snows (half that mostly cloudy,
+ ; none lighter): snow in the depth of winter, either at its edges, rain the rest
+ fall-odds [9 9 9 9 9 8 7 7 7 7 8 9]
  bay (2.0 * yard-b / 4.0)               ; a long wall's window bay
  ; --- the time: 'sim is the wall clock's local seconds, 'dst what summer adds to it ---
  ; now, as [local-seconds dst]: the zone's offset now, against the least of it a season on, two and three
@@ -87,7 +97,9 @@
                         st {'px 0.0 'pz (0.0 - yard-b + 1.4) 'th 0.0 'ph 0.5
                             'sim (now 0) 'dst (now 1) 'pace 0 'paces paces 'shown 40 't 0
                             'deep 0 'done 0 'tree tr 'litter (litter tr sd) 'fall () 'fallen ()
-                            'wx (sky-weather (throw sd 7 71 4) 'smooth)}
+                            'wx (court-season-wx (now 0) sd 'smooth)
+                            'drift 1 'hour (int (now 0 // 3600))}
+                        _ (pins st 'wet (sky-fall (st 'wx) = 1 ? 0.8 0.0) 'snow (sky-fall (st 'wx) = 2 ? 0.6 0.0))
                        (court-size st w (h // 2)))
  ; the screen w cells by r rows, and each pixel's offsets from the middle, and its dither
  (court-size st w r) (: h (2 * r) n (w * h) i (iota n) x (i % w) y (i // w)
@@ -112,8 +124,9 @@
         91 (tell (pin st 'sim (st 'sim - 3600.0)))
         93 (tell (pin st 'sim (st 'sim + 3600.0)))
         116 (tell (pin st 'pace ((st 'pace + 1) % #(st 'paces))))
-        99 (tell (pin st 'wx (sky-weather ((st 'wx 'cover + 1) % 4) (st 'wx 'style))))
-        118 (tell (pin st 'wx (sky-weather (st 'wx 'cover) (st 'wx 'style = 'pixel ? 'smooth 'pixel))))
+        99 (tell (pins st 'wx (wx-of ((st 'wx 'cover + 1) % 4) (st 'wx 'style) (sky-fall (st 'wx))) 'drift 0))
+        118 (tell (pin st 'wx (wx-of (st 'wx 'cover) (st 'wx 'style = 'pixel ? 'smooth 'pixel) (sky-fall (st 'wx)))))
+        112 (tell (pins st 'wx (wx-of (st 'wx 'cover) (st 'wx 'style) ((sky-fall (st 'wx) + 1) % 3)) 'drift 0))
         st))
  ; a frame's motion: the clock, and the leaves -- now and then one lets go of the top of
  ; the crown, drifts down and lies where it lands
@@ -125,9 +138,45 @@
            ())
    moved (map (q \ fall-step q t) (cat born (st 'fall)))
    down (filter (q \ q 1 <= leaf-y) moved)
-   (pins st 'sim (st 'sim + st 'paces (st 'pace) / fps)
-            'fall (filter (q \ leaf-y < q 1) moved)
-            'fallen (newest fallen-n (cat down (st 'fallen)))))
+   ; ..the ground under the weather, by the sky's seconds this frame: rain wets the floor
+   ; in half an hour and it dries in three; snow covers it in three hours, and goes in six
+   ; dry or one under rain
+   dt (st 'paces (st 'pace) / fps) f (sky-fall (st 'wx))
+   _ (pins st 'sim (st 'sim + dt)
+             'fall (filter (q \ leaf-y < q 1) moved)
+             'fallen (newest fallen-n (cat down (st 'fallen)))
+             'wet (sat (st 'wet + (f = 1 ? (dt / 1800.0) (0.0 - dt / 10800.0))))
+             'snow (sat (st 'snow + (f = 2 ? (dt / 10800.0) (0.0 - dt / (f = 1 ? 3600.0 21600.0))))))
+   (court-drift st))
+ ; --- the weather's month and its drift: a month's odds pick a cover from k in 0..19; and
+ ; while the weather is the season's own, about one sky hour in four it steps a notch
+ ; toward a cover the month's odds draw ---
+ (court-month sim) ((cite 'cal 'civil) (int sim // 86400) 1)
+ (court-wx-pick m k) (: o (wx-odds (m - 1))
+   (go i a) (i < 3 && a + o i <= k ? (go (i + 1) (a + o i)) i)
+   (go 0 0))
+ ; ..and what falls from a cover in month m, from k in 0..19 and a coin j for the
+ ; months between rain and snow
+ (court-fall-pick m c k j) (: o (fall-odds (m - 1))
+   (? (c < 2 || (c = 3 ? o (o // 2)) <= k) 0
+      (m = 12 || m <= 2) 2
+      (m = 3 || m = 11) (j = 0 ? 2 1)
+      1))
+ (wx-of c sty f) (pins (sky-weather c sty) 'fall f)
+ ; the season's weather at local seconds l, its dice from sd
+ (court-season-wx l sd sty) (: m (court-month l) c (court-wx-pick m (throw sd 7 71 20))
+   (wx-of c sty (court-fall-pick m c (throw sd 9 73 20) (throw sd 11 79 2))))
+ ; ..an hour on: the cover stepped one in four, and the fall kept two in three while the
+ ; cover can hold it, else drawn again
+ (court-drift st) (: h (int (st 'sim // 3600))
+   (? (h = st 'hour) st
+      !(st 'drift) (pin st 'hour h)
+      (: m (court-month (st 'sim)) c0 (st 'wx 'cover) f0 (sky-fall (st 'wx))
+         to (court-wx-pick m (throw h 13 59 20))
+         c (throw h 11 67 4 != 0 ? c0 (c0 + (to < c0 ? -1 (c0 < to ? 1 0))))
+         f (? (c < 2) 0 (0 < f0 && throw h 21 43 3 != 0) f0
+              (court-fall-pick m c (throw h 17 53 20) (throw h 19 47 2)))
+         (pins st 'hour h 'wx (wx-of c (st 'wx 'style) f)))))
  ; --- the maps: the walls and the floor, laid once a run in texels
  ; and gathered from by every frame, so no hash is thrown a frame ---
  ts 0.04                                ; a texel's side
@@ -308,7 +357,7 @@
    (two? l ? (bits l) ()))
  ; points drawn into the buffers, a point a pixel where nearer, lit as the floor is: the
  ; sun where it gets in and the tree lets it through, and the sky's light
- (bits! P cam lt sm buf) (: e (cam 'e) f (cam 'f) rt (cam 'r) uv (cam 'u) w (cam 'w) h (cam 'h) foc (cam 'foc)
+ (bits! P cam lt sm buf sn) (: e (cam 'e) f (cam 'f) rt (cam 'r) uv (cam 'u) w (cam 'w) h (cam 'h) foc (cam 'foc)
    s (lt 'sun) X (P 'x) Y (P 'y) Z (P 'z)
    qx (X - e 0) qy (Y - e 1) qz (Z - e 2)
    zc (qx * f 0 + qy * f 1 + qz * f 2) zs (max zc 0.1)
@@ -321,7 +370,7 @@
    up (P 'up) face (up * max2 (s 1) 0.0 + (1.0 - up) * 0.5)
    lit (sun-clear X Y Z s * (1.0 - grove-shade sm X Y Z) * lt 'sunk * face * 0.9)
    irr (c+ (c* 0.42 (lt 'amb)) (c* lit (lt 'sunc)))
-   cl (cm [(P 'r) (P 'g) (P 'b)] irr)
+   cl (cm (cmix [(P 'r) (P 'g) (P 'b)] snowc (P 'up * sn)) irr)
    (pins buf 't (pin (buf 't) i2 dist) 'r (pin (buf 'r) i2 (cl 0))
              'g (pin (buf 'g) i2 (cl 1)) 'b (pin (buf 'b) i2 (cl 2))))
  ; --- the frame ---
@@ -372,7 +421,13 @@
      fi (max 0 (min (fl-nz - 1) (floor ((pz + b) / fts))) * fl-nx + max 0 (min (fl-nx - 1) (floor ((px + a) / fts))))
      wm (mp 'wall) fm (mp 'floor)
      (wg k) (peep (wm k) wi 0.0) (fg k) (peep (fm k) fi 0.0)
-     alb (cmix [(wg 'r) (wg 'g) (wg 'b)] [(fg 'r) (fg 'g) (fg 'b)] gnd)
+     ; ..the floor darker wet and white under snow -- the pale concrete first, the joints,
+     ; the moss and a speckle of it last
+     fc [(fg 'r) (fg 'g) (fg 'b)] lum ((fc 0 + fc 1 + fc 2) / 3.0)
+     spk (frac (sin (fi * 12.9898) * 43758.5453))
+     sw (sat (st 'snow * 1.3 - 0.6 * (0.5 - lum) - 0.15 * spk))
+     flr (cmix (c* (1.0 - 0.35 * st 'wet) fc) snowc sw)
+     alb (cmix [(wg 'r) (wg 'g) (wg 'b)] flr gnd)
      glass ((1 - gnd) * peep (wm 'glass) wi 0)
      ; --- the light: the sun where it faces and gets in past the rim and the battlements,
      ; the sky's light by how much of the sky is seen and how it faces the sun's side, and a
@@ -405,9 +460,12 @@
    buf {'t (over t sky 1e9) 'r (col0 0) 'g (col0 1) 'b (col0 2)}
    _ (grove-wood! tr cam lt sun-clear buf) _ (grove-leaves! tr cam lt sun-clear buf t0)
    ; ..and what lies on the floor, and the leaves falling
-   _ (bits! (st 'litter 'pts) cam lt sm buf)
-   _ (lead (st 'litter 'leaves) (18 * int (leaf-n * sea 'ground)) (sea 'brown) @ P (tablet? P ? (bits! P cam lt sm buf)))
-   _ (loose st @ P (tablet? P ? (bits! P cam lt sm buf)))
+   sn (st 'snow)
+   _ (bits! (st 'litter 'pts) cam lt sm buf sn)
+   _ (lead (st 'litter 'leaves) (18 * int (leaf-n * sea 'ground)) (sea 'brown) @ P (tablet? P ? (bits! P cam lt sm buf sn)))
+   _ (loose st @ P (tablet? P ? (bits! P cam lt sm buf sn)))
+   ; ..and the rain or snow coming down, by the frame's own clock
+   _ (sky-fall! (st 'wx) cam lt buf (1.0 * st 't / fps))
    ; ..and the eye's gain and shoulder
    (sky-tone lt [(buf 'r) (buf 'g) (buf 'b)]))
  ; the frame: the clock in the corner for a while after the time is touched
@@ -416,7 +474,8 @@
    pace (st 'paces (st 'pace))
    wx (st 'wx)
    txt (" " + court-clock st + (pace = 0.0 ? "  still" (pace = 1.0 ? "" ("  x" + (int pace = pace ? (show (int pace)) (show pace)))))
-        + "  " + sky-says (wx 'cover) + (wx 'style = 'pixel ? ", in pixels " " "))
+        + "  " + sky-says (wx 'cover) + (sky-fall wx = 1 ? ", rain" (sky-fall wx = 2 ? ", snow" ""))
+        + (wx 'style = 'pixel ? ", in pixels " " "))
    bands (st 't < st 'shown ? {0 [1 txt (deep ? 249660 255) (deep ? 33288 235)]} {})
    (deep ? (view-deep-frame w h px bands)
       (view-frame w h (y \ peep px (iota w + w * y) 0) bands)))
@@ -427,17 +486,17 @@
    (view-walk {'new (w \ h \ (: st (pin (court-new w h (opt 'now @ n (n ? n (court-now ())))) 'deep
                                          (elem (getenv "COLORTERM") ["truecolor" "24bit"]))
                                   wx (opt 'wx) p (opt 'pace)
-                                  _ (wx ? (pin st 'wx wx))
+                                  _ (wx ? (pins st 'wx wx 'drift (opt 'fix ? 0 1)))
                                   (charm? p ? (pins st 'paces (p . paces) 'pace 0) st)))
                'size court-size 'frame court-frame 'key court-step 'tick court-move
                'fps fps 'song (hn \ ()) 'linger 0 'next ()}))
  (court-run o) (view-run (_ \ court-walk o))
- court-usage "usage: love lore court [--date YYYY-MM-DD] [--time HH:MM] [--pace N] [--weather clear|partly|mostly|overcast] [--sky smooth|pixel]   (the weather words may stand alone; h l turn, k j step, u n look, [ ] an hour, t the pace, c the cloud, v the sky's style; q or esc leaves)"
+ court-usage "usage: love lore court [--date YYYY-MM-DD] [--time HH:MM] [--pace N] [--weather clear|partly|mostly|overcast] [--sky smooth|pixel] [--fall none|rain|snow]   (the weather words, rain and snow may stand alone; h l turn, k j step, u n look, [ ] an hour, t the pace, c the cloud, p rain or snow, v the sky's style; q or esc leaves)"
  ; --- the words: a date, a time, a pace, the weather's cover and the sky's style, each at
  ; most once and in any order -> the walk's start, or () for words it cannot read. a date
  ; or a time alone keeps the other from now ---
  (court-opts as) (: (ix l w) (: (go i) (i < #l ? (l i = name w ? i (go (i + 1))) ()) (go 0))
-   (cov w) (ix sky-covers w) (sty w) (ix sky-styles w)
+   (cov w) (ix sky-covers w) (sty w) (ix sky-styles w) (fal w) (ix sky-falls w)
    (dnum w) (: n #w (go i v) (i < n ? (48 <= w i <= 57 ? (go (i + 1) (v * 10 + w i - 48)) ()) v)
                (0 < n ? (go 0 0) ()))
    (date w) (w @ (y + "-" + m + "-" + d)
@@ -456,6 +515,8 @@
              (two? >l && <l = "--pace") (once 'pace (pnum <>l) >>l)
              (two? >l && <l = "--weather") (once 'cov (cov <>l) >>l)
              (two? >l && <l = "--sky") (once 'sty (sty <>l) >>l)
+             (two? >l && <l = "--fall") (once 'fall (fal <>l) >>l)
+             (<l = "rain" || <l = "snow") (once 'fall (fal <l) >l)
              (charm? (cov <l)) (once 'cov (cov <l) >l)
              (charm? (sty <l)) (once 'sty (sty <l) >l)
              ())
@@ -465,10 +526,13 @@
          now (? (d = () && t = ()) now0
                 (court-local (86400 * (d = () ? (l0 // 86400) ((cite 'cal 'epoch-days) (d 0) (d 1) (d 2)))
                               + (t = () ? (l0 % 86400) t))))
-         c (r 'cov) y (r 'sty)
-         {'now now 'pace (r 'pace)
-          'wx (c = () && y = () ? ()
-                 (sky-weather (c = () ? (throw (int (now 0)) 7 71 4) c) (y = () ? 'smooth (sky-styles y))))})))
+         c (r 'cov) y (r 'sty) fl (r 'fall) l (now 0) sd (int l) m (court-month l)
+         ; ..what is not said is the season's: a fall said without a cover comes from overcast
+         sty (y = () ? 'smooth (sky-styles y))
+         c2 (? (c != ()) c (0 < fl) 3 (court-wx-pick m (throw sd 7 71 20)))
+         {'now now 'pace (r 'pace) 'fix (c = () && fl = () ? 0 1)
+          'wx (c = () && y = () && fl = () ? ()
+                 (wx-of c2 sty (fl = () ? (court-fall-pick m c2 (throw sd 9 73 20) (throw sd 11 79 2)) fl)))})))
  (court-main as) (court-opts as @ o
    (tablet? o ? (court-run o) (say err ("court: " + court-usage + "\n"), flush err, 2)))
  _ ((cite 'lore 'lore-enlist) 'court (udoor 'court court-main court-usage 1 1)))

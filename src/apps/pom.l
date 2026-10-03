@@ -5,11 +5,13 @@
 ;   pom -d       every hour of the month; with -e, redrawn in place
 ;   pom -p [N]   the moon now, N pixels square in half-blocks
 ;   pom -s [N]   the moon now as the pom saver draws it, its seas and dark limb
+;   pom -n [N]   the moon now drawn naturally: lit as the moon scatters sunlight, its seas
+;                soft, tycho and copernicus bright, earthshine on the dark side
 ;   pom [[[[[cc]yy]mm]dd]HH]  another hour, date(1)'s order
-; usage: love pom [-d] [-e] [[[[[[cc]yy]mm]dd]HH]] | -p [N] | -s [N]
+; usage: love pom [-d] [-e] [[[[[[cc]yy]mm]dd]HH]] | -p [N] | -s [N] | -n [N]
 (module (pom pom-main pom-julian pom-phase pom-name pom-percent pom-art
              pom-pixels pom-now pom-cells pom-tint pom-tc pom-xterm pom-lit
-             pom-lit? pom-mare? pom-face pom-moon)
+             pom-lit? pom-mare? pom-face pom-moon pom-glow pom-natural)
 (borrow 'cal)
 (:
  epoch 2444238.5                       ; 1980 january 0.0
@@ -119,6 +121,42 @@
  (pom-moon p n) (: (px i j) (pom-face p ((j + 0.5) * 2 / n - 1) ((i + 0.5) * 2 / n - 1)
                               @ k (charm? k ? (xrgb k)))
                    (map (i \ map (j \ px i j) ^n) ^n))
+ ; --- the moon drawn naturally: the sun's way by the phase (behind at new, round the right
+ ; through the first quarter, from the eye at full); lit as the moon scatters it -- lommel
+ ; and seeliger's law, which leaves a full moon nearly flat to its limb -- with a little
+ ; lambert; the seas soft-edged and bluer, the highlands mottled, tycho and copernicus
+ ; bright and tycho's rays faint; earthshine on the dark side, most near new; the light
+ ; toned as the sky's is. rgb as 0xrrggbb at (nx ny) on the unit disc, () off it ---
+ craters [[-0.12 0.64 0.05 0.5] [-0.33 0.06 0.04 0.3] [0.42 -0.38 0.03 0.25]]
+ ; the seas, north up: the saver's maria and nectaris beside them
+ seas [[-0.35 -0.45 0.28] [0.18 -0.38 0.17] [0.3 -0.05 0.2] [0.68 -0.3 0.12]
+       [-0.6 0.0 0.35] [-0.2 0.45 0.18] [0.55 0.2 0.14] [0.38 0.32 0.09]]
+ (sat v) (v < 0.0 ? 0.0 (1.0 < v ? 1.0 v))
+ (pom-glow p nx ny)
+  (: d2 (nx * nx + ny * ny)
+     (? (1.0 < d2) ()
+        (: nz (sqrt (1.0 - d2)) a (2 * pi * p) sx (sin a) sz (0.0 - cos a)
+           mu0 (nx * sx + nz * sz) mu nz
+           ls (mu0 <= 0.0 ? 0.0 (mu0 / (mu0 + mu)))
+           lit (1.65 * (0.85 * ls + 0.15 * (mu0 < 0.0 ? 0.0 mu0)))
+           ; ..a sea's shore wanders: its radius by the bearing from its middle
+           (soft m) (: dx (nx - m 0) dy (ny - m 1) an (atan2 dy dx) k (m 0 * 7.0 + m 1 * 11.0)
+                       rr (m 2 * (1.0 + 0.13 * sin (2.0 * an + k) + 0.06 * sin (5.0 * an + 2.0 * k)))
+                       (sat ((rr - sqrt (dx * dx + dy * dy)) / (0.5 * m 2))))
+           mare (foldl (\ b m (b < soft m ? (soft m) b)) 0.0 seas)
+           ; ..the highlands' mottle: waves at slants and lengths that never line up
+           mott (0.022 * sin (19.0 * nx + 11.0 * ny + 1.3) + 0.018 * sin (-23.0 * nx + 29.0 * ny + 0.4)
+                 + 0.014 * sin (43.0 * nx - 31.0 * ny + 2.1) + 0.01 * sin (61.0 * nx + 67.0 * ny))
+           (bright c) (: dx (nx - c 0) dy (ny - c 1) r (sqrt (dx * dx + dy * dy))
+                         (c 3 * sat (1.0 - r / c 2) + (c 3 = 0.5 ? (0.09 * sat (1.0 - r / 0.7) * (sin (9.0 * atan2 dy dx) @ v (v * v * v * v))) 0.0)))
+           alb ((1.0 - 0.42 * mare + mott) * (1.0 + foldl (\ b c (b + bright c)) 0.0 craters))
+           tint [(0.95 - 0.12 * mare) (0.93 - 0.1 * mare) (0.88 - 0.04 * mare)]
+           earth (0.05 * (1.0 + cos a) / 2.0)
+           (ch k) (: v (alb * (tint k * lit + earth * [0.8 0.86 1.0] k)) u (1.0 - exp (0.0 - 1.9 * v))
+                     (int (255.0 * sat u + 0.5)))
+           (ch 0 * 65536 + ch 1 * 256 + ch 2))))
+ ; ..and n by n of it, for pom-cells
+ (pom-natural p n) (map (i \ map (j \ pom-glow p ((j + 0.5) * 2 / n - 1) ((i + 0.5) * 2 / n - 1)) ^n) ^n)
  (pom-now _) (: s (clock 0 // 1000) gt (civil (s // 86400))
                (pom-phase (s % 86400 // 3600) <>gt <>>gt <gt))
 
@@ -148,7 +186,7 @@
      (map (r \ foldl (\ s x (s + cell (g (2 * r) x) (g (2 * r + 1) x))) "" ^#<g) ^(#g // 2)))
 
  ; --- the runner ------------------------------------------------------------------
- pom-usage "usage: love pom [-d] [-e] [[[[[[cc]yy]mm]dd]HH]] | -p [N] | -s [N]"
+ pom-usage "usage: love pom [-d] [-e] [[[[[[cc]yy]mm]dd]HH]] | -p [N] | -s [N] | -n [N]"
  (dig? c) (48 <= c < 58)
  (digits? s) (#s ? (all dig? (map s ^#s)) 0)
  (env k) (getenv k @ v (string? v ? v ""))
@@ -181,6 +219,7 @@
         (flush out, 0)))
  (pom-main as) (? (two? as && <as = "-p") (pom-show pom-pixels 8 >as)
                   (two? as && <as = "-s") (pom-show pom-moon 24 >as)
+                  (two? as && <as = "-n") (pom-show pom-natural 24 >as)
                   (pom-date as))
  (pom-date as)
   (: fl (flags as 0 0)

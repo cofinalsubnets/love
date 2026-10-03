@@ -891,7 +891,7 @@
               ("e" "edit") ("o" "edit") ("edit" "edit")
               ("hl" "hl") ("set" "set") ("lint" "lint")
               ("sp" "split") ("split" "split") ("vs" "vsplit") ("vsplit" "vsplit")
-              ("find" "find") ("grep" "grep"))
+              ("find" "find") ("grep" "grep") ("explore" "explore"))
    ; the word as typed when it is one, else the meaning of the one word it heads;
    ; ('many ..) when the heads mean different things, and the word itself when none
    (vexfull st w)
@@ -938,6 +938,8 @@
             (w = "vsplit") (pin st 'dos ['beside arg])
             ; a picker over the tree here, the face's to open: its files, or every line
             (w = "find" || w = "grep") (pin st 'dof [w arg])
+            ; a browser beside this buffer, on arg or the working directory: the face's door
+            (w = "explore") (pin st 'dex [arg])
             (w = "hl") (pin st 'hl (st 'hl ? () 1),
                         vmsg st (st 'hl ? "syntax on" "syntax off"))
             ; :set knows one option, which is the one > and < need a number for

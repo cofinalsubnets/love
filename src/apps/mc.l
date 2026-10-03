@@ -3,7 +3,8 @@
 ; the colour ls gives its class, off the same four the lstat already answers.
 ;
 ;   j k / arrows  the cursor      ^b ^f  a page        g G  the ends
-;   tab  the other pane           enter  descend       u  the parent
+;   tab  the other pane           enter  descend (a file: to whoever lent mc 'open)
+;   u  the parent
 ;   v ^q  quick view: the other pane shows the cursor's entry -- a picture fitted, text's
 ;         first lines, a directory's count; again to go back
 ;   t  thumbnails: the other pane lays the active pane's pictures as a grid
@@ -66,11 +67,14 @@
  ; path is a key that did nothing rather than an empty pane with no way back.
  (mc-cd p d) (mc-read d @ es (two? es ? (pins p 'dir d 'es es 'cur 0 'top 0) p))
  (mc-parent d) (mc-rfind d 47 @ k (? (d = "/") "/" (k < 1) "/" (snip d 0 k)))
- (mc-enter p)
+ ; a directory is entered; a file goes to 'open, when whoever runs mc lent one (vi's :ex)
+ (mc-enter s p)
   (mc-at p @ e
      (? (atom? e) p
         (<e = "..") (mc-cd p (mc-parent (p 'dir)))
-        (mc-join (p 'dir) <e @ q (mc-dirat? q ? (mc-cd p q) p))))
+        (mc-join (p 'dir) <e @ q (? (mc-dirat? q) (mc-cd p q)
+                                     !(nil? (s 'open)) ((s 'open) q, p)
+                                     p))))
 
  ; --- the step: every arm answers the state, so an idle key answers it unchanged -----
  ; 'qv is the other pane's use: 0 its own listing, 1 quick view, 2 thumbnails
@@ -84,7 +88,7 @@
    103           (mc-goto p 0 n, s)
    71            (mc-goto p (#(p 'es) - 1) n, s)
    (9 || -1 || -2) (pin s 'act (s 'act ? 0 1))
-   (10 || 13)  (mc-enter p, s)
+   (10 || 13)  (mc-enter s p, s)
    117           (mc-cd p (mc-parent (p 'dir)), s)
    114           (mc-cd p (p 'dir), s)
    (118 || 17)   (pin s 'qv (s 'qv = 1 ? 0 1))
