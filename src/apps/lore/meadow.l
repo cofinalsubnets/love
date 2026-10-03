@@ -196,12 +196,16 @@
    ; --- the sun and the moon, discs where the lens shows them, the land in front of them ---
    (put col d c) (: ix (d 0) (map (k \ pin (col k) ix (c k)) ^3))
    (behind col d) (: ix (d 0) (map (k \ peep (col k) ix 0.0) ^3))
-   ; the sun: hot at the middle, its colour the light's, and behind a cloud dimmed
-   sc (on-screen st s) sd (s 1 < -0.03 || !sc ? () (disc st sc 2.4))
-   col01 (two? sd ? (: rr (sd 1 * sd 1 + sd 2 * sd 2) fall (sat ((1.0 - rr) * 3.0) * (1.0 - 0.85 * lt 'csun))
-                       core (c* 1.4 (cmix [1.0 0.42 0.08] [1.0 0.8 0.28] (sat ((s 1 - 0.02) / 0.3))))
-                       (put col00 sd (cmix (behind col00 sd) core fall)))
-              col00)
+   ; the sun: hot at the middle, its colour the light's. behind a cloud it softens and pales
+   ; but shows, and the cloud round it glows, so where it is can be told
+   sc (on-screen st s) cs (lt 'csun) sd (s 1 < -0.03 || !sc ? () (disc st sc 2.4))
+   core (c* 1.4 (cmix (cmix [1.0 0.42 0.08] [1.0 0.8 0.28] (sat ((s 1 - 0.02) / 0.3))) [1.0 0.95 0.86] (0.6 * cs)))
+   hd (cs < 0.05 || s 1 < -0.03 || !sc ? () (disc st sc 7.0))
+   colh (two? hd ? (: rr (hd 1 * hd 1 + hd 2 * hd 2) (put col00 hd (cmix (behind col00 hd) core (0.3 * cs * sq (sat (1.0 - rr))))))
+            col00)
+   col01 (two? sd ? (: rr (sd 1 * sd 1 + sd 2 * sd 2) fall (sat ((1.0 - rr) * (3.0 - 1.5 * cs)) * (1.0 - 0.45 * cs))
+                       (put colh sd (cmix (behind colh sd) core fall)))
+              colh)
    ; the moon: its lit side toward the sun and as wide as the phase, seas on it, pale by day,
    ; behind a cloud dimmed, and its dark side hiding the stars
    mo (meadow-moon st g) ph (meadow-phase st g)

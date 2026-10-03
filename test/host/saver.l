@@ -23,7 +23,8 @@
                (? !(f (i + 1) = 91) [0 n]
                   (fin = 72) (? (#ns = 2 && 1 <= <ns <= r && 1 <= ns 1 <= c) (go (j + 1) (<ns - 1) (ns 1 - 1) ok n) [0 n])
                   (fin = 67) (? (#ns = 1 && 0 < <ns) (go (j + 1) y (x + <ns) ok n) [0 n])
-                  (fin = 109) (? (ps = "0" || #ns = 3 && (<ns = 38 || <ns = 48) && ns 1 = 5 && 0 <= ns 2 < 256)
+                  (fin = 109) (? (ps = "0" || #ns = 3 && (<ns = 38 || <ns = 48) && ns 1 = 5 && 0 <= ns 2 < 256
+                                 || #ns = 5 && (<ns = 38 || <ns = 48) && ns 1 = 2 && all (v \ 0 <= v < 256) >>ns)
                                  (go (j + 1) y x ok n) [0 n])
                   (fin = 104 || fin = 108) (? (ps = "?2026") (go (j + 1) y x ok n) [0 n])
                   [0 n]))
@@ -53,6 +54,17 @@
    (pic? nm) (: cv (saver-canvas nm 24 80 1500 ()) cs (map (i \ saver-cell cv (i // 80) (i % 80)) ^(24 * 80))
                 pens (foldl (t \ k \ pin t (k 1) 1) {} cs)
                 (all (k \ <k = 128) cs && 6 < #(keys pens)))
+   ; ..in 24-bit colour where COLORTERM says the terminal has it, else the 256 palette's
+   (pens-of nm) (: cv (saver-canvas nm 24 80 1500 ()) (map (i \ saver-cell cv (i // 80) (i % 80) 1) ^(24 * 80)))
+   ct0 (getenv "COLORTERM")
+   _ (setenv "COLORTERM" "truecolor")
+   deep (pens-of "grass99")
+   dframe (saver-frame "court" 24 80 1500 ())
+   _ (setenv "COLORTERM" "")
+   cube (pens-of "grass99")
+   _ (setenv "COLORTERM" (string? ct0 ? ct0 ""))
+   _ (test (all (v \ 256 <= v) deep) (all (v \ v < 256) cube)
+           (sv-has? dframe "[38;2;") (sv-scan dframe 24 80 @ s (<s && s 1 = 24 * 80)))
    _ (test (pic? "court") (pic? "grass99"))
 
    ; --- the moon is lit on its phase's side ---
