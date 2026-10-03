@@ -78,6 +78,8 @@ struct _IO_FILE {
   int un;                                    /* ungetc's pushback byte + 1 (0 = none) */
   int len, cap;
   unsigned char *buf;
+  int rp, rl, rcap;                          /* a read-only stream's buffer: rb[rp..rl) is read ahead */
+  unsigned char *rb;
 };
 
 /* ---- the syscall numbers. freebsd's table first, UNCONDITIONAL and named
@@ -618,4 +620,10 @@ void __semit(void *ctx, int c);
  * the stream table is named by whoever opens one. */
 extern FILE __stdf[3];
 extern unsigned char __obuf[8192];
+extern unsigned char __ibuf[4096];
+/* the read side (stdio/rbuf.c): fill an empty read buffer -> bytes now ahead (0 at end, -1 on error);
+ * how far the stream sits behind its fd; and putting the fd back at the stream's position */
+long __rfill(FILE *f);
+long __rahead(FILE *f);
+int __rsync(FILE *f);
 #endif

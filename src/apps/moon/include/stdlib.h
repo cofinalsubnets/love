@@ -20,6 +20,7 @@ void  qsort(void*, size_t, size_t, int (*)(void const*, void const*));
 void *bsearch(void const*, void const*, size_t, size_t, int (*)(void const*, void const*));
 char *getenv(char const*);
 char *mktemp(char*);
+int   mkstemp(char*);
 int   setenv(char const*, char const*, int);
 int   unsetenv(char const*);
 int   atoi(char const*);
