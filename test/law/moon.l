@@ -82,7 +82,7 @@
       ((spl (clex "L\"hi\"") 0) = "L\"hi\"")                  ; the spelling keeps the prefix (# owes it)
       ((tn <>(clex "Long") 0) = ['id "Long" 1])              ; an id starting with L/u/U is not a prefix (no quote follows)
       (#<>(clex "L L'a'") = 2)                        ; bare L stays an id; L'a' a number
-      !(clex "int @")                                        ; not C: the lex error rides up
+      (gripe? (cparse <>(clex "int @;")))                   ; a stray @ lexes (a pp-token), and the parse refuses it
       (#<>(clex "abc") = 3)                        ; form-feed + vertical-tab are whitespace (GNU page breaks); real FF/vt bytes here
       !(clex "a /* open")                                    ; unterminated comment refused
       ((tn3 <>(clex "0644") 0) = ['num 420 1])              ; octal integer literal (0644 = 420); gzip's 0777/0666 modes
