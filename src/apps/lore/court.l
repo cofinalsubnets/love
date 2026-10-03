@@ -1,4 +1,4 @@
-; tree -- the inner courtyard of an apartment block, first person in half blocks: the
+; court -- the inner courtyard of an apartment block, first person in half blocks: the
 ; level after the shaft. twenty feet by thirty of concrete gone green with moss, a grated
 ; sump in the middle, four floors of brick painted grey and chipped to the red beneath,
 ; windows lit and dark, a honey locust leaning in from the north-east corner, and the sky
@@ -16,15 +16,15 @@
 ; every pixel casts its own ray, so the look tilts as far as the neck does. the scene is
 ; trays a frame wide: what each ray meets, the stuff there, the sun on it past the rim,
 ; and the colour out -- 24-bit where COLORTERM says so, else the 256 palette dithered.
-; tree-new, tree-step, tree-move and tree-frame are pure, gated by test/host/tree.l;
-; only tree-walk and tree-run tie the tty. tree-walk takes a stage already raised.
+; court-new, court-step, court-move and court-frame are pure, gated by test/host/tree.l;
+; only court-walk and court-run tie the tty. court-walk takes a stage already raised.
 ;
-; run: love lore tree   h l or the arrows turn, k j step, u n look up and down;
+; run: love lore court  h l or the arrows turn, k j step, u n look up and down;
 ;                       [ ] an hour back or on, t the time's pace, c the cloud, v the
 ;                       sky smooth or in pixels; q or esc leaves
-;      love lore tree [clear|partly|mostly|overcast] [smooth|pixel]   the weather to start
-(module (tree tree-run tree-walk tree-main tree-new tree-size tree-step tree-move
-         tree-frame tree-sun tree-light tree-clock tree-now tree-pens tree-maps
+;      love lore court [clear|partly|mostly|overcast] [smooth|pixel]   the weather to start
+(module (court court-run court-walk court-main court-new court-size court-step court-move
+         court-frame court-sun court-light court-clock court-now court-pens court-maps
          tree-grow sun-clear top-h block-h
          fps yard-a yard-b floor-h floors wall-h eye-h body-r lat paces)
 (borrow 'rove)
@@ -48,26 +48,26 @@
  bay (2.0 * yard-b / 4.0)               ; a long wall's window bay
  ; --- the time: 'sim is the wall clock's local seconds, 'dst what summer adds to it ---
  ; now, as [local-seconds dst]: the zone's offset now, against the least of it a season on, two and three
- (tree-now _) (: s (clock 0 // 1000) zone ((cite 'kore 'tz-zone) 0)
+ (court-now _) (: s (clock 0 // 1000) zone ((cite 'kore 'tz-zone) 0)
                   (off u) (zone ? (zone u 0) 0)
                   o (off s) std (foldl (a \ k \ min2 a (off (s + k * 7889400))) o [1 2 3])
                   [(1.0 * (s + o)) (o - std)])
- (tree-clock st) (: d (day-secs (st 'sim)) hh (int (d / 3600.0)) mm (int (d / 60.0) % 60)
+ (court-clock st) (: d (day-secs (st 'sim)) hh (int (d / 3600.0)) mm (int (d / 60.0) % 60)
                      (p2 v) (v < 10 ? ("0" + show v) (show v))
                      (p2 hh + ":" + p2 mm))
  ; the sun as [east up north] and its light, at the scene's hour
- (tree-sun st) (sky-sun (st 'sim) (st 'dst) lat)
- (tree-light st) (sky-light (tree-sun st) (st 'wx) (st 'sim))
+ (court-sun st) (sky-sun (st 'sim) (st 'dst) lat)
+ (court-light st) (sky-light (court-sun st) (st 'wx) (st 'sim))
  ; --- the state: the screen as view lays it, where the player stands and looks ('th the
  ; bearing, 'ph the pitch), the clock, its pace, and the pixels' rays ---
  ; the weather a run starts under, unless it is said: the cover thrown, the sky smooth
- (tree-new w h now) (: st {'px 0.0 'pz (0.0 - yard-b + 1.4) 'th 0.0 'ph 0.5
+ (court-new w h now) (: st {'px 0.0 'pz (0.0 - yard-b + 1.4) 'th 0.0 'ph 0.5
                             'sim (now 0) 'dst (now 1) 'pace 0 'shown 40 't 0
                             'deep 0 'done 0 'tree (tree-grow (int (now 0)))
                             'wx (sky-weather (throw (int (now 0)) 7 71 4) 'smooth)}
-                       (tree-size st w (h // 2)))
+                       (court-size st w (h // 2)))
  ; the screen w cells by r rows, and each pixel's offsets from the middle, and its dither
- (tree-size st w r) (: h (2 * r) n (w * h) i (iota n) x (i % w) y (i // w)
+ (court-size st w r) (: h (2 * r) n (w * h) i (iota n) x (i % w) y (i // w)
    (pins (view! st w h (h // 2)) 'U ((x + 0.5 - w / 2.0) / (w / 2.0)) 'V ((h / 2.0 - y - 0.5) / (w / 2.0))
          'bay (view-bayer w h)))
  ; --- moving ---
@@ -77,7 +77,7 @@
                   qx (x2 - bs 0) qz (z2 - bs 2) d (sqrt (qx * qx + qz * qz)) m (0.3 + body-r)
                   (d < m ? (pins st 'px (bs 0 + qx * m / max2 d 0.001) 'pz (bs 2 + qz * m / max2 d 0.001))
                      (pins st 'px x2 'pz z2)))
- (tree-step st k) (: th (st 'th)
+ (court-step st k) (: th (st 'th)
    (step d) (put! st (st 'px + d * sin th) (st 'pz + d * cos th))
    (tell st2) (pin st2 'shown (st 't + 2 * fps))
    (k @ (104 || -1) (pin st 'th (wrap (th - turn-step)))
@@ -92,7 +92,7 @@
         99 (tell (pin st 'wx (sky-weather ((st 'wx 'cover + 1) % 4) (st 'wx 'style))))
         118 (tell (pin st 'wx (sky-weather (st 'wx 'cover) (st 'wx 'style = 'pixel ? 'smooth 'pixel))))
         st))
- (tree-move st) (pin st 'sim (st 'sim + paces (st 'pace) / fps))
+ (court-move st) (pin st 'sim (st 'sim + paces (st 'pace) / fps))
  ; --- the maps: the walls and the floor, laid once a run in texels
  ; and gathered from by every frame, so no hash is thrown a frame ---
  ts 0.04                                ; a texel's side
@@ -191,7 +191,7 @@
    grate (cmix (cmix [0.01 0.01 0.01] [0.18 0.16 0.14] bar) [0.24 0.21 0.18] rim)
    alb (cmix (c* wet (cmix conc mossc moss)) grate sump)
    {'r (alb 0) 'g (alb 1) 'b (alb 2)})
- (tree-maps _) (maps 'wall ? maps (pins maps 'wall (wall-map ()) 'floor (floor-map ())))
+ (court-maps _) (maps 'wall ? maps (pins maps 'wall (wall-map ()) 'floor (floor-map ())))
  ; whether the sun reaches the points px py pz (trays) past the rim, the long walls'
  ; parapets and the battlements: the way out toward it is through the top, or over a wall
  ; low enough where it crosses
@@ -220,7 +220,7 @@
  (lit-share hr) (? (hr < 5.0) 6 (hr < 6.5) 12 (hr < 9.0) 35 (hr < 16.0) 4 (hr < 18.0) 25 (hr < 23.0) 60 25)
  ; every pixel's colour, three trays: the ray from the eye, what it meets first -- a wall,
  ; the floor or the sky through the rim -- the stuff there out of the maps, and the light on it
- (tree-pens st) (: mp (tree-maps ()) lt (tree-light st) th (st 'th) ph (st 'ph) U (st 'U) V (st 'V)
+ (court-pens st) (: mp (court-maps ()) lt (court-light st) th (st 'th) ph (st 'ph) U (st 'U) V (st 'V)
    a yard-a b yard-b hh wall-h t0 (st 't)
    sth (sin th) cth (cos th) sph (sin ph) cph (cos ph)
    dx0 (sth * cph + U * cth - V * sth * sph) dy0 (sph + V * cph) dz0 (cth * cph - U * sth - V * cth * sph)
@@ -298,30 +298,30 @@
    ; ..and the eye's gain and shoulder
    (sky-tone lt [(buf 'r) (buf 'g) (buf 'b)]))
  ; the frame: the clock in the corner for a while after the time is touched
- (tree-frame st) (: w (st 'w) h (st 'h) c (tree-pens st) deep (st 'deep)
+ (court-frame st) (: w (st 'w) h (st 'h) c (court-pens st) deep (st 'deep)
    px (deep ? (view-deep-pens c) (view-cube-pens c (st 'bay)))
    pace (paces (st 'pace))
    wx (st 'wx)
-   txt (" " + tree-clock st + (pace = 0.0 ? "  still" (pace = 1.0 ? "" ("  x" + show (int pace))))
+   txt (" " + court-clock st + (pace = 0.0 ? "  still" (pace = 1.0 ? "" ("  x" + show (int pace))))
         + "  " + sky-says (wx 'cover) + (wx 'style = 'pixel ? ", in pixels " " "))
    bands (st 't < st 'shown ? {0 [1 txt (deep ? 249660 255) (deep ? 33288 235)]} {})
    (deep ? (view-deep-frame w h px bands)
       (view-frame w h (y \ peep px (iota w + w * y) 0) bands)))
- ; --- the walk, on view's loop; tree-run raises the stage ---
+ ; --- the walk, on view's loop; court-run raises the stage ---
  ; ..wx the weather to start under, or () for the run's own
- (tree-walk wx) (view-walk {'new (w \ h \ (: st (pin (tree-new w h (tree-now ())) 'deep
+ (court-walk wx) (view-walk {'new (w \ h \ (: st (pin (court-new w h (court-now ())) 'deep
                                                      (elem (getenv "COLORTERM") ["truecolor" "24bit"]))
                                               (wx ? (pin st 'wx wx) st)))
-                            'size tree-size 'frame tree-frame 'key tree-step 'tick tree-move
+                            'size court-size 'frame court-frame 'key court-step 'tick court-move
                             'fps fps 'song (hn \ ()) 'linger 0 'next ()})
- (tree-run wx) (view-run (_ \ tree-walk wx))
- tree-usage "usage: love lore tree [clear|partly|mostly|overcast] [smooth|pixel]   (h l turn, k j step, u n look, [ ] an hour, t the pace, c the cloud, v the sky's style; q or esc leaves)"
+ (court-run wx) (view-run (_ \ court-walk wx))
+ court-usage "usage: love lore court [clear|partly|mostly|overcast] [smooth|pixel]   (h l turn, k j step, u n look, [ ] an hour, t the pace, c the cloud, v the sky's style; q or esc leaves)"
  ; the words, in either order: a cover, a style, or both
- (tree-main as) (: (ix l w) (: (go i) (i < #l ? (l i = name w ? i (go (i + 1))) ()) (go 0))
+ (court-main as) (: (ix l w) (: (go i) (i < #l ? (l i = name w ? i (go (i + 1))) ()) (go 0))
    (cov w) (ix sky-covers w) (sty w) (ix sky-styles w)
    cs (filter charm? (map cov as)) ss (filter charm? (map sty as))
    (? (2 < #as || #as != #cs + #ss || 1 < #cs || 1 < #ss)
-      (say err ("tree: " + tree-usage + "\n"), flush err, 2)
-      (tree-run (#as ? (sky-weather (#cs ? <cs (throw (int (tree-now () 0)) 7 71 4)) (#ss ? sky-styles <ss 'smooth))))))
- _ ((cite 'lore 'lore-enlist) 'tree (udoor 'tree tree-main tree-usage 1 1)))
-) ; module tree
+      (say err ("court: " + court-usage + "\n"), flush err, 2)
+      (court-run (#as ? (sky-weather (#cs ? <cs (throw (int (court-now () 0)) 7 71 4)) (#ss ? sky-styles <ss 'smooth))))))
+ _ ((cite 'lore 'lore-enlist) 'court (udoor 'court court-main court-usage 1 1)))
+) ; module court
