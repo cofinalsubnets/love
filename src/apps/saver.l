@@ -3,8 +3,8 @@
 ;
 ;   love bee -s NAME     a saver on its own, until a key; -s alone names them
 ;
-; bee starts one when its screen has had no key for (screensaver-idle N) minutes, and the
-; watch below is all it holds. the frames are pure in (rows cols t phase): saver-frame and
+; bee's chat (src/apps/mitty/chat.l) starts one when it has had no key for (screensaver-idle N)
+; minutes, and the watch below is all it holds. the frames are pure in (rows cols t phase): saver-frame and
 ; saver-canvas are the headless doors, gated by test/host/saver.l.
 ;   pom     the moon at its phase, over stars that twinkle
 ;   slop    slop's skin, slop-drift, in its own gold and pink

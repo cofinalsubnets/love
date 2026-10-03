@@ -494,7 +494,7 @@
      bee-restart ("at the next convenient point -- between tasks, never mid-gate -- "
                   + "resuming in the same directory, so .mcp.json loads the new bee.")
      bee-landed ("this landing changed bee: every live session restarts " + bee-restart)
-     bee-served "src/apps/bee.l src/apps/locks.l src/apps/hosts.l src/apps/seals.l src/apps/saver.l src/apps/pom.l"   ; what bee runs
+     bee-served "src/apps/bee.l src/apps/locks.l src/apps/hosts.l src/apps/seals.l src/apps/saver.l src/apps/pom.l src/apps/mitty/chat.l src/apps/mitty/avatar.l"   ; what bee runs
      (self-id _) (: s (string? bee-self ? (stat bee-self)) (two? s ? (show [(s 0) (s 3) (s 8)])))
      bee-selfw {'id (self-id 0) 'at (clock 0)}
      bee-selfwait (: w (getenv "BEE_SELF_WATCH") (string? w && 0 < #w ? (digits w) 30))
@@ -1784,455 +1784,31 @@
             (: _ (state! "busy") m (turn key f (user l . msgs)) _ (state! "idle")
                (repl key f (two? m ? m msgs)))))
 
-     ; --- the full screen ---
-     ; the state c: 'blocks newest first, 'ed the input buffer, 'scroll lines up from the
-     ; bottom, 'dirt a box the main loop repaints on, 'busy the turn's task, 'asking the tool
-     ; block awaiting y/n, 'msgs the conversation, 'sock the open wire, 'over
+     ; --- the look: the avatar worn (src/apps/mitty/avatar.l), its face drawn and the accent
+     ; everything else takes, as an sgr and as the nearest of 256 for the saver's canvas ---
      esc (string 27)
      (sgr code s) (esc + "[" + code + "m" + s + esc + "[0m")
-     (soil c) (pin (c 'dirt) () 1)
-     (push c b) (pins c 'blocks (b . c 'blocks) 'scroll 0 'mails (peep c 'mails 0 + (b 'k = 'mail)))
-
-     ; words of l as lines at most n wide; a word wider than n stands alone, cut at paint
-     (wrap l n)
-      (: (go ws cur acc)
-          (? (atom? ws) (rev (cur . acc))
-             (: w <ws
-                (? (#cur = 0) (go >ws w acc)
-                   (edwide cur + 1 + edwide w <= n) (go >ws (cur + " " + w) acc)
-                   (go >ws w (cur . acc)))))
-         (go (words l) "" ()))
-     ; l as lines at most n columns wide, cut anywhere, every character kept
-     (hwrap l n) (? (edwide l <= n) [l] (: a (edcut l n) (? (#a = 0) [l] (a . hwrap (snip l #a #l) n))))
-
-     ; a unified diff, coloured, at most n lines
-     (diffs a b n)
-      (: ls (lines (cite 'kore 'udiff "a" "b" a b))
-         body (drop 2 ls)                                 ; the --- +++ pair says nothing here
-         (paint l) (? (#l = 0) l
-                      (l 0 = 43) (sgr "32" l) (l 0 = 45) (sgr "31" l) (l 0 = 64) (sgr "36" l)
-                      (sgr "2" l))
-         (map (\ l ("     " + paint l)) (#body <= n ? body (take n body + [("… " + show (#body - n) + " more")]))))
-
-     ; what a tool will do, shown while it asks: an edit or a write as its diff
-     (preview name in)
-      (? !(valid? name in) ()
-         (name @
-          "edit_file" (: s (slurp-file (in "path")) e (edited s (in "old_text") (in "new_text"))
-                         (? <e (diffs s (e 1) 16) [(sgr "31" (e 1))]))
-          "write_file" (: s (slurp-file (in "path")) (diffs (string? s ? s "") (in "content") 16))
-          ()))
-
-     ; --- a command on a pty, its screen live in its block ---
-     bee-pty-rows 24
-     ; the child's bytes into the screen, its queries answered, the painter cued per gulp
-     (pump c b m s)
-      (: bf (cask 8192)
-         (go _) (: ch (see m)
-                   (? (ch < 0) 0
-                      (: _ (scribe s ch)
-                         (drain _) (: n (swig m bf) (? (charm? n && 0 < n) (: _ (scribe s (snip bf 0 n)) (drain 0)) 0))
-                         _ (drain 0)
-                         rep (reply s)
-                         _ (? rep (: _ (say m (foldl (\ a x (a + string x)) "" rep)) (flush m)) 0)
-                         _ (pin b 'v (b 'v + 1))
-                         _ (soil c)
-                         (go 0))))
-         (go 0))
-     ; the used rows run from the oldest held in history (negative) to the cursor's
-     (scr-span s) (: w (gaze s 2) k (gaze s 0) cr (k // w)
-                     [(0 - (gaze s 9)) (k % w = 0 ? (cr - 1) cr)])
-     ; the last n used rows, painted as limn paints a pane
-     (scr-rows s n)
-      (: sp (scr-span s) hi (sp 1) lo (max <sp (hi - n + 1)) w (gaze s 2)
-         (map (\ i (: j (jug 0) _ (cite 'limn 'limn-row j s w i 0 -1 0) (slurp j + esc + "[0m")))
-              (map (\ d (lo + d)) ^(max 0 (hi - lo + 1)))))
-     ; everything the command wrote, as text, for the model
-     (scr-text s) (: w (gaze s 2) (copied s -(gaze s 9 * w) (gaze s 0)))
-
-     ; --- the look ---
-     ; an avatar: eight rows of eight pixels, a letter each or . for none, and its palette of
-     ; letter and rgb; its 'grid is the rgb or () of each, and pom draws it. 'ink, a letter,
-     ; names the accent where the pixels would choose badly
-     cells (cite 'pom 'pom-cells)
-     tinted (cite 'pom 'pom-tint)
-     xterm (cite 'pom 'pom-xterm)
-     bee-24? ((cite 'pom 'pom-tc) 0)
-     (tint x) (tinted x "38" bee-24?)
-     (rgb x) [(x // 65536) (x // 256 % 256) (x % 256)]
-     (pal a) (: (go l t) (? (atom? l) t (go (drop 2 l) (pin t (<l 0) (l 1)))) (go (a 'pal) {}))
-     (grid a) (: p (pal a) (map (r \ map (x \ x = 46 ? () (p x)) (map r ^#r)) (a 'px)))
-     bee-avatars
-      (map (a \ pin a 'grid (grid a))
-       [{'name "bunny" 'pal ["W" 0xffffff "P" 0xffafd7 "E" 0x303030 "N" 0xff5faf]
-         'px [".WPW.WPW" ".WPW.WPW" "..WEWEW." ".WWWNWWW" ".WWWWWWW" ".WWWWWWW" "..WW.WW." "........"]}
-        {'name "bee" 'pal ["W" 0xafd7ff "Y" 0xffd700 "K" 0x875f00 "E" 0xffffff "G" 0x808080]
-         'px ["...W..W." "..W.WW.W" "..YKYKYE" ".GYKYKYE" "..YKYKY." "........" "...G.G.." "........"]}
-        {'name "baby" 'ink "P" 'pal ["W" 0xeeeeee "C" 0xffd7af "E" 0x303030 "P" 0xffafaf]
-         'px ["....WWW." "..WWCWWW" ".WWWCCWW" "WWECWWWW" "PCWWWWWW" ".WWWWWWW" "..WWWWW." "..P...P."]}
-        {'name "hare" 'pal ["B" 0x5b6ee1]
-         'px [".B....B." ".BB..BB." ".BB..BB." "..BBBB.." ".B.BB.B." ".B.BB.B." "..BBBB.." "...BB..."]}
-        {'name "honeybee" 'pal ["K" 0x222034 "Y" 0xfbf236 "C" 0x5fcde4 "G" 0x696a6a "H" 0x595652]
-         'px ["...GG..." "..GKKG.." "..HYYH.." ".CCCCCC." ".CYYYYC." "..KKKK.." "..HYYH.." "...KK..."]}
-        {'name "beeface" 'pal ["K" 0x222034 "Y" 0xfbf236 "M" 0x45283c "B" 0x5b6ee1 "W" 0xffffff
-                               "G" 0x847e87 "H" 0x696a6a "D" 0x595652 "R" 0x663931 "L" 0x639bff]
-         'px [".K....K." "..K..K.." "..K..K.." ".KWMMWK." ".GHKKHG." "BMDRRDMB" "LBYYYYBL" "Y......Y"]}]
-       ; the moon as it is tonight, utc
-       + [{'name "moon" 'ink "L" 'pal ["L" (cite 'pom 'pom-lit)]
-           'grid ((cite 'pom 'pom-pixels) ((cite 'pom 'pom-now) 0) 8)}])
-     bee-names (map (a \ a 'name) bee-avatars)
-     (avatar nm) (: l (filter (a \ a 'name = nm) bee-avatars) (two? l ? <l ()))
-     (draw a) (cells (a 'grid) bee-24?)
-     ; the accent: the most-used vivid colour, else the most-used of any; a tie to the stronger
-     (ink-of a)
-      (: k (peep a 'ink ())
-         n (foldl (\ t x (pin t x (peep t x 0 + 1))) {} (catmap (r \ filter charm? r) (a 'grid)))
-         (strength x) (: c (rgb x) (foldl max 0 c - foldl min 255 c))
-         (vivid? x) (: hi (foldl max 0 (rgb x)) (90 <= hi && hi <= 4 * strength x))
-         cs (map (x \ [(n x) (strength x) x]) (keys n))
-         vs (filter (e \ vivid? (e 2)) cs)
-         (string? k ? ((pal a) (k 0)) (<(rev (sort (two? vs ? vs cs))) 2)))
-     ; the avatar worn: its name, its face drawn, and the accent everything else takes, as
-     ; an sgr and as the nearest of 256 for the saver's canvas
      bee-look {}
-     (look! nm) (: a (avatar nm) k (ink-of a)
-                   (pins bee-look 'name nm 'face (draw a) 'ink (tint k) 'pen (xterm k)))
-     _ (look! (: n (setting 'avatar "bunny") (tablet? (avatar n) ? n "bunny")))
+     (look! nm) (: l (cite 'avatar 'avatar-look nm) (pins bee-look 'name nm 'face (l 'face) 'ink (l 'ink) 'pen (l 'pen)))
+     _ (look! (: n (setting 'avatar "bunny") (elem n (cite 'avatar 'avatar-names 0) ? n "bunny")))
      ; (avatar NAME) in ~/.love/etc/bee.l, in place of any before it
      (keep-avatar nm)
       (: h (getenv "HOME")
          (? !(string? h) 0
             (: d (h + "/.love/etc") p (d + "/bee.l") s (slurp-file p)
-               ls (filter (l \ !(starts? (trim l) "(avatar")) (lines (string? s ? s "")))
+               ls (filter (l \ !(starts? (lstrip l) "(avatar")) (lines (string? s ? s "")))
                _ (mkdirs d)
                (spit-file p (foldl (\ a l (a + l + "\n")) "" ls + "(avatar " + nm + ")\n")))))
-     ; every avatar with its name under it, as many to a row as w holds
-     (gallery w)
-      (: per (max 1 ((w - 2) // 11))
-         (go l) (? (atom? l) ()
-                   (: row (take per l) fs (map draw row)
-                      ((map (i \ foldl (\ s f (s + "  " + f i + " ")) "" fs) ^4)
-                       + [(foldl (\ s a (s + "  " + sgr ((a 'name = bee-look 'name ? "1;" "") + tint (ink-of a))
-                                                         (edfit (a 'name) 9 " "))) "" row)]
-                       + go (drop per l))))
-         (go bee-avatars))
      ; /avatar lists them, /avatar NAME wears one and keeps it -> [ok lines]
      (avatar-cmd s w)
-      (: ws (words s) nm (two? >ws ? <>ws "")
-         (? (atom? >ws) [1 (gallery w + [(sgr "2" "  /avatar NAME to wear one")])]
-            !(tablet? (avatar nm)) [0 [("no avatar " + nm + "; there are " + joinw bee-names)]]
+      (: ws (words s) nm (two? >ws ? <>ws "") ns (cite 'avatar 'avatar-names 0)
+         (? (atom? >ws) [1 (cite 'avatar 'avatar-gallery w (bee-look 'name) + [(sgr "2" "  /avatar NAME to wear one")])]
+            !(elem nm ns) [0 [("no avatar " + nm + "; there are " + joinw ns)]]
             (: _ (look! nm) _ (keep-avatar nm)
                [1 (map (i \ "  " + (bee-look 'face) i + (i = 1 ? ("   " + sgr (bee-look 'ink) nm) "")) ^4)])))
-     ; lines in a rounded box n wide, its border in pen
-     (boxed pen ls n)
-      (: d (\ s (sgr pen s)) rule (edfit "" (n - 2) "─")
-         (d ("╭" + rule + "╮") . (map (\ l (d "│" + " " + edfit l (n - 4) " " + " " + d "│")) ls
-                                    + [(d ("╰" + rule + "╯"))])))
-     ; the first line after ⎿, the rest under it
-     (hang ls) (? (atom? ls) () (sgr "2" "  ⎿  " + <ls . map (l \ "     " + l) >ls))
-     ; lapiz sets a body at five columns; the gutter here is two
-     (unindent l) (: (go i) (? (i < 3 && i < #l && l i = 32) (go (i + 1)) i) (snip l (go 0) #l))
-     (trim l) (: (go i) (? (i < #l && l i = 32) (go (i + 1)) i) (snip l (go 0) #l))
-     ; a tool as the screen names it
-     (title name) (name @ "read_file" "Read" "write_file" "Write" "edit_file" "Update" "shell" <bee-shell
-                          "list_sessions" "Hive" "send_message" "Message" "start_job" "Job"
-                          "check_job" "Check" "stop_job" "Stop" "spawn_bee" "Spawn" "stop_bee" "Stop" "queue_row" "Queue" "lock_acquire" "Lock" "lock_release" "Unlock" "lock_list" "Locks"
-                          name)
 
-     bee-spin ["·" "✢" "✳" "✶" "✻" "✽" "✻" "✶" "✳" "✢"]
-     bee-hums ["buzzing" "foraging" "waggling" "humming" "pollinating" "hovering" "combing"
-               "gathering nectar" "making honey" "dancing"
-               "hopping" "nibbling" "twitching its nose" "burrowing" "binkying" "thumping"
-               "munching clover" "flopping" "grooming its ears" "zooming"]
-     (spinner c)
-      (: ms (clock 0 - c 't0) k (ms // 120)
-         (sgr (bee-look 'ink) (bee-spin (k % #bee-spin) + " " + c 'hum + "…")
-          + sgr "2" (" (" + show (ms // 1000) + "s · esc to interrupt)")))
-     ; the gauge: the last request's tokens against the window, or a count when it is unknown
-     (kilo n) (n < 1000 ? (show n) (show (n // 100 / 10) + "k"))
-     (gauge c)
-      (: n (c 'used) x (peep c 'cost ())
-         ; under claude-code, the window of the model claude reports
-         win (? bee-cc? (: md (peep bee-cc 'model "") (starts? md "claude-haiku" ? 200000 1000000)) bee-window)
-         dollars (? (x = ()) ""
-                    (: k (int (x * 100 + 0.5))
-                       (sgr "2" ("$" + show (k // 100) + "." + (k % 100 < 10 ? "0" "") + show (k % 100) + " · "))))
-         (? !(charm? n) dollars
-            (win = ()) (dollars + sgr "2" (kilo n + " tokens"))
-            (: p (n * 100 // win)
-               (dollars + sgr (? (p < 70) "2" (p < 90) "33" "31") (show p + "% context")))))
-
-     ; a block's lines at width w, cached on the block by [w its version]
-     (blines b w)
-      (: k [w (peep b 'v 0) (bee-look 'name)]
-         (? (peep b 'lk () = k) (b 'lines)
-            (: ls (blines0 b w) _ (pins b 'lk k 'lines ls) ls)))
-     (blines0 b w)
-      (b 'k @
-       'hello (: t [(sgr ("1;" + bee-look 'ink) "bee")
-                    (bee-model + sgr "2" (" · " + bee-api))
-                    (sgr "2" bee-cwd)
-                    (sgr "2" ("session " + (me 0) + " · enter send · ^d quit"))]
-                 (boxed (bee-look 'ink) (map (\ i ((bee-look 'face) i + "   " + t i)) ^4) (min w 72)))
-       'you (: ls (catmap (\ l (wrap l (w - 4))) (lines (b 'text)))
-               (map (\ l (sgr "2" l)) ("> " + <ls . map (l \ "  " + l) >ls)))
-       'bee (: md (map unindent (lines (cite 'lapiz 'md->tty (b 'text) (w + 2))))
-                ls (two? md ? md [""])
-                ("⏺ " + trim <ls . >ls))
-       'note (hang [(sgr "2;3" (b 'text))])
-       'lines (b 'ls)
-       ; a message from another session, its sender first
-       'mail (: ls (catmap (\ l (wrap l (w - 4))) (lines (b 'text)))
-                (sgr (bee-look 'ink) "✉ " + sgr "1" (b 'from) . map (\ l ("  " + l)) ls))
-       ; thinking streams dim while it runs, its last eight lines; done, it folds to one line
-       ; unless ^t has them all open
-       'think (: ls (catmap (\ l (wrap l (w - 4))) (lines (b 'text)))
-                 n #(words (b 'text))
-                 body (map (\ l (sgr "2;3" ("  " + l))) ls)
-                 (? (b 'open) (sgr (bee-look 'ink) "✻ thinking…" . (8 < #body ? (drop (#body - 8) body) body))
-                    (b 'x) (sgr "2;3" ("✻ thought · " + show n + " words") . body)
-                    [(sgr "2;3" ("✻ thought · " + show n + " words  ^t"))]))
-       'tool (: st (b 'st)
-                dot (sgr (st @ 'ask "1;33" 'ok "32" 'err "31" "2") "⏺")
-                head (dot + " " + sgr "1" (title (b 'name)) + sgr "2" ("(" + b 'brief + ")"))
-                out (peep b 'out "")
-                ; an ask shows all of what runs, wrapped by column, never cut
-                tail (? (st = 'ask)
-                        (catmap (\ l (hwrap l (w - 6))) (ask-lines (b 'name) (b 'in))
-                         + [(sgr "1;33" (peep b 'tall 0 ? "taller than the screen: ↑↓ to read it all, then y / n"
-                                           "run it?  y / n"))])
-                        (st = 'cut) [(sgr "2" "interrupted")]
-                        (st = 'err) [(sgr "31" (: l (lines out) (two? l ? <l out)))]
-                        (b 'name @
-                         "shell" (? (peep b 'scr () != ()) (scr-rows (b 'scr) 12)
-                                    (: ls (filter (\ l (0 < #l)) (lines out)) n #ls
-                                       (map (sgr "2") (8 < n ? (drop (n - 8) ls) ls))))
-                         "read_file" (? (st = 'ok) [(sgr "2" ("read " + show #(lines out) + " lines"))] ())
-                         ()))
-                (head . ((st = 'ask ? () (peep b 'pre ())) + hang tail)))
-       [""])
-
-     ; the transcript, oldest first, a blank line between blocks
-     (tlines c w) (catmap (\ b ("" . blines b w)) (rev (c 'blocks)))
-
-     ; the transcript's rows: the screen's less the spinner, the input box and the hints
-     (room c) (c 'rows - 4 - min 6 (max 1 #(lines (edtext (c 'ed)))))
-     ; the transcript, a spinner row while a turn runs, the input boxed with the gauge
-     ; right-aligned on its first row, and the hints under it
-     (frame c)
-      (: w (c 'cols) h (c 'rows) e (c 'ed)
-         il (lines (edtext e)) il2 (two? il ? il [""])
-         bh (min 6 #il2)
-         top (max 0 (#il2 - bh))
-         iw (w - 6)                                           ; inside "│ > " and " │"
-         g (gauge c) gw (edwide g)
-         (row i) (: l (edcut (il2 (top + i)) iw)
-                    (? (i = 0 && 0 < gw && edwide l + gw + 2 <= iw) (edfit l (iw - gw) " " + g) l))
-         box (boxed "2" (map (\ i ((i = 0 && top = 0 ? (sgr "1" ">") " ") + " " + row i)) ^bh) w)
-         th (room c)
-         all (tlines c w)
-         end (max 0 (#all - c 'scroll))
-         win (drop (max 0 (end - th)) (take end all))
-         pad (map (\ _ "") ^(th - #win))
-         busy (c 'busy != ())
-         spin (busy && !(tablet? (c 'asking)) ? (spinner c) "")
-         ; the session's name leads the hints, always: it is how other sessions address this one
-         stat (sgr (bee-look 'ink) ("  " + (me 0)) + sgr "2" (? (tablet? (c 'asking)) " · y run · n decline"
-                                                         busy " · esc interrupt · ↑↓ scroll"
-                                                         " · enter send · alt-enter newline · ↑↓ scroll · ^t thoughts · /whoami · ^d quit"))
-         rows (map (\ l (edfit l w " ")) (win + pad + [spin] + box))
-         cr (h - 1 - bh + #(e 'u) - top)
-         cc (5 + edcol e)
-         (cite 'tui 'tui-fresh c h [w h] () rows (edfit stat w " ") cr cc))
-
-     ; the tui face: the turn's reports become blocks
-     (tface c)
-      {'yes (c 'yes)
-       'text (\ x (: b (? (two? (c 'blocks)) <(c 'blocks))
-                     _ (? (tablet? b && b 'k = 'bee && b 'open)
-                        (pins b 'text (b 'text + x) 'v (b 'v + 1))
-                        (push c {'k 'bee 'text x 'v 1 'open 1}))
-                     (soil c)))
-       'think (\ x (: b (? (two? (c 'blocks)) <(c 'blocks))
-                      _ (? (tablet? b && b 'k = 'think && b 'open)
-                           (pins b 'text (b 'text + x) 'v (b 'v + 1))
-                           (push c {'k 'think 'text x 'v 1 'open 1 'x (c 'thinkall)}))
-                      (soil c)))
-       'break (\ _ (: b (? (two? (c 'blocks)) <(c 'blocks))
-                      (? (tablet? b) (: _ (pins b 'open 0 'v (peep b 'v 0 + 1)) (soil c)) 0)))
-       'note (\ s (push c {'k 'note 'text s}, soil c))
-       'mail (\ from t (push c {'k 'mail 'from from 'text t}, soil c))
-       'wire (\ s (pin c 'sock s))
-       'usage (\ n (pin c 'used n, soil c))
-       'cost (\ x (pin c 'cost (peep c 'cost 0 + x), soil c))       ; claude's own reckoning, summed
-       'tool (\ name in (: b {'k 'tool 'name name 'in in 'brief (brief name in) 'st 'run 'v 0
-                               'pre (? (name = "edit_file" || name = "write_file") (preview name in) ())}
-                          (push c b, soil c, b)))
-       'ask (\ b (: _ (pins b 'st 'ask 'v (b 'v + 1)) _ (pins c 'asking b 'scroll 0) _ (soil c)
-                    _ (state! "asking")
-                    (wait _) (? (charm? (peep b 'ans ())) (b 'ans) (: _ (rest 30) (wait 0)))
-                    a (wait 0)
-                    _ (state! "busy")
-                    _ (pins b 'st 'run 'v (b 'v + 1)) _ (pin c 'asking ()) _ (soil c)
-                    a))
-       'done (\ b r (pins b 'st (<r ? 'ok 'err) 'out (r 1) 'v (b 'v + 1), soil c))
-       ; on a pty of its own, its screen in the block as it runs; the pipe when no pty opens
-       'shell (\ b cmd (: w (max 20 (c 'cols - 8)) r bee-pty-rows
-                         _ (setenv "TERM" "xterm-256color")
-                         md (tether (shell-argv cmd))
-                         (? (atom? md) (shell-out cmd)
-                            (: pid <md m >md
-                               s (screen (cask (screen () r w)) r w)
-                               _ (settty m r w)
-                               _ (pins b 'scr s 'v (b 'v + 1))
-                               _ (pins c 'kid pid 'kidm m)
-                               _ (pump c b m s)
-                               code (reap pid)
-                               _ (close m)
-                               _ (pins c 'kid () 'kidm ())
-                               (scr-text s + "\n[exit " + show code + "]")))))}
-
-     ; a line sent: its block, and the turn as a task of its own
-     (send c s) (: _ (push c {'k 'you 'text s}) (launch c s))
-     ; the turn as a task of its own, the card busy until it ends
-     (launch c s)
-      (: m0 (c 'msgs)
-         _ (pins c 't0 (clock 0) 'hum (bee-hums (clock 0 % #bee-hums)))
-         _ (state! "busy")
-         t (twirl (\ _ (: m (turn (c 'key) (c 'face) (user s . m0))
-                          _ (pins c 'msgs (two? m ? m m0) 'busy ())
-                          _ (state! "idle")
-                          (soil c))) 0)
-         (pin c 'busy t))
-     ; idle, a message starts a turn of its own: its blocks, then the model reads it
-     (wake c)
-      (: _ (self-tell 0)
-         ms (take-mail 0)
-         (? (two? ms)
-            (: _ (map (\ m (push c {'k 'mail 'from <m 'text (m 1)})) ms)
-               (launch c (mail-text ms)))
-            0))
-     ; esc: the wire shut and the turn's task frozen; the conversation stays as it was
-     (halt c)
-      (: s (c 'sock) t (c 'busy)
-         _ (? (hot? s) (close s) 0)
-         _ (? (c 'kid != ()) (still (c 'kid) 15) 0)             ; a running command dies with its turn
-         _ (? (hot? (c 'kidm)) (close (c 'kidm)) 0)
-         _ (map (\ b (? (b 'k = 'tool && (b 'st = 'run || b 'st = 'ask)) (pins b 'st 'cut 'v (b 'v + 1)) 0))
-                (c 'blocks))
-         _ (? (t != ()) (freeze t) 0)
-         _ (pins c 'busy () 'sock () 'asking ())
-         _ (? (bee-cc 'live) (cc-stop 0) 0)                        ; the next turn resumes the session
-         _ (state! "idle")
-         (push c {'k 'note 'text "interrupted"}))
-
-     (onkey c k)
-      (: a (c 'asking) e (c 'ed) busy (c 'busy != ())
-         ; y runs only once every row of the ask has been on the screen; ↑↓ and ^b ^f scroll it
-         (? (tablet? a) (? (k = 121 || k = 89)
-                            (? (#(blines a (c 'cols)) + 1 <= room c + peep a 'seen 0) (pin a 'ans 1)
-                               (: _ (pins a 'tall 1 'v (a 'v + 1)) (soil c)))
-                           (k = 110 || k = 78 || k = 27) (pin a 'ans 0)
-                           (k = -8 || k = 2)
-                            (: s (c 'scroll + (k = 2 ? (room c) 1))
-                               _ (pin c 'scroll s)
-                               (pin a 'seen (max s (peep a 'seen 0))))
-                           (k = -9 || k = 6) (pin c 'scroll (max 0 (c 'scroll - (k = 6 ? (room c) 1))))
-                           0)
-            (busy && (k = 27 || k = 3)) (halt c)
-            (k = 20)                                             ; ^t: every thought open, or folded
-             (: x (!(c 'thinkall) ? 1 0)
-                _ (pin c 'thinkall x)
-                (map (\ b (? (b 'k = 'think) (pins b 'x x 'v (b 'v + 1)) 0)) (c 'blocks)))
-            (k = 3 || k = -7) (pin c 'over 1)
-            (k = 269) (ednl e)                                   ; alt-enter
-            (: _ (edstep e k) v (e 'ev) page (c 'rows // 2)
-               (v @ 10 (: s (edtext e)
-                          (? (busy || #s = 0) 0
-                            (s = "/whoami") (: _ (edclear e) (push c {'k 'note 'text (whoami 0)}))
-                            (<(words s) = "/avatar") (: _ (edclear e) (push c {'k 'lines 'ls ((avatar-cmd s (c 'cols)) 1)}))
-                            (: _ (edclear e) (send c s))))
-                    4 (? (#(edtext e) = 0) (pin c 'over 1) 0)
-                    -8 (pin c 'scroll (c 'scroll + 1))
-                    -9 (pin c 'scroll (max 0 (c 'scroll - 1)))
-                    2 (pin c 'scroll (c 'scroll + page))
-                    6 (pin c 'scroll (max 0 (c 'scroll - page)))
-                    0))))
-     ; a key that wakes the saver is the saver's, and the screen is laid again whole
-     (keyloop c) (: k (edkey in)
-                    _ (? (sv-key (c 'sv) (clock 0)) (pin c 'lastr ()) (onkey c k))
-                    _ (soil c)
-                    (? (c 'over) 0 (keyloop c)))
-
-     (tide c) (: ws (tty 1) r (two? ws && 5 < <ws ? <ws 24) w (two? ws && 19 < >ws ? >ws 80)
-                 (? (r = c 'rows && w = c 'cols) 0 (: _ (pins c 'rows r 'cols w) (soil c))))
-     ; the saver, when it runs, has the screen; a turn goes on under it, and mail or an ask
-     ; puts a mark in its corner
-     sv-watch (cite 'saver 'saver-watch)
-     sv-tick (cite 'saver 'saver-tick)
-     sv-key (cite 'saver 'saver-key)
-     sv-on? (cite 'saver 'saver-on?)
-     (swim c tick)
-      (: b (c 'dirt)
-         sv (sv-tick (pin (c 'sv) 'ink (bee-look 'pen)) (clock 0) (c 'rows) (c 'cols) (peep c 'mails 0 + tablet? (c 'asking)))
-         _ (? (0 < #sv) (: _ (say out sv) (flush out)) 0)
-         _ (? (peep b () 0 && !(sv-on? (c 'sv))) (: _ (pin b () 0) _ (say out (frame c)) (flush out)) 0)
-         _ (? (tick % 16 = 0) (tide c) 0)
-         _ (? (tick % 4 = 0 && c 'busy != ()) (soil c) 0)      ; the spinner turns
-         _ (? (tick % 30 = 0 && c 'busy = ()) (wake c) 0)       ; the inbox, about once a second
-         _ (rest 33)
-         (? (c 'over) 0 (swim c (tick + 1))))
-
-     (tnew key yes)
-      (: c {'blocks () 'ed (ednew 0) 'scroll 0 'dirt {() 1} 'busy () 'asking () 'msgs ()
-            'sock () 'over 0 'key key 'yes yes 'rows 24 'cols 80}
-         _ (pin c 'face (tface c))
-         _ (pin bee-selfw 'tell (\ t (push c {'k 'note 'text t}, soil c)))   ; a new binary, a note here
-         _ (push c {'k 'hello})
-         c)
-     (tui key yes)
-      (: c (tnew key yes)
-         _ (pin c 'sv (sv-watch (setting 'screensaver "pom")
-                                (: m (peep bee-salt 'screensaver-idle ()) (two? m ? <m 10))))
-         _ (twirl (\ _ (watch 0)) 0)                     ; the queues, mailed here when they move
-         _ (twirl (\ _ (lock-poll 0)) 0)                   ; queued locks, mailed here when granted
-         _ (tide c)
-         _ (raw 1)
-         _ (say out (esc + "[?1049h" + esc + "[2J" + esc + "[?2004h" + title-on 0))
-         _ (flush out)
-         up (twirl (\ _ (keyloop c)) 0)
-         _ (swim c 1)
-         _ (? (c 'busy != ()) (halt c) 0)
-         _ (? (landed? up) 0 (freeze up))
-         _ (say out (esc + "[0m" + esc + "[?2004l" + esc + "[?1049l" + title-off 0))
-         _ (flush out)
-         _ (raw 0)
-         0)
-
-     ; --- the stage: the full screen as a pane of a mitty (src/apps/mitty/mitty.l), which
-     ; owns the tty, the keys' reader and the clock. its frame is scribed into the pane's own
-     ; screen, so tui-fresh diffs against what that screen holds. no saver: idle is the mitty's
-     (tstage key yes)
-      (: c (tnew key yes)
-         tw (twirl (\ _ (watch 0)) 0)
-         tl (twirl (\ _ (lock-poll 0)) 0)
-         _ (pins c 'woke (clock 0) 'spun (clock 0))
-         {'name ("bee " + me 0)
-          'show (\ w h (? (w < 20 || h < 8) "" (: _ (pins c 'rows h 'cols w) (frame c))))
-          'step (\ k (: _ (onkey c k) (soil c)))
-          'over? (\ _ (c 'over))
-          ; a frame when the turn or the inbox moved: the spinner's beat, mail about once a second
-          'tick (\ _ (: t (clock 0) b (c 'dirt)
-                        _ (? (c 'busy != () && 130 < t - c 'spun) (: _ (pin c 'spun t) (soil c)) 0)
-                        _ (? (c 'busy = () && 1000 < t - c 'woke) (: _ (pin c 'woke t) (wake c)) 0)
-                        (? (peep b () 0) (: _ (pin b () 0) 1) 0)))
-          'shut (\ _ (: _ (? (c 'busy != ()) (halt c) 0) _ (freeze tw) _ (freeze tl)
-                        _ (? (bee-cc 'live) (cc-stop 0) 0)
-                        (unsettle 0)))})
-
-     ; --- the hud: what a bare `love bee` on a terminal shows. the queues, the locks and the
-     ; hive, read again every (queue-watch N) seconds; no model and no key. it holds the user's
-     ; card while it is open, so c talks to a session as the user and the answers show here ---
+     ; --- the hud's text: the queues, the locks and the hive, laid out as lines. --hud prints
+     ; them once; the hud's screen (src/apps/mitty/chat.l) reads them again as they move ---
      (hud-short s) (string? s && 9 < #s ? (snip s 0 9) s)
      (hud-nums ks) (map show (sort (map digits ks)))
      ; a queue's lines: its name, base and leader, then each row, a fold under the row it joins
@@ -2283,99 +1859,6 @@
      (hud-lines _) (hud-lines-of (q-sections (lush-out bee-qcmd)))
      ; the sessions the user may write to, and the one a talk starts with: the first queue's leader
      (hud-peers _) (map (p \ <p) (filter (p \ !(user-card? (p 1))) (settled 0)))
-     (hud-to c) (: ps (hud-peers 0) l (c 'lead) (? (string? l && elem l ps) l (two? ps) <ps ()))
-     (hud-log c hd t)
-      (: ls (lines t) l2 (two? ls ? ls [""])
-         all (c 'log + [(hd + <l2)] + map (l \ "  " + l) >l2)
-         (pin c 'log (drop (max 0 (#all - 200)) all)))
-     ; the talk under the dashboard: its rule, the log's last rows, and the line being written
-     (hud-talk c w n)
-      (: e (c 'ed) to (peep c 'to ())
-         log (catmap (l \ hwrap l (w - 2)) (c 'log))
-         il (? (c 'typing) [((sgr "1" ">") + " " + (: ls (lines (edtext e)) (two? ls ? (ls (#ls - 1)) "")))] ())
-         room (max 0 (n - 1 - #il))
-         body (drop (max 0 (#log - room)) log)
-         ([(sgr "2" (edfit ("── " + (string? to ? ("to " + to + " ") "")) w "─"))]
-          + map (l \ " " + l) (map (_ \ "") ^(room - #body) + body) + il))
-     (hud-frame c)
-      (: w (c 'cols) h (c 'rows) ls (c 'lines) ty (c 'typing)
-         th (? (ty || two? (c 'log)) (max 4 (min 12 (h // 3))) 0)
-         dh (max 1 (h - 1 - th))
-         top (max 0 (min (c 'top) (#ls - dh)))
-         win (take dh (drop top ls))
-         rows (map (l \ edfit l w " ") (win + map (_ \ "") ^(dh - #win) + (0 < th ? (hud-talk c w th) ())))
-         note (peep c 'note "")
-         stat (edfit (sgr "2" ((? ty ("  to " + c 'to + " · enter send · tab another session · esc back")
-                                  ("  bee · read " + utc-minute (c 'read // 1000) + " · c talk · r read again · ↑↓ scroll · q quit"
-                                   + (#ls > dh ? ("   " + show (top + 1) + "-" + show (top + #win) + " of " + show #ls) "")))
-                               + (0 < #note ? ("   " + note) "")))
-                     w " ")
-         (cite 'tui 'tui-fresh c h [w h] () rows stat (ty ? (h - 1) h) (ty ? (3 + edcol (c 'ed)) 1)))
-     (hud-read c)
-      (: qs (q-sections (lush-out bee-qcmd))
-         _ (pins c 'lines (hud-lines-of qs) 'read (clock 0) 'lead (two? qs ? (q-leader (<qs 1)) ()))
-         (soil c))
-     ; mail for the user, into the log, about once a second while this hud holds the card
-     (hud-inbox c)
-      (: ms (user-mail 0)
-         (? (two? ms) (: _ (map (m \ hud-log c ((sgr "1" <m) + ": ") (m 1)) ms) (soil c)) 0))
-     (hud-open c)
-      (: why (peep c 'why "") to (hud-to c)
-         (? (0 < #why) (: _ (pin c 'note why) (soil c))
-            !(string? to) (: _ (pin c 'note "no session to talk to") (soil c))
-            (: _ (pins c 'typing 1 'to to 'note "") _ (say out (esc + "[?25h")) (soil c))))
-     ; typing: enter sends to the session named, tab names the next, esc goes back to looking
-     (hud-type c k)
-      (: e (c 'ed)
-         (? (k = 27) (: _ (pin c 'typing 0) _ (say out (esc + "[?25l")) (soil c))
-            (k = 3) (pin c 'over 1)
-            (k = 9) (: ps (hud-peers 0) i (index-of ps (c 'to))
-                       _ (? (two? ps) (pin c 'to (ps ((i + 1) % #ps))) 0)
-                       (soil c))
-            (: _ (edstep e k)
-               _ (? (e 'ev = 10)
-                    (: t (edtext e)
-                       (? (#t = 0) 0
-                          (: r (user-post (c 'to) t) _ (edclear e)
-                             (? (#r = 0) (hud-log c ((sgr "1" "you") + " → " + c 'to + ": ") t)
-                                (hud-log c "" (sgr "31" r))))))
-                    0)
-               (soil c))))
-     (hud-keys c)
-      (: k (edkey in)
-         _ (? (c 'typing) (hud-type c k)
-              (elem k [113 81 3 4 -7]) (pin c 'over 1)
-              (elem k [99 67 13 10]) (hud-open c)
-              (elem k [114 82]) (hud-read c)
-              (elem k [-9 106 6]) (: _ (pin c 'top (c 'top + (k = 6 ? (c 'rows // 2) 1))) (soil c))
-              (elem k [-8 107 2]) (: _ (pin c 'top (max 0 (c 'top - (k = 2 ? (c 'rows // 2) 1)))) (soil c))
-              0)
-         (? (c 'over) 0 (hud-keys c)))
-     (hud-swim c tick)
-      (: b (c 'dirt)
-         _ (? (peep b () 0) (: _ (pin b () 0) _ (say out (hud-frame c)) (flush out)) 0)
-         _ (? (tick % 16 = 0) (tide c) 0)
-         _ (? (tick % 30 = 0 && c 'mine) (hud-inbox c) 0)
-         _ (? ((0 < bee-qwatch ? bee-qwatch 20) * 1000 < clock 0 - c 'read) (hud-read c) 0)
-         _ (rest 33)
-         (? (c 'over) 0 (hud-swim c (tick + 1))))
-     (hud _)
-      (: c {'rows 24 'cols 80 'over 0 'top 0 'lines () 'read 0 'dirt {() 1}
-            'typing 0 'log () 'ed (ednew 0) 'note "" 'to () 'lead () 'why "" 'mine 0}
-         why (user-settle 0)
-         _ (pins c 'why why 'mine (#why = 0))
-         _ (hud-read c) _ (tide c)
-         _ (raw 1)
-         _ (say out (esc + "[?1049h" + esc + "[2J" + esc + "[?25l" + esc + "[22;0t" + esc + "]2;bee" + string 7))
-         _ (flush out)
-         up (twirl (\ _ (hud-keys c)) 0)
-         _ (hud-swim c 0)
-         _ (? (landed? up) 0 (freeze up))
-         _ (say out (esc + "[0m" + esc + "[?25h" + esc + "[?1049l" + title-off 0))
-         _ (flush out)
-         _ (raw 0)
-         _ (? (c 'mine) (user-card! "away") 0)
-         0)
 
      ; --- the door ---
      ; a prompt on the command line runs once, plainly; with none, a terminal gets the full
@@ -2926,6 +2409,33 @@
      (serve-first key f p)
       (? (0 < #p) (: _ (state! "busy") m (turn key f [(user p)]) _ (state! "idle") (serve key f (two? m ? m ())))
          (serve key f ()))
+     ; --- the core: this session as a screen sees it. mitty's chat and hud (src/apps/mitty/chat.l)
+     ; reach the model, the hive and the queues only through these doors ---
+     ; what a write or an edit would change -> [1 old new], [0 why] when it cannot; () for any other tool
+     (change name in)
+      (? !(valid? name in) ()
+         (name @ "edit_file" (: s (slurp-file (in "path")) e (edited s (in "old_text") (in "new_text"))
+                                (<e ? [1 s (e 1)] [0 (e 1)]))
+                 "write_file" (: s (slurp-file (in "path")) [1 (string? s ? s "") (in "content")])
+                 ()))
+     bee-core
+      {'me me 'cwd bee-cwd 'model bee-model 'api bee-api 'look bee-look 'qwatch bee-qwatch
+       'shell-name <bee-shell 'whoami whoami 'setting setting 'salt (\ k (peep bee-salt k ()))
+       'title-on title-on 'title-off title-off 'utc-minute utc-minute 'avatar avatar-cmd
+       ; the turn and its tools
+       'turn turn 'user user 'state! state! 'brief brief 'ask-lines ask-lines 'change change
+       'argv shell-argv 'shell-out shell-out 'reap reap
+       'halt (\ _ (? (bee-cc 'live) (cc-stop 0) 0))
+       ; under claude-code, the window of the model claude reports
+       'window (\ _ (? bee-cc? (: md (peep bee-cc 'model "") (starts? md "claude-haiku" ? 200000 1000000)) bee-window))
+       ; the hive
+       'take-mail take-mail 'mail-text mail-text 'self-tell self-tell 'unsettle unsettle
+       'on-news (\ f (pin bee-selfw 'tell f))
+       'watch watch 'lock-poll lock-poll
+       ; the user's card, the hud's
+       'user-settle user-settle 'user-card! user-card! 'user-mail user-mail 'user-post user-post
+       'peers hud-peers 'queues (\ _ (q-sections (lush-out bee-qcmd))) 'q-leader q-leader 'hud-lines hud-lines-of}
+     (chat nm) (cite 'chat nm)
      bee-flags ["-y" "--plain" "--serve" "--mcp" "--stage" "--chat" "--hud"]
      (bee-go as)
       (: key (getenv bee-key-env)
@@ -2942,7 +2452,7 @@
             (elem "--hud" as) (: _ (puts (foldl (\ a l (a + l + "\n")) "" (hud-lines 0))) 0)   ; once, as text
             ; a bare bee on a terminal is the hud; a model's chat is --chat
             (!pl && !sv && !(two? words) && !(elem "--chat" as) && !(elem "--stage" as) && two? (tty 1))
-             (hud 0)
+             (chat 'chat-hud bee-core)
             (two? words && elem <words ["--list" "--send" "--spawn" "--stop" "--avatar" "--resume" "--keygen" "--ticket" "--enrol" "--admit" "--enrolled" "--deliver" "--ledger" "--revoke" "--revocations" "--revoked"]) (bee-cli words yes)
             ; the api backend wants its endpoint, model and key; claude brings its own. a stage
             ; answers why as a string: a mitty shows it, stderr would land on its glass
@@ -2951,7 +2461,7 @@
                       (!bee-cc? && !bee-local? && !(string? key && 0 < #key)) ("set " + bee-key-env)
                       "")
                (? (0 < #why) (elem "--stage" as ? why (say err ("bee: " + why + "\n"), 1))
-                  (elem "--stage" as) (: _ (settle bee-branch) _ (pin bee-cc 'yes yes) (tstage key yes))
+                  (elem "--stage" as) (: _ (settle bee-branch) _ (pin bee-cc 'yes yes) (chat 'chat-stage bee-core key yes))
             ; settled for the run, so other sessions can find it and write to it
             (: _ (settle bee-branch)
                _ (pin bee-cc 'yes yes)
@@ -2959,7 +2469,7 @@
                r (? sv (serve-first key (plain yes) (: p (getenv "BEE_PROMPT")
                                                     (? (string? p && 0 < #p) p (two? words) (joinw words) "")))
                     (two? words) (: _ (state! "busy") _ (turn key (plain yes) [(user (joinw words))]) 0)
-                    (!pl && two? (tty 1)) (tui key yes)
+                    (!pl && two? (tty 1)) (chat 'chat-tui bee-core key yes)
                     (repl-go key (plain yes)))
                _ (? (bee-cc 'live) (cc-stop 0) 0)
                _ (unsettle 0)

@@ -71,6 +71,8 @@ While it is open, the hud holds the *user's card*, at the login's name (**USER**
 
 The full screen is also a pane: **(bee-main ["--stage"])**, called from love, settles a session and answers it as a stage for a **mitty**, so **love mitty** opens one beside its shells (**C-a b**). A stage that cannot start answers why as a string. Closing the pane ends the session's turn and leaves the hive.
 
+The chat and the hud are drawn by **src/apps/mitty/chat.l**, the avatars by **src/apps/mitty/avatar.l**. They reach the session through bee's *core*, a tablet of doors (**bee-core** in **src/apps/bee.l**): the turn and its tools, the session's card and inbox, the user's card, and the queues' lines.
+
 The system prompt tells the model where it is:
 
 - the date, the platform and, in a git repository, the branch, its status and recent commits;
