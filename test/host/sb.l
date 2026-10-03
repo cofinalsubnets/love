@@ -569,6 +569,82 @@
  (own = 'took) (again = 'again) (other = ()) (dead = 'took)
  (show old = show (sort [nb nm nwk])))
 
+
+; --- derive from a base: a set derived once is a base the rest folds onto, and the fold equals
+;     the whole replay on any set, from whichever base. a store of synthetic patches, three lines
+;     of work on twenty paths that take up each other's state now and then, so writes cross ---
+(: (dg-r i) ((i * 7919 + 13) * 104729 % 1000003)
+   (dg-tab t) (map (k \ [k (t k)]) (sort (keys t)))
+   (dg-all d ids) [(sort (d 'tips)) (dg-tab (d 'snap)) (dg-tab (d 'cf)) (dg-tab (d 'last))
+                   (dv-count d) (map (i \ dv-dep d i) ids)
+                   (map (p \ [p (sort (dv-hist d p))]) (sort (keys (d 'last))))]
+   (dg-same a b) (: ids (sort (keys (a 'mem) + keys (b 'mem))) (seq (dg-all a ids) (dg-all b ids)))
+   ; patch i on a line's state: path p rewritten over what it held, or deleted
+   (dg-patch i st p del)
+    (: e (peep st p ()) old (two? e ? <e)
+       nw (? (del && two? e) ()
+             (keep ("line " + show i + " of " + p + "\n" + (two? e ? <>(look (".sb/blob/" + old)) ""))))
+       pt (show ['patch ['note (show i)] ['time i] ('deps . (two? e ? [<>e] ())) ('hunks . [[p old nw]])])
+       pid (sha256 pt)
+       _ (lay (".sb/patch/" + pid) pt)
+       _ (? (string? nw) (pin st p [nw pid]) (pull st p 0))
+       pid)
+   (dg-store n np)
+    (: ls [{} {} {}]
+       (go i acc)
+        (? (n <= i) (rev acc)
+           (: r (dg-r i) st (ls (r % 3))
+              _ (? (i % 5 = 4) (: c (ls ((r // 3) % 3)) (map (k \ pin st k (c k)) (keys c))) ())
+              (go (i + 1) ((dg-patch i st ("p" + show ((r // 9) % np)) (r % 11 = 0)) . acc))))
+       (go 0 ()))
+   (dg-pick ps i k) (map (j \ ps (dg-r (i * 31 + j) % #ps)) ^k))
+
+(: _ (mkdir "mrg/v" 493) _ (chdir "mrg/v") _ (mk ())
+   dps (dg-store 300 20)
+   ; twelve trials: a base, then more on it, folded and replayed whole
+   dtr (map (t \ (: w1 (dg-pick dps t (t * 3)) w2 (dg-pick dps (t + 100) (t * t))
+                    inc (dv-derive1 (w1 + w2) (dv-derive1 w1 (dv-new 0)))
+                    full (dv-derive1 (w1 + w2) (dv-new 0))
+                    [(dg-same inc full) (inc 'refold)]))
+            ^12)
+   dsame (sb-all? (r \ <r) dtr)
+   dre #(filter (r \ 0 < r 1) dtr)
+   ; the cache round trip
+   dall (dv-derive1 (readdir ".sb/patch") (dv-new 0))
+   _ (dv-write dall)
+   dback (dv-read (dv-path (dall 'tips)))
+   dtrip (dg-same dall dback)
+   ; through the verbs: apply a set, take more, and the tree is the replay's
+   dw1 (dg-pick dps 7 3) dw2 (dg-pick dps 77 3)
+   _ (sb-apply dw1)
+   dkept (two? (stat (dv-path (head ()))))
+   _ (sb-take dw2)
+   dsnap (seq (snap ()) <(derive-snap (dw1 + dw2)))
+   dclean (0 = dirty ())
+   dbases #(filter (f \ #f = 64) (readdir ".sb/derive"))
+   _ (chdir "../.."))
+
+(test
+ dsame (0 < dre) (dre < 12)                ; equal every time, some paths folded again or none
+ dtrip dkept dsnap dclean (1 = dbases))
+
+
+; --- the bank's worth: over twenty thousand patches, a take onto the cached head folds only what
+;     it adds, so it costs a small part of the whole replay (a ratio: the box may be busy) ---
+(: _ (mkdir "mrg/b" 493) _ (chdir "mrg/b") _ (mk ())
+   _ (dg-store 20000 2000)
+   b0 (clock 0) _ (sb-apply []) b1 (clock 0)                ; no base: the whole replay
+   bpt (show ['patch ['note "w"] ['time 1] ['deps] ['hunks ["w0" () (keep "w\n")]]])
+   bpid (sha256 bpt) _ (lay (".sb/patch/" + bpid) bpt)
+   b2 (clock 0) _ (sb-take [bpid]) b3 (clock 0)
+   btook (elem bpid (head ()))
+   bsnap (seq (snap ()) <(derive-snap (readdir ".sb/patch")))
+   _ (chdir "../.."))
+
+(test
+ btook bsnap
+ ((b3 - b2) * 4 < b1 - b0))
+
 (chdir sb-home)
 (hark ["rm" "-rf" sb-dir])
 (puts "sb: ok", putc 10, 0)

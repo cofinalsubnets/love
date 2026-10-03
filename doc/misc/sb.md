@@ -35,6 +35,14 @@ tips. `record` grows the head by its patch, `apply` sets it, `take` grows it by 
 `.sb/lock`, a directory holding its holder's pid: its own process's again, a live other's
 waited on, a dead one's taken; `sync` holds the peer's as well.
 
+A set's tree is the fold of its patches ordered by depth (the longest dep chain beneath a
+patch), then id, each path on its own. A patch's key is its own, so a set derived once is a
+base: `.sb/derive/PSID` keeps the head's derive and the four newest banks', and a settle
+folds only what it adds onto the head's, or another kept one inside the set, reading those
+patches alone. A path the new work writes under a later base writer folds again from its own
+writers. The answer is the whole replay's, byte for byte; over 20,000 patches a take onto the
+head costs under a second.
+
 A hunk is `(path old new)`, each side the path's state: absent, its blob's hash, or the hash
 with an `x` after it when the owner's execute bit is set. So a chmod is a change like an edit,
 and lands as the bit: x wherever r, or no x at all. Sides merge three ways, the mode on its
