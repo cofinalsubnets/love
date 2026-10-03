@@ -6,7 +6,8 @@
 ; claude code sessions are MCP servers driven over stdio as claude would drive them. the
 ; scenario: join (the queue made on bee's standard header), a second join (the queue turns
 ; long), a fold, gating, a join and a fold refused, green, land by sha, the landing verified
-; and a release note, and a long queue by its heavy-lock waiters.
+; and a release note, and a long queue by its heavy-lock waiters. then a land on an sb ledger,
+; by psid.
 ;   cat test/00-init.l test/host/beeq.l | out/love
 (borrow 'json)
 (borrow 'locks)
@@ -413,6 +414,51 @@
       (n-told t2 = 1) (bq-in t2 ("bee was updated: " + exe + " was replaced")) (bq-in t2 "never mid-gate")
       (n-told t3 = 0)
       (n-told t4 = 1) (n-told t5 = 0))
+   0)
+
+
+; --- the queue on an sb ledger: a row's gated head is the psid of the set it gated, banked and
+; deposited in the hub. the land is refused while the hub lacks that set, the hub then takes it
+; and realizes exactly the gated set, and queue_landed moves the base line to its psid ---------
+(: w (bq-box 'mcp 'w) lq "queue/sbq" hub (w 'dir + "/hub") wa (w 'dir + "/wa") wb (w 'dir + "/wb")
+   (sb d as) (bq-out (hark ([bq-love "sb" "-C" d] + as)))
+   (put d f) (bq-put (d + "/" + f) (f + "\n"))
+   (calls nm cs)
+    (: f (w 'dir + "/" + nm + ".in")
+       _ (bq-put f (foldl (\ a c (a + json-show {"jsonrpc" "2.0" "id" <c "method" "tools/call"
+                                                "params" {"name" (c 1) "arguments" (pin (c 2) "queue" lq)}} + "\n"))
+                         "" cs))
+       r (bq-sh w ("env SB_HUB=" + bq-sq hub + " BEE_NAME=" + nm + " " + bq-sq bq-love + " " + bq-sq bq-app + " --mcp < " + bq-sq f))
+       (foldl (\ t l (: j (json-read l) (? (two? j) (pin t ((j 1) "id") ((j 1) "result" "content" 0 "text")) t)))
+              {} (filter (\ l (0 < #l)) (lines (r 1)))))
+   _ (map (\ d (mkdir d 493)) [hub wa wb])
+   _ (put hub "f") _ (sb hub ["record" "one"])
+   m (sb hub ["psid"])
+   _ (sb wa ["sync" hub]) _ (put wa "a") _ (hark ["mkdir" "-p" (wa + "/src/apps")]) _ (put wa "src/apps/bee.l")
+   _ (sb wa ["record" "a"])
+   _ (sb wb ["sync" hub]) _ (put wb "b") _ (sb wb ["record" "b"])
+   _ (sb wa ["sync" wb])                                          ; the union, gated in wa
+   _ (sb wa ["bank" "union"])
+   g (sb wa ["psid"])
+   a (calls "ant" [[1 "queue_row" {"state" "waiting" "branch" "union" "leader" "queen"}]
+                   [2 "queue_row" {"state" "green" "gated_on" m "gated_head" g}]
+                   [3 "queue_land" {}]])
+   _ (sb wa ["sync" "--keep" hub])                                ; deposited: the hub holds it
+   b (calls "ant" [[4 "queue_land" {}] [5 "queue_landed" {}]])
+   _ (sb hub ["take" g])
+   c (calls "ant" [[6 "queue_landed" {"release" "a and b are in"}]])
+   q (sb hub ["ledger" lq])
+   _ (test
+      (#m = 64) (#g = 64) (m != g)
+      (bq-in (a 1) "made queue/sbq on bee's standard header, led by queen")
+      (bq-in (a 3) ("the hub holds no set " + g))
+      (bq-in (b 4) ("sb -C " + hub + " take " + g)) (bq-in (b 4) ("psid   # must print " + g))
+      (bq-in (b 5) ("not the gated set " + g))
+      (bq-in (c 6) ("landed: row 1 left queue/sbq, whose base line is now sbq " + g + "."))
+      (bq-in (c 6) "this landing changed bee: every live session restarts")
+      (bq-in q "land by psid") (bq-in q ("\nsbq " + g + "\n")) !(bq-in q " ant ")
+      (sb hub ["psid"] = g)
+      (bq-get (hub + "/a") = "a\n") (bq-get (hub + "/b") = "b\n"))
    0)
 
 (hark ["rm" "-rf" bq-root])

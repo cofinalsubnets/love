@@ -22,6 +22,9 @@ this doc is the interface over it: *what you type*, not *what the objects are*.
 | **`undo ID [NOTE]`** | add the *inverse* patch — revert as growth, never deletion | revert | rollback-by-superset |
 | **`log`** | the patches, newest first (`*` marks a tip of the head); each ref with its psid | inspect | inspect |
 | **`ls`** | the head's paths | ls-files | inspect |
+| **`psid [SET]`** | the name of a set's state: the head's, or SET's | rev-parse | name a release |
+| **`paths A B`** | the paths two sets lay differently | diff --name-only | what an upgrade touches |
+| **`within A B`** | exit 0 when set A lies inside set B | merge-base --is-ancestor | is it newer |
 | **`diff`** | working tree vs the recorded state (unified; exit 1 on change) | inspect | inspect |
 | **`ledger NAME ..`** | a named value that moves only by compare-and-swap, every entry kept | a ref moved by `update-ref NEW OLD` | the shared queue sessions coordinate by |
 
@@ -35,13 +38,16 @@ tips. `record` grows the head by its patch, `apply` sets it, `take` grows it by 
 `.sb/lock`, a directory holding its holder's pid: its own process's again, a live other's
 waited on, a dead one's taken; `sync` holds the peer's as well.
 
+A verb that takes a set names it by a ref, a patch (by id or prefix, its deps with it), a
+psid the nest knows (a ref's, the head's, or a kept derive's), or `head`.
+
 A set's tree is the fold of its patches ordered by depth (the longest dep chain beneath a
 patch), then id, each path on its own. A patch's key is its own, so a set derived once is a
-base: `.sb/derive/PSID` keeps the head's derive and the four newest banks', and a settle
-folds only what it adds onto the head's, or another kept one inside the set, reading those
-patches alone. A path the new work writes under a later base writer folds again from its own
-writers. The answer is the whole replay's, byte for byte; over 20,000 patches a take onto the
-head costs under a second.
+base: `.sb/derive/PSID` keeps the head's derive, the one before it and the four newest banks',
+and a settle folds only what it adds onto the head's, or another kept one inside the set,
+reading those patches alone. A path the new work writes under a later base writer folds again
+from its own writers. The answer is the whole replay's, byte for byte; over 20,000 patches a
+take onto the head costs under a second.
 
 A hunk is `(path old new)`, each side the path's state: absent, its blob's hash, or the hash
 with an `x` after it when the owner's execute bit is set. So a chmod is a change like an edit,

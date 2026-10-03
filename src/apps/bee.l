@@ -203,18 +203,20 @@
               "pre_drop" (prop "the pre line to drop, counting from 1")
               "base" (prop "the new sha for the base line")}
              ["queue"])
-       (tool "queue_land" ("Land by sha, on a git queue: for your green row at its head, check that the base branch "
-                           + "is where the base line says and that git merge-tree of it and your gated head gives "
-                           + "the gated tree, and answer the exact commands to land it with the sha and tree each "
-                           + "must print. It changes nothing.")
-             {"queue" (prop "refs/queue/NAME") "session" (prop "the row's session, when not yours")}
+       (tool "queue_land" ("Land by sha (git) or psid (sb): for your green row at its head, check that the base "
+                           + "is where the base line says and that landing your gated head gives the gated tree -- "
+                           + "git merge-tree of the base and the head, or the hub's head inside the gated set -- and "
+                           + "answer the exact commands to land it with what each must print. It changes nothing.")
+             {"queue" (prop "refs/queue/NAME for git, or queue/NAME for an sb ledger in the hub")
+              "session" (prop "the row's session, when not yours")}
              ["queue"])
-       (tool "queue_landed" ("After a landing on a git queue: find the merge of your gated head with the gated tree on "
-                             + "the base branch's first-parent line since the base line, then drop your row and the "
-                             + "rows folded into it and move the base line to that merge. release, when given, goes "
+       (tool "queue_landed" ("After a landing: on git, find the merge of your gated head with the gated tree on "
+                             + "the base branch's first-parent line since the base line; on sb, check the hub's head is "
+                             + "the gated set. Then drop your row and the rows folded into it and move the base line "
+                             + "to the landing. release, when given, goes "
                              + "to the next rows' sessions as the release note; relay it to any the answer says it "
                              + "could not reach.")
-             {"queue" (prop "refs/queue/NAME")
+             {"queue" (prop "refs/queue/NAME for git, or queue/NAME for an sb ledger in the hub")
               "release" (prop "what the merge removes, renames or moves, for the rows behind")
               "session" (prop "leader only: the row's session, when not yours")}
              ["queue"])])
@@ -775,6 +777,9 @@
      (chomp s) (: n #s (? (0 < n && s (n - 1) = 10) (snip s 0 (n - 1)) s))
      (q-git? q) (starts? q "refs/queue/")
      (q-hub _) (: h (getenv "SB_HUB") (? (string? h && 0 < #h) h "."))
+     (q-sb a) (lush-out ("sb -C " + sq (q-hub 0) + " " + a))
+     ; the hub's psid for a set (a psid, a ref, or head), "" when it has none
+     (q-psid x) (: s (chomp (q-sb ("psid " + sq x + " 2>/dev/null"))) (? (#s = 64) s ""))
      ; [id text], id "none" for a queue not made yet
      (q-read q)
       (? (q-git? q)
@@ -802,7 +807,7 @@
      (git-tree x) (git1 ("rev-parse --verify -q " + sq (x + "^{tree}")))
      ; the base line a new queue starts from: the branch it is named for, at its sha
      (q-base-of q)
-      (: nm (q-short q) s (? (q-git? q) (git1 ("rev-parse --short --verify -q " + sq ("refs/heads/" + nm))) "")
+      (: nm (q-short q) s (? (q-git? q) (git1 ("rev-parse --short --verify -q " + sq ("refs/heads/" + nm))) (q-psid "head"))
          [nm (0 < #s ? s "-")])
      ; bee's standard protocol, laid as the header of a queue it makes. a queue outlives the bee
      ; that made it, so its header says the rules itself; doc/bee.md says them at length
@@ -822,11 +827,18 @@
         "# a row says what is true: gating, with its head, before the gate starts; green only when every lane passed on"
         "#   that head; waiting only when nothing runs. lanes follow the files touched; the slow lane runs last, on the"
         "#   exact tree that lands."
-        "# land by sha: the green head lands its gated head, git merge --no-ff SHA, only when merge-tree of the base and"
-        "#   SHA gives SHA's own tree (queue_land answers the commands, with the sha and tree each must print); after it"
-        "#   a merge of SHA on the base's first-parent line since the base line must have the gated tree (queue_landed"
-        "#   checks, drops the row and the rows folded into it, and moves the base line to that merge). the lander sends"
-        "#   the next rows a release note naming what the merge removes, renames or moves."
+        (? (q-git? q)
+           (paras ["# land by sha: the green head lands its gated head, git merge --no-ff SHA, only when merge-tree of the base and"
+                   "#   SHA gives SHA's own tree (queue_land answers the commands, with the sha and tree each must print); after it"
+                   "#   a merge of SHA on the base's first-parent line since the base line must have the gated tree (queue_landed"
+                   "#   checks, drops the row and the rows folded into it, and moves the base line to that merge). the lander sends"
+                   "#   the next rows a release note naming what the merge removes, renames or moves."])
+           (paras ["# land by psid: a row's gated head is the psid of the patch set it gated, banked and deposited in the hub"
+                   "#   (sb bank NAME; sb sync --keep HUB). the green head lands it, sb -C HUB take PSID, only when the hub's head"
+                   "#   is the base line and lies inside that set, so the hub then realizes exactly the set that was gated"
+                   "#   (queue_land answers the command and the psid it must print; queue_landed checks the hub's head, drops"
+                   "#   the row and the rows folded into it, and moves the base line to it). the lander sends the next rows a"
+                   "#   release note naming what the landing removes, renames or moves."]))
         "# leader: the leader line names the one session that keeps the queue. only the leader edits another's row, the"
         "#   base, sync and pre lines: it writes a row for a session that cannot, places a join by when it was asked"
         "#   for, drops a gone session's row and re-gates the ones behind, corrects a row that no longer matches its"
@@ -848,7 +860,8 @@
         "# restart: after a landing that changes bee, every live session restarts at its next convenient point --"
         "#   between tasks, never mid-gate -- in the same directory, so .mcp.json loads the new bee."
         "# line: <position> <session> <branch> <gated-on> <gated-head> <state>  # note"
-        "#   gated-on: the base's sha for the head, else the row above's gated-head; state waiting|gating|green|folded-into-N"
+        (? (q-git? q) "#   gated-on: the base's sha for the head, else the row above's gated-head; state waiting|gating|green|folded-into-N"
+           "#   gated-on: the base's psid for the head, else the row above's gated-head; state waiting|gating|green|folded-into-N")
         ("leader " + lead)
         (<base + " " + base 1)])
      ; the rows of a text, and what they say
@@ -1091,8 +1104,7 @@
      ; the row a land tool acts on -> [pos row base] or why not
      (q-landing q who rows text)
       (: p (q-own rows who) r (? p (rows p) ()) base (q-base-line text) h (q-head rows)
-         (? !(q-git? q) "land by sha is git's: on sb, the patch set that lands is exactly the set that was gated"
-            !(two? (keys rows)) ("no rows in " + q)
+         (? !(two? (keys rows)) ("no rows in " + q)
             !p ("no row for " + who + " in " + q)
             (r 5 != "green") ("row " + p + " is " + r 5 + ": only a green row lands")
             (h != p) ("row " + h + " is ahead of row " + p + ": the head lands first")
@@ -1104,9 +1116,10 @@
          rd (q-read q) text (rd 1) rows (q-rows text)
          l (? (<rd = "none") ("no queue " + q) (q-landing q who rows text))
          (? (string? l) [0 l]
-            (: p <l r (l 1) br <(l 2) was (l 2 1)
-               cur (git-sha br) g (git-sha (r 4)) gt (git-tree g) mt (q-merge-tree br g)
-               fs (q-folds rows p) wt (q-checkout br)
+            (: p <l r (l 1) br <(l 2) was (l 2 1) fs (q-folds rows p)
+               (? !(q-git? q) (q-land-sb who p (r 4) was fs)
+               (: cur (git-sha br) g (git-sha (r 4)) gt (git-tree g) mt (q-merge-tree br g)
+               wt (q-checkout br)
                (? (#cur = 0) [0 ("no branch " + br + " here")]
                   !(starts? cur was)
                    [0 (br + " is at " + cur + " but the queue's base line says " + was
@@ -1124,7 +1137,43 @@
                        "  git status --short   # must print no one's uncommitted edits"
                        ("  git merge --no-ff " + g + " -m " + sq ("Merge queue row " + p + " (" + who + ")"))
                        ("  git rev-parse 'HEAD^{tree}'   # must print " + gt)
-                       "then the project's fast gate there, and queue_landed, which checks the landed tree and drops the row and the rows folded into it."])]))))
+                       "then the project's fast gate there, and queue_landed, which checks the landed tree and drops the row and the rows folded into it."])]))))))
+     ; --- land by psid, on sb: the hub takes the gated set when its head is the base and lies
+     ; inside it, so the hub then realizes exactly the set that was gated ---
+     (q-land-sb who p g was fs)
+      (: hub (q-hub 0) cur (q-psid "head") gp (q-psid g)
+         (? (#cur = 0) [0 ("no nest at " + hub + ": SB_HUB names the hub")]
+            !(starts? cur was)
+             [0 ("the hub's head is " + cur + " but the queue's base line says " + was
+                 + ": the leader sets the base line before anyone lands")]
+            (gp != g)
+             [0 ("the hub holds no set " + g + ": bank it and deposit it from the nest that gated it, "
+                 + "sb bank NAME and sb sync --keep " + hub)]
+            (q-sb ("within head " + sq g + " && echo yes") @ o (find o "yes" 0 < 0))
+             [0 ("the hub's head " + cur + " is not inside " + g + ": restack on the base and re-gate")]
+            [1 (paras
+                [("row " + p + " (" + who + (two? fs ? (", with row" + (#fs = 1 ? " " "s ") + q-joins fs + " folded in") "")
+                  + ") lands: the hub's head at " + cur + " grows to its gated set, " + g + ", which it lies inside.")
+                 ("  sb -C " + hub + " take " + g)
+                 ("  sb -C " + hub + " psid   # must print " + g)
+                 "then queue_landed, which checks the hub's head and drops the row and the rows folded into it."])]))
+     ; a landing checked: [the new base line's id, the bee files it changed] or why not
+     (q-landed-git br was g0)
+      (: from (git-sha was) g (git-sha g0) gt (git-tree g)
+         at (? (#g = 0) "" (q-landed-at br from g gt))
+         (? (#g = 0) ("no commit " + g0 + " here")
+            !(q-on? g br) ("the gated head " + g + " is not on " + br + ": land it first, as queue_land says")
+            (#at = 0)
+             ("no commit on " + br + "'s first-parent line" + (0 < #from ? (" since " + was) "")
+              + " merges " + g + " with the gated tree " + gt + ", and the tip's tree is " + git-tree br
+              + ": the row stays; tell the leader")
+            [(git1 ("rev-parse --short " + sq at))
+             (? (0 < #from) (git1 ("diff --name-only " + from + " " + at + " -- " + bee-served)) "")]))
+     (q-landed-sb was g)
+      (: cur (q-psid "head")
+         (? (cur != g) ("the hub's head is " + (0 < #cur ? cur "unreadable") + ", not the gated set " + g
+                        + ": land it first, as queue_land says")
+            [g (: ws (words bee-served) (q-joins (filter (\ x (elem x ws)) (lines (q-sb ("paths " + sq was + " " + sq g + " 2>/dev/null"))))))]))
      (queue-landed in) (q-check in queue-landed1)
      (queue-landed1 in)
       (: q (in "queue") i (me 0) who (field in "session" i) rel (field in "release" "")
@@ -1133,17 +1182,12 @@
              l (? (old = "none") ("no queue " + q) (who != i && lead != i) ("only the leader, " + lead + ", lands another's row")
                   (q-landing q who rows text))
              (? (string? l) [0 l]
-                (: p <l r (l 1) br <(l 2) from (git-sha (l 2 1)) g (git-sha (r 4)) gt (git-tree g)
-                   at (? (#g = 0) "" (q-landed-at br from g gt))
-                   (? (#g = 0) [0 ("no commit " + r 4 + " here")]
-                      !(q-on? g br) [0 ("the gated head " + g + " is not on " + br + ": land it first, as queue_land says")]
-                      (#at = 0)
-                       [0 ("no commit on " + br + "'s first-parent line" + (0 < #from ? (" since " + l 2 1) "")
-                           + " merges " + g + " with the gated tree " + gt + ", and the tip's tree is " + git-tree br
-                           + ": the row stays; tell the leader")]
-                      (: gone (p . q-folds rows p) short (git1 ("rev-parse --short " + sq at))
+                (: p <l r (l 1) br <(l 2)
+                   lk (? (q-git? q) (q-landed-git br (l 2 1) (r 4)) (q-landed-sb (l 2 1) (r 4)))
+                   (? (string? lk) [0 lk]
+                      (: gone (p . q-folds rows p) short <lk
                          ; a landing that changes bee's served code ends the note with the restart line
-                         bz (? (0 < #from) (git1 ("diff --name-only " + from + " " + at + " -- " + bee-served)) "")
+                         bz (lk 1)
                          rn (? (#bz = 0) rel (0 < #rel) (rel + " " + bee-landed) bee-landed)
                          t2 <(q-base (paras (filter (\ l !(q-row? l && elem <(words l) gone)) (lines text))) short)
                          (? (q-put q old t2)

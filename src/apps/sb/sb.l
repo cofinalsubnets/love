@@ -290,7 +290,7 @@
        (go cfs 0))
    ; the tree moved to realize the set want closes over, which becomes the head: (n nf cfs)
    (settle want)
-    (: d (dv-derive want)
+    (: was (psid (head ())) d (dv-derive want)
        oldsnap (snap ())
        sn (d 'snap) cf (d 'cf)
        newsnap (map (p \ (: e (sn p) [p <e <>e])) (sort (keys sn)))
@@ -301,7 +301,7 @@
        _ (lay ".sb/head" (ids-text (sort (d 'tips))))
        _ (lay ".sb/snap" (show newsnap))
        _ (dv-write d)
-       _ (dv-prune (d 'tips))
+       _ (dv-prune (d 'tips) was)
        nf (mater oldsnap newsnap)
        [(dv-count d) nf cfs])
    (derive-snap ids)                                          ; the full fold -> (snap conflicts)
@@ -316,7 +316,7 @@
    ;     writes after the base's last writer of it takes the rest's hunks, and a path it writes
    ;     under one folds again from its writers. .sb/derive/PSID keeps a derived set: its tips,
    ;     members and depths, snap, conflicts, and each path's last writer and writers, a line
-   ;     apiece; settle keeps the head's and the newest four banks' ---
+   ;     apiece; settle keeps the head's, the one before it and the newest four banks' ---
    (dv-new _) {'tips () 'n 0 'raw "" 'probes 0 'mem {} 'add {} 'snap {} 'cf {} 'last {} 'hist {} 'new {} 'refold 0}
    (dv-num s) (foldl (\ a i (a * 10 + s i - 48)) 0 ^#s)
    (dv-path tp) (".sb/derive/" + psid tp)
@@ -370,9 +370,9 @@
        p (dv-path (d 'tips))
        _ (mkdir ".sb/derive" 493)
        (lay (p + ".new") s && !(nom? (rename (p + ".new") p))))
-   (dv-prune tp)                                              ; keep the head's and four banks'
+   (dv-prune tp was)                                          ; keep the head's, the last one's, four banks'
     (: rs (sort (map (r \ [<>>r <>r]) (refs ())))            ; (time tips), oldest first
-       ks ((psid tp) . map (r \ psid <>r) (drop (max 0 (#rs - 4)) rs))
+       ks ((psid tp) . was . map (r \ psid <>r) (drop (max 0 (#rs - 4)) rs))
        (map (f \ (? (#f = 64 && !(elem f ks)) (unlink (".sb/derive/" + f)) ()))
             (readdir ".sb/derive")))
    ; the bases to try: the head's, then any other kept, at most two
@@ -605,7 +605,29 @@
           (atom? hits) (say err ("sb: no ref or patch matches " + pfx + "\n"), ())
           (say err ("sb: " + show #hits + " patches match " + pfx + "\n"), ())))
    (idsof a)                                                     ; a ref -> its whole tip set;
-    (refof a @ r (two? r ? r (idpfx a @ i (i ? [i]))))
+    (refof a @ r (? (two? r) r
+                    (a = "head") (head ())
+                    (sb-hex? a && !(two? (stat (".sb/patch/" + a)))) (psid-ids a)
+                    (idpfx a @ i (i ? [i]))))
+   ; a set by its psid: a ref's, the head's, or a kept derive's
+   (psid-ids s)
+    (: r (filter (e \ psid <>e = s) (refs ()))
+       (? (two? r) <><r
+          (s = psid (head ())) (head ())
+          (: d (dv-read (".sb/derive/" + s))
+             (? (tablet? d) (d 'tips) (say err ("sb: no set " + s + " here\n"), ())))))
+   ; --- psid: the name of a set -- the head's, or a named one's; paths: the paths two sets'
+   ;     trees differ on; within: whether one set lies inside another ---
+   (sb-psid args)
+    (: ts (? (two? args) (idsof <args) (head ()))
+       (? (two? args && atom? ts) 0 (: _ (puts (psid ts + "\n")) 1)))
+   (sb-paths a b)
+    (: sa ((dv-derive (idsof a)) 'snap) sb ((dv-derive (idsof b)) 'snap) u {}
+       _ (map (p \ pin u p 1) (keys sa + keys sb))
+       ps (sort (filter (p \ <(sa p) != <(sb p)) (keys u)))
+       _ (map (p \ puts (p + "\n")) ps)
+       #ps)
+   (sb-within a b) (: d (dv-derive (idsof b)) (sb-all? (t \ 0 <= dv-dep d t) (idsof a)))
    (sb-apply args)
     (mk (),
      (? (0 < dirty ())
@@ -805,6 +827,10 @@ usage: sb VERB ..
   take ID..       grow the HEAD by a set (a ref, or patches by prefix, with
                   their deps) and lay the tree: what a hub does to land work
   ls              the head's paths
+  psid [SET]      the name of a set's state: the head's, or SET's (a ref, a
+                  patch, a psid, or head)
+  paths A B       the paths sets A and B lay differently, a line each
+  within A B      exit 0 when set A lies inside set B
   apply [ID..]    make the HEAD a dep-consistent SUBSET, laid in the tree (an ID
                   may be a prefix; its deps come along). checkout and cherry-pick
                   are one act here. no ID realizes the whole store -- the way back
@@ -841,6 +867,9 @@ usage: sb VERB ..
            "undo" (atom? >as ? (usage ()) !(held "." (_ \ sb-undo >as)))
            "log" (sb-log (), 0)
            "ls" (sb-ls (), 0)
+           "psid" !(sb-psid >as)
+           "paths" (#>as = 2 ? (: _ (sb-paths <>as <>>as) 0) (usage ()))
+           "within" (#>as = 2 ? !(sb-within <>as <>>as) (usage ()))
            "diff" (0 < sb-diff ())
            (usage ()))))
 
