@@ -93,17 +93,26 @@
  (sky-cloud wx dx dy dz ex ez sim) (: mp (sky-maps ()) d (deck-at dx dy dz ex ez sim)
    (: c (sat (0.5 + (thick mp (d 0) (d 1) sim 0.3 - edge wx sim 0.3) * 10.0))
       (wx 'cover = 3 ? (max c 0.93) c)))
+ ; the cloud over the sun as the light under it feels it: rays over a patch round it, each
+ ; with a soft edge, so a passing cloud thins the light and gives it back over a while --
+ ; low down, where one ray sweeps the deck fast, most of all
+ sun-ring (cat [[0.0 0.0]] (map (k \ (: a (k * pi / 6.0) [(cos a) (sin a)])) ^12))
+ (sun-cloud wx s sim) (: mp (sky-maps ()) r 0.05
+   (one o) (: d (deck-at (s 0 + r * o 0) (s 1) (s 2 + r * o 1) 0.0 0.0 sim)
+              c (sat (0.5 + (thick mp (d 0) (d 1) sim 0.3 - edge wx sim 0.3) * 3.0))   ; a soft edge
+              (wx 'cover = 3 ? (max c 0.93) c))
+   (net (map one sun-ring) / #sun-ring))
  ; the light of the sun s under the weather: its colour and strength, the share of it
  ; the cloud over it lets through, how much day and twilight there is, the sky's light on
  ; what it sees -- greyer the more cloud -- and the eye's gain against the dark
  (sky-light s wx sim) (: sy (s 1)
    oc (sky-cover wx sim)
-   csun (s 1 <= 0.0 ? 0.0 (sky-cloud wx (s 0) (s 1) (s 2) 0.0 0.0 sim))
+   csun (s 1 <= 0.0 ? 0.0 (sun-cloud wx s sim))
    day (sat ((sy + 0.06) / 0.3))
    tw (sat (1.0 - mag (sy + 0.03) / 0.2) * (1.0 - 0.7 * oc))
    ; ..rain or snow takes the most of the sun, and rain the light's edge besides
    f (sky-fall wx)
-   sunk (sat ((sy + 0.005) / 0.05) * (1.0 - 0.9 * csun) * (f = 0 ? 1.0 0.3))
+   sunk (sat ((sy + 0.005) / 0.05) * (1.0 - 0.75 * csun) * (f = 0 ? 1.0 0.3))
    sunc (cmix [1.0 0.4 0.1] [1.0 0.93 0.82] (sat ((sy - 0.04) / 0.4) @ k (k * k * (3.0 - 2.0 * k))))
    night [0.05 0.055 0.075]
    amb0 (c+ (cmix night [0.42 0.47 0.56] day) (c* (tw * (1.0 - 0.5 * day)) [0.1 0.05 0.07]))
