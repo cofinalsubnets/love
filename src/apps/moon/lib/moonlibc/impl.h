@@ -630,10 +630,11 @@ void __semit(void *ctx, int c);
  * the stream table is named by whoever opens one. */
 extern FILE __stdf[3];
 extern unsigned char __obuf[8192];
-/* threads (proc/pthread.c): __ai_threads is set once a second thread exists, and the allocator
- * locks from then on. sys.o's clone leaf starts the child on its own stack, calling sp[0](sp[1]);
- * __ai_tp (a64, rv64) reads the thread pointer clone set to the thread's record */
-extern int __ai_threads;
+/* threads (proc/pthread.c): the process's thread state lives in mem/free.c (see there).
+ * sys.o's clone leaf starts the child on its own stack, calling sp[0](sp[1]); __ai_tp (a64,
+ * rv64) reads the thread pointer clone set to the thread's record */
+struct __ai_mt { int threads, lock; };
+extern struct __ai_mt __ai_mt;
 long __ai_clone(long flags, void *sp, int *ptid, int *ctid, void *tls);
 void *__ai_tp(void);
 extern unsigned char __ibuf[4096];

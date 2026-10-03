@@ -10,11 +10,12 @@
 
 static __mhdr __mbase;
 static __mhdr *__mfree;
-/* one lock over the arena, taken only once pthread_create has made a second thread */
-int __ai_threads;
-static int __mlock;
-static void __mtake(void) { if (__ai_threads) while (__sync_lock_test_and_set(&__mlock, 1)) sc0(NR_sched_yield); }
-static void __mgive(void) { if (__ai_threads) __sync_lock_release(&__mlock); }
+/* the process's thread state, the one place threads keep any: whether a second thread exists
+ * (pthread_create sets it, nothing clears it) and the arena lock that switches on with it. here
+ * rather than beside pthread_create so a link that allocates never pulls the thread member */
+struct __ai_mt __ai_mt;
+static void __mtake(void) { if (__ai_mt.threads) while (__sync_lock_test_and_set(&__ai_mt.lock, 1)) sc0(NR_sched_yield); }
+static void __mgive(void) { if (__ai_mt.threads) __sync_lock_release(&__ai_mt.lock); }
 static void __mput(__mhdr *b) {                        /* the arena's own free, lock held */
   __mhdr *q = __mfree;
   for (; !(b > q && b < q->next); q = q->next)
