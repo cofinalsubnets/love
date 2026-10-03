@@ -288,13 +288,15 @@
    (seed-os _) (elem 'love-os (names ()) && ev 'love-os @ n
                   (nom? n && !(elem n '(linux freebsd netbsd)) ? 'linux ()))
 
-   (seed-usage _) (puts $
-    "usage: love seed [-g] [ARCH] [DIR]\n" +
-    "  lay this binary's source under DIR (default .) and rebuild it there;\n" +
-    "  the result has to BE this binary, byte for byte.\n" +
-    "  ARCH    x64 | a64 | rv64 -- an egg for that machine instead\n" +
-    "  -g      gregarious: the ambient cc and tools build, ours fill the gaps.\n" +
-    "          without it ours go throughout, whatever PATH holds\n")
+   (seed-usage _) (puts """
+    usage: love seed [-g] [ARCH] [DIR]
+      lay this binary's source under DIR (default .) and rebuild it there;
+      the result has to BE this binary, byte for byte.
+      ARCH    x64 | a64 | rv64 -- an egg for that machine instead
+      -g      gregarious: the ambient cc and tools build, ours fill the gaps.
+              without it ours go throughout, whatever PATH holds
+
+    """)
 
    (seed-lay as0)
     (: _ (two? as0 && src-help? <as0 ? (seed-usage 0, quit 0))

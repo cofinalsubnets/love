@@ -3742,18 +3742,21 @@
                                     (d @ (a . u)) (ev 'ev (atom? u ? a d)))   ; many datums fold to one application
                v-msg ("love " + love-version + "\n")   ; _ arg: love has no nullary calls
                h-msg
-               ("usage: love [wake IMAGE] [-l FILE] [-e EXPR] [-q] [-m SIZE] [-v] [-h] [--] [VERB|FILE] [ARG ...]\n" +
-                "  -l, --load FILE   preload FILE (read-eval) before the program\n" +
-                "  -e, --eval EXPR   eval EXPR as one expression (infix works), print the answer\n" +
-                "  -q, --quiet       with -e: do not print the answer\n" +
-                "  -m  --memory N    max heap in {k,m,g} default = 0m = unlimited\n" +
-                "  -v, --version     print the version\n" +
-                "  -h, --help        print this help\n" +
-                "  --                end of options; the rest are files, and none of them is stdin\n" +
-                "the short flags cluster -- `-qe EXPR` is `-q -e EXPR` -- and a letter taking an\n" +
-                "argument ends the chain, on the rest of its word (-m8m) or the next one\n" +
-                "with no arguments then start a repl if on a tty else eval expressions from stdin\n" +
-                "try `love verbs` to see a list of commands\n")
+               """
+               usage: love [wake IMAGE] [-l FILE] [-e EXPR] [-q] [-m SIZE] [-v] [-h] [--] [VERB|FILE] [ARG ...]
+                 -l, --load FILE   preload FILE (read-eval) before the program
+                 -e, --eval EXPR   eval EXPR as one expression (infix works), print the answer
+                 -q, --quiet       with -e: do not print the answer
+                 -m  --memory N    max heap in {k,m,g} default = 0m = unlimited
+                 -v, --version     print the version
+                 -h, --help        print this help
+                 --                end of options; the rest are files, and none of them is stdin
+               the short flags cluster -- `-qe EXPR` is `-q -e EXPR` -- and a letter taking an
+               argument ends the chain, on the rest of its word (-m8m) or the next one
+               with no arguments then start a repl if on a tty else eval expressions from stdin
+               try `love verbs` to see a list of commands
+
+               """
                (need h '()) (say err $ "love: " + h + " needs an argument\n", cli-leave 2)
                K 1024 M 1048576 G 1073741824
                wordsz (charm? G ? 8 4)             ; 2^30 is a charm only where a fixnum is 62-bit

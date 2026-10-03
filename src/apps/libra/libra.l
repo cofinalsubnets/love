@@ -152,13 +152,15 @@
 
    ; above its reader: only lambda-to-lambda recursion resolves lazily, so a
    ; closure over a later non-lambda binding of this `:` raises missing usage at load.
-   ; an infix chain, not (+ a b c) -- three operands is application, ((+ a b) c)
-   usage ("usage: libra [check] FILE ..   balance: path:line:col: on err, quiet when\n"
-          + "                               clean, exit 1. THE DEFAULT.\n"
-          + "       libra doc FILE ..      the file's HEADER as a document, on stdout\n"
-          + "                              markdown by default; -ht for html, -rf for man\n"
-          + "  config: ~/.love/etc/libra.l, then ./.libra.l over it -- (singleton 0),\n"
-          + "          (deprecated old (worse \"use better\")). doc/misc/libra.md\n")
+   usage """
+    usage: libra [check] FILE ..   balance: path:line:col: on err, quiet when
+                                   clean, exit 1. THE DEFAULT.
+           libra doc FILE ..      the file's HEADER as a document, on stdout
+                                  markdown by default; -ht for html, -rf for man
+      config: ~/.love/etc/libra.l, then ./.libra.l over it -- (singleton 0),
+              (deprecated old (worse "use better")). doc/misc/libra.md
+
+    """
 
    libra-help ("libra ⚖ -- the .l balance tool.\n" + usage)
    ; the config is read once, here, and handed down -- never re-read per file

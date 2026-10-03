@@ -1254,16 +1254,18 @@
    ; would find that very file. everywhere else, and always with -f, a positional is a recipe.
    (bye s) (puts s, putc 10, flush out, uleave 0)
    (version _) (bye (uvers "cook"))
-   (usage _) (bye ("usage: cook [-C DIR] [-f FILE] [-j [N]] [--emit] [-v] [-h] [VAR=VAL ...] [RECIPE ...]\n"
-                   + "  -C, --directory DIR  cook in DIR\n"
-                   + "  -f, --file FILE   the build file (Makefile or Cookfile); else discovered\n"
-                   + "  -j, --jobs [N]    run up to N recipes at once (default 1; bare -j = this machine)\n"
-                   + "      --emit        transpile a Makefile to a resolved Cookfile, then exit\n"
-                   + "  -v, --version     print the version and exit\n"
-                   + "  -h, --help        print this help and exit\n"
-                   + "  VAR=VAL           a command-line variable (silences the file's assignments)\n"
-                   + "  RECIPE ...        the items to build (default: the first recipe declared)\n"
-                   + "a Makefile (Makefile/makefile/GNUmakefile/*.mk) is imported and cooked; any other build file is a Cookfile of ordinary love source."))
+   (usage _) (bye """
+    usage: cook [-C DIR] [-f FILE] [-j [N]] [--emit] [-v] [-h] [VAR=VAL ...] [RECIPE ...]
+      -C, --directory DIR  cook in DIR
+      -f, --file FILE   the build file (Makefile or Cookfile); else discovered
+      -j, --jobs [N]    run up to N recipes at once (default 1; bare -j = this machine)
+          --emit        transpile a Makefile to a resolved Cookfile, then exit
+      -v, --version     print the version and exit
+      -h, --help        print this help and exit
+      VAR=VAL           a command-line variable (silences the file's assignments)
+      RECIPE ...        the items to build (default: the first recipe declared)
+    a Makefile (Makefile/makefile/GNUmakefile/*.mk) is imported and cooked; any other build file is a Cookfile of ordinary love source.
+    """)
    (need-arg h r) (two? r ? 0 (udie 2 ("cook: " + h + " needs an argument")))
    ; is this word the count, or the next argument? all digits and at least one.
    (jobword? w)
