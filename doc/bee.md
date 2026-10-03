@@ -49,6 +49,10 @@ bee - a coding agent in the terminal, and the protocol its sessions talk by
 
 **love bee --nest** *dir*
 
+**love bee --node**
+
+**love bee --door** \[*key* ...\]
+
 **love bee -s** \| **--screensaver** \[*name*\]
 
 # DESCRIPTION
@@ -237,6 +241,25 @@ A queue lives in one box's hub, and the others reach it as **queue/***name***@**
 
 A key is revoked on the root's box: **love bee --revoke** *pub* or *name*, a name being a box admitted there. It writes **revoked** again, the lineage, a **serial** one higher and a **revoked** *pub* line for each key, signed by the root, and carries it by **(relay** ...**)** to **bee --revocations** on every box in **boxes**, saying which took it. A box keeps a list only when its root signed it and its serial is higher than the one it has; **--revocations** takes one on standard input, and **--revoked** prints this box's. Every check of a chain refuses a card whose key, or whose signer's key, is listed: mail is set aside, **--deliver** and **--ledger** refuse, **--admit** will not admit the key again, and a session's own card is not signed again. The root itself is not revoked; a lineage whose root is lost is made anew.
 
+# NEW NODE
+
+A *node* is a box that works on a queue whose hub another box keeps: it has a nest made from that hub, sends its patch sets there, and writes its rows there, all through the hub box's *door*. **love bee --node** checks a box in order and says the first step it lacks, with what to run; run it again after each step until it says the box is a node.
+
+On the hub's box, **(hub** *path***)** in **~/.love/etc/bee.l** names the hub nest (**SB_HUB** still wins where it is set). The door is what another box's key may run there, held to it by sshd: **love bee --door** *key* prints the **authorized_keys** line for a public key, **command="env HOME=***home* *love* **bee --door",restrict** *key*, and its owner appends it. sshd then runs **--door** with the asked command in **SSH_ORIGINAL_COMMAND**, and the door runs only **bee --deliver**, **bee --ledger** and **bee --admit**, each of which checks its own seal or ticket, its own hello (**bee --door**: the box, the hub's psid and its queues), and **sb serve @hub**, the hub nest's side of an sb sync. Anything else is refused. Without a command, **love bee --door** prints the hello.
+
+On the new box, in order:
+
+1. **love, nested.** In a love tree, a seed or **love source** *dir*: **make**, then **./out/love nest -y**, which lays **~/.love/bin/love** and **lush**.
+2. **the hub named.** **(hub** *name***@***box***)** in **~/.love/etc/bee.l**, where *box* keeps the hub; *name* is **hub**, the nest its door serves.
+3. **the way to the box.** A line *box* *host* \[*love*\] in **~/.love/etc/bee/boxes**, as for mail (KEYS).
+4. **the door.** The hub box's owner lays this box's ssh key behind the door. **--node** prints the line to give them.
+5. **enrolment.** **love bee --ticket** on the hub's box, then here **love bee --enrol** *token* *name* **\| ssh** *host* **love bee --admit \| love bee --enrolled**, the admission going through the door (KEYS).
+6. **a nest.** **love bee --nest** *dir* (**(nest** *path***)**, else **~/g**): **sb sync --take hub@***box* into a new directory, which pulls the hub's store and takes its head.
+7. **love built in the nest.** **make** there; the cc on PATH builds the bootstrap, love builds the rest.
+8. **Claude Code**, on PATH, and the tree's **.mcp.json** and **.claude/settings.json** in the nest, which come with the hub's head.
+
+Then start a session in the nest as above (THE MCP SERVER) and work as in a worker nest. The hub's queues are **queue/***name***@***box*: a queue tool call goes there sealed and runs on the hub's box as *session***@***node* (KEYS). A row's head is the psid of the banked set that gated: **sb bank** *name*, then **sb sync --keep hub@***box* deposits it in the hub. **queue_land** called from another box does the hub's **take** itself, since only the hub's box can, and answers the head it reached; **queue_landed** follows as on one box. **sb sync --take hub@***box* brings the nest up to the hub's head after a landing.
+
 # JOBS AND WORKERS
 
 A *job* is a command line run in the background. **start_job** answers its id (**j1**, **j2** ...) at once and the turn goes on. The job runs in a process group of its own, with its output in *hive***/jobs/***name***/***id***.log**. When it ends, a message from **job-***id* reaches the bee that started it, carrying the exit status and the output's last lines. Like any message, it wakes an idle full screen and joins the next request of a running turn. **check_job** shows a job's state and output so far. **stop_job** ends its whole group: the shell and whatever it started. A job belongs to its bee's process: a one-shot **love bee** *prompt* exits when its turn does, and a job still running then goes on unwatched.
@@ -288,7 +311,7 @@ When a queue does not exist yet, **queue_row** makes it on bee's standard header
 
 **The git mirror.** An sb queue whose header has a **mirror** *path* *branch* \[*keep* ...\] line (the leader's, set with **queue_lead**) writes each landing to git: **queue_landed** builds the hub's tree in a private index from the hub's blobs, keeps the parent's paths under each *keep* prefix (what the hub's store leaves out, such as generated artifacts), and commits it onto *branch* of the repository at *path*, the row's note its message, by compare-and-swap. A tip that already has that tree is left alone. It refuses a *branch* checked out anywhere but the hub, which would move under that checkout. When the mirror does not take the landing, the row stays.
 
-A session works in a *worker nest*, as it would in a git worktree: **love bee --nest** *dir* makes *dir* from the hub **SB_HUB** names, depositing the hub's store there, taking the hub's head, and seeding *dir*/**out/** from the hub's build. It refuses a *dir* that is already there.
+A session works in a *worker nest*, as it would in a git worktree: **love bee --nest** *dir* makes *dir* from the hub (**SB_HUB**, else **(hub** ...**)**), pulling the hub's store and taking its head (**sb sync --take**), and seeding *dir*/**out/** from the hub's build when the hub is on this box. It refuses a *dir* that is already there. A hub on another box is *name***@***box* (NEW NODE).
 
 **The leader.** The **leader** line names the one session that keeps the queue. Only the leader edits another's row, the base line, and the **sync** and **pre** lines. The leader:
 
@@ -310,6 +333,8 @@ The leader hands off by rewriting the line to a live session that agreed, and sa
 - nothing holds a heavy slot it is not using.
 
 **Say it, then verify it.** Tell the leader every change of state: join, gating, green, landed. The leader verifies from the store, not from the message. A restart may rename a session, which then asks the leader to correct its row and says so.
+
+**The owner lands.** The session whose row is green lands it, and then calls **queue_landed** with a release note; the leader lands only its own rows. Every sha or psid written in a row, a note or a message is pasted from a command just run (**git rev-parse**, **sb psid**), never typed or expanded from a short form. A queue that publishes (a public branch fed from the base) has the leader add a row for it on a schedule, gating what publishing needs, like any row.
 
 **Restart onto a new bee.** After a landing that changes bee (**src/apps/bee.l**, **locks.l**, **saver.l** or **pom.l**), every live session restarts at its next convenient point: between tasks, never mid-gate, resuming in the same directory so **.mcp.json** loads the new bee. **queue_landed** ends the release note with this, and each session's own watch on its binary says it too.
 

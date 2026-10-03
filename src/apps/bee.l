@@ -779,7 +779,7 @@
      ; model names fields; it never edits the text, which a small model overwrote whole ---
      (chomp s) (: n #s (? (0 < n && s (n - 1) = 10) (snip s 0 (n - 1)) s))
      (q-git? q) (starts? q "refs/queue/")
-     (q-hub _) (: h (getenv "SB_HUB") (? (string? h && 0 < #h) h "."))
+     (q-hub _) (: h (getenv "SB_HUB") (? (string? h && 0 < #h) h (setting 'hub ".")))
      (q-sb a) (lush-out ("sb -C " + sq (q-hub 0) + " " + a))
      ; the hub's psid for a set (a psid, a ref, or head), "" when it has none
      (q-psid x) (: s (chomp (q-sb ("psid " + sq x + " 2>/dev/null"))) (? (#s = 64) s ""))
@@ -1008,7 +1008,7 @@
             (: _ (mkdirs ids) fd (openfd (ids + "/" + id) 3)
                (? !(charm? fd) [0 "that id is taken"]
                   (: _ (close fd)
-                     _ (pin bee-who 'name sealed)
+                     _ (pins bee-who 'name sealed 'remote 1)
                      dir (setting 'ledger-dir (: h (getenv "HOME") (string? h ? h ".")))
                      _ (chdir dir)
                      (tool @ "queue_row" (queue-row in) "queue_lead" (queue-lead in)
@@ -1159,6 +1159,11 @@
                  + "sb bank NAME and sb sync --keep " + hub)]
             (q-sb ("within head " + sq g + " && echo yes") @ o (find o "yes" 0 < 0))
              [0 ("the hub's head " + cur + " is not inside " + g + ": restack on the base and re-gate")]
+            ; a row owned on another box: the take is the hub's, so it is done here
+            (peep bee-who 'remote 0)
+             (: _ (q-sb ("take " + sq g + " >/dev/null 2>&1")) now (q-psid "head")
+                (? (now = g) [1 ("row " + p + " (" + who + ") landed on the hub: its head is now " + g + ". queue_landed next.")]
+                   [0 ("the hub did not take " + g + " (its head is " + now + "): its tree may hold unrecorded work; tell the leader")]))
             [1 (paras
                 [("row " + p + " (" + who + (two? fs ? (", with row" + (#fs = 1 ? " " "s ") + q-joins fs + " folded in") "")
                   + ") lands: the hub's head at " + cur + " grows to its gated set, " + g + ", which it lies inside.")
@@ -1230,28 +1235,103 @@
             (#gs != #ents) [0 ("the mirror at " + path + " could not store the hub's blobs")]
             (starts? o "made " || starts? o "same ") [1 o]
             [0 ("the mirror at " + path + " did not take the landing: " + o)]))
-     ; --- a worker nest: DIR made from the hub (SB_HUB) at its head -- the hub's store deposited,
-     ; its head taken, out/ seeded from the hub's build -- where a session works, as in a worktree ---
-     (nest-ids t) (filter (\ w (#w = 64)) (words (foldl (\ a c (a + (elem c [34 40 41] ? " " (string c)))) "" (map t ^#t))))
+     ; --- a worker nest: DIR made from the hub (SB_HUB, else (hub ..)) at its head -- the hub's
+     ; store pulled and its head taken, out/ seeded from the hub's build when the hub is here --
+     ; where a session works, as in a worktree. the hub may be NAME@BOX, through BOX's door ---
      (nest-cmd as)
-      (: d (? (two? >as) <>as "") hub (: h (getenv "SB_HUB") (? (string? h) h ""))
+      (: d (? (two? >as) <>as "") hub (q-hub 0) far (find hub "@" 0 > 0)
          (? (#d = 0) (: _ (say err "usage: love bee --nest DIR\n") 2)
-            !(0 < #hub && two? (stat (hub + "/.sb")))
-             (: _ (say err "bee: SB_HUB names no nest: it names the hub a worker nest is made from\n") 2)
+            !(far || two? (stat (hub + "/.sb")))
+             (: _ (say err "bee: no hub: SB_HUB, or (hub PATH) or (hub NAME@BOX) in ~/.love/etc/bee.l, names the nest a worker nest is made from\n") 2)
             (two? (stat d)) (: _ (say err ("bee: " + d + " is there already\n")) 1)
             (: _ (mkdirs d)
-               dep (lush-out ("sb -C " + sq d + " sync --keep " + sq hub + " >/dev/null && echo ok"))
-               ht (: f (hub + "/.sb/head") t (slurp-file (? (two? (stat f)) f (hub + "/.sb/tips"))) (? (string? t) (nest-ids t) ()))
-               tk (? (two? ht) (lush-out ("sb -C " + sq d + " take" + foldl (\ a i (a + " " + i)) "" ht + " >/dev/null && echo ok")) "ok")
+               tk (lush-out ("sb -C " + sq d + " sync --take " + sq hub + " >/dev/null && echo ok"))
                ps (chomp (lush-out ("sb -C " + sq d + " psid")))
-               ob (? (two? (stat (hub + "/out")) && !(two? (stat (d + "/out"))))
+               ob (? (!far && two? (stat (hub + "/out")) && !(two? (stat (d + "/out"))))
                      (lush-out ("cp -a " + sq (hub + "/out") + " " + sq (d + "/out") + " && echo ok")) "")
-               (? (find dep "ok" 0 < 0) (: _ (say err ("bee: the hub's store did not come into " + d + "\n")) 1)
-                  (find tk "ok" 0 < 0) (: _ (say err ("bee: " + d + " holds the hub's store but could not take its head\n")) 1)
+               (? (find tk "ok" 0 < 0) (: _ (say err ("bee: " + d + " could not take the hub's head from " + hub + "\n")) 1)
                   (: _ (puts ("a worker nest at " + d + " on the hub's head " + ps
                               + (find ob "ok" 0 < 0 ? "" ", out/ seeded from the hub's") + ".\n"
                               + "work there; sb record, then sb bank NAME and sb sync --keep " + hub + " to hand the hub the set you gated.\n"))
                      0)))))
+     ; --- the door: what another box's key may run here, held to it by sshd. `--door KEY` prints
+     ; the authorized_keys line that forces it; sshd then runs --door with the asked command in
+     ; SSH_ORIGINAL_COMMAND, and the door runs only these: a sealed delivery, ledger call or
+     ; admission (each checks its own seal or ticket), its own hello, and the hub's sb serve,
+     ; asked for as @hub ---
+     (door-line k) ("command=\"env HOME=" + bee-home + " " + bee-me + " bee --door\",restrict " + k)
+     bee-home (: h (getenv "HOME") (string? h ? h "/"))
+     (door-hello _)
+      (: hub (setting 'hub "") b (box-seal 0)
+         ps (? (two? (stat (hub + "/.sb"))) (chomp (lush-out ("sb -C " + sq hub + " psid"))) "")
+         qs (? (0 < #ps) (filter (\ l (starts? l "queue/")) (lines (lush-out ("sb -C " + sq hub + " ledger")))) ())
+         [1 ("door: box " + (? (two? b) (b 1 "name") "(no card)") + ", hub " + (? (0 < #ps) ps "(none)")
+             + foldl (\ a l (a + "\nledger " + l)) "" qs)])
+     (door-run oc sr)
+      (: w (words oc) n #w
+         (last k) (? (k <= n) (drop (n - k) w) ())
+         hub (setting 'hub "")
+         (? (= (last 2) ["bee" "--deliver"]) (sr (deliver (slurp in)))
+            (= (last 2) ["bee" "--ledger"]) (sr (ledger (slurp in)))
+            (= (last 2) ["bee" "--admit"]) (sr (admit (slurp in)))
+            (= (last 2) ["bee" "--door"]) (sr (door-hello 0))
+            (= (last 3) ["sb" "serve" "@hub"])
+             (? (two? (stat (hub + "/.sb"))) (: p (spawn [bee-me "sb" "serve" hub]) (? (charm? p && 0 < p) (wait p) 1))
+                (sr [0 "this box keeps no hub: (hub PATH) in ~/.love/etc/bee.l"]))
+            (sr [0 ("the door here takes bee --deliver, --ledger, --admit and --door, and sb serve @hub; not: " + oc)])))
+     ; --- a fresh node: the box checked in order, each step's state, and the first one missing
+     ; said with what to run. the hub is (hub NAME@BOX), reached by BOX's door ---
+     (node-steps _)
+      (: hub (setting 'hub "") at (find hub "@" 0) bx (? (0 < at) (snip hub (at + 1) #hub) "")
+         nest (setting 'nest (bee-home + "/g"))
+         etc (bee-home + "/.love/etc")
+         route (? (0 < #bx) (box-route bx) ["" ""])
+         pub (: ks (filter (\ f (&& (starts? f "id_") (ends? f ".pub"))) (? (two? (readdir (bee-home + "/.ssh"))) (readdir (bee-home + "/.ssh")) ()))
+                (? (two? ks) (chomp (: t (slurp-file (bee-home + "/.ssh/" + <ks)) (string? t ? t ""))) ""))
+         door (\ _ (? (0 < #bx) (relay bx "" "--door") [1 ""]))
+         [["love, nested in ~/.love/bin"
+           (\ _ (two? (stat (bee-home + "/.love/bin/love")) && two? (stat (bee-home + "/.love/bin/lush"))))
+           (\ _ "in a love tree (a seed, or love source DIR): make, then ./out/love nest -y")]
+          ["the hub named: (hub NAME@BOX) in ~/.love/etc/bee.l"
+           (\ _ (0 < at && 0 < #bx))
+           (\ _ ("echo '(hub hub@BOX)' >> " + etc + "/bee.l   # BOX: the box that keeps the queue's hub"))]
+          [("the way to " + bx + ": a line in ~/.love/etc/bee/boxes")
+           (\ _ (: t (slurp-file (bee-keys + "/boxes")) (two? (filter (\ l (two? (words l) && <(words l) = bx)) (? (string? t) (lines t) ())))))
+           (\ _ ("mkdir -p " + bee-keys + " && echo '" + bx + " HOST' >> " + bee-keys + "/boxes   # HOST: what ssh reaches it as"))]
+          [("the door on " + bx + " lets this box in")
+           (\ _ (: r (door 0) (&& (<r = 0) (starts? (r 1) "door:"))))
+           (\ _ ("on " + bx + ", its owner lays this box's key behind the door:\n  love bee --door "
+                 + (0 < #pub ? pub "KEY") + " >> ~/.ssh/authorized_keys"
+                 + (0 < #pub ? "" "\n(no key here: ssh-keygen -t ed25519 first)")))]
+          [("enrolled in " + bx + "'s lineage: a box card")
+           (\ _ (two? (box-seal 0)))
+           (\ _ ("on " + bx + ": love bee --ticket, then here:\n  love bee --enrol TOKEN NAME | "
+                 + joinw (bee-relay + [<route (route 1) "bee" "--admit"]) + " | love bee --enrolled"))]
+          [("a nest at " + nest + " on the hub's head")
+           (\ _ (two? (stat (nest + "/.sb"))))
+           (\ _ ("love bee --nest " + nest + "   # (nest PATH) in ~/.love/etc/bee.l names another"))]
+          [("love built in the nest: " + nest + "/out/love")
+           (\ _ (two? (stat (nest + "/out/love"))))
+           (\ _ ("cd " + nest + " && make   # the cc on PATH builds love0, love builds the rest"))]
+          ["claude code on PATH"
+           (\ _ (0 < #(chomp (lush-out "command -v claude"))))
+           (\ _ "install Claude Code: https://claude.com/claude-code")]
+          ["the tree's .mcp.json and hooks in the nest"
+           (\ _ (&& (two? (stat (nest + "/.mcp.json"))) (two? (stat (nest + "/.claude/settings.json")))))
+           (\ _ "the nest's head lacks .mcp.json or .claude/settings.json: take the hub's head again")]])
+     (node-cmd _) (node-walk (node-steps 0))
+     (node-walk m)
+      (? (atom? m) (node-done 0)
+         (: st <m
+            (? ((st 1) 0) (: _ (puts ("ok    " + <st + "\n")) (node-walk >m))
+               (: _ (puts ("next  " + <st + "\n  " + ((st 2) 0) + "\n")) 1))))
+     (node-done _)
+      (: hub (setting 'hub "") nest (setting 'nest (bee-home + "/g"))
+         _ (puts ("this box is a node. start a session in the nest, and read doc/bee.md, NEW NODE and THE MERGE QUEUE:\n"
+                  + "  cd " + nest + " && claude --dangerously-load-development-channels server:bee\n"
+                  + "its queues are the hub's, as queue/NAME@" + snip hub (find hub "@" 0 + 1) #hub
+                  + " (love bee --door there, or this box's love bee --node, lists them)\n"))
+         0)
      (queue-landed in) (q-check in queue-landed1)
      (queue-landed1 in)
       (: q (in "queue") i (me 0) who (field in "session" i) rel (field in "release" "")
@@ -3034,6 +3114,11 @@
           "--revocations" (say-r (revocations (slurp in)))
           "--revoked" (: s (slurp-file (bee-keys + "/revoked")) (say-r (string? s ? [1 s] [0 "no list here"])))
           "--ledger" (say-r (ledger (slurp in)))
+          "--door" (: oc (getenv "SSH_ORIGINAL_COMMAND")
+                      (? (string? oc) (door-run oc say-r)
+                         (two? >as) (: _ (puts (door-line (joinw >as) + "\n")) 0)
+                         (say-r (door-hello 0))))
+          "--node" (node-cmd 0)
           "--enrolled" (say-r (enrolled (slurp in)))
           "--keygen" (: r (keygen >as) (? <r (: _ (puts (r 1 + (ends? (r 1) "\n" ? "" "\n"))) 0) (say err ("bee: " + r 1 + "\n"), 1)))
           "--stop" (? (#as < 2) (say err "usage: love bee --stop NAME\n", 2)
@@ -3070,7 +3155,7 @@
             ; a bare bee on a terminal is the hud; a model's chat is --chat
             (!pl && !sv && !(two? words) && !(elem "--chat" as) && !(elem "--stage" as) && two? (tty 1))
              (hud 0)
-            (two? words && elem <words ["--list" "--send" "--spawn" "--stop" "--avatar" "--resume" "--keygen" "--ticket" "--enrol" "--admit" "--enrolled" "--deliver" "--ledger" "--revoke" "--revocations" "--revoked"]) (bee-cli words yes)
+            (two? words && elem <words ["--list" "--send" "--spawn" "--stop" "--avatar" "--resume" "--keygen" "--ticket" "--enrol" "--admit" "--enrolled" "--deliver" "--ledger" "--revoke" "--revocations" "--revoked" "--door" "--node"]) (bee-cli words yes)
             ; the api backend wants its endpoint, model and key; claude brings its own. a stage
             ; answers why as a string: a mitty shows it, stderr would land on its glass
             (: why (? (!bee-cc? && atom? bee-at) ("cannot read the url " + bee-url)
@@ -3101,7 +3186,9 @@
        love bee --state busy|idle [--pid P]          a claude code session's hooks say its state
        love bee --on CAP [--where K=V] [--ship DIR] (--probe | --ssh | -- CMD ..)   a command on a host that can
        love bee --hosts                              the hosts this box knows
-       love bee --nest DIR                           a worker nest made from the hub (SB_HUB) at its head
+       love bee --nest DIR                           a worker nest made from the hub (SB_HUB, or (hub ..)) at its head
+       love bee --node                               a fresh box checked in order: what it has, and the next step
+       love bee --door [KEY ..]                      the door's hello here; KEY: the authorized_keys line that holds a key to it
        love bee --avatar [NAME]                        the avatars, or wear one
        love bee -s | --screensaver [NAME]               a screensaver until a key; none names them"
    _ (pins (cite 'verbs 'tab) 'bee (udoor 'bee bee-main bee-usage 1 0)))

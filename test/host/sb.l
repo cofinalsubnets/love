@@ -689,6 +689,32 @@
  (0 = s3) dgot dnot                          ; pulled only
  (0 = s4) avok)                             ; refused before any ssh ran; the words it runs
 
+; --- take: pull only and grow the head by the peer's, the peer untouched -- from a dir, and from
+;     NAME@BOX through a stand-in door that maps @hub to the far nest ---
+(: sl (: l <cmdline (l 0 = 47 ? l (sb-home + "/" + l)))
+   here (cwd 0) far (here + "/mrg/sf") home0 (getenv "HOME")
+   _ (lay "mrg/door" ("shift; shift\ncase \"$3\" in @hub) exec '" + sl + "' sb serve '" + far + "';; esac\nexit 9\n"))
+   _ (mkdir "mrg/th" 493) _ (mkdir "mrg/th/.love" 493) _ (mkdir "mrg/th/.love/etc" 493) _ (mkdir "mrg/th/.love/etc/bee" 493)
+   _ (lay "mrg/th/.love/etc/bee/boxes" "bx somehost\n")
+   _ (mkdir "mrg/t1" 493) _ (chdir "mrg/t1")
+   fstore #(readdir (far + "/.sb/patch"))
+   t1 (sync-take far)
+   thead (psid (head ()) = psid (head-in far))
+   tsame (seq (snap ()) (form (far + "/.sb/snap")))
+   tleft (fstore = #(readdir (far + "/.sb/patch")))
+   _ (mkdir "../t2" 493) _ (chdir "../t2")
+   _ (setenv "HOME" (here + "/mrg/th")) _ (setenv "SB_SSH" ("sh " + here + "/mrg/door"))
+   bok (seq (ssh-argv "hub@bx") ["sh" (here + "/mrg/door") "somehost" sl "sb" "serve" "@hub"])
+   t2 (sync-ssh "hub@bx" 2)
+   bhead (psid (head ()) = psid (head-in far))
+   bnone (0 = sync-ssh "nest@bx" 2)                     ; the door serves @hub alone
+   _ (setenv "HOME" home0)
+   _ (chdir "../.."))
+
+(test
+ (0 < t1) thead tsame tleft                 ; the peer's head, and nothing pushed
+ bok (0 < t2) bhead bnone)
+
 (chdir sb-home)
 (hark ["rm" "-rf" sb-dir])
 (puts "sb: ok", putc 10, 0)

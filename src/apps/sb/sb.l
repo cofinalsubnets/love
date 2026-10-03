@@ -827,7 +827,8 @@
    ; SB_SSH is the ssh words (ssh -T), SB_LOVE the far binary (love)
    (ssh-argv p)
     (: r (snip p 6 #p) k (fsub r "/" 0)
-       (? (k <= 0) ()
+       (? (box-peer? p) (box-argv p)
+          (k <= 0) ()
           (: hp (snip r 0 k) pt (snip r k #r)
              path (? (3 <= #pt && snip pt 0 3 = "/~/") (snip pt 1 #pt) pt)
              c (fsub hp ":" 0)
@@ -835,6 +836,17 @@
                 ((ssh-words (ssh-env "SB_SSH" "ssh -T"))
                  + (? (c < 0) [hp] ["-p" (snip hp (c + 1) #hp) (snip hp 0 c)])
                  + [(ssh-env "SB_LOVE" "love") "sb" "serve" path])))))
+   ; NAME@BOX: the nest NAME that BOX's door serves (love bee --door), BOX reached as bee's
+   ; ~/.love/etc/bee/boxes says, a line `BOX HOST [LOVE]`
+   (box-peer? p) (: k (fsub p "@" 0) (0 < k && k < #p - 1 && fsub p "/" 0 < 0 && fsub p ":" 0 < 0))
+   (box-argv p)
+    (: k (fsub p "@" 0) nm (snip p 0 k) bx (snip p (k + 1) #p)
+       t (look (ssh-env "HOME" "/" + "/.love/etc/bee/boxes"))
+       w (: (go m) (? (atom? m) [bx] (: v (ssh-words <m) (? (two? v && <v = bx) v (go >m))))
+            (go (? (two? t) (lines <>t) ())))
+       (? !(ssh-path? nm) ()
+          ((ssh-words (ssh-env "SB_SSH" "ssh -T"))
+           + [(? (1 < #w) (w 1) bx) (? (2 < #w) (w 2) (ssh-env "SB_LOVE" "love")) "sb" "serve" ("@" + nm)])))
    ; --- the frames
    (fr-put w s) (say w (show #s + "\n" + s))
    (fr-get q)                                                 ; the next frame's text | () at the end
@@ -929,25 +941,25 @@
              (ssh-form (fr-get (c 'q))))))
    (sync-ssh peer keep)
     (mk (),
-     (? (!keep && 0 < dirty ())
+     (? (keep != 1 && 0 < dirty ())
         (say err "sb: working tree has changes; record or revert first\n", 0)
         (: av (ssh-argv peer)
-           (? (atom? av) (say err ("sb: cannot read " + peer + " -- ssh://[USER@]HOST[:PORT]/PATH\n"), 0)
+           (? (atom? av) (say err ("sb: cannot read " + peer + " -- ssh://[USER@]HOST[:PORT]/PATH, or NAME@BOX\n"), 0)
               (: c (ssh-open av)
                  (? !(tablet? c) (say err ("sb: cannot run " + <av + "\n"), 0)
                     (: r (ssh-sync c peer keep) _ (ssh-shut c) r)))))))
    ; sync-with's exchange over the wire: pull, push onto a clean far nest (or deposit), the
-   ; refs both ways, then both heads to their union
+   ; refs both ways, then both heads to their union. keep: 0 the exchange, 1 a deposit, 2 a take
    (ssh-sync c peer keep)
-    (: hi (ssh-form (ssh-ask c (? keep "hello" "hello dirty")))
+    (: hi (ssh-form (ssh-ask c (? (keep = 0) "hello dirty" "hello")))
        (? !(two? hi && sb-all? sb-hex? <hi && sb-all? sb-hex? <>hi)
           (say err ("sb: no nest answers at " + peer + "\n"), 0)
-          (: ft <hi fh <>hi theirs <>>hi pd (? keep 0 (hi 3))
+          (: ft <hi fh <>hi theirs <>>hi pd (? (keep = 0) (hi 3) 0)
              ng (ssh-lacks c)
              (? (charm? ng) (say err ("sb: " + peer + " stopped answering\n"), 0)
                 (: gi (ssh-pull c <>ng ft)
                    got (? (tablet? gi) (gi 'ok) 0)
-                   po (? (got && (keep || pd = 0)) (ssh-push c <ng) ())
+                   po (? (got && keep != 2 && (keep = 1 || pd = 0)) (ssh-push c <ng) ())
                    pushed (? (two? po) (0 = po 1 && po 3) 0)
                    ru (refadd (refs ()) theirs 1)
                    _ (two? <ru ? (lay ".sb/refs" (show <ru)))
@@ -955,7 +967,8 @@
                    nin (? (tablet? gi) (gi 'laid) 0) nout (? pushed (po 0) 0)
                    nb ((? (tablet? gi) (gi 'blobs) 0) + (? (two? po) (po 2) 0))
                    (? !got (say err ("sb: some objects did not arrive from " + peer + " -- the sync is INCOMPLETE\n"), 0)
-                      keep (: _ (puts ("sb: deposited -- " + show nin + " patches in, " + show nout + " out, "
+                      (keep = 2) (take-tell gi fh <>ru)
+                      (keep = 1) (: _ (puts ("sb: deposited -- " + show nin + " patches in, " + show nout + " out, "
                                        + show nb + " blobs\n"))
                               (? pushed 1 0))
                       (ssh-settle c pushed pd fh nin nout nb <>ru)))))))
@@ -977,6 +990,25 @@
        _ (nleft @ 0 () (say err "sb: settle the flagged paths, then record\n"))
        _ (nref @ 0 () (say err "sb: a banked name is immutable\n"))
        (? (took && 0 = nleft && 0 = nref && 0 = pst 2) <st 0))
+   ; a take: the peer's head joins ours, nothing goes back
+   (take-tell gi fh nref)
+    (? !(tablet? gi && gi 'ok) (say err "sb: some objects did not arrive -- the take is INCOMPLETE\n", 0)
+       (: st (settle (head () + fh)) nleft (tell <>>st)
+          _ (puts ("sb: took the peer's head -- " + show <st + " patches (" + show (gi 'laid) + " in), "
+                   + show (gi 'blobs) + " blobs, " + show <>st + " files here"
+                   + (nleft @ 0 "" (", " + show nleft + " conflicted"))
+                   + (nref @ 0 "" (", " + show nref + " ref clash" + (nref @ 1 "" "es"))) + "\n"))
+          _ (nleft @ 0 () (say err "sb: settle the flagged paths, then record\n"))
+          (? (0 = nleft && 0 = nref) <st 0)))
+   ; the same from a peer nest on this box: no push, the peer only read
+   (sync-take peer)
+    (mk (),
+     (? (0 < dirty ()) (say err "sb: working tree has changes; record or revert first\n", 0)
+        !(two? (stat (peer + "/.sb"))) (say err ("sb: cannot reach " + peer + "\n"), 0)
+        (held peer (_ \ (: gi (gap (dir-pat peer) (dir-blb peer) (form (peer + "/.sb/tips")) ".")
+                            ru (refadd (refs ()) (form (peer + "/.sb/refs")) 1)
+                            _ (two? <ru ? (lay ".sb/refs" (show <ru)))
+                            (take-tell gi (head-in peer) <>ru))))))
    ; --- the far side: one answer per word asked, nothing else on stdout
    (sv-has d l) (cats (map (i \ (? (sb-hex? i && two? (stat (d + i))) "1" "0")) l))
    (sv-each l) (? (two? l) (: _ (fr-put out <l) (sv-each >l)) ())
@@ -1068,7 +1100,11 @@ usage: sb VERB ..
                   then record. --keep only deposits: both stores fill, no head
                   moves, so a hub holds work it has not taken.
                   ssh://[USER@]HOST[:PORT]/PATH is a nest on another box, its
-                  side `sb serve PATH` (SB_SSH the ssh words, SB_LOVE the far love)
+                  side `sb serve PATH` (SB_SSH the ssh words, SB_LOVE the far love).
+                  NAME@BOX is the nest NAME that BOX's door serves (love bee --door),
+                  BOX reached as ~/.love/etc/bee/boxes says
+  sync --take PEER  pull only, and grow the head by the peer's head: a new nest
+                  made from a hub, or one brought up to it
   serve [DIR]     the far side of an ssh sync, on stdin and stdout
   take ID..       grow the HEAD by a set (a ref, or patches by prefix, with
                   their deps) and lay the tree: what a hub does to land work
@@ -1106,9 +1142,13 @@ usage: sb VERB ..
                    (say err ("sb: cannot enter " + <>as + "\n"), 1))
            "record" (: _ (held "." (_ \ sb-record (two? >as ? <>as ""))) 0)
            "ledger" (: r (sb-ledger >as) (? (r = 2) (usage ()) !r))
-           "sync" (: pr (filter (w \ w != "--keep") >as)
+           "sync" (: pr (filter (w \ !(elem w ["--keep" "--take"])) >as)
+                     md (? (elem "--take" >as) 2 (elem "--keep" >as) 1 0)
                      (atom? pr ? (usage ())
-                      !(held "." (_ \ (? (ssh? <pr) sync-ssh sync-with) <pr (elem "--keep" >as)))))
+                      !(held "." (_ \ (? (ssh? <pr || box-peer? <pr) (sync-ssh <pr md)
+                                         (md < 2) (sync-with <pr md)
+                                         (url? <pr) (sync-url <pr 0)
+                                         (sync-take <pr))))))
            "serve" (sb-serve >as)
            "apply" !(held "." (_ \ sb-apply >as))
            "take" (atom? >as ? (usage ()) !(held "." (_ \ sb-take >as)))

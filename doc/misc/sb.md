@@ -88,6 +88,12 @@ head with `take`. `sb serve [DIR]` holds the far nest for the whole talk and pri
 but its answers. The far path must be one word to the far shell: letters, digits and
 `/._-~+,=@:`.
 
+`NAME@BOX` is the nest `NAME` that `BOX`'s door serves (`love bee --door`, doc/bee.md NEW NODE):
+sync runs `ssh -T HOST LOVE sb serve @NAME`, with `HOST` and `LOVE` from the line for `BOX` in
+bee's `~/.love/etc/bee/boxes` (the box's own name and `love` without one), and the door maps
+`@hub` to its hub. `sync --take PEER` pulls only and grows the head by the peer's head, leaving
+the peer as it was: how a nest is made from a hub, or brought up to it.
+
 **What a peer can and cannot do.** Every blob and patch is checked against its sha256 name, and
 a patch is refused whole if a hunk names an absolute path, a `.`/`..`/empty segment, a control
 byte, or `.git`/`.sb` at any depth in any case. No write or unlink goes through a symlink in the

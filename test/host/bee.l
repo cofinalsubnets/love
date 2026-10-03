@@ -1079,7 +1079,27 @@
       (nn-wp = nn-hp) (cr-get (nn-wk + "/f") = "the hub's\n") (cr-get (nn-wk + "/g") = "the hub's too\n")
       (cr-get (nn-wk + "/out/built") = "x\n")
       (<nn-again = 1) (cr-in >nn-again "is there already")
-      (<nn-nohub = 2) (cr-in >nn-nohub "SB_HUB names no nest"))
+      (<nn-nohub = 2) (cr-in >nn-nohub "no hub: SB_HUB"))
+   0)
+
+; --- the door: the line that holds a key to it, its hello, the hub's sb serve as @hub, and a
+; refusal; --node on an empty home names the first step ---
+(: dr-home (cr-dir "door" ("(hub " + cr-root + "/nhub)\n"))
+   dr-hp (snip >(hark [cr-love "sb" "-C" (cr-root + "/nhub") "psid"]) 0 64)
+   dr-line (cr-run dr-home "" "--door ssh-ed25519 AAAAk me@x")
+   dr-hi (cr-run dr-home "SSH_ORIGINAL_COMMAND='love bee --door'" "--door")
+   dr-no (cr-run dr-home "SSH_ORIGINAL_COMMAND='cat /etc/passwd'" "--door")
+   dr-sb (hark ["sh" "-c" ("printf '5\\nhello' | env HOME='" + dr-home + "' SSH_ORIGINAL_COMMAND='love sb serve @hub' '"
+                           + cr-love + "' '" + cr-app + "' --door")])
+   nd-home (cr-dir "node" "")
+   nd (cr-run nd-home "" "--node")
+   _ (test
+      (<dr-line = 0) (cr-in (dr-line 1) ("command=\"env HOME=" + dr-home + " "))
+      (cr-in (dr-line 1) " bee --door\",restrict ssh-ed25519 AAAAk me@x")
+      (<dr-hi = 0) (cr-in (dr-hi 1) ("door: box (no card), hub " + dr-hp))
+      (<dr-no = 1) (cr-in (dr-no 1) "the door here takes")
+      (<dr-sb = 0) (cr-in >dr-sb "((\"")
+      (<nd = 1) (cr-in (nd 1) "next  love, nested in ~/.love/bin"))
    0)
 
 (hark ["rm" "-rf" cr-root])
