@@ -1,0 +1,10 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {"hooks": [{"type": "command", "command": "r=$(git rev-parse --show-toplevel 2>/dev/null || pwd); l=love; [ -x \"$r/out/love\" ] && l=\"$r/out/love\"; (\"$l\" bee --state busy --pid $PPID --hud </dev/null >/dev/null 2>&1 &); exit 0"}]}
+    ],
+    "Stop": [
+      {"hooks": [{"type": "command", "command": "r=$(git rev-parse --show-toplevel 2>/dev/null || pwd); l=love; [ -x \"$r/out/love\" ] && l=\"$r/out/love\"; (\"$l\" bee --state idle --pid $PPID --hud </dev/null >/dev/null 2>&1 &); exit 0"}]}
+    ]
+  }
+}
