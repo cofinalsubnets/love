@@ -52,7 +52,7 @@
    (lf-fresh e) (hark [(selfpath 0) "-e" ("(borrow 'posix) " + e + " (puts (show (map (r \\ r 5) (tree-head 0)))) (quit 0)")])
  (test
    ((map cap h) = ["index" "moon" "bake" "seat" "lisp" "c" "rest"])
-   ((map (r \ r 1) h) = [1 1 1 1 2 2 3])               ; deflate where a run reads, else bzip2, lzma2
+   (all (r \ elem (r 1) [0 1 2 3]) h)                 ; the Makefile's tree_codecs, any of the four
    (all (r \ 0 < r 3) h)
    (#whole = +(map (r \ r 2) tars))                     ; the sections joined are the whole tar
    (#moon = 1024 + (tars 0 2))                         ; one alone ends as a tar does

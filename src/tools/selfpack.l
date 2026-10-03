@@ -1,6 +1,9 @@
 ; src/tools/selfpack.l -- cut the source container from the tree itself.
 ;
-;   love src/tools/selfpack.l src.tree top stamp build roster [drop..]
+;   love src/tools/selfpack.l [-c codecs] src.tree top stamp build roster [drop..]
+;
+; codecs names a section's codec, `lisp=bzip2,c=bzip2,rest=lzma2`: stored deflate bzip2 lzma2,
+; deflate where none is named. every seat carries every decoder, so the table is free to move.
 ;
 ; the tree on disk is the source, checkout and seed-laid tree alike. it leaves out sb's law
 ; (.sbignore plus sb's built-ins, so the vcs walk and this cut agree), sp-own's structural skips
@@ -48,11 +51,17 @@
    ; rest. each keeps the walk's order.
    sp-secs ["moon" "bake" "seat" "lisp" "c" "rest"]
    sp-seat ["src/apps/tls/roots.pem"]                  ; tls/verify.l's roots, off /love
-   ; the codec of each (srctree.h's numbers): the cold three decode at ~10x inflate's cost,
-   ; paid by a full lay or a read of a file no run reads
-   sp-codecs {"lisp" 2 "c" 2 "rest" 3}
-   (sp-pack nm s) (peep sp-codecs nm 1 @ c
-                    (? (c = 2) (bz2e s 9) (c = 3) (lzma2e s 8388608) (gz-deflate-best s)))
+   ; -c's table -> {section codec}, in srctree.h's numbers
+   sp-cnums {"stored" 0 "deflate" 1 "bzip2" 2 "lzma2" 3}
+   (sp-codecs spec)
+    (: (go s t) (s @ "" t
+                      (a + "," + b) (go b (go a t))
+                      (k + "=" + v) (? (!(any (= k) ("index" . sp-secs))) (sp-die ("no section " + k))
+                                       (nil? (peep sp-cnums v ())) (sp-die ("no codec " + v))
+                                       (pin t k (sp-cnums v)))
+                      (sp-die ("codecs are SECTION=CODEC,..: " + s)))
+       (go spec {}))
+   (sp-pack c s) (? (c = 0) s (c = 2) (bz2e s 9) (c = 3) (lzma2e s 8388608) (gz-deflate-best s))
    (sp-slice? e) (: n (tar-get e 'nom "")
                     (starts? n "src/apps/moon/include/" || starts? n "src/apps/moon/lib/"
                      || n = "src/apps/moon/include" || n = "src/apps/moon/lib"))
@@ -106,32 +115,37 @@
                     (i + 1 = n ? a (snip a 0 (#a - 1024)))))
             ^n))
    ; -> the container: the header row of each section, then them, packed, the index first
-   (sp-tree secs frags)
+   (sp-tree cs secs frags)
     (: idx (cats (map (i \ sp-recs (i + 1) (secs i)) ^#secs))
        raws (idx . frags)
        names ("index" . sp-secs)
-       packs (map (i \ sp-pack (names i) (raws i)) ^#raws)
-       (row i) (cats [(sp-name (names i)) (sp-le (peep sp-codecs (names i) 1) 4) (sp-le #(raws i) 4) (sp-le #(packs i) 4)
+       codec (map (nm \ peep cs nm 1) names)
+       packs (map (i \ sp-pack (codec i) (raws i)) ^#raws)
+       (row i) (cats [(sp-name (names i)) (sp-le (codec i) 4) (sp-le #(raws i) 4) (sp-le #(packs i) 4)
                       (sp-le (gz-crc32 (raws i)) 4)])
        (cats (["lovetree" (sp-le #raws 4)] + map row ^#raws + packs)))
-   ; the sidecar names the format with the digest, so a cut under another layout is not fresh
-   sp-fmt "tree2 "
+   ; the sidecar names the format and the codecs with the digest, so a cut under another
+   ; layout or table is not fresh
+   (sp-fmt spec) ("tree2 " + spec + " ")
 
    ; the cut that reads: pack, hash, and write when the content actually moved.
-   (sp-cut out side top stamp build rules ros)
+   (sp-cut spec out side top stamp build rules ros)
     (: g (tar-gather? (sp-keep? rules) "." "")
        _ (!g ? (sp-die "cannot read the tree"))
        secs (sp-lev <>g top stamp build ros)
        frags (sp-frags secs)
-       h (sp-fmt + sha256 (cats frags))
+       h (sp-fmt spec + sha256 (cats frags))
        old (sp-read side)
        have (sp-read out)
        (? (two? old && two? have && <>old = h) 0
-          (puts ("LOVE\t" + out), putc 10, sp-write out (sp-tree secs frags), sp-write side h, 0)))
+          (puts ("LOVE\t" + out), putc 10, sp-write out (sp-tree (sp-codecs spec) secs frags), sp-write side h, 0)))
 
-   (sp-main av)
-    (: n #av
-       _ (n < 5 ? (sp-die "usage: selfpack SRC.TREE TOP STAMP BUILD ROSTER [DROP..]"))
+   (sp-main a0)
+    (: spec (two? a0 && <a0 = "-c" ? <>a0 "")
+       av (two? a0 && <a0 = "-c" ? >>a0 a0)
+       _ (sp-codecs spec)                              ; a bad table dies before the walk
+       n #av
+       _ (n < 5 ? (sp-die "usage: selfpack [-c CODECS] SRC.TREE TOP STAMP BUILD ROSTER [DROP..]"))
        out <av
        top <>av
        stamp <(sound <>>av)
@@ -150,7 +164,7 @@
        _ (!t ? (sp-die "cannot read the tree"))
        hq (tar-hash (foldl (+) () (sp-lev <>t top stamp build ros)))
        old (sp-read side)
-       quiet (string? hq && two? old && <>old = sp-fmt + hq && two? (stat out))
-       (quiet ? 0 (sp-cut out side top stamp build rules ros)))
+       quiet (string? hq && two? old && <>old = sp-fmt spec + hq && two? (stat out))
+       (quiet ? 0 (sp-cut spec out side top stamp build rules ros)))
 
    (sp-main >argv))
