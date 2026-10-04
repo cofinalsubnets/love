@@ -885,6 +885,20 @@
                  (hot? q ? (say q t, (cite 'posix 'close q), 1)))
    ; mkdir -p: each directory prefix of p, then p, made at mode where missing -> p
    (umkdirs p mode) (: mk (cite 'posix 'mkdir) (each ((cite 'path 'pprefixes) p + [p]) (d \ mk d mode), p))
+   ; ..and at a place in one: n bytes from off -> (1 text), short at the end of the file;
+   ; text laid over the bytes at off, the rest of the file kept -> 1. () where it will not
+   ; open or seek. the seek is the raw fd's, before a port is laid over it
+   (u-at p m off) (cite 'posix 'openfd p m @ fd
+                   (charm? fd && 0 <= fd ?
+                      (charm? (cite 'posix 'lseek fd off 0) ? (fdopen fd) (cite 'posix 'close fd, ()))))
+   (uread-at p off n) (u-at p 0 off @ q
+     (hot? q ? (: b (cask (n < 65536 ? n 65536))
+                  (go k acc) (k < 1 ? acc
+                                 (cite 'posix 'swig q b @ r (charm? r && 0 < r ?
+                                    (go (k - r) ((snip b 0 (r < k ? r k)) . acc)) acc)))
+                  t (cats (rev (go n ())))
+                  (cite 'posix 'close q, [1 t]))))
+   (uwrite-at p off t) (u-at p 4 off @ q (hot? q ? (say q t, (cite 'posix 'close q), 1)))
    ; a main answers its status as a charm, or leaves from deep inside by scaring 'leave
    ; with it. urun is the driver both come back through, so a caller in the same image
    ; gets a charm instead of a dead process. nothing unwinds through a scare, so a port
@@ -3396,12 +3410,12 @@
    ; --- the tty, taken and given back ------------------------------------------------
    ; its [rows cols], 24 and 80 where it says no more than rmin and cmin (a fresh pty says 0)
    (ttysize rmin cmin) (tty 1 @ ws [(two? ws && rmin < <ws ? <ws 24) (two? ws && cmin < <>ws ? <>ws 80)])
-   ; raw, on the alternate screen, with modes: 'mouse (sgr reports), 'paste (bracketed),
-   ; 'hide (the cursor), ('title t) (pushed, popped on the way out). ttygive undoes exactly
+   ; raw, on the alternate screen, with modes: 'mouse (sgr reports), 'tap (a press alone,
+   ; sgr), 'paste (bracketed), 'hide (the cursor), ('title t) (pushed, popped on the way out). ttygive undoes exactly
    ; what ttytake set, every mouse mode included, and leaves the cursor shown
-   (ttyon m) (m @ 'mouse "\e[?1000h\e[?1006h" 'paste "\e[?2004h" 'hide "\e[?25l"
+   (ttyon m) (m @ 'mouse "\e[?1000h\e[?1006h" 'tap "\e[?9h\e[?1006h" 'paste "\e[?2004h" 'hide "\e[?25l"
                   ('title t) ("\e[22;0t\e]2;" + t + "\a") "")
-   (ttyoff m) (m @ 'mouse "\e[?1003l\e[?1002l\e[?1000l\e[?1006l" 'paste "\e[?2004l" ('title _) "\e[23;0t" "")
+   (ttyoff m) (m @ 'mouse "\e[?1003l\e[?1002l\e[?1000l\e[?1006l" 'tap "\e[?1006l\e[?9l" 'paste "\e[?2004l" ('title _) "\e[23;0t" "")
    (ttytake ms) (raw 1, say out ("\e[?1049h\e[2J" + cats (map ttyon ms)), flush out)
    (ttygive ms) (say out ("\e[0m" + cats (map ttyoff (rev ms)) + "\e[?25h\e[?1049l"), flush out, raw 0)
 

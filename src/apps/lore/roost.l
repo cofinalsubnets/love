@@ -6,7 +6,8 @@
 ; every line said about it is source.l's too, so the floor and `love nest -n` cannot
 ; disagree. roost-run answers 'apply or 'cancel.
 ;
-; a floor on rove: laid, not delved, lit end to end; the painter and the signs are rove's.
+; a floor on rove: laid, not delved, lit end to end; the painter, the signs and the keys are
+; rove's, a tap included: on a question a tap on a choice answers it.
 ; roost-new, roost-turn and roost-frame are state in and state out, gated headless by
 ; test/host/roost.l.
 (module (roost roost-run roost-new roost-turn roost-frame roost-face)
@@ -164,10 +165,10 @@
    r (two? ws && 7 < <ws ? (<ws - 2) 22)
    c (two? ws && 19 < <>ws ? <>ws 80)
    g (roost-new c r pl)
-   (turn k) (? (g 'ask) (k @ 27 (pins g 'ask () 'sign ()) (roost-turn g k))
+   (turn k) (? (g 'ask) (k @ 27 (pins g 'ask () 'sign ()) (roost-turn g (rove-key g k)))
                (k = 27 && g 'sign) (pin g 'sign ())
                (k @ (113 || 27 || -7) (pin g 'over 'cancel)
-                (roost-turn g k)))
+                (roost-turn g (rove-key g k))))
    (loop last t0) (g 'over ? ()
                      (: _ (say out (roost-frame g), flush out)
                         k (key-wait t0 last (g 'sign ? sign-gap repeat-gap) (_ \ rest 30))
@@ -177,11 +178,9 @@
     loop 0 0,
     g 'over))
  (roost-run pl)
-  (raw 1,
-   say out (esc + "[?1049h" + esc + "[?25l"),
+  (ttytake rove-modes,
    roost-walk pl @ r
-   (say out (esc + "[0m" + esc + "[?25h" + esc + "[?1049l"), flush out,
-    drain-keys (),
-    raw 0,
+   (drain-keys (),
+    ttygive rove-modes,
     r)))
 ) ; module roost

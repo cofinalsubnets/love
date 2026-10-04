@@ -530,15 +530,20 @@ test_ccthumb1 test_ccthumb2: test_cc%: host
 # rostered with a cause apiece in cts.sh, refusals and wrong answers kept apart.
 # opt-in on an imported tree (`make dl/c-testsuite`), skips whole without it.
 test_cts: host
-	@$(gsh) test/gate/cts.sh x64 $(ho) $m
+	@DL=$(dl) $(gsh) test/gate/cts.sh x64 $(ho) $m
 test_cts_a64 test_cts_rv64 test_cts_wasm: test_cts_%: host
-	@$(gsh) test/gate/cts.sh $* $(ho) $m
-# the corpus itself -- 220 files, cloned once and kept in dl/ like OVMF, so `make clean`
-# leaves it and only `make distclean` asks the network again. nothing depends on this rule:
-# a gate that downloads is a gate that fails on a train.
+	@DL=$(dl) $(gsh) test/gate/cts.sh $* $(ho) $m
+# the corpus itself -- 220 files, a pinned tarball checked by its hash and unpacked into dl/ like
+# OVMF, so `make clean` leaves it and only `make distclean` asks the network again. nothing
+# depends on this rule: a gate that downloads is a gate that fails on a train.
+cts_pin = 5c7275656d751de0e68b2d340a95b5681858ed07
+cts_sha = 010008bf4b5671f947ae7e8d693a1c959a4a4d795fa7227c0abb1f95de45f7e7
 dl/c-testsuite:
 	@echo 'MK	'c-testsuite
-	@git clone --depth=1 https://github.com/c-testsuite/c-testsuite.git $@ > /dev/null 2>&1
+	@mkdir -p dl && t=dl/c-testsuite-$(cts_pin).tar.gz; \
+	 [ -f $$t ] || curl -sSfL -o $$t https://github.com/c-testsuite/c-testsuite/archive/$(cts_pin).tar.gz || exit 1; \
+	 [ "$$(sha256sum < $$t | cut -d' ' -f1)" = $(cts_sha) ] || { echo "FAIL dl/c-testsuite: $$t is not the pinned tarball"; exit 1; }; \
+	 rm -rf $@.tmp && mkdir $@.tmp && tar xzf $$t -C $@.tmp && mv $@.tmp/c-testsuite-$(cts_pin) $@ && rmdir $@.tmp
 # test_libc -- our C library against the system's, function by function:
 # test/libc/*.c built by mooncc (pulling src/apps/moon/lib/moonlibc/ by need) and by gcc, run,
 # and the two outputs compared, so a drift names the function and the case.
@@ -1430,7 +1435,8 @@ endif
 # carries, drives cook with the artifact itself as the bootstrap (LOVE=, so no love0 is
 # compiled -- there is no seat here to run one) and cross-builds a hosted x64 love with
 # its own mooncc. nothing under it but wasm: no cc, no shell, no toolchain. the seed asks
-# for the egg to be carried out itself, and on an x64 box it has to run.
+# for the egg to be carried out itself, and on an x64 box it has to run: its first run
+# bakes it in place and goes on, and the second wakes the image the first one laid.
 # RAM: the seat's collector is bounded at an eighth of the machine (src/inle/kmain.c), so the
 # machine has to be big enough that an eighth of it holds the largest live set. that is
 # selfpack's, laying the dist tarball: 512 ooms there, 768 carries it, and this is the
@@ -1451,7 +1457,7 @@ test_seedwasm: host
 	   && grep -q "carried out of the machine" out/wasm/seed.log && test -s out/wasm/love-x64 \
 	   || { tail -20 out/wasm/seed.log; echo "FAIL test_seedwasm"; exit 1; }
 	@chmod +x out/wasm/love-x64
-	@$(if $(filter x64,$(hosta)),out/wasm/love-x64 -v,echo "  the egg is x64 and this box is $(hosta): laid, not run")
+	@$(if $(filter x64,$(hosta)),sh test/gate/seedegg.sh out/wasm/love-x64,echo "  the egg is x64 and this box is $(hosta): laid, not run")
 endif
 
 # test_nestwasm -- the artifact rebuilds its own wasm MODULE aboard the wasm seat: the
@@ -1510,11 +1516,7 @@ vmret: host
 	@$m src/tools/vmret.l $m
 endif
 
-WAITS_C := $(shell git ls-files '*.c' 2>/dev/null || $m sb ls 2>/dev/null | grep '\.c$$')
-ifeq ($(WAITS_C),)
+# the .c files from the tree's own listing (selfpack -l); an empty one is a refusal, never a pass
 waits: host
-	@sh test/gate/skip.sh gate-skip "waits: skipped (needs a git checkout or an sb nest to enumerate the .c files)"
-else
-waits: host
-	@$m src/tools/waits.l $(WAITS_C)
-endif
+	@fs=$$($m src/tools/selfpack.l -l | grep '\.c$$'); [ -n "$$fs" ] || { echo "FAIL waits: no .c files listed"; exit 1; }; \
+	 $m src/tools/waits.l $$fs

@@ -353,8 +353,29 @@ static int bsrc_lay_cat(char *cat, size_t n, char const *at) {
       close(fd), unlink(cat);
       return 0; } }
   return close(fd), 1; }
+
+// an egg a cross seed laid wears 2 where a fresh link's stub says 1 (src/apps/source.l,
+// seed-mark): its first run on the target bakes it in place -- `bake` as a child, the
+// adopt by rename -- then runs the same line again from the image it laid. a bake that
+// will not go (a read-only seat) is said, and the line runs from the egg as it is.
+static void self_bake(char const **argv) {
+  char exe[4096];
+  if (baked_image_len != 16 || baked_image[0] != 2 || !host_selfpath(exe, sizeof exe)) return;
+  fprintf(stderr, "love: a fresh egg: baking %s in place\n", exe);
+  pid_t pid = fork();
+  if (pid < 0) return;
+  if (!pid) {
+    char const *bv[] = { exe, "bake", NULL };
+    execv(exe, (char *const *) bv);
+    _exit(127); }
+  int st; while (waitpid(pid, &st, 0) < 0 && errno == EINTR) {}
+  if (!WIFEXITED(st) || WEXITSTATUS(st))
+    return (void) fprintf(stderr, "love: the bake did not go: running unbaked\n");
+  execv(exe, (char *const *) argv);
+  fprintf(stderr, "love: baked, but can't run again: running unbaked\n"); }
 #else
 #define bsrc_lay_cat(cat, n, at) 0
+#define self_bake(argv) ((void) 0)
 #endif
 
 // read-eval one .l file into the booting session, loudly: a bake's cat has no shell help,
@@ -545,6 +566,9 @@ int main(int argc, char const **argv) {
    if (baked_pick(&bimg, &blen) && (g = love_image_load(bimg, blen, 2)))
     woke_ms = love_clock() - t0,
     image_load_path = "<baked>"; }                                     // a loaded image is the booted state: skip the egg warm
+#ifndef Love0
+  if (!g && !bake && !(noimg && *noimg)) self_bake(argv);
+#endif
   if (!g) g = ini();
   // -n lays the stub back and saves no heap, so it skips the warm outright: the strip is
   // instant, and it answers for a binary whose own corpus would not boot.

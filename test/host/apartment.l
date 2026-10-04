@@ -179,5 +179,22 @@
        (0 < n1) !(g 'sfx)
        (#loud = 40 * 4 * song-chunk) (any (i \ 0 != loud (i * 89)) ^400)))
 
+;; a tap is rove's: on the talk's sign a choice is its digit, and off the box it is 0, which
+;; shows the node again; with no sign standing a tap steers toward where it landed
+(: g (apartment-new 80 22 (wheel 5)) d (g 'd) p (g 'p)
+   _ (chat g 'start)
+   ls >(g 'sign)
+   (row-of t) (: (go i) (find (ls i) t 0 ? i (go (i + 1))) (go 0))
+   (tap-at i) (: (go y) (y > 40 ? -1 (i = sign-line <(g 'sign) ls 1 (peep d 'rows (d 'h)) (peep d 'cols (d 'w)) y ? y (go (y + 1)))) (go 0))
+   k2 (tap-key g [40 (tap-at (row-of "Where is this place?"))])
+   k0 (tap-key g [0 0])
+   _ (apartment-turn g k2)
+   here (g 'talk)
+   _ (pins g 'sign () 'talk ())
+   (at dx dy) (tap-key g [(p 'x + dx + peep d 'vx 0) (p 'y + dy + 1 + peep d 'vy 0)])
+ (test (50 = k2) (0 = k0) ('here = here)
+       ('(1 0) = at 5 0) ('(-1 -1) = at -4 -2) ('(0 1) = at 0 3)
+       ('(1 0) = rove-key g 108) (113 = rove-key g 113)))
+
 (test_fin (),
  puts "apartment: ok -- the plain is laid, the cube is closed, the stranger talks through the pane, and the end opens it\n")
