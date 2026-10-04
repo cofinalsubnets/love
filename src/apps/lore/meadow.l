@@ -28,9 +28,13 @@
  near-z 0.12                           ; the bare dirt behind the row, before the meadow
  deep-z 2.6                             ; how far the meadow's own blades run
  field-n 700
- ; --- the screen: w by h pixels, and each pixel's ray, and where it meets the dirt ---
+ ; --- the screen: w by h pixels, and each pixel's ray, and where it meets the dirt. the
+ ; land takes the rows under the middle up to land-r of the width; a screen taller than
+ ; that gives the rest to the sky, as the flat field does ---
+ land-r 0.3
  (meadow-size st w h) (: n (w * h) i (iota n) x (i % w) y (i // w)
-   U ((x + 0.5 - w / 2.0) / (w / 2.0)) V ((h / 2.0 - y - 0.5) / (w / 2.0))
+   cy (h - min2 (h / 2.0) (land-r * w))
+   U ((x + 0.5 - w / 2.0) / (w / 2.0)) V ((cy - y - 0.5) / (w / 2.0))
    sp (sin pitch) cp (cos pitch)
    dx0 U dy0 (sp + V * cp) dz0 (cp - V * sp)
    ln (sqrt (dx0 * dx0 + dy0 * dy0 + dz0 * dz0))
@@ -51,9 +55,19 @@
    kx (max (peep kc x 0.0) 1.0) f ((kx - y - 0.5) / kx)
    el (sky-lo + f * (0.5 * pi - sky-lo) * 0.97) az (az-lift * atan U) cl (cos el)
    _ (pins st 'kc kc 'sdx (cl * sin az) 'sdy (sin el) 'sdz (cl * cos az))
-   (pins st 'w w 'h h 'foc (w / 2.0) 'dx dx 'dy dy 'dz dz 'gnd gnd
-            'gx gx 'gz gz 'G (iota gnd) 'S (iota (1 - gnd))
-            'bay (view-bayer w h) 'f [0.0 sp cp] 'u [0.0 cp (0.0 - sp)]))
+   (lay-stars (pins st 'w w 'h h 'cy cy 'foc (w / 2.0) 'dx dx 'dy dy 'dz dz 'gnd gnd
+                     'gx gx 'gz gz 'G (iota gnd) 'S (iota (1 - gnd))
+                     'bay (view-bayer w h) 'f [0.0 sp cp] 'u [0.0 cp (0.0 - sp)])))
+ ; the stars: fixed in the sky, evenly up it, each one pixel where the lens shows it and
+ ; the land does not -- [index direction brightness phase]
+ star-k 70
+ (lay-stars st) (: w (st 'w) h (st 'h)
+   (one k) (: az (5.8 * (throw k 1 91 1000 / 1000.0 - 0.5)) el (0.47 * pi * throw k 2 93 1000 / 1000.0)
+              q [(cos el * sin az) (sin el) (cos el * cos az)]
+              (on-screen st q @ p (two? p ? (: x (int (p 0)) y (int (p 1)) i (y * w + x)
+                                               (0 <= x && x < w && 0 <= y && y < h && peep (st 'gnd) i 1 = 0 ?
+                                                  [i q (0.3 + 0.12 * throw k 3 95 5) (throw k 4 97 628 / 100.0)])))))
+   (pin st 'stars (filter two? (map one ^star-k))))
  (asin v) (atan (v / sqrt (max (1.0 - v * v) 1e-9)))
  (at2 y x) (? (0.0 < x) (atan (y / x)) (x < 0.0) (atan (y / x) + (y < 0.0 ? (0.0 - pi) pi)) (y < 0.0 ? (-0.5 * pi) (0.5 * pi)))
  ; ..and back: a direction in the sky to the place on the screen the lens shows it, [x y]
@@ -63,6 +77,18 @@
    x (0.5 * w * (1.0 + sin as / cos as))
    (mag as < 1.4 && -4.0 < x && x < w + 4.0 && -0.1 < f ?
       [x (peep (st 'kc) (min2 (w - 1) (max2 0 (int x))) 1.0 * (1.0 - f))] ()))
+ ; how much of the sun's disc the moon's covers, 0 to 1: as drawn, where both are on the
+ ; screen, else by the angle between them at the screen's middle scale
+ (acos x) (at2 (sqrt (max 0.0 (1.0 - x * x))) x)
+ (covered d a b) (? (a + b <= d) 0.0 (d <= b - a) 1.0 (d <= a - b) (b * b / (a * a))
+   (: p (a * a * acos ((d * d + a * a - b * b) / (2.0 * d * a)))
+      q (b * b * acos ((d * d + b * b - a * a) / (2.0 * d * b)))
+      r (0.5 * sqrt (max 0.0 ((a + b - d) * (d + a - b) * (d - a + b) * (d + a + b))))
+      ((p + q - r) / (pi * a * a))))
+ (eclipse st s mo) (: sc (on-screen st s) mc (on-screen st mo)
+   (? (s 1 < -0.03 || mo 1 < -0.03) 0.0
+      (two? sc && two? mc) (covered (sqrt (sq (sc 0 - mc 0) + sq (sc 1 - mc 1))) 2.4 2.8)
+      (: k (0.5 * st 'w / az-lift) (covered (k * acos (s 0 * mo 0 + s 1 * mo 1 + s 2 * mo 2)) 2.4 2.8))))
  ; the pixels of a disc r across at c, off the land: [idx du dv], du dv its own
  ; coordinates, -1 to 1, up and to the right
  (disc st c r) (: w (st 'w) h (st 'h) x0 (max2 0 (int (c 0 - r) - 1)) x1 (min2 (w - 1) (int (c 0 + r) + 1))
@@ -130,7 +156,7 @@
    zc (qy * f 1 + qz * f 2)
    zs (max zc 0.01)
    cx (floor (w / 2.0 + foc * qx / zs))
-   cy (floor (h / 2.0 - foc * (qy * uv 1 + qz * uv 2) / zs))
+   cy (floor (st 'cy - foc * (qy * uv 1 + qz * uv 2) / zs))
    ok ((0.01 < zc) * (0 <= cx) * (cx < w) * (0 <= cy) * (cy < h))
    [(over -1 ok (cy * w + cx)) cx cy])
  ; --- the dirt: patches of brown, a pebble now and then, greener toward the haze ---
@@ -151,10 +177,14 @@
  (land gx gz) (cmix (dirt gx gz) (turf gx gz) (sat ((gz - 1.0) / 2.5)))
  ; --- the frame's colours, three trays a picture wide ---
  (meadow-pens st g wx) (: lt (meadow-light g wx) s (lt 'sun) sim (cloud-sim g) t0 (g 'fr)
+   ; the moon over the sun takes its light as it covers it, and the sky's with it
+   mo (meadow-moon st g) ph (meadow-phase st g) ec (eclipse st s mo)
+   _ (? (0.0 < ec) (pins lt 'sunk (lt 'sunk * (1.0 - ec)) 'day (lt 'day * (1.0 - 0.85 * ec * ec))
+                          'amb (c* (1.0 - 0.7 * ec * ec) (lt 'amb))) 0)
    w (st 'w) h (st 'h) G (st 'G) S (st 'S) (only ix v) (peep v ix 0.0)
    wxv ((0.0 - sin (g 'head * pi / 180.0) * g 'wind) * g 'gust)
    ; the sky behind, and the dirt under, each where it shows
-   hv (sky-colour lt wx (only S (st 'sdx)) (only S (st 'sdy)) (only S (st 'sdz)) (eye 0) (eye 2) sim t0)
+   hv (sky-colour-of lt wx (only S (st 'sdx)) (only S (st 'sdy)) (only S (st 'sdz)) (eye 0) (eye 2) sim t0 0.0)
    gx (only G (st 'gx)) gz (only G (st 'gz))
    alb (land gx gz)
    nx (only G (st 'nx)) ny (only G (st 'ny)) nz (only G (st 'nz))
@@ -192,10 +222,21 @@
    gc (cmix (cm alb irr) hazec far)
 
    z0 (st 'dx * 0.0)
-   col00 (map (k \ pin (pin z0 G (gc k)) S (hv k)) ^3)
-   ; --- the sun and the moon, discs where the lens shows them, the land in front of them ---
+   colg (map (k \ pin (pin z0 G (gc k)) S (hv k)) ^3)
    (put col d c) (: ix (d 0) (map (k \ pin (col k) ix (c k)) ^3))
    (behind col d) (: ix (d 0) (map (k \ peep (col k) ix 0.0) ^3))
+   ; --- the stars by night, a pixel each, where no cloud is: twinkling, or in pixels on
+   ; and off ---
+   sl (st 'stars) nt (sat (1.0 - lt 'day * 3.0))
+   col00 (? (0.0 < nt && two? sl)
+            (: (tr k) (gem-tray [#sl] (map (q \ 1.0 * q k) sl)) (td k) (gem-tray [#sl] (map (q \ q 1 k) sl))
+               si (int (tr 0)) ph (tr 3)
+               cl (sky-cloud wx (td 0) (td 1) (td 2) (eye 0) (eye 2) sim)
+               v (wx 'style = 'pixel ? ((0.6 < sin (t0 * 0.9 + ph)) * (lt 'day < 0.1) * (cl < 0.5) * 1.6)
+                    (tr 2 * (0.75 + 0.25 * sin (t0 * 0.9 + ph)) * nt * (1.0 - cl)))
+               (put colg [si] (c+ (behind colg [si]) [v v (0.9 * v)])))
+            colg)
+   ; --- the sun and the moon, discs where the lens shows them, the land in front of them ---
    ; the sun: hot at the middle, its colour the light's. behind a cloud it softens and pales
    ; but shows, and the cloud round it glows, so where it is can be told
    sc (on-screen st s) cs (lt 'csun) sd (s 1 < -0.03 || !sc ? () (disc st sc 2.4))
@@ -207,17 +248,17 @@
                        (put colh sd (cmix (behind colh sd) core fall)))
               colh)
    ; the moon: its lit side toward the sun and as wide as the phase, seas on it, pale by day,
-   ; behind a cloud dimmed, and its dark side hiding the stars
-   mo (meadow-moon st g) ph (meadow-phase st g)
+   ; behind a cloud dimmed. it hides what lies past it -- the stars, and the sun -- and no
+   ; more: its dark side shows the sky nearer than it, the twilight and the cloud
    mcs (on-screen st mo) md (mo 1 < -0.03 || !mcs ? () (disc st mcs 2.8))
-   col0 (two? md ? (: du (md 1) dv (md 2)
+   col0 (two? md ? (: du (md 1) dv (md 2) ix (md 0) (dir v) (peep v ix 0.0)
                      sg (? (0.0 < wrap (at2 (s 0) (s 2) - at2 (mo 0) (mo 2))) 1.0 -1.0)
                      lit (sg * du > cos (2.0 * pi * ph) * sqrt (max (1.0 - dv * dv) 0.0))
                      sea (0.72 + 0.28 * vn ((du + 3.0) * 2.3) ((dv + 3.0) * 2.3) 77)
                      cl (sky-cloud wx (mo 0) (mo 1) (mo 2) (eye 0) (eye 2) sim)
                      k (sea * (0.5 + 0.9 * (1.0 - lt 'day)) * (1.0 - 0.85 * cl))
-                     sk (behind col01 md)
-                     (put col01 md (c+ (c* (1.0 - 0.6 * (1 - lit) * (1.0 - lt 'day)) sk) (c* (lit * k) [0.95 0.93 0.82]))))
+                     near (sky-near lt wx (dir (st 'sdx)) (dir (st 'sdy)) (dir (st 'sdz)) (eye 0) (eye 2) sim)
+                     (put col01 md (c+ near (c* (lit * k) [0.95 0.93 0.82]))))
              col01)
    ; --- the blades, far to near: the meadow's, then the row's ---
    (green hue u wilt mu) (: base (cmix [0.05 0.16 0.03] [0.16 0.4 0.07] u)
