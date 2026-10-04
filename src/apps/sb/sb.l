@@ -1309,7 +1309,8 @@ usage: sb VERB ..
                   their deps) and lay the tree: what a hub does to land work
   ls [-l]         the head's paths; -l puts each one's side (blob hash, x when
                   executable) and a tab before it
-  unpack DIR [H..]  blobs as plain files DIR/HASH: the hashes named, else the head's
+  unpack DIR [H..|-]  blobs as plain files DIR/HASH: the hashes named (- reads them
+                  from stdin), else the head's
   psid [SET]      the name of a set's state: the head's, or SET's (a ref, a
                   patch, a psid, or head)
   paths A B       the paths sets A and B lay differently, a line each
@@ -1370,7 +1371,7 @@ usage: sb VERB ..
            "status" !(sb-status ())
            "bisect" (#>as < 3 ? (usage ()) (: r (held "." (_ \ sb-bisect >as)) (? (r = 2) (usage ()) !r)))
            "ls" (sb-ls (elem "-l" >as), 0)
-           "unpack" (two? >as ? !(sb-unpack <>as >>as) (usage ()))
+           "unpack" (two? >as ? !(sb-unpack <>as (>>as = ["-"] ? words (slurp in + "") >>as)) (usage ()))
            "psid" !(sb-psid >as)
            "stamp" !(sb-stamp >as)
            "paths" (#>as = 2 ? (sb-paths <>as <>>as) (usage ()))

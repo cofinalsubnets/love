@@ -1219,13 +1219,19 @@
          known (foldl (\ t l (? (#l = 105) (pin t (snip l 0 64) (snip l 65 105)) t)) {}
                       (lines (? (two? (stat mapf)) (slurp-file mapf) "")))
          hs (uniq (map (e \ snip <e 0 64) ents))
-         cand (filter (h \ known h) hs)
-         _ (spit-file (tmp + ".ask") (cats (catmap (h \ [known h "\n"]) cand)))
+         cand (filter (h \ string? (known h)) hs)
+         _ (spit-file (tmp + ".ask") (cats (catmap (h \ [(known h) "\n"]) cand)))
          held2 (lines (? (two? cand) (lush-out ("git -C " + sq path + " cat-file --batch-check < " + sq (tmp + ".ask"))) ""))
          live (foldl (\ t i (? (find (held2 i) " blob " 0 = 40) (pin t (cand i) 1) t)) {} ^#cand)
          need (filter (h \ !(live h)) hs)
-         _ (? (two? need) (q-sb ("unpack " + sq (tmp + ".raw") + cats (map (h \ " " + h) need))) "")
-         _ (spit-file (tmp + ".blobs") (cats (catmap (\ h [tmp ".raw/" h "\n"]) need)))
+         ; the hub's own tree holds the head: a file there whose bytes are the blob is handed as
+         ; it stands, and only what is not (an edited hub) comes from the store
+         at (foldl (\ t e (? (string? (t (snip <e 0 64))) t (pin t (snip <e 0 64) (hub + "/" + e 1)))) {} ents)
+         onfile (foldl (\ t h (: f (slurp-file (at h)) (? (string? f && sha256 f = h) (pin t h (at h)) t))) {} need)
+         rest (filter (h \ !(string? (onfile h))) need)
+         _ (spit-file (tmp + ".need") (cats (map (h \ h + "\n") rest)))
+         _ (? (two? rest) (q-sb ("unpack " + sq (tmp + ".raw") + " - < " + sq (tmp + ".need"))) "")
+         _ (spit-file (tmp + ".blobs") (cats (map (h \ (? (string? (onfile h)) (onfile h) (tmp + ".raw/" + h)) + "\n") need)))
          ng (? (two? need) (lines (lush-out ("git -C " + sq path + " hash-object -w --stdin-paths < " + sq (tmp + ".blobs")))) ())
          _ (? (#ng = #need && two? need)
               (spit-file mapf ((? (two? (stat mapf)) (slurp-file mapf) "") + cats (map (i \ need i + " " + ng i + "\n") ^#need)))
@@ -1254,7 +1260,7 @@
          o (? (0 < #held && q-abs held != hub) ""
               (two? (filter (g \ #g != 40) gs)) ""
               (chomp (lush-out ("sh " + sq (tmp + ".sh") + " 2>&1"))))
-         _ (map (\ x (unlink (tmp + x))) [".blobs" ".ask" ".info" ".msg" ".sh" ".index"])
+         _ (map (\ x (unlink (tmp + x))) [".blobs" ".ask" ".need" ".info" ".msg" ".sh" ".index"])
          _ (lush-out ("rm -rf " + sq (tmp + ".raw")))
          (? (0 < #held && q-abs held != hub)
              [0 ("the mirror's branch " + br + " is checked out at " + held + ", not the hub: it would move under that checkout")]
