@@ -11,8 +11,8 @@ include $(R)/common.mk
 # (where $(m)'s ../ prefix would point one level above the root).
 mr = out$(hsuf)/love
 
-.PHONY: all test_cook test_tele test_xor test_hue test_hueweb
-all: test_cook test_tele test_xor test_hue test_hueweb
+.PHONY: all test_cook test_tele test_xor test_hue test_hueweb test_dlfind
+all: test_cook test_tele test_xor test_hue test_hueweb test_dlfind
 
 # Build the host love on demand (it runs the .l tools); only if it's missing.
 $(m):
@@ -112,3 +112,14 @@ test_xor: | $(m)
 	  r=$$?; cat out/.test_xor.out; \
 	  [ $$r -eq 0 ] || { echo "FAIL test_xor (exit $$r)"; exit 1; }; \
 	  grep -q "tests pass" out/.test_xor.out || { echo "FAIL test_xor (exit 0, no summary)"; exit 1; }
+
+# dlfind: a tree's own dl/ or the one above it, else the nest's in ~/.love/etc/dl, else none.
+# the trees are made under /tmp, so the walk up meets no checkout's dl/ on the way
+test_dlfind:
+	@echo TEST dlfind.sh
+	@t=$$(mktemp -d) && mkdir -p $$t/a/dl $$t/a/b $$t/c $$t/h/.love/etc $$t/n && \
+	 w() { [ "$$(HOME=$$t/h sh dlfind.sh $$1)" = "$$2" ] || { echo "FAIL dlfind $$1: want '$$2'"; rm -rf $$t; exit 1; }; } && \
+	 w $$t/a/b $$t/a/dl && w $$t/c "" && \
+	 echo $$t/n > $$t/h/.love/etc/dl && w $$t/c $$t/n && w $$t/a/b $$t/a/dl && \
+	 echo $$t/gone > $$t/h/.love/etc/dl && w $$t/c "" && \
+	 rm -rf $$t
