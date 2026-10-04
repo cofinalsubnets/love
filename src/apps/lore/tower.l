@@ -11,7 +11,7 @@
 ;
 ; run: love lore tower. the climb gates headless in test/host/rove.l; only tower-run ties the
 ; tty, and test/host/tty.l plays it on a pty.
-(module (tower tower-run tower-main tap-key bell-row bell-open bell-key cell-face
+(module (tower tower-run tower-main bell-row bell-open bell-key cell-face
          live-cells crawl-new crawl-turn crawl-frame crawl-bar mob-new mob-set stock mend
          ascend circle? vale-new vale-tick walled? on-ring? done? enter exit-at circle-r
          circle-q circle-far ring-in talk talk-key talk-node her-tree open-box doom oct-pt
@@ -483,15 +483,6 @@
               (pin d 'live ls, ls))))
 
 
-
- ; ..and a tap on a page with choices -- hers, or the book's -- is the choice it lands
- ; on: the digit that picks it, or 0, which shows the page again. any other tap steers.
- (tap-key g c) (: sg (g 'sign) d (g 'd)
-                  (sg && (g 'talk || g 'bell) ?
-                     (: j (sign-line <sg >sg 1 (peep d 'rows (d 'h)) (peep d 'cols (d 'w)) <>c)
-                        l (0 <= j ? (>sg j) "")
-                        (2 < #l && l 0 = 1 ? (l 2) 0))  ; a choice's line opens on 1, its digit next
-                     (tap-steer g c)))
 
 
 
@@ -1632,8 +1623,7 @@
              ; a page of the book or her tree is left, not the tower
              (turn k) (k = 27 && g 'sign ? (pins g 'sign () 'pages () 'bell () 'talk ())
                          (k @ (113 || 27 || -7) (pin g 'over 'fled)
-                          -12 (crawl-turn g (tap-key g (edtap ())))
-                          (crawl-turn g (steer k))))
+                          (crawl-turn g (rove-key g k))))
              ; the ground shudders: the view jolts a row either way for half a second,
              ; with whatever sign the turn raised held back until it is still
              ; ..and the song goes on under it
@@ -1649,18 +1639,15 @@
                                    g 'rumble ? (rumble! ()),
                                    sng ? (song-tier sng g),
                                    loop k (clock 0))))
-             (raw 1,
-              say out "\e[?1049h\e[?25l\e[2J\e[?9h\e[?1006h",   ; a tap's press, as edkey's -12
+             (ttytake rove-modes,
               loop 0 0,
              ; an end shows its frame for a beat, the song still going, before the screen is given back
               (say out (crawl-frame g), flush out, hold 1200),
              ; ..and the card goes back before the walk asks for it
               hn ? (flush hn, close hn),
               g 'over = 'won ? (tower-win g),
-              say out "\e[?1006l\e[?9l\e[0m\e[?25h\e[?1049l",
-              flush out,
               drain-keys (),
-              raw 0,
+              ttygive rove-modes,
              ; won: the token line is still in the note row, and goes to the shell too.
              ; the shell hears 0 whichever way the climb ended: a count is not a status
               puts ((g 'over @ 'won (fit (g 'msg) 200)

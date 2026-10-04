@@ -135,12 +135,11 @@
    nx (lv 'next) walk (nx ? (cite (nx 0) (nx 1)))
    (st 'done && walk ? (walk ()),
     st))
- ; ..and the verb around a walk: the screen raised here and put back here
- (view-run walk) (raw 1,
-                  say out (esc + "[?1049h" + esc + "[?25l"),
+ ; ..and the verb around a walk: the screen raised here and put back here, taps on for
+ ; the rove floors a walk hands over to
+ (view-run walk) (ttytake rove-modes,
                   walk (),
-                  (say out (esc + "[0m" + esc + "[?25h" + esc + "[?1049l"), flush out),
                   drain-keys (),
-                  raw 0,
+                  ttygive rove-modes,
                   0))
 ) ; module view

@@ -3396,12 +3396,12 @@
    ; --- the tty, taken and given back ------------------------------------------------
    ; its [rows cols], 24 and 80 where it says no more than rmin and cmin (a fresh pty says 0)
    (ttysize rmin cmin) (tty 1 @ ws [(two? ws && rmin < <ws ? <ws 24) (two? ws && cmin < <>ws ? <>ws 80)])
-   ; raw, on the alternate screen, with modes: 'mouse (sgr reports), 'paste (bracketed),
-   ; 'hide (the cursor), ('title t) (pushed, popped on the way out). ttygive undoes exactly
+   ; raw, on the alternate screen, with modes: 'mouse (sgr reports), 'tap (a press alone,
+   ; sgr), 'paste (bracketed), 'hide (the cursor), ('title t) (pushed, popped on the way out). ttygive undoes exactly
    ; what ttytake set, every mouse mode included, and leaves the cursor shown
-   (ttyon m) (m @ 'mouse "\e[?1000h\e[?1006h" 'paste "\e[?2004h" 'hide "\e[?25l"
+   (ttyon m) (m @ 'mouse "\e[?1000h\e[?1006h" 'tap "\e[?9h\e[?1006h" 'paste "\e[?2004h" 'hide "\e[?25l"
                   ('title t) ("\e[22;0t\e]2;" + t + "\a") "")
-   (ttyoff m) (m @ 'mouse "\e[?1003l\e[?1002l\e[?1000l\e[?1006l" 'paste "\e[?2004l" ('title _) "\e[23;0t" "")
+   (ttyoff m) (m @ 'mouse "\e[?1003l\e[?1002l\e[?1000l\e[?1006l" 'tap "\e[?1006l\e[?9l" 'paste "\e[?2004l" ('title _) "\e[23;0t" "")
    (ttytake ms) (raw 1, say out ("\e[?1049h\e[2J" + cats (map ttyon ms)), flush out)
    (ttygive ms) (say out ("\e[0m" + cats (map ttyoff (rev ms)) + "\e[?25h\e[?1049l"), flush out, raw 0)
 
