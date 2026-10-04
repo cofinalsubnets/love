@@ -74,14 +74,7 @@
    (spitf f s)   (open f "w" @ q (hot? q ? (say q s, close q, 1) 0))
    ; a directory answers a list from readdir, a file answers nothing -- that is the test,
    ; and it needs no mode bits (love has no bitwise and to pick S_IFDIR out of stat's mode).
-   (dir? p)      (two? (readdir p))
-   ; mkdir every prefix, ignoring an already-there (mkdir answers an errno nom, and we
-   ; do not care which -- a real failure surfaces at the first open for writing). it walks the
-   ; path rather than splitting it, so a leading slash survives: splitting on / and
-   ; rejoining quietly turns /tmp/x into tmp/x, and the whole build then writes nowhere.
-   ; the prefixes keep a leading slash where splitting on / and rejoining would
-   ; quietly turn /tmp/x into tmp/x, and the whole build then writes nowhere
-   (mkdirp p)    (each (pprefixes p) (d \ mkdir d 493), #p ? (mkdir p 493) 0))
+   (dir? p)      (two? (readdir p)))
 
 ; --- slugs: a heading becomes an id ----------------------------------------------------
 ; lowercase, runs of anything-else collapsed to one dash, the ends trimmed. two headings
@@ -308,7 +301,7 @@ table{border-collapse:collapse}
    (: out (peep conf 'out "out/site")
       srcs (sources conf)
       _ (atom? srcs ? (scare 'papel "papel: no markdown sources"))
-      _ (mkdirp out)
+      _ (umkdirs out 493)
       known (foldl (t \ s \ pin t (pbase s) 1) {} srcs)
       self (peep conf 'self "")
       dep (two? (stat self) ? [self])

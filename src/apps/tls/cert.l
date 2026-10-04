@@ -65,13 +65,13 @@
 
    ; --- pem ---
    (pem-out label d)
-    ((cite 'ssh 'b64e d 1) @ b
+    (b64e d 1 @ b
        ("-----BEGIN " + label + "-----\n" + catmap (i \ snip b (64 * i) (min #b (64 * i + 64)) + "\n") ^((#b + 63) // 64)
         + "-----END " + label + "-----\n"))
    (pem-in t label)
     (: b ("-----BEGIN " + label + "-----") e ("-----END " + label + "-----")
        (go i acc) (: p (fsub t b i) q (p < 0 ? -1 (fsub t e (p + #b)))
-                     (q < 0 ? (rev acc) (go (q + #e) (b64-dec t (p + #b) q . acc))))
+                     (q < 0 ? (rev acc) (go (q + #e) (b64d (snip t (p + #b) q) . acc))))
        (string? t ? (go 0 ())))
 
    ; --- keys: ['ed25519 seed pub] and ['p256 d [x y]] ---
