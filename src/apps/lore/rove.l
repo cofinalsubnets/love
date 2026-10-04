@@ -12,7 +12,7 @@
          nth-on open-book open? pace! pacer pad page-foot paint paint-live pen pen-gap pen-lum pen-rgb pens repeat-gap rgb-pen roll
          settle settle-slice sign-box sign-flow sign-gap sign-line sign-over sign-pen
          sign-rect sign-top sign-tpen snip-l song-fill song-lead song-lead-max song-lead-of song-rate steer
-         tail? tap-steer toward vlen)
+         tail? tap-key tap-steer rove-key rove-modes toward vlen)
 (borrow 'posix)
 (borrow 'x11)
 (borrow 'text)
@@ -251,6 +251,18 @@
                     (? (dx = 0 && dy = 0) 60
                        (ax <= 1 && ay <= 2 && 2 = dat d (p 'x) (p 'y)) 60
                        [dx dy]))
+ ; ..but a tap on a standing sign is the choice it lands on: the digit that picks it, or
+ ; 0, which a page takes as any other key -- shown again, or taken down
+ (tap-key g c) (: sg (g 'sign) d (g 'd)
+                  (two? sg ?
+                     (: j (sign-line <sg >sg 1 (peep d 'rows (d 'h)) (peep d 'cols (d 'w)) <>c)
+                        l (0 <= j ? (>sg j) "")
+                        (2 < #l && l 0 = 1 ? (l 2) 0))  ; a choice's line opens on 1, its digit next
+                     (tap-steer g c)))
+ ; the key a floor's turn is given: a tap (cli's -12) through tap-key, the rest through steer
+ (rove-key g k) (k = -12 ? (tap-key g (edtap ())) (steer k))
+ ; ..and the tty a floor is played on, for ttytake and ttygive: a tap's press, no cursor
+ rove-modes '(hide tap)
 
  ; a line and its holes: each ~ takes the next value, a string as itself and anything
  ; else as show, so a table line reads as the line it prints.
@@ -368,10 +380,11 @@
  repeat-gap 120                                         ; ms a held key's repeats are dropped for
  sign-gap 600                                           ; ..and while a sign stands
  ; the blocking shape: wait for a key, running idle between polls -- last is the key
- ; the last turn took and t0 when; answers the key to turn on
+ ; the last turn took and t0 when; answers the key to turn on. a tap's release (cli's 0)
+ ; is no key
  (key-wait t0 last gap idle) (cue? 0 ?
                                 (edkey in @ k
-                                   (k = last && clock t0 < gap ? (key-wait t0 last gap idle) k))
+                                   (k = 0 || k = last && clock t0 < gap ? (key-wait t0 last gap idle) k))
                                 (idle (), key-wait t0 last gap idle))
  ; the polling shape: every key waiting handed to take under the same rule, the last
  ; key taken and its time riding g as 'lk and 'lt; answers how many were taken

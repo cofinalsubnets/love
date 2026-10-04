@@ -1,10 +1,11 @@
 ; test/host/roost.l -- the nest as a floor (src/apps/lore/roost.l), headless
 ; the plan is spelled here as src/apps/source.l's nest-plan lays one, so nothing touches a
-; home: the opening sign, the perch asked both ways, a shelf turned, the door stayed at
+; home: the opening sign, the perch asked both ways and by a tap, a shelf turned, the door stayed at
 ; and then taken, and a frame that paints the room.
 ;
 ; run:  cat test/00-init.l test/host/roost.l | out/love
 (borrow 'roost)
+(borrow 'rove)
 
 (: pl {'mine 1790542482 'theirs 1790000000 'verdict 'older 'lay 'lay
        'tools [{'nm "lush" 'was "" 'act 'link}
@@ -26,6 +27,16 @@
    _ (bump <pc <>pc 107)
    _ (roost-turn g 49)
    _ (test (pl 'lay = 'lay))                               ; 1: lay this build
+   ; a tap on a choice is its digit, and off the box it answers nothing
+   _ (bump <pc <>pc 107)
+   ls >(g 'sign)
+   (tap-at i) (: (go y) (y > 40 ? -1 (i = sign-line <(g 'sign) ls 1 (d 'rows) (d 'cols) y ? y (go (y + 1)))) (go 0))
+   _ (roost-turn g (tap-key g [0 0]))
+   _ (test (g 'ask = 'perch))                              ; off the box: still asked
+   _ (roost-turn g (tap-key g [40 (tap-at (#ls - 1))]))
+   _ (test (pl 'lay = 'keep) !(g 'ask))                    ; the tap on leave
+   _ (bump <pc <>pc 107)
+   _ (roost-turn g 49)
    ; the shelves, in the tools' order: cook's is the second
    xs (sort (keys (d 'shelves)))
    sy (: (row y) (5 = peep (d 't) (xs 1 + d 'w * y) 0 ? y (row (y + 1))) (row 0))
@@ -44,6 +55,12 @@
    _ (roost-turn g 106)
    _ (roost-turn g 49)
    _ (test (g 'over = 'apply))                             ; 1: do it
+   ; the verdict: bytes first, then two nonzero stamps; a 0 on either side orders nothing
+   vd (cite 'source 'nest-vd)
+   _ (test (vd () "a" 5 0 = 'fresh) (vd "a" "a" 5 9 = 'same) (vd "a" "b" 5 3 = 'older)
+           (vd "a" "b" 5 9 = 'newer) (vd "a" "b" 5 5 = 'twin) (vd "a" "b" 0 9 = 'other)
+           (vd "a" "b" 5 0 = 'other) (vd "a" "a" 0 0 = 'same))
    f (roost-frame g)
    (test (string? f) (0 < #f),
+    test_fin (),
     puts "src/apps/lore/roost: ok -- the nest's floor (the perch, the shelves, the door)\n"))

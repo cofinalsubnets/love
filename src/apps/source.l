@@ -182,16 +182,27 @@
    ; a dirty tree still fails.
    ; the lay is an egg -- the crew arrives at bake and a bake means running the artifact,
    ; which this machine cannot do for another ISA. the egg carries its source and the dist
-   ; roster, so `love bake` on the target lays the crew from them (src/love/main.c), the same
-   ; bytes a native `make dist` lays.
+   ; roster, so a bake on the target lays the crew from them (src/love/main.c), the same
+   ; bytes a native `make dist` lays -- and the egg is marked to do that itself: the first
+   ; word of its .love.image stub, 1 in a fresh link, is laid as 2, which main.c reads on
+   ; a run that finds no image as `bake in place, then run the line again`.
+   ; made laid at dst with the mark on: 1, or () where it is not an egg we can mark --
+   ; the header, the section table and the names read, the one byte written
+   (seed-mark made dst)
+    (: (rd o n) (uread-at made o n @ [1 t] t "")
+       at ((cite 'holo 'elf-sec-at) rd ".love.image")
+       (two? at && 16 <= at 1 && rd (at 0) 1 = string [1] && 0 <= copyfile made dst ?
+          (uwrite-at dst (at 0) (string [2]))))
    (seed-cross root xa dst) (:- 0
     made (root + "/out/x-" + show (nom xa) + "/love")
-    e (copyfile made dst)
+    m (seed-mark made dst)
+    e (m = 1 ? 0 (copyfile made dst))
     _ (e < 0 ? (src-die ("can't write " + dst)))
     _ (chmod dst 493)
     out? (src-lift dst)
     _ (puts (";; laid " + dst + " -- a raw egg for " + xa + ". on that machine\n"
-             + ";; `love bake` lays its crew from the source it carries.\n"
+             + (m = 1 ? ";; its first run bakes it in place, then goes on.\n"
+                         ";; `love bake` lays its crew from the source it carries.\n")
              + (out? ? ";; carried out of the machine. the x bit does not travel: chmod +x it there.\n" "")
              + ";; no fixpoint claimed here: a cross lay cannot BE this binary --\n"
              + ";; `love seed` on the " + xa + " machine proves it.\n")))
@@ -305,9 +316,10 @@
        exe (src-me 0)
        ; a seat with no path to itself lays an egg for another machine and nothing
        ; else: a native seed's claim is that the rebuild IS this binary, and there is
-       ; no file here to hold it to.
+       ; no file here to hold it to. said bare, the machines it can lay for are the answer
        _ (!(string? exe) && !(nom? xa) ?
-          (src-die "this seat has no path to itself -- name a machine: `love seed x64`"))
+          (two? as ? (src-die "this seat has no path to itself -- name a machine: `love seed x64`")
+             (puts ("seed for a machine: " + src-words (map show seed-arches) + "\n"), quit 0)))
        root (src-nest dir)
        farm (string? exe ? (src-farm root exe) "")
        path ("" + getenv "PATH")
@@ -412,8 +424,8 @@
         0))
 
    ; -- nest: this binary laid as the user's love under ~/.love/bin, the tools linked to it --
-   ; the build stamp is the carried tree's STAMP (src/tools/selfpack.l lays it); 0 where this
-   ; binary carries no source, or no stamp in it
+   ; the build stamp is the carried tree's STAMP (src/tools/selfpack.l lays it: the newest patch
+   ; time in the set it was cut from); 0 where this binary carries no source, or no stamp in it
    (nest-stamp _)
     (uread "/love/STAMP" @ [1 s] (: v <(sound (s + "")) (charm? v ? v 0)) 0)
    ; a stamp as its utc minute, which is what a person compares
@@ -457,8 +469,12 @@
 
    ; the plan: what is there, what this build is, and what to do about each. the verdict
    ; says how the two builds stand -- 'fresh (none there) 'older 'same (these very bytes)
-   ; 'twin (one stamp, other bytes) 'newer -- and 'bin is 'lay or 'keep. a tool's 'was is
+   ; 'twin (one stamp, other bytes) 'newer, or 'other (other bytes, where either stamp is 0 and
+   ; orders nothing) -- and 'bin is 'lay or 'keep. a tool's 'was is
    ; its link's target, "a file", or "" when absent; its 'act is 'link or 'keep
+   (nest-vd old new mine theirs)
+    (? !(string? old) 'fresh (old = new) 'same (theirs < 1 || mine < 1) 'other
+       (theirs < mine) 'older (theirs = mine) 'twin 'newer)
    (nest-plan f?)
     (: home (getenv "HOME")
        _ (string? home && #home ? 0 (src-die "nest: no HOME"))
@@ -470,8 +486,8 @@
        old (two? (stat dst) ? (nest-read dst))
        mine (nest-stamp 0)
        theirs (string? old ? (nest-theirs dst) 0)
-       vd (? !(string? old) 'fresh (old = new) 'same (theirs < mine) 'older (theirs = mine) 'twin 'newer)
-       lay (elem vd '(fresh older) || f? && !(vd = 'same))
+       vd (nest-vd old new mine theirs)
+       lay (elem vd '(fresh older other) || f? && !(vd = 'same))
        (tool nm) (: p (bin + "/" + nm) l (readlink p)
                     was (? (string? l) l (two? (stat p)) "a file" "")
                     {'nm nm 'was was 'act (was = "love" ? 'keep 'link)})
@@ -485,6 +501,7 @@
     'older "the nest's love is older"
     'same "the nest's love is this very build"
     'twin "the nest's love has this stamp but other bytes"
+    'other "the nest's love is another build, and one of the two is unstamped: no order"
     "the nest's love is newer")
    ; a tool's line: what it is, and what it becomes
    (nest-tool-line pl t)

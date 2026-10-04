@@ -136,9 +136,11 @@
  ; the sky's [east up north] seen facing south in the mirror: [right up ahead]
  (mirror v) [(v 0) (v 1) (0.0 - v 2)]
  (meadow-sun g) (mirror (sky-sun (day0 + (g 'h % 24.0) * 3600.0) 0.0 lat))
- ; the moon: a phase thrown with the week, and a round of it every 29.53 days. it rides
- ; the sun's track, as many hours behind it as its phase is of a day
- (meadow-phase st g) (frac (st 'seed * 0.6180339 + g 'h / 24.0 / 29.530588))
+ ; the moon: a phase thrown with the week ('moon0 on g in its place, if said), and a round
+ ; of it every 29.53 calendar days, 'cal of them to a game day (1 unless said): at 0 it
+ ; keeps its phase, and the sky comes round to itself each day. it rides the sun's
+ ; track, as many hours behind it as its phase is of a day
+ (meadow-phase st g) (frac (peep g 'moon0 (st 'seed * 0.6180339) + peep g 'cal 1.0 * g 'h / 24.0 / 29.530588))
  (meadow-moon st g) (: p (meadow-phase st g)
    (mirror (sky-body (day0 + (g 'h % 24.0) * 3600.0) lat (-24.0 * p) (365.2422 * p))))
  ; the clouds ride a clock of their own, a slow one: the game's day is a minute
@@ -207,7 +209,7 @@
    (rf v) (peep v bix 0.0)
    rp (bent (rf rx) (rf rz) (rf rL) (rf rA) (rf rB) u)
    ; the meadow's: swaying on the wind as the row does, each its own phase
-   fu (fd 'u) sway (0.05 * wxv * (1.0 + 0.35 * sin (t0 / 30.0 * 2.2 + fd 'ph)))
+   fu (fd 'u) sway (0.05 * wxv * (1.0 + 0.35 * sin (t0 * turns wx 'tper (2.2 / 30.0) + fd 'ph)))
    fp (bent (fd 'x) (fd 'z) (fd 'L) (max -1.2 (min 1.2 sway)) 0.0 fu)
    ; shadows: each point down the sun to the dirt, darkening the pixel it lands on
    (cast p) (: k (p 1 / max (s 1) 0.05) [(p 0 - k * s 0) 0.0 (p 2 - k * s 2)])
@@ -232,8 +234,8 @@
             (: (tr k) (gem-tray [#sl] (map (q \ 1.0 * q k) sl)) (td k) (gem-tray [#sl] (map (q \ q 1 k) sl))
                si (int (tr 0)) ph (tr 3)
                cl (sky-cloud wx (td 0) (td 1) (td 2) (eye 0) (eye 2) sim)
-               v (wx 'style = 'pixel ? ((0.6 < sin (t0 * 0.9 + ph)) * (lt 'day < 0.1) * (cl < 0.5) * 1.6)
-                    (tr 2 * (0.75 + 0.25 * sin (t0 * 0.9 + ph)) * nt * (1.0 - cl)))
+               v (wx 'style = 'pixel ? ((0.6 < sin (t0 * turns wx 'tper 0.9 + ph)) * (lt 'day < 0.1) * (cl < 0.5) * 1.6)
+                    (tr 2 * (0.75 + 0.25 * sin (t0 * turns wx 'tper 0.9 + ph)) * nt * (1.0 - cl)))
                (put colg [si] (c+ (behind colg [si]) [v v (0.9 * v)])))
             colg)
    ; --- the sun and the moon, discs where the lens shows them, the land in front of them ---

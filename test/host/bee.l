@@ -981,6 +981,43 @@
            (string? qt) (cr-in qt " ant@far b1 ") (cr-in qt "from far"))
    0)
 
+; --- a signed queue: on a box with a card, an sb queue's every write is an entry by its writer's
+; own seal. a call from another box comes back a proposal, which the caller signs and commits; a
+; session on the hub's box signs its own; a plain write is refused once the queue is signed
+(: nb (cr-dir "lnear" "") fb (cr-dir "lfar" "") hub (nb + "/hub")
+   _ (cr-run nb "" "--keygen root") _ (cr-run nb "" "--keygen box lnear")
+   tk (: r (cr-run nb "" "--ticket") (snip (r 1) 0 129))
+   _ (cr-put fb "req" ((cr-run fb "" ("--enrol " + tk + " lfar")) 1))
+   _ (cr-put fb "card" ((cr-run nb "" ("--admit < '" + fb + "/req'")) 1))
+   _ (cr-run fb "" ("--enrolled < '" + fb + "/card'"))
+   _ (mkdir hub 493) _ (cr-put hub "f" "f\n")
+   (sb as) (hark ([cr-love "sb" "-C" hub] + as))
+   _ (sb ["record" "one"])
+   _ (cr-put (nb + "/.love/etc") "bee.l" ("(hub " + hub + ")\n(ledger-dir " + nb + ")\n(beat 0)\n"))
+   _ (cr-put (fb + "/.love/etc") "bee.l" ("(relay sh " + fb + "/ssh)\n(beat 0)\n"))
+   _ (cr-put fb "ssh" ("for v; do :; done; exec env HOME='" + nb + "' '" + cr-love + "' '" + cr-app + "' \"$v\"\n"))
+   (msgs ls) (foldl (\ a m (a + json-show m + "\n")) "" ls)
+   (call id nm args) {"jsonrpc" "2.0" "id" id "method" "tools/call" "params" {"name" nm "arguments" args}}
+   _ (cr-put fb "row" (msgs [(call 1 "queue_row" {"queue" "queue/main@lnear" "state" "waiting" "branch" "b1"})]))
+   r1 (cr-run fb "BEE_NAME=ant" ("--mcp < '" + fb + "/row'"))
+   (head _) (: p (hark ["sh" "-c" ("'" + cr-love + "' sb -C '" + hub + "' ledger queue/main > '" + nb + "/head'")]) (cr-get (nb + "/head")))
+   (text _) (: p (hark ["sh" "-c" ("'" + cr-love + "' sb -C '" + hub + "' ledger queue/main --text > '" + nb + "/text'")]) (cr-get (nb + "/text")))
+   e1 (head 0) t1 (text 0)
+   _ (cr-put nb "join" (msgs [(call 1 "queue_row" {"queue" "queue/main" "state" "waiting" "branch" "b2"})]))
+   r2 (cr-run nb "BEE_NAME=bob" ("--mcp < '" + nb + "/join'"))
+   e2 (head 0) t2 (text 0)
+   ; a plain write over the signed head
+   id (: p (hark ["sh" "-c" ("'" + cr-love + "' sb -C '" + hub + "' ledger queue/main --id > '" + nb + "/id'")]) (cr-get (nb + "/id")))
+   _ (cr-put nb "plain" "leader bob\n")
+   pl (hark ["sh" "-c" ("'" + cr-love + "' sb -C '" + hub + "' ledger queue/main --was " + snip id 0 64 + " '" + nb + "/plain' 2>/dev/null")])
+   _ (test (0 = <r1) (cr-in (r1 1) "row now:") (cr-in (r1 1) "ant@lfar b1")
+           (string? e1) (starts? e1 "(entry ") (cr-in e1 "(by \"ant@lfar\")") (cr-in e1 "(seq \"0\")")
+           (cr-in t1 "1 ant@lfar b1 ")
+           (0 = <r2) (cr-in (r2 1) "row now:")
+           (cr-in e2 "(by \"bob@lnear\")") (cr-in e2 "(seq \"1\")") (cr-in t2 "2 bob b2 ")
+           (0 != <pl))
+   0)
+
 ; --- revocation: the root's box revokes a box by name and carries the list to the others; a box
 ; takes only a newer list its root signed, and a sealed message from the revoked box is refused
 (: st (cr-dir "rstem" "") b1 (cr-dir "rb1" "") b2 (cr-dir "rb2" "")

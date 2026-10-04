@@ -107,12 +107,11 @@ if [ "$arch" = wasm ]; then
   a64_qemu="$NODE $PWD/src/inle/wasm/loader.js"
 fi
 
-# the corpus, first hit wins: an explicit CTSSRC, then the tree-local dl/, the main
-# checkout's when this is a worktree, then the cache. empty when nothing matches.
+# the corpus, first hit wins: an explicit CTSSRC, then the dl/ make found ($DL: the tree's,
+# or the one it sits in), then the cache. empty when nothing matches.
 cts=${CTSSRC:-}
-gitdl=$(git rev-parse --git-common-dir 2>/dev/null)/../dl
 if [ -z "$cts" ]; then
-  for c in dl/c-testsuite "$gitdl"/c-testsuite "${MOONSRC:-$HOME/src}"/c-testsuite; do
+  for c in "${DL:-dl}"/c-testsuite "${MOONSRC:-$HOME/src}"/c-testsuite; do
     [ -f "$c/tests/single-exec/00001.c" ] && { cts=$c; break; }
   done
 fi

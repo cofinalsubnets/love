@@ -80,8 +80,11 @@ doc() {
   [ -s "$w/d.dvi" ] || fail "TeX wrote no DVI for $1"
   cmp -s "$w/d.dvi" "$w/doc.dvi" || { cmp "$w/d.dvi" "$w/doc.dvi" || true; fail "caja's DVI differs from TeX's on $1"; }
 }
+# the tree's own listing (selfpack -l, sb's law): an empty one is a refusal, never a pass
+mds=$("$L" src/tools/selfpack.l -l | grep '\.md$')
+[ -n "$mds" ] || fail "no markdown files listed (src/tools/selfpack.l -l)"
 nd=0
-for f in $(git ls-files '*.md' 2>/dev/null); do doc "$f"; nd=$((nd + 1)); done
+for f in $mds; do doc "$f"; nd=$((nd + 1)); done
 for m in ls grep tar sed gzip make; do
   [ -f /usr/share/man/man1/$m.1.gz ] || continue
   gzip -dc /usr/share/man/man1/$m.1.gz > "$w/$m.1" && doc "$w/$m.1" && nd=$((nd + 1))

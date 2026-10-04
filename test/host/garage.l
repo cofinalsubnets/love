@@ -90,5 +90,13 @@
        (2 = s 'cyc) (2 * spc = s 'next) (n * song-chunk = s 'fpos)
        (#out2 = 5 * 4 * song-chunk) (all (i \ 0 = out2 i) ^#out2) (0 = s2 'cyc)))
 
+;; a tap steers here as in the tower: toward where it landed, and a sign takes it as a key
+(: g (garage-new 80 22 (wheel 5)) d (g 'd) p (g 'p)
+   _ (pin g 'sign ())                                      ; the opening sign down
+   (at dx dy) (tap-key g [(p 'x + dx + peep d 'vx 0) (p 'y + dy + 1 + peep d 'vy 0)])
+   east (at 6 0) north (at 0 -2)
+   _ (pin g 'sign '("t" "a line"))
+ (test ('(1 0) = east) ('(0 -1) = north) (0 = at 6 0) ('(-1 0) = rove-key g 104)))
+
 (test_fin (),
  puts "garage: ok -- the bed runs through, the rats wander, the wrecks and the walls hold, and west is the way\n")
