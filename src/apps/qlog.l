@@ -23,8 +23,8 @@
    ql-unhex (cite 'tls 'unhex)
    ql-sign (cite 'ssh 'ed-sign)
    ql-verify (cite 'ssh 'ed-verify)
-   ql-b64e (cite 'ssh 'b64e)
-   ql-b64d (cite 'ssh 'b64d)
+   ql-b64e (cite 'bytes 'b64e)
+   ql-b64d (cite 'bytes 'b64d)
    ql-check (cite 'seals 'seal-check)
    ql-keys ["queue" "term" "seq" "prev" "at" "by" "call" "text" "cert"]
 
