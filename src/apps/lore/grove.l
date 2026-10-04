@@ -150,7 +150,8 @@
              disc (Wd * Wd - A * C)
              t ((0.0 - Wd - sqrt (max disc 0.0)) / A)
              sa (wu + t * dd)
-             hit ((0.0 < disc) * (0.0 < t) * (0.0 <= sa) * (sa <= L) * (t < peep (buf 't) idx 1e9))
+             ; ..each piece runs on half its radius past either end, so a bend shows no gap
+             hit ((0.0 < disc) * (0.0 < t) * (-0.5 * r <= sa) * (sa <= L + 0.5 * r) * (t < peep (buf 't) idx 1e9))
              i2 (over -1 hit idx)
              nx ((W 0 + t * (ddx - dd * u 0)) / r) ny ((W 1 + t * (ddy - dd * u 1)) / r) nz ((W 2 + t * (ddz - dd * u 2)) / r)
              X (e 0 + t * ddx) Y (e 1 + t * ddy) Z (e 2 + t * ddz)

@@ -4,9 +4,12 @@
 ; windows lit and dark, a honey locust leaning in from the north-east corner, and the sky
 ; at the top of the well.
 ;
-; the long walls run north and south with four windows a floor; the short walls carry
-; two narrow ones a floor and the stair's three between the floors, and over their outer
-; thirds a battlement each. the tree is grove's, grown afresh each run, its trunk leaning
+; the long walls run north and south with four sash windows a floor, the west's ground
+; floor the lobby, lit all night, and small high ones by the corners -- one each end over
+; the west's ground floor, two each end on the east; the short walls carry two narrow ones
+; a floor and the stair's three between the floors, the south a black door under them.
+; a battlement stands over the middle of each short wall, and a brick block on the roof in
+; the north-east corner. the tree is grove's, grown afresh each run, its trunk leaning
 ; toward the middle; the sky is sky's, the sun at this hour of this day at a fixed
 ; latitude under the weather -- clear, partly or mostly cloudy, or overcast, the sky
 ; drawn smooth or in the grass game's pixels -- and runs on faster than the clock: the
@@ -42,8 +45,10 @@
  yard-a 3.05 yard-b 4.57
  floors 4 floor-h 3.0
  wall-h (floors * floor-h + 0.5)        ; ..and a parapet over the top floor
- ; the short walls' battlements: a block over each outer third, two thirds of a floor high
- block-h (2.0 * floor-h / 3.0) top-h (wall-h + block-h) wall-t 0.45
+ ; the battlements: a block over the middle of each short wall, two thirds of a floor
+ ; high, and the roof's block as high, along the east wall at its north end and back over
+ ; the roof
+ block-h (2.0 * floor-h / 3.0) top-h (wall-h + block-h) wall-t 0.45 hb 0.9 cw 1.8
  eye-h 1.6 body-r 0.3
  walk-v 1.4 turn-step 0.07 tilt-step 0.06
  lat (40.7 * pi / 180.0)
@@ -61,7 +66,9 @@
  ; ..and under an overcast sky the twentieths it rains or snows (half that mostly cloudy,
  ; none lighter): snow in the depth of winter, either at its edges, rain the rest
  fall-odds [9 9 9 9 9 8 7 7 7 7 8 9]
- bay (2.0 * yard-b / 4.0)               ; a long wall's window bay
+ ; a long wall's sashes, 1.8 apart and 0.66 wide, and its small windows: the west's one
+ ; each end, the east's two, 0.34 wide; sills at 0.9 and 1.4, heads at 2.3
+ bay 1.8 sash-w 0.33 nook-w 0.17
  ; --- the time: 'sim is the wall clock's local seconds, 'dst what summer adds to it ---
  ; now, as [local-seconds dst]: the zone's offset now, against the least of it a season on, two and three
  (court-when s) (: zone ((cite 'kore 'tz-zone) 0)
@@ -91,10 +98,11 @@
  (court-sun st) (sky-sun (st 'sim) (st 'dst) lat)
  (court-light st) (sky-light (court-sun st) (st 'wx) (st 'sim))
  ; --- the state: the screen as view lays it, where the player stands and looks ('th the
- ; bearing, 'ph the pitch), the clock, its pace, and the pixels' rays ---
+ ; bearing, 'ph the pitch), the clock, its pace, and the pixels' rays. a run starts with
+ ; its back to the east wall between the north pair of sashes, looking up at the sky ---
  ; the weather a run starts under, unless it is said: the cover thrown, the sky smooth
  (court-new w h now) (: sd (int (now 0)) tr (tree-grow sd)
-                        st {'px 0.0 'pz (0.0 - yard-b + 1.4) 'th 0.0 'ph 0.5
+                        st {'px (yard-a - 0.45) 'pz bay 'th (0.0 - pi / 2.0) 'ph 1.1
                             'sim (now 0) 'dst (now 1) 'pace 0 'paces paces 'shown 40 't 0
                             'deep 0 'done 0 'tree tr 'litter (litter tr sd) 'fall () 'fallen ()
                             'wx (court-season-wx (now 0) sd 'smooth)
@@ -190,10 +198,10 @@
  fl-nx (int (2.0 * yard-a / fts + 0.999)) fl-nz (int (2.0 * yard-b / fts + 0.999))
  maps {}
  ; the brick, painted grey and chipped, at the run along wall wid and the height py:
- ; the windows and their sills and frames, the paint mottled, grimed at the foot and
- ; stained under the sills, the red or an older coat beneath, and the coping; over it
- ; the battlements, weathered harder under their dark caps. what a window shows lit is
- ; laid here too, and which window it is
+ ; the windows and their sills and frames, the south's door, the paint mottled, grimed at
+ ; the foot and stained under the sills, the red or an older coat beneath, and the
+ ; coping; over it the battlements, weathered harder under their dark caps. what a window
+ ; shows lit is laid here too, which window it is, and whether it is lit all night
  (wall-map _) (: i (iota wall-n)
    wid ((nu-long * nv <= i) + (2 * nu-long * nv <= i) + ((2 * nu-long + nu-short) * nv <= i))
    nu (peep wall-nus wid 0) j (i - peep wall-offs wid 0)
@@ -202,51 +210,74 @@
    al ((j % nu + 0.5) * ts - half) py ((j // nu + 0.5) * ts)
    b yard-b hh wall-h
    fl (floor (py / floor-h)) yy (py - fl * floor-h) infl (fl < floors)
-   ; the windows: four a floor on the long walls, two narrow on the short, and the
-   ; stair's between the floors, in the middle of the short walls
-   wa ((al + b) / bay) wi (floor wa) ca ((wa - wi - 0.5) * bay)
-   lw (isx * (sq ca < 0.2025) * (0.9 < yy) * (yy < 2.3) * infl)
+   ; the windows: a long wall's four sashes a floor and the small ones by its corners --
+   ; the west's a bathroom's, sill raised, the east's a living room's, level with the
+   ; sashes -- a short wall's two narrow ones a floor, and the stair's between the floors
+   wi (max 0 (min 3 (floor (al / bay + 2.0)))) ca (al - (wi - 1.5) * bay)
+   lw (isx * (sq ca < sash-w * sash-w) * (0.9 < yy) * (yy < 2.3) * infl)
+   ea (mag al) ei ((wid = 0) * (3.75 < ea)) na (ea - over 3.8 (wid = 0) (over 3.45 ei 4.05))
+   nk (isx * ((wid = 0) + (wid = 1) * (0.0 < fl)) * infl)
+   nb (over 1.4 (wid = 0) 0.9) bath (wid = 1)
+   nw (nk * (sq na < nook-w * nook-w) * (nb < yy) * (yy < 2.3))
    sa (mag al - 1.6)
    sw (isz * (sq sa < 0.0625) * (0.9 < yy) * (yy < 2.4) * infl)
    ys (py - 2.45) fs (floor (ys / floor-h)) yys (ys - fs * floor-h)
    stw (isz * (sq al < 0.09) * (yys < 1.2) * (0 <= fs) * (fs < floors - 1))
-   win (lw + sw + stw)
-   sill ((isx * (sq ca < 0.27) + isz * (sq sa < 0.09)) * (0.82 < yy) * (yy <= 0.9) * infl)
-   ; ..a window's frame: its edges, and the long ones' mullion and transom
-   cp (lw * ca + sw * sa + stw * al) hw (lw * 0.45 + sw * 0.25 + stw * 0.3)
-   vp ((lw + sw) * (yy - 0.9) + stw * yys) vh (lw * 1.4 + sw * 1.5 + stw * 1.2)
-   frm (win * (0 < (hw - mag cp < 0.06) + (vp < 0.07) + (vh - vp < 0.06)
-                   + lw * (mag cp < 0.05) + lw * (sq (vp - 1.0) < 0.0016)))
+   win (lw + nw + sw + stw)
+   sill (0 < (isx * (sq ca < 0.144) + isz * (sq sa < 0.09)) * (0.82 < yy) * (yy <= 0.9) * infl
+              + nk * (sq na < 0.048) * (nb - 0.08 < yy) * (yy <= nb))
+   ; ..a window's frame: its edges, and the meeting rail between the two sashes
+   cp (lw * ca + nw * na + sw * sa + stw * al) hw (lw * sash-w + nw * nook-w + sw * 0.25 + stw * 0.3)
+   vp ((lw + sw) * (yy - 0.9) + nw * (yy - nb) + stw * yys) vh (lw * 1.4 + nw * (2.3 - nb) + sw * 1.5 + stw * 1.2)
+   frm (win * (0 < (hw - mag cp < 0.05) + (vp < 0.07) + (vh - vp < 0.06) + (mag (vp - 0.5 * vh) < 0.03)))
    glass (win - frm)
-   ; ..each its own: lamps warm and various, a few with the curtains drawn, a few a television
-   wkey (wid * 100 + fl % 8 * 10 + lw * wi + sw * (4 + (0.0 < al)))
-   tv ((throw wkey 0 13 9 = 0) * (1 - stw))
-   cur (throw wkey 1 19 3 = 0)
+   ; ..each room its own, a long wall's sashes and corner windows by the pair: lamps warm
+   ; and various, a few with the curtains drawn, a few a television, a bathroom's white;
+   ; the lobby's, the stair's and the ground floor halls' lit all night
+   wkey (wid * 100 + fl % 8 * 10 + lw * (2 <= wi) + nw * (4 + 2 * (0.0 < al)) + sw * (4 + (0.0 < al)))
+   lob (lw * (wid = 1) * (fl = 0)) hall (sw * (fl = 0) * (al < 0.0)) nt (stw + lob + hall)
+   bw (nw * bath)
+   tv ((throw wkey 0 13 9 = 0) * (1 - nt) * (1 - bw))
+   cur ((throw wkey 1 19 3 = 0) * (1 - lob))
    lamp (0.55 + 0.45 * (throw wkey 2 23 10 / 10.0))
    glow (lamp * (1.0 - 0.6 * cur * (hw * 0.45 < mag cp)))
-   em (cmix (cmix (c* glow [1.0 0.76 0.44]) [0.5 0.62 1.0] tv) [0.85 0.95 0.82] stw)
+   em (cmix (cmix (cmix (cmix (c* glow [1.0 0.76 0.44]) [0.5 0.62 1.0] tv) (c* glow [0.9 0.88 0.8]) bw)
+                  [0.85 0.95 0.82] (stw + hall)) [0.95 0.8 0.52] lob)
    ; ..the brick: courses and their bonds, chipped in patches a brick at a time
-   row (floor (py / 0.075)) bi (floor ((al + row % 2 * 0.11) / 0.22))
+   row (floor (py / 0.08)) bi (floor ((al + row % 2 * 0.12) / 0.24))
    cx (floor (al / 0.7)) cy (floor (py / 0.5))
    chip (0 < (throw cx cy (wid + 11) 9 = 0) * (throw bi row (wid + 3) 2 = 0) + (throw bi row (wid + 5) 500 = 0))
    old (throw cx cy (wid + 23) 4 = 0)
-   stain ((isx * (sq ca < 0.16) + isz * (sq sa < 0.05)) * (yy < 0.82) * infl
+   stain ((isx * (sq ca < 0.12) + isz * (sq sa < 0.05)) * (yy < 0.82) * infl
           * sat (1.0 - (0.82 - yy) / 0.9) * sat (vn (al * 18.0) 0.5 9 * 2.0 - 0.6))
    foot (sat (1.0 - py / 1.2))
-   paint (c* ((0.92 + 0.13 * vn (al * 0.9) (py * 0.9) (wid + 40)) * (1.0 - 0.3 * stain) * (1.0 - 0.28 * foot))
+   ; ..the paint: mottled large and small, the joints of the brick showing through where the
+   ; coat is thin, grime run down it in streaks, and moss in patches at the foot
+   thin (sat (vn (al * 1.3) (py * 1.3) (wid + 50) * 2.6 - 1.4))
+   mort ((frac (py / 0.08) < 0.5) * 0.5 + (frac ((al + row % 2 * 0.12) / 0.24) < 0.17))
+   grime (sat (vn (al * 5.0) (py * 0.12) (wid + 60) * 2.4 - 1.3) * (0.4 + 0.6 * vn (al * 0.7) (py * 0.7) (wid + 61)))
+   fine ((throw (floor (al / ts)) (floor (py / ts)) (wid + 70) 9) / 9.0 - 0.5)
+   paint (c* ((0.92 + 0.13 * vn (al * 0.9) (py * 0.9) (wid + 40) + 0.12 * vn (al * 0.3) (py * 0.3) (wid + 45) - 0.06 + 0.05 * fine)
+              * (1.0 - 0.3 * stain) * (1.0 - 0.28 * foot) * (1.0 - 0.22 * thin * mort) * (1.0 - 0.22 * grime))
              [0.6 0.61 0.6])
-   paint2 (cmix paint [0.3 0.34 0.24] (0.35 * foot))
+   mz (sat (1.0 - py / 1.3) * sat (vn (al * 2.2) (py * 2.2) (wid + 80) * 2.4 - 0.6))
+   mossc (c* (0.75 + 0.45 * vn (al * 9.0) (py * 9.0) (wid + 81)) [0.22 0.31 0.13])
+   paint2 (cmix (cmix paint [0.3 0.34 0.24] (0.35 * foot)) mossc (0.85 * mz))
    under (cmix (c* (0.82 + 0.3 * (throw bi row 41 10 / 10.0)) [0.56 0.27 0.2]) [0.55 0.6 0.48] old)
-   blk (isz * (yard-a / 3.0 < mag al)) up (blk * (hh - 0.18 <= py))
+   blk (0 < isz * (ea < hb) + (wid = 0) * (b - cw < al) + (wid = 2) * (yard-a - 0.05 < al)) up (blk * (hh - 0.18 <= py))
    cope ((hh - 0.18 < py) * (1 - blk))
    ; ..the battlements: the paint blotched and streaked down from the cap, chipped more
    streak (sat (vn (al * 9.0) 0.5 77 * 2.2 - 0.9) * sat (1.0 - (top-h - py) / 1.4))
    worn (c* ((0.8 + 0.3 * vn (al * 3.0) (py * 3.0) 78) * (1.0 - 0.4 * streak)) [0.6 0.61 0.6])
    chip2 (0 < (throw cx cy (wid + 13) 3 = 0) * (throw bi row (wid + 7) 2 = 0) + (throw bi row (wid + 9) 40 = 0))
    battle (cmix (cmix worn under chip2) [0.15 0.15 0.16] (top-h - 0.14 < py))
-   alb (cmix (cmix (cmix (cmix (cmix paint2 under chip) [0.68 0.66 0.62] sill) [0.7 0.7 0.66] frm) [0.5 0.49 0.46] cope)
-             battle up)
-   {'r (alb 0) 'g (alb 1) 'b (alb 2) 'glass glass 'key wkey 'stair stw 'tv tv
+   ; ..the door, a dark brown in a darker frame, its knob brass on the right
+   dr ((wid = 3) * (ea < 0.5) * (py < 2.1))
+   dfr (dr * (0 < (0.5 - ea < 0.05) + (2.1 - py < 0.05)))
+   knob (dr * (sq (al + 0.36) + sq (py - 1.0) < 0.0009))
+   alb (cmix (cmix (cmix (cmix (cmix (cmix (cmix (cmix paint2 under chip) [0.68 0.66 0.62] sill) [0.7 0.7 0.66] frm) [0.5 0.49 0.46] cope)
+                         battle up) [0.17 0.115 0.08] dr) [0.1 0.075 0.055] dfr) [0.55 0.45 0.22] knob)
+   {'r (alb 0) 'g (alb 1) 'b (alb 2) 'glass glass 'key wkey 'night nt 'tv tv
     'er (em 0) 'eg (em 1) 'eb (em 2)})
  ; the floor: eight triangular slabs meeting at the sump -- split by the two axes and the
  ; two diagonals to the corners -- each poured a shade apart, their joints, moss over
@@ -285,8 +316,9 @@
    uz (((sz < 0.0 ? (0.0 - b) b) - pz) / away sz)
    uy ((top-h - py) / max2 sy 1e-6)
    viax ((ux < uz) * (ux < uy)) viaz ((1 - viax) * (uz < uy))
-   ye (py + sy * min ux uz) xe (px + uz * sx)
-   ((0.0 < sy) * (1 - viax * (ye < wall-h) - viaz * (0 < (ye < wall-h) + (a / 3.0 < mag xe)))))
+   ye (py + sy * min ux uz) xe (px + uz * sx) ze (pz + ux * sz)
+   ((0.0 < sy) * (1 - viax * (0 < (ye < wall-h) + (0.0 < sx) * (b - cw < ze))
+                    - viaz * (0 < (ye < wall-h) + (mag xe < hb)))))
  ; --- the tree: a honey locust in the north-east quarter, leaning toward the middle; its
  ; crown starts a metre under the wall tops, and below them a point is kept inside the
  ; walls, or not grown if it would be in one ---
@@ -393,29 +425,36 @@
    isy (1 - isx - isz) gnd (isy * (dy <= 0.0))
    t0w (min tx (min tz ty))
    px0 (ex + t0w * dx) py0 (ey + t0w * dy) pz0 (ez + t0w * dz)
-   ; ..a wall over the parapet is there only under a battlement; a ray over the middle
-   ; third may meet a battlement's end, in the wall's thickness
-   solid ((py0 < hh) + isz * (hh <= py0) * (a / 3.0 < mag px0))
+   ; ..a wall over the parapet is there only under a battlement or the roof's block; a
+   ; ray over the parapet may meet the end of the one it heads toward, past the wall's face
+   al0 (over px0 isx pz0) da (over dx isx dz) ea (over ex isx ez)
+   east (isx * (0.0 < dx)) north (isz * (0.0 < dz))
+   solid ((py0 < hh) + (hh <= py0) * (0 < isz * (mag al0 < hb) + east * (b - cw < al0)))
    gap ((1 - isy) * (1 - solid))
-   sgn (over -1.0 (0.0 < dx) 1.0) ef (sgn * a / 3.0)
-   te ((ef - ex) / dx) ye (ey + te * dy) ze (ez + te * dz)
-   endf (gap * isz * (b <= mag ze) * (mag ze <= b + wall-t) * (hh <= ye) * (ye < top-h))
+   sa (over -1.0 (0.0 < da) 1.0)
+   blk ((0.0 < sa) * (east + north * (hb < al0)))
+   ef (over (0.0 - sa * hb) blk (over (b - cw) north a)) dep (over wall-t (blk * east) cw)
+   te ((ef - ea) / da) ye (ey + te * dy) pp (over (ez + te * dz) isx (ex + te * dx))
+   dd (mag pp - over b isx a)
+   endf (gap * (0 < blk + isz * (hb < 0.0 - sa * al0)) * (0.0 <= dd) * (dd <= dep) * (hh <= ye) * (ye < top-h))
    sky (isy * (0.0 < dy) + gap - endf)
    t (over t0w endf te)
-   px (over px0 endf ef) py (over py0 endf ye) pz (over pz0 endf ze)
+   px (over px0 endf (over ef isx pp)) py (over py0 endf ye) pz (over pz0 endf (over pp isx ef))
+   ; ..which wall, where along it, and which way it faces: an end faces back along the wall
+   wid (isx * (over 1 (0.0 < dx) 0) + isz * (over 3 (0.0 < dz) 2))
+   al (over al0 endf (ef + sa * dd))
+   nx ((1 - endf) * isx * (over 1.0 (0.0 < dx) -1.0) - endf * isz * sa)
+   nz ((1 - endf) * isz * (over 1.0 (0.0 < dz) -1.0) - endf * isx * sa)
    s (lt 'sun) sx (s 0) sy (s 1) sz (s 2)
    sea (court-season st) tr (pins (st 'tree) 'share (sea 'share) 'turn (sea 'turn)) sm (grove-sun tr s sun-clear 0)
    ; ..each pixel shaded only as what it shows: a surface's on the surfaces' pixels, the
    ; sky's on the sky's, each gathered there and scattered back
-   (surface px py pz isx isz gnd endf sgn ze dx dz)
+   (surface px py pz al wid nx nz gnd)
     (:
-     ; --- the stuff: a wall's texel by which wall and where on it, a battlement's end
-     ; going on round from its face, else the floor's ---
-     al (over (over px isx pz) endf (sgn * (a / 3.0 + mag ze - b)))
-     wid (isx * (over 1 (0.0 < dx) 0) + isz * (over 3 (0.0 < dz) 2))
-     nx (isx * (over 1.0 (0.0 < dx) -1.0) - endf * sgn) nz ((isz - endf) * (over 1.0 (0.0 < dz) -1.0))
+     ; --- the stuff: a wall's texel by which wall and where on it, a block's end going on
+     ; round from its face, else the floor's ---
      nu (peep wall-nus wid 0)
-     tu (max 0 (min (nu - 1) (floor ((al + over yard-a isx yard-b) / ts))))
+     tu (max 0 (min (nu - 1) (floor ((al + over yard-a (wid < 2) yard-b) / ts))))
      trow (max 0 (min (nv - 1) (floor (py / ts))))
      wi (peep wall-offs wid 0 + trow * nu + tu)
      fi (max 0 (min (fl-nz - 1) (floor ((pz + b) / fts))) * fl-nx + max 0 (min (fl-nx - 1) (floor ((px + a) / fts))))
@@ -441,7 +480,7 @@
      ; ..a window: the sky in the pane, and the room behind it when it is lit -- each window
      ; by the hour, the stair's whenever it is dark out, a television flickering
      hr (day-secs (st 'sim) / 3600.0)
-     key (peep (wm 'key) wi 0) stw (peep (wm 'stair) wi 0) tv (peep (wm 'tv) wi 0)
+     key (peep (wm 'key) wi 0) stw (peep (wm 'night) wi 0) tv (peep (wm 'tv) wi 0)
      on (frac (sin (key * 12.9898 + int hr * 78.233) * 43758.5453) * 100.0 < lit-share hr)
      flick (1.0 - tv * (0.3 + 0.25 * sin (t0 * 1.7 + key * 2.1) * sin (t0 * 0.61 + key)))
      lamps (over ((1 - stw) * on * 0.7 * flick) stw ((lt 'day < 0.55) * 0.75))
@@ -449,8 +488,7 @@
      inglass (c+ panes (c* lamps [(wg 'er) (wg 'eg) (wg 'eb)]))
      (cmix (cm alb irr) inglass glass))
    G (iota (1 - sky)) S (iota sky) (only ix v) (peep v ix 0)
-   sf (surface (only G px) (only G py) (only G pz) (only G isx) (only G isz) (only G gnd) (only G endf)
-               (only G sgn) (only G ze) (only G dx) (only G dz))
+   sf (surface (only G px) (only G py) (only G pz) (only G al) (only G wid) (only G nx) (only G nz) (only G gnd))
    hv (sky-colour lt (st 'wx) (only S dx) (only S dy) (only S dz) ex ez (st 'sim) t0)
    z0 (dx * 0.0)
    col0 (map (c \ pin (pin z0 G (sf c)) S (hv c)) ^3)
