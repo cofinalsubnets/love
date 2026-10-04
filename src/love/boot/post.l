@@ -2967,7 +2967,7 @@
    ; moment its running line outgrows w -- never revived, which keeps the pass single. the slot
    ; widths ride a tablet keyed (count * mx + slot). answers the widest count that lived.
    (gfit cs n w down?)
-    (: mx (w // gmin @ m (? (m < 1) 1 (m < n) m n))
+    (: mx ((w + gpad) // gmin @ m (? (m < 1) 1 (m < n) m n))     ; k columns fill 3k - 2
        aw {}                         ; a slot's width so far, gmin until something widens it
        ln {}                         ; the line a count of i+1 has claimed
        ok {}                         ; is it still inside w?
@@ -2978,7 +2978,7 @@
            (o < r ? (peep ln i (gmin * (i + 1)) + r - o @ l
                        (pin aw (i * mx + k) r,
                         pin ln i l,
-                        pin ok i (l < w)))
+                        pin ok i (l <= w)))                ; a line may fill the screen
               ()))
        (gone c j i) (mx <= i ? ()
                        ((peep ok i 1 ? (gwide j i c)), gone c j (i + 1)))
