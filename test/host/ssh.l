@@ -26,6 +26,7 @@
 (borrow 'posix)
 (borrow 'tls)
 (borrow 'ssh)
+(borrow 'bytes)
 
 (: ssht-run (\ n (bytes n (i \ (i * 7 + 1) & 255))))
 

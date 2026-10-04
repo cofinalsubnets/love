@@ -18,6 +18,7 @@
 (module 'ssh
 (borrow 'tls)
 (borrow 'posix)
+(borrow 'bytes)
 
 (:
    vsd "SSH-2.0-love_sshd"
