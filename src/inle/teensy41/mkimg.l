@@ -6,9 +6,9 @@
 ; holo module; src/inle/teensy41/Makefile drives it.
 (: (mkimg src dst)
    (: r (uread src)
-      _ (two? r ? 0 (scare 'mkimg-no-image src))     ; presence out of band: a 0-byte
-      s <>r  n #s                                    ; image reads the same as none
-      _ (0 < n ? 0 (scare 'mkimg-empty src))
+      _ (two? r ? 0 (scare 'mkimg-no-image src))
+      s <>r  n #s                                    ; 0 bytes: no qemu baked it, and main.c,
+                                                     ; finding no image, bakes the egg
       ir [['label '_binary_love_img_start]
           ['raw (map (i \ s i) ^n)]
           ['label '_binary_love_img_end]]
