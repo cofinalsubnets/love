@@ -7,5 +7,5 @@
  * empty path with AT_EMPTY_PATH. the NUMBER rides os.c's map either way, so what
  * parts here is only the shape. */
 int fexecve(int fd, char *const *av, char *const *ev) {
-  if (__ai_osv >= 2) return (int) er(sc3(NR_execveat, fd, (long) av, (long) ev));
+  if (__love_osv >= 2) return (int) er(sc3(NR_execveat, fd, (long) av, (long) ev));
   return (int) er(sc5(NR_execveat, fd, (long) "", (long) av, (long) ev, AT_EMPTY_PATH)); }

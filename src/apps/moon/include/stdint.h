@@ -1,5 +1,5 @@
-#ifndef _AI_STDINT_H
-#define _AI_STDINT_H
+#ifndef _LOVE_STDINT_H
+#define _LOVE_STDINT_H
 /* freestanding stdint for cc (rung 3, stage 7c-ii). the unsigned types are real
  * now -- cc has `unsigned` (zero-extend loads, logical >>, unsigned cmp/div). */
 typedef signed char        int8_t;

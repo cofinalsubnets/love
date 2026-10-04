@@ -14,7 +14,7 @@
 // the null seat is src/love/user/nokern.c's and the carried blobs src/love/noblob.c's -- love0 has no
 // kmain.c under it and lays the archives rather than carrying them, and so does every
 // gate link that builds this C set. both are named into love0_o beside this file.
-// love0 has no moonlibc either, so __ai_osv is src/love/love.c's weak one, which reads 0.
+// love0 has no moonlibc either, so __love_osv is src/love/love.c's weak one, which reads 0.
 
 #include "boot0.h"                                   // src0_<name>[]: one literal per boot file, laid by sed
 static char const runner[] = "(reads(tap(s2cl tests)))";   // the stream shell (src/love/boot/post.l) drinks the corpus
@@ -24,38 +24,38 @@ static char const *const mods0[] = { src0_holo, src0_x64, src0_a64, NULL };
 static char const *const prelpost0[] = { src0_prel, src0_post, NULL };
 static char const *const prelev0[] = { src0_prel, src0_ev, NULL };
 // one NUL-terminated buffer off the heap, so a collect mid-eval cannot move it; the caller frees
-static char *join0(struct ai *g, char const *const *v) {
+static char *join0(struct g *g, char const *const *v) {
   uintptr_t n = 0;
   for (int i = 0; v[i]; i++) n += strlen(v[i]);
-  char *t = ai_alloc(NULL, n + 1), *p = t;
+  char *t = alloc(NULL, n + 1), *p = t;
   if (!t) return NULL;
   for (int i = 0; v[i]; i++) { uintptr_t l = strlen(v[i]); memcpy(p, v[i], l); p += l; }
   return *p = 0, t; }
-static struct ai *evals0(struct ai *g, char const *const *v) {
+static struct g *evals0(struct g *g, char const *const *v) {
   char *t = join0(g, v);
   if (!t) return g;
-  g = ai_evals_(g, t);
-  return ai_alloc(t, 0), g; }
+  g = evals_(g, t);
+  return alloc(t, 0), g; }
 
 // with args, run the build tool (lcat / gen_data) through the CLI driver.
 // with no args, self-test: eval prel, load bao (the shell core) as a module, and run
 // the baked corpus via c0, then bootstrap the self-hosted ev (egg) and run the corpus
 // again through it. the three bake words are the full love's: they stand in the
 // signature so main() has one call for both seats, and love0 has no bake verb.
-struct ai *boot(struct ai *g, bool argp, char const *bake, char const *bake_load,
+struct g *boot(struct g *g, bool argp, char const *bake, char const *bake_load,
                 char const *bake_out) {
   (void) bake, (void) bake_load, (void) bake_out;
   if (argp) {
     g = evals0(g, prelpost0);
     g = evals0(g, mods0);
-    g = ai_evals_(g, "(borrow 'cli)(borrow 'kanren)(borrow 'verbs)");
-    g = ai_shelve(g);
-    return ai_evals(g, "(cli-line cmdline 0)"); }
+    g = evals_(g, "(borrow 'cli)(borrow 'kanren)(borrow 'verbs)");
+    g = shelve(g);
+    return evals(g, "(cli-line cmdline 0)"); }
   g = evals0(g, prelpost0);
   g = evals0(g, mods0);
-  g = ai_evals_(g, "(borrow 'cli)(borrow 'holo)");
-  g = ai_shelve(g);
-  g = ai_evals_(g,
+  g = evals_(g, "(borrow 'cli)(borrow 'holo)");
+  g = shelve(g);
+  g = evals_(g,
     "(borrow 'uu)(: uu (cite 'uu))(borrow 'kanren)(borrow 'posix)"
     "(: (s2cl s) ((: (g i) (? (< i (tally s)) (. (peep s i 0) (g (+ 1 i))))) 0)"
     "   (c0read p) (: q (open p \"r\")"
@@ -72,7 +72,7 @@ struct ai *boot(struct ai *g, bool argp, char const *bake, char const *bake_load
     "   _ (? (two? fs) 0 (: _ (say err \"love0: corpus: out/lib/corpus.list names nothing\")"
     "                       _ (put err 10) (quit 1)))"
     "   tests (foldl (\\ a f (a + c0read f)) \"\" fs))");
-  g = ai_evals_(g, runner);          // pass 1: corpus via ev = the c0 nif
+  g = evals_(g, runner);          // pass 1: corpus via ev = the c0 nif
   char *corpus = join0(g, prelev0);                   // bootstrap: install the self-hosted ev
-  if (corpus) g = ai_egg(g, src0_egg, corpus, src0_post), ai_alloc(corpus, 0);
-  return ai_evals_(g, runner); }                      // pass 2: corpus via the self-hosted ev
+  if (corpus) g = egg(g, src0_egg, corpus, src0_post), alloc(corpus, 0);
+  return evals_(g, runner); }                      // pass 2: corpus via the self-hosted ev

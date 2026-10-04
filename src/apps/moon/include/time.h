@@ -1,5 +1,5 @@
-#ifndef _AI_TIME_H
-#define _AI_TIME_H
+#ifndef _LOVE_TIME_H
+#define _LOVE_TIME_H
 typedef long time_t;
 typedef long clock_t;
 #define CLOCKS_PER_SEC 1000000

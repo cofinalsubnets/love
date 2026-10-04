@@ -1,5 +1,5 @@
-#ifndef _AI_STRING_H
-#define _AI_STRING_H
+#ifndef _LOVE_STRING_H
+#define _LOVE_STRING_H
 #ifndef NULL
 #define NULL ((void*)0)
 #endif

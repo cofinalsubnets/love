@@ -1,6 +1,6 @@
 # inle -- love in kernel mode
 
-src/love/ is everything over one interface, moonlibc's `__ai_sys`; a platform answers
+src/love/ is everything over one interface, moonlibc's `__love_sys`; a platform answers
 it from one side. In user mode another kernel answers -- linux and the BSDs by trap,
 an SDK for the seats in src/love/user/. In kernel mode we answer: that is inle, the
 kernel (`kmain.c`, the syscall table `sys.c`, its drivers) and its machines. The
@@ -8,7 +8,7 @@ bare boards below are reduced kernel seats; nucleo446 and rp2040 carry no love a
 all and are the toolchain on silicon. Every device target is self-contained (own
 Makefile, `R := ../..` back to the repo root); the qemu boot gates live in
 test/test.mk and ride `make test_slow`. A seat's own vocabulary comes in through
-`ai_defn` -- a board's console -- so src/love/ never learns a device's name.
+`defn` -- a board's console -- so src/love/ never learns a device's name.
 
 ## the kernel
 

@@ -179,7 +179,7 @@
 
    ; --- the C, through clay ------------------------------------------------------
    ; the roster laid once as X-rows, and three consumers expanding it: the nifs table,
-   ; def1, and ai_nif_lvm. P is a plain run {impl, ret0}; C a curried one, {cur, count,
+   ; def1, and nif_lvm. P is a plain run {impl, ret0}; C a curried one, {cur, count,
    ; impl, ret0} above one operand. at is the run's offset in nifs, a running sum here.
    nl (string 10)
    (vr s) ['var s]
@@ -206,27 +206,27 @@
    ; a macro body over several lines, each but the last ending in a continuation
    (nif-lines l) (l @ (h . t) (foldl (a \ s \ a + " \\" + nl + " " + s) ("\\" + nl + " " + h) t) "")
    nif-rows-def
-    (mac "ai_nif_rows(P, C)" (nif-lines (map (p \ nif-row <>p <p) (zip nif-rows nif-ats))))
+    (mac "nif_rows(P, C)" (nif-lines (map (p \ nif-row <>p <p) (zip nif-rows nif-ats))))
    nif-insts-def
-    (mac "ai_inst_rows(I)"
+    (mac "inst_rows(I)"
          (nif-lines (map (c \ sepby " " (map (i \ "I(" + string i + ")") c)) (chunk 6 nif-insts))))
 
    nif-table
     ['gdecl [["nifs" '(arr (const (named "union u")) 0)
-              ['init [['call (vr "ai_nif_rows") [(vr "nif_run_p") (vr "nif_run_c")]]]]]]
+              ['init [['call (vr "nif_rows") [(vr "nif_run_p") (vr "nif_run_c")]]]]]]
      '(static)]
    ; the book table: love name -> the value as a word. a nif carries its run's address,
    ; an instruction carries itself -- the union member says which, so no cast either way.
    nif-def1
-    ['gdecl [["def1" '(arr (const (struct "ai_def")) 0)
-              ['init [(vr "ai_nif_rows(nif_def_p, nif_def_c) ai_inst_rows(nif_def_i)")]]]]
+    ['gdecl [["def1" '(arr (const (struct "def")) 0)
+              ['init [(vr "nif_rows(nif_def_p, nif_def_c) inst_rows(nif_def_i)")]]]]
      '(static)]
    ; book name -> the lvm_ that runs it, as love data in .rodata: `dis` can name only the
    ; book key, mooncc's IR only the C symbol. lib/splice.l reads it. not static: the
    ; runtime asks for it by name.
    nif-lvmmap
-    ['gdecl [["ai_nif_lvm" '(arr (const char) 0)
-              (vr (cstrlit "(" + " ai_nif_rows(nif_lvm_p, nif_lvm_c) " + cstrlit ")"))]] ()]
+    ['gdecl [["nif_lvm" '(arr (const char) 0)
+              (vr (cstrlit "(" + " nif_rows(nif_lvm_p, nif_lvm_c) " + cstrlit ")"))]] ()]
 
    nif-macs
     [(mac "nif_run_p(at, nm, im, mod)" "{ im }, { lvm_ret0 },")
@@ -238,7 +238,7 @@
      (mac "nif_lvm_c(at, a, nm, im, mod)" "nif_lvm_p(at, nm, im, mod)")]
    nif-undefs
     (map (n \ ['cpp-undef n])
-         '("ai_nif_rows" "ai_inst_rows" "nif_run_p" "nif_run_c" "nif_def_p" "nif_def_c"
+         '("nif_rows" "inst_rows" "nif_run_p" "nif_run_c" "nif_def_p" "nif_def_c"
            "nif_def_i" "nif_lvm_p" "nif_lvm_c"))
 
    nif-forms

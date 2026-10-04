@@ -3,8 +3,8 @@
  * struct or the AAPCS64 32-byte one -- fed by cc's variadic prologue from a
  * register save area. both are an array of one so a va_list DECAYS to a pointer
  * when passed to another function (the C `va_list` habit -- love.c's gvzprintf/
- * ai_pushr take one), and va_arg mutates the shared state. the field LAYOUT
- * matches gcc's on each target, so a cc-compiled variadic function (ai_push) is
+ * pushr take one), and va_arg mutates the shared state. the field LAYOUT
+ * matches gcc's on each target, so a cc-compiled variadic function (push) is
  * callable from gcc-built objects and vice versa. (on a64 gcc's va_list is
  * a bare struct passed by reference -- a composite > 16 bytes -- which is the
  * same wire as the array's decay: one pointer at the 32-byte struct.) the

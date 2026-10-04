@@ -29,15 +29,15 @@ CCACHE ?= $(shell command -v ccache 2>/dev/null)
 
 # mooncc's flags for the device C (run from $(R): its system include dir is
 # CWD-relative, the SDK's is absolute). TARGET_PLAYDATE gates main.c's newlib
-# stubs and pdglue.c's setup.c half. ai_data_section=0: the sentinel tiling
-# src/love/love.h's ai_typ reads wants the link to place love.data.NN, and this seat
+# stubs and pdglue.c's setup.c half. data_section=0: the sentinel tiling
+# src/love/love.h's love_typ reads wants the link to place love.data.NN, and this seat
 # lays one flat text run, so src/love/love.h asks the sentinels by name here.
-# ai_horn_seat: src/love/horn.c takes k_horn_* as its device rather than hunting a kernel's.
+# love_horn_seat: src/love/horn.c takes k_horn_* as its device rather than hunting a kernel's.
 # a fact about the LINK -- this roster supplies the door -- and the reason it cannot be
-# read off __ai_osv is that a board has no OS to have a word about. it also keeps the
+# read off __love_osv is that a board has no OS to have a word about. it also keeps the
 # ALSA and OSS lanes out of the compile, which want open/ioctl/getenv and would be a
 # link error here rather than a device this seat could ever reach.
-mc_flags = -t thumb2sp -D ai_tco=1 -D __STDC_HOSTED__=0 -D TARGET_PLAYDATE=1 -D TARGET_EXTENSION=1 -D ai_data_section=0 -D ai_horn_seat=1 \
+mc_flags = -t thumb2sp -D tco=1 -D __STDC_HOSTED__=0 -D TARGET_PLAYDATE=1 -D TARGET_EXTENSION=1 -D data_section=0 -D love_horn_seat=1 \
   -Isrc/love/user/playdate -Iout/playdate -I. -Isrc/love -Iout/lib -Isrc/love/quay -Isrc/apps/moon/include -I$(pd_sdk)/C_API
 # our own link. -Ttext 0 is where link_map.ld puts .text, which is the only thing
 # that script says about placement; --emit-relocs keeps the R_ARM_ABS32 sites so
@@ -65,7 +65,7 @@ pd_local_c = $(wildcard *.c)
 # src/love/bare.c is the null seat: this frontend supplies main and pdglue supplies the
 # heap, so the doors src/love/fd.c carries on a hosted love have nobody here to answer them.
 # src/love/horn.c where the boards take src/love/nohorn.c: this device has a speaker, so it answers
-# ai_horn_writen for real -- see ai_horn_seat in the flags below, and k_horn_* in main.c.
+# love_horn_writen for real -- see love_horn_seat in the flags below, and k_horn_* in main.c.
 pd_shared_c = $(love_c) $(f_c) $(S)/love/bare.c $(S)/love/horn.c
 # the bare-metal runtime, and the whole of it. the six moonlibc string members every
 # port takes (src/inle/port.mk's libc_m, out of the same source -- there is no second libc
@@ -176,7 +176,7 @@ $(o)/pdex-alt.elf: $(pd_o) | $(m)
 $(o)/pdex.so: $(pd_src) $(o)/cas.h
 	@echo CC	$@
 	@mkdir -p $(o)
-	@$(CCACHE) gcc -g -O1 -shared -fPIC -Dai_tco=0 -DTARGET_SIMULATOR=1 -DTARGET_EXTENSION=1 -Dai_horn_seat=1 \
+	@$(CCACHE) gcc -g -O1 -shared -fPIC -Dtco=0 -DTARGET_SIMULATOR=1 -DTARGET_EXTENSION=1 -Dlove_horn_seat=1 \
 	  -I. -I$(o) -I$(R) -I$(S)/love -I$(R)/out/lib -I$(S)/love/quay -I$(pd_sdk)/C_API \
 	  -o $@ $(pd_src) -lm
 

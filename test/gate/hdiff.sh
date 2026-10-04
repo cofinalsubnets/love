@@ -8,14 +8,14 @@
 #   1. it BUILDS and answers, per cc. semantics are the interpreter's and do not change
 #      with the compiler, so re-running the whole corpus through each is spent time -- the
 #      quick host suite is the whole reading.
-#   2. `vmret` is green, per cc. this is the one that earns the lane: ai_musttail is OWED,
+#   2. `vmret` is green, per cc. this is the one that earns the lane: love_musttail is OWED,
 #      and a shape that cannot jump must refuse at compile. mooncc's sibcall pass asks only
 #      whether a jump is EMITTABLE, so it waved through a 5-arg caller jumping into a 4-arg
 #      callee that clang refuses outright (doc/misc/moon-c-gaps.md). vmret cannot catch it
 #      either -- it reads the binary mooncc built, sounding our own rule against our own
 #      output. A foreign cc compiling the same file is the only instrument that has.
 #
-# ai_tco=1 IS THE POINT. at tco=0 ai_musttail expands to nothing and this proves nothing,
+# tco=1 IS THE POINT. at tco=0 love_musttail expands to nothing and this proves nothing,
 # which is exactly why love0's clang lane never caught any of it.
 #
 # usage: hdiff.sh CC..
@@ -30,7 +30,7 @@ command -v objdump > /dev/null 2>&1 || command -v llvm-objdump > /dev/null 2>&1 
   echo "test_hdiff: no objdump or llvm-objdump, so vmret reads nothing -- SKIPPED, not passed"
   exit 0; }
 
-# ..and the cc has to be able to HONOUR ai_musttail. love.h refuses to build the
+# ..and the cc has to be able to HONOUR love_musttail. love.h refuses to build the
 # tail-threaded vm without it, so a cc that lacks it would look like "could not
 # build love" -- a failure report for a tree that is fine and a toolchain that is old.
 mtc=out/.hdiff-musttail.c
@@ -45,9 +45,9 @@ ran=""
 for cc in "$@"; do
   command -v "$cc" > /dev/null 2>&1 || { gate_partly "test_hdiff: no $cc, skipped"; continue; }
   "$cc" -c "$mtc" -o "$mtc".o > /dev/null 2>&1 || {
-    gate_partly "test_hdiff: $cc has no musttail -- ai_tco=1 is this lane's point, so SKIPPED, not passed"
+    gate_partly "test_hdiff: $cc has no musttail -- tco=1 is this lane's point, so SKIPPED, not passed"
     continue; }
-  echo "  $cc: building love (HCC=1, ai_tco=1)"
+  echo "  $cc: building love (HCC=1, tco=1)"
   make --no-print-directory HCC=1 CC="$cc" host > /dev/null 2>&1 \
     || fail "$cc could not build love"
   b=out/cc/love

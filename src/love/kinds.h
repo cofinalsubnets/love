@@ -2,23 +2,23 @@
 //
 enum q { KMint, KNom, KCharm, KSun, KGem, KTwin, KTrayZ, KTrayR, KTrayC, KTrayO, KString, KChain, KTablet, KHot, KN };
 enum d { DMint, DNom, DGem, DTwin, DBig, DTray, DString, DChain };
-#define ai_kind_names "mint nom charm sun gem twin trayz trayr trayc trayo string chain tablet hot"
+#define kind_names "mint nom charm sun gem twin trayz trayr trayc trayo string chain tablet hot"
 //
-// the data slot layout: the sentinels tile one section at ai_data_stride in
+// the data slot layout: the sentinels tile one section at data_stride in
 // enum d order, so a value's rep is arithmetic on its ap -- love.c's DSENT,
-// love.h's ai_typ, src/love/love_data.ld. each #if is a default, the guard a -D door.
-#if !defined(ai_data_section)
+// love.h's love_typ, src/love/love_data.ld. each #if is a default, the guard a -D door.
+#if !defined(data_section)
 #if defined(__wasm__)
-#define ai_data_section 0
+#define data_section 0
 #else
-#define ai_data_section 1
+#define data_section 1
 #endif
 #endif
-#if !defined(ai_data_stride)
+#if !defined(data_stride)
 #if defined(__x86_64__) || defined(__aarch64__)
-#define ai_data_stride 16
+#define data_stride 16
 #else
-#define ai_data_stride 128
+#define data_stride 128
 #endif
 #endif
-#define ai_data_n 8
+#define data_n 8

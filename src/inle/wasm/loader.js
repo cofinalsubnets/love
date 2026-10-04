@@ -1,7 +1,7 @@
 // src/inle/wasm/loader.js -- the environment of moon's wasm artifact, in place of emcc's
 // runtime: Love() instantiates a module and answers the Module its drivers already expect
 // (test/holo/loader.mjs) -- ccall/cwrap, the string marshalling, _malloc/_free, and the
-// HEAPU8/HEAPU32 views. the module imports ONE function, env.__ai_sys, moonlibc's
+// HEAPU8/HEAPU32 views. the module imports ONE function, env.__love_sys, moonlibc's
 // syscall door, and this file is the kernel under it: linux's numbers, the handful the
 // artifact issues -- write, mmap over memory.grow, clock_gettime, exit -- and ENOSYS for
 // the rest. the type law is the arity: every wasm param and answer is an i64, so a number
@@ -69,7 +69,7 @@ export default async function Love(opts = {}) {
       case NR.exit: case NR.exit_group: throw new ExitStatus(Number(a));
       default: return BigInt(-ENOSYS); } };
 
-  const { instance } = await WebAssembly.instantiate(await bytesOf(opts.wasm), { env: { __ai_sys: sys } }),
+  const { instance } = await WebAssembly.instantiate(await bytesOf(opts.wasm), { env: { __love_sys: sys } }),
         ex = instance.exports;
   memory = ex.mem ?? ex.memory;
   uni = Object.values(ex).some((f) => typeof f === 'function' && f.length === 16);
@@ -113,12 +113,12 @@ export default async function Love(opts = {}) {
   const cwrap = (name, ret, types) => (...args) => ccall(name, ret, types, args);
 
   // (wake bytes): boot from a heap image (love.image, `make wasm`'s bake) -- true if the
-  // module took it; false says boot the egg (ai_init) instead, as a stale image is refused
+  // module took it; false says boot the egg (init) instead, as a stale image is refused
   const wake = (bytes) => {
-    if (!bytes || !ex.ai_wake) return false;
+    if (!bytes || !ex.wake) return false;
     const b = new Uint8Array(bytes), p = _malloc(b.length);
     u8().set(b, p);
-    const rc = ccall('ai_wake', 'number', ['number', 'number'], [p, b.length]);
+    const rc = ccall('wake', 'number', ['number', 'number'], [p, b.length]);
     if (rc) _free(p);                                   // a woken heap keeps reading the bytes
     return rc === 0; };
   const M = { ccall, cwrap, UTF8ToString, stringToUTF8, lengthBytesUTF8, _malloc, _free, memory, wake,
@@ -127,7 +127,7 @@ export default async function Love(opts = {}) {
               get HEAP32() { return new Int32Array(memory.buffer); } };
   for (const k of Object.keys(ex)) if (typeof ex[k] === 'function' && !(('_' + k) in M)) M['_' + k] = ex[k];
 
-  // the horn, in a browser: the sink taps its accepted PCM (host.c ai_horn_tap), and
+  // the horn, in a browser: the sink taps its accepted PCM (host.c love_horn_tap), and
   // this drains the ring and schedules it just ahead of the AudioContext clock. node
   // has no AudioContext, so M.horn.pull is a no-op there and the ring just cycles.
   const AC = typeof AudioContext !== 'undefined' ? AudioContext
@@ -139,14 +139,14 @@ export default async function Love(opts = {}) {
     // drain what the horn has written and queue it; call each animation frame
     pull() {
       if (!ctx || ctx.state !== 'running') return 0;
-      const rate = ccall('ai_horn_rate', 'number', [], []);
+      const rate = ccall('love_horn_rate', 'number', [], []);
       if (!rate) return 0;
-      const chans = ccall('ai_horn_chans', 'number', [], []) || 2, want = rate;   // up to a second per pull
+      const chans = ccall('love_horn_chans', 'number', [], []) || 2, want = rate;   // up to a second per pull
       if (pcmCap < want) {
         if (pcmBuf) _free(pcmBuf);
         pcmBuf = _malloc(want * 2);
         pcmCap = want; }
-      const got = ccall('ai_horn_drain', 'number', ['number', 'number'], [pcmBuf, want]);
+      const got = ccall('love_horn_drain', 'number', ['number', 'number'], [pcmBuf, want]);
       if (!got) return 0;
       const frames = (got / chans) | 0;
       if (!frames) return 0;

@@ -1,5 +1,5 @@
-#ifndef _AI_LIMITS_H
-#define _AI_LIMITS_H
+#ifndef _LOVE_LIMITS_H
+#define _LOVE_LIMITS_H
 /* freestanding limits for cc. the object-like limits a portable program leans on;
  * PATH_MAX/NAME_MAX live here on linux (via <linux/limits.h>) so we host them too. */
 #define CHAR_BIT   8

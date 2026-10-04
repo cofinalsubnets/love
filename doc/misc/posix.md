@@ -26,10 +26,10 @@ underneath.
 love-the-host-process already calls `read`/`write`/`malloc`. L0 widens that to the POSIX
 surface as nifs:
 
-> every host nif is `host_X` (an `ai_noinline` syscall worker) + `lvm_X` (the VM
+> every host nif is `host_X` (an `love_noinline` syscall worker) + `lvm_X` (the VM
 > tail wrapper) + a `nif_X[]` thread registered via `LvNif` in a `src/love/*.c` file
 > (auto-globbed — no love.c/love.h/main.c edit; main.c is core). The fd→port path is
-> free: `ai_io_alloc(g,fd)` wraps any fd as a port with a close finalizer, and
+> free: `io_alloc(g,fd)` wraps any fd as a port with a close finalizer, and
 > read/write then come free via getc/putc. The general-POSIX nifs wear the
 > `posix_` C-symbol prefix (src/love/posix.c: `lvm_posix_stat` &c); the love names stay
 > the plain POSIX words.
@@ -63,7 +63,7 @@ processes, this surface answered against a ramfs.
 |--------------------------------|--------------------------------------------------------|
 | process / thread               | **task** — `twirl`/`catch`/`landed?`/`freeze`/`pause` (the cooperative scheduler) |
 | `fork`/`exec`/`waitpid`/`_exit`| `fork` `exec` `wait` `quit` (src/love/posix.c)             |
-| file descriptor                | **port** via `ai_io_alloc` + the `k_sources[]` vtable  |
+| file descriptor                | **port** via `io_alloc` + the `k_sources[]` vtable  |
 | `open`/`read`/`write`/`close`  | `open`/`close` + getc/putc; `lseek` over the raw-fd `openfd` lane |
 | `dup2`/`pipe`                  | `dup` `dup2` `pipe` (a pair of fds)                    |
 | `stat`/`mkdir`/`unlink`/readdir| `stat` `lstat` `statfs` `mkdir` `rmdir` `unlink` `readdir` `rename` `symlink` `readlink` `hardlink` `chmod` `chown` `utime` `umask` |
@@ -76,8 +76,8 @@ processes, this surface answered against a ramfs.
 | ids — `getuid`/`getgid`        | `getuid` `getgid` (the REAL pair; no effective ids here) |
 | exit codes / std streams       | `in`/`out`/`err` ports; `quit`                          |
 | sockets (BSD)                  | **nc** — `connect`/`listen`/`accept`/`shutdown`/DNS (src/love/sock.c) |
-| time — `clock_gettime`         | `ai_clock` / `(clock t)`                                |
-| `select`/`poll`                | `ai_wait_fds` / `ai_ready` (the scheduler's core)       |
+| time — `clock_gettime`         | `love_clock` / `(clock t)`                                |
+| `select`/`poll`                | `wait_fds` / `ready` (the scheduler's core)       |
 
 Two mappings are the elegant ones:
 
@@ -86,7 +86,7 @@ Two mappings are the elegant ones:
   policy; `welp` is the default disposition. No new mechanism — the condition system
   *is* the signal machinery. `sigfd` takes a signal LIST and turns any of them into perceive
   DATA, `(signo . pid)`, re-raisable through `help`.
-- **fds → ports, select → `ai_wait_fds`.** The cooperative scheduler already blocks
+- **fds → ports, select → `wait_fds`.** The cooperative scheduler already blocks
   tasks on fds and wakes the ready one. Two `spawn`ed pumps on two fds interleave with
   no select loop (this is why nc's bidirectional pump is ~free).
 
@@ -94,7 +94,7 @@ Two mappings are the elegant ones:
 
 An effect op answers `()` on success | an errno **nom** (`'enoent`, `'eexist`, ..) |
 `'badarg` on misuse; a value op answers the value | `()` absence | a nom | `'badarg`.
-The rule: **if the C level set errno, it comes back as the nom naming it** — `ai_err`
+The rule: **if the C level set errno, it comes back as the nom naming it** — `love_err`
 reads the vocabulary interned at boot (`g->errs`, every canonical name, `'eunknown`
 for the numbering's blanks), so no error path allocates. A call refused upstairs,
 before any syscall ran, answers `'badarg`, which is not a posix name, so the two can
@@ -103,7 +103,7 @@ worked" on an effect op, `nom? e` reads "it failed" on any op, and a specific re
 matches by name — kore's mv takes its cross-device lane on `(id? e 'exdev)`. a
 failure is TRUTHY: never ask `? x` of a value op's answer — `hot?` is the port test,
 `two?` the tuple test, `charm?`/`string?` the rest. The C seams underneath are
-untouched: `kmain.c`'s `k_fs_*` and `__ai_sys` answer 0-or-negative as every C face
+untouched: `kmain.c`'s `k_fs_*` and `__love_sys` answer 0-or-negative as every C face
 must, and the nom is minted at the one place C meets love. The misuse axis is one
 word now: `'badarg`, retiring the positive-EINVAL / `-1` / `-EINVAL` split.
 `stat` answers `(size mtime-ms mode ns uid gid nlink blocks ino atime ctime dev rdev blksize)` — ns the
@@ -119,7 +119,7 @@ is the same shape of question about cpu: `(user sys)` in microseconds, of this p
 the children it has reaped (-1), which is how `time` prices a command it did not itself run.
 `birth` answers a file's creation time in nanoseconds, `()` where the filesystem keeps none.
 No `struct stat` here has a seat for one, so which call answers is the kernel's business and
-moonlibc's to know (`sys/birth.c`, one door, `__ai_osv` deciding): **the BSDs have carried it in
+moonlibc's to know (`sys/birth.c`, one door, `__love_osv` deciding): **the BSDs have carried it in
 `struct stat` since 2003 and it comes out of the stat they already do** — the twin holds it and
 the translators drop it — while linux, the one Unix that left it out, needs `statx(2)`. Each
 spells "none" differently AND EVERY SPELLING READS AS A DATE: freebsd writes VNOVAL, -1, which

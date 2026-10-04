@@ -50,7 +50,7 @@ zero is even and below the index bound, so it needs its own slot in `image_immor
 
 ## the stamp is a DISTANCE
 
-Not a build hash: `arch` (a compile-time tag) + `anchor`, the **gap** between `ai_image_save` and
+Not a build hash: `arch` (a compile-time tag) + `anchor`, the **gap** between `image_save` and
 `image_immortals`. A different binary — cross-arch, or a stale rebuild — lays symbols out
 differently, the gap changes, and the image is refused.
 
@@ -90,7 +90,7 @@ whole point is WHERE it lands.
 
 ## l/host split
 
-The core owns the stdio-free buffer codec `ai_image_save` / `ai_image_load` (love.h); file I/O
+The core owns the stdio-free buffer codec `image_save` / `love_image_load` (love.h); file I/O
 lives in `src/love/image.c`. The codec sits OUTSIDE the one `#if __STDC_HOSTED__` region, so it
 compiles into the freestanding kernel.
 
@@ -105,7 +105,7 @@ the bake. `test_bakerep` holds that.
 
 A bake egg-boots whatever it is given, so the crew is never aboard when the snapshot is taken.
 `-l CAT` names the roster; with nothing named, the binary's own carried source is it (the
-`distlist` roster, the bake section of `ai_srctree`), so **a raw love alone in an empty directory
+`distlist` roster, the bake section of `srctree`), so **a raw love alone in an empty directory
 bakes itself into the whole artifact.** That is what a cross-laid seed egg is for: a lay for
 another ISA cannot be baked here, so it ships raw and one `love bake` on the target finishes it.
 
@@ -144,11 +144,11 @@ Three seams make mid-eval dumping honest where the boot bake could assume purity
 
 - **The stack is ballast, not state.** The running continuation's objects get traced (they're
   live) and ride into the blob; the load side resets `sp` and re-establishes `ip` regardless, so
-  they are wake-unreachable garbage swept at the woken session's first major. `ai_image_save_`
-  (the unguarded worker) does the dump; `ai_image_save` keeps the empty-stack guard for the boot
+  they are wake-unreachable garbage swept at the woken session's first major. `image_save_`
+  (the unguarded worker) does the dump; `image_save` keeps the empty-stack guard for the boot
   path, where a non-quiescent dump is a bug.
 - **Live finalizer nodes forge into dead chains.** An open port's close (or a nat's unmap) is a
-  raw three-word `ai_fz` in the heap — no object header, so the blind walks (save's encode and
+  raw three-word `fz` in the heap — no object header, so the blind walks (save's encode and
   load's decode) cannot stride it. The save walk recognizes the `g->fz` chain and overwrites each
   node's BLOB copy with a `(() . ())` chain of the same width; `fz` lives outside the serialized
   `v0..end` root window, so the woken session starts with no finalizables. The dump-time fds
@@ -175,7 +175,7 @@ Resident size does not move by itself: the major pool is sized off the image wit
 smaller live set lands in the same pair. Wake first got SLOWER, 43.1 → 54.0 ms, and the decode is
 not why — it roughly halves with the words. The woken session ran one major collection during boot
 that the larger image did not, because `img_wake` seeded the nursery at `nw >> 1` while the pool
-carried `nw >> 2` of slack, making `ai_please`'s `major_free < g->len` true by construction. A
+carried `nw >> 2` of slack, making `please`'s `major_free < g->len` true by construction. A
 boot's allocation is a fixed cost and does not shrink with the live set, so the smaller nursery no
 longer swallowed it. The slack now clears the seeded nursery (`nw + (nw >> 1)`, and a floor for
 the small end), and the wake clears the remembered set it invalidates — a forced first major had

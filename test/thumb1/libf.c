@@ -1,4 +1,4 @@
-/* v6-M bare floats, mooncc side: ai_flo_t IS float on a 32-bit love, so bare
+/* v6-M bare floats, mooncc side: flo_t IS float on a 32-bit love, so bare
    float args/params/returns are EVERYWHERE -- one WORD each (binary32, the
    gcc base-ABI shape; the widened-pair mismatch here was the bug that kept
    the egg from hatching). */

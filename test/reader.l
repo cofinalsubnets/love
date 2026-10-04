@@ -107,7 +107,7 @@
 ; an integer literal reads its value -- in all three bases, at full precision, and the
 ; same in every build (host, love0, wasm, the kernel), whatever that build's word width
 ; or libc. all three bases share one reader (is_dec_int/is_hex_int/is_oct_int ->
-; ai_big_read_dec/_hex/_oct), and the predicates are exhaustive over what a base-0
+; big_read_dec/_hex/_oct), and the predicates are exhaustive over what a base-0
 ; strtol accepted whole, so the reader never calls it. a float goes by lm_strtod, which
 ; is ours and correctly rounded on every target.
 (test

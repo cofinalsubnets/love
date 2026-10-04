@@ -1,5 +1,5 @@
-#ifndef _AI_PWD_H
-#define _AI_PWD_H
+#ifndef _LOVE_PWD_H
+#define _LOVE_PWD_H
 /* freestanding pwd.h for cc: the password-database entry + its lookups. */
 #include <sys/types.h>
 

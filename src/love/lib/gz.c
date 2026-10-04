@@ -38,9 +38,9 @@ static const uint8_t gz_clord[19] = {
 // allocated once. a positive n is believed and verified; a wrong or absent one costs a
 // counting pass first, which is the decode with the stores dropped.
 // eight unaligned bytes as a word, little-endian by construction, once per symbol --
-// bytes.h's ai_ld64 where the machine takes one load, the byte gather where it does not.
-#if ai_wideld
-#define LD64(p) ai_ld64(p)
+// bytes.h's ld64 where the machine takes one load, the byte gather where it does not.
+#if wideld
+#define LD64(p) ld64(p)
 #else
 #define LD64(p) ld64le(p)
 #endif
@@ -103,10 +103,10 @@ static int inf_fast_run(const uint8_t *in, uintptr_t n, uintptr_t *ipp, uint64_t
    for (k = h; k < l; k++) op[k] = op[k - d];
    op += l; continue; }
   { uint8_t *dp = op, *sp = op - d, *de = op + l;
-#if ai_wideld
-    if (d >= 8) for (; dp < de; dp += 8, sp += 8) ai_st64(dp, ai_ld64(sp));
+#if wideld
+    if (d >= 8) for (; dp < de; dp += 8, sp += 8) st64(dp, ld64(sp));
     else if (d == 1) { uint64_t v = 0x0101010101010101ull * *sp;   // a run of one byte
-     for (; dp < de; dp += 8) ai_st64(dp, v); }
+     for (; dp < de; dp += 8) st64(dp, v); }
     else
 #endif
     for (; dp < de; dp++, sp++) *dp = *sp; }
@@ -227,8 +227,8 @@ static int64_t inf_rund(const uint8_t *in, uintptr_t n, uint8_t *out, uintptr_t 
     // 8.5-byte mean match.
     uint8_t *dp = out + op, *sp = dp - d;
     uintptr_t k = 0;
-#if ai_wideld
-    if (d >= 8) for (; k + 8 <= l; k += 8) ai_st64(dp + k, ai_ld64(sp + k));
+#if wideld
+    if (d >= 8) for (; k + 8 <= l; k += 8) st64(dp + k, ld64(sp + k));
 #endif
     for (; k < l; k++) dp[k] = sp[k]; }
    op += l; }
@@ -245,9 +245,9 @@ static int64_t inf_run(const uint8_t *in, uintptr_t n, uint8_t *out, uintptr_t c
 // into the heap is stale across the bump. tls.c pays the same toll.
 // the raw-DEFLATE door for C callers with no g: src/inle/kmain.c inflates the
 // source blob into its initrd through this. same law as inf_run, exported.
-intptr_t ai_inflate_raw(const unsigned char *in, uintptr_t n, unsigned char *out, uintptr_t cap) {
+intptr_t inflate_raw(const unsigned char *in, uintptr_t n, unsigned char *out, uintptr_t cap) {
  return (intptr_t) inf_run(in, n, out, cap); }
-intptr_t ai_inflate_dict(const unsigned char *in, uintptr_t n, unsigned char *out, uintptr_t cap,
+intptr_t inflate_dict(const unsigned char *in, uintptr_t n, unsigned char *out, uintptr_t cap,
                          const unsigned char *dic, uintptr_t nd) {
  return (intptr_t) inf_rund(in, n, out, cap, dic, nd); }
 
@@ -255,7 +255,7 @@ intptr_t ai_inflate_dict(const unsigned char *in, uintptr_t n, unsigned char *ou
 // is not grown into
 #define INF_MAX ((uintptr_t) 1 << 30)
 
-static ai_inline struct ai *host_inflate(struct ai *g) {
+static love_inline struct g *host_inflate(struct g *g) {
  word sw = g->sp[0], nw = g->sp[1];
  intptr_t hint;
  int64_t want;
@@ -267,7 +267,7 @@ static ai_inline struct ai *host_inflate(struct ai *g) {
                 : inf_run((const uint8_t*) txt(sw), len(sw), 0, INF_MAX);
  for (;;) {
   if (want < 0) break;
-  if (!ai_ok(g = str0(g, (uintptr_t) want))) return g;
+  if (!ok(g = str0(g, (uintptr_t) want))) return g;
   if (!want) { g->sp[2] = g->sp[0], g->sp += 2; return g; }   // the counting pass read it
   { word s2 = g->sp[1];
     int64_t got = inf_run((const uint8_t*) txt(s2), len(s2),
@@ -316,9 +316,9 @@ static int inf_room(struct inf_acc *A, uintptr_t k) {
  if (A->n + k > INF_MAX) return 0;
  uintptr_t c = A->cap;
  while (c < A->n + k) c *= 2;
- uint8_t *b = ai_alloc(NULL, c);
+ uint8_t *b = alloc(NULL, c);
  if (!b) return 0;
- memcpy(b, A->b, A->n), ai_alloc(A->b, 0);
+ memcpy(b, A->b, A->n), alloc(A->b, 0);
  return A->b = b, A->cap = c, 1; }
 
 static void inf_pull(uint64_t *bb, uint32_t *bc, const uint8_t *in, uintptr_t n, uintptr_t *ip) {
@@ -380,10 +380,10 @@ static int inf_fast(struct inf_st *S, const uint8_t *in, uintptr_t n, uintptr_t 
    if (d > o)                                     // behind this feed's output: the ring
     for (uintptr_t j = o; dp < de; dp++, j++)
      *dp = d <= j ? b[j - d] : S->hist[(S->hp - (d - j)) & (IS_HIST - 1)];
-#if ai_wideld
-   else if (d >= 8) for (; dp < de; dp += 8, sp += 8) ai_st64(dp, ai_ld64(sp));
+#if wideld
+   else if (d >= 8) for (; dp < de; dp += 8, sp += 8) st64(dp, ld64(sp));
    else if (d == 1) { uint64_t v = 0x0101010101010101ull * *sp;   // a run of one byte
-    for (; dp < de; dp += 8) ai_st64(dp, v); }
+    for (; dp < de; dp += 8) st64(dp, v); }
 #endif
    else for (; dp < de; dp++, sp++) *dp = *sp;
    op += l; }
@@ -503,29 +503,29 @@ wait:
 #undef EMIT
 }
 
-static struct ai_str *inf_cask(word x) {
+static struct str *inf_cask(word x) {
  if (charmp(x) || ((union u*) x)->ap != lvm_cask) return NULL;
- struct ai_str *s = cask(x)->str;
+ struct str *s = cask(x)->str;
  return s && s->len == sizeof(struct inf_st) && ((struct inf_st*) s->bytes)->magic == IS_MAGIC ? s : NULL; }
 
-static ai_noinline struct ai *host_inflate_new(struct ai *g) {
- uintptr_t sreq = str_width(sizeof(struct inf_st)), breq = Width(struct ai_cask) + Width(struct ai_tag);
- if (!ai_ok(g = ai_have(g, sreq + breq))) return g;
- struct ai_str *s = ini_str(bump(g, sreq), sizeof(struct inf_st));
+static love_noinline struct g *host_inflate_new(struct g *g) {
+ uintptr_t sreq = str_width(sizeof(struct inf_st)), breq = Width(struct cask) + Width(struct tag);
+ if (!ok(g = have(g, sreq + breq))) return g;
+ struct str *s = ini_str(bump(g, sreq), sizeof(struct inf_st));
  memset(s->bytes, 0, sizeof(struct inf_st));
  ((struct inf_st*) s->bytes)->magic = IS_MAGIC;
  union u *k = bump(g, breq);
  cask(k)->ap = lvm_cask, cask(k)->str = s;
- tagthread(k, Width(struct ai_cask));
+ tagthread(k, Width(struct cask));
  return g->sp[0] = word(k), g; }
 
-static ai_noinline struct ai *host_inflate_feed(struct ai *g) {
- struct ai_str *cs = inf_cask(g->sp[0]);
+static love_noinline struct g *host_inflate_feed(struct g *g) {
+ struct str *cs = inf_cask(g->sp[0]);
  if (!cs || !strp(g->sp[1])) return g->sp[1] = ZeroPoint, g->sp += 1, g;
  struct inf_st *S = (struct inf_st*) cs->bytes;
  const uint8_t *in = (const uint8_t*) txt(g->sp[1]);
  uintptr_t n = len(g->sp[1]), ip = 0, cap = 4 * n + 4096;
- struct inf_acc A = { ai_alloc(NULL, cap), 0, cap };
+ struct inf_acc A = { alloc(NULL, cap), 0, cap };
  if (!A.b) return g->sp[1] = putcharm(1), g->sp += 1, g;
  inf_st_fix(S);
  int r = inf_step(S, in, n, !n, &ip, &A);
@@ -539,17 +539,17 @@ static ai_noinline struct ai *host_inflate_feed(struct ai *g) {
   S->bb >>= S->bc & 7, S->bc -= S->bc & 7;
   for (; S->bc; S->bb >>= 8, S->bc -= 8) tail[rn++] = (uint8_t) S->bb;
   S->mode = IM_DONE; }
- if (r < 0) { ai_alloc(A.b, 0); return g->sp[1] = r == -2 ? putcharm(1) : ZeroPoint, g->sp += 1, g; }
+ if (r < 0) { alloc(A.b, 0); return g->sp[1] = r == -2 ? putcharm(1) : ZeroPoint, g->sp += 1, g; }
  uintptr_t tn = r == 1 ? rn + (n - ip) : 0,
-           need = str_width(on) + (r == 1 ? str_width(tn) + Width(struct ai_chain) : 0);
- if (!ai_ok(g = ai_have(g, need))) { ai_alloc(A.b, 0); return g; }
- struct ai_str *o = ini_str(bump(g, str_width(on)), on);
+           need = str_width(on) + (r == 1 ? str_width(tn) + Width(struct chain) : 0);
+ if (!ok(g = have(g, need))) { alloc(A.b, 0); return g; }
+ struct str *o = ini_str(bump(g, str_width(on)), on);
  memcpy(o->bytes, A.b, on);
- ai_alloc(A.b, 0);
+ alloc(A.b, 0);
  if (r != 1) return g->sp[1] = word(o), g->sp += 1, g;
- struct ai_str *t = ini_str(bump(g, str_width(tn)), tn);
- memcpy(t->bytes, tail, rn), memcpy(t->bytes + rn, txt(g->sp[1]) + ip, n - ip);   // re-read: ai_have may move it
- struct ai_chain *c = ini_chain(bump(g, Width(struct ai_chain)), (intptr_t) o, (intptr_t) t);
+ struct str *t = ini_str(bump(g, str_width(tn)), tn);
+ memcpy(t->bytes, tail, rn), memcpy(t->bytes + rn, txt(g->sp[1]) + ip, n - ip);   // re-read: have may move it
+ struct chain *c = ini_chain(bump(g, Width(struct chain)), (intptr_t) o, (intptr_t) t);
  return g->sp[1] = word(c), g->sp += 1, g; }
 
 static LvmWrap(lvm_inflate_new, host_inflate_new)
@@ -571,7 +571,7 @@ LvNif("inflate-feed", nif_inflate_feed, NULL);
 // the heap grows toward the budget before a collection pays. this is a fixed window
 // and some tables.
 // scratch is not the heap: the off semispace where it is big enough (the major pool's
-// spare half is dead between collections), one ai_alloc block where it is not. the
+// spare half is dead between collections), one alloc block where it is not. the
 // shape is inflate's counting pass twice over -- count, str0 the exact answer,
 // re-derive and emit -- because str0 may collect and a collection flips that half.
 #define DF_WSIZE 32768u
@@ -842,10 +842,10 @@ static int64_t df_go(const uint8_t *s, uintptr_t i0, uintptr_t n, uint8_t *out, 
 
 // str0 collects, so both the source and the spare half are re-derived after it:
 // a pointer held across the bump is stale, and a major collection flips the halves.
-static uint8_t *df_arena(struct ai *g, int *alloced) {
+static uint8_t *df_arena(struct g *g, int *alloced) {
  *alloced = 0;
  if (g->major_len * sizeof(word) >= DF_ARENA) return (uint8_t*) g->major_spare;
- void *p = ai_alloc(NULL, DF_ARENA);
+ void *p = alloc(NULL, DF_ARENA);
  if (p) *alloced = 1;
  return (uint8_t*) p; }
 
@@ -853,25 +853,25 @@ static uint8_t *df_arena(struct ai *g, int *alloced) {
 // it is no twin: a lazy parse down a 4096 chain, zlib -9's, a bake-time cost for bytes.
 // its arena is always its own -- df_arena may hand back the major pool's spare half, and
 // a dump is walking a compacted heap that owns it.
-intptr_t ai_deflate_raw(struct ai *g, unsigned char const *in, uintptr_t n,
+intptr_t deflate_raw(struct g *g, unsigned char const *in, uintptr_t n,
                         unsigned char *out, uintptr_t cap) {
- uint8_t *m = ai_alloc(NULL, DF_ARENA);
+ uint8_t *m = alloc(NULL, DF_ARENA);
  int64_t got;
  if (!m) return -1;
  got = df_go(in, 0, n, out, cap, m, 1);
- ai_alloc(m, 0);
+ alloc(m, 0);
  return (intptr_t) got; }
-// ..and against a preset dictionary, which the inflater is handed as ai_inflate_dict's dic
-intptr_t ai_deflate_dict(struct ai *g, unsigned char const *in, uintptr_t n,
+// ..and against a preset dictionary, which the inflater is handed as inflate_dict's dic
+intptr_t deflate_dict(struct g *g, unsigned char const *in, uintptr_t n,
                          unsigned char const *dic, uintptr_t nd, unsigned char *out, uintptr_t cap) {
- uint8_t *m = ai_alloc(NULL, DF_ARENA), *s = m ? ai_alloc(NULL, nd + n) : NULL;
+ uint8_t *m = alloc(NULL, DF_ARENA), *s = m ? alloc(NULL, nd + n) : NULL;
  int64_t got = -1;
  if (s) memcpy(s, dic, nd), memcpy(s + nd, in, n), got = df_go(s, nd, nd + n, out, cap, m, 1);
- if (s) ai_alloc(s, 0);
- if (m) ai_alloc(m, 0);
+ if (s) alloc(s, 0);
+ if (m) alloc(m, 0);
  return (intptr_t) got; }
 
-ai_noinline static struct ai *host_deflate(struct ai *g) {
+love_noinline static struct g *host_deflate(struct g *g) {
  word sw = g->sp[0];
  uint8_t *m;
  int alloced;
@@ -880,14 +880,14 @@ ai_noinline static struct ai *host_deflate(struct ai *g) {
  m = df_arena(g, &alloced);
  if (!m) { g->sp[0] = ZeroPoint; return g; }
  want = df_go((const uint8_t*) txt(sw), 0, len(sw), 0, (uintptr_t) -1, m, 0);
- if (alloced) ai_alloc(m, 0);
+ if (alloced) alloc(m, 0);
  if (want < 0) { g->sp[0] = ZeroPoint; return g; }
- if (!ai_ok(g = str0(g, (uintptr_t) want))) return g;
+ if (!ok(g = str0(g, (uintptr_t) want))) return g;
  m = df_arena(g, &alloced);
  if (!m) { g->sp[1] = ZeroPoint, g->sp += 1; return g; }
  got = df_go((const uint8_t*) txt(g->sp[1]), 0, len(g->sp[1]),
              (uint8_t*) txt(g->sp[0]), (uintptr_t) want, m, 0);
- if (alloced) ai_alloc(m, 0);
+ if (alloced) alloc(m, 0);
  g->sp[1] = got != want ? ZeroPoint : g->sp[0];
  return g->sp++, g; }
 
@@ -895,15 +895,15 @@ ai_noinline static struct ai *host_deflate(struct ai *g) {
 // a lazy parse down a 4096 chain, zlib -9's, for bytes that are written once and read often
 // (the dist tarball, gzip -9). the parse is dear, so it runs once, into a buffer at
 // deflate's own bound (stored blocks: five bytes a block over the input), then the string
-ai_noinline static struct ai *host_deflate_best(struct ai *g) {
+love_noinline static struct g *host_deflate_best(struct g *g) {
  word sw = g->sp[0];
  if (!strp(sw)) return g->sp[0] = ZeroPoint, g;
  uintptr_t n = len(sw), cap = n + n / 1024 + 64;
- uint8_t *out = ai_alloc(NULL, cap);
- intptr_t got = out ? ai_deflate_raw(g, (const uint8_t*) txt(sw), n, out, cap) : -1;
- if (got < 0) { if (out) ai_alloc(out, 0); return g->sp[0] = ZeroPoint, g; }
- if (ai_ok(g = str0(g, (uintptr_t) got))) memcpy(txt(g->sp[0]), out, (uintptr_t) got), g->sp[1] = g->sp[0], g->sp++;
- ai_alloc(out, 0);
+ uint8_t *out = alloc(NULL, cap);
+ intptr_t got = out ? deflate_raw(g, (const uint8_t*) txt(sw), n, out, cap) : -1;
+ if (got < 0) { if (out) alloc(out, 0); return g->sp[0] = ZeroPoint, g; }
+ if (ok(g = str0(g, (uintptr_t) got))) memcpy(txt(g->sp[0]), out, (uintptr_t) got), g->sp[1] = g->sp[0], g->sp++;
+ alloc(out, 0);
  return g; }
 
 static LvmWrap(lvm_deflate, host_deflate)

@@ -1,5 +1,5 @@
-#ifndef _AI_SYS_PARAM_H
-#define _AI_SYS_PARAM_H
+#ifndef _LOVE_SYS_PARAM_H
+#define _LOVE_SYS_PARAM_H
 /* freestanding sys/param.h for cc: the BSD-ish path/word constants and the little
  * arithmetic macros old unix code reaches for. */
 #include <limits.h>

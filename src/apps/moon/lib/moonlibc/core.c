@@ -32,9 +32,9 @@ typedef struct __mhdr { struct __mhdr *next; size_t size; } __mhdr;   /* size in
  * whose mark sits BELOW `here` (its frame unwound past). blocks from the same
  * or an ancestor frame (mark >= here) stay. leak-free without a
  * stack-direction probe. */
-/* argv[0], stashed by __ai_start below -- gnulib's progname module reaches for
+/* argv[0], stashed by __love_start below -- gnulib's progname module reaches for
  * this and would otherwise die at the link */
-char const *__ai_progname = "";
+char const *__love_progname = "";
 
 
 /* ---- stdio: FILE is a fd plus (for write streams) a flush buffer. stdout is
@@ -71,7 +71,7 @@ FILE *stdin = &__stdf[0], *stdout = &__stdf[1], *stderr = &__stdf[2];
 /* ---- signals: glibc's 152-byte sigaction folded onto the kernel's 32-byte
  * one. BOTH arches carry the restorer slot (a64 is the odd asm-generic
  * arch that kept SA_RESTORER in its uapi) -- but only x86-64 needs it filled
- * (sys.o's __ai_sigret); a64 leaves flag+slot zero and the kernel lays
+ * (sys.o's __love_sigret); a64 leaves flag+slot zero and the kernel lays
  * its vdso return trampoline. ---- */
 
 
@@ -91,7 +91,7 @@ FILE *stdin = &__stdf[0], *stdout = &__stdf[1], *stderr = &__stdf[2];
  * {u32 type, pad, u64 value} and the kernel leaves the pad unzeroed, so a
  * long-wide read sees garbage -- and linux's u64 types all fit 32 bits, so
  * one narrow read serves every kernel (the AT_NULL stop included). */
-static unsigned long __ai_bias(void) {
+static unsigned long __love_bias(void) {
   unsigned long phdr = 0; Elf64_Half phnum = 0;
   for (long *a = __auxv; a && (unsigned int) a[0]; a += 2) {
     if ((unsigned int) a[0] == 3) phdr = (unsigned long) a[1];   /* AT_PHDR */
@@ -107,17 +107,17 @@ static unsigned long __ai_bias(void) {
  * and left every abs64 data pointer holding its base-0 offset, plus a table of
  * those sites bracketed by __start_/__stop_love_rela. Add the real load base to each
  * -- the whole of static-PIE relocation, no dynamic loader. Must run before any
- * such pointer is dereferenced (top of __ai_start). An ET_EXEC binary links an
+ * such pointer is dereferenced (top of __love_start). An ET_EXEC binary links an
  * EMPTY table (start == stop), so this is a no-op there. ---- */
 extern long __start_love_rela[], __stop_love_rela[];
-static void __ai_reloc(void) {
-  unsigned long bias = __ai_bias();
+static void __love_reloc(void) {
+  unsigned long bias = __love_bias();
   for (long *p = __start_love_rela; p < __stop_love_rela; p++)
     *(unsigned long *) (bias + (unsigned long) *p) += bias; }
 
 /* ---- getauxval: the kernel's word for a type, 0 where it laid none ---- */
 unsigned long getauxval(unsigned long t) {
-  for (long *a = __auxv; a && (unsigned int) a[0]; a += 2)      /* low word: __ai_bias's rule */
+  for (long *a = __auxv; a && (unsigned int) a[0]; a += 2)      /* low word: __love_bias's rule */
     if ((unsigned int) a[0] == t) return (unsigned long) a[1];
   return 0; }
 
@@ -126,13 +126,13 @@ unsigned long getauxval(unsigned long t) {
  * in-binary pointers correctly under -pie (0 for a fixed-base ET_EXEC). ---- */
 int dl_iterate_phdr(int (*cb)(struct dl_phdr_info *, unsigned long, void *), void *data) {
   unsigned long phdr = 0, phnum = 0;
-  for (long *a = __auxv; a && (unsigned int) a[0]; a += 2) {   /* low word: __ai_bias's rule */
+  for (long *a = __auxv; a && (unsigned int) a[0]; a += 2) {   /* low word: __love_bias's rule */
     if ((unsigned int) a[0] == 3) phdr = (unsigned long) a[1];   /* AT_PHDR */
     if ((unsigned int) a[0] == 5) phnum = (unsigned long) a[1]; }   /* AT_PHNUM */
   if (!phdr) return 0;
   struct dl_phdr_info in;
   memset(&in, 0, sizeof in);
-  in.dlpi_addr = __ai_bias();
+  in.dlpi_addr = __love_bias();
   in.dlpi_name = "";
   in.dlpi_phdr = (Elf64_Phdr const *) phdr;
   in.dlpi_phnum = (Elf64_Half) phnum;
@@ -143,18 +143,18 @@ int dl_iterate_phdr(int (*cb)(struct dl_phdr_info *, unsigned long, void *), voi
  * definition overrides crt0's weak call-main tail (the linker's weak machinery
  * is the whole switch -- no flags anywhere). crt0's second word is what its
  * own entry test learned about the kernel, 0 where it learned nothing: the
- * aarch64 probe may not run blind (see __ai_osdetect), so there the freebsd
+ * aarch64 probe may not run blind (see __love_osdetect), so there the freebsd
  * side answers 2 and only linux and netbsd are left to ask. ---- */
-void __ai_start(long *sp, long osv) {
-  __ai_osv = osv ? osv : __ai_osdetect();   /* which kernel: crt0's answer where it has one, else ask */
+void __love_start(long *sp, long osv) {
+  __love_osv = osv ? osv : __love_osdetect();   /* which kernel: crt0's answer where it has one, else ask */
   long argc = sp[0];
   char **argv = (char **) (sp + 1);
   char **e = argv + argc + 1;
-  if (argc > 0 && argv[0]) __ai_progname = argv[0];   /* getprogname's answer */
+  if (argc > 0 && argv[0]) __love_progname = argv[0];   /* getprogname's answer */
   environ = e;
   while (*e) e++;
   __auxv = (long *) (e + 1);
-  __ai_reloc();                 /* -pie: slide abs64 data pointers before any is used (no-op for ET_EXEC) */
+  __love_reloc();                 /* -pie: slide abs64 data pointers before any is used (no-op for ET_EXEC) */
   stdout->fd = 1;
   stdout->wr = 1;
   stdout->buf = __obuf;

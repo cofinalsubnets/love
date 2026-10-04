@@ -1,5 +1,5 @@
-#ifndef _AI_SYS_SYSMACROS_H
-#define _AI_SYS_SYSMACROS_H
+#ifndef _LOVE_SYS_SYSMACROS_H
+#define _LOVE_SYS_SYSMACROS_H
 /* freestanding sys/sysmacros.h for cc: split/join a device number. the classic
  * 8:8 encoding -- enough to round-trip through mknod for a userland build. */
 #define major(d)     ((int)(((d) >> 8) & 0xff))

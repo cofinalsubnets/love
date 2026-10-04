@@ -1,5 +1,5 @@
-#ifndef _AI_WCTYPE_H
-#define _AI_WCTYPE_H
+#ifndef _LOVE_WCTYPE_H
+#define _LOVE_WCTYPE_H
 #include <wchar.h>
 /* C11 7.30 in the C locale: a wide character classifies as its ascii byte does, and past
    ascii it is no class at all, as glibc's C locale answers */

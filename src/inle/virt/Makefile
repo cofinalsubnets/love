@@ -6,7 +6,7 @@
 # image lays at 0x80000000 - 120 (the one-segment header's size): the header falls in the
 # unmapped hole below DRAM, where the loader's writes are discarded, and the FIRST TEXT
 # BYTE lands exactly at 0x80000000. That first text is the driver's crt0, whose
-# `call __ai_start` lands in start.o's STRONG override (sp, FPU, mtvec, then main) -- the
+# `call __love_start` lands in start.o's STRONG override (sp, FPU, mtvec, then main) -- the
 # same weak seam moonlibc rides, doing bare-metal bring-up.
 #
 # Boot it: qemu-system-riscv64 -M virt -bios none -nographic -kernel love.elf
@@ -17,7 +17,7 @@ p_be  = rv64
 lib_h = out/lib/egg.h out/lib/post.h out/lib/prel.h out/lib/ev.h out/lib/love_version.h
 include ../port.mk
 
-virt_cc = $(MOONCC) -t rv64 -D ai_tco=1 -D __STDC_HOSTED__=0 -I. -Isrc/love -Iout/lib
+virt_cc = $(MOONCC) -t rv64 -D tco=1 -D __STDC_HOSTED__=0 -I. -Isrc/love -Iout/lib
 
 objs = $(R)/$(o)/start.o $(love_o) $(heap_o) $(R)/$(o)/lm.o $(libc_o) $(R)/$(o)/main.o
 
