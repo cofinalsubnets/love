@@ -3,7 +3,8 @@
 (module 'sb
 (borrow 'kore)
 (borrow 'posix)
-(:
+(: zcap 16                                               ; the longest chain of bases a blob rides
+   bcache {'n 0}                                         ; derived blob bytes, by hash, bounded
    ; --- files ---
    ; an empty file slurps to (), so `+ ""` folds it back onto the string identity and a
    ; 0-byte file hashes honestly. the port is minded, not closed at the tail: a torn read
@@ -20,7 +21,7 @@
    ; --- the store ---
    ; a new nest's head is empty; a nest from before heads has none, and realizes its whole store
    (mk _) (: new !(two? (stat ".sb"))
-             _ (mkdir ".sb" 493, mkdir ".sb/blob" 493, mkdir ".sb/patch" 493)
+             _ (mkdir ".sb" 493, mkdir ".sb/blob" 493, mkdir ".sb/z" 493, mkdir ".sb/patch" 493)
              (? new (lay ".sb/head" "()") ()))
    (snap _) (form ".sb/snap")                            ; ((path side pid) ..) sorted, the head's tree
    (tips _) (form ".sb/tips")                            ; (id ..), the store's: every patch it holds
@@ -49,7 +50,7 @@
    ; before hashing, or the same head reads two ways.
    (psid tp) (sha256 (ids-text (sort tp)))
    (ids-text l) (? (atom? l) "()" (cats (["(\"" <l "\""] + catmap (i \ [" \"" i "\""]) >l + [")"])))  ; = show, faster
-   (blob h) (: k (sd-h h) t (? (sb-hex? k) (look (".sb/blob/" + k))) (two? t ? <>t))
+   (blob h) (: k (sd-h h) t (? (sb-hex? k) (bget k)) (two? t ? <>t))
    ; a side is a path's state: () absent, its blob's hash for a plain file, the hash and an
    ; x for an executable one. so a chmod is a change, and a context names the mode too
    (sd-h s) (? (sd-x? s) (snip s 0 64) s)                      ; the side's blob
@@ -61,7 +62,53 @@
     (: st (stat p) m (? (two? st) (4095 & <>>st) 0)
        m2 (? x (m | ((m & 292) // 4)) (m - (m & 73)))
        (? (two? st && m != m2) (chmod p m2)))
-   (keep s) (: h (sha256 s) _ (lay (".sb/blob/" + h) s) h)
+   ; --- the blobs: .sb/blob/H holds H's bytes, or .sb/z/H codes them against a base blob by
+   ;     lzma2, "sbz H BASE DEPTH\n" and the stream (BASE - for none). H is the bytes' sha256
+   ;     either way, so no address moves; a chain of bases stops at zcap ---
+   (zhead t)                                             ; -> [h base depth at] | ()
+    (? (#t < 72 || snip t 0 4 != "sbz ") ()
+       (: h (snip t 4 68) b (t 69 = 45 ? "-" (snip t 69 133)) i (b = "-" ? 71 134)
+          (go j d) (? (#t <= j) () (t j = 10) [h b d (j + 1)]
+                      (48 <= t j && t j <= 57) (go (j + 1) (d * 10 + t j - 48)) ())
+          (? (t 68 = 32 && t (i - 1) = 32 && sb-hex? h && (b = "-" || sb-hex? b)) (go i 0))))
+   (bhave-in d h) (two? (stat (d + "/.sb/blob/" + h)) || two? (stat (d + "/.sb/z/" + h)))
+   (bhave? h) (bhave-in "." h)
+   ; a blob's bytes -> (1 bytes) | (): its file, or its z text derived off its base
+   (bget-in d h)
+    (: c (peep bcache h ())
+       (? (two? c) c
+          !(sb-hex? h) ()
+          (look (d + "/.sb/blob/" + h) @ t
+             (two? t ? t (look (d + "/.sb/z/" + h) @ z (two? z ? (zderive d h <>z 0)))))))
+   (bget h) (bget-in "." h)
+   ; a z text's bytes, its base got from d first -> (1 bytes) | (). chk: checked against h, for
+   ; a text from outside; the store's own were checked as they came in, as its plain files are
+   (zderive d h z chk)
+    (zhead z @ [zh zb zd at]
+       (? (zh != h) ()
+          (: base (? (zb = "-") '(1 "") (bget-in d zb))
+             u (? (two? base) (lzma2d-by (snip z at #z) <>base))
+             (? (string? u && (!chk || sha256 u = h))
+                (: _ (? (64000000 < bcache 'n) (: _ (map (k \ pull bcache k 0) (keys bcache)) (pin bcache 'n 0)) 0)
+                   _ (pin bcache h [1 u]) _ (pin bcache 'n (bcache 'n + #u))
+                   [1 u]))))
+       ())
+   (zdepth-in d h) (look (d + "/.sb/z/" + h) @ z (two? z ? (zhead <>z @ [_ _ k _] k 0) 0))
+   ; bytes into d's store, coded against base (a blob hash | ()) when it is there -> their hash
+   (keep-in d s base)
+    (: h (sha256 s)
+       (? (bhave-in d h) h
+          (: bt (? (base && sb-hex? base && base != h) (bget-in d base))
+             k (? (two? bt) (zdepth-in d base + 1) 0)
+             b (? (two? bt && k <= zcap) base "-")
+             body (lzma2e-by s (b = "-" ? "" <>bt))
+             _ (mkdir (d + "/.sb/z") 493)
+             _ (? (string? body)
+                  (lay (d + "/.sb/z/" + h) ("sbz " + h + " " + b + " " + show (b = "-" ? 0 k) + "\n" + body))
+                  (lay (d + "/.sb/blob/" + h) s))
+             h)))
+   (keep s) (keep-in "." s ())
+   (keep-by s base) (keep-in "." s base)
    (patch id) (: f (? (sb-hex? id) (form (".sb/patch/" + id))) (sb-sound? f ? f))
    (fld f k) (:- (go >f) (go m) (? (atom? m) () (two? <m && <<m = k) ><m (go >m)))
 
@@ -155,7 +202,7 @@
        hunks (scan (sort (walk () (igs ()) ())) sn ())
        (? !(two? hunks) (puts "sb: nothing to record\n", ())
           (: ; the blobs: keep every hunk's new content
-             _ (: (go m) (two? m ?  (: h <m _ (? !<>>h () (keep <>(look <h))) (go >m)))
+             _ (: (go m) (two? m ?  (: h <m _ (? !<>>h () (keep-by <>(look <h) (sd-h <>h))) (go >m)))
                   (go hunks))
              ; the deps: the patches whose writes this one's contexts read
              deps (:- (go hunks ()) (go m acc)
@@ -247,17 +294,23 @@
    ; object by name, (1 text) | (); every one is checked against its name on the way.
    ; -> {'laid 'bad 'read 'blobs 'ok}: read the patches fetched, ok when every tip arrived whole
    (gap pat blb tips to)
-    (: tp (to + "/.sb/patch/") tb (to + "/.sb/blob/")
+    (: tp (to + "/.sb/patch/")
        seen {} n {'laid 0 'bad 0 'read 0 'blobs 0 'ids ()}
        (bump k) (pin n k (1 + n k))
        (each f l) (foldl (\ a x (: r (f x) (a && r))) 1 l)   ; every one runs: && would stop at a miss
-       (blob1 h)
-        (? (!h || two? (stat (tb + h))) 1
-           (: t (blb h)
-              (? (atom? t) (say err ("sb: cannot fetch blob " + sh h + "\n"), 0)
-                 (sha256 <>t != h) (say err ("sb: bad address " + h + "\n"), bump 'bad, 0)
-                 (lay (tb + h) <>t) (bump 'blobs, 1)
-                 0)))
+       ; a blob as the source keeps it: its bytes, coded here against base when to is this nest,
+       ; or its z text as it stands, the base fetched first and the derive checked against h
+       (blob1 hb)
+        (: h <hb base <>hb
+           (? (!h || bhave-in to h) 1
+              (: t (blb h)
+                 zh (? (two? t && sha256 <>t != h) (zhead <>t))
+                 (? (atom? t) (say err ("sb: cannot fetch blob " + sh h + "\n"), 0)
+                    (sha256 <>t = h) (: _ (? (to = ".") (keep-by <>t base) (lay (to + "/.sb/blob/" + h) <>t)) (bump 'blobs, 1))
+                    (atom? zh || <zh != h) (say err ("sb: bad address " + h + "\n"), bump 'bad, 0)
+                    !(zh 1 = "-" || blob1 [(zh 1) ()]) 0
+                    !(two? (zderive to h <>t 1)) (say err ("sb: bad address " + h + "\n"), bump 'bad, 0)
+                    (: _ (mkdir (to + "/.sb/z") 493) _ (lay (to + "/.sb/z/" + h) <>t) (bump 'blobs, 1))))))
        (one id)
         (: r0 (peep seen id ())
            (? (r0 != ()) r0
@@ -269,7 +322,7 @@
                             (sha256 <>t != id) (say err ("sb: bad address " + id + "\n"), bump 'bad, 0)
                             !(sb-sound? f) (sb-refuse id, bump 'bad, 0)
                             (: dk (each one (fld f 'deps))
-                               bk (each blob1 (catmap (h \ [(sd-h <>h) (sd-h <>>h)]) (fld f 'hunks)))
+                               bk (each blob1 (catmap (k \ [[(sd-h <>k) ()] [(sd-h <>>k) (sd-h <>k)]]) (fld f 'hunks)))
                                (? (dk && bk && lay (tp + id) <>t) (bump 'laid, pin n 'ids (id . n 'ids), 1) 0)))))
                  _ (pin seen id r)
                  r)))
@@ -282,7 +335,7 @@
        n)
    ; a nest's patches and blobs by name, (1 text) | ()
    (dir-pat d) (\ id (look (d + "/.sb/patch/" + id)))
-   (dir-blb d) (\ h (look (d + "/.sb/blob/" + h)))
+   (dir-blb d) (\ h (look (d + "/.sb/blob/" + h) @ t (two? t ? t (look (d + "/.sb/z/" + h)))))
    ; bring this nest to the state a given patch set implies
    (tell cfs)
     (: (go m n) (? (atom? m) n
@@ -461,7 +514,7 @@
             (keys q)))
    (bin? s) (: n #s (go i) (? (n <= i) 0 (s i = 0) 1 (go (i + 1))) (go 0))
    (sh h) (? h (snip h 0 12) "()")
-   (bl h) (: k (sd-h h) (? !k '(1 "") (sb-hex? k) (look (".sb/blob/" + k))))  ; (1 text) | () -- presence, not net
+   (bl h) (: k (sd-h h) (? !k '(1 "") (sb-hex? k) (bget k)))  ; (1 text) | () -- presence, not net
    (mend old curh nw curpid pid)
     (: bw (bl old) ow (bl curh) tw (bl nw)
        bh (sd-h old) oh (sd-h curh) th (sd-h nw)
@@ -478,7 +531,7 @@
                 [curh 1 ("binary, cannot merge -- kept " + sh curh + ", incoming " + sh nw)]
                 (: r (diff3 bt ot tt ("recorded (" + sh curpid + ")")
                                       ("incoming (" + sh pid + ")"))
-                   mh (keep <r) n <>r
+                   mh (keep-by <r oh) n <>r
                    (n @ 0 [(sd mh x) 0 "both sides kept"]
                     [(sd mh x) n (show n + " region" + (? (1 = n) "" "s") + " left in markers")]))))))
    (mkparents p)                                              ; mkdir every "/"-prefix of a nested path
@@ -490,7 +543,7 @@
               (: e <m p <e ch <>e
                  ok (sb-rel? p && sb-oid? ch && string? ch && !(sb-link? p))
                  bh (sd-h ch) x (sd-x? ch)
-                 bl (? ok (look (".sb/blob/" + bh)))   ; presence, not net: an empty blob is real
+                 bl (? ok (bget bh))                   ; presence, not net: an empty blob is real
                  cur (? ok (look p)) curh (? (two? cur) (sha256 <>cur) ())
                  (? !ok (say err ("sb: will not write " + show p + " from " + show ch + "\n"), go >m n)
                     (atom? bl) (say err ("sb: missing blob " + bh + "\n"), go >m n)
@@ -509,7 +562,7 @@
        (? (atom? tt) (say err ("sb: no store at " + base + " (no /tips)\n"), ())
           (: tips (readform <>tt)
              (? (atom? tips) (say err ("sb: " + base + " has no tips\n"), ())
-                (: g (gap (\ id (http-fetch base ("/patch/" + id))) (\ h (http-fetch base ("/blob/" + h))) tips ".")
+                (: g (gap (\ id (http-fetch base ("/patch/" + id))) (\ h (http-fetch base ("/blob/" + h) @ t (two? t ? t (http-fetch base ("/z/" + h))))) tips ".")
                    rt (http-fetch base "/refs")             ; the refs ride along
                    theirs (two? rt ? (readform <>rt))
                    ru (refadd (refs ()) theirs 1)
@@ -675,6 +728,15 @@
                  (? (0 = nleft) 1 0))))))
    ; --- ls: the head's paths, a line each ---
    (sb-ls long) (: sn (snap ()) _ (map (e \ puts ((? long (<>e + "\t") "") + <e + "\n")) sn) #sn)   ; -l: side, tab, path
+   ; blobs as plain files DIR/HASH, for a reader that wants bytes on disk: the hashes named,
+   ; else every one the head holds -> 1 | 0
+   (sb-unpack dir hs)
+    (: _ (mkdir dir 493)
+       (foldl (\ ok h (: p (dir + "/" + h)
+                         (? (two? (stat p)) ok
+                            (bget h @ t (two? t ? (: _ (lay p <>t) ok)
+                                           (: _ (say err ("sb: missing blob " + h + "\n")) 0))))))
+              1 (two? hs ? hs (map (e \ sd-h <>e) (snap ())))))
 
    ; --- bank: freeze the current head under a NAME -- an immutable release, the
    (refs _) (form ".sb/refs")                                  ; ((name (id..) time)..) | ()
@@ -792,15 +854,70 @@
           (: _ (mk ()) _ (mkparents (lg-path nm))
              (? !(lg-lock nm 250) (say err ("sb: ledger " + nm + " is held by another writer\n"), 0)
                 (: cur (lg-now nm)
+                   cv (? (cur = "none") () (blob cur))
+                   en? (lg-entry? cv || lg-entry? <>t)
+                   pt (? en? (lg-split <>t) [<>t ""])
+                   why (? !en? "" !(lg-entry? <pt) "a signed ledger moves only by an entry" (lg-why cv <pt (pt 1)))
                    r (? (cur != was) (say err ("sb: ledger " + nm + " stands at " + cur + ", not " + was + "\n"), 0)
-                        (: h (keep <>t)
-                           _ (? (h = cur) 0
-                                (lay (lg-path nm)
-                                     (foldl (\ a l (a + l + "\n")) "" (lg-lines nm)
-                                      + h + " " + show (clock 0 // 1000) + " " + lg-who () + "\n")))
+                        (0 < #why) (say err ("sb: ledger " + nm + " refused: " + why + "\n"), 0)
+                        (: _ (? en? (keep-by (pt 1) (? (lg-entry? cv) (lg-text-of cv 1) (cur = "none") () cur)) 0)
+                           h (keep-by <pt (? (cur = "none") () cur))
+                           _ (? (h = cur) 0 (lg-add nm [(h + " " + show (clock 0 // 1000) + " " + lg-who ())]))
                            (puts (h + "\n"), 1)))
                    _ (lg-unlock nm)
                    r)))))
+   (lg-add nm ls) (lay (lg-path nm) (foldl (\ a l (a + l + "\n")) "" (lg-lines nm + ls)))
+   ; --- a signed queue: a ledger whose head is an entry (src/apps/qlog.l). it moves only by an
+   ;     entry that follows its head, laid with the queue's text after it: FILE is the entry's one
+   ;     line, then the text. the first entry over a plain ledger signs over its text. qlog loads
+   ;     only here, so a plain ledger never asks for keys ---
+   (lg-entry? s) (string? s && starts? s "(entry ")
+   (lg-split s) (: k (fsub s "\n" 0) (? (k < 0) [s ""] [(snip s 0 k) (snip s (k + 1) #s)]))
+   (lg-text-of en get) (: f ((cite 'qlog 'qlog-read) en) (? (tablet? f) (get (f "text"))))
+   ; "" when entry en, laying text qt, may follow the head value prev (() for none), else why
+   (lg-why prev en qt) (lg-why-by prev en qt blob)
+   (lg-why-by prev en qt get)
+    (: tr ((cite 'qlog 'qlog-trust) 0)
+       before (? (lg-entry? prev) (lg-text-of prev get) prev)
+       ((cite 'qlog 'qlog-step) (? (lg-entry? prev) prev ()) en before qt <tr (tr 1)))
+   ; --- a signed queue travels by pull alone: this nest's copy fast-forwards along a peer's when
+   ;     every entry past its head follows; a head never moves back, and a peer's log that does
+   ;     not continue this one is a fork, kept in NAME.forks and said once. plines is the peer's
+   ;     ledger, a line each; get finds a blob there -> the entries taken, -1 for a fork ---
+   (lg-at l x i) (? (atom? l) -1 (<l = x) i (lg-at >l x (i + 1)))   ; where x sits in l, -1 for nowhere
+   (lg-pull nm plines get)
+    (: mine (lg-lines nm) cur (lg-now nm) cv (? (cur = "none") () (blob cur))
+       hs (map (l \ <(words l)) plines) k (? (cur = "none") -1 (lg-at hs cur 0))
+       (? (cur != "none" && !(lg-entry? cv)) 0                    ; a plain ledger stays where it is
+          (k < 0 && cur != "none")
+           (? (elem (? (two? hs) (hs (#hs - 1)) "") (map (l \ <(words l)) mine)) 0   ; the peer is behind
+              (: f (lg-path nm + ".forks") t (look f) hd (? (two? hs) (hs (#hs - 1)) "")
+                 (? (two? t && 0 <= fsub <>t hd 0) -1
+                    (: _ (lay f ((two? t ? <>t "") + hd + "\n"))
+                       _ (say err ("sb: " + nm + " forks from the peer's at " + snip hd 0 12 + " -- kept in " + f + "\n"))
+                       -1))))
+          (: (go i prev n)
+              (? (#hs <= i) n
+                 (: en (get (hs i)) qt (? (string? en) (lg-text-of en get))
+                    why (? !(string? en) "a missing entry" !(string? qt) "a missing text" (lg-why-by prev en qt (\ h (: b (blob h) (? (string? b) b (get h))))))
+                    (? (0 < #why) (: _ (say err ("sb: " + nm + " stops at " + snip (hs i) 0 12 + ": " + why + "\n")) n)
+                       (: _ (keep qt) _ (keep en) _ (lg-add nm [(plines i)]) (go (i + 1) en (n + 1))))))
+             r (? (k = #hs - 1) 0 (go (k + 1) cv 0))
+             _ (? (0 < r) (puts ("sb: " + nm + " took " + show r + " entr" + (? (1 = r) "y" "ies") + "\n")) 0)
+             r)))
+   ; the signed queues a nest holds: [name lines] each
+   (lg-signed d)
+    (: ns (filter (n \ starts? n "queue/") (lg-names (d + "/.sb/ledger") ""))
+       (filter two? (map (n \ (: t (look (d + "/.sb/ledger/" + n))
+                               ls (? (two? t) (filter (\ l (0 < #l)) (lines <>t)) ())
+                               h (? (two? ls) <(words (ls (#ls - 1))) "")
+                               b (? (sb-hex? h) (bget-in d h))
+                               (? (two? b && lg-entry? <>b) [n ls])))
+                        ns)))
+   (lg-pull-dir peer)
+    (: _ (mk ()) (map (e \ lg-held <e (_ \ lg-pull <e (e 1) (\ h (: b (? (sb-hex? h) (bget-in peer h)) (? (two? b) <>b)))))
+                      (lg-signed peer)))
+   (lg-held nm f) (: _ (mkparents (lg-path nm)) (? (lg-lock nm 250) (: r (f 0) _ (lg-unlock nm) r) (say err ("sb: ledger " + nm + " is held by another writer\n"), 0)))
    ; every ledger under dir, by name
    (lg-names dir pre)
     (: es (readdir dir)
@@ -819,6 +936,8 @@
           (atom? r) (: c (lg-now nm) b (? (c = "none") () (blob c))
                        (? (string? b) (: _ (say out b) 1) (say err ("sb: no ledger " + nm + "\n"), 0)))
           (<r = "--id") (: _ (puts (lg-now nm + "\n")) 1)
+          (<r = "--text") (: c (lg-now nm) b (? (c = "none") () (blob c)) t (? (lg-entry? b) (lg-text-of b blob) b)
+                             (? (string? t) (: _ (say out t) 1) (say err ("sb: no ledger " + nm + "\n"), 0)))
           (<r = "--log") (: _ (map (\ l (puts (l + "\n"))) (lg-lines nm)) 1)
           (<r = "--was" && #r = 3) (lg-swap nm <>r <>>r)
           2)))                                             ; malformed: the dispatcher says the usage
@@ -933,13 +1052,13 @@
           (: pc {} q (c 'q)
              _ (: (go k) (? (0 < k) (: t (fr-get q) _ (? (string? t) (pin pc (sha256 t) [1 t]) ()) (go (k - 1))))
                   (go n))
-             hs (filter (h \ !(two? (stat (".sb/blob/" + h)))) (ssh-hashes (map (k \ <>(pc k)) (keys pc))))
+             hs (filter (h \ !(bhave? h)) (ssh-hashes (map (k \ <>(pc k)) (keys pc))))
              bc (ssh-blobs c hs)
              (? (tablet? bc) (gap (\ id (peep pc id ())) (\ h (peep bc h ())) ft ".") 0))))
    ; our patches lk, with the blobs the far store lacks of theirs -> [laid bad blobs ok] | ()
    (ssh-push c lk)
     (: ts (filter string? (map (i \ (: t (look (".sb/patch/" + i)) (? (two? t) <>t ()))) lk))
-       hs (filter (h \ two? (stat (".sb/blob/" + h))) (ssh-hashes ts))
+       hs (filter bhave? (ssh-hashes ts))
        bs (ssh-bits c "hasb" hs)
        (? (charm? bs) ()
           (: send (: (go l b acc) (? (atom? l) acc (go >l >b (? (<b = 1) acc (<l . acc))))
@@ -948,7 +1067,7 @@
              (each l) (? (two? l) (: _ (fr-put w <l) (each >l)) ())
              _ (fr-put w ("put " + show #ts + " " + show #send))
              _ (each ts)
-             _ (each (map (h \ <>(look (".sb/blob/" + h))) send))
+             _ (each (map (h \ <>(bget h)) send))
              _ (flush w)
              (ssh-form (fr-get (c 'q))))))
    (sync-ssh peer keep)
@@ -976,6 +1095,7 @@
                    ru (refadd (refs ()) theirs 1)
                    _ (two? <ru ? (lay ".sb/refs" (show <ru)))
                    _ (? pushed (ssh-ask c ("refs " + show (refs ()))) ())
+                   _ (? got (lg-pull-ssh c) 0)
                    nin (? (tablet? gi) (gi 'laid) 0) nout (? pushed (po 0) 0)
                    nb ((? (tablet? gi) (gi 'blobs) 0) + (? (two? po) (po 2) 0))
                    (? !got (say err ("sb: some objects did not arrive from " + peer + " -- the sync is INCOMPLETE\n"), 0)
@@ -1021,6 +1141,19 @@
                             ru (refadd (refs ()) (form (peer + "/.sb/refs")) 1)
                             _ (two? <ru ? (lay ".sb/refs" (show <ru)))
                             (take-tell gi (head-in peer) <>ru))))))
+   ; the far nest's signed queues, pulled: its ledgers, then the entries and texts this store lacks
+   (lg-pull-ssh c)
+    (: ls (ssh-form (ssh-ask c "ledgers"))
+       (has? h) (bhave? h)
+       (fetch hs) (: w (filter (h \ sb-hex? h && !(has? h)) hs) (? (two? w) (ssh-blobs c w) {}))
+       (? !(two? ls) 0
+          (map (e \ (: hs (map (l \ <(words l)) (e 1)) b1 (fetch hs)
+                       (get1 h) (: b (? (tablet? b1) (peep b1 h ())) (? (two? b) <>b (blob h)))
+                       ts (map (h \ (: en (get1 h) f (? (string? en) ((cite 'qlog 'qlog-read) en)) (? (tablet? f) (f "text") ""))) hs)
+                       b2 (fetch ts)
+                       (get h) (: b (? (tablet? b2) (peep b2 h ())) (? (two? b) <>b (get1 h)))
+                       (lg-held <e (_ \ lg-pull <e (e 1) get))))
+               (filter (e \ two? e && string? <e && starts? <e "queue/" && lg-name? <e) ls))))
    ; --- the far side: one answer per word asked, nothing else on stdout
    (sv-has d l) (cats (map (i \ (? (sb-hex? i && two? (stat (d + i))) "1" "0")) l))
    (sv-each l) (? (two? l) (: _ (fr-put out <l) (sv-each >l)) ())
@@ -1071,15 +1204,16 @@
    (sv-do v a ids)
     (v @ "hello" (fr-put out (show [(tips ()) (head ()) (refs ()) (? (elem "dirty" ids) (dirty ()) 0)]))
          "has" (fr-put out (sv-has ".sb/patch/" ids))
-         "hasb" (fr-put out (sv-has ".sb/blob/" ids))
+         "hasb" (fr-put out (cats (map (i \ (? (sb-hex? i && bhave? i) "1" "0")) ids)))
          "want" (: ps (sv-want (filter (i \ sb-hex? i && two? (stat (".sb/patch/" + i))) ids))
                    _ (fr-put out (show #ps))
                    (sv-each ps))
-         "blobs" (: bs (map (h \ (? (sb-hex? h) (look (".sb/blob/" + h)) ())) ids)
+         "blobs" (: bs (map (h \ (? (sb-hex? h) (bget h) ())) ids)
                     _ (fr-put out (cats (map (b \ (? (two? b) "1" "0")) bs)))
                     (sv-each (map (b \ <>b) (filter two? bs))))
          "put" (fr-put out (show (sv-put ids)))
          "refs" (fr-put out (sv-refs a))
+         "ledgers" (fr-put out (show (lg-signed ".")))
          "take" (fr-put out (show (sv-take ids)))
          (fr-put out (show ["unknown" v])))
    (sv-loop _)
@@ -1247,6 +1381,8 @@ usage: sb VERB ..
                   their deps) and lay the tree: what a hub does to land work
   ls [-l]         the head's paths; -l puts each one's side (blob hash, x when
                   executable) and a tab before it
+  unpack DIR [H..|-]  blobs as plain files DIR/HASH: the hashes named (- reads them
+                  from stdin), else the head's
   psid [SET]      the name of a set's state: the head's, or SET's (a ref, a
                   patch, a psid, or head)
   paths A B       the paths sets A and B lay differently, a line each
@@ -1277,7 +1413,10 @@ usage: sb VERB ..
   ledger NAME --id | --log      its hash (none when new) | every entry
   ledger NAME --was OLD FILE    move it to FILE's text (- is stdin) iff it
                   stands at OLD (none for a new one); exit 1 when it has moved on.
-                  ledgers stay in their nest: sync never carries one
+                  plain ledgers stay in their nest. a signed queue (its head an
+                  entry, src/apps/qlog.l) moves only by an entry that follows,
+                  and sync pulls it along a chain that checks
+  ledger NAME --text            the text a signed queue's head names
   -C DIR VERB ..  the verb in the nest at DIR
 "
    ; the same page two ways: asked for, it is the answer; reached by a miss, a complaint
@@ -1293,9 +1432,11 @@ usage: sb VERB ..
                      md (? (elem "--take" >as) 2 (elem "--keep" >as) 1 0)
                      (atom? pr ? (usage ())
                       !(held "." (_ \ (? (ssh? <pr || box-peer? <pr) (sync-ssh <pr md)
-                                         (md < 2) (sync-with <pr md)
-                                         (url? <pr) (sync-url <pr 0)
-                                         (sync-take <pr))))))
+                                         (url? <pr) (sync-url <pr (? (md < 2) md 0))
+                                         ; a nest on this box: then its signed queues, pulled
+                                         (: r (? (md < 2) (sync-with <pr md) (sync-take <pr))
+                                            _ (? (two? (stat (<pr + "/.sb"))) (lg-pull-dir <pr) 0)
+                                            r))))))
            "serve" (sb-serve >as)
            "apply" !(held "." (_ \ sb-apply >as))
            "take" (atom? >as ? (usage ()) !(held "." (_ \ sb-take >as)))
@@ -1307,6 +1448,7 @@ usage: sb VERB ..
            "status" !(sb-status ())
            "bisect" (#>as < 3 ? (usage ()) (: r (held "." (_ \ sb-bisect >as)) (? (r = 2) (usage ()) !r)))
            "ls" (sb-ls (elem "-l" >as), 0)
+           "unpack" (two? >as ? !(sb-unpack <>as (>>as = ["-"] ? words (slurp in + "") >>as)) (usage ()))
            "psid" !(sb-psid >as)
            "stamp" !(sb-stamp >as)
            "paths" (#>as = 2 ? (sb-paths <>as <>>as) (usage ()))

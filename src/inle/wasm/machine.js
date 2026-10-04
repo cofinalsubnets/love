@@ -27,6 +27,7 @@
 import { ctl_n, ring_n, ring_at, shared_n, scan_at, scan_n, c_sh, c_st,
          point_at, point_n, c_ph, c_pt, paste_at, paste_n, c_xh, c_xt,
          horn_at, horn_n, c_rate, c_wrote, c_played, c_live, pageurl } from './cpu.mjs';
+import { host_shared_n } from './hostring.mjs';
 
 // --- the glass: a canvas as REAL pixels ------------------------------------------------
 // the backing store is the element's own box times a ratio settled here, and
@@ -215,6 +216,67 @@ export function hearing(ring, ctl, said = (s) => console.warn(s)) {
     catch (e) { dead = true; said('no sound: ' + e.message); return; }
     if (audio.state !== 'running') audio.resume().catch(() => {});   // not yet allowed: the next touch asks again
   }; }
+
+// --- the seat's own files: /mnt/host --------------------------------------------------
+// the machine's /mnt/host is answered by hostfs.mjs, a worker of its own, out of one
+// directory: a folder the reader picked, where the browser lets a page hold one (Chromium's
+// File System Access), else the browser's private storage for this page (OPFS), which
+// outlives a reload. a picked folder is remembered (IndexedDB holds the handle) and asked
+// for again, since the browser forgets the permission with the page: a chip says whose it
+// was, and a click lends it back. a file dropped on the screen or chosen with the upload chip
+// is laid in the same directory, so it is /mnt/host/NAME aboard; a file goes the other way
+// as any does, written to /proc/lift.
+const kept = (op) => new Promise((ok, no) => {
+  const r = indexedDB.open('love-machine', 1);
+  r.onupgradeneeded = () => r.result.createObjectStore('kept');
+  r.onerror = () => no(r.error);
+  r.onsuccess = () => {
+    const t = r.result.transaction('kept', 'readwrite'), q = op(t.objectStore('kept'));
+    q.onsuccess = () => ok(q.result); q.onerror = () => no(q.error); }; });
+export function seat(root, chips, said = (s) => console.info(s)) {
+  const ring = new SharedArrayBuffer(host_shared_n), { port1, port2 } = new MessageChannel();
+  const w = new Worker(new URL('./hostfs.mjs', import.meta.url), { type: 'module' });
+  w.postMessage({ ring, port: port2, root: null }, [port2]);
+  const chip = (text) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'chip'; b.textContent = text;
+    chips.after(b); chips = b;
+    return b; };
+  // the folder: picked, remembered, and lent back by a click after a reload
+  const lend = (h) => { w.postMessage({ root: h }); said('/mnt/host is the folder ' + h.name); };
+  if ('showDirectoryPicker' in window) {
+    const pick = chip('\u{1F4C1} folder');
+    pick.title = 'lend the machine a folder as /mnt/host';
+    pick.addEventListener('click', async () => {
+      try {
+        const h = await showDirectoryPicker({ mode: 'readwrite' });
+        lend(h); pick.textContent = '\u{1F4C1} ' + h.name;
+        kept((s) => s.put(h, 'folder')).catch(() => {}); }
+      catch (e) { if (e?.name !== 'AbortError') said('no folder: ' + e.message); } });
+    kept((s) => s.get('folder')).then(async (h) => {
+      if (!h) return;
+      if (await h.queryPermission({ mode: 'readwrite' }) === 'granted') { lend(h); pick.textContent = '\u{1F4C1} ' + h.name; return; }
+      pick.textContent = '\u{1F4C1} lend ' + h.name + ' again';
+      pick.addEventListener('click', async (e) => {
+        if (await h.requestPermission({ mode: 'readwrite' }) !== 'granted') return;
+        e.stopImmediatePropagation(); lend(h); pick.textContent = '\u{1F4C1} ' + h.name; },
+        { once: true, capture: true }); }).catch(() => {}); }
+  // files in: the upload chip, and a drop on the machine
+  const lay = async (files) => {
+    for (const f of files) w.postMessage({ put: f.name, bytes: await f.arrayBuffer() }); };
+  w.onmessage = ({ data: m }) => { if (m.put) said(m.error ? `${m.put}: ${m.error}` : `/mnt/host/${m.put} laid`); };
+  const pickf = document.createElement('input');
+  pickf.type = 'file'; pickf.multiple = true; pickf.hidden = true;
+  pickf.addEventListener('change', () => { lay(pickf.files); pickf.value = ''; });
+  const up = chip('\u21E7 upload');
+  up.title = 'lay files in /mnt/host';
+  up.after(pickf);
+  up.addEventListener('click', () => pickf.click());
+  root.addEventListener('dragover', (e) => { if (e.dataTransfer?.types.includes('Files')) e.preventDefault(); });
+  root.addEventListener('drop', (e) => {
+    if (!e.dataTransfer?.files.length) return;
+    e.preventDefault(); lay(e.dataTransfer.files); });
+  return { port: port1, ring }; }
 
 // --- the island ----------------------------------------------------------------------
 
@@ -472,8 +534,9 @@ export async function loveMachine(root) {
     spun += e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1);
     for (; Math.abs(spun) >= 48; spun -= Math.sign(spun) * 48) send(0, spun < 0 ? 64 : 65, e); },
     { passive: false });
-  cpu.postMessage({ wasm, ring, ram: Number(at('ram', 1024)), cmd: at('boot', 'sh --login'), fb, image },
-                  image ? [wasm, image] : [wasm]);
+  const host = seat(root, chip);
+  cpu.postMessage({ wasm, ring, ram: Number(at('ram', 1024)), cmd: at('boot', 'sh --login'), fb, image, host },
+                  image ? [wasm, image, host.port] : [wasm, host.port]);
   // the box reflowed -- the window resized, or the island's column did. the new size goes
   // into the ring and the kernel re-makes its console at it; the canvas itself is left
   // alone until a frame comes back at the size the machine actually took.

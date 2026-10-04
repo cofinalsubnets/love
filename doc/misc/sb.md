@@ -201,9 +201,24 @@ old ones, which is the vault's rule kept. The writer is `SB_WHO`, else `USER`. A
 lock beside the ledger: a directory, made atomically, holding the holder's pid. A live holder is
 waited on for up to five seconds, and a dead one's lock is taken over.
 
-A ledger stays in its nest: `sync` carries patches, blobs and refs, never a ledger. A value that
-moves by compare-and-swap has no union to settle on, so sessions sharing one name the same nest,
-the hub, and reach it with `-C`.
+A ledger stays in its nest: `sync` carries patches, blobs and refs, never a plain ledger. A value
+that moves by compare-and-swap has no union to settle on, so sessions sharing one name the same
+nest, the hub, and reach it with `-C`.
+
+**A signed queue** is a ledger whose head is an *entry* ([`src/apps/qlog.l`](../../src/apps/qlog.l)):
+one form naming the queue, its term, its `seq` and `prev` (the hash of the entry before), when and
+by whom and through which tool, the hash of the queue's text after it, the writer's chain and its
+sig. Its `--was FILE` is the entry's one line, then the text, and it moves only when that entry
+follows the head -- next in seq, prev the head, a sig and chain that check against the box's
+lineage, a change its writer may make -- so a plain value, or an entry that does not chain, is
+refused once a queue is signed. The first entry over a plain ledger signs over its text.
+`ledger NAME --text` prints the text a signed head names (a plain ledger's value otherwise).
+
+A signed `queue/*` ledger travels by **pull**: a sync with a nest on this box, or over ssh, takes the
+peer's entries when they continue this nest's chain and every one checks, and writes nothing to
+the peer's. A head never moves back: a peer behind this nest gives nothing, and a peer whose log
+does not continue this one is a fork, kept as a line in `NAME.forks` and said once. An http
+remote carries no ledger.
 
 ## install is a composition, not a verb
 
