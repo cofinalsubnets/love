@@ -10,8 +10,9 @@
 ;   (core-unwatch c id)
 ;   (core-snap c)         -> [snap STATE QUEUE]
 ;   (core-close c)        -> stops it and lets the horn go
-;   (player-main as)      -> the verb: `love player [--pipe] [FILE..]`, the protocol on stdin
-;                            and stdout, the files queued and played
+;   (player-main as)      -> the verb: `love player [--pipe] [FILE..]`, the files queued and
+;                            played; on a terminal the player in cells (src/apps/player/tui.l),
+;                            with --pipe or off one the protocol on stdin and stdout
 ;
 ; a track runs on a task of its own that feeds the horn a chunk at a time, never more than
 ; lead ahead of the speaker, so a pause, a seek or an eq change is heard within lead. what
@@ -299,6 +300,7 @@
    (line-of p) (: (go acc) (see p @ -1 (two? acc ? (string (rev acc)) ()) 10 (string (rev acc)) ch (go (ch . acc)))
                   (go ()))
    (player-main as)
+    (? (!(elem "--pipe" as) && two? (tty 1)) (player-tui as)
     (: c (core-new "main")
        (line m) (say out (show m + "\n"), flush out)
        id (core-watch c line)
@@ -309,6 +311,13 @@
                             s (: m (sound s @ (m . _) m _ ())
                                  r (two? m ? (core-tell c id m) ['err "a message is [verb arg ..]"])
                                  (line r, m = ['bye] ? 0 (go 0))))
-       (go 0, core-close c, 0))
+       (go 0, core-close c, 0)))
+   ; the cells on this terminal over a core in process; tui.l bakes after this file, so by cite
+   (player-tui fs)
+    (: c (core-new "main")
+       _ (each fs (p \ core-send c ['add p]))
+       _ (? (0 < #(c 'q)) (core-send c ['play 0]) 0)
+       _ ((cite 'ptui 'ptui-run) ((cite 'ptui 'ptui-new) c))
+       (core-close c, 0))
    _ (pins (cite 'verbs 'tab) 'player (udoor 'player player-main "usage: love player [--pipe] [FILE..]" 1 1)))
 ) ; module core
