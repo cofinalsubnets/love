@@ -50,7 +50,7 @@
    ; mblob); the bake roster; what a seat reads at run time; the other .l; C and asm; the
    ; rest. each keeps the walk's order.
    sp-secs ["moon" "bake" "seat" "lisp" "c" "rest"]
-   sp-seat ["src/apps/tls/roots.pem"]                  ; tls/verify.l's roots, off /love
+   sp-seat ["src/apps/tls/roots.pem" "VERSION"]        ; tls/verify.l's roots, and the version line
    ; -c's table -> {section codec}, in srctree.h's numbers
    sp-cnums {"stored" 0 "deflate" 1 "bzip2" 2 "lzma2" 3}
    (sp-codecs spec)
