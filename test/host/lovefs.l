@@ -69,9 +69,10 @@
    (>(lf-fresh "(slurp (open \"/love/src/apps/tls/roots.pem\" \"r\"))") = "(1 0 0 1 0 0 0)")
    (>(lf-fresh "(slurp (open \"/love/src/apps/sat/flat.l\" \"r\"))") = "(1 0 0 0 1 0 0)")
    (>(lf-fresh "(slurp (open \"/love/src/love/love.c\" \"r\"))") = "(1 0 0 0 0 1 0)")
-   (>(lf-fresh "(slurp (open \"/love/VERSION\" \"r\"))") = "(1 0 0 0 0 0 1)")
+   (>(lf-fresh "(slurp (open \"/love/VERSION\" \"r\"))") = "(1 0 0 1 0 0 0)")
+   (>(lf-fresh "(slurp (open \"/love/doc/love.md\" \"r\"))") = "(1 0 0 0 0 0 1)")
    ; each codec answers the file the tree holds
-   (all (p \ lf-rd ("/love/" + p) = lf-rd p) ["src/apps/sat/flat.l" "src/love/love.c" "VERSION"])))
+   (all (p \ lf-rd ("/love/" + p) = lf-rd p) ["src/apps/sat/flat.l" "src/love/love.c" "doc/love.md" "VERSION"])))
 
 (test_fin ())
 (puts "lovefs: ok")
