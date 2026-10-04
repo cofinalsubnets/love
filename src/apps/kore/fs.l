@@ -843,21 +843,19 @@
    ; access, change and device -- the stat tuple carries all three now -- and the birth
    ; time, which is statx's own call and answers the dash where a filesystem keeps none.
    ; the widths are GNU's printf: a Links is padded only when a device type follows it,
-   ; and the name here is raw, not %N's shell-quoted one.
+   ; and the name is %N's, quoted only where the shell needs it.
    (ust-block p st L?)
     (: sz <st md <>>st ns (st 3)
        kind (md & 61440)
        dev (ust-at st 11) rdev (ust-at st 12)
        dev? (kind = 8192 || kind = 24576)
        ; -L followed, so a link's own mode can only be here when it did not: the kind
-       ; alone says whether there is an arrow to draw, and asks readlink only then
-       t (kind = 40960 ? (readlink p))
-       nm (string? t ? (p + " -> " + t) p)
+       ; alone says whether there is an arrow to draw
        (num v) (charm? v ? (show v) "?")
        (idcol id path) ((charm? id ? (uidname path id) "?") @ n
                         (upad 5 (num id) + "/" + upad 8 n))
        (line s) (say out s, put out 10)
-       _ (line ("  File: " + nm))
+       _ (line ("  File: " + ust-name p kind))
        _ (line ("  Size: " + (urpad 10 (show sz)) + string 9
                 + "Blocks: " + (urpad 10 (num (ust-at st 7)))
                 + " IO Block: " + (urpad 6 (num (ust-at st 13)))
@@ -881,7 +879,7 @@
    ; the name, %i the id and %l the longest name, %t the type's magic in hex and %T its
    ; name off the mount list, %s %S the block and fundamental block, %b %f %a the blocks,
    ; free and available, %c %d the inodes and free ones; a - and a width pad a field
-   ufs-face "  File: \"%n\"\n    ID: %-8i Namelen: %-7l Type: %T\nBlock size: %-10s Fundamental block size: %S\nBlocks: Total: %-10b Free: %-10f Available: %a\nInodes: Total: %-10c Free: %d\n"
+   ufs-face "    ID: %-8i Namelen: %-7l Type: %T\nBlock size: %-10s Fundamental block size: %S\nBlocks: Total: %-10b Free: %-10f Available: %a\nInodes: Total: %-10c Free: %d\n"
    (ufs-expand fmt p r)
     (: n #fmt o (jug 0)
        ty (udf-holds (udf-mounts ()) p @ m (two? m ? (m 2) "?"))
@@ -915,7 +913,8 @@
        (one q ok)
         ((? (fsm 'f) (statfs q) L? (stat q) (lstat q)) @ st
          (? (atom? st) (say err ("stat: cannot read file system information for '" + q + "': No such file or directory\n"), 0)
-            (fsm 'f) (say out (ufs-expand (string? fmt ? (fmt + (pf? ? "" "\n")) ufs-face) q st), ok)
+            (fsm 'f) (say out (string? fmt ? (ufs-expand (fmt + (pf? ? "" "\n")) q st)
+                                 ("  File: " + ushq q + "\n" + ufs-expand ufs-face q st)), ok)
             0))
        (one0 q ok)
         ((L? ? (stat q) (lstat q)) @ st
