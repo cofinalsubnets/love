@@ -9,7 +9,10 @@
 ;           many pieces had as this, and done: every piece unless said)
 ;           'tick (f t), every second, for a progress line
 ;   (swarm-head! t i)        moves the playhead to piece i
-(module (swarm swarm-new swarm-run swarm-head! swarm-spans swarm-read swarm-had)
+;   (swarm-port t f from)    -> [port bytes]: file f's bytes from byte `from` on, in order, a
+;                               read parking until the next piece is had and checked; the
+;                               playhead follows the reader. a fresh call replaces the last
+(module (swarm swarm-new swarm-run swarm-head! swarm-spans swarm-read swarm-had swarm-port)
 (borrow 'bytes)
 (borrow 'metainfo)
 (borrow 'peerwire)
@@ -108,6 +111,19 @@
       pin (t 'busy) i 0, pins st 'piece -1 'buf {},
       ok ? (pin (t 'have) i 1, pin t 'had (t 'had + 1))))
 
+ ; --- the ordered port: a pipe, its writer a task that waits on each piece in turn ---
+ (swarm-port t f from)
+  (: m (t 'm) fl (m 'files f) at (fl 2) len (fl 1)
+     pp (pipe 0) r (fdopen <pp) w (fdopen >pp)
+     (feed off) (? (len <= off) (close w)
+                   (: abs (at + off) i (abs // m 'plen) ps (i * m 'plen)
+                      (? (peep (t 'have) i 0 = 0) (swarm-head! t i, rest 100, feed off)
+                         (: d (swarm-read t i)
+                            e (min #d (at + len - ps))
+                            chunk (snip d (abs - ps) e)
+                            (say w chunk, flush w, feed (off + #chunk))))))
+     _ (peep t 'feeder () @ () 0 old (freeze old))
+     (pin t 'feeder (twirl (_ \ feed from) ()), [r (len - from)]))
  ; --- the run: peers on tasks, more dialled as some end ------------------------------
  (swarm-run t peers opts)
   (: mx (peep opts 'max 30) tick (peep opts 'tick (_ \ 0))

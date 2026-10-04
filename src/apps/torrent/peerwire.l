@@ -7,9 +7,10 @@
 ;   (pw-send c id payload)
 ;   (pw-request c i begin len)   a block of piece i
 ;   (within ms f)   -> (f ()) | () if it has not answered in ms
+;   (pw-rd c n) (pw-wr c s)      exactly n bytes off the wire | (), and bytes onto it
 ; ids: 0 choke 1 unchoke 2 interested 3 not interested 4 have 5 bitfield 6 request 7 piece
 ; 8 cancel. a connection is a tablet: the socket 's, bytes read ahead 'pend, the peer's id.
-(module (peerwire pw-dial pw-next pw-send pw-request pw-close within pw-has? pw-proto)
+(module (peerwire pw-dial pw-next pw-send pw-request pw-close within pw-has? pw-proto pw-rd pw-wr)
 (borrow 'bytes)
 (:
  (close q) (cite 'posix 'close q)
