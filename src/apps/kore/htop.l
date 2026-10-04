@@ -17,6 +17,7 @@
 (module 'kore
 (borrow 'cli)
 (borrow 'posix)
+(borrow 'text)
 
 (:
    tp-usage "usage: top [-b] [-P] [-C] [-n FRAMES] [-d SECS] [-p PID].."
@@ -24,17 +25,8 @@
    tr-e (string 27)
 
    ; ---- text by the column ------------------------------------------------------
-   ; a column is a byte that does not continue a utf-8 sequence
-   (tr-w s) (foldl (\ a k (128 <= s k < 192 ? a (a + 1))) 0 ^#s)
-   (tr-cut s w)                        ; the longest head of s within w columns
-    (: n #s
-       (go k a) (? (n <= k) s
-                   (128 <= s k < 192) (go (k + 1) a)
-                   (w <= a) (snip s 0 k)
-                   (go (k + 1) (a + 1)))
-       (go 0 0))
    (tr-sp n) (n < 1 ? "" (string (map (_ \ 32) (jot n))))
-   (tr-fit s w) (: c (tr-cut s w) m (tr-w c) (m < w ? (c + tr-sp (w - m)) c))
+   (tr-fit s w) (: c (scut s w) m (swidth c) (m < w ? (c + tr-sp (w - m)) c))
 
    ; ---- pens --------------------------------------------------------------------
    ; a pen is a name; 256-colour SGR, or under -C the few that reverse or embolden
@@ -51,8 +43,8 @@
    (tr-segs st segs w)
     (: (go l left acc)
         (atom? l ? (acc + tr-sp left)
-         (: s <l c (tr-cut (s 1) left)
-            (go >l (left - tr-w c) (acc + tr-pen st (s 0) + c))))
+         (: s <l c (scut (s 1) left)
+            (go >l (left - swidth c) (acc + tr-pen st (s 0) + c))))
        (go segs w ""))
 
    ; ---- bars --------------------------------------------------------------------
@@ -165,7 +157,7 @@
    (tr-row st r pre sel?)
     (: b (? sel? 'sel (<r != r 15) 'thr (r 14) 'kth 'txt)
        (p x) (sel? ? 'sel x)
-       [[b (upad 7 (show <r))] [b (" " + urpad 8 (tp-cut (r 1) 8))] [b (" " + upad 3 (r 2))]
+       [[b (upad 7 (show <r))] [b (" " + urpad 8 (scut (r 1) 8))] [b (" " + upad 3 (r 2))]
         [b (" " + upad 3 (r 3))]
         [b " "] [(p (tr-kpen (tp-kb (r 4)) b)) (upad 7 (tp-kb (r 4)))]
         [b " "] [(p (tr-kpen (tp-kb (r 5)) b)) (upad 6 (tp-kb (r 5)))]
@@ -430,27 +422,23 @@
    ; first wait is short, so the second frame's %CPU is a difference and not an average
    (tr-ride st n d)
     (: b (cask 512)
-       e tr-e
-       (size _) (tty 1 @ ws [(two? ws && 0 < <ws ? <ws 24) (two? ws && 0 < >ws ? >ws 80)])
        (paint g) (puts (tr-draw st (g 1) (g 0)), flush out)
        (keys _) (tr-swig in b @ k (charm? k && 0 < k ? (tr-keys (snip b 0 k))))
        (wait left g)
         (: r (foldl (\ a k (tr-step st k @ v (a = 1 || v = 1 ? 1 (max a v)))) 0 (keys 0))
-           g2 (size 0)
+           g2 (ttysize 0 0)
            (? (r = 1) 1
               (r = 3) 0
               (r = 2 || g2 != g) (paint g2, wait left g2)
               (left < 1) 0
               (rest tp-nap, wait (left - tp-nap) g2)))
-       (go k) (size 0 @ g
+       (go k) (ttysize 0 0 @ g
                  (tp-take st,
                   paint g,
                   (? (0 < n && n <= k) 0
                      (wait (k = 1 ? (min d 700) d) g) 0
                      (go (k + 1)))))
-       (raw 1, puts (e + "[?1049h" + e + "[?25l" + e + "[?1000h" + e + "[?1006h"), flush out,
-        mind go 1 (_ \ (puts (e + "[?1006l" + e + "[?1000l" + e + "[0m" + e + "[?25h" + e + "[?1049l"),
-                        flush out, raw 0))))
+       (ttytake ['hide 'mouse], mind go 1 (_ \ ttygive ['hide 'mouse])))
 
    ; ---- the door ----------------------------------------------------------------
    (top-main as)

@@ -548,11 +548,7 @@
              r (ww-get <g 8)
              (? (<r = 0) (ww-show st r <>g (g 2)) (pgmsg st <>r)))))
    (ww-ride st kq)
-    (: e (string 27)
-       _ (raw 1)
-       _ (puts (e + "[?1049h"))
-       (fin _) (puts (e + "[0m" + e + "[?1049l"), flush out, raw 0, 0)
-       (go pend)
+    (: (go pend)
         (: _ (ww-do st)
            _ (pgresize st)
            _ (ww-fit st)
@@ -560,9 +556,8 @@
            _ (puts (pgframe st)) _ (flush out)
            kr (pgkey kq pend)
            c <kr
-           (? (c < 0) (fin ())
-              (ww-step st c, (? (st 'quit) (fin ()) (go <>kr)))))
-       (go -1))
+           (c < 0 ? 0 (ww-step st c, st 'quit ? 0 (go <>kr))))
+       (ttytake (), mind go -1 (_ \ ttygive ()), 0))
    (www-main as)
     (: t (tablet 0)
        o (uopt as t '(119) '(101) ())                       ; -w takes a value
@@ -571,7 +566,7 @@
        us <>>o
        _ (? (two? us && atom? >us) () (udie 2 ww-usage))
        ws (tty 1)
-       hw (? (two? ws) (pgwin ws) [24 80])
+       hw (ttysize 0 0)
        v (uoptv t 119)
        w (? (string? v) (: n (uatoi v) (? (0 < n) n 80)) <>hw)
        g (ww-get (ww-arg <us) 8)

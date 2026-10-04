@@ -17,6 +17,7 @@
 (module 'kore
 (borrow 'cli)
 (borrow 'posix)
+(borrow 'text)
 
 (:
    ; USER_HZ is 100 everywhere Linux runs a userland we could be in, which is the
@@ -39,7 +40,6 @@
     (tk // tp-hz @ s
        (show (s // 60) + ":" + zpad 2 (show (s % 60))
                         + "." + zpad 2 (show (tk % tp-hz))))
-   (tp-cut s w) (w < #s ? (snip s 0 w) s)
 
    ; ---- the samples -------------------------------------------------------------
    ; /proc/stat's cpu lines without their names, the sum first and then cpu0 onward:
@@ -166,7 +166,7 @@
                       + m1 (st - sf) + " used. " + m1 av + " avail Mem")])
    tp-head "    PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND"
    (tp-line r w)
-    (tp-cut (upad 7 (show <r) + " " + urpad 8 (tp-cut (r 1) 8)
+    (scut (upad 7 (show <r) + " " + urpad 8 (scut (r 1) 8)
              + " " + upad 3 (r 2) + " " + upad 3 (r 3)
              + " " + upad 7 (tp-kb (r 4)) + " " + upad 6 (tp-kb (r 5))
              + " " + upad 6 (tp-kb (r 6)) + " " + r 7
@@ -187,7 +187,7 @@
        top (hd + tp-mem (st 'mi) + ["" tp-head])
        room (h - #top @ n (0 < n ? n 0))
        body (map (r \ (tp-line r w)) (h < 1 ? rs (snip rs 0 room)))
-       (tp-join (map (s \ (tp-cut s w)) top) + tp-join body))
+       (tp-join (map (s \ (scut s w)) top) + tp-join body))
 
    ; ---- the plain face ----------------------------------------------------------
    ; batch: no terminal is wanted and none is asked for, every process is shown, and
@@ -220,11 +220,7 @@
    (tp-ride st n d)
     (: b (cask 64)
        e (string 27)
-       (paint _) (: ws (tty 1)
-                    h (two? ws && 0 < <ws ? <ws 24)
-                    w (two? ws && 0 < >ws ? >ws 80)
-                    (puts (e + "[H" + e + "[2J" + tp-frame st w h),
-                     flush out))
+       (paint _) (ttysize 0 0 @ g (puts (e + "[H" + e + "[2J" + tp-frame st (g 1) <g), flush out))
        ; the wait: naps until the delay is spent, cut short by a key that asks for
        ; a repaint. 1 quits, 2 repaints now, 0 carries on waiting.
        (wait left) (tp-keys st b @ k
@@ -235,7 +231,6 @@
        (go k) (paint 0,
                (0 < n && n <= k ? 0
                 (wait d ? 0 (go (k + 1)))))
-       (raw 1, puts (e + "[?1049h"),
-        mind go 1 (_ \ (puts (e + "[0m" + e + "[?1049l"), flush out, raw 0)))))
+       (ttytake (), mind go 1 (_ \ ttygive ()))))
 
 ) ; module 'kore
