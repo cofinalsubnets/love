@@ -255,7 +255,10 @@
       (uhuman 102400 = "100K") (uhuman 1500160 = "1.5M") (uhuman 3000000000 = "2.8G")
       ; %N's shell quoting: single quotes, double where the only trouble is the quote,
       ; a splice where it is not, and $'..' for a control byte
-      (ushq "plain" = "'plain'") (ushq "with space" = "'with space'")
+      (ushq "plain" = "plain") (ushq "with space" = "'with space'")
+      (ushq "a-b.c_d+e,f%g@h:i]j" = "a-b.c_d+e,f%g@h:i]j")      ; nothing the shell reads otherwise
+      (ushq "#x" = "'#x'") (ushq "a#b" = "a#b") (ushq "-x" = "-x") (ushq "-" = "-")
+      (ushq "{" = "'{'") (ushq "{a}" = "{a}")
       (ushq "sq'ote" = "\"sq'ote\"") (ushq "dq\"ote" = "'dq\"ote'")
       (ushq "both'and\"q" = "'both'\\''and\"q'")
       (ushq "sq'ote$x" = "'sq'\\''ote$x'")     ; a $ inside "" would expand, so it splices

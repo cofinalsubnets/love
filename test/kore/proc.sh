@@ -129,8 +129,9 @@ if command -v stty >/dev/null 2>&1 && script -qec true /dev/null > /dev/null 2>&
     script -qec "$K kore stty $v" /dev/null 2>&1 | tr -d '\r' > "$o"; same "stty $v"
   done
   for v in "-echo intr ^A" "raw" "sane" "cbreak min 3 time 2" "evenp" "nl -ixon" "erase 0x8 kill undef"; do
-    script -qec "stty $v; stty -a" /dev/null 2>&1 | tr -d '\r' | grep -v '^^D$' > "$g"
-    script -qec "$K kore stty $v; stty -a" /dev/null 2>&1 | tr -d '\r' | grep -v '^^D$' > "$o"; same "stty $v"
+    # script(1) echoes its eof as ^D, on a line of its own or glued to the next as it races
+    script -qec "stty $v; stty -a" /dev/null 2>&1 | tr -d '\r' | sed 's/^^D//' | grep -v '^$' > "$g"
+    script -qec "$K kore stty $v; stty -a" /dev/null 2>&1 | tr -d '\r' | sed 's/^^D//' | grep -v '^$' > "$o"; same "stty $v"
   done
 fi
 # who, users: one set of records -- a boot, a user, a session that ended, a getty --
