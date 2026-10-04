@@ -34,10 +34,10 @@ static void bw_byte(struct bz_w *w, uint8_t b) {
  if (w->n == w->cap) {
   if (w->fix || w->n >= BZ_OUTMAX) { w->bad = 1, w->big = !w->fix; return; }
   uintptr_t c = w->cap ? w->cap * 2 : 4096;
-  uint8_t *q = w->bad ? NULL : ai_alloc(NULL, c);
+  uint8_t *q = w->bad ? NULL : alloc(NULL, c);
   if (!q) { w->bad = 1; return; }
   if (w->n) memcpy(q, w->p, w->n);
-  if (w->p) ai_alloc(w->p, 0);
+  if (w->p) alloc(w->p, 0);
   w->p = q, w->cap = c; }
  w->p[w->n++] = b; }
 
@@ -216,19 +216,19 @@ static void bz_block(struct bz_e *e, struct bz_w *w, uintptr_t n, uint32_t crc) 
 
 static void bz_efree(struct bz_e *e) {
  void *p[] = {e->blk, e->sa, e->rk, e->tmp, e->cnt, e->mtf};
- for (unsigned i = 0; i < sizeof p / sizeof *p; i++) if (p[i]) ai_alloc(p[i], 0);
- ai_alloc(e, 0); }
+ for (unsigned i = 0; i < sizeof p / sizeof *p; i++) if (p[i]) alloc(p[i], 0);
+ alloc(e, 0); }
 
 // s[0..n) -> a whole .bz2 stream in *w; 0 ok, -1 out of memory
 static int bz_enc(const uint8_t *s, uintptr_t n, unsigned level, struct bz_w *w) {
  uintptr_t lim = level * 100000u - 19, bn = lim + 8;
- struct bz_e *e = ai_alloc(NULL, sizeof *e);
+ struct bz_e *e = alloc(NULL, sizeof *e);
  if (!e) return -1;
  memset(e, 0, sizeof *e);
- e->blk = ai_alloc(NULL, bn);
- e->sa = ai_alloc(NULL, bn * 4), e->rk = ai_alloc(NULL, bn * 4);
- e->tmp = ai_alloc(NULL, bn * 4), e->cnt = ai_alloc(NULL, (bn > 256 ? bn : 256) * 4);
- e->mtf = ai_alloc(NULL, (bn + 2) * 2);
+ e->blk = alloc(NULL, bn);
+ e->sa = alloc(NULL, bn * 4), e->rk = alloc(NULL, bn * 4);
+ e->tmp = alloc(NULL, bn * 4), e->cnt = alloc(NULL, (bn > 256 ? bn : 256) * 4);
+ e->mtf = alloc(NULL, (bn + 2) * 2);
  if (!e->blk || !e->sa || !e->rk || !e->tmp || !e->cnt || !e->mtf) return bz_efree(e), -1;
  bz_crcs(e->crct);
  bw_put(w, 0x425a68, 24), bw_put(w, 48 + level, 8);
@@ -389,7 +389,7 @@ static int bz_dblock(struct bz_d *d, struct bz_r *r, unsigned level, struct bz_w
 
 // every stream in s[0..n) -> 0 | an error; -1 out of memory
 static int bz_dec(const uint8_t *s, uintptr_t n, struct bz_w *w) {
- struct bz_d *d = ai_alloc(NULL, sizeof *d);
+ struct bz_d *d = alloc(NULL, sizeof *d);
  if (!d) return -1;
  bz_crcs(d->crct);
  struct bz_r r = { s, 0, n, 0, 0 };
@@ -418,7 +418,7 @@ static int bz_dec(const uint8_t *s, uintptr_t n, struct bz_w *w) {
    else { rc = 2; break; } }
   if (rc) break; }
  if (rc == 2 && br_used(&r) > n * 8) rc = 3;      // nonsense read off the end is a short stream
- ai_alloc(d, 0);
+ alloc(d, 0);
  return w->bad ? -1 : rc; }
 
 // --- a block at a time --------------------------------------------------------------------
@@ -459,26 +459,26 @@ static int bz_step(struct bz_st *S, struct bz_d *d, const uint8_t *s, uintptr_t 
 
 #ifndef BZ_STANDALONE
 // ===== the nifs: str0 may collect, so a string is re-read off the stack after it =====
-ai_noinline static struct ai *host_bz2e(struct ai *g) {
+love_noinline static struct g *host_bz2e(struct g *g) {
  word sw = g->sp[0], lw = g->sp[1];
  if (!strp(sw) || !oddp(lw) || getcharm(lw) < 1 || getcharm(lw) > 9) {
   g->sp[1] = ZeroPoint, g->sp += 1; return g; }
  struct bz_w w = {0};
  int rc = bz_enc((const uint8_t*) txt(sw), len(sw), (unsigned) getcharm(lw), &w);
- if (!rc && ai_ok(g = str0(g, w.n))) {           // pushes: out over the two
+ if (!rc && ok(g = str0(g, w.n))) {           // pushes: out over the two
   memcpy(txt(g->sp[0]), w.p, w.n);
   g->sp[2] = g->sp[0], g->sp += 2; }
- else if (ai_ok(g)) g->sp[1] = ZeroPoint, g->sp += 1;
- if (w.p) ai_alloc(w.p, 0);
+ else if (ok(g)) g->sp[1] = ZeroPoint, g->sp += 1;
+ if (w.p) alloc(w.p, 0);
  return g; }
 
 // every stream in s into exactly cap bytes of out, for a C caller with no g (src/love/lib/srctree.c)
 // -> cap, or -1 for a stream that is torn or says more or less than that
-intptr_t ai_bz2_into(unsigned char const *s, uintptr_t n, unsigned char *out, uintptr_t cap) {
+intptr_t bz2_into(unsigned char const *s, uintptr_t n, unsigned char *out, uintptr_t cap) {
  struct bz_w w = { .p = out, .cap = cap, .fix = 1 };
  return bz_dec(s, n, &w) || w.n != cap ? -1 : (intptr_t) cap; }
 
-ai_noinline static struct ai *host_bz2d(struct ai *g) {
+love_noinline static struct g *host_bz2d(struct g *g) {
  word sw = g->sp[0];
  if (!strp(sw)) { g->sp[0] = ZeroPoint; return g; }
  struct bz_w w = {0};
@@ -486,47 +486,47 @@ ai_noinline static struct ai *host_bz2d(struct ai *g) {
  if (w.big) g->sp[0] = putcharm(5);
  else if (rc > 0) g->sp[0] = putcharm(rc);
  else if (rc < 0) g->sp[0] = ZeroPoint;
- else if (ai_ok(g = str0(g, w.n))) {
+ else if (ok(g = str0(g, w.n))) {
   if (w.n) memcpy(txt(g->sp[0]), w.p, w.n);
   g->sp[1] = g->sp[0], g->sp++; }
- if (w.p) ai_alloc(w.p, 0);
+ if (w.p) alloc(w.p, 0);
  return g; }
 
-static struct ai_str *bz_cask(word x) {
+static struct str *bz_cask(word x) {
  if (charmp(x) || ((union u*) x)->ap != lvm_cask) return NULL;
- struct ai_str *s = cask(x)->str;
+ struct str *s = cask(x)->str;
  return s && s->len == sizeof(struct bz_st) && ((struct bz_st*) s->bytes)->magic == BZ_MAGIC ? s : NULL; }
-ai_noinline static struct ai *host_bz2_new(struct ai *g) {
- uintptr_t sreq = str_width(sizeof(struct bz_st)), breq = Width(struct ai_cask) + Width(struct ai_tag);
- if (!ai_ok(g = ai_have(g, sreq + breq))) return g;
- struct ai_str *s = ini_str(bump(g, sreq), sizeof(struct bz_st));
+love_noinline static struct g *host_bz2_new(struct g *g) {
+ uintptr_t sreq = str_width(sizeof(struct bz_st)), breq = Width(struct cask) + Width(struct tag);
+ if (!ok(g = have(g, sreq + breq))) return g;
+ struct str *s = ini_str(bump(g, sreq), sizeof(struct bz_st));
  memset(s->bytes, 0, sizeof(struct bz_st));
  ((struct bz_st*) s->bytes)->magic = BZ_MAGIC;
  union u *k = bump(g, breq);
  cask(k)->ap = lvm_cask, cask(k)->str = s;
- tagthread(k, Width(struct ai_cask));
+ tagthread(k, Width(struct cask));
  return g->sp[0] = word(k), g; }
-ai_noinline static struct ai *host_bz2_step(struct ai *g) {
- struct ai_str *cs = bz_cask(g->sp[0]);
+love_noinline static struct g *host_bz2_step(struct g *g) {
+ struct str *cs = bz_cask(g->sp[0]);
  if (!cs || !strp(g->sp[1])) return g->sp[2] = ZeroPoint, g->sp += 2, g;
  struct bz_st *S = (struct bz_st*) cs->bytes;
- struct bz_d *d = S->mode ? ai_alloc(NULL, sizeof *d) : NULL;
+ struct bz_d *d = S->mode ? alloc(NULL, sizeof *d) : NULL;
  if (S->mode && !d) return g->sp[2] = ZeroPoint, g->sp += 2, g;
  if (d) bz_crcs(d->crct);
  struct bz_w w = {0};
  int rc = bz_step(S, d, (const uint8_t*) txt(g->sp[1]), len(g->sp[1]), oddp(g->sp[2]) && getcharm(g->sp[2]), &w);
- if (d) ai_alloc(d, 0);
+ if (d) alloc(d, 0);
  if (rc) {
-  if (w.p) ai_alloc(w.p, 0);
+  if (w.p) alloc(w.p, 0);
   return g->sp[2] = rc == BZ_MORE ? putcharm(-1) : rc == BZ_DONE ? putcharm(0) : rc < 0 ? ZeroPoint : putcharm(rc),
          g->sp += 2, g; }
  uintptr_t k = S->bit / 8;                       // the bytes behind it, for the caller to drop
  S->bit -= 8 * k;
- if (!ai_ok(g = ai_have(g, str_width(w.n) + Width(struct ai_chain)))) { if (w.p) ai_alloc(w.p, 0); return g; }
- struct ai_str *o = ini_str(bump(g, str_width(w.n)), w.n);
+ if (!ok(g = have(g, str_width(w.n) + Width(struct chain)))) { if (w.p) alloc(w.p, 0); return g; }
+ struct str *o = ini_str(bump(g, str_width(w.n)), w.n);
  if (w.n) memcpy(o->bytes, w.p, w.n);
- if (w.p) ai_alloc(w.p, 0);
- struct ai_chain *c = ini_chain(bump(g, Width(struct ai_chain)), (intptr_t) o, putcharm((intptr_t) k));
+ if (w.p) alloc(w.p, 0);
+ struct chain *c = ini_chain(bump(g, Width(struct chain)), (intptr_t) o, putcharm((intptr_t) k));
  return g->sp[2] = word(c), g->sp += 2, g; }
 
 static LvmWrap(lvm_bz2e, host_bz2e)

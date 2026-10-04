@@ -1,7 +1,7 @@
 // src/love/inf.h -- one canonical prefix code read lsb first, rfc 1951's and vp8l's alike:
 // lib/gz.c's inflate and lib/webp.c's lossless decoder build and read it the same way.
-#ifndef AI_INF_H
-#define AI_INF_H
+#ifndef INF_H
+#define INF_H
 #include <stdint.h>
 #include <string.h>
 

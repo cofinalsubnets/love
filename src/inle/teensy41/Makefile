@@ -16,7 +16,7 @@ p_be  = thumb2
 lib_h = out/lib/egg.h out/lib/post.h out/lib/prel.h out/lib/ev.h out/lib/love_version.h
 include ../port.mk
 
-te_cc = $(MOONCC) -t thumb2 -D ai_tco=1 -D __STDC_HOSTED__=0 -I. -Isrc/love -Iout/lib
+te_cc = $(MOONCC) -t thumb2 -D tco=1 -D __STDC_HOSTED__=0 -I. -Isrc/love -Iout/lib
 
 objs = $(love_o) $(heap_o) $(R)/$(o)/lm.o $(libc_o) \
   $(R)/$(o)/teensy41.o $(R)/$(o)/psram.o $(R)/$(o)/main.o $(R)/$(o)/boot.o \

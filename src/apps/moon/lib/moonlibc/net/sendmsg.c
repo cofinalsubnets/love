@@ -6,14 +6,14 @@
  * only SCM_RIGHTS is spelled; an unmapped type refuses loudly. control rides
  * a fixed scratch -- a bigger one refuses, never a torn walk. */
 long sendmsg(int fd, struct msghdr const *m, int fl) {
-  if (__ai_osv < 2) return er(sc3(NR_sendmsg, fd, (long) m, fl));
+  if (__love_osv < 2) return er(sc3(NR_sendmsg, fd, (long) m, fl));
   struct sockaddr_storage sa;
   unsigned char cb[256];
   struct __fb_msghdr f = {0, 0, 0, 0, 0, 0, 0, 0, 0};
   f.iov = m->msg_iov; f.iovlen = (int) m->msg_iovlen;
   if (m->msg_name) {
     if (m->msg_namelen > sizeof sa) return er(-EINVAL);
-    f.namelen = __ai_sain(m->msg_name, m->msg_namelen, &sa);
+    f.namelen = __love_sain(m->msg_name, m->msg_namelen, &sa);
     f.name = &sa; }
   unsigned long cn = m->msg_controllen;
   if (cn) {
@@ -33,4 +33,4 @@ long sendmsg(int fd, struct msghdr const *m, int fl) {
       memcpy(cb + at + 16, c + at + 16, l - 16);
       at += (l + 7) & ~7UL; }
     f.control = cb; f.controllen = (unsigned int) cn; }
-  return er(sc3(NR_sendmsg, fd, (long) &f, (long) __ai_msgfb(fl))); }
+  return er(sc3(NR_sendmsg, fd, (long) &f, (long) __love_msgfb(fl))); }

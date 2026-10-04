@@ -87,7 +87,7 @@ static void gf_clear(struct gf *g, uint8_t *cv) {
    memset(cv + 4 * ((uintptr_t) y * (uintptr_t) g->sw + (uintptr_t) x), 0, 4); }
 
 // both nifs: s o canvas [trans] on the stack, the answer over them
-static struct ai *gf_host(struct ai *g, int nargs, int clear) {
+static struct g *gf_host(struct g *g, int nargs, int clear) {
  struct gf f;
  int why = !strp(g->sp[0]) ? 1 : !oddp(g->sp[1]) ? 2
          : gf_open(&f, (const uint8_t*) txt(g->sp[0]), len(g->sp[0]), getcharm(g->sp[1]));
@@ -96,7 +96,7 @@ static struct ai *gf_host(struct ai *g, int nargs, int clear) {
  if (!why && nargs == 4 && !oddp(g->sp[3])) why = 3;
  if (why) return g->sp[nargs - 1] = putcharm(why), g->sp += nargs - 1, g;
  int trans = nargs == 4 ? (int) getcharm(g->sp[3]) : -1;
- if (!ai_ok(g = str0(g, len(g->sp[2])))) return g;   // pushes: the new canvas
+ if (!ok(g = str0(g, len(g->sp[2])))) return g;   // pushes: the new canvas
  f.s = (const uint8_t*) txt(g->sp[1]);
  uint8_t *cv = (uint8_t*) txt(g->sp[0]);
  memcpy(cv, txt(g->sp[3]), len(g->sp[3]));
@@ -104,8 +104,8 @@ static struct ai *gf_host(struct ai *g, int nargs, int clear) {
  g->sp[nargs] = g->sp[0], g->sp += nargs;
  return g; }
 
-ai_noinline static struct ai *host_gif_frame(struct ai *g) { return gf_host(g, 4, 0); }
-ai_noinline static struct ai *host_gif_clear(struct ai *g) { return gf_host(g, 3, 1); }
+love_noinline static struct g *host_gif_frame(struct g *g) { return gf_host(g, 4, 0); }
+love_noinline static struct g *host_gif_clear(struct g *g) { return gf_host(g, 3, 1); }
 static lvm(lvm_gif_frame) LvmCall(g, host_gif_frame)
 static lvm(lvm_gif_clear) LvmCall(g, host_gif_clear)
 

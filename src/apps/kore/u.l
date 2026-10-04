@@ -10,7 +10,7 @@
 (borrow 'path)
 ; cpat/cpnext/cpn, for tr's sets and wc -m (src/love/boot/post.l)
 (borrow 'text)
-; civil, epoch-days, monl, for udate (src/love/boot/post.l)
+; civil, epoch-days, monl, wdl, for udate (src/love/boot/post.l)
 (borrow 'cal)
 
 (:
@@ -175,7 +175,8 @@
    ; with its day and year in either order, HH:MM[:SS] alone for today's; a Z, UTC or
    ; +HH[:]MM after a time. now, today, yesterday, tomorrow. relative: [+-]N UNIT, `ago`
    ; turning the item before it back, next and last as 1 and -1, stacking. a date without
-   ; a time is its midnight, a time without a date today's. UTC, as every clock here is
+   ; a time is its midnight, a time without a date today's. UTC, as every clock here is. a weekday
+; rides a date (date's own `Thu Jan  1 00:00:00 UTC 2026`, its year last) and alone is refused
    (uint w) (: n #w sg (0 < n && (w 0 = 43 || w 0 = 45) ? 1 0) d (snip w sg n)
                (0 < #d && all digit? (chars d) ? (sg && w 0 = 45 ? (0 - unum d) (unum d))))
    (udate s now)
@@ -186,6 +187,8 @@
        (mon w) ((3 <= #w ? (findsub "janfebmaraprmayjunjulaugsepoctnovdec" (snip w 0 3)) -1) @ k
                   (0 <= k && k % 3 = 0 && (#w = 3 || starts? (lower (monl (k // 3))) w) ? (k // 3 + 1)))
        (ymd a b c) (uint a && uint b && uint c ? [(uint a) (uint b) (uint c)])
+       (wkday? w) ((3 <= #w ? (findsub "sunmontuewedthufrisat" (snip w 0 3)) -1) @ k
+                     (0 <= k && k % 3 = 0 && (#w = 3 || starts? (lower (wdl (k // 3))) w)))
        (isod w) (usplit 45 w @ p (#p = 3 && #(<p) = 4 ? (ymd <p <>p <>>p)))
        (usd w) (usplit 47 w @ p (#p = 3 ? (ymd <p <>p <>>p @ v (v ? [(v 2) <v (v 1)]))))
        ; HH:MM[:SS] with a zone glued on (Z, +HHMM) -> [h m s off-ms] | ()
@@ -202,7 +205,7 @@
        ; the words, a date and its time split at a T
        ws (foldl (\ l w (w @ ((d && 0 < #d && isod d) + "t" + tm) (l + [d tm]) (l + [w])))
                  () (words (lower (replace s "," " "))))
-       st {'d () 't () 'tz () 'at () 'ms 0 'mo 0 'last () 'ok 1}
+       st {'d () 't () 'tz () 'at () 'ms 0 'mo 0 'last () 'ok 1 'wd 0 'ydef 0}
        (rel q k) ((? (k = 'm) (pin st 'mo (st 'mo + q)) (k = 'y) (pin st 'mo (st 'mo + 12 * q)) (pin st 'ms (st 'ms + q * k))) @ v
                     (pin st 'last [q k]))
        (go l)
@@ -214,12 +217,14 @@
                (w = "tomorrow") (rel 1 day, go >l)
                (w = "ago") (st 'last @ q
                               (q ? (rel (-2 * <q) <>q) 0, pin st 'last (), go >l))
+               (wkday? w) (pin st 'wd 1, go >l)
+               (st 'ydef && charm? iv && !u && 999 < iv) (st 'd @ d (pins st 'd [iv (d 1) (d 2)] 'ydef 0, go >l))
                ; a signed number just after a time is its zone, as GNU reads it: +1 an hour,
                ; +0130 an hour and a half, +90 no zone at all
-               (st 't && !(st 'tz) && (w 0 = 43 || w 0 = 45) && charm? iv)
+               (two? (st 't) && !(st 'tz) && (w 0 = 43 || w 0 = 45) && charm? iv)
                 (: dg (#w - 1) a (iv < 0 ? (0 - iv) iv)
                    hm (? (dg <= 2) [a 0] (dg <= 4) [(a // 100) (a % 100)] ())
-                   (hm && <hm <= 24 && <>hm < 60 ?
+                   (two? hm && <hm <= 24 && <>hm < 60 ?
                       (: t (st 't) off (60000 * (60 * <hm + <>hm))
                          (pins st 't [<t <>t (t 2) (iv < 0 ? (0 - off) off)] 'tz 1, go >l))
                       (pin st 'ok 0)))
@@ -228,14 +233,14 @@
                (charm? iv && u) (rel iv u, go >>l)
                (isod w) (pin st 'd (isod w), go >l)
                (usd w) (pin st 'd (usd w), go >l)
-               (hms w) (pin st 't (hms w), go >l)
-               (st 't && charm? (zone w)) (st 't @ t
+               (two? (hms w)) (pin st 't (hms w), go >l)              ; two?: midnight is [0 0 0 0], which sums false
+               (two? (st 't) && charm? (zone w)) (st 't @ t
                                              (pins st 't [<t <>t (t 2) (zone w)] 'tz 1, go >l))
                (mon w)
                 (: a (n2 ? (uint n2)) b (two? >>l ? (uint <>>l))
                    (? (charm? a && charm? b) (pin st 'd [(31 < a ? a b) (mon w) (31 < a ? b a)], go >>>l)
                       (charm? a) (<(civil (now // day)) @ y
-                                    (pin st 'd [y (mon w) a], go >>l))
+                                    (pins st 'd [y (mon w) a] 'ydef 1, go >>l))
                       (pin st 'ok 0)))
                (charm? iv && two? l && mon n2)
                 ((two? >>l ? (uint <>>l)) @ y
@@ -243,13 +248,13 @@
                (pin st 'ok 0, 0))))
        _ (go ws)
        t (st 't) d (st 'd)
-       (!(st 'ok) || atom? ws ? ()
+       (!(st 'ok) || atom? ws || st 'wd && !d ? ()
         ((charm? (st 'at) ? (st 'at)
           (: c (civil (now // day))
              dd (d ? d c)
              mo (st 'mo) m0 (dd 1 - 1 + mo) y (<dd + m0 // 12 - (m0 < 0 && !(m0 % 12 = 0) ? 1 0))
              m ((m0 % 12 + 12) % 12 + 1)
-             tod (? t (1000 * (3600 * <t + 60 * t 1 + t 2) - t 3) d 0 (now % day))
+             tod (? (two? t) (1000 * (3600 * <t + 60 * t 1 + t 2) - t 3) d 0 (now % day))
              (day * epoch-days y m (dd 2) + tod))) @ base
            (charm? base ? (base + st 'ms)))))
    ; -- backslash escapes, printf's and echo -e's --

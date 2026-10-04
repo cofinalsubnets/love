@@ -195,7 +195,7 @@ Fixpoint net (v : V) : Z :=
 
 (* THE CHARM CEILING. a charm is the codomain of every rung of the measure tower, so a
    net that will not fit lands on the EDGE rather than wrapping or widening (love.c's
-   ai_saturate/ai_ceilnet). the charm is the word minus its two tag bits, so the bound is
+   saturate/ceilnet). the charm is the word minus its two tag bits, so the bound is
    width-dependent -- 2^62-1 on the 64-bit host every gate here runs, and the model names
    that one. the LAWS below are stated against `maxcharm` and hold at any width; only the
    literal moves. spec.l asserts the ceiling without naming it: ($(100 2) = $(200 2)) is
@@ -613,7 +613,7 @@ Proof. intros A a b s. unfold smul, mcount. rewrite Zabs2Nat.inj_mul. apply srep
    lawful here, where () absorbs, in a way it never was for +. *)
 (* a point is GNom n, n its seat in love's order (a bare mint by serial, a name by
    spelling then serial, every name above every bare mint). () is the bare mint of
-   serial 0 -- love's ai_mint_zero, .code = 0, and every fresh mint takes
+   serial 0 -- love's mint_zero, .code = 0, and every fresh mint takes
    ++next_serial -- so it is GNom 0 and not a constructor of its own: the unit laws
    below are the join at its bottom, not a separate row, in Rocq as in mint_cmp. *)
 Inductive gval := GNum (z : Z) | GSeq (xs : list gval) | GNom (n : nat).

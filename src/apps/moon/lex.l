@@ -340,8 +340,9 @@
                  (c = 92 && i + 2 < n && src (i + 1) = 13 && src (i + 2) = 10)          ; \<cr><nl>
                   (go (i + 3) line acc)
                  (ws? c) (go (i + 1) line (spc acc))
-                 ; gas's comment: `#` after code, or opening a line that names no directive
-                 (asm && c = 35 && (two? acc && <>><acc = line ? !(dirline? acc line) !(asmdir? (i + 1))))
+                 ; gas's comment: `#` after code, or opening a line that names no directive. asm 2
+                 ; is the preprocessor's own view (-x assembler-with-cpp), which keeps them as text
+                 (asm = 1 && c = 35 && (two? acc && <>><acc = line ? !(dirline? acc line) !(asmdir? (i + 1))))
                   (: (eat j) (n <= j || src j = 10 ? j (eat (j + 1)))
                      (go (eat i) line acc))
                  ; a numeric label's reference: digits then b or f, one word

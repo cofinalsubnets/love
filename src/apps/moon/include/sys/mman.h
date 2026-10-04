@@ -1,5 +1,5 @@
-#ifndef _AI_SYS_MMAN_H
-#define _AI_SYS_MMAN_H
+#ifndef _LOVE_SYS_MMAN_H
+#define _LOVE_SYS_MMAN_H
 #include <sys/types.h>
 #define PROT_NONE  0
 #define PROT_READ  1
@@ -17,6 +17,10 @@
 #define MADV_DONTFORK 10
 #define MADV_DOFORK   11
 int madvise(void*, long, int);
+#define MS_ASYNC      1
+#define MS_INVALIDATE 2
+#define MS_SYNC       4
+int msync(void*, unsigned long, int);
 int mincore(void*, unsigned long, unsigned char*);
 void *mmap(void*, long, int, int, int, long);
 int munmap(void*, long);

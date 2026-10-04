@@ -542,6 +542,9 @@
                     ; name it owed is simply absent (C11 6.10p1 wants the
                     ; diagnostic). #include_next lands here too: unimplemented, and
                     ; now it says so rather than dropping a header.
+                    ; an assembler source keeps it as text, as gcc's assembler-with-cpp does: a
+                    ; `#` there is the assembly's (a device tree's #address-cells)
+                    (two? (mdef macs "__ASSEMBLER__")) (cppgo rest macs cond () (revcat (lnshift macs line) out1) incf)
                     (gripeat sline ("invalid preprocessing directive #" + spellcat [<>line]))))
              !(condactive cond) (cppgo rest macs cond buf out incf)                    ; skipped code: drop
              (cppgo rest macs cond (revcat (lnshift macs line) buf) out incf))))         ; active code: accumulate (reversed)
@@ -707,7 +710,9 @@
    ; or the line jumps, an included file named by its resolved path (gnulib finds the header it
    ; wraps that way).
    ; -> (1 text) | a gripe
-   (cpp-text toks incf fname)
+   ; exact: the tokens carry whitespace marks (the assembler lexer's), and a space goes back only
+   ; where the source had one -- a dts's /dts-v1/ and #address-cells are one word to dtc
+   (cpp-text toks incf fname exact)
     (: r (cppgo toks (cppmacs fname) () () () incf)
        (qesc s) ("\"" + string (catmap (c \ (c @ 34 [92 34] 92 [92 92] 10 [92 110] 9 [92 116]
                                                    (c < 32 || 126 < c ? (c & 255 @ o [92 (48 + (o >> 6)) (48 + ((o >> 3) & 7)) (48 + (o & 7))]) [c])))
@@ -715,15 +720,16 @@
        (sp t) (? (kof t = 'str) (0 < #(sof t) ? (sof t) (qesc (vof t))) (spell t))
        (mark l f) ("\n# " + show (l < 1 ? 1 l) + " \"" + f + "\"\n")
        ; files: the stack of open paths; cl the line the text stands on, cf its file
-       (go ts files cl cf acc)
+       (go ts files cl cf acc prev)
         (atom? ts ? (join "" (rev ("\n" . acc)))
            (<ts @ t
-              (? (fmark? t) (vof t = 'in ? (go >ts ((t 3) . files) 1 (t 3) (mark 1 (t 3) . acc))
-                                             (go >ts >files 0 () acc))
-                 (kof t = 'pmark) (go >ts files cl cf acc)
+              (? (fmark? t) (vof t = 'in ? (go >ts ((t 3) . files) 1 (t 3) (mark 1 (t 3) . acc) ())
+                                             (go >ts >files 0 () acc ()))
+                 (kof t = 'pmark) (go >ts files cl cf acc prev)
                  (: f (two? files ? <files fname) l (lof t)
-                    (? (f != cf || l < cl || cl + 8 < l) (go >ts files l f (sp t . mark l f . acc))
-                       (l > cl) (go >ts files l f (sp t . string (map (_ \ 10) ^(l - cl)) . acc))
-                       (go >ts files l f (sp t . " " . acc)))))))
-       (gripe? r ? r [1 (go r () 1 fname [(mark 1 fname)])])))
+                    (? (f != cf || l < cl || cl + 8 < l) (go >ts files l f (sp t . mark l f . acc) t)
+                       (l > cl) (go >ts files l f (sp t . string (map (_ \ 10) ^(l - cl)) . acc) t)
+                       (exact && !(two? prev && spaced? prev)) (go >ts files l f (sp t . acc) t)
+                       (go >ts files l f (sp t . " " . acc) t))))))
+       (gripe? r ? r [1 (go r () 1 fname [(mark 1 fname)] ())])))
 ) ; module 'moon

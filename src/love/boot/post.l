@@ -306,7 +306,7 @@
    ; embedded targets answer () -- no kernel is ever asked their name.
    arch-uname {'x64 "x86_64" 'a64 "aarch64" 'rv64 "riscv64"}
    ; and the same for the kernel -- only the respelling. main.c pins `love-os` per run off
-   ; __ai_osv: one binary meets four, and the compile that made it cannot say which.
+   ; __love_osv: one binary meets four, and the compile that made it cannot say which.
    os-uname {'linux "Linux" 'freebsd "FreeBSD" 'netbsd "NetBSD" 'inle "Inle"}
    ; any spelling -> the canonical nom, () for one nobody here knows. takes a nom or a
    ; string, since a flag arrives as text where a table key is a nom.
@@ -705,7 +705,7 @@
   ;   (: f (: (a o) (f o) c (tablet 0) (\ o c)))   -> ;; missing c
   cur (pick 0 (+)) ret0 (pick 1 cap) unc (pick 0 (+ 1))
   ; the float width is the seat's, never this file's: a 32-bit seat gets binary32 for
-  ; ai_flo_t. so ask the arithmetic -- a hard-coded 2^53 sends norm's doubling loop past
+  ; flo_t. so ask the arithmetic -- a hard-coded 2^53 sends norm's doubling loop past
   ; every float32 there is and it never returns.
   p53 (: (go m) (m = 1.0 + m ? m (go (m * 2.0))) (go 1.0))   ; where +1 is lost = 2^mantissa
   p52 (p53 / 2.0)
@@ -2224,7 +2224,7 @@
 ; and any other list is an application spine. (f) == f here too.
 ;
 ; a module on every corpus target (host + love0 + the inle kernel + wasm): the frontend lists
-; this source in its ai_libs table and its boot says (borrow 'uu), then rebinds `uu` to the
+; this source in its libs table and its boot says (borrow 'uu), then rebinds `uu` to the
 ; accessor -- (: uu (cite 'uu)) -- so the surface stays (uu 'vof), (uu 'defn), (uu 'chk),
 ; (uu 'lof), every internal a probe away. the UniMath theorem corpus rides in test/uu.l and
 ; the test/uu*.l ladder over it; the defn/defq/axm macros land in this layer's macro slot.

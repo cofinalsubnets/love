@@ -362,7 +362,7 @@
    ; ..and the code twin, for a function that named its own section (love.c's data
    ; sentinels). flags 6 = alloc|execinstr, which also picks objsecs' internal-resolve lane.
    ; the grain is the caller's: a run of one-fn sections at grain N tiles at N, which is how
-   ; love.h's ai_typ gets a stride out of a linker that was told no such thing.
+   ; love.h's love_typ gets a stride out of a linker that was told no such thing.
    (objsec-code nm forms al) [nm 1 6 al forms]
    ; a file-scope asm's sections, (name type flags forms) each: a name already laid takes the
    ; forms at its tail and keeps its own flags, a new one rides after the rest

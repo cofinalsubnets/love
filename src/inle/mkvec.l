@@ -62,7 +62,7 @@
 
    ;; the two lockstep tables, then the two LIDT operands. an entry is an 8-byte absolute
    ;; pointer, so a relocation in the .o. laid as .data and not .rodata: under the fused -pie
-   ;; artifact these sites ride the love_rela table and __ai_reloc writes them at a hosted
+   ;; artifact these sites ride the love_rela table and __love_reloc writes them at a hosted
    ;; start, where a read-only segment is a startup segfault and our linker has no relro
    ;; middle ground. metal never cared either way.
    (x-quad nm) ['raw [['fix 8 'abs64 nm 0]]]

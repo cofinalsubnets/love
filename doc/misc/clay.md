@@ -64,19 +64,19 @@ numbered as code comments cite them.
      defaults and a new sentinel is a `-Wswitch` error at every site.
    - 2d. `sdef`, struct definitions.
 3. **the node shapes the VM definitions need**: attributes on `fn`, `restrict`, the `ret`
-   prefix (`ai_musttail return`), `_Static_assert`, flexible members.
+   prefix (`love_musttail return`), `_Static_assert`, flexible members.
 4. **the nif + instruction registry.** `nifs.l` is the roster; `nifs.h` lays the one
    `union u nifs[]` table (each nif a run inside it), `def1` with each run's offset, and
-   `ai_nif_lvm` for the splice JIT. the X-macros `nifs`/`insts` and `s1`..`s5` went.
+   `nif_lvm` for the splice JIT. the X-macros `nifs`/`insts` and `s1`..`s5` went.
 5. **the preprocessor nodes** `cpp-def`, `cpp-undef`, `cpp-if`, emit-only. first consumer:
    the data slot layout, one `mx-strides` row giving the stride to both `kinds.h` and
    `love_data.ld`.
 6. **four readability shapes** kept from the reverted α conversion (`proto` with a
    signature, valued `edef` constants, index sugar through `dot`, `chr`), and
    `src/tools/clay-g2.l`, the conversion gate.
-7. **`nifs.h` and `mx.h` as rows.** the roster is laid once as `ai_nif_rows(P, C)` (a plain and a
-   curried row shape, the run offset in each) plus `ai_inst_rows(I)`, and `nifs[]`, `def1`
-   and `ai_nif_lvm` are three short consumers of it. `mx.h` likewise keeps `mx-rows`' own
+7. **`nifs.h` and `mx.h` as rows.** the roster is laid once as `nif_rows(P, C)` (a plain and a
+   curried row shape, the run offset in each) plus `inst_rows(I)`, and `nifs[]`, `def1`
+   and `nif_lvm` are three short consumers of it. `mx.h` likewise keeps `mx-rows`' own
    shape: `mx_row` fans a row's seven lanes out to the fourteen columns, one macro per row
    names its seven, and each grid names a row per kind. the objects compile identical to
    the expanded forms.

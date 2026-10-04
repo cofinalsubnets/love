@@ -2,7 +2,7 @@
 ;
 ; these run under test/front/main.c with HORN=none, so src/love/horn.c opens its SINK: the ring
 ; that keeps time and discards, which is the lane every box without a card runs and the
-; only lane a gate can run anywhere. what the sink accepts it hands to ai_horn_tap, and
+; only lane a gate can run anywhere. what the sink accepts it hands to love_horn_tap, and
 ; the weak default in src/love/horn.c takes nothing -- so on an ordinary love the PCM stops
 ; there and nothing downstream of the port has ever been asserted. the frontend defines
 ; that hook and keeps what it is given, which is what lets these be laws:

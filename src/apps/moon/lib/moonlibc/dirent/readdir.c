@@ -6,7 +6,7 @@ struct dirent *readdir(DIR *d) {
     long n = sc4(NR_getdents64, d->fd, (long) d->buf, sizeof d->buf, 0);
     if (n <= 0) { if (n < 0) __errno_v = (int) -n; return 0; }
     d->len = (int) n; d->pos = 0; }
-  if (__ai_osv == 2) {
+  if (__love_osv == 2) {
     /* freebsd's record is another shape (namlen, pads): repack into ours */
     struct __fb_dirent *fe = (struct __fb_dirent *) (d->buf + d->pos);
     unsigned l = fe->d_namlen;
@@ -19,7 +19,7 @@ struct dirent *readdir(DIR *d) {
     memcpy(d->ent.d_name, fe->d_name, l);
     d->ent.d_name[l] = 0;
     return &d->ent; }
-  if (__ai_osv == 3) {
+  if (__love_osv == 3) {
     /* netbsd's __getdents30 record: fileno + a byte-13 name, no d_off */
     struct __nb_dirent *ne = (struct __nb_dirent *) (d->buf + d->pos);
     unsigned l = ne->namlen;

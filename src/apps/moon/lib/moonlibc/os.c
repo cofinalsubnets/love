@@ -1,28 +1,28 @@
 /* src/apps/moon/lib/moonlibc/os.c -- the kernel under one binary (seed-universal
- * rungs UV1-UV2). one build runs linux, freebsd and netbsd: __ai_osdetect asks
- * the kernel which it is (once, at entry or lazily under __ai_call), and
+ * rungs UV1-UV2). one build runs linux, freebsd and netbsd: __love_osdetect asks
+ * the kernel which it is (once, at entry or lazily under __love_call), and
  * numbers, errnos, signals, masks and flag words translate through the tables
  * here. x64 and a64 carry them; riscv takes the identity stubs below and
  * answers whichever kernel -os named. */
 #include "impl.h"
 
-long __ai_osv;         /* 0 unprobed; 1 linux; 2 freebsd; 3 netbsd; -1 inle,
+long __love_osv;         /* 0 unprobed; 1 linux; 2 freebsd; 3 netbsd; -1 inle,
                         * written at its entry: we ARE the kernel, nothing to probe */
 
 /* the inle door's default, for a link that carries no src/inle/sys.c: refuse, and
  * name the protocol. a negative osv is only ever written by inle's own entry,
- * so a hosted binary never takes __ai_call's arm and this body is dead weight
+ * so a hosted binary never takes __love_call's arm and this body is dead weight
  * the dead-static sweep cannot drop -- one line, kept for the symbol. */
 __attribute__((weak))
-long __ai_inle(long n, long a, long b, long c, long d, long e, long f) {
+long __love_inle(long n, long a, long b, long c, long d, long e, long f) {
   return -38; }
 
 /* a refused address the program can make good (love's lazy image wakes what sleeps
  * there): 1 and the call goes once more. the default has nothing to wake */
 __attribute__((weak))
-int __ai_efault(void) { return 0; }
+int __love_efault(void) { return 0; }
 
-long __ai_osdetect(void) {
+long __love_osdetect(void) {
 #ifndef LvOsTranslate
   /* no tables on this arch: the kernel is whichever one the build was compiled
    * for, and nothing at runtime can contradict it. READ OFF -os, never
@@ -43,7 +43,7 @@ long __ai_osdetect(void) {
    * -EBADF, a pid is positive, and no kernel is disturbed by asking. a
    * positive answer says BSD; kern.ostype's first byte parts the two
    * (__sysctl is 202 and {CTL_KERN, KERN_OSTYPE} is {1, 1} on both).
-   * on aarch64 the two doors are mksys leaves, not __ai_sys: netbsd there
+   * on aarch64 the two doors are mksys leaves, not __love_sys: netbsd there
    * SIGSYSes the register form, so the question has to be asked in the svc
    * IMMEDIATE the kernel being asked about reads. 20 is epoll_create1 on
    * linux/arm64, which refuses -EINVAL -- the same negative the writev door
@@ -53,49 +53,49 @@ long __ai_osdetect(void) {
    * time this runs: crt0 parts it from the rest by the entry protocol alone
    * and hands 2 down, and this branch only ever asks linux from netbsd. */
 # if defined(__aarch64__)
-  long r = __ai_nbp20(-1);
+  long r = __love_nbp20(-1);
   if (r <= 0) return 1;
   { int mib[2] = {1, 1};
     char b[16] = {0};
     unsigned long len = sizeof b;
-    __ai_nbp202((long) mib, 2, (long) b, (long) &len, 0, 0);
+    __love_nbp202((long) mib, 2, (long) b, (long) &len, 0, 0);
     return b[0] == 'N' ? 3 : 2; }
 # else
-  long r = __ai_sys(20, -1, 0, 0, 0, 0, 0);
+  long r = __love_sys(20, -1, 0, 0, 0, 0, 0);
   if (r <= 0) return 1;
   { int mib[2] = {1, 1};
     char b[16] = {0};
     unsigned long len = sizeof b;
-    __ai_sys(202, (long) mib, 2, (long) b, (long) &len, 0, 0);
+    __love_sys(202, (long) mib, 2, (long) b, (long) &len, 0, 0);
     return b[0] == 'N' ? 3 : 2; }
 # endif
 #endif
 }
 
 #ifndef LvOsTranslate
-long __ai_nrfb(long n) { return n; }      /* no second kernel on this arch */
-long __ai_errfb(long e) { return e; }
-long __ai_sigfb(long s) { return s; }
-long __ai_sigcan(long s) { return s; }
-void __ai_sicanon(void const *n, siginfo_t *o) { memcpy(o, n, sizeof *o); }
-unsigned long __ai_maskfb(unsigned long m) { return m; }
-unsigned long __ai_maskcan(unsigned long m) { return m; }
-long __ai_ofb(long f) { return f; }
-long __ai_ocan(long f) { return f; }
-long __ai_mapfb(long f) { return f; }
-long __ai_safb(long f) { return f; }
-long __ai_sacan(long f) { return f; }
-void __ai_tiofb(struct termios const *t, struct __fb_termios *f) { }
-void __ai_tiocan(struct __fb_termios const *f, struct termios *t) { }
-void __ai_tiokeep(struct __fb_termios *f, struct __fb_termios const *cur) { }
-long __ai_affb(long a) { return a; }
-long __ai_afcan(long a) { return a; }
-long __ai_sotype(long t) { return t; }
-long __ai_msgfb(long f) { return f; }
-long __ai_msgcan(long f) { return f; }
-int __ai_sofb(long *lv, long *op) { return 0; }
-unsigned int __ai_sain(void const *a, unsigned int n, void *out) { memcpy(out, a, n); return n; }
-void __ai_saout(void *a, unsigned int n) { }
+long __love_nrfb(long n) { return n; }      /* no second kernel on this arch */
+long __love_errfb(long e) { return e; }
+long __love_sigfb(long s) { return s; }
+long __love_sigcan(long s) { return s; }
+void __love_sicanon(void const *n, siginfo_t *o) { memcpy(o, n, sizeof *o); }
+unsigned long __love_maskfb(unsigned long m) { return m; }
+unsigned long __love_maskcan(unsigned long m) { return m; }
+long __love_ofb(long f) { return f; }
+long __love_ocan(long f) { return f; }
+long __love_mapfb(long f) { return f; }
+long __love_safb(long f) { return f; }
+long __love_sacan(long f) { return f; }
+void __love_tiofb(struct termios const *t, struct __fb_termios *f) { }
+void __love_tiocan(struct __fb_termios const *f, struct termios *t) { }
+void __love_tiokeep(struct __fb_termios *f, struct __fb_termios const *cur) { }
+long __love_affb(long a) { return a; }
+long __love_afcan(long a) { return a; }
+long __love_sotype(long t) { return t; }
+long __love_msgfb(long f) { return f; }
+long __love_msgcan(long f) { return f; }
+int __love_sofb(long *lv, long *op) { return 0; }
+unsigned int __love_sain(void const *a, unsigned int n, void *out) { memcpy(out, a, n); return n; }
+void __love_saout(void *a, unsigned int n) { }
 #else
 /* canonical (linux x86_64) -> {freebsd, netbsd}, sorted by canonical. a row
  * rides here only when the members speak the call correctly on that kernel --
@@ -123,6 +123,8 @@ static short const os_nr[][3] = {
   {NR_pwrite64,      NR_fb_pwrite64,    174},
   {NR_mincore,       NR_fb_mincore,      78},
   {NR_madvise,       NR_fb_madvise,      75},
+  {NR_msync,         NR_fb_msync,       277},   /* nb: __msync13; the member maps the flags */
+  {NR_copy_file_range, NR_fb_copy_file_range, -1},   /* netbsd has none */
   {NR_nanosleep,     NR_fb_nanosleep,   430},
   {NR_getpid,        NR_fb_getpid,       20},
   {NR_socket,        NR_fb_socket,      394},
@@ -204,8 +206,8 @@ static short const os_nr[][3] = {
  * 1, close 3 ..) and is NOT on the asm-generic arches (read 63, write 64, close
  * 57 ..). An early exit on a passed key would answer ENOSYS to almost every
  * call the moment this lane opens on arm64. 71 rows, and only on a BSD. */
-long __ai_nrfb(long n) {
-  int col = __ai_osv == 3 ? 2 : 1;
+long __love_nrfb(long n) {
+  int col = __love_osv == 3 ? 2 : 1;
   for (unsigned i = 0; i < sizeof os_nr / sizeof *os_nr; i++)
     if (os_nr[i][0] == n) return os_nr[i][col];
   return -1; }
@@ -213,7 +215,7 @@ long __ai_nrfb(long n) {
 /* freebsd errno -> canonical, indexed by freebsd's value (ELAST 97). rows
  * with no canonical concept (the rpc/auth/capsicum family) map to 41, a blank
  * in the canonical numbering, so no canonical name can misread one -- upstairs
- * ai_err answers 'eunknown, and a numeric reader matches no errno.h define. */
+ * love_err answers 'eunknown, and a numeric reader matches no errno.h define. */
 static unsigned char const os_err[] = {
   0,   1,   2,   3,   4,   5,   6,   7,   8,   9,     /* 0..9 as linux */
   10,  35,  12,  13,  14,  15,  16,  17,  18,  19,    /* 11 EDEADLK */
@@ -241,8 +243,8 @@ static unsigned char const os_err[] = {
  * to the number. */
 static unsigned char const os_err_nb[] = {
   84, 95, 125, 74, 61, 63, 60, 62, 41, 72, 67, 71, 130, 131 };
-long __ai_errfb(long e) {
-  if (__ai_osv == 3 && e >= 85 && e <= 98) return os_err_nb[e - 85];
+long __love_errfb(long e) {
+  if (__love_osv == 3 && e >= 85 && e <= 98) return os_err_nb[e - 85];
   return (e > 0 && e < (long) (sizeof os_err)) ? os_err[e] : e; }
 
 /* the signal permutation, canonical <-> freebsd. same through 6, 8..9, 11,
@@ -257,8 +259,8 @@ static signed char const os_sigfb[32] = {
 static signed char const os_sigcan[32] = {
    0,  1,  2,  3,  4,  5,  6,  7,  8,  9,  7, 11, 31, 13, 14, 15,
   23, 19, 20, 18, 17, 21, 22, 29, 24, 25, 26, 27, 28, 29, 10, 12 };
-long __ai_sigfb(long s) { return (s >= 0 && s < 32) ? os_sigfb[s] : -1; }
-long __ai_sigcan(long s) { return (s >= 0 && s < 32) ? os_sigcan[s] : s; }
+long __love_sigfb(long s) { return (s >= 0 && s < 32) ? os_sigfb[s] : -1; }
+long __love_sigcan(long s) { return (s >= 0 && s < 32) ? os_sigcan[s] : s; }
 
 /* the native siginfo heads. freebsd keeps linux's signo/errno/code order and
  * then lays every lane flat (pid uid status, then the address); netbsd swaps
@@ -285,7 +287,7 @@ static int os_faultlane(int s, long code) {
  * freebsd's SI_NOINFO is 0, which IS linux's SI_USER and cannot be told from it,
  * and netbsd's is 32767, which nothing upstairs names. */
 static long os_sicode(long c) {
-  if (__ai_osv == 2) switch (c) {
+  if (__love_osv == 2) switch (c) {
     case 0x10001: return 0;      /* SI_USER */
     case 0x10002: return -1;     /* SI_QUEUE */
     case 0x10003: return -2;     /* SI_TIMER */
@@ -294,24 +296,24 @@ static long os_sicode(long c) {
     case 0x10006: return 0x80;   /* SI_KERNEL */
     case 0x10007: return -6;     /* SI_LWP; linux's nearest is SI_TKILL */
     default: return c; }
-  if (__ai_osv == 3) switch (c) {
+  if (__love_osv == 3) switch (c) {
     case -3: return -4;          /* SI_ASYNCIO */
     case -4: return -3;          /* SI_MESGQ */
     case -5: return -6;          /* SI_LWP; linux's -5 is SI_SIGIO, a different thing */
     default: return c; }         /* USER, QUEUE and TIMER already agree */
   return c; }
-void __ai_sicanon(void const *n, siginfo_t *o) {
+void __love_sicanon(void const *n, siginfo_t *o) {
   memset(o, 0, sizeof *o);
-  if (__ai_osv == 2) {
+  if (__love_osv == 2) {
     struct __fb_siginfo const *f = n;
-    o->si_signo = (int) __ai_sigcan(f->signo), o->si_errno = f->err;
+    o->si_signo = (int) __love_sigcan(f->signo), o->si_errno = f->err;
     o->si_code = (int) os_sicode(f->code);
     if (os_faultlane(o->si_signo, o->si_code)) o->si_addr = f->addr;
     else { o->si_pid = f->pid, o->si_uid = f->uid;
            if (o->si_signo == SIGCHLD) o->si_status = f->status; } }
-  else if (__ai_osv == 3) {
+  else if (__love_osv == 3) {
     struct __nb_siginfo const *b = n;
-    o->si_signo = (int) __ai_sigcan(b->signo), o->si_errno = b->err;
+    o->si_signo = (int) __love_sigcan(b->signo), o->si_errno = b->err;
     o->si_code = (int) os_sicode(b->code);
     if (os_faultlane(o->si_signo, o->si_code)) o->si_addr = b->u.addr;
     else { o->si_pid = b->u.chld.pid, o->si_uid = b->u.chld.uid;
@@ -320,12 +322,12 @@ void __ai_sicanon(void const *n, siginfo_t *o) {
 
 /* a mask, bit (sig-1), both spellings in the low word (signals 1..31); the
  * canonical rt band above 31 has no freebsd twin and drops. */
-unsigned long __ai_maskfb(unsigned long m) {
+unsigned long __love_maskfb(unsigned long m) {
   unsigned long o = 0;
   for (int s = 1; s < 32; s++)
     if (m & (1UL << (s - 1))) { long t = os_sigfb[s]; if (t > 0) o |= 1UL << (t - 1); }
   return o; }
-unsigned long __ai_maskcan(unsigned long m) {
+unsigned long __love_maskcan(unsigned long m) {
   unsigned long o = 0;
   for (int s = 1; s < 32; s++)
     if (m & (1UL << (s - 1))) { long t = os_sigcan[s]; if (t > 0) o |= 1UL << (t - 1); }
@@ -336,8 +338,8 @@ unsigned long __ai_maskcan(unsigned long m) {
  * NOFOLLOW 0x100, CREAT 0x200, TRUNC 0x400, EXCL 0x800, NOCTTY 0x8000 --
  * only DIRECTORY and CLOEXEC part company (fb 0x20000/0x100000, nb
  * 0x200000/0x400000). */
-long __ai_ofb(long f) {
-  long o = f & 3, nb = __ai_osv == 3;
+long __love_ofb(long f) {
+  long o = f & 3, nb = __love_osv == 3;
   if (f & O_CREAT)     o |= 0x200;
   if (f & O_EXCL)      o |= 0x800;
   if (f & O_NOCTTY)    o |= 0x8000;
@@ -348,8 +350,8 @@ long __ai_ofb(long f) {
   if (f & O_NOFOLLOW)  o |= 0x100;
   if (f & O_CLOEXEC)   o |= nb ? 0x400000 : 0x100000;
   return o; }
-long __ai_ocan(long f) {
-  long o = f & 3, nb = __ai_osv == 3;
+long __love_ocan(long f) {
+  long o = f & 3, nb = __love_osv == 3;
   if (f & 0x200)    o |= O_CREAT;
   if (f & 0x800)    o |= O_EXCL;
   if (f & 0x8000)   o |= O_NOCTTY;
@@ -363,14 +365,14 @@ long __ai_ocan(long f) {
 
 /* mmap flags: SHARED 1 / PRIVATE 2 / FIXED 0x10 agree; ANON moves to 0x1000;
  * POPULATE and the other linux hints have no twin and drop. */
-long __ai_mapfb(long f) {
+long __love_mapfb(long f) {
   long o = f & 0x13;
   if (f & MAP_ANON) o |= 0x1000;
   return o; }
 
 /* sa_flags (stable/14: ONSTACK 1, RESTART 2, RESETHAND 4, NOCLDSTOP 8,
  * NODEFER 16, NOCLDWAIT 32, SIGINFO 64) */
-long __ai_safb(long f) {
+long __love_safb(long f) {
   long o = 0;
   if (f & SA_ONSTACK)   o |= 1;
   if (f & SA_RESTART)   o |= 2;
@@ -380,7 +382,7 @@ long __ai_safb(long f) {
   if (f & SA_NOCLDWAIT) o |= 32;
   if (f & SA_SIGINFO)   o |= 64;
   return o; }
-long __ai_sacan(long f) {
+long __love_sacan(long f) {
   long o = 0;
   if (f & 1)  o |= SA_ONSTACK;
   if (f & 2)  o |= SA_RESTART;
@@ -422,7 +424,7 @@ static unsigned int os_tiow(unsigned int v, unsigned int const (*row)[2], int n,
   for (int i = 0; i < n; i++)
     if (v & row[i][can ? 1 : 0]) o |= row[i][can ? 0 : 1];
   return o; }
-void __ai_tiofb(struct termios const *t, struct __fb_termios *f) {
+void __love_tiofb(struct termios const *t, struct __fb_termios *f) {
   memset(f, 0, sizeof *f);
   f->c_iflag = os_tiow(t->c_iflag, os_tio_i, sizeof os_tio_i / 8, 0);
   f->c_oflag = os_tiow(t->c_oflag, os_tio_o, sizeof os_tio_o / 8, 0);
@@ -435,14 +437,14 @@ void __ai_tiofb(struct termios const *t, struct __fb_termios *f) {
     if (os_tio_cc[i] >= 0)
       f->c_cc[(int) os_tio_cc[i]] = t->c_cc[i] || i == 5 || i == 6 ? t->c_cc[i] : 0xff;
   /* netbsd spells CRTSCTS as the low bit alone; the high one is foreign there */
-  if (__ai_osv == 3 && (f->c_cflag & 0x30000)) f->c_cflag = (f->c_cflag & ~0x30000u) | 0x10000;
+  if (__love_osv == 3 && (f->c_cflag & 0x30000)) f->c_cflag = (f->c_cflag & ~0x30000u) | 0x10000;
   f->c_ispeed = t->c_ispeed; f->c_ospeed = t->c_ospeed; }
 /* the slots linux has no name for (status, dsusp) kept as the terminal has them */
-void __ai_tiokeep(struct __fb_termios *f, struct __fb_termios const *cur) {
+void __love_tiokeep(struct __fb_termios *f, struct __fb_termios const *cur) {
   unsigned char named[20] = {0};
   for (int i = 0; i < 17; i++) if (os_tio_cc[i] >= 0) named[(int) os_tio_cc[i]] = 1;
   for (int k = 0; k < 20; k++) if (!named[k]) f->c_cc[k] = cur->c_cc[k]; }
-void __ai_tiocan(struct __fb_termios const *f, struct termios *t) {
+void __love_tiocan(struct __fb_termios const *f, struct termios *t) {
   memset(t, 0, sizeof *t);
   t->c_iflag = os_tiow(f->c_iflag, os_tio_i, sizeof os_tio_i / 8, 1);
   t->c_oflag = os_tiow(f->c_oflag, os_tio_o, sizeof os_tio_o / 8, 1);
@@ -455,13 +457,13 @@ void __ai_tiocan(struct __fb_termios const *f, struct termios *t) {
   t->c_ispeed = f->c_ispeed; t->c_ospeed = f->c_ospeed; }
 
 /* the socket family: unix and inet agree, inet6 moves (10 -> 28). the BSD
- * sockaddr fronts a length byte where linux's 16-bit family sits: __ai_sain
- * rebuilds the head into the caller's scratch, __ai_saout folds a kernel-
+ * sockaddr fronts a length byte where linux's 16-bit family sits: __love_sain
+ * rebuilds the head into the caller's scratch, __love_saout folds a kernel-
  * filled head back in place. freebsd's copyin rewrites sa_len from the
  * syscall's namelen, so the length byte is set only for form. */
-long __ai_affb(long a) { return a == 10 ? (__ai_osv == 3 ? 24 : 28) : a; }
-long __ai_afcan(long a) { return (a == 28 || a == 24) ? 10 : a; }
-unsigned int __ai_sain(void const *a, unsigned int n, void *out) {
+long __love_affb(long a) { return a == 10 ? (__love_osv == 3 ? 24 : 28) : a; }
+long __love_afcan(long a) { return (a == 28 || a == 24) ? 10 : a; }
+unsigned int __love_sain(void const *a, unsigned int n, void *out) {
   unsigned char const *s = a;
   unsigned char *b = out;
   memcpy(out, a, n);
@@ -475,30 +477,30 @@ unsigned int __ai_sain(void const *a, unsigned int n, void *out) {
       while (k < n && b[k]) k++;
       n = k + (k < n); }
     b[0] = (unsigned char) n;
-    b[1] = (unsigned char) __ai_affb(fam); }
+    b[1] = (unsigned char) __love_affb(fam); }
   return n; }
-void __ai_saout(void *a, unsigned int n) {
+void __love_saout(void *a, unsigned int n) {
   unsigned char *b = a;
   if (n >= 2) {
-    unsigned int fam = (unsigned int) __ai_afcan(b[1]);
+    unsigned int fam = (unsigned int) __love_afcan(b[1]);
     b[0] = (unsigned char) (fam & 255);
     b[1] = (unsigned char) (fam >> 8); } }
 /* socket type: STREAM/DGRAM agree; the two flag bits move high
  * (stable/14: SOCK_CLOEXEC 0x10000000, SOCK_NONBLOCK 0x20000000) */
-long __ai_sotype(long t) {
+long __love_sotype(long t) {
   long o = t & 0xff;
   if (t & 0x800)   o |= 0x20000000;
   if (t & 0x80000) o |= 0x10000000;
   return o; }
 /* send/recv flags: the named bits translate, the rest drop */
-long __ai_msgfb(long f) {
+long __love_msgfb(long f) {
   long o = f & 3;                       /* OOB 1, PEEK 2 agree */
   if (f & 0x40)   o |= 0x80;            /* MSG_DONTWAIT */
   if (f & 0x100)  o |= 0x40;            /* MSG_WAITALL */
-  if (f & 0x4000) o |= __ai_osv == 3 ? 0x400 : 0x20000;   /* MSG_NOSIGNAL */
+  if (f & 0x4000) o |= __love_osv == 3 ? 0x400 : 0x20000;   /* MSG_NOSIGNAL */
   return o; }
 /* recvmsg's msg_flags come back the other way */
-long __ai_msgcan(long f) {
+long __love_msgcan(long f) {
   long o = f & 1;                       /* MSG_OOB agrees */
   if (f & 0x8)  o |= 0x80;              /* MSG_EOR */
   if (f & 0x10) o |= 0x20;              /* MSG_TRUNC */
@@ -509,10 +511,10 @@ long __ai_msgcan(long f) {
  * the other IPPROTO_* levels ride (TCP_NODELAY 1 = 1). only what the headers
  * spell has a row; an unmapped name refuses loudly upstream, never a silently
  * different option -- linux's IP_TTL is a bsd's IP_HDRINCL. 0 ok, -1 unknown. */
-int __ai_sofb(long *lv, long *op) {
+int __love_sofb(long *lv, long *op) {
   if (*lv == 0) switch (*op) {
     case 2: *op = 4; return 0;          /* IP_TTL */
-    case 12: *op = __ai_osv == 3 ? 23 : 65; return 0;   /* IP_RECVTTL */
+    case 12: *op = __love_osv == 3 ? 23 : 65; return 0;   /* IP_RECVTTL */
     default: return -1; }
   if (*lv == 41) switch (*op) {
     case 16: *op = 4; return 0;         /* IPV6_UNICAST_HOPS */
@@ -538,10 +540,10 @@ int __ai_sofb(long *lv, long *op) {
     case 13: *op = 0x80; return 0;      /* SO_LINGER */
     case 18: *op = 0x1004; return 0;    /* SO_RCVLOWAT */
     case 19: *op = 0x1003; return 0;    /* SO_SNDLOWAT */
-    case 20: *op = __ai_osv == 3 ? 0x100c : 0x1006; return 0;   /* SO_RCVTIMEO */
-    case 21: *op = __ai_osv == 3 ? 0x100b : 0x1005; return 0;   /* SO_SNDTIMEO */
+    case 20: *op = __love_osv == 3 ? 0x100c : 0x1006; return 0;   /* SO_RCVTIMEO */
+    case 21: *op = __love_osv == 3 ? 0x100b : 0x1005; return 0;   /* SO_SNDTIMEO */
     case 30: *op = 2; return 0;         /* SO_ACCEPTCONN */
-    case 38: if (__ai_osv == 3) return -1; *op = 0x1016; return 0;   /* SO_PROTOCOL: freebsd's alone */
-    case 39: if (__ai_osv == 3) return -1; *op = 0x1019; return 0; } /* SO_DOMAIN */
+    case 38: if (__love_osv == 3) return -1; *op = 0x1016; return 0;   /* SO_PROTOCOL: freebsd's alone */
+    case 39: if (__love_osv == 3) return -1; *op = 0x1019; return 0; } /* SO_DOMAIN */
   return -1; }
 #endif

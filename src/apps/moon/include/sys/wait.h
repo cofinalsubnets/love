@@ -1,5 +1,5 @@
-#ifndef _AI_SYS_WAIT_H
-#define _AI_SYS_WAIT_H
+#ifndef _LOVE_SYS_WAIT_H
+#define _LOVE_SYS_WAIT_H
 #include <sys/types.h>
 #define WNOHANG 1
 #define WUNTRACED 2

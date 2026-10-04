@@ -1,5 +1,5 @@
-#ifndef _AI_STDIO_H
-#define _AI_STDIO_H
+#ifndef _LOVE_STDIO_H
+#define _LOVE_STDIO_H
 /* glibc provides NULL from stdio/stdlib/string too (not just stddef) -- third-party
    C (the LFS ladder) leans on that; guarded so a prior stddef include is fine. */
 #ifndef NULL
@@ -86,6 +86,11 @@ int    vprintf(char const*, va_list);
 int    vfprintf(FILE*, char const*, va_list);
 int    vsprintf(char*, char const*, va_list);
 int    vsnprintf(char*, size_t, char const*, va_list);
+int    dprintf(int, char const*, ...);
+int    vdprintf(int, char const*, va_list);
+int    vscanf(char const*, va_list);
+int    vfscanf(FILE*, char const*, va_list);
+int    vsscanf(char const*, char const*, va_list);
 /* the GNU pair: allocate the answer. darkhttpd's whole reply builder rides them. */
 int    asprintf(char**, char const*, ...);
 int    vasprintf(char**, char const*, va_list);

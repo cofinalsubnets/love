@@ -1,5 +1,5 @@
-#ifndef _AI_STDLIB_H
-#define _AI_STDLIB_H
+#ifndef _LOVE_STDLIB_H
+#define _LOVE_STDLIB_H
 #ifndef NULL
 #define NULL ((void*)0)
 #endif

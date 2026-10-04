@@ -4,7 +4,7 @@
  * rewrite back to the canon in the caller's buffers. control past the scratch
  * comes back MSG_CTRUNC -- the kernel's own word for it. */
 long recvmsg(int fd, struct msghdr *m, int fl) {
-  if (__ai_osv < 2) return er(sc3(NR_recvmsg, fd, (long) m, fl));
+  if (__love_osv < 2) return er(sc3(NR_recvmsg, fd, (long) m, fl));
   if (fl & MSG_ERRQUEUE) return er(-EAGAIN);   /* linux's alone: a bsd has no error queue */
   struct sockaddr_storage sa;
   unsigned char cb[256];
@@ -14,11 +14,11 @@ long recvmsg(int fd, struct msghdr *m, int fl) {
   unsigned long cap = m->msg_controllen;
   if (m->msg_control && cap)
     f.control = cb, f.controllen = cap > sizeof cb ? (unsigned int) sizeof cb : (unsigned int) cap;
-  long r = er(sc3(NR_recvmsg, fd, (long) &f, (long) __ai_msgfb(fl)));
+  long r = er(sc3(NR_recvmsg, fd, (long) &f, (long) __love_msgfb(fl)));
   if (r < 0) return r;
   if (m->msg_name) {
     unsigned int n = f.namelen;
-    __ai_saout(&sa, n);
+    __love_saout(&sa, n);
     memcpy(m->msg_name, &sa, n > m->msg_namelen ? m->msg_namelen : n);
     m->msg_namelen = n; }
   if (f.control) {
@@ -37,5 +37,5 @@ long recvmsg(int fd, struct msghdr *m, int fl) {
       at += (l + 7) & ~7UL; }
     m->msg_controllen = cn; }
   else m->msg_controllen = 0;
-  m->msg_flags = (int) __ai_msgcan(f.flags);
+  m->msg_flags = (int) __love_msgcan(f.flags);
   return r; }

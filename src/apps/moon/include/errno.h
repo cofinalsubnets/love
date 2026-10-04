@@ -1,5 +1,5 @@
-#ifndef _AI_ERRNO_H
-#define _AI_ERRNO_H
+#ifndef _LOVE_ERRNO_H
+#define _LOVE_ERRNO_H
 /* glibc's errno is thread-local behind a call */
 int *__errno_location(void);
 #define errno (*__errno_location())

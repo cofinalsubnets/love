@@ -29,7 +29,7 @@ case $arch in
            ccnames="aarch64-linux-gnu-gcc a64-nerves-linux-gnu-gcc"
            ccglob="/usr/local/data/*/.nerves/artifacts/nerves_toolchain_a64*/bin/a64-nerves-linux-gnu-gcc"
            ccvar=AARCH64_CC
-           unsupported="100-complex 102-bigstruct 117-vastruct" ;;
+           unsupported="100-complex 117-vastruct" ;;
   rv64) name=test_ccrv64 ; qemu=qemu-riscv64 ; pretty=rv64
            ccenv=${RISCV64_CC:-}
            ccnames="riscv64-linux-gnu-gcc riscv64-unknown-linux-gnu-gcc riscv64-unknown-elf-gcc"
@@ -111,7 +111,22 @@ for f in test/cc/*.c; do
   progs="$progs $b"
 done
 
+# a64: the ABI across compilers -- mooncc's half (test/cc/abi64/host.c) linked with clang's
+# (peer.c), each calling the other with AAPCS64's memory-class composites
+if [ "$arch" = a64 ]; then
+  command -v clang > /dev/null 2>&1 || gate_skip "$name: no clang for the abi64 half"
+  clang --target=aarch64-linux-gnu -O2 -ffreestanding -fno-stack-protector -c -o "$d/peer.o" test/cc/abi64/peer.c 2> "$d/peer.log" \
+    || { cat "$d/peer.log" >&2; fail "abi64: clang could not build peer.c"; }
+  moonrun -t a64 -o "$r/abi64.t" test/cc/abi64/host.c "$d/peer.o" > "$d/abi64.log" 2>&1 \
+    || { cat "$d/abi64.log" >&2; fail "abi64: mooncc could not build or link host.c"; }
+  a64_job abi64.t "timeout 60 \$RUN ./abi64.t"
+fi
+
 a64_run "$r" || fail "the $pretty batch did not come back"
+if [ "$arch" = a64 ]; then
+  [ "$(cat "$r/res/abi64.t.rc")" -eq 0 ] || { cat "$r/res/abi64.t.out" >&2; fail "abi64: mooncc and clang disagree on AAPCS64"; }
+  tail -1 "$r/res/abi64.t.out"
+fi
 
 n=0
 ngcc=0

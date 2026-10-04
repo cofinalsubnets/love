@@ -1,5 +1,5 @@
-#ifndef _AI_SIGNAL_H
-#define _AI_SIGNAL_H
+#ifndef _LOVE_SIGNAL_H
+#define _LOVE_SIGNAL_H
 typedef int sig_atomic_t;
 #include <sys/types.h>
 typedef struct { long __v[16]; } sigset_t;   /* 128 bytes, glibc-sized */

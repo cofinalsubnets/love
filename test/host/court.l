@@ -50,15 +50,18 @@
  (test (0 <= top) !(warm? (st 'h - 1))))
 
 ; --- walking: k steps the way you face, j back; h and l turn; the walls stop you; u and
-; --- n tilt the look, never past straight up or down ---
-(: st (at 12.0) z0 (st 'pz) th0 (st 'th)
+; --- n tilt the look, never past straight up or down; a run starts by the east wall,
+; --- facing west and looking up
+(: st (pins (at 12.0) 'px 0.0 'pz (0.0 - yard-b + 1.4) 'th 0.0 'ph 0.5) z0 (st 'pz) th0 (st 'th)
    _ (keys! st [107 107 107]) z1 (st 'pz)
    _ (keys! st [106]) z2 (st 'pz)
    _ (keys! st [108 108]) th1 (st 'th)
    _ (keys! st (map (i \ 107) ^400)) far (st 'px)
    _ (keys! st (map (i \ 117) ^100)) up (st 'ph)
    _ (keys! st (map (i \ 110) ^100)) down (st 'ph)
+   st0 (at 12.0)
  (test (z0 < z1) (z2 < z1) (z0 < z2) (th0 < th1)
+       (near? (st0 'px) (yard-a - 0.45)) (st0 'th < 0.0) (1.0 < st0 'ph)
        (near? far (yard-a - body-r)) (up <= 1.45) (1.4 < up) (-1.21 < down) (down < -1.1)))
 
 ; --- the time: ] and [ an hour on and back, t the pace, a frame its share of it ---
@@ -72,12 +75,15 @@
        (court-clock st = "13:00")
        (court-now () @ n (two? n && 0.0 < n 0))))
 
-; --- the battlements: the sun past the north wall's middle third, and stopped by a block
-; --- over an outer third; a block's face high enough sees over the far one
-(: s (unit [0.0 0.2 1.0]) b0 (0.0 - yard-b)
- (test (sun-clear 0.0 12.6 b0 s = 1) (sun-clear 2.5 12.6 b0 s = 0)
-       (sun-clear 2.5 14.0 b0 s = 1) (sun-clear 2.5 12.6 b0 (unit [0.0 1.0 0.1]) = 1)
-       (sun-clear 0.0 1.0 0.0 (unit [0.0 -0.1 1.0]) = 0)))
+; --- the battlements: the sun stopped by the north wall's middle block and past it either
+; --- side; a block's face high enough sees over the far one; and over the east wall only
+; --- the roof's block at the north end stops it
+(: s (unit [0.0 0.2 1.0]) b0 (0.0 - yard-b) e (unit [1.0 0.2 0.0]) a0 (0.0 - yard-a)
+ (test (sun-clear 0.0 12.6 b0 s = 0) (sun-clear 2.5 12.6 b0 s = 1) (sun-clear -2.5 12.6 b0 s = 1)
+       (sun-clear 0.0 14.0 b0 s = 1) (sun-clear 0.0 12.6 b0 (unit [0.0 1.0 0.1]) = 1)
+       (sun-clear 0.0 1.0 0.0 (unit [0.0 -0.1 1.0]) = 0)
+       (sun-clear a0 12.6 0.0 e = 1) (sun-clear a0 12.6 3.5 e = 0) (sun-clear a0 12.6 -2.0 e = 1)
+       (sun-clear a0 12.6 2.0 e = 1)))
 
 ; --- the tree: the same seed the same tree; planted in the north-east quarter, leaning
 ; --- toward the middle, forked in the third floor, every leaf inside the walls below their

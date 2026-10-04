@@ -326,6 +326,13 @@
    _ (holo-bytes 'a64 '((sub sp sp r0)))
    _ (chk-eq "a64.alu.sp.refused" 1 (peep spcaught 0 0))
 
+   ;; -- ..and a logical immediate of all ones, spelled as the unsigned 2^64-1 a C mask reads as, has no
+   ;; bitmask encoding (a run filling its element is reserved): it raises, never lays the reserved word --
+   bmcaught {} _ (pin bmcaught 0 0)
+   _ (hear (a \ b \ a = 'a64-bitmask-imm ? (pin bmcaught 0 1, ()) (welp a b)))
+   _ (holo-bytes 'a64 '((and r0 r0 18446744073709551615)))
+   _ (chk-eq "a64.and.allones.refused" 1 (peep bmcaught 0 0))
+
    ;; -- the text front-end (src/love/holo/text.l) parses to the same IR, so it assembles byte-identically. --
    _ (chk-eq "text.basic" (holo-hex 'x64 '((li r0 60) (ret)))
                           (holo-hex 'x64 (asm-text "li r0, 60\nret")))
@@ -573,6 +580,8 @@
       ("a64.stx"    "f00c008b080600f9"  ((stx r7 r0 8 8 r8)))         ; add x16,x7,x0,lsl#3 ; str x8,[x16,#8]
       ("a64.ldxb"   "6000008b00404039"  ((ldxb r0 r3 r0 1 16)))       ; add x0,x3,x0 ; ldrb w0,[x0,#16]   (string-lane peep read)
       ("a64.stxb"   "7000008b00420039"  ((stxb r3 r0 1 16 r0)))       ; add x16,x3,x0 ; strb w0,[x16,#16] (cask-lane pin store)
+      ("a64.ldxb-1" "6000008b00f05f38"  ((ldxb r0 r3 r0 1 -1)))       ; add x0,x3,x0 ; ldurb w0,[x0,#-1]  (a negative disp: the unscaled lane)
+      ("a64.stxb-1" "7000008b00f21f38"  ((stxb r3 r0 1 -1 r0)))       ; add x16,x3,x0 ; sturb w0,[x16,#-1] (gnulib's ((small_t *) p)[-1])
       ("a64.li.big" "a0828fd240e9aff22037cff2e0c6f3f2"               ; movz + 3 movk (bignum-safe lane via //%)
                       ((li r0 0x9e3779b97f4a7c15)))
       ;; the link register (x30) by name -- a callee spills it across nested calls (BL clobbers it).

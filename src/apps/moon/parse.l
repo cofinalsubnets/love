@@ -292,8 +292,8 @@
                  pin t 'tgt tgt,                  ; the codegen target: 32-bit widths (thumb1/thumb2) vs 64-bit
                  pin t 'types {},         ; typedef name -> ty
                  pin t 'weaks (),                 ; __attribute__((weak)) function names
-                 pin t 'ainl (),                  ; always_inline function names (love.h's ai_inline)
-                 pin t 'noinl (),                 ; noinline function names (love.h's ai_noinline)
+                 pin t 'ainl (),                  ; always_inline function names (love.h's love_inline)
+                 pin t 'noinl (),                 ; noinline function names (love.h's love_noinline)
                  pin t 'enums {},         ; enum constant -> value
                  pin t 'declaring {},     ; the names of the declaration being parsed right now (C11 6.2.1p7)
                  pin t 'labs {},          ; the labels defined in the function being parsed (C11 6.8.1p3)
@@ -2411,7 +2411,7 @@
        (ws body ()))
    ; a comma-list of `*.. name (params)` prototypes sharing one base type; registers each sig,
    ; answers [rest-after-`;`] | (). each sibling's own stars ride into its sig's return slot --
-   ; dropped, `struct ai *ai_strof(..)` reads as a struct-by-value return.
+   ; dropped, `struct g *strof(..)` reads as a struct-by-value return.
    (mproto ps base ts)
     (: sr (pstars ts base)
        rty <sr s0 <>sr

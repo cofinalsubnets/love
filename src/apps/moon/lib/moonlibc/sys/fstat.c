@@ -1,8 +1,8 @@
 #include "../impl.h"
 
 /* the freebsd branch fills the ino64 twin and translates -- shared with
- * stat.c/lstat.c through __ai_fbstat (this member is their floor). */
-void __ai_fbstat(struct __fb_stat const *f, struct stat *st) {
+ * stat.c/lstat.c through __love_fbstat (this member is their floor). */
+void __love_fbstat(struct __fb_stat const *f, struct stat *st) {
   memset(st, 0, sizeof *st);
   st->st_dev = f->st_dev;
   st->st_ino = f->st_ino;
@@ -19,7 +19,7 @@ void __ai_fbstat(struct __fb_stat const *f, struct stat *st) {
   st->st_ctim = f->st_ctim; }
 
 /* ..and the netbsd twin (__fstat50's shape), same sharing */
-void __ai_nbstat(struct __nb_stat const *f, struct stat *st) {
+void __love_nbstat(struct __nb_stat const *f, struct stat *st) {
   memset(st, 0, sizeof *st);
   st->st_dev = f->dev;
   st->st_ino = f->ino;
@@ -36,14 +36,14 @@ void __ai_nbstat(struct __nb_stat const *f, struct stat *st) {
   st->st_ctim.tv_sec = f->ctime;  st->st_ctim.tv_nsec = f->ctimensec; }
 
 int fstat(int fd, struct stat *st) {
-  if (__ai_osv == 2) {
+  if (__love_osv == 2) {
     struct __fb_stat f;
     long r = er(sc2(NR_fstat, fd, (long) &f));
-    if (r >= 0) __ai_fbstat(&f, st);
+    if (r >= 0) __love_fbstat(&f, st);
     return (int) r; }
-  if (__ai_osv == 3) {
+  if (__love_osv == 3) {
     struct __nb_stat f;
     long r = er(sc2(NR_fstat, fd, (long) &f));
-    if (r >= 0) __ai_nbstat(&f, st);
+    if (r >= 0) __love_nbstat(&f, st);
     return (int) r; }
   return (int) er(sc2(NR_fstat, fd, (long) st)); }

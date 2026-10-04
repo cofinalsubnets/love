@@ -431,18 +431,19 @@
    ; --- heredoc collection ------------------------------------------------------
    ; the delimiter, right after << : 'EOF' / "EOF" (quoted: body literal) or a
    ; bare run -> (quoted delim . j) | ()
+   ; the delimiter word -> (quoted? . delim . j) | (): any quote or \ in it quotes the body
    (sh-hddelim s n i)
-     (i != n ?
-      (s i @
-       (b @ (39 || 34))
-        (:- (go (i + 1) "")
-         (go j acc) (? (j = n) ()
-                       (s j = b) (1 . acc . j + 1)
-                       (go (j + 1) (acc + string (s j)))))
-        (: (bare? x) !(lx-ws? x || elem x '(10 124 38 59 60 62 40 41))
-           (go j acc) (j < n && bare? (s j) ? (go (j + 1) (acc + string (s j))) (acc . j))
-           r (go i "")
-         (#<r ? (0 . r)))))
+     (: (bare? x) !(lx-ws? x || elem x '(10 124 38 59 60 62 40 41))
+        (qt j b acc) (? (j = n) ()
+                        (s j = b) (go (j + 1) acc 1)
+                        (qt (j + 1) b (acc + string (s j))))
+        (go j acc q)
+         (? (j < n && (s j = 39 || s j = 34)) (qt (j + 1) (s j) acc)
+            (j + 1 < n && s j = 92) (go (j + 2) (acc + string (s (j + 1))) 1)
+            (j < n && bare? (s j)) (go (j + 1) (acc + string (s j)) q)
+            (0 < #acc || q) (q . acc . j)
+            ())
+        (go i "" 0))
    (sh-tabstrip l) (: (go i) (i < #l && l i = 9 ? (go (i + 1)) i)
                     (snip l (go 0) #l))
    (sh-lineend s n j) (: (go i) (i = n || s i = 10 ? i (go (i + 1))) (go j))
@@ -528,7 +529,8 @@
                    ('more . 'sub))
                92 (? (i + 1 = n) ('more . 'cont)
                      (s (i + 1) = 10) (lx (i + 2) cur started segs toks hq bods k)
-                     (lx (i + 2) (cur + string (s (i + 1))) 1 segs toks hq bods k))
+                     ; \c quotes c: a one-byte '..', so \* never globs
+                     (lx (i + 2) "" 1 (('sq . string (s (i + 1))) . addl cur segs) toks hq bods k))
                (b @ (60 || 62))
                  (: ion (atom? segs && sh-digits? cur ? [(sh-int cur)])
                     tks (two? ion ? toks (fw cur started segs toks))
@@ -1435,9 +1437,31 @@
    ; exec takes that file and the child is still named as spelled. a seat with none
    ; (the kernel) hands the bare word to its registry
    (sh-spawnv argv) (: w <argv exe (sh-seat ())
-                       (? (!(string? exe) || sh-slashed? w) argv
+                       (? (!(string? exe)) argv
+                          (sh-slashed? w) (sh-asverb w >argv @ v (two? v ? v argv))
                           (!(sh-dotl? w) && sh-verbours? w) (exe . argv)
-                          (: r (sh-whichp w) (? (two? r) ((<>r . w) . >argv) argv))))
+                          (: r (sh-whichp w)
+                             (? (two? r) (sh-asverb <>r >argv @ v (two? v ? v ((<>r . w) . >argv))) argv))))
+   ; a file's #! line as words, or () -- bounded, since an elf has no first line
+   (sh-iline p)
+     (: h (open p "r")
+        (? !(hot? h) ()
+           (: (go k acc) (see h @ c (? (c < 0 || c = 10 || 255 < k) acc (go (k + 1) (acc + string c))))
+              a (see h)
+              ln (? (a = 35 && see h = 33) (go 0 "") ())
+              _ (close h)
+              (? (string? ln) (filter (w \ 0 < #w) (cite 'kore 'usplit 32 ln)) ()))))
+   ; under -a a script's interpreter is a word: #!/bin/sh, #!/usr/bin/env sh and #!/usr/bin/awk -f
+   ; run as our verb when the basename is one, as the bare word would -> that argv, or ()
+   (sh-asverb p rest)
+     (? !(sh-mode 0 = 0) ()
+        (: ws (sh-iline p)
+           (base x) ((: (g i) (i < 0 ? x (x i = 47 ? (snip x (i + 1) #x) (g (i - 1))))) (#x - 1))
+           env? (two? ws && base <ws = "env")
+           iv (? env? (? (two? >ws && <>ws = "-S") >>ws >ws) ws)
+           (? (two? iv && !(sh-dotl? p) && sh-verbw? (base <iv))
+              ((sh-seat ()) . (base <iv) . (>iv + (p . rest)))
+              ())))
    ; --- what would run: the answer `command -v`, `which` and `type` share -------
    ; the verdict walks sh-simple2's own ladder, so what it names is what would run:
    ; ('resw) ('fn) ('bi) ('verb path) ('path path), or () for a word nothing answers.

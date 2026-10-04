@@ -37,17 +37,17 @@ int clock_gettime(int ck, struct timespec *ts) {
 #ifdef LvVdso
   static cgtfn cgt;
   static int probed;
-  if (__ai_osv == 1) {
+  if (__love_osv == 1) {
     if (!probed) cgt = vdso_cgt(), probed = 1;
     if (cgt && !cgt(ck, ts)) return 0; }
 #endif
-  if (__ai_osv == 2) {
+  if (__love_osv == 2) {
     /* the clockids part: REALTIME 0 agrees; MONOTONIC is 4 there (1 is
      * CLOCK_VIRTUAL), PROCESS_CPUTIME_ID 15, THREAD_CPUTIME_ID 14. */
     if (ck == 1) ck = 4;
     else if (ck == 2) ck = 15;
     else if (ck == 3) ck = 14; }
-  else if (__ai_osv == 3) {
+  else if (__love_osv == 3) {
     /* netbsd: MONOTONIC 3; the cputime ids are flag words */
     if (ck == 1) ck = 3;
     else if (ck == 2) ck = 0x40000000;

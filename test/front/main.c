@@ -1,6 +1,6 @@
 // test/front/main.c -- a TEST-ONLY love frontend, and the instrument the io arc
 // runs on. It links liblove.a and supplies the frontend contract itself --
-// ai_fd_port_vt, ai_ready, the wait hooks, the three static ports -- which is
+// love_fd_port_vt, ready, the wait hooks, the three static ports -- which is
 // exactly what lets it fault the DEVICE without love carrying a fault switch.
 //
 // The standing rule: love must not gain a feature whose only purpose is letting
@@ -18,7 +18,7 @@
 //   (dev ())      a fresh device port
 //   (feed p s)    queue s's bytes on p (s: text, or one charm)
 //   (shut p)      after the queue drains, p is at END rather than merely quiet
-//   (stall p k)   the next k readn calls answer WOULD-BLOCK -- while `ai_ready`
+//   (stall p k)   the next k readn calls answer WOULD-BLOCK -- while `ready`
 //                 keeps saying yes. that IS the race defect 5 named: the
 //                 readiness check said go and the read said no.
 //   (wstall p k)  the next k writen calls land nothing
@@ -95,10 +95,10 @@ static struct dev *dev_of_fd(intptr_t fd) {
 
 static struct dev *dev_of_port(word x) {
   if ((x & 1) || ((union u*) x)->ap != lvm_port_io) return NULL;
-  return dev_of_fd(ai_io_fd((struct ai_io*) x)); }
+  return dev_of_fd(io_fd((struct io*) x)); }
 
 // --- the clock and the waits -----------------------------------------------
-uintptr_t ai_clock(void) {
+uintptr_t love_clock(void) {
   struct timespec ts;
   return clock_gettime(CLOCK_MONOTONIC, &ts) ? 0
        : (uintptr_t) (ts.tv_sec * 1000u + (uintptr_t) ts.tv_nsec / 1000000u); }
@@ -107,29 +107,29 @@ uintptr_t ai_clock(void) {
 // all -- see the (naps ()) nif, and the law it is the gauge for.
 static uintptr_t naps;
 
-void ai_sleep(uintptr_t ms) {
+void love_sleep(uintptr_t ms) {
   if (!ms) die("a sleep with no deadline -- every task is parked");
   naps += 1;
   struct timespec t = { (time_t) (ms / 1000), (long) (ms % 1000) * 1000000L };
   nanosleep(&t, NULL); }
 
-// the readiness law: a NEGATIVE fd is always ready (ai_io_fd answers -1 for
+// the readiness law: a NEGATIVE fd is always ready (io_fd answers -1 for
 // every port with no device behind it, and those wait on nothing external),
 // the console is always ready (end-of-stream IS an answer),
 // and a device is ready when it has bytes or has ended.
-// rstall is NOT consulted here, and that is the whole point: `ai_ready` says
+// rstall is NOT consulted here, and that is the whole point: `ready` says
 // go and the read says no, which is the one schedule no in-process test could
 // otherwise reach.
 // an OUT park is ready by definition here: this frontend's devices take
 // writes through `wstall`, which is a REFUSAL from the write door, not a
 // readiness the scheduler can poll for. Only the read direction is a question.
-bool ai_ready(int fd, int events) {
+bool ready(int fd, int events) {
   struct dev *d = dev_of_fd(fd);
-  if (events != ai_wait_in) return true;
+  if (events != wait_in) return true;
   return d ? (d->qpos < d->qlen || d->ended) : true; }
 
-void ai_wait_fds(struct ai_wait_fd *fds, int n, uintptr_t ms) {
-  ai_sleep(ms); }                    // ms == 0 dies loudly; see the header note
+void wait_fds(struct wait_fd *fds, int n, uintptr_t ms) {
+  love_sleep(ms); }                    // ms == 0 dies loudly; see the header note
 
 // --- the devices, by fd ----------------------------------------------------
 // the port rows below read their fd off the port and the raw-fd rows take love's
@@ -159,45 +159,45 @@ static intptr_t dev_writen(intptr_t fd, unsigned char const *src, uintptr_t n) {
   return d->olen += k, (intptr_t) k; }
 
 // --- the port vtable -------------------------------------------------------
-static intptr_t fd_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
-  return dev_readn(ai_io_fd(g->io), dst, n); }
+static intptr_t fd_readn(struct g *g, unsigned char *dst, uintptr_t n) {
+  return dev_readn(io_fd(g->io), dst, n); }
 
-static struct ai *fd_writen(struct ai *g, unsigned char const *src, uintptr_t n) {
-  return g->b = dev_writen(ai_io_fd(g->io), src, n), g; }
+static struct g *fd_writen(struct g *g, unsigned char const *src, uintptr_t n) {
+  return g->b = dev_writen(io_fd(g->io), src, n), g; }
 
-static struct ai *fd_flush(struct ai *g) {
-  intptr_t fd = ai_io_fd(g->io);
+static struct g *fd_flush(struct g *g) {
+  intptr_t fd = io_fd(g->io);
   if (fd == 1) fflush(stdout);
   else if (fd == 2) fflush(stderr);
   return g; }
 
-struct ai_port_vt const ai_fd_port_vt =
+struct port_vt const love_fd_port_vt =
  { fd_flush, fd_writen, fd_readn, NULL };
 
-struct ai_fio ai_stdin  = { { lvm_port_io, &ai_fd_port_vt, putcharm(EOF) }, putcharm(0) };
-struct ai_fio ai_stdout = { { lvm_port_io, &ai_fd_port_vt, putcharm(EOF) }, putcharm(1) };
-struct ai_fio ai_stderr = { { lvm_port_io, &ai_fd_port_vt, putcharm(EOF) }, putcharm(2) };
+struct fio love_stdin  = { { lvm_port_io, &love_fd_port_vt, putcharm(EOF) }, putcharm(0) };
+struct fio love_stdout = { { lvm_port_io, &love_fd_port_vt, putcharm(EOF) }, putcharm(1) };
+struct fio love_stderr = { { lvm_port_io, &love_fd_port_vt, putcharm(EOF) }, putcharm(2) };
 
 // --- the raw-fd rows -------------------------------------------------------
 // love's io ops take a charm as well as a port, so a frontend owes these two as
 // well as the vtable: src/love/fd.c has them on a hosted seat and src/love/fdrow.h on a
 // board, and both are unreachable from here. the shape is fd.c's, over these
 // devices -- >0 landed, 0 busy, -1 gone, and a say that lands every byte.
-intptr_t ai_fd_readn(struct ai *g, int fd, unsigned char *dst, uintptr_t n) {
+intptr_t love_fd_readn(struct g *g, int fd, unsigned char *dst, uintptr_t n) {
   return dev_readn(fd, dst, n); }
 
-uintptr_t ai_fd_say(int fd, unsigned char const *src, uintptr_t n) {
+uintptr_t love_fd_say(int fd, unsigned char const *src, uintptr_t n) {
   uintptr_t i = 0;
   while (i < n) {
     intptr_t k = dev_writen(fd, src + i, n - i);
     if (k < 0) break;                                // the device is gone: the rest drops
-    if (!k) { ai_sleep(1); continue; }                // a wstall arm, counted down per call
+    if (!k) { love_sleep(1); continue; }                // a wstall arm, counted down per call
     i += (uintptr_t) k; }
   return i; }
 
 // --- the nifs --------------------------------------------------------------
 // no scratch on an lvm_ frame (CLAUDE.md, the tail-threaded VM): the bodies
-// that need one go through an ai_noinline helper, and the ones here need none.
+// that need one go through an love_noinline helper, and the ones here need none.
 
 // (quit n) -- the frontend nif cli's scare tail reaches for (src/love/boot/post.l). Without
 // it `(borrow 'cli)` compiles a form naming an unbound global and raises missing.
@@ -214,12 +214,12 @@ static lvm(lvm_dev) {
   int fd = next_fd;
   dev_at(fd - dev_base);
   Pack(g);
-  struct ai *r = ai_io_alloc(g, fd);
-  if (!ai_ok(r)) { Unpack(g); Sp[0] = ZeroPoint; Ip += 1; return Continue(); }
+  struct g *r = io_alloc(g, fd);
+  if (!ok(r)) { Unpack(g); Sp[0] = ZeroPoint; Ip += 1; return Continue(); }
   next_fd += 1;
   g = r;
   Unpack(g);
-  // ai_io_alloc PUSHED the port, so the argument sits one slot up.
+  // io_alloc PUSHED the port, so the argument sits one slot up.
   Sp[1] = Sp[0];
   Sp += 1;
   Ip += 1;
@@ -236,7 +236,7 @@ static lvm(lvm_feed) {
       grow(&d->q, &d->qcap, d->qlen + 1);
       d->q[d->qlen++] = b; }
     else if (strp(x)) {
-      struct ai_str *s = (struct ai_str*) x;
+      struct str *s = (struct str*) x;
       grow(&d->q, &d->qcap, d->qlen + s->len);
       memcpy(d->q + d->qlen, s->bytes, s->len);
       d->qlen += s->len; }
@@ -273,8 +273,8 @@ static lvm(lvm_sent) {
   uintptr_t n = d->olen;
   if (!n) { Sp[0] = EmptyString; Ip += 1; return Continue(); }
   Pack(g);
-  struct ai *r = str0(g, n);
-  if (!ai_ok(r)) { Unpack(g); Sp[0] = EmptyString; Ip += 1; return Continue(); }
+  struct g *r = str0(g, n);
+  if (!ok(r)) { Unpack(g); Sp[0] = EmptyString; Ip += 1; return Continue(); }
   g = r;
   Unpack(g);
   d = dev_of_port(Sp[1]);            // the gc may have moved the port; the fd did not
@@ -289,7 +289,7 @@ static lvm(lvm_wpending) {
   uintptr_t n = 0;
   if (!(x & 1) && ((union u*) x)->ap == lvm_port_io) {
     Pack(g);
-    n = ai_io_wpending(g, (struct ai_io*) x);
+    n = io_wpending(g, (struct io*) x);
     Unpack(g); }
   Sp[0] = putcharm((intptr_t) n);
   Ip += 1; return Continue(); }
@@ -302,7 +302,7 @@ static lvm(lvm_naps) {
   Ip += 1; return Continue(); }
 
 // --- the horn's tap ---------------------------------------------------------
-// src/love/horn.c's sink hands its ACCEPTED frames to ai_horn_tap and the weak default in
+// src/love/horn.c's sink hands its ACCEPTED frames to love_horn_tap and the weak default in
 // that file takes nothing, so on every native seat the PCM stops at the sink and no
 // law can say what went in came out. a seat with a speaker and no card defines this
 // and plays what it is handed; here it is kept, so a .l law can read it back.
@@ -318,7 +318,7 @@ static lvm(lvm_naps) {
 enum { tap_n = 1 << 16 };
 static unsigned char tap_buf[tap_n];
 static uintptr_t tap_len, tap_rate, tap_chans;
-void ai_horn_tap(unsigned char const *pcm, uintptr_t frames, uintptr_t chans, uintptr_t rate) {
+void love_horn_tap(unsigned char const *pcm, uintptr_t frames, uintptr_t chans, uintptr_t rate) {
   uintptr_t n = frames * chans * 2, room = tap_n - tap_len;
   tap_rate = rate, tap_chans = chans;
   memcpy(tap_buf + tap_len, pcm, n < room ? n : room);
@@ -326,7 +326,7 @@ void ai_horn_tap(unsigned char const *pcm, uintptr_t frames, uintptr_t chans, ui
 
 // ..and the SEAT's door, the OTHER way PCM leaves love: src/love/horn.c asks k_horn_* where the
 // seat carries its own card -- inle over src/inle/hda.c, the playdate over its SDK. out/front is
-// built TWICE, once doorless where the sink taps and once with -D ai_horn_seat=1 where
+// built TWICE, once doorless where the sink taps and once with -D love_horn_seat=1 where
 // these four are the device, so one pair of nifs reads both lanes and a law can say
 // exactly where they differ.
 //
@@ -372,8 +372,8 @@ static lvm(lvm_tapped) {
   tap_len = 0;
   if (!n) { Sp[0] = EmptyString; Ip += 1; return Continue(); }
   Pack(g);
-  struct ai *r = str0(g, n);
-  if (!ai_ok(r)) { Unpack(g); Sp[0] = EmptyString; Ip += 1; return Continue(); }
+  struct g *r = str0(g, n);
+  if (!ok(r)) { Unpack(g); Sp[0] = EmptyString; Ip += 1; return Continue(); }
   g = r;
   Unpack(g);
   memcpy(txt(Sp[0]), tap_buf, n);
@@ -418,7 +418,7 @@ static union u const
   nif_wstall[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_wstall}, {lvm_ret0}},
   nif_wcap[]   = {{lvm_cur}, {.x = putcharm(2)}, {lvm_wcap},   {lvm_ret0}};
 
-static struct ai_def const defs[] = {
+static struct def const defs[] = {
   {"quit",   {.k = nif_quit}, NULL},
   {"dev",    {.k = nif_dev}, NULL},
   {"feed",   {.k = nif_feed}, NULL},
@@ -436,7 +436,7 @@ static struct ai_def const defs[] = {
 
 // --- the boot --------------------------------------------------------------
 
-static ai_noinline char *slurp(char const *path) {
+static love_noinline char *slurp(char const *path) {
   FILE *f = fopen(path, "rb");
   if (!f) { fprintf(stderr, "; front: cannot read %s\n", path); exit(2); }
   size_t cap = 1 << 16, len = 0;
@@ -455,12 +455,12 @@ int main(int argc, char const **argv) {
   if (argc < 2) {
     fprintf(stderr, "usage: %s <file.l>...\n", argv[0]);
     return 2; }
-  struct ai *g = ai_defn(ai_ini(), defs, countof(defs));
+  struct g *g = defn(ini(), defs, countof(defs));
   // ..and the LvNif slice of every TU linked beside this one, as src/love/main.c drains it:
   // src/love/horn.c's rows ride the section, not the table above, so without this the horn is
   // in the binary and off the book.
-  g = ai_defn(g, __start_love_nifs, __stop_love_nifs - __start_love_nifs);
-  g = ai_egg(g,
+  g = defn(g, __start_love_nifs, __stop_love_nifs - __start_love_nifs);
+  g = egg(g,
 #include "egg.h"
     ,
 #include "prel.h"
@@ -469,9 +469,9 @@ int main(int argc, char const **argv) {
     ,
 #include "post.h"
     );
-  g = ai_evals_(g, "(borrow 'cli)");
-  g = ai_open(g);                   // the session layer: one load, one layer
-  for (int i = 1; i < argc && ai_ok(g); i++) g = ai_evals_(g, slurp(argv[i]));
-  if (ai_code_of(g) == ai_status_scare) ai_scare_face(g);    // the honest face: ";; a b", or ";; oom@len=N" bare
+  g = evals_(g, "(borrow 'cli)");
+  g = love_open(g);                   // the session layer: one load, one layer
+  for (int i = 1; i < argc && ok(g); i++) g = evals_(g, slurp(argv[i]));
+  if (code_of(g) == status_scare) scare_face(g);    // the honest face: ";; a b", or ";; oom@len=N" bare
   fflush(stdout);
-  return ai_fin(g); }
+  return fin(g); }

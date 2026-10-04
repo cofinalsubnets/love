@@ -1,5 +1,5 @@
-#ifndef _AI_SYS_RESOURCE_H
-#define _AI_SYS_RESOURCE_H
+#ifndef _LOVE_SYS_RESOURCE_H
+#define _LOVE_SYS_RESOURCE_H
 #include <sys/time.h>   /* struct timeval */
 #include <sys/types.h>  /* id_t */
 #define RUSAGE_SELF      0

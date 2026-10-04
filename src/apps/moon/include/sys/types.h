@@ -1,5 +1,5 @@
-#ifndef _AI_SYS_TYPES_H
-#define _AI_SYS_TYPES_H
+#ifndef _LOVE_SYS_TYPES_H
+#define _LOVE_SYS_TYPES_H
 typedef unsigned long size_t;
 typedef long   ssize_t;
 typedef int    pid_t;

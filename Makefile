@@ -102,7 +102,7 @@ host_o = $(host_c:$(S)/%.c=$(ho)/o/%.o)
 # weak one wherever moonlibc's os.c is not in the link.
 # wants none of them; the HCC flavour is gcc and glibc alone, so it takes all three.
 seat_o = $(ho)/o/love/user/nokern.o $(ho)/o/love/noblob.o
-hcc = LOVE_NO_IMAGE= $(CC) $(cflags) $(GCDBG) -Dai_tco=$(tco) -fpic -I$(ho) -I. -Isrc/love -Isrc/inle -Iout/lib
+hcc = LOVE_NO_IMAGE= $(CC) $(cflags) $(GCDBG) -Dtco=$(tco) -fpic -I$(ho) -I. -Isrc/love -Isrc/inle -Iout/lib
 image_ldflags = -Wl,--section-start=.love.image=0x2000000
 .PHONY: force_hostcc
 force_hostcc: ;
@@ -141,7 +141,7 @@ $(ho)/liblove.a: $(h_o)
 love0_o = $(patsubst $(S)/%.c,out/0/%.o,$(filter-out $(S)/love/cats.c,$(host_c)) $(S)/love/user/main0.c $(S)/love/user/nokern.c $(S)/love/noblob.c $(love_c))
 out/0/love/user/main0.o: out/lib/boot0.h
 out/0/love/cb.o: src/love/quay/quay.c src/love/quay/nif.c src/love/quay/quay.h src/love/quay/cp437.h src/love/quay/cpwidth.h src/love/quay/cpemoji.h src/love/quay/paint.c src/love/quay/cga_8x8.c src/love/quay/cleat_8x16.c
-boot_cc = $(CCACHE) $(CC) $(cflags) -fPIE -DLove0 -Dai_tco=0 -Dai_data_section=0 -DLvVersion='"$(love_base)+bootstrap"' -I. -Isrc/love -Isrc/inle -Iout/lib
+boot_cc = $(CCACHE) $(CC) $(cflags) -fPIE -DLove0 -Dtco=0 -Ddata_section=0 -DLvVersion='"$(love_base)+bootstrap"' -I. -Isrc/love -Isrc/inle -Iout/lib
 .PHONY: force_love0cc
 force_love0cc: ;
 out/0/.love0cc: force_love0cc
@@ -232,12 +232,12 @@ $(1)_seat_o = $$($(2))/love/noblob.o
 $$($(1)_love_o): $$($(2))/%.o: $$(S)/%.c $$(love_h) $$(moon0_dep)
 	@echo 'MOON	'$$@
 	@mkdir -p $$(dir $$@)
-	@$$($(3)) -D ai_tco=$$(tco) -D LvHaveVersionH -I$$(ho) -I. -Isrc/love -Isrc/inle -Iout/lib -c $$< $$@
+	@$$($(3)) -D tco=$$(tco) -D LvHaveVersionH -I$$(ho) -I. -Isrc/love -Isrc/inle -Iout/lib -c $$< $$@
 $$($(2))/love/love.o: out/lib/love_version.h   # only this TU carries the version id
 $$($(1)_host_o) $$($(1)_seat_o): $$($(2))/%.o: $$(S)/%.c $$(love_h) $$(moon0_dep)
 	@echo 'MOON	'$$@
 	@mkdir -p $$(dir $$@)
-	@$$($(3)) -D ai_tco=$$(tco) -I$$(ho) -I. -Isrc/love -Isrc/inle -Iout/lib -c $$< $$@
+	@$$($(3)) -D tco=$$(tco) -I$$(ho) -I. -Isrc/love -Isrc/inle -Iout/lib -c $$< $$@
 $$($(2))/love/main.o: out/lib/distlist.h
 $$($(2))/love/cats.o: out/lib/baked.h
 $$($(2))/love/cb.o: src/love/quay/quay.c src/love/quay/nif.c src/love/quay/quay.h src/love/quay/cp437.h src/love/quay/cpwidth.h src/love/quay/cpemoji.h src/love/quay/paint.c src/love/quay/cga_8x8.c src/love/quay/cleat_8x16.c
@@ -395,9 +395,9 @@ dist: dist-seed   # the binary, carrying its own source
 # .sbignore's to drop, which selfpack reads too. each nom is matched as a path prefix
 # at a segment boundary (src/tools/selfpack.l).
 dist_drop = bench
-# the codec of each src.tree section (selfpack -c): deflate where a run reads (index, moon,
-# bake, seat), the denser coders where only a full lay or a cold read pays their decode
-tree_codecs = lisp=bzip2,c=bzip2,rest=lzma2
+# the codec of each src.tree section (selfpack -c): deflate where every mooncc or tls run reads
+# (index, moon, seat), lzma2 where one read a bake or a full lay pays for is worth the bytes
+tree_codecs = bake=lzma2,lisp=lzma2,c=lzma2,rest=lzma2
 .PHONY: force_src
 force_src: ;
 # force_src: the artifact packs the tree as it is, so make cannot know the prerequisites;
@@ -418,7 +418,7 @@ out/prof/src.o: out/prof/src.tree src/tools/mksrc.l $(holocat_dep) $(love0)
 	@echo 'HOLO	'$@
 	@$(love0) $(holocat) src/tools/mksrc.l out/prof/src.tree $@ $(hosta)
 # the machine's own files (src/inle/rootfs/): a second initrd, walked at the root of every inle
-# boot where the tree's is walked under /love. one tar, carried under ai_rootfs
+# boot where the tree's is walked under /love. one tar, carried under rootfs
 # beside the source blob on every link that carries one.
 rootfs_files = $(wildcard src/inle/rootfs/* src/inle/rootfs/*/* src/inle/rootfs/*/*/*)
 out/rootfs.tar: $(rootfs_files) src/tools/mkrootfs.l $(love0)
@@ -427,7 +427,7 @@ out/rootfs.tar: $(rootfs_files) src/tools/mkrootfs.l $(love0)
 	@LOVE_NO_IMAGE= $(love0) src/tools/mkrootfs.l src/inle/rootfs $@
 out/rootfs.o: out/rootfs.tar src/tools/mkblob.l $(holocat_dep) $(love0)
 	@echo 'HOLO	'$@
-	@LOVE_NO_IMAGE= $(love0) $(holocat) src/tools/mkblob.l $< $@ ai_rootfs $(hosta)
+	@LOVE_NO_IMAGE= $(love0) $(holocat) src/tools/mkblob.l $< $@ rootfs $(hosta)
 
 # this roster must cover what mcsrctext walks (src/apps/moon/moon.l): the carried archives are
 # stamped with an identity hashed over include/ and lib/ ENTIRE, so a source file the roster
@@ -488,7 +488,7 @@ $(xd)/src.o: $(src_tree) src/tools/mksrc.l $(holocat_dep) $(love0)
 	@$(love0) $(holocat) src/tools/mksrc.l $(src_tree) $@ $(xa)
 $(xd)/rootfs.o: out/rootfs.tar src/tools/mkblob.l $(holocat_dep) $(love0)
 	@echo 'HOLO	'$@
-	@LOVE_NO_IMAGE= $(love0) $(holocat) src/tools/mkblob.l $< $@ ai_rootfs $(xa)
+	@LOVE_NO_IMAGE= $(love0) $(holocat) src/tools/mkblob.l $< $@ rootfs $(xa)
 $(xd)/moonlibc.o: $(rt_a) $(rt_slice) src/tools/mkrt.l $(rtlove_dep) $(love0)
 	@echo 'HOLO	'$@
 	@$(rtlove) src/tools/mkrt.l $@ $(xa) $(rt_a)
@@ -667,7 +667,7 @@ $(k_odir)/src.o: $(src_tree) src/tools/mksrc.l $(mdep)
 $(k_odir)/rootfs.o: out/rootfs.tar src/tools/mkblob.l $(mdep)
 	@echo 'HOLO	'$@
 	@mkdir -p "$(dir $@)"
-	@LOVE_NO_IMAGE= $m src/tools/mkblob.l $< $@ ai_rootfs $a
+	@LOVE_NO_IMAGE= $m src/tools/mkblob.l $< $@ rootfs $a
 $(k_pie): $(k_o) $(mdep)
 	@echo 'MOON	'$@
 	@mkdir -p "$(dir $@)"

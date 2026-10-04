@@ -1,5 +1,5 @@
-#ifndef _AI_SYS_EVENT_H
-#define _AI_SYS_EVENT_H
+#ifndef _LOVE_SYS_EVENT_H
+#define _LOVE_SYS_EVENT_H
 /* kqueue, the BSD door (linux answers ENOSYS; signalfd is the twin there).
  * the canonical face is freebsd's (struct + the negative filters); netbsd's
  * 40-byte record and positive filters translate in the member. EVFILT_SIGNAL

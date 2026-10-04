@@ -91,7 +91,7 @@
 ; instantly with enetunreach and the law would pass straight over the bug. a syn
 ; the kernel drops is retried for about two minutes, which is the stall this needs.
 ;
-; so this law knows src/love/sock.c's `ai_listen_backlog` by VALUE, and has to: it
+; so this law knows src/love/sock.c's `listen_backlog` by VALUE, and has to: it
 ; fills the queue that constant sizes. linux queues one more than asked (the test
 ; is `> max`), so backlog+1 arrivals fill it and the next is dropped. if the
 ; constant moves and this does not, the fill stops one short, the stalled connect

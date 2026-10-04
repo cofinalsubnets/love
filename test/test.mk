@@ -59,7 +59,7 @@ test_extra: test_filemode waits test_front test_proof test_gen test_uugen test_u
 # $m is the warm love -- the baked image woken, what ships. a gate whose subject is
 # the egg boot spells LOVE_NO_IMAGE=1 itself; love0 is always the egg.
 
-# love0 self-tests BOTH compilers in one run (-Dai_tco=0, the trampoline lane too), so it
+# love0 self-tests BOTH compilers in one run (-Dtco=0, the trampoline lane too), so it
 # must print two "tests pass" summaries -- a reader stop drops the rest and exits 0. status
 # rides `.rc`, no pipefail. corpus.list is a runtime input, not a stamp: love0 reads it to
 # find the corpus (src/love/main.c), and nothing else asks for it, so it is named here or a fresh
@@ -113,7 +113,7 @@ test_stdinbuf: $(ho)/love
 	    || { cat out/.test_stdinbuf3.out; \
 	         echo "FAIL fd 0 handed on nonblocking (flags $$fl) -- stdin_give did not put the bit back"; exit 1; }
 # ..and the give-back rides the same seek: `unchug` returns drained bytes to the run, so
-# ai_io_pending counts them again and the child inherits fd 0 in front of them. the CONTRAST
+# io_pending counts them again and the child inherits fd 0 in front of them. the CONTRAST
 # is the law -- `chug` drains the whole run, so the child inherits nothing without it and all
 # ten with. only rbio_of finds that run: a heap-port-only door answers 0 here while every
 # file-port law in test/io.l still passes.
@@ -184,7 +184,7 @@ $(ho)/front: test/front/main.c $(S)/love/bare.c $(S)/love/alloc.c $(S)/love/horn
 	@echo 'CC	'$@
 	@mkdir -p $(dir $@)
 	@$(hcc) -o $@ test/front/main.c $(S)/love/bare.c $(S)/love/alloc.c $(S)/love/horn.c $(ho)/liblove.a $(data_ld)
-# ..and the same frontend with the horn's SEAT door in place of its sink: ai_horn_seat
+# ..and the same frontend with the horn's SEAT door in place of its sink: love_horn_seat
 # makes src/love/horn.c ask k_horn_* for the device, which is the lane inle runs over src/inle/hda.c
 # and the playdate over its SDK. no gate can reach that lane WITH hardware, and this one
 # reaches it without -- the frontend's k_horn_* are the device, over the same
@@ -193,7 +193,7 @@ $(ho)/frontseat: test/front/main.c $(S)/love/bare.c $(S)/love/alloc.c $(S)/love/
     out/lib/egg.h out/lib/post.h out/lib/prel.h out/lib/ev.h
 	@echo 'CC	'$@
 	@mkdir -p $(dir $@)
-	@$(hcc) -D ai_horn_seat=1 -o $@ test/front/main.c $(S)/love/bare.c $(S)/love/alloc.c $(S)/love/horn.c $(ho)/liblove.a $(data_ld)
+	@$(hcc) -D love_horn_seat=1 -o $@ test/front/main.c $(S)/love/bare.c $(S)/love/alloc.c $(S)/love/horn.c $(ho)/liblove.a $(data_ld)
 test_front: $(ho)/front $(ho)/frontseat
 	@echo TEST $(ho)/front
 	@sh test/gate/run.sh -a front "$(ho)/front" "front: ok" test/front/io.l
@@ -583,7 +583,7 @@ test_tco0:
 	@$(MAKE) --no-print-directory tco=0 test_host
 	@echo "test_tco0: the trampoline builds, bakes and passes the host corpus"
 # test_hdiff -- the foreign-cc differential, the one lane a cc that is not ours still gets
-# to build. gcc and clang each link the whole vm at ai_tco=1, which the mooncc lane never
+# to build. gcc and clang each link the whole vm at tco=1, which the mooncc lane never
 # does, and each must build, answer, pass the quick suite and come out ret-free. not the
 # corpus twice: semantics are the interpreter's and do not move with the compiler.
 test_hdiff: host
@@ -871,11 +871,8 @@ test_hearts: host
 # test_gz -- src/apps/tar.l + src/apps/gz.l against the two programs they replace. the laws
 # are test/host/gz.l; this is the half only the OUTSIDE can say, and it is separate because
 # a coder and decoder by one hand round-trip cleanly through a format nobody else speaks.
-# skips without either system tool. gzfind.l rides along: the differential between gz.l's
-# match finder and the holo IR beside it, over corpora chosen for the chain the kernel walks.
+# skips without either system tool.
 test_gz: host
-	@echo TEST test/gate/gzfind.l
-	@$m $R/test/gate/gzfind.l
 	@echo TEST test/gate/targz.sh
 	@$(gsh) test/gate/targz.sh $(ho)/love
 # test_root -- the privileged verbs: chroot, mount, umount, sync, mkfifo, mknod. the

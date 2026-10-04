@@ -11,9 +11,10 @@
 //                            dict bytes (and a chunk's room) in place of the whole output
 //   (lzma2-chunk st c)       one whole chunk (control byte, header, data) -> its bytes | ()
 // the decoders read the output as their dictionary, so the window is everything said so far.
-// the coder's parse is a fast one: reps first, the longest chain match, one lazy look.
+// the coder prices its way: an optimal parse over a binary-tree match finder.
 #ifndef XZ_STANDALONE
 #include "love.h"
+#include "bytes.h"
 #endif
 #include <stdint.h>
 #include <string.h>
@@ -67,34 +68,31 @@ static void rd_norm(struct lz_rd *r) {
   r->range <<= 8;
   if (r->p < r->e) r->code = r->code << 8 | *r->p++; else r->bad = 1, r->code <<= 8; } }
 
-static unsigned rd_bit(struct lz_rd *r, lzp *p) {
- rd_norm(r);
- uint32_t b = (r->range >> LZ_BITS) * *p;
- if (r->code < b) { r->range = b; *p += (LZ_ONE - *p) >> LZ_MOVE; return 0; }
- r->range -= b; r->code -= b; *p -= *p >> LZ_MOVE; return 1; }
-
-static unsigned rd_tree(struct lz_rd *r, lzp *p, unsigned n) {
- unsigned m = 1;
- for (unsigned i = 0; i < n; i++) m = m << 1 | rd_bit(r, p + m);
- return m - (1u << n); }
-
-static unsigned rd_rtree(struct lz_rd *r, lzp *p, unsigned n) {
- unsigned m = 1, v = 0;
- for (unsigned i = 0; i < n; i++) { unsigned b = rd_bit(r, p + m); m = m << 1 | b; v |= b << i; }
- return v; }
-
-static uint32_t rd_direct(struct lz_rd *r, unsigned n) {
- uint32_t v = 0;
- while (n--) {
-  rd_norm(r);
-  r->range >>= 1;
-  if (r->code >= r->range) r->code -= r->range, v = v << 1 | 1; else v <<= 1; }
- return v; }
-
-static unsigned rd_len(struct lz_rd *r, struct lz_len *l, unsigned ps) {
- if (!rd_bit(r, &l->choice)) return rd_tree(r, l->low[ps], 3);
- if (!rd_bit(r, &l->choice2)) return 8 + rd_tree(r, l->mid[ps], 3);
- return 16 + rd_tree(r, l->high, 8); }
+// the decoder's steps, on lz_run's locals (rg the range, cd the code, ip the input to r->e):
+// written in place so the loop makes no call and mooncc keeps them in registers. word-wide, as
+// a narrow one is a zero-extend after every step; a range under LZ_TOP shifted still fits 32 bits.
+// past the input's end ip counts on over zeros, so a short stream is ip > r->e, asked per symbol.
+#define LZ_NORM() if (rg < LZ_TOP) { rg <<= 8, cd = cd << 8 | (ip < r->e ? *ip : 0), ip++; }
+#define LZ_BIT(pp, b) { lzp *p_ = (pp); uintptr_t w_ = *p_, q_; LZ_NORM() q_ = (rg >> LZ_BITS) * w_; \
+ if (cd < q_) rg = q_, *p_ = (lzp) (w_ + ((LZ_ONE - w_) >> LZ_MOVE)), b = 0; \
+ else rg -= q_, cd -= q_, *p_ = (lzp) (w_ - (w_ >> LZ_MOVE)), b = 1; }
+// ..and without a branch, for the bits of a tree, whose outcomes no predictor guesses: k_ is
+// all ones for a 1. the range keeps its bound or loses it, the prob moves toward the outcome.
+#define LZ_BITF(pp, b) { lzp *p_ = (pp); uintptr_t w_ = *p_, q_, k_; LZ_NORM() q_ = (rg >> LZ_BITS) * w_; \
+ b = cd >= q_, k_ = 0 - b; \
+ rg = (q_ & ~k_) | ((rg - q_) & k_), cd -= q_ & k_; \
+ *p_ = (lzp) (w_ + (((LZ_ONE - w_) >> LZ_MOVE) & ~k_) - ((w_ >> LZ_MOVE) & k_)); }
+#define LZ_TREE(pp, n, v) { lzp *t_ = (pp); uintptr_t m_ = 1, b_; \
+ while (m_ < ((uintptr_t) 1 << (n))) { LZ_BITF(t_ + m_, b_) m_ = m_ << 1 | b_; } \
+ v = m_ - ((uintptr_t) 1 << (n)); }
+#define LZ_RTREE(pp, n, v) { lzp *t_ = (pp); uintptr_t m_ = 1, b_, v_ = 0; \
+ for (uintptr_t i_ = 0; i_ < (n); i_++) { LZ_BITF(t_ + m_, b_) m_ = m_ << 1 | b_, v_ |= b_ << i_; } \
+ v = v_; }
+#define LZ_LEN(l, ps, v) { uintptr_t c_; LZ_BIT(&(l)->choice, c_) \
+ if (!c_) LZ_TREE((l)->low[ps], 3, v) \
+ else { LZ_BIT(&(l)->choice2, c_) \
+        if (!c_) { LZ_TREE((l)->mid[ps], 3, v) v += 8; } \
+        else { LZ_TREE((l)->high, 8, v) v += 16; } } }
 
 // the output, which is the dictionary. `grow` lets a sizeless .lzma double it as it goes.
 struct lz_out { uint8_t *b; uintptr_t n, cap, base; int grow, big; };
@@ -105,77 +103,107 @@ static int out_room(struct lz_out *o, uintptr_t k) {
  if (o->n + k > XZ_MAX) return o->big = 1, 0;
  uintptr_t c = o->cap < 65536 ? 65536 : o->cap;
  while (c < o->n + k) c *= 2;
- uint8_t *nb = ai_alloc(NULL, c);
+ uint8_t *nb = alloc(NULL, c);
  if (!nb) return 0;
  if (o->n) memcpy(nb, o->b, o->n);
- if (o->b) ai_alloc(o->b, 0);
+ if (o->b) alloc(o->b, 0);
  o->b = nb; o->cap = c; return 1; }
 
 // decode until `lim` bytes stand in the output or, with eopm, the end marker says so.
-// -> 1 done, 2 the marker seen, 0 corrupt. a match may not run past lim.
+// -> 1 done, 2 the marker seen, 0 corrupt. a match may not run past lim. the coder, the
+// state and rep0 ride locals, back in r and m at the end for the next chunk; the other reps
+// move only on a rep, and stay in m.
 static int lz_run(struct lz_model *m, struct lz_rd *r, struct lz_out *o, uintptr_t lim, int eopm) {
- unsigned pbm = (1u << m->pb) - 1, lpm = (1u << m->lp) - 1;
- while (o->n < lim || eopm) {
-  uintptr_t pos = o->n;
-  unsigned ps = pos & pbm, st = m->state;
-  if (r->bad) return 0;
-  if (!rd_bit(r, &m->ismatch[st][ps])) {
-   unsigned prev = pos > o->base ? o->b[pos - 1] : 0;
-   lzp *p = m->lit + 0x300 * (((pos & lpm) << m->lc) + (prev >> (8 - m->lc)));
-   unsigned s = 1;
-   if (st >= 7) {
-    if (pos - o->base <= m->reps[0]) return 0;
-    unsigned mb = o->b[pos - m->reps[0] - 1];
+ uintptr_t rg = r->range, cd = r->code, st = m->state, r0 = m->reps[0], n = o->n, b, len, d;
+ const uint8_t *ip = r->p;
+ uint8_t *ob = o->b;
+ int rc = 1;
+ if (r->bad) ip = r->e + 1;
+ if (eopm) lim = ~(uintptr_t) 0;
+ while (n < lim) {
+  uintptr_t ps = n & (((uintptr_t) 1 << m->pb) - 1);
+  if (ip > r->e) { rc = 0; break; }
+  LZ_BIT(&m->ismatch[st][ps], b)
+  if (!b) {
+   if (n >= o->cap) {
+    o->n = n;
+    if (!out_room(o, 1)) { rc = 0; break; }
+    ob = o->b; }
+   uintptr_t prev = n > o->base ? ob[n - 1] : 0, s = 1;
+   lzp *p = m->lit + 0x300 * (((n & (((uintptr_t) 1 << m->lp) - 1)) << m->lc) + (prev >> (8 - m->lc)));
+   if (st >= 7) {                                 // led by the byte at rep0 while the bits agree:
+    if (n - o->base <= r0) { rc = 0; break; }     // off stays 0x100 until one differs, then 0
+    uintptr_t mb = ob[n - r0 - 1], off = 0x100, mbit;
     while (s < 0x100) {
-     unsigned mbit = (mb >> 7) & 1, b;
-     mb <<= 1;
-     b = rd_bit(r, p + 0x100 + (mbit << 8) + s);
-     s = s << 1 | b;
-     if (b != mbit) break; } }
-   while (s < 0x100) s = s << 1 | rd_bit(r, p + s);
-   if (!out_room(o, 1)) return 0;
-   o->b[o->n++] = (uint8_t) s;
-   m->state = lz_litst(st);
+     mb <<= 1, mbit = mb & off;
+     LZ_BITF(p + off + mbit + s, b)
+     s = s << 1 | b, off &= (0 - b) ^ ~mbit; } }
+   else while (s < 0x100) { LZ_BITF(p + s, b) s = s << 1 | b; }
+   ob[n++] = (uint8_t) s;
+   st = st < 4 ? 0 : st < 10 ? st - 3 : st - 6;
    continue; }
-  unsigned len;
-  if (!rd_bit(r, &m->isrep[st])) {
-   len = rd_len(r, &m->len, ps);
-   m->state = st < 7 ? 7 : 10;
-   unsigned ls = len < 3 ? len : 3, slot = rd_tree(r, m->slot[ls], 6);
-   uint32_t d = slot;
+  LZ_BIT(&m->isrep[st], b)
+  if (!b) {
+   LZ_LEN(&m->len, ps, len)
+   st = st < 7 ? 7 : 10;
+   uintptr_t slot, v;
+   LZ_TREE(m->slot[len < 3 ? len : 3], 6, slot)
+   d = slot;
    if (slot >= 4) {
-    unsigned fb = (slot >> 1) - 1;
+    uintptr_t fb = (slot >> 1) - 1;
     d = (2 | (slot & 1)) << fb;
-    if (slot < 14) d += rd_rtree(r, m->spec + d - slot - 1, fb);
-    else d += rd_direct(r, fb - 4) << 4, d += rd_rtree(r, m->align, 4); }
-   if (d == 0xffffffffu) return eopm && !r->bad ? 2 : 0;
-   m->reps[3] = m->reps[2]; m->reps[2] = m->reps[1]; m->reps[1] = m->reps[0]; m->reps[0] = d; }
+    if (slot < 14) { LZ_RTREE(m->spec + d - slot - 1, fb, v) d += v; }
+    else {
+     v = 0;
+     for (uintptr_t k = fb - 4; k; k--) {         // the direct bits, half the range each
+      LZ_NORM()
+      rg >>= 1, b = cd >= rg;
+      cd -= rg & (0 - b), v = v << 1 | b; }
+     d += v << 4;
+     LZ_RTREE(m->align, 4, v) d += v; } }
+   if (d == 0xffffffffu) { rc = eopm && ip <= r->e ? 2 : 0; break; }
+   m->reps[3] = m->reps[2], m->reps[2] = m->reps[1], m->reps[1] = (uint32_t) r0, r0 = d; }
   else {
-   if (!rd_bit(r, &m->isg0[st])) {
-    if (!rd_bit(r, &m->isrep0l[st][ps])) {        // the short rep: one byte from rep0
-     if (pos - o->base <= m->reps[0] || !out_room(o, 1)) return 0;
-     o->b[o->n] = o->b[pos - m->reps[0] - 1]; o->n++;
-     m->state = st < 7 ? 9 : 11;
+   LZ_BIT(&m->isg0[st], b)
+   if (!b) {
+    LZ_BIT(&m->isrep0l[st][ps], b)
+    if (!b) {                                     // the short rep: one byte from rep0
+     if (n - o->base <= r0) { rc = 0; break; }
+     if (n >= o->cap) {
+      o->n = n;
+      if (!out_room(o, 1)) { rc = 0; break; }
+      ob = o->b; }
+     ob[n] = ob[n - r0 - 1], n++;
+     st = st < 7 ? 9 : 11;
      continue; } }
    else {
-    uint32_t d;
-    if (!rd_bit(r, &m->isg1[st])) d = m->reps[1];
+    LZ_BIT(&m->isg1[st], b)
+    if (!b) d = m->reps[1];
     else {
-     if (!rd_bit(r, &m->isg2[st])) d = m->reps[2];
-     else d = m->reps[3], m->reps[3] = m->reps[2];
+     LZ_BIT(&m->isg2[st], b)
+     if (!b) d = m->reps[2]; else d = m->reps[3], m->reps[3] = m->reps[2];
      m->reps[2] = m->reps[1]; }
-    m->reps[1] = m->reps[0]; m->reps[0] = d; }
-   len = rd_len(r, &m->rep, ps);
-   m->state = st < 7 ? 8 : 11; }
+    m->reps[1] = (uint32_t) r0, r0 = d; }
+   LZ_LEN(&m->rep, ps, len)
+   st = st < 7 ? 8 : 11; }
   len += LZ_MINLEN;
-  uint32_t d = m->reps[0];
-  if (pos - o->base <= d || r->bad) return 0;
-  if (!eopm && lim - pos < len) return 0;
-  if (!out_room(o, len)) return 0;
-  uint8_t *dp = o->b + pos, *sp = dp - d - 1;
-  for (unsigned k = 0; k < len; k++) dp[k] = sp[k];
-  o->n += len; }
- return 1; }
+  if (n - o->base <= r0 || ip > r->e || lim - n < len) { rc = 0; break; }
+  if (o->cap - n < len) {
+   o->n = n;
+   if (!out_room(o, len)) { rc = 0; break; }
+   ob = o->b; }
+  uint8_t *dp = ob + n, *sp = dp - r0 - 1, *de = dp + len;
+#if wideld
+  if (r0 >= 7 && o->cap - n >= len + 8)              // whole words, the last running into room
+   for (; dp < de; dp += 8, sp += 8) st64(dp, ld64(sp));
+  else
+#endif
+  for (; dp < de; dp++, sp++) *dp = *sp;
+  n += len; }
+ r->range = (uint32_t) rg, r->code = (uint32_t) cd, r->bad = ip > r->e, r->p = r->bad ? r->e : ip;
+ m->state = (unsigned) st, m->reps[0] = (uint32_t) r0;
+ o->n = n;
+ return rc; }
 
 // --- LZMA2: the chunk walk ------------------------------------------------------------------
 // the header pass alone sizes the output and finds the end byte; -> total bytes, *end the
@@ -325,92 +353,219 @@ static void xe_rep(struct lz_model *m, struct lz_rc *e, uintptr_t p, unsigned id
  rc_len(e, &m->rep, ps, len - LZ_MINLEN);
  m->state = st < 7 ? 8 : 11; }
 
-// --- the match finder: a hash chain over the whole input, the window its dict --------------
-#define XE_HBITS 16
+// --- the match finder: a binary tree over the whole input, the window its dict -------------
+// each position under a 4-byte hash roots a tree of the earlier ones sharing it, ordered by
+// what follows them, so one walk down finds the longest matches and re-roots the tree at the
+// new position. 2- and 3-byte heads find the nearest short ones. entries are position + 1.
+#define XE_H4BITS 20
 #define XE_DEPTH 48
 #define XE_NICE 96
+#define XE_MAXM 64
 
-struct xe_mf { const uint8_t *s; uintptr_t n; uint32_t *head, *prev, wmask, dict; uintptr_t ins;
-               uintptr_t cpos; unsigned clen, clen1; uint32_t cdist, cdist1; };
+struct xe_mf { const uint8_t *s; uintptr_t n; uint32_t *h2, *h3, *h4, *son, wmask, dict; uintptr_t ins; };
 
-static uint32_t xe_hash(const uint8_t *s) {
- return ((uint32_t) s[0] << 16 ^ (uint32_t) s[1] << 8 ^ s[2]) * 2654435761u >> (32 - XE_HBITS); }
-
-static void xe_ins(struct xe_mf *f, uintptr_t upto) {    // index every position below upto
- for (; f->ins < upto && f->ins + 3 <= f->n; f->ins++) {
-  uint32_t h = xe_hash(f->s + f->ins);
-  f->prev[f->ins & f->wmask] = f->head[h];
-  f->head[h] = (uint32_t) f->ins + 1; }
- if (f->ins < upto) f->ins = upto; }
+static uint32_t xe_h3(const uint8_t *s) { return ((uint32_t) s[0] << 16 ^ (uint32_t) s[1] << 8 ^ s[2]) * 2654435761u >> 16; }
+static uint32_t xe_h4(const uint8_t *s) {
+ return ((uint32_t) s[0] | (uint32_t) s[1] << 8 | (uint32_t) s[2] << 16 | (uint32_t) s[3] << 24) * 2654435761u >> (32 - XE_H4BITS); }
 
 static unsigned xe_mlen(const uint8_t *a, const uint8_t *b, unsigned lim) {
  unsigned k = 0;
  while (k < lim && a[k] == b[k]) k++;
  return k; }
 
-// the longest match at p within avail -> len (0 for none under 3), its distance, and the
-// best before it (nearer, shorter), so the parse can trade a byte for a much shorter reach.
-static unsigned xe_find(struct xe_mf *f, uintptr_t p, unsigned avail, uint32_t *dist,
-                        unsigned *len1, uint32_t *dist1) {
- if (f->cpos == p + 1) { *dist = f->cdist; *len1 = f->clen1; *dist1 = f->cdist1; return f->clen; }
- unsigned best = 0, b1 = 0;
- uint32_t bd = 0, bd1 = 0;
- if (avail >= 3 && p + 3 <= f->n) {
-  xe_ins(f, p);
-  uint32_t c = f->head[xe_hash(f->s + p)];
-  unsigned depth = XE_DEPTH;
-  while (c && depth--) {
-   uintptr_t q = c - 1;
-   if (p - q > f->dict || p - q > f->wmask) break;
-   if (f->s[q + best] == f->s[p + best] || best < 3) {
-    unsigned l = xe_mlen(f->s + q, f->s + p, avail);
-    if (l > best) {
-     b1 = best, bd1 = bd;
-     best = l; bd = (uint32_t) (p - q - 1);
-     if (l >= XE_NICE || l == avail) break; } }
-   uint32_t nx = f->prev[q & f->wmask];
-   if (nx >= c) break;
-   c = nx; }
-  xe_ins(f, p + 1); }
- if (best < 3) best = 0;
- f->cpos = p + 1; f->clen = best; f->cdist = bd; f->clen1 = b1; f->cdist1 = bd1;
- *dist = bd; *len1 = b1; *dist1 = bd1;
- return best; }
+// position p into the heads and its tree; with ls, every match longer than the nearer ones
+// (lengths rising in ls, distances less one in ds) -> how many. lim the bytes p may match.
+static unsigned xe_bt(struct xe_mf *f, uintptr_t p, unsigned lim, uint32_t *ls, uint32_t *ds) {
+ const uint8_t *s = f->s, *sp = s + p;
+ unsigned k = 0, best = 1;
+ uintptr_t reach = f->dict < f->wmask ? f->dict : f->wmask;
+ if (p + 2 > f->n) return 0;
+ uint32_t h2 = (uint32_t) sp[0] | (uint32_t) sp[1] << 8, c2 = f->h2[h2];
+ f->h2[h2] = (uint32_t) p + 1;
+ if (ls && c2 && p - (c2 - 1) <= reach && lim >= 2 && s[c2 - 1] == sp[0] && s[c2] == sp[1])
+  best = 2, ls[0] = 2, ds[0] = (uint32_t) (p - c2), k = 1;
+ if (p + 3 > f->n) return k;
+ uint32_t h3 = xe_h3(sp), c3 = f->h3[h3];
+ f->h3[h3] = (uint32_t) p + 1;
+ if (ls && c3 && p - (c3 - 1) <= reach && lim >= 3) {
+  unsigned l = xe_mlen(s + c3 - 1, sp, lim);
+  if (l >= 3) {
+   if (k && ds[0] == p - c3) k = 0;               // the same match, longer
+   best = l, ls[k] = l, ds[k] = (uint32_t) (p - c3), k++; } }
+ if (p + 4 > f->n) return k;
+ uint32_t h4 = xe_h4(sp), c = f->h4[h4];
+ f->h4[h4] = (uint32_t) p + 1;
+ uint32_t *lo = f->son + 2 * (p & f->wmask), *hi = lo + 1;   // the new root's two sides
+ unsigned llo = 0, lhi = 0, depth = XE_DEPTH, cut = lim < XE_NICE ? lim : XE_NICE;
+ for (;;) {
+  uintptr_t q = c - 1;
+  if (!c || p - q > reach || !depth--) { *lo = *hi = 0; break; }
+  uint32_t *pair = f->son + 2 * (q & f->wmask);
+  unsigned l = llo < lhi ? llo : lhi;
+  l += xe_mlen(s + q + l, sp + l, cut - l);
+  if (l > best && ls && k < XE_MAXM) {
+   if (k && ds[k - 1] == p - q - 1) k--;
+   best = l, ls[k] = l, ds[k] = (uint32_t) (p - q - 1), k++; }
+  if (l >= cut) { *lo = pair[0], *hi = pair[1]; break; }    // its subtrees become the root's
+  if (s[q + l] < sp[l]) *lo = c, lo = pair + 1, c = *lo, llo = l;
+  else *hi = c, hi = pair, c = *hi, lhi = l; }
+ return k; }
 
-#define XE_CHANGE(small, big) (((big) >> 7) > (small))
+// index every position below upto that is not yet, with no matches asked
+static void xe_ins(struct xe_mf *f, uintptr_t upto) {
+ for (; f->ins < upto; f->ins++) {
+  uintptr_t left = f->n - f->ins;
+  xe_bt(f, f->ins, left > LZ_MAXLEN ? LZ_MAXLEN : (unsigned) left, NULL, NULL); } }
 
-// -> 0 a literal, else the length; *kind 0..3 a rep, 4 a match (*d its distance)
-static unsigned xe_parse(struct lz_model *m, struct xe_mf *f, uintptr_t p, unsigned avail,
-                         unsigned *kind, uint32_t *d) {
+// the matches at p -> how many; a position a plan that ran further indexed already has none
+static unsigned xe_all(struct xe_mf *f, uintptr_t p, unsigned avail, uint32_t *ls, uint32_t *ds) {
+ xe_ins(f, p);
+ if (f->ins != p) return 0;
+ f->ins = p + 1;
+ return xe_bt(f, p, avail, ls, ds); }
+
+// --- prices, in 16ths of a bit, off the model as it stands -----------------------------------
+#define XP_INF 0x3fffffffu
+#define XP_LENS (LZ_MAXLEN - LZ_MINLEN + 1)
+struct xe_px {
+ uint16_t bit[128];                               // a bit's price by its prob's top 7 bits
+ uint32_t len[4][XP_LENS], rep[4][XP_LENS];       // by posstate
+ uint32_t slot[4][64], dist[4][128], align[16];   // by the length's state, min(len - 2, 3)
+ unsigned left; };                                // ops until the tables are priced again
+
+static void xp_init(struct xe_px *x) {             // -log2 by squaring: four fraction bits
+ for (uint32_t i = 0; i < 128; i++) {
+  uint32_t w = i << 4 | 8, e = 0;
+  for (int j = 0; j < 4; j++) { w = w * w, e <<= 1; while (w >= (1u << 16)) w >>= 1, e++; }
+  x->bit[i] = (uint16_t) ((11 << 4) - 15 - e); }
+ x->left = 0; }
+static uint32_t xp_bit(const struct xe_px *x, lzp p, unsigned b) { return x->bit[(b ? LZ_ONE - p : p) >> 4]; }
+static uint32_t xp_tree(const struct xe_px *x, const lzp *p, unsigned n, unsigned v) {
+ uint32_t c = 0;
+ for (unsigned m = 1; n--; ) { unsigned b = (v >> n) & 1; c += xp_bit(x, p[m], b); m = m << 1 | b; }
+ return c; }
+static uint32_t xp_rtree(const struct xe_px *x, const lzp *p, unsigned n, unsigned v) {
+ uint32_t c = 0;
+ for (unsigned m = 1; n--; v >>= 1) { unsigned b = v & 1; c += xp_bit(x, p[m], b); m = m << 1 | b; }
+ return c; }
+static void xp_lens(const struct xe_px *x, const struct lz_len *l, uint32_t t[4][XP_LENS]) {
+ uint32_t c0 = xp_bit(x, l->choice, 0), c1 = xp_bit(x, l->choice, 1);
+ uint32_t c10 = c1 + xp_bit(x, l->choice2, 0), c11 = c1 + xp_bit(x, l->choice2, 1);
+ for (unsigned ps = 0; ps < 4; ps++)
+  for (unsigned v = 0; v < XP_LENS; v++)
+   t[ps][v] = v < 8 ? c0 + xp_tree(x, l->low[ps], 3, v)
+            : v < 16 ? c10 + xp_tree(x, l->mid[ps], 3, v - 8) : c11 + xp_tree(x, l->high, 8, v - 16); }
+static void xp_price(struct xe_px *x, const struct lz_model *m) {
+ xp_lens(x, &m->len, x->len), xp_lens(x, &m->rep, x->rep);
+ for (unsigned ls = 0; ls < 4; ls++) {
+  for (unsigned sl = 0; sl < 64; sl++)            // the direct bits ride the slot, a bit each
+   x->slot[ls][sl] = xp_tree(x, m->slot[ls], 6, sl) + (sl >= 14 ? ((sl >> 1) - 5) << 4 : 0);
+  for (uint32_t d = 0; d < 128; d++) {
+   unsigned sl = xe_slot(d), fb = (sl >> 1) - 1;
+   uint32_t base = (2 | (sl & 1)) << fb;
+   x->dist[ls][d] = x->slot[ls][sl] + (sl >= 4 ? xp_rtree(x, m->spec + base - sl - 1, fb, d - base) : 0); } }
+ for (unsigned i = 0; i < 16; i++) x->align[i] = xp_rtree(x, m->align, 4, i);
+ x->left = 256; }
+static uint32_t xp_dist(const struct xe_px *x, uint32_t d, unsigned len) {
+ unsigned ls = len - LZ_MINLEN < 3 ? len - LZ_MINLEN : 3;
+ if (d < 128) return x->dist[ls][d];
+ unsigned sl = xe_slot(d), fb = (sl >> 1) - 1;
+ return x->slot[ls][sl] + x->align[(d - ((2 | (sl & 1)) << fb)) & 15]; }
+static uint32_t xp_lit(const struct xe_px *x, const struct lz_model *m, unsigned st, const uint8_t *s,
+                       uintptr_t p, uint32_t r0) {
+ const lzp *pr = m->lit + 0x300 * ((p ? s[p - 1] : 0) >> 5);
+ if (st < 7) return xp_tree(x, pr, 8, s[p]);
+ unsigned mb = s[p - r0 - 1], off = 0x100, sym = s[p] | 0x100;
+ uint32_t c = 0;
+ do {
+  mb <<= 1;
+  c += xp_bit(x, pr[off + (mb & off) + (sym >> 8)], (sym >> 7) & 1);
+  sym <<= 1, off &= ~(mb ^ sym); } while (sym < 0x10000);
+ return c; }
+
+// --- the optimal parse: the cheapest way through the next stretch, priced ---------------------
+// node i is the input i bytes on: its cheapest price from the plan's start, the op that reached
+// it (back: a rep 0..3, a match's distance + 4, XB_LIT or XB_SHORT) from node prev, and the
+// state and reps that path leaves. a plan runs until no op from a node reached so far reaches
+// further, or a match at nice length is taken whole, or XE_OPTS.
+#define XE_OPTS 2048
+#define XB_LIT 0xffffffffu
+#define XB_SHORT 0xfffffffeu
+struct xe_node { uint32_t price, back, reps[4]; uint16_t prev, len; uint8_t state; };
+struct xe_op { uint32_t back, len; };
+
+static void xn_take(struct xe_node *nd, uint32_t i, uint32_t price, uint32_t from, uint32_t back) {
+ if (price < nd[i].price) nd[i].price = price, nd[i].prev = (uint16_t) from, nd[i].back = back; }
+static void xn_state(struct xe_node *nd, uint32_t i) {   // node i's state and reps, off its op
+ struct xe_node *a = nd + nd[i].prev, *b = nd + i;
+ unsigned st = a->state;
+ memcpy(b->reps, a->reps, sizeof b->reps);
+ if (b->back == XB_LIT) b->state = (uint8_t) lz_litst(st);
+ else if (b->back == XB_SHORT) b->state = st < 7 ? 9 : 11;
+ else if (b->back < 4) {
+  uint32_t d = a->reps[b->back];
+  for (unsigned k = b->back; k; k--) b->reps[k] = b->reps[k - 1];
+  b->reps[0] = d, b->state = st < 7 ? 8 : 11; }
+ else {
+  b->reps[3] = b->reps[2], b->reps[2] = b->reps[1], b->reps[1] = b->reps[0];
+  b->reps[0] = b->back - 4, b->state = st < 7 ? 7 : 10; } }
+
+// -> how many ops, in ops, to cover the stretch from p (avail bytes on at most)
+static unsigned xe_plan(struct lz_model *m, struct xe_mf *f, struct xe_px *x, struct xe_node *nd,
+                        struct xe_op *ops, uint32_t *ls, uint32_t *ds, uintptr_t p, uintptr_t end) {
  const uint8_t *s = f->s;
- unsigned rl = 0, ri = 0;
- if (avail < 2) return 0;
- for (unsigned i = 0; i < 4; i++) {
-  if (p <= m->reps[i]) continue;
-  const uint8_t *q = s + p - m->reps[i] - 1;
-  if (q[0] != s[p] || q[1] != s[p + 1]) continue;
-  unsigned l = xe_mlen(q, s + p, avail);
-  if (l > rl) rl = l, ri = i; }
- if (rl >= XE_NICE) { *kind = ri; xe_ins(f, p + 1); return rl; }
- unsigned l1; uint32_t d1;
- uint32_t md;
- unsigned ml = xe_find(f, p, avail, &md, &l1, &d1);
- if (ml >= XE_NICE) { *kind = 4; *d = md; return ml; }
- if (ml && l1 + 1 == ml && l1 >= 3 && XE_CHANGE(d1, md)) ml = l1, md = d1;
- if (ml == 3 && md >= 0x8000) ml = 0;              // a far triple costs more than its bytes
- if (rl >= 2 && (rl + 1 >= ml || (rl + 2 >= ml && md >= 0x200) || (rl + 3 >= ml && md >= 0x8000))) {
-  *kind = ri; return rl; }
- if (!ml) return 0;
- if (avail > ml + 1 && ml < 64) {                 // the lazy look, one byte on
-  unsigned nl1; uint32_t nd, nd1;
-  unsigned nl = xe_find(f, p + 1, avail - 1, &nd, &nl1, &nd1);
-  if (nl && ((nl >= ml && nd < md) || (nl == ml + 1 && !XE_CHANGE(md, nd))
-             || nl > ml + 1 || (nl + 1 >= ml && ml >= 3 && XE_CHANGE(nd, md))))
-   return 0;
-  unsigned lim = ml > 3 ? ml - 1 : 2;
-  for (unsigned i = 0; i < 4; i++)
-   if (p + 1 > m->reps[i] && xe_mlen(s + p + 1, s + p - m->reps[i], lim) == lim) return 0; }
- *kind = 4; *d = md; return ml; }
+ uint32_t end_ = 0, cur;
+ nd[0].price = 0, nd[0].state = (uint8_t) m->state, memcpy(nd[0].reps, m->reps, sizeof nd[0].reps);
+ for (cur = 0; ; cur++) {
+  uintptr_t q = p + cur;
+  if (cur && cur == end_) break;
+  if (cur) xn_state(nd, cur);
+  if (q >= end || cur >= XE_OPTS) { end_ = cur; break; }
+  unsigned avail = end - q > LZ_MAXLEN ? LZ_MAXLEN : (unsigned) (end - q);
+  struct xe_node *c = nd + cur;
+  unsigned st = c->state, ps = q & XE_PBM;
+  uint32_t base = c->price, pm1 = base + xp_bit(x, m->ismatch[st][ps], 1);
+  uint32_t prep = pm1 + xp_bit(x, m->isrep[st], 1);
+  // the literal, and rep0 for one byte
+  if (end_ < cur + 1) nd[++end_].price = XP_INF;
+  xn_take(nd, cur + 1, base + xp_bit(x, m->ismatch[st][ps], 0) + xp_lit(x, m, st, s, q, c->reps[0]),
+          cur, XB_LIT);
+  if (q > c->reps[0] && s[q] == s[q - c->reps[0] - 1])
+   xn_take(nd, cur + 1, prep + xp_bit(x, m->isg0[st], 0) + xp_bit(x, m->isrep0l[st][ps], 0), cur, XB_SHORT);
+  // the reps
+  unsigned rl[4], rmax = 0, ri = 0;
+  for (unsigned i = 0; i < 4; i++) {
+   rl[i] = 0;
+   if (avail < 2 || q <= c->reps[i]) continue;
+   const uint8_t *r = s + q - c->reps[i] - 1;
+   if (r[0] == s[q] && r[1] == s[q + 1]) rl[i] = xe_mlen(r, s + q, avail);
+   if (rl[i] > rmax) rmax = rl[i], ri = i; }
+  // the matches, from the finder; one at nice length (or a rep) is taken whole
+  unsigned k = xe_all(f, q, avail, ls, ds), ml = k ? ls[k - 1] : 0;
+  if (rmax >= XE_NICE || ml >= XE_NICE) {
+   uint32_t L = rmax >= ml ? rmax : ml;
+   while (end_ < cur + L) nd[++end_].price = XP_INF;
+   nd[cur + L].price = 0, nd[cur + L].prev = (uint16_t) cur;
+   nd[cur + L].back = rmax >= ml ? ri : ds[k - 1] + 4;
+   end_ = cur + L; cur = end_; break; }
+  uint32_t top = cur + (rmax > ml ? rmax : ml);
+  while (end_ < top) nd[++end_].price = XP_INF;
+  for (unsigned i = 0; i < 4; i++) {
+   if (rl[i] < 2) continue;
+   uint32_t pr = prep + (i == 0 ? xp_bit(x, m->isg0[st], 0) + xp_bit(x, m->isrep0l[st][ps], 1)
+                       : xp_bit(x, m->isg0[st], 1) + (i == 1 ? xp_bit(x, m->isg1[st], 0)
+                         : xp_bit(x, m->isg1[st], 1) + xp_bit(x, m->isg2[st], i == 3)));
+   for (unsigned L = 2; L <= rl[i]; L++) xn_take(nd, cur + L, pr + x->rep[ps][L - 2], cur, i); }
+  uint32_t pmat = pm1 + xp_bit(x, m->isrep[st], 0);
+  for (unsigned j = 0, L = 2; j < k; j++)
+   for (; L <= ls[j]; L++)
+    xn_take(nd, cur + L, pmat + x->len[ps][L - 2] + xp_dist(x, ds[j], L), cur, ds[j] + 4); }
+ // back from the end, the ops in order
+ unsigned n = 0;
+ for (uint32_t i = cur; i; i = nd[i].prev) nd[i].len = (uint16_t) (i - nd[i].prev), n++;
+ unsigned k = n;
+ for (uint32_t i = cur; i; i = nd[i].prev) k--, ops[k].back = nd[i].back, ops[k].len = nd[i].len;
+ return n; }
 
 // the whole stream into out (cap bytes, sized by the caller for the worst case) -> its
 // length, or -1. a chunk is coded speculatively into cs; one that does not shrink goes raw.
@@ -418,29 +573,38 @@ static unsigned xe_parse(struct lz_model *m, struct xe_mf *f, uintptr_t p, unsig
 #define XE_CC 65536u
 #define XE_CSLACK 256u
 
-struct xe_arena { struct lz_model m; lzp lit[0x300 << 3]; uint8_t cs[XE_CC + XE_CSLACK]; uint32_t head[1u << XE_HBITS]; };
+struct xe_arena { struct lz_model m; lzp lit[0x300 << 3]; uint8_t cs[XE_CC + XE_CSLACK];
+                  uint32_t h2[1u << 16], h3[1u << 16], h4[1u << XE_H4BITS];
+                  struct xe_px px; struct xe_node nd[XE_OPTS + LZ_MAXLEN + 2]; struct xe_op ops[XE_OPTS + 1];
+                  uint32_t ls[XE_MAXM], ds[XE_MAXM]; };
 
 static int64_t xe_go(const uint8_t *s, uintptr_t n, uint32_t dict, uint8_t *out, uintptr_t cap,
-                     struct xe_arena *a, uint32_t *prev, uint32_t wmask) {
+                     struct xe_arena *a, uint32_t *son, uint32_t wmask) {
  struct lz_model *m = &a->m;
- struct xe_mf f = { s, n, a->head, prev, wmask, dict, 0, 0, 0, 0, 0, 0 };
+ struct xe_mf f = { s, n, a->h2, a->h3, a->h4, son, wmask, dict, 0 };
  uintptr_t p = 0, o = 0;
  int first = 1, needprops = 1, needstate = 1;
- memset(a->head, 0, sizeof a->head);
+ memset(a->h2, 0, sizeof a->h2), memset(a->h3, 0, sizeof a->h3), memset(a->h4, 0, sizeof a->h4);
  m->lit = a->lit; m->lc = 3; m->lp = 0; m->pb = 2;
+ xp_init(&a->px);
  while (p < n) {
   uintptr_t start = p, uend = n - p > XE_CU ? p + XE_CU : n;
   unsigned rst = first ? 3 : needprops ? 2 : needstate ? 1 : 0;
   struct lz_rc e;
-  if (rst) lz_reset(m);
+  if (rst) lz_reset(m), a->px.left = 0;
   rc_init(&e, a->cs, sizeof a->cs);
+  unsigned pn = 0, pi = 0;                         // a plan holds within its chunk
   while (p < uend && rc_size(&e) < XE_CC - XE_CSLACK) {
-   unsigned avail = uend - p > LZ_MAXLEN ? LZ_MAXLEN : (unsigned) (uend - p), kind = 0;
-   uint32_t d = 0;
-   unsigned l = xe_parse(m, &f, p, avail, &kind, &d);
-   if (!l) { xe_lit(m, &e, s, p); p++; continue; }
-   if (kind == 4) xe_match(m, &e, p, d, l); else xe_rep(m, &e, p, kind, l);
-   p += l;
+   if (pi == pn) {
+    if (!a->px.left) xp_price(&a->px, m);
+    pn = xe_plan(m, &f, &a->px, a->nd, a->ops, a->ls, a->ds, p, uend), pi = 0; }
+   struct xe_op *op = a->ops + pi++;
+   if (a->px.left) a->px.left--;
+   if (op->back == XB_LIT) xe_lit(m, &e, s, p);
+   else if (op->back == XB_SHORT) xe_rep(m, &e, p, 0, 1);
+   else if (op->back < 4) xe_rep(m, &e, p, op->back, op->len);
+   else xe_match(m, &e, p, op->back - 4, op->len);
+   p += op->len;
    xe_ins(&f, p); }
   rc_flush(&e);
   uintptr_t u = p - start, c = e.n;
@@ -523,15 +687,15 @@ static intptr_t l2_step(struct l2_st *S, uint8_t *win, const uint8_t *s, uintptr
  *o0 = S->n, S->n = o.n;
  return (intptr_t) u; }
 
-// the lzma model with room for lc + lp up to lim, from ai_alloc -> or NULL
+// the lzma model with room for lc + lp up to lim, from alloc -> or NULL
 static struct lz_model *lz_new(unsigned lclp) {
- struct lz_model *m = ai_alloc(NULL, sizeof *m + ((uintptr_t) 0x300 << lclp) * sizeof(lzp));
+ struct lz_model *m = alloc(NULL, sizeof *m + ((uintptr_t) 0x300 << lclp) * sizeof(lzp));
  if (m) m->lit = (lzp*) (m + 1);
  return m; }
 
 #ifndef XZ_STANDALONE
 // ===== the nifs: str0 may collect, so a string is re-read off the stack after it =====
-ai_noinline static struct ai *host_lzma2len(struct ai *g) {
+love_noinline static struct g *host_lzma2len(struct g *g) {
  word sw = g->sp[0];
  uintptr_t end;
  g->sp[0] = strp(sw) && l2_walk((const uint8_t*) txt(sw), len(sw), &end) >= 0
@@ -540,49 +704,50 @@ ai_noinline static struct ai *host_lzma2len(struct ai *g) {
 
 // a raw LZMA2 stream into exactly cap bytes of out, for a C caller with no g (src/love/lib/srctree.c)
 // -> cap, or -1 for one that is torn or says more or less than that
-intptr_t ai_lzma2_into(unsigned char const *s, uintptr_t n, unsigned char *out, uintptr_t cap) {
+intptr_t lzma2_into(unsigned char const *s, uintptr_t n, unsigned char *out, uintptr_t cap) {
  uintptr_t end;
  if (l2_walk(s, n, &end) != (int64_t) cap) return -1;
  struct lz_model *m = lz_new(4);
  int ok = m && !l2_dec(s, out, cap, m);
- if (m) ai_alloc(m, 0);
+ if (m) alloc(m, 0);
  return ok ? (intptr_t) cap : -1; }
 
-ai_noinline static struct ai *host_lzma2d(struct ai *g) {
+love_noinline static struct g *host_lzma2d(struct g *g) {
  word sw = g->sp[0];
  uintptr_t end;
  int64_t want = strp(sw) ? l2_walk((const uint8_t*) txt(sw), len(sw), &end) : -1;
  if (want < 0) { g->sp[0] = ZeroPoint; return g; }
  if ((uint64_t) want > XZ_MAX) { g->sp[0] = putcharm(1); return g; }
- if (!ai_ok(g = str0(g, (uintptr_t) want))) return g;   // pushes: out over s
+ if (!ok(g = str0(g, (uintptr_t) want))) return g;   // pushes: out over s
  struct lz_model *m = lz_new(4);
  int ok = m && !l2_dec((const uint8_t*) txt(g->sp[1]), (uint8_t*) txt(g->sp[0]), (uintptr_t) want, m);
- if (m) ai_alloc(m, 0);
+ if (m) alloc(m, 0);
  g->sp[1] = ok ? g->sp[0] : ZeroPoint;
  return g->sp++, g; }
 
-ai_noinline static struct ai *host_lzma2e(struct ai *g) {
+love_noinline static struct g *host_lzma2e(struct g *g) {
  word sw = g->sp[0], dw = g->sp[1];
  if (!strp(sw) || !oddp(dw) || getcharm(dw) < 4096 || getcharm(dw) > (1l << 30)) {
   g->sp[1] = ZeroPoint, g->sp += 1; return g; }
  uintptr_t n = len(sw), cap = xe_cap(n), w = 1;
- uint32_t dict = (uint32_t) getcharm(dw);
- while (w < dict && w < n) w <<= 1;
- struct xe_arena *a = ai_alloc(NULL, sizeof *a);
- uint32_t *prev = ai_alloc(NULL, w * sizeof *prev);
- uint8_t *out = ai_alloc(NULL, cap);
- int64_t got = a && prev && out
-               ? xe_go((const uint8_t*) txt(sw), n, dict, out, cap, a, prev, (uint32_t) (w - 1)) : -1;
- if (a) ai_alloc(a, 0);
- if (prev) ai_alloc(prev, 0);
- if (got >= 0 && ai_ok(g = str0(g, (uintptr_t) got))) {  // pushes: out over the two
+ uint32_t dict = (uint32_t) getcharm(dw), wmask;
+ if (n <= dict) w = n ? n : 1, wmask = ~(uint32_t) 0;      // the whole input in reach: no wrap
+ else { while (w < dict) w <<= 1; wmask = (uint32_t) (w - 1); }
+ struct xe_arena *a = alloc(NULL, sizeof *a);
+ uint32_t *son = alloc(NULL, 2 * w * sizeof *son);
+ uint8_t *out = alloc(NULL, cap);
+ int64_t got = a && son && out
+               ? xe_go((const uint8_t*) txt(sw), n, dict, out, cap, a, son, wmask) : -1;
+ if (a) alloc(a, 0);
+ if (son) alloc(son, 0);
+ if (got >= 0 && ok(g = str0(g, (uintptr_t) got))) {  // pushes: out over the two
   memcpy(txt(g->sp[0]), out, (size_t) got);
   g->sp[2] = g->sp[0], g->sp += 2; }
- else if (ai_ok(g)) g->sp[1] = ZeroPoint, g->sp += 1;
- if (out) ai_alloc(out, 0);
+ else if (ok(g)) g->sp[1] = ZeroPoint, g->sp += 1;
+ if (out) alloc(out, 0);
  return g; }
 
-ai_noinline static struct ai *host_lzmad(struct ai *g) {
+love_noinline static struct g *host_lzmad(struct g *g) {
  word sw = g->sp[0], pw = g->sp[1], nw = g->sp[3];
  struct lz_model *m = NULL;
  struct lz_model pm;
@@ -596,39 +761,39 @@ ai_noinline static struct ai *host_lzmad(struct ai *g) {
  struct lz_rd r;
  int rc = 0;
  if (want >= 0 && (uintptr_t) want > XZ_MAX) {
-  ai_alloc(m, 0);
+  alloc(m, 0);
   g->sp[3] = putcharm(1), g->sp += 3; return g; }
  if (want >= 0) {                                   // the size is known: straight into the string
-  if (!ai_ok(g = str0(g, (uintptr_t) want))) { ai_alloc(m, 0); return g; }
+  if (!ok(g = str0(g, (uintptr_t) want))) { alloc(m, 0); return g; }
   struct lz_out o = { (uint8_t*) txt(g->sp[0]), 0, (uintptr_t) want, 0, 0, 0 };
   const uint8_t *s = (const uint8_t*) txt(g->sp[1]);
   rc = rd_init(&r, s, s + len(g->sp[1])) && lz_run(m, &r, &o, (uintptr_t) want, 0) && !r.bad;
-  ai_alloc(m, 0);
+  alloc(m, 0);
   g->sp[4] = rc ? g->sp[0] : ZeroPoint, g->sp += 4;
   return g; }
  struct lz_out o = { NULL, 0, 0, 0, 1, 0 };
  const uint8_t *s = (const uint8_t*) txt(sw);
  rc = rd_init(&r, s, s + len(sw)) && lz_run(m, &r, &o, 0, 1) == 2;
- ai_alloc(m, 0);
- if (rc && ai_ok(g = str0(g, o.n))) {
+ alloc(m, 0);
+ if (rc && ok(g = str0(g, o.n))) {
   if (o.n) memcpy(txt(g->sp[0]), o.b, o.n);
   g->sp[4] = g->sp[0], g->sp += 4; }
- else if (ai_ok(g)) g->sp[3] = o.big ? putcharm(1) : ZeroPoint, g->sp += 3;
- if (o.b) ai_alloc(o.b, 0);
+ else if (ok(g)) g->sp[3] = o.big ? putcharm(1) : ZeroPoint, g->sp += 3;
+ if (o.b) alloc(o.b, 0);
  return g; }
 
-ai_noinline static struct ai *host_crc64(struct ai *g) {
+love_noinline static struct g *host_crc64(struct g *g) {
  if (!strp(g->sp[0])) { g->sp[0] = ZeroPoint; return g; }
- if (!ai_ok(g = str0(g, 8))) return g;
+ if (!ok(g = str0(g, 8))) return g;
  uint64_t c = xz_crc64((const uint8_t*) txt(g->sp[1]), len(g->sp[1]));
  for (int i = 0; i < 8; i++) ((uint8_t*) txt(g->sp[0]))[i] = (uint8_t) (c >> 8 * i);
  g->sp[1] = g->sp[0];
  return g->sp++, g; }
 
-ai_noinline static struct ai *host_crc64_on(struct ai *g) {
+love_noinline static struct g *host_crc64_on(struct g *g) {
  word cw = g->sp[0], sw = g->sp[1];
  if (!strp(cw) || len(cw) != 8 || !strp(sw)) return g->sp[1] = ZeroPoint, g->sp += 1, g;
- if (!ai_ok(g = str0(g, 8))) return g;              // pushes: out over c and s
+ if (!ok(g = str0(g, 8))) return g;              // pushes: out over c and s
  uint64_t c = 0;
  for (int i = 0; i < 8; i++) c |= (uint64_t) ((const uint8_t*) txt(g->sp[1]))[i] << 8 * i;
  c = xz_crc64_on(c, (const uint8_t*) txt(g->sp[2]), len(g->sp[2]));
@@ -636,34 +801,34 @@ ai_noinline static struct ai *host_crc64_on(struct ai *g) {
  return g->sp[2] = g->sp[0], g->sp += 2, g; }
 
 #define L2_HEAD ((sizeof(struct l2_st) + 7) & ~(uintptr_t) 7)
-static struct ai_str *l2_cask(word x) {
+static struct str *l2_cask(word x) {
  if (charmp(x) || ((union u*) x)->ap != lvm_cask) return NULL;
- struct ai_str *s = cask(x)->str;
+ struct str *s = cask(x)->str;
  struct l2_st *S = s && s->len > L2_HEAD ? (struct l2_st*) s->bytes : NULL;
  return S && S->magic == L2_MAGIC && S->cap == s->len - L2_HEAD ? s : NULL; }
-ai_noinline static struct ai *host_lzma2_new(struct ai *g) {
+love_noinline static struct g *host_lzma2_new(struct g *g) {
  word dw = g->sp[0];
  if (!oddp(dw) || getcharm(dw) < 4096 || (uintptr_t) getcharm(dw) > XZ_MAX) return g->sp[0] = ZeroPoint, g;
  uintptr_t dict = (uintptr_t) getcharm(dw), n = L2_HEAD + dict + L2_ROOM,
-           sreq = str_width(n), breq = Width(struct ai_cask) + Width(struct ai_tag);
- if (!ai_ok(g = ai_have(g, sreq + breq))) return g;
- struct ai_str *s = ini_str(bump(g, sreq), n);
+           sreq = str_width(n), breq = Width(struct cask) + Width(struct tag);
+ if (!ok(g = have(g, sreq + breq))) return g;
+ struct str *s = ini_str(bump(g, sreq), n);
  memset(s->bytes, 0, L2_HEAD);
  struct l2_st *S = (struct l2_st*) s->bytes;
  S->magic = L2_MAGIC, S->cap = dict + L2_ROOM, S->dict = dict, S->needdict = S->needprops = 1;
  union u *k = bump(g, breq);
  cask(k)->ap = lvm_cask, cask(k)->str = s;
- tagthread(k, Width(struct ai_cask));
+ tagthread(k, Width(struct cask));
  return g->sp[0] = word(k), g; }
-ai_noinline static struct ai *host_lzma2_chunk(struct ai *g) {
- struct ai_str *cs = l2_cask(g->sp[0]);
+love_noinline static struct g *host_lzma2_chunk(struct g *g) {
+ struct str *cs = l2_cask(g->sp[0]);
  if (!cs || !strp(g->sp[1])) return g->sp[1] = ZeroPoint, g->sp += 1, g;
  struct l2_st *S = (struct l2_st*) cs->bytes;
  S->m.lit = S->lit;                                 // the cask moves: the pointer is laid again
  uintptr_t o0 = 0;
  intptr_t got = l2_step(S, (uint8_t*) cs->bytes + L2_HEAD, (const uint8_t*) txt(g->sp[1]), len(g->sp[1]), &o0);
  if (got < 0) return g->sp[1] = ZeroPoint, g->sp += 1, g;
- if (!ai_ok(g = str0(g, (uintptr_t) got))) return g;   // pushes: out over st and c
+ if (!ok(g = str0(g, (uintptr_t) got))) return g;   // pushes: out over st and c
  memcpy(txt(g->sp[0]), l2_cask(g->sp[1])->bytes + L2_HEAD + o0, (uintptr_t) got);
  return g->sp[2] = g->sp[0], g->sp += 2, g; }
 

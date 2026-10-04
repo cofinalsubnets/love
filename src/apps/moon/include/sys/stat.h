@@ -1,5 +1,5 @@
-#ifndef _AI_SYS_STAT_H
-#define _AI_SYS_STAT_H
+#ifndef _LOVE_SYS_STAT_H
+#define _LOVE_SYS_STAT_H
 #include <time.h>       /* struct timespec */
 #include <sys/types.h>  /* mode_t etc -- POSIX says stat.h provides them (busybox leans on it) */
 #if defined(__aarch64__) || defined(__riscv)
@@ -87,7 +87,7 @@ struct stat {
  * this page has a seat for. the BSDs carry it in the stat they already do and linux
  * needs statx, so the question is asked once here and the kernel decided underneath.
  * -> 0 with *out filled | 1 where the filesystem keeps none | -1, errno set. */
-int __ai_birth(char const *path, int follow, struct timespec *out);
+int __love_birth(char const *path, int follow, struct timespec *out);
 int stat(char const*, struct stat*);
 int fstat(int, struct stat*);
 int lstat(char const*, struct stat*);

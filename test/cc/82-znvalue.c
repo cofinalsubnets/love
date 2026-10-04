@@ -1,4 +1,4 @@
-/* struct ai_zn by value, end to end: brace-init local + return by value (zn),
+/* struct love_zn by value, end to end: brace-init local + return by value (zn),
    param by value (nonpos), local from a call, member sums, nested call args,
    whole-struct assign from a call. */
 struct zn { double re, im; };

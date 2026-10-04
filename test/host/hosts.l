@@ -18,7 +18,9 @@
                       + "name bsd\nreach sh " + ht-d + "/ssh bsd\ncaps freebsd-x64\nos freebsd\n"))
    _ (setenv "BEE_HOSTS" (ht-d + "/hosts"))
    _ (setenv "BEE_LOCKS" (ht-d + "/locks"))
-   _ (setenv "KTEST_A64_HOSTS" "")
+   ; hermetic: no host the gate's env names (osbox-env's) takes a cap over this registry
+   _ (map (k \ setenv k "") ["KTEST_A64_HOSTS" "KTEST_A64_HOST" "KTEST_VMX_HOSTS"
+                              "FBSD_SSH" "NBSD_SSH" "FBSD_ARM64_SSH" "NBSD_ARM64_SSH"])
    (ht-names hs) (map (h \ h "name") hs)
    (ht-seq a b) (show a = show b)
    all (hosts-all 0)

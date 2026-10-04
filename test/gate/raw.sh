@@ -76,7 +76,7 @@ moonc() { LOVE_NO_IMAGE= "$m" mooncc $tflag "$@"; }
 
 for f in $gate_love_c $gate_host_c $gate_seat_c; do
   b=$(basename "$f" .c)
-  moonc -D ai_tco=1 -I"$ho" -I. -Isrc/love -Isrc/inle -Iout/lib -c "$f" "$d/$b.o" || fail "mooncc $tflag -c $f"
+  moonc -D tco=1 -I"$ho" -I. -Isrc/love -Isrc/inle -Iout/lib -c "$f" "$d/$b.o" || fail "mooncc $tflag -c $f"
 done
 
 # moonlibc is NOT compiled here: the link below owes its symbols and the driver's

@@ -129,4 +129,9 @@ int main(void) {
   say_n("strtod", (long) (e - cases[i])); }
  say_n("atof", (long) (atof("2.5") * 4.0));
 
+ /* strtod's special spellings: inf, infinity and nan (a (chars) tail), any case, signed */
+ { char const *sp[] = { "inf", "-INF", "infinity", "Infinityx", "nan", "NaN(abc)", "-nan", "infin", "nan(", "+inf" };
+   for (unsigned i = 0; i < sizeof sp / sizeof *sp; i++) {
+     char *e; double d = strtod(sp[i], &e); char t[32]; snprintf(t, sizeof t, "%g", d);
+     say_s(sp[i], t); say_n("  end", (long) (e - sp[i])); } }
  return 0; }

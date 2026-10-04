@@ -1,5 +1,5 @@
-#ifndef _AI_SYS_MTIO_H
-#define _AI_SYS_MTIO_H
+#ifndef _LOVE_SYS_MTIO_H
+#define _LOVE_SYS_MTIO_H
 /* freestanding sys/mtio.h for cc: magnetic-tape ioctls. the struct/op set tar's
  * rmt client speaks; values match linux <sys/mtio.h>. */
 #include <sys/ioctl.h>

@@ -201,7 +201,7 @@ static const uint8_t wl_clord[19] = { 17, 18, 0, 1, 2, 3, 4, 5, 16, 6, 7, 8, 9, 
 struct wp_mem { void *p[48]; int n; };
 static void *wp_new(struct wp_mem *m, uintptr_t n) {
  if (m->n == 48) return NULL;
- void *p = ai_alloc(NULL, n ? n : 1);
+ void *p = alloc(NULL, n ? n : 1);
  if (p) m->p[m->n++] = p;
  return p; }
 static void *wp_zero(struct wp_mem *m, uintptr_t n) {
@@ -209,8 +209,8 @@ static void *wp_zero(struct wp_mem *m, uintptr_t n) {
  return p ? memset(p, 0, n) : p; }
 static void wp_drop(struct wp_mem *m, void *p) {
  for (int i = 0; i < m->n; i++)
-  if (m->p[i] == p) { ai_alloc(p, 0), m->p[i] = m->p[--m->n]; return; } }
-static void wp_free(struct wp_mem *m) { while (m->n) ai_alloc(m->p[--m->n], 0); }
+  if (m->p[i] == p) { alloc(p, 0), m->p[i] = m->p[--m->n]; return; } }
+static void wp_free(struct wp_mem *m) { while (m->n) alloc(m->p[--m->n], 0); }
 
 static uint32_t rd16(const uint8_t *p) { return p[0] | (uint32_t) p[1] << 8; }
 static uint32_t rd24(const uint8_t *p) { return rd16(p) | (uint32_t) p[2] << 16; }
@@ -1061,7 +1061,7 @@ static int wp_decode(struct wp_mem *m, const uint8_t *s, uintptr_t n, struct wp_
    memcpy(o + ((uintptr_t) (f->fy + y) * f->w + f->fx) * 4, fr + (uintptr_t) y * f->fw * 4, (size_t) f->fw * 4);
  return *out = o, 0; }
 
-ai_noinline static struct ai *host_webpd(struct ai *g) {
+love_noinline static struct g *host_webpd(struct g *g) {
  struct wp_mem m;
  struct wp_info f;
  uint8_t *o = NULL;
@@ -1070,7 +1070,7 @@ ai_noinline static struct ai *host_webpd(struct ai *g) {
  int why = wp_decode(&m, (const uint8_t*) txt(g->sp[0]), len(g->sp[0]), &f, &o);
  if (why) return wp_free(&m), g->sp[0] = putcharm(why), g;
  uintptr_t k = (uintptr_t) f.w * f.h * 4;
- if (!ai_ok(g = str0(g, k))) return wp_free(&m), g;          // pushes: the rgba over s
+ if (!ok(g = str0(g, k))) return wp_free(&m), g;          // pushes: the rgba over s
  memcpy(txt(g->sp[0]), o, k), wp_free(&m);
  g->sp[1] = g->sp[0], g->sp += 1;
  return g; }
