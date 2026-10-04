@@ -838,18 +838,25 @@
    (gmsg g) (g 4)
    vla "int s(int n){ int a[n]; a[0]=1; return a[0]; }"
    big "struct b { long a,b,c,d,e; };\n"
+   v3 "struct v { double a,b,c; };\n"
    (test
       ; the C99 VLA: x64, a64 and rv64 carry the lane
       (okv? (cgt vla 'x64))
       (okv? (cgt vla 'a64))
       (okv? (cgt vla 'rv64))
-      ; a >16-byte struct by value: the two halves refuse separately and each
-      ; names which half it is -- passing and returning are different lanes
-      (cgt (big + "int t(struct b f){ return (int)f.a; }") 'a64 @ g
-       (gripe? g && (gmsg g = "no lane for passing this 40-byte struct by value on a64 (in t)")))
-      (cgt (big + "struct b m(long x){ struct b r; r.a=x; return r; }") 'a64 @ g
-       (gripe? g && (gmsg g = "no lane for returning this 40-byte struct by value on a64 (in m)")))
+      ; a >16-byte struct by value: AAPCS64's memory class (no HFA) carries both ways, x64's too
+      (okv? (cgt (big + "int t(struct b f){ return (int)f.a; }") 'a64))
+      (okv? (cgt (big + "struct b m(long x){ struct b r; r.a=x; return r; }") 'a64))
       (okv? (cgt (big + "int t(struct b f){ return (int)f.a; }") 'x64))
+      ; a64's logical immediate is a run of ones short of the word: 2^64-1 (a C ~0UL) materializes
+      (immok {'tgt 'a64} 'log 7) !(immok {'tgt 'a64} 'log 18446744073709551615)
+      (immok {'tgt 'a64} 'log 9223372036854775807)
+      ; ..but an HFA past 16 bytes rides the v registers on a64, which has no lane yet: the two
+      ; halves refuse separately and each names which half it is
+      (cgt (v3 + "int t(struct v f){ return (int)f.a; }") 'a64 @ g
+       (gripe? g && (gmsg g = "no lane for passing this 24-byte struct by value on a64 (in t)")))
+      (cgt (v3 + "struct v m(double x){ struct v r; r.a=x; return r; }") 'a64 @ g
+       (gripe? g && (gmsg g = "no lane for returning this 24-byte struct by value on a64 (in m)")))
       ; C99 complex arithmetic is an x64 lane only
       (cgt "double _Complex f(double _Complex a, double _Complex b){ return a*b; }" 'a64 @ g
        (gripe? g && (gmsg g = "no lane for C99 complex arithmetic on a64 (in f)")))
