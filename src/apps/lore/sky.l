@@ -34,11 +34,6 @@
  sky-styles ['smooth 'pixel]
  sky-says ["clear" "partly cloudy" "mostly cloudy" "overcast"]
  (sky-weather cover style) {'cover cover 'style style}
- ; a loop: 'per on the weather is its length in sim seconds and 'tper in frames, and each of
- ; the sky's clocks then comes round a whole number of times in it -- the nearest number, so
- ; a slow one stands still. turns snaps a rate in radians, lap a drift over a wrapping map
- (turns wx k w) (peep wx k 0 @ p (p = 0 ? w (2.0 * pi * floor (w * p / (2.0 * pi) + 0.5) / p)))
- (lap wx r k) (peep wx 'per 0 @ p (p = 0 ? r (floor (r * k * p / cloud-n + 0.5) * cloud-n / (k * p))))
  sky-falls ['none 'rain 'snow]
  (sky-fall wx) (peep wx 'fall 0)
  ; the share of the sky that is cloud: each cover's own, breathing a little with the hours
@@ -48,6 +43,11 @@
                           + 0.02 * sin (sim * turns wx 'per (1.0 / 2900.0)))))
  ; --- the maps ---
  cloud-n 128 star-n 256
+ ; a loop: 'per on the weather is its length in sim seconds and 'tper in frames, and each of
+ ; the sky's clocks then comes round a whole number of times in it -- the nearest number, so
+ ; a slow one stands still. turns snaps a rate in radians, lap a drift over a wrapping map
+ (turns wx k w) (peep wx k 0 @ p (p = 0 ? w (2.0 * pi * floor (w * p / (2.0 * pi) + 0.5) / p)))
+ (lap wx r k) (peep wx 'per 0 @ p (p = 0 ? r (floor (r * k * p / cloud-n + 0.5) * cloud-n / (k * p))))
  ; the clouds' thickness, a square that tiles: value noise on lattices that wrap
  (cloud-map _) (: n cloud-n i (iota (n * n)) u (i % n / (1.0 * n)) v (i // n / (1.0 * n))
    (vp x z s p) (: ix (floor x) iz (floor z) ux (x - ix) uz (z - iz)
