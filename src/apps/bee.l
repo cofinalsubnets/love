@@ -2390,6 +2390,10 @@
                                 (<e ? [1 s (e 1)] [0 (e 1)]))
                  "write_file" (: s (slurp-file (in "path")) [1 (string? s ? s "") (in "content")])
                  ()))
+     ; the session's own loops, each a task: the queues watched and queued locks polled, each
+     ; mailing this session as they move -> a stopper that freezes them
+     (loops _) (: ts [(twirl (\ _ (watch 0)) 0) (twirl (\ _ (lock-poll 0)) 0)]
+                  (\ _ (each ts freeze)))
      bee-core
       {'me me 'cwd bee-cwd 'model bee-model 'api bee-api 'look bee-look 'qwatch bee-qwatch
        'shell-name <bee-shell 'whoami whoami
@@ -2403,7 +2407,7 @@
        ; the hive
        'take-mail take-mail 'mail-text mail-text 'self-tell self-tell 'unsettle unsettle
        'on-news (\ f (pin bee-selfw 'tell f))
-       'watch watch 'lock-poll lock-poll
+       'loops loops
        ; the user's card, the hud's
        'user-settle user-settle 'user-card! user-card! 'user-mail user-mail 'user-post user-post
        'peers hud-peers 'queues (\ _ (q-sections (lush-out bee-qcmd))) 'q-leader q-leader 'hud-lines hud-lines-of}
@@ -2436,7 +2440,7 @@
             ; settled for the run, so other sessions can find it and write to it
             (: _ (settle bee-branch)
                _ (pin bee-cc 'yes yes)
-               _ (? sv (: _ (twirl (_ \ watch 0) 0) (twirl (_ \ lock-poll 0) 0)) 0)
+               _ (? sv (loops 0) 0)
                r (? sv (serve-first key (plain yes) (: p (getenv "BEE_PROMPT")
                                                     (? (string? p && 0 < #p) p (two? words) (join " " words) "")))
                     (two? words) (: _ (state! "busy") _ (turn key (plain yes) [(user (join " " words))]) 0)

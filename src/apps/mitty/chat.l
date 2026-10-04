@@ -321,8 +321,7 @@
  ; what that screen holds. the saver is the mitty's
  (chat-stage k key yes)
   (: c (tnew k key yes)
-     tw (twirl (\ _ (k 'watch 0)) 0)
-     tl (twirl (\ _ (k 'lock-poll 0)) 0)
+     stop (k 'loops 0)                                    ; the queues and locks, mailed here as they move
      _ (pins c 'woke (clock 0) 'spun (clock 0))
      {'name ("bee " + k 'me 0)
       'show (\ w h (? (w < 20 || h < 8) "" (: _ (pins c 'rows h 'cols w) (frame c))))
@@ -333,7 +332,7 @@
                     _ (? (c 'busy != () && 130 < t - c 'spun) (: _ (pin c 'spun t) (soil c)) 0)
                     _ (? (c 'busy = () && 1000 < t - c 'woke) (: _ (pin c 'woke t) (wake c)) 0)
                     (? (peep b () 0) (: _ (pin b () 0) 1) 0)))
-      'shut (\ _ (: _ (? (c 'busy != ()) (halt c) 0) _ (freeze tw) _ (freeze tl)
+      'shut (\ _ (: _ (? (c 'busy != ()) (halt c) 0) _ (stop 0)
                     _ (k 'halt 0)
                     (k 'unsettle 0)))})
 
