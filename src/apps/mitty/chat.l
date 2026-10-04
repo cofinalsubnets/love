@@ -3,11 +3,11 @@
 ; queues: a session is bee's core (src/apps/bee.l, bee-core), a tablet of doors, and these
 ; only paint what it answers and hand it the keys.
 ;
-;   (chat-tui k key yes)     the chat on the whole terminal, its saver when idle
+;   (chat-tui k key yes)     the chat on the whole terminal
 ;   (chat-stage k key yes)   the chat as a stage for a mitty, which owns the tty and the clock
 ;   (chat-hud k)             the hud: queues, locks and sessions, and a talk to one as the user
 ;
-; host-only: the chat's commands run on a pty of their own (tether, screen).
+; host-only: the chat's commands run on a pty of their own (tether, screen). the saver is mitty's.
 (module (chat chat-tui chat-stage chat-hud)
 (:
  esc (string 27)
@@ -307,21 +307,13 @@
                 2 (pin c 'scroll (c 'scroll + page))
                 6 (pin c 'scroll (max 0 (c 'scroll - page)))
                 0))))
- ; the saver, when it runs, has the screen; a turn goes on under it, and mail or an ask
- ; puts a mark in its corner. a key that wakes it is its own, and the screen is laid again whole
- sv-watch (cite 'saver 'saver-watch)
- sv-tick (cite 'saver 'saver-tick)
- sv-key (cite 'saver 'saver-key)
- sv-on? (cite 'saver 'saver-on?)
  (keyloop c) (: k (edkey in)
-                _ (? (sv-key (c 'sv) (clock 0)) (pin c 'lastr ()) (onkey c k))
+                _ (onkey c k)
                 _ (soil c)
                 (? (c 'over) 0 (keyloop c)))
  (swim c tick)
   (: b (c 'dirt)
-     sv (sv-tick (pin (c 'sv) 'ink (c 'bee 'look 'pen)) (clock 0) (c 'rows) (c 'cols) (peep c 'mails 0 + tablet? (c 'asking)))
-     _ (? (0 < #sv) (: _ (say out sv) (flush out)) 0)
-     _ (? (peep b () 0 && !(sv-on? (c 'sv))) (: _ (pin b () 0) _ (say out (frame c)) (flush out)) 0)
+     _ (? (peep b () 0) (: _ (pin b () 0) _ (say out (frame c)) (flush out)) 0)
      _ (? (tick % 16 = 0) (tide c) 0)
      _ (? (tick % 4 = 0 && c 'busy != ()) (soil c) 0)      ; the spinner turns
      _ (? (tick % 30 = 0 && c 'busy = ()) (wake c) 0)       ; the inbox, about once a second
@@ -337,8 +329,6 @@
      c)
  (chat-tui k key yes)
   (: c (tnew k key yes)
-     _ (pin c 'sv (sv-watch (k 'setting 'screensaver "pom")
-                            (: m (k 'salt 'screensaver-idle) (two? m ? <m 10))))
      _ (twirl (\ _ (k 'watch 0)) 0)                     ; the queues, mailed here when they move
      _ (twirl (\ _ (k 'lock-poll 0)) 0)                 ; queued locks, mailed here when granted
      _ (tide c)
@@ -356,7 +346,7 @@
 
  ; the full screen as a pane of a mitty (mitty.l), which owns the tty, the keys' reader and
  ; the clock. its frame is scribed into the pane's own screen, so tui-fresh diffs against
- ; what that screen holds. no saver: idle is the mitty's
+ ; what that screen holds. the saver is the mitty's
  (chat-stage k key yes)
   (: c (tnew k key yes)
      tw (twirl (\ _ (k 'watch 0)) 0)

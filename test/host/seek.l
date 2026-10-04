@@ -60,6 +60,11 @@
    ;; esc goes back to the buffer untouched; a dirty buffer is not left for another file
    _ (vk ":find\r", (fc 1) 27, test (() = st 'seek) (st 'file = "a.l"))
    _ (vk "ix", (fc 1) 27, vk ":find c\r", (fc 1) 13, test (st 'file = "a.l") (st 'dirty))
+   ;; :ex hands its directory to the face's explore door; a face with none has no explorer
+   xs {0}
+   fx ((cite 'vi 'vi-face) st {'explore (\ s dd (pin xs () dd))})
+   _ (each (map (i \ ":ex b\r" i) ^#":ex b\r") (c \ (fx 1) c), test ((peep xs () 0) = "b"))
+   _ (vk ":ex\r", test ((st 'msg) = "no explorer on this seat"))
    _ (chdir "../.."))
 
 (test_fin ())

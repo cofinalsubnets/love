@@ -5,8 +5,8 @@
 ; so every answer is made per call.
 ;
 ;   (avatar-names _)        the names, in gallery order
-;   (avatar-look nm)        {'name 'face 'ink 'pen}: its four rows drawn, the accent as an sgr
-;                           and as the nearest of 256 for the saver's canvas; () for no such one
+;   (avatar-look nm)        {'name 'face 'ink}: its four rows drawn and the accent as an sgr;
+;                           () for no such one
 ;   (avatar-gallery w nm)   every avatar with its name under it, as many to a row as w holds,
 ;                           the one named nm in bold
 (module (avatar avatar-names avatar-look avatar-gallery)
@@ -48,7 +48,7 @@
      (string? k ? ((pal a) (k 0)) (<(rev (sort (two? vs ? vs cs))) 2)))
  (avatar-look nm)
   (: a (avatar-of nm)
-     (? (tablet? a) (: k (ink-of a) {'name nm 'face (draw a) 'ink (tint k) 'pen ((cite 'pom 'pom-xterm) k)})))
+     (? (tablet? a) (: k (ink-of a) {'name nm 'face (draw a) 'ink (tint k)})))
  (avatar-gallery w nm)
   (: per (max 1 ((w - 2) // 11))
      (go l) (? (atom? l) ()

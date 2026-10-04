@@ -10,9 +10,10 @@
 ;
 ; a scene's time is local seconds 'sim and the summer offset 'dst; its rays are trays of
 ; unit directions [east up north]. the weather is a tablet, (sky-weather cover style):
-; cover 0 to 3, style 'smooth or 'pixel
+; cover 0 to 3, style 'smooth or 'pixel; and what falls from it, 'fall 0 nothing, 1 rain,
+; 2 snow (nothing unless said), drawn into a scene by sky-fall!
 (module (sky sky-sun sky-body sky-light sky-maps sky-weather sky-cover sky-cloud sky-colour sky-tone
-         sky-covers sky-styles sky-says bil cloud-n star-n day-secs)
+         sky-covers sky-styles sky-says sky-falls sky-fall sky-fall! bil cloud-n star-n day-secs)
 (borrow 'view)
 (borrow 'vec)
 (:
@@ -33,6 +34,8 @@
  sky-styles ['smooth 'pixel]
  sky-says ["clear" "partly cloudy" "mostly cloudy" "overcast"]
  (sky-weather cover style) {'cover cover 'style style}
+ sky-falls ['none 'rain 'snow]
+ (sky-fall wx) (peep wx 'fall 0)
  ; the share of the sky that is cloud: each cover's own, breathing a little with the hours
  shares [0.03 0.22 0.55 0.97]
  (sky-cover wx sim) (: c (wx 'cover) b (shares c)
@@ -90,20 +93,31 @@
  (sky-cloud wx dx dy dz ex ez sim) (: mp (sky-maps ()) d (deck-at dx dy dz ex ez sim)
    (: c (sat (0.5 + (thick mp (d 0) (d 1) sim 0.3 - edge wx sim 0.3) * 10.0))
       (wx 'cover = 3 ? (max c 0.93) c)))
+ ; the cloud over the sun as the light under it feels it: rays over a patch round it, each
+ ; with a soft edge, so a passing cloud thins the light and gives it back over a while --
+ ; low down, where one ray sweeps the deck fast, most of all
+ sun-ring (cat [[0.0 0.0]] (map (k \ (: a (k * pi / 6.0) [(cos a) (sin a)])) ^12))
+ (sun-cloud wx s sim) (: mp (sky-maps ()) r 0.05
+   (one o) (: d (deck-at (s 0 + r * o 0) (s 1) (s 2 + r * o 1) 0.0 0.0 sim)
+              c (sat (0.5 + (thick mp (d 0) (d 1) sim 0.3 - edge wx sim 0.3) * 3.0))   ; a soft edge
+              (wx 'cover = 3 ? (max c 0.93) c))
+   (net (map one sun-ring) / #sun-ring))
  ; the light of the sun s under the weather: its colour and strength, the share of it
  ; the cloud over it lets through, how much day and twilight there is, the sky's light on
  ; what it sees -- greyer the more cloud -- and the eye's gain against the dark
  (sky-light s wx sim) (: sy (s 1)
    oc (sky-cover wx sim)
-   csun (s 1 <= 0.0 ? 0.0 (sky-cloud wx (s 0) (s 1) (s 2) 0.0 0.0 sim))
+   csun (s 1 <= 0.0 ? 0.0 (sun-cloud wx s sim))
    day (sat ((sy + 0.06) / 0.3))
    tw (sat (1.0 - mag (sy + 0.03) / 0.2) * (1.0 - 0.7 * oc))
-   sunk (sat ((sy + 0.005) / 0.05) * (1.0 - 0.9 * csun))
+   ; ..rain or snow takes the most of the sun, and rain the light's edge besides
+   f (sky-fall wx)
+   sunk (sat ((sy + 0.005) / 0.05) * (1.0 - 0.75 * csun - 0.2 * csun * csun * csun * csun) * (f = 0 ? 1.0 0.3))
    sunc (cmix [1.0 0.4 0.1] [1.0 0.93 0.82] (sat ((sy - 0.04) / 0.4) @ k (k * k * (3.0 - 2.0 * k))))
    night [0.05 0.055 0.075]
    amb0 (c+ (cmix night [0.42 0.47 0.56] day) (c* (tw * (1.0 - 0.5 * day)) [0.1 0.05 0.07]))
    grey (cmix night [0.5 0.51 0.53] day)
-   amb (cmix amb0 grey (0.7 * oc))
+   amb (c* (f = 1 ? 0.8 1.0) (cmix amb0 grey (0.7 * oc)))
    {'sun s 'day day 'tw tw 'sunk sunk 'sunc sunc 'amb amb 'cover oc 'csun csun
     'expo (1.0 + 1.2 * (1.0 - day) + 0.3 * oc)})
  ; --- the smooth sky ---
@@ -122,7 +136,7 @@
    cl0 (sat (0.5 + (th - edge wx sim 0.3) * 10.0))
    cl (wx 'cover = 3 ? (max cl0 0.93) cl0)        ; overcast: no sky through it
    ; ..the clouds: lit from under by the sun, darker the thicker, greyer the more of them
-   body (1.0 - 0.3 * cl - 0.35 * oc * sat ((th - 0.45) * 2.0))
+   body ((1.0 - 0.3 * cl - 0.35 * oc * sat ((th - 0.45) * 2.0)) * (sky-fall wx = 1 ? 0.8 1.0))
    cloudc (c* body
               (c+ (c+ (c+ (c* 1.15 (lt 'amb)) (c* (sat ((sy + 0.005) / 0.05) * (1.0 - 0.6 * oc) * (0.55 + 0.4 * sy)) (lt 'sunc)))
                       (c* (lt 'tw) [0.5 0.22 0.14]))
@@ -183,6 +197,40 @@
  ; lt and the weather wx, at the time sim and the frame's clock t0 (in frames)
  (sky-colour lt wx dx dy dz ex ez sim t0)
   (wx 'style = 'pixel ? (pixel lt wx dx dy dz ex ez sim t0) (smooth lt wx dx dy dz ex ez sim t0))
+ ; --- what falls: rain in streaks and snow in flakes, drawn into a scene's buffers -- 't
+ ; the depth, 'r 'g 'b the colour -- through a camera (grove's: 'e 'f 'r 'u 'w 'h 'foc),
+ ; at sec seconds of the scene's own clock. no state: a drop is where its number and the
+ ; clock put it, on a lattice fixed to the ground and wrapped round the eye, so walking
+ ; through it is walking through weather; nearer than the scene or not drawn ---
+ fall-r 6.0 fall-h 9.0 rain-n 1600 snow-n 1400
+ (sky-fall! wx cam lt buf sec) (: f (sky-fall wx)
+   (f = 0 ? buf
+      (: e (cam 'e) fw (cam 'f) rt (cam 'r) uv (cam 'u) w (cam 'w) h (cam 'h) foc (cam 'foc)
+         n (f = 1 ? rain-n snow-n) i (iota n) R fall-r H fall-h
+         (rnd k) (frac (sin (i * 12.9898 + k * 78.233) * 43758.5453))
+         v (f = 1 ? 7.5 1.1) sway (f = 1 ? 0.0 0.25)
+         (wrap w0 c) (c + 2.0 * R * (frac ((w0 - c) / (2.0 * R)) - 0.5))
+         X0 (wrap (2.0 * R * rnd 1 + sway * sin (sec * 0.7 + 6.3 * rnd 4)) (e 0))
+         Z0 (wrap (2.0 * R * rnd 2 + sway * cos (sec * 0.5 + 6.3 * rnd 5)) (e 2))
+         Y0 (H * (1.0 - frac (rnd 3 + sec * v / H)))
+         ; ..a drop is a streak three points long, a flake a point and its neighbour
+         (one dy) (: Y (Y0 + dy) qx (X0 - e 0) qy (Y - e 1) qz (Z0 - e 2)
+                     zc (qx * fw 0 + qy * fw 1 + qz * fw 2) zs (max zc 0.1)
+                     cx (floor (w / 2.0 + foc * (qx * rt 0 + qy * rt 1 + qz * rt 2) / zs))
+                     cy (floor (h / 2.0 - foc * (qx * uv 0 + qy * uv 1 + qz * uv 2) / zs))
+                     dist (sqrt (qx * qx + qy * qy + qz * qz))
+                     ok ((0.1 < zc) * (0 <= cx) * (cx < w) * (0 <= cy) * (cy < h))
+                     idx (over -1 ok (cy * w + cx))
+                     i2 (over -1 (dist < peep (buf 't) idx 1e9) idx)
+                     a ((f = 1 ? 0.38 0.85) * sat (1.4 - dist / R))
+                     tc (f = 1 ? (c* 0.95 (c+ (lt 'amb) [0.08 0.09 0.11]))
+                                 (c+ (c* 1.5 (lt 'amb)) (c* (0.4 * lt 'sunk) (lt 'sunc))))
+                     (old k) (peep (buf k) i2 0.0)
+                     (pins buf 'r (pin (buf 'r) i2 (old 'r + a * (tc 0 - old 'r)))
+                               'g (pin (buf 'g) i2 (old 'g + a * (tc 1 - old 'g)))
+                               'b (pin (buf 'b) i2 (old 'b + a * (tc 2 - old 'b)))))
+         _ (each (f = 1 ? [0.0 0.07 0.14] [0.0 0.012]) one)
+         buf)))
  ; ..and the eye: its gain against the dark under lt, and a soft shoulder that keeps a hue
  (sky-tone lt col) (: k (1.5 * lt 'expo)
    [(1.0 - exp (0.0 - k * col 0)) (1.0 - exp (0.0 - k * col 1)) (1.0 - exp (0.0 - k * col 2))]))

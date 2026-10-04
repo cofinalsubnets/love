@@ -1,7 +1,7 @@
-; test/host/saver.l -- the screensavers (src/apps/saver.l), headless: every saver's frame
-; covers the screen it is asked for in well-formed escapes, the moon is lit on the side its
-; phase says, the idle watch fires on a fake clock and a key takes the saver down, love bee -s
-; names the savers, and bee on a pty goes to its saver and comes back with the key swallowed.
+; test/host/saver.l -- mitty's screensavers (src/apps/mitty/saver.l), headless: every saver's
+; frame covers the screen it is asked for in well-formed escapes, the moon is lit on the side
+; its phase says, the idle watch fires on a fake clock and a key takes the saver down, and
+; love mitty -s names the savers. mitty's glass going to its saver is test/host/mitty.l's.
 ;   cat test/00-init.l test/host/saver.l | out/love
 (borrow 'saver)
 
@@ -23,7 +23,8 @@
                (? !(f (i + 1) = 91) [0 n]
                   (fin = 72) (? (#ns = 2 && 1 <= <ns <= r && 1 <= ns 1 <= c) (go (j + 1) (<ns - 1) (ns 1 - 1) ok n) [0 n])
                   (fin = 67) (? (#ns = 1 && 0 < <ns) (go (j + 1) y (x + <ns) ok n) [0 n])
-                  (fin = 109) (? (ps = "0" || #ns = 3 && (<ns = 38 || <ns = 48) && ns 1 = 5 && 0 <= ns 2 < 256)
+                  (fin = 109) (? (ps = "0" || #ns = 3 && (<ns = 38 || <ns = 48) && ns 1 = 5 && 0 <= ns 2 < 256
+                                 || #ns = 5 && (<ns = 38 || <ns = 48) && ns 1 = 2 && all (v \ 0 <= v < 256) >>ns)
                                  (go (j + 1) y x ok n) [0 n])
                   (fin = 104 || fin = 108) (? (ps = "?2026") (go (j + 1) y x ok n) [0 n])
                   [0 n]))
@@ -34,13 +35,37 @@
                     (go (i + w) y (x + 1) ok (fresh ? (n + 1) n)))
                  [0 n])))
        (go 0 0 0 1 0))
-   _ (test (["life" "matrix" "pom" "slop"] = saver-names))
+   _ (test (["court" "grass99" "life" "matrix" "pom" "slop"] = saver-names))
 
    ; --- each saver, two sizes: a whole frame covers every cell in escapes it may send ---
    _ (each saver-names
        (nm \ each [[24 80] [11 37]]
          (z \ (: r <z c (z 1) s (sv-scan (saver-frame nm r c 1500 0.4) r c)
                  (test <s (s 1 = r * c))))))
+
+   ; --- a style after the name: pom natural covers the screen too, and is not pom's own
+   ; --- face; a style a saver has not is never one ---
+   nat (saver-frame "pom natural" 24 80 1500 0.4)
+   _ (test (sv-scan nat 24 80 @ s (<s && s 1 = 24 * 80)) (nat != saver-frame "pom" 24 80 1500 0.4)
+           (0 < (saver-watch "pom natural" 5) 'idle) (0 = (saver-watch "pom fancy" 5) 'idle)
+           (0 = (saver-watch "life natural" 5) 'idle))
+
+   ; --- the lore scenes are pictures: half blocks over the whole canvas, in many pens ---
+   (pic? nm) (: cv (saver-canvas nm 24 80 1500 ()) cs (map (i \ saver-cell cv (i // 80) (i % 80)) ^(24 * 80))
+                pens (foldl (t \ k \ pin t (k 1) 1) {} cs)
+                (all (k \ <k = 128) cs && 6 < #(keys pens)))
+   ; ..in 24-bit colour where COLORTERM says the terminal has it, else the 256 palette's
+   (pens-of nm) (: cv (saver-canvas nm 24 80 1500 ()) (map (i \ saver-cell cv (i // 80) (i % 80) 1) ^(24 * 80)))
+   ct0 (getenv "COLORTERM")
+   _ (setenv "COLORTERM" "truecolor")
+   deep (pens-of "grass99")
+   dframe (saver-frame "court" 24 80 1500 ())
+   _ (setenv "COLORTERM" "")
+   cube (pens-of "grass99")
+   _ (setenv "COLORTERM" (string? ct0 ? ct0 ""))
+   _ (test (all (v \ 256 <= v) deep) (all (v \ v < 256) cube)
+           (sv-has? dframe "[38;2;") (sv-scan dframe 24 80 @ s (<s && s 1 = 24 * 80)))
+   _ (test (pic? "court") (pic? "grass99"))
 
    ; --- the moon is lit on its phase's side ---
    ph (cite 'pom 'pom-phase)
@@ -83,57 +108,31 @@
            (: w0 (saver-watch "pom" 0) _ (saver-tick w0 0 24 80 0) ("" = saver-tick w0 (999 * mn) 24 80 0))   ; 0 is never
            (: wn (saver-watch "nope" 1) _ (saver-tick wn 0 24 80 0) ("" = saver-tick wn (9 * mn) 24 80 0))   ; nor a name it lacks
            (: wf (saver-watch "pom" 0.5) _ (saver-tick wf 0 24 80 0) (0 < #(saver-tick wf 30000 24 80 0))))
+   ; cycle: a saver of the roster at each start, and the next once five minutes have run
+   wc (saver-watch "cycle" 1)
+   _ (saver-tick wc 0 24 80 0)
+   _ (saver-tick wc mn 24 80 0)
+   c1 ((wc 'on) 'nm)
+   _ (saver-tick wc (6 * mn + 1) 24 80 0)
+   c2 ((wc 'on) 'nm)
+   _ (saver-key wc (7 * mn))
+   _ (saver-tick wc (7 * mn + 1) 24 80 0)
+   _ (saver-tick wc (9 * mn) 24 80 0)
+   c3 ((wc 'on) 'nm)
+   _ (test (elem c1 saver-names) (elem c2 saver-names) (elem c3 saver-names) (c1 != c2) (c2 != c3))
 
-   ; --- love bee -s: the names, and an unknown one exits 2 naming them ---
+   ; --- love mitty -s: the names, and an unknown one exits 2 naming them ---
    (sv-run argv) (: md (tether argv) o (slurp >md)
                     (wf p) (gather p @ g (two? g ? g (rest 2, wf p)))
                     st (wf <md)
                     _ (close >md)
                     [<st o])
-   ls (sv-run [sv-love "bee" "-s"])
-   bad (sv-run [sv-love "bee" "-s" "nope"])
-   bad2 (sv-run [sv-love "bee" "--screensaver" "nope"])
+   ls (sv-run [sv-love "mitty" "-s"])
+   bad (sv-run [sv-love "mitty" "-s" "nope"])
+   bad2 (sv-run [sv-love "mitty" "--screensaver" "nope"])
+   bad3 (sv-run [sv-love "mitty" "-s" "pom" "fancy"])
    _ (test (0 = <ls) (all (n \ sv-has? (ls 1) n) saver-names)
            (2 = <bad) (sv-has? (bad 1) "no screensaver nope") (all (n \ sv-has? (bad 1) n) saver-names)
-           (2 = <bad2))
+           (2 = <bad2) (2 = <bad3) (sv-has? (ls 1) "pom [natural]") (sv-has? (ls 1) "cycle"))
 
-   ; --- bee's own screen on a pty: idle to the saver, a key back, the key not typed ---
-   ; HOME and the hive are a scratch directory's, the model one on this machine that is
-   ; never asked: nothing is sent
-   dir (cwd 0 + "/out/.saver-" + show (getpid 0))
-   _ (mkdir dir 493) _ (mkdir (dir + "/.love") 448) _ (mkdir (dir + "/.love/etc") 448)
-   _ (: p (open (dir + "/.love/etc/bee.l") "w")
-        _ (say p "(api openai)\n(url \"http://127.0.0.1:9/v1/chat/completions\")\n(model mock)\n(screensaver pom)\n(screensaver-idle 0.02)\n")
-        (close p))
-   md (tether ["sh" "-c" ("cd '" + dir + "' && HOME='" + dir + "' BEE_HIVE='" + dir + "/hive' BEE_NAME=svtest PWD='" + dir
-                         + "' exec '" + sv-love + "' bee --chat")])
-   m >md
-   _ (settty m 24 80)
-   box {'s ""}
-   rd (twirl (_ \ (: (go _) (: b (see m) (? (b < 0) 0 (: _ (unsee m b) _ (pin box 's (box 's + chug m)) (go 0))))
-                     (go 0))) 0)
-   (upto n pat) (? (sv-has? (box 's) pat) 1 (n <= 0) 0 (: _ (rest 50) (upto (n - 1) pat)))
-   (mark _) #(box 's)
-   (since k) (: s (box 's) (snip s k #s))
-   up (upto 100 "session svtest")                           ; its own screen first
-   asleep (upto 100 "\e[?25l")                              ; then, after 1.2 s without a key, the saver
-   k0 (mark 0)
-   _ (rest 300)
-   frames (0 < #(since k0))                                 ; and it moves
-   k1 (mark 0)
-   _ (say m "a") _ (flush m)
-   (upk n pat) (? (sv-has? (since k1) pat) 1 (n <= 0) 0 (: _ (rest 50) (upk (n - 1) pat)))
-   woke (upk 100 "\e[?25h")
-   back (upk 100 "session svtest")                          ; the screen laid again whole
-   k2 (mark 0)
-   _ (say m "b") _ (flush m)
-   (upk2 n pat) (? (sv-has? (since k2) pat) 1 (n <= 0) 0 (: _ (rest 50) (upk2 (n - 1) pat)))
-   typed (upk2 60 ">\e[0m b")
-   _ (say m (string 3)) _ (flush m)                          ; ^c leaves
-   st (: (wf p n) (gather p @ g (? (two? g) g (n <= 0) (: _ (still p 9) [-1]) (: _ (rest 20) (wf p (n - 1))))) (wf <md 250))
-   _ (test up asleep frames woke back typed
-           !(sv-has? (since k1) ">\e[0m a")                  ; the a woke it and went nowhere
-           (two? st && <st = 0))                               ; and ^c left it
-   _ (close m)
-   _ (hark ["rm" "-rf" dir])
    (test_fin (), puts "saver: ok", putc 10, 0))

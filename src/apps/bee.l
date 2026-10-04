@@ -30,8 +30,6 @@
 ;   (ledger-dir PATH)     where a queue call from another box runs; HOME
 ;   (mem-floor GB) (heavy-max N)   no heavy lock below GB available; N heavy locks at once, 2
 ;   (avatar NAME)       the face and its accent, bunny unless set; /avatar or --avatar sets it
-;   (screensaver NAME) (screensaver-idle N)   the screen's saver after N minutes without a key:
-;                         pom and 10, 0 for never; `love bee -s` names them (src/apps/saver.l)
 ; the answer streams: text prints as it comes. a key goes out only over tls, and only to a
 ; peer tls-open verified: its chain to a root the host trusts, and its name.
 (module (bee bee-main)
@@ -471,7 +469,7 @@
      bee-restart ("at the next convenient point -- between tasks, never mid-gate -- "
                   + "resuming in the same directory, so .mcp.json loads the new bee.")
      bee-landed ("this landing changed bee: every live session restarts " + bee-restart)
-     bee-served "src/apps/bee.l src/apps/locks.l src/apps/hosts.l src/apps/seals.l src/apps/hive.l src/apps/saver.l src/apps/pom.l src/apps/mitty/chat.l src/apps/mitty/avatar.l"   ; what bee runs
+     bee-served "src/apps/bee.l src/apps/locks.l src/apps/hosts.l src/apps/seals.l src/apps/hive.l src/apps/mitty/chat.l src/apps/mitty/avatar.l"   ; what bee runs
      (self-id _) (: s (string? bee-self ? (stat bee-self)) (two? s ? (show [(s 0) (s 3) (s 8)])))
      bee-selfw {'id (self-id 0) 'at (clock 0)}
      bee-selfwait (: w (getenv "BEE_SELF_WATCH") (string? w && 0 < #w ? (digits w) 30))
@@ -1761,11 +1759,11 @@
                (repl key f (two? m ? m msgs)))))
 
      ; --- the look: the avatar worn (src/apps/mitty/avatar.l), its face drawn and the accent
-     ; everything else takes, as an sgr and as the nearest of 256 for the saver's canvas ---
+     ; everything else takes, an sgr ---
      esc (string 27)
      (sgr code s) (esc + "[" + code + "m" + s + esc + "[0m")
      bee-look {}
-     (look! nm) (: l (cite 'avatar 'avatar-look nm) (pins bee-look 'name nm 'face (l 'face) 'ink (l 'ink) 'pen (l 'pen)))
+     (look! nm) (: l (cite 'avatar 'avatar-look nm) (pins bee-look 'name nm 'face (l 'face) 'ink (l 'ink)))
      _ (look! (: n (setting 'avatar "bunny") (elem n (cite 'avatar 'avatar-names 0) ? n "bunny")))
      ; (avatar NAME) in ~/.love/etc/bee.l, in place of any before it
      (keep-avatar nm)
@@ -2394,7 +2392,7 @@
                  ()))
      bee-core
       {'me me 'cwd bee-cwd 'model bee-model 'api bee-api 'look bee-look 'qwatch bee-qwatch
-       'shell-name <bee-shell 'whoami whoami 'setting setting 'salt (\ k (peep bee-salt k ()))
+       'shell-name <bee-shell 'whoami whoami
        'title-on title-on 'title-off title-off 'utc-minute utc-minute 'avatar avatar-cmd
        ; the turn and its tools
        'turn turn 'user user 'state! state! 'brief brief 'ask-lines ask-lines 'change change
@@ -2422,7 +2420,6 @@
             (two? as && elem <as ["--on" "--hosts"]) ((cite 'hosts 'hosts-on) as)   ; so do --on's
             ; ahead of --hud, which the hooks add so that a bee older than --state only prints its hud
             (two? as && <as = "--state") (: _ (state-cmd as) 0)
-            (two? as && elem <as ["-s" "--screensaver"]) (cite 'saver 'saver-cli >as)   ; a saver, no session
             (elem "--hud" as) (: _ (puts (foldl (\ a l (a + l + "\n")) "" (hud-lines 0))) 0)   ; once, as text
             ; a bare bee on a terminal is the hud; a model's chat is --chat
             (!pl && !sv && !(two? words) && !(elem "--chat" as) && !(elem "--stage" as) && two? (tty 1))
@@ -2458,8 +2455,7 @@
        love bee --state busy|idle [--pid P]          a claude code session's hooks say its state
        love bee --on CAP [--where K=V] [--ship DIR] (--probe | --ssh | -- CMD ..)   a command on a host that can
        love bee --hosts                              the hosts this box knows
-       love bee --avatar [NAME]                        the avatars, or wear one
-       love bee -s | --screensaver [NAME]               a screensaver until a key; none names them"
+       love bee --avatar [NAME]                        the avatars, or wear one"
    _ (pins (cite 'verbs 'tab) 'bee (udoor 'bee bee-main bee-usage 1 0)))
 
 ; the seat: run as a file, `love src/apps/bee.l ..`, bee starts itself; as the verb, the
