@@ -283,9 +283,8 @@
     song-out s song-chunk song-gain))
 
  ; --- the walk: on a stage already raised, the tower's way -- the wait is the song ---
- (garage-walk _) (: ws (tty 1)
-   r (two? ws && 7 < <ws ? (<ws - 2) 22)
-   c (two? ws && 19 < <>ws ? <>ws 80)
+ (garage-walk _) (: ws (ttysize 7 19)
+   r (<ws - 2) c <>ws
    g (garage-new (c < 100 ? c 100) r (wheel (clock 0)))
    hn (horn song-rate 2 @ q (nom? q ? () q))
    sng (hn ? (garage-song-new (garage-tune ()) hn (wheel (clock 0))))

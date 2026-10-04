@@ -161,9 +161,8 @@
     two? sg ? (sign-over f <sg >sg 1 rows cols) f))
 
  ; --- the walk: the screen raised, a key a turn, the answer handed back ---------------
- (roost-walk pl) (: ws (tty 1)
-   r (two? ws && 7 < <ws ? (<ws - 2) 22)
-   c (two? ws && 19 < <>ws ? <>ws 80)
+ (roost-walk pl) (: ws (ttysize 7 19)
+   r (<ws - 2) c <>ws
    g (roost-new c r pl)
    (turn k) (? (g 'ask) (k @ 27 (pins g 'ask () 'sign ()) (roost-turn g (rove-key g k)))
                (k = 27 && g 'sign) (pin g 'sign ())

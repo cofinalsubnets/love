@@ -244,8 +244,6 @@
  (lead-of gap) (int (2.5 * gap * song-rate / 1000.0) @ n
                   (n < synth-lead ? synth-lead (song-lead-max < n ? song-lead-max n)))
  (synth-run _) (: _ (synth-warm ())
-   _ (raw 1)
-   _ (say out (esc + "[?1049h" + esc + "[?25l"))
    st (synth-new ())
    hn (horn song-rate 2 @ h (nom? h ? () h))
    pace (pacer ())
@@ -254,11 +252,8 @@
    (go _) (feed (),
            st 'dirty ? (say out (synth-frame st), flush out, pin st 'dirty 0),
            keys st = 'quit || st 'over ? () (rest 4, go ()))
-   (go (),
-    (say out (esc + "[0m" + esc + "[?25h" + esc + "[?1049l"), flush out),
-    hn ? (flush hn, close hn),
-    drain-keys (),
-    raw 0,
+   (ttytake ['hide],
+    mind go () (_ \ (hn ? (flush hn, close hn), drain-keys (), ttygive ['hide])),
     0))
  synth-usage "usage: love synth [LOOP]   (1 .. = play, shift and alt bend, tab the timbre, up and down the octave, p e [ ] the loop, q leaves)"
  ; --- the mitty: the keys a stage over the buffer, a vi stage on the loop's text.
