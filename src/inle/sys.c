@@ -62,7 +62,8 @@ extern long
  k_fd_write(int fd, void const *b, long n),
  k_fd_read(int fd, void *b, long n),
  k_fd_close(int fd),
- k_fd_lseek(int fd, long off, int whence);
+ k_fd_lseek(int fd, long off, int whence),
+ k_fd_truncate(int fd, long n);
 
 // a dirfd is honored as AT_FDCWD only: the ramfs has one cwd, and an absolute
 // path ignores its dirfd by POSIX's own rule. any other seat refuses loudly.
@@ -137,6 +138,7 @@ long __love_inle(long n, long a, long b, long c, long d, long e, long f) {
   case NR_read:  return k_fd_read((int) a, (void *) b, c);
   case NR_close: return k_fd_close((int) a);
   case NR_lseek: return k_fd_lseek((int) a, b, (int) c);
+  case NR_ftruncate: return k_fd_truncate((int) a, b);
   case NR_openat:     return k_openat(a, (char const*) b, c, d);
   case NR_newfstatat: return k_statat(a, (char const*) b, (struct stat *) c, d);
   case NR_utimensat:  return k_utimeat(a, (char const*) b, (struct timespec const*) c, d);

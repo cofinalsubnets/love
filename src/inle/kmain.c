@@ -778,6 +778,20 @@ long k_fd_lseek(int fd, long off, int whence) {
   if (at < 0) return -22;
   return (long) (h->pos = (uintptr_t) at); }
 
+static bool k_fit(int i, uintptr_t need);
+// ..and its truncate: cut, or stretched with zeros; a reader's row is refused as linux does
+long k_fd_truncate(int fd, long n) {
+  if (!k_row_live(fd)) return -9;                        // EBADF
+  struct k_fh *h = k_fh(fd);
+  if (!h) return -22;                                    // EINVAL: a console or a pipe
+  if (!h->w) return -9;
+  if (n < 0) return -22;
+  if (!k_fit(h->i, (uintptr_t) n)) return -12;           // ENOMEM
+  struct k_ent *e = &k_ents[h->i];
+  if ((uintptr_t) n > e->len) memset(e->bytes + e->len, 0, (uintptr_t) n - e->len);
+  e->len = (uintptr_t) n, e->ms = k_clock_ms();
+  return 0; }
+
 // canonical path -> its live entry. linear: the tree is a few dozen entries.
 static int k_find(char const *p, uintptr_t n) {
   for (int i = 0; i < k_ents_n; i++)
