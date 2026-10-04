@@ -78,8 +78,21 @@
                l (sh ("../love metaflac --list " + f + ".flac"))
                (<a = 0 && >a = rd (dir + "/" + f + ".wav") && <b = 0 && >b = rd (dir + "/" + f + ".bu")
                 && <l = 0 && >l = rd (dir + "/" + f + ".list")))
+   ; the encoder: every shape at three levels, through the reference flac -t (its crcs and md5)
+   ; and back out of the reference decoder byte for byte, and no more than 5% past libFLAC's size
+   (fl-num t) (foldl (\ a c (a * 10 + c - 48)) 0 (chars t))
+   (enc [f sg] lv)
+    (: ch ((cases (fl-num (snip f 1 #f))) 0) bps ((cases (fl-num (snip f 1 #f))) 1)
+       raw (" --force-raw-format --endian=little --sign=signed --channels=" + ch + " --bps=" + bps + " --sample-rate=44100 ")
+       a (sh ("../love flac -s -f -" + show lv + raw + f + ".raw -o " + f + ".e.flac"))
+       t (sh ("flac -s -t " + f + ".e.flac 2>&1"))
+       d (sh ("flac -s -d -f --force-raw-format --endian=little --sign=signed " + f + ".e.flac -o " + f + ".e.raw"))
+       b (sh ("flac -s -f -" + show lv + raw + "--no-padding --no-seektable " + f + ".raw -o " + f + ".r.flac"))
+       (<a = 0 && t = (0 . "") && <d = 0 && rd (dir + "/" + f + ".e.raw") = rd (dir + "/" + f + ".raw")
+        && #(rd (dir + "/" + f + ".e.flac")) - 8196 <= #(rd (dir + "/" + f + ".r.flac")) * 105 // 100))
    _ (ref? ? (: fs (map (i \ mk i (cases i)) ^#cases)
-                (test (all two? fs) (all same fs)))
+                (test (all two? fs) (all same fs)
+                      (all (f \ enc f 0) fs) (all (f \ enc f 5) fs) (all (f \ enc f 8) fs)))
         (gate-partly "flac: no flac, metaflac or ffmpeg, the reference streams skipped"))
 
    ; -- the verbs ------------------------------------------------------------------------
@@ -93,6 +106,13 @@
            (sh "../love metaflac --show-sample-rate --show-tag=title t.flac" = (0 . "8000\nTITLE=tiny\n"))
            (sh "../love metaflac --export-tags-to=- t.flac" = (0 . "TITLE=tiny\n"))
            (sh "head -c 300 t.flac | ../love flac -s -t - 2>&1" = (1 . "stdin: ERROR while decoding data: cut short\n")))
+   ; the encoder through the door: a wav in, and a flac re-encoded, each back to the same samples
+   _ (test (sh "../love flac -s -f t.wav -o w.flac && ../love flac -s -d -c w.flac | cmp - t.wav" = (0 . ""))
+           (sh "../love flac -s -f -8 t.flac -o r.flac && ../love flac -s -t r.flac" = (0 . ""))
+           (sh "../love flac -f t.wav -o w.flac 2>&1" @ (0 . m) ("t.wav: wrote " = snip m 0 13) _ 0)
+           (sh "../love metaflac --show-vendor-tag w.flac" @ (0 . v) ("love " = snip v 0 5) _ 0)
+           (sh "../love flac -s -f --force-raw-format t.wav -o x.flac 2>&1"
+              = (1 . "t.wav: ERROR: for raw input you must specify --channels, --bps, --sample-rate, --endian and --sign\n")))
    ; -- the decoder door: av picks the codec off the bytes, and plays through the horn ----------
    (av e) (sh ("HORN=none ../love -e '(borrow (quote posix)) (borrow (quote av)) " + e + " (quit 0)' 2>&1"))
    _ (sh "../love flac -s -d -f t.flac")

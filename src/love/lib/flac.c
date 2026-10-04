@@ -185,36 +185,44 @@ struct fe_sub { int kind, order, prec, shift, wasted, po, rice[64]; int32_t q[32
 
 static uint64_t fe_fold(int64_t r) { return r < 0 ? ((uint64_t) -(r + 1) << 1) | 1 : (uint64_t) r << 1; }
 
-// the cheapest rice parameter for u[0..n) -> its bits; k back through *kp
-static uint64_t fe_rice1(const uint64_t *u, uintptr_t n, int *kp) {
- uint64_t sum = 0;
- for (uintptr_t i = 0; i < n; i++) sum += u[i];
+// a partition's rice cost from its sum alone, as libFLAC estimates it: each sample loses about
+// half a bit to the floor of its shift. the parameter is the mean's and its two neighbours'
+static uint64_t fe_rice_est(uint64_t sum, uint64_t n, int *kp) {
  int k0 = 0;
- if (n) for (uint64_t m = sum / n; m > 1 && k0 < 30; m >>= 1) k0++;
+ if (n) for (uint64_t m = sum / n; m > 1 && k0 < 29; m >>= 1) k0++;
  uint64_t best = ~0ull;
- for (int k = k0 > 0 ? k0 - 1 : 0; k <= k0 + 1 && k <= 30; k++) {
-  uint64_t c = (uint64_t) n * (uint64_t) (k + 1);
-  for (uintptr_t i = 0; i < n; i++) c += u[i] >> k;
+ for (int k = k0 > 0 ? k0 - 1 : 0; k <= k0 + 1; k++) {
+  uint64_t c = n * (uint64_t) (k + 1) + (sum >> k), h = k ? n / 2 : 0;
+  c = c > h ? c - h : 0;
   if (c < best) best = c, *kp = k; }
  return best; }
 
-// the residual r[order..bs) folded into u, every partition order up to po costed -> the bits,
-// with s's partition order and parameters set; ~0 when a residual will not fit 32 bits
+// the residual r[order..bs) costed at every partition order up to maxpo -> the bits, with s's
+// partition order and parameters set; ~0 when a residual will not fit 32 bits. the finest
+// partitions' sums are taken once; a coarser partition's sum is its two halves'
 static uint64_t fe_resid(const int64_t *r, uint64_t *u, int bs, int order, int maxpo, struct fe_sub *s) {
- for (int i = order; i < bs; i++) {
-  if (r[i] > INT32_MAX || r[i] < INT32_MIN) return ~0ull;
-  u[i] = fe_fold(r[i]); }
+ int top = 0;
+ while (top < maxpo && !(bs & ((2 << top) - 1)) && bs >> (top + 1) > order) top++;
+ uint64_t sums[64];
+ int parts = 1 << top;
+ for (int p = 0, i = order; p < parts; p++) {
+  int end = (p + 1) * (bs >> top);
+  uint64_t a = 0;
+  for (; i < end; i++) {
+   if (r[i] > INT32_MAX || r[i] < INT32_MIN) return ~0ull;
+   a += u[i] = fe_fold(r[i]); }
+  sums[p] = a; }
  uint64_t best = ~0ull;
- for (int po = 0; po <= maxpo; po++) {
-  int parts = 1 << po;
-  if (po && ((bs & (parts - 1)) || bs >> po <= order)) break;
-  uint64_t c = 6; int big = 0, ks[64];
-  for (int p = 0, i = order; p < parts; p++) {
-   int cnt = (bs >> po) - (p ? 0 : order);
-   c += fe_rice1(u + i, (uintptr_t) cnt, &ks[p]), i += cnt;
+ for (int po = top; po >= 0; po--) {
+  int np = 1 << po, big = 0, ks[64];
+  uint64_t c = 6;
+  for (int p = 0; p < np; p++) {
+   uint64_t n = (uint64_t) (bs >> po) - (p ? 0 : (uint64_t) order);
+   c += fe_rice_est(sums[p], n, &ks[p]);
    if (ks[p] > 14) big = 1; }
-  c += (uint64_t) parts * (big ? 5 : 4);
-  if (c < best) { best = c, s->po = po; memcpy(s->rice, ks, sizeof(int) * (uintptr_t) parts); } }
+  c += (uint64_t) np * (big ? 5 : 4);
+  if (c < best) { best = c, s->po = po; memcpy(s->rice, ks, sizeof(int) * (uintptr_t) np); }
+  for (int p = 0; p < np / 2; p++) sums[p] = sums[2 * p] + sums[2 * p + 1]; }
  return best; }
 
 static void fe_fixed(const int64_t *x, int64_t *r, int bs, int order) {
