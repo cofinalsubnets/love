@@ -778,6 +778,20 @@ long k_fd_lseek(int fd, long off, int whence) {
   if (at < 0) return -22;
   return (long) (h->pos = (uintptr_t) at); }
 
+static bool k_fit(int i, uintptr_t need);
+// ..and its truncate: cut, or stretched with zeros; a reader's row is refused as linux does
+long k_fd_truncate(int fd, long n) {
+  if (!k_row_live(fd)) return -9;                        // EBADF
+  struct k_fh *h = k_fh(fd);
+  if (!h) return -22;                                    // EINVAL: a console or a pipe
+  if (!h->w) return -9;
+  if (n < 0) return -22;
+  if (!k_fit(h->i, (uintptr_t) n)) return -12;           // ENOMEM
+  struct k_ent *e = &k_ents[h->i];
+  if ((uintptr_t) n > e->len) memset(e->bytes + e->len, 0, (uintptr_t) n - e->len);
+  e->len = (uintptr_t) n, e->ms = k_clock_ms();
+  return 0; }
+
 // canonical path -> its live entry. linear: the tree is a few dozen entries.
 static int k_find(char const *p, uintptr_t n) {
   for (int i = 0; i < k_ents_n; i++)
@@ -1109,11 +1123,12 @@ static int k_fd_free_at(int at) {
   return k_sources_n > lo ? k_sources_n : lo; }
 static int k_fd_free(void) { return k_fd_free_at(0); }
 
-// open a path -> an fd or a negative errno. m is r read, w truncate, a append; w and a create
-// an absent path whose parent is a directory, for r absence stays absence. a directory does
+// open a path -> an fd or a negative errno. m is r read, w truncate, a append, c and o write
+// in place from the start; w a and c create an absent path whose parent is a directory,
+// for r and o absence stays absence. a directory does
 // not open: readdir is its read door. the love doors flatten the errno in the marshaling.
 love_noinline int k_fs_open(char const *p, uintptr_t pn, char m) {
-  if (m != 'r' && m != 'w' && m != 'a') return -EINVAL;
+  if (m != 'r' && m != 'w' && m != 'a' && m != 'c' && m != 'o') return -EINVAL;
   if (!k_fs_init()) return -ENOMEM;
   char cp[256];
   intptr_t cn = k_walk(p, pn, cp, true);
@@ -1140,7 +1155,7 @@ love_noinline int k_fs_open(char const *p, uintptr_t pn, char m) {
   if (i < 0) {
     // 'r' misses stay one k_find, the load path's probe lane; only a create pays k_dirp,
     // so a file never shadows a synthesized directory.
-    if (m == 'r') return -ENOENT;
+    if (m == 'r' || m == 'o') return -ENOENT;
     if (k_dirp(cp, (uintptr_t) cn)) return -EISDIR;
     int e = k_parent_ok(cp, (uintptr_t) cn);
     if (e) return e;
