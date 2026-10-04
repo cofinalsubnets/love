@@ -1,6 +1,7 @@
 ; src/tools/selfpack.l -- cut the source container from the tree itself.
 ;
 ;   love src/tools/selfpack.l [-c codecs] src.tree top stamp build roster [drop..]
+;   love src/tools/selfpack.l -l          the walk's files, one path a line: the tree's listing
 ;
 ; codecs names a section's codec, `lisp=bzip2,c=bzip2,rest=lzma2`: stored deflate bzip2 lzma2,
 ; deflate where none is named. every seat carries every decoder, so the table is free to move.
@@ -8,8 +9,10 @@
 ; the tree on disk is the source, checkout and seed-laid tree alike. it leaves out sb's law
 ; (.sbignore plus sb's built-ins, so the vcs walk and this cut agree), sp-own's structural skips
 ; and each drop. the walk is sorted and every mtime pinned to stamp, so the same files answer
-; the same bytes (test_distboot holds a re-cut to the byte). `build` rides in as top/STAMP, and
-; roster names the files a carried-source bake reads (the Makefile's distfiles).
+; the same bytes (test_distboot holds a re-cut to the byte). `build` rides in as top/STAMP: a
+; number, or `set` -- the newest patch time in the nest's head (sb's set-stamp), else an
+; unpacked release's own STAMP, else 0, which orders nothing. roster names the files a
+; carried-source bake reads (the Makefile's distfiles).
 ; the container is the one src/love/lib/srctree.h reads: a header, an index, and the tar in
 ; sections, each packed alone under the codec its -c table names, else deflate. the
 ; id is the sha of the joined tar, kept in src.tree.sha; the quiet pass (tar-thin? + tar-hash)
@@ -140,8 +143,20 @@
        (? (two? old && two? have && <>old = h) 0
           (puts ("LOVE\t" + out), putc 10, sp-write out (sp-tree (sp-codecs spec) secs frags), sp-write side h, 0)))
 
+   ; the build stamp of the tree here, in seconds: a function of the patch set, never a clock.
+   ; sb reads the nest off the working directory, which is the tree's root
+   (sp-stamp _)
+    (: t ((cite 'sb 'set-stamp) ((cite 'sb 'head) ()))
+       (0 < t ? t (sp-read "STAMP" @ [1 x] (<(sound x) @ v (charm? v ? v 0)) 0)))
+   ; the listing: the tree's files under sb's law alone, which the cut's structural skips narrow
+   (sp-ls _)
+    (: t (tar-thin? (sp-keep? ((cite 'sb 'igs 0) + (cite 'sb 'igsdir))) "." "")
+       _ (!t ? (sp-die "cannot read the tree"))
+       (each >(<>t) (e \ tar-get e 'kind 'file = 'file ? (puts (tar-get e 'nom "" + "\n")) 0), 0))
+
    (sp-main a0)
-    (: spec (two? a0 && <a0 = "-c" ? <>a0 "")
+    (: _ (two? a0 && <a0 = "-l" ? (sp-ls 0, quit 0) 0)
+       spec (two? a0 && <a0 = "-c" ? <>a0 "")
        av (two? a0 && <a0 = "-c" ? >>a0 a0)
        _ (sp-codecs spec)                              ; a bad table dies before the walk
        n #av
@@ -149,7 +164,7 @@
        out <av
        top <>av
        stamp <(sound <>>av)
-       build (av 3)
+       build (av 3 = "set" ? show (sp-stamp 0) (av 3))
        ros (sp-read (av 4) @ [1 s] (foldl (t \ w \ pin t w 1) {} (words s))
               (sp-die ("cannot read the roster " + av 4)))
        ; top joins the drops: a release untarred at the root would otherwise ride the

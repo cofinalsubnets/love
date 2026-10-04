@@ -44,6 +44,11 @@
    _ (roost-turn g 106)
    _ (roost-turn g 49)
    _ (test (g 'over = 'apply))                             ; 1: do it
+   ; the verdict: bytes first, then two nonzero stamps; a 0 on either side orders nothing
+   vd (cite 'source 'nest-vd)
+   _ (test (vd () "a" 5 0 = 'fresh) (vd "a" "a" 5 9 = 'same) (vd "a" "b" 5 3 = 'older)
+           (vd "a" "b" 5 9 = 'newer) (vd "a" "b" 5 5 = 'twin) (vd "a" "b" 0 9 = 'other)
+           (vd "a" "b" 5 0 = 'other) (vd "a" "a" 0 0 = 'same))
    f (roost-frame g)
    (test (string? f) (0 < #f),
     puts "src/apps/lore/roost: ok -- the nest's floor (the perch, the shelves, the door)\n"))

@@ -412,8 +412,8 @@
         0))
 
    ; -- nest: this binary laid as the user's love under ~/.love/bin, the tools linked to it --
-   ; the build stamp is the carried tree's STAMP (src/tools/selfpack.l lays it); 0 where this
-   ; binary carries no source, or no stamp in it
+   ; the build stamp is the carried tree's STAMP (src/tools/selfpack.l lays it: the newest patch
+   ; time in the set it was cut from); 0 where this binary carries no source, or no stamp in it
    (nest-stamp _)
     (uread "/love/STAMP" @ [1 s] (: v <(sound (s + "")) (charm? v ? v 0)) 0)
    ; a stamp as its utc minute, which is what a person compares
@@ -457,8 +457,12 @@
 
    ; the plan: what is there, what this build is, and what to do about each. the verdict
    ; says how the two builds stand -- 'fresh (none there) 'older 'same (these very bytes)
-   ; 'twin (one stamp, other bytes) 'newer -- and 'bin is 'lay or 'keep. a tool's 'was is
+   ; 'twin (one stamp, other bytes) 'newer, or 'other (other bytes, where either stamp is 0 and
+   ; orders nothing) -- and 'bin is 'lay or 'keep. a tool's 'was is
    ; its link's target, "a file", or "" when absent; its 'act is 'link or 'keep
+   (nest-vd old new mine theirs)
+    (? !(string? old) 'fresh (old = new) 'same (theirs < 1 || mine < 1) 'other
+       (theirs < mine) 'older (theirs = mine) 'twin 'newer)
    (nest-plan f?)
     (: home (getenv "HOME")
        _ (string? home && #home ? 0 (src-die "nest: no HOME"))
@@ -470,8 +474,8 @@
        old (two? (stat dst) ? (nest-read dst))
        mine (nest-stamp 0)
        theirs (string? old ? (nest-theirs dst) 0)
-       vd (? !(string? old) 'fresh (old = new) 'same (theirs < mine) 'older (theirs = mine) 'twin 'newer)
-       lay (elem vd '(fresh older) || f? && !(vd = 'same))
+       vd (nest-vd old new mine theirs)
+       lay (elem vd '(fresh older other) || f? && !(vd = 'same))
        (tool nm) (: p (bin + "/" + nm) l (readlink p)
                     was (? (string? l) l (two? (stat p)) "a file" "")
                     {'nm nm 'was was 'act (was = "love" ? 'keep 'link)})
@@ -485,6 +489,7 @@
     'older "the nest's love is older"
     'same "the nest's love is this very build"
     'twin "the nest's love has this stamp but other bytes"
+    'other "the nest's love is another build, and one of the two is unstamped: no order"
     "the nest's love is newer")
    ; a tool's line: what it is, and what it becomes
    (nest-tool-line pl t)

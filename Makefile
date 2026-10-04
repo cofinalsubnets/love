@@ -14,7 +14,7 @@ love0 = out/love0
   site serve site-serve valg disasm flame cat cata catav perf repl gdb bench cloc
 
 # an unpacked release builds the product; a checkout keeps the fast gate
-ifeq ($(in_git),)
+ifeq ($(in_vcs),)
 .DEFAULT_GOAL := dist
 else
 .DEFAULT_GOAL := test
@@ -405,12 +405,12 @@ force_src: ;
 # the roster is the bake section, what a carried-source bake decodes alone (main.c).
 $(src_tree): force_src $(love0) $(ho)/.dist.list
 	@mkdir -p $(dir $@)
-	@LOVE_NO_IMAGE= LOVE_BUDGET_MB=256 $(love0) src/tools/selfpack.l -c $(tree_codecs) $@ love-$(dist_ver) $(dist_stamp) $(love_stamp) $(ho)/.dist.list $(dist_drop)
+	@LOVE_NO_IMAGE= LOVE_BUDGET_MB=256 $(love0) src/tools/selfpack.l -c $(tree_codecs) $@ love-$(dist_ver) $(dist_stamp) set $(ho)/.dist.list $(dist_drop)
 
 out/src.o: $(src_tree) src/tools/mksrc.l $(holocat_dep) $(love0)
 	@echo 'HOLO	'$@
 	@$(love0) $(holocat) src/tools/mksrc.l $(src_tree) $@ $(hosta)
-# the build stamp is 0, not the last commit's time: committing hot.prof moves that stamp
+# the build stamp is 0, not the set's: recording hot.prof moves that stamp
 out/prof/src.tree: force_src $(love0) $(ho)/.dist.list
 	@mkdir -p $(dir $@)
 	@LOVE_NO_IMAGE= LOVE_BUDGET_MB=256 $(love0) src/tools/selfpack.l -c $(tree_codecs) $@ love-$(dist_ver) $(dist_stamp) 0 $(ho)/.dist.list $(dist_drop) src/tools/hot.prof
@@ -1114,8 +1114,10 @@ $v/syntax/love.vim: $(ho)/syntax.vim
 
 all: host kernel wasm dist
 
+# the tree's own listing (selfpack -l, sb's law), never a vcs tool's; an empty one is a refusal
 lint: $(mdep)
-	@$m $S/apps/libra/libra.l $$(git ls-files '*.l' 2>/dev/null || $m sb ls | grep '\.l$$') && echo "lint: parens balance"
+	@fs=$$($m $S/tools/selfpack.l -l | grep '\.l$$'); [ -n "$$fs" ] || { echo "FAIL lint: no .l files listed"; exit 1; }; \
+	 $m $S/apps/libra/libra.l $$fs && echo "lint: parens balance"
 
 
 crewtools = $(wildcard src/apps/*.l) $(foreach d,$(wildcard src/apps/*),$(wildcard $d/$(notdir $d).l))
