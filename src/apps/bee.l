@@ -211,7 +211,8 @@
        (tool "queue_land" ("Land by sha (git) or psid (sb): for your green row at its head, check that the base "
                            + "is where the base line says and that landing your gated head gives the gated tree -- "
                            + "git merge-tree of the base and the head, or the hub's head inside the gated set -- and "
-                           + "answer the exact commands to land it with what each must print. It changes nothing.")
+                           + "answer the exact commands to land it with what each must print. It changes nothing, but for a row "
+                           + "owned on another box: the hub's take is its box's alone, so it is done there and said.")
              {"queue" (prop "refs/queue/NAME for git, or queue/NAME for an sb ledger in the hub")
               "session" (prop "the row's session, when not yours")}
              ["queue"])
@@ -1245,9 +1246,25 @@
      ; --- a worker nest: DIR made from the hub (SB_HUB, else (hub ..)) at its head -- the hub's
      ; store pulled and its head taken, out/ seeded from the hub's build when the hub is here --
      ; where a session works, as in a worktree. the hub may be NAME@BOX, through BOX's door ---
+     ; the nest's verbs: .sb/bin holds a script per love verb the host's PATH lacks, so a session
+     ; there says sb, cook, kore bare and keeps the host's own cc, ssh and make. the tree's
+     ; .claude/settings.json puts the dir first on its sessions' PATH. -> how many it laid
+     (shim-text v) (paras ["#!/bin/sh" "# a love verb in this nest: the nest's own love when built, else love on PATH"
+                           ("r=$(dirname \"$0\")/../..; [ -x \"$r/out/love\" ] && exec \"$r/out/love\" " + v + " \"$@\"")
+                           ("exec love " + v + " \"$@\"")])
+     (nest-shims d)
+      (: b (d + "/.sb/bin") _ (mkdirs b) _ (lush-out ("rm -f " + sq b + "/*"))
+         ps (filter (\ p (0 < #p && p != b)) (cite 'kore 'usplit 58 (: p (getenv "PATH") (string? p ? p ""))))
+         (host? v) (two? (filter (\ p (two? (stat (p + "/" + v)))) ps))
+         vs (filter (\ v (v != "love" && find v "/" 0 < 0 && !(host? v))) (sort (map show (keys (cite 'verbs 'tab)))))
+         _ (map (\ v (spit-file (b + "/" + v) (shim-text v))) vs)
+         _ (? (two? vs) (lush-out ("chmod +x " + sq b + "/*")) "")
+         #vs)
      (nest-cmd as)
       (: d (? (two? >as) <>as "") hub (q-hub 0) far (find hub "@" 0 > 0)
          (? (#d = 0) (: _ (say err "usage: love bee --nest DIR\n") 2)
+            ; a nest already: its verbs laid again, as a nest made before them needs
+            (two? (stat (d + "/.sb"))) (: n (nest-shims d) _ (puts (d + " is a nest already: its verbs laid again in .sb/bin (" + show n + ")\n")) 0)
             !(far || two? (stat (hub + "/.sb")))
              (: _ (say err "bee: no hub: SB_HUB, or (hub PATH) or (hub NAME@BOX) in ~/.love/etc/bee.l, names the nest a worker nest is made from\n") 2)
             (two? (stat d)) (: _ (say err ("bee: " + d + " is there already\n")) 1)
@@ -1256,9 +1273,11 @@
                ps (chomp (lush-out ("sb -C " + sq d + " psid")))
                ob (? (!far && two? (stat (hub + "/out")) && !(two? (stat (d + "/out"))))
                      (lush-out ("cp -a " + sq (hub + "/out") + " " + sq (d + "/out") + " && echo ok")) "")
+               nv (? (find tk "ok" 0 < 0) 0 (nest-shims d))
                (? (find tk "ok" 0 < 0) (: _ (say err ("bee: " + d + " could not take the hub's head from " + hub + "\n")) 1)
                   (: _ (puts ("a worker nest at " + d + " on the hub's head " + ps
-                              + (find ob "ok" 0 < 0 ? "" ", out/ seeded from the hub's") + ".\n"
+                              + (find ob "ok" 0 < 0 ? "" ", out/ seeded from the hub's") + "; "
+                              + show nv + " love verbs in .sb/bin, first on its sessions' PATH.\n"
                               + "work there; sb record, then sb bank NAME and sb sync --keep " + hub + " to hand the hub the set you gated.\n"))
                      0)))))
      ; --- the door: what another box's key may run here, held to it by sshd. `--door KEY` prints
@@ -1295,7 +1314,9 @@
          route (? (0 < #bx) (box-route bx) ["" ""])
          ; the key ssh offers the box: its identityfiles as ssh -G reads them, the first with a .pub
          pub (: ids (? (0 < #(route 0)) (filter (\ l (starts? l "identityfile ")) (lines (lush-out ("ssh -G " + sq (route 0) + " 2>/dev/null")))) ())
-                fs (map (\ l (: f (snip l 13 #l) (? (starts? f "~/") (bee-home + snip f 1 #f) f))) ids)
+                ; ssh's ~ is the account's home from passwd, not $HOME (a node may run in a scratch one)
+                pw (: h (chomp (lush-out "getent passwd \"$(id -un)\" | cut -d: -f6")) (0 < #h ? h bee-home))
+                fs (map (\ l (: f (snip l 13 #l) (? (starts? f "~/") (pw + snip f 1 #f) f))) ids)
                 ks (filter (\ f (string? (slurp-file (f + ".pub")))) fs)
                 (? (two? ks) (chomp (slurp-file (<ks + ".pub"))) ""))
          door (\ _ (? (0 < #bx) (relay bx "" "--door") [1 ""]))
@@ -1320,6 +1341,9 @@
           [("a nest at " + nest + " on the hub's head")
            (\ _ (two? (stat (nest + "/.sb"))))
            (\ _ ("love bee --nest " + nest + "   # (nest PATH) in ~/.love/etc/bee.l names another"))]
+          [("the nest's love verbs in " + nest + "/.sb/bin (sb, cook, kore bare in its sessions)")
+           (\ _ (two? (stat (nest + "/.sb/bin"))))
+           (\ _ ("love bee --nest " + nest + "   # on a nest already, it lays the verbs again"))]
           [("love built in the nest: " + nest + "/out/love")
            (\ _ (two? (stat (nest + "/out/love"))))
            (\ _ ("cd " + nest + " && make   # the cc on PATH builds love0, love builds the rest"))]
