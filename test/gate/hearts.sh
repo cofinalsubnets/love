@@ -31,7 +31,8 @@ for t in make clang ld.lld llvm-ar llvm-objcopy flex bison perl curl; do
 done
 mkdir -p "$B" "$C/src" || fail "cannot make $B"
 mkdir "$B/.lock" 2>/dev/null || fail "$B is in use ($B/.lock)"
-trap 'rm -rf "$O" "$B/ref" "$B/.lock"' EXIT
+# a red run keeps both builds to read (the next run clears them); a green one leaves nothing
+trap 'rm -rf "$B/.lock"' EXIT
 
 tgz=$C/src/linux-$V.tar.xz
 [ -f "$tgz" ] || curl -sSfL -o "$tgz" "https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-$V.tar.xz" \
@@ -74,4 +75,6 @@ for f in .config kernel/config_data.gz arch/arm64/boot/Image; do
   [ -f "$O/$f" ] || fail "hearts made no $f"
   cmp -s "$B/ref/$f" "$O/$f" || fail "$f differs from kbuild's"
 done
-echo "hearts: Image $(sha256sum < "$O/arch/arm64/boot/Image" | cut -c1-16) = kbuild+clang's, from linux-$V defconfig, host programs by mooncc"
+sha=$(sha256sum < "$O/arch/arm64/boot/Image" | cut -c1-16)
+rm -rf "$O" "$B/ref"
+echo "hearts: Image $sha = kbuild+clang's, from linux-$V defconfig, host programs by mooncc"
