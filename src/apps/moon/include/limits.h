@@ -7,7 +7,7 @@
 #define SCHAR_MIN  (-128)
 #define SCHAR_MAX  127
 #define UCHAR_MAX  255
-#ifdef __CHAR_UNSIGNED__                /* plain char per the target's psABI: signed on x86-64 alone */
+#ifdef __CHAR_UNSIGNED__                /* plain char per the target's ABI: signed on x86-64 and wasm */
 #define CHAR_MIN   0
 #define CHAR_MAX   UCHAR_MAX
 #else

@@ -368,10 +368,10 @@
    ; -- the type floor rides src/apps/moon/floor.l (shapes, sizes, the typing door), read from
    ; gen too. ps carries the two things it takes as parameters: the word and the tag table --
    (pst32? ps) (elem (ps 'tgt) '(thumb2 thumb2sp thumb1))
-   ; char is three types (C11 6.2.5p15): 'schar and 'uchar, and plain char -- 'char where the psABI makes
-   ; it signed (x86-64), 'cchar where unsigned (AAPCS64, AAPCS32, RISC-V; wasm rides riscv's). each
+   ; char is three types (C11 6.2.5p15): 'schar and 'uchar, and plain char -- 'char where the ABI makes it
+   ; signed (x86-64, wasm's C conventions), 'cchar where unsigned (AAPCS64, AAPCS32, RISC-V). each
    ; symbol's sign is its own, so nothing past here asks the target
-   (pchar ps) (elem (ps 'tgt) '(a64 rv64 wasm thumb1 thumb2 thumb2sp) ? 'cchar 'char)
+   (pchar ps) (elem (ps 'tgt) '(a64 rv64 thumb1 thumb2 thumb2sp) ? 'cchar 'char)
    (pw64 ps) !(pst32? ps)                          ; is long 8 bytes? the const folder's one question
    (psword ps) (pst32? ps ? 4 8)
    (szty ps) (pst32? ps ? 'uint 'ulong)          ; size_t: sizeof folds wear this coat
