@@ -757,7 +757,7 @@
       hub=${SB_HUB:-}; [ -z "$hub" ] && [ -d .sb ] && hub=.
       if [ -n "$hub" ]; then
        for n in $(sb -C "$hub" ledger 2>/dev/null | cut -d' ' -f1); do
-        case $n in queue/*) echo "--- sb ledger $n, in the nest at $hub ---"; sb -C "$hub" ledger "$n";; esac
+        case $n in queue/*) echo "--- sb ledger $n, in the nest at $hub ---"; sb -C "$hub" ledger "$n" --text;; esac
        done
       fi
       """
@@ -988,7 +988,7 @@
        [("# " + q-short q + " merge queue, on bee's standard protocol (doc/bee.md, THE MERGE QUEUE): the state every")
         "#   session reads; messages only announce changes to it."
         (? (q-git? q) ("# read:  git cat-file -p " + q)
-           ("# read:  queue_read, or sb -C HUB ledger " + q + "   (HUB: SB_HUB, the one nest every session names)"))
+           ("# read:  queue_read, or sb -C HUB ledger " + q + " --text   (HUB: SB_HUB, the one nest every session names)"))
         "# write: only through bee's tools -- queue_row, queue_lead, queue_land, queue_landed -- from a bee, or from"
         "#   claude code through love bee --mcp. each write is a compare-and-swap and refuses what these rules forbid."
         "# join: add your row at the bottom when your branch is ready to gate -- a row per branch, so a second branch"

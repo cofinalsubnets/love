@@ -1010,12 +1010,15 @@
    id (: p (hark ["sh" "-c" ("'" + cr-love + "' sb -C '" + hub + "' ledger queue/main --id > '" + nb + "/id'")]) (cr-get (nb + "/id")))
    _ (cr-put nb "plain" "leader bob\n")
    pl (hark ["sh" "-c" ("'" + cr-love + "' sb -C '" + hub + "' ledger queue/main --was " + snip id 0 64 + " '" + nb + "/plain' 2>/dev/null")])
+   ; what reads queues the way queue-watch does -- the hud here -- sees the text, not the entry
+   hud (cr-run nb ("SB_HUB=" + hub) "--hud")
    _ (test (0 = <r1) (cr-in (r1 1) "row now:") (cr-in (r1 1) "ant@lfar b1")
            (string? e1) (starts? e1 "(entry ") (cr-in e1 "(by \"ant@lfar\")") (cr-in e1 "(seq \"0\")")
            (cr-in t1 "1 ant@lfar b1 ")
            (0 = <r2) (cr-in (r2 1) "row now:")
            (cr-in e2 "(by \"bob@lnear\")") (cr-in e2 "(seq \"1\")") (cr-in t2 "2 bob b2 ")
-           (0 != <pl))
+           (0 != <pl)
+           (cr-in (hud 1) "ant@lfar") !(cr-in (hud 1) "(entry "))
    0)
 
 ; --- revocation: the root's box revokes a box by name and carries the list to the others; a box
