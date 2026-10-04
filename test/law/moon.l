@@ -920,12 +920,18 @@
 ; are 'uchar 'ushort 'uint 'ulong (gen: zero-extend loads, logical >>, unsigned divide).
 (: (cast src) <>(cparse <>(clex src))
    (ty1 src)  <<><<><<>(cast (src + " int main(void){return 0;}"))
+   (ty1t src tgt) <<><<><<>(<>(cparse-t <>(clex (src + " int main(void){return 0;}")) tgt))
    (test
       ((ty1 "unsigned long g;") = 'ulong)
       ((ty1 "unsigned char b;") = 'uchar)
       ((ty1 "unsigned short h;") = 'ushort)
       ((ty1 "unsigned u;") = 'uint)
-      ((ty1 "signed char c;") = 'char)     ; signed folds away
+      ; char is three types (C11 6.2.5p15): signed char, unsigned char, and plain char, whose sign is
+      ; the psABI's -- 'char where signed (x86-64), 'cchar where unsigned (a64, rv64, wasm, thumb)
+      ((ty1 "signed char c;") = 'schar)
+      ((ty1 "char c;") = 'char)
+      ((ty1t "char c;" 'a64) = 'cchar) ((ty1t "char c;" 'rv64) = 'cchar) ((ty1t "char c;" 'thumb2) = 'cchar)
+      ((ty1t "signed char c;" 'a64) = 'schar) ((ty1t "unsigned char c;" 'a64) = 'uchar)
       ((ty1 "long long q;") = 'long)     ; long long -> long
       ((ty1 "int i;") = 'int)))
 
