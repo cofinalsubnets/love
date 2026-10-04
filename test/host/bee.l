@@ -974,6 +974,70 @@
            (cr-in (after 1) "seal does not check") !(cr-in (after 1) "sent to peer@two"))
    0)
 
+; --- across boxes, live: wnear keeps refs/queue/main and wfar's ant owns a row there. a write on
+; wnear tells ant@wfar what it moves, as queue-watch sealed at wnear; a shell's mail crosses both
+; ways sealed by its box; a beat makes a session read as live on the far box, an old one is
+; refused, and a stale one reads as gone, as does a leader known only by it
+(: nb (cr-dir "wnear" "") fb (cr-dir "wfar" "")
+   _ (cr-run nb "" "--keygen root") _ (cr-run nb "" "--keygen box wnear")
+   tk (: r (cr-run nb "" "--ticket") (snip (r 1) 0 129))
+   _ (cr-put fb "req" ((cr-run fb "" ("--enrol " + tk + " wfar")) 1))
+   _ (cr-put fb "card" ((cr-run nb "" ("--admit < '" + fb + "/req'")) 1))
+   _ (cr-run fb "" ("--enrolled < '" + fb + "/card'"))
+   learnt (cr-get (nb + "/.love/etc/bee/boxes"))                   ; the admission keeps the route
+   tk2 (: r (cr-run nb "" "--ticket") (snip (r 1) 0 129))
+   _ (cr-put fb "req" ((cr-run fb "" ("--enrol " + tk2 + " wfar wfar.lan")) 1))
+   _ (cr-put fb "card" ((cr-run nb "" ("--admit < '" + fb + "/req'")) 1))
+   _ (cr-run fb "" ("--enrolled < '" + fb + "/card'"))
+   again (cr-get (nb + "/.love/etc/bee/boxes"))                    ; enrolled again: the new way, alone
+   _ (hark ["git" "-C" nb "init" "-q"])
+   _ (cr-put (nb + "/.love/etc") "bee.l" ("(ledger-dir " + nb + ")\n(relay sh " + nb + "/ssh)\n(beat 10)\n"))
+   _ (cr-put (fb + "/.love/etc") "bee.l" ("(relay sh " + fb + "/ssh)\n(beat 10)\n"))
+   _ (cr-put (fb + "/.love/etc/bee") "boxes" "wnear wnear\n")
+   ; the stand-in ssh: HOST [env HOME=..] LOVE bee VERB, the verb its last word, run as the far box
+   _ (cr-put nb "ssh" ("for v; do :; done; exec env HOME='" + fb + "' '" + cr-love + "' '" + cr-app + "' \"$v\"\n"))
+   _ (cr-put fb "ssh" ("for v; do :; done; exec env HOME='" + nb + "' '" + cr-love + "' '" + cr-app + "' \"$v\"\n"))
+   (msgs ls) (foldl (\ a m (a + json-show m + "\n")) "" ls)
+   (call id nm args) {"jsonrpc" "2.0" "id" id "method" "tools/call" "params" {"name" nm "arguments" args}}
+   (cell b nm) (: hv (b + "/.love/run/hive") pc (hv + "/" + nm)
+                  _ (map (\ p (mkdir p 448)) [(b + "/.love/run") hv pc (pc + "/inbox") (pc + "/read")])
+                  (cr-put pc "card" ("pid " + show (getpid 0) + "\ncwd /x\nstate idle\nbranch w1\n")))
+   (inbox b nm) (: d (b + "/.love/run/hive/" + nm + "/inbox") fs (readdir d)
+                   (map (\ f (cr-get (d + "/" + f))) (? (two? fs) (sort fs) ())))
+   _ (cr-put fb "row" (msgs [(call 1 "queue_row" {"queue" "refs/queue/main@wnear" "state" "waiting" "branch" "b1"})]))
+   r1 (cr-run fb "BEE_NAME=ant" ("--mcp < '" + fb + "/row'"))
+   _ (cell fb "ant")
+   _ (cr-put nb "join" (msgs [(call 1 "queue_row" {"queue" "refs/queue/main" "state" "waiting" "branch" "b2"})]))
+   r2 (cr-run nb "BEE_NAME=bob" ("--mcp < '" + nb + "/join'"))
+   n1 (inbox fb "ant")
+   _ (cr-put fb "take" (msgs [(call 2 "inbox" {})]))
+   t1 (cr-run fb "BEE_AS=ant" ("--mcp < '" + fb + "/take'"))
+   ; a shell's mail, both ways
+   _ (cell nb "zed")
+   s1 (cr-run nb "BEE_NAME=" "--send ant@wfar from a shell on wnear")
+   s2 (cr-run fb "BEE_NAME=" "--send zed@wnear from a shell on wfar")
+   n2 (inbox fb "ant") n3 (inbox nb "zed")
+   ; beats: wnear's zed reads as live on wfar, until the beat is old
+   bt (cr-run nb "" "--beats")
+   l1 (cr-run fb "" "--list")
+   kept (cr-get (fb + "/.love/run/hive/.boxes/wnear"))
+   old (: f (fb + "/.love/run/hive/.boxes/wnear")
+          _ (cr-put (fb + "/.love/run/hive/.boxes") "wnear"
+                    (foldl (\ a l (a + (starts? l "at " ? "at 1000" l) + "\n")) "" (lines (cr-get f))))
+          (cr-run fb "" "--list"))
+   _ (test (0 = <r1) (cr-in (r1 1) "ant@wfar") (cr-in learnt "wfar wfar ") (cr-in learnt (" " + fb + "\n"))
+           (cr-in again "wfar wfar.lan ") !(cr-in again "wfar wfar ")
+           (0 = <r2) (cr-in (r2 1) "row now:")
+           (1 = #n1) (cr-in <n1 "from queue-watch\n") (cr-in <n1 "refs/queue/main@wnear changed:")
+           (cr-in <n1 "row 2 joined") (cr-in <n1 "\nsig ")
+           (cr-in (t1 1) "sealed=\\\"queue-watch@wnear\\\"")
+           (0 = <s1) (0 = <s2) (1 = #n2) (cr-in <n2 "from a shell on wnear") (cr-in <n2 "from cli-") (cr-in <n2 "\nsig ")
+           (1 = #n3) (cr-in <n3 "from a shell on wfar")
+           (0 = <bt) (cr-in (bt 1) "wfar: taken")
+           (cr-in (l1 1) "zed@wnear") (cr-in (l1 1) "(by beat)") (cr-in kept "session zed idle")
+           !(cr-in (old 1) "zed@wnear"))
+   0)
+
 ; --- the hud: --hud prints it once. a fixture queue with a fold: the fold sits under the row it
 ; joins, the head is marked, the long queue said; no model is named and no session is settled
 (: d (cr-dir "hud" "")
