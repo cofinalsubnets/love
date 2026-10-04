@@ -3693,11 +3693,13 @@
                 (? (two? h) (skiprel g >fs hs)
                    (elem <>f (g 'pool0)) (skiprel g >fs hs)
                    fs)))))
+   ; a tail call's result extension (rext) may go: on x64 and a64 every caller extends what it gets back
+   (skipxt g l) (? (two? l && (x64? g || a64? g) && two? <l && elem <<l '(sx1 sx2 sx4 zx1 zx2 zx4) && <>(<l) = 'r0) >l l)
    (sibs g (f . r) lw el hs ej crf)
     (: lw2 (two? f && <f = 'lea && <>>f = 'r4 || lw)
        cand (!lw2 && two? f && (<f = 'call && two? >f ||
                                 <f = 'callr && <>f = <>crf))
-       rr (cand ? (skiprel g r hs) r)
+       rr (cand ? (skiprel g (skipxt g r) hs) r)
        (? (cand && epim? rr ej)
            (sibjmp g f ej + sibs g (drop #ej rr) () el hs ej crf)
           (cand && lbl-epi? rr ej)
