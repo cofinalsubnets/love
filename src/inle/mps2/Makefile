@@ -13,7 +13,7 @@ lib_h  = out/lib/egg.h out/lib/post.h out/lib/prel.h out/lib/ev.h out/lib/love_v
 p_hdrs = out/lib/rune.h
 include ../port.mk
 
-mps2_cc = $(MOONCC) -t thumb2 -D ai_tco=1 -D __STDC_HOSTED__=0 -I. -Isrc/love -Iout/lib
+mps2_cc = $(MOONCC) -t thumb2 -D tco=1 -D __STDC_HOSTED__=0 -I. -Isrc/love -Iout/lib
 # our own link: -Ttext 0 is the board's origin, -nostdlib says an owed nom is a diagnostic
 # rather than a hunt for a runtime this board would not want.
 mps2_ld = $(MOONCC) -t thumb2 -Ttext 0 -Tdata 0x20000000 -nostdlib
@@ -101,10 +101,10 @@ $(R)/$(o)/love-pd.img: $(R)/$(o)/baker-pd.elf $(R)/$(o)/waker-pd.elf
 # --- the thumb1 face: the SAME port compiled `mooncc -t thumb1` (ARMv6-M, the RP2040's
 # ISA). v6-M code is a strict subset of ARMv7E-M, so qemu's M7 runs it natively -- no
 # RP2040 machine exists in qemu; the microbit differential legs prove the v6-M encoding
-# floor, this proves the whole runtime. ai_tco=0: v6-M has no sibcalls (the pop-pc
+# floor, this proves the whole runtime. tco=0: v6-M has no sibcalls (the pop-pc
 # epilogue), so the VM rides the trampoline -- the lane the clang rp2040 build uses. The
 # __aeabi soft-float/64-bit helpers are rt-t1.o, the tree's own.
-mps2t1_cc = $(MOONCC) -t thumb1 -D ai_tco=0 -D __STDC_HOSTED__=0 -I. -Isrc/love -Iout/lib
+mps2t1_cc = $(MOONCC) -t thumb1 -D tco=0 -D __STDC_HOSTED__=0 -I. -Isrc/love -Iout/lib
 t1_libc_o = $(addprefix $(R)/$(o)/,$(addsuffix -t1.o,$(libc_m)))
 t1_love_o = $(addprefix $(R)/$(o)/,$(addsuffix -t1.o,$(love_m)))
 t1_objs = $(R)/$(o)/start.o $(t1_love_o) $(R)/$(o)/alloc-t1.o $(R)/$(o)/lm-t1.o $(R)/$(o)/rt-t1.o $(t1_libc_o) \

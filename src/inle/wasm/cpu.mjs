@@ -3,7 +3,7 @@
 // (inle.mjs under node, machine.js in the browser); the two share one ring of key bytes
 // in a SharedArrayBuffer, which is what lets the kernel's idle really block: nanosleep is
 // an Atomics.wait on the ring, one tick or the next key. moonlibc's calls never arrive --
-// kmain writes __ai_osv = -1 and they take src/inle/sys.c -- so what comes through the one import
+// kmain writes __love_osv = -1 and they take src/inle/sys.c -- so what comes through the one import
 // is src/inle/wasm/arch.c's five hypercalls wearing linux's numbers, and src/inle/wasm/horn.c's four
 // wearing none, whose samples go into a second ring for the terminal's AudioWorklet.
 //
@@ -375,7 +375,7 @@ const call = (f, ...args) => {
 async function boot(msg) {
   let uni = false;
   const sys = (...a) => { const r = sys1(...a); return uni ? [r, 0n, 0, 0] : r; };
-  const { instance } = await WebAssembly.instantiate(msg.wasm, { env: { __ai_sys: sys } });
+  const { instance } = await WebAssembly.instantiate(msg.wasm, { env: { __love_sys: sys } });
   ex = instance.exports;
   memory = ex.mem ?? ex.memory;
   uni = Object.values(ex).some((f) => typeof f === 'function' && f.length === 16);

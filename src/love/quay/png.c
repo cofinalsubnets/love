@@ -6,7 +6,7 @@
 // never lands on a byte still to be read.
 #include "quay.h"
 
-intptr_t ai_inflate_raw(unsigned char const*, uintptr_t, unsigned char*, uintptr_t);
+intptr_t inflate_raw(unsigned char const*, uintptr_t, unsigned char*, uintptr_t);
 
 static uint32_t qp_be32(uint8_t const *p) {
   return (uint32_t) p[0] << 24 | (uint32_t) p[1] << 16 | (uint32_t) p[2] << 8 | p[3]; }
@@ -94,7 +94,7 @@ int cb_png(uint8_t *buf, uintptr_t n, uintptr_t cap, uint32_t *wp, uint32_t *hp)
   if (z < 6 || f0 + fsz > cap) return -1;
   // zlib: deflate, no preset dictionary
   if ((buf[0] & 15) != 8 || ((uint32_t) buf[0] << 8 | buf[1]) % 31u || buf[1] & 32) return -1;
-  if (ai_inflate_raw(buf + 2, z - 2, buf + f0, fsz) != (intptr_t) fsz) return -1;
+  if (inflate_raw(buf + 2, z - 2, buf + f0, fsz) != (intptr_t) fsz) return -1;
   uint32_t *out = (uint32_t*) buf;
   uint8_t *f = buf + f0;
   for (int p = lace ? 0 : 6; p < 7; p++) {

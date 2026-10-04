@@ -1,5 +1,5 @@
-#ifndef _AI_FNMATCH_H
-#define _AI_FNMATCH_H
+#ifndef _LOVE_FNMATCH_H
+#define _LOVE_FNMATCH_H
 /* shell patterns against a name: * ? [..] with ranges, ! or ^ negation and [:class:]es, \ escapes */
 #define FNM_PATHNAME    1    /* a / matches only a / */
 #define FNM_NOESCAPE    2    /* \ is an ordinary character */

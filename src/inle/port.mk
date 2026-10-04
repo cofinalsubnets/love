@@ -78,16 +78,16 @@ be_lc   = $(subst $(R)/,,$(p_be_l))
 # and src/love/nohorn.c, the horn's refusal where there is no card. only a bare seat links
 # either: everything else carries src/love/fd.c, whose bodies are the real ones, and two of
 # them in one link is a collision that says so. a board that grows a speaker drops
-# nohorn for src/love/horn.c, which answers ai_horn_writen itself -- out/front is the link that
+# nohorn for src/love/horn.c, which answers love_horn_writen itself -- out/front is the link that
 # shows the shape.
 love_m   = $(basename $(love_tu) $(love_codec)) bare nohorn
 love_dep = $(love_h) $(lib_hR) $(lv)
 love_o   = $(addprefix $(R)/$(o)/,$(addsuffix .o,$(love_m)))
 
-# ..and the seat's heap beside them: src/love/alloc.c answers ai_alloc over malloc and free,
+# ..and the seat's heap beside them: src/love/alloc.c answers alloc over malloc and free,
 # which is what a board whose memory is already those wants. it is not in love_m because
 # that list is compiled out of src/love/ and this answer is the seat's, not the runtime's -- a
-# board with a heap of its own defines ai_alloc and names no alloc.o, and a board that
+# board with a heap of its own defines alloc and names no alloc.o, and a board that
 # names neither fails to link, which is the right answer for a runtime with nowhere to
 # put its pools. $1 is the board's own <x>_cc, $2 an object-stem suffix.
 define p_heap

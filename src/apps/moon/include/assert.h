@@ -13,8 +13,8 @@
 	                __FILE__, __LINE__, #e), abort()))
 #endif
 
-#ifndef _AI_ASSERT_H
-#define _AI_ASSERT_H
+#ifndef _LOVE_ASSERT_H
+#define _LOVE_ASSERT_H
 /* static_assert is a keyword-level facility; expose the C11 macro spelling. */
 #ifndef static_assert
 #define static_assert _Static_assert

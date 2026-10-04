@@ -1,5 +1,5 @@
-#ifndef _AI_SYS_UTSNAME_H
-#define _AI_SYS_UTSNAME_H
+#ifndef _LOVE_SYS_UTSNAME_H
+#define _LOVE_SYS_UTSNAME_H
 /* linux's new_utsname: six fields of 65, which the call fills in place. the BSDs have no
  * such call, and the member builds the same struct from kern.* and hw.machine */
 struct utsname {

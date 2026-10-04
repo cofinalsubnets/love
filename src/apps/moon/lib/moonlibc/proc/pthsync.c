@@ -134,21 +134,21 @@ int pthread_once(pthread_once_t *o, void (*fn)(void)) {
     __fx_wait(o, 1, 0); }
   return 0; }
 
-/* keys: a slot taken in __ai_mt, its value in each thread's own row */
+/* keys: a slot taken in __love_mt, its value in each thread's own row */
 void **__pt_tsd(void);
 int pthread_key_create(pthread_key_t *k, void (*dtor)(void *)) {
-  __pt_take(&__ai_mt.klock);
+  __pt_take(&__love_mt.klock);
   int i = 0;
-  while (i < PTHREAD_KEYS_MAX && __ai_mt.key[i]) i++;
-  if (i < PTHREAD_KEYS_MAX) { __ai_mt.key[i] = 1; __ai_mt.dtor[i] = dtor; }
-  __pt_give(&__ai_mt.klock);
+  while (i < PTHREAD_KEYS_MAX && __love_mt.key[i]) i++;
+  if (i < PTHREAD_KEYS_MAX) { __love_mt.key[i] = 1; __love_mt.dtor[i] = dtor; }
+  __pt_give(&__love_mt.klock);
   if (i == PTHREAD_KEYS_MAX) return EAGAIN;
   __pt_tsd()[i] = 0;
   *k = (pthread_key_t) i; return 0; }
 int pthread_key_delete(pthread_key_t k) {
-  if (k >= PTHREAD_KEYS_MAX || !__ai_mt.key[k]) return EINVAL;
-  __ai_mt.key[k] = 0; __ai_mt.dtor[k] = 0; return 0; }
+  if (k >= PTHREAD_KEYS_MAX || !__love_mt.key[k]) return EINVAL;
+  __love_mt.key[k] = 0; __love_mt.dtor[k] = 0; return 0; }
 void *pthread_getspecific(pthread_key_t k) { return k < PTHREAD_KEYS_MAX ? __pt_tsd()[k] : 0; }
 int pthread_setspecific(pthread_key_t k, void const *v) {
-  if (k >= PTHREAD_KEYS_MAX || !__ai_mt.key[k]) return EINVAL;
+  if (k >= PTHREAD_KEYS_MAX || !__love_mt.key[k]) return EINVAL;
   __pt_tsd()[k] = (void *) v; return 0; }

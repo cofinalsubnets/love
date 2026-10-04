@@ -62,7 +62,7 @@ rndm() { awk -v n="$1" 'BEGIN{printf "%d", int(n*4.26+0.5)}'; }
 # -- generate the DIMACS once (php re-stated here, the textbook encoding, so the
 #    files match src/apps/sat/sat.l's (php h) without loading its self-test). --
 gen() {
-  cat <<'AI'
+  cat <<'EOF'
 (: (neg v) (- 0 v)
    (php h) (: P (+ h 1)
       pc (map (\ p (map (\ k (+ (* p h) (+ k 1))) (jot h))) (jot P))
@@ -75,7 +75,7 @@ gen() {
    (dump h) (: cs (php h)
       _ (puts (+ "p cnf " (+ (show (php-vars h)) (+ " " (+ (show (tally cs)) "\n")))))
       (foldl (\ _ cl (puts (+ (lits cl) "0\n"))) 0 cs)))
-AI
+EOF
   echo "(dump $1)"
 }
 for h in $INSTANCES; do
@@ -85,12 +85,12 @@ done
 # -- the random-3-SAT files, one per (size, seed): the SAME gen2 the love lane runs. --
 genrnd() { # $1 = n, $2 = m, $3 = seed
   printf '%s\n' "$GEN2"
-  cat <<'AI'
+  cat <<'EOF'
 (: (lits cl) (foldl (\ a x (+ a (+ (show x) " "))) "" cl)
    (dumpf n m sd) (: cs (gen2 sd n m)
       _ (puts (+ "p cnf " (+ (show n) (+ " " (+ (show (tally cs)) "\n")))))
       (foldl (\ _ cl (puts (+ (lits cl) "0\n"))) 0 cs))
-AI
+EOF
   echo "   _ (dumpf $1 $2 $3))"
 }
 for n in $RNDN; do
@@ -134,7 +134,7 @@ for h in $INSTANCES; do
 done
 
 # -- the random rows: a batch of RNDK instances summed; verdict = the signature. --
-RNDDRV=$(cat <<'AI'
+RNDDRV=$(cat <<'EOF'
 (: _ (fcdcl (gen2 1000 @N@ @M@) @N@)
    res ((: (go i ms sig)
            (? (>= i @K@) (link ms sig)
@@ -143,7 +143,7 @@ RNDDRV=$(cat <<'AI'
                  (go (+ i 1) (+ ms d) (+ sig (? (id? r 'unsat) "u" "s"))))))
         0 0 "")
    _ (puts (+ "RESULT " (+ (show (cap res)) (+ " " (+ (cup res) "\n"))))))
-AI
+EOF
 )
 for n in $RNDN; do
   m=$(rndm "$n")

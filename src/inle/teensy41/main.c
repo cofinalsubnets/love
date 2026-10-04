@@ -1,7 +1,7 @@
 // Teensy 4.1 (i.MX RT1062) frontend for love -- bare metal, no Teensyduino.
 //
-// love's frontend contract (love.h): the host defines ai_clock, the
-// ai_stdin/ai_stdout ports, the ai_fd_port_vt vtable, and the cooperative-wait
+// love's frontend contract (love.h): the host defines love_clock, the
+// love_stdin/love_stdout ports, the love_fd_port_vt vtable, and the cooperative-wait
 // hooks. Here the console is LPUART6 on pin0(RX)/pin1(TX) at 115200 8N1,
 // reachable over a 3.3 V USB-serial adapter -- the analogue of the rp2040
 // port's UART0 console (USB CDC is a TODO, see README). The arch backend
@@ -20,28 +20,28 @@
 
 // --- cooperative waits ----------------------------------------------------
 // The host backs these with poll(2); we have only the free-running GPT timer
-// and a polled LPUART, so spin against a ai_clock() deadline (ticks are ms;
+// and a polled LPUART, so spin against a love_clock() deadline (ticks are ms;
 // ticks==0 means wait forever). No IRQs are enabled, so there is nothing to
 // WFE on -- a tight poll keeps (key)/timed sleeps re-checking readiness. Same
 // shape as the host's poll_wait, minus the kernel.
-void ai_sleep(uintptr_t ms) {
+void love_sleep(uintptr_t ms) {
   if (!ms) { for (;;) if (serial_rx_ready()) return; }   // wait forever -- but wake on input
-  uintptr_t start = ai_clock();
-  while (ai_clock() - start < ms) ; }
+  uintptr_t start = love_clock();
+  while (love_clock() - start < ms) ; }
 
 // the readiness law (src/love/main.c, inle's kmain.c): a NEGATIVE fd is ALWAYS
 // ready -- a string port waits on nothing external, and answering "not ready"
 // parks its task on a wait no scheduler can satisfy (lvm_sound's park law
 // spins sound -> yield -> sound forever: the Enter-key freeze that walled
 // first-silicon interactive). fd 0 is the honest poll; other fds are nominal.
-bool ai_ready(int fd, int events) { return fd || events != ai_wait_in ? 1 : serial_rx_ready(); }
+bool ready(int fd, int events) { return fd || events != wait_in ? 1 : serial_rx_ready(); }
 
-void ai_wait_fds(struct ai_wait_fd *fds, int n, uintptr_t ms) {
-  if (n <= 0) { ai_sleep(ms); return; }
-  uintptr_t start = ai_clock();
+void wait_fds(struct wait_fd *fds, int n, uintptr_t ms) {
+  if (n <= 0) { love_sleep(ms); return; }
+  uintptr_t start = love_clock();
   for (;;) {
-    for (int i = 0; i < n; i++) if (ai_ready(fds[i].fd, fds[i].events)) return;
-    if (ms && ai_clock() - start >= ms) return; } }
+    for (int i = 0; i < n; i++) if (ready(fds[i].fd, fds[i].events)) return;
+    if (ms && love_clock() - start >= ms) return; } }
 
 // --- port vtable ----------------------------------------------------------
 // Both ports ride LPUART6; the fd is nominal (>= 0 so the dispatcher routes
@@ -49,12 +49,12 @@ void ai_wait_fds(struct ai_wait_fd *fds, int n, uintptr_t ms) {
 // call serial_getc, which spins the whole vm on an empty ring; serial_rx_ready
 // pumps the ring and answers the same question without waiting. (serial_getc
 // stays in the driver -- psram-test.c is a standalone image with no scheduler.)
-static intptr_t fd_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
+static intptr_t fd_readn(struct g *g, unsigned char *dst, uintptr_t n) {
   uintptr_t k = 0;
   while (k < n && serial_rx_ready()) dst[k++] = (unsigned char) serial_getc();
   return (intptr_t) k; }
 
-static struct ai *fd_writen(struct ai *g, unsigned char const *src, uintptr_t n) {
+static struct g *fd_writen(struct g *g, unsigned char const *src, uintptr_t n) {
   for (uintptr_t k = 0; k < n; k++) {
     if (src[k] == '\n') serial_putc('\r');   // cook LF -> CRLF for terminals
     serial_putc(src[k]); }
@@ -63,7 +63,7 @@ static struct ai *fd_writen(struct ai *g, unsigned char const *src, uintptr_t n)
 // LPUART has no output buffer here, so a flush has nothing of its own to push --
 // it is simply the moment before the user is shown something, which makes it the
 // place to say what the INBOUND ring could not hold (teensy41.c's rx_put).
-static struct ai *fd_flush(struct ai *g) {
+static struct g *fd_flush(struct g *g) {
   uint32_t lost = serial_rx_lost();
   if (lost) {
     bput_s(serial_putc, "\r\n; input lost: ");
@@ -71,13 +71,13 @@ static struct ai *fd_flush(struct ai *g) {
     bput_s(serial_putc, " bytes\r\n"); }
   return g; }
 
-struct ai_fio ai_stdin  = { { .ap = lvm_port_io, .vt = &ai_fd_port_vt, .ungetc_buf = putcharm(EOF) }, .fd = putcharm(0) };
-struct ai_fio ai_stdout = { { .ap = lvm_port_io, .vt = &ai_fd_port_vt, .ungetc_buf = putcharm(EOF) }, .fd = putcharm(1) };
+struct fio love_stdin  = { { .ap = lvm_port_io, .vt = &love_fd_port_vt, .ungetc_buf = putcharm(EOF) }, .fd = putcharm(0) };
+struct fio love_stdout = { { .ap = lvm_port_io, .vt = &love_fd_port_vt, .ungetc_buf = putcharm(EOF) }, .fd = putcharm(1) };
 // No separate error stream; route err to the console too.
-struct ai_fio ai_stderr = { { .ap = lvm_port_io, .vt = &ai_fd_port_vt, .ungetc_buf = putcharm(EOF) }, .fd = putcharm(1) };
-struct ai_port_vt const ai_fd_port_vt = { fd_flush, fd_writen, fd_readn, NULL };
+struct fio love_stderr = { { .ap = lvm_port_io, .vt = &love_fd_port_vt, .ungetc_buf = putcharm(EOF) }, .fd = putcharm(1) };
+struct port_vt const love_fd_port_vt = { fd_flush, fd_writen, fd_readn, NULL };
 
-#include "../../love/fdrow.h"                       // ai_fd_readn / ai_fd_say off the two above
+#include "../../love/fdrow.h"                       // love_fd_readn / love_fd_say off the two above
 
 // --- GPIO builtins --------------------------------------------------------
 // (gpio_init pin)    -- claim a GPIO2 bit (pin 13 also gets its pad muxed); returns the pin.
@@ -85,17 +85,17 @@ struct ai_port_vt const ai_fd_port_vt = { fd_flush, fd_writen, fd_readn, NULL };
 // (gpio_put pin val) -- drive an output: val non-zero => high; returns val.
 // (gpio_get pin)     -- sample an input; returns 1 (high) or 0 (low).
 // zero is putcharm(0), so getcharm(arg) != 0 reads a number or zero correctly.
-static lvm(ai_gpio_init) {
+static lvm(love_gpio_init) {
   gpio_init(getcharm(Sp[0]));           // leaves Sp[0] (the pin) as the result
   Ip += 1;
   return Continue(); }
 
-static lvm(ai_gpio_get) {
+static lvm(love_gpio_get) {
   Sp[0] = putcharm(gpio_get(getcharm(Sp[0])));
   Ip += 1;
   return Continue(); }
 
-static lvm(ai_gpio_dir) {
+static lvm(love_gpio_dir) {
   unsigned pin = getcharm(Sp[0]);
   int out = getcharm(Sp[1]) != 0;
   gpio_set_dir(pin, out);
@@ -104,7 +104,7 @@ static lvm(ai_gpio_dir) {
   Ip += 1;
   return Continue(); }
 
-static lvm(ai_gpio_put) {
+static lvm(love_gpio_put) {
   unsigned pin = getcharm(Sp[0]);
   int val = getcharm(Sp[1]) != 0;
   gpio_put(pin, val);
@@ -116,17 +116,17 @@ static lvm(ai_gpio_put) {
 // 1-arg nifs run their thunk directly; 2-arg nifs build a 2-slot frame with
 // lvm_cur first (mirrors the host's nif_open shape).
 static union u const
-  nif_gpio_init[] = {{ai_gpio_init}, {lvm_ret0}},
-  nif_gpio_get[]  = {{ai_gpio_get}, {lvm_ret0}},
-  nif_gpio_dir[]  = {{lvm_cur}, {.x = putcharm(2)}, {ai_gpio_dir}, {lvm_ret0}},
-  nif_gpio_put[]  = {{lvm_cur}, {.x = putcharm(2)}, {ai_gpio_put}, {lvm_ret0}};
+  nif_gpio_init[] = {{love_gpio_init}, {lvm_ret0}},
+  nif_gpio_get[]  = {{love_gpio_get}, {lvm_ret0}},
+  nif_gpio_dir[]  = {{lvm_cur}, {.x = putcharm(2)}, {love_gpio_dir}, {lvm_ret0}},
+  nif_gpio_put[]  = {{lvm_cur}, {.x = putcharm(2)}, {love_gpio_put}, {lvm_ret0}};
 
 // the baked heap image, embedded by ld -b binary (see the Makefile + .image
 // in teensy41.lds). FILE scope: mooncc emits no relocation for a block-scope
 // extern array (the address materializes as garbage -- silicon-diagnosed).
 extern const char _binary_love_img_start[], _binary_love_img_end[];
 
-static struct ai_def defs[] = {
+static struct def defs[] = {
   {"gpio_init", {.k = nif_gpio_init}},
   {"gpio_dir",  {.k = nif_gpio_dir}},
   {"gpio_put",  {.k = nif_gpio_put}},
@@ -134,7 +134,7 @@ static struct ai_def defs[] = {
 
 // --- the arena ------------------------------------------------------------
 // The generational collector is the ONLY collector, and it draws its pools
-// through ai_alloc, whose default rides malloc/free (src/love/love.c). So the frontend
+// through alloc, whose default rides malloc/free (src/love/love.c). So the frontend
 // supplies those: a first-fit free list (ffalloc.h) over a static arena in OCRAM2,
 // with the C stack above it under __stack_top__.
 #include "../ffalloc.h"
@@ -204,24 +204,24 @@ int main(void) {
   // src/inle/mps2's baker -- fully symbolic, so this differently-linked binary
   // may wake it). A good image skips the ~55 s on-device bake; any problem
   // answers NULL and the egg lane below bakes from source as always.
-  uintptr_t t0 = ai_clock();
-  struct ai *g = ai_image_load(_binary_love_img_start,
+  uintptr_t t0 = love_clock();
+  struct g *g = love_image_load(_binary_love_img_start,
                                (uintptr_t)(_binary_love_img_end - _binary_love_img_start), 0);
   int woke = g != NULL;
   { char const *s = woke ? "; image awake\r\n" : "; no image -- baking the egg\r\n";
     for (; *s; s++) serial_putc(*s); }
-  if (!woke) g = ai_ini();
-  g = ai_defn(g, defs, countof(defs));
+  if (!woke) g = ini();
+  g = defn(g, defs, countof(defs));
   // born: this wake's cost, as src/love/main.c defines it -- the egg lane's egg.l pins its own
-  if (woke && ai_ok(g = ai_push(g, 1, putcharm((intptr_t) (ai_clock() - t0))))) {
-    g = ai_defv(g, "born");
-    if (ai_ok(g)) g->sp++; }
-  // BOUND the collector to the arena (the Appel knob -- ai_please, love.c):
+  if (woke && ok(g = push(g, 1, putcharm((intptr_t) (love_clock() - t0))))) {
+    g = defv(g, "born");
+    if (ok(g)) g->sp++; }
+  // BOUND the collector to the arena (the Appel knob -- please, love.c):
   // 2*minor + 2*major carve out of the free list, and a major resize holds old
   // and new at once, so an unbounded budget OOMs inside the collector. A
   // quarter of the arena leaves the double-buffered resize and free-list
   // fragmentation their room.
-  if (ai_ok(g)) g->budget = arena_words / 4;
+  if (ok(g)) g->budget = arena_words / 4;
   // The LED is the status channel while the console has no adapter: solid on
   // = still baking/waking, OFF = the shell is at its prompt, fast blink
   // (below) = fatal. 3 is LED_BIT (GPIO2_IO03 = pin 13). the tail runs AFTER
@@ -234,7 +234,7 @@ int main(void) {
   if (!woke) {
     // the on-device egg bake: bao is a MODULE, registered by the eval below and
     // then spliced. a woken image (the mps2 baker's) carries the load already.
-    g = ai_egg(g,
+    g = egg(g,
 #include "egg.h"
     ,
 #include "prel.h"
@@ -243,13 +243,13 @@ int main(void) {
     ,
 #include "post.h"
     );
-    g = ai_evals_(g, "(borrow 'cli) 0"); }
+    g = evals_(g, "(borrow 'cli) 0"); }
   // THE SESSION: a fresh writable layer, C-side -- the shell's defglobs land
   // here, never in the base (bakes carry none; every boot or wake pushes its own).
-  g = ai_open(g);
+  g = love_open(g);
   // the seat check answers first: a shell over an image that fails it is
   // worse than a loud prompt, and this board has no exit code to say it with.
-  struct ai *r = ai_evals_(g, woke ?
+  struct g *r = evals_(g, woke ?
     "(: ok "
     SEAT_OK
     TE_TAIL("; image hatched -- shell up")
@@ -258,8 +258,8 @@ int main(void) {
     SEAT_OK
     TE_TAIL("; egg hatched -- shell up"));
   // The shell only returns on a fatal error: honest face, then blink it out.
-  if (ai_code_of(r) == ai_status_scare) ai_scare_face(r);
-  ai_fin(r);
+  if (code_of(r) == status_scare) scare_face(r);
+  fin(r);
   for (;;) {
-    gpio_put(LED_BIT, 1); ai_sleep(120);
-    gpio_put(LED_BIT, 0); ai_sleep(120); } }
+    gpio_put(LED_BIT, 1); love_sleep(120);
+    gpio_put(LED_BIT, 0); love_sleep(120); } }

@@ -77,7 +77,7 @@
  (!"" = (0 = $"")) (!-5 = (0 = $-5)))            ; !x == (0 = $x); the parens are load-bearing, bare an = run chains
 
 ; --- types & predicates --- storage: charm? sun? gem? twin? tray? string? nom? name? mint? two? tablet?;
-; derived constellation? whole? atom?; lit? = a top-region reference (tablet/fn/hot, ai_kind>=KTablet); hot? the opaque cask/port subset.
+; derived constellation? whole? atom?; lit? = a top-region reference (tablet/fn/hot, kind>=KTablet); hot? the opaque cask/port subset.
 ; a predicate answers a bit -- 0 on false, never the zero point. both are blue, so nothing that
 ; tests one can tell them apart, which is why the sweep below is generic rather than a roster:
 ; every `?`-named global takes four false-ish probes, and an answer equal to () is the failure
@@ -134,7 +134,7 @@
  (infinity = 1 / 0) ("infinity" = show (1 / 0)) ("-infinity" = show (-1 / 0))
  (word ? ("1.7976931348623157e308" = show 1.7976931348623157e308) 1)  ; the whole finite range prints digits -- only true infinity wears infinity
  ; the printer is shortest-roundtrip (exact Steele & White), so (read (show x)) = x for every
- ; finite gem. the word guard: these faces are the double tier's -- a 32-bit ai_flo_t's differ
+ ; finite gem. the word guard: these faces are the double tier's -- a 32-bit flo_t's differ
  (word ? ("0.30000000000000004" = show (0.1 + 0.2)) 1) ("0.3" = show 0.3)
  (word ? ("5e-324" = show 5e-324) 1) (word ? ("1e23" = show 1e23) 1)
  ; ..and the read side is correctly rounded too (lm_strtod, no glibc): neighbors stay distinct

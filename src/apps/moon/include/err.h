@@ -1,5 +1,5 @@
-#ifndef _AI_ERR_H
-#define _AI_ERR_H
+#ifndef _LOVE_ERR_H
+#define _LOVE_ERR_H
 /* BSD's message-and-exit calls, glibc's way: "prog: msg: strerror", the x ones without the
    strerror, and a null format leaving just the strerror */
 #include <stdarg.h>

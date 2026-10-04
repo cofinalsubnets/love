@@ -1,5 +1,5 @@
-#ifndef _AI_SYS_MMAN_H
-#define _AI_SYS_MMAN_H
+#ifndef _LOVE_SYS_MMAN_H
+#define _LOVE_SYS_MMAN_H
 #include <sys/types.h>
 #define PROT_NONE  0
 #define PROT_READ  1

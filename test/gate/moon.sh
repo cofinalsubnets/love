@@ -786,7 +786,7 @@ echo "mooncc: the warm compiler (moon-run answers, the image compiles on past a 
 
 # ------------------------------------------------ the carried runtime is KERNEL-NEUTRAL
 # one archive per ISA, all three cut under -os linux -- and that pin does not reach the
-# bytes, because impl.h parts the kernels at RUN time on __ai_osv. so every hosted kernel
+# bytes, because impl.h parts the kernels at RUN time on __love_osv. so every hosted kernel
 # must take the CARRIED archive.
 # A CLOCK ALONE CANNOT SAY IT WAS TAKEN: out/cache/moon's .a entries make the
 # member-compile lane fast too, so a warm cache passes this leg whether the archive was

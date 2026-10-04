@@ -1,5 +1,5 @@
-#ifndef _AI_SYS_VFS_H
-#define _AI_SYS_VFS_H
+#ifndef _LOVE_SYS_VFS_H
+#define _LOVE_SYS_VFS_H
 /* linux's statfs, which is the only one of the three kernels whose answer has this
  * shape at all -- the BSDs carry mount names and a version word inside theirs. every
  * field is a machine word on the 64-bit ports, so one struct serves x64, a64 and rv64.

@@ -1,5 +1,5 @@
-#ifndef _AI_SYSEXITS_H
-#define _AI_SYSEXITS_H
+#ifndef _LOVE_SYSEXITS_H
+#define _LOVE_SYSEXITS_H
 /* BSD's exit statuses, 64 and up */
 #define EX_OK          0
 #define EX__BASE      64

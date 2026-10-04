@@ -1,5 +1,5 @@
 ; test/front/hornseat.l -- the horn's seat door, and the ring a card pulls it through.
-; runs under out/frontseat (test/front/main.c with -D ai_horn_seat=1), where
+; runs under out/frontseat (test/front/main.c with -D love_horn_seat=1), where
 ; src/love/horn.c asks k_horn_* for the device: the lane inle and the playdate run, which
 ; no other gate reaches. the frontend's device is src/love/hornring.h's ring; (tapped ())
 ; drains it as a card would, and at 1024 frames against writes of a few hundred every law
@@ -69,7 +69,7 @@
   tapped ()))                                   ; drained again, for the law below
 
 ; --- the lag is the device's number, not a clock's --------------------------------
-; the sink reckons what is played from ai_clock at the nominal rate, so its lag drifts
+; the sink reckons what is played from love_clock at the nominal rate, so its lag drifts
 ; with the wall. a seat answers k_horn_lag, which is what the ring actually holds --
 ; exact, and the number backpressure is owed.
 (horn 44100 2 @ h

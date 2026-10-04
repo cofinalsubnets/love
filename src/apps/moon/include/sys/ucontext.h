@@ -1,5 +1,5 @@
-#ifndef _AI_SYS_UCONTEXT_H
-#define _AI_SYS_UCONTEXT_H
+#ifndef _LOVE_SYS_UCONTEXT_H
+#define _LOVE_SYS_UCONTEXT_H
 #include <signal.h>
 /* the context a SA_SIGINFO handler's third argument points at: linux's frame, laid as the kernel
    lays it, up to the register set (a BSD kernel hands its own shape). no getcontext/makecontext */

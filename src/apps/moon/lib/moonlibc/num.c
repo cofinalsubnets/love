@@ -279,7 +279,7 @@ FILE *popen(char const *cmd, char const *mode) {
   f->pid = pid;
   if (!rd) { f->buf = (unsigned char *) (f + 1); f->cap = 4096; }
   else { f->rb = (unsigned char *) (f + 1); f->rcap = 4096; }
-  __ai_fopened(f);
+  __love_fopened(f);
   return f; }
 int pclose(FILE *f) {
   int pid = f->pid, st = 0;

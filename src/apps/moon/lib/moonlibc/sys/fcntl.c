@@ -4,14 +4,14 @@ int fcntl(int fd, int cmd, ...) {
   va_list ap; va_start(ap, cmd);
   long arg = va_arg(ap, long);
   va_end(ap);
-  if (__ai_osv >= 2) {
+  if (__love_osv >= 2) {
     /* DUPFD/GETFD/SETFD/GETFL/SETFL share their numbers; the rest translate.
      * SETFL's status flags and GETFL's answer wear the other kernel's bits;
      * the record-lock trio takes each BSD's numbers (fb 11/12/13, nb 7/8/9)
      * and the shared {start,len,pid,type,whence} prefix -- freebsd alone
      * appends sysid, which the wider scratch carries for both. */
-    int nb = __ai_osv == 3;
-    if (cmd == F_SETFL) arg = __ai_ofb(arg);
+    int nb = __love_osv == 3;
+    if (cmd == F_SETFL) arg = __love_ofb(arg);
     else if (cmd == F_DUPFD_CLOEXEC) cmd = nb ? 12 : 17;
     else if (cmd == F_GETLK || cmd == F_SETLK || cmd == F_SETLKW) {
       struct flock *l = (struct flock *) arg;
@@ -26,6 +26,6 @@ int fcntl(int fd, int cmd, ...) {
         l->l_type = (short) (kf.type == 1 ? F_RDLCK : kf.type == 3 ? F_WRLCK : F_UNLCK); }
       return (int) r; }
     long r = er(sc3(NR_fcntl, fd, cmd, arg));
-    if (r >= 0 && cmd == F_GETFL) r = __ai_ocan(r);
+    if (r >= 0 && cmd == F_GETFL) r = __love_ocan(r);
     return (int) r; }
   return (int) er(sc3(NR_fcntl, fd, cmd, arg)); }

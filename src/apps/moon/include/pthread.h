@@ -1,5 +1,5 @@
-#ifndef _AI_PTHREAD_H
-#define _AI_PTHREAD_H
+#ifndef _LOVE_PTHREAD_H
+#define _LOVE_PTHREAD_H
 /* the minimal threads: create, join, exit, self, equal -- linux only (clone, a futex join); on
    another kernel pthread_create answers EAGAIN. each thread gets an 8M stack and ignores its
    attributes. malloc and free lock once a second thread exists; errno is one for the whole

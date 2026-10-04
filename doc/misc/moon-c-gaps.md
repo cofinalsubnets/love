@@ -616,20 +616,20 @@ carrying an extra argument will happily jump into a callee without one:
 
 ```c
 // a 5-arg caller into a 4-arg callee: mooncc emits the jump, clang refuses the compile
-static struct ai *f(struct ai *g, union u *Ip, word *Hp, word *Sp, int extra) {
-  ai_musttail return callee(g, Ip, Hp, Sp); }
+static struct g *f(struct g *g, union u *Ip, word *Hp, word *Sp, int extra) {
+  love_musttail return callee(g, Ip, Hp, Sp); }
 ```
 
 clang: `cannot perform a tail call to function 'callee' because its signature is incompatible
 with the calling function`. This is the one gap that undermines an invariant rather than a
-value — `ai_musttail` is *owed*, and the whole discipline rests on a shape that cannot jump
+value — `love_musttail` is *owed*, and the whole discipline rests on a shape that cannot jump
 REFUSING at compile (love.h). A check that passes the incompatible case means mooncc alone
 cannot police it. Measured 2026-08-15: 58 converted `ghelp` tails, mooncc took all 58, clang
 named the 5 that were extra-arg lvms.
 
 **`make vmret` does not cover this.** It reads the shipped binary, which mooncc builds — so
 it sounds mooncc's own output against mooncc's own rule. `test_front` is currently the only
-gate compiling clang at `ai_tco=1`, which is what caught it.
+gate compiling clang at `tco=1`, which is what caught it.
 
 ---
 

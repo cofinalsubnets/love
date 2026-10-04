@@ -3,7 +3,7 @@
 
 /* the program's name as glibc prints it here: argv[0] past its last slash */
 static char const *__errname(void) {
-  char const *p = __ai_progname, *s = p;
+  char const *p = __love_progname, *s = p;
   for (; *p; p++) if (*p == '/') s = p + 1;
   return s; }
 static void __errsay(int e, int with, char const *fmt, va_list ap) {

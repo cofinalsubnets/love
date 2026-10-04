@@ -1,5 +1,5 @@
-#ifndef _AI_STDIO_H
-#define _AI_STDIO_H
+#ifndef _LOVE_STDIO_H
+#define _LOVE_STDIO_H
 /* glibc provides NULL from stdio/stdlib/string too (not just stddef) -- third-party
    C (the LFS ladder) leans on that; guarded so a prior stddef include is fine. */
 #ifndef NULL

@@ -71,7 +71,7 @@
 // scribbled screen may paint garbage, never read or write out of bounds.
 static struct cb *scr_ok(word x) {
  if (x & 1 || ((union u*) x)->ap != lvm_cask) return 0;
- struct ai_str *s = ((struct ai_cask*) x)->str;
+ struct str *s = ((struct cask*) x)->str;
  if (s->len < sizeof(struct cb)) return 0;
  struct cb *c = (struct cb*) s->bytes;
  uintptr_t n = (uintptr_t) c->rows * c->cols;
@@ -122,13 +122,13 @@ static lvm(lvm_screen) {
   uintptr_t need = cb_size(r, k, sn) + cb_hsize(hl, k) + cb_tsize(r, k);
   if ((b & 1) || ((union u*) b)->ap != lvm_cask) out = putcharm(need);
   else {
-   struct ai_str *s = ((struct ai_cask*) b)->str;
+   struct str *s = ((struct cask*) b)->str;
    if (s->len >= need) {
     cb_open((struct cb*) s->bytes, r, k, sn);
     cb_hist((struct cb*) s->bytes, hl), cb_twin((struct cb*) s->bytes, 1);
     out = b; } } }
  Sp[2] = out;
- Sp += 2; Ip += 1; ai_musttail return Continue(); }
+ Sp += 2; Ip += 1; love_musttail return Continue(); }
 
 // (regrid scr b rows cols): as screen, but the new grid starts from scr's. b must be a
 // cask of its own -- the two may not overlap
@@ -142,12 +142,12 @@ static lvm(lvm_regrid) {
   uintptr_t need = cb_size(r, k, sn) + cb_hsize(hl, k) + cb_tsize(r, k);
   if ((b & 1) || ((union u*) b)->ap != lvm_cask) out = putcharm(need);
   else {
-   struct ai_str *s = ((struct ai_cask*) b)->str;
+   struct str *s = ((struct cask*) b)->str;
    if (s->len >= need && (uint8_t*) s->bytes != (uint8_t*) c) {
     cb_regrid((struct cb*) s->bytes, c, r, k, sn, hl, 1);
     out = b; } } }
  Sp[3] = out;
- Sp += 3; Ip += 1; ai_musttail return Continue(); }
+ Sp += 3; Ip += 1; love_musttail return Continue(); }
 
 // (scribe scr x): the feed. A charm is one byte; a string or cask pours every
 // byte through cb_putc (the hot path: one nif call per pty read). Returns the
@@ -159,14 +159,14 @@ static lvm(lvm_scribe) {
   out = Sp[0];
   if (x & 1) cb_putc(c, (char) (getcharm(x) & 0xff));
   else if (strp(x)) {
-   struct ai_str *s = str(x);
+   struct str *s = str(x);
    for (uintptr_t i = 0; i < s->len; i++) cb_putc(c, s->bytes[i]); }
   else if (((union u*) x)->ap == lvm_cask) {
-   struct ai_str *s = ((struct ai_cask*) x)->str;
+   struct str *s = ((struct cask*) x)->str;
    for (uintptr_t i = 0; i < s->len; i++) cb_putc(c, s->bytes[i]); }
   else out = ZeroPoint; }
  Sp[1] = out;
- Sp += 1; Ip += 1; ai_musttail return Continue(); }
+ Sp += 1; Ip += 1; love_musttail return Continue(); }
 
 // (glass scr i k): look through to one word of one cell.
 static lvm(lvm_glass) {
@@ -180,7 +180,7 @@ static lvm(lvm_glass) {
    out = putcharm(k == 0 ? (v ? (e->g & 0xffe00000u) | cb_cp(v[0]) : e->g) : k == 1 ? e->fg & ~cb_soft : k == 2 ? e->bg
                   : v ? cb_cp(v[k - 2]) : 0u); } }
  Sp[2] = out;
- Sp += 2; Ip += 1; ai_musttail return Continue(); }
+ Sp += 2; Ip += 1; love_musttail return Continue(); }
 
 // (gaze scr k): one header field by key -- no allocation, so a render loop
 // polls the cursor for free. 0 cursor, 1 rows, 2 cols, 3 flag, 4 top, 5 bot.
@@ -202,7 +202,7 @@ static lvm(lvm_gaze) {
   case 11: out = putcharm(c->sel1); break;
   default: break; }
  Sp[1] = out;
- Sp += 1; Ip += 1; ai_musttail return Continue(); }
+ Sp += 1; Ip += 1; love_musttail return Continue(); }
 
 // (peer scr n): the view n lines back, clamped; answers where it landed
 static lvm(lvm_peer) {
@@ -213,7 +213,7 @@ static lvm(lvm_peer) {
   cb_peer(c, n < 0 ? 0u : n > (intptr_t) c->hn ? c->hn : (uint32_t) n);
   out = putcharm(c->view); }
  Sp[1] = out;
- Sp += 1; Ip += 1; ai_musttail return Continue(); }
+ Sp += 1; Ip += 1; love_musttail return Continue(); }
 
 // (wet scr k): dirty-row bits for rows 32k..32k+31, read-and-cleared --
 // the renderer's shopping list. bit 255 stands for row 255 and past.
@@ -226,7 +226,7 @@ static lvm(lvm_damage) {
    out = putcharm(c->dmg[k]);
    c->dmg[k] = 0; } }
  Sp[1] = out;
- Sp += 1; Ip += 1; ai_musttail return Continue(); }
+ Sp += 1; Ip += 1; love_musttail return Continue(); }
 
 // (tilepx scr i x y): one pixel of cell i's tile, as the painter reads it
 static lvm(lvm_tilepx) {
@@ -242,13 +242,13 @@ static lvm(lvm_tilepx) {
     uint32_t const X = cb_ttx(g) * c->cw + (uint32_t) x, Y = cb_tty(g) * c->ch + (uint32_t) y;
     out = putcharm(X < im->w && Y < im->h ? cb_ipx(c)[im->off + Y * im->w + X] : 0u); } } }
  Sp[3] = out;
- Sp += 3; Ip += 1; ai_musttail return Continue(); }
+ Sp += 3; Ip += 1; love_musttail return Continue(); }
 
 // the bytes of a string or cask, or 0
-static struct ai_str *nif_bytes(word x) {
+static struct str *nif_bytes(word x) {
  if (x & 1) return 0;
  if (strp(x)) return str(x);
- if (((union u*) x)->ap == lvm_cask) return ((struct ai_cask*) x)->str;
+ if (((union u*) x)->ap == lvm_cask) return ((struct cask*) x)->str;
  return 0; }
 
 // (dye scr buf w row cur font): one row of the screen as pixels, the same draw the
@@ -256,46 +256,46 @@ static struct ai_str *nif_bytes(word x) {
 // fails its vetting is no font. no allocation, so every pointer holds throughout
 static lvm(lvm_dye) {
  struct cb *c = scr_ok(Sp[0]);
- struct ai_str *b = !(Sp[1] & 1) && ((union u*) Sp[1])->ap == lvm_cask ? ((struct ai_cask*) Sp[1])->str : 0;
+ struct str *b = !(Sp[1] & 1) && ((union u*) Sp[1])->ap == lvm_cask ? ((struct cask*) Sp[1])->str : 0;
  word out = ZeroPoint;
  if (c && b && (Sp[2] & 1) && (Sp[3] & 1) && (Sp[4] & 1)) {
   intptr_t const w = getcharm(Sp[2]), row = getcharm(Sp[3]), cur = getcharm(Sp[4]);
   if (w > 0 && row >= 0 && row < c->rows) {
-   struct ai_str *f = nif_bytes(Sp[5]);
+   struct str *f = nif_bytes(Sp[5]);
    uint8_t const *qf = f && cb_font_ok((uint8_t const*) f->bytes, f->len) ? (uint8_t const*) f->bytes : 0;
    struct cb_paper const p = { (uint32_t*) b->bytes, (uintptr_t) w, (uintptr_t) w, b->len / 4u / (uintptr_t) w, 1 };
    struct font const ft = { (uint8_t const*) cleat_8x16, 8, 16 };
    cb_paint(&p, c, &ft, qf, (uint16_t) row, 0, 0, cur < 0 ? ~0u : (uint32_t) cur);
    out = Sp[0]; } }
  Sp[5] = out;
- Sp += 5; Ip += 1; ai_musttail return Continue(); }
+ Sp += 5; Ip += 1; love_musttail return Continue(); }
 
 // (fontrow f cp r): the painter's own reading of a font, vetting and all
 static lvm(lvm_fontrow) {
  word f = Sp[0], out = ZeroPoint;
- struct ai_str *s = 0;
+ struct str *s = 0;
  if (!(f & 1) && strp(f)) s = str(f);
- else if (!(f & 1) && ((union u*) f)->ap == lvm_cask) s = ((struct ai_cask*) f)->str;
+ else if (!(f & 1) && ((union u*) f)->ap == lvm_cask) s = ((struct cask*) f)->str;
  if (s && (Sp[1] & 1) && (Sp[2] & 1) && cb_font_ok((uint8_t const*) s->bytes, s->len)) {
   intptr_t cp = getcharm(Sp[1]), r = getcharm(Sp[2]);
   uint8_t const *g = cp >= 0 && r >= 0 && r < 16
                      ? cb_font_rows((uint8_t const*) s->bytes, (uint32_t) cp) : 0;
   if (g) out = putcharm((uintptr_t) g[2 * r] | (uintptr_t) g[2 * r + 1] << 8); }
  Sp[2] = out;
- Sp += 2; Ip += 1; ai_musttail return Continue(); }
+ Sp += 2; Ip += 1; love_musttail return Continue(); }
 
 // Workhorse for (reply scr), called with g Packed and the screen at sp[0].
-// Drains the queue into a stack buffer FIRST (ai_have may move the cask),
+// Drains the queue into a stack buffer FIRST (have may move the cask),
 // then builds the byte list tail-first. Returns a not-ok g only on OOM.
-ai_noinline static struct ai *host_reply(struct ai *g) {
+love_noinline static struct g *host_reply(struct g *g) {
  struct cb *c = scr_ok(g->sp[0]);
  uint8_t buf[cb_outn];
  int n = c ? cb_reply(c, buf) : 0;
  if (!n) { g->sp[0] = ZeroPoint; return g; }
- if (!ai_ok(g = ai_have(g, (uintptr_t) n * Width(struct ai_chain)))) return g;
+ if (!ok(g = have(g, (uintptr_t) n * Width(struct chain)))) return g;
  word tail = ZeroPoint;
  for (int i = n; i-- > 0;) {
-  struct ai_chain *w = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
+  struct chain *w = ini_chain((struct chain*) bump(g, Width(struct chain)),
                                    putcharm(buf[i]), tail);
   tail = word(w); }
  g->sp[0] = tail;
@@ -306,9 +306,9 @@ ai_noinline static struct ai *host_reply(struct ai *g) {
 static lvm(lvm_reply) {
  Pack(g);
  g = host_reply(g);
- if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
+ if (!ok(g)) love_musttail return Ap(_lvm_ghelp, g);
  Unpack(g);
- Ip += 1; ai_musttail return Continue(); }
+ Ip += 1; love_musttail return Continue(); }
 
 // (mouse scr b row col how): the bytes are laid before Have, which may move the cask
 static lvm(lvm_mouse) {
@@ -322,10 +322,10 @@ static lvm(lvm_mouse) {
  if (!n) Sp[4] = word(EmptyString);
  else {
   Have(str_width(n));
-  struct ai_str *s = ini_str(str(Hp), n); Hp += str_width(n);
+  struct str *s = ini_str(str(Hp), n); Hp += str_width(n);
   memcpy(txt(s), buf, n);
   Sp[4] = word(s); }
- Sp += 4; Ip += 1; ai_musttail return Continue(); }
+ Sp += 4; Ip += 1; love_musttail return Continue(); }
 
 // (picture scr slot k): the base64 (k 3) or the raw rgba (k 4) is laid straight from the
 // store, counted first for Have
@@ -340,7 +340,7 @@ static lvm(lvm_picture) {
   static char const abc[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
   uintptr_t const nb = (uintptr_t) im->w * im->h * 4u, n = (nb + 2) / 3 * 4;
   Have(str_width(n));
-  struct ai_str *s = ini_str(str(Hp), n); Hp += str_width(n);
+  struct str *s = ini_str(str(Hp), n); Hp += str_width(n);
   uint32_t const *px = cb_ipx(c) + im->off;
   uint8_t *o = (uint8_t*) txt(s);
   uint32_t acc = 0, got = 0;
@@ -358,14 +358,14 @@ static lvm(lvm_picture) {
  else if (im && k == 4 && (uint64_t) im->off + (uint64_t) im->w * im->h <= (c->sn - cb_shead) / 4u) {
   uintptr_t const n = (uintptr_t) im->w * im->h;
   Have(str_width(n * 4));
-  struct ai_str *s = ini_str(str(Hp), n * 4); Hp += str_width(n * 4);
+  struct str *s = ini_str(str(Hp), n * 4); Hp += str_width(n * 4);
   uint32_t const *px = cb_ipx(c) + im->off;
   uint8_t *o = (uint8_t*) txt(s);
   for (uintptr_t i = 0; i < n; i++, o += 4)
    o[0] = (uint8_t) (px[i] >> 16), o[1] = (uint8_t) (px[i] >> 8), o[2] = (uint8_t) px[i], o[3] = px[i] >> 24 ? 255u : 0u;
   out = word(s); }
  Sp[2] = out;
- Sp += 2; Ip += 1; ai_musttail return Continue(); }
+ Sp += 2; Ip += 1; love_musttail return Continue(); }
 
 // (select scr a b u)
 static lvm(lvm_select) {
@@ -376,31 +376,31 @@ static lvm(lvm_select) {
   cb_select(c, getcharm(Sp[1]), getcharm(Sp[2]), u < 0 ? 3u : (uint32_t) u);
   out = Sp[0]; }
  Sp[3] = out;
- Sp += 3; Ip += 1; ai_musttail return Continue(); }
+ Sp += 3; Ip += 1; love_musttail return Continue(); }
 
 // (copied scr a b): counted first, as pasted is
 static lvm(lvm_copied) {
  struct cb *c = scr_ok(Sp[0]);
- if (!c || !(Sp[1] & Sp[2] & 1)) { Sp[2] = ZeroPoint; Sp += 2; Ip += 1; ai_musttail return Continue(); }
+ if (!c || !(Sp[1] & Sp[2] & 1)) { Sp[2] = ZeroPoint; Sp += 2; Ip += 1; love_musttail return Continue(); }
  intptr_t const a = getcharm(Sp[1]), b = getcharm(Sp[2]);
  uintptr_t const n = cb_copied(c, 0, a, b);
  Have(str_width(n));
- struct ai_str *s = ini_str(str(Hp), n); Hp += str_width(n);
+ struct str *s = ini_str(str(Hp), n); Hp += str_width(n);
  cb_copied(c, (uint8_t*) txt(s), a, b);
  Sp[2] = word(s);
- Sp += 2; Ip += 1; ai_musttail return Continue(); }
+ Sp += 2; Ip += 1; love_musttail return Continue(); }
 
 // (pasted scr s): counted first, so Have's restart repeats nothing but the count
 static lvm(lvm_pasted) {
  struct cb *c = scr_ok(Sp[0]);
- if (!c || !strp(Sp[1])) { Sp[1] = ZeroPoint; Sp += 1; Ip += 1; ai_musttail return Continue(); }
- struct ai_str *in = str(Sp[1]);
+ if (!c || !strp(Sp[1])) { Sp[1] = ZeroPoint; Sp += 1; Ip += 1; love_musttail return Continue(); }
+ struct str *in = str(Sp[1]);
  uintptr_t const n = cb_pasted(c, 0, (uint8_t const*) txt(in), len(in));
  Have(str_width(n));
- struct ai_str *s = ini_str(str(Hp), n); Hp += str_width(n);
+ struct str *s = ini_str(str(Hp), n); Hp += str_width(n);
  cb_pasted(c, (uint8_t*) txt(s), (uint8_t const*) txt(in), len(in));
  Sp[1] = word(s);
- Sp += 1; Ip += 1; ai_musttail return Continue(); }
+ Sp += 1; Ip += 1; love_musttail return Continue(); }
 
 // limn's row in C: cells k.. as the escapes an outer terminal paints them by, the pen
 // threaded through (pn[0] the face, -1 for none said yet; 1 the fg; 2 the bg). it stops
@@ -461,23 +461,23 @@ static uintptr_t limn_cells(struct cb const *c, uint8_t *o, intptr_t k, intptr_t
  *took = i;
  return at; }
 
-// (limned scr k n f fg bg): counted, then laid after ai_have, which may move the cask
-ai_noinline static struct ai *host_limned(struct ai *g) {
+// (limned scr k n f fg bg): counted, then laid after have, which may move the cask
+love_noinline static struct g *host_limned(struct g *g) {
  word *a = g->sp;
  struct cb *c = scr_ok(a[0]);
  if (!c || !(a[1] & a[2] & a[3] & a[4] & a[5] & 1)) { a[0] = ZeroPoint; return g; }
  intptr_t const k = getcharm(a[1]), n = getcharm(a[2]);
  intptr_t pn[3] = { getcharm(a[3]), getcharm(a[4]), getcharm(a[5]) }, took = 0;
  uintptr_t const len = limn_cells(c, 0, k, n, pn, &took);
- if (!ai_ok(g = ai_have(g, str_width(len) + 5 * chain_req))) return g;
+ if (!ok(g = have(g, str_width(len) + 5 * chain_req))) return g;
  a = g->sp, c = scr_ok(a[0]);
  pn[0] = getcharm(a[3]), pn[1] = getcharm(a[4]), pn[2] = getcharm(a[5]);
- struct ai_str *s = ini_str(bump(g, str_width(len)), len);
+ struct str *s = ini_str(bump(g, str_width(len)), len);
  limn_cells(c, (uint8_t*) txt(s), k, n, pn, &took);
  intptr_t const tail[4] = { took, pn[0], pn[1], pn[2] };
  word l = ZeroPoint;
- for (int i = 4; i-- > 0;) l = word(ini_chain((struct ai_chain*) bump(g, chain_req), putcharm(tail[i]), l));
- a[0] = word(ini_chain((struct ai_chain*) bump(g, chain_req), word(s), l));
+ for (int i = 4; i-- > 0;) l = word(ini_chain((struct chain*) bump(g, chain_req), putcharm(tail[i]), l));
+ a[0] = word(ini_chain((struct chain*) bump(g, chain_req), word(s), l));
  return g; }
 static lvm(lvm_limned) { LvmCallp(g, 5, host_limned) }
 

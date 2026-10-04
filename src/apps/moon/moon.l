@@ -463,7 +463,7 @@
    ; the link path (rung 3, src/love/holo/link.l): every input lands as object bytes (a .c
    ; compiled here, a .o read off disk), crt0 rides first -- its text is the entry -- and
    ; ldlink binds the static exe, no system linker. the entry hands the OS stack pointer
-   ; (argc at [rsp]) to __ai_start and exits with its answer if it ever returns. __ai_start
+   ; (argc at [rsp]) to __love_start and exits with its answer if it ever returns. __love_start
    ; is weak here, the call-main tail every small link gets, so a libc object
    ; (src/apps/moon/lib/moonlibc/, rung 4) can override it strong and unpack envp/auxv too: the
    ; weak machinery is the whole switch, and there is no conditional anywhere.
@@ -476,14 +476,14 @@
            (br ne c0-fb)
            (mov r6 sp)
            (li r5 0)
-           (call __ai_start)
+           (call __love_start)
            (mov r6 r0) (li r0 60) (sys)
            (label c0-fb)
            (push r6)
            (li r5 0)
-           (call __ai_start)
+           (call __love_start)
            (mov r6 r0) (li r0 1) (sys)
-           (label __ai_start)
+           (label __love_start)
            (push r6)
            (lea r5 r6 8)
            (ld r6 r6 0)
@@ -503,25 +503,25 @@
                (br ne c0a-fb)
                (lea r0 sp 0)
                (li r1 0)
-               (call __ai_start)
+               (call __love_start)
                (li r8 93) (sys)
                (label c0a-fb)
                (li r1 2)
-               (call __ai_start)
+               (call __love_start)
                (li r8 1) (sys)
-               (label __ai_start)
+               (label __love_start)
                (push lr)
                (lea r1 r0 8)
                (ld r0 r0 0)
                (call main)
                (li r8 93) (sys))
    ; the riscv twin: a0 = the OS stack pointer, exit_group = 94 in a7 (the
-   ; answer already rides a0); the default __ai_start mirrors a64's.
+   ; answer already rides a0); the default __love_start mirrors a64's.
    crt0-rv '((lea r0 sp 0)
               (li r1 0)
-              (call __ai_start)
+              (call __love_start)
               (li r7 94) (sys)
-              (label __ai_start)
+              (label __love_start)
               (push lr)
               (lea r1 r0 8)
               (ld r0 r0 0)
@@ -726,7 +726,7 @@
    ; compile).
    ; the refusal is the target's, not the kernel's. one archive per ISA, all three cut
    ; under -os linux, and that pin does not reach the bytes: impl.h parts the kernels at run
-   ; time on __ai_osv, and os.c, the only member with an OS predefine in it, sits under
+   ; time on __love_osv, and os.c, the only member with an OS predefine in it, sits under
    ; #ifndef LvOsTranslate. riscv is where that stops -- no translation tables, so os.c reads
    ; -os and only linux has an answer; the BSDs there owe a compile, which refuses by #error.
    (rtcarried home tgt os)
@@ -826,17 +826,17 @@
               <pr))))
    ; -- the wasm link (src/love/holo/wasmfn.l): the objects are gen tuples as text, the
    ; runtime the same members compiled for wasm and pulled by need, and one function
-   ; imported -- __ai_sys, the syscall door the page's loader answers. crt0 hands moonlibc's
-   ; __ai_start a stack laid in data (argc 1, an argv, empty envp and auxv) and exits with
+   ; imported -- __love_sys, the syscall door the page's loader answers. crt0 hands moonlibc's
+   ; __love_start a stack laid in data (argc 1, an argv, empty envp and auxv) and exits with
    ; its answer through the import; the weak default calls main outright. ..or a container
    ; with the blobs behind the text (wasmfn.l's wasm-tu-read).
    (wasm-tu text) (wasm-tu-read text @ r (two? r ? r (udie 1 "cc: not a wasm object")))
-   crt0-wasm '(((label _start) (la r0 __ai_osstack) (call __ai_start) (mov r1 r0) (li r0 231) (call __ai_sys) (ret)
-                (label __ai_start) (push lr) (lea r1 r0 8) (ld r0 r0 0) (call main) (pop lr) (ret))
-               ((label __ai_osstack) (raw (1 0 0 0 0 0 0 0 (fix 8 abs64 __ai_argv0 0) 0 0 0 0 0 0 0 0
+   crt0-wasm '(((label _start) (la r0 __love_osstack) (call __love_start) (mov r1 r0) (li r0 231) (call __love_sys) (ret)
+                (label __love_start) (push lr) (lea r1 r0 8) (ld r0 r0 0) (call main) (pop lr) (ret))
+               ((label __love_osstack) (raw (1 0 0 0 0 0 0 0 (fix 8 abs64 __love_argv0 0) 0 0 0 0 0 0 0 0
                                            0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0))
-                (label __ai_argv0) (raw (97 46 111 117 116 0)))
-               ("_start" "__ai_start") ("__ai_osstack") () () () () () () () ("__ai_start"))
+                (label __love_argv0) (raw (97 46 111 117 116 0)))
+               ("_start" "__love_start") ("__love_osstack") () () () () () () () ("__love_start"))
    ; the runtime for wasm: rtmems' members under the wasm target (text objects), cached
    ; whole as one text under the same key law as the ELF archives -> ((name text) ..)
    (wasm-rt home os vb)
@@ -868,7 +868,7 @@
                             ss,
                         filter (r \ !(defs r)) (keys refs))))
        ; crt0 rides when an input defines main; a module with a face of its own (the wasm
-       ; seat's host.c, which the page enters at ai_init) links without an entry
+       ; seat's host.c, which the page enters at init) links without an entry
        entry? (foldl (a \ s \ a || elem 'main <s) 0 tsyms)      ; a ledger names noms
        base (entry? ? (crt0-wasm . texts) texts)
        bsyms (entry? ? (wasm-tu-syms crt0-wasm . tsyms) tsyms)
@@ -883,7 +883,7 @@
               (set + new @ set2 (pull set2 (ledger (bsyms + map (m \ m 2) set2))))))
        picked (pull () owed0)
        all (base + map (m \ m 1) picked)
-       m (wasm-link all {'imports '("__ai_sys") 'exports 'all})
+       m (wasm-link all {'imports '("__love_sys") 'exports 'all})
        q (open dst "w")
        (!(hot? q) ? (udie 1 ("cc: cannot write " + dst)),
         say q (wasm-emit m),
@@ -926,7 +926,7 @@
                            [['at org 'text 'rodata 'data 'nifs 'bss]])
        c9 (tgt @ 'a64 crt0-a64 'rv64 crt0-rv crt0)   ; x64's serves both kernels
        all (arm? ? srcs
-                   (["crt0" (string (objelf tgt c9 () '("__ai_start") () '("__ai_start") () () () () ()))] . srcs))
+                   (["crt0" (string (objelf tgt c9 () '("__love_start") () '("__love_start") () () () () ()))] . srcs))
        ; the archives first, then whatever the runtime still owes: a library the
        ; line named is what the link meant, and the implicit one is the fallback.
        lib (all + arload all ars tgt)

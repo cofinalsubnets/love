@@ -10,15 +10,15 @@
 // empty -- a zero-length array is not a definition every compiler will lay.
 #include "love.h"
 
-const unsigned char ai_srctree[1] = {0};
-const uintptr_t ai_srctree_len = 0;
-const unsigned char ai_rootfs[1] = {0};
-const uintptr_t ai_rootfs_len = 0;
-const unsigned char ai_rtgz_x64[1] = {0};
-const uintptr_t ai_rtgz_x64_len = 0;
-const unsigned char ai_rtgz_a64[1] = {0};
-const uintptr_t ai_rtgz_a64_len = 0;
-const unsigned char ai_rtgz_rv64[1] = {0};
-const uintptr_t ai_rtgz_rv64_len = 0;
-const unsigned char ai_rtgz_id[1] = {0};
-const uintptr_t ai_rtgz_id_len = 0;
+const unsigned char srctree[1] = {0};
+const uintptr_t srctree_len = 0;
+const unsigned char rootfs[1] = {0};
+const uintptr_t rootfs_len = 0;
+const unsigned char rtgz_x64[1] = {0};
+const uintptr_t rtgz_x64_len = 0;
+const unsigned char rtgz_a64[1] = {0};
+const uintptr_t rtgz_a64_len = 0;
+const unsigned char rtgz_rv64[1] = {0};
+const uintptr_t rtgz_rv64_len = 0;
+const unsigned char rtgz_id[1] = {0};
+const uintptr_t rtgz_id_len = 0;

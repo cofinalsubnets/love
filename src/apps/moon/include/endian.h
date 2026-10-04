@@ -1,5 +1,5 @@
-#ifndef _AI_ENDIAN_H
-#define _AI_ENDIAN_H
+#ifndef _LOVE_ENDIAN_H
+#define _LOVE_ENDIAN_H
 /* byte order: every seat moon targets is little-endian, so the le conversions are casts and the
    be ones swap (byteswap.h) */
 #include <stdint.h>

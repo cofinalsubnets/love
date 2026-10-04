@@ -23,7 +23,7 @@ static int unfilter_row(uint8_t *o, const uint8_t *up, const uint8_t *in, uintpt
    default: return 0; } }
  return 1; }
 
-static int unfilter_args(struct ai *g) {
+static int unfilter_args(struct g *g) {
  for (int k = 1; k < 5; k++) if (!oddp(g->sp[k]) || getcharm(g->sp[k]) < 0) return 0;
  uintptr_t o = (uintptr_t) getcharm(g->sp[1]), rows = (uintptr_t) getcharm(g->sp[2]),
            n = (uintptr_t) getcharm(g->sp[3]), bpp = (uintptr_t) getcharm(g->sp[4]);
@@ -31,10 +31,10 @@ static int unfilter_args(struct ai *g) {
      && rows < ((uintptr_t) 1 << 31) && o <= len(g->sp[0])
      && (uint64_t) rows * (n + 1) <= len(g->sp[0]) - o; }
 
-ai_noinline static struct ai *host_unfilter(struct ai *g) {
+love_noinline static struct g *host_unfilter(struct g *g) {
  if (!unfilter_args(g)) return g->sp[4] = ZeroPoint, g->sp += 4, g;
  uintptr_t rows = (uintptr_t) getcharm(g->sp[2]), n = (uintptr_t) getcharm(g->sp[3]);
- if (!ai_ok(g = str0(g, rows * n))) return g;       // pushes: out over the five args
+ if (!ok(g = str0(g, rows * n))) return g;       // pushes: out over the five args
  const uint8_t *in = (const uint8_t*) txt(g->sp[1]) + getcharm(g->sp[2]);
  uintptr_t bpp = (uintptr_t) getcharm(g->sp[5]);
  uint8_t *o = (uint8_t*) txt(g->sp[0]);

@@ -3,7 +3,7 @@
 //
 // on inle the doors are the kernel's own -- framebuffer, scancode tap, clock -- and
 //   (doom ())      runs the game whole; it answers when doom quits from its own menu.
-// on the host the doors are a frame flag, a key queue and ai_clock, and love drives
+// on the host the doors are a frame flag, a key queue and love_clock, and love drives
 // the loop from src/apps/doom.l over an X window:
 //   (doom-start wad)      set up, with the IWAD at that path -> 1 | 0 (already running)
 //   (doom-tick ())        one frame of the game -> 1 when a frame was drawn, 0 when
@@ -49,7 +49,7 @@ int k_baked(struct k_file *rows, int cap) {
 
 // --- the doors ------------------------------------------------------------
 
-static bool hosted(void) { return __ai_osv >= 0; }
+static bool hosted(void) { return __love_osv >= 0; }
 
 // the host seat's state: doom keeps its own globals, so this is the one place
 // the doors and the nifs meet
@@ -71,7 +71,7 @@ static void dg_quit(void) { dh.quit = 1; }
 // show is not drawn on either seat
 extern int show_endoom;
 void DG_Init(void) {
- dh.epoch = hosted() ? ai_clock() : k_clock_ms();
+ dh.epoch = hosted() ? love_clock() : k_clock_ms();
  show_endoom = 0;
  if (!hosted()) k_scan_arm(1); }
 
@@ -92,10 +92,10 @@ void DG_DrawFrame(void) {
   for (int x = 0; x < cw; x++) d[x] = s[x]; }
  k_fb_touch(); }
 
-void DG_SleepMs(uint32_t ms) { if (hosted()) ai_sleep(ms); else k_sleep(ms); }
+void DG_SleepMs(uint32_t ms) { if (hosted()) love_sleep(ms); else k_sleep(ms); }
 
 uint32_t DG_GetTicksMs(void) {
- return (uint32_t) ((hosted() ? ai_clock() : k_clock_ms()) - dh.epoch); }
+ return (uint32_t) ((hosted() ? love_clock() : k_clock_ms()) - dh.epoch); }
 
 void DG_SetWindowTitle(char const *t) { }
 
@@ -161,35 +161,35 @@ static void doom_run(void) {
 
 static lvm(lvm_doom) {
  doom_run();
- ai_musttail return Next(1); }
+ love_musttail return Next(1); }
 
 // (doom-start wad): the IWAD path is doom's for the run, so it is copied out of the heap
 static lvm(lvm_doom_start) {
  word x = Sp[0];
  if (dh.started || !hosted() || !strp(x) || len(str(x)) >= sizeof dh.wad)
-  ai_musttail return Answer(putcharm(0));
+  love_musttail return Answer(putcharm(0));
  memcpy(dh.wad, txt(str(x)), len(str(x)));
  dh.wad[len(str(x))] = 0;
  dh.started = 1;
  dg_create();
- ai_musttail return Answer(putcharm(1)); }
+ love_musttail return Answer(putcharm(1)); }
 
 // (doom-tick ()): 1 when a frame was drawn, 0 when not, -1 once the game has quit
 static lvm(lvm_doom_tick) {
- if (!dh.started) ai_musttail return Answer(putcharm(0));
- if (dh.quit) ai_musttail return Answer(putcharm(-1));
+ if (!dh.started) love_musttail return Answer(putcharm(0));
+ if (dh.quit) love_musttail return Answer(putcharm(-1));
  dh.frame = 0;
  doomgeneric_Tick();
- ai_musttail return Answer(putcharm(dh.frame)); }
+ love_musttail return Answer(putcharm(dh.frame)); }
 
 static lvm(lvm_doom_frame) {
  word x = Sp[0];
  uintptr_t n = 0;
  if (dh.started && caskp(x) && DG_ScreenBuffer) {
-  struct ai_str *s = cask(x)->str;
+  struct str *s = cask(x)->str;
   n = len(s) < DOOMGENERIC_RESX * DOOMGENERIC_RESY * 4 ? len(s) : DOOMGENERIC_RESX * DOOMGENERIC_RESY * 4;
   memcpy(txt(s), DG_ScreenBuffer, n); }
- ai_musttail return Answer(putcharm((intptr_t) n)); }
+ love_musttail return Answer(putcharm((intptr_t) n)); }
 
 // (doom-key k pressed): a full queue drops the oldest -- a key held through a stall
 // is a worse stall than one lost
@@ -199,7 +199,7 @@ static lvm(lvm_doom_key) {
   if (dh.kt - dh.kh == dh_keys) dh.kh++;
   dh.keys[dh.kt++ % dh_keys] = (int) (getcharm(k) & 0xff) | (p != ZeroPoint && (!charmp(p) || getcharm(p))) << 8; }
  Sp[1] = ZeroPoint;
- ai_musttail return Nextp(1, 1); }
+ love_musttail return Nextp(1, 1); }
 
 static union u const
  nif_doom[] = {{lvm_doom}, {lvm_ret0}},

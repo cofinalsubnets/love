@@ -179,7 +179,7 @@ thumb1)
   lane lm "$lm" test/thumb2/harnesslm.c "$lminc" 9 60 "thumb1 lm.c" \
     " = the seven transcendentals BIT-IDENTICAL to the host lm floor through the shared __aeabi soft float, incl. the Payne-Hanek big-argument reduction"
   lane f  test/thumb1/libf.c  test/thumb1/harnessf.c  "" 7  30 "thumb1 bare floats" \
-    " = every differential check vs gcc; 100+n names the first miss -- see test/thumb1/harnessf.c; a bare float is ONE WORD on v6-M (ai_flo_t IS float on a 32-bit love -- the widened-pair mismatch here kept the egg from hatching)"
+    " = every differential check vs gcc; 100+n names the first miss -- see test/thumb1/harnessf.c; a bare float is ONE WORD on v6-M (flo_t IS float on a 32-bit love -- the widened-pair mismatch here kept the egg from hatching)"
   lane a  test/thumb2/liba.c  test/thumb2/harnessa.c  "" 6  30 "thumb1 aligned(N)" \
     " = every aligned(N) global lands on its N after the link; 100+n names the first miss -- see test/thumb2/harnessa.c. the pad inside a section is laid by mooncc either way, so a miss here is sh_addralign: objsecs3's data lanes handing the linker a grain narrower than the stream asked for"
   lane z  test/thumb1/libzn.c test/thumb1/harnesszn.c "" 9  30 "thumb1 composites" \

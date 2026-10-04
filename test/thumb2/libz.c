@@ -2,7 +2,7 @@
    struct zn is love.c's shape -- a {double,double} HFA riding d-pairs both
    directions; dd the 8-byte one-sse blob (the packed S-pair, bit-identical);
    ii the <=4-byte int one (r0's word). vsum/vnth are love.c's variadic shapes
-   (ai_push / ioprintf: anonymous WORDS only), vnth2 the decayed-va_list
+   (push / ioprintf: anonymous WORDS only), vnth2 the decayed-va_list
    helper (gvzprintf's shape), ovnamed the named-params-overflow edge. */
 #include <stdarg.h>
 typedef unsigned uptr;
@@ -28,7 +28,7 @@ double dget(struct dd v) { return v.d * 2.0; }
 struct ii imake(int a, int b) { struct ii r; r.a = (short)a; r.b = (short)b; return r; }
 int isum(struct ii v) { return v.a + v.b; }
 
-int vsum(int n, ...) {                    /* ai_push's shape: anonymous words */
+int vsum(int n, ...) {                    /* push's shape: anonymous words */
   va_list ap; int s, i;
   va_start(ap, n); s = 0;
   for (i = 0; i < n; i++) s += va_arg(ap, int);

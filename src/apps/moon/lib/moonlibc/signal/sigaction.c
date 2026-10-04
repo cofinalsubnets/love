@@ -2,7 +2,7 @@
 
 /* one body, both kernels. on freebsd the numbers, the sa_flags and the
  * ksigaction shape translate -- and the HANDLER would land on the freebsd
- * number, so __ai_sigshim rides in front and hands the user's handler the
+ * number, so __love_sigshim rides in front and hands the user's handler the
  * canonical one. SIG_DFL/SIG_IGN pass bare; the user handlers park in
  * __sighand by FREEBSD number, so the shim's lookup is one index. */
 static void (*__sighand[64])(int);
@@ -11,19 +11,19 @@ static unsigned char __sigsi[64];        /* did this row ask for SA_SIGINFO? */
  * whatever the user asked for, and forwards the pair only to a handler that
  * registered SA_SIGINFO. the record is translated on the way through: the
  * user reads the canonical shape, never freebsd's or netbsd's own. */
-static void __ai_sigshim(int s, void *si, void *ctx) {
+static void __love_sigshim(int s, void *si, void *ctx) {
   void (*h)(int) = (s > 0 && s < 64) ? __sighand[s] : 0;
   if (!h) return;
-  int can = (int) __ai_sigcan(s);
+  int can = (int) __love_sigcan(s);
   if (__sigsi[s] && si) {
     siginfo_t c;
-    __ai_sicanon(si, &c);
+    __love_sicanon(si, &c);
     ((void (*)(int, siginfo_t *, void *)) h)(can, &c, ctx); }
   else h(can); }
 
 int sigaction(int sig, struct sigaction const *a, struct sigaction *old) {
-  if (__ai_osv == 2) {
-    long fs = __ai_sigfb(sig);
+  if (__love_osv == 2) {
+    long fs = __love_sigfb(sig);
     if (fs <= 0) { __errno_v = EINVAL; return -1; }
     struct __fb_sigact ka, ko;
     memset(&ko, 0, sizeof ko);
@@ -35,23 +35,23 @@ int sigaction(int sig, struct sigaction const *a, struct sigaction *old) {
       if (h == (void (*)(int)) 0 || h == (void (*)(int)) 1) {
         ka.h = (void *) h; __sighand[fs] = 0; __sigsi[fs] = 0; }
       else {
-        ka.h = (void *) __ai_sigshim; __sighand[fs] = h;
+        ka.h = (void *) __love_sigshim; __sighand[fs] = h;
         __sigsi[fs] = (a->sa_flags & SA_SIGINFO) ? 1 : 0; }
-      ka.flags = (int) __ai_safb(a->sa_flags);
-      ka.mask[0] = (unsigned int) __ai_maskfb((unsigned long) a->sa_mask.__v[0]);
-      ka.mask[1] = (unsigned int) (__ai_maskfb((unsigned long) a->sa_mask.__v[0]) >> 32); }
+      ka.flags = (int) __love_safb(a->sa_flags);
+      ka.mask[0] = (unsigned int) __love_maskfb((unsigned long) a->sa_mask.__v[0]);
+      ka.mask[1] = (unsigned int) (__love_maskfb((unsigned long) a->sa_mask.__v[0]) >> 32); }
     long r = sc3(NR_rt_sigaction, fs, a ? (long) &ka : 0, old ? (long) &ko : 0);
     if (r < 0) { if (a) __sighand[fs] = prev, __sigsi[fs] = prevsi;
                  __errno_v = (int) -r; return -1; }
     if (old) {
       memset(old, 0, sizeof *old);
-      old->sa_handler = (ko.h == (void *) __ai_sigshim) ? prev : (void (*)(int)) ko.h;
-      old->sa_flags = (int) __ai_sacan(ko.flags);
-      old->sa_mask.__v[0] = (long) __ai_maskcan((unsigned long) ko.mask[0]
+      old->sa_handler = (ko.h == (void *) __love_sigshim) ? prev : (void (*)(int)) ko.h;
+      old->sa_flags = (int) __love_sacan(ko.flags);
+      old->sa_mask.__v[0] = (long) __love_maskcan((unsigned long) ko.mask[0]
                                                 | ((unsigned long) ko.mask[1] << 32)); }
     return 0; }
 #ifdef LvOsTranslate
-  if (__ai_osv == 3) {
+  if (__love_osv == 3) {
 #ifndef LvNbTramp
     /* no proven return path on this ISA: refuse rather than register a tramp
      * that was never laid. freebsd on this arch does not come through here. */
@@ -59,8 +59,8 @@ int sigaction(int sig, struct sigaction const *a, struct sigaction *old) {
 #else
     /* the same permutation and shim; netbsd's shape puts the mask before the
      * flags, and the kernel provides no return path -- the registered tramp
-     * (mksys's __ai_nb_sigtramp, version 2) is the way back. */
-    long fs = __ai_sigfb(sig);
+     * (mksys's __love_nb_sigtramp, version 2) is the way back. */
+    long fs = __love_sigfb(sig);
     if (fs <= 0) { __errno_v = EINVAL; return -1; }
     struct __nb_sigact ka, ko;
     memset(&ko, 0, sizeof ko);
@@ -72,20 +72,20 @@ int sigaction(int sig, struct sigaction const *a, struct sigaction *old) {
       if (h == (void (*)(int)) 0 || h == (void (*)(int)) 1) {
         ka.h = (void *) h; __sighand[fs] = 0; __sigsi[fs] = 0; }
       else {
-        ka.h = (void *) __ai_sigshim; __sighand[fs] = h;
+        ka.h = (void *) __love_sigshim; __sighand[fs] = h;
         __sigsi[fs] = (a->sa_flags & SA_SIGINFO) ? 1 : 0; }
-      ka.flags = (int) __ai_safb(a->sa_flags);
-      ka.mask[0] = (unsigned int) __ai_maskfb((unsigned long) a->sa_mask.__v[0]);
-      ka.mask[1] = (unsigned int) (__ai_maskfb((unsigned long) a->sa_mask.__v[0]) >> 32); }
-    long r = __ai_fb(NR_nb_sigaction_sigtramp, fs, a ? (long) &ka : 0, old ? (long) &ko : 0,
-                     (long) __ai_nb_sigtramp, 2, 0);
+      ka.flags = (int) __love_safb(a->sa_flags);
+      ka.mask[0] = (unsigned int) __love_maskfb((unsigned long) a->sa_mask.__v[0]);
+      ka.mask[1] = (unsigned int) (__love_maskfb((unsigned long) a->sa_mask.__v[0]) >> 32); }
+    long r = __love_fb(NR_nb_sigaction_sigtramp, fs, a ? (long) &ka : 0, old ? (long) &ko : 0,
+                     (long) __love_nb_sigtramp, 2, 0);
     if (r < 0) { if (a) __sighand[fs] = prev, __sigsi[fs] = prevsi;
                  __errno_v = (int) -r; return -1; }
     if (old) {
       memset(old, 0, sizeof *old);
-      old->sa_handler = (ko.h == (void *) __ai_sigshim) ? prev : (void (*)(int)) ko.h;
-      old->sa_flags = (int) __ai_sacan(ko.flags);
-      old->sa_mask.__v[0] = (long) __ai_maskcan((unsigned long) ko.mask[0]
+      old->sa_handler = (ko.h == (void *) __love_sigshim) ? prev : (void (*)(int)) ko.h;
+      old->sa_flags = (int) __love_sacan(ko.flags);
+      old->sa_mask.__v[0] = (long) __love_maskcan((unsigned long) ko.mask[0]
                                                 | ((unsigned long) ko.mask[1] << 32)); }
     return 0;
 #endif
@@ -100,7 +100,7 @@ int sigaction(int sig, struct sigaction const *a, struct sigaction *old) {
     ka.restorer = 0;
 #else
     ka.flags = (unsigned long) (unsigned int) a->sa_flags | 67108864UL;   /* SA_RESTORER */
-    ka.restorer = (void *) __ai_sigret;
+    ka.restorer = (void *) __love_sigret;
 #endif
     ka.mask = (unsigned long) a->sa_mask.__v[0]; }
   long r = sc4(NR_rt_sigaction, sig, a ? (long) &ka : 0, old ? (long) &ko : 0, 8);
