@@ -28,9 +28,13 @@
  near-z 0.12                           ; the bare dirt behind the row, before the meadow
  deep-z 2.6                             ; how far the meadow's own blades run
  field-n 700
- ; --- the screen: w by h pixels, and each pixel's ray, and where it meets the dirt ---
+ ; --- the screen: w by h pixels, and each pixel's ray, and where it meets the dirt. the
+ ; land takes the rows under the middle up to land-r of the width; a screen taller than
+ ; that gives the rest to the sky, as the flat field does ---
+ land-r 0.3
  (meadow-size st w h) (: n (w * h) i (iota n) x (i % w) y (i // w)
-   U ((x + 0.5 - w / 2.0) / (w / 2.0)) V ((h / 2.0 - y - 0.5) / (w / 2.0))
+   cy (h - min2 (h / 2.0) (land-r * w))
+   U ((x + 0.5 - w / 2.0) / (w / 2.0)) V ((cy - y - 0.5) / (w / 2.0))
    sp (sin pitch) cp (cos pitch)
    dx0 U dy0 (sp + V * cp) dz0 (cp - V * sp)
    ln (sqrt (dx0 * dx0 + dy0 * dy0 + dz0 * dz0))
@@ -51,9 +55,19 @@
    kx (max (peep kc x 0.0) 1.0) f ((kx - y - 0.5) / kx)
    el (sky-lo + f * (0.5 * pi - sky-lo) * 0.97) az (az-lift * atan U) cl (cos el)
    _ (pins st 'kc kc 'sdx (cl * sin az) 'sdy (sin el) 'sdz (cl * cos az))
-   (pins st 'w w 'h h 'foc (w / 2.0) 'dx dx 'dy dy 'dz dz 'gnd gnd
-            'gx gx 'gz gz 'G (iota gnd) 'S (iota (1 - gnd))
-            'bay (view-bayer w h) 'f [0.0 sp cp] 'u [0.0 cp (0.0 - sp)]))
+   (lay-stars (pins st 'w w 'h h 'cy cy 'foc (w / 2.0) 'dx dx 'dy dy 'dz dz 'gnd gnd
+                     'gx gx 'gz gz 'G (iota gnd) 'S (iota (1 - gnd))
+                     'bay (view-bayer w h) 'f [0.0 sp cp] 'u [0.0 cp (0.0 - sp)])))
+ ; the stars: fixed in the sky, evenly up it, each one pixel where the lens shows it and
+ ; the land does not -- [index direction brightness phase]
+ star-k 70
+ (lay-stars st) (: w (st 'w) h (st 'h)
+   (one k) (: az (5.8 * (throw k 1 91 1000 / 1000.0 - 0.5)) el (0.47 * pi * throw k 2 93 1000 / 1000.0)
+              q [(cos el * sin az) (sin el) (cos el * cos az)]
+              (on-screen st q @ p (two? p ? (: x (int (p 0)) y (int (p 1)) i (y * w + x)
+                                               (0 <= x && x < w && 0 <= y && y < h && peep (st 'gnd) i 1 = 0 ?
+                                                  [i q (0.3 + 0.12 * throw k 3 95 5) (throw k 4 97 628 / 100.0)])))))
+   (pin st 'stars (filter two? (map one ^star-k))))
  (asin v) (atan (v / sqrt (max (1.0 - v * v) 1e-9)))
  (at2 y x) (? (0.0 < x) (atan (y / x)) (x < 0.0) (atan (y / x) + (y < 0.0 ? (0.0 - pi) pi)) (y < 0.0 ? (-0.5 * pi) (0.5 * pi)))
  ; ..and back: a direction in the sky to the place on the screen the lens shows it, [x y]
@@ -142,7 +156,7 @@
    zc (qy * f 1 + qz * f 2)
    zs (max zc 0.01)
    cx (floor (w / 2.0 + foc * qx / zs))
-   cy (floor (h / 2.0 - foc * (qy * uv 1 + qz * uv 2) / zs))
+   cy (floor (st 'cy - foc * (qy * uv 1 + qz * uv 2) / zs))
    ok ((0.01 < zc) * (0 <= cx) * (cx < w) * (0 <= cy) * (cy < h))
    [(over -1 ok (cy * w + cx)) cx cy])
  ; --- the dirt: patches of brown, a pebble now and then, greener toward the haze ---
@@ -170,7 +184,7 @@
    w (st 'w) h (st 'h) G (st 'G) S (st 'S) (only ix v) (peep v ix 0.0)
    wxv ((0.0 - sin (g 'head * pi / 180.0) * g 'wind) * g 'gust)
    ; the sky behind, and the dirt under, each where it shows
-   hv (sky-colour lt wx (only S (st 'sdx)) (only S (st 'sdy)) (only S (st 'sdz)) (eye 0) (eye 2) sim t0)
+   hv (sky-colour-of lt wx (only S (st 'sdx)) (only S (st 'sdy)) (only S (st 'sdz)) (eye 0) (eye 2) sim t0 0.0)
    gx (only G (st 'gx)) gz (only G (st 'gz))
    alb (land gx gz)
    nx (only G (st 'nx)) ny (only G (st 'ny)) nz (only G (st 'nz))
@@ -208,10 +222,21 @@
    gc (cmix (cm alb irr) hazec far)
 
    z0 (st 'dx * 0.0)
-   col00 (map (k \ pin (pin z0 G (gc k)) S (hv k)) ^3)
-   ; --- the sun and the moon, discs where the lens shows them, the land in front of them ---
+   colg (map (k \ pin (pin z0 G (gc k)) S (hv k)) ^3)
    (put col d c) (: ix (d 0) (map (k \ pin (col k) ix (c k)) ^3))
    (behind col d) (: ix (d 0) (map (k \ peep (col k) ix 0.0) ^3))
+   ; --- the stars by night, a pixel each, where no cloud is: twinkling, or in pixels on
+   ; and off ---
+   sl (st 'stars) nt (sat (1.0 - lt 'day * 3.0))
+   col00 (? (0.0 < nt && two? sl)
+            (: (tr k) (gem-tray [#sl] (map (q \ 1.0 * q k) sl)) (td k) (gem-tray [#sl] (map (q \ q 1 k) sl))
+               si (int (tr 0)) ph (tr 3)
+               cl (sky-cloud wx (td 0) (td 1) (td 2) (eye 0) (eye 2) sim)
+               v (wx 'style = 'pixel ? ((0.6 < sin (t0 * 0.9 + ph)) * (lt 'day < 0.1) * (cl < 0.5) * 1.6)
+                    (tr 2 * (0.75 + 0.25 * sin (t0 * 0.9 + ph)) * nt * (1.0 - cl)))
+               (put colg [si] (c+ (behind colg [si]) [v v (0.9 * v)])))
+            colg)
+   ; --- the sun and the moon, discs where the lens shows them, the land in front of them ---
    ; the sun: hot at the middle, its colour the light's. behind a cloud it softens and pales
    ; but shows, and the cloud round it glows, so where it is can be told
    sc (on-screen st s) cs (lt 'csun) sd (s 1 < -0.03 || !sc ? () (disc st sc 2.4))
