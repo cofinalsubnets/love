@@ -663,7 +663,8 @@
        (crawl-turn g (tap 40 12), 'who = g 'talk)
        (crawl-turn g (tap 40 10), 'who = g 'talk)
        (talk g 'bye, crawl-turn g (tap 40 12), atom? (g 'talk))
-       (talk g 'bye, pin g 'talk (), '(1 0) = tap (g 'p 'x + 9) (g 'p 'y + 1))))
+       (talk g 'bye, pin g 'talk (), 0 = tap (g 'p 'x + 9) (g 'p 'y + 1))   ; a sign takes a tap as a key
+       (pin g 'sign (), '(1 0) = tap (g 'p 'x + 9) (g 'p 'y + 1))))
 
 ; --- the vale: the last floor is three screens tall, lit end to end, and laid rather
 ; than delved: a road from the foot, the clearing, seven stones and a bare spot round
