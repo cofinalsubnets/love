@@ -717,15 +717,22 @@
    ; %n %N %s %b %B %f %a %A %F %u %U %g %G %h %i %m %o %d %D %r %R %t %T %y %Y %x %X
    ; %z %Z %w %W, the \n \t \\ escapes, and %% ; anything else is GNU's bare ?. -L
    ; follows a symbolic link and the bare face does not.
-   ; %N is the name shell-quoted, and a link's own target after an arrow.
-   ; the quoting is the shell's: single quotes, '\'' for a quote of its own, $'\t' for a
-   ; control byte, and double quotes for a name whose only trouble is the quote. a byte
-   ; over 127 rides through -- there is no locale here to tell text from a stray byte,
-   ; and text is what a name usually is.
+   ; %N is the name shell-quoted, and a link's own target after an arrow. a name the shell
+   ; reads as itself goes bare, as GNU's shell-escape style has it; else the quoting is the
+   ; shell's: single quotes, '\'' for a quote of its own, $'\t' for a control byte, and
+   ; double quotes for a name whose only trouble is the quote. a byte over 127 rides
+   ; through -- there is no locale here to tell text from a stray byte, and text is what a
+   ; name usually is.
    (ushq-esc c)                        ; the text after the backslash in $'..'
     (c @ 7 "a" 8 "b" 9 "t" 10 "n" 11 "v" 12 "f" 13 "r" (zpad 3 (radix c 8)))
    (ushq-ctl? c) (c < 32 || c = 127)
-   (ushq w)
+   ; bare: no shell special anywhere, no # or ~ to start it, and not { or } alone
+   (ushq-bare? w)
+    (: n #w
+       (0 < n && !(any (c \ ushq-ctl? c || elem c '(32 33 34 36 38 39 40 41 42 59 60 61 62 63 91 92 94 96 124)) (map w ^n))
+        && !(elem (w 0) '(35 126)) && !(n = 1 && elem (w 0) '(123 125))))
+   (ushq w) (? (ushq-bare? w) w (ushq1 w))
+   (ushq1 w)
     (: n #w
        (scan k q? hard?)                ; holds a quote? holds anything a "" would escape?
         (n <= k ? [q? hard?]
