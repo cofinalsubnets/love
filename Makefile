@@ -812,7 +812,7 @@ $(moon_d)/doom/wad.o: $(dl)/doom1.wad src/tools/mkblob.l $(holocat_dep) $(love0)
 	@LOVE_NO_IMAGE= $(love0) $(holocat) src/tools/mkblob.l $< $@ doom_wad $(hosta)
 endif
 
-$(ho)/love.raw $(ho)/love.cand.raw: $(kart_o)
+$(ho)/love.raw $(ho)/love.cand.raw $(ho)/love.praw: $(kart_o)
 
 $(k_odir)/love/love.o: out/lib/love_version.h
 kcppflags += -DLvHaveVersionH      # only src/love/love.c reads it; cook has no target-specific variable
