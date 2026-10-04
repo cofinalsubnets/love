@@ -796,9 +796,10 @@
          (: id (chomp (lush-out ("git rev-parse --verify -q " + sq q)))
             (? (0 < #id) [id (lush-out ("git cat-file -p " + sq q))] ["none" ""]))
          (: id (chomp (lush-out ("sb -C " + sq (q-hub 0) + " ledger " + sq q + " --id")))
-            [(0 < #id ? id "none") (? (id = "none" || #id = 0) "" (lush-out ("sb -C " + sq (q-hub 0) + " ledger " + sq q)))]))
+            [(0 < #id ? id "none") (? (id = "none" || #id = 0) "" (lush-out ("sb -C " + sq (q-hub 0) + " ledger " + sq q + " --text")))]))
      ; -> 1 when it landed on old, 0 when someone wrote first
-     (q-put q old text)
+     (q-put q old text) (? (q-git? q) (q-swap q old text) (q-put-sb q old text))
+     (q-swap q old text)
       (: tmp (bee-hive + "/.queue-" + (me 0)) _ (mkdirs bee-hive) _ (spit-file tmp text)
          r (? (q-git? q)
               (: nw (chomp (lush-out ("git hash-object -w " + sq tmp)))
@@ -806,6 +807,29 @@
               (lush-out ("sb -C " + sq (q-hub 0) + " ledger " + sq q + " --was " + old + " " + sq tmp + " && echo landed")))
          _ (unlink tmp)
          (0 <= find r "landed" 0))
+     ; --- a signed queue (src/apps/qlog.l, notes/plan/hive-decentral.md rung 1): on a box with a
+     ;     card, an sb queue's write is an entry over its text, by the writer's own seal. called
+     ;     from another box (--ledger), the write is proposed, not made: the caller signs the
+     ;     entry and commits it (queue_commit), so every entry carries its writer's sig ---
+     (q-entry-at q old)                                          ; [seq prev] the next entry takes
+      (: hd (? (old = "none") "" (q-sb ("ledger " + sq q))) e ((cite 'qlog 'qlog-read) hd)
+         (? (tablet? e) [(1 + digits (e "seq")) old] [0 "none"]))
+     (q-home q) (: b (box-seal 0) (q + "@" + (? (two? b) (b 1 "name") "?")))
+     (q-put-sb q old text)
+      (: b (box-seal 0) at (q-entry-at q old) call (peep bee-who 'tool "queue_row")
+         seal (? (!(two? b) || peep bee-who 'remote 0) () (bee-cell 'state || bee-as?) (cell-seal 0) (name-seal (me 0)))
+         (? (peep bee-who 'remote 0)
+             (: _ (pins bee-who 'proposal {"queue" (q-home q) "seq" (show <at) "prev" (at 1) "call" call
+                                          "text" text "was" old})
+                1)
+            !(two? seal) (q-swap q old text)                     ; no lineage here: a plain write
+            (q-swap q old ((cite 'qlog 'qlog-make) (q-home q) <at (at 1) (me 0 + "@" + b 1 "name") call (sha256 text) seal
+                           + "\n" + text))))
+     ; the caller's side: a proposal signed by this session's seal -> [entry text] | why
+     (q-sign-proposal p seal)
+      (: b (box-seal 0) by (me 0 + "@" + b 1 "name")
+         (? !(tablet? p && string? (p "text") && string? (p "seq")) "no proposal came back"
+            [((cite 'qlog 'qlog-make) (p "queue") (digits (p "seq")) (p "prev") by (p "call") (sha256 (p "text")) seal) (p "text")]))
      (q-row? l) (: w (words l) (5 < #w && 0 < #<w && 48 <= <w 0 <= 57))
      (q-note l) (: k (find l "  # " 0) (? (k < 0) "" (snip l (k + 4) #l)))
      (q-leader text) (: w (words (q-line text "leader")) (? (1 < #w) (w 1) ""))
@@ -991,14 +1015,26 @@
          b (box-seal 0)
          (? (#box = 0) (run in)
             (two? b && b 1 "name" = box) (run (pin in "queue" (snip q 0 at)))
-            (: seal (cell-seal 0)
+            (: seal (cell-seal 0) lq (snip q 0 at)
+               (call t i) (: m (sealed-msg (me 0) ("ledger@" + box) (json-show {"tool" t "in" i}) seal)
+                             r (relay box (m 1) "--ledger") [(<r = 0 ? 1 0) (chomp (r 1))])
+               ; an sb queue answers a proposal: signed here and committed, again when it moved
+               (try n)
+                (: r (call tool (pin in "queue" lq)) j (? (<r && starts? (r 1) "{") (json-read (r 1)))
+                   p (? (two? j && tablet? (j 1)) (peep (j 1) "proposal" ()))
+                   (? !(tablet? p) r
+                      (: sg (q-sign-proposal p seal)
+                         (? (string? sg) [0 sg]
+                            (: c (call "queue_commit" {"queue" lq "entry" <sg "text" (sg 1) "was" (p "was")})
+                               (? <c [1 (peep (j 1) "result" "")]
+                                  (n <= 0) [0 ("the queue kept moving under the write: " + c 1)]
+                                  (try (n - 1))))))))
                (? !(two? seal) [0 "a queue on another box is written only sealed, and nothing here can seal"]
-                  (: m (sealed-msg (me 0) ("ledger@" + box) (json-show {"tool" tool "in" (pin in "queue" (snip q 0 at))}) seal)
-                     r (relay box (m 1) "--ledger")
-                     [(<r = 0 ? 1 0) (chomp (r 1))])))))
+                  (q-git? lq) (call tool (pin in "queue" lq))
+                  (try 4)))))
      ; --ledger, a sealed call on stdin: run in (ledger-dir PATH), else HOME, as the sealed name.
      ; each id is taken once
-     bee-ledger-tools ["queue_read" "queue_row" "queue_lead" "queue_land" "queue_landed"]
+     bee-ledger-tools ["queue_read" "queue_row" "queue_lead" "queue_land" "queue_landed" "queue_commit"]
      (ledger s)
       (: k (find s "\n\n" 0) hd (? (k < 0) s (snip s 0 k)) body (? (k < 0) "" (snip s (k + 2) #s))
          (hv key) (: fl (filter (\ l (starts? l (key + " "))) (lines hd)) (? (two? fl) (snip <fl (#key + 1) #<fl)))
@@ -1015,13 +1051,26 @@
             (: _ (mkdirs ids) fd (openfd (ids + "/" + id) 3)
                (? !(charm? fd) [0 "that id is taken"]
                   (: _ (close fd)
-                     _ (pins bee-who 'name sealed 'remote 1)
+                     _ (pins bee-who 'name sealed 'remote 1 'tool tool)
                      dir (setting 'ledger-dir (: h (getenv "HOME") (string? h ? h ".")))
                      _ (chdir dir)
-                     (tool @ "queue_read" (queue-read in) "queue_row" (queue-row in) "queue_lead" (queue-lead in)
-                             "queue_land" (queue-land in) (queue-landed in)))))))
+                     r (tool @ "queue_read" (queue-read in) "queue_row" (queue-row in) "queue_lead" (queue-lead in)
+                             "queue_land" (queue-land in) "queue_commit" (queue-commit in sealed) (queue-landed in))
+                     pr (peep bee-who 'proposal ())
+                     (? (tablet? pr && <r) [1 (json-show {"result" (r 1) "proposal" pr})] r))))))
+     ; a proposal signed and sent back: laid by compare-and-swap on the head it was made over, and
+     ; told to the sessions elsewhere it moves
+     (queue-commit in sealed)
+      (: q (field in "queue" "") e (peep in "entry" "") t (peep in "text" "") was (field in "was" "none")
+         f ((cite 'qlog 'qlog-read) e)
+         before (? (was = "none") "" (<>(q-read q)))
+         (? (!(q-name? q) || q-git? q) [0 "a commit is for an sb queue"]
+            !(tablet? f) [0 "not an entry"]
+            (f "by" != sealed) [0 "an entry is committed by its writer"]
+            (q-swap q was (e + "\n" + t)) [1 "committed"]
+            [0 "the queue moved under the proposal, or the entry was refused; propose again"]))
      (queue-read in) (q-check in (\ in (: rd (q-read (in "queue")) (? (<rd = "none") [0 ("no queue " + in "queue")] [1 (rd 1)]))))
-     (queue-row in) (q-check in queue-row1)
+     (queue-row in) (: _ (pins bee-who 'tool "queue_row") (q-check in queue-row1))
      ; a queue not made yet is made on bee's standard header, led by the leader given, else this session
      (queue-row1 in)
       (: q (in "queue") who (field in "session" (me 0))
@@ -1075,7 +1124,7 @@
             (#pd && !(two? ls3)) [text ("no pre line " + pd)]
             (0 < #mi && mi != "-" && #(words mi) < 2) [text "mirror is PATH BRANCH [KEEP..]"]
             [(paras ls5) ""]))
-     (queue-lead in) (q-check in queue-lead1)
+     (queue-lead in) (: _ (pins bee-who 'tool "queue_lead") (q-check in queue-lead1))
      (queue-lead1 in)
       (: q (in "queue") i (me 0) nl (field in "leader" "")
          (try n)
@@ -1370,7 +1419,7 @@
                                   + foldl (\ a w (a + "  " + w 1 + "@" + bx + "\n")) "" qs)
                        ("the hub keeps no queue yet; one made there is queue/NAME@" + bx + "\n"))))
          0)
-     (queue-landed in) (q-check in queue-landed1)
+     (queue-landed in) (: _ (pins bee-who 'tool "queue_landed") (q-check in queue-landed1))
      (queue-landed1 in)
       (: q (in "queue") i (me 0) who (field in "session" i) rel (field in "release" "")
          (try n)
