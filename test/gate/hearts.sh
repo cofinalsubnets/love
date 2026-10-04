@@ -35,6 +35,7 @@ fail() { echo "FAIL hearts: $*" >&2; exit 1; }
 PATH=$L/bin:$PATH; export PATH
 [ "$(clang --version | head -1)" = "clang version 22.1.8" ] || fail "$L/bin/clang is not clang 22.1.8"
 case $(ld.lld --version) in "LLD 22.1.8 "*) ;; *) fail "$L/bin/ld.lld is not lld 22.1.8" ;; esac
+[ "$(clang -print-target-triple)" = aarch64-unknown-linux-gnu ] || fail "$L/bin/clang does not default to arm64"
 q=$(mktemp -d) || fail "no temp dir"
 cat > "$q/q.c" <<'EOF'
 typedef unsigned char u8;
@@ -67,7 +68,7 @@ EOF
 qs=$(sha256sum < "$q/q.o" | cut -d' ' -f1); rm -rf "$q"
 [ "$qs" = "$QSHA" ] || fail "$L/bin/clang is not the pinned build: the probe compiles to $qs"
 
-for t in make cc clang ld.lld llvm-ar llvm-objcopy flex bison perl curl; do
+for t in make cc c++ clang ld.lld llvm-ar llvm-objcopy flex bison perl curl; do
   command -v $t >/dev/null 2>&1 || gate_skip "hearts: no $t, skipped"
 done
 mkdir -p "$B" "$C/src" || fail "cannot make $B"
@@ -120,8 +121,11 @@ mkdir -p "$B/no-sysroot"
 mk="LLVM=1 ARCH=arm64 RUSTC=false HOSTRUSTC=false BINDGEN=false PAHOLE=false USERCFLAGS=--sysroot=$B/no-sysroot"
 
 mkdir -p "$O"
+# kbuild's host programs build with the host's cc: our clang targets arm only, and their bytes
+# never reach the image
 # shellcheck disable=SC2086
-(cd "$K" && make O="$O" $mk KGZIP="$gz" defconfig && make O="$O" $mk KGZIP="$gz" -j"$J" Image) \
+(cd "$K" && make O="$O" $mk HOSTCC=cc HOSTCXX=c++ KGZIP="$gz" defconfig \
+  && make O="$O" $mk HOSTCC=cc HOSTCXX=c++ KGZIP="$gz" -j"$J" Image) \
   > "$B/ref.log" 2>&1 || { tail -20 "$B/ref.log"; fail "kbuild's own build failed"; }
 mv "$O" "$B/ref" || fail "cannot set kbuild's build aside"
 

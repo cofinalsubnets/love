@@ -17,11 +17,13 @@ mkdir -p "$C/src" "$W/tmp"
 [ "$(sha256sum < "$tgz" | cut -d' ' -f1)" = "$SHA" ] || { echo "hearts-llvm: $tgz is not the pinned llvm $V" >&2; exit 1; }
 rm -rf "$W/llvm-project-$V.src" "$W/build"
 (cd "$W" && tar xf "$tgz")
-# no vc revision: it would carry a git suffix into the version text, so into .config
+# kbuild asks clang some questions with no --target, so it defaults to arm64 on every host; no vc
+# revision: it would carry a git suffix into the version text, so into .config
 export TMPDIR=$W/tmp
 cmake -S "$W/llvm-project-$V.src/llvm" -B "$W/build" -G Ninja \
   -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_PROJECTS='clang;lld' -DLLVM_TARGETS_TO_BUILD='AArch64;ARM' \
-  -DLLVM_APPEND_VC_REV=OFF -DLLVM_ENABLE_ASSERTIONS=OFF -DLLVM_INSTALL_TOOLCHAIN_ONLY=ON \
+  -DLLVM_DEFAULT_TARGET_TRIPLE=aarch64-unknown-linux-gnu -DLLVM_APPEND_VC_REV=OFF \
+  -DLLVM_ENABLE_ASSERTIONS=OFF -DLLVM_INSTALL_TOOLCHAIN_ONLY=ON \
   -DCMAKE_INSTALL_PREFIX="$P"
 ninja -C "$W/build" -j"$J" install
 rm -rf "$W"
