@@ -370,8 +370,7 @@
    (pst32? ps) (elem (ps 'tgt) '(thumb2 thumb2sp thumb1))
    ; plain char per each target's psABI: unsigned under AAPCS64, AAPCS32 (thumb) and RISC-V (wasm rides
    ; riscv's) -- 'uchar -- and signed on x86-64 alone; `signed char` is 'char everywhere
-   uchar-tgts '(a64 rv64 wasm thumb1 thumb2 thumb2sp)
-   (pchar ps) (elem (ps 'tgt) uchar-tgts ? 'uchar 'char)
+   (pchar ps) (elem (ps 'tgt) '(a64 rv64 wasm thumb1 thumb2 thumb2sp) ? 'uchar 'char)
    (pw64 ps) !(pst32? ps)                          ; is long 8 bytes? the const folder's one question
    (psword ps) (pst32? ps ? 4 8)
    (szty ps) (pst32? ps ? 'uint 'ulong)          ; size_t: sizeof folds wear this coat
