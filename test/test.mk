@@ -1162,7 +1162,7 @@ endef
 #   uusplgen  spl.l's three call-site compilers (call, binding splice, substitution
 #             splice) on its samples                  -> test/uuspllaw.l, the splice license
 #   uumx      love.c's +/* dispatch matrices (src/love/mx.l) -> test/uumxlaw.l, the band lattice
-#   uuvallaw  CLAUDE.md's laws off test/law.l's own rows -> proved where they stand, one
+#   uuvallaw  AGENTS.md's laws off test/law.l's own rows -> proved where they stand, one
 #             spelling for the fuzz lane and the proof lane both
 $(eval $(call uu_corpus,uuwm,uuwmgen,src/apps/lux/core.l))
 $(eval $(call uu_corpus,uukind,kinds2uu,test/proto/kinds.l))

@@ -187,7 +187,7 @@
        ; reply, and the bare list cannot tell them apart -- which is how a
        ; desynced connection read as "there are no windows", the startup sweep
        ; adopted nothing, and lux ran on for good with an empty client list. the
-       ; house law (CLAUDE.md): carry presence in a wrapper tested with two?,
+       ; house law (AGENTS.md): carry presence in a wrapper tested with two?,
        ; never in the value's own emptiness. QueryTree on the root cannot fail
        ; for any legitimate reason -- the root id is always valid -- so this ()
        ; is precisely a garble detector, and it used to throw the detection away.

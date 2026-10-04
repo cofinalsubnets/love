@@ -76,5 +76,4 @@ evaluator. c0 hands off to [ev](src/love/boot/ev.l) in [egg](src/love/boot/egg.l
 
 ## license
 
-[0BSD](LICENSE)
-[NOTICE](NOTICE)
+[0BSD](LICENSE), and the third-party files it lists keep their own terms
