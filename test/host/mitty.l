@@ -5,6 +5,7 @@
 (borrow "src/apps/mitty/mitty.l")
 (borrow "src/apps/mitty/wharf.l")
 (borrow "src/apps/mitty/limn.l")
+(borrow 'bytes)
 
 (: (mkscr r c) (screen (cask (screen () r c)) r c)
    (chat s i) (2097151 & glass s i 0)             ; a cell's codepoint
@@ -396,7 +397,7 @@
 (: (sub? h n i) (i + #n < #h + 1 ? (n = snip h i (i + #n) ? 1 (sub? h n (i + 1))) 0)
    hb (mitty-up 4 10)
    _ (hberth hb 'stack 50 (hopen-stage (mitty-stage (\ w h "x") (\ c 0) (\ _ 0)) 1 1))
-   _ (test (["" "Zg==" "Zm8=" "Zm9v" "YQpi/w=="] = map hb64 ["" "f" "fo" "foo" "a\nb\xff"])
+   _ (test (["" "Zg==" "Zm8=" "Zm9v" "YQpi/w=="] = map (s \ b64e s 1) ["" "f" "fo" "foo" "a\nb\xff"])
            !(sub? (hframe hb) "\e]52" 0))
    _ (pin (hb 'clip) () ['chr "hi"])
    (test (sub? (hframe hb) "\e]52;c;aGk=\a" 0)

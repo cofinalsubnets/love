@@ -17,7 +17,16 @@
    now (stat g)
    _ (wr g orig)
    back (stat g)
-   (unlink g,
+   ; a write in place keeps the bytes about it, and a truncate cuts or stretches with zeros
+   h "/tmp/l-fs-at"
+   _ (wr h "abcdef")
+   _ (uwrite-at h 2 "XY")
+   inplace (rd h)
+   _ (truncate h 3 0)
+   cut (rd h)
+   _ (truncate h 5 0)
+   grown (rd h)
+   (unlink g, unlink h,
     test
    ; stat answers the four fields, and the size is the bytes a read hands over
    (two? st)
@@ -86,6 +95,11 @@
    (3 = <now)
    (<>was <= <>now)
    (#orig = <back)
+   ("abXYef" = inplace)
+   ("abX" = cut)
+   ("abX" + string [0 0] = grown)
+   !(uwrite-at "/tmp/l-fs-none" 0 "x")         ; in place is not a create
+   !(two? (stat "/tmp/l-fs-none"))
    ; the wall clock, which every line above leans on: the door's date if it left
    ; one, else the machine's own rtc (mc146818 on x64, PL031 on a64). It reads as
    ; milliseconds since the epoch here exactly as it does on the host -- an uptime

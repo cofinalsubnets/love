@@ -18,11 +18,11 @@
 (module (mime mime-split mime-heads mime-get mime-words mime-b64 mime-qp mime-b64e mime-utf8
          mime-ctype mime-leaves mime-date mime-addrs mime-head-enc mime-num mime-ascii?)
 (borrow 'cal)
+(borrow 'bytes)
 (:
  ; windows-1252's 0x80..0x9f, 0 where it leaves a hole
  mime-1252 [8364 0 8218 402 8222 8230 8224 8225 710 8240 352 8249 338 0 381 0
             0 8216 8217 8220 8221 8226 8211 8212 732 8482 353 8250 339 0 382 376]
- mime-b64set "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
  mime-mons ["jan" "feb" "mar" "apr" "may" "jun" "jul" "aug" "sep" "oct" "nov" "dec"]
  ; the north american zones 822 names, in minutes east
  mime-zones {"ut" 0 "gmt" 0 "utc" 0 "z" 0 "est" -300 "edt" -240 "cst" -360 "cdt" -300
@@ -46,33 +46,9 @@
  (mime-get hs n) (: (go l) (l @ ([k v] . r) (k = n ? v (go r)) "") (go hs))
 
  ; --- the transfer encodings ------------------------------------------------------------
- ; base64, lenient: anything outside the alphabet is skipped, and = ends nothing early
- (mime-b64v c)
-  (? (65 <= c <= 90) (c - 65) (97 <= c <= 122) (c - 71) (48 <= c <= 57) (c + 4)
-     (c = 43) 62 (c = 47) 63 -1)
- (mime-b64 s)
-  (: j (jug 0) n #s
-     (go i a m)
-      (n <= i ? (slurp j)
-         (mime-b64v (s i) @ d
-            (? (d < 0) (go (i + 1) a m)
-               (: a2 ((a << 6) | d) m2 (m + 6)
-                  (m2 < 8 ? (go (i + 1) a2 m2)
-                     (: k (m2 - 8)
-                        (put j ((a2 >> k) & 255), go (i + 1) (a2 & ((1 << k) - 1)) k)))))))
-     (go 0 0 0))
- (mime-b64e s)
-  (: j (jug 0) n #s
-     (ch v) (put j (mime-b64set (v & 63)))
-     (go i)
-      (n <= i ? (slurp j)
-         (: b0 (s i) b1 (i + 1 < n ? (s (i + 1)) 0) b2 (i + 2 < n ? (s (i + 2)) 0)
-            v ((b0 << 16) | (b1 << 8) | b2)
-            (ch (v >> 18), ch (v >> 12),
-             (i + 1 < n ? (ch (v >> 6)) (put j 61)),
-             (i + 2 < n ? (ch v) (put j 61)),
-             go (i + 3))))
-     (go 0))
+ ; base64 is bytes' (post.l), lenient: anything outside the alphabet is skipped
+ (mime-b64 s) (b64d s)
+ (mime-b64e s) (b64e s 1)
  ; quoted-printable; u reads _ as a space, the Q of an encoded word
  (mime-qpx s u)
   (: j (jug 0) n #s

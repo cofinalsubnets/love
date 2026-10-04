@@ -58,7 +58,7 @@
      (go ()))
  (sm-cmd c s) (smtp-put c (s + "\r\n"), sm-reply c)
  (smtp-close c) (tablet? (c 'tls) ? (cite 'tls 'tls-close (c 'tls)) (close (c 's)))
- (sm-q s) ("'" + replace s "'" "'\\''" + "'")
+ sh-quote (cite 'lush 'sh-quote)
  (sm-local? h) (elem h ["localhost" "127.0.0.1" "::1"])
 
  ; --- the conversation ----------------------------------------------------------------------
@@ -118,7 +118,7 @@
 
  ; --- sendmail ------------------------------------------------------------------------------
  (smtp-pipe cmd from rcpts raw)
-  (: argv ("exec " + cmd + " -oi -f " + sm-q from + " -- " + join " " (map sm-q rcpts))
+  (: argv ("exec " + cmd + " -oi -f " + sh-quote from + " -- " + join " " (map sh-quote rcpts))
      _ (flush out) pp (pipe 0)
      (? (nom? pp) "cannot make a pipe"
         (: p (spawnio ["sh" "-c" argv] <pp -1 -1 [>pp] -1 0)

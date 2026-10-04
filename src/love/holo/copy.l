@@ -71,6 +71,24 @@
        (two? secs ? 0 (scare 'copy-nothing id),
         [(sortby (\ a b (<a <= <b)) secs) (ld-f fs s 0 'e-entry)]))
 
+   ;; the section named nm in a linked elf, as (file-offset size), or () where it has none:
+   ;; where a patch of the binary's own bytes goes (src/apps/source.l marks a cross seed's
+   ;; egg in its .love.image). rd answers the n bytes at an offset, so a caller reads the
+   ;; header, the section table and the names and nothing else -- (\ o n (snip s o (o + n)))
+   ;; over bytes in hand
+   (elf-sec-at rd nm) (rd 0 64 @ hd (#hd < 52 || !(hd 0 = 127 && hd 1 = 69) ? () (es-at rd nm hd)))
+   (es-at rd nm hd)
+    (: fs (hd 4 = 1 ? elf32f elf64f)
+       e (ld-n fs 'sh-ent) shnum (ld-f fs hd 0 'e-shnum)
+       tab (rd (ld-f fs hd 0 'e-shoff) (shnum * e))
+       (f i k) (ld-f fs tab (i * e) k)
+       sx (ld-f fs hd 0 'e-shstrx)
+       strs (#tab < shnum * e || shnum <= sx ? "" (rd (f sx 'sh-off) (f sx 'sh-size)))
+       (go i) (? (shnum <= i) ()
+                 (ld-cstr strs (f i 'sh-name) = nm) [(f i 'sh-off) (f i 'sh-size)]
+                 (go (i + 1)))
+       (#strs ? (go 1) ()))
+
    ;; -- the flat image, as a list of pieces for ld-write. a gap between two sections
    ;; is zeros: the file lays down from the lowest load address, so whatever is not a
    ;; section is what the part comes up holding there.

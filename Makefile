@@ -14,7 +14,7 @@ love0 = out/love0
   site serve site-serve valg disasm flame cat cata catav perf repl gdb bench cloc
 
 # an unpacked release builds the product; a checkout keeps the fast gate
-ifeq ($(in_git),)
+ifeq ($(in_vcs),)
 .DEFAULT_GOAL := dist
 else
 .DEFAULT_GOAL := test
@@ -332,7 +332,7 @@ crewfiles = src/apps/json.l src/apps/sb/merge.l src/apps/sb/http.l src/apps/sb/s
   src/apps/harp/just.l src/apps/harp/drift.l src/apps/harp/tonnetz.l src/apps/harp/phrases.l \
   src/apps/x11.l src/apps/manifest/manifest.l src/apps/lore/lore.l src/apps/lore/rove.l src/apps/lore/view.l src/apps/lore/vec.l src/apps/lore/sky.l src/apps/lore/grove.l src/apps/lore/meadow.l src/apps/lore/tower.l src/apps/lore/story.l src/apps/lore/design.l src/apps/lore/slop.l src/apps/lore/grass.l src/apps/lore/grass99.l src/apps/lore/wade.l src/apps/lore/apartment.l src/apps/lore/dusk.l src/apps/lore/garage.l src/apps/lore/shaft.l src/apps/lore/court.l src/apps/lore/roost.l src/apps/harp/synth.l \
   src/apps/seek.l src/apps/mitty/wharf.l src/apps/mitty/limn.l src/apps/mitty/mitty.l src/apps/font.l src/apps/lux/wire.l src/apps/mitty/pier.l src/apps/doom.l src/apps/lupa.l src/apps/mc.l src/apps/help.l \
-  src/apps/chucho/mime.l src/apps/chucho/box.l src/apps/chucho/smtp.l src/apps/chucho/imap.l src/apps/chucho/chucho.l src/apps/pom.l src/apps/mitty/saver.l src/apps/locks.l src/apps/hosts.l src/apps/seals.l src/apps/bee.l
+  src/apps/chucho/mime.l src/apps/chucho/box.l src/apps/chucho/smtp.l src/apps/chucho/imap.l src/apps/chucho/chucho.l src/apps/pom.l src/apps/mitty/saver.l src/apps/mitty/avatar.l src/apps/mitty/chat.l src/apps/locks.l src/apps/hosts.l src/apps/seals.l src/apps/hive.l src/apps/bee.l
 korefiles = $(kore_head) $(holo_obj) src/love/holo/copy.l $(kore_arc) $(kore_net)
 # the KERNEL's crew: the host's, and the compiler ahead of it. a metal seat has no
 # ambient toolchain, so the one it carries is the only one there is -- `love seed` and
@@ -405,12 +405,12 @@ force_src: ;
 # the roster is the bake section, what a carried-source bake decodes alone (main.c).
 $(src_tree): force_src $(love0) $(ho)/.dist.list
 	@mkdir -p $(dir $@)
-	@LOVE_NO_IMAGE= LOVE_BUDGET_MB=256 $(love0) src/tools/selfpack.l -c $(tree_codecs) $@ love-$(dist_ver) $(dist_stamp) $(love_stamp) $(ho)/.dist.list $(dist_drop)
+	@LOVE_NO_IMAGE= LOVE_BUDGET_MB=256 $(love0) src/tools/selfpack.l -c $(tree_codecs) $@ love-$(dist_ver) $(dist_stamp) set $(ho)/.dist.list $(dist_drop)
 
 out/src.o: $(src_tree) src/tools/mksrc.l $(holocat_dep) $(love0)
 	@echo 'HOLO	'$@
 	@$(love0) $(holocat) src/tools/mksrc.l $(src_tree) $@ $(hosta)
-# the build stamp is 0, not the last commit's time: committing hot.prof moves that stamp
+# the build stamp is 0, not the set's: recording hot.prof moves that stamp
 out/prof/src.tree: force_src $(love0) $(ho)/.dist.list
 	@mkdir -p $(dir $@)
 	@LOVE_NO_IMAGE= LOVE_BUDGET_MB=256 $(love0) src/tools/selfpack.l -c $(tree_codecs) $@ love-$(dist_ver) $(dist_stamp) 0 $(ho)/.dist.list $(dist_drop) src/tools/hot.prof
@@ -1114,8 +1114,10 @@ $v/syntax/love.vim: $(ho)/syntax.vim
 
 all: host kernel wasm dist
 
+# the tree's own listing (selfpack -l, sb's law), never a vcs tool's; an empty one is a refusal
 lint: $(mdep)
-	@$m $S/apps/libra/libra.l $$(git ls-files '*.l' 2>/dev/null || $m sb ls | grep '\.l$$') && echo "lint: parens balance"
+	@fs=$$($m $S/tools/selfpack.l -l | grep '\.l$$'); [ -n "$$fs" ] || { echo "FAIL lint: no .l files listed"; exit 1; }; \
+	 $m $S/apps/libra/libra.l $$fs && echo "lint: parens balance"
 
 
 crewtools = $(wildcard src/apps/*.l) $(foreach d,$(wildcard src/apps/*),$(wildcard $d/$(notdir $d).l))

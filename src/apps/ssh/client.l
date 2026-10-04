@@ -46,28 +46,6 @@
    (g-str c) (: n (g-u32 c) i (g-skip c n) (snip (c 's) i (i + n)))
    (g-names c) (g-str c @ s (#s = 0 ? () (split s 44)))
 
-   ; --- base64, both ways (RFC 4648; decode skips what is not the alphabet) ---
-   b64a "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
-   (b64v c) (? (64 < c && c < 91) (c - 65) (96 < c && c < 123) (c - 71)
-               (47 < c && c < 58) (c + 4) (c = 43) 62 (c = 47) 63 -1)
-   (b64d s)
-    (: vs (filter (v \ -1 < v) (map (i \ b64v (s i)) (jot #s)))
-       (go l acc k out)
-        (two? l ? (: a2 (acc << 6 | <l) k2 (k + 6)
-                     (8 <= k2 ? (go >l (a2 & (1 << k2 - 8) - 1) (k2 - 8) (a2 >> (k2 - 8) . out))
-                        (go >l a2 k2 out)))
-           (string (rev out)))
-       (go vs 0 0 ()))
-   (b64e s pad?)
-    (: n #s
-       (grp i) (: b0 (s i) b1 (i + 1 < n ? (s (i + 1)) 0) b2 (i + 2 < n ? (s (i + 2)) 0)
-                  v (b0 << 16 | b1 << 8 | b2)
-                  k (? (i + 2 < n) 4 (i + 1 < n) 3 2)
-                  q (string (map (j \ b64a (v >> 18 - 6 * j & 63)) (jot k)))
-                  (q + (pad? ? (snip "==" 0 (4 - k)) "")))
-       (go i a) (n <= i ? a (go (i + 3) (a + grp i)))
-       (go 0 ""))
-
    ; a peer's text for our terminal: c0 but tab and newline, del, c1 (u+0080..u+009f) and
    ; any byte outside well-formed utf-8 are dropped -- the reach of openssh's strnvis
    (ssh-clean s)
