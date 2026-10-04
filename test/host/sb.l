@@ -812,7 +812,9 @@
    dbad (0 < dg 'bad && !(bhave? h2))
    ; the head's blobs as plain files, and a plain blob file still read
    _ (chdir "../a")
-   up (sb-unpack "../raw")
+   up (sb-unpack "../raw" ())
+   up1 (sb-unpack "../raw1" [h2])
+   up1ok (up1 && <>(look ("../raw1/" + h2)) = f2 && #(readdir "../raw1") = 1)
    upok (up && <>(look ("../raw/" + sha256 (dz-v 19))) = dz-v 19)
    _ (lay (".sb/blob/" + h1) big) _ (unlink (".sb/z/" + h1)) _ (dz-clear ())
    legacy (bget h1 @ t (two? t && <>t = big))
@@ -824,7 +826,7 @@
  (sb-all? (k \ 0 <= k && k <= zcap) ks) (elem 0 ks) (elem zcap ks) ; the chain stops at zcap and starts again
  gets g2
  bsame bz dbad
- upok legacy)
+ upok up1ok legacy)
 
 (chdir sb-home)
 (hark ["rm" "-rf" sb-dir])

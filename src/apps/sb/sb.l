@@ -79,15 +79,16 @@
        (? (two? c) c
           !(sb-hex? h) ()
           (look (d + "/.sb/blob/" + h) @ t
-             (two? t ? t (look (d + "/.sb/z/" + h) @ z (two? z ? (zderive d h <>z)))))))
+             (two? t ? t (look (d + "/.sb/z/" + h) @ z (two? z ? (zderive d h <>z 0)))))))
    (bget h) (bget-in "." h)
-   ; a z text's bytes, its base got from d first, checked against h -> (1 bytes) | ()
-   (zderive d h z)
+   ; a z text's bytes, its base got from d first -> (1 bytes) | (). chk: checked against h, for
+   ; a text from outside; the store's own were checked as they came in, as its plain files are
+   (zderive d h z chk)
     (zhead z @ [zh zb zd at]
        (? (zh != h) ()
           (: base (? (zb = "-") '(1 "") (bget-in d zb))
              u (? (two? base) (lzma2d-by (snip z at #z) <>base))
-             (? (string? u && sha256 u = h)
+             (? (string? u && (!chk || sha256 u = h))
                 (: _ (? (64000000 < bcache 'n) (: _ (map (k \ pull bcache k 0) (keys bcache)) (pin bcache 'n 0)) 0)
                    _ (pin bcache h [1 u]) _ (pin bcache 'n (bcache 'n + #u))
                    [1 u]))))
@@ -308,7 +309,7 @@
                     (sha256 <>t = h) (: _ (? (to = ".") (keep-by <>t base) (lay (to + "/.sb/blob/" + h) <>t)) (bump 'blobs, 1))
                     (atom? zh || <zh != h) (say err ("sb: bad address " + h + "\n"), bump 'bad, 0)
                     !(zh 1 = "-" || blob1 [(zh 1) ()]) 0
-                    !(two? (zderive to h <>t)) (say err ("sb: bad address " + h + "\n"), bump 'bad, 0)
+                    !(two? (zderive to h <>t 1)) (say err ("sb: bad address " + h + "\n"), bump 'bad, 0)
                     (: _ (mkdir (to + "/.sb/z") 493) _ (lay (to + "/.sb/z/" + h) <>t) (bump 'blobs, 1))))))
        (one id)
         (: r0 (peep seen id ())
@@ -727,14 +728,15 @@
                  (? (0 = nleft) 1 0))))))
    ; --- ls: the head's paths, a line each ---
    (sb-ls long) (: sn (snap ()) _ (map (e \ puts ((? long (<>e + "\t") "") + <e + "\n")) sn) #sn)   ; -l: side, tab, path
-   ; the head's blobs as plain files DIR/HASH, for a reader that wants bytes on disk -> 1 | 0
-   (sb-unpack dir)
+   ; blobs as plain files DIR/HASH, for a reader that wants bytes on disk: the hashes named,
+   ; else every one the head holds -> 1 | 0
+   (sb-unpack dir hs)
     (: _ (mkdir dir 493)
-       (foldl (\ ok e (: h (sd-h <>e) p (dir + "/" + h)
+       (foldl (\ ok h (: p (dir + "/" + h)
                          (? (two? (stat p)) ok
                             (bget h @ t (two? t ? (: _ (lay p <>t) ok)
                                            (: _ (say err ("sb: missing blob " + h + "\n")) 0))))))
-              1 (snap ())))
+              1 (two? hs ? hs (map (e \ sd-h <>e) (snap ())))))
 
    ; --- bank: freeze the current head under a NAME -- an immutable release, the
    (refs _) (form ".sb/refs")                                  ; ((name (id..) time)..) | ()
@@ -1307,7 +1309,7 @@ usage: sb VERB ..
                   their deps) and lay the tree: what a hub does to land work
   ls [-l]         the head's paths; -l puts each one's side (blob hash, x when
                   executable) and a tab before it
-  unpack DIR      the head's blobs as plain files DIR/HASH
+  unpack DIR [H..]  blobs as plain files DIR/HASH: the hashes named, else the head's
   psid [SET]      the name of a set's state: the head's, or SET's (a ref, a
                   patch, a psid, or head)
   paths A B       the paths sets A and B lay differently, a line each
@@ -1368,7 +1370,7 @@ usage: sb VERB ..
            "status" !(sb-status ())
            "bisect" (#>as < 3 ? (usage ()) (: r (held "." (_ \ sb-bisect >as)) (? (r = 2) (usage ()) !r)))
            "ls" (sb-ls (elem "-l" >as), 0)
-           "unpack" (#>as = 1 ? !(sb-unpack <>as) (usage ()))
+           "unpack" (two? >as ? !(sb-unpack <>as >>as) (usage ()))
            "psid" !(sb-psid >as)
            "stamp" !(sb-stamp >as)
            "paths" (#>as = 2 ? (sb-paths <>as <>>as) (usage ()))

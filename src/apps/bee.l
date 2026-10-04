@@ -1213,10 +1213,25 @@
          ents (filter two? (map (\ l (: k (find l "\t" 0) (? (k = 64 || k = 65) [(snip l 0 k) (snip l (k + 1) #l)] ())))
                                 (lines (q-sb "ls -l"))))
          _ (mkdirs bee-hive)
-         ; the hub's store may hold a blob as a delta: git is handed plain files sb lays
-         _ (q-sb ("unpack " + sq (tmp + ".raw")))
-         _ (spit-file (tmp + ".blobs") (cats (catmap (\ e [tmp ".raw/" (snip <e 0 64) "\n"]) ents)))
-         gs (? (two? ents) (lines (lush-out ("git -C " + sq path + " hash-object -w --stdin-paths < " + sq (tmp + ".blobs")))) ())
+         ; git's id for each blob: the mirror's own map from sb's hash, each one git still holds;
+         ; the rest sb lays as plain files (the hub may hold a blob as a delta) and git hashes
+         mapf (bee-hive + "/.mirror-oids-" + snip (sha256 path) 0 16)
+         known (foldl (\ t l (? (#l = 105) (pin t (snip l 0 64) (snip l 65 105)) t)) {}
+                      (lines (? (two? (stat mapf)) (slurp-file mapf) "")))
+         hs (uniq (map (e \ snip <e 0 64) ents))
+         cand (filter (h \ known h) hs)
+         _ (spit-file (tmp + ".ask") (cats (catmap (h \ [known h "\n"]) cand)))
+         held2 (lines (? (two? cand) (lush-out ("git -C " + sq path + " cat-file --batch-check < " + sq (tmp + ".ask"))) ""))
+         live (foldl (\ t i (? (find (held2 i) " blob " 0 = 40) (pin t (cand i) 1) t)) {} ^#cand)
+         need (filter (h \ !(live h)) hs)
+         _ (? (two? need) (q-sb ("unpack " + sq (tmp + ".raw") + cats (map (h \ " " + h) need))) "")
+         _ (spit-file (tmp + ".blobs") (cats (catmap (\ h [tmp ".raw/" h "\n"]) need)))
+         ng (? (two? need) (lines (lush-out ("git -C " + sq path + " hash-object -w --stdin-paths < " + sq (tmp + ".blobs")))) ())
+         _ (? (#ng = #need && two? need)
+              (spit-file mapf ((? (two? (stat mapf)) (slurp-file mapf) "") + cats (map (i \ need i + " " + ng i + "\n") ^#need)))
+              "")
+         oid (foldl (\ t i (pin t (need i) (ng i))) (foldl (\ t h (pin t h (known h))) {} (keys live)) ^#ng)
+         gs (map (e \ peep oid (snip <e 0 64) "") ents)
          _ (spit-file (tmp + ".info") (cats (catmap (\ i (: e (ents i) [(#<e = 65 ? "100755" "100644") " " (gs i) "\t" (e 1) "\n"]))
                                                    ^#ents)))
          _ (spit-file (tmp + ".msg") msg)
@@ -1237,13 +1252,13 @@
                      ("git update-ref " + sq ("refs/heads/" + br) + " \"$c\" \"$par\"")
                      "echo \"made $c\""]))
          o (? (0 < #held && q-abs held != hub) ""
-              (#gs != #ents) ""
+              (two? (filter (g \ #g != 40) gs)) ""
               (chomp (lush-out ("sh " + sq (tmp + ".sh") + " 2>&1"))))
-         _ (map (\ x (unlink (tmp + x))) [".blobs" ".info" ".msg" ".sh" ".index"])
+         _ (map (\ x (unlink (tmp + x))) [".blobs" ".ask" ".info" ".msg" ".sh" ".index"])
          _ (lush-out ("rm -rf " + sq (tmp + ".raw")))
          (? (0 < #held && q-abs held != hub)
              [0 ("the mirror's branch " + br + " is checked out at " + held + ", not the hub: it would move under that checkout")]
-            (#gs != #ents) [0 ("the mirror at " + path + " could not store the hub's blobs")]
+            (two? (filter (g \ #g != 40) gs)) [0 ("the mirror at " + path + " could not store the hub's blobs")]
             (starts? o "made " || starts? o "same ") [1 o]
             [0 ("the mirror at " + path + " did not take the landing: " + o)]))
      ; --- a worker nest: DIR made from the hub (SB_HUB, else (hub ..)) at its head -- the hub's

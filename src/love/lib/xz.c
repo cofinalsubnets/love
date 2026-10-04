@@ -362,6 +362,7 @@ static void xe_rep(struct lz_model *m, struct lz_rc *e, uintptr_t p, unsigned id
 // new position. 2- and 3-byte heads find the nearest short ones. entries are position + 1.
 #define XE_H4BITS 20
 #define XE_DEPTH 48
+#define XE_SKIPDEPTH 8                          // a position indexed with no matches asked
 #define XE_NICE 96
 #define XE_MAXM 64
 
@@ -373,6 +374,11 @@ static uint32_t xe_h4(const uint8_t *s) {
 
 static unsigned xe_mlen(const uint8_t *a, const uint8_t *b, unsigned lim) {
  unsigned k = 0;
+#if wideld
+ for (; k + 8 <= lim; k += 8) {                 // a word at a time: the first byte that differs
+  uint64_t x = ld64(a + k) ^ ld64(b + k);       // is the lowest set one, little-endian
+  if (x) return k + (unsigned) (__builtin_ctzll(x) >> 3); }
+#endif
  while (k < lim && a[k] == b[k]) k++;
  return k; }
 
@@ -399,7 +405,7 @@ static unsigned xe_bt(struct xe_mf *f, uintptr_t p, unsigned lim, uint32_t *ls, 
  uint32_t h4 = xe_h4(sp), c = f->h4[h4];
  f->h4[h4] = (uint32_t) p + 1;
  uint32_t *lo = f->son + 2 * (p & f->wmask), *hi = lo + 1;   // the new root's two sides
- unsigned llo = 0, lhi = 0, depth = XE_DEPTH, cut = lim < XE_NICE ? lim : XE_NICE;
+ unsigned llo = 0, lhi = 0, depth = ls ? XE_DEPTH : XE_SKIPDEPTH, cut = lim < XE_NICE ? lim : XE_NICE;
  for (;;) {
   uintptr_t q = c - 1;
   if (!c || p - q > reach || !depth--) { *lo = *hi = 0; break; }
