@@ -52,7 +52,7 @@
 
      ; ~/.love/etc/bee.l says everything. a tree's ./.bee.l comes with a clone, so it says only
      ; what cannot move the key, the shell, the backend or the machine's locks
-     bee-tree-keys ['model 'max-tokens 'thinking 'context 'queue-watch]
+     bee-tree-keys ['model 'max-tokens 'thinking 'context 'queue-watch 'stall-minutes 'gone-minutes]
      bee-salt (: sf (cite 'salt 'salt-file) h (getenv "HOME")
                  u (? (string? h) (sf (h + "/.love/etc/bee.l") {}) {})
                  t (sf ".bee.l" {})
@@ -478,6 +478,12 @@
                k (go 0 -1) w (? (0 <= k) (words (snip s (k + 1) #s)) ())
                (#w > 1 ? (digits (w 1)) 0))))
      (ancestors p) (: (go p acc n) (? (p <= 1 || n <= 0) acc (go (ppid-of p) (p . acc) (n - 1))) (go p () 32))
+     ; a claude code session backgrounded (an /exit with work running, or claude --bg): its claude
+     ; runs under claude's --bg-pty-host, holding no terminal. its card's parent is that claude
+     (backgrounded? c)
+      (: p (digits (peep c "parent" "0"))
+         (0 < p && two? (filter (a \ (: t (slurp-file ("/proc/" + show a + "/cmdline")) (string? t && 0 <= find t "--bg-pty-host" 0)))
+                                (take 4 (rev (ancestors p))))))
      ; --state STATE [--pid P]: a claude code session's hooks say busy or idle. the session is the
      ; one whose card names P or an ancestor of it as its parent, else BEE_NAME's, else the one
      ; claude code session in this directory. it says nothing, and the card's state and turn move
@@ -580,6 +586,7 @@
             ((foldl (\ a p (: c (p 1)
                              (a + <p + (<p = (me 0) ? " (you)" "") + "  "
                                 + (user-card? c ? ("user " + (alive? (card-pid c) ? "here" "away")) (peep c "state" "?"))
+                                + (backgrounded? c ? " background" "")
                                 + "  " + (: b (peep c "branch" "") (0 < #b ? b "-"))
                              + "  " + peep c "cwd" "" + "\n")))
                    "" ps)
@@ -826,10 +833,71 @@
                               ns (? (string? old && old != new) (q-news old new) ())
                               (? (two? ns) [(nm + " changed:\n" + foldl (\ a l (a + "- " + l + "\n")) "" ns)] ())))
                       now)
+         _ (foldl (\ a s (: _ (stall-check (sect-queue <s) (s 1)) a)) 0 now)
          (? (two? news)
             (post-as "queue-watch" (me 0)
                      (foldl (\ a t (a + t)) "" news + "read it fresh before acting on it."))
             0))
+     ; --- the watchdog: a queue whose head stalls -- its owner gone (gone-minutes, 5), or green and
+     ; not landed, or waiting with no row gating (stall-minutes, 30) -- rings its leader once, or,
+     ; with the leader gone too, every live session holding a row. a stall is known by its row, state
+     ; and head, so a row that moves starts afresh; every session watches, and the first to make the
+     ; stall's mark in the hive rings ---
+     (bee-mins k d) (: v (peep bee-salt k ()) (? (two? v && charm? <v) <v d))
+     bee-stall-dir (bee-hive + "/.stall")
+     ; a watched section's queue: "git refs/queue/NAME", or "sb ledger queue/NAME, in the nest at HUB"
+     (sect-queue nm) (: w (words nm) (? (<w = "git") (w 1) (: q (w 2) (ends? q "," ? (snip q 0 (#q - 1)) q))))
+     (stall-key q p r why) (q-short q + "-" + p + "-" + r 5 + "-" + hud-short (r 4) + "-" + why)
+     ; when this stall was first seen (ms), its file made now when new
+     (stall-since k now)
+      (: f (bee-stall-dir + "/" + k) t (slurp-file f)
+         (? (string? t && 0 < #t) (digits (chomp t)) (: _ (umkdirs bee-stall-dir 448) _ (spit-file f (show now)) now)))
+     ; -> the stalls of a queue's head: [key text minutes]
+     (stalls q text)
+      (: rows (q-rows text) h (q-head rows) live (live-names 0)
+         (? (h = ()) ()
+            (: r (rows h) st (r 5) own (r 1)
+               gating? (two? (filter (\ p ((rows p) 5 = "gating")) (keys rows)))
+               (? (!(elem own live) && elem st ["waiting" "gating" "green"])
+                   [[(stall-key q h r "gone") ("row " + h + "'s owner " + own + " has no live session (it was " + st + ")") (bee-mins 'gone-minutes 5)]]
+                  (st = "green")
+                   [[(stall-key q h r "green") ("row " + h + " (" + own + ") is green at " + r 4 + " and not landed") (bee-mins 'stall-minutes 30)]]
+                  (st = "waiting" && !gating?)
+                   [[(stall-key q h r "idle") ("row " + h + " (" + own + ") heads the queue waiting, and no row is gating") (bee-mins 'stall-minutes 30)]]
+                  ()))))
+     ; when a row was first seen in its state at its head, by any watching session or the hud:
+     ; how long a row has gated, with no field written for it
+     bee-seen-dir (bee-hive + "/.seen")
+     (seen-since q p r now)
+      (: f (bee-seen-dir + "/" + stall-key q p r "seen") t (slurp-file f)
+         (? (string? t && 0 < #t) (digits (chomp t)) (: _ (umkdirs bee-seen-dir 448) _ (spit-file f (show now)) now)))
+     ; what a watcher stamped, for the hud, which only reads: () when none has yet
+     (stamp-at dir k) (: t (slurp-file (dir + "/" + k)) (? (string? t && 0 < #t) (digits (chomp t))))
+     (seen-all q text now)
+      (: rows (q-rows text) pre (q-short q + "-")
+         ks (map (\ p (stall-key q p (rows p) "seen")) (keys rows))
+         _ (foldl (\ a f (: _ (? (starts? f pre && !(elem f ks)) (unlink (bee-seen-dir + "/" + f)) ()) a))
+                  0 (: d (readdir bee-seen-dir) (two? d ? d ())))
+         (foldl (\ a p (: _ (seen-since q p (rows p) now) a)) 0 (keys rows)))
+     (stall-check q text)
+      (: now (clock 0) lead (q-leader text) live (live-names 0)
+         _ (seen-all q text now)
+         ss (stalls q text)
+         ; a mark no stall holds any more goes
+         ks (map (\ x <x) ss) pre (q-short q + "-")
+         _ (foldl (\ a f (: _ (? (starts? f pre && !(elem f ks) && !(elem (snip f 0 (max 0 (#f - 5))) ks)) (unlink (bee-stall-dir + "/" + f)) ()) a))
+                  0 (: d (readdir bee-stall-dir) (two? d ? d ())))
+         (ring s)
+          (: k <s mins (s 2) since (stall-since k now)
+             (? (now - since < mins * 60000) 0
+                (: fd (openfd (bee-stall-dir + "/" + k + ".rung") 3)
+                   (? !(charm? fd && 0 <= fd) 0
+                      (: _ (close fd)
+                         to (? (elem lead live) [lead] (filter (\ n (elem n live)) (q-uniq (map (\ p (((q-rows text) p) 1)) (keys (q-rows text))))))
+                         msg (q + " has stalled " + show mins + "+ minutes: " + s 1 + ". read it fresh, then fold, land, take the lead or ask its owner.")
+                         _ (foldl (\ a n (: _ (post-as "watchdog" n msg) a)) 0 to)
+                         1)))))
+         (foldl (\ a s (a + ring s)) 0 ss))
      (watch _) (? (0 < bee-qwatch) (: _ (rest (bee-qwatch * 1000)) _ (watch-tick 0) (watch 0)) 0)
      ; a session on another box watches no queue here, so a write that lands is told from here, as
      ; queue-watch, to the owners of its rows and a leader that are NAME@BOX elsewhere
@@ -1090,7 +1158,16 @@
                      (tool @ "queue_read" (queue-read in) "queue_row" (queue-row in) "queue_lead" (queue-lead in)
                              "queue_land" (queue-land in) (queue-landed in)))))))
      (queue-read in) (q-check in (\ in (: rd (q-read (in "queue")) (? (<rd = "none") [0 ("no queue " + in "queue")] [1 (rd 1)]))))
-     (queue-row in) (q-check in queue-row1)
+     ; a sha or psid a row names resolves where the queue lives -- a commit in its repository, a set
+     ; its hub holds -- or is refused, so a hand-expanded one never sits in a row
+     (q-resolves? q x) (? (elem x ["" "-"]) 1 (q-git? q) (0 < #(git-sha x)) (q-psid x = x))
+     (q-unresolved q xs) (filter (\ x !(q-resolves? q x)) xs)
+     (q-unres-why q x)
+      ((q-git? q ? ("no commit " + x + " in this repository") ("no set " + x + " in the hub"))
+       + ": paste it from " + (q-git? q ? "git rev-parse" "sb psid") + " just run, never typed or expanded by hand")
+     (queue-row in)
+      (q-check in (\ in (: bad (q-unresolved (in "queue") [(field in "gated_on" "") (field in "gated_head" "")])
+                         (? (two? bad) [0 (q-unres-why (in "queue") <bad)] (queue-row1 in)))))
      ; a queue not made yet is made on bee's standard header, led by the leader given, else this session
      (queue-row1 in)
       (: q (in "queue") who (field in "session" (me 0))
@@ -1194,6 +1271,7 @@
             (r 5 != "green") ("row " + p + " is " + r 5 + ": only a green row lands")
             (h != p) ("row " + h + " is ahead of row " + p + ": the head lands first")
             !(two? base) (q + " has no base line")
+            (two? (q-unresolved q [(r 3) (r 4)])) ("row " + p + ": " + q-unres-why q <(q-unresolved q [(r 3) (r 4)]))
             [p r base]))
      (queue-land in) (q-check in queue-land1)
      (queue-land1 in)
@@ -2126,18 +2204,59 @@
      ; them once; the hud's screen (src/apps/mitty/chat.l) reads them again as they move ---
      (hud-short s) (string? s && 9 < #s ? (snip s 0 9) s)
      (hud-nums ks) (map show (sort (map digits ks)))
-     ; a queue's lines: its name, base and leader, then each row, a fold under the row it joins
+     ; a session's own colour, the same every time: mid tones, legible on a dark or a light terminal
+     hud-pal ["38;5;67" "38;5;72" "38;5;133" "38;5;137" "38;5;108" "38;5;140" "38;5;66" "38;5;173"]
+     (hud-who nm) (sgr (hud-pal ((foldl (\ a i (a + nm i)) 0 ^#nm) % #hud-pal)) nm)
+     (hud-dur ms) (: d (max 0 (ms // 1000))
+                     (? (d < 60) (show d + "s") (d < 3600) (show (d // 60) + "m")
+                        (d < 86400) (show (d // 3600) + "h" + show (d % 3600 // 60) + "m") (show (d // 86400) + "d")))
+     ; what a row carries: its note's first clause, cut to fit
+     (hud-gist n)
+      (: cut (foldl (\ a sep (: k (find n sep 0) (? (0 <= k && k < a) k a))) #n [" -- " ": " "; " ". "])
+         g (snip n 0 cut) (#g <= 44 ? g (snip g 0 43 + "…")))
+     (q-notes text)
+      (foldl (\ t l (: w (words l) (? (5 < #w && 0 < #<w && 48 <= <w 0 <= 57) (pin t <w (q-note l)) t))) {} (lines text))
+     ; the sync line's last publish ("YYYY-MM-DD HH:MM utc") + 8 h -> seconds, () without one
+     (hud-due sy)
+      (: k (find sy " utc" 0)
+         (? (k < 16 || find sy "publish" 0 < 0) ()
+            (: d (snip sy (k - 16) k) (n a b) (digits (snip d a b))
+               ((cite 'cal 'epoch-days) (n 0 4) (n 5 7) (n 8 10) * 86400 + n 11 13 * 3600 + n 14 16 * 60 + 8 * 3600))))
+     ; a queue's lines: its name, base, leader and sync, then each row -- what it carries, how long
+     ; it has held its state, a stall in red -- a fold dim under the row it joins
      (hud-queue nm text)
-      (: rows (q-rows text) h (q-head rows) b (q-base-line text) lead (q-leader text)
+      (: q (sect-queue nm) rows (q-rows text) h (q-head rows) b (q-base-line text) lead (q-leader text)
+         now (clock 0) notes (q-notes text)
+         ; the head's stall, once a watcher has seen it last long enough to ring
+         stall (: ss (stalls q text)
+                  (? (two? ss) (: s <ss t (stamp-at bee-stall-dir <s) (? (charm? t && now - t >= s 2 * 60000) (s 1)))))
          (row p ind)
-          (: r (rows p) st (r 5)
-             (ind + (p = h ? (sgr "1" "▸ ") "  ") + edfit (r 0) 4 " " + edfit (r 1) 10 " " + " " + edfit (r 2) 18 " "
-              + " " + edfit (hud-short (r 3)) 10 " " + edfit (hud-short (r 4)) 10 " "
-              + (st @ "green" (sgr "32" st) "gating" (sgr "33" st) "waiting" st (sgr "2" st))))
+          (: r (rows p) st (r 5) fold? (q-folded? r)
+             age (: t (stamp-at bee-seen-dir (stall-key q p r "seen")) (? (charm? t) (hud-dur (now - t)) ""))
+             red? (p = h && string? stall)
+             stc (? red? (sgr "31" (st + " " + age)) fold? st
+                    (st @ "green" (sgr "32" (st + " " + age)) "gating" (sgr "33" (st + " " + age)) (st + " " + age)))
+             gist (hud-gist (peep notes p ""))
+             (? fold?
+                [(sgr "2" (ind + "  " + edfit (r 0) 4 " " + edfit (r 1) 10 " " + " " + edfit (r 2) 18 " " + " "
+                          + edfit (hud-short (r 4)) 10 " " + " " + st + "  " + gist))]
+                ([(ind + (p = h ? (sgr "1" "▸ ") "  ") + (p = h ? (sgr "1" (edfit (r 0) 4 " ")) (edfit (r 0) 4 " "))
+                 + hud-who (edfit (r 1) 10 " ") + " " + (p = h ? (sgr "1" (edfit (r 2) 18 " ")) (edfit (r 2) 18 " "))
+                 + " " + sgr "2" (edfit (hud-short (r 3)) 10 " " + edfit (hud-short (r 4)) 10 " ")
+                 + stc + "  " + gist)]
+                 + (red? ? [("      " + sgr "31" ("stalled: " + stall))] ()))))
          top (filter (p \ !(q-folded? (rows p))) (hud-nums (keys rows)))
+         sy (: l (q-line text "sync") (0 < #l ? (snip l 5 #l) ""))
+         due (hud-due sy) left (? (charm? due) (due - now // 1000))
          ([((sgr "1" nm) + (q-long? text ? (sgr "33" "  long: fold, not line up") ""))]
-          + [("  base " + (two? b ? (<b + " " + b 1) "-") + "   leader " + (0 < #lead ? lead "-"))]
-          + (two? top ? (catmap (p \ [(row p "")] + map (f \ row f "    ") (hud-nums (q-folds rows p))) top)
+          + [("  base " + sgr "2" (two? b ? (<b + " " + b 1) "-") + "   leader " + (0 < #lead ? (hud-who lead) "-"))]
+          + (0 < #sy ? [("  sync " + sgr "2" (#sy <= 72 ? sy (snip sy 0 71 + "…"))
+                         + (charm? left
+                            ? ("   next publish " + (? (left < 0) (sgr "31" ("due " + hud-dur ((0 - left) * 1000) + " ago"))
+                                                       (left < 3600) (sgr "33" ("in " + hud-dur (left * 1000)))
+                                                       ("in " + hud-dur (left * 1000))))
+                            ""))] ())
+          + (two? top ? (catmap (p \ row p "" + catmap (f \ row f "    ") (hud-nums (q-folds rows p))) top)
                         ["  no rows"])))
      (hud-locks _)
       (? !(locks? 0) ["locks are not in this binary"]
@@ -2147,8 +2266,9 @@
             hosts (filter (e \ starts? <e "host-") ex) outs (filter (e \ !(starts? <e "host-")) ex)
             ([((sgr "1" "locks") + sgr "2" ("  " + (: m (peep t "mem_gb" ()) (? (m = ()) "?" (show (int (m * 10) / 10)))) + " GB free, load "
                                                 + (: l (peep t "load" "?") (string? l ? l (show l)))))]
-             + [("  heavy " + show #hv + "/" + show bee-hmax + (two? hv ? (": " + foldl (\ a h (a + (#a ? ", " "") + who h)) "" hv) ""))]
-             + (two? wt ? [("  waiting: " + foldl (\ a h (a + (#a ? ", " "") + who h)) "" wt)] ())
+             + [("  heavy " + (: x (show #hv + "/" + show bee-hmax) (? (#hv >= bee-hmax && two? wt) (sgr "31" x) (#hv >= bee-hmax) (sgr "33" x) x))
+                 + (two? hv ? (": " + foldl (\ a h (a + (#a ? ", " "") + who h)) "" hv) ""))]
+             + (two? wt ? [(sgr "33" "  waiting: " + foldl (\ a h (a + (#a ? ", " "") + who h)) "" wt)] ())
              + map (e \ "  " + <e + "  " + who (e 1)) outs
              + map (e \ "  " + <e + "  " + who (e 1)) hosts)))
      (ago t) (: d (max 0 (clock 0 // 1000 - t))
@@ -2166,6 +2286,7 @@
                 ("  " + edfit <p 12 " " + sgr "36" "user" + " " + (alive? (card-pid c) ? "here" (sgr "2" "away"))
                  + (: n (waiting <p) (0 < n ? ("  " + show n + " waiting") "")))
                 ("  " + edfit <p 12 " " + (st = "busy" ? (sgr "33" st) st) + (string? tn ? (" " + ago (digits tn)) "")
+                 + (backgrounded? c ? (" " + sgr "35" "background") "")
                  + "  " + (: b (peep c "branch" "") (0 < #b ? b "-")) + "  " + sgr "2" (peep c "cwd" "")
                  + (sn ? (sgr "2" ("  · bee " + ago sn)) ""))))
          ([(sgr "1" "sessions")] + (two? ps ? (map one ps) ["  none"])))
@@ -2376,6 +2497,11 @@
          k (card-of nm)
          mc (bee-resumes + "/mcp.json")
          (? !(tablet? r && string? (peep r "claude" ())) [0 ("no session to resume named " + nm)]
+            ; a backgrounded claude keeps the card alive with no one at it: say how to reach it
+            (tablet? k && alive? (card-pid k) && backgrounded? k)
+             (: id (: c (r "claude") (snip c 0 (min 8 #c)))
+                [0 (nm + " is a backgrounded claude session (" + id + "): `claude attach " + id + "` opens it here, "
+                    + "or `claude stop " + id + "` and then `love bee --resume " + nm + "` (--attach, --stop do either)") id])
             (tablet? k && alive? (card-pid k)) [0 (nm + " is live")]
             (: _ (spit-file mc (json-show {"mcpServers" {"bee" {"command" bee-me "args" ["bee" "--mcp"]}}}))
                [1 ("cd " + sh-quote (r "cwd") + " && BEE_NAME=" + sh-quote nm + " exec claude"
@@ -2700,14 +2826,32 @@
           "--avatar" (: r (avatar-cmd (join " " as) 80)
                         _ (say (<r ? out err) (foldl (\ a l (a + l + "\n")) (<r ? "" "bee: ") (r 1)))
                         (<r ? 0 1))
-          ; --resume lists who can come back; --resume NAME [PROMPT] relaunches one, --cmd only says how
+          ; --resume lists who can come back; --resume NAME [PROMPT] relaunches one, --cmd only says how.
+          ; a backgrounded one: --attach opens it, --stop stops it and resumes; on a terminal, asked
           "--resume"
-           (: ws (filter (w \ w != "--cmd") >as)
-              (? !(two? ws) (: _ (map (n \ puts (n + "\n")) (resumable 0)) 0)
-                 (: r (resume-cmd <ws (join " " >ws))
-                    (? !<r (say err ("bee: " + r 1 + "\n"), 1)
-                       (elem "--cmd" as) (: _ (puts (r 1 + "\n")) 0)
-                       (: p (spawn ["sh" "-c" (r 1)]) (charm? p && 0 <= p ? (wait p) 127))))))
+           (: ws (filter (w \ !(elem w ["--cmd" "--attach" "--stop"])) >as)
+              (sh-run c) (: p (spawn ["sh" "-c" c]) (charm? p && 0 <= p ? (wait p) 127))
+              ; claude stop, then the card's pid gone (15 s at most) before the resume
+              (stop-then nm id)
+               (: _ (sh-run ("claude stop " + sh-quote id + " >/dev/null"))
+                  (gone n) (: k (card-of nm) (? !(tablet? k && alive? (card-pid k)) 1 (n <= 0) 0 (: _ (rest 500) (gone (n - 1)))))
+                  (? (gone 30) (go-resume ()) (say err ("bee: " + nm + " did not stop\n"), 1)))
+              (go-resume _)
+               (: r (resume-cmd <ws (join " " >ws))
+                  (? (two? >>r)
+                      (: id (r 2)
+                         (? (elem "--attach" as) (sh-run ("exec claude attach " + sh-quote id))
+                            (elem "--stop" as) (stop-then <ws id)
+                            (two? (tty 0))
+                             (: _ (puts (r 1 + "\n[a]ttach, [s]top and resume, or leave it? ")) _ (flush out) l (line 0)
+                                (? (string? l && 0 < #l && l 0 = 97) (sh-run ("exec claude attach " + sh-quote id))
+                                   (string? l && 0 < #l && l 0 = 115) (stop-then <ws id)
+                                   0))
+                            (say err ("bee: " + r 1 + "\n"), 1)))
+                     !<r (say err ("bee: " + r 1 + "\n"), 1)
+                     (elem "--cmd" as) (: _ (puts (r 1 + "\n")) 0)
+                     (sh-run (r 1))))
+              (? !(two? ws) (: _ (map (n \ puts (n + "\n")) (resumable 0)) 0) (go-resume ())))
           "--ticket" (say-r (mint >as))
           "--enrol" (say-r (enrol >as))
           "--admit" (say-r (admit (slurp in)))

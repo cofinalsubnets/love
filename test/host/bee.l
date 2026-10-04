@@ -286,13 +286,35 @@
       (0 = <st))
    0)
 
+; --- the watchdog: a queue whose head's owner has no live session rings the leader, once ---------
+(: cr-wd (cr-dir "wdog" ("(api anthropic)\n(url \"" + cr-url + "/v1/messages\")\n(model claude-mock)\n"))
+   hub (cr-wd + "/hub") wt (cr-wd + "/wt")
+   _ (mkdir hub 493) _ (mkdir wt 493)
+   _ (cr-put wt ".bee.l" "(queue-watch 1)\n(gone-minutes 0)\n")
+   (ok0 _) (cr-ok (cr-sse [{"type" "message_delta" "delta" {"stop_reason" "end_turn"}}]))
+   _ (cr-put cr-wd "q" "leader alice\n1 ghost b1 aaa h1 gating\n2 alice b2 h1 h2 waiting\n")
+   _ (hark [cr-love "sb" "-C" hub "ledger" "queue/main" "--was" "none" (cr-wd + "/q")])
+   _ (cr-serves [(ok0 0) (ok0 0) (ok0 0)])
+   sp (cr-run cr-wd ("SB_HUB='" + hub + "'") ("--spawn alice '" + wt + "' 'wait for the queue'"))
+   _ (rest 5000)
+   h (cr-heard 0)
+   st (cr-run cr-wd "" "--stop alice")
+   said (foldl (\ a r (a + r)) "" h)
+   _ (test
+      (0 = <sp)
+      (2 = #h)                                                  ; the prompt, then one ring
+      (cr-in said "from=\\\"watchdog\\\"")
+      (cr-in said "row 1's owner ghost has no live session (it was gating)")
+      (0 = <st))
+   0)
+
 ; --- queue_row: a row written by field, the rest of the queue untouched --------------------
 ; ant joins gating, goes green naming only the state, and is refused another's row; queen,
 ; the leader, drops ant's row and moves the base line. the header survives every write
 (: cr-q (cr-dir "qrow" ("(api anthropic)\n(url \"" + cr-url + "/v1/messages\")\n(model claude-mock)\n"))
    (g as) (hark (["git" "-C" cr-q "-c" "user.name=t" "-c" "user.email=t@t"] + as))
    _ (g ["init" "-q" "-b" "main"]) _ (cr-put cr-q "f" "one\n") _ (g ["add" "f"]) _ (g ["commit" "-q" "-m" "one"])
-   head0 "b94062f"
+   head0 (: r (g ["rev-parse" "--short=7" "HEAD"]) (: s >r (snip s 0 (#s - 1))))
    _ (cr-put cr-q "q0" ("# the rules: one row each, the leader lands\n# line: <position> <session> <branch> <gated-on> <gated-head> <state>\nleader queen\nmain " + head0 + "\n"))
    blob (: r (g ["hash-object" "-w" (cr-q + "/q0")]) (: s >r (snip s 0 (#s - 1))))
    _ (g ["update-ref" "refs/queue/main" blob])
@@ -304,7 +326,7 @@
                     (ev "message_delta" {"delta" {"stop_reason" "tool_use"}})]))
    (done _) (cr-ok (cr-sse [(ev "message_delta" {"delta" {"stop_reason" "end_turn"}})]))
    _ (cr-serves [(one "a" {"queue" "refs/queue/main" "state" "gating" "branch" "ant" "gated_on" head0
-                           "gated_head" "h1" "note" "make test"})
+                           "gated_head" head0 "note" "make test"})
                  (one "b" {"queue" "refs/queue/main" "state" "green"})
                  (one "c" {"queue" "refs/queue/main" "state" "left" "session" "bob"})
                  (done 0)])
@@ -319,11 +341,11 @@
    qq (: r (g ["cat-file" "-p" "refs/queue/main"]) >r)
    _ (test
       (0 = <ra) (4 = #ha)
-      (cr-in (res ha 1) "row now: 1 ant ant b94062f h1 gating  # make test")
-      (cr-in (res ha 2) "row now: 1 ant ant b94062f h1 green  # make test")   ; the rest kept
+      (cr-in (res ha 1) ("row now: 1 ant ant " + head0 + " " + head0 + " gating  # make test"))
+      (cr-in (res ha 2) ("row now: 1 ant ant " + head0 + " " + head0 + " green  # make test"))   ; the rest kept
       (cr-in (res ha 3) "only the leader, queen,")
-      (cr-in qa "# the rules: one row each") (cr-in qa "leader queen") (cr-in qa "main b94062f")
-      (cr-in qa "1 ant ant b94062f h1 green  # make test")
+      (cr-in qa "# the rules: one row each") (cr-in qa "leader queen") (cr-in qa ("main " + head0))
+      (cr-in qa ("1 ant ant " + head0 + " " + head0 + " green  # make test"))
       (0 = <rq) (2 = #hq)
       (cr-in (res hq 1) "the change is in refs/queue/main")
       (cr-in qq "# the rules: one row each") (cr-in qq "main c0ffee1") !(cr-in qq " ant "))
@@ -335,18 +357,20 @@
 (: cr-rb (cr-dir "rows" "")
    (g as) (hark (["git" "-C" cr-rb "-c" "user.name=t" "-c" "user.email=t@t"] + as))
    _ (g ["init" "-q" "-b" "main"]) _ (g ["commit" "-q" "--allow-empty" "-m" "one"])
+   hb (: r (g ["rev-parse" "--short=7" "HEAD"]) (: s >r (snip s 0 (#s - 1))))
    (row id a) {"jsonrpc" "2.0" "id" id "method" "tools/call" "params" {"name" "queue_row" "arguments" (pin a "queue" "refs/queue/r")}}
    (lead id a) {"jsonrpc" "2.0" "id" id "method" "tools/call" "params" {"name" "queue_lead" "arguments" (pin a "queue" "refs/queue/r")}}
    _ (cr-put cr-rb "in" (foldl (\ a m (a + json-show m + "\n")) ""
                               [(row 1 {"state" "waiting" "branch" "a"})
-                               (row 2 {"state" "green" "gated_head" "h1"})
+                               (row 2 {"state" "green" "gated_head" hb})
                                (row 3 {"state" "waiting" "branch" "b"})
                                (row 4 {"state" "gating"})
                                (row 5 {"state" "waiting" "branch" "a"})
                                (row 6 {"state" "folded-into-1" "branch" "b"})
                                (row 7 {"state" "waiting" "branch" "c"})
                                (row 8 {"state" "waiting" "row" "2" "branch" "d"})
-                               (lead 9 {"base" "c0ffee1"})]))
+                               (lead 9 {"base" "c0ffee1"})
+                               (row 10 {"state" "waiting" "branch" "e" "gated_head" "deadbee"})]))
    r (cr-run cr-rb "BEE_NAME=ant BEE_YES=1" ("--mcp < '" + cr-rb + "/in'"))
    byid (foldl (\ t l (: j (json-read l) (? (two? j && tablet? (j 1)) (pin t (show ((j 1) "id")) (j 1)) t)))
                {} (filter (\ l (0 < #l)) (lines (r 1))))
@@ -355,7 +379,7 @@
    _ (test
       (0 = <r)
       (cr-in (text "1") "row now: 1 ant a - - waiting")
-      (cr-in (text "2") "row now: 1 ant a - h1 green")             ; the only row, no branch named
+      (cr-in (text "2") ("row now: 1 ant a - " + hb + " green"))   ; the only row, no branch named
       (cr-in (text "3") "row now: 2 ant b - - waiting")            ; a second branch joins
       (cr-in (text "4") "you hold rows 1 and 2: pass branch or row")
       (cr-in (text "6") "row now: 2 ant b - - folded-into-1")
@@ -363,7 +387,9 @@
       (cr-in (text "8") "row 2 carries b and is folded-into-1")
       (cr-in (text "9") "the change is in refs/queue/r")
       (cr-in q "2 ant b - - folded-into-1") (cr-in q "3 ant c - - waiting")
-      (cr-in q "\nr c0ffee1") !(cr-in q "4 ant"))                ; the base moved, no row made
+      (cr-in q "\nr c0ffee1") !(cr-in q "4 ant")                 ; the base moved, no row made
+      ; a sha that names no commit here is refused: pasted, never expanded by hand
+      (cr-in (text "10") "no commit deadbee in this repository: paste it from git rev-parse") !(cr-in q " e "))
    0)
 
 ; --- the leader hears every row -----------------------------------------------------------
@@ -466,6 +492,18 @@
    ls (cr-run cr-r2 "" "--resume")
    c (cr-run cr-r2 "" "--resume back --cmd go on")
    no (cr-run cr-r2 "" "--resume nobody")
+   ; back's card held by a backgrounded claude: alive, its parent under --bg-pty-host. --resume
+   ; says how to attach or stop it, and the list marks it
+   bgp (spawn ["sh" "-c" "sleep 30; :" "--bg-pty-host"])
+   _ (mkdir (cr-r2 + "/.love/run") 448) _ (mkdir (cr-r2 + "/.love/run/hive") 448) _ (mkdir (cr-r2 + "/.love/run/hive/back") 448)
+   _ (cr-put (cr-r2 + "/.love/run/hive/back") "card"
+             ("pid " + show bgp + "\ncwd " + cr-r2 + "\nbranch -\nmodel claude-code\nstate idle\nsince 0\nparent " + show bgp + "\n"))
+   bg (cr-run cr-r2 "" "--resume back")
+   bgl (cr-run cr-r2 "" "--list")
+   _ (hark ["kill" (show bgp)]) _ (wait bgp)
+   _ (test
+      (1 = <bg) (cr-in (bg 1) "back is a backgrounded claude session (sid-42)") (cr-in (bg 1) "claude attach sid-42")
+      (cr-in (bg 1) "claude stop sid-42") (cr-in (bgl 1) "background"))
    _ (test
       (0 = <m) (0 = <ls) (cr-in (ls 1) "back")
       (0 = <c) (cr-in (c 1) "BEE_NAME=back") (cr-in (c 1) "--resume sid-42 'go on'")
@@ -1050,7 +1088,7 @@
    at (\ p (: is (filter (\ i (cr-in (ls i) p)) ^#ls) (two? is ? <is -1)))
    _ (test (0 = <r)
            (cr-in (r 1) "refs/queue/main") (cr-in (r 1) "long: fold")
-           (cr-in (r 1) "base main abc1234") (cr-in (r 1) "leader g")
+           (cr-in (cr-plain (r 1)) "base main abc1234") (cr-in (cr-plain (r 1)) "leader g")
            (0 <= at "31  ant") (at "32  bob" = at "31  ant" + 1) (at "33  carol" = at "32  bob" + 1)
            (starts? (ls (at "31  ant")) "▸ 31")
            (starts? (ls (at "32  bob")) "      32")
