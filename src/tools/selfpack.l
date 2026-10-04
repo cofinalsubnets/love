@@ -11,7 +11,7 @@
 ; the same bytes (test_distboot holds a re-cut to the byte). `build` rides in as top/STAMP, and
 ; roster names the files a carried-source bake reads (the Makefile's distfiles).
 ; the container is the one src/love/lib/srctree.h reads: a header, an index, and the tar in
-; sections, each packed alone: deflate where a run reads, bzip2 or lzma2 where none does. the
+; sections, each packed alone under the codec its -c table names, else deflate. the
 ; id is the sha of the joined tar, kept in src.tree.sha; the quiet pass (tar-thin? + tar-hash)
 ; answers "has the tree moved" off stat alone.
 ; the borrows name paths, in dependency order: a module name has nothing to find under love0,
