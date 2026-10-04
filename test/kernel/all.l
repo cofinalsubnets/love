@@ -29,7 +29,7 @@
    (law? n) (#n @ k (2 < k && ".l" = snip n (k - 2) k && nelem n apart))
    host (map (n \ ("test/" + n)) (filter law? (sort (readdir "test"))))
    roster (["test/00-init.l" "test/spec.l" "test/uu.l"] + host +
-           ["test/kernel/ramfs.l" "test/kernel/fs.l" "test/kernel/wfs.l"
+           ["test/kernel/ramfs.l" "test/kernel/fs.l" "test/kernel/wfs.l" "test/kernel/hostfs.l"
             "test/kernel/kore0.l"
             "src/apps/kore/text.l" "src/apps/kore/u.l" "src/apps/kore/core.l" "src/apps/kore/fs.l"
             "test/kernel/kore.l" "test/kernel/pipe.l" "test/kernel/pty.l" "test/kernel/pane.l"

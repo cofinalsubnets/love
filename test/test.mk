@@ -1331,10 +1331,12 @@ test_kernel_wasm:
 else
 test_kernel_wasm: host
 	@$(MAKE) -s wasm
-	@echo TEST out/love.wasm "(node: the kernel corpus on the woken image, serial, headless)"
-	@INLE_RAM=768 $(NODE) $(S)/inle/wasm/inle.mjs --image $(ko)/wasm/love.image $(R)/$(ko)/love.wasm test/kernel/all.l \
+	@echo TEST out/love.wasm "(node: the kernel corpus on the woken image, serial, headless; /mnt/host a fresh directory)"
+	@rm -rf $(ko)/wasm/host && mkdir -p $(ko)/wasm/host
+	@INLE_RAM=768 $(NODE) $(S)/inle/wasm/inle.mjs --host $(R)/$(ko)/wasm/host --image $(ko)/wasm/love.image $(R)/$(ko)/love.wasm test/kernel/all.l \
 	   < /dev/null > $(ko)/wasm/kernel.log 2>&1; \
 	 grep -q "image awake" $(ko)/wasm/kernel.log \
+	   && grep -qx "the seat keeps this" $(ko)/wasm/host/kept.txt \
 	   && grep -q "tests pass" $(ko)/wasm/kernel.log && ! grep -q "failed:" $(ko)/wasm/kernel.log \
 	   && ! grep -q "^0 tests pass" $(ko)/wasm/kernel.log \
 	   || { tail -20 $(ko)/wasm/kernel.log; echo "FAIL test_kernel_wasm"; exit 1; }
