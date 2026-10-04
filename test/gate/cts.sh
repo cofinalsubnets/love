@@ -64,8 +64,8 @@ roster_refuses='
 roster_wrong=''
 # the two per-target lines, both of them lanes x64 has and the others do not
 # (doc/misc/moon-c-gaps, "target asymmetries"): a by-value composite in a variadic
-# function, and the variable-length array.
-if [ "$arch" != x64 ]; then
+# function, and the variable-length array. a64 carries the composite (AAPCS64's memory class).
+if [ "$arch" != x64 ] && [ "$arch" != a64 ]; then
   roster_refuses="$roster_refuses
 00140 no lane for a by-value composite argument on $arch (x64 carries it, named and anonymous)
 "

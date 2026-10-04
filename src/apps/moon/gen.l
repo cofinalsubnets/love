@@ -334,7 +334,7 @@
            (vent g env nm @ en
               (!(two? en && <en = 'loc && arr? <>>en) ? ()
                  (<>(<>>en) @ et
-                    ((ptr? et || elem et '(char uchar bool short ushort int uint long ulong)) &&
+                    ((ptr? et || elem et '(char schar cchar uchar bool short ushort int uint long ulong)) &&
                      !(pair? g et) ?
                        [(<>en + i * tsz g et) et])))))
    ; may this param alias? only if the body never writes it (the register holds the caller's
@@ -362,6 +362,7 @@
    (gtgt g) (wasm? g ? 'rv64 (peep g 'tgt 'x64))   ; the ABI name the asm dialect and the lane rosters read
    (x64? g) (peep g 'tgt 'x64 = 'x64)
    (a8? g) (a64? g || rv64? g)                        ; the 8-gp-arg LP64 pair: a64 + riscv share the AAPCS64 shapes
+   (gchar g) (elem (peep g 'tgt 'x64) '(a64 rv64 thumb1 thumb2 thumb2sp) ? 'cchar 'char)   ; plain char, as parse.l's pchar
    (arm? g) (a64? g || t32? g || rv64? g)             ; the lr-push / fp-base frame family (riscv rides it whole)
    (wsize g) (t32? g ? 4 8)                       ; the machine word in bytes (a pointer, a gp scalar, a stack cell)
    (argr g) (? (a8? g) argregs-a64 (t32? g) argregs-t32 argregs)   ; riscv a0..a7 map onto the same r0..r7
@@ -488,7 +489,7 @@
                  (<>ty @ ft (fn? ft && 2 < #ft ? (ft 2) ())))
    ; the unsigned scalars: the signed twin's width, but a load zero-extends, `>>` is logical,
    ; and compare/divide go unsigned
-   (usg? ty) (elem ty '(uchar ushort uint ulong ullong u128))
+   (usg? ty) (elem ty '(cchar uchar ushort uint ulong ullong u128))
    ; llong/ullong exist only on t32 (canon folds `long long` to 'long elsewhere): the r0:r1
    ; pair, the one type wider than the accumulator
    (llt? ty) (ty = 'llong || ty = 'ullong)
@@ -527,11 +528,11 @@
    (cnum g e)
     (e @ ('cast ty ('num n && (charm? n || sun? n)))
      (ty @ 'bool [(n != 0) ty]
-           'uchar [(n & 255) ty]
+           ('uchar || 'cchar) [(n & 255) ty]
            'ushort [(n & 65535) ty]
            'uint [(n & 4294967295) ty]
-           ('char || 'short || 'int)
-            (: w (ty @ 'char 8 'short 16 32)
+           ('char || 'schar || 'short || 'int)
+            (: w (ty @ ('char || 'schar) 8 'short 16 32)
                r (n & ((1 << w) - 1))
                s (r < 1 << (w - 1) ? r (r - (1 << w)))
              [s ty])
@@ -574,7 +575,7 @@
    (homable? pty) (ptr? pty || elem pty '(long ulong))       ; an 8-byte gp scalar: what a register home can carry
    ; a home carries narrow gp scalars too, canonically extended (every def re-narrows through cvt,
    ; a param's entry cvt canonicalizes the arrival), so reads are zero forms; a bool home holds 0/1
-   (lhomable? ty) (homable? ty || elem ty '(int uint short ushort char uchar bool))
+   (lhomable? ty) (homable? ty || elem ty '(int uint short ushort char schar cchar uchar bool))
    ; a double local homes in an xmm seat (x64): caller-saved all, so only a name that crosses no
    ; call takes one, and it never joins g 'homes (no wrap, no shadow). the file sits above the
    ; protocol pair, the narrow scratch and the park file
@@ -713,25 +714,32 @@
                          fs (vfs av + [[iop rd rA sn]] + (u32 ? [['zx4 rd]]))
                          (rpeq? g rd rA ? () (rfree g rA),
                           mkv rt rd fs))))))))
-   (ldop ty) (ty @ 'char 'ld1 'short 'ld2 'int 'ld4
-                   ('uchar || 'bool) 'ldu1 'ushort 'ldu2 'uint 'ldu4 'ld)
-   (stop ty) (ty @ ('char || 'uchar || 'bool) 'st1 ('short || 'ushort) 'st2
+   (ldop ty) (ty @ ('char || 'schar) 'ld1 'short 'ld2 'int 'ld4
+                   ('uchar || 'cchar || 'bool) 'ldu1 'ushort 'ldu2 'uint 'ldu4 'ld)
+   (stop ty) (ty @ ('char || 'schar || 'cchar || 'uchar || 'bool) 'st1 ('short || 'ushort) 'st2
                    ('int || 'uint) 'st4 'st)
    ; does every value of integer type a fit b? (a canonical a is then already a canonical b)
-   (irng ty) (ty @ 'bool [0 1] 'char [-128 127] 'uchar [0 255] 'short [-32768 32767] 'ushort [0 65535]
+   (irng ty) (ty @ 'bool [0 1] ('char || 'schar) [-128 127] ('uchar || 'cchar) [0 255] 'short [-32768 32767] 'ushort [0 65535]
                    'int [-2147483648 2147483647] 'uint [0 4294967295] ())
    (irfit? a b) (: ra (irng a) rb (irng b)
                    (? !(two? rb) 1 !(two? ra) () (<rb <= <ra && >ra <= >rb)))
    ; bool's cvt converts (any nonzero -> 1): every write site runs cvt before its store, so a
    ; bool object holds 0/1 and loads ride a plain ldu1
-   (cvt ty r) (ty @ 'char [['sx1 r]] 'short [['sx2 r]] 'int [['sx4 r]]
-                    'uchar [['zx1 r]] 'ushort [['zx2 r]] 'uint [['zx4 r]]
+   (cvt ty r) (ty @ ('char || 'schar) [['sx1 r]] 'short [['sx2 r]] 'int [['sx4 r]]
+                    ('uchar || 'cchar) [['zx1 r]] 'ushort [['zx2 r]] 'uint [['zx4 r]]
                     'bool [['cmp r 0] ['set 'ne r]])
    ; a store narrows on its own: an int store needs no cvt before it (the value's cvt is for the
    ; expression's answer), and an integer cast at least as wide as the stored type, over a plain
    ; integer variable, truncates only what the store truncates
-   (stcvt? ty) (elem ty '(char uchar short ushort int uint))
-   ints9 '(char uchar short ushort int uint long ulong llong ullong)
+   (stcvt? ty) (elem ty '(char schar cchar uchar short ushort int uint))
+   ; an integer answer narrower than the register, as a call hands it back: SysV and AAPCS64 leave
+   ; the bits above it to the caller (a gcc or clang callee returns -5 as a 32-bit neg), so it
+   ; extends here; riscv's and AAPCS32's callee extends, and ours always does
+   (rext g ty) (? (!(x64? g || a64? g) || abl? g 'rext) ()
+                  (ty = 'bool) [['zx1 'r0]]
+                  (elem ty '(char schar cchar uchar short ushort int uint)) (cvt ty 'r0)
+                  ())
+   ints9 '(char schar cchar uchar short ushort int uint long ulong llong ullong)
    (stnar g env ty e)
     (e @ ('cast t ('var _))
           (rotty g env <>>e @ vt
@@ -812,7 +820,7 @@
      'un (<>e @ 'neg (dbty <>>e) 'bnot (dbty <>>e @ 'int 'int 'no) 'no)
      'cast (? (dbty <>>e = 'no) 'no
               (<>e = 'double) 'double
-              (elem <>e '(bool char uchar short ushort int uint long ulong llong ullong)) 'int
+              (elem <>e '(bool char schar cchar uchar short ushort int uint long ulong llong ullong)) 'int
               'no)
      'no))
    ; love answers () for a NaN and `infinity` past the range, and neither is a fold
@@ -924,8 +932,8 @@
            (v3 != v || wr? body || wr? E ? ()
               (: tv (peekty g env ['var v]) te (peekty g env E)
                  k (E @ ('num k) (charm? k ? k ()) ())       ; a literal bound: its value, not its type
-                 (? (tv = 'int && (k ? (k <= 2147483647) (elem te '(int short ushort char schar uchar bool)))) v
-                    (tv = 'uint && (k ? (0 <= k <= 4294967295) (elem te '(uint ushort uchar bool)))) v
+                 (? (tv = 'int && (k ? (k <= 2147483647) (elem te '(int short ushort char schar cchar uchar bool)))) v
+                    (tv = 'uint && (k ? (0 <= k <= 4294967295) (elem te '(uint ushort uchar cchar bool)))) v
                     ())))
            ())))
    (hcvt g nm ty r) (nm = g 'bndv ? () (cvt ty r))   ; the counted loop's step skips its re-narrow
@@ -1710,7 +1718,7 @@
                          !(vmb lv = 'r4) ()
                          (two? (vfs lv)) ()
                          (vty lv @ ty
-                            ((ptr? ty || elem ty '(char uchar bool short ushort int uint long ulong)) &&
+                            ((ptr? ty || elem ty '(char schar cchar uchar bool short ushort int uint long ulong)) &&
                              !(pair? g ty) ?
                                [(vmo lv) ty])))))))))
 
@@ -2020,7 +2028,7 @@
        ('str s)
         (nlab g ".S" @ lbl
            (pin g 'strs ([lbl s] . g 'strs),
-            mkv '(ptr char) 'r0 [['la 'r0 lbl]]))
+            mkv ['ptr (gchar g)] 'r0 [['la 'r0 lbl]]))
        (('dot || 'moor) . _)
         (clval g env e @ r
            (bad? r ? 'bad (lvload g r wnt)))
@@ -2399,11 +2407,10 @@
                   (op = 'neg) (mkv (vty r) 'r0 (tor0 g r + '((n128))))
                   (op = 'bnot) (mkv (vty r) 'r0 (tor0 g r + '((not r0) (not r2))))
                   (mkv 'long 'r0 (tor0 g r + '((or r0 r0 r2) (cmp r0 0)) + '((set eq r0)))))
-              ; -1ull stays unsigned; a sub-64 unsigned re-narrows after neg/~ (-1u wraps at 32 bits, not 64)
-              (: uty (elem op '(neg bnot) && usg? (vty r))
-                 renar (uty ? (vty r @ 'uchar '((zx1 r0))
-                                       'ushort '((zx2 r0))
-                                       'uint '((zx4 r0))))
+              ; -1ull stays unsigned and -1u wraps at 32 bits, not 64; an unsigned char or short promotes
+              ; to int first (6.3.1.1), so its ~ and - are int and nothing re-narrows
+              (: uty (elem op '(neg bnot) && usg? (vty r) && !(elem (vty r) '(uchar cchar ushort)))
+                 renar (uty ? (vty r @ 'uint '((zx4 r0))))
                  (mkv (uty ? (vty r) 'long) 'r0
                     (tor0 g r +
                      (op @ 'neg '((neg r0))
@@ -2607,7 +2614,7 @@
           (<e = 'str)
            (nlab g ".S" @ lbl
               (pin g 'strs ([lbl <>e] . g 'strs),
-               fin '(ptr char) [['la rT lbl]]))
+               fin ['ptr (gchar g)] [['la rT lbl]]))
           (<e = 'addr)                          ; &var only: lea/la, argpos-equivalent (no escan)
            (!(<<>e = 'var) ? 'no
               (vent g env <><>e @ en
@@ -2926,7 +2933,7 @@
                     ; the hidden sret pointer rides the first argument register (a64: x8); the result is the temp's address, fresh in r0
                     srin (sr6 ? [['lea (srreg g) 'r4 sroff]])
                     srout (sr6 ? [['lea 'r0 'r4 sroff]])
-                    (mkv ret 'r0 (pf + spills + ezf + pops + setal + srin + [['call (intern <>hd)]] + fres + srout + clean + relods)))
+                    (mkv ret 'r0 (pf + spills + ezf + pops + setal + srin + [['call (intern <>hd)]] + fres + rext g ret + srout + clean + relods)))
                 (: hr (cgexpr g env hd ())                   ; a function-pointer value: park (x64 rbx; a64 x15), callr
                    pk (pkr g)
                    fres (? (t32f? g && fnret (vty hr) = 'float) '((cvtss2sd f0 f0))
@@ -2944,7 +2951,7 @@
                                     spills + ezf + pops + setal + [['ld pk 'r4 pko] ['callr pk]] + fres + clean + relods)))
                       (mkv (fnret (vty hr)) 'r0 (pf + tor0 g hr + [['mov pk 'r0]] +
                                 spills + ezf + pops + setal + (sr6 ? [['lea (srreg g) 'r4 sroff]] ()) + [['callr pk]] +
-                                (sr6 ? [['lea 'r0 'r4 sroff]] ()) + clean + relods))))))))
+                                rext g (fnret (vty hr)) + (sr6 ? [['lea 'r0 'r4 sroff]] ()) + clean + relods))))))))
    ; the C99 complex lane (x64): a complex value is its two-member struct, so it flows as one. arithmetic parks each
    ; side in a double-pair temp (the other side may call), f0..f3 carry (a.re a.im b.re b.im), the answer is a fresh temp's address
    (cxb ty) (<>ty = "__cplx_float" ? 'float 'double)
@@ -3095,7 +3102,7 @@
            (: sy (x @ ('bin 'shl y2 kx) (kn kx @ s (charm? s ? [y2 s])) [x 0])
               (!(two? sy) ? ()
                  (: y <sy ct (y @ ('cast t _) t ()) d (unc y)
-                    (!(two? d && <d = 'deref && rotty g env d = 'uchar) ? ()
+                    (!(two? d && <d = 'deref && elem (rotty g env d) '(uchar cchar)) ? ()
                        (: A <>d
                           bk (A @ ('bin '+ b9 kx) (kn kx @ k (charm? k ? [b9 k]))
                                   ('bin '+ kx b9) (kn kx @ k (charm? k ? [b9 k]))
@@ -3686,11 +3693,13 @@
                 (? (two? h) (skiprel g >fs hs)
                    (elem <>f (g 'pool0)) (skiprel g >fs hs)
                    fs)))))
+   ; a tail call's result extension (rext) may go: on x64 and a64 every caller extends what it gets back
+   (skipxt g l) (? (two? l && (x64? g || a64? g) && two? <l && elem <<l '(sx1 sx2 sx4 zx1 zx2 zx4) && <>(<l) = 'r0) >l l)
    (sibs g (f . r) lw el hs ej crf)
     (: lw2 (two? f && <f = 'lea && <>>f = 'r4 || lw)
        cand (!lw2 && two? f && (<f = 'call && two? >f ||
                                 <f = 'callr && <>f = <>crf))
-       rr (cand ? (skiprel g r hs) r)
+       rr (cand ? (skiprel g (skipxt g r) hs) r)
        (? (cand && epim? rr ej)
            (sibjmp g f ej + sibs g (drop #ej rr) () el hs ej crf)
           (cand && lbl-epi? rr ej)
@@ -6178,9 +6187,9 @@
    ; a cast on a folded integer (C11 6.3.1.3): narrow types wrap and re-sign, word-sized keep the pattern
    (icast ty v)
     (ty @ 'bool (v != 0)
-          'uchar (v & 255) 'ushort (v & 65535) 'uint (v & 4294967295)
-          ('char || 'short || 'int)
-           (: w (ty @ 'char 8 'short 16 32)
+          ('uchar || 'cchar) (v & 255) 'ushort (v & 65535) 'uint (v & 4294967295)
+          ('char || 'schar || 'short || 'int)
+           (: w (ty @ ('char || 'schar) 8 'short 16 32)
               r (v & ((1 << w) - 1))
               (r < 1 << (w - 1) ? r (r - (1 << w))))
           v)
@@ -6240,7 +6249,7 @@
         (imaddr g <>>e @ r
            (r @ 'no 'no [<r <>r <>e]))
        'str
-        (nlab g ".S" @ l (pin g 'strs ([l <>e] . g 'strs), [l 0 '(ptr char)]))
+        (nlab g ".S" @ l (pin g 'strs ([l <>e] . g 'strs), [l 0 ['ptr (gchar g)]]))
        'var
         (peep (g 'fns) <>e () ? [(intern <>e) 0 ['ptr (fnty g <>e)]]
            (peep (g 'glob) <>e 0 @ en
@@ -7652,7 +7661,7 @@
                     (c @ 'no (acand g nm @ c9 (pin memo nm c9, c9)) c))
        crt <(peep (g 'sigs) <>rf ['long ()])
        ; a call's value in its return type: a truth value needs no conversion to an integer type
-       (cv e rt) (elem rt '(bool char uchar short ushort int uint long ulong) &&
+       (cv e rt) (elem rt '(bool char schar cchar uchar short ushort int uint long ulong) &&
                   (e @ ('bin op _ _) (elem op '(eq ne lt le gt ge)) (('land || 'lor) . _) 1 ('un 'not _) 1 ()) ?
                     e ['cast rt e])
        ; a call spliced here -> (pre value) | () declined. mode: 'val its value, 'br a branch's test,
@@ -8122,7 +8131,7 @@
            (ptr? ty) (ivs nm && (init @ ('addr . _) 1 ('cast _ ('addr . _)) 1 ()) &&
                       (imaddr g init != 'no || onlys init) ?
                         ['cast ty init])
-           !(elem ty '(bool char uchar short ushort int uint long ulong)) ()
+           !(elem ty '(bool char schar cchar uchar short ushort int uint long ulong)) ()
            (: v (cfold !(t32? g) init @ cv (cint? cv ? cv 'no))   ; any constant init, folded in C's types
               (!(charm? v) ? ()
                  (cnum g ['cast ty ['num v]] @ cv

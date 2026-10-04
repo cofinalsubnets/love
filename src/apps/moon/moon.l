@@ -143,10 +143,11 @@
    ; the arch predefines, both spellings where gcc gives two -- pdclib's config asks
    ; `defined(__x86_64)`, and one spelling missing reads as an unsupported machine.
    (archdefs tgt)
-   (tgt @ 'a64                          '("__aarch64__")
-          'rv64                        '("__riscv")
-          'wasm                        '("__wasm__" "__wasm64__")
-          ('thumb2 || 'thumb2sp || 'thumb1) '("__arm__" "__arm")
+   ; __CHAR_UNSIGNED__ where plain char is unsigned (parse.l's pchar), as gcc and clang predefine it
+   (tgt @ 'a64                          '("__aarch64__" "__CHAR_UNSIGNED__")
+          'rv64                        '("__riscv" "__CHAR_UNSIGNED__")
+          'wasm                        '("__wasm__" "__wasm64__")   ; plain char signed, as wasm's C conventions (emcc)
+          ('thumb2 || 'thumb2sp || 'thumb1) '("__arm__" "__arm" "__CHAR_UNSIGNED__")
                                           '("__x86_64__" "__x86_64" "__amd64__" "__amd64"))
    ; the OS predefines: -os picks, and unnamed is the ground we stand on, never a fixed
    ; kernel. all three spellings gcc gives a linux ELF target -- st.c asks `#if

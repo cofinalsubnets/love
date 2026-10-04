@@ -196,7 +196,7 @@ uintptr_t love_fd_say(int fd, unsigned char const *src, uintptr_t n) {
   return i; }
 
 // --- the nifs --------------------------------------------------------------
-// no scratch on an lvm_ frame (CLAUDE.md, the tail-threaded VM): the bodies
+// no scratch on an lvm_ frame (AGENTS.md, the tail-threaded VM): the bodies
 // that need one go through an love_noinline helper, and the ones here need none.
 
 // (quit n) -- the frontend nif cli's scare tail reaches for (src/love/boot/post.l). Without

@@ -131,7 +131,7 @@
    ; array or function suffix must parenthesize it (`int (*fp)()`, not `int *fp()`).
    ; the unsigned scalars canonicalize to one symbol at parse, so the base expands
    ; back out -- `ulong` is moon's word for the type, not C's.
-   spelling '((uchar "unsigned char") (ushort "unsigned short") (uint "unsigned int")
+   spelling '((uchar "unsigned char") (schar "signed char") (cchar "char") (ushort "unsigned short") (uint "unsigned int")
               (ulong "unsigned long") (ullong "unsigned long long") (llong "long long")
               (bool "_Bool"))
    (cptr? ('ptr . _)) 1
