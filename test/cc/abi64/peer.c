@@ -1,6 +1,6 @@
 /* the other compiler's half of the a64 ABI check (built by clang, freestanding): AAPCS64's
  * memory-class composites -- past 16 bytes, no HFA -- in and out, deep on the stack, through
- * `...`, and a call back into mooncc's half */
+ * `...`, plain char, and calls back into mooncc's half */
 #include <stdarg.h>
 
 struct big { long a, b, c, d, e; };
@@ -19,7 +19,12 @@ long peer_va(int n, ...)
 	va_end(ap);
 	return t;
 }
+/* plain char, unsigned under AAPCS64: a byte past 127 crosses as itself */
+int peer_char(char a, char b) { return a * 1000 + b; }
+char peer_retc(int x) { return (char) x; }
 extern struct big host_make(long k);
+extern int host_char(char a);
 extern long host_va(int n, ...);
 long peer_calls_back(void) { struct big b = host_make(9); return b.a + b.b + b.c + b.d + b.e; }
+int peer_calls_char(void) { return host_char((char) 233); }
 long peer_calls_va(void) { struct big x = { 1, 0, 0, 0, 2 }, y = { 3, 0, 0, 0, 4 }; return host_va(2, x, y); }

@@ -362,6 +362,7 @@
    (gtgt g) (wasm? g ? 'rv64 (peep g 'tgt 'x64))   ; the ABI name the asm dialect and the lane rosters read
    (x64? g) (peep g 'tgt 'x64 = 'x64)
    (a8? g) (a64? g || rv64? g)                        ; the 8-gp-arg LP64 pair: a64 + riscv share the AAPCS64 shapes
+   (gchar g) (elem (peep g 'tgt 'x64) '(a64 rv64 wasm thumb1 thumb2 thumb2sp) ? 'uchar 'char)   ; plain char, as parse.l's pchar
    (arm? g) (a64? g || t32? g || rv64? g)             ; the lr-push / fp-base frame family (riscv rides it whole)
    (wsize g) (t32? g ? 4 8)                       ; the machine word in bytes (a pointer, a gp scalar, a stack cell)
    (argr g) (? (a8? g) argregs-a64 (t32? g) argregs-t32 argregs)   ; riscv a0..a7 map onto the same r0..r7
@@ -2020,7 +2021,7 @@
        ('str s)
         (nlab g ".S" @ lbl
            (pin g 'strs ([lbl s] . g 'strs),
-            mkv '(ptr char) 'r0 [['la 'r0 lbl]]))
+            mkv ['ptr (gchar g)] 'r0 [['la 'r0 lbl]]))
        (('dot || 'moor) . _)
         (clval g env e @ r
            (bad? r ? 'bad (lvload g r wnt)))
@@ -2607,7 +2608,7 @@
           (<e = 'str)
            (nlab g ".S" @ lbl
               (pin g 'strs ([lbl <>e] . g 'strs),
-               fin '(ptr char) [['la rT lbl]]))
+               fin ['ptr (gchar g)] [['la rT lbl]]))
           (<e = 'addr)                          ; &var only: lea/la, argpos-equivalent (no escan)
            (!(<<>e = 'var) ? 'no
               (vent g env <><>e @ en
@@ -6240,7 +6241,7 @@
         (imaddr g <>>e @ r
            (r @ 'no 'no [<r <>r <>e]))
        'str
-        (nlab g ".S" @ l (pin g 'strs ([l <>e] . g 'strs), [l 0 '(ptr char)]))
+        (nlab g ".S" @ l (pin g 'strs ([l <>e] . g 'strs), [l 0 ['ptr (gchar g)]]))
        'var
         (peep (g 'fns) <>e () ? [(intern <>e) 0 ['ptr (fnty g <>e)]]
            (peep (g 'glob) <>e 0 @ en

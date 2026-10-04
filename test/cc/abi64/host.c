@@ -1,5 +1,6 @@
 /* mooncc's half of the a64 ABI check: every call below crosses into clang's code (peer.c),
- * or comes back from it, carrying AAPCS64 memory-class composites. a wrong check prints */
+ * or comes back from it, carrying AAPCS64 memory-class composites and plain char (unsigned
+ * there). a wrong check prints */
 #include <stdarg.h>
 #include <stdio.h>
 
@@ -12,6 +13,10 @@ long peer_deep(long, long, long, long, long, long, long, long, struct big);
 long peer_va(int n, ...);
 long peer_calls_back(void);
 long peer_calls_va(void);
+int peer_char(char a, char b);
+char peer_retc(int x);
+int peer_calls_char(void);
+int host_char(char a) { return a + 1; }
 
 struct big host_make(long k) { struct big b = { k, k + 1, k + 2, k + 3, k + 4 }; return b; }
 long host_va(int n, ...)
@@ -44,6 +49,9 @@ int main(void)
 	ck(peer_calls_back(), 9 + 10 + 11 + 12 + 13);
 	ck(peer_calls_va(), (1 * 10 + 2) + (3 * 10 + 4));
 	ck(peer_make(1, peer_make(2, in)).a, 4);           /* a return fed straight into the next call */
+	ck(peer_char((char) 200, (char) 7), 200 * 1000 + 7);
+	ck(peer_retc(0x1f0), 0xf0);
+	ck(peer_calls_char(), 234);
 	ck(in.a, 1);
 	printf("abi64: %d checks, %d wrong\n", n_, bad_);
 	return bad_;
