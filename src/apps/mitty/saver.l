@@ -226,7 +226,9 @@
                       (pin s 'done (max (s 'done) (want - 4))))
  ; ..court: a day of this year and an hour thrown -- by day three times in four, any hour
  ; else -- the season's weather, the eye somewhere in the yard and not in the trunk,
- ; looking a little up; the sky's hours at 600 a second
+ ; looking nearly straight up through a narrower lens than the walk's, so the sky fills
+ ; it and the wall tops and the tree frame it, nodding slowly as it turns; the sky's
+ ; hours at 600 a second
  (court-new r c seed p sty)
   (: (rr k m) (dice k 5 seed m)
      y <((cite 'cal 'civil) (clock 0 // 86400000))
@@ -236,12 +238,13 @@
      ya (cite 'court 'yard-a) yb (cite 'court 'yard-b) bs (st 'tree 'base)
      x (ya * (rr 3 160 / 100.0 - 0.8)) z0 (yb * (rr 4 160 / 100.0 - 0.8))
      z ((x - bs 0) * (x - bs 0) + (z0 - bs 2) * (z0 - bs 2) < 0.6 ? (z0 - 1.5) z0)
-     _ (pins st 'px x 'pz z 'th (rr 5 628 / 100.0) 'ph (rr 6 70 / 100.0 + 0.15) 'pace 1 'deep 0)
-     {'st st 'done 0 'th (st 'th)})
+     _ (pins st 'px x 'pz z 'th (rr 5 628 / 100.0) 'ph (rr 6 18 / 100.0 + 1.22) 'pace 1 'deep 0
+                   'U (st 'U * 0.58) 'V (st 'V * 0.58) 'foc (st 'foc / 0.58))
+     {'st st 'done 0 'th (st 'th) 'ph (st 'ph)})
  (court-draw s cv t)
   (: st (s 'st)
      _ (owe s (t * 20 // 1000) (_ \ (pin st 't (st 't + 1), (cite 'court 'court-move) st)))
-     _ (pin st 'th (s 'th + t * 0.00003))
+     _ (pins st 'th (s 'th + t * 0.00003) 'ph (s 'ph + 0.05 * sin (t * 0.000045)))
      (halves cv (scene-pens ((cite 'court 'court-pens) st) (st 'bay))))
  ; ..grass99: the week from a thrown hour of it, a field its own; at the week's end another
  (meadow-new r c seed p sty)
