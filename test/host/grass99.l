@@ -39,5 +39,22 @@
          (chat s 79 != 0) (chat s (22 * 80 + 79) != 0)     ; the hud's last cell, the meadow's last row
          (2 = #bars) !(any (b \ b 'err) bars)))
 
+;; a loop: with the weather's 'per and 'tper a day long and the moon held ('cal 0), the
+;; picture a day on is the picture now, to under half a step of a byte -- clouds, stars
+;; and moon -- and without
+;; the hold the moon walks off
+(: g (grass-new 23 80 (wheel 12))
+   _ (pins g 'covers '(0.3 0.3 0.3 0.3 0.3 0.3 0.3) 'cal 0.0 'moon0 0.25)
+   _ (grass99-frame g)
+   td (int (24.0 / dh + 0.5)) f0 (g 'fr)
+   (pic h fr) (pins g 'h h 'fr fr, meadow-pens (g 'mv) g (pins (meadow-sky g) 'per (2.0 * td) 'tper td))
+   (moon h) (pin g 'h h, meadow-bodies (g 'mv) g 1)
+   a (pic 19.0 f0) b (pic 43.0 (f0 + td)) c (pic 19.0 (f0 + td // 3))
+   (near x y) (all (k \ (x k - y k @ d (amax d < 0.002 && -0.002 < amin d))) ^3)
+   m0 (moon 42.0) m1 (moon 66.0)
+   _ (pin g 'cal 1.0)
+   n0 (moon 42.0) n1 (moon 66.0)
+ (test (near a b) !(near a c) (two? m0) (m0 = m1) (two? n0) !(n0 = n1)))
+
 (test_fin (),
  puts "grass99: ok -- the week stands up in three dimensions, day and night, its pens in range as the field dries, and its tune reads\n")
