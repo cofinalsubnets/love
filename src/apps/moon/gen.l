@@ -2639,9 +2639,9 @@
                       (stru? ty || flo? ty) 'no
                       (<en = 'loc)
                        (fin ty [[(ldop ty) rT 'r4 <>en]])
-                      ; a global: la then a self-based load -- but not into a64's x4, whose r4 in a base slot
-                      ; the retarget (a4ize) reads as the frame base
-                      (a64? g && rT = 'r4 ? 'no (fin ty [['la rT <>en] [(ldop ty) rT rT 0]]))))))))
+                      ; a global: la then a self-based load -- but not into the fifth arg register on a64 or
+                      ; riscv (x4, a4), whose r4 in a base slot the retarget reads as the frame base
+                      (a8? g && rT = 'r4 ? 'no (fin ty [['la rT <>en] [(ldop ty) rT rT 0]]))))))))
    ; the register call: overflow args emit first, then the register group, both right-to-left; the caller
    ; cleans the overflow block after the call. params are named uniquely so no lambda param shadows a :-local
    (call-fixed g env hd ags dir pts ret va?)
