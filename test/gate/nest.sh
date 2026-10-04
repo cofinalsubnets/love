@@ -20,6 +20,11 @@ fake() { printf '#!/bin/sh\n[ "$1" = verbs ] && { echo nest; exit 0; }\necho %s\
 
 mine=$("$love" nest --stamp)
 [ "$mine" -ge 0 ] 2>/dev/null || fail "--stamp answers no number: '$mine'"
+# built in a nest, the binary carries the set's stamp: sb's own answer, to the second
+if [ -d .sb ]; then
+  set_stamp=$("$love" sb stamp)
+  [ "$mine" = "$set_stamp" ] || fail "built in a nest, the stamp is $mine, the set's is $set_stamp"
+fi
 
 fresh
 out=$(nest -n); st=$?

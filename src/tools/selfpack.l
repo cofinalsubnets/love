@@ -164,7 +164,7 @@
        out <av
        top <>av
        stamp <(sound <>>av)
-       build (av 3 = "set" ? show (sp-stamp 0) (av 3))
+       build (av 3 = "set" ? (show (sp-stamp 0)) (av 3))
        ros (sp-read (av 4) @ [1 s] (foldl (t \ w \ pin t w 1) {} (words s))
               (sp-die ("cannot read the roster " + av 4)))
        ; top joins the drops: a release untarred at the root would otherwise ride the
