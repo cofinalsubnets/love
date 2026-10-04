@@ -14,7 +14,7 @@
 ;                line's, so no clock or host name reaches the image
 ; $HEARTS_HOSTCC the compiler the host programs build with (kconfig's conf, fixdep, dtc, ..),
 ;                as `make HOSTCC=` names it; unset, mooncc through .hearts/bin/hk-hostcc, which
-;                hands the programs in `borrowed` below to clang
+;                lays certs/extract-cert as ours (xcert.l) rather than link openssl's
 ; $HEARTS_LEX, $HEARTS_YACC  the flex and bison the build runs (`make LEX= YACC=`); unset, kbuild's
 ; $HEARTS_KGZIP  the gzip the build runs (`make KGZIP=`): the reference is given the same one
 ; $HEARTS_SH     a shell to run the commands with instead of lush (/bin/sh, for a differential)
@@ -94,8 +94,6 @@
              f (hd + "/job." + show (bump 'n))
              pid (spawn (shc ("{ " + pre + text + "\n} > " + q f + " 2>&1")))
              (pin pids pid [tg f], pin jobs tg pid, bump 'live, 0))))
-   ; the host programs mooncc cannot build yet, and why: they take the borrowed clang
-   borrowed ["certs/extract-cert"]                    ; links openssl's libcrypto
    ; mooncc finds its headers and runtime at <its binary>/../lib/love/moon: a seat under .hearts,
    ; a copy of this love beside the tree's own src/apps/moon (build.l sits in src/apps/hearts)
    (seat _)
@@ -105,9 +103,11 @@
         hark ["cp" "-f" (selfpath 0) (sd + "/bin/love")],
         hark ["ln" "-sfn" moon (sd + "/lib/love/moon")],
         uwrite (hd + "/bin/hk-hostcc")
-               (bang + "# the host compiler: mooncc, but for what build.l borrows clang for\ncase \" $* \" in\n"
-                + join "" (map (b \ "  *\" -o " + b + " \"*) exec clang \"$@\";;\n") borrowed)
+               (bang + "# the host compiler: mooncc; extract-cert, which links openssl, is laid as ours instead\n"
+                + "case \" $* \" in\n  *\" -o certs/extract-cert \"*) exec cp -f " + q (hd + "/bin/xcert") + " certs/extract-cert;;\n"
                 + "esac\nexec " + q (sd + "/bin/love") + " mooncc \"$@\"\n"),
+        uwrite (hd + "/bin/xcert") (bang + "exec " + q (sd + "/bin/love") + " " + q (dir (argv 1) + "/xcert.l") + " \"$@\"\n"),
+        hark ["chmod" "+x" (hd + "/bin/xcert")],
         hark ["chmod" "+x" (hd + "/bin/hk-hostcc")],
         ; perl: the scripts the build runs are ported (perlasm.l, oidreg.l, each pinned by hash); any
         ; other refuses

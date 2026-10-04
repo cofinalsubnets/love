@@ -6,8 +6,8 @@
 # vdso's build-id hashes debug info that names the source and output dirs and the vdso is
 # in the image; the build's identity is pinned. kbuild's half borrows the host's toolchain
 # (clang, lld, llvm, flex, bison, perl). hearts' half borrows only clang/lld/llvm for the kernel's
-# own units: the host programs build with mooncc (but certs/extract-cert, which wants openssl),
-# flex and bison are ours (src/tools/moon-flex.sh, moon-bison.sh), perl's scripts are ported,
+# own units: the host programs build with mooncc, certs/extract-cert is ours (xcert.l, no
+# openssl), flex and bison are ours (src/tools/moon-flex.sh, moon-bison.sh), perl's scripts are ported,
 # and the commands run through lush with kore's verbs. where a tool's bytes reach the Image
 # (config_data.gz), kbuild's half borrows OUR tool too: KGZIP is love's gzip on both sides.
 # heavy (two kernel builds, and our flex/bison once when absent); opt-in by name.
@@ -26,7 +26,7 @@ O=$B/o
 J=${HEARTS_GATE_JOBS:-8}
 fail() { echo "FAIL hearts: $*" >&2; exit 1; }
 
-for t in make clang ld.lld llvm-ar llvm-objcopy flex bison perl curl; do
+for t in make cc clang ld.lld llvm-ar llvm-objcopy flex bison perl curl; do
   command -v $t >/dev/null 2>&1 || gate_skip "hearts: no $t, skipped"
 done
 mkdir -p "$B" "$C/src" || fail "cannot make $B"
@@ -45,6 +45,22 @@ rm -rf "$K" "$O" "$B/ref"
 export CCACHE_DISABLE=1
 export KBUILD_BUILD_USER=hearts KBUILD_BUILD_HOST=hearts KBUILD_BUILD_VERSION=1
 export KBUILD_BUILD_TIMESTAMP='Thu Jan  1 00:00:00 UTC 2026'
+
+# our extract-cert against the kernel's own, built here on openssl: each case byte for byte,
+# the same exit, and nothing written where it refuses
+x=$B/xcert; rm -rf "$x"; mkdir -p "$x"
+cc -O2 -I"$K/scripts" -o "$x/ref" "$K/certs/extract-cert.c" -lcrypto 2> "$x/cc.log" || { tail -3 "$x/cc.log"; fail "the openssl extract-cert did not build"; }
+awk '/BEGIN CERT/{n++} n==1' "$R/src/apps/tls/roots.pem" | sed '/END CERT/q' > "$x/one.pem"
+printf -- '-----BEGIN PRIVATE KEY-----\nMC4CAQAwBQYDK2VwBCIEIDj9\n-----END PRIVATE KEY-----\n' > "$x/key.pem"
+cat "$x/one.pem" "$x/key.pem" > "$x/trail.pem"; cat "$x/key.pem" "$x/one.pem" > "$x/lead.pem"
+sed 's/BEGIN CERTIFICATE/BEGIN X509 CERTIFICATE/; s/END CERTIFICATE/END X509 CERTIFICATE/' "$x/one.pem" > "$x/old.pem"
+for f in "$R/src/apps/tls/roots.pem" "$x/one.pem" "$x/trail.pem" "$x/lead.pem" "$x/old.pem" "$x/key.pem" ""; do
+  rm -f "$x/r" "$x/o"
+  "$x/ref" "$f" "$x/r" > /dev/null 2>&1; a=$?
+  "$love" "$R/src/apps/hearts/xcert.l" "$f" "$x/o" > /dev/null 2>&1; b=$?
+  [ $a -eq $b ] || fail "extract-cert '$f': openssl's exits $a, ours $b"
+  if [ -f "$x/r" ] || [ -f "$x/o" ]; then cmp -s "$x/r" "$x/o" || fail "extract-cert '$f' differs from openssl's"; fi
+done
 
 # our flex and bison, each on our m4, built by their lanes when absent
 fx=$R/out/moonflex/flex-2.6.4/src/flex
