@@ -16,7 +16,7 @@
  (["a  bb  ccc  dddd  eeeee"] = grid-d grid-A 80)
  (["a  bb  ccc  dddd  eeeee"] = grid-a grid-A 80)
  (["a   ccc   eeeee" "bb  dddd"] = grid-d grid-A 20)
- (["a     bb     ccc" "dddd  eeeee"] = grid-a grid-A 20)
+ (["a      bb  ccc\tdddd" "eeeee"] = grid-a grid-A 20)
  (["a    dddd" "bb   eeeee" "ccc"] = grid-d grid-A 12)
  (["a      bb" "ccc    dddd" "eeeee"] = grid-a grid-A 12)
 
@@ -34,6 +34,10 @@
   = grid-a grid-B 20)
  (["alpha  delta\teta    theta" "beta   epsilon\tgamma  zeta"] = grid-d grid-C 40)
  (["alpha\t eta" "beta\t gamma" "delta\t theta" "epsilon  zeta"] = grid-d grid-C 20)
+
+ ; --- a line may fill the screen: k columns fit when 3k - 2 is the width -------------
+ (["a  c" "b  d"] = grid-d ["a" "b" "c" "d"] 4)
+ (["a" "b" "c" "d"] = grid-d ["a" "b" "c" "d"] 3)
 
  ; --- one column is always on offer, and nothing ever hangs off the end ---------------
  (grid-B = grid-d grid-B 12)            ; the widest name alone outgrows the screen
