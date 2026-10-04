@@ -911,11 +911,11 @@
        (filter two? (map (n \ (: t (look (d + "/.sb/ledger/" + n))
                                ls (? (two? t) (filter (\ l (0 < #l)) (lines <>t)) ())
                                h (? (two? ls) <(words (ls (#ls - 1))) "")
-                               b (? (sb-hex? h) (look (d + "/.sb/blob/" + h)))
+                               b (? (sb-hex? h) (bget-in d h))
                                (? (two? b && lg-entry? <>b) [n ls])))
                         ns)))
    (lg-pull-dir peer)
-    (: _ (mk ()) (map (e \ lg-held <e (_ \ lg-pull <e (e 1) (\ h (: b (? (sb-hex? h) (look (peer + "/.sb/blob/" + h))) (? (two? b) <>b)))))
+    (: _ (mk ()) (map (e \ lg-held <e (_ \ lg-pull <e (e 1) (\ h (: b (? (sb-hex? h) (bget-in peer h)) (? (two? b) <>b)))))
                       (lg-signed peer)))
    (lg-held nm f) (: _ (mkparents (lg-path nm)) (? (lg-lock nm 250) (: r (f 0) _ (lg-unlock nm) r) (say err ("sb: ledger " + nm + " is held by another writer\n"), 0)))
    ; every ledger under dir, by name
@@ -1144,7 +1144,7 @@
    ; the far nest's signed queues, pulled: its ledgers, then the entries and texts this store lacks
    (lg-pull-ssh c)
     (: ls (ssh-form (ssh-ask c "ledgers"))
-       (has? h) (two? (stat (".sb/blob/" + h)))
+       (has? h) (bhave? h)
        (fetch hs) (: w (filter (h \ sb-hex? h && !(has? h)) hs) (? (two? w) (ssh-blobs c w) {}))
        (? !(two? ls) 0
           (map (e \ (: hs (map (l \ <(words l)) (e 1)) b1 (fetch hs)
