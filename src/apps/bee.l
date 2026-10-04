@@ -1213,7 +1213,9 @@
          ents (filter two? (map (\ l (: k (find l "\t" 0) (? (k = 64 || k = 65) [(snip l 0 k) (snip l (k + 1) #l)] ())))
                                 (lines (q-sb "ls -l"))))
          _ (mkdirs bee-hive)
-         _ (spit-file (tmp + ".blobs") (cats (catmap (\ e [hub "/.sb/blob/" (snip <e 0 64) "\n"]) ents)))
+         ; the hub's store may hold a blob as a delta: git is handed plain files sb lays
+         _ (q-sb ("unpack " + sq (tmp + ".raw")))
+         _ (spit-file (tmp + ".blobs") (cats (catmap (\ e [tmp ".raw/" (snip <e 0 64) "\n"]) ents)))
          gs (? (two? ents) (lines (lush-out ("git -C " + sq path + " hash-object -w --stdin-paths < " + sq (tmp + ".blobs")))) ())
          _ (spit-file (tmp + ".info") (cats (catmap (\ i (: e (ents i) [(#<e = 65 ? "100755" "100644") " " (gs i) "\t" (e 1) "\n"]))
                                                    ^#ents)))
@@ -1238,6 +1240,7 @@
               (#gs != #ents) ""
               (chomp (lush-out ("sh " + sq (tmp + ".sh") + " 2>&1"))))
          _ (map (\ x (unlink (tmp + x))) [".blobs" ".info" ".msg" ".sh" ".index"])
+         _ (lush-out ("rm -rf " + sq (tmp + ".raw")))
          (? (0 < #held && q-abs held != hub)
              [0 ("the mirror's branch " + br + " is checked out at " + held + ", not the hub: it would move under that checkout")]
             (#gs != #ents) [0 ("the mirror at " + path + " could not store the hub's blobs")]

@@ -35,7 +35,7 @@
    _ (mk ()) _ (record "first")
    _ (lay "a.txt" "v2\n") _ (record "second")
    _ (bank '("v1"))
-   nblob #(readdir ".sb/blob")
+   nblob (#(readdir ".sb/blob") + #(readdir ".sb/z"))
    _ (chdir home)
    ; --- kiosko over the origin's .sb/, in a task ---
    pl (test-listen 0)

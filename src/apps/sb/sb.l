@@ -3,7 +3,8 @@
 (module 'sb
 (borrow 'kore)
 (borrow 'posix)
-(:
+(: zcap 16                                               ; the longest chain of bases a blob rides
+   bcache {'n 0}                                         ; derived blob bytes, by hash, bounded
    ; --- files ---
    ; an empty file slurps to (), so `+ ""` folds it back onto the string identity and a
    ; 0-byte file hashes honestly. the port is minded, not closed at the tail: a torn read
@@ -20,7 +21,7 @@
    ; --- the store ---
    ; a new nest's head is empty; a nest from before heads has none, and realizes its whole store
    (mk _) (: new !(two? (stat ".sb"))
-             _ (mkdir ".sb" 493, mkdir ".sb/blob" 493, mkdir ".sb/patch" 493)
+             _ (mkdir ".sb" 493, mkdir ".sb/blob" 493, mkdir ".sb/z" 493, mkdir ".sb/patch" 493)
              (? new (lay ".sb/head" "()") ()))
    (snap _) (form ".sb/snap")                            ; ((path side pid) ..) sorted, the head's tree
    (tips _) (form ".sb/tips")                            ; (id ..), the store's: every patch it holds
@@ -49,7 +50,7 @@
    ; before hashing, or the same head reads two ways.
    (psid tp) (sha256 (ids-text (sort tp)))
    (ids-text l) (? (atom? l) "()" (cats (["(\"" <l "\""] + catmap (i \ [" \"" i "\""]) >l + [")"])))  ; = show, faster
-   (blob h) (: k (sd-h h) t (? (sb-hex? k) (look (".sb/blob/" + k))) (two? t ? <>t))
+   (blob h) (: k (sd-h h) t (? (sb-hex? k) (bget k)) (two? t ? <>t))
    ; a side is a path's state: () absent, its blob's hash for a plain file, the hash and an
    ; x for an executable one. so a chmod is a change, and a context names the mode too
    (sd-h s) (? (sd-x? s) (snip s 0 64) s)                      ; the side's blob
@@ -61,7 +62,52 @@
     (: st (stat p) m (? (two? st) (4095 & <>>st) 0)
        m2 (? x (m | ((m & 292) // 4)) (m - (m & 73)))
        (? (two? st && m != m2) (chmod p m2)))
-   (keep s) (: h (sha256 s) _ (lay (".sb/blob/" + h) s) h)
+   ; --- the blobs: .sb/blob/H holds H's bytes, or .sb/z/H codes them against a base blob by
+   ;     lzma2, "sbz H BASE DEPTH\n" and the stream (BASE - for none). H is the bytes' sha256
+   ;     either way, so no address moves; a chain of bases stops at zcap ---
+   (zhead t)                                             ; -> [h base depth at] | ()
+    (? (#t < 72 || snip t 0 4 != "sbz ") ()
+       (: h (snip t 4 68) b (t 69 = 45 ? "-" (snip t 69 133)) i (b = "-" ? 71 134)
+          (go j d) (? (#t <= j) () (t j = 10) [h b d (j + 1)]
+                      (48 <= t j && t j <= 57) (go (j + 1) (d * 10 + t j - 48)) ())
+          (? (t 68 = 32 && t (i - 1) = 32 && sb-hex? h && (b = "-" || sb-hex? b)) (go i 0))))
+   (bhave-in d h) (two? (stat (d + "/.sb/blob/" + h)) || two? (stat (d + "/.sb/z/" + h)))
+   (bhave? h) (bhave-in "." h)
+   ; a blob's bytes -> (1 bytes) | (): its file, or its z text derived off its base
+   (bget-in d h)
+    (: c (peep bcache h ())
+       (? (two? c) c
+          !(sb-hex? h) ()
+          (look (d + "/.sb/blob/" + h) @ t
+             (two? t ? t (look (d + "/.sb/z/" + h) @ z (two? z ? (zderive d h <>z)))))))
+   (bget h) (bget-in "." h)
+   ; a z text's bytes, its base got from d first, checked against h -> (1 bytes) | ()
+   (zderive d h z)
+    (zhead z @ [zh zb zd at]
+       (? (zh != h) ()
+          (: base (? (zb = "-") '(1 "") (bget-in d zb))
+             u (? (two? base) (lzma2d-by (snip z at #z) <>base))
+             (? (string? u && sha256 u = h)
+                (: _ (? (64000000 < bcache 'n) (: _ (map (k \ pull bcache k 0) (keys bcache)) (pin bcache 'n 0)) 0)
+                   _ (pin bcache h [1 u]) _ (pin bcache 'n (bcache 'n + #u))
+                   [1 u]))))
+       ())
+   (zdepth-in d h) (look (d + "/.sb/z/" + h) @ z (two? z ? (zhead <>z @ [_ _ k _] k 0) 0))
+   ; bytes into d's store, coded against base (a blob hash | ()) when it is there -> their hash
+   (keep-in d s base)
+    (: h (sha256 s)
+       (? (bhave-in d h) h
+          (: bt (? (base && sb-hex? base && base != h) (bget-in d base))
+             k (? (two? bt) (zdepth-in d base + 1) 0)
+             b (? (two? bt && k <= zcap) base "-")
+             body (lzma2e-by s (b = "-" ? "" <>bt))
+             _ (mkdir (d + "/.sb/z") 493)
+             _ (? (string? body)
+                  (lay (d + "/.sb/z/" + h) ("sbz " + h + " " + b + " " + show (b = "-" ? 0 k) + "\n" + body))
+                  (lay (d + "/.sb/blob/" + h) s))
+             h)))
+   (keep s) (keep-in "." s ())
+   (keep-by s base) (keep-in "." s base)
    (patch id) (: f (? (sb-hex? id) (form (".sb/patch/" + id))) (sb-sound? f ? f))
    (fld f k) (:- (go >f) (go m) (? (atom? m) () (two? <m && <<m = k) ><m (go >m)))
 
@@ -155,7 +201,7 @@
        hunks (scan (sort (walk () (igs ()) ())) sn ())
        (? !(two? hunks) (puts "sb: nothing to record\n", ())
           (: ; the blobs: keep every hunk's new content
-             _ (: (go m) (two? m ?  (: h <m _ (? !<>>h () (keep <>(look <h))) (go >m)))
+             _ (: (go m) (two? m ?  (: h <m _ (? !<>>h () (keep-by <>(look <h) (sd-h <>h))) (go >m)))
                   (go hunks))
              ; the deps: the patches whose writes this one's contexts read
              deps (:- (go hunks ()) (go m acc)
@@ -247,17 +293,23 @@
    ; object by name, (1 text) | (); every one is checked against its name on the way.
    ; -> {'laid 'bad 'read 'blobs 'ok}: read the patches fetched, ok when every tip arrived whole
    (gap pat blb tips to)
-    (: tp (to + "/.sb/patch/") tb (to + "/.sb/blob/")
+    (: tp (to + "/.sb/patch/")
        seen {} n {'laid 0 'bad 0 'read 0 'blobs 0 'ids ()}
        (bump k) (pin n k (1 + n k))
        (each f l) (foldl (\ a x (: r (f x) (a && r))) 1 l)   ; every one runs: && would stop at a miss
-       (blob1 h)
-        (? (!h || two? (stat (tb + h))) 1
-           (: t (blb h)
-              (? (atom? t) (say err ("sb: cannot fetch blob " + sh h + "\n"), 0)
-                 (sha256 <>t != h) (say err ("sb: bad address " + h + "\n"), bump 'bad, 0)
-                 (lay (tb + h) <>t) (bump 'blobs, 1)
-                 0)))
+       ; a blob as the source keeps it: its bytes, coded here against base when to is this nest,
+       ; or its z text as it stands, the base fetched first and the derive checked against h
+       (blob1 hb)
+        (: h <hb base <>hb
+           (? (!h || bhave-in to h) 1
+              (: t (blb h)
+                 zh (? (two? t && sha256 <>t != h) (zhead <>t))
+                 (? (atom? t) (say err ("sb: cannot fetch blob " + sh h + "\n"), 0)
+                    (sha256 <>t = h) (: _ (? (to = ".") (keep-by <>t base) (lay (to + "/.sb/blob/" + h) <>t)) (bump 'blobs, 1))
+                    (atom? zh || <zh != h) (say err ("sb: bad address " + h + "\n"), bump 'bad, 0)
+                    !(zh 1 = "-" || blob1 [(zh 1) ()]) 0
+                    !(two? (zderive to h <>t)) (say err ("sb: bad address " + h + "\n"), bump 'bad, 0)
+                    (: _ (mkdir (to + "/.sb/z") 493) _ (lay (to + "/.sb/z/" + h) <>t) (bump 'blobs, 1))))))
        (one id)
         (: r0 (peep seen id ())
            (? (r0 != ()) r0
@@ -269,7 +321,7 @@
                             (sha256 <>t != id) (say err ("sb: bad address " + id + "\n"), bump 'bad, 0)
                             !(sb-sound? f) (sb-refuse id, bump 'bad, 0)
                             (: dk (each one (fld f 'deps))
-                               bk (each blob1 (catmap (h \ [(sd-h <>h) (sd-h <>>h)]) (fld f 'hunks)))
+                               bk (each blob1 (catmap (k \ [[(sd-h <>k) ()] [(sd-h <>>k) (sd-h <>k)]]) (fld f 'hunks)))
                                (? (dk && bk && lay (tp + id) <>t) (bump 'laid, pin n 'ids (id . n 'ids), 1) 0)))))
                  _ (pin seen id r)
                  r)))
@@ -282,7 +334,7 @@
        n)
    ; a nest's patches and blobs by name, (1 text) | ()
    (dir-pat d) (\ id (look (d + "/.sb/patch/" + id)))
-   (dir-blb d) (\ h (look (d + "/.sb/blob/" + h)))
+   (dir-blb d) (\ h (look (d + "/.sb/blob/" + h) @ t (two? t ? t (look (d + "/.sb/z/" + h)))))
    ; bring this nest to the state a given patch set implies
    (tell cfs)
     (: (go m n) (? (atom? m) n
@@ -461,7 +513,7 @@
             (keys q)))
    (bin? s) (: n #s (go i) (? (n <= i) 0 (s i = 0) 1 (go (i + 1))) (go 0))
    (sh h) (? h (snip h 0 12) "()")
-   (bl h) (: k (sd-h h) (? !k '(1 "") (sb-hex? k) (look (".sb/blob/" + k))))  ; (1 text) | () -- presence, not net
+   (bl h) (: k (sd-h h) (? !k '(1 "") (sb-hex? k) (bget k)))  ; (1 text) | () -- presence, not net
    (mend old curh nw curpid pid)
     (: bw (bl old) ow (bl curh) tw (bl nw)
        bh (sd-h old) oh (sd-h curh) th (sd-h nw)
@@ -478,7 +530,7 @@
                 [curh 1 ("binary, cannot merge -- kept " + sh curh + ", incoming " + sh nw)]
                 (: r (diff3 bt ot tt ("recorded (" + sh curpid + ")")
                                       ("incoming (" + sh pid + ")"))
-                   mh (keep <r) n <>r
+                   mh (keep-by <r oh) n <>r
                    (n @ 0 [(sd mh x) 0 "both sides kept"]
                     [(sd mh x) n (show n + " region" + (? (1 = n) "" "s") + " left in markers")]))))))
    (mkparents p)                                              ; mkdir every "/"-prefix of a nested path
@@ -490,7 +542,7 @@
               (: e <m p <e ch <>e
                  ok (sb-rel? p && sb-oid? ch && string? ch && !(sb-link? p))
                  bh (sd-h ch) x (sd-x? ch)
-                 bl (? ok (look (".sb/blob/" + bh)))   ; presence, not net: an empty blob is real
+                 bl (? ok (bget bh))                   ; presence, not net: an empty blob is real
                  cur (? ok (look p)) curh (? (two? cur) (sha256 <>cur) ())
                  (? !ok (say err ("sb: will not write " + show p + " from " + show ch + "\n"), go >m n)
                     (atom? bl) (say err ("sb: missing blob " + bh + "\n"), go >m n)
@@ -509,7 +561,7 @@
        (? (atom? tt) (say err ("sb: no store at " + base + " (no /tips)\n"), ())
           (: tips (readform <>tt)
              (? (atom? tips) (say err ("sb: " + base + " has no tips\n"), ())
-                (: g (gap (\ id (http-fetch base ("/patch/" + id))) (\ h (http-fetch base ("/blob/" + h))) tips ".")
+                (: g (gap (\ id (http-fetch base ("/patch/" + id))) (\ h (http-fetch base ("/blob/" + h) @ t (two? t ? t (http-fetch base ("/z/" + h))))) tips ".")
                    rt (http-fetch base "/refs")             ; the refs ride along
                    theirs (two? rt ? (readform <>rt))
                    ru (refadd (refs ()) theirs 1)
@@ -675,6 +727,14 @@
                  (? (0 = nleft) 1 0))))))
    ; --- ls: the head's paths, a line each ---
    (sb-ls long) (: sn (snap ()) _ (map (e \ puts ((? long (<>e + "\t") "") + <e + "\n")) sn) #sn)   ; -l: side, tab, path
+   ; the head's blobs as plain files DIR/HASH, for a reader that wants bytes on disk -> 1 | 0
+   (sb-unpack dir)
+    (: _ (mkdir dir 493)
+       (foldl (\ ok e (: h (sd-h <>e) p (dir + "/" + h)
+                         (? (two? (stat p)) ok
+                            (bget h @ t (two? t ? (: _ (lay p <>t) ok)
+                                           (: _ (say err ("sb: missing blob " + h + "\n")) 0))))))
+              1 (snap ())))
 
    ; --- bank: freeze the current head under a NAME -- an immutable release, the
    (refs _) (form ".sb/refs")                                  ; ((name (id..) time)..) | ()
@@ -793,7 +853,7 @@
              (? !(lg-lock nm 250) (say err ("sb: ledger " + nm + " is held by another writer\n"), 0)
                 (: cur (lg-now nm)
                    r (? (cur != was) (say err ("sb: ledger " + nm + " stands at " + cur + ", not " + was + "\n"), 0)
-                        (: h (keep <>t)
+                        (: h (keep-by <>t (? (cur = "none") () cur))
                            _ (? (h = cur) 0
                                 (lay (lg-path nm)
                                      (foldl (\ a l (a + l + "\n")) "" (lg-lines nm)
@@ -933,13 +993,13 @@
           (: pc {} q (c 'q)
              _ (: (go k) (? (0 < k) (: t (fr-get q) _ (? (string? t) (pin pc (sha256 t) [1 t]) ()) (go (k - 1))))
                   (go n))
-             hs (filter (h \ !(two? (stat (".sb/blob/" + h)))) (ssh-hashes (map (k \ <>(pc k)) (keys pc))))
+             hs (filter (h \ !(bhave? h)) (ssh-hashes (map (k \ <>(pc k)) (keys pc))))
              bc (ssh-blobs c hs)
              (? (tablet? bc) (gap (\ id (peep pc id ())) (\ h (peep bc h ())) ft ".") 0))))
    ; our patches lk, with the blobs the far store lacks of theirs -> [laid bad blobs ok] | ()
    (ssh-push c lk)
     (: ts (filter string? (map (i \ (: t (look (".sb/patch/" + i)) (? (two? t) <>t ()))) lk))
-       hs (filter (h \ two? (stat (".sb/blob/" + h))) (ssh-hashes ts))
+       hs (filter bhave? (ssh-hashes ts))
        bs (ssh-bits c "hasb" hs)
        (? (charm? bs) ()
           (: send (: (go l b acc) (? (atom? l) acc (go >l >b (? (<b = 1) acc (<l . acc))))
@@ -948,7 +1008,7 @@
              (each l) (? (two? l) (: _ (fr-put w <l) (each >l)) ())
              _ (fr-put w ("put " + show #ts + " " + show #send))
              _ (each ts)
-             _ (each (map (h \ <>(look (".sb/blob/" + h))) send))
+             _ (each (map (h \ <>(bget h)) send))
              _ (flush w)
              (ssh-form (fr-get (c 'q))))))
    (sync-ssh peer keep)
@@ -1071,11 +1131,11 @@
    (sv-do v a ids)
     (v @ "hello" (fr-put out (show [(tips ()) (head ()) (refs ()) (? (elem "dirty" ids) (dirty ()) 0)]))
          "has" (fr-put out (sv-has ".sb/patch/" ids))
-         "hasb" (fr-put out (sv-has ".sb/blob/" ids))
+         "hasb" (fr-put out (cats (map (i \ (? (sb-hex? i && bhave? i) "1" "0")) ids)))
          "want" (: ps (sv-want (filter (i \ sb-hex? i && two? (stat (".sb/patch/" + i))) ids))
                    _ (fr-put out (show #ps))
                    (sv-each ps))
-         "blobs" (: bs (map (h \ (? (sb-hex? h) (look (".sb/blob/" + h)) ())) ids)
+         "blobs" (: bs (map (h \ (? (sb-hex? h) (bget h) ())) ids)
                     _ (fr-put out (cats (map (b \ (? (two? b) "1" "0")) bs)))
                     (sv-each (map (b \ <>b) (filter two? bs))))
          "put" (fr-put out (show (sv-put ids)))
@@ -1247,6 +1307,7 @@ usage: sb VERB ..
                   their deps) and lay the tree: what a hub does to land work
   ls [-l]         the head's paths; -l puts each one's side (blob hash, x when
                   executable) and a tab before it
+  unpack DIR      the head's blobs as plain files DIR/HASH
   psid [SET]      the name of a set's state: the head's, or SET's (a ref, a
                   patch, a psid, or head)
   paths A B       the paths sets A and B lay differently, a line each
@@ -1307,6 +1368,7 @@ usage: sb VERB ..
            "status" !(sb-status ())
            "bisect" (#>as < 3 ? (usage ()) (: r (held "." (_ \ sb-bisect >as)) (? (r = 2) (usage ()) !r)))
            "ls" (sb-ls (elem "-l" >as), 0)
+           "unpack" (#>as = 1 ? !(sb-unpack <>as) (usage ()))
            "psid" !(sb-psid >as)
            "stamp" !(sb-stamp >as)
            "paths" (#>as = 2 ? (sb-paths <>as <>>as) (usage ()))
