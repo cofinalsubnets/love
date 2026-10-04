@@ -762,10 +762,13 @@ test_playdate: host
 # all: mooncc -t thumb2 compiles, tlink.l binds (no ld, no linker script -- the XIP flash map
 # is the map in that file), mkimg.l wraps the baked heap image, ocopy.l writes the .hex/.bin,
 # and the ROM-facing boot image is verified out of that .bin (FCFB tag at flash 0, IVT at
-# 0x1000, thumb-bit entry). So this one never skips; test_mps2 is the runtime (no RT1062 qemu).
+# 0x1000, thumb-bit entry). Its heap image is src/inle/mps2's, baked under qemu-system-arm; with
+# no qemu the image is empty, the firmware egg-boots, and the lane says so as a leg it could not
+# run. test_mps2 is the runtime (no RT1062 qemu).
 test_teensy41: host
 	@echo TEST out/teensy41/love.hex
 	@$(MAKE) -C src/inle/teensy41 || { echo "FAIL teensy41 build (the boot-image verify is inside)"; exit 1; }
+	@test -s out/mps2/love.img || { . test/gate/skip.sh; gate_partly "test_teensy41: no qemu-system-arm to bake the heap image -- the firmware egg-boots, its image wrap untested"; }
 	@echo "test_teensy41: love (all-mooncc thumb2), OUR linker, flatten and boot image -- nothing foreign"
 # test_nucleo446 -- the Nucleo-F446RE firmware build: mooncc -t thumb2sp compiles, nlink.l
 # binds (no ld, no script -- the F4's memory map is the map in that file), ocopy.l flattens,
@@ -1507,10 +1510,10 @@ vmret: host
 	@$m src/tools/vmret.l $m
 endif
 
-WAITS_C := $(shell git ls-files '*.c' 2>/dev/null)
+WAITS_C := $(shell git ls-files '*.c' 2>/dev/null || $m sb ls 2>/dev/null | grep '\.c$$')
 ifeq ($(WAITS_C),)
 waits: host
-	@sh test/gate/skip.sh gate-skip "waits: skipped (needs a git checkout to enumerate the .c files)"
+	@sh test/gate/skip.sh gate-skip "waits: skipped (needs a git checkout or an sb nest to enumerate the .c files)"
 else
 waits: host
 	@$m src/tools/waits.l $(WAITS_C)

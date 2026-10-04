@@ -522,6 +522,261 @@
  !(th 'ok) (0 = th 'laid) !tlaid                          ; no blob, no patch
  (32 = tdone) (<>tf0 = "one more\n") (<>tf1 = "no blob\n"))  ; and it all arrives once the blob is back
 
+; --- the head: a nest's tree realizes its head, a tip set, and its store may hold more. a worker's
+;     patch deposited in a hub sits in the hub's store and not its tree until the hub takes it;
+;     apply sets the head and it stays set; sync settles both nests on the union of their heads.
+;     the nest's lock is its own process's again, a live other's to wait on, a dead one's to take.
+;     a nest from before heads realizes its whole store ---
+(: _ (mkdir "mrg/n" 493) _ (mkdir "mrg/n/hub" 493) _ (mkdir "mrg/n/w" 493)
+   _ (chdir "mrg/n/hub") _ (mk ())
+   _ (lay "base" "the hub's\n") nb (sb-record "base")
+   _ (chdir "../w") nw0 (sb-sync "../hub")
+   _ (lay "work" "the worker's\n") nwk (sb-record "work")
+   nd (sb-deposit "../hub")
+   _ (chdir "../hub")
+   held1 (look "work")                                   ; deposited: not in the hub's tree
+   inst (two? (patch nwk))                               ; ...but in its store
+   tips1 (tips ()) head1 (head ())
+   nt (sb-take [nwk])
+   took (look "work") head2 (head ())
+   nls (sb-ls ())
+   na (sb-apply [nb])                                    ; back to the base alone
+   gone (look "work") head3 (head ())
+   _ (lay "more" "the hub's again\n") nm (sb-record "more")
+   head4 (head ())
+   ns (sb-sync "../w")                                   ; the union of the two heads
+   back (look "work") wmore (look "../w/more")
+   hfile (look ".sb/head") hps (psid (head ()))         ; the head file's sha256 is its psid
+   own (nest-hold "." 2)                                 ; a free lock, taken
+   again (nest-hold "." 2)                               ; ...and this process's own again
+   _ (nest-free ".")
+   live (spawn ["sleep" "30"])                           ; a live other holder
+   _ (mkdir ".sb/lock" 448) _ (lay ".sb/lock/pid" (show live))
+   other (nest-hold "." 2)
+   _ (still live 9) _ (wait live)
+   _ (lay ".sb/lock/pid" "999999")                       ; a gone one
+   dead (nest-hold "." 2)
+   _ (nest-free ".")
+   _ (map (f \ (? (#f = 64) (unlink (".sb/derive/" + f)) ())) (readdir ".sb/derive"))
+   hset (setof (psid head1))                             ; a set the head stood at stays a name
+   hnone (setof (sha256 "no such set"))
+   hst (sb-stamp ()) hstn (set-stamp (head ()))
+   _ (unlink ".sb/head") old (head ())                   ; a nest from before heads
+   _ (chdir "../../.."))
+
+(test
+ (0 < nw0) (1 = nd)
+ !(two? held1) inst (elem nwk tips1) !(elem nwk head1)
+ (1 = nt) (<>took = "the worker's\n") (elem nwk head2) (2 = nls)
+ (0 < na) !(two? gone) (show head3 = show [nb])
+ (show head4 = show (sort [nb nm]))
+ (0 < ns) (<>back = "the worker's\n") (<>wmore = "the hub's again\n")
+ (sha256 <>hfile = hps)                                ; what lush's prompt shows
+ (own = 'took) (again = 'again) (other = ()) (dead = 'took)
+ (show hset = show [head1]) !(two? hnone) hst (0 < hstn)
+ (show old = show (sort [nb nm nwk])))
+
+
+; --- derive from a base: a set derived once is a base the rest folds onto, and the fold equals
+;     the whole replay on any set, from whichever base. a store of synthetic patches, three lines
+;     of work on twenty paths that take up each other's state now and then, so writes cross ---
+(: (dg-r i) ((i * 7919 + 13) * 104729 % 1000003)
+   (dg-tab t) (map (k \ [k (t k)]) (sort (keys t)))
+   (dg-all d ids) [(sort (d 'tips)) (dg-tab (d 'snap)) (dg-tab (d 'cf)) (dg-tab (d 'last))
+                   (dv-count d) (map (i \ dv-dep d i) ids)
+                   (map (p \ [p (sort (dv-hist d p))]) (sort (keys (d 'last))))]
+   (dg-same a b) (: ids (sort (keys (a 'mem) + keys (b 'mem))) (seq (dg-all a ids) (dg-all b ids)))
+   ; patch i on a line's state: path p rewritten over what it held, or deleted
+   (dg-patch i st p del)
+    (: e (peep st p ()) old (two? e ? <e)
+       nw (? (del && two? e) ()
+             (keep ("line " + show i + " of " + p + "\n" + (two? e ? <>(look (".sb/blob/" + old)) ""))))
+       pt (show ['patch ['note (show i)] ['time i] ('deps . (two? e ? [<>e] ())) ('hunks . [[p old nw]])])
+       pid (sha256 pt)
+       _ (lay (".sb/patch/" + pid) pt)
+       _ (? (string? nw) (pin st p [nw pid]) (pull st p 0))
+       pid)
+   (dg-store n np)
+    (: ls [{} {} {}]
+       (go i acc)
+        (? (n <= i) (rev acc)
+           (: r (dg-r i) st (ls (r % 3))
+              _ (? (i % 5 = 4) (: c (ls ((r // 3) % 3)) (map (k \ pin st k (c k)) (keys c))) ())
+              (go (i + 1) ((dg-patch i st ("p" + show ((r // 9) % np)) (r % 11 = 0)) . acc))))
+       (go 0 ()))
+   (dg-pick ps i k) (map (j \ ps (dg-r (i * 31 + j) % #ps)) ^k))
+
+(: _ (mkdir "mrg/v" 493) _ (chdir "mrg/v") _ (mk ())
+   dps (dg-store 300 20)
+   ; twelve trials: a base, then more on it, folded and replayed whole
+   dtr (map (t \ (: w1 (dg-pick dps t (t * 3)) w2 (dg-pick dps (t + 100) (t * t))
+                    inc (dv-derive1 (w1 + w2) (dv-derive1 w1 (dv-new 0)))
+                    full (dv-derive1 (w1 + w2) (dv-new 0))
+                    [(dg-same inc full) (inc 'refold)]))
+            ^12)
+   dsame (sb-all? (r \ <r) dtr)
+   dre #(filter (r \ 0 < r 1) dtr)
+   ; the cache round trip
+   dall (dv-derive1 (readdir ".sb/patch") (dv-new 0))
+   _ (dv-write dall)
+   dback (dv-read (dv-path (dall 'tips)))
+   dtrip (dg-same dall dback)
+   ; through the verbs: apply a set, take more, and the tree is the replay's
+   dw1 (dg-pick dps 7 3) dw2 (dg-pick dps 77 3)
+   _ (sb-apply dw1)
+   dkept (two? (stat (dv-path (head ()))))
+   _ (sb-take dw2)
+   dsnap (seq (snap ()) <(derive-snap (dw1 + dw2)))
+   dclean (0 = dirty ())
+   dbases #(filter (f \ #f = 64) (readdir ".sb/derive"))
+   _ (chdir "../.."))
+
+(test
+ dsame (0 < dre) (dre < 12)                ; equal every time, some paths folded again or none
+ dtrip dkept dsnap dclean (2 = dbases))           ; the head's derive and the one before it
+
+
+; --- the bank's worth: over twenty thousand patches, a take onto the cached head folds only what
+;     it adds, so it costs a small part of the whole replay (a ratio: the box may be busy) ---
+(: _ (mkdir "mrg/b" 493) _ (chdir "mrg/b") _ (mk ())
+   _ (dg-store 20000 2000)
+   b0 (clock 0) _ (sb-apply []) b1 (clock 0)                ; no base: the whole replay
+   bpt (show ['patch ['note "w"] ['time 1] ['deps] ['hunks ["w0" () (keep "w\n")]]])
+   bpid (sha256 bpt) _ (lay (".sb/patch/" + bpid) bpt)
+   b2 (clock 0) _ (sb-take [bpid]) b3 (clock 0)
+   btook (elem bpid (head ()))
+   bsnap (seq (snap ()) <(derive-snap (readdir ".sb/patch")))
+   _ (chdir "../.."))
+
+(test
+ btook bsnap
+ ((b3 - b2) * 4 < b1 - b0))
+
+; --- ssh: the exchange with a nest on another box, here a stand-in for ssh that drops the host
+;     and runs the far `sb serve` on this one. chains on both sides, a deposit, a far tree with
+;     unrecorded work that takes no push, a ref carried over, a path the far shell would split ---
+(: sl (: l <cmdline (l 0 = 47 ? l (sb-home + "/" + l)))
+   here (cwd 0) far (here + "/mrg/sf") url ("ssh://box" + far)
+   _ (lay "mrg/ssh" "shift\nexec \"$@\"\n")
+   _ (setenv "SB_SSH" ("sh " + here + "/mrg/ssh"))
+   _ (setenv "SB_LOVE" sl)
+   _ (mkdir "mrg/sf" 493) _ (mkdir "mrg/sn" 493)
+   _ (chdir "mrg/sf") _ (mk ()) _ (lay "far" "f0\n") _ (sb-record "far: f0")
+   _ (lay "far" "f0\nf1\n") _ (sb-record "far: f1")
+   _ (chdir "../sn") _ (mk ())
+   _ (lay "near" "n0\n") _ (sb-record "near: n0")
+   _ (lay "near" "n0\nn1\n") _ (sb-record "near: n1")
+   _ (lay "near" "n0\nn1\nn2\n") _ (sb-record "near: n2")
+   _ (sb-bank ["r1"])
+   s1 (sync-ssh url 0)
+   ssame (seq (snap ()) (form (far + "/.sb/snap")))
+   shead (psid (head ()) = psid (head-in far))
+   sref (two? (refof-in (form (far + "/.sb/refs")) "r1"))
+   ; a deposit: both stores fill, neither head moves
+   _ (lay "near" "n0\nn1\nn2\nn3\n") nk (sb-record "near: kept")
+   _ (chdir far) _ (lay "far2" "f\n") fk (sb-record "far: kept") _ (chdir (here + "/mrg/sn"))
+   s2 (sync-ssh url 1)
+   kin (two? (stat (".sb/patch/" + fk))) kout (two? (stat (far + "/.sb/patch/" + nk)))
+   kstill (!(elem nk (head-in far)) && !(elem fk (head ())))
+   ; unrecorded work there: we take theirs, they take nothing
+   _ (lay (far + "/scratch") "unrecorded\n")
+   _ (lay "near" "n4\n") nd (sb-record "near: late")
+   s3 (sync-ssh url 0)
+   dgot (two? (look "far2"))
+   dnot !(two? (stat (far + "/.sb/patch/" + nd)))
+   s4 (sync-ssh "ssh://box/a b" 0)
+   avok (seq (ssh-argv "ssh://u@h:2222/~/hub") ["sh" (here + "/mrg/ssh") "-p" "2222" "u@h" sl "sb" "serve" "~/hub"])
+   _ (chdir "../.."))
+
+(test
+ (0 < s1) ssame shead sref                   ; one exchange, the same tree and head on both ends
+ s2 kin kout kstill                          ; deposited both ways, no head moved
+ (0 = s3) dgot dnot                          ; pulled only
+ (0 = s4) avok)                             ; refused before any ssh ran; the words it runs
+
+; --- take: pull only and grow the head by the peer's, the peer untouched -- from a dir, and from
+;     NAME@BOX through a stand-in door that maps @hub to the far nest ---
+(: sl (: l <cmdline (l 0 = 47 ? l (sb-home + "/" + l)))
+   here (cwd 0) far (here + "/mrg/sf") home0 (getenv "HOME")
+   _ (lay "mrg/door" ("shift; shift\ncase \"$3\" in @hub) exec '" + sl + "' sb serve '" + far + "';; esac\nexit 9\n"))
+   _ (mkdir "mrg/th" 493) _ (mkdir "mrg/th/.love" 493) _ (mkdir "mrg/th/.love/etc" 493) _ (mkdir "mrg/th/.love/etc/bee" 493)
+   _ (lay "mrg/th/.love/etc/bee/boxes" "bx somehost\n")
+   _ (mkdir "mrg/t1" 493) _ (chdir "mrg/t1")
+   fstore #(readdir (far + "/.sb/patch"))
+   t1 (sync-take far)
+   thead (psid (head ()) = psid (head-in far))
+   tsame (seq (snap ()) (form (far + "/.sb/snap")))
+   tleft (fstore = #(readdir (far + "/.sb/patch")))
+   _ (mkdir "../t2" 493) _ (chdir "../t2")
+   _ (setenv "HOME" (here + "/mrg/th")) _ (setenv "SB_SSH" ("sh " + here + "/mrg/door"))
+   bok (seq (ssh-argv "hub@bx") ["sh" (here + "/mrg/door") "somehost" sl "sb" "serve" "@hub"])
+   t2 (sync-ssh "hub@bx" 2)
+   bhead (psid (head ()) = psid (head-in far))
+   bnone (0 = sync-ssh "nest@bx" 2)                     ; the door serves @hub alone
+   _ (setenv "HOME" home0)
+   _ (chdir "../.."))
+
+(test
+ (0 < t1) thead tsame tleft                 ; the peer's head, and nothing pushed
+ bok (0 < t2) bhead bnone)
+
+; --- history: show, log PATH, blame, status and bisect over banks, held against a scripted
+;     history -- five patches with a bank after each, then an edit on v1 taken back in, so
+;     a.txt's last state is a merge ---
+(: _ (chdir (sb-home + "/" + sb-dir))
+   _ (mkdir "hs" 493) _ (chdir "hs")
+   (has s t) (0 <= fsub s t 0)
+   _ (lay "a.txt" "one\ntwo\nthree\n") _ (lay "b.txt" "b\n")
+   h1 (sb-record "first") _ (sb-bank ["v1"])
+   _ (lay "a.txt" "one\nTWO\nthree\n")
+   h2 (sb-record "second") _ (sb-bank ["v2"])
+   _ (lay "a.txt" "one\nTWO\nthree\nfour\n") _ (mkdir "sub" 493) _ (lay "sub/c.txt" "c\n")
+   h3 (sb-record "third") _ (sb-bank ["v3"])
+   _ (lay "a.txt" "one\nTWO\nBAD\nfour\n")
+   h4 (sb-record "fourth") _ (sb-bank ["v4"])
+   _ (lay "b.txt" "bb\n")
+   h5 (sb-record "fifth") _ (sb-bank ["v5"])
+   d (hs-derive ())
+   sw (hs-show h2)
+   swok (has sw ("patch " + h2 + "\n") && has sw "note second\n" && has sw ("dep " + h1 + "\n")
+         && has sw "--- a.txt\n+++ a.txt\n" && has sw "-two\n+TWO\n")
+   sw3 (has (hs-show h3) "--- (none)\n+++ sub/c.txt\n")
+   lga (hs-log d "a.txt") lgb (hs-log d "b.txt") lgs (hs-log d "sub/") lgn (hs-log d "nope")
+   bla (hs-blame d "a.txt")
+   st0 (hs-status ())
+   _ (lay "b.txt" "bbb\n") _ (lay "d.txt" "d\n") _ (unlink "sub/c.txt") _ (chmod "a.txt" 493)
+   st1 (hs-status ())
+   _ (chmod "a.txt" 420) _ (lay "b.txt" "bb\n") _ (unlink "d.txt") _ (lay "sub/c.txt" "c\n")
+   sn0 (snap ()) hd0 (psid (head ()))
+   bad "while read l; do [ \"$l\" = BAD ] && exit 1; [ \"$l\" = four ] && exit $SKIP; done < a.txt; exit 0"
+   _ (setenv "SKIP" "0")
+   bi (hs-bisect "v1" "v5" ["sh" "-c" bad])
+   back (seq (snap ()) sn0 && psid (head ()) = hd0 && <>(look "a.txt") = "one\nTWO\nBAD\nfour\n")
+   _ (setenv "SKIP" "125")
+   bk (hs-bisect "v1" "v5" ["sh" "-c" bad])
+   bn (hs-bisect "v1" "nope" ["true"])
+   _ (sb-apply ["v1"])
+   st2 (hs-status ())
+   _ (lay "a.txt" "ONE\ntwo\nthree\n")
+   hq (sb-record "loud")
+   _ (sb-take ["v5"])
+   blm (hs-blame (hs-derive ()) "a.txt")
+   mtxt <>(look "a.txt")
+   _ (chdir (sb-home + "/" + sb-dir)))
+
+(test
+ swok sw3
+ (seq lga [h4 h3 h2 h1]) (seq lgb [h5 h1]) (seq lgs [h3]) !lgn     ; the fold's last first
+ (seq bla [[h1 "one"] [h2 "TWO"] [h4 "BAD"] [h3 "four"]])
+ (seq (>st0) ["bank v5"])                                           ; a clean tree says no path
+ (seq (>>st1) ["X a.txt" "M b.txt" "A d.txt" "D sub/c.txt"])
+ (<<bi = "v4") (<<>bi = "v3") back                                  ; the first bad, the last good
+ (<<bk = "v4") (<<>bk = "v2")                                       ; v3 skipped: the step widens
+ !bn
+ (elem "store 4 more, not in the head" st2)
+ (mtxt = "ONE\nTWO\nBAD\nfour\n")                                    ; the merge, and each line's writer
+ (seq blm [[hq "ONE"] [h2 "TWO"] [h4 "BAD"] [h3 "four"]]))
+
 (chdir sb-home)
 (hark ["rm" "-rf" sb-dir])
 (puts "sb: ok", putc 10, 0)
