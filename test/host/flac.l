@@ -40,6 +40,13 @@
            (flac-frame tiny (m 'at) 24 2 = 4)                   ; the stream says 16 bits
            (flac-meta "not flac" = "not a FLAC file") (flac-meta "fLaC" = 'more)
            (flac-meta (snip tiny 0 50) = 'more))
+   ; a seek: entered part way into the first frame, a pump starts at the second
+   (fl-seek k) (: p (dir + "/seek") _ (open p "w" @ q (say q (snip tiny (m 'at + k) #tiny), close q))
+                  q (open p "r") b {} r (flac-pump q "" m (pcm \ pin b 0 (peep b 0 "" + pcm)))
+                  (close q, [r (peep b 0 "")]))
+   _ (test (fl-seek 0 = [0 (fl-all tiny (m 'at) m)])
+           (fl-seek 1 = [0 (snip (fl-all tiny (m 'at) m) 128 384)])
+           (fl-seek 40 = [0 (snip (fl-all tiny (m 'at) m) 128 384)]))
    ; a flipped byte anywhere answers why or samples, and never takes the process down
    (flip s i) (cask #s @ c (map (k \ pin c k (s k)) (jot #s), pin c i (255 - s i), string c))
    _ (test (atom? (filter (i \ !(flac-meta (flip tiny i) @ m2

@@ -7,7 +7,8 @@
 ;                             'tags ("NAME=value" ..), 'at the first frame | 'more | why not
 ;   (flac-format m)        -> the format tablet src/apps/wav.l's wav-pcm takes for m's frames
 ;   (flac-pump q h m emit) -> each frame's samples to emit, h the bytes held past the
-;                             metadata, q the port the rest comes from -> 0 | why not
+;                             metadata, q the port the rest comes from -> 0 | why not. a
+;                             stream entered mid-way (a seek) starts at the next frame
 ;   (flac-wav-head m)      -> the wav header flac -d writes ahead of m's samples
 ;   (flac-sniff s)         -> 1 a flac | 0 | 'more: with meta, format and pump, the decoder
 ;                             door (notes/plan/av.md)
@@ -77,17 +78,24 @@
        (gulp _) (see q @ -1 () c (unsee q c, chug q))
        ; an id3v1 tag at the end is no frame
        (tail? h o) (#h - o = 128 && "TAG" = snip h o (o + 3))
-       (go h o)
+       ; the next frame sync at or past i, -1 for none in h
+       (sync h i) (? (#h <= i + 1) -1 (h i = 255 && (h (i + 1) & 254) = 248) i (sync h (i + 1)))
+       ; until a frame has decoded, a stream entered mid-way (a seek) hunts for the next one,
+       ; and a sync that is no frame is passed over
+       (hunt h o) (sync h (o + 1) @ i (? (0 <= i) (go h i 1)
+                                         (gulp () @ g (string? g ? (go (snip h (max o (#h - 1)) #h + g) 0 1) (flac-why 1)))))
+       (go h o first)
         (flac-frame h o bps ch @
-          (pcm . nx) (emit pcm, go h nx)
-          2 (gulp () @ g (? (string? g) (go (snip h o #h + g) 0)
+          (pcm . nx) (emit pcm, go h nx 0)
+          2 (gulp () @ g (? (string? g) (go (snip h o #h + g) 0 first)
                             (o >= #h || tail? h o) 0
                             (flac-why 2)))
-          1 (? (o >= #h) (gulp () @ g (string? g ? (go g 0) 0))
+          1 (? (o >= #h) (gulp () @ g (string? g ? (go g 0 first) 0))
                (tail? h o) 0
+               first (hunt h o)
                (flac-why 1))
-          w (flac-why w))
-       (go h0 0))
+          w (? (first && w = 4) (hunt h o) (flac-why w)))
+       (go h0 0 1))
    ; little-endian signed samples of w bytes -> the same in the order and sign asked
    (flac-lay pcm w big uns)
     (? (!big && !uns) pcm
