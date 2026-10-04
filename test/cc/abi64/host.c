@@ -15,6 +15,10 @@ long peer_calls_back(void);
 long peer_calls_va(void);
 int peer_char(char a, char b);
 char peer_retc(int x);
+int peer_neg(int x);
+short peer_sneg(int x);
+unsigned char peer_byte(int x);
+_Bool peer_bool(int x);
 int peer_calls_char(void);
 int host_char(char a) { return a + 1; }
 
@@ -52,6 +56,10 @@ int main(void)
 	ck(peer_char((char) 200, (char) 7), 200 * 1000 + 7);
 	ck(peer_retc(0x1f0), 0xf0);
 	ck(peer_calls_char(), 234);
+	{ volatile int five = 5;
+	  long n = peer_neg(five);                          /* a 32-bit neg in w0: extended here */
+	  ck(n, -5); ck(peer_neg(five) < 0, 1);
+	  ck(peer_sneg(five), -5); ck(peer_byte(0x1ff), 255); ck(peer_bool(7), 1); }
 	ck(in.a, 1);
 	printf("abi64: %d checks, %d wrong\n", n_, bad_);
 	return bad_;

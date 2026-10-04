@@ -83,7 +83,7 @@
                              (1 < n2 specs 0)))                             ; two longs on t32
           base (? (elem 'char specs) 'char (elem 'short specs) 'short
                   ll 'llong (elem 'long specs) 'long 'int)
-          (? (base = 'char && !uns && !(elem 'signed specs)) (pchar ps)   ; plain char: the target's own
+          (? (base = 'char && !uns) (elem 'signed specs ? 'schar (pchar ps))   ; signed char, or plain: the target's own
              !uns base
              (base = 'char) 'uchar (base = 'short) 'ushort
              (base = 'llong) 'ullong (base = 'long) 'ulong 'uint)))
@@ -368,9 +368,10 @@
    ; -- the type floor rides src/apps/moon/floor.l (shapes, sizes, the typing door), read from
    ; gen too. ps carries the two things it takes as parameters: the word and the tag table --
    (pst32? ps) (elem (ps 'tgt) '(thumb2 thumb2sp thumb1))
-   ; plain char per each target's psABI: unsigned under AAPCS64, AAPCS32 (thumb) and RISC-V (wasm rides
-   ; riscv's) -- 'uchar -- and signed on x86-64 alone; `signed char` is 'char everywhere
-   (pchar ps) (elem (ps 'tgt) '(a64 rv64 wasm thumb1 thumb2 thumb2sp) ? 'uchar 'char)
+   ; char is three types (C11 6.2.5p15): 'schar and 'uchar, and plain char -- 'char where the psABI makes
+   ; it signed (x86-64), 'cchar where unsigned (AAPCS64, AAPCS32, RISC-V; wasm rides riscv's). each
+   ; symbol's sign is its own, so nothing past here asks the target
+   (pchar ps) (elem (ps 'tgt) '(a64 rv64 wasm thumb1 thumb2 thumb2sp) ? 'cchar 'char)
    (pw64 ps) !(pst32? ps)                          ; is long 8 bytes? the const folder's one question
    (psword ps) (pst32? ps ? 4 8)
    (szty ps) (pst32? ps ? 'uint 'ulong)          ; size_t: sizeof folds wear this coat
@@ -1503,7 +1504,7 @@
    ; its first, a char array one when that item is a string. an incomplete tag or a [0]
    ; bound takes nothing, which is how the caller's walk learns to stop.
    (uni? ps ty) (stru? ty && peep (ps 'utag) <>ty 0)
-   (chart? ty) (elem ty '(char uchar))
+   (chart? ty) (elem ty '(char schar cchar uchar))
    (fills ps ty items)
     (? (atom? items) items
        (arr? ty)
@@ -1616,8 +1617,8 @@
    ; -6 / 3u divides unsigned, and every result wraps to its type's width. w64: long is 8
    ; bytes. the answer is the value in its type: an unsigned one never negative.
    (cint? x) (charm? x || sun? x)
-   (ity? ty) (elem ty '(bool char uchar short ushort int uint long ulong llong ullong i128 u128))
-   (tbits w64 ty) (ty @ 'bool 1 ('char || 'uchar) 8 ('short || 'ushort) 16 ('int || 'uint) 32
+   (ity? ty) (elem ty '(bool char schar cchar uchar short ushort int uint long ulong llong ullong i128 u128))
+   (tbits w64 ty) (ty @ 'bool 1 ('char || 'schar || 'cchar || 'uchar) 8 ('short || 'ushort) 16 ('int || 'uint) 32
                         ('long || 'ulong) (w64 ? 64 32) ('i128 || 'u128) 128 64)
    ; v as a value of ty (C11 6.3.1.3): an unsigned type is v modulo its width, a signed one
    ; that residue re-signed, _Bool a compare with 0

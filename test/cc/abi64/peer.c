@@ -22,6 +22,11 @@ long peer_va(int n, ...)
 /* plain char, unsigned under AAPCS64: a byte past 127 crosses as itself */
 int peer_char(char a, char b) { return a * 1000 + b; }
 char peer_retc(int x) { return (char) x; }
+/* narrow integer answers: the caller extends them (AAPCS64 leaves the bits above to it) */
+int peer_neg(int x) { return -x; }
+short peer_sneg(int x) { return (short) -x; }
+unsigned char peer_byte(int x) { return (unsigned char) x; }
+_Bool peer_bool(int x) { return x != 0; }
 extern struct big host_make(long k);
 extern int host_char(char a);
 extern long host_va(int n, ...);
