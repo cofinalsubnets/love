@@ -506,9 +506,8 @@
       settle sign-settle,
       edkey in))
 
- (slop-walk tk pn) (: ws (tty 1)
-             r (two? ws && 7 < <ws ? (<ws - 1) 23)
-             c (two? ws && 19 < <>ws ? <>ws 80)
+ (slop-walk tk pn) (: ws (ttysize 7 19)
+             r (<ws - 1) c <>ws
              g (slop-new r c (wheel (clock 0)))
              ; the song: harp for the notes, a horn to put them out of. no card and
              ; the walk is silent, which is all it is.
@@ -545,16 +544,10 @@
 
  ; ..and the verb around it: the screen is raised here and put back here, and the
  ; walk between the two neither knows nor cares which door it came in by
- (slop-run tk pn) (: _ (raw 1)
-                 _ (say out (esc + "[?1049h" + esc + "[2J" + esc + "[?9h" + esc + "[?1006h"))   ; a tap's press, as edkey's -12
-                 g (slop-walk tk pn)
-                 (say out (esc + "[?1006l" + esc + "[?9l" + esc + "[0m" + esc + "[?25h" + esc + "[?1049l"),
-                  flush out,
-                  drain-keys (),
-                  raw 0,
+ (slop-run tk pn) (: g (ttytake rove-modes, mind (_ \ slop-walk tk pn) () (_ \ (drain-keys (), ttygive rove-modes)))
                   (puts (g 'over @ 'taken ("the slop has you, " + presses (g 'spent) + " in\n")
                                           ("you turn back, " + presses (g 'spent) + " in\n")),
-                   0)))
+                   0))
  slop-usage "usage: love lore slop [token] [pennies]   (what you bring; forward is k or up, q or esc leaves)"
  ; the two optional words, in either order: a number is pennies and anything else is
  ; the token. given either, the walk opens on a sign saying what you came in with.

@@ -12,7 +12,7 @@
          nth-on open-book open? pace! pacer pad page-foot paint paint-live pen pen-gap pen-lum pen-rgb pens repeat-gap rgb-pen roll
          settle settle-slice sign-box sign-flow sign-gap sign-line sign-over sign-pen
          sign-rect sign-top sign-tpen snip-l song-fill song-lead song-lead-max song-lead-of song-rate steer
-         tail? tap-key tap-steer rove-key rove-modes toward vlen)
+         tail? tap-dir tap-key tap-steer rove-key rove-modes toward vlen)
 (borrow 'posix)
 (borrow 'x11)
 (borrow 'text)
@@ -234,23 +234,23 @@
        (121 || 377) '(-1 -1) (117 || 373) '(1 -1) (98 || 354) '(-1 1) (110 || 366) '(1 1)
        k)
 
- ; ..and a tap is a place rather than a letter: one step of the eight toward the cell it
- ; landed on -- the nearest of the eight as the screen shows them, a cell being twice
- ; as tall as it is wide, so a tap a little off a row is still along it -- and a tap on
- ; the cell you stand on is the stair; standing on one, so are the eight about it, a
- ; finger being wider than a cell. the note row is the screen's first, so a screen y
- ; is a floor y and one. c is [x y], cli's edtap.
+ ; ..and a tap is a place rather than a letter: the step of the eight toward a cell ex
+ ; across and ey down -- the nearest as the screen shows them, a cell being twice as tall
+ ; as it is wide, so a tap a little off a row is still along it: within 22.5 degrees,
+ ; tan 5/12. [0 0] for the cell itself
  (toward a b) (a < b ? 1 (a > b ? -1 0))
+ (tap-dir ex ey) (: ax (abs ex) ay (2 * abs ey)          ; in cell widths
+                    [(12 * ax < 5 * ay ? 0 (toward 0 ex)) (12 * ay < 5 * ax ? 0 (toward 0 ey))])
+ ; a floor's tap: on the cell you stand on it is the stair; standing on one, so are the
+ ; eight about it, a finger being wider than a cell. the note row is the screen's first,
+ ; so a screen y is a floor y and one. c is [x y], cli's edtap.
  (tap-steer g c) (: p (g 'p) d (g 'd)
                     ex (<c - peep d 'vx 0 - p 'x)
                     ey (<>c - 1 + peep d 'vy 0 - p 'y)
-                    ax (abs ex) ay (2 * abs ey)          ; in cell widths
-                    ; within 22.5 degrees of a row or a column is along it: tan is 5/12
-                    dx (12 * ax < 5 * ay ? 0 (toward 0 ex))
-                    dy (12 * ay < 5 * ax ? 0 (toward 0 ey))
-                    (? (dx = 0 && dy = 0) 60
-                       (ax <= 1 && ay <= 2 && 2 = dat d (p 'x) (p 'y)) 60
-                       [dx dy]))
+                    st (tap-dir ex ey)
+                    (? (st = [0 0]) 60
+                       (abs ex <= 1 && abs ey <= 1 && 2 = dat d (p 'x) (p 'y)) 60
+                       st))
  ; ..but a tap on a standing sign is the choice it lands on: the digit that picks it, or
  ; 0, which a page takes as any other key -- shown again, or taken down
  (tap-key g c) (: sg (g 'sign) d (g 'd)

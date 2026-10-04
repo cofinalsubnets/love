@@ -608,10 +608,10 @@
  (ch-edit s d)
   (: p (ch-tmp 0) t0 (ch-draft-text d)
      _ (uwrite p t0)
-     _ (say out (ch-esc + "[?25h" + ch-esc + "[?1049l"), flush out, raw 0)
+     _ (ttygive ())
      pid (spawn ["sh" "-c" (ch-editor s + " '" + replace p "'" "'\\''" + "'")])
      _ (charm? pid && 0 <= pid ? (wait pid) 0)
-     _ (raw 1, say out (ch-esc + "[?1049h"), pin s 'lastr ())
+     _ (ttytake (), pin s 'lastr ())
      r (uread p)
      _ (unlink p)
      (? (atom? r) (ch-say s "the draft is gone")
@@ -624,17 +624,13 @@
                    ['send] (ch-send-now s)
                    s))
  (ch-loop s)
-  (: ws (tty 1)
-     h (two? ws && 7 < <ws ? <ws 24)
-     w (two? ws && 19 < <>ws ? <>ws 80)
-     (say out (chucho-frame s w h),
+  (: g (ttysize 7 19)
+     (say out (chucho-frame s (g 1) <g),
       flush out,
       (two? (s 'act) ? (ch-act s, ch-loop s)
          (edkey in @ c (chucho-key s c, s 'over ? s (ch-loop s))))))
  (chucho-run s)
-  (raw 1, say out (ch-esc + "[?1049h"), ch-loop s,
-   (s 'box 'kind = 'imap ? (imap-close (s 'box)) 0),
-   say out (ch-esc + "[0m" + ch-esc + "[?25h" + ch-esc + "[?1049l"), flush out, raw 0, 0)
+  (ttytake (), mind ch-loop s (_ \ (s 'box 'kind = 'imap ? (imap-close (s 'box)), ttygive ())), 0)
 
  ; --- the door --------------------------------------------------------------------------------
  ch-usage "usage: love chucho [-f MAILBOX]\n       love chucho [-s SUBJECT] [-c CC] [-a FILE].. ADDRESS..   (the body on stdin)"
@@ -659,10 +655,7 @@
      (? !tty? (: b (slurp in) _ (pin d 'body (string? b ? b ""))
                  r (pin s 'draft d, ch-send-now s)
                  (s 'msg = "Mail sent." ? 0 (say err ("chucho: " + s 'msg + "\n"), 1)))
-        (: _ (raw 1, say out (ch-esc + "[?1049h"))
-           _ (ch-edit s d)
-           _ (s 'view = 'compose ? (ch-loop s) 0)
-           _ (say out (ch-esc + "[0m" + ch-esc + "[?25h" + ch-esc + "[?1049l"), flush out, raw 0)
+        (: _ (ttytake (), mind (_ \ (ch-edit s d, s 'view = 'compose ? (ch-loop s) 0)) () (_ \ ttygive ()))
            (puts (s 'msg + "\n"), 0))))
  (ch-flag? a) (#a && a 0 = 45 && !(elem a ["-s" "-c" "-a"]))
  (chucho-main as)
