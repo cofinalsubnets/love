@@ -26,6 +26,11 @@ this doc is the interface over it: *what you type*, not *what the objects are*.
 | **`paths A B`** | the paths two sets lay differently | diff --name-only | what an upgrade touches |
 | **`within A B`** | exit 0 when set A lies inside set B | merge-base --is-ancestor | is it newer |
 | **`stamp [SET]`** | the newest of a set's patch times, in seconds | log -1 --format=%ct | a build's stamp |
+| **`log PATH`** | the head's patches that write PATH, or a path under it, the fold's last first | log -- PATH | what touched a file |
+| **`show ID`** | a patch: time, note, deps, then each hunk as a diff | show | inspect |
+| **`blame PATH`** | each line of PATH in the head, after the patch that wrote it | blame | inspect |
+| **`status`** | the head, the banks at it, what the store holds beyond it, conflicted paths, the tree's changes | status | inspect |
+| **`bisect GOOD BAD CMD..`** | lay the banks between, halving, and run CMD in each; the first bad one | bisect run | which release broke it |
 | **`diff`** | working tree vs the recorded state (unified; exit 1 on change) | inspect | inspect |
 | **`ledger NAME ..`** | a named value that moves only by compare-and-swap, every entry kept | a ref moved by `update-ref NEW OLD` | the shared queue sessions coordinate by |
 
@@ -158,6 +163,27 @@ forever. Two or three tips is what ordinary parallel work looks like, not a fork
 the only way to collapse them would be to write a patch touching every path every tip touched,
 i.e. to edit files to appease the check. So a release freezes the head DAG state whatever its
 shape — which is exactly what `psid` hashes.
+
+### history
+
+`log PATH`, `blame PATH` and `status` read the head's derive, so a path's writers come in the
+fold's order, (depth, id), the order its states were made in. `log PATH` lists them last first;
+a PATH that names a directory takes every path under it. `blame` replays the path's writers
+through the same step the derive takes, merges included, and gives each line of the last state
+the patch whose state added it: a line a state keeps keeps its writer. `status` says the head's
+psid, tips and patches, the banks standing at it, how many patches the store holds beyond it, the
+paths its derive left conflicted (`C`), and each path the tree changes: `A` born, `D` gone, `M`
+changed, `X` the mode alone.
+
+`show ID` prints a patch: its id, its time in seconds, its note and deps, then each hunk as a
+unified diff (`(none)` for a birth, `(gone)` for a death), a `mode` line for an x bit moved, or a
+word for a binary side.
+
+`bisect GOOD BAD [--] CMD ..` searches the banks lying above GOOD and within BAD, oldest first,
+with BAD itself last. Each step lays a bank in the tree and runs CMD there: exit 0 is good, 125
+skips that bank, anything else is bad. It says the first bad set and the patches it adds over
+the last good one, then lays the head back. The tree must be clean, and the nest is held for the
+whole search.
 
 ### ledger
 

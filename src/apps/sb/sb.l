@@ -193,6 +193,16 @@
    (ins e l) (? (atom? l) [e]                                 ; insert desc by time (seat 0)
               (<<l <= <e) (e . l)
               (<l . ins e >l))
+   ; the lines of (time id note nhunks) entries, * for a tip of tp
+   (log-pr es tp)
+    (two? es ?
+     (: e <es id <>e
+        _ (puts (? (elem id tp) "* " "  "))
+        _ (puts (snip id 0 12 + "  " + show <>>>e + " paths"))
+        nt <>>e
+        _ (? !nt () (puts ("  " + nt)))
+        _ (puts "\n")
+        (log-pr >es tp)))
    (sb-log _)
     (: tp (head ())
        (go m acc)
@@ -201,16 +211,7 @@
           (atom? f ? (go >m acc)
            (go >m (ins [<(fld f 'time) id <(fld f 'note) #(fld f 'hunks)] acc)))))
        es (go (readdir ".sb/patch") ())
-       (pr m)
-        (two? m ?
-         (: e <m id <>e
-            _ (puts (? (elem id tp) "* " "  "))
-            _ (puts (snip id 0 12 + "  " + show <>>>e + " paths"))
-            nt <>>e
-            _ (? !nt () (puts ("  " + nt)))
-            _ (puts "\n")
-            (pr >m)))
-       _ (pr es)
+       _ (log-pr es tp)
        _ (: (pf m) (? (two? m)
                       (: e <m t <>e
                          ; the psid: the name of this release's head DAG state.
@@ -1098,6 +1099,131 @@
           !(two? (stat ".sb")) (: _ (say err ("sb: no nest at " + d + "\n")) 1)
           (? (held "." (_ \ sv-loop ())) 0 1))))
 
+; --- history: a patch shown, the patches that wrote a path, the patch behind each line, the
+;     tree against the head, and bisect over banks. a path's writers come from the head's
+;     derive in the fold's (depth, id) order, the order its states were made in ---
+(:
+   (hs-derive _) (dv-derive (head ()))
+   (hs-text s) (: t (bl s) (? (two? t) <>t))                  ; a side's text, "" absent | ()
+   (hs-entry i) (: f (patch i) [<(fld f 'time) i <(fld f 'note) #(fld f 'hunks)])   ; log-pr's
+   ; a hunk as text: its unified diff, a mode line, or a word for a side that cannot diff
+   (hs-hunk h)
+    (: p <h o <>h n <>>h ot (hs-text o) nt (hs-text n)
+       md (? (o && n && sd-x? o != sd-x? n) ["mode " p (? (sd-x? n) " +x" " -x") "\n"] ())
+       (? (o && n && sd-h o = sd-h n) md
+          !(string? ot && string? nt) (md + ["missing blob " p "\n"])
+          (bin? ot || bin? nt) (md + ["binary " p "\n"])
+          (: d (udiff (? !o "(none)" p) (? !n "(gone)" p) ot nt) (md + (? (string? d) [d] ())))))
+   ; a patch as text: its id, time in seconds, note, deps, then each hunk | ()
+   (hs-show id)
+    (: f (patch id) nt <(fld f 'note)
+       (? (two? f)
+          (cats (["patch " id "\n" "time " (show (<(fld f 'time) // 1000)) "\n"]
+                 + (? (string? nt && 0 < #nt) ["note " nt "\n"] ())
+                 + catmap (d \ ["dep " d "\n"]) (fld f 'deps)
+                 + catmap hs-hunk (fld f 'hunks)))))
+   ; PATH, or every path under PATH/, that a patch of the derive writes
+   (hs-under d p)
+    (: q (? (1 < #p && p (#p - 1) = 47) (snip p 0 (#p - 1)) p) n #q
+       (filter (k \ k = q || (n < #k && snip k 0 (n + 1) = (q + "/"))) (sort (keys (d 'last)))))
+   ; their writers, the fold's last first
+   (hs-log d p)
+    (: u {} _ (map (k \ map (i \ pin u i 1) (dv-hist d k)) (hs-under d p))
+       (map (e \ e 1) (rev (sort (map (i \ [(dv-dep d i) i]) (keys u))))))
+   ; a path's states as the fold made them, each writer through dv-step -> ((text pid) ..)
+   ; oldest first, a deletion's text ()
+   (hs-states d p)
+    (: sn {} cf {}
+       (go m acc) (? (atom? m) (rev acc)
+          (: i (<m 1) h <(filter (e \ <e = p) (fld (patch i) 'hunks))
+             (? (atom? h) (go >m acc)
+                (: _ (dv-step sn cf p <>h <>>h i) e (peep sn p ())
+                   (go >m ([(? (two? e) (hs-text <e)) i] . acc))))))
+       (go (sort (map (i \ [(dv-dep d i) i]) (dv-hist d p))) ()))
+   ; each line of the path's last state with the patch that wrote it -> ((pid line) ..): a line a
+   ; state keeps keeps its writer, a line it adds is its own
+   (hs-blame d p)
+    (: (step s pv i acc) (? (atom? s) (rev acc)
+          (<<s @ 'keep (step >s >pv i (<pv . acc))
+                 'del (step >s >pv i acc)
+                 (step >s pv i ([i <><s] . acc))))
+       (go m pv) (? (atom? m) pv
+          (: t <<m (go >m (step (myers (map (e \ <>e) pv) (? (string? t) (lines t) ())) pv <><m ()))))
+       (go (hs-states d p) ()))
+   ; the head and the tree against it, a line apiece: the head, the banks at it, what the store
+   ; holds beyond it, its conflicted paths, then A D M or X (the mode alone) per changed path
+   (hs-status _)
+    (: tp (head ()) d (hs-derive ()) n (dv-count d) ps (psid tp)
+       all #(filter (i \ #i = 64) (readdir ".sb/patch"))
+       cf (d 'cf) cs (filter (p \ 0 < <(cf p)) (sort (keys cf)))
+       (tag h) (? !<>h "A" !<>>h "D" (sd-h <>h = sd-h <>>h) "X" "M")
+       ([("head " + sh ps + ", " + show #tp + " tip" + (? (1 = #tp) "" "s")
+          + ", " + show n + " patch" + (? (1 = n) "" "es"))]
+        + map (r \ "bank " + <r) (filter (r \ psid <>r = ps) (refs ()))
+        + (? (n < all) [("store " + show (all - n) + " more, not in the head")] ())
+        + map (p \ "C " + p + " -- " + <>(cf p)) cs
+        + map (h \ tag h + " " + <h) (scan (sort (walk () (igs ()) ())) (snap ()) ())))
+   ; the ids a set adds over another: the walk down from its tips, stopping where in? holds
+   (hs-above tp in?)
+    (: seen {}
+       (go st acc) (? (atom? st) (sort acc)
+          (: id <st
+             (? (peep seen id 0 || in? id) (go >st acc)
+                (: _ (pin seen id 1) (go (fld (patch id) 'deps + >st) (id . acc))))))
+       (go tp ()))
+   ; the banks above GOOD and within BAD, oldest first, then BAD: each one halving lays it and
+   ; runs cmd in the tree, exit 0 good, 125 skip, else bad. the head is laid back after
+   ; -> [[name tips] [name tips]], the first bad set and the last good one | ()
+   (hs-bisect ga ba cmd)
+    (: x (setof ga) y (setof ba)
+       (? (atom? x || atom? y) ()
+          (: g <x b <y bin (reach b) gp (psid g) bp (psid b) tp0 (head ())
+             (between r) (: rp (psid <>r) (rp != gp && rp != bp && sb-all? bin <>r && sb-all? (reach <>r) g))
+             l (map (e \ [(e 1) (e 2)]) (sort (map (r \ [<>>r <r <>r]) (filter between (refs ())))))
+             l2 (l + [[ba b]])
+             (run c) (: _ (settle <>c) s <(hark cmd)
+                        _ (puts ("sb: bisect " + <c + " " + sh (psid <>c) + " -- " + (s @ 0 "good" 125 "skip" "bad") + "\n"))
+                        s)
+             (go l lo hi) (? (hi - lo <= 1) [(l hi) (? (lo < 0) [ga g] (l lo))]
+                             (: m ((lo + hi) // 2)
+                                (run (l m) @ 0 (go l m hi)
+                                             125 (go (take m l + drop (m + 1) l) lo (hi - 1))
+                                             (go l lo m))))
+             r (go l2 -1 (#l2 - 1))
+             _ (settle tp0)
+             r)))
+
+   (sb-show a) (: id (idpfx a) t (? id (hs-show id)) (? (string? t) (: _ (say out t) 1) 0))
+   (sb-log-path p)
+    (: ids (hs-log (hs-derive ()) p)
+       (? (atom? ids) (say err ("sb: no patch in the head writes " + p + "\n"), 0)
+          (: _ (log-pr (map hs-entry ids) (head ())) 1)))
+   (sb-blame p)
+    (: d (hs-derive ()) e ((d 'snap) p) t (? (two? e) (hs-text <e))
+       (? (atom? e) (say err ("sb: " + p + " is not in the head\n"), 0)
+          (!(string? t) || bin? t) (say err ("sb: " + p + " is binary, or its blob is missing\n"), 0)
+          (: bs (hs-blame d p) w #(show #bs)
+             _ (foldl (\ n b (: s (show n)
+                                _ (puts (snip <b 0 12 + "  " + snip "            " 0 (w - #s) + s + "  " + <>b + "\n"))
+                                (n + 1)))
+                      1 bs)
+             1)))
+   (sb-status _)
+    (? !(two? (stat ".sb")) (say err "sb: no nest here\n", 0)
+       (: _ (map (l \ puts (l + "\n")) (hs-status ())) 1))
+   ; GOOD BAD [--] CMD ..: 2 when malformed
+   (sb-bisect as)
+    (: cmd (? (<>>as = "--") >>>as >>as)
+       (? (atom? cmd) 2
+          (0 < dirty ()) (say err "sb: working tree has changes; record or revert first\n", 0)
+          (: r (hs-bisect <as <>as cmd)
+             (? (atom? r) 0
+                (: bd <r gd <>r ad (hs-above <>bd (reach <>gd))
+                   _ (puts ("sb: first bad " + <bd + " " + sh (psid <>bd) + ", over " + <gd + " -- "
+                            + show #ad + " patch" + (? (1 = #ad) "" "es") + "\n"))
+                   _ (log-pr (foldl (\ a e (ins e a)) () (map hs-entry ad)) ())
+                   1))))))
+
 ; --- the CLI face: usage + the verb dispatcher (cook-main's shape) ---
 (:
    sb-usage "sb -- svalbard, the patch-set vcs (doc/misc/sb.md)
@@ -1137,6 +1263,15 @@ usage: sb VERB ..
                   a path that moved on since three-way merges instead of being
                   clobbered: P's write is lifted OUT, later edits stay
   log             the patches, newest first (* marks a tip of the head)
+  log PATH        the head's patches that write PATH, or a path under it, the
+                  fold's last first
+  show ID         a patch: its time, note and deps, then each hunk as a diff
+  blame PATH      each line of PATH in the head, after the patch that wrote it
+  status          the head, the banks at it, what the store holds beyond it,
+                  conflicted paths, and the tree's changes: A D M, X the mode
+  bisect GOOD BAD [--] CMD ..  lay the banks above GOOD and within BAD, halving,
+                  and run CMD in each: exit 0 good, 125 skip, else bad. says the
+                  first bad set and the patches it adds, then lays the head back
   diff            working tree vs the recorded state (unified; exit 1 on change)
   ledger [NAME]   a named value that moves only by compare-and-swap, its every
                   entry kept. no NAME lists them; NAME prints what it holds
@@ -1167,7 +1302,11 @@ usage: sb VERB ..
            "take" (atom? >as ? (usage ()) !(held "." (_ \ sb-take >as)))
            "bank" (atom? >as ? (usage ()) !(held "." (_ \ sb-bank >as)))
            "undo" (atom? >as ? (usage ()) !(held "." (_ \ sb-undo >as)))
-           "log" (sb-log (), 0)
+           "log" (atom? >as ? (sb-log (), 0) !(sb-log-path <>as))
+           "show" (#>as = 1 ? !(sb-show <>as) (usage ()))
+           "blame" (#>as = 1 ? !(sb-blame <>as) (usage ()))
+           "status" !(sb-status ())
+           "bisect" (#>as < 3 ? (usage ()) (: r (held "." (_ \ sb-bisect >as)) (? (r = 2) (usage ()) !r)))
            "ls" (sb-ls (elem "-l" >as), 0)
            "psid" !(sb-psid >as)
            "stamp" !(sb-stamp >as)

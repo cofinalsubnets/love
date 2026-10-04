@@ -720,6 +720,63 @@
  (0 < t1) thead tsame tleft                 ; the peer's head, and nothing pushed
  bok (0 < t2) bhead bnone)
 
+; --- history: show, log PATH, blame, status and bisect over banks, held against a scripted
+;     history -- five patches with a bank after each, then an edit on v1 taken back in, so
+;     a.txt's last state is a merge ---
+(: _ (chdir (sb-home + "/" + sb-dir))
+   _ (mkdir "hs" 493) _ (chdir "hs")
+   (has s t) (0 <= fsub s t 0)
+   _ (lay "a.txt" "one\ntwo\nthree\n") _ (lay "b.txt" "b\n")
+   h1 (sb-record "first") _ (sb-bank ["v1"])
+   _ (lay "a.txt" "one\nTWO\nthree\n")
+   h2 (sb-record "second") _ (sb-bank ["v2"])
+   _ (lay "a.txt" "one\nTWO\nthree\nfour\n") _ (mkdir "sub" 493) _ (lay "sub/c.txt" "c\n")
+   h3 (sb-record "third") _ (sb-bank ["v3"])
+   _ (lay "a.txt" "one\nTWO\nBAD\nfour\n")
+   h4 (sb-record "fourth") _ (sb-bank ["v4"])
+   _ (lay "b.txt" "bb\n")
+   h5 (sb-record "fifth") _ (sb-bank ["v5"])
+   d (hs-derive ())
+   sw (hs-show h2)
+   swok (has sw ("patch " + h2 + "\n") && has sw "note second\n" && has sw ("dep " + h1 + "\n")
+         && has sw "--- a.txt\n+++ a.txt\n" && has sw "-two\n+TWO\n")
+   sw3 (has (hs-show h3) "--- (none)\n+++ sub/c.txt\n")
+   lga (hs-log d "a.txt") lgb (hs-log d "b.txt") lgs (hs-log d "sub/") lgn (hs-log d "nope")
+   bla (hs-blame d "a.txt")
+   st0 (hs-status ())
+   _ (lay "b.txt" "bbb\n") _ (lay "d.txt" "d\n") _ (unlink "sub/c.txt") _ (chmod "a.txt" 493)
+   st1 (hs-status ())
+   _ (chmod "a.txt" 420) _ (lay "b.txt" "bb\n") _ (unlink "d.txt") _ (lay "sub/c.txt" "c\n")
+   sn0 (snap ()) hd0 (psid (head ()))
+   bad "while read l; do [ \"$l\" = BAD ] && exit 1; [ \"$l\" = four ] && exit $SKIP; done < a.txt; exit 0"
+   _ (setenv "SKIP" "0")
+   bi (hs-bisect "v1" "v5" ["sh" "-c" bad])
+   back (seq (snap ()) sn0 && psid (head ()) = hd0 && <>(look "a.txt") = "one\nTWO\nBAD\nfour\n")
+   _ (setenv "SKIP" "125")
+   bk (hs-bisect "v1" "v5" ["sh" "-c" bad])
+   bn (hs-bisect "v1" "nope" ["true"])
+   _ (sb-apply ["v1"])
+   st2 (hs-status ())
+   _ (lay "a.txt" "ONE\ntwo\nthree\n")
+   hq (sb-record "loud")
+   _ (sb-take ["v5"])
+   blm (hs-blame (hs-derive ()) "a.txt")
+   mtxt <>(look "a.txt")
+   _ (chdir (sb-home + "/" + sb-dir)))
+
+(test
+ swok sw3
+ (seq lga [h4 h3 h2 h1]) (seq lgb [h5 h1]) (seq lgs [h3]) !lgn     ; the fold's last first
+ (seq bla [[h1 "one"] [h2 "TWO"] [h4 "BAD"] [h3 "four"]])
+ (seq (>st0) ["bank v5"])                                           ; a clean tree says no path
+ (seq (>>st1) ["X a.txt" "M b.txt" "A d.txt" "D sub/c.txt"])
+ (<<bi = "v4") (<<>bi = "v3") back                                  ; the first bad, the last good
+ (<<bk = "v4") (<<>bk = "v2")                                       ; v3 skipped: the step widens
+ !bn
+ (elem "store 4 more, not in the head" st2)
+ (mtxt = "ONE\nTWO\nBAD\nfour\n")                                    ; the merge, and each line's writer
+ (seq blm [[hq "ONE"] [h2 "TWO"] [h4 "BAD"] [h3 "four"]]))
+
 (chdir sb-home)
 (hark ["rm" "-rf" sb-dir])
 (puts "sb: ok", putc 10, 0)
