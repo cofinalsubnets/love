@@ -468,7 +468,7 @@
    no (cr-run cr-r2 "" "--resume nobody")
    _ (test
       (0 = <m) (0 = <ls) (cr-in (ls 1) "back")
-      (0 = <c) (cr-in (c 1) "BEE_NAME='back'") (cr-in (c 1) "--resume 'sid-42' 'go on'")
+      (0 = <c) (cr-in (c 1) "BEE_NAME=back") (cr-in (c 1) "--resume sid-42 'go on'")
       (cr-in (c 1) "--dangerously-load-development-channels server:bee") (cr-in (c 1) "--mcp-config ")
       (1 = <no) (cr-in (no 1) "no session to resume named nobody"))
    0)

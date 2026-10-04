@@ -424,7 +424,7 @@
   (: e (c 'ed)
      (? (k = 27) (: _ (pin c 'typing 0) _ (say out (esc + "[?25l")) (soil c))
         (k = 3) (pin c 'over 1)
-        (k = 9) (: ps (c 'bee 'peers 0) i (lidx (c 'to) ps)
+        (k = 9) (: ps (c 'bee 'peers 0) i (findsub ps [(c 'to)])
                    _ (? (two? ps) (pin c 'to (ps ((i + 1) % #ps))) 0)
                    (soil c))
         (: _ (edstep e k)

@@ -243,8 +243,6 @@
      card-of (cite 'hive 'hive-card)                        ; () when there is none
      card-pid (cite 'hive 'hive-pid)
      alive? (cite 'hive 'hive-alive?)
-     (mkdirs p) (foldl (\ a s (: d (a + "/" + s) _ (mkdir d 448) d)) ""
-                       (filter (\ s (0 < #s)) (cite 'kore 'usplit 47 p)))
      (hex2 n) (string [("0123456789abcdef" (n // 16)) ("0123456789abcdef" (n % 16))])
      ; a user's card: the person at this login, in the hive through bee's hud, with no model
      ; behind it. it is never swept, so mail to it waits while no hud is open
@@ -293,7 +291,7 @@
      (settle branch)
       (: d (cell-of (me 0))
          _ (: c (card-of (me 0)) (? (tablet? c && !(user-card? c)) (sweep (me 0)) 0))   ; a dead namesake's leavings
-         _ (mkdirs (d + "/inbox")) _ (mkdir (d + "/read") 448)
+         _ (umkdirs (d + "/inbox") 448) _ (mkdir (d + "/read") 448)
          _ (pins bee-cell 'since (clock 0 // 1000) 'branch branch)
          (card! "idle"))
      (state! s) (? (bee-cell 'state && bee-cell 'state != s) (card! s) 0)
@@ -306,7 +304,7 @@
      (sealed-msg from to text seal)
       (: id (show (clock 0) + "-" + from + "-" + hex2 (clock 0 % 256))
          hd ("from " + from + "\nsent " + show (clock 0 // 1000) + "\n"
-             + (two? seal ? ("to " + to + "\nid " + id + "\ncert " + cite 'ssh 'b64e (seal 1) 1 + "\n") ""))
+             + (two? seal ? ("to " + to + "\nid " + id + "\ncert " + cite 'bytes 'b64e (seal 1) 1 + "\n") ""))
          sg (? (two? seal) ("sig " + cite 'tls 'hex (cite 'ssh 'ed-sign <<seal (<seal 1) (hd + "\n" + text)) + "\n") "")
          [id (hd + sg + "\n" + text)])
      (post-with from to text seal)
@@ -331,7 +329,7 @@
      ; its stdin -> [exit output]
      bee-relay (: v (peep bee-salt 'relay ()) (two? v ? (map word v) ["ssh" "-T"]))
      (relay box msg verb)
-      (: r (box-route box) _ (mkdirs bee-hive) f (bee-hive + "/.relay-" + show (getpid 0))
+      (: r (box-route box) _ (umkdirs bee-hive 448) f (bee-hive + "/.relay-" + show (getpid 0))
          _ (spit-file f msg)
          fd (openfd f 0) pp (pipe 0)
          p (spawnio (bee-relay + [<r (r 1) "bee" verb]) fd >pp >pp (open-fds 0) -1 0)
@@ -364,7 +362,7 @@
      ; inbox kept either way
      (user-card! st)
       (: d (cell-of bee-login) t (d + "/.card-" + show (getpid 0))
-         _ (mkdirs (d + "/inbox")) _ (mkdir (d + "/read") 448)
+         _ (umkdirs (d + "/inbox") 448) _ (mkdir (d + "/read") 448)
          _ (spit-file t (paras [("pid " + show (st = "here" ? (getpid 0) 0)) ("cwd " + bee-cwd) "kind user" "model user"
                                 ("state " + st) ("since " + show (clock 0 // 1000))]))
          (rename t (d + "/card")))
@@ -405,7 +403,7 @@
      ; claude code session in this directory. it says nothing, and the card's state and turn move
      (state-cmd as)
       (: st (two? >as ? <>as "")
-         pk (index-of as "--pid") p0 (? (0 <= pk && pk + 1 < #as) (digits (as (pk + 1))) (getpid 0))
+         pk (findsub as ["--pid"]) p0 (? (0 <= pk && pk + 1 < #as) (digits (as (pk + 1))) (getpid 0))
          anc (ancestors p0) e (getenv "BEE_NAME")
          ps (filter (p \ peep (p 1) "model" "" = "claude-code") (settled 0))
          a (filter (p \ elem (digits (peep (p 1) "parent" "0")) anc) ps)
@@ -438,7 +436,7 @@
          b (box-seal 0)
          (? !(string? sg) [from body "" u]
             !(two? b) [from body "" u]
-            (: ch (: c (hv "cert") (string? c ? (cite 'ssh 'b64d c) ()))
+            (: ch (: c (hv "cert") (string? c ? (cite 'bytes 'b64d c) ()))
                t (? (string? ch) (sl 'seal-check ch (b 1 "lineage") (clock 0 // 1000) (bee-revoked 0)))
                signed (foldl (\ a l (a + l + "\n")) "" (take (#ls - 1) ls) + "\n" + body)
                (? (&& (starts? (ls (#ls - 1)) "sig ") (tablet? t) (t "kind" = "cell")
@@ -520,7 +518,7 @@
                       (foldl (\ a l (a + l + "\n")) "" (#ls <= n ? ls (drop (#ls - n) ls))))
      (job-start cmd)
       (: n (bee-jobs 'n + 1) _ (pin bee-jobs 'n n) id ("j" + show n)
-         _ (mkdirs (job-dir 0)) log (job-dir 0 + "/" + id + ".log")
+         _ (umkdirs (job-dir 0) 448) log (job-dir 0 + "/" + id + ".log")
          pp (pipe 0) nul (openfd "/dev/null" 0)
          p (spawnio (shell-argv cmd) nul >pp >pp (open-fds 0) 0 0)
          _ (close >pp) _ (? (0 <= nul) (close nul) 0)
@@ -554,7 +552,7 @@
 
      ; --- spawning: a bee started detached in a directory, serving -- its first prompt,
      ; then a turn per message until it is stopped -- its output to HIVE/logs/NAME.log ---
-     (sq s) ("'" + foldl (\ a i (a + (s i = 39 ? "'\\''" (string (s i))))) "" ^#s + "'")
+     sh-quote (cite 'lush 'sh-quote)
      (name-ok? nm)
       (0 < #nm && #nm <= 64
        && !(two? (filter (\ i (: c (nm i) !(48 <= c <= 57 || 65 <= c <= 90 || 97 <= c <= 122
@@ -570,10 +568,10 @@
             (user-card? c) (nm + " is a user's name")
             (tablet? c && alive? (card-pid c)) ("a bee named " + nm + " is already running")
             !(two? (stat dir)) ("no directory " + dir)
-            (: _ (mkdirs lg)
-               line ("cd " + sq dir + " && BEE_NAME=" + sq nm + " PWD=" + sq dir
-                     + " BEE_PROMPT=" + sq prompt + " exec " + sq bee-self + " bee --serve"
-                     + (yes ? " -y" "") + " >> " + sq (lg + "/" + nm + ".log") + " 2>&1")
+            (: _ (umkdirs lg 448)
+               line ("cd " + sh-quote dir + " && BEE_NAME=" + sh-quote nm + " PWD=" + sh-quote dir
+                     + " BEE_PROMPT=" + sh-quote prompt + " exec " + sh-quote bee-self + " bee --serve"
+                     + (yes ? " -y" "") + " >> " + sh-quote (lg + "/" + nm + ".log") + " 2>&1")
                nul (openfd "/dev/null" 0)
                p (spawnio [bee-self "lush" "-c" line] nul nul nul (open-fds 0) 0 0)
                _ (? (0 <= nul) (close nul) 0)
@@ -761,17 +759,17 @@
      ; [id text], id "none" for a queue not made yet
      (q-read q)
       (? (q-git? q)
-         (: id (chomp (lush-out ("git rev-parse --verify -q " + sq q)))
-            (? (0 < #id) [id (lush-out ("git cat-file -p " + sq q))] ["none" ""]))
-         (: id (chomp (lush-out ("sb -C " + sq (q-hub 0) + " ledger " + sq q + " --id")))
-            [(0 < #id ? id "none") (? (id = "none" || #id = 0) "" (lush-out ("sb -C " + sq (q-hub 0) + " ledger " + sq q)))]))
+         (: id (chomp (lush-out ("git rev-parse --verify -q " + sh-quote q)))
+            (? (0 < #id) [id (lush-out ("git cat-file -p " + sh-quote q))] ["none" ""]))
+         (: id (chomp (lush-out ("sb -C " + sh-quote (q-hub 0) + " ledger " + sh-quote q + " --id")))
+            [(0 < #id ? id "none") (? (id = "none" || #id = 0) "" (lush-out ("sb -C " + sh-quote (q-hub 0) + " ledger " + sh-quote q)))]))
      ; -> 1 when it landed on old, 0 when someone wrote first
      (q-put q old text)
-      (: tmp (bee-hive + "/.queue-" + (me 0)) _ (mkdirs bee-hive) _ (spit-file tmp text)
+      (: tmp (bee-hive + "/.queue-" + (me 0)) _ (umkdirs bee-hive 448) _ (spit-file tmp text)
          r (? (q-git? q)
-              (: nw (chomp (lush-out ("git hash-object -w " + sq tmp)))
-                 (lush-out ("git update-ref " + sq q + " " + nw + (old = "none" ? " ''" (" " + old)) + " && echo landed")))
-              (lush-out ("sb -C " + sq (q-hub 0) + " ledger " + sq q + " --was " + old + " " + sq tmp + " && echo landed")))
+              (: nw (chomp (lush-out ("git hash-object -w " + sh-quote tmp)))
+                 (lush-out ("git update-ref " + sh-quote q + " " + nw + (old = "none" ? " ''" (" " + old)) + " && echo landed")))
+              (lush-out ("sb -C " + sh-quote (q-hub 0) + " ledger " + sh-quote q + " --was " + old + " " + sh-quote tmp + " && echo landed")))
          _ (unlink tmp)
          (0 <= find r "landed" 0))
      (q-row? l) (: w (words l) (5 < #w && 0 < #<w && 48 <= <w 0 <= 57))
@@ -781,11 +779,11 @@
      (q-short q) (q @ ("refs/queue/" + n) n ("queue/" + n) n "")
      (git1 a) (chomp (lush-out ("git " + a)))
      ; a commit's or a tree's full sha, "" when there is none
-     (git-sha x) (git1 ("rev-parse --verify -q " + sq (x + "^{commit}")))
-     (git-tree x) (git1 ("rev-parse --verify -q " + sq (x + "^{tree}")))
+     (git-sha x) (git1 ("rev-parse --verify -q " + sh-quote (x + "^{commit}")))
+     (git-tree x) (git1 ("rev-parse --verify -q " + sh-quote (x + "^{tree}")))
      ; the base line a new queue starts from: the branch it is named for, at its sha
      (q-base-of q)
-      (: nm (q-short q) s (? (q-git? q) (git1 ("rev-parse --short --verify -q " + sq ("refs/heads/" + nm))) "")
+      (: nm (q-short q) s (? (q-git? q) (git1 ("rev-parse --short --verify -q " + sh-quote ("refs/heads/" + nm))) "")
          [nm (0 < #s ? s "-")])
      ; bee's standard protocol, laid as the header of a queue it makes. a queue outlives the bee
      ; that made it, so its header says the rules itself; doc/bee.md says them at length
@@ -972,7 +970,7 @@
             !(0 < #id && id 0 != 46 && find id "/" 0 < 0) [0 "a bad id"]
             (#sealed = 0) [0 "the seal does not check"]
             !(elem tool bee-ledger-tools && tablet? in) [0 "a ledger call is a queue tool and its input"]
-            (: _ (mkdirs ids) fd (openfd (ids + "/" + id) 3)
+            (: _ (umkdirs ids 448) fd (openfd (ids + "/" + id) 3)
                (? !(charm? fd) [0 "that id is taken"]
                   (: _ (close fd)
                      _ (pin bee-who 'name sealed)
@@ -1049,9 +1047,9 @@
      ; --- land by sha, on git: the head's green row lands its gated head only when merging it onto
      ; the base gives the tree it gated, and it leaves the queue only once the base holds that tree ---
      (q-merge-tree br g)
-      (: ls (lines (lush-out ("git merge-tree --write-tree " + sq br + " " + sq g + " && echo clean")))
+      (: ls (lines (lush-out ("git merge-tree --write-tree " + sh-quote br + " " + sh-quote g + " && echo clean")))
          (? (elem "clean" ls) <ls ""))
-     (q-on? g br) (0 <= find (lush-out ("git merge-base --is-ancestor " + sq g + " " + sq br + " && echo yes")) "yes" 0)
+     (q-on? g br) (0 <= find (lush-out ("git merge-base --is-ancestor " + sh-quote g + " " + sh-quote br + " && echo yes")) "yes" 0)
      ; the working tree that has branch br checked out, "" when none does
      (q-checkout br)
       (: (go ls wt) (atom? ls ? "" (<ls @ ("worktree " + w) (go >ls w)
@@ -1067,7 +1065,7 @@
      ; whose other parents reach g (or g itself); else the tip, when it holds g with that tree
      (q-landed-at br from g gt)
       (: cs (rev (map words (lines (lush-out ("git log --first-parent -n 512 --format='%H %T %P' "
-                                               + sq (0 < #from ? (from + ".." + br) br))))))
+                                               + sh-quote (0 < #from ? (from + ".." + br) br))))))
          (lands? c) (two? c && c 1 = gt && (<c = g || two? (filter (\ x (q-on? g x)) (drop 3 c))))
          ok (filter lands? cs)
          (? (two? ok) (<ok 0) (q-on? g br && git-tree br = gt) (git-sha br) ""))
@@ -1105,7 +1103,7 @@
                        ("in the checkout of " + br + (0 < #wt ? (", " + wt) "") + ":")
                        ("  git rev-parse " + br + "   # must print " + cur)
                        "  git status --short   # must print no one's uncommitted edits"
-                       ("  git merge --no-ff " + g + " -m " + sq ("Merge queue row " + p + " (" + who + ")"))
+                       ("  git merge --no-ff " + g + " -m " + sh-quote ("Merge queue row " + p + " (" + who + ")"))
                        ("  git rev-parse 'HEAD^{tree}'   # must print " + gt)
                        "then the project's fast gate there, and queue_landed, which checks the landed tree and drops the row and the rows folded into it."])]))))
      (queue-landed in) (q-check in queue-landed1)
@@ -1124,7 +1122,7 @@
                        [0 ("no commit on " + br + "'s first-parent line" + (0 < #from ? (" since " + l 2 1) "")
                            + " merges " + g + " with the gated tree " + gt + ", and the tip's tree is " + git-tree br
                            + ": the row stays; tell the leader")]
-                      (: gone (p . q-folds rows p) short (git1 ("rev-parse --short " + sq at))
+                      (: gone (p . q-folds rows p) short (git1 ("rev-parse --short " + sh-quote at))
                          ; a landing that changes bee's served code ends the note with the restart line
                          bz (? (0 < #from) (git1 ("diff --name-only " + from + " " + at + " -- " + bee-served)) "")
                          rn (? (#bz = 0) rel (0 < #rel) (rel + " " + bee-landed) bee-landed)
@@ -1636,7 +1634,6 @@
                                        (: ls (lines v)
                                           (? (#ls <= 1) [(k + ": " + v)] ((k + ":") . map (\ l ("  " + l)) ls))))))
                             ks)))))
-     (joinl ls) (? (two? ls) (foldl (\ a l (a + "\n" + l)) <ls >ls) "")
      ; a tool as the transcript names it: the shell by its own name
      (shown name) (name = "shell" ? <bee-shell name)
      (brief name in)
@@ -1733,7 +1730,7 @@
        ; the whole input under the line when the line did not say all of it
        'ask (\ h (: _ (state! "asking")
                     ls (ask-lines <h (h 1))
-                    _ (? (joinl ls != visible (brief <h (h 1))) (puts (foldl (\ a l (a + "    " + l + "\n")) "" ls)) 0)
+                    _ (? (join "\n" ls != visible (brief <h (h 1))) (puts (foldl (\ a l (a + "    " + l + "\n")) "" ls)) 0)
                     a (? (ask "  run? [y/N] ") 1 0) _ (state! "busy") a))
        'done (\ h r 0)
        'usage (\ n 0)
@@ -1776,13 +1773,13 @@
          (? !(string? h) 0
             (: d (h + "/.love/etc") p (d + "/bee.l") s (slurp-file p)
                ls (filter (l \ !(starts? (lstrip l) "(avatar")) (lines (string? s ? s "")))
-               _ (mkdirs d)
+               _ (umkdirs d 448)
                (spit-file p (foldl (\ a l (a + l + "\n")) "" ls + "(avatar " + nm + ")\n")))))
      ; /avatar lists them, /avatar NAME wears one and keeps it -> [ok lines]
      (avatar-cmd s w)
       (: ws (words s) nm (two? >ws ? <>ws "") ns (cite 'avatar 'avatar-names 0)
          (? (atom? >ws) [1 (cite 'avatar 'avatar-gallery w (bee-look 'name) + [(sgr "2" "  /avatar NAME to wear one")])]
-            !(elem nm ns) [0 [("no avatar " + nm + "; there are " + joinw ns)]]
+            !(elem nm ns) [0 [("no avatar " + nm + "; there are " + join " " ns)]]
             (: _ (look! nm) _ (keep-avatar nm)
                [1 (map (i \ "  " + (bee-look 'face) i + (i = 1 ? ("   " + sgr (bee-look 'ink) nm) "")) ^4)])))
 
@@ -1845,8 +1842,6 @@
      ; the branch the environment named, for the card
      bee-branch (: k (find bee-env "git branch: " 0)
                     (? (k < 0) "" (: e (find bee-env "\n" k) (snip bee-env (k + 12) (e < 0 ? #bee-env e)))))
-     (joinw ws) (foldl (\ a w (a + " " + w)) <ws >ws)
-     (index-of xs x) (: (go l i) (? (atom? l) -1 (<l = x) i (go >l (i + 1))) (go xs 0))
      ; --- the claude-code backend, (backend claude-code): a long-lived `claude -p` child in
      ; stream-json both ways does the thinking and runs its own tools, and bee is the harness --
      ; it draws the child's events on the same doors, answers its permission asks from the screen
@@ -2032,7 +2027,7 @@
      (remember _)
       (: id (getenv "CLAUDE_CODE_SESSION_ID")
          (? (string? id && 0 < #id)
-            (: _ (mkdirs bee-resumes) (spit-file (bee-resumes + "/" + me 0) (paras [("claude " + id) ("cwd " + bee-cwd)])))
+            (: _ (umkdirs bee-resumes 448) (spit-file (bee-resumes + "/" + me 0) (paras [("claude " + id) ("cwd " + bee-cwd)])))
             0))
      ; NAME's relaunch line -> [ok text]; the mcp config it names runs bee from this binary, so a
      ; worktree whose out/love predates the bell still rings
@@ -2044,9 +2039,9 @@
          (? !(tablet? r && string? (peep r "claude" ())) [0 ("no session to resume named " + nm)]
             (tablet? k && alive? (card-pid k)) [0 (nm + " is live")]
             (: _ (spit-file mc (json-show {"mcpServers" {"bee" {"command" bee-me "args" ["bee" "--mcp"]}}}))
-               [1 ("cd " + sq (r "cwd") + " && BEE_NAME=" + sq nm + " exec claude"
-                   + " --dangerously-load-development-channels server:bee --strict-mcp-config --mcp-config " + sq mc
-                   + " --resume " + sq (r "claude") + (0 < #prompt ? (" " + sq prompt) ""))])))
+               [1 ("cd " + sh-quote (r "cwd") + " && BEE_NAME=" + sh-quote nm + " exec claude"
+                   + " --dangerously-load-development-channels server:bee --strict-mcp-config --mcp-config " + sh-quote mc
+                   + " --resume " + sh-quote (r "claude") + (0 < #prompt ? (" " + sh-quote prompt) ""))])))
      (resumable _)
       (: ns (readdir bee-resumes)
          (? (two? ns) (filter (n \ n 0 != 46 && n != "mcp.json") (sort ns)) ()))
@@ -2078,7 +2073,7 @@
          (deny why) [1 (json-show {"behavior" "deny" "message" why})]
          (? !(string? tn) [0 "approve wants tool_name"]
             (getenv "BEE_YES" = "1") (allow 0)
-            (: d (cell-of (me 0) + "/asks") _ (mkdirs d)
+            (: d (cell-of (me 0) + "/asks") _ (umkdirs d 448)
                id (show (clock 0) + "-" + hex2 (clock 0 % 256))
                tu (peep a "tool_use_id" ())                ; so the screen asks on the block it drew
                _ (spit-file (d + "/." + id) (json-show (: j {"tool_name" tn "input" (tablet? inp ? inp {})}
@@ -2154,7 +2149,7 @@
      (card-name? s) (0 < #s && all (c \ 32 < c && c != 64) (map s ^#s))
      ; --keygen root | box [NAME] -> [1 what to print] | [0 why not]
      (keygen ws)
-      (: _ (mkdirs bee-keys)
+      (: _ (umkdirs bee-keys 448)
          hx (cite 'tls 'hex)
          rk (bee-keys + "/root.key")
          (? (ws = ["root"])
@@ -2211,7 +2206,7 @@
       (: hx (cite 'tls 'hex) r (root-key 0) days (two? ws ? (digits <ws) 7)
          (? !(two? r) [0 "no root here: a ticket is minted where root.key is"]
             !(0 < days) [0 "usage: love bee --ticket [DAYS]"]
-            (: t (cite 'tls 'rnd 32) _ (mkdirs bee-tickets)
+            (: t (cite 'tls 'rnd 32) _ (umkdirs bee-tickets 448)
                (? (spit-file (bee-tickets + "/" + sha256 t) ("expires " + show (clock 0 // 1000 + days * 86400) + "\n"))
                   [1 (hx (r 1) + "-" + hx t)]
                   [0 "cannot write the ticket"]))))
@@ -2225,7 +2220,7 @@
          (? !(#tok = 129 && tok 64 = 45 && hex? root 32 && hex? tk 32) [0 "usage: love bee --enrol TOKEN [NAME]"]
             !(card-name? nm) [0 ("not a box name: '" + nm + "'")]
             (string? had && had != root + "\n") [0 "this box is of another lineage"]
-            (: _ (mkdirs bee-keys)
+            (: _ (umkdirs bee-keys 448)
                _ (? (string? had) 0 (spit-file lf (root + "\n")))
                bk (bee-keys + "/box.key")
                k (: r (sl 'seal-keyread bk) (? (two? r) r (: _ (sl 'seal-keywrite bk (sl 'seal-key 0)) (sl 'seal-keyread bk))))
@@ -2334,31 +2329,31 @@
           "--send" (? (#as < 3) (say err "usage: love bee --send NAME TEXT ..\n", 2)
                       (: e0 (getenv "BEE_NAME") u (getenv "USER")
                          from (? (string? e0 && 0 < #e0) e0 ("cli-" + (string? u ? u "someone")))
-                         (say1 (post-as from <>as (joinw >>as)) ("sent to " + <>as))))
+                         (say1 (post-as from <>as (join " " >>as)) ("sent to " + <>as))))
           "--spawn" (? (#as < 4) (say err "usage: love bee --spawn NAME DIR [-y] PROMPT ..\n", 2)
-                       (say1 (spawn-bee <>as <>>as (joinw >>>as) yes)
+                       (say1 (spawn-bee <>as <>>as (join " " >>>as) yes)
                              (<>as + " is serving" + (yes ? "" ", reading only"))))
           ; --lock [--heavy] [--out DIR] -- CMD ..: the command under an exclusive lock on its out/
           ; (./out when there is one) and, with --heavy, a heavy ticket; waits for both, runs,
           ; releases whatever way it ends, and answers the command's status
           "--lock"
-           (: dd (: k (index-of as "--") (k >= 0 ? (drop (k + 1) as)))
-              od (: k (index-of as "--out") (? (0 <= k && k + 1 < #as) (as (k + 1)) ""))
+           (: dd (: k (findsub as ["--"]) (k >= 0 ? (drop (k + 1) as)))
+              od (: k (findsub as ["--out"]) (? (0 <= k && k + 1 < #as) (as (k + 1)) ""))
               out (? (0 < #od) (od 0 = 47 ? od (bee-cwd + "/" + od))
                      (two? (stat (bee-cwd + "/out"))) (bee-cwd + "/out") "")
               reqs ((0 < #out ? [[out 'exclusive]] ()) + (elem "--heavy" as ? [["heavy" 'heavy]] ()))
               (? !(two? dd) (say err "usage: love bee --lock [--heavy] [--out DIR] -- CMD ..\n", 2)
                  !(locks? 0) (say err "bee: locks are not in this binary\n", 1)
-                 (lk 'locks-run (lk 'locks-root 0) reqs (joinw dd) bee-floor bee-hmax dd)))
+                 (lk 'locks-run (lk 'locks-root 0) reqs (join " " dd) bee-floor bee-hmax dd)))
           ; --avatar lists them, --avatar NAME wears one from now on
-          "--avatar" (: r (avatar-cmd (joinw as) 80)
+          "--avatar" (: r (avatar-cmd (join " " as) 80)
                         _ (say (<r ? out err) (foldl (\ a l (a + l + "\n")) (<r ? "" "bee: ") (r 1)))
                         (<r ? 0 1))
           ; --resume lists who can come back; --resume NAME [PROMPT] relaunches one, --cmd only says how
           "--resume"
            (: ws (filter (w \ w != "--cmd") >as)
               (? !(two? ws) (: _ (map (n \ puts (n + "\n")) (resumable 0)) 0)
-                 (: r (resume-cmd <ws (joinw >ws))
+                 (: r (resume-cmd <ws (join " " >ws))
                     (? !<r (say err ("bee: " + r 1 + "\n"), 1)
                        (elem "--cmd" as) (: _ (puts (r 1 + "\n")) 0)
                        (: p (spawn ["sh" "-c" (r 1)]) (charm? p && 0 <= p ? (wait p) 127))))))
@@ -2446,8 +2441,8 @@
                _ (pin bee-cc 'yes yes)
                _ (? sv (: _ (twirl (_ \ watch 0) 0) (twirl (_ \ lock-poll 0) 0)) 0)
                r (? sv (serve-first key (plain yes) (: p (getenv "BEE_PROMPT")
-                                                    (? (string? p && 0 < #p) p (two? words) (joinw words) "")))
-                    (two? words) (: _ (state! "busy") _ (turn key (plain yes) [(user (joinw words))]) 0)
+                                                    (? (string? p && 0 < #p) p (two? words) (join " " words) "")))
+                    (two? words) (: _ (state! "busy") _ (turn key (plain yes) [(user (join " " words))]) 0)
                     (!pl && two? (tty 1)) (chat 'chat-tui bee-core key yes)
                     (repl-go key (plain yes)))
                _ (? (bee-cc 'live) (cc-stop 0) 0)

@@ -71,7 +71,6 @@ usage: helm [-c CONF] [-s SOCK] [-q]     supervise (pid 1 lays the machine first
    ;
    ; the names come from the registry and are never listed: a roster would drift
    ; from what the binary can actually do the first time a verb is added.
-   (hmkdirs p) (each (pprefixes p) (d \ mkdir d 493), mkdir p 493)
    ; one link, laid over whatever stands there: a second boot into a live tmpfs
    ; would meet its own last pass, and eexist is not a reason to have no `ls`.
    (hlink1 exe dir nm)
@@ -80,7 +79,7 @@ usage: helm [-c CONF] [-s SOCK] [-q]     supervise (pid 1 lays the machine first
    (hunderlay dir)
     (selfpath 0 @ exe
        (? !(string? exe) (hnote "underlay: this seat cannot say where it lives", 0)
-          (hmkdirs dir,
+          (umkdirs dir 493,
            (: r  (mount "tmpfs" dir "tmpfs")
              _  (hnote ("underlay " + dir + (nom? r ? (" -> " + string r + ", laid in place")
                                                       " -> tmpfs")))
@@ -110,7 +109,7 @@ usage: helm [-c CONF] [-s SOCK] [-q]     supervise (pid 1 lays the machine first
              (atom? t ? (hnote "scatter: the carried tree is torn", 0)
                 (: es (filter (e \ (0 < #(tar-get e 'nom "")))
                               (map (e \ pin e 'nom (hbelow (tar-get e 'nom ""))) <>t))
-                   _  (hmkdirs root)
+                   _  (umkdirs root 493)
                    w  (tar-scatter root es)
                    (atom? w ? (hnote ("scatter: can't write " + root), 0)
                       (hnote ("scatter " + show <>w + " files under " + root),

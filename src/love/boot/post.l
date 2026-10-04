@@ -883,6 +883,8 @@
    ; a path + text -> 1 when it lands, () when it will not open
    (uwrite p t) (cite 'posix 'open p "w" @ q
                  (hot? q ? (say q t, (cite 'posix 'close q), 1)))
+   ; mkdir -p: each directory prefix of p, then p, made at mode where missing -> p
+   (umkdirs p mode) (: mk (cite 'posix 'mkdir) (each ((cite 'path 'pprefixes) p + [p]) (d \ mk d mode), p))
    ; a main answers its status as a charm, or leaves from deep inside by scaring 'leave
    ; with it. urun is the driver both come back through, so a caller in the same image
    ; gets a charm instead of a dead process. nothing unwinds through a scare, so a port
@@ -1126,8 +1128,10 @@
 ;   (zbytes n)   -> n NULs
 ;   (b2hex s) (hex2b h) -> bytes as lowercase hex, and hex (either case) back
 ;   (xorb a b)   -> a with b xored in, byte by byte, #a long
+;   (b64e s pad?) (b64d t) -> base64 (rfc 4648), = padded when pad?; the decode skips what is
+;                   not the alphabet, so a wrapped or padded text reads whole
 
-(module '(bytes rdle rdbe rdoct wrle wrbe padk zbytes b2hex hex2b xorb)
+(module '(bytes rdle rdbe rdoct wrle wrbe padk zbytes b2hex hex2b xorb b64e b64d)
 (: (rdle s i n) (n < 1 ? 0 (s i + (rdle s (i + 1) (n - 1) << 8)))
    (rdbe s i n) (foldl (\ a k ((a << 8) + s (i + k))) 0 ^n)
    (rdoct s i n) (: (go k a) (n <= k ? a (s (i + k) @ c (48 <= c < 56 ? (go (k + 1) (a * 8 + c - 48)) a)))
@@ -1140,7 +1144,33 @@
    (hex2b h) (: n (#h // 2) b (cask n)
                 (each ^n (i \ pin b i (hexv (h (2 * i)) * 16 + hexv (h (2 * i + 1)))),
                  string b))
-   (xorb a b) (: n #a c (cask n) (each ^n (i \ pin c i (a i ^ b i)), string c)))
+   (xorb a b) (: n #a c (cask n) (each ^n (i \ pin c i (a i ^ b i)), string c))
+   b64set "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+   (b64e s pad?)
+    (: j (jug 0) n #s
+       (ch v) (put j (b64set (v & 63)))
+       (go i)
+        (n <= i ? (slurp j)
+           (: b0 (s i) b1 (i + 1 < n ? (s (i + 1)) 0) b2 (i + 2 < n ? (s (i + 2)) 0)
+              v ((b0 << 16) | (b1 << 8) | b2)
+              (ch (v >> 18), ch (v >> 12),
+               (? (i + 1 < n) (ch (v >> 6)) pad? (put j 61) 0),
+               (? (i + 2 < n) (ch v) pad? (put j 61) 0),
+               go (i + 3))))
+       (go 0))
+   (b64v c) (? (65 <= c <= 90) (c - 65) (97 <= c <= 122) (c - 71) (48 <= c <= 57) (c + 4)
+               (c = 43) 62 (c = 47) 63 -1)
+   (b64d t)
+    (: j (jug 0) n #t
+       (go i a m)
+        (n <= i ? (slurp j)
+           (b64v (t i) @ d
+              (? (d < 0) (go (i + 1) a m)
+                 (: a2 ((a << 6) | d) m2 (m + 6)
+                    (m2 < 8 ? (go (i + 1) a2 m2)
+                       (: k (m2 - 8)
+                          (put j ((a2 >> k) & 255), go (i + 1) (a2 & ((1 << k) - 1)) k)))))))
+       (go 0 0 0)))
 
 ) ; module bytes
 

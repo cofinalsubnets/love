@@ -69,17 +69,6 @@
    (drop l k) (k < 1 || atom? l ? l (drop >l (k - 1)))
 
    ; --- pem: every CERTIFICATE block of a text, its base64 undone -> a list of ders ---
-   (b64v c) (? (64 < c < 91) (c - 65) (96 < c < 123) (c - 71) (47 < c < 58) (c + 4)
-               (c = 43) 62 (c = 47) 63 -1)
-   (b64-dec s i e)
-    (: o (jug 0)
-       (go i acc k) (e <= i ? (slurp o)
-                       (b64v (s i) @ v
-                          (v < 0 ? (go (i + 1) acc k)
-                             (: a (acc << 6 | v) k2 (k + 6)
-                                (8 <= k2 ? (put o (a >> k2 - 8), go (i + 1) (a & (1 << k2 - 8) - 1) (k2 - 8))
-                                   (go (i + 1) a k2))))))
-       (go i 0 0))
    pem-begin "-----BEGIN CERTIFICATE-----"
    pem-end "-----END CERTIFICATE-----"
    (pem-ders t)
@@ -87,7 +76,7 @@
         (: b (fsub t pem-begin i)
            e (b < 0 ? -1 (fsub t pem-end (b + #pem-begin)))
            (e < 0 ? (rev acc)
-              (go (e + #pem-end) (b64-dec t (b + #pem-begin) e . acc))))
+              (go (e + #pem-end) (b64d (snip t (b + #pem-begin) e) . acc))))
        (go 0 ()))
 
    (bits-of n) (: (go n k) (n < 1 ? k (go (n >> 1) (k + 1))) (go n 0))

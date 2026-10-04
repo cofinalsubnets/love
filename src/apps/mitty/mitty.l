@@ -21,11 +21,12 @@
 (module '(mitty mitty mitty-stage mitty-up hberth hsail hopen hopen-stage moor waitfor
           hbox hmas hpid hstage hpty? hpane hsoil hrelay hframe hmoor hsplit hsteer hshut
           hfeed hkey oars hsize htide htick hswim hquick? hcopy hpaste hclip-text hscreen-text
-          hseq hmouse hpeer hpasted hfaces hgo hcycle hfresh hb64 hsub? hswap hpicker mitty-launch mitty-switch mitty-hive mitty-queues mitty-barx mitty-saver hwake hidle hidle? hsleep hquiet? hin hout hlive? hgreet hbye hattach hdetach mitty-lush mitty-here mitty-serve mitty-attach mitty-sock mitty-dir mitty-ls mitty-size hname hname-of hlr hbarat hdrag hmice hbarline hbarface hbartick hnote hhands mitty-bee mitty-main)
+          hseq hmouse hpeer hpasted hfaces hgo hcycle hfresh hsub? hswap hpicker mitty-launch mitty-switch mitty-hive mitty-queues mitty-barx mitty-saver hwake hidle hidle? hsleep hquiet? hin hout hlive? hgreet hbye hattach hdetach mitty-lush mitty-here mitty-serve mitty-attach mitty-sock mitty-dir mitty-ls mitty-size hname hname-of hlr hbarat hdrag hmice hbarline hbarface hbartick hnote hhands mitty-bee mitty-main)
 (borrow ((cite 'wharf) @ m (m ? m "src/apps/mitty/wharf.l")))   ; the baked module, else the tree's file
 (borrow ((cite 'limn) @ m (m ? m "src/apps/mitty/limn.l")))
 (borrow ((cite 'seek) @ m (m ? m "src/apps/seek.l")))
 (borrow 'posix)
+(borrow 'bytes)
 (:
  ; --- the moor: pump the master through the screen until the child hangs up.
  ; the screen lives in box bx (a relay swaps it); replies pour straight back;
@@ -76,17 +77,6 @@
                     (? (atom? v) ""
                        (<v = 'lin) (foldl (a \ l \ a + l + "\n") "" <>v)
                        <>v))
- ; base64, for the clip's trip out through osc 52
- (hb64 s) (: t "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/" n #s j (jug 0)
-             (ch v) (string (t (v & 63)))
-             (at i) (i < n ? (s i) 0)
-             (go i) (? (n <= i) 0
-                       (: a (at i) b (at (i + 1)) c (at (i + 2))
-                          (say j (ch (a >> 2) + ch (a << 4 | b >> 4)
-                                  + (i + 1 < n ? (ch (b << 2 | c >> 6)) "=")
-                                  + (i + 2 < n ? (ch c) "=")),
-                           go (i + 3))))
-             (go 0, slurp j))
  ; a pane's history and screen as rows of text, each with its trailing blanks off; the
  ; glyphs come out as limn paints them
  (hscreen-text p) (: s (peep (hbox p) () 0) r (gaze s 1) c (gaze s 2) hn (gaze s 9)
@@ -235,7 +225,7 @@
       hbars j hb,
       peep hb 'bar 0 ? (say j (limn-go (hb 'rows - 1) 0 + hbarline hb)) 0,
       (hclip-text hb @ ct
-         (ct = hb 'c52 ? 0 (pin hb 'c52 ct, 0 < #ct ? (say j ("\e]52;c;" + hb64 ct + "\a")) 0))),
+         (ct = hb 'c52 ? 0 (pin hb 'c52 ct, 0 < #ct ? (say j ("\e]52;c;" + b64e ct 1 + "\a")) 0))),
       (: p (hpane hb (hb 'focus)) b (hfind (hb 'lay) (hb 'focus))
          (two? p && two? b ?
             (: s (peep (hbox p) () 0) w (gaze s 0) c (gaze s 2) f (gaze s 3)
@@ -744,10 +734,8 @@
  (mitty-dir _) (: e (getenv "MITTY_RUN") h (getenv "HOME")
                  (? (string? e && 0 < #e) e (string? h) (h + "/.love/run/mitty") "/tmp/mitty"))
  (mitty-sock nm) (mitty-dir 0 + "/" + nm + ".sock")
- (mitty-mkdirs p) (foldl (a \ w \ (: d (a + "/" + w) _ (mkdir d 448) d)) (0 < #p && p 0 = 47 ? "" ".")
-                        (filter (w \ 0 < #w) (cite 'kore 'usplit 47 p)))
  (mitty-serve nm as)
-  (: _ (mitty-mkdirs (mitty-dir 0)) path (mitty-sock nm)
+  (: _ (umkdirs (mitty-dir 0) 448) path (mitty-sock nm)
      _ (setenv "MITTY" path)
      _ (unlink path)                                         ; a dead one's: a live one was asked first
      l (listen ['unix path])
