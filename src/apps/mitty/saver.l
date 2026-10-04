@@ -29,19 +29,23 @@
             (h2 ^ h2 >> 16))
  (dice x y s k) (h32 ((x * 7919 + y * 104729 + s * 15485863) % 4294967296) % k)
 
- ; --- the canvas: r by c cells of three bytes, glyph foreground background ---
+ ; --- the canvas: r by c cells of seven bytes, a glyph and two pens of three. a pen below
+ ; 256 is the palette's; 256 on is 256 + a 24-bit colour as view-deep-pens gives it ---
  blank-fg 252
  sky 16
- (cv-new r c) (: n (r * c) z (cask (3 * n))
-                 _ (upto n (i \ (pin z (3 * i) 32, pin z (3 * i + 1) blank-fg, pin z (3 * i + 2) sky)))
-                 {'r r 'c c 'b (cask (3 * n)) 'z z})
- (cv-wipe cv) (pour (cv 'b) 0 (cv 'z) 0 (3 * cv 'r * cv 'c))
+ cw 7
+ (cv-new r c) (: n (r * c) z (cask (cw * n))
+                 _ (upto n (i \ cv-set z i 32 blank-fg sky))
+                 {'r r 'c c 'b (cask (cw * n)) 'z z})
+ (cv-wipe cv) (pour (cv 'b) 0 (cv 'z) 0 (cw * cv 'r * cv 'c))
  ; cell i of the canvas's bytes d
- (cv-set d i g f b) (: k (3 * i) (pin d k g, pin d (k + 1) f, pin d (k + 2) b))
+ (pen3 d k v) (pin d k (v >> 16 & 255), pin d (k + 1) (v >> 8 & 255), pin d (k + 2) (v & 255))
+ (pen-at d k) (peep d k 0 * 65536 + peep d (k + 1) 0 * 256 + peep d (k + 2) 0)
+ (cv-set d i g f b) (: k (cw * i) (pin d k g, pen3 d (k + 1) f, pen3 d (k + 4) b))
  (cv-put cv y x g f b) (? (0 <= y < cv 'r && 0 <= x < cv 'c) (cv-set (cv 'b) (y * cv 'c + x) g f b))
  ; ascii only: a byte is a cell
  (cv-text cv y x s f b) (upto #s (i \ cv-put cv y (x + i) (s i) f b))
- (saver-cell cv y x) (: k (3 * (y * cv 'c + x)) d (cv 'b) [(peep d k 0) (peep d (k + 1) 0) (peep d (k + 2) 0)])
+ (saver-cell cv y x) (: k (cw * (y * cv 'c + x)) d (cv 'b) [(peep d k 0) (pen-at d (k + 1)) (pen-at d (k + 4))])
 
  ; a glyph byte below 128 is itself; these are the ones above
  marks ["▀" "·" "✉"]
@@ -53,13 +57,20 @@
  ; the pens and the cursor's steps right, spelled once
  fgs (: t {} _ (upto 256 (i \ pin t i (esc + "[38;5;" + show i + "m"))) t)
  bgs (: t {} _ (upto 256 (i \ pin t i (esc + "[48;5;" + show i + "m"))) t)
+ ; ..and a 24-bit one, its six bits a channel widened
+ (rgb-sgr ground v) (: q (v - 256) (ch k) (show ((q >> k & 63) * 255 // 63))
+   (esc + "[" + ground + ";2;" + ch 12 + ";" + ch 6 + ";" + ch 0 + "m"))
+ (fg-sgr f) (f < 256 ? (fgs f) (rgb-sgr "38" f))
+ (bg-sgr b) (b < 256 ? (bgs b) (rgb-sgr "48" b))
  rights (: t {} _ (upto 256 (i \ pin t i (esc + "[" + show i + "C"))) t)
 
  ; the first cell from i on where the bytes a and p differ, n for none: numbers only, so
  ; the scan stays a tight loop
  (cv-next a p i n)
-  (? (i < n && peep a (3 * i) 0 = peep p (3 * i) 0 && peep a (3 * i + 1) 0 = peep p (3 * i + 1) 0
-      && peep a (3 * i + 2) 0 = peep p (3 * i + 2) 0)
+  (? (i < n && (: k (cw * i) (peep a k 0 = peep p k 0 && peep a (k + 1) 0 = peep p (k + 1) 0
+                                && peep a (k + 2) 0 = peep p (k + 2) 0 && peep a (k + 3) 0 = peep p (k + 3) 0
+                                && peep a (k + 4) 0 = peep p (k + 4) 0 && peep a (k + 5) 0 = peep p (k + 5) 0
+                                && peep a (k + 6) 0 = peep p (k + 6) 0)))
      (cv-next a p (i + 1) n)
      i)
  ; the cells of cv that differ from pv's, or all of them, as escapes; pv is then cv's copy.
@@ -70,17 +81,17 @@
      (go i0 at f0 b0)
       (: i (all ? i0 (cv-next a p i0 n))
          (? (i < n)
-            (: k (3 * i) g (peep a k 0) f (peep a (k + 1) 0) b (peep a (k + 2) 0)
+            (: k (cw * i) g (peep a k 0) f (pen-at a (k + 1)) b (pen-at a (k + 4))
                _ (? (at = i) 0
                     (0 <= at && at // c = i // c) (say j (rights (i - at)))
                     (say j (esc + "[" + show (i // c + 1) + ";" + show (i % c + 1) + "H")))
-               _ (? (f != f0) (say j (fgs f)) 0)
-               _ (? (b != b0) (say j (bgs b)) 0)
+               _ (? (f != f0) (say j (fg-sgr f)) 0)
+               _ (? (b != b0) (say j (bg-sgr b)) 0)
                _ (say j (glyphs g))
                (go (i + 1) (i % c = c - 1 ? -1 (i + 1)) f b))
             0))
      _ (go 0 -1 -1 -1)
-     _ (pour p 0 a 0 (3 * n))
+     _ (pour p 0 a 0 (cw * n))
      s (slurp j)
      (#s ? (esc + "[?2026h" + s + esc + "[0m" + esc + "[?2026l") ""))
 
@@ -203,6 +214,10 @@
  ; --- the lore scenes: a screen of pixels two to a cell, drawn as half blocks in the
  ; scene's own dithered pens; the scene ticked as many frames as the clock owes it, a few
  ; at most, so a slow frame skips the time rather than chasing it ---
+ ; a scene's colours as pens: 24-bit where COLORTERM says the terminal has them, as lore's
+ ; games ask, else the palette's cube dithered by bay
+ (scene-pens c bay) (? (elem (getenv "COLORTERM") ["truecolor" "24bit"]) ((cite 'view 'view-deep-pens) c + 256)
+                       ((cite 'view 'view-cube-pens) c bay))
  (halves cv px) (: r (cv 'r) c (cv 'c) d (cv 'b)
    (upto r (y \ upto c (x \ cv-set d (y * c + x) hb (int (peep px (2 * y * c + x) 16))
                                       (int (peep px ((2 * y + 1) * c + x) 16))))))
@@ -227,7 +242,7 @@
   (: st (s 'st)
      _ (owe s (t * 20 // 1000) (_ \ (pin st 't (st 't + 1), (cite 'court 'court-move) st)))
      _ (pin st 'th (s 'th + t * 0.00003))
-     (halves cv ((cite 'view 'view-cube-pens) ((cite 'court 'court-pens) st) (st 'bay))))
+     (halves cv (scene-pens ((cite 'court 'court-pens) st) (st 'bay))))
  ; ..grass99: the week from a thrown hour of it, a field its own; at the week's end another
  (meadow-new r c seed p sty)
   (: g ((cite 'grass 'grass-new) r c seed)
@@ -238,8 +253,7 @@
      _ (? ((cite 'grass 'week-hours) <= s 'g 'h)
           (: n (meadow-new (s 'r) (s 'c) (s 'seed + 1) () ()) (pins s 'g (n 'g) 'm (n 'm) 'seed (n 'seed))) 0)
      g (s 'g) m (s 'm)
-     (halves cv ((cite 'view 'view-cube-pens) ((cite 'meadow 'meadow-pens) m g ((cite 'meadow 'meadow-sky) g))
-                                               (m 'bay * 0.5 + 0.25))))
+     (halves cv (scene-pens ((cite 'meadow 'meadow-pens) m g ((cite 'meadow 'meadow-sky) g)) (m 'bay * 0.5 + 0.25))))
 
  ; --- the savers, by name ---
  savers {"pom" {'fps 8 'new pom-new 'draw pom-draw}

@@ -395,9 +395,9 @@ dist: dist-seed   # the binary, carrying its own source
 # .sbignore's to drop, which selfpack reads too. each nom is matched as a path prefix
 # at a segment boundary (src/tools/selfpack.l).
 dist_drop = bench
-# the codec of each src.tree section (selfpack -c): deflate where a run reads (index, moon,
-# bake, seat), the denser coders where only a full lay or a cold read pays their decode
-tree_codecs = lisp=bzip2,c=bzip2,rest=lzma2
+# the codec of each src.tree section (selfpack -c): deflate where every mooncc or tls run reads
+# (index, moon, seat), lzma2 where one read a bake or a full lay pays for is worth the bytes
+tree_codecs = bake=lzma2,lisp=lzma2,c=lzma2,rest=lzma2
 .PHONY: force_src
 force_src: ;
 # force_src: the artifact packs the tree as it is, so make cannot know the prerequisites;
