@@ -219,8 +219,8 @@
 
      ; --- the project's own instructions ---
      ; from / down to the working directory, each directory's AGENTS.md and then its CLAUDE.md:
-     ; the files other agents read, so the same words instruct them all. both, not either: a
-     ; CLAUDE.md that imports its AGENTS.md (@AGENTS.md) still holds words of its own
+     ; the files other agents read, so the same words instruct them all. both, not either:
+     ; a tree may keep words in either
      bee-cwd (: d (getenv "PWD") (? (string? d && 0 < #d) d "."))
      ; "" for the root, then "/home", "/home/gwen" .. the working directory
      bee-dirs (foldl (\ a p (a + [(a (#a - 1) + "/" + p)]))
@@ -674,7 +674,7 @@
         "## the source, and working on it"
         ("- `" + bee-me + " source DIR` lays the carried source at DIR/love-" + love-version + " (DIR defaults to .).")
         ("- `" + bee-me + " seed [DIR]` lays it and rebuilds it with the built-in tools, checking the result is this binary byte for byte.")
-        ("- to develop there: cd into the tree and read its CLAUDE.md, then build with love's own tools, as seed does: `LUSHFLAGS=-a CC=\"" + bee-me
+        ("- to develop there: cd into the tree and read its AGENTS.md, then build with love's own tools, as seed does: `LUSHFLAGS=-a CC=\"" + bee-me
          + " mooncc\" make -j dist` makes out/love, and `make test` is the fast gate. `" + bee-me
          + " src/apps/libra/libra.l FILE` checks a .l file's parens.")
         "- that build needs nothing from the host, PATH or not; two checks in make test spawn the host's sh and true by name, and fail where PATH has neither."])

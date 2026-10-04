@@ -72,8 +72,11 @@ printf '#!/bin/sh\nM4=%s BISON_PKGDATADIR=%s exec %s "$@"\n' \
   "$R/out/moonbison/m4-1.4.21/src/m4" "$R/out/moonbison/bison-3.8.2/data" "$by" > "$B/tools/bison"
 chmod +x "$B/tools/bison"
 gz="$love gzip"
-# and neither half sees the host's rust or pahole: their versions reach .config, so the image
-mk="LLVM=1 ARCH=arm64 RUSTC=false HOSTRUSTC=false BINDGEN=false PAHOLE=false"
+# and neither half sees the host's rust or pahole, nor its libc: their versions, and whether the
+# compiler can link a user program (CC_CAN_LINK), reach .config, so the image. an empty sysroot
+# makes that probe fail on every host; defconfig builds no user program for it to touch
+mkdir -p "$B/no-sysroot"
+mk="LLVM=1 ARCH=arm64 RUSTC=false HOSTRUSTC=false BINDGEN=false PAHOLE=false USERCFLAGS=--sysroot=$B/no-sysroot"
 
 mkdir -p "$O"
 # shellcheck disable=SC2086

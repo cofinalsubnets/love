@@ -83,7 +83,8 @@
                              (1 < n2 specs 0)))                             ; two longs on t32
           base (? (elem 'char specs) 'char (elem 'short specs) 'short
                   ll 'llong (elem 'long specs) 'long 'int)
-          (? !uns base
+          (? (base = 'char && !uns) (elem 'signed specs ? 'schar (pchar ps))   ; signed char, or plain: the target's own
+             !uns base
              (base = 'char) 'uchar (base = 'short) 'ushort
              (base = 'llong) 'ullong (base = 'long) 'ulong 'uint)))
    ; ignorable specifiers: storage/qualifier keywords + gcc attribute ids, skipped wherever
@@ -112,7 +113,7 @@
    ; every identifier in the TU, and the shortest name any of them answers to is 16 long
    (bib? s) (#s @ n (n < 16 ? () (s 2 = 98)))     ; `__b..`, 16+
    (libsig ps nm)
-    (: vp '(ptr void) cp '(ptr char) sz (szty ps)
+    (: vp '(ptr void) cp ['ptr (pchar ps)] sz (szty ps)
        (? (nm = "memset") [vp [vp 'int sz] ()]
           (nm = "memcmp") ['int [vp vp sz] ()]
           (nm = "strlen") [sz [cp] ()]
@@ -367,6 +368,10 @@
    ; -- the type floor rides src/apps/moon/floor.l (shapes, sizes, the typing door), read from
    ; gen too. ps carries the two things it takes as parameters: the word and the tag table --
    (pst32? ps) (elem (ps 'tgt) '(thumb2 thumb2sp thumb1))
+   ; char is three types (C11 6.2.5p15): 'schar and 'uchar, and plain char -- 'char where the ABI makes it
+   ; signed (x86-64, wasm's C conventions), 'cchar where unsigned (AAPCS64, AAPCS32, RISC-V). each
+   ; symbol's sign is its own, so nothing past here asks the target
+   (pchar ps) (elem (ps 'tgt) '(a64 rv64 thumb1 thumb2 thumb2sp) ? 'cchar 'char)
    (pw64 ps) !(pst32? ps)                          ; is long 8 bytes? the const folder's one question
    (psword ps) (pst32? ps ? 4 8)
    (szty ps) (pst32? ps ? 'uint 'ulong)          ; size_t: sizeof folds wear this coat
@@ -477,7 +482,7 @@
                                   (? (two? ft && <ft = 'fn) <>ft
                                      (two? ft && <ft = 'ptr && two? <>ft && <<>ft = 'fn) <><>ft
                                      ()))))
-             (k = 'str) ['arr 'char (#<>e + 1)]     ; a literal is its array (cpp pasted phase 6; the lexer decoded escapes) -- sizeof("ab") folds to 3, an array bound
+             (k = 'str) ['arr (pchar ps) (#<>e + 1)]     ; a literal is its array (cpp pasted phase 6; the lexer decoded escapes) -- sizeof("ab") folds to 3, an array bound
              ; a literal: sizeof('T') is sizeof(int) (musl's _IOW ioctl codes);
              ; a plain decimal past int32 is a long (suffixed forms arrive cast)
              (k = 'num) (-2147483648 <= <>e && <>e <= 2147483647 ? 'int 'long)
@@ -1499,7 +1504,7 @@
    ; its first, a char array one when that item is a string. an incomplete tag or a [0]
    ; bound takes nothing, which is how the caller's walk learns to stop.
    (uni? ps ty) (stru? ty && peep (ps 'utag) <>ty 0)
-   (chart? ty) (elem ty '(char uchar))
+   (chart? ty) (elem ty '(char schar cchar uchar))
    (fills ps ty items)
     (? (atom? items) items
        (arr? ty)
@@ -1612,8 +1617,8 @@
    ; -6 / 3u divides unsigned, and every result wraps to its type's width. w64: long is 8
    ; bytes. the answer is the value in its type: an unsigned one never negative.
    (cint? x) (charm? x || sun? x)
-   (ity? ty) (elem ty '(bool char uchar short ushort int uint long ulong llong ullong i128 u128))
-   (tbits w64 ty) (ty @ 'bool 1 ('char || 'uchar) 8 ('short || 'ushort) 16 ('int || 'uint) 32
+   (ity? ty) (elem ty '(bool char schar cchar uchar short ushort int uint long ulong llong ullong i128 u128))
+   (tbits w64 ty) (ty @ 'bool 1 ('char || 'schar || 'cchar || 'uchar) 8 ('short || 'ushort) 16 ('int || 'uint) 32
                         ('long || 'ulong) (w64 ? 64 32) ('i128 || 'u128) 128 64)
    ; v as a value of ty (C11 6.3.1.3): an unsigned type is v modulo its width, a signed one
    ; that residue re-signed, _Bool a compare with 0
