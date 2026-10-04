@@ -3,6 +3,9 @@
 //   (lzma2d s)               a raw LZMA2 chunk stream -> its bytes | () | 1 past XZ_MAX
 //   (lzma2len s)             the stream's length through its 0x00 end byte | ()
 //   (lzma2e s dict)          bytes -> a raw LZMA2 stream, dict the match window | ()
+//   (lzma2e-by s base)       s coded against base: the stream reaches into base as if it had
+//                            just been said, and carries only s | ()
+//   (lzma2d-by z base)       such a stream with its base -> s | ()
 //   (lzmad s props dict n)   a .lzma body (after its 13-byte head) -> its bytes | () | 1 past
 //                            XZ_MAX; n -1 unknown
 //   (crc64 s)                CRC-64/XZ as the 8 little-endian bytes a check field holds
@@ -230,11 +233,11 @@ static int64_t l2_walk(const uint8_t *s, uintptr_t n, uintptr_t *end) {
 
 // decode the chunks into out (cap its exact size). -> 0 ok, -1 corrupt. the reset rules:
 // a dict reset first, props before the first LZMA chunk and after a 0x01.
-static int l2_dec(const uint8_t *s, uint8_t *out, uintptr_t cap, struct lz_model *m) {
- struct lz_out o = { out, 0, cap, 0, 0, 0 };
+static int l2_dec(const uint8_t *s, uint8_t *out, uintptr_t cap, struct lz_model *m, uintptr_t pre) {
+ struct lz_out o = { out, pre, cap, 0, 0, 0 };        // pre bytes of out said already: a preset base
  struct lz_rd r;
  uintptr_t i = 0;
- int needdict = 1, needprops = 1;
+ int needdict = !pre, needprops = 1;
  for (;;) {
   unsigned c = s[i];
   if (!c) return o.n == cap ? 0 : -1;
@@ -359,6 +362,7 @@ static void xe_rep(struct lz_model *m, struct lz_rc *e, uintptr_t p, unsigned id
 // new position. 2- and 3-byte heads find the nearest short ones. entries are position + 1.
 #define XE_H4BITS 20
 #define XE_DEPTH 48
+#define XE_SKIPDEPTH 8                          // a position indexed with no matches asked
 #define XE_NICE 96
 #define XE_MAXM 64
 
@@ -370,6 +374,11 @@ static uint32_t xe_h4(const uint8_t *s) {
 
 static unsigned xe_mlen(const uint8_t *a, const uint8_t *b, unsigned lim) {
  unsigned k = 0;
+#if wideld
+ for (; k + 8 <= lim; k += 8) {                 // a word at a time: the first byte that differs
+  uint64_t x = ld64(a + k) ^ ld64(b + k);       // is the lowest set one, little-endian
+  if (x) return k + (unsigned) (__builtin_ctzll(x) >> 3); }
+#endif
  while (k < lim && a[k] == b[k]) k++;
  return k; }
 
@@ -396,7 +405,7 @@ static unsigned xe_bt(struct xe_mf *f, uintptr_t p, unsigned lim, uint32_t *ls, 
  uint32_t h4 = xe_h4(sp), c = f->h4[h4];
  f->h4[h4] = (uint32_t) p + 1;
  uint32_t *lo = f->son + 2 * (p & f->wmask), *hi = lo + 1;   // the new root's two sides
- unsigned llo = 0, lhi = 0, depth = XE_DEPTH, cut = lim < XE_NICE ? lim : XE_NICE;
+ unsigned llo = 0, lhi = 0, depth = ls ? XE_DEPTH : XE_SKIPDEPTH, cut = lim < XE_NICE ? lim : XE_NICE;
  for (;;) {
   uintptr_t q = c - 1;
   if (!c || p - q > reach || !depth--) { *lo = *hi = 0; break; }
@@ -578,13 +587,15 @@ struct xe_arena { struct lz_model m; lzp lit[0x300 << 3]; uint8_t cs[XE_CC + XE_
                   struct xe_px px; struct xe_node nd[XE_OPTS + LZ_MAXLEN + 2]; struct xe_op ops[XE_OPTS + 1];
                   uint32_t ls[XE_MAXM], ds[XE_MAXM]; };
 
+// the bytes below p0 are a base the decoder holds already: indexed, never coded
 static int64_t xe_go(const uint8_t *s, uintptr_t n, uint32_t dict, uint8_t *out, uintptr_t cap,
-                     struct xe_arena *a, uint32_t *son, uint32_t wmask) {
+                     struct xe_arena *a, uint32_t *son, uint32_t wmask, uintptr_t p0) {
  struct lz_model *m = &a->m;
  struct xe_mf f = { s, n, a->h2, a->h3, a->h4, son, wmask, dict, 0 };
- uintptr_t p = 0, o = 0;
- int first = 1, needprops = 1, needstate = 1;
+ uintptr_t p = p0, o = 0;
+ int first = !p0, needprops = 1, needstate = 1;
  memset(a->h2, 0, sizeof a->h2), memset(a->h3, 0, sizeof a->h3), memset(a->h4, 0, sizeof a->h4);
+ xe_ins(&f, p0);
  m->lit = a->lit; m->lc = 3; m->lp = 0; m->pb = 2;
  xp_init(&a->px);
  while (p < n) {
@@ -708,7 +719,7 @@ intptr_t lzma2_into(unsigned char const *s, uintptr_t n, unsigned char *out, uin
  uintptr_t end;
  if (l2_walk(s, n, &end) != (int64_t) cap) return -1;
  struct lz_model *m = lz_new(4);
- int ok = m && !l2_dec(s, out, cap, m);
+ int ok = m && !l2_dec(s, out, cap, m, 0);
  if (m) alloc(m, 0);
  return ok ? (intptr_t) cap : -1; }
 
@@ -720,7 +731,7 @@ love_noinline static struct g *host_lzma2d(struct g *g) {
  if ((uint64_t) want > XZ_MAX) { g->sp[0] = putcharm(1); return g; }
  if (!ok(g = str0(g, (uintptr_t) want))) return g;   // pushes: out over s
  struct lz_model *m = lz_new(4);
- int ok = m && !l2_dec((const uint8_t*) txt(g->sp[1]), (uint8_t*) txt(g->sp[0]), (uintptr_t) want, m);
+ int ok = m && !l2_dec((const uint8_t*) txt(g->sp[1]), (uint8_t*) txt(g->sp[0]), (uintptr_t) want, m, 0);
  if (m) alloc(m, 0);
  g->sp[1] = ok ? g->sp[0] : ZeroPoint;
  return g->sp++, g; }
@@ -737,7 +748,7 @@ love_noinline static struct g *host_lzma2e(struct g *g) {
  uint32_t *son = alloc(NULL, 2 * w * sizeof *son);
  uint8_t *out = alloc(NULL, cap);
  int64_t got = a && son && out
-               ? xe_go((const uint8_t*) txt(sw), n, dict, out, cap, a, son, wmask) : -1;
+               ? xe_go((const uint8_t*) txt(sw), n, dict, out, cap, a, son, wmask, 0) : -1;
  if (a) alloc(a, 0);
  if (son) alloc(son, 0);
  if (got >= 0 && ok(g = str0(g, (uintptr_t) got))) {  // pushes: out over the two
@@ -745,6 +756,47 @@ love_noinline static struct g *host_lzma2e(struct g *g) {
   g->sp[2] = g->sp[0], g->sp += 2; }
  else if (ok(g)) g->sp[1] = ZeroPoint, g->sp += 1;
  if (out) alloc(out, 0);
+ return g; }
+
+// base then s in one buffer, coded from where s starts; the whole of it in reach
+love_noinline static struct g *host_lzma2e_by(struct g *g) {
+ word sw = g->sp[0], bw = g->sp[1];
+ if (!strp(sw) || !strp(bw) || len(sw) + len(bw) > XZ_MAX) { g->sp[1] = ZeroPoint, g->sp += 1; return g; }
+ uintptr_t nb = len(bw), n = nb + len(sw), w = n ? n : 1, cap = xe_cap(len(sw));
+ uint8_t *in = alloc(NULL, w);
+ struct xe_arena *a = alloc(NULL, sizeof *a);
+ uint32_t *son = alloc(NULL, 2 * w * sizeof *son);
+ uint8_t *out = alloc(NULL, cap);
+ int64_t got = -1;
+ if (in && a && son && out) {
+  memcpy(in, txt(bw), nb), memcpy(in + nb, txt(sw), len(sw));
+  got = xe_go(in, n, (uint32_t) (n < 4096 ? 4096 : n), out, cap, a, son, ~(uint32_t) 0, nb); }
+ if (in) alloc(in, 0);
+ if (a) alloc(a, 0);
+ if (son) alloc(son, 0);
+ if (got >= 0 && ok(g = str0(g, (uintptr_t) got))) {  // pushes: out over the two
+  memcpy(txt(g->sp[0]), out, (size_t) got);
+  g->sp[2] = g->sp[0], g->sp += 2; }
+ else if (ok(g)) g->sp[1] = ZeroPoint, g->sp += 1;
+ if (out) alloc(out, 0);
+ return g; }
+
+// the base laid first in the output, the stream decoded after it, the base cut off
+love_noinline static struct g *host_lzma2d_by(struct g *g) {
+ word zw = g->sp[0], bw = g->sp[1];
+ uintptr_t end, nb = strp(bw) ? len(bw) : 0;
+ int64_t want = strp(zw) && strp(bw) ? l2_walk((const uint8_t*) txt(zw), len(zw), &end) : -1;
+ if (want < 0 || (uint64_t) want + nb > XZ_MAX) { g->sp[1] = ZeroPoint, g->sp += 1; return g; }
+ uint8_t *buf = alloc(NULL, nb + (uintptr_t) want + 1);
+ struct lz_model *m = lz_new(4);
+ int good = buf && m;
+ if (good) memcpy(buf, txt(bw), nb), good = !l2_dec((const uint8_t*) txt(zw), buf, nb + (uintptr_t) want, m, nb);
+ if (m) alloc(m, 0);
+ if (good && ok(g = str0(g, (uintptr_t) want))) {
+  memcpy(txt(g->sp[0]), buf + nb, (size_t) want);
+  g->sp[2] = g->sp[0], g->sp += 2; }
+ else if (ok(g)) g->sp[1] = ZeroPoint, g->sp += 1;
+ if (buf) alloc(buf, 0);
  return g; }
 
 love_noinline static struct g *host_lzmad(struct g *g) {
@@ -838,6 +890,8 @@ static LvmWrap(lvm_lzma2_chunk, host_lzma2_chunk)
 static LvmWrap(lvm_lzma2len, host_lzma2len)
 static LvmWrap(lvm_lzma2d, host_lzma2d)
 static LvmWrap(lvm_lzma2e, host_lzma2e)
+static LvmWrap(lvm_lzma2e_by, host_lzma2e_by)
+static LvmWrap(lvm_lzma2d_by, host_lzma2d_by)
 static LvmWrap(lvm_lzmad, host_lzmad)
 static LvmWrap(lvm_crc64, host_crc64)
 
@@ -845,6 +899,8 @@ static union u const
  nif_lzma2len[] = {{lvm_lzma2len}, {lvm_ret0}},
  nif_lzma2d[]   = {{lvm_lzma2d}, {lvm_ret0}},
  nif_lzma2e[]   = {{lvm_cur}, {.x = putcharm(2)}, {lvm_lzma2e}, {lvm_ret0}},
+ nif_lzma2e_by[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_lzma2e_by}, {lvm_ret0}},
+ nif_lzma2d_by[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_lzma2d_by}, {lvm_ret0}},
  nif_lzmad[]    = {{lvm_cur}, {.x = putcharm(4)}, {lvm_lzmad}, {lvm_ret0}},
  nif_crc64[]    = {{lvm_crc64}, {lvm_ret0}},
  nif_crc64_on[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_crc64_on}, {lvm_ret0}},
@@ -853,6 +909,8 @@ static union u const
 LvNif("lzma2len", nif_lzma2len, NULL);
 LvNif("lzma2d", nif_lzma2d, NULL);
 LvNif("lzma2e", nif_lzma2e, NULL);
+LvNif("lzma2e-by", nif_lzma2e_by, NULL);
+LvNif("lzma2d-by", nif_lzma2d_by, NULL);
 LvNif("lzmad", nif_lzmad, NULL);
 LvNif("crc64", nif_crc64, NULL);
 LvNif("crc64-on", nif_crc64_on, NULL);
