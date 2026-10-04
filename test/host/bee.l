@@ -468,7 +468,7 @@
    no (cr-run cr-r2 "" "--resume nobody")
    _ (test
       (0 = <m) (0 = <ls) (cr-in (ls 1) "back")
-      (0 = <c) (cr-in (c 1) "BEE_NAME='back'") (cr-in (c 1) "--resume 'sid-42' 'go on'")
+      (0 = <c) (cr-in (c 1) "BEE_NAME=back") (cr-in (c 1) "--resume sid-42 'go on'")
       (cr-in (c 1) "--dangerously-load-development-channels server:bee") (cr-in (c 1) "--mcp-config ")
       (1 = <no) (cr-in (no 1) "no session to resume named nobody"))
    0)
@@ -943,6 +943,43 @@
            (string? qt) (cr-in qt " ant@far b1 ") (cr-in qt "from far"))
    0)
 
+; --- a signed queue: on a box with a card, an sb queue's every write is an entry by its writer's
+; own seal. a call from another box comes back a proposal, which the caller signs and commits; a
+; session on the hub's box signs its own; a plain write is refused once the queue is signed
+(: nb (cr-dir "lnear" "") fb (cr-dir "lfar" "") hub (nb + "/hub")
+   _ (cr-run nb "" "--keygen root") _ (cr-run nb "" "--keygen box lnear")
+   tk (: r (cr-run nb "" "--ticket") (snip (r 1) 0 129))
+   _ (cr-put fb "req" ((cr-run fb "" ("--enrol " + tk + " lfar")) 1))
+   _ (cr-put fb "card" ((cr-run nb "" ("--admit < '" + fb + "/req'")) 1))
+   _ (cr-run fb "" ("--enrolled < '" + fb + "/card'"))
+   _ (mkdir hub 493) _ (cr-put hub "f" "f\n")
+   (sb as) (hark ([cr-love "sb" "-C" hub] + as))
+   _ (sb ["record" "one"])
+   _ (cr-put (nb + "/.love/etc") "bee.l" ("(hub " + hub + ")\n(ledger-dir " + nb + ")\n(beat 0)\n"))
+   _ (cr-put (fb + "/.love/etc") "bee.l" ("(relay sh " + fb + "/ssh)\n(beat 0)\n"))
+   _ (cr-put fb "ssh" ("for v; do :; done; exec env HOME='" + nb + "' '" + cr-love + "' '" + cr-app + "' \"$v\"\n"))
+   (msgs ls) (foldl (\ a m (a + json-show m + "\n")) "" ls)
+   (call id nm args) {"jsonrpc" "2.0" "id" id "method" "tools/call" "params" {"name" nm "arguments" args}}
+   _ (cr-put fb "row" (msgs [(call 1 "queue_row" {"queue" "queue/main@lnear" "state" "waiting" "branch" "b1"})]))
+   r1 (cr-run fb "BEE_NAME=ant" ("--mcp < '" + fb + "/row'"))
+   (head _) (: p (hark ["sh" "-c" ("'" + cr-love + "' sb -C '" + hub + "' ledger queue/main > '" + nb + "/head'")]) (cr-get (nb + "/head")))
+   (text _) (: p (hark ["sh" "-c" ("'" + cr-love + "' sb -C '" + hub + "' ledger queue/main --text > '" + nb + "/text'")]) (cr-get (nb + "/text")))
+   e1 (head 0) t1 (text 0)
+   _ (cr-put nb "join" (msgs [(call 1 "queue_row" {"queue" "queue/main" "state" "waiting" "branch" "b2"})]))
+   r2 (cr-run nb "BEE_NAME=bob" ("--mcp < '" + nb + "/join'"))
+   e2 (head 0) t2 (text 0)
+   ; a plain write over the signed head
+   id (: p (hark ["sh" "-c" ("'" + cr-love + "' sb -C '" + hub + "' ledger queue/main --id > '" + nb + "/id'")]) (cr-get (nb + "/id")))
+   _ (cr-put nb "plain" "leader bob\n")
+   pl (hark ["sh" "-c" ("'" + cr-love + "' sb -C '" + hub + "' ledger queue/main --was " + snip id 0 64 + " '" + nb + "/plain' 2>/dev/null")])
+   _ (test (0 = <r1) (cr-in (r1 1) "row now:") (cr-in (r1 1) "ant@lfar b1")
+           (string? e1) (starts? e1 "(entry ") (cr-in e1 "(by \"ant@lfar\")") (cr-in e1 "(seq \"0\")")
+           (cr-in t1 "1 ant@lfar b1 ")
+           (0 = <r2) (cr-in (r2 1) "row now:")
+           (cr-in e2 "(by \"bob@lnear\")") (cr-in e2 "(seq \"1\")") (cr-in t2 "2 bob b2 ")
+           (0 != <pl))
+   0)
+
 ; --- revocation: the root's box revokes a box by name and carries the list to the others; a box
 ; takes only a newer list its root signed, and a sealed message from the revoked box is refused
 (: st (cr-dir "rstem" "") b1 (cr-dir "rb1" "") b2 (cr-dir "rb2" "")
@@ -972,6 +1009,70 @@
            (0 = <rv) (cr-in (rv 1) "serial 1") (cr-in (rv 1) "two: taken")
            (1 = <again) (cr-in (again 1) "not newer")
            (cr-in (after 1) "seal does not check") !(cr-in (after 1) "sent to peer@two"))
+   0)
+
+; --- across boxes, live: wnear keeps refs/queue/main and wfar's ant owns a row there. a write on
+; wnear tells ant@wfar what it moves, as queue-watch sealed at wnear; a shell's mail crosses both
+; ways sealed by its box; a beat makes a session read as live on the far box, an old one is
+; refused, and a stale one reads as gone, as does a leader known only by it
+(: nb (cr-dir "wnear" "") fb (cr-dir "wfar" "")
+   _ (cr-run nb "" "--keygen root") _ (cr-run nb "" "--keygen box wnear")
+   tk (: r (cr-run nb "" "--ticket") (snip (r 1) 0 129))
+   _ (cr-put fb "req" ((cr-run fb "" ("--enrol " + tk + " wfar")) 1))
+   _ (cr-put fb "card" ((cr-run nb "" ("--admit < '" + fb + "/req'")) 1))
+   _ (cr-run fb "" ("--enrolled < '" + fb + "/card'"))
+   learnt (cr-get (nb + "/.love/etc/bee/boxes"))                   ; the admission keeps the route
+   tk2 (: r (cr-run nb "" "--ticket") (snip (r 1) 0 129))
+   _ (cr-put fb "req" ((cr-run fb "" ("--enrol " + tk2 + " wfar wfar.lan")) 1))
+   _ (cr-put fb "card" ((cr-run nb "" ("--admit < '" + fb + "/req'")) 1))
+   _ (cr-run fb "" ("--enrolled < '" + fb + "/card'"))
+   again (cr-get (nb + "/.love/etc/bee/boxes"))                    ; enrolled again: the new way, alone
+   _ (hark ["git" "-C" nb "init" "-q"])
+   _ (cr-put (nb + "/.love/etc") "bee.l" ("(ledger-dir " + nb + ")\n(relay sh " + nb + "/ssh)\n(beat 10)\n"))
+   _ (cr-put (fb + "/.love/etc") "bee.l" ("(relay sh " + fb + "/ssh)\n(beat 10)\n"))
+   _ (cr-put (fb + "/.love/etc/bee") "boxes" "wnear wnear\n")
+   ; the stand-in ssh: HOST [env HOME=..] LOVE bee VERB, the verb its last word, run as the far box
+   _ (cr-put nb "ssh" ("for v; do :; done; exec env HOME='" + fb + "' '" + cr-love + "' '" + cr-app + "' \"$v\"\n"))
+   _ (cr-put fb "ssh" ("for v; do :; done; exec env HOME='" + nb + "' '" + cr-love + "' '" + cr-app + "' \"$v\"\n"))
+   (msgs ls) (foldl (\ a m (a + json-show m + "\n")) "" ls)
+   (call id nm args) {"jsonrpc" "2.0" "id" id "method" "tools/call" "params" {"name" nm "arguments" args}}
+   (cell b nm) (: hv (b + "/.love/run/hive") pc (hv + "/" + nm)
+                  _ (map (\ p (mkdir p 448)) [(b + "/.love/run") hv pc (pc + "/inbox") (pc + "/read")])
+                  (cr-put pc "card" ("pid " + show (getpid 0) + "\ncwd /x\nstate idle\nbranch w1\n")))
+   (inbox b nm) (: d (b + "/.love/run/hive/" + nm + "/inbox") fs (readdir d)
+                   (map (\ f (cr-get (d + "/" + f))) (? (two? fs) (sort fs) ())))
+   _ (cr-put fb "row" (msgs [(call 1 "queue_row" {"queue" "refs/queue/main@wnear" "state" "waiting" "branch" "b1"})]))
+   r1 (cr-run fb "BEE_NAME=ant" ("--mcp < '" + fb + "/row'"))
+   _ (cell fb "ant")
+   _ (cr-put nb "join" (msgs [(call 1 "queue_row" {"queue" "refs/queue/main" "state" "waiting" "branch" "b2"})]))
+   r2 (cr-run nb "BEE_NAME=bob" ("--mcp < '" + nb + "/join'"))
+   n1 (inbox fb "ant")
+   _ (cr-put fb "take" (msgs [(call 2 "inbox" {})]))
+   t1 (cr-run fb "BEE_AS=ant" ("--mcp < '" + fb + "/take'"))
+   ; a shell's mail, both ways
+   _ (cell nb "zed")
+   s1 (cr-run nb "BEE_NAME=" "--send ant@wfar from a shell on wnear")
+   s2 (cr-run fb "BEE_NAME=" "--send zed@wnear from a shell on wfar")
+   n2 (inbox fb "ant") n3 (inbox nb "zed")
+   ; beats: wnear's zed reads as live on wfar, until the beat is old
+   bt (cr-run nb "" "--beats")
+   l1 (cr-run fb "" "--list")
+   kept (cr-get (fb + "/.love/run/hive/.boxes/wnear"))
+   old (: f (fb + "/.love/run/hive/.boxes/wnear")
+          _ (cr-put (fb + "/.love/run/hive/.boxes") "wnear"
+                    (foldl (\ a l (a + (starts? l "at " ? "at 1000" l) + "\n")) "" (lines (cr-get f))))
+          (cr-run fb "" "--list"))
+   _ (test (0 = <r1) (cr-in (r1 1) "ant@wfar") (cr-in learnt "wfar wfar ") (cr-in learnt (" " + fb + "\n"))
+           (cr-in again "wfar wfar.lan ") !(cr-in again "wfar wfar ")
+           (0 = <r2) (cr-in (r2 1) "row now:")
+           (1 = #n1) (cr-in <n1 "from queue-watch\n") (cr-in <n1 "refs/queue/main@wnear changed:")
+           (cr-in <n1 "row 2 joined") (cr-in <n1 "\nsig ")
+           (cr-in (t1 1) "sealed=\\\"queue-watch@wnear\\\"")
+           (0 = <s1) (0 = <s2) (1 = #n2) (cr-in <n2 "from a shell on wnear") (cr-in <n2 "from cli-") (cr-in <n2 "\nsig ")
+           (1 = #n3) (cr-in <n3 "from a shell on wfar")
+           (0 = <bt) (cr-in (bt 1) "wfar: taken")
+           (cr-in (l1 1) "zed@wnear") (cr-in (l1 1) "(by beat)") (cr-in kept "session zed idle")
+           !(cr-in (old 1) "zed@wnear"))
    0)
 
 ; --- the hud: --hud prints it once. a fixture queue with a fold: the fold sits under the row it
@@ -1057,6 +1158,59 @@
    _ (test (cr-in (r 1) "from=\\\"tess\\\" kind=\\\"user\\\"")
            (cr-in (r 1) "from=\\\"mallory\\\">") !(cr-in (r 1) "from=\\\"mallory\\\" kind")
            (cr-in (r 1) "tess is a user's name"))
+   0)
+
+
+; --- a worker nest: --nest DIR makes DIR from the hub SB_HUB names -- its store deposited, its
+; head taken, out/ seeded from its build -- and refuses a DIR that is there or a hub that is not ---
+(: nn-hub (cr-root + "/nhub") nn-wk (cr-root + "/nwork")
+   (nn-sb d as) (hark ([cr-love "sb" "-C" d] + as))
+   (nn-run env args) (hark ["sh" "-c" ("cd '" + cr-root + "' && exec env " + env + " '" + cr-love + "' '" + cr-app + "' " + args + " 2>&1")])
+   _ (mkdir nn-hub 493) _ (mkdir (nn-hub + "/out") 493)
+   _ (cr-put nn-hub "f" "the hub's\n") _ (cr-put (nn-hub + "/out") "built" "x\n")
+   _ (nn-sb nn-hub ["record" "one"])
+   _ (cr-put nn-hub "g" "the hub's too\n") _ (nn-sb nn-hub ["record" "two"])
+   nn-hp (snip >(nn-sb nn-hub ["psid"]) 0 64)
+   nn-ok (nn-run ("SB_HUB='" + nn-hub + "'") ("--nest '" + nn-wk + "'"))
+   nn-wp (snip >(nn-sb nn-wk ["psid"]) 0 64)
+   nn-again (nn-run ("SB_HUB='" + nn-hub + "'") ("--nest '" + nn-wk + "'"))
+   nn-plain (nn-run ("SB_HUB='" + nn-hub + "'") ("--nest '" + nn-hub + "/out'"))
+   ; the nest's verbs: sb laid (no host has it), sh not (every host has it); the shim runs
+   ; love's sb, here the test's love put first on PATH as `love`
+   _ (mkdir (cr-root + "/nlove") 493) _ (hark ["ln" "-s" cr-love (cr-root + "/nlove/love")])
+   nn-shp (hark ["env" ("PATH=" + cr-root + "/nlove:/usr/bin:/bin") (nn-wk + "/.sb/bin/sb") "-C" nn-wk "psid"])
+   nn-nohub (nn-run "SB_HUB=" ("--nest '" + cr-root + "/nother'"))
+   _ (test
+      (<nn-ok = 0) (cr-in >nn-ok ("a worker nest at " + nn-wk + " on the hub's head " + nn-hp))
+      (nn-wp = nn-hp) (cr-get (nn-wk + "/f") = "the hub's\n") (cr-get (nn-wk + "/g") = "the hub's too\n")
+      (cr-get (nn-wk + "/out/built") = "x\n")
+      (cr-in >nn-ok "love verbs in .sb/bin")
+      (<nn-again = 0) (cr-in >nn-again "is a nest already: its verbs laid again")
+      (<nn-plain = 1) (cr-in >nn-plain "is there already")
+      (two? (stat (nn-wk + "/.sb/bin/sb"))) (two? (stat (nn-wk + "/.sb/bin/cook")))
+      !(two? (stat (nn-wk + "/.sb/bin/sh"))) !(two? (stat (nn-wk + "/.sb/bin/love")))
+      (snip >nn-shp 0 64 = nn-hp)
+      (<nn-nohub = 2) (cr-in >nn-nohub "no hub: SB_HUB"))
+   0)
+
+; --- the door: the line that holds a key to it, its hello, the hub's sb serve as @hub, and a
+; refusal; --node on an empty home names the first step ---
+(: dr-home (cr-dir "door" ("(hub " + cr-root + "/nhub)\n"))
+   dr-hp (snip >(hark [cr-love "sb" "-C" (cr-root + "/nhub") "psid"]) 0 64)
+   dr-line (cr-run dr-home "" "--door ssh-ed25519 AAAAk me@x")
+   dr-hi (cr-run dr-home "SSH_ORIGINAL_COMMAND='love bee --door'" "--door")
+   dr-no (cr-run dr-home "SSH_ORIGINAL_COMMAND='cat /etc/passwd'" "--door")
+   dr-sb (hark ["sh" "-c" ("printf '5\\nhello' | env HOME='" + dr-home + "' SSH_ORIGINAL_COMMAND='love sb serve @hub' '"
+                           + cr-love + "' '" + cr-app + "' --door")])
+   nd-home (cr-dir "node" "")
+   nd (cr-run nd-home "" "--node")
+   _ (test
+      (<dr-line = 0) (cr-in (dr-line 1) ("command=\"env HOME=" + dr-home + " "))
+      (cr-in (dr-line 1) " bee --door\",restrict ssh-ed25519 AAAAk me@x")
+      (<dr-hi = 0) (cr-in (dr-hi 1) ("door: box (no card), hub " + dr-hp))
+      (<dr-no = 1) (cr-in (dr-no 1) "the door here takes")
+      (<dr-sb = 0) (cr-in >dr-sb "((\"")
+      (<nd = 1) (cr-in (nd 1) "next  love, nested in ~/.love/bin"))
    0)
 
 (hark ["rm" "-rf" cr-root])

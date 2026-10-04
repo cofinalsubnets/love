@@ -8,8 +8,7 @@
    _ (#argv = 4 || (puts "Usage: extract-cert <source> <dest>\n", quit 2))
    src (argv 2)
    dst (argv 3)
-   _ (borrow 'tls)
-   b64 (cite 'tls 'b64-dec)
+   (b64 t i e) (cite 'bytes 'b64d (snip t i e))
    ; a der's first element, whole: its tag, its length octets, its contents
    (tlv d) (: l (d 1) n (l & 127)
               (? (#d < 2 || d 0 != 48) ()

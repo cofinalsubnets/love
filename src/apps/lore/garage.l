@@ -3,12 +3,12 @@
 ; where the bed runs is bare. rats wander, never hostile: bumping one is rat-interaction.
 ; the way on is west along the bed, to the shaft (src/apps/lore/shaft.l).
 ;
-; a roguelike floor on rove, laid rather than delved; the painter is rove's, the keys the
-; tower's. garage-new/turn/frame are pure, gated by test/host/garage.l; garage-walk takes
+; a roguelike floor on rove, laid rather than delved; the painter and the keys are rove's,
+; a tap included. garage-new/turn/frame are pure, gated by test/host/garage.l; garage-walk takes
 ; a raised stage, so the dusk hands over on the same screen. the music is a harp loop,
 ; garage-tune, pulled a cycle at a time.
 ;
-; run: love lore garage    h j k l or the arrows walk, y u b n slant; q or esc leaves
+; run: love lore garage    h j k l or the arrows walk, y u b n slant, a tap steers; q or esc leaves
 (module (garage garage-run garage-walk garage-main garage-new garage-turn garage-frame
          garage-bar garage-lay garage-face garage-stride garage-stir rat-interaction
          car-cells bay-w bay-d bed-h rat-glyph garage-tune garage-song-new garage-song-feed
@@ -295,7 +295,7 @@
    (idle _) (? !sng (rest 30) (feed ()) 0 (rest 5))
    (turn k) (k = 27 && g 'sign ? (pin g 'sign ())
                (k @ (113 || 27 || -7) (pin g 'over 'fled)
-                (garage-turn g (steer k))))
+                (garage-turn g (rove-key g k))))
    (loop last t0) (g 'over ? ()
                      (: _ (say out (garage-frame g), flush out)
                         k (key-wait t0 last (g 'sign ? sign-gap repeat-gap) idle)
@@ -309,14 +309,12 @@
    (g 'over = 'west && next ? (next ()),
     g))
  ; ..and the verb around it: the screen raised here and put back here
- (garage-run _) (: _ (raw 1)
-   _ (say out (esc + "[?1049h" + esc + "[?25l"))
+ (garage-run _) (: _ (ttytake rove-modes)
    g (garage-walk ())
-   ((say out (esc + "[0m" + esc + "[?25h" + esc + "[?1049l"), flush out),
-    drain-keys (),
-    raw 0,
+   (drain-keys (),
+    ttygive rove-modes,
     0))
- garage-usage "usage: love lore garage   (h j k l or the arrows walk, y u b n slant; q or esc leaves)"
+ garage-usage "usage: love lore garage   (h j k l or the arrows walk, y u b n slant, a tap steers; q or esc leaves)"
  (garage-main as) (as @ () (garage-run ())
                         (say err ("garage: " + garage-usage + "\n"), flush err, 2))
  _ ((cite 'lore 'lore-enlist) 'garage (udoor 'garage garage-main garage-usage 1 1)))

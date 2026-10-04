@@ -819,10 +819,20 @@
    _ (pin sh-inread () 1)
    b (sh-forkok? ["cat" "f"] ())
    c (sh-forkok? ["cat"] [(0 . 5)])
-   ; ..and a foreign bare word spawns as (path . word), the path PATH gave it here
-   w (sh-whichp "git")
-   v (sh-spawnv ["git" "--version"])
-   d (? (two? w) (<v = (<>w . "git") && >v = ["--version"]) 1)
+   ; ..and a foreign bare word spawns as (path . word), the path PATH gave it here. the foreign
+   ; program is laid here, on a PATH of its own, with no #! line: every program we ship, and
+   ; every #!/bin/sh script, runs in-image
+   fd (cwd 0 + "/out/.sh-foreign") fp (fd + "/sh-foreign")
+   _ (mkdir fd 493)
+   _ (: q (open fp "w") _ (say q "exit 0\n") (close q))
+   _ (chmod fp 493)
+   p0 (getenv "PATH")
+   _ (setenv "PATH" (fd + ":" + p0))
+   w (sh-whichp "sh-foreign")
+   v (sh-spawnv ["sh-foreign" "--version"])
+   d (two? w && <v = (<>w . "sh-foreign") && >v = ["--version"])
+   _ (setenv "PATH" p0)
+   _ (unlink fp) _ (rmdir fd)
    _ (pin sh-tty () tty0)
    _ (pin sh-inread () in0)
    (test (1 = a) (0 = b) (1 = c) (1 = d)))

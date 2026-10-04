@@ -3,12 +3,12 @@
 ; talk ends the pane shatters, the plain goes to desert, the river runs dry, and the way
 ; off the map is west along the bed into dusk (src/apps/lore/dusk.l).
 ;
-; a roguelike floor on rove, laid rather than delved; the painter is rove's, the keys the
-; tower's. the talk is a tree of nodes and choices, data in chat-book.
+; a roguelike floor on rove, laid rather than delved; the painter and the keys are rove's,
+; a tap included. the talk is a tree of nodes and choices, data in chat-book.
 ; apartment-new/turn/frame are pure, gated by test/host/apartment.l; apartment-walk takes
 ; a raised stage, so wade hands over on the same screen.
 ;
-; run: love lore apartment    h j k l or the arrows walk, y u b n slant; q or esc leaves
+; run: love lore apartment    h j k l or the arrows walk, y u b n slant, a tap steers; q or esc leaves
 (module (apartment apartment-run apartment-walk apartment-main apartment-new apartment-turn
          apartment-frame apartment-bar apartment-lay apartment-face apartment-stride
          apartment-stir chat chat-key chat-node chat-end chat-book blocks blocks-name
@@ -367,11 +367,11 @@
    ; not ended, and a bump opens it again
    (turn k) (k = 27 && g 'sign ? (pins g 'sign () 'talk ())
                (k @ (113 || 27 || -7) (pin g 'over 'fled)
-                (apartment-turn g (steer k))))
+                (apartment-turn g (rove-key g k))))
    ; a key, or none when the river is due another frame
    (wait t0 last gap due) (? (cue? 0)
                              (edkey in @ k
-                                (k = last && (clock 0 - t0) < gap ? (wait t0 last gap due) k))
+                                (k = 0 || k = last && (clock 0 - t0) < gap ? (wait t0 last gap due) k))
                              (due <= clock 0) ()
                              (idle (), wait t0 last gap due))
    t00 (clock 0)
@@ -392,14 +392,12 @@
    (g 'over = 'west && next ? (next ()),
     g))
  ; ..and the verb around it: the screen raised here and put back here
- (apartment-run _) (: _ (raw 1)
-   _ (say out (esc + "[?1049h" + esc + "[?25l"))
+ (apartment-run _) (: _ (ttytake rove-modes)
    g (apartment-walk ())
-   ((say out (esc + "[0m" + esc + "[?25h" + esc + "[?1049l"), flush out),
-    drain-keys (),
-    raw 0,
+   (drain-keys (),
+    ttygive rove-modes,
     0))
- apartment-usage "usage: love lore apartment   (h j k l or the arrows walk, y u b n slant; q or esc leaves)"
+ apartment-usage "usage: love lore apartment   (h j k l or the arrows walk, y u b n slant, a tap steers; q or esc leaves)"
  (apartment-main as) (as @ () (apartment-run ())
                            (say err ("apartment: " + apartment-usage + "\n"), flush err, 2))
  _ ((cite 'lore 'lore-enlist) 'apartment (udoor 'apartment apartment-main apartment-usage 1 1)))

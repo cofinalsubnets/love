@@ -2,7 +2,7 @@
   "mcpServers": {
     "bee": {
       "command": "sh",
-      "args": ["-c", "r=$(git rev-parse --show-toplevel 2>/dev/null || pwd); if [ -x \"$r/out/love\" ]; then exec \"$r/out/love\" bee --mcp; fi; exec love bee --mcp"]
+      "args": ["-c", "r=$(pwd); while [ \"$r\" != / ] && [ ! -e \"$r/.sb\" ] && [ ! -e \"$r/.git\" ]; do r=$(dirname \"$r\"); done; if [ -x \"$r/out/love\" ]; then exec \"$r/out/love\" bee --mcp; fi; exec love bee --mcp"]
     }
   }
 }

@@ -2,8 +2,9 @@
 # root first, so these resolve from any cwd; output lands in $R/out/<frontend>/.
 R ?= .
 S = $(R)/src
-# dl/ is untracked, so a worktree has none and reads the main checkout's
-dl := $(firstword $(wildcard $(R)/dl) $(dir $(shell git rev-parse --git-common-dir 2>/dev/null))dl)
+# dl/ is untracked: LOVE_DL names it, else the nearest one at or above the tree, so a worktree
+# or a nest made inside a checkout reads the checkout's
+dl := $(firstword $(LOVE_DL) $(shell sh $(S)/tools/dlfind.sh $(R)) $(R)/dl)
 
 # the recipe tag column is `@echo 'MOON<TAB>'$@`, and the quote is load-bearing: a bare tab
 # only separates argv, which echo rejoins with a space. one line per target and nothing else,
@@ -67,14 +68,10 @@ uname_rv64 = riscv64
 # what lets love0's stamp agree with a real one (see boot_cc).
 love_base := $(shell cat $R/VERSION 2>/dev/null || echo 0)
 
-# checkout or unpacked release? `git -C DIR` walks UP, so the test is for THIS tree's own .git
-# and never an ancestor's. one reader, the DEFAULT GOAL: a checkout wants the fast gate for its
-# edit loop, an unpacked release wants the product.
-in_git := $(wildcard $R/.git)
-
-# the BUILD STAMP orders two builds of one VERSION: the commit time of HEAD in seconds, or an
-# unpacked release's own STAMP, which selfpack writes into every archive and no tree tracks
-love_stamp := $(if $(wildcard $R/STAMP),$(shell cat $R/STAMP),$(if $(in_git),$(shell git -C $R log -1 --format=%ct 2>/dev/null || echo 0),0))
+# a working tree or an unpacked release? a nest (.sb) or a git checkout is worked in; this tree's
+# own, never an ancestor's. one reader, the DEFAULT GOAL: a working tree wants the fast gate for
+# its edit loop, an unpacked release wants the product.
+in_vcs := $(wildcard $R/.sb $R/.git)
 
 # $(CC) is the ambient compiler and the tree names no favourite: mooncc builds everything but
 # love0, which by definition cannot be built by the compiler it exists to bootstrap.
