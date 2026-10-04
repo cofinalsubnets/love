@@ -27,7 +27,7 @@
        (arr? ty) (<>>ty * tysz w stag <>ty)
        (stru? ty) <>(stag <>ty)
        (bitf? ty) (tysz w stag <>ty)       ; the unit's size (a bitfield rides its declared type)
-       (ty @ ('char || 'uchar || 'bool || 'void) 1   ; void is gcc's: void * steps by bytes
+       (ty @ ('char || 'schar || 'cchar || 'uchar || 'bool || 'void) 1   ; void is gcc's: void * steps by bytes
              ('short || 'ushort) 2
              ('int || 'uint || 'float) 4
              ('llong || 'ullong || 'double) 8  ; 8-byte on every target (t32's word is 4)
@@ -46,14 +46,14 @@
    ; long is 8 bytes -- on ilp32 a long cannot hold every uint, so long meets uint at ulong
    ; where LP64 answers long.
    (parith? ty) (bitf? ty ? 1
-                   (elem ty '(bool char uchar short ushort int uint long ulong
+                   (elem ty '(bool char schar cchar uchar short ushort int uint long ulong
                                  llong ullong i128 u128 float double)))
    (trank ty) (ty @ ('i128 || 'u128) 4 ('llong || 'ullong) 3 ('long || 'ulong) 2 1)
-   (tusg? ty) (elem ty '(uchar ushort uint ulong ullong u128))
+   (tusg? ty) (elem ty '(cchar uchar ushort uint ulong ullong u128))
    (tusg ty) (ty @ 'int 'uint 'long 'ulong 'llong 'ullong 'i128 'u128 ty)
    (tw w64 ty) (trank ty @ 1 4 2 (w64 ? 8 4) 3 8 16)
    (pprom ty) (? (bitf? ty) (pprom <>ty)              ; a bitfield promotes as its unit
-                 (elem ty '(bool char uchar short ushort)) 'int
+                 (elem ty '(bool char schar cchar uchar short ushort)) 'int
                  ty)
    (puac w64 ta tb)
     ; either operand decides, so this reads both and cannot be an @ over ta alone

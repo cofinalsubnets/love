@@ -128,9 +128,12 @@
          _ (hark ["chmod" "+x" (hd + "/bin/hk-make")])
          _ (seat 0)
          id (filter (n \ string? (getenv n)) ["KBUILD_BUILD_USER" "KBUILD_BUILD_HOST" "KBUILD_BUILD_VERSION" "KBUILD_BUILD_TIMESTAMP"])
-         ; no rust or pahole, whatever the host has: their versions land in .config, and so the image
+         ; no rust or pahole, and no libc to link a user program against, whatever the host has: their
+         ; versions and CC_CAN_LINK land in .config, and so the image
+         _ (hark ["mkdir" "-p" (hd + "/no-sysroot")])
          cl0 (foldl (a \ n \ pin a n (getenv n))
-                    (pins {} "ARCH" "arm64" "LLVM" "1" "RUSTC" "false" "HOSTRUSTC" "false" "BINDGEN" "false" "PAHOLE" "false") id)
+                    (pins {} "ARCH" "arm64" "LLVM" "1" "RUSTC" "false" "HOSTRUSTC" "false" "BINDGEN" "false" "PAHOLE" "false"
+                             "USERCFLAGS" ("--sysroot=" + hd + "/no-sysroot")) id)
          cl1 (pin cl0 "HOSTCC" (getenv "HEARTS_HOSTCC" @ h (string? h ? h (hd + "/bin/hk-hostcc"))))
          cl (foldl (a \ kv \ (getenv (kv 0) @ v (string? v ? (pin a (kv 1) v) a))) cl1
                    [["HEARTS_LEX" "LEX"] ["HEARTS_YACC" "YACC"] ["HEARTS_KGZIP" "KGZIP"]])
