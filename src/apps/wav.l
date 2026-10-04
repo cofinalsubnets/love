@@ -6,6 +6,8 @@
 ;   (wav-format name)   -> the format tablet aplay's -f names, case aside | ()
 ;   (wav-pcm f n c)     -> n frames of cask c in format f, as interleaved s16le of one or
 ;                          two channels: a cask
+;   wav-sniff wav-meta wav-pump   the decoder door (notes/plan/av.md); a wav's meta is its
+;                          own format
 ;   (aplay-main as)     -> the verb: `love aplay [-q] [-t wav|raw] [-f F] [-c N] [-r N]
 ;                          [-d SECS] [-s FRAMES] [FILE..]`
 ;
@@ -13,7 +15,7 @@
 ; 'kind (s u f mu a), 'big, and for a stream 'ch 'rate 'align. conversion is ffmpeg's:
 ; integers floor down to 16 bits, floats round half to even and saturate, the laws are g.711's.
 ; past two channels the first two are played. a stream is read a gulp at a time.
-(module (wav wav-head wav-format wav-pcm wav-desc aplay-main aplay-usage)
+(module (wav wav-head wav-format wav-pcm wav-desc wav-sniff wav-meta wav-pump aplay-main aplay-usage)
 (:
    peepv (cite 'guts 'peepv) pinv (cite 'guts 'pinv)
    open (cite 'posix 'open) close (cite 'posix 'close)
@@ -115,6 +117,25 @@
     (: o (min 2 (f 'ch)) out (cask (n * 2 * o))
        (n = 0 ? out
         (each ^o (k \ pinv out (2 * k) 2 (2 * o) (wav-chan f n c k)), out)))
+
+   ; --- the decoder door ------------------------------------------------------
+   (wav-sniff s) (? (#s < 12) (#s < 4 || "RIFF" = snip s 0 4 ? 'more 0)
+                    ("RIFF" = snip s 0 4 && "WAVE" = snip s 8 12) 1
+                    0)
+   (wav-meta s) (wav-head s @ 'raw "not a WAVE-file"
+                              m (tablet? m ? (pin m 'total (m 'len < 0 ? 0 (m 'len // m 'align))) m))
+   (wav-pump q h0 m emit)
+    (: align (m 'align)
+       (gulp _) (see q @ -1 () c (unsee q c, chug q))
+       (cut h left) (left < 0 || #h <= left ? h (snip h 0 left))
+       (go h left)
+        (: k (#h // align * align)
+           _ (0 < k ? (emit (snip h 0 k)) ())
+           r (snip h k #h)
+           (? (left = 0) 0
+              (gulp () @ g (? !(string? g) 0
+                              (: g2 (cut g left) (go (r + g2) (left < 0 ? left (left - #g2))))))))
+       (cut h0 (m 'len) @ h1 (go h1 (m 'len < 0 ? -1 (m 'len - #h1)))))
 
    ; --- the verb -------------------------------------------------------------
    aplay-usage "usage: aplay [-q] [-t wav|raw] [-f FORMAT] [-c N] [-r RATE] [-d SECS] [-s FRAMES] [FILE..]
