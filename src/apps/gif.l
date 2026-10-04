@@ -1,7 +1,8 @@
-; src/apps/gif.l -- gif encoding, an rgba image to a gif89a of one frame, and decoding.
+; src/apps/gif.l -- gif encoding, an rgba image or a run of them to a gif89a, and decoding.
 ; `(borrow 'gif)`, then:
 ;
 ;   (gif-encode w h rgba)   -> the gif's bytes
+;   (gif-anim w h fs)       -> a looping gif of fs, ((rgba ms) ..) as gif-frames answers them
 ;   (gif-decode s)          -> (w h rgba), the first frame | a string saying why not
 ;   (gif-frames s most)     -> (w h ((rgba ms) ..)), each frame as shown and how long,
 ;                              at most most of them | why not
@@ -11,7 +12,7 @@
 ; frame's box to see-through (as browsers do) and 3 restores what was under it.
 ; a pixel under half alpha is the transparent index. up to 256 colours stay exact; past
 ; that each channel is cut to 5 bits and a median cut over what is left picks the palette.
-(module (gif gif-encode gif-decode gif-frames gif-palette gif-key)
+(module (gif gif-encode gif-anim gif-decode gif-frames gif-palette gif-key)
 (:
    ; --- the palette ----------------------------------------------------------------------
    ; a pixel's colour as one number, -1 when it is transparent
@@ -103,7 +104,8 @@
                      go (i + k))))
        (go 0))
 
-   (gif-encode w h px)
+   ; one image's palette and codes: [s table trans colours mcs codes], s its table's bits
+   (gif-image w h px)
     (: n (w * h)
        trans (: (go i) (? (i = n) 0 (peep px (4 * i + 3) 0 < 128) 1 (go (i + 1))) (go 0))
        pal (gif-palette px n (256 - trans))
@@ -114,15 +116,31 @@
        ix (cask n)
        (put i) (f (gif-key px (4 * i)) @ k (pin ix i (k < 0 ? #cols (peep ix-of k 0))))
        _ (map put (jot n))
-       (bytes l) (foldl (acc \ b \ acc + string (b & 255)) "" l)
-       rgb (foldl (acc \ c \ acc + bytes [(c >> 16) (c >> 8) c]) "" cols)
-       table (rgb + bytes (map (k \ 0) (jot (3 * ((1 << s) - #cols)))))
-       ("GIF89a" + gif-le16 w + gif-le16 h + bytes [(128 | 112 | s - 1) 0 0]
+       rgb (foldl (acc \ c \ acc + gif-bytes [(c >> 16) (c >> 8) c]) "" cols)
+       table (rgb + gif-bytes (map (k \ 0) (jot (3 * ((1 << s) - #cols)))))
+       [s table trans #cols mcs (gif-blocks (gif-lzw ix n mcs))])
+   (gif-bytes l) (foldl (acc \ b \ acc + string (b & 255)) "" l)
+   ; the box at the screen's corner, w by h, its table local when pk says so
+   (gif-place w h pk) (string 44 + gif-le16 0 + gif-le16 0 + gif-le16 w + gif-le16 h + string pk)
+
+   (gif-encode w h px)
+    (gif-image w h px @ [s table trans nc mcs codes]
+       ("GIF89a" + gif-le16 w + gif-le16 h + gif-bytes [(128 | 112 | s - 1) 0 0]
         + table
-        + (trans ? (bytes [33 249 4 1 0 0 #cols 0]) "")
-        + string 44 + gif-le16 0 + gif-le16 0 + gif-le16 w + gif-le16 h + bytes [0 mcs]
-        + gif-blocks (gif-lzw ix n mcs)
-        + string 59))
+        + (trans ? (gif-bytes [33 249 4 1 0 0 nc 0]) "")
+        + gif-place w h 0 + string mcs + codes + string 59))
+
+   ; frames as gif-frames answers them, ((rgba ms) ..), to a gif that loops for good: each
+   ; frame its own table, and cleared after it is shown (disposal 2), so each is as given.
+   ; a delay is centiseconds on the wire, and under 2 most viewers show as 10
+   (gif-anim w h fs)
+    (: (frame f) (gif-image w h (f 0) @ [s table trans nc mcs codes]
+                   (: cs (f 1 // 10)
+                      (gif-bytes [33 249 4 (8 | trans) cs (cs >> 8) (trans ? nc 0) 0]
+                       + gif-place w h (128 | s - 1) + table + string mcs + codes)))
+       ("GIF89a" + gif-le16 w + gif-le16 h + gif-bytes [0 0 0]
+        + gif-bytes [33 255 11] + "NETSCAPE2.0" + gif-bytes [3 1 0 0 0]
+        + cats (map frame fs) + string 59))
 
    ; --- decoding, over src/love/lib/gif.c's gif-frame and gif-clear ----------------------------
    (gif-rd16 s i) (s i + 256 * s (i + 1))
