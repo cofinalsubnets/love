@@ -883,6 +883,20 @@
    ; a path + text -> 1 when it lands, () when it will not open
    (uwrite p t) (cite 'posix 'open p "w" @ q
                  (hot? q ? (say q t, (cite 'posix 'close q), 1)))
+   ; ..and at a place in one: n bytes from off -> (1 text), short at the end of the file;
+   ; text laid over the bytes at off, the rest of the file kept -> 1. () where it will not
+   ; open or seek. the seek is the raw fd's, before a port is laid over it
+   (u-at p m off) (cite 'posix 'openfd p m @ fd
+                   (charm? fd && 0 <= fd ?
+                      (charm? (cite 'posix 'lseek fd off 0) ? (fdopen fd) (cite 'posix 'close fd, ()))))
+   (uread-at p off n) (u-at p 0 off @ q
+     (hot? q ? (: b (cask (n < 65536 ? n 65536))
+                  (go k acc) (k < 1 ? acc
+                                 (cite 'posix 'swig q b @ r (charm? r && 0 < r ?
+                                    (go (k - r) ((snip b 0 (r < k ? r k)) . acc)) acc)))
+                  t (cats (rev (go n ())))
+                  (cite 'posix 'close q, [1 t]))))
+   (uwrite-at p off t) (u-at p 4 off @ q (hot? q ? (say q t, (cite 'posix 'close q), 1)))
    ; a main answers its status as a charm, or leaves from deep inside by scaring 'leave
    ; with it. urun is the driver both come back through, so a caller in the same image
    ; gets a charm instead of a dead process. nothing unwinds through a scare, so a port

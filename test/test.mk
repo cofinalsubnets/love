@@ -1430,7 +1430,8 @@ endif
 # carries, drives cook with the artifact itself as the bootstrap (LOVE=, so no love0 is
 # compiled -- there is no seat here to run one) and cross-builds a hosted x64 love with
 # its own mooncc. nothing under it but wasm: no cc, no shell, no toolchain. the seed asks
-# for the egg to be carried out itself, and on an x64 box it has to run.
+# for the egg to be carried out itself, and on an x64 box it has to run: its first run
+# bakes it in place and goes on, and the second wakes the image the first one laid.
 # RAM: the seat's collector is bounded at an eighth of the machine (src/inle/kmain.c), so the
 # machine has to be big enough that an eighth of it holds the largest live set. that is
 # selfpack's, laying the dist tarball: 512 ooms there, 768 carries it, and this is the
@@ -1451,7 +1452,7 @@ test_seedwasm: host
 	   && grep -q "carried out of the machine" out/wasm/seed.log && test -s out/wasm/love-x64 \
 	   || { tail -20 out/wasm/seed.log; echo "FAIL test_seedwasm"; exit 1; }
 	@chmod +x out/wasm/love-x64
-	@$(if $(filter x64,$(hosta)),out/wasm/love-x64 -v,echo "  the egg is x64 and this box is $(hosta): laid, not run")
+	@$(if $(filter x64,$(hosta)),sh test/gate/seedegg.sh out/wasm/love-x64,echo "  the egg is x64 and this box is $(hosta): laid, not run")
 endif
 
 # test_nestwasm -- the artifact rebuilds its own wasm MODULE aboard the wasm seat: the

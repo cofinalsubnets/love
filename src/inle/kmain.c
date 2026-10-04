@@ -1109,11 +1109,12 @@ static int k_fd_free_at(int at) {
   return k_sources_n > lo ? k_sources_n : lo; }
 static int k_fd_free(void) { return k_fd_free_at(0); }
 
-// open a path -> an fd or a negative errno. m is r read, w truncate, a append; w and a create
-// an absent path whose parent is a directory, for r absence stays absence. a directory does
+// open a path -> an fd or a negative errno. m is r read, w truncate, a append, c and o write
+// in place from the start; w a and c create an absent path whose parent is a directory,
+// for r and o absence stays absence. a directory does
 // not open: readdir is its read door. the love doors flatten the errno in the marshaling.
 love_noinline int k_fs_open(char const *p, uintptr_t pn, char m) {
-  if (m != 'r' && m != 'w' && m != 'a') return -EINVAL;
+  if (m != 'r' && m != 'w' && m != 'a' && m != 'c' && m != 'o') return -EINVAL;
   if (!k_fs_init()) return -ENOMEM;
   char cp[256];
   intptr_t cn = k_walk(p, pn, cp, true);
@@ -1140,7 +1141,7 @@ love_noinline int k_fs_open(char const *p, uintptr_t pn, char m) {
   if (i < 0) {
     // 'r' misses stay one k_find, the load path's probe lane; only a create pays k_dirp,
     // so a file never shadows a synthesized directory.
-    if (m == 'r') return -ENOENT;
+    if (m == 'r' || m == 'o') return -ENOENT;
     if (k_dirp(cp, (uintptr_t) cn)) return -EISDIR;
     int e = k_parent_ok(cp, (uintptr_t) cn);
     if (e) return e;

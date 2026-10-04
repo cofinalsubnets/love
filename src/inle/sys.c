@@ -79,7 +79,9 @@ static long k_openat(long dfd, char const *p, long fl, long mode) {   // mode is
     return k_fs_opendir(p, strlen(p)); }
   char m = acc == O_RDONLY ? 'r'
          : acc != O_WRONLY ? 0
-         : (fl & O_APPEND) ? 'a' : 'w';
+         : (fl & O_APPEND) ? 'a'
+         : (fl & O_TRUNC) ? 'w'
+         : (fl & O_CREAT) ? 'c' : 'o';
   if (!m) return -EINVAL;                       // the ramfs has no O_RDWR door
   r = k_fs_open(p, strlen(p), m);
   // POSIX opens a directory read-only; the face keeps its 'r' misses cheap
