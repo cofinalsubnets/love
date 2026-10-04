@@ -3,10 +3,13 @@
 ; the colour ls gives its class, off the same four the lstat already answers.
 ;
 ;   j k / arrows  the cursor      ^b ^f  a page        g G  the ends
-;   tab  the other pane           enter  descend       u  the parent
+;   tab  the other pane           enter  descend (a file: to whoever lent mc 'open)
+;   u  the parent
 ;   v ^q  quick view: the other pane shows the cursor's entry -- a picture fitted, text's
 ;         first lines, a directory's count; again to go back
 ;   t  thumbnails: the other pane lays the active pane's pictures as a grid
+;   /  find: every file under the pane's directory, narrowed as it is typed at (seek.l);
+;      enter takes the pane to the file, esc back
 ;   r  re-read the pane           q  leave
 ;
 ; pictures are drawn by kore pic (src/apps/kore/pic.l): in blocks, or sixel or kitty's graphics
@@ -19,6 +22,7 @@
 (module (mc mc-main mc-run mc-new mc-key mc-frame mc-read mc-pane mc-at mc-goto mc-cell mc-vis)
 (borrow 'posix)
 (borrow 'tui)
+(borrow ((cite 'seek) @ m (m ? m "src/apps/seek.l")))
 (:
  mc-kitkeys "i=7,p=1,C=1,"          ; kitty's keys: image 7, placement 1, cursor stays
  (mc-rfind s b) (: (go k) (? (k < 0) (0 - 1) (s k = b) k (go (k - 1))) (go (#s - 1)))
@@ -66,17 +70,36 @@
  ; path is a key that did nothing rather than an empty pane with no way back.
  (mc-cd p d) (mc-read d @ es (two? es ? (pins p 'dir d 'es es 'cur 0 'top 0) p))
  (mc-parent d) (mc-rfind d 47 @ k (? (d = "/") "/" (k < 1) "/" (snip d 0 k)))
- (mc-enter p)
+ ; a directory is entered; a file goes to 'open, when whoever runs mc lent one (vi's :ex)
+ (mc-enter s p)
   (mc-at p @ e
      (? (atom? e) p
         (<e = "..") (mc-cd p (mc-parent (p 'dir)))
-        (mc-join (p 'dir) <e @ q (mc-dirat? q ? (mc-cd p q) p))))
+        (mc-join (p 'dir) <e @ q (? (mc-dirat? q) (mc-cd p q)
+                                     !(nil? (s 'open)) ((s 'open) q, p)
+                                     p))))
 
  ; --- the step: every arm answers the state, so an idle key answers it unchanged -----
  ; 'qv is the other pane's use: 0 its own listing, 1 quick view, 2 thumbnails
  (mc-act s) (s $ s 'act ? 'r 'l)
+ ; / : the files under the active pane's directory, in a picker drawn in mc's place; a
+ ; pick takes the pane to the file's directory with the cursor on it
+ (mc-find s p)
+  (: d (p 'dir)
+     (rel f) (starts? f (d + "/") ? (snip f (#d + 1) #f) f)
+     (pin s 'seek (seek-new (seek-files d) (f \ rel f) rel "find")))
+ (mc-found s f)
+  (: p (mc-act s) dir (mc-parent f) nm (snip f (mc-rfind f 47 + 1) #f)
+     (mc-cd p dir,
+      (: (at l i) (? !(two? l) 0 (<(<l) = nm) i (at >l (i + 1)))
+         (mc-goto p (at (p 'es) 0) (s 'rows)))))
+ (mc-seekey s c)
+  (: d (s 'seek)
+     (seek-key d c,
+      d 'over ? (pin s 'seek (), d 'pick @ f (string? f ? (mc-found s f) 0)) 0,
+      s))
  (mc-key s c)
-  (: p (mc-act s) n (s 'rows) cur (p 'cur) (c @- s
+  (: p (mc-act s) n (s 'rows) cur (p 'cur) (? !(nil? (s 'seek)) (mc-seekey s c) (c @- s
    (-8 || 107) (mc-goto p (cur - 1) n, s)
    (-9 || 106) (mc-goto p (cur + 1) n, s)
    2             (mc-goto p (cur - n) n, s)
@@ -84,12 +107,13 @@
    103           (mc-goto p 0 n, s)
    71            (mc-goto p (#(p 'es) - 1) n, s)
    (9 || -1 || -2) (pin s 'act (s 'act ? 0 1))
-   (10 || 13)  (mc-enter p, s)
+   (10 || 13)  (mc-enter s p, s)
    117           (mc-cd p (mc-parent (p 'dir)), s)
    114           (mc-cd p (p 'dir), s)
    (118 || 17)   (pin s 'qv (s 'qv = 1 ? 0 1))
    116           (pin s 'qv (s 'qv = 2 ? 0 2))
-   (113 || -7) (pin s 'over 1)))
+   47            (mc-find s p, s)
+   (113 || -7) (pin s 'over 1))))
 
  ; --- looking inside: text, bytes and directories ------------------------------------
  ; the first n bytes of a regular file, "" of anything else -- opening a fifo would park
@@ -226,7 +250,7 @@
      (#es <= i ? (edfit "" w " ")
         (mc-cell (p 'dir) <(drop i es) w (? (i != p 'cur) 0 act? 1 2))))
  (mc-head d w) ("\e[7m" + edfit (" " + d) w " " + "\e[0m")
- mc-keys " tab pane  enter descend  u up  v view  t thumbs  r reread  q quit"
+ mc-keys " tab pane  enter in  u up  / find  v view  t thumbs  r reread  q quit"
  ; a graphic goes out after the text, at its place, since text laid over it may wipe it:
  ; a sixel whole every frame; kitty's sent once as image 7 and then placed again by id,
  ; every picture let go when it changes
@@ -241,6 +265,7 @@
          (gs = old) (gs = "" ? "" (at + e + "_Ga=p,i=7,p=1,C=1,q=2" + e + "\\"))
          (un + gs))))
  (mc-frame s w h)
+  (? !(nil? (s 'seek)) (seek-frame (s 'seek) w h)
   (: j (jug 0)
      rows (h < 6 ? 1 (h - 3))
      _ (pins s 'rows rows 'owe 0)
@@ -262,7 +287,7 @@
       say j (edfit (" " + here) w " " + "\e[K\r\n"),
       say j ("\e[7m" + edfit mc-keys w " " + "\e[0m\e[K\e[?25l"),
       say j (mc-gfx s (a = 0 ? (lw + 2) 1) 2 (v 1)),
-      slurp j))
+      slurp j)))
 
  ; --- the runner: the tool on a stage ------------------------------------------------
  ; 'gm the graphics (block sixel kitty) and 'cw 'ch a cell's pixels; 'cache the drawn

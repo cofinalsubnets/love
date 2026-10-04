@@ -31,8 +31,6 @@
 ;   (ledger-dir PATH)     where a queue call from another box runs; HOME
 ;   (mem-floor GB) (heavy-max N)   no heavy lock below GB available; N heavy locks at once, 2
 ;   (avatar NAME)       the face and its accent, bunny unless set; /avatar or --avatar sets it
-;   (screensaver NAME) (screensaver-idle N)   the screen's saver after N minutes without a key:
-;                         pom and 10, 0 for never; `love bee -s` names them (src/apps/saver.l)
 ; the answer streams: text prints as it comes. a key goes out only over tls, and only to a
 ; peer tls-open verified: its chain to a root the host trusts, and its name.
 (module (bee bee-main)
@@ -503,7 +501,7 @@
      bee-restart ("at the next convenient point -- between tasks, never mid-gate -- "
                   + "resuming in the same directory, so .mcp.json loads the new bee.")
      bee-landed ("this landing changed bee: every live session restarts " + bee-restart)
-     bee-served "src/apps/bee.l src/apps/locks.l src/apps/hosts.l src/apps/seals.l src/apps/saver.l src/apps/pom.l"   ; what bee runs
+     bee-served "src/apps/bee.l src/apps/locks.l src/apps/hosts.l src/apps/seals.l"   ; what bee runs
      (self-id _) (: s (string? bee-self ? (stat bee-self)) (two? s ? (show [(s 0) (s 3) (s 8)])))
      bee-selfw {'id (self-id 0) 'at (clock 0)}
      bee-selfwait (: w (getenv "BEE_SELF_WATCH") (string? w && 0 < #w ? (digits w) 30))
@@ -631,14 +629,16 @@
             t))
      ; the date and platform from love's own verbs; the git summary only where the host has git
      bee-env
-      (lush-out ("echo \"date: $(date '+%Y-%m-%d %A %H:%M %Z')\"\n"
-                 + "echo \"platform: $(uname -s -r -m)\"\n"
-                 + "if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then\n"
-                 + " echo \"git branch: $(git branch --show-current)\"\n"
-                 + " s=$(git status --short 2>/dev/null | head -n 20)\n"
-                 + " echo \"git status, first 20 lines:\"; echo \"${s:-(clean)}\"\n"
-                 + " echo \"recent commits:\"; git log --oneline -5 2>/dev/null | cut -c1-120\n"
-                 + "fi\n"))
+      (lush-out """
+         echo "date: $(date '+%Y-%m-%d %A %H:%M %Z')"
+         echo "platform: $(uname -s -r -m)"
+         if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+          echo "git branch: $(git branch --show-current)"
+          s=$(git status --short 2>/dev/null | head -n 20)
+          echo "git status, first 20 lines:"; echo "${s:-(clean)}"
+          echo "recent commits:"; git log --oneline -5 2>/dev/null | cut -c1-120
+         fi
+         """)
 
      (paras ls) (foldl (\ a l (a + l + "\n")) "" ls)
      bee-me (string? bee-self ? bee-self "love")
@@ -691,15 +691,17 @@
      ; every merge queue there is, as it stands at start: git's refs/queue/*, and the queue/*
      ; ledgers of sb's hub nest -- SB_HUB, else this directory when it holds a .sb
      bee-qcmd
-      ("for r in $(git for-each-ref --format='%(refname)' refs/queue 2>/dev/null); do\n"
-       + " echo \"--- git $r ---\"; git cat-file -p \"$r\"\n"
-       + "done\n"
-       + "hub=${SB_HUB:-}; [ -z \"$hub\" ] && [ -d .sb ] && hub=.\n"
-       + "if [ -n \"$hub\" ]; then\n"
-       + " for n in $(sb -C \"$hub\" ledger 2>/dev/null | cut -d' ' -f1); do\n"
-       + "  case $n in queue/*) echo \"--- sb ledger $n, in the nest at $hub ---\"; sb -C \"$hub\" ledger \"$n\";; esac\n"
-       + " done\n"
-       + "fi\n")
+      """
+      for r in $(git for-each-ref --format='%(refname)' refs/queue 2>/dev/null); do
+       echo "--- git $r ---"; git cat-file -p "$r"
+      done
+      hub=${SB_HUB:-}; [ -z "$hub" ] && [ -d .sb ] && hub=.
+      if [ -n "$hub" ]; then
+       for n in $(sb -C "$hub" ledger 2>/dev/null | cut -d' ' -f1); do
+        case $n in queue/*) echo "--- sb ledger $n, in the nest at $hub ---"; sb -C "$hub" ledger "$n";; esac
+       done
+      fi
+      """
      bee-queues (lush-out bee-qcmd)
 
      ; --- queue watching: every (queue-watch N) seconds, 20 unless set and 0 for never, the
@@ -2076,7 +2078,6 @@
      ; names the accent where the pixels would choose badly
      cells (cite 'pom 'pom-cells)
      tinted (cite 'pom 'pom-tint)
-     xterm (cite 'pom 'pom-xterm)
      bee-24? ((cite 'pom 'pom-tc) 0)
      (tint x) (tinted x "38" bee-24?)
      (rgb x) [(x // 65536) (x // 256 % 256) (x % 256)]
@@ -2112,11 +2113,10 @@
          cs (map (x \ [(n x) (strength x) x]) (keys n))
          vs (filter (e \ vivid? (e 2)) cs)
          (string? k ? ((pal a) (k 0)) (<(rev (sort (two? vs ? vs cs))) 2)))
-     ; the avatar worn: its name, its face drawn, and the accent everything else takes, as
-     ; an sgr and as the nearest of 256 for the saver's canvas
+     ; the avatar worn: its name, its face drawn, and the accent everything else takes, an sgr
      bee-look {}
      (look! nm) (: a (avatar nm) k (ink-of a)
-                   (pins bee-look 'name nm 'face (draw a) 'ink (tint k) 'pen (xterm k)))
+                   (pins bee-look 'name nm 'face (draw a) 'ink (tint k)))
      _ (look! (: n (setting 'avatar "bunny") (tablet? (avatar n) ? n "bunny")))
      ; (avatar NAME) in ~/.love/etc/bee.l, in place of any before it
      (keep-avatar nm)
@@ -2378,25 +2378,16 @@
                     2 (pin c 'scroll (c 'scroll + page))
                     6 (pin c 'scroll (max 0 (c 'scroll - page)))
                     0))))
-     ; a key that wakes the saver is the saver's, and the screen is laid again whole
      (keyloop c) (: k (edkey in)
-                    _ (? (sv-key (c 'sv) (clock 0)) (pin c 'lastr ()) (onkey c k))
+                    _ (onkey c k)
                     _ (soil c)
                     (? (c 'over) 0 (keyloop c)))
 
      (tide c) (: ws (tty 1) r (two? ws && 5 < <ws ? <ws 24) w (two? ws && 19 < >ws ? >ws 80)
                  (? (r = c 'rows && w = c 'cols) 0 (: _ (pins c 'rows r 'cols w) (soil c))))
-     ; the saver, when it runs, has the screen; a turn goes on under it, and mail or an ask
-     ; puts a mark in its corner
-     sv-watch (cite 'saver 'saver-watch)
-     sv-tick (cite 'saver 'saver-tick)
-     sv-key (cite 'saver 'saver-key)
-     sv-on? (cite 'saver 'saver-on?)
      (swim c tick)
       (: b (c 'dirt)
-         sv (sv-tick (pin (c 'sv) 'ink (bee-look 'pen)) (clock 0) (c 'rows) (c 'cols) (peep c 'mails 0 + tablet? (c 'asking)))
-         _ (? (0 < #sv) (: _ (say out sv) (flush out)) 0)
-         _ (? (peep b () 0 && !(sv-on? (c 'sv))) (: _ (pin b () 0) _ (say out (frame c)) (flush out)) 0)
+         _ (? (peep b () 0) (: _ (pin b () 0) _ (say out (frame c)) (flush out)) 0)
          _ (? (tick % 16 = 0) (tide c) 0)
          _ (? (tick % 4 = 0 && c 'busy != ()) (soil c) 0)      ; the spinner turns
          _ (? (tick % 30 = 0 && c 'busy = ()) (wake c) 0)       ; the inbox, about once a second
@@ -2412,8 +2403,6 @@
          c)
      (tui key yes)
       (: c (tnew key yes)
-         _ (pin c 'sv (sv-watch (setting 'screensaver "pom")
-                                (: m (peep bee-salt 'screensaver-idle ()) (two? m ? <m 10))))
          _ (twirl (\ _ (watch 0)) 0)                     ; the queues, mailed here when they move
          _ (twirl (\ _ (lock-poll 0)) 0)                   ; queued locks, mailed here when granted
          _ (tide c)
@@ -2431,7 +2420,7 @@
 
      ; --- the stage: the full screen as a pane of a mitty (src/apps/mitty/mitty.l), which
      ; owns the tty, the keys' reader and the clock. its frame is scribed into the pane's own
-     ; screen, so tui-fresh diffs against what that screen holds. no saver: idle is the mitty's
+     ; screen, so tui-fresh diffs against what that screen holds. the saver is the mitty's
      (tstage key yes)
       (: c (tnew key yes)
          tw (twirl (\ _ (watch 0)) 0)
@@ -3164,7 +3153,6 @@
             (two? as && <as = "--nest") (nest-cmd as)
             ; ahead of --hud, which the hooks add so that a bee older than --state only prints its hud
             (two? as && <as = "--state") (: _ (state-cmd as) 0)
-            (two? as && elem <as ["-s" "--screensaver"]) (cite 'saver 'saver-cli >as)   ; a saver, no session
             (elem "--hud" as) (: _ (puts (foldl (\ a l (a + l + "\n")) "" (hud-lines 0))) 0)   ; once, as text
             ; a bare bee on a terminal is the hud; a model's chat is --chat
             (!pl && !sv && !(two? words) && !(elem "--chat" as) && !(elem "--stage" as) && two? (tty 1))
@@ -3203,8 +3191,7 @@
        love bee --nest DIR                           a worker nest made from the hub (SB_HUB, or (hub ..)) at its head
        love bee --node                               a fresh box checked in order: what it has, and the next step
        love bee --door [KEY ..]                      the door's hello here; KEY: the authorized_keys line that holds a key to it
-       love bee --avatar [NAME]                        the avatars, or wear one
-       love bee -s | --screensaver [NAME]               a screensaver until a key; none names them"
+       love bee --avatar [NAME]                        the avatars, or wear one"
    _ (pins (cite 'verbs 'tab) 'bee (udoor 'bee bee-main bee-usage 1 0)))
 
 ; the seat: run as a file, `love src/apps/bee.l ..`, bee starts itself; as the verb, the

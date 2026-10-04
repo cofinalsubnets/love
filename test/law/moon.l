@@ -82,7 +82,7 @@
       ((spl (clex "L\"hi\"") 0) = "L\"hi\"")                  ; the spelling keeps the prefix (# owes it)
       ((tn <>(clex "Long") 0) = ['id "Long" 1])              ; an id starting with L/u/U is not a prefix (no quote follows)
       (#<>(clex "L L'a'") = 2)                        ; bare L stays an id; L'a' a number
-      !(clex "int @")                                        ; not C: the lex error rides up
+      (gripe? (cparse <>(clex "int @;")))                   ; a stray @ lexes (a pp-token), and the parse refuses it
       (#<>(clex "abc") = 3)                        ; form-feed + vertical-tab are whitespace (GNU page breaks); real FF/vt bytes here
       !(clex "a /* open")                                    ; unterminated comment refused
       ((tn3 <>(clex "0644") 0) = ['num 420 1])              ; octal integer literal (0644 = 420); gzip's 0777/0666 modes
@@ -278,7 +278,7 @@
               (align 2) (label main) (li r0 42) (ret)))
       (two? (cgn "int main() { int x=1; while (x<5) x++; return x; }"))
       ; a ret-position call tail-jumps: the epilogue is (jmp F), no (call F), so deep tail
-      ; recursion runs flat and the lvm shape continues by jmp at ai_tco=1.
+      ; recursion runs flat and the lvm shape continues by jmp at tco=1.
       (elem '(jmp rec) <>(cgn "int rec(int n){ if(n==0) return 5; return rec(n-1); } int main(){ return rec(3); }"))
       !(elem '(call rec) <>(cgn "int rec(int n){ if(n==0) return 5; return rec(n-1); } int main(){ return rec(3); }"))
       ; a frame-escaping fn keeps the plain call (the address outlives the frame); g's static
@@ -838,18 +838,25 @@
    (gmsg g) (g 4)
    vla "int s(int n){ int a[n]; a[0]=1; return a[0]; }"
    big "struct b { long a,b,c,d,e; };\n"
+   v3 "struct v { double a,b,c; };\n"
    (test
       ; the C99 VLA: x64, a64 and rv64 carry the lane
       (okv? (cgt vla 'x64))
       (okv? (cgt vla 'a64))
       (okv? (cgt vla 'rv64))
-      ; a >16-byte struct by value: the two halves refuse separately and each
-      ; names which half it is -- passing and returning are different lanes
-      (cgt (big + "int t(struct b f){ return (int)f.a; }") 'a64 @ g
-       (gripe? g && (gmsg g = "no lane for passing this 40-byte struct by value on a64 (in t)")))
-      (cgt (big + "struct b m(long x){ struct b r; r.a=x; return r; }") 'a64 @ g
-       (gripe? g && (gmsg g = "no lane for returning this 40-byte struct by value on a64 (in m)")))
+      ; a >16-byte struct by value: AAPCS64's memory class (no HFA) carries both ways, x64's too
+      (okv? (cgt (big + "int t(struct b f){ return (int)f.a; }") 'a64))
+      (okv? (cgt (big + "struct b m(long x){ struct b r; r.a=x; return r; }") 'a64))
       (okv? (cgt (big + "int t(struct b f){ return (int)f.a; }") 'x64))
+      ; a64's logical immediate is a run of ones short of the word: 2^64-1 (a C ~0UL) materializes
+      (immok {'tgt 'a64} 'log 7) !(immok {'tgt 'a64} 'log 18446744073709551615)
+      (immok {'tgt 'a64} 'log 9223372036854775807)
+      ; ..but an HFA past 16 bytes rides the v registers on a64, which has no lane yet: the two
+      ; halves refuse separately and each names which half it is
+      (cgt (v3 + "int t(struct v f){ return (int)f.a; }") 'a64 @ g
+       (gripe? g && (gmsg g = "no lane for passing this 24-byte struct by value on a64 (in t)")))
+      (cgt (v3 + "struct v m(double x){ struct v r; r.a=x; return r; }") 'a64 @ g
+       (gripe? g && (gmsg g = "no lane for returning this 24-byte struct by value on a64 (in m)")))
       ; C99 complex arithmetic is an x64 lane only
       (cgt "double _Complex f(double _Complex a, double _Complex b){ return a*b; }" 'a64 @ g
        (gripe? g && (gmsg g = "no lane for C99 complex arithmetic on a64 (in f)")))
@@ -1331,7 +1338,7 @@
    ; -- the riscv frame: a body naming no sp, fp or lr and making no call lays no frame; on wasm a call
    ; leaves every local but its answers, so there a call keeps no frame either, a home off the argument
    ; registers rides it unspilled, and a cs seat is unsaved and priced as a pool seat
-   ufs "typedef long word; struct ai; union u { struct ai *(*ap)(struct ai *, union u *, word *, word *); word x; union u *m; }; struct ai { union u *ip; word *hp, *sp; word pad[4]; word b; }; struct ai *lvm_gc(struct ai *g, union u *Ip, word *Hp, word *Sp); struct ai *uf(struct ai *g, union u *Ip, word *Hp, word *Sp) { if (Sp < Hp + 1) { g->b = 1; return lvm_gc(g, Ip, Hp, Sp); } *--Sp = Ip[1].x; Ip = Ip[2].m; return Ip->ap(g, Ip, Hp, Sp); } int main() { return 0; }"
+   ufs "typedef long word; struct g; union u { struct g *(*ap)(struct g *, union u *, word *, word *); word x; union u *m; }; struct g { union u *ip; word *hp, *sp; word pad[4]; word b; }; struct g *lvm_gc(struct g *g, union u *Ip, word *Hp, word *Sp); struct g *uf(struct g *g, union u *Ip, word *Hp, word *Sp) { if (Sp < Hp + 1) { g->b = 1; return lvm_gc(g, Ip, Hp, Sp); } *--Sp = Ip[1].x; Ip = Ip[2].m; return Ip->ap(g, Ip, Hp, Sp); } int main() { return 0; }"
    ufr (fnf 'uf <>(cgt ufs 'rv64))
    ufw (fnf 'uf <>(cgt ufs 'wasm))
    hks "long k(long); long h(long a) { long b = a * 3; k(a); k(b); return b + a; } int main() { return 0; }"
@@ -1745,7 +1752,7 @@
       (elem '(cmp r0 70000) (addrfold g4 '((li r1 70000) (cmp r0 r1) (ret)))))
    ; end to end: the pointp shape (the vm's hottest compare chain) runs slot-free -- p rides
    ; its park through both compares and the dead store sweeps
-   irE (cgn "typedef long word; typedef struct ai { long x; } ai_t; typedef void lvm_t(ai_t *); typedef struct cell { lvm_t *ap; } cell_t; static void lvm_sym(ai_t *g) { g->x = 1; } static void lvm_nom(ai_t *g) { g->x = 2; } static inline int lamp(word x) { return !(x & 1) && x != 0; } static inline cell_t *cell(word x) { return (cell_t *)x; } static inline int pointp(word x) { lvm_t *p; return lamp(x) && ((p = cell(x)->ap) == lvm_sym || p == lvm_nom); } long probe(word a, word b) { if (((a & b & 1)) || pointp(a) || pointp(b)) return a == b; return 7; } int main() { return (int)probe(3, 5); }")
+   irE (cgn "typedef long word; typedef struct g { long x; } love_t; typedef void lvm_t(love_t *); typedef struct cell { lvm_t *ap; } cell_t; static void lvm_sym(love_t *g) { g->x = 1; } static void lvm_nom(love_t *g) { g->x = 2; } static inline int lamp(word x) { return !(x & 1) && x != 0; } static inline cell_t *cell(word x) { return (cell_t *)x; } static inline int pointp(word x) { lvm_t *p; return lamp(x) && ((p = cell(x)->ap) == lvm_sym || p == lvm_nom); } long probe(word a, word b) { if (((a & b & 1)) || pointp(a) || pointp(b)) return a == b; return 7; } int main() { return (int)probe(3, 5); }")
    pbf (fnf 'probe <>irE)
    (test
       (two? irE)

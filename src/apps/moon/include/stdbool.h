@@ -1,5 +1,5 @@
-#ifndef _AI_STDBOOL_H
-#define _AI_STDBOOL_H
+#ifndef _LOVE_STDBOOL_H
+#define _LOVE_STDBOOL_H
 /* mooncc predefines bool/true/false (cpp.l, C23-style), so this is a no-op there.
    ANOTHER compiler reading these headers under -nostdinc has no other stdbool --
    the KCC=clang kernel lane -- and C11 spells them here. bool is _Bool: one byte. */

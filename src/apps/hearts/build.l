@@ -1,6 +1,7 @@
 ; hearts' build: kbuild's goals made by hearts (kbuild.l) in this directory, the output dir,
-; from the kernel tree $HEARTS_SRC. each command runs through the host's sh -- the borrowed
-; toolchain -- and $(shell) is answered there too. `--sub ARGS` is the make a recipe's own
+; from the kernel tree $HEARTS_SRC. each command runs through lush with kore's verbs ahead of
+; PATH (sh, sed, cat, ..), so only the borrowed compiler and linker reach the host, and $(shell)
+; is answered there too. `--sub ARGS` is the make a recipe's own
 ; script execs (link-vmlinux.sh's ${MAKE}), started from the environment.
 ;
 ; $HEARTS_GOALS  the goals, each made from a fresh read of the Makefile (default
@@ -11,6 +12,12 @@
 ; $HEARTS_PRIOR  1: an earlier build's .cmd files stand as the prior state (hk-make's " prior")
 ; $KBUILD_BUILD_USER/HOST/VERSION/TIMESTAMP  the build's identity, handed in as the command
 ;                line's, so no clock or host name reaches the image
+; $HEARTS_HOSTCC the compiler the host programs build with (kconfig's conf, fixdep, dtc, ..),
+;                as `make HOSTCC=` names it; unset, mooncc through .hearts/bin/hk-hostcc, which
+;                lays certs/extract-cert as ours (xcert.l) rather than link openssl's
+; $HEARTS_LEX, $HEARTS_YACC  the flex and bison the build runs (`make LEX= YACC=`); unset, kbuild's
+; $HEARTS_KGZIP  the gzip the build runs (`make KGZIP=`): the reference is given the same one
+; $HEARTS_SH     a shell to run the commands with instead of lush (/bin/sh, for a differential)
 (: argv cmdline
    memo {}
    jobs {}
@@ -27,8 +34,11 @@
    hd (here + "/.hearts")
    njobs (getenv "HEARTS_JOBS" @ j (string? j ? (read j) 1))
    (chomp s) ((: (g i) (0 < i && s (i - 1) = 10 ? (g (i - 1)) (snip s 0 i))) #s)
+   ; the wrappers' interpreter line: lush, as the commands run (a #!/bin/sh would be the host's)
+   bang ("#!" + selfpath 0 + " lush\n")
+   (shc cmd) (getenv "HEARTS_SH" @ h (string? h ? [h "-c" cmd] [(selfpath 0) "lush" "-a" "-c" cmd]))
    (sh cmd) (peep memo cmd 0 @ a (string? a ? a
-              (: r (hark ["/bin/sh" "-c" cmd])
+              (: r (hark (shc cmd))
                  a (two? r ? (join " " (lines (chomp >r))) "")
                  (pin memo cmd a, a))))
    (split1 s) ((: (g i st acc) (i >= #s ? (rev (snip s st i . acc))
@@ -76,14 +86,37 @@
                            ? ("{ " + text + "\n} > " + q (tg + ".tmp") + " && if cmp -s " + q (tg + ".tmp") + " " + q tg
                               + "; then rm -f " + q (tg + ".tmp") + "; exit 3; else mv -f " + q (tg + ".tmp") + " " + q tg + "; fi")
                            text))
-             r (hark ["/bin/sh" "-c" (line + " 2>&1")])
+             r (hark (shc (line + " 2>&1")))
              (? (two? r && 0 = <r) 0
                 (kind = 'out && two? r && 3 = <r) 'same
                 (puts ("FAILED " + tg + " (" + show (two? r ? <r r) + ")\n" + text + "\n" + (two? r ? >r "") + "\n"), 1)))
           (: _ (slot 0)
              f (hd + "/job." + show (bump 'n))
-             pid (spawn ["/bin/sh" "-c" ("{ " + pre + text + "\n} > " + q f + " 2>&1")])
+             pid (spawn (shc ("{ " + pre + text + "\n} > " + q f + " 2>&1")))
              (pin pids pid [tg f], pin jobs tg pid, bump 'live, 0))))
+   ; mooncc finds its headers and runtime at <its binary>/../lib/love/moon: a seat under .hearts,
+   ; a copy of this love beside the tree's own src/apps/moon (build.l sits in src/apps/hearts)
+   (seat _)
+    (: sd (hd + "/seat") apps (dir (dir (argv 1)))
+       moon ((apps 0 = 47 ? apps (here + "/" + apps)) + "/moon")
+       (hark ["mkdir" "-p" (sd + "/bin") (sd + "/lib/love")],
+        hark ["cp" "-f" (selfpath 0) (sd + "/bin/love")],
+        hark ["ln" "-sfn" moon (sd + "/lib/love/moon")],
+        uwrite (hd + "/bin/hk-hostcc")
+               (bang + "# the host compiler: mooncc; extract-cert, which links openssl, is laid as ours instead\n"
+                + "case \" $* \" in\n  *\" -o certs/extract-cert \"*) exec cp -f " + q (hd + "/bin/xcert") + " certs/extract-cert;;\n"
+                + "esac\nexec " + q (sd + "/bin/love") + " mooncc \"$@\"\n"),
+        uwrite (hd + "/bin/xcert") (bang + "exec " + q (sd + "/bin/love") + " " + q (dir (argv 1) + "/xcert.l") + " \"$@\"\n"),
+        hark ["chmod" "+x" (hd + "/bin/xcert")],
+        hark ["chmod" "+x" (hd + "/bin/hk-hostcc")],
+        ; perl: the scripts the build runs are ported (perlasm.l, oidreg.l, each pinned by hash); any
+        ; other refuses
+        uwrite (hd + "/bin/perl")
+               (bang + "# the build's perl: the ported scripts, nothing else\ncase \"$1\" in\n"
+                + "  */sha2-armv8.pl) exec " + q (sd + "/bin/love") + " " + q (dir (argv 1) + "/perlasm.l") + " \"$@\";;\n"
+                + "  */build_OID_registry) exec " + q (sd + "/bin/love") + " " + q (dir (argv 1) + "/oidreg.l") + " \"$@\";;\n"
+                + "esac\necho \"hearts: no perl here for $1\" >&2\nexit 1\n"),
+        hark ["chmod" "+x" (hd + "/bin/perl")]))
    (after l) (atom? l ? () (<l = "--sub" ? >l (after >l)))
    sub (after argv)
    _ (pins made " prior" (getenv "HEARTS_PRIOR" = "1" ? prior ()) " wait" waitfor)
@@ -91,10 +124,16 @@
     ? (: f (hk-envmake K sub sh run (made " prior")) (drain 0, quit (string? f ? 1 0)))
       (: t0 (clock 0)
          _ (hark ["mkdir" "-p" (hd + "/bin")])
-         _ (uwrite (hd + "/bin/hk-make") ("#!/bin/sh\nHEARTS_JOBS=1 exec " + q (argv 0) + " " + q (argv 1) + " --sub \"$@\"\n"))
+         _ (uwrite (hd + "/bin/hk-make") (bang + "HEARTS_JOBS=1 exec " + q (argv 0) + " " + q (argv 1) + " --sub \"$@\"\n"))
          _ (hark ["chmod" "+x" (hd + "/bin/hk-make")])
+         _ (seat 0)
          id (filter (n \ string? (getenv n)) ["KBUILD_BUILD_USER" "KBUILD_BUILD_HOST" "KBUILD_BUILD_VERSION" "KBUILD_BUILD_TIMESTAMP"])
-         cl (foldl (a \ n \ pin a n (getenv n)) (pins {} "ARCH" "arm64" "LLVM" "1") id)
+         ; no rust or pahole, whatever the host has: their versions land in .config, and so the image
+         cl0 (foldl (a \ n \ pin a n (getenv n))
+                    (pins {} "ARCH" "arm64" "LLVM" "1" "RUSTC" "false" "HOSTRUSTC" "false" "BINDGEN" "false" "PAHOLE" "false") id)
+         cl1 (pin cl0 "HOSTCC" (getenv "HEARTS_HOSTCC" @ h (string? h ? h (hd + "/bin/hk-hostcc"))))
+         cl (foldl (a \ kv \ (getenv (kv 0) @ v (string? v ? (pin a (kv 1) v) a))) cl1
+                   [["HEARTS_LEX" "LEX"] ["HEARTS_YACC" "YACC"] ["HEARTS_KGZIP" "KGZIP"]])
          goals (words (getenv "HEARTS_GOALS" || "defconfig syncconfig Image"))
          (one g) (peep made " failed" 0 ? 0
                    (: top (hk-topgoal K here cl sh g)

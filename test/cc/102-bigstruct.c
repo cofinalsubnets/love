@@ -6,7 +6,8 @@
  * covered: a MEMORY param behind register args, one that overflows LATE
  * (6 gp args ahead of it, so it lands deep in the block), several in one
  * call (the block's slot arithmetic), a MEMORY return, a return fed straight
- * into another call, and the by-value COPY semantics (a callee mutating its
+ * into another call, a MEMORY return through a function pointer -- and one
+ * answered straight from such a call (gnulib's gl_oset_iterator), and the by-value COPY semantics (a callee mutating its
  * parameter must not touch the caller's object). freestanding, exit-code
  * only -- the cross-toolchain ABI check lives in the moon-* package gates. */
 
@@ -46,6 +47,12 @@ static struct big mk(long k, long j)             /* a MEMORY return */
 	return s;
 }
 
+struct ops { struct big (*mk)(long, long); };
+static struct big viaptr(struct ops const *o, long k)   /* the indirect callee's result, returned as is */
+{
+	return o->mk(k, 1);
+}
+
 int main(void)
 {
 	iofn_t f = { r1, w1, 0, (void *)1 };
@@ -57,5 +64,8 @@ int main(void)
 	struct big u = mk(3, 7);                  /* 3,6,9,12,22 */
 	r += (int)(u.a + u.b + u.c + u.d + u.e);  /* 52 */
 	r += (int)pairup(mk(1, 0), u);            /* 1 + 220 = 221 */
-	return r & 0xff;                          /* 833 & 255 = 65 */
+	struct ops o = { mk };
+	struct big v = o.mk(2, 0), w = viaptr(&o, 1);   /* 2,4,6,8,10 and 1,2,3,4,6 */
+	r += (int)(v.a + v.e + w.b + w.e);        /* 2 + 10 + 2 + 6 = 20 */
+	return r & 0xff;                          /* 853 & 255 = 85 */
 }

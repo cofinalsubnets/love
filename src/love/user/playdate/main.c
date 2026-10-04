@@ -1,7 +1,7 @@
 // Playdate frontend for love -- the rune CAS workbench riding the crank.
 //
-// love's frontend contract (love.h): the host defines ai_clock, the
-// ai_stdin/ai_stdout ports, the ai_fd_port_vt vtable, and the cooperative-wait
+// love's frontend contract (love.h): the host defines love_clock, the
+// love_stdin/love_stdout ports, the love_fd_port_vt vtable, and the cooperative-wait
 // hooks. Here the console is a quay cb (50x30 cells of the 8x8 CGA font)
 // blitted to the 1-bit LCD each frame; stdout/stderr both land there, so the
 // prel's puts IS the screen and a scare face is visible. The heap rides the
@@ -26,7 +26,7 @@
 #define NCOLS 50
 #define kcb (&K.cb)
 static struct k {
-  struct ai *g;
+  struct g *g;
   int dead;                    // a scare froze the session; keep blitting it
   union {
     struct cb cb;
@@ -34,57 +34,57 @@ static struct k {
 } K;
 
 // --- clock + cooperative waits ---------------------------------------------
-uintptr_t ai_clock(void) { return pdg_ms(); }
-void ai_sleep(uintptr_t ms) {
-  uintptr_t start = ai_clock();
-  if (ms) while (ai_clock() - start < ms) ;
+uintptr_t love_clock(void) { return pdg_ms(); }
+void love_sleep(uintptr_t ms) {
+  uintptr_t start = love_clock();
+  if (ms) while (love_clock() - start < ms) ;
 }
 // the readiness law (src/love/main.c, the teensy's Enter-freeze lesson): a
 // NEGATIVE fd is ALWAYS ready -- a string port waits on nothing external.
 // fd 0 answers instantly too (it is always at the end), so every fd is
 // honestly ready here.
-bool ai_ready(int fd, int events) { return 1; }
-void ai_wait_fds(struct ai_wait_fd *fds, int n, uintptr_t ms) { ai_sleep(ms); }
+bool ready(int fd, int events) { return 1; }
+void wait_fds(struct wait_fd *fds, int n, uintptr_t ms) { love_sleep(ms); }
 
 // --- port vtable: output rides the console buffer --------------------------
 // there is no text input on the device -- the crank and the buttons are the
 // whole keyboard -- so stdin is at the end from the first read and says so.
-static intptr_t fd_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
+static intptr_t fd_readn(struct g *g, unsigned char *dst, uintptr_t n) {
   return -1; }
-static struct ai *fd_writen(struct ai *g, unsigned char const *src, uintptr_t n) {
+static struct g *fd_writen(struct g *g, unsigned char const *src, uintptr_t n) {
   for (uintptr_t k = 0; k < n; k++) cb_putc(kcb, src[k]);
   return g->b = (intptr_t) n, g; }
-static struct ai *_flush(struct ai *g) { return g; }
+static struct g *_flush(struct g *g) { return g; }
 
-struct ai_fio ai_stdin  = { { .ap = lvm_port_io, .vt = &ai_fd_port_vt, .ungetc_buf = putcharm(EOF) }, .fd = putcharm(0) };
-struct ai_fio ai_stdout = { { .ap = lvm_port_io, .vt = &ai_fd_port_vt, .ungetc_buf = putcharm(EOF) }, .fd = putcharm(1) };
+struct fio love_stdin  = { { .ap = lvm_port_io, .vt = &love_fd_port_vt, .ungetc_buf = putcharm(EOF) }, .fd = putcharm(0) };
+struct fio love_stdout = { { .ap = lvm_port_io, .vt = &love_fd_port_vt, .ungetc_buf = putcharm(EOF) }, .fd = putcharm(1) };
 // No separate error stream on the device; the scare face lands on the LCD too.
-struct ai_fio ai_stderr = { { .ap = lvm_port_io, .vt = &ai_fd_port_vt, .ungetc_buf = putcharm(EOF) }, .fd = putcharm(1) };
-struct ai_port_vt const ai_fd_port_vt = { _flush, fd_writen, fd_readn, NULL };
+struct fio love_stderr = { { .ap = lvm_port_io, .vt = &love_fd_port_vt, .ungetc_buf = putcharm(EOF) }, .fd = putcharm(1) };
+struct port_vt const love_fd_port_vt = { _flush, fd_writen, fd_readn, NULL };
 
-#include "../../fdrow.h"                       // ai_fd_readn / ai_fd_say off the two above
+#include "../../fdrow.h"                       // love_fd_readn / love_fd_say off the two above
 
 // --- the playdate nifs ------------------------------------------------------
 // (crank ())     -- the crank angle 0..359, or () docked
 // (pushed ())    -- this frame's fresh button bits (left 1 right 2 up 4
 //                   down 8 B 16 A 32)
 // (cur_set r c)  -- seat the console's write cursor
-static lvm(ai_crank) {
-  Sp[0] = pdg_crank_docked() ? ai_zero : putcharm(pdg_crank_deg());
+static lvm(crank) {
+  Sp[0] = pdg_crank_docked() ? zero : putcharm(pdg_crank_deg());
   Ip += 1;
   return Continue(); }
-static lvm(ai_pushed) {
+static lvm(pushed) {
   Sp[0] = putcharm(pdg_pushed());
   Ip += 1;
   return Continue(); }
-static lvm(ai_cur_set) {
+static lvm(cur_set) {
   cb_cur(kcb, getcharm(Sp[0]), getcharm(Sp[1]));
   Sp += 1;
   Ip += 1;
   return Continue(); }
 
 // --- the horn's seat door ---------------------------------------------------
-// this roster says ai_horn_seat, so src/love/horn.c asks these instead of hunting a kernel's
+// this roster says love_horn_seat, so src/love/horn.c asks these instead of hunting a kernel's
 // device -- the same four src/inle/hda.c answers under inle. the ring and the SDK source are
 // pdglue's, which owns pd_api.h; nothing but words crosses.
 //
@@ -97,10 +97,10 @@ uintptr_t k_horn_lag(void) { return (uintptr_t) pdg_horn_lag(); }
 void k_horn_close(void) { pdg_horn_close(); }
 
 static union u const
-  nif_crank[]   = {{ai_crank}, {lvm_ret0}},
-  nif_pushed[]  = {{ai_pushed}, {lvm_ret0}},
-  nif_cur_set[] = {{lvm_cur}, {.x = putcharm(2)}, {ai_cur_set}, {lvm_ret0}};
-static struct ai_def defs[] = {
+  nif_crank[]   = {{crank}, {lvm_ret0}},
+  nif_pushed[]  = {{pushed}, {lvm_ret0}},
+  nif_cur_set[] = {{lvm_cur}, {.x = putcharm(2)}, {cur_set}, {lvm_ret0}};
+static struct def defs[] = {
   {"crank",   {.k = nif_crank}},
   {"pushed",  {.k = nif_pushed}},
   {"cur_set", {.k = nif_cur_set}} };
@@ -121,11 +121,11 @@ static int k_update(void *_) {
   if (!K.dead) {
     cb_cur(kcb, 0, 0);
     cb_fill(kcb, 0);
-    K.g = ai_evals_(K.g, "(cas ())");
-    if (!ai_ok(K.g)) {
+    K.g = evals_(K.g, "(cas ())");
+    if (!ok(K.g)) {
       // honest face: the condition prints to the console, and the screen
       // freezes on it (reset the device to go again)
-      if (ai_code_of(K.g) == ai_status_scare) ai_scare_face(K.g);
+      if (code_of(K.g) == status_scare) scare_face(K.g);
       K.dead = 1; } }
   blit();
   return 1; }
@@ -163,12 +163,12 @@ void love_init(void) {
   // minutes-long on-device bake the OS watchdog would kill anyway; any
   // problem answers NULL and the egg lane below bakes from source (the
   // 64-bit simulator refuses the 32-bit image this way BY DESIGN).
-  struct ai *g0 = NULL;
-  uintptr_t t0 = ai_clock();
+  struct g *g0 = NULL;
+  uintptr_t t0 = love_clock();
   { enum { imgcap = 2u << 20 };
     void *ib = pdg_realloc(NULL, imgcap);
     int n = ib ? pdg_file_read("love-pd.img", ib, imgcap) : -1;
-    if (n > 0) g0 = ai_image_load(ib, (uintptr_t) n, 0);
+    if (n > 0) g0 = love_image_load(ib, (uintptr_t) n, 0);
     if (ib) pdg_realloc(ib, 0); }
   int woke = g0 != NULL;
   pdg_log(woke ? "love: image awake" : "love: no image -- baking the egg");
@@ -176,26 +176,26 @@ void love_init(void) {
                             : "; src/love/user/playdate -- baking the egg"; *s; s++)
     cb_putc(kcb, *s);
   blit();
-  struct ai *g = ai_defn(woke ? g0 : ai_ini(), defs, countof(defs));
+  struct g *g = defn(woke ? g0 : ini(), defs, countof(defs));
   // ..and the LvNif slice of every TU linked beside this one, as src/love/main.c drains it:
   // src/love/horn.c's rows ride the section, not the table above.
-  g = ai_defn(g, __start_love_nifs, __stop_love_nifs - __start_love_nifs);
+  g = defn(g, __start_love_nifs, __stop_love_nifs - __start_love_nifs);
   // born: this wake's cost, as src/love/main.c defines it -- the egg lane's egg.l pins its own
-  if (woke && ai_ok(g = ai_push(g, 1, putcharm((intptr_t) (ai_clock() - t0))))) {
-    g = ai_defv(g, "born");
-    if (ai_ok(g)) g->sp++; }
-  pdg_log(ai_ok(g) ? "love: core up" : "love: core FAILED");
+  if (woke && ok(g = push(g, 1, putcharm((intptr_t) (love_clock() - t0))))) {
+    g = defv(g, "born");
+    if (ok(g)) g->sp++; }
+  pdg_log(ok(g) ? "love: core up" : "love: core FAILED");
   // bound the collector to a QUARTER of the device's 16 MB (the Appel knob,
   // teensy's law): a major resize holds old and new pools at once, so the
   // transient peak is double the budget -- 8 MB here, and the simulator
   // emulates the device heap exactly (a budget of half OOMed it).
-  if (ai_ok(g)) g->budget = (4u << 20) / sizeof(word);
+  if (ok(g)) g->budget = (4u << 20) / sizeof(word);
   if (woke) {
-    K.g = ai_open(g);           // the waker opens its own session (the bake carries none)
+    K.g = love_open(g);           // the waker opens its own session (the bake carries none)
     pdg_log("love: woke -- workbench up");
-    if (ai_ok(K.g)) pdg_set_update(k_update);
+    if (ok(K.g)) pdg_set_update(k_update);
     return; }
-  K.g = ai_egg(g,
+  K.g = egg(g,
 #include "egg.h"
     ,
 #include "prel.h"
@@ -204,8 +204,8 @@ void love_init(void) {
     ,
 #include "post.h"
     );
-  K.g = ai_evals_(K.g, src_mods);
-  K.g = ai_evals_(K.g,
+  K.g = evals_(K.g, src_mods);
+  K.g = evals_(K.g,
     "(borrow 'kanren)"
     " "
     "(borrow 'rune)"
@@ -213,11 +213,11 @@ void love_init(void) {
 #include "cas.h"
     " 0");
   // THE SESSION: the crank's evals defglob here, never in the base
-  K.g = ai_open(K.g);
-  pdg_log(ai_ok(K.g) ? "love: boot eval ok" : "love: boot eval FAILED");
-  if (ai_ok(K.g))
+  K.g = love_open(K.g);
+  pdg_log(ok(K.g) ? "love: boot eval ok" : "love: boot eval FAILED");
+  if (ok(K.g))
     pdg_set_update(k_update);
-  else if (ai_code_of(K.g) == ai_status_scare)
-    ai_scare_face(K.g),           // the condition lands on the cb...
+  else if (code_of(K.g) == status_scare)
+    scare_face(K.g),           // the condition lands on the cb...
     blit();                       // ...and freezes on the LCD
 }

@@ -19,11 +19,12 @@
 ; host-only (screen/tether/tty ride src/love/*.c): never in the corpus; test/host/mitty.l
 ; smokes it over a real pty. a module, so a guest that berths itself (vi's splits) cites it.
 (module '(mitty mitty mitty-stage mitty-up hberth hsail hopen hopen-stage moor waitfor
-          hbox hmas hpid hstage hpty? hpane hsoil hrelay hframe hmoor hsplit hsteer hshut
+          hbox hmas hpid hstage hpty? hpane hshow hsoil hrelay hframe hmoor hsplit hsteer hshut
           hfeed hkey oars hsize htide htick hswim hquick? hcopy hpaste hclip-text hscreen-text
           hseq hmouse hpeer hpasted hfaces hgo hcycle hfresh hb64 hsub? hswap hpicker mitty-launch mitty-switch mitty-hive mitty-queues mitty-barx mitty-saver hwake hidle hidle? hsleep hquiet? hin hout hlive? hgreet hbye hattach hdetach mitty-lush mitty-here mitty-serve mitty-attach mitty-sock mitty-dir mitty-ls mitty-size hname hname-of hlr hbarat hdrag hmice hbarline hbarface hbartick hnote hhands mitty-bee mitty-main)
 (borrow ((cite 'wharf) @ m (m ? m "src/apps/mitty/wharf.l")))   ; the baked module, else the tree's file
 (borrow ((cite 'limn) @ m (m ? m "src/apps/mitty/limn.l")))
+(borrow ((cite 'seek) @ m (m ? m "src/apps/seek.l")))
 (borrow 'posix)
 (:
  ; --- the moor: pump the master through the screen until the child hangs up.
@@ -473,7 +474,7 @@
                         (hfeed hb ch)),
                      oars hb g))))
 
- ; --- idle: 'saver is a watch of src/apps/saver.l's, which has the glass after its minutes
+ ; --- idle: 'saver is a watch of src/apps/mitty/saver.l's, which has the glass after its minutes
  ; without a key; the mitty's own frames wait under it, and are laid again whole after ---
  ; a key: 1 when it woke a saver, which then is owed a whole frame
  (hwake hb) (: w (peep hb 'saver ()) k (cite 'saver 'saver-key) _ (pin hb 'forced 0)
@@ -594,9 +595,9 @@
 
  ; --- love mitty: the shell on any terminal -- lush in every pane a
  ; split or a face opens, and argv, when given, in the first ---
- ; --- the picker: a stage that lists items, filters them as it is typed at, and on enter
- ; becomes what its item opens, in place -- or, when the item answers no pane, simply goes.
- ; an item is [label thunk]. ↑↓ (or ^p ^n) choose, backspace unsays, esc goes ---
+ ; --- the picker: seek's list in a pane, narrowed as it is typed at; on enter it becomes
+ ; what its item opens, in place -- or, when the item answers no pane, simply goes. an item
+ ; is [label thunk]; the keys are seek's (src/apps/seek.l), esc goes ---
  (hsub? h n) (: (go i) (? (#h < i + #n) 0 (n = snip h i (i + #n)) 1 (go (i + 1))) (go 0))
  ; a stage pane stands in for pane id: the old one's own leavings first. a pty's moor would
  ; shut the id when its child hangs up, so only a stage's place is taken this way
@@ -605,22 +606,11 @@
                        (: _ (hstage o 'shut ? (hstage o 'shut ()) 0)
                           (pin (hb 'panes) id p, hrelay hb, hpty? p ? (hmoor hb id) 0, hsoil hb))))
  (hpicker hb title items)
-  (: st {'q "" 'sel 0} own {-1}
-     (shown _) (filter (it \ 0 = #(st 'q) || hsub? <it (st 'q)) items)
+  (: own {-1} d (seek-new items (it \ <it) (it \ <it) title)
      (go _) (hshut hb (peep own () -1))
      (pick it) ((it 1) () @ p (two? p ? (hswap hb (peep own () -1) p) (go 0)))
-     (frame w h) (: xs (shown 0) n #xs sel (min (st 'sel) (max 0 (n - 1))) top (max 0 (sel - (h - 3)))
-                    ("\e[H\e[2J\e[1m" + title + "\e[22m " + st 'q + "\r\n"
-                     + foldl (a \ i \ a + (i = sel ? "\e[7m" "") + " " + edfit (<(xs i)) (max 1 (w - 2)) " " + " \e[27m\r\n")
-                             "" (filter (i \ top <= i && i < top + h - 2) (jot n))))
-     (step k) (? (k = 27) (go 0)
-                 (k = 10 || k = 13) (: xs (shown 0) (? (two? xs) (pick (xs (min (st 'sel) (#xs - 1)))) (go 0)))
-                 (k = -8 || k = 16) (pin st 'sel (max 0 (st 'sel - 1)))
-                 (k = -9 || k = 14) (pin st 'sel (min (max 0 (#(shown 0) - 1)) (st 'sel + 1)))
-                 (k = 127 || k = 8) (: q (st 'q) (pins st 'q (snip q 0 (max 0 (#q - 1))) 'sel 0))
-                 (31 < k && k < 127) (pins st 'q (st 'q + string k) 'sel 0)
-                 0)
-     sg (mitty-stage frame step (_ \ 0))
+     (step k) (seek-key d k, d 'over ? (d 'pick @ it (two? it ? (pick it) (go 0))) 0)
+     sg (mitty-stage (w \ h \ seek-frame d w h) step (_ \ 0))
      (pin sg 'name title, pin own () (hb 'next), hopen-stage sg 1 1))
 
  ; --- hands: the mitty as a model's tools see it -- every pane by id on every face, read
@@ -728,11 +718,12 @@
                 (: hv (mitty-hive 0) qs (mitty-queues 0)
                    x ("hive " + show hv + foldl (a \ q \ a + " · " + q) "" qs)
                    (pins t 'at now 'x x, x))))))
- ; the saver as ~/.love/etc/mitty.l names it: (screensaver NAME) (screensaver-idle MINUTES),
- ; pom after 10 unless said; a name no saver has, or 0 minutes, is never
+ ; the saver as ~/.love/etc/mitty.l names it: (screensaver NAME [STYLE]) (screensaver-idle
+ ; MINUTES), cycle after 10 unless said; a name no saver has, or 0 minutes, is never
  (mitty-saver _) (: sf (cite 'salt 'salt-file) wf (cite 'saver 'saver-watch) h (getenv "HOME")
                    c (? (sf && string? h) (sf (h + "/.love/etc/mitty.l") {}) {})
-                   nm (peep c 'screensaver () @ v (two? v ? (: w <v (string? w ? w (show w))) "pom"))
+                   (word w) (string? w ? w (show w))
+                   nm (peep c 'screensaver () @ v (two? v ? (join " " (map word v)) "cycle"))
                    m (peep c 'screensaver-idle () @ v (two? v ? <v 10))
                    (wf ? (wf nm m) ()))
  ; a mitty laid for the shell at r x c: lush in its panes (argv, when given, in the first), the
@@ -823,6 +814,7 @@
   (? (two? as && <as = "--serve" && two? >as) (mitty-serve <>as >>as)
      (two? as && <as = "--here") (mitty-here >as)
      (two? as && <as = "--ls") (mitty-ls 0)
+     (two? as && elem <as ["-s" "--screensaver"]) ((cite 'saver 'saver-cli) >as)   ; a saver, no mitty
      (: nm (two? as && <as = "-n" && two? >as ? <>as "main")
         rest (two? as && <as = "-n" && two? >as ? >>as as)
         path (mitty-sock nm)
@@ -831,7 +823,8 @@
            (mitty-spawn nm rest) (mitty-reattach path 60 @ r (r = () ? (mitty-here rest) 0))
            (mitty-here rest))))
  mitty-usage "usage: love mitty [-n NAME] [COMMAND ..]   the mitty NAME (main), started when none is up;
-       COMMAND in its first pane. love mitty --ls lists them; --here runs one in this process
+       COMMAND in its first pane. love mitty --ls lists them; --here runs one in this process;
+       -s [NAME] a screensaver until a key, -s alone names them
   C-a: s v split, h j k l steer, x shut, [ ] copy and paste, c n p 0-9 faces, b a model,
        space open an app, w go to a pane, z the screensaver now, d detach, C-a a literal C-a"
  _ (pins (cite 'verbs 'tab) 'mitty (udoor 'mitty mitty-main mitty-usage 1 1)))

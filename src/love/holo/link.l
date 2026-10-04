@@ -783,7 +783,7 @@
        relbox (pie ? {0 ()})    ; abs64 site accumulator (pie only)
        glo (ldsyms objs)
        ; the entry: ld's rule -- `_start` when the set defines one, else the first object's
-       ; text (mooncc's crt0 lane, which names its entry __ai_start and relies on being
+       ; text (mooncc's crt0 lane, which names its entry __love_start and relies on being
        ; first). a foreign libc brings its own _start and must be entered through it.
        ent (: e (glo "_start")
               o1 <objs

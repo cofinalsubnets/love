@@ -10,10 +10,14 @@
 
 static __mhdr __mbase;
 static __mhdr *__mfree;
-void free(void *p) {
-  if (!p) return;
-  __mhdr *b = (__mhdr *) p - 1, *q = __mfree;
-  if (b->next == __MDirect) { munmap(b, (long) (b->size * sizeof(__mhdr))); return; }
+/* the process's thread state, the one place threads keep any: whether a second thread exists
+ * (pthread_create sets it, nothing clears it) and the arena lock that switches on with it. here
+ * rather than beside pthread_create so a link that allocates never pulls the thread member */
+struct __love_mt __love_mt;
+static void __mtake(void) { if (__love_mt.threads) while (__sync_lock_test_and_set(&__love_mt.lock, 1)) sc0(NR_sched_yield); }
+static void __mgive(void) { if (__love_mt.threads) __sync_lock_release(&__love_mt.lock); }
+static void __mput(__mhdr *b) {                        /* the arena's own free, lock held */
+  __mhdr *q = __mfree;
   for (; !(b > q && b < q->next); q = q->next)
     if (q >= q->next && (b > q || b < q->next)) break;   /* at the arena's wrap point */
   if (b + b->size == q->next) { b->size += q->next->size; b->next = q->next->next; }
@@ -21,6 +25,11 @@ void free(void *p) {
   if (q + q->size == b) { q->size += b->size; q->next = b->next; }
   else q->next = b;
   __mfree = q; }
+void free(void *p) {
+  if (!p) return;
+  __mhdr *b = (__mhdr *) p - 1;
+  if (b->next == __MDirect) { munmap(b, (long) (b->size * sizeof(__mhdr))); return; }
+  __mtake(); __mput(b); __mgive(); }
 static __mhdr *__mcore(size_t nu) {
   size_t need = (nu + 1) * sizeof(__mhdr);
   size_t len = need < (1UL << 20) ? (1UL << 20) : ((need + 4095UL) & ~4095UL);
@@ -29,7 +38,7 @@ static __mhdr *__mcore(size_t nu) {
   __mhdr *u = m;
   u->size = len / sizeof(__mhdr);
   u->next = 0;
-  free((void *) (u + 1));
+  __mput(u);
   return __mfree; }
 static void *__mbig(size_t nu) {                        /* its own mapping, given back whole */
   size_t len = (nu * sizeof(__mhdr) + 4095UL) & ~4095UL;
@@ -39,9 +48,7 @@ static void *__mbig(size_t nu) {                        /* its own mapping, give
   u->size = len / sizeof(__mhdr);
   u->next = __MDirect;
   return (void *) (u + 1); }
-void *malloc(size_t n) {
-  size_t nu = (n + sizeof(__mhdr) - 1) / sizeof(__mhdr) + 1;
-  if (n >= MBig) return __mbig(nu);
+static void *__marena(size_t nu) {
   __mhdr *prev = __mfree;
   if (!prev) { __mbase.next = __mfree = prev = &__mbase; __mbase.size = 0; }
   for (__mhdr *q = prev->next; ; prev = q, q = q->next) {
@@ -53,3 +60,10 @@ void *malloc(size_t n) {
       return (void *) (q + 1); }
     if (q == __mfree)
       if (!(q = __mcore(nu))) { __errno_v = ENOMEM; return 0; } } }
+void *malloc(size_t n) {
+  size_t nu = (n + sizeof(__mhdr) - 1) / sizeof(__mhdr) + 1;
+  if (n >= MBig) return __mbig(nu);
+  __mtake();
+  void *p = __marena(nu);
+  __mgive();
+  return p; }

@@ -20,13 +20,13 @@ _Static_assert(sizeof(struct __lx_statx) == 256, "statx buffer is the kernel's 2
  * stat they already do, linux needs statx. 0 filled | 1 none kept | -1, errno set.
  * "none" READS AS A DATE on both BSDs -- freebsd VNOVAL (-1, 1969), netbsd 0 (1970, an
  * FFSv1 inode having no field) -- and nofollow is 0x200 there where linux's is 0x100. */
-int __ai_birth(char const *p, int follow, struct timespec *out) {
-  if (__ai_osv == 2) {
+int __love_birth(char const *p, int follow, struct timespec *out) {
+  if (__love_osv == 2) {
     struct __fb_stat f;
     if (er(sc4(NR_newfstatat, AT_FDCWD, (long) p, (long) &f, follow ? 0 : 0x200)) < 0) return -1;
     if (f.st_birthtim.tv_sec < 0) return 1;
     return *out = f.st_birthtim, 0; }
-  if (__ai_osv == 3) {
+  if (__love_osv == 3) {
     struct __nb_stat f;
     if (er(sc4(NR_newfstatat, AT_FDCWD, (long) p, (long) &f, follow ? 0 : 0x200)) < 0) return -1;
     if (!f.btime) return 1;

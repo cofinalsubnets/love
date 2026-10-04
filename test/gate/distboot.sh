@@ -1,53 +1,50 @@
 #!/bin/sh
-# test/gate/distboot.sh -- either release artifact, built with `make`, gives the same binary.
-# SOURCE bootstraps through the machine's C compiler; SEED carries its own source and
-# toolchain and touches no ambient compiler. the two are compared to each other.
+# test/gate/distboot.sh -- the source the artifact carries, built with `make`, gives the same
+# binary by either road. LEAN bootstraps it through the machine's C compiler; SEED builds it
+# with its own toolchain and touches no ambient compiler. the two are compared to each other.
 #
 # this holds because the local cc builds only love0, and every object in the product is
 # mooncc's -- test_fixpoint's property, stated across the artifacts.
 # the seed lane shadows cc/gcc/clang with scripts that fail, so a build that succeeds
 # was done by the bundled love. the seed lays its carried source (src/tools/mksrc.l,
 # src/love/src.c) and `love seed` builds it, then rebuilds itself from it byte for byte.
-# the seed is the tree's own out/love, and it re-cuts its archive from the tree
+# the seed is the tree's own out/love, and each laid tree re-cuts its container from itself
 # (selfpack); the claim compare runs before the circle leg, whose `make dist` bakes the
 # compared binary in place.
 #
 # minutes, not seconds; opt-in by name.
-# usage: distboot.sh SOURCE_TGZ SEED_EXE
+# usage: distboot.sh SEED_EXE
 . test/gate/skip.sh
 set -u
 
-src=$1
-seed=$2
+seed=$1
 
-[ -f "$src" ] || { echo "distboot: no $src -- run 'make dist'"; exit 1; }
 [ -x "$seed" ] || { echo "distboot: no $seed -- run 'make dist'"; exit 1; }
 command -v make >/dev/null 2>&1 || gate_skip "distboot: no make, skipped"
 
 R=$(pwd)
+case $seed in /*) ;; *) seed=$R/$seed ;; esac
 w=$(mktemp -d)
 trap 'rm -rf "$w"' EXIT
 fail() { echo "FAIL distboot: $*" >&2; exit 1; }
 
-# our own extractor, so the gate leans on nothing it is not already testing
-love=$R/out/love
-[ -x "$love" ] || fail "no $love"
-
 echo "distboot: two bootstraps and a self-rebuild, this takes a few minutes"
 
-# ---- 1. SOURCE, through the machine's own compiler ---------------------------
+# ---- 1. LEAN, through the machine's own compiler -----------------------------
+# LOVE_NO_IMAGE= (empty = UNSET) leads, as on every run of the artifact below
 mkdir -p "$w/lean"
-"$love" "$R/src/tools/tgz.l" x "$src" "$w/lean" > /dev/null || fail "cannot unpack $src"
+( cd "$w/lean" && LOVE_NO_IMAGE= "$seed" source ) > "$w/leanlay.log" 2>&1 \
+  || { tail -20 "$w/leanlay.log"; fail "the seed could not lay its source"; }
 lean=$(echo "$w"/lean/love-*/)
-[ -d "$lean" ] || fail "the source tarball unpacked no love-<ver>/ directory"
-[ -f "$lean/VERSION" ] || fail "the source tarball carries no VERSION (the binary would stamp 'unknown')"
-[ ! -e "$lean/.git" ] || fail "the source tarball shipped a .git"
+[ -d "$lean" ] || fail "'love source' laid no love-<ver>/ directory"
+[ -f "$lean/VERSION" ] || fail "the carried source has no VERSION (the binary would stamp 'unknown')"
+[ ! -e "$lean/.git" ] || fail "the carried source shipped a .git"
 ( cd "$lean" && make -j"$(nproc 2>/dev/null || echo 4)" out/love ) > "$w/lean.log" 2>&1 \
   || { tail -20 "$w/lean.log"; fail "the source artifact does not build"; }
 [ -x "$lean/out/love" ] || fail "the source build produced no love"
-echo "  OK source: builds through the ambient cc"
+echo "  OK lean: builds through the ambient cc"
 
-# ---- 2. SEED, which needs no tarball at all and no compiler ------------------
+# ---- 2. SEED, which needs no compiler ----------------------------------------
 mkdir -p "$w/nocc"
 for c in cc gcc clang c99 tcc; do
   printf '#!/bin/sh\necho "distboot: the ambient %s was called -- the bundled love should have been the compiler" >&2\nexit 1\n' "$c" > "$w/nocc/$c"
@@ -79,21 +76,21 @@ selfd=$(echo "$w"/self/love-*/)
   > "$w/selfb.log" 2>&1 \
   || { tail -20 "$w/selfb.log"; fail "the seed-laid tree does not build without an ambient compiler"; }
 grep -q "was called" "$w/selfb.log" && { grep "was called" "$w/selfb.log" | head -3; fail "the seed-laid build reached for an ambient compiler"; }
-echo "  OK seed: one binary lays its own source and builds it, no tar and no ambient cc"
+echo "  OK seed: one binary lays its own source and builds it, no ambient cc"
 
 # ---- 3. THE CLAIM ------------------------------------------------------------
 # Both binaries here are the bare LINKS (the explicit out/love target, no
-# .baked asked) -- and each embeds its archive, so this one cmp also proves the
-# lean tree's selfpack re-cut the very bytes the seed carried.
+# .baked asked) -- and each embeds its container, so this one cmp also proves the
+# two trees' selfpack re-cut the same bytes.
 if cmp -s "$lean/out/love" "$selfd/out/love"; then
   echo "  OK both artifacts answer the SAME binary ($(wc -c < "$lean/out/love") bytes)"
 else
   ls -l "$lean/out/love" "$selfd/out/love"
-  fail "source and seed built DIFFERENT binaries -- the release claim is false"
+  fail "lean and seed built DIFFERENT binaries -- the release claim is false"
 fi
 
 # ---- 4. THE CIRCLE CLOSES: the artifact rebuilds ITSELF, to the byte ---------
-# The chain whole: cut a tarball, bootstrap it, build the artifact, extract the source
+# The chain whole: cut the container, bootstrap it, build the artifact, extract the source
 # back OUT of the artifact, and rebuild -- and the second artifact is the first one's
 # bytes. That is a stronger claim than "it builds": it says the artifact carries
 # everything it was made from and nothing about the machine it was made on leaked in.
@@ -113,9 +110,8 @@ fi
 # image used to carry the baker's ASLR base (raw kept absolutes, the header's address
 # pair, a dead JIT husk's W^X pointer) and `born`, the hatch duration -- so two bakes of
 # one tree differed by 180012 bytes and no artifact could ever equal another.
-# and the archive rides ALONG: `love source` lays the very bytes it carried, and a
-# re-cut (selfpack, the one cutter) answers the same bytes -- the cmp below is what
-# holds that to the byte. Same blob in, same binary out.
+# and a re-cut (selfpack, the one cutter) of the laid tree answers the bytes the binary
+# carried -- the cmp below is what holds that to the byte. Same tree in, same binary out.
 mkdir -p "$w/circle"
 ( cd "$w/self" && env PATH="$w/nocc" LOVE_NO_IMAGE= ./love seed "$w/circle" ) \
   > "$w/selfd.log" 2>&1 \

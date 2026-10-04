@@ -41,7 +41,7 @@ rm -f "$d"/*.elf "$d"/*.bin
   printf 'int (*const vt[2])(void) = { f1, f2 };\n'
   printf 'const char *msg = "hi";\n'
   printf 'int *const ap = &acc;\n'
-  printf 'int __ai_start(void){ return vt[0]() + vt[1]() + *ap + msg[0]; }\n'
+  printf 'int __love_start(void){ return vt[0]() + vt[1]() + *ap + msg[0]; }\n'
 } > "$d/rel.c"
 
 delta=65536

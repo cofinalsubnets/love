@@ -1,5 +1,5 @@
-// src/love/image.c -- file I/O around the stdio-free image codec in snap.c (ai_image_save /
-// ai_image_load). that codec rides love_tu, which the src/inle/ boards link with no stdio
+// src/love/image.c -- file I/O around the stdio-free image codec in snap.c (image_save /
+// love_image_load). that codec rides love_tu, which the src/inle/ boards link with no stdio
 // aboard, so stdio stops here. main.c calls image_bake (lay the image back into the
 // binary's own .image section), image_dump (write a plain image file) and image_load.
 // bake and dump answer 0 ok / <0 error; load answers NULL on any problem, so the caller
@@ -24,10 +24,10 @@
 // the scratch beside a bake's target, per-process. two loves bake the same name
 // concurrently all the time under `make -jN`, and on one shared name they interleave into
 // each other's bytes, the second to rename answering ENOENT. NULL on refusal.
-static char *bake_scratch(struct ai *g, char const *path) {
+static char *bake_scratch(struct g *g, char const *path) {
   long pid = (long) getpid();
   int n = snprintf(NULL, 0, "%s.bake.%ld", path, pid);       // measure, then the one exact block
-  char *t = n < 0 ? NULL : ai_alloc(NULL, (size_t) n + 1);
+  char *t = n < 0 ? NULL : alloc(NULL, (size_t) n + 1);
   if (t) snprintf(t, (size_t) n + 1, "%s.bake.%ld", path, pid);
   return t; }
 
@@ -37,8 +37,8 @@ static char *bake_scratch(struct ai *g, char const *path) {
 // lvm_ ap's tail-jump (make vmret). 0 ok, <0 refused.
 // the bake's choices off the environment: LOVE_BAKE_CHUNK the words of a stream chunk,
 // LOVE_BAKE_HOT a file of word ranges, "a b" a line, that a profile of this layout touched
-static void *image_save_env(struct ai *g, uintptr_t *len) {
-  struct ai_image_opt o = { 0, NULL, 0 };
+static void *image_save_env(struct g *g, uintptr_t *len) {
+  struct image_opt o = { 0, NULL, 0 };
   char const *c = getenv("LOVE_BAKE_CHUNK"), *h = getenv("LOVE_BAKE_HOT");
   uint64_t *r = NULL;
   if (c && *c) o.chunk = (uintptr_t) strtoul(c, NULL, 10);
@@ -51,19 +51,19 @@ static void *image_save_env(struct ai *g, uintptr_t *len) {
       if (c >= '0' && c <= '9') { v = 10 * v + (uint64_t) (c - '0'), in = 1; continue; }
       if (!in) continue;
       if (n + 1 > cap) {
-        uint64_t *t = ai_alloc(NULL, (cap = cap ? 2 * cap : 1024) * sizeof *t);
+        uint64_t *t = alloc(NULL, (cap = cap ? 2 * cap : 1024) * sizeof *t);
         if (!t) break;
-        if (r) memcpy(t, r, n * sizeof *t), ai_alloc(r, 0);
+        if (r) memcpy(t, r, n * sizeof *t), alloc(r, 0);
         r = t; }
       r[n++] = v, v = 0, in = 0;
       if (c == EOF) break; }
     fclose(f);
     o.hot = r, o.nhot = n / 2; }
-  void *buf = ai_image_save2(g, len, NULL, &o);
-  if (r) ai_alloc(r, 0);
+  void *buf = image_save2(g, len, NULL, &o);
+  if (r) alloc(r, 0);
   return buf; }
 
-ai_noinline static int image_put(struct ai *g) {
+love_noinline static int image_put(struct g *g) {
   uintptr_t len = 0;
   void *buf = image_save_env(g, &len);
   if (!buf) return -2;
@@ -78,14 +78,14 @@ ai_noinline static int image_put(struct ai *g) {
     if (f && fclose(f)) rc = -4;
     if (!rc && rename(tmp, path)) rc = -4;        // the adopt: atomic, a whole file or none
     if (rc) remove(tmp);
-    ai_alloc(tmp, 0); }
-  return ai_alloc(buf, 0), rc; }
+    alloc(tmp, 0); }
+  return alloc(buf, 0), rc; }
 
 // `bake PATH`: image_put reads the path off the stack, so the C string goes there first.
 // the push can move g, so g comes back out, and the rc rides g->b, written last.
-struct ai *image_dump(struct ai *g, char const *path) {
-  g = ai_strof(g, path);
-  if (!ai_ok(g)) return ai_core_of(g)->b = -2, g;
+struct g *image_dump(struct g *g, char const *path) {
+  g = strof(g, path);
+  if (!ok(g)) return core_of(g)->b = -2, g;
   int rc = image_put(g);
   g->sp++;
   return g->b = rc, g; }
@@ -107,20 +107,20 @@ struct ai *image_dump(struct ai *g, char const *path) {
 // PROGBITS, patchable in place, never .bss. the bake grows the section, so this stub exists
 // only to give it an address.
 #define ReserveWords 2u
-__attribute__((section(".love.image"))) uint64_t ai_baked_image[ReserveWords] = {1};
-uintptr_t ai_baked_image_len = ReserveWords * 8u;
+__attribute__((section(".love.image"))) uint64_t baked_image[ReserveWords] = {1};
+uintptr_t baked_image_len = ReserveWords * 8u;
 // the stub's size is a lie gcc believes: ReserveWords is 2 because the bake grows the
 // object, so a read past the second word is out of bounds of the declaration and in bounds
-// of the section. main.c's `extern uint64_t ai_baked_image[]` never hears about it.
+// of the section. main.c's `extern uint64_t baked_image[]` never hears about it.
 #if defined(__GNUC__) && !defined(__clang__) && !defined(__mooncc__)
 #pragma GCC diagnostic ignored "-Warray-bounds"
 #endif
 // --- the carried image -------------------------------------------------------
 // the section holds one image; its first word is the codec's own magic. an unbaked
 // binary carries a stub too short to be one, and the caller boots the egg.
-int ai_baked_pick(void const **blob, uintptr_t *blen) {
-  return *blob = (void const *) ai_baked_image, *blen = ai_baked_image_len,
-         ai_baked_image_len > 0; }
+int baked_pick(void const **blob, uintptr_t *blen) {
+  return *blob = (void const *) baked_image, *blen = baked_image_len,
+         baked_image_len > 0; }
 
 struct bake_at { uintptr_t addr, off; int found; };
 static int bake_phdr(struct dl_phdr_info *in, size_t sz, void *d) {
@@ -143,7 +143,7 @@ static int bake_move(int src, int dst, uint64_t soff, uint64_t doff, uint64_t n,
   return 0; }
 
 // lay the image. 0 done, >0 "this binary is not laid for growth", <0 a real failure.
-static int bake_tail(struct ai *g, int src, char const *tmp, void const *buf, uintptr_t len,
+static int bake_tail(struct g *g, int src, char const *tmp, void const *buf, uintptr_t len,
                      uint64_t lenoff, uint64_t imgoff, mode_t mode) {
   Elf64_Ehdr eh;
   Elf64_Shdr *sh = NULL;
@@ -157,13 +157,13 @@ static int bake_tail(struct ai *g, int src, char const *tmp, void const *buf, ui
       || eh.e_shentsize != sizeof(Elf64_Shdr) || eh.e_phentsize != sizeof(Elf64_Phdr)
       || eh.e_shnum < 2 || !eh.e_phnum || eh.e_shstrndx >= eh.e_shnum) return 1;
   nsh = eh.e_shnum, nph = eh.e_phnum;
-  sh = ai_alloc(NULL, nsh * sizeof *sh), ph = ai_alloc(NULL, nph * sizeof *ph);
-  win = ai_alloc(NULL, BakeScratch);
+  sh = alloc(NULL, nsh * sizeof *sh), ph = alloc(NULL, nph * sizeof *ph);
+  win = alloc(NULL, BakeScratch);
   if (!sh || !ph || !win) { rc = -6; goto out; }
   if (pread(src, sh, nsh * sizeof *sh, (off_t) eh.e_shoff) != (ssize_t)(nsh * sizeof *sh)
       || pread(src, ph, nph * sizeof *ph, (off_t) eh.e_phoff) != (ssize_t)(nph * sizeof *ph))
     { rc = -6; goto out; }
-  if (!(str = ai_alloc(NULL, sh[eh.e_shstrndx].sh_size + 1))) { rc = -6; goto out; }
+  if (!(str = alloc(NULL, sh[eh.e_shstrndx].sh_size + 1))) { rc = -6; goto out; }
   if (pread(src, str, sh[eh.e_shstrndx].sh_size, (off_t) sh[eh.e_shstrndx].sh_offset)
       != (ssize_t) sh[eh.e_shstrndx].sh_size) { rc = -6; goto out; }
   str[sh[eh.e_shstrndx].sh_size] = 0;
@@ -184,7 +184,7 @@ static int bake_tail(struct ai *g, int src, char const *tmp, void const *buf, ui
   if (pi == nph) goto out;                        // .image does not end a segment: not the tail
   for (size_t i = 0; i < nph; i++)                // ..and no other segment lives above it
     if (i != pi && ph[i].p_type == PT_LOAD && ph[i].p_vaddr > ph[pi].p_vaddr) goto out;
-  // the blob's home is ai_baked_image's, not the section's. a lay may open the section
+  // the blob's home is baked_image's, not the section's. a lay may open the section
   // with alignment padding ahead of the symbol -- the address is congruent to the file
   // offset, which says nothing about the symbol's own alignment -- and the wake reads from
   // the symbol. pad is that gap: it rides inside the head and the two records below carry
@@ -210,7 +210,7 @@ static int bake_tail(struct ai *g, int src, char const *tmp, void const *buf, ui
   ph[pi].p_filesz = ph[pi].p_memsz = al + pad + len;   // .image ends the segment, so its growth is the segment's
   eh.e_shoff = cur = (cur + 7) & ~(uint64_t) 7;
   // FIXME remove bare block delimiters like this, rename scoped variables if needed
-  { uintptr_t l = len;                            // ai_baked_image_len: what main.c hands the codec
+  { uintptr_t l = len;                            // baked_image_len: what main.c hands the codec
     if (pwrite(dst, sh, nsh * sizeof *sh, (off_t) cur) != (ssize_t)(nsh * sizeof *sh)
         || pwrite(dst, ph, nph * sizeof *ph, (off_t) eh.e_phoff) != (ssize_t)(nph * sizeof *ph)
         || pwrite(dst, &eh, sizeof eh, 0) != (ssize_t) sizeof eh
@@ -219,30 +219,30 @@ static int bake_tail(struct ai *g, int src, char const *tmp, void const *buf, ui
   if (dst >= 0) {
     if (!rc && (fchmod(dst, mode) || fsync(dst))) rc = -6;
     if (close(dst)) rc = -6; }
-  ai_alloc(sh, 0), ai_alloc(ph, 0), ai_alloc(str, 0), ai_alloc(win, 0);
+  alloc(sh, 0), alloc(ph, 0), alloc(str, 0), alloc(win, 0);
   return rc; }
 
 // `bare` lays the sentinel stub back instead of a snapshot -- the section a fresh link
 // carries -- so the answer is an imageless binary, and no heap has to be saved.
-int image_bake(struct ai *g, char const *out, int bare) {
+int image_bake(struct g *g, char const *out, int bare) {
   uint64_t stub[ReserveWords] = {1};
   uintptr_t len = sizeof stub;
   void *buf = bare ? NULL : image_save_env(g, &len);
   // the natives ride: their code is a segment of the image, woken as a chunk of the
   // arena. only a refused bake (below) is worth a word.
   if (!bare && !buf) return -2;
-  // ai_baked_image_len is patched by file offset, taken from the running program's own
+  // baked_image_len is patched by file offset, taken from the running program's own
   // phdrs -- the one place a live address and a file position name the same byte. a copy
   // is this binary's head byte for byte, so the same offset names the same word there.
-  struct bake_at bl = { (uintptr_t) &ai_baked_image_len, 0, 0 },
-                 bi = { (uintptr_t) ai_baked_image, 0, 0 };     // ..and the blob goes where that symbol reads
+  struct bake_at bl = { (uintptr_t) &baked_image_len, 0, 0 },
+                 bi = { (uintptr_t) baked_image, 0, 0 };     // ..and the blob goes where that symbol reads
   dl_iterate_phdr(bake_phdr, &bl);
   dl_iterate_phdr(bake_phdr, &bi);
-  if (!bl.found || !bi.found) return ai_alloc(buf, 0), -5;
+  if (!bl.found || !bi.found) return alloc(buf, 0), -5;
   // exe[4096] is the kernel's own PATH_MAX, not a cap of ours: host_selfpath asks about a
   // real file, and no path an open could name is longer.
   char exe[4096];
-  if (!host_selfpath(exe, sizeof exe)) return ai_alloc(buf, 0), -6;
+  if (!host_selfpath(exe, sizeof exe)) return alloc(buf, 0), -6;
   char const *dst = out ? out : exe;
   char *tmp = bake_scratch(g, dst);
   struct stat st;
@@ -255,8 +255,8 @@ int image_bake(struct ai *g, char const *out, int bare) {
     if (!rc && rename(tmp, dst)) rc = -6;         // the adopt: atomic, a new inode
     if (rc) unlink(tmp); }
   if (src >= 0) close(src);
-  ai_alloc(tmp, 0);
-  return ai_alloc(buf, 0), rc; }
+  alloc(tmp, 0);
+  return alloc(buf, 0), rc; }
 
 // the (bake path) nif: `love wake path prog.l ..` boots a session carrying every global
 // this one had pinned, a live native closure among them -- its code is bytes the image
@@ -264,19 +264,19 @@ int image_bake(struct ai *g, char const *out, int bare) {
 // FIXME extend LvmCall macro to handle this.
 static lvm(lvm_bake) {
  Pack(g);
- word r = cstrp(g->sp[0]) && !image_put(g) ? putcharm(1) : ai_zero;
+ word r = cstrp(g->sp[0]) && !image_put(g) ? putcharm(1) : zero;
  Unpack(g);
  Sp[0] = r;
- ai_musttail return Next(1); }
+ love_musttail return Next(1); }
 
 static union u const nif_bake[] = {{lvm_bake}, {lvm_ret0}};
 LvNif("bake", nif_bake, NULL);
 
-struct ai *image_load(char const *path) {
+struct g *image_load(char const *path) {
   int fd = open(path, O_RDONLY);
   if (fd < 0) return NULL;
   struct stat st;
-  struct ai *g = NULL;
+  struct g *g = NULL;
   if (!fstat(fd, &st) && st.st_size > 0) {        // map, don't read: the core copies the blob straight
     size_t n = (size_t) st.st_size;               // out of the page cache -- one pass, no file buffer
     void *buf = mmap(NULL, n, PROT_READ, MAP_PRIVATE, fd, 0);
@@ -288,7 +288,7 @@ struct ai *image_load(char const *path) {
         char *nl = memchr(buf, '\n', n);
         if (nl) off = (size_t)(nl - (char*) buf) + 1; }
       // kept: a woken session keeps the map, so its code and heap chunks wake as first touched
-      if (off < n) g = ai_image_load((char*) buf + off, (uintptr_t)(n - off), 2);
+      if (off < n) g = love_image_load((char*) buf + off, (uintptr_t)(n - off), 2);
       if (!g) munmap(buf, n); } }
   close(fd);
   return g; }

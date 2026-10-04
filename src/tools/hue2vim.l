@@ -87,7 +87,12 @@
           'span
            (: q (string a) e (string (hue-rule r 2))
               (line ("syn region " + g + " start='" + q + "' skip='" + e + e + e + e
-                     + "\\|" + e + e + q + "' end='" + q + "'")))
+                     + "\\|" + e + e + q + "' end='" + q + "' contains=LoveHole"),
+               ; a hole, "a \\(x) b": code to its closer, bracketed like a list
+               line ("syn region LoveHole matchgroup=" + pgroup + " start='" + e + e + "(' end='[)\\]}]'"
+                     + " contained contains=@LoveListCluster,LoveList,LoveList0"),
+               ; a raw text: three or more quotes and as many to close, no escapes
+               line ("syn region " + g + " start='\\z(" + q + "\\{3,}\\)' end='\\z1'")))
           'mark
            (line ("syn match " + g + " \"" + string a + "[^" + stop + "]*\""))
           ; sep: one byte standing alone, and a tag of its own because both
@@ -185,6 +190,7 @@
    _ (each hue-classes (r \ line $ "hi def link " + pad (grp r) 14 + " " + string (hue-grp r)))
    _ (line ("hi def link " + pad "LoveTodo" 14 + " Todo"))
    _ (line ("hi def link " + pad "LoveParenError" 14 + " Error"))
+   _ (line ("hi def link " + pad "LoveHole" 14 + " Normal"))     ; a hole's inside is code
    _ (blank ())
    _ (line "\" Rainbow parentheses -- each nesting level gets its own colour, level 9 wraps")
    _ (line "\" to 0. Toggle with g:love_rainbow (default: off, one flat Delimiter).")

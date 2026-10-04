@@ -1,5 +1,5 @@
-#ifndef _AI_DIRENT_H
-#define _AI_DIRENT_H
+#ifndef _LOVE_DIRENT_H
+#define _LOVE_DIRENT_H
 typedef struct __dirstream DIR;   /* opaque; glibc owns it */
 struct dirent {
   unsigned long  d_ino;
@@ -21,4 +21,5 @@ DIR *fdopendir(int);
 struct dirent *readdir(DIR*);
 int closedir(DIR*);
 int dirfd(DIR*);
+void rewinddir(DIR*);
 #endif

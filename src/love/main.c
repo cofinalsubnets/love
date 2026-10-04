@@ -10,39 +10,38 @@
 #include <poll.h>
 #include <errno.h>
 #include <math.h>
-#include <stddef.h>      // offsetof (the struct ai_wait_fd / struct pollfd assert)
+#include <stddef.h>      // offsetof (the struct wait_fd / struct pollfd assert)
 #if defined(__moonlibc__)
 #endif
 #include <stdnoreturn.h>
 #include <signal.h>
 #include <sys/wait.h>
-#include <sys/mman.h>    // the carried source's inflate buffer (mmap, no malloc)
 
-// ai_clock lives in src/love/posix.c, one body for this frontend and the kernel's.
+// love_clock lives in src/love/posix.c, one body for this frontend and the kernel's.
 // the fine clock's real source (the weak default in love.c degrades to ms*1e6)
-ai_noinline intptr_t ai_nclock(void) {
+love_noinline intptr_t nclock(void) {
  struct timespec ts;
  return clock_gettime(CLOCK_MONOTONIC, &ts) ? -1
   : (intptr_t) ts.tv_sec * 1000000000 + ts.tv_nsec; }
 
 
-static void stdin_give(struct ai *g) {
- if (!g || !ai_ok(g)) return;
+static void stdin_give(struct g *g) {
+ if (!g || !ok(g)) return;
  if (g->inflag)                                          // its blocking bit was ours: back it goes
   fcntl(STDIN_FILENO, F_SETFL, (int) getcharm(g->inflag)), g->inflag = 0;
  if (!g->inport || lseek(STDIN_FILENO, 0, SEEK_CUR) < 0) return;   // an unseekable door: stdin_hand's
- uintptr_t n = ai_io_pending(g, (struct ai_io*) g->inport)
-             + (getcharm(ai_stdin.io.ungetc_buf) != EOF ? 1 : 0);
+ uintptr_t n = io_pending(g, (struct io*) g->inport)
+             + (getcharm(love_stdin.io.ungetc_buf) != EOF ? 1 : 0);
  if (n) lseek(STDIN_FILENO, -(off_t) n, SEEK_CUR); }
 
-static struct ai *stdin_take(struct ai *g) {
- if (!ai_ok(g)) return g;
+static struct g *stdin_take(struct g *g) {
+ if (!ok(g)) return g;
  if (lseek(STDIN_FILENO, 0, SEEK_CUR) < 0) {              // not seekable: a tty, or a pipe
   if (isatty(STDIN_FILENO)) return g;
   int fl = fcntl(STDIN_FILENO, F_GETFL);                  // a pipe: take the bit and the bytes
   if (fl >= 0 && ((fl & O_NONBLOCK) || fcntl(STDIN_FILENO, F_SETFL, fl | O_NONBLOCK) >= 0))
    g->inflag = putcharm(fl); }                            // already-nonblocking restores to itself
- if (!ai_ok(g = ai_io_alloc(g, STDIN_FILENO))) return g;
+ if (!ok(g = io_alloc(g, STDIN_FILENO))) return g;
  g->inport = g->sp[0], g->sp++;
  return g; }
 
@@ -50,20 +49,20 @@ _lvm(k_lvm_quit);
 _lvm(k_lvm_getpid);
 
 static lvm(lvm_exit) {
- if (__ai_osv < 0) ai_musttail return Ap(k_lvm_quit, g);
+ if (__love_osv < 0) love_musttail return Ap(k_lvm_quit, g);
  for (;;) stdin_give(g), exit(getcharm(Sp[0])); }
 
                                                                           //
-static void stdin_hand(struct ai *g) {
+static void stdin_hand(struct g *g) {
  stdin_give(g);
- if (!g || !ai_ok(g)) return;
+ if (!g || !ok(g)) return;
  if (!g->inport || lseek(STDIN_FILENO, 0, SEEK_CUR) >= 0) return;   // seekable: the seek said it all
- unsigned char res[ai_iobuf + 1];
+ unsigned char res[iobuf + 1];
  uintptr_t n = 0;
- if (getcharm(ai_stdin.io.ungetc_buf) != EOF)
-  res[n++] = (unsigned char) getcharm(ai_stdin.io.ungetc_buf),
-  ai_stdin.io.ungetc_buf = putcharm(EOF);
- n += ai_io_read_drain(g, (struct ai_io*) g->inport, res + n, sizeof res - n);
+ if (getcharm(love_stdin.io.ungetc_buf) != EOF)
+  res[n++] = (unsigned char) getcharm(love_stdin.io.ungetc_buf),
+  love_stdin.io.ungetc_buf = putcharm(EOF);
+ n += io_read_drain(g, (struct io*) g->inport, res + n, sizeof res - n);
  if (!n) return;                                                    // nothing owed: the fd is already exact
  int p[2];
  if (pipe(p)) return;
@@ -71,12 +70,12 @@ static void stdin_hand(struct ai *g) {
  if (pid < 0) return close(p[0]), (void) close(p[1]);
  if (!pid) {                                                        // the pumper: residue, then the rest
   close(p[0]);
-  if (ai_fd_write_all(p[1], res, n) == n)
+  if (love_fd_write_all(p[1], res, n) == n)
    for (;;) {
-    unsigned char buf[ai_iobuf];
+    unsigned char buf[iobuf];
     ssize_t k = read(STDIN_FILENO, buf, sizeof buf);
     if (k < 0 && errno == EINTR) continue;                          // a signal is not an end
-    if (k <= 0 || ai_fd_write_all(p[1], buf, (uintptr_t) k) < (uintptr_t) k) break; }
+    if (k <= 0 || love_fd_write_all(p[1], buf, (uintptr_t) k) < (uintptr_t) k) break; }
   _exit(0); }                                                       // _exit: no atexit, no flush, no love
  close(p[1]);
  if (p[0] != STDIN_FILENO) dup2(p[0], STDIN_FILENO), close(p[0]); }
@@ -87,44 +86,44 @@ static void host_teeout(char const *p, size_t n) {
   if (w < 0) { if (errno == EINTR) continue; return; }
   p += w, n -= (size_t) w; } }
 
-static struct ai *host_harkst(struct ai *g, intptr_t fd, intptr_t pid, int tee) {
- g = ai_push(g, 3, putcharm(0), putcharm(fd), putcharm(pid));
- if (ai_ok(g)) g->sp[3] = putcharm(tee);
+static struct g *host_harkst(struct g *g, intptr_t fd, intptr_t pid, int tee) {
+ g = push(g, 3, putcharm(0), putcharm(fd), putcharm(pid));
+ if (ok(g)) g->sp[3] = putcharm(tee);
  return g; }
 
 // the first ap: marshal argv, fork, and confirm the exec. called with g Packed;
 // argv is at sp[0]. returns a not-ok g only on oom.
-ai_noinline static struct ai *host_harkstart(struct ai *g, int tee) {
+love_noinline static struct g *host_harkstart(struct g *g, int tee) {
  char **cav;
- g = ai_argv_marshal(g, &cav);
+ g = love_argv_marshal(g, &cav);
  if (!cav) {                                              // a misuse, or the reserve
-  if (!ai_ok(g)) return g;
+  if (!ok(g)) return g;
   g = host_harkst(g, -1, 0, tee);                         // then the nom: harkst's push can collect
-  return ai_push(g, 1, ai_badarg(g)); }
+  return push(g, 1, badarg(g)); }
 
  int op[2], ep[2];
  // errno into a local before every state push: the push may collect, and a collection
  // that grows the pool makes syscalls of its own.
  if (pipe(op)) { int e = errno;
   g = host_harkst(g, -1, 0, tee);
-  return ai_push(g, 1, ai_err(g, e)); }
+  return push(g, 1, love_err(g, e)); }
  if (pipe(ep)) { int e = errno; close(op[0]); close(op[1]);
   g = host_harkst(g, -1, 0, tee);
-  return ai_push(g, 1, ai_err(g, e)); }
+  return push(g, 1, love_err(g, e)); }
  fcntl(op[0], F_SETFD, FD_CLOEXEC), fcntl(ep[0], F_SETFD, FD_CLOEXEC), fcntl(ep[1], F_SETFD, FD_CLOEXEC);
  fflush(stdout);
  pid_t pid = fork();
  if (pid < 0) { int e = errno;
   close(op[0]); close(op[1]); close(ep[0]); close(ep[1]);
   g = host_harkst(g, -1, 0, tee);
-  return ai_push(g, 1, ai_err(g, e)); }
+  return push(g, 1, love_err(g, e)); }
  if (!pid) {                                              // child
   signal(SIGPIPE, SIG_DFL);                               // the ignore must not ride the exec
   dup2(op[1], STDOUT_FILENO);
   int nul = open("/dev/null", O_RDONLY);
   if (nul >= 0) { dup2(nul, STDIN_FILENO); if (nul > 2) close(nul); }
   close(op[0]); close(op[1]); close(ep[0]);
-  execvp(ai_argv_file(cav), cav);
+  execvp(argv_file(cav), cav);
   int e = errno; ssize_t w = write(ep[1], &e, sizeof e); (void) w;
   _exit(127); }
  close(op[1]); close(ep[1]);                              // parent
@@ -135,13 +134,13 @@ ai_noinline static struct ai *host_harkstart(struct ai *g, int tee) {
   close(op[0]);
   int st; while (waitpid(pid, &st, 0) < 0 && errno == EINTR) {}
   g = host_harkst(g, -1, 0, tee);
-  return ai_push(g, 1, ai_err(g, childerr)); }
+  return push(g, 1, love_err(g, childerr)); }
 
  int fl = fcntl(op[0], F_GETFL);
  if (fl >= 0) fcntl(op[0], F_SETFL, fl | O_NONBLOCK);
  return str0(host_harkst(g, op[0], pid, tee), 1u << 16); }  // capture -> sp[0]
 
-ai_noinline static struct ai *host_harkdrain(struct ai *g) {
+love_noinline static struct g *host_harkdrain(struct g *g) {
  intptr_t fd = getcharm(g->sp[2]);
  if (fd == -1) return g;                        // nothing was spawned: sp[0] is the answer
  pid_t pid = (pid_t) getcharm(g->sp[3]);
@@ -151,7 +150,7 @@ ai_noinline static struct ai *host_harkdrain(struct ai *g) {
   for (;;) {
    uintptr_t lim = len(g->sp[0]);
    if (n == lim) {                                        // full -> double it and retry
-    if (ai_ok(g = grbufg(g, lim))) continue;
+    if (ok(g = grbufg(g, lim))) continue;
     // oom mid-capture: close the pipe and kill the child rather than wait on it
     close((int) fd);
     kill(pid, SIGKILL);
@@ -173,15 +172,15 @@ ai_noinline static struct ai *host_harkdrain(struct ai *g) {
                                                           //
  int st; pid_t w;
  do w = waitpid(pid, &st, WNOHANG); while (w < 0 && errno == EINTR);
- if (!w) { g->next_wake_at = ai_clock() + 1; return g; }
+ if (!w) { g->next_wake_at = love_clock() + 1; return g; }
  uintptr_t n = (uintptr_t) getcharm(g->sp[1]);
  if (n) len(g->sp[0]) = n;                              // fix logical length
  else g->sp[0] = EmptyString;                           // empty output -> the singleton
  int status = w < 0 ? -1
             : WIFEXITED(st) ? WEXITSTATUS(st)
             : WIFSIGNALED(st) ? 128 + WTERMSIG(st) : -1;
- if (!ai_ok(g = ai_have(g, Width(struct ai_chain)))) return g;
- struct ai_chain *c = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
+ if (!ok(g = have(g, Width(struct chain)))) return g;
+ struct chain *c = ini_chain((struct chain*) bump(g, Width(struct chain)),
                                 putcharm(status), g->sp[0]);
  g->sp[0] = word(c);
  g->sp[2] = putcharm(-1);                             // done
@@ -201,23 +200,23 @@ static lvm(lvm_herald) {
 static lvm(lvm_harkdrain) {
  Pack(g);
  g = host_harkdrain(g);
- if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
+ if (!ok(g)) love_musttail return Ap(_lvm_ghelp, g);
  Unpack(g);
- if (Sp[2] != putcharm(-1)) ai_musttail return Ap(lvm_yield_sw, g);
+ if (Sp[2] != putcharm(-1)) love_musttail return Ap(lvm_yield_sw, g);
  Sp[4] = Sp[0];                                           // the answer over the state
  Sp += 4; Ip += 1;
- ai_musttail return Continue(); }
+ love_musttail return Continue(); }
 
-ai_noinline static struct ai *host_exec(struct ai *g) {
+love_noinline static struct g *host_exec(struct g *g) {
  char **cav;
- g = ai_argv_marshal(g, &cav);
- if (!cav) return ai_push(g, 1, ai_badarg(g));
+ g = love_argv_marshal(g, &cav);
+ if (!cav) return push(g, 1, badarg(g));
  fflush(stdout);
  fflush(stderr);
  signal(SIGPIPE, SIG_DFL);                                 // ... nor this one
  stdin_hand(g);                                            // the child inherits fd 0: hand it over exact
- execvp(ai_argv_file(cav), cav);
- return ai_push(g, 1, ai_err(g, errno)); }                  // exec failed -> its nom
+ execvp(argv_file(cav), cav);
+ return push(g, 1, love_err(g, errno)); }                  // exec failed -> its nom
 
 static lvm(lvm_exec) {
  LvmCallp(g, 1, host_exec) }
@@ -231,21 +230,21 @@ static lvm(lvm_exec) {
 // built by the ambient cc has to say it here. moonlibc's own is the same type.
 extern char **environ;
 
-ai_noinline static struct ai *host_fexec(struct ai *g) {
+love_noinline static struct g *host_fexec(struct g *g) {
  // the fd is read BEFORE the marshal: a charm cannot move, and a port's fd is a
  // number once read, so neither needs rooting across a collection.
  word x = g->sp[0];
- intptr_t fd = charmp(x) ? getcharm(x) : ai_port_fd(x);    // a charm is a raw fd
+ intptr_t fd = charmp(x) ? getcharm(x) : port_fd(x);    // a charm is a raw fd
  char **cav;
  g->sp[0] = g->sp[1];                       // argv over the fd -- the marshal's only root
- g = ai_argv_marshal(g, &cav);
- if (!cav || fd < 0) return ai_push(g, 1, ai_badarg(g));
+ g = love_argv_marshal(g, &cav);
+ if (!cav || fd < 0) return push(g, 1, badarg(g));
  fflush(stdout);
  fflush(stderr);
  signal(SIGPIPE, SIG_DFL);
  stdin_hand(g);                                            // as host_exec: fd 0 exact
  fexecve((int) fd, cav, environ);
- return ai_push(g, 1, ai_err(g, errno)); }                 // returns only on failure
+ return push(g, 1, love_err(g, errno)); }                 // returns only on failure
 
 static lvm(lvm_fexec) {
  LvmCallp(g, 2, host_fexec) }   // returns only on failure; the errno nom over argv
@@ -254,12 +253,12 @@ static lvm(lvm_fexec) {
 // the name goes to getenv where it lies: a love string's bytes[len] is always a NUL.
 static lvm(lvm_getenv) {
  char const *v = cstrp(Sp[0]) ? getenv(txt(Sp[0])) : NULL;
- if (!v) { Sp[0] = ZeroPoint; ai_musttail return Next(1); }
- LvmCallp(g, 1, ai_strof, v) }
+ if (!v) { Sp[0] = ZeroPoint; love_musttail return Next(1); }
+ LvmCallp(g, 1, strof, v) }
 
 static lvm(lvm_getpid) {
-  if (__ai_osv < 0) ai_musttail return Ap(k_lvm_getpid, g);
-  ai_musttail return Answer(putcharm(getpid())); }
+  if (__love_osv < 0) love_musttail return Ap(k_lvm_getpid, g);
+  love_musttail return Answer(putcharm(getpid())); }
 
 static union u const
  nif_exit[] = {{lvm_exit}, {lvm_ret0}},
@@ -277,7 +276,7 @@ LvNif("fexec", nif_fexec, NULL);
 LvNif("getenv", nif_getenv, NULL);
 LvNif("getpid", nif_getpid, NULL);
 
-static struct ai *env_budget(struct ai *g) {
+static struct g *env_budget(struct g *g) {
   char const *b = getenv("LOVE_BUDGET_MB");
   if (g && b && atol(b) > 0) {
     g->budget = (uintptr_t) atol(b) * (1024 * 1024 / sizeof(word));
@@ -305,85 +304,55 @@ static char const glaze_off[] = "";
 // the tty is one terminal, so its cooked baseline and its atexit live in posix.c, which the
 // (raw on) nif drives; the capture-once latch there is what makes a repl that raws after
 // bao already did restore the true baseline rather than a raw one.
-static struct ai *run_program(struct ai *g, bool replp) {
-  if (replp) (void) ai_raw_mode(1);
-  g = ai_open(g);
-  if (getenv("LOVE_NO_GLAZE")) g = ai_evals_(g, glaze_off);
-  return ai_evals(g, replp ? "(cli-line cmdline 1)" : "(cli-line cmdline 0)"); }
+static struct g *run_program(struct g *g, bool replp) {
+  if (replp) (void) raw_mode(1);
+  g = love_open(g);
+  if (getenv("LOVE_NO_GLAZE")) g = evals_(g, glaze_off);
+  return evals(g, replp ? "(cli-line cmdline 1)" : "(cli-line cmdline 0)"); }
 
 #ifdef Love0
 // love0's seat is its own translation unit: inle/boot.c, linked only into love0.
-struct ai *boot(struct ai *g, bool argp, char const *bake, char const *bake_load, char const *bake_out);
+struct g *boot(struct g *g, bool argp, char const *bake, char const *bake_load, char const *bake_out);
 #else
 #ifdef LvBakeSrc
-#include "lib/ustar.h"
+#include "lib/srctree.h"
 static char const src_distlist[] =
 #include "distlist.h"
  ;
 
-// inflate the carried blob (gzip: skip the header fields, ISIZE names the tar)
-static unsigned char *bsrc_untar(uintptr_t *outn) {
-  uintptr_t o = 0, un = 0;
-  if (!ai_gz_body(ai_srcgz, ai_srcgz_len, &o, &un)) return NULL;
-  unsigned char *t = mmap(NULL, un ? un : 1, PROT_READ | PROT_WRITE,
-                          MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-  if (t == MAP_FAILED) return NULL;
-  if (ai_inflate_raw(ai_srcgz + o, ai_srcgz_len - o - 8, t, un) != (intptr_t) un)
-    return munmap(t, un), NULL;
-  return *outn = un, t; }
-
-// find a tree-relative path in the ustar block. the archive's paths carry a top component,
-// so match past it; a symlink member chases its target against its own directory.
-static unsigned char const *bsrc_find(unsigned char const *t, uintptr_t n,
-                                    char const *path, uintptr_t *len, int hop) {
-  uintptr_t pl = strlen(path);
-  if (hop > 3 || !pl) return NULL;
-  for (uintptr_t o = 0; o + 512 <= n && t[o];) {
-    unsigned char const *h = t + o;
-    uintptr_t sz = ai_ustar_octal(h + 124, 12);
-    if (ai_ustar_member(h)) {
-      char nm[256];
-      uintptr_t ln = ai_ustar_name(h, nm, sizeof nm);
-      if (ln == pl && !memcmp(nm, path, pl)) {
-        if (!ai_ustar_islink(h)) return *len = sz, t + o + 512;
-        char tgt[101], cn[256];
-        tgt[ai_ustar_link(h, tgt, sizeof tgt - 1)] = 0;
-        cn[ai_lnk_canon(path, tgt, cn, sizeof cn - 1)] = 0;
-        return bsrc_find(t, n, cn, len, hop + 1); } }
-    o += 512 + ((sz + 511) & ~(uintptr_t) 511); }
-  return NULL; }
-
 // lay the roster cat from the carried source, beside `at`: the crew a binary bakes when
 // no -l names one, which is how a raw love emits its baked state with no tree to hand.
-// 1 laid, 0 refused -- no blob aboard, nowhere to write, or a roster name the archive
-// does not carry. per-process, for the reason the bake's scratch is (src/love/image.c).
+// the roster is the tree's bake section, so that is the one decoded. 1 laid, 0 refused --
+// no source aboard, nowhere to write, or a roster name the tree does not carry.
+// per-process, for the reason the bake's scratch is (src/love/image.c).
 static int bsrc_lay_cat(char *cat, size_t n, char const *at) {
   char exe[4096];                                    // the kernel's own PATH_MAX, not a cap of ours
-  if (ai_srcgz_len < 18) return 0;                   // src/love/noblob.c's zero: this link carries no source
+  if (!srctree_len) return 0;                     // src/love/noblob.c's zero: this link carries no source
   if (!at && !(at = host_selfpath(exe, sizeof exe) ? exe : NULL)) return 0;
-  uintptr_t un = 0;
-  unsigned char *t = bsrc_untar(&un);
-  if (!t) return fprintf(stderr, "love: bake: the carried source will not inflate\n"), 0;
+  struct tree *t = tree_carried();
+  if (!t) return fprintf(stderr, "love: bake: the carried source will not open\n"), 0;
   snprintf(cat, n, "%s.bakecat.%ld.l", at, (long) getpid());
   int fd = open(cat, O_WRONLY | O_CREAT | O_TRUNC, 0600);
   if (fd < 0) {                                      // a read-only seat -- /usr/bin, a container layer
     fprintf(stderr, "love: bake: %s is not writable\n", cat);
-    return munmap(t, un), 0; }
+    return 0; }
   for (char const *p = src_distlist; *p;) {
     while (*p == ' ' || *p == '\n') p++;
     char w[256]; size_t wl = 0;
     while (*p && *p != ' ' && *p != '\n' && wl < 255) w[wl++] = *p++;
     if (!wl) break;
     w[wl] = 0;
-    uintptr_t ml = 0;
-    unsigned char const *m = bsrc_find(t, un, w, &ml, 0);
-    // a roster name the archive does not carry (a stale distlist), or a full filesystem
+    intptr_t i = tree_find(t, w, wl);
+    unsigned char const *m = i < 0 ? NULL : tree_bytes(t, t->rows + i);
+    uintptr_t ml = i < 0 ? 0 : t->rows[i].len;
+    // a roster name the tree does not carry (a stale distlist), one that will not decode,
+    // or a full filesystem
     if (!m || (ml && write(fd, m, ml) != (ssize_t) ml)) {
       fprintf(stderr, "love: bake: %s %s\n", w,
-              m ? "would not write" : "is not in the carried source");
-      close(fd), unlink(cat), munmap(t, un);
+              i < 0 ? "is not in the carried source" : m ? "would not write" : "will not decode");
+      close(fd), unlink(cat);
       return 0; } }
-  return close(fd), munmap(t, un), 1; }
+  return close(fd), 1; }
 #else
 #define bsrc_lay_cat(cat, n, at) 0
 #endif
@@ -395,30 +364,30 @@ static int bsrc_lay_cat(char *cat, size_t n, char const *at) {
 // fd into the image; and the name is rebound to () rather than pulled, since the seal has
 // already dropped the book. either way the name must stop holding the path, or an absolute
 // one bakes the baker's directory in.
-static struct ai *bake_eval_file(struct ai *g, char const *path) {
+static struct g *bake_eval_file(struct g *g, char const *path) {
   uintptr_t xn = strlen(path);
-  if (!ai_ok(g = str0(g, xn))) return g;
+  if (!ok(g = str0(g, xn))) return g;
   if (xn) memcpy(txt(g->sp[0]), path, xn);
-  g = ai_defv(g, "bake-load");
-  if (!ai_ok(g)) return g;
+  g = defv(g, "bake-load");
+  if (!ok(g)) return g;
   g->sp++;
-  g = ai_evals_(g,
+  g = evals_(g,
     "(: open (cite 'posix 'open) close (cite 'posix 'close)"    // the fs doors are a module's
     "   q (open bake-load \"r\")"
     " (? q (: _ (reads q) (close q))"
     "      (: _ (say err (\"love: bake: cannot open \" + bake-load)) _ (put err 10) (quit 1))))");
-  return ai_ok(g) ? ai_evals_(g, "(: bake-load ())") : g; }
+  return ok(g) ? evals_(g, "(: bake-load ())") : g; }
 
 // FIXME waaaaaaaaaaaaaaaaaaaaay too much code in string literals
-static struct ai *boot(struct ai *g, bool argp, char const *bake, char const *bake_load,
+static struct g *boot(struct g *g, bool argp, char const *bake, char const *bake_load,
                        char const *bake_out) {
   // leave the internal names in global scope and in `guts` too. only an unbaked boot
   // reaches this; a mopped one keeps none of the cell or stack doors (egg.l).
   char const *nm = getenv("LOVE_NO_MOP");
-  if (nm && *nm) g = ai_evals_(g, "(: nomop 1)");
-  g = ai_cats_egg(g);                                    // prel then ev's half, and the printer with `@`
-  g = ai_cats_lib(g);                                   // register every baked module; the uses below are splices
-  g = ai_evals_(g,
+  if (nm && *nm) g = evals_(g, "(: nomop 1)");
+  g = cats_egg(g);                                    // prel then ev's half, and the printer with `@`
+  g = cats_lib(g);                                   // register every baked module; the uses below are splices
+  g = evals_(g,
     "(borrow 'kanren)"
     "(borrow 'overlay)"
     "(: overlay (cite 'overlay)"
@@ -427,28 +396,28 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake, char const *ba
     "(: uu (cite 'uu))"
     "(borrow 'holo)"
   );
-  g = ai_shelve(g);
-  g = ai_evals_(g, "(borrow 'cli)(borrow 'verbs)");
-  g = ai_shelve(g);
+  g = shelve(g);
+  g = evals_(g, "(borrow 'cli)(borrow 'verbs)");
+  g = shelve(g);
   // kanren, overlay and uu come off: the latter two already have their accessor bound
   // above, so the splice bought only ambient names -- `C`, `Q`, `src`, `glob`, `walk`,
   // `var`, `con`, `est` are what this tree calls its locals. kanren keeps a named surface.
   // unsplice drops one link at a time, so bao comes off with them and goes straight back
   // on: read/reads for cli, `@` for every later compile.
-  for (int i = 0; i < 4; i++) g = ai_shelve(g);        // bao, uu, overlay, kanren
+  for (int i = 0; i < 4; i++) g = shelve(g);        // bao, uu, overlay, kanren
   // FIXME what is this even doing? we just used bao a couple of lines ago? what is "hoist"?
-  g = ai_evals_(g, "(borrow 'cli)"
+  g = evals_(g, "(borrow 'cli)"
     "(transcribe 'kanren ())"                                 // \\\, &&&, |||, zz -- macros, not names
     "(: unify (cite 'kanren 'unify)  ufail (cite 'kanren 'ufail)"
     "   ufail? (cite 'kanren 'ufail?)  var (cite 'kanren 'var)"
     "   s_plus (cite 'kanren 's_plus)  s_star (cite 'kanren 's_star)"
     "   === (cite 'kanren '===)  =/= (cite 'kanren '=/=))");
-  g = ai_cats_glaze(g);                                     // a no-op on an unglazed arch
+  g = cats_glaze(g);                                     // a no-op on an unglazed arch
 #ifdef LvGlazed
-  g = ai_shelve(g);                                    // holo back to non-ambient
+  g = shelve(g);                                    // holo back to non-ambient
 #endif
 
-  g = ai_evals_(g,
+  g = evals_(g,
     "(: spawn0 spawn  spawnio0 spawnio  spawnmap0 spawnmap  wait0 wait"
     "   tether0 tether  still0 still  tty0 tty  settty0 settty  raw0 raw  ttyfg0 ttyfg  ttypg0 ttypg"
     "   seat-doors (: t (tablet 11) _ (pin t 0 spawn0) _ (pin t 1 spawnio0)"
@@ -468,7 +437,7 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake, char const *ba
     "   (ttypg fd) (peep seat-doors 10 0 fd))");
 
   // FIXME why are we pulling from book here, that's what mop is for
-  g = ai_evals_(g, bake
+  g = evals_(g, bake
     ? "(: _ (pull book 'nif 0) _ (pull book 'nifx 0) _ (pull book 'born 0) (pull book 'book 0))"
     : "(: _ (pull book 'nif 0) _ (pull book 'nifx 0) (pull book 'book 0))");
 
@@ -479,20 +448,20 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake, char const *ba
     char cat[4096 + 40];                               // a path, and ".bakecat.<pid>.l"
     if (!bake_load && bsrc_lay_cat(cat, sizeof cat, bake_out)) bake_load = cat;
     if (bake_load) {
-      int ok = ai_ok(g = bake_eval_file(g, bake_load));
+      int ok = ok(g = bake_eval_file(g, bake_load));
       if (bake_load == cat) unlink(cat);
       if (!ok) return g; }
-    int rc = *bake ? (int) ai_core_of(g = image_dump(g, bake))->b : image_bake(g, bake_out, 0);
+    int rc = *bake ? (int) core_of(g = image_dump(g, bake))->b : image_bake(g, bake_out, 0);
     if (rc) fprintf(stderr, "love: bake failed (rc=%d)\n", rc);
     exit(rc ? 1 : 0); }
   return run_program(g, !argp && isatty(STDIN_FILENO)); }
 #endif
 
-ai_noinline static struct ai *argv_chain(struct ai *g, char const **v, int argc, int skip) {
+love_noinline static struct g *argv_chain(struct g *g, char const **v, int argc, int skip) {
   int n = 0;
-  if (argc > 0) g = ai_strof(g, v[0]), n++;                  // argv[0] is always the program
-  for (int i = 1 + skip; i < argc; i++) g = ai_strof(g, v[i]), n++;
-  for (g = ai_push(g, 1, ZeroPoint); n--; g = gxr(g));   // () terminates, as a love list does
+  if (argc > 0) g = strof(g, v[0]), n++;                  // argv[0] is always the program
+  for (int i = 1 + skip; i < argc; i++) g = strof(g, v[i]), n++;
+  for (g = push(g, 1, ZeroPoint); n--; g = gxr(g));   // () terminates, as a love list does
   return g; }
 
 
@@ -538,7 +507,7 @@ static void trap_note_on(void) {
 int main(int argc, char const **argv) {
   signal(SIGPIPE, SIG_IGN);
   trap_note_on();
-  struct ai *g = NULL;
+  struct g *g = NULL;
   char const *image_load_path = NULL, *bake = NULL,   // see boot(): "" = self-bake, a path = an image file
              *bake_load = NULL,                      // bake -l CAT: read-eval it before the seal
              *bake_out = NULL;                       // bake -o OUT: a copy of the binary, not this one
@@ -571,12 +540,12 @@ int main(int argc, char const **argv) {
   char const *noimg = getenv("LOVE_NO_IMAGE");
   uintptr_t woke_ms = 0;                       // what the wake cost, for `born` below
   if (!g && !bake && !(noimg && *noimg)) {
-   uintptr_t t0 = ai_clock(), blen = 0;
+   uintptr_t t0 = love_clock(), blen = 0;
    void const *bimg = NULL;
-   if (ai_baked_pick(&bimg, &blen) && (g = ai_image_load(bimg, blen, 2)))
-    woke_ms = ai_clock() - t0,
+   if (baked_pick(&bimg, &blen) && (g = love_image_load(bimg, blen, 2)))
+    woke_ms = love_clock() - t0,
     image_load_path = "<baked>"; }                                     // a loaded image is the booted state: skip the egg warm
-  if (!g) g = ai_ini();
+  if (!g) g = ini();
   // -n lays the stub back and saves no heap, so it skips the warm outright: the strip is
   // instant, and it answers for a binary whose own corpus would not boot.
   if (bare) {
@@ -586,17 +555,17 @@ int main(int argc, char const **argv) {
   g = env_budget(g);                               // the LOVE_BUDGET_MB cap, on whichever g won (fresh or woken image)
   bool argp = argc - skip > 1;
   if (!bake) g = argv_chain(g, argv, argc, skip);   // the line past the primes -- sp[0]
-  if (ai_ok(g)) {
-    g = ai_defn(g, __start_love_nifs, __stop_love_nifs - __start_love_nifs);
+  if (ok(g)) {
+    g = defn(g, __start_love_nifs, __stop_love_nifs - __start_love_nifs);
     if (!bake) {
-      g = ai_defv(g, "cmdline");
-      if (ai_ok(g)) g->sp++; }          // the book holds it now
-    if (image_load_path && ai_ok(g = ai_defv(ai_strof(g, image_load_path), "love-image"))) g->sp++;
+      g = defv(g, "cmdline");
+      if (ok(g)) g->sp++; }          // the book holds it now
+    if (image_load_path && ok(g = defv(strof(g, image_load_path), "love-image"))) g->sp++;
     if (!bake) {
       char const *osn =
 #if defined(__moonlibc__)
-        __ai_osv  < 0 ? "inle" :
-        __ai_osv == 1 ? "linux" : __ai_osv == 2 ? "freebsd" : __ai_osv == 3 ? "netbsd" : 0;
+        __love_osv  < 0 ? "inle" :
+        __love_osv == 1 ? "linux" : __love_osv == 2 ? "freebsd" : __love_osv == 3 ? "netbsd" : 0;
 #elif defined(__linux__)
         "linux";
 #elif defined(__FreeBSD__)
@@ -606,21 +575,21 @@ int main(int argc, char const **argv) {
 #else
         0;
 #endif
-      if (osn && ai_ok(g = intern(ai_strof(g, osn)))) {
-        g = ai_defv(g, "love-os");
-        if (ai_ok(g)) g->sp++; } }
-    if (image_load_path && ai_ok(g = ai_push(g, 1, putcharm((intptr_t) woke_ms)))) {
-      g = ai_defv(g, "born");
-      if (ai_ok(g)) g->sp++; }
+      if (osn && ok(g = intern(strof(g, osn)))) {
+        g = defv(g, "love-os");
+        if (ok(g)) g->sp++; } }
+    if (image_load_path && ok(g = push(g, 1, putcharm((intptr_t) woke_ms)))) {
+      g = defv(g, "born");
+      if (ok(g)) g->sp++; }
     if (!bake) g = stdin_take(g);
     // an egg warm, or a woken image straight to the program -- the wake skips the warm
     g = image_load_path ? run_program(g, !argp && isatty(STDIN_FILENO))
                         : boot(g, argp, bake, bake_load, bake_out); }
-  if (ai_code_of(g) == ai_status_scare) ai_scare_face(g);
-  // the program's status is cli-line's answer, a charm, left at sp[0] by ai_evals: the
-  // process answers with it. a scare answers 1 through ai_fin, ahead of it.
-  int rc = (image_load_path || argp) && ai_ok(g) && charmp(g->sp[0])
+  if (code_of(g) == status_scare) scare_face(g);
+  // the program's status is cli-line's answer, a charm, left at sp[0] by evals: the
+  // process answers with it. a scare answers 1 through fin, ahead of it.
+  int rc = (image_load_path || argp) && ok(g) && charmp(g->sp[0])
          ? (int) (getcharm(g->sp[0]) & 255) : 0;
   stdin_give(g);
-  enum ai_status s = ai_fin(g);
+  enum status s = fin(g);
   return s ? (int) s : rc; }

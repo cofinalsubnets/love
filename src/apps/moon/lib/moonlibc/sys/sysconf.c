@@ -45,8 +45,8 @@ static long page_size(void) { unsigned long p = getauxval(6); return p ? (long) 
 
 /* linux answers from /sys and sysinfo(2), the BSDs from hw.*; inle has no answer yet */
 long sysconf(int name) {
-  long v = __ai_osv;
-  if (!v) v = __ai_osv = __ai_osdetect();
+  long v = __love_osv;
+  if (!v) v = __love_osv = __love_osdetect();
   switch (name) {
   case _SC_PAGESIZE: return page_size();
   case _SC_NPROCESSORS_CONF:

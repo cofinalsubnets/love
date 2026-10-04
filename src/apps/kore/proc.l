@@ -274,6 +274,7 @@
            (<a = "-u" || <a = "--utc") (pin u 'u 1, fl >a when fmt)
            (<a = "-d") (two? >a ? (fl >>a (udt-when <>a) fmt)
                         (udie 1 "date: -d wants a time"))
+           (2 < #<a && snip <a 0 2 = "-d") (fl >a (udt-when (snip <a 2 #<a)) fmt)
            (<a = "-r") (two? >a ?
                         (stat <>a @ st
                          (two? st ? (fl >>a <>st fmt)

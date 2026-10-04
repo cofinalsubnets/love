@@ -259,6 +259,13 @@ printf '' | korerun bc "$ho/.kore-bc-nope" > /dev/null 2>&1; b=$?
 [ $a -eq $b ] || fail "kore bc missing file (gnu $a ours $b)"
 # dc: GNU's, stdout and stderr, over the arithmetic and its scale, the bases, the
 # registers and arrays, macros and their exits, and every complaint
+# read(): the program from a file, its number from stdin's next line, in ibase (one read and one
+# line: GNU's blocks on a second read, and its first swallows the rest of stdin)
+printf 'ibase = 16; a = read()\na * 2\n' > "$ho/.kore-bc-rd"
+for i in '1A\n' '-2.5\n' '0\n'; do
+  pipe "bc read() of $i" "$(printf -- "$i")
+" bc -q "$ho/.kore-bc-rd"
+done
 if command -v dc >/dev/null 2>&1; then
   cat > "$ho/.kore-dc.cases" <<'EOF'
 2 3+p

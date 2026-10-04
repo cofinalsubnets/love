@@ -356,6 +356,32 @@ moonrun "$ho/.cc4.c" "$ho/.ccx" > "$ho/.cc4.out" 2>&1; r=$?
 [ $r -eq 1 ] || fail "mooncc undeclared-in-initializer exit (rc $r)"
 grep -q "undeclared 'nosuchthing'" "$ho/.cc4.out" \
   || fail "mooncc undeclared-in-initializer must name it: $(head -1 "$ho/.cc4.out")"
+# a member the struct lacks, or of a struct never completed, is named too
+printf 'struct s { int y; };\nint f(struct s *p) { return p->x; }\nint main(void) { return 0; }\n' > "$ho/.cc6.c"
+moonrun "$ho/.cc6.c" "$ho/.ccx" > "$ho/.cc6.out" 2>&1
+grep -q "no member 'x' in 's'" "$ho/.cc6.out" || fail "mooncc missing member must name it: $(head -1 "$ho/.cc6.out")"
+printf 'struct t;\nint f(struct t *p) { return p->x; }\nint main(void) { return 0; }\n' > "$ho/.cc7.c"
+moonrun "$ho/.cc7.c" "$ho/.ccx" > "$ho/.cc7.out" 2>&1
+grep -q "incomplete type 't'" "$ho/.cc7.out" || fail "mooncc incomplete member must name it: $(head -1 "$ho/.cc7.out")"
+# sizeof a struct never completed is not a size (autoconf's type probes ask exactly this)
+printf 'struct u;\nint main(void) { return sizeof (struct u); }\n' > "$ho/.cc8.c"
+moonrun "$ho/.cc8.c" "$ho/.ccx" > "$ho/.cc8.out" 2>&1
+grep -q "sizeof an incomplete type" "$ho/.cc8.out" || fail "mooncc sizeof incomplete must refuse: $(head -1 "$ho/.cc8.out")"
+# C11 6.7p4: an object redeclared at file scope keeps its type -- autoconf finds a type's
+# literal suffix by redeclaring one (`extern ptrdiff_t foo; extern int foo;` must refuse)
+printf 'extern long foo;\nextern int foo;\nint main(void) { return 0; }\n' > "$ho/.cc9.c"
+moonrun "$ho/.cc9.c" "$ho/.ccx" > "$ho/.cc9.out" 2>&1
+grep -q "conflicting types for 'foo'" "$ho/.cc9.out" || fail "mooncc redeclared type must refuse: $(head -1 "$ho/.cc9.out")"
+printf 'extern int a[];\nint a[4];\nint x;\nint x = 3;\nint main(void) { return x - 3; }\n' > "$ho/.cc10.c"
+moonrun "$ho/.cc10.c" "$ho/.cc10" > /dev/null 2>&1 && "$ho/.cc10" || fail "mooncc compatible redeclarations"
+# C11 6.7.4p7: a plain `inline` definition in a header lays no external symbol, so two TUs
+# including it link; the one saying `extern inline` lays it (gnulib's _GL_INLINE)
+printf 'inline int twice(int x) { return 2 * x; }\n' > "$ho/.inl.h"
+printf '#include "%s"\nint a(int x) { return twice(x); }\n' "$ho/.inl.h" > "$ho/.inla.c"
+printf '#include "%s"\nint b(int x) { return twice(x); }\n' "$ho/.inl.h" > "$ho/.inlb.c"
+printf '#include "%s"\nextern inline int twice(int);\nint a(int), b(int);\nint main(void) { int (*p)(int) = twice; return a(1) + b(2) + p(3) != 12; }\n' "$ho/.inl.h" > "$ho/.inlm.c"
+moonrun -o "$ho/.inlx" "$ho/.inla.c" "$ho/.inlb.c" "$ho/.inlm.c" > "$ho/.inl.out" 2>&1 && "$ho/.inlx" \
+  || fail "mooncc c99 inline across TUs: $(head -1 "$ho/.inl.out")"
 # ..and the shape it must NOT refuse: a function's address IS a constant
 cat > "$ho/.cc5.c" <<'EOF'
 int puts(char const*);
@@ -760,7 +786,7 @@ echo "mooncc: the warm compiler (moon-run answers, the image compiles on past a 
 
 # ------------------------------------------------ the carried runtime is KERNEL-NEUTRAL
 # one archive per ISA, all three cut under -os linux -- and that pin does not reach the
-# bytes, because impl.h parts the kernels at RUN time on __ai_osv. so every hosted kernel
+# bytes, because impl.h parts the kernels at RUN time on __love_osv. so every hosted kernel
 # must take the CARRIED archive.
 # A CLOCK ALONE CANNOT SAY IT WAS TAKEN: out/cache/moon's .a entries make the
 # member-compile lane fast too, so a warm cache passes this leg whether the archive was

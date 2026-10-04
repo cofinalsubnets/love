@@ -4,8 +4,8 @@
 ; exceptions. a wait that comes back therefore comes back loudly, at build time,
 ; instead of arriving as a hang in somebody's test six months later.
 ;
-; the hooks it watches are the four that actually stop the world -- ai_sleep,
-; ai_wait_fds, ai_fd_drain, and the runtime's own wait_one shim. every call to one of
+; the hooks it watches are the four that actually stop the world -- love_sleep,
+; wait_fds, love_fd_drain, and the runtime's own wait_one shim. every call to one of
 ; them, in every tracked .c file, must name a function on the roster below.
 ; the roster keys on the file, so a function that moves TUs moves its entry.
 ;
@@ -39,35 +39,35 @@
 (: (die m) (say err "waits: ", say err m, say err "\n", quit 2)
 
    ; --- what counts as a wait -------------------------------------------------
-   hooks ["ai_sleep" "ai_wait_fds" "ai_fd_drain" "wait_one"]
+   hooks ["love_sleep" "wait_fds" "love_fd_drain" "wait_one"]
    (hook? nm) (any (= nm) hooks)
    ; the three love.h contract symbols, whose bodies are the wait itself: a
-   ; frontend's `ai_wait_fds` reaching ai_sleep is what a wait hook is, so the
+   ; frontend's `wait_fds` reaching love_sleep is what a wait hook is, so the
    ; family's own implementations are exempt and only callers from outside it
    ; have to answer. the runtime's wait_one is not one of these -- it is ordinary
    ; code that happens to wait, so it answers on the roster like anyone else.
-   (impl? nm) (any (= nm) ["ai_sleep" "ai_wait_fds" "ai_fd_drain"])
+   (impl? nm) (any (= nm) ["love_sleep" "wait_fds" "love_fd_drain"])
 
    ; --- the roster: (file function hook why) ----------------------------------
    ; every wait in the tree, and the sentence that earns it.
    roster
-   [["src/love/task.c" "wait_one" "ai_wait_fds"
+   [["src/love/task.c" "wait_one" "wait_fds"
      "the scheduler's one-fd shim -- an lvm_ frame may hold no scratch"]
     ["src/love/task.c" "lvm_yield_sw_mono" "wait_one"
      "the monotask scheduler, parked on one fd"]
-    ["src/love/task.c" "lvm_yield_sw_mono" "ai_sleep"
+    ["src/love/task.c" "lvm_yield_sw_mono" "love_sleep"
      "the monotask scheduler, a timer and no fd"]
-    ["src/love/task.c" "yield_sw_wait" "ai_wait_fds"
+    ["src/love/task.c" "yield_sw_wait" "wait_fds"
      "THE wait: every parked task and the nearest timer, one call"]
-    ["src/love/io.c" "io_close" "ai_fd_drain"
+    ["src/love/io.c" "io_close" "love_fd_drain"
      "the finalizer: a dying port's unsent run. runs inside gc, where nothing can park -- the write side's one remaining unbounded wait"]
-    ["src/love/fd.c" "ai_fd_say" "ai_sleep"
+    ["src/love/fd.c" "love_fd_say" "love_sleep"
      "a raw fd carries no write run of love's to park behind, so the busy device is waited on -- bounded by its drain"]
-    ["test/front/main.c" "ai_fd_say" "ai_sleep"
+    ["test/front/main.c" "love_fd_say" "love_sleep"
      "the test frontend's copy of that row, over a synthetic device whose stall arm counts down per call"]
-    ["src/inle/teensy41/main.c" "main" "ai_sleep"
+    ["src/inle/teensy41/main.c" "main" "love_sleep"
      "the panic blink after a fatal shell exit -- nothing runs after it"]
-    ["src/inle/doom.c" "DG_SleepMs" "ai_sleep"
+    ["src/inle/doom.c" "DG_SleepMs" "love_sleep"
      "doom's frame pacer: the game loop owns the frame and names the gap itself, with no love task behind it to park -- bounded by the frame, and the freestanding half waits the same way through k_sleep"]]
 
    ; --- character classes ------------------------------------------------------

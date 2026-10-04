@@ -1,12 +1,12 @@
 /* v6-M varargs, mooncc side: the pop-r3/bx epilogue + the r0-r3 push block
-   over lr/fp/r4 (ovb 12). vsum/vnth are love.c's variadic shapes (ai_push /
+   over lr/fp/r4 (ovb 12). vsum/vnth are love.c's variadic shapes (push /
    ioprintf: anonymous WORDS only), vnth2 the decayed-va_list helper
    (gvzprintf's shape), ovnamed the named-params-overflow edge, vpair the
    pair-returning variadic (r0:r1 must survive the r3 return hop). */
 #include <stdarg.h>
 typedef unsigned uptr;
 
-int vsum(int n, ...) {                    /* ai_push's shape: anonymous words */
+int vsum(int n, ...) {                    /* push's shape: anonymous words */
   va_list ap; int s, i;
   va_start(ap, n); s = 0;
   for (i = 0; i < n; i++) s += va_arg(ap, int);

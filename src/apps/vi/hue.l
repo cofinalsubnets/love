@@ -155,7 +155,8 @@
    ; --- the lexer -------------------------------------------------------------
    ; (hue-lex bk s in keep) answers [runs out]: the classified runs over the one
    ; line s, each [class from to] with `to` exclusive, and the string state at
-   ; the line's end -- 0 code, 1 still inside a string, which is what carries a
+   ; the line's end -- 0 code, 1 still inside a string, a raw text's quote count
+   ; inside one, which is what carries a
    ; multi-line literal (src/apps/papel.l's css is forty lines of one string)
    ; onto the next line.
    ;
@@ -183,17 +184,51 @@
                        (i < p ?                            ; punct inside a name is the name
                            (w p (emit acc (glued? p ? 'mono 'dyad) i p))
                           (w j acc)))))))
+       ; a hole, "a \(x) b": past its closer, strings and holes inside it walked
+       ; whole, or () when the line ends first. its \( and closer paint as brackets
+       ; and what is between as code
+       (hole k d) (? (n <= k) ()
+                     (: c (s k)
+                        (? (c = 40 || c = 91 || c = 123) (hole (k + 1) (d + 1))
+                           (c = 41 || c = 93 || c = 125) (d = 1 ? (k + 1) (hole (k + 1) (d - 1)))
+                           (c = hue-str) (hole (sbody (k + 1)) d)
+                           (hole (k + 1) d))))
+       (sbody k) (? (n <= k) n
+                    (s k = hue-str) (k + 1)
+                    (s k = hue-esc) ((k + 1 < n && s (k + 1) = 40) ? (sbody (hole (k + 1) 0 || n)) (sbody (k + 2)))
+                    (sbody (k + 1)))
        (wstr i a acc)                                      ; inside "..."
         (n <= i ? [(rev (emit acc 'string a n)) 1]
            (s i @ c
-              (? (c = hue-esc) (wstr (i + 2) a acc)
+              (? (c = hue-esc && i + 1 < n && s (i + 1) = 40)
+                   (: e (hole (i + 1) 0)
+                      o (i + 2)
+                      in1 <(hue-lex bk (snip s o (e ? (e - 1) n)) 0 keep)
+                      acc1 (foldl (\ b r ([<r (r 1 + o) (r 2 + o)] . b))
+                                  (emit (emit acc 'string a i) 'paren i o) in1)
+                      (e ? (wstr e e (emit acc1 'paren (e - 1) e)) [(rev acc1) 0]))
+                 (c = hue-esc) (wstr (i + 2) a acc)
                  (c = hue-str) (w (i + 1) (emit acc 'string a (i + 1)))
                  (wstr (i + 1) a acc))))
+       ; a raw text: three or more quotes, closed by as many. one that ends its opening
+       ; line carries the count, and closes at a line of blanks and the quotes
+       (qrun i) (i < n && s i = hue-str ? (qrun (i + 1)) i)
+       (bl i) (i < n && hue-blank? (s i) ? (bl (i + 1)) i)
+       (raw i acc)
+        (: e (qrun i)
+           q (e - i)
+           (find j) (? (n <= j) () (s j != hue-str) (find (j + 1)) (qrun j @ r (r - j < q ? (find r) r)))
+           (? (bl e = n) [(rev (emit acc 'string i n)) q]
+              (find e @ r (r ? (w r (emit acc 'string i r)) [(rev (emit acc 'string i n)) q]))))
+       (wraw q acc)
+        (bl 0 @ t
+           (qrun t - t < q ? [(rev (emit acc 'string 0 n)) q] (w (t + q) (emit acc 'string 0 (t + q)))))
        (w i acc)
         (n <= i ? [(rev acc) 0]
            (s i @ c
               (? (hue-blank? c) (w (i + 1) acc)
                  (any (t \ hue-at? s i t) hue-eols) [(rev (emit acc 'comment i n)) 0]
+                 (c = hue-str && i + 2 < n && s (i + 1) = hue-str && s (i + 2) = hue-str) (raw i acc)
                  (c = hue-str) (wstr (i + 1) i acc)
                  (c = hue-quo) (tend (i + 1) @ j (w j (emit acc 'atom i j)))
                  (hue-delim? c) (w (i + 1) (emit acc 'paren i (i + 1)))
@@ -202,7 +237,7 @@
                  ; and that is what leaves `word` the i<j it walks on
                  (hue-term? c) (w (i + 1) acc)
                  (word i (tend i) acc))))
-       (in ? (wstr 0 0 ()) (w 0 ())))
+       (? (in = 1) (wstr 0 0 ()) (charm? in && 2 < in) (wraw in ()) (w 0 ())))
 
    ; one start-state per line: fold a lexer (lx s in keep) down the buffer,
    ; keeping nothing. hue-lex over a book is one; src/apps/vi/hues.l has the rest

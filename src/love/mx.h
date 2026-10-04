@@ -14,7 +14,7 @@
 #define mx_MUL_REP mx_row(lvm_mul_rep, lvm_0, lvm_0, lvm_0, lvm_0, lvm_mulh, lvm_mulh)
 #define mx_MUL_CHAIN mx_row(lvm_mul_rep, lvm_0, lvm_0, lvm_0, lvm_mul_cart, lvm_mulh, lvm_mulh)
 #define mx_MUL_H mx_row(lvm_mulh, lvm_0, lvm_0, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh)
-static lvm_t *const ai_add_mx[KN][KN] = {
+static lvm_t *const add_mx[KN][KN] = {
  [KMint] = mx_ADD_MINT,
  [KNom] = mx_ADD_MINT,
  [KCharm] = mx_ADD_NUM,
@@ -30,7 +30,7 @@ static lvm_t *const ai_add_mx[KN][KN] = {
  [KTablet] = mx_ADD_H,
  [KHot] = mx_ADD_H,
 };
-static lvm_t *const ai_mul_mx[KN][KN] = {
+static lvm_t *const mul_mx[KN][KN] = {
  [KMint] = mx_MUL_MINT,
  [KNom] = mx_MUL_MINT,
  [KCharm] = mx_MUL_NUM,
@@ -46,7 +46,7 @@ static lvm_t *const ai_mul_mx[KN][KN] = {
  [KTablet] = mx_MUL_H,
  [KHot] = mx_MUL_H,
 };
-static enum q const ai_kind_of_d[] = { [DMint] = KMint, [DNom] = KNom, [DGem] = KGem, [DTwin] = KTwin, [DBig] = KSun, [DTray] = KTrayZ, [DString] = KString, [DChain] = KChain };
+static enum q const kind_of_d[] = { [DMint] = KMint, [DNom] = KNom, [DGem] = KGem, [DTwin] = KTwin, [DBig] = KSun, [DTray] = KTrayZ, [DString] = KString, [DChain] = KChain };
 #undef mx_row
 #undef mx_ADD_MINT
 #undef mx_ADD_NUM

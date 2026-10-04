@@ -1,7 +1,7 @@
 /* v6-M composites, mooncc side: the MEMORY-return lane (>4B composite fills
    the caller temp whose address rides the implicit first arg -- gcc's exact
    base-ABI shape) and the position-0 16B r0-r3 quad (love.c's zn shapes:
-   zn()/ai_net() return by value, zn_nonpos() takes one by value). dd is the
+   zn()/net() return by value, zn_nonpos() takes one by value). dd is the
    8B blob (an even-odd gp pair in, MEMORY out); ii the <=4B int one (r0). */
 struct zn { double re, im; };
 struct dd { double d; };

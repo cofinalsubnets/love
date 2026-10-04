@@ -79,12 +79,12 @@ moon1() { "$d/love1" wake "$d/mooncc1.image" mooncc "$@"; }
 # string, naming a broken fixpoint where the only difference is a build flag.
 for f in $gate_love_c; do
   mkobj "$f"
-  moon1 -D ai_tco=1 -D LvHaveVersionH -I"$ho" -I. -Isrc/love -Isrc/inle -Iout/lib -c "$f" "$o" \
+  moon1 -D tco=1 -D LvHaveVersionH -I"$ho" -I. -Isrc/love -Isrc/inle -Iout/lib -c "$f" "$o" \
     || fail "love1 mooncc -c $f"
 done
 for f in $gate_host_c $gate_seat_c; do
   mkobj "$f"
-  moon1 -D ai_tco=1 -I"$ho" -I. -Isrc/love -Isrc/inle -Iout/lib -c "$f" "$o" || fail "love1 mooncc -c $f"
+  moon1 -D tco=1 -I"$ho" -I. -Isrc/love -Isrc/inle -Iout/lib -c "$f" "$o" || fail "love1 mooncc -c $f"
 done
 # moonlibc rides the implicit runtime, as in raw.sh -- pulled member by need.
 for f in src/apps/moon/lib/moonlibc/math/*.c; do

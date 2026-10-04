@@ -76,7 +76,8 @@
                ? (c = 92 ? (g >>cs 0 1 (<>cs . c . out))
                     (g >cs 0 (c = 34 ? 0 1) (c . out)))
                  (c = 32
-                  ? (redundant? ctx >cs
+                  ; a space between two strings is never redundant: three quotes open a raw text
+                  ? (!(two? out && <out = 34 && two? >cs && <>cs = 34) && redundant? ctx >cs
                      ? (g >cs ctx 0 out)                          ; drop the space; ctx keeps accruing
                        (g >cs 0 0 (c . out)))                     ; keep it: a real boundary
                     ; a terminal ' is a prime, not a quote: `x'` is one name, so the byte
@@ -114,25 +115,25 @@
    ; the baked source (src/love/cats.c), row by row: a string lays as it is -- the arch
    ; guards -- and a list is [symbol items], laid deflated with the _raw twin. an item is a
    ; symbol, one boot file by name, or a string, glue laid between two files. a group is ONE
-   ; text: ai_evals_ reads a text whole before its first form runs, so the grouping here is
+   ; text: evals_ reads a text whole before its first form runs, so the grouping here is
    ; part of the boot's meaning.
    rows
-    [['ai_cat_egg_z ['egg]]
-     ['ai_cat_prel_z ['prel " " 'ev]]                     ; prel carries ev's half spliced after its own
-     ['ai_cat_post_z ['post]]
+    [['cat_egg_z ['egg]]
+     ['cat_prel_z ['prel " " 'ev]]                     ; prel carries ev's half spliced after its own
+     ['cat_post_z ['post]]
      ; holo, one blob per arch because the backend is; an arch with no backend registers
      ; none, the one shape that leaves LvCatModsH unset. scan rides it: it lays a native
      ; kernel through holo at load. every other module is post's.
      "#if defined(__x86_64__)" "#define LvCatModsH 1"
-     ['ai_cat_lib_h_z ['holo 'x64 'scan]]
+     ['cat_lib_h_z ['holo 'x64 'scan]]
      "#elif defined(__aarch64__)" "#define LvCatModsH 1"
-     ['ai_cat_lib_h_z ['holo 'a64 'scan]]
+     ['cat_lib_h_z ['holo 'a64 'scan]]
      "#elif defined(__riscv)" "#define LvCatModsH 1"
-     ['ai_cat_lib_h_z ['holo 'rv64 'scan]]
+     ['cat_lib_h_z ['holo 'rv64 'scan]]
      ; wasm is gen's rv64 lane under another writer (src/love/holo/wasmfn.l), so the
      ; machine under that seat's holo is rv64's
      "#elif defined(__wasm__)" "#define LvCatModsH 1"
-     ['ai_cat_lib_h_z ['holo 'rv64 'scan]]
+     ['cat_lib_h_z ['holo 'rv64 'scan]]
      "#endif"
      ; the glaze, one text: src/love/boot/glaze.l carries its own (borrow 'holo) and its own
      ; (module 'glaze ..) wrapper, so which halves are inside the module is the file's to

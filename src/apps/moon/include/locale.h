@@ -1,5 +1,5 @@
-#ifndef _AI_LOCALE_H
-#define _AI_LOCALE_H
+#ifndef _LOVE_LOCALE_H
+#define _LOVE_LOCALE_H
 /* freestanding locale for cc: the LC_* categories, struct lconv, and the two
  * queries. we run one fixed "C" locale, so setlocale answers a constant. */
 #define LC_CTYPE    0

@@ -3,7 +3,7 @@
 ; these run under test/front/main.c, the test-only frontend. the park itself is
 ; ordinary now -- every quiet device on every frontend comes through it, so the
 ; whole corpus walks it -- but the sharp case still cannot be reached from inside
-; a normal love: `ai_ready` says go and the device then says no. the scheduler's
+; a normal love: `ready` says go and the device then says no. the scheduler's
 ; readiness question and the device's answer are separated by no yield point, so
 ; only a second process sharing the open file description can lose that race --
 ; or a frontend that lies, which is what this one is for.
@@ -11,7 +11,7 @@
 ; the fault lives in test code. love carries no switch, no env var and no nif for
 ; it, which is the standing rule.
 ;
-; `(stall p k)` arms k would-block answers on the device's readn while `ai_ready`
+; `(stall p k)` arms k would-block answers on the device's readn while `ready`
 ; keeps saying yes. what must then hold: the reading task parks and re-runs the op
 ; rather than spinning the vm or losing the byte it was about to get.
 

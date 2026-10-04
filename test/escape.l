@@ -64,3 +64,39 @@
   ("\u{d800}" = "u{d800}")        ("\u{dfff}" = "u{dfff}")        ; a surrogate is no character
   ("\u{0000041}" = "u{0000041}")  ("\u{4g}" = "u{4g}")            ; seven digits, a non-digit
   ('torn = sound '(34 92 117 123 52 49)))                         ; input ending inside one
+
+; raw texts: three or more quotes open one and as many close it, and nothing escapes.
+; when the opener ends its line the closer's indent comes off every line, and the
+; breaks beside the quotes are not the text's
+(test
+  ("""a\nb""" = "a\\nb")          ("""say "hi"""" = "say \"hi\"")
+  (""""has """ in"""" = "has \"\"\" in")
+  ("""
+   one
+     two
+
+   three
+   """ = "one\n  two\n\nthree")
+  ("""
+  a
+""" = "  a")
+  ("""
+   """ = "")
+  ("""
+   a """ b
+   """ = "a \"\"\" b")
+  ((sound "\"\" \"x\"" @ r [<r <(sound >r)]) = ["" "x"])          ; two strings, spaced
+  ('torn = sound '(34 34 34 10 32 97 10))                         ; no closing line
+  ('torn = sound '(34 34 34 97 98)))
+
+; holes: \( reads a form to its closer, and the text runs on. a string is laid as it is,
+; anything else shown; a text without one is just itself
+(: esc-c 7 esc-l [1 2 3])
+(test
+  ("cycle \(esc-c) of \(#esc-l)" = "cycle 7 of 3")
+  ("\(esc-c - 1)\(esc-c + 1)" = "68")
+  ("a \("b") c" = "a b c")                 ("\(quote q) \(esc-l)" = "q (1 2 3)")
+  ("n \("in \(esc-c)") m" = "n in 7 m")    ("\\(x)" = "\\" + "(x)")
+  ((sound "\"a \\(x) b\"") = [['weave ['list "a " '(x) " b"]]])
+  ((sound "\"\\(#l) \\(# l)\"") = [['weave ['list (cap (sound "(#l)")) " " '(# l)]]])
+  ('torn = sound "\"a \\(x")             ('torn = sound "\"a \\(x) b"))

@@ -118,7 +118,7 @@
                  (: w (v | m ^ -1)                         ; the run wraps the element: ask of its complement
                     (bmrun? (w ^ -1) ?
                        (bmclo w @ c [(64 - c) (c + bmones w 0 - (64 - e))]))))
-            (r = () ? (scare 'a64-bitmask-imm imm)
+            (r = () || r 1 = e ? (scare 'a64-bitmask-imm imm)    ; a run filling its element is all ones: reserved
                (: i <r
                   ct <>r
                   immr (e - i & e - 1)
@@ -467,14 +467,15 @@
    ;; cmov: d <- s when cond holds = csel Xd, Xs, Xd, cond; d = s would be a no-op wearing a select: refused
    (a64-cmov cond d s) (: dn (rn d) sn (rn s) (dn = sn ? (scare 'cmov-alias d) (a64-wsel dn sn dn cond)))
    ;; byte indexed load/store (the string/cask/map byte lanes). LDRB zero-extends to W (clearing the top
-   ;; 32 of X, == x86 movzx); strb stores the low byte. disp is a raw BYTE offset (no scaling), unsigned
-   ;; 12-bit. Same address synthesis as ldx/stx: ldxb borrows the dest as the address temp, stxb uses x16.
+   ;; 32 of X, == x86 movzx); strb stores the low byte. disp is a raw BYTE offset, through the memory core's
+   ;; three lanes like every other face. Same address synthesis as ldx/stx: ldxb borrows the dest as the
+   ;; address temp, stxb uses x16.
    (a64-ldxb d base index scale disp)                                                       ; d = (byte)[base + index*scale + disp]
       (rn d @ dn (catall [(a64-addsh dn (rn base) (rn index) (a64-shiftamt scale))     ; add Xd, base, index lsl #amt
-                          (le32 (0x39400000 | (disp << 10 | (dn << 5 | dn))))]))          ; ldrb Wd, [Xd, #disp]
+                          (a64-mem-raw 0x38400000 0x39400000 1 dn dn disp)]))              ; ldrb/ldurb Wd, [Xd, #disp]
    (a64-stxb base index scale disp s)                                                       ; [base + index*scale + disp] = (byte)s
       (catall [(a64-addsh 16 (rn base) (rn index) (a64-shiftamt scale))                  ; add x16, base, index lsl #amt
-                (le32 (0x39000000 | (disp << 10 | (16 << 5 | rn s))))])                    ; strb Ws, [x16, #disp]
+                (a64-mem-raw 0x38000000 0x39000000 1 (rn s) 16 disp)])                    ; strb/sturb Ws, [x16, #disp]
 
    ;; -- scalar-double FP (the float glaze lane). f0..f15 -> v0..v15 (d-register view), a separate file
    ;;    from the gprs. the IR carries the SSE mnemonics (addsd/movsd/...) two-address (d = op(d,s)); we

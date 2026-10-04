@@ -326,6 +326,13 @@
    _ (holo-bytes 'a64 '((sub sp sp r0)))
    _ (chk-eq "a64.alu.sp.refused" 1 (peep spcaught 0 0))
 
+   ;; -- ..and a logical immediate of all ones, spelled as the unsigned 2^64-1 a C mask reads as, has no
+   ;; bitmask encoding (a run filling its element is reserved): it raises, never lays the reserved word --
+   bmcaught {} _ (pin bmcaught 0 0)
+   _ (hear (a \ b \ a = 'a64-bitmask-imm ? (pin bmcaught 0 1, ()) (welp a b)))
+   _ (holo-bytes 'a64 '((and r0 r0 18446744073709551615)))
+   _ (chk-eq "a64.and.allones.refused" 1 (peep bmcaught 0 0))
+
    ;; -- the text front-end (src/love/holo/text.l) parses to the same IR, so it assembles byte-identically. --
    _ (chk-eq "text.basic" (holo-hex 'x64 '((li r0 60) (ret)))
                           (holo-hex 'x64 (asm-text "li r0, 60\nret")))
@@ -389,6 +396,11 @@
    _ (chk-eq "gas.expand"
         '(".long 11 + (1 << 8)")
         (gf-expand (gf-lines 'x64 ".macro m t:req r:req\n.set .Ln, 0\n.irp s,rax,rcx\n.ifc \\r, %\\s\n.long \\t + (.Ln << 8)\n.endif\n.set .Ln, .Ln+1\n.endr\n.endm\nm r=%rcx, t=11\n.purgem m")))
+   ; an .elseif chain takes its first true arm, and >> is gas's logical shift
+   _ (chk-eq "gas.elseif"
+        '(".long 2" ".long 6")
+        (gf-expand (gf-lines 'x64 ".if 0\n.long 1\n.elseif 1\n.long 2\n.elseif 1\n.long 3\n.else\n.long 4\n.endif\n.if 0\n.long 5\n.elseif 0\n.long 7\n.else\n.long 6\n.endif")))
+   _ (chk-eq "gimm.shr" [15 15] [(gimm (gtoks "~0 >> 60")) (gimm (gtoks "0xf0 >> 4"))])
    ; a symbol-less rip displacement is the address past the lea (_THIS_IP_): its own bytes
    _ (chk-eq "gas.x64.thisip"
         '((raw (76 141 29 0 0 0 0)) (raw (72 141 5 8 0 0 0)))
@@ -407,8 +419,28 @@
         (gas-text 'a64 "msr daifset, #0xf\n tlbi vmalle1is\n dsb ish\n mov x9, sp\n msr spsel, #1\n mov sp, x9\n mrs x9, cpacr_el1\n orr x9, x9, #(3 << 20)\n msr cpacr_el1, x9\n isb\n brk #0\n udf #0\n hlt #0xf000\n hvc #0\n at s1e1w, x1\n dc cvau, x0\n ic ivau, x0\n msr vbar_el1, x0\n wfi\n mrs x0, ctr_el0"))
    _ (chk-eq "gas.a64.core"
         '((add r0 r1 4) (sub r0 r0 r2) (cmp r0 0) (br eq l1.1) (ld r1 r0 8) (st4 r0 0 r1) (ldu1 r2 r0 1) (jmp l2.1)
-          (label l1.1) (li r0 7) (ret) (label l2.1) (sys) (xor r3 r3 r3) (shl r0 3) (neg r1))
+          (label l1.1) (raw (224 0 128 210)) (ret) (label l2.1) (sys) (xor r3 r3 r3)
+          (raw (0 240 125 211)) (raw (225 3 1 203)))
         (gas-text 'a64 "add x0, x1, #4\n sub x0, x0, x2\n cmp x0, #0\n b.eq 1f\n ldr x1, [x0, #8]\n str w1, [x0]\n ldrb w2, [x0, #1]\n b 2f\n1:\n mov x0, #7\n ret\n2:\n svc #0\n eor x3, x3, x3\n lsl x0, x0, #3\n neg x1, x1"))
+   ;; what the IR's 64-bit rows cannot say lands as its own word, held to llvm-mc's: a W register
+   ;; op, a written-back or register-indexed address, a W sign-extending load, `ret xN`
+   _ (chk-eq "gas.a64.w"
+        ["c8018052" "00008012" "e0ffbf52" "e09f0832" "e003032a" "7f280071" "bf01086b" "9f0c0072" "210c0012" "213c0052" "62000132" "21f00112" "41044011" "8a280051" "6000054b" "42400071" "0801090b" "207c021b" "ad7d0453" "41701d53" "417c1f13" "101b9813" "4124c31a" "e103034b" "e103232a"]
+        (map (l \ holo-hex 'a64 (gas-text 'a64 l)) ["mov w8, #14" "mov w0, #-1" "mov w0, #0xffff0000" "mov w0, #0xff00ff00" "mov w0, w3" "cmp w3, #10" "cmp w13, w8" "tst w4, #0xf" "and w1, w1, #0xf" "eor w1, w1, #0xffff" "orr w2, w3, #0x80000000" "and w1, w1, #0xaaaaaaaa" "add w1, w2, #4096" "sub w10, w4, #10" "sub w0, w3, w5" "subs w2, w2, #16" "add w8, w8, w9" "mul w0, w1, w2" "lsr w13, w13, #4" "lsl w1, w2, #3" "asr w1, w2, #31" "ror w16, w24, #6" "lsr w1, w2, w3" "neg w1, w3" "mvn w1, w3"]))
+   _ (chk-eq "gas.a64.mem"
+        ["d08540f8" "23144038" "c3240078" "200c5ff8" "e00f1ff8" "9c6b74f8" "08682e38" "207862f8" "205862b8" "20786238" "200cc039" "20d0df78" "40005fd6"]
+        (map (l \ holo-hex 'a64 (gas-text 'a64 l)) ["ldr x16, [x14], #8" "ldrb w3, [x1], #1" "strh w3, [x6], #2" "ldr x0, [x1, #-16]!" "str x0, [sp, #-16]!" "ldr x28, [x28, x20]" "strb w8, [x0, x14]" "ldr x0, [x1, x2, lsl #3]" "ldr w0, [x1, w2, uxtw #2]" "ldrb w0, [x1, x2, lsl #0]" "ldrsb w0, [x1, #3]" "ldrsh w0, [x1, #-3]" "ret x2"]))
+   ; ..and an X op the IR would lay as two or more words takes gas's one: lengths are held too
+   _ (chk-eq "gas.a64.x"
+        ["00008092" "0000b0d2" "e07f40b2" "0000b092" "ebc300b2" "22fc7f93" "64fc60d3" "6005cb93" "e40301cb" "e40321aa" "4120c39a"]
+        (map (l \ holo-hex 'a64 (gas-text 'a64 l)) ["mov x0, #-1" "mov x0, #2147483648" "mov x0, #0xffffffff" "mov x0, #0xffffffff7fffffff" "mov x11, #72340172838076673" "asr x2, x1, #63" "lsr x4, x3, #32" "ror x0, x11, #1" "neg x4, x1" "mvn x4, x1" "lsl x1, x2, x3"]))
+   ;; ..and a line with an operand nothing reads, or a width mix, is refused, never dropped
+   _ (chk-eq "gas.a64.refuse"
+        '(gas-a64-operand gas-a64-operand gas-a64-width gas-a64-width gas-a64-operand gas-a64-operand
+          a64-bitmask-imm gas-a64-operand gas-a64-operand gas-a64-operand)
+        (map (l \ trap (x \ gas-text 'a64 x) l (\ a b a))
+             ["cmp x0, x1, lsl #2" "neg x1, x2, lsl #1" "add w0, x1, w2" "ldrsw w0, [x1]" "add w0, wzr, #1"
+              "ret x2, x3" "and w0, w0, #0" "ldr x0, [x1, x2, lsl #2]" "ldr x0, [x1], #300" "lsl w0, w1, #32"]))
    _ (chk-eq "gas.rv64"
         '((csrr r0 time) (csrw stvec r0) (csrs sie r0) (csrsi sstatus 2) (csrci sstatus 2) (sys) (trap) (csrw cycle zr)
           (fence) (wfi) (sfence zr zr) (sfence r0 r1) (li r0 5) (mov r1 r0) (add sp sp -16) (ld r2 sp 8) (st sp 0 r2)
@@ -548,6 +580,8 @@
       ("a64.stx"    "f00c008b080600f9"  ((stx r7 r0 8 8 r8)))         ; add x16,x7,x0,lsl#3 ; str x8,[x16,#8]
       ("a64.ldxb"   "6000008b00404039"  ((ldxb r0 r3 r0 1 16)))       ; add x0,x3,x0 ; ldrb w0,[x0,#16]   (string-lane peep read)
       ("a64.stxb"   "7000008b00420039"  ((stxb r3 r0 1 16 r0)))       ; add x16,x3,x0 ; strb w0,[x16,#16] (cask-lane pin store)
+      ("a64.ldxb-1" "6000008b00f05f38"  ((ldxb r0 r3 r0 1 -1)))       ; add x0,x3,x0 ; ldurb w0,[x0,#-1]  (a negative disp: the unscaled lane)
+      ("a64.stxb-1" "7000008b00f21f38"  ((stxb r3 r0 1 -1 r0)))       ; add x16,x3,x0 ; sturb w0,[x16,#-1] (gnulib's ((small_t *) p)[-1])
       ("a64.li.big" "a0828fd240e9aff22037cff2e0c6f3f2"               ; movz + 3 movk (bignum-safe lane via //%)
                       ((li r0 0x9e3779b97f4a7c15)))
       ;; the link register (x30) by name -- a callee spills it across nested calls (BL clobbers it).

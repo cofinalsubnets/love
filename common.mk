@@ -84,11 +84,11 @@ love_stamp := $(if $(wildcard $R/STAMP),$(shell cat $R/STAMP),$(if $(in_git),$(s
 
 # WHO LINKS `love`: mooncc by default, and the whole vm with it. HCC=1 takes the $(CC) lane,
 # the one differential a foreign cc still gets and the only build that puts one on the vm at
-# ai_tco=1, where ai_musttail is live (doc/misc/moon-c-gaps.md). its own tree, out/cc, because
+# tco=1, where love_musttail is live (doc/misc/moon-c-gaps.md). its own tree, out/cc, because
 # the two loves are the same path otherwise; $m follows it so a test runs the one you asked for.
 override HCC := $(filter-out 0,$(HCC))
 
-# ai_tco: 1 = the tail-threaded VM (aps tail-jump, never return -- `make vmret` verifies it per
+# tco: 1 = the tail-threaded VM (aps tail-jump, never return -- `make vmret` verifies it per
 # binary), 0 = the trampoline loop. the host runs $(tco); the kernel lane and the wasm seat take
 # src/love/love.h's own default of 1, wasm's return_call being worth 1.31x. PINNED to 0 on love0
 # (the deliberate trampoline-coverage lane) and the two seats with no sibcall, mps2's thumb1
@@ -124,7 +124,7 @@ love_c = $(love_tu_c) $S/apps/moon/lib/moonlibc/math/lm.c
 hosta_c = $(wildcard $S/inle/$(hosta)/*.c)
 # ..and the surface over the interface: src/love/ less the core, the board seat (bare.c, nohorn.c)
 # and noblob.c, which a LINK names for itself, plus lib/'s nif libraries. user and kernel
-# mode both take it -- moonlibc's __ai_sys is the one door under it, whoever answers. drop a
+# mode both take it -- moonlibc's __love_sys is the one door under it, whoever answers. drop a
 # src/love/<app>.c in and its nifs register with no rule edit.
 host_c = $(filter-out $(addprefix $S/love/,$(love_tu) bare.c nohorn.c noblob.c),$(wildcard $S/love/*.c)) \
          $(filter-out $S/love/$(love_codec),$(wildcard $S/love/lib/*.c))
@@ -135,7 +135,7 @@ host_c = $(filter-out $(addprefix $S/love/,$(love_tu) bare.c nohorn.c noblob.c),
 # wants one NAMES it rather than taking it here.
 f_c = $(filter-out %/paint.c %/nif.c,$(wildcard $S/love/quay/*.c))
 # inle's libc is moonlibc's, named member by member; os.c is the map every syscall reaches it
-# through, and a negative __ai_osv (written at kmain) takes the __ai_inle arm, src/inle/sys.c
+# through, and a negative __love_osv (written at kmain) takes the __love_inle arm, src/inle/sys.c
 # answering the canonical numbers in C. mooncc builds the kernel, so it builds the kernel's
 # libc too -- no second copy to drift. this is src/love/posix.c's closure plus the members love.c's
 # hosted compile reaches (the mmap family behind the W^X arena's runtime branch, refused
@@ -191,5 +191,5 @@ cflags += -fcf-protection=none
 ifeq ($(filter FreeBSD NetBSD,$(shell uname -s)),)
 cflags += -D_POSIX_C_SOURCE=200809L
 endif
-# the data-sentinel tiling src/love/love.h's ai_typ reads (src/love/love.c's DSENT), on every ld/lld link.
+# the data-sentinel tiling src/love/love.h's love_typ reads (src/love/love.c's DSENT), on every ld/lld link.
 data_ld = -Wl,-T,$S/love/love_data.ld
