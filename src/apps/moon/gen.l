@@ -475,9 +475,13 @@
    ; a memory-class return: a hidden pointer as the first gp argument, filled and answered by
    ; the callee. AAPCS32 past 4 bytes -- save, on a VFP seat, an HFA, which the s/d file carries --
    ; and SysV past 16
-   (sretm? g ty) (stru? ty && (t32? g && 4 < tsz g ty && !(t32f? g && t32hfa? g ty) || amem? g ty))
+   (sretm? g ty) (stru? ty && (t32? g && 4 < tsz g ty && !(t32f? g && t32hfa? g ty) || amem? g ty || a64m? g ty))
+   ; AAPCS64's memory class: a composite past 16 bytes that is no HFA travels by reference -- an arg as the
+   ; address of the caller's own copy, a return through the buffer x8 points at
+   (a64m? g ty) (a64? g && stru? ty && 16 < tsz g ty && !(hfab g ty @ b (flo? b && tsz g ty <= 4 * tsz g b)))
    ; an AAPCS-VFP homogeneous aggregate: one float base, at most four of it
    (t32hfa? g ty) (hfab g ty @ b (flo? b && tsz g ty <= 4 * tsz g b))
+   (srreg g) (a64? g ? 'r8 (argr g 0))              ; where the hidden result pointer rides
    (fnret ty) (!(two? ty && <ty = 'ptr) ? 'long        ; an indirect callee's result type: ('ptr ('fn ret ptys)) | 'long
                  (<>ty @ ft (fn? ft && two? >ft ? <>ft 'long)))
    (fnpts ty) (!(two? ty && <ty = 'ptr) ? ()           ; ..and its parameter types, () where the declarator had no prototype
@@ -2506,6 +2510,8 @@
               (t32? g && (flo? ty || llt? ty || stru? ty))        ; t32 va_arg reads words only (love.c's shape)
                (nolane g ("no lane for a double/pair/struct va_arg" + ontgt g))
               (d128? ty) (nolane g "a wide va_arg is not carried")
+              ; a64: a memory-class struct's slot holds its copy's address, which is the value; any other struct's holds data
+              (a64? g && stru? ty && !(a64m? g ty)) (nolane g ("no lane for a va_arg of this struct" + ontgt g))
               (flo? ty) (mkv 'double 'r0 (tor0 g lv + walk + fldf ty 'f0 'r2 0))
               (mkv ty 'r0 (tor0 g lv + walk + [[(ldop ty) 'r0 'r2 0]]))))
        ('vaend . _) (mkv 'long 'r0 ())
@@ -2702,6 +2708,12 @@
                                  (kls >as (i + 1) (gpc + gpn) (xmmc + xmn) ovc
                                       (. [['p2 f0 i0 f1 i1] (tor0 g a + (a8? g ? cell2w push2w))]
                                             acc)))))
+                       ; an a64 memory-class arg: copied into a temp of the caller's, whose address rides as a pointer
+                       (a64m? g aty)
+                        (: off (ntmp g aty)
+                           cp (tor0 g a + [['lea 'r1 'r4 off]] + bcopy g 0 (tsz g aty) () + [['lea 'r0 'r4 off]])
+                           (gpc < ngp g ? (kls >as (i + 1) (gpc + 1) xmmc ovc ([['g gpc] (cp + spush 'r0)] . acc))
+                              (kls >as (i + 1) gpc xmmc (ovc + 1) ([['ov ovc] (cp + [['st 'sp (8 * ovc) 'r0]])] . acc))))
                        ; a memory-class struct arg fills n overflow slots, highest eightbyte pushed first (x64 pushes deepest first)
                        (amem? g aty)
                         (8 < asalign g aty ?              ; over-aligned memory arg: deferred
@@ -2804,7 +2816,7 @@
        ; ezride: every arg a pure leaf, so no sibling evaluation can move a register-resident param (ezarg's ride lane)
        _ (pin g 'ezride (: (pure? l) (!(two? l) ? 1 (elem <<l '(num var) && pure? >l))
                           (pure? ags)))
-       kr (kls ags 0 (sr6 ? 1 0) 0 0 ())
+       kr (kls ags 0 (sr6 && !(a64? g) ? 1 0) 0 0 ())
        (pin g 'ezride (),
         bad? kr ? 'bad
           (: ov? (kent \ (<<kent = 'ov))
@@ -2909,8 +2921,8 @@
                             !(v6m? g && flo? ret) ()
                             (ret = 'float) '((movqxr f0 r0) (cvtss2sd f0 f0))
                             '((movqxr f0 r0)))
-                    ; the hidden sret pointer rides the first argument register; the result is the temp's address, fresh in r0
-                    srin (sr6 ? [['lea (argr g 0) 'r4 sroff]])
+                    ; the hidden sret pointer rides the first argument register (a64: x8); the result is the temp's address, fresh in r0
+                    srin (sr6 ? [['lea (srreg g) 'r4 sroff]])
                     srout (sr6 ? [['lea 'r0 'r4 sroff]])
                     (mkv ret 'r0 (pf + spills + ezf + pops + setal + srin + [['call (intern <>hd)]] + fres + srout + clean + relods)))
                 (: hr (cgexpr g env hd ())                   ; a function-pointer value: park (x64 rbx; a64 x15), callr
@@ -2929,7 +2941,7 @@
                           (mkv (fnret (vty hr)) 'r0 (pf + tor0 g hr + [['st 'r4 pko 'r0]] +
                                     spills + ezf + pops + setal + [['ld pk 'r4 pko] ['callr pk]] + fres + clean + relods)))
                       (mkv (fnret (vty hr)) 'r0 (pf + tor0 g hr + [['mov pk 'r0]] +
-                                spills + ezf + pops + setal + (sr6 ? [['lea (argr g 0) 'r4 sroff]] ()) + [['callr pk]] +
+                                spills + ezf + pops + setal + (sr6 ? [['lea (srreg g) 'r4 sroff]] ()) + [['callr pk]] +
                                 (sr6 ? [['lea 'r0 'r4 sroff]] ()) + clean + relods))))))))
    ; the C99 complex lane (x64): a complex value is its two-member struct, so it flows as one. arithmetic parks each
    ; side in a double-pair temp (the other side may call), f0..f3 carry (a.re a.im b.re b.im), the answer is a fresh temp's address
@@ -6069,7 +6081,7 @@
    (cgfill g env off ty ini0)                       ; fill an aggregate at frame offset off (no zero)
     (unelide g env ty ini0 @ ini                    ; normalize elided braces (idempotent)
      (?- 'bad
-      (<ini == 'str) (arr? ty ? (cgstr off <>ini) 'bad)
+      (<ini == 'str) (arr? ty ? (cgstr off (snip <>ini 0 (min #<>ini (tsz g ty)))) 'bad)   ; s[3] = "abc" drops the NUL
       (<ini != 'init) 'bad
       (arr? ty)
        (: elt <>ty esz (tsz g elt)
@@ -6079,7 +6091,7 @@
                  ci (<it = 'didx ? <>it idx)
                  val (elval it)
                  eoff (off + ci * esz)
-                 r (? (aggish? elt && <val = 'init) (cgfill g env eoff elt val)
+                 r (? (aggish? elt && <val = 'init || arr? elt && <val = 'str) (cgfill g env eoff elt val)   ; a string fills a char array
                       (stru? elt && <val != 'str) (cgsfill g env eoff elt val)
                       (cgstore g env eoff elt val))
                  (bad? r ? 'bad (fill >l (ci + 1) (acc + r)))))
@@ -6095,7 +6107,7 @@
                fe (nthfield fields ci)
                (bad? fe ? 'bad
                   (: foff (off + <>fe) fty <>>fe
-                     r (? (aggish? fty && <val = 'init) (cgfill g env foff fty val)
+                     r (? (aggish? fty && <val = 'init || arr? fty && <val = 'str) (cgfill g env foff fty val)
                           (stru? fty && !(<val = 'str)) (cgsfill g env foff fty val)
                           (bitf? fty) (cgbffill g env foff fty val)
                           (cgstore g env foff fty val))
@@ -7196,7 +7208,8 @@
      'hasasm ()                ; an asm statement pins it (homing off)
      'fpin ()                  ; the frame link is asked for by name (unframe stands off)
      'cssv ()                  ; the callee-saved save forms (a cs grant pins)
-     'sret ())                 ; the memory-return slot (the driver re-pins under sr6f)
+     'sret ()                  ; the memory-return slot (the driver re-pins under sr6f)
+     'pcopy ())                ; the by-reference struct params' copies, laid after the spills (spillp)
 
    (cgstmt g env s)
     (: _ (psreset g)                                 ; a statement never carries a live operand in
@@ -7239,7 +7252,7 @@
                        (tor0 g r + fldf 'double (xmmreg 0) 'r0 0 + epj)
                       (aone g rt = 'int)                             ; a small int aggregate (a union rides here): rax
                        (tor0 g r + '((ld r0 r0 0)) + epj)
-                      (amem? g rt)                                       ; a memory return: fill the caller's temp through
+                      (amem? g rt || a64m? g rt)                         ; a memory return: fill the caller's temp through
                        (tor0 g r                                         ; the saved hidden pointer, and answer it in rax
                         + [['ld 'r1 'r4 (peep g 'sret 0)]]
                         + bcopy g 0 (tsz g rt) () + '((mov r0 r1)) + epj)
@@ -8171,6 +8184,10 @@
        ; hp is the home policy over the gp params: () spills every one to its slot, ('uni rides homes excl)
        ; seats upar's verdicts; under a policy an exotic composite answers 'bad and ubuild bares
        (pol? h9) (two? h9)                           ; the one policy is the uni seat list
+       ; spill, then the by-reference struct params' copies (a64), which may run only once every arg register is home
+       (spillp hp ps gpi acc)
+        (: _ (pin g 'pcopy ())
+           (spill hp ps gpi 0 0 () acc @ r (two? r ? [(<r + g 'pcopy) <>r] r)))
        (spill hp ps gpi xmmi ovi env acc)
         (!(two? ps) ? [acc env]
            (: p <ps pty <>p
@@ -8249,6 +8266,16 @@
                      (t32? g ?                        ; t32 stack blob params: deferred
                          (nolane g ("no lane for a stack-passed by-value struct param" + ontgt g))
                         (spill hp >ps gpi xmmi (ovi + 1) ([<p (ovb g + 8 * ovi) pty] . env) acc)))
+                 ; an a64 memory-class param arrives as the address of the caller's copy: it saves like a pointer, and
+                 ; the struct copies into this frame once every arg register is home (spillp: bcopy runs through r0-r2)
+                 (a64m? g pty)
+                  (? (pol? hp) 'bad
+                     (: off (ntmp g pty)
+                        reg (gpi < ngp g)
+                        src (reg ? (nslot g 8) (ovb g + 8 * ovi))
+                        _ (pin g 'pcopy (g 'pcopy + [['ld 'r0 'r4 src] ['lea 'r1 'r4 off]] + bcopy g 0 (tsz g pty) ()))
+                        (reg ? (spill hp >ps (gpi + 1) xmmi ovi ([<p off pty] . env) (acc + [['st 'r4 src (argr g gpi)]]))
+                           (spill hp >ps gpi xmmi (ovi + 1) ([<p off pty] . env) acc))))
                  ; a memory-class param binds straight to the caller's overflow block (SysV: that memory is the callee's copy)
                  (amem? g pty)
                   (pol? hp || 8 < asalign g pty ? 'bad     ; under a policy, or over-aligned: deopt/refuse
@@ -8333,17 +8360,29 @@
        ; a variadic fn (AAPCS64): a 192-byte save area, x0..x7 at +0 step 8, q0..q7 at +64 step 16 (the low 8 bytes the double)
        (vaspill-a64 ps)
         (: rsa (nslot g 192)
-           _ (pin g 'rsa rsa)
+           _ (pins g 'rsa rsa 'pcopy ())
            savegp (: (go i acc) (7 < i ? acc (go (i + 1) (acc + [['st 'r4 (rsa + 8 * i) (argregs-a64 i)]]))) (go 0 ()))
            savevr (: (go i acc) (7 < i ? acc (go (i + 1) (acc + fstf g 'double 'r4 (rsa + 64 + 16 * i) (xmmreg i)))) (go 0 ()))
            (cls qs gpi vri ov env)
-            (!(two? qs) ? (pins g 'vagp gpi 'vaxmm vri 'vaov ov, [(savegp + savevr) env])
+            (!(two? qs) ? (pins g 'vagp gpi 'vaxmm vri 'vaov ov, [(savegp + savevr + g 'pcopy) env])
                (: p <qs pty <>p
-                  (flo? pty ?
+                  (? (flo? pty)
                       (7 < vri ? (cls >qs gpi vri (ov + 1) ([<p (ovb g + 8 * ov) pty] . env))
                                  (cls >qs gpi (vri + 1) ov ([<p (rsa + 64 + 16 * vri) pty] . env)))
-                     (7 < gpi ? (cls >qs gpi vri (ov + 1) ([<p (ovb g + 8 * ov) pty] . env))
-                                (cls >qs (gpi + 1) vri ov ([<p (rsa + 8 * gpi) pty] . env))))))
+                     ; a by-reference struct: its pointer's slot, copied into the frame after the saves
+                     (a64m? g pty)
+                      (: off (ntmp g pty) src (7 < gpi ? (ovb g + 8 * ov) (rsa + 8 * gpi))
+                         _ (pin g 'pcopy (g 'pcopy + [['ld 'r0 'r4 src] ['lea 'r1 'r4 off]] + bcopy g 0 (tsz g pty) ()))
+                         (7 < gpi ? (cls >qs gpi vri (ov + 1) ([<p off pty] . env))
+                            (cls >qs (gpi + 1) vri ov ([<p off pty] . env))))
+                     ; a gp struct takes its slots whole, as the caller's p2 lane lays them; an HFA, or one past the file, refuses there too
+                     (stru? pty)
+                      (aslots g pty @ n
+                         (hfab g pty @ b (flo? b) || 8 < gpi + n ?
+                            (nolane g ("no lane for this by-value struct param in a variadic function" + ontgt g))
+                            (cls >qs (gpi + n) vri ov ([<p (rsa + 8 * gpi) pty] . env))))
+                     (7 < gpi) (cls >qs gpi vri (ov + 1) ([<p (ovb g + 8 * ov) pty] . env))
+                     (cls >qs (gpi + 1) vri ov ([<p (rsa + 8 * gpi) pty] . env)))))
            (cls ps 0 0 0 ()))
        ; a variadic fn (AAPCS32): the prologue pushed r0-r3 just under the caller's stack args, so a
        ; named register param sits at fp+ovb+4i and an overflow one past it; word params only
@@ -8667,7 +8706,7 @@
                        (pin g 'cssv sv,
                         pin g 'epi (map (f9 \ ['ld (f9 3) 'r4 (f9 2)]) sv + e0))))
                ; empty grants take the bare () policy, so no policy bar can fire
-               spu (spill (two? rides || two? phs ? ['uni rides phs]) params 0 0 0 () ())
+               spu (spillp (two? rides || two? phs ? ['uni rides phs]) params 0 ())
                spu (two? vzf ? [(<spu + vzf) <>spu] spu)
                irU (build spu)
                _ (pins (rgreset g) 'cssv () 'epi e0)
@@ -8682,7 +8721,7 @@
                    two? av9 && peep g 'lsq 0 != av9 3 ||
                    !(peep g 'dseq 0 = (two? av9 ? (av9 13) (peep g 'dseq 0))))
                   (: _ (pins (fnreset g) 'n n0 'strs strs0 'statics sts0 'fasecs fas0 'pool0 tpool 'pool tpool)
-                     sb (spill () params 0 0 0 () ())
+                     sb (spillp () params 0 ())
                      sb (two? vzf ? [(<sb + vzf) <>sb] sb)
                      (build sb))
                   irU))
@@ -8703,8 +8742,8 @@
               (vararg && t32? g) (vaspill-t32 params)
               (vararg && rv64? g) (vaspill-rv params)
               vararg (vaspill params)
-              sr6f (spill () params 1 0 0 () [['st 'r4 (peep g 'sret 0) (argr g 0)]])
-              (spill () params 0 0 0 () ()))
+              sr6f (spillp () params (a64? g ? 0 1) [['st 'r4 (peep g 'sret 0) (srreg g)]])
+              (spillp () params 0 ()))
        sp1 (uni9 || !(two? vzf) ? sp1 [(<sp1 + vzf) <>sp1])   ; the VLA size-slot zeroes ride after the spills
        irf (uni9 ? (ubuild (alive g f)) (build sp1))
        ; the post-choice chain, typed by stage.l (each pass advances a stage die, so only this order checks):
