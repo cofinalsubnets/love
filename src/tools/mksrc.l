@@ -1,15 +1,15 @@
-; src/tools/mksrc.l -- lay the source tarball into an ELF object, so the artifact can
-; hand out its own source with nothing on the box.
+; src/tools/mksrc.l -- lay the source container (src/tools/selfpack.l's) into an ELF object, so
+; the artifact can hand out its own source with nothing on the box.
 ;
-;   love src/tools/mksrc.l archive.tar.gz out.o [arch]     arch defaults to x64
+;   love src/tools/mksrc.l src.tree out.o [arch]     arch defaults to x64
 ;
 ; the object holds two symbols in .rodata and nothing else:
 ;
-;   ai_srcgz_len   an 8-byte little-endian length, at offset 0 (so it is 8-aligned)
-;   ai_srcgz       the .tar.gz bytes, right behind it
+;   srctree_len   an 8-byte little-endian length, at offset 0 (so it is 8-aligned)
+;   srctree       the container's bytes, right behind it
 ;
-; src/love/src.c declares both weak, so an ordinary `love` links with no blob and answers
-; nothing when asked; only the dist link supplies one.
+; a link that takes no such object names src/love/noblob.c, whose zero length says none
+; is carried.
 ; no unconditional (borrow 'holo): it resolves off a nest (~/.love), which a fresh seed tree
 ; does not have, so make hands holo in as a cat (-l $(ho)/.mksys-cat.l).
 
@@ -38,12 +38,12 @@
                 (a . u) (ev a, mksrc-rdev u))
 
    ; a wasm object is the gen tuple as text (src/apps/moon/moon.l): the forms in the data slot,
-   ; the two names in the globals slot, and the archive behind the text as (blob 0), the
+   ; the two names in the globals slot, and the container behind the text as (blob 0), the
    ; container moon.l's wasm-tu reads
    (mksrc-wasm dst forms s)
     (: q (open dst "w")
        _ (!(hot? q) ? (mksrc-die ("cannot write " + dst)))
-       t (show [() forms () '("ai_srcgz" "ai_srcgz_len") () () () () () () () ()])
+       t (show [() forms () '("srctree" "srctree_len") () () () () () () () ()])
        (say q ("wo1 " + show #t + " " + show #s + "\n" + t + s), close q))
 
    (mksrc arch src dst)
@@ -53,18 +53,18 @@
        s <>g
        n #s
        _ (n < 1 ? (mksrc-die (src + " is empty")))
-       ; the archive rides as a BLOB -- the string itself, one item carrying every byte
+       ; the container rides as a BLOB -- the string itself, one item carrying every byte
        ; (holo.l's item-len) -- through lay, the walk and the write, on either lane
-       forms ['(label ai_srcgz_len) ['raw (mksrc-le8 n 0 ())]
-              '(label ai_srcgz)     ['raw [(arch = 'wasm ? '(blob 0) s)]]]
+       forms ['(label srctree_len) ['raw (mksrc-le8 n 0 ())]
+              '(label srctree)     ['raw [(arch = 'wasm ? '(blob 0) s)]]]
        (arch = 'wasm ? (mksrc-wasm dst forms s)
-        (write-bytes dst (objelf arch () () () '("ai_srcgz" "ai_srcgz_len") () () () () () forms))))
+        (write-bytes dst (objelf arch () () () '("srctree" "srctree_len") () () () () () forms))))
 
    ; argv's head is this script's own path. the arch arrives as text and `name` interns it
    ; to the symbol the backend table is keyed by (a `mint` would be == to nothing)
    (mksrc-main av)
     (#av @ n
        (2 <= n ? (mksrc (3 <= n ? (name <>>av) 'x64) <av <>av)
-        (mksrc-die "usage: mksrc ARCHIVE.tar.gz OUT.o [ARCH]")))
+        (mksrc-die "usage: mksrc SRC.TREE OUT.o [ARCH]")))
 
    (mksrc-main >argv))

@@ -292,8 +292,8 @@
                  pin t 'tgt tgt,                  ; the codegen target: 32-bit widths (thumb1/thumb2) vs 64-bit
                  pin t 'types {},         ; typedef name -> ty
                  pin t 'weaks (),                 ; __attribute__((weak)) function names
-                 pin t 'ainl (),                  ; always_inline function names (love.h's ai_inline)
-                 pin t 'noinl (),                 ; noinline function names (love.h's ai_noinline)
+                 pin t 'ainl (),                  ; always_inline function names (love.h's love_inline)
+                 pin t 'noinl (),                 ; noinline function names (love.h's love_noinline)
                  pin t 'enums {},         ; enum constant -> value
                  pin t 'declaring {},     ; the names of the declaration being parsed right now (C11 6.2.1p7)
                  pin t 'labs {},          ; the labels defined in the function being parsed (C11 6.8.1p3)
@@ -306,6 +306,7 @@
                  pin t 'sigs {},          ; fn/proto name -> (rettype (paramty..)) for the call ABI
                  pin t 'anon 0,                   ; the anonymous-tag counter
                  pin t 'sfns {},          ; top-level `static` fn names: local symbols in the .o
+                 pin t 'c99inl {},        ; fn name -> 'inl while every file-scope declaration says plain `inline`
                  pin t 'svars {},         ; top-level `static` globals: internal linkage, never exported
                  pin t 'sects {},         ; global name -> its __attribute__((section "..")) string
                  pin t 'consts {},        ; global name -> 1 when `const` names the object and it has an initializer
@@ -1340,11 +1341,15 @@
                            ; sizeof of a VLA type (struct T[n+1], if_nameindex's malloc):
                            ; the runtime multiply dim * sizeof(elt)
                            (varr? <tr) [['bin '* <>><tr ['num (tsz ps <><tr)]] <>tr]
-                           [['cast (szty ps) ['num (tsz ps <tr)]] <>tr]))
+                           (tsz ps <tr @ n
+                              (charm? n ? [['cast (szty ps) ['num n]] <>tr]
+                                 (blame <>tr "sizeof an incomplete type")))))
                     (punary ps r1 @ r                 ; sizeof unary-expr | sizeof(expr) -- gen sizes from the type
                        (two? r ? (ptype ps <r @ ty
-                                    (ty && !(varr? ty) ?      ; a VLA's size is runtime: defer to gen's szof
-                                       [['cast (szty ps) ['num (tsz ps ty)]] <>r] [['szof <r] <>r]))))))
+                                    (? (!ty || varr? ty) [['szof <r] <>r]      ; a VLA's size is runtime: defer to gen's szof
+                                       (tsz ps ty @ n
+                                          (charm? n ? [['cast (szty ps) ['num n]] <>r]
+                                             (blame <>r "sizeof an incomplete type")))))))))
              ; _Alignof (C11 6.5.3.4) through talign, the door playout lays members with, so it
              ; cannot drift. the expression operand is gcc's __alignof__ alone, C11's a type-name.
              (tkk t = 'id && elem (tkv t) '("_Alignof" "__alignof__"))
@@ -1365,7 +1370,10 @@
                             (atom? r ? ()
                                (nulloff ps <r @ n   ; the offsetof idiom folds to a constant
                                   (charm? n ? [['num n] <>r] [['addr <r] <>r]))))
-             (tp? t "+") (punary ps >ts)
+             (tp? t "+") (punary ps >ts @ r          ; +x is x promoted (_Generic reads the difference)
+                            (atom? r ? ()
+                               (ptype ps <r @ ty
+                                  (ty && pprom ty != ty ? [['cast (pprom ty) <r] <>r] r))))
              (tp? t "-") (punary ps >ts @ r
                             (two? r ? [['un 'neg <r] <>r]))
              (tp? t "!") (punary ps >ts @ r
@@ -1478,6 +1486,11 @@
                    r)))))
    ; a `[]` bound completes from the initializer (C11 6.7.9p22, 6.5.2.5p22 for a
    ; compound literal); one that implies no count leaves the type as it stands
+   ; C11 6.7.9p11: a scalar's initializer may stand in braces, `int x = {0};` (PTHREAD_ONCE_INIT's)
+   (scini ty ini)
+    (? (arr? ty || stru? ty || varr? ty) ini
+       (ini @ ('init (x)) (two? x && elem <x '(dfield didx init) ? ini x)   ; one level: {{0}} is not a scalar's
+              ini))
    (fillarr ps ty ini)
     (arr? ty && <>>ty = 0 && charm? (initcount ps <>ty ini) ?
        ['arr <>ty (initcount ps <>ty ini)] ty)
@@ -1822,7 +1835,7 @@
                                     (old = 'none ? (pull (ps 'locals) name 0) (pin (ps 'locals) name old),
                                      atom? r ? ()
                                        (<r @ ini
-                                          [([name (fillarr ps ty ini) ini] + pinl) <>r])))   ; [] local: infer size
+                                          [([name (fillarr ps ty ini) (scini ty ini)] + pinl) <>r])))   ; [] local: infer size
                                  [([name ty ()] + pinl) ts3])))))
                    (more ts2 acc)
                     (one ts2 @ r
@@ -2213,9 +2226,10 @@
                 dr (pdtor ps <>br <br)
                 (atom? dr ? ()
                    ; a parameter of array type decays to a pointer, so `int a[]` and a
-                   ; va_list (an array typedef) both ride as pointers
+                   ; va_list (an array typedef) both ride as pointers; one of function type likewise
                    (: e0 <dr ty0 <>e0
-                      entry (arr? ty0 ? [<e0 (tdecay ty0)] e0)
+                      ; (fn ret) here carries no parameter list; the pointer wears the declarator's (fn ret ptys) shape
+                      entry (? (arr? ty0) [<e0 (tdecay ty0)] (fn? ty0) [<e0 ['ptr (two? >>ty0 ? ty0 [<ty0 <>ty0 ()])]] e0)
                       _ (peep ps 'sawrstr () && <e0 ?   ; a named restrict param: file it for note
                            (pin ps 'currstr (<e0 . peep ps 'currstr ())) 0)
                       _ (!<e0 ? 0                         ; a named param stages its mark like a local's
@@ -2397,7 +2411,7 @@
        (ws body ()))
    ; a comma-list of `*.. name (params)` prototypes sharing one base type; registers each sig,
    ; answers [rest-after-`;`] | (). each sibling's own stars ride into its sig's return slot --
-   ; dropped, `struct ai *ai_strof(..)` reads as a struct-by-value return.
+   ; dropped, `struct g *strof(..)` reads as a struct-by-value return.
    (mproto ps base ts)
     (: sr (pstars ts base)
        rty <sr s0 <>sr
@@ -2428,6 +2442,7 @@
      (peep ps 'curweak () ? () (wkany? ts ? (pin ps 'curweak 1))),
      (peep ps 'curinl () ? () (inlany? ts ? (pin ps 'curinl 1))),
      (peep ps 'curnoinl () ? () (noinlany? ts ? (pin ps 'curnoinl 1))),
+     (peep ps 'curlink () ? () (pin ps 'curlink (leadkw? ps ts 'inline && !(leadextern? ps ts) ? 'inl 'ext))),
      (peep ps 'curalign () ? () (alignat? ps ts @ an (an ? (pin ps 'curalign an)))),
      ptop9 ps ts)
    (ptop9 ps ts)
@@ -2510,7 +2525,7 @@
                                        ; (`more` runs pdtor first, so t2 is the whole array type and
                                        ; ts3 sits on the `=`), where the first still has its `[`
                                        ; ahead of it -- so a lone [] bound is filled in here too
-                                       [[nm (fillarr ps t2 <r) <r] <>r]))
+                                       [[nm (fillarr ps t2 <r) (scini t2 <r)] <>r]))
                                 ; a global register variable's row was pinned before its type was
                                 ; in hand; fill it in here, where the declarator is done
                                 (peep (ps 'gregs) nm () @ gv
@@ -2612,6 +2627,19 @@
        (atom? t ? (gripe () () () "parse error at end of input")
           (gripe (two? dt ? (filof t) (filat spans i0)) <>>t ()
                  (why ? why ("parse error near " + spell t)))))
+   ; C11 6.7p4: a redeclared file-scope object keeps a compatible type. what is compared is the
+   ; shape -- scalar against pointer against struct, and two different arithmetic types --
+   ; which is what autoconf's suffix probes ask (`extern ptrdiff_t foo; extern int foo;`)
+   (tyshape t) (? (atom? t) t (ptr? t) 'ptr (arr? t) 'arr (stru? t) t (fn? t) 'fn 'other)
+   (tyclash? a b) (? (fn? a || fn? b) () (atom? a && atom? b) (a != b) (tyshape a != tyshape b))
+   (redecl ps f)
+    (? !(elem <f '(gdecl xdecl)) ()
+       (: (go prs) (atom? prs ? ()
+                     (<prs @ pr
+                        (peep (ps 'globals) <pr () @ old
+                           (two? pr && old && <>pr && tyclash? old <>pr ?
+                              ("conflicting types for '" + <pr + "'") (go >prs)))))
+          (go <>f)))
    (cparse ts) (cparse-t ts 'x64)          ; the law tests + any bare caller: 64-bit widths (unchanged behavior)
    (cparse-t ts tgt) (cparse-d ts tgt 'moon)  ; ..and the default dialect, which is what a bare caller means
    (cparse-d ts tgt dia)
@@ -2668,6 +2696,10 @@
               (pin ps 'ainl (<>f . ps 'ainl)),
             peep ps 'curnoinl () && fnp ?
               (pin ps 'noinl (<>f . ps 'noinl)),
+            ; C11 6.7.4p7: a function every file-scope declaration of which is plain `inline` has
+            ; an inline definition here and no external one -- the TU saying `extern` lays that
+            fnp ? (pin (ps 'c99inl) <>f (peep (ps 'c99inl) <>f 'inl = 'inl && ps 'curlink = 'inl ? 'inl 'ext)),
+            pin ps 'curlink (),
            ; the restrict params, filed under this function and never a bare name set: `p` may
            ; be restrict in one function and plain in the next
             (ps 'currstr @ rs
@@ -2684,10 +2716,14 @@
        (tops ts2 acc)
         ; the hoisted block-scope externs lead the program: gen's global pass reads them, and
         ; C's tentative rule lets a real definition later in the TU take the entry back
-        (atom? ts2 ? [1 ['prog (ps 'hoist + rev acc)] (ps 'stag) (ps 'sigs) (ps 'weaks)  ; empty acc = a valid empty TU (crypt.c), not a parse failure
+        (atom? ts2 ? ((map (nm \ (peep (ps 'c99inl) nm () = 'inl ? (pin (ps 'sfns) nm 1))) (keys (ps 'c99inl))),
+                      [1 ['prog (ps 'hoist + rev acc)] (ps 'stag) (ps 'sigs) (ps 'weaks)  ; empty acc = a valid empty TU (crypt.c), not a parse failure
                             (ps 'sfns) (ps 'svars) (ps 'sects) (ps 'alias) (ps 'aligns) (ps 'ainl) (ps 'noinl)
-                            (ps 'consts) (ps 'rstrs) (ps 'gregs) vol]
+                            (ps 'consts) (ps 'rstrs) (ps 'gregs) vol])
            (ptop ps ts2 @ r
-              (two? r ? (note <r, tops <>r (<r . acc)) (pfail ps ts2 spans toks))))
+              (? !(two? r) (pfail ps ts2 spans toks)
+                 (redecl ps <r @ why
+                    (why ? (gripe (filat spans (#toks - #ts2)) (<>><ts2) () why)
+                       (note <r, tops <>r (<r . acc)))))))
        (tops toks ())))
 ) ; module 'moon

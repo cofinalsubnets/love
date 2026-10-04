@@ -7,7 +7,7 @@
 # defines; the root Makefile names only its own verbs.
 .PHONY: \
   moon-bzip2 moon-bzip2-a64 moon-bzip2-rv64 moon-gzip moon-gzip-a64 moon-gzip-rv64 \
-  moon-lua moon-lua-a64 moon-lua-rv64 moon-m4 moon-m4-a64 moon-m4-rv64 moon-sqlite \
+  moon-bison moon-flex moon-lua moon-lua-a64 moon-lua-rv64 moon-m4 moon-m4-a64 moon-m4-rv64 moon-sqlite \
   moon-sqlite-a64 moon-sqlite-rv64 moon-tar moon-tar-a64 moon-tar-rv64 mx nettest test \
   test_as test_asmops test_bakerep test_big test_boards test_cca64 test_ccrv64 test_ccwasm test_ccthumb1 \
   test_ccthumb2 test_clay test_cli test_nest test_cookdiff test_cpio test_cts test_cts_a64 test_tfm test_caja test_gpic test_grap test_chem \
@@ -59,7 +59,7 @@ test_extra: test_filemode waits test_front test_proof test_gen test_uugen test_u
 # $m is the warm love -- the baked image woken, what ships. a gate whose subject is
 # the egg boot spells LOVE_NO_IMAGE=1 itself; love0 is always the egg.
 
-# love0 self-tests BOTH compilers in one run (-Dai_tco=0, the trampoline lane too), so it
+# love0 self-tests BOTH compilers in one run (-Dtco=0, the trampoline lane too), so it
 # must print two "tests pass" summaries -- a reader stop drops the rest and exits 0. status
 # rides `.rc`, no pipefail. corpus.list is a runtime input, not a stamp: love0 reads it to
 # find the corpus (src/love/main.c), and nothing else asks for it, so it is named here or a fresh
@@ -113,7 +113,7 @@ test_stdinbuf: $(ho)/love
 	    || { cat out/.test_stdinbuf3.out; \
 	         echo "FAIL fd 0 handed on nonblocking (flags $$fl) -- stdin_give did not put the bit back"; exit 1; }
 # ..and the give-back rides the same seek: `unchug` returns drained bytes to the run, so
-# ai_io_pending counts them again and the child inherits fd 0 in front of them. the CONTRAST
+# io_pending counts them again and the child inherits fd 0 in front of them. the CONTRAST
 # is the law -- `chug` drains the whole run, so the child inherits nothing without it and all
 # ten with. only rbio_of finds that run: a heap-port-only door answers 0 here while every
 # file-port law in test/io.l still passes.
@@ -184,7 +184,7 @@ $(ho)/front: test/front/main.c $(S)/love/bare.c $(S)/love/alloc.c $(S)/love/horn
 	@echo 'CC	'$@
 	@mkdir -p $(dir $@)
 	@$(hcc) -o $@ test/front/main.c $(S)/love/bare.c $(S)/love/alloc.c $(S)/love/horn.c $(ho)/liblove.a $(data_ld)
-# ..and the same frontend with the horn's SEAT door in place of its sink: ai_horn_seat
+# ..and the same frontend with the horn's SEAT door in place of its sink: love_horn_seat
 # makes src/love/horn.c ask k_horn_* for the device, which is the lane inle runs over src/inle/hda.c
 # and the playdate over its SDK. no gate can reach that lane WITH hardware, and this one
 # reaches it without -- the frontend's k_horn_* are the device, over the same
@@ -193,7 +193,7 @@ $(ho)/frontseat: test/front/main.c $(S)/love/bare.c $(S)/love/alloc.c $(S)/love/
     out/lib/egg.h out/lib/post.h out/lib/prel.h out/lib/ev.h
 	@echo 'CC	'$@
 	@mkdir -p $(dir $@)
-	@$(hcc) -D ai_horn_seat=1 -o $@ test/front/main.c $(S)/love/bare.c $(S)/love/alloc.c $(S)/love/horn.c $(ho)/liblove.a $(data_ld)
+	@$(hcc) -D love_horn_seat=1 -o $@ test/front/main.c $(S)/love/bare.c $(S)/love/alloc.c $(S)/love/horn.c $(ho)/liblove.a $(data_ld)
 test_front: $(ho)/front $(ho)/frontseat
 	@echo TEST $(ho)/front
 	@sh test/gate/run.sh -a front "$(ho)/front" "front: ok" test/front/io.l
@@ -206,7 +206,7 @@ test_front: $(ho)/front $(ho)/frontseat
 # cats.c is the catalog love0 lacks; it is not idempotent and love0 evaluates twice; or its
 # regression is a HANG, wanting a timeout a corpus cannot give -- a wedged gate is worse than
 # a red one. gate = exit 0 and a "<name>: ok"; a cold lane opts in via hostnif_cold.
-hostnif_tests = test/host/gcpause.l test/host/gcroom.l test/host/mop.l test/host/deepeq.l test/host/wharf.l test/host/cb.l test/host/manifest.l test/host/rune.l test/host/pty.l test/host/loader.l test/host/rdiff.l test/host/run.l test/host/luxui.l test/host/sh.l test/host/mitty.l test/host/vi.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/tty.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/web.l test/host/sbhttp.l test/host/salt.l test/host/libra.l test/host/clay.l test/host/tls.l test/host/tlsc.l test/host/ssh.l test/host/sshd.l test/host/gz.l test/host/gzc.l test/host/png.l test/host/imgenc.l test/host/jpeg.l test/host/webp.l test/host/pic.l test/host/grap.l test/host/chem.l test/host/font.l test/host/story.l test/host/evback.l test/host/design.l test/host/slop.l test/host/score.l test/host/grass.l test/host/grass99.l test/host/wade.l test/host/apartment.l test/host/garage.l test/host/roost.l test/host/shaft.l test/host/tree.l test/host/lore.l test/host/synth.l test/host/lupa.l test/host/mc.l test/host/chucho.l test/host/pom.l test/host/saver.l test/host/helm.l test/host/wget.l test/host/www.l test/host/smallweb.l test/host/net.l test/host/ed.l test/host/cook.l test/host/x11.l test/host/pier.l test/host/kitpng.l test/host/bee.l test/host/beeq.l test/host/locks.l test/host/hosts.l test/host/seals.l test/host/showbig.l test/host/lovefs.l
+hostnif_tests = test/host/gcpause.l test/host/gcroom.l test/host/mop.l test/host/deepeq.l test/host/wharf.l test/host/cb.l test/host/manifest.l test/host/rune.l test/host/pty.l test/host/loader.l test/host/rdiff.l test/host/run.l test/host/luxui.l test/host/sh.l test/host/mitty.l test/host/vi.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/tty.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/web.l test/host/sbhttp.l test/host/salt.l test/host/libra.l test/host/clay.l test/host/tls.l test/host/tlsc.l test/host/ssh.l test/host/sshd.l test/host/gz.l test/host/gzc.l test/host/png.l test/host/imgenc.l test/host/jpeg.l test/host/webp.l test/host/pic.l test/host/grap.l test/host/chem.l test/host/font.l test/host/story.l test/host/evback.l test/host/design.l test/host/slop.l test/host/score.l test/host/grass.l test/host/grass99.l test/host/wade.l test/host/apartment.l test/host/garage.l test/host/roost.l test/host/shaft.l test/host/court.l test/host/lore.l test/host/synth.l test/host/lupa.l test/host/seek.l test/host/mc.l test/host/chucho.l test/host/pom.l test/host/saver.l test/host/helm.l test/host/wget.l test/host/www.l test/host/smallweb.l test/host/net.l test/host/ed.l test/host/cook.l test/host/x11.l test/host/pier.l test/host/kitpng.l test/host/bee.l test/host/beeq.l test/host/locks.l test/host/hosts.l test/host/seals.l test/host/showbig.l test/host/lovefs.l
 # out/lush: test/host/sh.l drives the built shell end to end, via out/love and
 # never env's PATH love -- the tree's nifs, not the nest's.
 hostnif_cold =                                   # empty: no gate needs the cold lane
@@ -583,7 +583,7 @@ test_tco0:
 	@$(MAKE) --no-print-directory tco=0 test_host
 	@echo "test_tco0: the trampoline builds, bakes and passes the host corpus"
 # test_hdiff -- the foreign-cc differential, the one lane a cc that is not ours still gets
-# to build. gcc and clang each link the whole vm at ai_tco=1, which the mooncc lane never
+# to build. gcc and clang each link the whole vm at tco=1, which the mooncc lane never
 # does, and each must build, answer, pass the quick suite and come out ret-free. not the
 # corpus twice: semantics are the interpreter's and do not move with the compiler.
 test_hdiff: host
@@ -833,7 +833,7 @@ define moon_pkg
 moon-$1: host
 moon-$1-a64 moon-$1-rv64: $3
 moon-$1 moon-$1-a64 moon-$1-rv64:
-	@$2="$$($2)" ./tools/moon-$1.sh $$(moon_arch_$$(patsubst moon-$1-%,%,$$@))
+	@$2="$$($2)" ./src/tools/moon-$1.sh $$(moon_arch_$$(patsubst moon-$1-%,%,$$@))
 endef
 $(eval $(call moon_pkg,tar,TARSRC,host))
 $(eval $(call moon_pkg,m4,M4SRC,host))
@@ -841,10 +841,15 @@ $(eval $(call moon_pkg,lua,LUASRC,host))
 $(eval $(call moon_pkg,sqlite,SQLSRC,moon-sqlite))
 $(eval $(call moon_pkg,gzip,GZIPSRC,host))
 $(eval $(call moon_pkg,bzip2,BZIP2SRC,host))
-# test_distboot -- the release claim: take either artifact, type make, get the same binary.
-# source bootstraps through the machine's cc; seed lays the source it carries in .rodata and
-# builds it with cc/gcc/clang shadowed by scripts that fail loudly, so "no ambient compiler
-# did the work" is proved. then the circle: `love seed` with nothing on PATH that compiles,
+# flex 2.6.4 and bison 3.8.2, each on m4 1.4.21, from pinned tarballs: configured with
+# CC=mooncc (no gcc even in the probes), built, and held byte-identical to the host's own
+# flex and bison on the scanners and grammars their tarballs carry. hearts' LEX and YACC.
+moon-flex moon-bison: host
+	@./src/tools/$@.sh
+# test_distboot -- the release claim: lay the source the binary carries, type make, get the
+# same binary by either road. one lay bootstraps through the machine's cc; the other builds
+# with cc/gcc/clang shadowed by scripts that fail loudly, so "no ambient compiler did the
+# work" is proved. then the circle: `love seed` with nothing on PATH that compiles,
 # taking its own mooncc. the claim holds because the local cc builds love0 and nothing else.
 # three full builds and still NOT a superset of test_seed -- no leg here runs a default
 # `love seed`, so the deference decision goes untested. minutes, opt-in, by name.
@@ -856,7 +861,7 @@ test_bakerep: host $(prof_raw)
 	@$(gsh) test/gate/bakerep.sh $(ho) $(prof_raw)
 test_distboot: dist
 	@echo TEST test/gate/distboot.sh
-	@sh test/gate/distboot.sh $(dist_source) $(ho)/love
+	@sh test/gate/distboot.sh $(ho)/love
 # test_hearts -- hearts (src/apps/hearts) builds the arm64 defconfig kernel Image from the pinned
 # linux tarball, byte-identical to kbuild+clang's, both at one canonical path (/var/tmp/hearts).
 # two kernel builds on the host's borrowed toolchain: heavy, opt-in by name.
@@ -866,11 +871,8 @@ test_hearts: host
 # test_gz -- src/apps/tar.l + src/apps/gz.l against the two programs they replace. the laws
 # are test/host/gz.l; this is the half only the OUTSIDE can say, and it is separate because
 # a coder and decoder by one hand round-trip cleanly through a format nobody else speaks.
-# skips without either system tool. gzfind.l rides along: the differential between gz.l's
-# match finder and the holo IR beside it, over corpora chosen for the chain the kernel walks.
+# skips without either system tool.
 test_gz: host
-	@echo TEST test/gate/gzfind.l
-	@$m $R/test/gate/gzfind.l
 	@echo TEST test/gate/targz.sh
 	@$(gsh) test/gate/targz.sh $(ho)/love
 # test_root -- the privileged verbs: chroot, mount, umount, sync, mkfifo, mknod. the

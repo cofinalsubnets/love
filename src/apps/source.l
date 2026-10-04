@@ -1,8 +1,7 @@
-; the wrap: see src/apps/tar.l -- `borrow` splices into the current layer, so the two asks
-; need a layer of this file's own rather than the dist cat's. the seed's lay reads the
-; carried archive through both, and rode that cat's leak to reach them before.
+; the wrap: see src/apps/tar.l -- `borrow` splices into the current layer, so the ask
+; needs a layer of this file's own rather than the dist cat's. the seed's lay reads the
+; carried tree through it.
 (module 'source
-(borrow 'gz)
 (borrow 'tar)
 
 (borrow 'posix)
@@ -27,26 +26,15 @@
    (src-top es) (atom? es ? ""
     (src-head (tar-get <es 'nom "") @ ("." || "") (src-top >es) c c))
 
-   (src-lay-tgz root top gz)
-    (: _ (mkdir (root + "/out") 493)
-       _ (mkdir (root + "/out/dist") 493)
-       p (root + "/out/dist/" + top + ".tar.gz")
-       q (open p "w")
-       ((!(hot? q) ? (src-die ("can't write " + p))),
-        say q gz,
-        close q,
-        p))
-
+   ; the carried tree whole, every section joined: the tar it was cut to
    (src-lay dir)
-    (: gz (source-gz "x")
-       _ (!(string? gz) ? (src-die "this love carries no source"))
-       u (gz-unzip gz)
-       _ (atom? u ? (src-die "the embedded archive did not inflate"))
-       t (tar-unpack <>u)
-       _ (atom? t ? (src-die "the embedded archive is torn"))
+    (: a (tree-tar 0)
+       _ (!(string? a) ? (src-die "this love carries no source"))
+       t (tar-unpack a)
+       _ (atom? t ? (src-die "the carried source is torn"))
        es <>t
        top (src-top es)
-       _ (0 >= #top ? (src-die "the embedded archive names no top directory"))
+       _ (0 >= #top ? (src-die "the carried source names no top directory"))
        w (tar-scatter dir es)
        _ (atom? w ? (src-die ("can't write " + dir)))
        root (dir = "." ? top (dir + "/" + top))
@@ -54,13 +42,13 @@
        ; drives it. bare make has no love and can only mean the ambient cc; a love driving
        ; knows its own selfpath and says so in CC. a copy in bin/ would be the toolchain by
        ; being there, which is a claim made by a file existing rather than by anyone.
-       (src-lay-tgz root top gz,
-        [1 root <>w]))
+       ; nor the container: the laid tree cuts its own, to the same bytes.
+       [1 root <>w])
 
    ; the nest every verb shares: love-<version> under dir, laid once. source, seed, doom
    ; and web build in the one tree, in any order, and a tree laid before is taken as it
-   ; stands. the lay runs in a child where there is a path to one: the inflate leaves
-   ; ~200 MB of heap no collection gives back, and a server would hold it for good.
+   ; stands. the lay runs in a child where there is a path to one: the unpack leaves
+   ; heap no collection gives back, and a server would hold it for good.
    (src-root dir) ((dir = "." ? "" (dir + "/")) + "love-" + love-version)
    (src-nest dir)
     (: root (src-root dir)
@@ -288,13 +276,15 @@
    (seed-os _) (elem 'love-os (names ()) && ev 'love-os @ n
                   (nom? n && !(elem n '(linux freebsd netbsd)) ? 'linux ()))
 
-   (seed-usage _) (puts $
-    "usage: love seed [-g] [ARCH] [DIR]\n" +
-    "  lay this binary's source under DIR (default .) and rebuild it there;\n" +
-    "  the result has to BE this binary, byte for byte.\n" +
-    "  ARCH    x64 | a64 | rv64 -- an egg for that machine instead\n" +
-    "  -g      gregarious: the ambient cc and tools build, ours fill the gaps.\n" +
-    "          without it ours go throughout, whatever PATH holds\n")
+   (seed-usage _) (puts """
+    usage: love seed [-g] [ARCH] [DIR]
+      lay this binary's source under DIR (default .) and rebuild it there;
+      the result has to BE this binary, byte for byte.
+      ARCH    x64 | a64 | rv64 -- an egg for that machine instead
+      -g      gregarious: the ambient cc and tools build, ours fill the gaps.
+              without it ours go throughout, whatever PATH holds
+
+    """)
 
    (seed-lay as0)
     (: _ (two? as0 && src-help? <as0 ? (seed-usage 0, quit 0))
@@ -372,17 +362,13 @@
    ; --- `love kernel OUT.elf` -- the metal projection of this binary ----------
    ; the artifact is the kernel: this verb emits
    ; the flat image a boot door eats, from nothing but what it already carries.
-   ; the boot stub is laid here, not stored: mkboot.l rides the source blob and
+   ; the boot stub is laid here, not stored: mkboot.l rides the carried tree and
    ; holo is baked, so the lay's cat (kore text/u/asbook, then mkboot, then
-   ; kproject) evals off the in-memory tar, exactly the shape the Makefile cats
-   ; from the tree. the arch is the binary's own -- e_machine says it, and a
+   ; kproject) evals off /love, exactly the shape the Makefile cats from the
+   ; tree. the arch is the binary's own -- e_machine says it, and a
    ; projection of self can be nothing else.
-   (kern-pick es top nm)
-    (: want (top + "/" + nm)
-       (go l) (? (atom? l) (src-die ("the blob carries no " + nm))
-                 (tar-get <l 'nom "" = want) (tar-get <l 'body "")
-                 (go >l))
-       (go es))
+   (kern-pick nm)
+    (uread ("/love/" + nm) @ [1 s] (s + "") (src-die ("the carried tree has no " + nm)))
    (kern-b16 s i) (s i + 256 * s (i + 1))
    kern-box {}                  ; the verb's inputs, read back by the stream
    (kernel-main as)
@@ -401,14 +387,6 @@
        m (kern-b16 pie 18)
        arch (m @ 62 "x64" 183 "a64" 243 "rv64"
              (src-die "no boot door for this machine"))
-       gz (source-gz "x")
-       _ (string? gz ? 0 (src-die "this love carries no source"))
-       u (gz-unzip gz)
-       _ (two? u ? 0 (src-die "the embedded archive did not inflate"))
-       t (tar-unpack <>u)
-       _ (two? t ? 0 (src-die "the embedded archive is torn"))
-       es <>t
-       top (src-top es)
        ; the inputs cross on the verb table -- the one tablet every layer can
        ; reach ((cite 'verbs 'tab) hands the real thing) -- under a key pulled
        ; back off below, so `love verbs` never lists it. the stream evals in
@@ -419,12 +397,12 @@
        vt (cite 'verbs 'tab)
        _ (pin vt 'kern-in kern-box)
        cat ("(borrow 'holo)"
-            + kern-pick es top "src/apps/kore/text.l"
-            + kern-pick es top "src/apps/kore/u.l"
+            + kern-pick "src/apps/kore/text.l"
+            + kern-pick "src/apps/kore/u.l"
             + "(borrow 'kore)"
-            + kern-pick es top "src/apps/kore/asbook.l"
-            + kern-pick es top "src/inle/mkboot.l"
-            + kern-pick es top "src/tools/kproject.l"
+            + kern-pick "src/apps/kore/asbook.l"
+            + kern-pick "src/inle/mkboot.l"
+            + kern-pick "src/tools/kproject.l"
             + "(: kb (peep (cite 'verbs 'tab) 'kern-in 0)"
             + "   bb (string (cask (lay-boot-bytes (peep kb 'arch 0))))"
             + "   (kproject (peep kb 'pie 0) bb (peep kb 'out 0) (peep kb 'arch 0)))")
@@ -434,22 +412,10 @@
         0))
 
    ; -- nest: this binary laid as the user's love under ~/.love/bin, the tools linked to it --
-   ; the build stamp is the carried archive's STAMP, the third member (src/tools/selfpack.l lays
-   ; the root, the top, then it); 0 where this binary carries no source, or no stamp in it
+   ; the build stamp is the carried tree's STAMP (src/tools/selfpack.l lays it); 0 where this
+   ; binary carries no source, or no stamp in it
    (nest-stamp _)
-    (: gz (source-gz "x")
-       u (string? gz ? (gz-unzip gz))
-       s (two? u ? <>u "")
-       n #s
-       (stamp? nm) (#nm @ m (6 <= m && snip nm (m - 6) m = "/STAMP"))
-       (go o k) (3 <= k ? 0
-                   (tar-read1 s n o @ r
-                      (!(two? r) ? 0
-                         (<>r @ e
-                            (stamp? (tar-get e 'nom "") ?
-                               (: v <(sound (tar-get e 'body "")) (charm? v ? v 0))
-                               (go <>>r (k + 1)))))))
-       (go 0 0))
+    (uread "/love/STAMP" @ [1 s] (: v <(sound (s + "")) (charm? v ? v 0)) 0)
    ; a stamp as its utc minute, which is what a person compares
    (nest-when t)
     (t < 1 ? "unstamped"
@@ -621,13 +587,7 @@
    ;    restarts by exec'ing its own argv, which comes back here --
    lux-modules ["core" "layout" "wire" "ewmh" "manage" "keys" "config" "lux"]
    (lux-main as)
-    (: gz (source-gz "x")
-       _ (string? gz ? 0 (src-die "lux: this love carries no source"))
-       u (gz-unzip gz)
-       t (two? u ? (tar-unpack <>u))
-       _ (two? t ? 0 (src-die "lux: the carried source is torn"))
-       es <>t top (src-top es)
-       cat (foldl (a \ m \ a + kern-pick es top ("src/apps/lux/" + m + ".l")) "" lux-modules)
+    (: cat (foldl (a \ m \ a + kern-pick ("src/apps/lux/" + m + ".l")) "" lux-modules)
        (reads (tap ((: (g i) (i < #cat ? (peep cat i 0 . g (1 + i)))) 0))))
    lux-usage "usage: love lux
   the window manager, over the display DISPLAY names; settings ride ~/.love/etc/lux.l

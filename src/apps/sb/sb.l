@@ -637,9 +637,8 @@
              _ (map (p \ puts (p + "\n")) ps)
              0)))
    ; a set's stamp: its newest tip's time in seconds, which orders two builds of a tree
-   (sb-stamp args)
-    (: x (setof (two? args ? <args "head"))
-       (? (two? x) (: _ (puts (show (foldl (\ a i (: f (patch i) (? (two? f) (max a (<(fld f 'time) // 1000)) a))) 0 <x) + "\n")) 1)))
+   (set-stamp ids) (foldl (\ a i (: f (patch i) (? (two? f) (max a (<(fld f 'time) // 1000)) a))) 0 ids)
+   (sb-stamp args) (: x (setof (two? args ? <args "head")) (? (two? x) (: _ (puts (show (set-stamp <x) + "\n")) 1)))
    (sb-within a b) (: x (setof a) y (setof b) (? (two? x && two? y) (: d (dv-derive <y) (sb-all? (t \ 0 <= dv-dep d t) <x))))
    (sb-apply args)
     (mk (),

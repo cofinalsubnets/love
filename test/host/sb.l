@@ -560,7 +560,7 @@
    _ (map (f \ (? (#f = 64) (unlink (".sb/derive/" + f)) ())) (readdir ".sb/derive"))
    hset (setof (psid head1))                             ; a set the head stood at stays a name
    hnone (setof (sha256 "no such set"))
-   hst (sb-stamp ())
+   hst (sb-stamp ()) hstn (set-stamp (head ()))
    _ (unlink ".sb/head") old (head ())                   ; a nest from before heads
    _ (chdir "../../.."))
 
@@ -573,7 +573,7 @@
  (0 < ns) (<>back = "the worker's\n") (<>wmore = "the hub's again\n")
  (sha256 <>hfile = hps)                                ; what lush's prompt shows
  (own = 'took) (again = 'again) (other = ()) (dead = 'took)
- (show hset = show [head1]) !(two? hnone) hst
+ (show hset = show [head1]) !(two? hnone) hst (0 < hstn)
  (show old = show (sort [nb nm nwk])))
 
 

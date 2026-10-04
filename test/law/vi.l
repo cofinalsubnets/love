@@ -324,6 +324,8 @@
       (at (vgob '("a" "b" "c") ((bytes ":$") + [CR])) = '(2 0))
       (st? (vgob '("a") ((bytes ":q") + [CR])) 'quit = 1)
       !(st? (vgob '("a") ((bytes "x:q") + [CR])) 'quit)        ; dirty q refuses
+      !(st? (vgob '("a") ((bytes "iz") + [27] + (bytes ":q") + [CR])) 'quit)   ; so after an insert
+      !(st? (vgob '("a") ((bytes "Az") + [13 27] + (bytes ":q") + [CR])) 'quit)
       (st? (vgob '("a") ((bytes "x:q!") + [CR])) 'quit = 1)
       (st? (vgob '("a") ((bytes ":w") + [CR])) 'dow = '("t"))
       (st? (vgob '("a") ((bytes ":w other") + [CR])) 'dow = '("other"))

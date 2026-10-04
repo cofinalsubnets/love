@@ -241,8 +241,8 @@ the runtime sources the implicit link pulls — are found through three rungs, t
 2. **the installed nest**, `<seat>/../lib/love/moon/` — the loader's own seat walk, the
    `selfpath` nif. So `~/.love/bin/love` finds `~/.love/lib/love/moon/`, and a distro's
    `/usr/bin/love` finds `/usr/lib/love/moon/`. `the Makefile` lays them there.
-3. **the carried source, in memory** — a bare binary with no nest anywhere inflates its own
-   embedded archive (`source-gz`) and reads the toolchain slice out of a table: the resolver
+3. **the carried source, in memory** — a bare binary with no nest anywhere decodes the moon
+   section of its carried tree (`tree-tar "moon"`) and reads the toolchain slice out of a table: the resolver
    and the runtime walk take the table where they would have read the nest. Nothing is written
    to the filesystem, so `love cc hi.c` answers from any cwd on any kernel with no tree and no
    install — and a version's compiles can never ride a stale copy, because the source it reads
@@ -270,14 +270,14 @@ the same face.
 
 ## the runtime (src/apps/moon/lib/)
 
-* **moonlibc/** — the raw libc over one `__ai_sys` trampoline: a mini stdio (a FILE is a fd plus
+* **moonlibc/** — the raw libc over one `__love_sys` trampoline: a mini stdio (a FILE is a fd plus
   a flush buffer), a K&R first-fit malloc over mmap arenas, dirent over getdents64, the
   glibc-152B-to-kernel-32B sigaction fold with our own restorer, a numeric getaddrinfo,
   env/exec/termios/pty. Single-threaded like love: errno is one int, no locks. See.
 * **mksys.l** — lays `sys.o`, the things C cannot say: the 7-slot syscall trampoline,
   `__sigsetjmp`/`siglongjmp` over our own layout inside the glibc-sized 25-long buffer (the
   signal mask in `buf[8]`, saved/restored by rt_sigprocmask — love.c's fault barrier is
-  `sigsetjmp(env,1)`, so the mask is load-bearing), and `__ai_sigret` (the SA_RESTORER tail).
+  `sigsetjmp(env,1)`, so the mask is load-bearing), and `__love_sigret` (the SA_RESTORER tail).
   Every encoding objdump-checked, the holo house rule.
 * **math/lm.c** — our transcendentals. sqrt exact, the seven within a few ulp; `make ulp` is the
   differential gate. `-lm` appears in no link.
@@ -290,7 +290,7 @@ Either is a checkout, which is why the cache seats itself at `out/` and `make cl
 
 **The carried archives are per-ISA and kernel-neutral.** All three are cut under `-os linux`
 and the pin does not reach the bytes: `impl.h` parts linux, freebsd and netbsd at RUN time on
-`__ai_osv`, and `os.c` — the only member with an OS predefine in it — keeps its arms under
+`__love_osv`, and `os.c` — the only member with an OS predefine in it — keeps its arms under
 `#ifndef LvOsTranslate`. So a refusal here belongs to the TARGET, never the kernel: riscv has no
 translation tables, so a BSD there owes a compile that `#error`s rather than quietly linking
 linux's numbers.
@@ -321,7 +321,7 @@ is the tree's own — a day of rebuilds mints more generations than a month of u
 clock cannot tell the two apart. The `-c` path is not cached, and neither is a `.c` the user
 named — this is the *implicit* runtime only.
 
-**The crt0 switch is one weak symbol.** `__ai_start` is defined WEAK in the crt0 object (the
+**The crt0 switch is one weak symbol.** `__love_start` is defined WEAK in the crt0 object (the
 bare call-main tail every small link gets), and moonlibc overrides it STRONG to unpack
 argv/envp/auxv before main — no link-time flag anywhere, the weak machinery IS the switch.
 

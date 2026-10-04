@@ -13,17 +13,31 @@ static int __fdrain(FILE *f) {
   f->len = 0;
   if (__wall(f->fd, f->buf, n) < 0) { f->err = 1; return EOF; }
   return 0; }
+/* the streams fopen, fdopen and popen open, so fflush(NULL) and exit reach every one: the one
+ * piece of process-wide stdio state past the standard three, linked through the FILEs themselves */
+static FILE *__love_files;
+void __love_fopened(FILE *f) { f->next = __love_files; __love_files = f; }
+static void __love_fclosed(FILE *f) {
+  for (FILE **p = &__love_files; *p; p = &(*p)->next) if (*p == f) { *p = f->next; return; } }
 int fflush(FILE *f) {
   if (!f) {
     int r = __fdrain(stdout);
-    return __fdrain(stderr) || r ? EOF : 0; }
-  return __fdrain(f); }
+    if (__fdrain(stderr)) r = EOF;
+    for (FILE *o = __love_files; o; o = o->next) if (o->wr && __fdrain(o)) r = EOF;
+    return r ? EOF : 0; }
+  return f->wr ? __fdrain(f) : __rsync(f); }
 void setbuf(FILE *f, char *buf) {          /* NULL = unbuffered (m4 -e); else a BUFSIZ block */
   __fdrain(f);
+  if (!f->wr) { __rsync(f); f->rp = f->rl = 0; if (buf) f->rb = (unsigned char *) buf; f->rcap = buf ? 8192 : 0; return; }
   if (buf) { f->buf = (unsigned char *) buf; f->cap = 8192; f->line = 0; }
   else f->cap = 0; }
 int setvbuf(FILE *f, char *buf, int mode, size_t size) {
   __fdrain(f);
+  if (!f->wr) {                              /* a read stream: no buffer, or the caller's (else its own stays) */
+    __rsync(f); f->rp = f->rl = 0;
+    if (mode == _IONBF) f->rcap = 0;
+    else if (buf && size) { f->rb = (unsigned char *) buf; f->rcap = (int) size; }
+    return 0; }
   if (mode == _IONBF) { f->cap = 0; f->line = 0; return 0; }
   if (buf && size) { f->buf = (unsigned char *) buf; f->cap = (int) size; }
   f->line = mode == _IOLBF;
@@ -51,8 +65,9 @@ size_t fwrite(void const *p, size_t sz, size_t n, FILE *f) {
   if (f->line) { unsigned char const *q = p; for (size_t i = 0; i < total; i++) if (q[i] == 10) { __fdrain(f); break; } }
   return n; }
 int fclose(FILE *f) {
-  int r = __fdrain(f);
+  int r = f->wr ? __fdrain(f) : __rsync(f);
   if (close(f->fd) < 0) r = EOF;
+  __love_fclosed(f);
   if (f->heap) free(f);
   return r; }
 FILE *freopen(char const *path, char const *mode, FILE *f) {
@@ -66,12 +81,17 @@ FILE *freopen(char const *path, char const *mode, FILE *f) {
   int fd = open(path, fl, 438);
   if (fd < 0) return 0;
   f->fd = fd; f->wr = wr; f->err = 0; f->eof = 0; f->un = 0; f->len = 0; f->pid = 0;
+  f->rp = f->rl = 0;
+  if (wr) f->rcap = 0;
   return f; }
 int fseek(FILE *f, long off, int wh) {
   if (__fdrain(f)) return -1;
+  if (wh == SEEK_CUR) off -= __rahead(f);    /* relative to the stream, not the fd's read-ahead */
   f->un = 0;                                 /* ISO: a seek discards the pushback */
+  f->rp = f->rl = 0;
   f->eof = 0;                                /* and clears the end-of-file flag */
   return lseek(f->fd, off, wh) < 0 ? -1 : 0; }
 long ftell(FILE *f) {
   if (__fdrain(f)) return -1;
-  return lseek(f->fd, 0, SEEK_CUR); }
+  long o = lseek(f->fd, 0, SEEK_CUR);
+  return o < 0 ? -1 : o - __rahead(f); }

@@ -1,5 +1,5 @@
-#ifndef _AI_STDCKDINT_H
-#define _AI_STDCKDINT_H
+#ifndef _LOVE_STDCKDINT_H
+#define _LOVE_STDCKDINT_H
 /* C23 7.20 checked integer arithmetic. cc has no _Bool keyword, so the
    result narrows to int (0/1) -- the same truth value. gen.l already lowers
    __builtin_{add,sub,mul}_overflow (rax op rcx + set-overflow). */

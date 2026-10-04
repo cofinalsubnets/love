@@ -99,14 +99,14 @@ int main(void) {
      each spells "none" as a READABLE DATE -- freebsd VNOVAL (1969), netbsd 0 (1970,
      an FFSv1 root having no field at all). so: kept and recent, or honestly none. */
   struct timespec bt;
-  int br = __ai_birth("/tmp/rung3.txt", 1, &bt);
+  int br = __love_birth("/tmp/rung3.txt", 1, &bt);
   ok(br >= 0);
   ok(br == 1 || (bt.tv_sec > 1600000000 && bt.tv_sec <= ts.tv_sec + 60));
   /* the nofollow bit is 0x200 on a BSD where linux's is 0x100, and a regular file must
      read the same either way. freebsd convicts a wrong one; netbsd's FFSv1 root answers
      "none" down both paths and cannot, so read this leg as freebsd's. */
-  ok(__ai_birth("/tmp/rung3.txt", 0, &bt) == br);
-  ok(__ai_birth("/no/such/file", 1, &bt) < 0 && errno == ENOENT);
+  ok(__love_birth("/tmp/rung3.txt", 0, &bt) == br);
+  ok(__love_birth("/no/such/file", 1, &bt) < 0 && errno == ENOENT);
   fd = open("/tmp/rung3.txt", O_RDONLY); char buf[8];
   ok(fd >= 0 && read(fd, buf, 8) == 5 && memcmp(buf, "five!", 5) == 0);
   int fd2 = dup2(fd, 17);

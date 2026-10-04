@@ -1,6 +1,6 @@
 #!/bin/sh
 # test/gate/ccwarn.sh -- each foreign cc builds love without a warning: love0, the bootstrap
-# the ambient cc compiles in the default lane, and the whole hosted vm (HCC=1, ai_tco=1), at
+# the ambient cc compiles in the default lane, and the whole hosted vm (HCC=1, tco=1), at
 # the tree's own -W set with -Werror. a warning turns the lane red here, not a line in a log.
 # out/cc is cleared first: its stamp keys on the cc, not the flags, so objects an earlier
 # lane laid would be taken as they are and read by no one.
@@ -9,7 +9,7 @@
 set -u
 fail() { echo "FAIL test_ccwarn: $*" >&2; exit 1; }
 
-# the hosted vm at ai_tco=1 wants ai_musttail, as test_hdiff says; a cc without it could not
+# the hosted vm at tco=1 wants love_musttail, as test_hdiff says; a cc without it could not
 # build love at all, which is an old toolchain and not a warning
 mtc=out/.ccwarn-musttail.c
 mkdir -p out

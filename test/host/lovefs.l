@@ -42,6 +42,37 @@
    ; a child that is not love does not see it
    (: r (hark ["sh" "-c" "cat /love/VERSION 2>/dev/null; echo $?"]) (>r != ver + "0\n"))))
 
+;; the container under it (src/love/lib/srctree.h): an index, then six tar sections, each
+;; decoded at the first read of a file in it. a fresh process shows which.
+(: (lf-rd p) (open p "r" @ q (port? q ? (slurp q @ s (close q, s))))
+   h (tree-head 0)
+   tars >h
+   whole (tree-tar 0)
+   moon (tree-tar "moon")
+   (lf-fresh e) (hark [(selfpath 0) "-e" ("(borrow 'posix) " + e + " (puts (show (map (r \\ r 5) (tree-head 0)))) (quit 0)")])
+ (test
+   ((map cap h) = ["index" "moon" "bake" "seat" "lisp" "c" "rest"])
+   (all (r \ elem (r 1) [0 1 2 3]) h)                 ; the Makefile's tree_codecs, any of the four
+   (all (r \ 0 < r 3) h)
+   (#whole = +(map (r \ r 2) tars))                     ; the sections joined are the whole tar
+   (#moon = 1024 + (tars 0 2))                         ; one alone ends as a tar does
+   (has? moon "/src/apps/moon/include/stdio.h")
+   (has? moon (lf-rd "src/apps/moon/include/stdio.h"))
+   (!(has? moon "/src/apps/kore/text.l"))
+   (has? (tree-tar "bake") "/src/apps/kore/text.l")   ; the roster a carried bake reads
+   (nil? (tree-tar "index"))
+   (nil? (tree-tar "nope"))
+   ; opening decodes the index alone; a stat and a listing read no section; a read, its own
+   (>(lf-fresh "0") = "(1 0 0 0 0 0 0)")
+   (>(lf-fresh "(stat \"/love/src/apps/json.l\") (readdir \"/love/src/apps\")") = "(1 0 0 0 0 0 0)")
+   (>(lf-fresh "(slurp (open \"/love/src/apps/moon/include/stdio.h\" \"r\"))") = "(1 1 0 0 0 0 0)")
+   (>(lf-fresh "(slurp (open \"/love/src/apps/tls/roots.pem\" \"r\"))") = "(1 0 0 1 0 0 0)")
+   (>(lf-fresh "(slurp (open \"/love/src/apps/sat/flat.l\" \"r\"))") = "(1 0 0 0 1 0 0)")
+   (>(lf-fresh "(slurp (open \"/love/src/love/love.c\" \"r\"))") = "(1 0 0 0 0 1 0)")
+   (>(lf-fresh "(slurp (open \"/love/VERSION\" \"r\"))") = "(1 0 0 0 0 0 1)")
+   ; each codec answers the file the tree holds
+   (all (p \ lf-rd ("/love/" + p) = lf-rd p) ["src/apps/sat/flat.l" "src/love/love.c" "VERSION"])))
+
 (test_fin ())
 (puts "lovefs: ok")
 (putc 10)

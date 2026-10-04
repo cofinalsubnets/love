@@ -27,7 +27,7 @@ static int uart_rx_ready(void) { return UART[5] & 1; }
 
 // the CLINT's mtime, a free-running 10 MHz counter -> ms.
 #define MTIME (*(volatile uint64_t *) 0x0200BFF8u)
-uintptr_t ai_clock(void) { return (uintptr_t) (MTIME / 10000u); }
+uintptr_t love_clock(void) { return (uintptr_t) (MTIME / 10000u); }
 
 // the sifive test finisher: FINISHER_FAIL (0x3333) carries the exit status in
 // its high half, so qemu leaves with exactly `code` -- the gate's whole wire.
@@ -51,57 +51,57 @@ void fault_report(uintptr_t cause, uintptr_t epc) {
   v_exit(98); }
 
 // --- cooperative waits ----------------------------------------------------
-// The teensy shapes: no IRQs, so spin against an ai_clock deadline (ms;
+// The teensy shapes: no IRQs, so spin against an love_clock deadline (ms;
 // 0 means forever). Under qemu the spin costs nothing real.
-void ai_sleep(uintptr_t ms) {
+void love_sleep(uintptr_t ms) {
   if (!ms) { for (;;) if (uart_rx_ready()) return; }   // wait forever -- but wake on input
-  uintptr_t start = ai_clock();
-  while (ai_clock() - start < ms) ; }
+  uintptr_t start = love_clock();
+  while (love_clock() - start < ms) ; }
 
 // the readiness law (src/love/main.c, inle's kmain.c): a NEGATIVE fd is ALWAYS
 // ready -- a string port waits on nothing external, and answering "not ready"
 // parks its task on a wait no scheduler can satisfy. fd 0 is the honest poll;
 // others nominal.
-bool ai_ready(int fd, int events) { return fd || events != ai_wait_in ? 1 : uart_rx_ready(); }
+bool ready(int fd, int events) { return fd || events != wait_in ? 1 : uart_rx_ready(); }
 
-void ai_wait_fds(struct ai_wait_fd *fds, int n, uintptr_t ms) {
-  if (n <= 0) { ai_sleep(ms); return; }
-  uintptr_t start = ai_clock();
+void wait_fds(struct wait_fd *fds, int n, uintptr_t ms) {
+  if (n <= 0) { love_sleep(ms); return; }
+  uintptr_t start = love_clock();
   for (;;) {
-    for (int i = 0; i < n; i++) if (ai_ready(fds[i].fd, fds[i].events)) return;
-    if (ms && ai_clock() - start >= ms) return; } }
+    for (int i = 0; i < n; i++) if (ready(fds[i].fd, fds[i].events)) return;
+    if (ms && love_clock() - start >= ms) return; } }
 
 // --- port vtable ----------------------------------------------------------
 // Console bytes in and out through the ns16550 (pollable, never EOF -- a live
 // wire, so a dry read is 0 and never -1). This used to spin in uart_getc until
 // a byte arrived, which stopped the vm rather than the reading task.
-static intptr_t fd_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
+static intptr_t fd_readn(struct g *g, unsigned char *dst, uintptr_t n) {
   uintptr_t k = 0;
   while (k < n && uart_rx_ready()) dst[k++] = UART[0];
   return (intptr_t) k; }
 
-static struct ai *fd_writen(struct ai *g, unsigned char const *src, uintptr_t n) {
+static struct g *fd_writen(struct g *g, unsigned char const *src, uintptr_t n) {
   for (uintptr_t k = 0; k < n; k++) v_putc((char) src[k]);
   return g->b = (intptr_t) n, g; }
 
-static struct ai *fd_flush(struct ai *g) { return g; }
+static struct g *fd_flush(struct g *g) { return g; }
 
-struct ai_fio ai_stdin  = { { .ap = lvm_port_io, .vt = &ai_fd_port_vt, .ungetc_buf = putcharm(EOF) }, .fd = putcharm(0) };
-struct ai_fio ai_stdout = { { .ap = lvm_port_io, .vt = &ai_fd_port_vt, .ungetc_buf = putcharm(EOF) }, .fd = putcharm(1) };
-struct ai_fio ai_stderr = { { .ap = lvm_port_io, .vt = &ai_fd_port_vt, .ungetc_buf = putcharm(EOF) }, .fd = putcharm(1) };
-struct ai_port_vt const ai_fd_port_vt = { fd_flush, fd_writen, fd_readn, NULL };
+struct fio love_stdin  = { { .ap = lvm_port_io, .vt = &love_fd_port_vt, .ungetc_buf = putcharm(EOF) }, .fd = putcharm(0) };
+struct fio love_stdout = { { .ap = lvm_port_io, .vt = &love_fd_port_vt, .ungetc_buf = putcharm(EOF) }, .fd = putcharm(1) };
+struct fio love_stderr = { { .ap = lvm_port_io, .vt = &love_fd_port_vt, .ungetc_buf = putcharm(EOF) }, .fd = putcharm(1) };
+struct port_vt const love_fd_port_vt = { fd_flush, fd_writen, fd_readn, NULL };
 
-#include "../../love/fdrow.h"                       // ai_fd_readn / ai_fd_say off the two above
+#include "../../love/fdrow.h"                       // love_fd_readn / love_fd_say off the two above
 
 // --- the exit builtin -----------------------------------------------------
 // (vexit code) -- leave the machine through the test finisher with `code` as
 // the qemu exit status. The driver tail's last word.
-static lvm(ai_vexit) {
+static lvm(vexit) {
   v_exit(getcharm(Sp[0]));
   return Continue(); }                       // unreached
 
-static union u const nif_vexit[] = {{ai_vexit}, {lvm_ret0}};
-static struct ai_def defs[] = { {"vexit", {.k = nif_vexit}} };
+static union u const nif_vexit[] = {{vexit}, {lvm_ret0}};
+static struct def defs[] = { {"vexit", {.k = nif_vexit}} };
 
 // --- the arena ------------------------------------------------------------
 // The first-fit free list (ffalloc.h), fed 64 MB of virt's DRAM by address -- the
@@ -136,9 +136,9 @@ int main(void) {
   freelist = (struct mem*) POOL;
   freelist->next = NULL;
   freelist->len = POOL_BYTES / sizeof(uintptr_t);
-  struct ai *g = ai_defn(ai_ini(), defs, countof(defs));
-  if (ai_ok(g)) g->budget = POOL_BYTES / sizeof(word) / 4;
-  struct ai *r = ai_egg(g,
+  struct g *g = defn(ini(), defs, countof(defs));
+  if (ok(g)) g->budget = POOL_BYTES / sizeof(word) / 4;
+  struct g *r = egg(g,
 #include "egg.h"
     ,
 #include "prel.h"
@@ -147,13 +147,13 @@ int main(void) {
     ,
 #include "post.h"
     );
-  r = ai_evals_(r,
+  r = evals_(r,
     // the driver tail: the seat check, alive on the hart.
     "(: ok "
     SEAT_OK
     "   _ (putc 10) _ (puts \"; the egg hatched -- love on the hart\") _ (putc 10)"
     "   (vexit (? ok 42 1)))");
-  if (ai_code_of(r) == ai_status_scare) ai_scare_face(r);
-  ai_fin(r);
+  if (code_of(r) == status_scare) scare_face(r);
+  fin(r);
   v_exit(2);                                 // fell out of the driver: loud
   return 0; }

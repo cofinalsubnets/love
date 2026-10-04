@@ -67,7 +67,7 @@
    forge-unwind ('(label deoptp) . (forge-restore + '((jmp deopt))))
    ; -- one love value handed through `nifx`'s extras slot, in the cell at Ip+32. unlike an `li`
    ; immediate it is GC-walked and image-encoded, which is the door for a constant a kernel
-   ; cannot spell: a list-builder's zero point is `&ai_mint_zero`, which no book name hands out.
+   ; cannot spell: a list-builder's zero point is `&mint_zero`, which no book name hands out.
    (forge-extras d) [['ld d 'r5 32]]
    ; the deopt tail: Ip <- the interp twin (Ip[1]), then enter it with the args still on Sp.
    ; arity 1 enters at its first word; arity>=2 skips the twin's own curry preamble.
@@ -131,12 +131,12 @@
    ; the kernels
    ; =======================================================================================
    ; (aall v) -- the conjunction reduction over a tray: every element positive. the native says the
-   ; ai_Z lane and nothing else; a scalar, a float/complex/object tray and a fixnum all deopt.
+   ; love_Z lane and nothing else; a scalar, a float/complex/object tray and a fixnum all deopt.
    ; tray layout: [0] ap, [8] type, [16] rank, [24] shape.., data at 24+rank*8.
    ; the weakest of the three -- gcc hoists the C nif's per-element type test out by itself.
    (forge-aall-ir _)
     (forge-guard 0 forge-trayk
-    + '((ld r7 r0 8) (cmp r7 0) (br ne deopt)                ; type must be ai_Z
+    + '((ld r7 r0 8) (cmp r7 0) (br ne deopt)                ; type must be love_Z
         (ld r7 r0 16) (li r8 1) (li r10 0)                   ; rank; n=1; i=0
         (label pl) (cmp r10 r7) (br ge ple)                  ; n = product of the shape words
         (ldx r9 r0 r10 8 24) (imul r8 r8 r9) (add r10 r10 1) (jmp pl)
@@ -150,7 +150,7 @@
     + forge-epi)
    _ (forge-put 'aall 1 forge-aall-ir aall)
 
-   ; (outer a b) -- the outer product over two ai_Z trays: rank ra+rb, M*N cells, written
+   ; (outer a b) -- the outer product over two love_Z trays: rank ra+rb, M*N cells, written
    ; in one sequential sweep (j fastest) so the destination pointer only ever walks.
    ; regs: r3=M r11=a-data r12=b-data r13=dest r14=N, r0/r7/r8/r9/r10 scratch.
    ; M, N and the rank come off the two shapes, so the size is known before a byte is allocated:
@@ -159,10 +159,10 @@
    (forge-outer-ir _)
     ([ '(ld r0 r1 0) '(test r0 1) '(br ne deopt)
        ['li 'r8 forge-trayk] '(ld r7 r0 0) '(cmp r7 r8) '(br ne deopt)
-       '(ld r7 r0 8) '(cmp r7 0) '(br ne deopt)                  ; a must be ai_Z
+       '(ld r7 r0 8) '(cmp r7 0) '(br ne deopt)                  ; a must be love_Z
        '(ld r9 r1 8) '(test r9 1) '(br ne deopt)
        '(ld r7 r9 0) '(cmp r7 r8) '(br ne deopt)
-       '(ld r7 r9 8) '(cmp r7 0) '(br ne deopt)                  ; b must be ai_Z
+       '(ld r7 r9 8) '(cmp r7 0) '(br ne deopt)                  ; b must be love_Z
        '(ld r7 r0 16) '(ld r8 r9 16)                             ; ra, rb
        '(mov r10 r7) '(add r10 r10 r8) '(cmp r10 8) '(br gt deopt)   ; rank <= maxrank
        '(cmp r7 1) '(br lt deopt) '(cmp r8 1) '(br lt deopt)]
@@ -182,7 +182,7 @@
      + (forge-roomr 'r0 96
      + [ '(mov r13 r2) '(add r2 r2 r0) '(push r13)               ; result = Hp ; Hp += bytes
          ['li 'r7 forge-trayk] '(st r13 0 r7)
-         '(li r7 0) '(st r13 8 r7) '(st r13 16 r10)              ; ap, type ai_Z, rank
+         '(li r7 0) '(st r13 8 r7) '(st r13 16 r10)              ; ap, type love_Z, rank
          '(ld r8 r11 16) '(li r7 0)                              ; the shape: a's words ..
          '(label sa) '(cmp r7 r8) '(br ge sae)
          '(ldx r0 r11 r7 8 24) '(stx r13 r7 8 24 r0) '(add r7 r7 1) '(jmp sa)
@@ -207,7 +207,7 @@
      + (forge-restore + (forge-epi-ptr + forge-unwind)))))
    _ (forge-put 'outer 2 forge-outer-ir outer)
 
-   ; (inner a b) -- +.x over two ai_Z trays: contract a's last axis with b's first (1D.1D a
+   ; (inner a b) -- +.x over two love_Z trays: contract a's last axis with b's first (1D.1D a
    ; dot, 2D.2D a matmul). ikj order, the accumulator in memory, and the addressing carried in
    ; walking pointers -- Arow by K*8, Brow by N*8, Crow by N*8 -- where the C recomputes i*N+j
    ; per element. that is the whole difference, and it draws with gcc.

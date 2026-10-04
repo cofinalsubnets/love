@@ -1,5 +1,5 @@
-#ifndef _AI_UNISTD_H
-#define _AI_UNISTD_H
+#ifndef _LOVE_UNISTD_H
+#define _LOVE_UNISTD_H
 typedef long ssize_t;
 #include <sys/types.h>
 long read(int, void*, long);
@@ -28,6 +28,8 @@ int  fchown(int, unsigned int, unsigned int);
 int  lchown(char const*, unsigned int, unsigned int);
 int  setuid(unsigned int);
 int  setgid(unsigned int);
+int  setresuid(unsigned int, unsigned int, unsigned int);
+int  setresgid(unsigned int, unsigned int, unsigned int);
 int  seteuid(unsigned int);
 int  setegid(unsigned int);
 int  chdir(char const*);
@@ -71,6 +73,7 @@ int  unlinkat(int, char const*, int);
 unsigned int sleep(unsigned int);
 int  usleep(unsigned int);
 long pread(int, void*, unsigned long, long);
+ssize_t copy_file_range(int, long*, int, long*, unsigned long, unsigned int);
 long pwrite(int, void const*, unsigned long, long);
 int  getpgrp(void);
 int  setpgid(pid_t, pid_t);

@@ -920,13 +920,15 @@
        r (peep c pat 'none)
        (r !== 'none ? r
         (aw-re pat @ nds (pin c pat nds, nds))))
-   ; gawk's word boundary is \y, and its \b a backspace; the engine speaks grep's \b
+   ; gawk's word boundary is \y, and its \b a backspace; the engine speaks grep's \b. a string's
+   ; escapes (\t \n ..) are their bytes, in a bracket too
    (aw-gnu pat)
     (: o (jug 0) n #pat
+       ctl {116 9 110 10 114 13 102 12 118 11 97 7}
        (go k) (? (n <= k) (slurp o)
                  (pat k = 92 && k + 1 < n)
                   (pat (k + 1) @ d
-                     ((? (d = 121) (say o "\\b") (d = 98) (put o 8) (put o 92, put o d)),
+                     ((? (d = 121) (say o "\\b") (d = 98) (put o 8) (ctl d) (put o (ctl d)) (put o 92, put o d)),
                       go (k + 2)))
                  (put o (pat k), go (k + 1)))
        (go 0))

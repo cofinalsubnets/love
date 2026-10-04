@@ -1,11 +1,12 @@
-#ifndef _AI_STDLIB_H
-#define _AI_STDLIB_H
+#ifndef _LOVE_STDLIB_H
+#define _LOVE_STDLIB_H
 #ifndef NULL
 #define NULL ((void*)0)
 #endif
 #define EXIT_SUCCESS 0
 #define EXIT_FAILURE 1
 typedef unsigned long size_t;
+typedef int wchar_t;
 void *malloc(size_t);
 void *calloc(size_t, size_t);
 void *realloc(void*, size_t);
@@ -19,6 +20,7 @@ void  qsort(void*, size_t, size_t, int (*)(void const*, void const*));
 void *bsearch(void const*, void const*, size_t, size_t, int (*)(void const*, void const*));
 char *getenv(char const*);
 char *mktemp(char*);
+int   mkstemp(char*);
 int   setenv(char const*, char const*, int);
 int   unsetenv(char const*);
 int   atoi(char const*);
@@ -44,4 +46,11 @@ int  rand(void);
 void srand(unsigned int);
 long random(void);
 void srandom(unsigned int);
+/* the C locale's multibyte face: one byte a character, ascii only (wchar.h says more) */
+#define MB_CUR_MAX ((size_t) 1)
+int mblen(char const *, size_t);
+int mbtowc(wchar_t *, char const *, size_t);
+int wctomb(char *, wchar_t);
+size_t mbstowcs(wchar_t *, char const *, size_t);
+size_t wcstombs(char *, wchar_t const *, size_t);
 #endif

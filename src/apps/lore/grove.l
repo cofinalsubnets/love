@@ -13,6 +13,8 @@
 ;   'seed     the dice                         'base   [x 0 z], where it stands
 ;   'toward   [x z] the way the trunk leans     'crown  the height leaves start at
 ;   'inside   p -> p, a point kept in bounds    'keep?  p -> 0 for a point not grown
+; a scene's season rides on the tree: 'share how much of the crown is in leaf (1 unless
+; said), the rest dropped; 'turn how far the leaves have gone from green to gold
 (module (grove grove-new grove-sun grove-shade grove-wood! grove-leaves!)
 (borrow 'view)
 (borrow 'vec)
@@ -98,20 +100,23 @@
  ; texel keeping how far toward the sun the tree stands there; () while the sun is down
  smap-n 128
  (smap-new tr s) (s 1 <= 0.0 ? ()
-   (: e1 (side s) e2 (cross e1 s) c (tr 'c) R (tr 'R) n smap-n
+   (: e1 (side s) e2 (cross e1 s) c (tr 'c) R (tr 'R) n smap-n on (in-leaf tr)
       (pix X Y Z) (: qx (X - c 0) qy (Y - c 1) qz (Z - c 2)
                      iu (floor (((qx * e1 0 + qy * e1 1 + qz * e1 2) / (2.0 * R) + 0.5) * n))
                      iv (floor (((qx * e2 0 + qy * e2 1 + qz * e2 2) / (2.0 * R) + 0.5) * n))
                      (over -1 ((0 <= iu) * (iu < n) * (0 <= iv) * (iv < n)) (iv * n + iu)))
       (depth X Y Z) (X * s 0 + Y * s 1 + Z * s 2)
       m0 (iota (n * n) * 0.0 - 1e9)
-      m1 (pin m0 (pix (tr 'x) (tr 'y) (tr 'z)) (depth (tr 'x) (tr 'y) (tr 'z)))
+      m1 (pin m0 (over -1 on (pix (tr 'x) (tr 'y) (tr 'z))) (depth (tr 'x) (tr 'y) (tr 'z)))
       m2 (pin m1 (pix (tr 'shx) (tr 'shy) (tr 'shz)) (depth (tr 'shx) (tr 'shy) (tr 'shz)))
       {'map m2 'pix pix 'depth depth}))
  ; the sun's map and each point's share of the sun, kept on the tree until the sun has
  ; moved a step: [map share]. clear (X Y Z s) is how much of the sun the scene lets reach
  ; the points, before the tree's own shade
- (grove-sun tr s clear) (: k (int (s 0 * 400.0) * 1000000 + int (s 1 * 400.0) * 1000 + int (s 2 * 400.0))
+ ; which of the tree's points are on it: all the wood, and the leaves the season has kept
+ (in-leaf tr) ((tr 'kind != 2.0) + (tr 'kind = 2.0) * (tr 'ph / (2.0 * pi) < peep tr 'share 1.0))
+ (grove-sun tr s clear) (: k [(int (s 0 * 400.0) * 1000000 + int (s 1 * 400.0) * 1000 + int (s 2 * 400.0))
+                              (int (peep tr 'share 1.0 * 200.0))]
    cc (tr 'cache)
    (k = cc 'key ? (cc 'sun)
       (: sm (smap-new tr s) X (tr 'x) Y (tr 'y) Z (tr 'z)
@@ -145,7 +150,8 @@
              disc (Wd * Wd - A * C)
              t ((0.0 - Wd - sqrt (max disc 0.0)) / A)
              sa (wu + t * dd)
-             hit ((0.0 < disc) * (0.0 < t) * (0.0 <= sa) * (sa <= L) * (t < peep (buf 't) idx 1e9))
+             ; ..each piece runs on half its radius past either end, so a bend shows no gap
+             hit ((0.0 < disc) * (0.0 < t) * (-0.5 * r <= sa) * (sa <= L + 0.5 * r) * (t < peep (buf 't) idx 1e9))
              i2 (over -1 hit idx)
              nx ((W 0 + t * (ddx - dd * u 0)) / r) ny ((W 1 + t * (ddy - dd * u 1)) / r) nz ((W 2 + t * (ddz - dd * u 2)) / r)
              X (e 0 + t * ddx) Y (e 1 + t * ddy) Z (e 2 + t * ddz)
@@ -168,6 +174,7 @@
    s (lt 'sun) lc0 (grove-sun tr s clear 1)
    n #(tr 'x) cc (tr 'cache) k (min n (peep cc 'k n)) ik (iota k) (fk q) (peep (tr q) ik 0.0)
    lf (fk 'kind = 2.0) ph (fk 'ph) lc (peep lc0 ik 0.0)
+   on ((1 - lf) + lf * (ph / (2.0 * pi) < peep tr 'share 1.0))
    sw (0.025 * sin (t0 * 0.13 + ph)) sw2 (0.02 * sin (t0 * 0.09 + ph * 1.7))
    X (fk 'x + lf * sw) Y (fk 'y) Z (fk 'z + lf * sw2)
    qx (X - e 0) qy (Y - e 1) qz (Z - e 2)
@@ -178,12 +185,15 @@
    dist (sqrt (qx * qx + qy * qy + qz * qz))
    ok ((0.1 < zc) * (0 <= cx) * (cx < w) * (0 <= cy) * (cy < h))
    idx (over -1 ok (cy * w + cx))
-   i2 (over -1 (dist < peep (buf 't) idx 1e9) idx)
+   i2 (over -1 (on * (dist < peep (buf 't) idx 1e9)) idx)
    lit (lc * lt 'sunk)
    mu ((qx * s 0 + qy * s 1 + qz * s 2) / dist)
    glow (lf * lit * sq (sat ((mu - 0.2) / 0.8)))
    sh (fk 'shade)
-   base (cmix [0.16 0.14 0.12] (c+ (c* sh [0.2 0.34 0.09]) (c* (fk 'yel) [0.16 0.14 -0.02])) lf)
+   ; ..green, or gold as far as the season has turned it, the yellower leaves first
+   yel (fk 'yel) gold (sat ((peep tr 'turn 0.0 - 0.4 * (1.0 - yel)) / 0.6))
+   leafc (cmix (c+ (c* sh [0.2 0.34 0.09]) (c* yel [0.16 0.14 -0.02])) (c* sh [0.62 0.48 0.1]) gold)
+   base (cmix [0.16 0.14 0.12] leafc lf)
    irr (c+ (c* 0.8 (lt 'amb)) (c* (0.6 * lit) (lt 'sunc)))
    cl (c+ (cm base irr) (c* glow [0.45 0.55 0.12]))
    ; ..and the next frame's k, by how many drawn points fell to a pixel they took, moved

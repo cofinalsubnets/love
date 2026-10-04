@@ -1,5 +1,5 @@
-#ifndef _AI_GRP_H
-#define _AI_GRP_H
+#ifndef _LOVE_GRP_H
+#define _LOVE_GRP_H
 /* freestanding grp.h for cc: the group-database entry + its lookups. */
 #include <sys/types.h>
 

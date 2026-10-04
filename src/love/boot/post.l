@@ -306,7 +306,7 @@
    ; embedded targets answer () -- no kernel is ever asked their name.
    arch-uname {'x64 "x86_64" 'a64 "aarch64" 'rv64 "riscv64"}
    ; and the same for the kernel -- only the respelling. main.c pins `love-os` per run off
-   ; __ai_osv: one binary meets four, and the compile that made it cannot say which.
+   ; __love_osv: one binary meets four, and the compile that made it cannot say which.
    os-uname {'linux "Linux" 'freebsd "FreeBSD" 'netbsd "NetBSD" 'inle "Inle"}
    ; any spelling -> the canonical nom, () for one nobody here knows. takes a nom or a
    ; string, since a flag arrives as text where a table key is a nom.
@@ -705,7 +705,7 @@
   ;   (: f (: (a o) (f o) c (tablet 0) (\ o c)))   -> ;; missing c
   cur (pick 0 (+)) ret0 (pick 1 cap) unc (pick 0 (+ 1))
   ; the float width is the seat's, never this file's: a 32-bit seat gets binary32 for
-  ; ai_flo_t. so ask the arithmetic -- a hard-coded 2^53 sends norm's doubling loop past
+  ; flo_t. so ask the arithmetic -- a hard-coded 2^53 sends norm's doubling loop past
   ; every float32 there is and it never returns.
   p53 (: (go m) (m = 1.0 + m ? m (go (m * 2.0))) (go 1.0))   ; where +1 is lost = 2^mantissa
   p52 (p53 / 2.0)
@@ -870,6 +870,8 @@
 ; form; it answers its operand, so it drops into any sequence.
 (: (print o x) (px o x (), x)
    (show x) (jug 0 @ o (px o x (), slurp o))
+   ; a text with holes, "a \(x) b": its runs verbatim, a string verbatim, the rest shown
+   (weave l) (jug 0 @ o (each l (x \ string? x ? (say o x) (px o x ())), slurp o))
    (dot x) (string? x || hot? x && !(port? x) ? (say out x) (px out x ()), flush out, x)
    putx (print out))
 
@@ -2192,7 +2194,7 @@
 ; and any other list is an application spine. (f) == f here too.
 ;
 ; a module on every corpus target (host + love0 + the inle kernel + wasm): the frontend lists
-; this source in its ai_libs table and its boot says (borrow 'uu), then rebinds `uu` to the
+; this source in its libs table and its boot says (borrow 'uu), then rebinds `uu` to the
 ; accessor -- (: uu (cite 'uu)) -- so the surface stays (uu 'vof), (uu 'defn), (uu 'chk),
 ; (uu 'lof), every internal a probe away. the UniMath theorem corpus rides in test/uu.l and
 ; the test/uu*.l ladder over it; the defn/defq/axm macros land in this layer's macro slot.
@@ -3746,18 +3748,21 @@
                                     (d @ (a . u)) (ev 'ev (atom? u ? a d)))   ; many datums fold to one application
                v-msg ("love " + love-version + "\n")   ; _ arg: love has no nullary calls
                h-msg
-               ("usage: love [wake IMAGE] [-l FILE] [-e EXPR] [-q] [-m SIZE] [-v] [-h] [--] [VERB|FILE] [ARG ...]\n" +
-                "  -l, --load FILE   preload FILE (read-eval) before the program\n" +
-                "  -e, --eval EXPR   eval EXPR as one expression (infix works), print the answer\n" +
-                "  -q, --quiet       with -e: do not print the answer\n" +
-                "  -m  --memory N    max heap in {k,m,g} default = 0m = unlimited\n" +
-                "  -v, --version     print the version\n" +
-                "  -h, --help        print this help\n" +
-                "  --                end of options; the rest are files, and none of them is stdin\n" +
-                "the short flags cluster -- `-qe EXPR` is `-q -e EXPR` -- and a letter taking an\n" +
-                "argument ends the chain, on the rest of its word (-m8m) or the next one\n" +
-                "with no arguments then start a repl if on a tty else eval expressions from stdin\n" +
-                "try `love verbs` to see a list of commands\n")
+               """
+               usage: love [wake IMAGE] [-l FILE] [-e EXPR] [-q] [-m SIZE] [-v] [-h] [--] [VERB|FILE] [ARG ...]
+                 -l, --load FILE   preload FILE (read-eval) before the program
+                 -e, --eval EXPR   eval EXPR as one expression (infix works), print the answer
+                 -q, --quiet       with -e: do not print the answer
+                 -m  --memory N    max heap in {k,m,g} default = 0m = unlimited
+                 -v, --version     print the version
+                 -h, --help        print this help
+                 --                end of options; the rest are files, and none of them is stdin
+               the short flags cluster -- `-qe EXPR` is `-q -e EXPR` -- and a letter taking an
+               argument ends the chain, on the rest of its word (-m8m) or the next one
+               with no arguments then start a repl if on a tty else eval expressions from stdin
+               try `love verbs` to see a list of commands
+
+               """
                (need h '()) (say err $ "love: " + h + " needs an argument\n", cli-leave 2)
                K 1024 M 1048576 G 1073741824
                wordsz (charm? G ? 8 4)             ; 2^30 is a charm only where a fixnum is 62-bit

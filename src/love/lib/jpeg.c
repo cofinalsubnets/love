@@ -193,19 +193,19 @@ static void jp_setup(struct jp_enc *e, int quality) {
   jp_huff_build(&e->dc[t], jp_dc_bits[t], jp_dc_vals);
   jp_huff_build(&e->ac[t], jp_ac_bits[t], jp_ac_vals[t]); } }
 
-static int jpeg_args(struct ai *g) {
+static int jpeg_args(struct g *g) {
  for (int k = 0; k < 4; k++) if (k != 2 && !oddp(g->sp[k])) return 0;
  intptr_t w = getcharm(g->sp[0]), h = getcharm(g->sp[1]), q = getcharm(g->sp[3]);
  return w >= 1 && w <= 65535 && h >= 1 && h <= 65535 && q >= 1 && q <= 100
      && strp(g->sp[2]) && len(g->sp[2]) == (uint64_t) w * (uint64_t) h * 4; }
 
-ai_noinline static struct ai *host_jpeg(struct ai *g) {
+love_noinline static struct g *host_jpeg(struct g *g) {
  if (!jpeg_args(g)) return g->sp[3] = ZeroPoint, g->sp += 3, g;
  int w = (int) getcharm(g->sp[0]), h = (int) getcharm(g->sp[1]);
  struct jp_enc e;
  jp_setup(&e, (int) getcharm(g->sp[3]));
  e.out = 0, jp_encode(&e, (const uint8_t*) txt(g->sp[2]), w, h);
- if (!ai_ok(g = str0(g, e.n))) return g;              // pushes: out over the four args
+ if (!ok(g = str0(g, e.n))) return g;              // pushes: out over the four args
  e.out = (uint8_t*) txt(g->sp[0]), jp_encode(&e, (const uint8_t*) txt(g->sp[3]), w, h);
  g->sp[4] = g->sp[0], g->sp += 4;
  return g; }
@@ -543,19 +543,19 @@ static uintptr_t jd_scratch(struct jd *d) {
  struct jd_comp *c = &d->c[d->nc - 1];
  return c->off + c->bw * c->bh * 128; }
 
-ai_noinline static struct ai *host_jpegd(struct ai *g) {
+love_noinline static struct g *host_jpegd(struct g *g) {
  struct jd d;
  if (!strp(g->sp[0])) return g->sp[0] = putcharm(1), g;
  memset(&d, 0, sizeof d), d.s = (const uint8_t*) txt(g->sp[0]), d.n = len(g->sp[0]);
  int why = jd_walk(&d, 1);
  if (why) return g->sp[0] = putcharm(why), g;
  uintptr_t need = jd_scratch(&d);
- if (!ai_ok(g = str0(g, need))) return g;           // pushes: the scratch over s
+ if (!ok(g = str0(g, need))) return g;           // pushes: the scratch over s
  d.s = (const uint8_t*) txt(g->sp[1]), d.base = (uint8_t*) txt(g->sp[0]);
  memset(d.base, 0, need);
  if ((why = jd_walk(&d, 0))) return g->sp[1] = putcharm(why), g->sp += 1, g;
  jd_idct(&d);
- if (!ai_ok(g = str0(g, (uintptr_t) d.w * (uintptr_t) d.h * 4))) return g;
+ if (!ok(g = str0(g, (uintptr_t) d.w * (uintptr_t) d.h * 4))) return g;
  d.base = (uint8_t*) txt(g->sp[1]);
  jd_rgba(&d, (uint8_t*) txt(g->sp[0]));
  g->sp[2] = g->sp[0], g->sp += 2;

@@ -30,7 +30,7 @@ static void m7_exit(uintptr_t code) {
 
 static void sh_putc(int c) { char b = (char) c; sh_call(SH_WRITEC, (uintptr_t) &b); }
 
-uintptr_t ai_clock(void) { return sh_call(SH_CLOCK, 0) * 10; }   // cs -> ms
+uintptr_t love_clock(void) { return sh_call(SH_CLOCK, 0) * 10; }   // cs -> ms
 
 // any fault vectors here (start.S): name the stacked pc/lr, then exit 98 --
 // loud and greppable where the bare M7 would sit in a lockup.
@@ -47,7 +47,7 @@ void fault_report(uintptr_t *frame) {    // frame: r0 r1 r2 r3 r12 lr pc xPSR
 // --- console input: CMSDK APB UART0 ---------------------------------------
 // Output rides semihosting (sh_putc, unbuffered and free), but INPUT needs a
 // pollable source -- semihosting READC blocks the whole VM with no readiness
-// probe, so the honest ai_ready(0) below reads UART0's RX-full flag instead.
+// probe, so the honest ready(0) below reads UART0's RX-full flag instead.
 // qemu maps UART0 at 0x40004000 and feeds it from -serial; the gate's
 // </dev/null run simply never sees RX full.
 #define UART0_BASE 0x40004000u
@@ -56,58 +56,58 @@ static void uart_init(void) { UREG(0x10) = 16; UREG(0x08) = 3; }   // min bauddi
 static int uart_rx_ready(void) { return !!(UREG(0x04) & 2); }      // STATE bit1 = RX full
 
 // --- cooperative waits ----------------------------------------------------
-// The teensy shapes: no IRQs, so spin against an ai_clock deadline (ms;
+// The teensy shapes: no IRQs, so spin against an love_clock deadline (ms;
 // 0 means forever). Under qemu the spin costs nothing real.
-void ai_sleep(uintptr_t ms) {
+void love_sleep(uintptr_t ms) {
   if (!ms) { for (;;) if (uart_rx_ready()) return; }   // wait forever -- but wake on input
-  uintptr_t start = ai_clock();
-  while (ai_clock() - start < ms) ; }
+  uintptr_t start = love_clock();
+  while (love_clock() - start < ms) ; }
 
 // the readiness law (src/love/main.c, inle's kmain.c): a NEGATIVE fd is ALWAYS
 // ready -- a string port waits on nothing external, and answering "not ready"
 // parks its task on a wait no scheduler can satisfy (lvm_sound's park law
 // spins sound -> yield -> sound forever: the Enter-key freeze, walled here
 // and on teensy silicon alike). fd 0 is the honest poll; others nominal.
-bool ai_ready(int fd, int events) { return fd || events != ai_wait_in ? 1 : uart_rx_ready(); }
+bool ready(int fd, int events) { return fd || events != wait_in ? 1 : uart_rx_ready(); }
 
-void ai_wait_fds(struct ai_wait_fd *fds, int n, uintptr_t ms) {
-  if (n <= 0) { ai_sleep(ms); return; }
-  uintptr_t start = ai_clock();
+void wait_fds(struct wait_fd *fds, int n, uintptr_t ms) {
+  if (n <= 0) { love_sleep(ms); return; }
+  uintptr_t start = love_clock();
   for (;;) {
-    for (int i = 0; i < n; i++) if (ai_ready(fds[i].fd, fds[i].events)) return;
-    if (ms && ai_clock() - start >= ms) return; } }
+    for (int i = 0; i < n; i++) if (ready(fds[i].fd, fds[i].events)) return;
+    if (ms && love_clock() - start >= ms) return; } }
 
 // --- port vtable ----------------------------------------------------------
 // Console bytes in from UART0 (pollable, never EOF -- a live wire, so a dry
 // read is 0 and never -1), out through semihosting. This used to spin in
 // uart_getc until a byte arrived, which stopped the vm rather than the task.
-static intptr_t fd_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
+static intptr_t fd_readn(struct g *g, unsigned char *dst, uintptr_t n) {
   uintptr_t k = 0;
   while (k < n && uart_rx_ready()) dst[k++] = (unsigned char) (UREG(0x00) & 0xff);
   return (intptr_t) k; }
 
-static struct ai *fd_writen(struct ai *g, unsigned char const *src, uintptr_t n) {
+static struct g *fd_writen(struct g *g, unsigned char const *src, uintptr_t n) {
   for (uintptr_t k = 0; k < n; k++) sh_putc((char) src[k]);
   return g->b = (intptr_t) n, g; }
 
-static struct ai *fd_flush(struct ai *g) { return g; }
+static struct g *fd_flush(struct g *g) { return g; }
 
-struct ai_fio ai_stdin  = { { .ap = lvm_port_io, .vt = &ai_fd_port_vt, .ungetc_buf = putcharm(EOF) }, .fd = putcharm(0) };
-struct ai_fio ai_stdout = { { .ap = lvm_port_io, .vt = &ai_fd_port_vt, .ungetc_buf = putcharm(EOF) }, .fd = putcharm(1) };
-struct ai_fio ai_stderr = { { .ap = lvm_port_io, .vt = &ai_fd_port_vt, .ungetc_buf = putcharm(EOF) }, .fd = putcharm(1) };
-struct ai_port_vt const ai_fd_port_vt = { fd_flush, fd_writen, fd_readn, NULL };
+struct fio love_stdin  = { { .ap = lvm_port_io, .vt = &love_fd_port_vt, .ungetc_buf = putcharm(EOF) }, .fd = putcharm(0) };
+struct fio love_stdout = { { .ap = lvm_port_io, .vt = &love_fd_port_vt, .ungetc_buf = putcharm(EOF) }, .fd = putcharm(1) };
+struct fio love_stderr = { { .ap = lvm_port_io, .vt = &love_fd_port_vt, .ungetc_buf = putcharm(EOF) }, .fd = putcharm(1) };
+struct port_vt const love_fd_port_vt = { fd_flush, fd_writen, fd_readn, NULL };
 
-#include "../../love/fdrow.h"                       // ai_fd_readn / ai_fd_say off the two above
+#include "../../love/fdrow.h"                       // love_fd_readn / love_fd_say off the two above
 
 // --- the exit builtin -----------------------------------------------------
 // (m7exit code) -- leave the machine through semihosting with `code` as the
 // qemu exit status. The driver tail's last word.
-static lvm(ai_m7exit) {
+static lvm(m7exit) {
   m7_exit(getcharm(Sp[0]));
   return Continue(); }                       // unreached
 
-static union u const nif_m7exit[] = {{ai_m7exit}, {lvm_ret0}};
-static struct ai_def defs[] = { {"m7exit", {.k = nif_m7exit}} };
+static union u const nif_m7exit[] = {{m7exit}, {lvm_ret0}};
+static struct def defs[] = { {"m7exit", {.k = nif_m7exit}} };
 
 // --- the arena ------------------------------------------------------------
 // The first-fit free list (ffalloc.h), fed the AN500's 16 MB PSRAM (mps.ram at
@@ -167,15 +167,15 @@ int main(void) {
   if (sh_call(SH_READ, (uintptr_t) rd)) { sh_puts("; short read\n"); m7_exit(4); }
   uintptr_t cl[1] = { (uintptr_t) fd };
   sh_call(SH_CLOSE, (uintptr_t) cl);
-  uintptr_t t0 = ai_clock();
-  struct ai *g = ai_image_load(buf, len, 0);
+  uintptr_t t0 = love_clock();
+  struct g *g = love_image_load(buf, len, 0);
   if (!g) { sh_puts("; wake REFUSED\n"); m7_exit(5); }
-  g = ai_defn(g, defs, countof(defs));
-  if (ai_ok(g = ai_push(g, 1, putcharm((intptr_t) (ai_clock() - t0))))) {   // born: this wake's cost
-    g = ai_defv(g, "born");
-    if (ai_ok(g)) g->sp++; }
-  if (ai_ok(g)) g->budget = freelist->len / 4;
-  struct ai *r = ai_evals_(g,
+  g = defn(g, defs, countof(defs));
+  if (ok(g = push(g, 1, putcharm((intptr_t) (love_clock() - t0))))) {   // born: this wake's cost
+    g = defv(g, "born");
+    if (ok(g)) g->sp++; }
+  if (ok(g)) g->budget = freelist->len / 4;
+  struct g *r = evals_(g,
     "(: ok (&& "
     SEAT_OK
 #ifdef BAKER_RUNE
@@ -185,8 +185,8 @@ int main(void) {
 #endif
     "   _ (putc 10) _ (puts \"; the image woke -- love on the M7\") _ (putc 10)"
     "   (m7exit (? ok 42 1)))");
-  if (ai_code_of(r) == ai_status_scare) ai_scare_face(r);
-  ai_fin(r);
+  if (code_of(r) == status_scare) scare_face(r);
+  fin(r);
   m7_exit(2);
   return 0; }
 #else
@@ -221,10 +221,10 @@ int main(void) {
   freelist = (struct mem*) POOL;
   freelist->next = NULL;
   freelist->len = POOL_BYTES / sizeof(uintptr_t);
-  struct ai *g = ai_ini();          // NO ai_defn: a port nif in the book would
+  struct g *g = ini();          // NO defn: a port nif in the book would
                                     // ride into the image as a dead absolute
-  if (ai_ok(g)) g->budget = POOL_BYTES / sizeof(word) / 4;
-  struct ai *r = ai_egg(g,
+  if (ok(g)) g->budget = POOL_BYTES / sizeof(word) / 4;
+  struct g *r = egg(g,
 #include "egg.h"
     ,
 #include "prel.h"
@@ -233,8 +233,8 @@ int main(void) {
     ,
 #include "post.h"
     );
-  r = ai_evals_(r, src_mods);
-  r = ai_evals_(r,
+  r = evals_(r, src_mods);
+  r = evals_(r,
 #ifdef BAKER_RUNE
     // the PLAYDATE corpus: rune (registered module) + the cas workbench, no
     // bao -- the device has no shell, the crank is the interface. cas's
@@ -248,12 +248,12 @@ int main(void) {
 #endif
     "(: _ (pull book 'born 0)"            // this boot's cost, not the image's: off before the dump
     "   _ (putc 10) _ (puts \"; corpus baked -- dumping\") _ (putc 10) 0)");
-  if (!ai_ok(r)) {
-    if (ai_code_of(r) == ai_status_scare) ai_scare_face(r);
+  if (!ok(r)) {
+    if (code_of(r) == status_scare) scare_face(r);
     m7_exit(3); }
-  struct ai_image_bad bad = { {0}, 0, 0 };               // an unencodable word refuses the dump
+  struct image_bad bad = { {0}, 0, 0 };               // an unencodable word refuses the dump
   uintptr_t len = 0;
-  void *img = ai_image_save(r, &len, &bad);
+  void *img = image_save(r, &len, &bad);
   if (!img) {
     sh_puts("; dump REFUSED at stage "); sh_hex((uintptr_t) bad.why);
     sh_puts(" -- (off, val, ap):\n");
@@ -263,21 +263,21 @@ int main(void) {
       sh_hex(bad.q[3 * i + 2]); sh_putc('\n'); }
     m7_exit(4); }
   // THE BAKED RUNTIME GOES BEFORE THE PROOF DOES, and on 16 MB that is the whole
-  // margin: img is ai_alloc'd and outlives r, the wake wants a second pool the size of
+  // margin: img is alloc'd and outlives r, the wake wants a second pool the size of
   // the first, and holding a spent heap through it left the arena 14 KB short of a
   // 6 MB ask with 10.9 MB free but in four pieces.
-  ai_fin(r);
+  fin(r);
   // round-trip PROOF before the file exists: wake the buffer we just dumped
   // and run a law through the woken heap. (same-binary wake -- the cross-
   // binary truth is the teensy's -- but it catches every codec desync here.)
-  struct ai *g2 = ai_image_load(img, len, 0);
+  struct g *g2 = love_image_load(img, len, 0);
   if (!g2) { sh_puts("; round-trip load FAILED\n"); m7_exit(7); }
-  struct ai *r2 = ai_evals_(g2,
+  struct g *r2 = evals_(g2,
     "(: _ (? "
     SEAT_OK
     " (puts \"; round-trip ok\") (puts \"; ROUND-TRIP BROKEN\"))"
     "   _ (putc 10) 0)");
-  if (!ai_ok(r2)) { sh_puts("; round-trip eval FAILED\n"); m7_exit(8); }
+  if (!ok(r2)) { sh_puts("; round-trip eval FAILED\n"); m7_exit(8); }
 #ifdef BAKER_RUNE
   static const char impath[] = "out/mps2/love-pd.img";
 #else
@@ -308,9 +308,9 @@ int main(void) {
   freelist = (struct mem*) POOL;
   freelist->next = NULL;
   freelist->len = POOL_BYTES / sizeof(uintptr_t);
-  struct ai *g = ai_defn(ai_ini(), defs, countof(defs));
-  if (ai_ok(g)) g->budget = POOL_BYTES / sizeof(word) / 4;
-  struct ai *r = ai_egg(g,
+  struct g *g = defn(ini(), defs, countof(defs));
+  if (ok(g)) g->budget = POOL_BYTES / sizeof(word) / 4;
+  struct g *r = egg(g,
 #include "egg.h"
     ,
 #include "prel.h"
@@ -319,14 +319,14 @@ int main(void) {
     ,
 #include "post.h"
     );
-  r = ai_evals_(r,
+  r = evals_(r,
     // the driver tail: the seat check, alive on the M7.
     "(: ok "
     SEAT_OK
     "   _ (putc 10) _ (puts \"; the egg hatched -- love on the M7\") _ (putc 10)"
     "   (m7exit (? ok 42 1)))");
-  if (ai_code_of(r) == ai_status_scare) ai_scare_face(r);
-  ai_fin(r);
+  if (code_of(r) == status_scare) scare_face(r);
+  fin(r);
   m7_exit(2);                                // fell out of the driver: loud
   return 0; }
 #endif

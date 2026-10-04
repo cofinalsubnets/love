@@ -167,6 +167,19 @@
        _ (ev '(module (gzh gzh-sum) (: (gzh-sum l acc) (? (two? l) (gzh-sum >l (acc + gzh-sq <l)) acc) (gzh-sq x) (x * x))))
        f (cite 'gzh 'gzh-sum)
        (fired? n && nat? f && 14 = (f [1 2 3] 0)))
+    ; --- a saturated call lays its frame below Sp, and a call-out before it may have spent the
+    ;     room: gzfmk leaves m words (gauge's pool less heap less stack) and makes a tablet in
+    ;     them, swept over m. the frame must not land on that tablet -- the 15th argument stays one
+    (: n (peep fires () 0)
+       f (ev '(: (gzf16 a b c d e f g h i j k l m n o p) (? (tablet? o) 0 1)
+                 (gzfmk m) (: g (gauge 0)  r (- (- (g 0) (g 1)) (g 2))
+                              _ (? (> r (+ m 64)) (cask (* 8 (- (- r m) 16))))
+                              (tablet 0))
+                 (gzfrun m bad) (? (< m 0) bad
+                                   (: x (list m m)
+                                      (gzfrun (- m 1) (+ bad (gzf16 x x x x x x x x x x x x x x (gzfmk m) x)))))
+                 gzfrun))
+       (fired? n && 0 = (f 120 0)))
    )
 (: _ (puts "glaze-hook: ok -- the natjit creation hook (leaf, float, loop, capture, self, =, transparency)
 ") 0)

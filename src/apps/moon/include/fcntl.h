@@ -1,5 +1,5 @@
-#ifndef _AI_FCNTL_H
-#define _AI_FCNTL_H
+#ifndef _LOVE_FCNTL_H
+#define _LOVE_FCNTL_H
 /* Linux x86-64 values (octal in the kernel; spelled decimal here) -- the
  * CANONICAL face on every lane; a freebsd kernel takes them translated
  * (moonlibc's os.c flag rows). */
@@ -28,6 +28,7 @@
 #define O_NOFOLLOW  131072   /* x86-64, rv64, asm-generic 0400000 */
 #endif
 #define O_CLOEXEC   524288
+#define O_LARGEFILE 0      /* glibc's on 64-bit: every open is large already */
 #define O_SEARCH   O_RDONLY   /* Linux has no O_SEARCH; gnulib's own fallback (fcntl.in.h) */
 #define O_BINARY         0    /* no text/binary distinction on Linux (a DOS-ism; 0 = no-op) */
 #define O_TEXT           0

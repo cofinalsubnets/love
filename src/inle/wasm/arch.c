@@ -2,10 +2,10 @@
 // reset. this is the wasm counterpart of x64/arch.c -- same contract (archinit,
 // serial_init, serial_putc, k_reset, k_rtc, k_fault_trigger), no hardware at all: the
 // machine is the worker running the module (src/inle/wasm/inle.js), and each face below is
-// one hypercall through __ai_sys, the module's one import, wearing linux's number for
+// one hypercall through __love_sys, the module's one import, wearing linux's number for
 // the nearest thing -- write is the serial line, read the keys, nanosleep the idle,
 // clock_gettime the two clocks, reboot the reset. moonlibc's own calls never reach that
-// import here: kmain writes __ai_osv = -1 first, so they take src/inle/sys.c's C answer.
+// import here: kmain writes __love_osv = -1 first, so they take src/inle/sys.c's C answer.
 #include <stdint.h>
 #include <stdbool.h>
 #include <errno.h>
@@ -15,7 +15,7 @@
 void kq(uint8_t);                      // kmain's input queue, one byte
 void kmain(void);
 bool k_fb_reseat(unsigned w, unsigned h, unsigned pitch, unsigned scale);  // kmain's paper door
-extern long __ai_sys(long n, long a, long b, long c, long d, long e, long f);
+extern long __love_sys(long n, long a, long b, long c, long d, long e, long f);
 
 #define hc_read 0
 #define hc_write 1
@@ -41,7 +41,7 @@ void serial_init(void) { }
 // of bytes. what is held goes out before any sleep or reset, so nothing waits on it
 static struct { unsigned char b[2048]; unsigned n; } ser;   // the arch's one held line
 static void serial_drain(void) {
-  if (ser.n) __ai_sys(hc_write, 1, (long) ser.b, ser.n, 0, 0, 0), ser.n = 0; }
+  if (ser.n) __love_sys(hc_write, 1, (long) ser.b, ser.n, 0, 0, 0), ser.n = 0; }
 void serial_putc(int c) {
   ser.b[ser.n++] = (unsigned char) c;
   if (c == '\n' || ser.n == sizeof ser.b) serial_drain(); }
@@ -49,7 +49,7 @@ void serial_putc(int c) {
 // the two clocks the worker keeps: 0 the wall, 1 monotonic since the page loaded
 static uint64_t clock_ms(long which) {
   long ts[2];
-  if (__ai_sys(hc_clock_gettime, which, (long) ts, 0, 0, 0, 0)) return 0;
+  if (__love_sys(hc_clock_gettime, which, (long) ts, 0, 0, 0, 0)) return 0;
   return (uint64_t) ts[0] * 1000 + (uint64_t) ts[1] / 1000000; }
 
 uint64_t k_rtc(void) { return clock_ms(0) / 1000; }
@@ -78,22 +78,22 @@ void k_paste_in(uint8_t const *s, long n);
 void k_paste_end(void);
 static void k_point_sync(void) {
   unsigned char r[8 * 8];
-  long const n = __ai_sys(hc_point, (long) r, sizeof r, 0, 0, 0, 0);
+  long const n = __love_sys(hc_point, (long) r, sizeof r, 0, 0, 0, 0);
   for (long i = 0; i + 8 <= n; i += 8)
     k_pointer(r[i], r[i + 1], r[i + 4] | (uint32_t) r[i + 5] << 8, r[i + 6] | (uint32_t) r[i + 7] << 8); }
 void k_kb_sync(int room) {
   unsigned char b[48];
   k_point_sync();
   if (room <= 0) return;
-  long n = __ai_sys(hc_read, 0, (long) b, room < 16 ? room : 16, 0, 0, 0);
+  long n = __love_sys(hc_read, 0, (long) b, room < 16 ? room : 16, 0, 0, 0);
   for (long i = 0; i < n; i++) kq(b[i]);
   room -= (int) n;
-  if (!__ai_sys(hc_paste, 0, 0, 0, 0, 0, 0)) { if (room >= 6) k_paste_end(); }
+  if (!__love_sys(hc_paste, 0, 0, 0, 0, 0, 0)) { if (room >= 6) k_paste_end(); }
   else if (room > 12) {
-    n = __ai_sys(hc_paste, (long) b, room - 12 < (int) sizeof b ? room - 12 : (long) sizeof b, 0, 0, 0, 0);
+    n = __love_sys(hc_paste, (long) b, room - 12 < (int) sizeof b ? room - 12 : (long) sizeof b, 0, 0, 0, 0);
     k_paste_in(b, n); } }
 
-void k_copy_out(uint8_t const *s, uintptr_t n) { __ai_sys(hc_copy, (long) s, (long) n, 0, 0, 0, 0); }
+void k_copy_out(uint8_t const *s, uintptr_t n) { __love_sys(hc_copy, (long) s, (long) n, 0, 0, 0, 0); }
 
 // the scancodes the page queued on their own lane (src/inle/wasm/machine.js's scan lane), for the tap when a
 // game armed it (kmain's k_scan_put) and dropped otherwise, so the lane never fills
@@ -101,7 +101,7 @@ void k_scan_put(uint8_t b);
 bool k_scan_armed(void);
 void k_scan_sync(void) {
   unsigned char b[16];
-  long n = __ai_sys(hc_scan, (long) b, sizeof b, 0, 0, 0, 0);
+  long n = __love_sys(hc_scan, (long) b, sizeof b, 0, 0, 0, 0);
   for (long i = 0; i < n; i++) k_scan_put(b[i]); }
 
 // the idle: sleep one tick or until a key, then take the keys that came while we were
@@ -109,7 +109,7 @@ void k_scan_sync(void) {
 void k_idle(void) {
   long ts[2] = { 0, 10 * 1000000 };
   serial_drain();
-  __ai_sys(hc_nanosleep, (long) ts, 0, 0, 0, 0, 0);
+  __love_sys(hc_nanosleep, (long) ts, 0, 0, 0, 0, 0);
   k_kb_poll();
   // the codes go out whether or not a game armed the tap, and the worker holds its sleep
   // while the lane has anything in it: unread is not the same as empty, so an unarmed tap
@@ -122,13 +122,13 @@ void k_idle(void) {
 bool k_nap(uintptr_t ms) {
   long ts[2] = { 0, (long) ms * 1000000 };
   serial_drain();
-  __ai_sys(hc_nanosleep, (long) ts, 0, 0, 0, 0, 0);
+  __love_sys(hc_nanosleep, (long) ts, 0, 0, 0, 0, 0);
   k_kb_poll();
   k_tick_sync();
   return true; }
 
 // the paper was drawn on by something other than the console: the worker blits it
-void k_fb_touch(void) { __ai_sys(hc_drew, 0, 0, 0, 0, 0, 0); }
+void k_fb_touch(void) { __love_sys(hc_drew, 0, 0, 0, 0, 0, 0); }
 
 // the page's network (kmain's k_fetch): the worker takes URL whole -- the page's own
 // origin, or a file under --origin under node -- and hands it over in pieces, laid as
@@ -137,20 +137,20 @@ int k_fs_open(char const *p, uintptr_t pn, char m);
 long k_fd_write(int fd, void const *b, long n);
 long k_fd_close(int fd);
 long k_fetch(char const *url, uintptr_t un, char const *path, uintptr_t pn) {
-  long n = __ai_sys(hc_fetch_open, (long) url, (long) un, 0, 0, 0, 0), r = 0;
+  long n = __love_sys(hc_fetch_open, (long) url, (long) un, 0, 0, 0, 0), r = 0;
   if (n < 0) return n;
   int fd = k_fs_open(path, pn, 'w');
   if (fd < 0) r = fd;
   else {
     unsigned char b[4096];
-    for (long got; r == 0 && (got = __ai_sys(hc_fetch_read, (long) b, sizeof b, 0, 0, 0, 0)) != 0; )
+    for (long got; r == 0 && (got = __love_sys(hc_fetch_read, (long) b, sizeof b, 0, 0, 0, 0)) != 0; )
       if (got < 0 || k_fd_write(fd, b, got) != got) r = got < 0 ? got : -EIO;
     k_fd_close(fd); }
-  __ai_sys(hc_fetch_close, 0, 0, 0, 0, 0, 0);
+  __love_sys(hc_fetch_close, 0, 0, 0, 0, 0, 0);
   return r; }
 
 // the reset: the worker unwinds the module and boots it again
-void k_reset(void) { serial_drain(); for (;;) __ai_sys(hc_reboot, 0, 0, 0, 0, 0, 0); }
+void k_reset(void) { serial_drain(); for (;;) __love_sys(hc_reboot, 0, 0, 0, 0, 0, 0); }
 // ..and into another module: the path and the boot line go into the lift slot, and the
 // worker reads the file at the reset the way it lifts one, then boots those bytes
 long k_kexec(char const *p, uintptr_t pn, char const *cmd, uintptr_t cn) {
@@ -159,21 +159,21 @@ long k_kexec(char const *p, uintptr_t pn, char const *cmd, uintptr_t cn) {
   for (uintptr_t i = 0; i < pn; i++) b[i] = (unsigned char) p[i];
   b[pn] = 0;
   for (uintptr_t i = 0; i < cn; i++) b[pn + 1 + i] = (unsigned char) cmd[i];
-  long r = __ai_sys(hc_kexec, (long) b, (long) (pn + 1 + cn), 0, 0, 0, 0);
+  long r = __love_sys(hc_kexec, (long) b, (long) (pn + 1 + cn), 0, 0, 0, 0);
   if (r < 0) return r;
   k_reset();
   return 0; }
 // a path for the page to carry out: it lands in the shared lift slot and the request is
 // raised, and the worker's loop reads the file and posts it at its next idle
 void k_lift_ask(unsigned char const *p, uintptr_t n) {
-  __ai_sys(hc_lift, (long) p, (long) n, 0, 0, 0, 0); }
+  __love_sys(hc_lift, (long) p, (long) n, 0, 0, 0, 0); }
 
 // (fault n) backend: wasm has one trap, `unreachable`, and every n is it
 void k_fault_trigger(intptr_t n) { (void) n; __builtin_trap(); }
 
 // moonlibc's signal-return trampoline, the metal tails' one asm leaf (mksys.l); no
 // signal is ever delivered on this machine, so the leaf is empty
-void __ai_sigret(void) { }
+void __love_sigret(void) { }
 
 // the door: the worker grows the memory, then hands over the span above the module's
 // own data and shadow stack, the boot line, and the heap image it fetched, if any (laid
@@ -221,11 +221,11 @@ bool k_fb_resize(uintptr_t w, uintptr_t h, uintptr_t scale) {
 // carried per-ISA runtimes are the shipped artifact's, and out/wasm/src.o brings only
 // the source blob. plain definitions, so a seat that grows either one collides here
 // rather than quietly keeping the empty answer.
-const unsigned char ai_rtgz_x64[1] = {0};
-const uintptr_t ai_rtgz_x64_len = 0;
-const unsigned char ai_rtgz_a64[1] = {0};
-const uintptr_t ai_rtgz_a64_len = 0;
-const unsigned char ai_rtgz_rv64[1] = {0};
-const uintptr_t ai_rtgz_rv64_len = 0;
-const unsigned char ai_rtgz_id[1] = {0};
-const uintptr_t ai_rtgz_id_len = 0;
+const unsigned char rtgz_x64[1] = {0};
+const uintptr_t rtgz_x64_len = 0;
+const unsigned char rtgz_a64[1] = {0};
+const uintptr_t rtgz_a64_len = 0;
+const unsigned char rtgz_rv64[1] = {0};
+const uintptr_t rtgz_rv64_len = 0;
+const unsigned char rtgz_id[1] = {0};
+const uintptr_t rtgz_id_len = 0;

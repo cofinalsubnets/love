@@ -1,5 +1,5 @@
-#ifndef _AI_STDINT_H
-#define _AI_STDINT_H
+#ifndef _LOVE_STDINT_H
+#define _LOVE_STDINT_H
 /* freestanding stdint for cc (rung 3, stage 7c-ii). the unsigned types are real
  * now -- cc has `unsigned` (zero-extend loads, logical >>, unsigned cmp/div). */
 typedef signed char        int8_t;
@@ -77,6 +77,27 @@ typedef int64_t  int_fast64_t;   typedef uint64_t  uint_fast64_t;
 #define UINT_LEAST16_MAX UINT16_MAX
 #define UINT_LEAST32_MAX UINT32_MAX
 #define UINT_LEAST64_MAX UINT64_MAX
+#define INT_FAST8_MAX    INT8_MAX
+#define INT_FAST8_MIN    INT8_MIN
+#define UINT_FAST8_MAX   UINT8_MAX
+#ifdef __arm__
+#define INT_FAST16_MAX   INT32_MAX
+#define INT_FAST16_MIN   INT32_MIN
+#define UINT_FAST16_MAX  UINT32_MAX
+#define INT_FAST32_MAX   INT32_MAX
+#define INT_FAST32_MIN   INT32_MIN
+#define UINT_FAST32_MAX  UINT32_MAX
+#else
+#define INT_FAST16_MAX   INT64_MAX
+#define INT_FAST16_MIN   INT64_MIN
+#define UINT_FAST16_MAX  UINT64_MAX
+#define INT_FAST32_MAX   INT64_MAX
+#define INT_FAST32_MIN   INT64_MIN
+#define UINT_FAST32_MAX  UINT64_MAX
+#endif
+#define INT_FAST64_MAX   INT64_MAX
+#define INT_FAST64_MIN   INT64_MIN
+#define UINT_FAST64_MAX  UINT64_MAX
 #define INTMAX_MAX       INT64_MAX
 #define INTMAX_MIN       INT64_MIN
 #define UINTMAX_MAX      UINT64_MAX

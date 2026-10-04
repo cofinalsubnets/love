@@ -183,25 +183,116 @@ static void __fmtflo(void (*put)(void *, int), void *ctx, double v, int conv,
     put(ctx, xe < 0 ? '-' : '+');
     for (int t = nx; t; t--) { int q = ax; for (int u = 1; u < t; u++) q /= 10; put(ctx, '0' + q % 10); } }
   if (fl & FfLeft) __pad(put, ctx, pad, 32); }
-static void __fmt(void (*put)(void *, int), void *ctx, char const *fmt, va_list ap) {
+/* one directive, parsed: its value's place (pos, 0 = the next argument), the width and the
+ * precision -- or the argument each comes from (wa/pa: -1 the next, n the n-th) -- the length
+ * (H hh, h, l for every word-wide one, L) and the conversion */
+struct __fsp { int fl, width, prec, wa, pa, pos, len, conv; };
+static char const *__fdigits(char const *f, int *n) {
+  *n = 0; while (*f >= '0' && *f <= '9') *n = *n * 10 + (*f++ - 48);
+  return f; }
+/* an argument's number, *N$ or N$; zero when the text is not one */
+static char const *__fargno(char const *f, int *n) {
+  char const *q = __fdigits(f, n);
+  if (*q == '$' && *n) return q + 1;
+  *n = 0; return f; }
+static char const *__fparse(char const *f, struct __fsp *sp) {
+  int n;
+  sp->fl = 0; sp->width = 0; sp->prec = -1; sp->wa = 0; sp->pa = 0; sp->len = 0;
+  f = __fargno(f, &sp->pos);
+  for (; ; f++) {                          /* flags: all five of them act */
+    if (*f == '-') sp->fl |= FfLeft;
+    else if (*f == '0') sp->fl |= FfZero;
+    else if (*f == '+') sp->fl |= FfPlus;
+    else if (*f == ' ') sp->fl |= FfSpc;
+    else if (*f == '#') sp->fl |= FfAlt;
+    else break; }
+  if (*f == '*') { f = __fargno(f + 1, &n); sp->wa = n ? n : -1; }
+  else f = __fdigits(f, &sp->width);
+  if (*f == '.') {
+    f++;
+    if (*f == '*') { f = __fargno(f + 1, &n); sp->pa = n ? n : -1; }
+    else f = __fdigits(f, &sp->prec); }
+  if (*f == 'h') { f++; sp->len = 'h'; if (*f == 'h') { f++; sp->len = 'H'; } }
+  else if (*f == 'L') { f++; sp->len = 'L'; }
+  else while (*f == 'l' || *f == 'z' || *f == 'j' || *f == 't' || *f == 'q') { f++; sp->len = 'l'; }
+  sp->conv = *f;
+  return f; }
+/* what a directive's value is read as: an int, a word (long, a pointer), or a double */
+static int __fkind(struct __fsp const *sp) {
+  int c = sp->conv;
+  if (c == 's' || c == 'p' || c == 'n') return 'l';
+  if (c == 'f' || c == 'F' || c == 'e' || c == 'E' || c == 'g' || c == 'G' || c == 'a' || c == 'A') return 'd';
+  return sp->len == 'l' ? 'l' : 'i'; }
+/* the arguments: off the va_list in order, or -- once a directive names one by number
+ * (POSIX's %n$) -- fetched whole first, each by the kind its directives read it as */
+#define FArgMax 64
+union __farg { long i; double d; };
+struct __fargs { va_list ap; union __farg a[FArgMax + 1]; int npos, next; };
+static union __farg __fget(struct __fargs *A, int pos, int kind) {
+  union __farg v;
+  if (A->npos) { v = pos > 0 && pos <= FArgMax ? A->a[pos] : A->a[0]; return v; }
+  if (kind == 'd') v.d = va_arg(A->ap, double);
+  else if (kind == 'l') v.i = va_arg(A->ap, long);
+  else v.i = va_arg(A->ap, int);
+  return v; }
+/* the count every directive owes (%n reads it, the call answers it), and a sticky failure */
+struct __fcount { void (*put)(void *, int); void *ctx; long n; int bad; };
+static void __fcput(void *c, int ch) { struct __fcount *k = c; k->n++; k->put(k->ctx, ch); }
+static int __fmt(void (*put0)(void *, int), void *ctx0, char const *fmt, va_list ap0) {
+  struct __fcount k = { put0, ctx0, 0, 0 };
+  void (*put)(void *, int) = __fcput;
+  void *ctx = &k;
+  struct __fargs A;
+  va_copy(A.ap, ap0);
+  A.npos = 0;
+  struct __fsp sp;
+  /* the numbered lane: a first pass learns each argument's kind, then they are read in order */
+  for (char const *f = fmt; *f; f++) {
+    if (*f != '%') continue;
+    if (f[1] == '%') { f++; continue; }
+    f = __fparse(f + 1, &sp);
+    if (!*f) break;
+    if (sp.pos > 0) { A.npos = 1; break; } }
+  if (A.npos) {
+    int kd[FArgMax + 1], top = 0;
+    for (int i = 0; i <= FArgMax; i++) { kd[i] = 0; A.a[i].i = 0; }
+    for (char const *f = fmt; *f; f++) {
+      if (*f != '%') continue;
+      if (f[1] == '%') { f++; continue; }
+      f = __fparse(f + 1, &sp);
+      if (!*f) break;
+      if (sp.wa > 0 && sp.wa <= FArgMax) { kd[sp.wa] = 'i'; if (sp.wa > top) top = sp.wa; }
+      if (sp.pa > 0 && sp.pa <= FArgMax) { kd[sp.pa] = 'i'; if (sp.pa > top) top = sp.pa; }
+      if (sp.pos > 0 && sp.pos <= FArgMax) { kd[sp.pos] = __fkind(&sp); if (sp.pos > top) top = sp.pos; } }
+    for (int i = 1; i <= top; i++) {
+      if (kd[i] == 'd') A.a[i].d = va_arg(A.ap, double);
+      else if (kd[i] == 'i') A.a[i].i = va_arg(A.ap, int);
+      else A.a[i].i = va_arg(A.ap, long); } }
   for (; *fmt; fmt++) {
     if (*fmt != '%') { put(ctx, *fmt); continue; }
-    fmt++;
-    int fl = 0, width = 0, prec = -1, wide = 0;
-    for (; ; fmt++) {                        /* flags: all five of them act */
-      if (*fmt == '-') fl |= FfLeft;
-      else if (*fmt == '0') fl |= FfZero;
-      else if (*fmt == '+') fl |= FfPlus;
-      else if (*fmt == ' ') fl |= FfSpc;
-      else if (*fmt == '#') fl |= FfAlt;
-      else break; }
-    while (*fmt >= '0' && *fmt <= '9') { width = width * 10 + (*fmt - 48); fmt++; }
-    if (*fmt == '.') { fmt++; prec = 0; while (*fmt >= '0' && *fmt <= '9') { prec = prec * 10 + (*fmt - 48); fmt++; } }
-    while (*fmt == 'l' || *fmt == 'z' || *fmt == 'h') { if (*fmt != 'h') wide = 1; fmt++; }
+    if (fmt[1] == '%') { put(ctx, 37); fmt++; continue; }
+    char const *at = fmt;
+    fmt = __fparse(fmt + 1, &sp);
+    if (!*fmt) { for (; at < fmt; at++) put(ctx, *at); fmt--; continue; }
+    int fl = sp.fl, width = sp.width, prec = sp.prec;
+    if (sp.wa) { width = (int) __fget(&A, sp.wa, 'i').i; if (width < 0) { fl |= FfLeft; width = -width; } }
+    if (sp.pa) { prec = (int) __fget(&A, sp.pa, 'i').i; if (prec < 0) prec = -1; }
     if (fl & FfLeft) fl &= ~FfZero;
     if (fl & FfPlus) fl &= ~FfSpc;         /* + outranks the space */
-    if (*fmt == 's') {
-      char const *s = va_arg(ap, char const *);
+    int c = sp.conv;
+    union __farg v = __fget(&A, sp.pos, __fkind(&sp));
+    if (c == 's' && sp.len == 'l') {       /* a wide string in the C locale: ascii, past it EILSEQ */
+      int const *w = (int const *) v.i;
+      if (!w) w = (int const *) L"(null)";
+      int len = 0;
+      while (w[len] && (prec < 0 || len < prec)) { if ((unsigned) w[len] > 127) { k.bad = 1; break; } len++; }
+      if (k.bad) break;
+      int pad = width > len ? width - len : 0;
+      if (!(fl & FfLeft)) __pad(put, ctx, pad, 32);
+      for (int i = 0; i < len; i++) put(ctx, w[i]);
+      if (fl & FfLeft) __pad(put, ctx, pad, 32); }
+    else if (c == 's') {
+      char const *s = (char const *) v.i;
       if (!s) s = "(null)";
       int len = 0;
       while (s[len] && (prec < 0 || len < prec)) len++;
@@ -209,58 +300,66 @@ static void __fmt(void (*put)(void *, int), void *ctx, char const *fmt, va_list 
       if (!(fl & FfLeft)) __pad(put, ctx, pad, 32);
       for (int i = 0; i < len; i++) put(ctx, s[i]);
       if (fl & FfLeft) __pad(put, ctx, pad, 32); }
-    else if (*fmt == 'c') {
+    else if (c == 'c') {
+      if (sp.len == 'l' && (unsigned long) v.i > 127) { k.bad = 1; break; }
       int pad = width > 1 ? width - 1 : 0;
       if (!(fl & FfLeft)) __pad(put, ctx, pad, 32);
-      put(ctx, va_arg(ap, int));
+      put(ctx, (unsigned char) v.i);
       if (fl & FfLeft) __pad(put, ctx, pad, 32); }
-    else if (*fmt == 'd' || *fmt == 'i') {
-      long v = wide ? va_arg(ap, long) : (long) va_arg(ap, int);
-      unsigned long u = (unsigned long) v;
-      int neg = v < 0;
+    else if (c == 'd' || c == 'i') {
+      long x = sp.len == 'l' ? v.i : sp.len == 'h' ? (short) v.i : sp.len == 'H' ? (signed char) v.i : (int) v.i;
+      unsigned long u = (unsigned long) x;
+      int neg = x < 0;
       if (neg) u = 0UL - u;
       __fmtnum(put, ctx, u, 10, neg, prec, width, fl, 0); }
-    else if (*fmt == 'u')
-      __fmtnum(put, ctx, wide ? va_arg(ap, unsigned long) : (unsigned long) va_arg(ap, unsigned int), 10, 0, prec, width, fl, 0);
-    else if (*fmt == 'x' || *fmt == 'X')
-      __fmtnum(put, ctx, wide ? va_arg(ap, unsigned long) : (unsigned long) va_arg(ap, unsigned int), 16, 0, prec, width, fl, *fmt == 'X');
-    else if (*fmt == 'o')
-      __fmtnum(put, ctx, wide ? va_arg(ap, unsigned long) : (unsigned long) va_arg(ap, unsigned int), 8, 0, prec, width, fl, 0);
-    else if (*fmt == 'f' || *fmt == 'F' || *fmt == 'e' || *fmt == 'E' || *fmt == 'g' || *fmt == 'G'
-             || *fmt == 'a' || *fmt == 'A')
-      __fmtflo(put, ctx, va_arg(ap, double), *fmt, prec, width, fl);
-    else if (*fmt == 'p') { put(ctx, 48); put(ctx, 120); __fmtnum(put, ctx, (unsigned long) va_arg(ap, void *), 16, 0, -1, 0, 0, 0); }
-    else if (*fmt == '%') put(ctx, 37);
-    else { put(ctx, 37); if (*fmt) put(ctx, *fmt); else fmt--; } }
-}
+    else if (c == 'u' || c == 'x' || c == 'X' || c == 'o') {
+      unsigned long u = sp.len == 'l' ? (unsigned long) v.i : sp.len == 'h' ? (unsigned short) v.i
+                      : sp.len == 'H' ? (unsigned char) v.i : (unsigned int) v.i;
+      __fmtnum(put, ctx, u, c == 'u' ? 10 : c == 'o' ? 8 : 16, 0, prec, width, fl & ~(c == 'u' ? FfAlt : 0), c == 'X'); }
+    else if (c == 'f' || c == 'F' || c == 'e' || c == 'E' || c == 'g' || c == 'G' || c == 'a' || c == 'A')
+      __fmtflo(put, ctx, v.d, c, prec, width, fl);
+    else if (c == 'p') {                     /* glibc's: 0x and the hex, or (nil) */
+      if (v.i) __fmtnum(put, ctx, (unsigned long) v.i, 16, 0, prec, width, fl | FfAlt, 0);
+      else { int pad = width > 5 ? width - 5 : 0;
+             if (!(fl & FfLeft)) __pad(put, ctx, pad, 32);
+             for (char const *q = "(nil)"; *q; q++) put(ctx, *q);
+             if (fl & FfLeft) __pad(put, ctx, pad, 32); } }
+    else if (c == 'n') {
+      void *p = (void *) v.i;
+      if (sp.len == 'H') *(signed char *) p = (signed char) k.n;
+      else if (sp.len == 'h') *(short *) p = (short) k.n;
+      else if (sp.len == 'l') *(long *) p = k.n;
+      else *(int *) p = (int) k.n; }
+    else for (; at <= fmt; at++) put(ctx, *at); }   /* not a conversion: the text stands */
+  va_end(A.ap);
+  if (k.bad) { __errno_v = EILSEQ; return -1; }
+  return (int) k.n; }
 int fprintf(FILE *f, char const *fmt, ...) {
   va_list ap; va_start(ap, fmt);
-  __fmt(__femit, f, fmt, ap);
+  int r = __fmt(__femit, f, fmt, ap);
   va_end(ap);
-  return 0; }
+  return r; }
 int snprintf(char *p, size_t n, char const *fmt, ...) {
   struct __sctx s;
   s.p = p; s.n = n; s.at = 0;
   va_list ap; va_start(ap, fmt);
-  __fmt(__semit, &s, fmt, ap);
+  int r = __fmt(__semit, &s, fmt, ap);
   va_end(ap);
   if (n) p[s.at < n ? s.at : n - 1] = 0;
-  return (int) s.at; }
+  return r < 0 ? r : (int) s.at; }
 int printf(char const *fmt, ...) {
   va_list ap; va_start(ap, fmt);
-  __fmt(__femit, stdout, fmt, ap);
+  int r = __fmt(__femit, stdout, fmt, ap);
   va_end(ap);
-  return 0; }
-/* the v-variants: __fmt already threads a va_list, so these just forward it. */
-int vfprintf(FILE *f, char const *fmt, va_list ap) {
-  __fmt(__femit, f, fmt, ap); return 0; }
-int vprintf(char const *fmt, va_list ap) {
-  __fmt(__femit, stdout, fmt, ap); return 0; }
+  return r; }
+/* the v-variants: __fmt copies the va_list it is handed, so these just forward it. */
+int vfprintf(FILE *f, char const *fmt, va_list ap) { return __fmt(__femit, f, fmt, ap); }
+int vprintf(char const *fmt, va_list ap) { return __fmt(__femit, stdout, fmt, ap); }
 int vsnprintf(char *p, size_t n, char const *fmt, va_list ap) {
   struct __sctx s; s.p = p; s.n = n; s.at = 0;
-  __fmt(__semit, &s, fmt, ap);
+  int r = __fmt(__semit, &s, fmt, ap);
   if (n) p[s.at < n ? s.at : n - 1] = 0;
-  return (int) s.at; }
+  return r < 0 ? r : (int) s.at; }
 /* asprintf: measure with a null sink, then format into a fresh block. two
  * passes over the format rather than a growing buffer -- __fmt counts either way. */
 int vasprintf(char **out, char const *fmt, va_list ap) {
@@ -268,8 +367,9 @@ int vasprintf(char **out, char const *fmt, va_list ap) {
   va_list m;                                       /* the measuring pass takes a COPY:
                                                     * __fmt walks the list to its end */
   va_copy(m, ap);
-  __fmt(__semit, &s, fmt, m);
+  int r = __fmt(__semit, &s, fmt, m);
   va_end(m);
+  if (r < 0) return *out = 0, -1;
   char *b = malloc(s.at + 1);
   if (!b) return *out = 0, -1;
   struct __sctx t; t.p = b; t.n = s.at + 1; t.at = 0;

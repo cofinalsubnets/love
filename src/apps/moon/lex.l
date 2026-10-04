@@ -340,8 +340,9 @@
                  (c = 92 && i + 2 < n && src (i + 1) = 13 && src (i + 2) = 10)          ; \<cr><nl>
                   (go (i + 3) line acc)
                  (ws? c) (go (i + 1) line (spc acc))
-                 ; gas's comment: `#` after code, or opening a line that names no directive
-                 (asm && c = 35 && (two? acc && <>><acc = line ? !(dirline? acc line) !(asmdir? (i + 1))))
+                 ; gas's comment: `#` after code, or opening a line that names no directive. asm 2
+                 ; is the preprocessor's own view (-x assembler-with-cpp), which keeps them as text
+                 (asm = 1 && c = 35 && (two? acc && <>><acc = line ? !(dirline? acc line) !(asmdir? (i + 1))))
                   (: (eat j) (n <= j || src j = 10 ? j (eat (j + 1)))
                      (go (eat i) line acc))
                  ; a numeric label's reference: digits then b or f, one word
@@ -455,7 +456,10 @@
                        (in1? c)                        ; a '(' GLUED to a preceding id (no space) carries a 4th field: the function-macro paren
                         (c = 40 && 0 < i && idc? (src (i - 1)) @ gl
                            (go (i + 1) line ((gl ? ['p (string c) line 1] ['p (string c) line]) . acc)))
-                       asm (go (i + 1) line (['p (string c) line] . acc))     ; gas reads what C would not
+                       ; gas reads what C would not; and C's preprocessor reads $ @ ` \ too, as the
+                       ; pp-tokens C11 6.4 keeps for a character no token spells -- harmless in a
+                       ; skipped group or an #error's text, and a parse error if one reaches C
+                       (asm || elem c '(36 64 92 96)) (go (i + 1) line (['p (string c) line] . acc))
                        ())))))
        (go 0 ln0 ())))
 ) ; module 'moon

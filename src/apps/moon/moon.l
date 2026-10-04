@@ -51,11 +51,8 @@
                        (go (i + 1) st ps))
        (jn l a) (!(two? l) ? a (jn >l (<l + (#a ? ("/" + a) a))))
        (jn (go 0 0 ()) ""))
-   ; the carried archive is a .gz, opened by src/apps/gz.l's gz-unzip -- cited at the call, as a
-   ; `borrow` here would tie moon to the bake order. a love without 'gz carries no archive.
-   (gzbody s) (: f (cite 'gz 'gz-unzip) r (lit? f ? (f s)) (two? r ? <>r ()))
-   ; ..and a read-only ustar walk: nom (prefix + name), size, body -- all this
-   ; needs. src/apps/tar.l stays the whole law; this reads the slice and nothing else.
+   ; a read-only ustar walk: nom (prefix + name), size, body -- all this needs.
+   ; src/apps/tar.l stays the whole law; this reads the slice and nothing else.
    (ttxt s o k) (: (go i) (k <= i || s (o + i) = 0 ? i (go (i + 1)))
                    m (go 0)
                    (m ? (cask m @ c (pour c 0 s o m, string c)) ""))
@@ -81,39 +78,17 @@
                                 acc)
                         (go (o + 512 + 512 * ((sz + 511) // 512)) acc2)))
        (go 0 ()))
-   ; no nest on disk, but a love carries its whole tree (source-gz): the toolchain slice --
-   ; include/ and lib/, what the Makefile ships -- as an in-memory table, key the
-   ; nest-relative path, value the bytes. nothing is written anywhere; () when there is
-   ; nothing to carry (love0), and the owed-nest diagnostic stands.
-   ; the slice leads the archive (src/tools/selfpack.l lays it so), so it is streamed -- gz.l's
-   ; gz-pull under tar.l's walk -- and the read stops at the first file past it, rather than
-   ; inflating the tree. where those doors are not aboard the whole archive is read as before
+   ; no nest on disk, but a love carries its whole tree: the toolchain slice -- include/
+   ; and lib/, what the Makefile ships -- as an in-memory table, key the nest-relative path,
+   ; value the bytes. nothing is written anywhere; () when there is nothing to carry (love0),
+   ; and the owed-nest diagnostic stands. the slice is the tree's moon section
+   ; (src/tools/selfpack.l), decoded alone.
    (msub nom) (: rel (strip1 nom) sub (starts? rel mtree ? (snip rel #mtree #rel) "")
                  (starts? sub "include/" || starts? sub "lib/" ? sub))
    (mblob _)
-    (: gz (source-gz "x")
-       pull (cite 'gz 'gz-pull)   walk (cite 'tar 'tar-walk)
-       (? !(string? gz) ()
-          !(lit? pull && lit? walk) (mblob-whole gz)
-          (: next (cite 'gz 'gz-next)   body (cite 'tar 'tar-body)
-             t {0 0}                                   ; fed a slice at a time, so the walk's stop stops the inflate
-             g (pull (_ \ peep t 0 0 @ o (#gz <= o ? "" (pin t 0 (o + 65536), snip gz o (min #gz (o + 65536))))))
-             s (cite 'tar 'tar-src (_ \ next g))
-             a {}   seen {0 0}
-             (walk s (e \ b \ msub (e 'nom) @ sub
-                                 (!sub ? (peep seen 0 0 ? 'stop 1)
-                                    ({0 ()} @ ps
-                                       (e 'kind = 'file ?
-                                          (: _ (body s b (x \ pin ps 0 (x . peep ps 0 ())))
-                                             l (ps 0)
-                                             (pin a sub (two? l ? (cats (rev l)) ""))),
-                                        pin seen 0 1,
-                                        1)))),
-              a))))
-   (mblob-whole gz)
-    (gzbody gz @ u
-       (!(string? u) ? ()
-          (foldl (a \ e \ msub <e @ sub (sub ? (pin a sub <>e) a)) {} (tarfiles u))))
+    (tree-tar "moon" @ s
+       (!(string? s) ? ()
+          (foldl (a \ e \ msub <e @ sub (sub ? (pin a sub <>e) a)) {} (tarfiles s))))
    ; the first three of a name list, comma-joined, with a count of the rest --
    ; a diagnostic wants a taste, not the whole bag
    (mfew ns)
@@ -376,14 +351,18 @@
    ; fatal exit. the -D lines prepend to the source text before the one lex, so a define body
    ; runs to its line's end and the numbering stays whole -- clexat stamps them 1-k..0 and
    ; the source itself from 1, so every stamped line is true with no pay-back pass.
-   (cc-parse src {'is is 'ds ds 'tgt tgt 'os os 'vb vb 'dia dia})
-    (: ds9 (archdefs tgt + osdefs os + featdefs tgt + stddefs tgt
+   ; the -D lines a TU starts from: the machine's, the OS's, the libc's and the dialect's, then
+   ; the command line's
+   (cc-defs {'ds ds 'tgt tgt 'os os 'dia dia 'undef un})
+    (un ? (stddefs tgt + ds) (archdefs tgt + osdefs os + featdefs tgt + stddefs tgt
                  ; our libc is the one in this link and carries its whole surface on every
                  ; kernel: a source asks it what it may call, never the kernel.
                  + '("LvMoonlibc=1")
                  + (dia = 'moon && '("__moon__=1"))       ; the dialect's own macro: extensions on
                  +   ; ds9, not ds: a :-local shadows the param over the whole scope (the boxfix cell trap)
-                 (elem tgt '(x64 a64) ? ("__SIZEOF_INT128__=16" . ds) ds))       ; the wide pair (gen's d128 lane); love.c's limb seam reads it, and gcc says the same on both
+                 (elem tgt '(x64 a64) ? ("__SIZEOF_INT128__=16" . ds) ds)))      ; the wide pair (gen's d128 lane); love.c's limb seam reads it, and gcc says the same on both
+   (cc-parse src (t @ {'is is 'ds ds 'tgt tgt 'os os 'vb vb 'dia dia}))
+    (: ds9 (cc-defs t)
        ; `-` is read here and nowhere else, so every door onto a TU gets stdin for free; cdir
        ; answers "" for it, which is the cwd, gcc's rule for a source with no directory.
        ; the source may instead live in the carried table (a runtime member on the blob
@@ -443,17 +422,48 @@
        (udie 1 ("cc: the parser answered an unexpected shape for " + src)))
    ; a wasm object is the gen tuple as TEXT (above), so it goes to the port whole:
    ; write-bytes walks a byte list, and a string handed to it lands as an empty file.
+   ; -E: the source preprocessed, to -o or stdout; a refusal exits as a compile's does, which is
+   ; how a configure script tells a header that is there from one that is not
+   (cc-pre src dst (t @ {'is is 'vb vb 'xasm xasm}))
+    (: ds9 (xasm ? ("__ASSEMBLER__=1" . cc-defs t) (cc-defs t))
+       r (src = "-" ? [1 (slurp in)]
+            (uread src @ q (? (two? q) q !vb () (vb src @ h (string? h && [1 h])))))
+       _ (two? r || udie 1 ("cc: cannot open " + src))
+       lx (xasm ? (clexm (deftext ds9 + <>r) (1 - #ds9) 2 1) (clexat (deftext ds9 + <>r) (1 - #ds9)))
+       _ (okv? lx || ccdie lx src ("cc: lex error in " + src))
+       _ (pin cppdeps 'l ())
+       pp (cpp-text <>lx (name \ sys? \ incload vb is (cdir src) name sys?) src xasm)
+       _ (okv? pp || ccdie pp src ("cc: preprocessor error in " + src))
+       _ (t 'md && cc-deps src dst t)                ; -E -MD writes the dependencies as a compile does
+       (dst ? (open dst "w" @ q (!(hot? q) ? (udie 1 ("cc: cannot write " + dst)), say q <>pp, close q))
+              (puts <>pp, flush out)))
    (cc-obj src dst (t @ {'tgt tgt}))
-    (cc-objbytes src t @ b
+    (pin cppdeps 'l (),
+     cc-objbytes src t @ b
        (tgt != 'wasm ? (write-bytes dst b)
         (open dst "w" @ q
            (!(hot? q) ? (udie 1 ("cc: cannot write " + dst)),
             say q b,
-            close q))))
+            close q))),
+     t 'md && cc-deps src dst t)
+   ; the rule -MD asks for: the object, then its source and every file the #includes opened,
+   ; in the order they opened, each once; -MMD leaves our own headers out. -MF names the file,
+   ; else the object's with .d; -MT the target, else the object
+   (cc-deps src dst t)
+    (: ours (map (r \ r + "include/") (mroots ()))
+       (sys? p) (any (d \ starts? p d) ours || (t 'vb && starts? p "include/"))
+       hs (filter (p \ !(t 'mmd && sys? p)) (uniq (rev (peep cppdeps 'l ()))))
+       df (t 'mf || (dst @ (b + ".o") (b + ".d") (dst + ".d")))
+       txt ((t 'mt || dst) + ": " + join " \\\n  " (src . hs) + "\n"
+            + (t 'mp ? (join "" (map (h \ "\n" + h + ":\n") hs)) ""))
+       (open df "w" @ q
+          (!(hot? q) ? (udie 1 ("cc: cannot write " + df)),
+           say q txt,
+           close q)))
    ; the link path (rung 3, src/love/holo/link.l): every input lands as object bytes (a .c
    ; compiled here, a .o read off disk), crt0 rides first -- its text is the entry -- and
    ; ldlink binds the static exe, no system linker. the entry hands the OS stack pointer
-   ; (argc at [rsp]) to __ai_start and exits with its answer if it ever returns. __ai_start
+   ; (argc at [rsp]) to __love_start and exits with its answer if it ever returns. __love_start
    ; is weak here, the call-main tail every small link gets, so a libc object
    ; (src/apps/moon/lib/moonlibc/, rung 4) can override it strong and unpack envp/auxv too: the
    ; weak machinery is the whole switch, and there is no conditional anywhere.
@@ -466,14 +476,14 @@
            (br ne c0-fb)
            (mov r6 sp)
            (li r5 0)
-           (call __ai_start)
+           (call __love_start)
            (mov r6 r0) (li r0 60) (sys)
            (label c0-fb)
            (push r6)
            (li r5 0)
-           (call __ai_start)
+           (call __love_start)
            (mov r6 r0) (li r0 1) (sys)
-           (label __ai_start)
+           (label __love_start)
            (push r6)
            (lea r5 r6 8)
            (ld r6 r6 0)
@@ -493,25 +503,25 @@
                (br ne c0a-fb)
                (lea r0 sp 0)
                (li r1 0)
-               (call __ai_start)
+               (call __love_start)
                (li r8 93) (sys)
                (label c0a-fb)
                (li r1 2)
-               (call __ai_start)
+               (call __love_start)
                (li r8 1) (sys)
-               (label __ai_start)
+               (label __love_start)
                (push lr)
                (lea r1 r0 8)
                (ld r0 r0 0)
                (call main)
                (li r8 93) (sys))
    ; the riscv twin: a0 = the OS stack pointer, exit_group = 94 in a7 (the
-   ; answer already rides a0); the default __ai_start mirrors a64's.
+   ; answer already rides a0); the default __love_start mirrors a64's.
    crt0-rv '((lea r0 sp 0)
               (li r1 0)
-              (call __ai_start)
+              (call __love_start)
               (li r7 94) (sys)
-              (label __ai_start)
+              (label __love_start)
               (push lr)
               (lea r1 r0 8)
               (ld r0 r0 0)
@@ -716,7 +726,7 @@
    ; compile).
    ; the refusal is the target's, not the kernel's. one archive per ISA, all three cut
    ; under -os linux, and that pin does not reach the bytes: impl.h parts the kernels at run
-   ; time on __ai_osv, and os.c, the only member with an OS predefine in it, sits under
+   ; time on __love_osv, and os.c, the only member with an OS predefine in it, sits under
    ; #ifndef LvOsTranslate. riscv is where that stops -- no translation tables, so os.c reads
    ; -os and only linux has an answer; the BSDs there owe a compile, which refuses by #error.
    (rtcarried home tgt os)
@@ -816,17 +826,17 @@
               <pr))))
    ; -- the wasm link (src/love/holo/wasmfn.l): the objects are gen tuples as text, the
    ; runtime the same members compiled for wasm and pulled by need, and one function
-   ; imported -- __ai_sys, the syscall door the page's loader answers. crt0 hands moonlibc's
-   ; __ai_start a stack laid in data (argc 1, an argv, empty envp and auxv) and exits with
+   ; imported -- __love_sys, the syscall door the page's loader answers. crt0 hands moonlibc's
+   ; __love_start a stack laid in data (argc 1, an argv, empty envp and auxv) and exits with
    ; its answer through the import; the weak default calls main outright. ..or a container
    ; with the blobs behind the text (wasmfn.l's wasm-tu-read).
    (wasm-tu text) (wasm-tu-read text @ r (two? r ? r (udie 1 "cc: not a wasm object")))
-   crt0-wasm '(((label _start) (la r0 __ai_osstack) (call __ai_start) (mov r1 r0) (li r0 231) (call __ai_sys) (ret)
-                (label __ai_start) (push lr) (lea r1 r0 8) (ld r0 r0 0) (call main) (pop lr) (ret))
-               ((label __ai_osstack) (raw (1 0 0 0 0 0 0 0 (fix 8 abs64 __ai_argv0 0) 0 0 0 0 0 0 0 0
+   crt0-wasm '(((label _start) (la r0 __love_osstack) (call __love_start) (mov r1 r0) (li r0 231) (call __love_sys) (ret)
+                (label __love_start) (push lr) (lea r1 r0 8) (ld r0 r0 0) (call main) (pop lr) (ret))
+               ((label __love_osstack) (raw (1 0 0 0 0 0 0 0 (fix 8 abs64 __love_argv0 0) 0 0 0 0 0 0 0 0
                                            0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0))
-                (label __ai_argv0) (raw (97 46 111 117 116 0)))
-               ("_start" "__ai_start") ("__ai_osstack") () () () () () () () ("__ai_start"))
+                (label __love_argv0) (raw (97 46 111 117 116 0)))
+               ("_start" "__love_start") ("__love_osstack") () () () () () () () ("__love_start"))
    ; the runtime for wasm: rtmems' members under the wasm target (text objects), cached
    ; whole as one text under the same key law as the ELF archives -> ((name text) ..)
    (wasm-rt home os vb)
@@ -858,7 +868,7 @@
                             ss,
                         filter (r \ !(defs r)) (keys refs))))
        ; crt0 rides when an input defines main; a module with a face of its own (the wasm
-       ; seat's host.c, which the page enters at ai_init) links without an entry
+       ; seat's host.c, which the page enters at init) links without an entry
        entry? (foldl (a \ s \ a || elem 'main <s) 0 tsyms)      ; a ledger names noms
        base (entry? ? (crt0-wasm . texts) texts)
        bsyms (entry? ? (wasm-tu-syms crt0-wasm . tsyms) tsyms)
@@ -873,7 +883,7 @@
               (set + new @ set2 (pull set2 (ledger (bsyms + map (m \ m 2) set2))))))
        picked (pull () owed0)
        all (base + map (m \ m 1) picked)
-       m (wasm-link all {'imports '("__ai_sys") 'exports 'all})
+       m (wasm-link all {'imports '("__love_sys") 'exports 'all})
        q (open dst "w")
        (!(hot? q) ? (udie 1 ("cc: cannot write " + dst)),
         say q (wasm-emit m),
@@ -916,7 +926,7 @@
                            [['at org 'text 'rodata 'data 'nifs 'bss]])
        c9 (tgt @ 'a64 crt0-a64 'rv64 crt0-rv crt0)   ; x64's serves both kernels
        all (arm? ? srcs
-                   (["crt0" (string (objelf tgt c9 () '("__ai_start") () '("__ai_start") () () () () ()))] . srcs))
+                   (["crt0" (string (objelf tgt c9 () '("__love_start") () '("__love_start") () () () () ()))] . srcs))
        ; the archives first, then whatever the runtime still owes: a library the
        ; line named is what the link meant, and the implicit one is the fallback.
        lib (all + arload all ars tgt)
@@ -992,7 +1002,7 @@
        (go as 'moon ()))          ; unsaid means moon: our C, extensions and all
    ; `none` is gcc's word for "read the suffix again", which for us is the default.
    (xlang? w) (w = "c" || w = "none")
-   (xdie w) ("cc: -x " + w + " -- mooncc reads: c none")
+   (xdie w) ("cc: -x " + w + " -- mooncc reads: c none assembler-with-cpp")
    (tol? a) (a = "-pipe" || a = "-static" ||
              starts? a "-g" || starts? a "-O" ||
              starts? a "-f" || glu? a 108 || glu? a 76 ||
@@ -1019,7 +1029,7 @@
    ; would answer the zero point. the literal has to be complete and is wanted at two sites,
    ; so it is spelled once rather than wrapped on `{}`.
    (fseed tgt dia) {'c () 'is () 'ds () 'o () 'ins () 'tgt tgt 'os () 'pie () 'org () 'dorg ()
-                    'nostd () 'vb () 'ni () 'rdme () 'relo () 'dia dia}
+                    'nostd () 'vb () 'ni () 'rdme () 'relo () 'dia dia 'md () 'mmd () 'mf () 'mt () 'mp () 'E () 'xasm () 'undef ()}
    (flags as t)
     (!(two? as) ?
        (pin t 'is (rev (t 'is)),
@@ -1028,6 +1038,7 @@
         t)
        (: a <as r >as
           (? (a = "-c") (flags r (pin t 'c 1))
+             (a = "-E") (flags r (pin t 'E 1))
              ; the same string love answers, because they are one artifact: mooncc is a
              ; verb on the love binary, not a separate program, and two reported versions
              ; would report a thing that cannot happen.
@@ -1063,6 +1074,16 @@
               (: f (a @ ("-freadme=" + f) f) rt (uread f)
                  (two? rt ? (flags r (pin t 'rdme <>rt))
                             (udie 1 ("cc: cannot open " + f))))
+             ; the dependency rule gcc writes beside an object: -MD, -MMD (our own headers left
+             ; out, as gcc leaves the system's), -MF its file, -MT / -MQ its target, -MP an
+             ; empty rule per header -- and kbuild's -Wp,-MD,FILE / -Wp,-MMD,FILE spelling
+             (a = "-MD") (flags r (pin t 'md 1))
+             (a = "-MMD") (flags r (pin (pin t 'md 1) 'mmd 1))
+             (a = "-MP") (flags r (pin t 'mp 1))
+             (a = "-MF") (two? r ? (flags >r (pin t 'mf <r)) (udie 2 usage))
+             (a = "-MT" || a = "-MQ") (two? r ? (flags >r (pin t 'mt <r)) (udie 2 usage))
+             (starts? a "-Wp,-MD,") (flags r (pin (pin t 'md 1) 'mf (snip a 8 #a)))
+             (starts? a "-Wp,-MMD,") (flags r (pin (pin (pin t 'md 1) 'mmd 1) 'mf (snip a 9 #a)))
              (glu? a 73) (flags r (fpush t 'is (snip a 2 #a)))
              (glu? a 68) (flags r (fpush t 'ds (snip a 2 #a)))
              (glu? a 116) (flags r (pin t 'tgt (totgt (snip a 2 #a))))
@@ -1084,9 +1105,16 @@
              ; may arrive with no suffix to read. loud like -std=: `-x c++` and `-x
              ; assembler` name compilers we are not, and taking either for C would read one
              ; language as another.
-             (a = "-x") (two? r ? (xlang? <r ? (flags >r t) (udie 2 (xdie <r))) (udie 2 usage))
+             ; assembler-with-cpp is the preprocessor's half of a .S: -E reads it that way (a
+             ; device tree's dts is the user kbuild has)
+             (a = "-x") (two? r ? (<r = "assembler-with-cpp" ? (flags >r (pin t 'xasm 1))
+                                   (xlang? <r ? (flags >r (pin t 'xasm ())) (udie 2 (xdie <r)))) (udie 2 usage))
              (glu? a 120) (snip a 2 #a @ w
-                             (xlang? w ? (flags r t) (udie 2 (xdie w))))
+                             (? (w = "assembler-with-cpp") (flags r (pin t 'xasm 1))
+                                (xlang? w) (flags r (pin t 'xasm ()))
+                                (udie 2 (xdie w))))
+             ; -undef: none of the system's or the compiler's predefines, only the standard's
+             (a = "-undef") (flags r (pin t 'undef 1))
              (tol? a) (flags r t)
              ; ahead of the dash refusal, and the only arg that is: a bare `-` is an
              ; input, the source on stdin, which every configure probe writes before it
@@ -1136,6 +1164,8 @@
        ; configure script writes, and it has to bind a libc. the arms are ordered and two of
        ; them are not about `ins` at all, so the scrutinee carries flag guards beside its
        ; shapes: `(? g)` fits anything g holds for, and a guard that fails falls through.
+       (? (f 'E) (: (go l) (? !(two? l) 0 (cc-pre <l o f, go >l))
+                    (two? ins ? (go ins) (udie 2 usage)))
        (ins @
         []      (udie 2 usage)
         (? o)   (c ? (two? >ins ? (udie 2 "cc: -o takes one input")
@@ -1154,7 +1184,7 @@
                              !(dotsrc? <l) (udie 2 ("cc: not a .c or .s input: " + <l))
                              (cc-obj <l (obase <l) f, go >l))
                    (go ins))
-                (cc-link ins "a.out" f, 0))))
+                (cc-link ins "a.out" f, 0)))))
 
 ; the seat: fire moon-main iff mooncc sits in the program seat of the real command line
 ; -- the positional program, or a `-l` preload (the installed shebang) -- taking the

@@ -1,5 +1,5 @@
-#ifndef _AI_SYS_SELECT_H
-#define _AI_SYS_SELECT_H
+#ifndef _LOVE_SYS_SELECT_H
+#define _LOVE_SYS_SELECT_H
 #include <sys/types.h>
 #include <sys/time.h>
 /* glibc's layout exactly: 1024 bits as 16 longs, so a set built here is the one

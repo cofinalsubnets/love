@@ -91,7 +91,7 @@
 ; the same supervisor, now over OS processes. spawn each unit (a pid to track), then
 ; poll `glean` -- the SIGCHLD core -- mapping each dead pid back to its unit and
 ; restarting on a nonzero exit per policy. on metal this poll is driven by signalfd
-; through ai_wait_fds (perceive), exactly as {nic, clock} is in inle; here a rest-paced
+; through wait_fds (perceive), exactly as {nic, clock} is in inle; here a rest-paced
 ; loop stands in. a real service's `cmd` is its argv (hark by spawn); `pids` maps
 ; pid->name, `tries` counts restarts. the dep graph / checkpoint above carry over
 ; unchanged -- only start1's "modeled thunk" becomes "a real fork+exec".
@@ -130,7 +130,7 @@
 ; --- the perceive lane (Linux: src/love/posix.c sigfd/sigtake + the core `await`) ---
 ; the supervisor's perceive becomes a real park on a signalfd, not a poll loop.
 ; (await sig) cooperatively yields until a signal lands; the scheduler folds the
-; parked sigfd and a heartbeat task's timer into one ai_wait_fds -- the {nic, clock}
+; parked sigfd and a heartbeat task's timer into one wait_fds -- the {nic, clock}
 ; merge, now {signals, clock}, so the heartbeat ticks while the supervisor sleeps on
 ; the fd. on SIGCHLD we drain glean (it COALESCES, so loop) and restart per policy; a
 ; sigterm (blocked -> queued to the fd: a graceful EVENT, not a kill) ends the loop.

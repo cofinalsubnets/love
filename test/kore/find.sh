@@ -55,6 +55,10 @@ for x in "-iname hi.*" "-ipath */A/*" "-empty" "-newer $F/ref" "-mtime +1" "-mti
 done
 find -L "$F/t" -name s.c | sort > "$g"; korerun find -L "$F/t" -name s.c | sort > "$o"; same "find -L"
 find "$F/t" -print0 | tr '\0' '\n' | sort > "$g"; korerun find "$F/t" -print0 | tr '\0' '\n' | sort > "$o"; same "find -print0"
+# -printf, line by line and sorted: the directives gen_initramfs.sh asks (%p %m %U %G, %T@) and the rest
+for f in '%p %m %U %G\n' '%T@ %p\n' '%f|%h|%y|%s\n' '%%\t%p\0'; do
+  find "$F/t" -printf "$f" | tr '\0' '\n' | sort > "$g"; korerun find "$F/t" -printf "$f" | tr '\0' '\n' | sort > "$o"; same "find -printf '$f'"
+done
 find "$F/t" -type f -exec echo X {} + | tr ' ' '\n' | sort > "$g"; korerun find "$F/t" -type f -exec echo X {} + | tr ' ' '\n' | sort > "$o"; same "find -exec {} +"
 korerun find "$F/t" -name b > /dev/null; korerun find "$F/t" -name b -delete 2> /dev/null; r=$?
 [ $r -eq 1 ] && [ -d "$F/t/a/b" ] || fail "kore find -delete of a directory not empty (rc $r)"

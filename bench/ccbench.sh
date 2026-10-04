@@ -38,11 +38,14 @@ CORPUS=${CORPUS:-"$R/test/00-init.l $R/test/spec.l $R/test/uu.l $(ls "$R"/test/*
 # under flags that are not the tree's is wrong rather than missing
 [ -n "${LOVE_CFLAGS:-}" ] || { echo "ccbench: no LOVE_CFLAGS -- run \`make ccbench\`" >&2; exit 2; }
 # a caller's -Werror comes back out: a warning set is not throughput
-CFLAGS="$(printf '%s' "$LOVE_CFLAGS" | sed 's/-Werror//g') -Dai_tco=1 -fpic -I$ho -I$R -I$R/love -I$R/inle -I$R/out/lib"
-# the hosted roster, common.mk's spelling: src/love/ plus src/inle/ less the kernel's own six
-love_tu="love gc ev task io map snap num arr gz"
-host_cs=$(ls "$R"/love/*.c "$R"/love/lib/*.c | grep -v '/\(love\|gc\|ev\|task\|io\|map\|snap\|num\|arr\|gz\|bare\|nohorn\|noblob\)\.c$')
-# common.mk's $(data_ld), owed by any link: the sentinels' tiling is love.h's ai_typ, and
+CFLAGS="$(printf '%s' "$LOVE_CFLAGS" | sed 's/-Werror//g') -Dtco=1 -fpic -I$ho -I$R -I$R/src/love -I$R/src/inle -I$R/out/lib"
+# the hosted roster, common.mk's spelling: the core (love_tu + the codec), then src/love/ less
+# the core and the board seat, plus src/love/lib/ less the codec
+love_tu="love gc ev task io map snap num arr lib/gz"
+host_cs=$(ls "$R"/src/love/*.c "$R"/src/love/lib/*.c | grep -v '/\(love\|gc\|ev\|task\|io\|map\|snap\|num\|arr\|gz\|bare\|nohorn\|noblob\)\.c$')
+# ..and the hosted seat, the Makefile's seat_o: the kernel's doors stood in, no carried source
+host_cs="$host_cs $R/src/love/user/nokern.c $R/src/love/noblob.c"
+# common.mk's $(data_ld), owed by any link: the sentinels' tiling is love.h's love_typ, and
 # ld left alone orders love.data.N as emitted -- lvm_str under lvm_sym, strings as closures
 LDFLAGS="-Wl,-T,$R/src/love/love_data.ld"
 
@@ -57,7 +60,7 @@ build_cc() { # $1=compiler $2=binpath $3=extra flags ; objects under $WORK/o-<bi
   rm -rf "$od"; mkdir -p "$od/host"
   ( cd "$R" || exit 1
     for b in $love_tu; do
-      $cc $CFLAGS $xf -c "src/love/$b.c" -o "$od/$b.o" || exit 1; done
+      $cc $CFLAGS $xf -c "src/love/$b.c" -o "$od/${b##*/}.o" || exit 1; done
     $cc $CFLAGS $xf -c src/apps/moon/lib/moonlibc/math/lm.c -o "$od/lm.o" || exit 1
     for f in $host_cs; do b=$(basename "$f" .c)
       $cc $CFLAGS $xf -c "$f" -o "$od/host/$b.o" || exit 1; done
@@ -76,9 +79,9 @@ build_mooncc() { # $1=binpath
   bin=$1; od=$WORK/mooncc; rm -rf "$od"; mkdir -p "$od"
   ( cd "$R" || exit 1
     for b in $love_tu; do
-      mc -D ai_tco=1 -D LvHaveVersionH -Iout -I. -Isrc/love -Isrc/inle -Iout/lib -c "src/love/$b.c" "$od/$b.o" || exit 1; done
+      mc -D tco=1 -D LvHaveVersionH -Iout -I. -Isrc/love -Isrc/inle -Iout/lib -c "src/love/$b.c" "$od/${b##*/}.o" || exit 1; done
     for f in $host_cs; do b=$(basename "$f" .c)
-      mc -D ai_tco=1 -D LvHaveVersionH -Iout -I. -Isrc/love -Isrc/inle -Iout/lib -c "$f" "$od/host_$b.o" || exit 1; done
+      mc -D tco=1 -D LvHaveVersionH -Iout -I. -Isrc/love -Isrc/inle -Iout/lib -c "$f" "$od/host_$b.o" || exit 1; done
     # no moonlibc object: the link pulls members by need, so ccsize and ccdead read
     # mooncc's libc off the binary's complement instead
     for f in src/apps/moon/lib/moonlibc/math/*.c; do b=$(basename "$f" .c)

@@ -77,8 +77,8 @@ static uint8_t const MS[64] = {
  6,10,15,21, 6,10,15,21, 6,10,15,21, 6,10,15,21};
 
 static uint32_t rr(uint32_t x, int n) { return (x >> n) | (x << (32 - n)); }
-static ai_inline uint32_t rl(uint32_t x, int n) { return (x << n) | (x >> (32 - n)); }
-static ai_inline uint64_t rr64(uint64_t x, int n) { return (x >> n) | (x << (64 - n)); }
+static love_inline uint32_t rl(uint32_t x, int n) { return (x << n) | (x >> (32 - n)); }
+static love_inline uint64_t rr64(uint64_t x, int n) { return (x >> n) | (x << (64 - n)); }
 
 static void sha_block(uint32_t h[8], const uint8_t *p) {
  uint32_t w[64];
@@ -222,16 +222,16 @@ static void blk_hex(const uint32_t *h, int words, int be, char *out) {
  out[8 * words] = 0; }
 
 // pushes the digest's hex over the argument, the one-shots' and the streams' shared last step
-static struct ai *dig_push(struct ai *g, const char *hex) {
- if (!ai_ok(g = ai_strof(g, hex))) return g;
+static struct g *dig_push(struct g *g, const char *hex) {
+ if (!ok(g = strof(g, hex))) return g;
  g->sp[1] = g->sp[0];
  g->sp += 1;
  return g; }
 
 // (X str) -> the hex digest | ()
-static ai_noinline struct ai *dig_one(struct ai *g, const struct digspec *d) {
+static love_noinline struct g *dig_one(struct g *g, const struct digspec *d) {
  if (!strp(g->sp[0])) return g->sp[0] = ZeroPoint, g;
- struct ai_str *s = (struct ai_str*) g->sp[0];
+ struct str *s = (struct str*) g->sp[0];
  uint32_t h[16];
  uint8_t buf[128];
  char hex[129];
@@ -241,12 +241,12 @@ static ai_noinline struct ai *dig_one(struct ai *g, const struct digspec *d) {
  blk_hex(h, d->outw, d->be, hex);
  return dig_push(g, hex); }
 
-static struct ai *host_sha256(struct ai *g) { return dig_one(g, &dig_sha); }
-static struct ai *host_md5(struct ai *g) { return dig_one(g, &dig_md5); }
-static struct ai *host_sha1(struct ai *g) { return dig_one(g, &dig_sha1); }
-static struct ai *host_sha224(struct ai *g) { return dig_one(g, &dig_sha224); }
-static struct ai *host_sha384(struct ai *g) { return dig_one(g, &dig_sha384); }
-static struct ai *host_sha512(struct ai *g) { return dig_one(g, &dig_sha512); }
+static struct g *host_sha256(struct g *g) { return dig_one(g, &dig_sha); }
+static struct g *host_md5(struct g *g) { return dig_one(g, &dig_md5); }
+static struct g *host_sha1(struct g *g) { return dig_one(g, &dig_sha1); }
+static struct g *host_sha224(struct g *g) { return dig_one(g, &dig_sha224); }
+static struct g *host_sha384(struct g *g) { return dig_one(g, &dig_sha384); }
+static struct g *host_sha512(struct g *g) { return dig_one(g, &dig_sha512); }
 static lvm(lvm_sha256) LvmCall(g, host_sha256)
 static lvm(lvm_md5) LvmCall(g, host_md5)
 static lvm(lvm_sha1) LvmCall(g, host_sha1)
@@ -311,9 +311,9 @@ static void b2_done(uint64_t h[8], uint64_t t, uint8_t *buf, unsigned rem, unsig
   out[2 * k] = hexd[b >> 4]; out[2 * k + 1] = hexd[b & 15]; }
  out[2 * nn] = 0; }
 
-ai_noinline static struct ai *host_blake2b(struct ai *g) {
+love_noinline static struct g *host_blake2b(struct g *g) {
  if (!strp(g->sp[0])) return g->sp[0] = ZeroPoint, g;
- struct ai_str *s = (struct ai_str*) g->sp[0];
+ struct str *s = (struct str*) g->sp[0];
  uint64_t h[8], t = 0;
  uint8_t buf[128];
  char hex[129];
@@ -367,9 +367,9 @@ static void k_done(uint8_t *st, unsigned pos, unsigned rate, unsigned outn, uint
   out[2 * i] = hexd[b >> 4]; out[2 * i + 1] = hexd[b & 15]; }
  out[2 * outn] = 0; }
 
-ai_noinline static struct ai *host_sha3(struct ai *g) {
+love_noinline static struct g *host_sha3(struct g *g) {
  if (!strp(g->sp[0])) return g->sp[0] = ZeroPoint, g;
- struct ai_str *s = (struct ai_str*) g->sp[0];
+ struct str *s = (struct str*) g->sp[0];
  uint8_t st[200];
  char hex[65];
  memset(st, 0, sizeof st);
@@ -384,13 +384,13 @@ static lvm(lvm_bsdsum) {
  word a = Sp[0], x = Sp[1];
  if (!charmp(a) || !strp(x)) Sp[1] = ZeroPoint;
  else {
-  struct ai_str *s = (struct ai_str*) x;
+  struct str *s = (struct str*) x;
   const uint8_t *p = (const uint8_t*) s->bytes;
   uint32_t c = (uint32_t) getcharm(a) & 0xffff;
   for (uintptr_t i = 0; i < (uintptr_t) s->len; i++)
    c = (((c >> 1) | ((c & 1) << 15)) + p[i]) & 0xffff;
   Sp[1] = putcharm(c); }
- ai_musttail return Nextp(1, 1); }
+ love_musttail return Nextp(1, 1); }
 
 // --- crc32 (IEEE 802.3: reflected, polynomial 0xedb88320) -------------------------
 // eight bytes at a time, and that is the whole difference: the byte-at-a-time walk
@@ -428,10 +428,11 @@ static uint32_t crc32_run(uint32_t c, const uint8_t *p, uintptr_t n) {
  return c; }
 
 static uint32_t crc32_of(const uint8_t *p, uintptr_t n) { return ~crc32_run(0xffffffff, p, n); }
+uint32_t crc32(unsigned char const *p, uintptr_t n) { return crc32_of(p, n); }
 
-static ai_inline struct ai *host_crc32(struct ai *g) {
+static love_inline struct g *host_crc32(struct g *g) {
  if (!strp(g->sp[0])) return g->sp[0] = ZeroPoint, g;
- { struct ai_str *s = (struct ai_str*) g->sp[0];
+ { struct str *s = (struct str*) g->sp[0];
    g->sp[0] = putcharm(crc32_of((const uint8_t*) s->bytes, (uintptr_t) s->len)); }
  return g; }
 static lvm(lvm_crc32) {
@@ -442,9 +443,9 @@ static lvm(lvm_crc32_on) {
  word c = Sp[0], x = Sp[1];
  if (!charmp(c) || !strp(x)) Sp[1] = ZeroPoint;
  else {
-  struct ai_str *s = (struct ai_str*) x;
+  struct str *s = (struct str*) x;
   Sp[1] = putcharm(~crc32_run(~(uint32_t) getcharm(c), (const uint8_t*) s->bytes, (uintptr_t) s->len)); }
- ai_musttail return Nextp(1, 1); }
+ love_musttail return Nextp(1, 1); }
 
 // --- cksum (POSIX: not reflected, polynomial 0x04c11db7, the length folded in) -----
 // a different crc from the one above in every part: the register runs the other way,
@@ -459,7 +460,7 @@ static lvm(lvm_crc32_on) {
 static uint32_t ck_t[8][256];
 static int ck_ready;
 
-static ai_noinline void ck_init(void) {
+static love_noinline void ck_init(void) {
  unsigned i, k;
  for (i = 0; i < 256; i++) ck_t[0][i] = crc_msb(0, (uint8_t) i);
  for (i = 0; i < 256; i++) {                    // table k is table 0 shifted k bytes on
@@ -497,9 +498,9 @@ static uint32_t cksum_of(const uint8_t *p, uintptr_t n) {
 static lvm(lvm_cksum) {
  if (!strp(Sp[0])) Sp[0] = ZeroPoint;
  else {
-  struct ai_str *s = str(Sp[0]);
+  struct str *s = str(Sp[0]);
   Sp[0] = putcharm(cksum_of((unsigned char const*)s->bytes, s->len)); }
- ai_musttail return Next(1); }
+ love_musttail return Next(1); }
 
 // --- the same digests, resumable ---------------------------------------------------
 // the one-shots want their whole message contiguous, and for a file that is the file.
@@ -525,9 +526,9 @@ static lvm(lvm_cksum) {
 #define K3St 204
 #define CkSt 12
 
-static struct ai_str *dig_cask(word x, uintptr_t want) {   // the cask's bytes, or NULL
+static struct str *dig_cask(word x, uintptr_t want) {   // the cask's bytes, or NULL
  if (charmp(x) || ((union u*) x)->ap != lvm_cask) return NULL;
- struct ai_str *s = ((struct ai_cask*) x)->str;
+ struct str *s = ((struct cask*) x)->str;
  return s && s->len == want ? s : NULL; }
 
 // h[words] then the 8-byte count, both big-endian, at the front of the state
@@ -544,7 +545,7 @@ static void dig_st(uint8_t *st, const uint32_t *h, int words, uint64_t len) {
 // (X-init b) -> b, carrying the standard's initial state and nothing fed | () on
 // anything that is not a cask of X's width
 static word dig_init(word x, const struct digspec *d) {
- struct ai_str *s = dig_cask(x, d->st);
+ struct str *s = dig_cask(x, d->st);
  if (!s) return ZeroPoint;
  uint8_t *st = (uint8_t*) s->bytes;
  uint32_t h[16];
@@ -557,9 +558,9 @@ static word dig_init(word x, const struct digspec *d) {
 // a block stays in the remainder and rides to the next feed, which is the whole point
 // -- a caller reads by the gulp and never has to think in blocks.
 static word dig_feed(word x, word a, const struct digspec *d) {
- struct ai_str *cs = dig_cask(x, d->st);
+ struct str *cs = dig_cask(x, d->st);
  if (!cs || !strp(a)) return ZeroPoint;
- struct ai_str *in = (struct ai_str*) a;
+ struct str *in = (struct str*) a;
  uint8_t *st = (uint8_t*) cs->bytes;
  unsigned remoff = 4 * d->words + 8;
  uint32_t h[16];
@@ -573,8 +574,8 @@ static word dig_feed(word x, word a, const struct digspec *d) {
 
 // (X-done b) -> the hex digest | (). the pad is the one-shot's, over the remainder
 // rather than the message tail; b is left spent, not reusable.
-static ai_noinline struct ai *dig_done(struct ai *g, const struct digspec *d) {
- struct ai_str *cs = dig_cask(g->sp[0], d->st);
+static love_noinline struct g *dig_done(struct g *g, const struct digspec *d) {
+ struct str *cs = dig_cask(g->sp[0], d->st);
  if (!cs) return g->sp[0] = ZeroPoint, g;
  uint8_t *st = (uint8_t*) cs->bytes;
  unsigned remoff = 4 * d->words + 8;
@@ -588,10 +589,10 @@ static ai_noinline struct ai *dig_done(struct ai *g, const struct digspec *d) {
 
 // one digest's three lvm entry points, told apart by the row they pass
 #define DigNifs(nm, spec) \
- static struct ai *host_##nm##_done(struct ai *g) { return dig_done(g, &spec); } \
+ static struct g *host_##nm##_done(struct g *g) { return dig_done(g, &spec); } \
  static lvm(lvm_##nm##_done) LvmCall(g, host_##nm##_done) \
- static lvm(lvm_##nm##_init) { Sp[0] = dig_init(Sp[0], &spec); ai_musttail return Next(1); } \
- static lvm(lvm_##nm##_feed) { Sp[1] = dig_feed(Sp[0], Sp[1], &spec); ai_musttail return Nextp(1, 1); }
+ static lvm(lvm_##nm##_init) { Sp[0] = dig_init(Sp[0], &spec); love_musttail return Next(1); } \
+ static lvm(lvm_##nm##_feed) { Sp[1] = dig_feed(Sp[0], Sp[1], &spec); love_musttail return Nextp(1, 1); }
 DigNifs(sha, dig_sha)
 DigNifs(md5, dig_md5)
 DigNifs(sha1, dig_sha1)
@@ -612,7 +613,7 @@ static void b2_st(uint8_t *st, const uint64_t h[8], uint64_t t) {
 
 // (blake2b-init b n) -> b, set for an n-byte digest (1..64) | ()
 static word host_b2_init(word x, word n) {
- struct ai_str *s = dig_cask(x, B2St);
+ struct str *s = dig_cask(x, B2St);
  if (!s || !charmp(n) || getcharm(n) < 1 || getcharm(n) > 64) return ZeroPoint;
  uint8_t *st = (uint8_t*) s->bytes;
  uint64_t h[8];
@@ -623,9 +624,9 @@ static word host_b2_init(word x, word n) {
  return x; }
 
 static word host_b2_feed(word x, word a) {
- struct ai_str *cs = dig_cask(x, B2St);
+ struct str *cs = dig_cask(x, B2St);
  if (!cs || !strp(a)) return ZeroPoint;
- struct ai_str *in = (struct ai_str*) a;
+ struct str *in = (struct str*) a;
  uint8_t *st = (uint8_t*) cs->bytes;
  uint64_t h[8], t;
  b2_ld(st, h, &t);
@@ -634,8 +635,8 @@ static word host_b2_feed(word x, word a) {
  b2_st(st, h, t);
  return x; }
 
-static ai_noinline struct ai *host_b2_done(struct ai *g) {
- struct ai_str *cs = dig_cask(g->sp[0], B2St);
+static love_noinline struct g *host_b2_done(struct g *g) {
+ struct str *cs = dig_cask(g->sp[0], B2St);
  if (!cs) return g->sp[0] = ZeroPoint, g;
  uint8_t *st = (uint8_t*) cs->bytes;
  uint64_t h[8], t;
@@ -646,15 +647,15 @@ static ai_noinline struct ai *host_b2_done(struct ai *g) {
 
 static lvm(lvm_b2_init) {
  Sp[1] = host_b2_init(Sp[0], Sp[1]);
- ai_musttail return Nextp(1, 1); }
+ love_musttail return Nextp(1, 1); }
 static lvm(lvm_b2_feed) {
  Sp[1] = host_b2_feed(Sp[0], Sp[1]);
- ai_musttail return Nextp(1, 1); }
+ love_musttail return Nextp(1, 1); }
 static lvm(lvm_b2_done) LvmCall(g, host_b2_done)
 
 // (sha3-init b bits shake) -> b, set for a bits-long digest | ()
 static word host_k3_init(word x, word bw, word sw) {
- struct ai_str *s = dig_cask(x, K3St);
+ struct str *s = dig_cask(x, K3St);
  if (!s || !charmp(bw) || getcharm(bw) < 8 || getcharm(bw) > 512) return ZeroPoint;
  uint8_t *st = (uint8_t*) s->bytes;
  intptr_t bits = getcharm(bw);
@@ -665,15 +666,15 @@ static word host_k3_init(word x, word bw, word sw) {
  return x; }
 
 static word host_k3_feed(word x, word a) {
- struct ai_str *cs = dig_cask(x, K3St);
+ struct str *cs = dig_cask(x, K3St);
  if (!cs || !strp(a) || !((uint8_t*) cs->bytes)[201]) return ZeroPoint;
- struct ai_str *in = (struct ai_str*) a;
+ struct str *in = (struct str*) a;
  uint8_t *st = (uint8_t*) cs->bytes;
  st[200] = (uint8_t) k_feed(st, st[200], st[201], (const uint8_t*) in->bytes, (uintptr_t) in->len);
  return x; }
 
-static ai_noinline struct ai *host_k3_done(struct ai *g) {
- struct ai_str *cs = dig_cask(g->sp[0], K3St);
+static love_noinline struct g *host_k3_done(struct g *g) {
+ struct str *cs = dig_cask(g->sp[0], K3St);
  if (!cs || !((uint8_t*) cs->bytes)[201]) return g->sp[0] = ZeroPoint, g;
  uint8_t *st = (uint8_t*) cs->bytes;
  char hex[129];
@@ -682,16 +683,16 @@ static ai_noinline struct ai *host_k3_done(struct ai *g) {
 
 static lvm(lvm_k3_init) {
  Sp[2] = host_k3_init(Sp[0], Sp[1], Sp[2]);
- ai_musttail return Nextp(1, 2); }
+ love_musttail return Nextp(1, 2); }
 static lvm(lvm_k3_feed) {
  Sp[1] = host_k3_feed(Sp[0], Sp[1]);
- ai_musttail return Nextp(1, 1); }
+ love_musttail return Nextp(1, 1); }
 static lvm(lvm_k3_done) LvmCall(g, host_k3_done)
 
-ai_noinline static word host_ck_feed(word x, word a) {
- struct ai_str *cs = dig_cask(x, CkSt);
+love_noinline static word host_ck_feed(word x, word a) {
+ struct str *cs = dig_cask(x, CkSt);
  if (!cs || !strp(a)) return ZeroPoint;
- struct ai_str *in = (struct ai_str*) a;
+ struct str *in = (struct str*) a;
  uint8_t *st = (uint8_t*) cs->bytes;
  uint32_t c;
  uint64_t len;
@@ -702,8 +703,8 @@ ai_noinline static word host_ck_feed(word x, word a) {
  dig_st(st, &c, 1, len);
  return x; }
 
-ai_noinline static word host_ck_done(word x) {
- struct ai_str *cs = dig_cask(x, CkSt);
+love_noinline static word host_ck_done(word x) {
+ struct str *cs = dig_cask(x, CkSt);
  if (!cs) return ZeroPoint;
  uint8_t *st = (uint8_t*) cs->bytes;
  uint32_t c;
@@ -714,17 +715,17 @@ ai_noinline static word host_ck_done(word x) {
 // cksum streams with no block and no remainder: its walk is a byte at a time, so the
 // whole state is the register and the count.
 static lvm(lvm_ck_init) {                      // (cksum-init b) -> b zeroed | (): the cask, never a pointer into it
- struct ai_str *s = dig_cask(Sp[0], CkSt);
+ struct str *s = dig_cask(Sp[0], CkSt);
  if (!s) Sp[0] = ZeroPoint; else memset(s->bytes, 0, CkSt);
- ai_musttail return Next(1); }
+ love_musttail return Next(1); }
 
 static lvm(lvm_ck_feed) {
  Sp[1] = host_ck_feed(Sp[0], Sp[1]);
- ai_musttail return Nextp(1, 1); }
+ love_musttail return Nextp(1, 1); }
 
 static lvm(lvm_ck_done) {
  Sp[0] = host_ck_done(Sp[0]);
- ai_musttail return Next(1); }
+ love_musttail return Next(1); }
 
 #define Nif1(nm, f) static union u const nm[] = {{f}, {lvm_ret0}};
 #define Nif2(nm, f) static union u const nm[] = {{lvm_cur}, {.x = putcharm(2)}, {f}, {lvm_ret0}};
