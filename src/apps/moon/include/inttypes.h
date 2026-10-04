@@ -1,5 +1,5 @@
-#ifndef _AI_INTTYPES_H
-#define _AI_INTTYPES_H
+#ifndef _LOVE_INTTYPES_H
+#define _LOVE_INTTYPES_H
 /* freestanding inttypes for cc: the fixed-width types come from stdint, plus the
  * PRI format macros and the strtoimax/strtoumax conversions programs call. */
 #include <stdint.h>

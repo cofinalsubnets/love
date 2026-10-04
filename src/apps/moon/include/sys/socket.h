@@ -1,5 +1,5 @@
-#ifndef _AI_SYS_SOCKET_H
-#define _AI_SYS_SOCKET_H
+#ifndef _LOVE_SYS_SOCKET_H
+#define _LOVE_SYS_SOCKET_H
 typedef unsigned int socklen_t;
 typedef unsigned short sa_family_t;
 struct sockaddr { sa_family_t sa_family; char sa_data[14]; };

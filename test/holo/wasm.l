@@ -110,32 +110,32 @@
    _ (puts ("test/holo/wasm: wrote out/.holo2.wasm, " + show #(wasm-emit m2) + " bytes\n"))
 
    ;; rung 3, the environment: a mock of the artifact's face for src/inle/wasm/loader.js --
-   ;; the verbs the page calls, over the one import, __ai_sys with linux's numbers. [16] is the
-   ;; out buffer's length and 4096 the buffer; [24] the bump pointer malloc rides; ai_init asks
-   ;; the clock (228) and the kernel probe (20, which must say linux: -EBADF); ai_eval copies
-   ;; its text into the buffer and write(1)s it; ai_grow mmaps a page and lands a word on it.
+   ;; the verbs the page calls, over the one import, __love_sys with linux's numbers. [16] is the
+   ;; out buffer's length and 4096 the buffer; [24] the bump pointer malloc rides; init asks
+   ;; the clock (228) and the kernel probe (20, which must say linux: -EBADF); eval copies
+   ;; its text into the buffer and write(1)s it; grow mmaps a page and lands a word on it.
    malloc-ir '((li r1 24) (ld r2 r1 0) (add r3 r2 r0) (add r3 r3 15) (and r3 r3 -16) (st r1 0 r3) (mov r0 r2) (ret))
    free-ir '((ret))
-   init-ir '((li r0 228) (li r1 1) (li r2 32) (call __ai_sys) (mov r3 r0)
-             (li r0 20) (li r1 -1) (call __ai_sys) (cmp r0 -9) (br ne bad) (mov r0 r3) (ret)
+   init-ir '((li r0 228) (li r1 1) (li r2 32) (call __love_sys) (mov r3 r0)
+             (li r0 20) (li r1 -1) (call __love_sys) (cmp r0 -9) (br ne bad) (mov r0 r3) (ret)
              (label bad) (li r0 1) (ret))
    eval-ir '((li r1 16) (ld r2 r1 0)
              (label top) (ldu1 r3 r0 0) (cmp r3 0) (br eq done)
              (li r4 4096) (add r4 r4 r2) (st1 r4 0 r3) (inc r2) (inc r0) (jmp top)
              (label done) (st r1 0 r2)
-             (li r0 1) (li r1 1) (li r2 4096) (li r3 16) (ld r3 r3 0) (call __ai_sys)
+             (li r0 1) (li r1 1) (li r2 4096) (li r3 16) (ld r3 r3 0) (call __love_sys)
              (li r0 0) (ret))
    optr-ir '((li r0 4096) (ret))
    olen-ir '((li r1 16) (ld r0 r1 0) (ret))
    oreset-ir '((li r1 16) (li r2 0) (st r1 0 r2) (li r0 0) (ret))
-   exit-ir '((mov r1 r0) (li r0 231) (call __ai_sys) (ret))
-   grow-ir '((li r0 9) (li r1 0) (li r2 65536) (li r3 3) (li r4 34) (li r5 -1) (li r6 0) (call __ai_sys)
+   exit-ir '((mov r1 r0) (li r0 231) (call __love_sys) (ret))
+   grow-ir '((li r0 9) (li r1 0) (li r2 65536) (li r3 3) (li r4 34) (li r5 -1) (li r6 0) (call __love_sys)
              (mov r1 r0) (li r2 77) (st r1 0 r2) (ld r0 r1 0) (ret))
-   p3 {'imports '(("env" "__ai_sys" 7))
-       'fns [['malloc 1 malloc-ir] ['free 1 free-ir] ['ai_init 0 init-ir] ['ai_eval 1 eval-ir]
-             ['ai_out_ptr 0 optr-ir] ['ai_out_len 0 olen-ir] ['ai_out_reset 0 oreset-ir]
-             ['ai_exit 1 exit-ir] ['ai_grow 0 grow-ir]]
-       'exports '(malloc free ai_init ai_eval ai_out_ptr ai_out_len ai_out_reset ai_exit ai_grow)
+   p3 {'imports '(("env" "__love_sys" 7))
+       'fns [['malloc 1 malloc-ir] ['free 1 free-ir] ['init 0 init-ir] ['eval 1 eval-ir]
+             ['out_ptr 0 optr-ir] ['out_len 0 olen-ir] ['out_reset 0 oreset-ir]
+             ['love_exit 1 exit-ir] ['grow 0 grow-ir]]
+       'exports '(malloc free init eval out_ptr out_len out_reset love_exit grow)
        'memory '(2 8)
        'data '((24 0 0 1 0 0 0 0 0))}                     ; the bump pointer starts at 65536
    m3 (wasm-program p3)

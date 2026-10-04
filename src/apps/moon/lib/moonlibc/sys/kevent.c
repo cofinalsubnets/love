@@ -8,8 +8,8 @@
  * twin (STKFLT, PWR) refuses EINVAL. */
 int kevent(int kq, struct kevent const *ch, int nch,
            struct kevent *ev, int nev, struct timespec const *ts) {
-  if (__ai_osv < 2) { __errno_v = ENOSYS; return -1; }
-  int nb = __ai_osv == 3;
+  if (__love_osv < 2) { __errno_v = ENOSYS; return -1; }
+  int nb = __love_osv == 3;
   long nr = nb ? 435 : NR_fb_kevent;   /* __kevent50 */
   /* changes first (chunked through the translation buffer, no timeout leg),
    * then the wait -- the order one kernel call keeps. */
@@ -19,7 +19,7 @@ int kevent(int kq, struct kevent const *ch, int nch,
     for (int i = 0; i < k; i++) {
       struct kevent const *c = ch + at + i;
       long id = (long) c->ident;
-      if (c->filter == EVFILT_SIGNAL && (id = __ai_sigfb(id)) < 0) {
+      if (c->filter == EVFILT_SIGNAL && (id = __love_sigfb(id)) < 0) {
         __errno_v = EINVAL; return -1; }
       if (nb) {
         nc[i].ident = (unsigned long) id;
@@ -36,7 +36,7 @@ int kevent(int kq, struct kevent const *ch, int nch,
     if (got < 0) return -1;
     for (long i = 0; i < got; i++)
       if (ev[i].filter == EVFILT_SIGNAL)
-        ev[i].ident = (unsigned long) __ai_sigcan((long) ev[i].ident); }
+        ev[i].ident = (unsigned long) __love_sigcan((long) ev[i].ident); }
   else {
     /* through the repack buffer: up to 8 a call (fewer than asked is a legal
      * kevent answer; a hungrier caller loops) */
@@ -46,7 +46,7 @@ int kevent(int kq, struct kevent const *ch, int nch,
     for (long i = 0; i < got; i++) {
       long f = -(long) no[i].filter - 1;
       long id = (long) no[i].ident;
-      if (f == EVFILT_SIGNAL) id = __ai_sigcan(id);
+      if (f == EVFILT_SIGNAL) id = __love_sigcan(id);
       ev[i].ident = (unsigned long) id; ev[i].filter = (short) f;
       ev[i].flags = (unsigned short) no[i].flags; ev[i].fflags = no[i].fflags;
       ev[i].data = no[i].data; ev[i].udata = no[i].udata;

@@ -1,5 +1,5 @@
-#ifndef _AI_SYS_SIGNALFD_H
-#define _AI_SYS_SIGNALFD_H
+#ifndef _LOVE_SYS_SIGNALFD_H
+#define _LOVE_SYS_SIGNALFD_H
 #include <signal.h>
 #define SFD_CLOEXEC  524288
 #define SFD_NONBLOCK   2048

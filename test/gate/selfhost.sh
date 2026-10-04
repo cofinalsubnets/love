@@ -5,7 +5,7 @@
 # linker it did not write. x86-64 only.
 #
 # the objects are moonlibc's all through (mooncc predefines __moonlibc__, and posix.c
-# takes kqueue, sysctl and __ai_birth from it), so moonlibc is what they link against --
+# takes kqueue, sysctl and __love_birth from it), so moonlibc is what they link against --
 # compiled member by member into an archive, so ld takes a member only where a symbol
 # asks. crt0 is mooncc's own, laid with a _start the ld can name, and sys.o is mksys's,
 # as test_raw lays it. the load table rides love_data.ld; the -pie reloc table is empty.
@@ -24,7 +24,7 @@ mkdir -p "$d/obj" "$d/libc"
 rm -f "$d/obj/"*.o "$d/libc/"*.o "$d/libmoon.a"
 
 for f in $gate_love_c $gate_host_c $gate_seat_c; do
-  "$m" mooncc -D ai_tco=1 -I"$ho" -I. -Isrc/love -Isrc/inle -Iout/lib -c "$f" "$d/obj/`basename $f .c`.o" \
+  "$m" mooncc -D tco=1 -I"$ho" -I. -Isrc/love -Isrc/inle -Iout/lib -c "$f" "$d/obj/`basename $f .c`.o" \
     || fail "mooncc -c $f"
 done
 "$m" mooncc -Isrc/apps/moon/include -c src/apps/moon/lib/moonlibc/math/lm.c "$d/obj/lm.o" || fail "mooncc -c lm.c"
@@ -36,7 +36,7 @@ done
 ar rcs "$d/libmoon.a" "$d/libc/"*.o || fail "ar the libc"
 
 { echo "(borrow 'posix) (borrow 'holo)"
-  echo "(: b (string (objelf 'x64 (['label '_start] . (cite 'moon 'crt0)) () '(\"_start\" \"__ai_start\") () '(\"__ai_start\") () () () () ()))"
+  echo "(: b (string (objelf 'x64 (['label '_start] . (cite 'moon 'crt0)) () '(\"_start\" \"__love_start\") () '(\"__love_start\") () () () () ()))"
   echo "   q (open \"$d/crt0.o\" \"w\") (: _ (say q b) (close q)))"
 } | "$m" || fail "lay crt0.o"
 { cat src/apps/kore/text.l src/apps/kore/u.l src/apps/kore/asbook.l src/love/holo/elf.l src/love/holo/obj.l src/apps/moon/lib/mksys.l

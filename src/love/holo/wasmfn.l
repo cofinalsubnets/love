@@ -158,7 +158,7 @@
    (w-ret _) (w-uni? 0 ? '((local.get 0) (local.get 1) (local.get 8) (local.get 9) (return)) '((local.get 0) (return)))
 
    ;; -- one IR form, in segment depth d. what stays refused: sys (the wasm kernel is an import,
-   ;;    __ai_sys, and nothing here issues it), tp, raw (inline asm), the 128-bit lane. --
+   ;;    __love_sys, and nothing here issues it), tp, raw (inline asm), the 128-bit lane. --
    (w-ins f d)
     (<f @
      'li   (w-val (f 2) + w-set (f 1))

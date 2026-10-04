@@ -232,14 +232,14 @@ static void gcm_tag(const struct aes_ks *s, const uint8_t iv[12], const uint8_t 
 // str0 can collect, so the result is allocated first and the arguments re-read
 // off the stack after it: the pointers a C local held are stale across the bump.
 // FIXME why is this noinline?
-static ai_inline struct ai *host_chacha20(struct ai *g) {
+static love_inline struct g *host_chacha20(struct g *g) {
  word kw = g->sp[0], nw = g->sp[1], cw = g->sp[2], tw = g->sp[3];
  if (!strp(kw) || !strp(nw) || !strp(tw) || !oddp(cw)
      || len(kw) != 32 || len(nw) != 12 || getcharm(cw) < 0) {
   g->sp[3] = ZeroPoint, g->sp += 3; return g; }
  uintptr_t n = len(tw);
  uint32_t ctr = (uint32_t) getcharm(cw);
- if (!ai_ok(g = str0(g, n))) return g;             // pushes: out over the four args
+ if (!ok(g = str0(g, n))) return g;             // pushes: out over the four args
  cc_xor((const uint8_t*) txt(g->sp[1]), (const uint8_t*) txt(g->sp[2]), ctr,
         (const uint8_t*) txt(g->sp[4]), (uint8_t*) txt(g->sp[0]), n);
  g->sp[4] = g->sp[0], g->sp += 4;
@@ -247,14 +247,14 @@ static ai_inline struct ai *host_chacha20(struct ai *g) {
 
 static lvm(lvm_chacha20) LvmCall(g, host_chacha20)
 
-ai_noinline static struct ai *host_poly1305(struct ai *g) {
+love_noinline static struct g *host_poly1305(struct g *g) {
  word kw = g->sp[0], mw = g->sp[1];
  if (!strp(kw) || !strp(mw) || len(kw) != 32)
   return g->sp[1] = ZeroPoint, g->sp += 1, g;
  uintptr_t n = len(mw);
  uint8_t tag[16];
  po_mac((const uint8_t*) txt(kw), (const uint8_t*) txt(mw), n, tag);
- if (!ai_ok(g = str0(g, 16))) return g;            // pushes: tag over the two args
+ if (!ok(g = str0(g, 16))) return g;            // pushes: tag over the two args
  memcpy(txt(g->sp[0]), tag, 16);
  g->sp[2] = g->sp[0], g->sp += 2;
  return g; }
@@ -263,11 +263,11 @@ static lvm(lvm_poly1305) LvmCall(g, host_poly1305)
 // (aes-gcm-seal key iv aad pt) -> ct and its 16-byte tag; (aes-gcm-open key iv aad ctag)
 // -> pt, or () when the tag does not hold -- checked before a byte is deciphered. a key
 // of 16 or 32 bytes, a 12-byte iv; anything else is () too
-static int gcm_args(struct ai *g, int open) {
+static int gcm_args(struct g *g, int open) {
  word kw = g->sp[0], iw = g->sp[1], aw = g->sp[2], tw = g->sp[3];
  return strp(kw) && strp(iw) && strp(aw) && strp(tw) && (len(kw) == 16 || len(kw) == 32)
      && len(iw) == 12 && (!open || len(tw) >= 16); }
-ai_noinline static struct ai *host_gcm(struct ai *g, int open) {
+love_noinline static struct g *host_gcm(struct g *g, int open) {
  if (!gcm_args(g, open)) return g->sp[3] = ZeroPoint, g->sp += 3, g;
  struct aes_ks s;
  aes_expand(&s, (const uint8_t*) txt(g->sp[0]), (int) len(g->sp[0]));
@@ -278,7 +278,7 @@ ai_noinline static struct ai *host_gcm(struct ai *g, int open) {
           (const uint8_t*) txt(g->sp[3]), n, tag);
   for (int i = 0; i < 16; i++) d |= tag[i] ^ (uint8_t) txt(g->sp[3])[n + i];
   if (d) return g->sp[3] = ZeroPoint, g->sp += 3, g; }
- if (!ai_ok(g = str0(g, n + (open ? 0 : 16)))) return g;   // pushes: out over the four args
+ if (!ok(g = str0(g, n + (open ? 0 : 16)))) return g;   // pushes: out over the four args
  uint8_t *o = (uint8_t*) txt(g->sp[0]);
  const uint8_t *iv = (const uint8_t*) txt(g->sp[2]), *in = (const uint8_t*) txt(g->sp[4]);
  gcm_ctr(&s, iv, in, o, n);

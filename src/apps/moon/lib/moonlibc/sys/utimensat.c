@@ -1,7 +1,7 @@
 #include "../impl.h"
 
 int utimensat(int dfd, char const *p, struct timespec const *ts, int fl) {
-  if (__ai_osv == 2) {
+  if (__love_osv == 2) {
     /* freebsd spells the specials -1/-2 where linux says 2^30-1/2^30-2, and
      * AT_SYMLINK_NOFOLLOW wears its bit */
     struct timespec t2[2];
@@ -15,6 +15,6 @@ int utimensat(int dfd, char const *p, struct timespec const *ts, int fl) {
       a = (long) t2; }
     long f2 = (fl & AT_SYMLINK_NOFOLLOW) ? 0x200 : 0;
     return (int) er(sc4(NR_utimensat, dfd, (long) p, a, f2)); }
-  if (__ai_osv == 3 && (fl & AT_SYMLINK_NOFOLLOW))
+  if (__love_osv == 3 && (fl & AT_SYMLINK_NOFOLLOW))
     fl = (fl & ~AT_SYMLINK_NOFOLLOW) | 0x200;   /* netbsd's bit; its specials are linux's */
   return (int) er(sc4(NR_utimensat, dfd, (long) p, (long) ts, fl)); }

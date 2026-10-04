@@ -1,4 +1,4 @@
-/* always_inline honored (the ai_inline lever): a marked static splices at any
+/* always_inline honored (the love_inline lever): a marked static splices at any
  * size -- multi-return if-chains, loops, switches -- and noinline bars the
  * table by name. splices NEST to depth 3, so a marked chain flattens; an &
  * -taking arg or body declines back to the real call; a struct-returning call
@@ -14,7 +14,7 @@
 struct zn { double re, im; };
 static struct zn zmk(double a, double b) { struct zn z; z.re = a; z.im = b; return z; }
 
-/* multi-return if-chain (the ai_nilp shape) */
+/* multi-return if-chain (the nilp shape) */
 AI int nilp(long x) {
  if (x == 0) return 1;
  if (x & 1) return x < 0;

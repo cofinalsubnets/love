@@ -51,7 +51,7 @@
    ms (clock t0)
    _ (test (charm? pid) (0 < pid)
              (ms < 500))             ; a blocking door sits here for the child's whole nap
-   _ (close w)                       ; ai_io_wflush: the residue lands before the fd dies
+   _ (close w)                       ; io_wflush: the residue lands before the fd dies
    _ (wait pid))
 
 (puts "run rung4: ok\n")

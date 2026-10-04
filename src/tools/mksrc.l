@@ -5,8 +5,8 @@
 ;
 ; the object holds two symbols in .rodata and nothing else:
 ;
-;   ai_srctree_len   an 8-byte little-endian length, at offset 0 (so it is 8-aligned)
-;   ai_srctree       the container's bytes, right behind it
+;   srctree_len   an 8-byte little-endian length, at offset 0 (so it is 8-aligned)
+;   srctree       the container's bytes, right behind it
 ;
 ; a link that takes no such object names src/love/noblob.c, whose zero length says none
 ; is carried.
@@ -43,7 +43,7 @@
    (mksrc-wasm dst forms s)
     (: q (open dst "w")
        _ (!(hot? q) ? (mksrc-die ("cannot write " + dst)))
-       t (show [() forms () '("ai_srctree" "ai_srctree_len") () () () () () () () ()])
+       t (show [() forms () '("srctree" "srctree_len") () () () () () () () ()])
        (say q ("wo1 " + show #t + " " + show #s + "\n" + t + s), close q))
 
    (mksrc arch src dst)
@@ -55,10 +55,10 @@
        _ (n < 1 ? (mksrc-die (src + " is empty")))
        ; the container rides as a BLOB -- the string itself, one item carrying every byte
        ; (holo.l's item-len) -- through lay, the walk and the write, on either lane
-       forms ['(label ai_srctree_len) ['raw (mksrc-le8 n 0 ())]
-              '(label ai_srctree)     ['raw [(arch = 'wasm ? '(blob 0) s)]]]
+       forms ['(label srctree_len) ['raw (mksrc-le8 n 0 ())]
+              '(label srctree)     ['raw [(arch = 'wasm ? '(blob 0) s)]]]
        (arch = 'wasm ? (mksrc-wasm dst forms s)
-        (write-bytes dst (objelf arch () () () '("ai_srctree" "ai_srctree_len") () () () () () forms))))
+        (write-bytes dst (objelf arch () () () '("srctree" "srctree_len") () () () () () forms))))
 
    ; argv's head is this script's own path. the arch arrives as text and `name` interns it
    ; to the symbol the backend table is keyed by (a `mint` would be == to nothing)

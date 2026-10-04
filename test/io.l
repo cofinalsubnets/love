@@ -62,7 +62,7 @@
       txt = rd)) 1)
 
   ; --- chug and unchug: the run, and the run put back ---------------------------
-  ; unchug rewinds rpos, which is at once the reader's position and what ai_io_pending
+  ; unchug rewinds rpos, which is at once the reader's position and what io_pending
   ; counts, so bytes given back are bytes stdin's seek-back sees again.
   ; on a file, never on `in`: a real read of `in` eats the corpus feeding this suite.
   (files ? (: pth "/tmp/l-io-unchug"

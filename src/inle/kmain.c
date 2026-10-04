@@ -19,7 +19,7 @@ static uintptr_t k_ticks_for(uintptr_t ms) { return (ms + k_tick_ms - 1) / k_tic
 uintptr_t khhdm;
 // the window that runs: the hhdm carries NX for the whole higher half (src/inle/mkboot.l),
 // so the identity map is the same pages without the bit, which is what code needs.
-char *ai_code_window(char *p) { return (char*)((uintptr_t) p - khhdm); }
+char *code_window(char *p) { return (char*)((uintptr_t) p - khhdm); }
 
 #include "ffalloc.h"
 static struct mem *kmem;
@@ -73,7 +73,7 @@ static struct font const kface = { (uint8_t const*) cleat_8x16, 8, 16 };
 
 
 // the seat hooks src/love/fd.c branches to on a negative osv (weak no-ops there)
-void k_row_close(int fd), k_sleep(uintptr_t ms), k_wait_fds(struct ai_wait_fd*, int, uintptr_t),
+void k_row_close(int fd), k_sleep(uintptr_t ms), k_wait_fds(struct wait_fd*, int, uintptr_t),
      k_seat_init(void);                // src/inle/sys.c: arm environ + the std streams
 bool k_ready(int fd, int events);
 
@@ -83,10 +83,10 @@ void kputc(int c) { if (kcb) cb_putc(kcb, (char) c); serial_putc(c); }
 void kputs(char const *s) { bput_s(kputc, s); }
 void kputn(uintptr_t n, int base) { bput_n(kputc, n, (unsigned) base); }
 // the kernel-only nif bracket (defs[] below); the linker synthesizes the pair
-extern struct ai_def const __start_ai_knifs[], __stop_ai_knifs[];
+extern struct def const __start_knifs[], __stop_knifs[];
 // the bracket, for the image codec's nif slice (src/love/snap.c's weak default answers none)
-uintptr_t ai_knifs_slice(struct ai_def const **s) {
-  return *s = __start_ai_knifs, (uintptr_t)(__stop_ai_knifs - __start_ai_knifs); }
+uintptr_t knifs_slice(struct def const **s) {
+  return *s = __start_knifs, (uintptr_t)(__stop_knifs - __start_knifs); }
 // the metal image's far edge, patched into the file by the projection (src/tools/kproject.l):
 // the flat link's kimage_end. unpatched, the memmap excludes nothing and the heap eats it.
 uintptr_t const k_image_top = 1;
@@ -116,7 +116,7 @@ struct k_boot kboot;
 #define kb_flag_shift (kb_flag_lshift|kb_flag_rshift)
 
 // --- vfs-shaped source table ----------------------------------------------
-// k_sources[] holds per-fd vtables and ai_fd_port_vt routes each call through k_sources[fd].
+// k_sources[] holds per-fd vtables and love_fd_port_vt routes each call through k_sources[fd].
 // a NULL slot is "no method" and the dispatcher skips it: writes discard, reads answer the
 // end, ready answers false. `state` is per-instance scratch, a ramfs fd's handle. the table
 // grows in the kernel's own heap through k_source_open, up to k_fd_most rows.
@@ -230,12 +230,12 @@ static struct k_source *k_sources = k_boot;
 static int k_sources_n = (int) countof(k_boot);
 
 // the row for fd, or NULL -- the file's one bounds check; no dispatcher carries a limit.
-static ai_inline struct k_source *k_source(int fd) {
+static love_inline struct k_source *k_source(int fd) {
  return fd >= 0 && fd < k_sources_n ? &k_sources[fd] : NULL; }
 
 // in range is not open: a closed row is zeroed where it stands, never removed, so k_source
 // keeps answering it. carrying any method at all is what live means.
-static ai_inline bool k_row_live(int fd) {
+static love_inline bool k_row_live(int fd) {
  struct k_source const *s = k_source(fd);
  return s && (s->readn || s->writen || s->putc || s->flush || s->ready || s->close); }
 
@@ -259,12 +259,12 @@ static struct k_source *k_source_open(int fd) {
 
 // --- rung 4: a task's stdio ---------------------------------------------------
 // a task wears a chain (i o e) of real ports (prel's `wear`, hook 6) and io_route swaps
-// the folded in/b/err for them, so ai_io_fd already answers the row: nothing to translate.
+// the folded in/b/err for them, so io_fd already answers the row: nothing to translate.
 
 // the running task's pid: the run ring's head is the running task (love.c), its pid at
 // node[2]. the main task wears the zero point and reads 0, which no spawned pid can be.
-static ai_inline intptr_t k_cur_pid(struct ai *g) {
- union u *t = ai_core_of(g)->tasks;
+static love_inline intptr_t k_cur_pid(struct g *g) {
+ union u *t = core_of(g)->tasks;
  return t && (t[2].x & 1) ? getcharm(t[2].x) : 0; }
 
 // the row-level motions, on an already-resolved fd -- the port dispatchers below resolve
@@ -282,13 +282,13 @@ intptr_t k_row_write(int fd, unsigned char const *src, uintptr_t n) {
  for (uintptr_t k = 0; k < n; k++) s->putc(fd, src[k]);
  return (intptr_t) n; }
 
-// the port lanes ai_fd_port_vt (src/love/fd.c) takes on a negative osv: the seat translation,
+// the port lanes love_fd_port_vt (src/love/fd.c) takes on a negative osv: the seat translation,
 // then the rows. busy and end are distinct here, which read(2) cannot carry.
-intptr_t k_port_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
- return k_row_read((int) ai_io_fd(g->io), dst, n); }
+intptr_t k_port_readn(struct g *g, unsigned char *dst, uintptr_t n) {
+ return k_row_read((int) io_fd(g->io), dst, n); }
 
-struct ai *k_port_writen(struct ai *g, unsigned char const *src, uintptr_t n) {
- return g->b = k_row_write((int) ai_io_fd(g->io), src, n), g; }
+struct g *k_port_writen(struct g *g, unsigned char const *src, uintptr_t n) {
+ return g->b = k_row_write((int) io_fd(g->io), src, n), g; }
 
 // src/inle/sys.c's door: the POSIX shapes over the same rows. the port layer says end with -1
 // and read(2) with 0, so the ends are translated here and not in the syscall table.
@@ -309,13 +309,13 @@ long k_fd_close(int fd) {
  k_row_close(fd);
  return 0; }
 
-struct ai *k_port_flush(struct ai *g) {
- int fd = (int) ai_io_fd(g->io);
+struct g *k_port_flush(struct g *g) {
+ int fd = (int) io_fd(g->io);
  struct k_source *s = k_source(fd);
  if (s && s->flush) s->flush(fd);
  return g; }
 
-// ai_fd_close's inle lane (src/love/fd.c). statics have NULL close -- nothing to release.
+// love_fd_close's inle lane (src/love/fd.c). statics have NULL close -- nothing to release.
 void k_row_close(int fd) {
  struct k_source *s = k_source(fd);
  if (s && s->close) s->close(fd); }
@@ -323,7 +323,7 @@ void k_row_close(int fd) {
 // no write-direction probe: a row that can take a byte can always take one, so out is ready
 bool k_ready(int fd, int events) {
  if (fd < 0) return true;
- if (events != ai_wait_in) return true;
+ if (events != wait_in) return true;
  struct k_source *s = k_source(fd);
  return s && s->ready && s->ready(fd); }
 
@@ -338,7 +338,7 @@ static void k_park(void) {
   k_horn_poll();
   k_wait(); }
 
-void k_wait_fds(struct ai_wait_fd *fds, int n, uintptr_t ms) {
+void k_wait_fds(struct wait_fd *fds, int n, uintptr_t ms) {
   if (n <= 0) { k_sleep(ms); return; }
   k_tick_sync();
   uintptr_t deadline = kticks + k_ticks_for(ms);
@@ -482,18 +482,18 @@ void kfree(void *p) { ff_free(&kmem, p); }
 // --- the ramfs: the baked tree, and the copies writes make -----------------
 // the initrd is read-only bytes and one row per file. reads come straight off it; the first
 // write copies that file into the kernel heap and the entry reads the copy ever after.
-// kmallocw/kfree rather than ai_alloc: a vt method is handed an fd and nothing else, so g
+// kmallocw/kfree rather than alloc: a vt method is handed an fd and nothing else, so g
 // is out of reach at the door that grows a file. ms is the source's baked mtime.
 struct k_file { char const *path, *bytes; uintptr_t len, ms; };
-// the initrd is the source the artifact carries (ai_srctree): its index lays the rows at
+// the initrd is the source the artifact carries (srctree): its index lays the rows at
 // boot, and each section decodes into the kernel heap at the first read of a file in it.
 // such a row has no bytes until then; tree is its place in the index.
 #include "lib/ustar.h"
 #include "lib/srctree.h"
-struct k_brow { struct k_file f; struct ai_tree_row const *tree; };
+struct k_brow { struct k_file f; struct tree_row const *tree; };
 static struct k_brow const *k_bakes;
 static int k_bakes_n;
-static struct ai_tree k_src;
+static struct tree k_src;
 static void *k_grab(uintptr_t n) { return kmallocw(b2w(n)); }
 // the tree's rows live under /love, read-only, so a module loads from bytes the shell
 // cannot have edited. the root holds src/inle/rootfs/, a second tar walked with no prefix.
@@ -506,21 +506,21 @@ static int k_tar_walk(unsigned char const *t, uintptr_t n, struct k_brow *rows, 
   int k = 0;
   for (uintptr_t o = 0; o + 512 <= n && t[o];) {
     unsigned char const *h = t + o;
-    uintptr_t sz = ai_ustar_octal(h + 124, 12);
-    if (ai_ustar_member(h)) {
+    uintptr_t sz = ustar_octal(h + 124, 12);
+    if (ustar_member(h)) {
       if (rows) {
         char nm[256];
-        uintptr_t ln = ai_ustar_name(h, nm, sizeof nm);      // TOP stripped
+        uintptr_t ln = ustar_name(h, nm, sizeof nm);      // TOP stripped
         char *p = kmallocw(b2w(ln + 1));
         if (!p) return -1;
         memcpy(p, nm, ln);
         p[ln] = 0;
         rows[k] = (struct k_brow) { { .path = p, .bytes = (char const *) t + o + 512,
-                                      .len = sz, .ms = 1000 * ai_ustar_octal(h + 136, 12) } };
-        if (ai_ustar_islink(h)) {
+                                      .len = sz, .ms = 1000 * ustar_octal(h + 136, 12) } };
+        if (ustar_islink(h)) {
           char tgt[101], cn[256];
-          tgt[ai_ustar_link(h, tgt, sizeof tgt - 1)] = 0;
-          uintptr_t cl = ai_lnk_canon(p, tgt, cn, sizeof cn);
+          tgt[ustar_link(h, tgt, sizeof tgt - 1)] = 0;
+          uintptr_t cl = lnk_canon(p, tgt, cn, sizeof cn);
           char *q = kmallocw(b2w(cl + 1));
           if (!q) return -1;
           memcpy(q, cn, cl);
@@ -530,11 +530,11 @@ static int k_tar_walk(unsigned char const *t, uintptr_t n, struct k_brow *rows, 
     o += 512 + ((sz + 511) & ~511ull); }
   return k; }
 static bool k_untar(void) {
-  if (!ai_tree_open(&k_src, ai_srctree, ai_srctree_len, k_grab)) return false;
+  if (!tree_open(&k_src, srctree, srctree_len, k_grab)) return false;
   int n1 = (int) k_src.n;
   if (n1 <= 0) return false;
   // the machine's own rows ride a second, plain tar (src/inle/rootfs/ through src/tools/mkrootfs.l)
-  int n2 = ai_rootfs_len ? k_tar_walk(ai_rootfs, ai_rootfs_len, NULL, NULL) : 0;
+  int n2 = rootfs_len ? k_tar_walk(rootfs, rootfs_len, NULL, NULL) : 0;
   if (n2 < 0) return false;
   int n = n1 + n2;
   struct k_brow *rows = kmallocw(b2w((uintptr_t) n * sizeof *rows));
@@ -542,14 +542,14 @@ static bool k_untar(void) {
   if (!rows || !lnks) return false;
   memset(lnks, 0, (uintptr_t) n * sizeof *lnks);
   for (int i = 0; i < n1; i++) {
-    struct ai_tree_row const *r = k_src.rows + i;
+    struct tree_row const *r = k_src.rows + i;
     uintptr_t ln = strlen(r->path);
     char *p = kmallocw(b2w(k_tree_n + 1 + ln + 1));
     if (!p) return false;
     memcpy(p, k_tree, k_tree_n), p[k_tree_n] = '/';
     memcpy(p + k_tree_n + 1, r->path, ln + 1);
     rows[i] = (struct k_brow) { { .path = p, .len = r->len, .ms = 1000 * (uintptr_t) r->mtime }, r }; }
-  if (n2 && k_tar_walk(ai_rootfs, ai_rootfs_len, rows + n1, lnks + n1) != n2) return false;
+  if (n2 && k_tar_walk(rootfs, rootfs_len, rows + n1, lnks + n1) != n2) return false;
   // resolve the rootfs's symlinks against the rows (two passes cover a link to a link), then
   // compact: a dangling or directory link has no bytes to serve.
   for (int pass = 0; pass < 2; pass++)
@@ -579,7 +579,7 @@ static struct k_file const *k_bake_row(int i) {
   return i < k_bakes_n ? &k_bakes[i].f : &k_extra[i - k_bakes_n]; }
 // ..and its bytes: a tree row's section decodes at the first ask, NULL where it will not
 static unsigned char const *k_bake_bytes(int i) {
-  return i < k_bakes_n && k_bakes[i].tree ? ai_tree_bytes(&k_src, k_bakes[i].tree)
+  return i < k_bakes_n && k_bakes[i].tree ? tree_bytes(&k_src, k_bakes[i].tree)
        : (unsigned char const *) k_bake_row(i)->bytes; }
 
 // the tree (rung 2): entries in the kernel heap, one per baked row at first touch, growing
@@ -724,7 +724,7 @@ static uintptr_t k_cwd_n = 4;
 static intptr_t k_canon(char const *p, uintptr_t pn, char *out) {
   uintptr_t n = 0;
   if (!(pn && p[0] == '/')) memcpy(out, k_cwd, n = k_cwd_n);
-  return ai_path_canon(out, n, p, pn, 256); }
+  return path_canon(out, n, p, pn, 256); }
 
 // the tree is nobody's to write: every mutating door refuses the mount and what lies under
 static bool k_ro(char const *cp, uintptr_t cn) {
@@ -750,7 +750,7 @@ static intptr_t ram_readn(int fd, unsigned char *dst, uintptr_t n);
 
 // the handle behind an fd, NULL for a row that is not the ramfs's: `state` is scratch of
 // whatever kind, so the readn method is what says it means a file handle.
-static ai_inline struct k_fh *k_fh(int fd) {
+static love_inline struct k_fh *k_fh(int fd) {
   struct k_source *s = k_source(fd);
   return s && s->readn == ram_readn ? s->state : NULL; }
 
@@ -805,7 +805,7 @@ static intptr_t k_walk(char const *p, uintptr_t pn, char *out, bool leaf) {
       uintptr_t j = i;
       while (j < inn && in[j] != '/') j++;
       if (j == i) break;
-      intptr_t r = ai_path_canon(out, n, in + i, j - i, 256);   // "." and ".." included,
+      intptr_t r = path_canon(out, n, in + i, j - i, 256);   // "." and ".." included,
       if (r < 0) return -ENAMETOOLONG;                          // so ".." lands on the
       n = (uintptr_t) r;                                        // RESOLVED path
       i = j;
@@ -817,7 +817,7 @@ static intptr_t k_walk(char const *p, uintptr_t pn, char *out, bool leaf) {
       if (++hop > k_hops) return -ELOOP;
       // the target is held as written, so it is canonicalized here and loses the leading
       // slash entry paths lack; the rebuilt line wears one, or the walk seeds from the cwd.
-      uintptr_t tn = ai_lnk_canon(out, k_ents[e].to, nx + 1, sizeof nx - 1) + 1;
+      uintptr_t tn = lnk_canon(out, k_ents[e].to, nx + 1, sizeof nx - 1) + 1;
       nx[0] = '/';
       uintptr_t rest = inn - k;
       if (tn + 1 + rest >= sizeof nx) return -ENAMETOOLONG;
@@ -1021,7 +1021,7 @@ static int k_meminfo(char *b) {
   return k_row(b, at, "fs-heap-bytes", bytes); }
 
 // src/love/love.c's lvm_gauge roster, spelled out: the same sixteen, named rather than indexed.
-static int k_gauge(char *b, struct ai const *g) {
+static int k_gauge(char *b, struct g const *g) {
   int at = k_row(b, 0, "pool-words", g->len);
   at = k_row(b, at, "heap-words", (uintptr_t) (g->hp - ptr(g)));
   at = k_row(b, at, "stack-words", (uintptr_t) (ptr(g) + g->len - g->sp));
@@ -1053,9 +1053,9 @@ static int k_bootline(char *b) {
 // entry i's bytes <- the machine, at the open of a read; a refusal leaves the last content
 // standing, a stale row being answerable where a failed open is not.
 static void k_proc_read(int i, int slot) {
-  if (slot == 2 && !ai_system) return;          // no process to ask; meminfo is ours alone
+  if (slot == 2 && !love_system) return;          // no process to ask; meminfo is ours alone
   char b[768];
-  int n = slot == 1 ? k_meminfo(b) : slot == 3 ? k_bootline(b) : k_gauge(b, ai_system);
+  int n = slot == 1 ? k_meminfo(b) : slot == 3 ? k_bootline(b) : k_gauge(b, love_system);
   if (!k_fit(i, (uintptr_t) n)) return;
   memcpy(k_ents[i].bytes, b, (uintptr_t) n);
   k_ents[i].len = (uintptr_t) n; }
@@ -1112,7 +1112,7 @@ static int k_fd_free(void) { return k_fd_free_at(0); }
 // open a path -> an fd or a negative errno. m is r read, w truncate, a append; w and a create
 // an absent path whose parent is a directory, for r absence stays absence. a directory does
 // not open: readdir is its read door. the love doors flatten the errno in the marshaling.
-ai_noinline int k_fs_open(char const *p, uintptr_t pn, char m) {
+love_noinline int k_fs_open(char const *p, uintptr_t pn, char m) {
   if (m != 'r' && m != 'w' && m != 'a') return -EINVAL;
   if (!k_fs_init()) return -ENOMEM;
   char cp[256];
@@ -1184,7 +1184,7 @@ struct k_st { uintptr_t size, ms, mode; };
 // -> 0, or -ENOENT. a synthesized directory -- a prefix with children but no entry of its
 // own, and the root -- answers like any other, which is why this fills a struct and not an
 // entry index: it has no row to point at.
-ai_noinline int k_fs_stat(char const *p, uintptr_t pn, struct k_st *st, bool follow) {
+love_noinline int k_fs_stat(char const *p, uintptr_t pn, struct k_st *st, bool follow) {
   char cp[256];
   intptr_t cn;
   if (!k_fs_init()) return -ENOMEM;
@@ -1454,7 +1454,7 @@ static int k_fd_pty(int fds[3]) {
 // clone src's row into a fresh fd. a pipe end shares the queue and bumps its side's count; a
 // ramfs fd clones the handle, so the offset diverges where POSIX shares it; a boot twin gets
 // k_row_zero so its close frees the row.
-ai_noinline static int k_dup_row(int src, int at) {
+love_noinline static int k_dup_row(int src, int at) {
   struct k_source *s = k_source(src);
   if (!s || !(s->readn || s->writen || s->putc)) return -1;
   int fd = k_fd_free_at(at);
@@ -1606,7 +1606,7 @@ long k_fd_stat(int fd, struct k_st *st) {
 // getpid nif branches here on a negative osv, its own answer being the constant 1.
 lvm(k_lvm_getpid) {
   Sp[0] = putcharm(k_cur_pid(g));
-  ai_musttail return Next(1); }
+  love_musttail return Next(1); }
 
 // --- rung 5: the disk -- the block door src/apps/fat.l rides, driven by src/inle/blk.c. DMA
 // rides a love string's own heap bytes: nothing allocates between post and completion, so
@@ -1620,14 +1620,14 @@ int k_blk_rw(uint64_t lba, uint32_t n, void *buf, int wr);
 
 static lvm(lvm_disk) {
   Sp[0] = putcharm((intptr_t) k_blk_sectors());
-  ai_musttail return Next(1); }
+  love_musttail return Next(1); }
 
-ai_noinline static struct ai *k_disk_read(struct ai *g) {
+love_noinline static struct g *k_disk_read(struct g *g) {
   word lw = g->sp[0], nw = g->sp[1];
   intptr_t lba = (lw & 1) ? getcharm(lw) : -1,
            n   = (nw & 1) ? getcharm(nw) : -1;
   if (lba < 0 || n <= 0 || n > 1 << 24) return g->sp[1] = ZeroPoint, g->sp += 1, g;
-  if (!ai_ok(g = str0(g, (uintptr_t) n * 512))) return g;   // OOM: the wrapper ghelps
+  if (!ok(g = str0(g, (uintptr_t) n * 512))) return g;   // OOM: the wrapper ghelps
   if (k_blk_rw((uint64_t) lba, (uint32_t) n, txt(g->sp[0]), 0) < 0)
     g->sp[0] = ZeroPoint;
   return g->sp[2] = g->sp[0], g->sp += 2, g; }
@@ -1635,10 +1635,10 @@ ai_noinline static struct ai *k_disk_read(struct ai *g) {
 static lvm(lvm_disk_read) {
  LvmCall(g, k_disk_read) }
 
-ai_noinline static word k_disk_write(word lw, word sw) {
+love_noinline static word k_disk_write(word lw, word sw) {
  intptr_t lba = (lw & 1) ? getcharm(lw) : -1;
  if (lba < 0 || !strp(sw)) return ZeroPoint;
- struct ai_str *s = (struct ai_str*) sw;
+ struct str *s = (struct str*) sw;
  if (!s->len || s->len % 512) return ZeroPoint;
  if (k_blk_rw((uint64_t) lba, (uint32_t) (s->len / 512), s->bytes, 1) < 0)
   return ZeroPoint;
@@ -1646,37 +1646,37 @@ ai_noinline static word k_disk_write(word lw, word sw) {
 
 static lvm(lvm_disk_write) {
   Sp[1] = k_disk_write(Sp[0], Sp[1]);
-  ai_musttail return Nextp(1, 1); }
+  love_musttail return Nextp(1, 1); }
 
 // (fetch url path): the page's network where a seat has one (src/inle/wasm) -- the bytes at
 // URL laid as the ramfs file at PATH, 0 or -errno; metal has no door and says so
 __attribute__((weak)) long k_fetch(char const *url, uintptr_t un, char const *path, uintptr_t pn) {
   return (void) url, (void) un, (void) path, (void) pn, -ENOSYS; }
-ai_noinline static word k_lvm_fetch(word uw, word pw) {
+love_noinline static word k_lvm_fetch(word uw, word pw) {
   if (!strp(uw) || !strp(pw)) return ZeroPoint;
-  struct ai_str *u = (struct ai_str*) uw, *p = (struct ai_str*) pw;
+  struct str *u = (struct str*) uw, *p = (struct str*) pw;
   return putcharm((intptr_t) k_fetch(u->bytes, u->len, p->bytes, p->len)); }
 static lvm(lvm_fetch) {
   Sp[1] = k_lvm_fetch(Sp[0], Sp[1]);
-  ai_musttail return Nextp(1, 1); }
+  love_musttail return Nextp(1, 1); }
 
 // (kexec path cmd): boot the ramfs module at path with cmd as its boot line, in place of this
 // one -- src/inle/wasm can, metal cannot yet. answers only on refusal, -errno.
 __attribute__((weak)) long k_kexec(char const *p, uintptr_t pn, char const *cmd, uintptr_t cn) {
   return (void) p, (void) pn, (void) cmd, (void) cn, -ENOSYS; }
-ai_noinline static word k_lvm_kexec(word pw, word cw) {
+love_noinline static word k_lvm_kexec(word pw, word cw) {
   if (!strp(pw) || !strp(cw)) return ZeroPoint;
-  struct ai_str *p = (struct ai_str*) pw, *c = (struct ai_str*) cw;
+  struct str *p = (struct str*) pw, *c = (struct str*) cw;
   return putcharm((intptr_t) k_kexec(p->bytes, p->len, c->bytes, c->len)); }
 static lvm(lvm_kexec) {
   Sp[1] = k_lvm_kexec(Sp[0], Sp[1]);
-  ai_musttail return Nextp(1, 1); }
+  love_musttail return Nextp(1, 1); }
 
 // the bake door: the heap as image bytes, written whole to one ramfs file
-static void k_bake(struct ai *g, char const *path) {
+static void k_bake(struct g *g, char const *path) {
   uintptr_t n = 0;
-  struct ai_image_bad bad = {0};
-  void *b = ai_image_save(g, &n, &bad);
+  struct image_bad bad = {0};
+  void *b = image_save(g, &n, &bad);
   int fd = b ? k_fs_open(path, strlen(path), 'w') : -1;
   long w = fd < 0 ? -1 : k_fd_write(fd, b, (long) n);
   if (fd >= 0) k_fd_close(fd);
@@ -1694,22 +1694,22 @@ static void k_bake(struct ai *g, char const *path) {
 
 static lvm(lvm_svm) {
   Sp[0] = k_svm_ok() ? putcharm(1) : ZeroPoint;
-  ai_musttail return Next(1); }
+  love_musttail return Next(1); }
 
-ai_noinline static struct ai *k_svm_run(struct ai *g) {
+love_noinline static struct g *k_svm_run(struct g *g) {
   uint64_t code = 0, rax = 0, rip = 0;
   if (!k_svm_ok()) return g->sp[0] = ZeroPoint, g;
   // the spike's pages ride a love string's own bytes, safe for blk.c's reason: nothing
   // allocates between the carve and the vmrun, so the VMCB cannot move under the CPU.
-  if (!ai_ok(g = str0(g, k_svm_need()))) return g;      // OOM: the wrapper ghelps
+  if (!ok(g = str0(g, k_svm_need()))) return g;      // OOM: the wrapper ghelps
   if (k_svm_spike(txt(g->sp[0]), &code, &rax, &rip) < 0)
     return g->sp[1] = ZeroPoint, g->sp += 1, g;
-  if (!ai_ok(g = ai_have(g, 3 * Width(struct ai_chain)))) return g;
-  struct ai_chain *c = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
+  if (!ok(g = have(g, 3 * Width(struct chain)))) return g;
+  struct chain *c = ini_chain((struct chain*) bump(g, Width(struct chain)),
                                  putcharm((intptr_t) rip), ZeroPoint);
-  c = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
+  c = ini_chain((struct chain*) bump(g, Width(struct chain)),
                 putcharm((intptr_t) rax), word(c));
-  c = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
+  c = ini_chain((struct chain*) bump(g, Width(struct chain)),
                 putcharm((intptr_t) code), word(c));
   return g->sp[1] = word(c), g->sp += 1, g; }
 
@@ -1721,20 +1721,20 @@ static lvm(lvm_svm_run) {
 
 static lvm(lvm_vmx) {
   Sp[0] = k_vmx_ok() ? putcharm(1) : ZeroPoint;
-  ai_musttail return Next(1); }
+  love_musttail return Next(1); }
 
-ai_noinline static struct ai *k_vmx_run(struct ai *g) {
+love_noinline static struct g *k_vmx_run(struct g *g) {
   uint64_t reason = 0, rax = 0, rip = 0, err = 0;
   if (!k_vmx_ok()) return g->sp[0] = ZeroPoint, g;
-  if (!ai_ok(g = str0(g, k_vmx_need()))) return g;       // OOM: the wrapper ghelps
+  if (!ok(g = str0(g, k_vmx_need()))) return g;       // OOM: the wrapper ghelps
   if (k_vmx_spike(txt(g->sp[0]), &reason, &rax, &rip, &err) < 0)
     return g->sp[1] = ZeroPoint, g->sp += 1, g;
-  if (!ai_ok(g = ai_have(g, 4 * Width(struct ai_chain)))) return g;
-  struct ai_chain *c = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
+  if (!ok(g = have(g, 4 * Width(struct chain)))) return g;
+  struct chain *c = ini_chain((struct chain*) bump(g, Width(struct chain)),
                                  putcharm((intptr_t) err), ZeroPoint);
-  c = ini_chain(bump(g, Width(struct ai_chain)), putcharm(rip), word(c));
-  c = ini_chain(bump(g, Width(struct ai_chain)), putcharm(rax), word(c));
-  c = ini_chain(bump(g, Width(struct ai_chain)), putcharm(reason), word(c));
+  c = ini_chain(bump(g, Width(struct chain)), putcharm(rip), word(c));
+  c = ini_chain(bump(g, Width(struct chain)), putcharm(rax), word(c));
+  c = ini_chain(bump(g, Width(struct chain)), putcharm(reason), word(c));
   return g->sp[1] = word(c), g->sp += 1, g; }
 static lvm(lvm_vmx_run) {
   LvmCall(g, k_vmx_run) }
@@ -1746,9 +1746,9 @@ static lvm(lvm_vmx_run) {
 
 // --- the path faces ------------------------------------------------------
 // k_fs_* take (bytes, len) and answer 0 or a negative errno, as k_fd_* and k_parent_ok do --
-// the one sign __ai_inle owes its caller, so src/inle/sys.c hands these out with no flip.
-// ai_noinline is load-bearing: cp[256] in an lvm's own frame would block its musttail.
-ai_noinline int k_fs_mkdir(char const *p, uintptr_t pn, uintptr_t mode) {
+// the one sign __love_inle owes its caller, so src/inle/sys.c hands these out with no flip.
+// love_noinline is load-bearing: cp[256] in an lvm's own frame would block its musttail.
+love_noinline int k_fs_mkdir(char const *p, uintptr_t pn, uintptr_t mode) {
   char cp[256];
   intptr_t cn;
   if (!k_fs_init()) return -ENOMEM;
@@ -1761,7 +1761,7 @@ ai_noinline int k_fs_mkdir(char const *p, uintptr_t pn, uintptr_t mode) {
   if (e) return e;
   return k_create(cp, (uintptr_t) cn, true, mode) < 0 ? -ENOMEM : 0; }
 
-ai_noinline int k_fs_rmdir(char const *p, uintptr_t pn) {
+love_noinline int k_fs_rmdir(char const *p, uintptr_t pn) {
   char cp[256];
   intptr_t cn;
   if (!k_fs_init()) return -ENOMEM;
@@ -1777,7 +1777,7 @@ ai_noinline int k_fs_rmdir(char const *p, uintptr_t pn) {
   k_ent_gc(i);
   return 0; }
 
-ai_noinline int k_fs_unlink(char const *p, uintptr_t pn) {
+love_noinline int k_fs_unlink(char const *p, uintptr_t pn) {
   char cp[256];
   intptr_t cn;
   if (!k_fs_init()) return -ENOMEM;
@@ -1792,7 +1792,7 @@ ai_noinline int k_fs_unlink(char const *p, uintptr_t pn) {
 
 // (symlink target path). the target is stored as given, the way readlink(2) owes it back,
 // and canonicalized against the link's own place only when k_walk follows it.
-ai_noinline int k_fs_symlink(char const *t, uintptr_t tn, char const *p, uintptr_t pn) {
+love_noinline int k_fs_symlink(char const *t, uintptr_t tn, char const *p, uintptr_t pn) {
   char cp[256];
   intptr_t cn;
   if (!k_fs_init()) return -ENOMEM;
@@ -1813,7 +1813,7 @@ ai_noinline int k_fs_symlink(char const *t, uintptr_t tn, char const *p, uintptr
 
 // (readlink path): the target, unfollowed and untruncated -- the byte count back, as
 // readlink(2) answers it, and -EINVAL where the path is not a link at all.
-ai_noinline intptr_t k_fs_readlink(char const *p, uintptr_t pn, char *b, uintptr_t n) {
+love_noinline intptr_t k_fs_readlink(char const *p, uintptr_t pn, char *b, uintptr_t n) {
   char cp[256];
   intptr_t cn;
   if (!k_fs_init()) return -ENOMEM;
@@ -1830,7 +1830,7 @@ ai_noinline intptr_t k_fs_readlink(char const *p, uintptr_t pn, char *b, uintptr
 // (rename old new): a file moves whole, a target file unlinked under it; a directory
 // carries everything beneath it, the copies staged first so a refusal leaves the tree whole.
 struct k_ren { struct k_ren *next; int i; char *q; };
-ai_noinline int k_fs_rename(char const *o, uintptr_t olen,
+love_noinline int k_fs_rename(char const *o, uintptr_t olen,
                                    char const *n, uintptr_t nlen) {
   char op[256], np[256];
   intptr_t on, nn;
@@ -1887,7 +1887,7 @@ ai_noinline int k_fs_rename(char const *o, uintptr_t olen,
     kfree(x); }
   return 0; }
 
-ai_noinline int k_fs_chdir(char const *p, uintptr_t pn) {
+love_noinline int k_fs_chdir(char const *p, uintptr_t pn) {
   char cp[256];
   intptr_t cn;
   if (!k_fs_init()) return -ENOMEM;
@@ -1910,7 +1910,7 @@ int k_fs_getcwd(char *b, uintptr_t n) {
 
 // the two attribute writers land on the entry, so a synthesized directory takes either as
 // a no-op: it has no row to keep bits on, and its date is its children's.
-ai_noinline int k_fs_chmod(char const *p, uintptr_t pn, uintptr_t mode) {
+love_noinline int k_fs_chmod(char const *p, uintptr_t pn, uintptr_t mode) {
   char cp[256];
   intptr_t cn;
   if (!k_fs_init()) return -ENOMEM;
@@ -1921,7 +1921,7 @@ ai_noinline int k_fs_chmod(char const *p, uintptr_t pn, uintptr_t mode) {
   k_ents[i].mode = mode & 07777;
   return 0; }
 
-ai_noinline int k_fs_utime(char const *p, uintptr_t pn, uintptr_t ms) {
+love_noinline int k_fs_utime(char const *p, uintptr_t pn, uintptr_t ms) {
   char cp[256];
   intptr_t cn;
   if (!k_fs_init()) return -ENOMEM;
@@ -1932,7 +1932,7 @@ ai_noinline int k_fs_utime(char const *p, uintptr_t pn, uintptr_t ms) {
   k_ents[i].ms = ms;
   return 0; }
 
-static lvm(ai_kreset) { return k_reset(), g; }
+static lvm(kreset) { return k_reset(), g; }
 
 // the cursor as last painted. quay marks the row of every grid write and the cursor is not
 // one, so the renderer owns it or the block stays where it last was.
@@ -2035,22 +2035,22 @@ bool k_fb(volatile uint32_t **p, int *w, int *h, int *pitch) {
 // nom. the operand routes as every io op's does: the rows are one table shared by every
 // task, and 0 1 2 are the numeric spellings of in/out/err, so a task wearing a pipe is
 // asked about the pipe. only a charm past 2 is a raw row.
-static intptr_t k_ttyfd(struct ai *g, word x) {
+static intptr_t k_ttyfd(struct g *g, word x) {
   if (charmp(x) && getcharm(x) >= 0 && getcharm(x) <= 2)
-    x = word(getcharm(x) == 0 ? &ai_stdin : getcharm(x) == 1 ? &ai_stdout : &ai_stderr);
+    x = word(getcharm(x) == 0 ? &love_stdin : getcharm(x) == 1 ? &love_stdout : &love_stderr);
   if (*task_io(g) != zero) x = io_route(g, x);
-  return charmp(x) ? getcharm(x) : ai_port_fd(x); }
+  return charmp(x) ? getcharm(x) : port_fd(x); }
 
-ai_noinline static struct ai *k_tty(struct ai *g) {
+love_noinline static struct g *k_tty(struct g *g) {
   intptr_t fd = k_ttyfd(g, g->sp[0]);
-  if (fd < 0) return g->sp[0] = ai_badarg(g), g;
+  if (fd < 0) return g->sp[0] = badarg(g), g;
   struct k_source const *s = k_source((int) fd);
   struct k_pty const *t = k_pty_row(fd);
   uintptr_t rows = t ? t->rows : kcb ? kcb->rows : 0, cols = t ? t->cols : kcb ? kcb->cols : 0;
   if (!rows || !s || !(t || s->putc == serial_putc1 || s->readn == kb_readn))
-   return g->sp[0] = ai_err(g, ENOTTY), g;
-  if (!ai_ok(g = ai_have(g, Width(struct ai_chain)))) return g;
-  struct ai_chain *w = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
+   return g->sp[0] = love_err(g, ENOTTY), g;
+  if (!ok(g = have(g, Width(struct chain)))) return g;
+  struct chain *w = ini_chain((struct chain*) bump(g, Width(struct chain)),
                                  putcharm(rows), putcharm(cols));
   return g->sp[0] = word(w), g; }
 
@@ -2060,8 +2060,8 @@ static lvm(lvm_ksettty) {
   struct k_pty *t = k_pty_row(k_ttyfd(g, Sp[0]));
   bool ok = t && 0 < r && r <= UINT16_MAX && 0 < c && c <= UINT16_MAX;
   if (ok) t->rows = (uint16_t) r, t->cols = (uint16_t) c;
-  Sp[2] = ok ? ZeroPoint : ai_err(g, ENOTTY);
-  ai_musttail return Nextp(1, 2); }
+  Sp[2] = ok ? ZeroPoint : love_err(g, ENOTTY);
+  love_musttail return Nextp(1, 2); }
 
 // the console answers the terminal doors and keeps nothing: its keys are its own
 static bool k_console_in(intptr_t fd) {
@@ -2074,8 +2074,8 @@ static lvm(lvm_kttyfg) {
   intptr_t fd = k_ttyfd(g, putcharm(0)), pg = charmp(Sp[0]) ? getcharm(Sp[0]) : 0;
   struct k_pty *t = k_pty_row(fd);
   if (t) t->fg = pg > 0 ? pg : 0;
-  Sp[0] = t || k_console_in(fd) ? ZeroPoint : ai_err(g, ENOTTY);
-  ai_musttail return Next(1); }
+  Sp[0] = t || k_console_in(fd) ? ZeroPoint : love_err(g, ENOTTY);
+  love_musttail return Next(1); }
 
 // (ttypg fd) -- the terminal's foreground group, () when the shell holds it; the signal
 // row answers too, so its reader can ask after the master is gone
@@ -2083,8 +2083,8 @@ static lvm(lvm_kttypg) {
   intptr_t fd = k_ttyfd(g, Sp[0]);
   struct k_source const *s = fd < 0 ? NULL : k_source((int) fd);
   struct k_pty *t = s && s->readn == pty_greadn ? s->state : k_pty_row(fd);
-  Sp[0] = !t ? ai_err(g, ENOTTY) : t->fg ? putcharm(t->fg) : ZeroPoint;
-  ai_musttail return Next(1); }
+  Sp[0] = !t ? love_err(g, ENOTTY) : t->fg ? putcharm(t->fg) : ZeroPoint;
+  love_musttail return Next(1); }
 
 // (raw on) -- the terminal on fd 0 raw (1) or cooked (0); () when there is one to set
 static lvm(lvm_kraw) {
@@ -2092,20 +2092,20 @@ static lvm(lvm_kraw) {
   struct k_pty *t = k_pty_row(fd);
   unsigned const cooked = pt_icanon | pt_echo | pt_isig | pt_icrnl;
   if (t) t->flags = charmp(Sp[0]) && getcharm(Sp[0]) ? t->flags & ~cooked : t->flags | cooked;
-  Sp[0] = t || k_console_in(fd) ? ZeroPoint : ai_err(g, ENOTTY);
-  ai_musttail return Next(1); }
+  Sp[0] = t || k_console_in(fd) ? ZeroPoint : love_err(g, ENOTTY);
+  love_musttail return Next(1); }
 
 // (openpty _) -- a fresh pty as its rows: (master slave signal)
-ai_noinline static struct ai *k_openpty(struct ai *g) {
+love_noinline static struct g *k_openpty(struct g *g) {
   int fds[3];
   int e = k_fd_pty(fds);
-  if (e) return g->sp[0] = ai_err(g, -e), g;
-  if (!ai_ok(g = ai_have(g, 3 * Width(struct ai_chain)))) {
+  if (e) return g->sp[0] = love_err(g, -e), g;
+  if (!ok(g = have(g, 3 * Width(struct chain)))) {
     for (int i = 0; i < 3; i++) k_row_close(fds[i]);
     return g; }
   word l = ZeroPoint;
   for (int i = 2; i >= 0; i--)
-    l = word(ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)), putcharm(fds[i]), l));
+    l = word(ini_chain((struct chain*) bump(g, Width(struct chain)), putcharm(fds[i]), l));
   return g->sp[0] = l, g; }
 
 static lvm(lvm_kopenpty) {
@@ -2117,13 +2117,13 @@ static lvm(lvm_tty) {
 static lvm(draw) {
  fbdraw();
  k_wait();
- ai_musttail return Next(1); }
+ love_musttail return Next(1); }
 
 
 static lvm(key) {
  int b = kqpop();
  Sp[0] = putcharm(b < 0 ? 0 : b);
- ai_musttail return Next(1); }
+ love_musttail return Next(1); }
 
 // (color fg bg) -- xterm-256 indices, the attribute and every cell already on the screen.
 // two in and one out, so the answer lands in the deeper slot and Sp moves by one.
@@ -2131,13 +2131,13 @@ static lvm(color) {
  uint8_t fg = getcharm(Sp[0]), bg = getcharm(Sp[1]);
  if (kcb) cb_recolor(kcb, cb_ink(cb_idx, fg), cb_ink(cb_idx, bg));
  Sp[1] = ZeroPoint;
- ai_musttail return Nextp(1, 1); }
+ love_musttail return Nextp(1, 1); }
 
 // (fault n) -- raise a CPU exception to exercise the ap in arch.c; n mirrors the x64 vector
 // numbers. the ap halts, so what follows the call is reachable only if the fault missed.
 static lvm(lvm_fault) {
   k_fault_trigger(getcharm(Sp[0]));
-  ai_musttail return Next(1); }
+  love_musttail return Next(1); }
 
 // (quit code) -- the exit door, with two rooms behind it. a seated task quits as _exit: its
 // seated fds close (a write end's close is the reader's EOF), the seat retires, and the task
@@ -2148,7 +2148,7 @@ static union u const k_exit_body[] = { {lvm_task_exit} };
 static bool k_wears(word l, word x) {
   for (int i = 0; i < 3 && chainp(l); i++, l = B(l)) if (A(l) == x) return true;
   return false; }
-static bool k_worn_elsewhere(struct ai *g, word x) {
+static bool k_worn_elsewhere(struct g *g, word x) {
   union u *me = g->tasks, *h = g->parked;
   for (union u *n = me[0].m; n && n != me; n = n[0].m) if (k_wears(n[7].x, x)) return true;
   if (h) { union u *n = h; do { if (k_wears(n[7].x, x)) return true; n = n[0].m; } while (n != h); }
@@ -2158,14 +2158,14 @@ static bool k_worn_elsewhere(struct ai *g, word x) {
 // neutered as its row goes. a port another task still wears is the parent's, handed down
 // (a console-numbered slot): its row stays, or a pane's shell loses its terminal to the
 // exit of every child. -> nonzero when the task has a pid, so the wrapper knows the room.
-ai_noinline static int k_task_exit(struct ai *g) {
+love_noinline static int k_task_exit(struct g *g) {
   if (!k_cur_pid(g)) return 0;
   word l = *task_io(g);
   for (int i = 0; i < 3 && chainp(l); i++, l = B(l)) {
     word x = A(l);
     if (!iop(x) || k_worn_elsewhere(g, x)) continue;
-    struct ai_fio *f = (struct ai_fio*) x;
-    intptr_t fd = ai_io_fd(&f->io);
+    struct fio *f = (struct fio*) x;
+    intptr_t fd = io_fd(&f->io);
     if (fd > 2) k_row_close((int) fd), f->fd = putcharm(-1); }
   g->next_wake_at = 0;                          // a stale intention would gate the park
   g->next_wait_fd = -1;
@@ -2180,14 +2180,14 @@ lvm(k_lvm_quit) {
     Sp = (word*) g + g->len - 1;
     Sp[0] = code;
     Ip = (union u*) k_exit_body;
-    ai_musttail return Ap(lvm_task_exit, g); }
+    love_musttail return Ap(lvm_task_exit, g); }
   k_reset();
-  ai_musttail return Next(1); }
+  love_musttail return Next(1); }
 
 
 
 static union u
-  nif_reset[] = {{ai_kreset}},
+  nif_reset[] = {{kreset}},
   nif_draw[] = {{draw}, {lvm_ret0}},
   nif_key[] = {{key}, {lvm_ret0}},
   nif_color[] = {{lvm_cur}, {.x = putcharm(2)}, {color}, {lvm_ret0}},
@@ -2244,7 +2244,7 @@ static bool fbinit(void) {
 static bool cbinit(void) {
   const uintptr_t rows = kfb.height / (kface.h * kfb.scale),
                   cols = kfb.width / (kface.w * kfb.scale);
-  // kmallocw, not ai_alloc: cbinit runs before ai_ini, so no g exists yet
+  // kmallocw, not alloc: cbinit runs before ini, so no g exists yet
   uint32_t sn = k_sn(rows, cols), hl = k_hl(cols), tw = 1;
   if (!(kcb = kmallocw(b2w(cb_size(rows, cols, sn) + cb_hsize(hl, cols) + cb_tsize(rows, cols)))))
     sn = hl = tw = 0, kcb = kmallocw(b2w(cb_size(rows, cols, 0)));   // no room: the grid alone
@@ -2256,10 +2256,10 @@ static bool cbinit(void) {
   cb_fill(kcb, 0);
   return true; }
 
-// the kernel's own nifs ride ai_knifs, a section apart: the one binary is also the hosted
+// the kernel's own nifs ride knifs, a section apart: the one binary is also the hosted
 // love, whose book must not carry reset, fault, the disk or the virt doors. kmain drains
 // love_nifs and then this bracket, indexed by position -- so the order is append-only.
-static struct ai_def const __attribute__((section("ai_knifs"), used)) defs[] = {
+static struct def const __attribute__((section("knifs"), used)) defs[] = {
   {"reset", {.k = nif_reset}},
   {"draw", {.k = nif_draw}},
   {"key", {.k = nif_key}},
@@ -2310,10 +2310,10 @@ void kmain(void) {
  // copy is movups) and that #UDs into a triple fault with no output while SSE is masked.
  k_sse_enable();
 #endif
- // which kernel: -1, we are it. on metal __ai_start is not the entry, so the value is written
+ // which kernel: -1, we are it. on metal __love_start is not the entry, so the value is written
  // here before any libc member can ask -- unwritten, the lazy probe issues a real `syscall`
  // into our own #UD handler. the seat arming rides with it (src/inle/sys.c).
- __ai_osv = -1;
+ __love_osv = -1;
  k_seat_init();
  khhdm = kboot.hhdm;
  archinit();
@@ -2331,46 +2331,46 @@ void kmain(void) {
   // the sound card: command rings, buffer list and position buffer in one block, 128-aligned
   // inside (hda.c lays it); the sample ring is its own
   k_hda_init(kmallocw(b2w(4096 + 128)));
-  // the wake: ai_baked_pick reads the projection's re-based image off the same two symbols
+  // the wake: baked_pick reads the projection's re-based image off the same two symbols
   // the hosted start does; any problem answers NULL and the egg bakes from source below.
-  struct ai *g = NULL;
+  struct g *g = NULL;
   uintptr_t blen = 0;
   void const *bimg = NULL;
   if (kboot.image_len) bimg = kboot.image, blen = kboot.image_len;
-  else if (!ai_baked_pick(&bimg, &blen)) blen = 0;
-  if (blen) g = ai_image_load(bimg, blen, 0);
+  else if (!baked_pick(&bimg, &blen)) blen = 0;
+  if (blen) g = love_image_load(bimg, blen, 0);
   bool woke = g != NULL;
   char const *s = woke ? "; inle -- image awake\n" : "; inle -- baking the egg\n";
   for (; *s; s++) serial_putc(*s);
-  if (!woke) g = ai_ini();
+  if (!woke) g = ini();
   // the nif drains re-pin over a woken book too: the section rides this binary
-  g = ai_defn(g, __start_love_nifs,
+  g = defn(g, __start_love_nifs,
               (uintptr_t)(__stop_love_nifs - __start_love_nifs));
   // ..then the kernel's own bracket, so a kernel row wins any name it shares
-  g = ai_defn(g, __start_ai_knifs,
-              (uintptr_t)(__stop_ai_knifs - __start_ai_knifs));
+  g = defn(g, __start_knifs,
+              (uintptr_t)(__stop_knifs - __start_knifs));
   // bound the generational collector to the device's RAM (the Appel knob): unbounded, the
   // nursery's resizer grows and gen_major's all-survive sizing asks kmallocw for a block
   // bigger than physical RAM. the budget counts every pool but not a resize, which holds
   // the old pair beside the new; a third leaves RAM for that
-  if (ai_ok(g)) g->budget = kram_words / 3;
+  if (ok(g)) g->budget = kram_words / 3;
   // the kore ROSTER (rung 3): the cat itself is read off the ramfs below.
-  g = ai_strof(g, src_korelist);
-  struct ai_def kd[] = {{"korelist", {.x = ai_pop1(g)}}};
-  g = ai_defn(g, kd, countof(kd));
-  g = ai_strof(g, src_crewlist);
-  struct ai_def cd[] = {{"crewlist", {.x = ai_pop1(g)}}};
-  g = ai_defn(g, cd, countof(cd));
+  g = strof(g, src_korelist);
+  struct def kd[] = {{"korelist", {.x = pop1(g)}}};
+  g = defn(g, kd, countof(kd));
+  g = strof(g, src_crewlist);
+  struct def cd[] = {{"crewlist", {.x = pop1(g)}}};
+  g = defn(g, cd, countof(cd));
   // the boot cmdline, raw; the boot text below splits it into the argv shape.
-  g = ai_strof(g, kboot.cmdline);
-  struct ai_def bd[] = {{"bootline", {.x = ai_pop1(g)}}};
-  g = ai_defn(g, bd, countof(bd));
+  g = strof(g, kboot.cmdline);
+  struct def bd[] = {{"bootline", {.x = pop1(g)}}};
+  g = defn(g, bd, countof(bd));
   // the egg lane: the prel and the module layers; the seat text below runs on both lanes
-  struct ai *r = g;
+  struct g *r = g;
   if (!woke) {
-   r = ai_cats_egg(g);
-   r = ai_cats_lib(r);                                  // register every baked module; the uses below are splices
-   r = ai_evals_(r,
+   r = cats_egg(g);
+   r = cats_lib(r);                                  // register every baked module; the uses below are splices
+   r = evals_(r,
     // verbs first: this machine's userland is a verb table the cat's apps pin into as they
     // load, and the boot cmdline's program seat reads the registry.
     "(borrow 'verbs)"
@@ -2378,10 +2378,10 @@ void kmain(void) {
     "(borrow 'cli)"); }                                      //   one-name `uu` surface on this target too
   // the seat text, both lanes (src/inle/seat.l, laid by lcat): what this machine is that a
   // host is not. over a woken book these shadow the hosted bindings.
-  r = ai_evals_(r, src_seat);
+  r = evals_(r, src_seat);
   // a woken image's crew captured the seat-doors wrappers (src/love/main.c), which read the live
   // door off the tablet -- aim them at this seat's shim. the egg book has no tablet.
-  r = ai_evals_(r,
+  r = evals_(r,
    "(? (elem 'seat-doors (names ()))"
    "   (: _ (pin seat-doors 0 spawn) _ (pin seat-doors 1 spawnio)"
    "      _ (pin seat-doors 2 spawnmap) _ (pin seat-doors 3 wait)"
@@ -2390,12 +2390,12 @@ void kmain(void) {
    "      (pin seat-doors 10 ttypg))"
    "   0)");
   // the session: a fresh writable layer, so the shell's defglobs never land in the base
-  r = ai_open(r);
+  r = love_open(r);
   // an unbound mention raises missing at every define that names one, and bao's file-help
   // folds a real quit, so one absent nif in the cat resets the machine at load. pin a no-op
   // for whichever host nifs the cat mentions and this seat lacks -- self-retiring, since a
   // rung landing the real nif takes its name off by existing. signal ignores.
-  r = ai_evals_(r,
+  r = evals_(r,
    "(: (signal n h) ())"
    "(map (\\ n (? (elem n (names ())) () (ev [': [n 'x] ()])))"
    "     '(hardlink spawn spawnmap fork exec herald wait still"
@@ -2405,7 +2405,7 @@ void kmain(void) {
   // own seat sits out and the whole userland lands. built off /love, korelist being the
   // baked roster. egg lane only: re-loading over a woken image re-pins every sealed verb.
   if (!woke) {
-  r = ai_evals_(r,
+  r = evals_(r,
    "(: (kwords s i j acc)"
    "    (? (< j (tally s))"
    "       (? (= 32 (peep s j 0))"
@@ -2416,23 +2416,23 @@ void kmain(void) {
    "   (kslurp p) (: h (open (+ \"/love/\" p) \"r\") s (slurp h) _ (close h) s)"
    "   (kcat l) (? (two? l) (+ (kslurp (cap l)) (kcat (cup l))) \"\")"
    "   korecat (kcat (kwords korelist 0 0 ())))");
-  r = ai_evals_(r, "(reads (tap ((: (g i) (? (< i (tally korecat)) (. (peep korecat i 0) (g (+ 1 i))))) 0)))");
+  r = evals_(r, "(reads (tap ((: (g i) (? (< i (tally korecat)) (. (peep korecat i 0) (g (+ 1 i))))) 0)))");
   }
   // the crew hangs off the registry's miss, re-armed on every boot including a woken
   // image's: the load is idempotent, its own `source` row the guard.
-  r = ai_evals_(r, "((cite 'verbs 'fills) crewload)");
+  r = evals_(r, "((cite 'verbs 'fills) crewload)");
   // `bake PATH` on the boot line: the warm heap -- the crew in, the seat text run -- as an
   // image file on the ramfs, then reset; the wasm lift hands it to the next boot as
   // kboot.image. the crew is pulled aboard first: left to the filler it is not in the heap
   // that gets written, and every boot of that image pays the whole load at its first miss.
   if (!memcmp(kboot.cmdline, "bake ", 5)) {
-    r = ai_evals_(r, "(crewload 0)");
+    r = evals_(r, "(crewload 0)");
     k_bake(r, kboot.cmdline + 5); }
   // now the line wears its real shape and the program word dispatches off the registry.
   // an empty line is a mitty on the console, lush in its first pane; when its last pane
   // ends, or it cannot start, the console shell stands in, the toolbox warm.
-  r = ai_evals_(r, "(: cmdline (. \"love\" bootargv) argv cmdline)");
-  r = ai_evals_(r,
+  r = evals_(r, "(: cmdline (. \"love\" bootargv) argv cmdline)");
+  r = evals_(r,
    "(? (two? bootargv)"
    "   (: _ (hear (\\ a b (? (== a 'leave) (quit b)"
    "                        (: _ (say err \";; \") _ (print err a) _ (say err \" \") _ (print err b)"
@@ -2442,11 +2442,11 @@ void kmain(void) {
    "           (: _ (say err (+ (cap bootargv) \": not found\")) _ (put err 10) 127))"
    "      (quit (? (charm? r) r 0)))"
    "   0)");
-  r = ai_evals_(r,
+  r = evals_(r,
    "(: pr (k-prog (. \"mitty\" (. \"--here\" ())))"
    "   (? (two? pr) (trap (\\ _ ((cap pr) (cup pr))) () (\\ a b 0)) 0))");
-  r = ai_evals_(r, "(cite 'cli 'shell 0)");
+  r = evals_(r, "(cite 'cli 'shell 0)");
   // a terminal scare gets the honest face on the serial console before reset
-  if (ai_code_of(r) == ai_status_scare) ai_scare_face(r);
-  ai_fin(r); }
+  if (code_of(r) == status_scare) scare_face(r);
+  fin(r); }
  k_reset(); }

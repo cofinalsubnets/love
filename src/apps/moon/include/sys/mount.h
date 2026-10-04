@@ -1,5 +1,5 @@
-#ifndef _AI_SYS_MOUNT_H
-#define _AI_SYS_MOUNT_H
+#ifndef _LOVE_SYS_MOUNT_H
+#define _LOVE_SYS_MOUNT_H
 int mount(char const*, char const*, char const*, unsigned long, void const*);
 int umount(char const*);
 int umount2(char const*, int);

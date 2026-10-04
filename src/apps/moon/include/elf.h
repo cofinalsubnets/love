@@ -1,5 +1,5 @@
-#ifndef _AI_ELF_H
-#define _AI_ELF_H
+#ifndef _LOVE_ELF_H
+#define _LOVE_ELF_H
 /* the ELF format (the System V gABI and the psABIs' relocation numbers): the types, headers,
    sections, symbols, relocations, program headers, dynamic entries and notes, both widths */
 #include <stdint.h>

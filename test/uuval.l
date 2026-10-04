@@ -30,7 +30,7 @@
    (lam z (coprod_rect (lam w nat) (lam n n) (lam n 0) z)))
  ; ..and the charm ceiling above it. a charm is the word minus its tag bits, so
  ; a net that will not fit lands on the edge rather than wrapping or widening
- ; (love.c's ai_saturate). the width is a parameter and the laws below are
+ ; (love.c's saturate). the width is a parameter and the laws below are
  ; stated against chmax, holding at any width -- only the literal moves; a small
  ; one keeps the ceiling in reach of a demo. zsat is the tower's retraction and
  ; stays unbounded: the round trip is a fact about the measure, the ceiling a

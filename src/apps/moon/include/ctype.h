@@ -1,5 +1,5 @@
-#ifndef _AI_CTYPE_H
-#define _AI_CTYPE_H
+#ifndef _LOVE_CTYPE_H
+#define _LOVE_CTYPE_H
 /* the C character classes -- declarations only; moonlibc/libc owns the bodies.
    love.c itself never needs these (it nets bytes directly), so this header exists
    for THIRD-PARTY C (the LFS-userland ladder) -- without it

@@ -104,20 +104,20 @@ here")) = "// two lines" + nl + "// here" + nl))
 
 ; --- the five shapes of doc/misc/clay.md's rung 3, ~750 sites in love.c --------------
 ; attributes ride fn's 5th slot as spellings -- love.h's macros used call-shaped,
-; so clay says "ai_noinline" and never what it expands to. emit-only by necessity:
+; so clay says "love_noinline" and never what it expands to. emit-only by necessity:
 ; parse.l balance-skips a trailing attribute run, so none can come back through G1.
 (test
- ((one '(fn "ai_sleep" (("ticks" (named "uintptr_t"))) (blk ((ret ()))) void
-            ("__attribute__((weak))" "ai_noinline")))
-  = ("__attribute__((weak)) ai_noinline void ai_sleep(uintptr_t ticks) {" + nl
+ ((one '(fn "love_sleep" (("ticks" (named "uintptr_t"))) (blk ((ret ()))) void
+            ("__attribute__((weak))" "love_noinline")))
+  = ("__attribute__((weak)) love_noinline void love_sleep(uintptr_t ticks) {" + nl
      + " return;" + nl + "}" + nl))
  ; restrict binds to the declarator, the shape every lvm_ parameter wears
- (one '(gdecl (("g" (restrict (ptr (struct "ai"))) ()))) = "struct ai *restrict g;" + nl)
+ (one '(gdecl (("g" (restrict (ptr (struct "g"))) ()))) = "struct g *restrict g;" + nl)
  ; ...and qualifies a pointer or nothing -- dropping it in silence would pretend
  (gripe? (one '(gdecl (("x" (restrict int) ())))))
  ; the ret prefix is love.h's tail-call discipline, the one vmret disassembles for
- (one '(fn "f" () (blk ((ret (call (var "Continue") ()) ai_musttail))))
-  = "int f(void) {" + nl + " ai_musttail return Continue();" + nl + "}" + nl)
+ (one '(fn "f" () (blk ((ret (call (var "Continue") ()) love_musttail))))
+  = "int f(void) {" + nl + " love_musttail return Continue();" + nl + "}" + nl)
  ; _Static_assert, which cparse reduces to the bare (tdef) marker
  (one '(sassert (bin eq (bin shr (un neg (num 1)) (num 1)) (un neg (num 1))) "sign extended shift")
   = "_Static_assert(-1 >> 1 == -1, \"sign extended shift\");" + nl)
@@ -131,15 +131,15 @@ here")) = "// two lines" + nl + "// here" + nl))
 ; `lvm(lvm_add)`'s expansion at love.c's 184 definition sites -- attributes, the
 ; restrict-qualified params, the return type, the musttail return.
 (: cl-lvm '(fn "lvm_add"
-            (("g" (restrict (ptr (struct "ai")))) ("Ip" (ptr (named "union u")))
+            (("g" (restrict (ptr (struct "g")))) ("Ip" (ptr (named "union u")))
              ("Hp" (ptr (named "word"))) ("Sp" (restrict (ptr (named "word")))))
-            (blk ((ret (call (var "Continue") ()) "ai_musttail")))
-            (ptr (struct "ai"))
-            ("ai_noinline" "ai_noicf"))
+            (blk ((ret (call (var "Continue") ()) "love_musttail")))
+            (ptr (struct "g"))
+            ("love_noinline" "noicf"))
    (test
     (one cl-lvm
-     = ("ai_noinline ai_noicf struct ai *lvm_add(struct ai *restrict g, union u *Ip, word *Hp, word *restrict Sp) {"
-        + nl + " ai_musttail return Continue();" + nl + "}" + nl))))
+     = ("love_noinline noicf struct g *lvm_add(struct g *restrict g, union u *Ip, word *Hp, word *restrict Sp) {"
+        + nl + " love_musttail return Continue();" + nl + "}" + nl))))
 
 ; --- the preprocessor, doc/misc/clay.md's rung 5 ------------------------------------
 ; emit-only more firmly than a note is: cpp runs before the lexer, so no directive
@@ -147,15 +147,15 @@ here")) = "// two lines" + nl + "// here" + nl))
 ; tightest context, which is macro hygiene falling out of the precedence table --
 ; the body cannot see where it is substituted, so it parenthesizes itself.
 (test
- (one '(cpp-def "ai_data_n" 9) = "#define ai_data_n 9" + nl)
+ (one '(cpp-def "data_n" 9) = "#define data_n 9" + nl)
  (one '(cpp-def "countof(_)" (bin / (szof (var "_")) (szof (deref (var "_")))))
   = "#define countof(_) (sizeof(_) / sizeof(*_))" + nl)
  ; ...and a body that is tokens rather than an expression rides through as a
  ; spelling, the standing that `fn`'s attributes and `ret`'s prefix already have
- (one '(cpp-def "ai_noicf" "__attribute__((noipa))") = "#define ai_noicf __attribute__((noipa))" + nl)
+ (one '(cpp-def "noicf" "__attribute__((noipa))") = "#define noicf __attribute__((noipa))" + nl)
  ; presence is the arity: no body slot is a bare #define, the feature-test flag
- (one '(cpp-def "AI_FLAG") = "#define AI_FLAG" + nl)
- (one '(cpp-undef "AI_FLAG") = "#undef AI_FLAG" + nl)
+ (one '(cpp-def "FLAG") = "#define FLAG" + nl)
+ (one '(cpp-undef "FLAG") = "#undef FLAG" + nl)
  ; a macro is named by an identifier -- a spelling that is not one would emit C
  ; that no compiler reads
  (gripe? (one '(cpp-def "9bad" 1)))
@@ -167,20 +167,20 @@ here")) = "// two lines" + nl + "// here" + nl))
 ; syntax in C's own grammar, so it is a plain (call (var "defined") ..).
 (: cl-def (n \ ['call ['var "defined"] [['var n]]])
    cl-if ['cpp-if [[['lor (cl-def "__x86_64__") (cl-def "__aarch64__")]
-                     [['cpp-def "ai_data_stride" 16]]]]
-                  [['cpp-def "ai_data_stride" 128]]]
+                     [['cpp-def "data_stride" 16]]]]
+                  [['cpp-def "data_stride" 128]]]
    ; the shape love.h actually wants: a guard with a conditional nested inside it,
    ; every directive at column 0 whatever the depth -- love.h's own style
-   cl-nest ['cpp-if [[['un 'not (cl-def "ai_data_stride")]
+   cl-nest ['cpp-if [[['un 'not (cl-def "data_stride")]
                        [cl-if]]]]
    (test
     (one cl-if = ("#if defined(__x86_64__) || defined(__aarch64__)" + nl
-                    + "#define ai_data_stride 16" + nl + "#else" + nl
-                    + "#define ai_data_stride 128" + nl + "#endif" + nl))
-    (one cl-nest = ("#if !defined(ai_data_stride)" + nl
+                    + "#define data_stride 16" + nl + "#else" + nl
+                    + "#define data_stride 128" + nl + "#endif" + nl))
+    (one cl-nest = ("#if !defined(data_stride)" + nl
                       + "#if defined(__x86_64__) || defined(__aarch64__)" + nl
-                      + "#define ai_data_stride 16" + nl + "#else" + nl
-                      + "#define ai_data_stride 128" + nl + "#endif" + nl + "#endif" + nl))
+                      + "#define data_stride 16" + nl + "#else" + nl
+                      + "#define data_stride 128" + nl + "#endif" + nl + "#endif" + nl))
     ; an #elif arm, and an arm's body carrying more than a directive
     (one '(cpp-if (((var "A") ((note "a"))) ((var "B") ((note "b")))) ((note "c")))
      = ("#if A" + nl + "// a" + nl + "#elif B" + nl + "// b" + nl
@@ -200,9 +200,9 @@ here")) = "// two lines" + nl + "// here" + nl))
 ; calling each other have no other way to be spelled.
 (test
  (one '(proto "shash") = "int shash();" + nl)
- ((one '(proto "shash" (("g" (ptr (struct "ai"))) ("x" (named "word"))
+ ((one '(proto "shash" (("g" (ptr (struct "g"))) ("x" (named "word"))
                         ("env" (ptr (struct "arib")))) (named "uintptr_t") ("static")))
-  = "static uintptr_t shash(struct ai *g, word x, struct arib *env);" + nl)
+  = "static uintptr_t shash(struct g *g, word x, struct arib *env);" + nl)
  ; the appended slots are independent: params alone, then params and a return type
  (one '(proto "f" (("a" int))) = "int f(int a);" + nl)
  (one '(proto "g" () void) = "void g(void);" + nl))
@@ -255,7 +255,7 @@ here")) = "// two lines" + nl + "// here" + nl))
  ; mistakes actually land
  (gripe? (cok '(gdecl (("x" int (bin + (num 1)))))))
  ; the ATTRS slot holds spellings, not nodes, so the walk must not read them as tags
- (1 = cok '(fn "f" () (blk ((ret (num 1) ai_musttail))) void (ai_noinline ai_noicf)))
+ (1 = cok '(fn "f" () (blk ((ret (num 1) love_musttail))) void (love_noinline noicf)))
  (1 = cok '(sassert (bin eq (num 1) (num 1)) "m"))
  (gripe? (cok '(sassert (num 1))))                 ; wants the message
  ; a proto's ATTRS slot holds spellings too, and its params and return type are walked

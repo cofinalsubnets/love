@@ -17,13 +17,13 @@
 #define NIF_STUB_H
 #include "love.h"
 
-const struct ai_mint ai_mint_zero = {0, 0};
+const struct mint mint_zero = {0, 0};
 
 #include "../../src/love/alloc.c"               // a real allocator: deflate's arena asks it at run time
 
-struct ai *ai_strof(struct ai *g, const char *s) { return g; }
-struct ai *str0(struct ai *g, uintptr_t n) { return g; }
-struct ai *ai_please(struct ai *g, uintptr_t n) { return g; }   // ai_have()'s slow path
+struct g *strof(struct g *g, const char *s) { return g; }
+struct g *str0(struct g *g, uintptr_t n) { return g; }
+struct g *please(struct g *g, uintptr_t n) { return g; }   // have()'s slow path
 
 lvm(lvm_ret0) { return g; }
 lvm(lvm_cur) { return g; }

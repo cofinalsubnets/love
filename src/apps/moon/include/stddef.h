@@ -1,5 +1,5 @@
-#ifndef _AI_STDDEF_H
-#define _AI_STDDEF_H
+#ifndef _LOVE_STDDEF_H
+#define _LOVE_STDDEF_H
 typedef unsigned long size_t;
 typedef long ssize_t;
 typedef long ptrdiff_t;

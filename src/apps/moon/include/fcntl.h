@@ -1,5 +1,5 @@
-#ifndef _AI_FCNTL_H
-#define _AI_FCNTL_H
+#ifndef _LOVE_FCNTL_H
+#define _LOVE_FCNTL_H
 /* Linux x86-64 values (octal in the kernel; spelled decimal here) -- the
  * CANONICAL face on every lane; a freebsd kernel takes them translated
  * (moonlibc's os.c flag rows). */

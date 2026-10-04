@@ -15,11 +15,11 @@ static void puts_(const char *s) { bput_s(serial_putc, s); }
 static void puthex(uint32_t v) { bput_x(serial_putc, v, 8); }
 static void putdec(uint32_t v) { bput_n(serial_putc, v, 10); }
 
-// main.c is absent from this build; ai_clock lives in teensy41.c
-uintptr_t ai_clock(void);
+// main.c is absent from this build; love_clock lives in teensy41.c
+uintptr_t love_clock(void);
 static void sleep_ms(uintptr_t ms) {
-  uintptr_t start = ai_clock();
-  while (ai_clock() - start < ms) ; }
+  uintptr_t start = love_clock();
+  while (love_clock() - start < ms) ; }
 
 static void blink_forever(uint32_t ms) {
   for (;;) {
@@ -62,13 +62,13 @@ int main(void) {
     for (;;) ; }
   puts_("; PASS "); putdec(mb); puts_(" MB clean\r\n");
   // heartbeat + echo: prove BOTH wire directions continuously
-  { uint32_t t = 0; uintptr_t last = ai_clock();
+  { uint32_t t = 0; uintptr_t last = love_clock();
     puts_("; echo ready\r\n");
     for (;;) {
       if (serial_rx_ready()) {
         int c = serial_getc();
         puts_("; heard "); puthex((uint32_t) c); puts_("\r\n"); }
-      if (ai_clock() - last >= 2000) {
-        last = ai_clock();
+      if (love_clock() - last >= 2000) {
+        last = love_clock();
         puts_("; tick "); putdec(t++); puts_("\r\n");
         gpio_put(LED_BIT, t & 1); } } } }
