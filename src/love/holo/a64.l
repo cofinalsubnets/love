@@ -118,7 +118,7 @@
                  (: w (v | m ^ -1)                         ; the run wraps the element: ask of its complement
                     (bmrun? (w ^ -1) ?
                        (bmclo w @ c [(64 - c) (c + bmones w 0 - (64 - e))]))))
-            (r = () ? (scare 'a64-bitmask-imm imm)
+            (r = () || r 1 = e ? (scare 'a64-bitmask-imm imm)    ; a run filling its element is all ones: reserved
                (: i <r
                   ct <>r
                   immr (e - i & e - 1)

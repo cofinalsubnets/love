@@ -326,6 +326,13 @@
    _ (holo-bytes 'a64 '((sub sp sp r0)))
    _ (chk-eq "a64.alu.sp.refused" 1 (peep spcaught 0 0))
 
+   ;; -- ..and a logical immediate of all ones, spelled as the unsigned 2^64-1 a C mask reads as, has no
+   ;; bitmask encoding (a run filling its element is reserved): it raises, never lays the reserved word --
+   bmcaught {} _ (pin bmcaught 0 0)
+   _ (hear (a \ b \ a = 'a64-bitmask-imm ? (pin bmcaught 0 1, ()) (welp a b)))
+   _ (holo-bytes 'a64 '((and r0 r0 18446744073709551615)))
+   _ (chk-eq "a64.and.allones.refused" 1 (peep bmcaught 0 0))
+
    ;; -- the text front-end (src/love/holo/text.l) parses to the same IR, so it assembles byte-identically. --
    _ (chk-eq "text.basic" (holo-hex 'x64 '((li r0 60) (ret)))
                           (holo-hex 'x64 (asm-text "li r0, 60\nret")))

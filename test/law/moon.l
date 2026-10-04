@@ -848,6 +848,9 @@
       (okv? (cgt (big + "int t(struct b f){ return (int)f.a; }") 'a64))
       (okv? (cgt (big + "struct b m(long x){ struct b r; r.a=x; return r; }") 'a64))
       (okv? (cgt (big + "int t(struct b f){ return (int)f.a; }") 'x64))
+      ; a64's logical immediate is a run of ones short of the word: 2^64-1 (a C ~0UL) materializes
+      (immok {'tgt 'a64} 'log 7) !(immok {'tgt 'a64} 'log 18446744073709551615)
+      (immok {'tgt 'a64} 'log 9223372036854775807)
       ; ..but an HFA past 16 bytes rides the v registers on a64, which has no lane yet: the two
       ; halves refuse separately and each names which half it is
       (cgt (v3 + "int t(struct v f){ return (int)f.a; }") 'a64 @ g
