@@ -854,15 +854,70 @@
           (: _ (mk ()) _ (mkparents (lg-path nm))
              (? !(lg-lock nm 250) (say err ("sb: ledger " + nm + " is held by another writer\n"), 0)
                 (: cur (lg-now nm)
+                   cv (? (cur = "none") () (blob cur))
+                   en? (lg-entry? cv || lg-entry? <>t)
+                   pt (? en? (lg-split <>t) [<>t ""])
+                   why (? !en? "" !(lg-entry? <pt) "a signed ledger moves only by an entry" (lg-why cv <pt (pt 1)))
                    r (? (cur != was) (say err ("sb: ledger " + nm + " stands at " + cur + ", not " + was + "\n"), 0)
-                        (: h (keep-by <>t (? (cur = "none") () cur))
-                           _ (? (h = cur) 0
-                                (lay (lg-path nm)
-                                     (foldl (\ a l (a + l + "\n")) "" (lg-lines nm)
-                                      + h + " " + show (clock 0 // 1000) + " " + lg-who () + "\n")))
+                        (0 < #why) (say err ("sb: ledger " + nm + " refused: " + why + "\n"), 0)
+                        (: _ (? en? (keep-by (pt 1) (? (lg-entry? cv) (lg-text-of cv 1) (cur = "none") () cur)) 0)
+                           h (keep-by <pt (? (cur = "none") () cur))
+                           _ (? (h = cur) 0 (lg-add nm [(h + " " + show (clock 0 // 1000) + " " + lg-who ())]))
                            (puts (h + "\n"), 1)))
                    _ (lg-unlock nm)
                    r)))))
+   (lg-add nm ls) (lay (lg-path nm) (foldl (\ a l (a + l + "\n")) "" (lg-lines nm + ls)))
+   ; --- a signed queue: a ledger whose head is an entry (src/apps/qlog.l). it moves only by an
+   ;     entry that follows its head, laid with the queue's text after it: FILE is the entry's one
+   ;     line, then the text. the first entry over a plain ledger signs over its text. qlog loads
+   ;     only here, so a plain ledger never asks for keys ---
+   (lg-entry? s) (string? s && starts? s "(entry ")
+   (lg-split s) (: k (fsub s "\n" 0) (? (k < 0) [s ""] [(snip s 0 k) (snip s (k + 1) #s)]))
+   (lg-text-of en get) (: f ((cite 'qlog 'qlog-read) en) (? (tablet? f) (get (f "text"))))
+   ; "" when entry en, laying text qt, may follow the head value prev (() for none), else why
+   (lg-why prev en qt) (lg-why-by prev en qt blob)
+   (lg-why-by prev en qt get)
+    (: tr ((cite 'qlog 'qlog-trust) 0)
+       before (? (lg-entry? prev) (lg-text-of prev get) prev)
+       ((cite 'qlog 'qlog-step) (? (lg-entry? prev) prev ()) en before qt <tr (tr 1)))
+   ; --- a signed queue travels by pull alone: this nest's copy fast-forwards along a peer's when
+   ;     every entry past its head follows; a head never moves back, and a peer's log that does
+   ;     not continue this one is a fork, kept in NAME.forks and said once. plines is the peer's
+   ;     ledger, a line each; get finds a blob there -> the entries taken, -1 for a fork ---
+   (lg-at l x i) (? (atom? l) -1 (<l = x) i (lg-at >l x (i + 1)))   ; where x sits in l, -1 for nowhere
+   (lg-pull nm plines get)
+    (: mine (lg-lines nm) cur (lg-now nm) cv (? (cur = "none") () (blob cur))
+       hs (map (l \ <(words l)) plines) k (? (cur = "none") -1 (lg-at hs cur 0))
+       (? (cur != "none" && !(lg-entry? cv)) 0                    ; a plain ledger stays where it is
+          (k < 0 && cur != "none")
+           (? (elem (? (two? hs) (hs (#hs - 1)) "") (map (l \ <(words l)) mine)) 0   ; the peer is behind
+              (: f (lg-path nm + ".forks") t (look f) hd (? (two? hs) (hs (#hs - 1)) "")
+                 (? (two? t && 0 <= fsub <>t hd 0) -1
+                    (: _ (lay f ((two? t ? <>t "") + hd + "\n"))
+                       _ (say err ("sb: " + nm + " forks from the peer's at " + snip hd 0 12 + " -- kept in " + f + "\n"))
+                       -1))))
+          (: (go i prev n)
+              (? (#hs <= i) n
+                 (: en (get (hs i)) qt (? (string? en) (lg-text-of en get))
+                    why (? !(string? en) "a missing entry" !(string? qt) "a missing text" (lg-why-by prev en qt (\ h (: b (blob h) (? (string? b) b (get h))))))
+                    (? (0 < #why) (: _ (say err ("sb: " + nm + " stops at " + snip (hs i) 0 12 + ": " + why + "\n")) n)
+                       (: _ (keep qt) _ (keep en) _ (lg-add nm [(plines i)]) (go (i + 1) en (n + 1))))))
+             r (? (k = #hs - 1) 0 (go (k + 1) cv 0))
+             _ (? (0 < r) (puts ("sb: " + nm + " took " + show r + " entr" + (? (1 = r) "y" "ies") + "\n")) 0)
+             r)))
+   ; the signed queues a nest holds: [name lines] each
+   (lg-signed d)
+    (: ns (filter (n \ starts? n "queue/") (lg-names (d + "/.sb/ledger") ""))
+       (filter two? (map (n \ (: t (look (d + "/.sb/ledger/" + n))
+                               ls (? (two? t) (filter (\ l (0 < #l)) (lines <>t)) ())
+                               h (? (two? ls) <(words (ls (#ls - 1))) "")
+                               b (? (sb-hex? h) (look (d + "/.sb/blob/" + h)))
+                               (? (two? b && lg-entry? <>b) [n ls])))
+                        ns)))
+   (lg-pull-dir peer)
+    (: _ (mk ()) (map (e \ lg-held <e (_ \ lg-pull <e (e 1) (\ h (: b (? (sb-hex? h) (look (peer + "/.sb/blob/" + h))) (? (two? b) <>b)))))
+                      (lg-signed peer)))
+   (lg-held nm f) (: _ (mkparents (lg-path nm)) (? (lg-lock nm 250) (: r (f 0) _ (lg-unlock nm) r) (say err ("sb: ledger " + nm + " is held by another writer\n"), 0)))
    ; every ledger under dir, by name
    (lg-names dir pre)
     (: es (readdir dir)
@@ -881,6 +936,8 @@
           (atom? r) (: c (lg-now nm) b (? (c = "none") () (blob c))
                        (? (string? b) (: _ (say out b) 1) (say err ("sb: no ledger " + nm + "\n"), 0)))
           (<r = "--id") (: _ (puts (lg-now nm + "\n")) 1)
+          (<r = "--text") (: c (lg-now nm) b (? (c = "none") () (blob c)) t (? (lg-entry? b) (lg-text-of b blob) b)
+                             (? (string? t) (: _ (say out t) 1) (say err ("sb: no ledger " + nm + "\n"), 0)))
           (<r = "--log") (: _ (map (\ l (puts (l + "\n"))) (lg-lines nm)) 1)
           (<r = "--was" && #r = 3) (lg-swap nm <>r <>>r)
           2)))                                             ; malformed: the dispatcher says the usage
@@ -1038,6 +1095,7 @@
                    ru (refadd (refs ()) theirs 1)
                    _ (two? <ru ? (lay ".sb/refs" (show <ru)))
                    _ (? pushed (ssh-ask c ("refs " + show (refs ()))) ())
+                   _ (? got (lg-pull-ssh c) 0)
                    nin (? (tablet? gi) (gi 'laid) 0) nout (? pushed (po 0) 0)
                    nb ((? (tablet? gi) (gi 'blobs) 0) + (? (two? po) (po 2) 0))
                    (? !got (say err ("sb: some objects did not arrive from " + peer + " -- the sync is INCOMPLETE\n"), 0)
@@ -1083,6 +1141,19 @@
                             ru (refadd (refs ()) (form (peer + "/.sb/refs")) 1)
                             _ (two? <ru ? (lay ".sb/refs" (show <ru)))
                             (take-tell gi (head-in peer) <>ru))))))
+   ; the far nest's signed queues, pulled: its ledgers, then the entries and texts this store lacks
+   (lg-pull-ssh c)
+    (: ls (ssh-form (ssh-ask c "ledgers"))
+       (has? h) (two? (stat (".sb/blob/" + h)))
+       (fetch hs) (: w (filter (h \ sb-hex? h && !(has? h)) hs) (? (two? w) (ssh-blobs c w) {}))
+       (? !(two? ls) 0
+          (map (e \ (: hs (map (l \ <(words l)) (e 1)) b1 (fetch hs)
+                       (get1 h) (: b (? (tablet? b1) (peep b1 h ())) (? (two? b) <>b (blob h)))
+                       ts (map (h \ (: en (get1 h) f (? (string? en) ((cite 'qlog 'qlog-read) en)) (? (tablet? f) (f "text") ""))) hs)
+                       b2 (fetch ts)
+                       (get h) (: b (? (tablet? b2) (peep b2 h ())) (? (two? b) <>b (get1 h)))
+                       (lg-held <e (_ \ lg-pull <e (e 1) get))))
+               (filter (e \ two? e && string? <e && starts? <e "queue/" && lg-name? <e) ls))))
    ; --- the far side: one answer per word asked, nothing else on stdout
    (sv-has d l) (cats (map (i \ (? (sb-hex? i && two? (stat (d + i))) "1" "0")) l))
    (sv-each l) (? (two? l) (: _ (fr-put out <l) (sv-each >l)) ())
@@ -1142,6 +1213,7 @@
                     (sv-each (map (b \ <>b) (filter two? bs))))
          "put" (fr-put out (show (sv-put ids)))
          "refs" (fr-put out (sv-refs a))
+         "ledgers" (fr-put out (show (lg-signed ".")))
          "take" (fr-put out (show (sv-take ids)))
          (fr-put out (show ["unknown" v])))
    (sv-loop _)
@@ -1341,7 +1413,10 @@ usage: sb VERB ..
   ledger NAME --id | --log      its hash (none when new) | every entry
   ledger NAME --was OLD FILE    move it to FILE's text (- is stdin) iff it
                   stands at OLD (none for a new one); exit 1 when it has moved on.
-                  ledgers stay in their nest: sync never carries one
+                  plain ledgers stay in their nest. a signed queue (its head an
+                  entry, src/apps/qlog.l) moves only by an entry that follows,
+                  and sync pulls it along a chain that checks
+  ledger NAME --text            the text a signed queue's head names
   -C DIR VERB ..  the verb in the nest at DIR
 "
    ; the same page two ways: asked for, it is the answer; reached by a miss, a complaint
@@ -1357,9 +1432,11 @@ usage: sb VERB ..
                      md (? (elem "--take" >as) 2 (elem "--keep" >as) 1 0)
                      (atom? pr ? (usage ())
                       !(held "." (_ \ (? (ssh? <pr || box-peer? <pr) (sync-ssh <pr md)
-                                         (md < 2) (sync-with <pr md)
-                                         (url? <pr) (sync-url <pr 0)
-                                         (sync-take <pr))))))
+                                         (url? <pr) (sync-url <pr (? (md < 2) md 0))
+                                         ; a nest on this box: then its signed queues, pulled
+                                         (: r (? (md < 2) (sync-with <pr md) (sync-take <pr))
+                                            _ (? (two? (stat (<pr + "/.sb"))) (lg-pull-dir <pr) 0)
+                                            r))))))
            "serve" (sb-serve >as)
            "apply" !(held "." (_ \ sb-apply >as))
            "take" (atom? >as ? (usage ()) !(held "." (_ \ sb-take >as)))
