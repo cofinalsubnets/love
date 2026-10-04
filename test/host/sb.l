@@ -507,10 +507,11 @@
    tsame (gap (dir-pat "../a") (dir-blb "../a") (form "../a/.sb/tips") ".")
    _ (chdir "../a") _ (lay "f1" "no blob\n") tlost (sb-record "its blob goes") _ (chdir "../b")
    tbh (sha256 "no blob\n")
-   _ (rename ("../a/.sb/blob/" + tbh) "../held")
+   tbp (? (two? (stat ("../a/.sb/z/" + tbh))) "../a/.sb/z/" "../a/.sb/blob/")
+   _ (rename (tbp + tbh) "../held")
    th (gap (dir-pat "../a") (dir-blb "../a") (form "../a/.sb/tips") ".")
    tlaid (two? (stat (".sb/patch/" + tlost)))
-   _ (rename "../held" ("../a/.sb/blob/" + tbh))
+   _ (rename "../held" (tbp + tbh))
    tdone (sb-sync "../a")
    tf0 (look "f0") tf1 (look "f1")
    _ (chdir "../../.."))
@@ -590,7 +591,7 @@
    (dg-patch i st p del)
     (: e (peep st p ()) old (two? e ? <e)
        nw (? (del && two? e) ()
-             (keep ("line " + show i + " of " + p + "\n" + (two? e ? <>(look (".sb/blob/" + old)) ""))))
+             (keep ("line " + show i + " of " + p + "\n" + (two? e ? <>(bget old) ""))))
        pt (show ['patch ['note (show i)] ['time i] ('deps . (two? e ? [<>e] ())) ('hunks . [[p old nw]])])
        pid (sha256 pt)
        _ (lay (".sb/patch/" + pid) pt)
@@ -776,6 +777,56 @@
  (elem "store 4 more, not in the head" st2)
  (mtxt = "ONE\nTWO\nBAD\nfour\n")                                    ; the merge, and each line's writer
  (seq blm [[hq "ONE"] [h2 "TWO"] [h4 "BAD"] [h3 "four"]]))
+
+;; delta blobs: a blob coded against its base, every address still its bytes' sha256
+(: _ (mkdir "dz" 493) _ (mkdir "dz/a" 493) _ (mkdir "dz/b" 493) _ (mkdir "dz/d" 493)
+   (dz-clear _) (: _ (map (k \ pull bcache k 0) (keys bcache)) (pin bcache 'n 0))
+   _ (chdir "dz/a") _ (mk ())
+   big (cats (map (i \ "line " + show i + " of a file long enough to code well\n") ^3000))
+   _ (lay "f" big) _ (sb-record "big")
+   h1 (sha256 big)
+   _ (lay "f" (snip big 0 5000 + "an edited line\n" + snip big 5000 #big)) _ (sb-record "one line")
+   f2 <>(look "f") h2 (sha256 f2)
+   z1 <>(look (".sb/z/" + h1)) z2 <>(look (".sb/z/" + h2))
+   zh1 (zhead z1) zh2 (zhead z2)
+   raw1 (two? (stat (".sb/blob/" + h1)))
+   ; twenty more edits on the one path: each codes against the last, the chain starting again at zcap
+   (dz-v i) (big + "tail " + show i + "\n")
+   _ (: (go i) (? (i < 20) (: _ (lay "f" (dz-v i)) _ (sb-record ("e" + show i)) (go (i + 1))) 0) (go 0))
+   hs (map (i \ sha256 (dz-v i)) ^20)
+   ks (map (h \ zdepth-in "." h) hs)
+   _ (dz-clear ())
+   gets (foldl (\ a i (a && (bget (hs i) @ t (two? t && <>t = dz-v i)))) 1 ^20)
+   g2 (bget h2 @ t (two? t && <>t = f2))
+   ; a peer takes the coded form as it stands, and lays the same tree
+   _ (chdir "../b") _ (mk ())
+   _ (sb-sync "../a")
+   bsame (<>(look "f") = dz-v 19)
+   bz (<>(look (".sb/z/" + h2)) = z2 && !(two? (stat (".sb/blob/" + h2))))
+   ; a coded blob whose bytes are not its name is refused
+   _ (chdir "..") _ (hark ["cp" "-r" "a" "c"])
+   cz ("c/.sb/z/" + h2) cb <>(look cz)
+   _ (lay cz (snip cb 0 (#cb - 1) + string (255 - cb (#cb - 1))))
+   _ (chdir "d") _ (mk ()) _ (dz-clear ())
+   dg (gap (dir-pat "../c") (dir-blb "../c") (form "../c/.sb/tips") ".")
+   dbad (0 < dg 'bad && !(bhave? h2))
+   ; the head's blobs as plain files, and a plain blob file still read
+   _ (chdir "../a")
+   up (sb-unpack "../raw" ())
+   up1 (sb-unpack "../raw1" [h2])
+   up1ok (up1 && <>(look ("../raw1/" + h2)) = f2 && #(readdir "../raw1") = 1)
+   upok (up && <>(look ("../raw/" + sha256 (dz-v 19))) = dz-v 19)
+   _ (lay (".sb/blob/" + h1) big) _ (unlink (".sb/z/" + h1)) _ (dz-clear ())
+   legacy (bget h1 @ t (two? t && <>t = big))
+   _ (chdir (sb-home + "/" + sb-dir)))
+
+(test
+ (zh1 1 = "-") (zh1 2 = 0) !raw1                                   ; the first holds itself, coded
+ (zh2 1 = h1) (#z2 < 400)                                           ; one line edited: a few hundred bytes
+ (sb-all? (k \ 0 <= k && k <= zcap) ks) (elem 0 ks) (elem zcap ks) ; the chain stops at zcap and starts again
+ gets g2
+ bsame bz dbad
+ upok up1ok legacy)
 
 (chdir sb-home)
 (hark ["rm" "-rf" sb-dir])

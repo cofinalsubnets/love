@@ -640,6 +640,26 @@ static char *k_strdup(char const *p, uintptr_t n);   // below, with the entry do
 static bool k_vt_rescale(unsigned v);                // below, with fbdraw's cached cursor
 static void fbwash(void);                            // below: the whole paper again
 
+// --- /mnt/host: the seat's own files ------------------------------------------------
+// a seat with files of its own -- the page's folder or the browser's private storage, a
+// directory under node -- answers k_host, and everything beneath the mount is asked of it:
+// one call an operation, the path relative to the mount, 0 or a count or -errno back. a
+// seat without (metal) answers kh_here 0, and no mount is laid.
+enum { kh_here, kh_stat, kh_open, kh_pread, kh_pwrite, kh_trunc, kh_close, kh_fstat,
+       kh_list, kh_mkdir, kh_rmdir, kh_unlink, kh_rename };
+__attribute__((weak)) long k_host(long op, long a, long b, long c, long d, long e) {
+  (void) a, (void) b, (void) c, (void) d, (void) e;
+  return op == kh_here ? 0 : -ENODEV; }
+static char const k_mnt[] = "mnt/host";
+#define k_mnt_n (sizeof k_mnt - 1)
+static bool k_mnt_up;                          // k_fs_init laid the mount
+// a canonical path -> where its tail under the mount starts in it, k_mnt_n for the mount
+// itself (an empty tail); -1 for a path elsewhere
+static intptr_t k_hosted(char const *cp, uintptr_t cn) {
+  if (!k_mnt_up || cn < k_mnt_n || memcmp(cp, k_mnt, k_mnt_n)) return -1;
+  if (cn == k_mnt_n) return (intptr_t) cn;
+  return cp[k_mnt_n] == '/' ? (intptr_t) k_mnt_n + 1 : -1; }
+
 // lay the table on first use: every baked row live off .rodata, plus tmp and the home.
 // idempotent, and a refusal leaves the console standing (the caller answers ENOMEM).
 static bool k_fs_init(void) {
@@ -650,7 +670,7 @@ static bool k_fs_init(void) {
     struct k_file *xr = kmallocw(b2w((uintptr_t) xn * sizeof *xr));
     if (!xr) return false;
     k_extra = xr, k_extra_n = k_baked(xr, xn); }
-  int n = k_bakes_n + k_extra_n, cap = n + 17;
+  int n = k_bakes_n + k_extra_n, cap = n + 18;
   struct k_ent *t = kmallocw(b2w((uintptr_t) cap * sizeof *t));
   if (!t) return false;
   for (int i = 0; i < n; i++) {
@@ -711,6 +731,11 @@ static bool k_fs_init(void) {
   t[n + 16] = (struct k_ent) { .path = "proc/src", .bake = -1, .ms = k_clock_ms(),
                                .mode = 0777, .own = true, .live = true,
                                .dir = !to, .to = to };
+  // and the seat's own files, where it has some: n + 17, a directory row the seat answers under
+  if ((k_mnt_up = k_host(kh_here, 0, 0, 0, 0, 0) > 0))
+    t[n + 17] = (struct k_ent) { .path = k_mnt, .bake = -1, .ms = k_clock_ms(),
+                                 .mode = 0755, .own = true, .dir = true, .live = true };
+  else t[n + 17] = (struct k_ent) {0};          // a retired slot, the next create's
   k_ents = t, k_ents_n = cap, k_ents_cap = cap;
   return true; }
 
@@ -734,7 +759,7 @@ static bool k_ro(char const *cp, uintptr_t cn) {
 // ..and a move or a removal leaves these be besides: a special row, and every directory
 // above one or above the tree, whose rename would carry them out from under their names
 static char const *const k_pins[] = { k_tree, k_vtfg, k_vtbg, k_vtscale, k_vtfont, k_plift,
-                                      k_pmem, k_pgauge, k_pcmd, k_dnull, k_dzero };
+                                      k_pmem, k_pgauge, k_pcmd, k_dnull, k_dzero, k_mnt };
 static bool k_pinned(char const *cp, uintptr_t cn) {
   if (k_ro(cp, cn)) return true;
   for (uintptr_t i = 0; cn && i < countof(k_pins); i++) {
@@ -767,8 +792,11 @@ static uintptr_t k_size(int i) {
   return e->own ? e->len : k_bake_row(e->bake)->len; }
 
 // src/inle/sys.c's seek: a negative errno, the sign every C face here wears; whence is SEEK_*.
+static struct k_hf *k_hf(int fd);
+static long k_host_lseek(struct k_hf *f, long off, int whence);
 long k_fd_lseek(int fd, long off, int whence) {
   if (!k_row_live(fd)) return -9;                        // EBADF
+  if (k_hf(fd)) return k_host_lseek(k_hf(fd), off, whence);
   struct k_fh *h = k_fh(fd);
   if (!h) return -29;                                    // ESPIPE: a console or a pipe
   if (whence < 0 || whence > 2) return -22;              // EINVAL
@@ -782,6 +810,8 @@ static bool k_fit(int i, uintptr_t need);
 // ..and its truncate: cut, or stretched with zeros; a reader's row is refused as linux does
 long k_fd_truncate(int fd, long n) {
   if (!k_row_live(fd)) return -9;                        // EBADF
+  struct k_hf *hf = k_hf(fd);
+  if (hf) return !hf->w ? -9 : n < 0 ? -22 : k_host(kh_trunc, hf->h, n, 0, 0, 0);
   struct k_fh *h = k_fh(fd);
   if (!h) return -22;                                    // EINVAL: a console or a pipe
   if (!h->w) return -9;
@@ -1123,6 +1153,62 @@ static int k_fd_free_at(int at) {
   return k_sources_n > lo ? k_sources_n : lo; }
 static int k_fd_free(void) { return k_fd_free_at(0); }
 
+// one open host file, shared by its dups: so the offset is too, as POSIX has it
+struct k_hf { long h; uintptr_t pos; int refs; bool w; };
+static intptr_t host_readn(int fd, unsigned char *dst, uintptr_t n) {
+  struct k_hf *f = k_source(fd)->state;
+  long k = k_host(kh_pread, f->h, (long) dst, (long) n, (long) f->pos, 0);
+  if (k <= 0) return -1;                       // the end, never 0: that would park the reader
+  f->pos += (uintptr_t) k;
+  return k; }
+static intptr_t host_writen(int fd, unsigned char const *src, uintptr_t n) {
+  struct k_hf *f = k_source(fd)->state;
+  if (!f->w) return -1;
+  if (!n) return 0;
+  long k = k_host(kh_pwrite, f->h, (long) src, (long) n, (long) f->pos, 0);
+  if (k <= 0) return -1;
+  f->pos += (uintptr_t) k;
+  return k; }
+static void host_close(int fd) {
+  struct k_source *s = k_source(fd);
+  if (!s) return;
+  struct k_hf *f = s->state;
+  if (f && --f->refs <= 0) k_host(kh_close, f->h, 0, 0, 0, 0), kfree(f);
+  *s = (struct k_source) {0}; }
+static struct k_hf *k_hf(int fd) {
+  struct k_source *s = k_source(fd);
+  return s && s->readn == host_readn ? s->state : NULL; }
+static long k_host_lseek(struct k_hf *f, long off, int whence) {
+  if (whence < 0 || whence > 2) return -EINVAL;
+  long st[3] = { 0, 0, 0 };
+  if (whence == 2) {
+    long e = k_host(kh_fstat, f->h, (long) st, 0, 0, 0);
+    if (e) return e; }
+  long at = off + (whence == 1 ? (long) f->pos : whence == 2 ? st[0] : 0);
+  if (at < 0) return -EINVAL;
+  return (long) (f->pos = (uintptr_t) at); }
+// the seat's stat -> size, ms, mode with the kind over the bits
+static int k_host_stat(char const *p, uintptr_t n, uintptr_t *st3) {
+  long r[3] = { 0, 0, 0 };
+  long e = k_host(kh_stat, (long) p, (long) n, (long) r, 0, 0);
+  if (e) return (int) e;
+  st3[0] = (uintptr_t) r[0], st3[1] = (uintptr_t) r[1], st3[2] = (uintptr_t) r[2];
+  return 0; }
+static int k_host_open(char const *p, uintptr_t n, char m) {
+  if (!n) return -EISDIR;                      // the mount is a directory
+  long h = k_host(kh_open, (long) p, (long) n, m, 0, 0);
+  if (h < 0) return (int) h;
+  int fd = k_fd_free();
+  struct k_hf *f = kmallocw(b2w(sizeof *f));
+  struct k_source *s = f ? k_source_open(fd) : NULL;
+  if (!s) { kfree(f); k_host(kh_close, h, 0, 0, 0, 0); return -ENOMEM; }
+  long st[3] = { 0, 0, 0 };
+  if (m == 'a') k_host(kh_fstat, h, (long) st, 0, 0, 0);
+  *f = (struct k_hf) { .h = h, .pos = (uintptr_t) st[0], .refs = 1, .w = m != 'r' };
+  *s = (struct k_source) { .readn = host_readn, .writen = host_writen,
+                           .ready = ram_ready, .close = host_close, .state = f };
+  return fd; }
+
 // open a path -> an fd or a negative errno. m is r read, w truncate, a append, c and o write
 // in place from the start; w a and c create an absent path whose parent is a directory,
 // for r and o absence stays absence. a directory does
@@ -1133,6 +1219,8 @@ love_noinline int k_fs_open(char const *p, uintptr_t pn, char m) {
   char cp[256];
   intptr_t cn = k_walk(p, pn, cp, true);
   if (cn < 0) return (int) cn;
+  intptr_t ho = k_hosted(cp, (uintptr_t) cn);
+  if (ho >= 0) return k_host_open(cp + ho, (uintptr_t) (cn - ho), m);
   if (k_ro(cp, (uintptr_t) cn)) {                // the tree: read only, and the mount a directory
     if (m != 'r') return -EROFS;
     if (cn == (intptr_t) k_tree_n) return -EISDIR; }
@@ -1204,9 +1292,15 @@ love_noinline int k_fs_stat(char const *p, uintptr_t pn, struct k_st *st, bool f
   intptr_t cn;
   if (!k_fs_init()) return -ENOMEM;
   if ((cn = k_walk(p, pn, cp, follow)) < 0) return (int) cn;
+  *st = (struct k_st) { 0, 0, 0 };
+  intptr_t ho = k_hosted(cp, (uintptr_t) cn);
+  if (ho >= 0) {
+    uintptr_t r[3];
+    int e = k_host_stat(cp + ho, (uintptr_t) (cn - ho), r);
+    if (!e) *st = (struct k_st) { r[0], r[1], r[2] };
+    return e; }
   int i = k_find(cp, (uintptr_t) cn);
   uintptr_t kid;
-  *st = (struct k_st) { 0, 0, 0 };
   // lstat, the only reason the walk left the last name alone: the link itself, sized by
   // its target the way stat(2) has it.
   if (!follow && i >= 0 && k_ents[i].to)
@@ -1483,6 +1577,7 @@ love_noinline static int k_dup_row(int src, int at) {
   s = k_source(src);                            // the grow may have moved the table
   *t = *s;
   if (h) t->state = h, k_ents[h->i].refs++;
+  else if (s->readn == host_readn) ((struct k_hf*) s->state)->refs++;
   else if (s->readn == pipe_readn) ((struct k_pipe*) s->state)->rrefs++;
   else if (s->writen == pipe_writen) ((struct k_pipe*) s->state)->wrefs++;
   else if (s->readn == pty_mreadn) ((struct k_pty*) s->state)->mrefs++;
@@ -1540,11 +1635,37 @@ static void k_dir_close(int fd) {
  kfree(s->state);
  *s = (struct k_source) {0}; }
 
+// a host directory opens as its whole listing, taken once: a kind byte (d or f), the
+// name, a NUL, each; the cursor walks it
+struct k_hd { char *b; long n, at, k; };
+static void k_hdir_close(int fd) {
+ struct k_source *s = k_source(fd);
+ if (!s) return;
+ struct k_hd *h = s->state;
+ if (h) kfree(h->b), kfree(h);
+ *s = (struct k_source) {0}; }
+static long k_host_opendir(char const *p, uintptr_t n) {
+ for (long cap = 4096; ; ) {
+  char *b = kmallocw(b2w((uintptr_t) cap));
+  if (!b) return -ENOMEM;
+  long k = k_host(kh_list, (long) p, (long) n, (long) b, cap, 0);
+  if (k < 0) return kfree(b), k;
+  if (k > cap) { kfree(b); cap = k; continue; }        // the seat said how much room it wants
+  int fd = k_fd_free();
+  struct k_hd *h = kmallocw(b2w(sizeof *h));
+  struct k_source *s = h ? k_source_open(fd) : NULL;
+  if (!s) { kfree(h), kfree(b); return -ENOMEM; }
+  *h = (struct k_hd) { b, k, 0, 0 };
+  *s = (struct k_source) { .close = k_hdir_close, .state = h };
+  return fd; } }
+
 long k_fs_opendir(char const *p, uintptr_t pn) {
  char cp[256];
  intptr_t cn;
  if (!k_fs_init()) return -ENOMEM;
  if ((cn = k_walk(p, pn, cp, true)) < 0) return cn;
+ intptr_t ho = k_hosted(cp, (uintptr_t) cn);
+ if (ho >= 0) return k_host_opendir(cp + ho, (uintptr_t) (cn - ho));
  if (!k_dirp(cp, (uintptr_t) cn))
   return k_find(cp, (uintptr_t) cn) >= 0 ? -ENOTDIR : -ENOENT;
  int fd = k_fd_free();
@@ -1560,9 +1681,25 @@ long k_fs_opendir(char const *p, uintptr_t pn) {
 // to 8 -- so every record stays 8-aligned in the caller's buffer.
 struct k_dent { unsigned long ino; long off; unsigned short reclen;
                 unsigned char type; char name[]; };
+static long k_host_dents(struct k_hd *h, void *buf, long cap) {
+ long off = 0;
+ while (h->at < h->n) {
+  char const *e = h->b + h->at;
+  uintptr_t k = strlen(e + 1);
+  long rl = (long) ((19 + k + 1 + 7) & ~(uintptr_t) 7);
+  if (off + rl > cap) return off ? off : -EINVAL;
+  struct k_dent *d = (struct k_dent*) ((char*) buf + off);
+  d->ino = (unsigned long) h->k + 1;            // fabricated: the place in the listing
+  d->off = h->k + 1;
+  d->reclen = (unsigned short) rl;
+  d->type = e[0] == 'd' ? 4 : 8;                // DT_DIR : DT_REG
+  memcpy(d->name, e + 1, k + 1);
+  off += rl, h->k++, h->at += (long) k + 2; }
+ return off; }
 long k_fd_dents(int fd, void *buf, long cap) {
  if (!k_row_live(fd)) return -EBADF;
  struct k_source *s = k_source(fd);
+ if (s->close == k_hdir_close) return k_host_dents(s->state, buf, cap);
  if (s->close != k_dir_close) return -ENOTDIR;
  struct k_dh *h = s->state;
  long off = 0;
@@ -1603,9 +1740,16 @@ long k_fd_stat(int fd, struct k_st *st) {
     st->ms = k_ents[h->i].ms;
     st->mode = k_mode_file | k_ents[h->i].mode;
     return 0; }
+  if (s->readn == host_readn) {
+    long r[3] = { 0, 0, 0 };
+    long e = k_host(kh_fstat, ((struct k_hf*) s->state)->h, (long) r, 0, 0, 0);
+    if (e) return e;
+    *st = (struct k_st) { (uintptr_t) r[0], (uintptr_t) r[1], (uintptr_t) r[2] };
+    return 0; }
   if (s->readn == pipe_readn || s->writen == pipe_writen) {
     st->mode = 0010000 | 0600;                  // a fifo
     return 0; }
+  if (s->close == k_hdir_close) return st->mode = k_mode_dir | 0755, 0;
   if (s->close == k_dir_close) {
     struct k_dh *h = s->state;
     int i = k_find(h->p, h->pn);
@@ -1768,6 +1912,8 @@ love_noinline int k_fs_mkdir(char const *p, uintptr_t pn, uintptr_t mode) {
   intptr_t cn;
   if (!k_fs_init()) return -ENOMEM;
   if ((cn = k_walk(p, pn, cp, false)) < 0) return (int) cn;
+  intptr_t ho = k_hosted(cp, (uintptr_t) cn);
+  if (ho >= 0) return cn == ho ? -EEXIST : (int) k_host(kh_mkdir, (long) (cp + ho), cn - ho, 0, 0, 0);
   if (k_ro(cp, (uintptr_t) cn)) return -EROFS;
   uintptr_t junk;
   if (!cn || k_find(cp, (uintptr_t) cn) >= 0 || k_kids(cp, (uintptr_t) cn, &junk))
@@ -1781,6 +1927,8 @@ love_noinline int k_fs_rmdir(char const *p, uintptr_t pn) {
   intptr_t cn;
   if (!k_fs_init()) return -ENOMEM;
   if ((cn = k_walk(p, pn, cp, false)) < 0) return (int) cn;
+  intptr_t ho = k_hosted(cp, (uintptr_t) cn);
+  if (ho > (intptr_t) k_mnt_n) return (int) k_host(kh_rmdir, (long) (cp + ho), cn - ho, 0, 0, 0);
   if (k_pinned(cp, (uintptr_t) cn)) return -EROFS;
   if (!cn) return -EBUSY;                         // the root stays
   int i = k_find(cp, (uintptr_t) cn);
@@ -1797,6 +1945,8 @@ love_noinline int k_fs_unlink(char const *p, uintptr_t pn) {
   intptr_t cn;
   if (!k_fs_init()) return -ENOMEM;
   if ((cn = k_walk(p, pn, cp, false)) < 0) return (int) cn;
+  intptr_t ho = k_hosted(cp, (uintptr_t) cn);
+  if (ho >= 0) return cn == ho ? -EISDIR : (int) k_host(kh_unlink, (long) (cp + ho), cn - ho, 0, 0, 0);
   if (k_ro(cp, (uintptr_t) cn)) return -EROFS;
   int i = cn ? k_find(cp, (uintptr_t) cn) : -1;
   if (i < 0) return k_dirp(cp, (uintptr_t) cn) ? -EISDIR : -ENOENT;
@@ -1813,6 +1963,7 @@ love_noinline int k_fs_symlink(char const *t, uintptr_t tn, char const *p, uintp
   if (!k_fs_init()) return -ENOMEM;
   if (!tn || tn >= 256) return -ENAMETOOLONG;
   if ((cn = k_walk(p, pn, cp, false)) < 0) return (int) cn;
+  if (k_hosted(cp, (uintptr_t) cn) >= 0) return -EPERM;   // the seat keeps no links
   if (k_ro(cp, (uintptr_t) cn)) return -EROFS;
   uintptr_t junk;
   if (!cn || k_find(cp, (uintptr_t) cn) >= 0 || k_kids(cp, (uintptr_t) cn, &junk))
@@ -1833,6 +1984,8 @@ love_noinline intptr_t k_fs_readlink(char const *p, uintptr_t pn, char *b, uintp
   intptr_t cn;
   if (!k_fs_init()) return -ENOMEM;
   if ((cn = k_walk(p, pn, cp, false)) < 0) return cn;
+  intptr_t ho = k_hosted(cp, (uintptr_t) cn);
+  if (ho >= 0) { uintptr_t r[3]; int e = k_host_stat(cp + ho, (uintptr_t) (cn - ho), r); return e ? e : -EINVAL; }
   int i = cn > 0 ? k_find(cp, (uintptr_t) cn) : -1;
   if (i < 0) return -ENOENT;
   if (!k_ents[i].to) return -EINVAL;
@@ -1852,6 +2005,10 @@ love_noinline int k_fs_rename(char const *o, uintptr_t olen,
   if (!k_fs_init()) return -ENOMEM;
   if ((on = k_walk(o, olen, op, false)) < 0) return (int) on;
   if ((nn = k_walk(n, nlen, np, false)) < 0) return (int) nn;
+  intptr_t ho = k_hosted(op, (uintptr_t) on), hn = k_hosted(np, (uintptr_t) nn);
+  if (ho > (intptr_t) k_mnt_n && hn > (intptr_t) k_mnt_n)
+    return (int) k_host(kh_rename, (long) (op + ho), on - ho, (long) (np + hn), nn - hn, 0);
+  if ((ho > (intptr_t) k_mnt_n) != (hn > (intptr_t) k_mnt_n)) return -EXDEV;   // across the mount
   if (k_pinned(op, (uintptr_t) on) || k_pinned(np, (uintptr_t) nn)) return -EROFS;
   if (!on) return -EBUSY;                         // the root does not move
   if (on == nn && !memcmp(op, np, (uintptr_t) on)) return 0;           // itself: done
@@ -1907,7 +2064,13 @@ love_noinline int k_fs_chdir(char const *p, uintptr_t pn) {
   intptr_t cn;
   if (!k_fs_init()) return -ENOMEM;
   if ((cn = k_walk(p, pn, cp, true)) < 0) return (int) cn;
-  if (cn) {
+  intptr_t ho = k_hosted(cp, (uintptr_t) cn);
+  if (ho >= 0) {
+    uintptr_t r[3];
+    int e = k_host_stat(cp + ho, (uintptr_t) (cn - ho), r);
+    if (e) return e;
+    if ((r[2] & 0170000) != k_mode_dir) return -ENOTDIR; }
+  else if (cn) {
     int i = k_find(cp, (uintptr_t) cn);
     if (i >= 0 && !k_ents[i].dir) return -ENOTDIR;
     uintptr_t junk;
@@ -1930,6 +2093,8 @@ love_noinline int k_fs_chmod(char const *p, uintptr_t pn, uintptr_t mode) {
   intptr_t cn;
   if (!k_fs_init()) return -ENOMEM;
   if ((cn = k_walk(p, pn, cp, true)) < 0) return (int) cn;
+  intptr_t ho = k_hosted(cp, (uintptr_t) cn);     // the seat keeps no bits or dates of ours:
+  if (ho >= 0) { uintptr_t r[3]; return k_host_stat(cp + ho, (uintptr_t) (cn - ho), r); }   // there is all
   if (k_ro(cp, (uintptr_t) cn)) return -EROFS;
   int i = k_find(cp, (uintptr_t) cn);
   if (i < 0) return k_dirp(cp, (uintptr_t) cn) ? 0 : -ENOENT;
@@ -1941,6 +2106,8 @@ love_noinline int k_fs_utime(char const *p, uintptr_t pn, uintptr_t ms) {
   intptr_t cn;
   if (!k_fs_init()) return -ENOMEM;
   if ((cn = k_walk(p, pn, cp, true)) < 0) return (int) cn;
+  intptr_t ho = k_hosted(cp, (uintptr_t) cn);     // the seat keeps no bits or dates of ours:
+  if (ho >= 0) { uintptr_t r[3]; return k_host_stat(cp + ho, (uintptr_t) (cn - ho), r); }   // there is all
   if (k_ro(cp, (uintptr_t) cn)) return -EROFS;
   int i = k_find(cp, (uintptr_t) cn);
   if (i < 0) return k_dirp(cp, (uintptr_t) cn) ? 0 : -ENOENT;

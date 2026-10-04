@@ -18,14 +18,17 @@
 //        { fault }                        the module trapped: the message, and the worker stops
 //        { lift, bytes | error }          a ramfs file the terminal asked for (see lift below)
 //        { copy }                         a selection the console made, as text: the page's clipboard
+//   in, beside the boot: { host: { port, ring } }  the seat's own files (hostfs.mjs): a
+//                                         port to ask it on and the ring its answers land in
 
 // the five wear linux's numbers; the horn's four are ours -- sound has no call to borrow
 // one from, so the block sits well clear of any syscall table (src/inle/wasm/horn.c).
+import { host_f64, host_at, host_win } from './hostring.mjs';
 const NR = { read: 0, write: 1, nanosleep: 35, reboot: 169, clock_gettime: 228,
              horn_open: 0x4000, horn_write: 0x4001, horn_lag: 0x4002, horn_close: 0x4003,
              lift: 0x4010, scan: 0x4011, drew: 0x4012, kexec: 0x4013,
              point: 0x4014, paste: 0x4015, copy: 0x4016,
-             fetch_open: 0x4020, fetch_read: 0x4021, fetch_close: 0x4022 };
+             fetch_open: 0x4020, fetch_read: 0x4021, fetch_close: 0x4022, host: 0x4030 };
 const ENOENT = 2, EBADF = 9, EACCES = 13, ENOSYS = 38, ENAMETOOLONG = 36;
 // the ring: Int32 [0] the reader's head, [1] the writer's tail, [2] the wake count, [3] a
 // lift request, [4] a resize request with [5] [6] [7] the width, height and glyph scale it
@@ -149,6 +152,49 @@ const resize = () => {
   if (fbCtx) fbImg = fbCtx.createImageData(w, h);
   drew = true; };                                         // the whole screen is new
 
+// the seat's own files (kmain's /mnt/host, src/inle/wasm/arch.c's hc_host + op): hostfs.mjs
+// holds them, on a thread that has an event loop, so an op is a message there and a wait
+// here on the shared word it answers on -- the read's bytes back, or the write's in, through
+// the window. none attached, and kh_here answers 0: the kernel lays no mount.
+const kh = ['here', 'stat', 'open', 'pread', 'pwrite', 'trunc', 'close', 'fstat', 'list',
+            'mkdir', 'rmdir', 'unlink', 'rename'];
+let hport = null, hctl = null, hf64 = null, hwin = null;
+const hostAsk = (q) => {
+  Atomics.store(hctl, 0, 1);
+  hport.postMessage(q);
+  for (let waited = 0; Atomics.load(hctl, 0) === 1; waited++)
+    if (Atomics.wait(hctl, 0, 1, 1000) === 'timed-out' && waited > 30) { Atomics.store(hctl, 0, 0); return -5; }   // EIO
+  Atomics.store(hctl, 0, 0);
+  return hf64[0]; };
+const hstr = (p, n) => dec.decode(u8().subarray(Number(p), Number(p) + Number(n)));
+const host = (op, a, b, c, d) => {
+  const k = kh[op];
+  if (k === 'here') return hport ? 1 : 0;
+  if (!hport || !k) return -19;                           // ENODEV
+  switch (k) {
+    case 'stat': case 'fstat': {
+      const r = k === 'stat' ? hostAsk({ op: k, path: hstr(a, b) }) : hostAsk({ op: k, h: Number(a) });
+      if (r === 0) new BigInt64Array(memory.buffer, Number(k === 'stat' ? c : b), 3)
+        .set([BigInt(hf64[1]), BigInt(hf64[2]), BigInt(hf64[3])]);
+      return r; }
+    case 'open': return hostAsk({ op: k, path: hstr(a, b), m: String.fromCharCode(Number(c)) });
+    case 'pread': {
+      const n = Math.min(Number(c), hwin.length), r = hostAsk({ op: k, h: Number(a), n, off: Number(d) });
+      if (r > 0) u8().set(hwin.subarray(0, r), Number(b));
+      return r; }
+    case 'pwrite': {
+      const n = Math.min(Number(c), hwin.length);
+      hwin.set(u8().subarray(Number(b), Number(b) + n));
+      return hostAsk({ op: k, h: Number(a), n, off: Number(d) }); }
+    case 'trunc': return hostAsk({ op: k, h: Number(a), n: Number(b) });
+    case 'close': return hostAsk({ op: k, h: Number(a) });
+    case 'list': {
+      const r = hostAsk({ op: k, path: hstr(a, b), cap: Number(d) });
+      if (r > 0 && r <= Number(d)) u8().set(hwin.subarray(0, r), Number(c));
+      return r; }
+    case 'rename': return hostAsk({ op: k, path: hstr(a, b), path2: hstr(c, d) });
+    default: return hostAsk({ op: k, path: hstr(a, b) }); } };
+
 const isNode = typeof process !== 'undefined' && !!process.versions?.node;
 const port = isNode ? (await import('node:worker_threads')).parentPort
            : typeof WorkerGlobalScope !== 'undefined' ? self : null;
@@ -245,7 +291,8 @@ const hornSink = () => {
   if (((p - w) | 0) > 0) p = w;                           // the clock passed the writer
   Atomics.store(ctl, c_played, p); };
 
-const sys1 = (n, a, b, c) => {
+const sys1 = (n, a, b, c, d, e) => {
+  if (Number(n) >= NR.host && Number(n) < NR.host + kh.length) return BigInt(host(Number(n) - NR.host, a, b, c, d, e));
   switch (Number(n)) {
     case NR.write: {                                    // the serial line: fds 1 and 2 alike
       const p = Number(b), len = Number(c), s = dec.decode(u8().subarray(p, p + len), { stream: true });
@@ -398,6 +445,9 @@ async function boot(msg) {
   if (imgn) { u8().set(new Uint8Array(msg.image), img); hi = down(img, 4096); }
   fb = msg.fb;
   origin = msg.origin ?? null;
+  if (msg.host && !hport) {
+    hport = msg.host.port, hctl = new Int32Array(msg.host.ring, 0, 4);
+    hf64 = new Float64Array(msg.host.ring, host_f64, 4), hwin = new Uint8Array(msg.host.ring, host_at, host_win); }
   if (isNode && origin) {
     ({ readFileSync, realpathSync } = await import('node:fs'));
     nodePath = await import('node:path'); }
