@@ -19,8 +19,7 @@
 ;
 ; the coder is greedy LZ77 in 16k-symbol blocks, each written the cheapest of stored,
 ; fixed or dynamic Huffman; the decoder takes all three.
-; gz-find has a holo IR installed through src/apps/forge.l above gz-floor (test/gate/gzfind.l
-; is the differential). gz-inflate is a door onto src/love/lib/gz.c's nif, falling back to
+; gz-inflate is a door onto src/love/lib/gz.c's nif, falling back to
 ; gz-puff (test/host/gzc.l fuzzes the pair).
 ; a cask is mutable bytes; a tray's pin answers a copy, so trays hold constant tables only.
 ; the wrap registers module 'gz in the dist cat too, so the bake compiles it once.
@@ -197,121 +196,6 @@
                     (bl < l ? (lim <= l ? [l dist] (go nx (d - 1) l dist))
                                 (go nx (d - 1) bl bd))))))
        (go (gz-c32 head (gz-hash s i)) gz-chain 0 0))
-   ; --- the same finder, in machine code -------------------------------------
-   ; the twin above is the definition. this is one holo IR program that says the same
-   ; thing to a cpu, installed through src/apps/forge.l's `nif` seam; every guard in it jumps
-   ; to `deopt`, which enters the twin with the arguments untouched. so a shape the IR
-   ; does not say is not a bug -- it is the twin's turn.
-   ;
-   ; and the reason is not "it is hot", which forge's header says is not a reason. it is
-   ; VOCABULARY: `(s i)` is a VM apply, and no compiler improvement hands love code an
-   ; instruction the VM has no name for. 2.7x on the whole of gz-deflate, byte-identical
-   ; output, all of it in the finder. the other axis forge names -- a constant known only
-   ; at run time -- this does not have; what a C nif could not do is be written in the
-   ; seed's own source, which is the whole reason to reach for holo and not for C.
-   ;
-   ; regs (after the callee-saved file): r11=ai (the bytes of s, at i) r13=lim r14=bl
-   ; r12=bd r3=k r10=d r9=l r8=pbp, r0/r7 scratch; [sp+0]=i+1 [sp+8]=prev's bytes.
-   ; the guards are wider than the twin's domain because the twin reads through love:
-   ; `(s i)` bounds-checks and a cask index is checked, so a torn `n` or a hand-built
-   ; window array is merely a wrong answer there and is a wild read here. so the kernel
-   ; proves what it is about to trust -- n within the string, the two casks window-sized,
-   ; i+3 within n (the hash reads three bytes) -- and hands back everything else.
-   ; ld4 reads a cask cell in one load, which is the little-endian layout gz-c32
-   ; writes; every holo backend is little-endian. and it sign-extends, where gz-c32's
-   ; four shifted bytes do not -- so `zx4` follows every one of them. Without it a cell
-   ; with the top bit set reads as a negative k, which this walks off as "no chain" and
-   ; the twin walks into a wild position: two different answers from one cask.
-   (gz-find-ir _)
-    (: guard (cite 'forge 'forge-guard)     fixg (cite 'forge 'forge-fixg)
-       room  (cite 'forge 'forge-room)      save (cite 'forge 'forge-save)
-       restore (cite 'forge 'forge-restore) epi  (cite 'forge 'forge-epi-ptr)
-       strk (apof "ab")   caskk (apof (cask 1))   chaink (apof '(1 2))
-       ; the extra two slots ride above the callee-saved file, so they come off first
-       unwind ('(label deoptp) . ('(pop r0) . '(pop r0) . restore + '((jmp deopt))))
-       (guard 0 strk + guard 3 caskk + guard 4 caskk + fixg 1 + fixg 2
-       + [ ; both windows must be the format's size: the kernel indexes them by a mask
-           '(ld r0 r1 24) '(ld r0 r0 8) '(ld r0 r0 8)
-           ['li 'r8 (4 * gz-wsize)] '(cmp r0 r8) '(br lt deopt)
-           '(ld r0 r1 32) '(ld r0 r0 8) '(ld r0 r0 8)
-           ['li 'r8 (4 * gz-wsize)] '(cmp r0 r8) '(br lt deopt)
-           '(ld r0 r1 8) '(sar r0 1)                          ; n
-           '(ld r7 r1 0) '(ld r7 r7 8) '(cmp r0 r7) '(br gt deopt)   ; n <= tally s
-           '(li r8 2147483647) '(cmp r0 r8) '(br gt deopt)    ; and inside a 4-byte cell
-           '(ld r7 r1 16) '(sar r7 1) '(cmp r7 0) '(br lt deopt)     ; 0 <= i
-           '(mov r8 r7) '(add r8 r8 3) '(cmp r8 r0) '(br gt deopt)]  ; i + 3 <= n
-       + room 96                                              ; two chain cells and slack
-       + save
-       + [ '(ld r11 r1 0) '(lea r11 r11 16)
-           '(ld r7 r1 16) '(sar r7 1) '(add r11 r11 r7)       ; ai = s bytes + i
-           '(ld r0 r1 8) '(sar r0 1) '(sub r0 r0 r7)          ; n - i
-           ['li 'r8 gz-maxmatch] '(cmp r0 r8) '(br le lok) '(mov r0 r8)
-           '(label lok) '(mov r13 r0)                         ; lim
-           '(ld r0 r1 32) '(ld r0 r0 8) '(lea r0 r0 16) '(push r0)   ; prev's bytes
-           '(mov r0 r7) '(add r0 r0 1) '(push r0)             ; i + 1
-           '(ld1 r0 r11 0) '(zx1 r0) '(shl r0 10)             ; the three-byte hash
-           '(ld1 r7 r11 1) '(zx1 r7) '(shl r7 5) '(xor r0 r0 r7)
-           '(ld1 r7 r11 2) '(zx1 r7) '(xor r0 r0 r7)
-           ['li 'r7 gz-hmask] '(and r0 r0 r7)
-           '(ld r7 r1 24) '(ld r7 r7 8) '(lea r7 r7 16)
-           '(leax r7 r7 r0 4 0) '(ld4 r3 r7 0) '(zx4 r3)      ; k = head[h]
-           ['li 'r10 gz-chain] '(li r14 0) '(li r12 0)        ; d, bl, bd
-           ; the chain walk. `k <= 0` is the twin's (! k) exactly, and it is also what
-           ; keeps p non-negative, so every byte the compare below reads is inside s.
-           '(label cl)
-           '(cmp r3 1) '(br lt cend)
-           '(cmp r10 0) '(br le cend)
-           '(ld r0 sp 0) '(sub r0 r0 r3)                      ; dist = (i + 1) - k
-           ['li 'r7 gz-wsize] '(cmp r0 r7) '(br gt cend)
-           ; a cask holding a position ahead of i is not this window's -- the twin reads
-           ; it through love's own bounds check and this cannot, so it goes to the twin
-           '(cmp r0 1) '(br lt deoptp)
-           '(mov r8 r11) '(sub r8 r8 r0)                      ; the other cursor
-           '(li r9 0)
-           '(label ml) '(cmp r9 r13) '(br ge mle)
-           '(ldxb r0 r11 r9 1 0) '(ldxb r7 r8 r9 1 0)
-           '(cmp r0 r7) '(br ne mle)
-           '(add r9 r9 1) '(jmp ml)
-           '(label mle)                                       ; l
-           '(mov r0 r3) '(sub r0 r0 1) ['li 'r7 gz-wmask] '(and r0 r0 r7)
-           '(ld r7 sp 8) '(leax r7 r7 r0 4 0) '(ld4 r0 r7 0) '(zx4 r0)   ; the next link
-           '(cmp r14 r9) '(br ge cnext)
-           '(mov r14 r9) '(mov r12 r11) '(sub r12 r12 r8)     ; a longer run: keep it
-           '(cmp r9 r13) '(br ge cend)                        ; and lim is all there is
-           '(label cnext)
-           '(mov r3 r0) '(sub r10 r10 1) '(jmp cl)
-           '(label cend) '(pop r0) '(pop r0)
-           ; the answer is (bl bd), two chain cells; the zero point comes off the
-           ; extras slot, being the one address no book name hands out
-           '(mov r0 r2) '(add r2 r2 48) '(mov r7 r0) '(add r7 r7 24)
-           ['li 'r8 chaink] '(st r0 0 r8) '(st r7 0 r8)
-           '(mov r9 r14) '(shl r9 1) '(or r9 r9 1) '(st r0 8 r9)
-           '(st r0 16 r7)
-           '(mov r9 r12) '(shl r9 1) '(or r9 r9 1) '(st r7 8 r9)
-           '(ld r9 r5 32) '(st r7 16 r9)]
-       + restore + epi + unwind))
-
-   ; the finder in force, resolved once per deflate and cached for the process.
-   ; lazy, and gated on size, because `use 'forge` costs 24 ms of parse and eval and a
-   ; tar member is usually a few hundred bytes -- below the floor the twin is simply the
-   ; better program. and trapped: a tree without src/apps/forge.l, a build with no glaze
-   ; module, a cpu with no holo backend all answer the twin, which is the whole design.
-   gz-floor 65536
-   gz-forged {}
-   (gz-finder n)
-    (? (n < gz-floor) gz-find
-       (gz-forged 0) (gz-forged 0)
-       (trap (_ \ (: _ (borrow "src/apps/forge.l")
-                     putx (cite 'forge 'forge-putx)
-                     fit  (cite 'forge 'forge-fit)
-                     of   (cite 'forge 'forge-of)
-                     _ (lit? putx ? (putx 'gz-find 5 gz-find-ir gz-find (),
-                                     fit 0, 0)
-                          0)
-                     w (lit? of ? (of 'gz-find) gz-find)
-                     (lit? w ? w gz-find)))
-             () (a \ b \ gz-find) @ v
-          (pin gz-forged 0 v, v)))
 
    (gz-ins s n i head prev)                 ; index position i, if 3 bytes remain
     (i + 2 < n ?
@@ -336,19 +220,17 @@
    ; and refusing them outright does not. text likes it (the tarball goes on to
    ; 2949504) and binaries do not -- out/love swells to 1275300, 4.6% worse.
    gz-toofar 4096
-   ; `fn` is the finder, handed down rather than read: gz-find above or the machine
-   ; code that says the same thing, and which one is settled once per deflate.
-   (gz-tok fn s n head prev tok fl fd i k xb)  ; -> (i tokens extra-bits)
+   (gz-tok s n head prev tok fl fd i k xb)  ; -> (i tokens extra-bits)
     (? (n <= i) [i k xb]
        (gz-tokmax <= k) [i k xb]
-       (: m (? (i + gz-minmatch <= n) (fn s n i head prev) '(0 0))
+       (: m (? (i + gz-minmatch <= n) (gz-find s n i head prev) '(0 0))
           l (<m = 3 ? (gz-toofar < <>m ? 0 <m) <m)
           (l < gz-minmatch ?
              (s i @ c
                 (gz-c32! tok k c,
                  gz-c32! fl c (gz-c32 fl c + 1),
                  gz-ins s n i head prev,
-                 gz-tok fn s n head prev tok fl fd (i + 1) (k + 1) xb))
+                 gz-tok s n head prev tok fl fd (i + 1) (k + 1) xb))
              (: d (<(>m))
                 lc (gz-lcode l)   dc (gz-dcode d)
                 le (peep gz-lext lc 0)   de (peep gz-dext dc 0)
@@ -358,7 +240,7 @@
                  gz-c32! fl (257 + lc) (gz-c32 fl (257 + lc) + 1),
                  gz-c32! fd dc (gz-c32 fd dc + 1),
                  gz-fill s n head prev i l,
-                 gz-tok fn s n head prev tok fl fd (i + l) (k + 1) (xb + le + de))))))
+                 gz-tok s n head prev tok fl fd (i + l) (k + 1) (xb + le + de))))))
 
    ; --- the block's own code, written out as code lengths ---------------------
    ; the lengths go through a third Huffman code, run-length coded first: 16 repeats
@@ -456,19 +338,19 @@
 
    ; the window and the chains outlive the block: a match may reach back into any
    ; block already written, which is what makes many blocks cost only their trees.
-   (gz-blocks fn s n j t head prev i)
+   (gz-blocks s n j t head prev i)
     (: tok (cask (gz-tokmax * 4))
        fl (cask (286 * 4))   fd (cask (30 * 4))
-       r (gz-tok fn s n head prev tok fl fd i 0 0)
+       r (gz-tok s n head prev tok fl fd i 0 0)
        i2 <r   k <>r   xb <>>r
        (gz-flush s j t tok k fl fd i i2 (n <= i2) xb,
-        (n <= i2 ? 0 (gz-blocks fn s n j t head prev i2))))
+        (n <= i2 ? 0 (gz-blocks s n j t head prev i2))))
 
    (gz-deflatel s)
     (: n #s
        j (jug 0)   t {}
        head (cask (32768 * 4))   prev (cask (32768 * 4))
-       (gz-blocks (gz-finder n) s n j t head prev 0,
+       (gz-blocks s n j t head prev 0,
         gz-align j t,
         slurp j + ""))
    ; src/love/lib/gz.c where the artifact carries it, the coder above where it does not --
