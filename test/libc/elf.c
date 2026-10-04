@@ -323,6 +323,15 @@ int main(void) {
  say_n("  Elf64_Nhdr.n_namesz", (long) offsetof(Elf64_Nhdr, n_namesz));
  say_n("  Elf64_Nhdr.n_descsz", (long) offsetof(Elf64_Nhdr, n_descsz));
  say_n("  Elf64_Nhdr.n_type", (long) offsetof(Elf64_Nhdr, n_type));
+ say_n("EF_ARM_EABIMASK", (long) EF_ARM_EABIMASK);
+ say_n("EF_ARM_EABI_UNKNOWN", (long) EF_ARM_EABI_UNKNOWN);
+ say_n("EF_ARM_EABI_VER4", (long) EF_ARM_EABI_VER4);
+ say_n("EF_ARM_EABI_VER5", (long) EF_ARM_EABI_VER5);
+ say_n("EF_ARM_ABI_FLOAT_SOFT", (long) EF_ARM_ABI_FLOAT_SOFT);
+ say_n("EF_ARM_ABI_FLOAT_HARD", (long) EF_ARM_ABI_FLOAT_HARD);
+ say_n("EF_ARM_LE8", (long) EF_ARM_LE8);
+ say_n("EF_ARM_BE8", (long) EF_ARM_BE8);
+ say_n("EF_ARM_EABI_VERSION", (long) EF_ARM_EABI_VERSION(0x05000402u));
  say_s("ELFMAG", ELFMAG); say_n("SELFMAG", SELFMAG);
  say_n("ELF32_ST_BIND", (long) ELF32_ST_BIND(0x21)); say_n("ELF32_ST_TYPE", (long) ELF32_ST_TYPE(0x21)); say_n("ELF32_ST_INFO", (long) ELF32_ST_INFO(2, 1));
  say_n("ELF32_ST_VISIBILITY", (long) ELF32_ST_VISIBILITY(0x13));

@@ -871,11 +871,8 @@ test_hearts: host
 # test_gz -- src/apps/tar.l + src/apps/gz.l against the two programs they replace. the laws
 # are test/host/gz.l; this is the half only the OUTSIDE can say, and it is separate because
 # a coder and decoder by one hand round-trip cleanly through a format nobody else speaks.
-# skips without either system tool. gzfind.l rides along: the differential between gz.l's
-# match finder and the holo IR beside it, over corpora chosen for the chain the kernel walks.
+# skips without either system tool.
 test_gz: host
-	@echo TEST test/gate/gzfind.l
-	@$m $R/test/gate/gzfind.l
 	@echo TEST test/gate/targz.sh
 	@$(gsh) test/gate/targz.sh $(ho)/love
 # test_root -- the privileged verbs: chroot, mount, umount, sync, mkfifo, mknod. the

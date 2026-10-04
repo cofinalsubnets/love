@@ -98,6 +98,17 @@ typedef struct {
 #define EM_BPF 247
 #define EM_LOONGARCH 258
 
+/* e_flags on arm (32-bit): the EABI version in the top byte, and the float ABI */
+#define EF_ARM_EABIMASK 0xff000000
+#define EF_ARM_EABI_VERSION(flags) ((flags) & EF_ARM_EABIMASK)
+#define EF_ARM_EABI_UNKNOWN 0x00000000
+#define EF_ARM_EABI_VER4 0x04000000
+#define EF_ARM_EABI_VER5 0x05000000
+#define EF_ARM_ABI_FLOAT_SOFT 0x200
+#define EF_ARM_ABI_FLOAT_HARD 0x400
+#define EF_ARM_LE8 0x00400000
+#define EF_ARM_BE8 0x00800000
+
 /* sections */
 typedef struct {
   Elf32_Word sh_name, sh_type, sh_flags;

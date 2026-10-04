@@ -80,6 +80,7 @@ struct _IO_FILE {
   unsigned char *buf;
   int rp, rl, rcap;                          /* a read-only stream's buffer: rb[rp..rl) is read ahead */
   unsigned char *rb;
+  struct _IO_FILE *next;                     /* the open streams past the standard three (stdio/fflush.c) */
 };
 
 /* ---- the syscall numbers. freebsd's table first, UNCONDITIONAL and named
@@ -98,6 +99,8 @@ struct _IO_FILE {
 #define NR_fb_mprotect       74
 #define NR_fb_munmap         73
 #define NR_fb_madvise        75
+#define NR_fb_msync          65
+#define NR_fb_copy_file_range 569
 #define NR_fb_mincore        78
 #define NR_fb_rt_sigaction  416   /* sigaction; no restorer, another ksigaction (rung 3) */
 #define NR_fb_rt_sigprocmask 340  /* sigprocmask; 16-byte set, no size arg (rung 3) */
@@ -274,6 +277,8 @@ struct _IO_FILE {
 #define NR_mmap           222
 #define NR_mprotect       226
 #define NR_madvise        233
+#define NR_msync          227
+#define NR_copy_file_range 285
 #define NR_mincore        232
 #define NR_wait4          260
 #define NR_getrusage      165
@@ -297,6 +302,8 @@ struct _IO_FILE {
 #define NR_mprotect        10
 #define NR_munmap          11
 #define NR_madvise         28
+#define NR_msync           26
+#define NR_copy_file_range 326
 #define NR_mincore         27
 #define NR_rt_sigaction    13
 #define NR_rt_sigprocmask  14
@@ -633,13 +640,14 @@ extern unsigned char __obuf[8192];
 /* threads (proc/pthread.c): the process's thread state lives in mem/free.c (see there).
  * sys.o's clone leaf starts the child on its own stack, calling sp[0](sp[1]); __love_tp (a64,
  * rv64) reads the thread pointer clone set to the thread's record */
-struct __love_mt { int threads, lock; };
+struct __love_mt { int threads, lock, klock; void (*dtor[128])(void *); unsigned char key[128]; void *tsd[128]; };   /* klock guards the keys: their destructors, which are taken, and the first thread's values */
 extern struct __love_mt __love_mt;
 long __love_clone(long flags, void *sp, int *ptid, int *ctid, void *tls);
 void *__love_tp(void);
 extern unsigned char __ibuf[4096];
 /* the read side (stdio/rbuf.c): fill an empty read buffer -> bytes now ahead (0 at end, -1 on error);
  * how far the stream sits behind its fd; and putting the fd back at the stream's position */
+void __love_fopened(FILE *f);
 long __rfill(FILE *f);
 long __rahead(FILE *f);
 int __rsync(FILE *f);

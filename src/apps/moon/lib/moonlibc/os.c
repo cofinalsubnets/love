@@ -123,6 +123,8 @@ static short const os_nr[][3] = {
   {NR_pwrite64,      NR_fb_pwrite64,    174},
   {NR_mincore,       NR_fb_mincore,      78},
   {NR_madvise,       NR_fb_madvise,      75},
+  {NR_msync,         NR_fb_msync,       277},   /* nb: __msync13; the member maps the flags */
+  {NR_copy_file_range, NR_fb_copy_file_range, -1},   /* netbsd has none */
   {NR_nanosleep,     NR_fb_nanosleep,   430},
   {NR_getpid,        NR_fb_getpid,       20},
   {NR_socket,        NR_fb_socket,      394},

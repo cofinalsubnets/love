@@ -4,8 +4,13 @@
 # (src/apps/hearts/build.l) makes defconfig, syncconfig and Image from an empty output dir,
 # and the two Images must be the same bytes. both build at one canonical path, since the
 # vdso's build-id hashes debug info that names the source and output dirs and the vdso is
-# in the image; the build's identity is pinned. the toolchain is the host's (clang, lld,
-# llvm, flex, bison, perl), borrowed. heavy (two kernel builds); opt-in by name.
+# in the image; the build's identity is pinned. kbuild's half borrows the host's toolchain
+# (clang, lld, llvm, flex, bison, perl). hearts' half borrows only clang/lld/llvm for the kernel's
+# own units: the host programs build with mooncc, certs/extract-cert is ours (xcert.l, no
+# openssl), flex and bison are ours (src/tools/moon-flex.sh, moon-bison.sh), perl's scripts are ported,
+# and the commands run through lush with kore's verbs. where a tool's bytes reach the Image
+# (config_data.gz), kbuild's half borrows OUR tool too: KGZIP is love's gzip on both sides.
+# heavy (two kernel builds, and our flex/bison once when absent); opt-in by name.
 # usage: hearts.sh LOVE
 . test/gate/skip.sh
 set -u
@@ -21,12 +26,13 @@ O=$B/o
 J=${HEARTS_GATE_JOBS:-8}
 fail() { echo "FAIL hearts: $*" >&2; exit 1; }
 
-for t in make clang ld.lld llvm-ar llvm-objcopy flex bison perl curl; do
+for t in make cc clang ld.lld llvm-ar llvm-objcopy flex bison perl curl; do
   command -v $t >/dev/null 2>&1 || gate_skip "hearts: no $t, skipped"
 done
 mkdir -p "$B" "$C/src" || fail "cannot make $B"
 mkdir "$B/.lock" 2>/dev/null || fail "$B is in use ($B/.lock)"
-trap 'rm -rf "$O" "$B/ref" "$B/.lock"' EXIT
+# a red run keeps both builds to read (the next run clears them); a green one leaves nothing
+trap 'rm -rf "$B/.lock"' EXIT
 
 tgz=$C/src/linux-$V.tar.xz
 [ -f "$tgz" ] || curl -sSfL -o "$tgz" "https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-$V.tar.xz" \
@@ -40,18 +46,51 @@ export CCACHE_DISABLE=1
 export KBUILD_BUILD_USER=hearts KBUILD_BUILD_HOST=hearts KBUILD_BUILD_VERSION=1
 export KBUILD_BUILD_TIMESTAMP='Thu Jan  1 00:00:00 UTC 2026'
 
+# our extract-cert against the kernel's own, built here on openssl: each case byte for byte,
+# the same exit, and nothing written where it refuses
+x=$B/xcert; rm -rf "$x"; mkdir -p "$x"
+cc -O2 -I"$K/scripts" -o "$x/ref" "$K/certs/extract-cert.c" -lcrypto 2> "$x/cc.log" || { tail -3 "$x/cc.log"; fail "the openssl extract-cert did not build"; }
+awk '/BEGIN CERT/{n++} n==1' "$R/src/apps/tls/roots.pem" | sed '/END CERT/q' > "$x/one.pem"
+printf -- '-----BEGIN PRIVATE KEY-----\nMC4CAQAwBQYDK2VwBCIEIDj9\n-----END PRIVATE KEY-----\n' > "$x/key.pem"
+cat "$x/one.pem" "$x/key.pem" > "$x/trail.pem"; cat "$x/key.pem" "$x/one.pem" > "$x/lead.pem"
+sed 's/BEGIN CERTIFICATE/BEGIN X509 CERTIFICATE/; s/END CERTIFICATE/END X509 CERTIFICATE/' "$x/one.pem" > "$x/old.pem"
+for f in "$R/src/apps/tls/roots.pem" "$x/one.pem" "$x/trail.pem" "$x/lead.pem" "$x/old.pem" "$x/key.pem" ""; do
+  rm -f "$x/r" "$x/o"
+  "$x/ref" "$f" "$x/r" > /dev/null 2>&1; a=$?
+  "$love" "$R/src/apps/hearts/xcert.l" "$f" "$x/o" > /dev/null 2>&1; b=$?
+  [ $a -eq $b ] || fail "extract-cert '$f': openssl's exits $a, ours $b"
+  if [ -f "$x/r" ] || [ -f "$x/o" ]; then cmp -s "$x/r" "$x/o" || fail "extract-cert '$f' differs from openssl's"; fi
+done
+
+# our flex and bison, each on our m4, built by their lanes when absent
+fx=$R/out/moonflex/flex-2.6.4/src/flex
+by=$R/out/moonbison/bison-3.8.2/src/bison
+[ -x "$fx" ] || sh src/tools/moon-flex.sh > "$B/moon-flex.log" 2>&1 || { tail -5 "$B/moon-flex.log"; fail "our flex did not build"; }
+[ -x "$by" ] || sh src/tools/moon-bison.sh > "$B/moon-bison.log" 2>&1 || { tail -5 "$B/moon-bison.log"; fail "our bison did not build"; }
+mkdir -p "$B/tools"
+printf '#!/bin/sh\nM4=%s BISON_PKGDATADIR=%s exec %s "$@"\n' \
+  "$R/out/moonbison/m4-1.4.21/src/m4" "$R/out/moonbison/bison-3.8.2/data" "$by" > "$B/tools/bison"
+chmod +x "$B/tools/bison"
+gz="$love gzip"
+# and neither half sees the host's rust or pahole: their versions reach .config, so the image
+mk="LLVM=1 ARCH=arm64 RUSTC=false HOSTRUSTC=false BINDGEN=false PAHOLE=false"
+
 mkdir -p "$O"
-(cd "$K" && make O="$O" LLVM=1 ARCH=arm64 defconfig && make O="$O" LLVM=1 ARCH=arm64 -j"$J" Image) \
+# shellcheck disable=SC2086
+(cd "$K" && make O="$O" $mk KGZIP="$gz" defconfig && make O="$O" $mk KGZIP="$gz" -j"$J" Image) \
   > "$B/ref.log" 2>&1 || { tail -20 "$B/ref.log"; fail "kbuild's own build failed"; }
 mv "$O" "$B/ref" || fail "cannot set kbuild's build aside"
 
 mkdir -p "$O"
 (cd "$O" && HEARTS_SRC="$K" HEARTS_JOBS="$J" LOVE_BUDGET_MB=${LOVE_BUDGET_MB:-1500} \
+  HEARTS_LEX="$fx" HEARTS_YACC="$B/tools/bison" HEARTS_KGZIP="$gz" \
   "$love" "$R/src/apps/hearts/build.l") > "$B/hearts.log" 2>&1 \
   || { tail -20 "$B/hearts.log"; fail "hearts' build failed"; }
 
-for f in .config arch/arm64/boot/Image; do
+for f in .config kernel/config_data.gz arch/arm64/boot/Image; do
   [ -f "$O/$f" ] || fail "hearts made no $f"
   cmp -s "$B/ref/$f" "$O/$f" || fail "$f differs from kbuild's"
 done
-echo "hearts: Image $(sha256sum < "$O/arch/arm64/boot/Image" | cut -c1-16) = kbuild+clang's, from linux-$V defconfig"
+sha=$(sha256sum < "$O/arch/arm64/boot/Image" | cut -c1-16)
+rm -rf "$O" "$B/ref"
+echo "hearts: Image $sha = kbuild+clang's, from linux-$V defconfig, host programs by mooncc"

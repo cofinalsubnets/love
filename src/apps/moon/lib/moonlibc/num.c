@@ -143,9 +143,32 @@ double lm_strtod(char const *, char **);
  * it did not while mooncc lowered -d as 0.0 - d (src/apps/moon/gen.l), and a
  * wrapper that "fixed" it here would now flip the sign BACK, since -0.0 == 0.0
  * tests true. */
+/* inf, infinity and nan (with an optional (chars) tail), any case, after an optional sign:
+ * the bits themselves, so a minus reaches nan's sign too. 0 when p spells neither */
+static char const *__strtospecial(char const *p, double *v) {
+  int neg = *p == '-';
+  if (*p == '-' || *p == '+') p++;
+  unsigned long bits;
+  if ((p[0] | 32) == 'i' && (p[1] | 32) == 'n' && (p[2] | 32) == 'f') {
+    p += 3;
+    if ((p[0] | 32) == 'i' && (p[1] | 32) == 'n' && (p[2] | 32) == 'i' && (p[3] | 32) == 't' && (p[4] | 32) == 'y') p += 5;
+    bits = 0x7ff0000000000000UL; }
+  else if ((p[0] | 32) == 'n' && (p[1] | 32) == 'a' && (p[2] | 32) == 'n') {
+    p += 3;
+    if (*p == '(') {
+      char const *q = p + 1;
+      while ((*q | 32) >= 'a' && (*q | 32) <= 'z' || (*q >= '0' && *q <= '9') || *q == '_') q++;
+      if (*q == ')') p = q + 1; }
+    bits = 0x7ff8000000000000UL; }
+  else return 0;
+  if (neg) bits |= 0x8000000000000000UL;
+  memcpy(v, &bits, sizeof *v);
+  return p; }
 double strtod(char const *s, char **end) {
   char const *p = s;
   while (*p == 32 || (*p >= 9 && *p <= 13)) p++;
+  double sv; char const *sp = __strtospecial(p, &sv);
+  if (sp) { if (end) *end = (char *) sp; return sv; }
   char *e = (char *) p;
   double v = lm_strtod(p, &e);
   if (e == p) { if (end) *end = (char *) s; return 0.0; }   /* no conversion: the ORIGINAL s */
@@ -256,6 +279,7 @@ FILE *popen(char const *cmd, char const *mode) {
   f->pid = pid;
   if (!rd) { f->buf = (unsigned char *) (f + 1); f->cap = 4096; }
   else { f->rb = (unsigned char *) (f + 1); f->rcap = 4096; }
+  __love_fopened(f);
   return f; }
 int pclose(FILE *f) {
   int pid = f->pid, st = 0;
@@ -315,8 +339,7 @@ struct lconv *localeconv(void) {                   /* the C locale's table: "." 
     (char *) "", (char *) "", 127, 127, 127, 127, 127, 127, 127, 127 };
   return &c; }
 
-/* getc/fputs/ferror; a read-write stream reads unbuffered. fscanf reads char-by-char
- * (no ungetc, so it consumes the field terminator -- tar's lone use is "%d"). */
+/* getc/fputs/ferror; a read-write stream reads unbuffered */
 int getc(FILE *f) {
   unsigned char c;
   if (f->un) { int r = f->un - 1; f->un = 0; return r; }
@@ -346,56 +369,6 @@ int getchar(void) { return getc(stdin); }
 int ferror(FILE *f) { return f->err; }
 int feof(FILE *f) { return f->eof; }
 void clearerr(FILE *f) { f->err = 0; f->eof = 0; }
-/* sscanf, the string twin, %d only (m4 builtin.c's lone use: a divert number). */
-int sscanf(char const *s, char const *fmt, ...) {
-  va_list ap; va_start(ap, fmt);
-  int got = 0;
-  for (; *fmt; fmt++) {
-    if (*fmt == '%' && fmt[1] == 'd') {
-      char *e;
-      long v = strtol(s, &e, 10);
-      if (e == s) break;
-      *va_arg(ap, int *) = (int) v;
-      s = e; fmt++; got++; }
-    else if (*fmt == ' ') { while (*s == ' ' || (*s >= 9 && *s <= 13)) s++; }
-    else { if (*s != *fmt) break; s++; } }
-  va_end(ap);
-  return got; }
-static int __vfscanf(FILE *f, char const *fmt, va_list ap) {
-  int got = 0, c;
-  for (; *fmt; fmt++) {
-    if (*fmt == '%') {
-      fmt++;
-      if (*fmt == 'd' || *fmt == 'u' || *fmt == 'x' || *fmt == 's')
-        do { c = getc(f); } while (c == 32 || (c >= 9 && c <= 13));
-      if (*fmt == 'd' || *fmt == 'u' || *fmt == 'x') {
-        int base = *fmt == 'x' ? 16 : 10, sign = 1, any = 0, d;
-        if (*fmt == 'd' && (c == '-' || c == '+')) { if (c == '-') sign = -1; c = getc(f); }
-        long v = 0;
-        while ((d = __digval(c)) < base) { v = v * base + d; any = 1; c = getc(f); }
-        if (!any) break;
-        *va_arg(ap, int *) = (int) (sign * v);
-        got++; }
-      else if (*fmt == 's') {
-        char *out = va_arg(ap, char *); int i = 0;
-        while (c != EOF && !(c == 32 || (c >= 9 && c <= 13))) { out[i++] = (char) c; c = getc(f); }
-        out[i] = 0; got++; }
-      else if (*fmt == 'c') { c = getc(f); if (c == EOF) break; *va_arg(ap, char *) = (char) c; got++; } }
-    else if (*fmt == 32 || (*fmt >= 9 && *fmt <= 13)) ;   /* fmt whitespace: no peek, skip */
-    else { c = getc(f); if (c != (unsigned char) *fmt) break; } }
-  return got; }
-/* one body, three faces -- fscanf and scanf differ only in which stream */
-int fscanf(FILE *f, char const *fmt, ...) {
-  va_list ap; va_start(ap, fmt);
-  int r = __vfscanf(f, fmt, ap);
-  va_end(ap);
-  return r; }
-int scanf(char const *fmt, ...) {
-  va_list ap; va_start(ap, fmt);
-  int r = __vfscanf(stdin, fmt, ap);
-  va_end(ap);
-  return r; }
-
 /* no name database yet: every passwd/group lookup misses, so tar prints numeric
  * owner/group (its own fallback). a real /etc/passwd walk is a later rung. */
 struct passwd *getpwuid(uid_t u) { return 0; }

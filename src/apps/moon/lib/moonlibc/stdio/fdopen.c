@@ -18,4 +18,5 @@ FILE *fdopen(int fd, char const *mode) {
   f->heap = 1;
   if (wr) { f->buf = (unsigned char *) (f + 1); f->cap = 4096; }
   else { f->rb = (unsigned char *) (f + 1); f->rcap = 4096; }
+  __love_fopened(f);
   return f; }

@@ -5,7 +5,8 @@
 ;   tests      -name pat  -iname pat  -path pat  -ipath pat  -type f|d|l  -empty
 ;              -newer FILE  -mtime N  -mmin N  -size N[cwbkMG]  -perm [-/]MODE
 ;              -true  -false   (N is +N more, -N less, N exactly)
-;   actions    -print  -print0  -prune  -delete  -exec CMD.. ;  -exec CMD.. {} +
+;   actions    -print  -print0  -printf FMT  -prune  -delete  -exec CMD.. ;  -exec CMD.. {} +
+;              (FMT: %p %f %h %m %U %G %s %y %T@ %%, and \n \t \\ \0)
 ;   options    -maxdepth N  -mindepth N  -depth (-delete implies it)
 ;   operators  ( )  ! / -not  -a / -and (implicit between two primaries)  -o / -or
 ; no action means -print; -a binds tighter than -o and both short-circuit.
@@ -53,6 +54,7 @@
            (a = "-false") [['false] m]
            (a = "-exec")  (fi-exec m ())
            (atom? m) ()
+           (a = "-printf") [['printf <m] >m]
            (a = "-name") [['name <m] >m]
            (a = "-iname") [['name (lower <m) 1] >m]
            (a = "-path") [['path <m] >m]
@@ -118,7 +120,7 @@
    ; does the tree act, or only test -- the question that decides the added -print
    (fi-acts? e)
     (<e @ k
-       (? (elem k '(print print0 exec execs delete)) 1
+       (? (elem k '(print print0 printf exec execs delete)) 1
           (k = 'not) (fi-acts? <>e)
           (k = 'and || k = 'or) (fi-acts? <>e ? 1 (fi-acts? <>>e))
           0))
@@ -138,9 +140,32 @@
                        two? ps ? (fi-run st (<>e + rev ps) ? 0 (pin st 101 1)) 0))
    ; the tree's -exec {} + nodes, to flush at the end
    (fi-execs e) (<e @ k (? (k = 'execs) [e] (elem k '(and or)) (fi-execs <>e + fi-execs <>>e) (k = 'not) (fi-execs <>e) ()))
+   ; -printf's format for one name: the stat tuple is (size mtime mode ns uid gid ..)
+   (fi-printf f p base ty sb)
+    (: n #f
+       (oct v) (v < 8 ? (show v) (oct (v // 8) + show (v % 8)))
+       (pad9 v) (show v @ t ((: (g u) (#u < 9 ? (g ("0" + u)) u)) t))
+       (dir _) (lastsl p @ k (? (k < 0) "." (k = 0) "/" (snip p 0 k)))
+       (lastsl q) ((: (g i) (i < 0 ? -1 (q i = 47 ? i (g (i - 1))))) (#q - 1))
+       (tyc _) (? (two? sb) (61440 & (sb 2) @ m (? (m = 16384) "d" (m = 32768) "f" (m = 40960) "l" (m = 8192) "c"
+                                                      (m = 24576) "b" (m = 4096) "p" (m = 49152) "s" "U")) "N")
+       (dirv c) (? (c = 112) p (c = 102) base (c = 104) (dir 0) (c = 109) (oct (4095 & sb 2))
+                   (c = 85) (show (sb 4)) (c = 71) (show (sb 5)) (c = 115) (show <sb) (c = 121) (tyc 0)
+                   (c = 37) "%"
+                   (udie 1 ("find: -printf: unknown directive %" + string c)))
+       (go k)
+        (? (n <= k) 0
+           (f k = 92 && k + 1 < n) (f (k + 1) @ c
+                                     (put out (? (c = 110) 10 (c = 116) 9 (c = 48) 0 c), go (k + 2)))
+           (f k = 37 && k + 2 < n && f (k + 1) = 84 && f (k + 2) = 64)
+            (sb 3 @ ns (say out (show (ns // 1000000000) + "." + pad9 (ns % 1000000000) + "0"), go (k + 3)))
+           (f k = 37 && k + 1 < n) (say out (dirv (f (k + 1))), go (k + 2))
+           (put out (f k), go (k + 1)))
+       (go 0, 1))
    (fi-eval e p base ty sb st)
     (<e @ k
        (? (k = 'print) (say out p, put out 10, 1)
+          (k = 'printf) (fi-printf <>e p base ty sb)
           (k = 'print0) (say out p, put out 0, 1)
           (k = 'name)  (match <>e (<>>e ? (lower base) base))
           (k = 'path)  (match <>e (<>>e ? (lower p) p))

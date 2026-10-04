@@ -73,6 +73,7 @@ int  unlinkat(int, char const*, int);
 unsigned int sleep(unsigned int);
 int  usleep(unsigned int);
 long pread(int, void*, unsigned long, long);
+ssize_t copy_file_range(int, long*, int, long*, unsigned long, unsigned int);
 long pwrite(int, void const*, unsigned long, long);
 int  getpgrp(void);
 int  setpgid(pid_t, pid_t);

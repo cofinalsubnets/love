@@ -13,10 +13,18 @@ static int __fdrain(FILE *f) {
   f->len = 0;
   if (__wall(f->fd, f->buf, n) < 0) { f->err = 1; return EOF; }
   return 0; }
+/* the streams fopen, fdopen and popen open, so fflush(NULL) and exit reach every one: the one
+ * piece of process-wide stdio state past the standard three, linked through the FILEs themselves */
+static FILE *__love_files;
+void __love_fopened(FILE *f) { f->next = __love_files; __love_files = f; }
+static void __love_fclosed(FILE *f) {
+  for (FILE **p = &__love_files; *p; p = &(*p)->next) if (*p == f) { *p = f->next; return; } }
 int fflush(FILE *f) {
   if (!f) {
     int r = __fdrain(stdout);
-    return __fdrain(stderr) || r ? EOF : 0; }
+    if (__fdrain(stderr)) r = EOF;
+    for (FILE *o = __love_files; o; o = o->next) if (o->wr && __fdrain(o)) r = EOF;
+    return r ? EOF : 0; }
   return f->wr ? __fdrain(f) : __rsync(f); }
 void setbuf(FILE *f, char *buf) {          /* NULL = unbuffered (m4 -e); else a BUFSIZ block */
   __fdrain(f);
@@ -59,6 +67,7 @@ size_t fwrite(void const *p, size_t sz, size_t n, FILE *f) {
 int fclose(FILE *f) {
   int r = f->wr ? __fdrain(f) : __rsync(f);
   if (close(f->fd) < 0) r = EOF;
+  __love_fclosed(f);
   if (f->heap) free(f);
   return r; }
 FILE *freopen(char const *path, char const *mode, FILE *f) {
