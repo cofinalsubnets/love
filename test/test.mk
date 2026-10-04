@@ -1020,7 +1020,17 @@ else
 # Import spec`. one spelling everywhere (`cd test/proof/rocq && -R . ""`), or spec.vo's logical
 # name is not the one gen.v asks for. a static pattern: big/mx/enc take their own flags.
 rocq_kept = test/proof/rocq/spec.vo test/proof/rocq/patch.vo
-$(rocq_kept): test/proof/rocq/%.vo: test/proof/rocq/%.v
+# a .vo carries the version of the coqc that wrote it, and another coqc refuses it, so every
+# kept .vo hangs off the checker's own version: a forced witness, rewritten only when coqc -v
+# says something new (Makefile's note), so an upgrade rebuilds them and nothing else does
+.PHONY: force_coqc
+force_coqc: ;
+rocq_ver = $(ho)/.coqc-version
+$(rocq_ver): force_coqc
+	@mkdir -p $(ho)
+	@tf=$@.$$$$.tmp; $(COQC) --version > $$tf 2>&1; \
+	 $(note)
+$(rocq_kept): test/proof/rocq/%.vo: test/proof/rocq/%.v $(rocq_ver)
 	@echo TEST test/proof/rocq/$*.v "(coqc)"
 	@cd test/proof/rocq && $(COQC) -q -R . "" $*.v
 test_proof: $(rocq_kept)
