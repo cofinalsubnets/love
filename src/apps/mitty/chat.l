@@ -3,20 +3,18 @@
 ; queues: a session is bee's core (src/apps/bee.l, bee-core), a tablet of doors, and these
 ; only paint what it answers and hand it the keys.
 ;
-;   (chat-tui k key yes)     the chat on the whole terminal
-;   (chat-stage k key yes)   the chat as a stage for a mitty, which owns the tty and the clock
-;   (chat-hud k)             the hud: queues, locks and sessions, and a talk to one as the user
+;   (chat-stage k key yes)   the chat as a stage (cli's stage-run shape): a mitty's pane
+;   (chat-tui k key yes)     the same stage on the whole terminal
+;   (hud-stage k)            the hud: queues, locks and sessions, and a talk to one as the user
+;   (chat-hud k)             the hud on the whole terminal
 ;
 ; host-only: the chat's commands run on a pty of their own (tether, screen). the saver is mitty's.
-(module (chat chat-tui chat-stage chat-hud)
+(module (chat chat-tui chat-stage chat-hud hud-stage)
 (:
  esc (string 27)
  (sgr code s) (esc + "[" + code + "m" + s + esc + "[0m")
  (soil c) (pin (c 'dirt) () 1)
  (push c b) (pins c 'blocks (b . c 'blocks) 'scroll 0 'mails (peep c 'mails 0 + (b 'k = 'mail)))
- ; the tty's size into c, from 24x80 when it says nothing usable
- (tide c) (: ws (tty 1) r (two? ws && 5 < <ws ? <ws 24) w (two? ws && 19 < >ws ? >ws 80)
-             (? (r = c 'rows && w = c 'cols) 0 (: _ (pins c 'rows r 'cols w) (soil c))))
 
  ; --- the chat. the state c: 'bee the core, 'blocks newest first, 'ed the input buffer,
  ; 'scroll lines up from the bottom, 'dirt a box the main loop repaints on, 'busy the turn's
@@ -307,19 +305,6 @@
                 2 (pin c 'scroll (c 'scroll + page))
                 6 (pin c 'scroll (max 0 (c 'scroll - page)))
                 0))))
- (keyloop c) (: k (edkey in)
-                _ (onkey c k)
-                _ (soil c)
-                (? (c 'over) 0 (keyloop c)))
- (swim c tick)
-  (: b (c 'dirt)
-     _ (? (peep b () 0) (: _ (pin b () 0) _ (say out (frame c)) (flush out)) 0)
-     _ (? (tick % 16 = 0) (tide c) 0)
-     _ (? (tick % 4 = 0 && c 'busy != ()) (soil c) 0)      ; the spinner turns
-     _ (? (tick % 30 = 0 && c 'busy = ()) (wake c) 0)       ; the inbox, about once a second
-     _ (rest 33)
-     (? (c 'over) 0 (swim c (tick + 1))))
-
  (tnew k key yes)
   (: c {'bee k 'blocks () 'ed (ednew 0) 'scroll 0 'dirt {() 1} 'busy () 'asking () 'msgs ()
         'sock () 'over 0 'key key 'yes yes 'rows 24 'cols 80}
@@ -327,22 +312,9 @@
      _ (k 'on-news (\ t (push c {'k 'note 'text t}, soil c)))   ; a new binary, a note here
      _ (push c {'k 'hello})
      c)
+ ; the chat on the whole terminal: the stage below, run by cli's stage-run
  (chat-tui k key yes)
-  (: c (tnew k key yes)
-     _ (twirl (\ _ (k 'watch 0)) 0)                     ; the queues, mailed here when they move
-     _ (twirl (\ _ (k 'lock-poll 0)) 0)                 ; queued locks, mailed here when granted
-     _ (tide c)
-     _ (raw 1)
-     _ (say out (esc + "[?1049h" + esc + "[2J" + esc + "[?2004h" + k 'title-on 0))
-     _ (flush out)
-     up (twirl (\ _ (keyloop c)) 0)
-     _ (swim c 1)
-     _ (? (c 'busy != ()) (halt c) 0)
-     _ (? (landed? up) 0 (freeze up))
-     _ (say out (esc + "[0m" + esc + "[?2004l" + esc + "[?1049l" + k 'title-off 0))
-     _ (flush out)
-     _ (raw 0)
-     0)
+  (stage-run (pins (chat-stage k key yes) 'modes ['paste ['title ("bee: " + k 'me 0)]]))
 
  ; the full screen as a pane of a mitty (mitty.l), which owns the tty, the keys' reader and
  ; the clock. its frame is scribed into the pane's own screen, so tui-fresh diffs against
@@ -426,39 +398,29 @@
                             (hud-log c "" (sgr "31" r))))))
                 0)
            (soil c))))
- (hud-keys c)
-  (: k (edkey in)
-     _ (? (c 'typing) (hud-type c k)
-          (elem k [113 81 3 4 -7]) (pin c 'over 1)
-          (elem k [99 67 13 10]) (hud-open c)
-          (elem k [114 82]) (hud-read c)
-          (elem k [-9 106 6]) (: _ (pin c 'top (c 'top + (k = 6 ? (c 'rows // 2) 1))) (soil c))
-          (elem k [-8 107 2]) (: _ (pin c 'top (max 0 (c 'top - (k = 2 ? (c 'rows // 2) 1)))) (soil c))
-          0)
-     (? (c 'over) 0 (hud-keys c)))
- (hud-swim c tick)
-  (: b (c 'dirt) qw (c 'bee 'qwatch)
-     _ (? (peep b () 0) (: _ (pin b () 0) _ (say out (hud-frame c)) (flush out)) 0)
-     _ (? (tick % 16 = 0) (tide c) 0)
-     _ (? (tick % 30 = 0 && c 'mine) (hud-inbox c) 0)
-     _ (? ((0 < qw ? qw 20) * 1000 < clock 0 - c 'read) (hud-read c) 0)
-     _ (rest 33)
-     (? (c 'over) 0 (hud-swim c (tick + 1))))
- (chat-hud k)
+ (hud-key c k)
+  (? (c 'typing) (hud-type c k)
+     (elem k [113 81 3 4 -7]) (pin c 'over 1)
+     (elem k [99 67 13 10]) (hud-open c)
+     (elem k [114 82]) (hud-read c)
+     (elem k [-9 106 6]) (: _ (pin c 'top (c 'top + (k = 6 ? (c 'rows // 2) 1))) (soil c))
+     (elem k [-8 107 2]) (: _ (pin c 'top (max 0 (c 'top - (k = 2 ? (c 'rows // 2) 1)))) (soil c))
+     0)
+ ; the hud as a stage: the user's mail about once a second, the queues every (queue-watch N)
+ (hud-stage k)
   (: c {'bee k 'rows 24 'cols 80 'over 0 'top 0 'lines () 'read 0 'dirt {() 1}
-        'typing 0 'log () 'ed (ednew 0) 'note "" 'to () 'lead () 'why "" 'mine 0}
+        'typing 0 'log () 'ed (ednew 0) 'note "" 'to () 'lead () 'why "" 'mine 0 'polled 0}
      why (k 'user-settle 0)
      _ (pins c 'why why 'mine (#why = 0))
-     _ (hud-read c) _ (tide c)
-     _ (raw 1)
-     _ (say out (esc + "[?1049h" + esc + "[2J" + esc + "[?25l" + esc + "[22;0t" + esc + "]2;bee" + string 7))
-     _ (flush out)
-     up (twirl (\ _ (hud-keys c)) 0)
-     _ (hud-swim c 0)
-     _ (? (landed? up) 0 (freeze up))
-     _ (say out (esc + "[0m" + esc + "[?25h" + esc + "[?1049l" + k 'title-off 0))
-     _ (flush out)
-     _ (raw 0)
-     _ (? (c 'mine) (k 'user-card! "away") 0)
-     0))
+     _ (hud-read c)
+     {'show (\ w h (: _ (pins c 'rows h 'cols w) (hud-frame c)))
+      'step (\ n (hud-key c n))
+      'over? (\ _ (c 'over))
+      'tick (\ _ (: t (clock 0) b (c 'dirt) qw (k 'qwatch)
+                    _ (? (c 'mine && 1000 < t - c 'polled) (: _ (pin c 'polled t) (hud-inbox c)) 0)
+                    _ (? ((0 < qw ? qw 20) * 1000 < t - c 'read) (hud-read c) 0)
+                    (? (peep b () 0) (: _ (pin b () 0) 1) 0)))
+      'shut (\ _ (? (c 'mine) (k 'user-card! "away") 0))
+      'modes ['hide ['title "bee"]]})
+ (chat-hud k) (stage-run (hud-stage k)))
 ) ; module chat

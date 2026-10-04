@@ -3111,7 +3111,7 @@
 ; this binary need not exec, and what it would have exec'd is (cli-line its-line) on a warm
 ; heap. the shadow rule lives in one place, verbs' `word`.
 
-(module '(cli read reads forms shell welp edraw edln edlnc edlay cli-rail cli-line stage edkey edtap edgc
+(module '(cli read reads forms shell welp edraw edln edlnc edlay cli-rail cli-line stage stage-run ttysize ttytake ttygive edkey edtap edgc
           uopt uopt1 uoptv uoptun uoptbad uoptstray uoptp uoptlast uask uvers udoor edcmd edsgr edwide edcut edpad edfit
           ednew edstep edput ednl edclear edempty? edchars edtext edcol edparses? edframe edload
           edleft edright edbsp eddel edhome edend edtop edbot edup eddown uphist downhist eddetach
@@ -3393,21 +3393,45 @@
                          (c2 = -1) 27
                          (unsee p c2, 27)))))
 
-   ; --- the stage: a full-screen tty app ---------------------------------------------
-   ; show answers the frame for a screen w by h, step takes a key, over? says when to leave.
-   ; the frame lives on the alternate screen, the tty is raw for the visit and cooked after,
-   ; and eof leaves too. a frame places or hides the cursor itself; it comes back shown
-   (stage show step over?)
-     (: (loop _) (: ws (tty 1)
-                    h (two? ws && 7 < <ws ? <ws 24)
-                    w (two? ws && 19 < <>ws ? <>ws 80)
-                    _ (say out (show w h))
-                    _ (flush out)
-                    c (edkey in)
-                    (c = -7 ? ()
-                       (step c, over? () ? () (loop ()))))
-        (raw 1, say out "\e[?1049h", loop (),
-         say out "\e[0m\e[?25h\e[?1049l", flush out, raw 0, 0))
+   ; --- the tty, taken and given back ------------------------------------------------
+   ; its [rows cols], 24 and 80 where it says no more than rmin and cmin (a fresh pty says 0)
+   (ttysize rmin cmin) (tty 1 @ ws [(two? ws && rmin < <ws ? <ws 24) (two? ws && cmin < <>ws ? <>ws 80)])
+   ; raw, on the alternate screen, with modes: 'mouse (sgr reports), 'paste (bracketed),
+   ; 'hide (the cursor), ('title t) (pushed, popped on the way out). ttygive undoes exactly
+   ; what ttytake set, every mouse mode included, and leaves the cursor shown
+   (ttyon m) (m @ 'mouse "\e[?1000h\e[?1006h" 'paste "\e[?2004h" 'hide "\e[?25l"
+                  ('title t) ("\e[22;0t\e]2;" + t + "\a") "")
+   (ttyoff m) (m @ 'mouse "\e[?1003l\e[?1002l\e[?1000l\e[?1006l" 'paste "\e[?2004l" ('title _) "\e[23;0t" "")
+   (ttytake ms) (raw 1, say out ("\e[?1049h\e[2J" + cats (map ttyon ms)), flush out)
+   (ttygive ms) (say out ("\e[0m" + cats (map ttyoff (rev ms)) + "\e[?25h\e[?1049l"), flush out, raw 0)
+
+   ; --- the stage: a full-screen tty app, a tablet of doors, mitty's pane shape ------------
+   ;   'show w h -> the frame for a w by h screen     'step k    a key
+   ;   'over? _ -> 1 to leave                          'shut _    on the way out (optional)
+   ;   'tick _ -> 1 when a frame is wanted, asked every 'every ms (33); without it a frame
+   ;             follows each key and nothing runs between them
+   ;   'modes   ttytake's
+   ; eof leaves too, and the tty comes back whatever way the visit ends
+   (stage-run d)
+    (: ms (peep d 'modes ()) tk (peep d 'tick ()) per (peep d 'every 33)
+       st {'over 0 'dirt 1 'size ()}
+       (over? _) (st 'over || (d 'over?) ())
+       (key c) (? (c = -7) (pin st 'over 1) (: _ ((d 'step) c) (pin st 'dirt 1)))
+       (paint g) (: _ (pins st 'dirt 0 'size g) (say out ((d 'show) (g 1) <g), flush out))
+       ; no tick: the frame, then a key, in turn
+       (turns _) (: _ (paint (ttysize 7 19)) _ (key (edkey in)) (over? () ? 0 (turns ())))
+       ; a tick: the keys on a task of their own, a frame when a key, the tick or the size says
+       (keys _) (: _ (key (edkey in)) (over? () ? 0 (keys ())))
+       (beats _) (: g (ttysize 7 19)
+                    _ (? (st 'dirt || g != st 'size || tk ()) (paint g) 0)
+                    (over? () ? 0 (: _ (rest per) (beats ()))))
+       (visit _) (? !tk (turns ())
+                    (: up (twirl keys 0) _ (beats ()) (landed? up ? 0 (freeze up))))
+       (ttytake ms,
+        mind visit () (_ \ ((peep d 'shut (_ \ 0)) (), ttygive ms)),
+        0))
+   ; show answers the frame for a screen w by h, step takes a key, over? says when to leave
+   (stage show step over?) (stage-run {'show show 'step step 'over? over?})
 
    ; redraw the buffer in place. the cursor's row from the previous render is kept on the
    ; buffer ('row) -- move up that many first, and all motion is relative, so terminal

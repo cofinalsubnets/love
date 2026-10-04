@@ -2393,7 +2393,7 @@
      bee-core
       {'me me 'cwd bee-cwd 'model bee-model 'api bee-api 'look bee-look 'qwatch bee-qwatch
        'shell-name <bee-shell 'whoami whoami
-       'title-on title-on 'title-off title-off 'utc-minute utc-minute 'avatar avatar-cmd
+       'utc-minute utc-minute 'avatar avatar-cmd
        ; the turn and its tools
        'turn turn 'user user 'state! state! 'brief brief 'ask-lines ask-lines 'change change
        'argv shell-argv 'shell-out shell-out 'reap reap
