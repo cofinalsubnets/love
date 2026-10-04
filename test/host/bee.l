@@ -1137,12 +1137,22 @@
    nn-ok (nn-run ("SB_HUB='" + nn-hub + "'") ("--nest '" + nn-wk + "'"))
    nn-wp (snip >(nn-sb nn-wk ["psid"]) 0 64)
    nn-again (nn-run ("SB_HUB='" + nn-hub + "'") ("--nest '" + nn-wk + "'"))
+   nn-plain (nn-run ("SB_HUB='" + nn-hub + "'") ("--nest '" + nn-hub + "/out'"))
+   ; the nest's verbs: sb laid (no host has it), sh not (every host has it); the shim runs
+   ; love's sb, here the test's love put first on PATH as `love`
+   _ (mkdir (cr-root + "/nlove") 493) _ (hark ["ln" "-s" cr-love (cr-root + "/nlove/love")])
+   nn-shp (hark ["env" ("PATH=" + cr-root + "/nlove:/usr/bin:/bin") (nn-wk + "/.sb/bin/sb") "-C" nn-wk "psid"])
    nn-nohub (nn-run "SB_HUB=" ("--nest '" + cr-root + "/nother'"))
    _ (test
       (<nn-ok = 0) (cr-in >nn-ok ("a worker nest at " + nn-wk + " on the hub's head " + nn-hp))
       (nn-wp = nn-hp) (cr-get (nn-wk + "/f") = "the hub's\n") (cr-get (nn-wk + "/g") = "the hub's too\n")
       (cr-get (nn-wk + "/out/built") = "x\n")
-      (<nn-again = 1) (cr-in >nn-again "is there already")
+      (cr-in >nn-ok "love verbs in .sb/bin")
+      (<nn-again = 0) (cr-in >nn-again "is a nest already: its verbs laid again")
+      (<nn-plain = 1) (cr-in >nn-plain "is there already")
+      (two? (stat (nn-wk + "/.sb/bin/sb"))) (two? (stat (nn-wk + "/.sb/bin/cook")))
+      !(two? (stat (nn-wk + "/.sb/bin/sh"))) !(two? (stat (nn-wk + "/.sb/bin/love")))
+      (snip >nn-shp 0 64 = nn-hp)
       (<nn-nohub = 2) (cr-in >nn-nohub "no hub: SB_HUB"))
    0)
 

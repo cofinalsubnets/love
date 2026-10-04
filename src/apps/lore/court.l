@@ -202,7 +202,7 @@
  ; the foot and stained under the sills, the red or an older coat beneath, and the
  ; coping; over it the battlements, weathered harder under their dark caps. what a window
  ; shows lit is laid here too, which window it is, and whether it is lit all night
- (wall-map _) (: i (iota wall-n)
+ (wall-at i) (:
    wid ((nu-long * nv <= i) + (2 * nu-long * nv <= i) + ((2 * nu-long + nu-short) * nv <= i))
    nu (peep wall-nus wid 0) j (i - peep wall-offs wid 0)
    isx (wid < 2) isz (1 - isx)
@@ -284,7 +284,7 @@
  ; most of it and thickest by the walls, in the joints and round the sump, and the
  ; sump's round grate
  sump-r 0.2
- (floor-map _) (: i (iota (fl-nx * fl-nz)) a yard-a b yard-b
+ (floor-at i) (: a yard-a b yard-b
    px ((i % fl-nx + 0.5) * fts - a) pz ((i // fl-nx + 0.5) * fts - b)
    r2 (sq px + sq pz) dg (sqrt (a * a + b * b))
    ux (mag px) uz (mag pz)
@@ -306,7 +306,15 @@
    grate (cmix (cmix [0.01 0.01 0.01] [0.18 0.16 0.14] bar) [0.24 0.21 0.18] rim)
    alb (cmix (c* wet (cmix conc mossc moss)) grate sump)
    {'r (alb 0) 'g (alb 1) 'b (alb 2)})
- (court-maps _) (maps 'wall ? maps (pins maps 'wall (wall-map ()) 'floor (floor-map ())))
+ ; ..each laid a slice of texels at a time into trays n long, so what a texel takes on its
+ ; way is held for a slice and not the whole map: a small machine has the room
+ (lay-map n f) (: k 16384
+   (go lo out) (lo < n ? (: ix (lo + iota (min2 k (n - lo))) c (f ix)
+                            (go (lo + k) (foldl (o \ key \ pin o key (pin (peep o key (iota n * 0 + peep (c key) 0 0 * 0)) ix (c key)))
+                                                out (keys c))))
+                         out)
+   (go 0 {}))
+ (court-maps _) (maps 'wall ? maps (pins maps 'wall (lay-map wall-n wall-at) 'floor (lay-map (fl-nx * fl-nz) floor-at)))
  ; whether the sun reaches the points px py pz (trays) past the rim, the long walls'
  ; parapets and the battlements: the way out toward it is through the top, or over a wall
  ; low enough where it crosses

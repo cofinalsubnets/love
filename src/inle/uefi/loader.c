@@ -31,7 +31,7 @@ static void **sys, **bs;               // SystemTable / BootServices, u64-slot v
 static void say(char *s) {
  u16 w[128];
  int i = 0;
- for (; s[i] && i < 126; i++) w[i] = (u16) s[i];
+ for (; s[i] && i < 126; i++) w[i] = (u16) (unsigned char) s[i];
  w[i] = 0;
  efi_call(((void **) sys[8])[1], (u64) sys[8], (u64) w, 0, 0, 0); }
 

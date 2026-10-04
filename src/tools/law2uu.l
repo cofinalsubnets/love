@@ -261,7 +261,7 @@
 
    ; --- emit ---
    _ (pl "; test/uuvallaw.l -- generated from test/law.l by src/tools/law2uu.l. Do not edit;")
-   _ (pl "; refresh with `make uuvallaw`. CLAUDE.md's laws, one spelling for both lanes:")
+   _ (pl "; refresh with `make uuvallaw`. AGENTS.md's laws, one spelling for both lanes:")
    _ (pl "; test/law.l quantifies each row over a corpus (refutation), and the rows the")
    _ (pl "; measure tower can state arrive here as uu obligations over test/uuval.l's")
    _ (pl "; model (proof). the source row prints over its term, and every proof was")
