@@ -1,10 +1,13 @@
 {
   "hooks": {
     "UserPromptSubmit": [
-      {"hooks": [{"type": "command", "command": "r=$(git rev-parse --show-toplevel 2>/dev/null || pwd); l=love; [ -x \"$r/out/love\" ] && l=\"$r/out/love\"; (\"$l\" bee --state busy --pid $PPID --hud </dev/null >/dev/null 2>&1 &); exit 0"}]}
+      {"hooks": [{"type": "command", "command": "r=$(pwd); while [ \"$r\" != / ] && [ ! -e \"$r/.sb\" ] && [ ! -e \"$r/.git\" ]; do r=$(dirname \"$r\"); done; l=love; [ -x \"$r/out/love\" ] && l=\"$r/out/love\"; (\"$l\" bee --state busy --pid $PPID --hud </dev/null >/dev/null 2>&1 &); exit 0"}]}
     ],
     "Stop": [
-      {"hooks": [{"type": "command", "command": "r=$(git rev-parse --show-toplevel 2>/dev/null || pwd); l=love; [ -x \"$r/out/love\" ] && l=\"$r/out/love\"; (\"$l\" bee --state idle --pid $PPID --hud </dev/null >/dev/null 2>&1 &); exit 0"}]}
+      {"hooks": [{"type": "command", "command": "r=$(pwd); while [ \"$r\" != / ] && [ ! -e \"$r/.sb\" ] && [ ! -e \"$r/.git\" ]; do r=$(dirname \"$r\"); done; l=love; [ -x \"$r/out/love\" ] && l=\"$r/out/love\"; (\"$l\" bee --state idle --pid $PPID --hud </dev/null >/dev/null 2>&1 &); exit 0"}]}
+    ],
+    "SessionStart": [
+      {"hooks": [{"type": "command", "command": "r=$(pwd); while [ \"$r\" != / ] && [ ! -e \"$r/.sb\" ] && [ ! -e \"$r/.git\" ]; do r=$(dirname \"$r\"); done; if [ -d \"$r/.sb/bin\" ] && [ -n \"$CLAUDE_ENV_FILE\" ]; then echo \"export PATH=\\\"$r/.sb/bin:\\$PATH\\\"\" >> \"$CLAUDE_ENV_FILE\"; fi; exit 0"}]}
     ]
   }
 }

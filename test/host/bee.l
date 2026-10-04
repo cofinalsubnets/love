@@ -1059,5 +1059,58 @@
            (cr-in (r 1) "tess is a user's name"))
    0)
 
+
+; --- a worker nest: --nest DIR makes DIR from the hub SB_HUB names -- its store deposited, its
+; head taken, out/ seeded from its build -- and refuses a DIR that is there or a hub that is not ---
+(: nn-hub (cr-root + "/nhub") nn-wk (cr-root + "/nwork")
+   (nn-sb d as) (hark ([cr-love "sb" "-C" d] + as))
+   (nn-run env args) (hark ["sh" "-c" ("cd '" + cr-root + "' && exec env " + env + " '" + cr-love + "' '" + cr-app + "' " + args + " 2>&1")])
+   _ (mkdir nn-hub 493) _ (mkdir (nn-hub + "/out") 493)
+   _ (cr-put nn-hub "f" "the hub's\n") _ (cr-put (nn-hub + "/out") "built" "x\n")
+   _ (nn-sb nn-hub ["record" "one"])
+   _ (cr-put nn-hub "g" "the hub's too\n") _ (nn-sb nn-hub ["record" "two"])
+   nn-hp (snip >(nn-sb nn-hub ["psid"]) 0 64)
+   nn-ok (nn-run ("SB_HUB='" + nn-hub + "'") ("--nest '" + nn-wk + "'"))
+   nn-wp (snip >(nn-sb nn-wk ["psid"]) 0 64)
+   nn-again (nn-run ("SB_HUB='" + nn-hub + "'") ("--nest '" + nn-wk + "'"))
+   nn-plain (nn-run ("SB_HUB='" + nn-hub + "'") ("--nest '" + nn-hub + "/out'"))
+   ; the nest's verbs: sb laid (no host has it), sh not (every host has it); the shim runs
+   ; love's sb, here the test's love put first on PATH as `love`
+   _ (mkdir (cr-root + "/nlove") 493) _ (hark ["ln" "-s" cr-love (cr-root + "/nlove/love")])
+   nn-shp (hark ["env" ("PATH=" + cr-root + "/nlove:/usr/bin:/bin") (nn-wk + "/.sb/bin/sb") "-C" nn-wk "psid"])
+   nn-nohub (nn-run "SB_HUB=" ("--nest '" + cr-root + "/nother'"))
+   _ (test
+      (<nn-ok = 0) (cr-in >nn-ok ("a worker nest at " + nn-wk + " on the hub's head " + nn-hp))
+      (nn-wp = nn-hp) (cr-get (nn-wk + "/f") = "the hub's\n") (cr-get (nn-wk + "/g") = "the hub's too\n")
+      (cr-get (nn-wk + "/out/built") = "x\n")
+      (cr-in >nn-ok "love verbs in .sb/bin")
+      (<nn-again = 0) (cr-in >nn-again "is a nest already: its verbs laid again")
+      (<nn-plain = 1) (cr-in >nn-plain "is there already")
+      (two? (stat (nn-wk + "/.sb/bin/sb"))) (two? (stat (nn-wk + "/.sb/bin/cook")))
+      !(two? (stat (nn-wk + "/.sb/bin/sh"))) !(two? (stat (nn-wk + "/.sb/bin/love")))
+      (snip >nn-shp 0 64 = nn-hp)
+      (<nn-nohub = 2) (cr-in >nn-nohub "no hub: SB_HUB"))
+   0)
+
+; --- the door: the line that holds a key to it, its hello, the hub's sb serve as @hub, and a
+; refusal; --node on an empty home names the first step ---
+(: dr-home (cr-dir "door" ("(hub " + cr-root + "/nhub)\n"))
+   dr-hp (snip >(hark [cr-love "sb" "-C" (cr-root + "/nhub") "psid"]) 0 64)
+   dr-line (cr-run dr-home "" "--door ssh-ed25519 AAAAk me@x")
+   dr-hi (cr-run dr-home "SSH_ORIGINAL_COMMAND='love bee --door'" "--door")
+   dr-no (cr-run dr-home "SSH_ORIGINAL_COMMAND='cat /etc/passwd'" "--door")
+   dr-sb (hark ["sh" "-c" ("printf '5\\nhello' | env HOME='" + dr-home + "' SSH_ORIGINAL_COMMAND='love sb serve @hub' '"
+                           + cr-love + "' '" + cr-app + "' --door")])
+   nd-home (cr-dir "node" "")
+   nd (cr-run nd-home "" "--node")
+   _ (test
+      (<dr-line = 0) (cr-in (dr-line 1) ("command=\"env HOME=" + dr-home + " "))
+      (cr-in (dr-line 1) " bee --door\",restrict ssh-ed25519 AAAAk me@x")
+      (<dr-hi = 0) (cr-in (dr-hi 1) ("door: box (no card), hub " + dr-hp))
+      (<dr-no = 1) (cr-in (dr-no 1) "the door here takes")
+      (<dr-sb = 0) (cr-in >dr-sb "((\"")
+      (<nd = 1) (cr-in (nd 1) "next  love, nested in ~/.love/bin"))
+   0)
+
 (hark ["rm" "-rf" cr-root])
 (test_fin (), puts "bee: ok", putc 10, 0)

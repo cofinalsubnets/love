@@ -15,15 +15,46 @@ this doc is the interface over it: *what you type*, not *what the objects are*.
 | verb | does | vcs hat | distro hat |
 |---|---|---|---|
 | **`record [NOTE]`** | working changes → a patch in the DAG | commit | — |
-| **`sync PEER`** | union patch sets with another nest (peer dir *or* http URL) | the divergent-tips → set-union payoff | clone / pull / fetch-a-release are all this |
-| **`apply [ID..]`** | realize a dep-consistent subset of the local store into the working tree | checkout / cherry-pick, one act | select which release a nest realizes |
+| **`sync [--keep] PEER`** | union patch sets with another nest (peer dir, `ssh://` nest, *or* http URL) | the divergent-tips → set-union payoff | clone / pull / fetch-a-release are all this |
+| **`take ID..`** | grow the head by a set already in the store | merge, as a hub lands work | land a row |
+| **`apply [ID..]`** | set the head to a dep-consistent subset of the local store | checkout / cherry-pick, one act | select which release a nest realizes |
 | **`bank NAME`** | freeze the current head (its tip **set**) → a named, immutable release | tag | the unit you propagate |
 | **`undo ID [NOTE]`** | add the *inverse* patch — revert as growth, never deletion | revert | rollback-by-superset |
-| **`log`** | the patches, newest first (`*` marks a tip); each ref with its psid | inspect | inspect |
+| **`log`** | the patches, newest first (`*` marks a tip of the head); each ref with its psid | inspect | inspect |
+| **`ls [-l]`** | the head's paths; `-l` with each one's side | ls-files | inspect |
+| **`psid [SET]`** | the name of a set's state: the head's, or SET's | rev-parse | name a release |
+| **`paths A B`** | the paths two sets lay differently | diff --name-only | what an upgrade touches |
+| **`within A B`** | exit 0 when set A lies inside set B | merge-base --is-ancestor | is it newer |
+| **`stamp [SET]`** | the newest of a set's patch times, in seconds | log -1 --format=%ct | a build's stamp |
+| **`log PATH`** | the head's patches that write PATH, or a path under it, the fold's last first | log -- PATH | what touched a file |
+| **`show ID`** | a patch: time, note, deps, then each hunk as a diff | show | inspect |
+| **`blame PATH`** | each line of PATH in the head, after the patch that wrote it | blame | inspect |
+| **`status`** | the head, the banks at it, what the store holds beyond it, conflicted paths, the tree's changes | status | inspect |
+| **`bisect GOOD BAD CMD..`** | lay the banks between, halving, and run CMD in each; the first bad one | bisect run | which release broke it |
 | **`diff`** | working tree vs the recorded state (unified; exit 1 on change) | inspect | inspect |
 | **`ledger NAME ..`** | a named value that moves only by compare-and-swap, every entry kept | a ref moved by `update-ref NEW OLD` | the shared queue sessions coordinate by |
 
 `-C DIR` before any verb runs it in the nest at DIR.
+
+A nest's tree realizes its *head*, the tips of a set kept in `.sb/head`, and its store may
+hold more: work deposited by another nest and not yet taken. `.sb/tips` stays the store's
+tips. `record` grows the head by its patch, `apply` sets it, `take` grows it by a set, and
+`sync` moves both nests' heads to the union of the two. A nest from before heads has no
+`.sb/head` and realizes its whole store. Every verb that writes holds the nest's lock,
+`.sb/lock`, a directory holding its holder's pid: its own process's again, a live other's
+waited on, a dead one's taken; `sync` holds the peer's as well.
+
+A verb that takes a set names it by a ref, a patch (by id or prefix, its deps with it), a
+psid the nest knows (a ref's, a kept derive's, or any set its head has stood at, each kept by its
+tips in `.sb/sets/PSID`), or `head`. A name that resolves to no set fails the verb.
+
+A set's tree is the fold of its patches ordered by depth (the longest dep chain beneath a
+patch), then id, each path on its own. A patch's key is its own, so a set derived once is a
+base: `.sb/derive/PSID` keeps the head's derive, the one before it and the four newest banks',
+and a settle folds only what it adds onto the head's, or another kept one inside the set,
+reading those patches alone. A path the new work writes under a later base writer folds again
+from its own writers. The answer is the whole replay's, byte for byte; over 20,000 patches a
+take onto the head costs under a second.
 
 A hunk is `(path old new)`, each side the path's state: absent, its blob's hash, or the hash
 with an `x` after it when the owner's execute bit is set. So a chmod is a change like an edit,
@@ -40,14 +71,35 @@ tree), which the network exchange isn't.
 
 `sync PEER` **exchanges** patch sets with a peer nest (a directory holding a `.sb/`) — it is
 not a fetch: pull the blobs + patches we lack, push the ones the peer lacks (content-addressed,
-so a union in either direction just fills gaps), then **settle both nests** — re-derive tips +
-snap from the *whole* patch set (order-free — the DAG is a pure function of its patches) and
-materialize onto a **clean** working tree (a dirty tree refuses, exit 1). Because the derive is
+so a union in either direction just fills gaps), then **settle both nests** on the union of
+their heads — re-derive the snap from that set (order-free — the DAG is a pure function of its
+patches) and materialize onto a **clean** working tree (a dirty tree refuses, exit 1). Each
+direction walks back from the source's tips through deps and stops at a patch the other side
+holds, so its cost goes with what differs. `sync --keep PEER` only deposits: both stores
+fill and neither head moves, which is how a worker hands a hub work the hub has not taken. Because the derive is
 a pure function of the patch set, both ends land on the *same* snap: after one sync the two
 trees are identical, from whichever side you ran it. The peer's half needs its tree clean and
 writable; when it is not, sync still pulls (always safe), leaves the peer's store **whole**
 rather than half-fed, and says so with exit 1. An `http://` remote is pull-only — any static
 file tree serving a `.sb/` is a complete remote, and it takes no push.
+
+**A nest on another box** is `ssh://[USER@]HOST[:PORT]/PATH` (`/~/` is the far home). sync runs
+`ssh -T HOST love sb serve PATH` (`SB_SSH` replaces the ssh words, `SB_LOVE` the far binary)
+and the exchange is the same, over the far side's stdin and stdout: each word is a decimal
+length, a newline and the bytes. The near side asks which of its patches the far store holds,
+one level of its tip walk a round, so the rounds go with the length of the work the far side
+lacks. The far side then walks its own tips down to the closure of the ones it holds (stopping
+at a kept derive within it) and sends what lies above, with the blobs asked for after. The
+near side pushes only onto a clean far tree (or deposits with `--keep`), and settles the far
+head with `take`. `sb serve [DIR]` holds the far nest for the whole talk and prints nothing
+but its answers. The far path must be one word to the far shell: letters, digits and
+`/._-~+,=@:`.
+
+`NAME@BOX` is the nest `NAME` that `BOX`'s door serves (`love bee --door`, doc/bee.md NEW NODE):
+sync runs `ssh -T HOST LOVE sb serve @NAME`, with `HOST` and `LOVE` from the line for `BOX` in
+bee's `~/.love/etc/bee/boxes` (the box's own name and `love` without one), and the door maps
+`@hub` to its hub. `sync --take PEER` pulls only and grows the head by the peer's head, leaving
+the peer as it was: how a nest is made from a hub, or brought up to it.
 
 **What a peer can and cannot do.** Every blob and patch is checked against its sha256 name, and
 a patch is refused whole if a hunk names an absolute path, a `.`/`..`/empty segment, a control
@@ -111,6 +163,27 @@ forever. Two or three tips is what ordinary parallel work looks like, not a fork
 the only way to collapse them would be to write a patch touching every path every tip touched,
 i.e. to edit files to appease the check. So a release freezes the head DAG state whatever its
 shape — which is exactly what `psid` hashes.
+
+### history
+
+`log PATH`, `blame PATH` and `status` read the head's derive, so a path's writers come in the
+fold's order, (depth, id), the order its states were made in. `log PATH` lists them last first;
+a PATH that names a directory takes every path under it. `blame` replays the path's writers
+through the same step the derive takes, merges included, and gives each line of the last state
+the patch whose state added it: a line a state keeps keeps its writer. `status` says the head's
+psid, tips and patches, the banks standing at it, how many patches the store holds beyond it, the
+paths its derive left conflicted (`C`), and each path the tree changes: `A` born, `D` gone, `M`
+changed, `X` the mode alone.
+
+`show ID` prints a patch: its id, its time in seconds, its note and deps, then each hunk as a
+unified diff (`(none)` for a birth, `(gone)` for a death), a `mode` line for an x bit moved, or a
+word for a binary side.
+
+`bisect GOOD BAD [--] CMD ..` searches the banks lying above GOOD and within BAD, oldest first,
+with BAD itself last. Each step lays a bank in the tree and runs CMD there: exit 0 is good, 125
+skips that bank, anything else is bad. It says the first bad set and the patches it adds over
+the last good one, then lays the head back. The tree must be clean, and the nest is held for the
+whole search.
 
 ### ledger
 
