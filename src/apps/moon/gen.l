@@ -6247,8 +6247,16 @@
    (imsel g e)
     (: c <>e
        v (cfold !(t32? g) c)
+       ; an object's or a function's address is never null: compared with a null constant, or
+       ; negated, it decides the test (OF_DECLARE's `(fn == (fn_type)NULL) ? fn : fn`)
+       (addr? x) ((two? x && <x = 'str) || imaddr g x != 'no)
+       (null? x) (cfold !(t32? g) x @ k (cint? k && k = 0))
        t (? (cint? v) (v != 0)
             (two? c && <c = 'str) 1
+            (c @ ('bin op a b) (elem op '(eq ne)) ('un 'not _) 1 ())
+             (c @ ('un 'not x) (addr? x ? 0 'no)
+                  ('bin op a b) ((addr? a && null? b) || (addr? b && null? a) ? (op = 'ne) 'no)
+                  'no)
             (imaddr g c @ a (a = 'no ? 'no 1)))
        (? (t = 'no) 'no t <>>e <>>>e))
    ; a constant address at image time -> (label byteoffset ptrtype) | 'no; a cast retypes, so
@@ -8896,8 +8904,11 @@
           cs (bad? cg ? 'bad (globs (rev (g 'statics)) ".data" 'r ()))
           nb (bad? cg || bad? cs ? 'bad (globs (rev (g 'globs)) "love_nifs" () ()))
           ib (bad? nb ? 'bad (globs (rev (g 'globs)) ".love.image" () ()))
+          ; a named section's refusal is a refusal of the whole: one entry it cannot lay would
+          ; otherwise leave that section empty, the kernel's of_device_id tables among them
           xb (bad? ib ? 'bad
-                (map (nm \ [nm (globs (rev (g 'globs)) nm () ()) (xro? nm)]) xnames))
+                (map (nm \ [nm (globs (rev (g 'globs)) nm () ()) (xro? nm)]) xnames @ l
+                   (any (x \ bad? (x 1)) l ? 'bad l)))
           ; each switch's jump table: a label, then 4-byte self-relative entries (label differences, settled at link)
           jt (foldl (a \ p \ a + [['align 4] ['label <p]] + [['raw <>p]])
                     () (rev (g 'jtabs)))

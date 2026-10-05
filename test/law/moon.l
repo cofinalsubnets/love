@@ -867,7 +867,11 @@
       ; the static-data lane refuses through the same door: a cause pinned by globs, a
       ; gripe minted at gfns's tail (cgdata's callers thread a bare 'bad, not a gripe)
       (: g (cgt "int g = nope;\n" 'x64)
-         (gripe? g && (gmsg g = "cannot lay the initializer of 'g' ((var \"nope\"))")))))
+         (gripe? g && (gmsg g = "cannot lay the initializer of 'g' ((var \"nope\"))")))
+      ; ..and so does a named section's: one entry it cannot lay refuses the unit, never an
+      ; empty section that compiled clean (linux's of_device_id tables went missing that way)
+      (: g (cgt "int a __attribute__((__section__(\"T\"))) = 1;\nint b __attribute__((__section__(\"T\"))) = nope;\n" 'x64)
+         (gripe? g && (gmsg g = "cannot lay the initializer of 'b' ((var \"nope\"))")))))
 
 ; -- 7c-i: freestanding-header surface. cc keeps no linkage/qualifier state, so those
 ; keywords and __attribute__((..)) are skipped wherever a type may begin or a declarator
