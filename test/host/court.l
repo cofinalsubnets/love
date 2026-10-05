@@ -126,8 +126,10 @@
        (two? tops) (all (y \ amax (st 'tree 'y) - 1.5 < y) ty)))
 
 ; --- the cables: each step of a run is along one axis on one wall's face, below the parapet's
-; --- top; laid, they darken the walls' map; the loose ones hang from the parapet's top inside
-; --- the walls, the box's bundle out of it, and the lower ends sway while the tops keep still
+; --- top, and laid it darkens the walls' map along it; a box on each short wall, mirrored, its
+; --- foot at the second floor's sill between the stair's windows and the east one, a run
+; --- climbing into it; the loose ones hang from the parapet's top inside the walls, and the
+; --- lower ends sway while the tops keep still
 (: (axes p q) #(filter (k \ 0.0001 < mag (p k - q k)) ^3)
    (face? p wid) (? (wid = 0) (mag (p 0 - yard-a) < 0.01) (wid = 1) (mag (p 0 + yard-a) < 0.01)
                     (wid = 2) (mag (p 2 - yard-b) < 0.01) (mag (p 2 + yard-b) < 0.01))
@@ -140,11 +142,15 @@
  (test (10 < #steps) (all (st \ axes (st 0) (st 1) = 1) steps)
        (all (st \ wall-of (st 0) (st 1) @ w (face? (st 0) w && face? (st 1) w)) steps)
        (all (st \ st 0 1 <= wall-h && st 1 1 <= wall-h && 0.0 < st 1 1) steps)
-       (1000 < net (m 'wall 'r < 0.08))
+       (all (st \ (: p (lerp (st 0) (st 1) 0.5) w (wall-of (st 0) (st 1)) u (p (w < 2 ? 2 0))
+                     (peep (m 'wall 'r) (wall-texel w u (p 1)) 0.0 + 0.12 < peep (m 'wall 'r) (wall-texel w u (p 1 + 0.25)) 0.0)))
+            (filter (st \ st 0 1 = st 1 1) steps))
+       (#boxes = 2) (all (bx \ bx 0 1 = 3.9 && 0.3 < bx 0 0 && bx 1 0 < 1.35) boxes)
+       (boxes 0 0 0 = boxes 1 0 0) (boxes 0 1 2 = 0.0 - boxes 1 0 2)
+       (all (bx \ any (st \ any (q \ q 1 = 3.9 && bx 0 0 < q 0 && q 0 < bx 1 0 && mag (q 2 - bx (3 - bx 2) 2) < 0.01) st) steps) boxes)
        (10 < #s0) (all in? pts) (all (r \ r 2 < 0.05) s0)
        (two? lows) (all (k \ 0.001 < moved k) lows)
-       (two? tops) (all (k \ s0 k 0 = s1 k 0) tops)
-       (two? (filter (r \ box-lo 1 - 0.05 < r 0 1 && r 0 1 < box-hi 1 + 0.05 && box-lo 2 - 0.15 < r 0 2) s0))))
+       (two? tops) (all (k \ s0 k 0 = s1 k 0) tops)))
 
 ; --- falling leaves: now and then one lets go of the top of the crown and comes down, and
 ; --- it lies on the floor where it lands, inside the walls; the frame draws them

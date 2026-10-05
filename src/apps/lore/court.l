@@ -33,7 +33,7 @@
 (module (court court-run court-walk court-main court-new court-size court-step court-move
          court-frame court-sun court-light court-clock court-now court-local court-doy court-season
          court-opts court-wx-pick court-fall-pick court-month court-pens court-maps
-         tree-grow sun-clear top-h block-h crown-y runs strands box-lo box-hi wall-of
+         tree-grow sun-clear top-h block-h crown-y runs boxes strands wall-of wall-texel
          fps yard-a yard-b floor-h floors wall-h eye-h body-r lat paces)
 (borrow 'rove)
 (borrow 'view)                          ; the screen, the pens, the hash, the loop
@@ -73,27 +73,16 @@
  ; a long wall's sashes, 1.8 apart and 0.66 wide, and its small windows: the west's one
  ; each end, the east's two, 0.34 wide; sills at 0.9 and 1.4, heads at 2.3
  bay 1.8 sash-w 0.33 nook-w 0.17
- ; --- the cables: the building's wiring, come down over the parapets. most are bundled
- ; neat against the walls, turning square like a board's traces, to a hole, a window's
- ; corner, or the box on the north wall behind the tree, its bottom at the second floor's
- ; sills; a few hang loose, cut, and sway. a run is [width colour waypoints end], each
- ; step along one axis on one wall's face, 'hole the end that goes into the wall ---
- blk [0.045 0.045 0.05] gry [0.26 0.26 0.27] wht [0.72 0.72 0.7]
- box-lo [2.2 3.9 (yard-b - 0.23)] box-hi [2.5 4.2 yard-b]
- runs [[0.08 blk [[2.35 4.46 yard-b] [2.35 wall-h yard-b]] ()]
-       [0.07 blk [[2.3 3.55 yard-b] [0.55 3.55 yard-b] [0.55 3.77 yard-b] [(0.0 - yard-a) 3.77 yard-b]
-                  [(0.0 - yard-a) 3.77 3.1] [(0.0 - yard-a) 3.95 3.1]] ()]
-       [0.06 blk [[2.3 3.55 yard-b] [yard-a 3.55 yard-b] [yard-a 3.55 1.8] [yard-a 0.5 1.8]] 'hole]
-       [0.05 blk [[2.3 3.55 yard-b] [2.3 1.25 yard-b]] 'hole]
-       [0.06 blk [[yard-a wall-h -1.8] [yard-a 8.45 -1.8] [yard-a 8.45 -2.32] [yard-a 8.33 -2.32]] ()]
-       [0.05 blk [[yard-a wall-h 4.4] [yard-a 11.6 4.4] [yard-a 11.6 -1.8]] ()]
-       [0.07 blk [[(0.0 - yard-a) wall-h 0.0] [(0.0 - yard-a) 2.6 0.0]] ()]
-       [0.04 blk [[(0.0 - yard-a) 2.6 0.0] [(0.0 - yard-a) 2.6 -0.52] [(0.0 - yard-a) 2.33 -0.52]] ()]
-       [0.04 gry [[(0.0 - yard-a) 2.6 0.0] [(0.0 - yard-a) 2.6 0.52] [(0.0 - yard-a) 2.33 0.52]] ()]
-       [0.05 blk [[-2.5 wall-h (0.0 - yard-b)] [-2.5 3.77 (0.0 - yard-b)] [-0.6 3.77 (0.0 - yard-b)]
-                  [-0.6 3.2 (0.0 - yard-b)]] 'hole]
-       [0.012 wht [[-0.95 wall-h (0.0 - yard-b)] [-0.95 6.76 (0.0 - yard-b)] [-0.33 6.76 (0.0 - yard-b)]] ()]
-       [0.015 gry [[-2.6 wall-h yard-b] [-2.6 9.8 yard-b] [-1.9 9.8 yard-b] [-1.9 9.95 yard-b]] ()]]
+ ; --- the cables: the building's wiring. one runs neat along the west wall over the ground
+ ; floor's windows and round onto the short walls, dips under the stair's lowest window and
+ ; climbs into a box beside it, each box west of the east window at the second floor's sill,
+ ; the north's and the south's mirrored; and a few hang loose from the parapets, cut, and
+ ; sway. a run is [width colour waypoints], each step along one axis on one wall's face;
+ ; a box is [low corner, high corner, wall] ---
+ cab [0.25 0.25 0.26]
+ boxes [[[0.95 3.9 (yard-b - 0.23)] [1.25 4.2 yard-b] 2] [[0.95 3.9 (0.0 - yard-b)] [1.25 4.2 (0.23 - yard-b)] 3]]
+ (to-box z) [[1.09 3.9 z] [1.09 2.62 z] [0.45 2.62 z] [0.45 2.3 z] [-0.43 2.3 z] [-0.43 2.62 z] [(0.0 - yard-a) 2.62 z]]
+ runs [[0.04 cab (cat (to-box (0.0 - yard-b)) (rev (to-box yard-b)))]]
  ; --- the time: 'sim is the wall clock's local seconds, 'dst what summer adds to it ---
  ; now, as [local-seconds dst]: the zone's offset now, against the least of it a season on, two and three
  (court-when s) (: zone ((cite 'kore 'tz-zone) 0)
@@ -476,55 +465,51 @@
     'shx (col 0) 'shy (col 1) 'shz (col 2) 'c [(bs 0) 0.3 (bs 2)] 'R 1.9 'cache {}})
  (heap-shade hm X Y Z) (hm ? (0.85 * (hm 'depth X Y Z + 0.03 < peep (hm 'map) (hm 'pix X Y Z) -1e9)) 0.0)
  (shade sms X Y Z) (1.0 - (1.0 - grove-shade (sms 0) X Y Z) * (1.0 - heap-shade (sms 1) X Y Z))
- ; ..the bundle off the box, out of its bottom and its top and back to the wall, and the
- ; loose ones from the parapet's top down, swaying the more the lower they hang as the
+ ; ..the loose ones from the parapet's top down, swaying the more the lower they hang as the
  ; frame's clock t goes; a rod off a wall casts its shadow there (shade-walls)
  (strands t) (: (sway k p) (: f (sq (sat ((wall-h - p 1) / 5.0)))
                              [(p 0 + f * 0.03 * sin (t * 0.05 + k)) (p 1) (p 2 + f * 0.03 * cos (t * 0.04 + k * 1.3))])
    (hang wid ps r k) (: n #ps q (map (i \ sway k (ps i)) ^n)
-                        (map (i \ [(q i) (q (i + 1)) r blk 0.0 wid]) ^(n - 1)))
+                        (map (i \ [(q i) (q (i + 1)) r [0.05 0.05 0.055] 0.0 wid]) ^(n - 1)))
    ea (yard-a - 0.04) wa (0.04 - yard-a) nb (yard-b - 0.04) sb (0.04 - yard-b)
-   (cat* [[[[2.33 3.9 4.43] [2.31 3.72 4.47] 0.045 blk 0.1 2] [[2.31 3.72 4.47] [2.3 3.57 4.53] 0.04 blk 0.1 2]
-           [[2.35 4.2 4.43] [2.35 4.34 4.49] 0.04 blk 0.1 2] [[2.35 4.34 4.49] [2.35 4.47 4.53] 0.04 blk 0.1 2]]
-          (hang 2 [[-2.2 wall-h nb] [-2.2 9.4 (nb + 0.01)] [-2.14 7.6 (nb - 0.12)]] 0.009 1.0)
+   (cat* [(hang 2 [[-2.2 wall-h nb] [-2.2 9.4 (nb + 0.01)] [-2.14 7.6 (nb - 0.12)]] 0.009 1.0)
           (hang 0 [[ea wall-h -3.45] [(ea + 0.01) 8.2 -3.45] [(ea - 0.16) 5.9 -3.38]] 0.01 2.0)
           (hang 1 [[wa wall-h 1.6] [(wa - 0.01) 10.6 1.62] [(wa + 0.11) 9.3 1.7]] 0.008 3.0)
-          (hang 3 [[0.95 wall-h sb] [0.95 6.0 (sb - 0.01)] [1.02 2.7 (sb + 0.16)]] 0.011 4.0)
+          (hang 3 [[2.45 wall-h sb] [2.45 6.0 (sb - 0.01)] [2.52 2.7 (sb + 0.16)]] 0.011 4.0)
           (hang 0 [[ea wall-h 0.3] [(ea - 0.02) 11.95 0.75] [(ea - 0.03) 11.8 1.25] [(ea - 0.02) 11.95 1.7] [ea wall-h 2.1]] 0.009 5.0)
           (hang 1 [[wa wall-h -4.1] [(wa - 0.02) 10.9 -4.12] [(wa + 0.16) 10.1 -4.0]] 0.008 6.0)]))
  ; which wall's face a step of a run is on, and where along it
  (wall-of p q) (: (on? k v) (mag (p k - v) < 0.01 && mag (q k - v) < 0.01)
    (? (on? 0 yard-a) 0 (on? 0 (0.0 - yard-a)) 1 (on? 2 yard-b) 2 3))
  (along-of wid p) (wid < 2 ? (p 2) (p 0))
+ ; ..the map's texel on wall wid at u along it and v up it
+ (wall-texel wid u v) (peep wall-offs wid 0 + floor (v / ts) * peep wall-nus wid 0
+                       + floor ((u + (wid < 2 ? yard-b yard-a)) / ts))
  ; ..a step laid into the wall's map: the texels of its box, each the share of it the run
- ; covers, its strands striped and its upper side lit, the wall under it a little
- ; shadowed; plain, a hole's dark square
- (lay-step m wid u0 u1 v0 v1 wd c plain) (: nu (peep wall-nus wid 0) half (wid < 2 ? yard-b yard-a)
+ ; covers, its strands striped and its upper side lit, the wall under it a little shadowed
+ (lay-step m wid u0 u1 v0 v1 wd c) (: nu (peep wall-nus wid 0) half (wid < 2 ? yard-b yard-a)
    flat (mag (v1 - v0) < 0.001) pad (wd + 0.08)
    tu0 (max2 0 (int ((min2 u0 u1 - pad + half) / ts))) tu1 (min2 (nu - 1) (int ((max2 u0 u1 + pad + half) / ts)))
    tv0 (max2 0 (int ((min2 v0 v1 - pad) / ts))) tv1 (min2 (nv - 1) (int ((max2 v0 v1 + pad) / ts)))
    bw (tu1 - tu0 + 1) bh (tv1 - tv0 + 1)
    ii (iota (bw * bh)) tu (tu0 + ii % bw) tv (tv0 + ii // bw)
-   ix (peep wall-offs wid 0 + tv * nu + tu)
-   uc ((tu + 0.5) * ts - half) vc ((tv + 0.5) * ts)
+   uc ((tu + 0.5) * ts - half) vc ((tv + 0.5) * ts) ix (wall-texel wid uc vc)
    ac (flat ? (vc - v0) (uc - u0)) w2 (0.5 * wd)
    at (flat ? uc vc) lo (flat ? (min2 u0 u1) (min2 v0 v1)) hi (flat ? (max2 u0 u1) (max2 v0 v1))
    (ov x l h) (sat ((min (x + 0.5 * ts) h - max (x - 0.5 * ts) l) / ts))
    long (ov at (lo - w2) (hi + w2))
    cov (ov ac (0.0 - w2) w2 * long)
-   shd ((ov ac (0.0 - w2 - 0.04) (flat ? w2 (w2 + 0.04)) * long - cov) * (plain ? 0.0 0.35))
+   shd ((ov ac (0.0 - w2 - 0.04) (flat ? w2 (w2 + 0.04)) * long - cov) * 0.15)
    x (ac / max2 w2 0.001) k (max2 1 (int (wd / 0.012)))
-   strand (0.85 + 0.3 * throw (floor ((x + 1.0) * 0.5 * k)) (int (mag lo * 100.0)) 91 9 / 9.0)
+   strand (0.9 + 0.2 * throw (floor ((x + 1.0) * 0.5 * k)) (int (mag lo * 100.0)) 91 9 / 9.0)
    tie ((frac (at / 0.3) < 0.13) * (0.05 < wd))
-   tone (plain ? 1.0 ((flat ? (1.0 + 0.45 * x) (1.15 - 0.35 * mag x)) * strand * (1.0 + 0.8 * tie)))
+   tone ((flat ? (1.0 + 0.25 * x) (1.1 - 0.2 * mag x)) * strand * (1.0 + 0.3 * tie))
    (lay key ck) (peep (m key) ix 0.0 @ o (pin m key (pin (m key) ix (o * (1.0 - shd) + cov * (tone * ck - o * (1.0 - shd))))))
    _ (lay 'r (c 0)) _ (lay 'g (c 1)) _ (lay 'b (c 2))
    (pin m 'glass (pin (m 'glass) (over -1 (0.5 < cov) ix) 0)))
  (lay-run m rn) (: wd (rn 0) c (rn 1) ps (rn 2) n #ps
    _ (each ^(n - 1) (i \ (: p (ps i) q (ps (i + 1)) wid (wall-of p q)
-                           (lay-step m wid (along-of wid p) (along-of wid q) (p 1) (q 1) wd c 0))))
-   (rn 3 = 'hole ? (: p (ps (n - 1)) wid (wall-of p p) u (along-of wid p)
-                      (lay-step m wid u u (p 1) (p 1) (wd + 0.04) [0.02 0.02 0.02] 1))))
+                           (lay-step m wid (along-of wid p) (along-of wid q) (p 1) (q 1) wd c)))))
  ; --- rods: the heap's branches and the cables off the walls, [a b r colour bark wall],
  ; cylinders each tried only on the pixels of its box on the screen; bark how much the shade
  ; wanders. one thinner than a pixel is drawn as the share of each pixel it covers, over
@@ -587,7 +572,7 @@
                        'b (pin (buf 'b) ix (mix 'b (cl 2)))))))))
    (each rs one))
  ; the box: grey paint gone dull, its door's edge on the face, dirt at its foot
- (box! cam lt sms buf sn) (: e (cam 'e) s (lt 'sun) lo box-lo hi box-hi
+ (box! bx cam lt sms buf sn) (: e (cam 'e) s (lt 'sun) lo (bx 0) hi (bx 1)
    cs (map (k \ [((k % 2 = 1 ? hi lo) 0) ((k // 2 % 2 = 1 ? hi lo) 1) ((k // 4 = 1 ? hi lo) 2)]) ^8)
    idx (spot cs 1.0 cam)
    (#idx = 0 ? ()
@@ -629,19 +614,21 @@
              cov (sat ((min (d + r) (0.5 * soft) - max (d - r) (-0.5 * soft)) / soft))
              (lay (over -1 (seen idx wid) idx) (0.85 * cov)))))))
    _ (each rs one)
-   ; ..the box's on the north wall, the sun from the south
-   sn (0.0 - s 2) dep (box-hi 2 - box-lo 2)
-   _ ((0.02 < sn && 0.0 < s 1) ?
-      (: du (s 0 * dep / s 2) dv (s 1 * dep / s 2) lo box-lo hi box-hi
-         cs (cat* (map (k \ (: q [((k % 2 = 1 ? hi lo) 0) ((k // 2 = 1 ? hi lo) 1) yard-b]
-                               [q [(q 0 + du) (q 1 + dv) yard-b]])) ^4))
+   ; ..each box's on its wall: its face's outline laid back onto the wall, swept
+   (cast-box bx) (: lo (bx 0) hi (bx 1) wid (bx 2) sn (dot s (ins wid))
+     dep (hi 2 - lo 2) zf (wid = 2 ? yard-b (0.0 - yard-b))
+     ((0.02 < sn && 0.0 < s 1) ?
+      (: du (0.0 - s 0 * dep / sn) dv (0.0 - s 1 * dep / sn)
+         cs (cat* (map (k \ (: q [((k % 2 = 1 ? hi lo) 0) ((k // 2 = 1 ? hi lo) 1) zf]
+                               [q [(q 0 + du) (q 1 + dv) zf]])) ^4))
          idx (spot cs 1.0 cam)
          (#idx = 0 ? ()
           (: (span p d l h) (: k1 ((p - h) / d) k2 ((p - l) / d) [(min k1 k2) (max k1 k2)])
              ru (span (peep (P 0) idx 0.0) (mag du < 1e-6 ? 1e-6 du) (lo 0) (hi 0))
              rv (span (peep (P 1) idx 0.0) (mag dv < 1e-6 ? 1e-6 dv) (lo 1) (hi 1))
-             ok ((max 0.0 (max (ru 0) (rv 0)) <= min 1.0 (min (ru 1) (rv 1))) * seen idx 2)
-             (lay (over -1 ok idx) 0.95)))) ())
+             ok ((max 0.0 (max (ru 0) (rv 0)) <= min 1.0 (min (ru 1) (rv 1))) * seen idx wid)
+             (lay (over -1 ok idx) 0.95)))) ()))
+   _ (each boxes cast-box)
    (O 'o))
  ; --- the frame ---
  ; the lit share of the windows by the hour of the evening
@@ -743,7 +730,7 @@
    ; being drawn over what is there
    sn (st 'snow)
    _ (rods! (st 'litter 'rods) cam lt sms buf sn)
-   _ (box! cam lt sms buf sn)
+   _ (each boxes (bx \ box! bx cam lt sms buf sn))
    _ (bits! (st 'litter 'pts) cam lt sms buf sn)
    _ (lead (st 'litter 'leaves) (18 * int (leaf-n * sea 'ground)) (sea 'brown) @ P (tablet? P ? (bits! P cam lt sms buf sn)))
    _ (loose st @ P (tablet? P ? (bits! P cam lt sms buf sn)))
