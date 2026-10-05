@@ -54,15 +54,21 @@ fi
 # ps's faces byte for byte on pid 1's row and every header, under TZ=UTC0 (START and
 # STIME are UTC here): -o with its headers renamed and blanked, -p, -f, BSD's aux, -e;
 # -u, an unknown key and a pid not there
-# a TIME may tick between the two reads, so its digits are blanked, its width kept
+# a TIME may tick between the two reads, so its digits are blanked, its width kept; a
+# size moves between them too, so vsz and rss are held to their headers alone
 pstm() { sed -E 's/[0-9]{2}:[0-9]{2}:[0-9]{2}/HH:MM:SS/; s/ [0-9]+:[0-9]{2} / M:SS /'; }
-for c in "-o pid,ppid,user,comm,stat,rss,tty -p 1" "-o pid=,ppid=,comm= -p 1" "-o pid,user,vsz,rss,stat,ni -p 1" "-f -p 1"; do
+for c in "-o pid,ppid,user,comm,stat,tty -p 1" "-o pid=,ppid=,comm= -p 1" "-o pid,user,stat,ni -p 1" "-f -p 1"; do
   # shellcheck disable=SC2086
   TZ=UTC0 ps $c | pstm > "$g"; TZ=UTC0 korerun ps $c | pstm > "$o"; same "ps $c"
 done
+ps -o pid,user,vsz,rss,stat,ni -p 1 | head -1 > "$g"; korerun ps -o pid,user,vsz,rss,stat,ni -p 1 | head -1 > "$o"; same "ps -o vsz,rss's headers"
+# aux's pid-1 row: %CPU %MEM VSZ RSS (fields 3-6) move too, so their digits are blanked in place
+psmvp='on && NR > 1 { o = ""; n = 0; w = 0; for (i = 1; i <= length($0); i++) { ch = substr($0, i, 1); if (ch == " ") w = 0; else if (!w) { w = 1; n++ }; if (n >= 3 && n <= 6 && ch ~ /[0-9]/) ch = "9"; o = o ch }; $0 = o } { print }'
+psmv() { awk -v on="$1" "$psmvp"; }
 for c in -e -ef aux; do
+  blank=0; [ "$c" = aux ] && blank=1
   # shellcheck disable=SC2086
-  TZ=UTC0 ps $c | awk 'NR == 1 || $2 == 1 || $1 == 1' | pstm > "$g"; TZ=UTC0 korerun ps $c | awk 'NR == 1 || $2 == 1 || $1 == 1' | pstm > "$o"; same "ps $c"
+  TZ=UTC0 ps $c | awk 'NR == 1 || $2 == 1 || $1 == 1' | pstm | psmv $blank > "$g"; TZ=UTC0 korerun ps $c | awk 'NR == 1 || $2 == 1 || $1 == 1' | pstm | psmv $blank > "$o"; same "ps $c"
 done
 [ "$(korerun ps -o pid=P,comm -p 1 | head -1)" = "      P COMMAND" ] || fail "kore ps -o, a header renamed"
 korerun ps -u root | awk '{ print $1 }' | grep -qx 1 || fail "kore ps -u root"
