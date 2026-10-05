@@ -93,7 +93,12 @@
            (run "-fXX z.raw" = (1 . "aplay: wrong extended format 'XX'\n"))
            (run "-r 4000 z.raw" = (1 . "aplay: rate 4000 Hz is outside the horn's 8000..192000\n"))
            (run "nope.wav a.wav" = (1 . "nope.wav: No such file or directory\nPlaying WAVE 'a.wav' : Signed 16 bit Little Endian, Rate 8000 Hz, Stereo\n"))
-           (run "--bogus" = (1 . "aplay: unrecognized option '--bogus'\n")),
+           (run "--bogus" = (1 . "aplay: unrecognized option '--bogus'\n"))
+           (run "-c 300 z.raw" = (1 . "aplay: value 300 for channels is invalid\n")))
+   ; the last gulp plays too, so a wav read whole at once is half a second of HORN=none's time
+   _ (put (dir + "/half.wav") (ap-wav (ap-fmt 1 1 8000 8 1) (ap-cat (map (k \ string [128]) ^4000))))
+   t0 (clock 0)
+   _ (test (run "-q half.wav" = (0 . "")) (400 <= clock 0 - t0),
     hark ["rm" "-rf" dir],
     0))
 

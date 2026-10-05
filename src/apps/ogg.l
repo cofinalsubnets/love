@@ -48,8 +48,6 @@
        [() (held + (string? tl ? tl ""))])
 
    ; --- the codecs ----------------------------------------------------------
-   ogg-why ["" "lost sync" "cut short" "a kind of frame this can't read"
-            "a bad frame (its crc, or a reserved code)"]
    ; flac (the ogg mapping 1.0): "\x7fFLAC" 1 0, a count, then "fLaC" and STREAMINFO; each later
    ; header packet is one metadata block, and each audio packet one frame
    (ogg-flac-head ps)
@@ -57,8 +55,9 @@
        (? (#p < 13 || p 5 != 1) "an Ogg FLAC mapping this can't read"
           ; flac's sizes and skips count bytes of a flac stream, not of these packets
           ((cite 'flac 'flac-meta) (cats ("fLaC" . snip p 13 #p . >ps)) @ ('more . _) 'more ('skip . _) 'more m m)))
+   ; a packet that is no frame (empty, cut, a bad crc) answers (), and the pump passes it over
    (ogg-flac-start m)
-    (\ pkt gr (flac-frame pkt 0 (m 'bps) (m 'ch) @ (pcm . _) pcm w (ogg-why w)))
+    (\ pkt gr (flac-frame pkt 0 (m 'bps) (m 'ch) @ (pcm . _) pcm _ ()))
    ; vorbis: identification, comments and setup, then each audio packet a block; the end
    ; page's granule cuts the last block to the stream's length
    (ogg-vb-tags p)
@@ -77,9 +76,9 @@
                       'rate (m 'rate) 'align (2 * m 'ch)}
    (ogg-vb-start m)
     (: st (cask (m 'size)) r (vorbis-init st (m 'vb 0) (m 'vb 1)) w (2 * m 'ch) n {'n 0}
-       (? (r != 0) (\ pkt gr (ogg-vb-why r))
+       (? (r != 0) (\ pkt gr ())
           (\ pkt gr (vorbis-packet st pkt 0 @
-                      pcm (? !(string? pcm) ""                 ; a packet that is no block is passed over
+                      pcm (? !(string? pcm) ()                 ; a packet that is no block is passed over
                              (: k (#pcm // w) t (n 'n) c (? (0 <= gr && gr < t + k) (max 0 (gr - t)) k)
                                 (pin n 'n (t + c), snip pcm 0 (c * w))))))))
    (ogg-codecs _)
@@ -147,7 +146,7 @@
                 (ogg-join held (ty & 1) pk tl @ [ps tl2]
                   (: (go l k) (? (atom? l) ()
                                  (0 < k) (go >l (k - 1))
-                                 (dec <l (atom? >l && (ty & 4) ? gr -1) @ pcm (? (string? pcm) (emit pcm, go >l 0) pcm)))
+                                 (dec <l (atom? >l && (ty & 4) ? gr -1) @ pcm (? (string? pcm) (emit pcm, go >l 0) !pcm (go >l 0) pcm)))
                      r (go ps k)
                      (? (string? r) r
                         (run h e m dec tl2 (max 0 (k - #ps)) (ty & 4)))))))
