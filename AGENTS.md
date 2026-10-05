@@ -159,7 +159,6 @@ i = (0 ~ 1)                  ; a ~ b = (twin a b), the complex builder
 - `src/love/holo/*` -> `test_holo` `test_as`
 - `src/apps/sb/*` -> `test_sb`
 - `src/apps/hearts/*` -> `test_hearts`
-- `src/apps/player/mpd.l` -> `test_mpd` (needs mpd, mpc and flac on the box)
 
 `test_slow` runs last, on the exact tree that lands. The `test_cc%` lanes are pattern rules in `test/test.mk`, so grepping for `^test_cc...:` misses them.
 
