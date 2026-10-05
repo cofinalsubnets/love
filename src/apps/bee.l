@@ -202,12 +202,13 @@
                            + "that agreed (or, from the head's session while the leader has no live session, "
                            + "takes it, acting); sync sets what the queue lands toward (- removes it); pre_add "
                            + "adds a pre-release condition and pre_drop N drops the Nth; base moves the base line; mirror "
-                           + "names the git repository and branch an sb queue's landings are written to. Only the leader may.")
+                           + "names the git repository and branch an sb queue's landings are written to; lives names the box the queue lives on while a standby leads it. Only the leader may.")
              {"queue" (prop "refs/queue/NAME or queue/NAME") "leader" (prop "the session to lead")
               "sync" (prop "the sync line's text, or - to remove it") "pre_add" (prop "a pre line's text")
               "pre_drop" (prop "the pre line to drop, counting from 1")
               "base" (prop "the new sha for the base line")
-              "mirror" (prop "on an sb queue: PATH BRANCH [KEEP..] -- the git repository at PATH, its branch, and the path prefixes the parent's tree keeps there; - to remove it")}
+              "mirror" (prop "on an sb queue: PATH BRANCH [KEEP..] -- the git repository at PATH, its branch, and the path prefixes the parent's tree keeps there; - to remove it")
+              "lives" (prop "the box the queue lives on while a standby leads it: other boxes' copies follow that box's and refuse writes; - to remove it")}
              ["queue"])
        (tool "queue_land" ("Land by sha (git) or psid (sb): for your green row at its head, check that the base "
                            + "is where the base line says and that landing your gated head gives the gated tree -- "
@@ -970,10 +971,41 @@
      (q-write q old was text) (: ok (q-put q old text) _ (? (ok && !(tablet? (peep bee-who 'proposal ()))) (q-tell-away q was text) 0) ok)
      (q-row? l) (: w (words l) (5 < #w && 0 < #<w && 48 <= <w 0 <= 57))
      (q-note l) (: k (find l "  # " 0) (? (k < 0) "" (snip l (k + 4) #l)))
-     (q-leader text) (: w (words (q-line text "leader")) (? (1 < #w) (w 1) ""))
+     ; the leader line's session; NAME@BOX names a session on BOX, and on BOX itself it is NAME
+     (q-leader text) (: w (words (q-line text "leader")) l (? (1 < #w) (w 1) "") h ("@" + here-box 0)
+                        (? (ends? l h && #h < #l) (snip l 0 (#l - #h)) l))
+     ; this box's name: (box NAME) in bee.l, else its card's, else the host's
+     (here-box _) (: s (setting 'box "") b (box-seal 0) (? (0 < #s) s (two? b) (b 1 "name") bee-hostname))
+     ; the box a queue lives on when its `lives BOX` line names another than this one, else "".
+     ; a standby taking the lead writes it; this box's copy then only follows that box's
+     (q-lives-box text) (: w (words (q-line text "lives")) (? (1 < #w && w 1 != here-box 0) (w 1) ""))
+     (q-away-why q)
+      (: rd (q-read q) bx (q-lives-box (rd 1))
+         (? (0 < #bx) (q + " lives on " + bx + " now (its leader " + q-leader (rd 1) + "): write it there, "
+                       + "or after the hand-back -- a queue_lead there with lives naming this box")
+            ""))
      (field in k d) (: v (peep in k ()) (? (string? v && 0 < #v) v d))
      (q-short q) (q @ ("refs/queue/" + n) n ("queue/" + n) n "")
      (git1 a) (chomp (lush-out ("git " + a)))
+     ; --mirror-queue REF DEST: a git queue kept in step with its copy at DEST, a repository git can
+     ; fetch from and push to. DEST's copy is taken when either copy's `lives` line names a box
+     ; other than this one -- the queue moved there, or is handed back from there -- else ours is pushed
+     (mirror-queue ref dest)
+      (: tmp "refs/mirror-in/queue"
+         got (lush-out ("git fetch -q " + sh-quote dest + " " + sh-quote ("+" + ref + ":" + tmp) + " 2>/dev/null && echo got"))
+         theirs (? (0 <= find got "got" 0) (git1 ("rev-parse --verify -q " + tmp)) "")
+         mine (git1 ("rev-parse --verify -q " + sh-quote ref))
+         tt (? (0 < #theirs) (lush-out ("git cat-file -p " + theirs)) "")
+         mt (? (0 < #mine) (lush-out ("git cat-file -p " + mine)) "")
+         _ (? (0 < #theirs) (git1 ("update-ref -d " + tmp)) "")
+         r (? (0 < #theirs && theirs != mine && (0 < #(q-lives-box tt) || 0 < #(q-lives-box mt)))
+               (: _ (git1 ("update-ref " + sh-quote ref + " " + theirs))
+                  [1 ("took " + dest + "'s " + ref + ": its " + q-line tt "leader")])
+              (0 = #mine) [0 ("no " + ref + " here")]
+              (theirs = mine) [1 (ref + " is the same at " + dest)]
+              (: o (lush-out ("git push -q --force " + sh-quote dest + " " + sh-quote ("+" + ref + ":" + ref) + " 2>&1 && echo pushed"))
+                 (? (0 <= find o "pushed" 0) [1 ("pushed " + ref + " to " + dest)] [0 ("cannot push " + ref + " to " + dest + ": " + chomp o)])))
+         r)
      ; a commit's or a tree's full sha, "" when there is none
      (git-sha x) (git1 ("rev-parse --verify -q " + sh-quote (x + "^{commit}")))
      (git-tree x) (git1 ("rev-parse --verify -q " + sh-quote (x + "^{tree}")))
@@ -1120,7 +1152,7 @@
      (q-bare l) (words (snip l 0 (q-cut l)))
      ; the base line -- `<branch> <sha>`, a note allowed, neither a row nor the leader's, sync, pre
      ; or next -- moved to sha, its note kept
-     (q-base? l) (: w (q-bare l) (#w = 2 && !(q-row? l) && !(elem <w ["leader" "sync" "pre" "next" "mirror"]) && 0 < #<w && <w 0 != 35))
+     (q-base? l) (: w (q-bare l) (#w = 2 && !(q-row? l) && !(elem <w ["leader" "sync" "pre" "next" "mirror" "lives"]) && 0 < #<w && <w 0 != 35))
      (q-base-line text) (: ls (filter q-base? (lines text)) (? (two? ls) (q-bare <ls) ()))
      (q-base text sha)
       (: ls (lines text)
@@ -1146,6 +1178,8 @@
       (? !(q-name? (in "queue")) [0 "a queue is refs/queue/NAME or queue/NAME"]
          (two? (q-bad in)) [0 ("a field holds a control character, or a space outside a text: " + <(q-bad in))]
          (go in))
+     ; a write's check: q-check's, and the queue must live on this box
+     (q-wcheck in go) (q-check in (\ in (: w (q-away-why (in "queue")) (? (0 < #w) [0 w] (go in)))))
      ; --- the queue across boxes: queue/NAME@BOX lives in BOX's hub. a call to it goes there
      ; sealed, to ledger@BOX, and that box's --ledger runs it as the session the seal names ---
      (q-route tool in run)
@@ -1217,7 +1251,7 @@
        + ": paste it from " + (q-git? q ? "git rev-parse" "sb psid") + " just run, never typed or expanded by hand")
      (queue-row in)
       (: _ (pins bee-who 'tool "queue_row")
-       (q-check in (\ in (: bad (q-unresolved (in "queue") [(field in "gated_on" "") (field in "gated_head" "")])
+       (q-wcheck in (\ in (: bad (q-unresolved (in "queue") [(field in "gated_on" "") (field in "gated_head" "")])
                          (? (two? bad) [0 (q-unres-why (in "queue") <bad)] (queue-row1 in))))))
      ; a queue not made yet is made on bee's standard header, led by the leader given, else this session
      (queue-row1 in)
@@ -1251,7 +1285,7 @@
          (ins ls k l) (take (k + 1) ls + [l] + drop (k + 1) ls)
          (after ls ps l) (: k (foldl (\ a p (? (0 <= a) a (last ls p))) -1 ps) (ins ls k l))
          nl (field in "leader" "") sy (field in "sync" "") pa (field in "pre_add" "") pd (field in "pre_drop" "")
-         ba (field in "base" "") mi (: m (peep in "mirror" "") (string? m ? m ""))
+         ba (field in "base" "") mi (: m (peep in "mirror" "") (string? m ? m "")) lv (field in "lives" "")
          pres (filter (\ i (kind (ls0 i) = "pre")) ^#ls0)
          ls1 (? (#nl = 0) ls0 (map (\ l (kind l = "leader" ? ("leader " + nl + (acting ? " acting" "")) l)) ls0))
          ls2 (? (#sy = 0) ls1
@@ -1268,11 +1302,15 @@
                 (mi = "-") (filter (\ l (kind l != "mirror")) ls4)
                 (0 <= last ls4 (\ l (kind l = "mirror"))) (map (\ l (kind l = "mirror" ? ("mirror " + mi) l)) ls4)
                 (after ls4 [(\ l (kind l = "pre")) (\ l (kind l = "sync")) q-base? (\ l (kind l = "leader"))] ("mirror " + mi)))
-         (? (#nl + #sy + #pa + #pd + #ba + #mi = 0) [text "name leader, sync, pre_add, pre_drop, base or mirror"]
+         ls6 (? (#lv = 0) ls5
+                (lv = "-") (filter (\ l (kind l != "lives")) ls5)
+                (0 <= last ls5 (\ l (kind l = "lives"))) (map (\ l (kind l = "lives" ? ("lives " + lv) l)) ls5)
+                (after ls5 [(\ l (kind l = "leader"))] ("lives " + lv)))
+         (? (#nl + #sy + #pa + #pd + #ba + #mi + #lv = 0) [text "name leader, sync, pre_add, pre_drop, base, mirror or lives"]
             (#pd && !(two? ls3)) [text ("no pre line " + pd)]
             (0 < #mi && mi != "-" && #(words mi) < 2) [text "mirror is PATH BRANCH [KEEP..]"]
-            [(paras ls5) ""]))
-     (queue-lead in) (: _ (pins bee-who 'tool "queue_lead") (q-check in queue-lead1))
+            [(paras ls6) ""]))
+     (queue-lead in) (: _ (pins bee-who 'tool "queue_lead") (q-wcheck in queue-lead1))
      (queue-lead1 in)
       (: q (in "queue") i (me 0) nl (field in "leader" "")
          (try n)
@@ -1324,7 +1362,7 @@
             !(two? base) (q + " has no base line")
             (two? (q-unresolved q [(r 3) (r 4)])) ("row " + p + ": " + q-unres-why q <(q-unresolved q [(r 3) (r 4)]))
             [p r base]))
-     (queue-land in) (q-check in queue-land1)
+     (queue-land in) (q-wcheck in queue-land1)
      (queue-land1 in)
       (: q (in "queue") who (field in "session" (me 0))
          rd (q-read q) text (rd 1) rows (q-rows text)
@@ -1593,7 +1631,7 @@
                                   + foldl (\ a w (a + "  " + w 1 + "@" + bx + "\n")) "" qs)
                        ("the hub keeps no queue yet; one made there is queue/NAME@" + bx + "\n"))))
          0)
-     (queue-landed in) (: _ (pins bee-who 'tool "queue_landed") (q-check in queue-landed1))
+     (queue-landed in) (: _ (pins bee-who 'tool "queue_landed") (q-wcheck in queue-landed1))
      (queue-landed1 in)
       (: q (in "queue") i (me 0) who (field in "session" i) rel (field in "release" "")
          (try n)
@@ -2937,6 +2975,7 @@
           "--ledger" (say-r (ledger (slurp in)))
           "--beat" (say-r (beat-take (slurp in)))
           ; --beats: one beat now, and which boxes took it
+          "--mirror-queue" (? (#as < 3) (say err "usage: love bee --mirror-queue REF DEST\n", 2) (say-r (mirror-queue (as 1) (as 2))))
           "--beats" (: r (beat-send 0)
                        (say-r (? (two? r) [1 (foldl (\ a x (a + <x + (x 1 ? ": taken\n" ": not taken\n"))) "" r)]
                                  [0 "no beat: this box has no card, or knows no other box"])))
@@ -3011,7 +3050,7 @@
             ; a bare bee on a terminal is the hud; a model's chat is --chat
             (!pl && !sv && !(two? words) && !(elem "--chat" as) && !(elem "--stage" as) && two? (tty 1))
              (chat 'chat-hud bee-core)
-            (two? words && elem <words ["--list" "--send" "--spawn" "--stop" "--avatar" "--resume" "--keygen" "--ticket" "--enrol" "--admit" "--enrolled" "--deliver" "--ledger" "--beat" "--beats" "--revoke" "--revocations" "--revoked" "--door" "--node"]) (bee-cli words yes)
+            (two? words && elem <words ["--list" "--send" "--spawn" "--stop" "--avatar" "--resume" "--keygen" "--ticket" "--enrol" "--admit" "--enrolled" "--deliver" "--ledger" "--beat" "--beats" "--mirror-queue" "--revoke" "--revocations" "--revoked" "--door" "--node"]) (bee-cli words yes)
             ; the api backend wants its endpoint, model and key; claude brings its own. a stage
             ; answers why as a string: a mitty shows it, stderr would land on its glass
             (: why (? (!bee-cc? && atom? bee-at) ("cannot read the url " + bee-url)
