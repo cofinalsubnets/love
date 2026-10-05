@@ -3,7 +3,7 @@
 R ?= .
 S = $(R)/src
 # dl/ is untracked: LOVE_DL names it, else the nearest one at or above the tree, so a worktree
-# or a nest made inside a checkout reads the checkout's
+# or a nest made inside a checkout reads the checkout's, and one outside any reads ~/.love/etc/dl
 dl := $(firstword $(LOVE_DL) $(shell sh $(S)/tools/dlfind.sh $(R)) $(R)/dl)
 
 # the recipe tag column is `@echo 'MOON<TAB>'$@`, and the quote is load-bearing: a bare tab
