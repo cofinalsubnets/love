@@ -16,7 +16,8 @@
 ;
 ; a codec rides ogg as [name id? head format start]: (id? p) knows its first packet, (head ps)
 ; reads its header packets -> m | 'more | why, (start m) -> a decoder, (packet granule) ->
-; samples | why. the samples are in format's shape.
+; samples | why, in format's shape. granule is the stream's length, given with the last
+; packet of its end page, -1 with every other.
 (module (ogg ogg-sniff ogg-meta ogg-format ogg-pump ogg-page ogg-cut)
 (:
    (le s i n) (foldl (\ a j (a * 256 + s (i + j))) 0 (rev ^n))
@@ -58,8 +59,32 @@
           ((cite 'flac 'flac-meta) (cats ("fLaC" . snip p 13 #p . >ps)) @ ('more . _) 'more ('skip . _) 'more m m)))
    (ogg-flac-start m)
     (\ pkt gr (flac-frame pkt 0 (m 'bps) (m 'ch) @ (pcm . _) pcm w (ogg-why w)))
+   ; vorbis: identification, comments and setup, then each audio packet a block; the end
+   ; page's granule cuts the last block to the stream's length
+   (ogg-vb-tags p)
+    (: vn (le p 7 4) k (le p (11 + vn) 4)
+       (go i j acc) (? (j >= k || #p < i + 4) (rev acc) (le p i 4 @ n (go (i + 4 + n) (j + 1) (snip p (i + 4) (i + 4 + n) . acc))))
+       ; a name is any case; the door's are upper, as they are written by convention
+       (? (#p < 15) () (map (t \ (findsub t "=") @ i (i < 0 ? t (upper (snip t 0 i) + snip t i #t))) (go (15 + vn) 0 ()))))
+   ogg-vb-why ["" "not a vorbis stream" "a vorbis setup cut short" "a kind of vorbis this can't read (floor 0)"
+               "a bad vorbis setup"]
+   (ogg-vb-head ps)
+    (? (#ps < 3) 'more
+       (: id <ps su (ps 2) n (vorbis-size id su)
+          (? (n < 0) (ogg-vb-why (0 - n))
+             {'rate (le id 12 4) 'ch (id 11) 'tags (ogg-vb-tags (ps 1)) 'vb [id su] 'size n})))
+   (ogg-vb-format m) {'name "vorbis" 'desc "vorbis" 'w 2 'bits 16 'kind 's 'big 0 'ch (m 'ch)
+                      'rate (m 'rate) 'align (2 * m 'ch)}
+   (ogg-vb-start m)
+    (: st (cask (m 'size)) r (vorbis-init st (m 'vb 0) (m 'vb 1)) w (2 * m 'ch) n {'n 0}
+       (? (r != 0) (\ pkt gr (ogg-vb-why r))
+          (\ pkt gr (vorbis-packet st pkt 0 @
+                      pcm (? !(string? pcm) ""                 ; a packet that is no block is passed over
+                             (: k (#pcm // w) t (n 'n) c (? (0 <= gr && gr < t + k) (max 0 (gr - t)) k)
+                                (pin n 'n (t + c), snip pcm 0 (c * w))))))))
    (ogg-codecs _)
-    [["flac" (p \ "\x7fFLAC" = snip p 0 5) ogg-flac-head (cite 'flac 'flac-format) ogg-flac-start]]
+    [["flac" (p \ "\x7fFLAC" = snip p 0 5) ogg-flac-head (cite 'flac 'flac-format) ogg-flac-start]
+     ["vorbis" (p \ "\x01vorbis" = snip p 0 7) ogg-vb-head ogg-vb-format ogg-vb-start]]
    (ogg-codec nm) <(filter (c \ <c = nm) (ogg-codecs ()))
 
    ; --- the door ------------------------------------------------------------
@@ -122,7 +147,7 @@
                 (ogg-join held (ty & 1) pk tl @ [ps tl2]
                   (: (go l k) (? (atom? l) ()
                                  (0 < k) (go >l (k - 1))
-                                 (dec <l gr @ pcm (? (string? pcm) (emit pcm, go >l 0) pcm)))
+                                 (dec <l (atom? >l && (ty & 4) ? gr -1) @ pcm (? (string? pcm) (emit pcm, go >l 0) pcm)))
                      r (go ps k)
                      (? (string? r) r
                         (run h e m dec tl2 (max 0 (k - #ps)) (ty & 4)))))))
