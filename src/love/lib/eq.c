@@ -50,8 +50,8 @@ static struct g *host_biquads(struct g *g) {
             - eq_q(co, k + 3) * z[2] - eq_q(co, k + 4) * z[3];
    z[1] = z[0], z[0] = x, z[3] = z[2], z[2] = y, x = y; }
   x *= eq_q(co, c);
+  x = x != x ? 0 : x > 32767 ? 32767 : x < -32768 ? -32768 : x;   // clamped as a double: nan is silence
   long v = (long) (x < 0 ? x - 0.5 : x + 0.5);
-  v = v > 32767 ? 32767 : v < -32768 ? -32768 : v;
   o[2 * i] = (uint8_t) v, o[2 * i + 1] = (uint8_t) ((unsigned long) v >> 8); }
  struct chain *r = ini_chain(bump(g, Width(struct chain)), (intptr_t) out, (intptr_t) st);
  return g->sp[3] = word(r), g->sp += 3, g; }

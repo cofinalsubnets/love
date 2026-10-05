@@ -120,6 +120,39 @@
                       (sh "HORN=none ../love -e '(borrow (quote posix)) (borrow (quote av)) (puts (show (av-play (open \"c1.oga\" \"r\")))) (quit 0)' 2>&1"
                          = (0 . "0"))))
         (gate-partly "ogg: no flac or ffmpeg, the reference streams skipped"))
+
+   ; -- vorbis against ffmpeg's float decoder: 11172-4's full accuracy on s16 (rms under
+   ;    1/sqrt 12 of a step, none more than two), the end page's granule giving its length ------
+   peepv (cite 'guts 'peepv)
+   (vb-s16 s) (peepv (: c (cask #s) (pour c 0 s 0 #s, c)) 0 2 2 (#s // 2) @ t (t - 65536 * (t >= 32768)))
+   (vb-full a b) (? (#a != #b || #a < 2) 0
+                    (: d (vb-s16 a - vb-s16 b) (net (d * d) / (#a // 2) < 1 / 12 && aall (d <= 2) && aall (d >= -2))))
+   vb-tone "0.5*sin(440*2*PI*t)*lt(mod(t\\,0.25)\\,0.02)+0.2*random(0)*lt(mod(t\\,0.5)\\,0.01)+0.3*sin(3000*2*PI*t)"
+   (vb-src ch) (cats (map (i \ (? (i = 0) vb-tone ("|" + show (0.1 + 0.05 * i) + "*sin(" + show (300 + 170 * i) + "*2*PI*t)"))) ^ch))
+   vcases [["44100" 2 "4"] ["48000" 2 "10"] ["44100" 1 "-1"] ["22050" 2 "0"] ["8000" 1 "1"] ["96000" 2 "6"]
+           ["44100" 6 "4"] ["44100" 2 "2"]]
+   (vmk i [r ch q])
+    (: f ("v" + show i)
+       (sh ("ffmpeg -nostdin -loglevel error -y -f lavfi -i 'aevalsrc=" + vb-src ch + ":s=" + r + ":d=1.7' -c:a libvorbis -q:a "
+            + q + " -metadata title=" + f + " " + f + ".ogg && ffmpeg -nostdin -loglevel error -y -i " + f + ".ogg -f s16le " + f + ".ff")
+          @ (0 . _) f _ ()))
+   (vsame f) (og-dec (f + ".ogg") @ ["ogg" 0 pcm] (vb-full pcm (og-rd (dir + "/" + f + ".ff"))) _ 0)
+   _ (ref? ? (: fs (map (i \ vmk i (vcases i)) ^#vcases)
+                (test (all string? fs) (all vsame fs)
+                      ; a radio's chain of songs: the second's title reaches m, and both play whole
+                      (sh "cat v0.ogg v7.ogg > vch.ogg && cat v0.ff v7.ff > vch.ff" = (0 . ""))
+                      (vsame "vch")
+                      (: q (open (dir + "/vch.ogg") "r")
+                         r (av-open q @ [n m h] (: x ((<(filter (c \ <c = n) (av-codecs ()))) 4 q h m (_ \ 0))
+                                                   [x (m 'link) (elem "TITLE=v7" (m 'tags))]) w w)
+                         (close q, r = [0 1 1]))
+                      ; a flipped byte anywhere answers why or samples, and never falls over
+                      (: s (og-rd (dir + "/v4.ogg"))
+                         (all (i \ (: p (dir + "/flip") c (cask #s)
+                                      _ (pour c 0 s 0 #s, pin c i (255 - s i), open p "w" @ q (say q (string c), close q))
+                                      (og-dec "flip" @ [r] (string? r) [_ r _] (r = 0 || string? r) _ 0)))
+                              (map (k \ k * 13) ^(#s // 13))))))
+        (gate-partly "ogg: no ffmpeg, the vorbis streams skipped"))
    _ (hark ["rm" "-rf" dir])
    0)
 

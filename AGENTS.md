@@ -158,7 +158,7 @@ i = (0 ~ 1)                  ; a ~ b = (twin a b), the complex builder
 - `src/apps/moon/*` -> `test_moon` `test_clay` `test_cca64` `test_ccrv64` `test_ccwasm` `test_ccthumb1` `test_ccthumb2` `test_fixpoint`
 - `src/love/holo/*` -> `test_holo` `test_as`
 - `src/apps/sb/*` -> `test_sb`
-- `src/apps/hearts/*` -> `test_hearts`
+- `src/apps/hearts/*` -> `test_hearts` `test_hearts_boot`
 
 `test_slow` runs last, on the exact tree that lands. The `test_cc%` lanes are pattern rules in `test/test.mk`, so grepping for `^test_cc...:` misses them.
 
@@ -166,7 +166,7 @@ i = (0 ~ 1)                  ; a ~ b = (twin a b), the complex builder
 
 Several sessions gate on one box. Two makes in one `out/` race, and a box short of memory reaps gates. A heavy lane waits its turn through `src/apps/locks.l` (`locks-run`; bee's `lock_*` tools):
 
-- heavy: `test_slow` `test_extra` `test_inle` `test_kernel_%` `test_gcstress` `test_boards` `test_hearts` `moon-flex` `moon-bison`, and a `make out/love` from a clean `out/`
+- heavy: `test_slow` `test_extra` `test_inle` `test_kernel_%` `test_gcstress` `test_boards` `test_hearts` `test_hearts_boot` `moon-flex` `moon-bison`, and a `make out/love` from a clean `out/`
 - one make at a time in an `out/`: an exclusive lock named by its path
 - a lane that runs on another box takes that box's slot, not a heavy one. the boxes are bee's host registry, `~/.love/etc/bee/hosts` (`love bee --hosts`; doc/bee.md, HOSTS): each host's reach, caps, slots and facts, each slot an exclusive lock `host-NAME-N`. the a64 kernel lane boots under kvm on a `kvm-a64` host; the a64 lanes' binaries (`test_cca64` `test_cts_a64` `test_raw_a64` `test_softfp`'s a64 leg, the BSD lanes' local half, `test_love_a64`) are built here, run one batch per ssh by `love bee --on a64-exec`, and compared here; `test_kernel_vmx` boots on a `vt-x` host, in `test_extra` only; the BSD lanes find their boxes by `freebsd-x64` and its kin. with no host the kernel lane runs tcg here, and is heavy, and the binaries run under qemu-aarch64
 

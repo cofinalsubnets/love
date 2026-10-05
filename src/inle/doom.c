@@ -20,6 +20,7 @@
 // for it (kmain.c's hook), so doom's own fopen/fread reach it through src/inle/sys.c
 // with no filesystem mounted anywhere. the host opens the path it was handed.
 #include "love.h"
+#include "vfs.h"
 #include <stdint.h>
 #include <string.h>
 #include "doomgeneric.h"
@@ -38,13 +39,12 @@ void k_fb_touch(void);
 extern unsigned char const doom_wad[];
 extern uintptr_t const doom_wad_len;
 
-struct k_file { char const *path, *bytes; uintptr_t len, ms; };
 // the strong definition of kmain.c's weak hook: one baked row, the IWAD. the
 // mtime is 0 -- the blob carries none, and a date invented here would be a lie
 // the corpus's stat laws could read.
-int k_baked(struct k_file *rows, int cap) {
+int k_baked(struct vfs_file *rows, int cap) {
  if (rows && cap > 0)
-  rows[0] = (struct k_file) { "usr/share/doom1.wad", (char const *) doom_wad, doom_wad_len, 0 };
+  rows[0] = (struct vfs_file) { "usr/share/doom1.wad", (char const *) doom_wad, doom_wad_len, 0 };
  return 1; }
 
 // --- the doors ------------------------------------------------------------

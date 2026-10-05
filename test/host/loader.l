@@ -86,6 +86,20 @@
  unlink "out/lib/love/zz-fhsprobe.l",
  rmdir "out/lib/love",
  0)
+; a path names its file, never a module that merely shares the basename: with a module
+; zz-shadow registered, a module-less out/zz-sub/zz-shadow.l borrowed by path answers its own
+; bindings, the module keeps its own, and a second borrow of the path reads nothing again
+(module (zz-shadow zz-shadow-mod) (: zz-shadow-mod 7))
+(mkdir "out/zz-sub" 493)
+(open "out/zz-sub/zz-shadow.l" "w" @ p (say p "(: zz-shadow-file 42 (zz-shadow-f x) (x + 1))", close p))
+(borrow "out/zz-sub/zz-shadow.l")
+(test (42 = zz-shadow-file) (3 = zz-shadow-f 2)
+      (7 = cite 'zz-shadow 'zz-shadow-mod) !(cite 'zz-shadow 'zz-shadow-file)
+      (42 = cite "out/zz-sub/zz-shadow.l" 'zz-shadow-file))
+(open "out/zz-sub/zz-shadow.l" "w" @ p (say p "(: zz-shadow-file 43)", close p))
+(borrow "out/zz-sub/zz-shadow.l")
+(test (42 = cite "out/zz-sub/zz-shadow.l" 'zz-shadow-file))
+(unlink "out/zz-sub/zz-shadow.l", rmdir "out/zz-sub", 0)
 (test_fin ())
 (puts "loader: ok")
 (putc 10)

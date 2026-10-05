@@ -24,6 +24,26 @@
        (has? f "38;5;") (has? deep "38;2;")
        (has? f (court-clock st)) !(has? quiet (court-clock st))))
 
+; --- an odd width puts a column dead ahead: at a run's start, facing due west, it is drawn
+; --- like its neighbours, every pixel a number
+(: st (court-new 41 30 [(day0 + 15.0 * 3600.0) 3600]) c (court-pens st) n (41 * st 'h)
+   (col k x) (peep (c k) (iota (st 'h) * 41 + x) 0.0)
+ (test (0.0 < net (c 0) + net (c 1) + net (c 2))
+       (net (col 1 20) < 1.5 * net (col 1 19)) (0.66 * net (col 1 19) < net (col 1 20))))
+
+; --- the stars by night: each one pixel, never a patch, wherever the eye is turned -- the
+; --- stars over a black sky looking straight up light one pixel per star in view
+(borrow 'sky)
+(: st (at 23.0) _ (pin st 'wx (sky-weather 0 'smooth)) lt (court-light st) w 80 h 48 n (w * h)
+   cam {'e [0.0 eye-h 0.0] 'f [0.0 1.0 0.0] 'r [1.0 0.0 0.0] 'u [0.0 0.0 -1.0] 'w w 'h h 'foc (w / 2.0)}
+   z (iota n * 0.0) c (stars! [z z z] st lt cam (iota n * 0 + 1) 0)
+   lit (net (0.0 < c 0))
+   X (stars 'x) Y (stars 'y) Z (stars 'z)
+   cx (floor (w / 2.0 + 40.0 * X / Y)) cy (floor (h / 2.0 + 40.0 * Z / Y))
+   seen (net ((0.05 < Y) * (0 <= cx) * (cx < w) * (0 <= cy) * (cy < h)))
+ (test (5 < seen) (0.9 * seen <= lit) (lit <= seen) (amax (c 0) < 1.0)
+       (all (k \ 0.3 <= peep Y k 0.0) ^(#X))))
+
 ; --- the sun: up by day and down by night, south at noon, east in the morning and west in
 ; --- the evening, a unit vector; summer's hour is taken off the wall clock
 (: (sun hr) (court-sun (at hr)) n (sun 13.0) m (sun 8.0) e (sun 18.0) mid (sun 1.0)
@@ -107,16 +127,48 @@
    _ (keys! st (map (i \ 107) ^60))
  (test (0.55 < sqrt (sq (st 'px - bs 0) + sq (st 'pz - bs 2)))))
 
-; --- the floor's litter: the sticks lie in a ring round the trunk's foot, the leaves flat on
-; --- the ground, all of it inside the walls; and the leaves a falling one starts from, high in the crown
+; --- the floor's litter: branches laid in a ring round the trunk's foot, none in a wall, the
+; --- floor or the trunk, none leant up, the ring no wider than a long branch; twigs strewn round it
+; --- and the leaves flat on the ground, all of it inside the walls; and the leaves a falling
+; --- one starts from, high in the crown
 (: st (at 12.0) bs (st 'tree 'base) L (st 'litter) P (L 'pts) X (P 'x) Y (P 'y) Z (P 'z)
-   d (sq (X - bs 0) + sq (Z - bs 2)) G (L 'leaves)
+   G (L 'leaves) rs (L 'rods) ends (cat (map (r \ r 0) rs) (map (r \ r 1) rs))
    (out Q) ((yard-a < mag (Q 'x)) + (yard-b < mag (Q 'z)))
+   (from q) (sqrt (sq (q 0 - bs 0) + sq (q 2 - bs 2)))
+   (inside? q) (mag (q 0) < yard-a - 0.1 && mag (q 2) < yard-b - 0.1 && 0.0 < q 1)
    tops (L 'tops) ty (map (q \ q 1) tops)
- (test (100 < #X) (0 = net (Y < 0.009)) (0 = net (1 - (0.09 < d) * (d < 0.5625)))
-       (1000 < #(G 'x)) (0 = net (0.01 < G 'y)) (0 = net (G 'up < 1.0))
-       (0 = net (out P)) (0 = net (out G))
+ (test (40 < #rs) (all inside? ends) (all (q \ from q < 2.2) ends)
+       (all (r \ 0.005 < r 2 && r 2 < 0.07) rs) (all (q \ 0.25 < from q && q 1 < 0.3) ends)
+       (100 < #X) (0 = net (Y < 0.009)) (0 = net (out P))
+       (1000 < #(G 'x)) (0 = net (0.01 < G 'y)) (0 = net (G 'up < 1.0)) (0 = net (out G))
        (two? tops) (all (y \ amax (st 'tree 'y) - 1.5 < y) ty)))
+
+; --- the cables: each step of a run is along one axis on one wall's face, below the parapet's
+; --- top, and laid it darkens the walls' map along it; a box on each short wall, mirrored, its
+; --- foot at the second floor's sill between the stair's windows and the east one, a run
+; --- climbing into it; the loose ones hang from the parapet's top inside the walls, and the
+; --- lower ends sway while the tops keep still
+(: (axes p q) #(filter (k \ 0.0001 < mag (p k - q k)) ^3)
+   (face? p wid) (? (wid = 0) (mag (p 0 - yard-a) < 0.01) (wid = 1) (mag (p 0 + yard-a) < 0.01)
+                    (wid = 2) (mag (p 2 - yard-b) < 0.01) (mag (p 2 + yard-b) < 0.01))
+   steps (foldl cat () (map (rn \ rn 2 @ ps (map (i \ [(ps i) (ps (i + 1))]) ^(#ps - 1))) runs))
+   s0 (strands 0) s1 (strands 37) pts (cat (map (r \ r 0) s0) (map (r \ r 1) s0))
+   (in? q) (mag (q 0) < yard-a && mag (q 2) < yard-b && 0.0 < q 1 && q 1 <= wall-h)
+   (moved k) (sqrt (sq (s0 k 1 0 - s1 k 1 0) + sq (s0 k 1 2 - s1 k 1 2)))
+   lows (filter (k \ s0 k 1 1 < 9.0 && s0 k 2 < 0.02) ^#s0) tops (filter (k \ s0 k 0 1 = wall-h) ^#s0)
+   m (court-maps ())
+ (test (10 < #steps) (all (st \ axes (st 0) (st 1) = 1) steps)
+       (all (st \ wall-of (st 0) (st 1) @ w (face? (st 0) w && face? (st 1) w)) steps)
+       (all (st \ st 0 1 <= wall-h && st 1 1 <= wall-h && 0.0 < st 1 1) steps)
+       (all (st \ (: p (lerp (st 0) (st 1) 0.5) w (wall-of (st 0) (st 1)) u (p (w < 2 ? 2 0))
+                     (peep (m 'wall 'r) (wall-texel w u (p 1)) 0.0 + 0.12 < peep (m 'wall 'r) (wall-texel w u (p 1 + 0.25)) 0.0)))
+            (filter (st \ st 0 1 = st 1 1) steps))
+       (#boxes = 2) (all (bx \ bx 0 1 = 3.9 && 0.3 < bx 0 0 && bx 1 0 < 1.35) boxes)
+       (boxes 0 0 0 = boxes 1 0 0) (boxes 0 1 2 = 0.0 - boxes 1 0 2)
+       (all (bx \ any (st \ any (q \ q 1 = 3.9 && bx 0 0 < q 0 && q 0 < bx 1 0 && mag (q 2 - bx (3 - bx 2) 2) < 0.01) st) steps) boxes)
+       (10 < #s0) (all in? pts) (all (r \ r 2 < 0.05) s0)
+       (two? lows) (all (k \ 0.001 < moved k) lows)
+       (two? tops) (all (k \ s0 k 0 = s1 k 0) tops)))
 
 ; --- falling leaves: now and then one lets go of the top of the crown and comes down, and
 ; --- it lies on the floor where it lands, inside the walls; the frame draws them

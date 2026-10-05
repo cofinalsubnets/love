@@ -140,5 +140,7 @@ for f in .config kernel/config_data.gz arch/arm64/boot/Image; do
   cmp -s "$B/ref/$f" "$O/$f" || fail "$f differs from kbuild's"
 done
 sha=$(sha256sum < "$O/arch/arm64/boot/Image" | cut -c1-16)
+# the Image a green run certifies is the one rung 0 boots (test/gate/hearts-boot.sh)
+cp "$O/arch/arm64/boot/Image" "$C/Image-$V.new" && mv "$C/Image-$V.new" "$C/Image-$V" || fail "cannot keep the Image in $C"
 rm -rf "$O" "$B/ref"
 echo "hearts: Image $sha = kbuild+clang's, from linux-$V defconfig, host programs by mooncc"

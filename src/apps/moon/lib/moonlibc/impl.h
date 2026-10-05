@@ -211,6 +211,7 @@ struct _IO_FILE {
 #define NR_renameat2      276   /* riscv is the one asm-generic port without __ARCH_WANT_RENAMEAT */
 #define NR_umount2         39
 #define NR_mount           40
+#define NR_reboot         142
 #define NR_ftruncate       46
 #define NR_sync            81
 #define NR_chdir           49
@@ -366,6 +367,7 @@ struct _IO_FILE {
 #define NR_getpgid        121
 #define NR_sync           162
 #define NR_mount          165
+#define NR_reboot         169
 #define NR_umount2        166
 #define NR_getdents64     217
 #define NR_clock_gettime  228
