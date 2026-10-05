@@ -981,6 +981,43 @@
            (string? qt) (cr-in qt " ant@far b1 ") (cr-in qt "from far"))
    0)
 
+; --- the queue moves to six: six's standby takes the lead of bee's git queue and writes that the
+; queue lives on six; bee, back, takes six's copy and refuses every write to its own, saying where
+; the queue lives; six hands it back (the leader bee's g, the queue living on bee), bee takes that
+; and leads again, and six's copy refuses writes in turn
+(: ba (cr-dir "lbee" "(box bee)\n(beat 0)\n") bb (cr-dir "lsix" "(box six)\n(beat 0)\n")
+   _ (hark ["git" "-C" ba "init" "-q"]) _ (hark ["git" "-C" bb "init" "-q"])
+   (msgs ls) (foldl (\ a m (a + json-show m + "\n")) "" ls)
+   (call id nm args) {"jsonrpc" "2.0" "id" id "method" "tools/call" "params" {"name" nm "arguments" (pin args "queue" "refs/queue/main")}}
+   (mcp d nm cs) (: _ (cr-put d "in" (msgs cs)) (cr-run d ("BEE_NAME=" + nm) ("--mcp < '" + d + "/in'")))
+   (text d) (: _ (hark ["sh" "-c" ("git -C '" + d + "' cat-file -p refs/queue/main > '" + d + "/q.txt' 2>/dev/null")]) (cr-get (d + "/q.txt")))
+   (mirror _) (cr-run ba "" ("--mirror-queue refs/queue/main '" + bb + "'"))
+   _ (mcp ba "g" [(call 1 "queue_row" {"state" "waiting" "branch" "b1"})])
+   _ (mcp ba "ant" [(call 1 "queue_row" {"state" "waiting" "branch" "b2"})])
+   m1 (mirror 0) x1 (text bb)                                                      ; six keeps bee's copy
+   t1 (mcp bb "g" [(call 1 "queue_lead" {"leader" "g@six" "lives" "six"})])          ; bee down: six takes it
+   t2 (mcp bb "g" [(call 1 "queue_lead" {"sync" "on six"})]) x2 (text bb)           ; and leads there
+   m2 (mirror 0) x3 (text ba)                                                      ; bee back: it takes six's
+   r1 (mcp ba "g" [(call 1 "queue_lead" {"sync" "on bee"})])
+   r2 (mcp ba "ant" [(call 1 "queue_row" {"state" "green" "branch" "b2"})])
+   r3 (mcp ba "ant" [(call 1 "queue_read" {})])
+   h1 (mcp bb "g" [(call 1 "queue_lead" {"leader" "g@bee" "lives" "bee"})])          ; the hand-back
+   h2 (mcp bb "g" [(call 1 "queue_lead" {"sync" "late"})])
+   m3 (mirror 0) x4 (text ba)
+   b1 (mcp ba "g" [(call 1 "queue_lead" {"sync" "on bee again"})])
+   m4 (mirror 0) x5 (text bb)
+   _ (test (cr-in (m1 1) "pushed refs/queue/main") (cr-in x1 "leader g\n")
+           (cr-in (t1 1) "the change is in") (cr-in (t2 1) "the change is in")
+           (cr-in x2 "leader g@six\nlives six\n") (cr-in x2 "sync on six")
+           (cr-in (m2 1) "took ") (cr-in x3 "lives six")
+           (cr-in (r1 1) "lives on six now (its leader g@six)") (cr-in (r2 1) "lives on six now")
+           (cr-in (r3 1) "leader g@six")
+           (cr-in (h1 1) "the change is in") (cr-in (h2 1) "lives on bee now")
+           (cr-in (m3 1) "took ") (cr-in x4 "leader g@bee\nlives bee\n")
+           (cr-in (b1 1) "the change is in")
+           (cr-in (m4 1) "pushed refs/queue/main") (cr-in x5 "sync on bee again"))
+   0)
+
 ; --- a signed queue: on a box with a card, an sb queue's every write is an entry by its writer's
 ; own seal. a call from another box comes back a proposal, which the caller signs and commits; a
 ; session on the hub's box signs its own; a plain write is refused once the queue is signed

@@ -51,7 +51,15 @@
            (tablet? tm) (tm 'rate = 16000) (tm 'ch = 1) (tm 'at = 0) (tm 'total = 0) (tm 'tags = ())
            (mp3-format tm 'align = 2)
            (mp3-sniff tiny = 1) (mp3-sniff (snip tiny 0 50) = 'more) (mp3-sniff (cats (map (_ \ "noise ") ^1000)) = 0)
-           (mp3-meta "ID3" = 'more))
+           (mp3-meta "ID3" = ['more 10]))
+   ; a tag past 1 MiB through the door: its text frames kept, the picture after them left unread
+   (mp-b4 n) (string (map (k \ (n >> (8 * (3 - k))) & 255) ^4))
+   (mp-ss n) (string (map (k \ (n >> (7 * (3 - k))) & 127) ^4))
+   (mp-fr i b) (i + mp-b4 #b + string [0 0] + b)
+   mp-big (: t (mp-fr "TIT2" (string [0] + "Big") + mp-fr "APIC" (string [0] + "image/jpeg" + string [0 3 0] + string (cask 2097152)))
+             ("ID3" + string [3 0 0] + mp-ss #t + t))
+   _ (open (dir + "/apic.mp3") "w" @ q (say q (mp-big + tiny), close q))
+   _ (test ((cite 'av 'av-open) (open (dir + "/apic.mp3") "r") @ [n m h] (n = "mp3" && m 'tags = ["TITLE=Big"]) _ 0))
    ; a flipped byte anywhere answers why or samples, and never takes the process down
    (mp-flip s i) (cask #s @ c (map (k \ pin c k (s k)) (jot #s), pin c i (255 - s i), string c))
    _ (test (atom? (filter (i \ !(mp-all (mp-flip tiny i) 0 @ r (string? r || charm? r))) (jot #tiny))))
@@ -97,6 +105,8 @@
                       ; mpg123's wav: the same header, the same length
                       (sh "mpg123 -q -w m.wav c0.mp3 && ../love mpg123 -w l.wav c0.mp3" = (0 . ""))
                       (mp-rd (dir + "/m.wav") @ a (mp-rd (dir + "/l.wav") @ b (snip a 0 44 = snip b 0 44 && #a = #b)))
+                      ; with no -w -s or -t it plays, as mpg123 does: HORN=none keeps the 1.3 s
+                      (: t0 (clock 0) r (sh "HORN=none ../love mpg123 c0.mp3") (r = (0 . "") && 1000 <= clock 0 - t0))
                       ; the door: its tags, its gapless length, and the horn
                       (sh ("HORN=none ../love -e '(borrow (quote posix)) (borrow (quote av)) (puts (show (av-open (open \"c0.mp3\" \"r\") @ [n m h] [n (m (quote total)) (m (quote tags))] w w))) (puts (show (av-play (open \"c0.mp3\" \"r\")))) (quit 0)' 2>&1")
                          = (0 . "(\"mp3\" 57330 (\"TITLE=c0\"))0"))

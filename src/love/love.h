@@ -495,11 +495,15 @@ uint32_t crc32(unsigned char const*, uintptr_t);                                
 // the carried source, a container src/love/lib/srctree.h reads
 extern unsigned char const srctree[];
 extern uintptr_t const srctree_len;
-// /love on the host (src/love/lovefs.c): the process's one open tree (NULL where none is
-// carried), a path's place in it (-1 not the tree's, -2 absent, -3 a directory, else its
-// row), and a read port over one row
+// /love on the host (src/love/lovefs.c, over src/love/vfs.c): the process's one open tree
+// (NULL where none is carried), a path's place in it (-1 not the tree's, -2 absent, -3 a
+// directory, else its entry) with its canonical name, a stat and a listing there, and a
+// read port over one entry
 struct tree *tree_carried(void);
-intptr_t lovefs_at(char const *p, char *rel, uintptr_t *rn);
+intptr_t lovefs_at(char const *p, char *c, uintptr_t *cn);
+struct vfs_st;
+int lovefs_stat_at(char const *c, uintptr_t cn, struct vfs_st *st);
+int lovefs_child(char const *c, uintptr_t cn, int *cur, char const **name, uintptr_t *len, bool *dir);
 struct g *lovefs_port(struct g *g, uintptr_t i);
 extern unsigned char const rootfs[];          // src/inle/rootfs/ as a plain tar (src/tools/mkrootfs.l)
 extern uintptr_t const rootfs_len;

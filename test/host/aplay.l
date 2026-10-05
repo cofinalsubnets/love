@@ -5,6 +5,8 @@
 (borrow 'posix)
 (borrow "src/apps/wav.l")
 (: dir (cwd 0 + "/out/.aplayd")
+   ; a meta that wants more: 'more, or how much and where
+   (ap-more? x) (x = 'more || (two? x && <x = 'more))
    _ (hark ["rm" "-rf" dir], mkdir dir 448)
    (rd p) (: q (open p "r") s (slurp q) (close q, s))
    (put p s) (open p "w" @ q (say q s, close q))
@@ -72,8 +74,11 @@
    _ (test (wav-head (ap-wav (ap-fmt 85 1 8000 16 2) "") = "can't play WAVE-file format 0x0055 which is not PCM or FLOAT encoded")
            (wav-head (ap-wav (ap-fmt 1 1 8000 12 2) "") = "can't play WAVE-files with sample 12 bits wide")
            (wav-head (ap-cat ["RIFF" (ap-le 12 4) "WAVE" "data" (ap-le 0 4)]) = "a WAVE-file with no fmt chunk ahead of its data")
-           (wav-head (snip (ap-wav (ap-fmt 1 1 8000 16 2) "") 0 30) = 'more)
+           (ap-more? (wav-head (snip (ap-wav (ap-fmt 1 1 8000 16 2) "") 0 30)))
            (wav-head "hello, not a riff" = 'raw))
+   ; a size field past the head's cap is refused at once, nothing read toward it
+   _ (open (dir + "/huge.wav") "w" @ q (say q (ap-cat ["RIFF" (ap-le 36 4) "WAVE" "fmt " (ap-le 2147483632 4)]), close q))
+   _ (test ((cite 'av 'av-open) (open (dir + "/huge.wav") "r") = "the head of this stream is past 16 MiB"))
 
    ; -- the verb ------------------------------------------------------------------------
    (run cmd) (hark ["sh" "-c" ("cd " + dir + " && HORN=none ../love aplay " + cmd + " 2>&1")])
@@ -88,7 +93,12 @@
            (run "-fXX z.raw" = (1 . "aplay: wrong extended format 'XX'\n"))
            (run "-r 4000 z.raw" = (1 . "aplay: rate 4000 Hz is outside the horn's 8000..192000\n"))
            (run "nope.wav a.wav" = (1 . "nope.wav: No such file or directory\nPlaying WAVE 'a.wav' : Signed 16 bit Little Endian, Rate 8000 Hz, Stereo\n"))
-           (run "--bogus" = (1 . "aplay: unrecognized option '--bogus'\n")),
+           (run "--bogus" = (1 . "aplay: unrecognized option '--bogus'\n"))
+           (run "-c 300 z.raw" = (1 . "aplay: value 300 for channels is invalid\n")))
+   ; the last gulp plays too, so a wav read whole at once is half a second of HORN=none's time
+   _ (put (dir + "/half.wav") (ap-wav (ap-fmt 1 1 8000 8 1) (ap-cat (map (k \ string [128]) ^4000))))
+   t0 (clock 0)
+   _ (test (run "-q half.wav" = (0 . "")) (400 <= clock 0 - t0),
     hark ["rm" "-rf" dir],
     0))
 

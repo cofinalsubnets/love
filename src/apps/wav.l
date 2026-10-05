@@ -68,12 +68,14 @@
                 (pins f 'ch ch 'rate rate 'align align 'tag tag 'ext (tag0 = 65534))))))
    (wav-head s)
     (: (go i f sk)
-        (? (#s < i + 8) 'more
+        (? (#s < i + 8) ['more (i + 8)]
            (: id (snip s i (i + 4)) z (wav-le s (i + 4) 4) nx (i + 8 + z + (z & 1))
               (? (id = "data") (? !(tablet? f) "a WAVE-file with no fmt chunk ahead of its data"
                                   (pins f 'at (i + 8) 'len (z = 0 || z = 4294967295 ? -1 z) 'skip (rev sk)))
-                 (id = "fmt ") (? (#s < i + 8 + z) 'more
+                 (id = "fmt ") (? (#s < i + 8 + z) ['more (i + 8 + z)]
                                   (wav-fmt s (i + 8) z @ g (string? g ? g (go nx g sk))))
+                 ; a big chunk not yet held is skipped unread, an empty one of its id in its place
+                 (#s < nx && 65536 < z) ['skip i nx (id + string [0 0 0 0])]
                  (go nx f (id . sk)))))
        (? (#s < 12) (#s < 4 || "RIFF" = snip s 0 4 ? 'more 'raw)
           ("RIFF" = snip s 0 4 && "WAVE" = snip s 8 12) (go 12 () ())
@@ -152,23 +154,22 @@
    (aplay-pump q h0 f left cap hn)
     (: align (f 'align)
        (gulp _) (see q @ -1 () c (unsee q c, chug q))
+       ; the whole frames held go out before the end is asked, so the last gulp plays too
        (go h left cap)
-        (? (left = 0 || cap = 0) 1
-           (: k (#h // align @ k (cap < 0 ? k (min k cap)))
-              (? (k = 0) (gulp () @ g (? !(string? g) 1 (: g2 (left < 0 || #g <= left ? g (snip g 0 left))
-                                                   (go (h + g2) (left < 0 ? left (left - #g2)) cap))))
-                 (: m (k * align) c (cask m)
-                    (pour c 0 h 0 m, say hn (wav-pcm f k c),
-                     go (snip h m #h) left (cap < 0 ? cap (cap - k)))))))
+        (: k (#h // align @ j (cap < 0 ? j (min j cap)))
+           (? (0 < k) (: m (k * align) c (cask m)
+                         (pour c 0 h 0 m, say hn (wav-pcm f k c),
+                          go (snip h m #h) left (cap < 0 ? cap (cap - k))))
+              (left = 0 || cap = 0) 1
+              (gulp () @ g (? !(string? g) 1 (: g2 (left < 0 || #g <= left ? g (snip g 0 left))
+                                                (go (h + g2) (left < 0 ? left (left - #g2)) cap))))))
        (go (left < 0 || #h0 <= left ? h0 (snip h0 0 left)) (left < 0 ? left (max 0 (left - #h0))) cap))
    ; one input, its port q named nm: read the head, open the horn, pump
    (aplay-one o q nm)
     (: (more h) (see q @ -1 h c (unsee q c, h + chug q))
        ; -> [what wav-head says, the bytes read for it]; a short head that is no RIFF is raw
-       (head h) (wav-head h @ 'more (more h @ h2 (#h2 = #h ? [("RIFF" = snip h 0 4 ? 'more 'raw) h]
-                                                        (head h2)))
-                                r [r h])
-       rh (o 't = 'raw ? ['raw (more "")] (head (more "")))
+       rh (o 't = 'raw ? ['raw (more "")]
+             ((cite 'av 'av-head) q wav-head "" @ ['short h] [("RIFF" = snip h 0 4 ? 'more 'raw) h] x x))
        hb <>rh
        r (<rh = 'more ? "a WAVE-file cut short ahead of its data" <rh)
        wav (tablet? r)
@@ -201,7 +202,7 @@
                            "cdr" (pins o 'f (wav-format "S16_BE") 'r 44100 'c 2, 1)
                            "dat" (pins o 'f (wav-format "S16_LE") 'r 48000 'c 2, 1)
                            _ (wav-format v @ f (tablet? f ? (pin o 'f f, 1) (aplay-fail ("wrong extended format '" + v + "'"), ()))))
-         "-c" (aplay-int v @ n (n && 0 < n ? (pin o 'c n, 1) (aplay-fail ("value " + v + " for channels is invalid"), ())))
+         "-c" (aplay-int v @ n (n && 0 < n <= 256 ? (pin o 'c n, 1) (aplay-fail ("value " + v + " for channels is invalid"), ())))
          "-r" (aplay-int v @ n (n && 0 < n ? (pin o 'r (n < 300 ? (n * 1000) n), 1) (aplay-fail ("bad speed value " + v), ())))
          "-d" (aplay-int v @ n (charm? n ? (pin o 'd (n ? n -1), 1) (aplay-fail ("bad duration " + v), ())))
          "-s" (aplay-int v @ n (charm? n ? (pin o 's (n ? n -1), 1) (aplay-fail ("bad samples " + v), ())))
