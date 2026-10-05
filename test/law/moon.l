@@ -2246,7 +2246,8 @@ int main() { return 0; }"
 ; -- __builtin_constant_p decides after inlining and kprop: a param bound to a constant reads 1,
 ; so an inline body's constant lane is taken (linux's kmalloc) and a BUILD_BUG_ON over a constant
 ; local folds its call away; a param left a variable reads 0
-(: (calls fs nm) #(filter (f \ two? f && <f = 'call && 0 <= findsub (show f) nm) fs)
+; (a call in tail position lays as a jmp: both count)
+(: (calls fs nm) #(filter (f \ two? f && elem <f '(call jmp) && 0 <= findsub (show f) nm) fs)
    srcB ("extern int cached(unsigned long n); extern int generic(unsigned long n);\n"
          + "static inline __attribute__((__always_inline__)) int km(unsigned long size)\n"
          + "{ if (__builtin_constant_p(size) && size) return cached(size); return generic(size); }\n"
