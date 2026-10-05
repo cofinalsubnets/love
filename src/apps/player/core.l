@@ -44,7 +44,7 @@
     {'s {'state 'stop 'song -1 'pos 0.0 'dur 0.0 'rate 0 'ch 0 'bits 0 'kbps 0 'vol 100 'bal 0
          'pre 0 'eq (map (_ \ 0) ^10) 'eqon 1 'repeat 0 'random 0 'single 0 'consume 0 'qver 0
          'sink sink 'follow () 'clients 0}
-     'q () 'nid 1 'w () 'nw 1 'hn () 'hrate 0 'brate 0 'dec () 'fq () 'fi {} 'ftn 0 'fm () 'fln 0 'bus (bus-new ()) 'tick ()
+     'q () 'nid 1 'w () 'nw 1 'hn () 'hrate 0 'brate 0 'fl () 'dec () 'fq () 'fi {} 'ftn 0 'fm () 'fln 0 'bus (bus-new ()) 'tick ()
      'tf 0 'base 0 'skip 0 'ring (cask (4 * ringn)) 'rw 0 'held "" 'seed (clock 0)}
 
    ; --- the messages out ------------------------------------------------------
@@ -138,17 +138,19 @@
                     (go (o + k))))
        (go skip))
    ; play queue index i from frame at, then whatever comes after it
-   (track c i at)
+   ; at is a frame, or ['sec S] when the rate is not known until the stream is open
+   (track c i at0)
     (: it (Q c i) p (it 'uri)
        (opens p @
          [nm m h q info]
           (: cd (<(filter (d \ <d = nm) ((cite 'av 'av-codecs) ())))
              f ((cd 3) m) rate (f 'rate) ch (min 2 (f 'ch))
+             at (two? at0 ? (int ((at0 1) * rate)) at0)
              _ (pins c 'fq q 'fi info 'ftn 0 'fm m 'fln 0 'tf 0 'base at 'skip at 'brate rate)
              _ (rebus c)
              _ (horn-at c rate)
-             _ (sets c [['song i] ['dur (it 'dur)] ['rate rate] ['ch ch] ['bits (it 'bits)]
-                        ['kbps (it 'dur > 0 ? (int (it 'size * 8 / (it 'dur * 1000))) (peep it 'br 0))]
+             _ (sets c [['song i] ['dur (it 'dur)] ['rate rate] ['ch ch] ['bits (peep it 'bits 16)]
+                        ['kbps (it 'dur > 0 ? (int (peep it 'size 0 * 8 / (it 'dur * 1000))) (peep it 'br 0))]
                         ['pos (at / (1.0 * rate))]
                         ['state (paused? c ? 'pause 'play)]])
              r ((cd 4) q h m ((cite 'av 'av-pcm) f (pcm \ feed c rate (stereo pcm ch))))
@@ -190,6 +192,7 @@
            _ (? (S c 'state = 'play && k % 25 = 0) (sets c [['pos (pos c)]]) 0)
            _ (? (S c 'state = 'play) (each (c 'w) (w \ feeds c w t)) 0)
            _ (retitle c)
+           _ (? (k % 10 = 0) (follow-check c) 0)
            (go (k + 1)))
        (go 0))
    ; the playing track's title moved -- a stream's StreamTitle, or a codec's tags at a new chain
@@ -220,6 +223,73 @@
    (nay why) ['err why]
    (num? x) (charm? x || gem? x)
    (pct x lo hi) (max lo (min hi x))
+   ; --- playlists: one directory a user, so every sink of theirs sees the same ones -------
+   (lists-dir _) (: e (getenv "PLAYER_LISTS") h (getenv "HOME")
+                   (? (string? e && 0 < #e) e (string? h) (h + "/.love/var/player/lists") "/tmp/player-lists"))
+   (list-name? nm) (string? nm && 0 < #nm && nm 0 != 46 && findsub (chars nm) [47] < 0)
+   (list-path nm) (lists-dir 0 + "/" + nm + ".m3u")
+   (list-save c nm)
+    (? !(list-name? nm) (nay "a list's name: no / and no leading .")
+       (: _ (umkdirs (lists-dir 0) 448)
+          body (foldl (\ a it (a + "#EXTINF:" + show (int (it 'dur)) + "," + it 'title + "\n" + it 'uri + "\n"))
+                      "#EXTM3U\n" (c 'q))
+          (open (list-path nm) "w" @ q (? (hot? q) (: _ (say q body) _ (close q) ['ok #(c 'q)])
+                                          (nay ("cannot write " + list-path nm))))))
+   (list-load c nm)
+    (? !(list-name? nm) (nay "a list's name: no / and no leading .")
+       (open (list-path nm) "r" @ q
+         (? !(hot? q) (nay ("no list " + nm))
+            (: t (slurp q) _ (close q)
+               us (filter (l \ 0 < #l && l 0 != 35) (map (l \ l @ x (#x && x (#x - 1) = 13 ? (snip x 0 (#x - 1)) x)) (lines-of t)))
+               ids (map (u \ ltell c 0 ['add u] @ ['ok i] i _ ()) us)
+               ['ok #(filter (i \ i != ()) ids)]))))
+   (lines-of t) (: (go i acc) (fsub t "\n" i @ e (? (e < 0) (rev (snip t i #t . acc)) (go (e + 1) (snip t i e . acc))))
+                  (go 0 ()))
+   (list-names _) (: fs (readdir (lists-dir 0))
+                     (sort (map (f \ snip f 0 (#f - 4)) (filter (f \ 4 < #f && ".m3u" = snip f (#f - 4) #f) (two? fs ? fs ())))))
+
+   ; --- follow: this sink plays what another served sink plays, where it plays it -------
+   ; the leader's queue and transport are mirrored; mixer, feeds and the follow stay this
+   ; sink's own, and while following, transport and queue commands go to the leader
+   forwarded ['play 'pause 'toggle 'stop 'next 'prev 'seek 'seekby 'add 'del 'move 'clear 'shuffle 'sort
+              'repeat 'random 'single 'consume 'load]
+   (kv-of l k d) (foldl (\ a kv (two? kv && <kv = k ? (kv 1) a)) d l)
+   (adopt-queue c its)
+    (: q (map (al \ foldl (\ t kv (pin t <kv (kv 1))) {'size 0 'bits 16 'br 0} al) its)
+       (? (map (it \ it 'uri) q = map (it \ it 'uri) (c 'q))
+          (: _ (each ^#q (i \ pin (Q c i) 'title ((q i) 'title))) (requeue c))
+          (: _ (pin c 'q q) (requeue c))))
+   (adopt-state c kvs)
+    (: st (kv-of kvs 'state ()) i (kv-of kvs 'song ()) p (kv-of kvs 'pos ())
+       mine (S c 'state)
+       _ (? (st = 'stop && mine != 'stop) (stop c) 0)
+       _ (? ((st = 'play || st = 'pause) && charm? i && 0 <= i && i < #(c 'q) && (mine = 'stop || i != S c 'song))
+            (go-to c i ['sec (num? p ? p 0.0)]) 0)
+       _ (? (st = 'pause && S c 'state = 'play) (pause c 1) (st = 'play && S c 'state = 'pause) (pause c 0) 0)
+       ; drifted past half a second: catch up, a little ahead for the restart
+       _ (? (num? p && S c 'state = 'play && (i = () || i = S c 'song) && 0.5 < abs (pos c - p))
+            (seek c (p + 0.1)) 0)
+       0)
+   (mirror c m)
+    (m @ ['snap st [_ its]] (: _ (adopt-queue c its) (adopt-state c st))
+         ['queue _ its] (adopt-queue c its)
+         ['set kvs] (adopt-state c kvs)
+         _ 0)
+   (follow c nm)
+    (? (nm = () || nm = 0) (: _ (unfollow c) ok)
+       !(string? nm) (nay "follow SINK|()")
+       (nm = S c 'sink) (nay "a sink cannot follow itself")
+       (core-attach (player-sock nm) @
+         () (nay ("no core is served as " + nm))
+         rc (: _ (unfollow c) _ (pin c 'fl rc)
+               _ (? (c 'tick = ()) (pin c 'tick (twirl (_ \ ticker c) 0)) 0)
+               _ (sets c [['follow nm]])
+               _ (core-watch rc (m \ mirror c m))
+               ok)))
+   (unfollow c) (c 'fl @ () 0 rc (: _ (pin c 'fl ()) _ (core-close rc) (sets c [['follow ()]])))
+   (follow-check c)
+    (c 'fl @ () 0 rc (? (rc 'up) 0 (: _ (notice c ("the sink followed has gone: " + show (S c 'follow))) (unfollow c))))
+
    (rebus c)
     (pin (c 'bus) 'co (bus-co (c 'brate || 44100) (S c 'eq) (S c 'pre) (S c 'vol) (S c 'bal) (S c 'eqon)))
    (mix c k v) (: _ (sets c [[k v]]) _ (rebus c) ok)
@@ -240,7 +310,7 @@
           ok))
    (go-to c i at)
     (? (i < 0 || i >= #(c 'q)) (nay "no such song")
-       (: _ (pin c 'held "") _ (start c i (max 0 at)) _ (sets c [['song i] ['state 'play]]) ok))
+       (: _ (pin c 'held "") _ (start c i (two? at ? at (max 0 at))) _ (sets c [['song i] ['state 'play]]) ok))
    (stop c) (: _ (halt c) _ (pin c 'held "") _ (stopped c) ok)
    (seek c secs)
     (? !(playing? c) (nay "not playing")
@@ -310,6 +380,11 @@
             'shuffle (moved c (shuffled c (c 'q)))
             'sort (? (elem (a1 ()) ['title 'artist 'album 'dur 'uri]) (moved c (sorted c (a1 ())))
                      (nay "sort title|artist|album|dur|uri"))
+            'follow (follow c (a1 ()))
+            'save (list-save c (a1 ()))
+            'load (list-load c (a1 ()))
+            'lists ['ok (list-names ())]
+            'rm (? !(list-name? (a1 ())) (nay "rm NAME") (: _ (unlink (list-path (a1 ()))) ok))
             'feed (? (id = 0) (nay "feed: a watcher's")
                      (!(elem (a1 ()) ['spec 'scope]) || !(num? (a2 ()))) (nay "feed spec|scope FPS N")
                      (: w (<(filter (w \ <w = id) (c 'w))) fps (pct (a2 ()) 0 60)
@@ -328,12 +403,15 @@
     (? !(elem id (map (w \ <w) (c 'w))) 0
        (: _ (pin c 'w (filter (w \ <w != id) (c 'w)))
           (sets c [['clients #(c 'w)]])))
-   (lclose c) (: _ (halt c) _ (horn-off c)
+   (lclose c) (: _ (unfollow c) _ (halt c) _ (horn-off c)
                  _ (c 'tick @ () 0 t (freeze t)) (pins c 'tick () 'w ()))
 
    ; --- the five words, on a core here or one attached over its socket ----------
    (core-send c msg) (core-tell c 0 msg)
-   (core-tell c id msg) (c 'remote ? (rsend c msg) (ltell c id msg))
+   (core-tell c id msg)
+    (? (c 'remote) (rsend c msg)
+       (c 'fl != () && two? msg && elem <msg forwarded) (core-send (c 'fl) msg)
+       (ltell c id msg))
    (core-watch c f) (c 'remote ? (rwatch c f) (lwatch c f))
    (core-unwatch c id) (c 'remote ? (pin c 'fs (filter (w \ <w != id) (c 'fs))) (lunwatch c id))
    (core-close c) (c 'remote ? (rclose c) (lclose c))
