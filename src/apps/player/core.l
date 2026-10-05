@@ -37,7 +37,7 @@
     {'s {'state 'stop 'song -1 'pos 0.0 'dur 0.0 'rate 0 'ch 0 'bits 0 'kbps 0 'vol 100 'bal 0
          'pre 0 'eq (map (_ \ 0) ^10) 'eqon 1 'repeat 0 'random 0 'single 0 'consume 0 'qver 0
          'sink sink 'follow () 'clients 0}
-     'q () 'nid 1 'w () 'nw 1 'hn () 'hrate 0 'brate 0 'dec () 'fq () 'fi {} 'ftn 0 'bus (bus-new ()) 'tick ()
+     'q () 'nid 1 'w () 'nw 1 'hn () 'hrate 0 'brate 0 'dec () 'fq () 'fi {} 'ftn 0 'fm () 'fln 0 'bus (bus-new ()) 'tick ()
      'tf 0 'base 0 'skip 0 'ring (cask (4 * ringn)) 'rw 0 'held "" 'seed (clock 0)}
 
    ; --- the messages out ------------------------------------------------------
@@ -136,7 +136,7 @@
          [nm m h q info]
           (: cd (<(filter (d \ <d = nm) ((cite 'av 'av-codecs) ())))
              f ((cd 3) m) rate (f 'rate) ch (min 2 (f 'ch))
-             _ (pins c 'fq q 'fi info 'ftn 0 'tf 0 'base at 'skip at 'brate rate)
+             _ (pins c 'fq q 'fi info 'ftn 0 'fm m 'fln 0 'tf 0 'base at 'skip at 'brate rate)
              _ (rebus c)
              _ (horn-at c rate)
              _ (sets c [['song i] ['dur (it 'dur)] ['rate rate] ['ch ch] ['bits (it 'bits)]
@@ -184,11 +184,19 @@
            _ (retitle c)
            (go (k + 1)))
        (go 0))
-   ; a stream's StreamTitle moved: the playing item takes it, and the queue goes out again
+   ; the playing track's title moved -- a stream's StreamTitle, or a codec's tags at a new chain
+   ; link ('link, a count the pump bumps): the item takes it, and the queue goes out again
    (retitle c)
     (: fi (c 'fi) n (stream? fi ? (peep fi 'titles 0) 0) t (stream? fi ? (peep fi 'title "") "")
-       (? (n = c 'ftn || !(string? t) || #t = 0 || S c 'song < 0) 0
-          (: _ (pin c 'ftn n) _ (pin (Q c (S c 'song)) 'title t) (requeue c))))
+       m (c 'fm) k (tablet? m ? (peep m 'link 0) 0)
+       it (0 <= S c 'song ? (Q c (S c 'song)) ())
+       (? !(tablet? it) 0
+          (n != c 'ftn && string? t && 0 < #t) (: _ (pin c 'ftn n) _ (pin it 'title t) (requeue c))
+          (k != c 'fln) (: _ (pin c 'fln k)
+                           _ (pins it 'title (tag m "TITLE" || it 'title) 'artist (tag m "ARTIST" || it 'artist)
+                                      'album (tag m "ALBUM" || it 'album))
+                           (requeue c))
+          0))
    (feeds c w t)
     (: fs (w 2)
        (each (keys fs) (kind \ (fs kind @
