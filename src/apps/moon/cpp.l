@@ -23,14 +23,14 @@
    (kof t) <t
    (vof t) <>t
    (lof t) <>>t
-   (hof t) (3 < #t ? <>>>t)
+   (hof (_ . _ . _ . h . _)) h                  ; by shape, never a tally: these run per token
    ; a numeric token's source spelling, which its value cannot answer: 0777 and 511
    ; are one value, 1u and 1 are one value, and a float's value is not text at all.
    ; # owes the spelling (C11 6.10.3.2), so the lexer carries it and every rebuild
    ; below hands it on. () on a token the cpp minted itself (__LINE__, defined ..),
    ; where the value is the spelling. parse reuses this slot once cpp is done.
-   (sof t) (4 < #t ? <>>>>t)
-   (spaced? t) (5 < #t)                         ; clexw's mark: whitespace followed it
+   (sof (_ . _ . _ . _ . s . _)) s
+   (spaced? (_ . _ . _ . _ . _ . _ . _)) 1      ; clexw's mark: whitespace followed it
    ; a rebuild hands the mark on; bare drops it, so parse meets the shapes it always has
    (retok t l h) (spaced? t ? [(kof t) (vof t) l h (sof t) 1] [(kof t) (vof t) l h (sof t)])
    (bare t) (? !(spaced? t) t
@@ -154,44 +154,39 @@
    ; -- substitute args into a function-macro body. a param preceded by # is
    ; stringized; a param that is an operand of ## substitutes unexpanded; else
    ; it substitutes the fully-expanded arg. then ## pastes are folded. --
-   ; (adjh is a closure-local, not a sibling -- a lambda PARAMETER named after a
-   ; sibling :-local gets shadowed by boxfix's shared cell, so the macro-body
-   ; array rides as `mb`, a nom bound nowhere else, and its ## check is inlined.)
    (subst mb params args var? line macs seps)
-    (: (adjh i) (0 < i && pv? (mb (i - 1)) "##" ||
-                 i + 1 < #mb && pv? (mb (i + 1)) "##")
-       (go i acc)
-        (#mb <= i ? (rev acc)
-           (mb i @ t
-              (? (pv? t "#" && i + 1 < #mb)        ; # param -> stringize
-                  (: p (mb (i + 1))
+    (: (go ml q1 q2 acc)                                ; q1 q2: the two body tokens before <ml
+        (atom? ml ? (rev acc)
+           (<ml @ t
+              (? (pv? t "#" && two? >ml)                ; # param -> stringize
+                  (: p <>ml
                      pi (paramidx params (pnm p))
                      va (var? && idv? p "__VA_ARGS__")
                      (-1 < pi || va ?
-                        (go (i + 2) (tok 'str (spellcat (va ? (vaargs args params seps) (args pi))) line . acc))
-                        (go (i + 1) (t . acc))))
+                        (go >>ml p t (tok 'str (spellcat (va ? (vaargs args params seps) (args pi))) line . acc))
+                        (go >ml t q1 (t . acc))))
                  (-1 < paramidx params (pnm t))                 ; a named parameter
                   (: pi (paramidx params (pnm t))
                      raw (args pi)
                      ; an empty argument beside a ## is a placemarker, not nothing
-                     sub (? !(adjh i) (expand raw macs)
+                     sub (? !(pv? q1 "##" || (two? >ml && pv? <>ml "##")) (expand raw macs)
                             (two? raw) raw
                             [(tok 'pmark "" line)])
-                     (go (i + 1) (revcat sub acc)))
+                     (go >ml t q1 (revcat sub acc)))
                  (var? && idv? t "__VA_ARGS__")                 ; the variadic tail
                   (: va (vaargs args params seps)
-                     prevhh (0 < i && pv? (mb (i - 1)) "##")
-                     commahh ((prevhh && 1 < i) && pv? (mb (i - 2)) ",")
+                     prevhh (pv? q1 "##")
+                     commahh (prevhh && pv? q2 ",")
                      (? commahh                                 ; GNU `, ## __VA_ARGS__` elision: the ## is a marker, not a paste
                          (>acc @ acc2                       ; drop the ## already emitted (no join)
-                            (two? va ? (go (i + 1) (revcat (expand va macs) acc2))         ; args present: keep the comma
-                               (go (i + 1) (two? acc2 && pv? <acc2 "," ? >acc2 acc2))))      ; empty: drop the comma too
+                            (two? va ? (go >ml t q1 (revcat (expand va macs) acc2))         ; args present: keep the comma
+                               (go >ml t q1 (two? acc2 && pv? <acc2 "," ? >acc2 acc2))))      ; empty: drop the comma too
                         ; a real `## __VA_ARGS__` paste: unexpanded, paste folds it -- and
                         ; an empty tail is the placemarker, same as a named parameter's
-                        prevhh (go (i + 1) (revcat (two? va ? va [(tok 'pmark "" line)]) acc))
-                        (go (i + 1) (revcat (expand va macs) acc))))
-                 (go (i + 1) (t . acc)))))
-       (paste (go 0 ()) line))
+                        prevhh (go >ml t q1 (revcat (two? va ? va [(tok 'pmark "" line)]) acc))
+                        (go >ml t q1 (revcat (expand va macs) acc))))
+                 (go >ml t q1 (t . acc)))))
+       (paste (go mb () () ()) line))
    (vaargs args params seps)                        ; the arg token-lists past the named params, comma-joined
     (: np #params
        (skip l k) (k < 1 || atom? l ? l (skip >l (k - 1)))
@@ -209,24 +204,26 @@
           (? !(macat? t macs) (t . expand rest macs)
              (idv? t "__LINE__") (tok 'num (lof t) (lof t) . expand rest macs)
              (macnm t @ nm
-                (elem nm (hof t) ? (t . expand rest macs)      ; blue-painted: leave it
-                   (mdef macs nm @ m
-                      (? (mobj? m)
-                          (: hs (nm . hof t)
-                             body (mapadd <>m hs (lof t))
-                             (expand (body + rest) macs))
-                         (mfun? m && two? rest && pv? <rest "(")
-                          (collargs >rest @ ca
-                             (atom? ca ? (t . expand rest macs)
-                                (: args <ca after <>ca
-                                   params <>m mbody <>>m mvar <>>>m
-                                   hs (nm . hof t)
-                                   body (subst mbody params args mvar (lof t) macs <>>ca)
-                                   (expand (mapadd body hs (lof t) + after) macs))))
-                         (t . expand rest macs))))))))
+                (mdef macs nm @ m
+                   (? (atom? m) (t . expand rest macs)          ; no macro, so no hideset to walk
+                      (elem nm (hof t)) (t . expand rest macs)  ; blue-painted: leave it
+                      (mobj? m)
+                       (: hs (nm . hof t)
+                          body (mapadd <>m hs (lof t))
+                          (expand (body + rest) macs))
+                      (mfun? m && two? rest && pv? <rest "(")
+                       (collargs >rest @ ca
+                          (atom? ca ? (t . expand rest macs)
+                             (: args <ca after <>ca
+                                params <>m mbody <>>m mvar <>>>m
+                                hs (nm . hof t)
+                                body (subst mbody params args mvar (lof t) macs <>>ca)
+                                (expand (mapadd body hs (lof t) + after) macs))))
+                      (t . expand rest macs)))))))
+   ; hs is a set already (the name was not in the invoker's), so a token with none of its own takes it whole
    (mapadd toks hs line)                            ; give body tokens the hideset + the invocation line
     (atom? toks ? ()
-       (<toks @ t (retok t line (dedup (hof t + hs)) . mapadd >toks hs line)))
+       (<toks @ t (retok t line (hof t @ h (two? h ? (dedup (h + hs)) hs)) . mapadd >toks hs line)))
    ; -- #line's operand: a digit sequence, or what one macro-expands to (C11 6.10.4p3).
    ; () when it is neither, which is the directive doing nothing. --
    (lnum body macs)
