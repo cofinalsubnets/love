@@ -10,7 +10,7 @@
 ;                         tablet ({} for a file) | why not
 (module (av av-codecs av-open av-play av-pcm av-uri)
 (:
-   close (cite 'posix 'close)
+   open (cite 'posix 'open) close (cite 'posix 'close)
    ; cited when asked, so a codec's module may bake after this one. a wav's meta is its
    ; own format: wav-format looks one up by name
    (av-codecs _) [["wav" (cite 'wav 'wav-sniff) (cite 'wav 'wav-meta) (m \ m) (cite 'wav 'wav-pump)]
