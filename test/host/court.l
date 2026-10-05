@@ -31,6 +31,19 @@
  (test (0.0 < net (c 0) + net (c 1) + net (c 2))
        (net (col 1 20) < 1.5 * net (col 1 19)) (0.66 * net (col 1 19) < net (col 1 20))))
 
+; --- the stars by night: each one pixel, never a patch, wherever the eye is turned -- the
+; --- stars over a black sky looking straight up light one pixel per star in view
+(borrow 'sky)
+(: st (at 23.0) _ (pin st 'wx (sky-weather 0 'smooth)) lt (court-light st) w 80 h 48 n (w * h)
+   cam {'e [0.0 eye-h 0.0] 'f [0.0 1.0 0.0] 'r [1.0 0.0 0.0] 'u [0.0 0.0 -1.0] 'w w 'h h 'foc (w / 2.0)}
+   z (iota n * 0.0) c (stars! [z z z] st lt cam (iota n * 0 + 1) 0)
+   lit (net (0.0 < c 0))
+   X (stars 'x) Y (stars 'y) Z (stars 'z)
+   cx (floor (w / 2.0 + 40.0 * X / Y)) cy (floor (h / 2.0 + 40.0 * Z / Y))
+   seen (net ((0.05 < Y) * (0 <= cx) * (cx < w) * (0 <= cy) * (cy < h)))
+ (test (5 < seen) (0.9 * seen <= lit) (lit <= seen) (amax (c 0) < 1.0)
+       (all (k \ 0.3 <= peep Y k 0.0) ^(#X))))
+
 ; --- the sun: up by day and down by night, south at noon, east in the morning and west in
 ; --- the evening, a unit vector; summer's hour is taken off the wall clock
 (: (sun hr) (court-sun (at hr)) n (sun 13.0) m (sun 8.0) e (sun 18.0) mid (sun 1.0)
