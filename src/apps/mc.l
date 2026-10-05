@@ -302,10 +302,8 @@
  ; cli's stage, but a thumbnail still owed waits for the keys to rest a beat and is then
  ; decoded, one a beat, so a cursor run over pictures never stalls on each
  (mc-loop s)
-  (: ws (tty 1)
-     h (two? ws && 7 < <ws ? <ws 24)
-     w (two? ws && 19 < <>ws ? <>ws 80)
-     (say out (mc-frame s w h),
+  (: g (ttysize 7 19)
+     (say out (mc-frame s (g 1) <g),
       flush out,
       (s 'owe && !(mc-rest 150) ? (pin s 'budget 1, mc-loop s)
          (edkey in @ c (pin s 'budget 0,
@@ -316,8 +314,7 @@
      pr (gm @ "block" (kp 'pic-heard "") (kp 'pic-probe 0))
      (pins s 'gm (kp 'pic-pick gm pr) 'budget 0
              'cw (0 < pr 'cw ? (pr 'cw) 8) 'ch (0 < pr 'ch ? (pr 'ch) 16),
-      raw 1, say out "\e[?1049h", mc-loop s,
-      say out ((s 'gm @ "kitty" (kp 'pv-unkit) "") + "\e[0m\e[?25h\e[?1049l"), flush out, raw 0, 0))
+      ttytake (), mind mc-loop s (_ \ (s 'gm = "kitty" ? (say out (kp 'pv-unkit)), ttygive ())), 0))
  mc-usage "usage: love mc [-g block|sixel|kitty|auto] [DIR [DIR]]"
  (mc-main as)
   (: g? (two? as && <as = "-g")

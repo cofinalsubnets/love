@@ -10,8 +10,8 @@
    st {}                                  ; 'code (newest first) and 'q, the NEON thunk queue
    env {}                                 ; perl's variables by name: numbers, strings, arrays
    (die m) (puts ("perlasm: " + m + "\n"), quit 1)
-   (emit s) (pin st 'code (s . peep st 'code ()))
-   (gv k) (peep env k ())
+   (emit s) (pin st 'code (s . st 'code))
+   gv env
    (sv k v) (pin env k v)
    (setn names vals) (two? names ? (sv <names <vals, setn >names >vals) 0)
    (rep n f) (n > 0 ? (f 0, rep (n - 1) f) 0)
@@ -34,27 +34,27 @@
        (prim _)
         (at 0 @ c
            (? (c = 40) (: _ (eat 0) v (ex 0) _ (at 0) _ (eat 0) v)     ; ( e )
-              (c = 45) (: _ (eat 0) v (prim 0) (0 - v))
-              (c = 108) (: _ (pin p 'i (p 'i + 3)) v (prim 0) (log v))   ; log(e)
+              (c = 45) (eat 0, -(prim 0))
+              (c = 108) (pin p 'i (p 'i + 3), (log (prim 0)))   ; log(e)
               (dig? c) (num 0)
               (die ("cannot read " + s))))
-       (mul v) (at 0 @ c (? (c = 42) (: _ (eat 0) w (prim 0) (mul (v * w)))
-                            (c = 47) (: _ (eat 0) w (prim 0) (mul (v / w)))
-                            (c = 37) (: _ (eat 0) w (prim 0) (mul (v % w)))
-                            v))
-       (add v) (at 0 @ c (? (c = 43) (: _ (eat 0) w (mul (prim 0)) (add (v + w)))
-                            (c = 45) (: _ (eat 0) w (mul (prim 0)) (add (v - w)))
-                            v))
-       (band v) (at 0 @ c (c = 38 ? (: _ (eat 0) w (add (mul (prim 0))) (band (v & w))) v))
+       (mul v) (at 0 @ 42 (eat 0, prim 0 @ w (mul (v * w)))
+                       47 (eat 0, prim 0 @ w (mul (v / w)))
+                       37 (eat 0, prim 0 @ w (mul (v % w)))
+                       v)
+       (add v) (at 0 @ 43 (eat 0, mul (prim 0) @ w (add (v + w)))
+                       45 (eat 0, mul (prim 0) @ w (add (v - w)))
+                       v)
+       (band v) (at 0 @- v 38 (eat 0, add (mul (prim 0)) @ w (band (v & w))))
        (ex _) (band (add (mul (prim 0))))
        (ex 0))
 
    ; -- a heredoc's interpolation: $x, $x[e] (an element of @x), @x[e], and \@
-   (close t i d) (t i @ c (? (c = 91) (close t (i + 1) (d + 1))
-                             (c = 93) (d = 1 ? i (close t (i + 1) (d - 1)))
-                             (close t (i + 1) d)))
+   (close t i d) (t i @ 91 (close t (i + 1) (d + 1))
+                        93 (d = 1 ? i (close t (i + 1) (d - 1)))
+                        (close t (i + 1) d))
    (interp t)
-    (: n #t
+    (:- (go 0 ()) n #t
        (go i acc)
         (i >= n ? (join "" (rev acc))
            (t i @ c
@@ -66,8 +66,7 @@
                             (go (k + 1) (txt ((gv nm) ix) . acc)))
                         (c = 64) (go (i + 1) ("@" . acc))
                         (go e (txt (gv nm) . acc))))
-                 (go (i + 1) (string c . acc)))))
-       (go 0 ()))
+                 (go (i + 1) (string c . acc))))))
 
    ; -- the script: pinned, its header comment, and its heredocs in order
    src (uread (argv 2) @ [1 s] s (die ("cannot read " + argv 2)))
@@ -93,8 +92,8 @@
    ; Dscalar / Dlo / Dhi: the number after the first q or v
    (regno r) ((: (go i) (? (i >= #r) "" (r i = 113 || r i = 118) (snip r (i + 1) (digend r (i + 1))) (go (i + 1)))) 0)
    (dscalar r) (regno r @ d (d = "" ? "" ("d" + d)))
-   (dlo r) (regno r @ d (d = "" ? "" ("v" + d + ".d[0]")))
-   (dhi r) (regno r @ d (d = "" ? "" ("v" + d + ".d[1]")))
+   (dlo r) (regno r @ "" "" d ("v" + d + ".d[0]"))
+   (dhi r) (regno r @ "" "" d ("v" + d + ".d[1]"))
    (lastof l) (atom? >l ? <l (lastof >l))
    (butlast l) (atom? >l ? () (<l . butlast >l))
    (rot l) (atom? l ? l (lastof l . butlast l))       ; unshift(@l, pop(@l))
@@ -137,7 +136,7 @@
      (_ \ ins "eor" [(gv "t4") (gv "t4") (gv "a") ("ror#" + fmtn (sg "Sigma0" 2 - sg "Sigma0" 0))])
      (_ \ ins "add" [(gv "h") (gv "h") (gv "t0")])
      (_ \ (: j (gv "j")
-             _ ((j & 15) != 15 ? (ins "ldr" [(gv "t1") ("[sp,#" + fmtn (4 * ((j + 1) & 15)) + "]")]))
+             _ (j & 15 != 15 ? (ins "ldr" [(gv "t1") ("[sp,#" + fmtn (4 * ((j + 1) & 15)) + "]")]))
              _ (j = 15 ? (ins "ldr" [(gv "t1") ("[" + gv "Ktbl" + "]")]))
              (ins "and" [(gv "t3") (gv "t3") (gv "t2")])))
      (_ \ ins "ror" [(gv "t4") (gv "t4") ("#" + fmtn (sg "Sigma0" 0))])
@@ -154,59 +153,59 @@
    (sg1 k) (sg "sigma1" k)
    (br r) ("{" + r + "}")
    (xupdate _)
-    (: _ (qload 0)
-       _ (ins "ext_8" [(T 0) (x 0) (x 1) 4]) _ (en 3)
-       _ (ins "ext_8" [(T 3) (x 2) (x 3) 4]) _ (en 2)
-       _ (ins "mov" [(dscalar (T 7)) (dhi (x 3))]) _ (en 2)
-       _ (ins "ushr_32" [(T 2) (T 0) (sg0 0)]) _ (en 1)
-       _ (ins "ushr_32" [(T 1) (T 0) (sg0 2)]) _ (en 1)
-       _ (ins "add_32" [(x 0) (x 0) (T 3)]) _ (en 1)
-       _ (ins "sli_32" [(T 2) (T 0) (32 - sg0 0)]) _ (en 2)
-       _ (ins "ushr_32" [(T 3) (T 0) (sg0 1)]) _ (en 2)
-       _ (ins "eor_8" [(T 1) (T 1) (T 2)]) _ (en 2)
-       _ (ins "sli_32" [(T 3) (T 0) (32 - sg0 1)]) _ (en 2)
-       _ (ins "ushr_32" [(T 4) (T 7) (sg1 0)]) _ (en 2)
-       _ (ins "eor_8" [(T 1) (T 1) (T 3)]) _ (en 2)
-       _ (ins "sli_32" [(T 4) (T 7) (32 - sg1 0)]) _ (en 2)
-       _ (ins "ushr_32" [(T 5) (T 7) (sg1 2)]) _ (en 2)
-       _ (ins "ushr_32" [(T 3) (T 7) (sg1 1)]) _ (en 2)
-       _ (ins "add_32" [(x 0) (x 0) (T 1)]) _ (en 2)
-       _ (ins "sli_u32" [(T 3) (T 7) (32 - sg1 1)]) _ (en 2)
-       _ (ins "eor_8" [(T 5) (T 5) (T 4)]) _ (en 3)
-       _ (ins "eor_8" [(T 5) (T 5) (T 3)]) _ (en 3)
-       _ (ins "add_32" [(x 0) (x 0) (T 5)]) _ (en 3)
-       _ (ins "ushr_32" [(T 6) (x 0) (sg1 0)]) _ (en 1)
-       _ (ins "ushr_32" [(T 7) (x 0) (sg1 2)]) _ (en 2)
-       _ (ins "sli_32" [(T 6) (x 0) (32 - sg1 0)]) _ (en 1)
-       _ (ins "ushr_32" [(T 5) (x 0) (sg1 1)]) _ (en 2)
-       _ (ins "eor_8" [(T 7) (T 7) (T 6)]) _ (en 2)
-       _ (ins "sli_32" [(T 5) (x 0) (32 - sg1 1)]) _ (en 2)
-       _ (ins "ld1_32" [(br (T 0)) ("[" + gv "Ktbl" + "], #16")]) _ (en 1)
-       _ (ins "eor_8" [(T 7) (T 7) (T 5)]) _ (en 2)
-       _ (ins "eor_8" [(T 5) (T 5) (T 5)]) _ (en 2)
-       _ (ins "mov" [(dhi (T 5)) (dlo (T 7))]) _ (en 3)
-       _ (ins "add_32" [(x 0) (x 0) (T 5)]) _ (en 3)
-       _ (ins "add_32" [(T 0) (T 0) (x 0)])
-       _ (en (qn 0 - 1))                          ; while($#insns>=1): all but the last
-       _ (ins "st1_32" [(br (T 0)) ("[" + gv "Xfer" + "], #16")]) _ (en 1)
-       (sv "X" (rotl (gv "X"))))
+    (qload 0,
+     ins "ext_8" [(T 0) (x 0) (x 1) 4], en 3,
+     ins "ext_8" [(T 3) (x 2) (x 3) 4], en 2,
+     ins "mov" [(dscalar (T 7)) (dhi (x 3))], en 2,
+     ins "ushr_32" [(T 2) (T 0) (sg0 0)], en 1,
+     ins "ushr_32" [(T 1) (T 0) (sg0 2)], en 1,
+     ins "add_32" [(x 0) (x 0) (T 3)], en 1,
+     ins "sli_32" [(T 2) (T 0) (32 - sg0 0)], en 2,
+     ins "ushr_32" [(T 3) (T 0) (sg0 1)], en 2,
+     ins "eor_8" [(T 1) (T 1) (T 2)], en 2,
+     ins "sli_32" [(T 3) (T 0) (32 - sg0 1)], en 2,
+     ins "ushr_32" [(T 4) (T 7) (sg1 0)], en 2,
+     ins "eor_8" [(T 1) (T 1) (T 3)], en 2,
+     ins "sli_32" [(T 4) (T 7) (32 - sg1 0)], en 2,
+     ins "ushr_32" [(T 5) (T 7) (sg1 2)], en 2,
+     ins "ushr_32" [(T 3) (T 7) (sg1 1)], en 2,
+     ins "add_32" [(x 0) (x 0) (T 1)], en 2,
+     ins "sli_u32" [(T 3) (T 7) (32 - sg1 1)], en 2,
+     ins "eor_8" [(T 5) (T 5) (T 4)], en 3,
+     ins "eor_8" [(T 5) (T 5) (T 3)], en 3,
+     ins "add_32" [(x 0) (x 0) (T 5)], en 3,
+     ins "ushr_32" [(T 6) (x 0) (sg1 0)], en 1,
+     ins "ushr_32" [(T 7) (x 0) (sg1 2)], en 2,
+     ins "sli_32" [(T 6) (x 0) (32 - sg1 0)], en 1,
+     ins "ushr_32" [(T 5) (x 0) (sg1 1)], en 2,
+     ins "eor_8" [(T 7) (T 7) (T 6)], en 2,
+     ins "sli_32" [(T 5) (x 0) (32 - sg1 1)], en 2,
+     ins "ld1_32" [(br (T 0)) ("[" + gv "Ktbl" + "], #16")], en 1,
+     ins "eor_8" [(T 7) (T 7) (T 5)], en 2,
+     ins "eor_8" [(T 5) (T 5) (T 5)], en 2,
+     ins "mov" [(dhi (T 5)) (dlo (T 7))], en 3,
+     ins "add_32" [(x 0) (x 0) (T 5)], en 3,
+     ins "add_32" [(T 0) (T 0) (x 0)],
+     en (qn 0 - 1),                          ; while($#insns>=1): all but the last
+     ins "st1_32" [(br (T 0)) ("[" + gv "Xfer" + "], #16")], en 1,
+     sv "X" (rotl (gv "X")))
    (xpreload _)
-    (: _ (qload 0) _ (en 2)
-       _ (ins "ld1_8" [(br (x 0)) ("[" + gv "inp" + "],#16")]) _ (en 2)
-       _ (ins "ld1_32" [(br (T 0)) ("[" + gv "Ktbl" + "],#16")]) _ (en 4)
-       _ (ins "rev32" [(x 0) (x 0)]) _ (en 4)
-       _ (ins "add_32" [(T 0) (T 0) (x 0)])
-       _ (en (qn 0))                              ; foreach (@insns): the rest
-       _ (ins "st1_32" [(br (T 0)) ("[" + gv "Xfer" + "], #16")])
-       (sv "X" (rotl (gv "X"))))
+    (qload 0, en 2,
+     ins "ld1_8" [(br (x 0)) ("[" + gv "inp" + "],#16")], en 2,
+     ins "ld1_32" [(br (T 0)) ("[" + gv "Ktbl" + "],#16")], en 4,
+     ins "rev32" [(x 0) (x 0)], en 4,
+     ins "add_32" [(T 0) (T 0) (x 0)],
+     en (qn 0),                              ; foreach (@insns): the rest
+     ins "st1_32" [(br (T 0)) ("[" + gv "Xfer" + "], #16")],
+     sv "X" (rotl (gv "X")))
 
    ; -- the post-pass, line by line (the script's six s///)
    (bt l) (findsub l "`" @ a
             (a < 0 ? l (: r (snip l (a + 1) #l) b (findsub r "`")
                           (bt (snip l 0 a + fmtn (arith (snip r 0 b)) + snip r (b + 1) #r)))))
    (hex8 v) (join "" (map (k \ string ("0123456789abcdef" ((v >> (4 * (7 - k))) & 15))) ^8))
-   (opc m) (? (m = "sha256h") 0x5e004000 (m = "sha256h2") 0x5e005000
-              (m = "sha256su0") 0x5e282800 (m = "sha256su1") 0x5e006000 ())
+   (opc m) (m @ "sha256h" 0x5e004000 "sha256h2" 0x5e005000
+                "sha256su0" 0x5e282800 "sha256su1" 0x5e006000)
    ; at i: [qv] then digits -> [number index-past], else ()
    (qvnum s i) (i + 1 < #s && (s i = 113 || s i = 118) && dig? (s (i + 1))
                 ? (: e (digend s (i + 1)) [(read (snip s (i + 1) e)) e]) ())
@@ -277,9 +276,9 @@
    _ (doc 8)
    _ (sz4 ? (doc 9))
    _ (doc 10)
-   v1 ((: (go i v) (i = 16 ? v (: _ (body i v) (go (i + 1) (rot v))))) 0 v0)
+   v1 ((: (go i v) (i @ 16 v (body i v, go (i + 1) (rot v)))) 0 v0)
    _ (emit ".Loop_16_xx:\n")
-   _ ((: (go i v) (i = 32 ? v (: _ (body i v) (go (i + 1) (rot v))))) 16 v1)
+   _ ((: (go i v) (i @ 32 v (body i v, go (i + 1) (rot v)))) 16 v1)
    _ (doc 11)
    _ (sz4 ? (doc 13) (doc 12))
    _ (doc 14)
@@ -291,17 +290,17 @@
           _ (rep 12 (_ \ (doc 16, gv "W0" @ w (sv "W0" (gv "W1"), sv "W1" w), sv "MSG" (rotl (gv "MSG")))))
           (doc 17)))
    _ (sz4 ?
-       (: vn (map (n \ "w" + show n) [3 4 5 6 7 8 9 10])
-          _ (sv "V" vn)
-          _ (setn ["A" "B" "C" "D" "E" "F" "G" "H"] vn)
-          _ (setn ["t0" "t1" "t2" "t3" "t4"] ["w11" "w12" "w13" "w14" "w15"])
-          _ (setn ["Ktbl" "Xfer" "X" "j"] ["x16" "x17" ["q0" "q1" "q2" "q3"] 0])
-          _ (setn ["T0" "T1" "T2" "T3" "T4" "T5" "T6" "T7"] ["q4" "q5" "q6" "q7" "q16" "q17" "q18" "q19"])
-          _ (doc 18)
-          _ (rep 4 xupdate)
-          _ (doc 19)
-          _ (rep 4 xpreload)
-          (doc 20)))
+       (map (n \ "w" + show n) [3 4 5 6 7 8 9 10] @ vn
+        (sv "V" vn,
+         setn ["A" "B" "C" "D" "E" "F" "G" "H"] vn,
+         setn ["t0" "t1" "t2" "t3" "t4"] ["w11" "w12" "w13" "w14" "w15"],
+         setn ["Ktbl" "Xfer" "X" "j"] ["x16" "x17" ["q0" "q1" "q2" "q3"] 0],
+         setn ["T0" "T1" "T2" "T3" "T4" "T5" "T6" "T7"] ["q4" "q5" "q6" "q7" "q16" "q17" "q18" "q19"],
+         doc 18,
+         rep 4 xupdate,
+         doc 19,
+         rep 4 xpreload,
+         doc 20)))
    _ (doc 21)
-   text (join "" (map (l \ post l + "\n") (lines (join "" (rev (peep st 'code ()))))))
+   text (join "" (map (l \ post l + "\n") (lines (join "" (rev (st 'code))))))
    (uwrite outp (join "" (map (l \ l + "\n") head) + text)))

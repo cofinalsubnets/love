@@ -31,6 +31,7 @@ extern long __love_sys(long n, long a, long b, long c, long d, long e, long f);
 #define hc_fetch_open 0x4020                // (url, n) -> the body's length, or -errno
 #define hc_fetch_read 0x4021                // (buf, n) -> bytes copied, on from the last
 #define hc_fetch_close 0x4022
+#define hc_host 0x4030                      // +op: kmain's k_host, the seat's own files
 #define hc_clock_gettime 228
 
 void archinit(void) { }
@@ -148,6 +149,12 @@ long k_fetch(char const *url, uintptr_t un, char const *path, uintptr_t pn) {
     k_fd_close(fd); }
   __love_sys(hc_fetch_close, 0, 0, 0, 0, 0, 0);
   return r; }
+
+// the seat's own files (kmain's /mnt/host): each operation one hypercall, its number
+// hc_host + op, answered by the worker from the page's folder or storage, or a directory
+// under node (cpu.mjs's host lane)
+long k_host(long op, long a, long b, long c, long d, long e) {
+  return __love_sys(hc_host + op, a, b, c, d, e, 0); }
 
 // the reset: the worker unwinds the module and boots it again
 void k_reset(void) { serial_drain(); for (;;) __love_sys(hc_reboot, 0, 0, 0, 0, 0, 0); }

@@ -206,7 +206,7 @@ test_front: $(ho)/front $(ho)/frontseat
 # cats.c is the catalog love0 lacks; it is not idempotent and love0 evaluates twice; or its
 # regression is a HANG, wanting a timeout a corpus cannot give -- a wedged gate is worse than
 # a red one. gate = exit 0 and a "<name>: ok"; a cold lane opts in via hostnif_cold.
-hostnif_tests = test/host/gcpause.l test/host/gcroom.l test/host/mop.l test/host/deepeq.l test/host/wharf.l test/host/cb.l test/host/manifest.l test/host/rune.l test/host/pty.l test/host/loader.l test/host/rdiff.l test/host/run.l test/host/luxui.l test/host/sh.l test/host/mitty.l test/host/vi.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/tty.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/web.l test/host/sbhttp.l test/host/salt.l test/host/libra.l test/host/clay.l test/host/tls.l test/host/tlsc.l test/host/ssh.l test/host/sshd.l test/host/gz.l test/host/gzc.l test/host/png.l test/host/imgenc.l test/host/jpeg.l test/host/webp.l test/host/pic.l test/host/grap.l test/host/chem.l test/host/font.l test/host/story.l test/host/evback.l test/host/design.l test/host/slop.l test/host/score.l test/host/grass.l test/host/grass99.l test/host/wade.l test/host/apartment.l test/host/garage.l test/host/roost.l test/host/shaft.l test/host/court.l test/host/lore.l test/host/synth.l test/host/aplay.l test/host/flac.l test/host/player.l test/host/lupa.l test/host/seek.l test/host/mc.l test/host/chucho.l test/host/pom.l test/host/saver.l test/host/helm.l test/host/wget.l test/host/www.l test/host/smallweb.l test/host/net.l test/host/ed.l test/host/cook.l test/host/x11.l test/host/pier.l test/host/kitpng.l test/host/bee.l test/host/beeq.l test/host/locks.l test/host/hosts.l test/host/seals.l test/host/broker.l test/host/showbig.l test/host/lovefs.l
+hostnif_tests = test/host/gcpause.l test/host/gcroom.l test/host/mop.l test/host/deepeq.l test/host/wharf.l test/host/cb.l test/host/manifest.l test/host/rune.l test/host/pty.l test/host/loader.l test/host/rdiff.l test/host/run.l test/host/luxui.l test/host/sh.l test/host/mitty.l test/host/vi.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/tty.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/web.l test/host/sbhttp.l test/host/salt.l test/host/libra.l test/host/clay.l test/host/tls.l test/host/tlsc.l test/host/ssh.l test/host/sshd.l test/host/gz.l test/host/gzc.l test/host/png.l test/host/imgenc.l test/host/jpeg.l test/host/webp.l test/host/pic.l test/host/grap.l test/host/chem.l test/host/font.l test/host/story.l test/host/evback.l test/host/design.l test/host/slop.l test/host/score.l test/host/grass.l test/host/grass99.l test/host/wade.l test/host/apartment.l test/host/garage.l test/host/roost.l test/host/shaft.l test/host/court.l test/host/lore.l test/host/synth.l test/host/aplay.l test/host/flac.l test/host/player.l test/host/lupa.l test/host/seek.l test/host/mc.l test/host/chucho.l test/host/torrent.l test/host/pom.l test/host/saver.l test/host/helm.l test/host/wget.l test/host/www.l test/host/smallweb.l test/host/net.l test/host/ed.l test/host/cook.l test/host/x11.l test/host/pier.l test/host/kitpng.l test/host/bee.l test/host/beeq.l test/host/locks.l test/host/hosts.l test/host/seals.l test/host/qlog.l test/host/broker.l test/host/showbig.l test/host/lovefs.l
 # out/lush: test/host/sh.l drives the built shell end to end, via out/love and
 # never env's PATH love -- the tree's nifs, not the nest's.
 hostnif_cold =                                   # empty: no gate needs the cold lane
@@ -1020,7 +1020,17 @@ else
 # Import spec`. one spelling everywhere (`cd test/proof/rocq && -R . ""`), or spec.vo's logical
 # name is not the one gen.v asks for. a static pattern: big/mx/enc take their own flags.
 rocq_kept = test/proof/rocq/spec.vo test/proof/rocq/patch.vo
-$(rocq_kept): test/proof/rocq/%.vo: test/proof/rocq/%.v
+# a .vo carries the version of the coqc that wrote it, and another coqc refuses it, so every
+# kept .vo hangs off the checker's own version: a forced witness, rewritten only when coqc -v
+# says something new (Makefile's note), so an upgrade rebuilds them and nothing else does
+.PHONY: force_coqc
+force_coqc: ;
+rocq_ver = $(ho)/.coqc-version
+$(rocq_ver): force_coqc
+	@mkdir -p $(ho)
+	@tf=$@.$$$$.tmp; $(COQC) --version > $$tf 2>&1; \
+	 $(note)
+$(rocq_kept): test/proof/rocq/%.vo: test/proof/rocq/%.v $(rocq_ver)
 	@echo TEST test/proof/rocq/$*.v "(coqc)"
 	@cd test/proof/rocq && $(COQC) -q -R . "" $*.v
 test_proof: $(rocq_kept)
@@ -1331,10 +1341,12 @@ test_kernel_wasm:
 else
 test_kernel_wasm: host
 	@$(MAKE) -s wasm
-	@echo TEST out/love.wasm "(node: the kernel corpus on the woken image, serial, headless)"
-	@INLE_RAM=768 $(NODE) $(S)/inle/wasm/inle.mjs --image $(ko)/wasm/love.image $(R)/$(ko)/love.wasm test/kernel/all.l \
+	@echo TEST out/love.wasm "(node: the kernel corpus on the woken image, serial, headless; /mnt/host a fresh directory)"
+	@rm -rf $(ko)/wasm/host && mkdir -p $(ko)/wasm/host
+	@INLE_RAM=768 $(NODE) $(S)/inle/wasm/inle.mjs --host $(R)/$(ko)/wasm/host --image $(ko)/wasm/love.image $(R)/$(ko)/love.wasm test/kernel/all.l \
 	   < /dev/null > $(ko)/wasm/kernel.log 2>&1; \
 	 grep -q "image awake" $(ko)/wasm/kernel.log \
+	   && grep -qx "the seat keeps this" $(ko)/wasm/host/kept.txt \
 	   && grep -q "tests pass" $(ko)/wasm/kernel.log && ! grep -q "failed:" $(ko)/wasm/kernel.log \
 	   && ! grep -q "^0 tests pass" $(ko)/wasm/kernel.log \
 	   || { tail -20 $(ko)/wasm/kernel.log; echo "FAIL test_kernel_wasm"; exit 1; }

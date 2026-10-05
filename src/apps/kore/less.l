@@ -377,20 +377,15 @@
                         (f = 126 && d = 49) 103
                         (f = 126 && d = 52) 71
                         27) -1]))))))
-   ; tty's (rows . cols) as [h w]. a fresh pty answers 0x0 before anyone has
-   ; sized it, and that is a terminal with no size yet, not a missing one
-   (pgwin ws) [(0 < <ws ? <ws 24) (0 < >ws ? >ws 80)]
    ; the window may move under us; the top line is what survives a rewrap
    (pgresize st)
-    (tty 1 @ ws
-       (atom? ws ? 0
-        (pgwin ws @ hw
-           (<hw = st 'h && <>hw = st 'w ? 0
-            (pgtopline st @ ln
-               (pins st 'h <hw 'w <>hw,
-                pgwrapall st,
-                pgline! st ln,
-                1))))))
+    (ttysize 0 0 @ hw
+       (<hw = st 'h && <>hw = st 'w ? 0
+        (pgtopline st @ ln
+           (pins st 'h <hw 'w <>hw,
+            pgwrapall st,
+            pgline! st ln,
+            1))))
    ; the loop. fs is the operand list (() when the text came off stdin), kq the
    ; keyboard port -- `in` when an operand is the text, /dev/tty when stdin was
    (pgride fs ls nm kq w h opt plus)
@@ -398,10 +393,6 @@
        _ (pin st 'files fs)
        _ (pgload st ls nm)
        _ (pgstart st plus)
-       e (string 27)
-       _ (raw 1)
-       _ (puts (e + "[?1049h"))
-       (fin _) (puts (e + "[0m" + e + "[?1049l"), flush out, raw 0, 0)
        (doe _)
         (st 'doe @ rq
            (atom? rq ? 0
@@ -415,9 +406,8 @@
            _ (puts (pgframe st)) _ (flush out)
            kr (pgkey kq pend)
            c <kr
-           (c < 0 ? (fin ())
-            (pgstep st c, doe (), st 'quit ? (fin ()) (go <>kr))))
-       (go -1))
+           (c < 0 ? 0 (pgstep st c, doe (), st 'quit ? 0 (go <>kr))))
+       (ttytake (), mind go -1 (_ \ ttygive ()), 0))
    ; the flags kore's pager knows, and the complaint for anything else
    (pgopts as)
     (: t {}
@@ -448,8 +438,7 @@
        f <fs
        r (uread f)
        _ (two? r ? 0 (udie 1 ("hexedit: " + f + ": No such file or directory")))
-       ws (tty 1)
-       _ (two? ws ? 0 (udie 1 "hexedit: needs a terminal"))
+       _ (two? (tty 1) ? 0 (udie 1 "hexedit: needs a terminal"))
        n #<>r
        st {'pos 0 'top 0 'lo 0 'undo () 'msg "" 'd <>r}
        (buf i) (st 'd i)
@@ -492,10 +481,8 @@
                           (put out c, flush out, go (acc + string c))))
            (go ""))
        (move p) (pin st 'pos (max 0 (min (max 0 (n - 1)) p)), pin st 'lo 0)
-       _ (raw 1)
-       _ (say out (e + "[?1049h"))
        (loop _)
-        (: hw (two? (tty 1) ? (tty 1) ws) h (max 3 <hw) w >hw
+        (: hw (ttysize 0 0) h (max 3 <hw) w <>hw
            _ (frame h w) _ (flush out)
            k (hx-key in) pos (st 'pos)
            (k = -1 || k = 3 || k = 17 || k = 113 || k = 'esc ? 0
@@ -520,10 +507,7 @@
                           set! pos v, poke pos v,
                           st 'lo ? (move (pos + 1)) (pin st 'lo 1))))
                     0), loop 0)))
-       (loop 0,
-        say out (e + "[0m" + e + "[?1049l"), flush out,
-        raw 0,
-        0))
+       (ttytake (), mind loop 0 (_ \ ttygive ()), 0))
    (less-main as)
     (: r (pgopts as)
        t <r
@@ -533,7 +517,7 @@
        plus (plus? ? (snip <rest 1 #(<rest)) "")
        fs (plus? ? >rest rest)
        ws (tty 1)
-       hw (two? ws ? (pgwin ws) [24 80])
+       hw (ttysize 0 0)
        (? (atom? ws) (pgpour fs)
           (two? fs)
            (: f <fs

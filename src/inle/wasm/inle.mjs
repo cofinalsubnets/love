@@ -21,6 +21,8 @@
 // plain reset still ends it.
 // --origin DIR is the page's network: what the machine fetches (kmain's fetch door) is read
 // as a file under DIR, where a page would ask its own origin.
+// --host DIR is the seat's own files: the machine's /mnt/host is DIR, answered by the page's
+// own worker (hostfs.mjs) through nodedir.mjs, where a page has a folder or its storage.
 // --frames FILE takes the machine's frames the way a page does -- cpu.mjs's post lane, not
 // the once-a-second PPM -- and lays a line per frame: the time it arrived and a signature
 // of its pixels. what a gate needs to see is not that a frame came but that it CARRIES what
@@ -28,18 +30,19 @@
 //   usage: node src/inle/wasm/inle.mjs [--fb WxH --scale N --dump screen.ppm --frames f.log]
 //                                  [--lift /in/machine:b/here] [--lifts DIR] [--horn sound.raw]
 //                                  [--press "Escape Enter" --after S] [--for S]
-//                                  [--origin DIR] [--image love.image] love.wasm [boot line ..]
-import { Worker } from 'node:worker_threads';
+//                                  [--origin DIR] [--host DIR] [--image love.image] love.wasm [boot line ..]
+import { Worker, MessageChannel } from 'node:worker_threads';
 import { openSync, readFileSync, writeFileSync, writeSync } from 'node:fs';
 import { join } from 'node:path';
 import { ctl_n, ring_n, ring_at, lift_n, lift_at, shared_n, scan_at, scan_n, c_sh, c_st,
          horn_at, horn_n, c_rate, c_wrote, c_played, c_live } from './cpu.mjs';
 import { scanlane, codes } from './machine.js';
+import { host_shared_n } from './hostring.mjs';
 
 const args = process.argv.slice(2);
 let fb = null, dump = null, scale = 0, liftReq = null, liftDir = null, image = null, hornFile = null, deaf = false;
 let framesFile = null;
-let press = [], after = 0, forS = 0, origin = null;
+let press = [], after = 0, forS = 0, origin = null, hostDir = null;
 while (args[0]?.startsWith('--')) {
   const o = args.shift();
   if (o === '--fb') { const [w, h] = args.shift().split('x').map(Number); fb = { w, h }; }
@@ -54,11 +57,12 @@ while (args[0]?.startsWith('--')) {
   else if (o === '--after') { const v = args.shift(); after = /^[\d.]+$/.test(v) ? Number(v) : v; }
   else if (o === '--for') forS = Number(args.shift());
   else if (o === '--origin') origin = args.shift();
+  else if (o === '--host') hostDir = args.shift();
   else if (o === '--image') { const b = readFileSync(args.shift()); image = b.buffer.slice(b.byteOffset, b.byteOffset + b.length); }
   else { console.error('inle.mjs: unknown option ' + o); process.exit(2); } }
 if (fb) fb.dump = dump, fb.scale = scale, fb.post = !!framesFile;
 const [wasm, ...cmd] = args;
-if (!wasm) { console.error('usage: inle.mjs [--fb WxH --scale N --dump screen.ppm --frames f.log] [--lift IN:OUT] [--lifts DIR] [--horn RAW] [--press KEYS --after S] [--for S] [--origin DIR] [--deaf] [--image IMG] love.wasm [boot line ..]'); process.exit(2); }
+if (!wasm) { console.error('usage: inle.mjs [--fb WxH --scale N --dump screen.ppm --frames f.log] [--lift IN:OUT] [--lifts DIR] [--horn RAW] [--press KEYS --after S] [--for S] [--origin DIR] [--host DIR] [--deaf] [--image IMG] love.wasm [boot line ..]'); process.exit(2); }
 
 const framesOut = framesFile ? openSync(framesFile, 'w') : 0;
 const ring = new SharedArrayBuffer(shared_n);
@@ -109,6 +113,14 @@ if (hornFile) { Atomics.store(ctl, c_live, 1); setInterval(hornDrain, 5).unref()
 else if (deaf) Atomics.store(ctl, c_live, 1);
 
 const cpu = new Worker(new URL('./cpu.mjs', import.meta.url));
+// the host lane: its worker holds the directory, the cpu worker asks it by the port
+let host = null;
+if (hostDir) {
+  const hring = new SharedArrayBuffer(host_shared_n), { port1, port2 } = new MessageChannel();
+  const hw = new Worker(new URL('./hostfs.mjs', import.meta.url));
+  hw.unref();
+  hw.postMessage({ ring: hring, port: port2, root: hostDir }, [port2]);
+  host = { port: port1, ring: hring }; }
 const leave = (code) => { if (process.stdin.isTTY) process.stdin.setRawMode(false); process.exit(code); };
 cpu.on('message', (m) => {
   if (m.frame && framesOut) {                             // what a page would paint, weighed
@@ -142,7 +154,8 @@ cpu.on('error', (e) => { process.stderr.write('\ninle: ' + e + '\n'); leave(1); 
 // word with a space in it is quoted back the way a shell had it
 const word = (a) => !/[\s"']/.test(a) ? a : !a.includes('"') ? '"' + a + '"' : "'" + a + "'";
 cpu.postMessage({ wasm: readFileSync(wasm), ring, ram: Number(process.env.INLE_RAM ?? 256),
-                  cmd: cmd.map(word).join(' '), fb, image, origin });
+                  cmd: cmd.map(word).join(' '), fb, image, origin, host },
+               host ? [host.port] : []);
 
 // the presses: a make, the break 60 ms behind it, the next key 300 ms on -- from --after's
 // second, or five seconds after its text shows on the serial line
