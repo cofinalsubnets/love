@@ -47,6 +47,9 @@ mkdir -p "$d"
 
 fail() { echo "FAIL $name: $*" >&2; exit 1; }
 moonrun() { LOVE_NO_IMAGE= "$m" mooncc "$@"; }
+# a law's own flags for this target, off its first line: /* mooncc -t ARCH: FLAGS */. the x86-64
+# reference builds without them, so a flagged build must answer what the plain one does
+tflags() { sed -n "1s|^/\* mooncc -t $arch: \(.*\) \*/\$|\1|p" "$1"; }
 
 # $unsupported comes from the case above: the features THIS target has no lane
 # for yet -- refusal is the asserted behaviour, per target, not per gate.
@@ -97,7 +100,7 @@ for f in test/cc/*.c; do
     || { cat "$d/$b.xlog" >&2; fail "$b: mooncc could not build the x86-64 reference"; }
   timeout 60 "$d/$b.x" > "$d/$b.xout" 2>&1; echo $? > "$d/$b.xrc"
 
-  moonrun -t "$arch" -o "$r/$b.t" "$f" > "$d/$b.tlog" 2>&1 \
+  moonrun -t "$arch" $(tflags "$f") -o "$r/$b.t" "$f" > "$d/$b.tlog" 2>&1 \
     || { cat "$d/$b.tlog" >&2; fail "$b: mooncc -t $arch could not build it"; }
   a64_job "$b.t" "timeout 60 \$RUN ./$b.t"
 
@@ -120,6 +123,66 @@ if [ "$arch" = a64 ]; then
   moonrun -t a64 -o "$r/abi64.t" test/cc/abi64/host.c "$d/peer.o" > "$d/abi64.log" 2>&1 \
     || { cat "$d/abi64.log" >&2; fail "abi64: mooncc could not build or link host.c"; }
   a64_job abi64.t "timeout 60 \$RUN ./abi64.t"
+
+  # the landing law: -mbranch-protection and -mstrict-align held to clang's objects for the
+  # same units (test/cc/protect/units.c) -- each fn's landing (bti c, paciasp or neither),
+  # autiasp right before every exit of a pac-ret fn and after every frame record's ldp, no
+  # packed access wider than clang's, and the property note and build attributes byte for
+  # byte. the clang the hearts lanes pin where this box has it, else the one on PATH
+  hc=${HEARTS_CLANG:-$HOME/.cache/hearts/llvm-22.1.8}/bin/clang
+  [ -x "$hc" ] || hc=clang
+  command -v llvm-objdump > /dev/null 2>&1 && command -v llvm-readelf > /dev/null 2>&1 \
+    || gate_skip "$name: no llvm-objdump or llvm-readelf for the landing law"
+  bp="-mbranch-protection=pac-ret+bti -mstrict-align"
+  "$hc" --target=aarch64-linux-gnu -O2 $bp -c -o "$d/land.c.o" test/cc/protect/units.c 2> "$d/land.log" \
+    || { cat "$d/land.log" >&2; fail "landing: clang could not build units.c"; }
+  moonrun -t a64 -c $bp -o "$d/land.m.o" test/cc/protect/units.c > "$d/land.log" 2>&1 \
+    || { cat "$d/land.log" >&2; fail "landing: mooncc could not build units.c"; }
+  # L fn landing | W fn widest-packed-access | BAD fn why
+  land() {
+    llvm-objdump -dr --no-show-raw-insn "$1" | awk '
+      function wd(m, ops,   r) {
+        if (m ~ /^(ld|st)(u?r|ur)s?b$/ || m ~ /^ldu?rsb$/) return 1
+        if (m ~ /^(ld|st)(u?r|ur)s?h$/ || m ~ /^ldu?rsh$/) return 2
+        if (m ~ /^ldu?rsw$/) return 4
+        r = substr(ops, 1, 1)
+        return r == "x" || r == "d" ? 8 : r == "q" ? 16 : r == "h" ? 2 : r == "b" ? 1 : 4
+      }
+      function out() { if (fn ~ /^pk_/) print "W", fn, w }
+      /^[0-9a-f]+ </ { if (fn != "") out(); fn = $2; gsub(/[<>:]/, "", fn); first = 1; pac = 0; w = 0; prev = ""; pprev = ""; ldp = 0; next }
+      /R_AARCH64_JUMP26/ { if (pac && prev ~ /^b\t/ && pprev != "autiasp") print "BAD", fn, "a tail branch without autiasp"; next }
+      /^ +[0-9a-f]+:/ {
+        l = $0; sub(/^ +[0-9a-f]+:[ \t]+/, "", l); sub(/[ \t]*(\/\/|<).*$/, "", l)
+        if (first) { c = l == "bti\tc" ? "btic" : l == "paciasp" ? "pac" : "-"; print "L", fn, c; pac = c == "pac"; first = 0 }
+        if (pac && (l == "ret" || l ~ /^br\t/) && prev != "autiasp") print "BAD", fn, "an exit without autiasp: " l
+        if (ldp && l != "autiasp") print "BAD", fn, "a frame record restored without autiasp"
+        ldp = l ~ /^ldp\tx29, x30/
+        split(l, f, "\t"); m = f[1]
+        if (m ~ /^(ld|st)(u?r|p)/ && m !~ /x(r|p)$/ && match(l, /\[[a-z0-9]+/)) {
+          b = substr(l, RSTART + 1, RLENGTH - 1)
+          if (b != "sp" && b != "x29") { k = wd(m, f[2]); if (k > w) w = k }
+        }
+        pprev = prev; prev = l
+      }
+      END { if (fn != "") out() }'
+  }
+  land "$d/land.c.o" > "$d/land.c"
+  land "$d/land.m.o" > "$d/land.m"
+  grep '^BAD' "$d/land.m" >&2 && fail "landing: mooncc's exits (above)"
+  grep '^L' "$d/land.c" | sort > "$d/land.cl"
+  grep '^L' "$d/land.m" | sort > "$d/land.ml"
+  cmp -s "$d/land.cl" "$d/land.ml" || { diff "$d/land.cl" "$d/land.ml" >&2; fail "landing: a fn lands where clang's does not (clang <, mooncc >)"; }
+  grep '^W' "$d/land.m" | while read -r _ fn k; do
+    kc=$(grep "^W $fn " "$d/land.c" | cut -d' ' -f3)
+    [ "$k" -le "${kc:-0}" ] || { echo "landing: $fn reads $k bytes at once where clang reads $kc" >&2; exit 1; }
+  done || fail "landing: a packed access wider than clang's"
+  for s in .note.gnu.property .ARM.attributes; do
+    llvm-readelf -x $s "$d/land.c.o" | grep '^ *0x' > "$d/land.cs"
+    llvm-readelf -x $s "$d/land.m.o" | grep '^ *0x' > "$d/land.ms"
+    [ -s "$d/land.cs" ] && cmp -s "$d/land.cs" "$d/land.ms" \
+      || { diff "$d/land.cs" "$d/land.ms" >&2; fail "landing: $s differs from clang's"; }
+  done
+  echo "landing: $(grep -c '^L' "$d/land.m") fns land as clang $("$hc" --version | sed -n '1s/.*version //p')'s do, their exits authenticate, packed reads go by its widths, the notes match"
 fi
 
 a64_run "$r" || fail "the $pretty batch did not come back"
