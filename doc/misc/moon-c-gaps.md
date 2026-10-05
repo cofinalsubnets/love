@@ -863,6 +863,8 @@ mooncc's own preprocessor; defconfig on clang's `-E` (ours was 20-50x clang's, s
 ours on every 20th unit, where 28 of 222 units fare worse. the scripts and every unit's command
 and message: `/var/tmp/census-g21` (census.py, rank.py; tiny/ def/ defown/).
 
+a crash here is an `internal error`; the assembler's are refusals since (linux on arm64, below).
+
 | | units | same as clang | compiles, differs | refused | crash |
 |---|---|---|---|---|---|
 | tinyconfig, our cpp | 474 | 117 | 25 | 183 | 149 |
@@ -897,8 +899,7 @@ away and 8 an asm's local label, so the link fails. every defconfig object also 
 
 accepted and WRONG, found by probing the flags mooncc takes in silence:
 
-- the frame record: x30 and x29 are stored as two 16-byte pushes, so `[x29+8]` is not the return
-  address AAPCS64 puts there and the kernel's frame-pointer unwinder reads.
+- the frame record (fixed since: linux on arm64, below).
 - x18 is allocated, and `-ffixed-x18` ignored.
 - `-fshort-wchar` is ignored: `wchar_t` stays 4 bytes.
 - `-fmacro-prefix-map` is ignored: `__FILE__` keeps the build path, which reaches the image.
