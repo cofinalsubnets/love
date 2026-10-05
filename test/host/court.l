@@ -107,16 +107,44 @@
    _ (keys! st (map (i \ 107) ^60))
  (test (0.55 < sqrt (sq (st 'px - bs 0) + sq (st 'pz - bs 2)))))
 
-; --- the floor's litter: the sticks lie in a ring round the trunk's foot, the leaves flat on
-; --- the ground, all of it inside the walls; and the leaves a falling one starts from, high in the crown
+; --- the floor's litter: branches heaped at the trunk's foot, none in a wall or the floor,
+; --- the heap no wider than a long branch and highest by the trunk; twigs strewn round it
+; --- and the leaves flat on the ground, all of it inside the walls; and the leaves a falling
+; --- one starts from, high in the crown
 (: st (at 12.0) bs (st 'tree 'base) L (st 'litter) P (L 'pts) X (P 'x) Y (P 'y) Z (P 'z)
-   d (sq (X - bs 0) + sq (Z - bs 2)) G (L 'leaves)
+   G (L 'leaves) rs (L 'rods) ends (cat (map (r \ r 0) rs) (map (r \ r 1) rs))
    (out Q) ((yard-a < mag (Q 'x)) + (yard-b < mag (Q 'z)))
+   (from q) (sqrt (sq (q 0 - bs 0) + sq (q 2 - bs 2)))
+   (inside? q) (mag (q 0) < yard-a - 0.1 && mag (q 2) < yard-b - 0.1 && 0.0 < q 1 && q 1 < 1.2)
+   near (filter (q \ from q < 0.5) ends) far (filter (q \ 0.9 < from q) ends)
+   (mean l) (foldl (a \ q \ a + q 1) 0.0 l / max 1 #l)
    tops (L 'tops) ty (map (q \ q 1) tops)
- (test (100 < #X) (0 = net (Y < 0.009)) (0 = net (1 - (0.09 < d) * (d < 0.5625)))
-       (1000 < #(G 'x)) (0 = net (0.01 < G 'y)) (0 = net (G 'up < 1.0))
-       (0 = net (out P)) (0 = net (out G))
+ (test (40 < #rs) (all inside? ends) (all (q \ from q < 2.2) ends)
+       (all (r \ 0.005 < r 2 && r 2 < 0.07) rs) (mean far < mean near)
+       (100 < #X) (0 = net (Y < 0.009)) (0 = net (out P))
+       (1000 < #(G 'x)) (0 = net (0.01 < G 'y)) (0 = net (G 'up < 1.0)) (0 = net (out G))
        (two? tops) (all (y \ amax (st 'tree 'y) - 1.5 < y) ty)))
+
+; --- the cables: each step of a run is along one axis on one wall's face, below the parapet's
+; --- top; laid, they darken the walls' map; the loose ones hang from the parapet's top inside
+; --- the walls, the box's bundle out of it, and the lower ends sway while the tops keep still
+(: (axes p q) #(filter (k \ 0.0001 < mag (p k - q k)) ^3)
+   (face? p wid) (? (wid = 0) (mag (p 0 - yard-a) < 0.01) (wid = 1) (mag (p 0 + yard-a) < 0.01)
+                    (wid = 2) (mag (p 2 - yard-b) < 0.01) (mag (p 2 + yard-b) < 0.01))
+   steps (foldl cat () (map (rn \ rn 2 @ ps (map (i \ [(ps i) (ps (i + 1))]) ^(#ps - 1))) runs))
+   s0 (strands 0) s1 (strands 37) pts (cat (map (r \ r 0) s0) (map (r \ r 1) s0))
+   (in? q) (mag (q 0) < yard-a && mag (q 2) < yard-b && 0.0 < q 1 && q 1 <= wall-h)
+   (moved k) (sqrt (sq (s0 k 1 0 - s1 k 1 0) + sq (s0 k 1 2 - s1 k 1 2)))
+   lows (filter (k \ s0 k 1 1 < 9.0 && s0 k 2 < 0.02) ^#s0) tops (filter (k \ s0 k 0 1 = wall-h) ^#s0)
+   m (court-maps ())
+ (test (10 < #steps) (all (st \ axes (st 0) (st 1) = 1) steps)
+       (all (st \ wall-of (st 0) (st 1) @ w (face? (st 0) w && face? (st 1) w)) steps)
+       (all (st \ st 0 1 <= wall-h && st 1 1 <= wall-h && 0.0 < st 1 1) steps)
+       (1000 < net (m 'wall 'r < 0.08))
+       (10 < #s0) (all in? pts) (all (r \ r 2 < 0.05) s0)
+       (two? lows) (all (k \ 0.001 < moved k) lows)
+       (two? tops) (all (k \ s0 k 0 = s1 k 0) tops)
+       (two? (filter (r \ box-lo 1 - 0.05 < r 0 1 && r 0 1 < box-hi 1 + 0.05 && box-lo 2 - 0.15 < r 0 2) s0))))
 
 ; --- falling leaves: now and then one lets go of the top of the crown and comes down, and
 ; --- it lies on the floor where it lands, inside the walls; the frame draws them
