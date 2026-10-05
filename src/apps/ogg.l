@@ -10,7 +10,8 @@
 ;                             header packets on that page | 'more | why not
 ;   (ogg-format m)         -> its codec's format tablet
 ;   (ogg-pump q h m emit)  -> each packet's samples to emit -> 0 | why not. a chained stream
-;                             (an internet radio's) plays on while its format holds
+;                             (an internet radio's) plays on while its format holds, each new
+;                             link's 'tags pinned on m and its 'link counted up from 0
 ;   (ogg-sniff s)          -> 1 an ogg stream | 0 | 'more
 ;
 ; a codec rides ogg as [name id? head format start]: (id? p) knows its first packet, (head ps)
@@ -103,7 +104,8 @@
           'more (gulp () @ g (string? g ? (chain (snip h o #h + g) 0 fmt) 0))
           m (? !(tablet? m) m
                (ogg-format m @ f (f 'rate = fmt 'rate && f 'ch = fmt 'ch && f 'align = fmt 'align))
-                (run (snip h o #h) (m 'at) m (((ogg-codec (m 'ogg)) 4) m) () (m 'skip) 0)
+                (: _ (pin m0 'tags (m 'tags), pin m0 'link (peep m0 'link 0 + 1))   ; tags first: a watcher reads 'link
+                   (run (snip h o #h) (m 'at) m (((ogg-codec (m 'ogg)) 4) m) () (m 'skip) 0))
                "a chained stream changes its format"))
        ; h the bytes, o the page, dec the decoder, held the packet running on, k packets yet
        ; to pass over, ended once this stream's last page is read

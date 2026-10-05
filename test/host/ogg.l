@@ -86,7 +86,7 @@
     (: f ("c" + show i)
        (sh ("ffmpeg -loglevel error -y -f lavfi -i 'aevalsrc=0.8*sin(440*2*PI*t)+0.05*random(0):s=44100:d=0.7' -ac " + ch
             + (bps = "8" ? " -f s8 -c:a pcm_s8 " (" -f s" + bps + "le -c:a pcm_s" + bps + "le ")) + f + ".in"
-            + " && flac -s -f --ogg --serial-number=" + show (i + 100) + " --force-raw-format --endian=little --sign=signed"
+            + " && flac -s -f --ogg --serial-number=" + show (i + 100) + " -T TITLE=" + f + " --force-raw-format --endian=little --sign=signed"
             + " --channels=" + ch + " --bps=" + bps + " --sample-rate=44100 " + opt + " " + f + ".in -o " + f + ".oga"
             + " && " + og-raw f) @ (0 . _) f _ ()))
    (same f) (og-dec (f + ".oga") @ ["ogg" 0 pcm] (pcm = og-rd (dir + "/" + f + ".raw")) _ 0)
@@ -95,6 +95,11 @@
                       ; a chain: one stream after another, the second with its own serial
                       (sh "cat c1.oga c4.oga > ch.oga && cat c1.raw c4.raw > ch.raw" = (0 . ""))
                       (same "ch")
+                      ; each link's tags reach the caller's m, its link counted
+                      (: q (open (dir + "/ch.oga") "r")
+                         r (av-open q @ [n m h] (: x ((<(filter (c \ <c = n) (av-codecs ()))) 4 q h m (_ \ 0))
+                                                   [x (m 'link) (elem "TITLE=c4" (m 'tags))]) w w)
+                         (close q, r = [0 1 1]))
                       ; a chain whose format changes stops there
                       (sh "cat c1.oga c2.oga > cx.oga" = (0 . ""))
                       (og-dec "cx.oga" @ ["ogg" "a chained stream changes its format" _] 1 _ 0)
