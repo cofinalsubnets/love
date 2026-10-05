@@ -1127,13 +1127,14 @@ static int mp3_huffman(struct mbit *b, struct gri *g, int end, int *x) {
   if (mp3_huffat[t] >= 0) {
    const int16_t *h = mp3_huff + mp3_huffat[t];
    int nd = 0;
-   while ((nd = h[2 * nd + (int) mb_get(b, 1)]) >= 0) if (b->p > end) return i;
+   while ((nd = h[2 * nd + (int) mb_get(b, 1)]) >= 0) if (b->p > end) { n = i; goto out; }
    v = ~nd; }
   int xy[2] = {v >> 4, v & 15}, lb = t < 32 ? mp3_linbits[t] : 0;
   for (int k = 0; k < 2; k++) {
    if (lb && xy[k] == 15) xy[k] += (int) mb_get(b, lb);
-   if (xy[k] && mb_get(b, 1)) xy[k] = -xy[k];
-   x[i + k] = xy[k]; } }
+   if (xy[k] && mb_get(b, 1)) xy[k] = -xy[k]; }
+  if (b->p > end) { n = i; goto out; }           // a pair that runs past is no pair
+  x[i] = xy[0], x[i + 1] = xy[1]; }
  n = i;
  const int16_t *h = mp3_huff + mp3_huffat[32 + g->c1];
  while (i + 4 <= 576 && b->p < end) {
@@ -1145,6 +1146,7 @@ static int mp3_huffman(struct mbit *b, struct gri *g, int end, int *x) {
   if (b->p > end) break;                         // a quad that runs past is no quad
   for (int k = 0; k < 4; k++) x[i + k] = q[k];
   i += 4, n = i; }
+out:                                             // a granule cut short is silent past its end
  for (; i < 576; i++) x[i] = 0;
  b->p = end;
  return n; }
@@ -1264,6 +1266,13 @@ static int mp3_free(const uint8_t *h, int len) {
  return len > 4096 ? -4 : -2; }
 
 // one frame: header at h, the side info and main data after it -> samples per channel
+// a frame's main data kept as the reservoir the frames after reach back into
+static void mp3_keep(struct mst *m, const uint8_t *fd, int md) {
+ int keep = md >= 1024 ? 1024 : md, old = m->reslen + keep > 1024 ? 1024 - keep : m->reslen;
+ for (int i = 0; i < old; i++) m->res[i] = m->res[m->reslen - old + i];
+ for (int i = 0; i < keep; i++) m->res[old + i] = fd[md - keep + i];
+ m->reslen = old + keep; }
+
 // (0 for a frame the reservoir cannot reach yet, which plays as silence) | -why; *flen its bytes
 static int mp3_decode(struct mst *m, const uint8_t *h, int len, int *flen) {
  int ver, rate, nch, n = mp3_head(h, &ver, &rate, &nch);
@@ -1276,6 +1285,10 @@ static int mp3_decode(struct mst *m, const uint8_t *h, int len, int *flen) {
  int sr = (h[2] >> 2 & 3) + 3 * (ver == 0 ? 0 : ver == 1 ? 1 : 2), row = sr - (sr != 0);
  int head = 4 + 2 * crc;
  if (n < head + si) return -4;
+ // the main data: mdb bytes back in the reservoir, then this frame's. a frame refused past
+ // here still keeps its main data, which the frames after may reach back into
+ int md = n - head - si;
+ const uint8_t *fd = h + head + si;
  struct mbit b = {h + head, si, 0};
  struct gri g[2][2];
  int mdb = (int) mb_get(&b, lsf ? 8 : 9), scfsi[2] = {0, 0}, p23 = 0;
@@ -1285,14 +1298,14 @@ static int mp3_decode(struct mst *m, const uint8_t *h, int len, int *flen) {
   for (int c = 0; c < nch; c++) {
    struct gri *q = &g[gr][c];
    q->p23 = (int) mb_get(&b, 12), q->big = (int) mb_get(&b, 9), q->gain = (int) mb_get(&b, 8);
-   if (q->big > 288) return -4;
+   if (q->big > 288) goto refuse;
    p23 += q->p23;
    q->sfc = (int) mb_get(&b, lsf ? 9 : 4);
    q->tab = mp3_long[row], q->nl = 22, q->ns = 0, q->mixed = 0, q->bt = 0;
    q->scfsi = gr ? scfsi[c] : 0;
    if (mb_get(&b, 1)) {
     q->bt = (int) mb_get(&b, 2), q->mixed = (int) mb_get(&b, 1);
-    if (!q->bt) return -4;
+    if (!q->bt) goto refuse;
     for (int k = 0; k < 2; k++) q->tsel[k] = (int) mb_get(&b, 5);
     q->tsel[2] = 0;
     for (int k = 0; k < 3; k++) q->sbg[k] = (int) mb_get(&b, 3);
@@ -1307,19 +1320,12 @@ static int mp3_decode(struct mst *m, const uint8_t *h, int len, int *flen) {
     q->rc0 = (int) mb_get(&b, 4), q->rc1 = (int) mb_get(&b, 3); }
    q->pre = lsf ? (q->sfc >= 500 && !(is && c)) : (int) mb_get(&b, 1);
    q->scale = (int) mb_get(&b, 1), q->c1 = (int) mb_get(&b, 1); }
- // the main data: mdb bytes back in the reservoir, then this frame's
- int md = n - head - si;
- if (p23 > 8 * (mdb + md)) return -4;
- const uint8_t *fd = h + head + si;
+ if (p23 > 8 * (mdb + md) || mdb + md > (int) sizeof m->buf) goto refuse;
  int have = m->reslen >= mdb;
  if (have) {
   for (int i = 0; i < mdb; i++) m->buf[i] = m->res[m->reslen - mdb + i];
   for (int i = 0; i < md; i++) m->buf[mdb + i] = fd[i]; }
- // keep this frame's tail for the frames after
- { int keep = md >= 1024 ? 1024 : md, old = m->reslen + keep > 1024 ? 1024 - keep : m->reslen;
-   for (int i = 0; i < old; i++) m->res[i] = m->res[m->reslen - old + i];
-   for (int i = 0; i < keep; i++) m->res[old + i] = fd[md - keep + i];
-   m->reslen = old + keep; }
+ mp3_keep(m, fd, md);
  int ns = 576 * ngr;
  if (!have) {
   for (int i = 0; i < ns * nch; i++) m->pcm[i] = 0;
@@ -1338,7 +1344,10 @@ static int mp3_decode(struct mst *m, const uint8_t *h, int len, int *flen) {
    if (g[gr][c].bt == 2) mp3_reorder(&g[gr][c], m->xr[c], m->tb[c]);
    mp3_hybrid(m, &g[gr][c], c);
    mp3_synth(m, c, nch, m->pcm + 576 * gr * nch); } }
- return ns; }
+ return ns;
+refuse:
+ mp3_keep(m, fd, md);
+ return -4; }
 
 static struct mst *mp3_st(word x) {
  if (charmp(x) || ((union u*) x)->ap != lvm_cask) return NULL;
