@@ -149,6 +149,17 @@
            (core-send c ['play 0] = ['ok]) (waits 'state 'stop 150)
            (titles () = ["two"]))
    _ (freeze srv)
+   ; an ogg chain: two flac --ogg links, TITLE=c1 then TITLE=c4. queued it says c1; played out,
+   ; the second link's tags retitle it
+   _ (? (sh "command -v flac >/dev/null" @ (0 . _) 1 _ 0)
+        (: f (\ n (dir + "/" + n))
+           _ (sh ("flac -s -f --ogg --serial-number=101 -T TITLE=c1 " + f "a.wav" + " -o " + f "c1.oga"
+                  + " && flac -s -f --ogg --serial-number=104 -T TITLE=c4 " + f "b.wav" + " -o " + f "c4.oga"
+                  + " && cat " + f "c1.oga" + " " + f "c4.oga" + " > " + f "ch.oga"))
+           (test (core-send c ['clear] = ['ok]) (<(core-send c ['add (f "ch.oga")]) = 'ok) (titles () = ["c1"])
+                 (core-send c ['play 0] = ['ok]) (waits 'state 'stop 150)
+                 (titles () = ["c4"])))
+        (gate-partly "player: no flac here, the ogg chain's retitle is not run"))
    _ (core-close c)
    ; the verb speaks the same messages on stdin and stdout
    _ (test (sh ("printf '(ping)\\n(bye)\\n' | HORN=none out/love player --pipe | tail -2")
