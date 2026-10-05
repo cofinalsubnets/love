@@ -475,30 +475,25 @@
        fs (fo 1)
        _ (two? fs ? () (udie 2 picless-usage))
        g (pic-mode "pic less" (fo 0))
-       ws (tty 1)
-       _ (two? ws ? () (udie 2 "pic less: not a terminal"))
-       hw (pgwin ws)
+       _ (two? (tty 1) ? () (udie 2 "pic less: not a terminal"))
+       hw (ttysize 0 0)
        st (pv-new fs <hw <>hw)
        pr (g = "block" ? (pic-heard "") (pic-probe 0))
        mode (pic-pick g pr)
        _ (mode = "block" ? 0
           (pins st 'mode mode 'ux (0 < pr 'cw ? (pr 'cw) 8) 'uy (0 < pr 'ch ? (pr 'ch) 16)))
        b (cask 64) e (string 27)
-       _ (raw 1)
-       _ (puts (e + "[?1049h" + e + "[?25l" + e + "[2J"))
-       (fin _) (puts ((mode = "kitty" ? pv-unkit "") + e + "[0m" + e + "[?25h" + e + "[?1049l"),
-                flush out, raw 0, 0)
        (go dirty)
-        (: ws2 (tty 1) hw2 (two? ws2 ? (pgwin ws2) [(st 'h) (st 'w)])
+        (: hw2 (ttysize 0 0)
            moved (!(<hw2 = st 'h) || !(<>hw2 = st 'w))
            _ (moved ? (pins st 'h <hw2 'w <>hw2, puts (e + "[2J")) 0)
            _ (dirty || moved ? (puts (pv-frame st), flush out) 0)
            n (pic-swig in b)
            ks (charm? n && 0 < n ? (pv-keys (snip (string b) 0 n)))
            (map (c \ pv-step st c) ks,
-            (st 'quit ? (fin ())
+            (st 'quit ? 0
              (pv-tick st (clock 0) @ t
                 (two? ks || t ? 0 (rest (1 < pv-nf st && st 'play ? 15 50)),
                  go (two? ks || t))))))
-       (go 1)))
+       (ttytake ['hide], mind go 1 (_ \ (mode = "kitty" ? (puts pv-unkit) 0, ttygive ['hide])), 0)))
 ) ; module 'kore

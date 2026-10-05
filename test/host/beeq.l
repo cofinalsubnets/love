@@ -445,7 +445,7 @@
                    [2 "queue_row" {"state" "green" "gated_on" m "gated_head" g}]
                    [3 "queue_land" {}]])
    _ (sb wa ["sync" "--keep" hub])                                ; deposited: the hub holds it
-   b (calls "ant" [[4 "queue_land" {}] [5 "queue_landed" {}]])
+   b (calls "ant" [[14 "queue_row" {"state" "green" "gated_on" m "gated_head" g}] [4 "queue_land" {}] [5 "queue_landed" {}]])
    _ (sb hub ["take" g])
    ; the git mirror: refused on a branch checked out elsewhere, then written to sbm, whose
    ; parent's web/ it keeps and whose other paths it drops
@@ -477,7 +477,8 @@
    _ (test
       (#m = 64) (#g = 64) (m != g)
       (bq-in (a 1) "made queue/sbq on bee's standard header, led by queen")
-      (bq-in (a 3) ("the hub holds no set " + g))
+      (bq-in (a 2) ("no set " + g + " in the hub: paste it from sb psid"))   ; refused before the deposit
+      (bq-in (a 3) "only a green row lands") (bq-in (b 14) " green")
       (bq-in (b 4) ("sb -C " + hub + " take " + g)) (bq-in (b 4) ("psid   # must print " + g))
       (bq-in (b 5) ("not the gated set " + g))
       (bq-in (c 6) ("landed: row 1 left queue/sbq, whose base line is now sbq " + g + "."))
