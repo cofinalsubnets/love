@@ -2,7 +2,9 @@
 ; the filesystem is module 'fat below; the command line is module 'fatcmd at the foot.
 ;
 ; a device is a chain (rd wr nsec): (rd lba n) -> a string of n*512 bytes | (),
-; (wr lba s) -> the sectors written | () (s whole sectors), nsec the total.
+; (wr lba s) -> the sectors written | () (s whole sectors), nsec the total. a fourth, ms
+; since the epoch, is the one time the fs stamps (entries, and mkfs's serial): the same
+; files give the same image. without it the clock does.
 ; anything that answers those is a disk -- the kernel's virtio nifs
 ; ((fat-disk ()) builds that dev), a cask in memory (the host laws), a file.
 ;
@@ -43,7 +45,8 @@
    (bfill b i n v) (n ? (pin b i v, bfill b (i + 1) (n - 1) v))
 
    ; --- the fs tablet, read by slot: 0 rd, 1 wr, 2 spc, 3 rsvd, 4 nfats, 5 fatsz,
-   ;     6 rootcl, 7 data0, 8 nclus, 9 fat-cache lba, 10 fat-cache string, 11 free hint ---
+   ;     6 rootcl, 7 data0, 8 nclus, 9 fat-cache lba, 10 fat-cache string, 11 free hint,
+   ;     12 the device's own time (ms) or () ---
    (rd1 f lba) (f 0 lba 1)
    (rdn f lba n) (f 0 lba n)
    (wr1 f lba s) (f 1 lba s)
@@ -237,17 +240,18 @@
        cs (comps path)
        (two? cs ? (go (f 6) cs) [(f 6) "" ()]))
 
-   ; --- timestamps: (clock 0) ms -> the dos pair (date . time) ---
-   (dos-now u)
-    (: ms (clock 0) secs (ms // 1000 % 86400)
+   ; --- timestamps: ms -> the dos pair (date . time); a device's own time, else the clock ---
+   (fs-ms f) (f 12 @ t (charm? t ? t (clock 0)))
+   (dos-at ms)                                        ; dos time starts in 1980: earlier is its first second
+    (: ms (max ms 315532800000) secs (ms // 1000 % 86400)
        ymd (civil (ms // 86400000)) y <ymd m <>ymd d <>>ymd
        ((y - 1980 << 9) + (m << 5) + d .
         (secs // 3600 << 11) + (secs // 60 % 60 << 5) + (secs % 60 // 2)))
 
    ; --- building one entry group for a name ---
-   (mk-short n11 flags at cl sz)
+   (mk-short n11 flags at cl sz ms)
     (: b (cask 32) _ (bcopy b 0 n11, pin b 11 at, pin b 12 flags)
-       dt (dos-now ()) dat <dt tim >dt
+       dt (dos-at ms) dat <dt tim >dt
        (w16 b 14 tim, w16 b 16 dat, w16 b 18 dat,
         w16 b 20 (cl >> 16), w16 b 22 tim, w16 b 24 dat,
         w16 b 26 (cl & 0xFFFF), w32 b 28 sz,
@@ -263,11 +267,11 @@
             string b))
        (go seq first acc) (seq ? (go (seq - 1) 0 (acc + one seq first)) acc)
        (go k 1 ""))
-   (mk-group gs nm at cl sz)                          ; -> a group | () (no alias left)
-    (fit83 nm @ [n11 fl] (group nm at cl sz n11 (mk-short n11 fl at cl sz))
+   (mk-group gs nm at cl sz ms)                       ; -> a group | () (no alias left)
+    (fit83 nm @ [n11 fl] (group nm at cl sz n11 (mk-short n11 fl at cl sz ms))
      (alias gs nm @ n11
       (string? n11 ?
-       (mk-short n11 0 at cl sz @ sh
+       (mk-short n11 0 at cl sz ms @ sh
         (group nm at cl sz n11 (mk-lfn nm (cksum n11) + sh))))))
 
    ; --- mkfs: reserved 32, two fats, one-sector clusters ---
@@ -285,7 +289,7 @@
              _ (pin b 21 0xF8, w16 b 24 32, w16 b 26 8)
              _ (w32 b 32 nsec, w32 b 36 fatsz, w32 b 44 2)
              _ (w16 b 48 1, w16 b 50 6, pin b 64 0x80, pin b 66 0x29)
-             _ (w32 b 67 (clock 0 & 0xFFFFFFFF))
+             _ (w32 b 67 ((#dev > 3 ? (dev 3 // 1000) (clock 0)) & 0xFFFFFFFF))
              _ (bcopy b 71 "LOVE       ", bcopy b 82 "FAT32   ", w16 b 510 0xAA55)
              bpb (string b)
              i (cask 512)
@@ -314,7 +318,8 @@
           (: spc (s 13) rsvd (rdle s 14 2) nfats (s 16) fatsz (rdle s 36 4)
              nsec (rdle s 32 4) data0 (rsvd + nfats * fatsz)
              {0 rd 1 <>dev 2 spc 3 rsvd 4 nfats 5 fatsz 6 (rdle s 44 4)
-              7 data0 8 ((nsec - data0) // spc) 9 () 10 () 11 3})))
+              7 data0 8 ((nsec - data0) // spc) 9 () 10 () 11 3
+              12 (#dev > 3 ? (dev 3) ())})))
 
    ; --- the verbs ---
    (fat-ls f path)
@@ -341,7 +346,7 @@
            (need && atom? cls ? ()                  ; the disk is full; nothing changed
               (: _ (need ? (chain-wr f cls s))
                  gs (dir-drop (dir-load f dcl) nm)
-                 ng (mk-group gs nm 32 (need ? <cls 0) #s)
+                 ng (mk-group gs nm 32 (need ? <cls 0) #s (fs-ms f))
                  ok (tablet? ng ? (dir-save f dcl (gs + [ng])))
                  (ok ? (tablet? old ? (chain-zap f (peep old 2 ())), 1)
                   (need ? (chain-zap f <cls),
@@ -353,11 +358,11 @@
            (atom? cls ? ()
               (: c <cls cb (clu-bytes f)
                  b (cask cb)
-                 _ (bcopy b 0 (mk-short ".          " 0 16 c 0),
-                    bcopy b 32 (mk-short "..         " 0 16 (dcl = f 6 ? 0 dcl) 0),
+                 _ (bcopy b 0 (mk-short ".          " 0 16 c 0 (fs-ms f)),
+                    bcopy b 32 (mk-short "..         " 0 16 (dcl = f 6 ? 0 dcl) 0 (fs-ms f)),
                     clu-wr f c (string b))
                  gs (dir-load f dcl)
-                 ng (mk-group gs nm 16 c 0)
+                 ng (mk-group gs nm 16 c 0 (fs-ms f))
                  ok (tablet? ng ? (dir-save f dcl (gs + [ng])))
                  (ok ? 1 (chain-zap f c, ())))))))
    (fat-rm f path)

@@ -14,6 +14,8 @@
    ; as `;; missing m64` when the #if evaluator below is compiled. The default love
    ; takes it either way, which is exactly why it must be written down -- only the
    ; mooncc0 bake (love0's lane) fails, and it fails at the bake, not at the edit.
+   inames {}                                       ; a macro name -> its one string, which a hideset holds
+   guards {}                                       ; a header's path -> (text guard), the guard () when it has none
    m64 18446744073709551616                        ; 2^64: #if arithmetic is 64-bit (C11 6.10.1)
    h64 9223372036854775808                         ; 2^63: intmax's top, so the sign boundary
    b32 4294967296                                  ; 2^32: the limb cbit splits on
@@ -23,14 +25,14 @@
    (kof t) <t
    (vof t) <>t
    (lof t) <>>t
-   (hof t) (3 < #t ? <>>>t)
+   (hof (_ . _ . _ . h . _)) h                  ; by shape, never a tally: these run per token
    ; a numeric token's source spelling, which its value cannot answer: 0777 and 511
    ; are one value, 1u and 1 are one value, and a float's value is not text at all.
    ; # owes the spelling (C11 6.10.3.2), so the lexer carries it and every rebuild
    ; below hands it on. () on a token the cpp minted itself (__LINE__, defined ..),
    ; where the value is the spelling. parse reuses this slot once cpp is done.
-   (sof t) (4 < #t ? <>>>>t)
-   (spaced? t) (5 < #t)                         ; clexw's mark: whitespace followed it
+   (sof (_ . _ . _ . _ . s . _)) s
+   (spaced? (_ . _ . _ . _ . _ . _ . _)) 1      ; clexw's mark: whitespace followed it
    ; a rebuild hands the mark on; bare drops it, so parse meets the shapes it always has
    (retok t l h) (spaced? t ? [(kof t) (vof t) l h (sof t) 1] [(kof t) (vof t) l h (sof t)])
    (bare t) (? !(spaced? t) t
@@ -62,12 +64,6 @@
    (idv? ('id . v . _) s) ?(v = s)
    (pv? ('p . v . _) s) ?(v = s)
    (kwv? ('kw . v . _) s) ?(v = s)
-   (addhide t hs)                                   ; union hs into t's hideset
-    (retok t (lof t) (dedup (hof t + hs)))
-   (dedup l) (: (go l seen) (? (atom? l) ()
-                              (elem <l seen) (go >l seen)
-                              (<l . go >l (<l . seen)))
-                (go l ()))
 
    ; -- the spelling of a token, for ## paste and # stringize --
    numks '(num unum lnum ulnum llnum ullnum flo flof iflo)
@@ -145,58 +141,54 @@
    ; and `A ## B ; bob` pasted a with the `;` and ate it when the join failed to relex. --
    (pmk? ('pmark . _)) 1
    (paste toks line)
-    (: (nopm l) (? (atom? l) () (pmk? <l) (nopm >l) (<l . nopm >l))
-       (go l acc) (? (atom? l) (nopm (rev acc))
-                     (pv? <l "##" && two? acc && two? >l)
-                      (: a <acc b <>l
-                         (? (pmk? a) (go >>l (b . >acc))     ; placemarker ## x -> x
-                            (pmk? b) (go >>l acc)             ; x ## placemarker -> x
-                            (relex (spell a + spell b) line @ r
-                               (go >>l ((r ? r a) . >acc)))))
-                     (go >l (<l . acc)))
-       (go toks ()))
+    (!(any (t \ pv? t "##" || pmk? t) toks) ? toks         ; nothing to fold: the list as it came
+     (: (nopm l) (? (atom? l) () (pmk? <l) (nopm >l) (<l . nopm >l))
+        (go l acc) (? (atom? l) (nopm (rev acc))
+                      (pv? <l "##" && two? acc && two? >l)
+                       (: a <acc b <>l
+                          (? (pmk? a) (go >>l (b . >acc))     ; placemarker ## x -> x
+                             (pmk? b) (go >>l acc)             ; x ## placemarker -> x
+                             (relex (spell a + spell b) line @ r
+                                (go >>l ((r ? r a) . >acc)))))
+                      (go >l (<l . acc)))
+        (go toks ())))
 
    ; -- substitute args into a function-macro body. a param preceded by # is
    ; stringized; a param that is an operand of ## substitutes unexpanded; else
    ; it substitutes the fully-expanded arg. then ## pastes are folded. --
-   ; (adjh is a closure-local, not a sibling -- a lambda PARAMETER named after a
-   ; sibling :-local gets shadowed by boxfix's shared cell, so the macro-body
-   ; array rides as `mb`, a nom bound nowhere else, and its ## check is inlined.)
    (subst mb params args var? line macs seps)
-    (: (adjh i) (0 < i && pv? (mb (i - 1)) "##" ||
-                 i + 1 < #mb && pv? (mb (i + 1)) "##")
-       (go i acc)
-        (#mb <= i ? (rev acc)
-           (mb i @ t
-              (? (pv? t "#" && i + 1 < #mb)        ; # param -> stringize
-                  (: p (mb (i + 1))
+    (: (go ml q1 q2 acc)                                ; q1 q2: the two body tokens before <ml
+        (atom? ml ? (rev acc)
+           (<ml @ t
+              (? (pv? t "#" && two? >ml)                ; # param -> stringize
+                  (: p <>ml
                      pi (paramidx params (pnm p))
                      va (var? && idv? p "__VA_ARGS__")
                      (-1 < pi || va ?
-                        (go (i + 2) (tok 'str (spellcat (va ? (vaargs args params seps) (args pi))) line . acc))
-                        (go (i + 1) (t . acc))))
+                        (go >>ml p t (tok 'str (spellcat (va ? (vaargs args params seps) (args pi))) line . acc))
+                        (go >ml t q1 (t . acc))))
                  (-1 < paramidx params (pnm t))                 ; a named parameter
                   (: pi (paramidx params (pnm t))
                      raw (args pi)
                      ; an empty argument beside a ## is a placemarker, not nothing
-                     sub (? !(adjh i) (expand raw macs)
+                     sub (? !(pv? q1 "##" || (two? >ml && pv? <>ml "##")) (expand raw macs)
                             (two? raw) raw
                             [(tok 'pmark "" line)])
-                     (go (i + 1) (revcat sub acc)))
+                     (go >ml t q1 (revcat sub acc)))
                  (var? && idv? t "__VA_ARGS__")                 ; the variadic tail
                   (: va (vaargs args params seps)
-                     prevhh (0 < i && pv? (mb (i - 1)) "##")
-                     commahh ((prevhh && 1 < i) && pv? (mb (i - 2)) ",")
+                     prevhh (pv? q1 "##")
+                     commahh (prevhh && pv? q2 ",")
                      (? commahh                                 ; GNU `, ## __VA_ARGS__` elision: the ## is a marker, not a paste
                          (>acc @ acc2                       ; drop the ## already emitted (no join)
-                            (two? va ? (go (i + 1) (revcat (expand va macs) acc2))         ; args present: keep the comma
-                               (go (i + 1) (two? acc2 && pv? <acc2 "," ? >acc2 acc2))))      ; empty: drop the comma too
+                            (two? va ? (go >ml t q1 (revcat (expand va macs) acc2))         ; args present: keep the comma
+                               (go >ml t q1 (two? acc2 && pv? <acc2 "," ? >acc2 acc2))))      ; empty: drop the comma too
                         ; a real `## __VA_ARGS__` paste: unexpanded, paste folds it -- and
                         ; an empty tail is the placemarker, same as a named parameter's
-                        prevhh (go (i + 1) (revcat (two? va ? va [(tok 'pmark "" line)]) acc))
-                        (go (i + 1) (revcat (expand va macs) acc))))
-                 (go (i + 1) (t . acc)))))
-       (paste (go 0 ()) line))
+                        prevhh (go >ml t q1 (revcat (two? va ? va [(tok 'pmark "" line)]) acc))
+                        (go >ml t q1 (revcat (expand va macs) acc))))
+                 (go >ml t q1 (t . acc)))))
+       (paste (go mb () () ()) line))
    (vaargs args params seps)                        ; the arg token-lists past the named params, comma-joined
     (: np #params
        (skip l k) (k < 1 || atom? l ? l (skip >l (k - 1)))
@@ -214,24 +206,33 @@
           (? !(macat? t macs) (t . expand rest macs)
              (idv? t "__LINE__") (tok 'num (lof t) (lof t) . expand rest macs)
              (macnm t @ nm
-                (elem nm (hof t) ? (t . expand rest macs)      ; blue-painted: leave it
-                   (mdef macs nm @ m
-                      (? (mobj? m)
-                          (: hs (nm . hof t)
-                             body (mapadd <>m hs (lof t))
-                             (expand (body + rest) macs))
-                         (mfun? m && two? rest && pv? <rest "(")
-                          (collargs >rest @ ca
-                             (atom? ca ? (t . expand rest macs)
-                                (: args <ca after <>ca
-                                   params <>m mbody <>>m mvar <>>>m
-                                   hs (nm . hof t)
-                                   body (subst mbody params args mvar (lof t) macs <>>ca)
-                                   (expand (mapadd body hs (lof t) + after) macs))))
-                         (t . expand rest macs))))))))
+                (mdef macs nm @ m
+                   (? (atom? m) (t . expand rest macs)          ; no macro, so no hideset to walk
+                      (eleq (iname nm) (hof t)) (t . expand rest macs)  ; blue-painted: leave it
+                      (mobj? m)
+                       (: hs (iname nm . hof t)
+                          body (mapadd <>m hs (lof t))
+                          (expand (body + rest) macs))
+                      (mfun? m && two? rest && pv? <rest "(")
+                       (collargs >rest @ ca
+                          (atom? ca ? (t . expand rest macs)
+                             (: args <ca after <>ca
+                                params <>m mbody <>>m mvar <>>>m
+                                hs (iname nm . hof t)
+                                body (subst mbody params args mvar (lof t) macs <>>ca)
+                                (expand (mapadd body hs (lof t) + after) macs))))
+                      (t . expand rest macs)))))))
    (mapadd toks hs line)                            ; give body tokens the hideset + the invocation line
     (atom? toks ? ()
-       (<toks @ t (retok t line (dedup (hof t + hs)) . mapadd >toks hs line)))
+       (<toks @ t (retok t line (hunion (hof t) hs) . mapadd >toks hs line)))
+   ; a hideset holds only interned names, so a set's member is found by identity. the union is
+   ; h's names that hs lacks, then hs -- often none: an argument's set is most often a tail of
+   ; the invocation's very list. hs is a set already (its name was not in the invoker's)
+   (iname nm) (inames nm @ c (string? c ? c (: _ (pin inames nm nm) nm)))
+   (hunion h hs) (? (atom? h) hs
+                    (sufq? h hs) hs
+                    (: (go l) (? (atom? l) hs (eleq <l hs) (go >l) (<l . go >l)) (go h)))
+   (sufq? h l) (? (h == l) 1 (atom? l) 0 (sufq? h >l))
    ; -- #line's operand: a digit sequence, or what one macro-expands to (C11 6.10.4p3).
    ; () when it is neither, which is the directive doing nothing. --
    (lnum body macs)
@@ -489,13 +490,27 @@
    (mput e) (pin memo 'l (e . mfew (memo 'l) 3))
    (mfew l n) (n < 1 || atom? l ? () (<l . mfew >l (n - 1)))
 
+   ; buf (reversed) ends inside a call of a function-like macro: an unmatched ( right after its name
+   (callopen? buf macs)
+    (: (go l d) (? (atom? l) 0
+                   (pv? <l ")") (go >l (d + 1))
+                   (pv? <l "(") (? (0 < d) (go >l (d - 1))
+                                    (two? >l && macat? <>l macs && mfun? (mdef macs (macnm <>l))) 1
+                                    (go >l 0))
+                   (go >l d))
+       (go buf 0))
    (cppgo toks macs cond buf out incf)
     (atom? toks ? (two? cond ? (gripe () <>><cond () "unterminated #if -- no #endif")
                         (rev (tokflush buf macs out)))
        (: ls (linesplit toks) line <ls rest <>ls
           (? (pv? <line "#")
-              (: out1 (tokflush buf macs out)
-                 dir (two? >line ? (dirname <>line))   ; if/else are keywords; the rest ids
+              (: dir (two? >line ? (dirname <>line))   ; if/else are keywords; the rest ids
+                 ; inside a function-like macro's open argument list the run is held, not
+                 ; flushed: the directive takes effect and the call expands once its ) comes,
+                 ; as gcc reads it. never across an #include
+                 held (dir != "include" && callopen? buf macs)
+                 out1 (held ? out (tokflush buf macs out))
+                 nb (held ? buf ())
                  dirk (two? >line ? (kof <>line))      ; ..and its kind, which is how a line marker is known
                  body >>line
                  ; a directive line never reaches the accumulator below, so the
@@ -506,10 +521,10 @@
                  (? (elem dir '("if" "ifdef" "ifndef" "elif" "else" "endif"))
                      (docond dir sbody sline macs cond @ cond2
                         (cond2 = 'err ? (gripeat sline ("#" + dir + " without #if"))   ; unbalanced -- fatal, not empty
-                           (cppgo rest macs cond2 () out1 incf)))
-                    !(condactive cond) (cppgo rest macs cond () out1 incf)      ; skipped: ignore non-cond directives
-                    (dir = "define") (defmacro macs body, cppgo rest macs cond () out1 incf)
-                    (dir = "undef") (pin macs (macnm <body) (), cppgo rest macs cond () out1 incf)
+                           (cppgo rest macs cond2 nb out1 incf)))
+                    !(condactive cond) (cppgo rest macs cond nb out1 incf)      ; skipped: ignore non-cond directives
+                    (dir = "define") (defmacro macs body, cppgo rest macs cond nb out1 incf)
+                    (dir = "undef") (pin macs (macnm <body) (), cppgo rest macs cond nb out1 incf)
                     (dir = "include") (doinc body macs cond out1 rest incf)
                     ; say the TEXT. an #error is the program telling you what is wrong in
                     ; its own words, and "#error directive" throws that away -- pdclib's
@@ -522,9 +537,9 @@
                     ; gripes, and a warning that stops nothing has none yet.
                     (dir = "warning")
                      (say err ("cc: warning: " + spellcat body + "\n"),
-                      cppgo rest macs cond () out1 incf)
+                      cppgo rest macs cond nb out1 incf)
                     (dir = "pragma" && pragmac? body)
-                     (dopragmac macs body, cppgo rest macs cond () out1 incf)
+                     (dopragmac macs body, cppgo rest macs cond nb out1 incf)
                     ; #line N ["file"]: the next line becomes N, so a token at
                     ; physical P reports P + (N - L - 1). the file operand is
                     ; parsed and dropped -- __file__ is the TU's name throughout.
@@ -534,13 +549,13 @@
                     (dir = "line")
                      (lnum body macs @ n
                         (n ? (pin macs 'lndelta (n - lof <line - 1)) 0,
-                         cppgo rest macs cond () out1 incf))
+                         cppgo rest macs cond nb out1 incf))
                     ; ignored on purpose, and each is one gcc also accepts: a bare
                     ; `#` is the null directive (C11 6.10.7), and a numeric one is
                     ; gcc -E's line marker.
                     (elem dir '("pragma" "ident" "sccs" "assert" "unassert") ||
                         atom? >line || dirk = 'num)
-                     (cppgo rest macs cond () out1 incf)
+                     (cppgo rest macs cond nb out1 incf)
                     ; ..and anything else is a directive we do not implement, where
                     ; ignoring it drops whatever it would have done in silence --
                     ; an unconfigured `#cmakedefine` template compiles clean and the
@@ -549,7 +564,8 @@
                     ; now it says so rather than dropping a header.
                     ; an assembler source keeps it as text, as gcc's assembler-with-cpp does: a
                     ; `#` there is the assembly's (a device tree's #address-cells)
-                    (two? (mdef macs "__ASSEMBLER__")) (cppgo rest macs cond () (revcat (lnshift macs line) out1) incf)
+                    (two? (mdef macs "__ASSEMBLER__")) (lnshift macs line @ sl
+                        (held ? (cppgo rest macs cond (revcat sl buf) out incf) (cppgo rest macs cond () (revcat sl out1) incf)))
                     (gripeat sline ("invalid preprocessing directive #" + spellcat [<>line]))))
              !(condactive cond) (cppgo rest macs cond buf out incf)                    ; skipped code: drop
              (cppgo rest macs cond (revcat (lnshift macs line) buf) out incf))))         ; active code: accumulate (reversed)
@@ -612,7 +628,7 @@
                 d0 #(peep cppdeps 'l ())
                 (two? got ? (mrestore macs <>>>>got, pin cppdeps 'l (got 5 + peep cppdeps 'l ()), rejoin <>>>got)
                    (: _ (0 < #ipath && pin cppdeps 'l (ipath . peep cppdeps 'l ()))
-                   (clexw <>txt 1 @ lr
+                   (lexinc ipath <>txt macs @ lr
                       ; okv?, not two? -- a gripe is a pair, and a two? here would read
                       ; a refusal as a token list and walk it. a located refusal is the
                       ; header's own and takes its name; a bare one is knowable only at
@@ -635,6 +651,29 @@
                                   (mput [ipath <>txt pre raw (msnap macs)
                                          (peep cppdeps 'l () @ l (take (#l - d0) l))]) 0,
                                 rejoin raw)))))))))))
+   ; -- the multiple-include rule: a header wholly inside `#ifndef G .. #endif`, nothing past
+   ; it and no #else at its top, reads as nothing once G is defined. so the second #include
+   ; of the same text lexes nothing and walks nothing -- the marks still bracket it --
+   (lexinc ip txt macs)
+    (peep guards ip () @ e
+       (? (two? e && <e = txt && two? (mdef macs <>e)) [1 ()]
+          (clexw txt 1 @ lr
+             (: _ (okv? lr && 0 < #ip && pin guards ip [txt (guardof <>lr)])
+                lr))))
+   (dirat? l) (two? l && pv? <l "#" && two? >l)      ; l opens a directive, its name next
+   (guardof ts)
+    (: (go l ln d)                                   ; d: the conditional depth, 1 inside the guard
+        (? (atom? l) ()
+           (lof <l = ln) (go >l ln d)                ; the rest of a line already read
+           !(dirat? l) (go >l (lof <l) d)
+           (dirname <>l @ dn
+              (? (elem dn '("if" "ifdef" "ifndef")) (go >l (lof <l) (d + 1))
+                 (dn = "endif") (d = 1 ? (tail >l (lof <l)) (go >l (lof <l) (d - 1)))
+                 (d = 1 && elem dn '("else" "elif")) ()
+                 (go >l (lof <l) d))))
+       (tail l ln) (? (atom? l) 1 (lof <l = ln) (tail >l ln) ())
+       (dirat? ts && dirname <>ts = "ifndef" && two? >>ts && idt? <>>ts &&
+        (atom? >>>ts || lof <>>>ts != lof <ts) && go >>>ts (lof <ts) 1 ? (vof <>>ts)))
    (incname body)                                     ; the header name from #include tokens
     (? (atom? body) ()
        (kof <body = 'str) (vof <body)         ; "file"

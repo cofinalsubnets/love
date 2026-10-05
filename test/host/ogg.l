@@ -59,6 +59,13 @@
            (ogg-meta "OggT" = "not an Ogg stream") (ogg-meta (snip toga 0 40) = 'more)
            (ogg-meta (og-page 2 0 1 0 ["\x01vorbiz"]) = 'more)
            (ogg-meta (og-page 0 0 1 0 ["x"]) = "an ogg stream with no codec this reads"))
+   ; a picture block in flac's mapping is held as one byte, and read as an empty padding block
+   og-pic (string [6 0 234 96] + string (cask 60000))
+   og-toga3 (cats [(og-page 2 0 7 0 [h1]) (og-page 0 0 7 1 [og-pic]) (og-page 0 0 7 2 [h2]) (og-page 4 96 7 3 tfr)])
+   og-om3 (ogg-meta og-toga3)
+   _ (test (tablet? og-om3) (og-om3 'tags = ["TITLE=tiny"])
+           (elem [1 0] (map (b \ snip b 0 2) (og-om3 'blocks))) !(elem 6 (map (b \ <b) (og-om3 'blocks)))
+           (og-pump (snip og-toga3 (og-om3 'at) #og-toga3) og-om3 @ [r pcm] (r = 0 && sha256 pcm = want)))
    ; the headers and the first frame on one page: the pump passes the headers over there
    toga2 (cats [(og-page 2 0 9 0 [h1]) (og-page 4 96 9 1 ([h2] + tfr))])
    om2 (ogg-meta toga2)
