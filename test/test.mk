@@ -14,7 +14,7 @@
   test_cts_rv64 test_cts_wasm test_disk test_dist test_distboot test_doc test_drat test_drv test_dtb \
   test_elf32 test_encver test_extra test_extract test_fat test_fat32 test_filemode test_fixpoint \
   test_forge test_freebsd test_freebsd_a64 test_front test_gc test_gcheck test_gcstress \
-  test_gates test_gen test_glaze test_glazebench test_glazefuzz test_gz test_harp test_hearts test_sqfs test_hdiff test_ccwarn test_holo test_holofuzz test_holowasm test_hook \
+  test_gates test_gen test_glaze test_glazebench test_glazefuzz test_gz test_harp test_hearts test_hearts_boot test_sqfs test_hdiff test_ccwarn test_holo test_holofuzz test_holowasm test_hook \
   test_host test_hostegg test_hostnif test_inle test_kboot test_kmitty test_kernel_a64 test_kernel_rv64 test_kernel_vmx test_kernel_wasm test_kore \
   test_kverb test_libc test_love0 test_lux test_moon test_moonfuzz test_mps2 test_mps2_t1 \
   test_mps2_build test_mps2_wake test_mx test_netbsd test_netbsd_a64 test_nucleo446 test_nucleo446_smoke \
@@ -888,6 +888,13 @@ test_distboot: dist
 test_hearts: host
 	@echo TEST test/gate/hearts.sh
 	@$(gsh) test/gate/hearts.sh $(ho)/love
+# test_hearts_boot -- hearts rung 0 under qemu virt (a64): our chooser, the Image test_hearts
+# certified and kept, helm as pid 1 on a squashfs root, and three updates in one run (refused,
+# committed, reverted). heavy: an a64 bake (qemu-user off an a64 box) and the boots.
+hb_love = $(if $(filter a64,$a),$(ho)/love,out/x-a64/love)
+test_hearts_boot: host $(hb_love) $(ho)/.dist-cat.l
+	@echo TEST test/gate/hearts-boot.sh
+	@DL=$(dl) $(gsh) test/gate/hearts-boot.sh $(ho)/love $(hb_love) $(ho)/.dist-cat.l
 # test_sqfs -- src/apps/sqfs.l against mksquashfs, byte for byte, over four trees.
 # skips without mksquashfs.
 test_sqfs: host
