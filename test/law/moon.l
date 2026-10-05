@@ -2262,17 +2262,6 @@ int main() { return 0; }"
       (0 = calls (fnf 'dyn <>irB) "cached") (1 = calls (fnf 'dyn <>irB) "generic")
       (0 = calls (fnf 'guard <>irB) "bug_on")))
 
-; -- an asm's other-section words follow its home out: a BUG_ON a late fold proves false loses its
-; brk and label, and so its __bug_table row, which would name that label for the link to miss
-(: bugasm "asm volatile (\".pushsection __bug_table,\\\"aw\\\"; .align 2; 14470: .long 14471f - .; .popsection; 14471: brk 0x800\");"
-   (asecs r) (r 12 @ a (two? a ? <a ()))
-   rD (cgt ("int f(void){ const int len = 0; if (0 < len) { " + bugasm + " } return 1; }") 'a64)
-   rL (cgt ("int f(int n){ if (n) { " + bugasm + " } return 1; }") 'a64)
-   (test
-      (okv? rD) (okv? rL)
-      (atom? (asecs rD))                          ; dead: no section words at all
-      (two? (asecs rL))))                         ; live: its row rides
-
 (test_fin ())                                        ; no zz-fin here: quit before claiming ok
 (say err "test/law/moon: lexer + cpp + parser + gen goldens (seams, aggregates, doubles, varargs, asm, diagnostics, objects) + the residency laws (alive, a64 homing, splice binds, stld, copy propagation + its carrier exhaustion, cskeep, the destination die, liveness + promotion, coalescing) + the AST inliner + the value layer (rung 0) + per-def promotion (rungs 1+2+3, narrow and cs seats ride) + the interval locals allocator (rung 4) + the param-cell default (rung 5) + the one-build default and its rides (rung 6, the only world) ok")
 (put err 10)

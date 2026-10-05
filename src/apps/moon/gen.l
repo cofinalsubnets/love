@@ -6689,13 +6689,14 @@
    ; ..less a function asm's whose home the dead code removed: its words name labels of that
    ; asm the text no longer lays (a BUG_ON a fold proved false keeps no __bug_table row)
    (asecs-live g txt)
-    (: have {}
-       (lbls x) (? !(two? x) 0 (<x = 'label && nom? <>x) (pin have (show <>x) 1) (lbls <x, lbls >x))
-       _ (lbls txt)
-       (mine? pf n) (starts? n pf)
+    (: (lbls x t) (? !(two? x) t (<x = 'label && nom? <>x) (pin t (show <>x) 1) (lbls >x (lbls <x t)))
+       have (lbls txt {})
+       ; a record is dead when a label of its own asm that it names but does not itself lay is
+       ; gone from the text; a label it lays in its own section (`2:` in the table) is no home's
        (live? r) (? !(string? (r 3)) 1
-                    !(any (n \ mine? (r 3) (show n)) (keys (cg-refs (take 3 r) {}))) 1
-                    (any (n \ mine? (r 3) n) (keys have)))
+                    (: own (lbls (take 3 r) {})
+                       outs (filter (n \ starts? n (r 3) && !(own n)) (map show (keys (cg-refs (take 3 r) {}))))
+                       (all (n \ have n) outs)))
        (asecs-of g (filter live? (rev (g 'fasecs)))))
    ; a refusal that names what the asm asked for, for cgfn's report
    (asmno g msg) (pin g 'nolane msg, 'bad)

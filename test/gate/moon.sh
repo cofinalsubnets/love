@@ -84,6 +84,16 @@ for f in test/cc/*.c; do
   [ $a -eq $b ] || fail "mooncc battery $f (ours $a gcc $b)"
 done
 
+# an asm's other-section words leave with its home: a BUG_ON a late fold proves false loses its brk
+# and label, and its __bug_table row must go too, or the object names a label it never lays
+bug='asm volatile (".pushsection __bug_table,\"aw\"; .align 2; 14470: .long 14471f - .; .popsection; 14471: brk 0x800");'
+printf 'int f(void){ const int len = 0; if (0 < len) { %s } return 1; }\n' "$bug" > "$ho/.bugd.c"
+printf 'int f(int n){ if (n) { %s } return 1; }\n' "$bug" > "$ho/.bugl.c"
+moonrun -t a64 -c "$ho/.bugd.c" -o "$ho/.bugd.o" || fail "mooncc -t a64 a dead BUG asm"
+moonrun -t a64 -c "$ho/.bugl.c" -o "$ho/.bugl.o" || fail "mooncc -t a64 a live BUG asm"
+! grep -q 'l14471' "$ho/.bugd.o" || fail "a dead BUG asm's __bug_table row names its removed label"
+grep -q '__bug_table' "$ho/.bugl.o" || fail "a live BUG asm lost its __bug_table row"
+
 # ------------------------------------------- -std=: the dialect rail (struct labels)
 # THE ORACLE IS THE LABEL-FREE TWIN. A struct label is not C -- gcc cannot compile the
 # labelled source at all -- so the differential is against the SAME struct with the labels
