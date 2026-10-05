@@ -68,12 +68,14 @@
                 (pins f 'ch ch 'rate rate 'align align 'tag tag 'ext (tag0 = 65534))))))
    (wav-head s)
     (: (go i f sk)
-        (? (#s < i + 8) 'more
+        (? (#s < i + 8) ['more (i + 8)]
            (: id (snip s i (i + 4)) z (wav-le s (i + 4) 4) nx (i + 8 + z + (z & 1))
               (? (id = "data") (? !(tablet? f) "a WAVE-file with no fmt chunk ahead of its data"
                                   (pins f 'at (i + 8) 'len (z = 0 || z = 4294967295 ? -1 z) 'skip (rev sk)))
-                 (id = "fmt ") (? (#s < i + 8 + z) 'more
+                 (id = "fmt ") (? (#s < i + 8 + z) ['more (i + 8 + z)]
                                   (wav-fmt s (i + 8) z @ g (string? g ? g (go nx g sk))))
+                 ; a big chunk not yet held is skipped unread, an empty one of its id in its place
+                 (#s < nx && 65536 < z) ['skip i nx (id + string [0 0 0 0])]
                  (go nx f (id . sk)))))
        (? (#s < 12) (#s < 4 || "RIFF" = snip s 0 4 ? 'more 'raw)
           ("RIFF" = snip s 0 4 && "WAVE" = snip s 8 12) (go 12 () ())
@@ -166,10 +168,8 @@
    (aplay-one o q nm)
     (: (more h) (see q @ -1 h c (unsee q c, h + chug q))
        ; -> [what wav-head says, the bytes read for it]; a short head that is no RIFF is raw
-       (head h) (wav-head h @ 'more (more h @ h2 (#h2 = #h ? [("RIFF" = snip h 0 4 ? 'more 'raw) h]
-                                                        (head h2)))
-                                r [r h])
-       rh (o 't = 'raw ? ['raw (more "")] (head (more "")))
+       rh (o 't = 'raw ? ['raw (more "")]
+             ((cite 'av 'av-head) q wav-head "" @ ['short h] [("RIFF" = snip h 0 4 ? 'more 'raw) h] x x))
        hb <>rh
        r (<rh = 'more ? "a WAVE-file cut short ahead of its data" <rh)
        wav (tablet? r)

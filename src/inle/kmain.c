@@ -70,8 +70,6 @@ static int kqpop(void) {                   // dequeue one byte, -1 if empty
 // the console's font: glyphs and their size; kfb.scale says how large, paint.c the palette.
 static struct font const kface = { (uint8_t const*) cleat_8x16, 8, 16 };
 
-
-
 // the seat hooks src/love/fd.c branches to on a negative osv (weak no-ops there)
 void k_row_close(int fd), k_sleep(uintptr_t ms), k_wait_fds(struct wait_fd*, int, uintptr_t),
      k_seat_init(void);                // src/inle/sys.c: arm environ + the std streams
@@ -484,118 +482,22 @@ void kfree(void *p) { ff_free(&kmem, p); }
 // write copies that file into the kernel heap and the entry reads the copy ever after.
 // kmallocw/kfree rather than alloc: a vt method is handed an fd and nothing else, so g
 // is out of reach at the door that grows a file. ms is the source's baked mtime.
-struct k_file { char const *path, *bytes; uintptr_t len, ms; };
-// the initrd is the source the artifact carries (srctree): its index lays the rows at
-// boot, and each section decodes into the kernel heap at the first read of a file in it.
-// such a row has no bytes until then; tree is its place in the index.
+// the initrd is the source the artifact carries (srctree, through src/love/vfs.c): its index
+// lays the rows at boot, and each section decodes into the kernel heap at the first read of
+// a file in it.
 #include "lib/ustar.h"
 #include "lib/srctree.h"
-struct k_brow { struct k_file f; struct tree_row const *tree; };
-static struct k_brow const *k_bakes;
-static int k_bakes_n;
-static struct tree k_src;
+#include "vfs.h"
 static void *k_grab(uintptr_t n) { return kmallocw(b2w(n)); }
 // the tree's rows live under /love, read-only, so a module loads from bytes the shell
 // cannot have edited. the root holds src/inle/rootfs/, a second tar walked with no prefix.
 static char const k_home[] = "home";
 static char const k_tree[] = "love";
-#define k_tree_n (sizeof k_tree - 1)
-// one ustar pass over the rootfs: count with rows NULL, fill on the second. a symlink lands
-// as a row whose target rides lnks[k].
-static int k_tar_walk(unsigned char const *t, uintptr_t n, struct k_brow *rows, char **lnks) {
-  int k = 0;
-  for (uintptr_t o = 0; o + 512 <= n && t[o];) {
-    unsigned char const *h = t + o;
-    uintptr_t sz = ustar_octal(h + 124, 12);
-    if (ustar_member(h)) {
-      if (rows) {
-        char nm[256];
-        uintptr_t ln = ustar_name(h, nm, sizeof nm);      // TOP stripped
-        char *p = kmallocw(b2w(ln + 1));
-        if (!p) return -1;
-        memcpy(p, nm, ln);
-        p[ln] = 0;
-        rows[k] = (struct k_brow) { { .path = p, .bytes = (char const *) t + o + 512,
-                                      .len = sz, .ms = 1000 * ustar_octal(h + 136, 12) } };
-        if (ustar_islink(h)) {
-          char tgt[101], cn[256];
-          tgt[ustar_link(h, tgt, sizeof tgt - 1)] = 0;
-          uintptr_t cl = lnk_canon(p, tgt, cn, sizeof cn);
-          char *q = kmallocw(b2w(cl + 1));
-          if (!q) return -1;
-          memcpy(q, cn, cl);
-          q[cl] = 0;
-          lnks[k] = q; } }
-      k++; }
-    o += 512 + ((sz + 511) & ~511ull); }
-  return k; }
-static bool k_untar(void) {
-  if (!tree_open(&k_src, srctree, srctree_len, k_grab)) return false;
-  int n1 = (int) k_src.n;
-  if (n1 <= 0) return false;
-  // the machine's own rows ride a second, plain tar (src/inle/rootfs/ through src/tools/mkrootfs.l)
-  int n2 = rootfs_len ? k_tar_walk(rootfs, rootfs_len, NULL, NULL) : 0;
-  if (n2 < 0) return false;
-  int n = n1 + n2;
-  struct k_brow *rows = kmallocw(b2w((uintptr_t) n * sizeof *rows));
-  char **lnks = kmallocw(b2w((uintptr_t) n * sizeof *lnks));
-  if (!rows || !lnks) return false;
-  memset(lnks, 0, (uintptr_t) n * sizeof *lnks);
-  for (int i = 0; i < n1; i++) {
-    struct tree_row const *r = k_src.rows + i;
-    uintptr_t ln = strlen(r->path);
-    char *p = kmallocw(b2w(k_tree_n + 1 + ln + 1));
-    if (!p) return false;
-    memcpy(p, k_tree, k_tree_n), p[k_tree_n] = '/';
-    memcpy(p + k_tree_n + 1, r->path, ln + 1);
-    rows[i] = (struct k_brow) { { .path = p, .len = r->len, .ms = 1000 * (uintptr_t) r->mtime }, r }; }
-  if (n2 && k_tar_walk(rootfs, rootfs_len, rows + n1, lnks + n1) != n2) return false;
-  // resolve the rootfs's symlinks against the rows (two passes cover a link to a link), then
-  // compact: a dangling or directory link has no bytes to serve.
-  for (int pass = 0; pass < 2; pass++)
-    for (int i = 0; i < n; i++)
-      if (lnks[i])
-        for (int j = 0; j < n; j++)
-          if (!lnks[j] && !strcmp(rows[j].f.path, lnks[i])) {
-            char const *p = rows[i].f.path;
-            rows[i] = rows[j], rows[i].f.path = p;
-            lnks[i] = NULL;
-            break; }
-  int m = 0;
-  for (int i = 0; i < n; i++)
-    if (!lnks[i]) rows[m++] = rows[i];
-  kfree(lnks);
-  k_bakes = rows, k_bakes_n = m;
-  return true; }
 
 // an object in this link may bake files of its own: a strong k_baked overrides this weak
 // nothing. asked twice -- with no room for the count, then to fill -- so the table is ours.
-__attribute__((weak)) int k_baked(struct k_file *rows, int cap) {
+__attribute__((weak)) int k_baked(struct vfs_file *rows, int cap) {
   return (void) rows, (void) cap, 0; }
-static struct k_file const *k_extra;
-static int k_extra_n;
-// what bake row i is: the initrd's, then the linked-in ones behind it.
-static struct k_file const *k_bake_row(int i) {
-  return i < k_bakes_n ? &k_bakes[i].f : &k_extra[i - k_bakes_n]; }
-// ..and its bytes: a tree row's section decodes at the first ask, NULL where it will not
-static unsigned char const *k_bake_bytes(int i) {
-  return i < k_bakes_n && k_bakes[i].tree ? tree_bytes(&k_src, k_bakes[i].tree)
-       : (unsigned char const *) k_bake_row(i)->bytes; }
-
-// the tree (rung 2): entries in the kernel heap, one per baked row at first touch, growing
-// as create and mkdir add paths. `own` has to be a bit: an emptied file is {NULL, 0}, what
-// one still in .rodata looks like. `heap` is that bit for the path; a NULL path is retired.
-struct k_ent {
-  char const *path;                 // the canonical key
-  int bake;                         // the kfiles row backing reads until the first write; -1 none
-  unsigned char *bytes;
-  uintptr_t len, cap, ms, mode;     // mode is the permission bits; stat lays the kind over them
-  int refs;                         // open fds; an unlinked entry frees at the last close
-  char const *to;                   // a symlink's target, canonical and heap; NULL is not one
-  bool own, heap, dir, live;
-};
-static struct k_ent *k_ents;
-static int k_ents_n, k_ents_cap;
 
 // /proc/vt -- the console's colours as files, xterm-256 indices in decimal. an ordinary
 // entry each: the open refreshes a read off the live pen, the close applies a write.
@@ -636,7 +538,6 @@ static int k_vt_slot(char const *p, uintptr_t n) {
   if (n == sizeof k_vtfont - 1 && !memcmp(p, k_vtfont, n)) return 5;
   return 0; }
 
-static char *k_strdup(char const *p, uintptr_t n);   // below, with the entry doors
 static bool k_vt_rescale(unsigned v);                // below, with fbdraw's cached cursor
 static void fbwash(void);                            // below: the whole paper again
 
@@ -660,112 +561,86 @@ static intptr_t k_hosted(char const *cp, uintptr_t cn) {
   if (cn == k_mnt_n) return (intptr_t) cn;
   return cp[k_mnt_n] == '/' ? (intptr_t) k_mnt_n + 1 : -1; }
 
+// a move or a removal leaves these be besides the tree: a special row, and every directory
+// above one, whose rename would carry them out from under their names
+static char const *const k_pins[] = { k_vtfg, k_vtbg, k_vtscale, k_vtfont, k_plift,
+                                      k_pmem, k_pgauge, k_pcmd, k_dnull, k_dzero, k_mnt };
+// the namespace: entries in the kernel heap, one per baked row, growing as create and mkdir
+// add paths. the cwd is canonical ("" the root); chdir writes it, and the boot seat is the home.
+static struct vfs k_fs = { .cwd = "home", .cwd_n = 4, .ro = k_tree, .pins = k_pins,
+                           .npins = countof(k_pins), .grab = k_grab, .drop = kfree, .now = k_clock_ms };
+
 // lay the table on first use: every baked row live off .rodata, plus tmp and the home.
 // idempotent, and a refusal leaves the console standing (the caller answers ENOMEM).
 static bool k_fs_init(void) {
-  if (k_ents) return true;
-  if (!k_bakes && !k_untar()) return false;
-  int xn = k_baked(NULL, 0);
+  if (k_fs.ents) return true;
+  if (!k_fs.bakes && !vfs_untar(&k_fs, k_tree, srctree, srctree_len, rootfs, rootfs_len)) return false;
+  int xn = k_fs.extra ? 0 : k_baked(NULL, 0);
   if (xn > 0) {
-    struct k_file *xr = kmallocw(b2w((uintptr_t) xn * sizeof *xr));
+    struct vfs_file *xr = kmallocw(b2w((uintptr_t) xn * sizeof *xr));
     if (!xr) return false;
-    k_extra = xr, k_extra_n = k_baked(xr, xn); }
-  int n = k_bakes_n + k_extra_n, cap = n + 18;
-  struct k_ent *t = kmallocw(b2w((uintptr_t) cap * sizeof *t));
-  if (!t) return false;
-  for (int i = 0; i < n; i++) {
-    struct k_file const *f = k_bake_row(i);
-    // a dateless blob row reads as this boot: the carried tree stamps mtime 0, and 0 is
-    // how a stat says "not there" -- cook then refuses to make a leaf that is right there.
-    t[i] = (struct k_ent) { .path = f->path, .bake = i,
-                            .ms = f->ms ? f->ms : k_clock_ms(), .mode = 0644, .live = true }; }
-  t[n] = (struct k_ent) { .path = "tmp", .bake = -1, .ms = k_clock_ms(),
+    k_fs.extra = xr, k_fs.extra_n = k_baked(xr, xn); }
+  int n = vfs_lay(&k_fs, 18);
+  if (n < 0) return false;
+  struct vfs_ent *t = k_fs.ents;
+  t[n] = (struct vfs_ent) { .path = "tmp", .bake = -1, .ms = k_clock_ms(),
                           .mode = 0755, .own = true, .dir = true, .live = true };
   // the home, empty, is where the shell starts
-  t[n + 14] = (struct k_ent) { .path = k_home, .bake = -1, .ms = k_clock_ms(),
+  t[n + 14] = (struct vfs_ent) { .path = k_home, .bake = -1, .ms = k_clock_ms(),
                                .mode = 0755, .own = true, .dir = true, .live = true };
   // the console's two colours, as files: own with no bytes until the first read. `proc`
   // and `proc/vt` come free -- a name baked paths lie under is a directory already.
-  t[n + 1] = (struct k_ent) { .path = k_vtfg, .bake = -1, .ms = k_clock_ms(),
+  t[n + 1] = (struct vfs_ent) { .path = k_vtfg, .bake = -1, .ms = k_clock_ms(),
                               .mode = 0644, .own = true, .live = true };
-  t[n + 2] = (struct k_ent) { .path = k_vtbg, .bake = -1, .ms = k_clock_ms(),
+  t[n + 2] = (struct vfs_ent) { .path = k_vtbg, .bake = -1, .ms = k_clock_ms(),
                               .mode = 0644, .own = true, .live = true };
   // ..the glyph scale, the one vt file that is not a colour. n + 8 and not n + 3: the
   // compat loop below starts where the numbered rows stop.
-  t[n + 8] = (struct k_ent) { .path = k_vtscale, .bake = -1, .ms = k_clock_ms(),
+  t[n + 8] = (struct vfs_ent) { .path = k_vtscale, .bake = -1, .ms = k_clock_ms(),
                               .mode = 0644, .own = true, .live = true };
   // ..and the font, written and never read, at n + 15 past the home
-  t[n + 15] = (struct k_ent) { .path = k_vtfont, .bake = -1, .ms = k_clock_ms(),
+  t[n + 15] = (struct vfs_ent) { .path = k_vtfont, .bake = -1, .ms = k_clock_ms(),
                                .mode = 0644, .own = true, .live = true };
   // and the two the open fills: read-only, since nothing here is anyone's to set.
-  t[n + 3] = (struct k_ent) { .path = k_pmem, .bake = -1, .ms = k_clock_ms(),
+  t[n + 3] = (struct vfs_ent) { .path = k_pmem, .bake = -1, .ms = k_clock_ms(),
                               .mode = 0444, .own = true, .live = true };
-  t[n + 4] = (struct k_ent) { .path = k_pgauge, .bake = -1, .ms = k_clock_ms(),
+  t[n + 4] = (struct vfs_ent) { .path = k_pgauge, .bake = -1, .ms = k_clock_ms(),
                               .mode = 0444, .own = true, .live = true };
   // the boot line, read-only and filled at every open, so a reset onto another line
   // changes what it answers. n + 9, past the numbered rows.
-  t[n + 9] = (struct k_ent) { .path = k_pcmd, .bake = -1, .ms = k_clock_ms(),
+  t[n + 9] = (struct vfs_ent) { .path = k_pcmd, .bake = -1, .ms = k_clock_ms(),
                               .mode = 0444, .own = true, .live = true };
   // and the lift, a file written and never read, at n + 10 past the boot line
-  t[n + 10] = (struct k_ent) { .path = k_plift, .bake = -1, .ms = k_clock_ms(),
+  t[n + 10] = (struct vfs_ent) { .path = k_plift, .bake = -1, .ms = k_clock_ms(),
                                .mode = 0644, .own = true, .live = true };
   // the two devices, 0666 and always empty; the open never touches these rows (k_dev_slot)
-  t[n + 5] = (struct k_ent) { .path = k_dnull, .bake = -1, .ms = k_clock_ms(),
+  t[n + 5] = (struct vfs_ent) { .path = k_dnull, .bake = -1, .ms = k_clock_ms(),
                               .mode = 0666, .own = true, .live = true };
-  t[n + 6] = (struct k_ent) { .path = k_dzero, .bake = -1, .ms = k_clock_ms(),
+  t[n + 6] = (struct vfs_ent) { .path = k_dzero, .bake = -1, .ms = k_clock_ms(),
                               .mode = 0666, .own = true, .live = true };
   // the compat names. `to` is heap because k_ent_gc frees it; a strdup that refuses
   // leaves a plain empty directory rather than a link that cannot be followed.
-  t[n + 7] = (struct k_ent) { .path = "usr/bin", .bake = -1, .ms = k_clock_ms(),
+  t[n + 7] = (struct vfs_ent) { .path = "usr/bin", .bake = -1, .ms = k_clock_ms(),
                               .mode = 0755, .own = true, .dir = true, .live = true };
   static char const *const compat[] = { "bin", "sbin", "usr/sbin" };
   int m = n + 11;
   for (uintptr_t c = 0; c < countof(compat); c++) {
-    char *to = k_strdup("/usr/bin", 8);
-    t[m] = (struct k_ent) { .path = compat[c], .bake = -1, .ms = k_clock_ms(),
+    char *to = vfs_strdup(&k_fs, "/usr/bin", 8);
+    t[m] = (struct vfs_ent) { .path = compat[c], .bake = -1, .ms = k_clock_ms(),
                             .mode = 0777, .own = true, .live = true,
                             .dir = !to, .to = to };
     m++; }
   // and the tree's old name, a link onto it for one release
-  char *to = k_strdup("/love", 5);
-  t[n + 16] = (struct k_ent) { .path = "proc/src", .bake = -1, .ms = k_clock_ms(),
+  char *to = vfs_strdup(&k_fs, "/love", 5);
+  t[n + 16] = (struct vfs_ent) { .path = "proc/src", .bake = -1, .ms = k_clock_ms(),
                                .mode = 0777, .own = true, .live = true,
                                .dir = !to, .to = to };
   // and the seat's own files, where it has some: n + 17, a directory row the seat answers under
   if ((k_mnt_up = k_host(kh_here, 0, 0, 0, 0, 0) > 0))
-    t[n + 17] = (struct k_ent) { .path = k_mnt, .bake = -1, .ms = k_clock_ms(),
+    t[n + 17] = (struct vfs_ent) { .path = k_mnt, .bake = -1, .ms = k_clock_ms(),
                                  .mode = 0755, .own = true, .dir = true, .live = true };
-  else t[n + 17] = (struct k_ent) {0};          // a retired slot, the next create's
-  k_ents = t, k_ents_n = cap, k_ents_cap = cap;
+  else t[n + 17] = (struct vfs_ent) {0};          // a retired slot, the next create's
   return true; }
-
-// the cwd, canonical ("" is the root), what k_canon resolves relative paths against.
-// chdir writes it; cwd wears the leading slash. the boot seat is the home.
-static char k_cwd[256] = "home";
-static uintptr_t k_cwd_n = 4;
-
-// resolve a path against the cwd into out (cap 256): absolute starts at the root.
-// -> the canonical length (0 is the root), or -1 for one longer than any entry could carry.
-static intptr_t k_canon(char const *p, uintptr_t pn, char *out) {
-  uintptr_t n = 0;
-  if (!(pn && p[0] == '/')) memcpy(out, k_cwd, n = k_cwd_n);
-  return path_canon(out, n, p, pn, 256); }
-
-// the tree is nobody's to write: every mutating door refuses the mount and what lies under
-static bool k_ro(char const *cp, uintptr_t cn) {
-  return cn >= k_tree_n && !memcmp(cp, k_tree, k_tree_n)
-      && (cn == k_tree_n || cp[k_tree_n] == '/'); }
-
-// ..and a move or a removal leaves these be besides: a special row, and every directory
-// above one or above the tree, whose rename would carry them out from under their names
-static char const *const k_pins[] = { k_tree, k_vtfg, k_vtbg, k_vtscale, k_vtfont, k_plift,
-                                      k_pmem, k_pgauge, k_pcmd, k_dnull, k_dzero, k_mnt };
-static bool k_pinned(char const *cp, uintptr_t cn) {
-  if (k_ro(cp, cn)) return true;
-  for (uintptr_t i = 0; cn && i < countof(k_pins); i++) {
-    uintptr_t const n = strlen(k_pins[i]);
-    if (cn <= n && !memcmp(cp, k_pins[i], cn) && (cn == n || k_pins[i][cn] == '/')) return true; }
-  return false; }
 
 // one open file: which entry, where in it, whether writes are allowed. rides the row's
 // `state`, which the close door frees.
@@ -779,17 +654,6 @@ static love_inline struct k_fh *k_fh(int fd) {
   struct k_source *s = k_source(fd);
   return s && s->readn == ram_readn ? s->state : NULL; }
 
-// what entry i reads as: the heap copy once there is one, the baked bytes until then
-// (empty where a tree section will not decode).
-static unsigned char const *k_blob(int i, uintptr_t *len) {
-  struct k_ent const *e = &k_ents[i];
-  if (e->own) return *len = e->len, e->bytes;
-  unsigned char const *b = k_bake_bytes(e->bake);
-  return *len = b ? k_bake_row(e->bake)->len : 0, b ? b : (unsigned char const*) ""; }
-// ..and its length alone, which decodes nothing: a stat or a seek reads no bytes
-static uintptr_t k_size(int i) {
-  struct k_ent const *e = &k_ents[i];
-  return e->own ? e->len : k_bake_row(e->bake)->len; }
 
 // src/inle/sys.c's seek: a negative errno, the sign every C face here wears; whence is SEEK_*.
 static struct k_hf *k_hf(int fd);
@@ -800,13 +664,12 @@ long k_fd_lseek(int fd, long off, int whence) {
   struct k_fh *h = k_fh(fd);
   if (!h) return -29;                                    // ESPIPE: a console or a pipe
   if (whence < 0 || whence > 2) return -22;              // EINVAL
-  uintptr_t len = k_size(h->i);
+  uintptr_t len = vfs_size(&k_fs, h->i);
   intptr_t at = off + (whence == 1 ? (intptr_t) h->pos
                      : whence == 2 ? (intptr_t) len : 0);
   if (at < 0) return -22;
   return (long) (h->pos = (uintptr_t) at); }
 
-static bool k_fit(int i, uintptr_t need);
 // ..and its truncate: cut, or stretched with zeros; a reader's row is refused as linux does
 long k_fd_truncate(int fd, long n) {
   if (!k_row_live(fd)) return -9;                        // EBADF
@@ -816,177 +679,17 @@ long k_fd_truncate(int fd, long n) {
   if (!h) return -22;                                    // EINVAL: a console or a pipe
   if (!h->w) return -9;
   if (n < 0) return -22;
-  if (!k_fit(h->i, (uintptr_t) n)) return -12;           // ENOMEM
-  struct k_ent *e = &k_ents[h->i];
+  if (!vfs_fit(&k_fs, h->i, (uintptr_t) n)) return -12;           // ENOMEM
+  struct vfs_ent *e = &k_fs.ents[h->i];
   if ((uintptr_t) n > e->len) memset(e->bytes + e->len, 0, (uintptr_t) n - e->len);
   e->len = (uintptr_t) n, e->ms = k_clock_ms();
   return 0; }
-
-// canonical path -> its live entry. linear: the tree is a few dozen entries.
-static int k_find(char const *p, uintptr_t n) {
-  for (int i = 0; i < k_ents_n; i++)
-    if (k_ents[i].live && k_ents[i].path
-        && strlen(k_ents[i].path) == n && !memcmp(k_ents[i].path, p, n)) return i;
-  return -1; }
-
-// resolve a path against the cwd, links followed at every component. `leaf` false leaves a
-// final link unresolved -- what readlink, unlink, rmdir, mkdir's and symlink's new name and
-// both sides of rename want. -> the canonical length (0 is the root), -ENAMETOOLONG, -ELOOP.
-// an expansion restarts the walk rather than splicing, and the budget is spent per
-// resolution, so a chain and a deep path draw on the same 32.
-#define k_hops 32
-static intptr_t k_walk(char const *p, uintptr_t pn, char *out, bool leaf) {
-  char in[256], nx[256];
-  if (pn >= sizeof in) return -ENAMETOOLONG;
-  memcpy(in, p, pn);
-  uintptr_t inn = pn;
-  for (int hop = 0; ; ) {
-    uintptr_t n = 0;
-    if (!(inn && in[0] == '/')) memcpy(out, k_cwd, n = k_cwd_n);
-    bool again = false;
-    for (uintptr_t i = 0; i < inn; ) {
-      while (i < inn && in[i] == '/') i++;
-      uintptr_t j = i;
-      while (j < inn && in[j] != '/') j++;
-      if (j == i) break;
-      intptr_t r = path_canon(out, n, in + i, j - i, 256);   // "." and ".." included,
-      if (r < 0) return -ENAMETOOLONG;                          // so ".." lands on the
-      n = (uintptr_t) r;                                        // RESOLVED path
-      i = j;
-      uintptr_t k = i;
-      while (k < inn && in[k] == '/') k++;
-      if (k >= inn && !leaf) break;                // the last name, kept as written
-      int e = n ? k_find(out, n) : -1;
-      if (e < 0 || !k_ents[e].to) continue;
-      if (++hop > k_hops) return -ELOOP;
-      // the target is held as written, so it is canonicalized here and loses the leading
-      // slash entry paths lack; the rebuilt line wears one, or the walk seeds from the cwd.
-      uintptr_t tn = lnk_canon(out, k_ents[e].to, nx + 1, sizeof nx - 1) + 1;
-      nx[0] = '/';
-      uintptr_t rest = inn - k;
-      if (tn + 1 + rest >= sizeof nx) return -ENAMETOOLONG;
-      if (rest) nx[tn++] = '/', memcpy(nx + tn, in + k, rest), tn += rest;
-      memcpy(in, nx, inn = tn);
-      again = true;
-      break; }
-    if (!again) return (intptr_t) n; } }
-
-// a slot for a fresh entry: a retired one first, else the table doubles. -1 is a refusal.
-static int k_ent_slot(void) {
-  for (int i = 0; i < k_ents_n; i++) if (!k_ents[i].path) return i;
-  if (k_ents_n == k_ents_cap) {
-    int cap = k_ents_cap * 2;
-    struct k_ent *t = kmallocw(b2w((uintptr_t) cap * sizeof *t));
-    if (!t) return -1;
-    memcpy(t, k_ents, (uintptr_t) k_ents_n * sizeof *t);
-    kfree(k_ents);
-    k_ents = t, k_ents_cap = cap; }
-  return k_ents_n++; }
-
-static char *k_strdup(char const *p, uintptr_t n) {
-  char *q = kmallocw(b2w(n + 1));
-  if (q) memcpy(q, p, n), q[n] = 0;
-  return q; }
-
-// free a dead, unheld entry's storage and retire the slot. unlink and the last close both
-// land here, so an open fd keeps its file until it lets go.
-static void k_ent_gc(int i) {
-  struct k_ent *e = &k_ents[i];
-  if (e->live || e->refs || !e->path) return;
-  if (e->own) kfree(e->bytes);
-  if (e->heap) kfree((void*) e->path);
-  if (e->to) kfree((void*) e->to);
-  *e = (struct k_ent) {0}; }
-
-// a fresh live entry at canonical path p; the caller has asked k_parent_ok. -1 is memory.
-static int k_create(char const *p, uintptr_t n, bool dir, uintptr_t mode) {
-  char *q = k_strdup(p, n);
-  if (!q) return -1;
-  int i = k_ent_slot();
-  if (i < 0) return kfree(q), -1;
-  k_ents[i] = (struct k_ent) { .path = q, .bake = -1, .ms = k_clock_ms(),
-                               .mode = mode, .own = true, .heap = true,
-                               .dir = dir, .live = true };
-  return i; }
-
-// a directory can be a prefix: the initrd is flat, so a name baked paths lie under is a
-// directory with no entry of its own -- synthesized, 0755, wearing its newest child's date.
-
-// entry i's name under a prefix of pn bytes, NULL when it does not lie under it. an entry
-// deeper than one level answers its next component, so a subdirectory is named by its paths.
-static char const *k_entry(int i, char const *p, uintptr_t pn, uintptr_t *len) {
-  if (!k_ents[i].live || !k_ents[i].path) return NULL;
-  char const *q = k_ents[i].path;
-  uintptr_t ql = strlen(q);
-  if (pn) {
-    if (ql <= pn + 1 || memcmp(q, p, pn) || q[pn] != '/') return NULL;
-    q += pn + 1, ql -= pn + 1; }
-  uintptr_t k = 0;
-  while (k < ql && q[k] != '/') k++;
-  return *len = k, q; }
-
-// anything live under the prefix? -> and the newest date beneath it, the only
-// date a synthesized directory can honestly wear.
-static bool k_kids(char const *p, uintptr_t pn, uintptr_t *ms) {
-  bool any = false;
-  *ms = 0;
-  for (int i = 0; i < k_ents_n; i++) {
-    uintptr_t k;
-    if (!k_entry(i, p, pn, &k)) continue;
-    any = true;
-    if (k_ents[i].ms > *ms) *ms = k_ents[i].ms; }
-  return any; }
-
-// is the canonical path a directory: the root always, an entry that says so, or a
-// prefix something lives under.
-static bool k_dirp(char const *p, uintptr_t pn) {
-  if (!pn) return true;
-  int i = k_find(p, pn);
-  if (i >= 0) return k_ents[i].dir;
-  uintptr_t junk;
-  return k_kids(p, pn, &junk); }
-
-// the parent a path wants to land in: 0 when it is a directory, else the errno
-// the host would say (a hole ENOENT, a file in the way ENOTDIR).
-static int k_parent_ok(char const *p, uintptr_t n) {
-  uintptr_t dn = n;
-  while (dn && p[dn - 1] != '/') dn--;
-  if (dn) dn--;
-  if (!dn) return 0;
-  int i = k_find(p, dn);
-  if (i >= 0) return k_ents[i].dir ? 0 : -ENOTDIR;
-  uintptr_t junk;
-  return k_kids(p, dn, &junk) ? 0 : -ENOENT; }
-
-// make room for `need` bytes in entry i's heap copy, bringing the baked blob across on the
-// first write. false is a refusal the caller must read and say; nothing is dropped quietly.
-static bool k_fit(int i, uintptr_t need) {
-  struct k_ent *e = &k_ents[i];
-  if (need > (uintptr_t) INTPTR_MAX) return false;   // the doubling below stays in range
-  if (!e->own) {
-    unsigned char const *b = k_bake_bytes(e->bake);
-    if (!b) return false;
-    uintptr_t n = k_bake_row(e->bake)->len, cap = n > need ? n : need;
-    unsigned char *p = cap ? kmallocw(b2w(cap)) : NULL;
-    if (cap && !p) return false;
-    if (n) memcpy(p, b, n);
-    e->bytes = p, e->len = n, e->cap = cap, e->own = true;
-    return true; }
-  if (e->cap >= need) return true;
-  uintptr_t cap = e->cap ? e->cap : 64;
-  while (cap < need) cap *= 2;
-  unsigned char *p = kmallocw(b2w(cap));
-  if (!p) return false;
-  if (e->len) memcpy(p, e->bytes, e->len);
-  kfree(e->bytes);
-  e->bytes = p, e->cap = cap;
-  return true; }
 
 // entry i's bytes <- the pen, at the open of a read. memory refusing leaves the last
 // content standing: a stale number is answerable, an open that failed here would not be.
 static void k_vt_read(int i, int slot) {
   // serial-only: no console to ask, so the file reads empty rather than the last write
-  if (!kcb || slot >= 4) { k_ents[i].len = 0; return; }   // ..and the lift and the font are written, never read
+  if (!kcb || slot >= 4) { k_fs.ents[i].len = 0; return; }   // ..and the lift and the font are written, never read
   // the colours come off the pen, the scale off the paper
   unsigned v = slot == 3 ? kfb.scale : cb_val(slot == 1 ? kcb->def_fg : kcb->def_bg) & 255u;
   char d[4]; int n = 0;
@@ -994,9 +697,9 @@ static void k_vt_read(int i, int slot) {
   if (v >= 10)  d[n++] = (char) ('0' + v / 10 % 10);
   d[n++] = (char) ('0' + v % 10);
   d[n++] = '\n';
-  if (!k_fit(i, (uintptr_t) n)) return;
-  memcpy(k_ents[i].bytes, d, (uintptr_t) n);
-  k_ents[i].len = (uintptr_t) n; }
+  if (!vfs_fit(&k_fs, i, (uintptr_t) n)) return;
+  memcpy(k_fs.ents[i].bytes, d, (uintptr_t) n);
+  k_fs.ents[i].len = (uintptr_t) n; }
 
 // the font <- a write's bytes: vetted, then copied out of the entry, whose bytes move on
 // the next write. a font that fails the vetting leaves the one in use; none drops it.
@@ -1012,8 +715,8 @@ static void k_vt_font(unsigned char const *b, uintptr_t n) {
 // the pen <- entry i's bytes, at the close of a write. a leading number is the whole
 // grammar; no number, or one past the palette's 256, leaves the console alone.
 static void k_vt_write(int i, int slot) {
-  unsigned char const *b = k_ents[i].bytes;
-  uintptr_t len = k_ents[i].len, j = 0;
+  unsigned char const *b = k_fs.ents[i].bytes;
+  uintptr_t len = k_fs.ents[i].len, j = 0;
   // the lift takes the bytes as a path, less a trailing newline, and needs no console
   if (slot == 4) {
     while (len && (b[len - 1] == '\n' || b[len - 1] == '\r')) len--;
@@ -1059,8 +762,8 @@ static int k_meminfo(char *b) {
   at = k_row(b, at, "free-largest", big);
   // heap bytes only: a baked row costs the image, not the RAM this file is about.
   uintptr_t ents = 0, bytes = 0;
-  for (int i = 0; i < k_ents_n; i++)
-    if (k_ents[i].live) ents++, bytes += k_ents[i].own ? k_ents[i].cap : 0;
+  for (int i = 0; i < k_fs.n; i++)
+    if (k_fs.ents[i].live) ents++, bytes += k_fs.ents[i].own ? k_fs.ents[i].cap : 0;
   at = k_row(b, at, "fs-entries", ents);
   return k_row(b, at, "fs-heap-bytes", bytes); }
 
@@ -1100,15 +803,15 @@ static void k_proc_read(int i, int slot) {
   if (slot == 2 && !love_system) return;          // no process to ask; meminfo is ours alone
   char b[768];
   int n = slot == 1 ? k_meminfo(b) : slot == 3 ? k_bootline(b) : k_gauge(b, love_system);
-  if (!k_fit(i, (uintptr_t) n)) return;
-  memcpy(k_ents[i].bytes, b, (uintptr_t) n);
-  k_ents[i].len = (uintptr_t) n; }
+  if (!vfs_fit(&k_fs, i, (uintptr_t) n)) return;
+  memcpy(k_fs.ents[i].bytes, b, (uintptr_t) n);
+  k_fs.ents[i].len = (uintptr_t) n; }
 
 static intptr_t ram_readn(int fd, unsigned char *dst, uintptr_t n) {
   struct k_fh *h = k_fh(fd);
   if (!h) return -1;
   uintptr_t len;
-  unsigned char const *p = k_blob(h->i, &len);
+  unsigned char const *p = vfs_blob(&k_fs, h->i, &len);
   // the end, never 0: a file does not grow under its reader, so 0 would park the scheduler
   if (h->pos >= len) return -1;
   uintptr_t k = len - h->pos;
@@ -1122,8 +825,8 @@ static intptr_t ram_writen(int fd, unsigned char const *src, uintptr_t n) {
   if (!h || !h->w) return -1;                  // read-only: gone, not silently taken
   if (!n) return 0;
   if (n > (uintptr_t) INTPTR_MAX - h->pos) return -1;
-  if (!k_fit(h->i, h->pos + n)) return -1;
-  struct k_ent *e = &k_ents[h->i];
+  if (!vfs_fit(&k_fs, h->i, h->pos + n)) return -1;
+  struct vfs_ent *e = &k_fs.ents[h->i];
   // a gap (a truncate under an append fd) reads as zeros, never the last tenant's bytes
   if (h->pos > e->len)
     memset(e->bytes + e->len, 0, h->pos - e->len);
@@ -1140,7 +843,7 @@ static void ram_close(int fd) {
   if (!s) return;
   struct k_fh *h = s->state;
   if (h && h->vt && h->w) k_vt_write(h->i, h->vt);   // the write lands when the writer is done
-  if (h && k_ents[h->i].refs) k_ents[h->i].refs--, k_ent_gc(h->i);
+  if (h && k_fs.ents[h->i].refs) k_fs.ents[h->i].refs--, vfs_gc(&k_fs, h->i);
   kfree(s->state);
   *s = (struct k_source) {0}; }               // and the row is free again
 
@@ -1217,13 +920,13 @@ love_noinline int k_fs_open(char const *p, uintptr_t pn, char m) {
   if (m != 'r' && m != 'w' && m != 'a' && m != 'c' && m != 'o') return -EINVAL;
   if (!k_fs_init()) return -ENOMEM;
   char cp[256];
-  intptr_t cn = k_walk(p, pn, cp, true);
+  intptr_t cn = vfs_walk(&k_fs, p, pn, cp, true);
   if (cn < 0) return (int) cn;
   intptr_t ho = k_hosted(cp, (uintptr_t) cn);
   if (ho >= 0) return k_host_open(cp + ho, (uintptr_t) (cn - ho), m);
-  if (k_ro(cp, (uintptr_t) cn)) {                // the tree: read only, and the mount a directory
+  if (vfs_ro(&k_fs, cp, (uintptr_t) cn)) {                // the tree: read only, and the mount a directory
     if (m != 'r') return -EROFS;
-    if (cn == (intptr_t) k_tree_n) return -EISDIR; }
+    if (cn == (intptr_t) sizeof k_tree - 1) return -EISDIR; }
   // the ramfs does not read its own mode bits, so 0444 is a label and this is the refusal
   if (k_proc_slot(cp, (uintptr_t) cn) && m != 'r') return -EROFS;
   if (!cn) return -EISDIR;                       // the root is a directory
@@ -1237,17 +940,17 @@ love_noinline int k_fs_open(char const *p, uintptr_t pn, char m) {
       *ds = dv == 2 ? (struct k_source) { .readn = k_zero_readn, .ready = k_dev_ready }
                     : (struct k_source) { .writen = k_null_writen, .ready = k_dev_ready };
       return dfd; } }
-  int i = k_find(cp, (uintptr_t) cn);
-  if (i >= 0 && k_ents[i].dir) return -EISDIR;
+  int i = vfs_find(&k_fs, cp, (uintptr_t) cn);
+  if (i >= 0 && k_fs.ents[i].dir) return -EISDIR;
   bool made = false;
   if (i < 0) {
     // 'r' misses stay one k_find, the load path's probe lane; only a create pays k_dirp,
     // so a file never shadows a synthesized directory.
     if (m == 'r' || m == 'o') return -ENOENT;
-    if (k_dirp(cp, (uintptr_t) cn)) return -EISDIR;
-    int e = k_parent_ok(cp, (uintptr_t) cn);
+    if (vfs_dirp(&k_fs, cp, (uintptr_t) cn)) return -EISDIR;
+    int e = vfs_parent_ok(&k_fs, cp, (uintptr_t) cn);
     if (e) return e;
-    if ((i = k_create(cp, (uintptr_t) cn, false, 0644)) < 0) return -ENOMEM;
+    if ((i = vfs_create(&k_fs, cp, (uintptr_t) cn, false, 0644)) < 0) return -ENOMEM;
     made = true; }
   int fd = k_fd_free();
   struct k_fh *h = kmallocw(b2w(sizeof *h));
@@ -1255,17 +958,17 @@ love_noinline int k_fs_open(char const *p, uintptr_t pn, char m) {
   if (!s) {
     kfree(h);
     // an open that refuses leaves the tree as it found it -- a file it minted goes too
-    if (made) k_ents[i].live = false, k_ent_gc(i);
+    if (made) k_fs.ents[i].live = false, vfs_gc(&k_fs, i);
     return -ENOMEM; }
   // the truncate lands last, past every way this can still fail (same law).
   uintptr_t len = 0;
-  struct k_ent *e = &k_ents[i];
+  struct vfs_ent *e = &k_fs.ents[i];
   int vt = k_vt_slot(cp, (uintptr_t) cn);
   if (vt && m == 'r') k_vt_read(i, vt);          // the pen, as of this open
   int ps = m != 'r' ? 0 : k_proc_slot(cp, (uintptr_t) cn);
   if (ps) k_proc_read(i, ps);                    // and the machine, as of this open
   if (m == 'w') e->own = true, e->len = 0, e->ms = k_clock_ms();
-  if (m == 'a') len = k_size(i);
+  if (m == 'a') len = vfs_size(&k_fs, i);
   e->refs++;
   *h = (struct k_fh) { .i = i, .vt = vt, .pos = len, .w = m != 'r' };
   *s = (struct k_source) { .readn = ram_readn, .writen = ram_writen,
@@ -1291,7 +994,7 @@ love_noinline int k_fs_stat(char const *p, uintptr_t pn, struct k_st *st, bool f
   char cp[256];
   intptr_t cn;
   if (!k_fs_init()) return -ENOMEM;
-  if ((cn = k_walk(p, pn, cp, follow)) < 0) return (int) cn;
+  if ((cn = vfs_walk(&k_fs, p, pn, cp, follow)) < 0) return (int) cn;
   *st = (struct k_st) { 0, 0, 0 };
   intptr_t ho = k_hosted(cp, (uintptr_t) cn);
   if (ho >= 0) {
@@ -1299,25 +1002,25 @@ love_noinline int k_fs_stat(char const *p, uintptr_t pn, struct k_st *st, bool f
     int e = k_host_stat(cp + ho, (uintptr_t) (cn - ho), r);
     if (!e) *st = (struct k_st) { r[0], r[1], r[2] };
     return e; }
-  int i = k_find(cp, (uintptr_t) cn);
+  int i = vfs_find(&k_fs, cp, (uintptr_t) cn);
   uintptr_t kid;
   // lstat, the only reason the walk left the last name alone: the link itself, sized by
   // its target the way stat(2) has it.
-  if (!follow && i >= 0 && k_ents[i].to)
-    return *st = (struct k_st) { strlen(k_ents[i].to), k_ents[i].ms,
+  if (!follow && i >= 0 && k_fs.ents[i].to)
+    return *st = (struct k_st) { strlen(k_fs.ents[i].to), k_fs.ents[i].ms,
                                  k_mode_lnk | 0777 }, 0;
-  if (i >= 0 && !k_ents[i].dir) {
+  if (i >= 0 && !k_fs.ents[i].dir) {
     int vt = k_vt_slot(cp, (uintptr_t) cn);
     if (vt) k_vt_read(i, vt);                        // so a size is the pen's, not the last read's
     int ps = k_proc_slot(cp, (uintptr_t) cn);
     if (ps) k_proc_read(i, ps);
-    st->size = k_size(i), st->ms = k_ents[i].ms,
-    st->mode = k_mode_file | k_ents[i].mode; }
+    st->size = vfs_size(&k_fs, i), st->ms = k_fs.ents[i].ms,
+    st->mode = k_mode_file | k_fs.ents[i].mode; }
   else if (i >= 0) {
-    st->mode = k_mode_dir | k_ents[i].mode;     // an explicit directory: its own date,
-    st->ms = k_ents[i].ms;                      // or its newest child's if newer
-    if (k_kids(cp, (uintptr_t) cn, &kid) && kid > st->ms) st->ms = kid; }
-  else if (k_kids(cp, (uintptr_t) cn, &st->ms) || !cn) st->mode = k_mode_dir | 0755;
+    st->mode = k_mode_dir | k_fs.ents[i].mode;     // an explicit directory: its own date,
+    st->ms = k_fs.ents[i].ms;                      // or its newest child's if newer
+    if (vfs_kids(&k_fs, cp, (uintptr_t) cn, &kid) && kid > st->ms) st->ms = kid; }
+  else if (vfs_kids(&k_fs, cp, (uintptr_t) cn, &st->ms) || !cn) st->mode = k_mode_dir | 0755;
   else return -ENOENT;
   return 0; }
 
@@ -1576,7 +1279,7 @@ love_noinline static int k_dup_row(int src, int at) {
   if (!t) { kfree(h); return -1; }
   s = k_source(src);                            // the grow may have moved the table
   *t = *s;
-  if (h) t->state = h, k_ents[h->i].refs++;
+  if (h) t->state = h, k_fs.ents[h->i].refs++;
   else if (s->readn == host_readn) ((struct k_hf*) s->state)->refs++;
   else if (s->readn == pipe_readn) ((struct k_pipe*) s->state)->rrefs++;
   else if (s->writen == pipe_writen) ((struct k_pipe*) s->state)->wrefs++;
@@ -1627,7 +1330,7 @@ long k_fd_pipe(int fds[2]) {
 
 // --- directory rows: opendir(2)'s door, src/inle/sys.c's only caller ------------
 // a directory opens as a row with a close and a dents cursor: read(2) on it is EISDIR. the
-// cursor counts the names handed out and the scan re-walks, so no state outlives the call.
+// cursor is the entry the next name's scan starts at, so no state outlives the call but that.
 struct k_dh { uintptr_t pn; int at; char p[256]; };
 static void k_dir_close(int fd) {
  struct k_source *s = k_source(fd);
@@ -1663,11 +1366,11 @@ long k_fs_opendir(char const *p, uintptr_t pn) {
  char cp[256];
  intptr_t cn;
  if (!k_fs_init()) return -ENOMEM;
- if ((cn = k_walk(p, pn, cp, true)) < 0) return cn;
+ if ((cn = vfs_walk(&k_fs, p, pn, cp, true)) < 0) return cn;
  intptr_t ho = k_hosted(cp, (uintptr_t) cn);
  if (ho >= 0) return k_host_opendir(cp + ho, (uintptr_t) (cn - ho));
- if (!k_dirp(cp, (uintptr_t) cn))
-  return k_find(cp, (uintptr_t) cn) >= 0 ? -ENOTDIR : -ENOENT;
+ if (!vfs_dirp(&k_fs, cp, (uintptr_t) cn))
+  return vfs_find(&k_fs, cp, (uintptr_t) cn) >= 0 ? -ENOTDIR : -ENOENT;
  int fd = k_fd_free();
  struct k_dh *h = kmallocw(b2w(sizeof *h));
  struct k_source *s = h ? k_source_open(fd) : NULL;
@@ -1703,29 +1406,21 @@ long k_fd_dents(int fd, void *buf, long cap) {
  if (s->close != k_dir_close) return -ENOTDIR;
  struct k_dh *h = s->state;
  long off = 0;
- int walked = 0;                               // distinct names passed this scan
- for (int i = 0; i < k_ents_n; i++) {
-  uintptr_t k;
-  char const *e = k_entry(i, h->p, h->pn, &k);
-  if (!e) continue;
-  bool seen = false;                          // one name per entry, k_readdir's rule
-  for (int j = 0; j < i && !seen; j++) {
-   uintptr_t k2;
-   char const *e2 = k_entry(j, h->p, h->pn, &k2);
-   seen = e2 && k2 == k && !memcmp(e, e2, k); }
-  if (seen) continue;
-  if (walked++ < h->at) continue;             // already handed out
+ char const *e;
+ uintptr_t k;
+ bool dir;
+ for (int cur = h->at, i; (i = vfs_child(&k_fs, h->p, h->pn, &cur, &e, &k, &dir)) >= 0; ) {
   long rl = (long) ((19 + k + 1 + 7) & ~(uintptr_t) 7);
   if (off + rl > cap) return off ? off : -EINVAL;
   struct k_dent *d = (struct k_dent*) ((char*) buf + off);
   d->ino = (unsigned long) i + 1;             // fabricated: the first carrier's row
-  d->off = h->at + 1;
+  d->off = cur;
   d->reclen = (unsigned short) rl;
-  d->type = (e[k] == '/' || k_ents[i].dir) ? 4 : 8;   // DT_DIR : DT_REG
+  d->type = dir ? 4 : 8;                      // DT_DIR : DT_REG
   memcpy(d->name, e, k);
   d->name[k] = 0;
   off += rl;
-  h->at++; }
+  h->at = cur; }
  return off; }
 
 // fstat(2)'s row face: the ramfs handle answers its entry, a pipe end is a fifo, a
@@ -1736,9 +1431,9 @@ long k_fd_stat(int fd, struct k_st *st) {
   *st = (struct k_st) { 0, 0, 0 };
   if (s->readn == ram_readn) {
     struct k_fh *h = s->state;
-    st->size = k_size(h->i);
-    st->ms = k_ents[h->i].ms;
-    st->mode = k_mode_file | k_ents[h->i].mode;
+    st->size = vfs_size(&k_fs, h->i);
+    st->ms = k_fs.ents[h->i].ms;
+    st->mode = k_mode_file | k_fs.ents[h->i].mode;
     return 0; }
   if (s->readn == host_readn) {
     long r[3] = { 0, 0, 0 };
@@ -1752,11 +1447,11 @@ long k_fd_stat(int fd, struct k_st *st) {
   if (s->close == k_hdir_close) return st->mode = k_mode_dir | 0755, 0;
   if (s->close == k_dir_close) {
     struct k_dh *h = s->state;
-    int i = k_find(h->p, h->pn);
-    st->mode = k_mode_dir | (i >= 0 ? k_ents[i].mode : 0755);
-    st->ms = i >= 0 ? k_ents[i].ms : 0;
+    int i = vfs_find(&k_fs, h->p, h->pn);
+    st->mode = k_mode_dir | (i >= 0 ? k_fs.ents[i].mode : 0755);
+    st->ms = i >= 0 ? k_fs.ents[i].ms : 0;
     uintptr_t kid;
-    if (k_kids(h->p, h->pn, &kid) && kid > st->ms) st->ms = kid;
+    if (vfs_kids(&k_fs, h->p, h->pn, &kid) && kid > st->ms) st->ms = kid;
     return 0; }
   st->mode = 0020000 | 0620;                    // the console twins: a character device
   return 0; }
@@ -1911,48 +1606,48 @@ love_noinline int k_fs_mkdir(char const *p, uintptr_t pn, uintptr_t mode) {
   char cp[256];
   intptr_t cn;
   if (!k_fs_init()) return -ENOMEM;
-  if ((cn = k_walk(p, pn, cp, false)) < 0) return (int) cn;
+  if ((cn = vfs_walk(&k_fs, p, pn, cp, false)) < 0) return (int) cn;
   intptr_t ho = k_hosted(cp, (uintptr_t) cn);
   if (ho >= 0) return cn == ho ? -EEXIST : (int) k_host(kh_mkdir, (long) (cp + ho), cn - ho, 0, 0, 0);
-  if (k_ro(cp, (uintptr_t) cn)) return -EROFS;
+  if (vfs_ro(&k_fs, cp, (uintptr_t) cn)) return -EROFS;
   uintptr_t junk;
-  if (!cn || k_find(cp, (uintptr_t) cn) >= 0 || k_kids(cp, (uintptr_t) cn, &junk))
+  if (!cn || vfs_find(&k_fs, cp, (uintptr_t) cn) >= 0 || vfs_kids(&k_fs, cp, (uintptr_t) cn, &junk))
     return -EEXIST;
-  int e = k_parent_ok(cp, (uintptr_t) cn);
+  int e = vfs_parent_ok(&k_fs, cp, (uintptr_t) cn);
   if (e) return e;
-  return k_create(cp, (uintptr_t) cn, true, mode) < 0 ? -ENOMEM : 0; }
+  return vfs_create(&k_fs, cp, (uintptr_t) cn, true, mode) < 0 ? -ENOMEM : 0; }
 
 love_noinline int k_fs_rmdir(char const *p, uintptr_t pn) {
   char cp[256];
   intptr_t cn;
   if (!k_fs_init()) return -ENOMEM;
-  if ((cn = k_walk(p, pn, cp, false)) < 0) return (int) cn;
+  if ((cn = vfs_walk(&k_fs, p, pn, cp, false)) < 0) return (int) cn;
   intptr_t ho = k_hosted(cp, (uintptr_t) cn);
   if (ho > (intptr_t) k_mnt_n) return (int) k_host(kh_rmdir, (long) (cp + ho), cn - ho, 0, 0, 0);
-  if (k_pinned(cp, (uintptr_t) cn)) return -EROFS;
+  if (vfs_pinned(&k_fs, cp, (uintptr_t) cn)) return -EROFS;
   if (!cn) return -EBUSY;                         // the root stays
-  int i = k_find(cp, (uintptr_t) cn);
-  if (i >= 0 && !k_ents[i].dir) return -ENOTDIR;
+  int i = vfs_find(&k_fs, cp, (uintptr_t) cn);
+  if (i >= 0 && !k_fs.ents[i].dir) return -ENOTDIR;
   uintptr_t junk;
-  if (k_kids(cp, (uintptr_t) cn, &junk)) return -ENOTEMPTY;
+  if (vfs_kids(&k_fs, cp, (uintptr_t) cn, &junk)) return -ENOTEMPTY;
   if (i < 0) return -ENOENT;
-  k_ents[i].live = false;
-  k_ent_gc(i);
+  k_fs.ents[i].live = false;
+  vfs_gc(&k_fs, i);
   return 0; }
 
 love_noinline int k_fs_unlink(char const *p, uintptr_t pn) {
   char cp[256];
   intptr_t cn;
   if (!k_fs_init()) return -ENOMEM;
-  if ((cn = k_walk(p, pn, cp, false)) < 0) return (int) cn;
+  if ((cn = vfs_walk(&k_fs, p, pn, cp, false)) < 0) return (int) cn;
   intptr_t ho = k_hosted(cp, (uintptr_t) cn);
   if (ho >= 0) return cn == ho ? -EISDIR : (int) k_host(kh_unlink, (long) (cp + ho), cn - ho, 0, 0, 0);
-  if (k_ro(cp, (uintptr_t) cn)) return -EROFS;
-  int i = cn ? k_find(cp, (uintptr_t) cn) : -1;
-  if (i < 0) return k_dirp(cp, (uintptr_t) cn) ? -EISDIR : -ENOENT;
-  if (k_ents[i].dir) return -EISDIR;
-  k_ents[i].live = false;                        // an open fd keeps the bytes; the
-  k_ent_gc(i);                                   // last close frees them
+  if (vfs_ro(&k_fs, cp, (uintptr_t) cn)) return -EROFS;
+  int i = cn ? vfs_find(&k_fs, cp, (uintptr_t) cn) : -1;
+  if (i < 0) return vfs_dirp(&k_fs, cp, (uintptr_t) cn) ? -EISDIR : -ENOENT;
+  if (k_fs.ents[i].dir) return -EISDIR;
+  k_fs.ents[i].live = false;                        // an open fd keeps the bytes; the
+  vfs_gc(&k_fs, i);                                   // last close frees them
   return 0; }
 
 // (symlink target path). the target is stored as given, the way readlink(2) owes it back,
@@ -1962,19 +1657,19 @@ love_noinline int k_fs_symlink(char const *t, uintptr_t tn, char const *p, uintp
   intptr_t cn;
   if (!k_fs_init()) return -ENOMEM;
   if (!tn || tn >= 256) return -ENAMETOOLONG;
-  if ((cn = k_walk(p, pn, cp, false)) < 0) return (int) cn;
+  if ((cn = vfs_walk(&k_fs, p, pn, cp, false)) < 0) return (int) cn;
   if (k_hosted(cp, (uintptr_t) cn) >= 0) return -EPERM;   // the seat keeps no links
-  if (k_ro(cp, (uintptr_t) cn)) return -EROFS;
+  if (vfs_ro(&k_fs, cp, (uintptr_t) cn)) return -EROFS;
   uintptr_t junk;
-  if (!cn || k_find(cp, (uintptr_t) cn) >= 0 || k_kids(cp, (uintptr_t) cn, &junk))
+  if (!cn || vfs_find(&k_fs, cp, (uintptr_t) cn) >= 0 || vfs_kids(&k_fs, cp, (uintptr_t) cn, &junk))
     return -EEXIST;
-  int e = k_parent_ok(cp, (uintptr_t) cn);
+  int e = vfs_parent_ok(&k_fs, cp, (uintptr_t) cn);
   if (e) return e;
-  char *q = k_strdup(t, tn);
+  char *q = vfs_strdup(&k_fs, t, tn);
   if (!q) return -ENOMEM;
-  int i = k_create(cp, (uintptr_t) cn, false, 0777);
+  int i = vfs_create(&k_fs, cp, (uintptr_t) cn, false, 0777);
   if (i < 0) return kfree(q), -ENOMEM;
-  k_ents[i].to = q;
+  k_fs.ents[i].to = q;
   return 0; }
 
 // (readlink path): the target, unfollowed and untruncated -- the byte count back, as
@@ -1983,16 +1678,16 @@ love_noinline intptr_t k_fs_readlink(char const *p, uintptr_t pn, char *b, uintp
   char cp[256];
   intptr_t cn;
   if (!k_fs_init()) return -ENOMEM;
-  if ((cn = k_walk(p, pn, cp, false)) < 0) return cn;
+  if ((cn = vfs_walk(&k_fs, p, pn, cp, false)) < 0) return cn;
   intptr_t ho = k_hosted(cp, (uintptr_t) cn);
   if (ho >= 0) { uintptr_t r[3]; int e = k_host_stat(cp + ho, (uintptr_t) (cn - ho), r); return e ? e : -EINVAL; }
-  int i = cn > 0 ? k_find(cp, (uintptr_t) cn) : -1;
+  int i = cn > 0 ? vfs_find(&k_fs, cp, (uintptr_t) cn) : -1;
   if (i < 0) return -ENOENT;
-  if (!k_ents[i].to) return -EINVAL;
-  uintptr_t tn = strlen(k_ents[i].to);
+  if (!k_fs.ents[i].to) return -EINVAL;
+  uintptr_t tn = strlen(k_fs.ents[i].to);
   if (!n) return -EINVAL;
   if (tn > n) tn = n;                            // readlink(2) truncates and does not say so
-  memcpy(b, k_ents[i].to, tn);
+  memcpy(b, k_fs.ents[i].to, tn);
   return (intptr_t) tn; }
 
 // (rename old new): a file moves whole, a target file unlinked under it; a directory
@@ -2003,38 +1698,38 @@ love_noinline int k_fs_rename(char const *o, uintptr_t olen,
   char op[256], np[256];
   intptr_t on, nn;
   if (!k_fs_init()) return -ENOMEM;
-  if ((on = k_walk(o, olen, op, false)) < 0) return (int) on;
-  if ((nn = k_walk(n, nlen, np, false)) < 0) return (int) nn;
+  if ((on = vfs_walk(&k_fs, o, olen, op, false)) < 0) return (int) on;
+  if ((nn = vfs_walk(&k_fs, n, nlen, np, false)) < 0) return (int) nn;
   intptr_t ho = k_hosted(op, (uintptr_t) on), hn = k_hosted(np, (uintptr_t) nn);
   if (ho > (intptr_t) k_mnt_n && hn > (intptr_t) k_mnt_n)
     return (int) k_host(kh_rename, (long) (op + ho), on - ho, (long) (np + hn), nn - hn, 0);
   if ((ho > (intptr_t) k_mnt_n) != (hn > (intptr_t) k_mnt_n)) return -EXDEV;   // across the mount
-  if (k_pinned(op, (uintptr_t) on) || k_pinned(np, (uintptr_t) nn)) return -EROFS;
+  if (vfs_pinned(&k_fs, op, (uintptr_t) on) || vfs_pinned(&k_fs, np, (uintptr_t) nn)) return -EROFS;
   if (!on) return -EBUSY;                         // the root does not move
   if (on == nn && !memcmp(op, np, (uintptr_t) on)) return 0;           // itself: done
   if (!nn) return -EEXIST;                        // onto the root
-  int e = k_parent_ok(np, (uintptr_t) nn);
+  int e = vfs_parent_ok(&k_fs, np, (uintptr_t) nn);
   if (e) return e;
-  int si = k_find(op, (uintptr_t) on), di = k_find(np, (uintptr_t) nn);
+  int si = vfs_find(&k_fs, op, (uintptr_t) on), di = vfs_find(&k_fs, np, (uintptr_t) nn);
   uintptr_t junk;
-  bool sdir = si >= 0 ? k_ents[si].dir : k_kids(op, (uintptr_t) on, &junk);
+  bool sdir = si >= 0 ? k_fs.ents[si].dir : vfs_kids(&k_fs, op, (uintptr_t) on, &junk);
   if (si < 0 && !sdir) return -ENOENT;
   if (!sdir) {
-    if (di >= 0 ? k_ents[di].dir : k_kids(np, (uintptr_t) nn, &junk))
+    if (di >= 0 ? k_fs.ents[di].dir : vfs_kids(&k_fs, np, (uintptr_t) nn, &junk))
       return -EISDIR;                             // a file does not land on a directory
-    char *q = k_strdup(np, (uintptr_t) nn);
+    char *q = vfs_strdup(&k_fs, np, (uintptr_t) nn);
     if (!q) return -ENOMEM;
-    if (di >= 0) k_ents[di].live = false, k_ent_gc(di);
-    if (k_ents[si].heap) kfree((void*) k_ents[si].path);
-    k_ents[si].path = q, k_ents[si].heap = true;
+    if (di >= 0) k_fs.ents[di].live = false, vfs_gc(&k_fs, di);
+    if (k_fs.ents[si].heap) kfree((void*) k_fs.ents[si].path);
+    k_fs.ents[si].path = q, k_fs.ents[si].heap = true;
     return 0; }
   // the directory lane
   if ((uintptr_t) nn > (uintptr_t) on && !memcmp(np, op, (uintptr_t) on) && np[on] == '/')
     return -EINVAL;                               // never into itself
-  if (di >= 0 || k_kids(np, (uintptr_t) nn, &junk)) return -EEXIST;
+  if (di >= 0 || vfs_kids(&k_fs, np, (uintptr_t) nn, &junk)) return -EEXIST;
   struct k_ren *st = NULL;
-  for (int i = 0; i < k_ents_n; i++) {
-    struct k_ent const *t = &k_ents[i];
+  for (int i = 0; i < k_fs.n; i++) {
+    struct vfs_ent const *t = &k_fs.ents[i];
     if (!t->live || !t->path) continue;
     uintptr_t tl = strlen(t->path);
     if (tl < (uintptr_t) on || memcmp(t->path, op, (uintptr_t) on)
@@ -2051,7 +1746,7 @@ love_noinline int k_fs_rename(char const *o, uintptr_t olen,
     *r = (struct k_ren) { st, i, q };
     st = r; }
   while (st) {
-    struct k_ent *t = &k_ents[st->i];
+    struct vfs_ent *t = &k_fs.ents[st->i];
     if (t->heap) kfree((void*) t->path);
     t->path = st->q, t->heap = true;
     struct k_ren *x = st;
@@ -2063,7 +1758,7 @@ love_noinline int k_fs_chdir(char const *p, uintptr_t pn) {
   char cp[256];
   intptr_t cn;
   if (!k_fs_init()) return -ENOMEM;
-  if ((cn = k_walk(p, pn, cp, true)) < 0) return (int) cn;
+  if ((cn = vfs_walk(&k_fs, p, pn, cp, true)) < 0) return (int) cn;
   intptr_t ho = k_hosted(cp, (uintptr_t) cn);
   if (ho >= 0) {
     uintptr_t r[3];
@@ -2071,19 +1766,19 @@ love_noinline int k_fs_chdir(char const *p, uintptr_t pn) {
     if (e) return e;
     if ((r[2] & 0170000) != k_mode_dir) return -ENOTDIR; }
   else if (cn) {
-    int i = k_find(cp, (uintptr_t) cn);
-    if (i >= 0 && !k_ents[i].dir) return -ENOTDIR;
+    int i = vfs_find(&k_fs, cp, (uintptr_t) cn);
+    if (i >= 0 && !k_fs.ents[i].dir) return -ENOTDIR;
     uintptr_t junk;
-    if (i < 0 && !k_kids(cp, (uintptr_t) cn, &junk)) return -ENOENT; }
-  memcpy(k_cwd, cp, (uintptr_t) cn), k_cwd_n = (uintptr_t) cn;
+    if (i < 0 && !vfs_kids(&k_fs, cp, (uintptr_t) cn, &junk)) return -ENOENT; }
+  memcpy(k_fs.cwd, cp, (uintptr_t) cn), k_fs.cwd_n = (uintptr_t) cn;
   return 0; }
 
 // the seat into a caller's buffer, 0 ok or -ERANGE -- getcwd(2)'s own refusal
 int k_fs_getcwd(char *b, uintptr_t n) {
-  if (n < k_cwd_n + 2) return -ERANGE;            // '/' + the seat + the NUL
+  if (n < k_fs.cwd_n + 2) return -ERANGE;            // '/' + the seat + the NUL
   b[0] = '/';
-  memcpy(b + 1, k_cwd, k_cwd_n);
-  b[1 + k_cwd_n] = 0;
+  memcpy(b + 1, k_fs.cwd, k_fs.cwd_n);
+  b[1 + k_fs.cwd_n] = 0;
   return 0; }
 
 // the two attribute writers land on the entry, so a synthesized directory takes either as
@@ -2092,26 +1787,26 @@ love_noinline int k_fs_chmod(char const *p, uintptr_t pn, uintptr_t mode) {
   char cp[256];
   intptr_t cn;
   if (!k_fs_init()) return -ENOMEM;
-  if ((cn = k_walk(p, pn, cp, true)) < 0) return (int) cn;
+  if ((cn = vfs_walk(&k_fs, p, pn, cp, true)) < 0) return (int) cn;
   intptr_t ho = k_hosted(cp, (uintptr_t) cn);     // the seat keeps no bits or dates of ours:
   if (ho >= 0) { uintptr_t r[3]; return k_host_stat(cp + ho, (uintptr_t) (cn - ho), r); }   // there is all
-  if (k_ro(cp, (uintptr_t) cn)) return -EROFS;
-  int i = k_find(cp, (uintptr_t) cn);
-  if (i < 0) return k_dirp(cp, (uintptr_t) cn) ? 0 : -ENOENT;
-  k_ents[i].mode = mode & 07777;
+  if (vfs_ro(&k_fs, cp, (uintptr_t) cn)) return -EROFS;
+  int i = vfs_find(&k_fs, cp, (uintptr_t) cn);
+  if (i < 0) return vfs_dirp(&k_fs, cp, (uintptr_t) cn) ? 0 : -ENOENT;
+  k_fs.ents[i].mode = mode & 07777;
   return 0; }
 
 love_noinline int k_fs_utime(char const *p, uintptr_t pn, uintptr_t ms) {
   char cp[256];
   intptr_t cn;
   if (!k_fs_init()) return -ENOMEM;
-  if ((cn = k_walk(p, pn, cp, true)) < 0) return (int) cn;
+  if ((cn = vfs_walk(&k_fs, p, pn, cp, true)) < 0) return (int) cn;
   intptr_t ho = k_hosted(cp, (uintptr_t) cn);     // the seat keeps no bits or dates of ours:
   if (ho >= 0) { uintptr_t r[3]; return k_host_stat(cp + ho, (uintptr_t) (cn - ho), r); }   // there is all
-  if (k_ro(cp, (uintptr_t) cn)) return -EROFS;
-  int i = k_find(cp, (uintptr_t) cn);
-  if (i < 0) return k_dirp(cp, (uintptr_t) cn) ? 0 : -ENOENT;
-  k_ents[i].ms = ms;
+  if (vfs_ro(&k_fs, cp, (uintptr_t) cn)) return -EROFS;
+  int i = vfs_find(&k_fs, cp, (uintptr_t) cn);
+  if (i < 0) return vfs_dirp(&k_fs, cp, (uintptr_t) cn) ? 0 : -ENOENT;
+  k_fs.ents[i].ms = ms;
   return 0; }
 
 static lvm(kreset) { return k_reset(), g; }
@@ -2365,8 +2060,6 @@ lvm(k_lvm_quit) {
     love_musttail return Ap(lvm_task_exit, g); }
   k_reset();
   love_musttail return Next(1); }
-
-
 
 static union u
   nif_reset[] = {{kreset}},

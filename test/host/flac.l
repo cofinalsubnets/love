@@ -7,6 +7,8 @@
 (borrow 'posix)
 (borrow 'flac)
 (: dir (cwd 0 + "/out/.flacd")
+   ; a meta that wants more, or would skip a block it need not hold
+   (fl-more? x) (x = 'more || (two? x && elem <x ['more 'skip]))
    _ (hark ["rm" "-rf" dir], mkdir dir 448)
    (rd p) (: q (open p "r") s (slurp q) (close q, s))
    (nib c) (? (c < 58) (c - 48) (c - 87))
@@ -38,8 +40,8 @@
            (all (n \ flac-frame (snip tiny 0 n) (m 'at) 16 2 = 2) (map (+ (m 'at)) ^20))
            (flac-frame tiny 0 16 2 = 1)
            (flac-frame tiny (m 'at) 24 2 = 4)                   ; the stream says 16 bits
-           (flac-meta "not flac" = "not a FLAC file") (flac-meta "fLaC" = 'more)
-           (flac-meta (snip tiny 0 50) = 'more))
+           (flac-meta "not flac" = "not a FLAC file") (flac-meta "fLaC" = ['more 8])
+           (fl-more? (flac-meta (snip tiny 0 50))))
    ; a seek: entered part way into the first frame, a pump starts at the second
    (fl-seek k) (: p (dir + "/seek") _ (open p "w" @ q (say q (snip tiny (m 'at + k) #tiny), close q))
                   q (open p "r") b {} r (flac-pump q "" m (pcm \ pin b 0 (peep b 0 "" + pcm)))
@@ -58,7 +60,7 @@
    (flip s i) (cask #s @ c (map (k \ pin c k (s k)) (jot #s), pin c i (255 - s i), string c))
    _ (test (atom? (filter (i \ !(flac-meta (flip tiny i) @ m2
                                   (? (tablet? m2) (fl-all (flip tiny i) (m2 'at) m2 @ r (string? r || charm? r))
-                                     (string? m2 || m2 = 'more))))
+                                     (string? m2 || fl-more? m2))))
                           (jot #tiny))))
 
    ; -- against the reference ------------------------------------------------------------
@@ -127,6 +129,16 @@
            (sh "../love metaflac --show-sample-rate --show-tag=title t.flac" = (0 . "8000\nTITLE=tiny\n"))
            (sh "../love metaflac --export-tags-to=- t.flac" = (0 . "TITLE=tiny\n"))
            (sh "head -c 300 t.flac | ../love flac -s -t - 2>&1" = (1 . "stdin: ERROR while decoding data: cut short\n")))
+   ; -- the head is read once: a picture past 64 KiB leaves the port unread through the door,
+   ; and metaflac, reading every block, still lists it --
+   (fl-pic n) ("fLaC" + snip tiny 4 42 + string [6 ((n >> 16) & 255) ((n >> 8) & 255) (n & 255)] + string (cask n)
+               + snip tiny 42 #tiny)
+   _ (open (dir + "/pic.flac") "w" @ q (say q (fl-pic 1048576), close q))
+   _ (test (sh "../love flac -s -t pic.flac" = (0 . ""))
+           ((cite 'av 'av-open) (open (dir + "/pic.flac") "r") @
+             [n m h] (m 'tags = ["TITLE=tiny"] && !(elem 6 (map (b \ <b) (m 'blocks))))
+             _ 0)
+           (sh "../love metaflac --list pic.flac | grep -c 'type: 6 (PICTURE)'" = (0 . "1\n")))
    ; the encoder through the door: a wav in, and a flac re-encoded, each back to the same samples
    _ (test (sh "../love flac -s -f t.wav -o w.flac && ../love flac -s -d -c w.flac | cmp - t.wav" = (0 . ""))
            (sh "../love flac -s -f -8 t.flac -o r.flac && ../love flac -s -t r.flac" = (0 . ""))
