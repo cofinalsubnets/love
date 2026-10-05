@@ -1,7 +1,8 @@
 ; test/host/torrent.l -- the torrent client, offline: bencode's laws and refusals, a
 ; metainfo read back from torrents laid here, transmission-show's sizes, the tracker's
 ; parsing, and a whole download from a seeder on loopback -- one file and two, and the
-; ordered port from a byte inside the first piece.
+; ordered port from a byte inside the first piece -- then that file, whole on disk, checked
+; and seeded to another swarm of ours.
 ; run: cat test/00-init.l test/host/torrent.l | out/love
 (borrow 'posix)
 (borrow 'bytes)
@@ -84,7 +85,15 @@
    streamed (rd "")
    _ (catch sw)
    _ (freeze srv) _ (close (pl 1))
- (test (tablet? m1) (m1 'name = "t.bin") (m1 'count = 4) (m1 'total = 100000) (m1 'plen = plen)
+   ; t.bin whole on disk: a fresh swarm checks it had, and seeds it to another of ours
+   sd (swarm-new m1 dir) had0 (swarm-had sd)
+   sl (test-listen 0)
+   st (twirl (_ \ swarm-run sd () {'listen (sl 1) 'seed 1 'id (peer-id 0)}) ())
+   _ (mkdir (dir + "/b") 448)
+   r3 (swarm-run (swarm-new m1 (dir + "/b")) [["127.0.0.1" <sl]] {'max 1 'id (peer-id 0)})
+   _ (pin sd 'quit 1) r4 (catch st) _ (close (sl 1))
+   got (uread (dir + "/b/t.bin") @ [1 s] s ())
+ _ (test (tablet? m1) (m1 'name = "t.bin") (m1 'count = 4) (m1 'total = 100000) (m1 'plen = plen)
        (m1 'hash = hex2b (sha1 (bencode one))) (m1 'comment = "laid here")
        ([["http://t.example/announce"]] = m1 'tiers)
        (tpiece-len m1 0 = plen) (tpiece-len m1 3 = 100000 - 3 * plen)
@@ -92,7 +101,8 @@
        ("not bencode" = tmeta "d") ("no info dictionary" = tmeta (bencode {"x" 1}))
        ("the pieces do not cover the files" = tmeta (torrent (pins {} "name" "x" "piece length" plen "pieces" (hashes data) "length" 10)))
        (r1 = [1 [data]]) (r2 = [1 [(snip data 0 70000) (snip data 70000 100000)]])
-       (q 1 = 100000 - 5) (streamed = snip data 5 100000))
+       (q 1 = 100000 - 5) (streamed = snip data 5 100000)
+       (had0 = 4) (r3 = 1) (r4 = 1) (sd 'up = 100000) (got = data))
  (hark ["rm" "-rf" dir]))
 
-(test_fin (), puts "torrent: ok -- bencode, a metainfo, transmission's sizes, the tracker's words, a swarm on loopback and its ordered port\n")
+(test_fin (), puts "torrent: ok -- bencode, a metainfo, transmission's sizes, the tracker's words, a swarm on loopback, its ordered port, and seeding\n")
