@@ -14,6 +14,7 @@
    ; as `;; missing m64` when the #if evaluator below is compiled. The default love
    ; takes it either way, which is exactly why it must be written down -- only the
    ; mooncc0 bake (love0's lane) fails, and it fails at the bake, not at the edit.
+   guards {}                                       ; a header's path -> (text guard), the guard () when it has none
    m64 18446744073709551616                        ; 2^64: #if arithmetic is 64-bit (C11 6.10.1)
    h64 9223372036854775808                         ; 2^63: intmax's top, so the sign boundary
    b32 4294967296                                  ; 2^32: the limb cbit splits on
@@ -619,7 +620,7 @@
                 d0 #(peep cppdeps 'l ())
                 (two? got ? (mrestore macs <>>>>got, pin cppdeps 'l (got 5 + peep cppdeps 'l ()), rejoin <>>>got)
                    (: _ (0 < #ipath && pin cppdeps 'l (ipath . peep cppdeps 'l ()))
-                   (clexw <>txt 1 @ lr
+                   (lexinc ipath <>txt macs @ lr
                       ; okv?, not two? -- a gripe is a pair, and a two? here would read
                       ; a refusal as a token list and walk it. a located refusal is the
                       ; header's own and takes its name; a bare one is knowable only at
@@ -642,6 +643,29 @@
                                   (mput [ipath <>txt pre raw (msnap macs)
                                          (peep cppdeps 'l () @ l (take (#l - d0) l))]) 0,
                                 rejoin raw)))))))))))
+   ; -- the multiple-include rule: a header wholly inside `#ifndef G .. #endif`, nothing past
+   ; it and no #else at its top, reads as nothing once G is defined. so the second #include
+   ; of the same text lexes nothing and walks nothing -- the marks still bracket it --
+   (lexinc ip txt macs)
+    (peep guards ip () @ e
+       (? (two? e && <e = txt && two? (mdef macs <>e)) [1 ()]
+          (clexw txt 1 @ lr
+             (: _ (okv? lr && 0 < #ip && pin guards ip [txt (guardof <>lr)])
+                lr))))
+   (dirat? l) (two? l && pv? <l "#" && two? >l)      ; l opens a directive, its name next
+   (guardof ts)
+    (: (go l ln d)                                   ; d: the conditional depth, 1 inside the guard
+        (? (atom? l) ()
+           (lof <l = ln) (go >l ln d)                ; the rest of a line already read
+           !(dirat? l) (go >l (lof <l) d)
+           (dirname <>l @ dn
+              (? (elem dn '("if" "ifdef" "ifndef")) (go >l (lof <l) (d + 1))
+                 (dn = "endif") (d = 1 ? (tail >l (lof <l)) (go >l (lof <l) (d - 1)))
+                 (d = 1 && elem dn '("else" "elif")) ()
+                 (go >l (lof <l) d))))
+       (tail l ln) (? (atom? l) 1 (lof <l = ln) (tail >l ln) ())
+       (dirat? ts && dirname <>ts = "ifndef" && two? >>ts && idt? <>>ts &&
+        (atom? >>>ts || lof <>>>ts != lof <ts) && go >>>ts (lof <ts) 1 ? (vof <>>ts)))
    (incname body)                                     ; the header name from #include tokens
     (? (atom? body) ()
        (kof <body = 'str) (vof <body)         ; "file"
