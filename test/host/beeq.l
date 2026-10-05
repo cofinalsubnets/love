@@ -494,5 +494,36 @@
       (bq-in (rd 13) ("\nsbq " + g2 + "\n")) (bq-in (rd 13) "land by psid"))
    0)
 
+;; --- a row merged but not yet queue_landed is still landing: the row behind may not land
+; until it leaves the queue, and the answer names the locked fast gate ----------------------
+(: w (bq-world "landing") lq bq-q
+   (sha r) (bq-out (bq-git w ["rev-parse" r]))
+   (calls nm cs)
+    (: f (w 'dir + "/" + nm + ".in")
+       _ (bq-put f (foldl (\ a c (a + json-show {"jsonrpc" "2.0" "id" <c "method" "tools/call"
+                                                "params" {"name" (c 1) "arguments" (pin (c 2) "queue" lq)}} + "\n"))
+                         "" cs))
+       r (bq-sh w ("env BEE_NAME=" + nm + " " + bq-sq bq-love + " " + bq-sq bq-app + " --mcp < " + bq-sq f))
+       (foldl (\ t l (: j (json-read l) (? (two? j) (pin t ((j 1) "id") ((j 1) "result" "content" 0 "text")) t)))
+              {} (filter (\ l (0 < #l)) (lines (r 1)))))
+   m (sha "test") ga (sha "ant") gu (sha "union")
+   a (calls "ant" [[1 "queue_row" {"state" "waiting" "branch" "ant" "leader" "queen"}]
+                   [2 "queue_row" {"state" "green" "gated_on" m "gated_head" ga}]])
+   b (calls "bob" [[3 "queue_row" {"state" "waiting" "branch" "union"}]
+                   [4 "queue_row" {"state" "green" "gated_on" ga "gated_head" gu}]
+                   [5 "queue_land" {}]])
+   _ (bq-git w ["merge" "-q" "--no-ff" ga "-m" "Merge queue row 1 (ant)"])
+   c (calls "bob" [[6 "queue_land" {}]])
+   d (calls "ant" [[7 "queue_landed" {}]])
+   e (calls "bob" [[8 "queue_land" {}]])
+   _ (test
+      (bq-in (b 4) " green")
+      (bq-in (b 5) "row 1 is ahead of row 2: the head lands first")
+      (bq-in (c 6) "row 1 is still landing (merged, make test running); wait for its queue_landed")
+      (bq-in (d 7) "landed: row 1 left")
+      (bq-in (e 8) ("git merge --no-ff " + gu))
+      (bq-in (e 8) "love bee --lock --out ") (bq-in (e 8) (w 'repo + "/out")) (bq-in (e 8) " -- make test"))
+   0)
+
 (hark ["rm" "-rf" bq-root])
 (test_fin (), puts "beeq: ok", putc 10, 0)
