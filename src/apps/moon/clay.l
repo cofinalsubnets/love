@@ -357,6 +357,7 @@
         ['goto l] (line n ("goto " + l + ";"))
         ['lbl l] (line (n < 1 ? 0 (n - 1)) (l + ":"))
         ['case v] (line (n < 1 ? 0 (n - 1)) ("case " + (charm? v ? (show v) (ce v 0)) + ":"))
+        ['case v w] (line (n < 1 ? 0 (n - 1)) ("case " + show v + " ... " + show w + ":"))
         ['dflt] (line (n < 1 ? 0 (n - 1)) "default:")
         ('if . _ . _ . _) (cif s n "")     ; lax: `if 2 3`, and cif reads the else itself
         ['while c b] (copen n "" ("while (" + ce c 0 + ")") b + cclose n b "")

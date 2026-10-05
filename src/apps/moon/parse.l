@@ -2087,23 +2087,23 @@
              ; case/default are labels, legal at any statement depth and not just as a direct
              ; child of the switch body (Duff's-device style); gen ties each back to its nearest
              ; enclosing switch by case value (g 'cases). gcc's `case A ... B:` expands to one
-             ; label per value -- sound because a switch dispatches by a compare chain, not a
-             ; table -- and is capped, so a wide range refuses rather than laying thousands.
+             ; label per value when narrow (a table may still take it), and a wider one is one
+             ; ('case A B) the dispatch tests as one unsigned compare (linux's sysreg ranges).
              (tkw? t 'case)
               (pexpr ps >ts @ rv
                  (atom? rv ? ()
                     (: v (cfold (pw64 ps) <rv)
                        (crange lo hi acc) (hi < lo ? (rev acc) (crange (lo + 1) hi (['case lo] . acc)))
-                       (? !(charm? v) ()
+                       (? !(cint? v) ()
                           (peekp <>rv "...")
                            (pexpr ps ><>rv @ r2
                               (atom? r2 ? ()
                                  (: hi (cfold (pw64 ps) <r2)
                                     rest (want <>r2 ":")
-                                    (? !(charm? hi) ()
+                                    (? !(cint? hi) ()
                                        (atom? rest) ()
                                        (hi < v) (blame <>rv "an empty case range")
-                                       (1024 < hi - v) (blame <>rv "case range too wide")
+                                       (16 < hi - v) [['case v hi] rest]
                                        [['blk (crange v hi ())] rest]))))
                           (want <>rv ":" @ rest
                              (two? rest ? [['case v] rest]))))))

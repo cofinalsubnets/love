@@ -7440,6 +7440,10 @@
           ('asm . _) (cgasm g env s)
           ; a case/default label emits from the tablet atop g 'cases (the switch's pre-scan pinned
           ; value->label); no enclosing switch, or an unscanned value, refuses
+          ('case lo hi)
+           (!(two? (g 'cases)) ? 'bad
+              (peep <(g 'cases) [lo hi] 'no @ lab
+                 (lab @ 'no 'bad [['label lab]])))
           ('case cv)
            (!(two? (g 'cases)) ? 'bad
               (peep <(g 'cases) cv 'no @ lab
@@ -7457,8 +7461,21 @@
                     tab {}                ; this switch's value->label map (and 'dflt->label)
                     cases (rev (scasel-l g items tab ()))   ; pre-scan the body at any depth -> (value label) dispatch pairs
                     dflt (peep tab 'dflt lend)
+                    ; a range tests x - lo against hi - lo, one unsigned compare, in a scratch
+                    ; register of its own
+                    (rng lo hi lab)
+                     (: l9 (cfit g (vty c) lo) sp (cfit g (vty c) hi - l9) t9 (ralloc g)
+                        (!t9 ? 'bad
+                           (: u9 (immok g 'cmp sp ? () (ralloc g))
+                              (? (!(immok g 'cmp sp) && !u9) (rfree g t9, 'bad)
+                                 (: ins ([['li t9 l9] ['sub t9 cr9 t9]]
+                                         + (u9 ? [['li u9 sp] ['cmp t9 u9]] [['cmp t9 sp]])
+                                         + [['br 'be lab]])
+                                    (rfree g t9, (u9 ? (rfree g u9) 0), ins))))))
                     chain (: (go l acc)
-                             (!(two? l) ? acc
+                             (? !(two? l) acc
+                                (bad? acc) acc
+                                (two? <<l) (rng <<<l <><<l <><l @ r (bad? r ? 'bad (go >l (acc + r))))
                                 (: e2 <l  v (cfit g (vty c) <e2)  lab <>e2
                                    ins (immok g 'cmp v ?
                                           [['cmp cr9 v] ['br 'eq lab]]
@@ -7475,7 +7492,7 @@
                     (pins g 'brk >(g 'brk)
                             'brkm >(g 'brkm)
                             'cases >(g 'cases),      ; pop
-                     bad? body ? 'bad
+                     bad? body || bad? disp ? 'bad
                        (vfs c + disp + [['jmp dflt]] + (body + [['label lend]]))))))))
    (cgitems g env items acc) (sxpre g env items acc @ r (bad? r ? 'bad <r))   ; a block's items -> forms | 'bad
 
@@ -7484,12 +7501,13 @@
    ; again (so the table rides .rodata; -pie slides an abs64): leax lands on the cell's end, ld4 reads
    ; back -4, the sum is the target. jmpt names its targets so the labels survive deadlab. --
    (jtable g c cr9 cases dflt)
-    (: vs (sort (map (e2 \ (cfit g (vty c) <e2)) cases))
+    (: vs (sort (map (e2 \ (two? <e2 ? 0 (cfit g (vty c) <e2))) cases))
        n9 #cases
        lo (two? vs ? <vs 0)
        hi (two? vs ? (vs (n9 - 1)) 0)
        span (hi - lo + 1)
        (? (wasm? g || t32? g) 'no               ; no memory table on wasm; t32's REL lane is unproven here
+          (any (e2 \ two? <e2) cases) 'no         ; a range rides the chain
           (abl? g 'jtab) 'no
           (n9 < 6) 'no                              ; fewer cases than a table is worth
           (4096 < span) 'no                         ; ..and a span no table should cover
@@ -7529,7 +7547,8 @@
    ; a switch body's case/default labels at any depth: value->label pinned into tab -> (value label) dispatch pairs
    (scasel g it tab acc)
     (!(two? it) ? acc
-       (it @ ('case cv)     (nlab g ".k" @ lab (pin tab cv lab, [cv lab . acc]))
+       (it @ ('case lo hi)  (nlab g ".k" @ lab (pin tab [lo hi] lab, [[lo hi] lab . acc]))   ; a range: one label
+             ('case cv)     (nlab g ".k" @ lab (pin tab cv lab, [cv lab . acc]))
              ('dflt . _)   (nlab g ".k" @ lab (pin tab 'dflt lab, acc))
              ('switch . _) acc                                   ; a nested switch owns its labels
              (scasel-l g (stkids it) tab acc)))
