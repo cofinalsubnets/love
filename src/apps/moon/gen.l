@@ -6667,9 +6667,11 @@
     ; template carrying one takes the runs path, its labels the function's own
     (neutral? || gas-plain? tgt txt && !(any (f \ two? f && <f = 'pushl) (gas-text tgt txt)) ?
        [['raw (: prog (neutral? ? (asm-text txt) (gas-text tgt txt))                 (asmho tgt prog (cg-refs prog {})))]]
-       (: r (gas-top-in tgt txt "" [1 6] (show (nlab g (g 'fn + ".asm")) + "."))
+       (: pf (show (nlab g (g 'fn + ".asm")) + ".")
+          r (gas-top-in tgt txt "" [1 6] pf)
           home (foldl (a \ x \ <x = "" ? (x 3) a) () <r)
-          (pin g 'fasecs ([(filter (x \ <x != "") <r) (r 1) (r 2)] . g 'fasecs),
+          ; the prefix rides along: what dead code removes of the home, the record follows out
+          (pin g 'fasecs ([(filter (x \ <x != "") <r) (r 1) (r 2) pf] . g 'fasecs),
            asmruns tgt home)))
    ; forms -> raw runs between the labels and aligns, every fix left open for the function's lay
    (asmruns tgt fs)
@@ -6681,8 +6683,20 @@
                  (go >l (f . cur) acc))))
        (go fs () ()))
    ; the file-scope asm's sections and every function's, one [secs fns objs]
-   (asecs-all g) (foldl (a \ r \ two? a ? [(<a + <r) (a 1 + r 1) (a 2 + r 2)] r)
-                        (g 'asecs) (rev (g 'fasecs)))
+   (asecs-all g) (asecs-of g (rev (g 'fasecs)))
+   (asecs-of g l) (foldl (a \ r \ two? a ? [(<a + <r) (a 1 + r 1) (a 2 + r 2)] (take 3 r))
+                         (g 'asecs) l)
+   ; ..less a function asm's whose home the dead code removed: its words name labels of that
+   ; asm the text no longer lays (a BUG_ON a fold proved false keeps no __bug_table row)
+   (asecs-live g txt)
+    (: have {}
+       (lbls x) (? !(two? x) 0 (<x = 'label && nom? <>x) (pin have (show <>x) 1) (lbls <x, lbls >x))
+       _ (lbls txt)
+       (mine? pf n) (starts? n pf)
+       (live? r) (? !(string? (r 3)) 1
+                    !(any (n \ mine? (r 3) (show n)) (keys (cg-refs (take 3 r) {}))) 1
+                    (any (n \ mine? (r 3) n) (keys have)))
+       (asecs-of g (filter live? (rev (g 'fasecs)))))
    ; a refusal that names what the asm asked for, for cgfn's report
    (asmno g msg) (pin g 'nolane msg, 'bad)
    ; what gas or holo could not read, as a sentence: the reader's own name for it and the piece
@@ -9222,5 +9236,5 @@
                         (map (nm \ [nm (forsec nm src) (grain nm src)]) (noms src ()))))
              [1 <>r <dat fnames gnames
                 <>dat <>>dat lnames <>>>dat <>>>>dat <>>>>>dat
-                xfns (asecs-all <r)]))))
+                xfns (asecs-live <r [<>r (map (x \ x 1) xfns)])]))))
 ) ; module 'moon
