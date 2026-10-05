@@ -83,8 +83,13 @@
    ; all. the standard's extra \ before each " and \ buys a text that RE-LEXES to
    ; this; we hand the value straight to codegen and never re-lex it, so the
    ; spelling is the answer. whitespace: one space where the source had any, none
-   ; where it had none (`a+1` stays tight), none before the first token
-   (spellcat ts) (: (go l acc gap) (atom? l ? acc
+   ; where it had none (`a+1` stays tight), none before the first token. the re-lex
+   ; still owes one thing outside a literal: a stray `\\` (gas's macro argument, the
+   ; kernel's `\\sreg`) reads back as one backslash
+   (bs? t) (spell t = "\\")
+   (spellcat ts) (: (go l acc gap) (? (atom? l) acc
+                                      (bs? <l && !(spaced? <l) && two? >l && bs? <>l)
+                                       (go >>l (acc + (gap && acc != "" ? " " "") + "\\") (spaced? <>l))
                                       (go >l (acc + (gap && acc != "" ? " " "") + spell <l)
                                           (spaced? <l)))
                     (go ts "" 0))
