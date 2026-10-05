@@ -441,6 +441,44 @@
         (map (l \ trap (x \ gas-text 'a64 x) l (\ a b a))
              ["cmp x0, x1, lsl #2" "neg x1, x2, lsl #1" "add w0, x1, w2" "ldrsw w0, [x1]" "add w0, wzr, #1"
               "ret x2, x3" "and w0, w0, #0" "ldr x0, [x1, x2, lsl #2]" "ldr x0, [x1], #300" "lsl w0, w1, #32"]))
+   ;; the hints, the inverted logicals, the carry pair, the reversals, uaccess's unprivileged
+   ;; pair and the kernel's system registers and operations, each word llvm-mc's
+   _ (chk-eq "gas.a64.more"
+        ["3f2003d5" "9f2003d5" "bf2003d5" "9f2203d5" "1f2203d5" "3f2303d5" "bf2303d5" "ff2003d5" "5f2403d5"
+         "1f2403d5" "5f2403d5" "df2403d5" "2000228a" "2000220a" "830025ea" "2000222a" "200022ca" "20dc7892"
+         "205c1812" "2000029a" "2000025a" "200002ba" "8300057a" "2000c0da" "2008c05a" "2004c0da" "2008c0da"
+         "2010c05a" "2014c0da" "200800f8" "208800b8" "20080038" "20e81f78" "20f84ff8" "20084038" "200880b8"
+         "004138d5" "414238d5" "62d01bd5" "030738d5" "84f038d5" "20421bd5" "1f7108d5" "a08308d5" "217c0bd5"]
+        (map (l \ holo-hex 'a64 (gas-text 'a64 l))
+             ["yield" "sev" "sevl" "csdb" "esb" "paciasp" "autiasp" "xpaclri" "hint #34" "bti" "bti c" "bti jc"
+              "bic x0, x1, x2" "bic w0, w1, w2" "bics x3, x4, x5" "orn w0, w1, w2" "eon x0, x1, x2"
+              "bic x0, x1, #0xff" "bic w0, w1, #0xff" "adc x0, x1, x2" "sbc w0, w1, w2" "adcs x0, x1, x2"
+              "sbcs w3, w4, w5" "rbit x0, x1" "rev w0, w1" "rev16 x0, x1" "rev32 x0, x1" "clz w0, w1"
+              "cls x0, x1" "sttr x0, [x1]" "sttr w0, [x1, #8]" "sttrb w0, [x1]" "sttrh w0, [x1, #-2]"
+              "ldtr x0, [x1, #255]" "ldtrb w0, [x1]" "ldtrsw x0, [x1]" "mrs x0, sp_el0" "mrs x1, CurrentEL"
+              "msr tpidrro_el0, x2" "mrs x3, id_aa64mmfr0_el1" "mrs x4, s3_0_c15_c0_4" "msr daif, x0"
+              "ic ialluis" "tlbi vale1is, x0" "dc cvap, x1"]))
+   ;; the exclusive pair and acquire/release, the atomics' and the spinlocks' loads and stores
+   _ (chk-eq "gas.a64.ex"
+        ["207c5fc8" "207c5f88" "207c5f08" "20fc5f48" "207c02c8" "207c0288" "20fc0208" "20fcdfc8" "20fc9f88"]
+        (map (l \ holo-hex 'a64 (gas-text 'a64 l))
+             ["ldxr x0, [x1]" "ldxr w0, [x1]" "ldxrb w0, [x1]" "ldaxrh w0, [x1]" "stxr w2, x0, [x1]"
+              "stxr w2, w0, [x1]" "stlxrb w2, w0, [x1]" "ldar x0, [x1]" "stlr w0, [x1]"]))
+   ;; the prefetches, scaled or not; and a move to or from sp, which is add #0 (orr's 31 is xzr)
+   _ (chk-eq "gas.a64.prfm"
+        ["200080f9" "310080f9" "510480f9" "0a0080f9" "260080f9" "20809ff8"]
+        (map (l \ holo-hex 'a64 (gas-text 'a64 l))
+             ["prfm pldl1keep, [x1]" "prfm pstl1strm, [x1]" "prfm pstl1strm, [x2, #8]" "prfm plil2keep, [x0]"
+              "prfm #6, [x1]" "prfum pldl1keep, [x1, #-8]"]))
+   _ (chk-eq "a64.mov.sp" "e00300911f000091" (holo-hex 'a64 '((mov r0 sp) (mov sp r0))))
+   ;; cbz/cbnz branch on a register and leave the flags; the label resolves as b.cond's does
+   _ (chk-eq "gas.a64.cbz" "410000351f2003d5020000b4"
+        (holo-hex 'a64 (gas-text 'a64 "cbnz w1, 1f\n nop\n1:\n cbz x2, 1b")))
+   ;; ..and what no row reads still refuses by name
+   _ (chk-eq "gas.a64.more.refuse"
+        '(gas-a64-operand gas-a64-operand gas-a64-operand badsysreg badsysreg)
+        (map (l \ trap (x \ holo-hex 'a64 (gas-text 'a64 x)) l (\ a b a))
+             ["hint #200" "sttr x0, [x1, #300]" "bti q" "mrs x0, s4_0_c0_c0_0" "mrs x0, no_such_el1"]))
    _ (chk-eq "gas.rv64"
         '((csrr r0 time) (csrw stvec r0) (csrs sie r0) (csrsi sstatus 2) (csrci sstatus 2) (sys) (trap) (csrw cycle zr)
           (fence) (wfi) (sfence zr zr) (sfence r0 r1) (li r0 5) (mov r1 r0) (add sp sp -16) (ld r2 sp 8) (st sp 0 r2)

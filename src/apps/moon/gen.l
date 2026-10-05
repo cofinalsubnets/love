@@ -1754,8 +1754,8 @@
        (elem bi '("__builtin_return_address" "__builtin_frame_address"))
         (: lvl (two? args && two? <args && <<args = 'num ? <><args 'no)
            fb (fbase g)
-           ; one push slot above the base: a64/riscv pad each push to 16, x64's is 8
-           w (? (t32? g) 4 (a64? g || rv64? g) 16 8)
+           ; the saved lr above the base: a64's frame record, riscv's padded push, x64's 8
+           w (? (t32? g) 4 (a64? g) 8 (rv64? g) 16 8)
            (? (lvl != 0) (nolane g (bi + " above level 0" + ontgt g))
               (wasm? g && bi = "__builtin_return_address")
                (nolane g (bi + " -- no return address in linear memory" + ontgt g))
@@ -4412,6 +4412,17 @@
                         (go (k 1) (['br (negcc <>f) K] . acc) (cs + (['label K] . <k))))
                     (go >l (f . acc) cs))))
           (go fs () ())))
+   ; a64's frame record (aapcs64 6.2.3): the fp and lr pushes fuse to one stp, fp at [fp] and lr at
+   ; [fp+8], and their pops to one ldp. the area stays 32 bytes, so no fp-relative offset moves
+   (frrec g fs)
+    (!(a64? g) || !(two? fs) ? fs
+       (: (go l acc) (? !(two? l) (rev acc)
+                        (<l = '(push lr) && <>l = '(push fp)) (go >>l ('(frpush) . acc))
+                        (<l = '(pop fp) && <>l = '(pop lr)) (go >>l ('(frpop) . acc))
+                        (go >l (<l . acc)))
+          (lone? f) (two? f && elem <f '(push pop) && elem <>f '(fp lr))
+          r (go fs ())
+          (any lone? r ? (nolane g ("a frame record split" + ontgt g)) r)))
    ; shrink-wrap: code the entry reaches without the frame runs without it. the prologue ((sub sp sp N)
    ; and the saves after it) moves onto the edges that leave that region, one stub each, and the
    ; region's exits drop their restores and (add sp sp N). the frame is needed by an sp operand, a
@@ -6569,12 +6580,15 @@
        (? (n < 1) 'bad
           (n = 1 && 48 <= c0 <= 57) ['tie (c0 - 48)]
           (n = 1) (c0 @ 114 'pick 113 'pick 103 'pick 109 'mem
+                      81 (a64? g ? 'mem 'bad)                  ; a64's Q: a base register alone, [xN]
                       97 (x86 ? 'r0 'bad) 98 (x86 ? 'r3 'bad) 99 (x86 ? 'r1 'bad)
                       100 (x86 ? 'r2 'bad) 83 (x86 ? 'r5 'bad) 68 (x86 ? 'r6 'bad)
                       (elem c0 asmimm ? 'imm 'bad))
           (c9 = "Nd" || c9 = "dN") (x86 ? 'r2 'bad)
           (c9 = "ir" || c9 = "ri" || c9 = "in" || c9 = "ni") 'either
           (in? asmimm) 'imm
+          (a64? g && in? '(81 109 111)) 'mem                  ; "Qo": [xN] is offsettable too
+          (a64? g && elem 90 cs && elem 114 cs) 'pick         ; "rZ": a register, never a bare 0 where one is spelt
           (in? (asmimm + '(114 113 103 109 111)) && any (c \ elem c '(114 113 103)) cs)
            (any (c \ elem c asmimm) cs ? 'either 'pick)
           (name c9)))
@@ -6652,7 +6666,13 @@
                         (g 'asecs) (rev (g 'fasecs)))
    ; a refusal that names what the asm asked for, for cgfn's report
    (asmno g msg) (pin g 'nolane msg, 'bad)
+   ; what gas or holo could not read, as a sentence: the reader's own name for it and the piece
+   (asmwhy a b) ("it has no lane for (" + show a + " " + show b + ")")
+   ; a line the assembler cannot read refuses the function, naming the line's piece
    (cgasm g env s)
+    (trap (s9 \ cgasm1 g env s9) s
+          (a \ b \ (a = 'leave ? (scare a b) (asmno g ("an asm " + asmwhy a b)))))
+   (cgasm1 g env s)
     (: _ (pin g 'hasasm 1)
        tmpl <>s
        tgt (gtgt g)
@@ -8802,7 +8822,7 @@
                      (cfoldir g irx))))))))))))))))
        ; the copy fold again after repack: a slot copied from a seat repack just minted forwards from it now
        (post irx) (deadst g (deaddef g (copyprop g (stld g (copyprop g (repack g irx))))))
-       (bad? irf ? irf (dp 'final (swrap g (tailarm g (jmpm g (csdrop g (cskeep g (unhome g (jr0 g (rvunframe g (unframe g (hz4 g (laacse g (coal g (copyprop g (recse g (wpair g (dp 'post (post (dp 'deadlab (deadlab (swp irf)))))))))))))))))))))))
+       (bad? irf ? irf (dp 'final (frrec g (swrap g (tailarm g (jmpm g (csdrop g (cskeep g (unhome g (jr0 g (rvunframe g (unframe g (hz4 g (laacse g (coal g (copyprop g (recse g (wpair g (dp 'post (post (dp 'deadlab (deadlab (swp irf))))))))))))))))))))))))
 
    ; the data tail -> (dataforms nifforms imgforms extras bssforms rodataforms) | 'bad, extras ((name forms
    ; ro?) ..) per other named section in declaration order. love_nifs packs for the linker's __start_/__stop_
@@ -9008,7 +9028,9 @@
                     (one <>f)))))
        ; the file-scope asm, one text in declaration order (gas's section state runs across them)
        asrc (foldl (a \ f \ <f = 'tasm ? (a + <>f + "\n") a) "" <>ast)
-       _ (pin g 'asecs (0 < #asrc ? (gas-top tgt asrc)))
+       _ (pin g 'asecs (0 < #asrc ? (trap (t \ gas-top tgt t) asrc
+                                         (a \ b \ (a = 'leave ? (scare a b)
+                                                     (pin g 'genfail (gripe () () () ("an assembly line " + asmwhy a b)), ()))))))
        ok (rec <>ast)
        ; -- lazy lowering: lay the roots (every exported fn, alias target, section-named fn, and every
        ; fn an initializer names), then what their laid forms still call, to closure; a spliced static's body ships only if named --
