@@ -1358,10 +1358,15 @@
          (? !(two? (keys rows)) ("no rows in " + q)
             !p ("no row for " + who + " in " + q)
             (r 5 != "green") ("row " + p + " is " + r 5 + ": only a green row lands")
+            (h != p && q-merged? q base (rows h))
+             ("row " + h + " is still landing (merged, make test running); wait for its queue_landed")
             (h != p) ("row " + h + " is ahead of row " + p + ": the head lands first")
             !(two? base) (q + " has no base line")
             (two? (q-unresolved q [(r 3) (r 4)])) ("row " + p + ": " + q-unres-why q <(q-unresolved q [(r 3) (r 4)]))
             [p r base]))
+     ; a row merged onto the base branch, or taken by the hub, whose queue_landed has not yet run
+     (q-merged? q base r)
+      (? (q-git? q) (two? base && 0 < #(git-sha (r 4)) && q-on? (r 4) <base) (0 < #(r 4) && q-psid "head" = r 4))
      (queue-land in) (q-wcheck in queue-land1)
      (queue-land1 in)
       (: q (in "queue") who (field in "session" (me 0))
@@ -1389,7 +1394,8 @@
                        "  git status --short   # must print no one's uncommitted edits"
                        ("  git merge --no-ff " + g + " -m " + sh-quote ("Merge queue row " + p + " (" + who + ")"))
                        ("  git rev-parse 'HEAD^{tree}'   # must print " + gt)
-                       "then the project's fast gate there, and queue_landed, which checks the landed tree and drops the row and the rows folded into it."])]))))))
+                       ("  love bee --lock --out " + sh-quote ((0 < #wt ? wt ".") + "/out") + " -- make test   # the fast gate, one make in its out/")
+                       "then queue_landed, which checks the landed tree and drops the row and the rows folded into it. the rows behind wait for it."])]))))))
      ; --- land by psid, on sb: the hub takes the gated set when its head is the base and lies
      ; inside it, so the hub then realizes exactly the set that was gated ---
      (q-land-sb who p g was fs)

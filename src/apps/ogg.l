@@ -88,6 +88,22 @@
 
    ; --- the door ------------------------------------------------------------
    (ogg-sniff s) (? (#s < 4) (snip "OggS" 0 #s = s ? 'more 0) ("OggS" = snip s 0 4) 1 0)
+   ; a header packet is gathered a page at a time as its pieces, newest first, joined once it
+   ; closes: a long one costs a copy, not a copy a page. in flac's mapping a PICTURE or PADDING
+   ; block keeps only its first byte and closes as an empty padding block with the same last
+   ; flag -- a mapping's first packet (0x7f) and a frame (0xff) are never those kinds
+   (ogg-open c p) (? !(string? p) ()
+                     (<c = "flac" && 0 < #p && elem (p 0 & 127) [1 6]) {'drop (p 0)}
+                     [p])
+   (ogg-close h p) (? (tablet? h) (string [(((h 'drop) & 128) | 1) 0 0 0]) (cats (rev (p . h))))
+   ; a whole packet on one page, the same way
+   (ogg-shrink c p) (ogg-open c p @ t (tablet? t ? (ogg-close t "") p))
+   (ogg-hjoin c held cont pk tl)
+    (: sh (map (p \ ogg-shrink c p) pk)
+       (? !cont [sh (ogg-open c tl)]
+          !(tablet? held || two? held) [(two? sh ? >sh ()) (two? sh ? (ogg-open c tl) ())]
+          (two? sh) [(ogg-close held <pk . >sh) (ogg-open c tl)]
+       [() (? (tablet? held) held (string? tl ? (tl . held) held))]))
    ; header packets fed one at a time -> ['done m used] | ['more ps] | why
    (ogg-heads c ps l i)
     (? (atom? l) ['more ps]
@@ -104,14 +120,14 @@
                  (? !(ty & 2) "an ogg stream with no codec this reads"
                     (: c <(filter (c \ (c 1) (pk 0 @ p (string? p ? p ""))) (ogg-codecs ()))
                        (? !(two? c) (go e ())
-                          (ogg-heads c () pk 0 @
+                          (ogg-heads c () (map (p \ ogg-shrink c p) pk) 0 @
                             ['done m k] (pins m 'ogg <c 'serial sn 'at o 'skip k)
-                            ['more ps] (go e [c sn ps tl])
+                            ['more ps] (go e [c sn ps (ogg-open c tl)])
                             why why))))
                 (sn != st 1) (go e st)
                 (st @ [c _ ps held]
-                  (: jn (ogg-join held (ty & 1) pk tl)
-                     off (? ((ty & 1) && string? held) 1 0)
+                  (: jn (ogg-hjoin c held (ty & 1) pk tl)
+                     off (? ((ty & 1) && (tablet? held || two? held)) 1 0)
                      (ogg-heads c ps (<jn) 0 @
                        ['done m k] (pins m 'ogg <c 'serial sn 'at o 'skip (k - off))
                        ['more ps2] (go e [c sn ps2 (jn 1)])
