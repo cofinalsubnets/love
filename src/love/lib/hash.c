@@ -5,6 +5,7 @@
 //                                sha3's the 256-bit one)
 //   (crc32 str)               -> the IEEE crc32, a charm; (crc32-on c str) carries c on
 //   (cksum str)               -> POSIX cksum's crc with the length folded in, a charm
+//   (ogg-crc s o n)           -> the crc of the ogg page s[o..o+n), its crc field as zeros
 //   (bsdsum acc str)          -> bsd sum's 16-bit checksum carried on over str
 // the others stream too, the state in a cask the caller allocates (the nifs do not):
 //   (X-init b) / (X-feed b str) / (X-done b), b a cask of X's width:
@@ -502,6 +503,19 @@ static lvm(lvm_cksum) {
   Sp[0] = putcharm(cksum_of((unsigned char const*)s->bytes, s->len)); }
  love_musttail return Next(1); }
 
+// ogg's page crc is cksum's register with nothing folded in after: seed 0, no complement.
+// the page's own crc field, bytes 22..25, goes through as zeros
+static love_inline struct g *host_ogg_crc(struct g *g) {
+ word r = ZeroPoint;
+ if (strp(g->sp[0]) && oddp(g->sp[1]) && oddp(g->sp[2])) {
+  struct str *s = str(g->sp[0]);
+  intptr_t o = getcharm(g->sp[1]), n = getcharm(g->sp[2]);
+  if (o >= 0 && n >= 27 && (uintptr_t) (o + n) <= s->len) {
+   const uint8_t *p = (const uint8_t*) s->bytes + o, z[4] = {0};
+   r = putcharm(ck_run(ck_run(ck_run(0, p, 22), z, 4), p + 26, (uintptr_t) n - 26)); } }
+ return g->sp[2] = r, g->sp += 2, g; }
+static lvm(lvm_ogg_crc) LvmCall(g, host_ogg_crc)
+
 // --- the same digests, resumable ---------------------------------------------------
 // the one-shots want their whole message contiguous, and for a file that is the file.
 // each triple below carries the state in a cask instead, so a caller feeds it a gulp
@@ -752,6 +766,7 @@ Nif2(nif_bsdsum, lvm_bsdsum)
 Nif1(nif_crc32, lvm_crc32)
 Nif2(nif_crc32_on, lvm_crc32_on)
 Nif1(nif_cksum, lvm_cksum)
+static union u const nif_ogg_crc[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_ogg_crc}, {lvm_ret0}};
 Nif1(nif_ck_init, lvm_ck_init)
 Nif2(nif_ck_feed, lvm_ck_feed)
 Nif1(nif_ck_done, lvm_ck_done)
@@ -792,6 +807,7 @@ LvNif("bsdsum", nif_bsdsum, NULL);
 LvNif("crc32", nif_crc32, NULL);
 LvNif("crc32-on", nif_crc32_on, NULL);
 LvNif("cksum", nif_cksum, NULL);
+LvNif("ogg-crc", nif_ogg_crc, NULL);
 LvNif("cksum-init", nif_ck_init, NULL);
 LvNif("cksum-feed", nif_ck_feed, NULL);
 LvNif("cksum-done", nif_ck_done, NULL);
