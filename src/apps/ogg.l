@@ -78,7 +78,7 @@
     (: st (cask (m 'size)) r (vorbis-init st (m 'vb 0) (m 'vb 1)) w (2 * m 'ch) n {'n 0}
        (? (r != 0) (\ pkt gr ())
           (\ pkt gr (vorbis-packet st pkt 0 @
-                      pcm (? !(string? pcm) ""                 ; a packet that is no block is passed over
+                      pcm (? !(string? pcm) ()                 ; a packet that is no block is passed over
                              (: k (#pcm // w) t (n 'n) c (? (0 <= gr && gr < t + k) (max 0 (gr - t)) k)
                                 (pin n 'n (t + c), snip pcm 0 (c * w))))))))
    (ogg-codecs _)
