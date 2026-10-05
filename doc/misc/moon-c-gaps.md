@@ -858,8 +858,9 @@ linker-script reader, and a 32/16-bit x86 backend for arch/x86/boot and the 32-b
 ## linux on arm64
 
 **measured 2026-10-05** against 6.19.14, arm64 tinyconfig (g-21's census, kbuild's flags,
-`mooncc -t a64 -c`): of 474 units, 117 compiled, 149 crashed and 183 refused, the inline-asm
-and assembler side's share of them here. What landed, each held by a law:
+`mooncc -t a64 -c`): of 474 units, 117 compiled, 149 crashed and 183 refused. With the rows
+below, 251 of those 332 re-run so far: **145 compile**, and the rest refuse by name but for two
+(gen's `cs-unsaved`). What landed on the inline-asm and assembler side, each held by a law:
 
 - **the frame record**: fp and lr save as one AAPCS64 record, `stp x29, x30, [sp, #-32]!`
   and its `ldp`, so `[fp]` is the caller's fp and `[fp+8]` the return address, which the
@@ -890,9 +891,10 @@ Still open on this side (g-21's probes):
 - **x18 is allocated freely**, and `-ffixed-x18` is ignored: the platform register, which the
   kernel's shadow call stack owns.
 - **a packed field loads unaligned** (`ldursw`), which faults under `-mstrict-align`.
-- what the tinyconfig rerun stops at next: `tbz`/`tbnz`, shifted-register operands
-  (`bic x0, x1, x2, lsl #3`), `.L__gpr_num_` over `.set` registers, and the front-end and
-  gen walls part 1 owns.
+- where the re-run stops now, on this side: the `.S` exception-table macro's `\insn`, which
+  reaches `.long ((\insn) - .)` unsubstituted (24); an asm goto with outputs (9, refused above);
+  a register variable pinned to `x0` (4); the `"p"` constraint (2). The rest is part 1's front
+  end and gen (`linux/skbuff.h`, an undeclared `branch`).
 
 ---
 
