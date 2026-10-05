@@ -6241,6 +6241,20 @@
            'dot
             (imlval g <>e @ 'no 'no b
              (fmem g <>>b <>>e @ fm (bad? fm ? 'no [<b (<>b + <fm) <>fm])))
+           ; a compound literal in a static initializer is an object of its own, static as the
+           ; one it initializes (C11 6.5.2.5), laid beside the data. it is keyed by the global
+           ; being laid and its place in that image, so each literal is its own object and a
+           ; stream pass that images the global again reuses it
+           'clit
+            (: ty <>e i (peep g 'clitn 0) _ (pin g 'clitn (i + 1)) k [(g 'clitg) i] m (g 'clitm)
+               (peep m k () @ l
+                 (l ? [l 0 ty]
+                    (cgimage g ty <>>e @ b
+                      (bad? b ? 'no
+                         (: l2 (nlab g ".C")
+                            (pin m k l2,
+                             pin g 'clits ([l2 (max 8 (tal g ty)) b] . g 'clits),
+                             [l2 0 ty])))))))
            'no)
    ; a ?: whose condition is known at image time -> the arm it takes | 'no: an integer that
    ; folds, or a string or static address, which is never null (the kernel's `"f" ? .. : 0`)
@@ -6277,6 +6291,10 @@
                  (<>en @ ty (arr? ty ? [<en 0 ['ptr <>ty]] [<en 0 ['ptr ty]])))))
        'addr
         (imlval g <>e @ lv (lv @ 'no 'no [<lv <>lv ['ptr <>>lv]]))
+       ; an array-typed element or compound literal decays the same way: a row of a 2-D array
+       ; (`regs[N]`, `&a[0][0]`'s inner a[0]), `(const char *[]){..}`
+       ('deref || 'clit)
+        (imlval g e @ lv (lv = 'no || !(arr? <>>lv) ? 'no [<lv <>lv ['ptr <>(<>>lv)]]))
        ; an array member decays to its first element's address (&s.arr[0] reads s.arr + 0)
        'dot
         (imlval g e @ lv (lv = 'no || !(arr? <>>lv) ? 'no [<lv <>lv ['ptr <>(<>>lv)]]))
@@ -8837,7 +8855,7 @@
            (zm = 'z && !(bss? <gs)) (globs >gs want zm acc)
            (: ge (peep (g 'glob) <gs 0)
               lbl <ge ty <>ge init <>>ge
-              _ (pins g 'undecl () g 'datacause ())   ; fresh per global: the refusal below names this one's cause
+              _ (pins g 'undecl () g 'datacause () 'clitg <gs 'clitn 0)   ; fresh per global: the refusal below names this one's cause
               bytes (image1 <gs ty init)                ; a constant image | 'bad (label values -> 4d)
               ; a refusal is neither 'r nor 'd: the 'd walk reports it, 'r steps past in silence
               roq (!(bad? bytes) && ro? <gs bytes)
@@ -8913,8 +8931,10 @@
           jt (foldl (a \ p \ a + [['align 4] ['label <p]] + [['raw <>p]])
                     () (rev (g 'jtabs)))
           (foldl (a \ x \ a || bad? x) () [gb sb zg zs rg rs cg cs nb ib xb] ? 'bad
-             [(gb + sb) nb ib xb (zg + zs)
+             [(gb + sb + clits (rev (g 'clits))) nb ib xb (zg + zs)
               (rg + rs + cg + cs + jt + strs (g 'strs) () + dbls g)])))
+       ; the static compound literals, each aligned as its type asks
+       (clits l) (foldl (a \ c \ a + [['align (c 1)] ['label <c] ['raw (c 2)]]) () l)
        ; the double pool: 8-aligned blocks in pattern order (keys are unsorted; the lay must not drift)
        (dbls g) (foldl (a \ u \ a + [['align 8] ['label (dbname u)] ['raw (le64 u)]])
                        () (sort (keys (g 'dbls))))
@@ -8956,7 +8976,7 @@
    ; the shared core: the gen state, then text (no _start) and data -> (g textforms dataforms) | ().
    ; weaks never inline (a spliced body would bake past the linker's strong override); xtra is the parser's tablets, () reading as empties
    (cgen-core ast stbl sigs weaks xtra tgt)
-    (: g {'n 0 'brk () 'brkm () 'cnt () 'cases () 'glob {} 'globs () 'strs () 'dbls {} 'jtabs () 'statics ()
+    (: g {'n 0 'brk () 'brkm () 'cnt () 'cases () 'glob {} 'globs () 'strs () 'clits () 'clitm {} 'dbls {} 'jtabs () 'statics ()
           'abl (ablenv 0)                           ; the pricing knob, read per unit at run time
           'laid {}                                  ; names already on 'globs (a tentative repeat lays no twin)
           'fns {} 'inl {} 'ineed {} 'ainlc {} 'cgitems cgitems 'sxpre sxpre 'stag stbl 'sigs sigs
