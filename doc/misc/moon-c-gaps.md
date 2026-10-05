@@ -95,6 +95,7 @@ All of C89 passes. What remains is C99/C11/GNU.
 | brace elision continuing **past** an anonymous union member | `{1,2,3,{4,5}}` over `struct { int a,b; union { int c,d; }; struct S1 s; }` — elision *into* the union is fine |
 | a `##` paste that makes a macro NAME | `CAT(A,B)(x)` where `AB` is itself a macro — the pasted name is not rescanned as an invocation |
 | a register-exhausted **SSE**-class by-value argument | five float HFAs — the gp twin landed 2026-08-08 (below), this one did not |
+| an element's address of a 2-D array, cast, in a **static** initializer | `const signed char *const p[] = {(signed char *)&a[0][0]};` refuses "cannot lay the initializer"; `(signed char *)a` (the same address) lays. found in rfc 6716's silk/tables_LTP.c, respelled there |
 
 The last five are what `test_cts` found (doc/misc/moon.md); `test/gate/cts.sh` names the program
 each one came from.
@@ -914,6 +915,47 @@ headers was 2.3 s of it; the rest is directives and macro expansion. `-E` itself
 in `join`, and a function-like macro over an `#ifdef` in its arguments stayed unexpanded
 (`struct_group`, 23 tinyconfig units); both are fixed since the run. a `#include` of a
 macro-built name (tracing's `TRACE_INCLUDE`) does not resolve.
+
+---
+
+## linux on arm64
+
+**measured 2026-10-05** against 6.19.14, arm64 tinyconfig (g-21's census, kbuild's flags,
+`mooncc -t a64 -c`): of 474 units, 117 compiled, 149 crashed and 183 refused, the inline-asm
+and assembler side's share of them here. What landed, each held by a law:
+
+- **the frame record**: fp and lr save as one AAPCS64 record, `stp x29, x30, [sp, #-32]!`
+  and its `ldp`, so `[fp]` is the caller's fp and `[fp+8]` the return address, which the
+  kernel's unwinder reads. The area stays 32 bytes, so no fp-relative offset moved. They were
+  two padded pushes, which put the lr at `[fp+16]`: wrong code, silent. gen's `frrec` fuses
+  the pair after every IR pass, and a lone fp or lr push left over refuses (225-framerecord.c,
+  native on an a64 host).
+- **a gas or holo scare is a refusal**: a function's asm, and the file-scope or `.S` text,
+  read under a trap. What used to print `internal error` now names the line's piece.
+- **Q, Qo, +Q, =Q**: a64's base-register memory operand is the `[xN]` "m" already spells;
+  `"rZ"` always takes a register (226-a64asm.c).
+- **system registers**: about a hundred by name, any case (`CurrentEL`), and gas's generic
+  `s3_0_c15_c0_4`; `ic ialluis` and the tlbi/dc operations the kernel names. Every word is
+  llvm-mc's (test/holo/golden.l).
+- **instructions**: the hints (`yield`, `sev`, `sevl`, `hint #n`, `bti`, pauth's sp pair),
+  `bic`/`bics`/`orn`/`eon`, `adc`/`sbc`, the reversals and counts, `cbz`/`cbnz` (a new IR op,
+  the flags untouched, CONDBR19 when its label is outside the blob), `sttr`/`ldtr` and kin,
+  the exclusives and acquire/release, `prfm`/`prfum`, and `mov` to or from sp.
+- **directives**: `.inst`; `.arch`/`.arch_extension`/`.cpu` read as no-ops; `.subsection N`,
+  laid after its section's own forms (a function's goes to .text); and `.org . - (a-b) + (c-d)`,
+  the alternatives' size check, which refuses when it would move back. A directive's name
+  ends where its identifier does (a `.S` spells `.long((x)-.)` unspaced).
+- **cpp**: `#` of a stray `\\` outside a literal is one backslash once re-lexed (C11
+  6.10.3.2). Every `__emit_inst` through `mrs_s`/`msr_s` carried a stray `\` (227-stringizebs.c).
+
+Still open on this side (g-21's probes):
+
+- **x18 is allocated freely**, and `-ffixed-x18` is ignored: the platform register, which the
+  kernel's shadow call stack owns.
+- **a packed field loads unaligned** (`ldursw`), which faults under `-mstrict-align`.
+- what the tinyconfig rerun stops at next: `tbz`/`tbnz`, shifted-register operands
+  (`bic x0, x1, x2, lsl #3`), `.L__gpr_num_` over `.set` registers, and the front-end and
+  gen walls part 1 owns.
 
 ---
 
