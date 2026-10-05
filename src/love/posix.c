@@ -65,6 +65,7 @@
 #endif
 #if defined(LvHaveMount)
 #include <sys/mount.h>      // mount(2), in linux's argument shape
+#include <sys/reboot.h>     // reboot(2), linux's commands
 #endif
 #if defined(LvHaveNamespaces)
 #include <sched.h>          // unshare, CLONE_NEWUSER/NEWNS (newns)
@@ -725,8 +726,16 @@ static lvm(lvm_umount) {
   char const *t = str_c(Sp[0]);
   Sp[0] = !t ? badarg(g) : (umount(t) ? love_err(g, errno) : ZeroPoint);
   love_musttail return Next(1); }
+// (reboot how) -> a nom, or no return: 0 restarts, 1 powers off, 2 halts. pid 1's last word;
+// the kernel writes nothing back first, so the caller syncs.
+static lvm(lvm_reboot) {
+  intptr_t h = charmp(Sp[0]) ? getcharm(Sp[0]) : -1;
+  int cmd = h == 0 ? (int) RB_AUTOBOOT : h == 1 ? (int) RB_POWER_OFF : h == 2 ? (int) RB_HALT_SYSTEM : 0;
+  Sp[0] = !cmd ? badarg(g) : (reboot(cmd), love_err(g, errno));
+  love_musttail return Next(1); }
 #else
 // the call is there; our mount speaks a shape this kernel does not answer.
+static lvm(lvm_reboot) { Sp[0] = love_err(g, ENOSYS); love_musttail return Next(1); }
 static lvm(lvm_mount) { Sp[2] = love_err(g, ENOSYS); Sp += 2; love_musttail return Next(1); }
 static lvm(lvm_mountf) { Sp[3] = love_err(g, ENOSYS); Sp += 3; love_musttail return Next(1); }
 static lvm(lvm_umount) { Sp[0] = love_err(g, ENOSYS); love_musttail return Next(1); }
@@ -1102,6 +1111,7 @@ static union u const
   nif_umount[]  = {{lvm_umount}, {lvm_ret0}},
   nif_chroot[]  = {{lvm_chroot}, {lvm_ret0}},
   nif_sync[]    = {{lvm_sync}, {lvm_ret0}},
+  nif_reboot[]  = {{lvm_reboot}, {lvm_ret0}},
   nif_mknod[]   = {{lvm_cur}, {.x = putcharm(3)}, {lvm_mknod}, {lvm_ret0}},
   nif_newns[]   = {{lvm_newns}, {lvm_ret0}},
   nif_posix_stat[]    = {{lvm_posix_stat}, {lvm_ret0}},
@@ -1154,6 +1164,7 @@ LvNif("mountf", nif_mountf, "posix");
 LvNif("umount", nif_umount, "posix");
 LvNif("chroot", nif_chroot, "posix");
 LvNif("sync", nif_sync, "posix");
+LvNif("reboot", nif_reboot, "posix");
 LvNif("mknod", nif_mknod, "posix");
 LvNif("newns", nif_newns, "posix");
 LvNif("stat", nif_posix_stat, "posix");

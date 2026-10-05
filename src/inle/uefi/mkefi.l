@@ -65,6 +65,11 @@
       (mov r6 r0)                 ; x6 = fn, then slide a..e down one register
       (mov r0 r1) (mov r1 r2) (mov r2 r3) (mov r3 r4) (mov r4 r5)
       (jmpr r6)
+      ;; efi_call6 carries a sixth (LoadImage's out handle) from x6 to x5, so fn rides x7
+      (label efi_call6)
+      (mov r7 r0)
+      (mov r0 r1) (mov r1 r2) (mov r2 r3) (mov r3 r4) (mov r4 r5) (mov r5 r6)
+      (jmpr r7)
       ;; efi_go(tables, entry): x0 is the TTBR0 root and TTBR1's is the page
       ;; after it -- loader.c lays l0_lo and l0_hi adjacent for exactly this.
       ;; the MMU is already ON here (firmware's identity map), so this is a
@@ -87,7 +92,7 @@
       (isb)
       (jmpr r1))                  ; the kernel's entry, never back
 
-   efi-exports '("efi_call" "efi_go")
+   (efi-exports arch) (arch @ "a64" '("efi_call" "efi_call6" "efi_go") '("efi_call" "efi_go"))
    (efi-tgt arch) (arch @ "a64" 'a64 'x64)
    (efi-ir arch)  (arch @ "a64" efi-ir-a64 efi-ir-x64)
    (mkboot out arch objs)
@@ -95,5 +100,5 @@
                        (two? r ? [f <>r] (say err ("mkefi: cannot open " + f), quit 1)))
                  objs)
        (pelink (efi-tgt arch)
-               (["efi0" (string (objelf (efi-tgt arch) (efi-ir arch) () efi-exports () () () () () () ()))] .  srcs)
+               (["efi0" (string (objelf (efi-tgt arch) (efi-ir arch) () (efi-exports arch) () () () () () () ()))] .  srcs)
                out)))
