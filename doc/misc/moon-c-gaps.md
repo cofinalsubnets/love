@@ -852,6 +852,69 @@ with a directive reads through gas-top too (180-asmsections.c), so what stops th
 is operands and instructions: the rows above, then a
 linker-script reader, and a 32/16-bit x86 backend for arch/x86/boot and the 32-bit vDSO.
 
+### arm64, measured 2026-10-05
+
+linux 6.19.14, `mooncc -t a64` on gwen baa7c8277, every unit of a kbuild reference built by
+clang 22.1.8 at the same paths, compiled with its own `.cmd` flags in mooncc's spelling (`-t a64`
+for `--target`, `-include` as a wrapper, a refused flag left out); an object that compiles is
+held to clang's by its defined and called symbols and its non-empty sections. tinyconfig ran on
+mooncc's own preprocessor; defconfig on clang's `-E` (ours was 20-50x clang's, see below), with
+ours on every 20th unit, where 28 of 222 units fare worse. the scripts and every unit's command
+and message: `/var/tmp/census-g21` (census.py, rank.py; tiny/ def/ defown/).
+
+| | units | same as clang | compiles, differs | refused | crash |
+|---|---|---|---|---|---|
+| tinyconfig, our cpp | 474 | 117 | 25 | 183 | 149 |
+| defconfig, clang's cpp | 4439 | 1012 | 835 | 1496 | 1093 |
+
+four walls stop every C unit, and the census stood in for each to see past it: no compiler
+family is predefined (`compiler_types.h`'s `#error "Unknown compiler"`; mooncc is to claim gcc
+8.1.0, the kernel's floor), `true`/`false`/`bool` predefined under `-std=gnu11` (`linux/stddef.h`
+declares them), no `__int128_t`/`__uint128_t` names (`__int128` itself is there), and no
+`&&label` (`_THIS_IP_`).
+
+defconfig, each unit at its first stop:
+
+| units | first stop |
+|---|---|
+| 1096 | the `Q` memory constraints: `+Q` 608, `Qo` 310 (`__raw_write*`, reported as "pinned twice"), `=Q` 91, `Q` 87 |
+| 473 | an a64 instruction holo lacks: `cbnz` 366, `yield` 75, `sttr*` 18, `sbc` 7, `hint` 3, `rbit` 3, `sev` 1 |
+| 352 | a system register holo lacks: `sp_el0` 351 (`current`), `CurrentEL` 1 |
+| 198 | a static initializer mooncc cannot lay: an address into an array element, a compound literal's address |
+| 196 | a gas directive: `.subsection` 174, `.inst` 15, `.incbin` 3, `.arch` 2, `.extern` 2 |
+| 131 | a parse error: case ranges past parse's 1024 98 (sysreg encodings), a case value from 2^62 up (`LONG_MAX`), `__label__` in a statement expression 7, `__auto_type` in a `for` 5, `asm("name")` on a declaration 1 |
+| 62 | gas expressions: `.req` 28, an immediate over `==` `!=` `<<` `>>` or labels 34 |
+| 42 | a jump label's `"i"` operand, constant only once inlined |
+| 10 / 7 / 7 / 2 | a register variable (`x0`.., `x30`); `__attribute__((cleanup))`; an asm goto with outputs; a `"p"` operand |
+
+the 835 that compile and differ: 419 lay a `__mod_device_table__*` alias clang does not; 221 call
+`__kmalloc_noprof` where clang's constant size takes the cache path (`__builtin_constant_p` answers
+0 after inlining); 31 leave `__clk_of_table`, `__irqchip_of_table`, `__reservedmem_of_table` or
+`__jump_table` empty, the `__used` statics dropped; 12 call a `__compiletime_assert_N` clang folded
+away and 8 an asm's local label, so the link fails. every defconfig object also lacks
+`.ARM.attributes`, the note clang lays under `-mbranch-protection`, which mooncc refuses.
+
+accepted and WRONG, found by probing the flags mooncc takes in silence:
+
+- the frame record: x30 and x29 are stored as two 16-byte pushes, so `[x29+8]` is not the return
+  address AAPCS64 puts there and the kernel's frame-pointer unwinder reads.
+- x18 is allocated, and `-ffixed-x18` ignored.
+- `-fshort-wchar` is ignored: `wchar_t` stays 4 bytes.
+- `-fmacro-prefix-map` is ignored: `__FILE__` keeps the build path, which reaches the image.
+- `__attribute__((used))` does not keep an unreferenced static.
+- every object carries `love_nifs` and `.love.image` sections, empty, which the kernel link would
+  meet as orphans.
+- `-mstrict-align` is refused, and a packed field is read unaligned.
+
+refused flags: `-include`, `--target`, `-mlittle-endian`, `-mgeneral-regs-only`,
+`-mbranch-protection`, `-Wa,-march`, `-mcmodel`, `-mstrict-align`.
+
+our preprocessor: `kernel/fork.c` took 34 s of cpp against clang's 0.64 s, and lexing its 902
+headers was 2.3 s of it; the rest is directives and macro expansion. `-E` itself was quadratic
+in `join`, and a function-like macro over an `#ifdef` in its arguments stayed unexpanded
+(`struct_group`, 23 tinyconfig units); both are fixed since the run. a `#include` of a
+macro-built name (tracing's `TRACE_INCLUDE`) does not resolve.
+
 ---
 
 ## assembly sources
