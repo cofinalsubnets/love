@@ -28,6 +28,18 @@
                                           (10 + foldl (\ a j (a * 128 + (s (6 + j) & 127))) 0 ^4
                                            + ((s 5 & 16) ? 10 0)))
                   0)
+   ; an id3v2 tag at the head of s, for av-head: its end once held; else its size, or for a tag
+   ; past 1 MiB the tag rebuilt from the frames already held, the rest of it skipped unread
+   (mp3-tagr s)
+    (: k (mp3-id3 s) v (#s > 3 ? (s 3) 4)
+       (fsz i) (? (v = 4) (foldl (\ a j (a * 128 + (s (i + 4 + j) & 127))) 0 ^4) (be s (i + 4) 4))
+       (held i) (? (#s < i + 10 || s i = 0) i (: e (i + 10 + fsz i) (e <= #s ? (held e) i)))
+       (ss n) (string (map (j \ (n >> (7 * (3 - j))) & 127) ^4))
+       (? (k < 0) ['more 10]
+          (k <= #s) k
+          (k <= 1048576) ['more k]
+          (: t (held 10)
+             ['skip 0 k ("ID3" + string [v (s 4) (s 5 & 239)] + ss (t - 10) + snip s 10 t)])))
    ; a header -> [bytes ch rate] | (), bytes 0 for free format
    (mp3-hd s o) (mp3-head s o @ v (? (charm? v && 0 < v) [(v & 4095) ((v >> 12) & 15) (v >> 16)] ()))
    ; the first frame at or past i whose successor is where its length says, so a stray 0xff in
@@ -86,7 +98,8 @@
              [frames (lame ? (d >> 12) 0) (lame ? (d & 4095) 0) lame])))
    (mp3-meta s)
     (: i (mp3-id3 s)
-       (? (i < 0 || #s < i) 'more
+       (? (i < 0) ['more 10]
+          (#s < i) (mp3-tagr s)
           (mp3-find s i (i + 65536) @
             -2 'more
             -1 "no mpeg audio layer iii frame here"
@@ -138,10 +151,14 @@
              4 (mp3-hd h o @ [n c r] (: _ (out (string (cask (m 'spf * want * w)))) (go h (o + max n 4))) _ (go h (o + 1)))
              _ (? (o >= #h) (gulp () @ g (string? g ? (go g 0) 0))
                   (tail? h o) 0
+                  ; a tag between frames is read through av-head, as the one ahead of them
                   ("ID3" = snip h o (o + 3))
-                   (mp3-id3 (snip h o #h) @ k
-                     (? (k < 0 || #h < o + k) (gulp () @ g (string? g ? (go (snip h o #h + g) 0) 0))
-                        (: _ (pin m 'tags (mp3-tags (snip h o (o + k)) k), pin m 'link (peep m 'link 0 + 1)) (go h (o + k)))))
+                   (? (0 < o) (go (snip h o #h) 0)
+                      ((cite 'av 'av-head) q mp3-tagr h @
+                        [k h2] (? (charm? k)
+                                  (: _ (pin m 'tags (mp3-tags (snip h2 0 k) k), pin m 'link (peep m 'link 0 + 1)) (go h2 k))
+                                  (string? k) k
+                                  0)))
                   (mp3-find h (o + 1) #h @ -1 (go h #h) -2 (gulp () @ g (string? g ? (go (snip h o #h + g) 0) 0))
                                             i (go h i)))))
        (go h0 0))
@@ -153,25 +170,26 @@
   layer iii only; playing to a sound card is aplay's (love aplay)."
    (mpg123-err m) (say err (m + "\n"), flush err, 1)
    (mpg123-wav m f n)
-    (: ch (m 'ch) w (f ? 4 2) (wle v k) (string (map (j \ (v >> (8 * j)) & 255) ^k))
-       ("RIFF" + wle (36 + n) 4 + "WAVE" + "fmt " + wle 16 4 + wle (f ? 3 1) 2 + wle ch 2 + wle (m 'rate) 4
-        + wle (m 'rate * ch * w) 4 + wle (ch * w) 2 + wle (8 * w) 2 + "data" + wle n 4))
+    (: ch (m 'ch) w (f ? 4 2) (wle v k) (string (map (j \ (v >> (8 * j)) & 255) ^k)) (cl v) (min 4294967295 v)
+       ("RIFF" + wle (cl (36 + n)) 4 + "WAVE" + "fmt " + wle 16 4 + wle (f ? 3 1) 2 + wle ch 2 + wle (m 'rate) 4
+        + wle (m 'rate * ch * w) 4 + wle (ch * w) 2 + wle (8 * w) 2 + "data" + wle (cl n) 4))
    (mpg123-one o p)
     (: q (p = "-" ? in (open p "r"))
        (? !(hot? q) (mpg123-err ("mpg123: cannot open " + p + ": " + uerrno q))
-          (: (more h) (see q @ -1 h c (unsee q c, h + chug q))
-             (head h) (mp3-meta h @ 'more (more h @ h2 (#h2 = #h ? "cut short" (head h2))) r [r h])
-             r (head (more ""))
-             m0 <r hb <>r f (o "e" = "f32" ? 1 0)
+          (: r ((cite 'av 'av-head) q mp3-meta "" @ ['short h] ["cut short" h] x x)
+             m0 <r hb (r 1) f (o "e" = "f32" ? 1 0)
              fin (\ v (p = "-" ? v (close q, v)))
              (? (string? m0) (fin (mpg123-err ("mpg123: " + p + ": " + m0)))
                 (: m (o "g" ? (pins m0 'skip 0 'total 0) m0)
                    d (? (o "w") (open (o "w") "w") (o "s") out ())
                    (? (o "w" && !(hot? d)) (fin (mpg123-err ("mpg123: cannot write " + o "w")))
-                      (: ps {'n 0 'l ()}
+                      ; -w streams: the header goes ahead, and its sizes are laid over it at the end
+                      (: ps {'n 0}
+                         _ (? (o "w") (say d (mpg123-wav m f 0)) ())
                          r (mp3-run q (snip hb (m 'at) #hb) m f
-                                    (pcm \ (: _ (pin ps 'n (ps 'n + #pcm)) (? (o "w") (pin ps 'l (pcm . ps 'l)) (o "s") (say d pcm) ()))))
-                         _ (? (o "w") (: _ (say d (mpg123-wav m f (ps 'n))) _ (each (rev (ps 'l)) (say d)) (flush d, close d)) (o "s") (flush d) ())
+                                    (pcm \ (: _ (pin ps 'n (ps 'n + #pcm)) (? (o "w" || o "s") (say d pcm) ()))))
+                         _ (? (o "w") (: _ (flush d) _ (close d) ((cite 'av 'av-patch) (o "w") 0 (mpg123-wav m f (ps 'n))))
+                              (o "s") (flush d) ())
                          (fin (? (string? r) (mpg123-err ("mpg123: " + p + ": " + r)) 0)))))))))
    (mpg123-main as)
     (: o {}
