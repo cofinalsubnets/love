@@ -4,10 +4,11 @@
 ;   2 root a, 3 root b (squashfs; b empty until an update writes it), 4 data (FAT32)
 ; a root: love as /bin/love, helm's script as init (/bin/helm), src/apps/hearts/dev.l and app.l, the update key.
 ; the parts lie back to back from 1 MiB, each `at` where the one before it ends.
-; usage: love -l src/apps/sqfs.l image.l OUT LOVE IMAGE EFI SEED BADSEED
+; usage: love -l src/apps/sqfs.l image.l OUT LOVE IMAGE EFI SEED BADSEED [STAMP]
 ;   writes OUT/disk.img (v1 in slot a) and OUT/u1.hup (v2 signed by BADSEED, refused),
 ;   OUT/u2.hup (v2) and OUT/u3.hup (v3, sick); LOVE is a baked a64 love, IMAGE the kernel,
-;   EFI the chooser, SEED and BADSEED 32-byte keys as hex.
+;   EFI the chooser, SEED and BADSEED 32-byte keys as hex, STAMP the one time every file
+;   carries (seconds, default 0): the same inputs give the same bytes on any host.
 (borrow 'bytes)
 (borrow 'posix)
 (borrow 'gz)
@@ -61,7 +62,7 @@
    (fatimg nsec files)
     (: im (cask (nsec * 512))
        dev [(lba \ k \ (cask (k * 512) @ b (pour b 0 im (lba * 512) (k * 512), string b)))
-            (lba \ s \ (pour im (lba * 512) s 0 #s, #s // 512)) nsec]
+            (lba \ s \ (pour im (lba * 512) s 0 #s, #s // 512)) nsec (stamp * 1000)]
        _ (fat-mkfs dev || gone "fat-mkfs refused")
        f (fat-mount dev)
        (dirs path) (: ws (split "/" path)
@@ -106,8 +107,9 @@
    efi (rd (as 3))
    seed (hex2b (as 4))
    bad (hex2b (as 5))
+   stamp (#as > 6 ? (read (as 6)) 0)
    pub (ed-pub seed)
-   (rootimg ver sick) (sqfs-make (root love ver sick pub) 0)
+   (rootimg ver sick) (sqfs-make (root love ver sick pub) stamp)
    r1 (rootimg "v1" 0)
    r2 (rootimg "v2" 0)
    r3 (rootimg "v3" 1)

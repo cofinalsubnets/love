@@ -95,6 +95,7 @@ All of C89 passes. What remains is C99/C11/GNU.
 | brace elision continuing **past** an anonymous union member | `{1,2,3,{4,5}}` over `struct { int a,b; union { int c,d; }; struct S1 s; }` — elision *into* the union is fine |
 | a `##` paste that makes a macro NAME | `CAT(A,B)(x)` where `AB` is itself a macro — the pasted name is not rescanned as an invocation |
 | a register-exhausted **SSE**-class by-value argument | five float HFAs — the gp twin landed 2026-08-08 (below), this one did not |
+| an element's address of a 2-D array, cast, in a **static** initializer | `const signed char *const p[] = {(signed char *)&a[0][0]};` refuses "cannot lay the initializer"; `(signed char *)a` (the same address) lays. found in rfc 6716's silk/tables_LTP.c, respelled there |
 
 The last five are what `test_cts` found (doc/misc/moon.md); `test/gate/cts.sh` names the program
 each one came from.
