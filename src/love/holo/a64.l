@@ -72,8 +72,9 @@
    ;; SP move is `add Xd, Xn, #0` instead, which is exactly `(lea d s 0)`; the guard sends you
    ;; there rather than emit the wrong register. (kernel code moves SP by name -- see spsel.)
    (a64-mov d s) (: dn (rn d) sn (rn s)
-      (dn = 31 || sn = 31 ? (scare 'a64-mov-sp [d s]) 0,
-       le32 (0xAA0003E0 | (sn << 16 | dn))))                                       ; orr d, xzr, s
+      (? (elem 'zr [d s] && elem 'sp [d s]) (scare 'a64-mov-sp [d s])
+         (d = 'sp || s = 'sp) (le32 (0x91000000 | (sn << 5 | dn)))               ; add d, s, #0: orr's 31 is xzr
+         (le32 (0xAA0003E0 | (sn << 16 | dn)))))                                  ; orr d, xzr, s
 
    ;; ALU. register form is the native three-address; immediate is add/sub only.
    ;; the register form is the shifted-register one, where encoding 31 is xzr in
@@ -203,6 +204,9 @@
 
    (a64-push s) (rn s @ st (le32 (0xF81F0FE0 | st)))      ; str s, [sp, #-16]!
    (a64-pop  d) (rn d @ dt (le32 (0xF84107E0 | dt)))      ; ldr d, [sp], #16
+   ;; the frame record: fp at [sp], lr at [sp+8], in the 32 bytes the two pushes took
+   a64-frpush (le32 0xA9BE7BFD)                           ; stp x29, x30, [sp, #-32]!
+   a64-frpop  (le32 0xA8C27BFD)                           ; ldp x29, x30, [sp], #32
 
    (a64-neg d) (rn d @ dt (le32 (0xCB0003E0 | (dt << 16 | dt))))   ; sub d, xzr, d
    (a64-not d) (rn d @ dt (le32 (0xAA2003E0 | (dt << 16 | dt))))   ; orn d, xzr, d (mvn)
@@ -212,6 +216,7 @@
    ;; control: B/BL carry a 26-bit offset (bits[25:0]); B.cond a 19-bit one (bits[23:5]). the offset
    ;; is pc-relative to the instruction's own address, in units of 4. the fix is the whole word.
    (a64-jmp  label)    [(fix 4 'b26 label 0x14000000)]
+   (a64-cbr w r label) [(fix 4 'b19 label (w | rn r))]   ; cbz/cbnz, X or W by the word
    (a64-call label)    [(fix 4 'b26 label 0x94000000)]
    ;; la: adrp + ADD -- the page-relative pair (+-4GB), one fixup each. adr alone
    ;; (+-1MB, and the patch masks silently) can't span love.c-scale images, and the
@@ -522,8 +527,63 @@
                 'vbar_el1 (sreg 3 0 12 0 0) 'mpidr_el1 (sreg 3 0 0 0 5)
                 'ctr_el0 (sreg 3 3 0 0 1)
                 'cntfrq_el0 (sreg 3 3 14 0 0) 'cntpct_el0 (sreg 3 3 14 0 1)
-                'cntp_tval_el0 (sreg 3 3 14 2 0) 'cntp_ctl_el0 (sreg 3 3 14 2 1)}
-   (a64-sysreg nm) (look a64-sysregs nm 'badsysreg)
+                'cntp_tval_el0 (sreg 3 3 14 2 0) 'cntp_ctl_el0 (sreg 3 3 14 2 1)
+                'sp_el0 (sreg 3 0 4 1 0) 'sp_el1 (sreg 3 4 4 1 0) 'spsel (sreg 3 0 4 2 0)
+                'daif (sreg 3 3 4 2 1) 'nzcv (sreg 3 3 4 2 0) 'fpcr (sreg 3 3 4 4 0) 'fpsr (sreg 3 3 4 4 1)
+                'pan (sreg 3 0 4 2 3) 'uao (sreg 3 0 4 2 4) 'dit (sreg 3 3 4 2 5) 'ssbs (sreg 3 3 4 2 6)
+                'tco (sreg 3 3 4 2 7) 'tpidr_el0 (sreg 3 3 13 0 2) 'tpidrro_el0 (sreg 3 3 13 0 3)
+                'tpidr_el1 (sreg 3 0 13 0 4) 'tpidr_el2 (sreg 3 4 13 0 2) 'contextidr_el1 (sreg 3 0 13 0 1)
+                'midr_el1 (sreg 3 0 0 0 0) 'revidr_el1 (sreg 3 0 0 0 6) 'id_aa64pfr0_el1 (sreg 3 0 0 4 0)
+                'id_aa64pfr1_el1 (sreg 3 0 0 4 1) 'id_aa64zfr0_el1 (sreg 3 0 0 4 4)
+                'id_aa64smfr0_el1 (sreg 3 0 0 4 5) 'id_aa64dfr0_el1 (sreg 3 0 0 5 0)
+                'id_aa64dfr1_el1 (sreg 3 0 0 5 1) 'id_aa64isar0_el1 (sreg 3 0 0 6 0)
+                'id_aa64isar1_el1 (sreg 3 0 0 6 1) 'id_aa64isar2_el1 (sreg 3 0 0 6 2)
+                'id_aa64mmfr0_el1 (sreg 3 0 0 7 0) 'id_aa64mmfr1_el1 (sreg 3 0 0 7 1)
+                'id_aa64mmfr2_el1 (sreg 3 0 0 7 2) 'id_aa64mmfr3_el1 (sreg 3 0 0 7 3)
+                'ccsidr_el1 (sreg 3 1 0 0 0) 'clidr_el1 (sreg 3 1 0 0 1) 'csselr_el1 (sreg 3 2 0 0 0)
+                'dczid_el0 (sreg 3 3 0 0 7) 'cntvct_el0 (sreg 3 3 14 0 2) 'cntkctl_el1 (sreg 3 0 14 1 0)
+                'cntp_cval_el0 (sreg 3 3 14 2 2) 'cntv_tval_el0 (sreg 3 3 14 3 0)
+                'cntv_ctl_el0 (sreg 3 3 14 3 1) 'cntv_cval_el0 (sreg 3 3 14 3 2)
+                'cntvoff_el2 (sreg 3 4 14 0 3) 'cnthctl_el2 (sreg 3 4 14 1 0) 'mdscr_el1 (sreg 2 0 0 2 2)
+                'oslar_el1 (sreg 2 0 1 0 4) 'osdlr_el1 (sreg 2 0 1 3 4) 'mdccsr_el0 (sreg 2 3 0 1 0)
+                'pmcr_el0 (sreg 3 3 9 12 0) 'pmuserenr_el0 (sreg 3 3 9 14 0) 'afsr0_el1 (sreg 3 0 5 1 0)
+                'afsr1_el1 (sreg 3 0 5 1 1) 'amair_el1 (sreg 3 0 10 3 0) 'disr_el1 (sreg 3 0 12 1 1)
+                'zcr_el1 (sreg 3 0 1 2 0) 'rgsr_el1 (sreg 3 0 1 0 5) 'gcr_el1 (sreg 3 0 1 0 6)
+                'tfsr_el1 (sreg 3 0 5 6 0) 'tfsre0_el1 (sreg 3 0 5 6 1) 'apiakeylo_el1 (sreg 3 0 2 1 0)
+                'apiakeyhi_el1 (sreg 3 0 2 1 1) 'apibkeylo_el1 (sreg 3 0 2 1 2)
+                'apibkeyhi_el1 (sreg 3 0 2 1 3) 'apdakeylo_el1 (sreg 3 0 2 2 0)
+                'apdakeyhi_el1 (sreg 3 0 2 2 1) 'apdbkeylo_el1 (sreg 3 0 2 2 2)
+                'apdbkeyhi_el1 (sreg 3 0 2 2 3) 'apgakeylo_el1 (sreg 3 0 2 3 0)
+                'apgakeyhi_el1 (sreg 3 0 2 3 1) 'hcr_el2 (sreg 3 4 1 1 0) 'mdcr_el2 (sreg 3 4 1 1 1)
+                'cptr_el2 (sreg 3 4 1 1 2) 'hstr_el2 (sreg 3 4 1 1 3) 'sctlr_el2 (sreg 3 4 1 0 0)
+                'ttbr0_el2 (sreg 3 4 2 0 0) 'tcr_el2 (sreg 3 4 2 0 2) 'vttbr_el2 (sreg 3 4 2 1 0)
+                'vtcr_el2 (sreg 3 4 2 1 2) 'spsr_el2 (sreg 3 4 4 0 0) 'elr_el2 (sreg 3 4 4 0 1)
+                'esr_el2 (sreg 3 4 5 2 0) 'far_el2 (sreg 3 4 6 0 0) 'mair_el2 (sreg 3 4 10 2 0)
+                'vbar_el2 (sreg 3 4 12 0 0) 'vpidr_el2 (sreg 3 4 0 0 0) 'vmpidr_el2 (sreg 3 4 0 0 5)
+                'icc_pmr_el1 (sreg 3 0 4 6 0) 'icc_dir_el1 (sreg 3 0 12 11 1)
+                'icc_rpr_el1 (sreg 3 0 12 11 3) 'icc_sgi1r_el1 (sreg 3 0 12 11 5)
+                'icc_iar1_el1 (sreg 3 0 12 12 0) 'icc_eoir1_el1 (sreg 3 0 12 12 1)
+                'icc_hppir1_el1 (sreg 3 0 12 12 2) 'icc_bpr1_el1 (sreg 3 0 12 12 3)
+                'icc_ctlr_el1 (sreg 3 0 12 12 4) 'icc_sre_el1 (sreg 3 0 12 12 5)
+                'icc_igrpen1_el1 (sreg 3 0 12 12 7) 'icc_sre_el2 (sreg 3 4 12 9 5)}
+   ;; gas's generic spelling, s<op0>_<op1>_c<n>_c<m>_<op2>, names one the table does not; a name
+   ;; reads in any case (the kernel's CurrentEL)
+   (a64-sgen s)
+    (: (parts i j acc) (? (#s <= j) (rev ((snip s i j) . acc))
+                          (s j = 95) (parts (j + 1) (j + 1) ((snip s i j) . acc))
+                          (parts i (j + 1) acc))
+       (dec t) (0 < #t && foldl (a \ c \ a && 48 <= c <= 57) 1 (chars t) ?
+                  (foldl (a \ c \ a * 10 + c - 48) 0 (chars t)) -1)
+       (crx t) (1 < #t && t 0 = 99 ? (dec (snip t 1 #t)) -1)
+       ps (1 < #s && s 0 = 115 ? (parts 1 1 ()) ())
+       (#ps != 5 ? ()
+          (: o0 (dec <ps) o1 (dec (ps 1)) cn (crx (ps 2)) cm (crx (ps 3)) o2 (dec (ps 4))
+             (2 <= o0 <= 3 && 0 <= o1 <= 7 && 0 <= cn <= 15 && 0 <= cm <= 15 && 0 <= o2 <= 7 ?
+                (sreg o0 o1 cn cm o2) ()))))
+   (a64-sysreg nm)
+    (: s (lower (show nm))
+       (peep a64-sysregs (name s) () @ v
+          (charm? v ? v (a64-sgen s @ k (charm? k ? k (scare 'badsysreg nm))))))
    (a64-mrs d nm) (le32 (0xD5200000 | (a64-sysreg nm | rn d)))         ; MRS Xd, <reg>
    (a64-msr nm s) (le32 (0xD5000000 | (a64-sysreg nm | rn s)))         ; MSR <reg>, Xs
 
@@ -550,10 +610,18 @@
    ;; op. the whole-system forms take no register: spell that operand `zr` (Rt = 31 = XZR).
    a64-tlbi-ops {'vmalle1 (sreg 1 0 8 7 0) 'vmalle1is (sreg 1 0 8 3 0)
                  'vae1 (sreg 1 0 8 7 1) 'vae1is (sreg 1 0 8 3 1)
-                 'aside1is (sreg 1 0 8 3 2) 'alle1 (sreg 1 4 8 7 4)}
-   a64-ic-ops {'iallu (sreg 1 0 7 5 0) 'ivau (sreg 1 3 7 5 1)}
+                 'aside1is (sreg 1 0 8 3 2) 'alle1 (sreg 1 4 8 7 4)
+                 'aside1 (sreg 1 0 8 7 2) 'vale1 (sreg 1 0 8 7 5) 'vale1is (sreg 1 0 8 3 5)
+                 'vaae1is (sreg 1 0 8 3 3) 'vaale1is (sreg 1 0 8 3 7)
+                 'vmalle1os (sreg 1 0 8 1 0) 'vae1os (sreg 1 0 8 1 1) 'vale1os (sreg 1 0 8 1 5)
+                 'aside1os (sreg 1 0 8 1 2) 'alle2 (sreg 1 4 8 7 0) 'alle2is (sreg 1 4 8 3 0)
+                 'alle1is (sreg 1 4 8 3 4) 'vmalls12e1 (sreg 1 4 8 7 6) 'vmalls12e1is (sreg 1 4 8 3 6)
+                 'ipas2e1is (sreg 1 4 8 0 1) 'vale2is (sreg 1 4 8 3 5) 'vae2 (sreg 1 4 8 7 1)}
+   a64-ic-ops {'iallu (sreg 1 0 7 5 0) 'ialluis (sreg 1 0 7 1 0) 'ivau (sreg 1 3 7 5 1)}
    a64-dc-ops {'ivac (sreg 1 0 7 6 1) 'zva (sreg 1 3 7 4 1) 'cvac (sreg 1 3 7 10 1)
-               'cvau (sreg 1 3 7 11 1) 'civac (sreg 1 3 7 14 1)}
+               'cvau (sreg 1 3 7 11 1) 'civac (sreg 1 3 7 14 1)
+               'cvap (sreg 1 3 7 12 1) 'cvadp (sreg 1 3 7 13 1) 'isw (sreg 1 0 7 6 2)
+               'csw (sreg 1 0 7 10 2) 'cisw (sreg 1 0 7 14 2) 'gva (sreg 1 3 7 4 3) 'gzva (sreg 1 3 7 4 4)}
    a64-at-ops {'s1e1r (sreg 1 0 7 8 0) 's1e1w (sreg 1 0 7 8 1)}
    (a64-sysrt t) (t = 'zr ? 31 (rn t))
    (a64-sys tab bad op t) (le32 (0xD5000000 | (look tab op bad | a64-sysrt t)))
@@ -582,7 +650,7 @@
           ('shl . a64-shift 'shl) ('shr . a64-shift 'shr) ('sar . a64-shift 'sar)
           ('rol . a64-shift 'rol) ('ror . a64-shift 'ror) ('ror4 . a64-shift 'ror4)
           ('lea . a64-lea) ('lean . a64-lea)           ; a consumed lea (x64 tells them apart for the escape gate)
-          ('push . a64-push) ('pop . a64-pop)
+          ('push . a64-push) ('pop . a64-pop) ('frpush . a64-frpush) ('frpop . a64-frpop) ('cbr . a64-cbr)
           ('neg . a64-neg) ('not . a64-not) ('inc . a64-inc) ('dec . a64-dec)
           ('jmp . a64-jmp) ('br . a64-br) ('jmpr . a64-jmpr) ('jmpt . a64-jmpt) ('callr . a64-callr)
           ('mulo . a64-mulo) ('mulh . a64-mulh) ('umulh . a64-umulh) ('set . a64-set) ('test . a64-test)

@@ -14,6 +14,7 @@
    ; as `;; missing m64` when the #if evaluator below is compiled. The default love
    ; takes it either way, which is exactly why it must be written down -- only the
    ; mooncc0 bake (love0's lane) fails, and it fails at the bake, not at the edit.
+   inames {}                                       ; a macro name -> its one string, which a hideset holds
    guards {}                                       ; a header's path -> (text guard), the guard () when it has none
    m64 18446744073709551616                        ; 2^64: #if arithmetic is 64-bit (C11 6.10.1)
    h64 9223372036854775808                         ; 2^63: intmax's top, so the sign boundary
@@ -63,12 +64,6 @@
    (idv? ('id . v . _) s) ?(v = s)
    (pv? ('p . v . _) s) ?(v = s)
    (kwv? ('kw . v . _) s) ?(v = s)
-   (addhide t hs)                                   ; union hs into t's hideset
-    (retok t (lof t) (dedup (hof t + hs)))
-   (dedup l) (: (go l seen) (? (atom? l) ()
-                              (elem <l seen) (go >l seen)
-                              (<l . go >l (<l . seen)))
-                (go l ()))
 
    ; -- the spelling of a token, for ## paste and # stringize --
    numks '(num unum lnum ulnum llnum ullnum flo flof iflo)
@@ -84,8 +79,13 @@
    ; all. the standard's extra \ before each " and \ buys a text that RE-LEXES to
    ; this; we hand the value straight to codegen and never re-lex it, so the
    ; spelling is the answer. whitespace: one space where the source had any, none
-   ; where it had none (`a+1` stays tight), none before the first token
-   (spellcat ts) (: (go l acc gap) (atom? l ? acc
+   ; where it had none (`a+1` stays tight), none before the first token. the re-lex
+   ; still owes one thing outside a literal: a stray `\\` (gas's macro argument, the
+   ; kernel's `\\sreg`) reads back as one backslash
+   (bs? t) (spell t = "\\")
+   (spellcat ts) (: (go l acc gap) (? (atom? l) acc
+                                      (bs? <l && !(spaced? <l) && two? >l && bs? <>l)
+                                       (go >>l (acc + (gap && acc != "" ? " " "") + "\\") (spaced? <>l))
                                       (go >l (acc + (gap && acc != "" ? " " "") + spell <l)
                                           (spaced? <l)))
                     (go ts "" 0))
@@ -141,16 +141,17 @@
    ; and `A ## B ; bob` pasted a with the `;` and ate it when the join failed to relex. --
    (pmk? ('pmark . _)) 1
    (paste toks line)
-    (: (nopm l) (? (atom? l) () (pmk? <l) (nopm >l) (<l . nopm >l))
-       (go l acc) (? (atom? l) (nopm (rev acc))
-                     (pv? <l "##" && two? acc && two? >l)
-                      (: a <acc b <>l
-                         (? (pmk? a) (go >>l (b . >acc))     ; placemarker ## x -> x
-                            (pmk? b) (go >>l acc)             ; x ## placemarker -> x
-                            (relex (spell a + spell b) line @ r
-                               (go >>l ((r ? r a) . >acc)))))
-                     (go >l (<l . acc)))
-       (go toks ()))
+    (!(any (t \ pv? t "##" || pmk? t) toks) ? toks         ; nothing to fold: the list as it came
+     (: (nopm l) (? (atom? l) () (pmk? <l) (nopm >l) (<l . nopm >l))
+        (go l acc) (? (atom? l) (nopm (rev acc))
+                      (pv? <l "##" && two? acc && two? >l)
+                       (: a <acc b <>l
+                          (? (pmk? a) (go >>l (b . >acc))     ; placemarker ## x -> x
+                             (pmk? b) (go >>l acc)             ; x ## placemarker -> x
+                             (relex (spell a + spell b) line @ r
+                                (go >>l ((r ? r a) . >acc)))))
+                      (go >l (<l . acc)))
+        (go toks ())))
 
    ; -- substitute args into a function-macro body. a param preceded by # is
    ; stringized; a param that is an operand of ## substitutes unexpanded; else
@@ -207,9 +208,9 @@
              (macnm t @ nm
                 (mdef macs nm @ m
                    (? (atom? m) (t . expand rest macs)          ; no macro, so no hideset to walk
-                      (elem nm (hof t)) (t . expand rest macs)  ; blue-painted: leave it
+                      (eleq (iname nm) (hof t)) (t . expand rest macs)  ; blue-painted: leave it
                       (mobj? m)
-                       (: hs (nm . hof t)
+                       (: hs (iname nm . hof t)
                           body (mapadd <>m hs (lof t))
                           (expand (body + rest) macs))
                       (mfun? m && two? rest && pv? <rest "(")
@@ -217,14 +218,21 @@
                           (atom? ca ? (t . expand rest macs)
                              (: args <ca after <>ca
                                 params <>m mbody <>>m mvar <>>>m
-                                hs (nm . hof t)
+                                hs (iname nm . hof t)
                                 body (subst mbody params args mvar (lof t) macs <>>ca)
                                 (expand (mapadd body hs (lof t) + after) macs))))
                       (t . expand rest macs)))))))
-   ; hs is a set already (the name was not in the invoker's), so a token with none of its own takes it whole
    (mapadd toks hs line)                            ; give body tokens the hideset + the invocation line
     (atom? toks ? ()
-       (<toks @ t (retok t line (hof t @ h (two? h ? (dedup (h + hs)) hs)) . mapadd >toks hs line)))
+       (<toks @ t (retok t line (hunion (hof t) hs) . mapadd >toks hs line)))
+   ; a hideset holds only interned names, so a set's member is found by identity. the union is
+   ; h's names that hs lacks, then hs -- often none: an argument's set is most often a tail of
+   ; the invocation's very list. hs is a set already (its name was not in the invoker's)
+   (iname nm) (inames nm @ c (string? c ? c (: _ (pin inames nm nm) nm)))
+   (hunion h hs) (? (atom? h) hs
+                    (sufq? h hs) hs
+                    (: (go l) (? (atom? l) hs (eleq <l hs) (go >l) (<l . go >l)) (go h)))
+   (sufq? h l) (? (h == l) 1 (atom? l) 0 (sufq? h >l))
    ; -- #line's operand: a digit sequence, or what one macro-expands to (C11 6.10.4p3).
    ; () when it is neither, which is the directive doing nothing. --
    (lnum body macs)

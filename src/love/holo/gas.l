@@ -460,6 +460,70 @@
               (s != -1 && s != 0 && s != lg ? (scare 'gas-a64-operand os)
                  (ga-raw (lb | 0x00200800 | ga-hw i << 16 | x << 13 | (s = lg ? 1 0) << 12 | ga-hw b << 5 | t)))
              (scare 'gas-a64-operand os))))
+   ;; words the IR has no row for: the hints, by name and by number
+   ga-hints {'yield 0xD503203F 'sev 0xD503209F 'sevl 0xD50320BF 'csdb 0xD503229F 'esb 0xD503221F
+             'paciasp 0xD503233F 'autiasp 0xD50323BF 'pacibsp 0xD503237F 'autibsp 0xD50323FF
+             'xpaclri 0xD50320FF}
+   ga-bti {'c 0xD503245F 'j 0xD503249F 'jc 0xD50324DF}
+   ;; register ops laid as their own word, [X W]: the inverted logicals, the carry pair, the bit
+   ;; and byte reversals and counts
+   ga-lnot {'bic [0x8A200000 0x0A200000 'and] 'bics [0xEA200000 0x6A200000 'ands]
+            'orn [0xAA200000 0x2A200000 'orr] 'eon [0xCA200000 0x4A200000 'eor]}
+   ga-carry {'adc [0x9A000000 0x1A000000] 'adcs [0xBA000000 0x3A000000]
+             'sbc [0xDA000000 0x5A000000] 'sbcs [0xFA000000 0x7A000000]}
+   ga-un {'rbit [0xDAC00000 0x5AC00000] 'rev [0xDAC00C00 0x5AC00800] 'rev16 [0xDAC00400 0x5AC00400]
+          'rev32 [0xDAC00800 ()] 'clz [0xDAC01000 0x5AC01000] 'cls [0xDAC01400 0x5AC01400]}
+   ;; the unprivileged loads and stores (uaccess): an imm9 offset, never written back
+   ga-ut {'sttr [0xF8000800 0xB8000800] 'sttrb [() 0x38000800] 'sttrh [() 0x78000800]
+          'ldtr [0xF8400800 0xB8400800] 'ldtrb [() 0x38400800] 'ldtrh [() 0x78400800]
+          'ldtrsw [0xB8800800 ()]}
+   ;; the exclusives and acquire/release, [X W] by the data register; a store-exclusive's
+   ;; status register leads. the address is a bare base
+   ga-ex {'ldxr [0xC85F7C00 0x885F7C00] 'ldxrb [() 0x085F7C00] 'ldxrh [() 0x485F7C00]
+          'ldaxr [0xC85FFC00 0x885FFC00] 'ldaxrb [() 0x085FFC00] 'ldaxrh [() 0x485FFC00]
+          'ldar [0xC8DFFC00 0x88DFFC00] 'ldarb [() 0x08DFFC00] 'ldarh [() 0x48DFFC00]
+          'stlr [0xC89FFC00 0x889FFC00] 'stlrb [() 0x089FFC00] 'stlrh [() 0x489FFC00]}
+   ga-sx {'stxr [0xC8007C00 0x88007C00] 'stxrb [() 0x08007C00] 'stxrh [() 0x48007C00]
+          'stlxr [0xC800FC00 0x8800FC00] 'stlxrb [() 0x0800FC00] 'stlxrh [() 0x4800FC00]}
+   (ga-ex-ins row os)
+    (: k #os rw (ga-rw (os (k - 2))) b (<>rw = 8 ? <row <>row)
+       s9 (k = 3 ? (ga-rw <os) ['zr 4])
+       ((os (k - 1)) @ ('mem x 0)
+          (charm? b && <>s9 = 4 ? (ga-raw (b | (k = 3 ? (ga-hw <s9 << 16) 0) | ga-hw x << 5 | ga-hw <rw))
+             (scare 'gas-a64-operand os))
+          (scare 'gas-a64-operand os)))
+   ;; a prefetch: its operation by name (type << 3 | level - 1 << 1 | strm) or number; the
+   ;; address scaled by 8 when it can be, else prfum's imm9
+   ga-prf {'pldl1keep 0 'pldl1strm 1 'pldl2keep 2 'pldl2strm 3 'pldl3keep 4 'pldl3strm 5
+           'plil1keep 8 'plil1strm 9 'plil2keep 10 'plil2strm 11 'plil3keep 12 'plil3strm 13
+           'pstl1keep 16 'pstl1strm 17 'pstl2keep 18 'pstl2strm 19 'pstl3keep 20 'pstl3strm 21}
+   (ga-prf-ins m os)
+    (: op ((os 0) @ ('sym t) (peep ga-prf t ()) ('imm n) (0 <= n <= 31 ? n ()) ())
+       ((os 1) @ ('mem x v)
+          (? !(charm? op) (scare 'gas-a64-operand os)
+             (m = 'prfm && v % 8 = 0 && 0 <= v <= 32760) (ga-raw (0xF9800000 | (v // 8) << 10 | ga-hw x << 5 | op))
+             (-256 <= v <= 255) (ga-raw (0xF8800000 | (v & 511) << 12 | ga-hw x << 5 | op))
+             (scare 'gas-a64-operand os))
+          (scare 'gas-a64-operand os)))
+   (ga-row row os) (: w (ga-wide os) b (w = 8 ? <row <>row)
+                      (charm? b ? b (scare 'gas-a64-width os)))
+   (ga-regw row os)                                 ; rd, rn{, rm}
+    (: b (ga-row row os) (r i) (ga-hw (ga-r (os i)))
+       (ga-raw (b | (#os = 3 ? (r 2 << 16) 0) | r 1 << 5 | r 0)))
+   (ga-lnot-ins m os)
+    (: row (ga-lnot m) op (row 2) d (ga-hw (ga-r (os 0))) n (ga-hw (ga-r (os 1)))
+       ((os 2) @ ('imm v)                           ; bic #v is and #~v
+          (ga-wide (take 2 os) = 4 ? (ga-raw (ga-wimm op d n (0 - v - 1)))
+             (ga-bm (0 - v - 1) 64 @ f
+                (charm? f ? (ga-raw (0x80000000 | <>(ga-walu op) | f | n << 5 | d))
+                   (scare 'a64-bitmask-imm v))))
+          (ga-regw row os)))
+   (ga-ut-ins m os)
+    (: rw (ga-rw (os 0)) row (ga-ut m) b (<>rw = 8 ? <row <>row)
+       ((os 1) @ ('mem x v)
+          (charm? b && -256 <= v <= 255 ? (ga-raw (b | (v & 511) << 12 | ga-hw x << 5 | ga-hw <rw))
+             (scare 'gas-a64-operand os))
+          (scare 'gas-a64-operand os)))
    (ga-bcond s) (show s @ t (#t > 2 && t 0 = 98 && t 1 = 46 ? (peep ga-cc (name (snip t 2 #t)) ()) ()))
    (ga-inplace op d s) (d = s ? () [['mov d s]])       ; the IR's unary ops work in place
    (ga-ins m os)
@@ -500,6 +564,22 @@
               (k != 3 ? (scare 'gas-a64-operand os)
                  (c @ ('imm n) (ga-inplace m d s + [[(ga-sh m) d n]])
                       (d = s ? [[(name (show (ga-sh m) + "v")) d (ga-r c)]] (scare 'gas-a64-operand os)))))
+          (charm? (peep ga-hints m ())) (k = 0 ? (ga-raw (ga-hints m)) (scare 'gas-a64-operand [m os]))
+          (m = 'hint) ((os 0) @ ('imm n) (k = 1 && 0 <= n <= 127 ? (ga-raw (0xD503201F | n << 5)) (scare 'gas-a64-operand [m os]))
+                         (scare 'gas-a64-operand [m os]))
+          (m = 'bti) (? (k = 0) (ga-raw 0xD503241F)
+                        ((os 0) @ ('sym t) (charm? (peep ga-bti t ()) && k = 1) 0) (ga-raw (ga-bti <>(os 0)))
+                        (scare 'gas-a64-operand [m os]))
+          (elem m '(cbz cbnz))                       ; compare and branch: the flags untouched
+           (k = 2 ? (ga-rw (os 0) @ rw [['cbr ((m = 'cbz ? 0x34000000 0x35000000) | (<>rw = 8 ? 0x80000000 0)) <rw (<>(os 1))]])
+              (scare 'gas-a64-operand [m os]))
+          (two? (peep ga-lnot m ())) (k = 3 ? (ga-lnot-ins m os) (scare 'gas-a64-operand [m os]))
+          (two? (peep ga-carry m ())) (k = 3 ? (ga-regw (ga-carry m) os) (scare 'gas-a64-operand [m os]))
+          (two? (peep ga-un m ())) (k = 2 ? (ga-regw (ga-un m) os) (scare 'gas-a64-operand [m os]))
+          (two? (peep ga-ut m ())) (k = 2 ? (ga-ut-ins m os) (scare 'gas-a64-operand [m os]))
+          (elem m '(prfm prfum)) (k = 2 ? (ga-prf-ins m os) (scare 'gas-a64-operand [m os]))
+          (two? (peep ga-ex m ())) (k = 2 ? (ga-ex-ins (ga-ex m) os) (scare 'gas-a64-operand [m os]))
+          (two? (peep ga-sx m ())) (k = 3 ? (ga-ex-ins (ga-sx m) os) (scare 'gas-a64-operand [m os]))
           (scare 'gas-a64-op m)))
    (ga-line toks)
     (gline toks @ l
@@ -719,6 +799,10 @@
    ; a leading `name:`'s colon, or -1
    (gf-labat s) (: n #s j ((: (g j) (j < n && gidc? (s j) ? (g (j + 1)) j)) 0)
                    (0 < j && j < n && s j = 58 ? j -1))
+   ; a directive's name runs to its identifier's end: a .S line spells `.long((x)-.)` unspaced
+   (gf-dsplit s) (: j ((: (g j) (j < #s && (gidc? (s j) || s j = 46) ? (g (j + 1)) j)) 1)
+                    [(snip s 0 j) (xa-trim (snip s j #s))])
+   (gf-base nm) ((: (g j) (? (j >= #nm) nm (nm j = 1) (snip nm 0 j) (g (j + 1)))) 0)   ; a subsection's section
    (gf-lines tgt src)
     (elem tgt '(x64 rv64) @ hash?
        (catmap (ln \ xa-lines (hash? ? (xa-decomment ln) (gcut2 ln 47))) (gsplit src 10)))
@@ -873,6 +957,13 @@
        (num e) (gimm (gtoks e))
        ; .org label+k (or k from the section's start): zeros up to it, over data laid since
        (org e)
+        (gtoks e @ ts
+           ; `. - (664b-663b) + (662b-661b)`, the alternatives' size check: the pad is the rest, laid
+           ; once the labels hold, and it may not move back
+           (two? >ts && <ts = ['sym "."] ?
+               (emit [['skipx (['num 0] . map (t \ (<t = 'lref ? ['sym (rl <>t <>>t)] t)) >ts) 0 0 'org]])
+              (org1 e)))
+       (org1 e)
         (: v (gf-val e rl) s <>v r (secs (st 'cur))
            (back l n) (atom? l ? (string? s ? 'bad n)
                          (<l @ f
@@ -904,6 +995,12 @@
                       (emit [['skipx (map (t \ (<t = 'lref ? ['sym (rl <>t <>>t)] t)) ts) f 0]])
                      (raw (map (i \ f & 255) ^(num <xs)))))
               (mn = ".org") (org rest)
+              (mn = ".inst") (tgt = 'a64 ? (raw (catmap (e \ gf-le (num e) 4) xs)) (scare 'gas-directive mn))
+              ; a subsection is its section's tail, named apart until the end lays it there
+              (mn = ".subsection")
+               (: n (num rest) b (gf-base (st 'cur)) r (secs b)
+                  (goto (n = 0 ? b (b + string 1 + show n))
+                        (two? r ? [<r <>r] (b = home ? htd (gf-dflt b)))))
               (mn = ".base64") (raw (catmap gf-b64 (gf-strs rest)))
               ; what the pre-pass left: an alias, or a value over labels only .size reads
               (elem mn '(".set" ".equ"))
@@ -938,6 +1035,8 @@
               (elem mn '(".globl" ".global")) (pin st 'globl (rev (map xa-unquote xs) + st 'globl))
               ; what a static link never reads: symbol types and sizes, visibility, unwind rows
               (elem mn '(".type" ".size" ".hidden" ".protected" ".internal" ".file" ".ident") || starts? mn ".cfi_") 0
+              ; the ISA a line may use: every one this reader knows, always
+              (elem mn '(".arch" ".arch_extension" ".cpu")) 0
               (scare 'gas-directive mn)))
        (line s0)
         (xa-trim s0 @ s
@@ -951,10 +1050,18 @@
                                                               emit [['label (name (pfx + show (glabel n k)))]]))
                           (pin labs l (st 'cur), emit [['label (name l)]]),
                         line (snip s (c + 1) #s)))
-                    (s 0 = 46) (flush 0, dir (xa-mnem s) (xa-rest s))
+                    (s 0 = 46) (flush 0, gf-dsplit s @ d (dir <d <>d))
                     (pin st 'run ((gf-lsub s rl) . (st 'run)))))))
        _ (foldl (\ _ x (line x)) 0 (gf-expand (gf-lines tgt src)))
        _ (flush 0)
+       ; each subsection after its section's own forms, in number order; a function's home has no
+       ; tail of its own, so its subsections go to .text
+       _ (foldl (\ _ nm (: b (gf-base nm) t (b = "" ? ".text" b) r (secs nm)
+                          (row t [<r <>r],
+                           secs t @ q (pin secs t [<q <>q (<>>r + <>>q)]),
+                           foldl (\ _ f (two? f && <f = 'label ? (pin labs (show <>f) t) 0)) 0 <>>r,
+                           pin st 'order (filter (x \ x != nm) (st 'order)))))
+                0 (sort (filter (nm \ gf-base nm != nm) (st 'order))))
        ; a .skip over label arithmetic (the alternatives' padding): each section's forms are
        ; sized -- an instruction assembled alone -- and the count read with the labels' section
        ; offsets in place, again until the sizes hold; then it lays its fill
@@ -982,7 +1089,8 @@
                              fs (map (f \ (skip? f ?
                                               (: v (skv f t) v2 (v < 0 ? 0 v)
                                                  (v2 != f 3 ? (pin ch 'c 1) 0,
-                                                  ['skipx (f 1) (f 2) v2]))
+                                                  (v < 0 && f 4 = 'org ? (scare 'gas-org-back (f 1)) 0,
+                                                   ['skipx (f 1) (f 2) v2 (f 4)])))
                                               f)) <>>r)
                              (pin secs nm [<r <>r fs])))
                   0 (st 'order),
