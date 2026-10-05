@@ -484,13 +484,27 @@
    (mput e) (pin memo 'l (e . mfew (memo 'l) 3))
    (mfew l n) (n < 1 || atom? l ? () (<l . mfew >l (n - 1)))
 
+   ; buf (reversed) ends inside a call of a function-like macro: an unmatched ( right after its name
+   (callopen? buf macs)
+    (: (go l d) (? (atom? l) 0
+                   (pv? <l ")") (go >l (d + 1))
+                   (pv? <l "(") (? (0 < d) (go >l (d - 1))
+                                    (two? >l && macat? <>l macs && mfun? (mdef macs (macnm <>l))) 1
+                                    (go >l 0))
+                   (go >l d))
+       (go buf 0))
    (cppgo toks macs cond buf out incf)
     (atom? toks ? (two? cond ? (gripe () <>><cond () "unterminated #if -- no #endif")
                         (rev (tokflush buf macs out)))
        (: ls (linesplit toks) line <ls rest <>ls
           (? (pv? <line "#")
-              (: out1 (tokflush buf macs out)
-                 dir (two? >line ? (dirname <>line))   ; if/else are keywords; the rest ids
+              (: dir (two? >line ? (dirname <>line))   ; if/else are keywords; the rest ids
+                 ; inside a function-like macro's open argument list the run is held, not
+                 ; flushed: the directive takes effect and the call expands once its ) comes,
+                 ; as gcc reads it. never across an #include
+                 held (dir != "include" && callopen? buf macs)
+                 out1 (held ? out (tokflush buf macs out))
+                 nb (held ? buf ())
                  dirk (two? >line ? (kof <>line))      ; ..and its kind, which is how a line marker is known
                  body >>line
                  ; a directive line never reaches the accumulator below, so the
@@ -501,10 +515,10 @@
                  (? (elem dir '("if" "ifdef" "ifndef" "elif" "else" "endif"))
                      (docond dir sbody sline macs cond @ cond2
                         (cond2 = 'err ? (gripeat sline ("#" + dir + " without #if"))   ; unbalanced -- fatal, not empty
-                           (cppgo rest macs cond2 () out1 incf)))
-                    !(condactive cond) (cppgo rest macs cond () out1 incf)      ; skipped: ignore non-cond directives
-                    (dir = "define") (defmacro macs body, cppgo rest macs cond () out1 incf)
-                    (dir = "undef") (pin macs (macnm <body) (), cppgo rest macs cond () out1 incf)
+                           (cppgo rest macs cond2 nb out1 incf)))
+                    !(condactive cond) (cppgo rest macs cond nb out1 incf)      ; skipped: ignore non-cond directives
+                    (dir = "define") (defmacro macs body, cppgo rest macs cond nb out1 incf)
+                    (dir = "undef") (pin macs (macnm <body) (), cppgo rest macs cond nb out1 incf)
                     (dir = "include") (doinc body macs cond out1 rest incf)
                     ; say the TEXT. an #error is the program telling you what is wrong in
                     ; its own words, and "#error directive" throws that away -- pdclib's
@@ -517,9 +531,9 @@
                     ; gripes, and a warning that stops nothing has none yet.
                     (dir = "warning")
                      (say err ("cc: warning: " + spellcat body + "\n"),
-                      cppgo rest macs cond () out1 incf)
+                      cppgo rest macs cond nb out1 incf)
                     (dir = "pragma" && pragmac? body)
-                     (dopragmac macs body, cppgo rest macs cond () out1 incf)
+                     (dopragmac macs body, cppgo rest macs cond nb out1 incf)
                     ; #line N ["file"]: the next line becomes N, so a token at
                     ; physical P reports P + (N - L - 1). the file operand is
                     ; parsed and dropped -- __file__ is the TU's name throughout.
@@ -529,13 +543,13 @@
                     (dir = "line")
                      (lnum body macs @ n
                         (n ? (pin macs 'lndelta (n - lof <line - 1)) 0,
-                         cppgo rest macs cond () out1 incf))
+                         cppgo rest macs cond nb out1 incf))
                     ; ignored on purpose, and each is one gcc also accepts: a bare
                     ; `#` is the null directive (C11 6.10.7), and a numeric one is
                     ; gcc -E's line marker.
                     (elem dir '("pragma" "ident" "sccs" "assert" "unassert") ||
                         atom? >line || dirk = 'num)
-                     (cppgo rest macs cond () out1 incf)
+                     (cppgo rest macs cond nb out1 incf)
                     ; ..and anything else is a directive we do not implement, where
                     ; ignoring it drops whatever it would have done in silence --
                     ; an unconfigured `#cmakedefine` template compiles clean and the
@@ -544,7 +558,8 @@
                     ; now it says so rather than dropping a header.
                     ; an assembler source keeps it as text, as gcc's assembler-with-cpp does: a
                     ; `#` there is the assembly's (a device tree's #address-cells)
-                    (two? (mdef macs "__ASSEMBLER__")) (cppgo rest macs cond () (revcat (lnshift macs line) out1) incf)
+                    (two? (mdef macs "__ASSEMBLER__")) (lnshift macs line @ sl
+                        (held ? (cppgo rest macs cond (revcat sl buf) out incf) (cppgo rest macs cond () (revcat sl out1) incf)))
                     (gripeat sline ("invalid preprocessing directive #" + spellcat [<>line]))))
              !(condactive cond) (cppgo rest macs cond buf out incf)                    ; skipped code: drop
              (cppgo rest macs cond (revcat (lnshift macs line) buf) out incf))))         ; active code: accumulate (reversed)
