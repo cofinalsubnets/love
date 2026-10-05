@@ -17,7 +17,7 @@
 ; flat, f all flat, p/P the presets. a tap on the seek bar seeks, on a row picks it, on a
 ; slider sets it, on the visualizer switches it.
 (module (ptui ptui-new ptui-frame ptui-key ptui-tap ptui-run ptui-close ptui-presets)
-(borrow 'core)
+(borrow 'pcore)
 (borrow 'seek)
 (:
    bands ["60" "170" "310" "600" "1k" "3k" "6k" "12k" "14k" "16k"]

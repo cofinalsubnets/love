@@ -15,7 +15,7 @@
 ; has its own queue in the session's mailbox, written by it alone (tasks switch at any call).
 (module (mpd mpd-lib mpd-skin mpd-session mpd-do mpd-serve mpd-args mpd-scan)
 (borrow 'posix)
-(borrow 'core)
+(borrow 'pcore)
 (:
    udatez (cite 'kore 'udatez) stat (cite 'posix 'stat)
    known ["add" "addid" "clear" "clearerror" "close" "commands" "consume" "count" "currentsong" "decoders" "delete"

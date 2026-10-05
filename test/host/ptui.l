@@ -3,7 +3,7 @@
 ; off the core's own state.
 ;   cat test/00-init.l test/host/ptui.l | out/love
 (borrow 'posix)
-(borrow 'core)
+(borrow 'pcore)
 (borrow 'ptui)
 (: pt-dir (cwd 0 + "/out/.ptuid")
    _ (hark ["rm" "-rf" pt-dir], mkdir pt-dir 448)
