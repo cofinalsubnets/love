@@ -835,8 +835,8 @@
                           (: pa (pattpk ps <>mr)       ; a trailing __attribute__((packed)) lays align-1
                              lay (alask (playout ps <mr uni (<pb | <pa)) (max (pb 2) (pa 2)))
                              tu (uni && attrany? <>mr "transparent_union" "__transparent_union__")
-                             (? (peep ps 'packbf ()) (pin ps 'packbf (), blame >ts3 "a bit-field under #pragma pack is not carried out")
-                                (tu && !(tuok? ps lay)) (blame >ts3 "a transparent union wants members of one word-sized scalar type")
+                             (? (peep ps 'packbf ()) (pin ps 'packbf (), clblame "a bit-field under #pragma pack is not carried out")
+                                (tu && !(tuok? ps lay)) (clblame "a transparent union wants members of one word-sized scalar type")
                              (pin (ps 'stag) tag2 lay,
                               uni ? (pin (ps 'utag) tag2 1) 0,
                               tu ? (pin (ps 'tunion) tag2 1) 0,
