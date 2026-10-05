@@ -6,7 +6,9 @@
 ;   (av-open q)        -> [name m h], the codec, its meta and the audio bytes held | why not
 ;   (av-play q)        -> 0 when q has played out the horn to its end | why not
 ;   (av-pcm f emit)    -> an emit that turns f-shaped samples into the horn's s16 for emit
-(module (av av-codecs av-open av-play av-pcm)
+;   (av-uri u)         -> [q info] for a path or an http(s) stream (src/apps/icy.l), info its
+;                         tablet ({} for a file) | why not
+(module (av av-codecs av-open av-play av-pcm av-uri)
 (:
    close (cite 'posix 'close)
    ; cited when asked, so a codec's module may bake after this one. a wav's meta is its
@@ -29,6 +31,10 @@
    (av-pcm f emit)
     (pcm \ (: n (#pcm // f 'align) c (cask #pcm)
               (pour c 0 pcm 0 #pcm, emit (string ((cite 'wav 'wav-pcm) f n c)))))
+   (av-uri u)
+    (? (starts? u "http://" || starts? u "https://")
+        ((cite 'icy 'icy-open) u @ [q info] [q info] why why)
+       (open u "r" @ q (hot? q ? [q {}] ("cannot open " + u))))
    ; the horn's close drops what it holds, so it is waited out first
    (av-drain hn) (horn-lag hn @ n (charm? n && 0 < n ? (rest 10, av-drain hn) 0))
    (av-play q)

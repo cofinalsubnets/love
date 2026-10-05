@@ -7,8 +7,9 @@
 //   run and carried by the caller; any other length starts them at rest. | 'badarg
 // (spectrum pcm ch tw edges) -> the power of each band, int64s | 'badarg. the last n frames
 //   of pcm (zeros ahead of a short one), mixed to mono, through tw = n window values then
-//   n/2 cosines and n/2 sines (n a power of two); edges = u16 fft bins e0 e1 .., band i
-//   the most power in bins [ei, ei+1), or bin ei alone when that range is empty.
+//   n/2 cosines and n/2 sines (n a power of two); edges = u32 band edges in sixteenths of a
+//   bin, e0 e1 ..: band i the most power in the bins it spans, or, narrower than a bin, the
+//   power at its center taken between the two bins on either side.
 #include "love.h"
 #include <stdint.h>
 #include <string.h>
@@ -20,6 +21,7 @@ static int64_t eq_i64(const uint8_t *p) {
  for (int k = 7; k >= 0; k--) v = v << 8 | p[k];
  return (int64_t) v; }
 static double eq_q(const uint8_t *p, uintptr_t i) { return (double) eq_i64(p + 8 * i) / Q40; }
+static uintptr_t eq_u32(const uint8_t *p) { return (uintptr_t) (p[0] | p[1] << 8 | p[2] << 16 | (uint32_t) p[3] << 24); }
 static int eq_s16(const uint8_t *p, uintptr_t i) { return (int16_t) (uint16_t) (p[2 * i] | p[2 * i + 1] << 8); }
 
 static struct g *host_biquads(struct g *g) {
@@ -58,7 +60,7 @@ static struct g *host_spectrum(struct g *g) {
  if (!(strp(g->sp[0]) || caskp(g->sp[0])) || !oddp(g->sp[1]) || !strp(g->sp[2]) || !strp(g->sp[3]))
   return g->sp[3] = badarg(g), g->sp += 3, g;
  intptr_t ch = getcharm(g->sp[1]);
- uintptr_t n = len(g->sp[2]) / 16, ne = len(g->sp[3]) / 2;
+ uintptr_t n = len(g->sp[2]) / 16, ne = len(g->sp[3]) / 4;
  if (ch < 1 || ch > 2 || n < 2 || (n & (n - 1)) || n > 65536 || ne < 2) return g->sp[3] = badarg(g), g->sp += 3, g;
  uintptr_t nw = 2 * n * sizeof(double), nout = (ne - 1) * 8;
  if (!ok(g = have(g, str_width(nw) + str_width(nout)))) return g;
@@ -87,13 +89,19 @@ static struct g *host_spectrum(struct g *g) {
     re[a + k + h] = re[a + k] - xr, im[a + k + h] = im[a + k] - xi;
     re[a + k] += xr, im[a + k] += xi; }
  uint8_t *o = (uint8_t*) out->bytes;
+ uintptr_t top = 16 * (n / 2 - 1);
  for (uintptr_t b = 0; b + 1 < ne; b++) {
-  uintptr_t lo = (uintptr_t) (ed[2 * b] | ed[2 * b + 1] << 8), hi = (uintptr_t) (ed[2 * b + 2] | ed[2 * b + 3] << 8);
-  if (lo >= n / 2) lo = n / 2 - 1;
-  if (hi <= lo) hi = lo + 1;
-  if (hi > n / 2) hi = n / 2;
+  uintptr_t lo = eq_u32(ed + 4 * b), hi = eq_u32(ed + 4 * b + 4);
+  if (lo > top) lo = top;
+  if (hi > top) hi = top;
   double p = 0;
-  for (uintptr_t k = lo; k < hi; k++) { double q = re[k] * re[k] + im[k] * im[k]; if (q > p) p = q; }
+  if (hi < lo + 16) {                               // narrower than a bin: between two bins
+   uintptr_t c = (lo + hi) / 2, k = c / 16;
+   double f = (double) (c % 16) / 16, q0 = re[k] * re[k] + im[k] * im[k];
+   double q1 = k + 1 < n / 2 ? re[k + 1] * re[k + 1] + im[k + 1] * im[k + 1] : q0;
+   p = q0 + (q1 - q0) * f; }
+  else for (uintptr_t k = (lo + 15) / 16; k <= hi / 16 && k < n / 2; k++) {
+   double q = re[k] * re[k] + im[k] * im[k]; if (q > p) p = q; }
   uint64_t v = p >= 4.6e18 ? (uint64_t) 4600000000000000000ull : (uint64_t) p;
   for (int k = 0; k < 8; k++) o[8 * b + k] = (uint8_t) (v >> (8 * k)); }
  return g->sp[3] = word(out), g->sp += 3, g; }
