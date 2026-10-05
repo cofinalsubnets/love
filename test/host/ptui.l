@@ -43,7 +43,7 @@
    0)
 
 ; --- transport and the mixer, as the core hears them -------------------------------------
-(: _ (ptui-key pt-d 32) _ (rest 300) a (pt-st 'state)       ; space: play, its track on a task
+(: _ (ptui-key pt-d 32) a (pt-st 'state)                    ; space: play
    _ (ptui-key pt-d 99) b (pt-st 'state)                    ; c: pause
    _ (ptui-key pt-d 118) c (pt-st 'state)                   ; v: stop
    f (pt-plain (ptui-frame pt-d 80 24))
@@ -72,7 +72,7 @@
 (: _ (ptui-key pt-d -9) s1 (pt-d 'sel)                        ; down: the second
    _ (ptui-key pt-d 75) q1 (pt-q ()) s2 (pt-d 'sel)          ; K: up a place
    _ (ptui-key pt-d 111) q2 (pt-q ())                         ; o: sort by title
-   _ (ptui-key pt-d -6) _ (ptui-key pt-d 10) _ (rest 300) song (pt-st 'song)   ; end, enter: play it
+   _ (ptui-key pt-d -6) _ (ptui-key pt-d 10) song (pt-st 'song)   ; end, enter: play it
    _ (ptui-key pt-d 100) q3 (pt-q ())                         ; d: drop it
    _ (test (s1 = 1) (q1 = ["alpha.wav" "bravo.wav"]) (s2 = 0)
            (q2 = ["alpha.wav" "bravo.wav"]) (song = 1) (q3 = ["alpha.wav"]))
