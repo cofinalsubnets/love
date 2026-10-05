@@ -10,8 +10,11 @@
 ;   (core-unwatch c id)
 ;   (core-snap c)         -> [snap STATE QUEUE]
 ;   (core-close c)        -> stops it and lets the horn go
-;   (player-main as)      -> the verb: `love player [--pipe] [FILE..]`, the protocol on stdin
-;                            and stdout, the files queued and played
+;   a uri is a path or an http(s) stream (icy.l, through av-uri); a stream's title follows
+;   what the station says it plays
+;   (player-main as)      -> the verb: `love player [--pipe] [FILE..]`, the files queued and
+;                            played; on a terminal the player in cells (src/apps/player/tui.l),
+;                            with --pipe or off one the protocol on stdin and stdout
 ;
 ; a track runs on a task of its own that feeds the horn a chunk at a time, never more than
 ; lead ahead of the speaker, so a pause, a seek or an eq change is heard within lead. what
@@ -35,7 +38,7 @@
     {'s {'state 'stop 'song -1 'pos 0.0 'dur 0.0 'rate 0 'ch 0 'bits 0 'kbps 0 'vol 100 'bal 0
          'pre 0 'eq (map (_ \ 0) ^10) 'eqon 1 'repeat 0 'random 0 'single 0 'consume 0 'qver 0
          'sink sink 'follow () 'clients 0}
-     'q () 'nid 1 'w () 'nw 1 'hn () 'hrate 0 'brate 0 'dec () 'fq () 'bus (bus-new ()) 'tick ()
+     'q () 'nid 1 'w () 'nw 1 'hn () 'hrate 0 'brate 0 'dec () 'fq () 'fi {} 'ftn 0 'fm () 'fln 0 'bus (bus-new ()) 'tick ()
      'tf 0 'base 0 'skip 0 'ring (cask (4 * ringn)) 'rw 0 'held "" 'seed (clock 0)}
 
    ; --- the messages out ------------------------------------------------------
@@ -53,24 +56,35 @@
    (base p) (: k (findsub (rev (chars p)) [47]) (k < 0 ? p (snip p (#p - k) #p)))
    (tag m nm) (: u (upper nm + "=")
                  (foldl (\ a t (a || (#t > #u && upper (snip t 0 #u) = u ? (snip t #u #t) ()))) () (peep m 'tags ())))
-   ; the head of p through the door -> [codec m h port] | why. the port is the caller's to close
+   ; a uri through the door -> [codec m h port info] | why: a path or an http(s) stream, info
+   ; the stream's live tablet ({} for a file). the caller lets both go with shut
+   (stream? info) (tablet? info && string? (peep info 'url ()))
+   (shut q info) (: _ (? (stream? info) ((cite 'icy 'icy-close) info) 0) (close q))
    (opens p)
-    (open p "r" @ q
-      (? !(hot? q) ("cannot open " + p + ": " + show q)
-         ((cite 'av 'av-open) q @ [nm m h] [nm m h q]
-                                  why (close q, why))))
+    ((cite 'av 'av-uri) p @
+      [q info] ((cite 'av 'av-open) q @ [nm m h] [nm m h q info]
+                                        why (shut q info, why))
+      why why)
    (frames m) (? (charm? (peep m 'total ())) (m 'total)
                  (charm? (peep m 'len ()) && 0 <= m 'len) (m 'len // m 'align)
                  0)
+   ; a stream is asked only its name: what it carries may be a codec still to come
    (probe c uri)
+    (? (starts? uri "http://" || starts? uri "https://")
+       ((cite 'av 'av-uri) uri @
+         [q info] (: _ (shut q info) t (peep info 'title "") nm (peep info 'name "")
+                     it {'id (c 'nid) 'uri uri 'title (#t > 0 ? t (#nm > 0 ? nm uri)) 'artist ""
+                         'album nm 'dur 0.0 'rate 0 'ch 0 'bits 0 'size 0 'br (peep info 'br 0)}
+                     (pin c 'nid (c 'nid + 1), it))
+         why why)
     (opens uri @
-      [nm m h q] (: _ (close q) r (m 'rate)
+      [nm m h q info] (: _ (shut q info) r (m 'rate)
                     it {'id (c 'nid) 'uri uri 'title (tag m "TITLE" || base uri)
                         'artist (tag m "ARTIST" || "") 'album (tag m "ALBUM" || "")
                         'dur (r ? (frames m / (1.0 * r)) 0.0) 'rate r 'ch (m 'ch)
                         'bits (peep m 'bps (peep m 'bits 16)) 'size (stat uri @ (z . _) z 0)}
                     (pin c 'nid (c 'nid + 1), it))
-      why why)
+      why why))
    (find c id) (findsub (map (it \ it 'id) (c 'q)) [id])
 
    ; --- the horn and the ring -------------------------------------------------
@@ -120,18 +134,18 @@
    (track c i at)
     (: it (Q c i) p (it 'uri)
        (opens p @
-         [nm m h q]
+         [nm m h q info]
           (: cd (<(filter (d \ <d = nm) ((cite 'av 'av-codecs) ())))
              f ((cd 3) m) rate (f 'rate) ch (min 2 (f 'ch))
-             _ (pins c 'fq q 'tf 0 'base at 'skip at 'brate rate)
+             _ (pins c 'fq q 'fi info 'ftn 0 'fm m 'fln 0 'tf 0 'base at 'skip at 'brate rate)
              _ (rebus c)
              _ (horn-at c rate)
              _ (sets c [['song i] ['dur (it 'dur)] ['rate rate] ['ch ch] ['bits (it 'bits)]
-                        ['kbps (it 'dur > 0 ? (int (it 'size * 8 / (it 'dur * 1000))) 0)]
+                        ['kbps (it 'dur > 0 ? (int (it 'size * 8 / (it 'dur * 1000))) (peep it 'br 0))]
                         ['pos (at / (1.0 * rate))]
                         ['state (paused? c ? 'pause 'play)]])
              r ((cd 4) q h m ((cite 'av 'av-pcm) f (pcm \ feed c rate (stereo pcm ch))))
-             _ (close q) _ (pin c 'fq ())
+             _ (shut q info) _ (pins c 'fq () 'fi {})
              (? (r = 0) (after c i) (: _ (notice c (p + ": " + show r)) (after c i))))
          why (: _ (notice c why) (after c i))))
    ; the track at i is done: the next by the modes, or let the horn play out and stop
@@ -156,8 +170,8 @@
    ; the track task: begun, and ended without a trace
    (halt c)
     (: _ (c 'dec @ () 0 t (landed? t ? 0 (freeze t)))
-       _ (c 'fq @ () 0 q (close q))
-       (pins c 'dec () 'fq ()))
+       _ (c 'fq @ () 0 q (shut q (c 'fi)))
+       (pins c 'dec () 'fq () 'fi {}))
    (start c i at) (: _ (halt c) _ (horn-off c)
                      (pin c 'dec (twirl (_ \ track c i at) 0)))
    (pos c) (: r (c 'brate || 1) ((max (c 'base) (c 'base + c 'tf - lag c)) / (1.0 * r)))
@@ -168,8 +182,22 @@
         (: _ (rest 10) t (clock 0)
            _ (? (S c 'state = 'play && k % 25 = 0) (sets c [['pos (pos c)]]) 0)
            _ (? (S c 'state = 'play) (each (c 'w) (w \ feeds c w t)) 0)
+           _ (retitle c)
            (go (k + 1)))
        (go 0))
+   ; the playing track's title moved -- a stream's StreamTitle, or a codec's tags at a new chain
+   ; link ('link, a count the pump bumps): the item takes it, and the queue goes out again
+   (retitle c)
+    (: fi (c 'fi) n (stream? fi ? (peep fi 'titles 0) 0) t (stream? fi ? (peep fi 'title "") "")
+       m (c 'fm) k (tablet? m ? (peep m 'link 0) 0)
+       it (0 <= S c 'song ? (Q c (S c 'song)) ())
+       (? !(tablet? it) 0
+          (n != c 'ftn && string? t && 0 < #t) (: _ (pin c 'ftn n) _ (pin it 'title t) (requeue c))
+          (k != c 'fln) (: _ (pin c 'fln k)
+                           _ (pins it 'title (tag m "TITLE" || it 'title) 'artist (tag m "ARTIST" || it 'artist)
+                                      'album (tag m "ALBUM" || it 'album))
+                           (requeue c))
+          0))
    (feeds c w t)
     (: fs (w 2)
        (each (keys fs) (kind \ (fs kind @
@@ -299,6 +327,7 @@
    (line-of p) (: (go acc) (see p @ -1 (two? acc ? (string (rev acc)) ()) 10 (string (rev acc)) ch (go (ch . acc)))
                   (go ()))
    (player-main as)
+    (? (!(elem "--pipe" as) && two? (tty 1)) (player-tui as)
     (: c (core-new "main")
        (line m) (say out (show m + "\n"), flush out)
        id (core-watch c line)
@@ -309,6 +338,13 @@
                             s (: m (sound s @ (m . _) m _ ())
                                  r (two? m ? (core-tell c id m) ['err "a message is [verb arg ..]"])
                                  (line r, m = ['bye] ? 0 (go 0))))
-       (go 0, core-close c, 0))
+       (go 0, core-close c, 0)))
+   ; the cells on this terminal over a core in process; tui.l bakes after this file, so by cite
+   (player-tui fs)
+    (: c (core-new "main")
+       _ (each fs (p \ core-send c ['add p]))
+       _ (? (0 < #(c 'q)) (core-send c ['play 0]) 0)
+       _ ((cite 'ptui 'ptui-run) ((cite 'ptui 'ptui-new) c))
+       (core-close c, 0))
    _ (pins (cite 'verbs 'tab) 'player (udoor 'player player-main "usage: love player [--pipe] [FILE..]" 1 1)))
 ) ; module core

@@ -130,6 +130,36 @@
    ; consume: what plays leaves the queue
    _ (test (core-send c ['consume 1] = ['ok]) (core-send c ['play 2] = ['ok]) (waits 'state 'stop 150)
            (ids () = [1 2]) (core-send c ['clear] = ['ok]) (ids () = []))
+   ; a station on loopback: an icy stream of a wav, its titles between the blocks. queued, it is
+   ; asked only its name; played, the item takes each StreamTitle as it comes
+   (pl-block m) (: n ((#m + 15) // 16) (string [n] + m + string (cask (16 * n - #m))))
+   (pl-icy s mi ts) (: (go i acc) (? (#s <= i * mi) (cats (rev acc))
+                                    (: b (snip s (i * mi) (min #s (i * mi + mi)))
+                                       (go (i + 1) ((#b < mi ? b (b + pl-block (i < #ts ? (ts i) ""))) . acc))))
+                       (go 0 ()))
+   station ("ICY 200 OK\r\nicy-name: love radio\r\nicy-br: 256\r\nicy-metaint: 1000\r\nContent-Type: audio/wav\r\n\r\n"
+            + pl-icy (pl-wav 8000 2 tone) 1000 ["StreamTitle='one';" "" "StreamTitle='two';"])
+   (pl-req s) (: (go b) (? (0 <= fsub b "\r\n\r\n" 0) b (see s @ -1 b ch (unsee s ch, go (b + chug s)))) (go ""))
+   (pl-serve l) (: _ (await l) s (accept l)
+                   _ (? (hot? s) (: _ (pl-req s) (say s station, flush s, close s)) 0)
+                   (pl-serve l))
+   lp (test-listen 0) srv (twirl (_ \ pl-serve (lp 1)) ())
+   url ("http://127.0.0.1:" + show <lp + "/live")
+   _ (test (core-send c ['consume 0] = ['ok]) (<(core-send c ['add url]) = 'ok) (titles () = ["love radio"])
+           (core-send c ['play 0] = ['ok]) (waits 'state 'stop 150)
+           (titles () = ["two"]))
+   _ (freeze srv)
+   ; an ogg chain: two flac --ogg links, TITLE=c1 then TITLE=c4. queued it says c1; played out,
+   ; the second link's tags retitle it
+   _ (? (sh "command -v flac >/dev/null" @ (0 . _) 1 _ 0)
+        (: f (\ n (dir + "/" + n))
+           _ (sh ("flac -s -f --ogg --serial-number=101 -T TITLE=c1 " + f "a.wav" + " -o " + f "c1.oga"
+                  + " && flac -s -f --ogg --serial-number=104 -T TITLE=c4 " + f "b.wav" + " -o " + f "c4.oga"
+                  + " && cat " + f "c1.oga" + " " + f "c4.oga" + " > " + f "ch.oga"))
+           (test (core-send c ['clear] = ['ok]) (<(core-send c ['add (f "ch.oga")]) = 'ok) (titles () = ["c1"])
+                 (core-send c ['play 0] = ['ok]) (waits 'state 'stop 150)
+                 (titles () = ["c4"])))
+        (gate-partly "player: no flac here, the ogg chain's retitle is not run"))
    _ (core-close c)
    ; the verb speaks the same messages on stdin and stdout
    _ (test (sh ("printf '(ping)\\n(bye)\\n' | HORN=none out/love player --pipe | tail -2")

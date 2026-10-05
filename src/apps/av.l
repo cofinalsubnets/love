@@ -14,7 +14,9 @@
    ; cited when asked, so a codec's module may bake after this one. a wav's meta is its
    ; own format: wav-format looks one up by name
    (av-codecs _) [["wav" (cite 'wav 'wav-sniff) (cite 'wav 'wav-meta) (m \ m) (cite 'wav 'wav-pump)]
-                  ["flac" (cite 'flac 'flac-sniff) (cite 'flac 'flac-meta) (cite 'flac 'flac-format) (cite 'flac 'flac-pump)]]
+                  ["flac" (cite 'flac 'flac-sniff) (cite 'flac 'flac-meta) (cite 'flac 'flac-format) (cite 'flac 'flac-pump)]
+                  ["ogg" (cite 'ogg 'ogg-sniff) (cite 'ogg 'ogg-meta) (cite 'ogg 'ogg-format) (cite 'ogg 'ogg-pump)]
+                  ["mp3" (cite 'mp3 'mp3-sniff) (cite 'mp3 'mp3-meta) (cite 'mp3 'mp3-format) (cite 'mp3 'mp3-pump)]]
    (av-more q h) (see q @ -1 h c (unsee q c, h + chug q))
    ; the first codec that says 1; 'more while one might and the stream has more
    (av-claim cs h) (: (go l more?) (? (atom? l) (more? ? 'more ())
