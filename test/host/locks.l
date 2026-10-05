@@ -57,6 +57,25 @@
       (0 = #(peep (locks-list lk-root) "exclusive" ()))
       (0 = #(peep (locks-list lk-root) "heavy" ())))
 
+; --- a wrapper under a wrapper: the locks its ancestor holds pass through, neither waited for
+; nor let go. this process holds out-n and the one heavy slot; a child love's wrapper on both
+; runs at once, and both are still this process's after ---
+(: ln-love (: l <cmdline (l 0 = 47 ? l (cwd 0 + "/" + l)))
+   ln-kid (lk-root + ".nest.l")
+   _ (: f (open ln-kid "w")
+        _ (say f ("(borrow 'locks)\n(puts (show (locks-run " + show lk-root
+                  + " [[\"out-n\" 'exclusive] [\"h2\" 'heavy]] \"nest\" () 1 [\"true\"])))\n"))
+        (close f))
+   _ (peep (locks-acquire lk-root "out-n" 'exclusive lk-me "gate" () 1) "granted" 0)
+   _ (peep (locks-acquire lk-root "h1" 'heavy lk-me "slow" () 1) "granted" 0)
+   r (hark ["timeout" "30" ln-love ln-kid])
+   _ (test (two? r && string? >r && >r = "0")
+           (lk-me = peep (<(peep (locks-list lk-root) "exclusive" ()) 1) "pid" 0)
+           (1 = #(peep (locks-list lk-root) "heavy" ()))
+           (1 = locks-release lk-root "out-n" 'exclusive lk-me)
+           (1 = locks-release lk-root "h1" 'heavy lk-me))
+   (unlink ln-kid))
+
 (test (string? (locks-root 0)))
 
 ; --- races: n processes at a barrier, each a kid file of its own run under this love ---
