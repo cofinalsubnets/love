@@ -39,7 +39,10 @@
               = (pl-chan nz 2 0 @ v (int (v * 0.5 + (v >= 0) * 0.5 - (v < 0) * 0.5))))
            (aall (pl-chan (run1 (bus-co 44100 (map (_ \ 0) ^10) 0 100 100 1) nz 2) 2 0 = 0))
            (pl-chan (run1 (bus-co 44100 (map (_ \ 0) ^10) 0 100 100 1) nz 2) 2 1 = pl-chan nz 2 1)
-           ((cite 'dsp 'biquads) nz 3 flat "" = 'badarg))
+           ((cite 'dsp 'biquads) nz 3 flat "" = 'badarg)
+           ; a filter blown past full scale (y = x + 4 y1) holds the rail it ran to
+           (run1 (bus-q [1.0 1.0 1.0 0.0 0.0 -4.0 0.0]) (string (cats (map (_ \ [232 3]) ^200))) 1
+              @ o (snip o (#o - 2) #o = string [255 127])))
    ; memory carries: two halves through one bus equal the whole through another
    _ (: eq (map (k \ k % 3 * 4 - 4) ^10) a (bus-new ()) b (bus-new ())
         _ (pin a 'co (bus-co 44100 eq 0 100 0 1)) _ (pin b 'co (a 'co))

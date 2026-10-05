@@ -47,16 +47,15 @@
        [() (held + (string? tl ? tl ""))])
 
    ; --- the codecs ----------------------------------------------------------
-   ogg-why ["" "lost sync" "cut short" "a kind of frame this can't read"
-            "a bad frame (its crc, or a reserved code)"]
    ; flac (the ogg mapping 1.0): "\x7fFLAC" 1 0, a count, then "fLaC" and STREAMINFO; each later
    ; header packet is one metadata block, and each audio packet one frame
    (ogg-flac-head ps)
     (: p <ps
        (? (#p < 13 || p 5 != 1) "an Ogg FLAC mapping this can't read"
           ((cite 'flac 'flac-meta) (cats ("fLaC" . snip p 13 #p . >ps)))))
+   ; a packet that is no frame (empty, cut, a bad crc) answers (), and the pump passes it over
    (ogg-flac-start m)
-    (\ pkt gr (flac-frame pkt 0 (m 'bps) (m 'ch) @ (pcm . _) pcm w (ogg-why w)))
+    (\ pkt gr (flac-frame pkt 0 (m 'bps) (m 'ch) @ (pcm . _) pcm _ ()))
    (ogg-codecs _)
     [["flac" (p \ "\x7fFLAC" = snip p 0 5) ogg-flac-head (cite 'flac 'flac-format) ogg-flac-start]]
    (ogg-codec nm) <(filter (c \ <c = nm) (ogg-codecs ()))
@@ -121,7 +120,7 @@
                 (ogg-join held (ty & 1) pk tl @ [ps tl2]
                   (: (go l k) (? (atom? l) ()
                                  (0 < k) (go >l (k - 1))
-                                 (dec <l gr @ pcm (? (string? pcm) (emit pcm, go >l 0) pcm)))
+                                 (dec <l gr @ pcm (? (string? pcm) (emit pcm, go >l 0) !pcm (go >l 0) pcm)))
                      r (go ps k)
                      (? (string? r) r
                         (run h e m dec tl2 (max 0 (k - #ps)) (ty & 4)))))))

@@ -47,6 +47,13 @@
    _ (test (fl-seek 0 = [0 (fl-all tiny (m 'at) m)])
            (fl-seek 1 = [0 (snip (fl-all tiny (m 'at) m) 128 384)])
            (fl-seek 40 = [0 (snip (fl-all tiny (m 'at) m) 128 384)]))
+   ; a first frame that fails its crc: a seek hunts past it, but from the stream's start
+   ; ('whole, flac -d and -t) it is the stream's error
+   (fl-bad whole) (: s (snip tiny (m 'at) #tiny) p (dir + "/bad")
+                     _ (open p "w" @ q (say q (snip s 0 5 + string [(s 5) ^ 255] + snip s 6 #s), close q))
+                     q (open p "r") r (flac-pump q "" (pin m 'whole whole) (_ \ 0))
+                     (close q, pin m 'whole 0, r))
+   _ (test (fl-bad 0 = 0) (string? (fl-bad 1)))
    ; a flipped byte anywhere answers why or samples, and never takes the process down
    (flip s i) (cask #s @ c (map (k \ pin c k (s k)) (jot #s), pin c i (255 - s i), string c))
    _ (test (atom? (filter (i \ !(flac-meta (flip tiny i) @ m2

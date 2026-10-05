@@ -97,6 +97,8 @@
                       ; mpg123's wav: the same header, the same length
                       (sh "mpg123 -q -w m.wav c0.mp3 && ../love mpg123 -w l.wav c0.mp3" = (0 . ""))
                       (mp-rd (dir + "/m.wav") @ a (mp-rd (dir + "/l.wav") @ b (snip a 0 44 = snip b 0 44 && #a = #b)))
+                      ; with no -w -s or -t it plays, as mpg123 does: HORN=none keeps the 1.3 s
+                      (: t0 (clock 0) r (sh "HORN=none ../love mpg123 c0.mp3") (r = (0 . "") && 1000 <= clock 0 - t0))
                       ; the door: its tags, its gapless length, and the horn
                       (sh ("HORN=none ../love -e '(borrow (quote posix)) (borrow (quote av)) (puts (show (av-open (open \"c0.mp3\" \"r\") @ [n m h] [n (m (quote total)) (m (quote tags))] w w))) (puts (show (av-play (open \"c0.mp3\" \"r\")))) (quit 0)' 2>&1")
                          = (0 . "(\"mp3\" 57330 (\"TITLE=c0\"))0"))

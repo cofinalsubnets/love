@@ -9,7 +9,8 @@
 ;   (flac-format m)        -> the format tablet src/apps/wav.l's wav-pcm takes for m's frames
 ;   (flac-pump q h m emit) -> each frame's samples to emit, h the bytes held past the
 ;                             metadata, q the port the rest comes from -> 0 | why not. a
-;                             stream entered mid-way (a seek) starts at the next frame
+;                             stream entered mid-way (a seek) starts at the next frame;
+;                             m 'whole says h opens on the first frame, which must decode
 ;   (flac-wav-head m)      -> the wav header flac -d writes ahead of m's samples
 ;   (flac-sniff s)         -> 1 a flac | 0 | 'more: with meta, format and pump, the decoder
 ;                             door (notes/plan/av.md)
@@ -96,15 +97,19 @@
                first (hunt h o)
                (flac-why 1))
           w (? (first && w = 4) (hunt h o) (flac-why w)))
-       (go h0 0 1))
-   ; little-endian signed samples of w bytes -> the same in the order and sign asked
-   (flac-lay pcm w big uns)
-    (? (!big && !uns) pcm
-       (: n (#pcm // w) c (cask #pcm) out (cask #pcm)
-          (pour c 0 pcm 0 #pcm,
-           each ^w (k \ (: t (peepv c k 1 w n)
-                           (pinv out (big ? (w - 1 - k) k) 1 w (uns && k = w - 1 ? (t ^ 128) t)))),
-           string out)))
+       (go h0 0 (peep m 'whole 0 ? 0 1)))
+   ; little-endian signed samples of w bytes -> the same in the order and sign asked, up s bits:
+   ; a wav's samples fill their bytes from the top
+   (flac-lay pcm w s big uns)
+    (: p (? (s = 0) pcm
+            (: n (#pcm // w) c (cask #pcm)
+               (pour c 0 pcm 0 #pcm, pinv c 0 w w ((peepv c 0 w w n) << s & ((1 << (8 * w)) - 1)), string c)))
+       (? (!big && !uns) p
+          (: n (#p // w) c (cask #p) out (cask #p)
+             (pour c 0 p 0 #p,
+              each ^w (k \ (: t (peepv c k 1 w n)
+                              (pinv out (big ? (w - 1 - k) k) 1 w (uns && k = w - 1 ? (t ^ 128) t)))),
+              string out))))
    flac-masks [4 3 7 51 1543 1551 1807 1599]
    (flac-wav-head m)
     (: ch (m 'ch) bps (m 'bps) w ((bps + 7) // 8) d (m 'total * ch * w)
@@ -140,7 +145,7 @@
              fin (\ v (p = "-" ? v (close q, v)))
              (? (string? m) (fin (flac-err (nm + ": ERROR: " + m)))
                 (o "t") (: b (cask 89) _ (md5-init b)
-                          r (flac-pump q (snip hb (m 'at) #hb) m (pcm \ md5-feed b pcm))
+                          r (flac-pump q (snip hb (m 'at) #hb) (pin m 'whole 1) (pcm \ md5-feed b pcm))
                           sum (md5-done b)
                           (fin (? (string? r) (flac-err (nm + ": ERROR while decoding data: " + r))
                                   (m 'md5 != "00000000000000000000000000000000" && sum != m 'md5)
@@ -159,7 +164,7 @@
                       (: d (op = "-" ? out (open op "w"))
                          (? !(hot? d) (fin (flac-err ("ERROR: cannot write " + op + ": " + uerrno d)))
                             (: _ (raw ? () (say d (flac-wav-head m)))
-                               r (flac-pump q (snip hb (m 'at) #hb) m (pcm \ say d (flac-lay pcm w big uns)))
+                               r (flac-pump q (snip hb (m 'at) #hb) (pin m 'whole 1) (pcm \ say d (flac-lay pcm w (raw ? 0 (8 * w - m 'bps)) big uns)))
                                _ (flush d, op = "-" ? () (close d))
                                (fin (? (string? r) (flac-err (nm + ": ERROR while decoding data: " + r))
                                        (flac-say o (nm + ": done\n")))))))))))))
