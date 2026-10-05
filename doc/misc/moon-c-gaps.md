@@ -953,7 +953,7 @@ the 835 that compile and differ: 419 lay a `__mod_device_table__*` alias clang d
 0 after inlining); 31 leave `__clk_of_table`, `__irqchip_of_table`, `__reservedmem_of_table` or
 `__jump_table` empty, the `__used` statics dropped; 12 call a `__compiletime_assert_N` clang folded
 away and 8 an asm's local label, so the link fails. every defconfig object also lacks
-`.ARM.attributes`, the note clang lays under `-mbranch-protection`, which mooncc refuses.
+`.ARM.attributes`, the note clang lays under `-mbranch-protection` (taken since: linux on arm64, below).
 
 accepted and WRONG, found by probing the flags mooncc takes in silence:
 
@@ -964,10 +964,10 @@ accepted and WRONG, found by probing the flags mooncc takes in silence:
 - `__attribute__((used))` does not keep an unreferenced static.
 - every object carries `love_nifs` and `.love.image` sections, empty, which the kernel link would
   meet as orphans.
-- `-mstrict-align` is refused, and a packed field is read unaligned.
+- `-mstrict-align` is refused, and a packed field is read unaligned (taken since: below).
 
 refused flags: `-include`, `--target`, `-mlittle-endian`, `-mgeneral-regs-only`,
-`-mbranch-protection`, `-Wa,-march`, `-mcmodel`, `-mstrict-align`.
+`-mbranch-protection`, `-Wa,-march`, `-mcmodel`, `-mstrict-align` (the two a64 flags taken since).
 
 our preprocessor: `kernel/fork.c` took 34 s of cpp against clang's 0.64 s, and lexing its 902
 headers was 2.3 s of it; the rest is directives and macro expansion. `-E` itself was quadratic
@@ -1008,11 +1008,27 @@ below, 251 of those 332 re-run so far: **145 compile**, and the rest refuse by n
 - **cpp**: `#` of a stray `\\` outside a literal is one backslash once re-lexed (C11
   6.10.3.2). Every `__emit_inst` through `mrs_s`/`msr_s` carried a stray `\` (227-stringizebs.c).
 
+- **`-mbranch-protection=pac-ret+bti`** (also `bti`, `pac-ret`, `none`; `standard`, `+leaf`,
+  `+b-key` and `+pc` refuse by name): paciasp before the frame record's `stp`, autiasp after its
+  `ldp`, so every exit, a tail call's `b` too, authenticates first; `bti c` at the entry of a fn
+  another unit or a pointer can reach, unless paciasp leads; `bti j` at each table jump's target;
+  an indirect tail call goes by x16, which both landings take from a `br`. Each object carries
+  clang's `.note.gnu.property` and `.ARM.attributes` byte for byte, and the acle macros
+  `__ARM_FEATURE_BTI_DEFAULT`/`__ARM_FEATURE_PAC_DEFAULT` say so. `__builtin_return_address(0)`
+  answers the signed lr, as gcc's does; the kernel strips it (ptrauth_strip_insn_pac).
+- **`-mstrict-align`**: a member reached through a packed struct is read, written, stepped and
+  `op=`'d by the chunks its alignment carries, and so are struct copies, the inlined
+  memcpy/memset, a packed local's initializer, and by-value structs under 8-byte alignment as
+  arguments and returns; the byte-gather fusion stands down. Both flags are held to clang 22.1.8's
+  objects for the same units (test_cca64's landing law) and run on an a64 host (228-strictalign.c).
+
 Still open on this side (g-21's probes):
 
 - **x18 is allocated freely**, and `-ffixed-x18` is ignored: the platform register, which the
   kernel's shadow call stack owns.
-- **a packed field loads unaligned** (`ldursw`), which faults under `-mstrict-align`.
+- under `-mstrict-align`: an array member of a packed struct indexed through its decayed pointer
+  reads at the element's width, a bitfield or 128-bit member of a packed struct refuses by name,
+  and a by-value struct reached as a packed member rides its type's alignment, not the member's.
 - where the re-run stops now, on this side: the `.S` exception-table macro's `\insn`, which
   reaches `.long ((\insn) - .)` unsubstituted (24); an asm goto with outputs (9, refused above);
   a register variable pinned to `x0` (4); the `"p"` constraint (2). The rest is part 1's front

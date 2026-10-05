@@ -182,6 +182,8 @@
    ; every row is target-true: complex and VLAs each ride a subset (the parity table),
    ; so claiming an absence we don't have would send a consumer down a fallback for
    ; nothing. the utf pair is the positive claim: u"" is utf-16, U"" utf-32.
+   ; what -mbranch-protection lays, as acle names it (gen.l's bprot): the a key, non-leaf
+   (bpdefs bp) ((elem 'bti bp ? '("__ARM_FEATURE_BTI_DEFAULT=1")) + (elem 'pac bp ? '("__ARM_FEATURE_PAC_DEFAULT=1")))
    (featdefs tgt)
     ('("__STDC_NO_ATOMICS__=1" "__STDC_NO_THREADS__=1"
        "__STDC_UTF_16__=1" "__STDC_UTF_32__=1")
@@ -366,8 +368,8 @@
    ; refused by name (doc/misc/moon-c-gaps.md, the GNU C rows)
    gnudefs '("__GNUC__=8" "__GNUC_MINOR__=1" "__GNUC_PATCHLEVEL__=0")
    (booldefs dia) (dia != 'c && '("bool=_Bool" "true=1" "false=0"))
-   (cc-defs {'ds ds 'tgt tgt 'os os 'dia dia 'undef un 'swch sw})
-    (un ? (stddefs tgt sw + booldefs dia + ds) (archdefs tgt + osdefs os + featdefs tgt + stddefs tgt sw
+   (cc-defs {'ds ds 'tgt tgt 'os os 'dia dia 'undef un 'swch sw 'bp bp})
+    (un ? (stddefs tgt sw + booldefs dia + ds) (archdefs tgt + osdefs os + featdefs tgt + bpdefs bp + stddefs tgt sw
                  ; our libc is the one in this link and carries its whole surface on every
                  ; kernel: a source asks it what it may call, never the kernel.
                  + '("LvMoonlibc=1")
@@ -413,7 +415,18 @@
    ; the two wide tuples are named once, here: parse.l's `tops` answers fifteen fields and
    ; gen.l's cgen-obj thirteen, and `[]` is the strict arity, so a shape that gains a member is
    ; a refusal naming the file rather than every site quietly reading its neighbour.
-   (cc-objbytes src (t @ {'ni ni 'tgt tgt}))
+   ; the marks a -mbranch-protection object carries, clang's bytes: the gnu property note (a
+   ; linker ands every input's feature bits) and the aeabi_feature_and_bits build attributes
+   (bpsecs bp)
+    (!(two? bp) ? ()
+       (: b (elem 'bti bp ? 1 0) p (elem 'pac bp ? 1 0)
+          [[".note.gnu.property" 7 2 8
+             [['raw (le32 4 + le32 16 + le32 5 + o-strbytes "GNU" + [0]
+                     + le32 3221225472 + le32 4 + le32 (b | p << 1) + le32 0)]]]   ; aarch64 feature_1_and
+           [".ARM.attributes" 1879048195 0 1                                         ; SHT_AARCH64_ATTRIBUTES
+             [['raw ([65] + le32 35 + o-strbytes "aeabi_feature_and_bits"
+                     + [0 1 0 0 b 1 p 2 0])]]]]))                              ; optional, uleb; bti pac gcs
+   (cc-objbytes src (t @ {'ni ni 'tgt tgt 'sal sal 'bp bp}))
     (@ (cc-parse src t)
        [_ ast stag sigs weaks sfns svars sects alias aligns ainl noinl consts rstrs gregs vol]
        ; wasm rides gen's rv64 lane whole (src/love/holo/wasmfn.l is the machine under it) and
@@ -421,11 +434,12 @@
        ; takes the name itself -- rv64? covers both, and the wide multiply wasm lacks must be
        ; declined.
        (: ob (cgen-obj ast stag sigs weaks
-                       [sfns svars sects alias aligns ainl noinl consts rstrs ni gregs vol] tgt)
+                       [sfns svars sects alias aligns ainl noinl consts rstrs ni gregs vol [sal bp]] tgt)
           (okv? ob || ccdie ob src ("cc: codegen error in " + src),
            (@ ob [_ tforms dforms fnames gnames nforms iforms lnames xsecs bforms rforms xfns asecs]
               (: xs (map ([nm forms ro] \ objsec-named nm forms ro) xsecs
-                         + map ([nm forms al] \ objsec-code nm forms al) xfns)   ; ..and the fns that named a section
+                         + map ([nm forms al] \ objsec-code nm forms al) xfns   ; ..and the fns that named a section
+                         + bpsecs bp)
                  ; the file-scope asm's sections, and the names its .globl exports by where they landed
                  at (two? asecs ? asecs [() () ()])
                  fns (fnames + filter (s \ !(elem s fnames)) (at 1))
@@ -1036,6 +1050,11 @@
    ; pulling.
    (nostd? a) (a = "-nostdlib" || a = "-nostartfiles" ||
                a = "-nodefaultlibs" || a = "-ffreestanding")
+   ; -mbranch-protection's words: clang's leaf, b-key, pc and standard (gcs) have no lane here
+   bps {"none" 'none "bti" '(bti) "pac-ret" '(pac) "pac-ret+bti" '(bti pac) "bti+pac-ret" '(bti pac)}
+   (bpof w) (peep bps w () @ v
+              (? (v = 'none) () v v
+                 (udie 2 ("cc: -mbranch-protection=" + w + " -- mooncc lays: none bti pac-ret pac-ret+bti"))))
    (dirn d) (#d @ n (? !n d (d (n - 1) = 47) d (d + "/")))
    (obase p) (pbase p @ b (snip b 0 (#b - 1) + "o"))   ; dir/x.c -> x.o (in the cwd, gcc-shaped)
    ; one tablet, not a row of positional accumulators: a flag is one `pin` at its own arm and
@@ -1052,7 +1071,8 @@
    ; would answer the zero point. the literal has to be complete and is wanted at two sites,
    ; so it is spelled once rather than wrapped on `{}`.
    (fseed tgt dia) {'c () 'is () 'ds () 'o () 'ins () 'tgt tgt 'os () 'pie () 'org () 'dorg ()
-                    'nostd () 'vb () 'ni () 'rdme () 'relo () 'dia dia 'md () 'mmd () 'mf () 'mt () 'mp () 'E () 'xasm () 'undef () 'swch () 'mpm () 'fx18 ()}
+                    'nostd () 'vb () 'ni () 'rdme () 'relo () 'dia dia 'md () 'mmd () 'mf () 'mt () 'mp () 'E () 'xasm () 'undef ()
+                    'swch () 'mpm () 'fx18 () 'sal () 'bp ()}
    (flags as t)
     (!(two? as) ?
        (pin t 'is (rev (t 'is)),
@@ -1152,6 +1172,11 @@
                                 (udie 2 (xdie w))))
              ; -undef: none of the system's or the compiler's predefines, only the standard's
              (a = "-undef") (flags r (pin t 'undef 1))
+             ; a64's two codegen asks (gen.l, bprot and the strict faces): no access its alignment
+             ; cannot carry, and bti landing pads and pac-ret's signed return address
+             (a = "-mstrict-align") (flags r (pin t 'sal 1))
+             (a = "-mno-strict-align") (flags r (pin t 'sal ()))
+             (starts? a "-mbranch-protection=") (flags r (pin t 'bp (bpof (snip a 20 #a))))
              (tol? a) (flags r t)
              ; ahead of the dash refusal, and the only arg that is: a bare `-` is an
              ; input, the source on stdin, which every configure probe writes before it
@@ -1193,6 +1218,8 @@
        _ (f 'fx18 && f 'tgt != 'a64 && udie 2 ("cc: -ffixed-x18 names an a64 register, and the target is " + show (f 'tgt)))
        ; wasm's kernel is the page's loader, which speaks linux's numbers: the os unless named
        _ (f 'tgt = 'wasm && !(f 'os) && pin f 'os 'linux)
+       _ ((f 'sal || two? (f 'bp)) && f 'tgt != 'a64 &&
+          udie 2 "cc: -mstrict-align and -mbranch-protection lay on a64 only")
        ; no nest on disk anywhere: the carried source answers, in memory --
        ; pinned once here so every TU and the runtime share the one inflate.
        _ (!(string? (mhome ())) && pin f 'vb (mblob ()))
