@@ -370,25 +370,24 @@
    bs (tr 'base) X (tr 'x) Y (tr 'y) Z (tr 'z) K (tr 'kind) n #X top (amax Y)
    ; a leaf of the crown, thrown for until one comes up, or the first point
    (pick k ok?) (: i (int (rr 0.0 (n - 0.5))) ((k < 1 || (peep K i 0.0 = 2.0 && ok? i)) ? i (pick (k - 1) ok?)))
-   ; ..the heap: some branches leant on the trunk, their feet on the floor, the rest thrown
-   ; round it across each other, an end as high as the heap stands there -- highest against
-   ; the trunk; most forked, some forks with a twig off them
+   ; ..the heap: branches laid on the floor in a ring round the trunk, along the ring more or
+   ; less, some across each other, an end a little off the floor where the ring is deep;
+   ; most forked, some forks with a twig off them
    (keep q) [(clamp (q 0) (0.12 - yard-a) (yard-a - 0.12)) (q 1) (clamp (q 2) (0.12 - yard-b) (yard-b - 0.12))]
    (round a d y) (keep [(bs 0 + d * cos a) y (bs 2 + d * sin a)])
    (from q) (sqrt (sq (q 0 - bs 0) + sq (q 2 - bs 2)))
-   (mound d) (0.42 * sat (1.0 - (d - 0.28) / 0.9))
+   (mound d) (0.14 * sat (1.0 - mag (d - 0.75) / 0.45))
    (bark _) (c* (rr 0.85 1.15) (barks (int (rr 0.0 4.99))))
    (fork a b r c fz k) (: p (lerp a b (rr 0.4 0.75)) ax (c+ b (c* -1.0 a))
      d (unit (turn (unit ax) [0.0 1.0 0.0] ((rr 0.0 1.0 < 0.5 ? -1.0 1.0) * rr 0.4 0.9)))
-     q (keep (c+ p (c* (rr 0.3 0.55 * sqrt (dot ax ax)) d)) @ q [(q 0) (max2 (0.55 * r) (q 1 + rr -0.1 0.15)) (q 2)])
+     q (keep (c+ p (c* (rr 0.3 0.55 * sqrt (dot ax ax)) d)) @ q [(q 0) (max2 (0.55 * r) (q 1 + rr -0.1 0.05)) (q 2)])
      rd [p q (0.55 * r) c fz]
      (0 < k && rr 0.0 1.0 < 0.5 ? (cat [rd] (fork p q (0.55 * r) c fz (k - 1))) [rd]))
    (branch _) (: a (rr 0.0 (2.0 * pi)) r (rr 0.022 0.06) c (bark 0) fz (rr 0.15 0.35)
-     ends (rr 0.0 1.0 < 0.3 ? [(round a (rr 0.7 1.2) r) (round (a + rr -0.3 0.3) 0.3 (rr 0.45 1.0))]
-            (: m (round a (rr 0.4 1.0) 0.0) yaw (a + pi / 2.0 + rr -0.6 0.6) hl (rr 0.3 0.8)
-               (end k) (keep [(m 0 + k * hl * cos yaw) 0.0 (m 2 + k * hl * sin yaw)] @ q
-                         [(q 0) (r + rr 0.3 1.0 * mound (from q)) (q 2)])
-               [(end -1.0) (end 1.0)]))
+     ends (: m (round a (rr 0.5 1.0) 0.0) yaw (a + pi / 2.0 + rr -0.5 0.5) hl (rr 0.3 0.8)
+             (end k) (keep [(m 0 + k * hl * cos yaw) 0.0 (m 2 + k * hl * sin yaw)] @ q
+                       [(q 0) (r + rr 0.0 1.0 * mound (from q)) (q 2)])
+             [(end -1.0) (end 1.0)])
      rd [(ends 0) (ends 1) r c fz]
      (rr 0.0 1.0 < 0.6 ? (cat [rd] (fork (ends 0) (ends 1) r c fz 1)) [rd]))
    ; ..each twig lies flat a little way out from the heap: two rows of points
@@ -652,7 +651,8 @@
    px0 (ex + t0w * dx) py0 (ey + t0w * dy) pz0 (ez + t0w * dz)
    ; ..a wall over the parapet is there only under a battlement or the roof's block; a
    ; ray over the parapet may meet the end of the one it heads toward, past the wall's face
-   al0 (over px0 isx pz0) da (over dx isx dz) ea (over ex isx ez)
+   al0 (over px0 isx pz0) ea (over ex isx ez)
+   da (isx * dz + (1 - isx) * dx)       ; by mask, exact: over's blend rounds a tiny dz beside dx to 0
    east (isx * (0.0 < dx)) north (isz * (0.0 < dz))
    solid ((py0 < hh) + (hh <= py0) * (0 < isz * (mag al0 < hb) + east * (b - cw < al0)))
    gap ((1 - isy) * (1 - solid))

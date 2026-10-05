@@ -24,6 +24,13 @@
        (has? f "38;5;") (has? deep "38;2;")
        (has? f (court-clock st)) !(has? quiet (court-clock st))))
 
+; --- an odd width puts a column dead ahead: at a run's start, facing due west, it is drawn
+; --- like its neighbours, every pixel a number
+(: st (court-new 41 30 [(day0 + 15.0 * 3600.0) 3600]) c (court-pens st) n (41 * st 'h)
+   (col k x) (peep (c k) (iota (st 'h) * 41 + x) 0.0)
+ (test (0.0 < net (c 0) + net (c 1) + net (c 2))
+       (net (col 1 20) < 1.5 * net (col 1 19)) (0.66 * net (col 1 19) < net (col 1 20))))
+
 ; --- the sun: up by day and down by night, south at noon, east in the morning and west in
 ; --- the evening, a unit vector; summer's hour is taken off the wall clock
 (: (sun hr) (court-sun (at hr)) n (sun 13.0) m (sun 8.0) e (sun 18.0) mid (sun 1.0)
@@ -107,20 +114,18 @@
    _ (keys! st (map (i \ 107) ^60))
  (test (0.55 < sqrt (sq (st 'px - bs 0) + sq (st 'pz - bs 2)))))
 
-; --- the floor's litter: branches heaped at the trunk's foot, none in a wall or the floor,
-; --- the heap no wider than a long branch and highest by the trunk; twigs strewn round it
+; --- the floor's litter: branches laid in a ring round the trunk's foot, none in a wall, the
+; --- floor or the trunk, none leant up, the ring no wider than a long branch; twigs strewn round it
 ; --- and the leaves flat on the ground, all of it inside the walls; and the leaves a falling
 ; --- one starts from, high in the crown
 (: st (at 12.0) bs (st 'tree 'base) L (st 'litter) P (L 'pts) X (P 'x) Y (P 'y) Z (P 'z)
    G (L 'leaves) rs (L 'rods) ends (cat (map (r \ r 0) rs) (map (r \ r 1) rs))
    (out Q) ((yard-a < mag (Q 'x)) + (yard-b < mag (Q 'z)))
    (from q) (sqrt (sq (q 0 - bs 0) + sq (q 2 - bs 2)))
-   (inside? q) (mag (q 0) < yard-a - 0.1 && mag (q 2) < yard-b - 0.1 && 0.0 < q 1 && q 1 < 1.2)
-   near (filter (q \ from q < 0.5) ends) far (filter (q \ 0.9 < from q) ends)
-   (mean l) (foldl (a \ q \ a + q 1) 0.0 l / max 1 #l)
+   (inside? q) (mag (q 0) < yard-a - 0.1 && mag (q 2) < yard-b - 0.1 && 0.0 < q 1)
    tops (L 'tops) ty (map (q \ q 1) tops)
  (test (40 < #rs) (all inside? ends) (all (q \ from q < 2.2) ends)
-       (all (r \ 0.005 < r 2 && r 2 < 0.07) rs) (mean far < mean near)
+       (all (r \ 0.005 < r 2 && r 2 < 0.07) rs) (all (q \ 0.3 < from q && q 1 < 0.25) ends)
        (100 < #X) (0 = net (Y < 0.009)) (0 = net (out P))
        (1000 < #(G 'x)) (0 = net (0.01 < G 'y)) (0 = net (G 'up < 1.0)) (0 = net (out G))
        (two? tops) (all (y \ amax (st 'tree 'y) - 1.5 < y) ty)))
