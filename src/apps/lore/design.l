@@ -139,7 +139,7 @@
                    vi (cite 'vi 'vi-main)
                    ; vi on the level's file and a play of the level are stages of their own:
                    ; each leaves the screen and the tty as it found them, so this one re-arms
-                   (visit f) (save d, f (), raw 1, say out "\e[?1049h")
+                   (visit f) (save d, f (), ttytake ())
                    (step c) (design-key d c,
                              d 'want @ 'vi (pin d 'want (), vi ? (visit (_ \ vi [p]), reload d) (tell d "no editor on this seat"))
                                        'play (pin d 'want (), visit (_ \ story-run (d 'lvl))))

@@ -138,22 +138,15 @@
          (pins g 'combo combo 'pts (g 'pts + combo) 'dk k 'dms now
                  'msg (word + (1 < combo ? ((word ? "   " "") + "combo x" + show combo) ""))))))
 
- ; ..and a tap is a place rather than a letter: the step it means is the direction from
- ; your blade's middle to the cell it landed on -- the nearest of the eight as the screen
- ; shows them, a cell being twice as tall as it is wide, so a tap a little off a row is
- ; still along it. c is [x y], cli's edtap, 0-based in screen order. a tap on the blade
- ; itself is nothing
+ ; ..and a tap is a place rather than a letter: the key for rove's step from your blade's
+ ; middle toward it, so a tap is a dance step like any other. c is [x y], cli's edtap. a
+ ; tap on the blade itself is nothing
  tap-keys {'(-1 0) 104 '(1 0) 108 '(0 -1) 107 '(0 1) 106
            '(-1 -1) 121 '(1 -1) 117 '(-1 1) 98 '(1 1) 110}
- (grass-tap g c now) (: me (g 'me) r (g 'r)
+ (grass-tap g c now) (: me (g 'me)
    n (int (me 'ht * rpi * (1.0 + me 's) + 0.5))
-   ex (<c - me 'x)
-   ey (<>c - (r - 4 - n // 2))
-   ax (abs ex) ay (2 * abs ey)          ; in cell widths
-   ; within 22.5 degrees of a row or a column is along it: tan is 5/12
-   dx (12 * ax < 5 * ay ? 0 (toward 0 ex))
-   dy (12 * ay < 5 * ax ? 0 (toward 0 ey))
-   (dx = 0 && dy = 0 ? g (grass-key g (tap-keys [dx dy]) now)))
+   d (tap-dir (<c - me 'x) (<>c - (g 'r - 4 - n // 2)))
+   (d = [0 0] ? g (grass-key g (tap-keys d) now)))
 
  ; --- one frame of the week -------------------------------------------------------
  (grass-tick g) (:
@@ -444,9 +437,8 @@
  ; ..lk the look: the title and the opening's rows, the frame a sign stands over, and the
  ; paint a tick says -- the flat field's, or a sequel's
  grass-look {'ttl open-ttl 'rows open-rows 'frame grass-frame 'paint grass-paint}
- (grass-week lk ls) (: ws (tty 1)
-   r (two? ws && 7 < <ws ? (<ws - 1) 23)
-   c (two? ws && 19 < <>ws ? <>ws 80)
+ (grass-week lk ls) (: ws (ttysize 7 19)
+   r (<ws - 1) c <>ws
    g (grass-new r c (wheel (clock 0)))
    bs (filter (b \ !(b 'err)) (score-parse ls))
    hn (bs ? (horn song-rate 2 @ h (nom? h ? () h)))
@@ -485,16 +477,10 @@
                        ("final height  " + fx1 (g 'me 'ht) + " in") "" "-- any key --"] beat),
     hn ? (flush hn, close hn),
     g))
- ; the screen raised and put back here; a terminal is asked for its taps too (xterm's
- ; SGR mouse reports, which cli's edkey reads as the key -12)
- (grass-run lk ls) (: _ (raw 1)
-                  _ (say out (esc + "[?1049h" + esc + "[2J" + esc + "[?1000h" + esc + "[?1006h"))
-                  g (grass-week lk ls)
-                  (say out (esc + "[?1006l" + esc + "[?1000l" + esc + "[0m" + esc + "[?25h" + esc + "[?1049l"),
-                   flush out,
-                   drain-keys (),
-                   raw 0,
-                   (puts (grass-final g + "\n"), 0)))
+ ; the screen raised and put back here, whatever way the week ends. the mouse, not rove's
+ ; taps: a press's release breaks key-drain's repeat, so two quick taps are two steps
+ (grass-run lk ls) (: g (ttytake ['mouse], mind (_ \ grass-week lk ls) () (_ \ (drain-keys (), ttygive ['mouse])))
+                  (puts (grass-final g + "\n"), 0))
  grass-usage "usage: love lore grass88   (dance: arrows, hjkl, or tap about your blade; q or esc leaves)"
  (grass-main as) (as @ () (grass-run grass-look score)
                        (say err ("grass: " + grass-usage + "\n"), flush err, 2))

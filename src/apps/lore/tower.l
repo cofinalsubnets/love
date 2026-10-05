@@ -1600,9 +1600,8 @@
  ; the climb keeps its own stage rather than cli's: stage blocks on a key, and a card
  ; with nothing coming out of it is a card that stops. the raising and the putting back
  ; are stage's, line for line; what is different is the wait in the middle.
- (tower-run _) (: ws (tty 1)
-             r (two? ws && 7 < <ws ? (<ws - 2) 22)
-             c (two? ws && 19 < <>ws ? <>ws 80)
+ (tower-run _) (: ws (ttysize 7 19)
+             r (<ws - 2) c <>ws
              g (crawl-new (c < 100 ? c 100) r (wheel (clock 0)))
              ; the card, if this seat has one: no horn and the tower is quiet
              hn (horn song-rate 2 @ q (nom? q ? () q))

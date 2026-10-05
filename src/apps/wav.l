@@ -65,18 +65,18 @@
           (ch < 1) "can't play WAVE-files with no channels"
           (wav-format name @ f
              (align < ch * f 'w ? "a WAVE-file whose frame is narrower than its samples"
-                (pins f 'ch ch 'rate rate 'align align)))))
+                (pins f 'ch ch 'rate rate 'align align 'tag tag 'ext (tag0 = 65534))))))
    (wav-head s)
-    (: (go i f)
+    (: (go i f sk)
         (? (#s < i + 8) 'more
-           (: id (snip s i (i + 4)) z (wav-le s (i + 4) 4)
+           (: id (snip s i (i + 4)) z (wav-le s (i + 4) 4) nx (i + 8 + z + (z & 1))
               (? (id = "data") (? !(tablet? f) "a WAVE-file with no fmt chunk ahead of its data"
-                                  (pins f 'at (i + 8) 'len (z = 0 || z = 4294967295 ? -1 z)))
+                                  (pins f 'at (i + 8) 'len (z = 0 || z = 4294967295 ? -1 z) 'skip (rev sk)))
                  (id = "fmt ") (? (#s < i + 8 + z) 'more
-                                  (wav-fmt s (i + 8) z @ g (string? g ? g (go (i + 8 + z + (z & 1)) g))))
-                 (go (i + 8 + z + (z & 1)) f))))
+                                  (wav-fmt s (i + 8) z @ g (string? g ? g (go nx g sk))))
+                 (go nx f (id . sk)))))
        (? (#s < 12) (#s < 4 || "RIFF" = snip s 0 4 ? 'more 'raw)
-          ("RIFF" = snip s 0 4 && "WAVE" = snip s 8 12) (go 12 ())
+          ("RIFF" = snip s 0 4 && "WAVE" = snip s 8 12) (go 12 () ())
           'raw))
 
    ; --- the samples ----------------------------------------------------------
