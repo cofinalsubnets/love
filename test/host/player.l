@@ -5,7 +5,7 @@
 ;   cat test/00-init.l test/host/player.l | out/love
 (borrow 'posix)
 (borrow 'bus)
-(borrow 'core)
+(borrow 'pcore)
 (: dir (cwd 0 + "/out/.playerd")
    _ (hark ["rm" "-rf" dir], mkdir dir 448)
    _ (setenv "HORN" "none")

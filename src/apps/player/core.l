@@ -1,7 +1,7 @@
 ; src/apps/player/core.l -- the player's core: a queue, the decoder door, the bus, the horn,
 ; and the messages every view speaks (notes/plan/av.md, the core's protocol). one core per
 ; (user, sink); in process a view watches it and sends to it, and a socket only carries the
-; same messages. `(borrow 'core)`, then:
+; same messages. `(borrow 'pcore)` (lux's core.l is the module core), then:
 ;
 ;   (core-new sink)       -> a core, stopped, its queue empty
 ;   (core-send c msg)     -> the reply to msg, [verb arg ..]: [ok] [ok VALUE] [err "why"]
@@ -25,7 +25,7 @@
 ; a track runs on a task of its own that feeds the horn a chunk at a time, never more than
 ; lead ahead of the speaker, so a pause, a seek or an eq change is heard within lead. what
 ; went out is kept in a ring for the feeds, read where the speaker is, not where the bus is.
-(module (core core-new core-send core-watch core-tell core-unwatch core-snap core-close
+(module (pcore core-new core-send core-watch core-tell core-unwatch core-snap core-close
               core-serve core-attach core-keys core-item player-main)
 (borrow 'bus)
 (borrow 'posix)

@@ -4,7 +4,7 @@
 ; first the skin's own words without a socket.
 ;   cat test/00-init.l test/host/mpd.l | out/love
 (borrow 'posix)
-(borrow 'core)
+(borrow 'pcore)
 (borrow 'mpd)
 (: md-dir (cwd 0 + "/out/.mpdd")
    _ (hark ["rm" "-rf" md-dir], mkdir md-dir 448, mkdir (md-dir + "/music") 448, mkdir (md-dir + "/music/sub") 448)
