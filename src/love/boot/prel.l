@@ -670,7 +670,8 @@
     (? (string? s && string? sub) (subidx s sub i)      ; two strings: subidx, in place
        (i + #sub > #s) -1 (snip s i (i + #sub) = sub) i (fsub s sub (i + 1)))
 
-   (join sep l)    (two? l ? (foldl (a \ x \ a + sep + x) <l >l) "")
+   (join sep l)    (? (atom? l) "" (atom? >l) <l                   ; one cats, not a + per piece
+                      (cats (rev (foldl (a \ x \ x . sep . a) [<l] >l))))
    (split sep s)                                        ; always >= 1 piece; "" splits nowhere
     (: (go i) (: j (fsub s sep i)
                  (#sep = 0 || j < 0 ? [(snip s i #s)] (snip s i j . go (j + #sep))))
