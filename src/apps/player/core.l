@@ -19,6 +19,7 @@
 ;                            player in cells (src/apps/player/tui.l) on the sink's served core,
 ;                            started detached when none is (--here: a core in this process);
 ;                            --headless queues and plays and leaves; --serve is the server,
+;                            with --mpd PORT mpd's protocol too (mpd.l) over --music DIR,
 ;                            --kill stops it; --pipe or off a terminal the protocol on stdio
 ;
 ; a track runs on a task of its own that feeds the horn a chunk at a time, never more than
@@ -506,11 +507,19 @@
                   (go ()))
    ; love player [-n SINK] [--here|--pipe|--serve|--headless|--kill] [FILE..]
    (player-main as)
-    (: k (findsub as ["-n"])
-       nm (k < 0 || k + 1 >= #as ? "main" (as (k + 1)))
-       fs (filter (a \ !(starts? a "--")) (k < 0 ? as (snip as 0 k + snip as (k + 2) #as)))
+    (: (opt f) (findsub as [f] @ k (k < 0 || k + 1 >= #as ? () (as (k + 1))))
+       nm (opt "-n" || "main")
+       (valued i) (i > 0 && elem (as (i - 1)) ["-n" "--mpd" "--music"])
+       fs (filter (a \ a != ()) (map (i \ (? (starts? (as i) "-" || valued i) () (as i))) ^#as))
        (flag f) (elem f as)
-       (? (flag "--serve") (core-serve (core-new nm) (player-sock nm))
+       (music _) (: e (getenv "MPD_MUSIC") h (getenv "HOME")
+                   (opt "--music" || (string? e && 0 < #e ? e (string? h ? (h + "/Music") "."))))
+       (? (flag "--serve")
+           (: c (core-new nm)
+              ; the mpd skin on the same core, by cite: mpd.l bakes after this file
+              _ (opt "--mpd" @ () 0
+                  p (twirl (_ \ (cite 'mpd 'mpd-serve) ((cite 'mpd 'mpd-skin) c ((cite 'mpd 'mpd-lib) (music ()))) (sound p @ (n . _) n _ 6600)) 0))
+              (core-serve c (player-sock nm)))
           (flag "--kill") (core-attach (player-sock nm) @
                             () (: _ (say err ("player: no core is served as " + nm + "\n")) _ (flush err) 1)
                             rc (: _ (core-send rc ['kill]) _ (core-close rc) 0))
@@ -549,5 +558,5 @@
     (: _ (player-feed c fs)
        _ ((cite 'ptui 'ptui-run) ((cite 'ptui 'ptui-new) c))
        (core-close c, 0))
-   _ (pins (cite 'verbs 'tab) 'player (udoor 'player player-main "usage: love player [-n SINK] [--here|--pipe|--serve|--headless|--kill] [FILE..]" 1 1)))
+   _ (pins (cite 'verbs 'tab) 'player (udoor 'player player-main "usage: love player [-n SINK] [--here|--pipe|--serve [--mpd PORT] [--music DIR]|--headless|--kill] [FILE..]" 1 1)))
 ) ; module core
