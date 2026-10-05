@@ -46,6 +46,19 @@
         h (#nz // 8 * 4)
         x (bus-run a (snip nz 0 h) 2) y (bus-run a (snip nz h #nz) 2) z (bus-run b nz 2)
         (test (x + y = z)))
+   ; a slider moved off 0 dB keeps the filters' memory: no cold start, so no click. the
+   ; difference just after the switch is no bigger than where it has settled
+   _ (: A [-12 9 0 0 0 0 0 0 0 0] B [-12 9 0 0 0 0 0 0 0 1] h (#nz // 8 * 4)
+        bq (cite 'dsp 'biquads)
+        (run co s st) (bq s 2 co st @ (o . st2) [o st2] w w)
+        whole (<(run (bus-co 44100 A 0 100 0 1) nz ""))
+        r1 (run (bus-co 44100 A 0 100 0 1) (snip nz 0 h) "")
+        r2 (run (bus-co 44100 B 0 100 0 1) (snip nz h #nz) (r1 1))
+        d (pl-chan (snip whole h #nz) 2 0 - pl-chan (<r2) 2 0)
+        ad (max d (0 - d))
+        (win k) (amax (peep ad (k + iota 500) 0))
+        (test (#(r1 1) = #((run (bus-co 44100 B 0 100 0 0) nz "") 1))
+              (win 0 <= 2 * win 1500 + 2)))
    ; the spectrum: a 1 kHz sine at full scale tops its own band, silence is the floor
    sine (pl-pcm [(pl-sine 1000.0 44100 4096 32767.0) (pl-sine 1000.0 44100 4096 32767.0)])
    sp (bus-spec sine 2 44100 32)
@@ -53,6 +66,7 @@
    _ (test (#sp = 32) (240 <= foldl max 0 sp)
            (top = 18)                                                   ; 970 .. 1219 Hz
            (bus-spec (pl-pcm [(iota 4096 * 0) (iota 4096 * 0)]) 2 44100 32 = map (_ \ 0) ^32)
+           (6 <= #(uniq (snip (bus-spec nz 2 44100 32) 0 8)))           ; bars narrower than a bin
            (#(bus-scope sine 2 8) = 8)
            (bus-scope sine 2 1 = [[-128 127]]))
 
@@ -97,7 +111,8 @@
    _ (test (core-send c ['vol 80] = ['ok]) (st 'vol = 80)
            (core-send c ['eq [3 0 0 0 0 0 0 0 0 -3]] = ['ok])
            (core-send c ['play] = ['ok]) (waits 'state 'stop 150)
-           (map (s \ (<(filter (kv \ <kv = 'song) s)) 1) (filter (s \ elem 'song (map (kv \ <kv) s)) (sets 'song))
+           (foldr (\ x a (two? a && <a = x ? a (x . a))) ()
+                  (map (s \ (<(filter (kv \ <kv = 'song) s)) 1) (filter (s \ elem 'song (map (kv \ <kv) s)) (sets 'song)))
               = [0 1 2 -1]))
    ; pause holds the place, and play goes on from it
    _ (test (core-send c ['play 0] = ['ok]) (rest 60, core-send c ['pause] = ['ok]) (st 'state = 'pause)
@@ -115,6 +130,25 @@
    ; consume: what plays leaves the queue
    _ (test (core-send c ['consume 1] = ['ok]) (core-send c ['play 2] = ['ok]) (waits 'state 'stop 150)
            (ids () = [1 2]) (core-send c ['clear] = ['ok]) (ids () = []))
+   ; a station on loopback: an icy stream of a wav, its titles between the blocks. queued, it is
+   ; asked only its name; played, the item takes each StreamTitle as it comes
+   (pl-block m) (: n ((#m + 15) // 16) (string [n] + m + string (cask (16 * n - #m))))
+   (pl-icy s mi ts) (: (go i acc) (? (#s <= i * mi) (cats (rev acc))
+                                    (: b (snip s (i * mi) (min #s (i * mi + mi)))
+                                       (go (i + 1) ((#b < mi ? b (b + pl-block (i < #ts ? (ts i) ""))) . acc))))
+                       (go 0 ()))
+   station ("ICY 200 OK\r\nicy-name: love radio\r\nicy-br: 256\r\nicy-metaint: 1000\r\nContent-Type: audio/wav\r\n\r\n"
+            + pl-icy (pl-wav 8000 2 tone) 1000 ["StreamTitle='one';" "" "StreamTitle='two';"])
+   (pl-req s) (: (go b) (? (0 <= fsub b "\r\n\r\n" 0) b (see s @ -1 b ch (unsee s ch, go (b + chug s)))) (go ""))
+   (pl-serve l) (: _ (await l) s (accept l)
+                   _ (? (hot? s) (: _ (pl-req s) (say s station, flush s, close s)) 0)
+                   (pl-serve l))
+   lp (test-listen 0) srv (twirl (_ \ pl-serve (lp 1)) ())
+   url ("http://127.0.0.1:" + show <lp + "/live")
+   _ (test (core-send c ['consume 0] = ['ok]) (<(core-send c ['add url]) = 'ok) (titles () = ["love radio"])
+           (core-send c ['play 0] = ['ok]) (waits 'state 'stop 150)
+           (titles () = ["two"]))
+   _ (freeze srv)
    _ (core-close c)
    ; the verb speaks the same messages on stdin and stdout
    _ (test (sh ("printf '(ping)\\n(bye)\\n' | HORN=none out/love player --pipe | tail -2")

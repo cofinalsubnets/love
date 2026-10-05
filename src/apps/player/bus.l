@@ -3,10 +3,11 @@
 ; numbers cross to it in Q40, laid here. `(borrow 'bus)`, then:
 ;
 ;   bus-bands               winamp's ten centers, Hz
-;   (bus-co rate eq pre vol bal on) -> the coefficients for biquads: each band an rbj peaking
-;                           filter (sox's equalizer, width in q), a 0 dB band left out, a band
-;                           past nyquist too; preamp, volume (0..100) and balance (-100..100)
-;                           as the two channels' gains
+;   (bus-co rate eq pre vol bal on) -> the coefficients for biquads: each band below nyquist an
+;                           rbj peaking filter (sox's equalizer, width in q), off as 0 dB, which
+;                           is the identity, so a slider or the switch never changes the
+;                           filters' shape and their memory carries; preamp, volume (0..100) and
+;                           balance (-100..100) as the two channels' gains
 ;   (bus-run b pcm ch)      -> pcm through b, a bus tablet ('co, 'st) whose memory moves on
 ;   (bus-new)               -> a bus at rest, flat
 ;   (bus-spec pcm ch rate n) -> n bins 0..255, log-spaced 20 Hz .. 20 kHz, dB -96 .. 0 of full
@@ -32,9 +33,8 @@
    (bus-co rate eq pre vol bal on)
     (: v (vol / 100.0 * (on ? (db pre) 1.0))
        gl (v * (bal > 0 ? (1.0 - bal / 100.0) 1.0)) gr (v * (bal < 0 ? (1.0 + bal / 100.0) 1.0))
-       bs (? !on ()
-             (foldl (\ a i (? ((eq i) = 0 || bus-bands i * 2 >= rate) a (a + peak rate (bus-bands i) (eq i))))
-                    () ^10))
+       bs (foldl (\ a i (? (bus-bands i * 2 >= rate) a (a + peak rate (bus-bands i) (on ? (eq i) 0))))
+                 () ^10)
        (bus-q ([gl gr] + bs)))
    (bus-new _) {'co (bus-co 44100 (map (_ \ 0) ^10) 0 100 0 1) 'st ""}
    (bus-run b pcm ch)
@@ -52,15 +52,15 @@
                   pinv c (12 * n) 8 8 (sin (a * h) * bus-q40),
                   string c))
    tws {}
-   (tw n) (peep tws n () || (pin tws n (bus-tw n), tws n))
-   ; u16 fft bins bounding n log-spaced bands, 20 Hz .. 20 kHz
+   (tw n) (string? (peep tws n ()) ? (tws n) (pin tws n (bus-tw n), tws n))
+   ; n log-spaced bands, 20 Hz .. 20 kHz, their edges as u32 sixteenths of an fft bin
    (bus-edges rate n)
-    (: c (cask (2 * (n + 1))) top (bus-n // 2)
-       (each ^(n + 1) (i \ pinv c (2 * i) 2 2
-                          (iota 1 + min top (int (20.0 * (1000.0 ** (i / n)) * bus-n / rate + 0.5)))),
+    (: c (cask (4 * (n + 1))) top (16 * (bus-n // 2))
+       (each ^(n + 1) (i \ pinv c (4 * i) 4 4
+                          (iota 1 + min top (int (16.0 * 20.0 * (1000.0 ** (i / n)) * bus-n / rate + 0.5)))),
         string c))
    edges {}
-   (edge rate n) (: k [rate n] (peep edges k () || (pin edges k (bus-edges rate n), edges k)))
+   (edge rate n) (: k [rate n] (string? (peep edges k ()) ? (edges k) (pin edges k (bus-edges rate n), edges k)))
    ; a full-scale sine's peak bin under the hann window: (32767 n / 4) squared
    ref (: a (32767.0 * bus-n / 4.0) (a * a))
    (bus-spec pcm ch rate n)
