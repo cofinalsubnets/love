@@ -98,7 +98,7 @@
    (ql-row? w) (5 < #w && ql-num? <w)
    (ql-kind l)
     (: w (words l)
-       (? !(two? w) "" (ql-row? w) "row" (<w 0 = 35) "#" (elem <w ["leader" "sync" "pre" "next" "mirror"]) <w "base"))
+       (? !(two? w) "" (ql-row? w) "row" (<w 0 = 35) "#" (elem <w ["leader" "sync" "pre" "next" "mirror" "lives"]) <w "base"))
    (ql-rows t) (foldl (\ a l (: w (words l) (? (ql-row? w) (pin a <w w) a))) {} (lines t))
    (ql-head t k) (filter (l \ ql-kind l = k) (lines t))
    (ql-leader t) (: l (ql-head t "leader") (? (two? l) (: w (words <l) (? (1 < #w) (w 1) "")) ""))
@@ -122,7 +122,7 @@
           (same k) (show (ql-head before k) = show (ql-head after k))
           la (ql-head after "leader")
           (? (two? bad) ("row " + <bad + " is not " + who + "'s to change")
-             !(all same ["#" "sync" "pre" "mirror"]) "only the leader edits the header"
+             !(all same ["#" "sync" "pre" "mirror" "lives"]) "only the leader edits the header"
              !(same "base" || two? gone) "only the leader, or a landing, moves the base line"
              !(same "leader" || (two? la && words <la = ["leader" who "acting"])) "only the leader hands on the queue"
              "")))
