@@ -46,6 +46,19 @@
         h (#nz // 8 * 4)
         x (bus-run a (snip nz 0 h) 2) y (bus-run a (snip nz h #nz) 2) z (bus-run b nz 2)
         (test (x + y = z)))
+   ; a slider moved off 0 dB keeps the filters' memory: no cold start, so no click. the
+   ; difference just after the switch is no bigger than where it has settled
+   _ (: A [-12 9 0 0 0 0 0 0 0 0] B [-12 9 0 0 0 0 0 0 0 1] h (#nz // 8 * 4)
+        bq (cite 'dsp 'biquads)
+        (run co s st) (bq s 2 co st @ (o . st2) [o st2] w w)
+        whole (<(run (bus-co 44100 A 0 100 0 1) nz ""))
+        r1 (run (bus-co 44100 A 0 100 0 1) (snip nz 0 h) "")
+        r2 (run (bus-co 44100 B 0 100 0 1) (snip nz h #nz) (r1 1))
+        d (pl-chan (snip whole h #nz) 2 0 - pl-chan (<r2) 2 0)
+        ad (max d (0 - d))
+        (win k) (amax (peep ad (k + iota 500) 0))
+        (test (#(r1 1) = #((run (bus-co 44100 B 0 100 0 0) nz "") 1))
+              (win 0 <= 2 * win 1500 + 2)))
    ; the spectrum: a 1 kHz sine at full scale tops its own band, silence is the floor
    sine (pl-pcm [(pl-sine 1000.0 44100 4096 32767.0) (pl-sine 1000.0 44100 4096 32767.0)])
    sp (bus-spec sine 2 44100 32)
@@ -53,6 +66,7 @@
    _ (test (#sp = 32) (240 <= foldl max 0 sp)
            (top = 18)                                                   ; 970 .. 1219 Hz
            (bus-spec (pl-pcm [(iota 4096 * 0) (iota 4096 * 0)]) 2 44100 32 = map (_ \ 0) ^32)
+           (6 <= #(uniq (snip (bus-spec nz 2 44100 32) 0 8)))           ; bars narrower than a bin
            (#(bus-scope sine 2 8) = 8)
            (bus-scope sine 2 1 = [[-128 127]]))
 
@@ -97,7 +111,8 @@
    _ (test (core-send c ['vol 80] = ['ok]) (st 'vol = 80)
            (core-send c ['eq [3 0 0 0 0 0 0 0 0 -3]] = ['ok])
            (core-send c ['play] = ['ok]) (waits 'state 'stop 150)
-           (map (s \ (<(filter (kv \ <kv = 'song) s)) 1) (filter (s \ elem 'song (map (kv \ <kv) s)) (sets 'song))
+           (foldr (\ x a (two? a && <a = x ? a (x . a))) ()
+                  (map (s \ (<(filter (kv \ <kv = 'song) s)) 1) (filter (s \ elem 'song (map (kv \ <kv) s)) (sets 'song)))
               = [0 1 2 -1]))
    ; pause holds the place, and play goes on from it
    _ (test (core-send c ['play 0] = ['ok]) (rest 60, core-send c ['pause] = ['ok]) (st 'state = 'pause)

@@ -205,7 +205,7 @@
           ok))
    (go-to c i at)
     (? (i < 0 || i >= #(c 'q)) (err "no such song")
-       (: _ (pin c 'held "") _ (pin (c 's) 'state 'play) _ (start c i (max 0 at)) ok))
+       (: _ (pin c 'held "") _ (start c i (max 0 at)) _ (sets c [['song i] ['state 'play]]) ok))
    (stop c) (: _ (halt c) _ (pin c 'held "") _ (stopped c) ok)
    (seek c secs)
     (? !(playing? c) (err "not playing")
