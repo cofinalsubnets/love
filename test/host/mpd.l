@@ -1,0 +1,82 @@
+; test/host/mpd.l -- src/apps/player/mpd.l, mpd's protocol over the player's core, held to mpd
+; itself: the same library served by a scratch mpd (null output, software mixer, a port of its
+; own) and by the skin, and the same mpc commands asked of both, their answers byte for byte.
+; first the skin's own words without a socket.
+;   cat test/00-init.l test/host/mpd.l | out/love
+(borrow 'posix)
+(borrow 'core)
+(borrow 'mpd)
+(: md-dir (cwd 0 + "/out/.mpdd")
+   _ (hark ["rm" "-rf" md-dir], mkdir md-dir 448, mkdir (md-dir + "/music") 448, mkdir (md-dir + "/music/sub") 448)
+   _ (setenv "HORN" "none")
+   _ (setenv "PLAYER_LISTS" (md-dir + "/lists"))
+   (md-sh c) (hark ["sh" "-c" c])
+   pinv (cite 'guts 'pinv)
+   (md-le v n) (string (map (k \ (v >> (8 * k)) & 255) ^n))
+   (md-wav rate n f)
+    (: c (cask (4 * n)) t (int (8000.0 * sin (iota n * (2.0 * 3.141592653589793 * f / rate))))
+       _ (pinv c 0 2 4 t) _ (pinv c 2 2 4 t) pcm (string c)
+       ("RIFF" + md-le (36 + #pcm) 4 + "WAVEfmt " + md-le 16 4 + md-le 1 2 + md-le 2 2 + md-le rate 4
+        + md-le (rate * 4) 4 + md-le 4 2 + md-le 16 2 + "data" + md-le #pcm 4 + pcm))
+   (md-lay p s) (open p "w" @ q (say q s, close q))
+   _ (md-lay (md-dir + "/music/a.wav") (md-wav 8000 8000 440.0))
+   _ (md-lay (md-dir + "/music/sub/c.wav") (md-wav 8000 4000 660.0))
+   _ (md-lay (md-dir + "/t.wav") (md-wav 44100 88200 330.0))
+   have-flac (md-sh "command -v flac >/dev/null" @ (0 . _) 1 _ 0)
+   _ (? have-flac (md-sh ("flac -s -f -T TITLE=Tune -T ARTIST=Gwen -T ALBUM=Love -o " + md-dir + "/music/b.flac " + md-dir + "/t.wav")) 0)
+
+   ; --- the words, no socket --------------------------------------------------------
+   _ (test (mpd-args "add \"a b.wav\"" = ["add" "a b.wav"]) (mpd-args "find Artist \"G\\\"w\"" = ["find" "Artist" "G\"w"])
+           (mpd-args "  status  " = ["status"]) (mpd-args "" = ()))
+   c (core-new "m") k (mpd-skin c (mpd-lib (md-dir + "/music"))) ss (mpd-session k)
+   _ (test (mpd-do ss "ping" = "OK\n")
+           (mpd-do ss "frob" = "ACK [5@0] {} unknown command \"frob\"\n")
+           (mpd-do ss "play 9" = "ACK [2@0] {play} Bad song index\n")
+           (mpd-do ss "command_list_ok_begin" = ()) (mpd-do ss "ping" = ()) (mpd-do ss "frob" = ())
+           (mpd-do ss "command_list_end" = "list_OK\nACK [5@1] {frob} unknown command \"frob\"\n")
+           (mpd-do ss "add sub" = "OK\n") (mpd-do ss "playlistinfo" @ t (0 <= findsub (chars t) (chars "file: sub/c.wav")) _ 0)
+           (mpd-do ss "close" = 'close))
+   _ (core-close c)
+
+   ; --- against mpd -------------------------------------------------------------------
+   have (md-sh "command -v mpd >/dev/null && command -v mpc >/dev/null" @ (0 . _) have-flac _ 0)
+   _ (? !have (gate-partly "mpd: no mpd, mpc or flac here, the skin is not held to mpd")
+      (: p1 (test-free 0) p2 (test-free 0)
+         conf ("music_directory \"" + md-dir + "/music\"\nplaylist_directory \"" + md-dir + "/pl\"\ndb_file \"" + md-dir
+               + "/db\"\nstate_file \"" + md-dir + "/state\"\npid_file \"" + md-dir + "/pid\"\nlog_file \"" + md-dir
+               + "/log\"\nbind_to_address \"127.0.0.1\"\nport \"" + show p1 + "\"\naudio_output {\n type \"null\"\n name \"null\"\n mixer_type \"software\"\n}\n")
+         _ (mkdir (md-dir + "/pl") 448)
+         _ (md-lay (md-dir + "/mpd.conf") conf)
+         _ (md-sh ("mpd " + md-dir + "/mpd.conf 2>/dev/null && mpc -q -p " + show p1 + " update -w"))
+         c2 (core-new "m2") k2 (mpd-skin c2 (mpd-lib (md-dir + "/music")))
+         srv (twirl (_ \ mpd-serve k2 p2) 0)
+         _ (rest 200)
+         (both a) (: r1 (md-sh ("mpc -p " + show p1 + " " + a + " 2>&1"))
+                     r2 (md-sh ("mpc -p " + show p2 + " " + a + " 2>&1"))
+                     (? (r1 = r2) 1 (: _ (puts ("mpd says: " + show r1 + "\nskin says: " + show r2 + "\n")) 0)))
+         _ (test (both "ls") (both "ls sub") (both "listall")
+                 (both "-q add a.wav") (both "-q add b.flac") (both "-q add sub")
+                 (both "playlist") (both "-f '%file%|%title%|%artist%|%album%|%time%' playlist")
+                 (both "find artist Gwen") (both "search title tun") (both "find title Nope")
+                 (both "list album") (both "list artist") (both "list title artist Gwen")
+                 (both "-q del 2") (both "playlist") (both "-q move 2 1") (both "playlist")
+                 (both "repeat on") (both "random on") (both "single on") (both "consume on")
+                 (both "repeat off") (both "random off") (both "single off") (both "consume off")
+                 (both "volume 40") (both "volume")
+                 (both "current") (both "-q save mix") (both "lsplaylists") (both "playlist mix")
+                 (both "-q clear") (both "playlist") (both "-q load mix") (both "playlist")
+                 (both "-q rm mix") (both "lsplaylists") (both "-q clear") (both "-q findadd artist Gwen") (both "playlist"))
+         ; playing: the clock is masked, the rest byte for byte; idle wakes on what play moves
+         mask " | sed -E 's#[0-9]+:[0-9]{2}/[0-9]+:[0-9]{2} \\([0-9]+%\\)#T#'"
+         (bothm a) (both (a + mask))
+         (idle p) ("(mpc -p " + show p + " idle player & sleep 0.5; mpc -q -p " + show p + " play 1; wait)")
+         _ (test (both "-q clear") (both "-q add a.wav") (both "-q add b.flac")
+                 (bothm "play 2") (both "current") (bothm "pause") (bothm "status") (bothm "prev")
+                 (both "-q stop") (bothm "status")
+                 (: r1 (md-sh (idle p1)) r2 (md-sh (idle p2)) (? (r1 = r2) 1 (: _ (puts ("idle: " + show r1 + " vs " + show r2 + "\n")) 0)))
+                 (both "-q stop"))
+         _ (md-sh ("kill $(cat " + md-dir + "/pid)"))
+         (freeze srv, core-close c2)))
+   (hark ["rm" "-rf" md-dir], 0))
+
+(test_fin (), puts "mpd: ok", putc 10, 0)
