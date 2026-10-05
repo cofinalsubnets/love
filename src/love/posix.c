@@ -12,6 +12,7 @@
 #define _GNU_SOURCE     // unshare / CLONE_* (newns), posix_openpt/grantpt/unlockpt/ptsname
 #include "love.h"
 #include "lib/srctree.h"   // the carried tree, under /love (lovefs.c)
+#include "vfs.h"
 #include <unistd.h>     // fork execvp _exit read close getuid/getgid symlink readlink chown
 #include <stdio.h>      // fflush, rename
 #include <stdlib.h>     // setenv/unsetenv, posix_openpt grantpt unlockpt ptsname
@@ -801,25 +802,22 @@ static lvm(lvm_newns) { Sp[0] = love_err(g, ENOSYS); love_musttail return Next(1
 // (lseek fd off whence) -> the new offset | a nom | 'badarg misuse. raw fds, the openfd
 //                   lane -- not ports (a port's read buffer would desync under a seek).
 //                   whence: 0 SET, 1 CUR, 2 END, a stranger 'einval and not a quiet SET.
-// /love's answer in stat's shape: 1 the path is the tree's (mode 0 where it is absent), 0 the OS's.
-// read-only and this process's own; a directory takes the tree's first row's date.
+// /love's answer in stat's shape: 1 the path is the tree's (mode 0 where it is absent), 0 the
+// OS's. read-only and this process's own; a directory wears its newest row's date.
 static int lovefs_stat(char const *p, struct stat *st) {
- char rel[256];
- uintptr_t rn, n;
- intptr_t i = lovefs_at(p, rel, &rn);
- if (i == -1) return 0;
+ char c[256];
+ uintptr_t cn;
+ struct vfs_st vs;
+ if (lovefs_at(p, c, &cn) == -1) return 0;
  memset(st, 0, sizeof *st);
- if (i == -2) return 1;
- struct tree const *t = tree_carried();
- struct tree_row const *e = t->rows;
- n = t->n;
- time_t at = i >= 0 ? (time_t) e[i].mtime : n ? (time_t) e[0].mtime : 0;
- st->st_mode = i >= 0 ? S_IFREG | 0444 : S_IFDIR | 0555;
- st->st_size = i >= 0 ? (off_t) e[i].len : 0;
+ if (!lovefs_stat_at(c, cn, &vs)) return 1;
+ st->st_mode = vs.kind == 2 ? S_IFDIR | 0555 : S_IFREG | 0444;
+ st->st_size = vs.kind == 2 ? 0 : (off_t) vs.size;
  st->st_nlink = 1, st->st_uid = getuid(), st->st_gid = getgid();
- st->st_ino = (ino_t) (i >= 0 ? i + 1 : 0);
+ st->st_ino = (ino_t) (vs.i + 1);
  st->st_blocks = (blkcnt_t) ((st->st_size + 511) / 512), st->st_blksize = 4096;
- st->st_mtim.tv_sec = st->st_atim.tv_sec = st->st_ctim.tv_sec = at;
+ st->st_mtim.tv_sec = st->st_atim.tv_sec = st->st_ctim.tv_sec = (time_t) (vs.ms / 1000);
+ st->st_mtim.tv_nsec = st->st_atim.tv_nsec = st->st_ctim.tv_nsec = (long) (vs.ms % 1000) * 1000000;
  return 1; }
 
 love_noinline static struct g *host_stat_tuple(struct g *g, int follow) {
@@ -944,22 +942,13 @@ love_noinline static struct g *host_posix_rusage(struct g *g) {
 static lvm(lvm_posix_rusage) {
  LvmCall(g, host_posix_rusage) }
 
-// /love's listing: each row under the directory gives its next component, once
-love_noinline static struct g *lovefs_readdir(struct g *g, char const *rel, uintptr_t rn) {
- struct tree const *t = tree_carried();
- struct tree_row const *e = t->rows;
- uintptr_t n = t->n;
+// /love's listing: each name under the directory once, as the vfs walks it
+love_noinline static struct g *lovefs_readdir(struct g *g, char const *c, uintptr_t cn) {
  g->sp[0] = ZeroPoint;
- for (uintptr_t i = 0; i < n; i++) {
-  char const *q = e[i].path;
-  if (rn && (memcmp(q, rel, rn) || q[rn] != '/')) continue;
-  q += rn ? rn + 1 : 0;
-  uintptr_t cl = 0;
-  while (q[cl] && q[cl] != '/') cl++;
-  bool seen = false;
-  for (word l = g->sp[0]; chainp(l) && !seen; l = B(l))
-   seen = len(A(l)) == cl && !memcmp(txt(A(l)), q, cl);
-  if (seen) continue;
+ char const *q;
+ uintptr_t cl;
+ bool dir;
+ for (int cur = 0; lovefs_child(c, cn, &cur, &q, &cl, &dir) >= 0; ) {
   if (!ok(g = str0(g, cl))) return g;                     // pushes: name over acc
   memcpy(txt(g->sp[0]), q, cl);
   if (!ok(g = have(g, Width(struct chain)))) return g;
