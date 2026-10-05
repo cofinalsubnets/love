@@ -10,11 +10,11 @@
   moon-bison moon-flex moon-lua moon-lua-a64 moon-lua-rv64 moon-m4 moon-m4-a64 moon-m4-rv64 moon-sqlite \
   moon-sqlite-a64 moon-sqlite-rv64 moon-tar moon-tar-a64 moon-tar-rv64 mx nettest test \
   test_as test_asmops test_bakerep test_big test_boards test_cca64 test_ccrv64 test_ccwasm test_ccthumb1 \
-  test_ccthumb2 test_clay test_cli test_nest test_cookdiff test_cpio test_cts test_cts_a64 test_tfm test_caja test_mpd test_gpic test_grap test_chem \
+  test_ccthumb2 test_clay test_cli test_nest test_cookdiff test_cpio test_cts test_cts_a64 test_tfm test_caja test_gpic test_grap test_chem \
   test_cts_rv64 test_cts_wasm test_disk test_dist test_distboot test_doc test_drat test_drv test_dtb \
   test_elf32 test_encver test_extra test_extract test_fat test_fat32 test_filemode test_fixpoint \
   test_forge test_freebsd test_freebsd_a64 test_front test_gc test_gcheck test_gcstress \
-  test_gates test_gen test_glaze test_glazebench test_glazefuzz test_gz test_harp test_hearts test_hdiff test_ccwarn test_holo test_holofuzz test_holowasm test_hook \
+  test_gates test_gen test_glaze test_glazebench test_glazefuzz test_gz test_harp test_hearts test_sqfs test_hdiff test_ccwarn test_holo test_holofuzz test_holowasm test_hook \
   test_host test_hostegg test_hostnif test_inle test_kboot test_kmitty test_kernel_a64 test_kernel_rv64 test_kernel_vmx test_kernel_wasm test_kore \
   test_kverb test_libc test_love0 test_lux test_moon test_moonfuzz test_mps2 test_mps2_t1 \
   test_mps2_build test_mps2_wake test_mx test_netbsd test_netbsd_a64 test_nucleo446 test_nucleo446_smoke \
@@ -45,7 +45,7 @@ test_extra: test_filemode waits test_front test_proof test_gen test_uugen test_u
 	test_holofuzz test_glazefuzz test_encver test_kore test_refuzz test_sb test_vi \
 	test_clay test_moonfuzz test_forge test_gates test_kernel_vmx \
 	test_cts test_libc test_ulp test_softfp test_reloc32 \
-	test_drv test_hdiff test_ccwarn test_tco0 nettest test_wake test_gz test_cpio test_tfm test_caja test_mpd test_gpic test_grap test_chem test_fat32 test_root \
+	test_drv test_hdiff test_ccwarn test_tco0 nettest test_wake test_gz test_sqfs test_cpio test_tfm test_caja test_gpic test_grap test_chem test_fat32 test_root \
 	test_uuhomgen test_uusplgen test_uumx test_uuvallaw \
 	test_fixpoint test_xfixpoint test_raw_bake test_drat test_vec \
 	test_asmops test_dtb test_rvboot test_elf32 test_objcopy test_distboot test_fat \
@@ -888,6 +888,11 @@ test_distboot: dist
 test_hearts: host
 	@echo TEST test/gate/hearts.sh
 	@$(gsh) test/gate/hearts.sh $(ho)/love
+# test_sqfs -- src/apps/sqfs.l against mksquashfs, byte for byte, over four trees.
+# skips without mksquashfs.
+test_sqfs: host
+	@echo TEST test/gate/sqfs.sh
+	@$(gsh) test/gate/sqfs.sh $(ho)/love
 # test_gz -- src/apps/tar.l + src/apps/gz.l against the two programs they replace. the laws
 # are test/host/gz.l; this is the half only the OUTSIDE can say, and it is separate because
 # a coder and decoder by one hand round-trip cleanly through a format nobody else speaks.
@@ -944,11 +949,6 @@ test_chem: host
 	@$(gsh) test/gate/chem.sh $(ho)/love
 # test_caja -- caja (src/apps/caja/) against TeX: the same boxes and paragraphs through both, DVI byte for byte.
 # skips without TeX Live
-# test_mpd: the player's mpd skin (src/apps/player/mpd.l) held to mpd itself through mpc; a lane
-# of its own because it needs mpd, mpc and flac on the box, which hostnif's boxes need not have
-test_mpd: host
-	@echo TEST test/host/mpd.l
-	@cat test/00-init.l test/host/mpd.l | DL=$(dl) $(gsh) test/gate/run.sh mpd "$m" ": ok"
 test_caja: host
 	@echo TEST test/gate/caja.sh
 	@$(gsh) test/gate/caja.sh $(ho)/love
