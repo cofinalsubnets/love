@@ -101,8 +101,10 @@
 ; the `borrow` up top splices a module the runtime already holds; here it also loads one
 ; from a path the caller writes out. the loader invents no path of its own, so a name it
 ; lacks is a miss: what a frontend baked and what a cat registered is all a name can mean.
-; a load is one fresh layer -- enter, read-eval, leave registers it under the file's
-; basename -- and a file that made its own (module nm ..) keeps that registration.
+; a load is one fresh anonymous layer. a file with no (module nm ..) of its own is that
+; layer, keyed by its path: a module that merely shares the file's name is never answered in
+; its place, and the layer takes the name only when no module holds it. a file that made its
+; own (module nm ..) keeps that registration, and the path remembers the name.
 ; the same path twice reads once, marked by path and not basename: several files register
 ; one module (sb's parts, lush's, tls's), and a name-keyed mark would drop every part after
 ; the first. `open` is captured off the posix module, so a fs-less frontend misses every path.
@@ -126,17 +128,24 @@
       (m \ (? (tablet? m) (prior m)
               (string? m)
               (mname m @ nm
-                 (peep (lib ()) m () ? (prior nm)          ; read already -- the path is the mark
-                    (: q (!fsopen ? () (fsopen m "r"))
-                       (!(hot? q) ? (prior m)
-                          ; a file whose own (module nm ..) registered wins over the loader's
-                          ; wrapper layer, which leave would pin over it; the mark goes down
-                          ; before the read, so a file naming itself stops. a bare wrapper
-                          ; claiming nothing is no module: pull the name and answer ().
-                          (: _ (pin (lib ()) m 1)
-                             _ (enter nm) _ (rdev q) t (lib () nm) w (leave ())
-                             (t && pin (lib ()) nm t,
-                              !t && bare? w ? (pull (lib ()) nm 0, ()) (prior nm)))))))
+                 ; read already -- the path is the mark: its layer, the name its file
+                 ; registered, or 1 while that read is still going
+                 (peep (lib ()) m () @ v
+                   (? (v = 1) ()
+                      (v != ()) (prior v)
+                      (: q (!fsopen ? () (fsopen m "r"))
+                         (!(hot? q) ? (prior m)
+                            ; the mark goes down before the read, so a file naming itself stops
+                            (: _ (pin (lib ()) m 1)
+                               _ (enter ()) _ (rdev q) w (leave ())
+                               (? !(bare? w)
+                                   (: _ (pin (lib ()) m w)
+                                      _ (? (nil? (lib () nm)) (pin (lib ()) nm w) 0)
+                                      (prior w))
+                                  ; claiming nothing of its own: the module the file made, if
+                                  ; it made one under its name, else nothing
+                                  (lib () nm) (: _ (pin (lib ()) m nm) (prior nm))
+                                  ())))))))
               (prior m)))))
 
 ; a module's macros in the head layer, without its names -- the only way to spell one when
