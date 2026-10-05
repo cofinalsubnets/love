@@ -219,7 +219,7 @@
       "__INT_LEAST32_MAX__=0x7fffffff" "__UINT_LEAST32_MAX__=0xffffffffU" "__INT_LEAST32_WIDTH__=32"
       "__WINT_TYPE__=unsigned int" "__WINT_MAX__=0xffffffffU" "__WINT_MIN__=0U" "__WINT_WIDTH__=32"
       "__SIZEOF_SHORT__=2" "__SIZEOF_INT__=4" "__SIZEOF_LONG_LONG__=8"
-      "__SIZEOF_FLOAT__=4" "__SIZEOF_DOUBLE__=8" "__SIZEOF_WCHAR_T__=4" "__SIZEOF_WINT_T__=4"
+      "__SIZEOF_FLOAT__=4" "__SIZEOF_DOUBLE__=8" "__SIZEOF_WINT_T__=4"
       "__FLT_RADIX__=2"
       "__FLT_MANT_DIG__=24" "__FLT_DIG__=6" "__FLT_DECIMAL_DIG__=9"
       "__FLT_MIN_EXP__=(-125)" "__FLT_MIN_10_EXP__=(-37)" "__FLT_MAX_EXP__=128" "__FLT_MAX_10_EXP__=38"
@@ -301,11 +301,16 @@
       "__BIGGEST_ALIGNMENT__=8")                     ; AAPCS's widest ask, and bare aligned
    ; wchar_t forks by ABI, not by width: signed int on x64/rv64 (SysV), unsigned int on
    ; a64/arm32 (AAPCS) -- gcc's values, so a header's typedef lays what a gcc object carries.
-   (wchdefs tgt)
-    (tgt = 'a64 || arm32? tgt ?
-       '("__WCHAR_TYPE__=unsigned int" "__WCHAR_MAX__=0xffffffffU" "__WCHAR_MIN__=0U" "__WCHAR_WIDTH__=32")
-       '("__WCHAR_TYPE__=int" "__WCHAR_MAX__=0x7fffffff" "__WCHAR_MIN__=(-__WCHAR_MAX__ - 1)" "__WCHAR_WIDTH__=32"))
-   (stddefs tgt) ((arm32? tgt ? stdt32 stdlp64) + wchdefs tgt + stdcommon)
+   ; -fshort-wchar makes it unsigned short everywhere, as gcc's does
+   (wchdefs tgt sw)
+    (? sw '("__WCHAR_TYPE__=short unsigned int" "__WCHAR_MAX__=0xffff" "__WCHAR_MIN__=0" "__WCHAR_WIDTH__=16"
+            "__SIZEOF_WCHAR_T__=2")
+       (tgt = 'a64 || arm32? tgt)
+       '("__WCHAR_TYPE__=unsigned int" "__WCHAR_MAX__=0xffffffffU" "__WCHAR_MIN__=0U" "__WCHAR_WIDTH__=32"
+         "__SIZEOF_WCHAR_T__=4")
+       '("__WCHAR_TYPE__=int" "__WCHAR_MAX__=0x7fffffff" "__WCHAR_MIN__=(-__WCHAR_MAX__ - 1)" "__WCHAR_WIDTH__=32"
+         "__SIZEOF_WCHAR_T__=4"))
+   (stddefs tgt sw) ((arm32? tgt ? stdt32 stdlp64) + wchdefs tgt sw + stdcommon)
    ; the diagnostic driver: a stage answered a gripe (a cause it named itself) or a bare bad.
    ; a gripe prints "cc: <file>:<line>:<col>: msg" -- an unknown file takes the source path,
    ; an unknown line/col elides; anything else falls back to <plain>.
@@ -354,16 +359,33 @@
    ; the source itself from 1, so every stamped line is true with no pay-back pass.
    ; the -D lines a TU starts from: the machine's, the OS's, the libc's and the dialect's, then
    ; the command line's
-   (cc-defs {'ds ds 'tgt tgt 'os os 'dia dia 'undef un})
-    (un ? (stddefs tgt + ds) (archdefs tgt + osdefs os + featdefs tgt + stddefs tgt
+   ; bool/true/false bare, as C23 has them and modern C (gnulib, gzip) writes them; an older
+   ; iso dialect keeps them plain names until <stdbool.h> (linux/stddef.h declares its own)
+   ; the family a header asks for: GNU C at the kernel's floor (scripts/min-tool-version.sh),
+   ; beside __mooncc__. a claim, so each gcc 8.1 extension a header reaches is carried or
+   ; refused by name (doc/misc/moon-c-gaps.md, the GNU C rows)
+   gnudefs '("__GNUC__=8" "__GNUC_MINOR__=1" "__GNUC_PATCHLEVEL__=0")
+   (booldefs dia) (dia != 'c && '("bool=_Bool" "true=1" "false=0"))
+   (cc-defs {'ds ds 'tgt tgt 'os os 'dia dia 'undef un 'swch sw})
+    (un ? (stddefs tgt sw + booldefs dia + ds) (archdefs tgt + osdefs os + featdefs tgt + stddefs tgt sw
                  ; our libc is the one in this link and carries its whole surface on every
                  ; kernel: a source asks it what it may call, never the kernel.
                  + '("LvMoonlibc=1")
                  + (dia = 'moon && '("__moon__=1"))       ; the dialect's own macro: extensions on
+                 + booldefs dia
+                 + gnudefs
                  +   ; ds9, not ds: a :-local shadows the param over the whole scope (the boxfix cell trap)
                  (elem tgt '(x64 a64) ? ("__SIZEOF_INT128__=16" . ds) ds)))      ; the wide pair (gen's d128 lane); love.c's limb seam reads it, and gcc says the same on both
-   (cc-parse src (t @ {'is is 'ds ds 'tgt tgt 'os os 'vb vb 'dia dia}))
-    (: ds9 (cc-defs t)
+   ; -fmacro-prefix-map=OLD=NEW (and -ffile-prefix-map's half of it): __FILE__ spelled with a
+   ; leading OLD as NEW, the last map that matches winning, as gcc's. it lays as a -D, which
+   ; cpp takes over its own predefine; the build path then never reaches the object
+   (filedef src mp)
+    (: (go l) (? !(two? l) ()
+                 (<l @ [o n] (starts? src o ? (n + snip src #o #src) (go >l))))
+       f (go mp)
+       (f ? [("__FILE__=\"" + string (catmap (c \ (c @ 92 [92 92] 34 [92 34] [c])) (chars f)) + "\"")]))
+   (cc-parse src (t @ {'is is 'ds ds 'tgt tgt 'os os 'vb vb 'dia dia 'swch sw 'mpm mp}))
+    (: ds9 (cc-defs t + filedef src mp)
        ; `-` is read here and nowhere else, so every door onto a TU gets stdin for free; cdir
        ; answers "" for it, which is the cwd, gcc's rule for a source with no directory.
        ; the source may instead live in the carried table (a runtime member on the blob
@@ -379,7 +401,7 @@
        _ (okv? lx || ccdie lx src ("cc: lex error in " + src))
        pp (cpp <>lx (name \ sys? \ incload vb is (cdir src) name sys?) src)
        _ (okv? pp || ccdie pp src ("cc: preprocessor error in " + src))
-       ps (cparse-d <>pp tgt dia)             ; the target sizes pointers/longs at the ABI width; the dialect says what grammar
+       ps (cparse-o <>pp tgt dia {'swch sw})   ; the target sizes pointers/longs at the ABI width; the dialect says what grammar
        (okv? ps || ccdie ps src ("cc: parse error in " + src),
         ps))
    ; a relocatable object: text/data/.bss/love_nifs/.image sections + symbols + relocations
@@ -425,8 +447,8 @@
    ; write-bytes walks a byte list, and a string handed to it lands as an empty file.
    ; -E: the source preprocessed, to -o or stdout; a refusal exits as a compile's does, which is
    ; how a configure script tells a header that is there from one that is not
-   (cc-pre src dst (t @ {'is is 'vb vb 'xasm xasm}))
-    (: ds9 (xasm ? ("__ASSEMBLER__=1" . cc-defs t) (cc-defs t))
+   (cc-pre src dst (t @ {'is is 'vb vb 'xasm xasm 'mpm mp}))
+    (: ds9 ((xasm ? ("__ASSEMBLER__=1" . cc-defs t) (cc-defs t)) + filedef src mp)
        r (src = "-" ? [1 (slurp in)]
             (uread src @ q (? (two? q) q !vb () (vb src @ h (string? h && [1 h])))))
        _ (two? r || udie 1 ("cc: cannot open " + src))
@@ -982,8 +1004,8 @@
    ; differ only in what we can say we accept. no `holyc` row -- it named one borrowed
    ; extension and would refuse u0, i64 and class, a parse error on line 1 of real HolyC.
    stds {"moon" 'moon
-         "c" 'c "c89" 'c "c90" 'c "c99" 'c "c11" 'c "c17" 'c "c18" 'c "c23" 'c
-         "gnu89" 'c "gnu90" 'c "gnu99" 'c "gnu11" 'c "gnu17" 'c "gnu18" 'c "gnu23" 'c}
+         "c" 'c "c89" 'c "c90" 'c "c99" 'c "c11" 'c "c17" 'c "c18" 'c "c23" 'c23
+         "gnu89" 'c "gnu90" 'c "gnu99" 'c "gnu11" 'c "gnu17" 'c "gnu18" 'c "gnu23" 'c23}
    (stdof w) (stds w)                            ; a tablet indexes itself; () is the miss
    ; sorted, because `keys` answers hash order -- a usage line that reshuffles itself
    ; between builds is a worse sentence than an alphabetical one.
@@ -1030,7 +1052,7 @@
    ; would answer the zero point. the literal has to be complete and is wanted at two sites,
    ; so it is spelled once rather than wrapped on `{}`.
    (fseed tgt dia) {'c () 'is () 'ds () 'o () 'ins () 'tgt tgt 'os () 'pie () 'org () 'dorg ()
-                    'nostd () 'vb () 'ni () 'rdme () 'relo () 'dia dia 'md () 'mmd () 'mf () 'mt () 'mp () 'E () 'xasm () 'undef ()}
+                    'nostd () 'vb () 'ni () 'rdme () 'relo () 'dia dia 'md () 'mmd () 'mf () 'mt () 'mp () 'E () 'xasm () 'undef () 'swch () 'mpm () 'fx18 ()}
    (flags as t)
     (!(two? as) ?
        (pin t 'is (rev (t 'is)),
@@ -1067,6 +1089,20 @@
              ; an optimization flag; gcc's -fno-inline-functions is the same word.
              (a = "-fno-inline" || a = "-fno-inline-functions")
               (flags r (pin t 'ni 1))
+             ; -fshort-wchar: wchar_t is unsigned short, and L"" lays 16-bit units (the efi
+             ; stub's strings). -fno-short-wchar is the default it names
+             (a = "-fshort-wchar") (flags r (pin t 'swch 1))
+             (a = "-fno-short-wchar") (flags r (pin t 'swch ()))
+             ; -ffixed-x18: the platform register stays out of allocation, which on a64 it always
+             ; is (holo/a64.l: x16..x18 are sayable, never allocated). any other -ffixed- names a
+             ; register we would have to take out of the pool, and refuses until we can
+             (a = "-ffixed-x18") (flags r (pin t 'fx18 1))
+             (starts? a "-ffixed-") (udie 2 ("cc: " + a + " -- mooncc reserves x18 on a64 only"))
+             ; -fmacro-prefix-map=OLD=NEW, and -ffile-prefix-map, which is it and the debug
+             ; map we have no debug info for: the newest first, so the last one given wins
+             (starts? a "-fmacro-prefix-map=" || starts? a "-ffile-prefix-map=")
+              (a @ (_ + "=" + o + "=" + n) (flags r (fpush t 'mpm [o n]))
+                   (udie 2 ("cc: " + a + " -- wants OLD=NEW")))
              ; -freadme=file -- plain text into the output's `.love.README` section, mapped by
              ; nothing, for whoever opens the binary. a link flag: with -c there is no output
              ; ELF to carry it and it is ignored. ahead of tol?, which swallows every other
@@ -1154,6 +1190,7 @@
        ; consumers take `f` itself, so a `dirn` on the way out of one reader would leave the
        ; others holding the raw list. one pin, before anything reads.
        _ (pin f 'is (map dirn (f 'is)))
+       _ (f 'fx18 && f 'tgt != 'a64 && udie 2 ("cc: -ffixed-x18 names an a64 register, and the target is " + show (f 'tgt)))
        ; wasm's kernel is the page's loader, which speaks linux's numbers: the os unless named
        _ (f 'tgt = 'wasm && !(f 'os) && pin f 'os 'linux)
        ; no nest on disk anywhere: the carried source answers, in memory --

@@ -240,6 +240,8 @@
    (inlany? ts) (attrany? ts "always_inline" "__always_inline__")
    (wkany? ts) (attrany? ts "weak" "__weak__")
    (noinlany? ts) (attrany? ts "noinline" "__noinline__")
+   (usedany? ts) (attrany? ts "used" "__used__")
+   (gnuinlany? ts) (attrany? ts "gnu_inline" "__gnu_inline__")
    ; the declaration's section attribute: `section("NAME")`, either spelling, to the first
    ; depth-0 `;` or `{` -- inside a declaration that shape only occurs in an __attribute__.
    ; -> NAME | ()
@@ -289,7 +291,7 @@
    ; a new door rather than a wider one: under (f) == f a shifted call hands back a closure
    ; without a word, so psnew/cparse-t keep the arity every caller already spells
    (psnew-d tgt dia) ({} @ t
-                (pin t 'dia dia,                  ; the dialect: what grammar the front reads (moon | c)
+                (pin t 'dia dia,                  ; the dialect: what grammar the front reads (moon | c | c23)
                  pin t 'tgt tgt,                  ; the codegen target: 32-bit widths (thumb1/thumb2) vs 64-bit
                  pin t 'types {},         ; typedef name -> ty
                  pin t 'weaks (),                 ; __attribute__((weak)) function names
@@ -333,6 +335,9 @@
                         '((("gp_offset" 0 int) ("fp_offset" 4 int) ("overflow_arg_area" 8 (ptr void))
                            ("reg_save_area" 16 (ptr void))) 24 8)),
                  pin (t 'types) "__builtin_va_list" '(arr (struct "__va_list_tag") 1),
+                ; gcc's predefined typedef names for the wide pair, wherever __int128 itself reads
+                 pin (t 'types) "__int128_t" 'i128,
+                 pin (t 'types) "__uint128_t" 'u128,
                 ; the bswap trio's sigs, seeded so the results type unsigned (a
                 ; swapped high bit is real: compare/divide/sizeof read the width)
                  pin (t 'sigs) "__builtin_bswap16" '(ushort (ushort) ()),
@@ -473,6 +478,7 @@
              ; &x is a pointer to x's type -- only when that type is known, so a
              ; wrong element type never reaches a stride fold.
              (k = 'addr) (ptype ps <>e @ it (it ? ['ptr it]))
+             (k = 'laddr) '(ptr void)
              ; a call through a named function: its 'sigs return type (the
              ; complex promotion below needs clog's answer to type complex)
              (k = 'call) (: sg (two? <>e && <<>e = 'var ? (peep (ps 'sigs) <><>e ()))
@@ -1104,7 +1110,7 @@
              ; on the arm targets), u -> char16 (ushort, a supplementary code point as its
              ; surrogate pair), U -> char32 (uint). the token's value is canonical UTF-8.
              (elem (tkk t) '(wstr str16 str32))
-              (: ety (? (tkk t = 'str16) 'ushort
+              (: ety (? (tkk t = 'str16 || ps 'swch) 'ushort
                         (tkk t = 'str32) 'uint
                         (elem (ps 'tgt) '(a64 thumb2 thumb2sp thumb1)) 'uint
                         'int)
@@ -1112,7 +1118,7 @@
                             (65536 <= <l) (<l - 65536 @ v
                                              (55296 + (v >> 10) . 56320 + (v & 1023) . s16 >l))
                             (<l . s16 >l))
-                 cps (utf8dec (tkv t) @ raw (tkk t = 'str16 ? (s16 raw) raw))
+                 cps (utf8dec (tkv t) @ raw (ety = 'ushort ? (s16 raw) raw))
                  (nums l) (atom? l ? [['num 0]] (['num <l] . nums >l))
                  [['clit ['arr ety (#cps + 1)] ['init (nums cps)]] >ts])
              ; _Generic (C11 6.5.1.1): the controlling expression is typed, never
@@ -1208,6 +1214,25 @@
                  tv (two? rb ? (cfold (pw64 ps) <rb))
                  (atom? rest ? ()
                     [['cast (szty ps) ['num (charm? tv && 1 < tv ? 0 -1)]] rest]))
+             ; __builtin_assume_aligned(p, a[, off]) is p, the promise dropped (its operands are
+             ; constants); __builtin_extract_return_addr(a) is a, no return address being signed
+             (tkk t = 'id && bib? (tkv t) &&
+              elem (tkv t) '("__builtin_assume_aligned" "__builtin_extract_return_addr"))
+              (: r1 (want >ts "(")
+                 ra (two? r1 ? (pasn ps r1))
+                 (tail l) (? (atom? l) () (peekp l ")") >l
+                             (peekp l ",") (pasn ps >l @ r (two? r ? (tail <>r)))
+                             ())
+                 rest (two? ra ? (tail <>ra))
+                 (two? rest ? [['cast '(ptr void) <ra] rest]))
+             ; __builtin_parity{,l,ll}(x): the popcount's low bit
+             (tkk t = 'id && bib? (tkv t) &&
+              elem (tkv t) '("__builtin_parity" "__builtin_parityl" "__builtin_parityll"))
+              (: r1 (want >ts "(")
+                 ra (two? r1 ? (pasn ps r1))
+                 rest (two? ra ? (want <>ra ")"))
+                 pc ("__builtin_popcount" + snip (tkv t) 16 #(tkv t))
+                 (two? rest ? [(mkbin ps '& ['call ['var pc] [<ra]] ['num 1]) rest]))
              ; __builtin_choose_expr(c,a,b): c must fold, the unchosen arm is parsed and
              ; dropped, so a call to an undefined function in it links clean. arms need not type alike
              (tkk t = 'id && bib? (tkv t) && tkv t = "__builtin_choose_expr")
@@ -1371,6 +1396,8 @@
              (idv? t "__extension__") (punary ps >ts)
              (tp? t "*") (punary ps >ts @ r
                             (two? r ? [['deref <r] <>r]))
+             ; gcc's &&L: the address of a label in this function
+             (tp? t "&&" && idat? >ts) [['laddr (lname ps (tkv <>ts))] >>ts]
              (tp? t "&") (punary ps >ts @ r
                             (atom? r ? ()
                                (nulloff ps <r @ n   ; the offsetof idiom folds to a constant
@@ -2072,7 +2099,9 @@
                        (two? rb ? [['switch <rc [<rb]] <>rb]))))
              (tkw? t 'goto)
               (>ts @ t2
-                 (!(idat? t2) ? ()
+                 (? (peekp t2 "*")                  ; gcc's computed goto, through a label's address
+                     (thenw (pexpr ps >t2) ";" @ r (two? r ? [['igoto <r] <>r]))
+                    !(idat? t2) ()
                     (want >t2 ";" @ rest
                        (two? rest ? [['goto (lname ps (tkv <t2))] rest]))))
              (tkw? t 'break)
@@ -2411,6 +2440,8 @@
                         (: sk (fresh "__cln_pad_")
                            a2 ([(s 0) (s 1) (s 2) (s 3) (s 4) <r] + >>>>>>s)
                            ['blk ([a2 ['goto sk]] + <>r + [['lbl sk]])])))
+                 ; a computed goto's target is unknown here, so it may leave no cleanup behind
+                 (k = 'igoto) (atom? (clup st ()) ? s 'bad)
                  (elem k '(lbl case dflt nop goto asm tdef)) s
                  (xw s st))))
        (ws body ()))
@@ -2447,7 +2478,11 @@
      (peep ps 'curweak () ? () (wkany? ts ? (pin ps 'curweak 1))),
      (peep ps 'curinl () ? () (inlany? ts ? (pin ps 'curinl 1))),
      (peep ps 'curnoinl () ? () (noinlany? ts ? (pin ps 'curnoinl 1))),
-     (peep ps 'curlink () ? () (pin ps 'curlink (leadkw? ps ts 'inline && !(leadextern? ps ts) ? 'inl 'ext))),
+     (peep ps 'curused () ? () (usedany? ts ? (pin ps 'curused 1))),
+     ; C99 inline: plain `inline` lays no external definition and `extern inline` does; gnu_inline
+     ; (the kernel's every `inline`) is gnu89's, the other way about
+     (peep ps 'curlink () ? ()
+        (pin ps 'curlink (leadkw? ps ts 'inline && !!(leadextern? ps ts) = !!(gnuinlany? ts) ? 'inl 'ext))),
      (peep ps 'curalign () ? () (alignat? ps ts @ an (an ? (pin ps 'curalign an)))),
      ptop9 ps ts)
    (ptop9 ps ts)
@@ -2647,8 +2682,10 @@
           (go <>f)))
    (cparse ts) (cparse-t ts 'x64)          ; the law tests + any bare caller: 64-bit widths (unchanged behavior)
    (cparse-t ts tgt) (cparse-d ts tgt 'moon)  ; ..and the default dialect, which is what a bare caller means
-   (cparse-d ts tgt dia)
-    (: ps (psnew-d tgt dia)
+   (cparse-d ts tgt dia) (cparse-o ts tgt dia {})
+   ; opts: what the driver's flags say about the language beyond the dialect ('swch, -fshort-wchar)
+   (cparse-o ts tgt dia opts)
+    (: ps (pin (psnew-d tgt dia) 'swch (opts 'swch))
        toks (fsbody ts) spans (fspans ts)
        ; does the unit name volatile anywhere? mooncc's types carry no qualifier, so a unit that
        ; does keeps every load and store where the source put it (gen's memfw stands down)
@@ -2668,7 +2705,8 @@
                    (gogl <>f)))
            st (ps 'curstat) sc (ps 'cursect) an (ps 'curalign)
            fnp (elem <f '(fn proto))
-           (st && fnp ? (pin (ps 'sfns) <>f 1),
+           ; a `used` static is kept though nothing here calls it (gen's dead-static sweep)
+           (st && fnp ? (pin (ps 'sfns) <>f (ps 'curused || peep (ps 'sfns) <>f () = 'used ? 'used 1)),
            ; a function may name its section and its alignment too (love.c's data sentinels):
            ; where the code lands is the point, and the align is what pins the spacing
             sc && fnp ? (pin (ps 'sects) <>f sc),
@@ -2715,6 +2753,7 @@
             pin ps 'curweak (),
             pin ps 'curinl (),
             pin ps 'curnoinl (),
+            pin ps 'curused (),
             pin ps 'curalign (),
             pin ps 'scopacc (),        ; what a file-scope specifier bound is nobody's to take back
             pin ps 'cursect ()))
@@ -2730,5 +2769,30 @@
                  (redecl ps <r @ why
                     (why ? (gripe (filat spans (#toks - #ts2)) (<>><ts2) () why)
                        (note <r, tops <>r (<r . acc)))))))
-       (tops toks ())))
+       (attrbad toks spans @ ab (gripe? ab ? ab (tops toks ()))))
+   ; an __attribute__ whose skip would change the code (cpp.l's gnuattrs 'no) refuses where it
+   ; is written: each item at the group's top depth is read by its first word. -> a gripe | ()
+   (attrbad toks spans)
+    (: ; inside __attribute__((, at depth d of parens; w: the next word names an item (the
+       ; group's opening or a `,` at its depth), so an argument never passes for one
+       (item l i d w)
+        (? (atom? l) ()
+           (<l @ t
+              (? (tp? t "(") (item >l (i + 1) (d + 1) ())
+                 (tp? t ")") (d = 2 ? (scan >>l (i + 2)) (item >l (i + 1) (d - 1) ()))
+                 (d = 2 && tp? t ",") (item >l (i + 1) d 1)
+                 (w && elem (tkk t) '(id kw))
+                  (: nm (tkk t = 'kw ? show (tkv t) (tkv t))
+                     (attrdoes nm = 'no ?
+                        (gripe (filat spans i) (<>>t) () ("__attribute__((" + attrname nm + ")) is not carried out"))
+                        (item >l (i + 1) d ())))
+                 (item >l (i + 1) d ()))))
+       (scan l i)
+        (? (atom? l) ()
+           (: t <l
+              (? (tkk t = 'id && elem (tkv t) '("__attribute__" "__attribute") && two? >l && tp? <>l "("
+                  && two? >>l && tp? <>>l "(")
+                  (item >>>l (i + 3) 2 1)
+                 (scan >l (i + 1)))))
+       (scan toks 0)))
 ) ; module 'moon

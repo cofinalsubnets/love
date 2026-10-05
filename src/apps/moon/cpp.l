@@ -4,8 +4,8 @@
 ; (cpp toks incf) -> (1 out-tokens) | (). (incf name sys?) -> (1 text) | () resolves a #include,
 ; lexed and preprocessed on the shared macro table (so include guards work); () incf means no
 ; includes. #line moves the reported line and drops the file operand; #pragma is ignored but for
-; push_macro/pop_macro. fenced: _Pragma, __counter__, the GNU ,##__va_args__ elision, #if with
-; character constants.
+; push_macro/pop_macro and once, and pack refuses. gcc 8's surface rides too: _Pragma, __COUNTER__,
+; __VA_OPT__, __has_attribute (gnuattrs) and __has_include.
 (module 'moon
 (borrow 'kore)
 (:
@@ -18,6 +18,36 @@
    h64 9223372036854775808                         ; 2^63: intmax's top, so the sign boundary
    b32 4294967296                                  ; 2^32: the limb cbit splits on
    cvv cap                                         ; a #if value is (v u): the pattern, and its two faces
+   ; gcc 8.1's attributes, by what mooncc does with each: 'do carries it out, 'hint is one
+   ; whose skip is exact (a diagnostic, an optimisation promise, a placement we already
+   ; make), 'no changes the code and refuses by name (parse's attrcheck). __has_attribute
+   ; answers 1 for the first two. a name not here is skipped, as gcc skips one it does not
+   ; know, and __has_attribute says 0, which is what a source asks before using it
+   gnuattrs {"aligned" 'do "packed" 'do "section" 'do "weak" 'do "alias" 'do "always_inline" 'do
+             "noinline" 'do "cleanup" 'do "used" 'do "gnu_inline" 'do "musttail" 'do "holo" 'do
+             "unused" 'hint "maybe_unused" 'hint "noreturn" 'hint "cold" 'hint "hot" 'hint "pure" 'hint
+             "const" 'hint "format" 'hint "format_arg" 'hint "malloc" 'hint "warn_unused_result" 'hint
+             "deprecated" 'hint "nonnull" 'hint "returns_nonnull" 'hint "visibility" 'hint
+             "externally_visible" 'hint "noclone" 'hint "noipa" 'hint "optimize" 'hint "target" 'hint
+             "designated_init" 'hint "fallthrough" 'hint "no_instrument_function" 'hint
+             "no_sanitize" 'hint "no_sanitize_address" 'hint "no_sanitize_undefined" 'hint
+             "no_sanitize_thread" 'hint "no_address_safety_analysis" 'hint "no_stack_protector" 'hint
+             "stack_protect" 'hint "no_split_stack" 'hint "nonstring" 'hint "assume_aligned" 'hint
+             "alloc_size" 'hint "alloc_align" 'hint "sentinel" 'hint "leaf" 'hint "nothrow" 'hint
+             "artificial" 'hint "flatten" 'hint "no_reorder" 'hint "error" 'hint "warning" 'hint
+             "may_alias" 'hint "warn_if_not_aligned" 'hint "tls_model" 'hint "returns_twice" 'hint
+             "noplt" 'hint "nocf_check" 'hint "indirect_branch" 'hint "function_return" 'hint
+             "common" 'hint "nocommon" 'hint
+             "constructor" 'no "destructor" 'no "ifunc" 'no "weakref" 'no "mode" 'no "vector_size" 'no
+             "transparent_union" 'no "naked" 'no "interrupt" 'no "patchable_function_entry" 'no
+             "regparm" 'no "stdcall" 'no "fastcall" 'no "thiscall" 'no "ms_abi" 'no "pcs" 'no
+             "long_call" 'no "short_call" 'no "scalar_storage_order" 'no "target_clones" 'no
+             "symver" 'no "no_caller_saved_registers" 'no}
+   ; an attribute's name, either spelling: __aligned__ is aligned
+   (attrname s) (4 < #s && s 0 = 95 && s 1 = 95 && s (#s - 1) = 95 && s (#s - 2) = 95 ? (snip s 2 (#s - 2)) s)
+   (attrdoes s) (gnuattrs (attrname s))
+   ; the names #if may ask about that are not macros, and that defined() says are there
+   hasnames '("__has_attribute" "__has_include" "__has_include_next")
    cvu caup
    ; -- token parts (a clex token is (kind val line); expansion adds a hideset) --
    (kof t) <t
@@ -170,6 +200,20 @@
                      (-1 < pi || va ?
                         (go (i + 2) (tok 'str (spellcat (va ? (vaargs args params seps) (args pi))) line . acc))
                         (go (i + 1) (t . acc))))
+                 ; __VA_OPT__(x) (C23, gcc 8): x substituted when the variadic tail has a
+                 ; token, else a placemarker
+                 (var? && idv? t "__VA_OPT__" && i + 1 < #mb && pv? (mb (i + 1)) "(")
+                  (: (close k d) (? (#mb <= k) -1
+                                    (pv? (mb k) "(") (close (k + 1) (d + 1))
+                                    (pv? (mb k) ")") (d = 1 ? k (close (k + 1) (d - 1)))
+                                    (close (k + 1) d))
+                     j (close (i + 2) 1)
+                     (from l k) (k < 1 || atom? l ? l (from >l (k - 1)))
+                     (? (j < 0) (go (i + 1) (t . acc))
+                        (: inner (take (j - i - 2) (from mb (i + 2)))
+                           sub (two? (vaargs args params seps) ? (subst inner params args var? line macs seps)
+                                  [(tok 'pmark "" line)])
+                           (go (j + 1) (revcat sub acc)))))
                  (-1 < paramidx params (pnm t))                 ; a named parameter
                   (: pi (paramidx params (pnm t))
                      raw (args pi)
@@ -208,6 +252,16 @@
        (: t <toks rest >toks
           (? !(macat? t macs) (t . expand rest macs)
              (idv? t "__LINE__") (tok 'num (lof t) (lof t) . expand rest macs)
+             ; __COUNTER__: 0, 1, 2.. per TU, in expansion order; the count rides macs under a
+             ; key no identifier can spell, so the include memo's snapshot carries it
+             (idv? t "__COUNTER__" && !(mdef macs "__COUNTER__"))
+              (peep macs "#counter" 0 @ n (pin macs "#counter" (n + 1), tok 'num n (lof t) . expand rest macs))
+             ; _Pragma("..") is #pragma's operator form: the pragmas we take are the ones we
+             ; ignore (GCC diagnostic, kernel's __diag), so it goes, but for a pack, which
+             ; changes a layout: that one stays in the stream for parse to refuse by name
+             (idv? t "_Pragma" && two? rest && pv? <rest "(" && two? >rest && kof <>rest = 'str
+              && two? >>rest && pv? <>>rest ")" && !(starts? (vof <>rest) "pack"))
+              (expand >>>rest macs)
              (macnm t @ nm
                 (elem nm (hof t) ? (t . expand rest macs)      ; blue-painted: leave it
                    (mdef macs nm @ m
@@ -235,20 +289,34 @@
 
    ; -- #if / #elif integer constant-expression evaluation (undefined ids -> 0,
    ; defined X / defined(X) resolved first, then macro-expanded). --
-   (resolve-defined ts macs)                        ; replace `defined X` / `defined ( X )` with 0/1
+   (resolve-defined ts macs incf)                   ; replace `defined X` / `defined ( X )` with 0/1
     (? (atom? ts) ()
+       ; __has_attribute(x): 1 for one mooncc carries out or may skip exactly (gnuattrs)
+       (idv? <ts "__has_attribute" && two? >ts && pv? <>ts "(")
+        (: r >>ts nm (two? r ? (pnm <r))
+           (two? >r && pv? <>r ")" ?
+              (tok 'num (attrdoes nm @ d (d = 'do || d = 'hint ? 1 0)) 0 . resolve-defined >>r macs incf)
+              (<ts . resolve-defined >ts macs incf)))
+       ; __has_include(<h>) / ("h"): whether #include would find it, read without including it
+       ((idv? <ts "__has_include" || idv? <ts "__has_include_next") && two? >ts && pv? <>ts "(")
+        (: (close l acc) (? (atom? l) () (pv? <l ")") [(rev acc) >l] (close >l (<l . acc)))
+           c (close >>ts ())
+           (? (atom? c) (<ts . resolve-defined >ts macs incf)
+              (: b <c nm (incname b) sys? (two? b && pv? <b "<")
+                 (tok 'num (nm && incf && two? (incf nm sys?) ? 1 0) 0 . resolve-defined <>c macs incf))))
        (idv? <ts "defined")
         (>ts @ r
            (? (two? r && pv? <r "(")
                (<>r @ nm
-                  (tok 'num (two? (mdef macs (macnm nm)) ? 1 0) 0 . resolve-defined >>>r macs))    ; skip ( name )
+                  (tok 'num (isdef macs nm ? 1 0) 0 . resolve-defined >>>r macs incf))    ; skip ( name )
               (two? r && (idt? <r || kof <r = 'kw))
-               (tok 'num (two? (mdef macs (macnm <r)) ? 1 0) 0 . resolve-defined >r macs)
-              (resolve-defined r macs)))
-       (<ts . resolve-defined >ts macs))
+               (tok 'num (isdef macs <r ? 1 0) 0 . resolve-defined >r macs incf)
+              (resolve-defined r macs incf)))
+       (<ts . resolve-defined >ts macs incf))
+   (isdef macs t) (two? (mdef macs (macnm t)) || elem (pnm t) hasnames)
    (zero-ids ts) (atom? ts ? ()                  ; any surviving identifier is 0
                     (<ts @ t ((idt? t || kof t = 'kw ? (tok 'num 0 0) t) . zero-ids >ts)))
-   (ifval ts macs) (: r0 (resolve-defined ts macs)
+   (ifval ts macs incf) (: r0 (resolve-defined ts macs incf)
                       r1 (expand r0 macs)
                       r2 (zero-ids r1)
                       (ceval r2))
@@ -499,7 +567,7 @@
                  sline (lnshift macs line)
                  sbody (two? sline ? >>sline)
                  (? (elem dir '("if" "ifdef" "ifndef" "elif" "else" "endif"))
-                     (docond dir sbody sline macs cond @ cond2
+                     (docond dir sbody sline macs cond incf @ cond2
                         (cond2 = 'err ? (gripeat sline ("#" + dir + " without #if"))   ; unbalanced -- fatal, not empty
                            (cppgo rest macs cond2 () out1 incf)))
                     !(condactive cond) (cppgo rest macs cond () out1 incf)      ; skipped: ignore non-cond directives
@@ -520,6 +588,10 @@
                       cppgo rest macs cond () out1 incf)
                     (dir = "pragma" && pragmac? body)
                      (dopragmac macs body, cppgo rest macs cond () out1 incf)
+                    ; a pack moves every member it covers, and dropping it lays the struct
+                    ; unpacked in silence (acpi's tables)
+                    (dir = "pragma" && two? body && idv? <body "pack")
+                     (gripeat sline "#pragma pack is not carried out -- use __attribute__((packed))")
                     ; #line N ["file"]: the next line becomes N, so a token at
                     ; physical P reports P + (N - L - 1). the file operand is
                     ; parsed and dropped -- __file__ is the TU's name throughout.
@@ -553,18 +625,18 @@
    ; is (active taken line), the line being the #if's own -- an #elif or #else
    ; carries its opener's forward, so an unterminated conditional at EOF can say
    ; which one never closed.
-   (docond dir body line macs cond)
+   (docond dir body line macs cond incf)
     (? (elem dir '("if" "ifdef" "ifndef"))
         (: pa (condactive cond)                        ; parent active?
            v (? !pa 0
-                (dir = "ifdef") !!(two? (mdef macs (macnm <body)))
-                (dir = "ifndef") (atom? (mdef macs (macnm <body)))
-                !!(0 < ifval body macs))
+                (dir = "ifdef") (isdef macs <body ? 1 0)
+                (dir = "ifndef") (isdef macs <body ? 0 1)
+                !!(0 < ifval body macs incf))
            ([(pa && 0 < v) (pa && 0 < v) (lof <line)] . cond))
        (dir = "elif")
         (atom? cond ? 'err
            (: fr <cond pa (parentactive >cond) taken <>fr
-              v (!taken && pa && 0 < ifval body macs)
+              v (!taken && pa && 0 < ifval body macs incf)
               ([(!taken && pa && 0 < v) (taken || 0 < v) <>>fr] . >cond)))
        (dir = "else")
         (atom? cond ? 'err
@@ -595,6 +667,10 @@
           (pin macs 'ninc (nth + 1),
            atom? txt ? (gripeat body ("cannot resolve #include " + spelt))      ; unresolved -> fatal
              (: ipath (3 < #txt ? <>>>txt "")   ; incload's resolved path; "" from a bare (1 text)
+                ; #pragma once: a header that says it is read once per TU, by its resolved path
+                okey ("#once:" + ipath)
+                seen (0 < #ipath && two? (macs okey))
+                _ (!seen && 0 < #ipath && oncep <>txt && pin macs okey [1])
                 pre (nth = 0 ? (msnap macs))
                 got (nth = 0 ? (mfind ipath <>txt pre))
                 ; the marks bracket the header's run. `out` is the reversed
@@ -605,7 +681,8 @@
                 (rejoin toks)
                  (cppgo rest macs cond () (fmout . rev toks + (fmin name ipath . out)) incf)
                 d0 #(peep cppdeps 'l ())
-                (two? got ? (mrestore macs <>>>>got, pin cppdeps 'l (got 5 + peep cppdeps 'l ()), rejoin <>>>got)
+                (? seen (cppgo rest macs cond () out incf)
+                   (two? got) (mrestore macs <>>>>got, pin cppdeps 'l (got 5 + peep cppdeps 'l ()), rejoin <>>>got)
                    (: _ (0 < #ipath && pin cppdeps 'l (ipath . peep cppdeps 'l ()))
                    (clexw <>txt 1 @ lr
                       ; okv?, not two? -- a gripe is a pair, and a two? here would read
@@ -630,6 +707,19 @@
                                   (mput [ipath <>txt pre raw (msnap macs)
                                          (peep cppdeps 'l () @ l (take (#l - d0) l))]) 0,
                                 rejoin raw)))))))))))
+   ; does a header's text say `#pragma once` on a line of its own?
+   (oncep s)
+    (: (ws? c) (c = 32 || c = 9)
+       (skip i) (i < #s && ws? (s i) ? (skip (i + 1)) i)
+       (word? i w) (: n #w (i + n <= #s && snip s i (i + n) = w))
+       (line i) (: a (skip i)
+                   (a < #s && s a = 35 &&
+                    (skip (a + 1) @ b (word? b "pragma" && (skip (b + 6) @ c (c > b + 6 && word? c "once"))))))
+       (go i) (? (#s <= i) ()
+                 (line i) 1
+                 (: j (go2 i) (go (j + 1))))
+       (go2 i) (i < #s && s i != 10 ? (go2 (i + 1)) i)
+       (go 0))
    (incname body)                                     ; the header name from #include tokens
     (? (atom? body) ()
        (kof <body = 'str) (vof <body)         ; "file"
@@ -687,12 +777,8 @@
                ; ..and the double twin, (2 - 2^-52) * 2^1023, built the same exact way
                ; (love.c's dtoa reads it as its finite ceiling)
                 pin t "__DBL_MAX__" ['obj [(tok 'flo ((2.0 - 1.0 / 4503599627370496.0) * 1023 2.0) 0)]],
-               ; bool/true/false builtin (C23-style, no <stdbool.h> needed): modern C
-               ; (gnulib, gzip) uses them bare. bool is _Bool -- one byte, stores
-               ; normalize to 0/1; true/false the 1/0 constants.
-                pin t "bool"  ['obj [(tok 'kw '_Bool 0)]],
-                pin t "true"  ['obj [(tok 'num 1 0)]],
-                pin t "false" ['obj [(tok 'num 0 0)]],
+               ; bool/true/false are the dialect's, not the language's: the driver's
+               ; -D channel lays them (moon.l cc-defs), and C11 leaves them plain names
                 t))
    (cpp toks incf fname)                              ; -> (1 out) | a gripe (test with okv?, never two?)
     (: macs (cppmacs fname)

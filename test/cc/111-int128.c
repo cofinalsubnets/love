@@ -128,4 +128,8 @@ int main(void) {
  /* sizeof */
  if (sizeof (u128) == 16 && sizeof (s128) == 16) ok++;
 
+ /* gcc's typedef names for the pair, the spelling the kernel's types.h uses */
+ { __uint128_t x = a; __int128_t y = -1;
+   if (x == (u128) a && y < 0 && sizeof x == 16 && sizeof y == 16) ok++; }
+
  return ok; }

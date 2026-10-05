@@ -2025,6 +2025,10 @@
                     ['li 'r2 (u // 18446744073709551616)]]))
            (wnt || 'r0 @ W (mkv (v > 9223372036854775807 ? 'ulong 'long) W [['li W v]])))
        ('flo d) (mkflo g d)
+       ; gcc's &&L: the label's address, a jump target for a computed goto (C laid as the label)
+       ('laddr nm)
+        (wasm? g ? (asmno g "a label's address (&&) has no wasm lane")
+           (mkv '(ptr void) 'r0 [['la 'r0 (name (g 'fn + "." + nm))]]))
        ('str s)
         (nlab g ".S" @ lbl
            (pin g 'strs ([lbl s] . g 'strs),
@@ -6250,6 +6254,7 @@
            (r @ 'no 'no [<r <>r <>e]))
        'str
         (nlab g ".S" @ l (pin g 'strs ([l <>e] . g 'strs), [l 0 ['ptr (gchar g)]]))
+       'lsym [(name <>e) 0 '(ptr void)]         ; a label's address, spelled by cgsdecl
        'var
         (peep (g 'fns) <>e () ? [(intern <>e) 0 ['ptr (fnty g <>e)]]
            (peep (g 'glob) <>e 0 @ en
@@ -6530,7 +6535,10 @@
     (: (one ps env2)
         (!(two? ps) ? [() env2]
            (: p <ps
-              name <p ty <>p init <>>p
+              name <p ty <>p
+              ; a &&L in the initializer names this function's label, so it is spelled now
+              (lfix x) (? !(two? x) x (<x == 'laddr) ['lsym (g 'fn + "." + <>x)] (map lfix x))
+              init (lfix <>>p)
               lbl (nlab g (g 'fn + "."))             ; `fn.N` -- the `.` bars any C-identifier collision
               (pin (g 'glob) lbl [lbl ty init],   ; a local data label (internal linkage): g 'statics,
                4 < #p ? (pin (g 'aligns) lbl (p 4)) 0,   ; its own aligned ask
@@ -6850,7 +6858,7 @@
                 ('switch ce items2) (nhc ce * w + pmxl items2 w tc9)   ; fallthrough: arms sum (conservative)
                 (('case || 'dflt) . _) 0
                 ('goto nm) (? (bwd nm) 99 ((peep lab nm 'no) == 'no) 99 0)
-                ('asm . _) 99
+                (('asm || 'igoto) . _) 99
                 0))
        (nhc e) (!(two? e) ? 0
                   (e @ ('call ('var nm) as) ((soft? nm ? (nhin nm) 1) + nhcl as)
@@ -7023,7 +7031,7 @@
                  (ust body a3))
              ('switch ce items) (ustl items <(erd ce acc 0))
              ('goto nm) (peep lab nm 'no @ o (sun acc ((o == 'no) ? univ o)))
-             ('asm . _) (sun acc univ)
+             (('asm || 'igoto) . _) (sun acc univ)
              acc)
        (ustl l acc) (!(two? l) ? acc (ustl >l (ust <l acc)))
        (ustp ps acc) (!(two? ps) ? acc (ustp >ps <(erd <>><ps acc 0)))
@@ -7139,7 +7147,7 @@
                             s9 ((o !== 'no) ? o (pin bwd nm 1, univ))   ; a target not yet passed: everything
                             sq (tick ()) (spn sq s9, s9))
               ('lbl nm) (tick () @ sq (spn sq out, abl? g 'glab ? () (pin lab nm out), out))
-              ('asm . _) (tick () @ sq (rec sq univ w9 (1 < w9 ? w9 0) w9, univ))   ; homing is off anyway (hasasm)
+              (('asm || 'igoto) . _) (tick () @ sq (rec sq univ w9 (1 < w9 ? w9 0) w9, univ))   ; homing is off anyway (hasasm)
               (tick () @ sq (spn sq out, out))))   ; nop tdef
        ; -- run: the counter descends from the prepass total; pre and lst disagreeing misses zero,
        ; and alive answers () --
@@ -7217,6 +7225,7 @@
      'fesc ()                  ; escape flag (the sibcall gate reads it)
      'inlining ()              ; statement-expression depth (stq's conservative wrapset)
      'hasasm ()                ; an asm statement pins it (homing off)
+     'ltaken ()                ; the labels a &&L names (a computed goto's targets)
      'fpin ()                  ; the frame link is asked for by name (unframe stands off)
      'cssv ()                  ; the callee-saved save forms (a cs grant pins)
      'sret ()                  ; the memory-return slot (the driver re-pins under sr6f)
@@ -7374,6 +7383,13 @@
                   [['label lc]] +
                   (c + [['label ld]]))))
           ('goto nm) [['jmp (name (g 'fn + "." + nm))]]
+          ; goto *e: a table jump whose targets are every label the function takes the address of
+          ('igoto e)
+           (: ls (map (nm \ name (g 'fn + "." + nm)) (g 'ltaken))
+              (? (wasm? g) (asmno g "a computed goto has no wasm lane")
+                 !(two? ls) (asmno g "a computed goto in a function that takes no label's address")
+                 (cgexpr g env e 'r0 @ r
+                    (bad? r ? 'bad (tor0 g r + [['jmpt 'r0 <ls ls]])))))
           ('lbl nm) [['label (name (g 'fn + "." + nm))]]
           ('asm . _) (cgasm g env s)
           ; a case/default label emits from the tablet atop g 'cases (the switch's pre-scan pinned
@@ -7748,6 +7764,7 @@
                        (lren x) (!(two? x) ? x
                                    (x @ ('lbl v) ['lbl (lm v)]
                                         ('goto v) ['goto (peep lm v v)]
+                                        ('laddr v) ['laddr (peep lm v v)]
                                         ('asm . _) (map lren x @ y (5 < #y ? (lset y 5 (map (v \ peep lm v v) (y 5))) y))
                                         (map lren x)))
                        jend ("`e" + show k)
@@ -8169,6 +8186,13 @@
        ; -- VLA prep: each site takes a pointer slot + a size slot, the size zeroed after the param
        ; spill (the decl lane reads 0 = never allocated) --
        _ (pins g 'fn <>f 'vslots {})
+       ; the labels whose address the body takes; a computed goto may land on any of them, so
+       ; homing stands off as for an asm (every name is live at the jump)
+       _ (: (lt x acc) (? !(two? x) acc
+                          (<x == 'laddr) (elem <>x acc ? acc (<>x . acc))
+                          (<x == 'igoto) (pin g 'hasasm 1, lt <>x acc)
+                          (lt >x (lt <x acc)))
+            (pin g 'ltaken (rev (lt (f 3) ()))))
        vzf (: (dscan prs a2)
                (atom? prs ? a2
                   (<><prs @ ty9
@@ -8996,7 +9020,7 @@
            sfns (two? xtra ? <xtra {})
            als (g 'alias || {})
            atg (foldl (a \ k \ als k . a) () (keys als))
-           (cut? nm) (peep sfns nm 'no != 'no && nelem nm atg)
+           (cut? nm) ((peep sfns nm 'no @ s (s != 'no && s != 'used)) && nelem nm atg)
            ; two tablets: a truth test on a form list reads its net, which lands on zero, so presence is its own mark
            laid {}                              ; fn name -> 1 once its body is laid
            lfm {}                               ; ..and the forms, for the ones that stayed in .text
