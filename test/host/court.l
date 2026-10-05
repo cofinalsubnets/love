@@ -125,7 +125,7 @@
    (inside? q) (mag (q 0) < yard-a - 0.1 && mag (q 2) < yard-b - 0.1 && 0.0 < q 1)
    tops (L 'tops) ty (map (q \ q 1) tops)
  (test (40 < #rs) (all inside? ends) (all (q \ from q < 2.2) ends)
-       (all (r \ 0.005 < r 2 && r 2 < 0.07) rs) (all (q \ 0.3 < from q && q 1 < 0.25) ends)
+       (all (r \ 0.005 < r 2 && r 2 < 0.07) rs) (all (q \ 0.25 < from q && q 1 < 0.3) ends)
        (100 < #X) (0 = net (Y < 0.009)) (0 = net (out P))
        (1000 < #(G 'x)) (0 = net (0.01 < G 'y)) (0 = net (G 'up < 1.0)) (0 = net (out G))
        (two? tops) (all (y \ amax (st 'tree 'y) - 1.5 < y) ty)))

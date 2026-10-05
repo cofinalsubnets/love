@@ -59,7 +59,7 @@
  ; on the ground, how low a leaf lies, how many landed are kept, how fast one falls; the
  ; barks, grey-brown, dark, weathered and stripped; and the leaves' colours, dry yellow,
  ; tan, brown, a few still green
- heap-n 40 stick-n 14 leaf-n 420 leaf-y 0.006 fallen-n 400 fall-v 0.45
+ heap-n 64 stick-n 14 leaf-n 420 leaf-y 0.006 fallen-n 400 fall-v 0.45
  barks [[0.19 0.16 0.13] [0.15 0.12 0.09] [0.12 0.1 0.08] [0.27 0.26 0.23] [0.33 0.28 0.21]]
  snowc [0.88 0.9 0.94]
  hues [[0.6 0.5 0.17] [0.5 0.39 0.19] [0.36 0.26 0.14] [0.33 0.38 0.13]]
@@ -370,24 +370,30 @@
    bs (tr 'base) X (tr 'x) Y (tr 'y) Z (tr 'z) K (tr 'kind) n #X top (amax Y)
    ; a leaf of the crown, thrown for until one comes up, or the first point
    (pick k ok?) (: i (int (rr 0.0 (n - 0.5))) ((k < 1 || (peep K i 0.0 = 2.0 && ok? i)) ? i (pick (k - 1) ok?)))
-   ; ..the heap: branches laid on the floor in a ring round the trunk, along the ring more or
-   ; less, some across each other, an end a little off the floor where the ring is deep;
-   ; most forked, some forks with a twig off them
+   ; ..the heap: branches laid on the floor in a ring hard against the trunk, thickest there so
+   ; no floor shows round it -- most along the ring, passing the bark as close as their own
+   ; width lets them, the rest pointing out from it -- an end a little off the floor where the
+   ; ring is deep; most forked, some forks with a twig off them
    (keep q) [(clamp (q 0) (0.12 - yard-a) (yard-a - 0.12)) (q 1) (clamp (q 2) (0.12 - yard-b) (yard-b - 0.12))]
    (round a d y) (keep [(bs 0 + d * cos a) y (bs 2 + d * sin a)])
    (from q) (sqrt (sq (q 0 - bs 0) + sq (q 2 - bs 2)))
-   (mound d) (0.14 * sat (1.0 - mag (d - 0.75) / 0.45))
+   (mound d) (0.2 * sat (1.0 - (d - 0.25) / 0.7))
    (bark _) (c* (rr 0.85 1.15) (barks (int (rr 0.0 4.99))))
+   ; ..a fork that would reach into the trunk goes the other way
    (fork a b r c fz k) (: p (lerp a b (rr 0.4 0.75)) ax (c+ b (c* -1.0 a))
-     d (unit (turn (unit ax) [0.0 1.0 0.0] ((rr 0.0 1.0 < 0.5 ? -1.0 1.0) * rr 0.4 0.9)))
-     q (keep (c+ p (c* (rr 0.3 0.55 * sqrt (dot ax ax)) d)) @ q [(q 0) (max2 (0.55 * r) (q 1 + rr -0.1 0.05)) (q 2)])
+     ang ((rr 0.0 1.0 < 0.5 ? -1.0 1.0) * rr 0.4 0.9) ln (rr 0.3 0.55 * sqrt (dot ax ax))
+     (tip g) (keep (c+ p (c* ln (unit (turn (unit ax) [0.0 1.0 0.0] (g * ang))))))
+     q (tip 1.0 @ q (from q < 0.3 + r ? (tip -1.0) q) @ q [(q 0) (max2 (0.55 * r) (q 1 + rr -0.1 0.05)) (q 2)])
      rd [p q (0.55 * r) c fz]
      (0 < k && rr 0.0 1.0 < 0.5 ? (cat [rd] (fork p q (0.55 * r) c fz (k - 1))) [rd]))
    (branch _) (: a (rr 0.0 (2.0 * pi)) r (rr 0.022 0.06) c (bark 0) fz (rr 0.15 0.35)
-     ends (: m (round a (rr 0.5 1.0) 0.0) yaw (a + pi / 2.0 + rr -0.5 0.5) hl (rr 0.3 0.8)
-             (end k) (keep [(m 0 + k * hl * cos yaw) 0.0 (m 2 + k * hl * sin yaw)] @ q
-                       [(q 0) (r + rr 0.0 1.0 * mound (from q)) (q 2)])
-             [(end -1.0) (end 1.0)])
+     (lift q) [(q 0) (r + rr 0.0 1.0 * mound (from q)) (q 2)]
+     ends (rr 0.0 1.0 < 0.35
+           ? [(lift (round a (0.27 + r) 0.0)) (lift (round (a + rr -0.15 0.15) (rr 0.6 1.1) 0.0))]
+           (: dv (rr -0.45 0.45) d ((0.27 + r + sq (rr 0.0 1.0) * 0.4) / cos dv)
+              m (round a d 0.0) yaw (a + pi / 2.0 + dv) hl (rr 0.3 0.8)
+              (end k) (lift (keep [(m 0 + k * hl * cos yaw) 0.0 (m 2 + k * hl * sin yaw)]))
+              [(end -1.0) (end 1.0)]))
      rd [(ends 0) (ends 1) r c fz]
      (rr 0.0 1.0 < 0.6 ? (cat [rd] (fork (ends 0) (ends 1) r c fz 1)) [rd]))
    ; ..each twig lies flat a little way out from the heap: two rows of points
