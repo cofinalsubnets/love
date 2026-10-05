@@ -146,8 +146,12 @@ for a in constructor 'vector_size(16)' 'mode(DI)' naked 'ifunc("r")'; do
   printf 'int f(void) __attribute__((%s));\n' "$a" > "$ho/.attr.c"
   moonrun -c -o /dev/null "$ho/.attr.c" 2>&1 | grep -q "is not carried out" || fail "__attribute__(($a)) was skipped"
 done
-printf '#pragma pack(1)\nstruct s { char c; int i; };\n' > "$ho/.attr.c"
-moonrun -c -o /dev/null "$ho/.attr.c" 2>&1 | grep -q "#pragma pack is not carried out" || fail "#pragma pack was skipped"
+# #pragma pack is carried (test/cc/231); an operand it does not read, and a bit-field it would
+# let straddle, refuse
+printf '#pragma pack(3)\nstruct s { char c; int i; };\n' > "$ho/.attr.c"
+moonrun -c -o /dev/null "$ho/.attr.c" 2>&1 | grep -q "is not one mooncc reads" || fail "#pragma pack(3) was taken"
+printf '#pragma pack(1)\nstruct s { char c; int i : 20; int j : 20; };\n' > "$ho/.attr.c"
+moonrun -c -o /dev/null "$ho/.attr.c" 2>&1 | grep -q "a bit-field under #pragma pack" || fail "a packed bit-field was laid"
 # #pragma once reads a header once
 mkdir -p "$ho/.once"
 printf '#pragma once\nstruct once { int a; };\n' > "$ho/.once/h.h"
@@ -157,7 +161,7 @@ printf '#include "h.h"\n#include "h.h"\nint main(void) { return sizeof (struct o
 moonrun -c -o "$ho/.used.o" test/cc/230-gnuc.c > /dev/null 2>&1 || fail "230-gnuc did not compile"
 nm "$ho/.used.o" | grep -q " t kept$" || fail "a used static function was swept"
 nm "$ho/.used.o" | grep -q " T thrice$" || fail "gnu_inline's plain inline laid no external definition"
-echo "mooncc: GNU C 8 -- bool by dialect, refused attributes and #pragma pack named, #pragma once, used, gnu_inline"
+echo "mooncc: GNU C 8 -- bool by dialect, refused attributes named, #pragma pack's refusals, #pragma once, used, gnu_inline"
 
 # ------------------------------------------- the flags that change the code
 # -fshort-wchar: wchar_t and L"" are 16-bit, held to gcc's

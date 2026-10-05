@@ -306,6 +306,7 @@
                  pin t 'stag {},          ; tag -> (fields size align)
                  pin t 'tags {},          ; a block tag's spelling -> the key it took in stag (C11 6.7.2.3)
                  pin t 'utag {},          ; the tags of that table that are unions (the layout flattens them alike)
+                 pin t 'tunion {},        ; ..and those __attribute__((transparent_union)) marked (tuargs)
                  pin t 'sigs {},          ; fn/proto name -> (rettype (paramty..)) for the call ABI
                  pin t 'anon 0,                   ; the anonymous-tag counter
                  pin t 'sfns {},          ; top-level `static` fn names: local symbols in the .o
@@ -728,7 +729,9 @@
    ; an aligned ask raises a laid struct's alignment, and its size rounds up to it
    (alask lay a) (a > lay 2 ? [<lay (a * ((lay 1 + a - 1) // a)) a] lay)
    (playout ps ms uni pk)                           ; -> (fields size align); pk: packed, every member aligns 1
-    (: (go l bit mx acc)
+    (: cap (peep ps 'pack 0)                         ; #pragma pack's: a member's natural alignment at most this
+       (capa x) (0 < cap && cap < x ? cap x)
+       (go l bit mx acc)
         (atom? l ?
            (: a2 (mx < 1 ? 1 mx)
               [(rev acc) (aup (>> (bit + 7) 3) a2) a2])
@@ -741,12 +744,13 @@
                  ; alignment, so a trailing label equals sizeof and mx is already final.
                  (: (nxt r) (atom? r ? () (<>(<r) @ t2 (t2 = 'label ? (nxt >r) t2)))
                     nt (nxt >l)
-                    la (? pk 1 nt (talign ps nt) (mx < 1 ? 1 mx))
+                    la (? pk 1 nt (capa (talign ps nt)) (mx < 1 ? 1 mx))
                     at (uni ? 0 (aup bit (la * 8) >> 3))   ; a union flattens every offset
                     (go >l bit mx ([name at ['arr 'char 0]] . acc)))
                  (bfmem? m)                          ; a bitfield member (named or anonymous): (name ty width)
                  (: w <>>m
                     usz (tsz ps ty) ubits (usz * 8) a (talign ps ty)
+                    _ (0 < cap && cap < a && pin ps 'packbf 1)    ; gcc lets these straddle units; refused
                     nmx (mx < a ? a mx)
                     (? (w = 0) (go >l (aup bit ubits) nmx acc)        ; `:0` -- align the cursor to the unit, no field
                        uni (: fld (name ? [name 0 ['bitfield ty 0 w]])
@@ -758,7 +762,7 @@
                           (go >l (bit2 + w) nmx (name ? (fld . acc) acc)))))
                  !name                               ; the anonymous struct/union splice (name absent, no width)
                  (: inner (peep (ps 'stag) <>ty 0)
-                    ia (pk ? 1 <>>inner)
+                    ia (pk ? 1 (capa <>>inner))
                     isz <>inner
                     sbit (uni ? 0 (aup bit (ia * 8)))
                     at (sbit >> 3)
@@ -768,7 +772,7 @@
                     nmx (mx < ia ? ia mx)
                     nbit (uni ? (bit < isz * 8 ? (isz * 8) bit) (sbit + isz * 8))
                     (go >l nbit nmx (spl <inner acc)))
-                 (: a (max (pk ? 1 (talign ps ty)) (two? >>>m ? (m 3) 0))   ; an ask outranks packed, as gcc has it
+                 (: a (max (pk ? 1 (capa (talign ps ty))) (two? >>>m ? (m 3) 0))   ; an ask outranks packed, as gcc has it
                     sz (tsz ps ty)
                     abit (uni ? 0 (aup bit (a * 8)))
                     at (abit >> 3)
@@ -830,10 +834,14 @@
                        (atom? mr ? ()
                           (: pa (pattpk ps <>mr)       ; a trailing __attribute__((packed)) lays align-1
                              lay (alask (playout ps <mr uni (<pb | <pa)) (max (pb 2) (pa 2)))
+                             tu (uni && attrany? <>mr "transparent_union" "__transparent_union__")
+                             (? (peep ps 'packbf ()) (pin ps 'packbf (), blame >ts3 "a bit-field under #pragma pack is not carried out")
+                                (tu && !(tuok? ps lay)) (blame >ts3 "a transparent union wants members of one word-sized scalar type")
                              (pin (ps 'stag) tag2 lay,
                               uni ? (pin (ps 'utag) tag2 1) 0,
+                              tu ? (pin (ps 'tunion) tag2 1) 0,
                               qmempin ps tag2 qpre,
-                              [['struct tag2] <>pa]))))
+                              [['struct tag2] <>pa])))))
                     (tag ? [['struct (tagref ps tag)] ts3])))
              (tkw? t 'enum)
               ; the underlying type is unsigned when no enumerator is negative (gcc's choice),
@@ -1289,6 +1297,18 @@
    ; literal with the clit ((struct kstat){0}.st_atime_sec, (size_t [3]){..}[i])
    ; a call, or a builtin gcc lowers to plain C: isdigit(c) is (unsigned)(c - '0') < 10,
    ; which folds over a constant like any comparison
+   ; a transparent union parameter takes any of its members' types: the argument becomes the
+   ; union, laid through its first member, which the attribute's word-sized members share
+   (tuok? ps lay) (: w (pw64 ps ? 8 4)
+                     (<>lay = w && all (f \ (f 2 @ t (ptr? t || elem t '(long ulong int uint))) && tsz ps (f 2) = w) <lay))
+   (tuargs ps e as)
+    (: sg (e @ ('var nm) (peep (ps 'sigs) nm ()) ())
+       (wrap a pt) (pt @ (('struct tag) && peep (ps 'tunion) tag ())
+                      (ptype ps a @ at (stru? at ? a
+                         ['clit pt ['init [['cast (<<(peep (ps 'stag) tag ()) 2) a]]]]))
+                      a)
+       (go l ps9) (? (atom? l) () (atom? ps9) l (wrap <l <ps9 . go >l >ps9))
+       (two? sg ? (go as (sg 1)) as))
    (bicall e as)
     (e = ['var "__builtin_isdigit"] && two? as && atom? >as ?
         ['bin 'lt ['cast 'uint ['bin '- <as '(num 48)]] '(num 10)]
@@ -1297,7 +1317,7 @@
     (: (more e ts2)
               (? (peekp ts2 "(")                     ; a call: the head is any postfix expr (fn pointers)
                   (pargs ps >ts2 () @ ra
-                     (two? ra ? (more (bicall e <ra) <>ra) [() ()]))
+                     (two? ra ? (more (bicall e (tuargs ps e <ra)) <>ra) [() ()]))
                  (peekp ts2 "[")
                   (thenw (pexpr ps >ts2) "]" @ ri
                      (two? ri ? (more ['deref ['bin '+ e <ri]] <>ri) [() ()]))
@@ -2760,7 +2780,8 @@
        (tops ts2 acc)
         ; the hoisted block-scope externs lead the program: gen's global pass reads them, and
         ; C's tentative rule lets a real definition later in the TU take the entry back
-        (atom? ts2 ? ((map (nm \ (peep (ps 'c99inl) nm () = 'inl ? (pin (ps 'sfns) nm 1))) (keys (ps 'c99inl))),
+        (? (two? ts2 && tkk <ts2 = 'pack) (pin ps 'pack (tkv <ts2), tops >ts2 acc)   ; cpp's #pragma pack mark
+           (atom? ts2) ((map (nm \ (peep (ps 'c99inl) nm () = 'inl ? (pin (ps 'sfns) nm 1))) (keys (ps 'c99inl))),
                       [1 ['prog (ps 'hoist + rev acc)] (ps 'stag) (ps 'sigs) (ps 'weaks)  ; empty acc = a valid empty TU (crypt.c), not a parse failure
                             (ps 'sfns) (ps 'svars) (ps 'sects) (ps 'alias) (ps 'aligns) (ps 'ainl) (ps 'noinl)
                             (ps 'consts) (ps 'rstrs) (ps 'gregs) vol])

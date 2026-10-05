@@ -238,8 +238,10 @@ Four of them carry an edge worth knowing:
 
 `#pragma`, `#ident`, `#sccs`, `#assert`, `#unassert`, a bare `#` (the null directive,
 C11 6.10.7) and gcc `-E`'s `# 42 "f.c"` line marker all pass and do nothing — except
-**`#pragma pack`**, which refuses by name (dropping it lays acpi's tables unpacked; `_Pragma("pack
-..")` stays in the stream and refuses at parse), **`#pragma once`**, which reads a header once per
+**`#pragma pack`** — `()`, `(N)`, `(push[, N])`, `(pop)`, N one of 1 2 4 8 16 — which caps each
+member's natural alignment at N for the structs laid while it stands (acpi's tables); another
+operand refuses, and so does a bit-field it would let straddle a unit, and `_Pragma("pack ..")`
+stays in the stream and refuses at parse — **`#pragma once`**, which reads a header once per
 TU by its resolved path, and **`#pragma push_macro("X")` / `pop_macro("X")`**, which save and restore the definition
 (gcc's semantics: a per-name stack, a saved-undefined pops back to undefined, a pop with
 nothing saved is a no-op, and the directive body reads raw so a user macro named `pop_macro`
@@ -834,7 +836,7 @@ with `CC=mooncc` is the build hearts wants. A source asking which compiler asks 
 first (stdarg.h, love.h, num.c), so love itself compiles exactly as before. The claim is a
 promise, so each GNU C 8.1 extension is carried or refuses by name — never skipped where the
 skip changes the code. Held by test/cc/229-labelvalue.c and 230-gnuc.c against gcc on every
-lane, the refusals in test/gate/moon.sh.
+lane (231-packunion.c the layout and call ones), the refusals in test/gate/moon.sh.
 
 carried:
 
@@ -844,6 +846,8 @@ carried:
 - `__int128_t`/`__uint128_t`, wherever `__int128` reads
 - `__has_attribute`, `__has_include`, `__has_include_next` (read as `__has_include`; `defined`
   says all three are there), `__COUNTER__`, `_Pragma` (its pragmas are the ones ignored), `__VA_OPT__`
+- a macro argument expanded once before substitution (C11 6.10.3.1), however often its parameter
+  is used: a `__COUNTER__` in it is one number throughout, which is `__UNIQUE_ID`
 - `-fshort-wchar`; `-fmacro-prefix-map=OLD=NEW` and `-ffile-prefix-map` (`__FILE__` spelled
   with the last matching map; there is no debug info for its other half); `-ffixed-x18`, true of
   a64 already (x16..x18 are never allocated) and refused on any other target or register
@@ -851,10 +855,12 @@ carried:
 
 the attributes, by `gnuattrs` in cpp.l: **carried** — aligned packed section weak alias
 always_inline noinline cleanup used (a static nothing calls is kept) gnu_inline (plain `inline`
-lays the external definition and `extern inline` does not, gnu89's way about); **a hint, whose
+lays the external definition and `extern inline` does not, gnu89's way about) transparent_union
+(an argument of a member's type becomes the union; members one word-sized scalar type, or it
+refuses); **a hint, whose
 skip is exact** — the diagnostics, the optimisation promises (pure const malloc nonnull ...),
 visibility under a static link, cold/hot, fallthrough and the rest of the list; **refused by
-name** — constructor destructor ifunc weakref mode vector_size transparent_union naked
+name** — constructor destructor ifunc weakref mode vector_size naked
 interrupt patchable_function_entry, the calling conventions (regparm, ms_abi, pcs ...),
 scalar_storage_order, target_clones, symver. `__has_attribute` answers 1 for the first two
 classes and 0 for the third and for a name it does not know, which is what a header asks

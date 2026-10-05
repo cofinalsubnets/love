@@ -39,7 +39,7 @@
              "noplt" 'hint "nocf_check" 'hint "indirect_branch" 'hint "function_return" 'hint
              "common" 'hint "nocommon" 'hint
              "constructor" 'no "destructor" 'no "ifunc" 'no "weakref" 'no "mode" 'no "vector_size" 'no
-             "transparent_union" 'no "naked" 'no "interrupt" 'no "patchable_function_entry" 'no
+             "transparent_union" 'do "naked" 'no "interrupt" 'no "patchable_function_entry" 'no
              "regparm" 'no "stdcall" 'no "fastcall" 'no "thiscall" 'no "ms_abi" 'no "pcs" 'no
              "long_call" 'no "short_call" 'no "scalar_storage_order" 'no "target_clones" 'no
              "symver" 'no "no_caller_saved_registers" 'no}
@@ -190,6 +190,10 @@
    (subst mb params args var? line macs seps)
     (: (adjh i) (0 < i && pv? (mb (i - 1)) "##" ||
                  i + 1 < #mb && pv? (mb (i + 1)) "##")
+       ; an argument is macro-expanded once, before substitution (C11 6.10.3.1), however
+       ; often its parameter is used: a __COUNTER__ in it is one number throughout
+       exa {}
+       (ex xk xr) (peep exa xk () @ e (two? e ? <e (expand xr macs @ r (pin exa xk [r], r))))
        (go i acc)
         (#mb <= i ? (rev acc)
            (mb i @ t
@@ -218,7 +222,7 @@
                   (: pi (paramidx params (pnm t))
                      raw (args pi)
                      ; an empty argument beside a ## is a placemarker, not nothing
-                     sub (? !(adjh i) (expand raw macs)
+                     sub (? !(adjh i) (ex pi raw)
                             (two? raw) raw
                             [(tok 'pmark "" line)])
                      (go (i + 1) (revcat sub acc)))
@@ -228,12 +232,12 @@
                      commahh ((prevhh && 1 < i) && pv? (mb (i - 2)) ",")
                      (? commahh                                 ; GNU `, ## __VA_ARGS__` elision: the ## is a marker, not a paste
                          (>acc @ acc2                       ; drop the ## already emitted (no join)
-                            (two? va ? (go (i + 1) (revcat (expand va macs) acc2))         ; args present: keep the comma
+                            (two? va ? (go (i + 1) (revcat (ex 'va va) acc2))         ; args present: keep the comma
                                (go (i + 1) (two? acc2 && pv? <acc2 "," ? >acc2 acc2))))      ; empty: drop the comma too
                         ; a real `## __VA_ARGS__` paste: unexpanded, paste folds it -- and
                         ; an empty tail is the placemarker, same as a named parameter's
                         prevhh (go (i + 1) (revcat (two? va ? va [(tok 'pmark "" line)]) acc))
-                        (go (i + 1) (revcat (expand va macs) acc))))
+                        (go (i + 1) (revcat (ex 'va va) acc))))
                  (go (i + 1) (t . acc)))))
        (paste (go 0 ()) line))
    (vaargs args params seps)                        ; the arg token-lists past the named params, comma-joined
@@ -443,6 +447,21 @@
               ()))
        ())
 
+   ; #pragma pack's operand: () | (N) | (push[, N]) | (pop[, N]), the stack under "#pack" (its
+   ; head the cap in force). -> the cap now in force | () when the operand is none of those
+   (dopack macs b)
+    (: stk (peep macs "#pack" [0])
+       (num? t) (kof t = 'num && elem (vof t) '(1 2 4 8 16))
+       (set stk2) (pin macs "#pack" stk2, <stk2)
+       (shut? l) (two? l && pv? <l ")")
+       n #b
+       (? !(two? b && pv? <b "(") ()
+          (n = 2 && shut? >b) (set (0 . >stk))
+          (n = 3 && num? <>b && shut? >>b) (set (vof <>b . >stk))
+          (n = 3 && idv? <>b "push" && shut? >>b) (set (<stk . stk))
+          (n = 5 && idv? <>b "push" && pv? <>>b "," && num? <>>>b && shut? >>>>b) (set (vof <>>>b . stk))
+          (n = 3 && idv? <>b "pop" && shut? >>b) (set (two? >stk ? >stk [0]))
+          ()))
    ; -- #pragma push_macro("X") / pop_macro("X") (gcc/msvc): the save is a per-name
    ; stack riding macs under a key no C identifier can spell, each cell the entry as
    ; saved (() = was undefined). a pop with nothing saved is a no-op, gcc's reading;
@@ -588,10 +607,12 @@
                       cppgo rest macs cond () out1 incf)
                     (dir = "pragma" && pragmac? body)
                      (dopragmac macs body, cppgo rest macs cond () out1 incf)
-                    ; a pack moves every member it covers, and dropping it lays the struct
-                    ; unpacked in silence (acpi's tables)
+                    ; #pragma pack: the stack rides macs, and the cap in force goes down the stream
+                    ; as a ('pack N) mark parse takes between top-level forms (0, no cap)
                     (dir = "pragma" && two? body && idv? <body "pack")
-                     (gripeat sline "#pragma pack is not carried out -- use __attribute__((packed))")
+                     (dopack macs >body @ n
+                        (? (charm? n) (cppgo rest macs cond () (['pack n (lof <sline)] . out1) incf)
+                           (gripeat sline ("#pragma pack" + spellcat >body + " is not one mooncc reads"))))
                     ; #line N ["file"]: the next line becomes N, so a token at
                     ; physical P reports P + (N - L - 1). the file operand is
                     ; parsed and dropped -- __file__ is the TU's name throughout.
@@ -811,7 +832,7 @@
            (<ts @ t
               (? (fmark? t) (vof t = 'in ? (go >ts ((t 3) . files) 1 (t 3) (mark 1 (t 3) . acc) ())
                                              (go >ts >files 0 () acc ()))
-                 (kof t = 'pmark) (go >ts files cl cf acc prev)
+                 (elem (kof t) '(pmark pack)) (go >ts files cl cf acc prev)
                  (: f (two? files ? <files fname) l (lof t)
                     (? (f != cf || l < cl || cl + 8 < l) (go >ts files l f (sp t . mark l f . acc) t)
                        (l > cl) (go >ts files l f (sp t . string (map (_ \ 10) ^(l - cl)) . acc) t)
