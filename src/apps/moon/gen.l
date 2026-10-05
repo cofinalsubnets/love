@@ -1999,6 +1999,7 @@
    ; knows where the value must land passes it, and a lane that ignores it answers its usual register
    (cgexpr g env e wnt)
     (e @- 'bad                                      ; the refusal, up front: its clauses run 600 lines
+       ('bcp e2) (cgexpr g env ['num (charm? (cfold !(t32? g) e2) ? 1 0)] wnt)
        ('szof e2)                                   ; sizeof EXPR: the undecayed type (clval keeps arrays), size a constant
         (peekty g env e2 @ ty
            (? (bad? ty) 'bad
@@ -6901,7 +6902,7 @@
        (nhc e) (!(two? e) ? 0
                   (e @ ('call ('var nm) as) ((soft? nm ? (nhin nm) 1) + nhcl as)
                        ('call fh as) (1 + nhc fh + nhcl as)
-                       ('szof . _) 0
+                       (('szof || 'bcp) . _) 0
                        (nhcl e)))
        ; a ret-tail call hardens nothing (sibcall jumps it, and a home is dead at its own return) --
        ; but a soft tail splices and its body's hard calls land in this frame; a musttail never splices (mt9)
@@ -6915,7 +6916,7 @@
                 (nhc e)))
        ; protocol dirt, anything that writes r0-r3: a call's staging, div/mod (r0:r2), a variable
        ; shift (r1), a d128 cast (r0:r2). a fn with none may ride a quad arrival
-       (pdt e) (e @ ('szof . _) 0
+       (pdt e) (e @ (('szof || 'bcp) . _) 0
                     ('call . _) 1
                     ('asm . _) 1
                     ('bin op a b && elem op '(/ %)) (1 + pdt a + pdt b)
@@ -8077,13 +8078,16 @@
                  (it . items >l))))
        (rec e) (? (atom? e) e (<e = 'blk) ['blk (items <>e)] (map rec e))
        (two? (f 3) && <(f 3) = 'blk ? ([<f <>f <>>f (rec (f 3))] + >>>>f) f))
+   ; a __builtin_constant_p whose operand does not fold yet: an inline body's param, decided
+   ; once the caller's constants have reached it
+   (bcpopen? w64 x) (? (atom? x) () (<x = 'bcp) !(cint? (cfold w64 <>x)) (bcpopen? w64 <x || bcpopen? w64 >x))
    (dprune w64 ty x)
     (atom? x ? x
        (x @ ('cond c a b)
-             (: v (cfold w64 c) t (? (!(cint? v) || lbl? a || lbl? b) () (ty a = ty b) (ty a) ())
+             (: v (bcpopen? w64 c ? () (cfold w64 c)) t (? (!(cint? v) || lbl? a || lbl? b) () (ty a = ty b) (ty a) ())
                 (!t ? (map (dprune w64 ty) x) ['cast t (dprune w64 ty (v != 0 ? a b))]))
             ('if c th el)
-             (cfold w64 c @ v
+             ((bcpopen? w64 c ? () (cfold w64 c)) @ v
                 (!(cint? v) || lbl? th || lbl? el ? (map (dprune w64 ty) x)
                    (: s (v != 0 ? th el) (two? s ? (dprune w64 ty s) '(nop)))))
             (map (dprune w64 ty) x)))
@@ -8178,7 +8182,7 @@
                       (imaddr g init != 'no || onlys init) ?
                         ['cast ty init])
            !(elem ty '(bool char schar cchar uchar short ushort int uint long ulong)) ()
-           (: v (cfold !(t32? g) init @ cv (cint? cv ? cv 'no))   ; any constant init, folded in C's types
+           (: v (bcpopen? !(t32? g) init ? 'no (cfold !(t32? g) init @ cv (cint? cv ? cv 'no)))   ; any constant init, folded in C's types
               (!(charm? v) ? ()
                  (cnum g ['cast ty ['num v]] @ cv
                     (two? cv ? ['cast ty ['num <cv]])))))
@@ -8203,8 +8207,16 @@
        (atom? (keys sbs) ? f
         (kprop g ([<f <>f <>>f] + (['blk (sub items)] . >>>>f)))))
 
+   ; every __builtin_constant_p decided on what inlining and kprop left: 1 where its operand
+   ; folds, else 0; the arms that settles pruned (a BUILD_BUG_ON's call among them), then
+   ; propagated again
+   (bcpfin g f)
+    (: w64 !(t32? g)
+       (has? x) (? (atom? x) () (<x = 'bcp) 1 (has? <x || has? >x))
+       (res x) (? (atom? x) x (<x = 'bcp) ['num (charm? (cfold w64 <>x) ? 1 0)] (map res x))
+       (has? f ? (kprop g (dprune w64 (e \ ()) (res f))) f))
    (cgfn g f)                                       ; ('fn name params ('blk items)) -> forms | 'bad
-    (: f (kprop g (respell (oalign g (ainl g f))))
+    (: f (bcpfin g (kprop g (respell (oalign g (ainl g f)))))
        params <>>f
        _ (fnreset g)                                 ; the whole per-fn pin record wiped (one roster)
        _ (pin g 'rdg (rdgraph >>>f))

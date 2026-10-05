@@ -486,6 +486,7 @@
              ; a literal: sizeof('T') is sizeof(int) (musl's _IOW ioctl codes);
              ; a plain decimal past int32 is a long (suffixed forms arrive cast)
              (k = 'num) (-2147483648 <= <>e && <>e <= 2147483647 ? 'int 'long)
+             (k = 'bcp) 'int
              (k = 'flo) 'double
              (k = 'flof) 'float
              ; arithmetic rides the typing door: ptr - ptr is ptrdiff_t, ptr +- int the
@@ -1187,14 +1188,16 @@
                  ; _Generic's marked types, so an inner const tells `const char *` from `char
                  ; *`; the top-level one is dropped, C11's own reading and gcc's for this builtin
                  (two? rest ? [['num (qbare <ta = qbare <tb ? 1 0)] rest]))
-             ; __builtin_constant_p: 1 when the parse-time fold settles the operand, 0 when
-             ; it does not -- a miss sends the consumer down its runtime lane, the safe end.
-             ; the operand is not evaluated, so its side effects are gone.
+             ; __builtin_constant_p: 1 when the parse-time fold settles the operand; else a
+             ; deferred ('bcp e) that gen decides once inlining and constant propagation have
+             ; run (a param bound to a constant reads 1), and a constant context reads as 0 --
+             ; a miss sends the consumer down its runtime lane, the safe end. the operand is
+             ; never evaluated, so its side effects are gone.
              (tkk t = 'id && bib? (tkv t) && tkv t = "__builtin_constant_p")
               (: r1 (want >ts "(")
                  ra (two? r1 ? (pasn ps r1))
                  rest (two? ra ? (want <>ra ")"))
-                 (two? rest ? [['num (charm? (cfold (pw64 ps) <ra) ? 1 0)] rest]))
+                 (two? rest ? [(charm? (cfold (pw64 ps) <ra) ? ['num 1] ['bcp <ra]) rest]))
              ; __builtin_object_size(p,t) and the dynamic spelling: the answer gcc gives when
              ; it cannot see the object -- (size_t)-1 for types 0/1, 0 for 2/3, the conservative
              ; end both ways, which is what the kernel's fortify checks read to stand down
@@ -1413,7 +1416,7 @@
    ; gcc's `a ?: b` is `a ? a : b` with a read once: a side-effect-free a is simply repeated
    ; (so a constant stays one), anything else lands in a temp inside a statement expression
    (elvpure? e)
-    (e @ (('num || 'flo || 'str || 'var || 'szof) . _) 1
+    (e @ (('num || 'flo || 'str || 'var || 'szof || 'bcp) . _) 1
          (('un || 'cast) _ x) (elvpure? x)
          (('deref || 'addr) x) (elvpure? x)
          ('dot x _) (elvpure? x)
@@ -1712,6 +1715,8 @@
                     (? (f = 'bad) ()
                        (ty = 'bool) [(f = 0.0 ? 0 1) 'bool]   ; to _Bool is a compare, never a truncation
                        (wr ty (ceil (f // 1)))))))           ; and every other one truncates toward zero
+          ; a deferred __builtin_constant_p in a constant context: 1 if its operand folds, else 0
+          (<e = 'bcp) (cfty w64 <>e @ r (two? r ? [1 'int] [0 'int]))
           ; the bit builtins over a constant fold, so one can label a case or size a bit-field
           (<e = 'call)
            (: h <>e as <>>e

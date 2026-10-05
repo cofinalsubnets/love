@@ -84,7 +84,7 @@
       ; (asn lv (bin op lv rhs)) would evaluate lv twice (parse.l's calm?)
       (rmw 3 3)
       (post 2 2) (cond 3 3) (comma 2 2) (call 2 2) (deref 1 1) (addr 1 1)
-      (dot 2 2) (cast 2 2) (szof 1 1) (init 1 1) (dfield 2 2) (didx 2 2)
+      (dot 2 2) (cast 2 2) (szof 1 1) (bcp 1 1) (init 1 1) (dfield 2 2) (didx 2 2)
       (clit 2 2) (land 2 2) (lor 2 2) (vastart 1 2) (vaarg 2 2) (vaend 1 1)
       ; ('sexpr items value ty) -- gcc's ({ .. }), said back as one; the type slot is
       ; recomputed on a re-parse rather than read back from the text
@@ -260,6 +260,7 @@
                     (sfx ? (cnum v + sfx) dflt))
                  dflt))
         ('szof x) ("sizeof(" + (ctype? x ? (cty x "") (ce x 0)) + ")")
+        ('bcp x) ("__builtin_constant_p(" + ce x 0 + ")")
         ; a call's arguments sit above the comma operator, hence 21
         ('call f as) (ce f 100 + "(" + sepby ", " (map (x \ ce x 21) as) + ")")
         ; (dot (deref x) "f") is what `x->f` parses to, so print the arrow back --
