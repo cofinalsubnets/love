@@ -37,6 +37,12 @@
        (? !(string? t) ()
           (: f (cite 'kore 'ustatf t) (two? f && 21 < #f ? (f 21)))))
 
+   ; a process's parent, field 4 of /proc/PID/stat; 0 off linux
+   (lk-ppid p)
+    (: t (lk-read ("/proc/" + show p + "/stat"))
+       (? !(string? t) 0 (: f (cite 'kore 'ustatf t) (two? f && 3 < #f ? (lk-num (f 3)) 0))))
+   (lk-ancestors p) (: (go p n a) (? (p <= 1 || n <= 0) a (: q (lk-ppid p) (go q (n - 1) (q . a)))) (go p 64 ()))
+
    ; an owner, one `key value` a line
    (lk-owner who note)
     (lk-paras [("pid " + show who) ("start " + lk-str (lk-start who)) ("since " + show (clock 0))
@@ -174,11 +180,21 @@
         "waiting" (map (n \ lk-view (lk-parse (lk-read (lk-hq root + "/" + n)))) (lk-sweep (lk-hq root)))
         "mem_gb" (lk-mem 0) "load" (lk-load 0)})
 
+   ; the live holders' pids of a lock: an exclusive one's owner, or the heavy pool's slots
+   (lk-holders root nm kind)
+    (kind @ 'exclusive (: o (lk-parse (lk-read (root + "/x/" + lk-slug nm + "/owner")))
+                          (lk-live? o ? [(lk-num (peep o "pid" "0"))] ()))
+            'heavy (map (n \ lk-num (peep (lk-parse (lk-read (lk-hh root + "/" + n))) "pid" "0")) (lk-sweep (lk-hh root)))
+            ())
+
    ; the wrapper: each [nm kind] in turn, waiting with a line on stderr whenever the answer
    ; changes, then argv spawned (every disposition default: spawn resets them) and waited for.
+   ; a lock an ancestor already holds is passed through, neither taken nor released: a
+   ; wrapper under a wrapper never waits on its own parent.
    ; the locks go on any way out that unwinds; a killed wrapper leaves its owner to be reclaimed
-   (locks-run root reqs note floor max argv)
-    (: me (getpid 0)
+   (locks-run root reqs0 note floor max argv)
+    (: me (getpid 0) anc (lk-ancestors me)
+       reqs (filter (r \ !(two? (filter (p \ elem p anc) (lk-holders root <r (r 1))))) reqs0)
        (wait1 r last)
         (: a (locks-acquire root <r (r 1) me note floor max)
            s (show [(peep a "position" 0) (peep a "held" 0)])
