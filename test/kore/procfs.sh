@@ -63,15 +63,12 @@ for c in "-o pid,ppid,user,comm,stat,tty -p 1" "-o pid=,ppid=,comm= -p 1" "-o pi
 done
 ps -o pid,user,vsz,rss,stat,ni -p 1 | head -1 > "$g"; korerun ps -o pid,user,vsz,rss,stat,ni -p 1 | head -1 > "$o"; same "ps -o vsz,rss's headers"
 # aux's pid-1 row: %CPU %MEM VSZ RSS (fields 3-6) move too, so their digits are blanked in place
-psmv() { awk -v on="$1" 'on && NR > 1 { o = ""; n = 0; w = 0
-  for (i = 1; i <= length($0); i++) { ch = substr($0, i, 1)
-    if (ch == " ") w = 0; else if (!w) { w = 1; n++ }
-    if (n >= 3 && n <= 6 && ch ~ /[0-9]/) ch = "9"; o = o ch }
-  $0 = o } { print }'; }
+psmvp='on && NR > 1 { o = ""; n = 0; w = 0; for (i = 1; i <= length($0); i++) { ch = substr($0, i, 1); if (ch == " ") w = 0; else if (!w) { w = 1; n++ }; if (n >= 3 && n <= 6 && ch ~ /[0-9]/) ch = "9"; o = o ch }; $0 = o } { print }'
+psmv() { awk -v on="$1" "$psmvp"; }
 for c in -e -ef aux; do
-  m=0; [ "$c" = aux ] && m=1
+  blank=0; [ "$c" = aux ] && blank=1
   # shellcheck disable=SC2086
-  TZ=UTC0 ps $c | awk 'NR == 1 || $2 == 1 || $1 == 1' | pstm | psmv $m > "$g"; TZ=UTC0 korerun ps $c | awk 'NR == 1 || $2 == 1 || $1 == 1' | pstm | psmv $m > "$o"; same "ps $c"
+  TZ=UTC0 ps $c | awk 'NR == 1 || $2 == 1 || $1 == 1' | pstm | psmv $blank > "$g"; TZ=UTC0 korerun ps $c | awk 'NR == 1 || $2 == 1 || $1 == 1' | pstm | psmv $blank > "$o"; same "ps $c"
 done
 [ "$(korerun ps -o pid=P,comm -p 1 | head -1)" = "      P COMMAND" ] || fail "kore ps -o, a header renamed"
 korerun ps -u root | awk '{ print $1 }' | grep -qx 1 || fail "kore ps -u root"
