@@ -54,7 +54,8 @@
    (ogg-flac-head ps)
     (: p <ps
        (? (#p < 13 || p 5 != 1) "an Ogg FLAC mapping this can't read"
-          ((cite 'flac 'flac-meta) (cats ("fLaC" . snip p 13 #p . >ps)))))
+          ; flac's sizes and skips count bytes of a flac stream, not of these packets
+          ((cite 'flac 'flac-meta) (cats ("fLaC" . snip p 13 #p . >ps)) @ ('more . _) 'more ('skip . _) 'more m m)))
    (ogg-flac-start m)
     (\ pkt gr (flac-frame pkt 0 (m 'bps) (m 'ch) @ (pcm . _) pcm w (ogg-why w)))
    (ogg-codecs _)
@@ -100,13 +101,13 @@
        (sync h i) (: k (findsub (snip h i #h) "OggS") (k < 0 ? -1 (i + k)))
        ; a chain's next stream: its headers read on from o, and its format the first's
        (chain h o fmt)
-        (ogg-meta (snip h o #h) @
-          'more (gulp () @ g (string? g ? (chain (snip h o #h + g) 0 fmt) 0))
-          m (? !(tablet? m) m
-               (ogg-format m @ f (f 'rate = fmt 'rate && f 'ch = fmt 'ch && f 'align = fmt 'align))
-                (: _ (pin m0 'tags (m 'tags), pin m0 'link (peep m0 'link 0 + 1))   ; tags first: a watcher reads 'link
-                   (run (snip h o #h) (m 'at) m (((ogg-codec (m 'ogg)) 4) m) () (m 'skip) 0))
-               "a chained stream changes its format"))
+        ((cite 'av 'av-head) q ogg-meta (snip h o #h) @
+          ['short _] 0
+          [m h2] (? !(tablet? m) m
+                    (ogg-format m @ f (f 'rate = fmt 'rate && f 'ch = fmt 'ch && f 'align = fmt 'align))
+                     (: _ (pin m0 'tags (m 'tags), pin m0 'link (peep m0 'link 0 + 1))   ; tags first: a watcher reads 'link
+                        (run h2 (m 'at) m (((ogg-codec (m 'ogg)) 4) m) () (m 'skip) 0))
+                    "a chained stream changes its format"))
        ; h the bytes, o the page, dec the decoder, held the packet running on, k packets yet
        ; to pass over, ended once this stream's last page is read
        (run h o m dec held k ended)
