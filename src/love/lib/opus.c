@@ -21,7 +21,6 @@ static double op_floor(double x) {
  if (x != x || x >= 4503599627370496.0 || x <= -4503599627370496.0) return x;
  double t = (double) (long long) x;
  return t > x ? t - 1 : t; }
-static double op_round(double x) { return x < 0 ? -op_floor(-x + 0.5) : op_floor(x + 0.5); }
 static long op_lrint(double x) {             // to nearest, ties to even
  double f = op_floor(x), d = x - f;
  long r = (long) f;
@@ -35,7 +34,6 @@ static long op_lrint(double x) {             // to nearest, ties to even
 #define atan2(y, x) lm_atan2(y, x)
 #define atan(x) lm_atan2(x, 1.0)
 #define floor(x) op_floor(x)
-#define round(x) op_round(x)
 #define lrint(x) op_lrint(x)
 #define lrintf(x) op_lrint(x)
 
@@ -68,9 +66,11 @@ static inline void *opus_alloc_scratch(size_t n) { (void) n; return NULL; }
 #include "opus/celt/quant_bands.c"
 #include "opus/celt/rate.c"
 #include "opus/celt/vq.c"
+#undef MAX_PULSES                      // celt's, before silk's own
 #include "opus/silk/CNG.c"
 #include "opus/silk/LPC_analysis_filter.c"
 #include "opus/silk/LPC_inv_pred_gain.c"
+#undef QA                              // LPC_inv_pred_gain.c's, before NLSF2A.c's own
 #include "opus/silk/NLSF2A.c"
 #include "opus/silk/NLSF_VQ_weights_laroia.c"
 #include "opus/silk/NLSF_decode.c"
