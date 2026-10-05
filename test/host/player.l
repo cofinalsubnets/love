@@ -130,6 +130,25 @@
    ; consume: what plays leaves the queue
    _ (test (core-send c ['consume 1] = ['ok]) (core-send c ['play 2] = ['ok]) (waits 'state 'stop 150)
            (ids () = [1 2]) (core-send c ['clear] = ['ok]) (ids () = []))
+   ; a station on loopback: an icy stream of a wav, its titles between the blocks. queued, it is
+   ; asked only its name; played, the item takes each StreamTitle as it comes
+   (pl-block m) (: n ((#m + 15) // 16) (string [n] + m + string (cask (16 * n - #m))))
+   (pl-icy s mi ts) (: (go i acc) (? (#s <= i * mi) (cats (rev acc))
+                                    (: b (snip s (i * mi) (min #s (i * mi + mi)))
+                                       (go (i + 1) ((#b < mi ? b (b + pl-block (i < #ts ? (ts i) ""))) . acc))))
+                       (go 0 ()))
+   station ("ICY 200 OK\r\nicy-name: love radio\r\nicy-br: 256\r\nicy-metaint: 1000\r\nContent-Type: audio/wav\r\n\r\n"
+            + pl-icy (pl-wav 8000 2 tone) 1000 ["StreamTitle='one';" "" "StreamTitle='two';"])
+   (pl-req s) (: (go b) (? (0 <= fsub b "\r\n\r\n" 0) b (see s @ -1 b ch (unsee s ch, go (b + chug s)))) (go ""))
+   (pl-serve l) (: _ (await l) s (accept l)
+                   _ (? (hot? s) (: _ (pl-req s) (say s station, flush s, close s)) 0)
+                   (pl-serve l))
+   lp (test-listen 0) srv (twirl (_ \ pl-serve (lp 1)) ())
+   url ("http://127.0.0.1:" + show <lp + "/live")
+   _ (test (core-send c ['consume 0] = ['ok]) (<(core-send c ['add url]) = 'ok) (titles () = ["love radio"])
+           (core-send c ['play 0] = ['ok]) (waits 'state 'stop 150)
+           (titles () = ["two"]))
+   _ (freeze srv)
    _ (core-close c)
    ; the verb speaks the same messages on stdin and stdout
    _ (test (sh ("printf '(ping)\\n(bye)\\n' | HORN=none out/love player --pipe | tail -2")
