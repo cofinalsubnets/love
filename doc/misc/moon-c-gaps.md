@@ -90,12 +90,10 @@ All of C89 passes. What remains is C99/C11/GNU.
 | construct | probe |
 |---|---|
 | `_Atomic` | `_Atomic int a;` — both spellings; `__STDC_NO_ATOMICS__` says so, which is C11's own door for the absence |
-| computed goto | `&&label`, `goto *p` |
 | the address of a compound literal in a **static** initializer | `struct S *p = &(struct S){1,2};` — inside a function it passes |
 | brace elision continuing **past** an anonymous union member | `{1,2,3,{4,5}}` over `struct { int a,b; union { int c,d; }; struct S1 s; }` — elision *into* the union is fine |
 | a `##` paste that makes a macro NAME | `CAT(A,B)(x)` where `AB` is itself a macro — the pasted name is not rescanned as an invocation |
 | a register-exhausted **SSE**-class by-value argument | five float HFAs — the gp twin landed 2026-08-08 (below), this one did not |
-| an element's address of a 2-D array, cast, in a **static** initializer | `const signed char *const p[] = {(signed char *)&a[0][0]};` refuses "cannot lay the initializer"; `(signed char *)a` (the same address) lays. found in rfc 6716's silk/tables_LTP.c, respelled there |
 
 The last five are what `test_cts` found (doc/misc/moon.md); `test/gate/cts.sh` names the program
 each one came from.
@@ -240,7 +238,11 @@ Four of them carry an edge worth knowing:
 
 `#pragma`, `#ident`, `#sccs`, `#assert`, `#unassert`, a bare `#` (the null directive,
 C11 6.10.7) and gcc `-E`'s `# 42 "f.c"` line marker all pass and do nothing — except
-**`#pragma push_macro("X")` / `pop_macro("X")`**, which save and restore the definition
+**`#pragma pack`** — `()`, `(N)`, `(push[, N])`, `(pop)`, N one of 1 2 4 8 16 — which caps each
+member's natural alignment at N for the structs laid while it stands (acpi's tables); another
+operand refuses, and so does a bit-field it would let straddle a unit, and `_Pragma("pack ..")`
+stays in the stream and refuses at parse — **`#pragma once`**, which reads a header once per
+TU by its resolved path, and **`#pragma push_macro("X")` / `pop_macro("X")`**, which save and restore the definition
 (gcc's semantics: a per-name stack, a saved-undefined pops back to undefined, a pop with
 nothing saved is a no-op, and the directive body reads raw so a user macro named `pop_macro`
 cannot interfere — cts 00206). `#warning` says its
@@ -276,7 +278,10 @@ stringize-diff against `gcc -dM -E` on x64/riscv64/arm-none-eabi and clang's a64
 `__LONG_MAX__` moved out of cpp into the fork, so t32 now answers `0x7fffffffL` instead of the
 64-bit lie. On top of the older rows: `__STDC__`, `__STDC_HOSTED__`, `__mooncc__`, the linux/
 unix spellings, the arch pairs, `__INT_MAX__`, `__FLT_MAX__`/`__DBL_MAX__`,
-`__SIZEOF_INT128__` on x64, `bool`/`true`/`false`. Pinned by test/cc/123-predef.c (all four
+`__SIZEOF_INT128__` on x64, and `bool`/`true`/`false` — the dialect's, not the language's: bare
+under moon and `-std=c23`/`gnu23`, plain names under an older iso `-std=` (linux/stddef.h
+declares them), where `<stdbool.h>` lays them. `-fshort-wchar` turns the wchar fork to gcc's
+`short unsigned int` and `L""` to 16-bit units (surrogate pairs past the BMP). Pinned by test/cc/123-predef.c (all four
 compilers agree at 21) and the t32 `#if` checker run against arm-none-eabi-gcc.
 
 Three deliberate deviations, all in the compiler's favor of honesty:
@@ -822,6 +827,58 @@ rv64; test/cc/173-asmgoto.c holds it to gcc and test/law/moon.l holds the node a
 
 ---
 
+## GNU C 8.1 — the claim, and what it owes
+
+mooncc predefines **`__GNUC__ 8`, `__GNUC_MINOR__ 1`, `__GNUC_PATCHLEVEL__ 0`** beside
+`__mooncc__` (chosen 2026-10-05, revisable): an unpatched kernel takes only gcc or clang
+(`compiler_types.h`), kbuild's `cc-version.sh` refuses gcc before 8.1, and a `.config` made
+with `CC=mooncc` is the build hearts wants. A source asking which compiler asks `__mooncc__`
+first (stdarg.h, love.h, num.c), so love itself compiles exactly as before. The claim is a
+promise, so each GNU C 8.1 extension is carried or refuses by name — never skipped where the
+skip changes the code. Held by test/cc/229-labelvalue.c and 230-gnuc.c against gcc on every
+lane (231-packunion.c the layout and call ones), the refusals in test/gate/moon.sh.
+
+carried:
+
+- labels as values: `&&L` is the label's address, `goto *p` a table jump over every label the
+  function takes the address of (homing stands off, as for an asm), a static table of them
+  laid as data; wasm refuses both, a wasm label having no address
+- `__int128_t`/`__uint128_t`, wherever `__int128` reads
+- `__has_attribute`, `__has_include`, `__has_include_next` (read as `__has_include`; `defined`
+  says all three are there), `__COUNTER__`, `_Pragma` (its pragmas are the ones ignored), `__VA_OPT__`
+- a macro argument expanded once before substitution (C11 6.10.3.1), however often its parameter
+  is used: a `__COUNTER__` in it is one number throughout, which is `__UNIQUE_ID`
+- `-fshort-wchar`; `-fmacro-prefix-map=OLD=NEW` and `-ffile-prefix-map` (`__FILE__` spelled
+  with the last matching map; there is no debug info for its other half); `-ffixed-x18`, true of
+  a64 already (x16..x18 are never allocated) and refused on any other target or register
+- `__builtin_assume_aligned`, `__builtin_extract_return_addr`, `__builtin_parity{,l,ll}`
+
+the attributes, by `gnuattrs` in cpp.l: **carried** — aligned packed section weak alias
+always_inline noinline cleanup used (a static nothing calls is kept) gnu_inline (plain `inline`
+lays the external definition and `extern inline` does not, gnu89's way about) transparent_union
+(an argument of a member's type becomes the union; members one word-sized scalar type, or it
+refuses); **a hint, whose
+skip is exact** — the diagnostics, the optimisation promises (pure const malloc nonnull ...),
+visibility under a static link, cold/hot, fallthrough and the rest of the list; **refused by
+name** — constructor destructor ifunc weakref mode vector_size naked
+interrupt patchable_function_entry, the calling conventions (regparm, ms_abi, pcs ...),
+scalar_storage_order, target_clones, symver. `__has_attribute` answers 1 for the first two
+classes and 0 for the third and for a name it does not know, which is what a header asks
+before it uses one.
+
+owed, each refusing loudly today (an undeclared builtin, or a parse error):
+
+| construct | |
+|---|---|
+| `__atomic_*` and `__ATOMIC_*`, `__sync_*` but the spin-lock pair | `__STDC_NO_ATOMICS__` says so for C11's; gcc 8 has the builtins |
+| `__builtin_alloca` | moonlibc's `alloca` is malloc-backed, so it is not the builtin's frame lifetime |
+| `__builtin_add_overflow_p` and kin, `__builtin_classify_type` | |
+| gcc's old `field:` initializer, nested functions | |
+
+open, not refused: **`__FILE__` in a header reads the TU's name** (cpp shares one table across
+includes), where gcc answers the header's path; deterministic, but a header's `WARN_ON` string
+differs from gcc's.
+
 ## linux
 
 **measured 2026-09-27** against 6.19.14, x86_64 defconfig: each translation unit gcc `-E`
@@ -853,7 +910,100 @@ with a directive reads through gas-top too (180-asmsections.c), so what stops th
 is operands and instructions: the rows above, then a
 linker-script reader, and a 32/16-bit x86 backend for arch/x86/boot and the 32-bit vDSO.
 
+### arm64, measured 2026-10-05
+
+linux 6.19.14, `mooncc -t a64` on gwen baa7c8277, every unit of a kbuild reference built by
+clang 22.1.8 at the same paths, compiled with its own `.cmd` flags in mooncc's spelling (`-t a64`
+for `--target`, `-include` as a wrapper, a refused flag left out); an object that compiles is
+held to clang's by its defined and called symbols and its non-empty sections. tinyconfig ran on
+mooncc's own preprocessor; defconfig on clang's `-E` (ours was 20-50x clang's, see below), with
+ours on every 20th unit, where 28 of 222 units fare worse. the scripts and every unit's command
+and message: `/var/tmp/census-g21` (census.py, rank.py; tiny/ def/ defown/).
+
+a crash here is an `internal error`; the assembler's are refusals since (linux on arm64, below).
+
+| | units | same as clang | compiles, differs | refused | crash |
+|---|---|---|---|---|---|
+| tinyconfig, our cpp | 474 | 117 | 25 | 183 | 149 |
+| defconfig, clang's cpp | 4439 | 1012 | 835 | 1496 | 1093 |
+
+four walls stop every C unit, and the census stood in for each to see past it: no compiler
+family is predefined (`compiler_types.h`'s `#error "Unknown compiler"`; mooncc is to claim gcc
+8.1.0, the kernel's floor), `true`/`false`/`bool` predefined under `-std=gnu11` (`linux/stddef.h`
+declares them), no `__int128_t`/`__uint128_t` names (`__int128` itself is there), and no
+`&&label` (`_THIS_IP_`).
+
+defconfig, each unit at its first stop:
+
+| units | first stop |
+|---|---|
+| 1096 | the `Q` memory constraints: `+Q` 608, `Qo` 310 (`__raw_write*`, reported as "pinned twice"), `=Q` 91, `Q` 87 |
+| 473 | an a64 instruction holo lacks: `cbnz` 366, `yield` 75, `sttr*` 18, `sbc` 7, `hint` 3, `rbit` 3, `sev` 1 |
+| 352 | a system register holo lacks: `sp_el0` 351 (`current`), `CurrentEL` 1 |
+| 198 | a static initializer mooncc cannot lay: an address into an array element, a compound literal's address |
+| 196 | a gas directive: `.subsection` 174, `.inst` 15, `.incbin` 3, `.arch` 2, `.extern` 2 |
+| 131 | a parse error: case ranges past parse's 1024 98 (sysreg encodings), a case value from 2^62 up (`LONG_MAX`), `__label__` in a statement expression 7, `__auto_type` in a `for` 5, `asm("name")` on a declaration 1 |
+| 62 | gas expressions: `.req` 28, an immediate over `==` `!=` `<<` `>>` or labels 34 |
+| 42 | a jump label's `"i"` operand, constant only once inlined |
+| 10 / 7 / 7 / 2 | a register variable (`x0`.., `x30`); `__attribute__((cleanup))`; an asm goto with outputs; a `"p"` operand |
+
+the 835 that compile and differ: 419 lay a `__mod_device_table__*` alias clang does not; 221 call
+`__kmalloc_noprof` where clang's constant size takes the cache path (`__builtin_constant_p` answers
+0 after inlining); 31 leave `__clk_of_table`, `__irqchip_of_table`, `__reservedmem_of_table` or
+`__jump_table` empty, the `__used` statics dropped; 12 call a `__compiletime_assert_N` clang folded
+away and 8 an asm's local label, so the link fails. every defconfig object also lacks
+`.ARM.attributes`, the note clang lays under `-mbranch-protection` (taken since: linux on arm64, below).
+
+accepted and WRONG, found by probing the flags mooncc takes in silence:
+
+- the frame record (fixed since: linux on arm64, below).
+- x18 is allocated, and `-ffixed-x18` ignored.
+- `-fshort-wchar` is ignored: `wchar_t` stays 4 bytes.
+- `-fmacro-prefix-map` is ignored: `__FILE__` keeps the build path, which reaches the image.
+- `__attribute__((used))` does not keep an unreferenced static.
+- every object carries `love_nifs` and `.love.image` sections, empty, which the kernel link would
+  meet as orphans.
+- `-mstrict-align` is refused, and a packed field is read unaligned (taken since: below).
+
+refused flags: `-include`, `--target`, `-mlittle-endian`, `-mgeneral-regs-only`,
+`-mbranch-protection`, `-Wa,-march`, `-mcmodel`, `-mstrict-align` (the two a64 flags taken since).
+
+our preprocessor: `kernel/fork.c` took 34 s of cpp against clang's 0.64 s, and lexing its 902
+headers was 2.3 s of it; the rest is directives and macro expansion. `-E` itself was quadratic
+in `join`, and a function-like macro over an `#ifdef` in its arguments stayed unexpanded
+(`struct_group`, 23 tinyconfig units); both are fixed since the run. a `#include` of a
+macro-built name (tracing's `TRACE_INCLUDE`) does not resolve.
+
 ---
+
+### the census's own fixes — landed 2026-10-06 (g-21, branch moonparse)
+
+each from the arm64 census above, each held by a law:
+
+- **a static initializer decides an address against null**: `(fn == (fn_type)NULL) ? fn : fn`
+  (OF_DECLARE's `.data`) refused, and a named section's refusal went unread, so the unit compiled
+  clean with that section EMPTY -- 31 defconfig units lost their clock, irqchip and reserved-mem
+  tables. an address is never null, compared or negated; a bad entry in a named section refuses
+  the unit (250-nullcmp-static.c, test/law/moon.l).
+- **a compound literal in a static initializer** is an object of its own, laid beside .data, and
+  an array-typed element decays to its address (`.regs = pll_regs[N]`, `&a[0][0]` -- the cast
+  element row rfc 6716's silk/tables_LTP.c found): 191 of the 198 static-initializer refusals
+  (251-static-clit.c).
+- **`__builtin_constant_p` decides after inlining and kprop**: a param bound to a constant reads 1
+  (kmalloc's cache lane, 221 units), and a BUILD_BUG_ON over a constant local folds its
+  `__compiletime_assert_N` call away (12 units failed the link) (252-constant-p.c, test/law/moon.l).
+- **an asm's other-section words leave with its home**: a BUG_ON a late fold proves false kept its
+  __bug_table row naming the removed label (8 units); a label the record lays itself is no home's
+  (test/gate/moon.sh).
+- **a wide case range** is one label and two compares; a case value may pass 2^62 (98 units,
+  253-case-range.c).
+- **a jump label** compiles where it is spliced (`char *k = &((char *)key)[branch]` as the "i"),
+  and an asm goto target named only by its __jump_table words stays laid (cfoldir, deadlab) -- 42
+  units; a64 also needs `.quad sym+k - .`, row 154 (test/gate/moon.sh).
+- **`__auto_type` takes attributes before its `=`**, the clz/ctz builtins type, and a declarator
+  is in scope for the rest of its list under typeof and sizeof (254-declarators.c).
+- a name an address probe could not resolve no longer stands as a function's refusal: it had hidden
+  the true cause (an asm's lane) behind "undeclared".
 
 ## linux on arm64
 
@@ -866,12 +1016,12 @@ below, 251 of those 332 re-run so far: **145 compile**, and the rest refuse by n
   and its `ldp`, so `[fp]` is the caller's fp and `[fp+8]` the return address, which the
   kernel's unwinder reads. The area stays 32 bytes, so no fp-relative offset moved. They were
   two padded pushes, which put the lr at `[fp+16]`: wrong code, silent. gen's `frrec` fuses
-  the pair after every IR pass, and a lone fp or lr push left over refuses (225-framerecord.c,
+  the pair after every IR pass, and a lone fp or lr push left over refuses (240-framerecord.c,
   native on an a64 host).
 - **a gas or holo scare is a refusal**: a function's asm, and the file-scope or `.S` text,
   read under a trap. What used to print `internal error` now names the line's piece.
 - **Q, Qo, +Q, =Q**: a64's base-register memory operand is the `[xN]` "m" already spells;
-  `"rZ"` always takes a register (226-a64asm.c).
+  `"rZ"` always takes a register (241-a64asm.c).
 - **system registers**: about a hundred by name, any case (`CurrentEL`), and gas's generic
   `s3_0_c15_c0_4`; `ic ialluis` and the tlbi/dc operations the kernel names. Every word is
   llvm-mc's (test/holo/golden.l).
@@ -883,14 +1033,32 @@ below, 251 of those 332 re-run so far: **145 compile**, and the rest refuse by n
   laid after its section's own forms (a function's goes to .text); and `.org . - (a-b) + (c-d)`,
   the alternatives' size check, which refuses when it would move back. A directive's name
   ends where its identifier does (a `.S` spells `.long((x)-.)` unspaced).
+- **`.quad sym+k - .`**, the jump table's key: an eight-byte word measured from its own place,
+  R_AARCH64_PREL64 in the object and applied by our linker (242-asmprel64.c).
 - **cpp**: `#` of a stray `\\` outside a literal is one backslash once re-lexed (C11
   6.10.3.2). Every `__emit_inst` through `mrs_s`/`msr_s` carried a stray `\` (227-stringizebs.c).
+
+- **`-mbranch-protection=pac-ret+bti`** (also `bti`, `pac-ret`, `none`; `standard`, `+leaf`,
+  `+b-key` and `+pc` refuse by name): paciasp before the frame record's `stp`, autiasp after its
+  `ldp`, so every exit, a tail call's `b` too, authenticates first; `bti c` at the entry of a fn
+  another unit or a pointer can reach, unless paciasp leads; `bti j` at each table jump's target;
+  an indirect tail call goes by x16, which both landings take from a `br`. Each object carries
+  clang's `.note.gnu.property` and `.ARM.attributes` byte for byte, and the acle macros
+  `__ARM_FEATURE_BTI_DEFAULT`/`__ARM_FEATURE_PAC_DEFAULT` say so. `__builtin_return_address(0)`
+  answers the signed lr, as gcc's does; the kernel strips it (ptrauth_strip_insn_pac).
+- **`-mstrict-align`**: a member reached through a packed struct is read, written, stepped and
+  `op=`'d by the chunks its alignment carries, and so are struct copies, the inlined
+  memcpy/memset, a packed local's initializer, and by-value structs under 8-byte alignment as
+  arguments and returns; the byte-gather fusion stands down. Both flags are held to clang 22.1.8's
+  objects for the same units (test_cca64's landing law) and run on an a64 host (228-strictalign.c).
 
 Still open on this side (g-21's probes):
 
 - **x18 is allocated freely**, and `-ffixed-x18` is ignored: the platform register, which the
   kernel's shadow call stack owns.
-- **a packed field loads unaligned** (`ldursw`), which faults under `-mstrict-align`.
+- under `-mstrict-align`: an array member of a packed struct indexed through its decayed pointer
+  reads at the element's width, a bitfield or 128-bit member of a packed struct refuses by name,
+  and a by-value struct reached as a packed member rides its type's alignment, not the member's.
 - where the re-run stops now, on this side: the `.S` exception-table macro's `\insn`, which
   reaches `.long ((\insn) - .)` unsubstituted (24); an asm goto with outputs (9, refused above);
   a register variable pinned to `x0` (4); the `"p"` constraint (2). The rest is part 1's front

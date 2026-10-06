@@ -84,6 +84,48 @@ for f in test/cc/*.c; do
   [ $a -eq $b ] || fail "mooncc battery $f (ours $a gcc $b)"
 done
 
+# an asm's other-section words leave with its home: a BUG_ON a late fold proves false loses its brk
+# and label, and its __bug_table row must go too, or the object names a label it never lays
+bug='asm volatile (".pushsection __bug_table,\"aw\"; .align 2; 14470: .long 14471f - .; .popsection; 14471: brk 0x800");'
+printf 'int f(void){ const int len = 0; if (0 < len) { %s } return 1; }\n' "$bug" > "$ho/.bugd.c"
+printf 'int f(int n){ if (n) { %s } return 1; }\n' "$bug" > "$ho/.bugl.c"
+moonrun -t a64 -c "$ho/.bugd.c" -o "$ho/.bugd.o" || fail "mooncc -t a64 a dead BUG asm"
+moonrun -t a64 -c "$ho/.bugl.c" -o "$ho/.bugl.o" || fail "mooncc -t a64 a live BUG asm"
+! grep -q 'l14471' "$ho/.bugd.o" || fail "a dead BUG asm's __bug_table row names its removed label"
+grep -q '__bug_table' "$ho/.bugl.o" || fail "a live BUG asm lost its __bug_table row"
+
+# a jump label: its "i" operand a local derived from params (arch_static_branch's
+# `char *k = &((char *)key)[branch]`), constant once the call is spliced, so the body compiles
+# only spliced; its asm goto target is named only by the __jump_table words, never by a jump,
+# and must stay laid. the program walks its own table. held to gcc -O2 (gcc -O0 refuses the "i")
+cat > "$ho/.jl.c" <<'CEOF'
+struct static_key { int enabled; };
+struct static_key key_a;
+struct jent { int code, target; long key; };
+extern struct jent __start___jump_table[], __stop___jump_table[];
+static inline __attribute__((__always_inline__)) int sb(struct static_key *const key, const _Bool branch)
+{
+  char *k = &((char *)key)[branch];
+  asm goto("1: nop\n\t.pushsection __jump_table, \"aw\"\n\t.align 8\n\t"
+           ".long 1b - ., %l[yes] - .\n\t.quad %c0 - .\n\t.popsection\n\t"
+           : : "i"(k) : : yes);
+  return 0;
+yes:
+  return 1;
+}
+int main(void)
+{
+  struct jent *e = __start___jump_table;
+  if (sb(&key_a, 1)) return 9;                      /* the nop falls through */
+  if (__stop___jump_table - e != 1) return 1;
+  if ((char *)&e->key + e->key != (char *)&key_a + 1) return 2;
+  return 0;
+}
+CEOF
+moonrun "$ho/.jl.c" -o "$ho/.jl" || fail "mooncc a spliced jump label"
+"$ho/.jl" || fail "a spliced jump label's table or target is wrong (exit $?)"
+$cc_g -O2 -o "$ho/.jlg" "$ho/.jl.c" && { "$ho/.jlg" || fail "gcc -O2 disagrees on the jump-label law (exit $?)"; }
+
 # ------------------------------------------- -std=: the dialect rail (struct labels)
 # THE ORACLE IS THE LABEL-FREE TWIN. A struct label is not C -- gcc cannot compile the
 # labelled source at all -- so the differential is against the SAME struct with the labels
@@ -129,6 +171,74 @@ moonrun -std=holyc -c -o /dev/null "$ho/.cc1.c" > /dev/null 2>&1 && fail "-std=h
 moonrun -std=c -c -o /dev/null "$ho/.cc1.c" > /dev/null 2>&1 || fail "-std=c refused a plain C file"
 moonrun -std=gnu11 -c -o /dev/null "$ho/.cc1.c" > /dev/null 2>&1 || fail "-std=gnu11 refused a plain C file"
 echo "mooncc: -std= is a rail (moon is the default and lays gcc's own layout; c fences the extensions out; an unknown one refuses)"
+
+# ------------------------- bool, and the GNU C a __GNUC__ 8 claim owes (test/cc/230 holds the rest)
+# bool/true/false are bare in moon and C23 and plain names in an older iso dialect, which
+# linux/stddef.h declares for itself; <stdbool.h> lays them there
+printf 'enum { false = 0, true = 1 };\ntypedef _Bool bool;\nint f(bool b) { return b ? true : false; }\n' > "$ho/.bool.c"
+moonrun -std=gnu11 -c -o /dev/null "$ho/.bool.c" > /dev/null 2>&1 || fail "-std=gnu11 kept true/false predefined"
+moonrun -std=c11 -c -o /dev/null "$ho/.bool.c" > /dev/null 2>&1 || fail "-std=c11 kept true/false predefined"
+printf 'bool f(void) { return true; }\n' > "$ho/.bool.c"
+moonrun -c -o /dev/null "$ho/.bool.c" > /dev/null 2>&1 || fail "the moon dialect lost bare bool"
+moonrun -std=c23 -c -o /dev/null "$ho/.bool.c" > /dev/null 2>&1 || fail "-std=c23 lost bare bool"
+printf '#include <stdbool.h>\nbool f(void) { return true; }\n' > "$ho/.bool.c"
+moonrun -std=c11 -c -o /dev/null "$ho/.bool.c" > /dev/null 2>&1 || fail "<stdbool.h> did not lay bool under -std=c11"
+# an attribute whose skip changes the code refuses by name; a #pragma pack likewise
+for a in constructor 'vector_size(16)' 'mode(DI)' naked 'ifunc("r")'; do
+  printf 'int f(void) __attribute__((%s));\n' "$a" > "$ho/.attr.c"
+  moonrun -c -o /dev/null "$ho/.attr.c" 2>&1 | grep -q "is not carried out" || fail "__attribute__(($a)) was skipped"
+done
+# #pragma pack is carried (test/cc/231); an operand it does not read, and a bit-field it would
+# let straddle, refuse
+printf '#pragma pack(3)\nstruct s { char c; int i; };\n' > "$ho/.attr.c"
+moonrun -c -o /dev/null "$ho/.attr.c" 2>&1 | grep -q "is not one mooncc reads" || fail "#pragma pack(3) was taken"
+printf '#pragma pack(1)\nstruct s { char c; int i : 20; int j : 20; };\n' > "$ho/.attr.c"
+moonrun -c -o /dev/null "$ho/.attr.c" 2>&1 | grep -q "a bit-field under #pragma pack" || fail "a packed bit-field was laid"
+printf 'typedef union { char *p; short s; } u __attribute__((transparent_union));\n' > "$ho/.attr.c"
+moonrun -c -o /dev/null "$ho/.attr.c" 2>&1 | grep -q "a transparent union wants" || fail "a mixed transparent union was taken"
+# #pragma once reads a header once
+mkdir -p "$ho/.once"
+printf '#pragma once\nstruct once { int a; };\n' > "$ho/.once/h.h"
+printf '#include "h.h"\n#include "h.h"\nint main(void) { return sizeof (struct once); }\n' > "$ho/.once/m.c"
+[ "$(moonrun -E "$ho/.once/m.c" | grep -c 'struct once {')" = 1 ] || fail "#pragma once read the header twice"
+# `used` keeps a static nothing calls; gnu_inline's plain inline lays the external definition
+moonrun -c -o "$ho/.used.o" test/cc/230-gnuc.c > /dev/null 2>&1 || fail "230-gnuc did not compile"
+nm "$ho/.used.o" | grep -q " t kept$" || fail "a used static function was swept"
+nm "$ho/.used.o" | grep -q " T thrice$" || fail "gnu_inline's plain inline laid no external definition"
+echo "mooncc: GNU C 8 -- bool by dialect, refused attributes named, #pragma pack's refusals, #pragma once, used, gnu_inline"
+
+# ------------------------------------------- the flags that change the code
+# -fshort-wchar: wchar_t and L"" are 16-bit, held to gcc's
+cat > "$ho/.sw.c" <<'EOF'
+#include <stddef.h>
+int main(void) {
+  const unsigned short *w = (const unsigned short *) L"h\U0001F600";
+  return (int) sizeof (wchar_t) * 10 + (int) (sizeof L"ab" / sizeof (wchar_t)) + (w[1] == 0xd83d && w[2] == 0xde00 && w[3] == 0) * 100; }
+EOF
+moonrun -fshort-wchar -o "$ho/.sw" "$ho/.sw.c" > /dev/null 2>&1 || fail "-fshort-wchar compile"
+"$ho/.sw"; a=$?
+$cc_g -O0 -fshort-wchar -o "$ho/.swg" "$ho/.sw.c" > /dev/null 2>&1 && "$ho/.swg"; b=$?
+[ $a -eq 123 ] && [ $a -eq $b ] || fail "-fshort-wchar (ours $a gcc $b, want 123)"
+# -fmacro-prefix-map / -ffile-prefix-map: __FILE__ loses the build path, as gcc's does
+mkdir -p "$ho/.mpm/sub"
+printf 'const char *fl(void) { return __FILE__; }\n' > "$ho/.mpm/sub/f.c"
+dir=$(cd "$ho/.mpm" && pwd)
+for fl in -fmacro-prefix-map -ffile-prefix-map; do
+  moonrun -c $fl="$dir/=" -o "$ho/.mpm/f.o" "$dir/sub/f.c" > /dev/null 2>&1 || fail "$fl compile"
+  strings "$ho/.mpm/f.o" | grep -qx "sub/f.c" || fail "$fl: __FILE__ is not sub/f.c"
+  strings "$ho/.mpm/f.o" | grep -q "$dir" && fail "$fl: the build path reached the object"
+done
+# -ffixed-x18: a64's platform register is never allocated, the flag says so, and elsewhere it refuses
+moonrun -t a64 -ffixed-x18 -c -o "$ho/.x18.o" test/cc/111-int128.c > /dev/null 2>&1 || fail "-ffixed-x18 refused on a64"
+if command -v llvm-objdump > /dev/null; then
+  llvm-objdump -d --no-show-raw-insn "$ho/.x18.o" | grep -E '^ *[0-9a-f]+:' | grep -qwE '[xw]18' \
+    && fail "-ffixed-x18: x18 allocated"
+else
+  gate_partly "  (-ffixed-x18: the allocation check skipped, no llvm-objdump)"
+fi
+moonrun -ffixed-x18 -c -o /dev/null "$ho/.cc1.c" > /dev/null 2>&1 && fail "-ffixed-x18 taken on x64"
+moonrun -t a64 -ffixed-x20 -c -o /dev/null "$ho/.cc1.c" > /dev/null 2>&1 && fail "-ffixed-x20 was ignored"
+echo "mooncc: -fshort-wchar, -fmacro-prefix-map and -ffixed-x18 do what they say, held to gcc"
 
 # -------------------------------- C11 conditional features (6.10.8.3), per target
 # gcc cannot be the oracle here -- it HAS atomics -- so these are ours alone, and

@@ -867,7 +867,11 @@
       ; the static-data lane refuses through the same door: a cause pinned by globs, a
       ; gripe minted at gfns's tail (cgdata's callers thread a bare 'bad, not a gripe)
       (: g (cgt "int g = nope;\n" 'x64)
-         (gripe? g && (gmsg g = "cannot lay the initializer of 'g' ((var \"nope\"))")))))
+         (gripe? g && (gmsg g = "cannot lay the initializer of 'g' ((var \"nope\"))")))
+      ; ..and so does a named section's: one entry it cannot lay refuses the unit, never an
+      ; empty section that compiled clean (linux's of_device_id tables went missing that way)
+      (: g (cgt "int a __attribute__((__section__(\"T\"))) = 1;\nint b __attribute__((__section__(\"T\"))) = nope;\n" 'x64)
+         (gripe? g && (gmsg g = "cannot lay the initializer of 'b' ((var \"nope\"))")))))
 
 ; -- 7c-i: freestanding-header surface. cc keeps no linkage/qualifier state, so those
 ; keywords and __attribute__((..)) are skipped wherever a type may begin or a declarator
@@ -2238,6 +2242,25 @@ int main() { return 0; }"
    fJ (fnf 'f <>(cgn srcJ))
    (test
       (2 = #(csset fJ))))                     ; shared: a and b ride one seat
+
+; -- __builtin_constant_p decides after inlining and kprop: a param bound to a constant reads 1,
+; so an inline body's constant lane is taken (linux's kmalloc) and a BUILD_BUG_ON over a constant
+; local folds its call away; a param left a variable reads 0
+; (a call in tail position lays as a jmp: both count)
+(: (calls fs nm) #(filter (f \ two? f && elem <f '(call jmp) && 0 <= findsub (show f) nm) fs)
+   srcB ("extern int cached(unsigned long n); extern int generic(unsigned long n);\n"
+         + "static inline __attribute__((__always_inline__)) int km(unsigned long size)\n"
+         + "{ if (__builtin_constant_p(size) && size) return cached(size); return generic(size); }\n"
+         + "int fixed(void) { return km(64); }\nint dyn(unsigned long n) { return km(n); }\n"
+         + "extern void bug_on(void);\nint guard(void) { const unsigned long len = sizeof(int) * 4;\n"
+         + "  if (!__builtin_constant_p(len) || len == (unsigned long)-1) bug_on(); return (int)len; }\n"
+         + "int main(void) { return 0; }")
+   irB (cgn srcB)
+   (test
+      (two? irB)
+      (1 = calls (fnf 'fixed <>irB) "cached") (0 = calls (fnf 'fixed <>irB) "generic")
+      (0 = calls (fnf 'dyn <>irB) "cached") (1 = calls (fnf 'dyn <>irB) "generic")
+      (0 = calls (fnf 'guard <>irB) "bug_on")))
 
 (test_fin ())                                        ; no zz-fin here: quit before claiming ok
 (say err "test/law/moon: lexer + cpp + parser + gen goldens (seams, aggregates, doubles, varargs, asm, diagnostics, objects) + the residency laws (alive, a64 homing, splice binds, stld, copy propagation + its carrier exhaustion, cskeep, the destination die, liveness + promotion, coalescing) + the AST inliner + the value layer (rung 0) + per-def promotion (rungs 1+2+3, narrow and cs seats ride) + the interval locals allocator (rung 4) + the param-cell default (rung 5) + the one-build default and its rides (rung 6, the only world) ok")

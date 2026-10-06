@@ -594,7 +594,7 @@
                     ; R_X86_64_32 / _32S: S + a absolute into a 4-byte field. always a
                     ; foreign object's -- we emit the 64-bit or pc-relative form.
                     abs32? (!rv && elem kind '(10 11))
-                    pc64? (!rv && kind = 24)                        ; R_X86_64_PC64: S + A - P in eight bytes
+                    pc64? (!rv && elem kind '(24 260))              ; R_X86_64_PC64 / R_AARCH64_PREL64: S + A - P in eight bytes
                     w (? (abs64? || pc64?) 8 (rv && kind = 19) 8 4)             ; call_plt spans the auipc pair
                     ; -pie: this abs64 site holds a base-0 offset (base is 0), so record its
                     ; load-address for the startup relocator to add the real base to.
@@ -603,7 +603,7 @@
                     ; put the 64-bit base the startup relocator adds.
                     _ (relbox && abs32? ? (scare 'link-abs32-pie <sy))
                     _ ((elem kind $ rv ? '(2 17 19 57)
-                                            '(1 2 4 10 11 24 257 261 275 277 278 280 282 283 284 285 286 299)) ?
+                                            '(1 2 4 10 11 24 257 260 261 275 277 278 280 282 283 284 285 286 299)) ?
                          0 (scare 'link-reloc kind))
                     _ (ro + w <= sz ? 0 (scare 'link-oob (peep ob 'id 0)))
                     bs (? abs64? (le64 sa)                             ; the abs64 three: S + a outright

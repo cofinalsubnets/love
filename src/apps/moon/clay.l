@@ -77,14 +77,14 @@
     '((prog 1 1) (fn 1 5) (proto 1 4) (gdecl 1 2) (xdecl 1 2) (tdef 0 2) (note 1 1) (tasm 1 1)
       (edef 2 2) (sdef 2 3) (sassert 2 2) (cpp-def 1 2) (cpp-undef 1 1) (cpp-if 1 2)
       (blk 1 1) (decl 1 1) (sdecl 1 1) (ret 1 2) (if 2 3) (while 2 2) (for 4 4)
-      (do 2 2) (switch 2 2) (case 1 1) (dflt 0 0) (brk 0 0) (cont 0 0) (goto 1 1)
+      (do 2 2) (switch 2 2) (case 1 2) (dflt 0 0) (brk 0 0) (cont 0 0) (goto 1 1) (igoto 1 1)
       (lbl 1 1) (expr 1 1) (nop 0 0) (asm 5 6)
       (num 1 1) (flo 1 1) (str 1 1) (chr 1 1) (var 1 1) (bin 3 3) (un 2 2) (asn 2 2)
       ; ('rmw op lv rhs) -- `lv op= rhs` kept whole, because the desugar to
       ; (asn lv (bin op lv rhs)) would evaluate lv twice (parse.l's calm?)
       (rmw 3 3)
-      (post 2 2) (cond 3 3) (comma 2 2) (call 2 2) (deref 1 1) (addr 1 1)
-      (dot 2 2) (cast 2 2) (szof 1 1) (init 1 1) (dfield 2 2) (didx 2 2)
+      (post 2 2) (cond 3 3) (comma 2 2) (call 2 2) (deref 1 1) (addr 1 1) (laddr 1 1)
+      (dot 2 2) (cast 2 2) (szof 1 1) (bcp 1 1) (init 1 1) (dfield 2 2) (didx 2 2)
       (clit 2 2) (land 2 2) (lor 2 2) (vastart 1 2) (vaarg 2 2) (vaend 1 1)
       ; ('sexpr items value ty) -- gcc's ({ .. }), said back as one; the type slot is
       ; recomputed on a re-parse rather than read back from the text
@@ -250,6 +250,7 @@
         ('deref ('bin '+ b i)) (ce b 100 + "[" + ce i 0 + "]")
         ('deref x) ("*" + ce x 90)
         ('addr x) ("&" + ce x 90)
+        ('laddr l) ("&&" + l)
         ('post x d) (ce x 95 + (0 < d ? "++" "--"))
         ; a uint/ulong cast around a bare literal prints as the suffix: spelled as a
         ; cast, the reparse ladder (C11 6.4.4.1) would wrap a big value and double it
@@ -260,6 +261,7 @@
                     (sfx ? (cnum v + sfx) dflt))
                  dflt))
         ('szof x) ("sizeof(" + (ctype? x ? (cty x "") (ce x 0)) + ")")
+        ('bcp x) ("__builtin_constant_p(" + ce x 0 + ")")
         ; a call's arguments sit above the comma operator, hence 21
         ('call f as) (ce f 100 + "(" + sepby ", " (map (x \ ce x 21) as) + ")")
         ; (dot (deref x) "f") is what `x->f` parses to, so print the arrow back --
@@ -354,8 +356,10 @@
         ['brk] (line n "break;")
         ['cont] (line n "continue;")
         ['goto l] (line n ("goto " + l + ";"))
+        ['igoto x] (line n ("goto *" + ce x 90 + ";"))
         ['lbl l] (line (n < 1 ? 0 (n - 1)) (l + ":"))
         ['case v] (line (n < 1 ? 0 (n - 1)) ("case " + (charm? v ? (show v) (ce v 0)) + ":"))
+        ['case v w] (line (n < 1 ? 0 (n - 1)) ("case " + show v + " ... " + show w + ":"))
         ['dflt] (line (n < 1 ? 0 (n - 1)) "default:")
         ('if . _ . _ . _) (cif s n "")     ; lax: `if 2 3`, and cif reads the else itself
         ['while c b] (copen n "" ("while (" + ce c 0 + ")") b + cclose n b "")
