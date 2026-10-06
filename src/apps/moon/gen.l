@@ -1986,6 +1986,9 @@
                               (cmp r0 r1) (set eq r0))
                            ('((movqrx r0 f0) (raw (72 209 224)) (li r1 18437736874454810624)) +   ; shl rax,1; rcx = inf<<1
                               '((raw (72 57 200 15 148 192 72 15 182 192)))))))))     ; cmp; sete al; movzx rax,al
+       (elem bi '("__builtin_add_overflow" "__builtin_sub_overflow" "__builtin_mul_overflow")
+             && two? (ovlow g env bi args))
+        (cgexpr g env (ovlow g env bi args) ())
        (elem bi '("__builtin_add_overflow" "__builtin_sub_overflow" "__builtin_mul_overflow"))
         (: e1 (cgexpr g env <args ())
            e2 (cgexpr g env <>args ())
@@ -7710,6 +7713,57 @@
                 (cgstmt g env it @ r
                    (bad? r ? 'bad (sxpre g env >items (acc + r)))))))
 
+   ; __builtin_{add,sub,mul}_overflow(a, b, r) as C reads it: the exact value of a op b, each
+   ; operand taken in its own type, stored in *r's type modulo its width, and the answer whether it
+   ; did not fit there. each operand is a sign and a 64-bit magnitude; a carry past 64 bits is an
+   ; overflow whatever *r is. integer operands and *r of at most 64 bits -> an sexpr | ()
+   (ovlow g env bi args)
+    (: ity '(char schar cchar uchar short ushort int uint long ulong llong ullong)
+       ta (peekty g env <args) tb (peekty g env <>args) tr (peekty g env <>>args)
+       tt (two? tr && <tr = 'ptr ? <>tr ())
+       ; all three a signed machine word: the machine's own flag answers it (cgbuiltin's lane)
+       (sw? ty) (!(usg? ty) && tsz g ty = wsize g)
+       (? !(#args = 3 && elem ta ity && elem tb ity && elem tt ity && tsz g ta <= 8 && tsz g tb <= 8 && tsz g tt <= 8) ()
+          (sw? ta && sw? tb && sw? tt) ()
+          (: k (peep g 'ovn 0) _ (pin g 'ovn (k + 1))
+             (v n) ['var (".ov" + show k + n)]
+             (d n ty e) ['decl [[(".ov" + show k + n) ty e]]]
+             U 'ullong
+             (sgn n x ty) (usg? ty ? ['num 0] ['bin 'lt ['cast 'llong x] ['num 0]])
+             (mag n x) ['cond n ['un 'neg ['cast U x]] ['cast U x]]
+             sub (bi = "__builtin_sub_overflow") mul (bi = "__builtin_mul_overflow")
+             na (v "na") ma (v "ma") nb (v "nb") mb (v "mb") m (v "m") n (v "n") o (v "o")
+             w (8 * tsz g tt) M32 ['num 4294967295]
+             ; add/sub: like signs add (a carry past 64 bits overflows); unlike signs subtract
+             ; the smaller magnitude from the larger, which keeps its sign
+             add [(d "s" 'int ['bin 'eq na nb])
+                  (d "m" U ['cond (v "s") ['bin '+ ma mb] ['cond ['bin 'ge ma mb] ['bin '- ma mb] ['bin '- mb ma]]])
+                  (d "o" 'int ['land (v "s") ['bin 'lt m ma]])
+                  (d "n" 'int ['cond (v "s") na ['cond ['bin 'ge ma mb] na nb]])]
+             ; mul: the low word wraps as the machine's; a high half times a high half, a cross
+             ; product past 32 bits, or the carry adding it, overflows
+             mu [(d "m" U ['bin '* ma mb])
+                 (d "ah" U ['bin 'shr ma ['num 32]]) (d "bh" U ['bin 'shr mb ['num 32]])
+                 (d "c" U ['bin '+ ['bin '* (v "ah") ['bin '& mb M32]] ['bin '* ['bin '& ma M32] (v "bh")]])
+                 (d "o" 'int ['lor ['land (v "ah") (v "bh")]
+                               ['lor ['bin 'ne ['bin 'shr (v "c") ['num 32]] ['num 0]]
+                                     ['bin 'lt m ['bin '* ['bin '& ma M32] ['bin '& mb M32]]]]])
+                 (d "n" 'int ['land ['bin '^ na nb] ['bin 'ne m ['num 0]]])]
+             ; fits *r: within its range, a negative only where it is signed
+             fit (usg? tt ?
+                    ['land ['lor ['un 'not n] ['bin 'eq m ['num 0]]] (w < 64 ? ['bin 'le m ['num (2 ** w - 1)]] ['num 1])]
+                    ['cond n ['bin 'le m ['num (2 ** (w - 1))]] ['bin 'le m ['num (2 ** (w - 1) - 1)]]])
+             ; a plain &x is x itself, stored to by name: its address taken at all would escape x
+             ; and cost the caller its sibcalls
+             rx (<>>args @ ('addr ('var _)) <><>>args ())
+             ['sexpr
+              ([(d "a" ta <args) (d "b" tb <>args)] + (rx ? () [(d "r" tr <>>args)]) +
+               [(d "na" 'int (sgn "a" (v "a") ta)) (d "ma" U (mag na (v "a")))
+                (d "nb0" 'int (sgn "b" (v "b") tb)) (d "mb" U (mag (v "nb0") (v "b")))
+                (d "nb" 'int (sub ? ['un 'not (v "nb0")] (v "nb0")))]
+               + (mul ? mu add)
+               + [['expr ['asn (rx || ['deref (v "r")]) ['cast tt ['cond n ['un 'neg m] m]]]]])
+              ['lor o ['un 'not fit]] 'int])))
    ; a switch body's case/default labels at any depth: value->label pinned into tab -> (value label) dispatch pairs
    (scasel g it tab acc)
     (!(two? it) ? acc
