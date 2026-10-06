@@ -17,28 +17,26 @@
 ;
 ; a frame's samples are little-endian, signed, (bps + 7) / 8 bytes each: what the stream's md5
 ; is taken over, and what flac -d --force-raw-format --endian=little --sign=signed writes.
-(module (flac flac-sniff flac-meta flac-format flac-pump flac-wav-head flac-main metaflac-main
+(module (flac flac-sniff flac-meta flac-format flac-pump flac-wav-head flac-id3 flac-main metaflac-main
               flac-usage metaflac-usage)
+(borrow 'bytes)
+(borrow 'wav)
 (:
    peepv (cite 'guts 'peepv) pinv (cite 'guts 'pinv)
    open (cite 'posix 'open) close (cite 'posix 'close)
-   (be s i n) (foldl (\ a j (a * 256 + s (i + j))) 0 ^n)
-   (le s i n) (foldl (\ a j (a * 256 + s (i + j))) 0 (rev ^n))
-   (flac-cat l) (foldl (\ a x (a + x)) "" l)          ; cats, but "" for none
-   (hex s) (flac-cat (map (c \ (: d "0123456789abcdef" (string [(d (c >> 4)) (d (c & 15))]))) (chars s)))
 
    ; --- the metadata --------------------------------------------------------
    (flac-info s p)
     (: b (s (p + 12))
-       {'minbs (be s p 2) 'maxbs (be s (p + 2) 2) 'minfr (be s (p + 4) 3) 'maxfr (be s (p + 7) 3)
-        'rate ((be s (p + 10) 2) * 16 + (b >> 4)) 'ch (((b >> 1) & 7) + 1)
+       {'minbs (rdbe s p 2) 'maxbs (rdbe s (p + 2) 2) 'minfr (rdbe s (p + 4) 3) 'maxfr (rdbe s (p + 7) 3)
+        'rate ((rdbe s (p + 10) 2) * 16 + (b >> 4)) 'ch (((b >> 1) & 7) + 1)
         'bps ((((b & 1) * 16) + (s (p + 13) >> 4)) + 1)
-        'total (((s (p + 13) & 15) * 4294967296) + be s (p + 14) 4)
-        'md5 (hex (snip s (p + 18) (p + 34)))})
+        'total (((s (p + 13) & 15) * 4294967296) + rdbe s (p + 14) 4)
+        'md5 (b2hex (snip s (p + 18) (p + 34)))})
    (flac-tags s p n)
-    (: vn (le s p 4) k (le s (p + 4 + vn) 4)
+    (: vn (rdle s p 4) k (rdle s (p + 4 + vn) 4)
        (go i j acc) (? (j >= k || i + 4 > p + n) (rev acc)
-                       (le s i 4 @ m (go (i + 4 + m) (j + 1) (snip s (i + 4) (i + 4 + m) . acc))))
+                       (rdle s i 4 @ m (go (i + 4 + m) (j + 1) (snip s (i + 4) (i + 4 + m) . acc))))
        [(snip s (p + 4) (p + 4 + vn)) (go (p + 8 + vn) 0 ())])
    ; an id3v2 tag ahead of the stream is passed over, as flac does. a picture or padding past
    ; 64 KiB is skipped unread (av-head): the last block becomes an empty padding block, so the
@@ -47,7 +45,7 @@
     (: id3 (flac-id3 s)
        (go i m bl)
         (? (#s < i + 4) ['more (i + 4)]
-           (: t (s i & 127) last (s i >> 7) n (be s (i + 1) 3) p (i + 4)
+           (: t (s i & 127) last (s i >> 7) n (rdbe s (i + 1) 3) p (i + 4)
               (? (#s < p + n) (? ((t = 1 || t = 6) && 65536 < n) ['skip i (p + n) (last = 1 ? (string [129 0 0 0]) "")]
                                  ['more (p + n)])
                  (: m2 (? (t = 0) (pins (flac-info s p) 'blocks () 'tags () 'vendor "")
@@ -82,7 +80,6 @@
              "a bad frame (its crc, or a reserved code)"]
    (flac-pump q h0 m emit)
     (: bps (m 'bps) ch (m 'ch)
-       (gulp _) (see q @ -1 () c (unsee q c, chug q))
        ; an id3v1 tag at the end is no frame
        (tail? h o) (#h - o = 128 && "TAG" = snip h o (o + 3))
        ; the next frame sync at or past i, -1 for none in h
@@ -90,14 +87,14 @@
        ; until a frame has decoded, a stream entered mid-way (a seek) hunts for the next one,
        ; and a sync that is no frame is passed over
        (hunt h o) (sync h (o + 1) @ i (? (0 <= i) (go h i 1)
-                                         (gulp () @ g (string? g ? (go (snip h (max o (#h - 1)) #h + g) 0 1) (flac-why 1)))))
+                                         (wav-gulp q @ g (string? g ? (go (snip h (max o (#h - 1)) #h + g) 0 1) (flac-why 1)))))
        (go h o first)
         (flac-frame h o bps ch @
           (pcm . nx) (emit pcm, go h nx 0)
-          2 (gulp () @ g (? (string? g) (go (snip h o #h + g) 0 first)
-                            (o >= #h || tail? h o) 0
-                            (flac-why 2)))
-          1 (? (o >= #h) (gulp () @ g (string? g ? (go g 0 first) 0))
+          2 (wav-gulp q @ g (? (string? g) (go (snip h o #h + g) 0 first)
+                               (o >= #h || tail? h o) 0
+                               (flac-why 2)))
+          1 (? (o >= #h) (wav-gulp q @ g (string? g ? (go g 0 first) 0))
                (tail? h o) 0
                first (hunt h o)
                (flac-why 1))
@@ -118,15 +115,14 @@
    flac-masks [4 3 7 51 1543 1551 1807 1599]
    (flac-wav-head m)
     (: ch (m 'ch) bps (m 'bps) w ((bps + 7) // 8) d (m 'total * ch * w)
-       (wle v n) (string (map (k \ (v >> (8 * k)) & 255) ^n))
        ext (ch > 2 || (bps != 8 && bps != 16))
        fmt ((ext ? 65534 1) @ tag
-              (wle tag 2 + wle ch 2 + wle (m 'rate) 4 + wle (m 'rate * ch * w) 4 + wle (ch * w) 2
-               + wle (8 * w) 2
-               + (ext ? (wle 22 2 + wle bps 2 + wle (flac-masks (ch - 1)) 4
+              (wrle tag 2 + wrle ch 2 + wrle (m 'rate) 4 + wrle (m 'rate * ch * w) 4 + wrle (ch * w) 2
+               + wrle (8 * w) 2
+               + (ext ? (wrle 22 2 + wrle bps 2 + wrle (flac-masks (ch - 1)) 4
                          + "\x01\x00\x00\x00\x00\x00\x10\x00\x80\x00\x00\xaa\x00\x38\x9b\x71") "")))
        ; a size past 4 GiB is 0xffffffff, never wrapped
-       ("RIFF" + wle (min 4294967295 (20 + #fmt + d)) 4 + "WAVE" + "fmt " + wle #fmt 4 + fmt + "data" + wle (min 4294967295 d) 4))
+       ("RIFF" + wrle (min 4294967295 (20 + #fmt + d)) 4 + "WAVE" + "fmt " + wrle #fmt 4 + fmt + "data" + wrle (min 4294967295 d) 4))
 
    ; --- flac ----------------------------------------------------------------
    flac-usage "usage: flac [-0..-8] [-b N] [-T NAME=VALUE].. [--no-padding] [--no-seektable] [-c] [-f] [-s] [-o FILE] FILE..
@@ -174,6 +170,7 @@
                                        (flac-say o (nm + ": done\n")))))))))))))
    ; --- encoding ------------------------------------------------------------
    flac-level-bs [1152 1152 1152 4096 4096 4096 4096 4096 4096]
+   ; a field keeps its width while its value is () (the head laid ahead), as wrbe would not
    (flac-be v n) (string (map (k \ (v // (256 ** (n - 1 - k))) % 256) ^n))
    (flac-le v n) (string (map (k \ (v // (256 ** k)) % 256) ^n))
    (flac-unhex h) (string (map (i \ (: (d c) (c < 58 ? (c - 48) (c - 87)) (d (h (2 * i)) * 16 + d (h (2 * i + 1))))) ^(#h // 2)))
@@ -199,7 +196,7 @@
                  [f f "" (cite 'wav 'wav-pump) q])))
        ; every block of a head is kept, so a re-encode carries its pictures
        ((cite 'av 'av-open-all) q @
-          [nm m h] (: c (<(filter (c \ <c = nm) ((cite 'av 'av-codecs) ())))
+          [nm m h] (: c ((cite 'av 'av-codec) nm)
                       [((c 3) m) m h (c 4) q])
           why why))
    ; a source encoded onto port d (the file op, or "-") a frame at a time -> [bytes total] |
@@ -232,13 +229,13 @@
                             (go (k + 1) (acc && <<acc = sn ? acc ([sn (offs fi) (<(sizes fi))] . acc)))))
            real (total = 0 || atom? sizes ? () (go 0 ()))
            ps (snip real 0 (min np #real))
-           (flac-cat (map (p \ flac-be (p 0) 8 + flac-be (p 1) 8 + flac-be (p 2) 2) ps)
-            + flac-cat (map (_ \ flac-be 18446744073709551615 8 + flac-be 0 8 + flac-be 0 2) ^(np - #ps))))
+           (join "" (map (p \ flac-be (p 0) 8 + flac-be (p 1) 8 + flac-be (p 2) 2) ps)
+            + join "" (map (_ \ flac-be 18446744073709551615 8 + flac-be 0 8 + flac-be 0 2) ^(np - #ps))))
        np (? (dt <= 0) 0 (: (go k acc) (? (dt <= k * 10 * rate) acc
                                           (: sn (k * 10 * rate // bs * bs) (go (k + 1) (acc && <acc = sn ? acc (sn . acc)))))
                             #(go 0 ())))
        vendor ("love " + love-version)
-       (vc ts) (flac-le #vendor 4 + vendor + flac-le #ts 4 + flac-cat (map (t \ flac-le #t 4 + t) ts))
+       (vc ts) (flac-le #vendor 4 + vendor + flac-le #ts 4 + join "" (map (t \ flac-le #t 4 + t) ts))
        ; a flac re-encoded keeps its blocks but STREAMINFO, the padding's length, and its tags
        ; unless -T gives others
        kf (tablet? m && string? (peep m 'head ()))
@@ -263,7 +260,7 @@
                 + (has 4 ? () [[4 (vc (o "tags" @ () () t (rev t)))]])
                 + map (b \ [<b (body b)]) kept + (o "nopad" ? () [[1 (string (cask padn))]]))
            ("fLaC" + flac-block 0 0 info
-            + flac-cat (map (i \ flac-block (i = #bks - 1) <(bks i) ((bks i) 1)) ^#bks)))
+            + join "" (map (i \ flac-block (i = #bks - 1) <(bks i) ((bks i) 1)) ^#bks)))
        z16 (string (cask 16))
        (? (string? conv) conv
           (ch > 8) "can't encode past 8 channels"
@@ -288,12 +285,11 @@
    (flac-reseek s total bs offs sizes)
     (: ph (string (map (k \ 255) ^8))
        ps (map (i \ snip s (18 * i) (18 * i + 18)) ^(#s // 18))
-       (be8 p) (foldl (\ a j (a * 256 + p j)) 0 ^8)
-       live (filter (p \ snip p 0 8 != ph && be8 p < total) ps)
-       far (filter (p \ snip p 0 8 != ph && be8 p >= total) ps)
-       sns (foldl (\ a sn (two? a && <a = sn ? a (sn . a))) () (sort (map (p \ be8 p // bs * bs) live)))
+       live (filter (p \ snip p 0 8 != ph && rdbe p 0 8 < total) ps)
+       far (filter (p \ snip p 0 8 != ph && rdbe p 0 8 >= total) ps)
+       sns (foldl (\ a sn (two? a && <a = sn ? a (sn . a))) () (sort (map (p \ rdbe p 0 8 // bs * bs) live)))
        re (map (sn \ flac-be sn 8 + flac-be (offs (sn // bs)) 8 + flac-be (<(sizes (sn // bs))) 2) (rev sns))
-       (flac-cat (re + far + map (k \ ph + string (cask 10)) ^(#ps - #re - #far))))
+       (join "" (re + far + map (k \ ph + string (cask 10)) ^(#ps - #re - #far))))
    ; to three places, rounded; flac input on stdin has no size to say it against
    (flac-ratio a b) (? !(charm? b) "N/A"
                        ((b ? ((2000 * a + b) // (2 * b)) 0) @ k (show (k // 1000) + "." + snip (show (1000 + k % 1000)) 1 4)))
@@ -403,19 +399,19 @@
                        + m 'md5 + "\n")
                   3 (: k (len // 18)
                        ("  seek points: " + show k + "\n"
-                        + flac-cat (map (j \ (: q (p + 18 * j)
-                                           ("    point " + show j
-                                            + (be s q 8 = 18446744073709551615 ? ": PLACEHOLDER\n"
-                                               (": sample_number=" + show (be s q 8) + ", stream_offset="
-                                                + show (be s (q + 8) 8) + ", frame_samples="
-                                                + show (be s (q + 16) 2) + "\n")))))
-                                    ^k)))
+                        + join "" (map (j \ (: q (p + 18 * j)
+                                          ("    point " + show j
+                                           + (rdbe s q 8 = 18446744073709551615 ? ": PLACEHOLDER\n"
+                                              (": sample_number=" + show (rdbe s q 8) + ", stream_offset="
+                                               + show (rdbe s (q + 8) 8) + ", frame_samples="
+                                               + show (rdbe s (q + 16) 2) + "\n")))))
+                                   ^k)))
                   4 (flac-tags s p len @ [v ts]
                        ("  vendor string: " + v + "\n  comments: " + show #ts + "\n"
-                        + flac-cat (map (j \ "    comment[" + show j + "]: " + ts j + "\n") ^#ts)))
-                  2 ("  application ID: " + hex (snip s p (p + 4)) + "\n")
+                        + join "" (map (j \ "    comment[" + show j + "]: " + ts j + "\n") ^#ts)))
+                  2 ("  application ID: " + b2hex (snip s p (p + 4)) + "\n")
                   "")))
-       (flac-cat (map (i \ n i (m 'blocks i)) ^#(m 'blocks))))
+       (join "" (map (i \ n i (m 'blocks i)) ^#(m 'blocks))))
    (mf-tag ts k) (filter (t \ (findsub t "=") @ i (0 < i && upper (snip t 0 i) = upper k)) ts)
    mf-opts ["--list" "--show-md5sum" "--show-min-blocksize" "--show-max-blocksize" "--show-min-framesize"
             "--show-max-framesize" "--show-sample-rate" "--show-channels" "--show-bps"
@@ -437,7 +433,7 @@
     (: m (flac-meta s)
        (? !(tablet? m) (flac-err ("ERROR: " + (string? m ? m "cut short")))
           (: _ (each ops (a \ say out (a = "--list" ? (mf-show s m a)
-                                       (flac-cat (map (x \ pre + x + "\n") (lines (mf-show s m a)))))))
+                                       (join "" (map (x \ pre + x + "\n") (lines (mf-show s m a)))))))
              _ (flush out)
              0)))
    ; the head alone, every block of it

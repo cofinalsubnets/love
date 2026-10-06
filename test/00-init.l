@@ -94,4 +94,11 @@
                       (test_set 'fail (x . (two? (test_get 'fail) ? (test_get 'fail)))))))
                 ('do . map (l \ [report ['\ l] l]) l))))
 
+; the codec tests' reads: a file whole ("" for none), s16le as signed numbers, and 11172-4's
+; full accuracy -- the rms under 1/sqrt 12 of a step, none more than two
+(: (av-t-rd p) (open p "r" @ q (hot? q ? (: s (slurp q) (close q, s)) ""))
+   (av-t-s16 s) ((cite 'guts 'peepv) (: c (cask #s) (pour c 0 s 0 #s, c)) 0 2 2 (#s // 2) @ t (t - 65536 * (t >= 32768)))
+   (av-t-full a b) (? (#a != #b || #a < 2) 0
+                      (: d (av-t-s16 a - av-t-s16 b) (net (d * d) / (#a // 2) < 1 / 12 && aall (d <= 2) && aall (d >= -2)))))
+
 (hear test-strict)
