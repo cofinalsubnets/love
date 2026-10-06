@@ -7873,6 +7873,10 @@
              alw (peep (g 'alw) nm ())
              (bar? x) (two? x ?
                          (x @ ('addr ('var v)) (elem v loc)
+                              ; the overflow builtins' result pointer is written in place and kept by
+                              ; no one: a local's address there does not escape (kmalloc_array's &bytes)
+                              ('call ('var b9) [a1 a2 a3] && elem b9 '("__builtin_add_overflow" "__builtin_sub_overflow" "__builtin_mul_overflow"))
+                               (bar? a1 || bar? a2 || (a3 @ ('addr ('var v)) () (bar? a3)))
                               ('call ('var b9) _ && b9 = "__builtin_frame_address") 1
                               ('call ('var b9) _ && b9 = "__builtin_return_address") !alw
                               ('asm . _) (need || alw ? (bar? >x) 1)

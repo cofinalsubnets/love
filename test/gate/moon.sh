@@ -94,6 +94,16 @@ moonrun -t a64 -c "$ho/.bugl.c" -o "$ho/.bugl.o" || fail "mooncc -t a64 a live B
 ! grep -q 'l14471' "$ho/.bugd.o" || fail "a dead BUG asm's __bug_table row names its removed label"
 grep -q '__bug_table' "$ho/.bugl.o" || fail "a live BUG asm lost its __bug_table row"
 
+# an inline helper whose local's address goes only to an overflow builtin is spliced, and
+# leaves no body of its own (kmalloc_array's &bytes); one handing that address to a call keeps
+# the bar and stays a call
+printf 'extern void *big(unsigned long);\nstatic inline void *karr(unsigned long n, unsigned long s) { unsigned long b; if (__builtin_mul_overflow(n, s, &b)) return 0; return big(b); }\nvoid *f(void) { return karr(4, 8); }\n' > "$ho/.ovf.c"
+printf 'extern void sink(long *);\nstatic inline long kesc(long x) { long b = x; sink(&b); return b; }\nlong g(void) { return kesc(3); }\n' > "$ho/.esc.c"
+moonrun -c "$ho/.ovf.c" -o "$ho/.ovf.o" || fail "mooncc an overflow builtin's &local"
+moonrun -c "$ho/.esc.c" -o "$ho/.esc.o" || fail "mooncc an escaping &local"
+! grep -q 'karr' "$ho/.ovf.o" || fail "an inline helper whose &local goes only to __builtin_mul_overflow was not spliced"
+grep -q 'kesc' "$ho/.esc.o" || fail "an inline helper handing its &local to a call was spliced"
+
 # a jump label: its "i" operand a local derived from params (arch_static_branch's
 # `char *k = &((char *)key)[branch]`), constant once the call is spliced, so the body compiles
 # only spliced; its asm goto target is named only by the __jump_table words, never by a jump,
