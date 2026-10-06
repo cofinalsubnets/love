@@ -2803,7 +2803,7 @@
                                            (. [['ov ovc 2] (tor0 g a + ldal 'r1 'r0 0 8 al + [['st 'sp o 'r1]]
                                                             + ldal 'r1 'r0 8 (n - 8) al + [['st 'sp (o + 8) 'r1]])]
                                               acc)))
-                                  (arm? g) 'bad             ; arm? is every non-x64 seat here
+                                  (arm? g) (nolane g ("no lane for a by-value struct past the arg registers" + ontgt g))
                                   (kls >as (i + 1) gpc xmmc (ovc + 2)
                                        (. [['ov ovc 2] (tor0 g a + push2w)] acc)))
                               (: i0 (f0 @ 'g gpc xmmc)
