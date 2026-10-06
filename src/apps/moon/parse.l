@@ -349,6 +349,14 @@
                  pin (t 'sigs) "__builtin_popcount" '(int (uint) ()),
                  pin (t 'sigs) "__builtin_popcountl" '(int (ulong) ()),
                  pin (t 'sigs) "__builtin_popcountll" '(int (ulong) ()),
+                ; clz and ctz: an unsigned operand, a plain int count, gcc's own signatures -- so an
+                ; __auto_type or a typeof over one (linux's ilog2) types
+                 pin (t 'sigs) "__builtin_clz" '(int (uint) ()),
+                 pin (t 'sigs) "__builtin_clzl" '(int (ulong) ()),
+                 pin (t 'sigs) "__builtin_clzll" '(int (ulong) ()),
+                 pin (t 'sigs) "__builtin_ctz" '(int (uint) ()),
+                 pin (t 'sigs) "__builtin_ctzl" '(int (ulong) ()),
+                 pin (t 'sigs) "__builtin_ctzll" '(int (ulong) ()),
                 ; ffs: gcc's signed operands, a plain int answer (0 for 0, else the lowest set bit's 1-based index)
                  pin (t 'sigs) "__builtin_ffs" '(int (int) ()),
                  pin (t 'sigs) "__builtin_ffsl" '(int (long) ()),
@@ -493,6 +501,7 @@
              ; a literal: sizeof('T') is sizeof(int) (musl's _IOW ioctl codes);
              ; a plain decimal past int32 is a long (suffixed forms arrive cast)
              (k = 'num) (-2147483648 <= <>e && <>e <= 2147483647 ? 'int 'long)
+             (k = 'bcp) 'int
              (k = 'flo) 'double
              (k = 'flof) 'float
              ; arithmetic rides the typing door: ptr - ptr is ptrdiff_t, ptr +- int the
@@ -896,15 +905,18 @@
              (tkk t = 'id && (peep (ps 'types) (tkv t) 0 ? 1))
               [(peep (ps 'types) (tkv t) 0) >ts]
              ; __auto_type NAME = init: the initializer's own type, parsed here with the cursor
-             ; left at the name so the ordinary declarator path runs. gcc allows no other declarator
+             ; left at the name so the ordinary declarator path runs. gcc allows no other declarator,
+             ; but attributes may stand between the name and its = (linux's scoped guards)
              (tkk t = 'id && tkv t = autoid)
               (>ts @ r1
+                 (: (atts l) (? (two? l && idv? <l "__attribute__" && peekp >l "(") (skipbal >>l 1 @ e (atts e)) l)
+                    r2 (two? r1 ? (atts >r1) r1)
                  (? !(idat? r1) ()
-                    !(peekp >r1 "=") ()
-                    (pasn ps >>r1 @ er
+                    !(peekp r2 "=") ()
+                    (pasn ps >r2 @ er
                        (atom? er ? ()
                           (ptype ps <er @ ty
-                             (ty ? [ty r1]))))))
+                             (ty ? [ty r1])))))))
              ; __typeof(expr) / __typeof__(type-name) (gcc): the operand's parse-time type --
              ; a type-name reads pcty, an expression ptype (whose 'sigs lane carries weak_alias)
              (tkk t = 'id && elem (tkv t) tyofid)
@@ -1201,14 +1213,16 @@
                  ; _Generic's marked types, so an inner const tells `const char *` from `char
                  ; *`; the top-level one is dropped, C11's own reading and gcc's for this builtin
                  (two? rest ? [['num (qbare <ta = qbare <tb ? 1 0)] rest]))
-             ; __builtin_constant_p: 1 when the parse-time fold settles the operand, 0 when
-             ; it does not -- a miss sends the consumer down its runtime lane, the safe end.
-             ; the operand is not evaluated, so its side effects are gone.
+             ; __builtin_constant_p: 1 when the parse-time fold settles the operand; else a
+             ; deferred ('bcp e) that gen decides once inlining and constant propagation have
+             ; run (a param bound to a constant reads 1), and a constant context reads as 0 --
+             ; a miss sends the consumer down its runtime lane, the safe end. the operand is
+             ; never evaluated, so its side effects are gone.
              (tkk t = 'id && bib? (tkv t) && tkv t = "__builtin_constant_p")
               (: r1 (want >ts "(")
                  ra (two? r1 ? (pasn ps r1))
                  rest (two? ra ? (want <>ra ")"))
-                 (two? rest ? [['num (charm? (cfold (pw64 ps) <ra) ? 1 0)] rest]))
+                 (two? rest ? [(charm? (cfold (pw64 ps) <ra) ? ['num 1] ['bcp <ra]) rest]))
              ; __builtin_object_size(p,t) and the dynamic spelling: the answer gcc gives when
              ; it cannot see the object -- (size_t)-1 for types 0/1, 0 for 2/3, the conservative
              ; end both ways, which is what the kernel's fortify checks read to stand down
@@ -1460,7 +1474,7 @@
    ; gcc's `a ?: b` is `a ? a : b` with a read once: a side-effect-free a is simply repeated
    ; (so a constant stays one), anything else lands in a temp inside a statement expression
    (elvpure? e)
-    (e @ (('num || 'flo || 'str || 'var || 'szof) . _) 1
+    (e @ (('num || 'flo || 'str || 'var || 'szof || 'bcp) . _) 1
          (('un || 'cast) _ x) (elvpure? x)
          (('deref || 'addr) x) (elvpure? x)
          ('dot x _) (elvpure? x)
@@ -1759,6 +1773,8 @@
                     (? (f = 'bad) ()
                        (ty = 'bool) [(f = 0.0 ? 0 1) 'bool]   ; to _Bool is a compare, never a truncation
                        (wr ty (ceil (f // 1)))))))           ; and every other one truncates toward zero
+          ; a deferred __builtin_constant_p in a constant context: 1 if its operand folds, else 0
+          (<e = 'bcp) (cfty w64 <>e @ r (two? r ? [1 'int] [0 'int]))
           ; the bit builtins over a constant fold, so one can label a case or size a bit-field
           (<e = 'call)
            (: h <>e as <>>e
@@ -1892,7 +1908,15 @@
                    (more ts2 acc)
                     (one ts2 @ r
                        (? (atom? r) ()
-                          (peekp <>r ",") (more ><>r (<r . acc))
+                          ; a declarator finished is in scope for the ones after it, typeof
+                          ; and sizeof included (`int timeout, err = ({ __typeof__(timeout) v; .. })`),
+                          ; put back when the list is read
+                          (peekp <>r ",")
+                           (: e <r nm <e old (peep (ps 'locals) nm 'none)
+                              _ (fn? (e 1) ? 0 (pin (ps 'locals) nm (e 1)))
+                              res (more ><>r (<r . acc))
+                              (fn? (e 1) ? 0 (old = 'none ? (pull (ps 'locals) nm 0) (pin (ps 'locals) nm old)),
+                               res))
                           (: rest (want <>r ";")
                              es (filter (e \ !(fn? <>e)) (rev (<r . acc)))
                              ; the extern entries hoist to the TU's top, where gen's global
@@ -2131,23 +2155,23 @@
              ; case/default are labels, legal at any statement depth and not just as a direct
              ; child of the switch body (Duff's-device style); gen ties each back to its nearest
              ; enclosing switch by case value (g 'cases). gcc's `case A ... B:` expands to one
-             ; label per value -- sound because a switch dispatches by a compare chain, not a
-             ; table -- and is capped, so a wide range refuses rather than laying thousands.
+             ; label per value when narrow (a table may still take it), and a wider one is one
+             ; ('case A B) the dispatch tests as one unsigned compare (linux's sysreg ranges).
              (tkw? t 'case)
               (pexpr ps >ts @ rv
                  (atom? rv ? ()
                     (: v (cfold (pw64 ps) <rv)
                        (crange lo hi acc) (hi < lo ? (rev acc) (crange (lo + 1) hi (['case lo] . acc)))
-                       (? !(charm? v) ()
+                       (? !(cint? v) ()
                           (peekp <>rv "...")
                            (pexpr ps ><>rv @ r2
                               (atom? r2 ? ()
                                  (: hi (cfold (pw64 ps) <r2)
                                     rest (want <>r2 ":")
-                                    (? !(charm? hi) ()
+                                    (? !(cint? hi) ()
                                        (atom? rest) ()
                                        (hi < v) (blame <>rv "an empty case range")
-                                       (1024 < hi - v) (blame <>rv "case range too wide")
+                                       (16 < hi - v) [['case v hi] rest]
                                        [['blk (crange v hi ())] rest]))))
                           (want <>rv ":" @ rest
                              (two? rest ? [['case v] rest]))))))

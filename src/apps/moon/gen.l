@@ -2031,6 +2031,7 @@
    ; knows where the value must land passes it, and a lane that ignores it answers its usual register
    (cgexpr g env e wnt)
     (e @- 'bad                                      ; the refusal, up front: its clauses run 600 lines
+       ('bcp e2) (cgexpr g env ['num (charm? (cfold !(t32? g) e2) ? 1 0)] wnt)
        ('szof e2)                                   ; sizeof EXPR: the undecayed type (clval keeps arrays), size a constant
         (peekty g env e2 @ ty
            (? (bad? ty) 'bad
@@ -4026,8 +4027,10 @@
        (swallow fs) (two? fs ?                ; the align ahead of a label is the label's
                        (<fs @ f (two? f && (<f = 'label || <f = 'align) ? fs (swallow >fs))))
        (atlab? fs l) (two? fs && (<fs @ f (two? f && <f = 'label && <>f = l)))
-       ; misc: labels named by a form other than a control transfer (an asm splice can hold one); over-approximate, filled by bscan
-       misc {}
+       ; misc: labels named by a form other than a control transfer (an asm splice can hold one, and
+       ; an asm's other-section words: a jump label's table names an asm goto's target no code
+       ; jumps to); over-approximate, seeded from those words and filled by bscan
+       misc (cg-refs (g 'fasecs) {})
        ; back-edge labels (a transfer below its target): a loop head joins an edge this linear pass never computes -- assume nothing
        backs (: seen {} bt {}
                 (bscan l) (!(two? l) ? bt
@@ -5354,9 +5357,12 @@
    ; label (refs = every symbol operand, over-approximate); a dropped region takes its refs with it
    ; every nom among a form's operands pinned into t; nested operands (a raw splice's forms) scan whole
    (pinnoms t ops) (!(two? ops) ? 0 (<ops @ o ((? (nom? o) (pin t o 1) (two? o) (pinnoms t o)), pinnoms t >ops)))
-   (deadlab fs) (deadlab1 fs @ r (#r = #fs ? r (deadlab r)))
-   (deadlab1 fs)
-    (: refs {}
+   ; ks seeds the refs: what a function's asm names from another section (a jump label's
+   ; table names an asm goto's target, which no code jumps to) is no dead label
+   (deadlab fs) (deadlabk {} fs)
+   (deadlabk ks fs) (deadlab1 ks fs @ r (#r = #fs ? r (deadlabk ks r)))
+   (deadlab1 ks fs)
+    (: refs (foldl (t \ k \ pin t k 1) {} (keys ks))
        (scan l) (!(two? l) ? 0
                    (<l @ f
                       (two? f && <f != 'label ? (pinnoms refs >f),
@@ -6371,14 +6377,36 @@
            'dot
             (imlval g <>e @ 'no 'no b
              (fmem g <>>b <>>e @ fm (bad? fm ? 'no [<b (<>b + <fm) <>fm])))
+           ; a compound literal in a static initializer is an object of its own, static as the
+           ; one it initializes (C11 6.5.2.5), laid beside the data. it is keyed by the global
+           ; being laid and its place in that image, so each literal is its own object and a
+           ; stream pass that images the global again reuses it
+           'clit
+            (: ty <>e i (peep g 'clitn 0) _ (pin g 'clitn (i + 1)) k [(g 'clitg) i] m (g 'clitm)
+               (peep m k () @ l
+                 (l ? [l 0 ty]
+                    (cgimage g ty <>>e @ b
+                      (bad? b ? 'no
+                         (: l2 (nlab g ".C")
+                            (pin m k l2,
+                             pin g 'clits ([l2 (max 8 (tal g ty)) b] . g 'clits),
+                             [l2 0 ty])))))))
            'no)
    ; a ?: whose condition is known at image time -> the arm it takes | 'no: an integer that
    ; folds, or a string or static address, which is never null (the kernel's `"f" ? .. : 0`)
    (imsel g e)
     (: c <>e
        v (cfold !(t32? g) c)
+       ; an object's or a function's address is never null: compared with a null constant, or
+       ; negated, it decides the test (OF_DECLARE's `(fn == (fn_type)NULL) ? fn : fn`)
+       (addr? x) ((two? x && <x = 'str) || imaddr g x != 'no)
+       (null? x) (cfold !(t32? g) x @ k (cint? k && k = 0))
        t (? (cint? v) (v != 0)
             (two? c && <c = 'str) 1
+            (c @ ('bin op a b) (elem op '(eq ne)) ('un 'not _) 1 ())
+             (c @ ('un 'not x) (addr? x ? 0 'no)
+                  ('bin op a b) ((addr? a && null? b) || (addr? b && null? a) ? (op = 'ne) 'no)
+                  'no)
             (imaddr g c @ a (a = 'no ? 'no 1)))
        (? (t = 'no) 'no t <>>e <>>>e))
    ; a constant address at image time -> (label byteoffset ptrtype) | 'no; a cast retypes, so
@@ -6400,6 +6428,10 @@
                  (<>en @ ty (arr? ty ? [<en 0 ['ptr <>ty]] [<en 0 ['ptr ty]])))))
        'addr
         (imlval g <>e @ lv (lv @ 'no 'no [<lv <>lv ['ptr <>>lv]]))
+       ; an array-typed element or compound literal decays the same way: a row of a 2-D array
+       ; (`regs[N]`, `&a[0][0]`'s inner a[0]), `(const char *[]){..}`
+       ('deref || 'clit)
+        (imlval g e @ lv (lv = 'no || !(arr? <>>lv) ? 'no [<lv <>lv ['ptr <>(<>>lv)]]))
        ; an array member decays to its first element's address (&s.arr[0] reads s.arr + 0)
        'dot
         (imlval g e @ lv (lv = 'no || !(arr? <>>lv) ? 'no [<lv <>lv ['ptr <>(<>>lv)]]))
@@ -6756,7 +6788,8 @@
                      (local? <x || local? >x))
        (? (charm? k) k
           (local? e2) 'no
-          (imaddr g e2 @ a
+          ; a probe: what it fails to resolve is no refusal's cause, so the pin is left as found
+          ((: u0 (g 'undecl) a (imaddr g e2) (pin g 'undecl u0, a)) @ a
              (a @ 'no 'no
                   (: nm (nom? <a ? (show <a) <a) (<>a @ 0 nm (<>a < 0 ? (nm + show <>a) (nm + "+" + show <>a))))))))
    ; an operand's byte width, off its type by static peek (a register spells by it on x64)
@@ -6774,9 +6807,11 @@
     ; template carrying one takes the runs path, its labels the function's own
     (neutral? || gas-plain? tgt txt && !(any (f \ two? f && <f = 'pushl) (gas-text tgt txt)) ?
        [['raw (: prog (neutral? ? (asm-text txt) (gas-text tgt txt))                 (asmho tgt prog (cg-refs prog {})))]]
-       (: r (gas-top-in tgt txt "" [1 6] (show (nlab g (g 'fn + ".asm")) + "."))
+       (: pf (show (nlab g (g 'fn + ".asm")) + ".")
+          r (gas-top-in tgt txt "" [1 6] pf)
           home (foldl (a \ x \ <x = "" ? (x 3) a) () <r)
-          (pin g 'fasecs ([(filter (x \ <x != "") <r) (r 1) (r 2)] . g 'fasecs),
+          ; the prefix rides along: what dead code removes of the home, the record follows out
+          (pin g 'fasecs ([(filter (x \ <x != "") <r) (r 1) (r 2) pf] . g 'fasecs),
            asmruns tgt home)))
    ; forms -> raw runs between the labels and aligns, every fix left open for the function's lay
    (asmruns tgt fs)
@@ -6788,8 +6823,21 @@
                  (go >l (f . cur) acc))))
        (go fs () ()))
    ; the file-scope asm's sections and every function's, one [secs fns objs]
-   (asecs-all g) (foldl (a \ r \ two? a ? [(<a + <r) (a 1 + r 1) (a 2 + r 2)] r)
-                        (g 'asecs) (rev (g 'fasecs)))
+   (asecs-all g) (asecs-of g (rev (g 'fasecs)))
+   (asecs-of g l) (foldl (a \ r \ two? a ? [(<a + <r) (a 1 + r 1) (a 2 + r 2)] (take 3 r))
+                         (g 'asecs) l)
+   ; ..less a function asm's whose home the dead code removed: its words name labels of that
+   ; asm the text no longer lays (a BUG_ON a fold proved false keeps no __bug_table row)
+   (asecs-live g txt)
+    (: (lbls x t) (? !(two? x) t (<x = 'label && nom? <>x) (pin t (show <>x) 1) (lbls >x (lbls <x t)))
+       have (lbls txt {})
+       ; a record is dead when a label of its own asm that it names but does not itself lay is
+       ; gone from the text; a label it lays in its own section (`2:` in the table) is no home's
+       (live? r) (? !(string? (r 3)) 1
+                    (: own (lbls (take 3 r) {})
+                       outs (filter (n \ starts? n (r 3) && !(own n)) (map show (keys (cg-refs (take 3 r) {}))))
+                       (all (n \ have n) outs)))
+       (asecs-of g (filter live? (rev (g 'fasecs)))))
    ; a refusal that names what the asm asked for, for cgfn's report
    (asmno g msg) (pin g 'nolane msg, 'bad)
    ; what gas or holo could not read, as a sentence: the reader's own name for it and the piece
@@ -7009,7 +7057,7 @@
        (nhc e) (!(two? e) ? 0
                   (e @ ('call ('var nm) as) ((soft? nm ? (nhin nm) 1) + nhcl as)
                        ('call fh as) (1 + nhc fh + nhcl as)
-                       ('szof . _) 0
+                       (('szof || 'bcp) . _) 0
                        (nhcl e)))
        ; a ret-tail call hardens nothing (sibcall jumps it, and a home is dead at its own return) --
        ; but a soft tail splices and its body's hard calls land in this frame; a musttail never splices (mt9)
@@ -7023,7 +7071,7 @@
                 (nhc e)))
        ; protocol dirt, anything that writes r0-r3: a call's staging, div/mod (r0:r2), a variable
        ; shift (r1), a d128 cast (r0:r2). a fn with none may ride a quad arrival
-       (pdt e) (e @ ('szof . _) 0
+       (pdt e) (e @ (('szof || 'bcp) . _) 0
                     ('call . _) 1
                     ('asm . _) 1
                     ('bin op a b && elem op '(/ %)) (1 + pdt a + pdt b)
@@ -7542,6 +7590,10 @@
           ('asm . _) (cgasm g env s)
           ; a case/default label emits from the tablet atop g 'cases (the switch's pre-scan pinned
           ; value->label); no enclosing switch, or an unscanned value, refuses
+          ('case lo hi)
+           (!(two? (g 'cases)) ? 'bad
+              (peep <(g 'cases) [lo hi] 'no @ lab
+                 (lab @ 'no 'bad [['label lab]])))
           ('case cv)
            (!(two? (g 'cases)) ? 'bad
               (peep <(g 'cases) cv 'no @ lab
@@ -7559,8 +7611,16 @@
                     tab {}                ; this switch's value->label map (and 'dflt->label)
                     cases (rev (scasel-l g items tab ()))   ; pre-scan the body at any depth -> (value label) dispatch pairs
                     dflt (peep tab 'dflt lend)
+                    ; a range is two compares in the control's own signedness, r1 the scratch as
+                    ; a single case's: below lo skips past, at most hi takes the case
+                    (rng lo hi lab)
+                     (: ty (vty c) u (usg? ty) l9 (cfit g ty lo) h9 (cfit g ty hi) sk (nlab g ".r")
+                        (cmpk v) (immok g 'cmp v ? [['cmp cr9 v]] [['li 'r1 v] ['cmp cr9 'r1]])
+                        (cmpk l9 + [['br (scc 'lt u) sk]] + cmpk h9 + [['br (scc 'le u) lab] ['label sk]]))
                     chain (: (go l acc)
-                             (!(two? l) ? acc
+                             (? !(two? l) acc
+                                (bad? acc) acc
+                                (two? <<l) (rng <<<l <><<l <><l @ r (bad? r ? 'bad (go >l (acc + r))))
                                 (: e2 <l  v (cfit g (vty c) <e2)  lab <>e2
                                    ins (immok g 'cmp v ?
                                           [['cmp cr9 v] ['br 'eq lab]]
@@ -7577,7 +7637,7 @@
                     (pins g 'brk >(g 'brk)
                             'brkm >(g 'brkm)
                             'cases >(g 'cases),      ; pop
-                     bad? body ? 'bad
+                     bad? body || bad? disp ? 'bad
                        (vfs c + disp + [['jmp dflt]] + (body + [['label lend]]))))))))
    (cgitems g env items acc) (sxpre g env items acc @ r (bad? r ? 'bad <r))   ; a block's items -> forms | 'bad
 
@@ -7586,12 +7646,13 @@
    ; again (so the table rides .rodata; -pie slides an abs64): leax lands on the cell's end, ld4 reads
    ; back -4, the sum is the target. jmpt names its targets so the labels survive deadlab. --
    (jtable g c cr9 cases dflt)
-    (: vs (sort (map (e2 \ (cfit g (vty c) <e2)) cases))
+    (: vs (sort (map (e2 \ (two? <e2 ? 0 (cfit g (vty c) <e2))) cases))
        n9 #cases
        lo (two? vs ? <vs 0)
        hi (two? vs ? (vs (n9 - 1)) 0)
        span (hi - lo + 1)
        (? (wasm? g || t32? g) 'no               ; no memory table on wasm; t32's REL lane is unproven here
+          (any (e2 \ two? <e2) cases) 'no         ; a range rides the chain
           (abl? g 'jtab) 'no
           (n9 < 6) 'no                              ; fewer cases than a table is worth
           (4096 < span) 'no                         ; ..and a span no table should cover
@@ -7631,7 +7692,8 @@
    ; a switch body's case/default labels at any depth: value->label pinned into tab -> (value label) dispatch pairs
    (scasel g it tab acc)
     (!(two? it) ? acc
-       (it @ ('case cv)     (nlab g ".k" @ lab (pin tab cv lab, [cv lab . acc]))
+       (it @ ('case lo hi)  (nlab g ".k" @ lab (pin tab [lo hi] lab, [[lo hi] lab . acc]))   ; a range: one label
+             ('case cv)     (nlab g ".k" @ lab (pin tab cv lab, [cv lab . acc]))
              ('dflt . _)   (nlab g ".k" @ lab (pin tab 'dflt lab, acc))
              ('switch . _) acc                                   ; a nested switch owns its labels
              (scasel-l g (stkids it) tab acc)))
@@ -7672,8 +7734,14 @@
    ; cpu features) compiles only where it is spliced: its labels may ride along (the jump lane).
    ; so does one handing a parameter to such a body (static_key_false's key)
    (asmneed? g ps x)
-    (: pn (map (p \ <p) ps)
-       (pv? e) (!(two? e) ? () (e @ ('var v) (elem v pn) (pv? <e || pv? >e)))
+    ; a local whose initializer names a param counts as one: arch_static_branch's
+    ; `char *k = &((char *)key)[branch]` is constant only once branch is
+    (: (dv l pn) (? !(two? l) pn
+                    (<l = 'decl) (foldl (a \ d \ (two? >>d && pvl a <>>d) ? (<d . a) a) pn <>l)
+                    (dv >l (dv <l pn)))
+       (pvl pn e) (!(two? e) ? () (e @ ('var v) (elem v pn) (pvl pn <e || pvl pn >e)))
+       pn (dv x (map (p \ <p) ps))
+       (pv? e) (pvl pn e)
        (imm? c) (#c @ n ((: (go i) (? (i >= n) () (elem (c i) '(105 110)) 1 (go (i + 1)))) 0))
        (go y) (? !(two? y) ()
                  (<y = 'asm) (any (o \ imm? <o && pv? <>o) (y 3))
@@ -8196,13 +8264,16 @@
                  (it . items >l))))
        (rec e) (? (atom? e) e (<e = 'blk) ['blk (items <>e)] (map rec e))
        (two? (f 3) && <(f 3) = 'blk ? ([<f <>f <>>f (rec (f 3))] + >>>>f) f))
+   ; a __builtin_constant_p whose operand does not fold yet: an inline body's param, decided
+   ; once the caller's constants have reached it
+   (bcpopen? w64 x) (? (atom? x) () (<x = 'bcp) !(cint? (cfold w64 <>x)) (bcpopen? w64 <x || bcpopen? w64 >x))
    (dprune w64 ty x)
     (atom? x ? x
        (x @ ('cond c a b)
-             (: v (cfold w64 c) t (? (!(cint? v) || lbl? a || lbl? b) () (ty a = ty b) (ty a) ())
+             (: v (bcpopen? w64 c ? () (cfold w64 c)) t (? (!(cint? v) || lbl? a || lbl? b) () (ty a = ty b) (ty a) ())
                 (!t ? (map (dprune w64 ty) x) ['cast t (dprune w64 ty (v != 0 ? a b))]))
             ('if c th el)
-             (cfold w64 c @ v
+             ((bcpopen? w64 c ? () (cfold w64 c)) @ v
                 (!(cint? v) || lbl? th || lbl? el ? (map (dprune w64 ty) x)
                    (: s (v != 0 ? th el) (two? s ? (dprune w64 ty s) '(nop)))))
             (map (dprune w64 ty) x)))
@@ -8282,6 +8353,10 @@
               c8 (cen <x c8)
               (cen >x c8)))
        cds (cen items ())
+       ; ..and what an immediate local's initializer names is one too, so a spliced
+       ; `char *k = &((char *)key)[branch]` folds once key's own address has
+       (vs x) (? !(two? x) () (<x = 'var) (pin ivs <>x 1) (vs <x, vs >x))
+       _ (foldl (_ \ p \ (ivs <p && two? >>p ? (vs <>>p) 0)) 0 cds)
        pns (: (go l a) (!(two? l) ? a (go >l (<<l . a))) (go <>>f))
        (onlys x) (? !(two? x) 1 (<x = 'var) (sdl <>x) (onlys <x && onlys >x))
        (kok nm ty init)
@@ -8297,7 +8372,7 @@
                       (imaddr g init != 'no || onlys init) ?
                         ['cast ty init])
            !(elem ty '(bool char schar cchar uchar short ushort int uint long ulong)) ()
-           (: v (cfold !(t32? g) init @ cv (cint? cv ? cv 'no))   ; any constant init, folded in C's types
+           (: v (bcpopen? !(t32? g) init ? 'no (cfold !(t32? g) init @ cv (cint? cv ? cv 'no)))   ; any constant init, folded in C's types
               (!(charm? v) ? ()
                  (cnum g ['cast ty ['num v]] @ cv
                     (two? cv ? ['cast ty ['num <cv]])))))
@@ -8322,8 +8397,19 @@
        (atom? (keys sbs) ? f
         (kprop g ([<f <>f <>>f] + (['blk (sub items)] . >>>>f)))))
 
+   ; every __builtin_constant_p decided on what inlining and kprop left: 1 where its operand
+   ; folds, else 0; the arms that settles pruned (a BUILD_BUG_ON's call among them), then
+   ; propagated again
+   (bcpfin g f)
+    (: w64 !(t32? g)
+       (has? x) (? (atom? x) () (<x = 'bcp) 1 (has? <x || has? >x))
+       (res x) (? (atom? x) x (<x = 'bcp) ['num (charm? (cfold w64 <>x) ? 1 0)] (map res x))
+       (has? f ? (kprop g (dprune w64 (e \ ()) (res f))) f))
    (cgfn g f)                                       ; ('fn name params ('blk items)) -> forms | 'bad
-    (: f (kprop g (respell (oalign g (ainl g f))))
+    (: f (bcpfin g (kprop g (respell (oalign g (ainl g f)))))
+       ; the tree passes probe addresses (kprop's, an asm operand's) before every constant has
+       ; arrived; a name such a probe could not resolve is no refusal's cause
+       _ (pin g 'undecl ())
        params <>>f
        _ (fnreset g)                                 ; the whole per-fn pin record wiped (one roster)
        _ (pin g 'rdg (rdgraph >>>f))
@@ -8950,7 +9036,7 @@
                      (cfoldir g irx))))))))))))))))
        ; the copy fold again after repack: a slot copied from a seat repack just minted forwards from it now
        (post irx) (deadst g (deaddef g (copyprop g (stld g (copyprop g (repack g irx))))))
-       (bad? irf ? irf (dp 'final (bprot g (frrec g (swrap g (tailarm g (jmpm g (csdrop g (cskeep g (unhome g (jr0 g (rvunframe g (unframe g (hz4 g (laacse g (coal g (copyprop g (recse g (wpair g (dp 'post (post (dp 'deadlab (deadlab (swp irf)))))))))))))))))))))))))
+       (bad? irf ? irf (dp 'final (bprot g (frrec g (swrap g (tailarm g (jmpm g (csdrop g (cskeep g (unhome g (jr0 g (rvunframe g (unframe g (hz4 g (laacse g (coal g (copyprop g (recse g (wpair g (dp 'post (post (dp 'deadlab (deadlabk (cg-refs (g 'fasecs) {}) (swp irf)))))))))))))))))))))))))
 
    ; the data tail -> (dataforms nifforms imgforms extras bssforms rodataforms) | 'bad, extras ((name forms
    ; ro?) ..) per other named section in declaration order. love_nifs packs for the linker's __start_/__stop_
@@ -8981,7 +9067,7 @@
            (zm = 'z && !(bss? <gs)) (globs >gs want zm acc)
            (: ge (peep (g 'glob) <gs 0)
               lbl <ge ty <>ge init <>>ge
-              _ (pins g 'undecl () g 'datacause ())   ; fresh per global: the refusal below names this one's cause
+              _ (pins g 'undecl () g 'datacause () 'clitg <gs 'clitn 0)   ; fresh per global: the refusal below names this one's cause
               bytes (image1 <gs ty init)                ; a constant image | 'bad (label values -> 4d)
               ; a refusal is neither 'r nor 'd: the 'd walk reports it, 'r steps past in silence
               roq (!(bad? bytes) && ro? <gs bytes)
@@ -9048,14 +9134,19 @@
           cs (bad? cg ? 'bad (globs (rev (g 'statics)) ".data" 'r ()))
           nb (bad? cg || bad? cs ? 'bad (globs (rev (g 'globs)) "love_nifs" () ()))
           ib (bad? nb ? 'bad (globs (rev (g 'globs)) ".love.image" () ()))
+          ; a named section's refusal is a refusal of the whole: one entry it cannot lay would
+          ; otherwise leave that section empty, the kernel's of_device_id tables among them
           xb (bad? ib ? 'bad
-                (map (nm \ [nm (globs (rev (g 'globs)) nm () ()) (xro? nm)]) xnames))
+                (map (nm \ [nm (globs (rev (g 'globs)) nm () ()) (xro? nm)]) xnames @ l
+                   (any (x \ bad? (x 1)) l ? 'bad l)))
           ; each switch's jump table: a label, then 4-byte self-relative entries (label differences, settled at link)
           jt (foldl (a \ p \ a + [['align 4] ['label <p]] + [['raw <>p]])
                     () (rev (g 'jtabs)))
           (foldl (a \ x \ a || bad? x) () [gb sb zg zs rg rs cg cs nb ib xb] ? 'bad
-             [(gb + sb) nb ib xb (zg + zs)
+             [(gb + sb + clits (rev (g 'clits))) nb ib xb (zg + zs)
               (rg + rs + cg + cs + jt + strs (g 'strs) () + dbls g)])))
+       ; the static compound literals, each aligned as its type asks
+       (clits l) (foldl (a \ c \ a + [['align (c 1)] ['label <c] ['raw (c 2)]]) () l)
        ; the double pool: 8-aligned blocks in pattern order (keys are unsorted; the lay must not drift)
        (dbls g) (foldl (a \ u \ a + [['align 8] ['label (dbname u)] ['raw (le64 u)]])
                        () (sort (keys (g 'dbls))))
@@ -9097,7 +9188,7 @@
    ; the shared core: the gen state, then text (no _start) and data -> (g textforms dataforms) | ().
    ; weaks never inline (a spliced body would bake past the linker's strong override); xtra is the parser's tablets, () reading as empties
    (cgen-core ast stbl sigs weaks xtra tgt)
-    (: g {'n 0 'brk () 'brkm () 'cnt () 'cases () 'glob {} 'globs () 'strs () 'dbls {} 'jtabs () 'statics ()
+    (: g {'n 0 'brk () 'brkm () 'cnt () 'cases () 'glob {} 'globs () 'strs () 'clits () 'clitm {} 'dbls {} 'jtabs () 'statics ()
           'abl (ablenv 0)                           ; the pricing knob, read per unit at run time
           'laid {}                                  ; names already on 'globs (a tentative repeat lays no twin)
           'fns {} 'inl {} 'ineed {} 'ainlc {} 'cgitems cgitems 'sxpre sxpre 'stag stbl 'sigs sigs
@@ -9348,5 +9439,5 @@
                         (map (nm \ [nm (forsec nm src) (grain nm src)]) (noms src ()))))
              [1 <>r <dat fnames gnames
                 <>dat <>>dat lnames <>>>dat <>>>>dat <>>>>>dat
-                xfns (asecs-all <r)]))))
+                xfns (asecs-live <r [<>r (map (x \ x 1) xfns)])]))))
 ) ; module 'moon
