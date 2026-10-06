@@ -6385,7 +6385,7 @@
             (: ty <>e i (peep g 'clitn 0) _ (pin g 'clitn (i + 1)) k [(g 'clitg) i] m (g 'clitm)
                (peep m k () @ l
                  (l ? [l 0 ty]
-                    (cgimage g ty <>>e @ b
+                    (cgimage g ty (aggish? ty ? <>>e e) @ b      ; a scalar's braces unwrap in cgimage's clit arm
                       (bad? b ? 'no
                          (: l2 (nlab g ".C")
                             (pin m k l2,
@@ -6505,6 +6505,9 @@
      ; a compound literal of the object's own aggregate (DEFINE_SPINLOCK's `(spinlock_t){..}`, gcc's
      ; constant-literal extension): its init is the image
      (<ini = 'clit && aggish? ty && two? >>ini && tsz g <>ini = tsz g ty) (imgbytes g ty <>>ini)
+     ; ..and of a scalar, `(int){ 5 }`: its one item is the image
+     (<ini = 'clit && !(aggish? <>ini) && two? >>ini)
+      (<>>ini @ ('init (e . _)) (cgimage g ty e) (cgimage g ty <>>ini))
      (ptr? ty) (imaddr g ini @ r                    ; a data pointer: a constant address (word-sized abs label+offset),
                    (r != 'no ? [['fix (wsize g) (t32? g ? 'abs32 'abs64) <r <>r]]      ; or a constant integer ((int*)0x1000, a null)
                       (icfold ini @ v (v @ 'no 'bad (imnum g ty v)))))
@@ -6707,8 +6710,16 @@
               name <p ty <>p
               ; a &&L in the initializer names this function's label, so it is spelled now
               (lfix x) (? !(two? x) x (<x == 'laddr) ['lsym (g 'fn + "." + <>x)] (map lfix x))
-              init (lfix <>>p)
               lbl (nlab g (g 'fn + "."))             ; `fn.N` -- the `.` bars any C-identifier collision
+              ; the image is laid after the fn, with no env: a name the initializer reaches by address,
+              ; this static itself (in scope in its own initializer) or one declared before it, is
+              ; spelled by its label now
+              (sfix x) (? !(two? x) x
+                          (<x == 'var && string? <>x)
+                           (? (<>x = name) ['var lbl]
+                              (assoc <>x env2 @ e (two? e && two? <>e && <<>e == 'glob ? ['var <><>e] x)))
+                          (map sfix x))
+              init (sfix (lfix <>>p))
               (pin (g 'glob) lbl [lbl ty init],   ; a local data label (internal linkage): g 'statics,
                4 < #p ? (pin (g 'aligns) lbl (p 4)) 0,   ; its own aligned ask
                pin g 'statics (lbl . g 'statics),      ; not g 'globs -- a static is never an exported symbol
@@ -9106,8 +9117,8 @@
                  (bad? bytes)
                  (g 'undecl @ u
                     (pin g 'datacause
-                         (u ? ("undeclared '" + u + "' in the initializer of '" + <gs + "'")
-                            ("cannot lay the initializer of '" + <gs + "' (" + show init + ")")),
+                         (u ? ("undeclared '" + u + "' in the initializer of '" + (string? <gs ? <gs (show <gs)) + "'")
+                            ("cannot lay the initializer of '" + (string? <gs ? <gs (show <gs)) + "' (" + show init + ")")),
                      'bad))
                  (: als (: (go l a2) (!(two? l) ? a2
                                           (go >l (g 'alias <l = <gs ?
