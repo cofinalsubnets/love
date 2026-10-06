@@ -584,7 +584,10 @@
     (: s (lower (show nm))
        (peep a64-sysregs (name s) () @ v
           (charm? v ? v (a64-sgen s @ k (charm? k ? k (scare 'badsysreg nm))))))
-   (a64-mrs d nm) (le32 (0xD5200000 | (a64-sysreg nm | rn d)))         ; MRS Xd, <reg>
+   ;; the write-only registers by name: an mrs of one refuses (the generic spelling reads anything)
+   a64-wo {'oslar_el1 1 'icc_dir_el1 1 'icc_sgi1r_el1 1 'icc_eoir1_el1 1}
+   (a64-mrs d nm) (? (peep a64-wo (name (lower (show nm))) ()) (scare 'badsysreg-wo nm)
+                     (le32 (0xD5200000 | (a64-sysreg nm | rn d))))         ; MRS Xd, <reg>
    (a64-msr nm s) (le32 (0xD5000000 | (a64-sysreg nm | rn s)))         ; MSR <reg>, Xs
 
    ;; MSR (immediate): a pstate field, not a register -- op1/op2 name the field and the 4-bit
@@ -616,7 +619,14 @@
                  'vmalle1os (sreg 1 0 8 1 0) 'vae1os (sreg 1 0 8 1 1) 'vale1os (sreg 1 0 8 1 5)
                  'aside1os (sreg 1 0 8 1 2) 'alle2 (sreg 1 4 8 7 0) 'alle2is (sreg 1 4 8 3 0)
                  'alle1is (sreg 1 4 8 3 4) 'vmalls12e1 (sreg 1 4 8 7 6) 'vmalls12e1is (sreg 1 4 8 3 6)
-                 'ipas2e1is (sreg 1 4 8 0 1) 'vale2is (sreg 1 4 8 3 5) 'vae2 (sreg 1 4 8 7 1)}
+                 'ipas2e1is (sreg 1 4 8 0 1) 'vale2is (sreg 1 4 8 3 5) 'vae2 (sreg 1 4 8 7 1)
+                 'vaae1os (sreg 1 0 8 1 3) 'vaale1os (sreg 1 0 8 1 7) 'ipas2le1is (sreg 1 4 8 0 5)
+                 'vae2is (sreg 1 4 8 3 1) 'ripas2e1is (sreg 1 4 8 0 2) 'ripas2le1is (sreg 1 4 8 0 6)
+                 ;; the ranges (v8.4): crm 6 local, 2 inner shareable, 5 outer
+                 'rvae1 (sreg 1 0 8 6 1) 'rvaae1 (sreg 1 0 8 6 3) 'rvale1 (sreg 1 0 8 6 5) 'rvaale1 (sreg 1 0 8 6 7)
+                 'rvae1is (sreg 1 0 8 2 1) 'rvaae1is (sreg 1 0 8 2 3) 'rvale1is (sreg 1 0 8 2 5) 'rvaale1is (sreg 1 0 8 2 7)
+                 'rvae1os (sreg 1 0 8 5 1) 'rvaae1os (sreg 1 0 8 5 3) 'rvale1os (sreg 1 0 8 5 5) 'rvaale1os (sreg 1 0 8 5 7)
+                 'rvae2is (sreg 1 4 8 2 1) 'rvale2is (sreg 1 4 8 2 5)}
    a64-ic-ops {'iallu (sreg 1 0 7 5 0) 'ialluis (sreg 1 0 7 1 0) 'ivau (sreg 1 3 7 5 1)}
    a64-dc-ops {'ivac (sreg 1 0 7 6 1) 'zva (sreg 1 3 7 4 1) 'cvac (sreg 1 3 7 10 1)
                'cvau (sreg 1 3 7 11 1) 'civac (sreg 1 3 7 14 1)

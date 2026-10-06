@@ -161,12 +161,17 @@
 
  ; --- llvm-mc assembling: two passes (an error would slide the encodings) ---
  ro-reject "expected writable system register"
+ wo-reject "expected readable system register"
  (llvm arch asms)
   ; the triple is LLVM's word, never ours: arch-uname is the tree's table for exactly
   ; that (uname's machine, and the head of a gnu triple). llvm-mc refuses an unknown
   ; target outright, so a nom that reached it here would read as 0 encodings.
   (: triple (peep arch-uname (archof arch) "x86_64")
-     mattr (arch = "rv64" ? " -mattr=+m,+f,+d,+zicsr,+zifencei" "")
+     ; a64: the extensions holo's names come from (pan, mte, sve, sme, pauth keys, the range
+     ; and outer-shareable tlbis, dc cvap), so a name is held to its word, not refused for its level
+     mattr (? (arch = "rv64") " -mattr=+m,+f,+d,+zicsr,+zifencei"
+              (arch = "a64") " -mattr=+v9.4a,+sve,+sme,+mte,+pauth,+tlb-rmi,+ccdp,+ssbs,+dit,+ras,+gic-v3"
+              "")
      nhead (arch = "x64" ? 1 0)
      head (arch = "x64" ? ".intel_syntax noprefix\n" "")
      (lay ls) (wrf (tmpd + "/.sysd.in") (head + foldl (a \ l \ a + "\t" + l + "\n") "" ls))
@@ -226,9 +231,12 @@
      (one c r st)                                         ; st = [npass nskip fails]
       (: ir <c asm (c 1) pair (c 2)
          want <r why (r 1)
-         got (holo-hex tgt [ir])
+         got (trap (x \ holo-hex tgt [x]) ir (\ a b ()))      ; () when holo refuses
          (? (want = ())
             (? (has? why ro-reject && (4 <= tally asm) && (snip asm 0 4) = "msr ") [<st (st 1 + 1) (st 2)]
+               ; a write-only register: holo refuses the read as llvm-mc does
+               (has? why wo-reject && (4 <= tally asm) && (snip asm 0 4) = "mrs " && got = ())
+                [(<st + 1) (st 1) (st 2)]
                !(pair = ()) [<st (st 1 + 1) (st 2)]
                [<st (st 1) ((st 2) + [[ir asm got ("llvm-mc reject: " + why)]])])
             (? (got = want)

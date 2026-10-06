@@ -1051,6 +1051,16 @@ below, 251 of those 332 re-run so far: **145 compile**, and the rest refuse by n
   memcpy/memset, a packed local's initializer, and by-value structs under 8-byte alignment as
   arguments and returns; the byte-gather fusion stands down. Both flags are held to clang 22.1.8's
   objects for the same units (test_cca64's landing law) and run on an a64 host (228-strictalign.c).
+- **the lse atomics**: `ld<op>`/`st<op>` for add, clr, eor, set, smax, smin, umax and umin,
+  `swp` and `cas`, each with its `a`/`l`/`al` order and `b`/`h` size, read by their spelling;
+  every one of the 225 forms is llvm-mc's word. A wrong width, an offset, or `casp` refuses by
+  name (243-lseasmgoto.c, which runs them only where ID_AA64ISAR0_EL1 says the core has them).
+- **an asm goto with outputs**: each label the template names becomes a trampoline that
+  stores the outputs and jumps on, so they hold on every edge, as gcc's do. A callee-saved
+  clobber beside a label still refuses: its pop would sit a frame off the fall-through.
+- **gas's `!`**: `!x` answers 1 or 0, so `.inst ... | (!!(x)) << 8` (`SET_PSTATE_PAN`) folds.
+- **the range tlbis** (`rvae1`..`rvaale1os`) and the outer-shareable and el2 rows.
+- **`"p"`**: an address in a register, which `%a` spells `[xN]` (the kernel's `prefetchw`).
 
 Still open on this side (g-21's probes):
 
@@ -1060,9 +1070,11 @@ Still open on this side (g-21's probes):
   reads at the element's width, a bitfield or 128-bit member of a packed struct refuses by name,
   and a by-value struct reached as a packed member rides its type's alignment, not the member's.
 - where the re-run stops now, on this side: the `.S` exception-table macro's `\insn`, which
-  reaches `.long ((\insn) - .)` unsubstituted (24); an asm goto with outputs (9, refused above);
-  a register variable pinned to `x0` (4); the `"p"` constraint (2). The rest is part 1's front
-  end and gen (`linux/skbuff.h`, an undeclared `branch`).
+  reaches `.long ((\insn) - .)` unsubstituted (24); a register variable pinned to `x0` (4).
+  The rest is part 1's front end and gen (`linux/skbuff.h`, an undeclared `branch`,
+  `__attribute__((mode))`).
+- defconfig, g-21's units once refused on a Q form or a register pinned twice: of a sample of
+  40, 38 compile; the other two stop on a static mutex's initializer, outside the asm.
 
 ---
 
