@@ -25,7 +25,6 @@
 (borrow 'play)                          ; the voices, the mix
 (borrow 'posix)    ; close, for the horn
 (:
- esc (string 27)
  fps 30
  week-secs 420.0                        ; a minute a day
  week-start 6.0                         ; monday, dawn
@@ -75,13 +74,12 @@
  (clamp x lo hi) (x < lo ? lo (hi < x ? hi x))
  (round x) (int (x + (x < 0.0 ? -0.5 0.5)))
  (fx1 x) (int (x * 10.0 + 0.5) @ n (show (n // 10) + "." + show (n % 10)))
- (two-dig n) (n < 10 ? ("0" + show n) (show n))
  ; what a row is worth in cells: a glyph's tail bytes belong to the lead that began it
  (wide s) (foldl (\ n i (n + lead (s i))) 0 ^#s)
  sgrs {}
  (sgr f b) (: k [f b] s (sgrs k)
               (string? s ? s
-               (esc + "[38;5;" + show f + ";48;5;" + show b + "m" @ s2 (pin sgrs k s2, s2))))
+               ("\e[38;5;" + show f + ";48;5;" + show b + "m" @ s2 (pin sgrs k s2, s2))))
 
  ; --- the clock and the weather --------------------------------------------------
  (grass-hour g) (g 'h % 24.0)
@@ -334,23 +332,23 @@
                                     (f2 != f || b2 != b ? (say p (sgr f2 b2)),
                                      say p (cl 0),
                                      row p y (x + 1) f2 b2 cells)))
-   (paint y cells) (jug 0 @ p ((row p y 0 -1 -1 cells, say p (esc + "[0m\r\n")), slurp p))
+   (paint y cells) (jug 0 @ p ((row p y 0 -1 -1 cells, say p "\e[0m\r\n"), slurp p))
    (line y) (entry y @ e
      (? (peep ys y 0) (paint y (e 'cells))
         (string? (e 's)) (e 's)
         (paint y (e 'cells) @ s (pin e 's s, s))))
    ; the bar a column short of the screen, so a wrapping console never scrolls the
    ; field -- and its erase falls on that spare column, where it costs nothing
-   (esc + "[0m" + fit (grass-hud g) c + "\r\n"
-    . map line (map (+ 1) ^(r - 1)) + [(esc + "[0m" + fit (grass-bar g) (c - 1) + esc + "[K")]))
- (grass-frame g) (jug 0 @ j (say j (esc + "[H"), each (grass-rows g) (say j), slurp j))
+   ("\e[0m" + fit (grass-hud g) c + "\r\n"
+    . map line (map (+ 1) ^(r - 1)) + [("\e[0m" + fit (grass-bar g) (c - 1) + "\e[K")]))
+ (grass-frame g) (jug 0 @ j (say j "\e[H", each (grass-rows g) (say j), slurp j))
  ; the rows that changed since the last paint, each under its cursor move; the first
  ; paint, and one after a sign stood over the screen, is the whole frame
  (grass-paint g) (: rs (grass-rows g) j (jug 0)
    last (g 'last @ t (tablet? t ? t (pin g 'last {}, g 'last)))
    (go l i) (two? l ?
                (<l @ s
-                  (s != last i ? (say j (esc + "[" + show (i + 1) + ";1H" + s), pin last i s),
+                  (s != last i ? (say j ("\e[" + show (i + 1) + ";1H" + s), pin last i s),
                    go >l (i + 1))))
    (go rs 0,
     slurp j))
@@ -358,7 +356,7 @@
  ; the day and the weather to the left, what is yours to the right, the screen's spare
  ; cells between them
  (grass-hud g) (: hr (grass-hour g) hh (int hr) mm (int ((hr - hh) * 60.0)) d (int (g 'h / 24.0))
-   l (day-names (d % 7) + " " + two-dig hh + ":" + two-dig mm
+   l (day-names (d % 7) + " " + zpad 2 (show hh) + ":" + zpad 2 (show mm)
       + "  " + show (round (grass-temp g)) + "°F  " + show (round (g 'wind)) + " kt " + compass (g 'head))
    r (fx1 (g 'me 'ht) + "\"  H2O " + show (round (g 'me 'hy)) + "%  score " + show (g 'pts))
    gap (g 'c - wide l - wide r @ n (n < 2 ? 2 n))
@@ -467,7 +465,7 @@
             cue (),
             late < tick-ms ? (say out (lk 'paint g), flush out),
             swim (n + 1)))))
-   (say out (esc + "[?25l"),
+   (say out "\e[?25l",
     sign lk g (lk 'ttl) (lk 'rows) beat,
     pin g 't0 (clock 0),
     swim 0,
