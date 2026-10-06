@@ -53,8 +53,19 @@
  zend (zc - floor-r - 1.0)               ; where the slot's own walls end, at the bowl's floor
  ; the open air's distance to the rock, as near as the march may step: the slot, the bowl
  ; and the sky over the plateau each open, and the rock what none of them is
- (stones-field x y z) (: slot (min (min (0.8 * (half y z - mag (x - slot-x z))) (zend - z)) y)
-   (max (max slot (0.4 * (y - bowl x z))) (0.65 * (y - top x z))))
+ (slot-d x y z) (min (min (0.8 * (half y z - mag (x - slot-x z))) (zend - z)) y)
+ ; ..the bowl's floor stepped over at its true height, inside the round the rows start at
+ (bowl-d x y z) (max (0.4 * (y - bowl x z)) (min y (floor-r - 0.6 - sqrt (x * x + sq (z - zc)))))
+ (top-d x y z) (0.65 * (y - top x z))
+ (stones-field x y z) (max (max (slot-d x y z) (bowl-d x y z)) (top-d x y z))
+ ; ..and over trays, each place asked only of the parts near enough to be the nearest:
+ ; south of the rows the bowl is far, and past the slot's end the slot is
+ south-z (zc - rim-r - 12.0) north-z (zend + 3.0)
+ (field x y z) (: a (iota (z < south-z)) b (iota (north-z < z)) c (iota ((south-z <= z) * (z <= north-z)))
+   (g ix v) (peep v ix 0.0)
+   o1 (#a = 0 ? (z * 0.0) (: X (g a x) Y (g a y) Z (g a z) (pin (z * 0.0) a (max (slot-d X Y Z) (top-d X Y Z)))))
+   o2 (#b = 0 ? o1 (: X (g b x) Y (g b y) Z (g b z) (pin o1 b (max (bowl-d X Y Z) (top-d X Y Z)))))
+   (#c = 0 ? o2 (: X (g c x) Y (g c y) Z (g c z) (pin o2 c (stones-field X Y Z)))))
  ; the ground under a place: the lowest of the slot's floor, the bowl and the plateau
  (stones-ground x z) (: in (mag (x - slot-x z) < half 1.0 z - body-r && z < zend)
    (min (in ? 0.0 99.0) (min (bowl x z) (top x z))))
@@ -87,29 +98,56 @@
  (stones-blocks sd) (altar . cat ring (audience sd))
  ; --- the march: the rays still going, a few steps at a time, then gathered again. a ray
  ; is done when the rock is nearer than a pixel's width there, or it is up over the
- ; plateau going up, or far; the last still going have met the rock if it is near ---
- march-k 3 march-n 30 tmax 500.0 ymax 25.5
- (march e dx dy dz n foc) (: ex (e 0) ey (e 1) ez (e 2) B {'T (dx * 0.0 + 1e9)}
+ ; plateau going up, or far; the last still going have met the rock if it is near. 'T
+ ; where each met the rock, 1e9 for the sky, and 'E where those gone to the sky left ---
+ march-k 4 march-n 24 tmax 500.0 ymax 25.5
+ (march e dx dy dz n foc t0) (: ex (e 0) ey (e 1) ez (e 2) B {'T (dx * 0.0 + 1e9) 'E (dx * 0.0)}
    ; ..each step near the eye half again as far as the open air reaches, and back by as
-   ; much as a step past the rock went in
-   (run j t ax ay az) (j < 1 ? t (stones-field (ex + t * ax) (ey + t * ay) (ez + t * az) @ d
-                                    (run (j - 1) (t + d * (1.0 + 0.5 * (0.0 < d) * (t < 8.0))) ax ay az)))
+   ; much as a step past the rock went in; where the air has been closing in since the
+   ; last step, on to where it would close at that rate, but no more than six times as far
+   (run j t tp dp ax ay az) (j < 1 ? t
+     (field (ex + t * ax) (ey + t * ay) (ez + t * az) @ d
+       (: sec ((0.0 < d) * (d < dp) * (1.0 < t))
+          plain (d * (1.0 + 0.5 * (0.0 < d) * (t < 8.0)))
+          ahead (min (6.0 * d) (max d (d * (t - tp) / max (dp - d) 1e-6)))
+          (run (j - 1) (t + over plain sec ahead) t d ax ay az))))
    (go ph idx t0) (: ax (peep dx idx 0.0) ay (peep dy idx 0.0) az (peep dz idx 0.0)
-     t (run march-k t0 ax ay az)
-     Y (ey + t * ay) d (stones-field (ex + t * ax) Y (ez + t * az))
+     t (run (ph = 0 ? 2 march-k) t0 t0 (t0 * 0.0 + 1e9) ax ay az)
+     Y (ey + t * ay) d (field (ex + t * ax) Y (ez + t * az))
      last (march-n <= ph + 1)
-     hit (over (mag d < 0.003 + 1.2 * t / foc) last (mag d < 0.5))
+     ; ..met on the open side of the rock, where its slope says which way it faces
+     eps (0.003 + 1.2 * t / foc)
+     hit (over ((d < eps) * (-0.002 < d)) last (mag d < 0.5))
      gone ((1 - hit) * (0 < (tmax < t) + (ymax < Y) * (0.0 < ay) + last))
-     _ (pin B 'T (pin (B 'T) (over -1 hit idx) t))
+     _ (pins B 'T (pin (B 'T) (over -1 hit idx) t) 'E (pin (B 'E) (over -1 gone idx) t))
      on (iota (1 - hit - gone))
-     (#on = 0 ? (B 'T) (go (ph + 1) (peep idx on 0) (peep t on 0.0))))
-   ; ..all of them from the edge of the open air round the eye
-   (go 0 (iota n) (dx * 0.0 + max 0.0 (stones-field ex ey ez))))
+     (#on = 0 ? B (go (ph + 1) (peep idx on 0) (peep t on 0.0))))
+   ; ..all of them from the edge of the open air round the eye, or further where t0 says
+   ; the rock lies further
+   (go 0 (iota n) (max (dx * 0.0 + max 0.0 (stones-field ex ey ez)) (tray? t0 ? t0 0.0))))
+ ; where to start the rays of the camera cam, n of them: the places last frame's ended,
+ ; seen from here, each ray from a little short of the nearest of them round its pixel, or
+ ; from the eye where none fell near -- the eye moves a little a frame, so the rock lies
+ ; about where it lay, however far apart its rays were cast. () before the first
+ (reseen st cam n) (: sn (peep st 'seen ())
+   (tablet? sn ?
+     (: e (cam 'e) f (cam 'f) rt (cam 'r) uv (cam 'u) w (cam 'w) h (cam 'h) foc (cam 'foc)
+        vx (sn 'X - e 0) vy (sn 'Y - e 1) vz (sn 'Z - e 2)
+        zc (vx * f 0 + vy * f 1 + vz * f 2) zs (max zc 0.01)
+        sx (floor (cam 'cx + foc * (vx * rt 0 + vy * rt 1 + vz * rt 2) / zs))
+        sy (floor (cam 'cy - foc * (vx * uv 0 + vy * uv 1 + vz * uv 2) / zs))
+        ok ((0.1 < zc) * (0 <= sx) * (sx < w) * (0 <= sy) * (sy < h))
+        D (pin (iota n * 0.0) (over -1 ok (sy * w + sx)) (sqrt (vx * vx + vy * vy + vz * vz)))
+        i (iota n) x (i % w) y (i // w)
+        (nb a b) (peep D (min (max (y + b) 0) (h - 1) * w + min (max (x + a) 0) (w - 1)) 0.0)
+        m (foldl (acc \ o \ min acc (nb (o 0) (o 1))) D [[-1 -1] [0 -1] [1 -1] [-1 0] [1 0] [-1 1] [0 1] [1 1]])
+        (max (0.93 * m - 0.05) 0.0))
+     ()))
  ; ..and toward the sun from where a ray met: how much of it gets past the rock, tried at
  ; a few places out along the way, soft at a shadow's edge by how near the rock passes for
  ; how far. the rock is thick, so the places can stand wide apart
  sun-ts [0.2 0.6 1.5 3.5 7.0 12.0 20.0 32.0]
- (shadow X Y Z s) (foldl (res \ t \ min res (8.0 * stones-field (X + t * s 0) (Y + t * s 1) (Z + t * s 2) / t))
+ (shadow X Y Z s) (foldl (res \ t \ min res (8.0 * field (X + t * s 0) (Y + t * s 1) (Z + t * s 2) / t))
                          (X * 0.0 + 1.0) sun-ts @ r (sat r))
  ; --- the blocks met: each tried only on the pixels of its box on the screen ---
  ; the block's eight corners
@@ -190,38 +228,67 @@
  ; the sun and its light at the scene's hour, under its weather
  (stones-sun st) (sky-sun (st 'sim) (st 'dst) lat)
  (stones-light st) (sky-light (stones-sun st) (st 'wx) (st 'sim))
- ; what the rays meet: the sky's mask and three trays of colour where it is not -- the sun on them past the rock and the blocks, the
- ; sky's light by how much of it is seen, and the glow the sunlit walls throw down the slot
+ ; --- the rock's colour kept: the stuff of a place and what the sun and the sky lay on
+ ; it, kept in a cell of the world about two pixels across where it is seen, so a frame
+ ; colours only the places it has not seen lately. a cell keeps its colour and when it was
+ ; lit; it is lit again a minute and a half to two and a half of the sky's time on, cells
+ ; apart, so the sun's going on is caught a little at a time. the cells hash into light-n
+ ; slots, each with its own key ---
+ light-n 262144
+ (light-new _) (: z (iota light-n * 0.0)
+   {'key (iota light-n * 0 - 1) 'r z 'g z 'b z 'at z})
+ ; what the rays meet: the sky's mask and three trays of colour where it is not
  (surface st lt cam n) (: e (cam 'e) dx (cam 'dx) dy (cam 'dy) dz (cam 'dz) z0 (dx * 0.0)
-   buf {'t (march e dx dy dz n (cam 'foc)) 'nx z0 'ny z0 'nz z0 'ar z0 'ag z0 'ab z0 'k z0}
+   mt (march e dx dy dz n (cam 'foc) (reseen st cam n))
+   buf {'t (mt 'T) 'nx z0 'ny z0 'nz z0 'ar z0 'ag z0 'ab z0 'k z0}
    _ (blocks! (st 'blocks) cam buf)
-   T (buf 't) sky (1e9 <= T) G (iota (1 - sky)) S (iota sky)
+   T (buf 't) sky (1e9 <= T) G (iota (1 - sky))
    (only ix v) (peep v ix 0.0)
    t (only G T) X (e 0 + t * only G dx) Y (e 1 + t * only G dy) Z (e 2 + t * only G dz)
-   ; ..the rock's normal across the field, a block's its face's
-   kb (only G (buf 'k)) h 0.02
-   d0 (stones-field X Y Z)
-   gx (stones-field (X + h) Y Z - d0) gy (stones-field X (Y + h) Z - d0) gz (stones-field X Y (Z + h) - d0)
+   kb (only G (buf 'k))
+   ; ..and where each ray ended, the rock or the edge of the sky, for the next frame to start from
+   E (over (mt 'E) (T < 1e9) T) ends (iota (0.0 < E)) te (peep E ends 0.0)
+   _ (pin st 'seen {'X (e 0 + te * peep dx ends 0.0) 'Y (e 1 + te * peep dy ends 0.0) 'Z (e 2 + te * peep dz ends 0.0)})
+   ; ..each place's cell: its size a power of two over a centimetre, near two pixels' width there
+   L (min (max (floor (log (2.0 * t / cam 'foc / 0.01) / log 2.0)) 0) 12)
+   sz (0.01 * exp (L * log 2.0))
+   ix (floor (X / sz)) iy (floor (Y / sz)) iz (floor (Z / sz))
+   slot (throw (ix + 7919 * iz) iy L light-n) key (throw ix (iy + 31 * iz) (L + 17) 1073741824)
+   lc (st 'light) sim (st 'sim)
+   fresh ((peep (lc 'key) slot -1 = key) * (sim - peep (lc 'at) slot -1e9 < 90.0 + 60.0 * (slot % 97) / 97.0))
+   mi (iota (1 - fresh))
+   ; ..read before any are laid, for one laid now may take a slot another reads; and those
+   ; lit afresh take their own colour
+   kept (map (k \ peep (lc k) slot 0.0) ['r 'g 'b])
+   lit (#mi = 0 ? () (lay-light st lt (peep slot mi 0) (peep key mi 0) (only mi X) (only mi Y) (only mi Z)
+                                 (only mi kb) (only mi t) (map (k \ only mi (only G (buf k))) ['nx 'ny 'nz 'ar 'ag 'ab])))
+   (sky . map (i \ pin z0 G (two? lit ? (pin (kept i) mi (lit i)) (kept i))) ^3))
+ ; ..the colour laid on places X Y Z, t from the eye, into their slots under their keys:
+ ; the rock's normal across the field, a block's (kb) its face's, and its stuff -- B the
+ ; block's normal and stuff, six trays; the sun where it faces, past the rock and the
+ ; blocks; the sky's light by how much of it is seen and how near the rock crowds the
+ ; place; and the glow the sunlit walls throw down the slot
+ (lay-light st lt slot key X Y Z kb t B) (: h 0.02 lc (st 'light) bnx (B 0) bny (B 1) bnz (B 2)
+   d0 (field X Y Z)
+   gx (field (X + h) Y Z - d0) gy (field X (Y + h) Z - d0) gz (field X Y (Z + h) - d0)
    gl (sqrt (max (gx * gx + gy * gy + gz * gz) 1e-12))
-   nx (over (gx / gl) kb (only G (buf 'nx))) ny (over (gy / gl) kb (only G (buf 'ny))) nz (over (gz / gl) kb (only G (buf 'nz)))
-   alb (cmix (rock X Y Z ny t) [(only G (buf 'ar)) (only G (buf 'ag)) (only G (buf 'ab))] kb)
-   ; ..the sun: where it faces, past the rock and the blocks
+   nx (over (gx / gl) kb bnx) ny (over (gy / gl) kb bny) nz (over (gz / gl) kb bnz)
    s (lt 'sun) nd (max 0.0 (nx * s 0 + ny * s 1 + nz * s 2))
    ox (X + 0.05 * nx) oy (Y + 0.05 * ny) oz (Z + 0.05 * nz)
    lit (0.0 < lt 'sunk * s 1 ? (shadow ox oy oz s * block-shade (st 'blocks) ox oy oz s) (X * 0.0))
    dir (nd * lit * lt 'sunk)
-   ; ..the sky: how open it is over the place, and how near the rock crowds it -- the field
-   ; read as distances by its own slope there, for each part of it steps short its own way
+   ; ..the field read as distances by its own slope there, for each part of it steps short
+   ; its own way
    gn (max (gl / h) 0.2)
-   sv (sat (stones-field X (Y + 5.0) Z / (4.0 * gn)))
-   ao (sat (0.45 + 0.55 * stones-field (X + 0.4 * nx) (Y + 0.4 * ny) (Z + 0.4 * nz) / (0.4 * gn)))
+   sv (sat (field X (Y + 5.0) Z / (4.0 * gn)))
+   ao (sat (0.45 + 0.55 * field (X + 0.4 * nx) (Y + 0.4 * ny) (Z + 0.4 * nz) / (0.4 * gn)))
    skl (ao * (0.18 + 0.82 * sv) * (0.75 + 0.25 * ny))
-   ; ..and the glow: the sun on the walls above thrown down between them, warm, the deeper
-   ; and narrower the more of the light it is
    glow (lt 'sunk * sat (s 1 * 3.0) * (1.0 - sv) * ao * (0.25 + 0.5 * sat (Y / 14.0)))
    irr (c+ (c+ (c* skl (lt 'amb)) (c* dir (lt 'sunc))) (c* glow [0.95 0.5 0.24]))
-   sf (cm alb irr)
-   (sky . map (k \ pin z0 G (sf k)) ^3))
+   alb (cmix (rock X Y Z ny t) [(B 3) (B 4) (B 5)] kb)
+   c (cm alb irr)
+   (put k v) (pin lc k (pin (lc k) slot v))
+   (put 'key key, put 'r (c 0), put 'g (c 1), put 'b (c 2), put 'at (X * 0.0 + st 'sim), c))
  ; ..a grid's colours spread over the screen: the sky where the nearest ray found it, and
  ; the rock blended from the four rays round each pixel that met rock
  (spread g sc) (: M (g 'M) Q (g 'Q) A (g 'A) B (g 'B) sk (sc 0)
@@ -269,7 +336,7 @@
  (cover-of sd) (throw sd 3 89 20 @ k (? (k < 13) 0 (k < 17) 1 (k < 19) 2 3))
  (stones-new w h now sd) (: st {'px (slot-x 0.0) 'pz 0.0 'py eye-h 'th 0.0 'ph 0.12 'sim (now 0) 'dst (now 1)
                                 'wx (sky-weather (cover-of sd) 'smooth) 't 0 'deep 0 'done 0
-                                'blocks (stones-blocks sd)}
+                                'blocks (stones-blocks sd) 'light (light-new ())}
    (stones-size st w (h // 2)))
  ; the screen w cells by r rows, and each pixel's offsets from the middle, and its dither;
  ; the rays f pixels apart to start with, f the least quarter that keeps them to ray-n or
@@ -296,10 +363,11 @@
          (pin gs k g, g))))
  ; the pace: the rays further apart a quarter pixel at a time while a moving frame's rays
  ; cost more than pace-ms, closer while they cost well under it -- a step a few frames
- ; apart, so the picture never jumps
+ ; apart, so the picture never jumps; and the frame just after a step, laying a new grid,
+ ; is not weighed
  pace-ms 40
  (stones-pace st) (: c (peep st 'cost 0) f (st 'f) since (peep st 'paced 0)
-   up (? (2.0 * pace-ms < c) 1 (1.2 * pace-ms < c && 6 <= since) 1 0)
+   up (? (since < 2) 0 (2.0 * pace-ms < c) 1 (1.2 * pace-ms < c && 6 <= since) 1 0)
    dn ((1 - up) * (c < 0.65 * pace-ms && 20 <= since && 1.0 < f))
    f2 (min2 4.0 (max2 1.0 (f + 0.25 * up - 0.25 * dn)))
    (f2 = f ? (pin st 'paced (since + 1)) (pins st 'f f2 'paced 0 'cost 0)))
