@@ -1,6 +1,8 @@
 #!/bin/sh
 # test/gate/sqfs.sh -- src/apps/sqfs.l against mksquashfs, byte for byte: the same tree
 # stored uncompressed, no fragments, no exports, root's, one stamp, must be the same image.
+# deflated ('zlib) our coder is not zlib's, so there the law is unsquashfs's: the image it
+# reads back is the tree, contents, types, modes and links, and src comes out smaller.
 # the trees: one of every node and the block edges (an empty file, one of exactly a block, one
 # a byte past, a mode, a symlink, a deep path), a directory past 256 entries (the extended
 # inode), one past a metadata block (its index points), and the tree's own src/.
@@ -11,6 +13,7 @@ set -u
 love=${1:-out/love}
 [ -x "$love" ] || { echo "sqfs: no $love -- run 'make host'"; exit 1; }
 command -v mksquashfs >/dev/null 2>&1 || gate_skip "sqfs: no mksquashfs, skipped"
+command -v unsquashfs >/dev/null 2>&1 || gate_skip "sqfs: no unsquashfs, skipped"
 w=$(mktemp -d) || exit 1
 trap 'rm -rf "$w"' EXIT
 fail() { echo "FAIL sqfs: $*" >&2; exit 1; }
@@ -31,8 +34,16 @@ for d in one wide long src; do
   mksquashfs "$w/$d" "$w/$d.ref" -noI -noD -noF -noX -no-fragments -no-exports -no-xattrs \
     -all-root -mkfs-time 0 -inode-time 0 -no-duplicates -processors 1 -quiet -no-progress \
     > "$w/mk.log" 2>&1 || { cat "$w/mk.log"; fail "mksquashfs refused $d"; }
-  "$love" -l src/apps/sqfs.l -e "(borrow 'sqfs) (uwrite \"$w/$d.ours\" (sqfs-make (sqfs-tree \"$w/$d\") 0))" \
+  "$love" -l src/apps/sqfs.l -e "(borrow 'sqfs) (uwrite \"$w/$d.ours\" (sqfs-make (sqfs-tree \"$w/$d\") 0 'none))" \
     > /dev/null || fail "ours did not write $d"
   cmp -s "$w/$d.ref" "$w/$d.ours" || fail "$d differs from mksquashfs's: $(cmp "$w/$d.ref" "$w/$d.ours" 2>&1)"
+  "$love" -l src/apps/sqfs.l -e "(borrow 'sqfs) (uwrite \"$w/$d.z\" (sqfs-make (sqfs-tree \"$w/$d\") 0 'zlib))" \
+    > /dev/null || fail "ours did not write $d deflated"
+  unsquashfs -s "$w/$d.z" | grep -q '^Compression gzip' || fail "$d deflated: unsquashfs reads no gzip"
+  unsquashfs -no-progress -d "$w/$d.x" "$w/$d.z" > "$w/un.log" 2>&1 || { cat "$w/un.log"; fail "unsquashfs refused $d deflated"; }
+  diff -r "$w/$d" "$w/$d.x" > /dev/null || fail "$d deflated reads back other contents"
+  for t in "$w/$d" "$w/$d.x"; do (cd "$t" && find . -printf '%y %m %l %P\n' | sort) > "$t.ls"; done
+  cmp -s "$w/$d.ls" "$w/$d.x.ls" || fail "$d deflated reads back other types, modes or links"
 done
-echo "sqfs: ok (4 trees byte-identical to mksquashfs)"
+[ "$(wc -c < "$w/src.z")" -lt "$(wc -c < "$w/src.ours")" ] || fail "src deflated is no smaller than stored"
+echo "sqfs: ok (4 trees byte-identical to mksquashfs stored, and read back whole deflated)"
