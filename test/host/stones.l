@@ -77,3 +77,5 @@
    _ (keys! st (map (i \ 107) ^700)) z (st 'pz)
    _ (keys! st [107 107])
  (test (st 'done = 1) (z < exit-z) (st 'pz = z)))
+(test_fin ())
+(puts "stones: ok\n")

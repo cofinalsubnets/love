@@ -4,7 +4,7 @@
 ; or as kitty's pixels.
 ; the world is lore's: x right, y up, z ahead when 'th is 0, 'th turning toward x.
 (module (mesh mesh mesh-join mesh-move mesh-quad mesh-box mesh-grid mesh-lathe mesh-normals
-         mesh-keep mesh-pack mesh-bake mesh-open mesh-tex mesh-view mesh-dirs mesh-sky mesh-haze mesh-frame mesh-flat
+         mesh-keep mesh-pack mesh-bake mesh-open mesh-tex mesh-view mesh-dirs mesh-spot mesh-sky mesh-haze mesh-frame mesh-flat
          mesh-cells mesh-kitty)
 (borrow 'view)
 (borrow 'vec)
@@ -56,18 +56,23 @@
        (\ i j (: a (2.0 * pi * i / n) r (prof j 0)
                   [(r * sin a) (prof j 1) (r * cos a) (k * a * prof 0 0) (k * len j)]))
        tex col))
+ ; the vertices' places as trays [x y z], read by index in one step where a list walks
+ (places vs) (: n #vs (map (k \ gem-tray [n] (map (v \ 1.0 * v k) vs)) ^3))
+ (at3 P i) [(peep (P 0) i 0.0) (peep (P 1) i 0.0) (peep (P 2) i 0.0)]
+ ; ..each with its index, in order
+ (indexed l) (rev (<>(foldl (\ st v [(<st + 1) ([v <st] . <>st)]) [0 ()] l)))
  ; only the triangles whose middles (keep? x y z)
- (mesh-keep m keep?) (: vs (m 0)
-   (mesh vs (filter (t \ (: a (vs (t 0)) b (vs (t 1)) c (vs (t 2))
-                          (keep? ((a 0 + b 0 + c 0) / 3.0) ((a 1 + b 1 + c 1) / 3.0) ((a 2 + b 2 + c 2) / 3.0))))
-                    (m 1))))
+ (mesh-keep m keep?) (: P (places (m 0))
+   (mesh (m 0) (filter (t \ (: a (at3 P (t 0)) b (at3 P (t 1)) c (at3 P (t 2))
+                             (keep? ((a 0 + b 0 + c 0) / 3.0) ((a 1 + b 1 + c 1) / 3.0) ((a 2 + b 2 + c 2) / 3.0))))
+                       (m 1))))
  ; each vertex's normal the sum of its faces', weighed by their size
- (mesh-normals m) (: vs (m 0) acc {}
+ (mesh-normals m) (: vs (m 0) P (places vs) acc {}
    (add i n) (pin acc i (peep acc i [0.0 0.0 0.0] @ o [(o 0 + n 0) (o 1 + n 1) (o 2 + n 2)]))
-   _ (each (m 1) (t \ (: a (vs (t 0)) b (vs (t 1)) c (vs (t 2))
+   _ (each (m 1) (t \ (: a (at3 P (t 0)) b (at3 P (t 1)) c (at3 P (t 2))
                         n (cross (sub c a) (sub b a))
                         (add (t 0) n, add (t 1) n, add (t 2) n))))
-   (mesh (map (i \ (: v (vs i) n (unit (peep acc i [0.0 1.0 0.0])) (take 5 v + n + drop 8 v))) ^#vs) (m 1)))
+   (mesh (map (q \ (: v <q n (unit (peep acc <>q [0.0 1.0 0.0])) (take 5 v + n + drop 8 v))) (indexed vs)) (m 1)))
  ; a mesh packed for drawing: its vertices as columns, trays [x y z u v nx ny nz r g b],
  ; and its triangles as the tray facets takes
  (mesh-pack m) (: vs (m 0) n #vs ft (cat (m 1))
@@ -119,9 +124,20 @@
    x (st * cp + U * ct - V * st * sp) y (sp + V * cp) z (ct * cp - U * st - V * ct * sp)
    l (sqrt (x * x + y * y + z * z))
    [(x / l) (y / l) (z / l)])
- ; lore's sky through the eye's gain, as the bare pixels' colours for mesh-frame; sf its
- ; stars' share
- (mesh-sky lt wx e sim t0 sf) (d \ word (sky-tone lt (sky-colour-of lt wx (d 0) (d 1) (d 2) (e 0) (e 2) sim t0 sf)))
+ ; ..and the pixels directions X Y Z (trays) fall on, -1 behind the eye or off the screen
+ (mesh-spot v X Y Z) (: w (v 'w) h (v 'h) foc (w / 2.0 / tan (v 'fov / 2.0))
+   th (v 'th) ph (v 'ph) st (sin th) ct (cos th) sp (sin ph) cp (cos ph)
+   zc (X * st * cp + Y * sp + Z * ct * cp) zs (max zc 0.01)
+   cx (floor (w / 2.0 + foc * (X * ct - Z * st) / zs))
+   cy (floor (h / 2.0 - foc * (Y * cp - (X * st + Z * ct) * sp) / zs))
+   (over -1 ((0.05 < zc) * (0 <= cx) * (cx < w) * (0 <= cy) * (cy < h)) (cy * w + cx)))
+ ; lore's sky through the eye's gain, as the bare pixels' colours for mesh-frame: S the
+ ; pixels of the view v left bare, the sky's stars a pixel each among them
+ (mesh-sky lt wx e sim t0)
+  (\ v S (: d (mesh-dirs v S) c (sky-colour-of lt wx (d 0) (d 1) (d 2) (e 0) (e 2) sim)
+            at (pin (iota (v 'w * v 'h) * 0 - 1) S (iota #S))
+            ix (peep at (mesh-spot v (sky-stars 'x) (sky-stars 'y) (sky-stars 'z)) -1)
+            (word (sky-tone lt (sky-stars! c lt wx (e 0) (e 2) sim t0 ix)))))
  ; the sky low ahead before the gain, 0 to 255: the colour a far thing fades to
  (mesh-haze v lt wx sim) (: th (v 'th) e (v 'e)
    c (sky-near lt wx (gem-tray [1] [(sin th)]) (gem-tray [1] [0.02]) (gem-tray [1] [(cos th)]) (e 0) (e 2) sim)
@@ -129,13 +145,13 @@
  ; a frame, a flat tray of colours w*h long: the scene [verts tris], each a tray or a
  ; list of batches, with its textures, fog [r g b near far] 0 to 255, facets's flags and
  ; the eye's gain (sky-tone's, 0 for none); and where it left the screen bare, bare: a
- ; colour, or (d \ ..) the colours for directions d
+ ; colour, or (\ v S ..) the colours of pixels S of the view
  (mesh-frame v sc texs fog flags gain bare) (: n (v 'w * v 'h)
    f (peep (facets (v 'w) (v 'h) -1 (v 'cam) (sc 0) (sc 1) texs
                    (gem-tray [7] [(1.0 * fog 0) (1.0 * fog 1) (1.0 * fog 2) (1.0 * fog 3) (1.0 * fog 4) (1.0 * flags) (1.0 * gain)]))
            (iota n) 0)
    S (iota (f = -1))
-   (#S = 0 ? f (pin f S (charm? bare ? bare (bare (mesh-dirs v S))))))
+   (#S = 0 ? f (pin f S (charm? bare ? bare (bare v S)))))
  ; a frame's colours as [r g b] trays, 0 to 1
  (mesh-flat f) [((f >> 16 & 255) / 255.0) ((f >> 8 & 255) / 255.0) ((f & 255) / 255.0)]
  ; ..and as half-block cells: 24-bit, or the 256 cube dithered by bay; bands view's words

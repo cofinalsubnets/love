@@ -154,20 +154,22 @@
  lips [2.0 5.0 9.0]                       ; ..and out over the plateau, under its edge
  (rim-y x z) (min (top x z) (bowl x z))
  ; a slot wall, side sg -1 the west and 1 the east, its profile i up and over at ring j:
- ; the east's i and j crossed, so both face the slot
+ ; the east's i and j crossed, so both face the slot. its foot is sunk under the floor
  (wall sg)
   (: nz (int ((zend - z0) / dz)) np (nw + #lips)
      (at i j) (: z (z0 + j * dz) sx (slot-x z) T (rim-y (sx + sg * half (top sx z) z) z)
-                 (i <= nw ? (: y (T * i / nw) x (sx + sg * half y z) [x y z (tx * z) (tx * y)])
+                 (i <= nw ? (: y ((T + 0.3) * i / nw - 0.3) x (sx + sg * half (max y 0.0) z) [x y z (tx * z) (tx * y)])
                     (: x (sx + sg * (half T z + lips (i - nw - 1))) y (rim-y x z - 0.08)
                        [x y z (tx * z) (tx * (T + mag (x - sx)))])))
-     (sg < 0 ? (mesh-grid nz np (\ j i (at i j)) 0 [1.0 1.0 1.0])
-        (mesh-grid np nz at 0 [1.0 1.0 1.0])))
- ; ..its floor, sand from wall to wall
+     m (sg < 0 ? (mesh-grid nz np (\ j i (at i j)) 0 [1.0 1.0 1.0])
+          (mesh-grid np nz at 0 [1.0 1.0 1.0]))
+     ; ..its lips only under the plateau, not where the bowl's rows are the ground
+     (mesh-keep m (\ x y z (mag (x - slot-x z) < half (max y 0.0) z + 0.5 || top x z - 0.3 <= bowl x z))))
+ ; ..its floor, sand from wall to wall, a hair under the bowl's where they meet
  floor-n 3
- (slot-floor _) (: nz (int ((zend - z0) / dz))
+ (slot-floor _) (: nz (int ((zend + 2.0 - z0) / dz))
    (mesh-grid floor-n nz (\ i j (: z (z0 + j * dz) sx (slot-x z) hw (half 0.0 z)
-                                   x (sx - hw + 2.0 * hw * i / floor-n) [x 0.0 z (tx * x) (tx * z)]))
+                                   x (sx - hw + 2.0 * hw * i / floor-n) [x -0.02 z (tx * x) (tx * z)]))
               1 [1.0 1.0 1.0]))
  ; the slot's air: inside its walls, short of the bowl
  (in-slot? x y z) (z < zend && mag (x - slot-x z) < half (max y 0.0) z - 0.02)
@@ -189,7 +191,19 @@
                  y (min (kn 1) (top x z) - (rim-r + 5.0 < rr ? 0.08 0.0))
                  [x y z (tx * rr * a) (tx * (rr + y))])
      m (mesh-grid bowl-n (#knots - 1) at 1 [1.0 1.0 1.0])
-     (mesh-keep m (\ x y z !(in-slot? x (y + 0.3) z))))
+     ; ..where the slot cuts the rows: a vertex in its air moved out across to the wall on
+     ; its side, so a row ends on the wall; a triangle across the slot, its corners either
+     ; side of it, or with all three moved into the wall, dropped
+     (side v) (v 0 < slot-x (v 2) ? -1 1)
+     (in? v) (in-slot? (v 0) (v 1 + 0.3) (v 2))
+     S (star-tray [#(m 0)] (map side (m 0))) I (star-tray [#(m 0)] (map (v \ in? v ? 1 0) (m 0)))
+     Z (gem-tray [#(m 0)] (map (v \ 1.0 * v 2) (m 0)))
+     vs (map (v \ (in? v ? ([(slot-x (v 2) + side v * half (v 1) (v 2)) (v 1) (v 2)] + drop 3 v) v)) (m 0))
+     ts (filter (t \ (: (g T k) (peep T (t k) 0) zl (min (g Z 0) (min (g Z 1) (g Z 2)))
+                       across (g S 0 != g S 1 || g S 0 != g S 2)
+                       !(across && zl < zend || g I 0 + g I 1 + g I 2 = 3)))
+                (m 1))
+     (mesh-normals (mesh vs ts)))
  ; the plateau, four metres a cell: where it is the top, not the bowl's air nor the slot's
  cell 4.0
  (plateau _) (: nx 40 nz 75 x0 (-0.5 * nx * cell) zp -110.0
@@ -259,7 +273,7 @@
    v (mesh-view w h e (st 'th) (st 'ph) fov 0.05 900.0)
    hz (mesh-haze v lt (st 'wx) (st 'sim))
    (mesh-frame v (scene st) ((land ()) 'texs) [(hz 0) (hz 1) (hz 2) 150.0 900.0] 8 (1.5 * lt 'expo)
-               (mesh-sky lt (st 'wx) e (st 'sim) (st 't) 1.0)))
+               (mesh-sky lt (st 'wx) e (st 'sim) (st 't))))
  (stones-frame st) (: w (st 'w) h (st 'h) f (stones-pens st)
    (? (st 'kitty) (mesh-kitty f w h w (h // 2) kitty-id)
       (st 'deep) (mesh-cells f w h 1 0 {})
