@@ -94,6 +94,38 @@ moonrun -t a64 -c "$ho/.bugl.c" -o "$ho/.bugl.o" || fail "mooncc -t a64 a live B
 ! grep -q 'l14471' "$ho/.bugd.o" || fail "a dead BUG asm's __bug_table row names its removed label"
 grep -q '__bug_table' "$ho/.bugl.o" || fail "a live BUG asm lost its __bug_table row"
 
+# a jump label: its "i" operand a local derived from params (arch_static_branch's
+# `char *k = &((char *)key)[branch]`), constant once the call is spliced, so the body compiles
+# only spliced; its asm goto target is named only by the __jump_table words, never by a jump,
+# and must stay laid. the program walks its own table. held to gcc -O2 (gcc -O0 refuses the "i")
+cat > "$ho/.jl.c" <<'CEOF'
+struct static_key { int enabled; };
+struct static_key key_a;
+struct jent { int code, target; long key; };
+extern struct jent __start___jump_table[], __stop___jump_table[];
+static inline __attribute__((__always_inline__)) int sb(struct static_key *const key, const _Bool branch)
+{
+  char *k = &((char *)key)[branch];
+  asm goto("1: nop\n\t.pushsection __jump_table, \"aw\"\n\t.align 8\n\t"
+           ".long 1b - ., %l[yes] - .\n\t.quad %c0 - .\n\t.popsection\n\t"
+           : : "i"(k) : : yes);
+  return 0;
+yes:
+  return 1;
+}
+int main(void)
+{
+  struct jent *e = __start___jump_table;
+  if (sb(&key_a, 1)) return 9;                      /* the nop falls through */
+  if (__stop___jump_table - e != 1) return 1;
+  if ((char *)&e->key + e->key != (char *)&key_a + 1) return 2;
+  return 0;
+}
+CEOF
+moonrun "$ho/.jl.c" -o "$ho/.jl" || fail "mooncc a spliced jump label"
+"$ho/.jl" || fail "a spliced jump label's table or target is wrong (exit $?)"
+$cc_g -O2 -o "$ho/.jlg" "$ho/.jl.c" && { "$ho/.jlg" || fail "gcc -O2 disagrees on the jump-label law (exit $?)"; }
+
 # ------------------------------------------- -std=: the dialect rail (struct labels)
 # THE ORACLE IS THE LABEL-FREE TWIN. A struct label is not C -- gcc cannot compile the
 # labelled source at all -- so the differential is against the SAME struct with the labels

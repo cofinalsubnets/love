@@ -3966,8 +3966,10 @@
        (swallow fs) (two? fs ?                ; the align ahead of a label is the label's
                        (<fs @ f (two? f && (<f = 'label || <f = 'align) ? fs (swallow >fs))))
        (atlab? fs l) (two? fs && (<fs @ f (two? f && <f = 'label && <>f = l)))
-       ; misc: labels named by a form other than a control transfer (an asm splice can hold one); over-approximate, filled by bscan
-       misc {}
+       ; misc: labels named by a form other than a control transfer (an asm splice can hold one, and
+       ; an asm's other-section words: a jump label's table names an asm goto's target no code
+       ; jumps to); over-approximate, seeded from those words and filled by bscan
+       misc (cg-refs (g 'fasecs) {})
        ; back-edge labels (a transfer below its target): a loop head joins an edge this linear pass never computes -- assume nothing
        backs (: seen {} bt {}
                 (bscan l) (!(two? l) ? bt
@@ -5230,9 +5232,12 @@
    ; label (refs = every symbol operand, over-approximate); a dropped region takes its refs with it
    ; every nom among a form's operands pinned into t; nested operands (a raw splice's forms) scan whole
    (pinnoms t ops) (!(two? ops) ? 0 (<ops @ o ((? (nom? o) (pin t o 1) (two? o) (pinnoms t o)), pinnoms t >ops)))
-   (deadlab fs) (deadlab1 fs @ r (#r = #fs ? r (deadlab r)))
-   (deadlab1 fs)
-    (: refs {}
+   ; ks seeds the refs: what a function's asm names from another section (a jump label's
+   ; table names an asm goto's target, which no code jumps to) is no dead label
+   (deadlab fs) (deadlabk {} fs)
+   (deadlabk ks fs) (deadlab1 ks fs @ r (#r = #fs ? r (deadlabk ks r)))
+   (deadlab1 ks fs)
+    (: refs (foldl (t \ k \ pin t k 1) {} (keys ks))
        (scan l) (!(two? l) ? 0
                    (<l @ f
                       (two? f && <f != 'label ? (pinnoms refs >f),
@@ -6649,7 +6654,8 @@
                      (local? <x || local? >x))
        (? (charm? k) k
           (local? e2) 'no
-          (imaddr g e2 @ a
+          ; a probe: what it fails to resolve is no refusal's cause, so the pin is left as found
+          ((: u0 (g 'undecl) a (imaddr g e2) (pin g 'undecl u0, a)) @ a
              (a @ 'no 'no
                   (: nm (nom? <a ? (show <a) <a) (<>a @ 0 nm (<>a < 0 ? (nm + show <>a) (nm + "+" + show <>a))))))))
    ; an operand's byte width, off its type by static peek (a register spells by it on x64)
@@ -7589,8 +7595,14 @@
    ; cpu features) compiles only where it is spliced: its labels may ride along (the jump lane).
    ; so does one handing a parameter to such a body (static_key_false's key)
    (asmneed? g ps x)
-    (: pn (map (p \ <p) ps)
-       (pv? e) (!(two? e) ? () (e @ ('var v) (elem v pn) (pv? <e || pv? >e)))
+    ; a local whose initializer names a param counts as one: arch_static_branch's
+    ; `char *k = &((char *)key)[branch]` is constant only once branch is
+    (: (dv l pn) (? !(two? l) pn
+                    (<l = 'decl) (foldl (a \ d \ (two? >>d && pvl a <>>d) ? (<d . a) a) pn <>l)
+                    (dv >l (dv <l pn)))
+       (pvl pn e) (!(two? e) ? () (e @ ('var v) (elem v pn) (pvl pn <e || pvl pn >e)))
+       pn (dv x (map (p \ <p) ps))
+       (pv? e) (pvl pn e)
        (imm? c) (#c @ n ((: (go i) (? (i >= n) () (elem (c i) '(105 110)) 1 (go (i + 1)))) 0))
        (go y) (? !(two? y) ()
                  (<y = 'asm) (any (o \ imm? <o && pv? <>o) (y 3))
@@ -8201,6 +8213,10 @@
               c8 (cen <x c8)
               (cen >x c8)))
        cds (cen items ())
+       ; ..and what an immediate local's initializer names is one too, so a spliced
+       ; `char *k = &((char *)key)[branch]` folds once key's own address has
+       (vs x) (? !(two? x) () (<x = 'var) (pin ivs <>x 1) (vs <x, vs >x))
+       _ (foldl (_ \ p \ (ivs <p && two? >>p ? (vs <>>p) 0)) 0 cds)
        pns (: (go l a) (!(two? l) ? a (go >l (<<l . a))) (go <>>f))
        (onlys x) (? !(two? x) 1 (<x = 'var) (sdl <>x) (onlys <x && onlys >x))
        (kok nm ty init)
@@ -8251,6 +8267,9 @@
        (has? f ? (kprop g (dprune w64 (e \ ()) (res f))) f))
    (cgfn g f)                                       ; ('fn name params ('blk items)) -> forms | 'bad
     (: f (bcpfin g (kprop g (respell (oalign g (ainl g f)))))
+       ; the tree passes probe addresses (kprop's, an asm operand's) before every constant has
+       ; arrived; a name such a probe could not resolve is no refusal's cause
+       _ (pin g 'undecl ())
        params <>>f
        _ (fnreset g)                                 ; the whole per-fn pin record wiped (one roster)
        _ (pin g 'rdg (rdgraph >>>f))
@@ -8870,7 +8889,7 @@
                      (cfoldir g irx))))))))))))))))
        ; the copy fold again after repack: a slot copied from a seat repack just minted forwards from it now
        (post irx) (deadst g (deaddef g (copyprop g (stld g (copyprop g (repack g irx))))))
-       (bad? irf ? irf (dp 'final (frrec g (swrap g (tailarm g (jmpm g (csdrop g (cskeep g (unhome g (jr0 g (rvunframe g (unframe g (hz4 g (laacse g (coal g (copyprop g (recse g (wpair g (dp 'post (post (dp 'deadlab (deadlab (swp irf))))))))))))))))))))))))
+       (bad? irf ? irf (dp 'final (frrec g (swrap g (tailarm g (jmpm g (csdrop g (cskeep g (unhome g (jr0 g (rvunframe g (unframe g (hz4 g (laacse g (coal g (copyprop g (recse g (wpair g (dp 'post (post (dp 'deadlab (deadlabk (cg-refs (g 'fasecs) {}) (swp irf))))))))))))))))))))))))
 
    ; the data tail -> (dataforms nifforms imgforms extras bssforms rodataforms) | 'bad, extras ((name forms
    ; ro?) ..) per other named section in declaration order. love_nifs packs for the linker's __start_/__stop_
