@@ -77,7 +77,7 @@
     '((prog 1 1) (fn 1 5) (proto 1 4) (gdecl 1 2) (xdecl 1 2) (tdef 0 2) (note 1 1) (tasm 1 1)
       (edef 2 2) (sdef 2 3) (sassert 2 2) (cpp-def 1 2) (cpp-undef 1 1) (cpp-if 1 2)
       (blk 1 1) (decl 1 1) (sdecl 1 1) (ret 1 2) (if 2 3) (while 2 2) (for 4 4)
-      (do 2 2) (switch 2 2) (case 1 1) (dflt 0 0) (brk 0 0) (cont 0 0) (goto 1 1)
+      (do 2 2) (switch 2 2) (case 1 2) (dflt 0 0) (brk 0 0) (cont 0 0) (goto 1 1)
       (lbl 1 1) (expr 1 1) (nop 0 0) (asm 5 6)
       (num 1 1) (flo 1 1) (str 1 1) (chr 1 1) (var 1 1) (bin 3 3) (un 2 2) (asn 2 2)
       ; ('rmw op lv rhs) -- `lv op= rhs` kept whole, because the desugar to

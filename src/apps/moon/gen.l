@@ -7467,17 +7467,12 @@
                     tab {}                ; this switch's value->label map (and 'dflt->label)
                     cases (rev (scasel-l g items tab ()))   ; pre-scan the body at any depth -> (value label) dispatch pairs
                     dflt (peep tab 'dflt lend)
-                    ; a range tests x - lo against hi - lo, one unsigned compare, in a scratch
-                    ; register of its own
+                    ; a range is two compares in the control's own signedness, r1 the scratch as
+                    ; a single case's: below lo skips past, at most hi takes the case
                     (rng lo hi lab)
-                     (: l9 (cfit g (vty c) lo) sp (cfit g (vty c) hi - l9) t9 (ralloc g)
-                        (!t9 ? 'bad
-                           (: u9 (immok g 'cmp sp ? () (ralloc g))
-                              (? (!(immok g 'cmp sp) && !u9) (rfree g t9, 'bad)
-                                 (: ins ([['li t9 l9] ['sub t9 cr9 t9]]
-                                         + (u9 ? [['li u9 sp] ['cmp t9 u9]] [['cmp t9 sp]])
-                                         + [['br 'be lab]])
-                                    (rfree g t9, (u9 ? (rfree g u9) 0), ins))))))
+                     (: ty (vty c) u (usg? ty) l9 (cfit g ty lo) h9 (cfit g ty hi) sk (nlab g ".r")
+                        (cmpk v) (immok g 'cmp v ? [['cmp cr9 v]] [['li 'r1 v] ['cmp cr9 'r1]])
+                        (cmpk l9 + [['br (scc 'lt u) sk]] + cmpk h9 + [['br (scc 'le u) lab] ['label sk]]))
                     chain (: (go l acc)
                              (? !(two? l) acc
                                 (bad? acc) acc
