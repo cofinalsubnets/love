@@ -7829,6 +7829,14 @@
    (oneret? (i . u))                                  ; decls* + one trailing `return expr` (the b2w shape)
     (i @ ('decl . _) (oneret? u)
          (('ret . rv . _) && two? rv) !(two? u))
+   ; a body's weight by its structure: a name, a number or an operator one unit each, and a
+   ; __builtin_expect (with the !! it wraps) its operand -- a hint lays no code
+   (aweigh x)
+    (? !(two? x) 1
+       (x @ ('call ('var b9) [a _] && b9 = "__builtin_expect")
+             (a @ ('un 'not ('un 'not a2)) (aweigh a2) (aweigh a))
+            ('var _) 1
+            (foldl (n \ y \ n + aweigh y) 0 x)))
    (inlok? g f sig aln)                             ; aln: __attribute__((always_inline)) -- the author's word waives the size gate
     (: rt (two? sig ? <sig 'long)
        items <><>>>f
@@ -7841,8 +7849,9 @@
           (flo? rt && !(dbl? rt) || stru? rt) ()
           (sig 2) ()                            ; variadic stays a real call
           !(pok <>>f 0) ()
-          ; the size gate on the shown body: 600 for a single-return body, 250 for a branchy one
-          (!aln && (oneret? items ? 600 250) < #(show <>>>f)) ()
+          ; the size gate on the body's weight, not the spelling of its names: 82 for a
+          ; single-return body, 35 for a branchy one
+          (!aln && (oneret? items ? 82 35) < aweigh <>>>f) ()
           (asmneed? g <>>f <>>>f) !(noinlj? <>>>f)
           !(noinl? <>>>f)))
    ; -- the AST inliner: a call to an inline candidate, where its statement evaluates it before anything
