@@ -8,8 +8,16 @@
 //         and tris may be lists of batches, pairwise, each batch's tris its own verts
 //  texs   a list of textures, each an [h w] tray of colours (one below 0 is a hole) or a
 //         list of them, each level half the last
-//  opts   fog r g b, fog near, fog far (view depth), flags: 1 affine, 2 snap, 4 dither, 8 cull
+//  opts   fog r g b, fog near, fog far (view depth), flags: 1 affine, 2 snap, 4 dither, 8 cull;
+//         and an exposure k, a colour c 0 to 255 shown as 255 (1 - e^(-k c / 255)), 0 none
 #include "love.h"
+#if Bits == 64
+double lm_exp(double);
+#define rz_exp lm_exp
+#else
+float lm_expf(float);
+#define rz_exp lm_expf
+#endif
 
 enum { rz_affine = 1, rz_snap = 2, rz_dither = 4, rz_cull = 8, rz_lv = 8 };
 // a vertex in clip space with what rides on it; once projected x y are pixels and z ndc
@@ -18,7 +26,7 @@ struct rz_tex { intptr_t const *px; intptr_t w, h; };
 struct rz {
  intptr_t W, H, flags;
  flo_t const *m;
- flo_t fog[5];
+ flo_t fog[5], tone;
  intptr_t *out;
  flo_t *depth;
  struct rz_tex lv[rz_lv];
@@ -132,6 +140,7 @@ static void rz_tri(struct rz *r, struct rz_v const *p0, struct rz_v const *p1, s
       flo_t f = (w - fn) * fs;
       f = f < 0 ? 0 : f > 1 ? 1 : f;
       for (int k = 0; k < 3; k++) c[k] += (r->fog[k] - c[k]) * f; }
+     if (r->tone > 0) for (int k = 0; k < 3; k++) c[k] = 255 * (1 - rz_exp(-r->tone * c[k] / 255));
      int const d = r->flags & rz_dither ? rz_bayer[(y & 3) * 4 + (x & 3)] : 0;
      o[x] = rz_ch(c[0], d) << 16 | rz_ch(c[1], d) << 8 | rz_ch(c[2], d);
      dz[x] = a[0]; } }
@@ -241,7 +250,7 @@ love_noinline static struct g *host_raster(struct g *g) {
  for (uintptr_t i = 0; i < 16; i++) m[i] = tray_get_flo(tray(a[3]), i);
  r.m = m;
  for (uintptr_t i = 0; i < 5; i++) r.fog[i] = rz_opt(a[7], i, 0);
- r.flags = (intptr_t) rz_opt(a[7], 5, 0);
+ r.flags = (intptr_t) rz_opt(a[7], 5, 0), r.tone = rz_opt(a[7], 6, 0);
  if (galaxyp(a[4])) rz_batch(&r, tray(a[4]), tray(a[5]), a[6]);
  else for (word v = a[4], t = a[5]; chainp(v); v = B(v), t = B(t)) rz_batch(&r, tray(A(v)), tray(A(t)), a[6]);
  a[0] = word(fr);

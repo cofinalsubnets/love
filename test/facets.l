@@ -2,7 +2,7 @@
 ; face stands whichever comes first, a texture laid a texel a pixel comes back as it was, and
 ; its level follows how many texels a pixel crosses. the loop holds more each round, so the
 ; collections the frame asks for move it under the heap (make test_gcstress). frame-bytes
-; spells a frame for a window or a terminal
+; spells a frame for a window or a terminal; an exposure rolls the light off as lore's eye does
 (: (fc-flat l) (foldr (+) () l)
    (fc-g l) (fc-flat l @ f (gem-tray [(tally f)] f))
    (fc-z l) (fc-flat l @ f (star-tray [(tally f)] f))
@@ -70,4 +70,6 @@
       (frame-bytes px2 2 1 = "EjRW////")
       (frame-bytes px2 0 2 = "\x12\x34\x56\x12\x34\x56\xff\xff\xff\xff\xff\xff\x12\x34\x56\x12\x34\x56\xff\xff\xff\xff\xff\xff")
       (frame-bytes px2 3 1 = ())
+      ; an exposure of 1 shows white as 255 (1 - 1/e)
+      (fc-n (facets 4 4 7 fc-id (fc-g (big 0.0 1 0)) (fc-z [[0 1 2 -1]]) () (fc-g [[0.0 0.0 0.0 0.0 0.0 0.0 1.0]])) (161 << 16) = 16)
       (fc-go 100 () 0 = 0)))
