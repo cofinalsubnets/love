@@ -42,7 +42,8 @@
              "common" 'hint "nocommon" 'hint
              "constructor" 'no "destructor" 'no "ifunc" 'no "weakref" 'no "mode" 'no "vector_size" 'no
              "transparent_union" 'do "naked" 'no "interrupt" 'no "patchable_function_entry" 'no
-             "regparm" 'no "stdcall" 'no "fastcall" 'no "thiscall" 'no "ms_abi" 'no "pcs" 'no
+             ; i386's conventions: gcc ignores them on every target mooncc lays, so a skip is exact
+             "regparm" 'hint "stdcall" 'hint "fastcall" 'hint "thiscall" 'hint "ms_abi" 'no "pcs" 'no
              "long_call" 'no "short_call" 'no "scalar_storage_order" 'no "target_clones" 'no
              "symver" 'no "no_caller_saved_registers" 'no}
    ; an attribute's name, either spelling: __aligned__ is aligned

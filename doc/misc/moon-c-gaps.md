@@ -90,13 +90,12 @@ All of C89 passes. What remains is C99/C11/GNU.
 | construct | probe |
 |---|---|
 | `_Atomic` | `_Atomic int a;` — both spellings; `__STDC_NO_ATOMICS__` says so, which is C11's own door for the absence |
-| the address of a compound literal in a **static** initializer | `struct S *p = &(struct S){1,2};` — inside a function it passes |
 | brace elision continuing **past** an anonymous union member | `{1,2,3,{4,5}}` over `struct { int a,b; union { int c,d; }; struct S1 s; }` — elision *into* the union is fine |
 | a `##` paste that makes a macro NAME | `CAT(A,B)(x)` where `AB` is itself a macro — the pasted name is not rescanned as an invocation |
 | a register-exhausted **SSE**-class by-value argument | five float HFAs — the gp twin landed 2026-08-08 (below), this one did not |
 
-The last five are what `test_cts` found (doc/misc/moon.md); `test/gate/cts.sh` names the program
-each one came from.
+The rows below `_Atomic` are what `test_cts` found (doc/misc/moon.md); `test/gate/cts.sh` names
+the program each one came from.
 
 ### what passes, for contrast
 
@@ -212,8 +211,8 @@ Four of them carry an edge worth knowing:
   locals, braces, elision, concatenation across a prefix and `sizeof` all match gcc on every
   target, and a wide *char* constant decodes to its last code point as gcc reads it. the
   storage is the compound literal's — automatic inside a function where C says static duration,
-  so a pointer kept past the frame dangles, and `wchar_t *p = L"x"` at file scope refuses on the
-  static-clit row above. A mixed-prefix concatenation `u"a" U"b"` takes the first prefix where
+  so a pointer kept past the frame dangles; at file scope `wchar_t *p = L"x"` lays its literal as
+  a static object of its own. A mixed-prefix concatenation `u"a" U"b"` takes the first prefix where
   gcc refuses.
 - **`__extension__`** is a no-op at a declaration's head (file scope, block, member, before
   `typedef`) and as a cast-expression prefix, the typedef declarator's trailing attribute run
@@ -859,12 +858,14 @@ lays the external definition and `extern inline` does not, gnu89's way about) tr
 (an argument of a member's type becomes the union; members one word-sized scalar type, or it
 refuses); **a hint, whose
 skip is exact** — the diagnostics, the optimisation promises (pure const malloc nonnull ...),
-visibility under a static link, cold/hot, fallthrough and the rest of the list; **refused by
-name** — constructor destructor ifunc weakref mode vector_size naked
-interrupt patchable_function_entry, the calling conventions (regparm, ms_abi, pcs ...),
-scalar_storage_order, target_clones, symver. `__has_attribute` answers 1 for the first two
-classes and 0 for the third and for a name it does not know, which is what a header asks
-before it uses one.
+visibility under a static link, cold/hot, fallthrough, i386's calling conventions (stdcall
+fastcall thiscall regparm, which gcc ignores on every target mooncc lays) and the rest of the
+list; **refused by name** — constructor destructor ifunc weakref mode vector_size naked
+interrupt patchable_function_entry, the calling conventions that change code here (ms_abi,
+pcs), scalar_storage_order, target_clones, symver. `__has_attribute` answers 1 for the first
+two classes and 0 for the third and for a name it does not know, which is what a header asks
+before it uses one -- save the four i386 conventions, which answer 1 where gcc off i386 knows
+them not and answers 0.
 
 owed, each refusing loudly today (an undeclared builtin, or a parse error):
 
