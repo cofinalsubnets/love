@@ -7829,6 +7829,14 @@
    (oneret? (i . u))                                  ; decls* + one trailing `return expr` (the b2w shape)
     (i @ ('decl . _) (oneret? u)
          (('ret . rv . _) && two? rv) !(two? u))
+   ; a body's weight by its structure: a name, a number or an operator one unit each, and a
+   ; __builtin_expect (with the !! it wraps) its operand -- a hint lays no code
+   (aweigh x)
+    (? !(two? x) 1
+       (x @ ('call ('var b9) [a _] && b9 = "__builtin_expect")
+             (a @ ('un 'not ('un 'not a2)) (aweigh a2) (aweigh a))
+            ('var _) 1
+            (foldl (n \ y \ n + aweigh y) 0 x)))
    (inlok? g f sig aln)                             ; aln: __attribute__((always_inline)) -- the author's word waives the size gate
     (: rt (two? sig ? <sig 'long)
        items <><>>>f
@@ -7841,8 +7849,9 @@
           (flo? rt && !(dbl? rt) || stru? rt) ()
           (sig 2) ()                            ; variadic stays a real call
           !(pok <>>f 0) ()
-          ; the size gate on the shown body: 600 for a single-return body, 250 for a branchy one
-          (!aln && (oneret? items ? 600 250) < #(show <>>>f)) ()
+          ; the size gate on the body's weight, not the spelling of its names: 99 for a
+          ; single-return body, 43 for a branchy one
+          (!aln && (oneret? items ? 99 43) < aweigh <>>>f) ()
           (asmneed? g <>>f <>>>f) !(noinlj? <>>>f)
           !(noinl? <>>>f)))
    ; -- the AST inliner: a call to an inline candidate, where its statement evaluates it before anything
@@ -8036,7 +8045,11 @@
                        (bind ps as pre)
                         (!(two? ps) ? pre
                            (: p <ps
-                              a (cfold !(t32? g) <as @ kc (cint? kc ? ['num kc] <as))   ; a constant arg folded
+                              ; a constant arg folded, and a sizeof of an expression the caller's
+                              ; names type (kcalloc's sizeof(*p))
+                              a (cfold !(t32? g) <as @ kc
+                                  (? (cint? kc) ['num kc]
+                                     (<as @ ('szof e9) (ptype ps9 e9 @ t9 ((two? t9 ? elem <t9 '(ptr struct) (elem t9 '(char schar cchar uchar short ushort int uint long ulong llong ullong double))) ? ['num (tsz g t9)] <as)) <as)))
                               ty9 (two? a && <a = 'var ? (peep tys <>a 'no) 'no)
                               ax (two? a && <a = 'addr && two? <>a && <<>a = 'var ? <><>a)
                               ; (a block static's address costs no frame: it binds as any arg)
@@ -8491,6 +8504,44 @@
        (atom? (keys sbs) ? f
         (kprop g ([<f <>f <>>f] + (['blk (sub items)] . >>>>f)))))
 
+   ; an overflow builtin over two constant operands into a local whose address it alone takes
+   ; and nothing else writes, answered here: the local's declaration takes the exact value at
+   ; its width, the call whether it fit -- so kprop carries the local on (kmalloc_array's
+   ; `bytes` into kmalloc's __builtin_constant_p) -> f | ()
+   (ovfold g f)
+    (: w64 !(t32? g)
+       ity '(char schar cchar uchar short ushort int uint long ulong llong ullong)
+       ovs '("__builtin_add_overflow" "__builtin_sub_overflow" "__builtin_mul_overflow")
+       tys {} tak {} wrt {}
+       (cen x) (? (atom? x) 0
+                  (: _ (x @ ('decl ps) (map (p \ pin tys <p <>p) ps)
+                            ('addr ('var v)) (pin tak v (peep tak v 0 + 1))
+                            (('asn || 'post || 'rmw) . _) (: d (x (<x = 'rmw ? 2 1)) (d @ ('var v) (pin wrt v 1) 0))
+                            0)
+                     (map cen x)))
+       _ (cen f)
+       ; the folds: the local -> its value, and each call -> its answer
+       val {}
+       (ans x)
+        (x @ ('call ('var b9) [a b ('addr ('var v))] && elem b9 ovs)
+              (: ka (cfty w64 a) kb (cfty w64 b) tt (peep tys v ())
+                 (? !(two? ka && two? kb && elem tt ity && tsz g tt <= 8 && peep tak v 0 = 1 && !(wrt v)) ()
+                    (: va <ka vb <kb
+                       r (? (b9 = "__builtin_add_overflow") (va + vb) (b9 = "__builtin_sub_overflow") (va - vb) (va * vb))
+                       m (2 ** (8 * tsz g tt))
+                       u (((r % m) + m) % m)
+                       _ (pin val v (usg? tt || u < m // 2 ? u (u - m)))
+                       ['num (? (usg? tt) (0 <= r && r < m ? 0 1) (0 - m // 2 <= r && r < m // 2 ? 0 1))])))
+             ())
+       (fold x)
+        (? (atom? x) x
+           (ans x @ k (two? k ? k (map fold x))))
+       f2 (fold f)
+       (seat x)
+        (? (atom? x) x
+           (x @ ('decl ps) ['decl (map (p \ (peep val <p 'no @ k (k = 'no ? p [<p <>p ['num k]]))) ps)]
+                (map seat x)))
+       (atom? (keys val) ? () (seat f2)))
    ; every __builtin_constant_p decided on what inlining and kprop left: 1 where its operand
    ; folds, else 0; the arms that settles pruned (a BUILD_BUG_ON's call among them), then
    ; propagated again
@@ -8500,7 +8551,7 @@
        (res x) (? (atom? x) x (<x = 'bcp) ['num (charm? (cfold w64 <>x) ? 1 0)] (map res x))
        (has? f ? (kprop g (dprune w64 (e \ ()) (res f))) f))
    (cgfn g f)                                       ; ('fn name params ('blk items)) -> forms | 'bad
-    (: f (bcpfin g (kprop g (respell (oalign g (ainl g f)))))
+    (: f (bcpfin g (: k1 (kprop g (respell (oalign g (ainl g f)))) (ovfold g k1 @ k2 (two? k2 ? (kprop g k2) k1))))
        ; the tree passes probe addresses (kprop's, an asm operand's) before every constant has
        ; arrived; a name such a probe could not resolve is no refusal's cause
        _ (pin g 'undecl ())

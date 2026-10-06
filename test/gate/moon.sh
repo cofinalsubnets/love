@@ -104,6 +104,17 @@ moonrun -c "$ho/.esc.c" -o "$ho/.esc.o" || fail "mooncc an escaping &local"
 ! grep -q 'karr' "$ho/.ovf.o" || fail "an inline helper whose &local goes only to __builtin_mul_overflow was not spliced"
 grep -q 'kesc' "$ho/.esc.o" || fail "an inline helper handing its &local to a call was spliced"
 
+# the size gate weighs a body by its structure: kmalloc_array's long names and its
+# __builtin_expect(!!(..)) wrapping do not keep a small body from being spliced
+printf 'extern void *slow_path_allocator(unsigned long, unsigned);\nstatic inline _Bool must_check_overflow_of_the_product(_Bool o) { return __builtin_expect(!!(o), 0); }\nstatic inline void *kmalloc_array_noprof_like_helper(unsigned long number_of_elements, unsigned long size_of_each, unsigned allocation_flags) { unsigned long total_bytes_requested; if (__builtin_expect(!!(must_check_overflow_of_the_product(__builtin_mul_overflow(number_of_elements, size_of_each, &total_bytes_requested))), 0)) return ((void *)0); return slow_path_allocator(total_bytes_requested, allocation_flags); }\nvoid *f(void) { return kmalloc_array_noprof_like_helper(4, 8, 1); }\n' > "$ho/.wgt.c"
+moonrun -c "$ho/.wgt.c" -o "$ho/.wgt.o" || fail "mooncc a long-named inline helper"
+! grep -q 'kmalloc_array_noprof_like_helper' "$ho/.wgt.o" || fail "a small inline helper with long names was not spliced"
+# kcalloc's size, a constant times a sizeof, through the overflow builtin into a local, reaches
+# kmalloc's __builtin_constant_p spliced: the constant path is laid, the slow one is not
+printf 'typedef unsigned long size_t;\nextern void *slow(size_t); extern void *fast(size_t);\nstatic inline __attribute__((always_inline)) void *km(size_t size) { if (__builtin_constant_p(size) && size) return fast(size); return slow(size); }\nstatic inline void *ka(size_t n, size_t s) { size_t b; if (__builtin_mul_overflow(n, s, &b)) return 0; return km(b); }\nlong *gp;\nvoid *f(void) { return ka(3, sizeof(*gp)); }\n' > "$ho/.kca.c"
+moonrun -c "$ho/.kca.c" -o "$ho/.kca.o" || fail "mooncc kcalloc's constant size"
+grep -q 'fast' "$ho/.kca.o" && ! grep -q 'slow' "$ho/.kca.o" || fail "a constant size through an overflow builtin did not reach __builtin_constant_p"
+
 # a jump label: its "i" operand a local derived from params (arch_static_branch's
 # `char *k = &((char *)key)[branch]`), constant once the call is spliced, so the body compiles
 # only spliced; its asm goto target is named only by the __jump_table words, never by a jump,
