@@ -1,8 +1,8 @@
 /* a block-scope static's initializer names statics by address -- itself (the kernel's
    static DEFINE_MUTEX: a list head pointing at itself beside a spinlock compound literal)
    and one declared before it -- and a scalar compound literal stands as a static's value,
-   and at file scope behind an address */
-#include <stdio.h>
+   and at file scope behind an address. the answer is the exit status: no libc, so the
+   bare-metal lanes run it too */
 
 struct list_head { struct list_head *next, *prev; };
 typedef struct { int counter; } atomic_t;
@@ -34,7 +34,5 @@ int main(void) {
     struct mutex *m = lock();
     int ok = m->wait_list.next == &m->wait_list && m->wait_list.prev == &m->wait_list
           && m->wait_lock.raw_lock.val.counter == 0 && m->owner.counter == 0;
-    printf("mutex %d same %d\n", ok, lock() == m);
-    printf("chain %d one %d two %d\n", chain(), one, *two);
-    return !ok;
+    return (!ok) | (lock() != m) << 1 | (chain() != 83) << 2 | (one != 7) << 3 | (*two != 9) << 4;
 }
