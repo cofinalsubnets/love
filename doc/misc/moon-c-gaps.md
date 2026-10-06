@@ -1032,11 +1032,12 @@ accepted and WRONG, the costly rows:
 - **`cbnz %0, .` branches to an undefined symbol `.`**: io.h's read barrier (`__iormb`) loops on
   `.`, and the object relocates against a symbol of that name instead of the instruction itself.
   474 units would fail the link (asm).
-- **`__builtin_constant_p` in a body the codegen splice lane inlines** reads 0: the deferred node
-  is decided before cginl binds the arguments. kmalloc's slow lane in 405 units; under clang's
-  `__OPTIMIZE__` (the clang -E leg) 100 units keep cpucap_is_possible's `__compiletime_assert_0`
-  for the link to miss -- our own cpp defines no `__OPTIMIZE__`, so its asserts compile out
-  (frontend, g-21).
+- **an always_inline body the AST inliner declines stays a call**: ainl takes no `switch` holding
+  a `return` (its returns go structurally), so cpucap_is_possible and kmalloc's helpers are called,
+  and their `__builtin_constant_p(param)` reads 0 there. kmalloc's slow lane in 405 units, a missed
+  optimisation; under clang's `__OPTIMIZE__` (the clang -E leg only) 100 units keep
+  cpucap_is_possible's `__compiletime_assert_0` for the link to miss -- our own cpp defines no
+  `__OPTIMIZE__`, so its asserts compile out (frontend, g-21).
 - no object carries `.ARM.attributes` on the clang -E leg, which drops the -m flags; ours keeps
   them (flags).
 
