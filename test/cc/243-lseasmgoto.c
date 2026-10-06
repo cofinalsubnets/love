@@ -1,7 +1,7 @@
 /* the lse atomics as the kernel spells them (ldadd, stset, cas, swp and their orders and
  * sizes), run only where ID_AA64ISAR0_EL1 says the core has them; an asm goto with an
  * output that holds on the jump as well as the fall-through; .inst over gas's `!!`; a
- * "p" address prefetched through %a. a target with no template here computes the same in C. */
+ * "p" address prefetched through %a; branches to `.+k`, which are their own offsets. a target with no template here computes the same in C. */
 typedef unsigned int u32;
 typedef unsigned long u64;
 
@@ -36,6 +36,10 @@ zero:
   return r;
 }
 static u32 pan(void) { u32 r; asm(".inst 0xd2800000 | ((!!(3)) << 5) | ((!(0)) << 10) \n mov %w0, w0" : "=r"(r) : : "x0"); return r; }
+static u32 dot(u32 x) {
+  asm("cbz %w0, .+12\n b .+8\n mov %w0, #9\n cbnz %w0, .+8\n mov %w0, #5" : "+r"(x));
+  return x;
+}
 #elif defined(__x86_64__)
 static u64 fadd(u64 *p, u64 i) { u64 r = *p; *p += i; return r; }
 static u32 lse32(u32 *p) { p[0] |= 6; p[1] = 40; p[2] = 40; return 9; }
@@ -48,12 +52,14 @@ zero:
   return r;
 }
 static u32 pan(void) { return 0x21; }
+static u32 dot(u32 x) { return x ? x : 5; }
 #else
 static u64 fadd(u64 *p, u64 i) { u64 r = *p; *p += i; return r; }
 static u32 lse32(u32 *p) { p[0] |= 6; p[1] = 40; p[2] = 40; return 9; }
 static u32 ldclrb(unsigned char *p) { u32 r = *p; *p &= ~3; return r; }
 static int vis(int x) { return x ? x + 107 : 7; }
 static u32 pan(void) { return 0x21; }
+static u32 dot(u32 x) { return x ? x : 5; }
 #endif
 
 int main(void) {
@@ -66,5 +72,6 @@ int main(void) {
   s += ldclrb(&b) == 7 && b == 4;
   s += vis(0) == 7 && vis(2) == 109;
   s += pan() == 0x21;
-  return s == 5 ? 0 : 1;
+  s += dot(0) == 5 && dot(3) == 3;
+  return s == 6 ? 0 : 1;
 }
