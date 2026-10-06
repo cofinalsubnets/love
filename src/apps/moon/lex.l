@@ -427,6 +427,18 @@
                            cps (two? r ? (utf8dec <r))
                            (lastc l) (two? >l ? (lastc >l) <l)
                            (two? cps ? (go <>r line (['num (lastc cps) line () (snip src i <>r)] . acc))))))
+                 ; a pp-number runs on through identifier characters (C11 6.4.8): `9p_fid_ref`
+                 ; is one token, so `__tracepoint_##tp` pastes to one name (linux's 9p
+                 ; tracepoints). a number that met an identifier run flush against it becomes
+                 ; a ('ppnum spelling); one that reaches the parser is no number
+                 (idh? c && 0 < i && !(ws? (src (i - 1))) && two? acc &&
+                  elem <(<acc) '(num unum lnum ulnum llnum ullnum flo flof iflo) &&
+                  4 < #(<acc) && string? ((<acc) 4) && 0 < #((<acc) 4) &&
+                  ((<acc) 4 @ sp (#sp <= i && snip src (i - #sp) i = sp)))
+                  (: (pr j) (? (j < n && (idc? (src j) || src j = 46)) (pr (j + 1)) j)
+                     j0 (pr i)
+                     sp ((<acc) 4 + snip src i j0)
+                     (go j0 line (['ppnum sp line () sp] . >acc)))
                  ; an identifier may be spelled with ucns (C99 6.4.2.1). a ucn names a code
                  ; point, so `Å` must intern as the utf-8 `Å` does -- one name, built by
                  ; the escape lane where the plain run is a snip. a malformed one lex-errors.
