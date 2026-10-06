@@ -1,7 +1,8 @@
 // src/love/lib/opus.c -- opus (rfc 6716, as rfc 8251 amends it), decoded.
 // (opus-state ch)       -> the width of a decoder's state for ch channels (1 or 2): (cask
 //                          (opus-state ch)) holds one
-// (opus-init b ch)      -> 0, b laid as a fresh decoder at 48 kHz | why
+// (opus-init b ch gain) -> 0, b laid as a fresh decoder at 48 kHz, its samples scaled by
+//                          gain (the head's output gain: dB in Q7.8) | why
 // (opus-packet b p f)   -> one packet's samples, interleaved, s16le (f 0) or f32le (f 1); p ""
 //                          conceals a lost packet | why: an opus error code, negated
 // the decoder is the rfc's reference (its float build), in src/love/lib/opus/ with its
@@ -114,8 +115,8 @@ static inline void *opus_alloc_scratch(size_t n) { (void) n; return NULL; }
 #include "opus/silk/tables_pulses_per_block.c"
 #include "opus/src/opus_decoder.c"
 
-// the cask: the decoder, its scratch, then room for a packet's samples
-#define OP_SCRATCH (GLOBAL_STACK_SIZE + 64 + 5760 * 2 * sizeof(float))
+// the cask: the decoder, its gain (a double), its scratch, then room for a packet's samples
+#define OP_SCRATCH (16 + GLOBAL_STACK_SIZE + 64 + 5760 * 2 * sizeof(float))
 static uintptr_t op_dec_size(int ch) { return ((uintptr_t) opus_decoder_get_size(ch) + 15) & ~(uintptr_t) 15; }
 
 static unsigned char *op_cask(word x, uintptr_t *n) {
@@ -134,10 +135,12 @@ static love_inline struct g *host_opus_init(struct g *g) {
  uintptr_t n = 0;
  unsigned char *b = op_cask(g->sp[0], &n);
  intptr_t ch = oddp(g->sp[1]) ? getcharm(g->sp[1]) : 0;
+ double gain = oddp(g->sp[2]) ? (double) getcharm(g->sp[2]) : 0;
  word r = putcharm(-OPUS_BAD_ARG);
- if (b && (ch == 1 || ch == 2) && n == op_dec_size((int) ch) + OP_SCRATCH)
-  r = putcharm(-opus_decoder_init((OpusDecoder*) b, 48000, (int) ch));
- return g->sp[1] = r, g->sp += 1, g; }
+ if (b && (ch == 1 || ch == 2) && gain >= -32768 && gain < 32768 && n == op_dec_size((int) ch) + OP_SCRATCH)
+  r = putcharm(-opus_decoder_init((OpusDecoder*) b, 48000, (int) ch)),
+  *(double*) (b + op_dec_size((int) ch)) = lm_exp(gain * (2.302585092994046 / 5120));
+ return g->sp[2] = r, g->sp += 2, g; }
 static lvm(lvm_opus_init) { LvmCall(g, host_opus_init) }
 
 love_noinline static struct g *host_opus_packet(struct g *g) {
@@ -152,7 +155,7 @@ love_noinline static struct g *host_opus_packet(struct g *g) {
  intptr_t f = getcharm(g->sp[2]);
  // the samples land past the scratch, in the cask's last 45 KiB
  float *pcm = (float*) (b + n - 5760 * 2 * sizeof(float));
- global_stack = (char*) b + op_dec_size(ch);
+ global_stack = (char*) b + op_dec_size(ch) + 16;
  int k = opus_decode_float(d, p->len ? (unsigned char const*) p->bytes : NULL, (opus_int32) p->len, pcm, 5760, 0);
  global_stack = 0;
  if (k < 0) return g->sp[2] = putcharm(-k), g->sp += 2, g;
@@ -161,21 +164,23 @@ love_noinline static struct g *host_opus_packet(struct g *g) {
  struct str *out = ini_str(bump(g, str_width(on)), on);
  b = op_cask(g->sp[0], &n);                     // re-read: have may move it
  pcm = (float*) (b + n - 5760 * 2 * sizeof(float));
+ double v = *(double*) (b + op_dec_size(ch));
  unsigned char *q = (unsigned char*) out->bytes;
  for (uintptr_t i = 0; i < m; i++) {
-  float x = pcm[i];
-  if (f) { union { float f; uint32_t u; } c = {x}; for (int j = 0; j < 4; j++) *q++ = (unsigned char) (c.u >> (8 * j)); }
+  if (f) {
+   float x = (float) (pcm[i] * v); union { float f; uint32_t u; } c = {x};
+   for (int j = 0; j < 4; j++) *q++ = (unsigned char) (c.u >> (8 * j)); }
   else {
-   double y = (double) x * 32768;
+   double y = pcm[i] * v * 32768;
    y = y > 32767 ? 32767 : y < -32768 ? -32768 : y;
-   int v = y >= 0 ? (int) (y + 0.5) : -(int) (-y + 0.5);
-   *q++ = (unsigned char) v, *q++ = (unsigned char) (v >> 8); } }
+   int t = y >= 0 ? (int) (y + 0.5) : -(int) (-y + 0.5);
+   *q++ = (unsigned char) t, *q++ = (unsigned char) (t >> 8); } }
  return g->sp[2] = word(out), g->sp += 2, g; }
 static lvm(lvm_opus_packet) { LvmCall(g, host_opus_packet) }
 
 static union u const
   nif_opus_state[] = {{lvm_opus_state}, {lvm_ret0}},
-  nif_opus_init[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_opus_init}, {lvm_ret0}},
+  nif_opus_init[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_opus_init}, {lvm_ret0}},
   nif_opus_packet[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_opus_packet}, {lvm_ret0}};
 LvNif("opus-state", nif_opus_state, NULL);
 LvNif("opus-init", nif_opus_init, NULL);

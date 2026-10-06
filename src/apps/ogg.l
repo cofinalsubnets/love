@@ -83,17 +83,19 @@
                              (: k (#pcm // w) t (n 'n) c (? (0 <= gr && gr < t + k) (max 0 (gr - t)) k)
                                 (pin n 'n (t + c), snip pcm 0 (c * w))))))))
    ; opus (rfc 7845): OpusHead and OpusTags, then packets of 48 kHz audio; the head's
-   ; pre-skip comes off the front, and the end page's granule, which counts it, cuts the last
+   ; pre-skip comes off the front, and the end page's granule, which counts it, cuts the last;
+   ; its output gain (dB in Q7.8) scales every sample
    (ogg-op-head ps)
     (? (#ps < 2) 'more
        (: p <ps ch (#p > 9 ? (p 9) 0)
           (? (#p < 19 || p 8 > 15) "an opus head this can't read"
              (p 18 != 0 || ch < 1 || ch > 2) "multichannel opus (a channel mapping past 0) is not read here"
-             {'rate 48000 'ch ch 'pre (le p 10 2) 'tags (ogg-tags (ps 1) 8)})))
+             {'rate 48000 'ch ch 'pre (le p 10 2) 'gain (le p 16 2 @ g (g - 65536 * (g >= 32768)))
+              'tags (ogg-tags (ps 1) 8)})))
    (ogg-op-format m) {'name "opus" 'desc "opus" 'w 2 'bits 16 'kind 's 'big 0 'ch (m 'ch) 'rate 48000
                       'align (2 * m 'ch)}
    (ogg-op-start m)
-    (: st (cask (opus-state (m 'ch))) r (opus-init st (m 'ch)) w (2 * m 'ch) n {'n 0}
+    (: st (cask (opus-state (m 'ch))) r (opus-init st (m 'ch) (m 'gain)) w (2 * m 'ch) n {'n 0}
        (? (r != 0) (\ pkt gr ())
           (\ pkt gr (opus-packet st pkt 0 @
                       pcm (? !(string? pcm) ()                 ; a packet that will not decode is passed over

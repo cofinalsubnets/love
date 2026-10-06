@@ -1142,8 +1142,10 @@
       (refused? (cgn "int main() { register long v asm(\"rsp\") = 1; asm(\"\" : \"+r\"(v)); return v; }"))
       ; the jump leaves its fix open for the function's own label, which the blob never binds
       (two? g6) (hasfix <>g6 'main.out)
-      ; a jump would skip the output stores and the clobber pops; %l is a label's, %N an operand's
-      (refused? (cgn "int main() { long v; asm goto(\"jmp %l1\" : \"=r\"(v) : : : out); return 1; out: return 0; }"))
+      ; outputs ride a trampoline per label, which stores them and jumps on; a jump would skip
+      ; the clobber pops; %l is a label's, %N an operand's
+      (: g7 (cgn "int main() { long v; asm goto(\"jmp %l1\" : \"=r\"(v) : : : out); return 1; out: return 0; }")
+         (two? g7 && !(hasfix <>g7 'main.out)))
       (refused? (cgn "int main() { asm goto(\"jmp %l0\" : : : \"r12\" : out); return 1; out: return 0; }"))
       (refused? (cgn "int main() { asm goto(\"jmp %l0\" : : \"r\"(1) : : out); return 1; out: return 0; }"))
       (refused? (cgn "int main() { asm goto(\"jmp %0\" : : : : out); return 1; out: return 0; }"))))

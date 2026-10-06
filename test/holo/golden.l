@@ -400,6 +400,7 @@
    _ (chk-eq "gas.elseif"
         '(".long 2" ".long 6")
         (gf-expand (gf-lines 'x64 ".if 0\n.long 1\n.elseif 1\n.long 2\n.elseif 1\n.long 3\n.else\n.long 4\n.endif\n.if 0\n.long 5\n.elseif 0\n.long 7\n.else\n.long 6\n.endif")))
+   _ (chk-eq "gimm.not" [0 1 1 256] [(gimm (gtoks "!5")) (gimm (gtoks "!0")) (gimm (gtoks "!!(7)")) (gimm (gtoks "(!!(3)) << 8"))])
    _ (chk-eq "gimm.shr" [15 15] [(gimm (gtoks "~0 >> 60")) (gimm (gtoks "0xf0 >> 4"))])
    ; a symbol-less rip displacement is the address past the lea (_THIS_IP_): its own bytes
    _ (chk-eq "gas.x64.thisip"
@@ -476,9 +477,28 @@
         (holo-hex 'a64 (gas-text 'a64 "cbnz w1, 1f\n nop\n1:\n cbz x2, 1b")))
    ;; ..and what no row reads still refuses by name
    _ (chk-eq "gas.a64.more.refuse"
-        '(gas-a64-operand gas-a64-operand gas-a64-operand badsysreg badsysreg)
+        '(gas-a64-operand gas-a64-operand gas-a64-operand badsysreg badsysreg badsysreg-wo "25cc18d5")
         (map (l \ trap (x \ holo-hex 'a64 (gas-text 'a64 x)) l (\ a b a))
-             ["hint #200" "sttr x0, [x1, #300]" "bti q" "mrs x0, s4_0_c0_c0_0" "mrs x0, no_such_el1"]))
+             ["hint #200" "sttr x0, [x1, #300]" "bti q" "mrs x0, s4_0_c0_c0_0" "mrs x0, no_such_el1"
+              "mrs x5, icc_eoir1_el1" "msr icc_eoir1_el1, x5"]))
+   ;; the lse atomics, spelled ld<op>/st<op>/swp/cas + a|l|al + b|h
+   _ (chk-eq "gas.a64.lse"
+        ["a40023f8" "4100e0b8" "a4102338" "a430a378" "a44063f8" "a47023b8" "a480e3f8" "3f0020b8" "3f1060f8"
+         "3f302038" "e47fa3c8" "a4fce348" "417ce088"]
+        (map (l \ holo-hex 'a64 (gas-text 'a64 l))
+             ["ldadd x3, x4, [x5]" "ldaddal w0, w1, [x2]" "ldclrb w3, w4, [x5]" "ldsetah w3, w4, [x5]"
+              "ldsmaxl x3, x4, [x5]" "ldumin w3, w4, [x5]" "swpal x3, x4, [x5]" "stadd w0, [x1]" "stclrl x0, [x1]"
+              "stsetb w0, [x1]" "cas x3, x4, [sp]" "casalh w3, w4, [x5]" "casa w0, w1, [x2]"]))
+   ;; the range tlbis (v8.4) and the outer-shareable and el2 rows
+   _ (chk-eq "gas.a64.tlbi.range"
+        ["208608d5" "e08208d5" "a08508d5" "608108d5" "40800cd5" "a0820cd5" "20830cd5"]
+        (map (l \ holo-hex 'a64 (gas-text 'a64 l))
+             ["tlbi rvae1, x0" "tlbi rvaale1is, x0" "tlbi rvale1os, x0" "tlbi vaae1os, x0" "tlbi ripas2e1is, x0"
+              "tlbi rvale2is, x0" "tlbi vae2is, x0"]))
+   _ (chk-eq "gas.a64.lse.refuse"
+        '(gas-a64-operand gas-a64-op gas-a64-operand gas-a64-operand gas-a64-operand)
+        (map (l \ trap (x \ holo-hex 'a64 (gas-text 'a64 x)) l (\ a b a))
+             ["ldaddb x3, x4, [x5]" "stadda x3, [x5]" "ldadd x3, w4, [x5]" "stadd x1, x2, [x3]" "ldadd x1, x2, [x3, #8]"]))
    _ (chk-eq "gas.rv64"
         '((csrr r0 time) (csrw stvec r0) (csrs sie r0) (csrsi sstatus 2) (csrci sstatus 2) (sys) (trap) (csrw cycle zr)
           (fence) (wfi) (sfence zr zr) (sfence r0 r1) (li r0 5) (mov r1 r0) (add sp sp -16) (ld r2 sp 8) (st sp 0 r2)
