@@ -1012,6 +1012,44 @@ each from the arm64 census above, each held by a law:
 - a name an address probe could not resolve no longer stands as a function's refusal: it had hidden
   the true cause (an asm's lane) behind "undeclared".
 
+### arm64 again, measured 2026-10-06
+
+the same census on gwen 40be5708f (149's asm work, 152's flags, 153's walls, 155's fixes), the
+same reference and spelling, defconfig on clang's `-E` with ours on every 20th unit:
+
+| | units | same as clang | compiles, differs | refused | crash |
+|---|---|---|---|---|---|
+| defconfig, 2026-10-05 (gwen baa7c8277) | 4439 | 1012 | 835 | 1496 | 1093 |
+| defconfig, 2026-10-06 (gwen 40be5708f) | 4439 | 1286 | 1692 | 1455 | 4 |
+
+the crashes became refusals or objects; many of the objects differ. first stops, by owner area:
+
+| units | first stop | area |
+|---|---|---|
+| ~1125 | LSE atomics: stset 257, casalh 159, ldadd 137, ldaddal 123, stclr 113, stadd 113, ldaddl 92, .. | asm (row 158 lays them) |
+| 61 | `__attribute__((mode))` refused | frontend |
+| 41 | an asm goto with register outputs | asm |
+| 28 / 17 | `.req` operands; an immediate over an expression | asm |
+| 18 / 12 | a register variable pinned to x0; a `"p"` operand | asm |
+| 4 | cs-unsaved r19 (internal) | gen |
+
+accepted and WRONG, the costly rows:
+
+- **`cbnz %0, .` branches to an undefined symbol `.`**: io.h's read barrier (`__iormb`) loops on
+  `.`, and the object relocates against a symbol of that name instead of the instruction itself.
+  474 units would fail the link (asm).
+- **an always_inline body the AST inliner declines stays a call**: ainl takes no `switch` holding
+  a `return` (its returns go structurally), so cpucap_is_possible and kmalloc's helpers are called,
+  and their `__builtin_constant_p(param)` reads 0 there. kmalloc's slow lane in 405 units, a missed
+  optimisation; under clang's `__OPTIMIZE__` (the clang -E leg only) 100 units keep
+  cpucap_is_possible's `__compiletime_assert_0` for the link to miss -- our own cpp defines no
+  `__OPTIMIZE__`, so its asserts compile out (frontend, g-21).
+- no object carries `.ARM.attributes` on the clang -E leg, which drops the -m flags; ours keeps
+  them (flags).
+
+our cpp on every 20th unit: 75 units the clang leg calls differing are the same as clang's there,
+the `.ARM.attributes` and `__OPTIMIZE__` artifacts above; 9 refuse where the clang leg compiles.
+
 ## linux on arm64
 
 **measured 2026-10-05** against 6.19.14, arm64 tinyconfig (g-21's census, kbuild's flags,
@@ -1068,6 +1106,9 @@ below, 251 of those 332 re-run so far: **145 compile**, and the rest refuse by n
 - **gas's `!`**: `!x` answers 1 or 0, so `.inst ... | (!!(x)) << 8` (`SET_PSTATE_PAN`) folds.
 - **the range tlbis** (`rvae1`..`rvaale1os`) and the outer-shareable and el2 rows.
 - **`"p"`**: an address in a register, which `%a` spells `[xN]` (the kernel's `prefetchw`).
+- **a branch to `.`, `.+k` or `.-k`** (`b`, `bl`, `b.cond`, `cbz`, `cbnz`) is its own
+  pc-relative word. It read as a label named `.`, an undefined symbol in the object, so every
+  user of `__iormb`'s `cbnz %0, .` failed the link; an unaligned or out-of-range offset refuses.
 
 Still open on this side (g-21's probes):
 
