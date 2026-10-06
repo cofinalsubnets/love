@@ -343,6 +343,14 @@
                  pin (t 'sigs) "__builtin_popcount" '(int (uint) ()),
                  pin (t 'sigs) "__builtin_popcountl" '(int (ulong) ()),
                  pin (t 'sigs) "__builtin_popcountll" '(int (ulong) ()),
+                ; clz and ctz: an unsigned operand, a plain int count, gcc's own signatures -- so an
+                ; __auto_type or a typeof over one (linux's ilog2) types
+                 pin (t 'sigs) "__builtin_clz" '(int (uint) ()),
+                 pin (t 'sigs) "__builtin_clzl" '(int (ulong) ()),
+                 pin (t 'sigs) "__builtin_clzll" '(int (ulong) ()),
+                 pin (t 'sigs) "__builtin_ctz" '(int (uint) ()),
+                 pin (t 'sigs) "__builtin_ctzl" '(int (ulong) ()),
+                 pin (t 'sigs) "__builtin_ctzll" '(int (ulong) ()),
                 ; ffs: gcc's signed operands, a plain int answer (0 for 0, else the lowest set bit's 1-based index)
                  pin (t 'sigs) "__builtin_ffs" '(int (int) ()),
                  pin (t 'sigs) "__builtin_ffsl" '(int (long) ()),
@@ -883,15 +891,18 @@
              (tkk t = 'id && (peep (ps 'types) (tkv t) 0 ? 1))
               [(peep (ps 'types) (tkv t) 0) >ts]
              ; __auto_type NAME = init: the initializer's own type, parsed here with the cursor
-             ; left at the name so the ordinary declarator path runs. gcc allows no other declarator
+             ; left at the name so the ordinary declarator path runs. gcc allows no other declarator,
+             ; but attributes may stand between the name and its = (linux's scoped guards)
              (tkk t = 'id && tkv t = autoid)
               (>ts @ r1
+                 (: (atts l) (? (two? l && idv? <l "__attribute__" && peekp >l "(") (skipbal >>l 1 @ e (atts e)) l)
+                    r2 (two? r1 ? (atts >r1) r1)
                  (? !(idat? r1) ()
-                    !(peekp >r1 "=") ()
-                    (pasn ps >>r1 @ er
+                    !(peekp r2 "=") ()
+                    (pasn ps >r2 @ er
                        (atom? er ? ()
                           (ptype ps <er @ ty
-                             (ty ? [ty r1]))))))
+                             (ty ? [ty r1])))))))
              ; __typeof(expr) / __typeof__(type-name) (gcc): the operand's parse-time type --
              ; a type-name reads pcty, an expression ptype (whose 'sigs lane carries weak_alias)
              (tkk t = 'id && elem (tkv t) tyofid)
@@ -1850,7 +1861,15 @@
                    (more ts2 acc)
                     (one ts2 @ r
                        (? (atom? r) ()
-                          (peekp <>r ",") (more ><>r (<r . acc))
+                          ; a declarator finished is in scope for the ones after it, typeof
+                          ; and sizeof included (`int timeout, err = ({ __typeof__(timeout) v; .. })`),
+                          ; put back when the list is read
+                          (peekp <>r ",")
+                           (: e <r nm <e old (peep (ps 'locals) nm 'none)
+                              _ (fn? (e 1) ? 0 (pin (ps 'locals) nm (e 1)))
+                              res (more ><>r (<r . acc))
+                              (fn? (e 1) ? 0 (old = 'none ? (pull (ps 'locals) nm 0) (pin (ps 'locals) nm old)),
+                               res))
                           (: rest (want <>r ";")
                              es (filter (e \ !(fn? <>e)) (rev (<r . acc)))
                              ; the extern entries hoist to the TU's top, where gen's global
