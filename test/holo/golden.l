@@ -502,6 +502,10 @@
         (map (l \ trap (x \ holo-hex 'a64 (gas-text 'a64 x)) l (\ a b a))
              ["b ." "b.ne ." "cbnz x0, ." "cbz w1, .+8" "b .+8" "bl .-4" "b.lt .-0x40" "cbnz x3, .-1048576"
               "b .+2" "cbz x0, .+1048576"]))
+   ;; `name .req reg` (the kernel's wx\n per register, from an .irp) and .unreq
+   _ (chk-eq "gas.a64.req"
+        '(((".text" 1 6 ((raw (225 3 0 42)) (add r3 r3 1)))) () ())
+        (gas-top 'a64 "\t.irp n,0,1\nwx\\n .req w\\n\n\t.endr\ntmp .req x3\n\tmov wx1, wx0\n\tadd tmp, tmp, #1\n\t.unreq tmp\n"))
    _ (chk-eq "gas.a64.lse.refuse"
         '(gas-a64-operand gas-a64-op gas-a64-operand gas-a64-operand gas-a64-operand)
         (map (l \ trap (x \ holo-hex 'a64 (gas-text 'a64 x)) l (\ a b a))

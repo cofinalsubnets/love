@@ -363,6 +363,31 @@ moonrun -o "$ho/.asm" "$ho/.asm.c" "$ho/.as1.s" "$ho/.as2.S" > /dev/null 2>&1 ||
 "$ho/.asm" || fail "a .s and a .S built, and answered wrong"
 fi
 
+# a header a .S includes is assembly too (the kernel's asm-extable.h and assembler.h): its
+# lines keep their breaks, `\uaccess_is_write` is a macro argument and no C escape, and the
+# spelling keeps the source's spaces, so `wx\n` is one word, aliased by .req
+cat > "$ho/.as3.h" <<'EOF'
+	.irp	num,0,1,2
+	.equ	.L__gpr_num_x\num, \num
+	.endr
+	.macro	ext, insn, fixup, uaccess_is_write
+	.pushsection __ex_table, "a"; .long ((\insn) - .); .long ((\fixup) - .); .short (\uaccess_is_write); .popsection
+	.endm
+	.irp	n,0,1,2
+wx\n	.req	w\n
+	.endr
+EOF
+cat > "$ho/.as3.S" <<'EOF'
+#include ".as3.h"
+	.text
+	.globl	f
+f:	mov	wx1, wx2
+1:	ret
+	ext	f, 1b, .L__gpr_num_x2
+EOF
+moonrun -c -t a64 -o "$ho/.as3.o" "$ho/.as3.S" > /dev/null 2>&1 || fail "a .S whose header holds gas macros did not assemble"
+readelf -SW "$ho/.as3.o" 2>/dev/null | grep -q __ex_table || fail "a .S's header macro laid no __ex_table"
+
 # the attribute skip on a local/parameter/member takes __attribute__ ALONE: an asm NAME
 # would rename the object, and dropping it renames it in silence. test/cc/145 holds the
 # well-formed side; only the refusals live here.

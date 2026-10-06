@@ -1109,6 +1109,10 @@ below, 251 of those 332 re-run so far: **145 compile**, and the rest refuse by n
 - **a branch to `.`, `.+k` or `.-k`** (`b`, `bl`, `b.cond`, `cbz`, `cbnz`) is its own
   pc-relative word. It read as a label named `.`, an undefined symbol in the object, so every
   user of `__iormb`'s `cbnz %0, .` failed the link; an unaligned or out-of-range offset refuses.
+- **a header a `.S` includes is assembly too**, lexed as its includer is: it was lexed as C,
+  so its lines ran together (asm-extable.h's `.irp` lost its `.endr`) and `\uaccess_is_write`
+  read as the escape `\uacce`. The text spelled back keeps the source's spaces, so a macro's
+  `wx\n` stays one word, and `name .req reg`/`.unreq` alias a register (test/gate/moon.sh).
 
 Still open on this side (g-21's probes):
 
@@ -1117,8 +1121,10 @@ Still open on this side (g-21's probes):
 - under `-mstrict-align`: an array member of a packed struct indexed through its decayed pointer
   reads at the element's width, a bitfield or 128-bit member of a packed struct refuses by name,
   and a by-value struct reached as a packed member rides its type's alignment, not the member's.
-- where the re-run stops now, on this side: the `.S` exception-table macro's `\insn`, which
-  reaches `.long ((\insn) - .)` unsubstituted (24); a register variable pinned to `x0` (4).
+- where the re-run stops now, on this side: a register variable pinned to `x0` (4). The 24
+  units that stopped on the `.S` extable macro's `\insn` reach gas now, and stop on: label
+  arithmetic in an immediate, `(662b - 661b) / 4` (8); gas's `||` (3, mov_q's range test);
+  `ldp`, `ccmp`, `bne`, `.incbin`, `@note`, a one-operand `mov` and an indexed `[x4, ..]`.
   The rest is part 1's front end and gen (`linux/skbuff.h`, an undeclared `branch`,
   `__attribute__((mode))`).
 - defconfig, g-21's units once refused on a Q form or a register pinned twice: of a sample of

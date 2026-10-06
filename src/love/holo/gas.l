@@ -846,11 +846,12 @@
        (catmap (ln \ xa-lines (hash? ? (xa-decomment ln) (gcut2 ln 47))) (gsplit src 10)))
    ;; gas's macro language, over a text's lines before anything reads them: .macro/.endm and a
    ;; call (positional or name=value arguments), .irp and .rept, .if/.ifc/.ifnc/.ifeq/.ifne with
-   ;; .else, .set/.equ (the symbol reads as its value on the lines after), .error, .purgem --
+   ;; .else, .set/.equ (the symbol reads as its value on the lines after), `name .req reg` and
+   ;; .unreq (the name reads as its register), .error, .purgem --
    ;; the kernel's exception-table macro, which finds a register's number by name
    gf-ifs '(".if" ".ifc" ".ifnc" ".ifeq" ".ifne")
    (gf-expand ls)
-    (: mac {} sv {}
+    (: mac {} sv {} rq {}
        (dname s) (xa-trim s @ t (0 < #t && t 0 = 46 ? (xa-mnem t) ""))
        (word s i) ((: (g j) (j < #s && gidc? (s j) ? (g (j + 1)) j)) i)
        ; a block's body up to its closer, nested openers counted -> (body rest)
@@ -873,11 +874,14 @@
                    (go i acc) (i >= n ? acc
                                  (s i @ c
                                     (gidc? c && (i = 0 || !(gidc? (s (i - 1)))) ?
-                                        (: j (word s i) v (peep sv (snip s i j) ())
-                                           (go j (acc + (charm? v ? (show v) (snip s i j)))))
+                                        (: j (word s i) k (snip s i j) v (peep sv k ()) q (peep rq k ())
+                                           (go j (acc + (? (charm? v) (show v) (string? q) q k))))
                                        (go (i + 1) (acc + string c)))))
                    (go 0 ""))
        (val e) (gimm (gtoks (ssub e)))
+       ; `name .req reg` -> [name reg] | ()
+       (req t) (: i (word t 0) r (xa-trim (snip t i #t))
+                  (0 < i && #r > 4 && (snip r 0 4) = ".req" && blank? (r 4) ? [(snip t 0 i) (xa-trim (snip r 4 #r))]))
        ; \name -> its argument, \() -> nothing; an unknown \name stays for an enclosing reading
        (psub s args)
         (: n #s
@@ -912,6 +916,8 @@
                      (pin mac <ws [specs <b],
                       go <>b acc))
                  (w = ".purgem") (go >l acc)
+                 (two? (req t)) (req t @ (nm rg) (pin rq nm (ssub rg), go >l acc))
+                 (w = ".unreq") (pin rq (xa-trim r) (), go >l acc)
                  (elem w '(".set" ".equ"))
                   (: xs (xa-oplist r) v (xa-trim (two? >xs ? <>xs ""))
                      (gf-ident? v && !(charm? (peep sv v ())) ? (go >l (s . acc))   ; an alias: gas-top lays it
