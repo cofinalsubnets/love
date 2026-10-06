@@ -369,8 +369,10 @@ export async function loveMachine(root) {
   for (const [k, v] of Object.entries({ autocapitalize: 'off', autocomplete: 'off', autocorrect: 'off', spellcheck: 'false' }))
     keys.setAttribute(k, v);
   const chip = document.createElement('button');
-  chip.type = 'button'; chip.className = 'chip keys-chip'; chip.textContent = '\u2328 keyboard';
-  canvas.after(keys, chip);
+  chip.type = 'button'; chip.className = 'chip'; chip.textContent = '\u2328 keyboard';
+  const chips = document.createElement('div');   // one row under the screen: the seat's chips join it
+  chips.className = 'chips'; chips.append(chip);
+  canvas.after(keys, chips);
   // a soft keyboard's backspace says nothing over an empty field, so the field always
   // holds one character to delete, a zero-width space, with the caret after it
   const blank = '\u200b';

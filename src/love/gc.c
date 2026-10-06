@@ -233,6 +233,15 @@ static void gen_minor(struct g *g) {
 #endif
  }
 
+// a half's share of the budget: the pair and the nursery beside it; 0 is no budget
+static uintptr_t major_share(struct g *g) {
+ return g->budget > (uintptr_t) g->len ? (g->budget - (uintptr_t) g->len) / 2 : 0; }
+// the pair can grow no further, even beside the smallest nursery: the major comes a
+// nursery early (please), so the worst case -- all of the pool and the nursery surviving --
+// fits the pool it has. the pool alone says so, never the nursery, which this then shrinks
+static bool at_share(struct g *g) {
+ return g->budget && 2 * ((uintptr_t) g->major_len + g->major0) + g->minor0 > g->budget; }
+
 // the major's two halves as separate blocks, both or neither: half the contiguous ask of one pair
 word *major_pair(uintptr_t n, word **spare) {
  word *a = alloc(NULL, n * sizeof(word)), *b = a ? alloc(NULL, n * sizeof(word)) : NULL;
@@ -281,8 +290,11 @@ struct g *gen_major(struct g *g, uintptr_t req0, bool *tight) {
  // budget cap: keep the major pair within its share, but never below need_step (the
  // to-space must hold the worst-case promotion); too small falls through to the oom path
  if (g->budget) {
-  uintptr_t cap = g->budget > (uintptr_t) g->len ? (g->budget - (uintptr_t) g->len) / 2 : 0;
-  if (to_len > cap) to_len = cap > need_step ? (cap / step) * step : need_step; }
+  uintptr_t cap = major_share(g);
+  if (to_len > cap) {
+   to_len = cap > need_step ? (cap / step) * step : need_step;
+   // a pool that holds the worst case keeps its size: shrunk under it, the next major grows it back
+   if (need <= g->major_len && to_len < g->major_len) to_len = g->major_len; } }
  word *to = g->major_spare, *resized = 0;
  if (to_len != g->major_len) {                                 // a different size: a new to-space now, the new spare after
   uintptr_t ask = to_len;
@@ -370,8 +382,11 @@ love_noinline struct g *please(struct g *g, uintptr_t req0) {
            major_free = (uintptr_t)((g->major_base + g->major_len) - g->major_hp);
  // a major: forced by a rem-set miss (or a please asking for one) or by the major lacking
  // room for a worst-case promotion. dead tenured objects wait for that, bounded by the pool.
+ // at the budget, a nursery early: a major at the brink always asks for more than the
+ // pool, and the cap gives way to that, so the pool would ratchet past its budget
+ bool early = at_share(g);
  bool major = g->rem_miss
-   || major_free < (uintptr_t) g->len + req0 + 16;
+   || major_free < (early ? 2 : 1) * (uintptr_t) g->len + req0 + 16;
 #ifdef LvGcStress
  // a minor is not enough: stress-collecting tenures everything almost at once,
  // and a minor never moves the tenured -- the detector answered green on its own
@@ -443,15 +458,17 @@ love_noinline struct g *please(struct g *g, uintptr_t req0) {
   } else if (g->win_alloc > 8 * len1) g->win_alloc = g->win_copied = 0, g->lean = 0; }   // under it: cap the window; the streak dies
  if (g->budget) {
   // appel cap, reserving room for the major that must hold the worst-case promotion
-  // (live + this whole nursery): the nursery gets ~(budget - 2*live)/4
-  uintptr_t lv = 2 * g->major_live0, room = g->budget > lv ? (g->budget - lv) / 4 : 0;
+  // (live + this whole nursery): the nursery gets ~(budget - 2*live)/4, and /8 at the
+  // budget, where the room past live must hold two of it (the early major) or every
+  // collection is a major
+  uintptr_t lv = 2 * g->major_live0, room = g->budget > lv ? (g->budget - lv) / (at_share(g) ? 8 : 4) : 0;
   if (arena > room) arena = room; }
  // the pool was denied room for a worst-case promotion of this nursery, so the nursery is
  // what gives. the floors below still win: under real pressure thrash beats failing the
  // request that asked for the collection.
  if (tight) {
   uintptr_t fr = (uintptr_t)((g->major_base + g->major_len) - g->major_hp),
-            fit = fr > req0 + 16 ? fr - req0 - 16 : 0;
+            fit = fr > req0 + 16 ? (fr - req0 - 16) / (at_share(g) ? 2 : 1) : 0;
   if (arena > fit) arena = fit; }
  if (arena < g->minor0) arena = g->minor0;                     // floor
  if (arena < req) arena = req;                                 // hard floor: hold the pending allocation

@@ -128,6 +128,7 @@
                            (gbad? r || !(two? >r) || !(<>r = '(ch 41)) ? 'bad (<r . >>r)))
                ('ch 126) (gprim >ts @ r (gbad? r ? 'bad ((<r ^ -1) . >r)))
                ('ch 45) (gprim >ts @ r (gbad? r ? 'bad ((0 - <r) . >r)))
+               ('ch 33) (gprim >ts @ r (gbad? r ? 'bad ((<r = 0 ? 1 0) . >r)))
                ('ch 43) (gprim >ts)
                'bad)))
    ; a comparison answers gas's -1 for true, 0 for false, and binds loosest (the kernel's
