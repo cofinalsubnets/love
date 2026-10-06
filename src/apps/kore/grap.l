@@ -108,14 +108,13 @@
    ; a numeral as the nearest double, as atof reads it
    (gr-atof t)
     (: n #t
-       (dig? c) (48 <= c <= 57)
-       (go i m f) (i < n && dig? (t i) ? (go (i + 1) (m * 10 + t i - 48) f) [i m f])
+       (go i m f) (i < n && digit? (t i) ? (go (i + 1) (m * 10 + t i - 48) f) [i m f])
        a (go 0 0 0)
-       b (<a < n && t <a = 46 ? (: (fr i m f) (i < n && dig? (t i) ? (fr (i + 1) (m * 10 + t i - 48) (f + 1)) [i m f]) (fr (<a + 1) (a 1) 0)) a)
+       b (<a < n && t <a = 46 ? (: (fr i m f) (i < n && digit? (t i) ? (fr (i + 1) (m * 10 + t i - 48) (f + 1)) [i m f]) (fr (<a + 1) (a 1) 0)) a)
        i <b m (b 1) f (b 2)
        ex (i < n && (t i = 101 || t i = 69) ?
            (: sg (t (i + 1) = 45 ? -1 1) j (t (i + 1) = 45 || t (i + 1) = 43 ? (i + 2) (i + 1))
-              (: (go2 k v) (k < n && dig? (t k) ? (go2 (k + 1) (v * 10 + t k - 48)) v) (sg * go2 j 0)))
+              (: (go2 k v) (k < n && digit? (t k) ? (go2 (k + 1) (v * 10 + t k - 48)) v) (sg * go2 j 0)))
            0)
        p (ex - f)
        (? (m = 0) 0.0 (0 <= p) (gr-dbl (m * 10 ** p) 1) (gr-dbl m (10 ** (0 - p)))))
@@ -140,9 +139,8 @@
                   pin s 'bol (c = 10)))
    ; the line of the document the lexer is on, under any expansion
    (gr-fline g) (g 'fsrc @ f (tablet? f ? (f 'ln) 0))
-   (gr-dig? c) (48 <= c <= 57)
    (gr-alpha? c) ((65 <= c <= 90) || (97 <= c <= 122) || c = 95)
-   (gr-wc? c) (gr-alpha? c || gr-dig? c)
+   (gr-wc? c) (gr-alpha? c || digit? c)
    (gr-blank? c) (c = 32 || c = 9)
    ; the text up to a newline (not taken)
    (gr-rest-line g)
@@ -181,12 +179,12 @@
    ; a numeral's text
    (gr-numeral g)
     (: o (jug 0)
-       (digs _) (gr-dig? (gr-c g) ? (put o (gr-c g), gr-adv g, digs 0) 0)
+       (digs _) (digit? (gr-c g) ? (put o (gr-c g), gr-adv g, digs 0) 0)
        _ (digs 0)
        _ (gr-c g = 46 ? (put o 46, gr-adv g, digs 0) 0)
        c (gr-c g) c1 (gr-c1 g)
-       (((c = 101 || c = 69) && (gr-dig? c1 || ((c1 = 43 || c1 = 45) && gr-dig? (gr-at (gr-top g) 2))) ?
-         (put o c, gr-adv g, gr-dig? (gr-c g) ? 0 (put o (gr-c g), gr-adv g), digs 0) 0),
+       (((c = 101 || c = 69) && (digit? c1 || ((c1 = 43 || c1 = 45) && digit? (gr-at (gr-top g) 2))) ?
+         (put o c, gr-adv g, digit? (gr-c g) ? 0 (put o (gr-c g), gr-adv g), digs 0) 0),
         slurp o))
 
    ; -- the lexer: macros, copy ----------------------------------------------------
@@ -194,8 +192,8 @@
    (gr-subst b as)
     (: o (jug 0) n #b
        (go i) (? (n <= i) (slurp o)
-                 (b i = 36 && i + 1 < n && gr-dig? (b (i + 1)))
-                  (: (dend j v) (j < n && gr-dig? (b j) ? (dend (j + 1) (v * 10 + b j - 48)) [j v])
+                 (b i = 36 && i + 1 < n && digit? (b (i + 1)))
+                  (: (dend j v) (j < n && digit? (b j) ? (dend (j + 1) (v * 10 + b j - 48)) [j v])
                      r (dend (i + 1) 0)
                      k <>r
                      (0 < k && k <= #as ? (say o (as (k - 1))) 0,
@@ -288,14 +286,14 @@
               (s 'k = 'for) (gr-for-next g s ? (gr-lex g) (gr-pop g, gr-lex g))
               (s 'endlf ? (gr-o0 g (s 'endlf)) 0, gr-pop g, gr-lex g))
           (: c (gr-c g) c1 (gr-c1 g)
-             (? ((s 'bol) && c = 46 && !(gr-dig? c1))
+             (? ((s 'bol) && c = 46 && !(digit? c1))
                  (gr-rest-line g @ t (gr-c g = 10 ? (gr-adv g) 0, tok 'troff t))
                 (gr-blank? c) (gr-adv g, gr-lex g)
                 (c = 92 && c1 = 10) (gr-adv g, gr-adv g, gr-lex g)
                 (c = 35) (gr-rest-line g, gr-lex g)
                 (c = 10) (gr-adv g, tok 'nl "\n")
                 (c = 59) (gr-adv g, tok 'nl ";")
-                (gr-dig? c || (c = 46 && gr-dig? c1)) (tok 'num (gr-atof (gr-numeral g)))
+                (digit? c || (c = 46 && digit? c1)) (tok 'num (gr-atof (gr-numeral g)))
                 (c = 34) (gr-adv g, tok 'str (gr-string g))
                 (gr-alpha? c) (gr-lex-word g (gr-word g) tok)
                 ((: (go l) (? (atom? l) (string c) (gr-looking? s <l) <l (go >l))

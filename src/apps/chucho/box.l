@@ -15,7 +15,7 @@
 ; 'del, and where it lives: 'file for a maildir's, 'from and 'raw (still quoted) for an
 ; mbox's. an mbox keeps the flags in its Status and X-Status headers: R is S here, O is "not
 ; new", X-Status's A F D are R F T.
-(module (mailbox mb-kind mb-open mb-raw mb-sync mb-append mb-flag mb-has? mb-new? mb-msg)
+(module (mailbox mb-kind mb-open mb-raw mb-sync mb-append mb-flag mb-has? mb-new? mb-msg mb-head)
 (borrow 'posix)
 (borrow 'mime)
 (borrow 'cal)
@@ -36,7 +36,7 @@
   (: d (mime-date (mime-get hs "date"))
      (pins {} 'hs hs 'date (two? d ? <d 0) 'day (two? d ? [(d 2) (d 3)] [1 1]) 'size size 'flags fl
            'flags0 fl 'del 0))
- (mb-head t) (findsub t "\n\n" @ k (k < 0 ? t (snip t 0 k)))
+ (mb-head t) (replace t "\r\n" "\n" @ x (findsub x "\n\n" @ k (k < 0 ? x (snip x 0 k))))
 
  ; --- maildir ---------------------------------------------------------------------------
  ; the head of a file, without reading a long body to find it
@@ -101,7 +101,7 @@
   (: nl (fsub t "\n" a) fe (nl < 0 || e < nl ? e nl)
      raw (snip t (fe < e ? (fe + 1) e) e)
      raw2 (raw @ (r + "\n") r raw)
-     hs (mime-heads (mb-head (replace raw2 "\r\n" "\n")))
+     hs (mime-heads (mb-head raw2))
      m (mb-msg hs (mb-sflags hs) #raw2)
      (pins m 'from (snip t a fe) 'raw raw2 'old (has? (mime-get hs "status") "O"), m))
  (mb-stamp p) (stat p @ st (two? st ? [<st (st 1)] ()))

@@ -259,4 +259,16 @@
  (adler32 (hash-mk 70000 (i \ 255)) = hash-adler (hash-mk 70000 (i \ 255)))
  !(adler32 7))
 
+;; --- crc32c (castagnoli), held to its walk in love, and carried across a split ---
+(: (hash-crcc s)
+    (foldl (\ c i (foldl (\ r _ (r & 1 ? (r >> 1 ^ 2197175160) (r >> 1))) (c ^ s i) ^8))
+           4294967295 ^#s ^ 4294967295))
+(test
+ (lit? crc32c) (lit? crc32c-on)
+ (crc32c "" = 0)
+ (crc32c "123456789" = 3808858755)
+ (crc32c (hash-bytes 1000) = hash-crcc (hash-bytes 1000))
+ (crc32c-on (crc32c-on 0 (hash-bytes 500)) (snip (hash-bytes 1000) 500 1000) = crc32c (hash-bytes 1000))
+ !(crc32c 7))
+
 (test_fin ())

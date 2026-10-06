@@ -16,24 +16,21 @@
 ; a frame whose channels differ from the stream's first (a mode change) is laid in its shape:
 ; one doubled, or two averaged.
 (module (mp3 mp3-sniff mp3-meta mp3-format mp3-pump mpg123-main mpg123-usage)
+(borrow 'bytes)
+(borrow 'wav)
 (:
    open (cite 'posix 'open) close (cite 'posix 'close)
-   (be s i n) (foldl (\ a j (a * 256 + s (i + j))) 0 ^n)
-   (le s i n) (foldl (\ a j (a * 256 + s (i + j))) 0 (rev ^n))
-   (mp3-cat l) (foldl (\ a x (a + x)) "" l)
 
    ; --- where the audio starts ----------------------------------------------
    ; past an id3v2 tag, -1 while its header is short
-   (mp3-id3 s) (? ("ID3" = snip s 0 3) (? (#s < 10) -1
-                                          (10 + foldl (\ a j (a * 128 + (s (6 + j) & 127))) 0 ^4
-                                           + ((s 5 & 16) ? 10 0)))
-                  0)
+   mp3-id3 (cite 'flac 'flac-id3)
+   ; a frame's size at i, syncsafe in v4
+   (mp3-fsz s v i) (? (v = 4) (foldl (\ a j (a * 128 + (s (i + 4 + j) & 127))) 0 ^4) (rdbe s (i + 4) 4))
    ; an id3v2 tag at the head of s, for av-head: its end once held; else its size, or for a tag
    ; past 1 MiB the tag rebuilt from the frames already held, the rest of it skipped unread
    (mp3-tagr s)
     (: k (mp3-id3 s) v (#s > 3 ? (s 3) 4)
-       (fsz i) (? (v = 4) (foldl (\ a j (a * 128 + (s (i + 4 + j) & 127))) 0 ^4) (be s (i + 4) 4))
-       (held i) (? (#s < i + 10 || s i = 0) i (: e (i + 10 + fsz i) (e <= #s ? (held e) i)))
+       (held i) (? (#s < i + 10 || s i = 0) i (: e (i + 10 + mp3-fsz s v i) (e <= #s ? (held e) i)))
        (ss n) (string (map (j \ (n >> (7 * (3 - j))) & 127) ^4))
        (? (k < 0) ['more 10]
           (k <= #s) k
@@ -61,7 +58,7 @@
    mp3-names {"TIT2" "TITLE" "TPE1" "ARTIST" "TALB" "ALBUM" "TRCK" "TRACKNUMBER" "TYER" "DATE"
               "TDRC" "DATE" "TCON" "GENRE" "TPE2" "ALBUMARTIST"}
    ; text in its encoding byte's form -> utf-8: latin-1, utf-16 with or without its bom, utf-8
-   (mp3-utf8 cs) (mp3-cat (map (c \ (? (c < 128) (string [c]) (c < 2048) (string [(192 | (c >> 6)) (128 | (c & 63))])
+   (mp3-utf8 cs) (join "" (map (c \ (? (c < 128) (string [c]) (c < 2048) (string [(192 | (c >> 6)) (128 | (c & 63))])
                                       (string [(224 | (c >> 12)) (128 | ((c >> 6) & 63)) (128 | (c & 63))])))
                                cs))
    (mp3-text t)
@@ -76,9 +73,9 @@
                  _ b)
           (findsub s (string [0]) @ k (k < 0 ? s (snip s 0 k)))))
    (mp3-tags s end)
-    (: v (s 3) syncsafe (v = 4)
+    (: v (s 3)
        (go i acc) (? (end < i + 10 || s i = 0) (rev acc)
-                     (: id (snip s i (i + 4)) n (? syncsafe (foldl (\ a j (a * 128 + (s (i + 4 + j) & 127))) 0 ^4) (be s (i + 4) 4))
+                     (: id (snip s i (i + 4)) n (mp3-fsz s v i)
                         nm (mp3-names id)
                         (go (i + 10 + n) (string? nm ? ((nm + "=" + mp3-text (snip s (i + 10) (i + 10 + n))) . acc) acc))))
        (? (v < 3) () (go 10 ())))
@@ -91,12 +88,12 @@
        (tag? x) (snip s x (x + 4) @ t (t = "Xing" || t = "Info"))
        x (? ((s (o + 1) & 1) = 0 && tag? (x0 + 2)) (x0 + 2) x0)
        (? !(tag? x) ()
-          (: fl (be s (x + 4) 4) p (x + 8)
-             frames (fl & 1 ? (be s p 4) 0)
+          (: fl (rdbe s (x + 4) 4) p (x + 8)
+             frames (fl & 1 ? (rdbe s p 4) 0)
              p2 (p + (fl & 1 ? 4 0) + (fl & 2 ? 4 0) + (fl & 4 ? 100 0) + (fl & 8 ? 4 0))
              lame (p2 + 21 <= o + n && ("LAME" = snip s p2 (p2 + 4) || "Lavf" = snip s p2 (p2 + 4)
                                          || "Lavc" = snip s p2 (p2 + 4)))
-             d (lame ? (be s (p2 + 21) 3) 0)
+             d (lame ? (rdbe s (p2 + 21) 3) 0)
              [frames (lame ? (d >> 12) 0) (lame ? (d & 4095) 0) lame])))
    (mp3-meta s)
     (: i (mp3-id3 s)
@@ -116,8 +113,7 @@
                            'total (? (fr && lame) (fr * spf - dl - pd) fr (fr * spf) 0)}
                          _ {'rate rate 'ch ch 'at o 'tags (mp3-tags s i) 'spf spf 'skip 0 'total 0})))
                 _ "no mpeg audio layer iii frame here"))))
-   (mp3-format m) {'name "mp3" 'desc "mp3" 'w 2 'bits 16 'kind 's 'big 0 'ch (m 'ch) 'rate (m 'rate)
-                   'align (2 * m 'ch)}
+   (mp3-format m) (wav-s16 "mp3" m)
 
    ; --- the frames ----------------------------------------------------------
    ; one frame's s16 in ch channels -> in want's
@@ -126,7 +122,7 @@
        (: n (#pcm // (2 * ch)) c (cask #pcm) o (cask (n * 2 * want))
           (pour c 0 pcm 0 #pcm,
            ch = 1 ? (each ^n (k \ (pour o (4 * k) pcm (2 * k) 2, pour o (4 * k + 2) pcm (2 * k) 2)))
-                    (each ^n (k \ (: (s16 j) (le pcm j 2 @ v (v < 32768 ? v (v - 65536)))
+                    (each ^n (k \ (: (s16 j) (rdle pcm j 2 @ v (v < 32768 ? v (v - 65536)))
                                      a ((s16 (4 * k) + s16 (4 * k + 2)) // 2 @ v (v < 0 ? (v + 65536) v))
                                      (pin o (2 * k) (a & 255), pin o (2 * k + 1) (a >> 8))))),
            string o)))
@@ -140,7 +136,6 @@
            r (left 'rest)
            p2 (? (m 'total = 0) p (r <= 0) "" (#p <= r) (: _ (pin left 'rest (r - #p)) p) (: _ (pin left 'rest 0) (snip p 0 r)))
            (? (0 < #p2) (emit p2) ()))
-       (gulp _) (see q @ -1 () c (unsee q c, chug q))
        ; a tag at the end is no frame
        (tail? h o) (? (#h - o = 128 && "TAG" = snip h o (o + 3)) 1 ("APETAGEX" = snip h o (o + 8)) 1 0)
        (go h o)
@@ -149,9 +144,9 @@
              (pcm . nx) (: hd (mp3-hd h o) c (hd 1)
                            (? (hd 2 != m 'rate) "the stream changes its sample rate"
                               (: _ (out (f ? pcm (mp3-shape pcm c want))) (go h nx))))
-             2 (gulp () @ g (string? g ? (go (snip h o #h + g) 0) 0))
+             2 (wav-gulp q @ g (string? g ? (go (snip h o #h + g) 0) 0))
              4 (mp3-hd h o @ [n c r] (: _ (out (string (cask (m 'spf * want * w)))) (go h (o + max n 4))) _ (go h (o + 1)))
-             _ (? (o >= #h) (gulp () @ g (string? g ? (go g 0) 0))
+             _ (? (o >= #h) (wav-gulp q @ g (string? g ? (go g 0) 0))
                   (tail? h o) 0
                   ; a tag between frames is read through av-head, as the one ahead of them
                   ("ID3" = snip h o (o + 3))
@@ -161,7 +156,7 @@
                                   (: _ (pin m 'tags (mp3-tags (snip h2 0 k) k), pin m 'link (peep m 'link 0 + 1)) (go h2 k))
                                   (string? k) k
                                   0)))
-                  (mp3-find h (o + 1) #h @ -1 (go h #h) -2 (gulp () @ g (string? g ? (go (snip h o #h + g) 0) 0))
+                  (mp3-find h (o + 1) #h @ -1 (go h #h) -2 (wav-gulp q @ g (string? g ? (go (snip h o #h + g) 0) 0))
                                             i (go h i)))))
        (go h0 0))
    (mp3-pump q h m emit) (mp3-run q h m 0 emit)
@@ -172,12 +167,10 @@
   -t tests and writes nothing. layer iii only. HORN=PATH names the device, HORN=none a sink
   that keeps time."
    (mpg123-err m) (say err (m + "\n"), flush err, 1)
-   ; the horn's close drops what it holds, so it is waited out first
-   (mpg123-drain hn) (horn-lag hn @ n (charm? n && 0 < n ? (rest 10, mpg123-drain hn) 0))
    (mpg123-wav m f n)
-    (: ch (m 'ch) w (f ? 4 2) (wle v k) (string (map (j \ (v >> (8 * j)) & 255) ^k)) (cl v) (min 4294967295 v)
-       ("RIFF" + wle (cl (36 + n)) 4 + "WAVE" + "fmt " + wle 16 4 + wle (f ? 3 1) 2 + wle ch 2 + wle (m 'rate) 4
-        + wle (m 'rate * ch * w) 4 + wle (ch * w) 2 + wle (8 * w) 2 + "data" + wle (cl n) 4))
+    (: ch (m 'ch) w (f ? 4 2) (cl v) (min 4294967295 v)
+       ("RIFF" + wrle (cl (36 + n)) 4 + "WAVE" + "fmt " + wrle 16 4 + wrle (f ? 3 1) 2 + wrle ch 2 + wrle (m 'rate) 4
+        + wrle (m 'rate * ch * w) 4 + wrle (ch * w) 2 + wrle (8 * w) 2 + "data" + wrle (cl n) 4))
    (mpg123-one o p)
     (: q (p = "-" ? in (open p "r"))
        (? !(hot? q) (mpg123-err ("mpg123: cannot open " + p + ": " + uerrno q))
@@ -197,7 +190,7 @@
                                     (pcm \ (: _ (pin ps 'n (ps 'n + #pcm)) (? (o "w" || o "s" || play) (say d pcm) ()))))
                          _ (? (o "w") (: _ (flush d) _ (close d) ((cite 'av 'av-patch) (o "w") 0 (mpg123-wav m f (ps 'n))))
                               (o "s") (flush d)
-                              play (flush d, mpg123-drain d, close d)
+                              play (flush d, wav-drain d, close d)
                               ())
                          (fin (? (string? r) (mpg123-err ("mpg123: " + p + ": " + r)) 0)))))))))
    (mpg123-main as)

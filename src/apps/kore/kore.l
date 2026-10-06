@@ -92,7 +92,7 @@
         sort-main sparse split-main srun stat-main strip-main stty-main microcom-main sync-main df-main time-main tac-main tail-main
         tee-main test-main top-main
         touch-main lift-main tr-main true-main truncate-main tsort-main uatoi ubase uclk ucopy udiff udirp ujoin
-        umount-main uname-main unexpand-main uniq-main unlines unlink-main uptime-main
+        umount-main uname-main unexpand-main uniq-main unlink-main uptime-main
         users-main uset usignames usplit ustatf utag utty uupsay wc-main who-main whoami-main xargs-main yes-main
         cal-main clear-main dd-main hostname-main logname-main strings-main timeout-main tty-main
         hostid-main dnsdomainname-main setsid-main watch-main pathchk-main mountpoint-main shred-main

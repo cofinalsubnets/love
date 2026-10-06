@@ -13,14 +13,13 @@
 (borrow 'posix)
 (borrow 'mime)
 (:
- (sm-num s) (mime-num s)
  (smtp-url u)
   (: tls? (starts? u "smtps://")
      r (u @ ("smtps://" + x) x ("smtp://" + x) x ())
      (? !(string? r) ()
         (: h (r @ (a + "/" + _) a r)
            h2 (h @ (_ + "@" + b) b h)
-           hpt (h2 @ (a + ":" + t) [a (sm-num t)] [h2 (tls? ? 465 587)])
+           hpt (h2 @ (a + ":" + t) [a (mime-num t)] [h2 (tls? ? 465 587)])
            host <hpt port <>hpt
            (#host && 0 < port ? [tls? host port] ()))))
  ; crlf on every line, a leading dot doubled, and the end of data after
@@ -53,7 +52,7 @@
   (: (go acc)
       (smtp-line c @ l
          (? !(string? l) [0 (rev acc)]
-            (#l < 4 || l 3 != 45) [(sm-num (snip l 0 3)) (rev ((snip l (min 4 #l) #l) . acc))]
+            (#l < 4 || l 3 != 45) [(mime-num (snip l 0 3)) (rev ((snip l (min 4 #l) #l) . acc))]
             (go ((snip l 4 #l) . acc))))
      (go ()))
  (sm-cmd c s) (smtp-put c (s + "\r\n"), sm-reply c)

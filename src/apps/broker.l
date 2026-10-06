@@ -33,19 +33,17 @@
 (module (broker broker-open broker-request broker-answer broker-tick broker-policy broker-teardown
          broker-sign broker-rent-local)
 (borrow 'posix)
+(borrow 'bytes)
 
-(: br-hex (cite 'tls 'hex)  br-unhex (cite 'tls 'unhex)
-   br-sign-raw (cite 'ssh 'ed-sign)  br-verify-raw (cite 'ssh 'ed-verify)
+(: br-sign-raw (cite 'ssh 'ed-sign)  br-verify-raw (cite 'ssh 'ed-verify)
    br-envelope ["budget" "policy" "teardown" "revoke"]
 
    ; --- text: `key value` lines, the last one a sig over all the rest ---
-   (br-sp l i) (? (#l <= i) -1 (l i = 32) i (br-sp l (i + 1)))
-   (br-kv l) (: i (br-sp l 0) (? (0 < i) [(snip l 0 i) (snip l (i + 1) #l)] [l ""]))
+   (br-kv l) (: i (fsub l " " 0) (? (0 < i) [(snip l 0 i) (snip l (i + 1) #l)] [l ""]))
    (br-num s) (: v <(sound (s + "")) (charm? v && 0 <= v ? v -1))
-   (br-hex? s n) (string? s && #s = 2 * n && br-hex (br-unhex s) = s)
-   (br-text ls) (foldl (\ a l (a + l + "\n")) "" ls)
+   br-hex? (cite 'seals 'seal-hex?)
    (br-lines s) (filter (l \ 0 < #l) (lines s))
-   (broker-sign k ls) (br-text ls + "sig " + br-hex (br-sign-raw <k (k 1) (br-text ls)) + "\n")
+   (broker-sign k ls) (unlines ls + "sig " + b2hex (br-sign-raw <k (k 1) (unlines ls)) + "\n")
    ; text signed by pub -> its lines, the sig taken off | a reason
    (br-signed s pub)
     (: ls (br-lines s) n #ls
@@ -53,7 +51,7 @@
           (: last (br-kv (ls (n - 1))) body (take (n - 1) ls)
              (? (<last != "sig" || !(br-hex? (last 1) 64)) "no sig line"
                 !(br-hex? pub 32) "no key to check it by"
-                (br-verify-raw (br-unhex pub) (br-text body) (br-unhex (last 1))) body
+                (br-verify-raw (hex2b pub) (unlines body) (hex2b (last 1))) body
                 "a bad signature"))))
    ; lines -> {key [value ..]}, every value a key took, in order
    (br-fields ls) (foldl (t \ l \ br-kv l @ [k v] (pin t k (peep t k () + [v]))) {} ls)
@@ -62,7 +60,6 @@
 
    ; --- the files ---
    (br-read p) (uread p @ [1 s] (s + "") ())
-   (br-lay p s) (: q (open p "w") (? (hot? q) (: _ (say q s) _ (close q) 1) 0))
    (br-add p s) (: q (open p "a") (? (hot? q) (: _ (say q s) _ (close q) 1) 0))
    ; a dir inside a hive tree is no place for the purse: a node could read or record it
    (br-up p) (: (cut i) (? (i <= 0) "/" (p i = 47) (snip p 0 i) (cut (i - 1))) (cut (#p - 1)))
@@ -118,8 +115,8 @@
    br-cols ['lease 'class 'region 'until 'cost 'by 'host 'slot]
    (br-row l) (map (k \ peep l k "") br-cols)
    (br-unrow r) (foldl (t \ i \ pin t (br-cols i) (r i)) {} ^#br-cols)
-   (br-save b) (: _ (br-lay (b 'dir + "/ledger") (show (b 'spent) + "\n"))
-                  (br-lay (b 'dir + "/leases") (show (map br-row (b 'leases)) + "\n")))
+   (br-save b) (: _ (uwrite (b 'dir + "/ledger") (show (b 'spent) + "\n"))
+                  (uwrite (b 'dir + "/leases") (show (map br-row (b 'leases)) + "\n")))
    (br-live b) #(b 'leases)
 
    ; --- a request ---
@@ -206,7 +203,7 @@
        (? (string? p) (: _ (br-log b ["refused" "policy" p]) p)
           (p 'serial <= br-pol b 'serial)
             (: _ (br-log b ["refused" "policy" "not a newer serial"]) "not a newer serial")
-          (: _ (br-lay (b 'dir + "/policy") text) _ (pin b 'policy p)
+          (: _ (uwrite (b 'dir + "/policy") text) _ (pin b 'policy p)
              _ (br-log b ["policy" (show (p 'serial)) "budget" (show (p 'budget))])
              1)))
    (br-drop b l free) (: _ (free l) _ (pin b 'leases (filter (x \ x 'lease != l 'lease) (b 'leases))) _ (br-save b)
