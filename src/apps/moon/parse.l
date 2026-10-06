@@ -783,6 +783,9 @@
                 [(<r2 | <nx) <>nx (max (r2 2) (nx 2))]))))
    ; an aligned ask raises a laid struct's alignment, and its size rounds up to it
    (alask lay a) (a > lay 2 ? [<lay (a * ((lay 1 + a - 1) // a)) a] lay)
+   ; a member's type with no size yet (C11 6.7.2.1p3): a struct whose body has not closed -- its own,
+   ; or one only declared -- or an array of one. the tag pins into stag when its layout is done
+   (incty? ps ty) (? (arr? ty) (incty? ps <>ty) (stru? ty) (atom? (peep (ps 'stag) <>ty 0)) ())
    (playout ps ms uni pk)                           ; -> (fields size align); pk: packed, every member aligns 1
     (: cap (peep ps 'pack 0)                         ; #pragma pack's: a member's natural alignment at most this
        (capa x) (0 < cap && cap < x ? cap x)
@@ -827,6 +830,8 @@
                     nmx (mx < ia ? ia mx)
                     nbit (uni ? (bit < isz * 8 ? (isz * 8) bit) (sbit + isz * 8))
                     (go >l nbit nmx (spl <inner acc)))
+                 (incty? ps ty) (: _ (peep ps 'incmem () || pin ps 'incmem name)
+                                   (go >l bit mx acc))
                  (: a (max (pk ? 1 (capa (talign ps ty))) (two? >>>m ? (m 3) 0))   ; an ask outranks packed, as gcc has it
                     sz (tsz ps ty)
                     abit (uni ? 0 (aup bit (a * 8)))
@@ -903,6 +908,7 @@
                              lay (alask (playout ps <mr uni (<pb | <pa)) (max (pb 2) (pa 2)))
                              tu (uni && attrany? <>mr "transparent_union" "__transparent_union__")
                              (? (peep ps 'packbf ()) (pin ps 'packbf (), clblame "a bit-field under #pragma pack is not carried out")
+                                (peep ps 'incmem ()) (ps 'incmem @ n (pin ps 'incmem (), clblame ("field '" + n + "' has incomplete type")))
                                 (tu && !(tuok? ps lay)) (clblame "a transparent union wants members of one word-sized scalar type")
                              (pin (ps 'stag) tag2 lay,
                               uni ? (pin (ps 'utag) tag2 1) 0,
