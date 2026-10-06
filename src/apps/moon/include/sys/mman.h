@@ -25,6 +25,9 @@ int mincore(void*, unsigned long, unsigned char*);
 void *mmap(void*, long, int, int, int, long);
 int munmap(void*, long);
 int mprotect(void*, long, int);
+#define MREMAP_MAYMOVE 1
+#define MREMAP_FIXED   2
+void *mremap(void*, unsigned long, unsigned long, int, ...);
 #define MFD_CLOEXEC 1
 int memfd_create(char const*, unsigned int);
 #endif

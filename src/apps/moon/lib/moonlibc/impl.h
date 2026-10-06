@@ -273,6 +273,7 @@ struct _IO_FILE {
 #define NR_sendmsg        211
 #define NR_recvmsg        212
 #define NR_munmap         215
+#define NR_mremap         216
 #define NR_clone          220
 #define NR_execve         221
 #define NR_mmap           222
@@ -302,6 +303,7 @@ struct _IO_FILE {
 #define NR_mmap             9
 #define NR_mprotect        10
 #define NR_munmap          11
+#define NR_mremap          25
 #define NR_madvise         28
 #define NR_msync           26
 #define NR_copy_file_range 326
