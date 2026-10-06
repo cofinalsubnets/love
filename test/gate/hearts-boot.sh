@@ -32,7 +32,7 @@ s=$w/ship
 mkdir -p "$s/fw"
 cp "$xlove" "$s/love" && cp "$cat" "$s/cat.l" && cp "$K" "$s/Image" && cp test/gate/hearts-run.sh "$s/" \
   && cp "$fw" "$s/fw/code.fd" && cp "$(dirname "$fw")/ovmf-vars-aarch64.fd" "$s/fw/vars.fd" || fail "cannot lay $s"
-for f in src/apps/sqfs.l src/apps/hearts/image.l src/apps/hearts/dev.l src/apps/hearts/app.l \
+for f in src/apps/sqfs.l src/apps/ext4.l src/apps/hearts/image.l src/apps/hearts/dev.l src/apps/hearts/app.l \
     src/apps/helm/unit.l src/apps/helm/sup.l src/apps/helm/moor.l src/apps/helm/helm.l \
     src/inle/uefi/slot.c src/inle/uefi/mkefi.l src/apps/kore/text.l src/apps/kore/u.l src/apps/kore/asbook.l \
     src/love/holo/elf.l src/love/holo/obj.l src/love/holo/link.l src/love/holo/pe.l; do
@@ -80,7 +80,7 @@ seed=$(printf 'hearts rung 0 key' | sha256sum | cut -c1-64)
 bad=$(printf 'hearts rung 0 other key' | sha256sum | cut -c1-64)
 for i in 1 2; do
   mkdir -p "$w/i$i"
-  "$love" -l src/apps/sqfs.l src/apps/hearts/image.l "$w/i$i" "$r/love" "$K" "$r/BOOTAA64.EFI" "$seed" "$bad" "$stamp" \
+  "$love" -l src/apps/sqfs.l -l src/apps/ext4.l src/apps/hearts/image.l "$w/i$i" "$r/love" "$K" "$r/BOOTAA64.EFI" "$seed" "$bad" "$stamp" \
     || fail "the image here ($i)"
   (cd "$w/i$i" && sha256sum disk.img u1.hup u2.hup u3.hup u4.hup) > "$w/i$i.shas"
   grep -v ' BOOTAA64.EFI$\| love$' "$r/shas" | cmp -s - "$w/i$i.shas" \
