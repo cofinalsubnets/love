@@ -7,8 +7,13 @@
 typedef unsigned int wint_t;
 typedef struct { int count; } mbstate_t;
 #define WEOF      ((wint_t) 0xffffffffu)
+#ifdef __WCHAR_MAX__
+#define WCHAR_MIN __WCHAR_MIN__
+#define WCHAR_MAX __WCHAR_MAX__
+#else
 #define WCHAR_MIN (-2147483647 - 1)
 #define WCHAR_MAX 2147483647
+#endif
 wint_t btowc(int);
 int wctob(wint_t);
 int mbsinit(mbstate_t const *);

@@ -778,7 +778,7 @@
     (: v (gf-val e rl) pc <v s <>v k <>>v
        (? !(string? s) (gf-le k w)
           pc (? (w = 4 && !(gthumb? tgt)) [['fix 4 'rel32 (name s) (k + 4)]]
-                (w = 8 && tgt = 'x64) [['fix 8 'rel64 (name s) (k + 8)]]     ; the jump table's `key - .`
+                (w = 8 && elem tgt '(x64 a64)) [['fix 8 'rel64 (name s) (k + 8)]]     ; the jump table's `key - .`
                 (scare 'gas-data-pcrel e))
           (w = 8) [['fix 8 'abs64 (name s) k]]
           (w = 4 && (tgt = 'x64 || gthumb? tgt)) [['fix 4 'abs32 (name s) k]]

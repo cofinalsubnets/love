@@ -24,6 +24,7 @@
    ra-jump26 282                                    ; R_AARCH64_JUMP26          (S+A-P)>>2 into b's imm26
    ra-call26 283                                    ; R_AARCH64_CALL26          ... into bl's imm26
    ra-condbr19 280                                  ; R_AARCH64_CONDBR19        ... into b.cond's or cbz's imm19
+   ra-prel64 260                                    ; R_AARCH64_PREL64          S + A - P in eight bytes (the jump table's key)
    ra-prel32 261                                    ; R_AARCH64_PREL32          S + A - P in four bytes (a jump table's entry)
    ra-pghi21 275                                    ; R_AARCH64_ADR_PREL_PG_HI21  page(S+A)-page(P) into adrp
    ra-lo12   277                                    ; R_AARCH64_ADD_ABS_LO12_NC   (S+A) & 0xfff into add
@@ -537,7 +538,7 @@
                  ; ..and its 4-byte twin, the PVH note's 32-bit entry
                  'abs32 (o-rela off si r-32 (sa + aux))
                  ; ..and a data word measured from its own start, eight bytes (the field is 8 wide)
-                 'rel64 (o-rela off si r-pc64 ((sa + aux) - 8))
+                 'rel64 (o-rela off si (a64 ? ra-prel64 r-pc64) ((sa + aux) - 8))
                  ; x64: the field is measured from its own end, so every addend carries
                  ; the -4. a weak-defined fn or data symbol binds its own symbol through a
                  ; plt32, section-relative nailing it to this object's body past any strong
