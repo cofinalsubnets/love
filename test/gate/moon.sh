@@ -94,6 +94,22 @@ moonrun -t a64 -c "$ho/.bugl.c" -o "$ho/.bugl.o" || fail "mooncc -t a64 a live B
 ! grep -q 'l14471' "$ho/.bugd.o" || fail "a dead BUG asm's __bug_table row names its removed label"
 grep -q '__bug_table' "$ho/.bugl.o" || fail "a live BUG asm lost its __bug_table row"
 
+# an inline helper whose local's address goes only to an overflow builtin is spliced, and
+# leaves no body of its own (kmalloc_array's &bytes); one handing that address to a call keeps
+# the bar and stays a call
+printf 'extern void *big(unsigned long);\nstatic inline void *karr(unsigned long n, unsigned long s) { unsigned long b; if (__builtin_mul_overflow(n, s, &b)) return 0; return big(b); }\nvoid *f(void) { return karr(4, 8); }\n' > "$ho/.ovf.c"
+printf 'extern void sink(long *);\nstatic inline long kesc(long x) { long b = x; sink(&b); return b; }\nlong g(void) { return kesc(3); }\n' > "$ho/.esc.c"
+moonrun -c "$ho/.ovf.c" -o "$ho/.ovf.o" || fail "mooncc an overflow builtin's &local"
+moonrun -c "$ho/.esc.c" -o "$ho/.esc.o" || fail "mooncc an escaping &local"
+! grep -q 'karr' "$ho/.ovf.o" || fail "an inline helper whose &local goes only to __builtin_mul_overflow was not spliced"
+grep -q 'kesc' "$ho/.esc.o" || fail "an inline helper handing its &local to a call was spliced"
+
+# the size gate weighs a body by its structure: kmalloc_array's long names and its
+# __builtin_expect(!!(..)) wrapping do not keep a small body from being spliced
+printf 'extern void *slow_path_allocator(unsigned long, unsigned);\nstatic inline _Bool must_check_overflow_of_the_product(_Bool o) { return __builtin_expect(!!(o), 0); }\nstatic inline void *kmalloc_array_noprof_like_helper(unsigned long number_of_elements, unsigned long size_of_each, unsigned allocation_flags) { unsigned long total_bytes_requested; if (__builtin_expect(!!(must_check_overflow_of_the_product(__builtin_mul_overflow(number_of_elements, size_of_each, &total_bytes_requested))), 0)) return ((void *)0); return slow_path_allocator(total_bytes_requested, allocation_flags); }\nvoid *f(void) { return kmalloc_array_noprof_like_helper(4, 8, 1); }\n' > "$ho/.wgt.c"
+moonrun -c "$ho/.wgt.c" -o "$ho/.wgt.o" || fail "mooncc a long-named inline helper"
+! grep -q 'kmalloc_array_noprof_like_helper' "$ho/.wgt.o" || fail "a small inline helper with long names was not spliced"
+
 # a jump label: its "i" operand a local derived from params (arch_static_branch's
 # `char *k = &((char *)key)[branch]`), constant once the call is spliced, so the body compiles
 # only spliced; its asm goto target is named only by the __jump_table words, never by a jump,
@@ -196,6 +212,15 @@ printf '#pragma pack(1)\nstruct s { char c; int i : 20; int j : 20; };\n' > "$ho
 moonrun -c -o /dev/null "$ho/.attr.c" 2>&1 | grep -q "a bit-field under #pragma pack" || fail "a packed bit-field was laid"
 printf 'typedef union { char *p; short s; } u __attribute__((transparent_union));\n' > "$ho/.attr.c"
 moonrun -c -o /dev/null "$ho/.attr.c" 2>&1 | grep -q "a transparent union wants" || fail "a mixed transparent union was taken"
+# mode is carried (test/cc/259); a mode it cannot lay, or one it cannot place, refuses
+printf 'typedef float tf __attribute__((mode(TF)));\n' > "$ho/.attr.c"
+moonrun -c -o /dev/null "$ho/.attr.c" 2>&1 | grep -q "mode(TF))) is not carried out" || fail "mode(TF) was taken"
+printf 'typedef int *pi __attribute__((mode(SI)));\n' > "$ho/.attr.c"
+moonrun -c -o /dev/null "$ho/.attr.c" 2>&1 | grep -q "on a pointer, array or function declarator" || fail "a mode on a pointer was taken"
+printf 'int a __attribute__((mode(DI))), b;\n' > "$ho/.attr.c"
+moonrun -c -o /dev/null "$ho/.attr.c" 2>&1 | grep -q "on a declaration of several declarators" || fail "a mode on one of two declarators was taken"
+printf 'enum e { A = 300 } __attribute__((mode(byte)));\n' > "$ho/.attr.c"
+moonrun -c -o /dev/null "$ho/.attr.c" 2>&1 | grep -q "does not fit the enum" || fail "an enum too wide for its mode was taken"
 # #pragma once reads a header once
 mkdir -p "$ho/.once"
 printf '#pragma once\nstruct once { int a; };\n' > "$ho/.once/h.h"
@@ -205,7 +230,7 @@ printf '#include "h.h"\n#include "h.h"\nint main(void) { return sizeof (struct o
 moonrun -c -o "$ho/.used.o" test/cc/230-gnuc.c > /dev/null 2>&1 || fail "230-gnuc did not compile"
 nm "$ho/.used.o" | grep -q " t kept$" || fail "a used static function was swept"
 nm "$ho/.used.o" | grep -q " T thrice$" || fail "gnu_inline's plain inline laid no external definition"
-echo "mooncc: GNU C 8 -- bool by dialect, refused attributes named, #pragma pack's refusals, #pragma once, used, gnu_inline"
+echo "mooncc: GNU C 8 -- bool by dialect, refused attributes named, mode's refusals, #pragma pack's refusals, #pragma once, used, gnu_inline"
 
 # ------------------------------------------- the flags that change the code
 # -fshort-wchar: wchar_t and L"" are 16-bit, held to gcc's

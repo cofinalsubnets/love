@@ -856,16 +856,26 @@ the attributes, by `gnuattrs` in cpp.l: **carried** — aligned packed section w
 always_inline noinline cleanup used (a static nothing calls is kept) gnu_inline (plain `inline`
 lays the external definition and `extern inline` does not, gnu89's way about) transparent_union
 (an argument of a member's type becomes the union; members one word-sized scalar type, or it
-refuses); **a hint, whose
+refuses) mode (below); **a hint, whose
 skip is exact** — the diagnostics, the optimisation promises (pure const malloc nonnull ...),
 visibility under a static link, cold/hot, fallthrough, i386's calling conventions (stdcall
 fastcall thiscall regparm, which gcc ignores on every target mooncc lays) and the rest of the
-list; **refused by name** — constructor destructor ifunc weakref mode vector_size naked
+list; **refused by name** — constructor destructor ifunc weakref vector_size naked
 interrupt patchable_function_entry, the calling conventions that change code here (ms_abi,
 pcs), scalar_storage_order, target_clones, symver. `__has_attribute` answers 1 for the first
 two classes and 0 for the third and for a name it does not know, which is what a header asks
 before it uses one -- save the four i386 conventions, which answer 1 where gcc off i386 knows
 them not and answers 0.
+
+`mode(M)` lays the declared integer type at M's width, its signedness kept: QI and byte one
+byte, HI two, SI four, DI eight, TI sixteen (refused on the 32-bit targets, as gcc cannot lay it
+there), word and pointer the target's word; SF and DF on a floating type are float and double.
+On an enum it lays the enum at that width, and an enumerator the width cannot hold refuses
+(the kernel's `__mode(byte)` trace and state enums, fscache's among them). It is read at the
+declaration's head and after a lone declarator. A mode gcc has and mooncc does not lay (TF,
+vector modes) refuses by name, and so does a mode on a pointer, array or function declarator,
+or on a declaration of several declarators. Held by test/cc/259-mode.c and the refusals in
+test/gate/moon.sh.
 
 owed, each refusing loudly today (an undeclared builtin, or a parse error):
 
