@@ -895,8 +895,8 @@ hb_love = $(if $(filter a64,$a),$(ho)/love,out/x-a64/love)
 test_hearts_boot: host $(hb_love) $(ho)/.dist-cat.l
 	@echo TEST test/gate/hearts-boot.sh
 	@DL=$(dl) $(gsh) test/gate/hearts-boot.sh $(ho)/love $(hb_love) $(ho)/.dist-cat.l
-# test_sqfs -- src/apps/sqfs.l against mksquashfs, byte for byte, over four trees.
-# skips without mksquashfs.
+# test_sqfs -- src/apps/sqfs.l against mksquashfs over four trees: byte for byte stored, read back deflated.
+# skips without mksquashfs or unsquashfs.
 test_sqfs: host
 	@echo TEST test/gate/sqfs.sh
 	@$(gsh) test/gate/sqfs.sh $(ho)/love

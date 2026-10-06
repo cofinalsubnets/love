@@ -4,6 +4,7 @@
 //   (blake2b str) (sha3 str)  -> the lowercase hex digest (blake2b's the 64-byte one,
 //                                sha3's the 256-bit one)
 //   (crc32 str)               -> the IEEE crc32, a charm; (crc32-on c str) carries c on
+//   (adler32 str)             -> zlib's adler-32 (RFC 1950), a charm
 //   (cksum str)               -> POSIX cksum's crc with the length folded in, a charm
 //   (ogg-crc s o n)           -> the crc of the ogg page s[o..o+n), its crc field as zeros
 //   (bsdsum acc str)          -> bsd sum's 16-bit checksum carried on over str
@@ -448,6 +449,26 @@ static lvm(lvm_crc32_on) {
   Sp[1] = putcharm(~crc32_run(~(uint32_t) getcharm(c), (const uint8_t*) s->bytes, (uintptr_t) s->len)); }
  love_musttail return Nextp(1, 1); }
 
+// --- adler32 (RFC 1950): the two sums zlib's stream ends with -------------------------
+// 5552 bytes is the most either sum takes before it could pass 32 bits, so the modulus
+// waits that long. test/digest.l holds it to the walk spelled in love.
+static uint32_t adler_run(const uint8_t *p, uintptr_t n) {
+ uint32_t a = 1, b = 0;
+ while (n) {
+  uintptr_t k = n < 5552 ? n : 5552;
+  n -= k;
+  for (; k; k--) a += *p++, b += a;
+  a %= 65521, b %= 65521; }
+ return b << 16 | a; }
+
+static love_inline struct g *host_adler32(struct g *g) {
+ if (!strp(g->sp[0])) return g->sp[0] = ZeroPoint, g;
+ { struct str *s = (struct str*) g->sp[0];
+   g->sp[0] = putcharm(adler_run((const uint8_t*) s->bytes, (uintptr_t) s->len)); }
+ return g; }
+static lvm(lvm_adler32) {
+ LvmCall(g, host_adler32) }
+
 // --- cksum (POSIX: not reflected, polynomial 0x04c11db7, the length folded in) -----
 // a different crc from the one above in every part: the register runs the other way,
 // the seed is 0, and the message does not end at the last byte -- the byte count goes
@@ -765,6 +786,7 @@ Nif1(nif_k3_done, lvm_k3_done)
 Nif2(nif_bsdsum, lvm_bsdsum)
 Nif1(nif_crc32, lvm_crc32)
 Nif2(nif_crc32_on, lvm_crc32_on)
+Nif1(nif_adler32, lvm_adler32)
 Nif1(nif_cksum, lvm_cksum)
 static union u const nif_ogg_crc[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_ogg_crc}, {lvm_ret0}};
 Nif1(nif_ck_init, lvm_ck_init)
@@ -806,6 +828,7 @@ LvNif("sha3-done", nif_k3_done, NULL);
 LvNif("bsdsum", nif_bsdsum, NULL);
 LvNif("crc32", nif_crc32, NULL);
 LvNif("crc32-on", nif_crc32_on, NULL);
+LvNif("adler32", nif_adler32, NULL);
 LvNif("cksum", nif_cksum, NULL);
 LvNif("ogg-crc", nif_ogg_crc, NULL);
 LvNif("cksum-init", nif_ck_init, NULL);
