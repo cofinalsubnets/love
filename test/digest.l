@@ -247,4 +247,16 @@
  (crc32-on (crc32-on 0 (hash-bytes 500)) (snip (hash-bytes 1000) 500 1000) = crc32 (hash-bytes 1000))
  (crc32-on 0 "123456789" = 3421780262))
 
+;; --- adler32 (rfc 1950), held to its walk in love on either side of the 5552-byte modulus ---
+(: (hash-adler s)
+    (foldl (r \ i \ (r 0 + s i) % 65521 @ a [a ((r 1 + a) % 65521)]) [1 0] ^#s @ r (r 1 << 16 | r 0)))
+(test
+ (lit? adler32)
+ (adler32 "" = 1)
+ (adler32 "Wikipedia" = 300286872)
+ (adler32 (hash-bytes 5552) = hash-adler (hash-bytes 5552))
+ (adler32 (hash-bytes 20000) = hash-adler (hash-bytes 20000))
+ (adler32 (hash-mk 70000 (i \ 255)) = hash-adler (hash-mk 70000 (i \ 255)))
+ !(adler32 7))
+
 (test_fin ())
