@@ -492,6 +492,32 @@
           (charm? b && <>s9 = 4 ? (ga-raw (b | (k = 3 ? (ga-hw <s9 << 16) 0) | ga-hw x << 5 | ga-hw <rw))
              (scare 'gas-a64-operand os))
           (scare 'gas-a64-operand os)))
+   ;; the lse atomics by spelling: ld<op>/st<op>/swp/cas, then a|l|al, then b|h ->
+   ;; (kind opbits acq rel size), size () for the register's own
+   ga-lse-ops '(("add" 0) ("clr" 1) ("eor" 2) ("set" 3) ("smax" 4) ("smin" 5) ("umax" 6) ("umin" 7))
+   (ga-lse m)
+    (: s (show m)
+       (rest t n) (snip t n #t)
+       (pre t l) (? !l () (starts? t <<l) [(<>(<l)) (rest t #(<<l))] (pre t >l))
+       (op k t) (pre t ga-lse-ops @ (o u) [k (o << 12) u] _ ())
+       hd (? (starts? s "cas") ['cas 0 (rest s 3)] (starts? s "swp") ['ld 0x8000 (rest s 3)]
+             (starts? s "ld") (op 'ld (rest s 2)) (starts? s "st") (op 'st (rest s 2)) ())
+       (ord t) (? (starts? t "al") [1 1 (rest t 2)] (starts? t "a") [1 0 (rest t 1)]
+                  (starts? t "l") [0 1 (rest t 1)] [0 0 t])
+       (siz t) (? (t = "") ['n] (t = "b") [0] (t = "h") [1] ())
+       (? !hd () (ord (hd 2) @ (a r t) (? (siz t = ()) () (<hd = 'st && a = 1) ()
+                                          [<hd (hd 1) a r <(siz t)]))))
+   (ga-lse-ins m row os)
+    (row @ (kind ob a r z)
+       (: k #os st (kind = 'st) rs (ga-rw (os 0)) w <>rs
+          rt (st ? ['zr w] (ga-rw (os 1)))
+          sz (z = 'n ? (w = 8 ? 3 2) z)
+          (? ((st ? 2 3) != k || <>rt != w || (z != 'n && w != 4)) (scare 'gas-a64-operand [m os])
+             ((os (k - 1)) @ ('mem x 0)
+                (ga-raw (sz << 30 | ga-hw <rs << 16 | ga-hw x << 5 | ga-hw <rt
+                         | (kind = 'cas ? (0x08A07C00 | a << 22 | r << 15) (0x38200000 | a << 23 | r << 22 | ob))))
+                (scare 'gas-a64-operand [m os]))))
+       _ (scare 'gas-a64-op m))
    ;; a prefetch: its operation by name (type << 3 | level - 1 << 1 | strm) or number; the
    ;; address scaled by 8 when it can be, else prfum's imm9
    ga-prf {'pldl1keep 0 'pldl1strm 1 'pldl2keep 2 'pldl2strm 3 'pldl3keep 4 'pldl3strm 5
@@ -580,7 +606,7 @@
           (elem m '(prfm prfum)) (k = 2 ? (ga-prf-ins m os) (scare 'gas-a64-operand [m os]))
           (two? (peep ga-ex m ())) (k = 2 ? (ga-ex-ins (ga-ex m) os) (scare 'gas-a64-operand [m os]))
           (two? (peep ga-sx m ())) (k = 3 ? (ga-ex-ins (ga-sx m) os) (scare 'gas-a64-operand [m os]))
-          (scare 'gas-a64-op m)))
+          (ga-lse-ins m (ga-lse m) os)))
    (ga-line toks)
     (gline toks @ l
        (l @ ('label s) [['label s]]
