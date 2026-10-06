@@ -990,6 +990,12 @@ each from the arm64 census above, each held by a law:
   an array-typed element decays to its address (`.regs = pll_regs[N]`, `&a[0][0]` -- the cast
   element row rfc 6716's silk/tables_LTP.c found): 191 of the 198 static-initializer refusals
   (251-static-clit.c).
+- **a block-scope static's initializer names statics by address**: itself, in scope in its own
+  initializer, and the block statics declared before it are spelled by their labels at the
+  declaration, since the image is laid after the fn with no env. the kernel's `static
+  DEFINE_MUTEX(..)` inside a fn (a list head pointing at itself) refused units 626 and 3381 once
+  the lse atomics let them reach it; a scalar compound literal, `(int){ 5 }`, lays as a value and
+  behind an address too (255-blockstatic.c).
 - **`__builtin_constant_p` decides after inlining and kprop**: a param bound to a constant reads 1
   (kmalloc's cache lane, 221 units), and a BUILD_BUG_ON over a constant local folds its
   `__compiletime_assert_N` call away (12 units failed the link) (252-constant-p.c, test/law/moon.l).
