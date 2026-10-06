@@ -90,7 +90,6 @@ All of C89 passes. What remains is C99/C11/GNU.
 | construct | probe |
 |---|---|
 | `_Atomic` | `_Atomic int a;` — both spellings; `__STDC_NO_ATOMICS__` says so, which is C11's own door for the absence |
-| computed goto | `&&label`, `goto *p` |
 | the address of a compound literal in a **static** initializer | `struct S *p = &(struct S){1,2};` — inside a function it passes |
 | brace elision continuing **past** an anonymous union member | `{1,2,3,{4,5}}` over `struct { int a,b; union { int c,d; }; struct S1 s; }` — elision *into* the union is fine |
 | a `##` paste that makes a macro NAME | `CAT(A,B)(x)` where `AB` is itself a macro — the pasted name is not rescanned as an invocation |
@@ -240,7 +239,11 @@ Four of them carry an edge worth knowing:
 
 `#pragma`, `#ident`, `#sccs`, `#assert`, `#unassert`, a bare `#` (the null directive,
 C11 6.10.7) and gcc `-E`'s `# 42 "f.c"` line marker all pass and do nothing — except
-**`#pragma push_macro("X")` / `pop_macro("X")`**, which save and restore the definition
+**`#pragma pack`** — `()`, `(N)`, `(push[, N])`, `(pop)`, N one of 1 2 4 8 16 — which caps each
+member's natural alignment at N for the structs laid while it stands (acpi's tables); another
+operand refuses, and so does a bit-field it would let straddle a unit, and `_Pragma("pack ..")`
+stays in the stream and refuses at parse — **`#pragma once`**, which reads a header once per
+TU by its resolved path, and **`#pragma push_macro("X")` / `pop_macro("X")`**, which save and restore the definition
 (gcc's semantics: a per-name stack, a saved-undefined pops back to undefined, a pop with
 nothing saved is a no-op, and the directive body reads raw so a user macro named `pop_macro`
 cannot interfere — cts 00206). `#warning` says its
@@ -276,7 +279,10 @@ stringize-diff against `gcc -dM -E` on x64/riscv64/arm-none-eabi and clang's a64
 `__LONG_MAX__` moved out of cpp into the fork, so t32 now answers `0x7fffffffL` instead of the
 64-bit lie. On top of the older rows: `__STDC__`, `__STDC_HOSTED__`, `__mooncc__`, the linux/
 unix spellings, the arch pairs, `__INT_MAX__`, `__FLT_MAX__`/`__DBL_MAX__`,
-`__SIZEOF_INT128__` on x64, `bool`/`true`/`false`. Pinned by test/cc/123-predef.c (all four
+`__SIZEOF_INT128__` on x64, and `bool`/`true`/`false` — the dialect's, not the language's: bare
+under moon and `-std=c23`/`gnu23`, plain names under an older iso `-std=` (linux/stddef.h
+declares them), where `<stdbool.h>` lays them. `-fshort-wchar` turns the wchar fork to gcc's
+`short unsigned int` and `L""` to 16-bit units (surrogate pairs past the BMP). Pinned by test/cc/123-predef.c (all four
 compilers agree at 21) and the t32 `#if` checker run against arm-none-eabi-gcc.
 
 Three deliberate deviations, all in the compiler's favor of honesty:
@@ -821,6 +827,58 @@ rv64; test/cc/173-asmgoto.c holds it to gcc and test/law/moon.l holds the node a
   them whenever the configuring compiler has `CC_HAS_ASM_GOTO_OUTPUT`.
 
 ---
+
+## GNU C 8.1 — the claim, and what it owes
+
+mooncc predefines **`__GNUC__ 8`, `__GNUC_MINOR__ 1`, `__GNUC_PATCHLEVEL__ 0`** beside
+`__mooncc__` (chosen 2026-10-05, revisable): an unpatched kernel takes only gcc or clang
+(`compiler_types.h`), kbuild's `cc-version.sh` refuses gcc before 8.1, and a `.config` made
+with `CC=mooncc` is the build hearts wants. A source asking which compiler asks `__mooncc__`
+first (stdarg.h, love.h, num.c), so love itself compiles exactly as before. The claim is a
+promise, so each GNU C 8.1 extension is carried or refuses by name — never skipped where the
+skip changes the code. Held by test/cc/229-labelvalue.c and 230-gnuc.c against gcc on every
+lane (231-packunion.c the layout and call ones), the refusals in test/gate/moon.sh.
+
+carried:
+
+- labels as values: `&&L` is the label's address, `goto *p` a table jump over every label the
+  function takes the address of (homing stands off, as for an asm), a static table of them
+  laid as data; wasm refuses both, a wasm label having no address
+- `__int128_t`/`__uint128_t`, wherever `__int128` reads
+- `__has_attribute`, `__has_include`, `__has_include_next` (read as `__has_include`; `defined`
+  says all three are there), `__COUNTER__`, `_Pragma` (its pragmas are the ones ignored), `__VA_OPT__`
+- a macro argument expanded once before substitution (C11 6.10.3.1), however often its parameter
+  is used: a `__COUNTER__` in it is one number throughout, which is `__UNIQUE_ID`
+- `-fshort-wchar`; `-fmacro-prefix-map=OLD=NEW` and `-ffile-prefix-map` (`__FILE__` spelled
+  with the last matching map; there is no debug info for its other half); `-ffixed-x18`, true of
+  a64 already (x16..x18 are never allocated) and refused on any other target or register
+- `__builtin_assume_aligned`, `__builtin_extract_return_addr`, `__builtin_parity{,l,ll}`
+
+the attributes, by `gnuattrs` in cpp.l: **carried** — aligned packed section weak alias
+always_inline noinline cleanup used (a static nothing calls is kept) gnu_inline (plain `inline`
+lays the external definition and `extern inline` does not, gnu89's way about) transparent_union
+(an argument of a member's type becomes the union; members one word-sized scalar type, or it
+refuses); **a hint, whose
+skip is exact** — the diagnostics, the optimisation promises (pure const malloc nonnull ...),
+visibility under a static link, cold/hot, fallthrough and the rest of the list; **refused by
+name** — constructor destructor ifunc weakref mode vector_size naked
+interrupt patchable_function_entry, the calling conventions (regparm, ms_abi, pcs ...),
+scalar_storage_order, target_clones, symver. `__has_attribute` answers 1 for the first two
+classes and 0 for the third and for a name it does not know, which is what a header asks
+before it uses one.
+
+owed, each refusing loudly today (an undeclared builtin, or a parse error):
+
+| construct | |
+|---|---|
+| `__atomic_*` and `__ATOMIC_*`, `__sync_*` but the spin-lock pair | `__STDC_NO_ATOMICS__` says so for C11's; gcc 8 has the builtins |
+| `__builtin_alloca` | moonlibc's `alloca` is malloc-backed, so it is not the builtin's frame lifetime |
+| `__builtin_add_overflow_p` and kin, `__builtin_classify_type` | |
+| gcc's old `field:` initializer, nested functions | |
+
+open, not refused: **`__FILE__` in a header reads the TU's name** (cpp shares one table across
+includes), where gcc answers the header's path; deterministic, but a header's `WARN_ON` string
+differs from gcc's.
 
 ## linux
 
