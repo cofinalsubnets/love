@@ -93,6 +93,10 @@
    ; the mem face: an lvalue as a (base, offset) memory operand, ['m b o] in the reg seat; a
    ; consumer lays one fused form, and matv is the degenerate face (the address on r0)
    (mkm ty b o fs) [ty ['m b o] fs]
+   ; ..one that cannot carry its type's width under -mstrict-align, a the alignment it does carry
+   (mkma ty b o fs a) [ty ['m b o a] fs]
+   (ua? v) (vm? v && 3 < #(vreg v))
+   (vma v) ((vreg v) 3)
    (vm? v) (bad? v ? () (two? (vreg v)))
    (vmb v) <>(vreg v)
    (vmo v) <>>(vreg v)
@@ -1291,6 +1295,24 @@
           (0 < sz) (bcopy g (off + 1) (sz - 1)
                      (acc + [['ld1 'r2 'r0 off] ['st1 'r1 off 'r2]]))
           acc))
+   ; ..their -mstrict-align twins, by the chunks an a-aligned run carries
+   (bcopya off sz a) (foldl (acc \ [p k] \ acc + [[(uldop k) 'r2 'r0 (off + p)] [(k @ 1 'st1 2 'st2 4 'st4 'st) 'r1 (off + p) 'r2]])
+                            () (alchunks sz a))
+   (bseta off sz a) (foldl (acc \ [p k] \ acc + [[(k @ 1 'st1 2 'st2 4 'st4 'st) 'r1 (off + p) 'r2]]) () (alchunks sz a))
+   ; the alignment a value's address carries: its face's mark, else its type's
+   (val9 g v) (ua? v ? (vma v) (tal g (vty v)))
+   ; a struct that rides registers by the word, which its alignment cannot carry
+   (salw? g ty) (sal? g && tal g ty < 8)
+   (ldw2 g ty)                                     ; a 9..16B aggregate at r0 into its 16-byte cell
+    (salw? g ty ? (: n (tsz g ty) a (tal g ty)
+                     (['(sub sp sp 16)] + ldal 'r1 'r0 8 (n - 8) a + [['st 'sp 8 'r1]] + ldal 'r1 'r0 0 8 a + [['st 'sp 0 'r1]]))
+       cell2w)
+   ; under -mstrict-align, what a mem builtin's pointer is known to align: a named object's own
+   ; alignment, anything else a byte
+   (memal g env e)
+    (e @ ('cast _ x) (memal g env x)
+         ('addr ('var nm)) (vent g env nm @ en (two? en && elem <en '(loc glo) ? (tal g <>>en) 1))
+         1)
    ; ..and its fill twin: dest address in r1, the splatted word in r2. a byte tail stores
    ; the low byte of the same register, which for a splat is the byte the caller asked for
    (bset g off sz acc)
@@ -1321,7 +1343,7 @@
                           ((c9 & 255) * (8 = wsize g ? 72340172838076673 16843009) @ v9
                              (mkv '(ptr void) 'r0 $
                               relean (tor0 g dv) + [['mov 'r1 'r0] ['li 'r2 v9]] +
-                              bset g 0 n9 ()))))))
+                              (sal? g ? (bseta 0 n9 (memal g env <args)) (bset g 0 n9 ()))))))))
              (memnm? bi "memcpy")
               ; the destination parks in a pool seat, never on the machine stack (sp motion costs
               ; a musttail fn its tail); a pool seat cannot survive a call, so a callish arg declines
@@ -1340,7 +1362,9 @@
                                  bad? sv ? 'bad
                                    (mkv '(ptr void) 'r0 $
                                     relean fd + [['mov rd 'r0]] + relean (tor0 g sv) +
-                                    [['mov 'r1 rd]] + bcopy g 0 n9 () + '((mov r0 r1))))))))))
+                                    [['mov 'r1 rd]]
+                                    + (sal? g ? (bcopya 0 n9 (min (memal g env <args) (memal g env <>args))) (bcopy g 0 n9 ()))
+                                    + '((mov r0 r1))))))))))
              'no)))
    ; a spill across a nested sub-eval (which may call): a bare 8-byte push would leave rsp at
    ; 8 mod 16 across the inner call, so a whole 16-byte cell
@@ -1604,6 +1628,11 @@
            (gvarr? ty) (mkv ['ptr (varel ty)] 'r0 (fs + mata b o))   ; a VLA row decays to its address (p[i] a char*)
            (fn? ty) (mkv ['ptr ty] 'r0 (fs + mata b o))
            (stru? ty) (mkv ty 'r0 (fs + mata b o))    ; a struct value is its address (the pair reps read through it)
+           (ua? r)                                    ; a misaligned member: by its chunks
+            (? (flo? ty) (ntmp g 'double @ tm
+                            (mkv 'double 'r0 (fs + ldal 'r0 b o (tsz g ty) (vma r) + [['st 'r4 tm 'r0]] + fldf ty 'f0 'r4 tm)))
+               (pair? g ty || d128? ty) (uanl g)
+               (W9 || 'r0 @ W (mkv ty W (fs + ldal W b o (tsz g ty) (vma r) + cvt ty W))))
            (flo? ty) (mkv 'double 'r0 (fs + fldf ty 'f0 b o))
            (pair? g ty) (mkv ty 'r0 (fs + pld b o))
            (d128? ty) (mkv ty 'r0 (fs + [['ld 'r2 b (o + 8)] ['ld 'r0 b o]]))   ; hi first: the low load may overwrite the base
@@ -1613,7 +1642,8 @@
    ; signed, shr unsigned), anything else loads flat
    (lvload g r wnt)
     (vty r @ ty
-       (bitf? ty ?
+       (? (bitf? ty && ua? r) (uanl g)
+          (bitf? ty)
            (: uty <>ty bitoff <>>ty width <>>>ty
               usz (tsz g uty) hi (64 - (bitoff + width)) lo (64 - width)
               sgn !(usg? uty || uty = 'bool)         ; a bool field holds 0/1: never sign-extend
@@ -1691,8 +1721,8 @@
            (bad? r ? 'bad
               (fmem g (vty r) fld @ fm
                  (? (bad? fm) ((vm? r ? (rfree g (vmb r))), 'bad)
-                    (vm? r) (mkm <>fm (vmb r) (vmo r + <fm) (vfs r))   ; the member folds into the face
-                    (mkm <>fm 'r0 <fm (vfs r))))))
+                    (vm? r) (sface g r fm (mkm <>fm (vmb r) (vmo r + <fm) (vfs r)))   ; the member folds into the face
+                    (sface g r fm (mkm <>fm 'r0 <fm (vfs r)))))))
        ('clit ty ini)                            ; a compound literal is an lvalue: fill a temp, address it
         (: off (ntmp g ty)
            fill (clitcode g env off ty ini)
@@ -1701,6 +1731,7 @@
        ; gen's own lvalue, minted by the rmw lane and reachable from no source: the object whose
        ; address is moored at frame offset off (reading it is calm, so it evaluates once)
        ('moor off ty) (mkm ty 'r0 0 [['ld 'r0 'r4 off]])
+       ('moor off ty a) (mkma ty 'r0 0 [['ld 'r0 'r4 off]] a)
        'bad)
 
    ; the static face of a store target -> (off ty) | (): afd, or a dot chain over a frame local whose
@@ -1715,6 +1746,7 @@
                 (!(two? en && <en = 'loc) ? ()
                    (clval g env e @ lv
                       (? !(vm? lv) ()
+                         (ua? lv) ()
                          !(vmb lv = 'r4) ()
                          (two? (vfs lv)) ()
                          (vty lv @ ty
@@ -2025,6 +2057,10 @@
                     ['li 'r2 (u // 18446744073709551616)]]))
            (wnt || 'r0 @ W (mkv (v > 9223372036854775807 ? 'ulong 'long) W [['li W v]])))
        ('flo d) (mkflo g d)
+       ; gcc's &&L: the label's address, a jump target for a computed goto (C laid as the label)
+       ('laddr nm)
+        (wasm? g ? (asmno g "a label's address (&&) has no wasm lane")
+           (mkv '(ptr void) 'r0 [['la 'r0 (name (g 'fn + "." + nm))]]))
        ('str s)
         (nlab g ".S" @ lbl
            (pin g 'strs ([lbl s] . g 'strs),
@@ -2140,7 +2176,9 @@
               (arr? (vty lv0)) 'bad                ; an array is not assignable
               (stru? (vty lv0))                    ; a whole-struct copy (dest r1, src r0)
                (: lv (matv g lv0)
-                  rl (matv g (clval g env rhs))   ; an rvalue struct (a call's temp) is its address too
+                  rl0 (clval g env rhs)
+                  al (min (val9 g lv0) (bad? rl0 ? 8 (val9 g rl0)))
+                  rl (matv g rl0)   ; an rvalue struct (a call's temp) is its address too
                   rv (bad? rl ? (cgexpr g env rhs ()) rl)
                   (? (bad? rv) 'bad
                      ; a real into a complex lvalue converts: re the value, im zero
@@ -2158,7 +2196,20 @@
                           (gcplx? (vty lv) && gcplx? (vty rv) &&
                            !(<>(vty lv) = <>(vty rv)) ?
                              (cxcopy g (vty rv))
-                             (bcopy g 0 (tsz g (vty lv)) ())))))
+                             (sal? g ? (bcopya 0 (tsz g (vty lv)) al) (bcopy g 0 (tsz g (vty lv)) ()))))))
+              ; a misaligned member (-mstrict-align): the value lands on the protocol, then by chunks
+              (ua? lv0)
+               (: ty (vty lv0) n (tsz g ty) a (vma lv0)
+                  (? (bitf? ty || pair? g ty || d128? ty) (uanl g)
+                     (: lv (matv g lv0)
+                        r (cgexpr g env rhs ())
+                        (? (bad? r) 'bad
+                           (flo? ty)
+                            (ntmp g 'double @ tm
+                               (mkv 'double 'r0 (vfs lv + spush 'r0 + asflo g r + fstf g ty 'r4 tm 'f0
+                                                 + [[(uldop n) 'r0 'r4 tm]] + spop 'r1 + stal 'r1 0 n a 'r0)))
+                           (mkv ty 'r0 (vfs lv + spush 'r0 + asintt g r ty + spop 'r1 + cvt ty 'r0
+                                        + stal 'r1 0 n a 'r0))))))
               (flo? (vty lv0))                     ; a float/double store (value in f0; narrow if float)
                (fdd ?
                   (: b (vmb lv0) o (vmo lv0)      ; the face is the address: fstf reads through it
@@ -2284,6 +2335,13 @@
               (: ty (vty lv0)
                  stp (ptr? ty ? (tsz g <>ty) 1)
                  (? (arr? ty) 'bad
+                    (ua? lv0)                       ; a misaligned member: old by chunks, the step back by chunks
+                     (? (bitf? ty || flo? ty || pair? g ty || d128? ty) (uanl g)
+                        (: n (tsz g ty) a (vma lv0)
+                           (matv g lv0 @ lv
+                              (mkv ty 'r0 (vfs lv + ['(mov r1 r0)] + ldal 'r0 'r1 0 n a + cvt ty 'r0
+                                           + [['add 'r2 'r0 (stp * step)]] + (ty @ 'bool (cvt ty 'r2))
+                                           + stal 'r1 0 n a 'r2)))))
                     ; unit read-modify-write: the old field answers in r0, and the unit takes
                     ; ((old ^ new) & mask) << bitoff by xor, the mask two shifts
                     (bitf? ty)
@@ -2324,16 +2382,17 @@
        ; E1 op= E2 evaluates e1 once: the address moors in a frame temp and ('moor off ty), a calm lvalue,
        ; stands for it in the asn/bin desugar -- so every store lane rides unchanged
        ('rmw op dst rhs)
-        (matv g (clval g env dst) @ lv
+        (: lv0 (clval g env dst)
+           (matv g lv0 @ lv
            (bad? lv ? 'bad
               (vty lv @ ty
                  (arr? ty || stru? ty ? 'bad
                     (: off (ntmp g 'long)
-                       mo ['moor off ty]
+                       mo (ua? lv0 ? ['moor off ty (vma lv0)] ['moor off ty])
                        r (cgexpr g env ['asn mo ['bin op mo rhs]] ())
                        (bad? r ? 'bad
                           (mkv (vty r) (vreg r)
-                               (vfs lv + [['st 'r4 off 'r0]] + vfs r))))))))
+                               (vfs lv + [['st 'r4 off 'r0]] + vfs r)))))))))
        ('cast ty x)
         (: tgt ty
            fv (flo? tgt ? (cgdfold g e) ())         ; (double) of a constant expression is one
@@ -2715,12 +2774,14 @@
                                  xmc1 (f0 @ 'x (xmmc + 1) xmmc)
                                  i1 (f1 @ 'g gpc1 xmc1)
                                  (kls >as (i + 1) (gpc + gpn) (xmmc + xmn) ovc
-                                      (. [['p2 f0 i0 f1 i1] (tor0 g a + (a8? g ? cell2w push2w))]
+                                      (. [['p2 f0 i0 f1 i1] (tor0 g a + (a8? g ? (ldw2 g aty) push2w))]
                                             acc)))))
                        ; an a64 memory-class arg: copied into a temp of the caller's, whose address rides as a pointer
                        (a64m? g aty)
                         (: off (ntmp g aty)
-                           cp (tor0 g a + [['lea 'r1 'r4 off]] + bcopy g 0 (tsz g aty) () + [['lea 'r0 'r4 off]])
+                           cp (tor0 g a + [['lea 'r1 'r4 off]]
+                               + (sal? g ? (bcopya 0 (tsz g aty) (tal g aty)) (bcopy g 0 (tsz g aty) ()))
+                               + [['lea 'r0 'r4 off]])
                            (gpc < ngp g ? (kls >as (i + 1) (gpc + 1) xmmc ovc ([['g gpc] (cp + spush 'r0)] . acc))
                               (kls >as (i + 1) gpc xmmc (ovc + 1) ([['ov ovc] (cp + [['st 'sp (8 * ovc) 'r0]])] . acc))))
                        ; a memory-class struct arg fills n overflow slots, highest eightbyte pushed first (x64 pushes deepest first)
@@ -2754,7 +2815,7 @@
                        (: one (stru? aty ? (aone g aty))
                           wd2 (wd || one = 'sse)
                           aval (? (t32? g && one = 'sse) (tor0 g a + pld 'r0 0)           ; the t32 8B blob rides the r0:r1 pair
-                                  one (tor0 g a + '((ld r0 r0 0)))
+                                  one (tor0 g a + (salw? g aty ? (ldal 'r0 'r0 0 (tsz g aty) (tal g aty)) '((ld r0 r0 0))))
                                   wd (asflo g a + '((movqrx r0 f0)))
                                   (asintt g a aty))
                           ; a register arg rides a 16-byte cell (sp stays aligned while later args evaluate);
@@ -3093,7 +3154,7 @@
    ; a little-endian byte gather -- (T)p[0] | (T)p[1] << 8 | .. over consecutive bytes of one
    ; unsigned char pointer -- is one unaligned load where the machine takes one (x64, a64)
    (gather g env e)
-    (!(x64? g || a64? g) || abl? g 'gath ? ()
+    (!(x64? g || a64? g) || abl? g 'gath || sal? g ? ()
        (: (orl x) (x @ ('bin '| a b) (orl a + orl b) [x])
           (unc x) (x @ ('cast _ y) (unc y) x)
           (kn x) (knum g x @ k (two? k && charm? <k ? <k))
@@ -4419,6 +4480,70 @@
           (lone? f) (two? f && elem <f '(push pop) && elem <>f '(fp lr))
           r (go fs ())
           (any lone? r ? (nolane g ("a frame record split" + ontgt g)) r)))
+   ; -mbranch-protection (acle, the a key). pac-ret signs lr as the frame record takes it and
+   ; authenticates it as the record comes off: paciasp before each (frpush), autiasp after each
+   ; (frpop), both at the entry sp. under bti a table jump's targets land on bti j, and an
+   ; indirect jump goes by x16, which a bti c entry and paciasp both take from a br. the entry's
+   ; own bti c is the unit's to place (btic): only it knows whether a static's address is taken
+   (bp? g k) (a64? g && elem k <>(g 'mo))
+   ; -mstrict-align (a64): no access wider than its address is known to align. a member reached
+   ; through a packed struct wears that alignment on its face, and its loads and stores go by
+   ; the widest chunk it carries -- r2 gathers and r3 shifts, neither ever a face's base
+   (sal? g) (a64? g && <(g 'mo))
+   (lowb x) (x & (0 - x))                            ; the alignment an offset keeps (0 for 0)
+   ; the chunks of n bytes at an a-aligned address: (pos width) each, widest first
+   (alchunks n a)
+    (: (go p acc) (!(p < n) ? (rev acc)
+                     (: lb (lowb p) c (min (p = 0 ? a (min a lb)) (n - p))
+                        k (? (8 <= c) 8 (4 <= c) 4 (2 <= c) 2 1)
+                        (go (p + k) ([p k] . acc))))
+       (go 0 ()))
+   (ldal d b o n a)                                 ; n bytes at b+o into d, zero-extended
+    (foldl (acc \ [p k] \ acc + (p = 0 ? [[(uldop k) 'r2 b (o + p)]]
+                                    [[(uldop k) 'r3 b (o + p)] ['shl 'r3 (8 * p)] '(or r2 r2 r3)]))
+           () (alchunks n a) + [['mov d 'r2]])
+   (stal b o n a v)                                 ; the low n bytes of v to b+o; v stands
+    (foldl (acc \ [p k] \ acc + (p = 0 ? [[(k @ 1 'st1 2 'st2 4 'st4 'st) b o v]]
+                                    [['mov 'r3 v] ['shr 'r3 (8 * p)] [(k @ 1 'st1 2 'st2 4 'st4 'st) b (o + p) 'r3]]))
+           () (alchunks n a))
+   ; a member's face, marked where its offset and its base's alignment cannot carry its width
+   (sface g r fm v)
+    (!(sal? g) ? v
+       (: ty <>fm
+          ba (ua? r ? (vma r) (tal g (vty r)))
+          lb (lowb <fm) e (lb = 0 ? ba (min ba lb))
+          nd (stru? ty || arr? ty ? (tal g ty) (tsz g ty))
+          (e < nd ? (mkma ty (vmb v) (vmo v) (vfs v) e) v)))
+   (uanl g) (nolane g "under -mstrict-align, a misaligned member of this kind")
+   bp-paci '(raw (63 35 3 213))                     ; paciasp
+   bp-auti '(raw (191 35 3 213))                    ; autiasp
+   bp-btic '(raw (95 36 3 213))                     ; bti c
+   bp-btij '(raw (159 36 3 213))                    ; bti j
+   (bprot g fs)
+    (: pac (bp? g 'pac) bti (bp? g 'bti)
+       tl (bti ? (foldl (t \ f \ (two? f && <f = 'jmpt ? (foldl (t2 \ L \ pin t2 L 1) t (f 3)) t)) {} fs))
+       (go l acc)
+        (!(two? l) ? (rev acc)
+           (<l @ f
+              (? (pac && f = '(frpush)) (go >l (f . bp-paci . acc))
+                 (pac && f = '(frpop)) (go >l (bp-auti . f . acc))
+                 (bti && two? f && <f = 'label && peep tl (f 1) ()) (go >l (bp-btij . f . acc))
+                 (bti && two? f && <f = 'jmpr && nelem (f 1) '(r16 r17))
+                  (go >l (['jmpr 'r16] . ['mov 'r16 (f 1)] . acc))
+                 (go >l (f . acc)))))
+       (pac || bti ? (go fs ()) fs))
+   ; the entry's bti c, once the unit is laid: a fn another unit may call, or one whose address
+   ; is taken, lands its indirect calls on it -- unless paciasp, a landing pad itself, leads.
+   ; its slot is laid with the body, right behind the fn's own label
+   (btiat nm fs) (: L ['label (name nm)]
+                    (go l) (!(two? l) ? l (<l = L ? (<l . '(btislot) . >l) (<l . go >l)))
+                    (go fs))
+   (btic fm on)
+    (: (go l acc)
+        (!(two? l) ? (rev acc)
+           (<l = '(btislot) ? (go >l (on && <>l != bp-paci ? (bp-btic . acc) acc))
+              (go >l (<l . acc))))
+       (go fm ()))
    ; shrink-wrap: code the entry reaches without the frame runs without it. the prologue ((sub sp sp N)
    ; and the saves after it) moves onto the edges that leave that region, one stub each, and the
    ; region's exits drop their restores and (add sp sp N). the frame is needed by an sp operand, a
@@ -6097,6 +6222,11 @@
    (cgstore g env off ty val)                       ; store a scalar value expr into [r4+off]
     (cgexpr g env val () @ r
        (? (bad? r) 'bad
+          (sal? g && (lowb off @ b (0 < b && b < tsz g ty)))   ; a packed member: by its chunks
+           (? (pair? g ty || d128? ty) (uanl g)
+              (flo? ty) (ntmp g 'double @ tm (asflo g r + fstf g ty 'r4 tm 'f0 + [[(uldop (tsz g ty)) 'r0 'r4 tm]]
+                                                + stal 'r4 off (tsz g ty) (lowb off) 'r0))
+              (asintt g r ty + cvt ty 'r0 + stal 'r4 off (tsz g ty) (lowb off) 'r0))
           (flo? ty) (asflo g r + fstf g ty 'r4 off 'f0)
           (pair? g ty) (asll g r + pst 'r4 off)
           (asintt g r ty + cvt ty 'r0 + [[(stop ty) 'r4 off 'r0]])))
@@ -6261,6 +6391,7 @@
            (r @ 'no 'no [<r <>r <>e]))
        'str
         (nlab g ".S" @ l (pin g 'strs ([l <>e] . g 'strs), [l 0 ['ptr (gchar g)]]))
+       'lsym [(name <>e) 0 '(ptr void)]         ; a label's address, spelled by cgsdecl
        'var
         (peep (g 'fns) <>e () ? [(intern <>e) 0 ['ptr (fnty g <>e)]]
            (peep (g 'glob) <>e 0 @ en
@@ -6541,7 +6672,10 @@
     (: (one ps env2)
         (!(two? ps) ? [() env2]
            (: p <ps
-              name <p ty <>p init <>>p
+              name <p ty <>p
+              ; a &&L in the initializer names this function's label, so it is spelled now
+              (lfix x) (? !(two? x) x (<x == 'laddr) ['lsym (g 'fn + "." + <>x)] (map lfix x))
+              init (lfix <>>p)
               lbl (nlab g (g 'fn + "."))             ; `fn.N` -- the `.` bars any C-identifier collision
               (pin (g 'glob) lbl [lbl ty init],   ; a local data label (internal linkage): g 'statics,
                4 < #p ? (pin (g 'aligns) lbl (p 4)) 0,   ; its own aligned ask
@@ -6870,7 +7004,7 @@
                 ('switch ce items2) (nhc ce * w + pmxl items2 w tc9)   ; fallthrough: arms sum (conservative)
                 (('case || 'dflt) . _) 0
                 ('goto nm) (? (bwd nm) 99 ((peep lab nm 'no) == 'no) 99 0)
-                ('asm . _) 99
+                (('asm || 'igoto) . _) 99
                 0))
        (nhc e) (!(two? e) ? 0
                   (e @ ('call ('var nm) as) ((soft? nm ? (nhin nm) 1) + nhcl as)
@@ -7043,7 +7177,7 @@
                  (ust body a3))
              ('switch ce items) (ustl items <(erd ce acc 0))
              ('goto nm) (peep lab nm 'no @ o (sun acc ((o == 'no) ? univ o)))
-             ('asm . _) (sun acc univ)
+             (('asm || 'igoto) . _) (sun acc univ)
              acc)
        (ustl l acc) (!(two? l) ? acc (ustl >l (ust <l acc)))
        (ustp ps acc) (!(two? ps) ? acc (ustp >ps <(erd <>><ps acc 0)))
@@ -7159,7 +7293,7 @@
                             s9 ((o !== 'no) ? o (pin bwd nm 1, univ))   ; a target not yet passed: everything
                             sq (tick ()) (spn sq s9, s9))
               ('lbl nm) (tick () @ sq (spn sq out, abl? g 'glab ? () (pin lab nm out), out))
-              ('asm . _) (tick () @ sq (rec sq univ w9 (1 < w9 ? w9 0) w9, univ))   ; homing is off anyway (hasasm)
+              (('asm || 'igoto) . _) (tick () @ sq (rec sq univ w9 (1 < w9 ? w9 0) w9, univ))   ; homing is off anyway (hasasm)
               (tick () @ sq (spn sq out, out))))   ; nop tdef
        ; -- run: the counter descends from the prepass total; pre and lst disagreeing misses zero,
        ; and alive answers () --
@@ -7237,6 +7371,7 @@
      'fesc ()                  ; escape flag (the sibcall gate reads it)
      'inlining ()              ; statement-expression depth (stq's conservative wrapset)
      'hasasm ()                ; an asm statement pins it (homing off)
+     'ltaken ()                ; the labels a &&L names (a computed goto's targets)
      'fpin ()                  ; the frame link is asked for by name (unframe stands off)
      'cssv ()                  ; the callee-saved save forms (a cs grant pins)
      'sret ()                  ; the memory-return slot (the driver re-pins under sr6f)
@@ -7278,15 +7413,17 @@
                        (tor0 g r + fldf 'double (xmmreg 0) 'r0 0 +
                         (fldf 'double (xmmreg 1) 'r0 8 + epj))
                       (ipair? g rt)                                      ; a two-int struct returns as rax:rdx (a64 x0:x1)
-                       (tor0 g r + [['ld (ip2 g) 'r0 8] '(ld r0 r0 0)] + epj)
+                       (tor0 g r + (salw? g rt ? (ldal (ip2 g) 'r0 8 (tsz g rt - 8) (tal g rt) + ldal 'r0 'r0 0 8 (tal g rt))
+                                      [['ld (ip2 g) 'r0 8] '(ld r0 r0 0)]) + epj)
                       (aone g rt = 'sse)                             ; a small SSE aggregate: its eightbyte in xmm0
-                       (tor0 g r + fldf 'double (xmmreg 0) 'r0 0 + epj)
+                       (tor0 g r + (salw? g rt ? (ldal 'r0 'r0 0 (tsz g rt) (tal g rt) + [['movqxr (xmmreg 0) 'r0]])
+                                      (fldf 'double (xmmreg 0) 'r0 0)) + epj)
                       (aone g rt = 'int)                             ; a small int aggregate (a union rides here): rax
-                       (tor0 g r + '((ld r0 r0 0)) + epj)
+                       (tor0 g r + (salw? g rt ? (ldal 'r0 'r0 0 (tsz g rt) (tal g rt)) '((ld r0 r0 0))) + epj)
                       (amem? g rt || a64m? g rt)                         ; a memory return: fill the caller's temp through
                        (tor0 g r                                         ; the saved hidden pointer, and answer it in rax
                         + [['ld 'r1 'r4 (peep g 'sret 0)]]
-                        + bcopy g 0 (tsz g rt) () + '((mov r0 r1)) + epj)
+                        + (sal? g ? (bcopya 0 (tsz g rt) (tal g rt)) (bcopy g 0 (tsz g rt) ())) + '((mov r0 r1)) + epj)
                       (stru? rt || stru? (vty r))                        ; a mixed 16-byte pair, and every composite class
                        (nolane g ("no lane for returning this " + show (tsz g (stru? rt ? rt (vty r)))     ; a64 has no memory return yet
                                   + "-byte struct by value" + ontgt g))
@@ -7394,6 +7531,13 @@
                   [['label lc]] +
                   (c + [['label ld]]))))
           ('goto nm) [['jmp (name (g 'fn + "." + nm))]]
+          ; goto *e: a table jump whose targets are every label the function takes the address of
+          ('igoto e)
+           (: ls (map (nm \ name (g 'fn + "." + nm)) (g 'ltaken))
+              (? (wasm? g) (asmno g "a computed goto has no wasm lane")
+                 !(two? ls) (asmno g "a computed goto in a function that takes no label's address")
+                 (cgexpr g env e 'r0 @ r
+                    (bad? r ? 'bad (tor0 g r + [['jmpt 'r0 <ls ls]])))))
           ('lbl nm) [['label (name (g 'fn + "." + nm))]]
           ('asm . _) (cgasm g env s)
           ; a case/default label emits from the tablet atop g 'cases (the switch's pre-scan pinned
@@ -7768,6 +7912,7 @@
                        (lren x) (!(two? x) ? x
                                    (x @ ('lbl v) ['lbl (lm v)]
                                         ('goto v) ['goto (peep lm v v)]
+                                        ('laddr v) ['laddr (peep lm v v)]
                                         ('asm . _) (map lren x @ y (5 < #y ? (lset y 5 (map (v \ peep lm v v) (y 5))) y))
                                         (map lren x)))
                        jend ("`e" + show k)
@@ -8189,6 +8334,13 @@
        ; -- VLA prep: each site takes a pointer slot + a size slot, the size zeroed after the param
        ; spill (the decl lane reads 0 = never allocated) --
        _ (pins g 'fn <>f 'vslots {})
+       ; the labels whose address the body takes; a computed goto may land on any of them, so
+       ; homing stands off as for an asm (every name is live at the jump)
+       _ (: (lt x acc) (? !(two? x) acc
+                          (<x == 'laddr) (elem <>x acc ? acc (<>x . acc))
+                          (<x == 'igoto) (pin g 'hasasm 1, lt <>x acc)
+                          (lt >x (lt <x acc)))
+            (pin g 'ltaken (rev (lt (f 3) ()))))
        vzf (: (dscan prs a2)
                (atom? prs ? a2
                   (<><prs @ ty9
@@ -8798,7 +8950,7 @@
                      (cfoldir g irx))))))))))))))))
        ; the copy fold again after repack: a slot copied from a seat repack just minted forwards from it now
        (post irx) (deadst g (deaddef g (copyprop g (stld g (copyprop g (repack g irx))))))
-       (bad? irf ? irf (dp 'final (frrec g (swrap g (tailarm g (jmpm g (csdrop g (cskeep g (unhome g (jr0 g (rvunframe g (unframe g (hz4 g (laacse g (coal g (copyprop g (recse g (wpair g (dp 'post (post (dp 'deadlab (deadlab (swp irf))))))))))))))))))))))))
+       (bad? irf ? irf (dp 'final (bprot g (frrec g (swrap g (tailarm g (jmpm g (csdrop g (cskeep g (unhome g (jr0 g (rvunframe g (unframe g (hz4 g (laacse g (coal g (copyprop g (recse g (wpair g (dp 'post (post (dp 'deadlab (deadlab (swp irf)))))))))))))))))))))))))
 
    ; the data tail -> (dataforms nifforms imgforms extras bssforms rodataforms) | 'bad, extras ((name forms
    ; ro?) ..) per other named section in declaration order. love_nifs packs for the linker's __start_/__stop_
@@ -8962,7 +9114,8 @@
           'novol (two? xtra && 11 < #xtra && !(xtra 11))
           'xfns ()                                  ; (secname forms) per fn that named a section, newest first
           'fasecs ()                                ; a function's asm sections, one gas-top reading each
-          'romemo {}}                               ; a const candidate's image, laid once and read by both walks
+          'romemo {}                                ; a const candidate's image, laid once and read by both walks
+          'mo (two? xtra && 12 < #xtra ? (xtra 12) [() ()])}   ; the -m asks: [strict-align branch-protection]
        ; pass 0: every fn name (the sig table too: an mproto sibling has a sig but no proto form),
        ; and the inline table -- always_inline at any size, noinline never
        ainls (two? xtra && 5 < #xtra ? (xtra 5))
@@ -9018,7 +9171,7 @@
            sfns (two? xtra ? <xtra {})
            als (g 'alias || {})
            atg (foldl (a \ k \ als k . a) () (keys als))
-           (cut? nm) (peep sfns nm 'no != 'no && nelem nm atg)
+           (cut? nm) ((peep sfns nm 'no @ s (s != 'no && s != 'used)) && nelem nm atg)
            ; two tablets: a truth test on a form list reads its net, which lands on zero, so presence is its own mark
            laid {}                              ; fn name -> 1 once its body is laid
            lfm {}                               ; ..and the forms, for the ones that stayed in .text
@@ -9046,11 +9199,11 @@
                            (go (keys (g 'alias)) ()))
                      ; an aligned(N) fn, floored at 2 by the parity law
                      an (peep (g 'aligns) nm 2 @ a (a < 2 ? 2 a))
-                     fm (['align an] . al2 + r)
+                     fm (['align an] . al2 + (bp? g 'bti ? (btiat nm r) r))
                      ; a fn that named its section leaves .text for that stream, its align riding out as the section's grain
                      sc (peep (g 'sects) nm ())
                      _ (nm = "main" ? (pin g 'saw 1))
-                     _ (sc ? (pin g 'xfns ([sc fm an] . g 'xfns)) (pin lfm nm fm))
+                     _ (sc ? (pin g 'xfns ([sc fm an nm] . g 'xfns)) (pin lfm nm fm))
                      _ (pin laid nm 1)          ; before the walk: a recursive fn names itself
                      ; the wide relation's order, narrowed: tablet keys run in no fixed order, so
                      ; walking the narrow tablet's own would re-deal the layout
@@ -9102,6 +9255,22 @@
                     ; txt builds reversed (a cat per fn is quadratic) and the rev restores order
                     (: _ (pin g 'dropped
                           (foldl (a \ f \ <f = 'fn && !(laid <>f) ? (<>f . a) a) () <>ast))
+                       ; who may reach a fn by an indirect call: another unit, unless it is static;
+                       ; else an address taken in code (la), in data, in an asm, or by an alias
+                       tk (bp? g 'bti ?
+                             (: t {}
+                                _ (foldl (_ \ k \ g 'glob k @ e (two? e ? (cg-srefs <>>e t, 0) 0)) 0 (keys (g 'glob)))
+                                _ (foldl (_ \ s \ (pin t s 1, 0)) 0 atg)
+                                n {}
+                                _ (foldl (_ \ s \ (pin n (name s) 1, 0)) 0 (keys t))
+                                _ (foldl (_ \ x \ (pin n x 1, 0)) 0 (keys (cg-refs [(g 'asecs) (g 'fasecs)] {})))
+                                (lafs fm) (foldl (_ \ f \ (two? f && elem <f '(la lar lia) ? (pin n (f 2) 1, 0) 0)) 0 fm)
+                                _ (foldl (_ \ k \ (lafs (lfm k), 0)) 0 (keys lfm))
+                                _ (foldl (_ \ x \ (lafs (x 1), 0)) 0 (g 'xfns))
+                                n))
+                       (bton nm) (peep sfns nm 'no = 'no || peep tk (name nm) ())
+                       _ (bp? g 'bti ? (foldl (_ \ k \ (pin lfm k (btic (lfm k) (bton k)), 0)) 0 (keys lfm)))
+                       _ (pin g 'xfns (map (x \ [(x 0) (bp? g 'bti ? (btic (x 1) (bton (x 3))) (x 1)) (x 2)]) (g 'xfns)))
                        txt (foldl (a \ f \ (: u (<f = 'fn ? (lfm <>f))
                                             (two? u ? (revcat u a) a)))
                                   () <>ast)

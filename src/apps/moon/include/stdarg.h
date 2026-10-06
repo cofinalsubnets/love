@@ -16,8 +16,8 @@
 /* under a real gcc/clang (the freestanding kernel lane rides these headers too)
  * the va_list type is the COMPILER'S: its __builtin_va_* insist on their own
  * __va_list_tag, so the hand layouts below would be rejected, not just wrong.
- * mooncc predefines neither __GNUC__ nor __clang__, so this forks clean. */
-#if defined(__GNUC__) || defined(__clang__)
+ * mooncc claims __GNUC__ but lays its own, so it asks for __mooncc__ first. */
+#if (defined(__GNUC__) || defined(__clang__)) && !defined(__mooncc__)
 typedef __builtin_va_list __gnuc_va_list;
 #else
 #ifdef __aarch64__
@@ -64,7 +64,7 @@ typedef __gnuc_va_list va_list;
 #define va_start(ap, last) __builtin_va_start(ap, last)
 #define va_arg(ap, type)   __builtin_va_arg(ap, type)
 #define va_end(ap)         __builtin_va_end(ap)
-#if defined(__GNUC__) || defined(__clang__)
+#if (defined(__GNUC__) || defined(__clang__)) && !defined(__mooncc__)
 #define va_copy(dst, src)  __builtin_va_copy(dst, src)
 #else
 #define va_copy(dst, src)  ((dst)[0] = (src)[0])

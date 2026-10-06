@@ -21,8 +21,9 @@ m=$2
 name=test_ccwasm
 # the 128-bit lane (rv64's own refusals, since the lane is rv64's), plus whatever else
 # the wasm machine cannot yet carry. 160-rangeinit is not "not yet": a wasm return
-# address lives on the engine's call stack, where linear memory cannot reach it at all.
-unsupported="100-complex 102-bigstruct 111-int128 117-vastruct 151-w128fuzz 160-rangeinit"
+# address lives on the engine's call stack, where linear memory cannot reach it at all, and
+# 229-labelvalue likewise: a wasm label has no address to take or jump through.
+unsupported="100-complex 102-bigstruct 111-int128 117-vastruct 151-w128fuzz 160-rangeinit 229-labelvalue"
 
 d=$ho/cc-wasm
 rm -rf "$d"
