@@ -4,7 +4,8 @@
 //  base   the ground: a tray of w*h colours, or one colour
 //  mat    16 numbers, row-major: clip = mat * [x y z 1], gl's clip box (-w <= x,y,z <= w)
 //  verts  8 numbers a vertex: x y z  u v (texels)  r g b (1.0 the texel as it is)
-//  tris   4 a triangle: three vertex indices and a texture's index, -1 for none
+//  tris   4 a triangle: three vertex indices and a texture's index, -1 for none; verts
+//         and tris may be lists of batches, pairwise, each batch's tris its own verts
 //  texs   a list of textures, each an [h w] tray of colours (one below 0 is a hole) or a
 //         list of them, each level half the last
 //  opts   fog r g b, fog near, fog far (view depth), flags: 1 affine, 2 snap, 4 dither, 8 cull
@@ -15,7 +16,7 @@ enum { rz_affine = 1, rz_snap = 2, rz_dither = 4, rz_cull = 8, rz_lv = 8 };
 struct rz_v { flo_t x, y, z, w, a[5]; };
 struct rz_tex { intptr_t const *px; intptr_t w, h; };
 struct rz {
- intptr_t W, H, flags, nv;
+ intptr_t W, H, flags;
  flo_t const *m;
  flo_t fog[5];
  intptr_t *out;
@@ -198,11 +199,30 @@ static void rz_draw(struct rz *r, struct tray *vt, intptr_t const ix[3], struct 
 static flo_t rz_opt(word o, uintptr_t i, flo_t d) {
  return galaxyp(o) && i < tray_nelem(tray(o)) ? tray_get_flo(tray(o), i) : d; }
 
+// a batch: verts and tris both trays, or both lists of them pairwise, each list's tris
+// counting from its own verts
+static int rz_ok(word v, word t) {
+ return galaxyp(v) && galaxyp(t) && !(tray_nelem(tray(v)) % 8) && !(tray_nelem(tray(t)) % 4); }
+static int rz_batches(word v, word t) {
+ if (rz_ok(v, t)) return 1;
+ for (; chainp(v) && chainp(t); v = B(v), t = B(t)) if (!rz_ok(A(v), A(t))) return 0;
+ return v == ZeroPoint && t == ZeroPoint; }
+
+static void rz_batch(struct rz *r, struct tray *vt, struct tray *tt, word texs) {
+ intptr_t const nv = (intptr_t) (tray_nelem(vt) / 8);
+ uintptr_t const nt = tray_nelem(tt) / 4;
+ intptr_t ct = -1;   // the texture the last triangle used, its levels still in r->lv
+ for (uintptr_t i = 0; i < nt; i++) {
+  intptr_t const ix[3] = { tray_get_int(tt, 4 * i), tray_get_int(tt, 4 * i + 1), tray_get_int(tt, 4 * i + 2) },
+                 t = tray_get_int(tt, 4 * i + 3);
+  if (ix[0] < 0 || ix[1] < 0 || ix[2] < 0 || ix[0] >= nv || ix[1] >= nv || ix[2] >= nv) continue;
+  if (t != ct) ct = t, r->nlv = t < 0 ? 0 : rz_levels(texs, t, r->lv);
+  rz_draw(r, vt, ix, r->lv, r->nlv); } }
+
 love_noinline static struct g *host_raster(struct g *g) {
  word *a = g->sp;
  // (facets w h base mat verts tris texs opts)
- if (!(a[0] & a[1] & 1) || !galaxyp(a[3]) || !galaxyp(a[4]) || !galaxyp(a[5])
-     || tray_nelem(tray(a[3])) < 16 || tray_nelem(tray(a[4])) % 8 || tray_nelem(tray(a[5])) % 4) {
+ if (!(a[0] & a[1] & 1) || !galaxyp(a[3]) || tray_nelem(tray(a[3])) < 16 || !rz_batches(a[4], a[5])) {
   a[0] = ZeroPoint; return g; }
  intptr_t const W = getcharm(a[0]), H = getcharm(a[1]);
  if (W < 1 || H < 1 || W > 4096 || H > 4096) { a[0] = ZeroPoint; return g; }
@@ -222,19 +242,54 @@ love_noinline static struct g *host_raster(struct g *g) {
  r.m = m;
  for (uintptr_t i = 0; i < 5; i++) r.fog[i] = rz_opt(a[7], i, 0);
  r.flags = (intptr_t) rz_opt(a[7], 5, 0);
- struct tray *vt = tray(a[4]), *tt = tray(a[5]);
- r.nv = (intptr_t) (tray_nelem(vt) / 8);
- uintptr_t const nt = tray_nelem(tt) / 4;
- intptr_t ct = -1;   // the texture the last triangle used, its levels still in r.lv
- for (uintptr_t i = 0; i < nt; i++) {
-  intptr_t const ix[3] = { tray_get_int(tt, 4 * i), tray_get_int(tt, 4 * i + 1), tray_get_int(tt, 4 * i + 2) },
-                 t = tray_get_int(tt, 4 * i + 3);
-  if (ix[0] < 0 || ix[1] < 0 || ix[2] < 0 || ix[0] >= r.nv || ix[1] >= r.nv || ix[2] >= r.nv) continue;
-  if (t != ct) ct = t, r.nlv = t < 0 ? 0 : rz_levels(a[6], t, r.lv);
-  rz_draw(&r, vt, ix, r.lv, r.nlv); }
+ if (galaxyp(a[4])) rz_batch(&r, tray(a[4]), tray(a[5]), a[6]);
+ else for (word v = a[4], t = a[5]; chainp(v); v = B(v), t = B(t)) rz_batch(&r, tray(A(v)), tray(A(t)), a[6]);
  a[0] = word(fr);
  return g; }
 static lvm(lvm_raster) { LvmCallp(g, 7, host_raster) }
 
-static union u const nif_facets[] = {{lvm_cur}, {.x = putcharm(8)}, {lvm_raster}, {lvm_ret0}};
+// (frame-bytes f kind s): a frame of colours as bytes, each pixel an s by s square --
+// kind 0 r g b, 1 b g r x (an xrgb word, little-endian), 2 the r g b in base64
+static uintptr_t rz_out(struct tray *f, intptr_t kind, intptr_t s, uint8_t *o) {
+ static char const abc[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+ uintptr_t const H = f->rank == 2 ? f->shape[0] : 1, W = f->rank == 2 ? f->shape[1] : f->shape[0];
+ uintptr_t const per = kind == 1 ? 4 : 3, raw = W * H * per * (uintptr_t) (s * s);
+ if (!o) return kind == 2 ? (raw + 2) / 3 * 4 : raw;
+ uint32_t acc = 0, got = 0;
+ uintptr_t at = 0;
+ for (uintptr_t y = 0; y < H * (uintptr_t) s; y++)
+  for (uintptr_t x = 0; x < W * (uintptr_t) s; x++) {
+   uint32_t const c = (uint32_t) tray_get_int(f, y / (uintptr_t) s * W + x / (uintptr_t) s);
+   uint8_t const b[4] = { (uint8_t) (c >> 16), (uint8_t) (c >> 8), (uint8_t) c, 0 },
+                 x4[4] = { (uint8_t) c, (uint8_t) (c >> 8), (uint8_t) (c >> 16), 0 };
+   for (uintptr_t k = 0; k < per; k++) {
+    uint8_t const v = kind == 1 ? x4[k] : b[k];
+    if (kind != 2) { o[at++] = v; continue; }
+    acc = acc << 8 | v;
+    if (++got == 3) {
+     o[at++] = (uint8_t) abc[acc >> 18 & 63], o[at++] = (uint8_t) abc[acc >> 12 & 63];
+     o[at++] = (uint8_t) abc[acc >> 6 & 63], o[at++] = (uint8_t) abc[acc & 63], acc = got = 0; } } }
+ if (got) {
+  acc <<= 8 * (3 - got);
+  o[at++] = (uint8_t) abc[acc >> 18 & 63], o[at++] = (uint8_t) abc[acc >> 12 & 63];
+  o[at++] = got == 2 ? (uint8_t) abc[acc >> 6 & 63] : '=', o[at++] = '='; }
+ return at; }
+
+love_noinline static struct g *host_frame_bytes(struct g *g) {
+ word *a = g->sp;
+ if (!galaxyp(a[0]) || tray(a[0])->rank > 2 || !(a[1] & a[2] & 1)) { a[0] = ZeroPoint; return g; }
+ intptr_t const kind = getcharm(a[1]), s = getcharm(a[2]);
+ if (kind < 0 || kind > 2 || s < 1 || s > 16) { a[0] = ZeroPoint; return g; }
+ uintptr_t const n = rz_out(tray(a[0]), kind, s, 0);
+ if (!ok(g = have(g, str_width(n)))) return g;
+ a = g->sp;
+ struct str *o = ini_str(bump(g, str_width(n)), n);
+ rz_out(tray(a[0]), kind, s, (uint8_t*) txt(o));
+ a[0] = word(o);
+ return g; }
+static lvm(lvm_frame_bytes) { LvmCallp(g, 2, host_frame_bytes) }
+
+static union u const nif_facets[] = {{lvm_cur}, {.x = putcharm(8)}, {lvm_raster}, {lvm_ret0}},
+  nif_frame_bytes[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_frame_bytes}, {lvm_ret0}};
 LvNif("facets", nif_facets, NULL);
+LvNif("frame-bytes", nif_frame_bytes, NULL);

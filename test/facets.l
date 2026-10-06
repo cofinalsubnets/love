@@ -1,7 +1,8 @@
 ; src/love/raster.c's facets: triangles onto a frame. a shared edge is drawn once, the nearer
 ; face stands whichever comes first, a texture laid a texel a pixel comes back as it was, and
 ; its level follows how many texels a pixel crosses. the loop holds more each round, so the
-; collections the frame asks for move it under the heap (make test_gcstress)
+; collections the frame asks for move it under the heap (make test_gcstress). frame-bytes
+; spells a frame for a window or a terminal
 (: (fc-flat l) (foldr (+) () l)
    (fc-g l) (fc-flat l @ f (gem-tray [(tally f)] f))
    (fc-z l) (fc-flat l @ f (star-tray [(tally f)] f))
@@ -37,6 +38,12 @@
    rp (facets 8 1 0 fc-id (fc-g [(fc-vx -1 -1 0 0 0 0 0 0) (fc-vx 1 -1 0 0 0 1 0 0) (fc-vx 1 3 0 0 0 1 0 0)
                                   (fc-vx -1 -1 0 0 0 0 0 0) (fc-vx 1 3 0 0 0 1 0 0) (fc-vx -1 3 0 0 0 0 0 0)])
               (fc-z [[0 1 2 -1] [3 4 5 -1]]) () ())
+   ; the two halves as two batches, each counting from its own verts
+   bt (facets 8 6 7 fc-id [(fc-g [(fc-vx -1 -1 0 0 0 1 0 0) (fc-vx 1 -1 0 0 0 1 0 0) (fc-vx 1 1 0 0 0 1 0 0)])
+                          (fc-g [(fc-vx -1 -1 0 0 0 0 0 1) (fc-vx 1 1 0 0 0 0 0 1) (fc-vx -1 1 0 0 0 0 0 1)])]
+                         [(fc-z [[0 1 2 -1]]) (fc-z [[0 1 2 -1]])] () ())
+   ; a frame as bytes: rgb, xrgb words, rgb in base64; doubled
+   px2 (star-tray [1 2] [1193046 16777215])
    (fc-go k keep bad)
     (k = 0 ? bad
        (facets 64 48 7 fc-id sq (fc-z [[0 1 2 -1] [3 4 5 -1]]) () () @ f
@@ -56,4 +63,11 @@
       (facets 0 4 7 fc-id sq (fc-z [[0 1 2 -1]]) () () = ())
       (facets 4 4 7 fc-id (fc-g [[1.0 2.0 3.0]]) (fc-z [[0 1 2 -1]]) () () = ())
       (fc-n (facets 4 4 7 fc-id sq (fc-z [[0 1 9 -1]]) () ()) 7 = 16)
+      (show bt = show ab)
+      (facets 8 6 7 fc-id [sq] [] () () = ())
+      (frame-bytes px2 0 1 = "\x12\x34\x56\xff\xff\xff")
+      (frame-bytes px2 1 1 = "\x56\x34\x12\x00\xff\xff\xff\x00")
+      (frame-bytes px2 2 1 = "EjRW////")
+      (frame-bytes px2 0 2 = "\x12\x34\x56\x12\x34\x56\xff\xff\xff\xff\xff\xff\x12\x34\x56\x12\x34\x56\xff\xff\xff\xff\xff\xff")
+      (frame-bytes px2 3 1 = ())
       (fc-go 100 () 0 = 0)))
