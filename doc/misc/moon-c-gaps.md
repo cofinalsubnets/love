@@ -866,12 +866,12 @@ below, 251 of those 332 re-run so far: **145 compile**, and the rest refuse by n
   and its `ldp`, so `[fp]` is the caller's fp and `[fp+8]` the return address, which the
   kernel's unwinder reads. The area stays 32 bytes, so no fp-relative offset moved. They were
   two padded pushes, which put the lr at `[fp+16]`: wrong code, silent. gen's `frrec` fuses
-  the pair after every IR pass, and a lone fp or lr push left over refuses (225-framerecord.c,
+  the pair after every IR pass, and a lone fp or lr push left over refuses (231-framerecord.c,
   native on an a64 host).
 - **a gas or holo scare is a refusal**: a function's asm, and the file-scope or `.S` text,
   read under a trap. What used to print `internal error` now names the line's piece.
 - **Q, Qo, +Q, =Q**: a64's base-register memory operand is the `[xN]` "m" already spells;
-  `"rZ"` always takes a register (226-a64asm.c).
+  `"rZ"` always takes a register (232-a64asm.c).
 - **system registers**: about a hundred by name, any case (`CurrentEL`), and gas's generic
   `s3_0_c15_c0_4`; `ic ialluis` and the tlbi/dc operations the kernel names. Every word is
   llvm-mc's (test/holo/golden.l).
@@ -883,6 +883,8 @@ below, 251 of those 332 re-run so far: **145 compile**, and the rest refuse by n
   laid after its section's own forms (a function's goes to .text); and `.org . - (a-b) + (c-d)`,
   the alternatives' size check, which refuses when it would move back. A directive's name
   ends where its identifier does (a `.S` spells `.long((x)-.)` unspaced).
+- **`.quad sym+k - .`**, the jump table's key: an eight-byte word measured from its own place,
+  R_AARCH64_PREL64 in the object and applied by our linker (233-asmprel64.c).
 - **cpp**: `#` of a stray `\\` outside a literal is one backslash once re-lexed (C11
   6.10.3.2). Every `__emit_inst` through `mrs_s`/`msr_s` carried a stray `\` (227-stringizebs.c).
 
