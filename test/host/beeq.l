@@ -385,9 +385,10 @@
       (bq-in (note "dan") ": v2 is in") !(bq-in (note "dan") "changed bee"))
    0)
 
-; --- a session told once when its binary is replaced -----------------------------------------
-; a server run from a copy of love: the copy touched to a new time, the next call carries one
-; notice from bee and the one after none; touched again, it is told again
+; --- a session told once when its binary is replaced by one carrying other bee source --------
+; a server run from a copy of love: the copy touched to a new time, the same bee, tells nothing;
+; laid over by a binary whose /love/src says otherwise, the next call carries one notice from bee
+; and the one after none
 (: w (bq-box 'mcp 'w) d (w 'dir + "/self") _ (mkdir d 493) exe (d + "/love")
    _ (hark ["cp" bq-love exe])
    s (: pi (pipe 0) po (pipe 0) nul (openfd "/dev/null" 2)
@@ -406,14 +407,15 @@
    t1 (inbox 1)
    _ (hark ["touch" "-d" "2030-01-02 03:04" exe])
    t2 (inbox 2) t3 (inbox 3)
-   _ (hark ["touch" "-d" "2031-01-02 03:04" exe])
+   _ (bq-put (d + "/other") "#!/bin/sh\necho another bee\n") _ (hark ["chmod" "755" (d + "/other")])
+   _ (hark ["mv" (d + "/other") exe])
    t4 (inbox 4) t5 (inbox 5)
    _ (close (s 1)) _ (bq-reap <s) _ (close (s 2))
    _ (test
       (n-told t1 = 0)
-      (n-told t2 = 1) (bq-in t2 ("bee was updated: " + exe + " was replaced")) (bq-in t2 "never mid-gate")
-      (n-told t3 = 0)
-      (n-told t4 = 1) (n-told t5 = 0))
+      (n-told t2 = 0) (n-told t3 = 0)
+      (n-told t4 = 1) (bq-in t4 ("bee was updated: " + exe + " was replaced")) (bq-in t4 "never mid-gate")
+      (n-told t5 = 0))
    0)
 
 

@@ -552,14 +552,19 @@
                      + ">\n" + m 1 + "\n</message>\n"))
              "" ms)
 
-     ; --- the binary this bee runs, known by its stat (size, mtime, inode) at start. a build laid
-     ; over it is told once, a message from bee, or a note on the full screen; the stat at most
-     ; every BEE_SELF_WATCH seconds, 30 unless set ---
+     ; --- the binary this bee runs, known by its stat (size, mtime, inode) at start and by the bee
+     ; source it carries (/love/src). a build laid over it that carries other bee source is told
+     ; once, a message from bee, or a note on the full screen; a relink with the same bee is not.
+     ; the stat at most every BEE_SELF_WATCH seconds, 30 unless set ---
      bee-restart ("at the next convenient point -- between tasks, never mid-gate -- "
                   + "resuming in the same directory, so .mcp.json loads the new bee.")
      bee-landed ("this landing changed bee: every live session restarts " + bee-restart)
      bee-served "src/apps/bee.l src/apps/locks.l src/apps/hosts.l src/apps/seals.l src/apps/hive.l src/apps/mitty/chat.l src/apps/mitty/avatar.l"   ; what bee runs
      (self-id _) (: s (string? bee-self ? (stat bee-self)) (two? s ? (show [(s 0) (s 3) (s 8)])))
+     ; the bee source a binary carries, hashed
+     (self-src exe)
+      (: o (lush-out (sh-quote exe + " kore cat" + foldl (\ a f (a + " /love/" + f)) "" (words bee-served) + " 2>/dev/null"))
+         (string? o && 0 < #o ? (sha256 o) ""))
      bee-selfw {'id (self-id 0) 'at (clock 0)}
      bee-selfwait (: w (getenv "BEE_SELF_WATCH") (string? w && 0 < #w ? (digits w) 30))
      (utc-minute t)
@@ -570,10 +575,14 @@
       (: now (clock 0) id0 (bee-selfw 'id)
          (? (!(string? id0) || now - (bee-selfw 'at) < bee-selfwait * 1000) ()
             (: _ (pin bee-selfw 'at now) id (self-id 0)
+               ; the first look, while the binary is still the one started, takes its source
+               _ (? (id = id0 && !(string? (bee-selfw 'src))) (pin bee-selfw 'src (self-src bee-self)) ())
                (? (!(string? id) || id = id0) ()
-                  (: _ (pin bee-selfw 'id id) s (stat bee-self)
-                     ("bee was updated: " + bee-self + " was replaced (built " + utc-minute ((s 3) // 1000000000)
-                      + "). this session still runs the old bee and works as before; restart " + bee-restart))))))
+                  (: _ (pin bee-selfw 'id id) src (self-src bee-self) was (bee-selfw 'src) _ (pin bee-selfw 'src src)
+                     s (stat bee-self)
+                     (? (0 < #was && src = was) ()
+                        ("bee was updated: " + bee-self + " was replaced (built " + utc-minute ((s 3) // 1000000000)
+                         + "). this session still runs the old bee and works as before; restart " + bee-restart)))))))
      ; told once: to the full screen's note when it set 'tell, else as mail from bee. a bee's
      ; own mcp child (BEE_AS) leaves it to the bee
      (self-tell _)
