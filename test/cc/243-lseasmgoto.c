@@ -30,7 +30,7 @@ static u32 ldclrb(unsigned char *p) {
 }
 static int vis(int x) {
   int r;
-  asm goto("mov %w0, %w1\n add %w0, %w0, #7\n cbz %w1, %l[zero]" : "=r"(r) : "r"(x) : : zero);
+  asm goto("mov %w0, %w1\n add %w0, %w0, #7\n cbz %w1, %l[zero]" : "=&r"(r) : "r"(x) : : zero);
   return r + 100;
 zero:
   return r;
@@ -42,7 +42,7 @@ static u32 lse32(u32 *p) { p[0] |= 6; p[1] = 40; p[2] = 40; return 9; }
 static u32 ldclrb(unsigned char *p) { u32 r = *p; *p &= ~3; return r; }
 static int vis(int x) {
   int r;
-  asm goto("movl %1, %0\n addl $7, %0\n testl %1, %1\n jz %l[zero]" : "=r"(r) : "r"(x) : "cc" : zero);
+  asm goto("movl %1, %0\n addl $7, %0\n testl %1, %1\n jz %l[zero]" : "=&r"(r) : "r"(x) : "cc" : zero);
   return r + 100;
 zero:
   return r;
