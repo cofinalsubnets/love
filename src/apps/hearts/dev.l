@@ -70,7 +70,7 @@
    (update f)
     (: p (open f "r")
        _ (hot? p ? 0 (gone ("cannot read " + f)))
-       _ (trial ? (tell "an update waits until this slot is well", quit 2) 0)
+       _ (string ((state 0) 0) = slot ? 0 (tell "an update waits until this slot is well", quit 2))
        pub (uread "/etc/hearts.pub" @ r (two? r ? <>r (gone "no /etc/hearts.pub")))
        buf (pins {} 'b "")
        ; n bytes off f, fewer only where it ends
