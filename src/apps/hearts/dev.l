@@ -8,8 +8,11 @@
 ;   love dev.l restart | off
 ; the chooser (src/inle/uefi/slot.c) spends a trial before it boots, so this side only commits.
 ; slot a's root is /dev/vda2 and b's /dev/vda3; /boot/hearts.st is active, trial, newline.
-; an update: "hearts-update 1\n", the kernel's, root's and cmd's lengths (u64 le), the three,
-; then the ed25519 signature of that much's sha256 under /etc/hearts.pub, and whatever padding.
+; an update: a 4K head -- "hearts-update 2\n", then for the kernel, the root and the cmd each its
+; enc (1 deflated, 0 stored), its length here and once inflated (u64 le) and its raw bytes' sha256,
+; and right after, those bytes' ed25519 signature under /etc/hearts.pub -- then the parts back to
+; back. it streams: the head is checked before anything is written, each part as it goes to its
+; place, and the slot is offered to the next boot only once every part matched.
 (borrow 'bytes)
 (borrow 'posix)
 (: argv cmdline
@@ -44,27 +47,59 @@
              (tell ("slot " + slot + " never said it was well: back to slot " + string (s 0)),
               sync 0, reboot 0))))
 
-   ; the archive's own lengths say where it ends: a disk carrying one pads it out
+   ; a part poured through w as it is read off rd, inflated where it was deflated: 1 when its
+   ; raw bytes are as many as the head says and hash as it says
+   (pour rd pt w)
+    (pt @ [enc len raw sha]
+      (: h (cask 105)
+         _ (sha256-init h)
+         z (enc = 1 ? (inflate-new 0) 0)
+         st (pins {} 'n 0 'end (enc = 0) 'bad 0)
+         (out s) (? (st 'n + #s > raw) (pin st 'bad 1)
+                    (sha256-feed h s, w s, pin st 'n (st 'n + #s)))
+         (take c) (? (enc = 0) (out c)
+                     (inflate-feed z c @ r
+                       (? (string? r) (out r)
+                          (two? r) (out <r, pin st 'end 1)
+                          (pin st 'bad 1))))
+         (go left) (? (left = 0 || st 'bad) 0
+                      (rd (min left 65536) @ c (#c = 0 ? (pin st 'bad 1) (take c, go (left - #c)))))
+         _ (go len)
+         (!(st 'bad) && st 'end && st 'n = raw && hex2b (sha256-done h) = sha)))
+
    (update f)
-    (: u (uread f @ r (two? r ? <>r (gone ("cannot read " + f))))
-       hd "hearts-update 1\n"
+    (: p (open f "r")
+       _ (hot? p ? 0 (gone ("cannot read " + f)))
+       _ (trial ? (tell "an update waits until this slot is well", quit 2) 0)
        pub (uread "/etc/hearts.pub" @ r (two? r ? <>r (gone "no /etc/hearts.pub")))
-       h0 #hd
-       kl (#u >= h0 + 24 ? (rdle u h0 8) 0)
-       rl (#u >= h0 + 24 ? (rdle u (h0 + 8) 8) 0)
-       cl (#u >= h0 + 24 ? (rdle u (h0 + 16) 8) 0)
-       k0 (h0 + 24) r0 (k0 + kl) c0 (r0 + rl) n (c0 + cl)
-       ok (n + 64 <= #u && snip u 0 h0 = hd && ed-verify pub (hex2b (sha256 (snip u 0 n))) (snip u n (n + 64)) = 1)
+       buf (pins {} 'b "")
+       ; n bytes off f, fewer only where it ends
+       (rd n)
+        (: (go b) (#b >= n ? (pin buf 'b (snip b n #b), snip b 0 n)
+                     (see p @ c (c < 0 ? (pin buf 'b "", b) (unsee p c, go (b + chug p)))))
+           (go (buf 'b)))
+       hd (rd 4096)
+       hl (16 + 3 * 56)
+       (part i) ((16 + i * 56) @ o [(rdle hd o 8) (rdle hd (o + 8) 8) (rdle hd (o + 16) 8) (snip hd (o + 24) (o + 56))])
+       ok (#hd = 4096 && snip hd 0 16 = "hearts-update 2\n" && ed-verify pub (snip hd 0 hl) (snip hd hl (hl + 64)) = 1)
        (? !ok (tell ("refused " + f + ": not signed by this device's key"), quit 2)
           (: to (other slot)
-             p (open (rootdev to) "w")
-             _ (hot? p ? (say p (snip u r0 c0), close p) (gone ("cannot open " + rootdev to)))
              _ (mkdir ("/boot/" + to) 493)
-             _ (uwrite ("/boot/" + to + "/Image") (snip u k0 r0) ? 0 (gone "cannot write the Image"))
-             _ (uwrite ("/boot/" + to + "/cmd") (snip u c0 n + " root=" + rootdev to + "\n")
-                ? 0 (gone "cannot write the cmd"))
-             (setstate (string ((state 0) 0) + to + "\n"),
-              tell ("update " + f + " written to slot " + to + ", tried at the next boot")))))
+             kp (open ("/boot/" + to + "/Image") "w")
+             _ (hot? kp ? 0 (gone "cannot write the Image"))
+             k (pour rd (part 0) (s \ say kp s))
+             _ (close kp)
+             rp (open (rootdev to) "w")
+             _ (hot? rp ? 0 (gone ("cannot open " + rootdev to)))
+             r (pour rd (part 1) (s \ say rp s))
+             _ (close rp)
+             cb (pins {} 'c "")
+             c (pour rd (part 2) (s \ pin cb 'c (cb 'c + s)))
+             (? !(k && r && c) (tell ("refused " + f + ": a part is not what its head signed"), quit 2)
+                ((uwrite ("/boot/" + to + "/cmd") (cb 'c + " root=" + rootdev to + "\n") ? 0
+                    (gone "cannot write the cmd")),
+                 setstate (string ((state 0) 0) + to + "\n"),
+                 tell ("update " + f + " written to slot " + to + ", tried at the next boot"))))))
 
    verb (#argv > 2 ? (argv 2) "")
    (verb @
