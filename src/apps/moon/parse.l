@@ -145,6 +145,52 @@
    ; cleanup is not decoration: it runs code at every exit from the scope, which a skip drops
    (cleanup? a b) (attrin a b "cleanup" || attrin a b "__cleanup__")
    (nocleanup ts) (blame ts "__attribute__((cleanup)) is not carried out")
+   ; gcc's mode(M): the declared type laid at M's width, keeping its signedness. the scan reads
+   ; the depth-0 attribute runs from a declaration's head to its first depth-0 `;` or `{`, or the `)`
+   ; or type-led `,` closing a parameter. -> M | 'many (it sits on a declaration of several
+   ; declarators) | 'deriv (on a pointer, array or function declarator) | ()
+   (modeat ps ts)
+    (: (inatt s d) (atom? s ? ()
+                     (? (peekp s "(") (inatt >s (d + 1))
+                        (peekp s ")") (d < 2 ? () (inatt >s (d - 1)))
+                        ((idv? <s "mode" || idv? <s "__mode__") && peekp >s "(" && idat? >>s)
+                         (tkv <>>s @ nm (nm @ ("__" + m + "__") m nm))
+                        (inatt >s d)))
+       ; m: the mode met so far; c: a declarator-list `,` passed; v: a derived declarator
+       (go s d m c v)
+        (: fv (? !m () c 'many v 'deriv m)
+           (atom? s ? fv
+              (<s @ t
+                 (? (d < 1 && (tp? t ";" || tp? t "{" || tp? t ")")) fv
+                    (d < 1 && tp? t "," && (tyat? ps >s || peekp >s "...")) fv
+                    (d < 1 && tp? t ",") (go >s d m 1 v)
+                    (d < 1 && tp? t "=") (go (pinit >s) d m c v)
+                    (d < 1 && (idv? t "__attribute__" || idv? t "__attribute") && peekp >s "(")
+                     (inatt >s 0 @ m2 (go (skipbal >>s 1) d (string? m2 ? m2 m) c v))
+                    (tp? t "(" || tp? t "[") (go >s (d + 1) m c (d < 1 || v))
+                    (tp? t ")" || tp? t "]") (go >s (d - 1) m c v)
+                    (go >s d m c (d < 1 && tp? t "*" || v))))))
+       ; an initializer's tokens, to the depth-0 `,` or `;` that ends it
+       (pinit s) (: (sk s d) (? (atom? s) s
+                                (d < 1 && (peekp s "," || peekp s ";" || peekp s ")")) s
+                                (peekp s "(" || peekp s "[" || peekp s "{") (sk >s (d + 1))
+                                (peekp s ")" || peekp s "]" || peekp s "}") (sk >s (d - 1))
+                                (sk >s d))
+                    (sk s 0))
+       (go ts 0 () () ()))
+   ; the type mode M lays ty at -> a type, or a refusal's sentence
+   (modety ps m ty)
+    (: uns (elem ty '(uchar cchar ushort uint ulong ullong u128))
+       w (m @ ("QI" || "byte") 1 "HI" 2 "SI" 4 "DI" 8 "TI" 16 ("word" || "pointer") (psword ps) 0)
+       (? (m = "SF" && elem ty '(float double)) 'float
+          (m = "DF" && elem ty '(float double)) 'double
+          (w < 1) ("__attribute__((mode(" + m + "))) is not carried out")
+          !(elem ty '(char schar cchar uchar short ushort int uint long ulong llong ullong i128 u128))
+           ("__attribute__((mode(" + m + "))) on a non-integer type is not carried out")
+          (w = 16 && pst32? ps) ("__attribute__((mode(" + m + "))) is not carried out on a 32-bit target")
+          (w @ 1 (uns ? 'uchar 'schar) 2 (uns ? 'ushort 'short) 4 (uns ? 'uint 'int)
+             8 (? (pst32? ps) (uns ? 'ullong 'llong) uns 'ulong 'long)
+             (uns ? 'u128 'i128))))
    ; gcc's `__label__ a, b;` declares local labels: each name takes a fresh spelling for the
    ; rest of its block (ps 'lren, restored with the block's shadows), so a macro that lays
    ; one twice in a function lays two labels. -> (rest shadows)
@@ -811,7 +857,19 @@
    ; scope it answers the bare name rather than declaring a fresh incomplete tag as C says,
    ; so `struct Node *p;` in a body still means the file-scope Node. accepts more, never less.
    (tagref ps nm) (peep (ps 'tags) nm nm)
+   ; ps 'lmode: a leading attribute run's mode, which ptop and pstmt skip before the
+   ; declaration reads, taken by the first base type after it
    (pbty ps ts0)
+    (peep ps 'lmode () @ lm
+     (lm != () ? (pin ps 'lmode ()) 0,
+      pbty0 ps ts0 @ r
+       (atom? r ? r
+          (modeat ps ts0 @ m0 (m0 = () ? lm m0) @ m
+             (? (m = ()) r
+                (m = 'many) (clblame "__attribute__((mode)) on a declaration of several declarators is not carried out")
+                (m = 'deriv) (clblame "__attribute__((mode)) on a pointer, array or function declarator is not carried out")
+                (modety ps m <r @ ty (string? ty ? (clblame ty) (ty . >r))))))))
+   (pbty0 ps ts0)
     (pquals ts0 @ ts
      (atom? ts ? ()
        (<ts @ t
@@ -864,22 +922,34 @@
                  ; by ABI -- AAPCS32 wants the smallest type holding every enumerator (gcc's
                  ; -fshort-enums), every other target says int, and pk (a trailing packed) asks the
                  ; same. past the 32-bit word both widen, or a load would truncate the enumerator.
-                 (ety pos lo hi pk)
+                 (ety pos lo hi pk m)
                   (: wide (? (pos && 4294967295 < hi) 'ulong
                              (!pos && (hi > 2147483647 || lo < -2147483648)) 'long ())
                      narrow (? pos (? (hi <= 255) 'uchar (hi <= 65535) 'ushort 'uint)
                                (-128 <= lo && hi <= 127) 'char
                                (-32768 <= lo && hi <= 32767) 'short
                                'int)
-                     ty (? wide wide
-                           (pst32? ps || pk) narrow
-                           pos 'uint 'int)
-                     (tag ? (spin ps 'etag tag ty) 0,
-                      ty))
+                     ty0 (? wide wide
+                            (pst32? ps || pk) narrow
+                            pos 'uint 'int)
+                     ; a mode(M) lays the enum at M's width, its signedness kept; gcc refuses
+                     ; a width that does not hold every enumerator
+                     ty (? (m = ()) ty0
+                           (m = 'many) (clblame "__attribute__((mode)) on a declaration of several declarators is not carried out")
+                           (m = 'deriv) (clblame "__attribute__((mode)) on a pointer, array or function declarator is not carried out")
+                           (modety ps m (pos ? 'uint 'int) @ mt
+                              (? (string? mt) (clblame mt)
+                                 (tsz ps mt @ n (8 * n - (pos ? 0 1) @ b
+                                    (lo < -(2 ** b) || (2 ** b) <= hi)))
+                                  (clblame "an enumerator does not fit the enum's __attribute__((mode))")
+                                 mt)))
+                     (ty = () ? ()
+                        (tag ? (spin ps 'etag tag ty) 0,
+                         ty)))
                  (peekp ts3 "{" ?
                     (: (consts ts4 v pos lo hi)
                         (? (peekp ts4 "}")                         ; a trailing comma (or empty body): the enum ends
-                            (pattpk ps >ts4 @ pa [(ety pos lo hi <pa) <>pa])
+                            (pattpk ps >ts4 @ pa (ety pos lo hi <pa (modeat ps >ts4) @ ty (ty = () ? () [ty <>pa])))
                            !(idat? ts4) ()
                            (: name (tkv <ts4)
                               ts5 >ts4
@@ -899,7 +969,7 @@
                                     (peekp ts6 "," ? (consts >ts6 (<vr + 1) pos2 lo2 hi2)
                                        (: rest (want ts6 "}")
                                           pa (two? rest ? (pattpk ps rest) [0 rest])
-                                          (two? rest ? [(ety pos2 lo2 hi2 <pa) <>pa])))))))
+                                          (two? rest ? (ety pos2 lo2 hi2 <pa (modeat ps rest) @ ty (ty = () ? () [ty <>pa])))))))))
                        (consts >ts3 0 1 0 0))
                     [(peep (ps 'etag) tag 'int) ts3]))
              (tkk t = 'id && (peep (ps 'types) (tkv t) 0 ? 1))
@@ -2047,7 +2117,9 @@
     (atom? ts0 ? ()
        (pattr ts0 @ ts
           (atom? ts ? ()
-             (: r (sassert? ts ? (pstatic ps ts) (pstmt2 ps ts))
+             (: r (? (sassert? ts) (pstatic ps ts)
+                     (ts0 = ts) (pstmt2 ps ts)
+                     (pin ps 'lmode (modeat ps ts0), pstmt2 ps ts @ r2 (pin ps 'lmode (), r2)))
                 mt (attrin ts0 ts "musttail")
                 ho (attrin ts0 ts "holo")
                 (? (!mt && !ho) r
@@ -2538,7 +2610,7 @@
        (asmid? <ts) (ptasm ps ts)
        ; a leading __attribute__((..)): the scans at ptop's entry read the whole form, so
        ; skip it and parse the declaration proper
-       (pattr ts != ts) (ptop ps (pattr ts))
+       (pattr ts != ts) (pin ps 'lmode (modeat ps ts), ptop ps (pattr ts) @ r (pin ps 'lmode (), r))
        ; `extern` data declares, never defines: an init-less gdecl under a leading extern
        ; becomes ('xdecl pairs) -- addressable, no storage laid. protos/typedefs pass through.
        (tkw? <ts 'extern)
