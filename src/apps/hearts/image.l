@@ -1,7 +1,7 @@
 ; src/apps/hearts/image.l -- rung 0's image: a GPT disk for qemu virt (a64), and the signed
 ; updates that move it. the disk:
 ;   1 ESP (FAT32): EFI/BOOT/BOOTAA64.EFI (src/inle/uefi/slot.c), a/Image, a/cmd, hearts.st
-;   2 root a, 3 root b (squashfs; b empty until an update writes it), 4 data (FAT32)
+;   2 root a, 3 root b (squashfs, deflated; b empty until an update writes it), 4 data (FAT32)
 ; a root: love as /bin/love, helm's script as init (/bin/helm), src/apps/hearts/dev.l and app.l, the update key.
 ; the parts lie back to back from 1 MiB, each `at` where the one before it ends.
 ; usage: love -l src/apps/sqfs.l image.l OUT LOVE IMAGE EFI SEED BADSEED [STAMP]
@@ -109,7 +109,7 @@
    bad (hex2b (as 5))
    stamp (#as > 6 ? (read (as 6)) 0)
    pub (ed-pub seed)
-   (rootimg ver sick) (sqfs-make (root love ver sick pub) stamp)
+   (rootimg ver sick) (sqfs-make (root love ver sick pub) stamp 'zlib)
    r1 (rootimg "v1" 0)
    r2 (rootimg "v2" 0)
    r3 (rootimg "v3" 1)

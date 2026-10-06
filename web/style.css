@@ -106,7 +106,7 @@ footer { margin-top: 3.5em; color: var(--faint); font-size: .85em;
 .machine { position: relative; }
 .machine .keys { position: absolute; left: 0; top: 0; width: 1px; height: 1px; opacity: 0;
                  border: 0; padding: 0; margin: 0; resize: none; overflow: hidden; }
-.machine .keys-chip { align-self: flex-start; margin-top: .6em; }
+.machine .chips { flex-shrink: 0; margin-top: .6em; }
 .mbar { flex-shrink: 0; color: var(--dim); font-size: .8em; margin-top: .6em; }
 /* a question the machine's page puts to the reader: a link's boot line, a file offered */
 .machine .ask { background: var(--pre); border: 1px solid var(--rule); border-radius: 4px;
@@ -147,13 +147,13 @@ footer { margin-top: 3.5em; color: var(--faint); font-size: .85em;
 }
 
 /* --- the full page: the machine alone, the canvas the whole viewport. dvh follows a
-   phone's toolbar as it comes and goes, vh the fallback where dvh is unknown; the keys
-   chip keeps its row under the screen, which is how a phone raises the keyboard --- */
+   phone's toolbar as it comes and goes, vh the fallback where dvh is unknown; the chips
+   keep their row under the screen, the keys chip being how a phone raises the keyboard --- */
 body.full { max-width: none; margin: 0; padding: 0; overflow: hidden;
             height: 100vh; height: 100dvh; }
 body.full .machine { height: 100%; margin: 0; padding: 0;
                      border: 0; border-radius: 0; box-shadow: none; }
 body.full .machine .fb { flex: 1; min-height: 0; height: auto; width: 100%; border-radius: 0; }
 body.full .machine .status { position: absolute; left: .5em; top: .5em; z-index: 1; }
-body.full .machine .keys-chip { margin: .2em .4em; }
+body.full .machine .chips { margin: .2em .4em; }
 body.full .machine .ask { position: absolute; left: .5em; right: .5em; top: 2.5em; z-index: 2; }

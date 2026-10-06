@@ -90,13 +90,12 @@ All of C89 passes. What remains is C99/C11/GNU.
 | construct | probe |
 |---|---|
 | `_Atomic` | `_Atomic int a;` — both spellings; `__STDC_NO_ATOMICS__` says so, which is C11's own door for the absence |
-| the address of a compound literal in a **static** initializer | `struct S *p = &(struct S){1,2};` — inside a function it passes |
 | brace elision continuing **past** an anonymous union member | `{1,2,3,{4,5}}` over `struct { int a,b; union { int c,d; }; struct S1 s; }` — elision *into* the union is fine |
 | a `##` paste that makes a macro NAME | `CAT(A,B)(x)` where `AB` is itself a macro — the pasted name is not rescanned as an invocation |
 | a register-exhausted **SSE**-class by-value argument | five float HFAs — the gp twin landed 2026-08-08 (below), this one did not |
 
-The last five are what `test_cts` found (doc/misc/moon.md); `test/gate/cts.sh` names the program
-each one came from.
+The rows below `_Atomic` are what `test_cts` found (doc/misc/moon.md); `test/gate/cts.sh` names
+the program each one came from.
 
 ### what passes, for contrast
 
@@ -212,8 +211,8 @@ Four of them carry an edge worth knowing:
   locals, braces, elision, concatenation across a prefix and `sizeof` all match gcc on every
   target, and a wide *char* constant decodes to its last code point as gcc reads it. the
   storage is the compound literal's — automatic inside a function where C says static duration,
-  so a pointer kept past the frame dangles, and `wchar_t *p = L"x"` at file scope refuses on the
-  static-clit row above. A mixed-prefix concatenation `u"a" U"b"` takes the first prefix where
+  so a pointer kept past the frame dangles; at file scope `wchar_t *p = L"x"` lays its literal as
+  a static object of its own. A mixed-prefix concatenation `u"a" U"b"` takes the first prefix where
   gcc refuses.
 - **`__extension__`** is a no-op at a declaration's head (file scope, block, member, before
   `typedef`) and as a cast-expression prefix, the typedef declarator's trailing attribute run
@@ -859,12 +858,14 @@ lays the external definition and `extern inline` does not, gnu89's way about) tr
 (an argument of a member's type becomes the union; members one word-sized scalar type, or it
 refuses); **a hint, whose
 skip is exact** — the diagnostics, the optimisation promises (pure const malloc nonnull ...),
-visibility under a static link, cold/hot, fallthrough and the rest of the list; **refused by
-name** — constructor destructor ifunc weakref mode vector_size naked
-interrupt patchable_function_entry, the calling conventions (regparm, ms_abi, pcs ...),
-scalar_storage_order, target_clones, symver. `__has_attribute` answers 1 for the first two
-classes and 0 for the third and for a name it does not know, which is what a header asks
-before it uses one.
+visibility under a static link, cold/hot, fallthrough, i386's calling conventions (stdcall
+fastcall thiscall regparm, which gcc ignores on every target mooncc lays) and the rest of the
+list; **refused by name** — constructor destructor ifunc weakref mode vector_size naked
+interrupt patchable_function_entry, the calling conventions that change code here (ms_abi,
+pcs), scalar_storage_order, target_clones, symver. `__has_attribute` answers 1 for the first
+two classes and 0 for the third and for a name it does not know, which is what a header asks
+before it uses one -- save the four i386 conventions, which answer 1 where gcc off i386 knows
+them not and answers 0.
 
 owed, each refusing loudly today (an undeclared builtin, or a parse error):
 
@@ -1005,6 +1006,44 @@ each from the arm64 census above, each held by a law:
 - a name an address probe could not resolve no longer stands as a function's refusal: it had hidden
   the true cause (an asm's lane) behind "undeclared".
 
+### arm64 again, measured 2026-10-06
+
+the same census on gwen 40be5708f (149's asm work, 152's flags, 153's walls, 155's fixes), the
+same reference and spelling, defconfig on clang's `-E` with ours on every 20th unit:
+
+| | units | same as clang | compiles, differs | refused | crash |
+|---|---|---|---|---|---|
+| defconfig, 2026-10-05 (gwen baa7c8277) | 4439 | 1012 | 835 | 1496 | 1093 |
+| defconfig, 2026-10-06 (gwen 40be5708f) | 4439 | 1286 | 1692 | 1455 | 4 |
+
+the crashes became refusals or objects; many of the objects differ. first stops, by owner area:
+
+| units | first stop | area |
+|---|---|---|
+| ~1125 | LSE atomics: stset 257, casalh 159, ldadd 137, ldaddal 123, stclr 113, stadd 113, ldaddl 92, .. | asm (row 158 lays them) |
+| 61 | `__attribute__((mode))` refused | frontend |
+| 41 | an asm goto with register outputs | asm |
+| 28 / 17 | `.req` operands; an immediate over an expression | asm |
+| 18 / 12 | a register variable pinned to x0; a `"p"` operand | asm |
+| 4 | cs-unsaved r19 (internal) | gen |
+
+accepted and WRONG, the costly rows:
+
+- **`cbnz %0, .` branches to an undefined symbol `.`**: io.h's read barrier (`__iormb`) loops on
+  `.`, and the object relocates against a symbol of that name instead of the instruction itself.
+  474 units would fail the link (asm).
+- **an always_inline body the AST inliner declines stays a call**: ainl takes no `switch` holding
+  a `return` (its returns go structurally), so cpucap_is_possible and kmalloc's helpers are called,
+  and their `__builtin_constant_p(param)` reads 0 there. kmalloc's slow lane in 405 units, a missed
+  optimisation; under clang's `__OPTIMIZE__` (the clang -E leg only) 100 units keep
+  cpucap_is_possible's `__compiletime_assert_0` for the link to miss -- our own cpp defines no
+  `__OPTIMIZE__`, so its asserts compile out (frontend, g-21).
+- no object carries `.ARM.attributes` on the clang -E leg, which drops the -m flags; ours keeps
+  them (flags).
+
+our cpp on every 20th unit: 75 units the clang leg calls differing are the same as clang's there,
+the `.ARM.attributes` and `__OPTIMIZE__` artifacts above; 9 refuse where the clang leg compiles.
+
 ## linux on arm64
 
 **measured 2026-10-05** against 6.19.14, arm64 tinyconfig (g-21's census, kbuild's flags,
@@ -1051,6 +1090,19 @@ below, 251 of those 332 re-run so far: **145 compile**, and the rest refuse by n
   memcpy/memset, a packed local's initializer, and by-value structs under 8-byte alignment as
   arguments and returns; the byte-gather fusion stands down. Both flags are held to clang 22.1.8's
   objects for the same units (test_cca64's landing law) and run on an a64 host (228-strictalign.c).
+- **the lse atomics**: `ld<op>`/`st<op>` for add, clr, eor, set, smax, smin, umax and umin,
+  `swp` and `cas`, each with its `a`/`l`/`al` order and `b`/`h` size, read by their spelling;
+  every one of the 225 forms is llvm-mc's word. A wrong width, an offset, or `casp` refuses by
+  name (243-lseasmgoto.c, which runs them only where ID_AA64ISAR0_EL1 says the core has them).
+- **an asm goto with outputs**: each label the template names becomes a trampoline that
+  stores the outputs and jumps on, so they hold on every edge, as gcc's do. A callee-saved
+  clobber beside a label still refuses: its pop would sit a frame off the fall-through.
+- **gas's `!`**: `!x` answers 1 or 0, so `.inst ... | (!!(x)) << 8` (`SET_PSTATE_PAN`) folds.
+- **the range tlbis** (`rvae1`..`rvaale1os`) and the outer-shareable and el2 rows.
+- **`"p"`**: an address in a register, which `%a` spells `[xN]` (the kernel's `prefetchw`).
+- **a branch to `.`, `.+k` or `.-k`** (`b`, `bl`, `b.cond`, `cbz`, `cbnz`) is its own
+  pc-relative word. It read as a label named `.`, an undefined symbol in the object, so every
+  user of `__iormb`'s `cbnz %0, .` failed the link; an unaligned or out-of-range offset refuses.
 
 Still open on this side (g-21's probes):
 
@@ -1060,9 +1112,11 @@ Still open on this side (g-21's probes):
   reads at the element's width, a bitfield or 128-bit member of a packed struct refuses by name,
   and a by-value struct reached as a packed member rides its type's alignment, not the member's.
 - where the re-run stops now, on this side: the `.S` exception-table macro's `\insn`, which
-  reaches `.long ((\insn) - .)` unsubstituted (24); an asm goto with outputs (9, refused above);
-  a register variable pinned to `x0` (4); the `"p"` constraint (2). The rest is part 1's front
-  end and gen (`linux/skbuff.h`, an undeclared `branch`).
+  reaches `.long ((\insn) - .)` unsubstituted (24); a register variable pinned to `x0` (4).
+  The rest is part 1's front end and gen (`linux/skbuff.h`, an undeclared `branch`,
+  `__attribute__((mode))`).
+- defconfig, g-21's units once refused on a Q form or a register pinned twice: of a sample of
+  40, 38 compile; the other two stop on a static mutex's initializer, outside the asm.
 
 ---
 

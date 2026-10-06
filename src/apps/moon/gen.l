@@ -6738,6 +6738,7 @@
        (? (n < 1) 'bad
           (n = 1 && 48 <= c0 <= 57) ['tie (c0 - 48)]
           (n = 1) (c0 @ 114 'pick 113 'pick 103 'pick 109 'mem
+                      112 'pick                                ; "p": an address in a register, %a spells it as memory
                       81 (a64? g ? 'mem 'bad)                  ; a64's Q: a base register alone, [xN]
                       97 (x86 ? 'r0 'bad) 98 (x86 ? 'r3 'bad) 99 (x86 ? 'r1 'bad)
                       100 (x86 ? 'r2 'bad) 83 (x86 ? 'r5 'bad) 68 (x86 ? 'r6 'bad)
@@ -6922,12 +6923,15 @@
                                    (asmsave? g r9) (clobs >l (r9 . acc))
                                    (asmno g ("an asm clobber of \"" + c + "\"")))))))
                    saves (clobs <>>>>s ())
-                   ; a jump out of the body would skip the output stores and the clobber pops
+                   ; an asm goto with outputs jumps to a trampoline per label that stores them
+                   ; and goes on; a pushed clobber would leave it a frame deeper than the fall-through
+                   outs? (any (e2 \ elem <e2 '(o x f)) os)
+                   tls (two? labs && outs? ? (map (_ \ nlab g (g 'fn + ".ag")) labs) labs)
                    (? (bad? saves) 'bad
                       (bad? asgn) (asmno g "more asm operands than registers to seat them")
-                      (two? labs && (any (e2 \ elem <e2 '(o x f)) os || two? saves)) (asmno g "an asm goto with register outputs or a callee-saved clobber")
+                      (two? labs && two? saves) (asmno g "an asm goto with a callee-saved clobber")
                       (: ; the operand printers, one per kind (neutral: a plain register name, "m" as `rN, 0`)
-                         (rtext a9 w) (md \ (? (md = 108) 'bad neutral? (md ? 'bad (peep asmnames a9 "r?")) (gas-reg tgt a9 w md)))
+                         (rtext a9 w) (md \ (? (md = 108) 'bad (md = 97 && !neutral?) (gas-mem tgt a9) neutral? (md ? 'bad (peep asmnames a9 "r?")) (gas-reg tgt a9 w md)))
                          (itext v) (md \ (? (md = 108) 'bad neutral? (md || !(charm? v) ? 'bad (show v)) (gas-imm tgt v md)))
                          (mtext a9) (md \ (? md 'bad neutral? (peep asmnames a9 "r?" + ", 0") (gas-mem tgt a9)))
                          (ltext l9) (md \ (md = 108 ? (show l9) 'bad))
@@ -6938,7 +6942,7 @@
                                                        'b (mtext a9)
                                                        'f (md \ 'bad)       ; a flag output has no spelling
                                                        (rtext a9 <>>>e2)) . acc))))
-                         txt (asmsub tmpl (optext ops9 asgn () + map ltext labs))
+                         txt (asmsub tmpl (optext ops9 asgn () + map ltext tls))
                          (? (bad? txt) (asmno g "an asm operand the template spells with a modifier it has no lane for")
                             (!neutral? && nom? (gas-nolong tgt txt))
                              (asmno g ("an asm \"" + show (gas-nolong tgt txt) + "\", which 64-bit mode has no encoding for"))
@@ -6985,8 +6989,14 @@
                                                            (ostores >l >al
                                                             (vfs lv + spop 'r1 + [[(stop ty) 'r0 0 'r1]] + acc)))))))))
                                      osf (ostores ops9 asgn ())
+                                     (post u9) (fsets ops9 asgn () + opush ops9 asgn () + osf)
+                                     (tramps t9 l9) (!(two? t9) ? ()
+                                                       ([['label <t9]] + post 0 + [['jmp <l9]] + tramps >t9 >l9))
                                      (bad? osf ? 'bad
-                                        (lf + pops ops9 asgn () + body + fsets ops9 asgn () + opush ops9 asgn () + osf)))))))))))))
+                                        (lf + pops ops9 asgn () + body + post 0
+                                         + (tls = labs ? ()
+                                              (: done (nlab g (g 'fn + ".ag"))
+                                                 ([['jmp done]] + tramps tls labs + [['label done]]))))))))))))))))
 
    ; a statement's child statements in tick order (a for's init only when it declares): alive's
    ; prepass and scasel walk by it, and cgstmt's walk must agree node for node
