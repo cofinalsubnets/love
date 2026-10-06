@@ -1,4 +1,4 @@
-; test/host/stones.l -- the canyon and the bowl, headless: the frame in both palettes, the
+; test/host/stones.l -- the canyon and the bowl, headless: the frame in both palettes and as kitty's pixels, the
 ; rock where it should stand, the ring and its missing stone, the audience thrown each run,
 ; walking up the slot and into what stops it, and out of the mouth to the end.
 ; not in the corpus: a crew module. run: cat test/00-init.l test/host/stones.l | out/love
@@ -20,6 +20,10 @@
    deep (stones-frame (pin (at 12.0 7) 'deep 1))
  (test (rows f = 24) (f = f2) (rows deep = 24) (f != deep)
        (has? f "38;5;") (has? deep "38;2;")))
+
+; --- ..and as kitty's pixels: one picture over the screen's cells, the cursor left where it is
+(: k (stones-frame (pin (at 12.0 7) 'kitty 1))
+ (test (snip k 0 3 = "\e_G") (has? k "f=24") (has? k "C=1") (has? k "s=80,v=48,c=80,r=24,") (has? k "m=0;")))
 
 ; --- the rock: open air at the eye, and the sand under it; rock either side of the slot
 ; --- and over the bowl's rim, the bowl open down to its floor, the plain open past the mouth

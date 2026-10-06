@@ -4,7 +4,7 @@
 ; or as kitty's pixels.
 ; the world is lore's: x right, y up, z ahead when 'th is 0, 'th turning toward x.
 (module (mesh mesh mesh-join mesh-move mesh-quad mesh-box mesh-grid mesh-lathe mesh-normals
-         mesh-bake mesh-pack mesh-tex mesh-view mesh-dirs mesh-sky mesh-haze mesh-frame mesh-flat
+         mesh-keep mesh-pack mesh-bake mesh-open mesh-tex mesh-view mesh-dirs mesh-sky mesh-haze mesh-frame mesh-flat
          mesh-cells mesh-kitty)
 (borrow 'view)
 (borrow 'vec)
@@ -56,6 +56,11 @@
        (\ i j (: a (2.0 * pi * i / n) r (prof j 0)
                   [(r * sin a) (prof j 1) (r * cos a) (k * a * prof 0 0) (k * len j)]))
        tex col))
+ ; only the triangles whose middles (keep? x y z)
+ (mesh-keep m keep?) (: vs (m 0)
+   (mesh vs (filter (t \ (: a (vs (t 0)) b (vs (t 1)) c (vs (t 2))
+                          (keep? ((a 0 + b 0 + c 0) / 3.0) ((a 1 + b 1 + c 1) / 3.0) ((a 2 + b 2 + c 2) / 3.0))))
+                    (m 1))))
  ; each vertex's normal the sum of its faces', weighed by their size
  (mesh-normals m) (: vs (m 0) acc {}
    (add i n) (pin acc i (peep acc i [0.0 0.0 0.0] @ o [(o 0 + n 0) (o 1 + n 1) (o 2 + n 2)]))
@@ -63,18 +68,24 @@
                         n (cross (sub c a) (sub b a))
                         (add (t 0) n, add (t 1) n, add (t 2) n))))
    (mesh (map (i \ (: v (vs i) n (unit (peep acc i [0.0 1.0 0.0])) (take 5 v + n + drop 8 v))) ^#vs) (m 1)))
- ; lit once: the sky's ambient and the sun on each vertex, shade (x y z) its share of
- ; the sun, 0 to 1; the colour the light times the surface's own, gain over all
- (mesh-bake m lt shade gain) (: s (lt 'sun) amb (lt 'amb) sc (c* (lt 'sunk) (lt 'sunc))
-   (map (v \ (: nd (max 0.0 (v 5 * s 0 + v 6 * s 1 + v 7 * s 2))
-              sh (nd > 0.0 && 0.0 < lt 'sunk ? (shade (v 0) (v 1) (v 2)) 0.0)
-              sky (0.6 + 0.4 * v 6)
-              irr (c+ (c* sky amb) (c* (nd * sh) sc))
-              [(v 0) (v 1) (v 2) (v 3) (v 4) (gain * irr 0 * v 8) (gain * irr 1 * v 9) (gain * irr 2 * v 10)]))
-        (m 0)))
- ; a baked mesh's verts and its triangles as the trays facets takes
- (mesh-pack vs ts) (: fv (cat vs) ft (cat ts)
-   [(gem-tray [#fv] (map (x \ 1.0 * x) fv)) (star-tray [#ft] ft)])
+ ; a mesh packed for drawing: its vertices as columns, trays [x y z u v nx ny nz r g b],
+ ; and its triangles as the tray facets takes
+ (mesh-pack m) (: vs (m 0) n #vs ft (cat (m 1))
+   {'n n 'cols (map (k \ gem-tray [n] (map (v \ 1.0 * v k) vs)) ^11) 'tris (star-tray [#ft] ft)})
+ ; ..lit by the sky's sun and its ambient: (light cols) says each vertex's [sun sky glow]
+ ; -- its share of the sun past what stands between, of the sky's light, and () or the
+ ; [r g b] it takes besides -- trays or numbers; the colour the light on it times its own,
+ ; gain over all. the scene [verts tris] mesh-frame draws
+ (mesh-bake pk lt light gain) (: c (pk 'cols) n (pk 'n) s (lt 'sun) amb (lt 'amb) sc (lt 'sunc)
+   L (light c)
+   sun (max 0.0 (c 5 * s 0 + c 6 * s 1 + c 7 * s 2) * (L 0) * lt 'sunk)
+   (lit k) (gain * c (8 + k) * ((L 1) * amb k + sun * sc k + (two? (L 2) ? (L 2 k) 0.0)))
+   cols [(c 0) (c 1) (c 2) (c 3) (c 4) (lit 0) (lit 1) (lit 2)]
+   i (iota n * 8)
+   [(foldl (\ v k (pin v (i + k) (cols k))) (iota (8 * n) * 0.0) ^8) (pk 'tris)])
+ ; ..the open sky's light alone, the sun on everything: what a level with nothing to cast
+ ; a shadow lights by
+ (mesh-open c) [1.0 (0.6 + 0.4 * c 6) ()]
  ; --- textures: n by n, (f x y) a colour [r g b] 0 to 1 or () for a hole; each level
  ;     half the last, a texel the mean of four, a hole where two or more were ---
  (q v) (int (sat v * 255.0 + 0.5))

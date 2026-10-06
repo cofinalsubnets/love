@@ -9,7 +9,7 @@
    (mh-cat l) (foldr (+) () l)
    (mh-count n s) (:- (go 0 0) (go i k) (i + #n <= #s ? (go (i + 1) (k + (n = snip s i (i + #n)))) k))
    lt {'sun [0.0 1.0 0.0] 'amb [0.2 0.2 0.2] 'sunk 1.0 'sunc [1.0 1.0 1.0] 'expo 1.0}
-   (lit m) (mesh-pack (mesh-bake m lt (\ x y z 1.0) 1.0) (m 1))
+   (lit m) (mesh-bake (mesh-pack m) lt mesh-open 1.0)
    (vw e th ph) (mesh-view W H e th ph 1.4 0.1 100.0)
    (draw m e th ph fl) (mesh-frame (vw e th ph) (lit m) () [0 0 0 0.0 0.0] fl 0.0 7)
    (at f x y) (peep f (y * W + x) 0)
@@ -27,9 +27,11 @@
    bowl (mesh-lathe [[6.0 -1.0] [6.0 3.0]] 16 -1 white 1.0)
    sheet (mesh-grid 4 4 (\ i j [(2.0 * i - 4.0) -1.0 (2.0 * j - 4.0) 0.0 0.0]) -1 white)
    ; the sun overhead: a top face is lit, a side is the ambient alone, unshaded or shaded
-   tops (mesh-bake (mesh-box [0.0 0.0 0.0] [1.0 1.0 1.0] 0.0 -1 white 1.0) lt (\ x y z 1.0) 1.0)
-   shd (mesh-bake (mesh-box [0.0 0.0 0.0] [1.0 1.0 1.0] 0.0 -1 white 1.0) lt (\ x y z 0.0) 1.0)
-   (bright vs) (amax (gem-tray [#vs] (map (v \ v 5) vs)))
+   cube (mesh-pack (mesh-box [0.0 0.0 0.0] [1.0 1.0 1.0] 0.0 -1 white 1.0))
+   tops (mesh-bake cube lt mesh-open 1.0)
+   shd (mesh-bake cube lt (\ c [0.0 (0.6 + 0.4 * c 6) ()]) 1.0)
+   glo (mesh-bake cube lt (\ c [0.0 0.0 [0.5 0.5 0.5]]) 1.0)
+   (bright sc) (amax (peep (sc 0) (iota 24 * 8 + 5) 0.0))
    ; a texture's levels: 8, 4, 2, 1 across; holes past half a cell's four
    tx (mesh-tex 8 (\ x y (x < 4 ? [1.0 0.0 0.0] [0.0 0.0 1.0])))
    hx (mesh-tex 4 (\ x y (y < 2 && x < 3 ? () white)))
@@ -56,7 +58,8 @@
        (at (draw bowl [0.0 0.0 0.0] 1.0 0.0 8) mid cen != 7)
        (at (draw sheet [0.0 1.0 0.0] 0.0 -0.8 8) mid cen != 7)
        (at (draw sheet [0.0 -3.0 0.0] 0.0 0.8 8) mid cen = 7)
-       (1.1 < bright tops) (bright shd < 0.3)
+       (1.1 < bright tops) (bright shd < 0.3) (bright glo = 0.5)
+       (#((mesh-keep bx (\ x y z (x < -0.4))) 1) = 2) (#((mesh-keep bx (\ x y z 1)) 1) = 12)
        (map shape tx = [[8 8] [4 4] [2 2] [1 1]])
        (peep (tx 0) [0 0] 0 = 16711680) (peep (tx 2) [0 0] 0 = 16711680) (peep (tx 2) [0 1] 0 = 255)
        (peep (hx 0) [0 0] 0 = -1) (peep (hx 1) [0 0] 0 = -1) (peep (hx 1) [0 1] 0 = -1) (peep (hx 1) [1 0] 0 != -1)
