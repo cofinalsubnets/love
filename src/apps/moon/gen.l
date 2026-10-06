@@ -7812,12 +7812,16 @@
              dl (dps body ())
              loc (map (p \ <p) ps + map (p \ <p) dl)
              ; a frame address costs the caller its sibcalls, and a return address read in place is
-             ; the caller's own; asm pins its homing off, unless the body compiles only spliced
+             ; the caller's own; asm pins its homing off, unless the body compiles only spliced.
+             ; always_inline is the author's word for both, as gcc reads it: its return address
+             ; is its caller's, and its asm rides along
              need (peep (g 'ineed) nm ())
+             alw (peep (g 'alw) nm ())
              (bar? x) (two? x ?
                          (x @ ('addr ('var v)) (elem v loc)
-                              ('call ('var b9) _ && elem b9 '("__builtin_return_address" "__builtin_frame_address")) 1
-                              ('asm . _) (need ? (bar? >x) 1)
+                              ('call ('var b9) _ && b9 = "__builtin_frame_address") 1
+                              ('call ('var b9) _ && b9 = "__builtin_return_address") !alw
+                              ('asm . _) (need || alw ? (bar? >x) 1)
                               (('clit || 'sexpr) . _) 1
                               (bar? <x || bar? >x)))
              (fv x a) (!(two? x) ? a
@@ -7860,14 +7864,25 @@
                                      (ar e) (arm c (bl (t . >l)) (bl [e]))
                                      'no)
                       ; ..a trap past the switch (the author's, for a fall out) moves inside it, last,
-                      ; behind a default when there is none: a break skips it, a fall out still meets it
+                      ; behind a default when there is none: a break skips it, a fall out still meets it.
+                      ; any other tail moves in the same way, and a copy goes ahead of each break at the
+                      ; switch's own level, so every way out of the switch still meets it
                       ('switch e items)
                        ('(expr (call (var "__builtin_trap") ())) @ trap
-                          (!sw || two? (filter (x \ (x != trap)) >l) ? 'no
-                             (: r (swel items)
-                                dfl (foldl (a \ x \ a || (two? x && <x = 'dflt)) () items)
-                                tl (? !(two? >l) () dfl [trap] [['dflt] trap])
-                                (r @ 'no 'no [['switch e (r + tl)]]))))
+                          (: tl0 >l trap? (two? tl0 && all (x \ (x = trap)) tl0)
+                             dfl (foldl (a \ x \ a || (two? x && <x = 'dflt)) () items)
+                             ; a break at the switch's own level: not inside a loop or a nested switch
+                             (tb s) (s @ ('brk) ['blk (tl0 + [['brk]])]
+                                         ('blk bs) ['blk (map tb bs)]
+                                         ('if c t e2) ['if c (tb t) (two? e2 ? (tb e2) e2)]
+                                         s)
+                             (nb s) (s @ ('brk) 1 ('blk bs) (foldl (a \ x \ a + nb x) 0 bs)
+                                         ('if _ t e2) (nb t + (two? e2 ? (nb e2) 0)) 0)
+                             its (? (trap? || !(two? tl0)) items (map tb items))
+                             (? (!sw || two? tl0 && !trap? && 0 < foldl (a \ x \ a + nb x) 0 items && 160 < #(show tl0)) 'no
+                                (: r (swel (its + (? (!(two? tl0) || trap?) () dfl tl0 (['dflt] . tl0))))
+                                   tl (? (!(two? tl0) || !trap?) () dfl [trap] [['dflt] trap])
+                                   (r @ 'no 'no [['switch e (r + tl)]])))))
                       ; ..and a trailing loop's top-level returns break out the same way: nothing
                       ; follows the loop, so a break is the return (a loop the body leaves by its own
                       ; break would meet what follows: only an empty tail)
@@ -9212,7 +9227,7 @@
     (: g {'n 0 'brk () 'brkm () 'cnt () 'cases () 'glob {} 'globs () 'strs () 'clits () 'clitm {} 'dbls {} 'jtabs () 'statics ()
           'abl (ablenv 0)                           ; the pricing knob, read per unit at run time
           'laid {}                                  ; names already on 'globs (a tentative repeat lays no twin)
-          'fns {} 'inl {} 'ineed {} 'ainlc {} 'cgitems cgitems 'sxpre sxpre 'stag stbl 'sigs sigs
+          'fns {} 'inl {} 'ineed {} 'alw {} 'ainlc {} 'cgitems cgitems 'sxpre sxpre 'stag stbl 'sigs sigs
           'tgt tgt                                  ; (the epilogue is per fn: cgfn pins g 'epi)
           'sects (two? xtra ? <>>xtra {})
           'alias (two? xtra && 3 < #xtra ? (xtra 3) {})
@@ -9242,6 +9257,7 @@
                           nelem <>f noinls &&
                           inlok? g f (sigs <>f) (elem <>f ainls) ?
                             ((asmneed? g <>>f <>>>f ? (pin (g 'ineed) <>f 1) 0),
+                             (elem <>f ainls ? (pin (g 'alw) <>f 1) 0),
                              pin (g 'inl) <>f f),
                           recfns >fs)))
        _ (recfns <>ast)
