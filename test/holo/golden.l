@@ -495,6 +495,13 @@
         (map (l \ holo-hex 'a64 (gas-text 'a64 l))
              ["tlbi rvae1, x0" "tlbi rvaale1is, x0" "tlbi rvale1os, x0" "tlbi vaae1os, x0" "tlbi ripas2e1is, x0"
               "tlbi rvale2is, x0" "tlbi vae2is, x0"]))
+   ;; a branch to `.`, `.+k`, `.-k` is its own pc-relative word, never a symbol named `.`
+   _ (chk-eq "gas.a64.dot"
+        ["00000014" "01000054" "000000b5" "41000034" "02000014" "ffffff97" "0bfeff54" "030080b5"
+         'gas-a64-branch 'gas-a64-branch]
+        (map (l \ trap (x \ holo-hex 'a64 (gas-text 'a64 x)) l (\ a b a))
+             ["b ." "b.ne ." "cbnz x0, ." "cbz w1, .+8" "b .+8" "bl .-4" "b.lt .-0x40" "cbnz x3, .-1048576"
+              "b .+2" "cbz x0, .+1048576"]))
    _ (chk-eq "gas.a64.lse.refuse"
         '(gas-a64-operand gas-a64-op gas-a64-operand gas-a64-operand gas-a64-operand)
         (map (l \ trap (x \ holo-hex 'a64 (gas-text 'a64 x)) l (\ a b a))

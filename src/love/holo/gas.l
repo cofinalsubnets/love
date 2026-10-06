@@ -338,7 +338,8 @@
        (#ps > 2 || !(charm? o) || <>>i != (o & 1 ? 8 4) ? (scare 'gas-a64-operand toks)
           ['memx b <>i o s]))
    (ga-opnd toks)
-    (toks @ (('ch 35) . rest) ['imm (gimm rest)]
+    (toks @ (('sym ".") . rest) ['dot (two? rest ? (gimm rest) 0)]   ; `.`, `.+k`: this instruction's own place
+            (('ch 35) . rest) ['imm (gimm rest)]
             (('num _) . _) ['imm (gimm toks)]
             (('ch 40) . _) ['imm (gimm toks)]
             (('ch 45) . _) ['imm (gimm toks)]
@@ -360,6 +361,10 @@
    (ga-v o) (o @ ('imm n) n ('reg x _) x (scare 'gas-a64-operand o))   ; a register or an immediate
    (ga-hw r) (r @ 'sp 31 'zr 31 'fp 29 'lr 30 (xa-num (snip (show r) 1 #(show r))))
    (ga-raw w) [['raw (le32 w)]]
+   ;; a branch to `.+k` is its own pc-relative word, no label: k in words, n bits wide
+   (ga-dot o) (o @ ('dot k) k ())
+   (ga-off k n) (: q (k // 4) h (1 << (n - 1))
+                   (? (k % 4 != 0 || q < 0 - h || q >= h) (scare 'gas-a64-branch k) (q & ((1 << n) - 1))))
    ;; 4 when an op's registers are all W, 8 when all X; a mix is no instruction
    (ga-wide os) (: ws (filter (w \ w > 0) (map (o \ o @ ('reg _ w) w 0) os))
                    (? (all (w \ w = 4) ws) (two? ws ? 4 8) (all (w \ w = 8) ws) 8 (scare 'gas-a64-width os)))
@@ -557,7 +562,11 @@
        (? (charm? (peep ga-arity m ()) && k != ga-arity m) (scare 'gas-a64-operand [m os])
           (m = 'ret && k = 1) (ga-r (os 0) @ r (r = 'lr ? '((ret)) (ga-raw (0xD65F0000 | ga-hw r << 5))))
           (ghas? ga-nils m) (k = 0 ? [[(ga-nils m)]] (scare 'gas-a64-operand [m os]))
-          (nom? (ga-bcond m)) (k = 1 ? [['br (ga-bcond m) (<>(os 0))]] (scare 'gas-a64-operand [m os]))
+          (nom? (ga-bcond m)) (? (k != 1) (scare 'gas-a64-operand [m os])
+                                 (charm? (ga-dot (os 0))) (ga-raw (0x54000000 | ga-off (ga-dot (os 0)) 19 << 5 | arm-cc (ga-bcond m)))
+                                 [['br (ga-bcond m) (<>(os 0))]])
+          (elem m '(b bl) && charm? (ga-dot (os 0)))
+           (ga-raw ((m = 'b ? 0x14000000 0x94000000) | ga-off (ga-dot (os 0)) 26))
           (m = 'b) [['jmp (<>(os 0))]]
           (m = 'bl) [['call (<>(os 0))]]
           (m = 'br) [['jmpr (ga-r (os 0))]]
@@ -597,7 +606,10 @@
                         ((os 0) @ ('sym t) (charm? (peep ga-bti t ()) && k = 1) 0) (ga-raw (ga-bti <>(os 0)))
                         (scare 'gas-a64-operand [m os]))
           (elem m '(cbz cbnz))                       ; compare and branch: the flags untouched
-           (k = 2 ? (ga-rw (os 0) @ rw [['cbr ((m = 'cbz ? 0x34000000 0x35000000) | (<>rw = 8 ? 0x80000000 0)) <rw (<>(os 1))]])
+           (k = 2 ? (ga-rw (os 0) @ rw
+                      (: w ((m = 'cbz ? 0x34000000 0x35000000) | (<>rw = 8 ? 0x80000000 0))
+                         (charm? (ga-dot (os 1)) ? (ga-raw (w | ga-off (ga-dot (os 1)) 19 << 5 | ga-hw <rw))
+                            [['cbr w <rw (<>(os 1))]])))
               (scare 'gas-a64-operand [m os]))
           (two? (peep ga-lnot m ())) (k = 3 ? (ga-lnot-ins m os) (scare 'gas-a64-operand [m os]))
           (two? (peep ga-carry m ())) (k = 3 ? (ga-regw (ga-carry m) os) (scare 'gas-a64-operand [m os]))

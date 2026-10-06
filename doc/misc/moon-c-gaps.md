@@ -1100,6 +1100,9 @@ below, 251 of those 332 re-run so far: **145 compile**, and the rest refuse by n
 - **gas's `!`**: `!x` answers 1 or 0, so `.inst ... | (!!(x)) << 8` (`SET_PSTATE_PAN`) folds.
 - **the range tlbis** (`rvae1`..`rvaale1os`) and the outer-shareable and el2 rows.
 - **`"p"`**: an address in a register, which `%a` spells `[xN]` (the kernel's `prefetchw`).
+- **a branch to `.`, `.+k` or `.-k`** (`b`, `bl`, `b.cond`, `cbz`, `cbnz`) is its own
+  pc-relative word. It read as a label named `.`, an undefined symbol in the object, so every
+  user of `__iormb`'s `cbnz %0, .` failed the link; an unaligned or out-of-range offset refuses.
 
 Still open on this side (g-21's probes):
 
