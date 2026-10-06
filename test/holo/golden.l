@@ -477,9 +477,10 @@
         (holo-hex 'a64 (gas-text 'a64 "cbnz w1, 1f\n nop\n1:\n cbz x2, 1b")))
    ;; ..and what no row reads still refuses by name
    _ (chk-eq "gas.a64.more.refuse"
-        '(gas-a64-operand gas-a64-operand gas-a64-operand badsysreg badsysreg)
+        '(gas-a64-operand gas-a64-operand gas-a64-operand badsysreg badsysreg badsysreg-wo "25cc18d5")
         (map (l \ trap (x \ holo-hex 'a64 (gas-text 'a64 x)) l (\ a b a))
-             ["hint #200" "sttr x0, [x1, #300]" "bti q" "mrs x0, s4_0_c0_c0_0" "mrs x0, no_such_el1"]))
+             ["hint #200" "sttr x0, [x1, #300]" "bti q" "mrs x0, s4_0_c0_c0_0" "mrs x0, no_such_el1"
+              "mrs x5, icc_eoir1_el1" "msr icc_eoir1_el1, x5"]))
    ;; the lse atomics, spelled ld<op>/st<op>/swp/cas + a|l|al + b|h
    _ (chk-eq "gas.a64.lse"
         ["a40023f8" "4100e0b8" "a4102338" "a430a378" "a44063f8" "a47023b8" "a480e3f8" "3f0020b8" "3f1060f8"
