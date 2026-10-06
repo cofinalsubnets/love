@@ -16,7 +16,7 @@
 ;
 ; run: love lore stones   h l or the arrows turn, k j step, u n look up and down;
 ;                         q or esc leaves, or walk back out of the canyon
-(module (stones stones-run stones-walk stones-main stones-new stones-size stones-step stones-move
+(module (stones stones-run stones-walk stones-main stones-new stones-size stones-step stones-move stones-pace
          stones-frame stones-pens stones-field stones-ground stones-blocks slot-x
          fps eye-h zc floor-r row-w row-h rows rim-r exit-z lat)
 (borrow 'rove)
@@ -28,7 +28,6 @@
  lat (37.0 * pi / 180.0)               ; the colorado plateau
  eye-h 1.6 body-r 0.25
  walk-v 2.6 turn-v 1.6 tilt-v 1.2         ; metres, and radians, a second
- still-n 8                              ; frames held still before every pixel casts its own
  ; --- the land, in metres: x east, z north, y up. the slot runs north from its mouth
  ; through the plateau to the bowl, whose middle is at x 0, z zc: a flat floor floor-r
  ; across, then rows rising row-h every row-w out to rim-r, and the bowl's wall over them
@@ -223,9 +222,9 @@
    irr (c+ (c+ (c* skl (lt 'amb)) (c* dir (lt 'sunc))) (c* glow [0.95 0.5 0.24]))
    sf (cm alb irr)
    (sky . map (k \ pin z0 G (sf k)) ^3))
- ; ..the coarse grid's colours spread over the screen: the sky where the nearest ray found
- ; it, and the rock blended from the four rays round each pixel that met rock
- (spread st sc) (: M (st 'M) Q (st 'Q) A (st 'A) B (st 'B) sk (sc 0)
+ ; ..a grid's colours spread over the screen: the sky where the nearest ray found it, and
+ ; the rock blended from the four rays round each pixel that met rock
+ (spread g sc) (: M (g 'M) Q (g 'Q) A (g 'A) B (g 'B) sk (sc 0)
    (wt k a) (a * (1 - peep sk (Q k) 1))
    ws [(wt 0 ((1.0 - A) * (1.0 - B))) (wt 1 (A * (1.0 - B))) (wt 2 ((1.0 - A) * B)) (wt 3 (A * B))]
    tw (max (ws 0 + ws 1 + ws 2 + ws 3) 1e-6)
@@ -239,21 +238,22 @@
     'w w 'h h 'foc foc 'cx cx 'cy cy
     'dx (over (dx0 / ln) (dx0 = 0.0) 1e-9) 'dy (over (dy0 / ln) (dy0 = 0.0) 1e-9) 'dz (over (dz0 / ln) (dz0 = 0.0) 1e-9)})
  ; every pixel's colour, three trays: what the rays meet lit, and the sky and its stars
- ; where they meet nothing, through the eye's gain. while the eye moves, the rays are cast
- ; a block of f by f pixels apart and each block takes its ray's colour; once it has held
- ; still some frames -- past a key's wait to repeat -- every pixel casts its own, and that
- ; is kept until it moves or the sun goes on
+ ; where they meet nothing, through the eye's gain. the rays are cast f pixels apart,
+ ; spread over the pixels between, the sky every pixel; what they met is kept while the eye
+ ; holds still and the sun has not gone on far. a frame that moved says what its rays cost,
+ ; 'cost, in milliseconds, for the pace to weigh
  (stones-pens st) (: lt (stones-light st) th (st 'th) ph (st 'ph) w (st 'w) h (st 'h) n (w * h) f (st 'f)
    e [(st 'px) (st 'py) (st 'pz)]
    cam (camera e th ph (st 'U) (st 'V) w h (st 'foc) (w / 2.0) (h / 2.0))
-   key [e th ph n (int (st 'sim // 20.0))] was (peep st 'scene ()) t (st 't)
-   same (two? was && was 0 = key)
-   (keep sharp v) (pin st 'scene [key sharp v (same ? (was 3) t)], v)
-   sc (? (same && was 1) (was 2)
-         ((same && was 3 + still-n <= t) || f = 1) (keep 1 (surface st lt cam n))
-         same (was 2)
-         (: c2 (camera e th ph (st 'U2) (st 'V2) (st 'w2) (st 'h2) (st 'foc / f) (w / 2.0 / f) (h / 2.0 / f))
-            (keep 0 (spread st (surface st lt c2 (st 'w2 * st 'h2))))))
+   pose [e th ph n (int (st 'sim // 20.0))] was (peep st 'scene ())
+   sc (two? was && was 0 = pose && was 1 = f ? (was 2)
+         (: t0 (clock 0)
+            v (f = 1.0 ? (surface st lt cam n)
+                 (: g (grid st f)
+                    (spread g (surface st lt (camera e th ph (g 'U) (g 'V) (g 'w) (g 'h) (st 'foc / f) (w / 2.0 / f) (h / 2.0 / f))
+                                       (g 'w * g 'h)))))
+            _ (two? was && was 0 = pose ? () (pin st 'cost (clock 0 - t0)))
+            (pin st 'scene [pose f v], v)))
    sky (sc 0) S (iota sky) (only ix v) (peep v ix 0.0)
    hv (sky-colour-of lt (st 'wx) (only S (cam 'dx)) (only S (cam 'dy)) (only S (cam 'dz)) (e 0) (e 2) (st 'sim) (st 't) 0.0)
    col0 (map (k \ pin (sc (k + 1)) S (hv k)) ^3)
@@ -272,22 +272,37 @@
                                 'blocks (stones-blocks sd)}
    (stones-size st w (h // 2)))
  ; the screen w cells by r rows, and each pixel's offsets from the middle, and its dither;
- ; and the coarse grid cast while moving: f pixels a block, f the least that keeps the
- ; rays to coarse-n or so, each block's offsets, M each pixel's block, and Q the four
- ; blocks round it, A and B how far it is across and down between them
- coarse-n 4000
+ ; the rays f pixels apart to start with, f the least quarter that keeps them to ray-n or
+ ; so, and the pace takes it from there
+ ray-n 4000
  (stones-size st w r) (: h (2 * r) n (w * h) i (iota n) x (i % w) y (i // w)
-   f (max2 1 (int (sqrt (n / (1.0 * coarse-n)) + 0.999)))
-   w2 ((w + f - 1) // f) h2 ((h + f - 1) // f) j (iota (w2 * h2)) x2 (j % w2) y2 (j // w2)
+   f (min2 4.0 (max2 1.0 (int (4.0 * sqrt (n / (1.0 * ray-n)) + 0.999) / 4.0)))
    (pins (view! st w h (h // 2)) 'U ((x + 0.5 - w / 2.0) / (w / 2.0)) 'V ((h / 2.0 - y - 0.5) / (w / 2.0))
-         'bay (view-bayer w h) 'f f 'w2 w2 'h2 h2 'M (y // f * w2 + x // f)
-         'Q (: gx ((x + 0.5) / f - 0.5) gy ((y + 0.5) / f - 0.5)
-               x0 (min (max (floor gx) 0) (w2 - 1)) y0 (min (max (floor gy) 0) (h2 - 1))
-               x1 (min (x0 + 1) (w2 - 1)) y1 (min (y0 + 1) (h2 - 1))
-               [(y0 * w2 + x0) (y0 * w2 + x1) (y1 * w2 + x0) (y1 * w2 + x1)])
-         'A (sat ((x + 0.5) / f - 0.5 - max (floor ((x + 0.5) / f - 0.5)) 0))
-         'B (sat ((y + 0.5) / f - 0.5 - max (floor ((y + 0.5) / f - 0.5)) 0))
-         'U2 ((f * (x2 + 0.5) - w / 2.0) / (w / 2.0)) 'V2 ((h / 2.0 - f * (y2 + 0.5)) / (w / 2.0))))
+         'bay (view-bayer w h) 'f f 'grids {} 'scene ()))
+ ; the grid of rays f pixels apart, kept by f: each ray's offsets, w by h of them, M each
+ ; pixel's nearest, Q the four round it and A B how far it lies across and down between them
+ (grid st f) (: gs (st 'grids) k (int (f * 4.0)) old (peep gs k ())
+   (tablet? old ? old
+      (: W (st 'w) H (st 'h) w (int (W / f + 0.999)) h (int (H / f + 0.999))
+         i (iota (W * H)) x (i % W) y (i // W) j (iota (w * h)) x2 (j % w) y2 (j // w)
+         gx ((x + 0.5) / f - 0.5) gy ((y + 0.5) / f - 0.5)
+         x0 (min (max (floor gx) 0) (w - 1)) y0 (min (max (floor gy) 0) (h - 1))
+         x1 (min (x0 + 1) (w - 1)) y1 (min (y0 + 1) (h - 1))
+         g {'w w 'h h
+            'U ((f * (x2 + 0.5) - W / 2.0) / (W / 2.0)) 'V ((H / 2.0 - f * (y2 + 0.5)) / (W / 2.0))
+            'M (min (int ((y + 0.5) / f)) (h - 1) * w + min (int ((x + 0.5) / f)) (w - 1))
+            'Q [(y0 * w + x0) (y0 * w + x1) (y1 * w + x0) (y1 * w + x1)]
+            'A (sat (gx - x0)) 'B (sat (gy - y0))}
+         (pin gs k g, g))))
+ ; the pace: the rays further apart a quarter pixel at a time while a moving frame's rays
+ ; cost more than pace-ms, closer while they cost well under it -- a step a few frames
+ ; apart, so the picture never jumps
+ pace-ms 40
+ (stones-pace st) (: c (peep st 'cost 0) f (st 'f) since (peep st 'paced 0)
+   up (? (2.0 * pace-ms < c) 1 (1.2 * pace-ms < c && 6 <= since) 1 0)
+   dn ((1 - up) * (c < 0.65 * pace-ms && 20 <= since && 1.0 < f))
+   f2 (min2 4.0 (max2 1.0 (f + 0.25 * up - 0.25 * dn)))
+   (f2 = f ? (pin st 'paced (since + 1)) (pins st 'f f2 'paced 0 'cost 0)))
  ; --- moving: over the sand and up the rows, but not up the rock, nor through a block;
  ; sliding along what stops a step. out past the mouth, the run is done ---
  (free? st x z) (: g (stones-ground x z) g0 (stones-ground (st 'px) (st 'pz))
@@ -329,7 +344,7 @@
                'size stones-size 'frame stones-frame 'key stones-step
                ; ..the frame's own time, kept for the next frame's keys: a slow frame steps further
                'tick (st \ (clock 0 @ now (pins st 'dt (clamp ((now - peep st 'wall now) / 1000.0) 0.02 0.25) 'wall now),
-                            stones-move st))
+                            stones-move st, stones-pace st))
                'fps fps 'song (hn \ ()) 'linger 800 'next ()})
  (stones-run _) (view-run stones-walk)
  stones-usage "usage: love lore stones   (h l turn, k j step, u n look; q or esc leaves, or walk back out of the canyon)"
