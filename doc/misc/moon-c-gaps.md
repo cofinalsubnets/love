@@ -858,12 +858,14 @@ lays the external definition and `extern inline` does not, gnu89's way about) tr
 (an argument of a member's type becomes the union; members one word-sized scalar type, or it
 refuses); **a hint, whose
 skip is exact** — the diagnostics, the optimisation promises (pure const malloc nonnull ...),
-visibility under a static link, cold/hot, fallthrough and the rest of the list; **refused by
-name** — constructor destructor ifunc weakref mode vector_size naked
-interrupt patchable_function_entry, the calling conventions (regparm, ms_abi, pcs ...),
-scalar_storage_order, target_clones, symver. `__has_attribute` answers 1 for the first two
-classes and 0 for the third and for a name it does not know, which is what a header asks
-before it uses one.
+visibility under a static link, cold/hot, fallthrough, i386's calling conventions (stdcall
+fastcall thiscall regparm, which gcc ignores on every target mooncc lays) and the rest of the
+list; **refused by name** — constructor destructor ifunc weakref mode vector_size naked
+interrupt patchable_function_entry, the calling conventions that change code here (ms_abi,
+pcs), scalar_storage_order, target_clones, symver. `__has_attribute` answers 1 for the first
+two classes and 0 for the third and for a name it does not know, which is what a header asks
+before it uses one -- save the four i386 conventions, which answer 1 where gcc off i386 knows
+them not and answers 0.
 
 owed, each refusing loudly today (an undeclared builtin, or a parse error):
 
