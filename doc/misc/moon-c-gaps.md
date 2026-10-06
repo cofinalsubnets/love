@@ -94,7 +94,6 @@ All of C89 passes. What remains is C99/C11/GNU.
 | brace elision continuing **past** an anonymous union member | `{1,2,3,{4,5}}` over `struct { int a,b; union { int c,d; }; struct S1 s; }` — elision *into* the union is fine |
 | a `##` paste that makes a macro NAME | `CAT(A,B)(x)` where `AB` is itself a macro — the pasted name is not rescanned as an invocation |
 | a register-exhausted **SSE**-class by-value argument | five float HFAs — the gp twin landed 2026-08-08 (below), this one did not |
-| an element's address of a 2-D array, cast, in a **static** initializer | `const signed char *const p[] = {(signed char *)&a[0][0]};` refuses "cannot lay the initializer"; `(signed char *)a` (the same address) lays. found in rfc 6716's silk/tables_LTP.c, respelled there |
 
 The last five are what `test_cts` found (doc/misc/moon.md); `test/gate/cts.sh` names the program
 each one came from.
@@ -976,6 +975,35 @@ in `join`, and a function-like macro over an `#ifdef` in its arguments stayed un
 macro-built name (tracing's `TRACE_INCLUDE`) does not resolve.
 
 ---
+
+### the census's own fixes — landed 2026-10-06 (g-21, branch moonparse)
+
+each from the arm64 census above, each held by a law:
+
+- **a static initializer decides an address against null**: `(fn == (fn_type)NULL) ? fn : fn`
+  (OF_DECLARE's `.data`) refused, and a named section's refusal went unread, so the unit compiled
+  clean with that section EMPTY -- 31 defconfig units lost their clock, irqchip and reserved-mem
+  tables. an address is never null, compared or negated; a bad entry in a named section refuses
+  the unit (250-nullcmp-static.c, test/law/moon.l).
+- **a compound literal in a static initializer** is an object of its own, laid beside .data, and
+  an array-typed element decays to its address (`.regs = pll_regs[N]`, `&a[0][0]` -- the cast
+  element row rfc 6716's silk/tables_LTP.c found): 191 of the 198 static-initializer refusals
+  (251-static-clit.c).
+- **`__builtin_constant_p` decides after inlining and kprop**: a param bound to a constant reads 1
+  (kmalloc's cache lane, 221 units), and a BUILD_BUG_ON over a constant local folds its
+  `__compiletime_assert_N` call away (12 units failed the link) (252-constant-p.c, test/law/moon.l).
+- **an asm's other-section words leave with its home**: a BUG_ON a late fold proves false kept its
+  __bug_table row naming the removed label (8 units); a label the record lays itself is no home's
+  (test/gate/moon.sh).
+- **a wide case range** is one label and two compares; a case value may pass 2^62 (98 units,
+  253-case-range.c).
+- **a jump label** compiles where it is spliced (`char *k = &((char *)key)[branch]` as the "i"),
+  and an asm goto target named only by its __jump_table words stays laid (cfoldir, deadlab) -- 42
+  units; a64 also needs `.quad sym+k - .`, row 154 (test/gate/moon.sh).
+- **`__auto_type` takes attributes before its `=`**, the clz/ctz builtins type, and a declarator
+  is in scope for the rest of its list under typeof and sizeof (254-declarators.c).
+- a name an address probe could not resolve no longer stands as a function's refusal: it had hidden
+  the true cause (an asm's lane) behind "undeclared".
 
 ## linux on arm64
 
