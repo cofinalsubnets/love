@@ -2580,8 +2580,35 @@
               (t32? g && (flo? ty || llt? ty || stru? ty))        ; t32 va_arg reads words only (love.c's shape)
                (nolane g ("no lane for a double/pair/struct va_arg" + ontgt g))
               (d128? ty) (nolane g "a wide va_arg is not carried")
-              ; a64: a memory-class struct's slot holds its copy's address, which is the value; any other struct's holds data
-              (a64? g && stru? ty && !(a64m? g ty)) (nolane g ("no lane for a va_arg of this struct" + ontgt g))
+              ; a by-value struct's bytes lie in place, so the value is the address its slots start at. a64's memory
+              ; class rides the pointer path below: its slot holds its copy's address, which is the value
+              (stru? ty && !(a64m? g ty))
+               (: n8 (8 * aslots g ty)
+                  gpo (aone g ty = 'int || ipair? g ty)        ; every eightbyte INT
+                  stk ['(ld r2 r0 0) '(mov r3 r2) ['add 'r3 'r3 n8] '(st r0 0 r3)]   ; p = the stack cursor; it steps past
+                  done (seq \ mkv ty 'r0 (tor0 g lv + seq + ['(mov r0 r2)]))
+                  (? (8 < asalign g ty) (nolane g ("no lane for a va_arg of a struct aligned past 8" + ontgt g))
+                     ; AAPCS64: from the x save area while __gr_offs + its size stays <= 0, else from __stack, and the
+                     ; gp file closes behind it. an HFA would want the q save area's 16-byte steps gathered
+                     (a64? g)
+                      (hfab g ty @ b (flo? b) ?
+                         (nolane g ("no lane for a va_arg of a float aggregate" + ontgt g))
+                         (done ([['ld4 'r1 'r0 24] '(cmp r1 0) ['br 'ge lov]
+                                 '(mov r3 r1) ['add 'r3 'r3 n8] ['st4 'r0 24 'r3]
+                                 '(cmp r3 1) ['br 'ge lov]
+                                 '(ld r2 r0 8) '(add r2 r2 r1) ['jmp ld] ['label lov]]
+                                + stk + [['label ld]])))
+                     ; riscv: __ap walks the slots whole
+                     (rv64? g) (gpo ? (done stk) (nolane g ("no lane for a va_arg of this struct" + ontgt g)))
+                     ; SysV: a memory-class one lies in the overflow area; an INT one comes from the gp save area while
+                     ; gp_offset + its size stays <= 48, else whole from the overflow area, gp_offset unmoved
+                     (: ovs ['(ld r2 r0 8) '(mov r3 r2) ['add 'r3 'r3 n8] '(st r0 8 r3)]
+                        (? (amem? g ty) (done ovs)
+                           gpo (done ([['ld4 'r1 'r0 0] ['cmp 'r1 (49 - n8)] ['br 'ge lov]
+                                       '(ld r2 r0 16) '(add r2 r2 r1) ['add 'r1 'r1 n8] ['st4 'r0 0 'r1]
+                                       ['jmp ld] ['label lov]]
+                                      + ovs + [['label ld]]))
+                           (nolane g ("no lane for a va_arg of this struct" + ontgt g))))))
               (flo? ty) (mkv 'double 'r0 (tor0 g lv + walk + fldf ty 'f0 'r2 0))
               (mkv ty 'r0 (tor0 g lv + walk + [[(ldop ty) 'r0 'r2 0]]))))
        ('vaend . _) (mkv 'long 'r0 ())
@@ -2767,10 +2794,16 @@
                            f1 (a64? g ? (hfa ? 'x 'g) (c1 @ 'sse 'x 'g))
                            gpn ((f0 @ 'g 1 0) + (f1 @ 'g 1 0))
                            xmn ((f0 @ 'x 1 0) + (f1 @ 'x 1 0))
-                           ; register-exhausted: SysV sends the whole aggregate to the overflow block. x64 only -- AAPCS64 closes the
-                           ; gp file behind a stack composite and riscv splits one across the seam, so they refuse
+                           ; register-exhausted: SysV sends the whole aggregate to the overflow block; AAPCS64 sends a gp one there
+                           ; and closes the gp file behind it (C.13); riscv splits one across the seam, and an a64 HFA, so they refuse
                            (ngp g < gpc + gpn || 8 < xmmc + xmn ?
-                               (arm? g ? 'bad             ; arm? is every non-x64 seat here
+                               (? (a64? g && gpn = 2)
+                                   (: n (tsz g aty) al (tal g aty) o (8 * ovc)
+                                      (kls >as (i + 1) (ngp g) xmmc (ovc + 2)
+                                           (. [['ov ovc 2] (tor0 g a + ldal 'r1 'r0 0 8 al + [['st 'sp o 'r1]]
+                                                            + ldal 'r1 'r0 8 (n - 8) al + [['st 'sp (o + 8) 'r1]])]
+                                              acc)))
+                                  (arm? g) 'bad             ; arm? is every non-x64 seat here
                                   (kls >as (i + 1) gpc xmmc (ovc + 2)
                                        (. [['ov ovc 2] (tor0 g a + push2w)] acc)))
                               (: i0 (f0 @ 'g gpc xmmc)

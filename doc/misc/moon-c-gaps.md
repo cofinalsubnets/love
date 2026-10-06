@@ -650,11 +650,12 @@ never silent**.
 | `_Complex` arithmetic | ✓ | — | — | — | — | — |
 | variable-length array | ✓ | ✓ | ✓ | — | — | — |
 | by-value composite arg, ≤16B, registers free | ✓ | ✓ | ✓ | — | — | — |
-| by-value composite arg, MEMORY class | ✓ | — | — | — | — | — |
+| by-value composite arg, MEMORY class | ✓ | ✓ | — | — | — | — |
 | composite passed at a variadic call site | ✓ | ✓ | ✓ | — | — | — |
 | composite NAMED in a variadic parameter list | ✓ | ✓ | — | — | — | — |
+| va_arg of a composite, ≤16B all-int | ✓ | ✓ | ✓ | — | — | — |
 | composite return, 16B all-int | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| composite return, MEMORY class | ✓ | — | — | ✓ | ✓ | ✓ |
+| composite return, MEMORY class | ✓ | ✓ | — | ✓ | ✓ | ✓ |
 | `__builtin_bswap64` | ✓ | ✓ | ✓ | — | — | — |
 | `__sync` spin-lock pair | ✓ | ✓ | ✓ | — | — | — |
 | signed 64-bit `/` and `%` | ✓ | ✓ | ✓ | rt.c | rt.c | rt.c |
@@ -703,6 +704,14 @@ register/stack seam, and t32 has no lane at all. Three rules, three rungs; do no
 `vaspill-a64`); `vaspill-rv` and `vaspill-t32` refuse the shape, each for its own ABI's reason.
 that is a different shape from *passing* a composite at a variadic call site, which rv64
 also takes — probe the one you mean.
+
+**`va_arg` of a by-value composite** takes its slots whole, the bytes in place (266-vaarg-struct.c):
+x64 from the gp save area while gp_offset + its size stays ≤ 48, else whole from the overflow area,
+and a MEMORY-class one from there; a64 from the x save area, else `__stack` with the gp file closed
+behind it, and its memory class through the slot's pointer; rv64 walks `__ap`. an SSE-touching one
+on x64, an HFA on a64, one aligned past 8, and t32 refuse. the a64 caller lays a 9..16B gp composite
+the registers no longer hold on the stack and closes the file (C.13); rv64's caller still refuses
+that straddle, so 266 sits on rv64's and wasm's unsupported lists.
 
 - **mixed/int-pair 8..16B composites on t32** — an aone-`int` 5..8B, or a two-eightbyte
   not-both-sse aggregate by value; register-exhausted stack HFAs (9+ double args); and
