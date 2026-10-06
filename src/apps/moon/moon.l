@@ -333,15 +333,14 @@
     (: d2 ("__ASSEMBLER__=1" . ds)
        lx (clexasm (deftext d2 + s) (1 - #d2))
        _ (okv? lx || ccdie lx src ("cc: lex error in " + src))
-       pp (cpp <>lx (name \ sys? \ incload vb is (cdir src) name sys?) src)
+       pp (cppasm <>lx (name \ sys? \ incload vb is (cdir src) name sys?) src)
        (okv? pp || ccdie pp src ("cc: preprocessor error in " + src),
         asmwrap (asmspell <>pp)))
    ; tokens back to assembly text: an unexpanded token from a later line opens a new one (an
-   ; expansion stays where it was invoked); a space between two words, and after a word unless
-   ; a closer follows, so `movl $1,%eax`, `0x10(%rsp)` and `foo:` come back as written
+   ; expansion stays where it was invoked); a space where the source had one and between two
+   ; words, so `movl $1,%eax`, `0x10(%rsp)`, `foo:` and a macro's `wx\n` come back as written
    (asmspell ts)
     (: (word? t) (<t != 'p && <t != 'str)
-       (closer? t) (<t = 'p && elem <>t '("," ")" ":" "(" "]" ";"))
        (qesc s) ("\"" + string (catmap (c \ (c @ 34 [92 34] 92 [92 92] 10 [92 110] 9 [92 116]
                                                    (c < 32 || 126 < c ? (c & 255 @ o [92 (48 + (o >> 6)) (48 + ((o >> 3) & 7)) (48 + (o & 7))]) [c])))
                                         (chars s)) + "\"")
@@ -352,7 +351,7 @@
            (<l @ t
               (? (<t = 'fspans) (go >l prev acc)                  ; cpp's file-span record, not text
                  (<t = 'p && <>t = "\n") (go >l () ([10] . acc))
-                 (: sep (? (atom? prev) () (word? prev && !(closer? t)) [32] ())
+                 (: sep (? (atom? prev) () (spaced? prev || (word? prev && word? t)) [32] ())
                     (go >l t (chars (spell t) . sep . acc))))))
        (go ts () ()))
    ; the shared front end: source path (+ -I dirs, -D defines) -> (1 ast stag sigs ..) | a

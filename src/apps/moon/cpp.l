@@ -510,17 +510,19 @@
    ; -> the rest after a run of marks, the file stack they leave, and whether
    ; the next real token is a string (so the caller knows to join)
    (skipfm ts files) (two? ts && fmark? <ts ? (skipfm >ts (fmpush <ts files)) [ts files])
-   (strcat-pass ts n files)
+   ; fin finishes each token: bare for C, which parse reads; an assembly source keeps the
+   ; whitespace marks, so asmspell spaces where the source did
+   (strcat-pass ts n files fin)
     (atom? ts ? ()
        (<ts @ t
           (? (fmark? t)
-              (fmpush t files @ fs (spanat n fs, strcat-pass >ts n fs))
-             !(strk? (kof t)) (bare t . strcat-pass >ts (n + 1) files)
+              (fmpush t files @ fs (spanat n fs, strcat-pass >ts n fs fin))
+             !(strk? (kof t)) (fin t . strcat-pass >ts (n + 1) files fin)
              (: sr (skipfm >ts files) nxt <sr fs <>sr
-                (!(two? nxt && strk? (kof <nxt)) ? (bare t . strcat-pass >ts (n + 1) files)
+                (!(two? nxt && strk? (kof <nxt)) ? (fin t . strcat-pass >ts (n + 1) files fin)
                    ; the marks we just consumed take effect after the merged token
                    (? (fmtop fs = fmtop files) () (spanat (n + 1) fs),
-                    strcat-pass (tok (jork (kof t) (kof <nxt)) (vof t + vof <nxt) (lof t) . >nxt) n fs))))))
+                    strcat-pass (tok (jork (kof t) (kof <nxt)) (vof t + vof <nxt) (lof t) . >nxt) n fs fin))))))
 
    ; -- the driver: walk logical lines, run directives, expand active code.
    ; macs is a mutable tablet (so #define/#undef persist and includes share it);
@@ -765,10 +767,12 @@
    ; -- the multiple-include rule: a header wholly inside `#ifndef G .. #endif`, nothing past
    ; it and no #else at its top, reads as nothing once G is defined. so the second #include
    ; of the same text lexes nothing and walks nothing -- the marks still bracket it --
+   ; a header an assembly source includes is assembly too, lexed as its includer is (gcc's
+   ; one mode per compile): its lines keep their marks and `\u` stays a macro argument's
    (lexinc ip txt macs)
     (peep guards ip () @ e
        (? (two? e && <e = txt && two? (mdef macs <>e)) [1 ()]
-          (clexw txt 1 @ lr
+          ((two? (mdef macs "__ASSEMBLER__") ? (clexasm txt 1) (clexw txt 1)) @ lr
              (: _ (okv? lr && 0 < #ip && pin guards ip [txt (guardof <>lr)])
                 lr))))
    (dirat? l) (two? l && pv? <l "#" && two? >l)      ; l opens a directive, its name next
@@ -845,7 +849,9 @@
                ; bool/true/false are the dialect's, not the language's: the driver's
                ; -D channel lays them (moon.l cc-defs), and C11 leaves them plain names
                 t))
-   (cpp toks incf fname)                              ; -> (1 out) | a gripe (test with okv?, never two?)
+   (cpp toks incf fname) (cpp-fin toks incf fname bare)   ; -> (1 out) | a gripe (test with okv?, never two?)
+   (cppasm toks incf fname) (cpp-fin toks incf fname (t \ t))
+   (cpp-fin toks incf fname fin)
     (: macs (cppmacs fname)
        r (cppgo toks macs () () () incf)
        ; the spans ride the stream's head as one marker token, so cpp keeps its
@@ -853,7 +859,7 @@
        ; feeds parse raw lexer output simply has none, and parse reads ().
        (gripe? r ? r
           (: _ (pin spanacc 'l ())
-             out (strcat-pass r 0 ())
+             out (strcat-pass r 0 () fin)
              [1 (tok 'fspans (rev (spanacc 'l)) 0 . out)])))       ; an empty token list is a valid empty TU, not a failure -- only a gripe fails
 
    ; -E: the TU preprocessed, as text -- gcc -E's shape, which configure scripts read: the
