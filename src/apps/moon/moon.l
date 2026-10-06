@@ -184,6 +184,19 @@
    ; nothing. the utf pair is the positive claim: u"" is utf-16, U"" utf-32.
    ; what -mbranch-protection lays, as acle names it (gen.l's bprot): the a key, non-leaf
    (bpdefs bp) ((elem 'bti bp ? '("__ARM_FEATURE_BTI_DEFAULT=1")) + (elem 'pac bp ? '("__ARM_FEATURE_PAC_DEFAULT=1")))
+   ; gcc's atomic predefines: the orders, and a width's lock-free answer as gen lays it -- 2
+   ; always, 0 refused (rv64 has no sub-word read-modify-write, thumb2 no doubleword, thumb1 no
+   ; exclusives). the -fshort-wchar fork narrows wchar_t's row
+   (atomdefs tgt sw)
+    (: ws (tgt @ 'thumb1 () 'rv64 '(4 8) ('thumb2 || 'thumb2sp) '(1 2 4) '(1 2 4 8))
+       lw (elem tgt '(thumb2 thumb2sp thumb1) ? 4 8)
+       (lf n) (elem n ws ? "2" "0")
+       ('("__ATOMIC_RELAXED=0" "__ATOMIC_CONSUME=1" "__ATOMIC_ACQUIRE=2" "__ATOMIC_RELEASE=3"
+          "__ATOMIC_ACQ_REL=4" "__ATOMIC_SEQ_CST=5" "__GCC_ATOMIC_TEST_AND_SET_TRUEVAL=1")
+        + map (p \ ("__GCC_ATOMIC_" + <p + "_LOCK_FREE=" + lf (p 1)))
+                [["BOOL" 1] ["CHAR" 1] ["CHAR16_T" 2] ["CHAR32_T" 4] ["WCHAR_T" (sw ? 2 4)]
+                 ["SHORT" 2] ["INT" 4] ["LONG" lw] ["LLONG" 8] ["POINTER" lw]]
+        + map (n \ ("__GCC_HAVE_SYNC_COMPARE_AND_SWAP_" + show n)) ws))
    (featdefs tgt)
     ('("__STDC_NO_ATOMICS__=1" "__STDC_NO_THREADS__=1"
        "__STDC_UTF_16__=1" "__STDC_UTF_32__=1")
@@ -368,7 +381,7 @@
    gnudefs '("__GNUC__=8" "__GNUC_MINOR__=1" "__GNUC_PATCHLEVEL__=0")
    (booldefs dia) (dia != 'c && '("bool=_Bool" "true=1" "false=0"))
    (cc-defs {'ds ds 'tgt tgt 'os os 'dia dia 'undef un 'swch sw 'bp bp})
-    (un ? (stddefs tgt sw + booldefs dia + ds) (archdefs tgt + osdefs os + featdefs tgt + bpdefs bp + stddefs tgt sw
+    (un ? (stddefs tgt sw + booldefs dia + ds) (archdefs tgt + osdefs os + featdefs tgt + atomdefs tgt sw + bpdefs bp + stddefs tgt sw
                  ; our libc is the one in this link and carries its whole surface on every
                  ; kernel: a source asks it what it may call, never the kernel.
                  + '("LvMoonlibc=1")

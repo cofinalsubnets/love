@@ -102,7 +102,7 @@ void __love_saout(void *a, unsigned int n) { }
  * same shape, or a body whose BSD branch builds the BSD shape and hands the
  * number through this door; -1 in a column refuses that kernel (ENOSYS,
  * loudly). unmapped stay unmapped: mount, sendfile, and linux's own
- * mechanisms (clone, dup3, signalfd4, memfd_create, unshare). netbsd's
+ * mechanisms (clone, dup3, signalfd4, memfd_create, mremap, unshare). netbsd's
  * classic band matches freebsd number for number; its versioned calls
  * (__fstat50 440, __getdents30 390, __wait450 449 ..) part company, and the
  * pad-carrying classics (lseek, pread, pwrite, ftruncate, mmap) keep their
