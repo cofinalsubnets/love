@@ -366,15 +366,19 @@
                                               (eat (j + 1) (src j = 10 && !(spliced? j) ? (l2 + 1) l2)))
                                 r (eat (i + 2) line)
                                 (charm? <r ? (go <r <>r (spc acc))))
+                 ; a quote that opens no literal -- unclosed on its line, or a bad escape -- is
+                 ; its own pp-token (C11 6.4p3): harmless in a skipped group (lua's ljumptab.h
+                 ; keeps a sed line under #if 0), a parse error if it reaches C
                  (c = 34) (strbody (i + 1) 34 () @ r          ; a string literal
-                             (two? r ? (go <>r line (['str <r line () (snip src i <>r)] . acc))))
+                             (two? r ? (go <>r line (['str <r line () (snip src i <>r)] . acc))
+                                (go (i + 1) line (['p "\"" line] . acc))))
                  ; a character constant: chars and escapes up to the closing quote.
                  ; multi-character ones are ordinary C (implementation-defined, gcc
                  ; packs left to right into an int) and they turn up in text the
                  ; program never means to compile -- pdclib's `#error .. 'long' ..`
                  ; sits in a dead #if, and the whole file lexes before cpp runs.
                  (c = 39) (: (mc k v cnt)
-                             (? (n <= k) ()
+                             (? (n <= k || src k = 10) ()
                                 (src k = 39) (cnt = 0 ? () [k v cnt])
                                 (src k = 92)
                                  (escseq (k + 1) @ r
@@ -388,7 +392,8 @@
                                  v (<>>r = 1 ? <>r
                                       (<>r & 4294967295 @ w
                                          (0 < w & 2147483648 ? (w - 4294967296) w)))
-                                 (go j line (['num v line () (snip src i j)] . acc)))))
+                                 (go j line (['num v line () (snip src i j)] . acc)))
+                              (go (i + 1) line (['p "'" line] . acc))))
                  (c = 48 && i + 1 < n && (src (i + 1) = 120 || src (i + 1) = 88))        ; 0x / 0X hex (int or float)
                   (: r (hexlit i)
                      k (<>r ? (<>>>r ? 'flof 'flo) (ukind i <r <>>r ()))   ; a u/U in the suffix run marks it unsigned (1U / 1ULL)

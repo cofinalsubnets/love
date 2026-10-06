@@ -52,13 +52,14 @@
       ((tn3 <>(clex "'a' '\\n' '\\''") 1) = ['num 10 1])
       ((tn3 <>(clex "'a' '\\n' '\\''") 2) = ['num 39 1])
       ; a multi-char constant packs left to right into an int, gcc's rule (0x6162);
-      ; an unterminated one still refuses.
+      ; a quote that opens no literal is its own pp-token (C11 6.4p3), the parser's to refuse
       ((tn3 <>(clex "'ab'") 0) = ['num 24930 1])
-      !(clex "'")                                            ; malformed literals refuse
+      ((tn3 <>(clex "'") 0) = ['p "'" 1])
+      ((tn3 <>(clex "it's") 1) = ['p "'" 1])
       ((tn3 <>(clex "\"hi\"") 0) = ['str "hi" 1])
       ((tn3 <>(clex "\"a\\nb\"") 0) = ['str "a\nb" 1])
       ((tn3 <>(clex "\"ab\\\ncd\"") 0) = ['str "abcd" 1])          ; \<newline> inside a string splices (the pair vanishes) -- tar's --help strings
-      !(clex "\"open")                                       ; unterminated string refuses
+      ((tn3 <>(clex "\"open") 0) = ['p "\"" 1])               ; so does an unterminated string's
       ; the source spelling beside the value, slot 4: what a value cannot answer
       ; back (0777 and 511 are one value) and what # owes. cpp's sof reads it.
       ((spl (clex "0777") 0) = "0777") ((spl (clex "0777") 0) = "0777")

@@ -4576,9 +4576,11 @@
                            (? (charm? j) (uncond? f ? [j] [j (i + 1)])
                               (uncond? f) ()
                               (i + 1 < n) [(i + 1)] ()))
-             ; the branch predecessors of each label
-             bp (foldl (t \ i \ (: f (fv i) L (tgt f)
-                                   (L && charm? (lix L) ? (pin t L (i . peep t L ())) t))) {} (jot n))
+             ; the branch predecessors of each label, a table jump one of each of its targets
+             (bpin t i L) (charm? (peep lix L ()) ? (pin t L (i . peep t L ())) t)
+             bp (foldl (t \ i \ (: f (fv i)
+                                   (two? f && <f = 'jmpt ? (foldl (t2 \ L \ bpin t2 i L) t (f 3))
+                                      (bpin t i (tgt f))))) {} (jot n))
              (reach B)
               (: (go st P) (!(two? st) ? P
                               (<st @ i
@@ -7678,7 +7680,7 @@
        (? (wasm? g || t32? g) 'no               ; no memory table on wasm; t32's REL lane is unproven here
           (any (e2 \ two? <e2) cases) 'no         ; a range rides the chain
           (abl? g 'jtab) 'no
-          (n9 < 6) 'no                              ; fewer cases than a table is worth
+          (n9 < 6) 'no                             ; fewer cases than a table is worth
           (4096 < span) 'no                         ; ..and a span no table should cover
           (3 * n9 < span) 'no                     ; too sparse: a third full is the floor
           !(immok g 'cmp (span - 1)) 'no
