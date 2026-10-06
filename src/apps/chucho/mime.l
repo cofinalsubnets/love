@@ -180,8 +180,7 @@
  (mime-leaves m) (mime-split m @ [h b] (mime-walk (mime-heads h) b 0))
 
  ; --- dates: "Thu, 30 Sep 2026 20:22:55 -0400", read leniently, its fields in its zone -----
- (mime-num s) (: (go i a) (? (#s <= i) a (48 <= s i <= 57) (go (i + 1) (a * 10 + s i - 48)) -1)
-                 (#s ? (go 0 0) -1))
+ (mime-num s) (unum s @ () -1 n n)
  (mime-mon s) (: (go l i) (? (atom? l) 0 (starts? (lower s) <l) i (go >l (i + 1))) (go mime-mons 1))
  (mime-zone s)
   (? (5 <= #s && (s 0 = 43 || s 0 = 45) && 0 <= mime-num (snip s 1 5))

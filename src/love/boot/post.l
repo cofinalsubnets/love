@@ -216,6 +216,7 @@
    (rstrip s) (: (go j) (0 < j && ws? (s (j - 1)) ? (go (j - 1)) j) (snip s 0 (go #s)))
    (strip s)  (lstrip (rstrip s))       ; not `trim`: that name is ev.l's port op, mopped by egg.l
    (lines s) (split "\n" (#s && s (#s - 1) = 10 ? (snip s 0 (#s - 1)) s))
+   (unlines ls) (: o (jug 0) (go m) (two? m ? (say o <m, put o 10, go >m) (slurp o)) (go ls))   ; each line ends in \n
    (words s) (: (go i st acc)                           ; whitespace runs, so no empty pieces
                  (: shut (st < i ? (snip s st i . acc) acc)
                     (? (i >= #s) (rev shut)
