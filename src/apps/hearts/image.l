@@ -1,10 +1,10 @@
 ; src/apps/hearts/image.l -- rung 0's image: a GPT disk for qemu virt (a64), and the signed
 ; updates that move it. the disk:
 ;   1 ESP (FAT32): EFI/BOOT/BOOTAA64.EFI (src/inle/uefi/slot.c), a/Image, a/cmd, hearts.st
-;   2 root a, 3 root b (squashfs, deflated; b empty until an update writes it), 4 data (FAT32)
+;   2 root a, 3 root b (squashfs, deflated; b empty until an update writes it), 4 data (ext4)
 ; a root: love as /bin/love, helm's script as init (/bin/helm), src/apps/hearts/dev.l and app.l, the update key.
 ; the parts lie back to back from 1 MiB, each `at` where the one before it ends.
-; usage: love -l src/apps/sqfs.l image.l OUT LOVE IMAGE EFI SEED BADSEED [STAMP]
+; usage: love -l src/apps/sqfs.l -l src/apps/ext4.l image.l OUT LOVE IMAGE EFI SEED BADSEED [STAMP]
 ;   writes OUT/disk.img (v1 in slot a) and OUT/u1.hup (v2 signed by BADSEED, refused),
 ;   OUT/u2.hup (v2 with a byte of its root changed under a good head, refused), OUT/u3.hup (v2)
 ;   and OUT/u4.hup (v3, sick); LOVE is a baked a64 love, IMAGE the kernel,
@@ -15,6 +15,7 @@
 (borrow 'gz)
 (borrow 'fat)
 (borrow 'sqfs)
+(borrow 'ext4)
 (: ; its words are the ones after its own name, whatever loaded ahead of it
    (after l) (atom? l ? () (<l @ (_ + "image.l") >l (after >l)))
    as (after cmdline)
@@ -125,7 +126,7 @@
    (flip s i) (snip s 0 i + string (255 - s i) + snip s (i + 1) #s)
    esp (fatimg (128 * mib) [["EFI/BOOT/BOOTAA64.EFI" efi] ["a/Image" kernel]
                             ["a/cmd" (cmd + " root=/dev/vda2\n")] ["hearts.st" "a-\n"]])
-   data (fatimg (64 * mib) ())
+   data (ext4-image (ext4-make 16384 (made "data") (made "data hash") stamp) 16384)
    ps [["esp" esp-type mib (128 * mib) esp]
        ["root-a" linux-type (129 * mib) rsz r1]
        ["root-b" linux-type (161 * mib) rsz ""]
