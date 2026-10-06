@@ -15,7 +15,7 @@ struct g; union u;
 #define love_noinline __attribute__((noinline))
 // no identical-code-folding: the data sentinels' bodies are byte-identical but
 // their address is the type tag (gcc -Os runs -fipa-icf)
-#if defined(__GNUC__) && !defined(__clang__)
+#if defined(__GNUC__) && !defined(__clang__) && !defined(__mooncc__)
 #define noicf __attribute__((noipa))
 #else
 #define noicf
@@ -130,7 +130,7 @@ static love_inline uintptr_t mulsat(uintptr_t a, uintptr_t b) {
 // cross-checks the shipped binary. an lvm takes no other argument: musttail wants matching
 // prototypes, so what an op needs beyond the stack rides g->b, read at entry.
 #define love_musttail __attribute__((musttail))
-#if defined(__GNUC__) && !defined(__clang__)
+#if defined(__GNUC__) && !defined(__clang__) && !defined(__mooncc__)
 // gcc's "maybe" escape lint: an address-taken local handed to an earlier helper trips it,
 // and no-scratch-in-lvm_ already forbids a frame address outliving its call
 #pragma GCC diagnostic ignored "-Wmaybe-musttail-local-addr"

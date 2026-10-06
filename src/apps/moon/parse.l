@@ -240,6 +240,8 @@
    (inlany? ts) (attrany? ts "always_inline" "__always_inline__")
    (wkany? ts) (attrany? ts "weak" "__weak__")
    (noinlany? ts) (attrany? ts "noinline" "__noinline__")
+   (usedany? ts) (attrany? ts "used" "__used__")
+   (gnuinlany? ts) (attrany? ts "gnu_inline" "__gnu_inline__")
    ; the declaration's section attribute: `section("NAME")`, either spelling, to the first
    ; depth-0 `;` or `{` -- inside a declaration that shape only occurs in an __attribute__.
    ; -> NAME | ()
@@ -289,7 +291,7 @@
    ; a new door rather than a wider one: under (f) == f a shifted call hands back a closure
    ; without a word, so psnew/cparse-t keep the arity every caller already spells
    (psnew-d tgt dia) ({} @ t
-                (pin t 'dia dia,                  ; the dialect: what grammar the front reads (moon | c)
+                (pin t 'dia dia,                  ; the dialect: what grammar the front reads (moon | c | c23)
                  pin t 'tgt tgt,                  ; the codegen target: 32-bit widths (thumb1/thumb2) vs 64-bit
                  pin t 'types {},         ; typedef name -> ty
                  pin t 'weaks (),                 ; __attribute__((weak)) function names
@@ -304,6 +306,7 @@
                  pin t 'stag {},          ; tag -> (fields size align)
                  pin t 'tags {},          ; a block tag's spelling -> the key it took in stag (C11 6.7.2.3)
                  pin t 'utag {},          ; the tags of that table that are unions (the layout flattens them alike)
+                 pin t 'tunion {},        ; ..and those __attribute__((transparent_union)) marked (tuargs)
                  pin t 'sigs {},          ; fn/proto name -> (rettype (paramty..)) for the call ABI
                  pin t 'anon 0,                   ; the anonymous-tag counter
                  pin t 'sfns {},          ; top-level `static` fn names: local symbols in the .o
@@ -333,6 +336,9 @@
                         '((("gp_offset" 0 int) ("fp_offset" 4 int) ("overflow_arg_area" 8 (ptr void))
                            ("reg_save_area" 16 (ptr void))) 24 8)),
                  pin (t 'types) "__builtin_va_list" '(arr (struct "__va_list_tag") 1),
+                ; gcc's predefined typedef names for the wide pair, wherever __int128 itself reads
+                 pin (t 'types) "__int128_t" 'i128,
+                 pin (t 'types) "__uint128_t" 'u128,
                 ; the bswap trio's sigs, seeded so the results type unsigned (a
                 ; swapped high bit is real: compare/divide/sizeof read the width)
                  pin (t 'sigs) "__builtin_bswap16" '(ushort (ushort) ()),
@@ -343,6 +349,14 @@
                  pin (t 'sigs) "__builtin_popcount" '(int (uint) ()),
                  pin (t 'sigs) "__builtin_popcountl" '(int (ulong) ()),
                  pin (t 'sigs) "__builtin_popcountll" '(int (ulong) ()),
+                ; clz and ctz: an unsigned operand, a plain int count, gcc's own signatures -- so an
+                ; __auto_type or a typeof over one (linux's ilog2) types
+                 pin (t 'sigs) "__builtin_clz" '(int (uint) ()),
+                 pin (t 'sigs) "__builtin_clzl" '(int (ulong) ()),
+                 pin (t 'sigs) "__builtin_clzll" '(int (ulong) ()),
+                 pin (t 'sigs) "__builtin_ctz" '(int (uint) ()),
+                 pin (t 'sigs) "__builtin_ctzl" '(int (ulong) ()),
+                 pin (t 'sigs) "__builtin_ctzll" '(int (ulong) ()),
                 ; ffs: gcc's signed operands, a plain int answer (0 for 0, else the lowest set bit's 1-based index)
                  pin (t 'sigs) "__builtin_ffs" '(int (int) ()),
                  pin (t 'sigs) "__builtin_ffsl" '(int (long) ()),
@@ -473,6 +487,7 @@
              ; &x is a pointer to x's type -- only when that type is known, so a
              ; wrong element type never reaches a stride fold.
              (k = 'addr) (ptype ps <>e @ it (it ? ['ptr it]))
+             (k = 'laddr) '(ptr void)
              ; a call through a named function: its 'sigs return type (the
              ; complex promotion below needs clog's answer to type complex)
              (k = 'call) (: sg (two? <>e && <<>e = 'var ? (peep (ps 'sigs) <><>e ()))
@@ -486,6 +501,7 @@
              ; a literal: sizeof('T') is sizeof(int) (musl's _IOW ioctl codes);
              ; a plain decimal past int32 is a long (suffixed forms arrive cast)
              (k = 'num) (-2147483648 <= <>e && <>e <= 2147483647 ? 'int 'long)
+             (k = 'bcp) 'int
              (k = 'flo) 'double
              (k = 'flof) 'float
              ; arithmetic rides the typing door: ptr - ptr is ptrdiff_t, ptr +- int the
@@ -722,7 +738,9 @@
    ; an aligned ask raises a laid struct's alignment, and its size rounds up to it
    (alask lay a) (a > lay 2 ? [<lay (a * ((lay 1 + a - 1) // a)) a] lay)
    (playout ps ms uni pk)                           ; -> (fields size align); pk: packed, every member aligns 1
-    (: (go l bit mx acc)
+    (: cap (peep ps 'pack 0)                         ; #pragma pack's: a member's natural alignment at most this
+       (capa x) (0 < cap && cap < x ? cap x)
+       (go l bit mx acc)
         (atom? l ?
            (: a2 (mx < 1 ? 1 mx)
               [(rev acc) (aup (>> (bit + 7) 3) a2) a2])
@@ -735,12 +753,13 @@
                  ; alignment, so a trailing label equals sizeof and mx is already final.
                  (: (nxt r) (atom? r ? () (<>(<r) @ t2 (t2 = 'label ? (nxt >r) t2)))
                     nt (nxt >l)
-                    la (? pk 1 nt (talign ps nt) (mx < 1 ? 1 mx))
+                    la (? pk 1 nt (capa (talign ps nt)) (mx < 1 ? 1 mx))
                     at (uni ? 0 (aup bit (la * 8) >> 3))   ; a union flattens every offset
                     (go >l bit mx ([name at ['arr 'char 0]] . acc)))
                  (bfmem? m)                          ; a bitfield member (named or anonymous): (name ty width)
                  (: w <>>m
                     usz (tsz ps ty) ubits (usz * 8) a (talign ps ty)
+                    _ (0 < cap && cap < a && pin ps 'packbf 1)    ; gcc lets these straddle units; refused
                     nmx (mx < a ? a mx)
                     (? (w = 0) (go >l (aup bit ubits) nmx acc)        ; `:0` -- align the cursor to the unit, no field
                        uni (: fld (name ? [name 0 ['bitfield ty 0 w]])
@@ -752,7 +771,7 @@
                           (go >l (bit2 + w) nmx (name ? (fld . acc) acc)))))
                  !name                               ; the anonymous struct/union splice (name absent, no width)
                  (: inner (peep (ps 'stag) <>ty 0)
-                    ia (pk ? 1 <>>inner)
+                    ia (pk ? 1 (capa <>>inner))
                     isz <>inner
                     sbit (uni ? 0 (aup bit (ia * 8)))
                     at (sbit >> 3)
@@ -762,7 +781,7 @@
                     nmx (mx < ia ? ia mx)
                     nbit (uni ? (bit < isz * 8 ? (isz * 8) bit) (sbit + isz * 8))
                     (go >l nbit nmx (spl <inner acc)))
-                 (: a (max (pk ? 1 (talign ps ty)) (two? >>>m ? (m 3) 0))   ; an ask outranks packed, as gcc has it
+                 (: a (max (pk ? 1 (capa (talign ps ty))) (two? >>>m ? (m 3) 0))   ; an ask outranks packed, as gcc has it
                     sz (tsz ps ty)
                     abit (uni ? 0 (aup bit (a * 8)))
                     at (abit >> 3)
@@ -824,10 +843,14 @@
                        (atom? mr ? ()
                           (: pa (pattpk ps <>mr)       ; a trailing __attribute__((packed)) lays align-1
                              lay (alask (playout ps <mr uni (<pb | <pa)) (max (pb 2) (pa 2)))
+                             tu (uni && attrany? <>mr "transparent_union" "__transparent_union__")
+                             (? (peep ps 'packbf ()) (pin ps 'packbf (), clblame "a bit-field under #pragma pack is not carried out")
+                                (tu && !(tuok? ps lay)) (clblame "a transparent union wants members of one word-sized scalar type")
                              (pin (ps 'stag) tag2 lay,
                               uni ? (pin (ps 'utag) tag2 1) 0,
+                              tu ? (pin (ps 'tunion) tag2 1) 0,
                               qmempin ps tag2 qpre,
-                              [['struct tag2] <>pa]))))
+                              [['struct tag2] <>pa])))))
                     (tag ? [['struct (tagref ps tag)] ts3])))
              (tkw? t 'enum)
               ; the underlying type is unsigned when no enumerator is negative (gcc's choice),
@@ -882,15 +905,18 @@
              (tkk t = 'id && (peep (ps 'types) (tkv t) 0 ? 1))
               [(peep (ps 'types) (tkv t) 0) >ts]
              ; __auto_type NAME = init: the initializer's own type, parsed here with the cursor
-             ; left at the name so the ordinary declarator path runs. gcc allows no other declarator
+             ; left at the name so the ordinary declarator path runs. gcc allows no other declarator,
+             ; but attributes may stand between the name and its = (linux's scoped guards)
              (tkk t = 'id && tkv t = autoid)
               (>ts @ r1
+                 (: (atts l) (? (two? l && idv? <l "__attribute__" && peekp >l "(") (skipbal >>l 1 @ e (atts e)) l)
+                    r2 (two? r1 ? (atts >r1) r1)
                  (? !(idat? r1) ()
-                    !(peekp >r1 "=") ()
-                    (pasn ps >>r1 @ er
+                    !(peekp r2 "=") ()
+                    (pasn ps >r2 @ er
                        (atom? er ? ()
                           (ptype ps <er @ ty
-                             (ty ? [ty r1]))))))
+                             (ty ? [ty r1])))))))
              ; __typeof(expr) / __typeof__(type-name) (gcc): the operand's parse-time type --
              ; a type-name reads pcty, an expression ptype (whose 'sigs lane carries weak_alias)
              (tkk t = 'id && elem (tkv t) tyofid)
@@ -1104,7 +1130,7 @@
              ; on the arm targets), u -> char16 (ushort, a supplementary code point as its
              ; surrogate pair), U -> char32 (uint). the token's value is canonical UTF-8.
              (elem (tkk t) '(wstr str16 str32))
-              (: ety (? (tkk t = 'str16) 'ushort
+              (: ety (? (tkk t = 'str16 || ps 'swch) 'ushort
                         (tkk t = 'str32) 'uint
                         (elem (ps 'tgt) '(a64 thumb2 thumb2sp thumb1)) 'uint
                         'int)
@@ -1112,7 +1138,7 @@
                             (65536 <= <l) (<l - 65536 @ v
                                              (55296 + (v >> 10) . 56320 + (v & 1023) . s16 >l))
                             (<l . s16 >l))
-                 cps (utf8dec (tkv t) @ raw (tkk t = 'str16 ? (s16 raw) raw))
+                 cps (utf8dec (tkv t) @ raw (ety = 'ushort ? (s16 raw) raw))
                  (nums l) (atom? l ? [['num 0]] (['num <l] . nums >l))
                  [['clit ['arr ety (#cps + 1)] ['init (nums cps)]] >ts])
              ; _Generic (C11 6.5.1.1): the controlling expression is typed, never
@@ -1187,14 +1213,16 @@
                  ; _Generic's marked types, so an inner const tells `const char *` from `char
                  ; *`; the top-level one is dropped, C11's own reading and gcc's for this builtin
                  (two? rest ? [['num (qbare <ta = qbare <tb ? 1 0)] rest]))
-             ; __builtin_constant_p: 1 when the parse-time fold settles the operand, 0 when
-             ; it does not -- a miss sends the consumer down its runtime lane, the safe end.
-             ; the operand is not evaluated, so its side effects are gone.
+             ; __builtin_constant_p: 1 when the parse-time fold settles the operand; else a
+             ; deferred ('bcp e) that gen decides once inlining and constant propagation have
+             ; run (a param bound to a constant reads 1), and a constant context reads as 0 --
+             ; a miss sends the consumer down its runtime lane, the safe end. the operand is
+             ; never evaluated, so its side effects are gone.
              (tkk t = 'id && bib? (tkv t) && tkv t = "__builtin_constant_p")
               (: r1 (want >ts "(")
                  ra (two? r1 ? (pasn ps r1))
                  rest (two? ra ? (want <>ra ")"))
-                 (two? rest ? [['num (charm? (cfold (pw64 ps) <ra) ? 1 0)] rest]))
+                 (two? rest ? [(charm? (cfold (pw64 ps) <ra) ? ['num 1] ['bcp <ra]) rest]))
              ; __builtin_object_size(p,t) and the dynamic spelling: the answer gcc gives when
              ; it cannot see the object -- (size_t)-1 for types 0/1, 0 for 2/3, the conservative
              ; end both ways, which is what the kernel's fortify checks read to stand down
@@ -1208,6 +1236,25 @@
                  tv (two? rb ? (cfold (pw64 ps) <rb))
                  (atom? rest ? ()
                     [['cast (szty ps) ['num (charm? tv && 1 < tv ? 0 -1)]] rest]))
+             ; __builtin_assume_aligned(p, a[, off]) is p, the promise dropped (its operands are
+             ; constants); __builtin_extract_return_addr(a) is a, no return address being signed
+             (tkk t = 'id && bib? (tkv t) &&
+              elem (tkv t) '("__builtin_assume_aligned" "__builtin_extract_return_addr"))
+              (: r1 (want >ts "(")
+                 ra (two? r1 ? (pasn ps r1))
+                 (tail l) (? (atom? l) () (peekp l ")") >l
+                             (peekp l ",") (pasn ps >l @ r (two? r ? (tail <>r)))
+                             ())
+                 rest (two? ra ? (tail <>ra))
+                 (two? rest ? [['cast '(ptr void) <ra] rest]))
+             ; __builtin_parity{,l,ll}(x): the popcount's low bit
+             (tkk t = 'id && bib? (tkv t) &&
+              elem (tkv t) '("__builtin_parity" "__builtin_parityl" "__builtin_parityll"))
+              (: r1 (want >ts "(")
+                 ra (two? r1 ? (pasn ps r1))
+                 rest (two? ra ? (want <>ra ")"))
+                 pc ("__builtin_popcount" + snip (tkv t) 16 #(tkv t))
+                 (two? rest ? [(mkbin ps '& ['call ['var pc] [<ra]] ['num 1]) rest]))
              ; __builtin_choose_expr(c,a,b): c must fold, the unchosen arm is parsed and
              ; dropped, so a call to an undefined function in it links clean. arms need not type alike
              (tkk t = 'id && bib? (tkv t) && tkv t = "__builtin_choose_expr")
@@ -1264,6 +1311,18 @@
    ; literal with the clit ((struct kstat){0}.st_atime_sec, (size_t [3]){..}[i])
    ; a call, or a builtin gcc lowers to plain C: isdigit(c) is (unsigned)(c - '0') < 10,
    ; which folds over a constant like any comparison
+   ; a transparent union parameter takes any of its members' types: the argument becomes the
+   ; union, laid through its first member, which the attribute's word-sized members share
+   (tuok? ps lay) (: w (pw64 ps ? 8 4)
+                     (<>lay = w && all (f \ (f 2 @ t (ptr? t || elem t '(long ulong int uint))) && tsz ps (f 2) = w) <lay))
+   (tuargs ps e as)
+    (: sg (e @ ('var nm) (peep (ps 'sigs) nm ()) ())
+       (wrap a pt) (pt @ (('struct tag) && peep (ps 'tunion) tag ())
+                      (ptype ps a @ at (stru? at ? a
+                         ['clit pt ['init [['cast (<<(peep (ps 'stag) tag ()) 2) a]]]]))
+                      a)
+       (go l ps9) (? (atom? l) () (atom? ps9) l (wrap <l <ps9 . go >l >ps9))
+       (two? sg ? (go as (sg 1)) as))
    (bicall e as)
     (e = ['var "__builtin_isdigit"] && two? as && atom? >as ?
         ['bin 'lt ['cast 'uint ['bin '- <as '(num 48)]] '(num 10)]
@@ -1272,7 +1331,7 @@
     (: (more e ts2)
               (? (peekp ts2 "(")                     ; a call: the head is any postfix expr (fn pointers)
                   (pargs ps >ts2 () @ ra
-                     (two? ra ? (more (bicall e <ra) <>ra) [() ()]))
+                     (two? ra ? (more (bicall e (tuargs ps e <ra)) <>ra) [() ()]))
                  (peekp ts2 "[")
                   (thenw (pexpr ps >ts2) "]" @ ri
                      (two? ri ? (more ['deref ['bin '+ e <ri]] <>ri) [() ()]))
@@ -1371,6 +1430,8 @@
              (idv? t "__extension__") (punary ps >ts)
              (tp? t "*") (punary ps >ts @ r
                             (two? r ? [['deref <r] <>r]))
+             ; gcc's &&L: the address of a label in this function
+             (tp? t "&&" && idat? >ts) [['laddr (lname ps (tkv <>ts))] >>ts]
              (tp? t "&") (punary ps >ts @ r
                             (atom? r ? ()
                                (nulloff ps <r @ n   ; the offsetof idiom folds to a constant
@@ -1413,7 +1474,7 @@
    ; gcc's `a ?: b` is `a ? a : b` with a read once: a side-effect-free a is simply repeated
    ; (so a constant stays one), anything else lands in a temp inside a statement expression
    (elvpure? e)
-    (e @ (('num || 'flo || 'str || 'var || 'szof) . _) 1
+    (e @ (('num || 'flo || 'str || 'var || 'szof || 'bcp) . _) 1
          (('un || 'cast) _ x) (elvpure? x)
          (('deref || 'addr) x) (elvpure? x)
          ('dot x _) (elvpure? x)
@@ -1712,6 +1773,8 @@
                     (? (f = 'bad) ()
                        (ty = 'bool) [(f = 0.0 ? 0 1) 'bool]   ; to _Bool is a compare, never a truncation
                        (wr ty (ceil (f // 1)))))))           ; and every other one truncates toward zero
+          ; a deferred __builtin_constant_p in a constant context: 1 if its operand folds, else 0
+          (<e = 'bcp) (cfty w64 <>e @ r (two? r ? [1 'int] [0 'int]))
           ; the bit builtins over a constant fold, so one can label a case or size a bit-field
           (<e = 'call)
            (: h <>e as <>>e
@@ -1845,7 +1908,15 @@
                    (more ts2 acc)
                     (one ts2 @ r
                        (? (atom? r) ()
-                          (peekp <>r ",") (more ><>r (<r . acc))
+                          ; a declarator finished is in scope for the ones after it, typeof
+                          ; and sizeof included (`int timeout, err = ({ __typeof__(timeout) v; .. })`),
+                          ; put back when the list is read
+                          (peekp <>r ",")
+                           (: e <r nm <e old (peep (ps 'locals) nm 'none)
+                              _ (fn? (e 1) ? 0 (pin (ps 'locals) nm (e 1)))
+                              res (more ><>r (<r . acc))
+                              (fn? (e 1) ? 0 (old = 'none ? (pull (ps 'locals) nm 0) (pin (ps 'locals) nm old)),
+                               res))
                           (: rest (want <>r ";")
                              es (filter (e \ !(fn? <>e)) (rev (<r . acc)))
                              ; the extern entries hoist to the TU's top, where gen's global
@@ -2072,7 +2143,9 @@
                        (two? rb ? [['switch <rc [<rb]] <>rb]))))
              (tkw? t 'goto)
               (>ts @ t2
-                 (!(idat? t2) ? ()
+                 (? (peekp t2 "*")                  ; gcc's computed goto, through a label's address
+                     (thenw (pexpr ps >t2) ";" @ r (two? r ? [['igoto <r] <>r]))
+                    !(idat? t2) ()
                     (want >t2 ";" @ rest
                        (two? rest ? [['goto (lname ps (tkv <t2))] rest]))))
              (tkw? t 'break)
@@ -2082,23 +2155,23 @@
              ; case/default are labels, legal at any statement depth and not just as a direct
              ; child of the switch body (Duff's-device style); gen ties each back to its nearest
              ; enclosing switch by case value (g 'cases). gcc's `case A ... B:` expands to one
-             ; label per value -- sound because a switch dispatches by a compare chain, not a
-             ; table -- and is capped, so a wide range refuses rather than laying thousands.
+             ; label per value when narrow (a table may still take it), and a wider one is one
+             ; ('case A B) the dispatch tests as one unsigned compare (linux's sysreg ranges).
              (tkw? t 'case)
               (pexpr ps >ts @ rv
                  (atom? rv ? ()
                     (: v (cfold (pw64 ps) <rv)
                        (crange lo hi acc) (hi < lo ? (rev acc) (crange (lo + 1) hi (['case lo] . acc)))
-                       (? !(charm? v) ()
+                       (? !(cint? v) ()
                           (peekp <>rv "...")
                            (pexpr ps ><>rv @ r2
                               (atom? r2 ? ()
                                  (: hi (cfold (pw64 ps) <r2)
                                     rest (want <>r2 ":")
-                                    (? !(charm? hi) ()
+                                    (? !(cint? hi) ()
                                        (atom? rest) ()
                                        (hi < v) (blame <>rv "an empty case range")
-                                       (1024 < hi - v) (blame <>rv "case range too wide")
+                                       (16 < hi - v) [['case v hi] rest]
                                        [['blk (crange v hi ())] rest]))))
                           (want <>rv ":" @ rest
                              (two? rest ? [['case v] rest]))))))
@@ -2411,6 +2484,8 @@
                         (: sk (fresh "__cln_pad_")
                            a2 ([(s 0) (s 1) (s 2) (s 3) (s 4) <r] + >>>>>>s)
                            ['blk ([a2 ['goto sk]] + <>r + [['lbl sk]])])))
+                 ; a computed goto's target is unknown here, so it may leave no cleanup behind
+                 (k = 'igoto) (atom? (clup st ()) ? s 'bad)
                  (elem k '(lbl case dflt nop goto asm tdef)) s
                  (xw s st))))
        (ws body ()))
@@ -2447,7 +2522,11 @@
      (peep ps 'curweak () ? () (wkany? ts ? (pin ps 'curweak 1))),
      (peep ps 'curinl () ? () (inlany? ts ? (pin ps 'curinl 1))),
      (peep ps 'curnoinl () ? () (noinlany? ts ? (pin ps 'curnoinl 1))),
-     (peep ps 'curlink () ? () (pin ps 'curlink (leadkw? ps ts 'inline && !(leadextern? ps ts) ? 'inl 'ext))),
+     (peep ps 'curused () ? () (usedany? ts ? (pin ps 'curused 1))),
+     ; C99 inline: plain `inline` lays no external definition and `extern inline` does; gnu_inline
+     ; (the kernel's every `inline`) is gnu89's, the other way about
+     (peep ps 'curlink () ? ()
+        (pin ps 'curlink (leadkw? ps ts 'inline && !!(leadextern? ps ts) = !!(gnuinlany? ts) ? 'inl 'ext))),
      (peep ps 'curalign () ? () (alignat? ps ts @ an (an ? (pin ps 'curalign an)))),
      ptop9 ps ts)
    (ptop9 ps ts)
@@ -2647,8 +2726,10 @@
           (go <>f)))
    (cparse ts) (cparse-t ts 'x64)          ; the law tests + any bare caller: 64-bit widths (unchanged behavior)
    (cparse-t ts tgt) (cparse-d ts tgt 'moon)  ; ..and the default dialect, which is what a bare caller means
-   (cparse-d ts tgt dia)
-    (: ps (psnew-d tgt dia)
+   (cparse-d ts tgt dia) (cparse-o ts tgt dia {})
+   ; opts: what the driver's flags say about the language beyond the dialect ('swch, -fshort-wchar)
+   (cparse-o ts tgt dia opts)
+    (: ps (pin (psnew-d tgt dia) 'swch (opts 'swch))
        toks (fsbody ts) spans (fspans ts)
        ; does the unit name volatile anywhere? mooncc's types carry no qualifier, so a unit that
        ; does keeps every load and store where the source put it (gen's memfw stands down)
@@ -2668,7 +2749,8 @@
                    (gogl <>f)))
            st (ps 'curstat) sc (ps 'cursect) an (ps 'curalign)
            fnp (elem <f '(fn proto))
-           (st && fnp ? (pin (ps 'sfns) <>f 1),
+           ; a `used` static is kept though nothing here calls it (gen's dead-static sweep)
+           (st && fnp ? (pin (ps 'sfns) <>f (ps 'curused || peep (ps 'sfns) <>f () = 'used ? 'used 1)),
            ; a function may name its section and its alignment too (love.c's data sentinels):
            ; where the code lands is the point, and the align is what pins the spacing
             sc && fnp ? (pin (ps 'sects) <>f sc),
@@ -2715,13 +2797,15 @@
             pin ps 'curweak (),
             pin ps 'curinl (),
             pin ps 'curnoinl (),
+            pin ps 'curused (),
             pin ps 'curalign (),
             pin ps 'scopacc (),        ; what a file-scope specifier bound is nobody's to take back
             pin ps 'cursect ()))
        (tops ts2 acc)
         ; the hoisted block-scope externs lead the program: gen's global pass reads them, and
         ; C's tentative rule lets a real definition later in the TU take the entry back
-        (atom? ts2 ? ((map (nm \ (peep (ps 'c99inl) nm () = 'inl ? (pin (ps 'sfns) nm 1))) (keys (ps 'c99inl))),
+        (? (two? ts2 && tkk <ts2 = 'pack) (pin ps 'pack (tkv <ts2), tops >ts2 acc)   ; cpp's #pragma pack mark
+           (atom? ts2) ((map (nm \ (peep (ps 'c99inl) nm () = 'inl ? (pin (ps 'sfns) nm 1))) (keys (ps 'c99inl))),
                       [1 ['prog (ps 'hoist + rev acc)] (ps 'stag) (ps 'sigs) (ps 'weaks)  ; empty acc = a valid empty TU (crypt.c), not a parse failure
                             (ps 'sfns) (ps 'svars) (ps 'sects) (ps 'alias) (ps 'aligns) (ps 'ainl) (ps 'noinl)
                             (ps 'consts) (ps 'rstrs) (ps 'gregs) vol])
@@ -2730,5 +2814,30 @@
                  (redecl ps <r @ why
                     (why ? (gripe (filat spans (#toks - #ts2)) (<>><ts2) () why)
                        (note <r, tops <>r (<r . acc)))))))
-       (tops toks ())))
+       (attrbad toks spans @ ab (gripe? ab ? ab (tops toks ()))))
+   ; an __attribute__ whose skip would change the code (cpp.l's gnuattrs 'no) refuses where it
+   ; is written: each item at the group's top depth is read by its first word. -> a gripe | ()
+   (attrbad toks spans)
+    (: ; inside __attribute__((, at depth d of parens; w: the next word names an item (the
+       ; group's opening or a `,` at its depth), so an argument never passes for one
+       (item l i d w)
+        (? (atom? l) ()
+           (<l @ t
+              (? (tp? t "(") (item >l (i + 1) (d + 1) ())
+                 (tp? t ")") (d = 2 ? (scan >>l (i + 2)) (item >l (i + 1) (d - 1) ()))
+                 (d = 2 && tp? t ",") (item >l (i + 1) d 1)
+                 (w && elem (tkk t) '(id kw))
+                  (: nm (tkk t = 'kw ? show (tkv t) (tkv t))
+                     (attrdoes nm = 'no ?
+                        (gripe (filat spans i) (<>>t) () ("__attribute__((" + attrname nm + ")) is not carried out"))
+                        (item >l (i + 1) d ())))
+                 (item >l (i + 1) d ()))))
+       (scan l i)
+        (? (atom? l) ()
+           (: t <l
+              (? (tkk t = 'id && elem (tkv t) '("__attribute__" "__attribute") && two? >l && tp? <>l "("
+                  && two? >>l && tp? <>>l "(")
+                  (item >>>l (i + 3) 2 1)
+                 (scan >l (i + 1)))))
+       (scan toks 0)))
 ) ; module 'moon

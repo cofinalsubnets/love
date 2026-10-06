@@ -145,7 +145,7 @@ static love_noinline int mag_mul_add_small(love_limb *a, int n, love_limb mul, l
 // 128/64 -> quotient + remainder, caller guarantees the quotient fits a limb
 // (hi < d): the hardware divq on x86-64, never __udivti3
 static love_inline love_limb div2by1(love_limb hi, love_limb lo, love_limb d, love_limb *rem) {
-#if defined(__x86_64__) && limb_bits == 64 && defined(__GNUC__)
+#if defined(__x86_64__) && limb_bits == 64 && defined(__GNUC__) && !defined(__mooncc__)
  // gcc/clang take the one-divq asm; mooncc compiles the C face below natively
  // (its u128/u64 divide is the same two-step divq dance, emitted whole)
  __asm__("divq %2" : "+a"(lo), "+d"(hi) : "r"(d));

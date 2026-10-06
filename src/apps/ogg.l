@@ -60,18 +60,19 @@
     (\ pkt gr (flac-frame pkt 0 (m 'bps) (m 'ch) @ (pcm . _) pcm _ ()))
    ; vorbis: identification, comments and setup, then each audio packet a block; the end
    ; page's granule cuts the last block to the stream's length
-   (ogg-vb-tags p)
-    (: vn (le p 7 4) k (le p (11 + vn) 4)
+   ; a comment header's tags, its vendor's length at o: vorbis's and opus's, the same shape
+   (ogg-tags p o)
+    (: vn (le p o 4) k (le p (o + 4 + vn) 4)
        (go i j acc) (? (j >= k || #p < i + 4) (rev acc) (le p i 4 @ n (go (i + 4 + n) (j + 1) (snip p (i + 4) (i + 4 + n) . acc))))
        ; a name is any case; the door's are upper, as they are written by convention
-       (? (#p < 15) () (map (t \ (findsub t "=") @ i (i < 0 ? t (upper (snip t 0 i) + snip t i #t))) (go (15 + vn) 0 ()))))
+       (? (#p < o + 8) () (map (t \ (findsub t "=") @ i (i < 0 ? t (upper (snip t 0 i) + snip t i #t))) (go (o + 8 + vn) 0 ()))))
    ogg-vb-why ["" "not a vorbis stream" "a vorbis setup cut short" "a kind of vorbis this can't read (floor 0)"
                "a bad vorbis setup"]
    (ogg-vb-head ps)
     (? (#ps < 3) 'more
        (: id <ps su (ps 2) n (vorbis-size id su)
           (? (n < 0) (ogg-vb-why (0 - n))
-             {'rate (le id 12 4) 'ch (id 11) 'tags (ogg-vb-tags (ps 1)) 'vb [id su] 'size n})))
+             {'rate (le id 12 4) 'ch (id 11) 'tags (ogg-tags (ps 1) 7) 'vb [id su] 'size n})))
    (ogg-vb-format m) {'name "vorbis" 'desc "vorbis" 'w 2 'bits 16 'kind 's 'big 0 'ch (m 'ch)
                       'rate (m 'rate) 'align (2 * m 'ch)}
    (ogg-vb-start m)
@@ -81,9 +82,28 @@
                       pcm (? !(string? pcm) ()                 ; a packet that is no block is passed over
                              (: k (#pcm // w) t (n 'n) c (? (0 <= gr && gr < t + k) (max 0 (gr - t)) k)
                                 (pin n 'n (t + c), snip pcm 0 (c * w))))))))
+   ; opus (rfc 7845): OpusHead and OpusTags, then packets of 48 kHz audio; the head's
+   ; pre-skip comes off the front, and the end page's granule, which counts it, cuts the last
+   (ogg-op-head ps)
+    (? (#ps < 2) 'more
+       (: p <ps ch (#p > 9 ? (p 9) 0)
+          (? (#p < 19 || p 8 > 15) "an opus head this can't read"
+             (p 18 != 0 || ch < 1 || ch > 2) "multichannel opus (a channel mapping past 0) is not read here"
+             {'rate 48000 'ch ch 'pre (le p 10 2) 'tags (ogg-tags (ps 1) 8)})))
+   (ogg-op-format m) {'name "opus" 'desc "opus" 'w 2 'bits 16 'kind 's 'big 0 'ch (m 'ch) 'rate 48000
+                      'align (2 * m 'ch)}
+   (ogg-op-start m)
+    (: st (cask (opus-state (m 'ch))) r (opus-init st (m 'ch)) w (2 * m 'ch) n {'n 0}
+       (? (r != 0) (\ pkt gr ())
+          (\ pkt gr (opus-packet st pkt 0 @
+                      pcm (? !(string? pcm) ()                 ; a packet that will not decode is passed over
+                             (: k (#pcm // w) t (n 'n) lo (max 0 (m 'pre - t))
+                                hi (? (0 <= gr && gr < t + k) (max 0 (gr - t)) k)
+                                (pin n 'n (t + k), lo < hi ? (snip pcm (lo * w) (hi * w)) "")))))))
    (ogg-codecs _)
     [["flac" (p \ "\x7fFLAC" = snip p 0 5) ogg-flac-head (cite 'flac 'flac-format) ogg-flac-start]
-     ["vorbis" (p \ "\x01vorbis" = snip p 0 7) ogg-vb-head ogg-vb-format ogg-vb-start]]
+     ["vorbis" (p \ "\x01vorbis" = snip p 0 7) ogg-vb-head ogg-vb-format ogg-vb-start]
+     ["opus" (p \ "OpusHead" = snip p 0 8) ogg-op-head ogg-op-format ogg-op-start]]
    (ogg-codec nm) <(filter (c \ <c = nm) (ogg-codecs ()))
 
    ; --- the door ------------------------------------------------------------

@@ -195,7 +195,10 @@ Anything without `-c` is a **link**, through `src/love/holo/link.l`.
   bites, and that the answer is unchanged;
 - the **semantic** refusals stay loud (`-shared`, `-Wl,`'s payload, `-m..`) — an ignored one
   would be the silent-no-op trap in a cc suit. mooncc **refuses** a `-m` rather than ignoring
-  it.
+  it, but for two it lays, on a64 only (moon-c-gaps.md, linux on arm64):
+  `-mstrict-align` (`-mno-strict-align`), no access wider than its address is known to align,
+  and `-mbranch-protection=none|bti|pac-ret|pac-ret+bti`, bti landing pads and pac-ret's signed
+  return address, with clang's property note and build attributes on the object.
 
 Errors speak on err and exit 1; usage exits 2.
 
