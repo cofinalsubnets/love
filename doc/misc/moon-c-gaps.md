@@ -855,6 +855,49 @@ linker-script reader, and a 32/16-bit x86 backend for arch/x86/boot and the 32-b
 
 ---
 
+## linux on arm64
+
+**measured 2026-10-05** against 6.19.14, arm64 tinyconfig (g-21's census, kbuild's flags,
+`mooncc -t a64 -c`): of 474 units, 117 compiled, 149 crashed and 183 refused. With the rows
+below, 251 of those 332 re-run so far: **145 compile**, and the rest refuse by name but for two
+(gen's `cs-unsaved`). What landed on the inline-asm and assembler side, each held by a law:
+
+- **the frame record**: fp and lr save as one AAPCS64 record, `stp x29, x30, [sp, #-32]!`
+  and its `ldp`, so `[fp]` is the caller's fp and `[fp+8]` the return address, which the
+  kernel's unwinder reads. The area stays 32 bytes, so no fp-relative offset moved. They were
+  two padded pushes, which put the lr at `[fp+16]`: wrong code, silent. gen's `frrec` fuses
+  the pair after every IR pass, and a lone fp or lr push left over refuses (225-framerecord.c,
+  native on an a64 host).
+- **a gas or holo scare is a refusal**: a function's asm, and the file-scope or `.S` text,
+  read under a trap. What used to print `internal error` now names the line's piece.
+- **Q, Qo, +Q, =Q**: a64's base-register memory operand is the `[xN]` "m" already spells;
+  `"rZ"` always takes a register (226-a64asm.c).
+- **system registers**: about a hundred by name, any case (`CurrentEL`), and gas's generic
+  `s3_0_c15_c0_4`; `ic ialluis` and the tlbi/dc operations the kernel names. Every word is
+  llvm-mc's (test/holo/golden.l).
+- **instructions**: the hints (`yield`, `sev`, `sevl`, `hint #n`, `bti`, pauth's sp pair),
+  `bic`/`bics`/`orn`/`eon`, `adc`/`sbc`, the reversals and counts, `cbz`/`cbnz` (a new IR op,
+  the flags untouched, CONDBR19 when its label is outside the blob), `sttr`/`ldtr` and kin,
+  the exclusives and acquire/release, `prfm`/`prfum`, and `mov` to or from sp.
+- **directives**: `.inst`; `.arch`/`.arch_extension`/`.cpu` read as no-ops; `.subsection N`,
+  laid after its section's own forms (a function's goes to .text); and `.org . - (a-b) + (c-d)`,
+  the alternatives' size check, which refuses when it would move back. A directive's name
+  ends where its identifier does (a `.S` spells `.long((x)-.)` unspaced).
+- **cpp**: `#` of a stray `\\` outside a literal is one backslash once re-lexed (C11
+  6.10.3.2). Every `__emit_inst` through `mrs_s`/`msr_s` carried a stray `\` (227-stringizebs.c).
+
+Still open on this side (g-21's probes):
+
+- **x18 is allocated freely**, and `-ffixed-x18` is ignored: the platform register, which the
+  kernel's shadow call stack owns.
+- **a packed field loads unaligned** (`ldursw`), which faults under `-mstrict-align`.
+- where the re-run stops now, on this side: the `.S` exception-table macro's `\insn`, which
+  reaches `.long ((\insn) - .)` unsubstituted (24); an asm goto with outputs (9, refused above);
+  a register variable pinned to `x0` (4); the `"p"` constraint (2). The rest is part 1's front
+  end and gen (`linux/skbuff.h`, an undeclared `branch`).
+
+---
+
 ## assembly sources
 
 **Landed 2026-09-28.** `mooncc x.s` and `mooncc x.S` lay an object, and link beside C. A `.s` is

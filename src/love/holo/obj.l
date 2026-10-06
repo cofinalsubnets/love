@@ -23,6 +23,7 @@
    ra-abs64  257                                    ; R_AARCH64_ABS64           S + A
    ra-jump26 282                                    ; R_AARCH64_JUMP26          (S+A-P)>>2 into b's imm26
    ra-call26 283                                    ; R_AARCH64_CALL26          ... into bl's imm26
+   ra-condbr19 280                                  ; R_AARCH64_CONDBR19        ... into b.cond's or cbz's imm19
    ra-prel32 261                                    ; R_AARCH64_PREL32          S + A - P in four bytes (a jump table's entry)
    ra-pghi21 275                                    ; R_AARCH64_ADR_PREL_PG_HI21  page(S+A)-page(P) into adrp
    ra-lo12   277                                    ; R_AARCH64_ADD_ABS_LO12_NC   (S+A) & 0xfff into add
@@ -557,6 +558,7 @@
                  'adrp21 (o-rela off si ra-pghi21 sa)
                  'addlo12 (o-rela off si ra-lo12 sa)
                  'b26 (o-rela off si (aux = 2483027968 ? ra-call26 ra-jump26) sa)   ; 0x94000000 = bl
+                 'b19 (o-rela off si ra-condbr19 sa)
                  ; riscv: a 'pcrel pair (CALL_PLT) or a wide branch's 'j21 (JAL), both S+a-p
                  'pcrel (o-rela off si rr-call sa)
                  'j21 (o-rela off si rr-jal sa)
