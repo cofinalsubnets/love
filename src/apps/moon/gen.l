@@ -7849,9 +7849,9 @@
           (flo? rt && !(dbl? rt) || stru? rt) ()
           (sig 2) ()                            ; variadic stays a real call
           !(pok <>>f 0) ()
-          ; the size gate on the body's weight, not the spelling of its names: 82 for a
-          ; single-return body, 35 for a branchy one
-          (!aln && (oneret? items ? 82 35) < aweigh <>>>f) ()
+          ; the size gate on the body's weight, not the spelling of its names: 99 for a
+          ; single-return body, 43 for a branchy one
+          (!aln && (oneret? items ? 99 43) < aweigh <>>>f) ()
           (asmneed? g <>>f <>>>f) !(noinlj? <>>>f)
           !(noinl? <>>>f)))
    ; -- the AST inliner: a call to an inline candidate, where its statement evaluates it before anything
