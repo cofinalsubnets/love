@@ -122,13 +122,14 @@ case $tgt in
   thumb2) refuse="67-varargs-double 68-static-assert 71-varargs-sysv 85-aggval
                   88-varargs-overflow 97-muslrungs 100-complex 101-vla 102-bigstruct
                   111-int128 115-rmwop 117-vastruct 128-bswap 129-sync 133-popcount
-                  151-w128fuzz 161-enumwide 165-constcond 166-condconv" ;;
+                  151-w128fuzz 161-enumwide 165-constcond 166-condconv 228-strictalign" ;;
+  # 228 lays a double at an odd packed offset, which vldr's word-aligned offset cannot carry.
   # the two lists are NOT the same list: v6-M refuses 82-znvalue where thumb2 takes it.
   # the composite rows do not move together (doc/misc/moon-c-gaps), so neither do these.
   thumb1) refuse="67-varargs-double 68-static-assert 71-varargs-sysv 82-znvalue 85-aggval
                   88-varargs-overflow 97-muslrungs 100-complex 101-vla 102-bigstruct
                   111-int128 115-rmwop 117-vastruct 128-bswap 129-sync 133-popcount
-                  151-w128fuzz 161-enumwide 165-constcond 166-condconv" ;;
+                  151-w128fuzz 161-enumwide 165-constcond 166-condconv 228-strictalign" ;;
 esac
 
 inlist() { for w in $2; do [ "$w" = "$1" ] && return 0; done; return 1; }

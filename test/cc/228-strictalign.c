@@ -19,7 +19,11 @@ __attribute__((noinline)) static struct small mk(int v) { struct small s = { 1, 
 __attribute__((noinline)) static int usesm(struct small s) { return s.c + s.i + s.d; }
 __attribute__((noinline)) static long usepr(struct pair p) { return p.c + p.a + p.b; }
 __attribute__((noinline)) static struct pair mkpr(long a) { struct pair p = { 3, a, -4 }; return p; }
+#if defined(__aarch64__) || defined(__x86_64__)   /* the targets that pass a memory-class struct */
 __attribute__((noinline)) static long usebig(struct big b) { return b.c + b.a[0] + b.a[1] + b.a[2]; }
+#else
+#define usebig(b) ((b).c + (b).a[0] + (b).a[1] + (b).a[2])
+#endif
 
 static int add1(int x) { return x + 1; }
 static int dbl(int x) { return x * 2; }
@@ -38,7 +42,7 @@ int main(void) {
     p->d = 2.5; p->f = -1.25f;
     printf("read %ld %d %ld %d %u\n", sum(p), p->i, p->l, p->s, p->u);
     p->i++; p->l--; ++p->s; p->u += 7; p->i *= 3; p->l ^= 0xff; p->s <<= 1; p->d *= 4; p->f += 0.5f;
-    printf("step %d %ld %d %u %g %g\n", p->i, p->l, p->s, p->u, p->d, (double)p->f);
+    printf("step %d %ld %d %u %ld %ld\n", p->i, p->l, p->s, p->u, (long)(p->d * 100), (long)(p->f * 100));
 
     struct outer *o = (struct outer *)(arena + 64 + 3);
     o->in.a = 77; o->in.b = -9; o->t = 200;
