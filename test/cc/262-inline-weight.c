@@ -1,7 +1,9 @@
 /* an inline helper weighed by its structure, not the spelling of its names: linux's
  * kmalloc_array -- long names, a helper around an overflow builtin, __builtin_expect(!!(..))
- * inside it -- and a short-named twin of the same shape answer alike. moon.sh holds that the
- * long-named one is spliced; this holds what both answer. freestanding, exit-code only. */
+ * inside it -- and a short-named twin of the same shape answer alike; and an overflow builtin
+ * over constants, answered whole. moon.sh holds that the long-named one is spliced and that a
+ * constant size reaches kmalloc's __builtin_constant_p; this holds what each answers.
+ * freestanding, exit-code only. */
 
 typedef unsigned long size_t;
 
@@ -26,10 +28,24 @@ static inline void *k(size_t n, size_t s, unsigned f)
 	return the_slow_path_allocator(b, f);
 }
 
+/* constant operands into a local written by nothing else: answered at compile time, the
+ * value at the local's width and whether it fit */
+static int folds(void)
+{
+	int bad = 0;
+	int i; signed char c; unsigned u; size_t z; long l;
+	if (!__builtin_add_overflow(0x7fffffff, 1, &i) || i != -0x7fffffff - 1) bad |= 1;
+	if (!__builtin_mul_overflow(16, 8, &c) || c != -128) bad |= 2;
+	if (!__builtin_sub_overflow(0u, 1, &u) || u != 0xffffffffu) bad |= 4;
+	if (__builtin_mul_overflow((size_t)3, sizeof(long), &z) || z != 24) bad |= 8;
+	if (__builtin_add_overflow(-5, 3, &l) || l != -2) bad |= 16;
+	return bad;
+}
+
 int main(void)
 {
 	volatile size_t n = 3, big = (size_t)1 << 62;
-	int bad = 0;
+	int bad = folds() << 4;
 	if (kmalloc_array_noprof_like_helper(4, 8, 1) != &got || got != 33) bad |= 1;
 	if (kmalloc_array_noprof_like_helper(n, 5, 2) != &got || got != 17) bad |= 2;
 	if (kmalloc_array_noprof_like_helper(big, 8, 0) != 0 || got != 17) bad |= 4;
