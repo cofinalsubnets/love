@@ -11,8 +11,6 @@
 ; host-only: the chat's commands run on a pty of their own (tether, screen). the saver is mitty's.
 (module (chat chat-tui chat-stage chat-hud hud-stage)
 (:
- esc (string 27)
- (sgr code s) (esc + "[" + code + "m" + s + esc + "[0m")
  (soil c) (pin (c 'dirt) () 1)
  (push c b) (pins c 'blocks (b . c 'blocks) 'scroll 0 'mails (peep c 'mails 0 + (b 'k = 'mail)))
 
@@ -65,7 +63,7 @@
  ; the last n used rows, painted as limn paints a pane
  (scr-rows s n)
   (: sp (scr-span s) hi (sp 1) lo (max <sp (hi - n + 1)) w (gaze s 2)
-     (map (\ i (: j (jug 0) _ (cite 'limn 'limn-row j s w i 0 -1 0) (slurp j + esc + "[0m")))
+     (map (\ i (: j (jug 0) _ (cite 'limn 'limn-row j s w i 0 -1 0) (slurp j + "\e[0m")))
           (map (\ d (lo + d)) ^(max 0 (hi - lo + 1)))))
  ; everything the command wrote, as text, for the model
  (scr-text s) (: w (gaze s 2) (copied s -(gaze s 9 * w) (gaze s 0)))
@@ -379,11 +377,11 @@
   (: why (peep c 'why "") to (hud-to c)
      (? (0 < #why) (: _ (pin c 'note why) (soil c))
         !(string? to) (: _ (pin c 'note "no session to talk to") (soil c))
-        (: _ (pins c 'typing 1 'to to 'note "") _ (say out (esc + "[?25h")) (soil c))))
+        (: _ (pins c 'typing 1 'to to 'note "") _ (say out "\e[?25h") (soil c))))
  ; typing: enter sends to the session named, tab names the next, esc goes back to looking
  (hud-type c k)
   (: e (c 'ed)
-     (? (k = 27) (: _ (pin c 'typing 0) _ (say out (esc + "[?25l")) (soil c))
+     (? (k = 27) (: _ (pin c 'typing 0) _ (say out "\e[?25l") (soil c))
         (k = 3) (pin c 'over 1)
         (k = 9) (: ps (c 'bee 'peers 0) i (findsub ps [(c 'to)])
                    _ (? (two? ps) (pin c 'to (ps ((i + 1) % #ps))) 0)

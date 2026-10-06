@@ -3135,7 +3135,7 @@
 ; heap. the shadow rule lives in one place, verbs' `word`.
 
 (module '(cli read reads forms shell welp edraw edln edlnc edlay cli-rail cli-line stage stage-run ttysize ttytake ttygive edkey edtap edgc
-          uopt uopt1 uoptv uoptun uoptbad uoptstray uoptp uoptlast uask uvers udoor edcmd edsgr edwide edcut edpad edfit
+          uopt uopt1 uoptv uoptun uoptbad uoptstray uoptp uoptlast uask uvers udoor edcmd edsgr edwide edcut edpad edfit sgr
           ednew edstep edput ednl edclear edempty? edchars edtext edcol edparses? edframe edload
           edleft edright edbsp eddel edhome edend edtop edbot edup eddown uphist downhist eddetach
           joinln splitat parseall)
@@ -3546,6 +3546,7 @@
    ; first so the answer is exactly n wide -- both by column, not by byte.
    (edpad s n c) (edwide s @ w (w < n ? (s + ((n - w) (t \ t + c) "")) s))
    (edfit s n c) (edpad (edcut s n) n c)
+   (sgr code s) ("\e[" + code + "m" + s + "\e[0m")       ; s in the pen code, reset after
 
    ; --- the option walk, shared by kore's applets and love's own rail ----------------
    ; (uopt1 w flags vals) -- one word into its letters as words of their own, or () when the

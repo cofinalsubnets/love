@@ -2266,7 +2266,7 @@
      (plain yes)
       {'yes yes
        'text (\ x (puts x, flush out))
-       'think (\ x (? bee-tty? (: _ (puts (esc + "[2;3m" + x + esc + "[0m")) (flush out)) 0))
+       'think (\ x (? bee-tty? (: _ (puts ("\e[2;3m" + x + "\e[0m")) (flush out)) 0))
        'break (\ _ (puts "\n"))
        'note (\ s (puts ("\nbee: " + s + "\n")))
        'mail (\ from t (puts ("\nbee: a message from " + from + "\n" + t + "\n")))
@@ -2288,8 +2288,8 @@
        + (: s (peep bee-cell 'claude ()) (string? s ? (" · claude " + s + " (--resume " + s + ")") "")))
      ; the terminal's title names the session (OSC 2), the old title pushed first and popped at the
      ; end (xterm's CSI 22/23 t), so tmux's window list and the tabs say which bee is which
-     (title-on _) (esc + "[22;0t" + esc + "]2;bee: " + (me 0) + string 7)
-     (title-off _) (esc + "[23;0t")
+     (title-on _) ("\e[22;0t\e]2;bee: " + (me 0) + string 7)
+     (title-off _) "\e[23;0t"
      ; the > loop: the name once, and the title while on a terminal
      (repl-go key f)
       (: tty? (two? (tty 1))
@@ -2307,8 +2307,6 @@
 
      ; --- the look: the avatar worn (src/apps/mitty/avatar.l), its face drawn and the accent
      ; everything else takes, an sgr ---
-     esc (string 27)
-     (sgr code s) (esc + "[" + code + "m" + s + esc + "[0m")
      bee-look {}
      (look! nm) (: l (cite 'avatar 'avatar-look nm) (pins bee-look 'name nm 'face (l 'face) 'ink (l 'ink)))
      _ (look! (: n (setting 'avatar "bunny") (elem n (cite 'avatar 'avatar-names 0) ? n "bunny")))
