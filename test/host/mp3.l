@@ -8,10 +8,9 @@
 (borrow 'posix)
 (borrow 'mp3)
 (borrow 'av)
+(borrow 'bytes)
 (: dir (cwd 0 + "/out/.mp3d")
-   peepv (cite (quote guts) (quote peepv))
    _ (hark ["rm" "-rf" dir], mkdir dir 448)
-   (mp-rd p) (: q (open p "r") (? (hot? q) (: s (slurp q) (close q, s)) ""))
    (mp-nib c) (? (c < 58) (c - 48) (c - 87))
    (mp-unx h) (cask (#h // 2) @ c (map (i \ pin c i (mp-nib (h (2 * i)) * 16 + mp-nib (h (2 * i + 1)))) (jot (#h // 2)),
                                   string c))
@@ -53,9 +52,8 @@
            (mp3-sniff tiny = 1) (mp3-sniff (snip tiny 0 50) = 'more) (mp3-sniff (cats (map (_ \ "noise ") ^1000)) = 0)
            (mp3-meta "ID3" = ['more 10]))
    ; a tag past 1 MiB through the door: its text frames kept, the picture after them left unread
-   (mp-b4 n) (string (map (k \ (n >> (8 * (3 - k))) & 255) ^4))
    (mp-ss n) (string (map (k \ (n >> (7 * (3 - k))) & 127) ^4))
-   (mp-fr i b) (i + mp-b4 #b + string [0 0] + b)
+   (mp-fr i b) (i + wrbe #b 4 + string [0 0] + b)
    mp-big (: t (mp-fr "TIT2" (string [0] + "Big") + mp-fr "APIC" (string [0] + "image/jpeg" + string [0 3 0] + string (cask 2097152)))
              ("ID3" + string [3 0 0] + mp-ss #t + t))
    _ (open (dir + "/apic.mp3") "w" @ q (say q (mp-big + tiny), close q))
@@ -65,10 +63,6 @@
    _ (test (atom? (filter (i \ !(mp-all (mp-flip tiny i) 0 @ r (string? r || charm? r))) (jot #tiny))))
 
    ; -- 11172-4's full accuracy, on s16: rms under 1/sqrt 12 of a step, none more than two ---
-   (mp-s16 s) (peepv (: c (cask #s) (pour c 0 s 0 #s, c)) 0 2 2 (#s // 2) @ t (t - 65536 * (t >= 32768)))
-   (mp-full a b) (? (#a != #b || #a < 2) 0
-                    (: d (mp-s16 a - mp-s16 b) n (#a // 2)
-                       (net (d * d) / n < 1 / 12 && aall (d <= 2) && aall (d >= -2))))
    ; the conformance streams: a reference may leave out a last frame, and sin1k0db's leaves
    ; out the first two (whose main data reaches back before the stream: silence here); that
    ; one opens on zeros, so it is decoded from its first frame
@@ -76,12 +70,12 @@
    iso ["l3-compl" "l3-he_32khz" "l3-he_44khz" "l3-he_48khz" "l3-he_free" "l3-he_mode" "l3-hecommon"
         "l3-si" "l3-si_block" "l3-si_huff" "l3-test45" "l3-test46" "M2L3_bitrate_16_all"
         "M2L3_bitrate_22_all" "M2L3_bitrate_24_all" "M2L3_compl24" "M2L3_noise"]
-   (mp-iso nm) (: b (mp-rd (vd + "/" + nm + ".bit")) r (mp-rd (vd + "/" + nm + ".pcm"))
-                  (mp-all b 0 @ pcm (? (string? pcm && #r <= #pcm && #pcm - #r <= 4608) (mp-full (snip pcm 0 #r) r)) _ 0))
-   _ (? (0 < #(mp-rd (vd + "/l3-compl.bit")))
+   (mp-iso nm) (: b (av-t-rd (vd + "/" + nm + ".bit")) r (av-t-rd (vd + "/" + nm + ".pcm"))
+                  (mp-all b 0 @ pcm (? (string? pcm && #r <= #pcm && #pcm - #r <= 4608) (av-t-full (snip pcm 0 #r) r)) _ 0))
+   _ (? (0 < #(av-t-rd (vd + "/l3-compl.bit")))
          (test (all mp-iso iso)
-               (: b (mp-rd (vd + "/l3-sin1k0db.bit")) r (mp-rd (vd + "/l3-sin1k0db.pcm"))
-                  (mp-all (snip b (mp3-meta b 'at) #b) 0 @ pcm (? (string? pcm) (mp-full (snip pcm 9216 (9216 + #r)) r)) _ 0)))
+               (: b (av-t-rd (vd + "/l3-sin1k0db.bit")) r (av-t-rd (vd + "/l3-sin1k0db.pcm"))
+                  (mp-all (snip b (mp3-meta b 'at) #b) 0 @ pcm (? (string? pcm) (av-t-full (snip pcm 9216 (9216 + #r)) r)) _ 0)))
         (gate-partly "mp3: no dl/mp3-vectors (make dl/mp3-vectors), the conformance streams skipped"))
 
    ; -- lame's streams against ffmpeg's float decoder and mpg123, gapless ----------------------
@@ -98,13 +92,13 @@
             + " && mpg123 -q -s " + f + ".mp3 > " + f + ".m123"
             + " && ffmpeg -nostdin -loglevel error -y -c:a mp3float -i " + f + ".mp3 -f s16le " + f + ".ff"
             + " && ../love mpg123 -s " + f + ".mp3 > " + f + ".love") @ (0 . _) f _ ()))
-   (same f) (: a (mp-rd (dir + "/" + f + ".love"))
-               (mp-full a (mp-rd (dir + "/" + f + ".m123")) && mp-full a (mp-rd (dir + "/" + f + ".ff"))))
+   (same f) (: a (av-t-rd (dir + "/" + f + ".love"))
+               (av-t-full a (av-t-rd (dir + "/" + f + ".m123")) && av-t-full a (av-t-rd (dir + "/" + f + ".ff"))))
    _ (ref? ? (: fs (map (i \ mk i (cases i)) ^#cases)
                 (test (all string? fs) (all same fs)
                       ; mpg123's wav: the same header, the same length
                       (sh "mpg123 -q -w m.wav c0.mp3 && ../love mpg123 -w l.wav c0.mp3" = (0 . ""))
-                      (mp-rd (dir + "/m.wav") @ a (mp-rd (dir + "/l.wav") @ b (snip a 0 44 = snip b 0 44 && #a = #b)))
+                      (av-t-rd (dir + "/m.wav") @ a (av-t-rd (dir + "/l.wav") @ b (snip a 0 44 = snip b 0 44 && #a = #b)))
                       ; with no -w -s or -t it plays, as mpg123 does: HORN=none keeps the 1.3 s
                       (: t0 (clock 0) r (sh "HORN=none ../love mpg123 c0.mp3") (r = (0 . "") && 1000 <= clock 0 - t0))
                       ; the door: its tags, its gapless length, and the horn
@@ -112,7 +106,7 @@
                          = (0 . "(\"mp3\" 57330 (\"TITLE=c0\"))0"))
                       ; entered mid-way: the pump finds the next frame, and from a few frames on
                       ; plays what the whole stream does
-                      (: s (mp-rd (dir + "/c2.mp3")) m (pins (mp3-meta s) 'skip 0 'total 0) b {'l ()}
+                      (: s (av-t-rd (dir + "/c2.mp3")) m (pins (mp3-meta s) 'skip 0 'total 0) b {'l ()}
                          _ (open (dir + "/mid") "w" @ q (say q (snip s (#s // 2) #s), close q))
                          q (open (dir + "/mid") "r") r (mp3-pump q "" m (pcm \ pin b 'l (pcm . b 'l)))
                          all (mp-all (snip s (m 'at) #s) 0) mid (cats (rev (b 'l)))

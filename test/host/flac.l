@@ -6,11 +6,11 @@
 ;   cat test/00-init.l test/host/flac.l | out/love
 (borrow 'posix)
 (borrow 'flac)
+(borrow 'bytes)
 (: dir (cwd 0 + "/out/.flacd")
    ; a meta that wants more, or would skip a block it need not hold
    (fl-more? x) (x = 'more || (two? x && elem <x ['more 'skip]))
    _ (hark ["rm" "-rf" dir], mkdir dir 448)
-   (rd p) (: q (open p "r") s (slurp q) (close q, s))
    (nib c) (? (c < 58) (c - 48) (c - 87))
    (unx h) (cask (#h // 2) @ c (map (i \ pin c i (nib (h (2 * i)) * 16 + nib (h (2 * i + 1)))) (jot (#h // 2)),
                                string c))
@@ -85,22 +85,21 @@
    (same [f sg]) (: a (sh ("../love flac -s -d -c " + f + ".flac"))
                     b (sh ("../love flac -s -dc --force-raw-format --endian=big --sign=" + sg + " - < " + f + ".flac"))
                l (sh ("../love metaflac --list " + f + ".flac"))
-               (<a = 0 && >a = rd (dir + "/" + f + ".wav") && <b = 0 && >b = rd (dir + "/" + f + ".bu")
-                && <l = 0 && >l = rd (dir + "/" + f + ".list")))
+               (<a = 0 && >a = av-t-rd (dir + "/" + f + ".wav") && <b = 0 && >b = av-t-rd (dir + "/" + f + ".bu")
+                && <l = 0 && >l = av-t-rd (dir + "/" + f + ".list")))
    ; the encoder: every shape at three levels, through the reference flac -t (its crcs and md5)
    ; and back out of the reference decoder byte for byte, and no more than 5% past libFLAC's size
    (fl-num t) (foldl (\ a c (a * 10 + c - 48)) 0 (chars t))
    ; STREAMINFO's frame sizes and the seektable's points, held to the frames themselves
-   (fl-be s i n) (foldl (\ a j (a * 256 + s (i + j))) 0 ^n)
    (fl-held f)
-    (: s (rd f) m (flac-meta s) bs (m 'maxbs)
+    (: s (av-t-rd f) m (flac-meta s) bs (m 'maxbs)
        (go o acc) (? (o >= #s) (rev acc)
                      (flac-frame s o (m 'bps) (m 'ch) @ (pcm . nx) (go nx ((nx - o) . acc)) w ()))
        zs (go (m 'at) ())
        offs (rev (foldl (\ a z ((<a + z) . a)) [0] zs))
        st (filter (b \ <b = 3) (m 'blocks) @ ([_ n p] . _) (snip (m 'head) p (p + n)) _ "")
        pts (filter (pt \ <pt < 1 << 63)
-                   (map (i \ [(fl-be st (18 * i) 8) (fl-be st (18 * i + 8) 8)]) ^(#st // 18)))
+                   (map (i \ [(rdbe st (18 * i) 8) (rdbe st (18 * i + 8) 8)]) ^(#st // 18)))
        (two? zs && m 'minfr = foldl min <zs zs && m 'maxfr = foldl max 0 zs
         && all (pt \ <pt % bs = 0 && pt 1 = offs (<pt // bs)) pts))
    (enc [f sg] lv)
@@ -110,9 +109,9 @@
        t (sh ("flac -s -t " + f + ".e.flac 2>&1"))
        d (sh ("flac -s -d -f --force-raw-format --endian=little --sign=signed " + f + ".e.flac -o " + f + ".e.raw"))
        b (sh ("flac -s -f -" + show lv + raw + "--no-padding --no-seektable " + f + ".raw -o " + f + ".r.flac"))
-       (<a = 0 && t = (0 . "") && <d = 0 && rd (dir + "/" + f + ".e.raw") = rd (dir + "/" + f + ".raw")
+       (<a = 0 && t = (0 . "") && <d = 0 && av-t-rd (dir + "/" + f + ".e.raw") = av-t-rd (dir + "/" + f + ".raw")
         && fl-held (dir + "/" + f + ".e.flac")
-        && #(rd (dir + "/" + f + ".e.flac")) - 8196 <= #(rd (dir + "/" + f + ".r.flac")) * 105 // 100))
+        && #(av-t-rd (dir + "/" + f + ".e.flac")) - 8196 <= #(av-t-rd (dir + "/" + f + ".r.flac")) * 105 // 100))
    _ (ref? ? (: fs (map (i \ mk i (cases i)) ^#cases)
                 (test (all two? fs) (all same fs)
                       (all (f \ enc f 0) fs) (all (f \ enc f 5) fs) (all (f \ enc f 8) fs)))
@@ -167,11 +166,11 @@
                       (sh "../love flac -f - -o x.flac < m.flac 2>&1" @ (0 . m) (", ratio=N/A\n" = snip m (#m - 12) #m) _ 0)
                       (sh "../love flac -f long.wav -o x.flac 2>&1"
                          = (0 . ("long.wav: WARNING: skipping unknown chunk 'LIST' (use --keep-foreign-metadata to keep)\n"
-                                 + "long.wav: wrote " + show #(rd (dir + "/x.flac")) + " bytes, ratio="
-                                 + fl-r #(rd (dir + "/x.flac")) (400000 + 44) + "\n")))
+                                 + "long.wav: wrote " + show #(av-t-rd (dir + "/x.flac")) + " bytes, ratio="
+                                 + fl-r #(av-t-rd (dir + "/x.flac")) (400000 + 44) + "\n")))
                       (sh "../love flac -f m.flac -o x.flac 2>&1"
-                         = (0 . ("m.flac: wrote " + show #(rd (dir + "/x.flac")) + " bytes, ratio="
-                                 + fl-r #(rd (dir + "/x.flac")) #(rd (dir + "/m.flac")) + "\n")))))
+                         = (0 . ("m.flac: wrote " + show #(av-t-rd (dir + "/x.flac")) + " bytes, ratio="
+                                 + fl-r #(av-t-rd (dir + "/x.flac")) #(av-t-rd (dir + "/m.flac")) + "\n")))))
         0)
    ; -- the decoder door: av picks the codec off the bytes, and plays through the horn ----------
    (av e) (sh ("HORN=none ../love -e '(borrow (quote posix)) (borrow (quote av)) " + e + " (quit 0)' 2>&1"))

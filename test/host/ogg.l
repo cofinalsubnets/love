@@ -8,13 +8,12 @@
 (borrow 'flac)
 (borrow 'ogg)
 (borrow 'av)
+(borrow 'bytes)
 (: dir (cwd 0 + "/out/.oggd")
    _ (hark ["rm" "-rf" dir], mkdir dir 448)
-   (og-rd p) (: q (open p "r") s (slurp q) (close q, s))
    (og-nib c) (? (c < 58) (c - 48) (c - 87))
    (og-unx h) (cask (#h // 2) @ c (map (i \ pin c i (og-nib (h (2 * i)) * 16 + og-nib (h (2 * i + 1)))) (jot (#h // 2)),
                                    string c))
-   (og-le v n) (string (map (k \ (v >> (8 * k)) & 255) ^n))
    ; libFLAC's three-frame stream test/host/flac.l holds to its samples
    tiny (og-unx (cats [
      "664c6143000000220020002000006a00006a01f402f000000060c77d5c95d11ac172f2c14037fdd400cc840000362000"
@@ -34,8 +33,8 @@
    ; a page laid around whole packets
    (og-page ty gr sn sq ps)
     (: ls (cats (map (p \ string (map (_ \ 255) ^(#p // 255)) + string [(#p % 255)]) ps))
-       pg ("OggS" + string [0 ty] + og-le gr 8 + og-le sn 4 + og-le sq 4 + og-le 0 4 + string [#ls] + ls + cats ps)
-       (snip pg 0 22 + og-le (ogg-crc pg 0 #pg) 4 + snip pg 26 #pg))
+       pg ("OggS" + string [0 ty] + wrle gr 8 + wrle sn 4 + wrle sq 4 + wrle 0 4 + string [#ls] + ls + cats ps)
+       (snip pg 0 22 + wrle (ogg-crc pg 0 #pg) 4 + snip pg 26 #pg))
    ; ogg flac: the mapping's first packet with STREAMINFO, the tags, then the frames
    h1 ("\x7fFLAC" + string [1 0 0 1] + "fLaC" + snip tiny 4 42)
    h2 (snip tiny 42 (tm 'at))
@@ -96,7 +95,7 @@
             + " && flac -s -f --ogg --serial-number=" + show (i + 100) + " -T TITLE=" + f + " --force-raw-format --endian=little --sign=signed"
             + " --channels=" + ch + " --bps=" + bps + " --sample-rate=44100 " + opt + " " + f + ".in -o " + f + ".oga"
             + " && " + og-raw f) @ (0 . _) f _ ()))
-   (same f) (og-dec (f + ".oga") @ ["ogg" 0 pcm] (pcm = og-rd (dir + "/" + f + ".raw")) _ 0)
+   (same f) (og-dec (f + ".oga") @ ["ogg" 0 pcm] (pcm = av-t-rd (dir + "/" + f + ".raw")) _ 0)
    _ (ref? ? (: fs (map (i \ mk i (cases i)) ^#cases)
                 (test (all string? fs) (all same fs)
                       ; a chain: one stream after another, the second with its own serial
@@ -116,11 +115,11 @@
                       (same "mx")
                       ; entered mid-way, the pump finds the next page and plays on from there
                       (og-dec "c1.oga" @ [_ _ all1]
-                        (: s (og-rd (dir + "/c1.oga")) m (ogg-meta s)
+                        (: s (av-t-rd (dir + "/c1.oga")) m (ogg-meta s)
                            (og-pump (snip s (#s // 2) #s) m @ [r pcm]
                              (r = 0 && 0 < #pcm && pcm = snip all1 (#all1 - #pcm) #all1))))
                       ; a damaged page is passed over, the rest played
-                      (: s (og-rd (dir + "/c1.oga")) m (ogg-meta s) k (#s // 3)
+                      (: s (av-t-rd (dir + "/c1.oga")) m (ogg-meta s) k (#s // 3)
                          (og-pump (snip s (m 'at) k + string [(255 - s k)] + snip s (k + 1) #s) m @ [r pcm]
                            (r = 0 && 0 < #pcm)))
                       ; av plays it through the horn
@@ -130,10 +129,6 @@
 
    ; -- vorbis against ffmpeg's float decoder: 11172-4's full accuracy on s16 (rms under
    ;    1/sqrt 12 of a step, none more than two), the end page's granule giving its length ------
-   peepv (cite 'guts 'peepv)
-   (vb-s16 s) (peepv (: c (cask #s) (pour c 0 s 0 #s, c)) 0 2 2 (#s // 2) @ t (t - 65536 * (t >= 32768)))
-   (vb-full a b) (? (#a != #b || #a < 2) 0
-                    (: d (vb-s16 a - vb-s16 b) (net (d * d) / (#a // 2) < 1 / 12 && aall (d <= 2) && aall (d >= -2))))
    vb-tone "0.5*sin(440*2*PI*t)*lt(mod(t\\,0.25)\\,0.02)+0.2*random(0)*lt(mod(t\\,0.5)\\,0.01)+0.3*sin(3000*2*PI*t)"
    (vb-src ch) (cats (map (i \ (? (i = 0) vb-tone ("|" + show (0.1 + 0.05 * i) + "*sin(" + show (300 + 170 * i) + "*2*PI*t)"))) ^ch))
    vcases [["44100" 2 "4"] ["48000" 2 "10"] ["44100" 1 "-1"] ["22050" 2 "0"] ["8000" 1 "1"] ["96000" 2 "6"]
@@ -143,7 +138,7 @@
        (sh ("ffmpeg -nostdin -loglevel error -y -f lavfi -i 'aevalsrc=" + vb-src ch + ":s=" + r + ":d=1.7' -c:a libvorbis -q:a "
             + q + " -metadata title=" + f + " " + f + ".ogg && ffmpeg -nostdin -loglevel error -y -i " + f + ".ogg -f s16le " + f + ".ff")
           @ (0 . _) f _ ()))
-   (vsame f) (og-dec (f + ".ogg") @ ["ogg" 0 pcm] (vb-full pcm (og-rd (dir + "/" + f + ".ff"))) _ 0)
+   (vsame f) (og-dec (f + ".ogg") @ ["ogg" 0 pcm] (av-t-full pcm (av-t-rd (dir + "/" + f + ".ff"))) _ 0)
    _ (ref? ? (: fs (map (i \ vmk i (vcases i)) ^#vcases)
                 (test (all string? fs) (all vsame fs)
                       ; a radio's chain of songs: the second's title reaches m, and both play whole
@@ -154,7 +149,7 @@
                                                    [x (m 'link) (elem "TITLE=v7" (m 'tags))]) w w)
                          (close q, r = [0 1 1]))
                       ; a flipped byte anywhere answers why or samples, and never falls over
-                      (: s (og-rd (dir + "/v4.ogg"))
+                      (: s (av-t-rd (dir + "/v4.ogg"))
                          (all (i \ (: p (dir + "/flip") c (cask #s)
                                       _ (pour c 0 s 0 #s, pin c i (255 - s i), open p "w" @ q (say q (string c), close q))
                                       (og-dec "flip" @ [r] (string? r) [_ r _] (r = 0 || string? r) _ 0)))

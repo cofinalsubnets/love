@@ -21,7 +21,6 @@
  (hk-slurp p) (uread p @ [1 s] s ())
  (hk-copy t) (foldl (a \ k \ pin a k (t k)) {} (keys t))
  (hk-words t v) (words (hk-expand ("$(" + v + ")") t))
- (hk-pre? s p) (#p <= #s && snip s 0 #p = p)
  ; a member as ar names it: arch/arm64/kvm/../../../virt/kvm/x.o is virt/kvm/x.o
  (hk-path p) (join "/" (pclean (segs p) 0))
 
@@ -51,7 +50,7 @@
      (walk n) (peep seen n 0 ? ()
                 (: rs (filter (r \ elem n (ws (r 0))) rules)
                    (pin seen n 1, catmap (r \ catmap walk (ws (r 1))) rs + catmap (r \ >>r) rs)))
-     (each (filter (s \ hk-pre? (strip >>s) "$(eval") (walk "prepare")) (s \ hk-vars >>s top),
+     (each (filter (s \ starts? (strip >>s) "$(eval") (walk "prepare")) (s \ hk-vars >>s top),
       top))
 
  ; scripts/Makefile.build over one directory, as `make $(build)=dir need-builtin=1` reads it
@@ -63,18 +62,15 @@
  ; a word against a path: a % pattern's stem, "" for the very path, else ()
  (hk-stem w path)
   (w @ (pre + "%" + suf)
-       (#pre + #suf < #path && hk-pre? path pre && ends? path suf
+       (#pre + #suf < #path && starts? path pre && ends? path suf
         ? (snip path #pre (#path - #suf)) ())
      (w = path ? "" ()))
  (hk-sub p s) (p @ (a + "%" + b) (a + s + b) p)
  ; a file name as make keeps it: ./foo is foo
- (hk-dot w) (hk-pre? w "./" && 2 < #w ? (snip w 2 #w) w)
+ (hk-dot w) (starts? w "./" && 2 < #w ? (snip w 2 #w) w)
  ; prerequisite words, the order-only ones past | left out
  (hk-pre s) ((: (g l) (atom? l || <l = "|" ? () (hk-dot <l . g >l))) (words s))
  (hk-lastsl p) ((: (g i) (i < 0 ? -1 (p i = 47 ? i (g (i - 1))))) (#p - 1))
- (hk-split s ch) ((: (g i st acc) (i >= #s ? (rev (snip s st i . acc))
-                                     (s i = ch ? (g (i + 1) (i + 1) (snip s st i . acc)) (g (i + 1) st acc))))
-                  0 0 ())
 
  ; the directory's rules, targets and prerequisites expanded once: [targets prereqs steps
  ; pattern], a static pattern rule (`$(objs): %.o: %.c`) keeping its target pattern apart
@@ -142,7 +138,7 @@
      (k < 0 ? ()
         (: r (snip s (k + 7) #s) c (findsub r ",") e (findsub r ")")
            (c < 0 || e < c ? (hk-calls t r)
-              (: nm (strip (snip r 0 c)) as (map strip (hk-split (snip r (c + 1) e) 44)) a <as
+              (: nm (strip (snip r 0 c)) as (map strip (split "," (snip r (c + 1) e))) a <as
                  rest (snip r (e + 1) #r)
                  (? (elem nm ["if_changed" "if_changed_dep" "cmd_and_savecmd" "cmd_and_fixdep"])
                      ([("cmd_" + a) 1 'run as] . hk-calls t rest)
@@ -174,7 +170,7 @@
            (call c) [(c 2) (c 1) (_ \ (auto 0, foldl (i \ a \ (pin ut (show i) a, i + 1)) 1 (c 3),
                                         hk-mods (hk-expand ("$(" + c 0 + ")") ut))) ut]
            (lit kd b) [kd 0 (_ \ (auto 0, hk-mods (hk-expand b ut))) ut]
-           (line b) (? (hk-pre? (strip b) "$(eval") [['eval 0 (_ \ (hk-vars (strip b) t, "")) ut]]
+           (line b) (? (starts? (strip b) "$(eval") [['eval 0 (_ \ (hk-vars (strip b) t, "")) ut]]
                        (0 <= findsub b "$(MAKE)") [(lit 'make b)]
                        (: cs (hk-calls ut b) (two? cs ? (map call cs) [(lit 'run b)])))
            ; the prerequisites twice: found through VPATH (as $< $^ read them) and as named --
@@ -233,7 +229,7 @@
   (: (aft l) (atom? l ? () (ends? <l "hk-make" ? >l (aft >l)))
      (g l f vs gs) (? (atom? l) [f (rev vs) (rev gs)]
                       (<l = "-f" || <l = "-C") (g >>l (<l = "-f" ? <>l f) vs gs)
-                      (hk-pre? <l "-") (g >l f vs gs)
+                      (starts? <l "-") (g >l f vs gs)
                       (0 < findsub <l "=") (g >l f (<l . vs) gs)
                       (g >l f vs (<l . gs)))
      a (g (aft (words line)) (K + "/Makefile") () ())
@@ -246,7 +242,7 @@
      _ (pin nt " rules" (hk-vars (hk-slurp (a 0)) nt))
      ; the default goal: a special target (.PHONY) starts with a dot and holds no slash; ./ is
      ; Makefile.build's $(obj)/ with obj=.
-     (first r) (filter (w \ !(hk-pre? w "." && findsub w "/" < 0) && findsub w "%" < 0) (r 0))
+     (first r) (filter (w \ !(starts? w "." && findsub w "/" < 0) && findsub w "%" < 0) (r 0))
      gs (two? (a 2) ? (a 2) (take 1 (catmap first (hk-rx nt))))
      seen {}
      (each gs (x \ hk-make K nt x made seen run), 0))
@@ -258,7 +254,7 @@
  (hk-envmake K args sh run prior)
   (: t (foldl (a \ e \ e @ ((k && 0 < #k) + "=" + v) (pin a k v) a) {} (environ 0))
      made (lit? prior ? (pins {} " prior" prior) {})
-     (pull t "SHELL" 0, pins t " shell" sh "MAKE" "hk-make" " exports" (sort (filter (k \ !(hk-pre? k " ")) (keys t))),
+     (pull t "SHELL" 0, pins t " shell" sh "MAKE" "hk-make" " exports" (sort (filter (k \ !(starts? k " ")) (keys t))),
       hk-submake K t (join " " ("hk-make" . args)) made run, peep made " failed" 0))
 
  ; a unit after the units its prerequisites need made here first: [[unit cmds] ..], build
@@ -270,7 +266,7 @@
         (pin seen (u 1) 1,
          atom? x ? [[u ()]]
            (: ph (hk-words t "PHONY")
-              (mine? p) (!(elem p ph) && !(hk-pre? p K) && two? (hk-rule K t p 3))
+              (mine? p) (!(elem p ph) && !(starts? p K) && two? (hk-rule K t p 3))
               cs (filter (c \ 0 < #(c 0)) (map (c \ [(hk-text c) (c 1) (c 0)]) (x 0)))
               (catmap (p \ hk-plan K t [(u 0) p] seen) (filter mine? (x 1)) + [[u cs]])))))
 

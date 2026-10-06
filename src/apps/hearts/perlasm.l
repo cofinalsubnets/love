@@ -15,14 +15,13 @@
    (sv k v) (pin env k v)
    (setn names vals) (two? names ? (sv <names <vals, setn >names >vals) 0)
    (rep n f) (n > 0 ? (f 0, rep (n - 1) f) 0)
-   (word? c) (c = 95 || 48 <= c <= 57 || 65 <= c <= 90 || 97 <= c <= 122)
-   (dig? c) (48 <= c <= 57)
+   (word? c) (c = 95 || alnum? c)
    (space? c) (c = 32 || 9 <= c <= 13)
    ; a number as perl prints it here: every value the script makes is integral
    (fmtn v) (int v @ k (k = v ? (show k) (die ("a fraction: " + show v))))
    (txt v) (string? v ? v (fmtn v))
    (idend t i) (i < #t && word? (t i) ? (idend t (i + 1)) i)
-   (digend t i) (i < #t && dig? (t i) ? (digend t (i + 1)) i)
+   (digend t i) (i < #t && digit? (t i) ? (digend t (i + 1)) i)
 
    ; -- arithmetic, perl's precedence for what the script writes: & under + - under * / %
    (arith s)
@@ -36,7 +35,7 @@
            (? (c = 40) (: _ (eat 0) v (ex 0) _ (at 0) _ (eat 0) v)     ; ( e )
               (c = 45) (eat 0, -(prim 0))
               (c = 108) (pin p 'i (p 'i + 3), (log (prim 0)))   ; log(e)
-              (dig? c) (num 0)
+              (digit? c) (num 0)
               (die ("cannot read " + s))))
        (mul v) (at 0 @ 42 (eat 0, prim 0 @ w (mul (v * w)))
                        47 (eat 0, prim 0 @ w (mul (v / w)))
@@ -59,7 +58,7 @@
         (i >= n ? (join "" (rev acc))
            (t i @ c
               (? (c = 92 && i + 1 < n && t (i + 1) = 64) (go (i + 2) ("@" . acc))
-                 ((c = 36 || c = 64) && i + 1 < n && word? (t (i + 1)) && !(dig? (t (i + 1))))
+                 ((c = 36 || c = 64) && i + 1 < n && word? (t (i + 1)) && !(digit? (t (i + 1))))
                   (: e (idend t (i + 1)) nm (snip t (i + 1) e)
                      (? (e < n && t e = 91)
                          (: k (close t e 0) ix (arith (interp (snip t (e + 1) k)))
@@ -207,7 +206,7 @@
    (opc m) (m @ "sha256h" 0x5e004000 "sha256h2" 0x5e005000
                 "sha256su0" 0x5e282800 "sha256su1" 0x5e006000)
    ; at i: [qv] then digits -> [number index-past], else ()
-   (qvnum s i) (i + 1 < #s && (s i = 113 || s i = 118) && dig? (s (i + 1))
+   (qvnum s i) (i + 1 < #s && (s i = 113 || s i = 118) && digit? (s (i + 1))
                 ? (: e (digend s (i + 1)) [(read (snip s (i + 1) e)) e]) ())
    (skipsp s i) (i < #s && space? (s i) ? (skipsp s (i + 1)) i)
    (upto s i c) (i < #s && s i != c ? (upto s (i + 1) c) i)      ; [^c]*
@@ -231,7 +230,7 @@
                       (snip l 0 a + ".inst\t0x" + hex8 (opc m | g 0 | (g 1 << 5) | (g 2 << 16)) + "\t//" + m + " " + arg)))))))
    (qreg l) ((: (go i acc)
                 (? (i >= #l) (join "" (rev acc))
-                   (l i = 113 && (i = 0 || !(word? (l (i - 1)))) && i + 1 < #l && dig? (l (i + 1))
+                   (l i = 113 && (i = 0 || !(word? (l (i - 1)))) && i + 1 < #l && digit? (l (i + 1))
                     && (digend l (i + 1) @ e (e = #l || !(word? (l e)))))
                     (: e (digend l (i + 1)) (go e (("v" + snip l (i + 1) e + ".16b") . acc)))
                    (go (i + 1) (string (l i) . acc)))) 0 ())
