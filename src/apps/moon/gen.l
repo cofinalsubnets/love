@@ -7722,7 +7722,7 @@
        ta (peekty g env <args) tb (peekty g env <>args) tr (peekty g env <>>args)
        tt (two? tr && <tr = 'ptr ? <>tr ())
        ; all three a signed machine word: the machine's own flag answers it (cgbuiltin's lane)
-       (sw? ty) (!(usg? ty) && tsz g ty = 8 && wsize g = 8)
+       (sw? ty) (!(usg? ty) && tsz g ty = wsize g)
        (? !(#args = 3 && elem ta ity && elem tb ity && elem tt ity && tsz g ta <= 8 && tsz g tb <= 8 && tsz g tt <= 8) ()
           (sw? ta && sw? tb && sw? tt) ()
           (: k (peep g 'ovn 0) _ (pin g 'ovn (k + 1))
@@ -7753,16 +7753,16 @@
              fit (usg? tt ?
                     ['land ['lor ['un 'not n] ['bin 'eq m ['num 0]]] (w < 64 ? ['bin 'le m ['num (2 ** w - 1)]] ['num 1])]
                     ['cond n ['bin 'le m ['num (2 ** (w - 1))]] ['bin 'le m ['num (2 ** (w - 1) - 1)]]])
-             ; a plain &x is stored through in place: bound to a pointer local it would escape x
+             ; a plain &x is x itself, stored to by name: its address taken at all would escape x
              ; and cost the caller its sibcalls
-             rx (<>>args @ ('addr ('var _)) <>>args ())
+             rx (<>>args @ ('addr ('var _)) <><>>args ())
              ['sexpr
               ([(d "a" ta <args) (d "b" tb <>args)] + (rx ? () [(d "r" tr <>>args)]) +
                [(d "na" 'int (sgn "a" (v "a") ta)) (d "ma" U (mag na (v "a")))
                 (d "nb0" 'int (sgn "b" (v "b") tb)) (d "mb" U (mag (v "nb0") (v "b")))
                 (d "nb" 'int (sub ? ['un 'not (v "nb0")] (v "nb0")))]
                + (mul ? mu add)
-               + [['expr ['asn ['deref (rx || v "r")] ['cast tt ['cond n ['un 'neg m] m]]]]])
+               + [['expr ['asn (rx || ['deref (v "r")]) ['cast tt ['cond n ['un 'neg m] m]]]]])
               ['lor o ['un 'not fit]] 'int])))
    ; a switch body's case/default labels at any depth: value->label pinned into tab -> (value label) dispatch pairs
    (scasel g it tab acc)
