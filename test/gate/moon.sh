@@ -196,6 +196,15 @@ printf '#pragma pack(1)\nstruct s { char c; int i : 20; int j : 20; };\n' > "$ho
 moonrun -c -o /dev/null "$ho/.attr.c" 2>&1 | grep -q "a bit-field under #pragma pack" || fail "a packed bit-field was laid"
 printf 'typedef union { char *p; short s; } u __attribute__((transparent_union));\n' > "$ho/.attr.c"
 moonrun -c -o /dev/null "$ho/.attr.c" 2>&1 | grep -q "a transparent union wants" || fail "a mixed transparent union was taken"
+# mode is carried (test/cc/259); a mode it cannot lay, or one it cannot place, refuses
+printf 'typedef float tf __attribute__((mode(TF)));\n' > "$ho/.attr.c"
+moonrun -c -o /dev/null "$ho/.attr.c" 2>&1 | grep -q "mode(TF))) is not carried out" || fail "mode(TF) was taken"
+printf 'typedef int *pi __attribute__((mode(SI)));\n' > "$ho/.attr.c"
+moonrun -c -o /dev/null "$ho/.attr.c" 2>&1 | grep -q "on a pointer, array or function declarator" || fail "a mode on a pointer was taken"
+printf 'int a __attribute__((mode(DI))), b;\n' > "$ho/.attr.c"
+moonrun -c -o /dev/null "$ho/.attr.c" 2>&1 | grep -q "on a declaration of several declarators" || fail "a mode on one of two declarators was taken"
+printf 'enum e { A = 300 } __attribute__((mode(byte)));\n' > "$ho/.attr.c"
+moonrun -c -o /dev/null "$ho/.attr.c" 2>&1 | grep -q "does not fit the enum" || fail "an enum too wide for its mode was taken"
 # #pragma once reads a header once
 mkdir -p "$ho/.once"
 printf '#pragma once\nstruct once { int a; };\n' > "$ho/.once/h.h"
@@ -205,7 +214,7 @@ printf '#include "h.h"\n#include "h.h"\nint main(void) { return sizeof (struct o
 moonrun -c -o "$ho/.used.o" test/cc/230-gnuc.c > /dev/null 2>&1 || fail "230-gnuc did not compile"
 nm "$ho/.used.o" | grep -q " t kept$" || fail "a used static function was swept"
 nm "$ho/.used.o" | grep -q " T thrice$" || fail "gnu_inline's plain inline laid no external definition"
-echo "mooncc: GNU C 8 -- bool by dialect, refused attributes named, #pragma pack's refusals, #pragma once, used, gnu_inline"
+echo "mooncc: GNU C 8 -- bool by dialect, refused attributes named, mode's refusals, #pragma pack's refusals, #pragma once, used, gnu_inline"
 
 # ------------------------------------------- the flags that change the code
 # -fshort-wchar: wchar_t and L"" are 16-bit, held to gcc's
