@@ -17,7 +17,7 @@
                      [(hund (15.0 * (rh + rm / 60.0 + rs / 3600.0)))
                       (hund (sg * (dd + dm / 60.0 + ds / 3600.0)))
                       (hund v) (bv = () ? 60 (hund bv))])))
-   (rows l) (? (atom? l) () (. (cats (map (s \ " " + cats (map (n \ " " + show n) s)) (take 8 l))) (rows (drop 8 l))))
+   (rows l) (? (atom? l) () (catmap (s \ " " + catmap (n \ " " + show n) s) (take 8 l) . rows (drop 8 l)))
    (main args) (: src (: q (open (args 0) "r") s (slurp q) (close q, s))
                   ss (map (p \ p 1) (sort (map (s \ [(s 2) s]) (filter two? (map star (lines src))))))
                   body ("; src/apps/lore/starmap.l -- written by src/tools/mkstars.l from the Yale Bright Star\n"
@@ -25,7 +25,7 @@
                         + "; magnitude 4.5, brightest first. each is four integers: right ascension and declination\n"
                         + "; J2000 in hundredths of a degree, V and B-V in hundredths of a magnitude. not edited by hand\n"
                         + "(module (starmap star-cat)\n(: star-cat [\n"
-                        + cats (map (r \ r + "\n") (rows ss)) + " ])\n) ; module starmap\n")
+                        + catmap (r \ r + "\n") (rows ss) + " ])\n) ; module starmap\n")
                   q (open (args 1) "w")
                   (hot? q ? (say q body, close q)
                      (say err ("mkstars: cannot open " + args 1 + "\n"), quit 1)))
