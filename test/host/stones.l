@@ -126,5 +126,32 @@
  (test (shown = 0) (marked = 1) (acting = 'move) (hid = ()) (back = 2) (0 < #tops)
        (waited = [() 'kneel]) (rising = 'move)))
 
+; --- space at the choices stands; wait is remembered, and the lamppost stands for it; off
+; --- the rows' edge into the slot is no step; and at night, after half an hour's waiting,
+; --- the missing stone glows where it stood, till the eye stands
+(: st (at 15.5 7) z0 (zc - 2.6)
+   _ (pins st 'px 0.3 'pz z0 'th 0.0 'ph 0.0 'py (stones-ground 0.3 z0 + eye-h) 'dt 0.05)
+   _ (stones-step st 32)
+   (until s f n) (stones-move s, f () || 400 < n ? n (until s f (n + 1)))
+   _ (until st (_ \ charm? (st 'dlg)) 0)
+   _ (stones-step st 32) spaced [(st 'dlg) (st 'eye)]
+   ; ..knelt again, and waited
+   w (at 15.5 7) _ (pins w 'px 0.3 'pz z0 'th 0.0 'ph 0.0 'py (stones-ground 0.3 z0 + eye-h) 'dt 0.05)
+   _ (stones-step w 32) _ (until w (_ \ charm? (w 'dlg)) 0) _ (stones-step w 53)
+   post (post-batch w (stones-light w))
+   ; ..the rows beside the slot, stepping toward it
+   x0 3.2 rz 95.0 g0 (stones-ground x0 rz)
+   e (at 15.5 7) _ (pins e 'px x0 'pz rz 'th (0.0 - pi / 2.0) 'py (g0 + eye-h) 'dt 0.05)
+   _ (each ^12 (_ \ stones-step e 107))
+   ; ..the same wait at night, half an hour on
+   n (at 23.0 7) _ (pins n 'px 0.3 'pz z0 'th 0.0 'ph 0.0 'py (stones-ground 0.3 z0 + eye-h) 'dt 0.05)
+   _ (stones-step n 32) _ (until n (_ \ charm? (n 'dlg)) 0) _ (stones-step n 53)
+   early (ghost-on? n (stones-light n))
+   _ (pin n 'wait-at (n 'mt - 1900.0)) late (ghost-on? n (stones-light n))
+   _ (stones-step n 107) gone (ghost-on? n (stones-light n))
+ (test (spaced = [() 'move]) (w 'waited = 1) (w 'dlg = ()) (w 'eye = 'kneel) (two? post)
+       (0 < g0) (mag (stones-ground (e 'px) (e 'pz) - g0) < 0.9)
+       (early = 0) (late = 1) (gone = 0)))
+
 (test_fin ())
 (puts "stones: ok\n")

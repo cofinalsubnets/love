@@ -82,6 +82,9 @@
       (fc-n (facets 4 4 7 fc-id (fc-g (big 0.0 1 0)) (fc-z [[0 1 2 -1]]) () (fc-g [[0.0 0.0 0.0 0.0 0.0 0.0 1.0]])) (161 << 16) = 16)
       ; ..and of 0.6, 255 (1 - e^-0.6)
       (fc-n (facets 4 4 7 fc-id (fc-g (big 0.0 1 0)) (fc-z [[0 1 2 -1]]) () (fc-g [[0.0 0.0 0.0 0.0 0.0 0.0 0.6]])) (115 << 16) = 16)
+      ; a glow adds to what is under it, and is hidden by what is nearer
+      (fc-n (facets 4 4 7 fc-id (fc-g (big 0.0 0.2 0)) (fc-z [[0 1 2 -2]]) () ()) ((51 << 16) | 7) = 16)
+      (fc-n (facets 4 4 7 fc-id (fc-g (big -0.5 0 1 + big 0.5 0.2 0)) (fc-z [[0 1 2 -1] [3 4 5 -2]]) () ()) 255 = 16)
       (shape near = [4 4]) (peep near [1 2] 0.0 = -0.5) (peep none [3 3] 0.0 = 2.0)
       (fc-n (sunlit none) red = 16) (fc-n (sunlit near) 0 = 16) (fc-n (sunlit ()) red = 16)
       (fc-go 100 () 0 = 0)))

@@ -4,7 +4,9 @@
 //  base   the ground: a tray of w*h colours, or one colour
 //  mat    16 numbers, row-major: clip = mat * [x y z 1], gl's clip box (-w <= x,y,z <= w)
 //  verts  8 numbers a vertex: x y z  u v (texels)  r g b (1.0 the texel as it is)
-//  tris   4 a triangle: three vertex indices and a texture's index, -1 for none; verts
+//  tris   4 a triangle: three vertex indices and a texture's index, -1 for none, -2 for a
+//         glow: its colour added to what is behind it, hidden by what is nearer, hiding
+//         nothing (so drawn after what it lies over); verts
 //         and tris may be lists of batches, pairwise, each batch's tris its own verts
 //  texs   a list of textures, each an [h w] tray of colours (one below 0 is a hole) or a
 //         list of them, each level half the last
@@ -30,7 +32,7 @@ enum { rz_affine = 1, rz_snap = 2, rz_dither = 4, rz_cull = 8, rz_depth = 16, rz
 struct rz_v { flo_t x, y, z, w, a[rz_na]; };
 struct rz_tex { intptr_t const *px; intptr_t w, h; };
 struct rz {
- intptr_t W, H, flags, stride;
+ intptr_t W, H, flags, stride, add;
  flo_t const *m;
  flo_t lm[16], bias;     // the sun's view, when there is one, and its depth answer
  flo_t const *sm;
@@ -172,8 +174,11 @@ static void rz_tri(struct rz *r, struct rz_v const *p0, struct rz_v const *p1, s
       flo_t const f = x <= 0 ? 0 : x - (flo_t) i;
       c[k] = r->tl[i] + (r->tl[i + 1] - r->tl[i]) * (f > 1 ? 1 : f); }
      int const d = r->flags & rz_dither ? rz_bayer[(y & 3) * 4 + (x & 3)] : 0;
-     o[x] = rz_ch(c[0], d) << 16 | rz_ch(c[1], d) << 8 | rz_ch(c[2], d);
-     dz[x] = a[0]; } } }
+     if (r->add) {   // a glow: onto what is there, the depth left as it was; bare, left bare
+      intptr_t const q = o[x];
+      if (q >= 0) o[x] = rz_ch(c[0] + (flo_t) (q >> 16 & 255), 0) << 16 | rz_ch(c[1] + (flo_t) (q >> 8 & 255), 0) << 8
+                         | rz_ch(c[2] + (flo_t) (q & 255), 0); }
+     else o[x] = rz_ch(c[0], d) << 16 | rz_ch(c[1], d) << 8 | rz_ch(c[2], d), dz[x] = a[0]; } } }
    for (int i = 0; i < 3; i++) e[i] += ex[i];
    for (int k = 0; k < 2 + rz_na; k++) a[k] += vx[k]; } } }
 
@@ -258,7 +263,7 @@ static void rz_batch(struct rz *r, struct tray *vt, struct tray *tt, word texs) 
   intptr_t const ix[3] = { tray_get_int(tt, 4 * i), tray_get_int(tt, 4 * i + 1), tray_get_int(tt, 4 * i + 2) },
                  t = tray_get_int(tt, 4 * i + 3);
   if (ix[0] < 0 || ix[1] < 0 || ix[2] < 0 || ix[0] >= nv || ix[1] >= nv || ix[2] >= nv) continue;
-  if (t != ct) ct = t, r->nlv = t < 0 ? 0 : rz_levels(texs, t, r->lv);
+  if (t != ct) ct = t, r->nlv = t < 0 ? 0 : rz_levels(texs, t, r->lv), r->add = t == -2;
   rz_draw(r, vt, ix, r->lv, r->nlv); } }
 
 love_noinline static struct g *host_raster(struct g *g) {

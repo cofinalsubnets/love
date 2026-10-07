@@ -19,7 +19,7 @@
 ;      h l or the arrows turn, k j step, u n look up and down, space kneels at the altar;
 ;      there 1 to 5, or k j and space, choose what to do, and a walking key or space stands
 ;      again; q or esc leaves, or walk back out of the canyon
-(module (stones stones-run stones-walk stones-main stones-new stones-size stones-step stones-move move-at curve acts
+(module (stones stones-run stones-walk stones-main stones-new stones-size stones-step stones-move move-at curve acts ghost-on? post-batch stones-light
          stones-frame stones-pens stones-opts stones-field stones-ground stones-blocks slot-x
          fps eye-h zc floor-r row-w row-h rows rim-r exit-z lat)
 (borrow 'rove)
@@ -88,6 +88,10 @@
  exit-z -34.0                           ; out on the open sand: the run done
  ; the slot's line, winding, and straight where it meets the bowl
  (slot-x z) (sat ((zc - 30.0 - z) / 25.0) * (1.9 * sin (z / 11.0) + 0.9 * sin (z / 5.3)))
+ ; the lamppost, far out on the plain past the mouth, a step aside of the slot's line; and
+ ; how long a wait at night brings back the missing stone
+ post-z -62.0 post-x (slot-x post-z + 1.5)
+ ghost-wait 1800.0
  ; ..how far out of the mouth, 0 inside to 1 on the plain
  (mouth z) (sat ((-8.0 - z) / 22.0))
  ; ..its half width at a height: narrow at the floor, scalloped by the floods, opening
@@ -177,15 +181,55 @@
  ; colour the rock's own there, lit once by the hour's sun and sky, and a texture over it
  ; the fine beds and the grain ---
  tx 16.0                                  ; texels a metre
+ ; the bowl's rows as knots [rr y] out from the middle: the floor a ring a metre, then a
+ ; tread and a riser eased up to the next; past the rim the wall to the plateau, and on
+ ; under it
+ knots (: (row k) (: r0 (floor-r + k * row-w) h (k * row-h)
+                     [[(r0 + 0.5 * row-w) h] [(r0 + 0.65 * row-w) (h + 0.156 * row-h)]
+                      [(r0 + 0.75 * row-w) (h + 0.5 * row-h)] [(r0 + 0.85 * row-w) (h + 0.844 * row-h)]
+                      [(r0 + row-w) (h + row-h)]])
+          (map (k \ [(1.0 * k) 0.0]) ^(int floor-r) + [[floor-r 0.0]] + foldr (+) () (map row ^rows)
+           + map (d \ [(rim-r + d) (rows * row-h + 2.2 * d)]) [1.0 2.5 4.0 5.5 7.0 10.0 15.0]))
+ ; the rows' height at x z as the bowl's triangles lay it: straight between knots
+ (bowl-m x z) (: r (sqrt (x * x + sq (z - zc))) rr (r + 0.6 * sin (x / 4.0 + z / 6.0))
+   (seg l) (atom? >>l || rr < >l 0 0 ? l (seg >l))
+   l (seg knots) a <l b (>l 0) t (sat ((rr - a 0) / (b 0 - a 0)))
+   (a 1 + t * (b 1 - a 1)))
+ ; ..and the rock's rim there, the lower of the rows and the plateau
+ (rim-y x z) (min (top x z) (bowl-m x z))
+ ; a ring's place at angle a: where the rows' wavering puts its radius rr
+ (ring-at rr a) (: (go r k) (: x (r * sin a) z (zc + r * cos a)
+                            (k = 0 ? [x z] (go (rr - 0.6 * sin (x / 4.0 + z / 6.0)) (k - 1))))
+   (go rr 2))
+ ; ..its height there: the knot's, and the plateau's a little under where it is the top
+ (ring-y kn x z) (min (kn 1) (top x z) - (rim-r + 5.0 < kn 0 ? 0.08 0.0))
+ ; ..and where it meets the slot's wall on side sg, a hand inside its face so the row
+ ; ends over the wall's top: halved toward it from the south, east or west of it
+ notch-ov 0.1
+ (notch-a kn sg) (: (miss a) (: p (ring-at (kn 0) a) y (ring-y kn (p 0) (p 1))
+                                ((p 0 - slot-x (p 1) - sg * (half (max y 0.0) (p 1) - notch-ov)) * sg))
+   (go lo hi k) (: m (0.5 * (lo + hi)) (k = 0 ? m (miss m < 0.0 ? (go m hi (k - 1)) (go lo m (k - 1)))))
+   (sg > 0 ? (go pi (pi - 1.5) 16) (go pi (pi + 1.5) 16)))
+ ; ..whether the slot crosses a ring at all
+ (cut? kn) (ring-at (kn 0) pi @ p (p 1 < zend))
  dz 1.0 z0 -90.0                          ; the slot's rings, from out on the plain
  nw 8                                     ; rows up a wall
  lips [2.0 5.0 9.0]                       ; ..and out over the plateau, under its edge
- (rim-y x z) (min (top x z) (bowl x z))
  ; a slot wall, side sg -1 the west and 1 the east, its profile i up and over at ring j:
  ; the east's i and j crossed, so both face the slot. its foot is sunk under the floor
+ ; ..its rings a metre apart, one on past the slot's end to close the seam with the bowl's
+ ; floor, and one more where each row the slot cuts meets it, so its top steps with the rows
+ (wall-zs sg) (: u (map (j \ z0 + j * dz) ^(int ((zend - z0) / dz) + 2))
+   c (map (kn \ ring-at (kn 0) (notch-a kn sg) @ p (p 1)) (filter cut? knots))
+   (go l last) (? (atom? l) () (<l < last + 0.05) (go >l last) ([<l] + go >l <l))
+   (go (sort (cat u (filter (z \ z < zend - 0.05) c))) -1e9))
  (wall sg)
-  (: nz (int ((zend - z0) / dz)) np (nw + #lips)
-     (at i j) (: z (z0 + j * dz) sx (slot-x z) T (rim-y (sx + sg * half (top sx z) z) z)
+  (: zs (wall-zs sg) nz (#zs - 1) np (nw + #lips)
+     ; ..its top where the rock's rim is at the wall's own lean
+     (rim-at sx z) (: (gap T) ((rim-y (sx + sg * half T z) z) - T)
+                      (go lo hi k) (: m (0.5 * (lo + hi)) (k = 0 ? m (gap m > 0.0 ? (go m hi (k - 1)) (go lo m (k - 1)))))
+                      (go 0.0 (max 0.0 (top sx z)) 14))
+     (at i j) (: z (zs j) sx (slot-x z) T (rim-at sx z)
                  (i <= nw ? (: y ((T + 0.3) * i / nw - 0.3) x (sx + sg * half (max y 0.0) z) [x y z (tx * z) (tx * y)])
                     (: x (sx + sg * (half T z + lips (i - nw - 1))) y (rim-y x z - 0.08)
                        [x y z (tx * z) (tx * (T + mag (x - sx)))])))
@@ -203,47 +247,25 @@
                                               (sx - hw + 2.0 * hw * (i - 1) / floor-n))
                                          [x -0.02 z (tx * x) (tx * z)]))
               1 [1.0 1.0 1.0]))
- ; the slot's air: inside its walls, short of the bowl
- (in-slot? x y z) (z < zend && mag (x - slot-x z) < half (max y 0.0) z - 0.02)
- ; the bowl's rows as knots [rr y] out from the middle: the floor a ring a metre, then a
- ; tread and a riser eased up to the next; past the rim the wall to the plateau, and on
- ; under it
- knots (: (row k) (: r0 (floor-r + k * row-w) h (k * row-h)
-                     [[(r0 + 0.5 * row-w) h] [(r0 + 0.65 * row-w) (h + 0.156 * row-h)]
-                      [(r0 + 0.75 * row-w) (h + 0.5 * row-h)] [(r0 + 0.85 * row-w) (h + 0.844 * row-h)]
-                      [(r0 + row-w) (h + row-h)]])
-          (map (k \ [(1.0 * k) 0.0]) ^(int floor-r) + [[floor-r 0.0]] + foldr (+) () (map row ^rows)
-           + map (d \ [(rim-r + d) (rows * row-h + 2.2 * d)]) [1.0 2.5 4.0 5.5 7.0 10.0 15.0]))
  bowl-n 72
- (bowl-mesh _)
-  (: (at i j) (: a (2.0 * pi * i / bowl-n) kn (knots j) rr (kn 0)
-                 ; ..each knot where the rows' wavering puts its radius
-                 (go r k) (: x (r * sin a) z (zc + r * cos a)
-                            (k = 0 ? [x z] (go (rr - 0.6 * sin (x / 4.0 + z / 6.0)) (k - 1))))
-                 p (go rr 2) x (p 0) z (p 1)
-                 y (min (kn 1) (top x z) - (rim-r + 5.0 < rr ? 0.08 0.0))
+ ; the bowl turned round its middle, each ring at its own wavering radius; a ring the slot
+ ; crosses runs from the slot's west wall round by the north to its east wall, its ends
+ ; on them, so the rows meet the walls with nothing cut away
+ (bowl-mesh ks)
+  (: ends (map (kn \ (cut? kn ? [(notch-a kn -1) (notch-a kn 1)] [pi (3.0 * pi)])) ks)
+     (at i j) (: kn (ks j) e (ends j) a (e 0 + (e 1 + (e 1 < e 0 + pi ? (2.0 * pi) 0.0) - e 0) * i / bowl-n)
+                 p (ring-at (kn 0) a) x (p 0) z (p 1) y (ring-y kn x z)
                  ; ..its sand laid by place, the risers' by height as well
                  [x y z (tx * x) (tx * (z + y))])
-     m (mesh-grid bowl-n (#knots - 1) at 1 [1.0 1.0 1.0])
-     ; ..where the slot cuts the rows: a vertex in its air moved out across to the wall on
-     ; its side, so a row ends on the wall; a triangle across the slot, its corners either
-     ; side of it, or with all three moved into the wall, dropped
-     (side v) (v 0 < slot-x (v 2) ? -1 1)
-     (in? v) (in-slot? (v 0) (v 1 + 0.3) (v 2))
-     S (star-tray [#(m 0)] (map side (m 0))) I (star-tray [#(m 0)] (map (v \ in? v ? 1 0) (m 0)))
-     Z (gem-tray [#(m 0)] (map (v \ 1.0 * v 2) (m 0)))
-     vs (map (v \ (in? v ? ([(slot-x (v 2) + side v * half (v 1) (v 2)) (v 1) (v 2)] + drop 3 v) v)) (m 0))
-     ts (filter (t \ (: (g T k) (peep T (t k) 0) zl (min (g Z 0) (min (g Z 1) (g Z 2)))
-                       across (g S 0 != g S 1 || g S 0 != g S 2)
-                       !(across && zl < zend || g I 0 + g I 1 + g I 2 = 3)))
-                (m 1))
-     (mesh-normals (mesh vs ts)))
+     (mesh-grid bowl-n (#ks - 1) at 1 [1.0 1.0 1.0]))
  ; the plateau, four metres a cell: where it is the top, not the bowl's air nor the slot's
  cell 4.0
  (plateau _) (: nx 40 nz 75 x0 (-0.5 * nx * cell) zp -110.0
    m (mesh-grid nx nz (\ i j (: x (x0 + i * cell) z (zp + j * cell) y (top x z) [x y z (tx * x) (tx * z)])) 1 [1.0 1.0 1.0])
-   (mesh-keep m (\ x y z (sqrt (x * x + sq (z - zc)) > rim-r + 7.0
-                          && (zend <= z || mag (x - slot-x z) > half (top x z) z + 8.0)))))
+   ; ..a cell only where all its corners are the top -- not down in the bowl, and clear of
+   ; the slot by a metre -- so its edge stays inside where the bowl's wall and the slot's
+   ; lips run on under it
+   (mesh-keep-all m (\ x y z (top x z <= bowl x z + 0.05 && (zend <= z || mag (x - slot-x z) > half (top x z) z + 1.0)))))
  ; a block hewn round: rings up it at heights t, (prof j) [t r], each its section (sec a)
  ; [x z] out to the block's sides scaled by r, n round; worn by amp unevenly all over and
  ; leant by lean, each block its own way by where it stands; its texels round the section,
@@ -322,7 +344,7 @@
  kept {}
  (land _) (: l (peep kept 'land ())
    (tablet? l ? l
-      (: rk (rock-cols (mesh-pack (mesh-join [(wall -1) (wall 1) (slot-floor ()) (bowl-mesh ()) (plateau ())])))
+      (: rk (rock-cols (mesh-pack (mesh-join [(wall -1) (wall 1) (slot-floor ()) (bowl-mesh knots) (plateau ())])))
          l2 {'rock rk 'texs (texs-of ())}
          (pin kept 'land l2, l2))))
  ; --- the light baked: each vertex's share of the sun past the rock, of the
@@ -366,7 +388,9 @@
    v (mesh-eye w h e (st 'th) (st 'ph + b 1) (peep st 'ro 0.0) fov 0.05 900.0)
    hz (mesh-haze v lt (st 'wx) (st 'sim))
    sc0 (scene st) db (drop-batch st lt)
-   sc (two? db ? [(cat (sc0 0) [(db 0)]) (cat (sc0 1) [(db 1)]) (sc0 2)] sc0)
+   ; ..and after the land the drops, the lamppost once it stands, and last the glow
+   xs (filter two? [db (post-batch st lt) (ghost-batch st lt)])
+   sc (#xs = 0 ? sc0 [(cat (sc0 0) (map (b \ b 0) xs)) (cat (sc0 1) (map (b \ b 1) xs)) (sc0 2)])
    (mesh-frame v sc ((land ()) 'texs) [(hz 0) (hz 1) (hz 2) 150.0 900.0] 8 (1.5 * lt 'expo)
                (mesh-sky lt (st 'wx) e (st 'sim) (st 't) (k = 1 ? 1 (sky-k * k)))))
  (stones-frame st) (: w (st 'w) h (st 'h) k (peep st 'kp 1) f0 (stones-pens st) kit (st 'kitty)
@@ -414,10 +438,11 @@
  ; as many pixels each way
  (stones-size st w r) (: h (2 * r)
    (pins (view! st w h (h // 2)) 'bay (view-bayer w h) 'kp (st 'kitty ? (max2 1 (kitty-w // w)) 1)))
- ; --- moving: over the sand and up the rows, but not up the rock, nor through a block;
+ ; --- moving: over the sand and up and down the rows, but not up the rock, nor off its
+ ; edge where it drops sheer, nor through a block;
  ; sliding along what stops a step. out past the mouth, the run is done ---
  (free? st x z) (: g (stones-ground x z) g0 (stones-ground (st 'px) (st 'pz))
-   (g < g0 + 0.7 && g < rows * row-h + 0.3
+   (g < g0 + 0.7 && g0 - 0.9 < g && g < rows * row-h + 0.3
     && !(any (b \ (: c (cos (b 3)) sn (sin (b 3)) qx (x - b 0) qz (z - b 2)
                      u (qx * c - qz * sn) w (qx * sn + qz * c)
                      (mag u < b 4 + body-r && mag w < b 6 + body-r))) (st 'blocks))))
@@ -437,7 +462,7 @@
    (step d) (put! st (st 'px + d * sin th) (st 'pz + d * cos th))
    (? (st 'done) st
       (charm? (st 'dlg)) (dialog-key st k)
-      (st 'eye = 'kneel) (elem k rise-keys ? (pins st 'dlg-at (), move! st (stand-move st)) st)
+      (st 'eye = 'kneel) (elem k rise-keys ? (rise! st) st)
       (st 'eye != 'walk) st
       (k = 32) (altar-near? st ? (move! st (kneel-move st)) st)
       (k @ (104 || -1) (pin st 'th (wrap (th - turn-v * dt)))
@@ -460,7 +485,7 @@
                                     'eye (end ? (mv 'then) 'move)
                                     'dlg-at (end && peep mv 'dlg 0 ? (mt + dlg-pause) (st 'dlg-at))))
       ; ..the choices back, once the pause after a move is up
-      (st 'eye = 'kneel && !(nil? (st 'dlg-at)) && st 'dlg-at <= mt) (pins st 'dlg (st 'sel) 'dlg-at ())
+      (st 'eye = 'kneel && gem? (st 'dlg-at) && st 'dlg-at <= mt) (pins st 'dlg (st 'sel) 'dlg-at ())
       (st 'eye = 'walk)
        (pins st 'py (g + eye-h - y @ dy (mag dy < 0.002 ? (g + eye-h) (y + 0.35 * dy))) 'ro 0.0
                 'done (st 'pz < exit-z ? 1 0))
@@ -516,16 +541,20 @@
         [(T + 1.4) (yk + 0.008)] [(T + 1.8) yk]]
     'ro [[0.0 0.0] [T 0.0] [(T + 0.45) 0.06] [(T + 0.7) 0.05] [(T + 1.1) -0.025] [(T + 1.6) 0.0]]
     'walk [x0 z0 kx kz] 'len (T + 2.0) 'then 'kneel 'dlg 1})
- ; --- the choices: a number takes one, k and j or the arrows go up and down them, space or
- ; enter takes the one marked. the last puts them away and stays kneeling; another, its
- ; move, and the choices again after it ---
+ ; --- the choices: a number takes one, k and j or the arrows go up and down them, enter
+ ; takes the one marked, and space puts them away and stands. the last, wait, puts them
+ ; away and stays kneeling, and is remembered; another, its move, and the choices again
+ ; after it ---
  (dialog-key st k) (: n #acts c (st 'dlg)
    (? (49 <= k && k < 49 + n) (choose! st (k - 49))
       (elem k [107 -8]) (pin st 'dlg ((c + n - 1) % n))
       (elem k [106 -9]) (pin st 'dlg ((c + 1) % n))
-      (elem k [32 13 10]) (choose! st c)
+      (elem k [13 10]) (choose! st c)
+      (k = 32) (rise! st)
       st))
- (choose! st i) (: _ (pins st 'dlg () 'sel i) (i = #acts - 1 ? st (move! st (act-move st i))))
+ (choose! st i) (: _ (pins st 'dlg () 'sel i)
+   (i = #acts - 1 ? (pins st 'waited 1 'wait-at (st 'mt)) (move! st (act-move st i))))
+ (rise! st) (: _ (pins st 'dlg () 'dlg-at () 'wait-at ()) (move! st (stand-move st)))
  ; ..an act's keys laid on the eye where it kneels
  (act-move st i) (: a (act-keys i) x0 (st 'px) z0 (st 'pz) th (st 'th)
    (off v l) (map (q \ [(q 0) (v + q 1)]) l)
@@ -577,6 +606,37 @@
    parts (foldl (\ acc d (: n (acc 2) g (peep d 'splat 0 ? (patch d n) (gem d n))
                             [(cat (acc 0) (g 0)) (cat (acc 1) (g 1)) (n + #(g 0))])) [() () 0] (cat ds sp))
    (parts 2 = 0 ? () [(gem-tray [(11 * parts 2)] (flat (parts 0))) (star-tray [(4 * #(parts 1))] (flat (parts 1)))]))
+ ; --- the end of it: once the eye has waited at the altar, a lamppost stands far out on
+ ; the plain past the mouth, beyond where the walk ends, its lantern lit at night ---
+ (box-parts c h col n) (: (p sx sy sz) [(c 0 + sx * h 0) (c 1 + sy * h 1) (c 2 + sz * h 2) 0.0 0.0 (col 0) (col 1) (col 2) 0.0 0.0 0.0]
+   [[(p -1 -1 -1) (p 1 -1 -1) (p 1 1 -1) (p -1 1 -1) (p -1 -1 1) (p 1 -1 1) (p 1 1 1) (p -1 1 1)]
+    (foldr cat () (map (t \ [[(n + t 0) (n + t 1) (n + t 2) -1] [(n + t 0) (n + t 2) (n + t 1) -1]])
+                       [[0 1 2] [0 2 3] [4 6 5] [4 7 6] [0 4 5] [0 5 1] [3 2 6] [3 6 7] [0 3 7] [0 7 4] [1 5 6] [1 6 2]]))])
+ (post-batch st lt) (? (peep st 'waited 0)
+   (: L (c+ (lt 'amb) (c* (0.7 * lt 'sunk) (lt 'sunc))) iron (c* 0.07 L) g (stones-ground post-x post-z)
+      lamp (lt 'day < 0.15 ? [2.6 1.9 0.9] (c* 0.32 L))
+      (at y) [post-x (g + y) post-z]
+      parts [[(at 0.3) [0.2 0.3 0.2] iron] [(at 2.6) [0.07 2.1 0.07] iron] [(at 4.45) [0.18 0.28 0.18] lamp]
+             [(at 4.78) [0.26 0.06 0.26] iron] [(at 4.98) [0.05 0.14 0.05] iron]]
+      bs (foldl (\ acc q (: b (box-parts (q 0) (q 1) (q 2) #(acc 0)) [(cat (acc 0) (b 0)) (cat (acc 1) (b 1))])) [() ()] parts)
+      [(gem-tray [(11 * #(bs 0))] (foldr cat () (bs 0))) (star-tray [(4 * #(bs 1))] (foldr cat () (bs 1)))]))
+ ; ..and at night, kneeling after the wait half an hour, the missing stone where it stood,
+ ; faint and the purple of the dusk, coming slowly and breathing; gone at sunrise, or when
+ ; the eye stands
+ (ghost-on? st lt) (st 'eye = 'kneel && !(charm? (st 'dlg)) && gem? (peep st 'wait-at ()) && lt 'day < 0.1
+                    && ghost-wait <= peep st 'mt 0.0 - st 'wait-at)
+ (ghost-batch st lt) (? (ghost-on? st lt)
+   (: g (peep kept 'ghost ())
+      pk (tablet? g ? g (: a (ring-a 3) j (throw 3 1 31 100 / 100.0)
+                           b (stone (ring-r * cos a) (zc + ring-r * sin a) (pi / 2.0 - a) (1.0 + 0.2 * j)
+                                    (2.9 + 0.5 * throw 3 2 37 100 / 100.0) 0.7)
+                           q (mesh-pack (block-mesh b)) (pin kept 'ghost q, q)))
+      mt (st 'mt) f (sat ((mt - st 'wait-at - ghost-wait) / 12.0) * (0.8 + 0.2 * sin (mt * 0.9)))
+      c (pk 'cols) n (pk 'n) z (c 0 * 0.0) k (f * (0.55 + 0.45 * c 6))
+      cols [(c 0) (c 1) (c 2) (c 3) (c 4) (0.22 * k) (0.11 * k) (0.32 * k) z z z]
+      i (iota n * 11) ts (pk 'tris)
+      [(foldl (\ v m (pin v (i + m) (cols m))) (iota (11 * n) * 0.0) ^11)
+       (pin ts (iota (#ts // 4) * 4 + 3) -2)]))
  ; ..and up again: a lean forward, the push up, a step back to stand, looking up
  (stand-move st) (: x0 (st 'px) z0 (st 'pz) y0 (st 'py) th (st 'th) ph0 (st 'ph)
    bx (x0 - 0.3 * sin th) bz (z0 - 0.3 * cos th) ys (stones-ground bx bz + eye-h)

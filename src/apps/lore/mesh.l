@@ -4,7 +4,7 @@
 ; or as kitty's pixels.
 ; the world is lore's: x right, y up, z ahead when 'th is 0, 'th turning toward x.
 (module (mesh mesh mesh-join mesh-move mesh-quad mesh-box mesh-grid mesh-lathe mesh-normals
-         mesh-keep mesh-pack mesh-bake mesh-bake-sun mesh-sun-view mesh-sun-map mesh-open mesh-tex mesh-view mesh-eye mesh-dirs mesh-spot mesh-sky mesh-haze mesh-frame mesh-flat
+         mesh-keep mesh-keep-all mesh-pack mesh-bake mesh-bake-sun mesh-sun-view mesh-sun-map mesh-open mesh-tex mesh-view mesh-eye mesh-dirs mesh-spot mesh-sky mesh-haze mesh-frame mesh-flat
          mesh-cells mesh-kitty)
 (borrow 'view)
 (borrow 'vec)
@@ -66,6 +66,10 @@
    (mesh (m 0) (filter (t \ (: a (at3 P (t 0)) b (at3 P (t 1)) c (at3 P (t 2))
                              (keep? ((a 0 + b 0 + c 0) / 3.0) ((a 1 + b 1 + c 1) / 3.0) ((a 2 + b 2 + c 2) / 3.0))))
                        (m 1))))
+ ; ..or only those whose corners all (keep? x y z)
+ (mesh-keep-all m keep?) (: P (places (m 0))
+   (ok i) (at3 P i @ v (keep? (v 0) (v 1) (v 2)))
+   (mesh (m 0) (filter (t \ ok (t 0) && ok (t 1) && ok (t 2)) (m 1))))
  ; each vertex's normal the sum of its faces', weighed by their size
  (mesh-normals m) (: vs (m 0) P (places vs) acc {}
    (add i n) (pin acc i (peep acc i [0.0 0.0 0.0] @ o [(o 0 + n 0) (o 1 + n 1) (o 2 + n 2)]))
