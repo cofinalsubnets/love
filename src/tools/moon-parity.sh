@@ -76,6 +76,8 @@ p 'composite passed at a variadic call site' \
 'typedef struct{int a,b;}S; int v(int n,...); int g(void){S s={1,2};return v(1,s);}' v
 p 'composite NAMED in a variadic parameter list' \
 'typedef struct{int a,b;}S; int v(int n,S s,...){return s.a+n;}'
+p 'va_arg of a composite, ≤16B all-int' \
+'typedef struct{int a,b,c;}S; int v(int n,...){__builtin_va_list ap;__builtin_va_start(ap,n);S s=__builtin_va_arg(ap,S);__builtin_va_end(ap);return s.c+n;}'
 p 'composite return, 16B all-int' \
 'typedef struct{int a,b,c,d;}R; static R mk(int x){R r={x,x,x,x};return r;} int g(void){return mk(3).a;}'
 p 'composite return, MEMORY class' \
