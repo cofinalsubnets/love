@@ -85,7 +85,7 @@
  ; to the plateau's top ---
  zc 120.0 floor-r 14.0 row-w 2.4 row-h 1.5 rows 7
  rim-r (floor-r + rows * row-w)
- exit-z -34.0                           ; out on the open sand: the run done
+ exit-z -52.0                           ; out on the open sand, near the lamppost: the run done
  ; the slot's line, winding, and straight where it meets the bowl
  (slot-x z) (sat ((zc - 30.0 - z) / 25.0) * (1.9 * sin (z / 11.0) + 0.9 * sin (z / 5.3)))
  ; the lamppost, far out on the plain past the mouth, a step aside of the slot's line; and
@@ -190,82 +190,128 @@
                       [(r0 + row-w) (h + row-h)]])
           (map (k \ [(1.0 * k) 0.0]) ^(int floor-r) + [[floor-r 0.0]] + foldr (+) () (map row ^rows)
            + map (d \ [(rim-r + d) (rows * row-h + 2.2 * d)]) [1.0 2.5 4.0 5.5 7.0 10.0 15.0]))
- ; the rows' height at x z as the bowl's triangles lay it: straight between knots
- (bowl-m x z) (: r (sqrt (x * x + sq (z - zc))) rr (r + 0.6 * sin (x / 4.0 + z / 6.0))
+ ; the rows' height at x z as the bowl's triangles lay it: straight between its rings,
+ ; each ring's height as it lays it, out along the same line from the middle
+ (bowl-m x z) (: r (max (sqrt (x * x + sq (z - zc))) 0.01) rr (r + 0.6 * sin (x / 4.0 + z / 6.0))
    (seg l) (atom? >>l || rr < >l 0 0 ? l (seg >l))
    l (seg knots) a <l b (>l 0) t (sat ((rr - a 0) / (b 0 - a 0)))
-   (a 1 + t * (b 1 - a 1)))
+   (ky kn) (: s ((r + kn 0 - rr) / r) (ring-y kn (x * s) (zc + (z - zc) * s)))
+   (b 0 < rr ? (top x z) (: ya (ky a) (ya + t * (ky b - ya)))))
  ; ..and the rock's rim there, the lower of the rows and the plateau
  (rim-y x z) (min (top x z) (bowl-m x z))
+ ; ..how far the plateau's own sheets sink at the bowl's rim, under its rings: they cut
+ ; the rim's crease short, a chord under it
+ (sink x z) (1.2 * sat (1.0 - (bowl x z - top x z) / 2.0))
  ; a ring's place at angle a: where the rows' wavering puts its radius rr
  (ring-at rr a) (: (go r k) (: x (r * sin a) z (zc + r * cos a)
                             (k = 0 ? [x z] (go (rr - 0.6 * sin (x / 4.0 + z / 6.0)) (k - 1))))
    (go rr 2))
  ; ..its height there: the knot's, and the plateau's a little under where it is the top
  (ring-y kn x z) (min (kn 1) (top x z) - (rim-r + 5.0 < kn 0 ? 0.08 0.0))
- ; ..and where it meets the slot's wall on side sg, a hand inside its face so the row
- ; ends over the wall's top: halved toward it from the south, east or west of it
- notch-ov 0.1
+ ; ..and where it meets the slot's wall on side sg, on its face: halved toward it from the
+ ; south, east or west of it
  (notch-a kn sg) (: (miss a) (: p (ring-at (kn 0) a) y (ring-y kn (p 0) (p 1))
-                                ((p 0 - slot-x (p 1) - sg * (half (max y 0.0) (p 1) - notch-ov)) * sg))
+                                ((p 0 - slot-x (p 1) - sg * half (max y 0.0) (p 1)) * sg))
    (go lo hi k) (: m (0.5 * (lo + hi)) (k = 0 ? m (miss m < 0.0 ? (go m hi (k - 1)) (go lo m (k - 1)))))
    (sg > 0 ? (go pi (pi - 1.5) 16) (go pi (pi + 1.5) 16)))
  ; ..whether the slot crosses a ring at all
  (cut? kn) (ring-at (kn 0) pi @ p (p 1 < zend))
- dz 1.0 z0 -90.0                          ; the slot's rings, from out on the plain
+ ; ..each ring the slot cuts, its end on side sg as [z y x], south first
+ (row-ends sg) (sort (map (kn \ (: p (ring-at (kn 0) (notch-a kn sg)) [(p 1) (ring-y kn (p 0) (p 1)) (p 0)]))
+                         (filter cut? knots)))
+ dz 1.0 z0 -42.0                          ; the slot's rings, from where the plain is flat
  nw 8                                     ; rows up a wall
  lips [2.0 5.0 9.0]                       ; ..and out over the plateau, under its edge
  ; a slot wall, side sg -1 the west and 1 the east, its profile i up and over at ring j:
  ; the east's i and j crossed, so both face the slot. its foot is sunk under the floor
- ; ..its rings a metre apart, one on past the slot's end to close the seam with the bowl's
- ; floor, and one more where each row the slot cuts meets it, so its top steps with the rows
- (wall-zs sg) (: u (map (j \ z0 + j * dz) ^(int ((zend - z0) / dz) + 2))
-   c (map (kn \ ring-at (kn 0) (notch-a kn sg) @ p (p 1)) (filter cut? knots))
-   (go l last) (? (atom? l) () (<l < last + 0.05) (go >l last) ([<l] + go >l <l))
-   (go (sort (cat u (filter (z \ z < zend - 0.05) c))) -1e9))
+ ; ..its rings a metre apart from one under the plain's edge, and where the rows are the
+ ; rim, one at each row's end and no other, so its top is the rows' own edge; the last at
+ ; the first row's, where the slot ends
+ (wall-zs sg) (: c (map (e \ e 0) (row-ends sg))
+   u (filter (z \ z < <c - 0.05) (map (j \ z0 + (j - 1) * dz) ^(int ((zend - z0) / dz) + 2)))
+   (cat u c))
  (wall sg)
   (: zs (wall-zs sg) nz (#zs - 1) np (nw + #lips)
      ; ..its top where the rock's rim is at the wall's own lean
      (rim-at sx z) (: (gap T) ((rim-y (sx + sg * half T z) z) - T)
                       (go lo hi k) (: m (0.5 * (lo + hi)) (k = 0 ? m (gap m > 0.0 ? (go m hi (k - 1)) (go lo m (k - 1)))))
                       (go 0.0 (max 0.0 (top sx z)) 14))
-     (at i j) (: z (zs j) sx (slot-x z) T (rim-at sx z)
-                 (i <= nw ? (: y ((T + 0.3) * i / nw - 0.3) x (sx + sg * half (max y 0.0) z) [x y z (tx * z) (tx * y)])
-                    (: x (sx + sg * (half T z + lips (i - nw - 1))) y (rim-y x z - 0.08)
+     ; ..and where the rows are the rim, its top through the rows' own ends and straight
+     ; between them as the rows' edge is, so the two meet with nothing between
+     es (row-ends sg)
+     (edge z) (: (go l) (? (atom? l) () (<l 0 = z) [(<l 1) (<l 2)] (atom? >l) () (<l 0 <= z <= >l 0 0)
+                           (: a <l b (>l 0) t ((z - a 0) / max (b 0 - a 0) 1e-6) [(a 1 + t * (b 1 - a 1)) (a 2 + t * (b 2 - a 2))])
+                           (go >l))
+                (go es))
+     ; ..its first ring, under the plain, sunk well under it
+     (at i j) (: z (zs j) sx (slot-x z) ed (edge z) dn (z < z0 - 0.5 ? 0.3 0.0) T (two? ed ? (ed 0) (rim-at sx z - dn))
+                 (? (i = nw && two? ed) [(ed 1) T z (tx * z) (tx * T)]
+                    (i <= nw) (: y ((T + 0.3) * i / nw - 0.3) x (sx + sg * half (max y 0.0) z) [x y z (tx * z) (tx * y)])
+                    (: x (sx + sg * (half T z + lips (i - nw - 1))) y (rim-y x z - 0.08 - sink x z - dn)
                        [x y z (tx * z) (tx * (T + mag (x - sx)))])))
-     m (sg < 0 ? (mesh-grid nz np (\ j i (at i j)) 0 [1.0 1.0 1.0])
-          (mesh-grid np nz at 0 [1.0 1.0 1.0]))
-     ; ..its lips only under the plateau, not where the bowl's rows are the ground
-     (mesh-keep m (\ x y z (mag (x - slot-x z) < half (max y 0.0) z + 0.5 || top x z - 0.3 <= bowl x z))))
- ; ..its floor, sand from wall to wall, a hair under the bowl's where they meet, and a
- ; skirt on past each wall's foot: a wall's rows are straight, its curve between them
- ; not where the floor's edge is
- floor-n 3
- (slot-floor _) (: nz (int ((zend + 2.0 - z0) / dz))
-   (mesh-grid (floor-n + 2) nz (\ i j (: z (z0 + j * dz) sx (slot-x z) hw (half 0.0 z)
-                                         x (? (i = 0) (sx - hw - 0.5) (i = floor-n + 2) (sx + hw + 0.5)
-                                              (sx - hw + 2.0 * hw * (i - 1) / floor-n))
-                                         [x -0.02 z (tx * x) (tx * z)]))
-              1 [1.0 1.0 1.0]))
+     ; ..the face in the rock's beds, and its lips apart in the plateau's own sand, from the
+     ; face's top points: where they show through the plain they are the plain
+     (sheet lo n tex) (: (f i j) (: v (at (lo + i) j) ((tex = 1) ? [(v 0) (v 1) (v 2) (tx * v 0) (tx * v 2)] v))
+                         (sg < 0 ? (mesh-grid nz n (\ j i (f i j)) tex [1.0 1.0 1.0]) (mesh-grid n nz f tex [1.0 1.0 1.0])))
+     m (mesh-join [(sheet 0 nw 0) (sheet nw #lips 1)])
+     ; ..its lips only under the plateau, every corner, not where the bowl's rows are the ground
+     (mesh-keep-all m (\ x y z (mag (x - slot-x z) < half (max y 0.0) z + 0.5 || top x z - 0.3 <= bowl x z))))
+ ; ..its floor, sand from wall to wall, from a row dipped under the plain's edge to one
+ ; straight across between the first row's ends and through their middle, the bowl's own
+ ; points there, where the bowl takes over;
+ ; and a skirt on past each wall's foot: a wall's rows are straight, its curve between
+ ; them not where the floor's edge is
+ floor-n 2
+ (slot-floor _) (: (last l) (l (#l - 1)) pw (last (row-ends -1)) pe (last (row-ends 1)) nz (int ((min (pw 0) (pe 0) - 0.3 - z0) / dz) + 1)
+   m (mesh-grid (floor-n + 2) (nz + 1) (\ i j (: k (min (max (i - 1) 0) floor-n) sk (? (i = 0) -0.5 (i = floor-n + 2) 0.5 0.0)
+                                         p (? (j <= nz) (: z (z0 + (j - 1) * dz) hw (half 0.0 z) [(slot-x z - hw + 2.0 * hw * k / floor-n) z])
+                                              (: f (1.0 * k / floor-n) [(pw 2 + f * (pe 2 - pw 2)) (pw 0 + f * (pe 0 - pw 0))]))
+                                         x (p 0 + sk) z (p 1)
+                                         [x (? (sk != 0.0) -0.3 (j = 0) -0.01 0.0) z (tx * x) (tx * z)]))
+              1 [1.0 1.0 1.0])
+   ; ..lit as the level sand it is, its skirt not leaning its edges
+   (mesh (map (v \ take 5 v + [0.0 1.0 0.0] + drop 8 v) (m 0)) (m 1)))
  bowl-n 72
  ; the bowl turned round its middle, each ring at its own wavering radius; a ring the slot
  ; crosses runs from the slot's west wall round by the north to its east wall, its ends
- ; on them, so the rows meet the walls with nothing cut away
+ ; on them, so the rows meet the walls with nothing cut away. before the first ring cut, a
+ ; bridge: that ring's own points, closed across the slot's end through the middle of its
+ ; ends, so the floor's last whole ring meets it all round and the slot's floor meets it
+ ; point for point
  (bowl-mesh ks)
-  (: ends (map (kn \ (cut? kn ? [(notch-a kn -1) (notch-a kn 1)] [pi (3.0 * pi)])) ks)
-     (at i j) (: kn (ks j) e (ends j) a (e 0 + (e 1 + (e 1 < e 0 + pi ? (2.0 * pi) 0.0) - e 0) * i / bowl-n)
-                 p (ring-at (kn 0) a) x (p 0) z (p 1) y (ring-y kn x z)
+  (: (go l pc) (atom? l ? ()
+                  (: kn <l c (cut? kn) e (c ? [(notch-a kn -1) (notch-a kn 1)] [pi (3.0 * pi)])
+                     ((c && (pc = 0) ? [[kn e 1]] ()) + [[kn e 0]] + go >l c)))
+     rs (go ks 0)
+     (lerp p q f) [(p 0 + f * (q 0 - p 0)) (p 1 + f * (q 1 - p 1))]
+     (at i j) (: rg (rs j) kn (rg 0) e (rg 1) w (e 0) E (e 1 + (e 1 < e 0 + pi ? (2.0 * pi) 0.0))
+                 ; ..its ends at their own angles, the very points the walls' tops are
+                 (on a) (ring-at (kn 0) a)
+                 (cut k) (? (k = 0) (on w) (k = bowl-n) (on (e 1)) (on (w + (E - w) * k / bowl-n)))
+                 p (? (rg 2 = 0) (cut i) (0 < i < bowl-n) (cut i) (lerp (on w) (on (e 1)) 0.5))
+                 x (p 0) z (p 1) y (ring-y kn x z)
                  ; ..its sand laid by place, the risers' by height as well
                  [x y z (tx * x) (tx * (z + y))])
-     (mesh-grid bowl-n (#ks - 1) at 1 [1.0 1.0 1.0]))
- ; the plateau, four metres a cell: where it is the top, not the bowl's air nor the slot's
+     (mesh-grid bowl-n (#rs - 1) at 1 [1.0 1.0 1.0]))
+ ; the plateau, four metres a cell about the slot and the bowl, and out to the haze the
+ ; cells growing: where it is the top, not the bowl's air nor the slot's
  cell 4.0
- (plateau _) (: nx 40 nz 75 x0 (-0.5 * nx * cell) zp -110.0
-   m (mesh-grid nx nz (\ i j (: x (x0 + i * cell) z (zp + j * cell) y (top x z) [x y z (tx * x) (tx * z)])) 1 [1.0 1.0 1.0])
-   ; ..a cell only where all its corners are the top -- not down in the bowl, and clear of
-   ; the slot by a metre -- so its edge stays inside where the bowl's wall and the slot's
-   ; lips run on under it
-   (mesh-keep-all m (\ x y z (top x z <= bowl x z + 0.05 && (zend <= z || mag (x - slot-x z) > half (top x z) z + 1.0)))))
+ (plateau _) (: (out k d s) (k = 0 ? () ([s + d] + out (k - 1) (1.6 * d) (s + d)))
+   far (out 9 6.4 0.0)
+   xs (map (o \ -80.0 - o) (rev far) + map (i \ -80.0 + i * cell) ^41 + map (o \ 80.0 + o) far)
+   zs (map (o \ -110.0 - o) (rev far) + map (j \ -110.0 + j * cell) ^76)
+   ; ..its edge over the bowl's rim sunk under the bowl's last rings, and by the slot under
+   ; the walls' lips, past the slot's floor where it starts; lit as the top it was
+   (by-slot x z) (: d (mag (x - slot-x z))
+                   (z0 - 0.5 < z && z < zend && d < half (top x z) z + 9.5 && (z0 + 0.5 < z || half 0.0 z + 1.0 < d)))
+   m0 (mesh-grid (#xs - 1) (#zs - 1) (\ i j (: x (xs i) z (zs j) y (top x z - sink x z)
+                                           [x y z (tx * x) (tx * z)])) 1 [1.0 1.0 1.0])
+   m (mesh (map (v \ (by-slot (v 0) (v 2) ? ([(v 0) (v 1 - 0.15)] + drop 2 v) v)) (m0 0)) (m0 1))
+   ; ..a cell only where its corners and its middle are the top -- not down in the bowl,
+   ; and clear of the slot by a metre -- so its edge stays inside where the bowl's wall and
+   ; the slot's lips run on under it
+   (ok x z) (top x z <= bowl x z + 0.05 && (zend <= z || z <= z0 || mag (x - slot-x z) > half (top x z) z + 1.0))
+   (mesh-keep (mesh-keep-all m (\ x y z (ok x z))) (\ x y z (ok x z))))
  ; a block hewn round: rings up it at heights t, (prof j) [t r], each its section (sec a)
  ; [x z] out to the block's sides scaled by r, n round; worn by amp unevenly all over and
  ; leant by lean, each block its own way by where it stands; its texels round the section,
@@ -351,7 +397,7 @@
  ; sky by how much of it is open overhead and how near the rock crowds it, and the glow
  ; the sunlit walls throw down the slot. again once the sun has gone on two minutes ---
  (light-of st lt) (: s (lt 'sun)
-   (c \ (: X (c 0) Y (c 1) Z (c 2) nx (c 5) ny (c 6) nz (c 7) h 0.02
+   (c \ (: X (c 0) Y (max (c 1) 0.02) Z (c 2) nx (c 5) ny (c 6) nz (c 7) h 0.02
            ox (X + 0.05 * nx) oy (Y + 0.05 * ny) oz (Z + 0.05 * nz)
            sun (0.0 < lt 'sunk * s 1 ? (shadow ox oy oz s) (X * 0.0))
            d0 (field X Y Z)
