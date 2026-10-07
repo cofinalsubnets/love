@@ -21,7 +21,7 @@ seed=$(printf 'hearts rung 0 key' | sha256sum | cut -c1-64)
 bad=$(printf 'hearts rung 0 other key' | sha256sum | cut -c1-64)
 $tool -l src/apps/sqfs.l src/apps/hearts/image.l out out/love Image out/BOOTAA64.EFI "$seed" "$bad" "$stamp" >&2 \
   || die "the image"
-(cd out && sha256sum disk.img u1.hup u2.hup u3.hup BOOTAA64.EFI love > shas)
+(cd out && sha256sum disk.img u1.hup u2.hup u3.hup u4.hup BOOTAA64.EFI love > shas)
 case $accel in kvm) a="-enable-kvm -cpu host" ;; *) a="-cpu cortex-a72" ;; esac
 cp fw/vars.fd out/vars.fd
 # shellcheck disable=SC2086
@@ -31,6 +31,7 @@ timeout "${HEARTS_BOOT_TIMEOUT:-1500}" qemu-system-aarch64 -M virt $a -m 2048 -s
   -drive file=out/u1.hup,if=virtio,format=raw,readonly=on \
   -drive file=out/u2.hup,if=virtio,format=raw,readonly=on \
   -drive file=out/u3.hup,if=virtio,format=raw,readonly=on \
+  -drive file=out/u4.hup,if=virtio,format=raw,readonly=on \
   -display none -serial file:out/serial.log -monitor none > out/qemu.log 2>&1
 echo $? > out/qemu.rc
 tar cf - -C out love BOOTAA64.EFI shas serial.log qemu.rc qemu.log

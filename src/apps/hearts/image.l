@@ -6,7 +6,8 @@
 ; the parts lie back to back from 1 MiB, each `at` where the one before it ends.
 ; usage: love -l src/apps/sqfs.l image.l OUT LOVE IMAGE EFI SEED BADSEED [STAMP]
 ;   writes OUT/disk.img (v1 in slot a) and OUT/u1.hup (v2 signed by BADSEED, refused),
-;   OUT/u2.hup (v2) and OUT/u3.hup (v3, sick); LOVE is a baked a64 love, IMAGE the kernel,
+;   OUT/u2.hup (v2 with a byte of its root changed under a good head, refused), OUT/u3.hup (v2)
+;   and OUT/u4.hup (v3, sick); LOVE is a baked a64 love, IMAGE the kernel,
 ;   EFI the chooser, SEED and BADSEED 32-byte keys as hex, STAMP the one time every file
 ;   carries (seconds, default 0): the same inputs give the same bytes on any host.
 (borrow 'bytes)
@@ -95,11 +96,14 @@
                                             "src/apps/helm/moor.l" "src/apps/helm/helm.l"]))
    cmd "console=ttyAMA0 rootfstype=squashfs ro rootwait panic=5 init=/bin/helm"
 
-   ; --- an update ------------------------------------------------------------
-   (hup seed kernel rootimg)
-    (: body ("hearts-update 1\n" + le #kernel 8 + le #rootimg 8 + le #cmd 8 + kernel + rootimg + cmd)
-       ; the key signs the body's sha256: ed25519's own hash, in love, is slow on a body this size
-       (body + ed-sign seed (ed-pub seed) (hex2b (sha256 body)) @ u (u + zbytes (padk #u 4096))))
+   ; --- an update: a signed 4K head, then the parts, as dev.l streams them ---------
+   ; a part is [enc bytes raw]: enc 1 when bytes are raw deflated
+   (hup seed ps)
+    (: (ent p) (p @ [enc b raw] (le enc 8 + le #b 8 + le #raw 8 + hex2b (sha256 raw)))
+       hd ("hearts-update 2\n" + join "" (map ent ps))
+       head (hd + ed-sign seed (ed-pub seed) hd @ h (h + zbytes (4096 - #h)))
+       body (head + join "" (map (p \ p 1) ps))
+       (body + zbytes (padk #body 4096)))
 
    odir (as 0)
    love (rd (as 1))
@@ -115,6 +119,10 @@
    r3 (rootimg "v3" 1)
    rsz (32 * mib)
    _ (#r1 <= rsz * 512 || gone "a root outgrows its slot")
+   ; the kernel travels deflated, the root as it is (squashfs deflates its own blocks)
+   kz (deflate-best kernel @ z (string? z ? z (gone "cannot deflate the kernel")))
+   (upd r) [[1 kz kernel] [0 r r] [0 cmd cmd]]
+   (flip s i) (snip s 0 i + string (255 - s i) + snip s (i + 1) #s)
    esp (fatimg (128 * mib) [["EFI/BOOT/BOOTAA64.EFI" efi] ["a/Image" kernel]
                             ["a/cmd" (cmd + " root=/dev/vda2\n")] ["hearts.st" "a-\n"]])
    data (fatimg (64 * mib) ())
@@ -124,7 +132,8 @@
        ["data" linux-type (193 * mib) (64 * mib) data]]
    total (257 * mib + 34)
    (disk (odir + "/disk.img") ps total,
-    uwrite (odir + "/u1.hup") (hup bad kernel r2),
-    uwrite (odir + "/u2.hup") (hup seed kernel r2),
-    uwrite (odir + "/u3.hup") (hup seed kernel r3),
-    say err "hearts-image: disk.img and three updates\n"))
+    uwrite (odir + "/u1.hup") (hup bad (upd r2)),
+    uwrite (odir + "/u2.hup") (flip (hup seed (upd r2)) (4096 + #kz + 4096)),
+    uwrite (odir + "/u3.hup") (hup seed (upd r2)),
+    uwrite (odir + "/u4.hup") (hup seed (upd r3)),
+    say err "hearts-image: disk.img and four updates\n"))
