@@ -22,10 +22,12 @@
        (has? f "38;5;") (has? deep "38;2;")))
 
 ; --- ..and as kitty's pixels: one picture over the screen's cells, the cursor left where it is;
-; --- sized for kitty, about kitty-w pixels across, a whole number a column
-(: k (stones-frame (pin (at 12.0 7) 'kitty 1))
+; --- sized for kitty, about kitty-w pixels across, a whole number a column; ids 7 and 8 by
+; --- turns, each frame taking the last one down after, in one synchronised update
+(: kt (pin (at 12.0 7) 'kitty 1) k (stones-frame kt) k2 (stones-frame kt)
    k8 (stones-frame (stones-size (pin (at 12.0 7) 'kitty 1) 80 24))
- (test (snip k 0 3 = "\e_G") (has? k "f=24") (has? k "C=1") (has? k "s=80,v=48,c=80,r=24,") (has? k "m=0;")
+ (test (snip k 0 8 = "\e[?2026h") (snip k (#k - 8) #k = "\e[?2026l")
+       (has? k "i=7,s=") (has? k "a=d,d=I,i=8,") (has? k2 "i=8,s=") (has? k2 "a=d,d=I,i=7,") (has? k "f=24") (has? k "C=1") (has? k "s=80,v=48,c=80,r=24,") (has? k "m=0;")
        (has? k8 "s=640,v=384,c=80,r=24,") ((stones-size (at 12.0 7) 80 24) 'kp = 1)))
 
 ; --- the words: the hour today, and kitty's or the cells; one wrong or said twice is none

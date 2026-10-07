@@ -274,8 +274,11 @@
  fov (pi / 2.0)
  kitty-w 640                              ; kitty's picture about this many pixels across
  sky-k 2                                  ; ..and the sky asked every sky-k columns
+ ; kitty's pictures go up as ids 7 and 8 by turns, the last taken down only once the next
+ ; is over it, the two in one synchronised update: one id put up again would go blank first
  kitty-id 7
- kitty-gone (esc + "_Ga=d,d=i,i=7,q=2" + esc + "\\")
+ (kitty-del id) (esc + "_Ga=d,d=I,i=" + show id + ",q=2" + esc + "\\")
+ kitty-gone (kitty-del 7 + kitty-del 8)
  ; ..'kp pixels a column, and twice that a row: one, for half blocks
  (stones-pens st) (: lt (stones-light st) k (peep st 'kp 1) w (k * st 'w) h (k * st 'h) e [(st 'px) (st 'py) (st 'pz)]
    v (mesh-view w h e (st 'th) (st 'ph) fov 0.05 900.0)
@@ -283,7 +286,9 @@
    (mesh-frame v (scene st) ((land ()) 'texs) [(hz 0) (hz 1) (hz 2) 150.0 900.0] 8 (1.5 * lt 'expo)
                (mesh-sky lt (st 'wx) e (st 'sim) (st 't) (k = 1 ? 1 (sky-k * k)))))
  (stones-frame st) (: w (st 'w) h (st 'h) k (peep st 'kp 1) f (stones-pens st)
-   (? (st 'kitty) (mesh-kitty f (k * w) (k * h) w (h // 2) kitty-id)
+   (? (st 'kitty) (: n (peep st 'kn 0) _ (pin st 'kn (1 - n))
+                     (esc + "[?2026h" + mesh-kitty f (k * w) (k * h) w (h // 2) (kitty-id + n)
+                      + kitty-del (kitty-id + 1 - n) + esc + "[?2026l"))
       (st 'deep) (mesh-cells f w h 1 0 {})
       (mesh-cells f w h 0 (st 'bay) {})))
  ; ..a terminal that shows kitty's pixels, by what it says of itself: mitty, kitty,
