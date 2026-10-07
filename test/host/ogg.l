@@ -9,6 +9,7 @@
 (borrow 'ogg)
 (borrow 'av)
 (borrow 'bytes)
+(borrow 'hashes)
 (: dir (cwd 0 + "/out/.oggd")
    _ (hark ["rm" "-rf" dir], mkdir dir 448)
    (og-nib c) (? (c < 58) (c - 48) (c - 87))

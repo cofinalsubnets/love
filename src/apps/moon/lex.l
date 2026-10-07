@@ -71,13 +71,14 @@
    ; spell the gaps the source had (C11 6.10.3.2); cpp drops it on the way out
    (clexw src ln0) (clexm src ln0 () 1)
    ; ..and an assembly source's (a .S the preprocessor reads first): a digit-led label
-   ; reference (1b, 2f) is one word, $ @ \ ` are punctuators, and `#` past a line's first token
-   ; -- or opening a line with no directive after it -- starts gas's comment
+   ; reference (1b, 2f) is one word, $ @ \ ` are punctuators, and `#` opening a line with no
+   ; directive after it starts gas's comment, as does one past the first token unless ar (arm's
+   ; gas, where it marks an immediate)
    ; a line of assembly opens with a ("\n") mark the preprocessor carries through like any
    ; punctuator, so the text spelled back breaks where the source did even past an expansion
    ; (whose tokens keep their definition's lines); a directive line takes none
-   (clexasm src ln0)
-    (: r (clexm src ln0 1 1)
+   (clexasm src ln0 ar)
+    (: r (clexm src ln0 (ar ? 3 1) 1)
        (go l ln acc) (atom? l ? (rev acc)
                         (<l @ t
                            (? (<>>t = ln) (go >l ln (t . acc))
@@ -340,9 +341,10 @@
                  (c = 92 && i + 2 < n && src (i + 1) = 13 && src (i + 2) = 10)          ; \<cr><nl>
                   (go (i + 3) line acc)
                  (ws? c) (go (i + 1) line (spc acc))
-                 ; gas's comment: `#` after code, or opening a line that names no directive. asm 2
-                 ; is the preprocessor's own view (-x assembler-with-cpp), which keeps them as text
-                 (asm = 1 && c = 35 && (two? acc && <>><acc = line ? !(dirline? acc line) !(asmdir? (i + 1))))
+                 ; gas's comment: `#` opening a line that names no directive, or after code except in
+                 ; asm 3 (arm's gas, an immediate). asm 2 is the preprocessor's own view (-x
+                 ; assembler-with-cpp), which keeps them as text
+                 (asm && asm != 2 && c = 35 && (two? acc && <>><acc = line ? (asm = 1 && !(dirline? acc line)) !(asmdir? (i + 1))))
                   (: (eat j) (n <= j || src j = 10 ? j (eat (j + 1)))
                      (go (eat i) line acc))
                  ; a numeric label's reference: digits then b or f, one word

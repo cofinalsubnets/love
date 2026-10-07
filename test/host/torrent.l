@@ -11,6 +11,7 @@
 (borrow 'tracker)
 (borrow 'peerwire)
 (borrow 'swarm)
+(borrow 'hashes)
 
 ; --- bencode ---
 (test ('(42) = bdecode "i42e") ('(-3) = bdecode "i-3e") ('("spam") = bdecode "4:spam")

@@ -28,6 +28,7 @@
 (borrow 'bytes)
 (borrow 'cal)
 (borrow 'posix)
+(borrow 'hashes)
 (:
    (vsha s) (unhex (sha256 s))
    (vsha384 s) (unhex (sha384 s))

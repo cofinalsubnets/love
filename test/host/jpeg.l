@@ -4,6 +4,7 @@
 ; sampling, grey, restart markers, one pixel -- and each decode held to magick's.
 ;   cat test/00-init.l test/host/jpeg.l | out/love
 (borrow 'posix)
+(borrow 'jpeg)
 (borrow "src/apps/jpeg.l")
 (: dir (cwd 0 + "/out/.jpegd")
    _ (hark ["rm" "-rf" dir], mkdir dir 448)

@@ -15,6 +15,8 @@
 ; place, and the slot is offered to the next boot only once every part matched.
 (borrow 'bytes)
 (borrow 'posix)
+(borrow 'gz)
+(borrow 'hashes)
 (: argv cmdline
    ; by name: a borrow of 'ssh would bring its own split
    ed-verify (cite 'ssh 'ed-verify)
@@ -85,8 +87,9 @@
        (? !ok (tell ("refused " + f + ": not signed by this device's key"), quit 2)
           (: to (other slot)
              _ (mkdir ("/boot/" + to) 493)
-             kp (open ("/boot/" + to + "/Image") "w")
+             kp (open ("/boot/" + to + "/Image.gz") "w")
              _ (hot? kp ? 0 (gone "cannot write the Image"))
+             _ (unlink ("/boot/" + to + "/Image"))
              k (pour rd (part 0) (s \ say kp s))
              _ (close kp)
              rp (open (rootdev to) "w")

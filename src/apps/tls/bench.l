@@ -4,6 +4,7 @@
 ; compiler that built love.
 ;
 ; not a gate: it prints numbers. run it by hand -- out/love src/apps/tls/bench.l
+(borrow 'tls)
 (borrow "src/apps/tls/tls.l")
 
 (:

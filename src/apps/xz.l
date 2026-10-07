@@ -16,6 +16,7 @@
 (borrow 'posix)
 (borrow 'bytes)
 (borrow 'tar)
+(borrow 'hashes)
 
 (:
    (xz-bytes l) (foldl (a \ b \ a + string b) "" l)

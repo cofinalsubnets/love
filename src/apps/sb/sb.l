@@ -3,6 +3,8 @@
 (module 'sb
 (borrow 'kore)
 (borrow 'posix)
+(borrow 'hashes)
+(borrow 'xz)
 (: zcap 16                                               ; the longest chain of bases a blob rides
    bcache {'n 0}                                         ; derived blob bytes, by hash, bounded
    ; --- files ---

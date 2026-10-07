@@ -38,6 +38,7 @@
 (borrow 'posix)
 (borrow 'json)
 (borrow 'bytes)
+(borrow 'hashes)
 
 ; the code rides in the image and every value is made per run, inside bee-main: a
 ; binding at the top would be made once, at the bake, with the bake's settings and directory

@@ -514,11 +514,21 @@
         (gas-top 'a64 "661:\tmov x0, #1\n\tadd x0, x0, #2\n\tldr x1, [x0]\n662:\n\t.rept (662b-661b) / 4\n\tnop\n\t.endr\n\t.if (662b - 661b) == 12\n\tmov x2, #12\n\t.endif\n"))
    _ (chk-eq "gas.ifb" '("nop" "b x" "")
         (gf-expand 'a64 (gf-lines 'a64 ".macro m f\n.ifb \\f\nnop\n.endif\n.ifnb \\f\nb \\f\n.endif\n.endm\nm\nm x\n")))
+   ;; labels then a macro call on one line: the labels, then the call's lines
+   _ (chk-eq "gas.macro.lbl" '("g:" "\tmov x0, #4" "1:" "h:" "\tmov x1, #4" "k: ret")
+        (gf-expand 'a64 (gf-lines 'a64 "\t.macro m, r\n\tmov \\r, #4\n\t.endm\ng:\tm x0\n1: h: m x1\nk: ret")))
    _ (chk-eq "gas.macro.at" "(((\".text\" 1 6 ((jmp .Lx0) (label .Lx0) (jmp .Lx1) (label .Lx1)))) () ())"
         (show (gas-top 'a64 "\t.macro m\n\tb .Lx\\@\n.Lx\\@:\n\t.endm\n\tm\n\tm\n")))
    _ (chk-eq "gas.a64.lbldist.refuse" '(gas-immediate gas-immediate)
         (map (x \ trap (y \ gas-top 'a64 y) x (\ a b a))
              ["661: nop\n .align 4\n662:\n .rept (662b-661b)/4\n nop\n .endr\n" ".rept (2f-1f)/4\n nop\n .endr\n1: nop\n2:\n"]))
+   ;; the bitfield moves, raw words as llvm-mc lays them; widths that differ, an immediate past
+   ;; the width, sp, a short or register operand refuse
+   _ (chk-eq "gas.a64.bfm" "214c50d3621c0013e4037fb3207c1f53"
+        (holo-hex 'a64 (gas-text 'a64 "ubfm x1, x1, #16, #19\n sbfm w2, w3, #0, #7\n bfm x4, xzr, #63, #0\n ubfm w0, w1, #31, #31")))
+   _ (chk-eq "gas.a64.bfm.refuse" '(gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand)
+        (map (l \ trap (x \ holo-hex 'a64 (gas-text 'a64 x)) l (\ a b a))
+             ["ubfm x1, w1, #1, #2" "ubfm w1, w1, #32, #2" "ubfm sp, x1, #1, #2" "ubfm x1, x1, #1" "ubfm x1, x1, x2, #1"]))
    _ (chk-eq "gas.a64.lse.refuse"
         '(gas-a64-operand gas-a64-op gas-a64-operand gas-a64-operand gas-a64-operand)
         (map (l \ trap (x \ holo-hex 'a64 (gas-text 'a64 x)) l (\ a b a))

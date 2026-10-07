@@ -6,6 +6,9 @@
 ; byte. last the refusals: not a png, a torn file, a flipped byte under a crc.
 ;   cat test/00-init.l test/host/png.l | out/love
 (borrow 'posix)
+(borrow 'gz)
+(borrow 'hashes)
+(borrow 'png)
 (borrow "src/apps/png.l")
 (: dir (cwd 0 + "/out/.png")
    _ (hark ["rm" "-rf" dir], mkdir dir 448)

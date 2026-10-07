@@ -493,8 +493,7 @@ love_noinline static struct g *host_bz2d(struct g *g) {
  return g; }
 
 static struct str *bz_cask(word x) {
- if (charmp(x) || ((union u*) x)->ap != lvm_cask) return NULL;
- struct str *s = cask(x)->str;
+ struct str *s = cask_str(x);
  return s && s->len == sizeof(struct bz_st) && ((struct bz_st*) s->bytes)->magic == BZ_MAGIC ? s : NULL; }
 love_noinline static struct g *host_bz2_new(struct g *g) {
  uintptr_t sreq = str_width(sizeof(struct bz_st)), breq = Width(struct cask) + Width(struct tag);
@@ -534,13 +533,8 @@ static LvmWrap(lvm_bz2d, host_bz2d)
 static LvmWrap(lvm_bz2_new, host_bz2_new)
 static LvmWrap(lvm_bz2_step, host_bz2_step)
 
-static union u const
- nif_bz2e[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_bz2e}, {lvm_ret0}},
- nif_bz2d[] = {{lvm_bz2d}, {lvm_ret0}},
- nif_bz2_new[] = {{lvm_bz2_new}, {lvm_ret0}},
- nif_bz2_step[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_bz2_step}, {lvm_ret0}};
-LvNif("bz2e", nif_bz2e, NULL);
-LvNif("bz2d", nif_bz2d, NULL);
-LvNif("bz2-new", nif_bz2_new, NULL);
-LvNif("bz2-step", nif_bz2_step, NULL);
+LvDef("bz2e", bz2e, 2, "bz2");
+LvDef("bz2d", bz2d, 1, "bz2");
+LvDef("bz2-new", bz2_new, 1, "bz2");
+LvDef("bz2-step", bz2_step, 3, "bz2");
 #endif

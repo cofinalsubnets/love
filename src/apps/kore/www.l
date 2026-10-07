@@ -44,6 +44,7 @@
 (module 'kore
 (borrow 'cli)
 (borrow 'posix)
+(borrow 'hashes)
 
 (:
    ww-usage "usage: www [-w COLS] URL|FILE"

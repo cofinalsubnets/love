@@ -24,6 +24,7 @@
 ; leak this does not close
 (module 'tls
 (borrow 'bytes)
+(borrow 'hashes)
 (:
    p2-m 67108863                                        ; 2^26 - 1, one limb
 

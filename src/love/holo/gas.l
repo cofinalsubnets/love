@@ -497,6 +497,14 @@
           (charm? b && <>s9 = 4 ? (ga-raw (b | (k = 3 ? (ga-hw <s9 << 16) 0) | ga-hw x << 5 | ga-hw <rw))
              (scare 'gas-a64-operand os))
           (scare 'gas-a64-operand os)))
+   ;; the bitfield moves by opc; sf and N by the width, immr and imms below it
+   ga-bfm {'sbfm 0 'bfm 1 'ubfm 2}
+   (ga-bfm-ins m os)
+    (: d (ga-rw (os 0)) s (ga-rw (os 1)) b (<>d = 8 ? 64 32)
+       ([(os 2) (os 3)] @ (('imm r) ('imm t))
+          (? (<>s != <>d || <d = 'sp || <s = 'sp || !(0 <= r < b && 0 <= t < b)) (scare 'gas-a64-operand [m os])
+             (ga-raw ((b = 64 ? 0x80400000 0) | ga-bfm m << 29 | 0x13000000 | r << 16 | t << 10 | ga-hw <s << 5 | ga-hw <d)))
+          _ (scare 'gas-a64-operand [m os])))
    ;; the lse atomics by spelling: ld<op>/st<op>/swp/cas, then a|l|al, then b|h ->
    ;; (kind opbits acq rel size), size () for the register's own
    ga-lse-ops '(("add" 0) ("clr" 1) ("eor" 2) ("set" 3) ("smax" 4) ("smin" 5) ("umax" 6) ("umin" 7))
@@ -618,6 +626,7 @@
           (elem m '(prfm prfum)) (k = 2 ? (ga-prf-ins m os) (scare 'gas-a64-operand [m os]))
           (two? (peep ga-ex m ())) (k = 2 ? (ga-ex-ins (ga-ex m) os) (scare 'gas-a64-operand [m os]))
           (two? (peep ga-sx m ())) (k = 3 ? (ga-ex-ins (ga-sx m) os) (scare 'gas-a64-operand [m os]))
+          (charm? (peep ga-bfm m ())) (k = 4 ? (ga-bfm-ins m os) (scare 'gas-a64-operand [m os]))
           (ga-lse-ins m (ga-lse m) os)))
    (ga-line toks)
     (gline toks @ l
@@ -973,6 +982,9 @@
                      (go <>b (go (yes ? <ab <>ab) acc)))
                  (w = ".error") (scare 'gas-error r)
                  (two? (mac (xa-mnem t))) (go >l (go (call (mac (xa-mnem t)) r) acc))
+                 ; labels then a macro call: the labels where the call lays its lines
+                 (lsplit t @ (ns u) (two? ns && two? (mac (xa-mnem u))))
+                  (lsplit t @ (ns u) (go (u . >l) ((map (n \ n + ":") ns) + acc)))
                  (go >l (ssub s . acc)))))
        (rev (go ls ())))
    ; does gas-text read it whole: instructions, and labels on lines of their own

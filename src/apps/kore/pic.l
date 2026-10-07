@@ -27,6 +27,7 @@
 (module 'kore
 (borrow 'cli)
 (borrow 'posix)
+(borrow 'jpeg)
 
 (:
    pic-usage (cats ["usage: pic [cat] [-g block|sixel|kitty|auto] [-w COLS] [-h ROWS] [FILE..]\n"

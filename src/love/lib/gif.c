@@ -4,6 +4,7 @@
 // there, 3 a bad canvas. (gif-clear s o canvas) -> canvas with that image's box cleared.
 // the canvas is the screen's w*h rgba; an image is clipped to it, lzw read as far as it goes.
 #include "love.h"
+#include "bytes.h"
 #include <stdint.h>
 #include <string.h>
 
@@ -12,17 +13,15 @@ struct gf {
  int sw, sh, fx, fy, fw, fh, inter, ncol;   // screen, image box, interlaced, palette size
  uintptr_t pal, data; };                    // palette's offset in s, first byte past it (the code size)
 
-static int gf_le16(const uint8_t *p) { return p[0] | p[1] << 8; }
-
 static int gf_open(struct gf *g, const uint8_t *s, uintptr_t n, intptr_t o) {
  g->s = s, g->n = n;
  if (n < 13 || memcmp(s, "GIF8", 4)) return 1;
- g->sw = gf_le16(s + 6), g->sh = gf_le16(s + 8);
+ g->sw = ld16le(s + 6), g->sh = ld16le(s + 8);
  if (!g->sw || !g->sh || (uintptr_t) g->sw * (uintptr_t) g->sh > (uintptr_t) 1 << 24) return 1;
  if (o < 13 || (uintptr_t) o + 10 > n || s[o] != 0x2c) return 2;
  const uint8_t *d = s + o;
- g->o = (uintptr_t) o, g->fx = gf_le16(d + 1), g->fy = gf_le16(d + 3);
- g->fw = gf_le16(d + 5), g->fh = gf_le16(d + 7), g->inter = d[9] >> 6 & 1;
+ g->o = (uintptr_t) o, g->fx = ld16le(d + 1), g->fy = ld16le(d + 3);
+ g->fw = ld16le(d + 5), g->fh = ld16le(d + 7), g->inter = d[9] >> 6 & 1;
  g->data = g->o + 10, g->pal = 0, g->ncol = 0;
  if (d[9] & 0x80) {
   g->ncol = 2 << (d[9] & 7), g->pal = g->data, g->data += 3 * (uintptr_t) g->ncol; }
@@ -109,8 +108,5 @@ love_noinline static struct g *host_gif_clear(struct g *g) { return gf_host(g, 3
 static lvm(lvm_gif_frame) LvmCall(g, host_gif_frame)
 static lvm(lvm_gif_clear) LvmCall(g, host_gif_clear)
 
-static union u const
-  nif_gif_frame[] = {{lvm_cur}, {.x = putcharm(4)}, {lvm_gif_frame}, {lvm_ret0}},
-  nif_gif_clear[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_gif_clear}, {lvm_ret0}};
-LvNif("gif-frame", nif_gif_frame, NULL);
-LvNif("gif-clear", nif_gif_clear, NULL);
+LvDef("gif-frame", gif_frame, 4, "gif");
+LvDef("gif-clear", gif_clear, 3, "gif");

@@ -7,7 +7,7 @@
 ; lossy with or without its alpha plane, lossless, and an animation's first frame on its
 ; canvas, the pixels libwebp's own. where the artifact carries no nif, every webp is "no
 ; decoder here".
-(module (webp webp-size webp-decode)
+(module (webp webp-size webp-decode webp-pixels)
 (:
    webp-why ["" "not a webp" "cut short" "a kind of webp this can't read" "a bad stream"
              "too big" "no room"]

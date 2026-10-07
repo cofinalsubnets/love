@@ -14,6 +14,7 @@
 (borrow 'benc)
 (borrow 'bytes)
 (borrow 'cal)
+(borrow 'hashes)
 (:
  (tm-get t k d) (tablet? t ? (peep t k d) d)
  (tm-str t k) (tm-get t k () @ v (string? v ? v ()))

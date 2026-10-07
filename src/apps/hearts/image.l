@@ -1,6 +1,6 @@
 ; src/apps/hearts/image.l -- rung 0's image: a GPT disk for qemu virt (a64), and the signed
 ; updates that move it. the disk:
-;   1 ESP (FAT32): EFI/BOOT/BOOTAA64.EFI (src/inle/uefi/slot.c), a/Image, a/cmd, hearts.st
+;   1 ESP (FAT32): EFI/BOOT/BOOTAA64.EFI (src/inle/uefi/slot.c), a/Image.gz, a/cmd, hearts.st
 ;   2 root a, 3 root b (squashfs, deflated; b empty until an update writes it), 4 data (ext4)
 ; a root: love as /bin/love, helm's script as init (/bin/helm), src/apps/hearts/dev.l and app.l, the update key.
 ; the parts lie back to back from 1 MiB, each `at` where the one before it ends.
@@ -16,6 +16,7 @@
 (borrow 'fat)
 (borrow 'sqfs)
 (borrow 'ext4)
+(borrow 'hashes)
 (: ; its words are the ones after its own name, whatever loaded ahead of it
    (after l) (atom? l ? () (<l @ (_ + "image.l") >l (after >l)))
    as (after cmdline)
@@ -120,11 +121,14 @@
    r3 (rootimg "v3" 1)
    rsz (32 * mib)
    _ (#r1 <= rsz * 512 || gone "a root outgrows its slot")
-   ; the kernel travels deflated, the root as it is (squashfs deflates its own blocks)
+   ; the kernel lies and travels gzipped (an arm64 Image does not unpack itself: the chooser
+   ; inflates it), the root as it is (squashfs deflates its own blocks)
    kz (deflate-best kernel @ z (string? z ? z (gone "cannot deflate the kernel")))
-   (upd r) [[1 kz kernel] [0 r r] [0 cmd cmd]]
+   kgz (string 31 + string 139 + string 8 + string 0 + le stamp 4 + string 2 + string 3
+        + kz + le (crc32 kernel) 4 + le #kernel 4)
+   (upd r) [[0 kgz kgz] [0 r r] [0 cmd cmd]]
    (flip s i) (snip s 0 i + string (255 - s i) + snip s (i + 1) #s)
-   esp (fatimg (128 * mib) [["EFI/BOOT/BOOTAA64.EFI" efi] ["a/Image" kernel]
+   esp (fatimg (128 * mib) [["EFI/BOOT/BOOTAA64.EFI" efi] ["a/Image.gz" kgz]
                             ["a/cmd" (cmd + " root=/dev/vda2\n")] ["hearts.st" "a-\n"]])
    data (ext4-image (ext4-make 16384 (made "data") (made "data hash") stamp) 16384)
    ps [["esp" esp-type mib (128 * mib) esp]
@@ -134,7 +138,7 @@
    total (257 * mib + 34)
    (disk (odir + "/disk.img") ps total,
     uwrite (odir + "/u1.hup") (hup bad (upd r2)),
-    uwrite (odir + "/u2.hup") (flip (hup seed (upd r2)) (4096 + #kz + 4096)),
+    uwrite (odir + "/u2.hup") (flip (hup seed (upd r2)) (4096 + #kgz + 4096)),
     uwrite (odir + "/u3.hup") (hup seed (upd r2)),
     uwrite (odir + "/u4.hup") (hup seed (upd r3)),
     say err "hearts-image: disk.img and four updates\n"))

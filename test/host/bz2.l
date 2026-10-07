@@ -5,6 +5,7 @@
 ;   run:  cat test/00-init.l test/host/bz2.l | out/love
 (borrow 'bz2)
 (borrow 'bytes)
+(borrow 'hashes)
 
 (: (bzt-mk n f) (: b (cask n) (go i) (n <= i ? (string b) (pin b i (f i), go (i + 1))) (go 0))
    (bzt-cut s k) (: n #s (go i) (n <= i ? () ((snip s i (min n (i + k))) . go (i + k))) (go 0))
