@@ -445,6 +445,9 @@
  (stones-frame st) (: w (st 'w) h (st 'h) k (peep st 'kp 1) f0 (stones-pens st) kit (st 'kitty)
    dl (charm? (st 'dlg)) r (h // 2) bw 22 bh (#acts + 2) r0 (max2 0 (r - bh - 2)) c0 (max2 0 ((w - bw) // 2))
    hp (st 'mt < help-t && !dl)
+   ; ..the frame the choices are put away, their cells blanked once: a terminal keeping
+   ; text and picture in one cell would lose the picture there every frame
+   _ (pin st 'shut (? dl 0 (: s (peep st 'shut 2) (s < 2 ? (s + 1) s))))
    ; ..under kitty's the choices' ground darkened in the picture, and the keys' line, the
    ; text over it
    f (? (dl && kit) (dim f0 (k * w) (k * c0) (2 * k * r0) (k * bw) (2 * k * bh))
@@ -468,7 +471,7 @@
      (0 < j && j < bh - 1 ? (esc + (i = c ? hi lo) + pad ((i = c ? " › " "   ") + show (i + 1) + "  " + acts i) bw " ")
         (pad "" bw " ")))
    (? (charm? c) (foldl (\ o j (o + at j + esc + bg + line j)) "" ^bh + esc + "[0m")
-      kit (foldl (\ o j (o + at j + esc + "[0m" + pad "" bw " ")) "" ^bh)
+      (kit && st 'shut = 1) (foldl (\ o j (o + at j + esc + "[0m" + pad "" bw " ")) "" ^bh)
       ""))
  ; the keys named along the bottom row r, w wide, for the first help-t seconds and not over
  ; the choices; under kitty, blanked a while after
