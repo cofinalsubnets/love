@@ -854,8 +854,7 @@ love_noinline static struct g *host_crc64_on(struct g *g) {
 
 #define L2_HEAD ((sizeof(struct l2_st) + 7) & ~(uintptr_t) 7)
 static struct str *l2_cask(word x) {
- if (charmp(x) || ((union u*) x)->ap != lvm_cask) return NULL;
- struct str *s = cask(x)->str;
+ struct str *s = cask_str(x);
  struct l2_st *S = s && s->len > L2_HEAD ? (struct l2_st*) s->bytes : NULL;
  return S && S->magic == L2_MAGIC && S->cap == s->len - L2_HEAD ? s : NULL; }
 love_noinline static struct g *host_lzma2_new(struct g *g) {

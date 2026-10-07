@@ -608,8 +608,7 @@ static lvm(lvm_ogg_crc) LvmCall(g, host_ogg_crc)
 #define CkSt 12
 
 static struct str *dig_cask(word x, uintptr_t want) {   // the cask's bytes, or NULL
- if (charmp(x) || ((union u*) x)->ap != lvm_cask) return NULL;
- struct str *s = ((struct cask*) x)->str;
+ struct str *s = cask_str(x);
  return s && s->len == want ? s : NULL; }
 
 // h[words] then the 8-byte count, both big-endian, at the front of the state

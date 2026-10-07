@@ -1,15 +1,22 @@
 // src/inle/uefi/slot.c -- hearts' boot chooser, a BOOTAA64.EFI that picks a slot and starts
 // that slot's EFI-stub kernel. its volume (the ESP) carries hearts.st and a directory per slot:
 //   hearts.st      three bytes: the active slot, the slot to try once or '-', a newline
-//   a/Image a/cmd  the kernel and its command line, likewise b/
+//   a/Image.gz     the kernel, gzipped (a/Image, as it is, where there is no .gz)
+//   a/cmd          its command line; likewise b/
 // a pending try is spent before it boots -- the file rewritten in place -- so a trial that never
 // says it is well comes back, at its next reset, on the active slot. the kernel's line gets
-// " hearts.slot=X", and " hearts.try=1" on a trial.
+// " hearts.slot=X", and " hearts.try=1" on a trial. an arm64 Image does not unpack itself, so
+// a gzipped one is inflated here, its crc checked, and started from memory.
+#include "../../love/inflate.h"
 
 typedef unsigned long long u64;
 typedef unsigned int u32;
 typedef unsigned short u16;
 typedef unsigned char u8;
+
+// no libc here: what the inflater calls
+void *memset(void *d, int c, size_t n) { u8 *p = d; while (n--) *p++ = (u8) c; return d; }
+void *memcpy(void *d, void const *s, size_t n) { u8 *p = d; u8 const *q = s; while (n--) *p++ = *q++; return d; }
 
 extern u64 efi_call(void *fn, u64 a, u64 b, u64 c, u64 d, u64 e);
 extern u64 efi_call6(void *fn, u64 a, u64 b, u64 c, u64 d, u64 e, u64 f);
@@ -56,6 +63,35 @@ static u8 *slurp(void *root, char const *path, u64 *n) {
  fclose_(f);
  return out; }
 
+static u32 le32(u8 const *p) { return p[0] | (u32) p[1] << 8 | (u32) p[2] << 16 | (u32) p[3] << 24; }
+
+static u32 crc32(u8 const *p, u64 n) {
+ u32 t[256], c;
+ for (u32 i = 0; i < 256; i++) {
+  c = i;
+  for (int k = 0; k < 8; k++) c = c & 1 ? c >> 1 ^ 0xedb88320 : c >> 1;
+  t[i] = c; }
+ for (c = 0xffffffff; n--; p++) c = t[(c ^ *p) & 0xff] ^ c >> 8;
+ return ~c; }
+
+// a gzip member (RFC 1952) inflated into pool memory, its size through *n; 0 if it is not
+// whole: a header of another kind, a stream short of its trailer's size, a crc that differs
+static u8 *gunzip(u8 const *z, u64 zn, u64 *n) {
+ u64 p = 10, b = 0;
+ if (zn < 18 || z[0] != 0x1f || z[1] != 0x8b || z[2] != 8 || z[3] & 0xe0) return 0;
+ if (z[3] & 4) p += 2 + (z[10] | (u64) z[11] << 8);          // FEXTRA
+ if (z[3] & 8) while (p < zn && z[p++]);                      // FNAME
+ if (z[3] & 16) while (p < zn && z[p++]);                     // FCOMMENT
+ if (z[3] & 2) p += 2;                                        // FHCRC
+ if (p + 8 > zn) return 0;
+ u32 size = le32(z + zn - 4), crc = le32(z + zn - 8);
+ if (efi_call(bs[8], 2, size, (u64) &b, 0, 0)) return 0;   // AllocatePool, LoaderData
+ if (inflate_raw(z + p, zn - 8 - p, (u8*) b, size) != (intptr_t) size || crc32((u8*) b, size) != crc) {
+  efi_call(bs[9], b, 0, 0, 0, 0);                             // FreePool
+  return 0; }
+ *n = size;
+ return (u8*) b; }
+
 u64 efi_main(void *handle, void *st) {
  sys = (void**) st;
  bs = (void**) sys[12];
@@ -87,10 +123,15 @@ u64 efi_main(void *handle, void *st) {
    return die("cannot spend the trial in hearts.st"); }
  fclose_(sf);
 
- char kp[] = "x/Image", cp[] = "x/cmd";
- kp[0] = cp[0] = (char) slot;
- u64 kn = 0, cn = 0;
- u8 *k = slurp(root, kp, &kn), *c = slurp(root, cp, &cn);
+ char zp[] = "x/Image.gz", kp[] = "x/Image", cp[] = "x/cmd";
+ zp[0] = kp[0] = cp[0] = (char) slot;
+ u64 kn = 0, cn = 0, zn = 0;
+ u8 *z = slurp(root, zp, &zn), *k = 0, *c = slurp(root, cp, &cn);
+ if (z) {
+  k = gunzip(z, zn, &kn);
+  efi_call(bs[9], (u64) z, 0, 0, 0, 0);                       // FreePool
+  if (!k) return die("the slot's Image.gz is torn"); }
+ else k = slurp(root, kp, &kn);
  if (!k) return die("the slot has no Image");
  say("hearts: slot "); say(slot == 'a' ? "a" : "b"); say(trial ? ", a trial\r\n" : "\r\n");
 

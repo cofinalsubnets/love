@@ -10,6 +10,7 @@
 // move between calls. doubles throughout and no libm: the cosines are a series, so every
 // build decodes the same samples. the floor's inverse-db table is the spec's.
 #include "love.h"
+#include "bytes.h"
 #include <stdint.h>
 #include <string.h>
 
@@ -302,7 +303,7 @@ static int vb_setup(struct va *a, const uint8_t *id, uint32_t idn, const uint8_t
  struct vh hc, *h = a->b ? (struct vh*) (a->b + ho) : &hc;
  memset(&hc, 0, sizeof hc);
  if (idn < 30 || id[0] != 1 || memcmp(id + 1, "vorbis", 6)) return 1;
- h->ch = id[11], h->rate = (int) (id[12] | id[13] << 8 | id[14] << 16 | (uint32_t) id[15] << 24);
+ h->ch = id[11], h->rate = (int) ld32le(id + 12);
  h->bs[0] = 1 << (id[28] & 15), h->bs[1] = 1 << (id[28] >> 4);
  if (id[7] | id[8] | id[9] | id[10] || !h->ch || !h->rate || h->bs[0] < 64 || h->bs[1] > 8192 || h->bs[0] > h->bs[1]) return 3;
  if (sun < 7 || su[0] != 5 || memcmp(su + 1, "vorbis", 6)) return 1;
@@ -567,11 +568,6 @@ static int vb_audio(uint8_t *base, struct vh *h, const uint8_t *p, uint32_t len)
  h->pn = n, h->primed = 1;
  return out; }
 
-static uint8_t *vb_cask(word x, uintptr_t *n) {
- if (charmp(x) || ((union u*) x)->ap != lvm_cask) return NULL;
- struct str *s = ((struct cask*) x)->str;
- if (!s || ((uintptr_t) s->bytes & 7)) return NULL;
- return *n = s->len, (uint8_t*) s->bytes; }
 
 static love_inline struct g *host_vorbis_size(struct g *g) {
  word r = putcharm(-3);
@@ -585,7 +581,7 @@ static lvm(lvm_vorbis_size) LvmCall(g, host_vorbis_size)
 
 static love_inline struct g *host_vorbis_init(struct g *g) {
  uintptr_t n = 0;
- uint8_t *b = vb_cask(g->sp[0], &n);
+ uint8_t *b = cask_bytes(g->sp[0], &n);
  word r = putcharm(3);
  if (b && strp(g->sp[1]) && strp(g->sp[2]) && n < 0x7fffffffu) {
   struct str *i = str(g->sp[1]), *s = str(g->sp[2]);
@@ -597,7 +593,7 @@ static lvm(lvm_vorbis_init) LvmCall(g, host_vorbis_init)
 
 love_noinline static struct g *host_vorbis_packet(struct g *g) {
  uintptr_t n = 0;
- uint8_t *b = vb_cask(g->sp[0], &n);
+ uint8_t *b = cask_bytes(g->sp[0], &n);
  if (!b || n < sizeof(struct vh) || !strp(g->sp[1]) || !oddp(g->sp[2])) return g->sp[2] = putcharm(3), g->sp += 2, g;
  struct vh *h = (struct vh*) b;
  if (!h->ch || !h->mode) return g->sp[2] = putcharm(3), g->sp += 2, g;
@@ -608,17 +604,8 @@ love_noinline static struct g *host_vorbis_packet(struct g *g) {
  uintptr_t k = (uintptr_t) ns * (uintptr_t) h->ch, on = k * (f ? 4u : 2u);
  if (!ok(g = have(g, str_width(on)))) return g;
  struct str *out = ini_str(bump(g, str_width(on)), on);
- b = vb_cask(g->sp[0], &n);                     // re-read: have may move it
- const float *o = (const float*) (b + ((struct vh*) b)->out);
- uint8_t *q = (uint8_t*) out->bytes;
- for (uintptr_t i = 0; i < k; i++) {
-  float x = o[i];
-  if (f) { union { float f; uint32_t u; } c = {x}; for (int j = 0; j < 4; j++) *q++ = (uint8_t) (c.u >> (8 * j)); }
-  else {
-   double y = (double) x * 32768;
-   y = y > 32767 ? 32767 : y < -32768 ? -32768 : y;
-   int v = y >= 0 ? (int) (y + 0.5) : -(int) (-y + 0.5);
-   *q++ = (uint8_t) v, *q++ = (uint8_t) (v >> 8); } }
+ b = cask_bytes(g->sp[0], &n);                     // re-read: have may move it
+ pcm_lay((uint8_t*) out->bytes, (const float*) (b + ((struct vh*) b)->out), k, f, 1);
  return g->sp[2] = word(out), g->sp += 2, g; }
 static lvm(lvm_vorbis_packet) LvmCall(g, host_vorbis_packet)
 

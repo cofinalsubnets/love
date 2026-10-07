@@ -13,6 +13,7 @@
 // are iso 11172-3's tables b.7 (held equal from minimp3's lookups and pdmp3's dist10 trees,
 // both public domain), the synthesis window its table b.3, the band widths minimp3's.
 #include "love.h"
+#include "bytes.h"
 #include <stdint.h>
 #include <string.h>
 
@@ -1350,10 +1351,9 @@ refuse:
  return -4; }
 
 static struct mst *mp3_st(word x) {
- if (charmp(x) || ((union u*) x)->ap != lvm_cask) return NULL;
- struct str *s = ((struct cask*) x)->str;
- if (!s || s->len != sizeof(struct mst) || ((uintptr_t) s->bytes & 7)) return NULL;
- return (struct mst*) s->bytes; }
+ uintptr_t n = 0;
+ uint8_t *b = cask_bytes(x, &n);
+ return b && n == sizeof(struct mst) ? (struct mst*) b : NULL; }
 
 static lvm(lvm_mp3_state) { Sp[0] = putcharm(sizeof(struct mst)); love_musttail return Next(1); }
 
@@ -1385,15 +1385,7 @@ love_noinline static struct g *host_mp3_frame(struct g *g) {
  if (!ok(g = have(g, str_width(on) + Width(struct chain)))) return g;
  struct str *out = ini_str(bump(g, str_width(on)), on);
  m = mp3_st(g->sp[0]);                          // re-read: have may move it
- uint8_t *p = (uint8_t*) out->bytes;
- for (int i = 0; i < ns * nch; i++) {
-  float x = m->pcm[i];
-  if (f) { union { float f; uint32_t u; } c = {x}; for (int k = 0; k < 4; k++) *p++ = (uint8_t) (c.u >> (8 * k)); }
-  else {
-   double y = (double) x * 32768;
-   y = y > 32767 ? 32767 : y < -32768 ? -32768 : y;
-   int v = y >= 0 ? (int) (y + 0.5) : -(int) (-y + 0.5);
-   *p++ = (uint8_t) v, *p++ = (uint8_t) (v >> 8); } }
+ pcm_lay((uint8_t*) out->bytes, m->pcm, (uintptr_t) ns * (uintptr_t) nch, f, 1);
  struct chain *r = ini_chain(bump(g, Width(struct chain)), (intptr_t) out, putcharm(o + n));
  return g->sp[3] = word(r), g->sp += 3, g; }
 static lvm(lvm_mp3_frame) LvmCall(g, host_mp3_frame)
