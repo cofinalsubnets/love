@@ -15,34 +15,29 @@
 ; then the signer's parent and sig, which seal-card writes. keys are lowercase hex, 64
 ; digits; sig is 128. cards in a chain are parted by a blank line. a cell's name is
 ; NAME@BOX, BOX its signer's name, so no box speaks for another's sessions.
-(module (seals seal-key seal-keytext seal-keyof seal-keywrite seal-keyread seal-card seal-chain seal-check)
+(module (seals seal-key seal-keytext seal-keyof seal-keywrite seal-keyread seal-card seal-chain seal-check seal-hex?)
 (borrow 'posix)
+(borrow 'bytes)
 
-(: sl-hex (cite 'tls 'hex)
-   sl-unhex (cite 'tls 'unhex)
-   sl-rnd (cite 'tls 'rnd)
+(: sl-rnd (cite 'tls 'rnd)
    sl-pub (cite 'ssh 'ed-pub)
    sl-sign (cite 'ssh 'ed-sign)
    sl-verify (cite 'ssh 'ed-verify)
    sl-fields ["lineage" "name" "kind" "pub" "issued" "expires"]
 
    ; n bytes of lowercase hex and nothing else: hex of its bytes spells it back
-   (sl-hex? s n) (string? s && #s = 2 * n && sl-hex (sl-unhex s) = s)
-   (sl-num? s) (string? s && 0 < #s && all (c \ 47 < c < 58) (map s ^#s))
-   (sl-num s) (foldl (\ a c (a * 10 + c - 48)) 0 (map s ^#s))
+   (seal-hex? s n) (string? s && #s = 2 * n && b2hex (hex2b s) = s)
    ; a line's key and value, split at the first space -> [k v] | ()
-   (sl-sp l i) (? (#l <= i) -1 (l i = 32) i (sl-sp l (i + 1)))
-   (sl-kv l) (: i (sl-sp l 0) (? (0 < i && i + 1 < #l) [(snip l 0 i) (snip l (i + 1) #l)]))
+   (sl-kv l) (: i (fsub l " " 0) (? (0 < i && i + 1 < #l) [(snip l 0 i) (snip l (i + 1) #l)]))
    (sl-dup? ks) (: s (sort ks) (any (i \ s i = s (i + 1)) ^(#s - 1)))
-   (sl-text ls) (foldl (\ a l (a + l + "\n")) "" ls)
 
    (seal-key _) (: s (sl-rnd 32) [s (sl-pub s)])
-   (seal-keytext k) ("seed " + sl-hex <k + "\npub " + sl-hex (k 1) + "\n")
+   (seal-keytext k) ("seed " + b2hex <k + "\npub " + b2hex (k 1) + "\n")
    (seal-keyof s)
     (: kv (map sl-kv (filter (l \ 0 < #l) (lines s)))
        (? (#kv = 2 && all two? kv && <<kv = "seed" && <(kv 1) = "pub"
-           && sl-hex? (<kv 1) 32 && sl-hex? (kv 1 1) 32)
-          (: sd (sl-unhex (<kv 1)) pb (sl-unhex (kv 1 1))
+           && seal-hex? (<kv 1) 32 && seal-hex? (kv 1 1) 32)
+          (: sd (hex2b (<kv 1)) pb (hex2b (kv 1 1))
              (? (sl-pub sd = pb) [sd pb]))))
    ; written beside itself and renamed in, so a reader never meets half a key
    (seal-keywrite path k)
@@ -59,8 +54,8 @@
 
    ; the fields as given, then parent, then sig over every line above it
    (seal-card k fields)
-    (: body (sl-text (map (f \ <f + " " + f 1) (fields + [["parent" (sl-hex (k 1))]])))
-       (body + "sig " + sl-hex (sl-sign <k (k 1) body) + "\n"))
+    (: body (unlines (map (f \ <f + " " + f 1) (fields + [["parent" (b2hex (k 1))]])))
+       (body + "sig " + b2hex (sl-sign <k (k 1) body) + "\n"))
 
    ; one card's lines -> [fields-tablet signed-text sig-bytes] | a reason
    (sl-card ls)
@@ -68,8 +63,8 @@
        ks (map cap (filter two? kv))
        (? !(all two? kv) "a card line is not `key value`"
           (sl-dup? ks) "a card names a field twice"
-          !(<last = "sig" && sl-hex? (last 1) 64) "a card does not end in its sig"
-          [(foldl (\ t f (pin t <f (f 1))) {} kv) (sl-text (take (#ls - 1) ls)) (sl-unhex (last 1))]))
+          !(<last = "sig" && seal-hex? (last 1) 64) "a card does not end in its sig"
+          [(foldl (\ t f (pin t <f (f 1))) {} kv) (unlines (take (#ls - 1) ls)) (hex2b (last 1))]))
    (seal-chain s)
     (: ps (foldl (\ a l (? (#l = 0) (two? <a ? ([] . a) a) ((<a + [l]) . >a))) [[]] (lines s))
        cs (map sl-card (rev (filter two? ps)))
@@ -85,17 +80,17 @@
         (: c (cs i) t <c top (i + 1 = #cs) up (? !top <(cs (i + 1)) {})
            (? !(all (f \ string? (peep t f ())) sl-fields) ("card " + show i + " lacks a field")
               (t "lineage" != root) ("card " + show i + " is of another lineage")
-              !(sl-hex? (t "pub") 32 && sl-hex? (peep t "parent" "") 32) ("card " + show i + " has a bad key")
-              !(sl-num? (t "issued") && sl-num? (t "expires")) ("card " + show i + " has a bad date")
-              !(sl-num (t "issued") <= now < sl-num (t "expires")) ("card " + show i + " is out of date")
+              !(seal-hex? (t "pub") 32 && seal-hex? (peep t "parent" "") 32) ("card " + show i + " has a bad key")
+              (unum (t "issued") = () || unum (t "expires") = ()) ("card " + show i + " has a bad date")
+              !(unum (t "issued") <= now < unum (t "expires")) ("card " + show i + " is out of date")
               (elem (t "pub") revoked || elem (t "parent") revoked) ("card " + show i + " is revoked")
               !(elem (t "kind") ["cell" "box"]) ("card " + show i + " is of no kind")
               (!top && (up "kind" != "box" || up "pub" != t "parent")) ("card " + show i + " is not signed by the next")
               (top && t "parent" != root) ("card " + show i + " is not signed by the root")
               (t "kind" = "cell" && !(!top && ends? (t "name") ("@" + up "name"))) ("card " + show i + " names another box")
-              !(sl-verify (sl-unhex (t "parent")) (c 1) (c 2)) ("card " + show i + " has a bad sig")
+              !(sl-verify (hex2b (t "parent")) (c 1) (c 2)) ("card " + show i + " has a bad sig")
               ()))
        (? (string? cs) cs
-          !(sl-hex? root 32) "the root is not a key"
+          !(seal-hex? root 32) "the root is not a key"
           (: e (filter string? (map link ^#cs)) (two? e ? <e <<cs)))))
 ) ; module seals

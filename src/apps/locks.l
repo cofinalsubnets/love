@@ -27,8 +27,6 @@
    (lk-num s) (foldl (\ a c (47 < c < 58 ? (a * 10 + c - 48) a)) 0 (lk-cs s))
    (lk-pad n) (: s (show n) (string (map (_ \ 48) ^(16 - #s)) + s))
    (lk-read p) (: r (uread p) (? (two? r) <>r ()))
-   (lk-paras ls) (foldl (\ a l (a + l + "\n")) "" ls)
-   (lk-write p s) (: f (open p "w") (? (hot? f) (say f s, close f, 1)))
    (lk-names d) (: ns (readdir d) (? (two? ns) (sort (filter (n \ 0 < #n && n 0 != 46) ns)) ()))
 
    ; a process's start time, field 22 of /proc/PID/stat, as the string it is there; () off linux
@@ -45,8 +43,8 @@
 
    ; an owner, one `key value` a line
    (lk-owner who note)
-    (lk-paras [("pid " + show who) ("start " + lk-str (lk-start who)) ("since " + show (clock 0))
-            ("note " + lk-str note)])
+    (unlines [("pid " + show who) ("start " + lk-str (lk-start who)) ("since " + show (clock 0))
+              ("note " + lk-str note)])
    (lk-parse t)
     (foldl (\ o l (l @ ((k && 0 < #k) + " " + v) (pin o k v) o))
            {} (lines (lk-str t)))
@@ -85,7 +83,7 @@
        d (dir + "/" + base)
        tmp (d + ".new-" + show who)
        _ (mkdir tmp 448)
-       (? !(lk-write (tmp + "/owner") (lk-owner who note))
+       (? !(uwrite (tmp + "/owner") (lk-owner who note))
            (: _ (lk-gone tmp) {"granted" 0 "lock" nm "error" "cannot write the owner"})
           !(rename tmp d) {"granted" 1 "lock" nm}
           (: _ (lk-gone tmp)
@@ -122,7 +120,7 @@
           (: have (filter mine? (lk-names q))
              t (? (two? have) <have
                   (: t (lk-pad (clock 0) + tag)
-                     _ (lk-write (q + "/." + t) (lk-owner who note))
+                     _ (uwrite (q + "/." + t) (lk-owner who note))
                      _ (rename (q + "/." + t) (q + "/" + t))
                      t))
              ; the count and the move are one step under the pool's mutex, held by this process

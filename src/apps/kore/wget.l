@@ -33,12 +33,13 @@
              hp (auth @ (h + ":" + p) [h (wg-digits p)] [auth (tls? ? 443 80)])
              host <hp port <>hp
              (? (0 < #host && 0 < port) [tls? host port path] ()))
-   ; a Location may be bare: a path on the same origin
+   ; a location against the url it came from: absolute, rooted, or beside the base's path
    (wg-resolve base loc)
-    (? (5 <= #loc && (snip loc 0 4) = "http") loc
-       (: b (wg-url base)
-          (? (atom? b) loc
-             ((<b ? "https://" "http://") + (b 1) + ":" + show (b 2) + (loc 0 = 47 ? loc ("/" + loc))))))
+    (? (0 < fsub loc "://" 0) loc
+       (wg-url base @
+         [t h p path] (: d (snip path 0 (1 + foldl (\ a k (path k = 47 ? k a)) 0 ^#path))
+                         ((t ? "https://" "http://") + h + ":" + show p + (loc 0 = 47 ? loc (d + loc))))
+         _ loc))
    ; the header block's value for a name, lowercase both sides; () when absent
    (wg-header hd name)
     (: h (wg-lower hd) k (fsub h ("\r\n" + name + ":") 0)

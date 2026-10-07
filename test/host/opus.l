@@ -8,41 +8,37 @@
 (borrow 'posix)
 (borrow 'ogg)
 (borrow 'av)
+(borrow 'bytes)
 (: dir (cwd 0 + "/out/.opusd")
    peepv (cite (quote guts) (quote peepv))
    _ (hark ["rm" "-rf" dir], mkdir dir 448)
-   (op-rd p) (: q (open p "r") (? (hot? q) (: s (slurp q) (close q, s)) ""))
-   (op-be s i) (foldl (\ a j (a * 256 + s (i + j))) 0 ^4)
    ; a vector's packets (each a length, a range word, the bytes) on a fresh decoder of ch
    ; channels at gain g (dB in Q7.8) -> its samples, s16 | why
    (op-vec s ch g)
     (: st (cask (opus-state ch)) r (opus-init st ch g)
        (go i acc) (? (i + 8 > #s) (cats (rev acc))
-                     (: k (op-be s i) (opus-packet st (snip s (i + 8) (i + 8 + k)) 0 @ x
+                     (: k (rdbe s i 4) (opus-packet st (snip s (i + 8) (i + 8 + k)) 0 @ x
                                          (go (i + 8 + k) (string? x ? (x . acc) acc)))))
        (r = 0 ? (go 0 ()) r))
    (op-cask s) (: c (cask #s) (pour c 0 s 0 #s, c))
    (op-sg t) (t - 65536 * (t >= 32768))
-   (op-s16 s) (op-sg (peepv (op-cask s) 0 2 2 (#s // 2)))
-   (op-full a b) (? (#a != #b || #a < 2) 0
-                    (: d (op-s16 a - op-s16 b) (net (d * d) / (#a // 2) < 1 / 12 && aall (d <= 2) && aall (d >= -2))))
    ; mono against the stereo reference's mean of its two channels
    (op-mono a b) (? (2 * #a != #b || #a < 2) 0
                     (: c (op-cask b) n (#b // 4)
                        m ((op-sg (peepv c 0 2 4 n) + op-sg (peepv c 2 2 4 n)) / 2)
-                       d (op-s16 a - m)
+                       d (av-t-s16 a - m)
                        (net (m * m) > 1000000 * net (d * d))))
    vd (getenv "DL" @ d (string? d ? (d + "/opus-vectors") ""))
    vs (map (i \ (i < 9 ? "0" "") + show (i + 1)) ^12)
-   (op-vecs v) (: b (op-rd (vd + "/testvector" + v + ".bit")) r (op-rd (vd + "/testvector" + v + ".dec"))
-                  (op-full (op-vec b 2 0) r && op-mono (op-vec b 1 0) r))
+   (op-vecs v) (: b (av-t-rd (vd + "/testvector" + v + ".bit")) r (av-t-rd (vd + "/testvector" + v + ".dec"))
+                  (av-t-full (op-vec b 2 0) r && op-mono (op-vec b 1 0) r))
    ; -6 dB of output gain (-1536 in Q7.8) is every sample times 10^(-6/20), to the step
-   (op-half a b) (#a = #b && 2 < #a && (: d (op-s16 b - op-s16 a * 0.5011872336272722) (aall (d <= 1) && aall (d >= -1))))
+   (op-half a b) (#a = #b && 2 < #a && (: d (av-t-s16 b - av-t-s16 a * 0.5011872336272722) (aall (d <= 1) && aall (d >= -1))))
    _ (test (opus-state 2 > opus-state 1) (opus-state 3 = ()) (opus-init (cask 10) 2 0 = 1)
            (opus-init (cask (opus-state 2)) 2 0 = 0) (opus-init (cask (opus-state 2)) 2 32768 = 1))
-   _ (? (0 < #(op-rd (vd + "/testvector01.bit")))
+   _ (? (0 < #(av-t-rd (vd + "/testvector01.bit")))
          (test (all op-vecs vs)
-               (: b (op-rd (vd + "/testvector01.bit")) (op-half (op-vec b 2 0) (op-vec b 2 -1536))))
+               (: b (av-t-rd (vd + "/testvector01.bit")) (op-half (op-vec b 2 0) (op-vec b 2 -1536))))
         (gate-partly "opus: no dl/opus-vectors (make dl/opus-vectors), the rfc's test vectors skipped"))
 
    ; -- libopus's streams through the door -------------------------------------------------
@@ -62,7 +58,7 @@
     (: q (open (dir + "/" + p) "r") b {'l ()}
        r (av-open q @ [n m h] ((<(filter (c \ <c = n) (av-codecs ()))) 4 q h m (pcm \ pin b 'l (pcm . b 'l)) @ x [n x]) w w)
        (close q, string? r ? [r] (r + [(cats (rev (b 'l)))])))
-   (same f) (op-dec (f + ".opus") @ ["ogg" 0 pcm] (#pcm = #(op-rd (dir + "/" + f + ".ff")) && 0 < #pcm) _ 0)
+   (same f) (op-dec (f + ".opus") @ ["ogg" 0 pcm] (#pcm = #(av-t-rd (dir + "/" + f + ".ff")) && 0 < #pcm) _ 0)
    _ (ref? ? (: fs (map (i \ mk i (cases i)) ^#cases)
                 (test (all string? fs) (all same fs)
                       ; a radio's chain of songs: the second's title reaches m, and both play whole
@@ -73,14 +69,14 @@
                                                    [x (m 'link) (elem "TITLE=o4" (m 'tags))]) w w)
                          (close q, r = [0 1 1]))
                       ; the head's output gain reaches the samples: o0 re-headed at -6 dB
-                      (: s (op-rd (dir + "/o0.opus")) c (op-cask s) h (27 + s 26) e (h + net (map (i \ s (27 + i)) ^(s 26)))
+                      (: s (av-t-rd (dir + "/o0.opus")) c (op-cask s) h (27 + s 26) e (h + net (map (i \ s (27 + i)) ^(s 26)))
                          _ (pin c (h + 16) 0, pin c (h + 17) 250)   ; -1536 = 0xfa00, little-endian
                          k (ogg-crc (string c) 0 e)
                          _ (map (j \ pin c (22 + j) ((k // (256 ** j)) % 256)) ^4)
                          _ (open (dir + "/half.opus") "w" @ q (say q (string c), close q))
                          (op-dec "o0.opus" @ [_ 0 a] (op-dec "half.opus" @ [_ 0 b] (op-half a b) _ 0) _ 0))
                       ; a flipped byte anywhere answers why or samples, and never falls over
-                      (: s (op-rd (dir + "/o3.opus"))
+                      (: s (av-t-rd (dir + "/o3.opus"))
                          (all (i \ (: c (op-cask s)
                                       _ (pin c i (255 - s i), open (dir + "/flip") "w" @ q (say q (string c), close q))
                                       (op-dec "flip" @ [r] (string? r) [_ r _] (r = 0 || string? r) _ 0)))

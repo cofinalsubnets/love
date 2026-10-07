@@ -19,7 +19,7 @@ $tool mooncc -t a64 -c src/inle/uefi/slot.c -o out/slot.o >&2 || die "mooncc on 
   || { tail -5 out/efi.log >&2; die "mkefi"; }
 seed=$(printf 'hearts rung 0 key' | sha256sum | cut -c1-64)
 bad=$(printf 'hearts rung 0 other key' | sha256sum | cut -c1-64)
-$tool -l src/apps/sqfs.l src/apps/hearts/image.l out out/love Image out/BOOTAA64.EFI "$seed" "$bad" "$stamp" >&2 \
+$tool -l src/apps/sqfs.l -l src/apps/ext4.l src/apps/hearts/image.l out out/love Image out/BOOTAA64.EFI "$seed" "$bad" "$stamp" >&2 \
   || die "the image"
 (cd out && sha256sum disk.img u1.hup u2.hup u3.hup u4.hup BOOTAA64.EFI love > shas)
 case $accel in kvm) a="-enable-kvm -cpu host" ;; *) a="-cpu cortex-a72" ;; esac

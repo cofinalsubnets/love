@@ -118,8 +118,7 @@
    [(b 2) (over 1e9 (b 2) (halve 0 (b 0) (over 1.0 (b 2) (b 1))))])
  ; --- the meadow behind the row: blades thrown once, each as the points it is drawn by,
  ; more of them the nearer it stands, the whole far to near ---
- (rnd g) (: s ((g 's * 1103515245 + 12345) % 2147483648) (pin g 's s, s / 2147483648.0))
- (field seed foc) (: g {'s (seed % 2147483647 + 1)}
+ (field seed foc) (: g (rnd-new seed)
    bl (map (_ \ (: z (near-z + sq (rnd g) * (deep-z - near-z)) hw ((z - eye 2) * 1.15)
                    [(rnd g * 2.0 * hw - hw) z ((1.5 + 2.0 * rnd g) * inch) (rnd g * 6.283) (rnd g)]))
            ^field-n)
@@ -162,7 +161,6 @@
    ok ((0.01 < zc) * (0 <= cx) * (cx < w) * (0 <= cy) * (cy < h))
    [(over -1 ok (cy * w + cx)) cx cy])
  ; --- the dirt: patches of brown, a pebble now and then, greener toward the haze ---
- (rgb x) [((x // 65536) / 255.0) ((x // 256 % 256) / 255.0) ((x % 256) / 255.0)]
  dirts [0x875f00 0xaf5f00 0x875f00 0xaf875f 0x5f3f1f]
  (pick ls k) (: a (rgb (ls 0)) (foldl (acc \ i \ cmix acc (rgb (ls i)) (k = i)) a ^#ls))
  (dirt gx gz) (: ix (floor (gx / 0.01)) iz (floor (gz / 0.01))

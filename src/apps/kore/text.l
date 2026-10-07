@@ -1,6 +1,6 @@
-; src/apps/kore/text.l -- the shared text layer: lines/unlines, the list<->text bridge every
-; line tool rides. a line is a string without its newline, and `unlines` terminates every
-; line, so a missing final newline is data: a tool asks `nl-end?` and `chomp`s to keep it.
+; src/apps/kore/text.l -- the shared text layer: lines (unlines is post's), the list<->text
+; bridge every line tool rides. a line is a string without its newline, and `unlines` terminates
+; every line, so a missing final newline is data: a tool asks `nl-end?` and `chomp`s to keep it.
 ;
 ; loads before diff.l in the gate: udiff captures `lines` at its define.
 (module 'kore
@@ -12,12 +12,6 @@
                           (s k = 10) (go (k + 1) (k + 1) (snip s cite k . acc))
                           (go cite (k + 1) acc))
        (go 0 0 ()))
-   ; the list of lines -> text, every line newline-terminated; an empty line is nothing
-   ; and rides through say as the no-op it is
-   (unlines ls)
-    (: o (jug 0)
-       (go m) (two? m ? (say o <m, put o 10, go >m) (slurp o))
-       (go ls))
    ; the two that put back what `unlines` cannot know: did this text end in a newline,
    ; and drop one if it is there. an empty text ends in nothing, so it answers 0 and
    ; chomps to itself -- neither is a special case anywhere above.

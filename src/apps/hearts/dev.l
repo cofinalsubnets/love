@@ -31,7 +31,7 @@
 
    (domount _)
     (mount "/dev/vda1" "/boot" "vfat" @ r (nom? r ? (gone ("cannot mount the ESP: " + show r)) 0),
-     mount "/dev/vda4" "/data" "vfat" @ r (nom? r ? (gone ("cannot mount data: " + show r)) 0),
+     mount "/dev/vda4" "/data" "ext4" @ r (nom? r ? (gone ("cannot mount data: " + show r)) 0),
      (two? (stat "/dev/vdb") ? (mount "/dev/vdb" "/drop" "vfat") 0),
      tell ("up on slot " + slot + (trial ? ", a trial" "")))
 

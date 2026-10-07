@@ -15,9 +15,8 @@
                sl (fsub r "/" 0)
                h (0 <= sl ? (snip r 0 sl) r) path (0 <= sl ? (snip r sl #r) "/")
                c (fsub h ":" 0)
-               host (0 <= c ? (snip h 0 c) h) port (0 <= c ? (tr-digits (snip h (c + 1) #h)) d)
+               host (0 <= c ? (snip h 0 c) h) port (0 <= c ? (cite 'kore 'wg-digits (snip h (c + 1) #h)) d)
                (0 < k && 0 < d && 0 < #host && 0 < port ? [p host port path] ()))
- (tr-digits s) (foldl (a \ c \ (48 <= c && c <= 57 ? (a * 10 + c - 48) a)) 0 (map (i \ s i) ^#s))
  (urlenc s) (cats (map (i \ s i @ c ((48 <= c <= 57 || 65 <= c <= 90 || 97 <= c <= 122
                                        || c = 45 || c = 46 || c = 95 || c = 126) ? (string c)
                                       ("%" + b2hex (string c))))
@@ -31,29 +30,16 @@
  (tr-dpeers l) (filter two? (map (p \ tablet? p ? [(peep p "ip" "") (peep p "port" 0)]) l))
 
  ; --- http ---------------------------------------------------------------------------
- (tr-chunks b) (: (go i acc) (: e (fsub b "\r\n" i)
-                                  (? (e < 0) acc
-                                     (: n (tr-hex (snip b i e))
-                                        (n = 0 ? acc (go (e + 2 + n + 2) (acc + snip b (e + 2) (e + 2 + n)))))))
-                 (go 0 ""))
- (tr-hex s) (foldl (a \ c \ (? (48 <= c <= 57) (a * 16 + c - 48) (97 <= c <= 102) (a * 16 + c - 87)
-                                (65 <= c <= 70) (a * 16 + c - 55) a)) 0 (map (i \ s i) ^#s))
  (tr-http u ask)
   (: q ("info_hash=" + urlenc (ask 'hash) + "&peer_id=" + urlenc (ask 'id) + "&port=" + show (ask 'port)
         + "&uploaded=" + show (ask 'up) + "&downloaded=" + show (ask 'down) + "&left=" + show (ask 'left)
         + "&compact=1&numwant=50" + (0 < #(ask 'event) ? ("&event=" + ask 'event) ""))
      path (u 3 + (0 <= fsub (u 3) "?" 0 ? "&" "?") + q)
-     req ("GET " + path + " HTTP/1.1\r\nHost: " + u 1 + "\r\nUser-Agent: love-torrent/0.3\r\n"
-          + "Accept-Encoding: identity\r\nConnection: close\r\n\r\n")
-     s (cite 'dns 'dial (u 1) (u 2))
-     raw (hot? s ? (: _ (say s req) _ (flush s) r (slurp s) (close s, r)))
-     k (string? raw ? (fsub raw "\r\n\r\n" 0) -1)
-     (? (k < 0) "the tracker did not answer"
-        (: head (snip raw 0 k) body (snip raw (k + 4) #raw)
-           code (tr-digits (snip head 9 12))
-           b (0 <= fsub (lower head) "transfer-encoding: chunked" 0 ? (tr-chunks body) body)
-           (code != 200 ? ("the tracker said " + snip head 9 (fsub head "\r\n" 0))
-              (cite 'benc 'bdecode b @ [d] (tr-reply d) "the tracker's answer is not bencode")))))
+     (cite 'kore 'wg-once 0 (u 1) (u 2) path @
+       (why && string? why) why
+       [code head b] (code != 200 ? ("the tracker said " + snip head 9 (fsub head "\r\n" 0))
+                        (cite 'benc 'bdecode b @ [d] (tr-reply d) "the tracker's answer is not bencode"))
+       _ "the tracker did not answer"))
  (tr-reply d) (? !(tablet? d) "the tracker's answer is not a dictionary"
                  (peep d "failure reason" ()) ("the tracker refused: " + d "failure reason")
                  (: ps (peep d "peers" "")

@@ -142,7 +142,7 @@
     (: it (Q c i) p (it 'uri)
        (opens p @
          [nm m h q info]
-          (: cd (<(filter (d \ <d = nm) ((cite 'av 'av-codecs) ())))
+          (: cd ((cite 'av 'av-codec) nm)
              f ((cd 3) m) rate (f 'rate) ch (min 2 (f 'ch))
              _ (pins c 'fq q 'fi info 'ftn 0 'fm m 'fln 0 'tf 0 'base at 'skip at 'brate rate)
              _ (rebus c)

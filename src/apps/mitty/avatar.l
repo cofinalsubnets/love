@@ -11,7 +11,6 @@
 ;                           the one named nm in bold
 (module (avatar avatar-names avatar-look avatar-gallery)
 (:
- (sgr code s) ("\e[" + code + "m" + s + "\e[0m")
  (tc _) ((cite 'pom 'pom-tc) 0)
  (tint x) ((cite 'pom 'pom-tint) x "38" (tc 0))
  (rgb x) [(x // 65536) (x // 256 % 256) (x % 256)]

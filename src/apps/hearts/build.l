@@ -41,9 +41,7 @@
               (: r (hark (shc cmd))
                  a (two? r ? (join " " (lines (chomp >r))) "")
                  (pin memo cmd a, a))))
-   (split1 s) ((: (g i st acc) (i >= #s ? (rev (snip s st i . acc))
-                                  (s i = 39 ? (g (i + 1) (i + 1) (snip s st i . acc)) (g (i + 1) st acc)))) 0 0 ())
-   (q s) ("'" + (join "'\\''" (split1 s)) + "'")
+   (q s) ("'" + join "'\\''" (split "'" s) + "'")
    (ident? n) (0 < #n && all (c \ c = 95 || 65 <= c <= 90 || 97 <= c <= 122 || 48 <= c <= 57) (map n ^#n)
                && !(48 <= n 0 <= 57))
    ; the prior build's saved command for a target: its .cmd, read as make reads it
