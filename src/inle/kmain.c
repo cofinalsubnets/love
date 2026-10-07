@@ -28,10 +28,12 @@ static struct mem *kmem;
 static uintptr_t kram_words;
 
 static struct cb *kcb;
-// the console's picture store: a screenful deep, 8 MB at most -- a dense screen's is
-// capped, and a machine that cannot spare it runs text alone
+// the console's picture store: three screenfuls deep, so a program putting up its next
+// frame before taking down the last has room for both and a stretch; 8 MB at least, 24 at
+// most -- a dense screen's is capped, and a machine that cannot spare it runs text alone
 static uint32_t k_sn(uintptr_t rows, uintptr_t cols) {
-  return rows * cols <= 16384u ? cb_sdefault(rows, cols) : cb_sdefault(128u, 128u); }
+  uint32_t const n = rows * cols <= 16384u ? (uint32_t) (rows * cols) : 16384u, sn = 3u * n * 512u;
+  return (uint32_t) cb_shead + (sn > 8u << 20 ? sn : 8u << 20); }
 // the console's history: five hundred lines, fewer past 1 MB of them
 static uint32_t k_hl(uintptr_t cols) {
   uint32_t const most = (uint32_t) ((1u << 20) / cb_hsize(1, cols));
