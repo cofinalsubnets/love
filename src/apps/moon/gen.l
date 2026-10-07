@@ -5698,15 +5698,18 @@
    (doors g tail) (? (a64? g) '(r9 r10 r11 r12 r13 r14 r15)
                      (rv64? g) (wasm? g && !tail ? () '(r8 r9 r10 r11 r12))
                      '(r0 r9 r10))
+   ; a jump's target is a function (a sibcall) when its spelling has no dot: gen's own labels lead
+   ; with one, and a C label is spelled fn.label (a goto) -- neither is an exit
+   (fsym? x) (findsub (show x) "." < 0)
    ; dies on the straight line: overwritten before any read. a ret rides only r0 out; a call or
-   ; sibcall jmp (a function symbol -- labels are dot-interned, 46 = '.') kills the door set
+   ; sibcall jmp kills the door set
    (dies? g rd (f . l))
     (two? f ?
        (rdsp g f @ rs
           (? (rs = 'bar)
               (? (retx? f) (rd != 'r0)
                  (elem <f '(call callr)) (elem rd (doors g 0))
-                 (<f = 'jmp && !(46 = (show <>f 0))) (elem rd (doors g 1))
+                 (<f = 'jmp && fsym? <>f) (elem rd (doors g 1))
                  ())
              (elem rd <rs) ()
              (elem rd <>rs) 1
@@ -5892,7 +5895,7 @@
                      (pin seen <>f 1, go >l wl))
                  (<f = 'align) (go >l wl)          ; a loop head's pad: no register effect
                  (elem <f '(jmp jmp8))
-                  (? (46 = show <>f 0) (next (<>f . wl))
+                  (? !(fsym? <>f) (next (<>f . wl))
                      ; a tail jump to a function: an exit reading its arguments -- the door set alone dies (dies?'s law)
                      (elem rd (doors g 1)) (next wl)
                      ())
@@ -6007,7 +6010,7 @@
                            (? (n = 'top) 0
                               (o = 'top || #n < #o) (pin inn L n, 1)
                               0)))
-          (local? L) (46 = show L 0)
+          (local? L) !(fsym? L)
           ; an and by a 32-bit mask straight after clears the top itself
           (masked r n) (two? n && <n = 'and && <>n = r && <>>n = r && u32? (n 3))
           (round l K ch)
