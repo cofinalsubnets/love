@@ -38,11 +38,11 @@
    cam {'e [0.0 eye-h 0.0] 'f [0.0 1.0 0.0] 'r [1.0 0.0 0.0] 'u [0.0 0.0 -1.0] 'w w 'h h 'foc (w / 2.0)}
    z (iota n * 0.0) c (stars! [z z z] st lt cam (iota n * 0 + 1) 0)
    lit (net (0.0 < c 0))
-   X (stars 'x) Y (stars 'y) Z (stars 'z)
+   ss (stars st) X (ss 'x) Y (ss 'y) Z (ss 'z)
    cx (floor (w / 2.0 + 40.0 * X / Y)) cy (floor (h / 2.0 + 40.0 * Z / Y))
    seen (net ((0.05 < Y) * (0 <= cx) * (cx < w) * (0 <= cy) * (cy < h)))
  (test (5 < seen) (0.9 * seen <= lit) (lit <= seen) (amax (c 0) < 1.0)
-       (all (k \ 0.3 <= peep Y k 0.0) ^(#X))))
+       (0.0 = net ((Y <= 0.0) * ss 'b))))   ; none from under the horizon
 
 ; --- the sun: up by day and down by night, south at noon, east in the morning and west in
 ; --- the evening, a unit vector; summer's hour is taken off the wall clock
@@ -274,8 +274,8 @@
    n 3000 i (iota n) y (0.42 + 0.58 * (i + 0.5) / n) r (sqrt (1.0 - y * y))
    dx (r * cos (i * 2.39996)) dz (r * sin (i * 2.39996)) sim (st 'sim) s (court-sun st)
    (cloud c sty) (: wx (sky-weather c sty) lt (sky-light s wx sim)
-                    k (sky-colour lt wx dx y dz 0.0 0.0 sim 0)
-                    k0 (sky-colour lt (sky-weather 0 sty) dx y dz 0.0 0.0 sim 0)
+                    k (sky-colour-of lt wx dx y dz 0.0 0.0 sim)
+                    k0 (sky-colour-of lt (sky-weather 0 sty) dx y dz 0.0 0.0 sim)
                     (net (0.15 < mag (k 0 - k0 0) + mag (k 1 - k0 1) + mag (k 2 - k0 2)) / (1.0 * n)))
    (rises sty) (: f (map (c \ cloud c sty) [1 2 3]) (f 0 < f 1 && f 1 < f 2 && 0.1 < f 0 && 0.9 < f 2))
    sm (court-frame (pins (at 15.0) 'ph 1.4 'wx (sky-weather 2 'smooth)))
