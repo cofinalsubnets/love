@@ -516,7 +516,7 @@
         (gf-expand 'a64 (gf-lines 'a64 ".macro m f\n.ifb \\f\nnop\n.endif\n.ifnb \\f\nb \\f\n.endif\n.endm\nm\nm x\n")))
    ;; labels then a macro call on one line: the labels, then the call's lines
    _ (chk-eq "gas.macro.lbl" '("g:" "\tmov x0, #4" "1:" "h:" "\tmov x1, #4" "k: ret")
-        (gf-expand 'a64 (gf-lines 'a64 "\t.macro m, r\n\tmov \\r, #4\n\t.endm\ng:\tm x0\n1: h: m x1\nk: ret\n")))
+        (gf-expand 'a64 (gf-lines 'a64 "\t.macro m, r\n\tmov \\r, #4\n\t.endm\ng:\tm x0\n1: h: m x1\nk: ret")))
    _ (chk-eq "gas.macro.at" "(((\".text\" 1 6 ((jmp .Lx0) (label .Lx0) (jmp .Lx1) (label .Lx1)))) () ())"
         (show (gas-top 'a64 "\t.macro m\n\tb .Lx\\@\n.Lx\\@:\n\t.endm\n\tm\n\tm\n")))
    _ (chk-eq "gas.a64.lbldist.refuse" '(gas-immediate gas-immediate)
