@@ -5698,15 +5698,18 @@
    (doors g tail) (? (a64? g) '(r9 r10 r11 r12 r13 r14 r15)
                      (rv64? g) (wasm? g && !tail ? () '(r8 r9 r10 r11 r12))
                      '(r0 r9 r10))
+   ; a jump's target is a function (a sibcall) when its spelling has no dot: gen's own labels lead
+   ; with one, and a C label is spelled fn.label (a goto) -- neither is an exit
+   (fsym? x) (findsub (show x) "." < 0)
    ; dies on the straight line: overwritten before any read. a ret rides only r0 out; a call or
-   ; sibcall jmp (a function symbol -- labels are dot-interned, 46 = '.') kills the door set
+   ; sibcall jmp kills the door set
    (dies? g rd (f . l))
     (two? f ?
        (rdsp g f @ rs
           (? (rs = 'bar)
               (? (retx? f) (rd != 'r0)
                  (elem <f '(call callr)) (elem rd (doors g 0))
-                 (<f = 'jmp && !(46 = (show <>f 0))) (elem rd (doors g 1))
+                 (<f = 'jmp && fsym? <>f) (elem rd (doors g 1))
                  ())
              (elem rd <rs) ()
              (elem rd <>rs) 1
@@ -5892,7 +5895,7 @@
                      (pin seen <>f 1, go >l wl))
                  (<f = 'align) (go >l wl)          ; a loop head's pad: no register effect
                  (elem <f '(jmp jmp8))
-                  (? (46 = show <>f 0) (next (<>f . wl))
+                  (? !(fsym? <>f) (next (<>f . wl))
                      ; a tail jump to a function: an exit reading its arguments -- the door set alone dies (dies?'s law)
                      (elem rd (doors g 1)) (next wl)
                      ())
@@ -6007,7 +6010,7 @@
                            (? (n = 'top) 0
                               (o = 'top || #n < #o) (pin inn L n, 1)
                               0)))
-          (local? L) (46 = show L 0)
+          (local? L) !(fsym? L)
           ; an and by a 32-bit mask straight after clears the top itself
           (masked r n) (two? n && <n = 'and && <>n = r && <>>n = r && u32? (n 3))
           (round l K ch)
@@ -7841,6 +7844,7 @@
                     tab {}                ; this switch's value->label map (and 'dflt->label)
                     cases (rev (scasel-l g items tab ()))   ; pre-scan the body at any depth -> (value label) dispatch pairs
                     dflt (peep tab 'dflt lend)
+                    dup9 (peep tab 'dup ())
                     ; a range is two compares in the control's own signedness, r1 the scratch as
                     ; a single case's: below lo skips past, at most hi takes the case
                     (rng lo hi lab)
@@ -7867,8 +7871,9 @@
                     (pins g 'brk >(g 'brk)
                             'brkm >(g 'brkm)
                             'cases >(g 'cases),      ; pop
-                     bad? body || bad? disp ? 'bad
-                       (vfs c + disp + [['jmp dflt]] + (body + [['label lend]]))))))))
+                     (? dup9 (nolane g "a duplicate case value, or a second default, in one switch")
+                        (bad? body || bad? disp) 'bad
+                        (vfs c + disp + [['jmp dflt]] + (body + [['label lend]])))))))))
    (cgitems g env items acc) (sxpre g env items acc @ r (bad? r ? 'bad <r))   ; a block's items -> forms | 'bad
 
    ; -- the switch's table lane -> forms | 'no (the caller keeps its chain). index = control - lo, so one
@@ -7971,11 +7976,17 @@
                + [['expr ['asn (rx || ['deref (v "r")]) ['cast tt ['cond n ['un 'neg m] m]]]]])
               ['lor o ['un 'not fit]] 'int])))
    ; a switch body's case/default labels at any depth: value->label pinned into tab -> (value label) dispatch pairs
+   ; a value or range another label already holds (C11 6.8.4.2p3), or a second default, marks 'dup
+   (scover? tab a b)
+    (any (k \ (? (charm? k) (a <= k && k <= b) (two? k) (<k <= b && a <= <>k) ())) (keys tab))
    (scasel g it tab acc)
     (!(two? it) ? acc
-       (it @ ('case lo hi)  (nlab g ".k" @ lab (pin tab [lo hi] lab, [[lo hi] lab . acc]))   ; a range: one label
-             ('case cv)     (nlab g ".k" @ lab (pin tab cv lab, [cv lab . acc]))
-             ('dflt . _)   (nlab g ".k" @ lab (pin tab 'dflt lab, acc))
+       (it @ ('case lo hi)  (: _ (scover? tab lo hi && pin tab 'dup 1)
+                               (nlab g ".k" @ lab (pin tab [lo hi] lab, [[lo hi] lab . acc])))   ; a range: one label
+             ('case cv)     (: _ (scover? tab cv cv && pin tab 'dup 1)
+                               (nlab g ".k" @ lab (pin tab cv lab, [cv lab . acc])))
+             ('dflt . _)   (: _ (peep tab 'dflt () && pin tab 'dup 1)
+                              (nlab g ".k" @ lab (pin tab 'dflt lab, acc)))
              ('switch . _) acc                                   ; a nested switch owns its labels
              (scasel-l g (stkids it) tab acc)))
    (scasel-l g l tab acc) (!(two? l) ? acc (scasel-l g >l tab (scasel g <l tab acc)))
