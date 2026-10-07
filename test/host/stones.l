@@ -21,9 +21,19 @@
  (test (rows f = 24) (f = f2) (rows deep = 24) (f != deep)
        (has? f "38;5;") (has? deep "38;2;")))
 
-; --- ..and as kitty's pixels: one picture over the screen's cells, the cursor left where it is
+; --- ..and as kitty's pixels: one picture over the screen's cells, the cursor left where it is;
+; --- sized for kitty, about kitty-w pixels across, a whole number a column
 (: k (stones-frame (pin (at 12.0 7) 'kitty 1))
- (test (snip k 0 3 = "\e_G") (has? k "f=24") (has? k "C=1") (has? k "s=80,v=48,c=80,r=24,") (has? k "m=0;")))
+   k8 (stones-frame (stones-size (pin (at 12.0 7) 'kitty 1) 80 24))
+ (test (snip k 0 3 = "\e_G") (has? k "f=24") (has? k "C=1") (has? k "s=80,v=48,c=80,r=24,") (has? k "m=0;")
+       (has? k8 "s=640,v=384,c=80,r=24,") ((stones-size (at 12.0 7) 80 24) 'kp = 1)))
+
+; --- the words: the hour today, and kitty's or the cells; one wrong or said twice is none
+(: (opt as k) (stones-opts as @ o (tablet? o ? (o k) 'bad))
+ (test (opt ["--time" "6:30"] 'time = 23400) (opt ["--kitty" "--time" "18:05"] 'time = 65100)
+       (opt ["--time" "18:05" "--cells"] 'md = 'cells) (opt [] 'md = ())
+       (opt ["--time" "24:00"] 'time = 'bad) (opt ["--time"] 'time = 'bad) (opt ["--kitty" "--kitty"] 'md = 'bad)
+       (opt ["--cells" "--kitty"] 'md = 'bad) (opt ["--day"] 'md = 'bad)))
 
 ; --- the rock: open air at the eye, and the sand under it; rock either side of the slot
 ; --- and over the bowl's rim, the bowl open down to its floor, the plain open past the mouth

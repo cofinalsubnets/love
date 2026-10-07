@@ -72,4 +72,6 @@
       (frame-bytes px2 3 1 = ())
       ; an exposure of 1 shows white as 255 (1 - 1/e)
       (fc-n (facets 4 4 7 fc-id (fc-g (big 0.0 1 0)) (fc-z [[0 1 2 -1]]) () (fc-g [[0.0 0.0 0.0 0.0 0.0 0.0 1.0]])) (161 << 16) = 16)
+      ; ..and of 0.6, 255 (1 - e^-0.6)
+      (fc-n (facets 4 4 7 fc-id (fc-g (big 0.0 1 0)) (fc-z [[0 1 2 -1]]) () (fc-g [[0.0 0.0 0.0 0.0 0.0 0.0 0.6]])) (115 << 16) = 16)
       (fc-go 100 () 0 = 0)))

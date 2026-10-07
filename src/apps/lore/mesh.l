@@ -118,8 +118,10 @@
      {'w w 'h h 'e e 'th th 'ph ph 'fov fov
       'cam (gem-tray [16] (row fx r + row fy u + [(z 0) (z 1) (z 2) (z 3 + zb)] + row 1.0 f))})
  ; the directions through pixels ix of the view, unit [x y z] trays
- (mesh-dirs v ix) (: w (v 'w) h (v 'h) foc (w / 2.0 / tan (v 'fov / 2.0))
-   U ((ix % w + 0.5 - w / 2.0) / foc) V ((h / 2.0 - ix // w - 0.5) / foc)
+ (mesh-dirs v ix) (: w (v 'w) (rays v (ix % w + 0.5) (ix // w + 0.5)))
+ ; ..and through the points px py of the screen, in pixels from its top left
+ (rays v px py) (: w (v 'w) h (v 'h) foc (w / 2.0 / tan (v 'fov / 2.0))
+   U ((px - w / 2.0) / foc) V ((h / 2.0 - py) / foc)
    th (v 'th) ph (v 'ph) st (sin th) ct (cos th) sp (sin ph) cp (cos ph)
    x (st * cp + U * ct - V * st * sp) y (sp + V * cp) z (ct * cp - U * st - V * ct * sp)
    l (sqrt (x * x + y * y + z * z))
@@ -131,13 +133,32 @@
    cx (floor (w / 2.0 + foc * (X * ct - Z * st) / zs))
    cy (floor (h / 2.0 - foc * (Y * cp - (X * st + Z * ct) * sp) / zs))
    (over -1 ((0.05 < zc) * (0 <= cx) * (cx < w) * (0 <= cy) * (cy < h)) (cy * w + cx)))
- ; lore's sky through the eye's gain, as the bare pixels' colours for mesh-frame: S the
- ; pixels of the view v left bare, the sky's stars a pixel each among them
- (mesh-sky lt wx e sim t0)
-  (\ v S (: d (mesh-dirs v S) c (sky-colour-of lt wx (d 0) (d 1) (d 2) (e 0) (e 2) sim)
-            at (pin (iota (v 'w * v 'h) * 0 - 1) S (iota #S))
-            ix (peep at (mesh-spot v (sky-stars 'x) (sky-stars 'y) (sky-stars 'z)) -1)
-            (word (sky-tone lt (sky-stars! c lt wx (e 0) (e 2) sim t0 ix)))))
+ ; lore's sky through the eye's gain, for mesh-frame's bare: k 1 the colours of the pixels
+ ; S of the view v left bare, the sky's stars a pixel each among them; k past 1 the sky
+ ; asked at the corners of k by k squares and shaded across each by facets, under the
+ ; scene, and the stars put on after where the scene left them showing
+ (mesh-sky lt wx e sim t0 k)
+  (: X (sky-stars 'x) Y (sky-stars 'y) Z (sky-stars 'z)
+     (shine c ix) (word (sky-tone lt (sky-stars! c lt wx (e 0) (e 2) sim t0 ix)))
+     (k <= 1
+      ? (\ v S (: at (pin (iota (v 'w * v 'h) * 0 - 1) S (iota #S)) d (mesh-dirs v S)
+                  (shine (sky-colour-of lt wx (d 0) (d 1) (d 2) (e 0) (e 2) sim) (peep at (mesh-spot v X Y Z) -1))))
+        [(v \ sky-grid v lt wx e sim k)
+         (\ v f B (: sp (mesh-spot v X Y Z) ix (over -1 (peep f sp -2 = peep B sp -3) (iota #X))
+                     (pin f (over -1 (0 <= ix) sp) (shine (sky-colour-of lt wx X Y Z (e 0) (e 2) sim) ix))))]))
+ ; the sky over the whole view, asked every k pixels across and down, a flat tray
+ (sky-grid v lt wx e sim k)
+  (: w (v 'w) h (v 'h) gw (w // k + 2) gh (h // k + 2) G (iota (gw * gh)) gi (G % gw) gj (G // gw)
+     d (rays v (1.0 * k * gi) (1.0 * k * gj))
+     c (sky-colour-of lt wx (d 0) (d 1) (d 2) (e 0) (e 2) sim)
+     z (G * 0.0) nv (gw * gh)
+     cols [(2.0 * k * gi / w - 1.0) (1.0 - 2.0 * k * gj / h) z z z (c 0) (c 1) (c 2)]
+     vs (foldl (\ t i (pin t (iota nv * 8 + i) (cols i))) (iota (8 * nv) * 0.0) ^8)
+     C (iota ((gw - 1) * (gh - 1))) q (C // (gw - 1) * gw + C % (gw - 1))
+     cs [q (q + 1) (q + gw + 1) (q * 0 - 1) q (q + gw + 1) (q + gw) (q * 0 - 1)]
+     ts (foldl (\ t i (pin t (C * 8 + i) (cs i))) (iota (8 * #C) * 0) ^8)
+     one (gem-tray [16] [1.0 0.0 0.0 0.0 0.0 1.0 0.0 0.0 0.0 0.0 1.0 0.0 0.0 0.0 0.0 1.0])
+     (peep (facets w h 0 one vs ts () (gem-tray [7] [0.0 0.0 0.0 0.0 0.0 0.0 (1.5 * lt 'expo)])) (iota (w * h)) 0))
  ; the sky low ahead before the gain, 0 to 255: the colour a far thing fades to
  (mesh-haze v lt wx sim) (: th (v 'th) e (v 'e)
    c (sky-near lt wx (gem-tray [1] [(sin th)]) (gem-tray [1] [0.02]) (gem-tray [1] [(cos th)]) (e 0) (e 2) sim)
@@ -145,13 +166,14 @@
  ; a frame, a flat tray of colours w*h long: the scene [verts tris], each a tray or a
  ; list of batches, with its textures, fog [r g b near far] 0 to 255, facets's flags and
  ; the eye's gain (sky-tone's, 0 for none); and where it left the screen bare, bare: a
- ; colour, or (\ v S ..) the colours of pixels S of the view
- (mesh-frame v sc texs fog flags gain bare) (: n (v 'w * v 'h)
-   f (peep (facets (v 'w) (v 'h) -1 (v 'cam) (sc 0) (sc 1) texs
+ ; colour, (\ v S ..) the colours of pixels S of the view, or [base over]: (base v) the
+ ; ground drawn over, and (over v f B) the frame f finished
+ (mesh-frame v sc texs fog flags gain bare) (: n (v 'w * v 'h) B (two? bare ? (<bare v) -1)
+   f (peep (facets (v 'w) (v 'h) B (v 'cam) (sc 0) (sc 1) texs
                    (gem-tray [7] [(1.0 * fog 0) (1.0 * fog 1) (1.0 * fog 2) (1.0 * fog 3) (1.0 * fog 4) (1.0 * flags) (1.0 * gain)]))
            (iota n) 0)
-   S (iota (f = -1))
-   (#S = 0 ? f (pin f S (charm? bare ? bare (bare v S)))))
+   (? (two? bare) (<>bare v f B)
+      (: S (iota (f = -1)) (#S = 0 ? f (pin f S (charm? bare ? bare (bare v S)))))))
  ; a frame's colours as [r g b] trays, 0 to 1
  (mesh-flat f) [((f >> 16 & 255) / 255.0) ((f >> 8 & 255) / 255.0) ((f & 255) / 255.0)]
  ; ..and as half-block cells: 24-bit, or the 256 cube dithered by bay; bands view's words

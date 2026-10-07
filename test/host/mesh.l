@@ -50,18 +50,24 @@
    sl (sky-light (sky-sun noon 0.0 0.65) wx noon)
    ; the sky where the box leaves the screen bare, and the same sky asked alone
    v0 (vw [0.0 0.0 0.0] 0.0 0.0)
-   skf (mesh-sky sl wx [0.0 0.0 0.0] noon 0.0)
+   skf (mesh-sky sl wx [0.0 0.0 0.0] noon 0.0 1)
    sk (skf v0 (iota (W * H)))
    fs (mesh-frame v0 (lit bx) () [0 0 0 0.0 0.0] 8 0.0 skf)
    ; by night, looking straight up: the stars change no more pixels than there are stars
    ; in view -- none of them a patch
    night (1.0 * 1790812800 + 1.0 * 3600.0) nl (sky-light (sky-sun night 0.0 0.65) wx night)
    vu (mesh-view W H [0.0 0.0 0.0] 0.0 1.5 1.4 0.1 100.0)
-   zen (mesh-frame vu (lit bx) () [0 0 0 0.0 0.0] 8 0.0 (mesh-sky nl wx [0.0 0.0 0.0] night 0.0))
+   zen (mesh-frame vu (lit bx) () [0 0 0 0.0 0.0] 8 0.0 (mesh-sky nl wx [0.0 0.0 0.0] night 0.0 1))
    bare (mesh-frame vu (lit bx) () [0 0 0 0.0 0.0] 8 0.0
                     (\ v S (: d (mesh-dirs v S) (mh-word (sky-tone nl (sky-colour-of nl wx (d 0) (d 1) (d 2) 0.0 0.0 night))))))
    seen (net (-1 < mesh-spot vu (sky-stars 'x) (sky-stars 'y) (sky-stars 'z)))
    lit-m (zen != bare) hot (iota lit-m)
+   ; the sky asked every 4 pixels and shaded between: near the sky asked at each, the box
+   ; the same, the rest near on the mean; by night the stars a pixel each over it, as many
+   fg (mesh-frame v0 (lit bx) () [0 0 0 0.0 0.0] 8 0.0 (mesh-sky sl wx [0.0 0.0 0.0] noon 0.0 4))
+   (gap a b) (: p (mesh-flat a) q (mesh-flat b) (+(map (k \ net (max (p k - q k) (q k - p k))) ^3) / (3.0 * #a)))
+   gk (mesh-sky nl wx [0.0 0.0 0.0] night 0.0 4)
+   hot4 (iota (mesh-frame vu (lit bx) () [0 0 0 0.0 0.0] 8 0.0 gk != mesh-frame vu (lit bx) () [0 0 0 0.0 0.0] 8 0.0 [(<gk) (\ v f B f)]))
  (test (all (k \ round k != 7) ^4)
        (mid < <(cols right))
        (#(rows up) = 0 || <(rows up) > <(rows right))
@@ -81,6 +87,7 @@
        (back = map (i \ 4278190080 | peep big i 0) ^(80 * 64))
        (shape sk = [(W * H)]) (0 < amin sk)
        (at fs mid cen = at f0 mid cen) (at fs 0 0 = peep sk 0 0) (at fs (W - 1) 0 = peep sk (W - 1) 0)
-       (0 < seen) (0.9 * seen <= #hot) (#hot <= seen)))
+       (0 < seen) (0.9 * seen <= #hot) (#hot <= seen)
+       (at fg mid cen = at f0 mid cen) (two? gk) (gap fg fs < 0.01) (0.9 * seen <= #hot4) (#hot4 <= seen)))
 (test_fin ())
 (puts "mesh: ok\n")

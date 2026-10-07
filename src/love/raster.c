@@ -19,7 +19,7 @@ float lm_expf(float);
 #define rz_exp lm_expf
 #endif
 
-enum { rz_affine = 1, rz_snap = 2, rz_dither = 4, rz_cull = 8, rz_lv = 8 };
+enum { rz_affine = 1, rz_snap = 2, rz_dither = 4, rz_cull = 8, rz_lv = 8, rz_tn = 256 };
 // a vertex in clip space with what rides on it; once projected x y are pixels and z ndc
 struct rz_v { flo_t x, y, z, w, a[5]; };
 struct rz_tex { intptr_t const *px; intptr_t w, h; };
@@ -27,6 +27,7 @@ struct rz {
  intptr_t W, H, flags;
  flo_t const *m;
  flo_t fog[5], tone;
+ flo_t tl[rz_tn + 2];   // the tone at k c / 255 = i / 32, 0 to 8, eased between
  intptr_t *out;
  flo_t *depth;
  struct rz_tex lv[rz_lv];
@@ -140,7 +141,11 @@ static void rz_tri(struct rz *r, struct rz_v const *p0, struct rz_v const *p1, s
       flo_t f = (w - fn) * fs;
       f = f < 0 ? 0 : f > 1 ? 1 : f;
       for (int k = 0; k < 3; k++) c[k] += (r->fog[k] - c[k]) * f; }
-     if (r->tone > 0) for (int k = 0; k < 3; k++) c[k] = 255 * (1 - rz_exp(-r->tone * c[k] / 255));
+     if (r->tone > 0) for (int k = 0; k < 3; k++) {
+      flo_t const x = r->tone * c[k] * (flo_t) (32.0 / 255);
+      intptr_t const i = x <= 0 ? 0 : x >= rz_tn ? rz_tn : (intptr_t) x;
+      flo_t const f = x <= 0 ? 0 : x - (flo_t) i;
+      c[k] = r->tl[i] + (r->tl[i + 1] - r->tl[i]) * (f > 1 ? 1 : f); }
      int const d = r->flags & rz_dither ? rz_bayer[(y & 3) * 4 + (x & 3)] : 0;
      o[x] = rz_ch(c[0], d) << 16 | rz_ch(c[1], d) << 8 | rz_ch(c[2], d);
      dz[x] = a[0]; } }
@@ -251,6 +256,8 @@ love_noinline static struct g *host_raster(struct g *g) {
  r.m = m;
  for (uintptr_t i = 0; i < 5; i++) r.fog[i] = rz_opt(a[7], i, 0);
  r.flags = (intptr_t) rz_opt(a[7], 5, 0), r.tone = rz_opt(a[7], 6, 0);
+ if (r.tone > 0) for (int i = 0; i < rz_tn + 2; i++)
+  r.tl[i] = 255 * (1 - rz_exp(-(flo_t) (i < rz_tn ? i : rz_tn) / 32));
  if (galaxyp(a[4])) rz_batch(&r, tray(a[4]), tray(a[5]), a[6]);
  else for (word v = a[4], t = a[5]; chainp(v); v = B(v), t = B(t)) rz_batch(&r, tray(A(v)), tray(A(t)), a[6]);
  a[0] = word(fr);

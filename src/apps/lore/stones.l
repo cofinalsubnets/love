@@ -14,10 +14,11 @@
 ; kitty's pixels on a terminal that takes them. stones-new, stones-step and stones-frame
 ; are pure, gated by test/host/stones.l; only stones-walk and stones-run tie the tty.
 ;
-; run: love lore stones [--kitty|--cells]   h l or the arrows turn, k j step, u n look up
-;                         and down; q or esc leaves, or walk back out of the canyon
+; run: love lore stones [--time HH:MM] [--kitty|--cells]
+;      h l or the arrows turn, k j step, u n look up and down; q or esc leaves, or walk
+;      back out of the canyon
 (module (stones stones-run stones-walk stones-main stones-new stones-size stones-step stones-move
-         stones-frame stones-pens stones-field stones-ground stones-blocks slot-x
+         stones-frame stones-pens stones-opts stones-field stones-ground stones-blocks slot-x
          fps eye-h zc floor-r row-w row-h rows rim-r exit-z lat)
 (borrow 'rove)
 (borrow 'view)                          ; the screen, the pens, the hash, the loop
@@ -165,11 +166,15 @@
           (mesh-grid np nz at 0 [1.0 1.0 1.0]))
      ; ..its lips only under the plateau, not where the bowl's rows are the ground
      (mesh-keep m (\ x y z (mag (x - slot-x z) < half (max y 0.0) z + 0.5 || top x z - 0.3 <= bowl x z))))
- ; ..its floor, sand from wall to wall, a hair under the bowl's where they meet
+ ; ..its floor, sand from wall to wall, a hair under the bowl's where they meet, and a
+ ; skirt on past each wall's foot: a wall's rows are straight, its curve between them
+ ; not where the floor's edge is
  floor-n 3
  (slot-floor _) (: nz (int ((zend + 2.0 - z0) / dz))
-   (mesh-grid floor-n nz (\ i j (: z (z0 + j * dz) sx (slot-x z) hw (half 0.0 z)
-                                   x (sx - hw + 2.0 * hw * i / floor-n) [x -0.02 z (tx * x) (tx * z)]))
+   (mesh-grid (floor-n + 2) nz (\ i j (: z (z0 + j * dz) sx (slot-x z) hw (half 0.0 z)
+                                         x (? (i = 0) (sx - hw - 0.5) (i = floor-n + 2) (sx + hw + 0.5)
+                                              (sx - hw + 2.0 * hw * (i - 1) / floor-n))
+                                         [x -0.02 z (tx * x) (tx * z)]))
               1 [1.0 1.0 1.0]))
  ; the slot's air: inside its walls, short of the bowl
  (in-slot? x y z) (z < zend && mag (x - slot-x z) < half (max y 0.0) z - 0.02)
@@ -267,15 +272,18 @@
  ; through the eye's gain; out as half blocks, or as kitty's pixels where the terminal
  ; takes them ---
  fov (pi / 2.0)
+ kitty-w 640                              ; kitty's picture about this many pixels across
+ sky-k 2                                  ; ..and the sky asked every sky-k columns
  kitty-id 7
  kitty-gone (esc + "_Ga=d,d=i,i=7,q=2" + esc + "\\")
- (stones-pens st) (: lt (stones-light st) w (st 'w) h (st 'h) e [(st 'px) (st 'py) (st 'pz)]
+ ; ..'kp pixels a column, and twice that a row: one, for half blocks
+ (stones-pens st) (: lt (stones-light st) k (peep st 'kp 1) w (k * st 'w) h (k * st 'h) e [(st 'px) (st 'py) (st 'pz)]
    v (mesh-view w h e (st 'th) (st 'ph) fov 0.05 900.0)
    hz (mesh-haze v lt (st 'wx) (st 'sim))
    (mesh-frame v (scene st) ((land ()) 'texs) [(hz 0) (hz 1) (hz 2) 150.0 900.0] 8 (1.5 * lt 'expo)
-               (mesh-sky lt (st 'wx) e (st 'sim) (st 't))))
- (stones-frame st) (: w (st 'w) h (st 'h) f (stones-pens st)
-   (? (st 'kitty) (mesh-kitty f w h w (h // 2) kitty-id)
+               (mesh-sky lt (st 'wx) e (st 'sim) (st 't) (k = 1 ? 1 (sky-k * k)))))
+ (stones-frame st) (: w (st 'w) h (st 'h) k (peep st 'kp 1) f (stones-pens st)
+   (? (st 'kitty) (mesh-kitty f (k * w) (k * h) w (h // 2) kitty-id)
       (st 'deep) (mesh-cells f w h 1 0 {})
       (mesh-cells f w h 0 (st 'bay) {})))
  ; ..a terminal that shows kitty's pixels, by what it says of itself: mitty, kitty,
@@ -290,11 +298,13 @@
  (cover-of sd) (throw sd 3 89 20 @ k (? (k < 13) 0 (k < 17) 1 (k < 19) 2 3))
  (stones-new w h now sd) (: bs (stones-blocks sd)
    st {'px (slot-x 0.0) 'pz 0.0 'py eye-h 'th 0.0 'ph 0.12 'sim (now 0) 'dst (now 1)
-       'wx (sky-weather (cover-of sd) 'smooth) 't 0 'deep 0 'kitty 0 'done 0
+       'wx (sky-weather (cover-of sd) 'smooth) 't 0 'deep 0 'kitty 0 'kp 1 'done 0
        'blocks bs 'bpk (mesh-pack (mesh-join (map block-mesh bs)))}
    (stones-size st w (h // 2)))
- ; the screen w cells by r rows, two pixels a row, and its dither
- (stones-size st w r) (: h (2 * r) (pins (view! st w h (h // 2)) 'bay (view-bayer w h)))
+ ; the screen w cells by r rows, two pixels a row, and its dither; as kitty's, 'kp times
+ ; as many pixels each way
+ (stones-size st w r) (: h (2 * r)
+   (pins (view! st w h (h // 2)) 'bay (view-bayer w h) 'kp (st 'kitty ? (max2 1 (kitty-w // w)) 1)))
  ; --- moving: over the sand and up the rows, but not up the rock, nor through a block;
  ; sliding along what stops a step. out past the mouth, the run is done ---
  (free? st x z) (: g (stones-ground x z) g0 (stones-ground (st 'px) (st 'pz))
@@ -329,23 +339,37 @@
  (stones-move st) (: g (stones-ground (st 'px) (st 'pz)) y (st 'py)
    (pins st 'sim (st 'sim + 1.0 / fps) 'py (g + eye-h - y @ dy (mag dy < 0.002 ? (g + eye-h) (y + 0.35 * dy)))
             'done (st 'pz < exit-z ? 1 0)))
- ; --- the walk, on view's loop; stones-run raises the stage. md 'kitty or 'cells, or ()
- ; for what the terminal says of itself ---
- (stones-walk md)
-   (view-walk {'new (w \ h \ (: sd (clock 0) now ((cite 'court 'court-now) ())
-                               (pins (stones-new w h now sd) 'deep (elem (getenv "COLORTERM") ["truecolor" "24bit"])
-                                     'kitty (md @ 'kitty 1 'cells 0 (kitty-term? ())))))
+ ; --- the walk, on view's loop; stones-run raises the stage. o's 'md 'kitty or 'cells, or
+ ; () for what the terminal says of itself; its 'time a local hour of today in seconds, or ()
+ ; for now ---
+ (stones-walk o)
+   (view-walk {'new (w \ h \ (: sd (clock 0) now0 ((cite 'court 'court-now) ()) l0 (int (now0 0)) t (o 'time)
+                               now (t = () ? now0 ((cite 'court 'court-local) (86400 * (l0 // 86400) + t)))
+                               k (o 'md @ 'kitty 1 'cells 0 (kitty-term? ()))
+                               (stones-size (pins (stones-new w h now sd) 'deep (elem (getenv "COLORTERM") ["truecolor" "24bit"]) 'kitty k)
+                                            w (h // 2))))
                'size stones-size 'frame stones-frame 'key stones-step
                ; ..the frame's own time, kept for the next frame's keys: a slow frame steps further
                'tick (st \ (clock 0 @ now (pins st 'dt (clamp ((now - peep st 'wall now) / 1000.0) 0.02 0.25) 'wall now),
                             stones-move st))
                'fps fps 'song (hn \ ()) 'linger 800 'next ()})
  ; ..and kitty's picture taken down after, where it was put up
- (stones-run md) (view-run (_ \ stones-walk md), say out kitty-gone, flush out, 0)
- stones-usage "usage: love lore stones [--kitty|--cells]   (h l turn, k j step, u n look; q or esc leaves, or walk back out of the canyon)"
- (stones-main as) (as @ () (stones-run ())
-                       ["--kitty"] (stones-run 'kitty)
-                       ["--cells"] (stones-run 'cells)
-                       (say err ("stones: " + stones-usage + "\n"), flush err, 2))
+ (stones-run o) (view-run (_ \ stones-walk o), say out kitty-gone, flush out, 0)
+ stones-usage "usage: love lore stones [--time HH:MM] [--kitty|--cells]   (h l turn, k j step, u n look; q or esc leaves, or walk back out of the canyon)"
+ ; the words, as a tablet for stones-run, or () where one is wrong or said twice
+ (stones-opts as)
+  (: (num w) (0 < #w && all (c \ 48 <= c <= 57) (chars w) ? <(sound w))
+     (hm w) (w @ (h + ":" + m) (: a (num h) b (num m) (charm? a && charm? b && a < 24 && b < 60 ? (3600 * a + 60 * b)))
+                 _ ())
+     o {}
+     (once k v r) (v = () || o k != () ? () (pin o k v, go r))
+     (go l) (? (atom? l) o
+               (<l = "--kitty") (once 'md 'kitty >l)
+               (<l = "--cells") (once 'md 'cells >l)
+               (two? >l && <l = "--time") (once 'time (hm <>l) >>l)
+               ())
+     (go as))
+ (stones-main as) (stones-opts as @ o
+   (tablet? o ? (stones-run o) (say err ("stones: " + stones-usage + "\n"), flush err, 2)))
  _ ((cite 'lore 'lore-enlist) 'stones (udoor 'stones stones-main stones-usage 1 1)))
 ) ; module stones
