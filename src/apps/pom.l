@@ -178,8 +178,7 @@
  (pom-tint x g tc) (: c (rgb x) (tc ? (g + ";2;" + show (c 0) + ";" + show (c 1) + ";" + show (c 2))
                                   (g + ";5;" + show (pom-xterm x))))
  (pom-cells g tc)
-  (: (sgr c s) ("\e[" + c + "m" + s + "\e[0m")
-     (cell t b) (? (!(charm? t) && !(charm? b)) " "
+  (: (cell t b) (? (!(charm? t) && !(charm? b)) " "
                    !(charm? b) (sgr (pom-tint t "38" tc) "▀")
                    !(charm? t) (sgr (pom-tint b "38" tc) "▄")
                    (sgr (pom-tint t "38" tc + ";" + pom-tint b "48" tc) "▀"))
@@ -187,12 +186,11 @@
 
  ; --- the runner ------------------------------------------------------------------
  pom-usage "usage: love pom [-d] [-e] [[[[[[cc]yy]mm]dd]HH]] | -p [N] | -s [N] | -n [N]"
- (dig? c) (48 <= c < 58)
- (digits? s) (#s ? (all dig? (map s ^#s)) 0)
+ (digits? s) (#s ? (all digit? (map s ^#s)) 0)
  (env k) (getenv k @ v (string? v ? v ""))
  ; a leading run of digits, perl's reading of a number, and d for none or zero
  (envnum k d) (: v (env k)
-                 (go i) (i < #v && dig? (v i) ? (go (i + 1)) i)
+                 (go i) (i < #v && digit? (v i) ? (go (i + 1)) i)
                  n (unum (snip v 0 (go 0)))
                  (n ? n d))
  (fail s) (say err ("pom: " + s + "\n"), flush err, 1)

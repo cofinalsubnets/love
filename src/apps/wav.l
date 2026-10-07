@@ -8,6 +8,8 @@
 ;                          two channels: a cask
 ;   wav-sniff wav-meta wav-pump   the decoder door (notes/plan/av.md); a wav's meta is its
 ;                          own format
+;   (wav-s16 nm m)      -> the format tablet of a decoder's s16 named nm, in m's shape
+;   (wav-gulp q) (wav-drain hn)  a port's next bytes (() at its end); a horn waited out
 ;   (aplay-main as)     -> the verb: `love aplay [-q] [-t wav|raw] [-f F] [-c N] [-r N]
 ;                          [-d SECS] [-s FRAMES] [FILE..]`
 ;
@@ -15,7 +17,9 @@
 ; 'kind (s u f mu a), 'big, and for a stream 'ch 'rate 'align. conversion is ffmpeg's:
 ; integers floor down to 16 bits, floats round half to even and saturate, the laws are g.711's.
 ; past two channels the first two are played. a stream is read a gulp at a time.
-(module (wav wav-head wav-format wav-pcm wav-desc wav-sniff wav-meta wav-pump aplay-main aplay-usage)
+(module (wav wav-head wav-format wav-pcm wav-desc wav-sniff wav-meta wav-pump wav-gulp wav-drain wav-s16
+             aplay-main aplay-usage)
+(borrow 'bytes)
 (:
    peepv (cite 'guts 'peepv) pinv (cite 'guts 'pinv)
    open (cite 'posix 'open) close (cite 'posix 'close)
@@ -42,18 +46,19 @@
                     (<<l = u) (<l @ [n w b k g d] {'name n 'w w 'bits b 'kind k 'big g 'desc d})
                     (go >l))
           (go wav-rows)))
+   ; a decoder's s16, named nm, in m's shape
+   (wav-s16 nm m) {'name nm 'desc nm 'w 2 'bits 16 'kind 's 'big 0 'ch (m 'ch) 'rate (m 'rate) 'align (2 * m 'ch)}
    (wav-desc f) (f 'desc + ", Rate " + show (f 'rate) + " Hz, "
                  + (f 'ch @ 1 "Mono" 2 "Stereo" n ("Channels " + show n)))
 
    ; --- the RIFF walk --------------------------------------------------------
-   (wav-le s i n) (foldl (\ a j (a * 256 + s (i + j))) 0 (rev ^n))
    (wav-hex n) (: d "0123456789abcdef" (string (map (k \ d ((n >> k) & 15)) [12 8 4 0])))
    ; the fmt chunk at p, of size z -> a format tablet | why not
    (wav-fmt s p z)
-    (: tag0 (wav-le s p 2)
-       tag (tag0 = 65534 && z >= 26 ? (wav-le s (p + 24) 2) tag0)
-       ch (wav-le s (p + 2) 2) rate (wav-le s (p + 4) 4)
-       align (wav-le s (p + 12) 2) bits (wav-le s (p + 14) 2)
+    (: tag0 (rdle s p 2)
+       tag (tag0 = 65534 && z >= 26 ? (rdle s (p + 24) 2) tag0)
+       ch (rdle s (p + 2) 2) rate (rdle s (p + 4) 4)
+       align (rdle s (p + 12) 2) bits (rdle s (p + 14) 2)
        name (? (tag = 1) (bits @ 8 "U8" 16 "S16_LE" 32 "S32_LE"
                                24 (ch && align // ch = 4 ? "S24_LE" "S24_3LE") ())
                (tag = 3) (bits @ 32 "FLOAT_LE" 64 "FLOAT64_LE" ())
@@ -69,7 +74,7 @@
    (wav-head s)
     (: (go i f sk)
         (? (#s < i + 8) ['more (i + 8)]
-           (: id (snip s i (i + 4)) z (wav-le s (i + 4) 4) nx (i + 8 + z + (z & 1))
+           (: id (snip s i (i + 4)) z (rdle s (i + 4) 4) nx (i + 8 + z + (z & 1))
               (? (id = "data") (? !(tablet? f) "a WAVE-file with no fmt chunk ahead of its data"
                                   (pins f 'at (i + 8) 'len (z = 0 || z = 4294967295 ? -1 z) 'skip (rev sk)))
                  (id = "fmt ") (? (#s < i + 8 + z) ['more (i + 8 + z)]
@@ -121,6 +126,10 @@
         (each ^o (k \ pinv out (2 * k) 2 (2 * o) (wav-chan f n c k)), out)))
 
    ; --- the decoder door ------------------------------------------------------
+   ; the port's next bytes, () at its end
+   (wav-gulp q) (see q @ -1 () c (unsee q c, chug q))
+   ; the horn's close drops what it holds, so it is waited out first
+   (wav-drain hn) (horn-lag hn @ n (charm? n && 0 < n ? (rest 10, wav-drain hn) 0))
    (wav-sniff s) (? (#s < 12) (#s < 4 || "RIFF" = snip s 0 4 ? 'more 0)
                     ("RIFF" = snip s 0 4 && "WAVE" = snip s 8 12) 1
                     0)
@@ -128,15 +137,14 @@
                               m (tablet? m ? (pin m 'total (m 'len < 0 ? 0 (m 'len // m 'align))) m))
    (wav-pump q h0 m emit)
     (: align (m 'align)
-       (gulp _) (see q @ -1 () c (unsee q c, chug q))
        (cut h left) (left < 0 || #h <= left ? h (snip h 0 left))
        (go h left)
         (: k (#h // align * align)
            _ (0 < k ? (emit (snip h 0 k)) ())
            r (snip h k #h)
            (? (left = 0) 0
-              (gulp () @ g (? !(string? g) 0
-                              (: g2 (cut g left) (go (r + g2) (left < 0 ? left (left - #g2))))))))
+              (wav-gulp q @ g (? !(string? g) 0
+                                 (: g2 (cut g left) (go (r + g2) (left < 0 ? left (left - #g2))))))))
        (cut h0 (m 'len) @ h1 (go h1 (m 'len < 0 ? -1 (m 'len - #h1)))))
 
    ; --- the verb -------------------------------------------------------------
@@ -148,12 +156,9 @@
    (aplay-fail m) (say err ("aplay: " + m + "\n"), flush err, 1)
    (aplay-int s) (string? s && #s && all (c \ 48 <= c <= 57) (chars s)
                   ? (foldl (\ a c (a * 10 + c - 48)) 0 (chars s)))
-   ; the horn's close drops what it holds, so wait it out as aplay's drain does
-   (aplay-drain hn) (horn-lag hn @ n (charm? n && 0 < n ? (rest 10, aplay-drain hn) 0))
    ; held bytes then the port's gulps, a whole frame at a time, out the horn
    (aplay-pump q h0 f left cap hn)
     (: align (f 'align)
-       (gulp _) (see q @ -1 () c (unsee q c, chug q))
        ; the whole frames held go out before the end is asked, so the last gulp plays too
        (go h left cap)
         (: k (#h // align @ j (cap < 0 ? j (min j cap)))
@@ -161,8 +166,8 @@
                          (pour c 0 h 0 m, say hn (wav-pcm f k c),
                           go (snip h m #h) left (cap < 0 ? cap (cap - k))))
               (left = 0 || cap = 0) 1
-              (gulp () @ g (? !(string? g) 1 (: g2 (left < 0 || #g <= left ? g (snip g 0 left))
-                                                (go (h + g2) (left < 0 ? left (left - #g2)) cap))))))
+              (wav-gulp q @ g (? !(string? g) 1 (: g2 (left < 0 || #g <= left ? g (snip g 0 left))
+                                                   (go (h + g2) (left < 0 ? left (left - #g2)) cap))))))
        (go (left < 0 || #h0 <= left ? h0 (snip h0 0 left)) (left < 0 ? left (max 0 (left - #h0))) cap))
    ; one input, its port q named nm: read the head, open the horn, pump
    (aplay-one o q nm)
@@ -186,7 +191,7 @@
                  horn (f 'rate) (min 2 (f 'ch)) @ hn
                   (nom? hn ? (aplay-fail ("audio open error: " + show hn))
                    (aplay-pump q h f (wav ? (r 'len) -1) cap hn,
-                    flush hn, aplay-drain hn, close hn, 0)))))))
+                    flush hn, wav-drain hn, close hn, 0)))))))
    (aplay-file o p)
     (? (p = "-") (aplay-one o in "stdin")
        (open p "r" @ q

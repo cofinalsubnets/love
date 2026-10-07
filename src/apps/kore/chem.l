@@ -54,20 +54,19 @@
                      (: (e j) (j < n && !(ch-blank? (s j)) ? (e (j + 1)) j)
                         j (e i) (go j (snip s i j . acc))))
        (go 0 ()))
-   (ch-dig? c) (48 <= c <= 57)
    ; a moiety's name: its letters and figures
-   (ch-name w) (cats (map (c \ string c) (filter (c \ (ch-upper? c || (97 <= c <= 122) || ch-dig? c)) (ch-chars w))))
+   (ch-name w) (cats (map (c \ string c) (filter (c \ (ch-upper? c || (97 <= c <= 122) || digit? c)) (ch-chars w))))
    ; its text for troff: figures lowered and shrunk, one point between figures kept among
    ; them, a point before one raised
    (ch-text w)
     (: n #w o (jug 0)
-       (digs i) (i < n && ch-dig? (w i) ? (digs (i + 1)) i)
+       (digs i) (i < n && digit? (w i) ? (digs (i + 1)) i)
        (go i) (? (n <= i) (slurp o)
-                 (ch-dig? (w i))
-                  (: j (digs i) k (j + 1 < n && w j = 46 && ch-dig? (w (j + 1)) ? (digs (j + 1)) j)
+                 (digit? (w i))
+                  (: j (digs i) k (j + 1 < n && w j = 46 && digit? (w (j + 1)) ? (digs (j + 1)) j)
                      (say o ("\\s-3\\d" + snip w i k + "\\u\\s+3"),
                       go k))
-                 (w i = 46 && i + 1 < n && ch-dig? (w (i + 1)))
+                 (w i = 46 && i + 1 < n && digit? (w (i + 1)))
                   (say o "\\v#-.3m#.\\v#.3m#", go (i + 1))
                  (put o (w i), go (i + 1)))
        (go 0))
@@ -265,7 +264,7 @@
    ; groff's chem.pic, which the diagrams lean on
    (ch-macros _)
     (: d "/usr/share/groff"
-       vs (udirp d ? (sort (filter (e \ 0 < #e && ch-dig? (e 0)) (readdir d))))
+       vs (udirp d ? (sort (filter (e \ 0 < #e && digit? (e 0)) (readdir d))))
        hit (filter (v \ two? (stat (d + "/" + v + "/tmac/chem.pic"))) vs)
        (two? hit ? (d + "/" + <hit + "/tmac/chem.pic") "chem.pic"))
    (ch-start s)

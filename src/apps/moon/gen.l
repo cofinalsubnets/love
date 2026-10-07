@@ -1768,6 +1768,175 @@
              (li r2 3689348814741910323) (mov r1 r0) (shr r1 2) (and r1 r1 r2) (and r0 r0 r2) (add r0 r0 r1)
              (li r2 1085102592571150095) (mov r1 r0) (shr r1 4) (add r0 r0 r1) (and r0 r0 r2))
            + fold 8 + fold 16 + fold 32 + '((li r2 127) (and r0 r0 r2)))))
+   ; -- gcc's __atomic and __sync families. atomop names the form from the spelling -> (kind ..) | ();
+   ; the generic (non-_n) forms take their operands by address and are refused by name --
+   (aop o) (o @ "add" 'add "sub" 'sub "and" 'and "or" 'or "xor" 'xor "nand" 'nand ())
+   (atomop bi)
+    (bi @ ("__atomic_" + s)
+            (s @ "load_n" ['load] "store_n" ['store] "exchange_n" ['rmw 'set 'old] "compare_exchange_n" ['cas]
+                 "test_and_set" ['tas] "clear" ['clear] "thread_fence" ['fence] "signal_fence" ['sfence]
+                 ("always_lock_free" || "is_lock_free") ['lockfree]
+                 ("load" || "store" || "exchange" || "compare_exchange") ['generic]
+                 ("fetch_" + o) (aop o @ k (k = () ? () ['rmw k 'old]))
+                 (o + "_fetch") (aop o @ k (k = () ? () ['rmw k 'new]))
+                 ())
+          ("__sync_" + s)
+            (s @ "synchronize" ['fence] "val_compare_and_swap" ['vcas] "bool_compare_and_swap" ['bcas]
+                 ("fetch_and_" + o) (aop o @ k (k = () ? () ['rmw k 'old]))
+                 (o + "_and_fetch") (aop o @ k (k = () ? () ['rmw k 'new]))
+                 ())
+          ())
+   ; the bytes of a little-endian word, and a thumb2 32-bit instruction (its high halfword first)
+   (le2 x) [(x & 255) (x >> 8 & 255)]
+   (le4 x) (le2 (x & 65535) + le2 (x >> 16))
+   (tw x) (le2 (x >> 16) + le2 (x & 65535))
+   ; the widths an exclusive loop lays: riscv's lr/sc are word and doubleword only, armv7-m has
+   ; no doubleword exclusive, armv6-m none at all (gcc calls libatomic there); wasm is one thread
+   (awidths g) (? (wasm? g) '(1 2 4 8) (v6m? g) () (rv64? g) '(4 8) (t32? g) '(1 2 4) '(1 2 4 8))
+   (amw g pt) (? (ptr? pt) (wsize g) (elem pt '(char schar cchar uchar bool)) 1 (elem pt '(short ushort)) 2
+                 (elem pt '(int uint)) 4 (elem pt '(long ulong llong ullong)) (tsz g pt) ())
+   ; a full fence, and a compiler-only one (a raw form nothing moves across)
+   (afence g) (? (wasm? g) () (x64? g) [['raw '(15 174 240)]] (a64? g) [['raw (le4 0xD5033BBF)]]
+                 (rv64? g) [['raw (le4 0x0330000F)]] [['raw (tw 0xF3BF8F5F)]])
+   (abar g) (? (wasm? g) () (x64? g) [['raw '(144)]] (a64? g) [['raw (le4 0xD503201F)]]
+               (rv64? g) [['raw (le4 19)]] [['raw (le2 0xBF00)]])
+   (stw w) (w @ 1 'st1 2 'st2 4 'st4 'st)
+   ; riscv's R and B shapes
+   (rvr f7 rs2 rs1 f3 rd) (f7 << 25 | rs2 << 20 | rs1 << 15 | f3 << 12 | rd << 7 | 0x33)
+   (rvbr f3 rs1 rs2 off) (: i (off & 0x1FFF)
+                            ((i >> 12 & 1) << 31 | (i >> 5 & 63) << 25 | rs2 << 20 | rs1 << 15 | f3 << 12
+                             | (i >> 1 & 15) << 8 | (i >> 11 & 1) << 7 | 0x63))
+   ; a read-modify-write: pointer r1, operand r2 -> the old value r0, the new r3. one exclusive
+   ; loop (x64 a lock cmpxchg loop) whose branch back is counted here
+   (armw g w op)
+    (? (wasm? g)
+        ([[(uldop w) 'r0 'r1 0] '(mov r3 r0)]
+         + (op @ 'set '((mov r3 r2)) 'nand '((and r3 r3 r2) (li r2 -1) (xor r3 r3 r2)) [[op 'r3 'r3 'r2]])
+         + [[(stw w) 'r1 0 'r3]])
+       (x64? g)
+        (: ld (w @ 1 '(15 182 1) 2 '(15 183 1) 4 '(139 1) '(72 139 1))     ; movzx/mov rax, [rcx]
+           body ('(72 137 195)                                              ; mov rbx, rax
+                 + (op @ 'add '(72 1 211) 'sub '(72 41 211) 'and '(72 33 211) 'or '(72 9 211)
+                         'xor '(72 49 211) 'nand '(72 33 211 72 247 211) 'set '(72 137 211))
+                 + [240] + (w @ 2 [102] 8 [72] ()) + [15 (w = 1 ? 176 177) 25])   ; lock cmpxchg [rcx], rbx
+           ; rbx is named once outside the raw, so the callee-saved save sees it written
+           ['(li r3 0) ['raw (ld + body + [117 (256 - (#body + 2))])]])     ; jne back
+       (a64? g)
+        (: lx ((w @ 1 0x085FFC00 2 0x485FFC00 4 0x885FFC00 0xC85FFC00) | 32)          ; ldaxr x0, [x1]
+           sx ((w @ 1 0x0800FC00 2 0x4800FC00 4 0x8800FC00 0xC800FC00) | 4 << 16 | 32 | 3)   ; stlxr w4, x3, [x1]
+           ops (op @ 'add [0x8B020003] 'sub [0xCB020003] 'and [0x8A020003] 'or [0xAA020003] 'xor [0xCA020003]
+                     'nand [0x8A020003 0xAA2303E3] 'set [0xAA0203E3])
+           body ([lx] + ops + [sx])
+           [['raw (catall (map le4 (body + [(0x35000000 | ((0x80000 - #body) & 0x7FFFF) << 5 | 4)   ; cbnz w4, back
+                                            0xD5033BBF])))]])
+       (rv64? g)
+        (: f3 (w = 4 ? 2 3)
+           lr (2 << 27 | 3 << 25 | 11 << 15 | f3 << 12 | 10 << 7 | 0x2F)             ; lr.aqrl a0, (a1)
+           sc (3 << 27 | 3 << 25 | 13 << 20 | 11 << 15 | f3 << 12 | 14 << 7 | 0x2F)   ; sc.aqrl a4, a3, (a1)
+           ops (op @ 'add [(rvr 0 12 10 0 13)] 'sub [(rvr 32 12 10 0 13)] 'and [(rvr 0 12 10 7 13)]
+                     'or [(rvr 0 12 10 6 13)] 'xor [(rvr 0 12 10 4 13)]
+                     'nand [(rvr 0 12 10 7 13) (0xFFF << 20 | 13 << 15 | 4 << 12 | 13 << 7 | 0x13)]
+                     'set [(12 << 15 | 13 << 7 | 0x13)])
+           body ([lr] + ops + [sc])
+           [['raw (catall (map le4 (body + [(rvbr 1 14 0 (-4 * #body))])))]])       ; bnez a4, back
+       (: lx (w @ 1 0xE8D10F4F 2 0xE8D10F5F 0xE8510F00)                ; ldrex{b,h} r0, [r1]
+          sx (w @ 1 0xE8C13F44 2 0xE8C13F54 0xE8413400)                ; strex{b,h} r4, r3, [r1]
+          ops (op @ 'add [0xEB000302] 'sub [0xEBA00302] 'and [0xEA000302] 'or [0xEA400302] 'xor [0xEA800302]
+                    'nand [0xEA000302 0xEA6F0303] 'set [0xEA4F0302])
+          body (catall (map tw ([lx] + ops + [sx])) + le2 0x2C00)      ; cmp r4, #0
+          dmb (tw 0xF3BF8F5F)
+          [['raw (dmb + body + le2 (0xD100 | (256 - (#body + 4) // 2) & 255) + dmb)]]))   ; bne back
+   ; a compare-and-swap: expected r0 (widened as the loop's load widens), pointer r1, desired r2 ->
+   ; the old value r0, success (0/1) r2
+   (acas g w)
+    (? (wasm? g)
+        (nlab g ".cas" @ f
+           [[(uldop w) 'r3 'r1 0] '(cmp r3 r0) ['br 'ne f] [(stw w) 'r1 0 'r2] ['label f]
+            '(cmp r3 r0) '(set eq r2) '(mov r0 r3)])
+       (x64? g)
+        ['(li r3 0) ['raw ([240] + (w @ 2 [102] 8 [72] ()) + [15 (w = 1 ? 176 177) 17]   ; lock cmpxchg [rcx], rdx
+                           + '(15 148 195 15 182 219))]                                  ; sete bl; movzx ebx, bl
+         '(mov r2 r3)]
+       (+ (? (a64? g)
+              (: lx ((w @ 1 0x085FFC00 2 0x485FFC00 4 0x885FFC00 0xC85FFC00) | 32 | 3)          ; ldaxr x3, [x1]
+                 sx ((w @ 1 0x0800FC00 2 0x4800FC00 4 0x8800FC00 0xC800FC00) | 4 << 16 | 32 | 2)   ; stlxr w4, x2, [x1]
+                 [['raw (catall (map le4 [lx 0xEB00007F 0x54000061 sx                 ; cmp x3, x0; b.ne out
+                                          (0x35000000 | (0x80000 - 4) << 5 | 4) 0xD5033BBF]))]])   ; cbnz w4, back
+             (rv64? g)
+              (: f3 (w = 4 ? 2 3)
+                 lr (2 << 27 | 3 << 25 | 11 << 15 | f3 << 12 | 13 << 7 | 0x2F)             ; lr.aqrl a3, (a1)
+                 sc (3 << 27 | 3 << 25 | 12 << 20 | 11 << 15 | f3 << 12 | 14 << 7 | 0x2F)   ; sc.aqrl a4, a2, (a1)
+                 [['raw (catall (map le4 [lr (rvbr 1 13 10 12) sc (rvbr 1 14 0 -12)]))]])   ; bne a3, a0, out; bnez a4, back
+             (: lx (w @ 1 0xE8D13F4F 2 0xE8D13F5F 0xE8513F00)                ; ldrex{b,h} r3, [r1]
+                sx (w @ 1 0xE8C12F44 2 0xE8C12F54 0xE8412400)                ; strex{b,h} r4, r2, [r1]
+                dmb (tw 0xF3BF8F5F)
+                [['raw (dmb + tw lx + le2 0x4283 + le2 0xD103 + tw sx + le2 0x2C00 + le2 0xD1F7 + dmb)]]))
+          '((cmp r3 r0) (set eq r2) (mov r0 r3))))
+   ; the expected value as the loop's own load leaves it: riscv's lr.w sign-extends, the
+   ; exclusive loads elsewhere zero-extend (x64's cmpxchg reads the low w bytes)
+   (aexp g w) (? (x64? g || w = 8) () (rv64? g && !(wasm? g)) (w = 4 ? '((sx4 r0))) [[(w @ 1 'zx1 2 'zx2 'zx4) 'r0]])
+   ; a memory order: a constant 0 is relaxed; any other answer, one known only at run time, or
+   ; none, is laid as seq_cst, which every order permits -> (order forms) | 'bad
+   (amo g env a) (? !(two? a) [5 ()] (<a = 'num) [<>a ()]
+                    (cgexpr g env a () @ e (bad? e ? 'bad [5 (vfs e)])))
+   (cgatomic g env k bi args)
+    (: kind <k
+       ; __sync's forms carry no order, and are full barriers
+       mo1 (amo g env (? (bi @ ("__sync_" + _) 1 ()) () (elem kind '(lockfree generic)) () (args (#args - 1))))
+       (? (bad? mo1) 'bad
+          (kind = 'generic) (nolane g (bi + " is not carried out (its _n form is)"))
+          (kind = 'fence) (mkv 'long 'r0 (<>mo1 + (<mo1 = 0 ? () (afence g))))
+          (kind = 'sfence) (mkv 'long 'r0 (<>mo1 + abar g))
+          (kind = 'lockfree)
+           ; the size is a constant (a sizeof folds to one, under its size_t cast)
+           (: (num l) (? (two? l && <l = 'num) <>l (two? l && <l = 'cast) (num (l 2)) ())
+              n (num <args)
+              (charm? n ? (mkv 'int 'r0 [['li 'r0 (elem n (awidths g) ? 1 0)]])
+                 (nolane g (bi + " wants a constant size"))))
+          (cgexpr g env <args () @ e1
+             (: pt (two? (vty e1) && <(vty e1) = 'ptr ? <>(vty e1))
+                w (pt ? (amw g pt))
+                rmw? (elem kind '(rmw cas vcas bcas tas))
+                (? (bad? e1) 'bad
+                   !w (nolane g ("no lane for " + bi + " on this type"))
+                   (t32? g && w = 8) (nolane g ("no lane for an 8-byte " + bi + ontgt g))
+                   (rmw? && !(elem (kind = 'tas ? 1 w) (awidths g)))
+                    (nolane g ("no lane for " + bi + " on a " + show (kind = 'tas ? 1 w) + "-byte object" + ontgt g))
+                   (kind = 'load)
+                    (mkv pt 'r0 (<>mo1 + tor0 g e1 + (<mo1 = 5 && !(x64? g) ? (afence g))
+                                 + [[(ldop pt) 'r0 'r0 0]] + (<mo1 = 0 || x64? g ? () (afence g))))
+                   (kind = 'clear)
+                    (mkv 'long 'r0 (<>mo1 + tor0 g e1 + '((mov r1 r0) (li r0 0)) + (<mo1 = 0 ? () (afence g))
+                                    + '((st1 r1 0 r0)) + (<mo1 = 5 ? (afence g))))
+                   (kind = 'tas)
+                    (mkv 'int 'r0 (<>mo1 + tor0 g e1 + '((mov r1 r0) (li r2 1)) + armw g 1 'set
+                                   + '((zx1 r0) (cmp r0 0) (set ne r0))))
+                   (kind = 'cas)
+                    ; the expected value is read through its pointer, and written back there on failure
+                    (cgexpr g env (args 1) () @ ep
+                       (cgexpr g env (args 2) () @ dv
+                          (? (bad? ep || bad? dv) 'bad
+                             (nlab g ".casok" @ ok
+                                (mkv 'int 'r0 (<>mo1 + tor0 g ep + spush 'r0 + tor0 g e1 + spush 'r0 + asint g dv
+                                               + '((mov r2 r0)) + spop 'r1 + [['ld 'r0 'sp 0] [(uldop w) 'r0 'r0 0]]
+                                               + aexp g w + acas g w + spop 'r1
+                                               + ['(cmp r2 0) ['br 'ne ok] [(stw w) 'r1 0 'r0] ['label ok] '(mov r0 r2)]))))))
+                   (cgexpr g env (args 1) () @ e2
+                      (? (bad? e2) 'bad
+                         (kind = 'store)
+                          (mkv 'long 'r0 (<>mo1 + tor0 g e1 + spush 'r0 + asint g e2 + spop 'r1
+                                          + (<mo1 = 0 || x64? g ? () (afence g))
+                                          + [[(stop pt) 'r1 0 'r0]] + (<mo1 = 5 ? (afence g))))
+                         (kind = 'rmw)
+                          (mkv pt 'r0 (<>mo1 + tor0 g e1 + spush 'r0 + asint g e2 + spop 'r1 + '((mov r2 r0))
+                                       + armw g w (k 1) + (k 2 = 'new ? '((mov r0 r3))) + cvt pt 'r0))
+                         ; __sync's compare-and-swap: (p old new), the old value or the success
+                         (cgexpr g env (args 2) () @ e3
+                            (bad? e3 ? 'bad
+                               (: pre (tor0 g e1 + spush 'r0 + asint g e2 + spush 'r0 + asint g e3
+                                       + '((mov r2 r0)) + spop 'r0 + aexp g w + spop 'r1 + acas g w)
+                                  (kind = 'vcas ? (mkv pt 'r0 (pre + cvt pt 'r0))
+                                     (mkv 'int 'r0 (pre + '((mov r0 r2)))))))))))))))
    (cgbuiltin g env bi args)                       ; a builtin call -> its value | 'bad; not one -> 'no
     (?- 'no                                        ; "not a builtin" first: its clauses run 250 lines
        (elem bi '("__builtin_trap" "__builtin_unreachable"))
@@ -1941,6 +2110,8 @@
                     + popops g w32 + [['label lz]])))))
        ; the __sync spin-lock pair: test_and_set is the acquire exchange (xchg / ldaxr+stxr / amoswap.aq),
        ; release a release-ordered store of 0. the pointee sizes the exchange (4/8); an unsized one refuses
+       ; the rest of __atomic and __sync (atomop): the lock pair below keeps its own lanes
+       (atomop bi) (cgatomic g env (atomop bi) bi args)
        (elem bi '("__sync_lock_test_and_set" "__sync_lock_release"))
         (: e1 (cgexpr g env <args ())
            pt (two? (vty e1) && <(vty e1) = 'ptr ? <>(vty e1))
@@ -2580,8 +2751,35 @@
               (t32? g && (flo? ty || llt? ty || stru? ty))        ; t32 va_arg reads words only (love.c's shape)
                (nolane g ("no lane for a double/pair/struct va_arg" + ontgt g))
               (d128? ty) (nolane g "a wide va_arg is not carried")
-              ; a64: a memory-class struct's slot holds its copy's address, which is the value; any other struct's holds data
-              (a64? g && stru? ty && !(a64m? g ty)) (nolane g ("no lane for a va_arg of this struct" + ontgt g))
+              ; a by-value struct's bytes lie in place, so the value is the address its slots start at. a64's memory
+              ; class rides the pointer path below: its slot holds its copy's address, which is the value
+              (stru? ty && !(a64m? g ty))
+               (: n8 (8 * aslots g ty)
+                  gpo (aone g ty = 'int || ipair? g ty)        ; every eightbyte INT
+                  stk ['(ld r2 r0 0) '(mov r3 r2) ['add 'r3 'r3 n8] '(st r0 0 r3)]   ; p = the stack cursor; it steps past
+                  done (seq \ mkv ty 'r0 (tor0 g lv + seq + ['(mov r0 r2)]))
+                  (? (8 < asalign g ty) (nolane g ("no lane for a va_arg of a struct aligned past 8" + ontgt g))
+                     ; AAPCS64: from the x save area while __gr_offs + its size stays <= 0, else from __stack, and the
+                     ; gp file closes behind it. an HFA would want the q save area's 16-byte steps gathered
+                     (a64? g)
+                      (hfab g ty @ b (flo? b) ?
+                         (nolane g ("no lane for a va_arg of a float aggregate" + ontgt g))
+                         (done ([['ld4 'r1 'r0 24] '(cmp r1 0) ['br 'ge lov]
+                                 '(mov r3 r1) ['add 'r3 'r3 n8] ['st4 'r0 24 'r3]
+                                 '(cmp r3 1) ['br 'ge lov]
+                                 '(ld r2 r0 8) '(add r2 r2 r1) ['jmp ld] ['label lov]]
+                                + stk + [['label ld]])))
+                     ; riscv: __ap walks the slots whole
+                     (rv64? g) (gpo ? (done stk) (nolane g ("no lane for a va_arg of this struct" + ontgt g)))
+                     ; SysV: a memory-class one lies in the overflow area; an INT one comes from the gp save area while
+                     ; gp_offset + its size stays <= 48, else whole from the overflow area, gp_offset unmoved
+                     (: ovs ['(ld r2 r0 8) '(mov r3 r2) ['add 'r3 'r3 n8] '(st r0 8 r3)]
+                        (? (amem? g ty) (done ovs)
+                           gpo (done ([['ld4 'r1 'r0 0] ['cmp 'r1 (49 - n8)] ['br 'ge lov]
+                                       '(ld r2 r0 16) '(add r2 r2 r1) ['add 'r1 'r1 n8] ['st4 'r0 0 'r1]
+                                       ['jmp ld] ['label lov]]
+                                      + ovs + [['label ld]]))
+                           (nolane g ("no lane for a va_arg of this struct" + ontgt g))))))
               (flo? ty) (mkv 'double 'r0 (tor0 g lv + walk + fldf ty 'f0 'r2 0))
               (mkv ty 'r0 (tor0 g lv + walk + [[(ldop ty) 'r0 'r2 0]]))))
        ('vaend . _) (mkv 'long 'r0 ())
@@ -2767,10 +2965,16 @@
                            f1 (a64? g ? (hfa ? 'x 'g) (c1 @ 'sse 'x 'g))
                            gpn ((f0 @ 'g 1 0) + (f1 @ 'g 1 0))
                            xmn ((f0 @ 'x 1 0) + (f1 @ 'x 1 0))
-                           ; register-exhausted: SysV sends the whole aggregate to the overflow block. x64 only -- AAPCS64 closes the
-                           ; gp file behind a stack composite and riscv splits one across the seam, so they refuse
+                           ; register-exhausted: SysV sends the whole aggregate to the overflow block; AAPCS64 sends a gp one there
+                           ; and closes the gp file behind it (C.13); riscv splits one across the seam, and an a64 HFA, so they refuse
                            (ngp g < gpc + gpn || 8 < xmmc + xmn ?
-                               (arm? g ? 'bad             ; arm? is every non-x64 seat here
+                               (? (a64? g && gpn = 2)
+                                   (: n (tsz g aty) al (tal g aty) o (8 * ovc)
+                                      (kls >as (i + 1) (ngp g) xmmc (ovc + 2)
+                                           (. [['ov ovc 2] (tor0 g a + ldal 'r1 'r0 0 8 al + [['st 'sp o 'r1]]
+                                                            + ldal 'r1 'r0 8 (n - 8) al + [['st 'sp (o + 8) 'r1]])]
+                                              acc)))
+                                  (arm? g) (nolane g ("no lane for a by-value struct past the arg registers" + ontgt g))
                                   (kls >as (i + 1) gpc xmmc (ovc + 2)
                                        (. [['ov ovc 2] (tor0 g a + push2w)] acc)))
                               (: i0 (f0 @ 'g gpc xmmc)
@@ -5494,15 +5698,18 @@
    (doors g tail) (? (a64? g) '(r9 r10 r11 r12 r13 r14 r15)
                      (rv64? g) (wasm? g && !tail ? () '(r8 r9 r10 r11 r12))
                      '(r0 r9 r10))
+   ; a jump's target is a function (a sibcall) when its spelling has no dot: gen's own labels lead
+   ; with one, and a C label is spelled fn.label (a goto) -- neither is an exit
+   (fsym? x) (findsub (show x) "." < 0)
    ; dies on the straight line: overwritten before any read. a ret rides only r0 out; a call or
-   ; sibcall jmp (a function symbol -- labels are dot-interned, 46 = '.') kills the door set
+   ; sibcall jmp kills the door set
    (dies? g rd (f . l))
     (two? f ?
        (rdsp g f @ rs
           (? (rs = 'bar)
               (? (retx? f) (rd != 'r0)
                  (elem <f '(call callr)) (elem rd (doors g 0))
-                 (<f = 'jmp && !(46 = (show <>f 0))) (elem rd (doors g 1))
+                 (<f = 'jmp && fsym? <>f) (elem rd (doors g 1))
                  ())
              (elem rd <rs) ()
              (elem rd <>rs) 1
@@ -5688,7 +5895,7 @@
                      (pin seen <>f 1, go >l wl))
                  (<f = 'align) (go >l wl)          ; a loop head's pad: no register effect
                  (elem <f '(jmp jmp8))
-                  (? (46 = show <>f 0) (next (<>f . wl))
+                  (? !(fsym? <>f) (next (<>f . wl))
                      ; a tail jump to a function: an exit reading its arguments -- the door set alone dies (dies?'s law)
                      (elem rd (doors g 1)) (next wl)
                      ())
@@ -5803,7 +6010,7 @@
                            (? (n = 'top) 0
                               (o = 'top || #n < #o) (pin inn L n, 1)
                               0)))
-          (local? L) (46 = show L 0)
+          (local? L) !(fsym? L)
           ; an and by a 32-bit mask straight after clears the top itself
           (masked r n) (two? n && <n = 'and && <>n = r && <>>n = r && u32? (n 3))
           (round l K ch)
@@ -7637,6 +7844,7 @@
                     tab {}                ; this switch's value->label map (and 'dflt->label)
                     cases (rev (scasel-l g items tab ()))   ; pre-scan the body at any depth -> (value label) dispatch pairs
                     dflt (peep tab 'dflt lend)
+                    dup9 (peep tab 'dup ())
                     ; a range is two compares in the control's own signedness, r1 the scratch as
                     ; a single case's: below lo skips past, at most hi takes the case
                     (rng lo hi lab)
@@ -7663,8 +7871,9 @@
                     (pins g 'brk >(g 'brk)
                             'brkm >(g 'brkm)
                             'cases >(g 'cases),      ; pop
-                     bad? body || bad? disp ? 'bad
-                       (vfs c + disp + [['jmp dflt]] + (body + [['label lend]]))))))))
+                     (? dup9 (nolane g "a duplicate case value, or a second default, in one switch")
+                        (bad? body || bad? disp) 'bad
+                        (vfs c + disp + [['jmp dflt]] + (body + [['label lend]])))))))))
    (cgitems g env items acc) (sxpre g env items acc @ r (bad? r ? 'bad <r))   ; a block's items -> forms | 'bad
 
    ; -- the switch's table lane -> forms | 'no (the caller keeps its chain). index = control - lo, so one
@@ -7767,11 +7976,17 @@
                + [['expr ['asn (rx || ['deref (v "r")]) ['cast tt ['cond n ['un 'neg m] m]]]]])
               ['lor o ['un 'not fit]] 'int])))
    ; a switch body's case/default labels at any depth: value->label pinned into tab -> (value label) dispatch pairs
+   ; a value or range another label already holds (C11 6.8.4.2p3), or a second default, marks 'dup
+   (scover? tab a b)
+    (any (k \ (? (charm? k) (a <= k && k <= b) (two? k) (<k <= b && a <= <>k) ())) (keys tab))
    (scasel g it tab acc)
     (!(two? it) ? acc
-       (it @ ('case lo hi)  (nlab g ".k" @ lab (pin tab [lo hi] lab, [[lo hi] lab . acc]))   ; a range: one label
-             ('case cv)     (nlab g ".k" @ lab (pin tab cv lab, [cv lab . acc]))
-             ('dflt . _)   (nlab g ".k" @ lab (pin tab 'dflt lab, acc))
+       (it @ ('case lo hi)  (: _ (scover? tab lo hi && pin tab 'dup 1)
+                               (nlab g ".k" @ lab (pin tab [lo hi] lab, [[lo hi] lab . acc])))   ; a range: one label
+             ('case cv)     (: _ (scover? tab cv cv && pin tab 'dup 1)
+                               (nlab g ".k" @ lab (pin tab cv lab, [cv lab . acc])))
+             ('dflt . _)   (: _ (peep tab 'dflt () && pin tab 'dup 1)
+                              (nlab g ".k" @ lab (pin tab 'dflt lab, acc)))
              ('switch . _) acc                                   ; a nested switch owns its labels
              (scasel-l g (stkids it) tab acc)))
    (scasel-l g l tab acc) (!(two? l) ? acc (scasel-l g >l tab (scasel g <l tab acc)))

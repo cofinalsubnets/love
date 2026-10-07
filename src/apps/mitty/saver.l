@@ -20,9 +20,7 @@
 (borrow 'posix)
 (borrow 'cal)
 (:
- esc (string 27)
  drain-keys (cite 'rove 'drain-keys)
- (upto n f) (: (go i) (? (i < n) (: _ (f i) (go (i + 1))) 0) (go 0))
  ; a cell's own dice, kept under 2^32 at every step so no product leaves the fixnums
  (h32 a) (: h ((a ^ a >> 16) * 73244475 % 4294967296)
             h2 ((h ^ h >> 16) * 73244475 % 4294967296)
@@ -35,7 +33,7 @@
  sky 16
  cw 7
  (cv-new r c) (: n (r * c) z (cask (cw * n))
-                 _ (upto n (i \ cv-set z i 32 blank-fg sky))
+                 _ (each ^n (i \ cv-set z i 32 blank-fg sky))
                  {'r r 'c c 'b (cask (cw * n)) 'z z})
  (cv-wipe cv) (pour (cv 'b) 0 (cv 'z) 0 (cw * cv 'r * cv 'c))
  ; cell i of the canvas's bytes d
@@ -44,7 +42,7 @@
  (cv-set d i g f b) (: k (cw * i) (pin d k g, pen3 d (k + 1) f, pen3 d (k + 4) b))
  (cv-put cv y x g f b) (? (0 <= y < cv 'r && 0 <= x < cv 'c) (cv-set (cv 'b) (y * cv 'c + x) g f b))
  ; ascii only: a byte is a cell
- (cv-text cv y x s f b) (upto #s (i \ cv-put cv y (x + i) (s i) f b))
+ (cv-text cv y x s f b) (each ^#s (i \ cv-put cv y (x + i) (s i) f b))
  (saver-cell cv y x) (: k (cw * (y * cv 'c + x)) d (cv 'b) [(peep d k 0) (pen-at d (k + 1)) (pen-at d (k + 4))])
 
  ; a glyph byte below 128 is itself; these are the ones above
@@ -52,17 +50,17 @@
  hb 128
  twinkle 129
  mail 130
- glyphs (: t {} _ (upto 128 (i \ pin t i (string i))) _ (upto #marks (i \ pin t (128 + i) (marks i))) t)
+ glyphs (: t {} _ (each ^128 (i \ pin t i (string i))) _ (each ^#marks (i \ pin t (128 + i) (marks i))) t)
 
  ; the pens and the cursor's steps right, spelled once
- fgs (: t {} _ (upto 256 (i \ pin t i (esc + "[38;5;" + show i + "m"))) t)
- bgs (: t {} _ (upto 256 (i \ pin t i (esc + "[48;5;" + show i + "m"))) t)
+ fgs (: t {} _ (each ^256 (i \ pin t i ("\e[38;5;" + show i + "m"))) t)
+ bgs (: t {} _ (each ^256 (i \ pin t i ("\e[48;5;" + show i + "m"))) t)
  ; ..and a 24-bit one, its six bits a channel widened
  (rgb-sgr ground v) (: q (v - 256) (ch k) (show ((q >> k & 63) * 255 // 63))
-   (esc + "[" + ground + ";2;" + ch 12 + ";" + ch 6 + ";" + ch 0 + "m"))
+   ("\e[" + ground + ";2;" + ch 12 + ";" + ch 6 + ";" + ch 0 + "m"))
  (fg-sgr f) (f < 256 ? (fgs f) (rgb-sgr "38" f))
  (bg-sgr b) (b < 256 ? (bgs b) (rgb-sgr "48" b))
- rights (: t {} _ (upto 256 (i \ pin t i (esc + "[" + show i + "C"))) t)
+ rights (: t {} _ (each ^256 (i \ pin t i ("\e[" + show i + "C"))) t)
 
  ; the first cell from i on where the bytes a and p differ, n for none: numbers only, so
  ; the scan stays a tight loop
@@ -84,7 +82,7 @@
             (: k (cw * i) g (peep a k 0) f (pen-at a (k + 1)) b (pen-at a (k + 4))
                _ (? (at = i) 0
                     (0 <= at && at // c = i // c) (say j (rights (i - at)))
-                    (say j (esc + "[" + show (i // c + 1) + ";" + show (i % c + 1) + "H")))
+                    (say j ("\e[" + show (i // c + 1) + ";" + show (i % c + 1) + "H")))
                _ (? (f != f0) (say j (fg-sgr f)) 0)
                _ (? (b != b0) (say j (bg-sgr b)) 0)
                _ (say j (glyphs g))
@@ -93,15 +91,12 @@
      _ (go 0 -1 -1 -1)
      _ (pour p 0 a 0 (cw * n))
      s (slurp j)
-     (#s ? (esc + "[?2026h" + s + esc + "[0m" + esc + "[?2026l") ""))
+     (#s ? ("\e[?2026h" + s + "\e[0m\e[?2026l") ""))
 
  ; --- pom: the moon at its phase, large and centred, over stars that twinkle ---
- pom-phase (cite 'pom 'pom-phase)
  pom-name (cite 'pom 'pom-name)
  pom-percent (cite 'pom 'pom-percent)
- ; the phase this hour, utc, as pom reckons it
- (pom-now _) (: s (clock 0 // 1000) d (civil (s // 86400))
-                (pom-phase (s % 86400 // 3600) <>d <>>d <d))
+ pom-now (cite 'pom 'pom-now)                  ; the phase this hour, utc, as pom reckons it
  ; the moon's face is pom's, so `pom -s` prints what this draws
  saver-moon-lit? (cite 'pom 'pom-lit?)
  moon-pen (cite 'pom 'pom-face)
@@ -153,7 +148,7 @@
      fg (peep ramp (peep k (st 'up) 0) 220)
      bg (peep ramp (peep k (st 'lo) 0) 220)
      d (cv 'b)
-     (upto (cv 'r * cv 'c) (i \ cv-set d i hb (peep fg i 0) (peep bg i 0))))
+     (each ^(cv 'r * cv 'c) (i \ cv-set d i hb (peep fg i 0) (peep bg i 0))))
 
  ; --- life: conway's, on a torus of half cells, each cell's age its green ---
  ; a step is eight gathers and a few tray ops, C doing every cell
@@ -189,7 +184,7 @@
      fg (peep life-pens (peep a (st 'up) 0) sky)
      bg (peep life-pens (peep a (st 'lo) 0) sky)
      d (cv 'b)
-     (upto (cv 'r * cv 'c) (i \ cv-set d i hb (peep fg i 0) (peep bg i 0))))
+     (each ^(cv 'r * cv 'c) (i \ cv-set d i hb (peep fg i 0) (peep bg i 0))))
 
  ; --- matrix: green rain, each column a drop of its own speed, length and gap; the head
  ; and every glyph a pure function of the column, the row and the clock ---
@@ -208,8 +203,8 @@
                      fl (dice x y sd 9 = 0 ? (t // 180) 0)
                      (? (0 <= y < r)
                         (cv-put cv y x (33 + dice x y (sd + cyc * 7 + fl + (d = 0) * (t // 90)) 94) (rain-pen d n) sky)))
-         (upto n cell))
-     (upto (cv 'c) col))
+         (each ^n cell))
+     (each ^(cv 'c) col))
 
  ; --- the lore scenes: a screen of pixels two to a cell, drawn as half blocks in the
  ; scene's own dithered pens; the scene ticked as many frames as the clock owes it, a few
@@ -219,7 +214,7 @@
  (scene-pens c bay) (? (elem (getenv "COLORTERM") ["truecolor" "24bit"]) ((cite 'view 'view-deep-pens) c + 256)
                        ((cite 'view 'view-cube-pens) c bay))
  (halves cv px) (: r (cv 'r) c (cv 'c) d (cv 'b)
-   (upto r (y \ upto c (x \ cv-set d (y * c + x) hb (int (peep px (2 * y * c + x) 16))
+   (each ^r (y \ each ^c (x \ cv-set d (y * c + x) hb (int (peep px (2 * y * c + x) 16))
                                       (int (peep px ((2 * y + 1) * c + x) 16))))))
  (owe s want tick) (: (go k) (? (k < 4 && s 'done < want) (: _ (tick 0) _ (pin s 'done (s 'done + 1)) (go (k + 1))) 0)
                       _ (go 0)
@@ -309,9 +304,9 @@
      (fresh t0 nm) (: s2 (saver-make nm r c now ()) (pins s2 't0 t0 'next now, pin w 'on s2, s2))
      (turn _) (: k (w 'k + 1) (pin w 'k k, pick (w 'nm) k))
      (? (w 'last = ()) (pin w 'last now, "")
-        (w 'bye) (pin w 'bye 0, esc + "[0m" + esc + "[?25h")
+        (w 'bye) (pin w 'bye 0, "\e[0m\e[?25h")
         (s = ()) (? (0 < w 'idle && w 'idle <= now - w 'last)
-                    (: s2 (fresh now (turn 0)) (pin w 'n0 news, esc + "[?25l" + saver-step s2 now 0))
+                    (: s2 (fresh now (turn 0)) (pin w 'n0 news, "\e[?25l" + saver-step s2 now 0))
                     "")
         (r != s 'r || c != s 'c) (saver-step (fresh (s 't0) (s 'nm)) now (news-pen w news))
         (w 'nm = "cycle" && cycle-ms <= now - s 't0) (saver-step (fresh now (turn 0)) now (news-pen w news))

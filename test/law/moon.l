@@ -314,6 +314,11 @@
       (elem '(jmp f) <>(cgn "int f(int n) { return n + 1; } int h(int n) { __attribute__((musttail)) return f(n); } int main() { return h(3); }"))
       (refused? (cgn "int f() { return 1; }"))                      ; no main, no program
       (gripe? (cgn "int main() { return y; }"))              ; undeclared name -- a named refusal now (rung 1)
+      ; one switch, one label per value (C11 6.8.4.2p3): a repeat, a value a range holds, a second default
+      (gripe? (cgn "int main() { switch (1) { case 1: return 2; case 1: return 3; } return 0; }"))
+      (gripe? (cgn "int main() { switch (1) { case 1 ... 5: return 2; case 3: return 3; } return 0; }"))
+      (gripe? (cgn "int main() { switch (1) { default: return 2; default: return 3; } }"))
+      !(refused? (cgn "int main() { switch (1) { case 1: switch (2) { case 1: return 4; } default: return 0; } }"))   ; a nested switch owns its own
       (refused? (cgn "int main() { return 5=3; }"))                 ; not an lvalue
       (refused? (cgn "int main() { break; }"))                      ; no loop to leave
       (two? (cgn "int main() { int a=1; int b=2; return a<<b; }"))  ; variable shifts ride shlv now

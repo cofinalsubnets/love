@@ -217,6 +217,14 @@ printf '#pragma pack(1)\nstruct s { char c; int i : 20; int j : 20; };\n' > "$ho
 moonrun -c -o /dev/null "$ho/.attr.c" 2>&1 | grep -q "a bit-field under #pragma pack" || fail "a packed bit-field was laid"
 printf 'typedef union { char *p; short s; } u __attribute__((transparent_union));\n' > "$ho/.attr.c"
 moonrun -c -o /dev/null "$ho/.attr.c" 2>&1 | grep -q "a transparent union wants" || fail "a mixed transparent union was taken"
+# the atomics are carried (test/cc/265); a generic form, a width a target's exclusives do not
+# reach, and armv6-m's read-modify-write refuse by name
+printf 'int f(int *p, int *r) { __atomic_load(p, r, 5); return *r; }\n' > "$ho/.attr.c"
+moonrun -c -o /dev/null "$ho/.attr.c" 2>&1 | grep -q "__atomic_load is not carried out" || fail "a generic __atomic_load was taken"
+printf 'int f(char *p) { return __atomic_fetch_add(p, 1, 5); }\n' > "$ho/.attr.c"
+moonrun -t rv64 -c -o /dev/null "$ho/.attr.c" 2>&1 | grep -q "on a 1-byte object on rv64" || fail "a byte atomic add was laid on rv64"
+printf 'int f(int *p) { return __sync_fetch_and_add(p, 1); }\n' > "$ho/.attr.c"
+moonrun -t thumb1 -c -o /dev/null "$ho/.attr.c" 2>&1 | grep -q "on a 4-byte object on thumb1" || fail "an atomic add was laid on thumb1"
 # mode is carried (test/cc/259); a mode it cannot lay, or one it cannot place, refuses
 printf 'typedef float tf __attribute__((mode(TF)));\n' > "$ho/.attr.c"
 moonrun -c -o /dev/null "$ho/.attr.c" 2>&1 | grep -q "mode(TF))) is not carried out" || fail "mode(TF) was taken"
@@ -235,7 +243,7 @@ printf '#include "h.h"\n#include "h.h"\nint main(void) { return sizeof (struct o
 moonrun -c -o "$ho/.used.o" test/cc/230-gnuc.c > /dev/null 2>&1 || fail "230-gnuc did not compile"
 nm "$ho/.used.o" | grep -q " t kept$" || fail "a used static function was swept"
 nm "$ho/.used.o" | grep -q " T thrice$" || fail "gnu_inline's plain inline laid no external definition"
-echo "mooncc: GNU C 8 -- bool by dialect, refused attributes named, mode's refusals, #pragma pack's refusals, #pragma once, used, gnu_inline"
+echo "mooncc: GNU C 8 -- bool by dialect, refused attributes named, the atomics' refusals, mode's refusals, #pragma pack's refusals, #pragma once, used, gnu_inline"
 
 # ------------------------------------------- the flags that change the code
 # -fshort-wchar: wchar_t and L"" are 16-bit, held to gcc's

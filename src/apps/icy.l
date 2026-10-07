@@ -23,38 +23,14 @@
    icy-pltypes ["audio/x-scpls" "audio/scpls" "application/pls+xml" "audio/x-mpegurl" "audio/mpegurl"
                 "application/x-mpegurl" "application/vnd.apple.mpegurl"]
 
-   ; --- words ---------------------------------------------------------------------
-   (icy-num s) (: (go i a) (? (i >= #s || s i < 48 || s i > 57) a (go (i + 1) (a * 10 + s i - 48)))
-                  (go 0 0))
-   (icy-sp c) (c = 32 || c = 9 || c = 13)
-   (icy-trim s) (: (l i) (? (i < #s && icy-sp (s i)) (l (i + 1)) i)
-                   (r j) (? (0 < j && icy-sp (s (j - 1))) (r (j - 1)) j)
-                   a (l 0) e (r #s)
-                   (snip s a (max a e)))
-   (icy-lines s) (: (go i acc) (fsub s "\n" i @ e (? (e < 0) (rev (snip s i #s . acc)) (go (e + 1) (snip s i e . acc))))
-                    (map icy-trim (go 0 ())))
+   ; --- words and where: wget's ------------------------------------------------------
+   icy-num (cite 'kore 'wg-digits)
+   icy-url (cite 'kore 'wg-url)
+   icy-resolve (cite 'kore 'wg-resolve)                  ; a location or playlist entry
+   (icy-lines s) (map strip (lines s))
    ; the header lines, keys lowercase
-   (icy-heads ls) (foldl (\ t l (fsub l ":" 0 @ c (? (c < 1) t (pin t (lower (snip l 0 c)) (icy-trim (snip l (c + 1) #l))))))
+   (icy-heads ls) (foldl (\ t l (fsub l ":" 0 @ c (? (c < 1) t (pin t (lower (snip l 0 c)) (strip (snip l (c + 1) #l))))))
                          {} ls)
-   (icy-ends? s e) (#e <= #s && snip s (#s - #e) #s = e)
-
-   ; --- where -----------------------------------------------------------------------
-   (icy-url u) (? (starts? u "https://") (icy-at 1 (snip u 8 #u))
-                  (starts? u "http://") (icy-at 0 (snip u 7 #u))
-                  ())
-   (icy-at tls? r)
-    (: i (fsub r "/" 0) auth (i < 0 ? r (snip r 0 i)) path (i < 0 ? "/" (snip r i #r))
-       j (fsub auth ":" 0)
-       host (j < 0 ? auth (snip auth 0 j))
-       port (j < 0 ? (tls? ? 443 80) (icy-num (snip auth (j + 1) #auth)))
-       (? (0 < #host && 0 < port) [tls? host port path] ()))
-   ; a location or playlist entry against the url it came from
-   (icy-resolve base loc)
-    (? (0 < fsub loc "://" 0) loc
-       (icy-url base @
-         [t h p path] (: d (snip path 0 (1 + foldl (\ a k (path k = 47 ? k a)) 0 ^#path))
-                         ((t ? "https://" "http://") + h + ":" + show p + (loc 0 = 47 ? loc (d + loc))))
-         _ loc))
    (icy-req [tls? host port path])
     ("GET " + path + " HTTP/1.0\r\nHost: " + host + (port = (tls? ? 443 80) ? "" (":" + show port))
      + "\r\nUser-Agent: love/" + love-version + "\r\nAccept: */*\r\nIcy-MetaData: 1\r\nConnection: close\r\n\r\n")
@@ -84,13 +60,13 @@
    (icy-pl? ty u b)
     (: t (lower (fsub ty ";" 0 @ k (k < 0 ? ty (snip ty 0 k)))) p (lower (icy-url u @ [_ _ _ p] p _ ""))
        h (lower (snip b 0 16))
-       (elem (icy-trim t) icy-pltypes || icy-ends? p ".pls" || icy-ends? p ".m3u" || icy-ends? p ".m3u8"
+       (elem (strip t) icy-pltypes || ends? p ".pls" || ends? p ".m3u" || ends? p ".m3u8"
         || starts? h "[playlist]" || starts? h "#extm3u"))
    ; a .pls's File1 first, else an .m3u's first line that is no comment
    (icy-list s)
     (: ls (filter (l \ 0 < #l) (icy-lines s))
        fs (filter (l \ starts? (lower l) "file" && 0 < fsub l "=" 0) ls)
-       (? (two? fs) (<fs @ l (icy-trim (snip l (fsub l "=" 0 + 1) #l)))
+       (? (two? fs) (<fs @ l (strip (snip l (fsub l "=" 0 + 1) #l)))
           (filter (l \ l 0 != 35 && l 0 != 91 && !(0 < fsub l "=" 0 && fsub l "://" 0 < 0)) ls @ (l . _) l _ ())))
 
    ; --- the stream: audio out the pipe, each metadata block read for its title -----------
@@ -98,7 +74,7 @@
                    (? (k < 0) ()
                       (: a (k + 13) e (fsub m "';" a) z (fsub m (string [0]) a)
                          t (snip m a (? (0 <= e) e (0 <= z) z #m))
-                         (? (0 <= e || !(icy-ends? t "'")) t (snip t 0 (#t - 1))))))
+                         (? (0 <= e || !(ends? t "'")) t (snip t 0 (#t - 1))))))
    (icy-run c info b mi w)
     (: (more b) ((c 'hear) () @ g (string? g ? (b + g) ()))
        (out s) (? (0 < #s) (say w s, flush w) 0)

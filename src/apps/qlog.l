@@ -18,13 +18,10 @@
 ; way is not an entry, so its sig covers exactly what it says.
 (module (qlog qlog-make qlog-read qlog-hash qlog-who qlog-step qlog-may? qlog-trust)
 (borrow 'posix)
+(borrow 'bytes)
 
-(: ql-hex (cite 'tls 'hex)
-   ql-unhex (cite 'tls 'unhex)
-   ql-sign (cite 'ssh 'ed-sign)
+(: ql-sign (cite 'ssh 'ed-sign)
    ql-verify (cite 'ssh 'ed-verify)
-   ql-b64e (cite 'bytes 'b64e)
-   ql-b64d (cite 'bytes 'b64d)
    ql-check (cite 'seals 'seal-check)
    ql-keys ["queue" "term" "seq" "prev" "at" "by" "call" "text" "cert"]
 
@@ -38,9 +35,9 @@
 
    (qlog-make q seq prev by call th seal)
     (: f {"queue" q "term" "0" "seq" (show seq) "prev" prev "at" (show (clock 0 // 1000)) "by" by
-          "call" call "text" th "cert" (ql-b64e (seal 1) 1)}
+          "call" call "text" th "cert" (b64e (seal 1) 1)}
        b (ql-body f)
-       sg (ql-hex (ql-sign <<seal (<seal 1) (ql-signed b)))
+       sg (b2hex (ql-sign <<seal (<seal 1) (ql-signed b)))
        (ql-signed b + " (sig \"" + sg + "\"))"))
 
    ; the fields, when s is an entry laid out the one way: every key once, in order, then the sig
@@ -68,7 +65,7 @@
           (string? prev && !(tablet? head)) "the entry before is not one"
           (ql-step1 e head (? (string? prev) (qlog-hash prev) "none") before after root revoked)))
    (ql-step1 e head hp before after root revoked)
-    (: sq (ql-num (e "seq")) t (ql-b64d (e "cert"))
+    (: sq (ql-num (e "seq")) t (b64d (e "cert"))
        c (? (string? t) (ql-check t root (ql-num (e "at")) revoked) "no chain")
        (? (tablet? head && head "queue" != e "queue") "an entry of another queue"
           (? (tablet? head) (sq != ql-num (head "seq") + 1) (sq != 0)) "out of place: its seq does not follow"
@@ -77,19 +74,19 @@
           (sha256 after != e "text") "its text is not the one it names"
           !(tablet? c) ("its chain does not check: " + c)
           (c "kind" != "cell" || c "name" != e "by") "its card is not the writer's"
-          !(ql-verify (ql-unhex (c "pub")) (ql-signed (ql-body e)) (ql-unhex (e "sig"))) "its sig does not check"
+          !(ql-verify (hex2b (c "pub")) (ql-signed (ql-body e)) (hex2b (e "sig"))) "its sig does not check"
           (qlog-may? before after (qlog-who e))))
 
    ; the box card's lineage, else the one it enrolled under, else its own root; revoked is the
    ; list bee kept, which it takes only when the root signed it
    (qlog-trust _)
     (: h (getenv "HOME") d ((string? h ? h "/tmp") + "/.love/etc/bee")
-       (rd p) (: q (open p "r") (? (hot? q) (: s (slurp q) _ (close q) (s + ""))))
+       (rd p) (uread p @ [1 s] (s + "") ())
        (field t k) (: ls (filter (l \ starts? l (k + " ")) (lines t)) (? (two? ls) (snip <ls (#k + 1) #<ls)))
        bc (rd (d + "/box.card")) lf (rd (d + "/lineage")) rk ((cite 'seals 'seal-keyread) (d + "/root.key"))
        root (? (string? bc && string? (field bc "lineage")) (field bc "lineage")
                (string? lf && 64 <= #lf) (snip lf 0 64)
-               (two? rk) (ql-hex (rk 1)) "")
+               (two? rk) (b2hex (rk 1)) "")
        rv (: t (rd (d + "/revoked")) (? (string? t) (map (l \ snip l 8 #l) (filter (l \ starts? l "revoked ") (lines t))) ()))
        [root rv])
 
