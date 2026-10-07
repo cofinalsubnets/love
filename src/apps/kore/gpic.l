@@ -457,11 +457,9 @@
             "int" (need 1, a 0 @ v (v < 0 ? (0 - gp-fl (floor (0 - v))) (gp-fl (floor v))))
             "max" (need 2, a 1 > a 0 ? (a 1) (a 0))
             "min" (need 2, a 1 < a 0 ? (a 1) (a 0))
-            "rand" (gp-rand g @ r (n = 0 ? r (1.0 + gp-fl (floor (r * a 0)))))
+            "rand" (gr-rand g @ r (n = 0 ? r (1.0 + gp-fl (floor (r * a 0)))))
             "srand" (need 1, pin g 'seed (int (a 0)), 0.0)
             0.0))
-   ; a small lcg: rand's numbers are ours, not the oracle's
-   (gp-rand g) ((g 'seed * 1103515245 + 12345) % 2147483648 @ s (pin g 'seed s, s / 2147483648.0))
    (gp-prim g i)
     (: k (gp-k g i) v (gp-v g i)
        (? (k = 'num) [(gp-fl v) (i + 1)]

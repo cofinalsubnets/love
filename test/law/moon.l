@@ -212,6 +212,12 @@
       (gripe? (cparse <>(clex "int main() { return (1+2; }")))            ; the lost )
       (gripe? (cparse <>(clex "int main() { if 1 return 2; }")))          ; if wants parens
       (gripe? (cparse <>(clex "int main() { return 42 }")))
+      ; a member whose type has no layout yet refuses (C11 6.7.2.1p3): its own struct, one only
+      ; declared, an array of either. laid, its initializer descended into it without end
+      (gripe? (cparse <>(clex "struct l { struct l n; int k; }; struct l x = { 1 };")))
+      (gripe? (cparse <>(clex "struct l { struct l n[2]; };")))
+      (gripe? (cparse <>(clex "struct f; struct g { struct f x; };")))
+      (okv? (cparse <>(clex "struct l { struct l *n; int k; }; struct l x = { &x, 1 };")))
       (<>(cparse ()) = '(prog ()))))          ; an empty token list is a valid empty TU (crypt.c), not a parse failure
 
 ; --- the gen-law kit: compile, cut one fn, count its traffic -- shared by every gen
@@ -308,6 +314,11 @@
       (elem '(jmp f) <>(cgn "int f(int n) { return n + 1; } int h(int n) { __attribute__((musttail)) return f(n); } int main() { return h(3); }"))
       (refused? (cgn "int f() { return 1; }"))                      ; no main, no program
       (gripe? (cgn "int main() { return y; }"))              ; undeclared name -- a named refusal now (rung 1)
+      ; one switch, one label per value (C11 6.8.4.2p3): a repeat, a value a range holds, a second default
+      (gripe? (cgn "int main() { switch (1) { case 1: return 2; case 1: return 3; } return 0; }"))
+      (gripe? (cgn "int main() { switch (1) { case 1 ... 5: return 2; case 3: return 3; } return 0; }"))
+      (gripe? (cgn "int main() { switch (1) { default: return 2; default: return 3; } }"))
+      !(refused? (cgn "int main() { switch (1) { case 1: switch (2) { case 1: return 4; } default: return 0; } }"))   ; a nested switch owns its own
       (refused? (cgn "int main() { return 5=3; }"))                 ; not an lvalue
       (refused? (cgn "int main() { break; }"))                      ; no loop to leave
       (two? (cgn "int main() { int a=1; int b=2; return a<<b; }"))  ; variable shifts ride shlv now

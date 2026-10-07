@@ -5,6 +5,7 @@
 //                                sha3's the 256-bit one)
 //   (crc32 str)               -> the IEEE crc32, a charm; (crc32-on c str) carries c on
 //   (adler32 str)             -> zlib's adler-32 (RFC 1950), a charm
+//   (crc32c str)              -> castagnoli's crc32c, a charm; (crc32c-on c str) carries c on
 //   (cksum str)               -> POSIX cksum's crc with the length folded in, a charm
 //   (ogg-crc s o n)           -> the crc of the ogg page s[o..o+n), its crc field as zeros
 //   (bsdsum acc str)          -> bsd sum's 16-bit checksum carried on over str
@@ -449,6 +450,51 @@ static lvm(lvm_crc32_on) {
   Sp[1] = putcharm(~crc32_run(~(uint32_t) getcharm(c), (const uint8_t*) s->bytes, (uintptr_t) s->len)); }
  love_musttail return Nextp(1, 1); }
 
+// --- crc32c (castagnoli: reflected, polynomial 0x82f63b78) ------------------------------
+// crc32's walk over another polynomial, its tables built the same way; ext4 and jbd2
+// checksum their metadata with it. test/digest.l holds it to the walk spelled in love.
+static uint32_t crcc_t[8][256];
+static int crcc_ready;
+
+static void crcc_init(void) {
+ unsigned i, k;
+ for (i = 0; i < 256; i++) {
+  uint32_t c = i;
+  for (k = 0; k < 8; k++) c = (c & 1) ? (c >> 1) ^ 0x82f63b78 : c >> 1;
+  crcc_t[0][i] = c; }
+ for (i = 0; i < 256; i++) {
+  uint32_t c = crcc_t[0][i];
+  for (k = 1; k < 8; k++) { c = crcc_t[0][c & 0xff] ^ (c >> 8); crcc_t[k][i] = c; } }
+ crcc_ready = 1; }
+
+static uint32_t crc32c_run(uint32_t c, const uint8_t *p, uintptr_t n) {
+ if (!crcc_ready) crcc_init();
+ for (; n >= 8; p += 8, n -= 8) {
+  uint32_t a = c ^ ld32le(p), b = ld32le(p + 4);
+  c = crcc_t[7][a & 0xff] ^ crcc_t[6][(a >> 8) & 0xff]
+    ^ crcc_t[5][(a >> 16) & 0xff] ^ crcc_t[4][a >> 24]
+    ^ crcc_t[3][b & 0xff] ^ crcc_t[2][(b >> 8) & 0xff]
+    ^ crcc_t[1][(b >> 16) & 0xff] ^ crcc_t[0][b >> 24]; }
+ for (; n; p++, n--) c = crcc_t[0][(c ^ *p) & 0xff] ^ (c >> 8);
+ return c; }
+
+static love_inline struct g *host_crc32c(struct g *g) {
+ if (!strp(g->sp[0])) return g->sp[0] = ZeroPoint, g;
+ { struct str *s = (struct str*) g->sp[0];
+   g->sp[0] = putcharm(~crc32c_run(0xffffffff, (const uint8_t*) s->bytes, (uintptr_t) s->len)); }
+ return g; }
+static lvm(lvm_crc32c) {
+ LvmCall(g, host_crc32c) }
+
+// (crc32c-on c str) -> the crc32c of whatever c was the crc32c of, str's bytes after it
+static lvm(lvm_crc32c_on) {
+ word c = Sp[0], x = Sp[1];
+ if (!charmp(c) || !strp(x)) Sp[1] = ZeroPoint;
+ else {
+  struct str *s = (struct str*) x;
+  Sp[1] = putcharm(~crc32c_run(~(uint32_t) getcharm(c), (const uint8_t*) s->bytes, (uintptr_t) s->len)); }
+ love_musttail return Nextp(1, 1); }
+
 // --- adler32 (RFC 1950): the two sums zlib's stream ends with -------------------------
 // 5552 bytes is the most either sum takes before it could pass 32 bits, so the modulus
 // waits that long. test/digest.l holds it to the walk spelled in love.
@@ -787,6 +833,8 @@ Nif2(nif_bsdsum, lvm_bsdsum)
 Nif1(nif_crc32, lvm_crc32)
 Nif2(nif_crc32_on, lvm_crc32_on)
 Nif1(nif_adler32, lvm_adler32)
+Nif1(nif_crc32c, lvm_crc32c)
+Nif2(nif_crc32c_on, lvm_crc32c_on)
 Nif1(nif_cksum, lvm_cksum)
 static union u const nif_ogg_crc[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_ogg_crc}, {lvm_ret0}};
 Nif1(nif_ck_init, lvm_ck_init)
@@ -829,6 +877,8 @@ LvNif("bsdsum", nif_bsdsum, NULL);
 LvNif("crc32", nif_crc32, NULL);
 LvNif("crc32-on", nif_crc32_on, NULL);
 LvNif("adler32", nif_adler32, NULL);
+LvNif("crc32c", nif_crc32c, NULL);
+LvNif("crc32c-on", nif_crc32c_on, NULL);
 LvNif("cksum", nif_cksum, NULL);
 LvNif("ogg-crc", nif_ogg_crc, NULL);
 LvNif("cksum-init", nif_ck_init, NULL);

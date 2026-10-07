@@ -13,7 +13,7 @@
 ; cover 0 to 3, style 'smooth or 'pixel; and what falls from it, 'fall 0 nothing, 1 rain,
 ; 2 snow (nothing unless said), drawn into a scene by sky-fall!
 (module (sky sky-sun sky-body sky-light sky-maps sky-weather turns lap sky-cover sky-cloud sky-colour-of sky-near sky-tone
-         sky-stars sky-stars! sky-covers sky-styles sky-says sky-falls sky-fall sky-fall! bil cloud-n day-secs)
+         sky-stars sky-stars! sky-covers sky-styles sky-says sky-falls sky-fall sky-fall! bil cloud-n day-secs rgb)
 (borrow 'view)
 (borrow 'vec)
 (:

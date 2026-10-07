@@ -133,10 +133,9 @@
      fl (it "FLAGS")
      fs (two? fl ? (map lower fl) ())
      lt (string (sort (catmap (p \ elem (p 0) fs ? [(p 1)] ()) im-flags)))
-     m (mb-msg (mime-heads (mb-head-of (string? h ? h ""))) lt (mime-num (show-or (it "RFC822.SIZE"))))
+     m (mb-msg (mime-heads (mb-head (string? h ? h ""))) lt (mime-num (show-or (it "RFC822.SIZE"))))
      (pins m 'uid (mime-num (show-or (it "UID"))) 'del (elem "\\deleted" fs ? 1 0), m))
  (show-or v) (string? v ? v "0")
- (mb-head-of t) (replace t "\r\n" "\n" @ x (findsub x "\n\n" @ k (k < 0 ? x (snip x 0 k))))
  ; the selected box's messages -> [msg ..] | why not
  (im-list c name)
   (im-cmd c ("SELECT " + imap-quote name) @ r

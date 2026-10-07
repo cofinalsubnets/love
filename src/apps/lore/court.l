@@ -85,13 +85,14 @@
  runs [[0.04 cab (cat (to-box (0.0 - yard-b)) (rev (to-box yard-b)))]]
  ; --- the time: 'sim is the wall clock's local seconds, 'dst what summer adds to it ---
  ; now, as [local-seconds dst]: the zone's offset now, against the least of it a season on, two and three
- (court-when s) (: zone ((cite 'kore 'tz-zone) 0)
-                   (off u) (zone ? (zone u 0) 0)
+ ; the zone's offset at utc u, the zone read once a call
+ (zone-off _) (: zone ((cite 'kore 'tz-zone) 0) (u \ zone ? (zone u 0) 0))
+ (court-when s) (: off (zone-off 0)
                    o (off s) std (foldl (a \ k \ min2 a (off (s + k * 7889400))) o [1 2 3])
                    [(1.0 * (s + o)) (o - std)])
  (court-now _) (court-when (clock 0 // 1000))
  ; ..and a wall-clock time L in local seconds, as [L dst] in this zone
- (court-local L) (: zone ((cite 'kore 'tz-zone) 0) (off u) (zone ? (zone u 0) 0) l (int L)
+ (court-local L) (: off (zone-off 0) l (int L)
                     (court-when (l - off (l - off l))))
  ; --- the season, by the day of the year as the sky counts it (0 the first of january):
  ; the honey locust leafs out from mid april to mid may, turns gold from late september,
@@ -106,8 +107,7 @@
     'brown (285.0 <= d ? 0.1 0.65)
     'every (? (share < 0.05) 0 (285.0 <= d && d < 320.0) 6 300)})
  (court-clock st) (: d (day-secs (st 'sim)) hh (int (d / 3600.0)) mm (int (d / 60.0) % 60)
-                     (p2 v) (v < 10 ? ("0" + show v) (show v))
-                     (p2 hh + ":" + p2 mm))
+                     (zpad 2 (show hh) + ":" + zpad 2 (show mm)))
  ; the sun as [east up north] and its light, at the scene's hour
  (court-sun st) (sky-sun (st 'sim) (st 'dst) lat)
  (court-light st) (sky-light (court-sun st) (st 'wx) (st 'sim))
@@ -349,8 +349,7 @@
  (inside p) (p 1 < wall-h ? [(clamp (p 0) (0.15 - yard-a) (yard-a - 0.15)) (max2 0.05 (p 1))
                             (clamp (p 2) (0.15 - yard-b) (yard-b - 0.15))] p)
  (in-wall? p) (p 1 < wall-h && (yard-a - 0.1 < mag (p 0) || yard-b - 0.1 < mag (p 2)))
- (tree-grow seed) (: g {'s (seed % 2147483647 + 1)}
-                     (rr lo hi) (: v ((g 's * 1103515245 + 12345) % 2147483648) (pin g 's v, lo + (hi - lo) * v / 2147483648.0))
+ (tree-grow seed) (: g (rnd-new seed) (rr lo hi) (lo + (hi - lo) * rnd g)
                      base [(rr 1.3 1.8) 0.0 (rr 2.2 2.9)]
                      (grove-new {'seed seed 'base base 'toward [0.0 0.0] 'crown crown-y
                                  'inside inside 'keep? (p \ !(in-wall? p))}))
@@ -366,7 +365,7 @@
                      (map (v \ [(x + u * ca - v * sa) leaf-y (z + u * sa + v * ca) (c 0) (c 1) (c 2) 1.0])
                           [-0.01 0.0 0.01]))) ^6)))
  (litter tr seed) (: g {'s (seed % 2147483647 + 7)}
-   (rr lo hi) (: v ((g 's * 1103515245 + 12345) % 2147483648) (pin g 's v, lo + (hi - lo) * v / 2147483648.0))
+   (rr lo hi) (lo + (hi - lo) * rnd g)
    bs (tr 'base) X (tr 'x) Y (tr 'y) Z (tr 'z) K (tr 'kind) n #X top (amax Y)
    ; a leaf of the crown, thrown for until one comes up, or the first point
    (pick k ok?) (: i (int (rr 0.0 (n - 0.5))) ((k < 1 || (peep K i 0.0 = 2.0 && ok? i)) ? i (pick (k - 1) ok?)))
@@ -440,15 +439,8 @@
    (two? l ? (bits l) ()))
  ; points drawn into the buffers, a point a pixel where nearer, lit as the floor is: the
  ; sun where it gets in and the tree lets it through, and the sky's light
- (bits! P cam lt sms buf sn) (: e (cam 'e) f (cam 'f) rt (cam 'r) uv (cam 'u) w (cam 'w) h (cam 'h) foc (cam 'foc)
-   s (lt 'sun) X (P 'x) Y (P 'y) Z (P 'z)
-   qx (X - e 0) qy (Y - e 1) qz (Z - e 2)
-   zc (qx * f 0 + qy * f 1 + qz * f 2) zs (max zc 0.1)
-   cx (floor (w / 2.0 + foc * (qx * rt 0 + qy * rt 1 + qz * rt 2) / zs))
-   cy (floor (h / 2.0 - foc * (qx * uv 0 + qy * uv 1 + qz * uv 2) / zs))
-   dist (sqrt (qx * qx + qy * qy + qz * qz))
-   ok ((0.1 < zc) * (0 <= cx) * (cx < w) * (0 <= cy) * (cy < h))
-   idx (over -1 ok (cy * w + cx))
+ (bits! P cam lt sms buf sn) (: s (lt 'sun) X (P 'x) Y (P 'y) Z (P 'z)
+   v (sight cam X Y Z) dist (v 3) idx (v 4)
    i2 (over -1 (dist < peep (buf 't) idx 1e9) idx)
    up (P 'up) face (up * max2 (s 1) 0.0 + (1.0 - up) * 0.5)
    lit (sun-clear X Y Z s * (1.0 - shade sms X Y Z) * lt 'sunk * face * 0.9)
@@ -519,23 +511,6 @@
  ; cylinders each tried only on the pixels of its box on the screen; bark how much the shade
  ; wanders. one thinner than a pixel is drawn as the share of each pixel it covers, over
  ; what is there, and leaves the depth alone ---
- ; the pixels of the screen's box round the points qs, pad pixels wider: a segment's end
- ; behind the eye cut back to the near plane, else all the screen when one is behind
- (spot qs pad cam) (: e (cam 'e) f (cam 'f) rt (cam 'r) uv (cam 'u) w (cam 'w) h (cam 'h) foc (cam 'foc)
-   (z q) (dot (c+ q (c* -1.0 e)) f)
-   (proj q) (c+ q (c* -1.0 e) @ v [(w / 2.0 + foc * dot v rt / z q) (h / 2.0 - foc * dot v uv / z q)])
-   (box ps) (: xs (map (p \ p 0) ps) ys (map (p \ p 1) ps)
-               x0 (max2 0 (flo (foldl min2 1e9 xs - pad))) x1 (min2 (w - 1) (flo (foldl max2 -1e9 xs + pad)))
-               y0 (max2 0 (flo (foldl min2 1e9 ys - pad))) y1 (min2 (h - 1) (flo (foldl max2 -1e9 ys + pad)))
-               bw (x1 - x0 + 1) bh (y1 - y0 + 1)
-               ((bw <= 0 || bh <= 0) ? () (iota (bw * bh) @ ii ((y0 + ii // bw) * w + x0 + ii % bw))))
-   zs (map z qs) nb #(filter (v \ v < 0.1) zs)
-   (? (nb = #qs) ()
-      (nb = 0) (box (map proj qs))
-      (#qs = 2) (: a (qs 0) b (qs 1) za (zs 0) zb (zs 1)
-                   (box [(proj (za < 0.1 ? (lerp a b ((0.1 - za) / (zb - za))) a))
-                         (proj (zb < 0.1 ? (lerp b a ((0.1 - zb) / (za - zb))) b))]))
-      (iota (w * h))))
  (rods! rs cam lt sms buf sn) (: e (cam 'e) f (cam 'f) foc (cam 'foc) s (lt 'sun)
    (one rd) (: a0 (rd 0) b0 (rd 1) r (rd 2) col (rd 3) fz (rd 4)
      za (dot (c+ a0 (c* -1.0 e)) f) zb (dot (c+ b0 (c* -1.0 e)) f)

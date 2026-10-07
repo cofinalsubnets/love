@@ -21,8 +21,7 @@
 
 (: sh-quote (cite 'lush 'sh-quote)
    (hs-env k) (getenv k @ v (string? v && 0 < #v ? v ()))
-   (hs-num s) (foldl (\ a i (48 <= s i <= 57 ? (a * 10 + s i - 48) a)) 0 ^#s)
-   (hs-slurp p) (: f (open p "r") (? (hot? f) (: s (slurp f) _ (close f) (s + "")) ()))
+   hs-num (cite 'kore 'wg-digits)
    (hs-path _) (hs-env "BEE_HOSTS" @ p (string? p ? p (getenv "HOME" + "/.love/etc/bee/hosts")))
 
    ; a host's lines into a tablet: reach and caps are words, slots a count, the rest text
@@ -38,7 +37,7 @@
                  (starts? <w "#") (go >ls t acc)                                   ; a # comment
                  (go >ls (pin (tablet? t ? t {}) <w (hs-val <w >w)) acc))))
        (go (lines s) () ()))
-   (hosts-all _) (: s (hs-slurp (hs-path 0)) (string? s ? (hs-parse s) ()))
+   (hosts-all _) (uread (hs-path 0) @ [1 s] (hs-parse (s + "")) ())
 
    ; the env's hosts for a cap: "host:slots .." lists, or one ssh prefix a box
    hs-envs [["KTEST_A64_HOSTS" ["a64-exec" "kvm-a64"]] ["KTEST_A64_HOST" ["a64-exec" "kvm-a64"]]

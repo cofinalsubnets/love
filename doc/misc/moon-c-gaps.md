@@ -653,6 +653,7 @@ never silent**.
 | by-value composite arg, MEMORY class | ✓ | ✓ | ✓ | — | — | — |
 | composite passed at a variadic call site | ✓ | ✓ | ✓ | — | — | — |
 | composite NAMED in a variadic parameter list | ✓ | ✓ | — | — | — | — |
+| va_arg of a composite, ≤16B all-int | ✓ | ✓ | ✓ | — | — | — |
 | composite return, 16B all-int | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | composite return, MEMORY class | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `__builtin_bswap64` | ✓ | ✓ | ✓ | — | — | — |
@@ -705,6 +706,14 @@ register/stack seam, and t32 has no lane at all. Three rules, three rungs; do no
 `vaspill-a64`); `vaspill-rv` and `vaspill-t32` refuse the shape, each for its own ABI's reason.
 that is a different shape from *passing* a composite at a variadic call site, which rv64
 also takes — probe the one you mean.
+
+**`va_arg` of a by-value composite** takes its slots whole, the bytes in place (266-vaarg-struct.c):
+x64 from the gp save area while gp_offset + its size stays ≤ 48, else whole from the overflow area,
+and a MEMORY-class one from there; a64 from the x save area, else `__stack` with the gp file closed
+behind it, and its memory class through the slot's pointer; rv64 walks `__ap`. an SSE-touching one
+on x64, an HFA on a64, one aligned past 8, and t32 refuse. the a64 caller lays a 9..16B gp composite
+the registers no longer hold on the stack and closes the file (C.13); rv64's caller still refuses
+that straddle, so 266 sits on rv64's and wasm's unsupported lists.
 
 - **mixed/int-pair 8..16B composites on t32** — an aone-`int` 5..8B, or a two-eightbyte
   not-both-sse aggregate by value; register-exhausted stack HFAs (9+ double args); and
@@ -850,6 +859,14 @@ carried:
   with the last matching map; there is no debug info for its other half); `-ffixed-x18`, true of
   a64 already (x16..x18 are never allocated) and refused on any other target or register
 - `__builtin_assume_aligned`, `__builtin_extract_return_addr`, `__builtin_parity{,l,ll}`
+- `__atomic_*_n`, the fetch/op pairs, `test_and_set`, `clear`, the fences and the lock-free
+  queries, and all of `__sync_*`, with `__ATOMIC_*`, `__GCC_ATOMIC_*_LOCK_FREE` and
+  `__GCC_HAVE_SYNC_COMPARE_AND_SWAP_N` as each target lays them: a read-modify-write is one
+  exclusive loop (x64 `lock cmpxchg`, a64 `ldaxr`/`stlxr`, rv64 `lr`/`sc`, thumb2
+  `ldrex`/`strex`), every order laid as seq_cst or stronger, and wasm's one thread takes the
+  plain operations (test/cc/265-atomics.c)
+- `mremap` (moonlibc), which a `_GNU_SOURCE` source reaches for on Linux -- sqlite defines
+  `_GNU_SOURCE` under `__GNUC__`; a BSD kernel answers ENOSYS, as for `memfd_create`
 
 the attributes, by `gnuattrs` in cpp.l: **carried** — aligned packed section weak alias
 always_inline noinline cleanup used (a static nothing calls is kept) gnu_inline (plain `inline`
@@ -880,7 +897,8 @@ owed, each refusing loudly today (an undeclared builtin, or a parse error):
 
 | construct | |
 |---|---|
-| `__atomic_*` and `__ATOMIC_*`, `__sync_*` but the spin-lock pair | `__STDC_NO_ATOMICS__` says so for C11's; gcc 8 has the builtins |
+| `__atomic_load`, `_store`, `_exchange`, `_compare_exchange` (the generic forms, operands by address) | refused by name; each `_n` form is carried |
+| a 1- or 2-byte atomic read-modify-write on rv64 (`__atomic_test_and_set` among them); every one on thumb1 | refused by name: lr/sc are word-wide, armv6-m has no exclusives (gcc calls libatomic there) |
 | `__builtin_alloca` | moonlibc's `alloca` is malloc-backed, so it is not the builtin's frame lifetime |
 | `__builtin_add_overflow_p` and kin, `__builtin_classify_type` | |
 | gcc's old `field:` initializer, nested functions | |
@@ -1122,6 +1140,11 @@ below, 251 of those 332 re-run so far: **145 compile**, and the rest refuse by n
   so its lines ran together (asm-extable.h's `.irp` lost its `.endr`) and `\uaccess_is_write`
   read as the escape `\uacce`. The text spelled back keeps the source's spaces, so a macro's
   `wx\n` stays one word, and `name .req reg`/`.unreq` alias a register (test/gate/moon.sh).
+- **backward local labels in a `.rept` or `.if`**: `nops (662b-661b) / 4`, the alternatives'
+  nop padding, measures the a64 lines between the labels at expansion; a directive between
+  them, or a forward label, still refuses. With it, gas's `\@` (a macro call's number) and
+  `.ifb`/`.ifnb`. `\@` counts per reading, so two inline asm statements that each call one
+  macro lay the same label: gas counts across the file.
 
 Still open on this side (g-21's probes):
 
@@ -1131,9 +1154,10 @@ Still open on this side (g-21's probes):
   reads at the element's width, a bitfield or 128-bit member of a packed struct refuses by name,
   and a by-value struct reached as a packed member rides its type's alignment, not the member's.
 - where the re-run stops now, on this side: a register variable pinned to `x0` (4). The 24
-  units that stopped on the `.S` extable macro's `\insn` reach gas now, and stop on: label
-  arithmetic in an immediate, `(662b - 661b) / 4` (8); gas's `||` (3, mov_q's range test);
-  `ldp`, `ccmp`, `bne`, `.incbin`, `@note`, a one-operand `mov` and an indexed `[x4, ..]`.
+  units that stopped on the `.S` extable macro's `\insn` reach gas now, and stop on: a
+  one-operand `mov` (7), the pre-index `[xN]!` (3), `ldp` (2), gas's `||` (3, mov_q's range
+  test), a two-register op with no lane (3), `ccmp`, `bne`, `.incbin`, `@note`, `sym+k` as a
+  memory operand and an indexed `[x4, ..]`.
   The rest is part 1's front end and gen (`linux/skbuff.h`, an undeclared `branch`,
   `__attribute__((mode))`).
 - defconfig, g-21's units once refused on a Q form or a register pinned twice: of a sample of

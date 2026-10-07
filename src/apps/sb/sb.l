@@ -12,6 +12,7 @@
    (look p) (: q (open p "r")                                            ; (1 text) | ()
                  (? (hot? q) (mind (_ \ (: s (slurp q) [1 (s + "")])) () (_ \ close q)) ()))
    (lay p s) (: q (open p "w") (? (hot? q) (mind (_ \ (say q s, 1)) () (_ \ close q)) 0))
+   (snum s) (: (go i a) (? (i < #s && 48 <= s i <= 57) (go (i + 1) (a * 10 + s i - 48)) a) (go 0 0))   ; leading digits, 0 for none
    (form p) (: q (open p "r")                                 ; the file's one form | ()
                   (? (hot? q) (mind (_ \ (: r (sound (slurp q))
                                      d (two? r ? <r)
@@ -35,7 +36,7 @@
    (nest-hold d tries)
     (: l (d + "/.sb/lock")
        (? ((mkdir l 448) = ()) (: _ (lay (l + "/pid") (show (getpid 0))) 'took)
-          (: t (look (l + "/pid")) p (? (two? t) (: s <>t (go i a) (? (i < #s && 48 <= s i <= 57) (go (i + 1) (a * 10 + s i - 48)) a) (go 0 0)) 0)
+          (: t (look (l + "/pid")) p (? (two? t) (snum <>t) 0)
              (? (p = getpid 0) 'again
                 (0 < p && nom? (still p 0)) (: _ (unlink (l + "/pid")) _ (rmdir l) (nest-hold d tries))
                 (tries <= 0) ()
@@ -374,7 +375,6 @@
    ;     members and depths, snap, conflicts, and each path's last writer and writers, a line
    ;     apiece; settle keeps the head's, the one before it and the newest four banks' ---
    (dv-new _) {'tips () 'n 0 'raw "" 'probes 0 'mem {} 'add {} 'snap {} 'cf {} 'last {} 'hist {} 'new {} 'refold 0}
-   (dv-num s) (foldl (\ a i (a * 10 + s i - 48)) 0 ^#s)
    (dv-path tp) (".sb/derive/" + psid tp)
    (dv-key< a b) (<a < <b || (<a = <b && a 1 < b 1))
    (dv-count d) (d 'n + #(keys (d 'add)))
@@ -388,10 +388,10 @@
        (? (0 <= v) v
           (d 'probes < 64)
            (: _ (pin d 'probes (d 'probes + 1)) r (d 'raw) k (fsub r (id + " ") 0)
-              (? (k < 0) -1 (: e (fsub r "\n" k) (dv-num (snip r (k + 65) e)))))
+              (? (k < 0) -1 (: e (fsub r "\n" k) (snum (snip r (k + 65) e)))))
           (d 'probes = 64)
            (: _ (pin d 'probes 65)
-              _ (map (l \ (? (65 < #l) (pin m (snip l 0 64) (dv-num (snip l 65 #l))))) (lines (d 'raw)))
+              _ (map (l \ (? (65 < #l) (pin m (snip l 0 64) (snum (snip l 65 #l))))) (lines (d 'raw)))
               (peep m id -1))
           -1))
    (dv-read p)
@@ -404,9 +404,9 @@
                               (l 0 @ 119 (pin hi (v 1) (v 2))                              ; w
                                      116 (pin d 'tips ((v 1) . d 'tips))                   ; t
                                      115 (pin sn (v 1) [(v 2) (v 3)])                      ; s
-                                     99 (pin cf (v 1) [(dv-num (v 2)) (v 3)])              ; c
-                                     108 (pin la (v 1) [(dv-num (v 2)) (v 3)])             ; l
-                                     110 (pin d 'n (dv-num (v 1)))                         ; n
+                                     99 (pin cf (v 1) [(snum (v 2)) (v 3)])                ; c
+                                     108 (pin la (v 1) [(snum (v 2)) (v 3)])               ; l
+                                     110 (pin d 'n (snum (v 1)))                           ; n
                                      ()))))
                     (lines (snip x 0 (k + 1))))
              d)))
@@ -839,11 +839,10 @@
    (lg-lock nm tries)
     (: d (lg-path nm + ".lock")
        (? ((mkdir d 448) = ()) (lay (d + "/pid") (show (getpid 0)))
-          (: t (look (d + "/pid")) p (? (two? t) (lg-num <>t) 0)
+          (: t (look (d + "/pid")) p (? (two? t) (snum <>t) 0)
              (? (0 < p && nom? (still p 0)) (: _ (unlink (d + "/pid")) _ (rmdir d) (lg-lock nm tries))
                 (tries <= 0) 0
                 (: _ (rest 20) (lg-lock nm (tries - 1)))))))
-   (lg-num s) (: (go i a) (? (i < #s && 48 <= s i <= 57) (go (i + 1) (a * 10 + s i - 48)) a) (go 0 0))
    (lg-unlock nm) (: d (lg-path nm + ".lock") _ (unlink (d + "/pid")) (rmdir d))
    (lg-who _) (: w (getenv "SB_WHO") u (getenv "USER") (? (string? w && 0 < #w) w (string? u) u "?"))
    ; NAME moves to FILE's text iff it stands at WAS ("none" for a new ledger) -> 1, else 0.
@@ -866,7 +865,7 @@
                            (puts (h + "\n"), 1)))
                    _ (lg-unlock nm)
                    r)))))
-   (lg-add nm ls) (lay (lg-path nm) (foldl (\ a l (a + l + "\n")) "" (lg-lines nm + ls)))
+   (lg-add nm ls) (lay (lg-path nm) (unlines (lg-lines nm + ls)))
    ; --- a signed queue: a ledger whose head is an entry (src/apps/qlog.l). it moves only by an
    ;     entry that follows its head, laid with the queue's text after it: FILE is the entry's one
    ;     line, then the text. the first entry over a plain ledger signs over its text. qlog loads
@@ -1047,7 +1046,7 @@
    ; the far side's patches beyond hd, and the blobs we lack of theirs, laid by gap over its
    ; tips -> gap's count | 0
    (ssh-pull c hd ft)
-    (: n (: r (ssh-ask c (ssh-line "want" hd)) (? (string? r) (dv-num r)))
+    (: n (: r (ssh-ask c (ssh-line "want" hd)) (? (string? r) (snum r)))
        (? !(charm? n) 0
           (: pc {} q (c 'q)
              _ (: (go k) (? (0 < k) (: t (fr-get q) _ (? (string? t) (pin pc (sha256 t) [1 t]) ()) (go (k - 1))))
@@ -1188,7 +1187,7 @@
        (go (tips ()) ()))
    ; put NP NB: that many patch frames, then blob frames, laid by gap -> [laid bad blobs ok]
    (sv-put ns)
-    (: np (? (two? ns) (dv-num <ns) 0) nb (? (two? >ns) (dv-num <>ns) 0)
+    (: np (? (two? ns) (snum <ns) 0) nb (? (two? >ns) (snum <>ns) 0)
        pc {} bc {}
        (rd k t) (? (0 < k) (: s (fr-get in) _ (? (string? s) (pin t (sha256 s) [1 s]) ()) (rd (k - 1) t)) t)
        _ (rd np pc) _ (rd nb bc)
