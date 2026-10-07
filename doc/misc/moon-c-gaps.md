@@ -1123,6 +1123,11 @@ below, 251 of those 332 re-run so far: **145 compile**, and the rest refuse by n
   so its lines ran together (asm-extable.h's `.irp` lost its `.endr`) and `\uaccess_is_write`
   read as the escape `\uacce`. The text spelled back keeps the source's spaces, so a macro's
   `wx\n` stays one word, and `name .req reg`/`.unreq` alias a register (test/gate/moon.sh).
+- **backward local labels in a `.rept` or `.if`**: `nops (662b-661b) / 4`, the alternatives'
+  nop padding, measures the a64 lines between the labels at expansion; a directive between
+  them, or a forward label, still refuses. With it, gas's `\@` (a macro call's number) and
+  `.ifb`/`.ifnb`. `\@` counts per reading, so two inline asm statements that each call one
+  macro lay the same label: gas counts across the file.
 
 Still open on this side (g-21's probes):
 
@@ -1132,9 +1137,10 @@ Still open on this side (g-21's probes):
   reads at the element's width, a bitfield or 128-bit member of a packed struct refuses by name,
   and a by-value struct reached as a packed member rides its type's alignment, not the member's.
 - where the re-run stops now, on this side: a register variable pinned to `x0` (4). The 24
-  units that stopped on the `.S` extable macro's `\insn` reach gas now, and stop on: label
-  arithmetic in an immediate, `(662b - 661b) / 4` (8); gas's `||` (3, mov_q's range test);
-  `ldp`, `ccmp`, `bne`, `.incbin`, `@note`, a one-operand `mov` and an indexed `[x4, ..]`.
+  units that stopped on the `.S` extable macro's `\insn` reach gas now, and stop on: a
+  one-operand `mov` (7), the pre-index `[xN]!` (3), `ldp` (2), gas's `||` (3, mov_q's range
+  test), a two-register op with no lane (3), `ccmp`, `bne`, `.incbin`, `@note`, `sym+k` as a
+  memory operand and an indexed `[x4, ..]`.
   The rest is part 1's front end and gen (`linux/skbuff.h`, an undeclared `branch`,
   `__attribute__((mode))`).
 - defconfig, g-21's units once refused on a Q form or a register pinned twice: of a sample of

@@ -845,13 +845,13 @@
     (elem tgt '(x64 rv64) @ hash?
        (catmap (ln \ xa-lines (hash? ? (xa-decomment ln) (gcut2 ln 47))) (gsplit src 10)))
    ;; gas's macro language, over a text's lines before anything reads them: .macro/.endm and a
-   ;; call (positional or name=value arguments), .irp and .rept, .if/.ifc/.ifnc/.ifeq/.ifne with
+   ;; call (positional or name=value arguments), .irp and .rept, .if/.ifc/.ifnc/.ifeq/.ifne/.ifb/.ifnb with
    ;; .else, .set/.equ (the symbol reads as its value on the lines after), `name .req reg` and
    ;; .unreq (the name reads as its register), .error, .purgem --
    ;; the kernel's exception-table macro, which finds a register's number by name
-   gf-ifs '(".if" ".ifc" ".ifnc" ".ifeq" ".ifne")
-   (gf-expand ls)
-    (: mac {} sv {} rq {}
+   gf-ifs '(".if" ".ifc" ".ifnc" ".ifeq" ".ifne" ".ifb" ".ifnb")
+   (gf-expand tgt ls)
+    (: mac {} sv {} rq {} cnt {}
        (dname s) (xa-trim s @ t (0 < #t && t 0 = 46 ? (xa-mnem t) ""))
        (word s i) ((: (g j) (j < #s && gidc? (s j) ? (g (j + 1)) j)) i)
        ; a block's body up to its closer, nested openers counted -> (body rest)
@@ -879,15 +879,44 @@
                                        (go (i + 1) (acc + string c)))))
                    (go 0 ""))
        (val e) (gimm (gtoks (ssub e)))
+       ; ..at a point, acc the lines laid so far (latest first): backward local labels (`Nb`)
+       ; whose distances the a64 lines between them measure. the latest named is the origin and
+       ; the others sit back from it, so only their differences mean anything -- the kernel's
+       ; `nops (662b-661b) / 4`. anything unmeasurable between leaves the expression refused
+       (vat e acc) (trap val e (\ a b (gtoks (ssub e) @ ts (lbloffs ts acc @ m (two? m ? (gimm (lsub ts m)) (scare a b))))))
+       (lsub ts m) (map (t \ t @ ('lref v 98) ['num (assoc v m @ x <>x)] t) ts)
+       ; a line's leading labels and the rest -> [names rest]
+       (lsplit s) (: (go t ns) (: j (word t 0)
+                                  (0 < j && j < #t && t j = 58 ? (go (xa-trim (snip t (j + 1) #t)) ((snip t 0 j) . ns)) [ns t]))
+                     (go (xa-trim s) ()))
+       (lsize r) (? (r = "") 0 (tgt != 'a64 || r 0 = 46) ()
+                    (trap (x \ foldl (\ n f (? !(charm? n) () (f @ ('label _) n ('raw bs) (n + #bs) ('align . _) () (n + 4))))
+                                    0 (gas-text tgt x))
+                          r (\ a b ())))
+       (lbloffs ts acc)
+        (: refs (foldl (\ a t (t @ ('lref v 98) (elem v a ? a (v . a)) a)) () ts)
+           (go l org off m)
+            (? (!(two? refs) || all (v \ two? (assoc v m)) refs) m
+               (atom? l) ()
+               (lsplit <l @ (ns r)
+                  (: hit (filter (v \ elem (show v) ns) refs)
+                     (? !org (two? hit ? (go >l 1 0 (map (v \ [v 0]) hit + m)) (go >l () 0 m))
+                        (lsize r @ k
+                           (!(charm? k) ? ()
+                              (go >l 1 (off + k) (map (v \ [v (0 - (off + k))]) (filter (v \ !(two? (assoc v m))) hit) + m))))))))
+           (go acc () 0 ()))
        ; `name .req reg` -> [name reg] | ()
        (req t) (: i (word t 0) r (xa-trim (snip t i #t))
                   (0 < i && #r > 4 && (snip r 0 4) = ".req" && blank? (r 4) ? [(snip t 0 i) (xa-trim (snip r 4 #r))]))
-       ; \name -> its argument, \() -> nothing; an unknown \name stays for an enclosing reading
+       ; \name -> its argument, \() -> nothing, \@ -> the call's number; an unknown \name stays
+       ; for an enclosing reading
        (psub s args)
         (: n #s
            (go i acc) (i >= n ? acc
                          (s i @ c
                             (? (c = 92 && i + 2 < n && s (i + 1) = 40 && s (i + 2) = 41) (go (i + 3) acc)
+                               (c = 92 && i + 1 < n && s (i + 1) = 64 && two? (assoc "@" args))
+                                (go (i + 2) (acc + <>(assoc "@" args)))
                                (c = 92 && i + 1 < n && gidc? (s (i + 1)))
                                 (: j (word s (i + 1)) a (assoc (snip s (i + 1) j) args)
                                    (two? a ? (go j (acc + <>a)) (go (i + 1) (acc + string c))))
@@ -904,7 +933,9 @@
                (: p <ps k (kv <p)
                   (two? k ? (bind >ps po ([<p (xa-trim (snip <k (1 + xa-idx <k 61) #<k))] . acc))
                      (bind >ps >po ([<p (two? po ? <po <>p)] . acc)))))
-           args (bind ps po ())
+           k (peep cnt 'n 0)
+           _ (pin cnt 'n (k + 1))
+           args (["@" (show k)] . bind ps po ())
            (map (l \ psub l args) <>m))
        (go l acc)
         (atom? l ? acc
@@ -929,14 +960,16 @@
                      (go <>b (foldl (\ a v (go (map (x \ psub x [[<xs v]]) <b) a)) acc >xs)))
                  (w = ".rept")
                   (grab >l '(".irp" ".rept") ".endr" @ b
-                     (go <>b (foldl (\ a i (go <b a)) acc ^(val r))))
+                     (go <>b (foldl (\ a i (go <b a)) acc ^(vat r acc))))
                  (elem w gf-ifs)
                   (: b (grab >l gf-ifs ".endif") ab (split <b)
                      yes (? (elem w '(".ifc" ".ifnc"))
                              (: xs (xa-oplist r) eq (xa-trim <xs = xa-trim (two? >xs ? <>xs ""))
                                 (w = ".ifc" ? eq !eq))
-                             (w = ".ifeq") (val r = 0)
-                             (val r != 0))
+                             (w = ".ifb") (xa-trim r = "")
+                             (w = ".ifnb") (xa-trim r != "")
+                             (w = ".ifeq") (vat r acc = 0)
+                             (vat r acc != 0))
                      (go <>b (go (yes ? <ab <>ab) acc)))
                  (w = ".error") (scare 'gas-error r)
                  (two? (mac (xa-mnem t))) (go >l (go (call (mac (xa-mnem t)) r) acc))
@@ -1096,7 +1129,7 @@
                         line (snip s (c + 1) #s)))
                     (s 0 = 46) (flush 0, gf-dsplit s @ d (dir <d <>d))
                     (pin st 'run ((gf-lsub s rl) . (st 'run)))))))
-       _ (foldl (\ _ x (line x)) 0 (gf-expand (gf-lines tgt src)))
+       _ (foldl (\ _ x (line x)) 0 (gf-expand tgt (gf-lines tgt src)))
        _ (flush 0)
        ; each subsection after its section's own forms, in number order; a function's home has no
        ; tail of its own, so its subsections go to .text
