@@ -7844,6 +7844,7 @@
                     tab {}                ; this switch's value->label map (and 'dflt->label)
                     cases (rev (scasel-l g items tab ()))   ; pre-scan the body at any depth -> (value label) dispatch pairs
                     dflt (peep tab 'dflt lend)
+                    dup9 (peep tab 'dup ())
                     ; a range is two compares in the control's own signedness, r1 the scratch as
                     ; a single case's: below lo skips past, at most hi takes the case
                     (rng lo hi lab)
@@ -7870,8 +7871,9 @@
                     (pins g 'brk >(g 'brk)
                             'brkm >(g 'brkm)
                             'cases >(g 'cases),      ; pop
-                     bad? body || bad? disp ? 'bad
-                       (vfs c + disp + [['jmp dflt]] + (body + [['label lend]]))))))))
+                     (? dup9 (nolane g "a duplicate case value, or a second default, in one switch")
+                        (bad? body || bad? disp) 'bad
+                        (vfs c + disp + [['jmp dflt]] + (body + [['label lend]])))))))))
    (cgitems g env items acc) (sxpre g env items acc @ r (bad? r ? 'bad <r))   ; a block's items -> forms | 'bad
 
    ; -- the switch's table lane -> forms | 'no (the caller keeps its chain). index = control - lo, so one
@@ -7974,11 +7976,17 @@
                + [['expr ['asn (rx || ['deref (v "r")]) ['cast tt ['cond n ['un 'neg m] m]]]]])
               ['lor o ['un 'not fit]] 'int])))
    ; a switch body's case/default labels at any depth: value->label pinned into tab -> (value label) dispatch pairs
+   ; a value or range another label already holds (C11 6.8.4.2p3), or a second default, marks 'dup
+   (scover? tab a b)
+    (any (k \ (? (charm? k) (a <= k && k <= b) (two? k) (<k <= b && a <= <>k) ())) (keys tab))
    (scasel g it tab acc)
     (!(two? it) ? acc
-       (it @ ('case lo hi)  (nlab g ".k" @ lab (pin tab [lo hi] lab, [[lo hi] lab . acc]))   ; a range: one label
-             ('case cv)     (nlab g ".k" @ lab (pin tab cv lab, [cv lab . acc]))
-             ('dflt . _)   (nlab g ".k" @ lab (pin tab 'dflt lab, acc))
+       (it @ ('case lo hi)  (: _ (scover? tab lo hi && pin tab 'dup 1)
+                               (nlab g ".k" @ lab (pin tab [lo hi] lab, [[lo hi] lab . acc])))   ; a range: one label
+             ('case cv)     (: _ (scover? tab cv cv && pin tab 'dup 1)
+                               (nlab g ".k" @ lab (pin tab cv lab, [cv lab . acc])))
+             ('dflt . _)   (: _ (peep tab 'dflt () && pin tab 'dup 1)
+                              (nlab g ".k" @ lab (pin tab 'dflt lab, acc)))
              ('switch . _) acc                                   ; a nested switch owns its labels
              (scasel-l g (stkids it) tab acc)))
    (scasel-l g l tab acc) (!(two? l) ? acc (scasel-l g >l tab (scasel g <l tab acc)))
