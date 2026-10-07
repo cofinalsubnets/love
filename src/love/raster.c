@@ -8,8 +8,13 @@
 //         and tris may be lists of batches, pairwise, each batch's tris its own verts
 //  texs   a list of textures, each an [h w] tray of colours (one below 0 is a hole) or a
 //         list of them, each level half the last
-//  opts   fog r g b, fog near, fog far (view depth), flags: 1 affine, 2 snap, 4 dither, 8 cull;
-//         and an exposure k, a colour c 0 to 255 shown as 255 (1 - e^(-k c / 255)), 0 none
+//  opts   fog r g b, fog near, fog far (view depth), flags: 1 affine, 2 snap, 4 dither, 8 cull,
+//         16 depth (the answer the depth buffer, [h w] floats, 2 where nothing was drawn);
+//         and an exposure k, a colour c 0 to 255 shown as 255 (1 - e^(-k c / 255)), 0 none;
+//         and a shadow's bias, in the sun's depth
+//         or a list (opts sun depth): the verts then 11 a vertex, the r g b of the light
+//         from everywhere but the sun and then the sun's, which a pixel takes as much of as
+//         sun, 16 numbers, and depth, a depth answer through sun, say it sees past
 #include "love.h"
 #if Bits == 64
 double lm_exp(double);
@@ -19,13 +24,17 @@ float lm_expf(float);
 #define rz_exp lm_expf
 #endif
 
-enum { rz_affine = 1, rz_snap = 2, rz_dither = 4, rz_cull = 8, rz_lv = 8, rz_tn = 256 };
+enum { rz_affine = 1, rz_snap = 2, rz_dither = 4, rz_cull = 8, rz_depth = 16, rz_lv = 8, rz_tn = 256,
+       rz_na = 11 };   // the riders: u v, r g b, the sun's r g b, and the place as the sun sees it
 // a vertex in clip space with what rides on it; once projected x y are pixels and z ndc
-struct rz_v { flo_t x, y, z, w, a[5]; };
+struct rz_v { flo_t x, y, z, w, a[rz_na]; };
 struct rz_tex { intptr_t const *px; intptr_t w, h; };
 struct rz {
- intptr_t W, H, flags;
+ intptr_t W, H, flags, stride;
  flo_t const *m;
+ flo_t lm[16], bias;     // the sun's view, when there is one, and its depth answer
+ flo_t const *sm;
+ intptr_t SW, SH;
  flo_t fog[5], tone;
  flo_t tl[rz_tn + 2];   // the tone at k c / 255 = i / 32, 0 to 8, eased between
  intptr_t *out;
@@ -58,8 +67,21 @@ static intptr_t rz_ch(flo_t c, int d) {
  k = k < 0 ? 0 : k > 255 ? 255 : k;
  return d ? (k & 0xf8) | (k >> 5) : k; }
 
+// how much of the sun a place reaches, as it sees it: four of its depths about the place,
+// each passed or not, eased between; off its edge, all of it
+static flo_t rz_lit(struct rz const *r, intptr_t i, intptr_t j, flo_t z) {
+ return i < 0 || j < 0 || i >= r->SW || j >= r->SH || z <= r->sm[j * r->SW + i] ? 1 : 0; }
+static flo_t rz_vis(struct rz const *r, flo_t lx, flo_t ly, flo_t lz) {
+ flo_t const sx = (lx * (flo_t) 0.5 + (flo_t) 0.5) * (flo_t) r->SW - (flo_t) 0.5,
+             sy = ((flo_t) 0.5 - ly * (flo_t) 0.5) * (flo_t) r->SH - (flo_t) 0.5,
+             fi = rz_floor(sx), fj = rz_floor(sy), fx = sx - fi, fy = sy - fj, z = lz - r->bias;
+ intptr_t const i = (intptr_t) fi, j = (intptr_t) fj;
+ flo_t const t0 = rz_lit(r, i, j, z) + (rz_lit(r, i + 1, j, z) - rz_lit(r, i, j, z)) * fx,
+             t1 = rz_lit(r, i, j + 1, z) + (rz_lit(r, i + 1, j + 1, z) - rz_lit(r, i, j + 1, z)) * fx;
+ return t0 + (t1 - t0) * fy; }
+
 // one screen triangle. edges in sixteenths of a pixel, exact, so a shared edge's pixels fall
-// to one side of it only; the planes of z, 1/w and the five riders (over w unless affine)
+// to one side of it only; the planes of z, 1/w and the riders (over w unless affine)
 static void rz_tri(struct rz *r, struct rz_v const *p0, struct rz_v const *p1, struct rz_v const *p2,
                    struct rz_tex const *lv, int nlv) {
  struct rz_v const *P[3] = { p0, p1, p2 };
@@ -79,14 +101,14 @@ static void rz_tri(struct rz *r, struct rz_v const *p0, struct rz_v const *p1, s
              dx2 = (flo_t) (X[2] - X[0]) / 16, dy2 = (flo_t) (Y[2] - Y[0]) / 16, Af = (flo_t) A / 256;
  int const persp = !(r->flags & rz_affine);
  // the attribute planes: value at p0, step a pixel right, step a row down
- flo_t v0[7], vx[7], vy[7], e1[7], e2[7];
+ flo_t v0[2 + rz_na], vx[2 + rz_na], vy[2 + rz_na], e1[2 + rz_na], e2[2 + rz_na];
  v0[0] = p0->z, e1[0] = p1->z, e2[0] = p2->z;
  v0[1] = 1 / p0->w, e1[1] = 1 / p1->w, e2[1] = 1 / p2->w;
- for (int k = 0; k < 5; k++) {
+ for (int k = 0; k < rz_na; k++) {
   v0[2 + k] = p0->a[k] * (persp ? v0[1] : 1);
   e1[2 + k] = p1->a[k] * (persp ? e1[1] : 1);
   e2[2 + k] = p2->a[k] * (persp ? e2[1] : 1); }
- for (int k = 0; k < 7; k++) {
+ for (int k = 0; k < 2 + rz_na; k++) {
   flo_t const d1 = e1[k] - v0[k], d2 = e2[k] - v0[k];
   vx[k] = (d1 * dy2 - d2 * dy1) / Af, vy[k] = (d2 * dx1 - d1 * dx2) / Af; }
  int64_t xa = X[0], xb = X[0], ya = Y[0], yb = Y[0];
@@ -111,15 +133,18 @@ static void rz_tri(struct rz *r, struct rz_v const *p0, struct rz_v const *p1, s
  for (intptr_t y = y0; y < y1; y++) {
   flo_t const py = (flo_t) y + (flo_t) 0.5, px0 = (flo_t) x0 + (flo_t) 0.5;
   int64_t e[3];
-  flo_t a[7];
+  flo_t a[2 + rz_na];
   for (int i = 0; i < 3; i++) e[i] = ec[i] + ey[i] * (int64_t) y + ex[i] * (int64_t) x0;
-  for (int k = 0; k < 7; k++) a[k] = v0[k] + vx[k] * (px0 - x0f) + vy[k] * (py - y0f);
+  for (int k = 0; k < 2 + rz_na; k++) a[k] = v0[k] + vx[k] * (px0 - x0f) + vy[k] * (py - y0f);
   intptr_t *o = r->out + y * r->W;
   flo_t *dz = r->depth + y * r->W;
   for (intptr_t x = x0; x < x1; x++) {
    if ((e[0] | e[1] | e[2]) >= 0 && a[0] >= -1 && a[0] <= 1 && a[0] < dz[x]) {
-    flo_t const w = 1 / a[1], s = persp ? w : 1;
-    flo_t c[3] = { a[4] * s * 255, a[5] * s * 255, a[6] * s * 255 };
+    if (r->flags & rz_depth) dz[x] = a[0];
+    else {
+    flo_t const w = 1 / a[1], s = persp ? w : 1,
+                sun = r->sm ? rz_vis(r, a[10] * s, a[11] * s, a[12] * s) : 1;
+    flo_t c[3] = { (a[4] + a[7] * sun) * s * 255, (a[5] + a[8] * sun) * s * 255, (a[6] + a[9] * sun) * s * 255 };
     int hole = 0;
     if (nlv) {   // the level where a pixel's step crosses about a texel
      flo_t const u = a[2] * s, v = a[3] * s;
@@ -148,9 +173,9 @@ static void rz_tri(struct rz *r, struct rz_v const *p0, struct rz_v const *p1, s
       c[k] = r->tl[i] + (r->tl[i + 1] - r->tl[i]) * (f > 1 ? 1 : f); }
      int const d = r->flags & rz_dither ? rz_bayer[(y & 3) * 4 + (x & 3)] : 0;
      o[x] = rz_ch(c[0], d) << 16 | rz_ch(c[1], d) << 8 | rz_ch(c[2], d);
-     dz[x] = a[0]; } }
+     dz[x] = a[0]; } } }
    for (int i = 0; i < 3; i++) e[i] += ex[i];
-   for (int k = 0; k < 7; k++) a[k] += vx[k]; } } }
+   for (int k = 0; k < 2 + rz_na; k++) a[k] += vx[k]; } } }
 
 // clip space to pixels; snapped to whole ones on request
 static void rz_project(struct rz const *r, struct rz_v *v) {
@@ -164,7 +189,7 @@ static struct rz_v rz_lerp(struct rz_v const *a, struct rz_v const *b, flo_t t) 
  struct rz_v o;
  o.x = a->x + (b->x - a->x) * t, o.y = a->y + (b->y - a->y) * t;
  o.z = a->z + (b->z - a->z) * t, o.w = a->w + (b->w - a->w) * t;
- for (int k = 0; k < 5; k++) o.a[k] = a->a[k] + (b->a[k] - a->a[k]) * t;
+ for (int k = 0; k < rz_na; k++) o.a[k] = a->a[k] + (b->a[k] - a->a[k]) * t;
  return o; }
 
 // the planes a triangle is cut at, as d = (x y z w) . p >= 0: the near one, and a guard
@@ -184,13 +209,16 @@ static void rz_draw(struct rz *r, struct tray *vt, intptr_t const ix[3], struct 
  int out[6] = { 0 };
  for (int i = 0; i < 3; i++) {
   flo_t const *m = r->m;
-  uintptr_t const b = (uintptr_t) ix[i] * 8;
-  flo_t const X = rz_num(vt, b), Y = rz_num(vt, b + 1), Z = rz_num(vt, b + 2);
+  uintptr_t const b = (uintptr_t) (ix[i] * r->stride);
+  flo_t const X = rz_num(vt, b), Y = rz_num(vt, b + 1), Z = rz_num(vt, b + 2), *l = r->lm;
   p[i].x = m[0] * X + m[1] * Y + m[2] * Z + m[3];
   p[i].y = m[4] * X + m[5] * Y + m[6] * Z + m[7];
   p[i].z = m[8] * X + m[9] * Y + m[10] * Z + m[11];
   p[i].w = m[12] * X + m[13] * Y + m[14] * Z + m[15];
-  for (int k = 0; k < 5; k++) p[i].a[k] = rz_num(vt, b + 3 + (uintptr_t) k);
+  for (int k = 0; k < 8; k++) p[i].a[k] = k < r->stride - 3 ? rz_num(vt, b + 3 + (uintptr_t) k) : 0;
+  p[i].a[8] = l[0] * X + l[1] * Y + l[2] * Z + l[3];
+  p[i].a[9] = l[4] * X + l[5] * Y + l[6] * Z + l[7];
+  p[i].a[10] = l[8] * X + l[9] * Y + l[10] * Z + l[11];
   out[0] += p[i].x < -p[i].w, out[1] += p[i].x > p[i].w, out[2] += p[i].y < -p[i].w;
   out[3] += p[i].y > p[i].w, out[4] += p[i].z < -p[i].w, out[5] += p[i].z > p[i].w; }
  for (int k = 0; k < 6; k++) if (out[k] == 3) return;
@@ -215,15 +243,15 @@ static flo_t rz_opt(word o, uintptr_t i, flo_t d) {
 
 // a batch: verts and tris both trays, or both lists of them pairwise, each list's tris
 // counting from its own verts
-static int rz_ok(word v, word t) {
- return galaxyp(v) && galaxyp(t) && !(tray_nelem(tray(v)) % 8) && !(tray_nelem(tray(t)) % 4); }
-static int rz_batches(word v, word t) {
- if (rz_ok(v, t)) return 1;
- for (; chainp(v) && chainp(t); v = B(v), t = B(t)) if (!rz_ok(A(v), A(t))) return 0;
+static int rz_ok(word v, word t, uintptr_t st) {
+ return galaxyp(v) && galaxyp(t) && !(tray_nelem(tray(v)) % st) && !(tray_nelem(tray(t)) % 4); }
+static int rz_batches(word v, word t, uintptr_t st) {
+ if (rz_ok(v, t, st)) return 1;
+ for (; chainp(v) && chainp(t); v = B(v), t = B(t)) if (!rz_ok(A(v), A(t), st)) return 0;
  return v == ZeroPoint && t == ZeroPoint; }
 
 static void rz_batch(struct rz *r, struct tray *vt, struct tray *tt, word texs) {
- intptr_t const nv = (intptr_t) (tray_nelem(vt) / 8);
+ intptr_t const nv = (intptr_t) tray_nelem(vt) / r->stride;
  uintptr_t const nt = tray_nelem(tt) / 4;
  intptr_t ct = -1;   // the texture the last triangle used, its levels still in r->lv
  for (uintptr_t i = 0; i < nt; i++) {
@@ -236,17 +264,27 @@ static void rz_batch(struct rz *r, struct tray *vt, struct tray *tt, word texs) 
 love_noinline static struct g *host_raster(struct g *g) {
  word *a = g->sp;
  // (facets w h base mat verts tris texs opts)
- if (!(a[0] & a[1] & 1) || !galaxyp(a[3]) || tray_nelem(tray(a[3])) < 16 || !rz_batches(a[4], a[5])) {
+ uintptr_t const st = chainp(a[7]) ? 11 : 8;
+ if (!(a[0] & a[1] & 1) || !galaxyp(a[3]) || tray_nelem(tray(a[3])) < 16 || !rz_batches(a[4], a[5], st)) {
   a[0] = ZeroPoint; return g; }
  intptr_t const W = getcharm(a[0]), H = getcharm(a[1]);
  if (W < 1 || H < 1 || W > 4096 || H > 4096) { a[0] = ZeroPoint; return g; }
  uintptr_t const n = (uintptr_t) (W * H),
-                 fw = b2w(tray_bytes(love_Z, 2, n)), dw = b2w(tray_bytes(love_R, 1, n));
+                 fw = b2w(tray_bytes(love_Z, 2, n)), dw = b2w(tray_bytes(love_R, 2, n));
  if (!ok(g = have(g, fw + dw))) return g;
  a = g->sp;
- struct tray *fr = ini_tray(bump(g, fw), love_Z, 2), *dp = ini_tray(bump(g, dw), love_R, 1);
- fr->shape[0] = (uintptr_t) H, fr->shape[1] = (uintptr_t) W, dp->shape[0] = n;
- struct rz r = { .W = W, .H = H, .out = tray_data(fr), .depth = tray_data(dp) };
+ struct tray *fr = ini_tray(bump(g, fw), love_Z, 2), *dp = ini_tray(bump(g, dw), love_R, 2);
+ fr->shape[0] = dp->shape[0] = (uintptr_t) H, fr->shape[1] = dp->shape[1] = (uintptr_t) W;
+ struct rz r = { .W = W, .H = H, .stride = (intptr_t) st, .out = tray_data(fr), .depth = tray_data(dp) };
+ // the opts, and the sun's view and depths where they come as a list; read after the
+ // allocation, which may move them
+ word o = a[7], sv = ZeroPoint, sd = ZeroPoint;
+ if (chainp(o)) {
+  word const l = B(o);
+  sv = chainp(l) ? A(l) : ZeroPoint, sd = chainp(l) && chainp(B(l)) ? A(B(l)) : ZeroPoint, o = A(o); }
+ if (galaxyp(sv) && tray_nelem(tray(sv)) >= 16 && galaxyp(sd) && tray(sd)->rank == 2 && tray(sd)->type == love_R) {
+  for (uintptr_t i = 0; i < 16; i++) r.lm[i] = tray_get_flo(tray(sv), i);
+  r.sm = tray_data(tray(sd)), r.SH = (intptr_t) tray(sd)->shape[0], r.SW = (intptr_t) tray(sd)->shape[1]; }
  word const base = a[2];
  int const bt = galaxyp(base) && tray_nelem(tray(base)) >= n;
  intptr_t const bc = charmp(base) ? getcharm(base) : 0;
@@ -254,13 +292,13 @@ love_noinline static struct g *host_raster(struct g *g) {
  flo_t m[16];
  for (uintptr_t i = 0; i < 16; i++) m[i] = tray_get_flo(tray(a[3]), i);
  r.m = m;
- for (uintptr_t i = 0; i < 5; i++) r.fog[i] = rz_opt(a[7], i, 0);
- r.flags = (intptr_t) rz_opt(a[7], 5, 0), r.tone = rz_opt(a[7], 6, 0);
+ for (uintptr_t i = 0; i < 5; i++) r.fog[i] = rz_opt(o, i, 0);
+ r.flags = (intptr_t) rz_opt(o, 5, 0), r.tone = rz_opt(o, 6, 0), r.bias = rz_opt(o, 7, 0);
  if (r.tone > 0) for (int i = 0; i < rz_tn + 2; i++)
   r.tl[i] = 255 * (1 - rz_exp(-(flo_t) (i < rz_tn ? i : rz_tn) / 32));
  if (galaxyp(a[4])) rz_batch(&r, tray(a[4]), tray(a[5]), a[6]);
  else for (word v = a[4], t = a[5]; chainp(v); v = B(v), t = B(t)) rz_batch(&r, tray(A(v)), tray(A(t)), a[6]);
- a[0] = word(fr);
+ a[0] = r.flags & rz_depth ? word(dp) : word(fr);
  return g; }
 static lvm(lvm_raster) { LvmCallp(g, 7, host_raster) }
 

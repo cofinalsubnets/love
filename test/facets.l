@@ -28,6 +28,14 @@
    qt (fc-z [[0 3 2 0] [0 2 1 0]])
    (laid s texs fl) (facets 4 4 7 fc-id (quad s) qt texs (fc-g [[0.0 0.0 0.0 0.0 0.0 fl]]))
    (flat f) (map (k \ peep f [(k // 4) (k % 4)] 0) ^16)
+   ; the depth alone: the near face's, 2 where nothing was drawn; and a face lit only by the
+   ; sun (11 a vertex, its sun red), whole where the sun's view of it is clear, dark where
+   ; that view saw something nearer
+   dop (fc-g [[0.0 0.0 0.0 0.0 0.0 16.0]])
+   near (facets 4 4 7 fc-id nf (fc-z [[0 1 2 -1]]) () dop) none (facets 4 4 7 fc-id nf (fc-z []) () dop)
+   (sv x y z) [(1.0 * x) (1.0 * y) (1.0 * z) 0.0 0.0 0.0 0.0 0.0 1.0 0.0 0.0]
+   rec (fc-g [(sv -1 -1 0) (sv 3 -1 0) (sv -1 3 0)])
+   (sunlit m) (facets 4 4 0 fc-id rec (fc-z [[0 1 2 -1]]) () [(fc-g [[0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0]]) fc-id m])
    ; levels: red where a pixel is a texel, green where it crosses four
    lv [[(star-tray [4 4] (map (k \ red) ^16)) (star-tray [2 2] (map (k \ 65280) ^4))]]
    ; a perspective eye 1 above a floor that runs out behind it: cut at the near plane
@@ -74,4 +82,6 @@
       (fc-n (facets 4 4 7 fc-id (fc-g (big 0.0 1 0)) (fc-z [[0 1 2 -1]]) () (fc-g [[0.0 0.0 0.0 0.0 0.0 0.0 1.0]])) (161 << 16) = 16)
       ; ..and of 0.6, 255 (1 - e^-0.6)
       (fc-n (facets 4 4 7 fc-id (fc-g (big 0.0 1 0)) (fc-z [[0 1 2 -1]]) () (fc-g [[0.0 0.0 0.0 0.0 0.0 0.0 0.6]])) (115 << 16) = 16)
+      (shape near = [4 4]) (peep near [1 2] 0.0 = -0.5) (peep none [3 3] 0.0 = 2.0)
+      (fc-n (sunlit none) red = 16) (fc-n (sunlit near) 0 = 16) (fc-n (sunlit ()) red = 16)
       (fc-go 100 () 0 = 0)))

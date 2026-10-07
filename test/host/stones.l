@@ -48,16 +48,17 @@
        (rows * row-h - 1.0 < stones-ground (floor-r + rows * row-w - 0.5) zc)))
 
 ; --- the blocks: the altar in the middle, the ring of seven round it -- every place of the
-; --- octagon but the north-west -- and the audience on the rows, three to six of them,
+; --- octagon but the one north of north-west, and none between the slot and the altar -- and the audience on the rows, three to six of them,
 ; --- none in the slot's notch; the same run the same audience, another run another
 (: bs (stones-blocks 7) al <bs ring (filter (b \ b 7 = 1 && sqrt (sq (b 0) + sq (b 2 - zc)) < 7.0) bs)
    aud (filter (b \ b 7 = 1 && 7.0 < sqrt (sq (b 0) + sq (b 2 - zc))) bs)
-   (slot b) (int (wrap (ang b) / (pi / 4.0) + 8.5) % 8)
+   (slot b) (int (wrap (ang b) / (pi / 4.0) + 8.0) % 8)
    places (sort (map slot ring))
    (on-row? b) (: g (stones-ground (b 0) (b 2)) (row-h - 0.1 <= g && g <= rows * row-h))
    (notch? b) (mag (wrap (ang b + pi / 2.0)) < 0.4)
    counts (map (sd \ #(stones-blocks sd) - 8) ^40)
- (test (al 7 = 0) (al 0 = 0.0) (al 2 = zc) (#ring = 7) (places = [0 1 2 4 5 6 7])
+ (test (al 7 = 0) (al 0 = 0.0) (al 2 = zc) (#ring = 7) (places = [0 1 3 4 5 6 7])
+       !(any (b \ b 2 < zc && mag (b 0) < al 4 + b 4) ring)
        (3 <= #aud) (#aud <= 6) (all on-row? aud) !(any notch? aud)
        (show (stones-blocks 7) = show bs) (show (stones-blocks 8) != show bs)
        (all (n \ 3 <= n && n <= 6) counts) (any (n \ n != 3) counts)))

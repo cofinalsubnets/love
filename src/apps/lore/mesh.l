@@ -4,7 +4,7 @@
 ; or as kitty's pixels.
 ; the world is lore's: x right, y up, z ahead when 'th is 0, 'th turning toward x.
 (module (mesh mesh mesh-join mesh-move mesh-quad mesh-box mesh-grid mesh-lathe mesh-normals
-         mesh-keep mesh-pack mesh-bake mesh-open mesh-tex mesh-view mesh-dirs mesh-spot mesh-sky mesh-haze mesh-frame mesh-flat
+         mesh-keep mesh-pack mesh-bake mesh-bake-sun mesh-sun-view mesh-sun-map mesh-open mesh-tex mesh-view mesh-dirs mesh-spot mesh-sky mesh-haze mesh-frame mesh-flat
          mesh-cells mesh-kitty)
 (borrow 'view)
 (borrow 'vec)
@@ -88,6 +88,26 @@
    cols [(c 0) (c 1) (c 2) (c 3) (c 4) (lit 0) (lit 1) (lit 2)]
    i (iota n * 8)
    [(foldl (\ v k (pin v (i + k) (cols k))) (iota (8 * n) * 0.0) ^8) (pk 'tris)])
+ ; ..or the sun's light apart, for a frame that shades by the sun's view: 11 a vertex, the
+ ; light from the sky and round about, then the sun's
+ (mesh-bake-sun pk lt light gain) (: c (pk 'cols) n (pk 'n) s (lt 'sun) amb (lt 'amb) sc (lt 'sunc)
+   L (light c)
+   sun (max 0.0 (c 5 * s 0 + c 6 * s 1 + c 7 * s 2) * (L 0) * lt 'sunk)
+   (sky k) (gain * c (8 + k) * ((L 1) * amb k + (two? (L 2) ? (L 2 k) 0.0)))
+   (lit k) (gain * c (8 + k) * sun * sc k)
+   cols [(c 0) (c 1) (c 2) (c 3) (c 4) (sky 0) (sky 1) (sky 2) (lit 0) (lit 1) (lit 2)]
+   i (iota n * 11)
+   [(foldl (\ v k (pin v (i + k) (cols k))) (iota (11 * n) * 0.0) ^11) (pk 'tris)])
+ ; the sun's view of a place round c: along its light, half metres either side and deep
+ ; along it, its matrix for facets
+ (mesh-sun-view lt c half deep) (: s (lt 'sun)
+   r (unit (mag (s 1) < 0.99 ? (cross [0.0 1.0 0.0] s) [1.0 0.0 0.0])) u (cross s r)
+   (row a k) [(a 0 / k) (a 1 / k) (a 2 / k) (0.0 - dot a c / k)]
+   (gem-tray [16] (row r half + row u half + row (sub [0.0 0.0 0.0] s) deep + [0.0 0.0 0.0 1.0])))
+ ; ..and what it sees there of the scene [verts tris], baked with the sun apart: an n by n
+ ; tray of depths, for mesh-frame's sun
+ (mesh-sun-map sv sc n)
+   (facets n n -1 sv (sc 0) (sc 1) () [(gem-tray [6] [0.0 0.0 0.0 0.0 0.0 16.0]) () ()])
  ; ..the open sky's light alone, the sun on everything: what a level with nothing to cast
  ; a shadow lights by
  (mesh-open c) [1.0 (0.6 + 0.4 * c 6) ()]
@@ -164,13 +184,16 @@
    c (sky-near lt wx (gem-tray [1] [(sin th)]) (gem-tray [1] [0.02]) (gem-tray [1] [(cos th)]) (e 0) (e 2) sim)
    [(255.0 * peep (c 0) 0 0.0) (255.0 * peep (c 1) 0 0.0) (255.0 * peep (c 2) 0 0.0)])
  ; a frame, a flat tray of colours w*h long: the scene [verts tris], each a tray or a
- ; list of batches, with its textures, fog [r g b near far] 0 to 255, facets's flags and
+ ; list of batches, or [verts tris sun] baked with the sun apart and sun () or [view depths
+ ; bias] its view (mesh-sun-view and -map) and its slack, with its textures, fog [r g b near far] 0 to 255, facets's flags and
  ; the eye's gain (sky-tone's, 0 for none); and where it left the screen bare, bare: a
  ; colour, (\ v S ..) the colours of pixels S of the view, or [base over]: (base v) the
  ; ground drawn over, and (over v f B) the frame f finished
  (mesh-frame v sc texs fog flags gain bare) (: n (v 'w * v 'h) B (two? bare ? (<bare v) -1)
+   sun (#sc < 3 ? () (sc 2)) bias (two? sun ? (sun 2) 0.0)
+   o (gem-tray [8] [(1.0 * fog 0) (1.0 * fog 1) (1.0 * fog 2) (1.0 * fog 3) (1.0 * fog 4) (1.0 * flags) (1.0 * gain) bias])
    f (peep (facets (v 'w) (v 'h) B (v 'cam) (sc 0) (sc 1) texs
-                   (gem-tray [7] [(1.0 * fog 0) (1.0 * fog 1) (1.0 * fog 2) (1.0 * fog 3) (1.0 * fog 4) (1.0 * flags) (1.0 * gain)]))
+                   (#sc < 3 ? o [o (two? sun ? (sun 0) ()) (two? sun ? (sun 1) ())]))
            (iota n) 0)
    (? (two? bare) (<>bare v f B)
       (: S (iota (f = -1)) (#S = 0 ? f (pin f S (charm? bare ? bare (bare v S)))))))

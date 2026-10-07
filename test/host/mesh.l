@@ -66,6 +66,14 @@
    ; the same, the rest near on the mean; by night the stars a pixel each over it, as many
    fg (mesh-frame v0 (lit bx) () [0 0 0 0.0 0.0] 8 0.0 (mesh-sky sl wx [0.0 0.0 0.0] noon 0.0 4))
    (gap a b) (: p (mesh-flat a) q (mesh-flat b) (+(map (k \ net (max (p k - q k) (q k - p k))) ^3) / (3.0 * #a)))
+   ; a box over a sheet, the sun overhead: seen from above, the sheet dark under the box by
+   ; the sun's view of it, and lit as before away from it; without the view, lit throughout
+   shs (mesh-bake-sun (mesh-pack sheet) lt mesh-open 1.0)
+   cb (mesh-bake-sun (mesh-pack (mesh-box [0.0 0.0 0.0] [0.5 0.5 0.5] 0.0 -1 white 1.0)) lt mesh-open 1.0)
+   sv (mesh-sun-view lt [0.0 0.0 0.0] 5.0 5.0) mp (mesh-sun-map sv cb 64)
+   vd (mesh-view W H [0.0 5.0 0.0] 0.0 -1.5 1.4 0.1 100.0)
+   fsh (mesh-frame vd [(shs 0) (shs 1) [sv mp 0.02]] () [0 0 0 0.0 0.0] 0 0.0 7)
+   fno (mesh-frame vd [(shs 0) (shs 1) ()] () [0 0 0 0.0 0.0] 0 0.0 7)
    gk (mesh-sky nl wx [0.0 0.0 0.0] night 0.0 4)
    hot4 (iota (mesh-frame vu (lit bx) () [0 0 0 0.0 0.0] 8 0.0 gk != mesh-frame vu (lit bx) () [0 0 0 0.0 0.0] 8 0.0 [(<gk) (\ v f B f)]))
  (test (all (k \ round k != 7) ^4)
@@ -88,6 +96,7 @@
        (shape sk = [(W * H)]) (0 < amin sk)
        (at fs mid cen = at f0 mid cen) (at fs 0 0 = peep sk 0 0) (at fs (W - 1) 0 = peep sk (W - 1) 0)
        (0 < seen) (0.9 * seen <= #hot) (#hot <= seen)
-       (at fg mid cen = at f0 mid cen) (two? gk) (gap fg fs < 0.01) (0.9 * seen <= #hot4) (#hot4 <= seen)))
+       (at fg mid cen = at f0 mid cen) (two? gk) (gap fg fs < 0.01) (0.9 * seen <= #hot4) (#hot4 <= seen)
+       (shape mp = [64 64]) (at fsh mid cen < at fno mid cen) (at fsh (mid + 6) cen = at fno (mid + 6) cen)))
 (test_fin ())
 (puts "mesh: ok\n")
