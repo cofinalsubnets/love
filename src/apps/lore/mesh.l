@@ -4,7 +4,7 @@
 ; or as kitty's pixels.
 ; the world is lore's: x right, y up, z ahead when 'th is 0, 'th turning toward x.
 (module (mesh mesh mesh-join mesh-move mesh-quad mesh-box mesh-grid mesh-lathe mesh-normals
-         mesh-keep mesh-pack mesh-bake mesh-bake-sun mesh-sun-view mesh-sun-map mesh-open mesh-tex mesh-view mesh-dirs mesh-spot mesh-sky mesh-haze mesh-frame mesh-flat
+         mesh-keep mesh-pack mesh-bake mesh-bake-sun mesh-sun-view mesh-sun-map mesh-open mesh-tex mesh-view mesh-eye mesh-dirs mesh-spot mesh-sky mesh-haze mesh-frame mesh-flat
          mesh-cells mesh-kitty)
 (borrow 'view)
 (borrow 'vec)
@@ -128,30 +128,32 @@
  ; --- the view: a screen w by h, the eye at e facing th and tilted up by ph, fov wide
  ;     across, nothing nearer than near nor past far; 'cam the matrix facets takes, clip
  ;     space gl's with z ahead ---
- (mesh-view w h e th ph fov near far)
-  (: st (sin th) ct (cos th) sp (sin ph) cp (cos ph)
-     r [ct 0.0 (0.0 - st)] u [(0.0 - st * sp) cp (0.0 - ct * sp)] f [(st * cp) sp (ct * cp)]
+ (mesh-view w h e th ph fov near far) (mesh-eye w h e th ph 0.0 fov near far)
+ ; ..and the head tilted ro toward its right shoulder as well
+ (mesh-eye w h e th ph ro fov near far)
+  (: st (sin th) ct (cos th) sp (sin ph) cp (cos ph) cr (cos ro) sr (sin ro)
+     r0 [ct 0.0 (0.0 - st)] u0 [(0.0 - st * sp) cp (0.0 - ct * sp)] f [(st * cp) sp (ct * cp)]
+     r (c+ (c* cr r0) (c* (0.0 - sr) u0)) u (c+ (c* cr u0) (c* sr r0))
      fx (1.0 / tan (fov / 2.0)) fy (fx * w / h)
      za ((far + near) / (far - near)) zb (-2.0 * far * near / (far - near))
      (row k a) [(k * a 0) (k * a 1) (k * a 2) (0.0 - k * dot a e)]
      z (row za f)
-     {'w w 'h h 'e e 'th th 'ph ph 'fov fov
+     {'w w 'h h 'e e 'th th 'ph ph 'fov fov 'r r 'u u 'f f
       'cam (gem-tray [16] (row fx r + row fy u + [(z 0) (z 1) (z 2) (z 3 + zb)] + row 1.0 f))})
  ; the directions through pixels ix of the view, unit [x y z] trays
  (mesh-dirs v ix) (: w (v 'w) (rays v (ix % w + 0.5) (ix // w + 0.5)))
  ; ..and through the points px py of the screen, in pixels from its top left
  (rays v px py) (: w (v 'w) h (v 'h) foc (w / 2.0 / tan (v 'fov / 2.0))
-   U ((px - w / 2.0) / foc) V ((h / 2.0 - py) / foc)
-   th (v 'th) ph (v 'ph) st (sin th) ct (cos th) sp (sin ph) cp (cos ph)
-   x (st * cp + U * ct - V * st * sp) y (sp + V * cp) z (ct * cp - U * st - V * ct * sp)
+   U ((px - w / 2.0) / foc) V ((h / 2.0 - py) / foc) r (v 'r) u (v 'u) f (v 'f)
+   x (f 0 + U * r 0 + V * u 0) y (f 1 + U * r 1 + V * u 1) z (f 2 + U * r 2 + V * u 2)
    l (sqrt (x * x + y * y + z * z))
    [(x / l) (y / l) (z / l)])
  ; ..and the pixels directions X Y Z (trays) fall on, -1 behind the eye or off the screen
  (mesh-spot v X Y Z) (: w (v 'w) h (v 'h) foc (w / 2.0 / tan (v 'fov / 2.0))
-   th (v 'th) ph (v 'ph) st (sin th) ct (cos th) sp (sin ph) cp (cos ph)
-   zc (X * st * cp + Y * sp + Z * ct * cp) zs (max zc 0.01)
-   cx (floor (w / 2.0 + foc * (X * ct - Z * st) / zs))
-   cy (floor (h / 2.0 - foc * (Y * cp - (X * st + Z * ct) * sp) / zs))
+   r (v 'r) u (v 'u) f (v 'f)
+   zc (X * f 0 + Y * f 1 + Z * f 2) zs (max zc 0.01)
+   cx (floor (w / 2.0 + foc * (X * r 0 + Y * r 1 + Z * r 2) / zs))
+   cy (floor (h / 2.0 - foc * (X * u 0 + Y * u 1 + Z * u 2) / zs))
    (over -1 ((0.05 < zc) * (0 <= cx) * (cx < w) * (0 <= cy) * (cy < h)) (cy * w + cx)))
  ; lore's sky through the eye's gain, for mesh-frame's bare: k 1 the colours of the pixels
  ; S of the view v left bare, the sky's stars a pixel each among them; k past 1 the sky
@@ -203,11 +205,12 @@
  (mesh-cells f w h deep bay bands) (: c (mesh-flat f)
    (deep ? (view-deep-frame w h (view-deep-pens c) bands)
       (view-cube-pens c bay @ px (view-frame w h (y \ peep px (iota w + w * y) 0) bands))))
- ; ..or as kitty's pixels over cols by rows cells from the cursor, which stays: image id,
+ ; ..or as kitty's pixels over cols by rows cells from the cursor, which stays, under any
+ ; text put over them: image id,
  ; the rgb in base64 4096 bytes a chunk
  (mesh-kitty f w h cols rows id) (: b (frame-bytes f 2 1) n #b o (jug 0)
    (go i) (: j (min n (i + 4096))
-             (say o (esc + "_G" + (i = 0 ? ("a=T,f=24,q=2,C=1,i=" + show id + ",s=" + show w + ",v=" + show h
+             (say o (esc + "_G" + (i = 0 ? ("a=T,f=24,q=2,C=1,z=-1,i=" + show id + ",s=" + show w + ",v=" + show h
                                             + ",c=" + show cols + ",r=" + show rows + ",") "")
                      + "m=" + (j < n ? "1" "0") + ";" + snip b i j + esc + "\\"),
               j < n ? (go j) (slurp o)))
