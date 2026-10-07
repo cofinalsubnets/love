@@ -23,7 +23,7 @@ name=test_ccwasm
 # the wasm machine cannot yet carry. 160-rangeinit and 256-inline-retaddr are not "not yet": a
 # wasm return address lives on the engine's call stack, where linear memory cannot reach it, and
 # 229-labelvalue likewise: a wasm label has no address to take or jump through.
-unsupported="100-complex 102-bigstruct 111-int128 117-vastruct 151-w128fuzz 160-rangeinit 229-labelvalue 256-inline-retaddr"
+unsupported="100-complex 111-int128 117-vastruct 151-w128fuzz 160-rangeinit 229-labelvalue 256-inline-retaddr"
 
 d=$ho/cc-wasm
 rm -rf "$d"

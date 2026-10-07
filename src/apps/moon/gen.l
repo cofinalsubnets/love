@@ -480,10 +480,10 @@
    ; a memory-class return: a hidden pointer as the first gp argument, filled and answered by
    ; the callee. AAPCS32 past 4 bytes -- save, on a VFP seat, an HFA, which the s/d file carries --
    ; and SysV past 16
-   (sretm? g ty) (stru? ty && (t32? g && 4 < tsz g ty && !(t32f? g && t32hfa? g ty) || amem? g ty || a64m? g ty))
-   ; AAPCS64's memory class: a composite past 16 bytes that is no HFA travels by reference -- an arg as the
-   ; address of the caller's own copy, a return through the buffer x8 points at
-   (a64m? g ty) (a64? g && stru? ty && 16 < tsz g ty && !(hfab g ty @ b (flo? b && tsz g ty <= 4 * tsz g b)))
+   (sretm? g ty) (stru? ty && (t32? g && 4 < tsz g ty && !(t32f? g && t32hfa? g ty) || amem? g ty || refm? g ty))
+   ; the by-reference class: a composite past 16 bytes (AAPCS64: and no HFA; LP64 riscv and wasm: any) travels
+   ; as the address of the caller's own copy, and returns through the buffer x8 (riscv: a0) points at
+   (refm? g ty) (stru? ty && 16 < tsz g ty && (rv64? g || (a64? g && !(hfab g ty @ b (flo? b && tsz g ty <= 4 * tsz g b)))))
    ; an AAPCS-VFP homogeneous aggregate: one float base, at most four of it
    (t32hfa? g ty) (hfab g ty @ b (flo? b && tsz g ty <= 4 * tsz g b))
    (srreg g) (a64? g ? 'r8 (argr g 0))              ; where the hidden result pointer rides
@@ -2581,7 +2581,7 @@
                (nolane g ("no lane for a double/pair/struct va_arg" + ontgt g))
               (d128? ty) (nolane g "a wide va_arg is not carried")
               ; a64: a memory-class struct's slot holds its copy's address, which is the value; any other struct's holds data
-              (a64? g && stru? ty && !(a64m? g ty)) (nolane g ("no lane for a va_arg of this struct" + ontgt g))
+              (a64? g && stru? ty && !(refm? g ty)) (nolane g ("no lane for a va_arg of this struct" + ontgt g))
               (flo? ty) (mkv 'double 'r0 (tor0 g lv + walk + fldf ty 'f0 'r2 0))
               (mkv ty 'r0 (tor0 g lv + walk + [[(ldop ty) 'r0 'r2 0]]))))
        ('vaend . _) (mkv 'long 'r0 ())
@@ -2781,7 +2781,7 @@
                                       (. [['p2 f0 i0 f1 i1] (tor0 g a + (a8? g ? (ldw2 g aty) push2w))]
                                             acc)))))
                        ; an a64 memory-class arg: copied into a temp of the caller's, whose address rides as a pointer
-                       (a64m? g aty)
+                       (refm? g aty)
                         (: off (ntmp g aty)
                            cp (tor0 g a + [['lea 'r1 'r4 off]]
                                + (sal? g ? (bcopya 0 (tsz g aty) (tal g aty)) (bcopy g 0 (tsz g aty) ()))
@@ -7494,12 +7494,12 @@
                                       (fldf 'double (xmmreg 0) 'r0 0)) + epj)
                       (aone g rt = 'int)                             ; a small int aggregate (a union rides here): rax
                        (tor0 g r + (salw? g rt ? (ldal 'r0 'r0 0 (tsz g rt) (tal g rt)) '((ld r0 r0 0))) + epj)
-                      (amem? g rt || a64m? g rt)                         ; a memory return: fill the caller's temp through
+                      (amem? g rt || refm? g rt)                         ; a memory return: fill the caller's temp through
                        (tor0 g r                                         ; the saved hidden pointer, and answer it in rax
                         + [['ld 'r1 'r4 (peep g 'sret 0)]]
                         + (sal? g ? (bcopya 0 (tsz g rt) (tal g rt)) (bcopy g 0 (tsz g rt) ())) + '((mov r0 r1)) + epj)
                       (stru? rt || stru? (vty r))                        ; a mixed 16-byte pair, and every composite class
-                       (nolane g ("no lane for returning this " + show (tsz g (stru? rt ? rt (vty r)))     ; a64 has no memory return yet
+                       (nolane g ("no lane for returning this " + show (tsz g (stru? rt ? rt (vty r)))
                                   + "-byte struct by value" + ontgt g))
                       (flo? (vty r)) (asintt g r rt + (rt @ 'bool (cvt rt 'r0) ()) + epj)     ; a double value, an int return -> truncate to r0
                       (pair? g rt) (asll g r + epj)        ; a pair return: r0:r1 (widen a word value)
@@ -8684,7 +8684,7 @@
                         (spill hp >ps gpi xmmi (ovi + 1) ([<p (ovb g + 8 * ovi) pty] . env) acc)))
                  ; an a64 memory-class param arrives as the address of the caller's copy: it saves like a pointer, and
                  ; the struct copies into this frame once every arg register is home (spillp: bcopy runs through r0-r2)
-                 (a64m? g pty)
+                 (refm? g pty)
                   (? (pol? hp) 'bad
                      (: off (ntmp g pty)
                         reg (gpi < ngp g)
@@ -8786,7 +8786,7 @@
                       (7 < vri ? (cls >qs gpi vri (ov + 1) ([<p (ovb g + 8 * ov) pty] . env))
                                  (cls >qs gpi (vri + 1) ov ([<p (rsa + 64 + 16 * vri) pty] . env)))
                      ; a by-reference struct: its pointer's slot, copied into the frame after the saves
-                     (a64m? g pty)
+                     (refm? g pty)
                       (: off (ntmp g pty) src (7 < gpi ? (ovb g + 8 * ov) (rsa + 8 * gpi))
                          _ (pin g 'pcopy (g 'pcopy + [['ld 'r0 'r4 src] ['lea 'r1 'r4 off]] + bcopy g 0 (tsz g pty) ()))
                          (7 < gpi ? (cls >qs gpi vri (ov + 1) ([<p off pty] . env))

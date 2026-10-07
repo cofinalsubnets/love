@@ -650,11 +650,11 @@ never silent**.
 | `_Complex` arithmetic | ✓ | — | — | — | — | — |
 | variable-length array | ✓ | ✓ | ✓ | — | — | — |
 | by-value composite arg, ≤16B, registers free | ✓ | ✓ | ✓ | — | — | — |
-| by-value composite arg, MEMORY class | ✓ | — | — | — | — | — |
+| by-value composite arg, MEMORY class | ✓ | ✓ | ✓ | — | — | — |
 | composite passed at a variadic call site | ✓ | ✓ | ✓ | — | — | — |
 | composite NAMED in a variadic parameter list | ✓ | ✓ | — | — | — | — |
 | composite return, 16B all-int | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| composite return, MEMORY class | ✓ | — | — | ✓ | ✓ | ✓ |
+| composite return, MEMORY class | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `__builtin_bswap64` | ✓ | ✓ | ✓ | — | — | — |
 | `__sync` spin-lock pair | ✓ | ✓ | ✓ | — | — | — |
 | signed 64-bit `/` and `%` | ✓ | ✓ | ✓ | rt.c | rt.c | rt.c |
@@ -684,9 +684,11 @@ object, which is how the table finds it. Everywhere else the lane is ours or the
 **The two struct rows do not move together, and t32 inverts them.** AAPCS32 returns a
 struct over 4 bytes through memory (`sretm?`) -- every one on v6-M, and on thumb2/thumb2sp
 every one that is no VFP HFA (at most four of one float type, which the s/d file carries) --
-so t32 takes both composite returns while refusing the int composite *argument*; a64 and rv64
-are the mirror image, taking arguments and the 16B return but refusing the MEMORY-class
-return — which is what stops PDCLib's dlmalloc on the cross targets.
+so t32 takes both composite returns while refusing the int composite *argument*. a64 and
+rv64 (and wasm, on rv64's lanes) pass a composite past 16 bytes by reference both ways
+(`refm?`): an argument as the address of the caller's copy, a return through a hidden
+pointer (x8 on a64, a0 on rv64) -- save, on a64, an HFA of three or four doubles, which
+refuses.
 
 **The register-exhausted by-value composite is x64-only, and even there only the gp half.**
 A 9..16B aggregate argument with too few *integer* registers left now goes wholly to the
@@ -710,9 +712,6 @@ also takes — probe the one you mean.
 - **a memory-returning call through a POINTER on t32** — `no lane for an indirect call to a
   MEMORY-returning function`: the direct call stages the hidden pointer, the indirect one
   does not yet. test/thumb2/libr.c is the direct lane's differential against gcc.
-- **a MEMORY-class composite RETURN on a64 and rv64** — `no lane for returning this
-  80-byte struct by value on <tgt>`. Probe: `typedef struct { long a[10]; } R;` with a
-  definition that returns one; a bare prototype compiles everywhere.
 - **signed 64-bit `/` and `%` on t32** call out to the runtime's own `__divdi3`/`__moddi3`
   (src/apps/moon/lib/rt.c) on all three targets.
 - **thumb1 varargs** — the pop-pc epilogue cannot drop the r0-r3 block; `vaspill-t32` refuses
