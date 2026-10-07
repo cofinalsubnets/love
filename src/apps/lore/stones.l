@@ -441,7 +441,7 @@
    xs (filter two? [db (post-batch st lt) (ghost-batch st lt)])
    sc (#xs = 0 ? sc0 [(cat (sc0 0) (map (b \ b 0) xs)) (cat (sc0 1) (map (b \ b 1) xs)) (sc0 2)])
    (mesh-frame v sc ((land ()) 'texs) [(hz 0) (hz 1) (hz 2) 150.0 900.0] 8 (1.5 * lt 'expo)
-               (mesh-sky lt (st 'wx) e (st 'sim) (st 't) (k = 1 ? 1 (sky-k * k)))))
+               (mesh-sky (sky-stars (st 'sim) (st 'dst) lat) lt (st 'wx) e (st 'sim) (st 't) (k = 1 ? 1 (sky-k * k)))))
  (stones-frame st) (: w (st 'w) h (st 'h) k (peep st 'kp 1) f0 (stones-pens st) kit (st 'kitty)
    dl (charm? (st 'dlg)) r (h // 2) bw 22 bh (#acts + 2) r0 (max2 0 (r - bh - 2)) c0 (max2 0 ((w - bw) // 2))
    hp (st 'mt < help-t && !dl)

@@ -50,21 +50,21 @@
    sl (sky-light (sky-sun noon 0.0 0.65) wx noon)
    ; the sky where the box leaves the screen bare, and the same sky asked alone
    v0 (vw [0.0 0.0 0.0] 0.0 0.0)
-   skf (mesh-sky sl wx [0.0 0.0 0.0] noon 0.0 1)
+   skf (mesh-sky (sky-stars noon 0.0 0.65) sl wx [0.0 0.0 0.0] noon 0.0 1)
    sk (skf v0 (iota (W * H)))
    fs (mesh-frame v0 (lit bx) () [0 0 0 0.0 0.0] 8 0.0 skf)
    ; by night, looking straight up: the stars change no more pixels than there are stars
    ; in view -- none of them a patch
-   night (1.0 * 1790812800 + 1.0 * 3600.0) nl (sky-light (sky-sun night 0.0 0.65) wx night)
+   night (1.0 * 1790812800 + 1.0 * 3600.0) nl (sky-light (sky-sun night 0.0 0.65) wx night) ns (sky-stars night 0.0 0.65)
    vu (mesh-view W H [0.0 0.0 0.0] 0.0 1.5 1.4 0.1 100.0)
-   zen (mesh-frame vu (lit bx) () [0 0 0 0.0 0.0] 8 0.0 (mesh-sky nl wx [0.0 0.0 0.0] night 0.0 1))
+   zen (mesh-frame vu (lit bx) () [0 0 0 0.0 0.0] 8 0.0 (mesh-sky ns nl wx [0.0 0.0 0.0] night 0.0 1))
    bare (mesh-frame vu (lit bx) () [0 0 0 0.0 0.0] 8 0.0
                     (\ v S (: d (mesh-dirs v S) (mh-word (sky-tone nl (sky-colour-of nl wx (d 0) (d 1) (d 2) 0.0 0.0 night))))))
-   seen (net (-1 < mesh-spot vu (sky-stars 'x) (sky-stars 'y) (sky-stars 'z)))
+   seen (net (-1 < mesh-spot vu (ns 'x) (ns 'y) (ns 'z)))
    lit-m (zen != bare) hot (iota lit-m)
    ; the sky asked every 4 pixels and shaded between: near the sky asked at each, the box
    ; the same, the rest near on the mean; by night the stars a pixel each over it, as many
-   fg (mesh-frame v0 (lit bx) () [0 0 0 0.0 0.0] 8 0.0 (mesh-sky sl wx [0.0 0.0 0.0] noon 0.0 4))
+   fg (mesh-frame v0 (lit bx) () [0 0 0 0.0 0.0] 8 0.0 (mesh-sky (sky-stars noon 0.0 0.65) sl wx [0.0 0.0 0.0] noon 0.0 4))
    (gap a b) (: p (mesh-flat a) q (mesh-flat b) (+(map (k \ net (max (p k - q k) (q k - p k))) ^3) / (3.0 * #a)))
    ; a box over a sheet, the sun overhead: seen from above, the sheet dark under the box by
    ; the sun's view of it, and lit as before away from it; without the view, lit throughout
@@ -74,7 +74,7 @@
    vd (mesh-view W H [0.0 5.0 0.0] 0.0 -1.5 1.4 0.1 100.0)
    fsh (mesh-frame vd [(shs 0) (shs 1) [sv mp 0.02]] () [0 0 0 0.0 0.0] 0 0.0 7)
    fno (mesh-frame vd [(shs 0) (shs 1) ()] () [0 0 0 0.0 0.0] 0 0.0 7)
-   gk (mesh-sky nl wx [0.0 0.0 0.0] night 0.0 4)
+   gk (mesh-sky ns nl wx [0.0 0.0 0.0] night 0.0 4)
    hot4 (iota (mesh-frame vu (lit bx) () [0 0 0 0.0 0.0] 8 0.0 gk != mesh-frame vu (lit bx) () [0 0 0 0.0 0.0] 8 0.0 [(<gk) (\ v f B f)]))
  (test (all (k \ round k != 7) ^4)
        (mid < <(cols right))

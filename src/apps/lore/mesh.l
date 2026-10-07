@@ -160,12 +160,12 @@
    cy (floor (h / 2.0 - foc * (X * u 0 + Y * u 1 + Z * u 2) / zs))
    (over -1 ((0.05 < zc) * (0 <= cx) * (cx < w) * (0 <= cy) * (cy < h)) (cy * w + cx)))
  ; lore's sky through the eye's gain, for mesh-frame's bare: k 1 the colours of the pixels
- ; S of the view v left bare, the sky's stars a pixel each among them; k past 1 the sky
+ ; S of the view v left bare, the stars ss (sky-stars) a pixel each among them; k past 1 the sky
  ; asked at the corners of k by k squares and shaded across each by facets, under the
  ; scene, and the stars put on after where the scene left them showing
- (mesh-sky lt wx e sim t0 k)
-  (: X (sky-stars 'x) Y (sky-stars 'y) Z (sky-stars 'z)
-     (shine c ix) (word (sky-tone lt (sky-stars! c lt wx (e 0) (e 2) sim t0 ix)))
+ (mesh-sky ss lt wx e sim t0 k)
+  (: X (ss 'x) Y (ss 'y) Z (ss 'z)
+     (shine c ix) (word (sky-tone lt (sky-stars! ss c lt wx (e 0) (e 2) sim t0 ix)))
      (k <= 1
       ? (\ v S (: at (pin (iota (v 'w * v 'h) * 0 - 1) S (iota #S)) d (mesh-dirs v S)
                   (shine (sky-colour-of lt wx (d 0) (d 1) (d 2) (e 0) (e 2) sim) (peep at (mesh-spot v X Y Z) -1))))

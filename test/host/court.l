@@ -38,11 +38,11 @@
    cam {'e [0.0 eye-h 0.0] 'f [0.0 1.0 0.0] 'r [1.0 0.0 0.0] 'u [0.0 0.0 -1.0] 'w w 'h h 'foc (w / 2.0)}
    z (iota n * 0.0) c (stars! [z z z] st lt cam (iota n * 0 + 1) 0)
    lit (net (0.0 < c 0))
-   X (stars 'x) Y (stars 'y) Z (stars 'z)
+   ss (stars st) X (ss 'x) Y (ss 'y) Z (ss 'z)
    cx (floor (w / 2.0 + 40.0 * X / Y)) cy (floor (h / 2.0 + 40.0 * Z / Y))
    seen (net ((0.05 < Y) * (0 <= cx) * (cx < w) * (0 <= cy) * (cy < h)))
  (test (5 < seen) (0.9 * seen <= lit) (lit <= seen) (amax (c 0) < 1.0)
-       (all (k \ 0.3 <= peep Y k 0.0) ^(#X))))
+       (0.0 = net ((Y <= 0.0) * ss 'b))))   ; none from under the horizon
 
 ; --- the sun: up by day and down by night, south at noon, east in the morning and west in
 ; --- the evening, a unit vector; summer's hour is taken off the wall clock

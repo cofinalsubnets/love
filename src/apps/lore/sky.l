@@ -16,6 +16,7 @@
          sky-stars sky-stars! sky-covers sky-styles sky-says sky-falls sky-fall sky-fall! bil cloud-n day-secs rgb)
 (borrow 'view)
 (borrow 'vec)
+(borrow 'starmap)
 (:
  (day-secs s) (s - 86400.0 * floor (s / 86400.0))
  ; the sun as [east up north], a unit vector, by solar time and the day of the year
@@ -23,12 +24,17 @@
  ; ..and a body on the sun's own track, its hour dh hours on from the sun's and its day of
  ; the year dd days: the moon, a phase p round, is the sun's hour -24p and its day +365p
  (sky-body s lat dh dd) (: hr (day-secs s / 3600.0 + dh)
-   doy (s / 86400.0 - 10957.0 - 365.2422 * floor ((s / 86400.0 - 10957.0) / 365.2422) + dd)
+   doy (sky-doy s + dd)
    dec (-0.4091 * cos (2.0 * pi * (doy + 10.0) / 365.2422))
    ha ((hr - 12.0) * pi / 12.0)
    [(0.0 - cos dec * sin ha)
     (sin lat * sin dec + cos lat * cos dec * cos ha)
     (cos lat * sin dec - sin lat * cos dec * cos ha)])
+ (sky-doy s) (s / 86400.0 - 10957.0 - 365.2422 * floor ((s / 86400.0 - 10957.0) / 365.2422))
+ ; the local sidereal time, as an angle: the sun's hour angle and its right ascension, off
+ ; the same year as its declination -- so the stars keep their place against the sun
+ (sky-lst s) (: lam (2.0 * pi * (sky-doy s - 81.31) / 365.2422) k (1.0 - cos 0.4091)
+   ((day-secs s / 3600.0 - 12.0) * pi / 12.0 + lam - atan (k * sin lam * cos lam / (1.0 - k * sq (sin lam)))))
  ; --- the weather ---
  sky-covers ['clear 'partly 'mostly 'overcast]
  sky-styles ['smooth 'pixel]
@@ -205,27 +211,33 @@
  ; ..and the sky nearer than the moon: no sun's disc
  (sky-near lt wx dx dy dz ex ez sim)
   (wx 'style = 'pixel ? (pixel lt wx dx dy dz ex ez sim 0.0) (smooth-of lt wx dx dy dz ex ez sim 0.0))
- ; --- the stars: fixed in the sky, evenly over it from a little above the horizon,
- ; [x y z brightness phase] as trays. a scene lays each one a pixel where its eye sees it:
- ; a star read off a map down every ray is stretched over the pixels near overhead and
- ; lost between them low down, so there is none ---
- star-k 400
- sky-stars (: (one k) (: az (2.0 * pi * throw k 1 91 1000 / 1000.0) y (0.3 + 0.7 * throw k 2 93 1000 / 1000.0)
-                         r (sqrt (1.0 - y * y))
-                         [(r * sin az) y (r * cos az) (0.3 + 0.12 * throw k 3 95 5) (throw k 4 97 628 / 100.0)])
-              l (map one ^star-k) (col j) (gem-tray [star-k] (map (q \ 1.0 * q j) l))
-              {'x (col 0) 'y (col 1) 'z (col 2) 'b (col 3) 'ph (col 4)})
- ; ..their light added to the colours c, [r g b] trays before the eye's gain, ix each
- ; star's place in them, -1 where it is not on the open sky: dimmed by the cloud before
+ ; --- the stars: the bright star catalogue's to magnitude 4.5 (starmap.l), turned with the
+ ; sidereal time over the latitude lat, as [east up north] trays 'x 'y 'z, each with its
+ ; brightness 'b by its magnitude, fading into the horizon and nothing below it, a
+ ; twinkle's phase 'ph and a tint 'tint [r g b] by its colour. a scene lays each one a
+ ; pixel where its eye sees it: a star read off a map down every ray is stretched over the
+ ; pixels near overhead and lost between them low down, so there is none ---
+ stars0 (: n (#star-cat // 4) (col j) (gem-tray [n] (map (i \ 1.0 * star-cat (4 * i + j)) ^n))
+           ra (col 0 * (pi / 18000.0)) de (col 1 * (pi / 18000.0)) m (col 2 / 100.0)
+           t (sat ((col 3 / 100.0 + 0.3) / 1.9)) u (sat (t * 2.13)) w (sat ((t - 0.47) * 1.89))
+           {'ra ra 'sd (sin de) 'cd (cos de) 'b (sat ((0.85 - 0.13 * m) / 1.1) * 1.1)
+            'ph (gem-tray [n] (map (k \ throw k 4 97 628 / 100.0) ^n))
+            'tint [(0.78 + 0.22 * u) (0.86 + 0.11 * u - 0.19 * w) (1.0 - 0.1 * u - 0.35 * w)]})
+ (sky-stars sim dst lat) (: H (sky-lst (sim - dst) - stars0 'ra) ch (cos H) sd (stars0 'sd) cd (stars0 'cd)
+   y (sin lat * sd + cos lat * cd * ch)
+   {'x (0.0 - cd * sin H) 'y y 'z (cos lat * sd - sin lat * cd * ch)
+    'b (stars0 'b * sat (y / 0.1)) 'ph (stars0 'ph) 'tint (stars0 'tint)})
+ ; ..their light added to the colours c, [r g b] trays before the eye's gain, ix each of
+ ; ss's stars' place in them, -1 where it is not on the open sky: dimmed by the cloud before
  ; it, twinkling by the frame's clock t0, or in the pixel sky on and off
- (sky-stars! c lt wx ex ez sim t0 ix) (: nt (sat (1.0 - lt 'day * 3.0))
+ (sky-stars! ss c lt wx ex ez sim t0 ix) (: nt (sat (1.0 - lt 'day * 3.0))
    (nt <= 0.0 ? c
-    (: X (sky-stars 'x) Y (sky-stars 'y) Z (sky-stars 'z)
+    (: X (ss 'x) Y (ss 'y) Z (ss 'z)
        cl (sky-cloud wx X Y Z ex ez sim)
-       tw (sin (t0 * turns wx 'tper 0.9 + sky-stars 'ph))
-       v (wx 'style = 'pixel ? ((0.6 < tw) * (lt 'day < 0.1) * (cl < 0.5) * 1.6)
-            (sky-stars 'b * (0.75 + 0.25 * tw) * nt * (1.0 - cl)))
-       (map (k \ peep (c k) ix 0.0 @ o (pin (c k) ix (o + (k = 2 ? 0.9 1.0) * v))) ^3))))
+       tw (sin (t0 * turns wx 'tper 0.9 + ss 'ph))
+       v (wx 'style = 'pixel ? ((0.6 < tw) * (lt 'day < 0.1) * (cl < 0.5) * (0.0 < Y) * 1.6)
+            (ss 'b * (0.75 + 0.25 * tw) * nt * (1.0 - cl)))
+       (map (k \ peep (c k) ix 0.0 @ o (pin (c k) ix (o + (ss 'tint) k * v))) ^3))))
  ; --- what falls: rain in streaks and snow in flakes, drawn into a scene's buffers -- 't
  ; the depth, 'r 'g 'b the colour -- through a camera (grove's: 'e 'f 'r 'u 'w 'h 'foc),
  ; at sec seconds of the scene's own clock. no state: a drop is where its number and the

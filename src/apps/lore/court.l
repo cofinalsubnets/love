@@ -610,15 +610,15 @@
              (lay (over -1 ok idx) 0.95)))) ()))
    _ (each boxes cast-box)
    (O 'o))
- ; --- the stars: sky's, each one pixel where the eye sees it through the top ---
- stars sky-stars
+ ; --- the stars: sky's at the hour, each one pixel where the eye sees it through the top ---
+ (stars st) (sky-stars (st 'sim) (st 'dst) lat)
  (stars! c st lt cam sky t0) (: e (cam 'e) f (cam 'f) rt (cam 'r) uv (cam 'u) w (cam 'w) h (cam 'h) foc (cam 'foc)
-   X (stars 'x) Y (stars 'y) Z (stars 'z)
+   ss (stars st) X (ss 'x) Y (ss 'y) Z (ss 'z)
    zc (X * f 0 + Y * f 1 + Z * f 2) zs (max zc 0.01)
    cx (floor (w / 2.0 + foc * (X * rt 0 + Y * rt 1 + Z * rt 2) / zs))
    cy (floor (h / 2.0 - foc * (X * uv 0 + Y * uv 1 + Z * uv 2) / zs))
    idx (over -1 ((0.05 < zc) * (0 <= cx) * (cx < w) * (0 <= cy) * (cy < h)) (cy * w + cx))
-   (sky-stars! c lt (st 'wx) (e 0) (e 2) (st 'sim) t0 (over -1 (peep sky idx 0) idx)))
+   (sky-stars! ss c lt (st 'wx) (e 0) (e 2) (st 'sim) t0 (over -1 (peep sky idx 0) idx)))
  ; --- the frame ---
  ; the lit share of the windows by the hour of the evening
  (lit-share hr) (? (hr < 5.0) 6 (hr < 6.5) 12 (hr < 9.0) 35 (hr < 16.0) 4 (hr < 18.0) 25 (hr < 23.0) 60 25)

@@ -55,17 +55,23 @@
    kx (max (peep kc x 0.0) 1.0) f ((kx - y - 0.5) / kx)
    el (sky-lo + f * (0.5 * pi - sky-lo) * 0.97) az (az-lift * atan U) cl (cos el)
    _ (pins st 'kc kc 'sdx (cl * sin az) 'sdy (sin el) 'sdz (cl * cos az))
-   (lay-stars (pins st 'w w 'h h 'cy cy 'foc (w / 2.0) 'dx dx 'dy dy 'dz dz 'gnd gnd
-                     'gx gx 'gz gz 'G (iota gnd) 'S (iota (1 - gnd))
-                     'bay (view-bayer w h) 'f [0.0 sp cp] 'u [0.0 cp (0.0 - sp)])))
- ; the stars: sky's, each one pixel where the lens shows it and the land does not -- a
+   (pins st 'w w 'h h 'cy cy 'foc (w / 2.0) 'dx dx 'dy dy 'dz dz 'gnd gnd
+            'gx gx 'gz gz 'G (iota gnd) 'S (iota (1 - gnd)) 'stars-h -99.0
+            'bay (view-bayer w h) 'f [0.0 sp cp] 'u [0.0 cp (0.0 - sp)]))
+ ; the stars: sky's ss, each one pixel where the lens shows it and the land does not -- a
  ; tray of their pixels, -1 for one not seen
- (lay-stars st) (: w (st 'w) h (st 'h) X (sky-stars 'x) Y (sky-stars 'y) Z (sky-stars 'z)
+ (lay-stars st ss) (: w (st 'w) h (st 'h) X (ss 'x) Y (ss 'y) Z (ss 'z)
    (one k) (on-screen st [(peep X k 0.0) (peep Y k 0.0) (peep Z k 0.0)] @ p
               (two? p ? (: x (int (p 0)) y (int (p 1)) i (y * w + x)
                            (0 <= x && x < w && 0 <= y && y < h && peep (st 'gnd) i 1 = 0 ? i -1))
                  -1))
-   (pin st 'stars (star-tray [#X] (map one ^#X))))
+   (star-tray [#X] (map one ^#X)))
+ ; ..at the game's hour, seen in the mirror: [stars pixels], laid again once the sky has
+ ; turned a third of a degree
+ (meadow-stars st g) (: hr (g 'h % 24.0)
+   (abs (hr - st 'stars-h) < 0.02 ? (st 'stars-at)
+      (: s0 (sky-stars (day0 + hr * 3600.0) 0.0 lat) ss (pins s0 'z (0.0 - s0 'z)) sl [ss (lay-stars st ss)]
+         (pins st 'stars-h hr 'stars-at sl, sl))))
  (asin v) (atan (v / sqrt (max (1.0 - v * v) 1e-9)))
  (at2 y x) (? (0.0 < x) (atan (y / x)) (x < 0.0) (atan (y / x) + (y < 0.0 ? (0.0 - pi) pi)) (y < 0.0 ? (-0.5 * pi) (0.5 * pi)))
  ; ..and back: a direction in the sky to the place on the screen the lens shows it, [x y]
@@ -224,7 +230,8 @@
    (put col d c) (: ix (d 0) (map (k \ pin (col k) ix (c k)) ^3))
    (behind col d) (: ix (d 0) (map (k \ peep (col k) ix 0.0) ^3))
    ; --- the stars by night, a pixel each ---
-   col00 (sky-stars! colg lt wx (eye 0) (eye 2) sim t0 (st 'stars))
+   sl (meadow-stars st g)
+   col00 (sky-stars! (sl 0) colg lt wx (eye 0) (eye 2) sim t0 (sl 1))
    ; --- the sun and the moon, discs where the lens shows them, the land in front of them ---
    ; the sun: hot at the middle, its colour the light's. behind a cloud it softens and pales
    ; but shows, and the cloud round it glows, so where it is can be told
