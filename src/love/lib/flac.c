@@ -457,7 +457,6 @@ love_noinline static struct g *host_flac_frame(struct g *g) {
  return g->sp[4] = word(r), g->sp += 4, g; }
 static lvm(lvm_flac_frame) LvmCall(g, host_flac_frame)
 
-
 love_noinline static struct g *host_flac_encode(struct g *g) {
  for (int i = 1; i < 6; i++) if (!oddp(g->sp[i])) return g->sp[5] = putcharm(3), g->sp += 5, g;
  intptr_t ch = getcharm(g->sp[1]), bps = getcharm(g->sp[2]), rate = getcharm(g->sp[3]),
@@ -476,8 +475,5 @@ love_noinline static struct g *host_flac_encode(struct g *g) {
  memcpy(txt(g->sp[0]), txt(g->sp[1]), m);
  return g->sp[8] = g->sp[0], g->sp += 8, g; }
 static lvm(lvm_flac_encode) LvmCall(g, host_flac_encode)
-static union u const
-  nif_flac_frame[] = {{lvm_cur}, {.x = putcharm(4)}, {lvm_flac_frame}, {lvm_ret0}},
-  nif_flac_encode[] = {{lvm_cur}, {.x = putcharm(6)}, {lvm_flac_encode}, {lvm_ret0}};
-LvNif("flac-frame", nif_flac_frame, NULL);
-LvNif("flac-encode", nif_flac_encode, NULL);
+LvDef("flac-frame", flac_frame, 4, "flac");
+LvDef("flac-encode", flac_encode, 6, "flac");

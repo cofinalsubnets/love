@@ -282,7 +282,6 @@ static lvm(lvm_shutdown) {
  Sp[1] = Sp[0];
  love_musttail return Nextp(1, 1); }
 
-
 // --- datagrams ----------------------------------------------------------------------
 //   (recv p)            -> (peer bytes) | (peer bytes ttl) | a nom | 'badarg   [parks]
 //   (send p peer bytes) -> p | a nom | 'badarg
@@ -545,19 +544,12 @@ static lvm(lvm_farend) {
  LvmCallp(g, 1, host_farend, fd) }                // [s] -> [peer]
 
 static union u const
- nif_connect[]  = {{lvm_connect}, {lvm_connectw}, {lvm_ret0}},
- nif_listen[]   = {{lvm_listen}, {lvm_ret0}},
- nif_bind[]     = {{lvm_bind}, {lvm_ret0}},
- nif_accept[]   = {{lvm_accept}, {lvm_ret0}},
- nif_shutdown[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_shutdown}, {lvm_ret0}},
- nif_recv[]     = {{lvm_recv}, {lvm_ret0}},
- nif_send[]     = {{lvm_cur}, {.x = putcharm(3)}, {lvm_send}, {lvm_ret0}},
- nif_farend[]   = {{lvm_farend}, {lvm_ret0}};
+  nif_connect[]  = {{lvm_connect}, {lvm_connectw}, {lvm_ret0}};
 LvNif("connect", nif_connect, NULL);
-LvNif("listen", nif_listen, NULL);
-LvNif("bind", nif_bind, NULL);
-LvNif("accept", nif_accept, NULL);
-LvNif("seal", nif_shutdown, NULL);
-LvNif("recv", nif_recv, NULL);
-LvNif("send", nif_send, NULL);
-LvNif("farend", nif_farend, NULL);
+LvDef("listen", listen, 1, NULL);
+LvDef("bind", bind, 1, NULL);
+LvDef("accept", accept, 1, NULL);
+LvDef("seal", shutdown, 2, NULL);
+LvDef("recv", recv, 1, NULL);
+LvDef("send", send, 3, NULL);
+LvDef("farend", farend, 1, NULL);

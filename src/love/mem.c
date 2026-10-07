@@ -105,12 +105,7 @@ static lvm(lvm_peepv) {
  Sp[4] = word(v);
  love_musttail return Nextp(1, 4); }
 
-static union u const
-  nif_peepw[]  = {{lvm_cur}, {.x = putcharm(2)}, {lvm_peepw}, {lvm_ret0}},
-  nif_pinw[]   = {{lvm_cur}, {.x = putcharm(3)}, {lvm_pinw},  {lvm_ret0}},
-  nif_peepv[]  = {{lvm_cur}, {.x = putcharm(5)}, {lvm_peepv}, {lvm_ret0}},
-  nif_pinv[]   = {{lvm_cur}, {.x = putcharm(5)}, {lvm_pinv},  {lvm_ret0}};
-LvNif("peepw", nif_peepw, "guts");
-LvNif("pinw", nif_pinw, "guts");
-LvNif("peepv", nif_peepv, "guts");
-LvNif("pinv", nif_pinv, "guts");
+LvDef("peepw", peepw, 2, "guts");
+LvDef("pinw", pinw, 3, "guts");
+LvDef("peepv", peepv, 5, "guts");
+LvDef("pinv", pinv, 5, "guts");

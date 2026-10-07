@@ -12,7 +12,7 @@
 ; frame's box to see-through (as browsers do) and 3 restores what was under it.
 ; a pixel under half alpha is the transparent index. up to 256 colours stay exact; past
 ; that each channel is cut to 5 bits and a median cut over what is left picks the palette.
-(module (gif gif-encode gif-anim gif-decode gif-frames gif-palette gif-key)
+(module (gif gif-encode gif-anim gif-decode gif-frames gif-palette gif-key gif-frame)
 (:
    ; --- the palette ----------------------------------------------------------------------
    ; a pixel's colour as one number, -1 when it is transparent

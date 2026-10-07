@@ -533,8 +533,7 @@ static lvm(lvm_defercell) {
  Hp += w + 1;
  tagthread(k, w);
  love_musttail return Answerp(1, word(k + 1)); }
-static union u const nif_defercell[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_defercell}, {lvm_ret0}};
-LvNif("defercell", nif_defercell, NULL);
+LvDef("defercell", defercell, 2, NULL);
 // (deferpatch cell native): a native of nif's shape (its header its code) patches the cell; the
 // interp twin back, or anything else, leaves it forwarding. answers the cell
 static lvm(lvm_deferpatch) {
@@ -547,9 +546,7 @@ static lvm(lvm_deferpatch) {
    if ((mc[4].x & 3) != thread_tag) c[4].x = mc[4].x, gen_wb_cell(g, &c[4], mc[4].x);
    c[5].x = n, gen_wb_cell(g, &c[5], n); } }
  love_musttail return Answerp(1, Sp[0]); }
-static union u const nif_deferpatch[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_deferpatch}, {lvm_ret0}};
-LvNif("deferpatch", nif_deferpatch, NULL);
-
+LvDef("deferpatch", deferpatch, 2, NULL);
 
 // (pour dst doff src soff n): copy n bytes of string-or-cask src into cask dst,
 // clamped to both backings (an out-of-range ask copies less, never tramples); answers dst

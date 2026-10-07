@@ -7,6 +7,8 @@
 (module (sqfs sqfs-make sqfs-tree)
 (borrow 'bytes)
 (borrow 'posix)
+(borrow 'gz)
+(borrow 'hashes)
 (: bsize 131072
    mblk 8192                                       ; a metadata block's payload
    (oops m) (say err ("sqfs: " + m + "\n"), quit 1)

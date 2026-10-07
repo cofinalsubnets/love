@@ -807,79 +807,19 @@ static lvm(lvm_ck_done) {
  Sp[0] = host_ck_done(Sp[0]);
  love_musttail return Next(1); }
 
-#define Nif1(nm, f) static union u const nm[] = {{f}, {lvm_ret0}};
-#define Nif2(nm, f) static union u const nm[] = {{lvm_cur}, {.x = putcharm(2)}, {f}, {lvm_ret0}};
-#define DigBook(nm) Nif1(nif_##nm, lvm_##nm) Nif1(nif_##nm##_init, lvm_##nm##_init) \
- Nif2(nif_##nm##_feed, lvm_##nm##_feed) Nif1(nif_##nm##_done, lvm_##nm##_done)
-Nif1(nif_sha, lvm_sha256)
-Nif1(nif_sha_init, lvm_sha_init)
-Nif2(nif_sha_feed, lvm_sha_feed)
-Nif1(nif_sha_done, lvm_sha_done)
+#define H(nm, x, n) LvDef(nm, x, n, "hashes");
+#define DigBook(nm) H(#nm, nm, 1) H(#nm "-init", nm##_init, 1) H(#nm "-feed", nm##_feed, 2) H(#nm "-done", nm##_done, 1)
+H("sha256", sha256, 1) H("sha256-init", sha_init, 1) H("sha256-feed", sha_feed, 2) H("sha256-done", sha_done, 1)
 DigBook(md5)
 DigBook(sha1)
 DigBook(sha224)
 DigBook(sha384)
 DigBook(sha512)
-Nif1(nif_blake2b, lvm_blake2b)
-Nif2(nif_b2_init, lvm_b2_init)
-Nif2(nif_b2_feed, lvm_b2_feed)
-Nif1(nif_b2_done, lvm_b2_done)
-Nif1(nif_sha3, lvm_sha3)
-static union u const nif_k3_init[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_k3_init}, {lvm_ret0}};
-Nif2(nif_k3_feed, lvm_k3_feed)
-Nif1(nif_k3_done, lvm_k3_done)
-Nif2(nif_bsdsum, lvm_bsdsum)
-Nif1(nif_crc32, lvm_crc32)
-Nif2(nif_crc32_on, lvm_crc32_on)
-Nif1(nif_adler32, lvm_adler32)
-Nif1(nif_crc32c, lvm_crc32c)
-Nif2(nif_crc32c_on, lvm_crc32c_on)
-Nif1(nif_cksum, lvm_cksum)
-static union u const nif_ogg_crc[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_ogg_crc}, {lvm_ret0}};
-Nif1(nif_ck_init, lvm_ck_init)
-Nif2(nif_ck_feed, lvm_ck_feed)
-Nif1(nif_ck_done, lvm_ck_done)
-
-LvNif("sha256", nif_sha, NULL);
-LvNif("sha256-init", nif_sha_init, NULL);
-LvNif("sha256-feed", nif_sha_feed, NULL);
-LvNif("sha256-done", nif_sha_done, NULL);
-LvNif("md5", nif_md5, NULL);
-LvNif("md5-init", nif_md5_init, NULL);
-LvNif("md5-feed", nif_md5_feed, NULL);
-LvNif("md5-done", nif_md5_done, NULL);
-LvNif("sha1", nif_sha1, NULL);
-LvNif("sha1-init", nif_sha1_init, NULL);
-LvNif("sha1-feed", nif_sha1_feed, NULL);
-LvNif("sha1-done", nif_sha1_done, NULL);
-LvNif("sha224", nif_sha224, NULL);
-LvNif("sha224-init", nif_sha224_init, NULL);
-LvNif("sha224-feed", nif_sha224_feed, NULL);
-LvNif("sha224-done", nif_sha224_done, NULL);
-LvNif("sha384", nif_sha384, NULL);
-LvNif("sha384-init", nif_sha384_init, NULL);
-LvNif("sha384-feed", nif_sha384_feed, NULL);
-LvNif("sha384-done", nif_sha384_done, NULL);
-LvNif("sha512", nif_sha512, NULL);
-LvNif("sha512-init", nif_sha512_init, NULL);
-LvNif("sha512-feed", nif_sha512_feed, NULL);
-LvNif("sha512-done", nif_sha512_done, NULL);
-LvNif("blake2b", nif_blake2b, NULL);
-LvNif("blake2b-init", nif_b2_init, NULL);
-LvNif("blake2b-feed", nif_b2_feed, NULL);
-LvNif("blake2b-done", nif_b2_done, NULL);
-LvNif("sha3", nif_sha3, NULL);
-LvNif("sha3-init", nif_k3_init, NULL);
-LvNif("sha3-feed", nif_k3_feed, NULL);
-LvNif("sha3-done", nif_k3_done, NULL);
-LvNif("bsdsum", nif_bsdsum, NULL);
-LvNif("crc32", nif_crc32, NULL);
-LvNif("crc32-on", nif_crc32_on, NULL);
-LvNif("adler32", nif_adler32, NULL);
-LvNif("crc32c", nif_crc32c, NULL);
-LvNif("crc32c-on", nif_crc32c_on, NULL);
-LvNif("cksum", nif_cksum, NULL);
-LvNif("ogg-crc", nif_ogg_crc, NULL);
-LvNif("cksum-init", nif_ck_init, NULL);
-LvNif("cksum-feed", nif_ck_feed, NULL);
-LvNif("cksum-done", nif_ck_done, NULL);
+H("blake2b", blake2b, 1) H("blake2b-init", b2_init, 2) H("blake2b-feed", b2_feed, 2) H("blake2b-done", b2_done, 1)
+H("sha3", sha3, 1) H("sha3-init", k3_init, 3) H("sha3-feed", k3_feed, 2) H("sha3-done", k3_done, 1)
+H("bsdsum", bsdsum, 2)
+H("crc32", crc32, 1) H("crc32-on", crc32_on, 2)
+H("adler32", adler32, 1)
+H("crc32c", crc32c, 1) H("crc32c-on", crc32c_on, 2)
+H("cksum", cksum, 1) H("cksum-init", ck_init, 1) H("cksum-feed", ck_feed, 2) H("cksum-done", ck_done, 1)
+H("ogg-crc", ogg_crc, 3)

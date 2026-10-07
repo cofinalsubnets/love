@@ -7,6 +7,7 @@
 (borrow 'posix)
 (borrow 'flac)
 (borrow 'bytes)
+(borrow 'hashes)
 (: dir (cwd 0 + "/out/.flacd")
    ; a meta that wants more, or would skip a block it need not hold
    (fl-more? x) (x = 'more || (two? x && elem <x ['more 'skip]))

@@ -11,6 +11,7 @@
 (borrow 'tls)
 (borrow 'posix)
 (borrow 'bytes)
+(borrow 'hashes)
 
 ; what ssh and scp share: the options and their defaults, and the login -- dial, the host key
 ; held to known_hosts, the identity, publickey auth. a failure is said as prog's and leaves

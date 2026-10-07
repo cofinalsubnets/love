@@ -13,6 +13,7 @@
 ; extend it.
 
 (borrow 'posix)
+(borrow 'gz)
 
 (: (die m) (say err ("lcat: " + m + "\n"), quit 1)
    (s2cl s) ((: (g i) (i < #s ? (s i . g (i + 1)))) 0)  ; string -> charlist

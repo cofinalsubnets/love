@@ -19,6 +19,7 @@
 ; object format (the link's arch), and a cross backend joins from its tree text.
 
 (borrow 'posix)
+(borrow 'gz)
 (: (rt-die m) (say err ("mkrt: " + m + "\n"), quit 1)
    (rt-rdev cl)
     (sound cl @ 'torn (rt-die "torn backend text")

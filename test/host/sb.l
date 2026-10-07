@@ -8,6 +8,7 @@
 ; bare, and the test's own helpers stay above in the session.
 (borrow 'sb)
 (borrow 'kore)          ; sb splices the text floor below itself, so the session must ask for it too
+(borrow 'hashes)
 
 (: sb-home (cwd 0))
 (: sb-dir ("out/.sbtest-" + show (getpid 0)))

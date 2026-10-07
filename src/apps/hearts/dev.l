@@ -15,6 +15,8 @@
 ; place, and the slot is offered to the next boot only once every part matched.
 (borrow 'bytes)
 (borrow 'posix)
+(borrow 'gz)
+(borrow 'hashes)
 (: argv cmdline
    ; by name: a borrow of 'ssh would bring its own split
    ed-verify (cite 'ssh 'ed-verify)

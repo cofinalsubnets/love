@@ -436,9 +436,8 @@ static lvm(lvm_resume) {
  Sp[0] = ok ? putcharm(1) : ZeroPoint;
  love_musttail return Next(1); }
 
-static union u const nif_pause[] = {{lvm_pause}, {lvm_ret0}}, nif_resume[] = {{lvm_resume}, {lvm_ret0}};
-LvNif("pause", nif_pause, NULL);
-LvNif("resume", nif_resume, NULL);
+LvDef("pause", pause, 1, NULL);
+LvDef("resume", resume, 1, NULL);
 
 lvm(lvm_sleep) {
  word n = Sp[0];

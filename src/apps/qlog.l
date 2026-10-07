@@ -19,6 +19,7 @@
 (module (qlog qlog-make qlog-read qlog-hash qlog-who qlog-step qlog-may? qlog-trust)
 (borrow 'posix)
 (borrow 'bytes)
+(borrow 'hashes)
 
 (: ql-sign (cite 'ssh 'ed-sign)
    ql-verify (cite 'ssh 'ed-verify)

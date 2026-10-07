@@ -10,6 +10,7 @@
 (borrow 'json)
 (borrow 'bytes)
 (borrow 'posix)
+(borrow 'hashes)
 (:
    home (getenv "HOME" || "")
    dir ((getenv "XBELL_DIR" || (home + "/.local/share/xbell")) + "/")

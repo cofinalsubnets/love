@@ -70,6 +70,4 @@ love_noinline static struct g *host_bcrypt(struct g *g) {
  return g; }
 static lvm(lvm_bcrypt) LvmCall(g, host_bcrypt)
 
-static union u const
-  nif_bcrypt[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_bcrypt}, {lvm_ret0}};
-LvNif("bcrypt-hash", nif_bcrypt, NULL);
+LvDef("bcrypt-hash", bcrypt, 3, "ssh");

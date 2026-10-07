@@ -81,11 +81,6 @@ static lvm(lvm_rtgz) LvmCall(g, host_rtgz)
 static LvmWrap(lvm_tree_tar, host_tree_tar)
 static LvmWrap(lvm_tree_head, host_tree_head)
 
-static union u const
- nif_tree_tar[] = {{lvm_tree_tar}, {lvm_ret0}},
- nif_tree_head[] = {{lvm_tree_head}, {lvm_ret0}},
- nif_rtgz[] = {{lvm_rtgz}, {lvm_ret0}};
-
-LvNif("tree-tar", nif_tree_tar, NULL);
-LvNif("tree-head", nif_tree_head, NULL);
-LvNif("runtime-gz", nif_rtgz, NULL);
+LvDef("tree-tar", tree_tar, 1, NULL);
+LvDef("tree-head", tree_head, 1, NULL);
+LvDef("runtime-gz", rtgz, 1, NULL);

@@ -104,8 +104,5 @@ static struct g *host_spectrum(struct g *g) {
 
 static lvm(lvm_biquads) LvmCall(g, host_biquads)
 static lvm(lvm_spectrum) LvmCall(g, host_spectrum)
-static union u const
-  nif_biquads[] = {{lvm_cur}, {.x = putcharm(4)}, {lvm_biquads}, {lvm_ret0}},
-  nif_spectrum[] = {{lvm_cur}, {.x = putcharm(4)}, {lvm_spectrum}, {lvm_ret0}};
-LvNif("biquads", nif_biquads, "dsp");
-LvNif("spectrum", nif_spectrum, "dsp");
+LvDef("biquads", biquads, 4, "dsp");
+LvDef("spectrum", spectrum, 4, "dsp");

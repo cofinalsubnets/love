@@ -568,7 +568,6 @@ static int vb_audio(uint8_t *base, struct vh *h, const uint8_t *p, uint32_t len)
  h->pn = n, h->primed = 1;
  return out; }
 
-
 static love_inline struct g *host_vorbis_size(struct g *g) {
  word r = putcharm(-3);
  if (strp(g->sp[0]) && strp(g->sp[1])) {
@@ -609,10 +608,6 @@ love_noinline static struct g *host_vorbis_packet(struct g *g) {
  return g->sp[2] = word(out), g->sp += 2, g; }
 static lvm(lvm_vorbis_packet) LvmCall(g, host_vorbis_packet)
 
-static union u const
-  nif_vorbis_size[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_vorbis_size}, {lvm_ret0}},
-  nif_vorbis_init[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_vorbis_init}, {lvm_ret0}},
-  nif_vorbis_packet[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_vorbis_packet}, {lvm_ret0}};
-LvNif("vorbis-size", nif_vorbis_size, NULL);
-LvNif("vorbis-init", nif_vorbis_init, NULL);
-LvNif("vorbis-packet", nif_vorbis_packet, NULL);
+LvDef("vorbis-size", vorbis_size, 2, "ogg");
+LvDef("vorbis-init", vorbis_init, 3, "ogg");
+LvDef("vorbis-packet", vorbis_packet, 3, "ogg");

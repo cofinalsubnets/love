@@ -20,7 +20,6 @@
 #define MAP_POPULATE 0
 #endif
 
-
 // the scratch beside a bake's target, per-process. two loves bake the same name
 // concurrently all the time under `make -jN`, and on one shared name they interleave into
 // each other's bytes, the second to rename answering ENOENT. NULL on refusal.
@@ -269,8 +268,7 @@ static lvm(lvm_bake) {
  Sp[0] = r;
  love_musttail return Next(1); }
 
-static union u const nif_bake[] = {{lvm_bake}, {lvm_ret0}};
-LvNif("bake", nif_bake, NULL);
+LvDef("bake", bake, 1, NULL);
 
 struct g *image_load(char const *path) {
   int fd = open(path, O_RDONLY);

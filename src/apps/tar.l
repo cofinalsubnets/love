@@ -20,6 +20,7 @@
 (module 'tar
 (borrow 'posix)
 (borrow 'bytes)
+(borrow 'hashes)
 (:
    tar-blk 512
 

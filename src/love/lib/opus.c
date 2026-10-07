@@ -120,7 +120,6 @@ static inline void *opus_alloc_scratch(size_t n) { (void) n; return NULL; }
 #define OP_SCRATCH (16 + GLOBAL_STACK_SIZE + 64 + 5760 * 2 * sizeof(float))
 static uintptr_t op_dec_size(int ch) { return ((uintptr_t) opus_decoder_get_size(ch) + 15) & ~(uintptr_t) 15; }
 
-
 static love_inline struct g *host_opus_state(struct g *g) {
  intptr_t ch = oddp(g->sp[0]) ? getcharm(g->sp[0]) : 0;
  g->sp[0] = ch == 1 || ch == 2 ? putcharm((intptr_t) (op_dec_size((int) ch) + OP_SCRATCH)) : ZeroPoint;
@@ -163,10 +162,6 @@ love_noinline static struct g *host_opus_packet(struct g *g) {
  return g->sp[2] = word(out), g->sp += 2, g; }
 static lvm(lvm_opus_packet) { LvmCall(g, host_opus_packet) }
 
-static union u const
-  nif_opus_state[] = {{lvm_opus_state}, {lvm_ret0}},
-  nif_opus_init[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_opus_init}, {lvm_ret0}},
-  nif_opus_packet[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_opus_packet}, {lvm_ret0}};
-LvNif("opus-state", nif_opus_state, NULL);
-LvNif("opus-init", nif_opus_init, NULL);
-LvNif("opus-packet", nif_opus_packet, NULL);
+LvDef("opus-state", opus_state, 1, "ogg");
+LvDef("opus-init", opus_init, 3, "ogg");
+LvDef("opus-packet", opus_packet, 3, "ogg");

@@ -222,6 +222,7 @@ echo "  OK the command faces -- gzip/gunzip/zcat, the suffixes, the statuses, -l
 # where an off-by-one lives), and a body that outruns the read buffer.
 cat > "$w/hash.l" <<EOF
 (borrow 'tar)
+(borrow 'hashes)
 (: g (tar-gather? (\ _ 1) "$w/tree" "")
    t (tar-thin? (\ _ 1) "$w/tree" "")
    _ (? (g && t) 0 (: _ (say err "walk failed\n") (quit 1)))
@@ -263,6 +264,7 @@ EOF
 diff "$w/m6.want" "$w/m6.got" || fail "a lay under umask 077 lost the archived modes"
 cat > "$w/repack6.l" <<EOF
 (borrow 'tar)
+(borrow 'hashes)
 (: g1 (tar-gather "$w/tree" "")
    g2 (tar-gather "$w/um" "")
    _ (? (g1 && g2) 0 (: _ (say err "walk failed\n") (quit 1)))

@@ -5,6 +5,7 @@
 ; `string?`, never `?` or `!`, asks whether an answer is there: a run of NULs reads as false.
 ; not in the corpus: host nifs. run: cat test/00-init.l test/host/gzc.l | out/love
 (borrow 'gz)
+(borrow 'hashes)
 
 (test
  (lit? inflate)

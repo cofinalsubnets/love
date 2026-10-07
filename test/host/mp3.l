@@ -9,6 +9,7 @@
 (borrow 'mp3)
 (borrow 'av)
 (borrow 'bytes)
+(borrow 'hashes)
 (: dir (cwd 0 + "/out/.mp3d")
    _ (hark ["rm" "-rf" dir], mkdir dir 448)
    (mp-nib c) (? (c < 58) (c - 48) (c - 87))
