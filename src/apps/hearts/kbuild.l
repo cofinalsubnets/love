@@ -20,7 +20,7 @@
  hk-features "target-specific order-only second-expansion else-if shortest-stem undefine oneshell nocomment grouped-target extra-prereqs notintermediate shell-export output-sync check-symlink load dir"
  (hk-slurp p) (uread p @ [1 s] s ())
  (hk-copy t) (foldl (a \ k \ pin a k (t k)) {} (keys t))
- (hk-words t v) (words (hk-expand ("$(" + v + ")") t))
+ (hk-words t v) (words (hk-expand "$(\(v))" t))
  ; a member as ar names it: arch/arm64/kvm/../../../virt/kvm/x.o is virt/kvm/x.o
  (hk-path p) (join "/" (pclean (segs p) 0))
 
@@ -35,29 +35,29 @@
  (hk-topgoal K cur cl sh goals)
   (: t (pins (hk-copy cl) "MAKE_VERSION" "4.4.1" ".FEATURES" hk-features
              "MAKEFLAGS" "rR --no-print-directory" "MAKECMDGOALS" goals
-             "MAKEFILE_LIST" (K + "/Makefile") "CURDIR" cur "LC_COLLATE" "C" "LC_NUMERIC" "C"
+             "MAKEFILE_LIST" "\(K)/Makefile" "CURDIR" cur "LC_COLLATE" "C" "LC_NUMERIC" "C"
              "sub_make_done" "1" "objtree" "." "KBUILD_EXTMOD" "" " shell" sh "MAKE" "hk-make"
              " cl" (sort (keys cl))
              " exports" (sort (keys cl) + ["sub_make_done" "objtree" "srcroot" "LC_COLLATE" "LC_NUMERIC"]))
-     (pin t " rules" (hk-vars (hk-slurp (K + "/Makefile")) t), t))
+     (pin t " rules" (hk-vars (hk-slurp "\(K)/Makefile") t), t))
 
  ; the prepare chain's recipe lines that only $(eval) into the top's variables, run once the
  ; generated headers exist (arm64's stack_protector_prepare reads asm-offsets.h)
  (hk-prepare top)
   (: rules (top " rules")
      seen {}
-     (ws s) (filter (w \ w != "|") (words (hk-expand s top)))
+     (ws s) (filter (!= "|") (words (hk-expand s top)))
      (walk n) (peep seen n 0 ? ()
                 (: rs (filter (r \ elem n (ws (r 0))) rules)
-                   (pin seen n 1, catmap (r \ catmap walk (ws (r 1))) rs + catmap (r \ >>r) rs)))
+                   (pin seen n 1, catmap (r \ catmap walk (ws (r 1))) rs + catmap cuup rs)))
      (each (filter (s \ starts? (strip >>s) "$(eval") (walk "prepare")) (s \ hk-vars >>s top),
       top))
 
  ; scripts/Makefile.build over one directory, as `make $(build)=dir need-builtin=1` reads it
  (hk-build K top dir)
   (: t (pins (hk-copy top) "obj" dir "need-builtin" "1" "need-modorder" "1"
-             "MAKEFILE_LIST" (K + "/scripts/Makefile.build"))
-     (pin t " rules" (hk-vars (hk-slurp (K + "/scripts/Makefile.build")) t), t))
+             "MAKEFILE_LIST" "\(K)/scripts/Makefile.build")
+     (pin t " rules" (hk-vars (hk-slurp "\(K)/scripts/Makefile.build") t), t))
 
  ; a word against a path: a % pattern's stem, "" for the very path, else ()
  (hk-stem w path)
@@ -88,14 +88,14 @@
   (peep t " ix" 0 @ x (two? x ? x
      (: rx (hk-rx t)
         ix {}
-        (one r) (: sn {} (each (r 0) (w \ peep sn w 0 ? 0 (pin sn w 1, pin ix w (r . peep ix w ())))))
+        (one r) (: sn {} (each (r 0) (w \ peep sn w 0 ? 0 (pin sn w 1, pin ix w (r . ix w)))))
         _ (each (rev rx) one)
-        x [ix (filter (r \ two? (r 2) && (r 3) = "" && any (w \ 0 <= findsub w "%") (r 0)) rx)]
+        x [ix (filter (r \ two? (r 2) && r 3 = "" && any (w \ 0 <= findsub w "%") (r 0)) rx)]
         (pin t " ix" x, x))))
 
  ; can path be had: in the tree, or made here (n bounds the search)
  (hk-had? K t path n)
-  (two? (stat path) || two? (stat (K + "/" + path)) || 0 < n && two? (hk-rule K t path (n - 1)))
+  (two? (stat path) || two? (stat "\(K)/\(path)") || 0 < n && two? (hk-rule K t path (n - 1)))
 
  ; how make makes path here: [steps prereqs stem siblings], () when no rule does -- siblings the
  ; other targets of the pattern rule that made it, which one run makes together. an explicit rule with
@@ -106,23 +106,23 @@
  (hk-rule K t path n)
   (: ix (hk-ix t)
      ex (peep (ix 0) path ())
-     (st r) ((r 3) = "" ? "" (hk-stem (r 3) path))
+     (st r) (r 3 @ "" "" (hk-stem (r 3) path))
      xp (catmap (r \ map (p \ hk-sub p (st r)) (r 1)) (filter (r \ atom? (r 2)) ex))
      rec (filter (r \ two? (r 2)) ex)
      (has% p) (0 <= findsub p "%")
      ; the recipe's rule leads, so its first prerequisite is $<, as make orders them
      (two? rec
       ? (: rr <(rev rec)
-           [(rr 2) (catmap (r \ map (p \ hk-sub p (st r)) (r 1)) (rr . filter (r \ r != rr) ex)) (st rr) ()])
+           [(rr 2) (catmap (r \ map (p \ hk-sub p (st r)) (r 1)) (rr . filter (!= rr) ex)) (st rr) ()])
         (: (fit r w) (hk-stem w path @ s
                        (string? s && s != "" && all (p \ !(has% p) || hk-had? K t (hk-sub p s) n) (r 1)
                         ? [[s r]] ()))
-           cs (catmap (r \ catmap (w \ fit r w) (r 0)) (ix 1))
-           best (foldl (a \ c \ atom? a || #(c 0) < #(a 0) ? c a) () cs)
+           cs (catmap (r \ catmap (fit r) (r 0)) (ix 1))
+           best (foldl (a \ c \ atom? a || #<c < #<a ? c a) () cs)
            ; no recipe anywhere: a target named only by recipe-less rules is still made -- its
            ; prerequisites, then nothing (prepare: prepare0)
            (? (two? best) [(best 1 2) (map (p \ hk-sub p (best 0)) (best 1 1) + xp) (best 0)
-                           (filter (w \ w != path) (map (w \ hk-sub w (best 0)) (best 1 0)))]
+                           (filter (!= path) (map (w \ hk-sub w (best 0)) (best 1 0)))]
               (two? ex) [() xp "" ()]
               ()))))
 
@@ -140,12 +140,12 @@
            (c < 0 || e < c ? (hk-calls t r)
               (: nm (strip (snip r 0 c)) as (map strip (split "," (snip r (c + 1) e))) a <as
                  rest (snip r (e + 1) #r)
-                 (? (elem nm ["if_changed" "if_changed_dep" "cmd_and_savecmd" "cmd_and_fixdep"])
-                     ([("cmd_" + a) 1 'run as] . hk-calls t rest)
-                    (nm = "cmd") ([("cmd_" + a) 0 'run as] . hk-calls t rest)
-                    (nm = "filechk") ([("filechk_" + a) 0 'out as] . hk-calls t rest)
-                    (nm = "if_changed_rule") (hk-calls t (peep t ("rule_" + a) "") + hk-calls t rest)
-                    (hk-calls t rest)))))))
+               (nm @ ("if_changed" || "if_changed_dep" || "cmd_and_savecmd" || "cmd_and_fixdep")
+                      (["cmd_\(a)" 1 'run as] . hk-calls t rest)
+                     "cmd" ([("cmd_" + a) 0 'run as] . hk-calls t rest)
+                     "filechk" ([("filechk_" + a) 0 'out as] . hk-calls t rest)
+                     "if_changed_rule" (hk-calls t (peep t "rule_\(a)" "") + hk-calls t rest)
+                     (hk-calls t rest)))))))
  ; a recipe line's leading @ - + modifiers off
  (hk-mods s) ((: (g i) (i < #s && elem (s i) [64 45 43 32 9] ? (g (i + 1)) (snip s i #s))) 0)
 
@@ -161,7 +161,7 @@
         (: tv (hk-tv t tg)
            ut (two? tv ? (hk-copy t) t)
            _ (each tv (v \ hk-vars (v 1) ut))
-           (vp p) (two? (stat p) || !(two? (stat (K + "/" + p))) ? p (K + "/" + p))
+           (vp p) (two? (stat p) || !(two? (stat "\(K)/\(p)")) ? p "\(K)/\(p)")
            ps (map vp (r 1))
            ap (join " " (uniq ps))
            k (hk-lastsl tg)
@@ -176,11 +176,11 @@
            ; the prerequisites twice: found through VPATH (as $< $^ read them) and as named --
            ; the name is what gets made, and a phony one (scripts) is never searched for. and
            ; the unit's tablet: its prerequisites, sub-makes and environment see its variables
-           [(catmap (s \ line >>s) (r 0)) ps (r 1) ut (r 3)])))
+           [(catmap (line * cuup) (r 0)) ps (r 1) ut (r 3)])))
  ; a command's text, expanded now; `:` is nothing to run
- (hk-text c) (strip (c 2 0) @ x (x = ":" ? "" x))
+ (hk-text c) (strip (c 2 0) @ ":" "" x x)
  ; the environment a make hands its recipes: each exported variable's value now
- (hk-env t) (map (n \ [n (hk-expand ("$(" + n + ")") t)]) (rev (peep t " exports" ())))
+ (hk-env t) (map (n \ [n (hk-expand "$(\(n))" t)]) (rev (peep t " exports" ())))
 
  ; make a goal in tablet t as a serial make would: its prerequisites first, then its recipe line
  ; by line, each expanded as it runs -- a $(MAKE) line as the sub-make it starts. a file already
@@ -195,13 +195,13 @@
            ph (map hk-dot (hk-words t "PHONY"))
            x (hk-unit K t ["" g])
            ; made's " trace", when given, sees each goal with its tablet and unit
-           _ (peep made " trace" 0 @ f (lit? f ? (f g t x) 0))
+           _ (peep made " trace" 0 @ f (lit? f && f g t x))
            (? (atom? x) 0
               (!(elem g ph) && two? (stat g) && !(any (p \ elem p ph) (x 2))) 0
               (: _ (each (x 2) (p \ hk-make K (x 3) p made seen run))
                  ; a runner that makes in parallel answers made's " wait": the prerequisites'
                  ; jobs are done before this recipe starts
-                 _ (peep made " wait" 0 @ w (lit? w ? (each (x 2) (p \ w (hk-dot p))) 0))
+                 _ (peep made " wait" 0 @ w (lit? w ? (each (x 2) (w * hk-dot)) 0))
                  ; an earlier build's state, when made carries one under " prior" (target -> the
                  ; command its .cmd saved): a target there, its saved command the same, and no
                  ; prerequisite remade this run is up to date -- if_changed's law, mtimes aside
@@ -213,12 +213,10 @@
                         && (pr g @ p (string? p && words p = words (hk-text <sv))))
                  ; run answers 0 when it went well, 'same when a filechk left the file as it was
                  (one c) (peep made " failed" 0 ? 0
-                           (c 0 = 'make ? (hk-submake K (c 3) (hk-text c) made run)
-                              (hk-text c @ s (0 < #s ? (run g (c 0) (c 1) s (hk-env (c 3)) @ st
-                                                         (? (st = 0) (pin made (" new " + g) 1)
-                                                            (st = 'same) 0
-                                                            (pin made " failed" g)))
-                                               0))))
+                           (c 0 @ 'make (hk-submake K (c 3) (hk-text c) made run)
+                              (hk-text c @ s (0 >= #s ? 0
+                               (run g (c 0) (c 1) s (hk-env (c 3)) @
+                                0 (pin made (" new " + g) 1) 'same 0 (pin made " failed" g))))))
                  (fresh ? 0 (each (x 0) one), elem g ph ? 0 (pin made g 1),
                   each (x 4) (w \ (pin made w 1, peep made (" new " + g) 0 ? (pin made (" new " + w) 1) 0)), 0))))))
 
@@ -228,7 +226,7 @@
  (hk-submake K t line made run)
   (: (aft l) (atom? l ? () (ends? <l "hk-make" ? >l (aft >l)))
      (g l f vs gs) (? (atom? l) [f (rev vs) (rev gs)]
-                      (<l = "-f" || <l = "-C") (g >>l (<l = "-f" ? <>l f) vs gs)
+                      (<l = "-f" || <l = "-C") (g >>l (<l @ "-f" <>l f) vs gs)
                       (starts? <l "-") (g >l f vs gs)
                       (0 < findsub <l "=") (g >l f (<l . vs) gs)
                       (g >l f vs (<l . gs)))
@@ -292,16 +290,16 @@
  (hk-vmlinux K top f)
   (: libs {}
      root (hk-walk K top "." f libs)
-     (lib d) (peep libs d 0 @ l
-               (l ? l (: t (hk-build K top d) lu (map (m \ [d m]) (hk-words t "lib-y"))
-                         (f d t lu, lu))))
-     all (catmap (o \ o = "built-in.a" ? root (lib (hk-path (snip o 0 (#o - 6)))))
+     (lib d) (peep libs d 0 ||
+              (: t (hk-build K top d) lu (map (m \ [d m]) (hk-words t "lib-y"))
+               (f d t lu, lu)))
+     all (catmap (o \ o @ "built-in.a" root (lib (hk-path (snip o 0 (#o - 6)))))
                  (hk-words top "KBUILD_VMLINUX_OBJS"))
      ; a member's first unit, as make's $^ keeps a repeated prerequisite's first place
-     us (rev <(foldl (a \ u \ hk-path (u 1) @ p (peep (a 1) p 0 ? a [(u . (a 0)) (pin (a 1) p 1)]))
+     us (rev <(foldl (a \ u \ hk-path (u 1) @ p (peep (a 1) p 0 ? a [(u . a 0) (pin (a 1) p 1)]))
                      [() {}] all))
      heads (filter (l \ 0 < #l && l 0 != 35)
-                   (map strip (lines (hk-slurp (K + "/scripts/head-object-list.txt") || ""))))
+                   (map strip (lines (hk-slurp "\(K)/scripts/head-object-list.txt" || ""))))
      (head? u) (hk-path (u 1) @ m (any (h \ 0 <= findsub m h) heads))
-     (filter head? us + filter (u \ !(head? u)) us)))
+     (filter head? us + filter (nil? * head?) us)))
 ) ; module hearts-kbuild
