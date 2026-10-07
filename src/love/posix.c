@@ -486,17 +486,19 @@ love_noinline static word host_posix_signal(struct g *g, word sigw, word dw) {
  sigemptyset(&sa.sa_mask);
  return sigaction((int) getcharm(sigw), &sa, NULL) ? love_err(g, errno) : ZeroPoint; }
 
-static lvm(lvm_posix_signal) {
- Sp[1] = host_posix_signal(g, Sp[0], Sp[1]);
- love_musttail return Nextp(1, 1); }
+LvmWord2(posix_signal)
 
 // a host inlines into its wrapper unless its frame holds a buffer or an address-taken
 // local -- those stay love_noinline, off the frame the musttail has to leave behind
-static love_inline word host_chdir(struct g *g, word arg) {
- char const *buf = str_c(arg);
- if (!buf) return badarg(g);
- return chdir(buf) ? love_err(g, errno) : ZeroPoint; }
-static lvm(lvm_chdir) { Sp[0] = host_chdir(g, Sp[0]); love_musttail return Next(1); }
+// a call on one path or two -> () | its errno as a nom | 'badarg
+static love_inline word path1(struct g *g, word pw, int (*f)(char const*)) {
+ char const *p = str_c(pw);
+ return !p ? badarg(g) : f(p) ? love_err(g, errno) : ZeroPoint; }
+static love_inline word path2(struct g *g, word ow, word nw, int (*f)(char const*, char const*)) {
+ char const *o = str_c(ow), *n = str_c(nw);
+ return !o || !n ? badarg(g) : f(o, n) ? love_err(g, errno) : ZeroPoint; }
+static love_inline word host_chdir(struct g *g, word p) { return path1(g, p, chdir); }
+LvmWord1(chdir)
 
 love_noinline static struct g *host_cwd(struct g *g) {
  char buf[4096];
@@ -612,17 +614,13 @@ love_noinline static word host_posix_setpg(struct g *g, word pidw, word pgw) {
  pid_t pid = (pid_t) getcharm(pidw), pg = (pid_t) getcharm(pgw);
  if (pid < 0 || pg < 0) return badarg(g);
  return setpgid(pid, pg) ? love_err(g, errno) : ZeroPoint; }
-static lvm(lvm_posix_setpg) {
- Sp[1] = host_posix_setpg(g, Sp[0], Sp[1]);
- love_musttail return Nextp(1, 1); }
+LvmWord2(posix_setpg)
 
 love_noinline static word host_posix_ttyfg(struct g *g, word pgw) {
  pid_t pg = (charmp(pgw) && getcharm(pgw) > 0) ? (pid_t) getcharm(pgw) : getpgrp();
  return tcsetpgrp(0, pg) ? love_err(g, errno) : ZeroPoint; }
 
-static lvm(lvm_posix_ttyfg) {
-  Sp[0] = host_posix_ttyfg(g, Sp[0]);
-  love_musttail return Next(1); }
+LvmWord1(posix_ttyfg)
 
 // (ttypg fd) -> the group that owns the terminal on fd, ttyfg's other half
 love_noinline static word host_posix_ttypg(struct g *g, word x) {
@@ -631,9 +629,7 @@ love_noinline static word host_posix_ttypg(struct g *g, word x) {
  pid_t pg = tcgetpgrp((int) fd);
  return pg < 0 ? love_err(g, errno) : putcharm(pg); }
 
-static lvm(lvm_posix_ttypg) {
-  Sp[0] = host_posix_ttypg(g, Sp[0]);
-  love_musttail return Next(1); }
+LvmWord1(posix_ttypg)
 
 // (fdopen fd) -> a port over a raw fd -- pipe/openfd's other half. 'badarg on a non-charm
 // or negative fd. the port's GC finalizer owns the fd from here: do not also close it.
@@ -926,9 +922,7 @@ love_noinline static word host_posix_birth(struct g *g, word pw, word fw) {
  return r < 0 ? love_err(g, errno)
       : r     ? ZeroPoint
       : putcharm((intptr_t) b.tv_sec * 1000000000 + b.tv_nsec); }
-static lvm(lvm_posix_birth) {
- Sp[1] = host_posix_birth(g, Sp[0], Sp[1]);
- love_musttail return Nextp(1, 1); }
+LvmWord2(posix_birth)
 #else
 // moonlibc is where the three kernels are known; love0 is not it. the name stands, refusing.
 static lvm(lvm_posix_birth) { Sp[1] = love_err(g, ENOSYS); love_musttail return Nextp(1, 1); }
@@ -993,14 +987,9 @@ static love_inline struct g *host_posix_readdir(struct g *g) {
 static lvm(lvm_posix_readdir) {
  LvmCall(g, host_posix_readdir) }
 
-static love_inline word host_posix_unlink(struct g *g, word arg) {
- char const *p = str_c(arg);
- if (!p) return badarg(g);
- return unlink(p) ? love_err(g, errno) : ZeroPoint; }
+static love_inline word host_posix_unlink(struct g *g, word p) { return path1(g, p, unlink); }
 
-static lvm(lvm_posix_unlink) {
-  Sp[0] = host_posix_unlink(g, Sp[0]);
-  love_musttail return Next(1); }
+LvmWord1(posix_unlink)
 
 // (setenv name val) -> () | a nom | 'badarg misuse; a non-string val unsets the name.
 // (environ _)       -> the environment as a list of "name=value" strings (the raw POSIX
@@ -1010,9 +999,7 @@ static love_inline word host_posix_setenv(struct g *g, word nw, word vw) {
  if (!n || (!v && strp(vw))) return badarg(g);
  if (!v) return unsetenv(n) ? love_err(g, errno) : ZeroPoint;
  return setenv(n, v, 1) ? love_err(g, errno) : ZeroPoint; }
-static lvm(lvm_posix_setenv) {
- Sp[1] = host_posix_setenv(g, Sp[0], Sp[1]);
- love_musttail return Nextp(1, 1); }
+LvmWord2(posix_setenv)
 
 extern char **environ;
 static love_inline struct g *host_posix_environ(struct g *g) {
@@ -1069,9 +1056,7 @@ static love_inline word host_posix_lseek(struct g *g, word fdw, word offw, word 
  off_t r = lseek((int) getcharm(fdw), (off_t) getcharm(offw), wh);
  return r < 0 ? love_err(g, errno) : putcharm((intptr_t) r); }
 
-static lvm(lvm_posix_lseek) {
- Sp[2] = host_posix_lseek(g, Sp[0], Sp[1], Sp[2]);
- love_musttail return Nextp(1, 2); }
+LvmWord3(posix_lseek)
 
 static union u const
   nif_spawn[]   = {{lvm_spawn}, {lvm_ret0}},
@@ -1184,21 +1169,11 @@ LvNif("environ", nif_posix_environ, NULL);
 //   (rmdir path)          -> () | a nom | 'badarg  (the empty-directory unlink)
 //   (hardlink old new)    -> () | a nom | 'badarg  (link(2); `link` the word is the
 //                            chain ctor, so the nif wears the long form)
-static love_inline word host_posix_rename(struct g *g, word ow, word nw) {
- char const *o = str_c(ow), *n = str_c(nw);
- if (!o || !n) return badarg(g);
- return rename(o, n) ? love_err(g, errno) : ZeroPoint; }
-static lvm(lvm_posix_rename) {
- Sp[1] = host_posix_rename(g, Sp[0], Sp[1]);
- love_musttail return Nextp(1, 1); }
+static love_inline word host_posix_rename(struct g *g, word o, word n) { return path2(g, o, n, rename); }
+LvmWord2(posix_rename)
 
-static love_inline word host_posix_symlink(struct g *g, word tw, word pw) {
- char const *t = str_c(tw), *p = str_c(pw);
- if (!t || !p) return badarg(g);
- return symlink(t, p) ? love_err(g, errno) : ZeroPoint; }
-static lvm(lvm_posix_symlink) {
- Sp[1] = host_posix_symlink(g, Sp[0], Sp[1]);
- love_musttail return Nextp(1, 1); }
+static love_inline word host_posix_symlink(struct g *g, word o, word n) { return path2(g, o, n, symlink); }
+LvmWord2(posix_symlink)
 
 love_noinline static struct g *host_posix_readlink(struct g *g) {
  char const *p = str_c(g->sp[0]);
@@ -1219,24 +1194,18 @@ static love_inline word host_posix_chmod(struct g *g, word pw, word mw) {
  char const *p = str_c(pw);
  if (!p || !charmp(mw)) return badarg(g);
  return chmod(p, (mode_t) getcharm(mw)) ? love_err(g, errno) : ZeroPoint; }
-static lvm(lvm_posix_chmod) {
- Sp[1] = host_posix_chmod(g, Sp[0], Sp[1]);
- love_musttail return Nextp(1, 1); }
+LvmWord2(posix_chmod)
 
 static love_inline word host_posix_chown(struct g *g, word pw, word uw, word gw) {
  char const *p = str_c(pw);
  if (!p || !charmp(uw) || !charmp(gw)) return badarg(g);
  return chown(p, (uid_t) getcharm(uw), (gid_t) getcharm(gw)) ? love_err(g, errno) : ZeroPoint; }
-static lvm(lvm_posix_chown) {
- Sp[2] = host_posix_chown(g, Sp[0], Sp[1], Sp[2]);
- love_musttail return Nextp(1, 2); }
+LvmWord3(posix_chown)
 static love_inline word host_posix_lchown(struct g *g, word pw, word uw, word gw) {
  char const *p = str_c(pw);
  if (!p || !charmp(uw) || !charmp(gw)) return badarg(g);
  return lchown(p, (uid_t) getcharm(uw), (gid_t) getcharm(gw)) ? love_err(g, errno) : ZeroPoint; }
-static lvm(lvm_posix_lchown) {
- Sp[2] = host_posix_lchown(g, Sp[0], Sp[1], Sp[2]);
- love_musttail return Nextp(1, 2); }
+LvmWord3(posix_lchown)
 
 love_noinline static word host_posix_utime(struct g *g, word pw, word msw) {
  char const *p = str_c(pw);
@@ -1249,23 +1218,13 @@ love_noinline static word host_posix_utime(struct g *g, word pw, word msw) {
  } else
   ts[0].tv_sec = ts[1].tv_sec = 0, ts[0].tv_nsec = ts[1].tv_nsec = UTIME_NOW;
  return utimensat(AT_FDCWD, p, ts, 0) ? love_err(g, errno) : ZeroPoint; }
-static lvm(lvm_posix_utime) {
- Sp[1] = host_posix_utime(g, Sp[0], Sp[1]);
- love_musttail return Nextp(1, 1); }
+LvmWord2(posix_utime)
 
-static love_inline word host_posix_rmdir(struct g *g, word pw) {
- char const *p = str_c(pw);
- if (!p) return badarg(g);
- return rmdir(p) ? love_err(g, errno) : ZeroPoint; }
-static lvm(lvm_posix_rmdir) { Sp[0] = host_posix_rmdir(g, Sp[0]); love_musttail return Next(1); }
+static love_inline word host_posix_rmdir(struct g *g, word p) { return path1(g, p, rmdir); }
+LvmWord1(posix_rmdir)
 
-static love_inline word host_posix_hardlink(struct g *g, word ow, word nw) {
- char const *o = str_c(ow), *n = str_c(nw);
- if (!o || !n) return badarg(g);
- return link(o, n) ? love_err(g, errno) : ZeroPoint; }
-static lvm(lvm_posix_hardlink) {
- Sp[1] = host_posix_hardlink(g, Sp[0], Sp[1]);
- love_musttail return Nextp(1, 1); }
+static love_inline word host_posix_hardlink(struct g *g, word o, word n) { return path2(g, o, n, link); }
+LvmWord2(posix_hardlink)
 
 // (copyfile src dst) -> bytes copied | a nom ('badarg misuse). src's bytes into dst
 // without passing through the heap. bytes only -- mode is the caller's to set.
@@ -1294,9 +1253,7 @@ shut:
  close(in);
  if (close(out) && !err) err = errno;             // the write may land only here
  return err ? love_err(g, (int) err) : putcharm(done); }
-static lvm(lvm_posix_copyfile) {
- Sp[1] = host_posix_copyfile(g, Sp[0], Sp[1]);
- love_musttail return Nextp(1, 1); }
+LvmWord2(posix_copyfile)
 
 // (rlimit res which) -> a bound as a charm, -1 unlimited: res by the index below, which 0 the
 // soft, 1 the hard. (setrlimit res soft hard) -> () | a nom: -1 unlimited, () keeps that bound
@@ -1313,9 +1270,7 @@ love_noinline static word host_posix_rlimit(struct g *g, word rw, word ww) {
  if (getrlimit(r, &l)) return love_err(g, errno);
  rlim_t v = w ? l.rlim_max : l.rlim_cur;
  return putcharm(v == RLIM_INFINITY ? -1 : (intptr_t) v); }
-static lvm(lvm_posix_rlimit) {
- Sp[1] = host_posix_rlimit(g, Sp[0], Sp[1]);
- love_musttail return Nextp(1, 1); }
+LvmWord2(posix_rlimit)
 love_noinline static word host_posix_setrlimit(struct g *g, word rw, word sw, word hw) {
  if (!charmp(rw)) return badarg(g);
  int r = host_rlres(getcharm(rw));
@@ -1335,16 +1290,12 @@ static love_inline word host_posix_prio(struct g *g, word ww, word hw) {
  errno = 0;
  int n = getpriority((int) getcharm(ww), (id_t) getcharm(hw));
  return n == -1 && errno ? love_err(g, errno) : putcharm(n); }
-static lvm(lvm_posix_prio) {
- Sp[1] = host_posix_prio(g, Sp[0], Sp[1]);
- love_musttail return Nextp(1, 1); }
+LvmWord2(posix_prio)
 static love_inline word host_posix_setprio(struct g *g, word ww, word hw, word nw) {
  if (!charmp(ww) || !charmp(hw) || !charmp(nw)) return badarg(g);
  return setpriority((int) getcharm(ww), (id_t) getcharm(hw), (int) getcharm(nw))
         ? love_err(g, errno) : ZeroPoint; }
-static lvm(lvm_posix_setprio) {
- Sp[2] = host_posix_setprio(g, Sp[0], Sp[1], Sp[2]);
- love_musttail return Nextp(1, 2); }
+LvmWord3(posix_setprio)
 
 // (truncate path n make) -> () | a nom | 'badarg: the file cut or stretched to n bytes,
 // made first (0666 less the umask) when `make` is truthy, or a charm fd instead of a path.
@@ -1358,9 +1309,7 @@ love_noinline static word host_posix_truncate(struct g *g, word pw, word nw, wor
  int e = ftruncate(fd, (off_t) getcharm(nw)) ? errno : 0;
  close(fd);
  return e ? love_err(g, e) : ZeroPoint; }
-static lvm(lvm_posix_truncate) {
- Sp[2] = host_posix_truncate(g, Sp[0], Sp[1], Sp[2]);
- love_musttail return Nextp(1, 2); }
+LvmWord3(posix_truncate)
 
 // (setsid ctty) -> the new session's id | a nom: the caller leads a fresh session and
 // group, and takes fd 0's terminal as its controlling one when ctty is truthy
@@ -1369,7 +1318,7 @@ static love_noinline word host_posix_setsid(struct g *g, word cw) {
  if (s < 0) return love_err(g, errno);
  if (charmp(cw) && getcharm(cw) > 0 && ioctl(0, TIOCSCTTY, 1)) return love_err(g, errno);
  return putcharm(s); }
-static lvm(lvm_posix_setsid) { Sp[0] = host_posix_setsid(g, Sp[0]); love_musttail return Next(1); }
+LvmWord1(posix_setsid)
 
 // (fsync path data) -> () | a nom | 'badarg: what the kernel holds of path's contents
 // written down, fdatasync's lesser promise when data is truthy
@@ -1381,9 +1330,7 @@ love_noinline static word host_posix_fsync(struct g *g, word pw, word dw) {
  int e = (charmp(dw) && getcharm(dw) > 0 ? fdatasync(fd) : fsync(fd)) ? errno : 0;
  close(fd);
  return e ? love_err(g, e) : ZeroPoint; }
-static lvm(lvm_posix_fsync) {
- Sp[1] = host_posix_fsync(g, Sp[0], Sp[1]);
- love_musttail return Nextp(1, 1); }
+LvmWord2(posix_fsync)
 
 static lvm(lvm_posix_umask) {
  Sp[0] = charmp(Sp[0]) ? putcharm((intptr_t) umask((mode_t) getcharm(Sp[0])))
@@ -1650,9 +1597,7 @@ love_noinline static word host_settermios(struct g *g, word x, word l) {
   }
  for (int k = 0; k < 17; k++) t.c_cc[k] = (cc_t) v[5 + k];
  return tcsetattr((int) fd, TCSADRAIN, &t) ? love_err(g, errno) : ZeroPoint; }
-static lvm(lvm_settermios) {
- Sp[1] = host_settermios(g, Sp[0], Sp[1]);
- love_musttail return Nextp(1, 1); }
+LvmWord2(settermios)
 
 // (raw on): own the interactive terminal discipline on stdin. a truthy `on` puts the tty
 // in raw mode (no ICANON/ECHO/ISIG, VMIN=1) so bao's editor is the sole echo; on = 0 / ()
@@ -1685,7 +1630,7 @@ static lvm(lvm_raw) {
 static lvm(lvm_swig) {
  word p = Sp[0], x = Sp[1], out = badarg(g);
  if (!charmp(p) && ((union u*) p)->ap == lvm_port_io
-      && !charmp(x) && ((union u*) x)->ap == lvm_cask) {
+      && caskp(x)) {
   struct io *io = (struct io*) p;
   intptr_t fd = io_fd(io);
   struct str *s = cask(x)->str;

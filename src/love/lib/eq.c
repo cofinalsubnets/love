@@ -11,17 +11,13 @@
 //   bin, e0 e1 ..: band i the most power in the bins it spans, or, narrower than a bin, the
 //   power at its center taken between the two bins on either side.
 #include "love.h"
+#include "bytes.h"
 #include <stdint.h>
 #include <string.h>
 
 #define Q40 1099511627776.0
 
-static int64_t eq_i64(const uint8_t *p) {
- uint64_t v = 0;
- for (int k = 7; k >= 0; k--) v = v << 8 | p[k];
- return (int64_t) v; }
-static double eq_q(const uint8_t *p, uintptr_t i) { return (double) eq_i64(p + 8 * i) / Q40; }
-static uintptr_t eq_u32(const uint8_t *p) { return (uintptr_t) (p[0] | p[1] << 8 | p[2] << 16 | (uint32_t) p[3] << 24); }
+static double eq_q(const uint8_t *p, uintptr_t i) { return (double) (int64_t) ld64le(p + 8 * i) / Q40; }
 static int eq_s16(const uint8_t *p, uintptr_t i) { return (int16_t) (uint16_t) (p[2 * i] | p[2 * i + 1] << 8); }
 
 static struct g *host_biquads(struct g *g) {
@@ -91,7 +87,7 @@ static struct g *host_spectrum(struct g *g) {
  uint8_t *o = (uint8_t*) out->bytes;
  uintptr_t top = 16 * (n / 2 - 1);
  for (uintptr_t b = 0; b + 1 < ne; b++) {
-  uintptr_t lo = eq_u32(ed + 4 * b), hi = eq_u32(ed + 4 * b + 4);
+  uintptr_t lo = ld32le(ed + 4 * b), hi = ld32le(ed + 4 * b + 4);
   if (lo > top) lo = top;
   if (hi > top) hi = top;
   double p = 0;

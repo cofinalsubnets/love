@@ -168,6 +168,10 @@ union u {
 #define LvmCallp(g, k, f, ...) { LvmPack(g, f, ##__VA_ARGS__); Unpack(g); Sp[k] = Sp[0]; love_musttail return Nextp(1, k); }
 #define LvmResume(g, f, ...) { LvmPack(g, f, ##__VA_ARGS__); love_musttail return Resume(); }
 #define LvmWrap(n, f) lvm(n) LvmCall(g, f)
+// lvm_X over a word-answering host_X of the top 1, 2 or 3 words: its answer replaces them
+#define LvmWord1(x) static lvm(lvm_##x) { Sp[0] = host_##x(g, Sp[0]); love_musttail return Next(1); }
+#define LvmWord2(x) static lvm(lvm_##x) { Sp[1] = host_##x(g, Sp[0], Sp[1]); love_musttail return Nextp(1, 1); }
+#define LvmWord3(x) static lvm(lvm_##x) { Sp[2] = host_##x(g, Sp[0], Sp[1], Sp[2]); love_musttail return Nextp(1, 2); }
 // the GC tail is love_musttail like every other, which is why lvm_gc takes its word count in
 // g->b and not a fifth parameter: musttail wants matching prototypes.
 // a variable ask is held to the room, the distance Sp - Hp in words, which no n can
@@ -792,6 +796,12 @@ uintptr_t intern_reserve(struct g*);
 struct str *nom_str(struct g *g, word x);   // a named sym -> its name string, else 0
 // the byte ops read from a string or a cask; both resolve to a str of bytes.
 static love_inline struct str *bytes_of(word x) { return caskp(x) ? cask(x)->str : str(x); }
+// a cask's str, or NULL for anything else
+static love_inline struct str *cask_str(word x) { return caskp(x) ? cask(x)->str : NULL; }
+// a cask's bytes, 8-aligned to hold a C state, and their count; NULL for anything else
+static love_inline uint8_t *cask_bytes(word x, uintptr_t *n) {
+ struct str *s = cask_str(x);
+ return s && !((uintptr_t) s->bytes & 7) ? (*n = s->len, (uint8_t*) s->bytes) : NULL; }
 
 // --- numbers ---
 #define isnum(x) (charmp(x) || gemp(x) || bigp(x))

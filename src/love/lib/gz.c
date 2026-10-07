@@ -504,8 +504,7 @@ wait:
 }
 
 static struct str *inf_cask(word x) {
- if (charmp(x) || ((union u*) x)->ap != lvm_cask) return NULL;
- struct str *s = cask(x)->str;
+ struct str *s = cask_str(x);
  return s && s->len == sizeof(struct inf_st) && ((struct inf_st*) s->bytes)->magic == IS_MAGIC ? s : NULL; }
 
 static love_noinline struct g *host_inflate_new(struct g *g) {

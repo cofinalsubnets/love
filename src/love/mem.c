@@ -21,7 +21,7 @@
 
 static lvm(lvm_peepw) {
  word c = Sp[0], out = ZeroPoint;
- if (!charmp(c) && cell(c)->ap == lvm_cask && charmp(Sp[1])) {
+ if (caskp(c) && charmp(Sp[1])) {
   intptr_t i = getcharm(Sp[1]);
   struct str *s = cask(c)->str;
   if (i >= 0 && (uintptr_t) i < s->len / 8) {
@@ -33,7 +33,7 @@ static lvm(lvm_peepw) {
 
 static lvm(lvm_pinw) {
  word c = Sp[0], out = ZeroPoint;
- if (!charmp(c) && cell(c)->ap == lvm_cask && charmp(Sp[1]) && charmp(Sp[2])) {
+ if (caskp(c) && charmp(Sp[1]) && charmp(Sp[2])) {
   intptr_t i = getcharm(Sp[1]);
   uint64_t v = (uint64_t) getcharm(Sp[2]) & 0xffffffffu;
   struct str *s = cask(c)->str;
@@ -63,7 +63,7 @@ static bool numtray(word x) {
 
 static lvm(lvm_pinv) {
  word c = Sp[0], out = ZeroPoint;
- if (!charmp(c) && cell(c)->ap == lvm_cask && charmp(Sp[1]) && charmp(Sp[2])
+ if (caskp(c) && charmp(Sp[1]) && charmp(Sp[2])
      && charmp(Sp[3]) && numtray(Sp[4])) {
   intptr_t o = getcharm(Sp[1]), w = getcharm(Sp[2]), s = getcharm(Sp[3]);
   struct tray *v = tray(Sp[4]);
@@ -80,7 +80,7 @@ static lvm(lvm_pinv) {
 
 static lvm(lvm_peepv) {
  word c = Sp[0];
- if (charmp(c) || cell(c)->ap != lvm_cask || !charmp(Sp[1]) || !charmp(Sp[2])
+ if (!caskp(c) || !charmp(Sp[1]) || !charmp(Sp[2])
      || !charmp(Sp[3]) || !charmp(Sp[4])) {
   Sp[4] = ZeroPoint; love_musttail return Nextp(1, 4); }
  intptr_t n = getcharm(Sp[4]);
