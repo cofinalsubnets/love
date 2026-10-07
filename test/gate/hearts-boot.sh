@@ -1,10 +1,10 @@
 #!/bin/sh
 # test/gate/hearts-boot.sh -- hearts rung 0 under qemu virt (a64): the image boots our chooser
-# (src/inle/uefi/slot.c), our kernel (the Image test_hearts certified) and helm as pid 1 off a
-# squashfs root, then walks four updates in one run: one signed by another key (refused), one whose
-# root lost a byte under a good head (refused once it streams past), v2 into
-# slot b (tried, well, committed), and v3 into slot a, which never says it is well -- so the watch
-# restarts it and it comes back on b. the serial log must say so, in order.
+# (src/inle/uefi/slot.c), which inflates and starts our kernel (the Image test_hearts certified,
+# gzipped), and helm as pid 1 off a squashfs root, then walks four updates in one run: one signed
+# by another key (refused), one whose root lost a byte under a good head (refused once it streams
+# past), v2 into slot b (tried, well, committed), and v3 into slot a, which never says it is well --
+# so the watch restarts it and it comes back on b. the serial log must say so, in order.
 # and the image is reproducible: its a64 half (test/gate/hearts-run.sh) bakes, builds and boots on
 # an a64 host under kvm, and here the chooser and the image are built again -- twice, from that
 # host's baked love -- and every byte must match. with no a64 host the half runs here (qemu-user,
@@ -34,7 +34,7 @@ cp "$xlove" "$s/love" && cp "$cat" "$s/cat.l" && cp "$K" "$s/Image" && cp test/g
   && cp "$fw" "$s/fw/code.fd" && cp "$(dirname "$fw")/ovmf-vars-aarch64.fd" "$s/fw/vars.fd" || fail "cannot lay $s"
 for f in src/apps/sqfs.l src/apps/ext4.l src/apps/hearts/image.l src/apps/hearts/dev.l src/apps/hearts/app.l \
     src/apps/helm/unit.l src/apps/helm/sup.l src/apps/helm/moor.l src/apps/helm/helm.l \
-    src/inle/uefi/slot.c src/inle/uefi/mkefi.l src/apps/kore/text.l src/apps/kore/u.l src/apps/kore/asbook.l \
+    src/inle/uefi/slot.c src/love/inflate.h src/love/inf.h src/inle/uefi/mkefi.l src/apps/kore/text.l src/apps/kore/u.l src/apps/kore/asbook.l \
     src/love/holo/elf.l src/love/holo/obj.l src/love/holo/link.l src/love/holo/pe.l; do
   mkdir -p "$s/$(dirname $f)" && cp "$f" "$s/$f" || fail "cannot lay $f"
 done
