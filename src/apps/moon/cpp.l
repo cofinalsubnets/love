@@ -772,9 +772,10 @@
    (lexinc ip txt macs)
     (peep guards ip () @ e
        (? (two? e && <e = txt && two? (mdef macs <>e)) [1 ()]
-          ((two? (mdef macs "__ASSEMBLER__") ? (clexasm txt 1) (clexw txt 1)) @ lr
+          ((two? (mdef macs "__ASSEMBLER__") ? (clexasm txt 1 (armgas? macs)) (clexw txt 1)) @ lr
              (: _ (okv? lr && 0 < #ip && pin guards ip [txt (guardof <>lr)])
                 lr))))
+   (armgas? macs) (two? (mdef macs "__aarch64__") || two? (mdef macs "__arm__"))  ; `#` past code marks an immediate
    (dirat? l) (two? l && pv? <l "#" && two? >l)      ; l opens a directive, its name next
    (guardof ts)
     (: (go l ln d)                                   ; d: the conditional depth, 1 inside the guard

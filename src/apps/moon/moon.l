@@ -346,7 +346,7 @@
    ; spelled back into lines, and taken as a .s is
    (asmcpp src s ds is vb)
     (: d2 ("__ASSEMBLER__=1" . ds)
-       lx (clexasm (deftext d2 + s) (1 - #d2))
+       lx (clexasm (deftext d2 + s) (1 - #d2) (elem "__aarch64__" ds || elem "__arm__" ds))
        _ (okv? lx || ccdie lx src ("cc: lex error in " + src))
        pp (cppasm <>lx (name \ sys? \ incload vb is (cdir src) name sys?) src)
        (okv? pp || ccdie pp src ("cc: preprocessor error in " + src),
