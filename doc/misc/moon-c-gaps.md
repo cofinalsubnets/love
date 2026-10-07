@@ -1145,6 +1145,12 @@ below, 251 of those 332 re-run so far: **145 compile**, and the rest refuse by n
   them, or a forward label, still refuses. With it, gas's `\@` (a macro call's number) and
   `.ifb`/`.ifnb`. `\@` counts per reading, so two inline asm statements that each call one
   macro lay the same label: gas counts across the file.
+- **a `#` past code in an arm `.S` is an immediate**, not gas's comment: the lexer dropped it
+  with the rest of the line, so `mov \reg, #4` reached gas as a one-operand `mov` and `add x1,
+  x1, x2, lsl #3` lost its shift. x64 and rv64 keep `#` as their comment; a `#` opening a line
+  is one everywhere. With it, `sbfm`/`bfm`/`ubfm` (all 444 forms of a sweep are llvm-mc's
+  words), and a macro call after a label on its own line (`g: lsz x0, x1`). Three tinyconfig
+  units now compile, word for word the kernel build's objects (sigreturn, strrchr, tishift).
 
 Still open on this side (g-21's probes):
 
@@ -1153,11 +1159,11 @@ Still open on this side (g-21's probes):
 - under `-mstrict-align`: an array member of a packed struct indexed through its decayed pointer
   reads at the element's width, a bitfield or 128-bit member of a packed struct refuses by name,
   and a by-value struct reached as a packed member rides its type's alignment, not the member's.
-- where the re-run stops now, on this side: a register variable pinned to `x0` (4). The 24
-  units that stopped on the `.S` extable macro's `\insn` reach gas now, and stop on: a
-  one-operand `mov` (7), the pre-index `[xN]!` (3), `ldp` (2), gas's `||` (3, mov_q's range
-  test), a two-register op with no lane (3), `ccmp`, `bne`, `.incbin`, `@note`, `sym+k` as a
-  memory operand and an indexed `[x4, ..]`.
+- where the re-run stops now, on this side: a register variable pinned to `x0` (4). Of the 24
+  units that stopped on the `.S` extable macro's `\insn`, 3 compile, and the rest stop on: the
+  pre-index `[xN]!` (5), gas's `||` (3, mov_q's range test), a shifted register operand
+  (`x2, lsl #8`, 2), `ldp` (2), `ccmp` (2), `stp`, `csinv`, `ands`, `bne`, `.incbin`, `@note`
+  and `sym+k` as a memory operand.
   The rest is part 1's front end and gen (`linux/skbuff.h`, an undeclared `branch`,
   `__attribute__((mode))`).
 - defconfig, g-21's units once refused on a Q form or a register pinned twice: of a sample of
