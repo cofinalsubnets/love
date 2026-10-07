@@ -395,11 +395,11 @@
    ; gas's macro language unrolls before gas-top reads: a keyword call, .irp, .ifc, .set values
    _ (chk-eq "gas.expand"
         '(".long 11 + (1 << 8)")
-        (gf-expand (gf-lines 'x64 ".macro m t:req r:req\n.set .Ln, 0\n.irp s,rax,rcx\n.ifc \\r, %\\s\n.long \\t + (.Ln << 8)\n.endif\n.set .Ln, .Ln+1\n.endr\n.endm\nm r=%rcx, t=11\n.purgem m")))
+        (gf-expand 'x64 (gf-lines 'x64 ".macro m t:req r:req\n.set .Ln, 0\n.irp s,rax,rcx\n.ifc \\r, %\\s\n.long \\t + (.Ln << 8)\n.endif\n.set .Ln, .Ln+1\n.endr\n.endm\nm r=%rcx, t=11\n.purgem m")))
    ; an .elseif chain takes its first true arm, and >> is gas's logical shift
    _ (chk-eq "gas.elseif"
         '(".long 2" ".long 6")
-        (gf-expand (gf-lines 'x64 ".if 0\n.long 1\n.elseif 1\n.long 2\n.elseif 1\n.long 3\n.else\n.long 4\n.endif\n.if 0\n.long 5\n.elseif 0\n.long 7\n.else\n.long 6\n.endif")))
+        (gf-expand 'x64 (gf-lines 'x64 ".if 0\n.long 1\n.elseif 1\n.long 2\n.elseif 1\n.long 3\n.else\n.long 4\n.endif\n.if 0\n.long 5\n.elseif 0\n.long 7\n.else\n.long 6\n.endif")))
    _ (chk-eq "gimm.not" [0 1 1 256] [(gimm (gtoks "!5")) (gimm (gtoks "!0")) (gimm (gtoks "!!(7)")) (gimm (gtoks "(!!(3)) << 8"))])
    _ (chk-eq "gimm.shr" [15 15] [(gimm (gtoks "~0 >> 60")) (gimm (gtoks "0xf0 >> 4"))])
    ; a symbol-less rip displacement is the address past the lea (_THIS_IP_): its own bytes
@@ -506,6 +506,19 @@
    _ (chk-eq "gas.a64.req"
         '(((".text" 1 6 ((raw (225 3 0 42)) (add r3 r3 1)))) () ())
         (gas-top 'a64 "\t.irp n,0,1\nwx\\n .req w\\n\n\t.endr\ntmp .req x3\n\tmov wx1, wx0\n\tadd tmp, tmp, #1\n\t.unreq tmp\n"))
+   ;; backward local labels measured at expansion: the alternative's `nops (662b-661b) / 4`
+   ;; and an .if over the same distance; a directive between them, or a forward label, refuses
+   _ (chk-eq "gas.a64.lbldist"
+        '(((".text" 1 6 ((label l661.1) (raw (32 0 128 210)) (add r0 r0 2) (ld r1 r0 0) (label l662.1)
+                          (nop) (nop) (nop) (raw (130 1 128 210))))) () ())
+        (gas-top 'a64 "661:\tmov x0, #1\n\tadd x0, x0, #2\n\tldr x1, [x0]\n662:\n\t.rept (662b-661b) / 4\n\tnop\n\t.endr\n\t.if (662b - 661b) == 12\n\tmov x2, #12\n\t.endif\n"))
+   _ (chk-eq "gas.ifb" '("nop" "b x" "")
+        (gf-expand 'a64 (gf-lines 'a64 ".macro m f\n.ifb \\f\nnop\n.endif\n.ifnb \\f\nb \\f\n.endif\n.endm\nm\nm x\n")))
+   _ (chk-eq "gas.macro.at" "(((\".text\" 1 6 ((jmp .Lx0) (label .Lx0) (jmp .Lx1) (label .Lx1)))) () ())"
+        (show (gas-top 'a64 "\t.macro m\n\tb .Lx\\@\n.Lx\\@:\n\t.endm\n\tm\n\tm\n")))
+   _ (chk-eq "gas.a64.lbldist.refuse" '(gas-immediate gas-immediate)
+        (map (x \ trap (y \ gas-top 'a64 y) x (\ a b a))
+             ["661: nop\n .align 4\n662:\n .rept (662b-661b)/4\n nop\n .endr\n" ".rept (2f-1f)/4\n nop\n .endr\n1: nop\n2:\n"]))
    _ (chk-eq "gas.a64.lse.refuse"
         '(gas-a64-operand gas-a64-op gas-a64-operand gas-a64-operand gas-a64-operand)
         (map (l \ trap (x \ holo-hex 'a64 (gas-text 'a64 x)) l (\ a b a))
