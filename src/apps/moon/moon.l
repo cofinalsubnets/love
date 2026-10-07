@@ -480,10 +480,10 @@
        r (src = "-" ? [1 (slurp in)]
             (uread src @ q (? (two? q) q !vb () (vb src @ h (string? h && [1 h])))))
        _ (two? r || udie 1 ("cc: cannot open " + src))
-       lx (xasm ? (clexm (deftext ds9 + <>r) (1 - #ds9) 2 1) (clexat (deftext ds9 + <>r) (1 - #ds9)))
+       lx (xasm ? (clexm (deftext ds9 + <>r) (1 - #ds9) 2 1) (clexw (deftext ds9 + <>r) (1 - #ds9)))
        _ (okv? lx || ccdie lx src ("cc: lex error in " + src))
        _ (pin cppdeps 'l ())
-       pp (cpp-text <>lx (name \ sys? \ incload vb is (cdir src) name sys?) src xasm)
+       pp (cpp-text <>lx (name \ sys? \ incload vb is (cdir src) name sys?) src)
        _ (okv? pp || ccdie pp src ("cc: preprocessor error in " + src))
        _ (t 'md && cc-deps src dst t)                ; -E -MD writes the dependencies as a compile does
        (dst ? (open dst "w" @ q (!(hot? q) ? (udie 1 ("cc: cannot write " + dst)), say q <>pp, close q))
