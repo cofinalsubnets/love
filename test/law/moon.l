@@ -212,6 +212,12 @@
       (gripe? (cparse <>(clex "int main() { return (1+2; }")))            ; the lost )
       (gripe? (cparse <>(clex "int main() { if 1 return 2; }")))          ; if wants parens
       (gripe? (cparse <>(clex "int main() { return 42 }")))
+      ; a member whose type has no layout yet refuses (C11 6.7.2.1p3): its own struct, one only
+      ; declared, an array of either. laid, its initializer descended into it without end
+      (gripe? (cparse <>(clex "struct l { struct l n; int k; }; struct l x = { 1 };")))
+      (gripe? (cparse <>(clex "struct l { struct l n[2]; };")))
+      (gripe? (cparse <>(clex "struct f; struct g { struct f x; };")))
+      (okv? (cparse <>(clex "struct l { struct l *n; int k; }; struct l x = { &x, 1 };")))
       (<>(cparse ()) = '(prog ()))))          ; an empty token list is a valid empty TU (crypt.c), not a parse failure
 
 ; --- the gen-law kit: compile, cut one fn, count its traffic -- shared by every gen
