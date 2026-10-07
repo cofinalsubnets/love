@@ -20,6 +20,9 @@
    deep (stones-frame (pin (at 12.0 7) 'deep 1))
  (test (rows f = 24) (f = f2) (rows deep = 24) (f != deep)
        (has? f "38;5;") (has? deep "38;2;")))
+; --- ..the keys named on the bottom row at the start, and gone a while in
+(: st (at 12.0 7) f (stones-frame st) g (stones-frame (pin (at 12.0 7) 'mt 30.0))
+ (test (has? f "\e[24;1H") (has? f "h/j/k/l move") (has? f "space interacts") !(has? g "h/j/k/l")))
 
 ; --- ..and as kitty's pixels: one picture over the screen's cells, the cursor left where it is;
 ; --- sized for kitty, about kitty-w pixels across, a whole number a column; ids 7 and 8 by

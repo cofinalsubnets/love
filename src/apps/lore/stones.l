@@ -16,8 +16,9 @@
 ; are pure, gated by test/host/stones.l; only stones-walk and stones-run tie the tty.
 ;
 ; run: love lore stones [--time HH:MM] [--kitty|--cells]
-;      h l or the arrows turn, k j step, u n look up and down, space kneels at the altar;
-;      there 1 to 5, or k j and space, choose what to do, and a walking key or space stands
+;      h l or the arrows turn, k j step, u n look up and down, space kneels at the altar
+;      (the bottom row names them for the first seconds of a run);
+;      there 1 to 5, or k j and enter, choose what to do, and a walking key or space stands
 ;      again; q or esc leaves, or walk back out of the canyon
 (module (stones stones-run stones-walk stones-main stones-new stones-size stones-step stones-move move-at curve acts ghost-on? post-batch stones-light
          stones-frame stones-pens stones-opts stones-field stones-ground stones-blocks slot-x
@@ -37,6 +38,8 @@
  stride 0.7                               ; a step, in metres
  reach 2.2                                ; how near the altar a kneel can start
  dlg-pause 1.0                            ; seconds after an act before the choices come back
+ help-t 12.0                              ; seconds the keys are named at the start
+ help-text "h/j/k/l move  ·  u/n look up/down  ·  space interacts"
  ; the choices at the altar, and the keys that stand a kneeler up once they are put away
  acts ["Breathe" "Weep" "Bleed" "Beg" "Wait"]
  rise-keys [32 104 108 107 106 117 110 -1 -2 -8 -9]
@@ -441,9 +444,12 @@
                (mesh-sky lt (st 'wx) e (st 'sim) (st 't) (k = 1 ? 1 (sky-k * k)))))
  (stones-frame st) (: w (st 'w) h (st 'h) k (peep st 'kp 1) f0 (stones-pens st) kit (st 'kitty)
    dl (charm? (st 'dlg)) r (h // 2) bw 22 bh (#acts + 2) r0 (max2 0 (r - bh - 2)) c0 (max2 0 ((w - bw) // 2))
-   ; ..under kitty's the choices' ground darkened in the picture, the text over it
-   f (dl && kit ? (dim f0 (k * w) (k * c0) (2 * k * r0) (k * bw) (2 * k * bh)) f0)
-   m (menu st r0 c0 bw bh)
+   hp (st 'mt < help-t && !dl)
+   ; ..under kitty's the choices' ground darkened in the picture, and the keys' line, the
+   ; text over it
+   f (? (dl && kit) (dim f0 (k * w) (k * c0) (2 * k * r0) (k * bw) (2 * k * bh))
+        (hp && kit) (dim f0 (k * w) 0 (2 * k * (r - 1)) (k * w) (2 * k)) f0)
+   m (menu st r0 c0 bw bh + keys-line st r w)
    (? kit (: n (peep st 'kn 0) _ (pin st 'kn (1 - n))
              (esc + "[?2026h" + mesh-kitty f (k * w) (k * h) w (h // 2) (kitty-id + n)
               + kitty-del (kitty-id + 1 - n) + m + esc + "[?2026l"))
@@ -463,6 +469,16 @@
         (pad "" bw " ")))
    (? (charm? c) (foldl (\ o j (o + at j + esc + bg + line j)) "" ^bh + esc + "[0m")
       kit (foldl (\ o j (o + at j + esc + "[0m" + pad "" bw " ")) "" ^bh)
+      ""))
+ ; the keys named along the bottom row r, w wide, for the first help-t seconds and not over
+ ; the choices; under kitty, blanked a while after
+ (keys-line st r w) (: kit (st 'kitty) deep (kit || st 'deep) t (st 'mt)
+   bg (kit ? "[49m" (deep ? "[48;2;22;17;14m" "[48;5;233m"))
+   fg (deep ? "[22;38;2;196;184;166m" "[22;38;5;250m")
+   at (esc + "[" + show r + ";1H")
+   (? (t < help-t && !(charm? (st 'dlg)))
+        (at + esc + bg + esc + fg + pad (pad "" (max2 0 ((w - vlen help-text) // 2)) " " + help-text) w " " + esc + "[0m")
+      (kit && t < help-t + 1.0) (at + esc + "[0m" + pad "" w " ")
       ""))
  ; ..a terminal that shows kitty's pixels, by what it says of itself: mitty, kitty,
  ; ghostty, wezterm
