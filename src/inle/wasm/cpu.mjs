@@ -143,8 +143,17 @@ const lift = (when, msg) => {
 // same place and reads a new w and h back. refused, the machine keeps the box it had, and
 // the frame that goes out says which size that is -- as a module older than the door does,
 // the export being the one thing this side can ask about before it calls.
+// the request is the page's own number for it, and every frame after says which one was
+// taken (`took`), so the page knows when a frame's scale is an answer and not an old one.
+let took = 0;
+// the glyph scale the kernel stands at, which /proc/vt/scale moves aboard; a module older
+// than the export answers what this side last asked for
+const kscale = () => ex?.k_fb_scale ? Number(call(ex.k_fb_scale)) || fb.scale : fb.scale;
 const resize = () => {
-  if (!ex?.k_fb_resize || !fb || !Atomics.exchange(ctl, 4, 0)) return;
+  if (!ex?.k_fb_resize || !fb) return;
+  const q = Atomics.exchange(ctl, 4, 0);
+  if (!q) return;
+  took = q, fb.scale = kscale();
   const w = Atomics.load(ctl, 5), h = Atomics.load(ctl, 6), scale = Atomics.load(ctl, 7);
   if (w <= 0 || h <= 0 || (w === fb.w && h === fb.h && scale === (fb.scale ?? 0))) return;
   if (!Number(call(ex.k_fb_resize, w, h, scale))) return;
@@ -243,7 +252,7 @@ const blit = (force) => {
     for (let i = 0; i < px.length; i++) {
       const v = px[i];
       o32[i] = 0xff000000 | ((v & 0xff) << 16) | (v & 0xff00) | ((v >>> 16) & 0xff); }
-    post({ frame: rgba.buffer, w: fb.w, h: fb.h }, [rgba.buffer]);
+    post({ frame: rgba.buffer, w: fb.w, h: fb.h, scale: kscale(), took }, [rgba.buffer]);
     return; }
   if (fbCtx) {
     const out = new Uint32Array(fbImg.data.buffer);
@@ -339,6 +348,9 @@ const sys1 = (n, a, b, c, d, e) => {
       Atomics.store(ctl, c_sh, head);
       return BigInt(k); }
     case NR.point: {                                    // whole pointer records, as many as fit
+      // asked whenever a task asks after a key (kmain's k_kb_sync), so a guest that never
+      // idles -- a frame loop slower than its pace -- takes a resize here
+      resize();
       const p = Number(a), max = Number(b) - (Number(b) % 8), h = u8(), tail = Atomics.load(ctl, c_pt);
       let head = Atomics.load(ctl, c_ph), k = 0;
       while (k < max && head !== tail) { h[p + k++] = pt[head]; head = (head + 1) % point_n; }

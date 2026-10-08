@@ -16,9 +16,11 @@
 // `sh --login`, lush on the console; a program named instead is booted
 // again when it exits, so `sh -c "tower; sh"` is a game and then a shell), data-ram the
 // RAM in MiB, data-cols the most columns worth reading, which is what settles how large a
-// glyph is drawn. a query string names the same four (?boot=tower) and wins where it
-// does: the attributes are the page's and the link is the reader's. a link's module or
-// image is taken only off this page's own origin; its boot line runs aboard as it stands.
+// glyph is drawn, unless data-scale names the size outright (the reader's own pick with the
+// chips under the screen wins over both). a query string names the same (?boot=tower) and
+// wins where it does: the attributes are the page's and the link is the reader's. a link's
+// module or image is taken only off this page's own origin; its boot line runs aboard as it
+// stands.
 //
 // the machine takes its RAM at boot and never gives it back, so a default is a promise
 // about what runs on it. 1024 is what the tower wants, measured: at 256 the walk answers a
@@ -31,10 +33,10 @@ import { host_shared_n } from './hostring.mjs';
 
 // --- the glass: a canvas as REAL pixels ------------------------------------------------
 // the backing store is the element's own box times a ratio settled here, and
-// the zoom says how many of its pixels a glyph pixel gets. the ratio is held to what one
+// the scale says how many of its pixels a glyph pixel gets. the ratio is held to what one
 // frame is worth painting (frame_cap): past that the compositor does the last integer
 // doubling, which is the same grid and costs the machine nothing. the machine is handed
-// the size and the zoom and settles rows and columns itself (src/inle/wasm/arch.c's k_start,
+// the size and the scale and settles rows and columns itself (src/inle/wasm/arch.c's k_start,
 // then kmain's fbscale and cbinit) -- which is why
 // nothing here mentions a font size or an aspect ratio, and why a page cannot pick a
 // shape the console then has to live inside.
@@ -67,19 +69,20 @@ const frame_cap = 2 << 20;
 const reservation = (r) => Math.min(pixel_cap,
   Math.round(screen.width * r) * Math.round(screen.height * r));
 
-// `cols` is the MOST columns worth reading: the zoom is the smallest that keeps the grid
+// `cols` is the MOST columns worth reading: the scale is the smallest that keeps the grid
 // inside it, so a wide box gets bigger text rather than more of it. a cap and not a floor
-// -- a box one glyph short of the next zoom would otherwise carry twice the columns asked
+// -- a box one glyph short of the next scale would otherwise carry twice the columns asked
 // for at half the size, which is the reading kmain's fbscale gives and a page can better,
 // the pixels being the part a page knows and the kernel does not. /proc/vt/scale retunes
-// it aboard, so this is the opening zoom and not a ceiling on one.
+// it aboard, so this is the opening scale and not a ceiling on one.
 // a page may also ASK for fewer pixels than its screen has (`ratio`): halving the ratio
-// doubles the zoom to match, which is the same grid, and the frame the machine swizzles
+// doubles the scale to match, which is the same grid, and the frame the machine swizzles
 // each time is a quarter the bytes. on a phone that is the difference between a floor
 // that repaints and a horn that keeps up. the default cap is wide enough that a desktop
-// monitor's box (up to 1920) opens at zoom 2
+// monitor's box (up to 1920) opens at scale 2
 export const cols_n = 120;
-export function glass(canvas, cols = cols_n, ratio = 0) {
+// `want` (1..8, a glyph pixel's size in CSS pixels) is the reader's scale and wins over the cap
+export function glass(canvas, cols = cols_n, ratio = 0, want = 0) {
   const n = cols > 0 ? cols : cols_n;            // a query string's nonsense falls back, never NaN
   const box = canvas.getBoundingClientRect();
   // the floor is a floor and not the column target: a narrow screen gets FEWER columns,
@@ -89,10 +92,10 @@ export function glass(canvas, cols = cols_n, ratio = 0) {
   const cap = reservation(r);
   while (r > 1 && w * h * r * r > Math.min(cap, frame_cap)) r--;
   // 1..8 is the kernel's own range for a glyph scale (kmain's fbscale, and what
-  // k_fb_reseat will take): past it a huge screen would be refused outright. the zoom is
-  // taken in device pixels, so the grid comes as near the asked columns as a whole zoom allows
-  const scale = Math.min(8, Math.max(1, Math.ceil(w * r / (8 * n))));
-  return { w: w * r, h: h * r, scale, cap }; }
+  // k_fb_reseat will take): past it a huge screen would be refused outright. the scale is
+  // taken in device pixels, so the grid comes as near the asked columns as a whole scale allows
+  const scale = Math.min(8, Math.max(1, want >= 1 ? Math.round(want) * r : Math.ceil(w * r / (8 * n))));
+  return { w: w * r, h: h * r, scale, cap, r }; }
 
 // --- the scan lane: the keyboard as a keyboard -----------------------------------------
 // into the shared ring's scan lane as PS/2 set 1 make and break codes, the bytes the
@@ -488,12 +491,12 @@ export async function loveMachine(root) {
     if (t) paste(t);
     e.preventDefault(); });
   cpu.onmessage = ({ data: m }) => {
-    if (m.frame) { latest = m; if (!due) due = requestAnimationFrame(draw); }
+    if (m.frame) { latest = m; follow(m); if (!due) due = requestAnimationFrame(draw); }
     else if (m.copy !== undefined) { copied = m.copy; if (fresh()) copy(); }
     else if (m.lift !== undefined) lifted(m);
     else if (m.fault) halt('the machine faulted: ' + m.fault); };
   cpu.onerror = e => halt('the machine stopped: ' + e.message);
-  // the canvas measured as REAL pixels -- its own box times a ratio -- and the zoom a
+  // the canvas measured as REAL pixels -- its own box times a ratio -- and the scale a
   // glyph pixel gets there. the kernel settles rows and columns from the two, so the
   // island's shape is a layout question and nothing the console has to live inside.
   // the ratio is one: the console's glyphs are integer-scaled bitmaps, so the compositor's
@@ -501,14 +504,33 @@ export async function loveMachine(root) {
   // box's worth of pixels a frame instead of the screen's. `ratio=0` asks for the device's
   const cols = Number(at('cols', cols_n));
   const ratio = Number(at('ratio', 1));
-  const fb = { ...glass(canvas, cols, ratio), post: true };
+  // the scale the reader last chose with the chips under the screen, kept by this browser;
+  // else the page's data-scale, else whatever the cap on columns gives
+  const kept = () => { try { return Number(localStorage.getItem('love.scale')) || 0; } catch { return 0; } };
+  let want = kept() || Number(at('scale', 0)) || 0;
+  const fb = { ...glass(canvas, cols, ratio, want), post: true };
+  // `scale` is the one the console stands at, as the frames report it; `sent` the one this
+  // page last sent, at ratio `r`, and `seq` that request's number
+  let scale = fb.scale, sent = fb.scale, r = fb.r, seq = 0;
+  // once a frame has answered the last request, a scale other than the one asked for was
+  // set aboard (/proc/vt/scale) or refused: the page takes it as its own, so the next reflow
+  // keeps it and the chips step from it
+  const follow = m => {
+    if (!m.scale || m.took !== seq) return;
+    scale = m.scale;
+    if (scale !== sent) sent = scale, want = Math.max(1, Math.round(scale / r));
+    shown.textContent = Math.max(1, Math.round(scale / r)) + '\u00d7'; };
+  // the scale as the reader counts it, in CSS pixels, between the chips that step it
+  // (a button that does nothing, so it wears the chips' own font)
+  const shown = document.createElement('button');
+  shown.type = 'button'; shown.tabIndex = -1; shown.className = 'chip scale';
+  shown.addEventListener('pointerdown', e => e.preventDefault());     // the keys keep the focus shown.title = 'the console\'s scale';
+  shown.textContent = Math.max(1, Math.round(scale / r)) + '\u00d7';
   // A TAP IS A PLACE: the pointer goes to the console as the cell it is over, and the
   // console says what it means (pointlane above) -- a game that asked for the mouse gets
   // its report, a shell's screen is selected. the cell is the canvas's own pixels over the
-  // glyph box, so it follows the zoom; `zoom` is the last one this page handed the machine,
-  // which a /proc/vt/scale aboard would leave behind until the next reflow. a move goes
-  // once per cell, and the wheel once per three lines' worth of scrolling
-  let zoom = fb.scale;
+  // glyph box at the console's own scale. a move goes once per cell, and the wheel once
+  // per three lines' worth of scrolling
   canvas.style.touchAction = 'none';               // a finger on the screen steers, never scrolls
   const point = pointlane(ring, ctl);
   const cell = e => {
@@ -516,7 +538,7 @@ export async function loveMachine(root) {
     if (box.width < 1 || box.height < 1) return null;
     const x = (e.clientX - box.left) * canvas.width / box.width,
           y = (e.clientY - box.top) * canvas.height / box.height;
-    return [Math.max(0, Math.floor(y / (16 * zoom))), Math.max(0, Math.floor(x / (8 * zoom)))]; };
+    return [Math.max(0, Math.floor(y / (16 * scale))), Math.max(0, Math.floor(x / (8 * scale)))]; };
   const mods = e => (e.shiftKey ? 4 : 0) | (e.altKey || e.metaKey ? 8 : 0) | (e.ctrlKey ? 16 : 0);
   const button = n => n === 0 ? 0 : n === 1 ? 1 : n === 2 ? 2 : 3;
   let over = '', spun = 0;
@@ -546,15 +568,27 @@ export async function loveMachine(root) {
   const ask = () => {
     const box = canvas.getBoundingClientRect();
     if (canvas.hidden || box.width < 1 || box.height < 1) return;
-    const g = glass(canvas, cols, ratio);
+    const g = glass(canvas, cols, ratio, want);
     Atomics.store(ctl, 5, g.w); Atomics.store(ctl, 6, g.h); Atomics.store(ctl, 7, g.scale);
-    zoom = g.scale;
-    Atomics.store(ctl, 4, 1);
+    sent = g.scale, r = g.r, seq = seq % 0x7fffffff + 1;
+    Atomics.store(ctl, 4, seq);
     Atomics.add(ctl, 2, 1); Atomics.notify(ctl, 2); };
   // a drag is hundreds of reflows and each one re-makes a console and frees a grid, so the
   // machine hears the size the reader stopped at rather than every size on the way there
   new ResizeObserver(() => { clearTimeout(pending); pending = setTimeout(ask, 150); })
     .observe(canvas);
+  // the scale by hand: a step a press, from the one the console stands at, kept for the next visit
+  const step = (d, text, title) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'chip'; b.textContent = text; b.title = title;
+    b.addEventListener('click', () => {
+      const now = Math.max(1, Math.round(scale / r)), next = Math.min(Math.floor(8 / r), Math.max(1, now + d));
+      if (next === now) return refocus();
+      want = next;
+      try { localStorage.setItem('love.scale', String(want)); } catch {}
+      ask(); refocus(); });
+    return b; };
+  chips.append(step(-1, '\u2212', 'smaller'), shown, step(1, '+', 'larger'));
   status.textContent = 'the machine is waking...';
   refocus();
 }
