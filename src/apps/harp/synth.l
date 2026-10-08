@@ -15,7 +15,7 @@
          synth-strike synth-feed synth-frame synth-key synth-timbres synth-shifted synth-digits
          synth-chunk synth-lead synth-octaves synth-send synth-play synth-stop synth-pull
          synth-cps! synth-cps synth-cps-step synth-cps-lo synth-cps-hi synth-text synth-ex
-         synth-just synth-sept synth-jdeg synth-dopts synth-drift synth-lname synth-map synth-kmodes)
+         synth-just synth-sept synth-jdeg synth-dopts synth-drift synth-lname synth-map synth-kmodes synth-warm)
 (borrow 'rove)                          ; the pacer, the song's rate and its lead's ceiling
 (borrow 'harp)                          ; the patterns: a cycle's events
 (borrow 'play)                          ; the voices, the mix, and harp-read for the text
@@ -46,7 +46,7 @@
  ; the drift rides it too: 'dr on, 'dw the walk's next state and 'dnow the one sounding,
  ; 'dprev the last choice, 'dph its name, 'trail the centers behind, and the knobs
  (synth-new _) {'oct 0 'tim 0 'vs () 'due () 'fpos 0 'last () 'lk 0 'lt 0 'dirty 1
-                'pat () 'nextp () 'on 0 'cyc 0 'cstart 0 'cps synth-cps 'lmsg "" 'over 0
+                'pat () 'nextp () 'ntext "" 'ptext "" 'lights 0 'lit () 'on 0 'cyc 0 'cstart 0 'cps synth-cps 'lmsg "" 'over 0
                 'dr 0 'dw () 'dnow () 'dprev [() ()] 'dph "" 'trail () 'dbook 3
                 'dlean 1.5 'dsteer 1.0 'dhome 0.1 'km 0}
  synth-kmodes ["fixed" "follow" "just"]
@@ -121,17 +121,21 @@
  ; complaint and the loop keeps what it had. an empty text is hush. sending starts
  ; the loop if it stood
  (synth-text ls) (foldl (a \ l \ a + "\n" + l) <ls >ls)
+ ; the text is read as it stands, marked first, so an event knows its words' places in it
  (synth-send st text) (: t (strip text)
+                         _ (mini-mark text)
                          r (0 = #t ? hush
-                              (trap (_ \ harp-read t) () (a \ b \ ['bad (show a + " " + show b)])))
+                              (trap (_ \ harp-read text) () (a \ b \ ['bad (show a + " " + show b)])))
                          (two? r ? (pins st 'lmsg <>r 'dirty 1)
-                            (pins st 'nextp r 'lmsg "sent" 'dirty 1,
+                            (pins st 'nextp r 'ntext text 'lmsg "sent" 'dirty 1,
                              st 'on ? st (synth-play st))))
  ; play: from the next frame written, cycle 0; stop: no more pulled, what has not
  ; begun dropped, what rings rings out
  (synth-play st) (st 'on ? st (pins st 'on 1 'cyc 0 'cstart (st 'fpos) 'dirty 1))
  (synth-stop st) (pins st 'on 0 'due () 'dirty 1)
  (synth-cps! st v) (pins st 'cps (v < synth-cps-lo ? synth-cps-lo (synth-cps-hi < v ? synth-cps-hi v)) 'dirty 1)
+ ; with 'lights on, each onset that knows its words is kept on 'lit as [start end locs
+ ; text] too, the text its pattern was read from; the host lets them go.
  ; the cycles starting before frame lim, their onsets as voices from their frames, kept
  ; with their start until it comes: a voice not begun is silent but not free, its closure
  ; runs over every frame of a chunk, and a cycle is pulled whole. a pattern sent takes
@@ -139,13 +143,17 @@
  ; the one crossing, as in play's own run
  (synth-pull st lim) (:- (go ()) (go _)
    (? (!(st 'on) || lim <= st 'cstart) ()
-      (: _ (st 'nextp ? (pins st 'pat (st 'nextp) 'nextp ()))
+      (: _ (st 'nextp ? (pins st 'pat (st 'nextp) 'nextp () 'ptext (st 'ntext)))
          p (st 'dr ? (dcycle st) (st 'pat)) c (st 'cyc) f0 (st 'cstart) spc (int (song-rate / st 'cps))
-         vs (p ? (filter two? (map (x \ (: at (f0 + int (spc * qnum (evwb x - qi c)))
-                                          v (mkvoice at (evv x) song-rate)
-                                        (two? v ? [at v] ())))
-                                   (filter onset? (p (qi c) (qi (c + 1)))))))
-         ((pins st 'due (st 'due + vs) 'cyc (c + 1) 'cstart (f0 + spc) 'dirty 1),
+         (fr t) (f0 + int (spc * qnum (t - qi c)))
+         xs (p ? (filter onset? (p (qi c) (qi (c + 1)))))
+         vs (filter two? (map (x \ (: at (fr (evwb x))
+                                      v (mkvoice at (evv x) song-rate)
+                                    (two? v ? [at v] ())))
+                              xs))
+         lit (st 'lights ? (filter two? (map (x \ (two? (evlocs x) ? [(fr (evwb x)) (fr (evwe x)) (evlocs x) (st 'ptext)]))
+                                             xs)))
+         ((pins st 'due (st 'due + vs) 'lit (st 'lit + lit) 'cyc (c + 1) 'cstart (f0 + spc) 'dirty 1),
           go ()))))
  ; the buffer's ex words, vi's door: answers true for one of the loop's
  (synth-ex st s w arg) (: (num t) (: v <(sound t) (charm? v ? v ()))

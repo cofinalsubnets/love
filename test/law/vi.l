@@ -470,6 +470,16 @@
       (see (see (box '("abcdefghij") 8 4) ":set wrap\r") ":set nowrap\r" @ st
        ((st 'msg = "nowrap") && (body st = '("abcdefgh" "~" "~"))))
       (st? (vgob '("a") ((bytes ":set frobs") + [CR])) 'msg = "not an option: frobs"))
+   ; marks: a host's spans worn over the row, the pen again after any escape inside
+   ; one, off at its end; a set laid again unchanged does not move 'markgen
+   (marked ls ms) (box ls 8 4 @ st (vmarks st ms, st))
+   _ (test
+      (body (marked '("ab cd" "ef") [[0 3 5] [1 0 1]])
+       = ["ab \e[48;5;24mcd\e[49m" "\e[48;5;24me\e[49mf" "~"])
+      (vmarkon {'marks {0 [[1 3]]} 'markpen "<"} 0 0 "a\e[31mbc\e[0md"
+       = "a\e[31m<bc\e[0m<\e[49md")
+      (: st (marked '("ab") [[0 0 1]]) g (st 'markgen)
+         (vmarks st [[0 0 1]], g = st 'markgen && 0 < g)))
    ; H M L and the pages count SCREEN rows, so a folded line shortens their reach
    _ (test
       (at (see (box '("abcdefgh" "b" "c" "d") 4 5) "L") = '(3 0))

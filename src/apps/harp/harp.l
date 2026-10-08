@@ -23,10 +23,11 @@
   evwb evwe evpb evpe evv onset? evtime cycles
   hush pure stack slowcat fastcat timecat squeeze fast slow rev late early
   pmap pkeep onsets appl pset whenc every off jux iter palin seg sig super whenmod ply
-  sine cosine saw isaw tri square rand range
+  sine cosine saw isaw tri square rand range evlocs evmk ploc mini-mark
   degby undeg degbyk undegk sometimesby sometimes degrade euclid euclidr bjork rnd rndk
   ctl with named hit note n gain pan speed cut room legato slide smooth mini matom lrev cmap)
 (:
+   mreg {0 {}}                          ; mini-mark's: a string's content -> where it sits
    ; --- exact cycle time -----------------------------------------------------
    ; the tree's own rationals (src/love/boot/post.l): `3 /// 4` builds one, + - * / and
    ; < <= = are exact over them and over bignums, `sort` orders them, and `load`
@@ -74,9 +75,14 @@
    (evpb x)   (x 2)
    (evpe x)   (x 3)
    (evv x)    (x 4)
+   ; where in the text the event came from: [[b e] ..] byte spans, carried by every
+   ; combinator and () unless mini was told where its string sits (mini-mark). an event
+   ; with none is the five fields alone, so it compares as it always did
+   (evlocs x) (x 5)
+   (evmk wb we pb pe v ls) (two? ls ? [wb we pb pe v ls] [wb we pb pe v])
    ; an onset is a part that starts where its whole does: the fragment a player strikes
    (onset? x) (x 0 = x 2)
-   (evtime f x) [(f (x 0)) (f (x 1)) (f (x 2)) (f (x 3)) (x 4)]
+   (evtime f x) (evmk (f (x 0)) (f (x 1)) (f (x 2)) (f (x 3)) (x 4) (x 5))
 
    ; the query span cut at every cycle line. every combinator whose answer depends
    ; on WHICH cycle it is (slowcat, rev, every, squeeze) queries through this, so
@@ -87,18 +93,18 @@
    hush       (b \ e \ ())
    ; one event per cycle, the whole cycle wide
    (pure v)   (b \ e \ map (s \ qfq <s @ c [c (c + qone) <s >s v]) (cycles b e))
-   (stack ps) (b \ e \ cmap (p \ pat p b e) ps)
+   (stack ps0) (map pat ps0 @ ps (b \ e \ cmap (p \ p b e) ps))
 
    ; one pattern per cycle, and each one advances a cycle only when its turn comes:
    ; that offset is the whole difference between slowcat and a stack of shifts.
-   (slowcat ps)
-    (#ps @ n
+   (slowcat ps0)
+    (map pat ps0 @ ps (#ps @ n
        (n = 0 ? hush
           (b \ e \ cmap (s \
                              (: c (qfl <s)  i (imod c n)  o (qi (c - idiv (c - i) n))
-                                p (pat (ps i))
+                                p (ps i)
                               (map (evtime (t \ t + o)) (p (<s - o) (>s - o)))))
-                        (cycles b e))))
+                        (cycles b e)))))
 
    (fast n0 p0) (: n (coin n0)  p (pat p0)
                   (? (n = qzero) hush
@@ -137,7 +143,7 @@
      (b \ e \ cmap (s \
                         (: c (qfl <s)  cq (qi c)  nq (cq + qone)
                            (refl t) (cq + nq - t)
-                           (map (x \ evtime refl x @ y [(y 1) (y 0) (y 3) (y 2) (y 4)])
+                           (map (x \ evtime refl x @ y (evmk (y 1) (y 0) (y 3) (y 2) (y 4) (y 5)))
                                 (p (refl >s) (refl <s)))))
                   (cycles b e)))
 
@@ -145,7 +151,7 @@
                   (b \ e \ map (x \ evtime (u \ u + t) x) (p (b - t) (e - t))))
    (early t p) (late (qneg (coin t)) p)
 
-   (pmap f p0)  (pat p0 @ p (b \ e \ map (x \ [(x 0) (x 1) (x 2) (x 3) (f (x 4))]) (p b e)))
+   (pmap f p0)  (pat p0 @ p (b \ e \ map (x \ evmk (x 0) (x 1) (x 2) (x 3) (f (x 4)) (x 5)) (p b e)))
    (pkeep f p0) (pat p0 @ p (b \ e \ filter f (p b e)))
    (onsets p)  (pkeep onset? p)
 
@@ -154,7 +160,7 @@
    (appl f pa0 pb0)
     (: pa (pat pa0)  pb (pat pb0)
      (b \ e \ cmap (x \ cmap (y \ (: pb2 (qmax (x 2) (y 2))  pe2 (qmin (x 3) (y 3))
-                                  (pb2 < pe2 ? [[(x 0) (x 1) pb2 pe2 (f (x 4) (y 4))]])))
+                                  (pb2 < pe2 ? [(evmk (x 0) (x 1) pb2 pe2 (f (x 4) (y 4)) (x 5 + y 5))])))
                             (pb (x 2) (x 3)))
                   (pa b e)))
 
@@ -205,7 +211,7 @@
                                                         pb (qmax sb (evpb x))
                                                         pe (qmin se (evpe x))
                                                       (pb < pe ?
-                                                       ([sb se pb pe (evv x)] . mk (i + 1))
+                                                       (evmk sb se pb pe (evv x) (x 5) . mk (i + 1))
                                                        (mk (i + 1))))))))))
 
    ; --- continuous patterns: a value everywhere, no structure of their own ----
@@ -331,7 +337,7 @@
           95  ('elong . (j + 1))
           (mword s j @ r
            ; an unreadable byte is one step of silence, and the cursor still moves
-           (#<r @ 0 (hush . j + 1) (pure (matom <r) . >r)))))
+           (#<r @ 0 (hush . j + 1) (mlocd s j >r (pure (matom <r)) . >r)))))
 
    ; a term and its modifier tail -> the steps it contributes, as [(w . p) ..]
    (mstep s i)
@@ -378,4 +384,33 @@
        ps (map (st \ atom? st ? hush (alt ? (slowcat (map cup st)) (timecat st)))
                <g)
        ((#ps @ 1 (ps 0) (stack ps)) . >g))
-   (mini s) (<(mseq s 0 0 0))))
+   (mini s) (<(mseq s 0 0 0))
+
+   ; --- where a string sits ---------------------------------------------------
+   ; a text's string literals, each by its content, at the byte after its quote; a
+   ; mini of that content then lays every word's span in the text on its events. a
+   ; text that opens on no paren is mini as it stands. marking again forgets the
+   ; last; a literal with an escape is not marked, its bytes are not its content
+   (mlocd s j e p) (peep (mreg 0) s () @ os
+                     (two? os ? (ploc (map (o \ [(o + j) (o + e)]) os) p) p))
+   (ploc ls p) (b \ e \ map (x \ evmk (x 0) (x 1) (x 2) (x 3) (x 4) (x 5 + ls)) (p b e))
+   (mini-mark t)
+    (: n #t  r {}
+       (add k o) (pin r k (peep r k () + [o]))
+       (eol i) (i < n && 10 != t i ? (eol (i + 1)) i)
+       (lead i) (? (i >= n) i (32 >= t i) (lead (i + 1)) (59 = t i) (lead (eol i)) i)
+       ; the close of a literal opened at i, or () where it escapes or runs out
+       (close i) (? (i >= n) () (92 = t i) () (34 = t i) i (close (i + 1)))
+       (skip i) (? (i >= n) i (92 = t i) (skip (i + 2)) (34 = t i) (i + 1) (skip (i + 1)))
+       (go i) (? (i >= n) r
+                 (59 = t i) (go (eol i))
+                 (34 = t i) (? (i + 2 < n && 34 = t (i + 1) && 34 = t (i + 2))
+                               (: (q j) (? (j + 2 >= n) n
+                                           (34 = t j && 34 = t (j + 1) && 34 = t (j + 2)) (j + 3)
+                                           (q (j + 1)))
+                                  (go (q (i + 3))))
+                               (close (i + 1) @ c
+                                  (nil? c ? (go (skip (i + 1)))
+                                     (add (snip t (i + 1) c) (i + 1), go (c + 1)))))
+                 (go (i + 1)))
+       (pin mreg 0 (lead 0 @ i (i < n && 40 = t i ? (go i) (add t 0, r)))))))

@@ -154,5 +154,24 @@
        (synth-lname [0 1 0] = "E-") (synth-lname [0 -1 0] = "Ab+") (synth-lname [0 0 1] = "Bb7")
        (synth-lname [4 -1 0] = "C+")))
 
+; --- harp's repl (src/apps/harp/live.l): with 'lights on, a pulled onset keeps its frames
+; --- and its words, and those sounding at a frame are marks on the rows sent
+(borrow 'harplive)
+(: st (synth-new ())
+   t "(stack [\"bd*2 sn\"\n (note \"<0 3>\")])"
+   _ (pins st 'lights 1)
+   _ (synth-send st t)
+   _ (synth-play st)
+   _ (synth-pull st 1)
+   spc (int (cite 'rove 'song-rate / st 'cps))
+   (at f) (sort (live-spans (live-lit (st 'lit) f) (lines t)))
+   (lines t) ["(stack [\"bd*2 sn\"" " (note \"<0 3>\")])"]
+   (test (at 0 = [[0 9 11] [1 9 10]])                  ; the first bd, and the cycle's 0
+         (at (spc // 4) = [[0 9 11] [1 9 10]])          ; the second bd
+         (at (spc // 2 + 1) = [[0 14 16] [1 9 10]])     ; sn
+         ; a row edited since is dark, the others lit
+         (live-spans (live-lit (st 'lit) 0) ["(stack [\"bd*2 sn\"" "x"]) = [[0 9 11]]
+         (live-rc "ab\ncd" 4 = [1 1])))
+
 (test_fin (),
  puts "synth: ok -- the keys bend as they should, the names are right, the turns stop, a strike rings, and the loop plays what the buffer says\n")
