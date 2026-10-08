@@ -61,13 +61,11 @@ const pixel_cap = 8 << 20;
 // the GPU, instead of the worker doing it per pixel in a loop.
 const frame_cap = 2 << 20;
 
-// the RESERVATION: the most this canvas can ever be, which is the screen it sits on. the
-// paper is carved at it once, at boot, and the heap gets what is under it, so a later
-// resize lands inside memory the kernel was never given. it is a whole-screen box because
-// that is the largest layout any reflow can arrive at, and it is settled here because the
-// screen is the reader's and not the kernel's.
-const reservation = (r) => Math.min(pixel_cap,
-  Math.round(screen.width * r) * Math.round(screen.height * r));
+// the RESERVATION is pixel_cap whole: the paper is carved at it once, at boot, and the heap
+// gets what is under it, so a later resize lands inside memory the kernel was never given.
+// not the screen the page woke on -- a window carried to a larger one would ask for more
+// than that and be refused for good. a box past it asks for the most pixels the reservation
+// holds, its own shape kept, and the compositor stretches them over the box.
 
 // `cols` is the MOST columns worth reading: the scale is the smallest that keeps the grid
 // inside it, so a wide box gets bigger text rather than more of it. a cap and not a floor
@@ -89,13 +87,14 @@ export function glass(canvas, cols = cols_n, ratio = 0, want = 0) {
   // never a canvas wider than the box it was laid in
   const w = Math.max(64, Math.round(box.width)), h = Math.max(16, Math.round(box.height));
   let r = Math.max(1, Math.round(ratio > 0 ? ratio : (window.devicePixelRatio || 1)));
-  const cap = reservation(r);
+  const cap = pixel_cap;
   while (r > 1 && w * h * r * r > Math.min(cap, frame_cap)) r--;
+  const f = Math.min(1, Math.sqrt(cap / (w * h * r * r))), W = Math.floor(w * r * f), H = Math.floor(h * r * f);
   // 1..8 is the kernel's own range for a glyph scale (kmain's fbscale, and what
   // k_fb_reseat will take): past it a huge screen would be refused outright. the scale is
   // taken in device pixels, so the grid comes as near the asked columns as a whole scale allows
-  const scale = Math.min(8, Math.max(1, want >= 1 ? Math.round(want) * r : Math.ceil(w * r / (8 * n))));
-  return { w: w * r, h: h * r, scale, cap, r }; }
+  const scale = Math.min(8, Math.max(1, want >= 1 ? Math.round(want) * r : Math.ceil(W / (8 * n))));
+  return { w: W, h: H, scale, cap, r }; }
 
 // --- the scan lane: the keyboard as a keyboard -----------------------------------------
 // into the shared ring's scan lane as PS/2 set 1 make and break codes, the bytes the
@@ -309,7 +308,14 @@ export async function loveMachine(root) {
   // re-renders the serial line -- a second reading of a stream whose control bytes ARE the
   // rendering can only disagree with the first. what is left for the page to say is the
   // machine failing to start or stopping, which the canvas cannot show.
-  const halt = t => { status.textContent = t; status.hidden = false; canvas.hidden = true; };
+  // ..and a stopped machine lets go: of the pointer it may hold mid-drag, and of the focus,
+  // or the unseen key field would go on taking every key with nothing left to hear them
+  let held = null;
+  const halt = t => {
+    status.textContent = t; status.hidden = false;
+    if (held !== null) try { canvas.releasePointerCapture(held); } catch {}
+    if (root.contains(document.activeElement)) document.activeElement.blur();
+    canvas.hidden = true; };
   // a question for the reader, answered by a click: the text, two buttons. -> true for
   // the first. one at a time; a later one waits its turn.
   let asked = Promise.resolve();
@@ -546,9 +552,14 @@ export async function loveMachine(root) {
   // a finger focuses the canvas (no keyboard over the floor), a mouse the field
   canvas.addEventListener('pointerdown', e => {
     (e.pointerType === 'touch' ? canvas : keys).focus({ preventScroll: true });
-    canvas.setPointerCapture?.(e.pointerId);
+    canvas.setPointerCapture?.(e.pointerId), held = e.pointerId;
     send(0, button(e.button), e); });
-  canvas.addEventListener('pointerup', e => { released = performance.now(); send(1, button(e.button), e); });
+  canvas.addEventListener('pointerup', e => { released = performance.now(), held = null; send(1, button(e.button), e); });
+  // a release the window never saw (it lost the focus mid-drag, or moved between screens)
+  // leaves the pointer held by the canvas: the window's blur gives it back
+  window.addEventListener('blur', () => {
+    if (held !== null) try { canvas.releasePointerCapture(held); } catch {}
+    held = null; });
   canvas.addEventListener('pointermove', e => {
     const c = cell(e);
     if (!c || c.join() === over) return;

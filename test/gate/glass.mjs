@@ -1,6 +1,6 @@
 // test/gate/glass.mjs -- the page's half of the console's grid, asked without a page.
 // src/inle/wasm/machine.js's glass turns a canvas box into real pixels and the scale a glyph pixel gets,
-// and no lane here has a browser, so the three globals it reads are stubbed and the law
+// and no lane here has a browser, so the two globals it reads are stubbed and the law
 // is checked as arithmetic: the machine divides the pixels it is handed by the face times
 // the scale (kmain's cbinit), so the columns are settled HERE and read back the same way.
 // what is asked is the cap -- the box a glyph short of the next scale is the one that used
@@ -10,7 +10,6 @@
 import { glass, keybytes, cols_n } from '../../src/inle/wasm/machine.js';
 
 const face = 8;                                  // cga_8x8's width, what cbinit divides by
-globalThis.screen = { width: 2560, height: 1440 };
 const canvas = (w, h) => ({ getBoundingClientRect: () => ({ width: w, height: h }) });
 
 let bad = 0;
@@ -39,6 +38,10 @@ law(grid(1600, 900, 1, 0).cols <= cols_n, 'a query string that is not a number f
 
 // a desktop monitor's box opens at scale 2 under the default cap
 law([1300, 1600, 1900, 1920].every((w) => grid(w, 1000, 1, cols_n).scale === 2), 'a desktop box opens at scale 2');
+
+// a box past the reservation asks for the most it holds, in its own shape, and is never refused
+const huge = (() => { globalThis.window = { devicePixelRatio: 1 }; return glass(canvas(5120, 2880), cols_n); })();
+law(huge.w * huge.h <= huge.cap && Math.abs(huge.w / huge.h - 16 / 9) < 0.01, 'a box past the reservation keeps its shape inside it');
 
 // a scale picked by hand is taken as it stands, in CSS pixels, whatever the cap would give
 const picked = (w, r, z) => { globalThis.window = { devicePixelRatio: r }; return glass(canvas(w, 1000), cols_n, 0, z).scale; };
