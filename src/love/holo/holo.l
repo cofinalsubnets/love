@@ -164,6 +164,7 @@
              'sx1 1 'sx2 1 'sx4 1 'zx1 1 'zx2 1 'zx4 1
              'frpush 0 'frpop 0              ; a64's frame record: fp and lr as one pair
              'cbr 3                          ; a64's cbz/cbnz: (cbr word reg label), the flags untouched
+             'tbr 3                          ; ..and tbz/tbnz: (tbr word reg label), the bit in the word
              'push 1 'pop 1 'neg 1 'not 1 'inc 1 'dec 1 'tp 1
              'jmp 1 'jmp8 1 'jmpr 1 'jmpm 2 'jmpt 3 'callr 1 'call 1 'raw 1 'lapool 1
              'li 2 'mov 2 'cmp 2 'test 2 'set 2 'set1 2 'br 2 'br8 2

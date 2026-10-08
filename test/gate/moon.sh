@@ -456,6 +456,12 @@ moonrun -c -t a64 -o "$ho/.as3.o" "$ho/.as3.S" > /dev/null 2>&1 || fail "a .S wh
 readelf -SW "$ho/.as3.o" 2>/dev/null | grep -q __ex_table || fail "a .S's header macro laid no __ex_table"
 readelf -x .text "$ho/.as3.o" 2>/dev/null | grep -q "214c50d3 800080d2 000c0091 00f47ed3" \
   || fail "a .S's arm immediates were not laid as written"
+# tbz's 14-bit field: a label past it refuses, never wraps; an outside target is a TSTBR14
+printf '1:\n\t.rept 8193\n\tnop\n\t.endr\n\ttbz x0, #1, 1b\n' > "$ho/.tbz.s"
+moonrun -c -t a64 -o "$ho/.tbz.o" "$ho/.tbz.s" > /dev/null 2>&1 && fail "a tbz past its 14-bit field was laid"
+printf '\t.globl f\nf:\ttbz x0, #3, ext\n\tret\n' > "$ho/.tbz.s"
+moonrun -c -t a64 -o "$ho/.tbz.o" "$ho/.tbz.s" > /dev/null 2>&1 || fail "a tbz to an outside label did not assemble"
+readelf -rW "$ho/.tbz.o" 2>/dev/null | grep -q "R_AARCH64_TSTBR14.*ext" || fail "a tbz to an outside label laid no TSTBR14"
 
 # the attribute skip on a local/parameter/member takes __attribute__ ALONE: an asm NAME
 # would rename the object, and dropping it renames it in silence. test/cc/145 holds the

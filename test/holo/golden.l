@@ -559,6 +559,15 @@
         (map (l \ trap (x \ holo-hex 'a64 (gas-text 'a64 x)) l (\ a b a))
              ["ldp x0, x1, [x2, #4]" "ldp x0, x1, [x2, #512]" "ldnp x0, x1, [x2, #16]!" "ldp x0, w1, [x2]"
               "ldp x3, x3, [x2]" "stp x0, x1, [x0, #16]!" "ldp x0, x1, [w2]" "ldr x0, [w2, #8]"]))
+   ;; test bit and branch to a label, back and forward and by `.`, and ands at X: llvm-mc's words.
+   ;; a bit past the width, sp, a register bit, an odd or far `.` offset, no bitmask refuse
+   _ (chk-eq "gas.a64.tbz" "000000366400f837d0ffffb61f2003d5201c40f2620004ea850c007241002836e2ff0fb7"
+        (holo-hex 'a64 (gas-text 'a64 "1:\n tbz x0, #0, 1b\n tbnz w4, #31, 2f\n tbz x16, 63, 1b\n nop\n2:\n ands x0, x1, #0xff\n ands x2, x3, x4\n ands w5, w4, #15\n tbz x1, #5, .+8\n tbnz x2, #33, .-4\n")))
+   _ (chk-eq "gas.a64.tbz.refuse"
+        '(gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-branch gas-a64-branch gas-a64-operand a64-bitmask-imm)
+        (map (l \ trap (x \ holo-hex 'a64 (gas-text 'a64 x)) l (\ a b a))
+             ["tbz w0, #32, .+8" "tbz x0, #64, .+8" "tbz sp, #1, .+8" "tbz x0, x1, .+8" "tbz x0, #1, .+2" "tbz x0, #1, .+32768"
+              "ands sp, x1, #1" "ands x0, x1, #0"]))
    _ (chk-eq "gas.a64.lse.refuse"
         '(gas-a64-operand gas-a64-op gas-a64-operand gas-a64-operand gas-a64-operand)
         (map (l \ trap (x \ holo-hex 'a64 (gas-text 'a64 x)) l (\ a b a))

@@ -24,6 +24,7 @@
    ra-jump26 282                                    ; R_AARCH64_JUMP26          (S+A-P)>>2 into b's imm26
    ra-call26 283                                    ; R_AARCH64_CALL26          ... into bl's imm26
    ra-condbr19 280                                  ; R_AARCH64_CONDBR19        ... into b.cond's or cbz's imm19
+   ra-tstbr14 279                                   ; R_AARCH64_TSTBR14         ... into tbz's imm14
    ra-prel64 260                                    ; R_AARCH64_PREL64          S + A - P in eight bytes (the jump table's key)
    ra-prel32 261                                    ; R_AARCH64_PREL32          S + A - P in four bytes (a jump table's entry)
    ra-pghi21 275                                    ; R_AARCH64_ADR_PREL_PG_HI21  page(S+A)-page(P) into adrp
@@ -64,7 +65,7 @@
                         bs (patch-with be k tgt off w (fix-a x))
                         (o-walkr be >items labels wkset internal? rset (off + w)
                                  (rev bs + bacc) racc))
-                    (: fill (? (elem k '(b26 b19 adrp21 addlo12 j21)) (le32 (fix-a x))
+                    (: fill (? (elem k '(b26 b19 b14 adrp21 addlo12 j21)) (le32 (fix-a x))
                                ; a surviving riscv 'pcrel: the aux packs both base words (auipc low,
                                ; the I-insn high) -- lay them as the 8-byte placeholder call_plt patches
                                (k == 'pcrel) (le32 (fix-a x % 4294967296) + le32 (fix-a x // 4294967296))
@@ -433,7 +434,7 @@
        _ (target = 'x64 || a64 || rv ? 0 (scare 'obj-target target))
        ; the in-place-resolvable kinds. riscv's are pure byte deltas (auipc is byte
        ; pc-relative, no page math), so intra-.text la/call/jmp all resolve inside the .o.
-       rset (? a64 '(b26 b19) rv '(j21 pcrel b13 cj cb) '(rel32 rel8))
+       rset (? a64 '(b26 b19 b14) rv '(j21 pcrel b13 cj cb) '(rel32 rel8))
        machine (peep elf-machines target 0)
        ; the backend must be registered, not merely named: a frontend bakes holo with the
        ; native backend only, and a cross target joins the cat at runtime. unregistered,
@@ -560,6 +561,7 @@
                  'addlo12 (o-rela off si ra-lo12 sa)
                  'b26 (o-rela off si (aux = 2483027968 ? ra-call26 ra-jump26) sa)   ; 0x94000000 = bl
                  'b19 (o-rela off si ra-condbr19 sa)
+                 'b14 (o-rela off si ra-tstbr14 sa)
                  ; riscv: a 'pcrel pair (CALL_PLT) or a wide branch's 'j21 (JAL), both S+a-p
                  'pcrel (o-rela off si rr-call sa)
                  'j21 (o-rela off si rr-jal sa)

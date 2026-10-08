@@ -555,6 +555,25 @@
                     (bad 0)
                    (ga-raw ((kd = 'sw ? 1 <>a) << 30 | 0x28000000 | <a << 26 | (kd = 'n ? 0 ty) << 23 | ld << 22
                             | (q & 127) << 15 | b 3 << 10 | rn << 5 | a 3)))))))
+   ;; test bit and branch: the bit's high half rides bit 31, its low five [23:19]; a W register
+   ;; tests 0..31, an X 0..63
+   (ga-tb-ins m os)
+    (: rw (ga-rw (os 0)) top (<>rw = 8 ? 64 32)
+       ((os 1) @ ('imm b)
+          (? (<rw = 'sp || !(0 <= b < top)) (scare 'gas-a64-operand [m os])
+             (: w ((m = 'tbz ? 0x36000000 0x37000000) | (b >> 5) << 31 | (b & 31) << 19)
+                (? (charm? (ga-dot (os 2))) (ga-raw (w | ga-off (ga-dot (os 2)) 14 << 5 | ga-hw <rw))
+                   ((os 2) @ ('sym l) [['tbr w <rw l]] _ (scare 'gas-a64-operand [m os])))))
+          _ (scare 'gas-a64-operand [m os])))
+   ;; ands at either width (a W one with a register or bitmask is ga-dp's); no sp
+   (ga-ands os)
+    (: d (ga-rw (os 0)) n (ga-rw (os 1)) sf (<>d = 8 ? 0x80000000 0)
+       (? (<>d != <>n || <d = 'sp || <n = 'sp) (scare 'gas-a64-operand ['ands os])
+          ((os 2) @ ('imm v) (ga-bm v (<>d = 8 ? 64 32) @ f
+                               (charm? f ? (ga-raw (sf | 0x72000000 | f | ga-hw <n << 5 | ga-hw <d)) (scare 'a64-bitmask-imm v)))
+                    ('reg x w) (w = <>d && x != 'sp ? (ga-raw (sf | 0x6A000000 | ga-hw x << 16 | ga-hw <n << 5 | ga-hw <d))
+                                  (scare 'gas-a64-operand ['ands os]))
+                    _ (scare 'gas-a64-operand ['ands os]))))
    ;; the bitfield moves by opc; sf and N by the width, immr and imms below it
    ga-bfm {'sbfm 0 'bfm 1 'ubfm 2}
    (ga-bfm-ins m os)
@@ -703,6 +722,8 @@
                             [['cbr w <rw (<>(os 1))]])))
               (scare 'gas-a64-operand [m os]))
           (two? (peep ga-lnot m ())) (k = 3 ? (ga-lnot-ins m os) (scare 'gas-a64-operand [m os]))
+          (elem m '(tbz tbnz)) (k = 3 ? (ga-tb-ins m os) (scare 'gas-a64-operand [m os]))
+          (m = 'ands) (k = 3 ? (ga-ands os) (scare 'gas-a64-operand [m os]))
           (two? (peep ga-carry m ())) (k = 3 ? (ga-regw (ga-carry m) os) (scare 'gas-a64-operand [m os]))
           (two? (peep ga-un m ())) (k = 2 ? (ga-regw (ga-un m) os) (scare 'gas-a64-operand [m os]))
           (two? (peep ga-ut m ())) (k = 2 ? (ga-ut-ins m os) (scare 'gas-a64-operand [m os]))

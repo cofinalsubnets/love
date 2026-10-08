@@ -217,6 +217,7 @@
    ;; is pc-relative to the instruction's own address, in units of 4. the fix is the whole word.
    (a64-jmp  label)    [(fix 4 'b26 label 0x14000000)]
    (a64-cbr w r label) [(fix 4 'b19 label (w | rn r))]   ; cbz/cbnz, X or W by the word
+   (a64-tbr w r label) [(fix 4 'b14 label (w | rn r))]   ; tbz/tbnz, the bit and the op in the word
    (a64-call label)    [(fix 4 'b26 label 0x94000000)]
    ;; la: adrp + ADD -- the page-relative pair (+-4GB), one fixup each. adr alone
    ;; (+-1MB, and the patch masks silently) can't span love.c-scale images, and the
@@ -660,7 +661,7 @@
           ('shl . a64-shift 'shl) ('shr . a64-shift 'shr) ('sar . a64-shift 'sar)
           ('rol . a64-shift 'rol) ('ror . a64-shift 'ror) ('ror4 . a64-shift 'ror4)
           ('lea . a64-lea) ('lean . a64-lea)           ; a consumed lea (x64 tells them apart for the escape gate)
-          ('push . a64-push) ('pop . a64-pop) ('frpush . a64-frpush) ('frpop . a64-frpop) ('cbr . a64-cbr)
+          ('push . a64-push) ('pop . a64-pop) ('frpush . a64-frpush) ('frpop . a64-frpop) ('cbr . a64-cbr) ('tbr . a64-tbr)
           ('neg . a64-neg) ('not . a64-not) ('inc . a64-inc) ('dec . a64-dec)
           ('jmp . a64-jmp) ('br . a64-br) ('jmpr . a64-jmpr) ('jmpt . a64-jmpt) ('callr . a64-callr)
           ('mulo . a64-mulo) ('mulh . a64-mulh) ('umulh . a64-umulh) ('set . a64-set) ('test . a64-test)
@@ -717,7 +718,10 @@
       (: rb (target - site)
          rel (rb // 4)
          (? (kind = 'b26) (le32 (aux | rel & 67108863))             ; 26-bit field, bits[25:0]
-            (kind = 'b19) (le32 (aux | (rel & 524287) << 5))        ; 19-bit field, bits[23:5]
+            (kind = 'b19) (-262144 <= rel < 262144 ? (le32 (aux | (rel & 524287) << 5))   ; 19-bit field, bits[23:5]
+                             (scare 'a64-branch-range rel))
+            (kind = 'b14) (-8192 <= rel < 8192 ? (le32 (aux | (rel & 16383) << 5))   ; 14-bit field, bits[18:5]
+                             (scare 'a64-branch-range rel))
             (kind = 'adrp21) (: pg (target // 4096 - site // 4096)   ; adrp: page delta, immlo[30:29] immhi[23:5]
                                 (le32 (aux | ((pg & 3) << 29 | (pg >> 2 & 524287) << 5))))
             (kind = 'addlo12) (le32 (aux | target % 4096 << 10))  ; ADD #imm12: the target's low 12 (site-free)
