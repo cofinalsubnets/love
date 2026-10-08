@@ -656,15 +656,17 @@ static uint64_t xz_crc64(const uint8_t *p, uintptr_t n) { return xz_crc64_on(0, 
 
 // --- LZMA2 a chunk at a time ---------------------------------------------------------------
 // the window holds the last dict bytes out and room for one chunk's (2 MiB at most); a chunk
-// that would not fit slides it down first. a match reaches no further back than the window
-// holds, which is every distance the dictionary allows. the reset rules are l2_dec's.
-#define L2_ROOM ((uintptr_t) 1 << 21)
+// that would not fit slides it down first, by a multiple of 16 so the position bits (pb, lp,
+// at most 4 each) read the same off the window as off the whole output. a match reaches no
+// further back than the window holds, which is every distance the dictionary allows. the
+// reset rules are l2_dec's.
+#define L2_ROOM (((uintptr_t) 1 << 21) + 16)
 #define L2_MAGIC 0x6c7a6d6132u
 struct l2_st { uint64_t magic, n, base, cap, dict; uint32_t needdict, needprops;
                struct lz_model m; lzp lit[0x300 << 4]; };
 static void l2_slide(struct l2_st *S, uint8_t *win, uintptr_t need) {
  if (S->n + need <= S->cap) return;
- uintptr_t keep = S->n < S->dict ? S->n : S->dict, shift = S->n - keep;
+ uintptr_t shift = (S->n - (S->n < S->dict ? S->n : S->dict)) & ~(uintptr_t) 15, keep = S->n - shift;
  memmove(win, win + shift, keep);
  S->n = keep, S->base = S->base > shift ? S->base - shift : 0; }
 // one chunk -> how many bytes it put out, from *o0 in the window; -1 malformed
