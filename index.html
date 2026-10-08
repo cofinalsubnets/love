@@ -18,11 +18,11 @@
      and machine.js (a module), and coi.js in the head -- that one goes first because it
      may reload the page to put the isolation headers on. the boot line and the two
      artifacts ride data- attributes, so a page can aim it elsewhere (data-wasm,
-     data-image, data-boot, data-ram, data-cols, data-ratio); the defaults are web/wasm/,
+     data-image, data-boot, data-ram, data-cols, data-scale, data-ratio); the defaults are web/wasm/,
      which is where `make site-wasm` puts them, and a query string names the same and
      wins where it does. the canvas carries no size: its box is the stylesheet's and its
      pixels are that box's own, measured at boot and again on a reflow. -->
-<div class="machine">
+<div class="machine" data-scale="1">
 <p class="status">waking the machine...</p>
 <canvas class="fb" tabindex="0"></canvas>
 </div>

@@ -13,6 +13,7 @@
 ; a pixel under half alpha is the transparent index. up to 256 colours stay exact; past
 ; that each channel is cut to 5 bits and a median cut over what is left picks the palette.
 (module (gif gif-encode gif-anim gif-decode gif-frames gif-palette gif-key gif-frame)
+(borrow 'bytes)
 (:
    ; --- the palette ----------------------------------------------------------------------
    ; a pixel's colour as one number, -1 when it is transparent
@@ -143,23 +144,15 @@
         + cats (map frame fs) + string 59))
 
    ; --- decoding, over src/love/lib/gif.c's gif-frame and gif-clear ----------------------------
-   (gif-rd16 s i) (s i + 256 * s (i + 1))
    ; the offset past the sub-blocks that start at p and their empty one
    (gif-skip s p) (? (#s <= p) #s (s p = 0) (p + 1) (gif-skip s (p + 1 + s p)))
    ; the palette's length in bytes by a flags byte
    (gif-table f) (f & 128 ? (3 * (2 << (f & 7))) 0)
-   ; the door: asked at first call, never at load
-   gif-door {}
-   (gif-nif? _)
-    (peep gif-door 0 () @ v
-       (charm? v ? v
-          (trap (_ \ (gif-clear "" 0 "", 1)) () (a \ b \ 0) @ w (pin gif-door 0 w, w))))
    ; the images laid in turn on the screen, each as the viewer sees it, at most most of them
    ; gc is the graphic control ahead of an image: [disposal trans ms]
    (gif-frames s most)
     (? (#s < 13 || snip s 0 4 != "GIF8") "not a gif"
-       !(gif-nif? 0) "no decoder here"
-       (: w (gif-rd16 s 6) h (gif-rd16 s 8)
+       (: w (rdle s 6 2) h (rdle s 8 2)
           (? (w * h = 0) "not a gif"
              (16777216 < w * h) "too big"
              (: (go p cv gc acc)
@@ -167,7 +160,7 @@
                     (s p = 33)
                      (gif-skip s (p + 2) @ nx
                         (s (p + 1) = 249 && p + 7 < #s ?
-                            (: pk (s (p + 3)) cs (gif-rd16 s (p + 4))
+                            (: pk (s (p + 3)) cs (rdle s (p + 4) 2)
                                (go nx cv [(pk >> 2 & 7) (pk & 1 ? (s (p + 6)) -1)
                                           (cs < 2 ? 100 (10 * cs))] acc))
                            (go nx cv gc acc)))

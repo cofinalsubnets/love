@@ -81,38 +81,19 @@ static uint32_t vb_get(struct vbit *b, int w) {
  return v; }
 static int vb_ilog(uint32_t v) { int n = 0; while (v) n++, v >>= 1; return n; }
 
-// 2^e laid as bits; the series below for sin and cos, so no libm and every build agrees
+// 2^e laid as bits
 static double vb_p2(int e) {
  union { double d; uint64_t u; } x;
  if (e < -1022) return 0;
  if (e > 1023) e = 1023;
  x.u = (uint64_t) (e + 1023) << 52;
  return x.d; }
-static double vb_sinr(double x) {             // |x| <= pi/4
- double t = x, s = x, x2 = x * x;
- for (int k = 1; k < 12; k++) t *= -x2 / ((2 * k) * (2 * k + 1)), s += t;
- return s; }
-static double vb_cosr(double x) {
- double t = 1, s = 1, x2 = x * x;
- for (int k = 1; k < 12; k++) t *= -x2 / ((2 * k - 1) * (2 * k)), s += t;
- return s; }
+double lm_sin(double), lm_cos(double);
 #define VB_PI 3.14159265358979323846
-// sin and cos of 2 pi num / den, reduced by octants exactly
+// sin and cos of 2 pi num / den
 static void vb_sc(long long num, long long den, double *s, double *c) {
- long long q = ((num % den) + den) % den;     // 0 .. den-1 of a turn
- long long o = q * 8 / den;                   // the octant
- double r = (double) (q * 8 - o * den) / (double) den * (VB_PI / 4);  // within it
- double a = vb_sinr(r), b = vb_cosr(r), ra = vb_sinr(VB_PI / 4 - r), rb = vb_cosr(VB_PI / 4 - r), sv, cv;
- switch (o) {
-  case 0: sv = a, cv = b; break;
-  case 1: sv = rb, cv = ra; break;
-  case 2: sv = b, cv = -a; break;
-  case 3: sv = ra, cv = -rb; break;
-  case 4: sv = -a, cv = -b; break;
-  case 5: sv = -rb, cv = -ra; break;
-  case 6: sv = -b, cv = a; break;
-  default: sv = -ra, cv = rb; }
- *s = sv, *c = cv; }
+ double a = 2 * VB_PI * (double) num / (double) den;
+ *s = lm_sin(a), *c = lm_cos(a); }
 
 // vorbis's float32: 21 bits of mantissa, a 10-bit exponent biased by 788
 static double vb_f32(uint32_t x) {
@@ -278,14 +259,9 @@ static void vb_tables(struct va *a, struct vh *h, int k) {
  double *w = AT(double, h->win[k]), *pr = AT(double, h->pre[k]), *po = AT(double, h->post[k]), *tw = AT(double, h->tw[k]);
  uint32_t *rv = AT(uint32_t, h->rev[k]);
  for (int i = 0; i < m; i++) {                 // sin(pi/2 sin^2((i + 1/2)/m pi/2))
-  double s, c, s2, c2;
+  double s, c;
   vb_sc(2 * i + 1, 8 * m, &s, &c);
-  double t = s * s;                            // sin^2 in [0, 1]: pi/2 t as a fraction of a turn
-  // sin(pi/2 t) by the series directly, |pi/2 t| <= pi/2: split at pi/4
-  double r = VB_PI / 2 * t;
-  if (r <= VB_PI / 4) s2 = vb_sinr(r); else s2 = vb_cosr(VB_PI / 2 - r);
-  (void) c2;
-  w[i] = s2; }
+  w[i] = lm_sin(VB_PI / 2 * s * s); }
  for (int i = 0; i < q; i++) {                 // exp(-i pi (i + 1/4) / m) and exp(-i pi i / m)
   double s, c;
   vb_sc(-(4 * i + 1), 8 * m, &s, &c), pr[2 * i] = c, pr[2 * i + 1] = s;

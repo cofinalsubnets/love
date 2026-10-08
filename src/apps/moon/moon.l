@@ -380,7 +380,9 @@
    ; the family a header asks for: GNU C at the kernel's floor (scripts/min-tool-version.sh),
    ; beside __mooncc__. a claim, so each gcc 8.1 extension a header reaches is carried or
    ; refused by name (doc/misc/moon-c-gaps.md, the GNU C rows)
-   gnudefs '("__GNUC__=8" "__GNUC_MINOR__=1" "__GNUC_PATCHLEVEL__=0")
+   ; inline means C99's under every -std (gnu_inline asks gnu89's), so __GNUC_STDC_INLINE__ says
+   ; so -- gnulib picks its extern-inline scheme by it
+   gnudefs '("__GNUC__=8" "__GNUC_MINOR__=1" "__GNUC_PATCHLEVEL__=0" "__GNUC_STDC_INLINE__=1")
    (booldefs dia) (dia != 'c && '("bool=_Bool" "true=1" "false=0"))
    (cc-defs {'ds ds 'tgt tgt 'os os 'dia dia 'undef un 'swch sw 'bp bp})
     (un ? (stddefs tgt sw + booldefs dia + ds) (archdefs tgt + osdefs os + featdefs tgt + atomdefs tgt sw + bpdefs bp + stddefs tgt sw
@@ -480,10 +482,10 @@
        r (src = "-" ? [1 (slurp in)]
             (uread src @ q (? (two? q) q !vb () (vb src @ h (string? h && [1 h])))))
        _ (two? r || udie 1 ("cc: cannot open " + src))
-       lx (xasm ? (clexm (deftext ds9 + <>r) (1 - #ds9) 2 1) (clexat (deftext ds9 + <>r) (1 - #ds9)))
+       lx (xasm ? (clexm (deftext ds9 + <>r) (1 - #ds9) 2 1) (clexw (deftext ds9 + <>r) (1 - #ds9)))
        _ (okv? lx || ccdie lx src ("cc: lex error in " + src))
        _ (pin cppdeps 'l ())
-       pp (cpp-text <>lx (name \ sys? \ incload vb is (cdir src) name sys?) src xasm)
+       pp (cpp-text <>lx (name \ sys? \ incload vb is (cdir src) name sys?) src)
        _ (okv? pp || ccdie pp src ("cc: preprocessor error in " + src))
        _ (t 'md && cc-deps src dst t)                ; -E -MD writes the dependencies as a compile does
        (dst ? (open dst "w" @ q (!(hot? q) ? (udie 1 ("cc: cannot write " + dst)), say q <>pp, close q))

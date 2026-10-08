@@ -156,4 +156,6 @@ body.full .machine { height: 100%; margin: 0; padding: 0;
 body.full .machine .fb { flex: 1; min-height: 0; height: auto; width: 100%; border-radius: 0; }
 body.full .machine .status { position: absolute; left: .5em; top: .5em; z-index: 1; }
 body.full .machine .chips { margin: .2em .4em; }
+.machine .chips .scale { background: none; border-color: transparent; color: var(--dim); cursor: default;
+                        padding-left: .2em; padding-right: .2em; }
 body.full .machine .ask { position: absolute; left: .5em; right: .5em; top: 2.5em; z-index: 2; }

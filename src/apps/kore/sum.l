@@ -1,7 +1,6 @@
 ; src/apps/kore/sum.l -- the checksum tools: cksum, sum, crc32, md5sum, sha1sum, sha224sum,
 ; sha256sum, sha384sum, sha512sum, b2sum, sha3sum, in GNU's faces, and the -c lane that reads
-; those lines back. the digests are src/love/lib/hash.c's nifs; an image without them (the
-; kernel's) says which one is missing and leaves with 2.
+; those lines back. the digests are src/love/lib/hash.c's nifs.
 ; loads after fs.l for udirp. a body-less top-level `:` -- the mains leak, kore.l
 ; registers them.
 (module 'kore
@@ -9,34 +8,7 @@
 (borrow 'hashes)
 
 (:
-   ; --- the digest door ------------------------------------------------------
-   ; the probe is asked at first call and kept, never at load: this file is baked
-   ; into the artifact by a love that has the nifs, so a load-time answer would be the
-   ; baking love's and not the running one's. src/apps/gz.l's gz-nif, the same reasoning --
-   ; and the same reason each probe is a lambda: an unbound global scares when it is
-   ; referenced, not when the function around it is compiled.
-   sum-door {}
-   sum-ckp (_ \ (cksum ""))
-   sum-md5p (_ \ (md5 ""))
-   sum-shap (_ \ (sha256 ""))
-   sum-sha1p (_ \ (sha1 ""))
-   sum-sha224p (_ \ (sha224 ""))
-   sum-sha384p (_ \ (sha384 ""))
-   sum-sha512p (_ \ (sha512 ""))
-   sum-b2p (_ \ (blake2b ""))
-   sum-bsdp (_ \ (bsdsum 0 ""))
-   sum-sha3p (_ \ (sha3 ""))
-   sum-crcp (_ \ (crc32-on 0 ""))
-   (sum-nif k f)
-    (peep sum-door k () @ v
-       (charm? v ? v
-        ((trap (_ \ (f 0, 1)) () (\ a b 0)) @ w
-           (pin sum-door k w, w))))
-   (sum-have who nm k probe) (sum-nif k probe ? 0 (udie 2 (who + ": this image carries no " + nm)))
-
-   ; the triples live inside lambdas for the reason the probes do: an unbound global
-   ; scares when it is referenced, and this file is baked by a love that has the nifs
-   ; into an image that may not. [state-width init feed done].
+   ; [state-width init feed done]
    (sum-shad _) [105 sha256-init sha256-feed sha256-done]
    (sum-md5d _) [89  md5-init    md5-feed    md5-done]
    (sum-ckd _)  [12  cksum-init  cksum-feed  cksum-done]
@@ -176,27 +148,26 @@
    ; the digest tools share a front: -c reads a list back, anything else digests operands
    ; -b marks a digest binary (a * before the name), -t text (the default two spaces);
    ; with -c, the flags sum-check reads
-   (sum-front who nm k probe mk n as)
+   (sum-front who mk n as)
     (: fo (uflagsl who as () (chars "bctw" + [1001 1002 1003 1004]) {"check" 99 "binary" 98 "text" 116 "warn" 119 "quiet" 1001 "status" 1002
                                      "ignore-missing" 1003 "strict" 1004})
        t <fo
        o {'quiet (t 1001) 'status (t 1002) 'miss (t 1003) 'strict (t 1004) 'w (t 119)}
        line (t 98 ? (\ v n f (v + " *" + f + "\n")) sum-hexline)
-       (sum-have who nm k probe, (t 99 ? (sum-check who (_ \ mk) n (fo 1) o)
-           (sum-say who line mk "-" (fo 1)))))
-   (cksum-main as) (sum-have "cksum" "cksum" 0 sum-ckp, sum-say "cksum" sum-ckline sum-ckd "" (uflags "cksum" as () "" 1))
-   (md5sum-main as) (sum-front "md5sum" "md5" 1 sum-md5p sum-md5d 32 as)
-   (sha256sum-main as) (sum-front "sha256sum" "sha256" 2 sum-shap sum-shad 64 as)
-   (sha1sum-main as) (sum-front "sha1sum" "sha1" 3 sum-sha1p sum-sha1d 40 as)
-   (sha224sum-main as) (sum-front "sha224sum" "sha224" 4 sum-sha224p sum-sha224d 56 as)
-   (sha384sum-main as) (sum-front "sha384sum" "sha384" 5 sum-sha384p sum-sha384d 96 as)
-   (sha512sum-main as) (sum-front "sha512sum" "sha512" 6 sum-sha512p sum-sha512d 128 as)
+       (t 99 ? (sum-check who (_ \ mk) n (fo 1) o)
+        (sum-say who line mk "-" (fo 1))))
+   (cksum-main as) (sum-say "cksum" sum-ckline sum-ckd "" (uflags "cksum" as () "" 1))
+   (md5sum-main as) (sum-front "md5sum" sum-md5d 32 as)
+   (sha256sum-main as) (sum-front "sha256sum" sum-shad 64 as)
+   (sha1sum-main as) (sum-front "sha1sum" sum-sha1d 40 as)
+   (sha224sum-main as) (sum-front "sha224sum" sum-sha224d 56 as)
+   (sha384sum-main as) (sum-front "sha384sum" sum-sha384d 96 as)
+   (sha512sum-main as) (sum-front "sha512sum" sum-sha512d 128 as)
 
    ; b2sum: blake2b, 512 bits or -l's (a multiple of 8, 0 the default). -c reads a
    ; line of any length b2sum could have written, unless -l pins one
    (b2sum-main as)
-    (: _ (sum-have "b2sum" "blake2b" 7 sum-b2p)
-       (bad w m) (udie 1 ("b2sum: invalid length: '" + w + "'" + (#m ? ("\nb2sum: " + m) "")))
+    (: (bad w m) (udie 1 ("b2sum: invalid length: '" + w + "'" + (#m ? ("\nb2sum: " + m) "")))
        (bits w) (unum w @ v
                    (? !(charm? v) (bad w "")
                       (512 < v) (bad w "maximum digest length for 'BLAKE2b' is 512 bits")
@@ -214,8 +185,7 @@
    ; sha3sum: toybox's -a BITS (224 by default, 128..512), -b the digest alone, -S shake's
    ; pad; busybox's -c beside them, reading a list of the length -a says
    (sha3sum-main as)
-    (: _ (sum-have "sha3sum" "sha3" 9 sum-sha3p)
-       (bad m) (udie 1 ("sha3sum: " + m + " (see \"sha3sum --help\")"))
+    (: (bad m) (udie 1 ("sha3sum: " + m + " (see \"sha3sum --help\")"))
        (bits w) (unum w @ v
                    (? !(charm? v) (bad ("-a '" + w + "'")) (v < 128) (bad "-a < 128") (512 < v) (bad "-a > 512") v))
        (go a o)
@@ -237,8 +207,7 @@
 
    ; crc32: toybox's -- zlib's crc of each file, eight hex digits and the name
    (crc32-main as)
-    (: _ (sum-have "crc32" "crc32" 10 sum-crcp)
-       (row f nm ok)
+    (: (row f nm ok)
         (sum-fold f crc32-on 0 @ r
            (two? r ? (say out (zpad 8 (radix <r 16) + (#nm ? (" " + nm) "") + "\n"), ok)
             (sum-nope "crc32" f r, 0)))
@@ -251,8 +220,7 @@
    ; system v's byte total folded to 16 bits over 512-byte blocks (-s, --sysv), the
    ; last one given winning; a name is said for a named operand only, "-" included
    (sum-main as)
-    (: _ (sum-have "sum" "bsdsum" 8 sum-bsdp)
-       (usage m) (udie 1 ("sum: " + m + "\nTry 'sum --help' for more information."))
+    (: (usage m) (udie 1 ("sum: " + m + "\nTry 'sum --help' for more information."))
        (flags w k sv) (? (#w <= k) sv
                          (w k = 114) (flags w (k + 1) 0)
                          (w k = 115) (flags w (k + 1) 1)

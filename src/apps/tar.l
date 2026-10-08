@@ -592,7 +592,7 @@
        z (peep t 'z () @ w (w ? w (tarc-sniff (tar-peek raw 6))))
        (all r a) (r 0 @ p (#p = 0 ? (cats (rev a)) (all r (p . a))))
        (drain src) (: (dr r) (#(r 0) = 0 ? 0 (dr r)) (dr (tar-rd src)))
-       (? (z = 'z && gz-nif 3 gz-feedprobe)
+       (? (z = 'z)
           (: g (gz-pull (tar-rd raw))   src (tar-src (_ \ gz-next g))
              [src (_ \ (drain src, two? (peep g 'ans ()))) z])
           (z = 'J || z = 'j)

@@ -72,7 +72,9 @@ rm -rf "$d"; mkdir -p "$d"
 # minus stackovf.o (USE_STACKOVF off) and alloca.o (HAVE_ALLOCA: moonlibc's).
 SRC="m4 builtin debug eval format freeze input macro output path symtab"
 LIB="regex getopt getopt1 error obstack xmalloc xstrdup"
-CFLAGS="-DSTDC_HEADERS=1 -DHAVE_CONFIG_H -Isrc/apps/moon/include -I$M4SRC -I$M4SRC/src -I$M4SRC/lib"
+# m4's own directories ahead of the libc's, as its Makefile orders them: lib/regex.h is the
+# regex its builtins and lib/regex.c share, not moonlibc's
+CFLAGS="-DSTDC_HEADERS=1 -DHAVE_CONFIG_H -I$M4SRC -I$M4SRC/src -I$M4SRC/lib -Isrc/apps/moon/include"
 
 echo "MOON-M4  $M4SRC  ($target: mooncc + moonlibc + holo, no gcc/glibc/ld)"
 
