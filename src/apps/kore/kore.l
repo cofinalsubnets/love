@@ -1235,7 +1235,8 @@ every tool answers --help and --version, and -h where the letter is free
               'grep (as \ (: t {} o (grep-opt as t) (two? o && kregs? (grep-fs t o))))}
    (koretraits k) (? (elem k korebuiltin) ['builtin 'self] (elem k koreself) ['self]
                      (elem k korefiles) [('self . kfiles?)]
-                     (lit? (korepreds k)) [('self . peep korepreds k ())] ())
+                     (lit? (korepreds k)) [('self . peep korepreds k ())]
+                     (elem k '(sh lush)) ['login] ())
    _ (: E (cite 'verbs 'enlist)
         ; kore-main is unbound here -- it binds later in this same form -- so the
         ; closure reads it through the registry at the call, when module 'kore holds

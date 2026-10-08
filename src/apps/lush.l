@@ -2923,7 +2923,7 @@ no file and no -c is a shell: a repl on a tty, cooked script off stdin otherwise
 ; quiet here and fires through its -e instead. a dash-led basename (-lush, -sh:
 ; login(1)'s mark) seats us and makes a login shell, so the scan hands the raw word
 ; back and not just the match.
-(: _ (pins (cite 'verbs 'tab) 'sh sh-main 'lush sh-main)
+(: _ (cite 'verbs 'enlist 'sh sh-main ['login], cite 'verbs 'enlist 'lush sh-main ['login])
    bn (cite 'path 'pbase)
    s (cite 'verbs 'fire ["lush" "lush.l" "sh"])
    (two? s ? (: w (bn <s)
