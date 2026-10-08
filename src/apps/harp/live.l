@@ -25,7 +25,7 @@
                 (10 = t i) (go (i + 1) (i + 1) (snip t a i . acc))
                 (go (i + 1) a acc)))
  ; the events of 'lit sounding at frame now: [start end locs text], start <= now < end
- (live-lit lit now) (filter (x \ <x <= now && now < x 1) lit)
+ (live-lit lit now) (filter (x \ <x <= now < <>x) lit)
  ; their words as vi's marks, [row c1 c2], on the rows that still read as they did when
  ; sent; a span over a line's end is cut to it
  (live-spans lit ls)
@@ -47,9 +47,9 @@
      face (vi 'vi-face buf {'ex (synth-ex st)})
      ; with no card the loop is fed by the clock, into nothing
      t0 (clock 0)
-     (dry _) (st 'fpos < (clock 0 - t0) * song-rate // 1000 ? (synth-feed st (jug 0), dry ()))
+     (dry _) (st 'fpos < clock t0 * song-rate // 1000 ? (synth-feed st (jug 0), dry ()))
      (feed _) (song-lead-of (pace! pace) @ l
-                 (hn ? (song-fill hn l (_ \ (synth-feed st hn))) (dry ())))
+                 (hn ? (song-fill hn l (_ \ synth-feed st hn)) (dry ())))
      ; the frames the card holds ahead of the speaker, so 'fpos less them is what sounds.
      ; the marks moved: a frame. events over are let go
      (light _) (: now (st 'fpos - (hn ? (horn-lag hn @ g (charm? g ? g 0)) 0))
@@ -58,26 +58,23 @@
                   _ (vi 'vmarks buf (live-spans (live-lit (st 'lit) now) (buf 'lines)))
                   (g != buf 'markgen))
      (send _) (synth-send st (synth-text (buf 'lines)))
-     (status w) (: m (st 'lmsg)
-                   s (" harp  " + (st 'on ? "playing" "stopped") + "  cycle " + show (st 'cyc)
-                      + "  cps " + show (st 'cps) + (0 < #m ? ("  " + m) "")
-                      + "   C-e send  C-k stop  :q leave")
-                   (#s < w ? s (snip s 0 w)))
+     (status w) (: m (st 'lmsg @ "" "" m "  \(m)")
+                   ps (st 'on ? "playing" "stopped")
+                   s " harp  \(ps)  cycle \(st 'cyc)  cps \(st 'cps)\(m)   C-e send  C-k stop  :q leave"
+                   (snip s 0 w))
      ; vi lays all but the last row; the status goes there, the cursor kept where vi put it
-     (frame w h) ((face 0) w (h - 1) + "\e7\e[" + show h + ";1H\e[7m" + status w + "\e[0m\e[K\e8")
-     (step c) (? (c = 5) (send ())
-                 (c = 11) (synth-stop st)
-                 ((face 1) c))
+     (frame w h) (face 0 w (h - 1) + "\e7\e[" + show h + ";1H\e[7m" + status w + "\e[0m\e[K\e8")
+     (step c) (c @ 5 (send ()) 11 (synth-stop st) (face 1 c))
      ; the loop is synth's own: the card fed, the marks lit, a frame on a change, and
      ; every key waiting read without blocking, so the card never waits on the keys
-     (keys _) (? ((face 2) ()) 'quit
+     (keys _) (? (face 2 ()) 'quit
                  !(cue? 0) ()
-                 (edkey in @ k (k = -7 ? 'quit (step k, pin st 'dirty 1, keys ()))))
+                 (edkey in @ -7 'quit k (step k, pin st 'dirty 1, keys ())))
      (go sz) (: _ (feed ())
                 g (ttysize 7 19)
                 d (light () || st 'dirty || g != sz)
                 (d ? (pin st 'dirty 0, say out (frame (g 1) <g), flush out),
-                 keys () = 'quit ? () (rest 4, go g)))
+                 keys () @ 'quit () (rest 4, go g)))
    (ttytake ['hide],
     mind go () (_ \ (hn ? (flush hn, close hn), ttygive ['hide])),
     0))
