@@ -186,7 +186,7 @@ void __love_sigret(void) { }
 // own data and shadow stack, the boot line, and the heap image it fetched, if any (laid
 // above the span; kmain copies it into the heap). a page with a canvas names its size in
 // REAL pixels -- the canvas backing store, device ratio included -- and the scale a glyph
-// pixel gets there, which is how the page's own zoom reaches the console; rows and columns
+// pixel gets there, which is how the page's own scale reaches the console; rows and columns
 // then fall out of the two. the framebuffer is carved off the top of that span; headless,
 // the serial line is the console (kmain's own law). never returns: kmain ends in k_reset.
 // `sc` carries two things in one argument, and it has to: moon's wasm convention hands a

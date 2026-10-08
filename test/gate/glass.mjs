@@ -1,9 +1,9 @@
 // test/gate/glass.mjs -- the page's half of the console's grid, asked without a page.
-// src/inle/wasm/machine.js's glass turns a canvas box into real pixels and the zoom a glyph pixel gets,
+// src/inle/wasm/machine.js's glass turns a canvas box into real pixels and the scale a glyph pixel gets,
 // and no lane here has a browser, so the three globals it reads are stubbed and the law
 // is checked as arithmetic: the machine divides the pixels it is handed by the face times
-// the zoom (kmain's cbinit), so the columns are settled HERE and read back the same way.
-// what is asked is the cap -- the box a glyph short of the next zoom is the one that used
+// the scale (kmain's cbinit), so the columns are settled HERE and read back the same way.
+// what is asked is the cap -- the box a glyph short of the next scale is the one that used
 // to carry twice the columns at half the size.
 // ..and the bytes a hardware key sends, the same way: keybytes on a made-up event.
 // usage: node test/gate/glass.mjs
@@ -30,19 +30,24 @@ for (const r of [1, 2]) {
     if (!g.cols || !g.rows) none++;
     if (g.scale < 1 || g.scale > 8) none++; }
   law(worst <= cols_n, `at ratio ${r} no box carries more than ${cols_n} columns (widest ${worst})`);
-  law(!none, `at ratio ${r} every box has a grid, at a zoom the kernel will take`); }
+  law(!none, `at ratio ${r} every box has a grid, at a scale the kernel will take`); }
 
 // ..and the cap is the one asked for, not 80 baked in
 law(grid(1600, 900, 1, 40).cols <= 40, 'a narrower cap is narrower');
 law(grid(1600, 900, 1, 200).cols <= 200, '..and a wider one wider');
 law(grid(1600, 900, 1, 0).cols <= cols_n, 'a query string that is not a number falls back to the default');
 
-// a desktop monitor's box opens at zoom 2 under the default cap
-law([1300, 1600, 1900, 1920].every((w) => grid(w, 1000, 1, cols_n).scale === 2), 'a desktop box opens at zoom 2');
+// a desktop monitor's box opens at scale 2 under the default cap
+law([1300, 1600, 1900, 1920].every((w) => grid(w, 1000, 1, cols_n).scale === 2), 'a desktop box opens at scale 2');
 
-// a wide box gets BIGGER text rather than more of it: the zoom climbs with the pixels
-const zooms = [640, 1280, 2560].map((w) => grid(w, 400, 1, 80).scale);
-law(zooms[0] <= zooms[1] && zooms[1] <= zooms[2], 'the zoom climbs with the box, never falls');
+// a scale picked by hand is taken as it stands, in CSS pixels, whatever the cap would give
+const picked = (w, r, z) => { globalThis.window = { devicePixelRatio: r }; return glass(canvas(w, 1000), cols_n, 0, z).scale; };
+law(picked(1920, 1, 1) === 1 && picked(400, 2, 1) === 2 && picked(640, 1, 3) === 3, 'a picked scale wins over the cap');
+law(picked(1920, 2, 8) === 8, '..and stays inside the kernel\'s range');
+
+// a wide box gets BIGGER text rather than more of it: the scale climbs with the pixels
+const scales = [640, 1280, 2560].map((w) => grid(w, 400, 1, 80).scale);
+law(scales[0] <= scales[1] && scales[1] <= scales[2], 'the scale climbs with the box, never falls');
 
 // the canvas never outgrows the box it was laid in, whatever the ratio asks for
 for (const r of [1, 2, 3]) {

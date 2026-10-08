@@ -2157,6 +2157,14 @@
                               (cmp r0 r1) (set eq r0))
                            ('((movqrx r0 f0) (raw (72 209 224)) (li r1 18437736874454810624)) +   ; shl rax,1; rcx = inf<<1
                               '((raw (72 57 200 15 148 192 72 15 182 192)))))))))     ; cmp; sete al; movzx rax,al
+       ; the _p forms ask only whether the answer fits the third operand's type: the plain form,
+       ; storing to a fresh local of that type (initialised by the operand, which gcc evaluates)
+       (elem bi '("__builtin_add_overflow_p" "__builtin_sub_overflow_p" "__builtin_mul_overflow_p"))
+        (: k (peep g 'ovn 0) _ (pin g 'ovn (k + 1))
+           nm (".ovp" + show k)
+           (#args != 3 ? (nolane g (bi + " wants three operands"))
+              (cgexpr g env ['sexpr [['decl [[nm (peekty g env (args 2)) (args 2)]]]]
+                                    ['call ['var (snip bi 0 (#bi - 2))] [<args <>args ['addr ['var nm]]]] 'int] ())))
        (elem bi '("__builtin_add_overflow" "__builtin_sub_overflow" "__builtin_mul_overflow")
              && two? (ovlow g env bi args))
         (cgexpr g env (ovlow g env bi args) ())
