@@ -1158,6 +1158,13 @@ below, 251 of those 332 re-run so far: **145 compile**, and the rest refuse by n
   `set`/`setg` with `t`/`n`/`tn`, over `[xd]!, [xs]!, xn!` and `[xd]!, xn!, xv`. All 360 forms of
   a sweep are llvm-mc's words; a register twice, `xzr` in brackets, `sp`, or a W register
   refuses, as llvm-mc does.
+- **the pair loads and stores**: `ldp`/`stp`, `ldnp`/`stnp` and `ldpsw` over x, w and the vector
+  s, d and q registers, at an offset (`#` optional), pre-indexed (`[sp, #-16]!`) and
+  post-indexed (`[sp], #16`). Of a 15409-line sweep, every form llvm-mc lays is its word and
+  every one it refuses refuses; past it, a load of one register twice and a written-back base
+  that is also a data register refuse in every addressing form, where llvm-mc lets some by.
+  With it, a W register as a base refuses for every load and store: its width was dropped.
+  smccc-call and copy_page now compile, word for word the kernel's objects.
 
 Still open on this side (g-21's probes):
 
@@ -1167,10 +1174,10 @@ Still open on this side (g-21's probes):
   reads at the element's width, a bitfield or 128-bit member of a packed struct refuses by name,
   and a by-value struct reached as a packed member rides its type's alignment, not the member's.
 - where the re-run stops now, on this side: a register variable pinned to `x0` (4). Of the 24
-  units that stopped on the `.S` extable macro's `\insn`, 3 compile, and the rest stop on:
-  `ldp` (3), gas's `||` (3, mov_q's range test), `ands` (3), a shifted register operand
-  (`x2, lsl #8`, 2), `ccmp` (2), `tbz`/`tbnz` (2), `stp`, `csinv`, `bne`, `.incbin`, `@note`
-  and `sym+k` as a memory operand.
+  units that stopped on the `.S` extable macro's `\insn`, 5 compile, and the rest stop on:
+  `ands` (3), `tbz`/`tbnz` (3), `ccmp` (3), gas's `||` (3, mov_q's range test), a shifted
+  register operand (`x2, lsl #8`, 2), `csinv`, `bne`, `.incbin`, `@note` and `sym+k` as a
+  memory operand. The exclusive pairs (`ldxp`/`stxp` and kin) have no lane yet.
   The rest is part 1's front end and gen (`linux/skbuff.h`, an undeclared `branch`,
   `__attribute__((mode))`).
 - defconfig, g-21's units once refused on a Q form or a register pinned twice: of a sample of
