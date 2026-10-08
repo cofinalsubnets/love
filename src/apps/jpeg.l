@@ -7,10 +7,10 @@
 ; rgba is w*h*4 bytes, alpha all 255. baseline and progressive, grey and ycbcr; where the
 ; artifact carries no nif, every jpeg is "no decoder here".
 (module (jpeg jpeg-size jpeg-decode jpeg-encode jpeg-pixels)
+(borrow 'bytes)
 (:
    jpeg-why ["" "not a jpeg" "cut short" "a kind of jpeg this can't read" "a bad table or scan"
              "too big"]
-   (jpeg-be16 s i) (s i * 256 + s (i + 1))
 
    ; the markers from the top to the frame header, its length word at p
    (jpeg-size s)
@@ -21,21 +21,14 @@
               (? (m = 255) (go (p + 1))
                  (m = 0 || m = 1 || 208 <= m <= 216) (go (p + 2))
                  (192 <= m <= 207 && !(elem m [196 200 204]))
-                  [(jpeg-be16 s (p + 7)) (jpeg-be16 s (p + 5))]
+                  [(rdbe s (p + 7) 2) (rdbe s (p + 5) 2)]
                  (m = 217) "no frame"
-                 (go (p + 2 + jpeg-be16 s (p + 2))))))
+                 (go (p + 2 + rdbe s (p + 2) 2)))))
        (#s < 4 || s 0 != 255 || s 1 != 216 ? "not a jpeg" (go 2)))
 
-   ; the door: the nif where the artifact carries it, asked at first call, never at load
-   jpeg-door {}
-   (jpeg-nif? _)
-    (jpeg-door 0 @ v
-       (charm? v ? v
-          (trap (_ \ (jpeg-pixels "", 1)) () (a \ b \ 0) @ w (pin jpeg-door 0 w, w))))
 
    (jpeg-decode s)
     (jpeg-size s @ d
        (? (string? d) d
-          !(jpeg-nif? 0) "no decoder here"
           (jpeg-pixels s @ r
              (? (string? r) [(d 0) (d 1) r] (charm? r) (jpeg-why r) "not a jpeg"))))))

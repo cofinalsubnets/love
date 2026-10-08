@@ -56,18 +56,10 @@
               (4 < f ? "bad filter"
                  (png-recon c f d (d - n - 1) n bpp (k = 0), row (k + 1) (d + n)))))
        (row 0 o))
-   ; the door: src/love/lib/png.c's nif where the artifact carries it, else the walk. asked at
-   ; first call, never at load, where the answer would be the baking love's.
+   ; src/love/lib/png.c's nif; the walk above is the oracle test/host/png.l holds it to
    ; -> [rows first-row-offset row-stride] | why not
-   png-door {}
-   png-probe (_ \ png-unfilter "" 0 0 0 1)
-   (png-nif? _)
-    (png-door 0 @ v
-       (charm? v ? v (trap (_ \ (png-probe 0, 1)) () (a \ b \ 0) @ w (pin png-door 0 w, w))))
    (png-rows c o rows n bpp)
-    (png-nif? 0
-     ? (png-unfilter c o rows n bpp @ r (string? r ? [r 0 n] "bad filter"))
-       (png-walk c o rows n bpp @ e (string? e ? e [c (o + 1) (n + 1)])))
+    (png-unfilter c o rows n bpp @ r (string? r ? [r 0 n] "bad filter"))
 
    ; --- samples --------------------------------------------------------------------------
    ; the j'th sample of the row at d, at its own depth
@@ -239,7 +231,7 @@
                                   (#<>r < need) "short image data"
                                   (: raw <>r
                                      ; the nif reads the string, the walk writes a cask
-                                     c (png-nif? 0 ? raw (cask #raw @ k (pour k 0 raw 0 #raw, k)))
+                                     c raw
                                      w (hd 'w) h (hd 'h) out (cask (4 * w * h))
                                      passes (hd 'lace ? png-adam7 [[0 0 1 1]])
                                      (go ps o) (!ps ? 0

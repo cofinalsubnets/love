@@ -7,7 +7,7 @@
 ;   (gz-puff s n)          -> the same, in love, and the oracle the C twin answers to
 ;   (gz-zip s nom stamp)   -> a .gz member; nom "" for no name, stamp 0 for no time
 ;   (gz-deflate-best s) (gz-zip9 s nom stamp)  the same, deflated harder: a lazy parse down a
-;                          long chain where the artifact carries it, gz-deflate's bytes where not
+;                          long chain
 ;   (gz-unzip s)           -> (1 bytes) | () | 'big
 ;   (gz-head s)            -> (1 stamp name body-seat) | (), the header walked
 ;   (gz-pull rd)           -> g, a reader: (gz-next g) the next piece inflated, "" at the end
@@ -33,30 +33,12 @@
    (gz-crcrow n) (foldl (\ c k (c & 1 ? (c >> 1 ^ 3988292384) (c >> 1))) n ^8)
    gz-crctab (star-tray '(256) (map gz-crcrow (jot 256)))
    (gz-crcwalk s) (foldl (\ c i (peep gz-crctab ((c ^ s i) & 255) 0 ^ c >> 8)) 4294967295 ^#s ^ 4294967295)
-   ; --- the two doors ---------------------------------------------------------
-   ; `lit?` is NOT a presence test: an unbound global scares when it is referenced, so
-   ; `(lit? crc32)` on a binary without the nif is the scare it was written to avoid. hence
-   ; the trap. and the probe is asked at first call, never at load -- this file is baked by
-   ; a love that has the nifs, so a load-time answer is the baking love's, not the running
-   ; one's. kept in a tablet for the process.
-   gz-door {}
-   gz-crcprobe (_ \ crc32 "")              ; making the lambda references nothing
-   gz-infprobe (_ \ inflate "" 0)
-   gz-feedprobe (_ \ inflate-feed 0 "")
-   gz-defprobe (_ \ deflate "")
-   gz-defbprobe (_ \ deflate-best "")
-   (gz-nif k f)
-    (peep gz-door k () @ v
-       (charm? v ? v
-          (trap (_ \ (f 0, 1)) () (a \ b \ 0) @ w (pin gz-door k w, w))))
 
-   ; src/love/lib/hash.c where the artifact carries it, the walk above where it does not.
-   ; the walk is here as the statement of the polynomial and the oracle test/host/gzc.l holds
-   ; the C to, not as the fallback.
+   ; src/love/lib/hash.c's; the walk above states the polynomial and is the oracle
+   ; test/host/gzc.l holds the C to.
    ; `charm?`, not `?`: the crc of "" is 0, a true answer a truth test calls absent.
    (gz-crc32 s)
-    (gz-nif 0 gz-crcprobe ? (crc32 s @ r (charm? r ? r (gz-crcwalk s)))
-       (gz-crcwalk s))
+    (crc32 s @ r (charm? r ? r (gz-crcwalk s)))
 
    ; --- the bit sink ---------------------------------------------------------
    ; deflate packs bits into bytes LSB-first, but a Huffman code is stored
@@ -354,18 +336,13 @@
        (gz-blocks s n j t head prev 0,
         gz-align j t,
         slurp j + ""))
-   ; src/love/lib/gz.c where the artifact carries it, the coder above where it does not --
-   ; and the C is a twin held to the bytes, so the door changes cost and never content.
-   ; the love lane is the oracle test/host/gzc.l holds it to.
+   ; src/love/lib/gz.c's, a twin held to the bytes of the coder above: the love lane is the
+   ; oracle test/host/gzc.l holds it to.
    (gz-deflate s)
-    (gz-nif 2 gz-defprobe ?
-       (deflate s @ r (string? r ? r (gz-deflatel s)))
-       (gz-deflatel s))
+    (deflate s @ r (string? r ? r (gz-deflatel s)))
    ; the harder coder has no love twin: it is the image lane's, and any deflate reads it
    (gz-deflate-best s)
-    (gz-nif 4 gz-defbprobe ?
-       (deflate-best s @ r (string? r ? r (gz-deflate s)))
-       (gz-deflate s))
+    (deflate-best s @ r (string? r ? r (gz-deflate s)))
 
    ; --- the growing byte buffer ---------------------------------------------
    ; inflate writes bytes and reads them back (a match copies out of what it has
@@ -541,14 +518,11 @@
                (? (!r || peep t 1 0) ()
                   <>r [1 (gz-take b)]
                   (go ()))))
-   ; the door. src/love/lib/gz.c where the artifact carries it, gz-puff where it does not
-   ; and wherever it declines -- and a torn stream declines, so a torn one is read twice
-   ; and answers () both times. `string?`, never `?`: a string of NULs sums to zero and
-   ; would read as absent. The presence probe is gz-nif's, and why is written there.
+   ; src/love/lib/gz.c's, gz-puff wherever it declines -- a torn stream declines, so a torn one
+   ; is read twice and answers () both times. `string?`, never `?`: a string of NULs sums to
+   ; zero and would read as absent.
    (gz-inflate s hint)
-    (gz-nif 1 gz-infprobe ?
-       (inflate s hint @ r (? (string? r) [1 r] (r = 1) 'big (gz-puff s hint)))
-       (gz-puff s hint))
+    (inflate s hint @ r (? (string? r) [1 r] (r = 1) 'big (gz-puff s hint)))
 
    ; --- the container (RFC 1952) --------------------------------------------
    (gz-zip s nom stamp) (gz-zipw s nom stamp gz-deflate)
@@ -643,23 +617,15 @@
            gz-next g))))
    ; the same members written out: mk (stamp name) of the first header answers (1 w), w
    ; the writer every piece goes through, or () for 'no. what came out before a failure
-   ; came out. a build without inflate-feed reads the whole input and answers through gz-unzip
+   ; came out.
    (gz-unzipf rd mk)
-    (!(gz-nif 3 gz-feedprobe) ? (gz-unzipw rd mk)
-       (: g (gz-pull rd)   p (gz-next g)   hd (peep g 'hd ())
-          (!(two? hd) ? (peep g 'ans ())
-             (mk (hd 0) (hd 1) @ m
-                (!(two? m) ? 'no
-                   (: w <>m
-                      (go p) (#p = 0 ? (peep g 'ans ()) (w p, go (gz-next g)))
-                      (go p)))))))
-   (gz-unzipw rd mk)
-    (: (all a) (rd 0 @ p (#p @ 0 a (all (p . a))))
-       s (cats (rev (all ())))   h (gz-head s)   u (h && gz-unzip s)
-       (? !h 'nogz
-          (u = 'big) 'big
-          !u ()
-          (mk (h 1) (h 2) @ m (!(two? m) ? 'no ((<>m <>u), [1 (h 1) (h 2) #<>u (h 3)]))))))
+    (: g (gz-pull rd)   p (gz-next g)   hd (peep g 'hd ())
+       (!(two? hd) ? (peep g 'ans ())
+          (mk (hd 0) (hd 1) @ m
+             (!(two? m) ? 'no
+                (: w <>m
+                   (go p) (#p = 0 ? (peep g 'ans ()) (w p, go (gz-next g)))
+                   (go p)))))))
 
 ) ; module 'gz
 
