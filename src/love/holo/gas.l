@@ -602,6 +602,29 @@
              (-256 <= v <= 255) (ga-raw (0xF8800000 | (v & 511) << 12 | ga-hw x << 5 | op))
              (scare 'gas-a64-operand os))
           (scare 'gas-a64-operand os)))
+   ;; the vector file: vN.<arrangement>, or a whole qN -> N, () for any other spelling. a row
+   ;; is its word, then each operand's arrangement; rd at 0, rn at 5, rm at 16 (mov's rm is rn)
+   (ga-vr o a) (o @ ('sym s) (: t (show s) p (a = "q" ? ["q" ""] ["v" ("." + a)])
+                                (filter (n \ t = <p + show n + <>p) ^32 @ (n . _) n _ ()))
+                    _ ())
+   ga-simd {'sha256h [0x5E004000 "q" "q" "4s"] 'sha256h2 [0x5E005000 "q" "q" "4s"]
+            'sha256su0 [0x5E282800 "4s" "4s"] 'sha256su1 [0x5E006000 "4s" "4s" "4s"]
+            'add [0x4EA08400 "4s" "4s" "4s"] 'rev32 [0x6E200800 "16b" "16b"] 'mov [0x4EA01C00 "16b" "16b"]}
+   (ga-simd-ins m os)
+    (: row (ga-simd m) rs (map (i \ ga-vr (os i) (row (i + 1))) ^#os)
+       (? (#os != #row - 1 || !(all charm? rs)) (scare 'gas-a64-operand [m os])
+          (ga-raw (<row | (m = 'mov ? <>rs (#rs > 2 ? (rs 2) 0)) << 16 | <>rs << 5 | <rs))))
+   ;; a q register's load and store: imm12 scaled by 16, else imm9, or written back
+   (ga-lsq m os)
+    (: t (ga-vr (os 0) "q") lb (m = 'str ? 0x3C800000 0x3CC00000) k #os
+       (? (k = 3) ([(os 1) (os 2)] @ (('mem b 0) ('imm v)) (ga-wb lb 1 t b v) _ (scare 'gas-a64-operand os))
+          (k != 2) (scare 'gas-a64-operand os)
+          ((os 1) @ ('mem b o)
+             (? (charm? o && o >= 0 && o % 16 = 0 && o >> 4 <= 4095) (ga-raw (lb | 0x01000000 | (o >> 4) << 10 | ga-hw b << 5 | t))
+                (charm? o && -256 <= o <= 255) (ga-raw (lb | (o & 511) << 12 | ga-hw b << 5 | t))
+                (scare 'gas-a64-operand os))
+             ('memw b o) (ga-wb lb 3 t b o)
+             (scare 'gas-a64-operand os))))
    (ga-row row os) (: w (ga-wide os) b (w = 8 ? <row <>row)
                       (charm? b ? b (scare 'gas-a64-width os)))
    (ga-regw row os)                                 ; rd, rn{, rm}
@@ -643,6 +666,8 @@
           (elem m ga-sys) [[m (<>(os 0)) (k > 1 ? (ga-r (os 1)) 'zr)]]
           (ghas? ga-exc m) [[(ga-exc m) (k > 0 ? (<>(os 0)) 0)]]
           (m = 'svc) (: n (k > 0 ? (<>(os 0)) 0) (n = 0 ? '((sys)) [['svcn n]]))
+          (k > 0 && elem m '(ldr str) && charm? (ga-vr (os 0) "q")) (ga-lsq m os)
+          (k > 0 && two? (peep ga-simd m ()) && charm? (ga-vr (os 0) (ga-simd m 1))) (ga-simd-ins m os)
           (two? (peep ga-ldst m ())) (ga-ls m os)
           (elem m '(mov cmp tst neg mvn mul add sub and orr eor adds subs ands lsl lsr asr ror) && ga-wide os = 4)
            (ga-dp m os 32)

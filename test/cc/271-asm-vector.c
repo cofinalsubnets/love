@@ -1,7 +1,8 @@
-/* the vector rows through an inline template, held to gcc: pshufb turns each word's bytes,
- * palignr shifts a register pair, pblendw takes halves by mask, and where cpuid says the sha
- * extensions are there sha256msg1 lays its schedule step, checked against the same step in C.
- * the asm names its xmm clobbers. a target with no template computes the same answers. */
+/* the vector rows through an inline template, held to gcc: pshufb (a64 rev32) turns each word's
+ * bytes, palignr shifts a register pair, pblendw takes halves by mask, and where the cpu says the
+ * sha extensions are there sha256msg1 (a64 sha256su0) lays its schedule step, checked against the
+ * same step in C. the asm names its vector clobbers. a target with no template computes the same
+ * answers. */
 
 static unsigned rr(unsigned x, int n) { return (x >> n) | (x << (32 - n)); }
 
@@ -12,6 +13,10 @@ static int sha_ext(void) {
   if (a < 7) return 0;
   asm("cpuid" : "=a"(a), "=b"(b), "=c"(c), "=d"(d) : "a"(7), "c"(0));
   return (int)(b >> 29 & 1);
+#elif defined(__aarch64__) && (defined(__moonlibc__) || defined(__ARM_FEATURE_SHA2))
+  unsigned long r;
+  asm("mrs %0, id_aa64isar0_el1" : "=r"(r));
+  return (r >> 12 & 15) != 0;
 #else
   return 0;
 #endif
@@ -22,6 +27,8 @@ static void turn(const unsigned char *in, unsigned char *out) {
   static const unsigned char m[16] = {3, 2, 1, 0, 7, 6, 5, 4, 11, 10, 9, 8, 15, 14, 13, 12};
   asm volatile("movdqu (%0), %%xmm1\n\tmovdqu (%2), %%xmm2\n\tpshufb %%xmm2, %%xmm1\n\tmovdqu %%xmm1, (%1)"
                : : "r"(in), "r"(out), "r"(m) : "xmm1", "xmm2", "memory");
+#elif defined(__aarch64__)
+  asm volatile("ldr q1, [%0]\n\trev32 v1.16b, v1.16b\n\tstr q1, [%1]" : : "r"(in), "r"(out) : "v1", "memory");
 #else
   for (int i = 0; i < 16; i++) out[i] = in[(i & ~3) + 3 - (i & 3)];
 #endif
@@ -49,6 +56,9 @@ static int msg1_ok(const unsigned *w, const unsigned *x) {
 #if defined(__x86_64__)
   asm volatile("movdqu (%0), %%xmm9\n\tmovdqu (%1), %%xmm10\n\tsha256msg1 %%xmm10, %%xmm9\n\tmovdqu %%xmm9, (%2)"
                : : "r"(w), "r"(x), "r"(got) : "xmm9", "xmm10", "memory");
+#elif defined(__aarch64__) && (defined(__moonlibc__) || defined(__ARM_FEATURE_SHA2))
+  asm volatile("ldr q16, [%0]\n\tldr q17, [%1]\n\tsha256su0 v16.4s, v17.4s\n\tstr q16, [%2]"
+               : : "r"(w), "r"(x), "r"(got) : "v16", "v17", "memory");
 #else
   for (int i = 0; i < 4; i++) got[i] = want[i];
 #endif

@@ -170,6 +170,42 @@ static int sha_hw(void) {
  __asm__("cpuid" : "=a"(a), "=b"(b), "=c"(c), "=d"(d) : "a"(7), "c"(0));
  return (int) (b >> 29 & 1); }
 #define sha_blocks_hw sha_blocks_ni
+#elif defined(__aarch64__) && (defined(__moonlibc__) || defined(__ARM_FEATURE_SHA2))
+// the armv8 sha2 words: four rounds to a sha256h/sha256h2 pair, the schedule by sha256su0/1. the
+// state rides v0/v1 as abcd/efgh, the words rotate through v16..v19, v20 the round constants.
+// whole blocks only, n > 0
+#define CE(x) x "\n\t"
+#define CE_R(o, t) CE("ldr q20, [%3, #" o "]") CE("add v4.4s, " t ".4s, v20.4s") \
+  CE("mov v5.16b, v2.16b") CE("sha256h q2, q3, v4.4s") CE("sha256h2 q3, q5, v4.4s")
+#define CE_S(o, t, t1, t2, t3) CE("ldr q20, [%3, #" o "]") CE("add v4.4s, " t ".4s, v20.4s") \
+  CE("sha256su0 " t ".4s, " t1 ".4s") CE("mov v5.16b, v2.16b") CE("sha256h q2, q3, v4.4s") \
+  CE("sha256h2 q3, q5, v4.4s") CE("sha256su1 " t ".4s, " t2 ".4s, " t3 ".4s")
+#define CE_4(o0, o1, o2, o3) CE_S(o0, "v16", "v17", "v18", "v19") CE_S(o1, "v17", "v18", "v19", "v16") \
+  CE_S(o2, "v18", "v19", "v16", "v17") CE_S(o3, "v19", "v16", "v17", "v18")
+static love_noinline void sha_blocks_ce(uint32_t h[8], const uint8_t *p, uintptr_t n) {
+ uint32_t k[64];
+ for (int i = 0; i < 64; i++) k[i] = (uint32_t) (K512[i] >> 32);
+ __asm__ volatile(
+  CE("ldr q0, [%2]") CE("ldr q1, [%2, #16]")
+  "1:\n\t"
+  CE("ldr q16, [%0], #16") CE("ldr q17, [%0], #16") CE("ldr q18, [%0], #16") CE("ldr q19, [%0], #16")
+  CE("rev32 v16.16b, v16.16b") CE("rev32 v17.16b, v17.16b") CE("rev32 v18.16b, v18.16b") CE("rev32 v19.16b, v19.16b")
+  CE("mov v2.16b, v0.16b") CE("mov v3.16b, v1.16b")
+  CE_4("0", "16", "32", "48") CE_4("64", "80", "96", "112") CE_4("128", "144", "160", "176")
+  CE_R("192", "v16") CE_R("208", "v17") CE_R("224", "v18") CE_R("240", "v19")
+  CE("add v0.4s, v0.4s, v2.4s") CE("add v1.4s, v1.4s, v3.4s")
+  CE("subs %1, %1, #1") CE("b.ne 1b")
+  CE("str q0, [%2]") "str q1, [%2, #16]"
+  : "+r"(p), "+r"(n) : "r"(h), "r"(k)
+  : "v0", "v1", "v2", "v3", "v4", "v5", "v16", "v17", "v18", "v19", "v20", "memory", "cc"); }
+// the cpu's word on it, id_aa64isar0_el1's sha2 field: inle reads its own, linux and freebsd
+// answer the read at el0 for it; elsewhere the c rounds
+static int sha_hw(void) {
+ if (__love_osv != 1 && __love_osv != 2 && __love_osv >= 0) return 0;
+ uint64_t r;
+ __asm__("mrs %0, id_aa64isar0_el1" : "=r"(r));
+ return (r >> 12 & 15) != 0; }
+#define sha_blocks_hw sha_blocks_ce
 #else
 static int sha_hw(void) { return 0; }
 static void sha_blocks_hw(uint32_t h[8], const uint8_t *p, uintptr_t n) { (void) h, (void) p, (void) n; }
