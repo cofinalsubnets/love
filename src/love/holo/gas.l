@@ -344,14 +344,14 @@
             (('ch 40) . _) ['imm (gimm toks)]
             (('ch 45) . _) ['imm (gimm toks)]
             (('sym s)) (ga-reg s @ r (two? r || nom? r ? r ['sym (name s)]))
-            (('ch 91) ('sym b) ('ch 93)) ['mem (<>(ga-reg b)) 0]
+            (('ch 91) ('sym b) ('ch 93)) (ga-reg b @ ('reg x 8) ['mem x 0] _ (scare 'gas-a64-operand toks))
             (('ch 91) ('sym b) ('ch 93) ('ch 33)) (ga-reg b @ r (two? r ? ['wbm <>r <>>r] (scare 'gas-a64-operand toks)))
             (('sym b) ('ch 33)) (ga-reg b @ r (two? r ? ['wbr <>r <>>r] (scare 'gas-a64-operand toks)))
             (('ch 91) . ('sym b) . ('ch 44) . rest)
              (: wb (two? rest && <(rev rest) = '(ch 33))            ; `]!`, pre-indexed
                 body (wb ? (rev >(rev rest)) rest)
                 r (ga-reg b) n #body
-                (atom? r || n < 2 || !(body (n - 1) = '(ch 93)) ? (scare 'gas-a64-operand toks)
+                (atom? r || <>>r != 8 || n < 2 || !(body (n - 1) = '(ch 93)) ? (scare 'gas-a64-operand toks)
                    (gops (rev >(rev body)) @ ps
                       (? (ps @ ((('sym s)) . _) (two? (ga-reg s)) 0)
                           (wb ? (scare 'gas-a64-operand toks) (ga-index <>r ps toks))
@@ -524,6 +524,31 @@
                 (? (d = u || u = n || d = n) (scare 'gas-a64-operand [m os])
                    cp (ga-raw (0x19000400 | b | g << 22 | u << 16 | op << 12 | n << 5 | d))
                    (ga-raw (0x19C00400 | b | n << 16 | op << 12 | u << 5 | d)))))))
+   ;; the pair loads and stores, (load? kind) by spelling, kind 'p plain, 'n no-allocate, 'sw ldpsw.
+   ;; a data register -> (V opc scale number): x, w, or a vector s/d/q. the address an offset,
+   ;; pre-indexed ([b, #k]!) or post-indexed ([b], #k), its offset scaled into imm7
+   ga-pair {'ldp [1 'p] 'stp [0 'p] 'ldnp [1 'n] 'stnp [0 'n] 'ldpsw [1 'sw]}
+   (ga-preg o)
+    (o @ ('reg 'sp _) () ('reg x 8) [0 2 8 (ga-hw x)] ('reg x 4) [0 0 4 (ga-hw x)]
+         ('sym v) (: t (show v) n (xa-num (snip t 1 #t)) e (assoc (t 0) [[115 0 4] [100 1 8] [113 2 16]])
+                     (two? e && #t > 1 && all digit? (chars (snip t 1 #t)) && 0 <= n <= 31 ? [1 (e 1) (e 2) n] ()))
+         _ ())
+   (ga-pair-ins m os)
+    (: k #os pr (ga-pair m) ld <pr kd <>pr
+       a (ga-preg (os 0)) b (ga-preg (os 1))
+       ad (? (k = 3) ((os 2) @ ('mem r n) [2 r n] ('memw r n) [3 r n] _ ())
+             (k = 4) ([(os 2) (os 3)] @ (('mem r 0) ('imm n)) [1 r n] _ ())
+             ())
+       (bad _) (scare 'gas-a64-operand [m os])
+       (? (!(two? a) || !(two? ad) || <a != <b || <>a != <>b) (bad 0)
+          (ad @ (ty r n)
+             (: z (kd = 'sw ? 4 (a 2)) q (n // z) rn (ga-hw r) wb (ty != 2)
+                (? (r = 'zr || n % z != 0 || !(-64 <= q <= 63)
+                    || (kd = 'n && wb) || (kd = 'sw && (<a != 0 || <>a != 2))
+                    || (ld && a 3 = b 3) || (wb && <a = 0 && r != 'sp && (rn = a 3 || rn = b 3)))
+                    (bad 0)
+                   (ga-raw ((kd = 'sw ? 1 <>a) << 30 | 0x28000000 | <a << 26 | (kd = 'n ? 0 ty) << 23 | ld << 22
+                            | (q & 127) << 15 | b 3 << 10 | rn << 5 | a 3)))))))
    ;; the bitfield moves by opc; sf and N by the width, immr and imms below it
    ga-bfm {'sbfm 0 'bfm 1 'ubfm 2}
    (ga-bfm-ins m os)
@@ -655,6 +680,7 @@
           (two? (peep ga-sx m ())) (k = 3 ? (ga-ex-ins (ga-sx m) os) (scare 'gas-a64-operand [m os]))
           (charm? (peep ga-bfm m ())) (k = 4 ? (ga-bfm-ins m os) (scare 'gas-a64-operand [m os]))
           (two? (ga-mops m)) (ga-mops-ins m (ga-mops m) os)
+          (two? (peep ga-pair m ())) (ga-pair-ins m os)
           (ga-lse-ins m (ga-lse m) os)))
    (ga-line toks)
     (gline toks @ l
