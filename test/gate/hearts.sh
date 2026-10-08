@@ -82,6 +82,11 @@ tgz=$C/src/linux-$V.tar.xz
 [ "$(sha256sum < "$tgz" | cut -d' ' -f1)" = "$SHA" ] || fail "$tgz is not the pinned linux-$V"
 rm -rf "$K" "$O" "$B/ref"
 (cd "$B" && tar xf "$tgz") || fail "cannot unpack $tgz"
+# the tree's patches over the pinned source, in order, for both halves (src/apps/hearts/patches)
+for p in "$R"/src/apps/hearts/patches/*.patch; do
+  [ -f "$p" ] || continue
+  patch -d "$K" -p1 -s < "$p" || fail "cannot apply $p"
+done
 
 # each half compiles for itself: a compile cache would hand hearts kbuild's objects
 export CCACHE_DISABLE=1
@@ -140,7 +145,9 @@ for f in .config kernel/config_data.gz arch/arm64/boot/Image; do
   cmp -s "$B/ref/$f" "$O/$f" || fail "$f differs from kbuild's"
 done
 sha=$(sha256sum < "$O/arch/arm64/boot/Image" | cut -c1-16)
-# the Image a green run certifies is the one rung 0 boots (test/gate/hearts-boot.sh)
-cp "$O/arch/arm64/boot/Image" "$C/Image-$V.new" && mv "$C/Image-$V.new" "$C/Image-$V" || fail "cannot keep the Image in $C"
+# the Image a green run certifies is the one rung 0 boots (test/gate/hearts-boot.sh), kept under
+# its own hash: a tree whose patches make another Image keeps it beside this one
+cp "$O/arch/arm64/boot/Image" "$C/Image-$V-$sha.new" && mv "$C/Image-$V-$sha.new" "$C/Image-$V-$sha" \
+  || fail "cannot keep the Image in $C"
 rm -rf "$O" "$B/ref"
-echo "hearts: Image $sha = kbuild+clang's, from linux-$V defconfig, host programs by mooncc"
+echo "hearts: Image $sha = kbuild+clang's, from linux-$V and the tree's patches, defconfig, host programs by mooncc"

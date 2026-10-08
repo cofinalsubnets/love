@@ -15,8 +15,8 @@ set -u
 
 love=$1 xlove=$2 cat=$3
 C=${HEARTS_CACHE:-$HOME/.cache/hearts}
-K=$C/Image-6.19.14
-KSHA=c15b13e63cb108a1e78f5d2aa10242b52d7efa9417723cc514d30c11889a73be
+KSHA=06008d280d8e6311965b35efcc7f544d76e88b236a443c675ca24b41a61c47cd
+K=$C/Image-6.19.14-$(echo $KSHA | cut -c1-16)
 stamp=${HEARTS_STAMP:-0}
 fail() { echo "FAIL hearts-boot: $*" >&2; exit 1; }
 dl=${DL:-$(sh src/tools/dlfind.sh .)}
