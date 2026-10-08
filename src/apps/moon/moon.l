@@ -10,6 +10,8 @@
 (module 'moon
 (borrow 'kore)
 (borrow 'holo) ; the assembler module: asm-text, arbytes, the linker
+(borrow 'gz)
+(borrow 'hashes)
 
 (borrow 'posix)
 (borrow 'glob) ; match and ones, under the wildcard

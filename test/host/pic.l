@@ -5,6 +5,7 @@
 ; left out. where magick is here, gifs of each disposal held to its coalesced frames.
 ;   cat test/00-init.l test/host/pic.l | out/love
 (borrow 'posix)
+(borrow 'jpeg)
 (: K (cite 'kore)
    kind (K 'pic-kind) size (K 'pic-size) dec (K 'pic-decode) frames (K 'pic-frames)
    art (K 'pic-art) view (K 'pic-view)

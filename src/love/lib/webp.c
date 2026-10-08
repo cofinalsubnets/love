@@ -1073,7 +1073,4 @@ love_noinline static struct g *host_webpd(struct g *g) {
  g->sp[1] = g->sp[0], g->sp += 1;
  return g; }
 static lvm(lvm_webpd) LvmCall(g, host_webpd)
-
-static union u const
-  nif_webpd[] = {{lvm_cur}, {.x = putcharm(1)}, {lvm_webpd}, {lvm_ret0}};
-LvNif("webp-pixels", nif_webpd, NULL);
+LvDef("webp-pixels", webpd, 1, "webp");

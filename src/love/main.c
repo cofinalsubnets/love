@@ -24,7 +24,6 @@ love_noinline intptr_t nclock(void) {
  return clock_gettime(CLOCK_MONOTONIC, &ts) ? -1
   : (intptr_t) ts.tv_sec * 1000000000 + ts.tv_nsec; }
 
-
 static void stdin_give(struct g *g) {
  if (!g || !ok(g)) return;
  if (g->inflag)                                          // its blocking bit was ours: back it goes
@@ -261,20 +260,15 @@ static lvm(lvm_getpid) {
   love_musttail return Answer(putcharm(getpid())); }
 
 static union u const
- nif_exit[] = {{lvm_exit}, {lvm_ret0}},
- nif_hark[] = {{lvm_hark}, {lvm_harkdrain}, {lvm_ret0}},
- nif_herald[] = {{lvm_herald}, {lvm_harkdrain}, {lvm_ret0}},
- nif_exec[] = {{lvm_exec}, {lvm_ret0}},
- nif_fexec[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_fexec}, {lvm_ret0}},
- nif_getenv[] = {{lvm_getenv}, {lvm_ret0}},
- nif_getpid[] = {{lvm_getpid}, {lvm_ret0}};
-LvNif("quit", nif_exit, NULL);
+  nif_hark[] = {{lvm_hark}, {lvm_harkdrain}, {lvm_ret0}},
+  nif_herald[] = {{lvm_herald}, {lvm_harkdrain}, {lvm_ret0}};
+LvDef("quit", exit, 1, NULL);
 LvNif("hark", nif_hark, NULL);
 LvNif("herald", nif_herald, NULL);
-LvNif("exec", nif_exec, NULL);
-LvNif("fexec", nif_fexec, NULL);
-LvNif("getenv", nif_getenv, NULL);
-LvNif("getpid", nif_getpid, NULL);
+LvDef("exec", exec, 1, NULL);
+LvDef("fexec", fexec, 2, NULL);
+LvDef("getenv", getenv, 1, NULL);
+LvDef("getpid", getpid, 1, NULL);
 
 static struct g *env_budget(struct g *g) {
   char const *b = getenv("LOVE_BUDGET_MB");
@@ -484,7 +478,6 @@ love_noinline static struct g *argv_chain(struct g *g, char const **v, int argc,
   for (int i = 1 + skip; i < argc; i++) g = strof(g, v[i]), n++;
   for (g = push(g, 1, ZeroPoint); n--; g = gxr(g));   // () terminates, as a love list does
   return g; }
-
 
 // a __builtin_trap guard fired: `ud2` / `brk #0` / `ebreak`, so it lands here as
 // SIGILL (SIGTRAP on the arm and riscv seats) with si_addr at the instruction.

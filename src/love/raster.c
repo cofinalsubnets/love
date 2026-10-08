@@ -348,7 +348,5 @@ love_noinline static struct g *host_frame_bytes(struct g *g) {
  return g; }
 static lvm(lvm_frame_bytes) { LvmCallp(g, 2, host_frame_bytes) }
 
-static union u const nif_facets[] = {{lvm_cur}, {.x = putcharm(8)}, {lvm_raster}, {lvm_ret0}},
-  nif_frame_bytes[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_frame_bytes}, {lvm_ret0}};
-LvNif("facets", nif_facets, NULL);
-LvNif("frame-bytes", nif_frame_bytes, NULL);
+LvDef("facets", raster, 8, NULL);
+LvDef("frame-bytes", frame_bytes, 3, NULL);

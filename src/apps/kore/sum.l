@@ -6,6 +6,7 @@
 ; registers them.
 (module 'kore
 (borrow 'posix)
+(borrow 'hashes)
 
 (:
    ; --- the digest door ------------------------------------------------------

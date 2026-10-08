@@ -59,8 +59,7 @@ static love_inline struct g *host_inflate(struct g *g) {
 static lvm(lvm_inflate) {
  LvmCall(g, host_inflate) }
 
-static union u const nif_inflate[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_inflate}, {lvm_ret0}};
-LvNif("inflate", nif_inflate, NULL);
+LvDef("inflate", inflate, 2, "gz");
 
 // ===== inflate, resumable: the stream fed a piece at a time =====
 // (inflate-new 0) -> a state cask. (inflate-feed st s) -> what s inflated to while the stream
@@ -329,10 +328,8 @@ static love_noinline struct g *host_inflate_feed(struct g *g) {
 
 static LvmWrap(lvm_inflate_new, host_inflate_new)
 static LvmWrap(lvm_inflate_feed, host_inflate_feed)
-static union u const nif_inflate_new[] = {{lvm_inflate_new}, {lvm_ret0}};
-static union u const nif_inflate_feed[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_inflate_feed}, {lvm_ret0}};
-LvNif("inflate-new", nif_inflate_new, NULL);
-LvNif("inflate-feed", nif_inflate_feed, NULL);
+LvDef("inflate-new", inflate_new, 1, "gz");
+LvDef("inflate-feed", inflate_feed, 2, "gz");
 
 // ===== deflate -- the C twin of src/apps/gz.l's DEFLATE coder, LvNif-registered =====
 // the same discipline as inflate above: (deflate s) -> the raw stream | ().
@@ -686,7 +683,5 @@ static LvmWrap(lvm_deflate_best, host_deflate_best)
 
 // one operand, so the run is {impl, ret0} -- src/love/nifs.l states the law and lvm_cur
 // curries once unconditionally, which at arity one hands the body an operand too many.
-static union u const nif_deflate[] = {{lvm_deflate}, {lvm_ret0}},
-                     nif_deflate_best[] = {{lvm_deflate_best}, {lvm_ret0}};
-LvNif("deflate", nif_deflate, NULL);
-LvNif("deflate-best", nif_deflate_best, NULL);
+LvDef("deflate", deflate, 1, "gz");
+LvDef("deflate-best", deflate_best, 1, "gz");

@@ -369,6 +369,18 @@ extern struct def const __start_love_nifs[], __stop_love_nifs[];
   static struct def const \
     __attribute__((section("love_nifs"), used, aligned(LvDefAlign) LvNifKeep)) \
     _ainif_##fn = { (nm), { .k = (fn) }, (mod) }
+// LvDef("name", x, n, mod): lvm_x as an n-ary nif, its table nif_x laid and registered.
+// one word takes its operand bare; more curry through lvm_cur
+#define LvTab1(f) {{f}, {lvm_ret0}}
+#define LvTabN(f, n) {{lvm_cur}, {.x = putcharm(n)}, {f}, {lvm_ret0}}
+#define LvTab2(f) LvTabN(f, 2)
+#define LvTab3(f) LvTabN(f, 3)
+#define LvTab4(f) LvTabN(f, 4)
+#define LvTab5(f) LvTabN(f, 5)
+#define LvTab6(f) LvTabN(f, 6)
+#define LvTab7(f) LvTabN(f, 7)
+#define LvTab8(f) LvTabN(f, 8)
+#define LvDef(nm, x, n, mod) static union u const nif_##x[] = LvTab##n(lvm_##x); LvNif(nm, nif_##x, mod)
 
 // --- ports ---
 // port vtable -- what a device owes. a NULL slot means no method (no readn reads end, no

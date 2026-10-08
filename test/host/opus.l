@@ -9,6 +9,7 @@
 (borrow 'ogg)
 (borrow 'av)
 (borrow 'bytes)
+(borrow 'hashes)
 (: dir (cwd 0 + "/out/.opusd")
    peepv (cite (quote guts) (quote peepv))
    _ (hark ["rm" "-rf" dir], mkdir dir 448)

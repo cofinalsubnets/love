@@ -4,6 +4,7 @@
 ; and held byte-identical to perl's output (the encoded length rides perl's own float log, as the
 ; script computes it).
 ; usage: love oidreg.l SCRIPT IN-H OUT-C   ($srctree, from kbuild, trims the script's name)
+(borrow 'hashes)
 (: argv cmdline
    pinned "3314c9aaead629ffd8a022dae27218a5e4d63c0ef25bc648be2da3c844edce7a"
    (die m) (puts ("oidreg: " + m + "\n"), quit 1)

@@ -13,7 +13,6 @@ struct gf {
  int sw, sh, fx, fy, fw, fh, inter, ncol;   // screen, image box, interlaced, palette size
  uintptr_t pal, data; };                    // palette's offset in s, first byte past it (the code size)
 
-
 static int gf_open(struct gf *g, const uint8_t *s, uintptr_t n, intptr_t o) {
  g->s = s, g->n = n;
  if (n < 13 || memcmp(s, "GIF8", 4)) return 1;
@@ -109,8 +108,5 @@ love_noinline static struct g *host_gif_clear(struct g *g) { return gf_host(g, 3
 static lvm(lvm_gif_frame) LvmCall(g, host_gif_frame)
 static lvm(lvm_gif_clear) LvmCall(g, host_gif_clear)
 
-static union u const
-  nif_gif_frame[] = {{lvm_cur}, {.x = putcharm(4)}, {lvm_gif_frame}, {lvm_ret0}},
-  nif_gif_clear[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_gif_clear}, {lvm_ret0}};
-LvNif("gif-frame", nif_gif_frame, NULL);
-LvNif("gif-clear", nif_gif_clear, NULL);
+LvDef("gif-frame", gif_frame, 4, "gif");
+LvDef("gif-clear", gif_clear, 3, "gif");

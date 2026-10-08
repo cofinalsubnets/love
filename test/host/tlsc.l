@@ -4,6 +4,7 @@
 ; message, so only test/host/tls.l reaches it.
 ; not in the corpus: host nifs. run: cat test/00-init.l test/host/tlsc.l | out/love
 
+(borrow 'tls)
 (borrow "src/apps/tls/tls.l")
 
 (test

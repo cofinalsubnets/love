@@ -211,9 +211,7 @@ love_noinline static struct g *host_jpeg(struct g *g) {
  return g; }
 static lvm(lvm_jpeg) LvmCall(g, host_jpeg)
 
-static union u const
-  nif_jpeg[] = {{lvm_cur}, {.x = putcharm(4)}, {lvm_jpeg}, {lvm_ret0}};
-LvNif("jpeg-encode", nif_jpeg, NULL);
+LvDef("jpeg-encode", jpeg, 4, "jpeg");
 
 // ---- decoding ---------------------------------------------------------------------------
 // coefficients land in a scratch string, 128 bytes a block, and each block's samples are
@@ -233,7 +231,6 @@ struct jd {
  int nc, hmax, vmax, w, h, prog, frame, scans, ri, adobe, transform, eobrun;
  uintptr_t mcux, mcuy;
  int ns, sc[3], ss, se, ah, al; };
-
 
 // scans past this many are ignored; a real progressive file has about ten
 #define JD_MAXSCANS 1000
@@ -561,7 +558,4 @@ love_noinline static struct g *host_jpegd(struct g *g) {
  g->sp[2] = g->sp[0], g->sp += 2;
  return g; }
 static lvm(lvm_jpegd) LvmCall(g, host_jpegd)
-
-static union u const
-  nif_jpegd[] = {{lvm_cur}, {.x = putcharm(1)}, {lvm_jpegd}, {lvm_ret0}};
-LvNif("jpeg-pixels", nif_jpegd, NULL);
+LvDef("jpeg-pixels", jpegd, 1, "jpeg");

@@ -18,9 +18,12 @@
 ; reads its header packets -> m | 'more | why, (start m) -> a decoder, (packet granule) ->
 ; samples | why, in format's shape. granule is the stream's length, given with the last
 ; packet of its end page, -1 with every other.
-(module (ogg ogg-sniff ogg-meta ogg-format ogg-pump ogg-page ogg-cut)
+(module (ogg ogg-sniff ogg-meta ogg-format ogg-pump ogg-page ogg-cut
+             opus-state opus-init opus-packet)
 (borrow 'bytes)
 (borrow 'wav)
+(borrow 'flac)
+(borrow 'hashes)
 (:
    ; --- pages and packets ----------------------------------------------------
    (ogg-page s o)

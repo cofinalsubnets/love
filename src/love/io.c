@@ -315,15 +315,13 @@ love_noinline static struct g *io_snug(struct g *g) {
  gen_wb(g, (word) b, b->rbuf);
  return g->sp[0] = putcharm(1), g; }
 static lvm(lvm_snug) { LvmCallp(g, 2, io_snug) }
-static union u const nif_snug[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_snug}, {lvm_ret0}};
-LvNif("snug", nif_snug, NULL);
+LvDef("snug", snug, 2, NULL);
 
 struct g *io_wflush(struct g *g, struct io *i) { return io_wdrain(g, i); }
 
 uintptr_t io_wpending(struct g *g, struct io *i) {
  struct bio *b = bio_of(g, i);
  return bio_wpending(b) ? (uintptr_t) getcharm(b->wlen) : 0; }
-
 
 struct ci { struct io io; word head; }; // charlist input
 struct to { struct io io; struct str *buf; word i; }; // lisp string output
@@ -363,7 +361,6 @@ static struct g *to_writen(struct g *g, unsigned char const *src, uintptr_t n) {
  gen_wb(g, (word) o, (word) nb);   // a tenured string-sink takes a fresh young backing -> remember it
  g->sp++;
  return g->b = 0, g; }
-
 
 struct port_vt const
  to_vt     = { noop_flush, to_writen, NULL,     NULL },       // a string sink: prel's `jug`

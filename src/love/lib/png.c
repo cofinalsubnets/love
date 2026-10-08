@@ -45,6 +45,4 @@ love_noinline static struct g *host_unfilter(struct g *g) {
  return g; }
 static lvm(lvm_unfilter) LvmCall(g, host_unfilter)
 
-static union u const
-  nif_unfilter[] = {{lvm_cur}, {.x = putcharm(5)}, {lvm_unfilter}, {lvm_ret0}};
-LvNif("png-unfilter", nif_unfilter, NULL);
+LvDef("png-unfilter", unfilter, 5, "png");

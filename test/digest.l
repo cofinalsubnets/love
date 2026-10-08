@@ -12,6 +12,7 @@
 ;             awkward size; agreement, not another vector. misuse feeds each nif its
 ;             neighbours' casks, since the state's width is all that tells them apart.
 ; run:  cat test/00-init.l test/digest.l | out/love
+(borrow 'hashes)
 (test
  (lit? sha256)
  (lit? md5)

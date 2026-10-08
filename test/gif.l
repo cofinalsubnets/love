@@ -1,6 +1,7 @@
 ; src/love/lib/gif.c's gif-frame: a two-pixel image laid on a canvas, its colours read off the
 ; global palette and off a local one. the loop holds more each round, so the collections
 ; the canvas asks for move the gif and grow the heap under it (make test_gcstress)
+(borrow 'gif)
 (: gift-lzw "\x02\x02\x4c\x0a\x00\x3b"             ; min code 2: clear 1 1 end, one block
    gift-g ("GIF89a\x02\x00\x01\x00\x80\x00\x00" + "\x00\x00\x00\x12\x34\x56"
            + "\x2c\x00\x00\x00\x00\x02\x00\x01\x00\x00")

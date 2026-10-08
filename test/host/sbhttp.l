@@ -15,6 +15,7 @@
 ; empty blob rides through too, which is the case that found kiosko's 404.
 (borrow 'sb)                                 ; the baked module: the whole stack, spliced
 (borrow 'kiosko)
+(borrow 'hashes)
 
 (: SD (cite 'sb)
    record (SD 'sb-record) sync (SD 'sb-sync) bank (SD 'sb-bank)

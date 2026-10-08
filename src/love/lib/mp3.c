@@ -1390,10 +1390,6 @@ love_noinline static struct g *host_mp3_frame(struct g *g) {
  return g->sp[3] = word(r), g->sp += 3, g; }
 static lvm(lvm_mp3_frame) LvmCall(g, host_mp3_frame)
 
-static union u const
-  nif_mp3_state[] = {{lvm_mp3_state}, {lvm_ret0}},
-  nif_mp3_head[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_mp3_head}, {lvm_ret0}},
-  nif_mp3_frame[] = {{lvm_cur}, {.x = putcharm(4)}, {lvm_mp3_frame}, {lvm_ret0}};
-LvNif("mp3-state", nif_mp3_state, NULL);
-LvNif("mp3-head", nif_mp3_head, NULL);
-LvNif("mp3-frame", nif_mp3_frame, NULL);
+LvDef("mp3-state", mp3_state, 1, "mp3");
+LvDef("mp3-head", mp3_head, 2, "mp3");
+LvDef("mp3-frame", mp3_frame, 4, "mp3");

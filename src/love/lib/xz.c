@@ -894,25 +894,14 @@ static LvmWrap(lvm_lzma2d_by, host_lzma2d_by)
 static LvmWrap(lvm_lzmad, host_lzmad)
 static LvmWrap(lvm_crc64, host_crc64)
 
-static union u const
- nif_lzma2len[] = {{lvm_lzma2len}, {lvm_ret0}},
- nif_lzma2d[]   = {{lvm_lzma2d}, {lvm_ret0}},
- nif_lzma2e[]   = {{lvm_cur}, {.x = putcharm(2)}, {lvm_lzma2e}, {lvm_ret0}},
- nif_lzma2e_by[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_lzma2e_by}, {lvm_ret0}},
- nif_lzma2d_by[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_lzma2d_by}, {lvm_ret0}},
- nif_lzmad[]    = {{lvm_cur}, {.x = putcharm(4)}, {lvm_lzmad}, {lvm_ret0}},
- nif_crc64[]    = {{lvm_crc64}, {lvm_ret0}},
- nif_crc64_on[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_crc64_on}, {lvm_ret0}},
- nif_lzma2_new[] = {{lvm_lzma2_new}, {lvm_ret0}},
- nif_lzma2_chunk[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_lzma2_chunk}, {lvm_ret0}};
-LvNif("lzma2len", nif_lzma2len, NULL);
-LvNif("lzma2d", nif_lzma2d, NULL);
-LvNif("lzma2e", nif_lzma2e, NULL);
-LvNif("lzma2e-by", nif_lzma2e_by, NULL);
-LvNif("lzma2d-by", nif_lzma2d_by, NULL);
-LvNif("lzmad", nif_lzmad, NULL);
-LvNif("crc64", nif_crc64, NULL);
-LvNif("crc64-on", nif_crc64_on, NULL);
-LvNif("lzma2-new", nif_lzma2_new, NULL);
-LvNif("lzma2-chunk", nif_lzma2_chunk, NULL);
+LvDef("lzma2len", lzma2len, 1, "xz");
+LvDef("lzma2d", lzma2d, 1, "xz");
+LvDef("lzma2e", lzma2e, 2, "xz");
+LvDef("lzma2e-by", lzma2e_by, 2, "xz");
+LvDef("lzma2d-by", lzma2d_by, 2, "xz");
+LvDef("lzmad", lzmad, 4, "xz");
+LvDef("crc64", crc64, 1, "xz");
+LvDef("crc64-on", crc64_on, 2, "xz");
+LvDef("lzma2-new", lzma2_new, 1, "xz");
+LvDef("lzma2-chunk", lzma2_chunk, 2, "xz");
 #endif

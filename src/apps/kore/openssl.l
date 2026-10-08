@@ -25,6 +25,7 @@
 (module 'kore
 (borrow 'bytes)
 (borrow 'posix)
+(borrow 'hashes)
 
 (:
    (os-tls nm) (cite 'tls nm)

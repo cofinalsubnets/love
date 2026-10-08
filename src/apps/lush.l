@@ -12,6 +12,7 @@
 ; also here: the shared floor (sh-int sh-unwords) and the shell state.
 
 (module 'lush
+(borrow 'hashes)
 ; the syscall doors this shell drives, taken off the module by value: a splice would
 ; not survive the trip, since lush's entries are called from a foreign chain and a
 ; global name reads the live book, so what is in scope at the call decides. the seat

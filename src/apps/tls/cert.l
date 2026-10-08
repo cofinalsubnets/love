@@ -22,6 +22,7 @@
 (module 'tls
 (borrow 'bytes)
 (borrow 'cal)
+(borrow 'hashes)
 (:
    oid-ski (unhex "551d0e")
    oid-aki (unhex "551d23")

@@ -29,6 +29,9 @@
 (borrow "src/apps/sb/sb.l")   ; for the ignore law only -- .sbignore is sb's file
 
 (borrow 'posix)
+(borrow 'bz2)
+(borrow 'hashes)
+(borrow 'xz)
 (: (sp-die m) (say err ("selfpack: " + m + "\n"), quit 1)
    (sp-read p) (uread p @ [1 s] [1 (s + "")] ())
    (sp-write p s) (: q (open p "w")

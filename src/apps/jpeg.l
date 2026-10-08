@@ -6,7 +6,7 @@
 ;
 ; rgba is w*h*4 bytes, alpha all 255. baseline and progressive, grey and ycbcr; where the
 ; artifact carries no nif, every jpeg is "no decoder here".
-(module (jpeg jpeg-size jpeg-decode)
+(module (jpeg jpeg-size jpeg-decode jpeg-encode jpeg-pixels)
 (:
    jpeg-why ["" "not a jpeg" "cut short" "a kind of jpeg this can't read" "a bad table or scan"
              "too big"]

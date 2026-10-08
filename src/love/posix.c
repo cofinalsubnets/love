@@ -1058,103 +1058,57 @@ static love_inline word host_posix_lseek(struct g *g, word fdw, word offw, word 
 
 LvmWord3(posix_lseek)
 
-static union u const
-  nif_spawn[]   = {{lvm_spawn}, {lvm_ret0}},
-  nif_reapany[] = {{lvm_reapany}, {lvm_ret0}},
-  nif_sigfd[]   = {{lvm_sigfd}, {lvm_ret0}},
-  nif_sigtake[] = {{lvm_sigtake}, {lvm_ret0}},
-  nif_waitpid[] = {{lvm_waitpid}, {lvm_ret0}},
-  nif_chdir[]   = {{lvm_chdir}, {lvm_ret0}},
-  nif_cwd[]     = {{lvm_cwd}, {lvm_ret0}},
-  nif_selfpath[] = {{lvm_selfpath}, {lvm_ret0}},
-  nif_uname[]   = {{lvm_posix_uname}, {lvm_ret0}},
-  nif_sysconf[] = {{lvm_posix_sysconf}, {lvm_ret0}},
-  nif_pipe[]    = {{lvm_pipe}, {lvm_ret0}},
-  nif_openfd[]  = {{lvm_cur}, {.x = putcharm(2)}, {lvm_openfd}, {lvm_ret0}},
-  nif_spawnio[] = {{lvm_cur}, {.x = putcharm(7)}, {lvm_spawnio}, {lvm_ret0}},
-  nif_fdopen[]  = {{lvm_fdopen}, {lvm_ret0}},
-  nif_spawnmap[] = {{lvm_cur}, {.x = putcharm(5)}, {lvm_spawnmap}, {lvm_ret0}},
-  nif_getuid[]  = {{lvm_getuid}, {lvm_ret0}},
-  nif_getgid[]  = {{lvm_getgid}, {lvm_ret0}},
-  nif_fork[]    = {{lvm_fork}, {lvm_ret0}},
-  nif_dup2[]    = {{lvm_cur}, {.x = putcharm(2)}, {lvm_dup2}, {lvm_ret0}},
-  nif_dup[]     = {{lvm_dup}, {lvm_ret0}},
-  nif_mkdir[]   = {{lvm_cur}, {.x = putcharm(2)}, {lvm_mkdir}, {lvm_ret0}},
-  nif_mount[]   = {{lvm_cur}, {.x = putcharm(3)}, {lvm_mount}, {lvm_ret0}},
-  nif_mountf[]  = {{lvm_cur}, {.x = putcharm(4)}, {lvm_mountf}, {lvm_ret0}},
-  nif_umount[]  = {{lvm_umount}, {lvm_ret0}},
-  nif_chroot[]  = {{lvm_chroot}, {lvm_ret0}},
-  nif_sync[]    = {{lvm_sync}, {lvm_ret0}},
-  nif_reboot[]  = {{lvm_reboot}, {lvm_ret0}},
-  nif_mknod[]   = {{lvm_cur}, {.x = putcharm(3)}, {lvm_mknod}, {lvm_ret0}},
-  nif_newns[]   = {{lvm_newns}, {lvm_ret0}},
-  nif_posix_stat[]    = {{lvm_posix_stat}, {lvm_ret0}},
-  nif_posix_lstat[]   = {{lvm_posix_lstat}, {lvm_ret0}},
-  nif_posix_statfs[]  = {{lvm_posix_statfs}, {lvm_ret0}},
-  nif_posix_rusage[]  = {{lvm_posix_rusage}, {lvm_ret0}},
-  nif_posix_birth[]   = {{lvm_cur}, {.x = putcharm(2)}, {lvm_posix_birth}, {lvm_ret0}},
-  nif_posix_readdir[] = {{lvm_posix_readdir}, {lvm_ret0}},
-  nif_posix_unlink[]  = {{lvm_posix_unlink}, {lvm_ret0}},
-  nif_posix_lseek[]   = {{lvm_cur}, {.x = putcharm(3)}, {lvm_posix_lseek}, {lvm_ret0}},
-  nif_sigclear[]      = {{lvm_sigclear}, {lvm_ret0}},
-  nif_sigignp[]       = {{lvm_sigignp}, {lvm_ret0}},
-  nif_posix_signal[]  = {{lvm_cur}, {.x = putcharm(2)}, {lvm_posix_signal}, {lvm_ret0}},
-  nif_posix_ttyfg[]   = {{lvm_posix_ttyfg}, {lvm_ret0}},
-  nif_posix_ttypg[]   = {{lvm_posix_ttypg}, {lvm_ret0}},
-  nif_posix_setpg[]   = {{lvm_cur}, {.x = putcharm(2)}, {lvm_posix_setpg}, {lvm_ret0}},
-  nif_posix_setenv[]  = {{lvm_cur}, {.x = putcharm(2)}, {lvm_posix_setenv}, {lvm_ret0}},
-  nif_posix_environ[] = {{lvm_posix_environ}, {lvm_ret0}};
 // not every row here is the module's: the ones registered with NULL stay on the book,
 // because a seat shadows each with a global of its own (src/inle/kmain.c's bindings and no-op
 // roster, and the four src/love/main.c's seat-doors tablet swaps). a global name reads the
 // live book (src/love/ev.c's lvm_index), which is how the shadow is reached, so a module
 // splice above the base would hide it for good and the crew would call the host's door on
 // a seat with no host. the line is syscall vs seat door, and only the seats can say which.
-LvNif("spawn", nif_spawn, NULL);
-LvNif("glean", nif_reapany, NULL);
-LvNif("sigfd", nif_sigfd, "posix");
-LvNif("sigtake", nif_sigtake, "posix");
-LvNif("sigclear", nif_sigclear, "posix");
-LvNif("sigign?", nif_sigignp, "posix");
-LvNif("wait", nif_waitpid, NULL);
-LvNif("chdir", nif_chdir, "posix");
-LvNif("cwd", nif_cwd, "posix");
-LvNif("selfpath", nif_selfpath, "posix");
-LvNif("uname", nif_uname, "posix");
-LvNif("sysconf", nif_sysconf, "posix");
-LvNif("pipe", nif_pipe, NULL);
-LvNif("openfd", nif_openfd, "posix");
-LvNif("spawnio", nif_spawnio, NULL);
-LvNif("fdopen", nif_fdopen, NULL);
-LvNif("spawnmap", nif_spawnmap, NULL);
-LvNif("getuid", nif_getuid, NULL);
-LvNif("getgid", nif_getgid, "posix");
-LvNif("fork", nif_fork, NULL);
-LvNif("dup2", nif_dup2, NULL);
-LvNif("dup", nif_dup, NULL);
-LvNif("mkdir", nif_mkdir, "posix");
-LvNif("mount", nif_mount, "posix");
-LvNif("mountf", nif_mountf, "posix");
-LvNif("umount", nif_umount, "posix");
-LvNif("chroot", nif_chroot, "posix");
-LvNif("sync", nif_sync, "posix");
-LvNif("reboot", nif_reboot, "posix");
-LvNif("mknod", nif_mknod, "posix");
-LvNif("newns", nif_newns, "posix");
-LvNif("stat", nif_posix_stat, "posix");
-LvNif("lstat", nif_posix_lstat, "posix");
-LvNif("statfs", nif_posix_statfs, "posix");
-LvNif("rusage", nif_posix_rusage, "posix");
-LvNif("birth", nif_posix_birth, "posix");
-LvNif("readdir", nif_posix_readdir, "posix");
-LvNif("unlink", nif_posix_unlink, "posix");
-LvNif("lseek", nif_posix_lseek, "posix");
-LvNif("signal", nif_posix_signal, NULL);
-LvNif("ttyfg", nif_posix_ttyfg, NULL);
-LvNif("ttypg", nif_posix_ttypg, NULL);
-LvNif("setpg", nif_posix_setpg, NULL);
-LvNif("setenv", nif_posix_setenv, NULL);
-LvNif("environ", nif_posix_environ, NULL);
+LvDef("spawn", spawn, 1, NULL);
+LvDef("glean", reapany, 1, NULL);
+LvDef("sigfd", sigfd, 1, "posix");
+LvDef("sigtake", sigtake, 1, "posix");
+LvDef("sigclear", sigclear, 1, "posix");
+LvDef("sigign?", sigignp, 1, "posix");
+LvDef("wait", waitpid, 1, NULL);
+LvDef("chdir", chdir, 1, "posix");
+LvDef("cwd", cwd, 1, "posix");
+LvDef("selfpath", selfpath, 1, "posix");
+LvDef("uname", posix_uname, 1, "posix");
+LvDef("sysconf", posix_sysconf, 1, "posix");
+LvDef("pipe", pipe, 1, NULL);
+LvDef("openfd", openfd, 2, "posix");
+LvDef("spawnio", spawnio, 7, NULL);
+LvDef("fdopen", fdopen, 1, NULL);
+LvDef("spawnmap", spawnmap, 5, NULL);
+LvDef("getuid", getuid, 1, NULL);
+LvDef("getgid", getgid, 1, "posix");
+LvDef("fork", fork, 1, NULL);
+LvDef("dup2", dup2, 2, NULL);
+LvDef("dup", dup, 1, NULL);
+LvDef("mkdir", mkdir, 2, "posix");
+LvDef("mount", mount, 3, "posix");
+LvDef("mountf", mountf, 4, "posix");
+LvDef("umount", umount, 1, "posix");
+LvDef("chroot", chroot, 1, "posix");
+LvDef("sync", sync, 1, "posix");
+LvDef("reboot", reboot, 1, "posix");
+LvDef("mknod", mknod, 3, "posix");
+LvDef("newns", newns, 1, "posix");
+LvDef("stat", posix_stat, 1, "posix");
+LvDef("lstat", posix_lstat, 1, "posix");
+LvDef("statfs", posix_statfs, 1, "posix");
+LvDef("rusage", posix_rusage, 1, "posix");
+LvDef("birth", posix_birth, 2, "posix");
+LvDef("readdir", posix_readdir, 1, "posix");
+LvDef("unlink", posix_unlink, 1, "posix");
+LvDef("lseek", posix_lseek, 3, "posix");
+LvDef("signal", posix_signal, 2, NULL);
+LvDef("ttyfg", posix_ttyfg, 1, NULL);
+LvDef("ttypg", posix_ttypg, 1, NULL);
+LvDef("setpg", posix_setpg, 2, NULL);
+LvDef("setenv", posix_setenv, 2, NULL);
+LvDef("environ", posix_environ, 1, NULL);
 // --- the rest of the fs surface: the effect ops the fs tools ride (mv, ln, touch,
 // chmod, chown -- src/apps/kore/fs.l and friends) -------------------------------------
 //   (rename old new)      -> () | a nom | 'badarg  (mv's heart; same filesystem)
@@ -1337,43 +1291,24 @@ static lvm(lvm_posix_umask) {
                      : badarg(g);
  love_musttail return Next(1); }
 
-static union u const
-  nif_posix_rename[]   = {{lvm_cur}, {.x = putcharm(2)}, {lvm_posix_rename}, {lvm_ret0}},
-  nif_posix_symlink[]  = {{lvm_cur}, {.x = putcharm(2)}, {lvm_posix_symlink}, {lvm_ret0}},
-  nif_posix_readlink[] = {{lvm_posix_readlink}, {lvm_ret0}},
-  nif_posix_chmod[]    = {{lvm_cur}, {.x = putcharm(2)}, {lvm_posix_chmod}, {lvm_ret0}},
-  nif_posix_chown[]    = {{lvm_cur}, {.x = putcharm(3)}, {lvm_posix_chown}, {lvm_ret0}},
-  nif_posix_lchown[]   = {{lvm_cur}, {.x = putcharm(3)}, {lvm_posix_lchown}, {lvm_ret0}},
-  nif_posix_utime[]    = {{lvm_cur}, {.x = putcharm(2)}, {lvm_posix_utime}, {lvm_ret0}},
-  nif_posix_umask[]    = {{lvm_posix_umask}, {lvm_ret0}},
-  nif_posix_rlimit[]   = {{lvm_cur}, {.x = putcharm(2)}, {lvm_posix_rlimit}, {lvm_ret0}},
-  nif_posix_setrlimit[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_posix_setrlimit}, {lvm_ret0}},
-  nif_posix_prio[]     = {{lvm_cur}, {.x = putcharm(2)}, {lvm_posix_prio}, {lvm_ret0}},
-  nif_posix_setprio[]  = {{lvm_cur}, {.x = putcharm(3)}, {lvm_posix_setprio}, {lvm_ret0}},
-  nif_posix_truncate[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_posix_truncate}, {lvm_ret0}},
-  nif_posix_setsid[]   = {{lvm_posix_setsid}, {lvm_ret0}},
-  nif_posix_fsync[]    = {{lvm_cur}, {.x = putcharm(2)}, {lvm_posix_fsync}, {lvm_ret0}},
-  nif_posix_rmdir[]    = {{lvm_posix_rmdir}, {lvm_ret0}},
-  nif_posix_hardlink[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_posix_hardlink}, {lvm_ret0}},
-  nif_posix_copyfile[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_posix_copyfile}, {lvm_ret0}};
-LvNif("rename", nif_posix_rename, "posix");
-LvNif("symlink", nif_posix_symlink, "posix");
-LvNif("readlink", nif_posix_readlink, "posix");
-LvNif("chmod", nif_posix_chmod, "posix");
-LvNif("chown", nif_posix_chown, "posix");
-LvNif("lchown", nif_posix_lchown, "posix");
-LvNif("utime", nif_posix_utime, "posix");
-LvNif("umask", nif_posix_umask, "posix");
-LvNif("rlimit", nif_posix_rlimit, "posix");
-LvNif("setrlimit", nif_posix_setrlimit, "posix");
-LvNif("prio", nif_posix_prio, "posix");
-LvNif("setprio", nif_posix_setprio, "posix");
-LvNif("truncate", nif_posix_truncate, "posix");
-LvNif("setsid", nif_posix_setsid, "posix");
-LvNif("fsync", nif_posix_fsync, "posix");
-LvNif("rmdir", nif_posix_rmdir, "posix");
-LvNif("hardlink", nif_posix_hardlink, NULL);
-LvNif("copyfile", nif_posix_copyfile, "posix");
+LvDef("rename", posix_rename, 2, "posix");
+LvDef("symlink", posix_symlink, 2, "posix");
+LvDef("readlink", posix_readlink, 1, "posix");
+LvDef("chmod", posix_chmod, 2, "posix");
+LvDef("chown", posix_chown, 3, "posix");
+LvDef("lchown", posix_lchown, 3, "posix");
+LvDef("utime", posix_utime, 2, "posix");
+LvDef("umask", posix_umask, 1, "posix");
+LvDef("rlimit", posix_rlimit, 2, "posix");
+LvDef("setrlimit", posix_setrlimit, 3, "posix");
+LvDef("prio", posix_prio, 2, "posix");
+LvDef("setprio", posix_setprio, 3, "posix");
+LvDef("truncate", posix_truncate, 3, "posix");
+LvDef("setsid", posix_setsid, 1, "posix");
+LvDef("fsync", posix_fsync, 2, "posix");
+LvDef("rmdir", posix_rmdir, 1, "posix");
+LvDef("hardlink", posix_hardlink, 2, NULL);
+LvDef("copyfile", posix_copyfile, 2, "posix");
 // --- the pty wrapper: bao's rlwrap/debugger muscle ------------------------------
 // spawn a program on a fresh pseudo-terminal, reap it without blocking, signal it, and
 // read/write its window size. (tether argv) is hark (main.c) with the stdout pipe swapped
@@ -1729,30 +1664,16 @@ static lvm(lvm_close) {
   Sp[0] = ZeroPoint;
   love_musttail return Next(1); }
 
-static union u const
-  nif_open[]  = {{lvm_cur}, {.x = putcharm(2)}, {lvm_open}, {lvm_ret0}},
-  nif_close[] = {{lvm_close}, {lvm_ret0}},
-  nif_raw[]        = {{lvm_raw}, {lvm_ret0}},
-  nif_swig[]       = {{lvm_cur}, {.x = putcharm(2)}, {lvm_swig}, {lvm_ret0}},
-  nif_tether[]     = {{lvm_tether}, {lvm_ret0}},
-  nif_tetherenv[]  = {{lvm_cur}, {.x = putcharm(2)}, {lvm_tetherenv}, {lvm_ret0}},
-  nif_reap[]       = {{lvm_reap}, {lvm_ret0}},
-  nif_kill[]       = {{lvm_cur}, {.x = putcharm(2)}, {lvm_kill}, {lvm_ret0}},
-  nif_tty[]        = {{lvm_tty}, {lvm_ret0}},
-  nif_settty[]     = {{lvm_cur}, {.x = putcharm(3)}, {lvm_settty}, {lvm_ret0}},
-  nif_ptyecho[]    = {{lvm_cur}, {.x = putcharm(2)}, {lvm_ptyecho}, {lvm_ret0}},
-  nif_termios[]    = {{lvm_termios}, {lvm_ret0}},
-  nif_settermios[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_settermios}, {lvm_ret0}};
-LvNif("tether", nif_tether, NULL);
-LvNif("tetherenv", nif_tetherenv, "posix");
-LvNif("gather", nif_reap, "posix");
-LvNif("still", nif_kill, NULL);
-LvNif("tty", nif_tty, NULL);
-LvNif("settty", nif_settty, NULL);
-LvNif("ptyecho", nif_ptyecho, "posix");
-LvNif("termios", nif_termios, "posix");
-LvNif("settermios", nif_settermios, "posix");
-LvNif("raw", nif_raw, NULL);
-LvNif("swig", nif_swig, "posix");
-LvNif("open", nif_open, "posix");
-LvNif("close", nif_close, "posix");
+LvDef("tether", tether, 1, NULL);
+LvDef("tetherenv", tetherenv, 2, "posix");
+LvDef("gather", reap, 1, "posix");
+LvDef("still", kill, 2, NULL);
+LvDef("tty", tty, 1, NULL);
+LvDef("settty", settty, 3, NULL);
+LvDef("ptyecho", ptyecho, 2, "posix");
+LvDef("termios", termios, 1, "posix");
+LvDef("settermios", settermios, 2, "posix");
+LvDef("raw", raw, 1, NULL);
+LvDef("swig", swig, 2, "posix");
+LvDef("open", open, 2, "posix");
+LvDef("close", close, 1, "posix");
