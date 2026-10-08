@@ -529,6 +529,14 @@
    _ (chk-eq "gas.a64.bfm.refuse" '(gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand)
         (map (l \ trap (x \ holo-hex 'a64 (gas-text 'a64 x)) l (\ a b a))
              ["ubfm x1, w1, #1, #2" "ubfm w1, w1, #32, #2" "ubfm sp, x1, #1, #2" "ubfm x1, x1, #1" "ubfm x1, x1, x2, #1"]))
+   ;; the memory copy and set ops: a copy's [d]!, [s]!, n!, a set's [d]!, n!, v; a register
+   ;; twice, zr in brackets, sp, a W register or an unbracketed address refuse
+   _ (chk-eq "gas.a64.mops" "40040119a304841d4094011d2004df192074c2192004c21de0070119"
+        (holo-hex 'a64 (gas-text 'a64 "cpyfp [x0]!, [x1]!, x2!\n cpye [x3]!, [x4]!, x5!\n cpypwtrn [x0]!, [x1]!, x2!\n setp [x0]!, x1!, xzr\n setmtn [x0]!, x1!, x2\n setgp [x0]!, x1!, x2\n cpyfp [x0]!, [x1]!, xzr!")))
+   _ (chk-eq "gas.a64.mops.refuse" '(gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-op)
+        (map (l \ trap (x \ holo-hex 'a64 (gas-text 'a64 x)) l (\ a b a))
+             ["cpyfp [x0]!, [x0]!, x2!" "setp [x0]!, xzr!, xzr" "cpyfp [xzr]!, [x1]!, x2!" "setp [x0]!, x1!, sp"
+              "cpyfp [w0]!, [x1]!, x2!" "cpyfp [x0]!, x1!, x2!" "ldr x0, [x1]!" "cpyfx [x0]!, [x1]!, x2!"]))
    _ (chk-eq "gas.a64.lse.refuse"
         '(gas-a64-operand gas-a64-op gas-a64-operand gas-a64-operand gas-a64-operand)
         (map (l \ trap (x \ holo-hex 'a64 (gas-text 'a64 x)) l (\ a b a))

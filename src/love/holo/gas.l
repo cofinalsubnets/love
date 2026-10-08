@@ -345,6 +345,8 @@
             (('ch 45) . _) ['imm (gimm toks)]
             (('sym s)) (ga-reg s @ r (two? r || nom? r ? r ['sym (name s)]))
             (('ch 91) ('sym b) ('ch 93)) ['mem (<>(ga-reg b)) 0]
+            (('ch 91) ('sym b) ('ch 93) ('ch 33)) (ga-reg b @ r (two? r ? ['wbm <>r <>>r] (scare 'gas-a64-operand toks)))
+            (('sym b) ('ch 33)) (ga-reg b @ r (two? r ? ['wbr <>r <>>r] (scare 'gas-a64-operand toks)))
             (('ch 91) . ('sym b) . ('ch 44) . rest)
              (: wb (two? rest && <(rev rest) = '(ch 33))            ; `]!`, pre-indexed
                 body (wb ? (rev >(rev rest)) rest)
@@ -497,6 +499,31 @@
           (charm? b && <>s9 = 4 ? (ga-raw (b | (k = 3 ? (ga-hw <s9 << 16) 0) | ga-hw x << 5 | ga-hw <rw))
              (scare 'gas-a64-operand os))
           (scare 'gas-a64-operand os)))
+   ;; the memory copy and set ops (mops) by spelling: cpy|cpyf|set|setg, a stage p|m|e, then
+   ;; the variant -> (kind bit26 stage op2); a copy's [d]!, [s]!, n!, a set's [d]!, n!, v,
+   ;; every one an X register and no two the same
+   ga-cpyv ["" "wt" "rt" "t" "wn" "wtwn" "rtwn" "twn" "rn" "wtrn" "rtrn" "trn" "n" "wtn" "rtn" "tn"]
+   (ga-mops m)
+    (: s (show m)
+       (rest t n) (snip t n #t)
+       (ix l v k) (? (atom? l) () (<l = v) k (ix >l v (k + 1)))
+       hd (? (starts? s "cpyf") ['cpy 0 (rest s 4)] (starts? s "cpy") ['cpy 0x04000000 (rest s 3)]
+             (starts? s "setg") ['set 0x04000000 (rest s 4)] (starts? s "set") ['set 0 (rest s 3)] ())
+       t (two? hd ? (hd 2) "")
+       g (t = "" ? () (assoc (t 0) [[112 0] [109 1] [101 2]]))
+       v (two? g ? (ix (<hd = 'cpy ? ga-cpyv ["" "t" "n" "tn"]) (rest t 1) 0) ())
+       (? !(charm? v) () (<hd = 'cpy) [<hd (hd 1) <>g v] [<hd (hd 1) 0 (<>g << 2 | v)]))
+   (ga-mops-ins m row os)
+    (row @ (kind b g op)
+       (: sh (map (o \ o @ ('wbm _ 8) 'm ('wbr _ 8) 'r ('reg _ 8) 'g _ ()) os)
+          xs (map (o \ o @ ('wbm x _) x ('wbr x _) x ('reg x _) x _ ()) os)
+          cp (kind = 'cpy)
+          (? (sh != (cp ? ['m 'm 'r] ['m 'r 'g]) || elem 'sp xs || elem 'zr (cp ? [<xs <>xs] [<xs]))
+              (scare 'gas-a64-operand [m os])
+             (map ga-hw xs @ (d u n)
+                (? (d = u || u = n || d = n) (scare 'gas-a64-operand [m os])
+                   cp (ga-raw (0x19000400 | b | g << 22 | u << 16 | op << 12 | n << 5 | d))
+                   (ga-raw (0x19C00400 | b | n << 16 | op << 12 | u << 5 | d)))))))
    ;; the bitfield moves by opc; sf and N by the width, immr and imms below it
    ga-bfm {'sbfm 0 'bfm 1 'ubfm 2}
    (ga-bfm-ins m os)
@@ -627,6 +654,7 @@
           (two? (peep ga-ex m ())) (k = 2 ? (ga-ex-ins (ga-ex m) os) (scare 'gas-a64-operand [m os]))
           (two? (peep ga-sx m ())) (k = 3 ? (ga-ex-ins (ga-sx m) os) (scare 'gas-a64-operand [m os]))
           (charm? (peep ga-bfm m ())) (k = 4 ? (ga-bfm-ins m os) (scare 'gas-a64-operand [m os]))
+          (two? (ga-mops m)) (ga-mops-ins m (ga-mops m) os)
           (ga-lse-ins m (ga-lse m) os)))
    (ga-line toks)
     (gline toks @ l

@@ -1153,6 +1153,11 @@ below, 251 of those 332 re-run so far: **145 compile**, and the rest refuse by n
   is one everywhere. With it, `sbfm`/`bfm`/`ubfm` (all 444 forms of a sweep are llvm-mc's
   words), and a macro call after a label on its own line (`g: lsz x0, x1`). Three tinyconfig
   units now compile, word for word the kernel build's objects (sigreturn, strrchr, tishift).
+- **the memory copy and set ops** (FEAT_MOPS, the kernel's `memcpy`/`memset` and their user
+  copies): `cpy`/`cpyf` with a stage `p`/`m`/`e` and the sixteen read/write variants, and
+  `set`/`setg` with `t`/`n`/`tn`, over `[xd]!, [xs]!, xn!` and `[xd]!, xn!, xv`. All 360 forms of
+  a sweep are llvm-mc's words; a register twice, `xzr` in brackets, `sp`, or a W register
+  refuses, as llvm-mc does.
 
 Still open on this side (g-21's probes):
 
@@ -1162,9 +1167,9 @@ Still open on this side (g-21's probes):
   reads at the element's width, a bitfield or 128-bit member of a packed struct refuses by name,
   and a by-value struct reached as a packed member rides its type's alignment, not the member's.
 - where the re-run stops now, on this side: a register variable pinned to `x0` (4). Of the 24
-  units that stopped on the `.S` extable macro's `\insn`, 3 compile, and the rest stop on: the
-  pre-index `[xN]!` (5), gas's `||` (3, mov_q's range test), a shifted register operand
-  (`x2, lsl #8`, 2), `ldp` (2), `ccmp` (2), `stp`, `csinv`, `ands`, `bne`, `.incbin`, `@note`
+  units that stopped on the `.S` extable macro's `\insn`, 3 compile, and the rest stop on:
+  `ldp` (3), gas's `||` (3, mov_q's range test), `ands` (3), a shifted register operand
+  (`x2, lsl #8`, 2), `ccmp` (2), `tbz`/`tbnz` (2), `stp`, `csinv`, `bne`, `.incbin`, `@note`
   and `sym+k` as a memory operand.
   The rest is part 1's front end and gen (`linux/skbuff.h`, an undeclared `branch`,
   `__attribute__((mode))`).
