@@ -858,7 +858,8 @@ carried:
 - `-fshort-wchar`; `-fmacro-prefix-map=OLD=NEW` and `-ffile-prefix-map` (`__FILE__` spelled
   with the last matching map; there is no debug info for its other half); `-ffixed-x18`, true of
   a64 already (x16..x18 are never allocated) and refused on any other target or register
-- `__builtin_assume_aligned`, `__builtin_extract_return_addr`, `__builtin_parity{,l,ll}`
+- `__builtin_assume_aligned`, `__builtin_extract_return_addr`, `__builtin_parity{,l,ll}`,
+  `__builtin_{add,sub,mul}_overflow_p` (the third operand evaluated, as gcc does; test/cc/268)
 - `__atomic_*_n`, the fetch/op pairs, `test_and_set`, `clear`, the fences and the lock-free
   queries, and all of `__sync_*`, with `__ATOMIC_*`, `__GCC_ATOMIC_*_LOCK_FREE` and
   `__GCC_HAVE_SYNC_COMPARE_AND_SWAP_N` as each target lays them: a read-modify-write is one
@@ -900,7 +901,7 @@ owed, each refusing loudly today (an undeclared builtin, or a parse error):
 | `__atomic_load`, `_store`, `_exchange`, `_compare_exchange` (the generic forms, operands by address) | refused by name; each `_n` form is carried |
 | a 1- or 2-byte atomic read-modify-write on rv64 (`__atomic_test_and_set` among them); every one on thumb1 | refused by name: lr/sc are word-wide, armv6-m has no exclusives (gcc calls libatomic there) |
 | `__builtin_alloca` | moonlibc's `alloca` is malloc-backed, so it is not the builtin's frame lifetime |
-| `__builtin_add_overflow_p` and kin, `__builtin_classify_type` | |
+| `__builtin_classify_type` | |
 | gcc's old `field:` initializer, nested functions | |
 
 open, not refused: **`__FILE__` in a header reads the TU's name** (cpp shares one table across
