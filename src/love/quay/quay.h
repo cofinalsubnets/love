@@ -105,8 +105,9 @@ struct cb {
 // the store, after the cells: 128 slots (0 unused), the 256 sixel registers, then the
 // pixels, xrgb with the top byte 0xff where a pixel was set -- the rest is the cell's bg
 // id: a kitty image's, 0 for none. gen: a serial new with every picture, kept across a regrid,
-// which is what lets a reader (limn passing a picture on) tell one it has already sent
-struct cb_img { uint32_t off, w, h, live, id, gen; };
+// which is what lets a reader (limn passing a picture on) tell one it has already sent.
+// dw x dh: what its tiles span, the pixels stretched to it nearest first -- 0 for its own size
+struct cb_img { uint32_t off, w, h, live, id, gen, dw, dh; };
 enum { cb_nimg = 128, cb_shead = cb_nimg * sizeof(struct cb_img) + 256 * 4 };
 // the bytes a screen of rows x cols needs, header, cells and a store of sn bytes
 #define cb_size(rows, cols, sn) \
@@ -157,6 +158,9 @@ void cb_select(struct cb*, intptr_t a, intptr_t b, uint32_t unit);
 uintptr_t cb_copied(struct cb const*, uint8_t *buf, intptr_t a, intptr_t b);
 struct cb_img const *cb_img(struct cb const*, uint32_t slot);   // a live picture, or 0
 uint32_t const *cb_ipx(struct cb const*);                       // the store's pixels
+uint32_t cb_iw(struct cb_img const*), cb_ih(struct cb_img const*);   // the size its tiles span
+// picture im's pixel at X,Y of what its tiles span, nearest; 0 past it
+uint32_t cb_ipick(struct cb const*, struct cb_img const *im, uint32_t X, uint32_t Y);
 // a PNG of n bytes at the head of a cap-byte region -> 0 and w x h pixels there, or -1
 int cb_png(uint8_t *buf, uintptr_t n, uintptr_t cap, uint32_t *w, uint32_t *h);
 uint32_t const *cb_clu(struct cb const*, uint32_t g);   // the cluster g names, or 0

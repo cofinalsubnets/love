@@ -32,6 +32,13 @@
  (test (snip k 0 8 = "\e[?2026h") (snip k (#k - 8) #k = "\e[?2026l")
        (has? k "i=7,s=") (has? k "a=d,d=I,i=8,") (has? k2 "i=8,s=") (has? k2 "a=d,d=I,i=7,") (has? k "f=24") (has? k "C=1") (has? k "s=80,v=48,c=80,r=24,") (has? k "m=0;")
        (has? k8 "s=640,v=384,c=80,r=24,") ((stones-size (at 12.0 7) 80 24) 'kp = 1)))
+; --- ..the choices' cells blanked over the picture once, the frame they are put away, and
+; --- not before or after
+(: kb (pin (at 12.0 7) 'kitty 1) r ((kb 'h) // 2) r0 (max2 0 (r - 9)) c0 (max2 0 ((kb 'w - 22) // 2))
+   gap ("\e[" + show (r0 + 1) + ";" + show (c0 + 1) + "H\e[0m" + cats (map (_ \ " ") (jot 22)))
+   f0 (stones-frame kb) _ (pin kb 'dlg 0) _ (stones-frame kb) _ (pin kb 'dlg ())
+   f2 (stones-frame kb) f3 (stones-frame kb)
+ (test !(has? f0 gap) (has? f2 gap) !(has? f3 gap)))
 
 ; --- the words: the hour today, and kitty's or the cells; one wrong or said twice is none
 (: (opt as k) (stones-opts as @ o (tablet? o ? (o k) 'bad))

@@ -24,14 +24,13 @@ static void cb_tpx(struct cb_paper const *p, struct cb const *c, struct font con
   if (x + f->w * s > p->w || y + f->h * s > p->h) return;
   uint32_t const bg = cb_rgbof(c, cell->bg, c->def_bg, 0);
   struct cb_img const *im = f->w == c->cw && f->h == c->ch ? cb_img(c, cb_tslot(cell->g)) : 0;
-  uint32_t const *ipx = cb_ipx(c);
   for (uint8_t r = 0; r < f->h; r++) {
     uint32_t const Y = cb_tty(cell->g) * f->h + r;
     for (uintptr_t d = 0; d < s; d++) {
       volatile uint32_t *px = p->px + (y + r * s + d) * p->pitch + x;
       for (uint8_t k = 0; k < f->w; k++) {
         uint32_t const X = cb_ttx(cell->g) * f->w + k,
-                       v = im && X < im->w && Y < im->h ? ipx[im->off + Y * im->w + X] : 0;
+                       v = im ? cb_ipick(c, im, X, Y) : 0;
         uint32_t const o = v >> 24 ? v & 0xffffffu : bg;
         for (uintptr_t e = 0; e < s; e++) px[k * s + e] = o; } } } }
 

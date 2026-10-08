@@ -506,6 +506,22 @@
    _ (scribe s3 "\e_Ga=T,f=24,s=2,v=2,c=2,r=1,C=1;/wAA/wAA/wAA/wAA\e\\")
    _ (test (pic? s3 0) (pic? s3 1) !(pic? s3 2) !(pic? s3 10)
            (red = tilepx s3 1 7 15) (0 = cur s3))
+   ; ..stretched over the whole screen, which a copy could not be: the store is one screenful
+   s4 (mkscr 4 10)
+   _ (scribe s4 "\e_Ga=T,f=24,s=2,v=2,c=10,r=4,C=1,q=2;/wAA/wAA/wAA/wAA\e\\")
+   _ (test (pic? s4 0) (pic? s4 39) (red = tilepx s4 39 7 15)
+           (80 = picture s4 (glass s4 0 0 >> 16 & 127) 5) (2 = picture s4 (glass s4 0 0 >> 16 & 127) 0))
+   ; a frame replacing its id where the store holds one of it, not two: at its size it lands
+   ; over the old one's pixels, in the same slot; at another the old gives way
+   (frame w b) ("\e_Ga=T,f=24,s=\(w),v=60,i=7,c=10,r=4,C=1,q=2;" + cats (map (_ \ b) (jot (w * 60))) + "\e\\")
+   (sl s) (glass s 0 0 >> 16 & 127)
+   _ (scribe s4 (frame 60 "/wAA"))
+   k4 (sl s4)
+   _ (scribe s4 (frame 60 "AAD/"))
+   _ (test (pic? s4 0) (pic? s4 39) (blue = tilepx s4 0 0 0) (blue = tilepx s4 39 7 15) (k4 = sl s4))
+   _ (scribe s4 (frame 59 "/wAA"))
+   _ (test (pic? s4 0) (pic? s4 39) (red = tilepx s4 0 0 0) (red = tilepx s4 39 7 15)
+           (59 = picture s4 (sl s4) 0))
    ; a=d: every placement goes; d=i one image's
    _ (scribe s "\e_Ga=d,d=i,i=8\e\\")
    _ (test (pic? s 0) !(pic? s 10))
@@ -710,7 +726,8 @@
    _ (test (2 = picture s k 0) (2 = picture s k 1) (1 = picture s k 2)
            ("/wAA//8AAP//AAD//wAA/w==" = picture s k 3)            ; ff 00 00 ff, four times
            ((cats (map (\ _ "\xff\x00\x00\xff") (jot 4))) = picture s k 4)   ; ..and raw
-           !(picture s (k + 1) 0) !(picture s 0 0) !(picture s k 5))
+           (2 = picture s k 5) (2 = picture s k 6)                 ; it spans its own size
+           !(picture s (k + 1) 0) !(picture s 0 0) !(picture s k 7))
    _ (scribe s "\e[3;1H\e_Ga=T,f=32,s=1,v=1,q=2;AAD/AA==\e\\")      ; another: a new gen
    _ (test (2 = picture s (slot s 20) 2))
    t (regrid s (cask (screen () 4 12)) 4 12)             ; a regrid keeps the gen

@@ -82,11 +82,11 @@
  cab [0.25 0.25 0.26]
  boxes [[[0.95 3.9 (yard-b - 0.23)] [1.25 4.2 yard-b] 2] [[0.95 3.9 (0.0 - yard-b)] [1.25 4.2 (0.23 - yard-b)] 3]]
  (to-box z) [[1.09 3.9 z] [1.09 2.62 z] [0.45 2.62 z] [0.45 2.3 z] [-0.43 2.3 z] [-0.43 2.62 z] [(0.0 - yard-a) 2.62 z]]
- runs [[0.04 cab (cat (to-box (0.0 - yard-b)) (rev (to-box yard-b)))]]
+ runs [[0.04 cab (to-box (0.0 - yard-b) + rev (to-box yard-b))]]
  ; --- the time: 'sim is the wall clock's local seconds, 'dst what summer adds to it ---
  ; now, as [local-seconds dst]: the zone's offset now, against the least of it a season on, two and three
  ; the zone's offset at utc u, the zone read once a call
- (zone-off _) (: zone ((cite 'kore 'tz-zone) 0) (u \ zone ? (zone u 0) 0))
+ (zone-off _) (: zone (cite 'kore 'tz-zone 0) (u \ zone ? (zone u 0) 0))
  (court-when s) (: off (zone-off 0)
                    o (off s) std (foldl (a \ k \ min2 a (off (s + k * 7889400))) o [1 2 3])
                    [(1.0 * (s + o)) (o - std)])
@@ -155,9 +155,8 @@
  (court-move st) (: t (st 't) tops (st 'litter 'tops) sea (court-season st) ev (sea 'every)
    ; ..gold in the fall, else mostly green
    hue (0.5 < sea 'turn ? (throw t 9 79 3) (throw t 9 79 4 = 0 ? 0 3))
-   born (? (0 < ev && throw t 3 97 ev = 0 && two? tops)
-           (tops (throw t 5 89 #tops) @ p [[(p 0) (p 1) (p 2) (throw t 7 83 628 / 100.0) hue]])
-           ())
+   born (0 < ev && throw t 3 97 ev = 0 && two? tops ?
+         (tops (throw t 5 89 #tops) @ p [[(p 0) (p 1) (p 2) (throw t 7 83 628 / 100.0) hue]]))
    moved (map (q \ fall-step q t) (cat born (st 'fall)))
    down (filter (q \ q 1 <= leaf-y) moved)
    ; ..the ground under the weather, by the sky's seconds this frame: rain wets the floor
@@ -167,22 +166,22 @@
    _ (pins st 'sim (st 'sim + dt)
              'fall (filter (q \ leaf-y < q 1) moved)
              'fallen (newest fallen-n (cat down (st 'fallen)))
-             'wet (sat (st 'wet + (f = 1 ? (dt / 1800.0) (0.0 - dt / 10800.0))))
-             'snow (sat (st 'snow + (f = 2 ? (dt / 10800.0) (0.0 - dt / (f = 1 ? 3600.0 21600.0))))))
+             'wet (sat (st 'wet + (f @ 1 (dt / 1800.0) (0.0 - dt / 10800.0))))
+             'snow (sat (st 'snow + (f @ 2 (dt / 10800.0) (-dt / (f @ 1 3600.0 21600.0))))))
    (court-drift st))
  ; --- the weather's month and its drift: a month's odds pick a cover from k in 0..19; and
  ; while the weather is the season's own, about one sky hour in four it steps a notch
  ; toward a cover the month's odds draw ---
- (court-month sim) ((cite 'cal 'civil) (int sim // 86400) 1)
+ (court-month sim) (cite 'cal 'civil (int sim // 86400) 1)
  (court-wx-pick m k) (: o (wx-odds (m - 1))
    (go i a) (i < 3 && a + o i <= k ? (go (i + 1) (a + o i)) i)
    (go 0 0))
  ; ..and what falls from a cover in month m, from k in 0..19 and a coin j for the
  ; months between rain and snow
  (court-fall-pick m c k j) (: o (fall-odds (m - 1))
-   (? (c < 2 || (c = 3 ? o (o // 2)) <= k) 0
+   (? (c < 2 || (c @ 3 o (o // 2)) <= k) 0
       (m = 12 || m <= 2) 2
-      (m = 3 || m = 11) (j = 0 ? 2 1)
+      (m = 3 || m = 11) (j @ 0 2 1)
       1))
  (wx-of c sty f) (pins (sky-weather c sty) 'fall f)
  ; the season's weather at local seconds l, its dice from sd
@@ -358,17 +357,16 @@
  ; tree's own seed; and the high leaves a falling one may start from. a point is
  ; [x y z r g b up], up 1 for one lying flat; a branch is a rod (rods!) ---
  (newest n l) (n < 1 || atom? l ? () (<l . newest (n - 1) >l))
- (cat* ls) (foldl (acc \ l \ cat acc l) () ls)
  ; a leaf lying at x z, turned ang: its stalk and a leaflet either side, six along
  (lying x z ang c) (: ca (cos ang) sa (sin ang)
-   (cat* (map (j \ (: u ((j - 2.5) * 0.012)
-                     (map (v \ [(x + u * ca - v * sa) leaf-y (z + u * sa + v * ca) (c 0) (c 1) (c 2) 1.0])
-                          [-0.01 0.0 0.01]))) ^6)))
+   (catmap (j \ (: u ((j - 2.5) * 0.012)
+                 (map (v \ [(x + u * ca - v * sa) leaf-y (z + u * sa + v * ca) (c 0) (c 1) (c 2) 1.0])
+                      [-0.01 0.0 0.01]))) ^6))
  (litter tr seed) (: g {'s (seed % 2147483647 + 7)}
    (rr lo hi) (lo + (hi - lo) * rnd g)
    bs (tr 'base) X (tr 'x) Y (tr 'y) Z (tr 'z) K (tr 'kind) n #X top (amax Y)
    ; a leaf of the crown, thrown for until one comes up, or the first point
-   (pick k ok?) (: i (int (rr 0.0 (n - 0.5))) ((k < 1 || (peep K i 0.0 = 2.0 && ok? i)) ? i (pick (k - 1) ok?)))
+   (pick k ok?) (: i (int (rr 0.0 (n - 0.5))) (k < 1 || peep K i 0.0 = 2.0 && ok? i ? i (pick (k - 1) ok?)))
    ; ..the heap: branches laid on the floor in a ring hard against the trunk, thickest there so
    ; no floor shows round it -- most along the ring, passing the bark as close as their own
    ; width lets them, the rest pointing out from it -- an end a little off the floor where the
@@ -384,7 +382,7 @@
      (tip g) (keep (c+ p (c* ln (unit (turn (unit ax) [0.0 1.0 0.0] (g * ang))))))
      q (tip 1.0 @ q (from q < 0.3 + r ? (tip -1.0) q) @ q [(q 0) (max2 (0.55 * r) (q 1 + rr -0.1 0.05)) (q 2)])
      rd [p q (0.55 * r) c fz]
-     (0 < k && rr 0.0 1.0 < 0.5 ? (cat [rd] (fork p q (0.55 * r) c fz (k - 1))) [rd]))
+     (0 < k && rr 0.0 1.0 < 0.5 ? (rd . fork p q (0.55 * r) c fz (k - 1)) [rd]))
    (branch _) (: a (rr 0.0 (2.0 * pi)) r (rr 0.022 0.06) c (bark 0) fz (rr 0.15 0.35)
      (lift q) [(q 0) (r + rr 0.0 1.0 * mound (from q)) (q 2)]
      ends (rr 0.0 1.0 < 0.35
@@ -394,7 +392,7 @@
               (end k) (lift (keep [(m 0 + k * hl * cos yaw) 0.0 (m 2 + k * hl * sin yaw)]))
               [(end -1.0) (end 1.0)]))
      rd [(ends 0) (ends 1) r c fz]
-     (rr 0.0 1.0 < 0.6 ? (cat [rd] (fork (ends 0) (ends 1) r c fz 1)) [rd]))
+     (rr 0.0 1.0 < 0.6 ? (rd . fork (ends 0) (ends 1) r c fz 1) [rd]))
    ; ..each twig lies flat a little way out from the heap: two rows of points
    (stick i) (: a (i * 2.0 * pi / stick-n + rr -0.3 0.3) rad (rr 0.9 1.4)
                 cx (clamp (bs 0 + rad * cos a) (0.3 - yard-a) (yard-a - 0.3))
@@ -403,20 +401,20 @@
                 cy (cos yaw) sy (sin yaw) th (rr 0.012 0.02)
                 c (c* (rr 0.75 1.15) (rr 0.0 1.0 < 0.3 ? [0.42 0.38 0.33] [0.34 0.24 0.15]))
                 ; ..three strands wide and three high, the top one the lightest
-                (cat* (map (j \ (: u (((j + 0.5) / k - 0.5) * ln)
-                                   (cat* (map (v \ (map (m \ [(cx + u * cy - v * sy) (0.01 + m * th) (cz + u * sy + v * cy)
+                (catmap (j \ (: u (((j + 0.5) / k - 0.5) * ln)
+                              (catmap (v \ (map (m \ [(cx + u * cy - v * sy) (0.01 + m * th) (cz + u * sy + v * cy)
                                                                ((0.8 + 0.12 * m) * c 0) ((0.8 + 0.12 * m) * c 1) ((0.8 + 0.12 * m) * c 2) 1.0])
                                                          ^3))
-                                              [(0.0 - th) 0.0 th])))) ^k)))
+                                      [(0.0 - th) 0.0 th]))) ^k))
    ; ..each leaf under one of the crown's, blown a little way off, kept off the walls
-   (leaf _) (: i (pick 40 (j \ 1)) x (clamp (peep X i 0.0 + rr -0.4 0.4) (0.08 - yard-a) (yard-a - 0.08))
+   (leaf _) (: i (pick 40 0) x (clamp (peep X i 0.0 + rr -0.4 0.4) (0.08 - yard-a) (yard-a - 0.08))
                z (clamp (peep Z i 0.0 + rr -0.4 0.4) (0.08 - yard-b) (yard-b - 0.08))
                ang (rr 0.0 (2.0 * pi)) c (c* (rr 0.8 1.1) (hues (int (rr 0.0 3.99))))
                (lying x z ang c))
    hi (filter (i \ peep K i 0.0 = 2.0 && top - 1.5 < peep Y i 0.0) ^n)
    tops (two? hi ? (map (q \ hi (int (rr 0.0 (#hi - 0.5))) @ i [(peep X i 0.0) (peep Y i 0.0) (peep Z i 0.0)]) ^120) ())
-   rods (cat* (map branch ^heap-n)) pts (bits (cat* (map stick ^stick-n)))
-   {'pts pts 'rods rods 'leaves (bits (cat* (map leaf ^leaf-n))) 'tops tops})
+   rods (catmap branch ^heap-n) pts (bits (catmap stick ^stick-n))
+   {'pts pts 'rods rods 'leaves (bits (catmap leaf ^leaf-n)) 'tops tops})
  ; the first k of the leaves on the ground, browned by bw
  (lead P k bw) (k < 1 ? () (: ix (iota k) (g q) (peep (P q) ix 0.0) dead [0.3 0.22 0.13]
    {'x (g 'x) 'y (g 'y) 'z (g 'z) 'up (g 'up)
@@ -435,7 +433,7 @@
                   (map (j \ [(q 0 + (j - 1.5) * 0.012 * cos a) (q 1 + (j - 1.5) * 0.006 * sin (a * 1.3))
                               (q 2 + (j - 1.5) * 0.012 * sin a) (c 0) (c 1) (c 2) 0.0]) ^4))
    (landed q) (lying (q 0) (q 2) (q 3) (hues (q 4)))
-   l (cat (cat* (map falling (st 'fall))) (cat* (map landed (st 'fallen))))
+   l (catmap falling (st 'fall) + catmap landed (st 'fallen))
    (two? l ? (bits l) ()))
  ; points drawn into the buffers, a point a pixel where nearer, lit as the floor is: the
  ; sun where it gets in and the tree lets it through, and the sky's light
@@ -454,10 +452,10 @@
  ; share the tree and the heap take together, sms their two maps
  (heap-tree rs bs) (: (ring rd) (: a (rd 0) b (rd 1) r (rd 2) ax (c+ b (c* -1.0 a)) u (unit ax)
                                    p1 (side u) p2 (cross u p1) k (int (sqrt (dot ax ax) / 0.02) + 1)
-                                   (cat* (map (i \ (lerp a b (i / (1.0 * k))) @ c
+                                   (catmap (i \ (lerp a b (i / (1.0 * k))) @ c
                                                      (map (j \ c+ c (c+ (c* (r * cos (j * 0.785)) p1) (c* (r * sin (j * 0.785)) p2))) ^8))
-                                              ^(k + 1))))
-   qs (cat* (map ring rs)) m #qs (col k) (gem-tray [m] (map (q \ q k) qs)) one (gem-tray [1] [1.0])
+                                           ^(k + 1)))
+   qs (catmap ring rs) m #qs (col k) (gem-tray [m] (map (q \ q k) qs)) one (gem-tray [1] [1.0])
    {'x (one * bs 0) 'y (one * 0.0) 'z (one * bs 2) 'kind one 'ph (one * 0.0)
     'shx (col 0) 'shy (col 1) 'shz (col 2) 'c [(bs 0) 0.3 (bs 2)] 'R 1.9 'cache {}})
  (heap-shade hm X Y Z) (hm ? (0.85 * (hm 'depth X Y Z + 0.03 < peep (hm 'map) (hm 'pix X Y Z) -1e9)) 0.0)
@@ -469,7 +467,7 @@
    (hang wid ps r k) (: n #ps q (map (i \ sway k (ps i)) ^n)
                         (map (i \ [(q i) (q (i + 1)) r [0.05 0.05 0.055] 0.0 wid]) ^(n - 1)))
    ea (yard-a - 0.04) wa (0.04 - yard-a) nb (yard-b - 0.04) sb (0.04 - yard-b)
-   (cat* [(hang 2 [[-2.2 wall-h nb] [-2.2 9.4 (nb + 0.01)] [-2.14 7.6 (nb - 0.12)]] 0.009 1.0)
+   (cats [(hang 2 [[-2.2 wall-h nb] [-2.2 9.4 (nb + 0.01)] [-2.14 7.6 (nb - 0.12)]] 0.009 1.0)
           (hang 0 [[ea wall-h -3.45] [(ea + 0.01) 8.2 -3.45] [(ea - 0.16) 5.9 -3.38]] 0.01 2.0)
           (hang 1 [[wa wall-h 1.6] [(wa - 0.01) 10.6 1.62] [(wa + 0.11) 9.3 1.7]] 0.008 3.0)
           (hang 3 [[2.45 wall-h sb] [2.45 6.0 (sb - 0.01)] [2.52 2.7 (sb + 0.16)]] 0.011 4.0)
@@ -515,7 +513,7 @@
    (one rd) (: a0 (rd 0) b0 (rd 1) r (rd 2) col (rd 3) fz (rd 4)
      za (dot (c+ a0 (c* -1.0 e)) f) zb (dot (c+ b0 (c* -1.0 e)) f)
      idx (spot [a0 b0] (r * foc / max2 0.1 (min2 za zb) + 1.5) cam)
-     (#idx = 0 ? ()
+     (#idx ?
       (: ddx (peep (cam 'dx) idx 0.0) ddy (peep (cam 'dy) idx 0.0) ddz (peep (cam 'dz) idx 0.0)
          ax (c+ b0 (c* -1.0 a0)) L (sqrt (dot ax ax)) u (unit ax)
          wv (c+ e (c* -1.0 a0)) wu (dot wv u) W (c+ wv (c* (0.0 - wu) u)) WW (dot W W)
@@ -532,7 +530,7 @@
          al0 (max hit cov * (0.0 < tt) * (-0.5 * r <= sa0) * (sa0 <= L + 0.5 * r) * (tt < peep (buf 't) idx 1e9))
          ; ..and only the pixels it takes are lit
          ks (iota (0.004 < al0))
-         (#ks = 0 ? ()
+         (#ks ?
           (: (g v) (peep v ks 0.0) ix (peep idx ks 0) al (g al0) t (g tt) sa (g sa0)
              ex (g ddx) ey (g ddy) ez (g ddz) de (g dd)
              ; ..the normal, off the axis toward where the ray meets it or passes nearest
@@ -553,9 +551,9 @@
    (each rs one))
  ; the box: grey paint gone dull, its door's edge on the face, dirt at its foot
  (box! bx cam lt sms buf sn) (: e (cam 'e) s (lt 'sun) lo (bx 0) hi (bx 1)
-   cs (map (k \ [((k % 2 = 1 ? hi lo) 0) ((k // 2 % 2 = 1 ? hi lo) 1) ((k // 4 = 1 ? hi lo) 2)]) ^8)
+   cs (map (k \ [((k % 2 @ 1 hi lo) 0) ((k // 2 % 2 @ 1 hi lo) 1) ((k // 4 @ 1 hi lo) 2)]) ^8)
    idx (spot cs 1.0 cam)
-   (#idx = 0 ? ()
+   (#idx ?
     (: ddx (peep (cam 'dx) idx 0.0) ddy (peep (cam 'dy) idx 0.0) ddz (peep (cam 'dz) idx 0.0)
        (slab k d) (: t1 ((lo k - e k) / d) t2 ((hi k - e k) / d) [(min t1 t2) (max t1 t2)])
        sx (slab 0 ddx) sy (slab 1 ddy) sz (slab 2 ddz)
@@ -599,8 +597,8 @@
      dep (hi 2 - lo 2) zf (wid = 2 ? yard-b (0.0 - yard-b))
      ((0.02 < sn && 0.0 < s 1) ?
       (: du (0.0 - s 0 * dep / sn) dv (0.0 - s 1 * dep / sn)
-         cs (cat* (map (k \ (: q [((k % 2 = 1 ? hi lo) 0) ((k // 2 = 1 ? hi lo) 1) zf]
-                               [q [(q 0 + du) (q 1 + dv) zf]])) ^4))
+         cs (catmap (k \ (: q [((k % 2 = 1 ? hi lo) 0) ((k // 2 = 1 ? hi lo) 1) zf]
+                               [q [(q 0 + du) (q 1 + dv) zf]])) ^4)
          idx (spot cs 1.0 cam)
          (#idx = 0 ? ()
           (: (span p d l h) (: k1 ((p - h) / d) k2 ((p - l) / d) [(min k1 k2) (max k1 k2)])
@@ -722,8 +720,8 @@
    _ (rods! (st 'litter 'rods) cam lt sms buf sn)
    _ (each boxes (bx \ box! bx cam lt sms buf sn))
    _ (bits! (st 'litter 'pts) cam lt sms buf sn)
-   _ (lead (st 'litter 'leaves) (18 * int (leaf-n * sea 'ground)) (sea 'brown) @ P (tablet? P ? (bits! P cam lt sms buf sn)))
-   _ (loose st @ P (tablet? P ? (bits! P cam lt sms buf sn)))
+   _ (lead (st 'litter 'leaves) (18 * int (leaf-n * sea 'ground)) (sea 'brown) @ P (tablet? P && bits! P cam lt sms buf sn))
+   _ (loose st @ P (tablet? P && bits! P cam lt sms buf sn))
    _ (rods! sr cam lt sms buf sn)
    ; ..and the rain or snow coming down, by the frame's own clock
    _ (sky-fall! (st 'wx) cam lt buf (1.0 * st 't / fps))
@@ -734,9 +732,9 @@
    px (deep ? (view-deep-pens c) (view-cube-pens c (st 'bay)))
    pace (st 'paces (st 'pace))
    wx (st 'wx)
-   txt (" " + court-clock st + (pace = 0.0 ? "  still" (pace = 1.0 ? "" ("  x" + (int pace = pace ? (show (int pace)) (show pace)))))
-        + "  " + sky-says (wx 'cover) + (sky-fall wx = 1 ? ", rain" (sky-fall wx = 2 ? ", snow" ""))
-        + (wx 'style = 'pixel ? ", in pixels " " "))
+   txt (" " + court-clock st + (pace @ 0.0 "  still" 1.0 "" ("  x" + (show $ int pace = pace ? (int pace) pace)))
+        + "  " + sky-says (wx 'cover) + (sky-fall wx @ 1 ", rain" 2 ", snow" "")
+        + (wx 'style @ 'pixel ", in pixels " " "))
    bands (st 't < st 'shown ? {0 [1 txt (deep ? 249660 255) (deep ? 33288 235)]} {})
    (deep ? (view-deep-frame w h px bands)
       (view-frame w h (y \ peep px (iota w + w * y) 0) bands)))
@@ -762,12 +760,12 @@
                (0 < n ? (go 0 0) ()))
    (date w) (w @ (y + "-" + m + "-" + d)
                  (: a (dnum y) b (dnum m) c (dnum d)
-                    (charm? a && charm? b && charm? c && 0 < b && b <= 12 && 0 < c && c <= 31 ? [a b c]))
+                    (charm? a && charm? b && charm? c && 0 < b <= 12 && 0 < c <= 31 ? [a b c]))
                  _ ())
    (hm w) (w @ (h + ":" + m) (: a (dnum h) b (dnum m) (charm? a && charm? b && a < 24 && b < 60 ? (3600 * a + 60 * b)))
                _ ())
-   (pnum w) (: cs (chars w) (0 < #w && all (c \ (48 <= c && c <= 57) || c = 46) cs && #(filter (c \ c = 46) cs) < 2
-                             && 48 <= w 0 && w 0 <= 57 ? (1.0 * <(sound w))))
+   (pnum w) (: cs (chars w) (0 < #w && all (c \ (48 <= c <= 57) || c = 46) cs && #(filter (= 46) cs) < 2
+                             && 48 <= w 0 <= 57 ? (1.0 * <(sound w))))
    o {}
    (once k v r) (v = () || o k != () ? () (pin o k v, go r))
    (go l) (? (atom? l) o
@@ -779,14 +777,13 @@
              (two? >l && <l = "--fall") (once 'fall (fal <>l) >>l)
              (<l = "rain" || <l = "snow") (once 'fall (fal <l) >l)
              (charm? (cov <l)) (once 'cov (cov <l) >l)
-             (charm? (sty <l)) (once 'sty (sty <l) >l)
-             ())
+             (charm? (sty <l)) (once 'sty (sty <l) >l))
    r (go as)
    (tablet? r ?
       (: now0 (court-now ()) l0 (int (now0 0)) d (r 'date) t (r 'time)
-         now (? (d = () && t = ()) now0
-                (court-local (86400 * (d = () ? (l0 // 86400) ((cite 'cal 'epoch-days) (d 0) (d 1) (d 2)))
-                              + (t = () ? (l0 % 86400) t))))
+         now (d = () && t = () ? now0
+              (court-local (86400 * (d = () ? (l0 // 86400) ((cite 'cal 'epoch-days) (d 0) (d 1) (d 2)))
+                            + (t = () ? (l0 % 86400) t))))
          c (r 'cov) y (r 'sty) fl (r 'fall) l (now 0) sd (int l) m (court-month l)
          ; ..what is not said is the season's: a fall said without a cover comes from overcast
          sty (y = () ? 'smooth (sky-styles y))

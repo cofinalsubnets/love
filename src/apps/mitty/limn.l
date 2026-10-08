@@ -120,15 +120,17 @@
        (each ^r (i \ each ^c (q \ cell i q)),
         t))
    ; what each picture's tiles show: [slot gen row col x y pw ph nc nr], its top-left tile
-   ; at row col of the pane, the part of it x y pw ph in its own pixels, over nc x nr cells
+   ; at row col of the pane, the part of it x y pw ph in its own pixels, over nc x nr cells.
+   ; the tiles count in the size they span, which a stretched one's own pixels are not
    (limn-placed s r c)
     (: cw (gaze s 6) ch (gaze s 7) t (limn-spans s r c)
-       (one sl) (: e (t sl) w (picture s sl 0) h (picture s sl 1)
+       (one sl) (: e (t sl) w (picture s sl 5) h (picture s sl 6) iw (picture s sl 0) ih (picture s sl 1)
                    (? !(charm? w) ()
                       (: x (e 2 * cw) y (e 3 * ch)
                          nc (e 5 - e 1 + 1) nr (e 4 - <e + 1)
                          pw (min (nc * cw) (w - x)) ph (min (nr * ch) (h - y))
-                         (0 < pw && 0 < ph ? [sl (picture s sl 2) <e (e 1) x y pw ph nc nr] ()))))
+                         sx (x * iw // w) sy (y * ih // h)
+                         (0 < pw && 0 < ph ? [sl (picture s sl 2) <e (e 1) sx sy ((x + pw) * iw // w - sx) ((y + ph) * ih // h - sy) nc nr] ()))))
        (filter two? (map one (sort (keys t)))))
    (limn-send j id w h b)                           ; a=t in 4096-byte pieces, m=1 until the last
     (: n #b

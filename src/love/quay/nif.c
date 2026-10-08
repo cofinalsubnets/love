@@ -44,7 +44,8 @@
 //                                newlines as returns, controls gone, bracketed when
 //                                the program asked (?2004); () misuse
 //   (picture scr slot k) -> n|s  a live picture's width (k 0), height (1), gen (2), or its
-//                                pixels as base64 rgba (3) or raw (4), unset ones clear; () for none
+//                                pixels as base64 rgba (3) or raw (4), unset ones clear; the
+//                                width (5) and height (6) its tiles span; () for none
 //   (reply scr)          -> (b ..) drain the reply queue (DSR/DA answers ride
 //                                home to the pty master) as byte charms; () quiet
 //   (wet scr k)          -> n    dirty-row bits, read-and-cleared
@@ -239,7 +240,7 @@ static lvm(lvm_tilepx) {
    struct cb_img const *im = g & cb_pic ? cb_img(c, cb_tslot(g)) : 0;
    if (im) {
     uint32_t const X = cb_ttx(g) * c->cw + (uint32_t) x, Y = cb_tty(g) * c->ch + (uint32_t) y;
-    out = putcharm(X < im->w && Y < im->h ? cb_ipx(c)[im->off + Y * im->w + X] : 0u); } } }
+    out = putcharm(cb_ipick(c, im, X, Y)); } } }
  Sp[3] = out;
  Sp += 3; Ip += 1; love_musttail return Continue(); }
 
@@ -335,6 +336,7 @@ static lvm(lvm_picture) {
  intptr_t const k = (Sp[2] & 1) ? getcharm(Sp[2]) : -1;
  word out = ZeroPoint;
  if (im && k >= 0 && k < 3) out = putcharm(k == 0 ? im->w : k == 1 ? im->h : im->gen);
+ else if (im && (k == 5 || k == 6)) out = putcharm(k == 5 ? cb_iw(im) : cb_ih(im));
  else if (im && k == 3 && (uint64_t) im->off + (uint64_t) im->w * im->h <= (c->sn - cb_shead) / 4u) {
   static char const abc[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
   uintptr_t const nb = (uintptr_t) im->w * im->h * 4u, n = (nb + 2) / 3 * 4;
