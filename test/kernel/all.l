@@ -36,6 +36,6 @@
             "test/kernel/sh0.l"
             "src/apps/lush.l"
             "test/kernel/sh.l"
-            "test/kernel/disk.l" "test/kernel/svm.l" "test/kernel/vmx.l"
+            "test/kernel/disk.l" "test/kernel/svm.l" "test/kernel/vmx.l" "test/kernel/vecirq.l"
             "test/zz-fin.l"])
    (each roster feed))
