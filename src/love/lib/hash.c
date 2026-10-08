@@ -160,10 +160,8 @@ static love_noinline void sha_blocks_ni(uint32_t h[8], const uint8_t *p, uintptr
 #undef T1
 #undef T2
 #undef T3
-// the cpu's word on it: ssse3 and sse4.1 (leaf 1 ecx 9, 19) and the sha extensions (leaf 7 ebx 29).
-// inle's interrupt path keeps only the low half of each xmm, so the kernel takes the c rounds
+// the cpu's word on it: ssse3 and sse4.1 (leaf 1 ecx 9, 19) and the sha extensions (leaf 7 ebx 29)
 static int sha_hw(void) {
- if (__love_osv < 0) return 0;
  uint32_t a, b, c, d;
  __asm__("cpuid" : "=a"(a), "=b"(b), "=c"(c), "=d"(d) : "a"(0), "c"(0));
  if (a < 7) return 0;
@@ -200,11 +198,10 @@ static love_noinline void sha_blocks_ce(uint32_t h[8], const uint8_t *p, uintptr
   CE("str q0, [%2]") "str q1, [%2, #16]"
   : "+r"(p), "+r"(n) : "r"(h), "r"(k)
   : "v0", "v1", "v2", "v3", "v4", "v5", "v16", "v17", "v18", "v19", "v20", "memory", "cc"); }
-// the cpu's word on it, id_aa64isar0_el1's sha2 field, which linux and freebsd answer at el0.
-// inle's interrupt path keeps only the d halves, so the kernel takes the c rounds, as does any
-// other host
+// the cpu's word on it, id_aa64isar0_el1's sha2 field: inle reads its own, linux and freebsd
+// answer the read at el0 for it; elsewhere the c rounds
 static int sha_hw(void) {
- if (__love_osv != 1 && __love_osv != 2) return 0;
+ if (__love_osv != 1 && __love_osv != 2 && __love_osv >= 0) return 0;
  uint64_t r;
  __asm__("mrs %0, id_aa64isar0_el1" : "=r"(r));
  return (r >> 12 & 15) != 0; }
