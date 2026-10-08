@@ -104,6 +104,77 @@ static void sha_block(uint32_t h[8], const uint8_t *p) {
  h[0] += a; h[1] += b; h[2] += c; h[3] += d;
  h[4] += e; h[5] += f; h[6] += gg; h[7] += hh; }
 
+#if defined(__x86_64__)
+// the sha extensions: four rounds to a sha256rnds2 pair, the schedule by sha256msg1/2, as intel
+// lays them. the state rides xmm1/xmm2 as ABEF/CDGH, the message words rotate through
+// xmm3..6, xmm0 is the rounds' implied operand. whole blocks only, n > 0
+#define NI(x) x "\n\t"
+#define NI_LD(o, t) NI("movdqu " o "(%0), " t) NI("pshufb %%xmm8, " t)
+#define NI_RA(o, t) NI("movdqu " o "(%3), %%xmm0") NI("paddd " t ", %%xmm0") NI("sha256rnds2 %%xmm1, %%xmm2")
+#define NI_RB NI("pshufd $0x0e, %%xmm0, %%xmm0") NI("sha256rnds2 %%xmm2, %%xmm1")
+#define NI_M1(t, tp) NI("sha256msg1 " t ", " tp)
+#define NI_MID(o, t, tp, tn) NI_RA(o, t) NI("movdqa " t ", %%xmm7") NI("palignr $4, " tp ", %%xmm7") \
+  NI("paddd %%xmm7, " tn) NI("sha256msg2 " t ", " tn) NI_RB
+#define T0 "%%xmm3"
+#define T1 "%%xmm4"
+#define T2 "%%xmm5"
+#define T3 "%%xmm6"
+static love_noinline void sha_blocks_ni(uint32_t h[8], const uint8_t *p, uintptr_t n) {
+ uint32_t k[64];
+ uint8_t m[16];
+ for (int i = 0; i < 64; i++) k[i] = (uint32_t) (K512[i] >> 32);
+ for (int i = 0; i < 16; i++) m[i] = (uint8_t) ((i & ~3) + 3 - (i & 3));   // each word's bytes turned
+ const uint8_t *e = p + 64 * n;
+ __asm__ volatile(
+  NI("movdqu (%1), %%xmm1") NI("movdqu 16(%1), %%xmm2")
+  NI("pshufd $0xb1, %%xmm1, %%xmm1") NI("pshufd $0x1b, %%xmm2, %%xmm2")
+  NI("movdqa %%xmm1, %%xmm7") NI("palignr $8, %%xmm2, %%xmm1") NI("pblendw $0xf0, %%xmm7, %%xmm2")
+  NI("movdqu (%4), %%xmm8")
+  "1:\n\t"
+  NI("movdqa %%xmm1, %%xmm9") NI("movdqa %%xmm2, %%xmm10")
+  NI_LD("0", T0) NI_RA("0", T0) NI_RB
+  NI_LD("16", T1) NI_RA("16", T1) NI_RB NI_M1(T1, T0)
+  NI_LD("32", T2) NI_RA("32", T2) NI_RB NI_M1(T2, T1)
+  NI_LD("48", T3) NI_MID("48", T3, T2, T0) NI_M1(T3, T2)
+  NI_MID("64", T0, T3, T1) NI_M1(T0, T3)
+  NI_MID("80", T1, T0, T2) NI_M1(T1, T0)
+  NI_MID("96", T2, T1, T3) NI_M1(T2, T1)
+  NI_MID("112", T3, T2, T0) NI_M1(T3, T2)
+  NI_MID("128", T0, T3, T1) NI_M1(T0, T3)
+  NI_MID("144", T1, T0, T2) NI_M1(T1, T0)
+  NI_MID("160", T2, T1, T3) NI_M1(T2, T1)
+  NI_MID("176", T3, T2, T0) NI_M1(T3, T2)
+  NI_MID("192", T0, T3, T1) NI_M1(T0, T3)
+  NI_MID("208", T1, T0, T2)
+  NI_MID("224", T2, T1, T3)
+  NI_RA("240", T3) NI_RB
+  NI("paddd %%xmm9, %%xmm1") NI("paddd %%xmm10, %%xmm2")
+  NI("add $64, %0") NI("cmp %2, %0") NI("jne 1b")
+  NI("pshufd $0x1b, %%xmm1, %%xmm1") NI("pshufd $0xb1, %%xmm2, %%xmm2")
+  NI("movdqa %%xmm1, %%xmm7") NI("pblendw $0xf0, %%xmm2, %%xmm1") NI("palignr $8, %%xmm7, %%xmm2")
+  NI("movdqu %%xmm1, (%1)") "movdqu %%xmm2, 16(%1)"
+  : "+r"(p) : "r"(h), "r"(e), "r"(k), "r"(m)
+  : "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7", "xmm8", "xmm9", "xmm10",
+    "memory", "cc"); }
+#undef T0
+#undef T1
+#undef T2
+#undef T3
+// the cpu's word on it: ssse3 and sse4.1 (leaf 1 ecx 9, 19) and the sha extensions (leaf 7 ebx 29)
+static int sha_hw(void) {
+ uint32_t a, b, c, d;
+ __asm__("cpuid" : "=a"(a), "=b"(b), "=c"(c), "=d"(d) : "a"(0), "c"(0));
+ if (a < 7) return 0;
+ __asm__("cpuid" : "=a"(a), "=b"(b), "=c"(c), "=d"(d) : "a"(1), "c"(0));
+ if (!(c >> 9 & 1) || !(c >> 19 & 1)) return 0;
+ __asm__("cpuid" : "=a"(a), "=b"(b), "=c"(c), "=d"(d) : "a"(7), "c"(0));
+ return (int) (b >> 29 & 1); }
+#define sha_blocks_hw sha_blocks_ni
+#else
+static int sha_hw(void) { return 0; }
+static void sha_blocks_hw(uint32_t h[8], const uint8_t *p, uintptr_t n) { (void) h, (void) p, (void) n; }
+#endif
+
 // sha-512 keeps its eight 64-bit words as sixteen 32-bit halves, so it rides the same
 // buffering and the same state layout as the 32-bit digests
 static void sha512_block(uint32_t h[16], const uint8_t *p) {
@@ -192,6 +263,11 @@ static unsigned blk_feed(uint32_t *h, uint8_t *buf, unsigned rem, const struct d
   memcpy(buf + rem, p, want);
   d->f(h, buf);
   p += want; n -= want; }
+ // the 256-bit shas' whole blocks go to the cpu's own rounds where it has them
+ if (d->f == sha_block && n >= bs && sha_hw()) {
+  uintptr_t k = n / bs;
+  sha_blocks_hw(h, p, k);
+  p += k * bs; n -= k * bs; }
  for (; n >= bs; p += bs, n -= bs) d->f(h, p);
  if (n) memcpy(buf, p, n);
  return (unsigned) n; }

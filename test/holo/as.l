@@ -221,6 +221,14 @@
       ("sse.movd" "660f7ed1" "movd %xmm2, %ecx")
       ("sse.shufps" "0fc6d188" "shufps $136, %xmm1, %xmm2")
       ("sse.pshufd" "660f70c81b" "pshufd $27, %xmm0, %xmm1")
+      ("sse.pshufb" "66410f3800d8" "pshufb %xmm8, %xmm3")
+      ("sse.pshufb.m" "660f380008" "pshufb (%rax), %xmm1")
+      ("sse.palignr" "660f3a0fca08" "palignr $8, %xmm2, %xmm1")
+      ("sse.pblendw" "660f3a0ed7f0" "pblendw $240, %xmm7, %xmm2")
+      ("sha.sha256rnds2" "0f38cbd1" "sha256rnds2 %xmm1, %xmm2")
+      ("sha.sha256msg1" "0f38ccdc" "sha256msg1 %xmm4, %xmm3")
+      ("sha.sha256msg2" "0f38cdde" "sha256msg2 %xmm6, %xmm3")
+      ("sha.sha256msg1.rex" "450f38ccd1" "sha256msg1 %xmm9, %xmm10")
       ("sse.psrldq" "660f73d808" "psrldq $8, %xmm0")
       ("sse.punpckhwd" "660f69c1" "punpckhwd %xmm1, %xmm0")
       ("sse.movhps" "0f164808" "movhps 8(%rax), %xmm1")
@@ -251,6 +259,8 @@
    _ (law2 "lens.cr" '((op mov 8 ((cr 3) (rg 7 8))) (op mov 8 ((rg 0 8) (cr 0)))) "mov %rdi, %cr3\nmov %cr0, %rax")
    _ (law2 "lens.expr" '((op and 8 ((rg 0 8) (im -5))) (op or 8 ((rg 0 8) (im 1536))))
            "and $~(1 << 2), %rax // clear\n or $((1 << 9) | (1 << 10)), %rax")
+   ; sha256rnds2's three-operand spelling names the implied xmm0; it reads back as the two
+   _ (chk "sha.sha256rnds2.xmm0" "0f38cbca" "sha256rnds2 %xmm0, %xmm2, %xmm1")
    _ (law2 "lens.semi" '((op xor 4 ((rg 2 4) (rg 2 4))) (op mov 4 ((rg 0 4) (im 1))) (op div 4 ((rg 1 4))))
            "xorl %edx,%edx; movl $1,%eax; divl %ecx;")
    ;; -- the decoder (src/love/holo/decode.l) over the same battery: the golden bytes read back

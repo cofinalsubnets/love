@@ -277,6 +277,15 @@
           195 (eg 'movnti w w)
           (c && c = 56 && px = '66 && dc-at s k2 = 130)
            (dc-modrm s (k2 + 1) p 8 8 @ r (finx (r 0) [(op1 'invpcid 0 [(r 1) (r 2)])]))
+          ;; the three-byte SSE rows: pshufb, the sha256 rounds and schedule, palignr and pblendw ib
+          (c && c = 56 && px = '66 && dc-at s k2 = 0)
+           (dc-modrm s (k2 + 1) p 16 16 @ r (finx (r 0) [(op1 'pshufb 0 [(r 1) (r 2)])]))
+          (c && c = 56 && px = 'none && 203 <= dc-at s k2 <= 205)
+           (dc-modrm s (k2 + 1) p 16 16 @ r
+              (finx (r 0) [(op1 (dc-at s k2 @ 203 'sha256rnds2 204 'sha256msg1 'sha256msg2) 0 [(r 1) (r 2)])]))
+          (c && c = 58 && px = '66 && (dc-at s k2 = 14 || dc-at s k2 = 15))
+           (dc-modrm s (k2 + 1) p 16 16 @ r
+              (finx (r 0 + 1) [(op1 (dc-at s k2 = 15 ? 'palignr 'pblendw) 0 [(r 1) (r 2) ['im (dc-at s (r 0))]])]))
           (c && c = 174 && px = 'f3 && dc-at s k2 >> 6 = 3)
            (dc-modrm s k2 p w w @ r
               (fin (r 0) [(op1 (r 3 @ 0 'rdfsbase 1 'rdgsbase 2 'wrfsbase 'wrgsbase) 0 [(r 2)])]))

@@ -309,7 +309,12 @@
                       'op (any (o \ two? o && <o = 'seg) (it 3) ? (gx-seg (it 1) (it 2) (it 3))
                              (gx-ins (it 1) (it 2) (it 3)))
                       (scare 'gas-x64-line it))                    ; a directive has no place in a template
-   (gx-text src) (catmap gx-item (gx-locals (att-read src)))
+   ; an inline template's line: the template lane, and as.l's bytes where it has no row (the
+   ; vector rows -- pshufb, sha256rnds2); both refusing, the template's word stands
+   (gx-text src)
+    (catmap (it \ (<it = 'op ? (trap gx-item it (\ a b (trap (i \ [['raw (as-instr i)]]) it (\ _ _ (scare a b)))))
+                     (gx-item it)))
+            (gx-locals (att-read src)))
    ;; ..and a file-scope run (an assembly source's): encoded exactly by as.l -- the width it says,
    ;; any addressing, the flags a 32-bit op sets -- and lowered as a template only where as.l
    ;; has no row (the system lane)
