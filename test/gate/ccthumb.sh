@@ -109,7 +109,7 @@ lg=$(arm-none-eabi-gcc $cpu -print-libgcc-file-name)
 # pcs, which has no d-reg lane.
 hosted="72-quals 110-param5 114-rmwlv 134-tentative 135-uac 142-syntax 146-declscope
         147-enumscope 148-tagscope 149-paste 150-alloc 154-blockextern 158-gnukw
-        159-stmtexpr 160-rangeinit 162-constexpr 163-bitfields 164-switchtab"
+        159-stmtexpr 160-rangeinit 162-constexpr 163-bitfields 164-switchtab 269-builtin-alloca"
 # each name, and what it assumes: 81 puts 2^62 in a `long`; 99 and 104 shift a
 # `unsigned long` by 32 or more, which is undefined once long is 32 bits; 105 unions a
 # double with one and reads bit 63; 120 asks for a `:40` bit-field (gcc REFUSES it here,

@@ -154,7 +154,7 @@
     (: (go ts depth cur args seps)
         (atom? ts ? ()
            (<ts @ t
-              (? (depth = 1 && pv? t ")") [(rev (rev cur . args)) >ts (rev seps)]
+              (? (depth = 1 && pv? t ")") [(rev (rev cur . args)) >ts (rev seps) t]
                  (depth = 1 && pv? t ",") (go >ts depth () (rev cur . args) (t . seps))
                  (pv? t "(") (go >ts (depth + 1) (t . cur) args seps)
                  (pv? t ")") (go >ts (depth - 1) (t . cur) args seps)
@@ -269,7 +269,7 @@
                       (eleq (iname nm) (hof t)) (t . expand rest macs)  ; blue-painted: leave it
                       (mobj? m)
                        (: hs (iname nm . hof t)
-                          body (mapadd <>m hs (lof t))
+                          body (mapadd <>m hs (lof t) (spaced? t))
                           (expand (body + rest) macs))
                       (mfun? m && two? rest && pv? <rest "(")
                        (collargs >rest @ ca
@@ -278,11 +278,16 @@
                                 params <>m mbody <>>m mvar <>>>m
                                 hs (iname nm . hof t)
                                 body (subst mbody params args mvar (lof t) macs <>>ca)
-                                (expand (mapadd body hs (lof t) + after) macs))))
+                                (expand (mapadd body hs (lof t) (spaced? (ca 3)) + after) macs))))
                       (t . expand rest macs)))))))
-   (mapadd toks hs line)                            ; give body tokens the hideset + the invocation line
+   ; give body tokens the hideset + the invocation line; the last takes the invocation's own
+   ; spacing (w), not its definition line's end
+   (mapadd toks hs line w)
     (atom? toks ? ()
-       (<toks @ t (retok t line (hunion (hof t) hs) . mapadd >toks hs line)))
+       (<toks @ t
+          (atom? >toks ? [(w ? [(kof t) (vof t) line (hunion (hof t) hs) (sof t) 1]
+                             [(kof t) (vof t) line (hunion (hof t) hs) (sof t)])]
+             (retok t line (hunion (hof t) hs) . mapadd >toks hs line w))))
    ; a hideset holds only interned names, so a set's member is found by identity. the union is
    ; h's names that hs lacks, then hs -- often none: an argument's set is most often a tail of
    ; the invocation's very list. hs is a set already (its name was not in the invoker's)
@@ -868,9 +873,24 @@
    ; or the line jumps, an included file named by its resolved path (gnulib finds the header it
    ; wraps that way).
    ; -> (1 text) | a gripe
-   ; exact: the tokens carry whitespace marks (the assembler lexer's), and a space goes back only
-   ; where the source had one -- a dts's /dts-v1/ and #address-cells are one word to dtc
-   (cpp-text toks incf fname exact)
+   ; the tokens carry whitespace marks, and a space goes back only where the source had one or
+   ; where the two would otherwise lex as others (gcc's rule): `-Wno-cast-qual` stays one word to
+   ; a configure script reading it back, as a dts's /dts-v1/ and #address-cells do to dtc
+   ; would x and y, spelled with nothing between, lex as other tokens? a word or number runs
+   ; on (or prefixes a literal), a pp-number takes a `.` or an exponent's sign, `.` a digit, `/`
+   ; opens a comment, and a punctuator grows into a longer one
+   cpuncts '("->" "++" "--" "<<" ">>" "<=" ">=" "==" "!=" "&&" "||" "*=" "/=" "%=" "+=" "-="
+             "&=" "^=" "|=" "##" "<<=" ">>=" "...")
+   (wordc? c) (c = 95 || 48 <= c <= 57 || 65 <= c <= 90 || 97 <= c <= 122 || 127 < c)
+   (pastes? x y)
+    (? (#x < 1 || #y < 1) ()
+       (: c (y 0) z (x (#x - 1)) xy (x + string c) n #xy
+          (? (wordc? z && (wordc? c || c = 34 || c = 39)) 1
+             ((48 <= x 0 <= 57 || x 0 = 46) && (c = 46 || (c = 43 || c = 45) && elem z '(101 69 112 80))) 1
+             (z = 46 && 48 <= c <= 57) 1
+             (z = 47 && (c = 47 || c = 42)) 1
+             (any (p \ n <= #p && snip p 0 n = xy) cpuncts))))
+   (cpp-text toks incf fname)
     (: r (cppgo toks (cppmacs fname) () () () incf)
        (qesc s) ("\"" + string (catmap (c \ (c @ 34 [92 34] 92 [92 92] 10 [92 110] 9 [92 116]
                                                    (c < 32 || 126 < c ? (c & 255 @ o [92 (48 + (o >> 6)) (48 + ((o >> 3) & 7)) (48 + (o & 7))]) [c])))
@@ -887,7 +907,7 @@
                  (: f (two? files ? <files fname) l (lof t)
                     (? (f != cf || l < cl || cl + 8 < l) (go >ts files l f (sp t . mark l f . acc) t)
                        (l > cl) (go >ts files l f (sp t . string (map (_ \ 10) ^(l - cl)) . acc) t)
-                       (exact && !(two? prev && spaced? prev)) (go >ts files l f (sp t . acc) t)
+                       (two? prev && !(spaced? prev) && !(pastes? (sp prev) (sp t))) (go >ts files l f (sp t . acc) t)
                        (go >ts files l f (sp t . " " . acc) t))))))
        (gripe? r ? r [1 (go r () 1 fname [(mark 1 fname)] ())])))
 ) ; module 'moon

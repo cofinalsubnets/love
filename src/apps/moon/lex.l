@@ -87,6 +87,12 @@
        (okv? r ? [1 (go <>r (ln0 - 1) ())] r))
    (clexm src ln0 asm wm)
     (: n #src
+       ; the newlines one logical line holds -- each splice, and a block comment's on a directive
+       ; line, which reads on past it (a comment is one space, C11 5.1.1.2 phase 3): the line
+       ; stands still across them and advances by them at the logical line's end
+       pend {}
+       (pend1 k) (pin pend 'n (peep pend 'n 0 + k))
+       (nls a b c) (a < b ? (nls (a + 1) b (src a = 10 ? (c + 1) c)) c)
        (wpad t) (#t @ k (? (k = 3) (t + [() () 1]) (k = 4) (t + [() 1]) (t + [1])))
        (spc acc) (? (!wm || atom? acc || 5 < #<acc) acc (wpad <acc . >acc))
        kws '(auto break case char const continue default do double else enum
@@ -335,11 +341,11 @@
        (go i line acc)
         (n <= i ? [1 (rev acc)]
            (src i @ c
-              (? (c = 10) (go (i + 1) (line + 1) (spc acc))
+              (? (c = 10) (peep pend 'n 0 @ k (0 < k ? (pin pend 'n 0) 0, go (i + 1) (line + 1 + k) (spc acc)))
                  (c = 92 && i + 1 < n && src (i + 1) = 10)         ; \<nl> splice: one logical line
-                  (go (i + 2) line acc)                                    ; (line unadvanced so a directive stays grouped)
+                  (pend1 1, go (i + 2) line acc)                           ; (line unadvanced so a directive stays grouped)
                  (c = 92 && i + 2 < n && src (i + 1) = 13 && src (i + 2) = 10)          ; \<cr><nl>
-                  (go (i + 3) line acc)
+                  (pend1 1, go (i + 3) line acc)
                  (ws? c) (go (i + 1) line (spc acc))
                  ; gas's comment: `#` opening a line that names no directive, or after code except in
                  ; asm 3 (arm's gas, an immediate). asm 2 is the preprocessor's own view (-x
@@ -367,7 +373,10 @@
                                               (at? j "*/") [(j + 2) l2]
                                               (eat (j + 1) (src j = 10 && !(spliced? j) ? (l2 + 1) l2)))
                                 r (eat (i + 2) line)
-                                (charm? <r ? (go <r <>r (spc acc))))
+                                k (charm? <r ? (nls i <r 0) 0)
+                                (? !(charm? <r) ()
+                                   (0 < k && dirline? acc line) (pend1 k, go <r line (spc acc))
+                                   (go <r (line + k) (spc acc))))
                  ; a quote that opens no literal -- unclosed on its line, or a bad escape -- is
                  ; its own pp-token (C11 6.4p3): harmless in a skipped group (lua's ljumptab.h
                  ; keeps a sed line under #if 0), a parse error if it reaches C
