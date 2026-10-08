@@ -28,12 +28,12 @@
    x-save '(r4 r0 r3 r1 r2 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14)   ; rbp rax rbx rcx rdx rsi rdi r8..r15
    x-push (map (r \ ['push r]) x-save)
    x-pop  (map (r \ ['pop r]) (rev x-save))
-   ;; ..and the xmm file, low halves: compiled C keeps doubles in xmm registers across
-   ;; statements now, and a handler's own C may spend any of them. 128 bytes under the gp
-   ;; frame keeps sp 16-byte aligned; the frame pointer for k_exception steps over them.
-   x-fregs (map (i \ name ("f" + show i)) (v-upto 16))
-   x-fsave ([['sub 'sp 'sp 128]] + v-mapi (\ i r ['stsd 'sp (8 * i) r]) x-fregs)
-   x-fload (v-mapi (\ i r ['ldsd r 'sp (8 * i)]) x-fregs + [['add 'sp 'sp 128]])
+   ;; ..and the whole xmm file with mxcsr, by fxsave64 / fxrstor64 (48 0f ae /0, /1 at [rsp]):
+   ;; compiled C keeps doubles in xmm registers, inline asm whole vectors, and a handler's own
+   ;; C may spend any of them. the gp frame leaves sp 16-byte aligned, as fxsave wants; the
+   ;; frame pointer for k_exception steps over its 512 bytes
+   x-fsave [['sub 'sp 'sp 512] ['raw [0x48 0x0f 0xae 0x04 0x24]]]
+   x-fload [['raw [0x48 0x0f 0xae 0x0c 0x24]] ['add 'sp 'sp 512]]
    ;; an EOI to the primary PIC. the port rides dx, the datum al.
    x-eoi '((li r0 0x20) (li r2 0x20) (outb))
    (x-stub v)
@@ -90,7 +90,7 @@
      + [['align 8] ['label 'exc_common]]
      + x-push
      + x-fsave
-     + '((lea r6 sp 128) (call k_exception))
+     + '((lea r6 sp 512) (call k_exception))
      + x-fload
      + x-pop
      + '((add sp sp 16)          ; discard the vector + error code
@@ -189,13 +189,17 @@
    ;; str/ldr rather than stp/ldp: twice the words, no scratch, and every offset stays inside
    ;; the 12-bit scaled immediate, so the far lane never borrows x16.
    a-save '(r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14 r15 r16 r17 r18 fp lr)
-   ;; ..then the d-file, all 32 low halves: compiled C keeps doubles in d17..d31 across
-   ;; statements now, and k_irq's own C may spend any of them. 176 + 256 keeps the alignment
-   a-fregs (map (i \ name ("f" + show i)) (v-upto 32))
-   a-frame 432
+   ;; ..then the whole vector file, q0..q31 at 176, and fpsr/fpcr at 688/696: compiled C keeps
+   ;; doubles in d17..d31, inline asm whole vectors, and k_irq's own C may spend any of them --
+   ;; a d store and load would keep the low halves and zero the rest. str/ldr q by sp, imm12
+   ;; scaled by 16, as words; x0 is spent last on the way in, first on the way out
+   a-frame 704
    (a-slot-off i) (8 * i)
-   a-push (v-mapi (\ i r ['st 'sp (a-slot-off i) r]) a-save + v-mapi (\ i r ['stsd 'sp (176 + 8 * i) r]) a-fregs)
-   a-pop  (v-mapi (\ i r ['ld r 'sp (a-slot-off i)]) a-save + v-mapi (\ i r ['ldsd r 'sp (176 + 8 * i)]) a-fregs)
+   (a-q base i) ['raw (le32 (base | (11 + i) << 10 | 31 << 5 | i))]
+   a-push (v-mapi (\ i r ['st 'sp (a-slot-off i) r]) a-save + map (a-q 0x3D800000) (v-upto 32)
+           + [['raw (le32 0xD53B4420)] ['st 'sp 688 'r0] ['raw (le32 0xD53B4400)] ['st 'sp 696 'r0]])    ; mrs x0, fpsr / fpcr
+   a-pop  ([['ld 'r0 'sp 696] ['raw (le32 0xD51B4400)] ['ld 'r0 'sp 688] ['raw (le32 0xD51B4420)]]       ; msr fpcr / fpsr, x0
+           + map (a-q 0x3DC00000) (v-upto 32) + v-mapi (\ i r ['ld r 'sp (a-slot-off i)]) a-save)
    ;; the align rides after each slot, the last included, so the table is exactly the
    ;; 16 x 0x80 the architecture defines and the handlers start past it. packing the handler
    ;; into the sixteenth slot's tail would save 124 bytes; a whole table is worth them.
@@ -228,10 +232,11 @@
    ;; which the abstract file does not name: x30 holds a cmp's flags until its br, and an
    ;; interrupt lands anywhere. k_trap is ABI, so s0..s11 are its own to keep. 16 slots
    ;; is 128 bytes; then f0..f19, the float file compiled C spends (fa0..fa7, ft0..ft11),
-   ;; since doubles live in it across statements. 288 keeps sp 16-aligned.
+   ;; since doubles live in it across statements; fcsr at 288, its rounding mode and flags, read
+   ;; and written through a0 once a0 is safe. 304 keeps sp 16-aligned.
    r-save '(lr r8 r9 r10 r11 r12 r0 r1 r2 r3 r4 r5 r6 r7)
    r-fregs (map (i \ name ("f" + show i)) (v-upto 20))
-   r-frame 288
+   r-frame 304
    ;; sd/ld of the two unnamed registers against sp, as words: S-form splits the offset
    ;; 11:5 / 4:0, I-form carries it whole.
    (r-sd rs2 off) (le32 (off >> 5 << 25 | rs2 << 20 | 2 << 15 | 3 << 12
@@ -239,8 +244,10 @@
    (r-ld rd off)  (le32 (off << 20 | 2 << 15 | 3 << 12 | rd << 7 | 0x03))
    r-push (v-mapi (\ i r ['st 'sp (8 * i) r]) r-save
            + [['raw (r-sd 30 112)] ['raw (r-sd 31 120)]]
-           + v-mapi (\ i r ['stsd 'sp (128 + 8 * i) r]) r-fregs)
-   r-pop  (v-mapi (\ i r ['ld r 'sp (8 * i)]) r-save
+           + v-mapi (\ i r ['stsd 'sp (128 + 8 * i) r]) r-fregs
+           + [['raw (le32 0x00302573)] ['st 'sp 288 'r0]])               ; frcsr a0
+   r-pop  ([['ld 'r0 'sp 288] ['raw (le32 0x00351073)]]                 ; fscsr a0
+           + v-mapi (\ i r ['ld r 'sp (8 * i)]) r-save
            + [['raw (r-ld 30 112)] ['raw (r-ld 31 120)]]
            + v-mapi (\ i r ['ldsd r 'sp (128 + 8 * i)]) r-fregs)
    r-text
