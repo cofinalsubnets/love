@@ -555,6 +555,34 @@
                     (bad 0)
                    (ga-raw ((kd = 'sw ? 1 <>a) << 30 | 0x28000000 | <a << 26 | (kd = 'n ? 0 ty) << 23 | ld << 22
                             | (q & 127) << 15 | b 3 << 10 | rn << 5 | a 3)))))))
+   ;; the conditionals: a condition by name -> its 4-bit field, al and nv among them
+   (ga-cond o) (o @ ('sym c) (: n (name c) (? (n = 'al) 14 (n = 'nv) 15 (nom? (peep ga-cc n ())) (arm-cc (ga-cc n)) ())) _ ())
+   ;; the conditional selects, and their aliases (register count, base) that invert the condition
+   ga-csel {'csel 0x1A800000 'csinc 0x1A800400 'csinv 0x5A800000 'csneg 0x5A800400}
+   ga-csal {'cset [0 'csinc] 'csetm [0 'csinv] 'cinc [1 'csinc] 'cinv [1 'csinv] 'cneg [1 'csneg]}
+   (ga-cs-ins m os)
+    (: k #os al (peep ga-csal m ()) c (ga-cond (os (k - 1)))
+       rs (map ga-rw (take (k - 1) os))
+       (bad _) (scare 'gas-a64-operand [m os])
+       (? (!(charm? c) || any (r \ <r = 'sp || <>r != <>(rs 0)) rs) (bad 0)
+          (two? al)
+           (? (k != 2 + <al || c >= 14) (bad 0)
+              (: d <(rs 0) n (<al = 1 ? <(rs 1) 'zr)
+                 (ga-cs-word (ga-csel (al 1)) (<>(rs 0)) d n n (c ^ 1))))
+          (k != 4) (bad 0)
+          (ga-cs-word (ga-csel m) (<>(rs 0)) <(rs 0) <(rs 1) <(rs 2) c)))
+   (ga-cs-word b z d n r c) (ga-raw ((z = 8 ? 0x80000000 0) | b | ga-hw r << 16 | c << 12 | ga-hw n << 5 | ga-hw d))
+   ;; conditional compare: rn against a register or #0..31, nzcv #0..15 when the condition fails
+   (ga-ccmp-ins m os)
+    (: n (ga-rw (os 0)) c (ga-cond (os 3)) b (m = 'ccmp ? 0x7A400000 0x3A400000) sf (<>n = 8 ? 0x80000000 0)
+       (bad _) (scare 'gas-a64-operand [m os])
+       ([(os 1) (os 2)] @ (('reg x w) ('imm f))
+           (? (<n = 'sp || x = 'sp || w != <>n || !(charm? c) || !(0 <= f <= 15)) (bad 0)
+              (ga-raw (sf | b | ga-hw x << 16 | c << 12 | ga-hw <n << 5 | f)))
+          (('imm v) ('imm f))
+           (? (<n = 'sp || !(charm? c) || !(0 <= v <= 31) || !(0 <= f <= 15)) (bad 0)
+              (ga-raw (sf | b | 0x800 | v << 16 | c << 12 | ga-hw <n << 5 | f)))
+          _ (bad 0)))
    ;; test bit and branch: the bit's high half rides bit 31, its low five [23:19]; a W register
    ;; tests 0..31, an X 0..63
    (ga-tb-ins m os)
@@ -663,7 +691,9 @@
           (charm? b && -256 <= v <= 255 ? (ga-raw (b | (v & 511) << 12 | ga-hw x << 5 | ga-hw <rw))
              (scare 'gas-a64-operand os))
           (scare 'gas-a64-operand os)))
-   (ga-bcond s) (show s @ t (#t > 2 && t 0 = 98 && t 1 = 46 ? (peep ga-cc (name (snip t 2 #t)) ()) ()))
+   (ga-bcond s) (show s @ t (? (#t > 2 && t 0 = 98 && t 1 = 46) (peep ga-cc (name (snip t 2 #t)) ())
+                                (#t = 3 && t 0 = 98) (peep ga-cc (name (snip t 1 3)) ())   ; gas's bne, as b.ne
+                                ()))
    (ga-inplace op d s) (d = s ? () [['mov d s]])       ; the IR's unary ops work in place
    (ga-ins m os)
     (#os @ k
@@ -724,6 +754,8 @@
           (two? (peep ga-lnot m ())) (k = 3 ? (ga-lnot-ins m os) (scare 'gas-a64-operand [m os]))
           (elem m '(tbz tbnz)) (k = 3 ? (ga-tb-ins m os) (scare 'gas-a64-operand [m os]))
           (m = 'ands) (k = 3 ? (ga-ands os) (scare 'gas-a64-operand [m os]))
+          (elem m '(ccmp ccmn)) (k = 4 ? (ga-ccmp-ins m os) (scare 'gas-a64-operand [m os]))
+          (charm? (peep ga-csel m ()) || two? (peep ga-csal m ())) (ga-cs-ins m os)
           (two? (peep ga-carry m ())) (k = 3 ? (ga-regw (ga-carry m) os) (scare 'gas-a64-operand [m os]))
           (two? (peep ga-un m ())) (k = 2 ? (ga-regw (ga-un m) os) (scare 'gas-a64-operand [m os]))
           (two? (peep ga-ut m ())) (k = 2 ? (ga-ut-ins m os) (scare 'gas-a64-operand [m os]))
