@@ -216,7 +216,8 @@
 
    ; --- the verb -------------------------------------------------------------
    harp-usage "usage: harp [-n N] [-c CPS] [-r RATE] [-g GAIN] [-o F.wav] [-p] [-s SCORE] PATTERN..
-       harp --check SCORE"
+       harp --check SCORE
+       harp -i [FILE]    a repl: the buffer played as sent, what sounds lit"
    ; a bare argument is mini-notation for `hit`; one that opens a paren is love, read
    ; and evaluated with the harp module already spliced; -s is a score file
    ; (src/apps/harp/score.l), its bars the cycles unless -n says. several arguments stack.
@@ -249,6 +250,7 @@
                "-o" (go >>l (pin o 'wav <>l) ps)
                "-g" (go >>l (pin o 'gain (harp-atof <>l)) ps)
                "-p" (go >l (pin o 'print 1) ps)
+               ("-i" || "--repl") ((cite 'harplive 'live-main) >l)
                "-s" (go >>l (pin o 'scores (<>l . peep o 'scores ())) ps)
                "--check" ((cite 'score 'score-file <>l) @ ls
                             (ls ? (cite 'score 'score-check ls 1)

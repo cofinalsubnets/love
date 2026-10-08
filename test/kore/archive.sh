@@ -108,6 +108,9 @@ if command -v xz >/dev/null 2>&1; then
   xz -t "$ho/.arc0.xz" || fail "xz -t of kore's empty stream"
   korerun xz -c "$ho/.arcb" | xz -dc > "$o"; cmp -s "$ho/.arcb" "$o" || fail "xz -d of kore's xz, 600 KiB"
   xz -c "$ho/.arcb" | korerun xz -dc > "$o"; cmp -s "$ho/.arcb" "$o" || fail "kore unxz of xz's, 600 KiB"
+  # ..and past the dictionary (-0's is 256 KiB): a window that slides keeps the position bits
+  cat src/love/*.c src/apps/*.l src/apps/*/*.l | head -c 3000000 > "$ho/.arcw"
+  xz -0 -T1 -c "$ho/.arcw" | korerun xz -dc > "$o"; cmp -s "$ho/.arcw" "$o" || fail "kore unxz of xz -0 past its dictionary"
   cat "$ho/.arcg.xz" "$ho/.arc1.xz" > "$ho/.arcs.xz"
   cat "$ho/.arc1" "$ho/.arc1" > "$g"
   korerun xz -dc "$ho/.arcs.xz" > "$o"; cmp -s "$g" "$o" || fail "kore unxz of two streams"

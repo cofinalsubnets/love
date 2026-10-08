@@ -471,8 +471,8 @@
                                fns gns weaks)
                     (objsecs tgt (objsec-merge (objsecs4 tforms dforms nforms iforms bforms rforms + xs) <at)
                              fns gns weaks lnames)))
-              (udie 1 ("cc: the code generator answered an unexpected shape for " + src)))))
-       (udie 1 ("cc: the parser answered an unexpected shape for " + src)))
+              (udie 1 "cc: the code generator answered an unexpected shape for \(src)"))))
+       (udie 1 "cc: the parser answered an unexpected shape for \(src)"))
    ; a wasm object is the gen tuple as TEXT (above), so it goes to the port whole:
    ; write-bytes walks a byte list, and a string handed to it lands as an empty file.
    ; -E: the source preprocessed, to -o or stdout; a refusal exits as a compile's does, which is
@@ -481,21 +481,21 @@
     (: ds9 ((xasm ? ("__ASSEMBLER__=1" . cc-defs t) (cc-defs t)) + filedef src mp)
        r (src = "-" ? [1 (slurp in)]
             (uread src @ q (? (two? q) q !vb () (vb src @ h (string? h && [1 h])))))
-       _ (two? r || udie 1 ("cc: cannot open " + src))
+       _ (two? r || udie 1 "cc: cannot open \(src)")
        lx (xasm ? (clexm (deftext ds9 + <>r) (1 - #ds9) 2 1) (clexw (deftext ds9 + <>r) (1 - #ds9)))
-       _ (okv? lx || ccdie lx src ("cc: lex error in " + src))
+       _ (okv? lx || ccdie lx src "cc: lex error in \(src)")
        _ (pin cppdeps 'l ())
-       pp (cpp-text <>lx (name \ sys? \ incload vb is (cdir src) name sys?) src)
-       _ (okv? pp || ccdie pp src ("cc: preprocessor error in " + src))
+       pp (cpp-text <>lx (incload vb is (cdir src)) src)
+       _ (okv? pp || ccdie pp src "cc: preprocessor error in \(src)")
        _ (t 'md && cc-deps src dst t)                ; -E -MD writes the dependencies as a compile does
-       (dst ? (open dst "w" @ q (!(hot? q) ? (udie 1 ("cc: cannot write " + dst)), say q <>pp, close q))
+       (dst ? (open dst "w" @ q (!(hot? q) ? (udie 1 "cc: cannot write \(dst)"), say q <>pp, close q))
               (puts <>pp, flush out)))
    (cc-obj src dst (t @ {'tgt tgt}))
     (pin cppdeps 'l (),
      cc-objbytes src t @ b
        (tgt != 'wasm ? (write-bytes dst b)
         (open dst "w" @ q
-           (!(hot? q) ? (udie 1 ("cc: cannot write " + dst)),
+           (!(hot? q) ? (udie 1 "cc: cannot write \(dst)"),
             say q b,
             close q))),
      t 'md && cc-deps src dst t)
@@ -506,9 +506,9 @@
     (: ours (map (r \ r + "include/") (mroots ()))
        (sys? p) (any (d \ starts? p d) ours || (t 'vb && starts? p "include/"))
        hs (filter (p \ !(t 'mmd && sys? p)) (uniq (rev (peep cppdeps 'l ()))))
-       df (t 'mf || (dst @ (b + ".o") (b + ".d") (dst + ".d")))
+       df (t 'mf || (dst @ (b + ".o") "\(b).d" "\(dst).d"))
        txt ((t 'mt || dst) + ": " + join " \\\n  " (src . hs) + "\n"
-            + (t 'mp ? (join "" (map (h \ "\n" + h + ":\n") hs)) ""))
+            + (t 'mp ? (join "" (map (h \ "\n\(h):\n") hs)) ""))
        (open df "w" @ q
           (!(hot? q) ? (udie 1 ("cc: cannot write " + df)),
            say q txt,
@@ -517,31 +517,35 @@
    ; compiled here, a .o read off disk), crt0 rides first -- its text is the entry -- and
    ; ldlink binds the static exe, no system linker. the entry hands the OS stack pointer
    ; (argc at [rsp]) to __love_start and exits with its answer if it ever returns. __love_start
-   ; is weak here, the call-main tail every small link gets, so a libc object
+   ; is weak here, the call-main tail every small link gets, which returns main's answer to the
+   ; entry, the one place that knows the kernel's exit number. a libc object
    ; (src/apps/moon/lib/moonlibc/, rung 4) can override it strong and unpack envp/auxv too: the
    ; weak machinery is the whole switch, and there is no conditional anywhere.
    ; the x64 entry serves both kernels (rung UV1): linux zeroes every register and lays argc
    ; at [rsp]; freebsd hands the vector base in %rdi with rsp only aligned near it, sometimes
    ; a pad word below argc -- so a zero rdi says linux, and the freebsd side pushes once to
    ; restore linux's entry parity. each side exits by its own number, and both hand a second
-   ; word of 0.
+   ; word of 0. netbsd rides the linux side, where 60 is umask: it returns, and 1 exits.
    crt0 '((cmp r6 0)
-           (br ne c0-fb)
-           (mov r6 sp)
-           (li r5 0)
-           (call __love_start)
-           (mov r6 r0) (li r0 60) (sys)
-           (label c0-fb)
-           (push r6)
-           (li r5 0)
-           (call __love_start)
-           (mov r6 r0) (li r0 1) (sys)
-           (label __love_start)
-           (push r6)
-           (lea r5 r6 8)
-           (ld r6 r6 0)
-           (call main)
-           (mov r6 r0) (li r0 60) (sys))
+          (br ne c0-fb)
+          (mov r6 sp)
+          (li r5 0)
+          (call __love_start)
+          (mov r3 r0)
+          (mov r6 r3) (li r0 60) (sys)
+          (mov r6 r3) (li r0 1) (sys)
+          (label c0-fb)
+          (push r6)
+          (li r5 0)
+          (call __love_start)
+          (mov r6 r0) (li r0 1) (sys)
+          (label __love_start)
+          (push r6)
+          (lea r5 r6 8)
+          (ld r6 r6 0)
+          (call main)
+          (pop r6)
+          (ret))
    ; the a64 twin, serving both kernels the way x64's does (rung UV1): linux zeroes every
    ; register and lays argc at [sp], freebsd hands the vector base in x0 with sp only near
    ; it, a pad word below argc as often as not -- so a zero x0 says linux and sp is the
@@ -551,35 +555,38 @@
    ; x64 can -- netbsd carries the number in the svc immediate and freebsd sigills any
    ; immediate but zero -- so the freebsd side answers 2 and leaves linux and netbsd to be
    ; asked.
+   ; the linux side's exit is netbsd's too: linux runs x8 and netbsd the svc immediate.
    ; mov from sp must be lea -- orr reads xzr at 31.
    crt0-a64 '((cmp r0 0)
-               (br ne c0a-fb)
-               (lea r0 sp 0)
-               (li r1 0)
-               (call __love_start)
-               (li r8 93) (sys)
-               (label c0a-fb)
-               (li r1 2)
-               (call __love_start)
-               (li r8 1) (sys)
-               (label __love_start)
-               (push lr)
-               (lea r1 r0 8)
-               (ld r0 r0 0)
-               (call main)
-               (li r8 93) (sys))
-   ; the riscv twin: a0 = the OS stack pointer, exit_group = 94 in a7 (the
-   ; answer already rides a0); the default __love_start mirrors a64's.
-   crt0-rv '((lea r0 sp 0)
+              (br ne c0a-fb)
+              (lea r0 sp 0)
               (li r1 0)
               (call __love_start)
-              (li r7 94) (sys)
+              (li r8 93) (svcn 1)
+              (label c0a-fb)
+              (li r1 2)
+              (call __love_start)
+              (li r8 1) (sys)
               (label __love_start)
               (push lr)
               (lea r1 r0 8)
               (ld r0 r0 0)
               (call main)
-              (li r7 94) (sys))
+              (pop lr)
+              (ret))
+   ; the riscv twin: a0 = the OS stack pointer, exit_group = 94 in a7 (the
+   ; answer already rides a0); the default __love_start mirrors a64's.
+   crt0-rv '((lea r0 sp 0)
+             (li r1 0)
+             (call __love_start)
+             (li r7 94) (sys)
+             (label __love_start)
+             (push lr)
+             (lea r1 r0 8)
+             (ld r0 r0 0)
+             (call main)
+             (pop lr)
+             (ret))
    ; the driver's libc: a link still owing strong symbols after the given objects is the cue
    ; every cc answers by supplying the runtime -- ours is moonlibc + the lm math + the sys
    ; leaf, compiled from the sources beside us and pulled member by need, archive-fashion: a
@@ -601,8 +608,8 @@
     (!(two? paths) ? ()
        (ldarch srcs
                (map (p \ (uread p @ r
-                              (two? r || udie 1 ("cc: cannot open " + p),
-                               ld-ar? <>r || udie 1 ("cc: not an archive: " + p),
+                              (two? r || udie 1 "cc: cannot open \(p)",
+                               ld-ar? <>r || udie 1 "cc: not an archive: \(p)",
                                [p <>r])))
                     paths)
                tgt))
@@ -664,19 +671,19 @@
            "" (sort (readdir d)))
    ; the two dirs that are the toolchain, as bytes and as shape. every digest below wants
    ; one or the other of these and nothing else of the tree.
-   (mcsrctext home) (mctree (home + "include/") + mctree (home + "lib/"))
-   (mcsrcshape home) (mcshape (home + "include/") + mcshape (home + "lib/"))
+   (mcsrctext home) (mctree "\(home)include/" + mctree "\(home)lib/")
+   (mcsrcshape home) (mcshape "\(home)include/" + mcshape "\(home)lib/")
    ; a digest memoized under a shape -- mccid's law one rung up from a file: the bytes are
    ; the identity, a stat says when to read them, `mk` is the real read. tag parts memos by
    ; shape.
    (mcmemo tag shape mk)
     (: d (mcdir ())
-       k (string? d && sha256 (tag + "\n" + shape))
-       hit (string? k && mcget d (k + ".cid") "cid1 ")
-       (two? hit && utime (d + k + ".cid") (clock ()),        ; the sweep orders by use
+       k (string? d && sha256 "\(tag)\n\(shape)")
+       hit (string? k && mcget d "\(k).cid" "cid1 ")
+       (two? hit && utime "\(d)\(k).cid" (clock ()),        ; the sweep orders by use
         two? hit ? (snip <>hit 5 69)
           (mk () @ h
-             (string? k && mcput d (k + ".cid") ("cid1 " + h + "\n"),
+             (string? k && mcput d "\(k).cid" "cid1 \(h)\n",
               h))))
    (mcsrcid home)
     (mcmemo "moon-src 1" (mcsrcshape home) (_ \ sha256 (mcsrctext home)))
@@ -728,14 +735,14 @@
    (mccid p)
     (: st (stat p)
        d (mcdir ())
-       k (string? d && two? st && sha256 ("moon-cid 1\n" + p + "\n" + show st))
-       hit (string? k && mcget d (k + ".cid") "cid1 ")
-       (two? hit && utime (d + k + ".cid") (clock ()),        ; the sweep orders by use
+       k (string? d && two? st && sha256 "moon-cid 1\n\(p)\n\(st)")
+       hit (string? k && mcget d "\(k).cid" "cid1 ")
+       (two? hit && utime "\(d)\(k).cid" (clock ()),        ; the sweep orders by use
         two? hit ? (snip <>hit 5 69)
           (uread p @ r
              (!(two? r) ? (show st)
                 (sha256 <>r @ h
-                   (string? k && mcput d (k + ".cid") ("cid1 " + h + "\n"),
+                   (string? k && mcput d "\(k).cid" "cid1 \(h)\n",
                     h))))))
    ; the bound, and the cache keeps it itself: swept on every link, hit or miss, so a folder
    ; grown fat under an older policy trims on the next one. nothing here knows which
@@ -805,12 +812,12 @@
           ; target name here even where the carried set has no such pair.
           (: id (string? home && mcid home)
              cd (string? id && mcdir ())        ; no identity, no cache, no directory made
-             k (string? cd && string? id && (sha256 $ id + "\n" + show tgt + "\n" + show os))
-             hit (string? k && mcget cd (k + ".a") "!<arch>\n")
-             _ (two? hit && utime (cd + k + ".a") (clock ()))        ; the sweep orders by use
+             k (string? cd && string? id && sha256 "\(id)\n\(tgt)\n\(os)")
+             hit (string? k && mcget cd "\(k).a" "!<arch>\n")
+             _ (two? hit && utime "\(cd)\(k).a" (clock ()))        ; the sweep orders by use
              bs (two? hit ? <>hit
                    (arbytes (rtmems home tgt os vb) @ b
-                      (string? k && mcput cd (k + ".a") b,
+                      (string? k && mcput cd "\(k).a" b,
                        b)))
              (string? cd && mcsweep cd,
               bs))))
@@ -823,8 +830,8 @@
    ; time.c and sys/time.c share a basename.
    (rtplan home tgt os vb)
     (: disk (string? home)                ; () home = the blob lane: paths are vb keys
-       ndir (disk ? (home + "lib/moonlibc/") "lib/moonlibc/")
-       inc  (disk ? (home + "include/") "include/")
+       ndir (disk ? "\(home)lib/moonlibc/" "lib/moonlibc/")
+       inc  (disk ? "\(home)include/" "include/")
        (dotobj n) (dotc? n ? (snip n 0 (#n - 2) + ".o") n)
        (swap47 s) (: n #s c (cask n)
                      _ (pour c 0 s 0 n)
@@ -834,7 +841,7 @@
            (foldl (a \ e \ d + e @ p
                              (? (dotc? e) (a + [[(dotobj e) p]])
                                 (sdir? (stat p))
-                                 (a + foldl (a2 \ f \ a2 + [[(dotobj $ e + "_" + f) (p + "/" + f)]])
+                                 (a + foldl (a2 \ f \ a2 + [[(dotobj "\(e)_\(f)") "\(p)/\(f)"]])
                                             () (sort (filter dotc? (readdir p))))
                                 a))
                   () (sort (readdir d)))
@@ -847,7 +854,7 @@
         + (elem tgt '(x64 a64 rv64) ? [["mksys.o" "" ()]] ())))
    ; the members compile under the link's os (impl.h's table opens on it), and the sys
    ; leaf is the os's own -- freebsd rides the x64 machine.
-   (rtflags tgt os vb is) (pin (pin (pin (fseed tgt 'moon) 'os os) 'is is) 'vb vb)
+   (rtflags tgt os vb is) (pins (fseed tgt 'moon) 'os os 'is is 'vb vb)
    ; one member of the roster, compiled -> [name bytes]. the archive is the cache; a member
    ; alone is make's to keep (src/tools/mkrt.l's groups).
    (rtmem1 tgt os vb e)
@@ -895,12 +902,12 @@
    (wasm-rt home os vb)
     (: id (string? home && mcid home)
        cd (string? id && mcdir ())
-       k (string? cd && string? id && (sha256 $ id + "\nwasm\n" + show os))
-       hit (string? k && mcget cd (k + ".wrt") "wrt1\n")
-       _ (two? hit && utime (cd + k + ".wrt") (clock ()))
+       k (string? cd && string? id && sha256 "\(id)\nwasm\n\(os)")
+       hit (string? k && mcget cd "\(k).wrt" "wrt1\n")
+       _ (two? hit && utime "\(cd)\(k).wrt" (clock ()))
        txt (two? hit ? (snip <>hit 5 #<>hit)
               (show (rtmems home 'wasm os vb) @ s
-                 (string? k && mcput cd (k + ".wrt") ("wrt1\n" + s),
+                 (string? k && mcput cd "\(k).wrt" "wrt1\n\(s)",
                   s)))
        <(sound txt))
    ; the inputs stay TEXT until the link reads them, and what is held of each here is its
@@ -909,8 +916,8 @@
     (: os9 (!os ? 'linux os)                          ; the loader speaks linux's numbers
        t9 (pin t 'os os9)
        texts (map (f \ (? (dotsrc? f) (cc-objbytes f t9)
-                          (doto? f) (uread f @ r (two? r ? <>r (udie 1 ("cc: cannot open " + f))))
-                          (udie 2 ("cc: not a .c/.o input for wasm: " + f))))
+                          (doto? f) (uread f @ r (two? r ? <>r (udie 1 "cc: cannot open \(f)")))
+                          (udie 2 "cc: not a .c/.o input for wasm: \(f)")))
                   ins)
        tsyms (map (x \ wasm-tu-syms (wasm-tu x)) texts)          ; (defs . refs) each
        ; the runtime by need: a member whose defs meet an owed name joins, and its own
@@ -938,23 +945,23 @@
        all (base + map (m \ m 1) picked)
        m (wasm-link all {'imports '("__love_sys") 'exports 'all})
        q (open dst "w")
-       (!(hot? q) ? (udie 1 ("cc: cannot write " + dst)),
+       (!(hot? q) ? (udie 1 "cc: cannot write \(dst)"),
         say q (wasm-emit m),
         close q,
         0))
-   (cc-link ins dst t) (t 'tgt = 'wasm ? (cc-wasm ins dst t) (cc-link-elf ins dst t))
+   (cc-link ins dst t) (t 'tgt @ 'wasm (cc-wasm ins dst t) (cc-link-elf ins dst t))
    (cc-link-elf ins dst (t @ {'is is 'ds ds 'tgt tgt 'os os 'pie pie 'org org 'dorg dorg
                           'nostd nostd 'vb vb 'ni ni 'rdme rdme 'relo relo}))
-    ; -os freebsd links on x64 only (the one lane with a table + mksys twin);
-    ; any other tgt under it is refused rather than half-built.
-    (: _ (os = 'freebsd && tgt != 'x64
-          && udie 1 "cc: -os freebsd links x64 only for now")
+    ; a BSD links where mksys lays the translation tail (impl.h's LvOsTranslate):
+    ; x64 and a64. elsewhere os.c has no tables for it, so it is refused here
+    (: _ (elem os '(freebsd netbsd) && !(elem tgt '(x64 a64))
+          && udie 1 "cc: -os \(os) links on x64 and a64 only")
        ars (filter dota? ins)
        srcs (map (f \ (? (dotsrc? f) [f (string (cc-objbytes f t))]
                          (doto? f) (uread f @ r
                                       (two? r ? [f <>r]
-                                                (udie 1 ("cc: cannot open " + f))))
-                         (udie 2 ("cc: not a .c/.s/.o/.a input: " + f))))
+                                                (udie 1 "cc: cannot open \(f)")))
+                         (udie 2 "cc: not a .c/.s/.o/.a input: \(f)")))
                  (filter (f \ !(dota? f)) ins))
        ; an arm32 target has no hosted lane -- nothing on this side of the toolchain runs a
        ; thumb exe -- so every thumb link is a board's: the image lays at the address the
@@ -989,7 +996,7 @@
        ; the ei_osabi = 9 brand (rung UV3) is ldlink's, laid where the header is made:
        ; one linker, one place, so kore's `ld` and this driver cannot disagree.
        nw (ld-write dst ps)
-       (nom? nw && udie 1 ("cc: cannot write " + dst + " -- " + show nw),
+       (nom? nw && udie 1 "cc: cannot write \(dst) -- \(nw)",
         chmod dst 493))
    usage "usage: mooncc [-c] [-pie] [--emit-relocs] [-x c] [-t x64|a64|rv64] [-os linux|none|freebsd] [-Ttext addr] [-Tdata addr] [-I dir] [-D name[=val]] [-U name] [-freadme=F] [-o out] in.c|in.o|lib.a|- .."
    ; a flag's numeric argument: 0x.. hex or decimal (-Ttext 0x80000000)
@@ -1049,13 +1056,13 @@
            (<l @ a
               (a @ ("-std=" + w)
                  (: d (stdof w)
-                    (d || udie 2 ("cc: unknown -std=" + w + " -- mooncc reads: " + stdnames ()),
+                    (d || udie 2 ("cc: unknown -std=\(w) -- mooncc reads: " + stdnames ()),
                      go >l d acc))
                  (go >l dia (a . acc)))))
        (go as 'moon ()))          ; unsaid means moon: our C, extensions and all
    ; `none` is gcc's word for "read the suffix again", which for us is the default.
    (xlang? w) (w = "c" || w = "none")
-   (xdie w) ("cc: -x " + w + " -- mooncc reads: c none assembler-with-cpp")
+   (xdie w) "cc: -x \(w) -- mooncc reads: c none assembler-with-cpp"
    (tol? a) (a = "-pipe" || a = "-static" ||
              starts? a "-g" || starts? a "-O" ||
              starts? a "-f" || glu? a 108 || glu? a 76 ||
@@ -1089,117 +1096,112 @@
    (fseed tgt dia) {'c () 'is () 'ds () 'o () 'ins () 'tgt tgt 'os () 'pie () 'org () 'dorg ()
                     'nostd () 'vb () 'ni () 'rdme () 'relo () 'dia dia 'md () 'mmd () 'mf () 'mt () 'mp () 'E () 'xasm () 'undef ()
                     'swch () 'mpm () 'fx18 () 'sal () 'bp ()}
+   ; one arm per flag, matched on the line itself: a flag that takes a word binds it in its
+   ; pattern, and one with none after it falls through to the dash refusal below
    (flags as t)
-    (!(two? as) ?
-       (pin t 'is (rev (t 'is)),
-        pin t 'ds (rev (t 'ds)),
-        pin t 'ins (rev (t 'ins)),
-        t)
-       (: a <as r >as
-          (? (a = "-c") (flags r (pin t 'c 1))
-             (a = "-E") (flags r (pin t 'E 1))
-             ; the same string love answers, because they are one artifact: mooncc is a
-             ; verb on the love binary, not a separate program, and two reported versions
-             ; would report a thing that cannot happen.
-             (a = "--version" || a = "-v")
-              (puts (uvers "mooncc"), putc 10, flush out, uleave 0)
-             (a = "--help" || a = "-h")
-              (puts usage, putc 10, flush out, uleave 0)
-             (a = "-pie") (flags r (pin t 'pie 1))
-             ; --emit-relocs: keep the ABS32 sites in .rel.* sections beside a fully
-             ; linked image, so a loader placing it at a base of its own can slide them.
-             ; the arm32 lane only -- ldlink's -pie answers this on the 64-bit seats.
-             (a = "--emit-relocs") (flags r (pin t 'relo 1))
-             (a = "-I") (two? r ? (flags >r (fpush t 'is <r)) (udie 2 usage))
-             (a = "-D") (two? r ? (flags >r (fpush t 'ds <r)) (udie 2 usage))
-             (a = "-U") (two? r ? (flags >r (fpush t 'ds ['u <r])) (udie 2 usage))
-             (a = "-o") (two? r ? (flags >r (pin t 'o <r)) (udie 2 usage))
-             (a = "-t") (two? r ? (flags >r (pin t 'tgt (totgt <r))) (udie 2 usage))
-             (a = "-os") (two? r ? (flags >r (pin t 'os (toos <r))) (udie 2 usage))
-             (a = "-Ttext") (two? r ? (flags >r (pin t 'org (tonum <r))) (udie 2 usage))
-             ; -Tdata is the split: .data runs there and is stored after the code,
-             ; which is what every xip part needs and what -Ttext alone cannot say.
-             (a = "-Tdata") (two? r ? (flags >r (pin t 'dorg (tonum <r))) (udie 2 usage))
-             ; -fno-inline bars the splice, fn-wide and TU-wide -- the same door
-             ; __attribute__((noinline)) opens one name at a time. an instrument before it is
-             ; an optimization flag; gcc's -fno-inline-functions is the same word.
-             (a = "-fno-inline" || a = "-fno-inline-functions")
-              (flags r (pin t 'ni 1))
-             ; -fshort-wchar: wchar_t is unsigned short, and L"" lays 16-bit units (the efi
-             ; stub's strings). -fno-short-wchar is the default it names
-             (a = "-fshort-wchar") (flags r (pin t 'swch 1))
-             (a = "-fno-short-wchar") (flags r (pin t 'swch ()))
-             ; -ffixed-x18: the platform register stays out of allocation, which on a64 it always
-             ; is (holo/a64.l: x16..x18 are sayable, never allocated). any other -ffixed- names a
-             ; register we would have to take out of the pool, and refuses until we can
-             (a = "-ffixed-x18") (flags r (pin t 'fx18 1))
-             (starts? a "-ffixed-") (udie 2 ("cc: " + a + " -- mooncc reserves x18 on a64 only"))
-             ; -fmacro-prefix-map=OLD=NEW, and -ffile-prefix-map, which is it and the debug
-             ; map we have no debug info for: the newest first, so the last one given wins
-             (starts? a "-fmacro-prefix-map=" || starts? a "-ffile-prefix-map=")
-              (a @ (_ + "=" + o + "=" + n) (flags r (fpush t 'mpm [o n]))
-                   (udie 2 ("cc: " + a + " -- wants OLD=NEW")))
-             ; -freadme=file -- plain text into the output's `.love.README` section, mapped by
-             ; nothing, for whoever opens the binary. a link flag: with -c there is no output
-             ; ELF to carry it and it is ignored. ahead of tol?, which swallows every other
-             ; -f.
-             (starts? a "-freadme=")
-              (: f (a @ ("-freadme=" + f) f) rt (uread f)
-                 (two? rt ? (flags r (pin t 'rdme <>rt))
-                            (udie 1 ("cc: cannot open " + f))))
-             ; the dependency rule gcc writes beside an object: -MD, -MMD (our own headers left
-             ; out, as gcc leaves the system's), -MF its file, -MT / -MQ its target, -MP an
-             ; empty rule per header -- and kbuild's -Wp,-MD,FILE / -Wp,-MMD,FILE spelling
-             (a = "-MD") (flags r (pin t 'md 1))
-             (a = "-MMD") (flags r (pin (pin t 'md 1) 'mmd 1))
-             (a = "-MP") (flags r (pin t 'mp 1))
-             (a = "-MF") (two? r ? (flags >r (pin t 'mf <r)) (udie 2 usage))
-             (a = "-MT" || a = "-MQ") (two? r ? (flags >r (pin t 'mt <r)) (udie 2 usage))
-             (starts? a "-Wp,-MD,") (flags r (pin (pin t 'md 1) 'mf (snip a 8 #a)))
-             (starts? a "-Wp,-MMD,") (flags r (pin (pin (pin t 'md 1) 'mmd 1) 'mf (snip a 9 #a)))
-             (glu? a 73) (flags r (fpush t 'is (snip a 2 #a)))
-             (glu? a 68) (flags r (fpush t 'ds (snip a 2 #a)))
-             (glu? a 116) (flags r (pin t 'tgt (totgt (snip a 2 #a))))
-             ; -nostdinc's whole job is done by design now: our headers are the only standard
-             ; set, so a header we do not carry refuses either way. accepted for CC= recipes.
-             (a = "-nostdinc") (flags r t)
-             ; -ffreestanding is the one member of the -nostd* family that says
-             ; something about the language and not just the link: it makes the
-             ; implementation freestanding, and __stdc_hosted__ is how the standard lets a
-             ; source ask -- love.c asks exactly that, to choose the w^x mmap arena over the
-             ; freestanding heap copy. it rides as a define (cpp applies -D after its
-             ; predefines, so this overrides). not the rest of the family: -nostdlib alone is
-             ; a hosted program supplying its own runtime (test_raw). freestanding also has
-             ; no OS, so it pins -os none, and a later explicit -os wins.
-             (a = "-ffreestanding")
-              (flags r (pin (pin (fpush t 'ds "__STDC_HOSTED__=0") 'nostd 1) 'os 'none))
-             (nostd? a) (flags r (pin t 'nostd 1))
-             ; -x names the language of what follows, which is the whole reason an input
-             ; may arrive with no suffix to read. loud like -std=: `-x c++` and `-x
-             ; assembler` name compilers we are not, and taking either for C would read one
-             ; language as another.
-             ; assembler-with-cpp is the preprocessor's half of a .S: -E reads it that way (a
-             ; device tree's dts is the user kbuild has)
-             (a = "-x") (two? r ? (<r = "assembler-with-cpp" ? (flags >r (pin t 'xasm 1))
-                                   (xlang? <r ? (flags >r (pin t 'xasm ())) (udie 2 (xdie <r)))) (udie 2 usage))
-             (glu? a 120) (snip a 2 #a @ w
-                             (? (w = "assembler-with-cpp") (flags r (pin t 'xasm 1))
-                                (xlang? w) (flags r (pin t 'xasm ()))
-                                (udie 2 (xdie w))))
-             ; -undef: none of the system's or the compiler's predefines, only the standard's
-             (a = "-undef") (flags r (pin t 'undef 1))
-             ; a64's two codegen asks (gen.l, bprot and the strict faces): no access its alignment
-             ; cannot carry, and bti landing pads and pac-ret's signed return address
-             (a = "-mstrict-align") (flags r (pin t 'sal 1))
-             (a = "-mno-strict-align") (flags r (pin t 'sal ()))
-             (starts? a "-mbranch-protection=") (flags r (pin t 'bp (bpof (snip a 20 #a))))
-             (tol? a) (flags r t)
-             ; ahead of the dash refusal, and the only arg that is: a bare `-` is an
-             ; input, the source on stdin, which every configure probe writes before it
-             ; trusts a flag.
-             (a = "-") (flags r (fpush t 'ins a))
-             (0 < #a && a 0 = 45) (udie 2 usage)
-             (flags r (fpush t 'ins a)))))
+    (as @ ()
+          (pins t 'is (rev (t 'is))
+                  'ds (rev (t 'ds))
+                  'ins (rev (t 'ins)))
+          ("-c" . r) (flags r (pin t 'c 1))
+          ("-E" . r) (flags r (pin t 'E 1))
+          ; the same string love answers, because they are one artifact: mooncc is a
+          ; verb on the love binary, not a separate program, and two reported versions
+          ; would report a thing that cannot happen.
+          (("--version" || "-v") . _)
+           (puts (uvers "mooncc"), putc 10, flush out, uleave 0)
+          (("--help" || "-h") . _)
+           (puts usage, putc 10, flush out, uleave 0)
+          ("-pie" . r) (flags r (pin t 'pie 1))
+          ; --emit-relocs: keep the ABS32 sites in .rel.* sections beside a fully
+          ; linked image, so a loader placing it at a base of its own can slide them.
+          ; the arm32 lane only -- ldlink's -pie answers this on the 64-bit seats.
+          ("--emit-relocs" . r) (flags r (pin t 'relo 1))
+          ("-I" . d . r) (flags r (fpush t 'is d))
+          ("-D" . d . r) (flags r (fpush t 'ds d))
+          ("-U" . d . r) (flags r (fpush t 'ds ['u d]))
+          ("-o" . o . r) (flags r (pin t 'o o))
+          ("-t" . w . r) (flags r (pin t 'tgt (totgt w)))
+          ("-os" . w . r) (flags r (pin t 'os (toos w)))
+          ("-Ttext" . w . r) (flags r (pin t 'org (tonum w)))
+          ; -Tdata is the split: .data runs there and is stored after the code,
+          ; which is what every xip part needs and what -Ttext alone cannot say.
+          ("-Tdata" . w . r) (flags r (pin t 'dorg (tonum w)))
+          ; -fno-inline bars the splice, fn-wide and TU-wide -- the same door
+          ; __attribute__((noinline)) opens one name at a time. an instrument before it is
+          ; an optimization flag; gcc's -fno-inline-functions is the same word.
+          (("-fno-inline" || "-fno-inline-functions") . r) (flags r (pin t 'ni 1))
+          ; -fshort-wchar: wchar_t is unsigned short, and L"" lays 16-bit units (the efi
+          ; stub's strings). -fno-short-wchar is the default it names
+          ("-fshort-wchar" . r) (flags r (pin t 'swch 1))
+          ("-fno-short-wchar" . r) (flags r (pin t 'swch ()))
+          ; -ffixed-x18: the platform register stays out of allocation, which on a64 it always
+          ; is (holo/a64.l: x16..x18 are sayable, never allocated). any other -ffixed- names a
+          ; register we would have to take out of the pool, and refuses until we can
+          ("-ffixed-x18" . r) (flags r (pin t 'fx18 1))
+          (("-ffixed-" + w) . _) (udie 2 "cc: -ffixed-\(w) -- mooncc reserves x18 on a64 only")
+          ; -fmacro-prefix-map=OLD=NEW, and -ffile-prefix-map, which is it and the debug
+          ; map we have no debug info for: the newest first, so the last one given wins
+          ((("-fmacro-prefix-map=" + m) || ("-ffile-prefix-map=" + m)) . r)
+           (m @ (o + "=" + n) (flags r (fpush t 'mpm [o n]))
+                (udie 2 "cc: \(<as) -- wants OLD=NEW"))
+          ; -freadme=file -- plain text into the output's `.love.README` section, mapped by
+          ; nothing, for whoever opens the binary. a link flag: with -c there is no output
+          ; ELF to carry it and it is ignored. ahead of tol?, which swallows every other
+          ; -f.
+          (("-freadme=" + f) . r)
+           (uread f @ rt (two? rt ? (flags r (pin t 'rdme <>rt))
+                                    (udie 1 "cc: cannot open \(f)")))
+          ; the dependency rule gcc writes beside an object: -MD, -MMD (our own headers left
+          ; out, as gcc leaves the system's), -MF its file, -MT / -MQ its target, -MP an
+          ; empty rule per header -- and kbuild's -Wp,-MD,FILE / -Wp,-MMD,FILE spelling
+          ("-MD" . r) (flags r (pin t 'md 1))
+          ("-MMD" . r) (flags r (pins t 'md 1 'mmd 1))
+          ("-MP" . r) (flags r (pin t 'mp 1))
+          ("-MF" . f . r) (flags r (pin t 'mf f))
+          (("-MT" || "-MQ") . w . r) (flags r (pin t 'mt w))
+          (("-Wp,-MD," + f) . r) (flags r (pins t 'md 1 'mf f))
+          (("-Wp,-MMD," + f) . r) (flags r (pins t 'md 1 'mmd 1 'mf f))
+          ((("-I" + d) . r) && #d) (flags r (fpush t 'is d))
+          ((("-D" + d) . r) && #d) (flags r (fpush t 'ds d))
+          ((("-t" + w) . r) && #w) (flags r (pin t 'tgt (totgt w)))
+          ; -nostdinc's whole job is done by design now: our headers are the only standard
+          ; set, so a header we do not carry refuses either way. accepted for CC= recipes.
+          ("-nostdinc" . r) (flags r t)
+          ; -ffreestanding is the one member of the -nostd* family that says
+          ; something about the language and not just the link: it makes the
+          ; implementation freestanding, and __stdc_hosted__ is how the standard lets a
+          ; source ask -- love.c asks exactly that, to choose the w^x mmap arena over the
+          ; freestanding heap copy. it rides as a define (cpp applies -D after its
+          ; predefines, so this overrides). not the rest of the family: -nostdlib alone is
+          ; a hosted program supplying its own runtime (test_raw). freestanding also has
+          ; no OS, so it pins -os none, and a later explicit -os wins.
+          ("-ffreestanding" . r)
+           (flags r (pins (fpush t 'ds "__STDC_HOSTED__=0") 'nostd 1 'os 'none))
+          ((a . r) && nostd? a) (flags r (pin t 'nostd 1))
+          ; -x names the language of what follows, which is the whole reason an input
+          ; may arrive with no suffix to read. loud like -std=: `-x c++` and `-x
+          ; assembler` name compilers we are not, and taking either for C would read one
+          ; language as another.
+          ; assembler-with-cpp is the preprocessor's half of a .S: -E reads it that way (a
+          ; device tree's dts is the user kbuild has)
+          (("-x" . w . r) || ((("-x" + w) . r) && #w))
+           (w @ "assembler-with-cpp" (flags r (pin t 'xasm 1))
+                (xlang? w ? (flags r (pin t 'xasm ())) (udie 2 (xdie w))))
+          ; -undef: none of the system's or the compiler's predefines, only the standard's
+          ("-undef" . r) (flags r (pin t 'undef 1))
+          ; a64's two codegen asks (gen.l, bprot and the strict faces): no access its alignment
+          ; cannot carry, and bti landing pads and pac-ret's signed return address
+          ("-mstrict-align" . r) (flags r (pin t 'sal 1))
+          ("-mno-strict-align" . r) (flags r (pin t 'sal ()))
+          (("-mbranch-protection=" + w) . r) (flags r (pin t 'bp (bpof w)))
+          ((a . r) && tol? a) (flags r t)
+          ; ahead of the dash refusal, and the only arg that is: a bare `-` is an
+          ; input, the source on stdin, which every configure probe writes before it
+          ; trusts a flag.
+          ("-" . r) (flags r (fpush t 'ins "-"))
+          (("-" + _) . _) (udie 2 usage)
+          (a . r) (flags r (fpush t 'ins a)))
    ; every cc says its sentence, the internal ones too: gen and holo raise noms
    ; (musttail-not-a-tail, cs-unsaved, link-undef) that would otherwise reach the reader
    ; as a bare love debug note, with no cc: prefix and nothing naming the input. it goes on
@@ -1211,7 +1213,7 @@
    ; every usage error and flatten its 2 to a 1.
    (moon-run as)
     (trap (x \ (moon-cc x @ r (charm? r ? r 0))) as
-          (a \ b \ a = 'leave ? b
+          (a \ b \ a @ 'leave b
                      (say err ("cc: internal error: " + show a + " " + show b + "\n"),
                       flush err,
                       1)))

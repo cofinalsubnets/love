@@ -71,23 +71,22 @@ static void rd_norm(struct lz_rd *r) {
   r->range <<= 8;
   if (r->p < r->e) r->code = r->code << 8 | *r->p++; else r->bad = 1, r->code <<= 8; } }
 
-// the decoder's steps, on lz_run's locals (rg the range, cd the code, ip the input to r->e):
-// written in place so the loop makes no call and mooncc keeps them in registers. word-wide, as
-// a narrow one is a zero-extend after every step; a range under LZ_TOP shifted still fits 32 bits.
-// past the input's end ip counts on over zeros, so a short stream is ip > r->e, asked per symbol.
-#define LZ_NORM() if (rg < LZ_TOP) { rg <<= 8, cd = cd << 8 | (ip < r->e ? *ip : 0), ip++; }
+// the decoder's steps, on locals (rg the range, cd the code, ip the input to ie), written in
+// place so mooncc keeps them in registers. word-wide, as a narrow one is a zero-extend after
+// every step; a range under LZ_TOP shifted still fits 32 bits. past the input's end ip counts on
+// over zeros, so a short stream is ip > ie, asked per symbol.
+#define LZ_NORM() if (rg < LZ_TOP) { rg <<= 8, cd = cd << 8 | (ip < ie ? *ip : 0), ip++; }
 #define LZ_BIT(pp, b) { lzp *p_ = (pp); uintptr_t w_ = *p_, q_; LZ_NORM() q_ = (rg >> LZ_BITS) * w_; \
  if (cd < q_) rg = q_, *p_ = (lzp) (w_ + ((LZ_ONE - w_) >> LZ_MOVE)), b = 0; \
  else rg -= q_, cd -= q_, *p_ = (lzp) (w_ - (w_ >> LZ_MOVE)), b = 1; }
-// ..and without a branch, for the bits of a tree, whose outcomes no predictor guesses: k_ is
-// all ones for a 1. the range keeps its bound or loses it, the prob moves toward the outcome.
+// ..and without a branch, for the bits of a tree, whose outcomes no predictor guesses: k_, the
+// sign of cd - q, is all ones for a 0. the range keeps its bound or loses it, the prob moves
+// toward the outcome.
 #define LZ_BITF(pp, b) { lzp *p_ = (pp); uintptr_t w_ = *p_, q_, k_; LZ_NORM() q_ = (rg >> LZ_BITS) * w_; \
- b = cd >= q_, k_ = 0 - b; \
- rg = (q_ & ~k_) | ((rg - q_) & k_), cd -= q_ & k_; \
- *p_ = (lzp) (w_ + (((LZ_ONE - w_) >> LZ_MOVE) & ~k_) - ((w_ >> LZ_MOVE) & k_)); }
-#define LZ_TREE(pp, n, v) { lzp *t_ = (pp); uintptr_t m_ = 1, b_; \
- while (m_ < ((uintptr_t) 1 << (n))) { LZ_BITF(t_ + m_, b_) m_ = m_ << 1 | b_; } \
- v = m_ - ((uintptr_t) 1 << (n)); }
+ k_ = (uintptr_t) ((intptr_t) (cd - q_) >> 63), b = k_ + 1; \
+ rg = q_ + ((rg - q_ - q_) & ~k_), cd -= q_ & ~k_; \
+ *p_ = (lzp) (w_ + (((LZ_ONE - w_) >> LZ_MOVE) & k_) - ((w_ >> LZ_MOVE) & ~k_)); }
+#define LZ_TREE(pp, n, v) LZ_CALL(lz_ftree(&cs, (pp), (uintptr_t) 1 << (n)), v)
 #define LZ_RTREE(pp, n, v) { lzp *t_ = (pp); uintptr_t m_ = 1, b_, v_ = 0; \
  for (uintptr_t i_ = 0; i_ < (n); i_++) { LZ_BITF(t_ + m_, b_) m_ = m_ << 1 | b_, v_ |= b_ << i_; } \
  v = v_; }
@@ -97,6 +96,24 @@ static void rd_norm(struct lz_rd *r) {
         if (!c_) { LZ_TREE((l)->mid[ps], 3, v) v += 8; } \
         else { LZ_TREE((l)->high, 8, v) v += 16; } } }
 
+// the trees and the literals as their own small functions: in lz_run's loop mooncc keeps a
+// tree's temporaries on the stack, here in registers (x64 +9%, a64 +37%). the coder in at s,
+// out back to it
+struct lz_cs { uintptr_t rg, cd; const uint8_t *ip, *ie; };
+static love_noinline uintptr_t lz_ftree(struct lz_cs *s, lzp *t_, uintptr_t top) {
+ uintptr_t rg = s->rg, cd = s->cd, m_ = 1, b_; const uint8_t *ip = s->ip, *ie = s->ie;
+ while (m_ < top) { LZ_BITF(t_ + m_, b_) m_ = m_ << 1 | b_; }
+ s->rg = rg, s->cd = cd, s->ip = ip;
+ return m_ - top; }
+static love_noinline uintptr_t lz_fmlit(struct lz_cs *s, lzp *p, uintptr_t mb) {
+ uintptr_t rg = s->rg, cd = s->cd, sy = 1, off = 0x100, mbit, b; const uint8_t *ip = s->ip, *ie = s->ie;
+ while (sy < 0x100) {
+  mb <<= 1, mbit = mb & off;
+  LZ_BITF(p + off + mbit + sy, b)
+  sy = sy << 1 | b, off &= (0 - b) ^ ~mbit; }
+ s->rg = rg, s->cd = cd, s->ip = ip;
+ return sy; }
+#define LZ_CALL(call, v) { cs.rg = rg, cs.cd = cd, cs.ip = ip; v = call; rg = cs.rg, cd = cs.cd, ip = cs.ip; }
 // the output, which is the dictionary. `grow` lets a sizeless .lzma double it as it goes.
 struct lz_out { uint8_t *b; uintptr_t n, cap, base; int grow, big; };
 
@@ -118,14 +135,15 @@ static int out_room(struct lz_out *o, uintptr_t k) {
 // move only on a rep, and stay in m.
 static int lz_run(struct lz_model *m, struct lz_rd *r, struct lz_out *o, uintptr_t lim, int eopm) {
  uintptr_t rg = r->range, cd = r->code, st = m->state, r0 = m->reps[0], n = o->n, b, len, d;
- const uint8_t *ip = r->p;
+ const uint8_t *ip = r->p, *ie = r->e;
+ struct lz_cs cs = { 0, 0, 0, r->e };
  uint8_t *ob = o->b;
  int rc = 1;
- if (r->bad) ip = r->e + 1;
+ if (r->bad) ip = ie + 1;
  if (eopm) lim = ~(uintptr_t) 0;
  while (n < lim) {
   uintptr_t ps = n & (((uintptr_t) 1 << m->pb) - 1);
-  if (ip > r->e) { rc = 0; break; }
+  if (ip > ie) { rc = 0; break; }
   LZ_BIT(&m->ismatch[st][ps], b)
   if (!b) {
    if (n >= o->cap) {
@@ -136,12 +154,8 @@ static int lz_run(struct lz_model *m, struct lz_rd *r, struct lz_out *o, uintptr
    lzp *p = m->lit + 0x300 * (((n & (((uintptr_t) 1 << m->lp) - 1)) << m->lc) + (prev >> (8 - m->lc)));
    if (st >= 7) {                                 // led by the byte at rep0 while the bits agree:
     if (n - o->base <= r0) { rc = 0; break; }     // off stays 0x100 until one differs, then 0
-    uintptr_t mb = ob[n - r0 - 1], off = 0x100, mbit;
-    while (s < 0x100) {
-     mb <<= 1, mbit = mb & off;
-     LZ_BITF(p + off + mbit + s, b)
-     s = s << 1 | b, off &= (0 - b) ^ ~mbit; } }
-   else while (s < 0x100) { LZ_BITF(p + s, b) s = s << 1 | b; }
+    LZ_CALL(lz_fmlit(&cs, p, ob[n - r0 - 1]), s) }
+   else LZ_CALL(lz_ftree(&cs, p, 0x100), s)
    ob[n++] = (uint8_t) s;
    st = st < 4 ? 0 : st < 10 ? st - 3 : st - 6;
    continue; }
@@ -190,7 +204,7 @@ static int lz_run(struct lz_model *m, struct lz_rd *r, struct lz_out *o, uintptr
    LZ_LEN(&m->rep, ps, len)
    st = st < 7 ? 8 : 11; }
   len += LZ_MINLEN;
-  if (n - o->base <= r0 || ip > r->e || lim - n < len) { rc = 0; break; }
+  if (n - o->base <= r0 || ip > ie || lim - n < len) { rc = 0; break; }
   if (o->cap - n < len) {
    o->n = n;
    if (!out_room(o, len)) { rc = 0; break; }
@@ -644,27 +658,45 @@ static int64_t xe_go(const uint8_t *s, uintptr_t n, uint32_t dict, uint8_t *out,
 static uintptr_t xe_cap(uintptr_t n) { return n + 16 * (n / 65536 + 2); }
 
 // --- crc64 ----------------------------------------------------------------------------------
-static uint64_t xz_crc64_on(uint64_t c0, const uint8_t *p, uintptr_t n) {
- uint64_t t[256], c = ~c0;
+// eight bytes at a time, as hash.c's crc32: eight independent lookups a step where one byte's
+// is a chain. the tables are built on the first call, write-once and idempotent as crc32's are
+static uint64_t crc64_t[8][256];
+static int crc64_ready;
+static void crc64_init(void) {
  for (unsigned i = 0; i < 256; i++) {
   uint64_t v = i;
   for (int k = 0; k < 8; k++) v = v & 1 ? v >> 1 ^ 0xc96c5795d7870f42ull : v >> 1;
-  t[i] = v; }
- while (n--) c = t[(c ^ *p++) & 255] ^ c >> 8;
+  crc64_t[0][i] = v; }
+ for (unsigned i = 0; i < 256; i++) {           // table k is table 0 shifted k bytes on
+  uint64_t v = crc64_t[0][i];
+  for (int k = 1; k < 8; k++) v = crc64_t[0][v & 255] ^ v >> 8, crc64_t[k][i] = v; }
+ crc64_ready = 1; }
+static uint64_t xz_crc64_on(uint64_t c0, const uint8_t *p, uintptr_t n) {
+ uint64_t c = ~c0;
+ if (!crc64_ready) crc64_init();
+ for (; n >= 8; p += 8, n -= 8) {
+  uint64_t x = c ^ ld64le(p);
+  c = crc64_t[7][x & 255] ^ crc64_t[6][x >> 8 & 255] ^ crc64_t[5][x >> 16 & 255] ^ crc64_t[4][x >> 24 & 255]
+    ^ crc64_t[3][x >> 32 & 255] ^ crc64_t[2][x >> 40 & 255] ^ crc64_t[1][x >> 48 & 255] ^ crc64_t[0][x >> 56]; }
+ for (; n; n--) c = crc64_t[0][(c ^ *p++) & 255] ^ c >> 8;
  return ~c; }
 static uint64_t xz_crc64(const uint8_t *p, uintptr_t n) { return xz_crc64_on(0, p, n); }
 
 // --- LZMA2 a chunk at a time ---------------------------------------------------------------
-// the window holds the last dict bytes out and room for one chunk's (2 MiB at most); a chunk
-// that would not fit slides it down first. a match reaches no further back than the window
-// holds, which is every distance the dictionary allows. the reset rules are l2_dec's.
-#define L2_ROOM ((uintptr_t) 1 << 21)
+// the window holds the last dict bytes out and room past them: a chunk's (2 MiB at most), or the
+// dict's own up to 8 MiB, so a slide moves the dict once per as many bytes out. a chunk that
+// would not fit slides it down first, by a multiple of 16 so the position bits (pb, lp, at
+// most 4 each) read the same off the window as off the whole output. a match reaches no
+// further back than the window holds, which is every distance the dictionary allows. the
+// reset rules are l2_dec's.
+#define L2_CHUNK ((uintptr_t) 1 << 21)
+#define L2_ROOM(d) (((d) < L2_CHUNK ? L2_CHUNK : (d) < ((uintptr_t) 1 << 23) ? (d) : (uintptr_t) 1 << 23) + 16)
 #define L2_MAGIC 0x6c7a6d6132u
 struct l2_st { uint64_t magic, n, base, cap, dict; uint32_t needdict, needprops;
                struct lz_model m; lzp lit[0x300 << 4]; };
 static void l2_slide(struct l2_st *S, uint8_t *win, uintptr_t need) {
  if (S->n + need <= S->cap) return;
- uintptr_t keep = S->n < S->dict ? S->n : S->dict, shift = S->n - keep;
+ uintptr_t shift = (S->n - (S->n < S->dict ? S->n : S->dict)) & ~(uintptr_t) 15, keep = S->n - shift;
  memmove(win, win + shift, keep);
  S->n = keep, S->base = S->base > shift ? S->base - shift : 0; }
 // one chunk -> how many bytes it put out, from *o0 in the window; -1 malformed
@@ -860,13 +892,13 @@ static struct str *l2_cask(word x) {
 love_noinline static struct g *host_lzma2_new(struct g *g) {
  word dw = g->sp[0];
  if (!oddp(dw) || getcharm(dw) < 4096 || (uintptr_t) getcharm(dw) > XZ_MAX) return g->sp[0] = ZeroPoint, g;
- uintptr_t dict = (uintptr_t) getcharm(dw), n = L2_HEAD + dict + L2_ROOM,
+ uintptr_t dict = (uintptr_t) getcharm(dw), n = L2_HEAD + dict + L2_ROOM(dict),
            sreq = str_width(n), breq = Width(struct cask) + Width(struct tag);
  if (!ok(g = have(g, sreq + breq))) return g;
  struct str *s = ini_str(bump(g, sreq), n);
  memset(s->bytes, 0, L2_HEAD);
  struct l2_st *S = (struct l2_st*) s->bytes;
- S->magic = L2_MAGIC, S->cap = dict + L2_ROOM, S->dict = dict, S->needdict = S->needprops = 1;
+ S->magic = L2_MAGIC, S->cap = dict + L2_ROOM(dict), S->dict = dict, S->needdict = S->needprops = 1;
  union u *k = bump(g, breq);
  cask(k)->ap = lvm_cask, cask(k)->str = s;
  tagthread(k, Width(struct cask));
