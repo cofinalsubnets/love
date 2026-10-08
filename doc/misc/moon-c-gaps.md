@@ -1184,10 +1184,10 @@ Still open on this side (g-21's probes):
   reads at the element's width, a bitfield or 128-bit member of a packed struct refuses by name,
   and a by-value struct reached as a packed member rides its type's alignment, not the member's.
 - where the re-run stops now, on this side: a register variable pinned to `x0` (4). Of the 24
-  units that stopped on the `.S` extable macro's `\insn`, 9 compile, and the rest stop on:
-  `ccmp` (4), gas's `||` (3, mov_q's range test), a shifted register operand (`x2, lsl #8`, 2),
-  `csinv`, `bne`, `.incbin`, `@note`, `sym+k` as a memory operand and a `.set` alias of a
-  function (`__memmove`). The exclusive pairs (`ldxp`/`stxp` and kin) have no lane yet.
+  units that stopped on the `.S` extable macro's `\insn`, 11 compile, and the rest stop on: a
+  shifted register operand (`x2, lsr #3`, the `#` sometimes left off, 6), gas's `||` (3,
+  mov_q's range test), `.incbin`, `@note`, `sym+k` as a memory operand and a `.set` alias of
+  a function (`__memmove`). The exclusive pairs (`ldxp`/`stxp` and kin) have no lane yet.
   The rest is part 1's front end and gen (`linux/skbuff.h`, an undeclared `branch`,
   `__attribute__((mode))`).
 - defconfig, g-21's units once refused on a Q form or a register pinned twice: of a sample of
