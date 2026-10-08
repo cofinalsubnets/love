@@ -3055,6 +3055,7 @@
    ;             chroot), and ANSWERS THE SAME WHOEVER ASKS (pidof skips its own pid)
    ;   'exec     wants a fresh process, never a fork of a warm one (love bake: the image a
    ;             fork would carry is the one being made)
+   ;   'login    a shell: seated by a dash-led argv[0], it is handed --login
    ; a verb that says nothing is still ours, and a shell forks it warm
    traits {}
    ; a seat whose verbs are not all in the image installs a filler here, and the first miss runs
@@ -3083,8 +3084,13 @@
    (sl? w)   (: n #w (go i) (? (n <= i) 0 (w i = 47) 1 (go (i + 1))) (go 0))
    (word w)  (sl? w || dotl? w ? () (get (name w)))
    ; ..and never the artifact's own name: argv[0] `love` is this binary, not a verb called
-   ; love, so the front door keeps its flags, its tty test and its stdin.
-   (seat p)  (bn p @ w (w = "love" ? () (get (name w))))
+   ; love, so the front door keeps its flags, its tty test and its stdin. a dash-led name
+   ; (-lush: login(1)'s and sshd's mark) seats the verb past it, which hears --login first
+   ; when it says 'login
+   (seat p)  (bn p @ b (dash b @ w
+                (w = "love" ? ()
+                   (get (name w) @ f
+                      (lit? f && b != w && 1 = trait (name w) 'login ? (as \ f ("--login" . as)) f)))))
    ; the listing: ls's own grid onto a terminal, one name a line into a pipe, so
    ; `love verbs | grep` reads what it always read.
    (vlist ks) (: ns (map string ks)

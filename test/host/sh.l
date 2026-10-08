@@ -400,11 +400,19 @@
    _ (setenv "HOME" d)
    r1 (hark ["out/love" "out/lush" "--login" "-c" "echo p=$LUSH_P4"])
    r2 (hark ["out/love" "out/lush" "-c" "echo p=[$LUSH_P4]"])
+   ; login(1)'s mark: a dash-led argv[0] seats the shell past the dash as a login shell,
+   ; and any other verb past one plain
+   _ (symlink "../love" (d + "/-lush"))
+   _ (symlink "../love" (d + "/-echo"))
+   r4 (hark [(d + "/-lush") "-c" "echo p=$LUSH_P4"])
+   r5 (hark [(d + "/-echo") "hi"])
    _ (setenv "HOME" home0)
    r3 (hark ["out/love" "out/lush" "-c" ". out/.lush-t4/rr.sh; echo rc=$?"])
    (test ("p=prof\n" = >r1)
            ("p=[]\n" = >r2)
-           ("one\nrc=5\n" = >r3)))
+           ("one\nrc=5\n" = >r3)
+           ("p=prof\n" = >r4)
+           ("hi\n" = >r5)))
 ; a comment ends at its newline, never the input's end (the multi-line -c /
 ; buffered-script shape every /etc/profile.d file has)
 (: r (hark ["out/love" "out/lush" "-c" "# lead\necho a # tail\n# mid\necho b"])
