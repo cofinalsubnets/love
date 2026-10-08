@@ -24,6 +24,8 @@ name=test_ccwasm
 # wasm return address lives on the engine's call stack, where linear memory cannot reach it, and
 # 229-labelvalue likewise: a wasm label has no address to take or jump through.
 unsupported="100-complex 111-int128 117-vastruct 151-w128fuzz 160-rangeinit 229-labelvalue 256-inline-retaddr 266-vaarg-struct"
+# ours builds these, emcc does not: clang has no __builtin_*_overflow_p. x64 stays their oracle
+noemcc="268-overflow-p"
 
 d=$ho/cc-wasm
 rm -rf "$d"
@@ -79,7 +81,8 @@ for f in test/cc/*.c; do
   fi
 
   # the same source through emcc, run by the same node: ours must answer what it answers
-  if [ -n "$EMCC" ]; then
+  case " $noemcc " in *" $b "*) noe=1 ;; *) noe= ;; esac
+  if [ -n "$EMCC" ] && [ -z "$noe" ]; then
     # -w: the battery is about the ANSWERS, and clang warns about deliberate edges
     if "$EMCC" -sMEMORY64=1 -O0 -w -o "$d/$b.e.js" "$f" > "$d/$b.elog" 2>&1; then
       timeout 60 "$NODE" "$d/$b.e.js" > "$d/$b.eout" 2>&1; re=$?
