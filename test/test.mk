@@ -622,7 +622,7 @@ test_ccwarn: host
 	@$(gsh) test/gate/ccwarn.sh gcc clang
 # the cc-driver conventions (the `CC=mooncc` door's floor): the real $(cflags) soup
 # rides through -c, a link owing libc symbols pulls the runtime by need, and the loud edges
-# stay loud (-shared usage-refuses, -nostdlib names its undefined references). In test_slow.
+# stay loud (-shared usage-refuses, -nostdlib names its undefined references). In test_extra.
 test_drv: host
 	@$(gsh) test/gate/drv.sh $(ho) $(cflags)
 # the kernel's inline-asm seam: src/inle/<a>/asmops.h says every privileged instruction
