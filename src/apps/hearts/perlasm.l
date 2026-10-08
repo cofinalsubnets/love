@@ -5,6 +5,7 @@
 ; interpolates perl's "$x", "$x[i]" and "@x[e]", `ins` is its AUTOLOAD thunk, the body_00_15
 ; strings are thunks over the same state, and `post` is its six rewrites.
 ; usage: love perlasm.l SCRIPT FLAVOUR OUTPUT   (kbuild's perlasm_with_args passes FLAVOUR void)
+(borrow 'hashes)
 (: argv cmdline
    pinned "5bdb5dcb78edfac87cc5c4e2009c065b045568fa9a0b563ba1a818f44329fd72"
    st {}                                  ; 'code (newest first) and 'q, the NEON thunk queue

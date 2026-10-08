@@ -9,6 +9,7 @@
 (module (ext4 ext4-make ext4-image ext4-write)
 (borrow 'bytes)
 (borrow 'posix)
+(borrow 'hashes)
 (: bs 4096  bpg 32768  isz 256  flex 16  apb 1024  fino 11  usedi 12
    (le v n) (wrle v n)
    (be v) (wrbe v 4)

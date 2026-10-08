@@ -36,6 +36,7 @@
 (borrow 'dns)
 (borrow 'posix)
 (borrow 'bytes)
+(borrow 'hashes)
 
 (:
    ; --- bytes and words ---

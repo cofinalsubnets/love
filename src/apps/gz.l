@@ -25,6 +25,7 @@
 ; the wrap registers module 'gz in the dist cat too, so the bake compiles it once.
 (module 'gz
 (borrow 'bytes)
+(borrow 'hashes)
 (:
    ; --- crc32 (IEEE 802.3: reflected, polynomial 0xedb88320) -----------------
    ; built once at load into a tray, read with peep. the final xor is the same

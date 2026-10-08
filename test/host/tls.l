@@ -22,6 +22,7 @@
 ; run:  cat test/00-init.l test/host/tls.l | out/love
 
 (borrow "src/apps/tls/tls.l")
+(borrow 'hashes)
 
 (test
  (elem 'tls (cite ()))

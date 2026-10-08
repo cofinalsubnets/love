@@ -16,6 +16,7 @@
 (borrow 'fat)
 (borrow 'sqfs)
 (borrow 'ext4)
+(borrow 'hashes)
 (: ; its words are the ones after its own name, whatever loaded ahead of it
    (after l) (atom? l ? () (<l @ (_ + "image.l") >l (after >l)))
    as (after cmdline)

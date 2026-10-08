@@ -20,6 +20,7 @@ cat > "$w/mk.l" <<'EOF'
 (borrow 'bytes)
 (borrow 'posix)
 (borrow 'ext4)
+(borrow 'hashes)
 ; ours, each superblock copy given the reference's s_kbytes_written: n ref out
 (: (after l) (atom? l ? () (<l @ (_ + "mk.l") >l (after >l)))
    as (after cmdline)

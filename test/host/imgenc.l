@@ -4,6 +4,7 @@
 ; colours), and jpegs near it; without magick, the markers alone.
 ; run: cat test/00-init.l test/host/imgenc.l | out/love
 (borrow 'posix)
+(borrow 'jpeg)
 (borrow "src/apps/gif.l")
 (borrow "src/apps/png.l")
 (: dir (cwd 0 + "/out/.imgenc")

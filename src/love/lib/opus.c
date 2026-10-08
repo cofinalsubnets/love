@@ -11,6 +11,7 @@
 // length of each call and let go after (the one mutable global, a pointer, and a decode is
 // never interrupted). its maths ride the tree's own (lm.c).
 #include "love.h"
+#include "bytes.h"
 #include <stdint.h>
 #include <string.h>
 #include <math.h>
@@ -119,12 +120,6 @@ static inline void *opus_alloc_scratch(size_t n) { (void) n; return NULL; }
 #define OP_SCRATCH (16 + GLOBAL_STACK_SIZE + 64 + 5760 * 2 * sizeof(float))
 static uintptr_t op_dec_size(int ch) { return ((uintptr_t) opus_decoder_get_size(ch) + 15) & ~(uintptr_t) 15; }
 
-static unsigned char *op_cask(word x, uintptr_t *n) {
- if (charmp(x) || ((union u*) x)->ap != lvm_cask) return NULL;
- struct str *s = ((struct cask*) x)->str;
- if (!s || ((uintptr_t) s->bytes & 7)) return NULL;
- return *n = s->len, (unsigned char*) s->bytes; }
-
 static love_inline struct g *host_opus_state(struct g *g) {
  intptr_t ch = oddp(g->sp[0]) ? getcharm(g->sp[0]) : 0;
  g->sp[0] = ch == 1 || ch == 2 ? putcharm((intptr_t) (op_dec_size((int) ch) + OP_SCRATCH)) : ZeroPoint;
@@ -133,7 +128,7 @@ static lvm(lvm_opus_state) { LvmCall(g, host_opus_state) }
 
 static love_inline struct g *host_opus_init(struct g *g) {
  uintptr_t n = 0;
- unsigned char *b = op_cask(g->sp[0], &n);
+ unsigned char *b = cask_bytes(g->sp[0], &n);
  intptr_t ch = oddp(g->sp[1]) ? getcharm(g->sp[1]) : 0;
  double gain = oddp(g->sp[2]) ? (double) getcharm(g->sp[2]) : 0;
  word r = putcharm(-OPUS_BAD_ARG);
@@ -145,7 +140,7 @@ static lvm(lvm_opus_init) { LvmCall(g, host_opus_init) }
 
 love_noinline static struct g *host_opus_packet(struct g *g) {
  uintptr_t n = 0;
- unsigned char *b = op_cask(g->sp[0], &n);
+ unsigned char *b = cask_bytes(g->sp[0], &n);
  if (!b || n <= OP_SCRATCH || !strp(g->sp[1]) || !oddp(g->sp[2]))
   return g->sp[2] = putcharm(-OPUS_BAD_ARG), g->sp += 2, g;
  OpusDecoder *d = (OpusDecoder*) b;
@@ -162,26 +157,11 @@ love_noinline static struct g *host_opus_packet(struct g *g) {
  uintptr_t m = (uintptr_t) k * (uintptr_t) ch, on = m * (f ? 4u : 2u);
  if (!ok(g = have(g, str_width(on)))) return g;
  struct str *out = ini_str(bump(g, str_width(on)), on);
- b = op_cask(g->sp[0], &n);                     // re-read: have may move it
- pcm = (float*) (b + n - 5760 * 2 * sizeof(float));
- double v = *(double*) (b + op_dec_size(ch));
- unsigned char *q = (unsigned char*) out->bytes;
- for (uintptr_t i = 0; i < m; i++) {
-  if (f) {
-   float x = (float) (pcm[i] * v); union { float f; uint32_t u; } c = {x};
-   for (int j = 0; j < 4; j++) *q++ = (unsigned char) (c.u >> (8 * j)); }
-  else {
-   double y = pcm[i] * v * 32768;
-   y = y > 32767 ? 32767 : y < -32768 ? -32768 : y;
-   int t = y >= 0 ? (int) (y + 0.5) : -(int) (-y + 0.5);
-   *q++ = (unsigned char) t, *q++ = (unsigned char) (t >> 8); } }
+ b = cask_bytes(g->sp[0], &n);                     // re-read: have may move it
+ pcm_lay((uint8_t*) out->bytes, (float*) (b + n - 5760 * 2 * sizeof(float)), m, f, *(double*) (b + op_dec_size(ch)));
  return g->sp[2] = word(out), g->sp += 2, g; }
 static lvm(lvm_opus_packet) { LvmCall(g, host_opus_packet) }
 
-static union u const
-  nif_opus_state[] = {{lvm_opus_state}, {lvm_ret0}},
-  nif_opus_init[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_opus_init}, {lvm_ret0}},
-  nif_opus_packet[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_opus_packet}, {lvm_ret0}};
-LvNif("opus-state", nif_opus_state, NULL);
-LvNif("opus-init", nif_opus_init, NULL);
-LvNif("opus-packet", nif_opus_packet, NULL);
+LvDef("opus-state", opus_state, 1, "ogg");
+LvDef("opus-init", opus_init, 3, "ogg");
+LvDef("opus-packet", opus_packet, 3, "ogg");

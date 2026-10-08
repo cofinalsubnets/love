@@ -22,6 +22,7 @@
 (borrow 'bytes)
 (borrow 'metainfo)
 (borrow 'peerwire)
+(borrow 'hashes)
 (:
  blk 16384
  (close q) (cite 'posix 'close q)

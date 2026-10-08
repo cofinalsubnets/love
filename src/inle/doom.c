@@ -201,14 +201,8 @@ static lvm(lvm_doom_key) {
  Sp[1] = ZeroPoint;
  love_musttail return Nextp(1, 1); }
 
-static union u const
- nif_doom[] = {{lvm_doom}, {lvm_ret0}},
- nif_doom_start[] = {{lvm_doom_start}, {lvm_ret0}},
- nif_doom_tick[] = {{lvm_doom_tick}, {lvm_ret0}},
- nif_doom_frame[] = {{lvm_doom_frame}, {lvm_ret0}},
- nif_doom_key[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_doom_key}, {lvm_ret0}};
-LvNif("doom", nif_doom, NULL);
-LvNif("doom-start", nif_doom_start, NULL);
-LvNif("doom-tick", nif_doom_tick, NULL);
-LvNif("doom-frame", nif_doom_frame, NULL);
-LvNif("doom-key", nif_doom_key, NULL);
+LvDef("doom", doom, 1, NULL);
+LvDef("doom-start", doom_start, 1, NULL);
+LvDef("doom-tick", doom_tick, 1, NULL);
+LvDef("doom-frame", doom_frame, 1, NULL);
+LvDef("doom-key", doom_key, 2, NULL);

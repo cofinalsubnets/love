@@ -6,6 +6,8 @@
 ; last the refusals.
 ;   cat test/00-init.l test/host/webp.l | out/love
 (borrow 'posix)
+(borrow 'hashes)
+(borrow 'webp)
 (borrow "src/apps/webp.l")
 (: dir (cwd 0 + "/out/.webpd")
    _ (hark ["rm" "-rf" dir], mkdir dir 448)

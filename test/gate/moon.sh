@@ -403,7 +403,8 @@ fi
 
 # a header a .S includes is assembly too (the kernel's asm-extable.h and assembler.h): its
 # lines keep their breaks, `\uaccess_is_write` is a macro argument and no C escape, and the
-# spelling keeps the source's spaces, so `wx\n` is one word, aliased by .req
+# spelling keeps the source's spaces, so `wx\n` is one word, aliased by .req. on arm a `#`
+# past code is an immediate, not gas's comment
 cat > "$ho/.as3.h" <<'EOF'
 	.irp	num,0,1,2
 	.equ	.L__gpr_num_x\num, \num
@@ -414,10 +415,17 @@ cat > "$ho/.as3.h" <<'EOF'
 	.irp	n,0,1,2
 wx\n	.req	w\n
 	.endr
+	.macro	lsz, reg, tmp
+	ubfm	\tmp, \tmp, #16, #19
+	mov	\reg, #4
+	add	\reg, \reg, #3
+	.endm
 EOF
 cat > "$ho/.as3.S" <<'EOF'
 #include ".as3.h"
 	.text
+g:	lsz	x0, x1
+	lsl	x0, x0, #2
 	.globl	f
 f:	mov	wx1, wx2
 1:	ret
@@ -425,6 +433,8 @@ f:	mov	wx1, wx2
 EOF
 moonrun -c -t a64 -o "$ho/.as3.o" "$ho/.as3.S" > /dev/null 2>&1 || fail "a .S whose header holds gas macros did not assemble"
 readelf -SW "$ho/.as3.o" 2>/dev/null | grep -q __ex_table || fail "a .S's header macro laid no __ex_table"
+readelf -x .text "$ho/.as3.o" 2>/dev/null | grep -q "214c50d3 800080d2 000c0091 00f47ed3" \
+  || fail "a .S's arm immediates were not laid as written"
 
 # the attribute skip on a local/parameter/member takes __attribute__ ALONE: an asm NAME
 # would rename the object, and dropping it renames it in silence. test/cc/145 holds the

@@ -8,6 +8,7 @@
 ; same bytes out. the distributed bytes stay immutable; a bake belongs to the extraction.
 
 (borrow 'posix)
+(borrow 'hashes)
 (: (fp-die m) (udie 1 ("fatpack: " + m))
    (fp-read p) (uread p @ [1 s] [1 (s + "")] ())
    (fp-write p s) (: q (open p "w") (!(hot? q) ? (fp-die ("cannot write " + p)), say q s, close q))

@@ -288,12 +288,7 @@ love_noinline static struct g *host_gcm(struct g *g, int open) {
 static lvm(lvm_gcm_seal) LvmCall(g, host_gcm, 0)
 static lvm(lvm_gcm_open) LvmCall(g, host_gcm, 1)
 
-static union u const
-  nif_chacha20[] = {{lvm_cur}, {.x = putcharm(4)}, {lvm_chacha20}, {lvm_ret0}},
-  nif_poly1305[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_poly1305}, {lvm_ret0}},
-  nif_gcm_seal[] = {{lvm_cur}, {.x = putcharm(4)}, {lvm_gcm_seal}, {lvm_ret0}},
-  nif_gcm_open[] = {{lvm_cur}, {.x = putcharm(4)}, {lvm_gcm_open}, {lvm_ret0}};
-LvNif("chacha20", nif_chacha20, NULL);
-LvNif("poly1305", nif_poly1305, NULL);
-LvNif("aes-gcm-seal", nif_gcm_seal, NULL);
-LvNif("aes-gcm-open", nif_gcm_open, NULL);
+LvDef("chacha20", chacha20, 4, "tls");
+LvDef("poly1305", poly1305, 2, "tls");
+LvDef("aes-gcm-seal", gcm_seal, 4, "tls");
+LvDef("aes-gcm-open", gcm_open, 4, "tls");

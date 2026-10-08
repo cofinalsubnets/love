@@ -7,6 +7,7 @@
 (borrow 'qlog)
 (borrow 'seals)
 (borrow 'sb)
+(borrow 'hashes)
 
 (borrow 'posix)
 

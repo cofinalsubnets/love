@@ -4,6 +4,7 @@
 // 4 a bad stream, 5 past 2^24 pixels, 6 no room. lossy (vp8, rfc 6386) with or without an
 // ALPH plane, and lossless (vp8l, rfc 9649); the pixels are libwebp's WebPDecodeRGBA's.
 #include "love.h"
+#include "bytes.h"
 #include "inf.h"
 #include <stdint.h>
 #include <string.h>
@@ -212,9 +213,6 @@ static void wp_drop(struct wp_mem *m, void *p) {
   if (m->p[i] == p) { alloc(p, 0), m->p[i] = m->p[--m->n]; return; } }
 static void wp_free(struct wp_mem *m) { while (m->n) alloc(m->p[--m->n], 0); }
 
-static uint32_t rd16(const uint8_t *p) { return p[0] | (uint32_t) p[1] << 8; }
-static uint32_t rd24(const uint8_t *p) { return rd16(p) | (uint32_t) p[2] << 16; }
-static uint32_t rd32(const uint8_t *p) { return rd24(p) | (uint32_t) p[3] << 24; }
 static int wp_big(uintptr_t w, uintptr_t h) { return w * h > (1u << 24); }
 
 // ===== vp8l, the lossless image =====
@@ -675,12 +673,12 @@ static void vp_pred4(uint8_t *dst, int mode) {
 
 // ----- the headers -----
 static int vp_headers(struct vp *v, const uint8_t *s, uintptr_t n) {
- uint32_t bits = rd24(s), plen = bits >> 5;
+ uint32_t bits = ld24le(s), plen = bits >> 5;
  int i, t, b, c, p;
  if (bits & 1) return 3;                         // an interframe: no picture of its own
  if ((bits >> 1 & 7) > 3 || !(bits >> 4 & 1)) return 4;
  if (s[3] != 0x9d || s[4] != 0x01 || s[5] != 0x2a) return 4;
- v->w = rd16(s + 6) & 0x3fff, v->h = rd16(s + 8) & 0x3fff;
+ v->w = ld16le(s + 6) & 0x3fff, v->h = ld16le(s + 8) & 0x3fff;
  if (!v->w || !v->h) return 4;
  s += 10, n -= 10;
  if (plen > n) return 2;
@@ -709,7 +707,7 @@ static int vp_headers(struct vp *v, const uint8_t *s, uintptr_t n) {
  if (left < 3 * last) return 2;
  at = sz + 3 * last, left -= 3 * last;
  for (unsigned k = 0; k < last; k++, sz += 3) {
-  uintptr_t ps = rd24(sz);
+  uintptr_t ps = ld24le(sz);
   if (ps > left) ps = left;
   vp_init(&v->parts[k], at, ps), at += ps, left -= ps; }
  vp_init(&v->parts[last], at, left);
@@ -985,7 +983,7 @@ static int wp_frame(struct wp_mem *m, const uint8_t *p, const uint8_t *e, unsign
  const uint8_t *alph = NULL;
  uintptr_t an = 0;
  while (p + 8 <= e) {
-  uintptr_t sz = rd32(p + 4);
+  uintptr_t sz = ld32le(p + 4);
   const uint8_t *d = p + 8;
   if (sz > (uintptr_t) (e - d)) return 2;
   if (!memcmp(p, "ALPH", 4)) alph = d, an = sz;
@@ -1012,33 +1010,33 @@ static int wp_frame(struct wp_mem *m, const uint8_t *p, const uint8_t *e, unsign
 struct wp_info { unsigned w, h, fx, fy, fw, fh; const uint8_t *p, *e; };
 static int wp_info(const uint8_t *s, uintptr_t n, struct wp_info *f) {
  if (n < 12 || memcmp(s, "RIFF", 4) || memcmp(s + 8, "WEBP", 4)) return 1;
- uintptr_t rs = rd32(s + 4);
+ uintptr_t rs = ld32le(s + 4);
  if (rs < 4 || rs > n - 8) return 2;
  const uint8_t *p = s + 12, *e = s + 8 + rs;
  if (p + 8 > e) return 2;
- uintptr_t sz = rd32(p + 4);
+ uintptr_t sz = ld32le(p + 4);
  if (sz > (uintptr_t) (e - p - 8)) return 2;
  if (!memcmp(p, "VP8 ", 4)) {
   if (sz < 10) return 2;
-  f->w = rd16(p + 14) & 0x3fff, f->h = rd16(p + 16) & 0x3fff; }
+  f->w = ld16le(p + 14) & 0x3fff, f->h = ld16le(p + 16) & 0x3fff; }
  else if (!memcmp(p, "VP8L", 4)) {
   if (sz < 5) return 2;
   if (p[8] != 0x2f) return 4;
-  uint32_t b = rd32(p + 9);
+  uint32_t b = ld32le(p + 9);
   f->w = (b & 0x3fff) + 1, f->h = (b >> 14 & 0x3fff) + 1; }
  else if (!memcmp(p, "VP8X", 4)) {
   if (sz < 10) return 2;
   int anim = p[8] & 2;
-  f->w = rd24(p + 12) + 1, f->h = rd24(p + 15) + 1;
+  f->w = ld24le(p + 12) + 1, f->h = ld24le(p + 15) + 1;
   f->p = p + 8 + sz + (sz & 1), f->e = e, f->fx = f->fy = 0, f->fw = f->w, f->fh = f->h;
   if (wp_big(f->w, f->h)) return 5;
   if (!anim) return 0;
   for (p = f->p; p + 8 <= e; p += 8 + sz + (sz & 1)) {   // the first ANMF
-   sz = rd32(p + 4);
+   sz = ld32le(p + 4);
    if (sz > (uintptr_t) (e - p - 8)) return 2;
    if (memcmp(p, "ANMF", 4)) continue;
    if (sz < 16) return 2;
-   f->fx = rd24(p + 8) * 2, f->fy = rd24(p + 11) * 2, f->fw = rd24(p + 14) + 1, f->fh = rd24(p + 17) + 1;
+   f->fx = ld24le(p + 8) * 2, f->fy = ld24le(p + 11) * 2, f->fw = ld24le(p + 14) + 1, f->fh = ld24le(p + 17) + 1;
    if (f->fx + f->fw > f->w || f->fy + f->fh > f->h) return 4;
    f->p = p + 24, f->e = p + 8 + sz;
    return 0; }
@@ -1075,7 +1073,4 @@ love_noinline static struct g *host_webpd(struct g *g) {
  g->sp[1] = g->sp[0], g->sp += 1;
  return g; }
 static lvm(lvm_webpd) LvmCall(g, host_webpd)
-
-static union u const
-  nif_webpd[] = {{lvm_cur}, {.x = putcharm(1)}, {lvm_webpd}, {lvm_ret0}};
-LvNif("webp-pixels", nif_webpd, NULL);
+LvDef("webp-pixels", webpd, 1, "webp");

@@ -650,12 +650,12 @@ never silent**.
 | `_Complex` arithmetic | ✓ | — | — | — | — | — |
 | variable-length array | ✓ | ✓ | ✓ | — | — | — |
 | by-value composite arg, ≤16B, registers free | ✓ | ✓ | ✓ | — | — | — |
-| by-value composite arg, MEMORY class | ✓ | ✓ | — | — | — | — |
+| by-value composite arg, MEMORY class | ✓ | ✓ | ✓ | — | — | — |
 | composite passed at a variadic call site | ✓ | ✓ | ✓ | — | — | — |
 | composite NAMED in a variadic parameter list | ✓ | ✓ | — | — | — | — |
 | va_arg of a composite, ≤16B all-int | ✓ | ✓ | ✓ | — | — | — |
 | composite return, 16B all-int | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| composite return, MEMORY class | ✓ | ✓ | — | ✓ | ✓ | ✓ |
+| composite return, MEMORY class | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `__builtin_bswap64` | ✓ | ✓ | ✓ | — | — | — |
 | `__sync` spin-lock pair | ✓ | ✓ | ✓ | — | — | — |
 | signed 64-bit `/` and `%` | ✓ | ✓ | ✓ | rt.c | rt.c | rt.c |
@@ -685,9 +685,11 @@ object, which is how the table finds it. Everywhere else the lane is ours or the
 **The two struct rows do not move together, and t32 inverts them.** AAPCS32 returns a
 struct over 4 bytes through memory (`sretm?`) -- every one on v6-M, and on thumb2/thumb2sp
 every one that is no VFP HFA (at most four of one float type, which the s/d file carries) --
-so t32 takes both composite returns while refusing the int composite *argument*; a64 and rv64
-are the mirror image, taking arguments and the 16B return but refusing the MEMORY-class
-return — which is what stops PDCLib's dlmalloc on the cross targets.
+so t32 takes both composite returns while refusing the int composite *argument*. a64 and
+rv64 (and wasm, on rv64's lanes) pass a composite past 16 bytes by reference both ways
+(`refm?`): an argument as the address of the caller's copy, a return through a hidden
+pointer (x8 on a64, a0 on rv64) -- save, on a64, an HFA of three or four doubles, which
+refuses.
 
 **The register-exhausted by-value composite is x64-only, and even there only the gp half.**
 A 9..16B aggregate argument with too few *integer* registers left now goes wholly to the
@@ -719,9 +721,6 @@ that straddle, so 266 sits on rv64's and wasm's unsupported lists.
 - **a memory-returning call through a POINTER on t32** — `no lane for an indirect call to a
   MEMORY-returning function`: the direct call stages the hidden pointer, the indirect one
   does not yet. test/thumb2/libr.c is the direct lane's differential against gcc.
-- **a MEMORY-class composite RETURN on a64 and rv64** — `no lane for returning this
-  80-byte struct by value on <tgt>`. Probe: `typedef struct { long a[10]; } R;` with a
-  definition that returns one; a bare prototype compiles everywhere.
 - **signed 64-bit `/` and `%` on t32** call out to the runtime's own `__divdi3`/`__moddi3`
   (src/apps/moon/lib/rt.c) on all three targets.
 - **thumb1 varargs** — the pop-pc epilogue cannot drop the r0-r3 block; `vaspill-t32` refuses
@@ -1146,6 +1145,12 @@ below, 251 of those 332 re-run so far: **145 compile**, and the rest refuse by n
   them, or a forward label, still refuses. With it, gas's `\@` (a macro call's number) and
   `.ifb`/`.ifnb`. `\@` counts per reading, so two inline asm statements that each call one
   macro lay the same label: gas counts across the file.
+- **a `#` past code in an arm `.S` is an immediate**, not gas's comment: the lexer dropped it
+  with the rest of the line, so `mov \reg, #4` reached gas as a one-operand `mov` and `add x1,
+  x1, x2, lsl #3` lost its shift. x64 and rv64 keep `#` as their comment; a `#` opening a line
+  is one everywhere. With it, `sbfm`/`bfm`/`ubfm` (all 444 forms of a sweep are llvm-mc's
+  words), and a macro call after a label on its own line (`g: lsz x0, x1`). Three tinyconfig
+  units now compile, word for word the kernel build's objects (sigreturn, strrchr, tishift).
 
 Still open on this side (g-21's probes):
 
@@ -1154,11 +1159,11 @@ Still open on this side (g-21's probes):
 - under `-mstrict-align`: an array member of a packed struct indexed through its decayed pointer
   reads at the element's width, a bitfield or 128-bit member of a packed struct refuses by name,
   and a by-value struct reached as a packed member rides its type's alignment, not the member's.
-- where the re-run stops now, on this side: a register variable pinned to `x0` (4). The 24
-  units that stopped on the `.S` extable macro's `\insn` reach gas now, and stop on: a
-  one-operand `mov` (7), the pre-index `[xN]!` (3), `ldp` (2), gas's `||` (3, mov_q's range
-  test), a two-register op with no lane (3), `ccmp`, `bne`, `.incbin`, `@note`, `sym+k` as a
-  memory operand and an indexed `[x4, ..]`.
+- where the re-run stops now, on this side: a register variable pinned to `x0` (4). Of the 24
+  units that stopped on the `.S` extable macro's `\insn`, 3 compile, and the rest stop on: the
+  pre-index `[xN]!` (5), gas's `||` (3, mov_q's range test), a shifted register operand
+  (`x2, lsl #8`, 2), `ldp` (2), `ccmp` (2), `stp`, `csinv`, `ands`, `bne`, `.incbin`, `@note`
+  and `sym+k` as a memory operand.
   The rest is part 1's front end and gen (`linux/skbuff.h`, an undeclared `branch`,
   `__attribute__((mode))`).
 - defconfig, g-21's units once refused on a Q form or a register pinned twice: of a sample of

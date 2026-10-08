@@ -412,8 +412,5 @@ static lvm(lvm_horn_lag) {
  lag += io_wpending(g, (struct io*) h) / (2 * (uintptr_t) getcharm(h->chans));
  love_musttail return Answer(putcharm((intptr_t) lag)); }
 
-static union u const
- nif_horn[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_horn}, {lvm_ret0}},
- nif_horn_lag[] = {{lvm_horn_lag}, {lvm_ret0}};
-LvNif("horn", nif_horn, NULL);
-LvNif("horn-lag", nif_horn_lag, NULL);
+LvDef("horn", horn, 2, NULL);
+LvDef("horn-lag", horn_lag, 1, NULL);

@@ -70,9 +70,8 @@
 // of it -- so every entry clamps the header fields the C loops trust: a
 // scribbled screen may paint garbage, never read or write out of bounds.
 static struct cb *scr_ok(word x) {
- if (x & 1 || ((union u*) x)->ap != lvm_cask) return 0;
- struct str *s = ((struct cask*) x)->str;
- if (s->len < sizeof(struct cb)) return 0;
+ struct str *s = cask_str(x);
+ if (!s || s->len < sizeof(struct cb)) return 0;
  struct cb *c = (struct cb*) s->bytes;
  uintptr_t n = (uintptr_t) c->rows * c->cols;
  if (!c->rows || !c->cols || cb_size(c->rows, c->cols, 0) > s->len) return 0;
@@ -120,7 +119,7 @@ static lvm(lvm_screen) {
   uint16_t const r = (uint16_t) getcharm(Sp[1]), k = (uint16_t) getcharm(Sp[2]);
   uint32_t const hl = scr_hl(k);
   uintptr_t need = cb_size(r, k, sn) + cb_hsize(hl, k) + cb_tsize(r, k);
-  if ((b & 1) || ((union u*) b)->ap != lvm_cask) out = putcharm(need);
+  if (!caskp(b)) out = putcharm(need);
   else {
    struct str *s = ((struct cask*) b)->str;
    if (s->len >= need) {
@@ -140,7 +139,7 @@ static lvm(lvm_regrid) {
   uint16_t const r = (uint16_t) getcharm(Sp[2]), k = (uint16_t) getcharm(Sp[3]);
   uint32_t const hl = scr_hl(k);
   uintptr_t need = cb_size(r, k, sn) + cb_hsize(hl, k) + cb_tsize(r, k);
-  if ((b & 1) || ((union u*) b)->ap != lvm_cask) out = putcharm(need);
+  if (!caskp(b)) out = putcharm(need);
   else {
    struct str *s = ((struct cask*) b)->str;
    if (s->len >= need && (uint8_t*) s->bytes != (uint8_t*) c) {
@@ -256,7 +255,7 @@ static struct str *nif_bytes(word x) {
 // fails its vetting is no font. no allocation, so every pointer holds throughout
 static lvm(lvm_dye) {
  struct cb *c = scr_ok(Sp[0]);
- struct str *b = !(Sp[1] & 1) && ((union u*) Sp[1])->ap == lvm_cask ? ((struct cask*) Sp[1])->str : 0;
+ struct str *b = cask_str(Sp[1]);
  word out = ZeroPoint;
  if (c && b && (Sp[2] & 1) && (Sp[3] & 1) && (Sp[4] & 1)) {
   intptr_t const w = getcharm(Sp[2]), row = getcharm(Sp[3]), cur = getcharm(Sp[4]);
@@ -275,7 +274,7 @@ static lvm(lvm_fontrow) {
  word f = Sp[0], out = ZeroPoint;
  struct str *s = 0;
  if (!(f & 1) && strp(f)) s = str(f);
- else if (!(f & 1) && ((union u*) f)->ap == lvm_cask) s = ((struct cask*) f)->str;
+ else if (caskp(f)) s = cask(f)->str;
  if (s && (Sp[1] & 1) && (Sp[2] & 1) && cb_font_ok((uint8_t const*) s->bytes, s->len)) {
   intptr_t cp = getcharm(Sp[1]), r = getcharm(Sp[2]);
   uint8_t const *g = cp >= 0 && r >= 0 && r < 16

@@ -4,6 +4,7 @@
 ; the keys www adds. the face -- raw mode and the frames -- is the one part left to a person.
 ;   cat test/00-init.l test/host/www.l | out/love
 (borrow 'kiosko)
+(borrow 'jpeg)
 
 (: K (cite 'kore)
    res (K 'ww-resolve) get (K 'ww-get) lay (K 'ww-lay) dump (K 'ww-dump)

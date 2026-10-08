@@ -610,31 +610,15 @@
              (lay (over -1 ok idx) 0.95)))) ()))
    _ (each boxes cast-box)
    (O 'o))
- ; --- the stars: fixed in the sky, evenly over it from a little above the horizon, each
- ; one pixel where the eye sees it through the top, so none is drawn stretched across the
- ; pixels the sky's own map would give it. [x y z brightness phase] as trays ---
- star-k 400
- stars (: (one k) (: az (2.0 * pi * throw k 1 91 1000 / 1000.0) y (0.3 + 0.7 * throw k 2 93 1000 / 1000.0)
-                     r (sqrt (1.0 - y * y))
-                     [(r * sin az) y (r * cos az) (0.3 + 0.12 * throw k 3 95 5) (throw k 4 97 628 / 100.0)])
-          l (map one ^star-k) (col j) (gem-tray [star-k] (map (q \ 1.0 * q j) l))
-          {'x (col 0) 'y (col 1) 'z (col 2) 'b (col 3) 'ph (col 4)})
- ; ..laid onto the colours c where a pixel shows the sky, dimmed by the cloud before them,
- ; twinkling, or in pixels on and off
- (stars! c st lt cam sky t0) (: wx (st 'wx) nt (sat (1.0 - lt 'day * 3.0))
-   (nt <= 0.0 ? c
-    (: e (cam 'e) f (cam 'f) rt (cam 'r) uv (cam 'u) w (cam 'w) h (cam 'h) foc (cam 'foc)
-       X (stars 'x) Y (stars 'y) Z (stars 'z)
-       zc (X * f 0 + Y * f 1 + Z * f 2) zs (max zc 0.01)
-       cx (floor (w / 2.0 + foc * (X * rt 0 + Y * rt 1 + Z * rt 2) / zs))
-       cy (floor (h / 2.0 - foc * (X * uv 0 + Y * uv 1 + Z * uv 2) / zs))
-       idx (over -1 ((0.05 < zc) * (0 <= cx) * (cx < w) * (0 <= cy) * (cy < h)) (cy * w + cx))
-       ix (over -1 (peep sky idx 0) idx)
-       cl (sky-cloud wx X Y Z (e 0) (e 2) (st 'sim))
-       tw (sin (t0 * turns wx 'tper 0.9 + stars 'ph))
-       v (wx 'style = 'pixel ? ((0.6 < tw) * (lt 'day < 0.1) * (cl < 0.5) * 1.6)
-            (stars 'b * (0.75 + 0.25 * tw) * nt * (1.0 - cl)))
-       (map (k \ peep (c k) ix 0.0 @ o (pin (c k) ix (o + (k = 2 ? 0.9 1.0) * v))) ^3))))
+ ; --- the stars: sky's at the hour, each one pixel where the eye sees it through the top ---
+ (stars st) (sky-stars (st 'sim) (st 'dst) lat)
+ (stars! c st lt cam sky t0) (: e (cam 'e) f (cam 'f) rt (cam 'r) uv (cam 'u) w (cam 'w) h (cam 'h) foc (cam 'foc)
+   ss (stars st) X (ss 'x) Y (ss 'y) Z (ss 'z)
+   zc (X * f 0 + Y * f 1 + Z * f 2) zs (max zc 0.01)
+   cx (floor (w / 2.0 + foc * (X * rt 0 + Y * rt 1 + Z * rt 2) / zs))
+   cy (floor (h / 2.0 - foc * (X * uv 0 + Y * uv 1 + Z * uv 2) / zs))
+   idx (over -1 ((0.05 < zc) * (0 <= cx) * (cx < w) * (0 <= cy) * (cy < h)) (cy * w + cx))
+   (sky-stars! ss c lt (st 'wx) (e 0) (e 2) (st 'sim) t0 (over -1 (peep sky idx 0) idx)))
  ; --- the frame ---
  ; the lit share of the windows by the hour of the evening
  (lit-share hr) (? (hr < 5.0) 6 (hr < 6.5) 12 (hr < 9.0) 35 (hr < 16.0) 4 (hr < 18.0) 25 (hr < 23.0) 60 25)
@@ -726,7 +710,7 @@
      (cmix (cm alb irr) inglass glass))
    G (iota (1 - sky)) S (iota sky) (only ix v) (peep v ix 0)
    sf (surface (only G px) (only G py) (only G pz) (only G al) (only G wid) (only G nx) (only G nz) (only G gnd) (only G oc))
-   hv (sky-colour-of lt (st 'wx) (only S dx) (only S dy) (only S dz) ex ez (st 'sim) t0 0.0)
+   hv (sky-colour-of lt (st 'wx) (only S dx) (only S dy) (only S dz) ex ez (st 'sim))
    z0 (dx * 0.0)
    col0 (stars! (map (c \ pin (pin z0 G (sf c)) S (hv c)) ^3) st lt cam sky t0)
    ; ..and the tree, drawn over all of it where it is nearer
