@@ -457,6 +457,12 @@ static uint8_t *cb_sbase(struct cb const *c) {
 static struct cb_img *cb_imgs(struct cb const *c) { return (struct cb_img*) cb_sbase(c); }
 static uint32_t *cb_pal(struct cb const *c) { return (uint32_t*) (cb_sbase(c) + cb_nimg * sizeof(struct cb_img)); }
 uint32_t const *cb_ipx(struct cb const *c) { return (uint32_t const*) (cb_sbase(c) + cb_shead); }
+uint32_t cb_iw(struct cb_img const *im) { return im->dw ? im->dw : im->w; }
+uint32_t cb_ih(struct cb_img const *im) { return im->dh ? im->dh : im->h; }
+uint32_t cb_ipick(struct cb const *c, struct cb_img const *im, uint32_t X, uint32_t Y) {
+  uint32_t const W = cb_iw(im), H = cb_ih(im);
+  if (X >= W || Y >= H) return 0;
+  return cb_ipx(c)[im->off + (uint64_t) Y * im->h / H * im->w + (uint64_t) X * im->w / W]; }
 static uint32_t *cb_spx(struct cb *c) { return (uint32_t*) (cb_sbase(c) + cb_shead); }
 // the arena's words, 0 for a screen with no store
 static uint32_t cb_words(struct cb const *c) { return c->sn > cb_shead ? (c->sn - cb_shead) / 4u : 0; }
@@ -468,7 +474,7 @@ void cb_store(struct cb *c, uint32_t sn) {
   if (!c->sn) return;
   struct cb_img *im = cb_imgs(c);
   uint32_t *pal = cb_pal(c);
-  for (uint32_t k = 0; k < cb_nimg; k++) im[k] = (struct cb_img) { 0, 0, 0, 0, 0, 0 };
+  for (uint32_t k = 0; k < cb_nimg; k++) im[k] = (struct cb_img) { 0, 0, 0, 0, 0, 0, 0, 0 };
   c->kopen = 0, c->kslot = 0;
   for (uint32_t k = 0; k < 256; k++) pal[k] = 0; }
 
@@ -523,7 +529,7 @@ static struct cb_cell *cb_nth(struct cb *c, uint32_t i) {
 struct cb_img const *cb_img(struct cb const *c, uint32_t slot) {
   if (!slot || slot >= cb_nimg || !cb_words(c)) return 0;
   struct cb_img const *im = cb_imgs(c) + slot;
-  if (!im->live || !im->w || !im->h || im->w > 65536u || im->h > 65536u) return 0;
+  if (!im->live || !im->w || !im->h || im->w > 65536u || im->h > 65536u || im->dw > 65536u || im->dh > 65536u) return 0;
   uint64_t const end = (uint64_t) im->off + (uint64_t) im->w * im->h;
   return end <= cb_words(c) ? im : 0; }
 
@@ -637,7 +643,7 @@ static void cb_six_open(struct cb *c) {
   uint32_t h = stride ? room / stride : 0;
   if (h > 256u * c->ch) h = 256u * c->ch;
   if (k == cb_nimg || h < 6) return;
-  cb_imgs(c)[k] = (struct cb_img) { c->stop, stride, h, 0, 0, 0 };
+  cb_imgs(c)[k] = (struct cb_img) { c->stop, stride, h, 0, 0, 0, 0, 0 };
   c->sslot = (uint16_t) k, c->sx = c->sy = c->sw = c->sh = 0, c->sreg = 0, c->srep = 1, c->sm = 0; }
 
 // a colour off HLS, sixel's hue wheel putting blue at 0, red at 120 and green at 240;
@@ -709,7 +715,7 @@ static void cb_place(struct cb *c, uint32_t k, int after) {
   struct cb_img const *im = cb_img(c, k);
   if (!im) return;
   uint32_t const cs = c->cols, col0 = c->wpos % cs, save = c->wpos;
-  uint32_t tw = (im->w + c->cw - 1u) / c->cw, th = (im->h + c->ch - 1u) / c->ch;
+  uint32_t tw = (cb_iw(im) + c->cw - 1u) / c->cw, th = (cb_ih(im) + c->ch - 1u) / c->ch;
   if (tw > 256) tw = 256;
   if (th > 256) th = 256;
   if (col0 + tw > cs) tw = cs - col0;
@@ -782,37 +788,41 @@ static void cb_kit_key(struct cb *c) {
    default: break; } }
 
 // a free slot with room for n words at the store's top: the sweep first keeps what ids
-// hold, then, pressed, lets it go. 0 for none
+// hold, then, pressed, lets it go; last, the image this id names gives way, its tiles
+// blanked -- an a=T replacing it lands on them next, so a frame sent whole never shows
+// the gap. 0 for none
 static uint32_t cb_kit_slot(struct cb *c, uint32_t n) {
-  for (int ids = 1; ids >= 0; ids--) {
-    cb_sweep(c, ids);
+  for (int ids = 1; ids >= -1; ids--) {
+    if (ids < 0) {
+      if (!c->ki) return 0;
+      struct cb_img *im = cb_imgs(c);
+      for (uint32_t i = 0, nc = cb_ncells(c), grid = (uint32_t) c->rows * c->cols; i < nc; i++) {
+        uint32_t const g = cb_nth(c, i)->g;
+        if (!(g & cb_pic) || im[cb_tslot(g)].id != c->ki) continue;
+        cb_nth(c, i)->g = g & 0xff000000u;
+        if (i < grid) cb_dirt(c, i / c->cols, i / c->cols); }
+      for (uint32_t k = 1; k < cb_nimg; k++) if (im[k].id == c->ki) im[k].id = 0; }
+    cb_sweep(c, ids > 0);
     uint32_t k = 1;
     while (k < cb_nimg && cb_imgs(c)[k].live) k++;
     if (k < cb_nimg && n <= cb_words(c) - c->stop) return k; }
   return 0; }
 
-// a copy of picture k at c x r cells (one of them 0: kept to the aspect), nearest pixel
+// picture k to span c x r cells (one of them 0: kept to the aspect), nearest pixel, read
+// that way where it is painted -- no copy, so a screen-wide one costs no store. a later
+// placement of the same image at another size moves the earlier one's too
 static uint32_t cb_kit_scale(struct cb *c, uint32_t k) {
-  struct cb_img const *im = cb_img(c, k);
-  if (!im || (!c->kc && !c->kr)) return k;
+  struct cb_img *im = cb_imgs(c) + k;
+  if (!cb_img(c, k)) return k;
+  im->dw = im->dh = 0;
+  if (!c->kc && !c->kr) return k;
   uint32_t W = c->kc * c->cw, H = c->kr * c->ch;
   if (!W) W = im->w * H / im->h;
   if (!H) H = im->h * W / im->w;
   if (W > 256u * c->cw) W = 256u * c->cw;
   if (H > 256u * c->ch) H = 256u * c->ch;
-  if (!W || !H) return k;
-  // no sweep here: k itself may be one no cell names yet
-  uint32_t k2 = 1;
-  while (k2 < cb_nimg && cb_imgs(c)[k2].live) k2++;
-  if (k2 == cb_nimg || (uint64_t) W * H > cb_words(c) - c->stop) return k;
-  uint32_t *px = cb_spx(c);
-  uint32_t const off = c->stop;
-  for (uint32_t y = 0; y < H; y++)
-    for (uint32_t x = 0; x < W; x++)
-      px[off + y * W + x] = px[im->off + (uint64_t) y * im->h / H * im->w + (uint64_t) x * im->w / W];
-  cb_imgs(c)[k2] = (struct cb_img) { off, W, H, 1, 0, cb_gen(c) };
-  c->stop = off + W * H;
-  return k2; }
+  if (W && H) im->dw = W, im->dh = H;
+  return k; }
 
 static void cb_kit_show(struct cb *c, uint32_t k) {
   cb_place(c, cb_kit_scale(c, k), c->kcur == 1 ? cb_stay : cb_beside_pic); }
@@ -843,9 +853,17 @@ static void cb_kit_begin(struct cb *c) {
   // a PNG's size is its own: it takes the store's whole top to land in, pixels and all
   int const png = c->kf == 100;
   if (!png && (!c->ks || !c->kv || c->ks > 65536u || c->kv > 65536u)) return cb_kit_reply(c, 0, "EINVAL:size");
+  // the same id again at its size: the pixels land over the old ones where its tiles show
+  // them, as kitty replaces an image its placements keep -- no second copy, and no gap
+  if (!png && c->ka != 'q' && c->ki)
+    for (uint32_t j = 1; j < cb_nimg; j++) {
+      struct cb_img const *im = cb_img(c, j);
+      if (im && im->id == c->ki && im->w == c->ks && im->h == c->kv) {
+        c->kslot = j, c->kpix = 0, c->kpx = 0, c->kbyte = 0, c->kopen = 1;
+        return; } }
   uint32_t const k = cb_kit_slot(c, png ? 1u : c->ks * c->kv);
   if (!k) return cb_kit_reply(c, 0, "ENOSPC:store full");
-  cb_imgs(c)[k] = (struct cb_img) { c->stop, png ? 0u : c->ks, png ? 0u : c->kv, 0, c->ki, 0 };
+  cb_imgs(c)[k] = (struct cb_img) { c->stop, png ? 0u : c->ks, png ? 0u : c->kv, 0, c->ki, 0, 0, 0 };
   c->kslot = k, c->kpix = 0, c->kpx = 0, c->kbyte = 0, c->kopen = 1; }
 
 static void cb_kit_byte(struct cb *c, uint32_t b) {
@@ -900,7 +918,8 @@ static void cb_kit_end(struct cb *c) {
   else if (c->kpix < im->w * im->h) return cb_kit_reply(c, 0, "EINVAL:short");
   if (c->ka == 'q') return cb_kit_reply(c, 1, 0);          // asked, not kept
   if (c->ki) for (uint32_t j = 1; j < cb_nimg; j++) if (j != k && cb_imgs(c)[j].id == c->ki) cb_imgs(c)[j].id = 0;
-  im->live = 1, im->gen = cb_gen(c), c->stop = im->off + im->w * im->h;
+  if (!im->live) c->stop = im->off + im->w * im->h;   // a fresh one tops the store; a reused one stays put
+  im->live = 1, im->gen = cb_gen(c);
   if (c->ka == 'T') cb_kit_show(c, k);
   cb_kit_reply(c, 1, 0); }
 

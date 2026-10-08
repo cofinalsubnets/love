@@ -103,17 +103,17 @@
              + 7.0 * mouth z)
  ; the plateau's top, falling away to the plain south of the mouth
  (top x z) (: k (sat ((z + 40.0) / 30.0))
-   (k * k * (3.0 - 2.0 * k) * (21.0 + 2.5 * sin (x / 13.0 + z / 17.0) + 1.5 * sin (z / 9.0 - x / 7.0))))
+   (2 k * (3.0 - 2.0 * k) * (21.0 + 2.5 * sin (x / 13.0 + z / 17.0) + 1.5 * sin (z / 9.0 - x / 7.0))))
  ; the bowl's floor at x z: its rows wavering a little round it, each a tread and a riser
  (bowl x z) (: r (sqrt (x * x + sq (z - zc))) rr (r + 0.6 * sin (x / 4.0 + z / 6.0))
    k (min (max ((rr - floor-r) / row-w) 0.0) (1.0 * rows)) kf (floor k) s (sat ((k - kf - 0.5) * 2.0))
-   (row-h * (kf + s * s * (3.0 - 2.0 * s)) + 2.2 * max (rr - rim-r) 0.0))
+   (row-h * (kf + 2 s * (3.0 - 2.0 * s)) + 2.2 * max (rr - rim-r) 0.0))
  zend (zc - floor-r - 1.0)               ; where the slot's own walls end, at the bowl's floor
  ; the open air's distance to the rock, as near as the march may step: the slot, the bowl
  ; and the sky over the plateau each open, and the rock what none of them is
  (slot-d x y z) (min (min (0.8 * (half y z - mag (x - slot-x z))) (zend - z)) y)
  ; ..the bowl's floor stepped over at its true height, inside the round the rows start at
- (bowl-d x y z) (max (0.4 * (y - bowl x z)) (min y (floor-r - 0.6 - sqrt (x * x + sq (z - zc)))))
+ (bowl-d x y z) (max (0.4 * (y - bowl x z)) (min y (floor-r - 0.6 - sqrt (2 x + sq (z - zc)))))
  (top-d x y z) (0.65 * (y - top x z))
  (stones-field x y z) (max (max (slot-d x y z) (bowl-d x y z)) (top-d x y z))
  ; ..and over trays, each place asked only of the parts near enough to be the nearest:
@@ -121,9 +121,9 @@
  south-z (zc - rim-r - 12.0) north-z (zend + 3.0)
  (field x y z) (: a (iota (z < south-z)) b (iota (north-z < z)) c (iota ((south-z <= z) * (z <= north-z)))
    (g ix v) (peep v ix 0.0)
-   o1 (#a = 0 ? (z * 0.0) (: X (g a x) Y (g a y) Z (g a z) (pin (z * 0.0) a (max (slot-d X Y Z) (top-d X Y Z)))))
-   o2 (#b = 0 ? o1 (: X (g b x) Y (g b y) Z (g b z) (pin o1 b (max (bowl-d X Y Z) (top-d X Y Z)))))
-   (#c = 0 ? o2 (: X (g c x) Y (g c y) Z (g c z) (pin o2 c (stones-field X Y Z)))))
+   o1 (#a @ 0 (z * 0.0) (: X (g a x) Y (g a y) Z (g a z) (pin (z * 0.0) a (max (slot-d X Y Z) (top-d X Y Z)))))
+   o2 (#b @ 0 o1 (: X (g b x) Y (g b y) Z (g b z) (pin o1 b (max (bowl-d X Y Z) (top-d X Y Z)))))
+   (#c @ 0 o2 (: X (g c x) Y (g c y) Z (g c z) (pin o2 c (stones-field X Y Z)))))
  ; the ground under a place: the lowest of the slot's floor, the bowl and the plateau
  (stones-ground x z) (: in (mag (x - slot-x z) < half 1.0 z - body-r && z < zend)
    (min (in ? 0.0 99.0) (min (bowl x z) (top x z))))
@@ -207,7 +207,7 @@
  (sink x z) (1.2 * sat (1.0 - (bowl x z - top x z) / 2.0))
  ; a ring's place at angle a: where the rows' wavering puts its radius rr
  (ring-at rr a) (: (go r k) (: x (r * sin a) z (zc + r * cos a)
-                            (k = 0 ? [x z] (go (rr - 0.6 * sin (x / 4.0 + z / 6.0)) (k - 1))))
+                            (k @ 0 [x z] (go (rr - 0.6 * sin (x / 4.0 + z / 6.0)) (k - 1))))
    (go rr 2))
  ; ..its height there: the knot's, and the plateau's a little under where it is the top
  (ring-y kn x z) (min (kn 1) (top x z) - (rim-r + 5.0 < kn 0 ? 0.08 0.0))
@@ -254,7 +254,7 @@
                        [x y z (tx * z) (tx * (T + mag (x - sx)))])))
      ; ..the face in the rock's beds, and its lips apart in the plateau's own sand, from the
      ; face's top points: where they show through the plain they are the plain
-     (sheet lo n tex) (: (f i j) (: v (at (lo + i) j) ((tex = 1) ? [(v 0) (v 1) (v 2) (tx * v 0) (tx * v 2)] v))
+     (sheet lo n tex) (: (f i j) (: v (at (lo + i) j) (tex @ 1 [(v 0) (v 1) (v 2) (tx * v 0) (tx * v 2)] v))
                          (sg < 0 ? (mesh-grid nz n (\ j i (f i j)) tex [1.0 1.0 1.0]) (mesh-grid n nz f tex [1.0 1.0 1.0])))
      m (mesh-join [(sheet 0 nw 0) (sheet nw #lips 1)])
      ; ..its lips only under the plateau, every corner, not where the bowl's rows are the ground
@@ -284,7 +284,7 @@
  (bowl-mesh ks)
   (: (go l pc) (atom? l ? ()
                   (: kn <l c (cut? kn) e (c ? [(notch-a kn -1) (notch-a kn 1)] [pi (3.0 * pi)])
-                     ((c && (pc = 0) ? [[kn e 1]] ()) + [[kn e 0]] + go >l c)))
+                     ((c && pc = 0 ? [[kn e 1]] ()) + [[kn e 0]] + go >l c)))
      rs (go ks 0)
      (lerp p q f) [(p 0 + f * (q 0 - p 0)) (p 1 + f * (q 1 - p 1))]
      (at i j) (: rg (rs j) kn (rg 0) e (rg 1) w (e 0) E (e 1 + (e 1 < e 0 + pi ? (2.0 * pi) 0.0))
@@ -391,11 +391,11 @@
  ; the land, kept for every run in the process: the rock packed, its colours its own;
  ; the textures
  kept {}
- (land _) (: l (peep kept 'land ())
-   (tablet? l ? l
-      (: rk (rock-cols (mesh-pack (mesh-join [(wall -1) (wall 1) (slot-floor ()) (bowl-mesh knots) (plateau ())])))
-         l2 {'rock rk 'texs (texs-of ())}
-         (pin kept 'land l2, l2))))
+ (land _) (kept 'land @ l
+  (tablet? l ? l
+   (: rk (rock-cols (mesh-pack (mesh-join [(wall -1) (wall 1) (slot-floor ()) (bowl-mesh knots) (plateau ())])))
+      l2 {'rock rk 'texs (texs-of ())}
+      (pin kept 'land l2, l2))))
  ; --- the light baked: each vertex's share of the sun past the rock, of the
  ; sky by how much of it is open overhead and how near the rock crowds it, and the glow
  ; the sunlit walls throw down the slot. again once the sun has gone on two minutes ---
@@ -429,7 +429,7 @@
  ; kitty's pictures go up as ids 7 and 8 by turns, the last taken down only once the next
  ; is over it, the two in one synchronised update: one id put up again would go blank first
  kitty-id 7
- (kitty-del id) (esc + "_Ga=d,d=I,i=" + show id + ",q=2" + esc + "\\")
+ (kitty-del id) "\(esc)_Ga=d,d=I,i=\(id),q=2\(esc)\\"
  kitty-gone (kitty-del 7 + kitty-del 8)
  ; ..'kp pixels a column, and twice that a row: one, for half blocks
  (stones-pens st) (: lt (stones-light st) k (peep st 'kp 1) w (k * st 'w) h (k * st 'h) b (breath (peep st 'mt 0.0))
@@ -441,10 +441,13 @@
    xs (filter two? [db (post-batch st lt) (ghost-batch st lt)])
    sc (#xs = 0 ? sc0 [(cat (sc0 0) (map (b \ b 0) xs)) (cat (sc0 1) (map (b \ b 1) xs)) (sc0 2)])
    (mesh-frame v sc ((land ()) 'texs) [(hz 0) (hz 1) (hz 2) 150.0 900.0] 8 (1.5 * lt 'expo)
-               (mesh-sky (sky-stars (st 'sim) (st 'dst) lat) lt (st 'wx) e (st 'sim) (st 't) (k = 1 ? 1 (sky-k * k)))))
+               (mesh-sky (sky-stars (st 'sim) (st 'dst) lat) lt (st 'wx) e (st 'sim) (st 't) (k @ 1 1 (sky-k * k)))))
  (stones-frame st) (: w (st 'w) h (st 'h) k (peep st 'kp 1) f0 (stones-pens st) kit (st 'kitty)
    dl (charm? (st 'dlg)) r (h // 2) bw 22 bh (#acts + 2) r0 (max2 0 (r - bh - 2)) c0 (max2 0 ((w - bw) // 2))
    hp (st 'mt < help-t && !dl)
+   ; ..the frame the choices are put away, their cells blanked once: a terminal keeping
+   ; text and picture in one cell would lose the picture there every frame
+   _ (pin st 'shut (? dl 0 (: s (peep st 'shut 2) (s < 2 ? (s + 1) s))))
    ; ..under kitty's the choices' ground darkened in the picture, and the keys' line, the
    ; text over it
    f (? (dl && kit) (dim f0 (k * w) (k * c0) (2 * k * r0) (k * bw) (2 * k * bh))
@@ -468,14 +471,14 @@
      (0 < j && j < bh - 1 ? (esc + (i = c ? hi lo) + pad ((i = c ? " › " "   ") + show (i + 1) + "  " + acts i) bw " ")
         (pad "" bw " ")))
    (? (charm? c) (foldl (\ o j (o + at j + esc + bg + line j)) "" ^bh + esc + "[0m")
-      kit (foldl (\ o j (o + at j + esc + "[0m" + pad "" bw " ")) "" ^bh)
+      (kit && st 'shut = 1) (foldl (\ o j (o + at j + esc + "[0m" + pad "" bw " ")) "" ^bh)
       ""))
  ; the keys named along the bottom row r, w wide, for the first help-t seconds and not over
  ; the choices; under kitty, blanked a while after
  (keys-line st r w) (: kit (st 'kitty) deep (kit || st 'deep) t (st 'mt)
    bg (kit ? "[49m" (deep ? "[48;2;22;17;14m" "[48;5;233m"))
    fg (deep ? "[22;38;2;196;184;166m" "[22;38;5;250m")
-   at (esc + "[" + show r + ";1H")
+   at (esc + "[\(r);1H")
    (? (t < help-t && !(charm? (st 'dlg)))
         (at + esc + bg + esc + fg + pad (pad "" (max2 0 ((w - vlen help-text) // 2)) " " + help-text) w " " + esc + "[0m")
       (kit && t < help-t + 1.0) (at + esc + "[0m" + pad "" w " ")
@@ -634,7 +637,7 @@
         [(hp 0) (land-y st (hp 0) (hp 2) + 0.22) (hp 2)])
    v (tear ? (c+ [0.0 -0.1 0.0] (c* (0.3 + 0.1 * j 2) f)) [0.0 -0.2 0.0])
    (pins st 'nd (n + 1)
-            'drops ({'p p 'v v 'c (tear ? [0.6 0.85 1.7] [1.1 0.06 0.05]) 'r (tear ? 0.008 0.009) 'k kind} . peep st 'drops ())))
+            'drops ({'p p 'v v 'c (tear ? [0.6 0.85 1.7] [1.1 0.06 0.05]) 'r (tear ? 0.008 0.009) 'k kind} . st 'drops)))
  ; ..where a drop at x z comes to rest
  (land-y st x z) (: al <(st 'blocks)
    (mag (x - al 0) < 0.9 * al 4 && mag (z - al 2) < 0.9 * al 6 ? (al 1 + al 5) (stones-ground x z)))
@@ -642,9 +645,9 @@
  ; blood stays bright where it lands
  wet [0.42 0.27 0.16]
  tear-dry 1.5 tear-gone 5.0
- (drops! st dt) (: ds (peep st 'drops ()) mt (peep st 'mt 0.0)
+ (drops! st dt) (: ds (st 'drops) mt (peep st 'mt 0.0)
    moved (map (d \ (: v (c+ (d 'v) [0.0 (-9.8 * dt) 0.0]) p (c+ (d 'p) (c* dt v)) h (land-y st (p 0) (p 2))
-                      (p 1 <= h ? {'splat 1 'p [(p 0) (h + 0.012) (p 2)] 'c (d 'k = 'tear ? wet (d 'c)) 'r ((d 'k = 'tear ? 4.5 6.0) * d 'r)
+                      (p 1 <= h ? {'splat 1 'p [(p 0) (h + 0.012) (p 2)] 'c (d 'k @ 'tear wet (d 'c)) 'r ((d 'k @ 'tear 4.5 6.0) * d 'r)
                                    'k (d 'k) 'born mt}
                          {'p p 'v v 'c (d 'c) 'r (d 'r) 'k (d 'k)}))) ds)
    kept (filter (d \ d 'k != 'tear || mt - d 'born < tear-gone) (peep st 'splats ()))
@@ -661,7 +664,7 @@
       (both n [[0 2 4] [4 2 1] [1 2 5] [5 2 0] [4 3 0] [1 3 4] [5 3 1] [0 3 5]])])
    mt (peep st 'mt 0.0)
    (patch d n) (: p (d 'p) c (d 'c)
-     r (d 'k = 'tear ? (d 'r * (1.0 - sat ((mt - d 'born - tear-dry) / (tear-gone - tear-dry)))) (d 'r))
+     r (d 'k @ 'tear (d 'r * (1.0 - sat ((mt - d 'born - tear-dry) / (tear-gone - tear-dry)))) (d 'r))
      [(cat [(vx p c)] (map (k \ (: a (k * pi / 3.0) q (r * (0.7 + 0.3 * sin (p 0 * 91.0 + k * 2.3)))
                                (vx (c+ p [(q * cos a) 0.0 (q * sin a)]) c))) ^6))
       (both n (map (k \ [0 (1 + k) (1 + (k + 1) % 6)]) ^6))])
@@ -711,8 +714,8 @@
  ; () for what the terminal says of itself; its 'time a local hour of today in seconds, or ()
  ; for now ---
  (stones-walk o)
-   (view-walk {'new (w \ h \ (: sd (clock 0) now0 ((cite 'court 'court-now) ()) l0 (int (now0 0)) t (o 'time)
-                               now (t = () ? now0 ((cite 'court 'court-local) (86400 * (l0 // 86400) + t)))
+   (view-walk {'new (w \ h \ (: sd (clock 0) now0 (cite 'court 'court-now ()) l0 (int (now0 0)) t (o 'time)
+                               now (t @ () now0 (cite 'court 'court-local (86400 * (l0 // 86400) + t)))
                                k (o 'md @ 'kitty 1 'cells 0 (kitty-term? ()))
                                st (stones-size (pins (stones-new w h now sd) 'deep (elem (getenv "COLORTERM") ["truecolor" "24bit"]) 'kitty k)
                                                w (h // 2))
@@ -725,8 +728,8 @@
                             stones-move st))
                'fps fps 'linger 800 'next ()
                ; ..to apartment's music box and its drone
-               'song (hn \ ((hn ? ((cite 'apartment 'apartment-song-new) hn (wheel (clock 0)))) @ s
-                              (s ? (_ \ ((cite 'apartment 'apartment-song-feed) s)))))})
+               'song (hn \ ((hn ? (cite 'apartment 'apartment-song-new hn (wheel (clock 0)))) @ s
+                              (s ? (_ \ cite 'apartment 'apartment-song-feed s))))})
  ; ..and kitty's picture taken down after, where it was put up
  (stones-run o) (view-run (_ \ stones-walk o), say out kitty-gone, flush out, 0)
  stones-usage "usage: love lore stones [--time HH:MM] [--kitty|--cells]   (h l turn, k j step, u n look, space kneels at the altar, and there 1 to 5 or k j and space choose; a walking key or space stands again; q or esc leaves, or walk back out of the canyon)"
@@ -740,10 +743,9 @@
      (go l) (? (atom? l) o
                (<l = "--kitty") (once 'md 'kitty >l)
                (<l = "--cells") (once 'md 'cells >l)
-               (two? >l && <l = "--time") (once 'time (hm <>l) >>l)
-               ())
+               (two? >l && <l = "--time") (once 'time (hm <>l) >>l))
      (go as))
  (stones-main as) (stones-opts as @ o
    (tablet? o ? (stones-run o) (say err ("stones: " + stones-usage + "\n"), flush err, 2)))
- _ ((cite 'lore 'lore-enlist) 'stones (udoor 'stones stones-main stones-usage 1 1)))
+ _ (cite 'lore 'lore-enlist 'stones (udoor 'stones stones-main stones-usage 1 1)))
 ) ; module stones
