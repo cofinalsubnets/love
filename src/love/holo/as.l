@@ -199,6 +199,9 @@
    ; imm8 forms: name -> (prefix opcode) with the immediate last (shufps, pshufd), or
    ; (prefix opcode digit) for a shift of the whole register by the immediate
    as-ssi {'shufps [() 198] 'shufpd [[102] 198] 'pshufd [[102] 112] 'pshuflw [[242] 112] 'pshufhw [[243] 112]}
+   ; the three-byte rows: 0F 38 xx, and 0F 3A xx with an imm8 last (sha256rnds2's xmm0 is implied)
+   as-s38 {'pshufb [[102] 0] 'sha256rnds2 [() 203] 'sha256msg1 [() 204] 'sha256msg2 [() 205]}
+   as-s3a {'palignr [[102] 15] 'pblendw [[102] 14]}
    as-ssh {'psrlw [113 2] 'psraw [113 4] 'psllw [113 6] 'psrld [114 2] 'psrad [114 4] 'pslld [114 6]
            'psrlq [115 2] 'psllq [115 6] 'psrldq [115 3] 'pslldq [115 7]}
    as-shf {'rol 0 'ror 1 'rcl 2 'rcr 3 'shl 4 'sal 4 'shr 5 'sar 7}
@@ -220,6 +223,8 @@
    (as-xw d s w) (? (w = 8) 1 (as-gp? d && as-regw d = 8) 1 (as-gp? s && as-regw s = 8) 1 0)
    (as-sse-op pf op wb rn rm)
     (catall [pf (as-rex 0 wb (as-hi rn) (as-rm-x rm) (as-rm-b rm)) [15 op] (as-rm rn rm)])
+   (as-sse-op3 pf esc op rn rm)
+    (catall [pf (as-rex 0 0 (as-hi rn) (as-rm-x rm) (as-rm-b rm)) [15 esc op] (as-rm rn rm)])
    (as-more mn w ops)
     (: nm (show mn) n #ops d (n > 0 ? (ops 0) ()) s (n > 1 ? (ops 1) ())
        sr (peep as-sse mn (peep as-sse2 mn ())) ss (peep as-sst mn ())
@@ -233,6 +238,10 @@
                  (as-sse-op [102] 110 0 (as-regn d) s)))
           (two? ss && n = 2 && as-mem? d) (as-sse-op <ss <>ss 0 (as-regn s) d)
           (two? sr && n = 2) (as-sse-op <sr <>sr (as-xw d s w) (as-regn d) s)
+          (two? (peep as-s38 mn ()) && (n = 2 || (n = 3 && mn = 'sha256rnds2 && <(ops 2) = 'rg && as-regn (ops 2) = 0)))
+           (as-s38 mn @ r (as-sse-op3 <r 56 <>r (as-regn d) s))
+          (n = 3 && two? (peep as-s3a mn ()) && <(ops 2) = 'im)
+           (as-s3a mn @ r (as-imt (as-sse-op3 <r 58 <>r (as-regn d) s + [(byte <>(ops 2))]) 1 s))
           ; a symbol's address as the immediate
           (n = 2 && <s = 'ims)
            (: fx (as-sym s) frc (as-frc d)

@@ -465,6 +465,19 @@
         (map (l \ holo-hex 'a64 (gas-text 'a64 l))
              ["ldxr x0, [x1]" "ldxr w0, [x1]" "ldxrb w0, [x1]" "ldaxrh w0, [x1]" "stxr w2, x0, [x1]"
               "stxr w2, w0, [x1]" "stlxrb w2, w0, [x1]" "ldar x0, [x1]" "stlr w0, [x1]"]))
+   ;; the vector file the sha2 extension rides: q loads and stores, the byte turn, the block copy,
+   ;; the lane add and the four schedule and round words; a wrong arrangement is refused
+   _ (chk-eq "gas.a64.simd"
+        ["3000c03d" "3104c03d" "3204c43c" "0000803d" "0104803d" "100a206e" "021ca04e" "0486b44e" "2040045e"
+         "4150045e" "302a285e" "5062135e" "000638d5" "410cdf3c" "4100df3c" "0380c03c"]
+        (map (l \ holo-hex 'a64 (gas-text 'a64 l))
+             ["ldr q16, [x1]" "ldr q17, [x1, #16]" "ldr q18, [x1], #64" "str q0, [x0]" "str q1, [x0, #16]"
+              "rev32 v16.16b, v16.16b" "mov v2.16b, v0.16b" "add v4.4s, v16.4s, v20.4s" "sha256h q0, q1, v4.4s"
+              "sha256h2 q1, q2, v4.4s" "sha256su0 v16.4s, v17.4s" "sha256su1 v16.4s, v18.4s, v19.4s"
+              "mrs x0, id_aa64isar0_el1" "ldr q1, [x2, #-16]!" "ldr q1, [x2, #-16]" "ldr q3, [x0, #8]"]))
+   _ (chk-eq "gas.a64.simd.refuse" '(gas-a64-operand gas-a64-operand gas-a64-operand)
+        (map (l \ trap (x \ gas-text 'a64 x) l (\ a b a))
+             ["sha256h q0, q1, v4.16b" "sha256su0 v16.4s" "ldr q0, [x1, #300]"]))
    ;; the prefetches, scaled or not; and a move to or from sp, which is add #0 (orr's 31 is xzr)
    _ (chk-eq "gas.a64.prfm"
         ["200080f9" "310080f9" "510480f9" "0a0080f9" "260080f9" "20809ff8"]

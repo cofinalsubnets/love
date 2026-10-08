@@ -6811,6 +6811,12 @@
    asmpick '(r10 r9 r8 r7 r6 r5 r2 r1 r0)
    asmnames (foldl (t \ i \ "r" + show i @ s9 (pin t (name s9) s9)) {} ^11)
    (asmreg? g r9) (elem r9 asmregs || a64? g && r9 = 'r4)
+   ; an x64 xmm0..15 or an a64 v0..31, by name
+   (vclob? g c) (: (num k) (: d (chars (snip c k #c))
+                              (? (two? d && foldl (\ a ch (a && 48 <= ch <= 57)) 1 d) (foldl (\ a ch (a * 10 + ch - 48)) 0 d) -1))
+                   (? (x64t? g && starts? c "xmm") (0 <= num 3 < 16)
+                      (a64? g && starts? c "v") (0 <= num 1 < 32)
+                      0))
    ; callee-saved seats a clobber may name past the asm file: pushed and popped around the body
    (asmsave? g r9) (? (x64t? g) (elem r9 csx64)
                       (a64? g) (elem r9 '(r11 r12 r13 r14 r15 r16 r17 r18 r19 r20 r21 r22 r23 r24 r25 r26 r27 r28))
@@ -7148,6 +7154,9 @@
                     (!(two? l) ? (rev acc)
                        (<l @ c
                           (c = "memory" || c = "cc" ? (clobs >l acc)
+                             ; a vector register: a function with an asm homes no float (hasasm), so
+                             ; none is live in one across the body and the clobber needs no save
+                             (vclob? g c) (clobs >l acc)
                              (: r9 (neutral? ? (intern c) (gas-regname tgt c))
                                 (? !(nom? r9) (asmno g ("an asm clobber of \"" + c + "\""))
                                    (asmreg? g r9) (clobs >l acc)
