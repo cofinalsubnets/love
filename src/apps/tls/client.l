@@ -18,6 +18,8 @@
 ;                              'pin-only (the caller holds the pin: gemini), or 'none
 ;   (tls-open-as host port sni how)   the same, sni the name said and checked
 ;   (tls-on s sni port how)    the same over a socket already connected (STARTTLS)
+;   (tls-wire tls? host port how)   tls-open, or with tls? false a plain connection the
+;                              words below take too -> a session | why not
 ;   (tls-say t s)              send s as application data
 ;   (tls-hear t)               the next run of application data as it arrives, () at the
 ;                              peer's close_notify, a nom for a stream cut or forged, (t 'why)
@@ -260,6 +262,9 @@
                  + "; to trust this key for " + key + " anyway, add the line \"" + key + " " + fp + "\" to " + file)))))
 
    ; --- the handshake, whole ---
+   (tls-wire tls? host port how)
+    (? tls? (tls-open host port how)
+       (dial host port @ s (hot? s ? {'s s} ("cannot connect to " + host + ":" + show port))))
    (tls-dial host port) (: r (tls-open host port 'verify) (? (tablet? r) r ()))
    ; how: 'verify (the chain to a root, or a pin), 'pin-only (the caller pins: gemini), 'none
    (tls-open host port how) (tls-open-as host port host how)
@@ -341,20 +346,23 @@
                          t)))))))
 
    ; --- the application half ---
+   ; a session with no handshake ('up) is a plain socket
    (tls-say t s)
-    (: n #s
-       (go i) (? (n <= i) 0
-                 (: k (n - i < 16384 ? (n - i) 16384)
-                    _ (seal t 23 (snip s i (i + k)))
-                    (go (i + k))))
-       (go 0))
+    (? !(t 'up) (say (t 's) s, flush (t 's))
+       (: n #s
+          (go i) (? (n <= i) 0
+                    (: k (n - i < 16384 ? (n - i) 16384)
+                       _ (seal t 23 (snip s i (i + k)))
+                       (go (i + k))))
+          (go 0)))
    (tls-hear t)
-    (: r (open-rec t)
-       (? (atom? r) r
-          (<r = 23) <>r
-          (<r = 21) (: a (alert-in t <>r) (? (two? a) (tls-hear t) a))
-          (<r = 22) (post-hs t (t 'hbuf + <>r))
-          (rd-fail t 'bad 10 "a record of no type this client knows")))
+    (? !(t 'up) (see (t 's) @ -1 () c (unsee (t 's) c, chug (t 's)))
+       (: r (open-rec t)
+          (? (atom? r) r
+             (<r = 23) <>r
+             (<r = 21) (: a (alert-in t <>r) (? (two? a) (tls-hear t) a))
+             (<r = 22) (post-hs t (t 'hbuf + <>r))
+             (rd-fail t 'bad 10 "a record of no type this client knows"))))
    ; the handshake messages after it: a ticket passed over (no resumption here), a key update
    ; taken, which must end its record (RFC 8446 5.1), the rest refused
    (post-hs t buf)
@@ -380,5 +388,5 @@
        (go _) (: s (tls-hear t) (? (string? s) (say j s, go 0) s))
        e (go 0)
        (? (nom? e) e (slurp j)))
-   (tls-close t) (seal t 21 (u8 1 + u8 0), close (t 's)))
+   (tls-close t) (? (t 'up) (seal t 21 (u8 1 + u8 0)) 0, close (t 's)))
 ) ; module tls

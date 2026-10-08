@@ -44,10 +44,9 @@
 ; binding at the top would be made once, at the bake, with the bake's settings and directory
 (: (bee-main as)
    (:
-     dial (cite 'tls 'tls-dial)
+     wire (cite 'tls 'tls-wire)
      tsay (cite 'tls 'tls-say)
      hear (cite 'tls 'tls-hear)
-     topen (cite 'tls 'tls-open)                             ; () on a binary that cannot verify
      find fsub
      header (cite 'kore 'wg-header)
      digits (cite 'kore 'wg-digits)
@@ -1864,12 +1863,9 @@
           ""))
 
      ; --- the wire ---
-     ; a pull reader over the connection: 'h holds bytes heard and not yet taken. over tls
-     ; it hears records, over plain http the socket's own gulps
-     (feed r) (: s (? (r 'tls) (hear (r 't))
-                      (: q (r 't) c (see q) (? (c < 0) () (: _ (unsee q c) (chug q)))))
-                 (? (string? s) (pin r 'h (r 'h + s), 1) 0))
-     (sock r) (? (r 'tls) (r 't 's) (r 't))
+     ; a pull reader over tls's wire, plain or sealed: 'h holds bytes heard and not yet taken
+     (feed r) (: s (hear (r 't)) (? (string? s) (pin r 'h (r 'h + s), 1) 0))
+     (sock r) (r 't 's)
      (upto r sep)                                             ; the bytes before sep, both taken; () at the end
       (: h (r 'h) k (find h sep 0)
          (? (k < 0) (? (feed r) (upto r sep))
@@ -1913,24 +1909,17 @@
               ["/proc/net/tcp" "/proc/net/tcp6"])
      ; one POST, its head read -> a reader carrying 'code, or () for a dead wire. plain http
      ; reaches this machine alone and carries no key; a key goes over tls only to a peer
-     ; tls-open verified, and not at all from a binary without it. a refusal is a reader
-     ; whose 'code is the reason
+     ; tls-open verified. a refusal is a reader whose 'code is the reason
      (bee-open key body)
-      (: tls? <bee-at keyed (string? key && 0 < #key) port (bee-at 2)
+      (: tls? <bee-at port (bee-at 2)
          (? (!tls? && !bee-local?) {'code "plain http reaches this machine alone"}
             ; a listener of another login's (uid 1000 up) could be anyone; a service's (ollama's) is the box's
             (!tls? && two? (filter (\ u (u != getuid 0 && 1000 <= u)) (port-uids port)))
              {'code ("port " + show port + " is another user's")}
-            (tls? && keyed && !(lit? topen)) {'code "this binary's tls cannot verify a certificate"}
-            (: t (? !tls? (cite 'dns 'dial bee-host port)
-                    (lit? topen) (topen bee-host port 'verify)
-                    (dial bee-host port))
-               up (? tls? (tablet? t) (hot? t))
-               (? (string? t) {'code t}                       ; tls-open's why not
-                  up
-                  (: q (request key body)
-                     _ (? tls? (tsay t q) (: _ (say t q) (flush t)))
-                     r {'t t 'h "" 'tls tls?}
+            (: t (wire tls? bee-host port 'verify)
+               (? (string? t) (tls? ? {'code t} ())           ; tls-open's why not
+                  (: _ (tsay t (request key body))
+                     r {'t t 'h ""}
                      hd (upto r "\r\n\r\n")
                      (? (string? hd)
                         (: sp (find hd " " 0)

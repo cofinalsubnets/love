@@ -111,13 +111,12 @@
  ; -> a connection logged in, or why not
  (im-login u user pass)
   (u @ [tls? _ host port _]
-     (: c0 (? tls? (cite 'tls 'tls-open host port 'verify @ t (tablet? t ? (pins (smtp-conn (t 's)) 'tls t) ("tls: " + show t)))
-              (cite 'dns 'dial host port @ s (hot? s ? (smtp-conn s) ("cannot connect to " + host + ":" + show port))))
+     (: c0 (smtp-conn tls? host port)
         (? (string? c0) c0
            (: c (pins c0 'tagn 0 'dead 0)
               g (smtp-line c)
               (? (!(string? g) || !(starts? g "* OK") && !(starts? g "* PREAUTH")) (smtp-close c, "the server did not greet")
-                 (: up (? (tablet? (c 'tls)) 1
+                 (: up (? (c 'w 'up) 1
                           (im-cmd c "STARTTLS" @ r (im-ok? r ? (smtp-tls c host port) 0)))
                     (? (string? up) (smtp-close c, up)
                        (up != 1 && !(elem host ["localhost" "127.0.0.1" "::1"]))
