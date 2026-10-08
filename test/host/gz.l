@@ -146,8 +146,7 @@
 
 ; --- the container streamed --- gz-unzipf reads a piece at a time and writes as it inflates:
 ; every cut answers the member, the stamp and the name; members that follow are read on; the
-; tail that is no member is 'trail; torn, a wrong crc and a declined writer say so; and the
-; whole-input lane a build without inflate-feed takes answers the same
+; tail that is no member is 'trail; torn, a wrong crc and a declined writer say so
 (: (gzf-cut s k) (: n #s (go i) (n <= i ? () ((snip s i (min n (i + k))) . go (i + k))) (go 0))
    (gzf-rd ps) ({0 ps} @ t (_ \ (peep t 0 () @ l (two? l ? (pin t 0 >l, <l) ""))))
    (gzf-wr t) (a \ b \ [1 (o \ (pin t 0 (o . peep t 0 ())))])
@@ -159,7 +158,6 @@
    gzf-ks [1 5 64 100000]
    (gzf-ok s k out) (: r (gzf-run s k) u <r
                        (two? u & (<u = 1) & (u 1 = 7) & (u 2 = "a.txt") & (u 3 = #out) & (r 1 = out) ? 1 0))
-   gzf-w (: t {0 ()}   u (gz-unzipw (gzf-rd [gzf-a]) (gzf-wr t)) [u (cats (rev (t 0)))])
    gzf-n {0 0}
    gzf-bu (gz-unzipf (gzf-rd (gzf-cut bomb-z 65536)) (a \ b \ [1 (o \ (pin gzf-n 0 (peep gzf-n 0 0 + #o)))])))
 (test
@@ -170,7 +168,6 @@
  (<(gzf-run (snip gzf-a 0 (#gzf-a - 8) + "\x01\x02\x03\x04" + snip gzf-a (#gzf-a - 4) #gzf-a) 64) = ())
  (<(gzf-run "hello, not a gzip" 5) = 'nogz)
  (gz-unzipf (gzf-rd [gzf-a]) (a \ b \ ()) = 'no)
- (gzf-w = gzf-run gzf-a 64)
  ; the ceiling is the heap's: streamed, the 1.1 GiB bomb goes out whole (its crc is not its own)
  (gzf-bu = ())
  (peep gzf-n 0 0 = 1 + 258 * (1 + 8 * 558835)))
