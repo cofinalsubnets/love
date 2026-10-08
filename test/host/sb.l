@@ -859,6 +859,41 @@
  gets g2
  bsame bz dbad
  upok up1ok legacy)
+;; packs: dz/a's texts, coded and plain, into one pack; every blob still read off it; a record
+;; after it lays its text loose beside, and a second pack folds both into one; a peer syncs
+;; off the packed nest; a byte turned in a pack whose idx (and so its name) is kept is refused
+(: _ (chdir "dz/a") _ (dz-clear ())
+   (nloose _) (#(readdir ".sb/z") + #(readdir ".sb/blob"))
+   lo0 (nloose ())
+   p1 (sb-pack 0)
+   lo1 (nloose ())
+   pn (lines <>(look ".sb/packs"))
+   ix <>(look (".sb/pack/" + <pn + ".idx"))
+   _ (dz-clear ())
+   reads (foldl (\ a i (a && (bget (hs i) @ t (two? t && <>t = dz-v i)))) 1 ^20)
+   leg (bget h1 @ t (two? t && <>t = big))
+   _ (lay "g" "after the pack\n") _ (sb-record "after")
+   lo2 (nloose ())
+   p2 (sb-pack 0)
+   pn2 (lines <>(look ".sb/packs"))
+   npk #(filter (f \ ends? f ".pack") (readdir ".sb/pack"))
+   d0 (sb-diff ())
+   _ (chdir "..") _ (mkdir "e" 493) _ (chdir "e") _ (mk ()) _ (dz-clear ())
+   _ (sb-sync "../a")
+   esame (<>(look "f") = <>(look "../a/f") && <>(look "g") = "after the pack\n")
+   _ (chdir "..") _ (hark ["cp" "-r" "a" "t"]) _ (mkdir "u" 493)
+   tp ("t/.sb/pack/" + <pn2 + ".pack") tb <>(look tp)
+   _ (lay tp (snip tb 0 (#tb - 1) + string (255 - tb (#tb - 1))))
+   _ (chdir "u") _ (mk ()) _ (dz-clear ())
+   ug (gap (dir-pat "../t") (dir-blb "../t") (form "../t/.sb/tips") ".")
+   ubad (0 < ug 'bad)
+   _ (chdir (sb-home + "/" + sb-dir)))
+
+(test
+ (0 < lo0) p1 (lo1 = 0) (1 = #pn) (#ix = lo0 * pkr)              ; every text in, none left loose
+ reads leg                                                        ; coded and plain, read off the pack
+ (lo2 = 1) p2 (1 = npk) (<pn2 != <pn) (0 = d0)                     ; the second pack folds the first
+ esame ubad)
 
 (chdir sb-home)
 (hark ["rm" "-rf" sb-dir])

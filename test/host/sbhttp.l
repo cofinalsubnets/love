@@ -127,4 +127,47 @@
  !(two? srefs) !ref                                                ; the malformed ref was dropped
  !got)                                                             ; and the pull says it was refused
 
+;; --- a packed origin: its texts in one pack, none loose, so the pull reads /packs, an idx and
+;     the pack. then a byte turned in the pack, its idx (and so its name) kept: refused ---
+(: SD (cite 'sb)
+   record (SD 'sb-record) sync (SD 'sb-sync) pack (SD 'sb-pack)
+   look (SD 'look) lay (SD 'lay) mk (SD 'mk) dirty (SD 'dirty)
+   root ("out/.sbpack-" + show (getpid 0))
+   home (cwd 0)
+   _ (mkdir root 493)
+   _ (map (d \ mkdir (root + "/" + d) 493) ["origin" "clone" "turned"])
+   oroot (home + "/" + root + "/origin/.sb")
+   _ (chdir (root + "/origin"))
+   _ (lay "a.txt" "v1\n") _ (lay "empty.txt" "") _ (mk ()) _ (record "first")
+   _ (lay "a.txt" "v2\n") _ (record "second")
+   packed (pack 1)
+   loose (#(readdir ".sb/z") + #(readdir ".sb/blob"))
+   pn <(lines <>(look ".sb/packs"))
+   _ (chdir home)
+   pl (test-listen 0)
+   port <pl
+   l (pl 1)
+   srv (twirl (\ _ ((: (g k) (: _ (await l)
+                                c (accept l)
+                                _ (hot? c ? (cite 'kiosko 'serve1 oroot () c, close c))
+                                (g k)))
+                    0)) 0)
+   url ("http://127.0.0.1:" + show port + "/")
+   _ (chdir (root + "/clone"))
+   got (sync url)
+   a (look "a.txt") e (look "empty.txt") clean (dirty ())
+   _ (chdir home)
+   pf (oroot + "/pack/" + pn + ".pack") pb <>(look pf)
+   _ (lay pf (snip pb 0 (#pb - 1) + string (255 - pb (#pb - 1))))
+   _ (chdir (root + "/turned"))
+   _ (mk ())
+   bad (sync url)
+   _ (chdir home)
+   _ (hark ["rm" "-rf" root]))
+
+(test
+ packed (0 = loose) (64 = #pn)                                     ; one pack, nothing loose
+ (0 < got) (<>a = "v2\n") (two? e) (0 = #<>e) (0 = clean)          ; pulled off the pack, empty file too
+ !bad)                                                             ; a turned byte is refused
+
 (test_fin (), puts "sbhttp: ok", putc 10, 0)

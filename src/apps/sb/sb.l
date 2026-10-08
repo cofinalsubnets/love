@@ -8,6 +8,8 @@
 (: zcap 16                                               ; the longest chain of bases a blob rides
    bcache {'n 0}                                         ; derived blob bytes, by hash, bounded
    stc {'old {} 'new {} 'now 0}                          ; the stat cache: path -> (key side)
+   pks {}                                                ; a store's absolute dir -> (sig ((name idx) ..))
+   pkr 93                                                ; one pack idx record's bytes
    ; --- files ---
    ; an empty file slurps to (), so `+ ""` folds it back onto the string identity and a
    ; 0-byte file hashes honestly. the port is minded, not closed at the tail: a torn read
@@ -75,7 +77,7 @@
           (go j d) (? (#t <= j) () (t j = 10) [h b d (j + 1)]
                       (48 <= t j && t j <= 57) (go (j + 1) (d * 10 + t j - 48)) ())
           (? (t 68 = 32 && t (i - 1) = 32 && sb-hex? h && (b = "-" || sb-hex? b)) (go i 0))))
-   (bhave-in d h) (two? (stat (d + "/.sb/blob/" + h)) || two? (stat (d + "/.sb/z/" + h)))
+   (bhave-in d h) (two? (stat (d + "/.sb/blob/" + h)) || two? (stat (d + "/.sb/z/" + h)) || two? (pk-find d h))
    (bhave? h) (bhave-in "." h)
    ; a blob's bytes -> (1 bytes) | (): its file, or its z text derived off its base
    (bget-in d h)
@@ -83,7 +85,9 @@
        (? (two? c) c
           !(sb-hex? h) ()
           (look (d + "/.sb/blob/" + h) @ t
-             (two? t ? t (look (d + "/.sb/z/" + h) @ z (two? z ? (zderive d h <>z 0)))))))
+             (two? t ? t (look (d + "/.sb/z/" + h) @ z
+                            (? (two? z) (zderive d h <>z 0)
+                               (: p (pk-get d h) (? (atom? p) () (<p = "b") [1 (p 1)] (zderive d h (p 1) 0)))))))))
    (bget h) (bget-in "." h)
    ; a z text's bytes, its base got from d first -> (1 bytes) | (). chk: checked against h, for
    ; a text from outside; the store's own were checked as they came in, as its plain files are
@@ -97,7 +101,52 @@
                    _ (pin bcache h [1 u]) _ (pin bcache 'n (bcache 'n + #u))
                    [1 u]))))
        ())
-   (zdepth-in d h) (look (d + "/.sb/z/" + h) @ z (two? z ? (zhead <>z @ [_ _ k _] k 0) 0))
+   (zdepth-in d h)
+    (: z (look (d + "/.sb/z/" + h))
+       t (? (two? z) <>z (: p (pk-get d h) (? (two? p && <p = "z") (p 1) ())))
+       (? (string? t) (zhead t @ [_ _ k _] k 0) 0))
+   ; --- packs: .sb/pack/P.pack holds store texts end to end (a blob's bytes, or its z text),
+   ;     P the pack's sha256; P.idx a record per text, sorted by hash: "H K OFF LEN\n", K b or
+   ;     z, OFF and LEN twelve digits. .sb/packs names them, a line each, for a client that
+   ;     cannot list a directory. the loose files above are asked first ---
+   (pk-num n) (snip (show (1000000000000 + n)) 1 13)
+   (pk-rec h k o n) (cats [h " " k " " (pk-num o) " " (pk-num n) "\n"])
+   ; the cache is keyed by the absolute dir (a sync chdirs, so "." moves) and signed by
+   ; .sb/packs' inode and mtime, which every pack lays anew: another process's pack is seen
+   (pk-key d) (? (starts? d "/") d (cwd 0 + "/" + d))
+   (pk-sig d) (: st (stat (d + "/.sb/packs")) (? (two? st) (show [(st 8) (st 3)]) ""))
+   (pk-load d)
+    (: pd (d + "/.sb/pack") sg (pk-sig d)
+       fs (? (two? (stat pd)) (filter (f \ #f = 68 && ends? f ".idx") (readdir pd)) ())
+       ps (filter two? (map (f \ (: t (look (d + "/.sb/pack/" + f)) (two? t ? [(snip f 0 64) <>t]))) fs))
+       _ (pin pks (pk-key d) [sg ps])
+       ps)
+   (pk-of d) (: c (peep pks (pk-key d) ()) (? (two? c && <c = pk-sig d) (c 1) (pk-load d)))
+   ; a hash in one idx text by halving -> (k off len) | ()
+   (pk-find1 ix h)
+    (: (go lo hi) (? (hi <= lo) ()
+                     (: m ((lo + hi) // 2) a (m * pkr) k (snip ix a (a + 64))
+                        (? (k = h) [(snip ix (a + 65) (a + 66)) (snum (snip ix (a + 67) (a + 79))) (snum (snip ix (a + 80) (a + 92)))]
+                           (k < h) (go (m + 1) hi)
+                           (go lo m))))
+       (go 0 (#ix // pkr)))
+   (pk-find d h) (: (go ps) (? (atom? ps) () (pk-find1 (<ps 1) h @ r (two? r ? (<<ps . r) (go >ps)))) (go (pk-of d)))
+   ; n bytes of file f from off -> (1 bytes) | ()
+   (pk-read f off n)
+    (openfd f 0 @ fd
+       (? (nom? fd) ()
+          (: _ (lseek fd off 0)
+             (go acc) (? (n <= #acc) acc (: c (chug fd) (? (0 < #c) (go (acc + c)) acc)))   ; a raw fd: one read a chug
+             t (go "") _ (close fd)
+             (? (n <= #t) [1 (snip t 0 n)] ()))))
+   ; h's text in d's packs -> (k text) | (). a pack gone under the cached idx (a repack)
+   ; reloads the idx once
+   (pk-get d h)
+    (: (try n) (pk-find d h @ r
+                  (? (atom? r) ()
+                     (: t (pk-read (d + "/.sb/pack/" + <r + ".pack") (r 2) (r 3))
+                        (? (two? t) [(r 1) <>t] (0 < n) (: _ (pk-load d) (try (n - 1))) ()))))
+       (try 1))
    ; bytes into d's store, coded against base (a blob hash | ()) when it is there -> their hash
    (keep-in d s base)
     (: h (sha256 s)
@@ -111,6 +160,57 @@
                   (lay (d + "/.sb/z/" + h) ("sbz " + h + " " + b + " " + show (b = "-" ? 0 k) + "\n" + body))
                   (lay (d + "/.sb/blob/" + h) s))
              h)))
+   ; --- pack: every loose text and every pack into one new pack, streamed to its file a text at
+   ;     a time and read back before the old ones go. the pack is named by its idx's sha256 (the
+   ;     idx names every text's hash and place). quiet: the auto pack after a sync ---
+   (sb-pack quiet)
+    (: (lo dir k) (map (f \ [f k ['f (dir + f)]]) (filter sb-hex? (? (two? (stat dir)) (readdir dir) ())))
+       loose (lo ".sb/blob/" "b" + lo ".sb/z/" "z")
+       old (pk-of ".")
+       (? (atom? loose && #old <= 1) (: _ (? quiet () (puts "sb: nothing to pack\n")) 0)
+          (: ; where each text is: an old pack's place, then a loose file over it (the same bytes)
+             ent {}
+             _ (map (pk \ (: ix (pk 1)
+                             (map (i \ (: a (i * pkr)
+                                         (pin ent (snip ix a (a + 64))
+                                              [(snip ix (a + 65) (a + 66))
+                                               ['p (".sb/pack/" + <pk + ".pack") (snum (snip ix (a + 67) (a + 79))) (snum (snip ix (a + 80) (a + 92)))]])))
+                                  (jot (#ix // pkr)))))
+                    old)
+             _ (map (e \ pin ent <e >e) loose)
+             hs (sort (keys ent))
+             (text w) (? (<w = 'f) (look (w 1)) (pk-read (w 1) (w 2) (w 3)))
+             _ (mkdir ".sb/pack" 493)
+             tmp ".sb/pack/new.pack"
+             q (open tmp "w")
+             ; the texts in hash order, each record laid as its text goes
+             recs (? (hot? q)
+                     (mind (_ \ (: (go m at acc)
+                                     (? (atom? m) (rev acc)
+                                        (: h <m e (ent h) t (text (e 1))
+                                           (? (atom? t) ()
+                                              (: _ (say q <>t)
+                                                 (go >m (at + #<>t) ((pk-rec h <e at #<>t) . acc))))))
+                                  (go hs 0 ())))
+                           () (_ \ close q))
+                     ())
+             ix (? (two? recs) (cats recs) "")
+             size (: st (stat tmp) (two? st ? <st -1))
+             want (: r (? (two? recs) (recs (#recs - 1)) "") (? (0 < #r) (snum (snip r 67 79) + snum (snip r 80 92)) 0))
+             nm (sha256 ix) pf (".sb/pack/" + nm)
+             ok (#recs = #hs && size = want
+                 && !(nom? (rename tmp (pf + ".pack")))
+                 && lay (pf + ".idx.new") ix && !(nom? (rename (pf + ".idx.new") (pf + ".idx")))
+                 && lay ".sb/packs.new" (nm + "\n") && !(nom? (rename ".sb/packs.new" ".sb/packs")))
+             (? !ok (: _ (unlink tmp) _ (say err "sb: the pack did not lay whole; nothing was removed\n") 0)
+                (: _ (map (pk \ (? (<pk = nm) () (: _ (unlink (".sb/pack/" + <pk + ".pack")) (unlink (".sb/pack/" + <pk + ".idx"))))) old)
+                   _ (map (e \ unlink (e 2 1)) loose)
+                   _ (pk-load ".")
+                   _ (? (quiet && #loose < 1024) () (puts ("sb: packed " + show #hs + " texts into " + sh nm + " (" + show size + " bytes)\n")))
+                   1)))))
+   ; after a sync: pack once the loose texts pass 1024
+   (pk-auto _) (: n (#(? (two? (stat ".sb/z")) (readdir ".sb/z") ()) + #(? (two? (stat ".sb/blob")) (readdir ".sb/blob") ()))
+                  (? (1024 < n) (sb-pack 1) 0))
    (keep s) (keep-in "." s ())
    (keep-by s base) (keep-in "." s base)
    (patch id) (: f (? (sb-hex? id) (form (".sb/patch/" + id))) (sb-sound? f ? f))
@@ -376,7 +476,9 @@
        n)
    ; a nest's patches and blobs by name, (1 text) | ()
    (dir-pat d) (\ id (look (d + "/.sb/patch/" + id)))
-   (dir-blb d) (\ h (look (d + "/.sb/blob/" + h) @ t (two? t ? t (look (d + "/.sb/z/" + h)))))
+   (dir-blb d) (\ h (look (d + "/.sb/blob/" + h) @ t
+                     (? (two? t) t (look (d + "/.sb/z/" + h) @ z
+                                     (? (two? z) z (: p (pk-get d h) (? (two? p) [1 (p 1)] ())))))))
    ; bring this nest to the state a given patch set implies
    (tell cfs)
     (: (go m n) (? (atom? m) n
@@ -602,7 +704,23 @@
        (? (atom? tt) (say err ("sb: no store at " + base + " (no /tips)\n"), ())
           (: tips (readform <>tt)
              (? (atom? tips) (say err ("sb: " + base + " has no tips\n"), ())
-                (: g (gap (\ id (http-fetch base ("/patch/" + id))) (\ h (http-fetch base ("/blob/" + h) @ t (two? t ? t (http-fetch base ("/z/" + h))))) tips ".")
+                (: ; the remote's packs: each idx up front, checked against the pack's name, and a
+                   ; pack's body on its first hit. a text from one is checked by the gap like any other
+                   pn (: t (http-fetch base "/packs") (? (two? t) (filter sb-hex? (lines <>t)) ()))
+                   rp (filter two? (map (n \ (: t (http-fetch base ("/pack/" + n + ".idx")) (? (two? t && sha256 <>t = n) [n <>t {}] ()))) pn))
+                   (rget h) (: (go ps) (? (atom? ps) ()
+                                          (pk-find1 (<ps 1) h @ r
+                                             (? (atom? r) (go >ps)
+                                                (: c (<ps 2)
+                                                   _ (? (peep c 'b ()) ()
+                                                        (: t (http-fetch base ("/pack/" + <<ps + ".pack"))
+                                                           (pin c 'b (? (two? t) <>t ""))))
+                                                   b (c 'b)
+                                                   (? (r 1 + r 2 <= #b) [1 (snip b (r 1) (r 1 + r 2))] ())))))
+                              (go rp))
+                   g (gap (\ id (http-fetch base ("/patch/" + id)))
+                          (\ h (: r (rget h) (? (two? r) r (http-fetch base ("/blob/" + h) @ t (two? t ? t (http-fetch base ("/z/" + h)))))))
+                          tips ".")
                    rt (http-fetch base "/refs")             ; the refs ride along
                    theirs (two? rt ? (readform <>rt))
                    ru (refadd (refs ()) theirs 1)
@@ -1427,6 +1545,8 @@ usage: sb VERB ..
                   executable) and a tab before it
   unpack DIR [H..|-]  blobs as plain files DIR/HASH: the hashes named (- reads them
                   from stdin), else the head's
+  pack            every loose blob and every pack into one pack (.sb/pack), read
+                  back before the old ones go. sync packs past 1024 loose
   psid [SET]      the name of a set's state: the head's, or SET's (a ref, a
                   patch, a psid, or head)
   paths A B       the paths sets A and B lay differently, a line each
@@ -1475,14 +1595,17 @@ usage: sb VERB ..
            "sync" (: pr (filter (w \ !(elem w ["--keep" "--take"])) >as)
                      md (? (elem "--take" >as) 2 (elem "--keep" >as) 1 0)
                      (atom? pr ? (usage ())
-                      !(held "." (_ \ (? (ssh? <pr || box-peer? <pr) (sync-ssh <pr md)
-                                         (url? <pr) (sync-url <pr (? (md < 2) md 0))
-                                         ; a nest on this box: then its signed queues, pulled
-                                         (: r (? (md < 2) (sync-with <pr md) (sync-take <pr))
-                                            _ (? (two? (stat (<pr + "/.sb"))) (lg-pull-dir <pr) 0)
-                                            r))))))
+                      !(held "." (_ \ (: r (? (ssh? <pr || box-peer? <pr) (sync-ssh <pr md)
+                                              (url? <pr) (sync-url <pr (? (md < 2) md 0))
+                                              ; a nest on this box: then its signed queues, pulled
+                                              (: r (? (md < 2) (sync-with <pr md) (sync-take <pr))
+                                                 _ (? (two? (stat (<pr + "/.sb"))) (lg-pull-dir <pr) 0)
+                                                 r))
+                                          _ (pk-auto ())
+                                          r)))))
            "serve" (sb-serve >as)
            "apply" !(held "." (_ \ sb-apply >as))
+           "pack" !(held "." (_ \ sb-pack 0))
            "take" (atom? >as ? (usage ()) !(held "." (_ \ sb-take >as)))
            "bank" (atom? >as ? (usage ()) !(held "." (_ \ sb-bank >as)))
            "undo" (atom? >as ? (usage ()) !(held "." (_ \ sb-undo >as)))
@@ -1492,7 +1615,7 @@ usage: sb VERB ..
            "status" !(sb-status ())
            "bisect" (#>as < 3 ? (usage ()) (: r (held "." (_ \ sb-bisect >as)) (? (r = 2) (usage ()) !r)))
            "ls" (sb-ls (elem "-l" >as), 0)
-           "unpack" (two? >as ? !(sb-unpack <>as (>>as = ["-"] ? words (slurp in + "") >>as)) (usage ()))
+           "unpack" (two? >as ? !(sb-unpack <>as (>>as = ["-"] ? (words (slurp in + "")) >>as)) (usage ()))
            "psid" !(sb-psid >as)
            "stamp" !(sb-stamp >as)
            "paths" (#>as = 2 ? (sb-paths <>as <>>as) (usage ()))
