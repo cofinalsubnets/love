@@ -9,6 +9,8 @@
 
 (: (count s n) (:- (go 0 0) (go i k) (i + #n <= #s ? (go (i + 1) (k + (n = snip s i (i + #n)))) k))
    (rows s) (1 + count s "\r\n")
+   ; the cell row the words n first appear on, or -1
+   (row-of s n) (:- (go 0) (go i) (i + #n <= #s ? (n = snip s i (i + #n) ? (count (snip s 0 i) "\r\n") (go (i + 1))) -1))
    day0 (1.0 * 1790812800)                          ; 2026-10-01, midnight on the wall clock
    (at hr sd) (stones-new 80 48 [(day0 + hr * 3600.0) 3600] sd)
    (keys! st ks) (each ks (k \ (stones-step st k, stones-move st)))
@@ -20,9 +22,15 @@
    deep (stones-frame (pin (at 12.0 7) 'deep 1))
  (test (rows f = 24) (f = f2) (rows deep = 24) (f != deep)
        (has? f "38;5;") (has? deep "38;2;")))
-; --- ..the keys named on the bottom row at the start, and gone a while in
+; --- ..the keys named on the bottom row at the start, and gone a while in; laid in the frame
+; --- as it is written, one synchronised update, and not written over it after
 (: st (at 12.0 7) f (stones-frame st) g (stones-frame (pin (at 12.0 7) 'mt 30.0))
- (test (has? f "\e[24;1H") (has? f "h/j/k/l move") (has? f "space interacts") !(has? g "h/j/k/l")))
+ (test (row-of f "h/j/k/l move" = 23) (has? f "space interacts") !(has? g "h/j/k/l")
+       !(has? f "\e[24;1H") (snip f 0 8 = "\e[?2026h") (snip f (#f - 8) #f = "\e[?2026l")))
+; --- ..the choices a third of the way up, in the frame too: the marked one first
+(: st (pin (at 12.0 7) 'dlg 0) f (stones-frame st) d (stones-frame (pin (at 12.0 7) 'deep 1 @ s (pin s 'dlg 1)))
+ (test (row-of f "1  Breathe" = 24 - 24 // 3 - 4 + 1) (row-of f "5  Wait" = 24 - 24 // 3 - 4 + 5)
+       (has? f " › 1  Breathe") (has? d " › 2  Weep") (rows f = 24) (rows d = 24) !(has? f "H\e[")))
 
 ; --- ..and as kitty's pixels: one picture over the screen's cells, the cursor left where it is;
 ; --- sized for kitty, about kitty-w pixels across, a whole number a column; ids 7 and 8 by
@@ -34,7 +42,7 @@
        (has? k8 "s=640,v=384,c=80,r=24,") ((stones-size (at 12.0 7) 80 24) 'kp = 1)))
 ; --- ..the choices' cells blanked over the picture once, the frame they are put away, and
 ; --- not before or after
-(: kb (pin (at 12.0 7) 'kitty 1) r ((kb 'h) // 2) r0 (max2 0 (r - 9)) c0 (max2 0 ((kb 'w - 22) // 2))
+(: kb (pin (at 12.0 7) 'kitty 1) r ((kb 'h) // 2) r0 (max2 0 (r - r // 3 - 4)) c0 (max2 0 ((kb 'w - 22) // 2))
    gap ("\e[" + show (r0 + 1) + ";" + show (c0 + 1) + "H\e[0m" + cats (map (_ \ " ") (jot 22)))
    f0 (stones-frame kb) _ (pin kb 'dlg 0) _ (stones-frame kb) _ (pin kb 'dlg ())
    f2 (stones-frame kb) f3 (stones-frame kb)

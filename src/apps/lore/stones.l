@@ -443,7 +443,8 @@
    (mesh-frame v sc ((land ()) 'texs) [(hz 0) (hz 1) (hz 2) 150.0 900.0] 8 (1.5 * lt 'expo)
                (mesh-sky (sky-stars (st 'sim) (st 'dst) lat) lt (st 'wx) e (st 'sim) (st 't) (k @ 1 1 (sky-k * k)))))
  (stones-frame st) (: w (st 'w) h (st 'h) k (peep st 'kp 1) f0 (stones-pens st) kit (st 'kitty)
-   dl (charm? (st 'dlg)) r (h // 2) bw 22 bh (#acts + 2) r0 (max2 0 (r - bh - 2)) c0 (max2 0 ((w - bw) // 2))
+   ; ..the choices centred a third of the way up the screen
+   dl (charm? (st 'dlg)) r (h // 2) bw 22 bh (#acts + 2) r0 (max2 0 (r - r // 3 - (bh + 1) // 2)) c0 (max2 0 ((w - bw) // 2))
    hp (st 'mt < help-t && !dl)
    ; ..the frame the choices are put away, their cells blanked once: a terminal keeping
    ; text and picture in one cell would lose the picture there every frame
@@ -452,12 +453,11 @@
    ; text over it
    f (? (dl && kit) (dim f0 (k * w) (k * c0) (2 * k * r0) (k * bw) (2 * k * bh))
         (hp && kit) (dim f0 (k * w) 0 (2 * k * (r - 1)) (k * w) (2 * k)) f0)
-   m (menu st r0 c0 bw bh + keys-line st r w)
    (? kit (: n (peep st 'kn 0) _ (pin st 'kn (1 - n))
              (esc + "[?2026h" + mesh-kitty f (k * w) (k * h) w (h // 2) (kitty-id + n)
-              + kitty-del (kitty-id + 1 - n) + m + esc + "[?2026l"))
-      (st 'deep) (mesh-cells f w h 1 0 {} + m)
-      (mesh-cells f w h 0 (st 'bay) {} + m)))
+              + kitty-del (kitty-id + 1 - n) + menu st r0 c0 bw bh + keys-line st r w + esc + "[?2026l"))
+      (esc + "[?2026h" + mesh-cells f w h (st 'deep) (st 'deep ? 0 (st 'bay)) (menu-bands st r0 c0 bw bh r w)
+       + esc + "[?2026l")))
  ; a part of a frame W wide darkened: x0 y0 its corner, bw by bh its size, in pixels
  (dim f W x0 y0 bw bh) (: i (iota (bw * bh)) ix ((y0 + i // bw) * W + x0 + i % bw) v (peep f ix 0)
    (pin f ix ((((v >> 16 & 255) * 2 // 5) << 16) | (((v >> 8 & 255) * 2 // 5) << 8) | ((v & 255) * 2 // 5))))
@@ -473,6 +473,18 @@
    (? (charm? c) (foldl (\ o j (o + at j + esc + bg + line j)) "" ^bh + esc + "[0m")
       (kit && st 'shut = 1) (foldl (\ o j (o + at j + esc + "[0m" + pad "" bw " ")) "" ^bh)
       ""))
+ ; ..in cells, the choices and the keys' line as view's bands, laid in the frame as it is
+ ; written: a terminal that paints as the bytes arrive would show the ground under the
+ ; box between a frame and the text written over it
+ (menu-bands st r0 c0 bw bh r w) (: deep (st 'deep) c (st 'dlg)
+   (pen v) (deep ? (: (q x) ((x * 63 + 127) // 255) (q (v 0) * 4096 + q (v 1) * 64 + q (v 2))) (v 3))
+   bg (pen [22 17 14 233]) hi (pen [244 234 216 230]) lo (pen [156 144 128 245]) fg (pen [196 184 166 250])
+   ; a band's text a cell at a time, each one character
+   (cells s) (: (go i) (i < #s ? (: j (cite 'text 'cpnext s i) (snip s i j . go j)) ()) (go 0))
+   (line j) (: i (j - 1) (0 < j && j < bh - 1 ? ((i = c ? " › " "   ") + show (i + 1) + "  " + acts i) ""))
+   (? (charm? c) (foldl (\ t j (pin t (r0 + j) [c0 (cells (pad (line j) bw " ")) (j - 1 = c ? hi lo) bg])) {} ^bh)
+      (st 'mt < help-t) {(r - 1) [0 (cells (pad (pad "" (max2 0 ((w - vlen help-text) // 2)) " " + help-text) w " ")) fg bg]}
+      {}))
  ; the keys named along the bottom row r, w wide, for the first help-t seconds and not over
  ; the choices; under kitty, blanked a while after
  (keys-line st r w) (: kit (st 'kitty) deep (kit || st 'deep) t (st 'mt)
@@ -494,7 +506,7 @@
  ; the weather thrown: the desert's mostly clear
  (cover-of sd) (throw sd 3 89 20 @ k (k < 15 ? 0 1))
  (stones-new w h now sd) (: bs (stones-blocks sd)
-   st {'px (slot-x 0.0) 'pz 0.0 'py eye-h 'th 0.0 'ph 0.12 'sim (now 0) 'dst (now 1)
+   st {'px (slot-x 0.0) 'pz 0.0 'py eye-h 'th 0.32 'ph 0.0 'sim (now 0) 'dst (now 1)
        'wx (sky-weather (cover-of sd) 'smooth) 't 0 'deep 0 'kitty 0 'kp 1 'done 0 'eye 'walk 'mt 0.0 'ro 0.0
        'dlg () 'sel 0 'dlg-at () 'drops () 'splats () 'nd 0
        'blocks bs 'bpk (mesh-pack (mesh-join (scar () . map block-mesh bs)))}

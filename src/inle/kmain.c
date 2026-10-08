@@ -1909,6 +1909,10 @@ bool k_fb(volatile uint32_t **p, int *w, int *h, int *pitch) {
   *p = kfb._, *w = kfb.width, *h = kfb.height, *pitch = kfb.pitch;
   return true; }
 
+// the glyph scale the console stands at, wherever it was set (/proc/vt/scale, a page's
+// resize); 0 with no framebuffer
+uintptr_t k_fb_scale(void) { return kfb._ ? kfb.scale : 0; }
+
 // (tty fd) -- the console as (rows . cols), off the framebuffer's pixels and the glyph scale
 // (cbinit); it is not 80x25 here. serial-only there is no grid and the answer is ENOTTY's
 // nom. the operand routes as every io op's does: the rows are one table shared by every
