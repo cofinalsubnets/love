@@ -73,17 +73,12 @@
    (wg-ask tls? host port path more) (wg-ask-how tls? host port path more 'verify)
    (wg-ask-how tls? host port path more how)
     (: req ("GET " + path + " HTTP/1.1\r\nHost: " + host + "\r\nUser-Agent: love-wget\r\nAccept: */*\r\n" + more + "Connection: close\r\n\r\n")
-       raw (? tls?
-              (: t (cite 'tls 'tls-open host port how)
-                 (? (string? t) ['why t]
-                    !(tablet? t) ()
-                    (: _ (cite 'tls 'tls-say t req)
-                       r (cite 'tls 'tls-slurp t)
-                       _ (close (t 's))
-                       (? (nom? r) ['why (wg-cut host (t 'why))] r))))
-              (: s (cite 'dns 'dial host port)
-                 (? !(hot? s) ()
-                    (: _ (say s req) _ (flush s) r (slurp s) _ (close s) r))))
+       raw (: t (cite 'tls 'tls-wire tls? host port how)
+              (? !(tablet? t) (tls? && string? t ? ['why t] ())
+                 (: _ (cite 'tls 'tls-say t req)
+                    r (cite 'tls 'tls-slurp t)
+                    _ (close (t 's))
+                    (? (nom? r) ['why (wg-cut host (t 'why))] r))))
        (? (two? raw) (raw 1)                                   ; the tls refusal, said
           !(string? raw) ()
           (: k (fsub raw "\r\n\r\n" 0)
