@@ -310,9 +310,10 @@
                              (gx-ins (it 1) (it 2) (it 3)))
                       (scare 'gas-x64-line it))                    ; a directive has no place in a template
    ; an inline template's line: the template lane, and as.l's bytes where it has no row (the
-   ; vector rows -- pshufb, sha256rnds2); both refusing, the template's word stands
+   ; vector rows -- pshufb, sha256rnds2). an operand the template refuses stays refused
    (gx-text src)
-    (catmap (it \ (<it = 'op ? (trap gx-item it (\ a b (trap (i \ [['raw (as-instr i)]]) it (\ _ _ (scare a b)))))
+    (catmap (it \ (<it = 'op ? (trap gx-item it (\ a b (a = 'gas-x64-op ? (trap (i \ [['raw (as-instr i)]]) it (\ _ _ (scare a b)))
+                                                       (scare a b))))
                      (gx-item it)))
             (gx-locals (att-read src)))
    ;; ..and a file-scope run (an assembly source's): encoded exactly by as.l -- the width it says,
