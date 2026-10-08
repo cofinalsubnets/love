@@ -50,11 +50,21 @@ tips in `.sb/sets/PSID`), or `head`. A name that resolves to no set fails the ve
 
 A set's tree is the fold of its patches ordered by depth (the longest dep chain beneath a
 patch), then id, each path on its own. A patch's key is its own, so a set derived once is a
-base: `.sb/derive/PSID` keeps the head's derive, the one before it and the four newest banks',
-and a settle folds only what it adds onto the head's, or another kept one inside the set,
+base: `.sb/derive/PSID` keeps the head's derive, the one before it and the four newest banks'
+(a read that had to fold the head keeps it too), and a settle folds only what it adds onto the head's, or another kept one inside the set,
 reading those patches alone. A path the new work writes under a later base writer folds again
 from its own writers. The answer is the whole replay's, byte for byte; over 20,000 patches a
 take onto the head costs under a second.
+
+A blob is stored by its sha256, as a file in `.sb/blob/` or coded against a base in `.sb/z/`;
+`pack` moves every one of those, and every older pack, into one `.sb/pack/P.pack` with its
+index `P.idx` (sorted records of hash, kind, offset and length), P the index's sha256, and names
+it in `.sb/packs` for a client that cannot list a directory. The pack is read back before
+anything it replaces is removed, and `sync` packs on its own once 1024 blobs lie loose. A reader
+asks the loose files first, then the packs. An http pull reads the remote's `/packs`, checks
+each index against its name, and fetches a pack whole on its first hit; every text out of a pack
+is checked against its name like any other. `.sb/stat` keeps each file's side under the lstat key
+it was hashed with, so a scan reads only the files whose key moved.
 
 A hunk is `(path old new)`, each side the path's state: absent, its blob's hash, or the hash
 with an `x` after it when the owner's execute bit is set. So a chmod is a change like an edit,
