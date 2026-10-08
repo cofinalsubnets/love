@@ -7,6 +7,7 @@
 (borrow 'xz)
 (: zcap 16                                               ; the longest chain of bases a blob rides
    bcache {'n 0}                                         ; derived blob bytes, by hash, bounded
+   stc {'old {} 'new {} 'now 0}                          ; the stat cache: path -> (key side)
    ; --- files ---
    ; an empty file slurps to (), so `+ ""` folds it back onto the string identity and a
    ; 0-byte file hashes honestly. the port is minded, not closed at the tail: a torn read
@@ -162,14 +163,26 @@
    (ign1? p g) (: n #g (ig-glob? g ? (ig-match g p)
                         (p = g || n + 1 < #p && snip p 0 (n + 1) = (g + "/"))))
    (ign? p igs) (? (atom? igs) 0 (ign1? p <igs) 1 (ign? p >igs))
+   ; the rules compiled for a walk: a prefix as (pfx g "g/"), a glob as (glob g pre suf) -- its
+   ; literal ends, which a path must carry before the match is asked (no suf past a class)
+   (igc rs)
+    (map (g \ (? !(ig-glob? g) ['pfx g (g + "/")]
+                (: n #g (meta? i) (elem (g i) [42 63 91])
+                   a (: (go i) (? (n <= i || meta? i) i (go (i + 1))) (go 0))
+                   b (: (go i) (? (i < 0 || meta? i) i (go (i - 1))) (go (n - 1)))
+                   ['glob g (snip g 0 a) (? (0 <= fsub g "[" 0) "" (snip g (b + 1) n))])))
+         rs)
+   (igc1? p r) (? (<r = 'pfx) (p = r 1 || starts? p (r 2))
+                  (starts? p (r 2) && ends? p (r 3) && ig-match (r 1) p))
+   (igc? p rs) (? (atom? rs) 0 (igc1? p <rs) 1 (igc? p >rs))
 
-   ; --- the walk: every regular file under the root, paths relative ---
+   ; --- the walk: every regular file under the root, paths relative; igs compiled ---
    (walk dir igs acc)
     (: es (readdir (? !dir "." dir))
        (go m acc)
         (? (atom? m) acc
            (: p (? !dir <m (dir + "/" + <m))
-              (? (ign? p igs || !(sb-rel? p)) (go >m acc)       ; a name no patch may carry
+              (? (igc? p igs || !(sb-rel? p)) (go >m acc)       ; a name no patch may carry
                  (: st (lstat p)                                 ; a link is not followed, nor kept
                     md (two? st ? (61440 & <>>st) 0)
                   (md @ 16384 (? (ign? p igsdir) (go >m acc) (go >m (walk p igs acc)))
@@ -177,15 +190,40 @@
                               (go >m acc))))))
        (go es acc))
 
-   ; --- the scan: working tree vs snap -> the hunks, path-sorted. pure (no
-   ;     blob writes); a hunk is (path old new), old and new its sides ---
+   ; --- the stat cache, .sb/stat: a line per file -- its side, the lstat key it was hashed
+   ;     under (size, mtime, ctime, inode, mode), its path -- so a scan reads only the files
+   ;     whose key moved. a file changed within 2 s of the scan is left out: a second edit in
+   ;     the same clock tick would keep its key ---
+   (st-key st) (cats [(show (st 0)) " " (show (st 3)) " " (show (st 10)) " " (show (st 8)) " " (show (st 2))])
+   (stc-load _)
+    (: t (look ".sb/stat")
+       (row m l) (: a (fsub l "\t" 0) b (? (0 < a) (fsub l "\t" (a + 1)) -1)
+                   (? (a < b) (pin m (snip l (b + 1) #l) [(snip l (a + 1) b) (snip l 0 a)]) m))
+       _ (pin stc 'old (foldl row {} (two? t ? (lines <>t) ())))
+       _ (pin stc 'new {})
+       (pin stc 'now (clock 0)))
+   (stc-save _)
+    (: n (stc 'new) ks (sort (keys n))
+       _ (lay ".sb/stat.new" (? (two? ks) (cats (catmap (p \ (: e (n p) [(e 1) "\t" <e "\t" p "\n"])) ks)) ""))
+       (rename ".sb/stat.new" ".sb/stat"))
+   ; the scan with the cache: loaded before, the new one laid after
+   (wscan sn) (: _ (stc-load ()) hs (scan (sort (walk () (igc (igs ())) ())) sn ())
+                 _ (? (two? (stat ".sb")) (stc-save ()) ())
+                 hs)
+
+   ; --- the scan: working tree vs snap -> the hunks, path-sorted. no blob writes;
+   ;     a hunk is (path old new), old and new its sides ---
    (h1 p e)                                                   ; one path vs its snap entry|()
-    (: t (look p)
-       (atom? t ? (two? e ? [p <>e ()])                 ; unreadable: dead if known
-        (: h (sd (sha256 <>t) (sd-exe? p))
-           (? (atom? e) [p () h]                               ; born
-              (<>e = h) ()                                   ; unchanged
-              [p <>e h]))))                                  ; changed
+    (: st (lstat p) k (two? st ? (st-key st) "") c (peep (stc 'old) p ())
+       (vs h) (? (atom? e) [p () h]                            ; born
+                 (<>e = h) ()                                ; unchanged
+                 [p <>e h])                                  ; changed
+       (? (0 < #k && two? c && <c = k) (: _ (pin (stc 'new) p c) (vs (c 1)))
+          (: t (look p)
+             (atom? t ? (two? e ? [p <>e ()])             ; unreadable: dead if known
+              (: h (sd (sha256 <>t) (two? st && 0 < (64 & st 2)))   ; the owner's x bit
+                 _ (? (0 < #k && st 1 < (stc 'now - 2000)) (pin (stc 'new) p [k h]) ())
+                 (vs h))))))
    (scan ps sn acc)                                           ; ps sorted paths, sn the snap
     (? (atom? ps)
         (atom? sn ? (rev acc) (scan ps >sn ([<<sn <><sn ()] . acc)))         ; the tail of snap: dead
@@ -202,7 +240,7 @@
        sn (snap ())
        st {}                                             ; path -> (chash pid)
        _ (: (go m) (? (two? m) (pin st <<m ><m, go >m) ()) (go sn))
-       hunks (scan (sort (walk () (igs ()) ())) sn ())
+       hunks (wscan sn)
        (? !(two? hunks) (puts "sb: nothing to record\n", ())
           (: ; the blobs: keep every hunk's new content
              _ (: (go m) (two? m ?  (: h <m _ (? !<>>h () (keep-by <>(look <h) (sd-h <>h))) (go >m)))
@@ -275,7 +313,7 @@
    ; --- diff: working tree vs the recorded state, unified; answers how many differ ---
    (sb-diff _)
     (: sn (snap ())
-       hunks (scan (sort (walk () (igs ()) ())) sn ())
+       hunks (wscan sn)
        (pr m n)
         (? (atom? m) n
            (: h <m p <h
@@ -289,7 +327,7 @@
        (pr hunks 0))
 
    ; --- sync: union a peer nest's store. blobs + patches are immutable and
-   (dirty _) #(scan (sort (walk () (igs ()) ())) (snap ()) ())
+   (dirty _) #(wscan (snap ()))
    ; one direction of the store exchange: the patches `to` lacks, walked back from the
    ; source's tips through their deps. a store holds every patch's deps, so the walk stops
    ; at a patch `to` already holds, and lays each patch after its deps and blobs, which keeps
@@ -1237,7 +1275,12 @@
 ;     tree against the head, and bisect over banks. a path's writers come from the head's
 ;     derive in the fold's (depth, id) order, the order its states were made in ---
 (:
-   (hs-derive _) (dv-derive (head ()))
+   ; the head's derive, kept when it was not: a nest that only records would fold every patch
+   ; since its last settle on each read
+   (hs-derive _)
+    (: tp (head ()) d (dv-derive tp)
+       _ (? (two? (stat (dv-path (d 'tips)))) () (: _ (dv-write d) (dv-prune (d 'tips) (psid tp))))
+       d)
    (hs-text s) (: t (bl s) (? (two? t) <>t))                  ; a side's text, "" absent | ()
    (hs-entry i) (: f (patch i) [<(fld f 'time) i <(fld f 'note) #(fld f 'hunks)])   ; log-pr's
    ; a hunk as text: its unified diff, a mode line, or a word for a side that cannot diff
@@ -1296,7 +1339,7 @@
         + map (r \ "bank " + <r) (filter (r \ psid <>r = ps) (refs ()))
         + (? (n < all) [("store " + show (all - n) + " more, not in the head")] ())
         + map (p \ "C " + p + " -- " + <>(cf p)) cs
-        + map (h \ tag h + " " + <h) (scan (sort (walk () (igs ()) ())) (snap ()) ())))
+        + map (h \ tag h + " " + <h) (wscan (snap ()))))
    ; the ids a set adds over another: the walk down from its tips, stopping where in? holds
    (hs-above tp in?)
     (: seen {}
