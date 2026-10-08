@@ -227,6 +227,7 @@
                              + "could not reach.")
              {"queue" (prop "refs/queue/NAME for git, or queue/NAME for an sb ledger in the hub")
               "release" (prop "what the merge removes, renames or moves, for the rows behind")
+              "publish" (prop "on an sb queue with a mirror: the absolute directory, on the hub's box, holding the generated files a publish row laid; the mirror's commit takes the paths under its KEEP prefixes from there")
               "session" (prop "leader only: the row's session, when not yours")}
              ["queue"])])
 
@@ -1198,6 +1199,7 @@
          b (box-seal 0)
          (? (#box = 0) (run in)
             (two? b && b 1 "name" = box) (run (pin in "queue" (snip q 0 at)))
+            (0 < #(field in "publish" "")) [0 ("publish names a directory on " + box + ", the hub's box: land the publish from there")]
             (: seal (cell-seal 0) lq (snip q 0 at)
                (call t i) (: m (sealed-msg (me 0) ("ledger@" + box) (json-show {"tool" t "in" i}) seal)
                              r (relay box (m 1) "--ledger") [(<r = 0 ? 1 0) (chomp (r 1))])
@@ -1450,11 +1452,12 @@
             [g (: ws (words bee-served) (q-joins (filter (\ x (elem x ws)) (lines (q-sb ("paths " + sh-quote was + " " + sh-quote g + " 2>/dev/null"))))))]))
      ; --- the git mirror of an sb queue: a landing written as one commit of the hub's tree on the
      ; mirror line's branch -- its paths from the hub's blobs, and the parent's paths under the
-     ; KEEP prefixes kept, what the hub's store leaves out. a tip that has the tree already is
-     ; left as it is, so a landing recorded again writes nothing twice ---
+     ; KEEP prefixes kept, what the hub's store leaves out -- or, for a publish, taken from the
+     ; files the publisher laid under PUB. a tip that has the tree already is left as it is, so a
+     ; landing recorded again writes nothing twice ---
      (q-mirror-of text) (: w (words (q-line text "mirror")) (? (2 < #w) >w ()))   ; [path branch keep..]
      (q-abs d) (chomp (lush-out ("cd " + sh-quote d + " && pwd -P")))
-     (q-mirror m msg)
+     (q-mirror m msg pub)
       (: path <m br (m 1) keep (drop 2 m) hub (q-abs (q-hub 0)) tmp (bee-hive + "/.mirror-" + me 0)
          ; a branch checked out elsewhere would move under that checkout's index
          wts (lines (lush-out ("git -C " + sh-quote path + " worktree list --porcelain")))
@@ -1498,12 +1501,21 @@
              (unlines ["set -e" ("cd " + sh-quote path) ("GIT_INDEX_FILE=" + sh-quote (tmp + ".index") + "; export GIT_INDEX_FILE")
                        "rm -f \"$GIT_INDEX_FILE\""
                        ("par=$(git rev-parse -q --verify " + sh-quote ("refs/heads/" + br + "^{commit}") + " || true)")
-                       (? (two? keep)
+                       (? (0 < #pub) "git read-tree --empty"
+                          (two? keep)
                           ("if [ -n \"$par\" ]; then git read-tree \"$par\"; git ls-files | grep -v"
                            + foldl (\ a k (a + " -e " + sh-quote ("^" + k))) "" keep
                            + " | git update-index --force-remove --stdin; else git read-tree --empty; fi")
                           "git read-tree --empty")
                        ("git update-index --add --index-info < " + sh-quote (tmp + ".info"))
+                       ; a publish's KEEP paths, hashed from PUB with their modes
+                       (? (0 < #pub)
+                          (: ks (map (k \ (k (#k - 1) = 47 ? (snip k 0 (#k - 1)) k)) keep)
+                             (unlines (map (k \ "[ -e " + sh-quote (pub + "/" + k) + " ] || { echo " + sh-quote ("the publish at " + pub + " has no " + k) + "; exit 1; }") ks
+                                       + ["gd=$(git rev-parse --absolute-git-dir)"
+                                          ("(cd " + sh-quote pub + " && find" + foldl (\ a k (a + " " + sh-quote k)) "" ks
+                                           + " -type f | git --git-dir=\"$gd\" --work-tree=. update-index --add --stdin)")])))
+                          ":")
                        "t=$(git write-tree)"
                        "if [ -n \"$par\" ] && [ \"$(git rev-parse \"$par^{tree}\")\" = \"$t\" ]; then echo \"same $par\"; exit 0; fi"
                        ("if [ -n \"$par\" ]; then c=$(git commit-tree \"$t\" -p \"$par\" -F " + sh-quote (tmp + ".msg") + "); "
@@ -1650,10 +1662,13 @@
          0)
      (queue-landed in) (: _ (pins bee-who 'tool "queue_landed") (q-wcheck in queue-landed1))
      (queue-landed1 in)
-      (: q (in "queue") i (me 0) who (field in "session" i) rel (field in "release" "")
+      (: q (in "queue") i (me 0) who (field in "session" i) rel (field in "release" "") pub (field in "publish" "")
          (try n)
           (: rd (q-read q) old <rd text (rd 1) rows (q-rows text) lead (q-leader text)
              l (? (old = "none") ("no queue " + q) (who != i && lead != i) ("only the leader, " + lead + ", lands another's row")
+                  (0 < #pub && q-git? q) "publish writes an sb queue's git mirror; on git, the generated files are the row's own commits"
+                  (0 < #pub && #(q-mirror-of text) < 3) "publish needs the mirror line to name the paths it keeps: queue_lead mirror PATH BRANCH KEEP.."
+                  (0 < #pub && pub 0 != 47) "publish is the absolute path of the directory the publisher laid its files in"
                   (q-landing q who rows text))
              (? (string? l) [0 l]
                 (: p <l r (l 1) br <(l 2)
@@ -1663,7 +1678,7 @@
                    mr (? (string? lk || !(two? mi)) [1 ""]
                          (q-mirror mi ("Merge queue row " + p + " (" + who + "): "
                                        + (: ls (filter (\ x (q-row? x && <(words x) = p)) (lines text)) (? (two? ls) (q-note <ls) ""))
-                                       + "\n\nsb psid " + r 4 + "\n")))
+                                       + "\n\nsb psid " + r 4 + "\n") pub))
                    (? (string? lk) [0 lk]
                       !(<mr) [0 ("the hub took " + r 4 + ", but " + mr 1 + ": the row stays; tell the leader")]
                       (: gone (p . q-folds rows p) short <lk
@@ -1680,7 +1695,8 @@
                                got (map (\ x <x) (filter (\ x (#(x 1) = 0)) sent))
                                lost (filter (\ x (0 < #(x 1))) sent)
                                [1 ("landed: " + q-rows-say gone + " left " + q + ", whose base line is now " + br + " " + short + ". "
-                                   + (? (0 < #(mr 1)) ("the mirror: " + (? (starts? (mr 1) "made ") ("a commit " + snip (mr 1) 5 #(mr 1)) "the tip had the tree already") + ". ") "")
+                                   + (? (0 < #(mr 1)) ("the mirror: " + (? (starts? (mr 1) "made ") ("a commit " + snip (mr 1) 5 #(mr 1)) "the tip had the tree already")
+                                                         + (0 < #pub ? (", its " + q-and (drop 2 mi) + " from " + pub) "") + ". ") "")
                                    + (? !(two? to) "no row is behind it."
                                         (0 < #rn)
                                          ((two? got ? ("the release note went to " + q-and got + ".") "the release note reached no session.")

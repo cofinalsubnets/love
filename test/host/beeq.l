@@ -466,7 +466,9 @@
    mbee (bq-out (bq-git w ["show" "sbm:src/apps/bee.l"]))
    q (sb hub ["ledger" lq])
    ; a second row, docs only, landed with the hub's derives gone: the base line still names a
-   ; set, so the landed paths are d's alone and no restart line goes out; queue_read reads it
+   ; set, so the landed paths are d's alone and no restart line goes out; queue_read reads it.
+   ; it lands as a publish: refused from a directory with no web/ (the row stays), then the
+   ; mirror's web/ comes from the publisher's files, not the parent's
    _ (sb wb ["sync" hub]) _ (put wb "d") _ (sb wb ["record" "d"]) _ (sb wb ["bank" "docs"])
    g2 (sb wb ["psid"])
    _ (sb wb ["sync" "--keep" hub])
@@ -474,7 +476,12 @@
                    [11 "queue_row" {"state" "green" "gated_on" g "gated_head" g2}]])
    _ (sb hub ["take" g2])
    _ (hark ["sh" "-c" ("rm -f " + bq-sq hub + "/.sb/derive/*")])
-   e (calls "bob" [[12 "queue_landed" {"release" "d is in"}]])
+   pd (hub + ".pub") _ (hark ["mkdir" "-p" (pd + "/web/wasm")])
+   _ (bq-put (pd + "/web/keep.txt") "new\n") _ (bq-put (pd + "/web/wasm/m.wasm") "wasm\n")
+   e0 (calls "bob" [[15 "queue_landed" {"publish" "rel/dir"}] [16 "queue_landed" {"publish" (hub + "/f")}]])
+   e (calls "bob" [[12 "queue_landed" {"release" "d is in" "publish" pd}]])
+   mt2 (bq-out (bq-git w ["ls-tree" "-r" "--name-only" "sbm"]))
+   mkeep (bq-out (bq-git w ["show" "sbm:web/keep.txt"]))
    rd (calls "bob" [[13 "queue_read" {}]])
    _ (test
       (#m = 64) (#g = 64) (m != g)
@@ -493,6 +500,9 @@
       (sb hub ["psid"] = g2)
       (bq-get (hub + "/a") = "a\n") (bq-get (hub + "/b") = "b\n")
       (#g2 = 64) (bq-in (e 12) ("whose base line is now sbq " + g2 + ".")) !(bq-in (e 12) "restarts")
+      (bq-in (e0 15) "publish is the absolute path") (bq-in (e0 16) "has no web") (bq-in (e0 16) "the row stays")
+      (bq-in (e 12) ("its web/ from " + pd)) (mkeep = "new")
+      (mt2 = "a\nb\nd\nf\nsrc/apps/bee.l\nweb/keep.txt\nweb/wasm/m.wasm")
       (bq-in (rd 13) ("\nsbq " + g2 + "\n")) (bq-in (rd 13) "land by psid"))
    0)
 
