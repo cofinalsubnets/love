@@ -559,6 +559,26 @@
         (map (l \ trap (x \ holo-hex 'a64 (gas-text 'a64 x)) l (\ a b a))
              ["ldp x0, x1, [x2, #4]" "ldp x0, x1, [x2, #512]" "ldnp x0, x1, [x2, #16]!" "ldp x0, w1, [x2]"
               "ldp x3, x3, [x2]" "stp x0, x1, [x0, #16]!" "ldp x0, x1, [w2]" "ldr x0, [w2, #8]"]))
+   ;; test bit and branch to a label, back and forward and by `.`, and ands at X: llvm-mc's words.
+   ;; a bit past the width, sp, a register bit, an odd or far `.` offset, no bitmask refuse
+   _ (chk-eq "gas.a64.tbz" "000000366400f837d0ffffb61f2003d5201c40f2620004ea850c007241002836e2ff0fb7"
+        (holo-hex 'a64 (gas-text 'a64 "1:\n tbz x0, #0, 1b\n tbnz w4, #31, 2f\n tbz x16, 63, 1b\n nop\n2:\n ands x0, x1, #0xff\n ands x2, x3, x4\n ands w5, w4, #15\n tbz x1, #5, .+8\n tbnz x2, #33, .-4\n")))
+   _ (chk-eq "gas.a64.tbz.refuse"
+        '(gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-branch gas-a64-branch gas-a64-operand a64-bitmask-imm)
+        (map (l \ trap (x \ holo-hex 'a64 (gas-text 'a64 x)) l (\ a b a))
+             ["tbz w0, #32, .+8" "tbz x0, #64, .+8" "tbz sp, #1, .+8" "tbz x0, x1, .+8" "tbz x0, #1, .+2" "tbz x0, #1, .+32768"
+              "ands sp, x1, #1" "ands x0, x1, #0"]))
+   ;; conditional compare and the conditional selects with their aliases, al and nv as conditions:
+   ;; llvm-mc's words. sp, a mixed width, a far immediate or nzcv, al/nv in an alias refuse
+   _ (chk-eq "gas.a64.ccmp" "200042fa2f185f7a64e845ba20f042faf7529f9ac5809f5a2034829a20a482dae0079f9ae1139f5a62a4839a62d083daa424855a"
+        (holo-hex 'a64 (gas-text 'a64 "ccmp x1, x2, #0, eq\n ccmp w1, #31, #15, ne\n ccmn x3, #5, #4, al\n ccmp x1, x2, 0, nv\n csel x23, x23, xzr, pl\n csinv w5, w6, wzr, hi\n csinc x0, x1, x2, lo\n csneg x0, x1, x2, ge\n cset x0, ne\n csetm w1, eq\n cinc x2, x3, lt\n cinv x2, x3, gt\n cneg w4, w5, lo")))
+   _ (chk-eq "gas.a64.ccmp.refuse" '(gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand)
+        (map (l \ trap (x \ holo-hex 'a64 (gas-text 'a64 x)) l (\ a b a))
+             ["ccmp sp, x1, #0, eq" "ccmp x1, #32, #0, eq" "ccmp x1, x2, #16, eq" "csel x0, w1, x2, eq" "csel sp, x1, x2, eq"
+              "cset x0, al" "ccmp x1, x2, #0, zz"]))
+   ;; gas's dotless conditional branches, bne as b.ne, back and by `.`
+   _ (chk-eq "gas.a64.bne" "00000054e1ffff54c2ffff54a3ffff5481ffff5441000054"
+        (holo-hex 'a64 (gas-text 'a64 "1:\nbeq 1b\nbne 1b\nbcs 1b\nblo 1b\nb.ne 1b\nbne .+8\n")))
    _ (chk-eq "gas.a64.lse.refuse"
         '(gas-a64-operand gas-a64-op gas-a64-operand gas-a64-operand gas-a64-operand)
         (map (l \ trap (x \ holo-hex 'a64 (gas-text 'a64 x)) l (\ a b a))
