@@ -434,8 +434,10 @@ lvm(lvm_fputs) {
    g->next_wake_at = love_clock() + 1;            // the write residue's poll -- see io_wdrain
    love_musttail return Ap(lvm_yield_sw, g); }
   while (ok(g) && i < l) {
-   intptr_t k = wn && !bio_wpending(bio_of(g, (struct io*) g->sp[0]))
-              ? core_of(g = wn(g, (unsigned char const*) txt(bytes_of(g->sp[1])) + i, l - i))->b : 0;
+   intptr_t k = 0;
+   if (wn && !bio_wpending(bio_of(g, (struct io*) g->sp[0]))) {
+    if (!ok(g = wn(g, (unsigned char const*) txt(bytes_of(g->sp[1])) + i, l - i))) break;   // a sink that could not grow
+    k = g->b; }
    if (k > 0) i += (uintptr_t) k;
    else g = ioputc(g, txt(bytes_of(g->sp[1]))[i++]); }
   if (!ok(g = zflush(g))) love_musttail return Ap(_lvm_ghelp, g);

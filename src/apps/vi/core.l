@@ -1297,7 +1297,7 @@
     {'lines (two? ls ? ls '(""))
      'row 0 'col 0 'goal 0 'top 0 'tops 0 'left 0 'wrap ()
      'mode 'n 'cnt 0 'op () 'pc () 'pcb "" 'gcnt 0 'lastf ()
-     'reg () 'undo () 'redo ()
+     'reg () 'undo () 'redo () 'marks {} 'markls () 'markgen 0 'markpen "\e[48;5;24m"
      'dot () 'rec () 'reccnt 0 'dotting ()
      'file file 'dirty () 'msg "" 'sw 2
      'cmd "" 'pat () 'pattx "" 'patw () 'dir 1
@@ -1390,12 +1390,13 @@
                   pad (k < <>s && q = k ? " " "")       ; the cell past the end, a line's own
                   (snip raw a p + "\e[7m" + snip raw p q + pad + "\e[0m" + snip raw q b))
               (b <= a) ""
-              !paint (snip raw a b)
+              !paint (vmarkon st fr a (snip raw a b))
               (: rw (st 'hlrow) ky [raw in a b lg] c (peep rw i ())
-                 (two? c && <c = ky ? <>c
-                    (hue-win (st 'pens) lx raw in a b @ p
-                       (pin rw i [ky p],
-                        p)))))))
+                 (vmarkon st fr a
+                    (two? c && <c = ky ? <>c
+                       (hue-win (st 'pens) lx raw in a b @ p
+                          (pin rw i [ky p],
+                           p))))))))
        ; 'lines and the carry are LISTS: asking for row i by application walks i
        ; pairs, so a screenful deep in a file walked the file forty times over --
        ; 55% of a keystroke, and the whole of why moving around got slower the
@@ -1426,7 +1427,7 @@
        ; the body is a pure function of these, so when none of them moved the rows
        ; are the ones we laid last time -- a keystroke that only walks the cursor
        ; about lays nothing at all, which is the common keystroke
-       key [(st 'hlgen) w top tops left body (paint ? 1 ()) (wrap? ? 1 ())
+       key [(st 'hlgen) (st 'markgen) w top tops left body (paint ? 1 ()) (wrap? ? 1 ())
             (vis? ? [(st 'mode) vr1 vc1 vr2 vc2])]
        lc (st 'laycar)
        rs (two? lc && <lc = key ? <>lc
@@ -1434,6 +1435,29 @@
                 (pin st 'laycar [key k],
                  k)))
        [rs (clipl status) cr cc key])
+
+   ; -- marks: spans a host lights, [row c1 c2] in bytes, worn over the colour. a host
+   ; that marks often (harp's repl, what sounds now) moves 'markgen only on a change,
+   ; so an unchanged set lays nothing --
+   (vmarks st ms)
+    (ms = st 'markls ? st
+       (pins st 'markls ms 'markgen (st 'markgen + 1)
+                'marks (foldl (t \ m \ pin t <m (peep t <m () + [>m])) {} ms)))
+   ; a painted window of row fr, its bytes from a: the pen on over a marked byte, again
+   ; after every escape inside one (the colour may reset it), and off past its end
+   (vmarkon st fr a txt)
+    (: sp (peep (st 'marks) fr ())  n #txt  on (st 'markpen)
+       (in? p) (any (m \ <m <= p && p < <>m) sp ? 1 0)
+       (esc j) (? (j >= n) j (64 <= txt j <= 126) (j + 1) (esc (j + 1)))
+       ; i the text's byte, p the row's, k the start of the run not yet laid, m marking
+       (go i p k m acc)
+        (? (i >= n) (cats (rev ((m ? "\e[49m" "") . snip txt k n . acc)))
+           (27 = txt i) (: j (91 = txt (i + 1) ? (esc (i + 2)) (i + 2))
+                          (go j p j m ((m ? on "") . snip txt k j . acc)))
+           (in? p @ h
+              (? (h = m) (go (i + 1) (p + 1) k m acc)
+                 (go (i + 1) (p + 1) i h ((h ? on "\e[49m") . snip txt k i . acc)))))
+       (two? sp ? (go 0 a 0 0 ()) txt))
 
    ; -- the frame: one full redraw as a single text --
    (vframe st)

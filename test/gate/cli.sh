@@ -97,5 +97,14 @@ try 3 boom $die
 try 3 boom -l $die -e 1
 try 1 ";; boo 7" -e '(scare (quote boo) 7)'   # any other scare is still a raise
 
+# a heap that cannot grow under a string sink's long say leaves by the scare, never a signal
+oomp='(: s (snip (show (iota 300000)) 0 1000000) o (jug 0) (go n) (, (say o s) (go (n + 1))) (go 0))'
+out=$( (ulimit -v 400000 && "$love" -e "$oomp") </dev/null 2>&1); st=$?
+case "$st:$out" in
+  1:*";; "*) ;;
+  *) echo "FAIL cli: a jug past the heap exit $st, wanted 1 and a scare, said: $(echo "$out" | tail -1)"
+     fails=$((fails+1)) ;;
+esac
+
 [ $fails -eq 0 ] || { echo "FAIL cli ($fails)"; exit 1; }
 echo "cli: every exit lane keeps its status -- 0 working, 1 unopenable, 2 malformed, and the verb's own"

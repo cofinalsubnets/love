@@ -283,5 +283,25 @@
     ; ..and at one that rails nothing
     (test (pack (L . R) n 100.0 = slowpack (L . R) n 100.0))))
 
+; --- where a word sits: mini-mark's spans, carried through the algebra ---------
+; a marked text's literals lay their words' byte spans on the events, through every
+; combinator; an unmarked string lays none, and its events are the five fields alone.
+(:
+   (locs p a b) (map (x \ [(qnum (evwb x)) (evlocs x)])
+                     (sortby (u \ v \ (evwb u) < (evwb v)) (filter onset? (p (qi a) (qi b)))))
+   t "(fast 2 (hit \"bd [sn cp]\"))"
+   _ (mini-mark t)
+   p (ev <(sound t))
+   q (rev (hit (mini "bd <sn cp>")))
+   _ (mini-mark "bd <sn cp>")                      ; a bare text is mini from its first byte
+   r (rev (hit (mini "bd <sn cp>")))
+   (test ((locs p 0 1) = [[0 [[14 16]]] [0.25 [[18 20]]] [0.375 [[21 23]]]
+                          [0.5 [[14 16]]] [0.75 [[18 20]]] [0.875 [[21 23]]]])
+         ((locs r 1 2) = [[1 [[7 9]]] [1.5 [[0 2]]]])
+         ; appl joins both sides' words; a mark over text with an escape is skipped
+         (mini-mark "(note \"0 7\" # s \"sin\" # gain \"a\\\"b\")",
+          map (x \ evlocs x) (pset (note "0 7") (hit "sin") 0 1) = [[[7 8] [17 20]] [[9 10] [17 20]]])
+         (5 = #<(q 0 1)) (5 = #((q 0 1) 1))))
+
 ; the sentinel the gate reads
 (say out "test/law/harp: patterns, mini-notation, voices\n")
