@@ -58,6 +58,37 @@
                           (go (snap ()) ())))       ; the death left the snap
  (0 = sb-diff ()))                                   ; recorded = working again
 
+; the stat cache (.sb/stat): a file whose lstat key holds is not read again -- a forged
+; side under a live key is believed -- yet no change hides behind it: a same-size edit
+; with its mtime put back moves the ctime, a chmod the mode, and a file touched within
+; 2 s of a scan is left out of the cache. status keeps the head's derive it folded
+(: old (clock 0 - 60000)
+   _ (map (f \ utime f old) [".sbignore" "a.txt" "c.txt"])
+   d0 (dirty ())
+   n0 #(lines <>(look ".sb/stat"))
+   sa ((stc 'new) "a.txt" 1)
+   sc ((stc 'new) "c.txt" 1)
+   _ (lay ".sb/stat" (cats (map (l \ (ends? l "\ta.txt" ? (sc + snip l 64 #l) l) + "\n")
+                              (lines <>(look ".sb/stat")))))
+   forged (sb-diff ())
+   _ (unlink ".sb/stat") d1 (dirty ())
+   _ (lay "a.txt" "one\ntwo point fivE\nthree\n") _ (utime "a.txt" old)
+   same (dirty ())
+   _ (lay "a.txt" "one\ntwo point five\nthree\n") _ (utime "a.txt" old) d2 (dirty ())
+   _ (chmod "a.txt" 493) mode (dirty ()) _ (chmod "a.txt" 420) d3 (dirty ())
+   _ (lay "c.txt" "born\n") _ (dirty ())
+   fresh ((stc 'new) "c.txt" ())
+   ; a nest that only records keeps the head's derive once status has folded it
+   dt ((hs-derive ()) 'tips) kept (two? (stat (dv-path dt))))
+
+(test
+ (0 = d0) (3 = n0) (64 = #sa) (64 = #sc) (sa != sc)
+ (1 = forged)                                          ; the cache was believed
+ (0 = d1)                                              ; and, gone, nothing is lost
+ (1 = same) (0 = d2) (1 = mode) (0 = d3)
+ (fresh = ())                                          ; inside the window: hashed, not kept
+ kept)
+
 ; a patch of only births depends on nothing: a second tip (the DAG, locally)
 (: _ (lay "d.txt" "free\n")
    p3 (sb-record "third")
