@@ -7,8 +7,8 @@
 ;   (smtp-pipe cmd from rcpts raw)             -> 1 | why not: sendmail's way
 ;   (smtp-url u)                               -> [tls? host port] | ()
 ;   (smtp-wire raw)                            -> raw with crlf ends and dots stuffed
-;   (smtp-conn s) (smtp-line c) (smtp-take c n) (smtp-put c s) (smtp-tls c host port)
-;   (smtp-close c)                             the line-at-a-time connection, which imap shares
+;   (smtp-conn tls? host port) (smtp-line c) (smtp-take c n) (smtp-put c s)
+;   (smtp-tls c host port) (smtp-close c)      the line-at-a-time connection, which imap shares
 (module (smtp smtp-send smtp-pipe smtp-url smtp-wire smtp-conn smtp-line smtp-put smtp-close smtp-take smtp-tls)
 (borrow 'posix)
 (borrow 'mime)
@@ -27,13 +27,11 @@
   (: t (replace raw "\r\n" "\n") t2 (t @ (a + "\n") a t)
      (join "\r\n" (map (l \ #l && l 0 = 46 ? ("." + l) l) (split "\n" t2)) + "\r\n"))
 
- ; --- a connection: a socket, maybe a tls session over it, and the bytes read ahead -------
- (smtp-conn s) (pins {} 's s 'tls () 'buf "")
- (smtp-put c s)
-  (tablet? (c 'tls) ? (cite 'tls 'tls-say (c 'tls) s) (say (c 's) s, flush (c 's)))
- (sm-more c)
-  (? (tablet? (c 'tls)) (cite 'tls 'tls-hear (c 'tls) @ r (string? r ? r ()))
-     (see (c 's) @ b (b = -1 ? () (string b + chug (c 's)))))
+ ; --- a connection: tls's wire, plain or sealed, and the bytes read ahead -> it | why not ----
+ (smtp-conn tls? host port)
+  (cite 'tls 'tls-wire tls? host port 'verify @ w (? (tablet? w) {'w w 'buf ""} tls? ("tls: " + show w) w))
+ (smtp-put c s) (cite 'tls 'tls-say (c 'w) s)
+ (sm-more c) (cite 'tls 'tls-hear (c 'w) @ r (string? r ? r ()))
  ; the next line without its crlf, () at the end of the stream
  (smtp-line c)
   (: b (c 'buf)
@@ -46,7 +44,7 @@
         (sm-more c @ m (string? m ? (pin c 'buf (b + m), smtp-take c n) ()))))
  ; a socket raised to tls in place -> 1 | why not
  (smtp-tls c host port)
-  (cite 'tls 'tls-on (c 's) host port 'verify @ t (tablet? t ? (pin c 'tls t, 1) ("tls: " + show t)))
+  (cite 'tls 'tls-on (c 'w 's) host port 'verify @ t (tablet? t ? (pin c 'w t, 1) ("tls: " + show t)))
  ; a reply, its lines gathered -> [code [text ..]], code 0 when the server went away
  (sm-reply c)
   (: (go acc)
@@ -56,7 +54,7 @@
             (go ((snip l 4 #l) . acc))))
      (go ()))
  (sm-cmd c s) (smtp-put c (s + "\r\n"), sm-reply c)
- (smtp-close c) (tablet? (c 'tls) ? (cite 'tls 'tls-close (c 'tls)) (close (c 's)))
+ (smtp-close c) (cite 'tls 'tls-close (c 'w))
  sh-quote (cite 'lush 'sh-quote)
  (sm-local? h) (elem h ["localhost" "127.0.0.1" "::1"])
 
@@ -74,7 +72,7 @@
      (? !(sm-ok? g 220 229) (sm-why "the server's greeting" g)
         (: e (sm-ehlo c)
            (? !(sm-ok? e 250 259) (sm-why "EHLO" e)
-              (: tl (? (tablet? (c 'tls)) e
+              (: tl (? (c 'w 'up) e
                        !(sm-has? e "STARTTLS") e
                        (sm-cmd c "STARTTLS" @ r
                           (? !(sm-ok? r 220 229) (sm-why "STARTTLS" r)
@@ -83,7 +81,7 @@
  (sm-go c e host user pass from rcpts raw)
   (? (string? e) e
      !(sm-ok? e 250 259) (sm-why "EHLO" e)
-     (#user && !(tablet? (c 'tls)) && !(sm-local? host)) "the server offers no tls; the password stays here"
+     (#user && !(c 'w 'up) && !(sm-local? host)) "the server offers no tls; the password stays here"
      (: a (? !(#user) [235 ()]
              (sm-cmd c ("AUTH PLAIN " + mime-b64e ("\0" + user + "\0" + pass))))
         (? !(sm-ok? a 235 235) (sm-why "AUTH" a)
@@ -102,18 +100,11 @@
  (smtp-send url user pass from rcpts raw)
   (smtp-url url @ u
      (? (atom? u) ("not an smtp url: " + url)
-        (: tls? <u host <>u port <>>u
-           (? tls?
-               (cite 'tls 'tls-open host port 'verify @ t
-                  (? !(tablet? t) ("tls: " + show t)
-                     (: c (pins (smtp-conn (t 's)) 'tls t)
-                        r (sm-talk c host port user pass from rcpts raw)
-                        (smtp-close c, r))))
-              (cite 'dns 'dial host port @ s
-                 (? !(hot? s) ("cannot connect to " + host + ":" + show port)
-                    (: c (smtp-conn s)
-                       r (sm-talk c host port user pass from rcpts raw)
-                       (smtp-close c, r))))))))
+        (: host <>u port <>>u
+           (smtp-conn <u host port @ c
+              (? (string? c) c
+                 (: r (sm-talk c host port user pass from rcpts raw)
+                    (smtp-close c, r)))))))
 
  ; --- sendmail ------------------------------------------------------------------------------
  (smtp-pipe cmd from rcpts raw)
