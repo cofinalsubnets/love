@@ -1171,6 +1171,10 @@ below, 251 of those 332 re-run so far: **145 compile**, and the rest refuse by n
   (`a64-branch-range`): tbz's 14 bits and cbz's or b.cond's 19 had wrapped in silence.
   clear_page, clear_user, copy_from_user and copy_to_user compile, word for word the kernel's
   objects, and their exception tables relocate as its do.
+- **conditional compare and select**: `ccmp`/`ccmn` against a register or `#0..31` with an nzcv,
+  `csel`/`csinc`/`csinv`/`csneg`, and the aliases `cset`/`csetm`/`cinc`/`cinv`/`cneg`, `al` and
+  `nv` among the conditions where the instruction takes them. All 479 lines of a sweep are
+  llvm-mc's, its refusals among them. With them, gas's dotless branches (`bne` as `b.ne`).
 
 Still open on this side (g-21's probes):
 
