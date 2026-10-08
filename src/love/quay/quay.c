@@ -253,18 +253,23 @@ static uintptr_t cb_u8(uint8_t *o, uintptr_t k, uint32_t cp) {
 uintptr_t cb_copied(struct cb const *c, uint8_t *o, intptr_t a, intptr_t b) {
   intptr_t const cs = c->cols, lo = -(intptr_t) c->hn * cs, hi = (intptr_t) c->rows * cs;
   a = a < lo ? lo : a, b = b > hi ? hi : b;
-  uintptr_t k = 0, kt = 0;                          // kt: past the row's last non-blank
+  // blanks are held back until something follows them, so a hard line end drops its tail
+  // unwritten and the count pass (o 0) answers every byte the writing pass will lay
+  uintptr_t k = 0, held = 0;
   for (intptr_t i = a; i < b; i++) {
     struct cb_cell const *e = cb_at(c, i);
     intptr_t const col = (i - lo) % cs;
     if (!(e->g & cb_pic) && !(cb_wide(e->g) == cb_tail && col)) {
       uint32_t const *v = cb_clu(c, e->g), cp = cb_base(c, e->g);
-      k = cb_u8(o, k, cp ? cp : ' ');
-      for (uint32_t m = 1; v && m < cb_clun && v[m]; m++) k = cb_u8(o, k, v[m]);
-      if (cp > ' ') kt = k; }
+      if (cp <= ' ' && !v) held++;
+      else {
+        for (; held; held--) k = cb_u8(o, k, ' ');
+        k = cb_u8(o, k, cp ? cp : ' ');
+        for (uint32_t m = 1; v && m < cb_clun && v[m]; m++) k = cb_u8(o, k, v[m]); } }
     if (col == cs - 1 && !(e->fg & cb_soft)) {
-      k = kt;
-      if (i + 1 < b) { if (o) o[k] = '\n'; kt = ++k; } } }
+      held = 0;
+      if (i + 1 < b) { if (o) o[k] = '\n'; k++; } } }
+  for (; held; held--) k = cb_u8(o, k, ' ');
   return k; }
 
 // the OSC asks worth answering: colour queries (ESC]10;? fg, ESC]11;? bg)

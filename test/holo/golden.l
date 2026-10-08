@@ -537,6 +537,15 @@
         (map (l \ trap (x \ holo-hex 'a64 (gas-text 'a64 x)) l (\ a b a))
              ["cpyfp [x0]!, [x0]!, x2!" "setp [x0]!, xzr!, xzr" "cpyfp [xzr]!, [x1]!, x2!" "setp [x0]!, x1!, sp"
               "cpyfp [w0]!, [x1]!, x2!" "cpyfp [x0]!, x1!, x2!" "ldr x0, [x1]!" "cpyfx [x0]!, [x1]!, x2!"]))
+   ;; the pair loads and stores, x w s d q, at an offset, pre- and post-indexed, as llvm-mc lays
+   ;; them; a misaligned or far offset, a written-back ldnp, a mixed pair, a load of one register
+   ;; twice, a written-back base that is also a data register, and a W base refuse
+   _ (chk-eq "gas.a64.pair" "400440a9fd7bbfa9fd7bc1a8020c30a8000441ad0084402d4004416940046029200000a9ff7f01a940046029"
+        (holo-hex 'a64 (gas-text 'a64 "ldp x0, x1, [x2]\n stp x29, x30, [sp, #-16]!\n ldp x29, x30, [sp], #16\n stnp x2, x3, [x0, #-256]\n ldp q0, q1, [x0, #32]\n ldp s0, s1, [x0, #4]\n ldpsw x0, x1, [x2, #8]\n ldp w0, w1, [x2, #-256]\n stp x0, x0, [x1]\n stp xzr, xzr, [sp, #16]\n ldp w0, w1, [x2, -256]")))
+   _ (chk-eq "gas.a64.pair.refuse" '(gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand)
+        (map (l \ trap (x \ holo-hex 'a64 (gas-text 'a64 x)) l (\ a b a))
+             ["ldp x0, x1, [x2, #4]" "ldp x0, x1, [x2, #512]" "ldnp x0, x1, [x2, #16]!" "ldp x0, w1, [x2]"
+              "ldp x3, x3, [x2]" "stp x0, x1, [x0, #16]!" "ldp x0, x1, [w2]" "ldr x0, [w2, #8]"]))
    _ (chk-eq "gas.a64.lse.refuse"
         '(gas-a64-operand gas-a64-op gas-a64-operand gas-a64-operand gas-a64-operand)
         (map (l \ trap (x \ holo-hex 'a64 (gas-text 'a64 x)) l (\ a b a))
