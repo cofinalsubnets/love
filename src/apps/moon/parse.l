@@ -107,8 +107,10 @@
    ; gcc's library builtins: the prefix names the plain function, and libsig declares it on
    ; the way past (a program spelling the prefix never included the header). it sits up here
    ; with the other rosters: further down the block, love0's lane answers `;; missing libbin`.
+   ; __builtin_alloca is moonlibc's alloca, gnulib's C_ALLOCA: the block outlives the frame
+   ; that asked for it, freed by a later call, rather than leaving with it
    libbin '("__builtin_memcpy" "__builtin_memmove" "__builtin_memset"
-            "__builtin_memcmp" "__builtin_strlen" "__builtin_strcpy")
+            "__builtin_memcmp" "__builtin_strlen" "__builtin_strcpy" "__builtin_alloca")
    ; ..and the shape test the builtin arms hide their string compares behind: pprim sees
    ; every identifier in the TU, and the shortest name any of them answers to is 16 long
    (bib? s) (#s @ n (n < 16 ? () (s 2 = 98)))     ; `__b..`, 16+
@@ -118,6 +120,7 @@
           (nm = "memcmp") ['int [vp vp sz] ()]
           (nm = "strlen") [sz [cp] ()]
           (nm = "strcpy") [cp [cp cp] ()]
+          (nm = "alloca") [vp [sz] ()]
           [vp [vp vp sz] ()]))                     ; memcpy and memmove
    ; one qualifier token, and the cursor past it (an attribute id carries its parens)
    (qual? t) (? (tkk t = 'kw) (elem (tkv t) qualkw) (tkk t = 'id) (elem (tkv t) qualid) ())
