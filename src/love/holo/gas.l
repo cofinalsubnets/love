@@ -359,7 +359,8 @@
             (('ch 91) ('sym b) ('ch 93) ('ch 33)) (ga-reg b @ r (two? r ? ['wbm <>r <>>r] (scare 'gas-a64-operand toks)))
             (('sym b) ('ch 33)) (ga-reg b @ r (two? r ? ['wbr <>r <>>r] (scare 'gas-a64-operand toks)))
             (('sym s) . rest)                                       ; `lsr #3`, `lsr 3`, `sxtw #2`: a shift or extend
-             (peep ga-shx (name s) () @ k (charm? k ? ['shx k (rest @ (('ch 35) . v) (gimm v) _ (gimm rest))]
+             (peep ga-shx (name s) () @ k (? (charm? k) ['shx k (rest @ (('ch 35) . v) (gimm v) _ (gimm rest))]
+                                             (elem <rest '((ch 43) (ch 45))) ['symk (name s) (gimm rest)]   ; sym+k
                                              (scare 'gas-a64-operand toks)))
             (('ch 91) . ('sym b) . ('ch 44) . rest)
              (: wb (two? rest && <(rev rest) = '(ch 33))            ; `]!`, pre-indexed
@@ -370,7 +371,8 @@
                       (? (ps @ ((('sym s)) . _) (two? (ga-reg s)) 0)
                           (wb ? (scare 'gas-a64-operand toks) (ga-index <>r ps toks))
                          (#ps > 1) (scare 'gas-a64-operand toks)
-                         [(wb ? 'memw 'mem) <>r (<>(ga-opnd <ps))]))))
+                         (ga-opnd <ps @ ('grp g ts) (wb ? (scare 'gas-a64-operand toks) ['meml <>r g ts])   ; [b, :lo12:sym]
+                                        o [(wb ? 'memw 'mem) <>r <>o])))))
             (scare 'gas-a64-operand toks))
    (ga-r o) (o @ ('reg x _) x (scare 'gas-a64-register o))
    (ga-rw o) (o @ ('reg x w) [x w] (scare 'gas-a64-register o))
@@ -461,6 +463,18 @@
    (ga-wb lb ix t b v)                              ; post- (ix 1) or pre-indexed (ix 3): imm9, the base written back
     (charm? v && -256 <= v <= 255 ? (ga-raw (lb | (v & 511) << 12 | ix << 10 | ga-hw b << 5 | t))
        (scare 'gas-a64-operand v))
+   ;; a symbol and its addend, from `sym` or `sym+k`
+   (ga-sym o) (o @ ('sym s) [s 0] ('symk s k) [s k] _ (scare 'gas-a64-operand o))
+   (ga-symts ts) (ga-sym (ga-opnd ts))
+   ;; adrp to a symbol's page, and add's :lo12: of it: address fixes, the addend aboard
+   (ga-adrp os) (? (#os != 2) (scare 'gas-a64-operand ['adrp os])
+                   (ga-rw (os 0) @ (r w) (w != 8 || r = 'sp ? (scare 'gas-a64-operand ['adrp os])
+                                            (ga-sym (os 1) @ (s k) [['afix 'adrp21 (0x90000000 | ga-hw r) s k]]))))
+   (ga-addlo os)
+    (: d (ga-rw (os 0)) n (ga-rw (os 1))
+       (? (<>d != 8 || <>n != 8 || <d = 'zr || <n = 'zr) (scare 'gas-a64-operand ['add os])
+          ((os 2) @ ('grp 'lo12 ts) (ga-symts ts @ (s k) [['afix 'addlo12 (0x91000000 | ga-hw <n << 5 | ga-hw <d) s k]])
+                    _ (scare 'gas-a64-operand ['add os]))))
    (ga-ls m os)
     (: k #os rw (ga-rw (os 0)) t (ga-hw <rw) row (ga-ldst m) lb (<>rw = 8 ? <row <>row)
        lg (charm? lb ? (lb >> 30) 0)
@@ -477,6 +491,10 @@
                 (charm? o && -256 <= o <= 255) (ga-raw (lb | (o & 511) << 12 | ga-hw b << 5 | t))
                 (scare 'gas-a64-operand os))
              ('memw b o) (ga-wb lb 3 t b o)
+             ('meml b g ts)                                   ; [b, :lo12:sym]: the scaled imm12 fixed by the access size
+              (g != 'lo12 ? (scare 'gas-a64-operand os)
+                 (ga-symts ts @ (s n) [['afix (lg @ 0 'lo12s1 1 'lo12s2 2 'lo12s4 'lo12s8)
+                                        (lb | 0x01000000 | ga-hw b << 5 | t) s n]]))
              ('memx b i x s)
               (s != -1 && s != 0 && s != lg ? (scare 'gas-a64-operand os)
                  (ga-raw (lb | 0x00200800 | ga-hw i << 16 | x << 13 | (s = lg ? 1 0) << 12 | ga-hw b << 5 | t)))
@@ -778,7 +796,13 @@
    (ga-ins m os)
     (#os @ k
        (? (charm? (peep ga-movw m ())) (ga-movw-ins m os)
+          (m = 'adrp) (ga-adrp os)
+          (m = 'add && k = 3 && ((os 2) @ ('grp _ _) 1 _ 0)) (ga-addlo os)
           (k > 2 && two? (ga-shxof (os (k - 1))) && (two? (peep ga-shop m ()) || two? (peep ga-shal m ()))) (ga-shifted m os)
+          ; a register form naming zr, which the IR's rows cannot hold: the shifted word at lsl #0
+          ((two? (peep ga-shop m ()) || two? (peep ga-shal m ())) && any (o \ o @ ('reg 'zr _) 1 _ 0) os
+           && ((os (k - 1)) @ ('reg _ _) 1 _ 0))
+           (ga-shifted m (os + [['shx 0 0]]))
           (charm? (peep ga-arity m ()) && k != ga-arity m) (scare 'gas-a64-operand [m os])
           (m = 'ret && k = 1) (ga-r (os 0) @ r (r = 'lr ? '((ret)) (ga-raw (0xD65F0000 | ga-hw r << 5))))
           (ghas? ga-nils m) (k = 0 ? [[(ga-nils m)]] (scare 'gas-a64-operand [m os]))
@@ -808,7 +832,9 @@
           (m = 'mov)
            (: d (ga-r (os 0)) s (os 1)
               (s @ ('imm n) [['li d n]]
-                   (d = 'sp || ga-r s = 'sp ? [['lea d (ga-r s) 0]] [['mov d (ga-r s)]])))
+                   (? (d = 'sp || ga-r s = 'sp) [['lea d (ga-r s) 0]]
+                      (d = 'zr || ga-r s = 'zr) (ga-raw (0xAA0003E0 | ga-hw (ga-r s) << 16 | ga-hw d))   ; orr d, xzr, s
+                      [['mov d (ga-r s)]])))
           (ghas? ga-alu m)
            (k = 3 ? [[(ga-alu m) (ga-r (os 0)) (ga-r (os 1)) (ga-v (os 2))]] (scare 'gas-a64-operand os))
           (m = 'cmp) [['cmp (ga-r (os 0)) (ga-v (os 1))]]

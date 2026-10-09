@@ -25,6 +25,7 @@
    ra-call26 283                                    ; R_AARCH64_CALL26          ... into bl's imm26
    ra-condbr19 280                                  ; R_AARCH64_CONDBR19        ... into b.cond's or cbz's imm19
    ra-tstbr14 279                                   ; R_AARCH64_TSTBR14         ... into tbz's imm14
+   ra-ldst {'lo12s1 278 'lo12s2 284 'lo12s4 285 'lo12s8 286 'lo12s16 299}   ; R_AARCH64_LDST{8..128}_ABS_LO12_NC
    ra-prel64 260                                    ; R_AARCH64_PREL64          S + A - P in eight bytes (the jump table's key)
    ra-prel32 261                                    ; R_AARCH64_PREL32          S + A - P in four bytes (a jump table's entry)
    ra-pghi21 275                                    ; R_AARCH64_ADR_PREL_PG_HI21  page(S+A)-page(P) into adrp
@@ -65,7 +66,8 @@
                         bs (patch-with be k tgt off w (fix-a x))
                         (o-walkr be >items labels wkset internal? rset (off + w)
                                  (rev bs + bacc) racc))
-                    (: fill (? (elem k '(b26 b19 b14 adrp21 addlo12 j21)) (le32 (fix-a x))
+                    (: fill (? (elem k a64-afix) (le32 (afix-w (fix-a x)))
+                               (elem k '(b26 b19 b14 j21)) (le32 (fix-a x))
                                ; a surviving riscv 'pcrel: the aux packs both base words (auipc low,
                                ; the I-insn high) -- lay them as the 8-byte placeholder call_plt patches
                                (k == 'pcrel) (le32 (fix-a x % 4294967296) + le32 (fix-a x // 4294967296))
@@ -557,8 +559,9 @@
                           ((sa + aux) - 4))
                  ; a64: an adrp/add pair relocates by kind, a page delta never resolving
                  ; inside a .o; a b26 that survived is weak, external, or in another section.
-                 'adrp21 (o-rela off si ra-pghi21 sa)
-                 'addlo12 (o-rela off si ra-lo12 sa)
+                 'adrp21 (o-rela off si ra-pghi21 (sa + afix-ad aux))
+                 'addlo12 (o-rela off si ra-lo12 (sa + afix-ad aux))
+                 ('lo12s1 || 'lo12s2 || 'lo12s4 || 'lo12s8 || 'lo12s16) (o-rela off si (ra-ldst k) (sa + afix-ad aux))
                  'b26 (o-rela off si (aux = 2483027968 ? ra-call26 ra-jump26) sa)   ; 0x94000000 = bl
                  'b19 (o-rela off si ra-condbr19 sa)
                  'b14 (o-rela off si ra-tstbr14 sa)

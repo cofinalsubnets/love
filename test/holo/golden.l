@@ -625,6 +625,17 @@
    _ (chk-eq "gas.a64.bfa.refuse" '(gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand)
         (map (l \ trap (x \ holo-hex 'a64 (gas-text 'a64 x)) l (\ a b a))
              ["ubfx x0, x1, #60, #5" "ubfx x0, x1, #0, #0" "bfi w0, w1, #32, #1" "ubfx x0, w1, #1, #1"]))
+   ;; adrp to a symbol's page and :lo12: of it on add and the loads and stores: address fixes, the
+   ;; word as llvm-mc lays it, the access size naming the kind, the addend aboard
+   _ (chk-eq "gas.a64.adrp"
+        "((afix adrp21 2415919105 id_override 0) (afix addlo12 2432696353 id_override 0) (afix lo12s8 4181721120 sym 0) (afix lo12s1 960495648 sym 3) (afix lo12s4 3103785058 sym 0) (afix adrp21 2415919121 .Lpt 16))"
+        (show (gas-text 'a64 "adrp x1, id_override\n add x1, x1, :lo12:id_override\n ldr x0, [x1, :lo12:sym]\n ldrb w0, [x1, :lo12:sym+3]\n str w2, [x3, #:lo12:sym]\n adrp x17, .Lpt + 16")))
+   ;; a register form naming zr, which the IR's rows cannot hold, is its own word
+   _ (chk-eq "gas.a64.zr" "e0031faaff0301aa3f001feb20001f8be20303aa3f001f6ae4031fcbe503064a3f0002cb"
+        (holo-hex 'a64 (gas-text 'a64 "mov x0, xzr\n mov xzr, x1\n cmp x1, xzr\n add x0, x1, xzr\n orr x2, xzr, x3\n tst w1, wzr\n neg x4, xzr\n eor w5, wzr, w6\n sub xzr, x1, x2")))
+   _ (chk-eq "gas.a64.adrp.refuse" '(gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand)
+        (map (l \ trap (x \ gas-text 'a64 x) l (\ a b a))
+             ["adrp w1, sym" "add w1, w1, :lo12:sym" "ldr x0, [x1, :lo12:sym]!" "ldr x0, [x1, :got:sym]"]))
    _ (chk-eq "gas.a64.lse.refuse"
         '(gas-a64-operand gas-a64-op gas-a64-operand gas-a64-operand gas-a64-operand)
         (map (l \ trap (x \ holo-hex 'a64 (gas-text 'a64 x)) l (\ a b a))
