@@ -348,6 +348,8 @@
           ['memx b <>i o s]))
    (ga-opnd toks)
     (toks @ (('sym ".") . rest) ['dot (two? rest ? (gimm rest) 0)]   ; `.`, `.+k`: this instruction's own place
+            (('ch 35) . ('ch 58) . rest) (ga-opnd >toks)
+            (('ch 58) . ('sym g) . ('ch 58) . rest) ['grp (name g) rest]   ; :abs_g1_s:val, one 16-bit group
             (('ch 35) . rest) ['imm (gimm rest)]
             (('num _) . _) ['imm (gimm toks)]
             (('ch 40) . _) ['imm (gimm toks)]
@@ -600,9 +602,25 @@
              _ (bad 0))))
    ;; the wide moves: a 16-bit immediate at lsl #0/16/32/48 (W: 0/16)
    ga-movw {'movn 0x12800000 'movz 0x52800000 'movk 0x72800000}
+   ;; ..or a constant's group by name: abs_gN its Nth 16 bits, checked unsigned; _nc unchecked;
+   ;; _s checked signed, and on movz a negative value lays the movn of its complement
+   ga-grps {'abs_g0 [0 'u] 'abs_g1 [1 'u] 'abs_g2 [2 'u] 'abs_g3 [3 'u] 'abs_g0_nc [0 'nc] 'abs_g1_nc [1 'nc]
+            'abs_g2_nc [2 'nc] 'abs_g0_s [0 's] 'abs_g1_s [1 's] 'abs_g2_s [2 's]}
+   (ga-movg m rw g ts)
+    (: e (peep ga-grps g ()) z <>rw
+       (bad _) (scare 'gas-a64-operand [m g])
+       (? (!(two? e) || <rw = 'sp || (z = 4 && <e > 1)) (bad 0)
+          (gtoks? ts) (scare 'gas-a64-movw-symbol [m g])
+          (: v (gimm ts) n <e top (1 << (16 * (n + 1))) ng (<>e = 's && m = 'movz && v < 0)
+             f ((u64 (ng ? (v ^ -1) v) >> (16 * n)) & 65535)
+             (? (<>e = 'u && !(0 <= v < top) && n < 3) (bad 0)
+                (<>e = 's && (m != 'movz || !(0 - top < v < top))) (bad 0)   ; the lower edge out
+                (ga-raw ((z = 8 ? 0x80000000 0) | ga-movw (ng ? 'movn m) | n << 21 | f << 5 | ga-hw <rw))))))
+   (gtoks? ts) (any (t \ t @ ('sym _) 1 _ 0) ts)            ; a symbol in the run: a relocation, not a constant
    (ga-movw-ins m os)
     (: k #os rw (ga-rw (os 0)) z <>rw sh (k = 3 ? (ga-shxof (os 2)) [0 0])
-       (? (<rw = 'sp || !(k = 2 || k = 3) || !(two? sh) || <sh != 0 || <>sh % 16 != 0 || !(0 <= <>sh < 8 * z))
+       (? ((os 1) @ ('grp _ _) 1 _ 0) (k = 2 ? ((os 1) @ ('grp g ts) (ga-movg m rw g ts)) (scare 'gas-a64-operand [m os]))
+          (<rw = 'sp || !(k = 2 || k = 3) || !(two? sh) || <sh != 0 || <>sh % 16 != 0 || !(0 <= <>sh < 8 * z))
            (scare 'gas-a64-operand [m os])
           ((os 1) @ ('imm v) (0 <= v <= 65535 ? (ga-raw ((z = 8 ? 0x80000000 0) | ga-movw m | (<>sh // 16) << 21 | v << 5 | ga-hw <rw))
                                  (scare 'gas-a64-operand [m os]))
@@ -661,6 +679,16 @@
        ([(os 2) (os 3)] @ (('imm r) ('imm t))
           (? (<>s != <>d || <d = 'sp || <s = 'sp || !(0 <= r < b && 0 <= t < b)) (scare 'gas-a64-operand [m os])
              (ga-raw ((b = 64 ? 0x80400000 0) | ga-bfm m << 29 | 0x13000000 | r << 16 | t << 10 | ga-hw <s << 5 | ga-hw <d)))
+          _ (scare 'gas-a64-operand [m os])))
+   ;; the bitfield aliases: an extract lays immr lsb, imms lsb+w-1; an insert immr -lsb mod size,
+   ;; imms w-1; bfc inserts zr. lsb below the width, w from 1 to what is left
+   ga-bfa {'ubfx ['ubfm 'x] 'sbfx ['sbfm 'x] 'bfxil ['bfm 'x] 'ubfiz ['ubfm 'z] 'sbfiz ['sbfm 'z] 'bfi ['bfm 'z] 'bfc ['bfm 'z]}
+   (ga-bfa-ins m os)
+    (: al (ga-bfa m) z ((ga-rw (os 0)) 1) top (z = 8 ? 64 32)
+       os2 (m = 'bfc && #os = 3 ? [(os 0) ['reg 'zr z] (os 1) (os 2)] os)
+       ([(os2 2) (os2 3)] @ (('imm l) ('imm w))
+          (? (#os2 != 4 || !(0 <= l < top) || !(1 <= w <= top - l)) (scare 'gas-a64-operand [m os])
+             (ga-bfm-ins (al 0) [(os2 0) (os2 1) ['imm (al 1 = 'x ? l ((top - l) % top))] ['imm (al 1 = 'x ? (l + w - 1) (w - 1))]]))
           _ (scare 'gas-a64-operand [m os])))
    ;; the lse atomics by spelling: ld<op>/st<op>/swp/cas, then a|l|al, then b|h ->
    ;; (kind opbits acq rel size), size () for the register's own
@@ -816,6 +844,7 @@
           (two? (peep ga-ex m ())) (k = 2 ? (ga-ex-ins (ga-ex m) os) (scare 'gas-a64-operand [m os]))
           (two? (peep ga-sx m ())) (k = 3 ? (ga-ex-ins (ga-sx m) os) (scare 'gas-a64-operand [m os]))
           (charm? (peep ga-bfm m ())) (k = 4 ? (ga-bfm-ins m os) (scare 'gas-a64-operand [m os]))
+          (two? (peep ga-bfa m ())) (ga-bfa-ins m os)
           (two? (ga-mops m)) (ga-mops-ins m (ga-mops m) os)
           (two? (peep ga-pair m ())) (ga-pair-ins m os)
           (ga-lse-ins m (ga-lse m) os)))
@@ -1123,9 +1152,28 @@
                                (go (i + 1) (acc + string c)))))
            (go 0 ""))
        ; a call's lines: keyword arguments by name, the rest in order, a default else
+       ; a call's arguments: split at commas, and at a space with no operator beside it
+       ; (`m x0 8 1f`, but `m (a) | (b)` is one), outside brackets and quotes
+       (margs s)
+        (: n #s
+           (op? c) (elem c '(43 45 42 47 37 38 124 94 60 62 61 33 126))
+           (sk j) (j < n && ws? (s j) ? (sk (j + 1)) j)
+           (go i st d q acc)
+            (? (i >= n) (rev (xa-trim (snip s st n) . acc))
+               (q = 1) (go (i + 1) st d (s i = 34 ? 0 1) acc)
+               (s i = 34) (go (i + 1) st d 1 acc)
+               (s i = 40 || s i = 91) (go (i + 1) st (d + 1) q acc)
+               (s i = 41 || s i = 93) (go (i + 1) st (d - 1) q acc)
+               (s i = 44 && d = 0) (go (i + 1) (i + 1) 0 q (xa-trim (snip s st i) . acc))
+               (ws? (s i) && d = 0)
+                (: j (sk i)
+                   (? (j >= n || i = st || op? (s (i - 1)) || op? (s j) || s j = 44) (go j st d q acc)
+                      (go j j d q (xa-trim (snip s st i) . acc))))
+               (go (i + 1) st d q acc))
+           (go 0 (sk 0) 0 0 ()))
        (call m rest)
         (: ps <m
-           as (0 = #(xa-trim rest) ? () (xa-oplist rest))
+           as (0 = #(xa-trim rest) ? () (margs rest))
            kw (filter (a \ xa-has? a 61) as) po (filter (a \ !(xa-has? a 61)) as)
            (kv nm) (filter (a \ xa-trim (snip a 0 (xa-idx a 61)) = nm) kw)
            (bind ps po acc)
