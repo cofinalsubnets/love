@@ -453,7 +453,7 @@
         '(gas-a64-operand gas-a64-operand gas-a64-width gas-a64-width gas-a64-operand gas-a64-operand
           a64-bitmask-imm gas-a64-operand gas-a64-operand gas-a64-operand)
         (map (l \ trap (x \ gas-text 'a64 x) l (\ a b a))
-             ["cmp x0, x1, lsl #2" "neg x1, x2, lsl #1" "add w0, x1, w2" "ldrsw w0, [x1]" "add w0, wzr, #1"
+             ["cmp x0, x1, ror #2" "neg x1, x2, lsl #64" "add w0, x1, w2" "ldrsw w0, [x1]" "add w0, wzr, #1"
               "ret x2, x3" "and w0, w0, #0" "ldr x0, [x1, x2, lsl #2]" "ldr x0, [x1], #300" "lsl w0, w1, #32"]))
    ;; the hints, the inverted logicals, the carry pair, the reversals, uaccess's unprivileged
    ;; pair and the kernel's system registers and operations, each word llvm-mc's
@@ -592,6 +592,15 @@
    ;; gas's dotless conditional branches, bne as b.ne, back and by `.`
    _ (chk-eq "gas.a64.bne" "00000054e1ffff54c2ffff54a3ffff5481ffff5441000054"
         (holo-hex 'a64 (gas-text 'a64 "1:\nbeq 1b\nbne 1b\nbcs 1b\nblo 1b\nb.ne 1b\nbne .+8\n")))
+   ;; a shifted register (the `#` optional), an extended one, #imm with lsl #12, the aliases,
+   ;; and the wide moves at a shift: llvm-mc's words. ror on arith, a far shift or extend, sp
+   ;; in a shifted form, an X register with a W extend, and a wide move off its lanes refuse
+   _ (chk-eq "gas.a64.shift" "000c448b207c824b20fcc2aae90f01cbe00b612abf1c08ea5f0c4feb20c8228bff6f218be043218be07321ab2060220b200440911ffc7ff12000a0f2e0ffbf52a000e0921f04212b20e0228b000c448b200080d2"
+        (holo-hex 'a64 (gas-text 'a64 "add x0, x0, x4, lsr #3\n sub w0, w1, w2, asr #31\n orr x0, x1, x2, ror #63\n neg x9, x1, lsl #3\n mvn w0, w1, lsr #2\n tst x5, x8, lsl #7\n cmp x2, x15, lsr #3\n add x0, x1, w2, sxtw #2\n add sp, sp, x1, lsl #3\n add x0, sp, w1, uxtw\n adds x0, sp, x1, uxtx #4\n add w0, w1, w2, uxtx\n add x0, x1, #1, lsl #12\n cmp x0, #4095, lsl #12\n movk x0, #1, lsl #16\n movz w0, #0xffff, lsl #16\n movn x0, #5, lsl #48\n cmn w0, w1, uxtb #1\n add x0, x1, x2, sxtx\n add x0, x0, x4, lsr 3\n movz x0, #1")))
+   _ (chk-eq "gas.a64.shift.refuse" '(gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand)
+        (map (l \ trap (x \ holo-hex 'a64 (gas-text 'a64 x)) l (\ a b a))
+             ["add x0, x1, x2, ror #1" "add x0, x1, x2, lsl #64" "and sp, x1, x2, lsl #1" "add x0, x1, x2, uxtw"
+              "add x0, x1, w2, uxtw #5" "movk w0, #1, lsl #32" "movz x0, #0x10000"]))
    _ (chk-eq "gas.a64.lse.refuse"
         '(gas-a64-operand gas-a64-op gas-a64-operand gas-a64-operand gas-a64-operand)
         (map (l \ trap (x \ holo-hex 'a64 (gas-text 'a64 x)) l (\ a b a))

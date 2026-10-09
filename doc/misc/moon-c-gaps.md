@@ -1175,6 +1175,13 @@ below, 251 of those 332 re-run so far: **145 compile**, and the rest refuse by n
   `csel`/`csinc`/`csinv`/`csneg`, and the aliases `cset`/`csetm`/`cinc`/`cinv`/`cneg`, `al` and
   `nv` among the conditions where the instruction takes them. All 479 lines of a sweep are
   llvm-mc's, its refusals among them. With them, gas's dotless branches (`bne` as `b.ne`).
+- **shifted and extended operands**: `x2, lsr #3` (the `#` optional) on add/sub, the logicals and
+  the cmp/cmn/tst/neg/negs/mvn aliases, `w2, sxtw #2` and its kin, `lsl` beside sp, `#imm, lsl
+  #12` (a multiple of 4096 moves up, as gas does), and `movz`/`movn`/`movk` at `lsl #16..48`,
+  laid as their own words (`movz w0` had laid an X word). `wsp` reads. Of a 3690-line sweep, each
+  form llvm-mc lays is its word and each it refuses refuses; past it, an X op's W register under
+  `uxtx`/`sxtx` refuses for adds/subs, as llvm-mc refuses it for add. memchr, memset, strcmp,
+  strlen, strncmp and strnlen compile, word for word the kernel's objects.
 
 Still open on this side (g-21's probes):
 
@@ -1184,10 +1191,9 @@ Still open on this side (g-21's probes):
   reads at the element's width, a bitfield or 128-bit member of a packed struct refuses by name,
   and a by-value struct reached as a packed member rides its type's alignment, not the member's.
 - where the re-run stops now, on this side: a register variable pinned to `x0` (4). Of the 24
-  units that stopped on the `.S` extable macro's `\insn`, 11 compile, and the rest stop on: a
-  shifted register operand (`x2, lsr #3`, the `#` sometimes left off, 6), gas's `||` (3,
-  mov_q's range test), `.incbin`, `@note`, `sym+k` as a memory operand and a `.set` alias of
-  a function (`__memmove`). The exclusive pairs (`ldxp`/`stxp` and kin) have no lane yet.
+  units that stopped on the `.S` extable macro's `\insn`, 17 compile, and the rest stop on:
+  gas's `||` (3, mov_q's range test), `.incbin`, `@note`, `sym+k` as a memory operand and a
+  `.set` alias of a function (`__memmove`). The exclusive pairs (`ldxp`/`stxp` and kin) have no lane yet.
   The rest is part 1's front end and gen (`linux/skbuff.h`, an undeclared `branch`,
   `__attribute__((mode))`).
 - defconfig, g-21's units once refused on a Q form or a register pinned twice: of a sample of
