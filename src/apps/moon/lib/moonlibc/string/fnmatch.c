@@ -4,25 +4,6 @@
 
 static int __fnfold(int c, int fl) { return (fl & FNM_CASEFOLD) ? tolower(c) : c; }
 
-/* one [:class:] by name; *ok is 0 for a name not among the twelve */
-static int __fnclass(char const *n, int len, int c, int *ok) {
-  *ok = 1;
-  #define FnIs(w) (len == (int) sizeof w - 1 && !memcmp(n, w, len))
-  if (FnIs("alnum")) return isalnum(c);
-  if (FnIs("alpha")) return isalpha(c);
-  if (FnIs("blank")) return c == ' ' || c == '\t';
-  if (FnIs("cntrl")) return iscntrl(c);
-  if (FnIs("digit")) return isdigit(c);
-  if (FnIs("graph")) return isgraph(c);
-  if (FnIs("lower")) return islower(c);
-  if (FnIs("print")) return isprint(c);
-  if (FnIs("punct")) return ispunct(c);
-  if (FnIs("space")) return isspace(c);
-  if (FnIs("upper")) return isupper(c);
-  if (FnIs("xdigit")) return isxdigit(c);
-  #undef FnIs
-  *ok = 0; return 0; }
-
 /* a bracket at p (just past the '['): matched -> 1, not -> 0, and *end past its ']'; a bracket
  * that never closes answers -1, and the '[' is then an ordinary character */
 static int __fnbracket(char const *p, int c, int fl, char const **end) {
@@ -37,8 +18,8 @@ static int __fnbracket(char const *p, int c, int fl, char const **end) {
       char const *q = p + 2;
       while (*q && !(*q == ':' && q[1] == ']')) q++;
       if (*q) {
-        int ok, m = __fnclass(p + 2, (int) (q - p - 2), c, &ok);
-        if (ok) { hit |= m; p = q + 2; continue; } } }
+        int (*f)(int) = __ctclass(p + 2, (size_t) (q - p - 2));
+        if (f) { hit |= f(c) != 0; p = q + 2; continue; } } }
     int lo = (unsigned char) *p;
     if (lo == '\\' && !(fl & FNM_NOESCAPE) && p[1]) lo = (unsigned char) *++p;
     if ((fl & FNM_PATHNAME) && lo == '/') return -1;

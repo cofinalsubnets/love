@@ -63,15 +63,6 @@ static node *two(parser *P, int t, node *a, node *b) {
   if (n) { n->a = a; n->b = b; }
   return n; }
 
-static int classok(char const *nm, size_t n, int c) {
-  struct { char const *k; int (*f)(int); } const cl[] = {
-    {"alpha", isalpha}, {"upper", isupper}, {"lower", islower}, {"digit", isdigit}, {"xdigit", isxdigit},
-    {"alnum", isalnum}, {"space", isspace}, {"print", isprint}, {"punct", ispunct}, {"graph", isgraph},
-    {"cntrl", iscntrl}, {"blank", isblank}};
-  for (unsigned i = 0; i < sizeof cl / sizeof *cl; i++)
-    if (strlen(cl[i].k) == n && !strncmp(cl[i].k, nm, n)) return c < 0 ? 1 : cl[i].f(c) != 0;
-  return -1; }
-
 /* [..] at P->s just past the '[' */
 static node *bracket(parser *P) {
   node *n = mk(P, N_SET);
@@ -94,8 +85,9 @@ static node *bracket(parser *P) {
       size_t len = (size_t) (e - b);
       P->s = e + 2;
       if (k == ':') {
-        if (classok(b, len, -1) < 0) { P->err = REG_ECTYPE; return 0; }
-        for (int i = 1; i < 256; i++) if (classok(b, len, i)) setc(P, s, i);
+        int (*f)(int) = __ctclass(b, len);
+        if (!f) { P->err = REG_ECTYPE; return 0; }
+        for (int i = 1; i < 256; i++) if (f(i)) setc(P, s, i);
         if (P->icase && (len == 5 && (!strncmp(b, "upper", 5) || !strncmp(b, "lower", 5))))
           for (int i = 1; i < 256; i++) if (isalpha(i)) setb(s, i);
         continue; }
