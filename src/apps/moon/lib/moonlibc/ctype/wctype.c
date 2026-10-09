@@ -19,15 +19,17 @@ int iswxdigit(wint_t w) { return ASC(w) && isxdigit(w); }
 wint_t towlower(wint_t w) { return ASC(w) ? (wint_t) tolower(w) : w; }
 wint_t towupper(wint_t w) { return ASC(w) ? (wint_t) toupper(w) : w; }
 
-static char const *const cls[] = {"alnum", "alpha", "blank", "cntrl", "digit", "graph",
-                                  "lower", "print", "punct", "space", "upper", "xdigit"};
-wctype_t wctype(char const *nm) {
-  for (int i = 0; i < 12; i++) if (!strcmp(nm, cls[i])) return i + 1;
+/* the twelve classes by name, in wctype's order: wctype_t is the index + 1 */
+static struct { char const *k; int (*f)(int); } const cls[] = {
+  {"alnum", isalnum}, {"alpha", isalpha}, {"blank", isblank}, {"cntrl", iscntrl},
+  {"digit", isdigit}, {"graph", isgraph}, {"lower", islower}, {"print", isprint},
+  {"punct", ispunct}, {"space", isspace}, {"upper", isupper}, {"xdigit", isxdigit}};
+static wctype_t ctname(char const *nm, size_t n) {
+  for (int i = 0; i < 12; i++) if (strlen(cls[i].k) == n && !memcmp(nm, cls[i].k, n)) return i + 1;
   return 0; }
-int iswctype(wint_t w, wctype_t t) {
-  switch (t) {
-  case 1: return iswalnum(w); case 2: return iswalpha(w); case 3: return iswblank(w);
-  case 4: return iswcntrl(w); case 5: return iswdigit(w); case 6: return iswgraph(w);
-  case 7: return iswlower(w); case 8: return iswprint(w); case 9: return iswpunct(w);
-  case 10: return iswspace(w); case 11: return iswupper(w); case 12: return iswxdigit(w);
-  default: return 0; } }
+/* a bracket's [:name:], not nul-ended -> its byte test, NULL for no class: regex and fnmatch */
+int (*__ctclass(char const *nm, size_t n))(int) {
+  wctype_t t = ctname(nm, n);
+  return t ? cls[t - 1].f : NULL; }
+wctype_t wctype(char const *nm) { return ctname(nm, strlen(nm)); }
+int iswctype(wint_t w, wctype_t t) { return t >= 1 && t <= 12 && ASC(w) && cls[t - 1].f((int) w); }

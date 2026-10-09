@@ -636,6 +636,7 @@ int __fmtsgn(int neg, int fl);
 void __pad(void (*put)(void *, int), void *ctx, int n, int ch);
 void __femit(void *ctx, int c);
 void __semit(void *ctx, int c);
+int (*__ctclass(char const *nm, size_t n))(int);
 
 /* the three standard streams' storage: core.c's entry wires stdout's buffer, and
  * the stream table is named by whoever opens one. */
