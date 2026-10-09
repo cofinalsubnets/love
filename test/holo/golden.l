@@ -333,6 +333,19 @@
    _ (holo-bytes 'a64 '((and r0 r0 18446744073709551615)))
    _ (chk-eq "a64.and.allones.refused" 1 (peep bmcaught 0 0))
 
+   ;; -- a64's far memory lane: past imm12's scaled reach and ldur's 256 bytes, x16 builds by add/sub
+   ;; immediate (Rn=31 is sp there), two words to 4095 and three to 2^24; past that movz/movk and a
+   ;; register add, which reads 31 as xzr -- so sp that far raises. the words are llvm-mc's --
+   _ (chk-eq "a64.far"
+        ("b0a30fd1000240f9" + "f027409110023191010200f9" + "b0b304d102024039" + "301053d110022dd1030240f9" +
+         "b00740d1040240f9" + "10a085d23026a0f23000108b000240f9")
+        (holo-hex 'a64 '((ld r0 fp -1000) (st sp 40000 r1) (ldu1 r2 fp -300) (ld r3 r1 -5000000)
+                         (ld r4 fp -4096) (ld r0 r1 20000000))))
+   fscaught {} _ (pin fscaught 0 0)
+   _ (hear (a \ b \ a = 'far-base-sp ? (pin fscaught 0 1, ()) (welp a b)))
+   _ (holo-bytes 'a64 '((ld r0 sp 20000000)))
+   _ (chk-eq "a64.far.sp.refused" 1 (peep fscaught 0 0))
+
    ;; -- the text front-end (src/love/holo/text.l) parses to the same IR, so it assembles byte-identically. --
    _ (chk-eq "text.basic" (holo-hex 'x64 '((li r0 60) (ret)))
                           (holo-hex 'x64 (asm-text "li r0, 60\nret")))
@@ -402,6 +415,14 @@
         (gf-expand 'x64 (gf-lines 'x64 ".if 0\n.long 1\n.elseif 1\n.long 2\n.elseif 1\n.long 3\n.else\n.long 4\n.endif\n.if 0\n.long 5\n.elseif 0\n.long 7\n.else\n.long 6\n.endif")))
    _ (chk-eq "gimm.not" [0 1 1 256] [(gimm (gtoks "!5")) (gimm (gtoks "!0")) (gimm (gtoks "!!(7)")) (gimm (gtoks "(!!(3)) << 8"))])
    _ (chk-eq "gimm.shr" [15 15] [(gimm (gtoks "~0 >> 60")) (gimm (gtoks "0xf0 >> 4"))])
+   ;; gas's ranks, as llvm-mc reads them: << with *, | & ^ above + -, comparisons below + -, then
+   ;; && then ||, which answer 1; a value wraps at 64 bits, signed
+   _ (chk-eq "gimm.rank" [17 3 8 2 -1 1 0 1 -1 0]
+        (map (x \ gimm (gtoks x)) ["1 + 2 << 3" "6 & 3 + 1" "8 >> 1 * 2" "5 - 1 | 2" "1 + 2 == 3" "1 || 0 && 0"
+                                   "1 + 2 != 3 || 0" "3 == 3 || 0" "(-5) >> 0 < 0" "1 << 63 << 1"]))
+   _ (chk-eq "gimm.movq" [1 0]
+        (map (x \ gimm (gtoks x)) ["(((195938833) >> 31) == 0 || ((195938833) >> 31) == 8589934591)"
+                                   "(((3684054920433006693) >> 31) == 0 || ((3684054920433006693) >> 31) == 8589934591)"]))
    ; a symbol-less rip displacement is the address past the lea (_THIS_IP_): its own bytes
    _ (chk-eq "gas.x64.thisip"
         '((raw (76 141 29 0 0 0 0)) (raw (72 141 5 8 0 0 0)))
@@ -797,10 +818,10 @@
       ;; f16+ registers; cmp's cmn flip; p/np as vs/vc (FCMP parks unordered in V). llvm-mc-verified.
       ("a64.lean"     "808000d1"          ((lean r0 r4 -32)))           ; sub x0, x4, #32 (lea's alias)
       ("a64.addi.24"  "2040409100100091"  ((add r0 r1 65540)))          ; add x0,x1,#16,lsl#12 ; add x0,x0,#4
-      ("a64.far.ld"   "902580d2300010cb000240f9" ((ld r0 r1 -300)))     ; movz x16,#300 ; sub x16,x1,x16 ; ldr x0,[x16]
+      ("a64.far.ld"   "30b004d1000240f9" ((ld r0 r1 -300)))             ; sub x16, x1, #300 ; ldr x0, [x16]
       ("a64.stur.d"   "40801ffc"          ((stsd r2 -8 f0)))            ; stur d0, [x2, #-8]
       ("a64.ldur.d"   "83005ffc"          ((ldsd f3 r4 -16)))           ; ldur d3, [x4, #-16]
-      ("a64.far.fld"  "902580d2300010cb000240fd" ((ldsd f0 r1 -300)))   ; movz x16,#300 ; sub x16,x1,x16 ; ldr d0,[x16]
+      ("a64.far.fld"  "30b004d1000240fd" ((ldsd f0 r1 -300)))           ; sub x16, x1, #300 ; ldr d0, [x16]
       ("a64.freg.hi"  "500400fd"          ((stsd r2 8 f16)))            ; str d16, [x2, #8] (the narrow scratch)
       ("a64.cmn"      "1f1c00b1"          ((cmp r0 -7)))                ; cmn x0, #7 (negative imm flips)
       ("a64.set.np"   "e0679f9a"          ((set np r0)))                ; cset x0, vc (np aliases vc)
