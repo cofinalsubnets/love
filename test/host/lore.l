@@ -11,7 +11,7 @@
                     st (wf <md)
                     _ (close >md)
                     [<st (split "\r\n" o) o])
-   games ["apartment" "court" "design" "dusk" "garage" "grass88" "grass99" "shaft" "slop" "stones" "story" "tower" "wade"]
+   games ["apartment" "corridor" "court" "design" "dusk" "garage" "grass88" "grass99" "shaft" "slop" "stones" "story" "tower" "wade"]
    ls (lo-run [lo-love "lore"])
    help (lo-run [lo-love "lore" "--help"])
    bad (lo-run [lo-love "lore" "nope"])

@@ -8,6 +8,8 @@
 ;   vec    triples of numbers or trays: vectors, colours, and the hash's value noise
 ;   sky    the sun by date, hour and latitude, and the weather: clear to overcast, smooth or in pixels
 ;   grove  trees grown from a seed, drawn as wood and points, and the shade they cast
+;   mesh   triangles: shapes, textures, the sun or lamps on them, and the frame out
+;   neon   signs bent from tube: a stroke font, and the tubes, halo and lamp of a sign
 ; a game registers with (lore-enlist NAME MAIN), MAIN taking the args after its name, and
 ; (lore-alias OLD NAME) lets another name play it, unlisted.
 (module (lore lore-enlist lore-alias lore-games lore-main)

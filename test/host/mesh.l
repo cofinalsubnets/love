@@ -98,5 +98,46 @@
        (0 < seen) (0.9 * seen <= #hot) (#hot <= seen)
        (at fg mid cen = at f0 mid cen) (two? gk) (gap fg fs < 0.01) (0.9 * seen <= #hot4) (#hot4 <= seen)
        (shape mp = [64 64]) (at fsh mid cen < at fno mid cen) (at fsh (mid + 6) cen = at fno (mid + 6) cen)))
+; --- a picture's texture: any size, its levels halved each way to a side of one; from rgba
+; --- bytes, each texel the mean under it, a hole where they are mostly clear
+(: white [1.0 1.0 1.0]
+   pc (mesh-pic 8 4 (\ x y (x < 4 ? [1.0 0.0 0.0] [0.0 0.0 1.0])))
+   px "\xff\x00\x00\xff\x00\xff\x00\xff\x00\x00\xff\xff\x00\x00\x00\x00"
+   r2 (mesh-rgba 2 2 px 2 2) r1 (mesh-rgba 2 2 px 1 1)
+   ; ..a sheet faces where it is told, either way its sides are given
+   (up? m) (all (v \ v 6 > 0.99) (m 0))
+   sa (mesh-sheet [0.0 0.0 0.0] [1.0 0.0 0.0] [0.0 0.0 1.0] 2 2 [0.0 1.0 0.0] (p \ [0.0 0.0]) -1 white)
+   sb (mesh-sheet [0.0 0.0 0.0] [0.0 0.0 1.0] [1.0 0.0 0.0] 2 2 [0.0 1.0 0.0] (p \ [0.0 0.0]) -1 white)
+   ; ..lamps over a floor 4 by 4: brightest under the lamp, none past its reach, none from a
+   ; lamp facing away, none where it is kept from
+   fl (mesh-pack (mesh-sheet [-2.0 0.0 -2.0] [4.0 0.0 0.0] [0.0 0.0 4.0] 4 4 [0.0 1.0 0.0] (p \ [0.0 0.0]) -1 white))
+   mid 12                             ; the vertex at the middle, under the lamp
+   lp {'at [[0.0 1.0 0.0]] 'c [1.0 1.0 1.0] 'r 2.5}
+   ch (mesh-lamp fl lp)
+   away (mesh-lamp fl {'at [[0.0 1.0 0.0]] 'c [1.0 1.0 1.0] 'r 2.5 'n [0.0 1.0 0.0]})
+   short (mesh-lamp fl {'at [[0.0 1.0 0.0]] 'c [1.0 1.0 1.0] 'r 1.2})
+   kept (mesh-lamp fl {'at [[0.0 1.0 0.0]] 'c [1.0 1.0 1.0] 'r 2.5 'keep (\ X Y Z (Z < 0.5))})
+   (texs t) (peep t (iota (#t // 4) * 4 + 3) 0)
+   ; ..and lit by them, each channel by its own brightness; what shines its colour alone
+   lm (mesh-lamps fl [0.0 0.0 0.0] [ch] [2.0] 1.0)
+   sh (mesh-shine fl 0.5)
+   gl (mesh-glow sh)
+ (test (map shape pc = [[4 8] [2 4] [1 2]]) (peep (pc 1) [0 0] 0 = 16711680) (peep (pc 1) [0 3] 0 = 255)
+       (map shape r2 = [[2 2] [1 1]]) (peep (r2 0) [1 1] 0 = -1) (peep (r2 0) [0 1] 0 = 65280) (peep (r1 0) [0 0] 0 = 5592405)
+       (up? sa) (up? sb)
+       (amax (ch 0) = peep (ch 0) mid 0.0) (0.9 < peep (ch 0) mid 0.0) (peep (ch 0) 0 1.0 = 0.0)
+       (amax (away 0) = 0.0) (peep (short 0) 6 1.0 = 0.0) (0.0 < peep (ch 0) 6 0.0)
+       (peep (kept 0) 14 1.0 = 0.0) (0.0 < peep (ch 0) 14 0.0) (peep (kept 0) mid 0.0 = peep (ch 0) mid 0.0)
+       (peep (lm 0) (mid * 8 + 5) 0.0 = 2.0 * peep (ch 0) mid 0.0) (peep (lm 0) (mid * 8) 1.0 = 0.0)
+       (amin (peep (sh 0) (iota 25 * 8 + 6) 0.0) = 0.5)
+       (amax (texs (sh 1)) = -1) (amax (texs (gl 1)) = -2) (gl 0 = sh 0)))
+; --- batches: each starts with no texture, whatever the batch before it last used
+(: W 40 H 24 white [1.0 1.0 1.0]
+   v (mesh-view W H [0.0 0.0 0.0] 0.0 0.0 1.4 0.1 100.0)
+   grey (mesh-tex 4 (\ x y [0.25 0.25 0.25]))
+   far (mesh-bake (mesh-pack (mesh-box [0.0 0.0 9.0] [4.0 4.0 0.1] 0.0 0 white 1.0)) {'sun [0.0 1.0 0.0] 'amb [1.0 1.0 1.0] 'sunk 0.0 'sunc [0.0 0.0 0.0]} mesh-open 1.0)
+   near (mesh-shine (mesh-pack (mesh-box [0.0 0.0 5.0] [0.5 0.5 0.1] 0.0 -1 white 1.0)) 1.0)
+   f (mesh-frame v [[(far 0) (near 0)] [(far 1) (near 1)]] [grey] [0 0 0 0.0 0.0] 0 0.0 7)
+ (test (peep f (12 * W + 20) 0 = 16777215) (peep f (2 * W + 2) 0 != 16777215)))
 (test_fin ())
 (puts "mesh: ok\n")
