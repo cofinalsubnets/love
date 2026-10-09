@@ -609,6 +609,22 @@
         (map (l \ trap (x \ holo-hex 'a64 (gas-text 'a64 x)) l (\ a b a))
              ["add x0, x1, x2, ror #1" "add x0, x1, x2, lsl #64" "and sp, x1, x2, lsl #1" "add x0, x1, x2, uxtw"
               "add x0, x1, w2, uxtw #5" "movk w0, #1, lsl #32" "movz x0, #0x10000"]))
+   ;; a constant's 16-bit group: mov_q's movz/movk, a negative _s laying movn; a group past its
+   ;; range or register, _s on movk, and a symbol (a relocation) refuse
+   _ (chk-eq "gas.a64.absg" "a075a1d2204299f20000a0920064e6d2c08dccf2002eacf2a00c8ff280008092e0ffaf92"
+        (holo-hex 'a64 (gas-text 'a64 "movz x0, :abs_g1_s:0xbadca11\n movk x0, :abs_g0_nc:0xbadca11\n movz x0, :abs_g1_s:-2\n movz x0, :abs_g3:0x3320646e61707865\n movk x0, :abs_g2_nc:0x3320646e61707865\n movk x0, :abs_g1_nc:0x3320646e61707865\n movk x0, #:abs_g0_nc:0x3320646e61707865\n movz x0, :abs_g0_s:-5\n movz x0, :abs_g1_s:-0x80000000")))
+   _ (chk-eq "gas.a64.absg.refuse" '(gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-movw-symbol)
+        (map (l \ trap (x \ holo-hex 'a64 (gas-text 'a64 x)) l (\ a b a))
+             ["movz x0, :abs_g0:0x10000" "movz w0, :abs_g2:1" "movk x0, :abs_g1_s:1" "movz x0, :abs_g0_s:-65536" "movz x0, :abs_g1:sym"]))
+   ;; a macro call's arguments split at a space as at a comma, unless an operator sits beside it
+   _ (chk-eq "gas.macro.space" '("add x0, x1, #8" "add x0, x1, #(1 + 2)" "add x0, x1, #(1) | (2)" "add x0, x1, #3" "add x0, x1, #1 + 2")
+        (gf-expand 'a64 (gf-lines 'a64 ".macro m a, b, c\nadd \\a, \\b, \\c\n.endm\nm x0 x1 #8\nm x0, x1, #(1 + 2)\nm x0 x1 #(1) | (2)\nm x0, x1 , #3\nm x0 x1 #1 + 2")))
+   ;; the bitfield aliases as llvm-mc lays them; a field past the register refuses
+   _ (chk-eq "gas.a64.bfa" "21ac68d3201c031320fc40b3201c7cd320000113201470b320140033e00f78b3e3030133"
+        (holo-hex 'a64 (gas-text 'a64 "ubfx x1, x1, #40, #4\n sbfx w0, w1, #3, #5\n bfxil x0, x1, #0, #64\n ubfiz x0, x1, #4, #8\n sbfiz w0, w1, #31, #1\n bfi x0, x1, #16, #6\n bfi w0, w1, #0, #6\n bfc x0, #8, #4\n bfc w3, #31, #1")))
+   _ (chk-eq "gas.a64.bfa.refuse" '(gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand)
+        (map (l \ trap (x \ holo-hex 'a64 (gas-text 'a64 x)) l (\ a b a))
+             ["ubfx x0, x1, #60, #5" "ubfx x0, x1, #0, #0" "bfi w0, w1, #32, #1" "ubfx x0, w1, #1, #1"]))
    _ (chk-eq "gas.a64.lse.refuse"
         '(gas-a64-operand gas-a64-op gas-a64-operand gas-a64-operand gas-a64-operand)
         (map (l \ trap (x \ holo-hex 'a64 (gas-text 'a64 x)) l (\ a b a))
