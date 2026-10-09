@@ -10,6 +10,8 @@
 (borrow 'neon)
 (borrow 'posix)
 (borrow 'view)     ; pi
+(borrow 'brush)
+(borrow 'vec)      ; mag
 
 (: (rows s) (: (go i k) (i + 2 <= #s ? (go (i + 1) (k + ("\r\n" = snip s i (i + 2)))) k) (1 + go 0 0))
    hall (corridor-load "src/apps/lore/levels/hall.l")
@@ -27,11 +29,33 @@
       (hall 'start 'at = [0.0 1.0]) (#(hall 'posters) = 1) (hall 'signs 0 'text = "LOUNGE"))
 ; --- levels that will not read, and why
 (test (string? (corridor-read "(room 0 0 1 1 2)")) (string? (lv "")) (has? (lv "") "needs a room")
-      (has? (lv "(room 0 0 1 1)") "not understood") (has? (lv "(room 0 0 1 1 2) (lamp 0 0)") "(lamp 0 0)")
-      (has? (lv "(room 0 0 2 2 2) (door 5 5 1 2)") "between two rooms")
-      (tablet? (lv "(room 0 0 2 2 2) (room 0 2.2 2 4 2) (door 1 2.1 1 2)"))
-      (lv "(room 0 0 2 2 2) (room 2.2 0 4 2 2) (door 2.1 1 1 2)" 'doors 0 'ax = 'x)
+      (has? (lv "(room 0 0 1 1 2)") "not understood") (has? (lv "(room 0 0 1 1 2)") "it reads (room (x y z) (x y z) [(walls NAME)]")
+      (has? (lv "(room (0 0 0) (1 2 1)) (lamp (0 0 0))") "(lamp (0 0 0))")
+      (has? (lv "(room (0 0 0) (1 2 1)) (bulb (0 1 0) (1 1 1))") "(rgb r g b)")
+      (has? (lv "(room (0 0 0) (1 2 1)) (solid (box (0 1 0) (1 1 1)))") "no inside")
+      (has? (lv "(room (0 0 0) (2 2 2)) (door (5 0 5) 1 2)") "between two rooms")
+      (tablet? (lv "(room (0 0 0) (2 2 2)) (room (0 0 2.2) (2 2 4)) (door (1 0 2.1) 1 2)"))
+      (lv "(room (0 0 0) (2 2 2)) (room (2.2 0 0) (4 2 2)) (door (2.1 0 1) 1 2)" 'doors 0 'ax = 'x)
       (string? (corridor-load "/nonexistent/level.l")))
+; --- textures: the corridor's own; a brush's skin naming a level's, all of them or by the
+; --- way a face is turned; a name no texture has; a bad layer, said back; a wall's texture
+; --- standing on its brush's foot, wherever that is
+(: tx "(texture rust 32 32 1 (fill (rgb 0.4 0.2 0.1)) (noise 3 0.2)) "
+   bad "(room (0 0 0) (2 2 2)) (texture rust 32 32 1 (fill 1) (stripes 4 2 (grey 0.5)))"
+   st (corridor-new 8 8 (lv (tx + "(room (0 1 0) (2 3.6 2) (walls rust))")) "")
+   pk (st 'sc 'hall) cs (pk 'cols) (c k i) (peep (cs k) i 0.0)
+   wall (filter (i \ mag (c 6 i) < 0.1) ^(pk 'n))
+ (test (map (t \ t 'name) (hall 'textures) = ['wall 'floor 'ceiling 'door]) (hall 'textures 0 'm = 1.3)
+       (#(at 8 8 'sc 'texs) = 5)
+       (lv (tx + "(room (0 0 0) (2 2 2) (walls rust) (floor rust))") 'brushes 0 'skin = [['wall 'rust] ['floor 'rust]])
+       (lv (tx + "(room (0 0 0) (2 2 2)) (solid (box (0 0 0) (1 2 1)) (all rust))") 'brushes 1 'skin
+        = [['wall 'rust] ['floor 'rust] ['ceiling 'rust]])
+       (has? (lv "(room (0 0 0) (2 2 2) (walls rust))") "no texture named rust")
+       (has? (lv bad) "(stripes 4 2 (grey 0.5)) in the texture rust") (has? (lv bad) "(stripes every w slant PAINT)")
+       (has? (lv "(room (0 0 0) (2 2 2)) (texture rust 32 32 0 (fill 1))") "(texture NAME width height metres LAYER ..)")
+       ; ..the level's textures, then a grid each for floor ceiling door and wall it has not
+       (#(st 'sc 'texs) = 5) (two? wall)
+       (all (i \ c 1 i > 1.01 || mag (c 4 i - 32.0) < 1e-6) wall) (any (i \ c 1 i < 1.01) wall)))
 ; --- the frame: half the pixel rows in cells, the same state the same frame, in the 256
 ; --- palette and in 24 bits; kitty's pixels a picture and its own id
 (: st (at 80 48) f (corridor-frame st) f2 (corridor-frame st)
@@ -73,16 +97,35 @@
 ; --- rebuilds the scene with the player where they stand; a broken save keeps the last
 ; --- level and says why, on the bottom row
 (: p ("/tmp/corridortest-" + show (getpid 0) + ".l")
-   _ (put p "(level \"a\" (room 0 0 4 4 3) (strip 2 2))")
+   _ (put p "(level \"a\" (room (0 0 0) (4 3 4)) (strip (2 3 2)))")
    st (corridor-watch (pins (corridor-new 40 24 (corridor-load p) "/tmp/") 'path p 'px 2.5 'pz 1.5))
    a (corridor-watch st 'lvl 'name)
-   _ (put p "(level \"b\" (room 0 0 4 4 3) (strip 1 1) (strip 3 3))")
+   _ (put p "(level \"b\" (room (0 0 0) (4 3 4)) (strip (1 3 1)) (strip (3 3 3)))")
    b (corridor-watch st) got (b 'lvl 'name) nl #(b 'sc 'lights) where [(b 'px) (b 'pz)] said (b 'msg) e0 (b 'err)
-   _ (put p "(level \"c\" (room 0 0")
+   _ (put p "(level \"c\" (room (0 0")
    c (corridor-watch b)
    _ (unlink p)
  (test (a = "a") (got = "b") (nl = 2) (where = [2.5 1.5]) (has? said "again") (e0 = 0)
        (c 'lvl 'name = "b") (c 'err = 1) (string? (c 'msg)) (has? (corridor-frame c) "not a level")))
+; --- brushes from a level: repeat and mirror laid out -- a hall, twenty pilasters of two
+; brushes each -- a mirror's point and bearing; walking into a pilaster stops at it, and
+; under a buttress's slope is air; the start's height and pitch; where the player stands,
+; on the bottom row when p is pressed
+(: ribs (lv """(room (-5 0 0) (5 5 32))
+               (mirror x 0 (repeat 10 (0 0 3.2) (solid (box (-5 0 1.3) (-4.7 5 1.9)))
+                                                (solid (box (-5 3.2 1.3) (-4.1 5 1.9)) (cut (-4.7 3.2 0) (-4.1 5 0) (-4.1 5 1)))))""")
+   mir (lv "(room (-5 0 0) (5 3 5)) (mirror x 0 (start (-2 0 1) 30) (solid (box (-5 0 1) (-4 3 2))))")
+   rs (corridor-new 40 24 ribs "")
+   walk (steps (pins rs 'px -3.0 'pz 1.6 'th (0.0 - pi / 2.0)) 107 40)
+   up (corridor-new 40 24 (lv "(room (0 0 0) (4 3 4)) (start (1 0.5 1) 90 10)") "")
+   pos (corridor-frame (pin (corridor-new 40 24 hall "src/apps/lore/levels/") 'pos 1))
+ (test (#(ribs 'brushes) = 41) (#(mir 'brushes) = 3) (mir 'brushes 2 'shape 'box 0 = [4.0 0.0 1.0])
+       (mir 'start 'at = [-2.0 1.0]) (string? (lv "(room (0 0 0) (1 1 1)) (mirror y 0 (strip (0 1 0)))"))
+       (string? (lv "(room (0 0 0) (1 1 1)) (repeat 2 1 0 (strip (0 1 0)))"))
+       (walk 'px > -4.7 + body-r - 0.01) (walk 'px < -4.2)
+       (brush-medium (rs 'sc 'brushes) [-4.85 2.0 1.6] = 0) (brush-medium (rs 'sc 'brushes) [-4.6 3.3 1.6] = 1)
+       (up 'py = 0.5 + eye-h) (mag (up 'ph - 10.0 * pi / 180.0) < 1e-9) (mag (up 'th - pi / 2.0) < 1e-9)
+       (has? pos "(0.0 0.0 1.0)  facing 0.0") (tablet? (corridor-load "src/apps/lore/levels/station.l"))))
 ; --- the sign: its letters' strokes, a space between words, its width by its letters
 (: hi (neon-strokes "HI") sp (neon-strokes "H I") s (neon-sign "OK" [0.0 0.0 0.0] [1.0 0.0 0.0] [0.0 1.0 0.0] [0.0 0.0 -1.0] 0.3 [1.0 0.2 0.6])
  (test (#(hi 0) = 6) (#(sp 0) = 6) (hi 1 < sp 1) (0 < s 'tube 'n) (0 < s 'halo 'n) (two? (s 'lamp 'at))

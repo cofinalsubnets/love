@@ -122,6 +122,9 @@
    lm (mesh-lamps fl [0.0 0.0 0.0] [ch] [2.0] 1.0)
    sh (mesh-shine fl 0.5)
    gl (mesh-glow sh)
+   ; ..relit in place: one buffer, its places kept and its colours the latest
+   b1 (mesh-lamps! fl [0.0 0.0 0.0] [ch] [1.0] 1.0) c1 (peep (b1 0) (mid * 8 + 5) 0.0)
+   b2 (mesh-lamps! fl [0.0 0.0 0.0] [ch] [3.0] 1.0)
  (test (map shape pc = [[4 8] [2 4] [1 2]]) (peep (pc 1) [0 0] 0 = 16711680) (peep (pc 1) [0 3] 0 = 255)
        (map shape r2 = [[2 2] [1 1]]) (peep (r2 0) [1 1] 0 = -1) (peep (r2 0) [0 1] 0 = 65280) (peep (r1 0) [0 0] 0 = 5592405)
        (up? sa) (up? sb)
@@ -130,7 +133,9 @@
        (peep (kept 0) 14 1.0 = 0.0) (0.0 < peep (ch 0) 14 0.0) (peep (kept 0) mid 0.0 = peep (ch 0) mid 0.0)
        (peep (lm 0) (mid * 8 + 5) 0.0 = 2.0 * peep (ch 0) mid 0.0) (peep (lm 0) (mid * 8) 1.0 = 0.0)
        (amin (peep (sh 0) (iota 25 * 8 + 6) 0.0) = 0.5)
-       (amax (texs (sh 1)) = -1) (amax (texs (gl 1)) = -2) (gl 0 = sh 0)))
+       (amax (texs (sh 1)) = -1) (amax (texs (gl 1)) = -2) (gl 0 = sh 0)
+       (c1 = peep (lm 0) (mid * 8 + 5) 0.0 / 2.0) (peep (b2 0) (mid * 8 + 5) 0.0 = 3.0 * c1)
+       (b2 0 = b1 0) (lm 0 = mesh-lamps fl [0.0 0.0 0.0] [ch] [2.0] 1.0 0)))
 ; --- batches: each starts with no texture, whatever the batch before it last used
 (: W 40 H 24 white [1.0 1.0 1.0]
    v (mesh-view W H [0.0 0.0 0.0] 0.0 0.0 1.4 0.1 100.0)

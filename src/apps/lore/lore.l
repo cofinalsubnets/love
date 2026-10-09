@@ -10,6 +10,8 @@
 ;   grove  trees grown from a seed, drawn as wood and points, and the shade they cast
 ;   mesh   triangles: shapes, textures, the sun or lamps on them, and the frame out
 ;   neon   signs bent from tube: a stroke font, and the tubes, halo and lamp of a sign
+;   swatch textures painted from a recipe: layers of shapes and paints
+;   brush  a world carved from solid by air brushes and filled again by solid ones
 ; a game registers with (lore-enlist NAME MAIN), MAIN taking the args after its name, and
 ; (lore-alias OLD NAME) lets another name play it, unlisted.
 (module (lore lore-enlist lore-alias lore-games lore-main)
