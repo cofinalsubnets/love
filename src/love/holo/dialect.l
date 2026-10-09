@@ -111,7 +111,7 @@
                 (galpha? c) (span i gidc? @ j (go j (['sym (snip s i j)] . acc)))
                 (c = 37 && i + 1 < n && galpha? (s (i + 1)))
                  (span (i + 1) gidc? @ j (go j (['pct (snip s (i + 1) j)] . acc)))
-                ((c = 60 || c = 62) && i + 1 < n && s (i + 1) = c)
+                ((c = 60 || c = 62 || c = 124 || c = 38) && i + 1 < n && s (i + 1) = c)   ; << >> || &&
                  (go (i + 2) (['op (snip s i (i + 2))] . acc))
                 ((c = 33 || c = 61 || c = 60 || c = 62) && i + 1 < n && s (i + 1) = 61)   ; != == <= >=
                  (go (i + 2) (['op (snip s i (i + 2))] . acc))
@@ -131,15 +131,17 @@
                ('ch 33) (gprim >ts @ r (gbad? r ? 'bad ((<r = 0 ? 1 0) . >r)))
                ('ch 43) (gprim >ts)
                'bad)))
-   ; a comparison answers gas's -1 for true, 0 for false, and binds loosest (the kernel's
-   ; alternatives write `-(d > 0) * d`)
-   (gbinop t) (t @ ('ch 62) '(1 gt) ('ch 60) '(1 lt) ('op ">=") '(1 ge) ('op "<=") '(1 le)
-                   ('op "==") '(1 eq) ('op "!=") '(1 ne)
-                   ('ch 124) '(2 or) ('ch 94) '(3 xor) ('ch 38) '(4 and)
-                   ('op "<<") '(5 shl) ('op ">>") '(5 shr)
-                   ('ch 43) '(6 add) ('ch 45) '(6 sub)
-                   ('ch 42) '(7 mul) ('ch 47) '(7 div) ('ch 37) '(7 mod) ())
-   (gapply op a b) (op @ 'gt (a > b ? -1 0) 'lt (a < b ? -1 0) 'ge (a >= b ? -1 0) 'le (a <= b ? -1 0)
+   ; gas's ranks, not C's: || below &&, below the comparisons, below + -, below | & ^, below
+   ; * / % << >>. a comparison answers -1 for true, || and && answer 1
+   (gbinop t) (t @ ('op "||") '(1 lor) ('op "&&") '(2 land)
+                   ('ch 62) '(3 gt) ('ch 60) '(3 lt) ('op ">=") '(3 ge) ('op "<=") '(3 le)
+                   ('op "==") '(3 eq) ('op "!=") '(3 ne)
+                   ('ch 43) '(4 add) ('ch 45) '(4 sub)
+                   ('ch 124) '(5 or) ('ch 94) '(5 xor) ('ch 38) '(5 and)
+                   ('ch 42) '(6 mul) ('ch 47) '(6 div) ('ch 37) '(6 mod) ('op "<<") '(6 shl) ('op ">>") '(6 shr) ())
+   (gapply op a b) (s64 (u64 (gapply1 op a b % 18446744073709551616)))   ; gas's 64-bit arithmetic
+   (gapply1 op a b) (op @ 'lor (a != 0 || b != 0 ? 1 0) 'land (a != 0 && b != 0 ? 1 0)
+                        'gt (a > b ? -1 0) 'lt (a < b ? -1 0) 'ge (a >= b ? -1 0) 'le (a <= b ? -1 0)
                         'eq (a = b ? -1 0) 'ne (a = b ? 0 -1)
                         'or (a | b) 'xor (a ^ b) 'and (a & b) 'shl (a << b) 'shr (u64 a >> b)
                         'add (a + b) 'sub (a - b) 'mul (a * b) 'div (a // b) (a % b))

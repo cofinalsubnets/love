@@ -1182,6 +1182,10 @@ below, 251 of those 332 re-run so far: **145 compile**, and the rest refuse by n
   form llvm-mc lays is its word and each it refuses refuses; past it, an X op's W register under
   `uxtx`/`sxtx` refuses for adds/subs, as llvm-mc refuses it for add. memchr, memset, strcmp,
   strlen, strncmp and strnlen compile, word for word the kernel's objects.
+- **gas's expression ranks**: `||` and `&&` (answering 1), and the ranks gas and llvm-mc read --
+  `<<`/`>>` with `*`, `|`/`&`/`^` above `+`/`-`, the comparisons below them -- where holo had
+  C's, so an unparenthesised `1 + 2 << 3` laid 24, not 17, in silence; values wrap at 64 bits,
+  signed. 1953 random expressions are llvm-mc's values. mov_q's range test now folds.
 
 Still open on this side (g-21's probes):
 
@@ -1192,7 +1196,8 @@ Still open on this side (g-21's probes):
   and a by-value struct reached as a packed member rides its type's alignment, not the member's.
 - where the re-run stops now, on this side: a register variable pinned to `x0` (4). Of the 24
   units that stopped on the `.S` extable macro's `\insn`, 17 compile, and the rest stop on:
-  gas's `||` (3, mov_q's range test), `.incbin`, `@note`, `sym+k` as a memory operand and a
+  mov_q's `:abs_g3:`/`:abs_g1_s:` group operators on movz/movk (2), a linker script's symbol
+  as a `.long` (`_kernel_size_le_lo32`), `.incbin`, `@note`, `sym+k` as a memory operand and a
   `.set` alias of a function (`__memmove`). The exclusive pairs (`ldxp`/`stxp` and kin) have no lane yet.
   The rest is part 1's front end and gen (`linux/skbuff.h`, an undeclared `branch`,
   `__attribute__((mode))`).
