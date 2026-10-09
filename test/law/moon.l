@@ -1359,6 +1359,16 @@
       (elem '(ld4 r0 sp 0) cvf)                   ; ...and re-extends from its slot
       (elem '(sx4 r4) r4f)                        ; f9: nb rides r4 on a64
       (elem '(cmp r6 r4) r4f))                    ; ...the inner bound register-register
+   ; -- a64's slots off sp: a frame past ldur's 256 bytes loads and stores its slots up from sp, one word each,
+   ; and fp stays the frame record; a body whose sp moves by a variable amount keeps them on fp
+   spf (fnf 'f <>(cgt "long k(long *); long f(long a) { long v[64]; long b = a * 3; v[0] = a; k(v); k(&b); return b + v[1]; } int main() { return 0; }" 'a64))
+   vlf (fnf 'f <>(cgt "long k(long *); long f(long a) { long v[64]; long w[a]; v[0] = a; w[0] = a; k(v); k(w); return v[1] + w[1]; } int main() { return 0; }" 'a64))
+   (slot? b f) (two? f && elem <f '(ld st) && (<f = 'st ? (f 1) (f 2)) = b)
+   _ (test
+      (elem '(lea fp sp 0) spf)
+      (any (slot? 'sp) spf)
+      !(any (f \ slot? 'fp f && (<f = 'st ? (f 2) (f 3)) < -256) spf)
+      (any (f \ slot? 'fp f && (<f = 'st ? (f 2) (f 3)) < -256) vlf))
    ; -- the riscv frame: a body naming no sp, fp or lr and making no call lays no frame; on wasm a call
    ; leaves every local but its answers, so there a call keeps no frame either, a home off the argument
    ; registers rides it unspilled, and a cs seat is unsaved and priced as a pool seat

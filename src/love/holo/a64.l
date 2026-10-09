@@ -148,20 +148,27 @@
          (scare 'a64-mul-imm ['imul d a b]))
 
    ;; loads/stores: LDR/STR scaled (offset a multiple of 8, unsigned) else LDUR/STUR unscaled (signed
-   ;; 9-bit) else the far lane -- the offset materializes in x16 (IP0, outside the IR file) and the
+   ;; 9-bit) else the far lane -- the address builds in x16 (IP0, outside the IR file) and the
    ;; access rides [x16, #0]; a C frame's slots run past +-256 routinely. lea is just add-immediate
    ;; (a64 has no lea).
    (a64-far ubase dt bn off)                               ; x16 = bn +- |off|, then op Rt, [x16, #0]
       (: u (off < 0 ? (0 - off) off)
          l0 (u % 65536) l1 (u // 65536)
-         (u < 4294967296 ? 0 (scare 'mem-range off),
-          bn = 16 ? (scare 'far-base-x16 off) 0,         ; the base would be clobbered mid-build
-          bn = 31 ? (scare 'far-base-sp off) 0,          ; shifted-reg add reads Rn=31 as XZR, not SP
-          catall [
-           (le32 (0xD2800000 | (l0 << 5 | 16)))                                    ; movz x16, l0
-           (l1 = 0 ? () (le32 (0xF2A00000 | (l1 << 5 | 16))))                    ; movk x16, l1, lsl 16
-           (le32 ((off < 0 ? 0xCB000000 0x8B000000) | (16 << 16 | (bn << 5 | 16))))    ; add/sub x16, base, x16
-           (le32 (ubase | (16 << 5 | dt)))]))                                      ; op Rt, [x16, #0]
+         ai (off < 0 ? 0xD1000000 0x91000000)             ; add/sub immediate, where Rn=31 reads SP
+         hi (u >> 12) lo (u % 4096)
+         (bn = 16 ? (scare 'far-base-x16 off) 0,         ; the base would be clobbered mid-build
+          u <= 16777215 ?
+            (catall [
+              (hi = 0 ? () (le32 (ai | 0x400000 | (hi << 10 | (bn << 5 | 16)))))          ; x16 = base +- hi, lsl 12
+              (lo = 0 ? () (le32 (ai | (lo << 10 | ((hi = 0 ? bn 16) << 5 | 16)))))      ; x16 = (base | x16) +- lo
+              (le32 (ubase | (16 << 5 | dt)))])
+            (u < 4294967296 ? 0 (scare 'mem-range off),
+             bn = 31 ? (scare 'far-base-sp off) 0,       ; shifted-reg add reads Rn=31 as XZR, not SP
+             catall [
+              (le32 (0xD2800000 | (l0 << 5 | 16)))                                    ; movz x16, l0
+              (l1 = 0 ? () (le32 (0xF2A00000 | (l1 << 5 | 16))))                    ; movk x16, l1, lsl 16
+              (le32 ((off < 0 ? 0xCB000000 0x8B000000) | (16 << 16 | (bn << 5 | 16))))    ; add/sub x16, base, x16
+              (le32 (ubase | (16 << 5 | dt)))])))                                    ; op Rt, [x16, #0]
    ;; one memory core, encodings in hand: LDR/STR scaled imm12 (units = the access width)
    ;; else LDUR/STUR unscaled imm9 else the far x16 build. every face -- word, sized,
    ;; fp -- is a spelling of it.
