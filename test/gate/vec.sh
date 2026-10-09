@@ -192,13 +192,22 @@ else
     rv64)
       # one entry, one return: every register the entry saves against sp comes back
       # off the same slot -- the two unnamed scratches included -- and the sret is
-      # the last word laid, so nothing runs past the restore.
-      d=$(llvm-objdump -d --no-show-raw-insn "$obj")
+      # the last word laid, so nothing runs past the restore. a0 is stored twice:
+      # itself, and fcsr carried through it. +d to read the float file's c.fsdsp.
+      d=$(llvm-objdump -d --no-show-raw-insn --mattr=+c,+d "$obj")
       sd=$(echo "$d" | awk '$2 == "sd" { print $3 }' | sort)
       ld=$(echo "$d" | awk '$2 == "ld" { print $3 }' | sort)
-      n=$(echo "$sd" | grep -c .)
+      n=$(echo "$sd" | sort -u | grep -c .)
       [ "$n" = 16 ] || fail "the trap entry should save 16 registers; it saves $n"
       [ "$sd" = "$ld" ] || fail "the trap entry restores a different set than it saves"
+      n=$(echo "$d" | awk '$2 == "fsd"' | grep -c .)
+      [ "$n" = 20 ] || fail "the trap entry should save the 20 float registers C spends; it saves $n"
+      [ "$(echo "$d" | awk '$2 == "fsd" { print $3 }' | sort)" = "$(echo "$d" | awk '$2 == "fld" { print $3 }' | sort)" ] ||
+        fail "the trap entry restores a different float set than it saves"
+      echo "$d" | awk '$2 == "frcsr" { r = 1 } r && $2 == "sd" && $3 == "a0," { ok = 1 } END { exit !ok }' ||
+        fail "the trap entry does not store fcsr"
+      echo "$d" | awk '$2 == "ld" && $3 == "a0," && !l { l = 1; next } l && $2 == "fscsr" { ok = 1 } END { exit !ok }' ||
+        fail "the trap entry does not restore fcsr"
       echo "$sd" | grep -q '^t5,' || fail "the trap entry does not save t5, the flag scratch"
       echo "$sd" | grep -q '^t6,' || fail "the trap entry does not save t6, the address scratch"
       n=$(echo "$d" | grep -c 'sret')
