@@ -333,9 +333,12 @@
    (ga-reg s) (name s @ k
                  (? (nom? (peep a64-names k ())) ['reg (a64-names k) 8]
                     (k = 'wzr) ['reg 'zr 4]
+                    (k = 'wsp) ['reg 'sp 4]
                     (#s > 1 && s 0 = 119 && digit? (s 1)) ['reg (peep a64-names (name ("x" + snip s 1 #s)) ()) 4]
                     ()))
    ga-exts {'uxtw 2 'lsl 3 'sxtw 6 'sxtx 7}
+   ;; a shift (0-3) or an extend (8 + option) by name; a bare extend is its own `#0`
+   ga-shx {'lsl 0 'lsr 1 'asr 2 'ror 3 'uxtb 8 'uxth 9 'uxtw 10 'uxtx 11 'sxtb 12 'sxth 13 'sxtw 14 'sxtx 15}
    (ga-index b ps toks)                             ; [b, rM{, lsl|uxtw|sxtw|sxtx {#s}}]
     (: i (<ps @ (('sym m)) (ga-reg m) ())
        ex (two? >ps ? <>ps ())
@@ -353,6 +356,9 @@
             (('ch 91) ('sym b) ('ch 93)) (ga-reg b @ ('reg x 8) ['mem x 0] _ (scare 'gas-a64-operand toks))
             (('ch 91) ('sym b) ('ch 93) ('ch 33)) (ga-reg b @ r (two? r ? ['wbm <>r <>>r] (scare 'gas-a64-operand toks)))
             (('sym b) ('ch 33)) (ga-reg b @ r (two? r ? ['wbr <>r <>>r] (scare 'gas-a64-operand toks)))
+            (('sym s) . rest)                                       ; `lsr #3`, `lsr 3`, `sxtw #2`: a shift or extend
+             (peep ga-shx (name s) () @ k (charm? k ? ['shx k (rest @ (('ch 35) . v) (gimm v) _ (gimm rest))]
+                                             (scare 'gas-a64-operand toks)))
             (('ch 91) . ('sym b) . ('ch 44) . rest)
              (: wb (two? rest && <(rev rest) = '(ch 33))            ; `]!`, pre-indexed
                 body (wb ? (rev >(rev rest)) rest)
@@ -385,7 +391,7 @@
    ga-ld (gtab '((ldr (ld ldu4)) (ldrb (ldu1 ldu1)) (ldrh (ldu2 ldu2)) (ldrsb (ld1 ld1)) (ldrsh (ld2 ld2)) (ldrsw (ld4 ld4))))
    ga-st (gtab '((str (st st4)) (strb (st1 st1)) (strh (st2 st2))))
    ga-sh (gtab '((lsl shl) (lsr shr) (asr sar) (ror ror)))
-   ga-arity {'mov 2 'movz 2 'cmp 2 'tst 2 'neg 2 'mvn 2 'mrs 2 'msr 2
+   ga-arity {'mov 2 'cmp 2 'tst 2 'neg 2 'mvn 2 'mrs 2 'msr 2
              'b 1 'bl 1 'br 1 'blr 1 'dsb 1 'dmb 1}
    ;; the W forms' words: register form, then immediate (add/sub imm12, the logicals a bitmask)
    ga-walu {'add [0x0B000000 0x11000000] 'sub [0x4B000000 0x51000000]
@@ -555,6 +561,52 @@
                     (bad 0)
                    (ga-raw ((kd = 'sw ? 1 <>a) << 30 | 0x28000000 | <a << 26 | (kd = 'n ? 0 ty) << 23 | ld << 22
                             | (q & 127) << 15 | b 3 << 10 | rn << 5 | a 3)))))))
+   (ga-shxof o) (o @ ('shx k a) [k a] ('sym e) (peep ga-shx e () @ k (charm? k && k >= 8 ? [k 0] ())) _ ())
+   ;; the register ops a shifted or extended operand (or #imm, lsl #12) can close: arith (0) with its
+   ;; register and immediate words, or logical (1); the aliases fill a zr for rd or rn
+   ga-shop {'add [0 0x0B000000 0x11000000] 'adds [0 0x2B000000 0x31000000] 'sub [0 0x4B000000 0x51000000]
+            'subs [0 0x6B000000 0x71000000] 'and [1 0x0A000000] 'bic [1 0x0A200000] 'orr [1 0x2A000000]
+            'orn [1 0x2A200000] 'eor [1 0x4A000000] 'eon [1 0x4A200000] 'ands [1 0x6A000000] 'bics [1 0x6A200000]}
+   ga-shal {'cmp ['subs 'd] 'cmn ['adds 'd] 'tst ['ands 'd] 'neg ['sub 'n] 'negs ['subs 'n] 'mvn ['orn 'n]}
+   (ga-shifted m os)
+    (: k #os al (peep ga-shal m ()) sh (ga-shxof (os (k - 1)))
+       (bad _) (scare 'gas-a64-operand [m os])
+       (zr o) (o @ ('reg _ w) ['reg 'zr w] _ ['reg 'zr 8])
+       (? (two? al)
+           (? (k != 3) (bad 0)
+              (al 1 = 'd) (ga-sh3 m <al (zr (os 0)) (os 0) (os 1) sh)
+              (os 1 @ ('reg _ _) (ga-sh3 m <al (os 0) (zr (os 0)) (os 1) sh) _ (bad 0)))
+          (two? (peep ga-shop m ())) (k = 4 ? (ga-sh3 m m (os 0) (os 1) (os 2) sh) (bad 0))
+          (bad 0)))
+   (ga-sh3 m op d n r sh)
+    (: row (ga-shop op) ar (<row = 0) s? (elem op '(adds subs ands bics))
+       dd (ga-rw d) nn (ga-rw n) z <>dd sf (z = 8 ? 0x80000000 0) top (z = 8 ? 64 32)
+       k <sh a <>sh hd (ga-hw <dd) hn (ga-hw <nn)
+       rdbad (s? ? (<dd = 'sp) (<dd = 'zr))                 ; 31 in rd is zr when flags are set, else sp
+       (bad _) (scare 'gas-a64-operand [m sh])
+       (? (<>nn != z) (bad 0)
+          (r @ ('imm v0)
+             (: up (a = 0 && v0 > 4095 && v0 % 4096 = 0)       ; gas lays #4096, lsl #0 as #1, lsl #12
+                v (up ? (v0 >> 12) v0) a (up ? 12 a)
+                (? (!ar || k != 0 || !(a = 0 || a = 12) || !(0 <= v <= 4095) || <nn = 'zr || rdbad) (bad 0)
+                   (ga-raw (sf | row 2 | (a = 12 ? 0x400000 0) | v << 10 | hn << 5 | hd))))
+             ('reg x w)
+             (? (k >= 8 || (k = 0 && ar && (<dd = 'sp || <nn = 'sp)))
+                 (: o (k >= 8 ? (k - 8) (z = 8 ? 3 2)) xr (o & 3 = 3)
+                    (? (!ar || !(0 <= a <= 4) || x = 'sp || <nn = 'zr || rdbad || (z = 8 ? ((w = 8) != xr) (w != 4))) (bad 0)
+                       (ga-raw (sf | row 1 | 0x200000 | ga-hw x << 16 | o << 13 | a << 10 | hn << 5 | hd))))
+                (? (x = 'sp || <dd = 'sp || <nn = 'sp || w != z || (ar && k = 3) || !(0 <= a < top)) (bad 0)
+                   (ga-raw (sf | row 1 | k << 22 | ga-hw x << 16 | a << 10 | hn << 5 | hd))))
+             _ (bad 0))))
+   ;; the wide moves: a 16-bit immediate at lsl #0/16/32/48 (W: 0/16)
+   ga-movw {'movn 0x12800000 'movz 0x52800000 'movk 0x72800000}
+   (ga-movw-ins m os)
+    (: k #os rw (ga-rw (os 0)) z <>rw sh (k = 3 ? (ga-shxof (os 2)) [0 0])
+       (? (<rw = 'sp || !(k = 2 || k = 3) || !(two? sh) || <sh != 0 || <>sh % 16 != 0 || !(0 <= <>sh < 8 * z))
+           (scare 'gas-a64-operand [m os])
+          ((os 1) @ ('imm v) (0 <= v <= 65535 ? (ga-raw ((z = 8 ? 0x80000000 0) | ga-movw m | (<>sh // 16) << 21 | v << 5 | ga-hw <rw))
+                                 (scare 'gas-a64-operand [m os]))
+                    _ (scare 'gas-a64-operand [m os]))))
    ;; the conditionals: a condition by name -> its 4-bit field, al and nv among them
    (ga-cond o) (o @ ('sym c) (: n (name c) (? (n = 'al) 14 (n = 'nv) 15 (nom? (peep ga-cc n ())) (arm-cc (ga-cc n)) ())) _ ())
    ;; the conditional selects, and their aliases (register count, base) that invert the condition
@@ -697,7 +749,9 @@
    (ga-inplace op d s) (d = s ? () [['mov d s]])       ; the IR's unary ops work in place
    (ga-ins m os)
     (#os @ k
-       (? (charm? (peep ga-arity m ()) && k != ga-arity m) (scare 'gas-a64-operand [m os])
+       (? (charm? (peep ga-movw m ())) (ga-movw-ins m os)
+          (k > 2 && two? (ga-shxof (os (k - 1))) && (two? (peep ga-shop m ()) || two? (peep ga-shal m ()))) (ga-shifted m os)
+          (charm? (peep ga-arity m ()) && k != ga-arity m) (scare 'gas-a64-operand [m os])
           (m = 'ret && k = 1) (ga-r (os 0) @ r (r = 'lr ? '((ret)) (ga-raw (0xD65F0000 | ga-hw r << 5))))
           (ghas? ga-nils m) (k = 0 ? [[(ga-nils m)]] (scare 'gas-a64-operand [m os]))
           (nom? (ga-bcond m)) (? (k != 1) (scare 'gas-a64-operand [m os])
@@ -727,7 +781,6 @@
            (: d (ga-r (os 0)) s (os 1)
               (s @ ('imm n) [['li d n]]
                    (d = 'sp || ga-r s = 'sp ? [['lea d (ga-r s) 0]] [['mov d (ga-r s)]])))
-          (m = 'movz) [['li (ga-r (os 0)) (<>(os 1))]]
           (ghas? ga-alu m)
            (k = 3 ? [[(ga-alu m) (ga-r (os 0)) (ga-r (os 1)) (ga-v (os 2))]] (scare 'gas-a64-operand os))
           (m = 'cmp) [['cmp (ga-r (os 0)) (ga-v (os 1))]]
