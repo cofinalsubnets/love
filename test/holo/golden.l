@@ -440,7 +440,7 @@
         '(gas-a64-operand gas-a64-operand gas-a64-width gas-a64-width gas-a64-operand gas-a64-operand
           a64-bitmask-imm gas-a64-operand gas-a64-operand gas-a64-operand)
         (map (l \ trap (x \ gas-text 'a64 x) l (\ a b a))
-             ["cmp x0, x1, lsl #2" "neg x1, x2, lsl #1" "add w0, x1, w2" "ldrsw w0, [x1]" "add w0, wzr, #1"
+             ["cmp x0, x1, ror #2" "neg x1, x2, lsl #64" "add w0, x1, w2" "ldrsw w0, [x1]" "add w0, wzr, #1"
               "ret x2, x3" "and w0, w0, #0" "ldr x0, [x1, x2, lsl #2]" "ldr x0, [x1], #300" "lsl w0, w1, #32"]))
    ;; the hints, the inverted logicals, the carry pair, the reversals, uaccess's unprivileged
    ;; pair and the kernel's system registers and operations, each word llvm-mc's
