@@ -1,11 +1,13 @@
 ; mesh -- what a level drawn in triangles rides: meshes as lists, built from a few shapes
-; and joined, lit once by the sky's sun, packed into trays for facets (src/love/raster.c);
-; a camera; textures and their levels; and the frame out to the terminal, as half blocks
-; or as kitty's pixels.
+; and joined, lit once by the sky's sun or by lamps, packed into trays for facets
+; (src/love/raster.c); a camera; textures, drawn or from a picture, and their levels; and
+; the frame out to the terminal, as half blocks or as kitty's pixels.
 ; the world is lore's: x right, y up, z ahead when 'th is 0, 'th turning toward x.
-(module (mesh mesh mesh-join mesh-move mesh-quad mesh-box mesh-grid mesh-lathe mesh-normals
-         mesh-keep mesh-keep-all mesh-pack mesh-bake mesh-bake-sun mesh-sun-view mesh-sun-map mesh-open mesh-tex mesh-view mesh-eye mesh-dirs mesh-spot mesh-sky mesh-haze mesh-frame mesh-flat
-         mesh-cells mesh-kitty)
+(module (mesh mesh mesh-join mesh-move mesh-quad mesh-box mesh-grid mesh-lathe mesh-sheet mesh-normals
+         mesh-keep mesh-keep-all mesh-pack mesh-bake mesh-bake-sun mesh-sun-view mesh-sun-map mesh-open
+         mesh-lamp mesh-lamps mesh-shine mesh-glow mesh-pic mesh-tex mesh-rgba
+         mesh-view mesh-eye mesh-dirs mesh-spot mesh-sky mesh-haze mesh-frame mesh-flat
+         mesh-cells mesh-kitty mesh-kitty? mesh-kitty-del)
 (borrow 'view)
 (borrow 'vec)
 (borrow 'sky)
@@ -14,8 +16,7 @@
  ; surface's own colour -- and each triangle [a b c tex], tex -1 for none
  (mesh vs ts) [vs ts]
  (sub a b) [(a 0 - b 0) (a 1 - b 1) (a 2 - b 2)]
- (cat l) (foldr (+) () l)
- (mesh-join ms) (: (go ms k vs ts) (atom? ms ? (mesh (cat (rev vs)) (cat (rev ts)))
+ (mesh-join ms) (: (go ms k vs ts) (atom? ms ? (mesh (cats (rev vs)) (cats (rev ts)))
                    (: m <ms (go >ms (k + #(m 0)) (m 0 . vs) (map (t \ [(t 0 + k) (t 1 + k) (t 2 + k) (t 3)]) (m 1) . ts))))
                    (go ms 0 () ()))
  ; turned by yaw about y (toward x as 'th turns), then moved by d
@@ -43,9 +44,9 @@
      (mesh-move m c yaw))
  ; a sheet of nu by nv cells, (f i j) placing each corner [x y z u v]; its normals smooth
  (mesh-grid nu nv f tex col)
-  (: vs (cat (map (i \ map (j \ f i j + [0.0 0.0 0.0] + col) ^(nv + 1)) ^(nu + 1)))
+  (: vs (cats (map (i \ map (j \ f i j + [0.0 0.0 0.0] + col) ^(nv + 1)) ^(nu + 1)))
      (at i j) (i * (nv + 1) + j)
-     ts (cat (map (k \ (: i (k // nv) j (k % nv) a (at i j) b (at (i + 1) j) c (at (i + 1) (j + 1)) d (at i (j + 1))
+     ts (cats (map (k \ (: i (k // nv) j (k % nv) a (at i j) b (at (i + 1) j) c (at (i + 1) (j + 1)) d (at i (j + 1))
                         [[a b c tex] [a c d tex]]))
                   ^(nu * nv)))
      (mesh-normals (mesh vs ts)))
@@ -56,6 +57,11 @@
        (\ i j (: a (2.0 * pi * i / n) r (prof j 0)
                   [(r * sin a) (prof j 1) (r * cos a) (k * a * prof 0 0) (k * len j)]))
        tex col))
+ ; a flat sheet from the corner o along U and V, nu by nv cells, its front toward n,
+ ; (uv p) the texels at a place p
+ (mesh-sheet o U V nu nv n uv tex col)
+  (: fl (dot (cross V U) n < 0.0) A (fl ? V U) B (fl ? U V) a (fl ? nv nu) b (fl ? nu nv)
+     (mesh-grid a b (\ i j (: p (c+ o (c+ (c* (1.0 * i / a) A) (c* (1.0 * j / b) B))) (p + uv p))) tex col))
  ; the vertices' places as trays [x y z], read by index in one step where a list walks
  (places vs) (: n #vs (map (k \ gem-tray [n] (map (v \ 1.0 * v k) vs)) ^3))
  (at3 P i) [(peep (P 0) i 0.0) (peep (P 1) i 0.0) (peep (P 2) i 0.0)]
@@ -79,7 +85,7 @@
    (mesh (map (q \ (: v <q n (unit (peep acc <>q [0.0 1.0 0.0])) (take 5 v + n + drop 8 v))) (indexed vs)) (m 1)))
  ; a mesh packed for drawing: its vertices as columns, trays [x y z u v nx ny nz r g b],
  ; and its triangles as the tray facets takes
- (mesh-pack m) (: vs (m 0) n #vs ft (cat (m 1))
+ (mesh-pack m) (: vs (m 0) n #vs ft (cats (m 1))
    {'n n 'cols (map (k \ gem-tray [n] (map (v \ 1.0 * v k) vs)) ^11) 'tris (star-tray [#ft] ft)})
  ; ..lit by the sky's sun and its ambient: (light cols) says each vertex's [sun sky glow]
  ; -- its share of the sun past what stands between, of the sky's light, and () or the
@@ -115,20 +121,54 @@
  ; ..the open sky's light alone, the sun on everything: what a level with nothing to cast
  ; a shadow lights by
  (mesh-open c) [1.0 (0.6 + 0.4 * c 6) ()]
- ; --- textures: n by n, (f x y) a colour [r g b] 0 to 1 or () for a hole; each level
- ;     half the last, a texel the mean of four, a hole where two or more were ---
+ ; --- lamps, for a scene lit from within: {'at points 'c [r g b] 'r reach}, and 'n a
+ ;     facing, 'soft a size and 'keep a mask of places, all optional. its light c at a
+ ;     metre, shared among its points, falls off by the square of the distance and to
+ ;     none at its reach; a facing lamp's mostly forward. no lamp casts a shadow: (keep X
+ ;     Y Z) says where it reaches, 1 or 0, so it does not light the far side of a wall ---
+ ; a lamp's light on each vertex of a packed mesh: [r g b] trays, before the surface's colour
+ (mesh-lamp pk lp) (: c (pk 'cols) X (c 0) Y (c 1) Z (c 2) ps (lp 'at) r (lp 'r) fn (peep lp 'n ())
+   s2 (sq (peep lp 'soft 0.1))
+   (one p) (: lx (p 0 - X) ly (p 1 - Y) lz (p 2 - Z) d2 (lx * lx + ly * ly + lz * lz) d (sqrt (d2 + 1e-9))
+             lam (max 0.0 ((c 5 * lx + c 6 * ly + c 7 * lz) / d))
+             em (two? fn ? (sat (0.25 - (fn 0 * lx + fn 1 * ly + fn 2 * lz) / d)) 1.0)
+             (lam * em * sq (sat (1.0 - sq (d2 / (r * r)))) / (d2 + s2)))
+   k (foldl (\ a p (a + one p)) (X * 0.0) ps / #ps)
+   (c* (peep lp 'keep () @ () k f (k * f X Y Z)) (lp 'c)))
+ ; ..and the mesh lit by them: amb [r g b] everywhere, each lamp's light (chs, mesh-lamp's)
+ ; times its ks, through the surface's own colour, gain over all: [verts tris] 8 a vertex
+ (mesh-lamps pk amb chs ks gain) (: c (pk 'cols) n (pk 'n) z (c 0 * 0.0)
+   (lit j) (gain * c (8 + j) * foldl (\ a i (a + ks i * chs i j)) (z + amb j) ^#chs)
+   cols [(c 0) (c 1) (c 2) (c 3) (c 4) (lit 0) (lit 1) (lit 2)]
+   i (iota n * 8)
+   [(foldl (\ v k (pin v (i + k) (cols k))) (iota (8 * n) * 0.0) ^8) (pk 'tris)])
+ ; ..a mesh that is its own light, its colour times k and nothing on it
+ (mesh-shine pk k) (mesh-lamps pk [k k k] () () 1.0)
+ ; ..and a scene's triangles made glows, added over what is behind them: a copy
+ (mesh-glow sc) (: ts (sc 1 + 0) [(sc 0) (pin ts (iota (#ts // 4) * 4 + 3) -2)])
+ ; --- textures: w by h, (f x y) a colour [r g b] 0 to 1 or () for a hole; each level
+ ;     half the last each way, a texel the mean of four, a hole where two or more were ---
  (q v) (int (sat v * 255.0 + 0.5))
  (word c) ((q (c 0) << 16) | (q (c 1) << 8) | q (c 2))
- (mesh-tex n f)
-  (: l0 (map (i \ f (i % n) (i // n)) ^(n * n))
-     (down m l) (: h (m // 2)
-       (map (i \ (: x (2 * (i % h)) y (2 * (i // h))
+ (mesh-pic w h f)
+  (: l0 (map (i \ f (i % w) (i // w)) ^(w * h))
+     (down m n l) (: a (m // 2) b (n // 2)
+       (map (i \ (: x (2 * (i % a)) y (2 * (i // a))
                     q (filter two? [(l (y * m + x)) (l (y * m + x + 1)) (l ((y + 1) * m + x)) (l ((y + 1) * m + x + 1))])
                     (#q < 3 ? () (c* (1.0 / #q) (foldl c+ [0.0 0.0 0.0] q)))))
-            ^(h * h)))
-     (lay m l) (star-tray [m m] (map (c \ two? c ? (word c) -1) l))
-     (go m l) (lay m l . (m < 2 ? () (go (m // 2) (down m l))))
-     (go n l0))
+            ^(a * b)))
+     (lay m n l) (star-tray [n m] (map (c \ two? c ? (word c) -1) l))
+     (go m n l) (lay m n l . (m < 2 || n < 2 ? () (go (m // 2) (n // 2) (down m n l))))
+     (go w h l0))
+ (mesh-tex n f) (mesh-pic n n f)
+ ; ..from a picture's rgba bytes sw by sh, as png-decode answers them, each texel the mean
+ ; of the pixels under it; a hole where they are mostly clear
+ (mesh-rgba sw sh b w h)
+  (mesh-pic w h (\ x y (: x0 (x * sw // w) x1 (max2 (x0 + 1) ((x + 1) * sw // w))
+                          y0 (y * sh // h) y1 (max2 (y0 + 1) ((y + 1) * sh // h))
+                          os (cats (map (j \ map (i \ 4 * (j * sw + i)) (map (+ x0) ^(x1 - x0))) (map (+ y0) ^(y1 - y0))))
+                          (px k) (foldl (\ a o (a + b (o + k))) 0 os / (255.0 * #os))
+                          (px 3 < 0.5 ? () [(px 0 / px 3) (px 1 / px 3) (px 2 / px 3)]))))
  ; --- the view: a screen w by h, the eye at e facing th and tilted up by ph, fov wide
  ;     across, nothing nearer than near nor past far; 'cam the matrix facets takes, clip
  ;     space gl's with z ahead ---
@@ -218,5 +258,12 @@
                                             + ",c=" + show cols + ",r=" + show rows + ",") "")
                      + "m=" + (j < n ? "1" "0") + ";" + snip b i j + esc + "\\"),
               j < n ? (go j) (slurp o)))
-   (go 0)))
+   (go 0))
+ ; ..a terminal that shows kitty's pixels, by what it says of itself: mitty, kitty,
+ ; ghostty, wezterm
+ (mesh-kitty? _) (: (has e s) (has? (getenv e) s)
+   (? (0 < #(getenv "MITTY")) 1 (has "TERM" "kitty") 1 (0 < #(getenv "KITTY_WINDOW_ID")) 1
+      (has "TERM_PROGRAM" "ghostty") 1 (has "TERM_PROGRAM" "WezTerm") 1 0))
+ ; ..and a picture taken down
+ (mesh-kitty-del id) "\(esc)_Ga=d,d=I,i=\(id),q=2\(esc)\\")
 ) ; module mesh

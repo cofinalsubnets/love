@@ -259,6 +259,7 @@ static void rz_batch(struct rz *r, struct tray *vt, struct tray *tt, word texs) 
  intptr_t const nv = (intptr_t) tray_nelem(vt) / r->stride;
  uintptr_t const nt = tray_nelem(tt) / 4;
  intptr_t ct = -1;   // the texture the last triangle used, its levels still in r->lv
+ r->nlv = 0, r->add = 0;   // ..none yet: what the last batch left is not this one's
  for (uintptr_t i = 0; i < nt; i++) {
   intptr_t const ix[3] = { tray_get_int(tt, 4 * i), tray_get_int(tt, 4 * i + 1), tray_get_int(tt, 4 * i + 2) },
                  t = tray_get_int(tt, 4 * i + 3);

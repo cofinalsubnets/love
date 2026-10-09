@@ -429,8 +429,7 @@
  ; kitty's pictures go up as ids 7 and 8 by turns, the last taken down only once the next
  ; is over it, the two in one synchronised update: one id put up again would go blank first
  kitty-id 7
- (kitty-del id) "\(esc)_Ga=d,d=I,i=\(id),q=2\(esc)\\"
- kitty-gone (kitty-del 7 + kitty-del 8)
+ kitty-gone (mesh-kitty-del 7 + mesh-kitty-del 8)
  ; ..'kp pixels a column, and twice that a row: one, for half blocks
  (stones-pens st) (: lt (stones-light st) k (peep st 'kp 1) w (k * st 'w) h (k * st 'h) b (breath (peep st 'mt 0.0))
    e [(st 'px) (st 'py + b 0) (st 'pz)]
@@ -455,7 +454,7 @@
         (hp && kit) (dim f0 (k * w) 0 (2 * k * (r - 1)) (k * w) (2 * k)) f0)
    (? kit (: n (peep st 'kn 0) _ (pin st 'kn (1 - n))
              (esc + "[?2026h" + mesh-kitty f (k * w) (k * h) w (h // 2) (kitty-id + n)
-              + kitty-del (kitty-id + 1 - n) + menu st r0 c0 bw bh + keys-line st r w + esc + "[?2026l"))
+              + mesh-kitty-del (kitty-id + 1 - n) + menu st r0 c0 bw bh + keys-line st r w + esc + "[?2026l"))
       (esc + "[?2026h" + mesh-cells f w h (st 'deep) (st 'deep ? 0 (st 'bay)) (menu-bands st r0 c0 bw bh r w)
        + esc + "[?2026l")))
  ; a part of a frame W wide darkened: x0 y0 its corner, bw by bh its size, in pixels
@@ -495,11 +494,6 @@
         (at + esc + bg + esc + fg + pad (pad "" (max2 0 ((w - vlen help-text) // 2)) " " + help-text) w " " + esc + "[0m")
       (kit && t < help-t + 1.0) (at + esc + "[0m" + pad "" w " ")
       ""))
- ; ..a terminal that shows kitty's pixels, by what it says of itself: mitty, kitty,
- ; ghostty, wezterm
- (kitty-term? _) (: (has e s) (has? (getenv e) s)
-   (? (0 < #(getenv "MITTY")) 1 (has "TERM" "kitty") 1 (0 < #(getenv "KITTY_WINDOW_ID")) 1
-      (has "TERM_PROGRAM" "ghostty") 1 (has "TERM_PROGRAM" "WezTerm") 1 0))
  ; --- the state: the screen as view lays it, where the player stands and looks ('th the
  ; bearing, 'ph the pitch, 'py the eye's height), the clock, the weather, the blocks. a run
  ; starts a little way in from the mouth, facing on up the slot ---
@@ -728,7 +722,7 @@
  (stones-walk o)
    (view-walk {'new (w \ h \ (: sd (clock 0) now0 (cite 'court 'court-now ()) l0 (int (now0 0)) t (o 'time)
                                now (t @ () now0 (cite 'court 'court-local (86400 * (l0 // 86400) + t)))
-                               k (o 'md @ 'kitty 1 'cells 0 (kitty-term? ()))
+                               k (o 'md @ 'kitty 1 'cells 0 (mesh-kitty? ()))
                                st (stones-size (pins (stones-new w h now sd) 'deep (elem (getenv "COLORTERM") ["truecolor" "24bit"]) 'kitty k)
                                                w (h // 2))
                                ; ..the land built and lit before the first frame, which the song's
