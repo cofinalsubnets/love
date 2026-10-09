@@ -101,6 +101,10 @@
    (fix-k x)  (x 2)
    (fix-l x)  (x 3)
    (fix-a x)  (x 4)
+   ;; an a64 address fix's aux: the word below bit 32, a signed 32-bit addend above it
+   a64-afix '(adrp21 addlo12 lo12s1 lo12s2 lo12s4 lo12s8 lo12s16)
+   (afix-w aux) (aux & 4294967295)
+   (afix-ad aux) ((aux >> 32) @ h (h >= 2147483648 ? (h - 4294967296) h))
    ;; a byte is 1; a fixup is its field width; a STRING is a blob -- those bytes verbatim,
    ;; carried as ONE item. mksrc and mkrt lay megabytes through here, and a cons per byte is
    ;; the whole cost of such an object: laying the 3 MB source archive as a list peaked at
@@ -165,6 +169,7 @@
              'frpush 0 'frpop 0              ; a64's frame record: fp and lr as one pair
              'cbr 3                          ; a64's cbz/cbnz: (cbr word reg label), the flags untouched
              'tbr 3                          ; ..and tbz/tbnz: (tbr word reg label), the bit in the word
+             'afix 4                         ; ..and gas's address fixes: (afix kind word label addend)
              'push 1 'pop 1 'neg 1 'not 1 'inc 1 'dec 1 'tp 1
              'jmp 1 'jmp8 1 'jmpr 1 'jmpm 2 'jmpt 3 'callr 1 'call 1 'raw 1 'lapool 1
              'li 2 'mov 2 'cmp 2 'test 2 'set 2 'set1 2 'br 2 'br8 2
