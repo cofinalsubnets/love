@@ -572,7 +572,7 @@ static char const *const k_pins[] = { k_vtfg, k_vtbg, k_vtscale, k_vtfont, k_pli
 static struct vfs k_fs = { .cwd = "home", .cwd_n = 4, .ro = k_tree, .pins = k_pins,
                            .npins = countof(k_pins), .grab = k_grab, .drop = kfree, .now = k_clock_ms };
 
-// lay the table on first use: every baked row live off .rodata, plus tmp and the home.
+// lay the table on first use: every baked row live off .rodata, plus the rows below.
 // idempotent, and a refusal leaves the console standing (the caller answers ENOMEM).
 static bool k_fs_init(void) {
   if (k_fs.ents) return true;
@@ -582,66 +582,33 @@ static bool k_fs_init(void) {
     struct vfs_file *xr = kmallocw(b2w((uintptr_t) xn * sizeof *xr));
     if (!xr) return false;
     k_fs.extra = xr, k_fs.extra_n = k_baked(xr, xn); }
-  int n = vfs_lay(&k_fs, 18);
+  // the rows past the baked ones, each laid empty and owned; one with `to` is a link, its
+  // target heap because k_ent_gc frees it, and a strdup that refuses leaves a plain directory
+  static struct { char const *path, *to; uintptr_t mode; bool dir; } const rows[] = {
+    { "tmp", NULL, 0755, true },
+    { k_vtfg, NULL, 0644, false }, { k_vtbg, NULL, 0644, false },     // the console's colours
+    { k_pmem, NULL, 0444, false }, { k_pgauge, NULL, 0444, false },   // filled at each open
+    { k_dnull, NULL, 0666, false }, { k_dzero, NULL, 0666, false },   // always empty (k_dev_slot)
+    { "usr/bin", NULL, 0755, true },
+    { k_vtscale, NULL, 0644, false },                                  // the glyph scale
+    { k_pcmd, NULL, 0444, false },                                     // the boot line, at each open
+    { k_plift, NULL, 0644, false },                                    // written, never read
+    { "bin", "/usr/bin", 0777, false }, { "sbin", "/usr/bin", 0777, false },
+    { "usr/sbin", "/usr/bin", 0777, false },
+    { k_home, NULL, 0755, true },                                      // where the shell starts
+    { k_vtfont, NULL, 0644, false },                                   // written, never read
+    { "proc/src", "/love", 0777, false },                              // the tree's old name
+    { k_mnt, NULL, 0755, true } };                                     // the seat's own files: last
+  int n = vfs_lay(&k_fs, (int) countof(rows));
   if (n < 0) return false;
   struct vfs_ent *t = k_fs.ents;
-  t[n] = (struct vfs_ent) { .path = "tmp", .bake = -1, .ms = k_clock_ms(),
-                          .mode = 0755, .own = true, .dir = true, .live = true };
-  // the home, empty, is where the shell starts
-  t[n + 14] = (struct vfs_ent) { .path = k_home, .bake = -1, .ms = k_clock_ms(),
-                               .mode = 0755, .own = true, .dir = true, .live = true };
-  // the console's two colours, as files: own with no bytes until the first read. `proc`
-  // and `proc/vt` come free -- a name baked paths lie under is a directory already.
-  t[n + 1] = (struct vfs_ent) { .path = k_vtfg, .bake = -1, .ms = k_clock_ms(),
-                              .mode = 0644, .own = true, .live = true };
-  t[n + 2] = (struct vfs_ent) { .path = k_vtbg, .bake = -1, .ms = k_clock_ms(),
-                              .mode = 0644, .own = true, .live = true };
-  // ..the glyph scale, the one vt file that is not a colour. n + 8 and not n + 3: the
-  // compat loop below starts where the numbered rows stop.
-  t[n + 8] = (struct vfs_ent) { .path = k_vtscale, .bake = -1, .ms = k_clock_ms(),
-                              .mode = 0644, .own = true, .live = true };
-  // ..and the font, written and never read, at n + 15 past the home
-  t[n + 15] = (struct vfs_ent) { .path = k_vtfont, .bake = -1, .ms = k_clock_ms(),
-                               .mode = 0644, .own = true, .live = true };
-  // and the two the open fills: read-only, since nothing here is anyone's to set.
-  t[n + 3] = (struct vfs_ent) { .path = k_pmem, .bake = -1, .ms = k_clock_ms(),
-                              .mode = 0444, .own = true, .live = true };
-  t[n + 4] = (struct vfs_ent) { .path = k_pgauge, .bake = -1, .ms = k_clock_ms(),
-                              .mode = 0444, .own = true, .live = true };
-  // the boot line, read-only and filled at every open, so a reset onto another line
-  // changes what it answers. n + 9, past the numbered rows.
-  t[n + 9] = (struct vfs_ent) { .path = k_pcmd, .bake = -1, .ms = k_clock_ms(),
-                              .mode = 0444, .own = true, .live = true };
-  // and the lift, a file written and never read, at n + 10 past the boot line
-  t[n + 10] = (struct vfs_ent) { .path = k_plift, .bake = -1, .ms = k_clock_ms(),
-                               .mode = 0644, .own = true, .live = true };
-  // the two devices, 0666 and always empty; the open never touches these rows (k_dev_slot)
-  t[n + 5] = (struct vfs_ent) { .path = k_dnull, .bake = -1, .ms = k_clock_ms(),
-                              .mode = 0666, .own = true, .live = true };
-  t[n + 6] = (struct vfs_ent) { .path = k_dzero, .bake = -1, .ms = k_clock_ms(),
-                              .mode = 0666, .own = true, .live = true };
-  // the compat names. `to` is heap because k_ent_gc frees it; a strdup that refuses
-  // leaves a plain empty directory rather than a link that cannot be followed.
-  t[n + 7] = (struct vfs_ent) { .path = "usr/bin", .bake = -1, .ms = k_clock_ms(),
-                              .mode = 0755, .own = true, .dir = true, .live = true };
-  static char const *const compat[] = { "bin", "sbin", "usr/sbin" };
-  int m = n + 11;
-  for (uintptr_t c = 0; c < countof(compat); c++) {
-    char *to = vfs_strdup(&k_fs, "/usr/bin", 8);
-    t[m] = (struct vfs_ent) { .path = compat[c], .bake = -1, .ms = k_clock_ms(),
-                            .mode = 0777, .own = true, .live = true,
-                            .dir = !to, .to = to };
-    m++; }
-  // and the tree's old name, a link onto it for one release
-  char *to = vfs_strdup(&k_fs, "/love", 5);
-  t[n + 16] = (struct vfs_ent) { .path = "proc/src", .bake = -1, .ms = k_clock_ms(),
-                               .mode = 0777, .own = true, .live = true,
-                               .dir = !to, .to = to };
-  // and the seat's own files, where it has some: n + 17, a directory row the seat answers under
-  if ((k_mnt_up = k_host(kh_here, 0, 0, 0, 0, 0) > 0))
-    t[n + 17] = (struct vfs_ent) { .path = k_mnt, .bake = -1, .ms = k_clock_ms(),
-                                 .mode = 0755, .own = true, .dir = true, .live = true };
-  else t[n + 17] = (struct vfs_ent) {0};          // a retired slot, the next create's
+  // the mount only where the seat has files; else its slot stays zero, the next create's
+  k_mnt_up = k_host(kh_here, 0, 0, 0, 0, 0) > 0;
+  for (uintptr_t k = 0; k < countof(rows) - !k_mnt_up; k++) {
+    char *to = rows[k].to ? vfs_strdup(&k_fs, rows[k].to, strlen(rows[k].to)) : NULL;
+    t[n + k] = (struct vfs_ent) { .path = rows[k].path, .bake = -1, .ms = k_clock_ms(),
+                                .mode = rows[k].mode, .own = true, .live = true,
+                                .dir = rows[k].dir || (rows[k].to && !to), .to = to }; }
   return true; }
 
 // one open file: which entry, where in it, whether writes are allowed. rides the row's
