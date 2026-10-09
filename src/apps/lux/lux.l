@@ -193,15 +193,17 @@
               peep mapd w 0 ? (pin owed w (1 + peep owed w 0)) 0,              ; only a mapped window echoes -- an unmap of the
               pull mapd w 0, x-unmap s w)                                        ; already-hidden fires no event, so no count
 
-   ; --- frames: a managed window rides in a frame of its own size, the client at
-   ;     (0 0) inside -- a reparenting wm, so a toolkit that assumes one (java's awt)
+   ; --- frames: a managed window rides in a frame of its own size plus the border,
+   ;     the client inside -- a reparenting wm, so a toolkit that assumes one (java's awt)
    ;     places itself right. the frame takes the client's depth and visual (a
-   ;     compositor reads alpha off the top-level), wears the border, moves and
-   ;     stacks; override-redirect, so a restart's sweep never adopts a stale one.
+   ;     compositor reads alpha off the top-level), moves and stacks; override-redirect,
+   ;     so a restart's sweep never adopts a stale one. the border is the frame's own
+   ;     background around the client at (bw bw), never an X border: a border change is
+   ;     a size change, which a compositor that renames its pixmap only on a resize sees.
    ;     the client is resized only when its size changes and told its root
    ;     geometry (ICCCM 4.2.3) when the frame moves; an unchanged place sends nothing.
-   ;     a frame record: 'f the frame, 'own its own visual, 'g (x y w h bw), 'px.
-   ;     the root's children are frames now: a client's parent is its frame, at (0 0) ---
+   ;     a frame record: 'f the frame, 'own its own visual, 'g (x y w h bw) as placed,
+   ;     'bw the border the next move! lays, 'px. a client's parent is its frame ---
    frm (tablet 8) fidc {'n 16 'free ()} cmaps (tablet 4)
    (fid u) (fidc 'free @ fr (two? fr ? (pin fidc 'free >fr, <fr)
                                (fidc 'n @ n (pin fidc 'n (n + 1), scr-idbase sc + n))))
@@ -229,12 +231,12 @@
               x-border s w 0,
               x-w8 s 7, x-w8 s 0, x-w16 s 4, x-w32 s w, x-w32 s f, x-w16 s 0, x-w16 s 0,   ; ReparentWindow into the frame at (0 0)
               x-chprop32 s w (ewmh-atom "_NET_FRAME_EXTENTS") 6 '(0 0 0 0),
-              pin frm w {'f f 'own own 'g [(g 0) (g 1) (g 2) (g 3) 0] 'px -1},
+              pin frm w {'f f 'own own 'g [(g 0) (g 1) (g 2) (g 3) 0] 'bw 0 'px -1},
               f))))
    (unframe! w back)                                                             ; the frame goes; back: the client returns to the root first
     (peep frm w () @ r
        (r ? (: f (r 'f) g (r 'g)
-               (back ? (x-w8 s 7, x-w8 s 0, x-w16 s 4, x-w32 s w, x-w32 s root, x-w16 s (g 0), x-w16 s (g 1),
+               (back ? (x-w8 s 7, x-w8 s 0, x-w16 s 4, x-w32 s w, x-w32 s root, x-w16 s (g 0 + g 4), x-w16 s (g 1 + g 4),
                         x-w8 s 6, x-w8 s 1, x-w16 s 2, x-w32 s w) 0,               ; ChangeSaveSet Delete
                 x-w8 s 4, x-w8 s 0, x-w16 s 2, x-w32 s f,                         ; DestroyWindow
                 pin fidc 'free (f . fidc 'free), pull frm w 0)) 0))
@@ -246,19 +248,19 @@
    (tell! w) (peep frm w () @ r                                                  ; a ConfigureRequest overruled: its answer
                (r ? (r 'g @ g (synconf w (g 0 + g 4) (g 1 + g 4) (g 2) (g 3))) (x-confnotify s w)))
    (geom w) (peep frm w () @ r (r ? (take 4 (r 'g)) (x-getgeom s w)))           ; (x y w h) as the screen sees it
-   (bord! w bw px)
+   (bord! w bw px)                                                               ; a frame's width waits for the move! that follows
     (peep frm w () @ r
        (? !r (x-border s w bw, x-borderpix s w px)
-          (: f (r 'f) p (r 'own ? (px | 4278190080) px)                          ; a 32-bit frame's border pixel carries opaque alpha
-             (r 'g 4 = bw ? 0 (x-border s f bw, pin r 'g (take 4 (r 'g) + [bw])),
-              r 'px = p ? 0 (x-borderpix s f p, pin r 'px p)))))
-   (move! w x y cw ch)
+          (: f (r 'f) p (r 'own ? (px | 4278190080) px)                          ; a 32-bit frame's pixel carries opaque alpha
+             (pin r 'bw bw,
+              r 'px = p ? 0 (x-bgpix s f p, x-clear s f, pin r 'px p)))))
+   (move! w x y cw ch)                                                           ; (x y) the outer corner, (cw ch) the client
     (peep frm w () @ r
        (? !r (x-configure s w x y cw ch)
-          (: g (r 'g) bw (g 4)
+          (: g (r 'g) bw (r 'bw)
              ([x y cw ch bw] = g ? 0
-                (x-configure s (r 'f) x y cw ch,
-                 g 2 = cw && g 3 = ch ? 0 (x-configure s w 0 0 cw ch),
+                (x-configure s (r 'f) x y (cw + 2 * bw) (ch + 2 * bw),
+                 g 2 = cw && g 3 = ch && g 4 = bw ? 0 (x-configure s w bw bw cw ch),
                  pin r 'g [x y cw ch bw],
                  synconf w (x + bw) (y + bw) cw ch)))))
    (unled! w) (pull mapd w 0, pull owed w 0)                              ; the window left management: clear its ledger
@@ -268,7 +270,7 @@
         (: t <p pls <(lay-tile (lay-at lays t) (trect-of <>p) (wstilezof sh t))
            _ (map (q \ (: w (q 0) bw (#q < 6 ? lux-border (q 5))                ; smartBorders sets 0 on a singleton/fullscreen
                          (bord! w bw (w = f ? fpix npix),                        ; focusedBorderColor / normalBorderColor
-                          move! w (q 1) (q 2)                                    ; the border sits outside the frame: shave it off
+                          move! w (q 1) (q 2)                                    ; the client is the tile less its border
                                 (mx2 1 (q 3 - 2 * bw)) (mx2 1 (q 4 - 2 * bw))))) pls)
            (map cap pls))
        placed (foldl (a \ p \ a + tiles p) () (wsvis sh))
@@ -538,7 +540,8 @@
                             d = ewmh-atom "_NET_WM_STATE_MAXIMIZED_HORZ")
                    (screen-of w) (wsscreenof sh w @ r (r ? r (cur-rect sh)))    ; the screen w is on (the current one when hidden)
                    (state-toggle rect atoms word)                               ; _net_wm_state add/remove/toggle -> float at rect / sink
-                     (: act (ewmh-cm-d0 pkt) on (wsfloating? sh cw)
+                     (: act (ewmh-cm-d0 pkt)                                    ; on: floated BY this state (our stamp), so a float
+                        on (wsfloating? sh cw && any (= <atoms) (x-getprop-atoms s cw (ewmh-atom "_NET_WM_STATE")))   ; the manageHook made shrugs off a remove
                         want (act @ 1 1 0 0 !on)             ; 0 remove / 1 add / 2 toggle
                         (? (want = !!on) (loop sh lays hist)
                            want (wsdofloat (wsmap sh (zfocto cw)) cw rect @ sh2

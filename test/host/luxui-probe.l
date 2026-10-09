@@ -93,8 +93,7 @@
       _ (must "frame-extents" ('(0 0 0 0) = x-getprop-atoms s w1 (x-intern s "_NET_FRAME_EXTENTS")))
       _ (waitp "w1-focused" (u \ w1 = getfocus ()) 50)
 
-      ; --- 2. maximize add/remove while tiled (a float's toggle is a no-op
-      ;     by design: float-state is the proxy) -- the stamp goes on and off ---
+      ; --- 2. maximize add/remove while tiled -- the stamp goes on and off ---
       _ (cmsg w1 a-st 1 a-mv a-mh)
       _ (waitp "maximized" (u \ rgeo w1 @ g
                                    (0 = g 0 && 600 < g 2)) 50)
@@ -103,7 +102,7 @@
       _ (waitp "unmax-stamped" (u \ !(x-getprop-atoms s w1 a-st)) 50)
 
       ; --- 3. super+btn1 drag: float + move, the delta lands exact ---
-      g0 (rgeo w1)
+      g0 (rgeo w1) c0 (x-getgeom s w1)
       cx (g0 0 + g0 2 // 2) cy (g0 1 + g0 3 // 2)
       _ (fake 6 0 cx cy, rest 80,
          fake 2 sk 0 0, rest 80,
@@ -113,7 +112,7 @@
          fake 5 1 (cx + 75) (cy + 45), rest 100,
          fake 3 sk 0 0, rest 80)
       _ (waitp "moved-exact" (u \ (rgeo w1 @ g
-                                     (g 0 = g0 0 + 75 && g 1 = g0 1 + 45 && g 2 = g0 2))) 50)
+                                     (g 0 = g0 0 + 75 && g 1 = g0 1 + 45 && x-getgeom s w1 2 = c0 2))) 50)   ; the client keeps its size; its frame gains the border
 
       ; --- 4. super+btn3 drag: resize, the delta lands exact ---
       g1 (rgeo w1)
@@ -127,6 +126,10 @@
       _ (waitp "resized-exact" (u \ (rgeo w1 @ g
                                      (g 2 = g1 2 + 50 && g 3 = g1 3 + 30))) 50)
       _ (waitp "float-focused" (u \ w1 = getfocus ()) 50)
+      ; --- 4b. a remove of a state lux never stamped leaves the float alone ---
+      g2 (rgeo w1)
+      _ (cmsg w1 a-st 0 a-mv a-mh, rest 150)
+      _ (must "unmax-unstamped-float-kept" (rgeo w1 = g2))
 
       ; --- 5. a second client (its own connection) tiles alongside;
       ;     _net_close_window fells it -- no wm_delete_window advertised, so
@@ -273,7 +276,7 @@
       (mstf u) <(x-attrs s wf)
       (actw u) (x-getprop-atoms s root a-aw @ a (two? a ? <a -1))          ; _net_active_window: what a taskbar highlights
       _ (mkdlg wf)
-      _ (waitp "wf-floated" (u \ 200 = rgeo wf 2) 100)                 ; a float keeps its own size; a tile would be stretched
+      _ (waitp "wf-floated" (u \ 200 = x-getgeom s wf 2) 100)          ; a float keeps its own size; a tile would be stretched
       _ (cmsg wf a-wd 1 0 0)                                                     ; send it to desktop 1, alone there
       _ (waitp "wf-emigrated" (u \ 0 = mstf ()) 50)
       _ (fake 6 0 5 5, rest 100)                                                 ; park the pointer off the centred float
