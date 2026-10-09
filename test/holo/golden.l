@@ -402,6 +402,14 @@
         (gf-expand 'x64 (gf-lines 'x64 ".if 0\n.long 1\n.elseif 1\n.long 2\n.elseif 1\n.long 3\n.else\n.long 4\n.endif\n.if 0\n.long 5\n.elseif 0\n.long 7\n.else\n.long 6\n.endif")))
    _ (chk-eq "gimm.not" [0 1 1 256] [(gimm (gtoks "!5")) (gimm (gtoks "!0")) (gimm (gtoks "!!(7)")) (gimm (gtoks "(!!(3)) << 8"))])
    _ (chk-eq "gimm.shr" [15 15] [(gimm (gtoks "~0 >> 60")) (gimm (gtoks "0xf0 >> 4"))])
+   ;; gas's ranks, as llvm-mc reads them: << with *, | & ^ above + -, comparisons below + -, then
+   ;; && then ||, which answer 1; a value wraps at 64 bits, signed
+   _ (chk-eq "gimm.rank" [17 3 8 2 -1 1 0 1 -1 0]
+        (map (x \ gimm (gtoks x)) ["1 + 2 << 3" "6 & 3 + 1" "8 >> 1 * 2" "5 - 1 | 2" "1 + 2 == 3" "1 || 0 && 0"
+                                   "1 + 2 != 3 || 0" "3 == 3 || 0" "(-5) >> 0 < 0" "1 << 63 << 1"]))
+   _ (chk-eq "gimm.movq" [1 0]
+        (map (x \ gimm (gtoks x)) ["(((195938833) >> 31) == 0 || ((195938833) >> 31) == 8589934591)"
+                                   "(((3684054920433006693) >> 31) == 0 || ((3684054920433006693) >> 31) == 8589934591)"]))
    ; a symbol-less rip displacement is the address past the lea (_THIS_IP_): its own bytes
    _ (chk-eq "gas.x64.thisip"
         '((raw (76 141 29 0 0 0 0)) (raw (72 141 5 8 0 0 0)))
