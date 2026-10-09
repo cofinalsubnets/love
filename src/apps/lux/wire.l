@@ -19,7 +19,7 @@
   x-focus x-sync x-clear-enters x-border x-intern x-getprop x-atoms-of x-getprop-atoms x-has-atom x-getclass
   x-transient x-getgeom x-raise x-lower x-kill x-wmdel x-confnotify x-delprop
   x-grabbtn x-replay x-allow-async x-grabptr x-ungrabptr x-querytree x-attrs x-manageable?
-  x-redirect x-keymap x-grab x-ungrabkeys x-color x-borderpix x-cursor xauth-parse
+  x-redirect x-keymap x-grab x-ungrabkeys x-color x-borderpix x-bgpix x-clear x-cursor xauth-parse
   xauth-cookie x-decode x-next ev-code ev-detail ev-window ev-state ev-raw
   i16 x-queryext x-randr-init x-monitors x-warp x-queryptr)
 (borrow 'posix)
@@ -282,6 +282,10 @@
        hdr (x-reply s) (<hdr = 1 ? (u32 hdr 8) 0))                               ; an error answers the wait: pixel 0, not a garbage id
    (x-borderpix s win px)                                                        ; ChangeWindowAttributes cwborderPixel
     (x-w8 s 2, x-w8 s 0, x-w16 s 4, x-w32 s win, x-w32 s 8, x-w32 s px)
+   (x-bgpix s win px)                                                            ; ChangeWindowAttributes cwbackPixel
+    (x-w8 s 2, x-w8 s 0, x-w16 s 4, x-w32 s win, x-w32 s 2, x-w32 s px)
+   (x-clear s win)                                                               ; ClearArea, the whole window, no exposures:
+    (x-w8 s 61, x-w8 s 0, x-w16 s 4, x-w32 s win, x-w32 s 0, x-w32 s 0)          ; repaints its background around mapped children
 
    ; --- the root cursor (setDefaultCursor xC_left_ptr): OpenFont "cursor" (45),
    ;     CreateGlyphCursor (94, glyph 68/69, black on white), cwa cwcursor ---
