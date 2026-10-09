@@ -4024,6 +4024,37 @@
           up (two? f ? (peep uoff <f -1) -1)
           (. (bp >= 0 && up >= 0 && f bp = 'fp ? (rvreb f 0 up fr) f)
                 (rvslots >fs fr))))
+   ; a64's slots off sp: past the prologue's (sub sp sp F), sp = fp - F - d until an epilogue's (lea sp fp 0), d the
+   ; straight-line parks open (sub/add sp by a constant, closed before any label or jump), so the slot at fp+o is
+   ; sp+F+d+o -- one word to 4095 units scaled, where fp's negative side has ldur's 256 bytes and then x16. fp stays
+   ; the frame record; a body that moves sp any other way keeps its slots on fp. last, after bprot
+   a64sc {'ld 8 'st 8 'ldsd 8 'stsd 8 'ld4 4 'ldu4 4 'st4 4 'ldss 4 'stss 4
+          'ld2 2 'ldu2 2 'st2 2 'ld1 1 'ldu1 1 'st1 1 'lea 0 'lean 0}
+   (a64w sc o)                                     ; holo's words for base+o: a64-mem-raw's lanes, lea's add/sub
+    (: u (o < 0 ? (0 - o) o)
+       (? (sc = 0 ? (u <= 4095) (0 <= o && o % sc = 0 && o // sc <= 4095 || -256 <= o && o <= 255)) 1
+          (u <= 4095 || u % 4096 = 0) 2
+          3))
+   (a64sp g fs)
+    (: (sw? f) (two? f && (elem <f '(push pop) || f 1 = 'sp && nelem <f (stops9 + siops + stxops + fstxops)))
+       (spk? f k) (two? f && <f = k && f 1 = 'sp && f 2 = 'sp && charm? (f 3))
+       (ctl? f) (two? f && elem <f '(label br br8 cbr tbr jmp jmpm jmpr jmpt ret))
+       (reb f F d) (: bp (peep a4base <f -1) up (peep uoff <f -1) sc (peep a64sc <f -1)
+                      (? (sc < 0 || bp < 0 || up < 0 || f 1 = 'sp || f bp != 'fp || !(charm? (f up))) f
+                         (F + d + f up @ n
+                            (0 <= n && a64w sc n < a64w sc (f up) ? (reop (reop f bp 'sp) up n) f))))
+       ; one walk: F the frame once the prologue stands, d the parks open; () when sp moves any other way
+       (go l pv F d acc)
+        (? !(two? l) (d = 0 ? (rev acc) ())
+           (<l @ f
+              (? (spk? f 'sub && pv = '(lea fp sp 0)) (d = 0 && (!F || F = f 3) ? (go >l f (f 3) 0 (f . acc)) ())
+                 (f = '(lea sp fp 0)) (d = 0 && two? >l && <>l = '(frpop) ? (go >l f F d (f . acc)) ())
+                 (spk? f 'sub) (F ? (go >l f F (d + f 3) (f . acc)) ())
+                 (spk? f 'add) (F && f 3 <= d ? (go >l f F (d - f 3) (f . acc)) ())
+                 (sw? f) ()
+                 (ctl? f && d != 0) ()
+                 (go >l f F d ((F ? (reb f F d) f) . acc)))))
+       (!(a64? g) || abl? g 'a64sp || g 'hasasm ? fs (go fs () () 0 () @ r (two? r ? r fs))))
    ; the x64 frame prologue at fs's head (unframe strips it; repack requires it)
    (pro4? fs) (epim? >fs pro4)
    ; riscv's frame: a body that names no sp, fp or lr and makes no call (wasm: may call) keeps nothing in it, so the
@@ -9415,7 +9446,7 @@
                      (cfoldir g irx))))))))))))))))
        ; the copy fold again after repack: a slot copied from a seat repack just minted forwards from it now
        (post irx) (deadst g (deaddef g (copyprop g (stld g (copyprop g (repack g irx))))))
-       (bad? irf ? irf (dp 'final (bprot g (frrec g (swrap g (tailarm g (jmpm g (csdrop g (cskeep g (unhome g (jr0 g (rvunframe g (unframe g (hz4 g (laacse g (coal g (copyprop g (recse g (wpair g (dp 'post (post (dp 'deadlab (deadlabk (cg-refs (g 'fasecs) {}) (swp irf)))))))))))))))))))))))))
+       (bad? irf ? irf (dp 'final (a64sp g (bprot g (frrec g (swrap g (tailarm g (jmpm g (csdrop g (cskeep g (unhome g (jr0 g (rvunframe g (unframe g (hz4 g (laacse g (coal g (copyprop g (recse g (wpair g (dp 'post (post (dp 'deadlab (deadlabk (cg-refs (g 'fasecs) {}) (swp irf))))))))))))))))))))))))))
 
    ; the data tail -> (dataforms nifforms imgforms extras bssforms rodataforms) | 'bad, extras ((name forms
    ; ro?) ..) per other named section in declaration order. love_nifs packs for the linker's __start_/__stop_
