@@ -1193,6 +1193,13 @@ below, 251 of those 332 re-run so far: **145 compile**, and the rest refuse by n
   the bitfield aliases (`ubfx`/`sbfx`/`bfxil`/`ubfiz`/`sbfiz`/`bfi`/`bfc`, 1400 lines = llvm-mc),
   and a macro call's arguments split at a space as at a comma unless an operator sits beside
   it (`check_override id_aa64mmfr1 8 0f 1f x1 x2`): gas's rule, and llvm-mc's.
+- **a symbol's page and its `:lo12:`**: `adrp`, then `add`, `ldr`/`str` and their byte, half and
+  word kin at `:lo12:`, `sym+k` the addend (the kernel's adr_l, ldr_l, str_l). The a64 address
+  fixes carry the addend above their word; a byte access relocates as LDST8, the wider ones
+  LDST16..64, so an object's relocations are llvm-mc's (272-asm-adrp.c links and runs them). A
+  128-bit `ldr q` at `:lo12:` refuses. With them, a register form naming `xzr` (`mov x0, xzr`,
+  `cmp x1, xzr`) is its own word: it had reached the IR, which cannot hold zr (`badreg zr`).
+  hyp-stub compiles, its 773 words and every relocation the kernel's object's.
 
 Still open on this side (g-21's probes):
 
@@ -1202,10 +1209,9 @@ Still open on this side (g-21's probes):
   reads at the element's width, a bitfield or 128-bit member of a packed struct refuses by name,
   and a by-value struct reached as a packed member rides its type's alignment, not the member's.
 - where the re-run stops now, on this side: a register variable pinned to `x0` (4). Of the 24
-  units that stopped on the `.S` extable macro's `\insn`, 17 compile, and the rest stop on:
-  `adrp` to a symbol (hyp-stub's adr_l, a relocation pair), a vector lane `v4.d[0]`, a linker
-  script's symbol as a `.long` (`_kernel_size_le_lo32`), `.incbin`, `@note`, `sym+k` as a memory
-  operand and a `.set` alias of a function (`__memmove`). The exclusive pairs (`ldxp`/`stxp` and kin) have no lane yet.
+  units that stopped on the `.S` extable macro's `\insn`, 18 compile, and the rest stop on: a
+  vector lane `v4.d[0]`, `sys`, a linker script's symbol as a `.long` (`_kernel_size_le_lo32`),
+  `.incbin`, `@note` and a `.set` alias of a function (`__memmove`). The exclusive pairs (`ldxp`/`stxp` and kin) have no lane yet.
   The rest is part 1's front end and gen (`linux/skbuff.h`, an undeclared `branch`,
   `__attribute__((mode))`).
 - defconfig, g-21's units once refused on a Q form or a register pinned twice: of a sample of
