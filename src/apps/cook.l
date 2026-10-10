@@ -267,9 +267,11 @@
    (: k (join " " (sh . fl)) v (peep cookbox k 'no)
        (v != 'no ? v
           (: ours (cite 'lush 'sh-ours?) one (cite 'lush 'sh-oneline)
-             fs (cite 'lush 'sh-oneflags) in (cite 'lush 'sh-inmode)
-             f (lit? ours && lit? one && lit? fs && lit? in
-                && in (fs fl @ r (two? r ? (r 4) ())) (_ \ ours sh) ? one 0)
+             fs (cite 'lush 'sh-oneflags) in (cite 'lush 'sh-inmode) nw (cite 'lush 'sh-new)
+             ; each line a shell of its own, as a spawned SHELL would be: its state fresh
+             f (lit? ours && lit? one && lit? fs && lit? in && lit? nw
+                && (nw 0 @ S (in S (fs fl @ r (two? r ? (r 4) ())) (_ \ ours S sh)))
+                ? (\ g c (one (nw 0) g c)) 0)
              (pin cookbox k f,
               f))))
 
@@ -586,8 +588,8 @@
     (: hook (peep as " shell" 0)
        (lit? hook ? (hook cmd) (fn-shell1 as cmd)))
    (fn-shell1 as cmd)
-    (: sh (shname as) fl (shflags as) cap (cite 'lush 'sh-onecap)
-       o (inimg sh fl && lit? cap ? (cap fl cmd))
+    (: sh (shname as) fl (shflags as) cap (cite 'lush 'sh-onecap) nw (cite 'lush 'sh-new)
+       o (inimg sh fl && lit? cap ? (cap (nw 0) fl cmd))
        r (two? o ? o (hark ([sh] + fl + [cmd])))
        (two? r ? (nl->sp (chomp >r)) ""))
    ; $(wildcard): lush's glob (cook-glob -- classes, multi-segment patterns, the mask law) when
