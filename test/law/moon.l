@@ -1369,6 +1369,17 @@
       (any (slot? 'sp) spf)
       !(any (f \ slot? 'fp f && (<f = 'st ? (f 2) (f 3)) < -256) spf)
       (any (f \ slot? 'fp f && (<f = 'st ? (f 2) (f 3)) < -256) vlf))
+   ; -- a64's three-register twins: a copy the next form reshapes in place is one form
+   twf (fnf 'f <>(cgt "unsigned long f(unsigned long a, unsigned long b) { return (a >> 11) * b + (a << 8) + ~a; } int main() { return 0; }" 'a64))
+   ; ..and no copy is left standing before a form that reshapes its destination in place
+   (twpair? l) (? (!(two? l) || !(two? >l)) ()
+                  (: f <l h <>l
+                     (two? f && <f = 'mov && two? h && elem <h '(shl shr sar not zx1 zx2 zx4 sx1 sx2 sx4) &&
+                      h 1 = f 1 && f 2 != 'sp ? 1 (twpair? >l))))
+   _ (test
+      (elem '(lsr r6 r0 11) twf)
+      (elem '(lsl r5 r0 8) twf)
+      !(twpair? twf))
    ; -- the riscv frame: a body naming no sp, fp or lr and making no call lays no frame; on wasm a call
    ; leaves every local but its answers, so there a call keeps no frame either, a home off the argument
    ; registers rides it unspilled, and a cs seat is unsaved and priced as a pool seat
