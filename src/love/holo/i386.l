@@ -20,6 +20,13 @@
    (mem regf base disp) (x86-mem regf (i3rn base) disp)
    (memx regf base index scale disp) (x86-memx regf (i3rn base) (i3rn index) scale disp)
    (i3b r) (i3rn r @ n (n < 4 ? n (scare 'i386-bytereg r)))     ; a register with a low byte
+   ;; a byte op on esi/edi borrows a low-byte register by xchg (the flags untouched): the first of
+   ;; eax..ebx the operation's address does not name, swapped in around it and back
+   (i3xb m s avoid f)
+    (i3rn s < 4 ? (f s)
+       (: t (<(filter (r \ nelem r avoid) '(r0 r1 r2 r3)))
+          sw (o32 m + (t = 'r0 ? [(144 | i3rn s)] [135 (modrm 3 (i3rn s) (i3rn t))]))   ; 90+r with eax, else 87 /r
+          (sw + f t + sw)))
 
    ;; the mode's prefixes: a 32-bit operand, a 16-bit one, a memory operand
    (o32 m) (m = 1 ? [102] ())
@@ -72,8 +79,8 @@
 
    (i3-lea m d base off) (i3mem m 4 [141] d base off)
    (i3-leax m d base ix sc dp) (i3memx m 4 [141] d base ix sc dp)
-   (i3-st1 m base off s) (i3b s, i3mem m 1 [136] s base off)
-   (i3-stxb m base ix sc dp s) (i3b s, i3memx m 1 [136] s base ix sc dp)
+   (i3-st1 m base off s) (i3xb m s [base] (t \ i3mem m 1 [136] t base off))
+   (i3-stxb m base ix sc dp s) (i3xb m s [base ix] (t \ i3memx m 1 [136] t base ix sc dp))
    (i3-si m w base off n) (i3memd m w (w = 1 ? [198] [199]) 0 base off + (w @ 1 [(byte n)] 2 (le16 n) (le32 n)))
    (i3-cmpm m base off y)
     (? (reg? y) (i3mem m 4 [57] y base off)
@@ -112,16 +119,26 @@
        (? (w = 1) (scare 'i386-btm-byte op)
           (reg? y) (i3-mw m w () [15 (k @ 4 163 5 171 6 179 187)] y base off)
           (i3-mw m w () [15 186] k base off + [(byte y)])))
+   ;; the carry chain three-address: d <- a OP b with the carry in. mov keeps the flags, so the
+   ;; two-address dance is sound; d aliasing b has no honest encoding unless OP commutes
+   (i3-adc m op d a b)
+    (? (i3rn d = i3rn a) (i3-carry m op 4 d b)
+       (reg? b && i3rn d = i3rn b) (op = 'adc ? (i3-carry m op 4 d a) (scare 'alias-dst [op d a b]))
+       (i3-mov m d a + i3-carry m op 4 d b))
    (i3-cas m acc new ptr)
     (acc @ 'r0 ([240] + i3mem m 4 [15 177] new ptr 0) (scare 'cas-acc acc))
    ;; the thread pointer: linux i386 keeps it in gs, the block's first word the pointer itself
    (i3-tp m d) ([101] + a32 m + o32 m + [139 (modrm 0 (i3rn d) 5)] + le32 0)
 
    ;; movsx/movzx r32 from a register's low byte or word; the 32-bit faces are the register itself
-   (i3-sx m w d) (w = 4 ? () (o32 m + [15 (w @ 1 190 191) (modrm 3 (i3rn d) (w = 1 ? (i3b d) (i3rn d)))]))
-   (i3-zx m w d) (w = 4 ? () (i3-zxm m w d d))
+   (i3-sx m w d)
+    (? (w = 4) ()
+       (w = 1) (i3xb m d () (t \ o32 m + [15 190 (modrm 3 (i3rn t) (i3b t))]))
+       (o32 m + [15 191 (modrm 3 (i3rn d) (i3rn d))]))
+   (i3-zx m w d) (? (w = 4) () (w = 1) (i3xb m d () (t \ i3-zxm m 1 t t)) (i3-zxm m w d d))
    (i3-zxm m w d s)
-    (w = 4 ? (i3-mov m d s)
+    (? (w = 4) (i3-mov m d s)
+       (w = 1 && 4 <= i3rn s) (i3-mov m d s + i3-zx m 1 d)      ; esi/edi has no low byte: copy, then extend in place
        (o32 m + [15 (w @ 1 182 183) (modrm 3 (i3rn d) (w = 1 ? (i3b s) (i3rn s)))]))
 
    (i3-push m s)
@@ -150,8 +167,8 @@
           (o32 m + [232 0 0 0 0] + tail + [(fix 4 'rel32 label (#tail + 4))])))
    (i3-pushl m label) (o32 m + [104 (fix 4 'abs32 label 0)])
 
-   (i3-set1 m cond d) [15 (jcc-op cond + 16) (modrm 3 0 (i3b d))]
-   (i3-set m cond d) (i3-set1 m cond d + i3-zxm m 1 d d)
+   (i3-set1 m cond d) (i3xb m d () (t \ [15 (jcc-op cond + 16) (modrm 3 0 (i3b t))]))
+   (i3-set m cond d) (i3xb m d () (t \ i3-set1 m cond t + i3-zxm m 1 t t))
    (i3-cmov m cond d s)
     (i3rn d = i3rn s ? (scare 'cmov-alias d) (o32 m + [15 (jcc-op cond - 64) (modrm 3 (i3rn d) (i3rn s))]))
    (i3-mulo m d a b t lbl) (i3-imul m d a b + (m = 1 ? [15 128 (fix 2 'rel16 lbl 0)] [15 128 (fix 4 'rel32 lbl 0)]))
@@ -232,6 +249,8 @@
            ('div . i3-div m 0 1) ('udiv . i3-div m 0 0)
            ('rem . (\ d a b t (i3-div m 1 1 d a b))) ('urem . (\ d a b t (i3-div m 1 0 d a b)))
            ('divl . i3-divl m)
+           ('adc . i3-adc m 'adc) ('adcs . i3-adc m 'adc) ('sbc . i3-adc m 'sbb) ('sbcs . i3-adc m 'sbb)
+           ('ors . i3-alu m 'or)
            ('xaddm . (\ w b o s (i3-mw m w [15 192] [15 193] s b o)))
            ('cmpxchgm . (\ w b o s (i3-mw m w [15 176] [15 177] s b o)))
            ('xchgm . (\ w b o s (i3-mw m w [134] [135] s b o)))
@@ -272,8 +291,8 @@
      'patch x86-patch
      'nop '(144)
      'zeroxor 1
-     'flagr '(br set cmov adc sbb)
-     'flagw '(cmp cmpm cmprm test add sub and or xor andx4 orx4 xorx4 andm4 orm4 xorm4 adds subs neg mulo)
+     'flagr '(br set cmov adc sbb adcs sbcs carry)
+     'flagw '(cmp cmpm cmprm test add sub and or xor andx4 orx4 xorx4 andm4 orm4 xorm4 adds subs adcs sbcs ors neg mulo)
      'short x86-short}
    _ (defbackend 'i386 (i386-be i386-ems32))
    (defbackend 'i386m16 (i386-be i386-ems16)))

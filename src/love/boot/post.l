@@ -311,7 +311,9 @@
                'wasm 'wasm  'wasm64 'wasm
                'thumb1 'thumb1  'cortex-m0 'thumb1
                'thumb2 'thumb2  'cortex-m7 'thumb2
-               'thumb2sp 'thumb2sp  'playdate 'thumb2sp}
+               'thumb2sp 'thumb2sp  'playdate 'thumb2sp
+               'i386 'i386  'i686 'i386  'ia32 'i386  'x86 'i386
+               'i386m16 'i386m16}
    ; the word the world outside says: uname's machine, and the head of a gnu triple. the
    ; embedded targets answer () -- no kernel is ever asked their name.
    arch-uname {'x64 "x86_64" 'a64 "aarch64" 'rv64 "riscv64"}
