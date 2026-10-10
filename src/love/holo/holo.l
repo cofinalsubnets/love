@@ -175,6 +175,7 @@
              'li 2 'mov 2 'cmp 2 'test 2 'set 2 'set1 2 'br 2 'br8 2
              'la 2 'laa 3 'lar 2 'lia 2 'ldseg 2 'pushl 1 'stseg 2 'segst 3 'segld 3 'clz 2
              'shl 2 'shr 2 'sar 2 'rol 2 'ror 2 'ror4 2
+             'lsl 3 'lsr 3 'asr 3 'mvn 2 'uxtb 2 'uxth 2 'uxtw 2 'sxtb 2 'sxth 2 'sxtw 2   ; a64's three-register twins
              'shlv 2 'shrv 2 'sarv 2 'rorv 2 'rorv4 2
              'movupd 2 'movsd 2 'movapd 2 'movhlps 2 'unpcklpd 2
              'mulpd 2 'addpd 2 'subpd 2 'divpd 2
