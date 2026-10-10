@@ -4,6 +4,7 @@
 ; 67 on every memory operand, call and ret 32-bit so a frame keeps its shape, jumps 16-bit.
 ; every encoding was checked against `objdump -d` (-M i8086 for the twin).
 ;
+; loads after x64.l, whose x86 core (ModRM/SIB, the tables, the relocation kinds) it shares.
 ; the register file is x64's first eight, no REX anywhere:
 ;   sp->esp  r0->eax r1->ecx r2->edx r3->ebx  r4->ebp r5->esi r6->edi
 ; and r7..r14 refuse at the door (i386-lower). only r0..r3 have a byte face: a byte store, setcc or movzx from r4..r6 or sp
@@ -12,26 +13,12 @@
 (module 'holo
 (: i386-regs {'sp 4 'r0 0 'r1 1 'r2 2 'r3 3 'r4 5 'r5 6 'r6 7}
    (i3rn r) (look i386-regs r 'i386-badreg)
-   ;; op -> (rr-opcode imm-/digit commutative?), and the 0F 8x jcc low bytes
-   i3-alut {'add '(1 0 1) 'or '(9 1 1) 'and '(33 4 1) 'sub '(41 5 0) 'xor '(49 6 1)
-            'adds '(1 0 1) 'subs '(41 5 0)}
-   i3-cc {'eq 132 'ne 133 'lt 140 'ge 141 'le 142 'gt 143 'below 130 'ae 131
-          'be 134 'above 135 's 136 'ns 137 'vs 128 'vc 129 'p 138 'np 139}
-   (jcc-op c) (look i3-cc c 'badcc)
-   (modrm m reg rm) (m << 6 | ((reg & 7) << 3 | rm & 7))
-   (sib sc ix bs) (sc << 6 | ((ix & 7) << 3 | bs & 7))
-   (scale-bits s) (s @ 1 0 2 1 4 2 8 3 (scare 'badscale s))
-   (shift-ext op) (op @ 'shl 4 'shr 5 'sar 7 'rol 0 'ror 1 (scare 'badshift op))
-   (dispf md disp) (md @ 0 () 1 [(byte disp)] (le32 disp))
-   ;; [base+disp]: esp as a base takes a SIB byte, ebp a displacement even at 0
-   (mem regf base disp)
-    (: bn (i3rn base) md (disp = 0 && bn != 5 ? 0 (fits8 disp ? 1 2))
-     ((bn = 4 ? [(modrm md regf 4) (sib 0 4 4)] [(modrm md regf bn)]) + dispf md disp))
-   (memx regf base index scale disp)
-    (: bn (i3rn base) ixn (i3rn index)
-       md (disp = 0 && bn != 5 ? 0 (fits8 disp ? 1 2))
-     ([(modrm md regf 4) (sib (scale-bits scale) ixn bn)] + dispf md disp))
-   (emit-seg s) (s @ 'fs [100] 'gs [101] 'es [38] 'cs [46] 'ss [54] 'ds [62] (scare 'i386-seg s))
+   jcc-op x86-jcc
+   modrm x86-modrm
+   shift-ext x86-shift-ext
+   emit-seg x86-seg
+   (mem regf base disp) (x86-mem regf (i3rn base) disp)
+   (memx regf base index scale disp) (x86-memx regf (i3rn base) (i3rn index) scale disp)
    (i3b r) (i3rn r @ n (n < 4 ? n (scare 'i386-bytereg r)))     ; a register with a low byte
 
    ;; the mode's prefixes: a 32-bit operand, a 16-bit one, a memory operand
@@ -61,7 +48,7 @@
    (i3-test m a b)
     (reg? b ? (i3rr m [133] a b) (i3rn a @ an (o32 m + [247 (modrm 3 0 an)] + le32 b)))
    (i3-alu m op d a b)
-    (: meta (peep i3-alut op 0) rr (meta 0) ext (meta 1) comm (meta 2)
+    (: meta (peep x86-alu op 0) rr (meta 0) ext (meta 1) comm (meta 2)
        (? (op = 'xor && reg? a && reg? b && i3rn d = i3rn a = i3rn b) (i3rr m [49] d d)
           (reg? a && i3rn d = i3rn a) (i3step m rr ext d b)
           (reg? b && i3rn d = i3rn b) (comm ? (i3step m rr ext d a) (scare 'alias-dst [op d a b]))
@@ -271,7 +258,7 @@
            ('stc . [249]) ('clc . [248]) ('cmc . [245]) ('stac . [15 1 203]) ('clac . [15 1 202])
            ('rdpkru . [15 1 238]) ('wrpkru . [15 1 239]) ('xgetbv . [15 1 208]) ('xsetbv . [15 1 209])
            ('wbinvd . [15 9]) ('invd . [15 8]) ('monitor . [15 1 200]) ('mwait . [15 1 201])])
-       _ (map (k \ emrow t k (i3-alu m k)) (keys i3-alut))
+       _ (map (k \ emrow t k (i3-alu m k)) (keys x86-alu))
        t)
    i386-ems32 (i386-ems 0)
    i386-ems16 (i386-ems 1)
@@ -280,25 +267,14 @@
    (i386-lower ems ins)
     (: _ (each >ins (o \ elem o i386-wide && scare 'i386-badreg [o ins]))
      (lower-via ems ins))
-   ;; rel32 from the field's end, rel8 the relaxer's, abs32 an address, rel16 a 16-bit segment's jump
-   (i386-patch kind target site width aux)
-    (kind @ 'rel16 (: d (target + aux - (site + width))
-                     (-32768 <= d <= 32767 ? 0 (scare 'rel16-range d), le16 d))
-       'rel32 (le32 (target + aux - (site + width)))
-       'rel8 (: d (target - (site + width)) (fits8 d ? 0 (scare 'rel8-range d), [(byte d)]))
-       'abs32 ((target + aux) % 4294967296 @ v (le32 (v < 0 ? (v + 4294967296) v)))
-       (scare 'badfix kind))
    (i386-be ems)
     {'lower (i386-lower ems)
-     'patch i386-patch
+     'patch x86-patch
      'nop '(144)
      'zeroxor 1
      'flagr '(br set cmov adc sbb)
      'flagw '(cmp cmpm cmprm test add sub and or xor andx4 orx4 xorx4 andm4 orm4 xorm4 adds subs neg mulo)
-     'short (\ ins c rel
-      (? !(fits8 (rel - 2)) ()
-         (<ins == 'jmp) [235 (fix 1 'rel8 (ins 1) 0)]
-         [(jcc-op (ins 1) - 16) (fix 1 'rel8 (ins 2) 0)]))}
+     'short x86-short}
    _ (defbackend 'i386 (i386-be i386-ems32))
    (defbackend 'i386m16 (i386-be i386-ems16)))
 ) ; module 'holo
