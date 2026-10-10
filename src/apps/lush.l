@@ -2037,6 +2037,11 @@
                ; child's own, and only the word is ours to say
                ((? (sh-known? S w) 0 (sh-nfsay S w fm)),
                 spawnmap (sh-spawnv S (st 1)) fm allclose pg fgi)))
+         ; a seat with no fork runs the stage as a task of its own, on a copy of our state:
+         ; the seat lays its stdio from the map, as for a spawned word
+         !(sh-forkseat? 0)
+          (spawnmap ['thunk (_ \ sh-eval (sh-subtask S) (st 1) @ s (? (charm? s) s (<s @ 'ret >s 0)))]
+                    base allclose pg fgi)
          (: p (fork 0)
             (? (p = 0)
                (: _ (wear (),                   ; a child wears the console: its fds are the dup2 below, and a jug is not one
@@ -2320,7 +2325,7 @@
    ; under a forkless capture a `( )` does not fork: the child would inherit the
    ; drainer and stall on it. outside one the fork stands and isolates fds and jobs.
    (sh-subsh S b)
-     (? (S 'sh-subfds) (sh-subhere S b)
+     (? ((S 'sh-subfds) || !(sh-forkseat? 0)) (sh-subhere S b)
         (: _ (flush out) _ (flush err)
            pg (sh-pgm S 0) fg (sh-fgm S 0)
            p (fork 0)
@@ -2449,6 +2454,11 @@
       ; sh-disarm drops the parent's signalfd and empties the mask with it -- an
       ; inherited block would be a subshell ^C cannot reach.
       each (keys (S 'sh-traps)) (k \ pull (S 'sh-traps) k 0), (sh-disarm S) 0, 0)
+   ; a forkless seat's subshell task: our state copied, and what sh-dropcaps and
+   ; sh-subjc would clear in a fork child cleared in the copy alone -- the fds, the
+   ; signal port and the dispositions are the parent's, shared, and stay as they are
+   (sh-subtask S)
+     (sh-copy S @ c (pins c 'sh-subfds () 'sh-online 0 'sh-jc 0 'sh-sigport 0 'sh-traps {}))
    (sh-tabsnap t) (map (k \ k . t k) (keys t))
    (sh-tabback t sn)
      (each (keys t) (k \ pull t k 0),

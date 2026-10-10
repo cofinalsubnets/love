@@ -225,12 +225,12 @@
 (: r (hark ["out/love" "out/lush" "-c" "type exec"])
    (test ("exec is a shell builtin\n" = >r)))
 
-; the engine plans: (sh-plan ast) reads the AST once and answers a thunk, so
-; firing it twice runs twice. the function book holds that plan -- a closure, so
+; the engine plans: (sh-plan S ast) reads the AST once and answers a plan, fired with the
+; state it runs in, so firing it twice runs twice. the function book holds that plan -- a closure, so
 ; two? can never see it, and absence is the sh-nofn mint (peep's total test)
 (: pr (sh-parse >(sh-lex shS "LUSH_PL=$(expr ${LUSH_PL:-0} + 1)"))
    p (sh-plan shS >pr)
-   _ (p ()) _ (p ())
+   _ (p shS) _ (p shS)
    (test ('("2") = (sh-fields shS) [('var . "LUSH_PL")])))
 (sh-line shS "lush_pf() { echo x; }",
  test (sh-fn? shS "lush_pf") !(sh-fn? shS "lush_pq_zz")
