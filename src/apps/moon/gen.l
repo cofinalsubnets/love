@@ -406,7 +406,7 @@
    (immok g cls n)
     (? (a64? g)
        (cls @ 'addsub (-16777215 <= n <= 16777215)   ; imm12, or the backend's hi12+lo12 split
-              'cmp (-4095 <= n <= 4095)              ; imm12 only (no split -- flags)
+              'cmp (-4095 <= n <= 4095 || 0 = n % 4096 && -16777215 <= n <= 16777215)   ; imm12, or imm12 lsl 12 (no split -- flags)
               'log (0 < n < 9223372036854775808 && 0 = n & (n + 1)))   ; a low run of 1..63 ones: all 64 has no encoding
        (v6m? g)
         (cls @ 'addsub (-255 <= n <= 255)             ; v6-M ADDS/subs imm8 (imm3 3-addr / imm8 2-addr; negative flips)
