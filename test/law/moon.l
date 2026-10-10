@@ -1376,6 +1376,16 @@
                   (: f <l h <>l
                      (two? f && <f = 'mov && two? h && elem <h '(shl shr sar not zx1 zx2 zx4 sx1 sx2 sx4) &&
                       h 1 = f 1 && f 2 != 'sp ? 1 (twpair? >l))))
+   ; -- a64's pool reaches x11, x13 and x14: seven accumulators live around a loop seat there, not
+   ; in four callee-saved registers that owe a save each
+   plf (fnf 'f <>(cgt "extern long p[64]; long f(void) { long a = 0, b = 1, c = 2, d = 3, e = 4, g = 5, h = 6; for (long i = 0; i < 64; i++) { a += p[i]; b ^= a; c += b; d ^= c; e += d; g ^= e; h += g; } return a + b + c + d + e + g + h; } int main() { return 0; }" 'a64))
+   (plnames l) (? (atom? l) (elem l '(r11 r13 r14 r19 r20 r21 r22 r23 r24 r25 r26 r27 r28) ? [l] ())
+                  (foldl (a \ x \ sun9 a (plnames x)) () l))
+   (sun9 a b) (foldl (s \ x \ elem x s ? s (x . s)) a b)
+   pln (plnames (take 40 plf))
+   _ (test
+      (elem 'r11 pln)
+      (#(filter (r \ elem r '(r19 r20 r21 r22 r23 r24 r25 r26 r27 r28)) pln) <= 1))
    _ (test
       (elem '(lsr r6 r0 11) twf)
       (elem '(lsl r5 r0 8) twf)
