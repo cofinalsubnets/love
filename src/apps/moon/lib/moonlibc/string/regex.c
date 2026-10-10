@@ -15,7 +15,8 @@
  * under a UTF-8 LC_CTYPE at regcomp, pattern and text read by character, as love's re does:
  * a literal, `.`, a bracket and \w \s take a whole one and never a byte no character wears,
  * which matches only itself; classes and -i past ascii are the unicode floor's, -i gnulib's
- * case_folded_counterparts. */
+ * case_folded_counterparts. REG_GREP reads gnu grep's dialect, where posix refuses: a repeat
+ * with nothing to repeat is skipped (ERE) or ink (BRE), and a brace that opens no interval is ink. */
 
 enum { N_CHAR, N_ANY, N_SET, N_BOL, N_EOL, N_ASSERT, N_CAT, N_ALT, N_REP, N_GROUP, N_BREF, N_EMPTY };
 enum { A_WORDB, A_NWORDB, A_WBEG, A_WEND, A_BUFBEG, A_BUFEND };
@@ -32,7 +33,7 @@ typedef struct { int op, x, y; rset *set; } ins;
 typedef struct { ins *p; int np, nregs, bref, flags, u8; size_t nsub; } prog;
 
 typedef struct {
-  char const *s; int ext, icase, nl, err, ngroup, bref, u8; unsigned closed;
+  char const *s; int ext, icase, nl, grep, err, ngroup, bref, u8; unsigned closed;
   node **all; int nall, call;
   rset **sets; int nsets, csets; } parser;
 
@@ -216,6 +217,7 @@ static int interval(parser *P, int *mn, int *mx) {
     if (m < 0) m = 0; }
   else n = m;
   if (P->ext ? *s != '}' : (s[0] != '\\' || s[1] != '}')) {
+    if (P->grep && P->ext) return 0;
     P->err = strstr(s, P->ext ? "}" : "\\}") ? REG_BADBR : REG_EBRACE; return 0; }
   if (m < 0 || m > DUP_MAX || n > DUP_MAX || (n != REP_INF && n < m)) { P->err = REG_BADBR; return 0; }
   P->s = s + (P->ext ? 1 : 2);
@@ -271,10 +273,21 @@ static node *atom(parser *P, int depth, int *anchor) {
   if (c == '[') return bracket(P);
   return lit(P, c); }
 
+/* under REG_GREP, an ERE repeat with nothing to repeat -- at a branch's start or after an
+ * anchor -- is passed over, a whole interval with it, as gnu grep picks its lines; a brace that
+ * opens none is ink, and a group closing on a skip is unmatched */
+static int skip(parser *P, int depth) {
+  int c = (unsigned char) *P->s, mn, mx;
+  if (!P->grep || !(c == '*' || c == '+' || c == '?' || c == '{')) return 0;
+  char const *t = P->s++;
+  if (c == '{' && !interval(P, &mn, &mx)) { P->err = 0; P->s = t; return 0; }
+  if (*P->s == ')' && depth) P->err = REG_EPAREN;
+  return 1; }
+
 /* one branch: atoms and their repetitions, until | ) or the end */
 static node *cat(parser *P, int depth) {
   node *seq = mk(P, N_EMPTY), *eol = 0;
-  int start = 1, begin = 1;
+  int start = 1, begin = 1, lead = 1;   /* lead: nothing but anchors yet */
   while (!P->err) {
     char const *s = P->s;
     int c = (unsigned char) *s;
@@ -286,9 +299,15 @@ static node *cat(parser *P, int depth) {
     if (c == '^' && (P->ext || begin)) { P->s++; a = mk(P, N_BOL); anchor = 1; if (a) a->n = !begin; }
     else if (c == '$' && (P->ext || !s[1] || (s[1] == '\\' && (s[2] == ')' || s[2] == '|')))) {
       P->s++; a = mk(P, N_EOL); anchor = 1; }
-    else if (P->ext && (c == '*' || c == '+' || c == '?' || c == '{') && start) {
+    else if (P->ext && start && skip(P, depth)) continue;
+    else if (P->ext && (c == '*' || c == '+' || c == '?' || c == '{') && start && !P->grep) {
       P->err = REG_BADRPT; break; }
     else if (!P->ext && c == '*' && start) { P->s++; a = mk(P, N_CHAR); if (a) a->c = c; }
+    else if (!P->ext && c == '\\' && s[1] == '{' && start && P->grep) {
+      int mn, mx;                                  /* ink, but a bad interval past an atom is refused */
+      P->s += 2;
+      if (!lead && !interval(P, &mn, &mx)) break;
+      P->s = s + 2; a = lit(P, '{'); }
     else if (!P->ext && c == '\\' && s[1] == '{' && start) { P->err = REG_BADRPT; break; }
     else a = atom(P, depth, &anchor);
     if (P->err) break;
@@ -297,8 +316,9 @@ static node *cat(parser *P, int depth) {
       char const *t = P->s;
       int mn, mx;
       if (!P->ext && a && (a->t == N_BOL || a->t == N_ASSERT)) break;
+      if (P->ext && anchor && P->grep) { if (skip(P, depth)) continue; break; }
       if (P->ext && anchor && (*t == '*' || *t == '+' || *t == '?' || *t == '{')) { P->err = REG_BADRPT; break; }
-      if (!P->ext && reps && (*t == '*' || (t[0] == '\\' && t[1] == '{'))) { P->err = REG_BADRPT; break; }
+      if (!P->ext && reps && !P->grep && (*t == '*' || (t[0] == '\\' && t[1] == '{'))) { P->err = REG_BADRPT; break; }
       if (*t == '*') { P->s++; mn = 0; mx = REP_INF; }
       else if (P->ext && *t == '+') { P->s++; mn = 1; mx = REP_INF; }
       else if (P->ext && *t == '?') { P->s++; mn = 0; mx = 1; }
@@ -306,7 +326,7 @@ static node *cat(parser *P, int depth) {
       else if (!P->ext && t[0] == '\\' && t[1] == '?') { P->s += 2; mn = 0; mx = 1; }
       else if (P->ext ? *t == '{' : (t[0] == '\\' && t[1] == '{')) {
         P->s += P->ext ? 1 : 2;
-        if (!interval(P, &mn, &mx)) break; }
+        if (!interval(P, &mn, &mx)) { if (!P->err) P->s = t; break; } }
       else break;
       if (anchor && P->ext) { P->err = REG_BADRPT; break; }
       node *r = mk(P, N_REP);
@@ -317,6 +337,7 @@ static node *cat(parser *P, int depth) {
     eol = a && a->t == N_EOL ? a : 0;
     seq = two(P, N_CAT, seq, a);
     start = !P->ext && a && (a->t == N_BOL || a->t == N_ASSERT);
+    lead = lead && start;
     begin = 0; }
   return seq; }
 
@@ -407,7 +428,7 @@ static void freeparse(parser *P, int keepsets) {
 
 int regcomp(regex_t *re, char const *pat, int flags) {
   parser P = {0};
-  P.s = pat; P.ext = flags & REG_EXTENDED; P.icase = flags & REG_ICASE; P.nl = flags & REG_NEWLINE;
+  P.s = pat; P.ext = flags & REG_EXTENDED; P.icase = flags & REG_ICASE; P.nl = flags & REG_NEWLINE; P.grep = flags & REG_GREP;
   P.u8 = __love_utf8;
   re->re_prog = 0; re->re_nsub = 0;
   node *root = alt(&P, 0);
