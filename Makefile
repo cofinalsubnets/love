@@ -140,7 +140,7 @@ $(ho)/liblove.a: $(h_o)
 # src/love/user/main0.c, which host_c holds back because only this link has a use for it.
 love0_o = $(patsubst $(S)/%.c,out/0/%.o,$(filter-out $(S)/love/cats.c,$(host_c)) $(S)/love/user/main0.c $(S)/love/user/nokern.c $(S)/love/noblob.c $(love_c))
 out/0/love/user/main0.o: out/lib/boot0.h
-out/0/love/cb.o: src/love/quay/quay.c src/love/quay/nif.c src/love/quay/quay.h src/love/quay/cp437.h src/love/quay/cpwidth.h src/love/quay/cpemoji.h src/love/quay/paint.c src/love/quay/cga_8x8.c src/love/quay/cleat_8x16.c
+out/0/love/cb.o: src/love/quay/quay.c src/love/quay/nif.c src/love/quay/quay.h src/love/quay/cp437.h src/love/quay/paint.c src/love/quay/cga_8x8.c src/love/quay/cleat_8x16.c
 boot_cc = $(CCACHE) $(CC) $(cflags) -fPIE -DLove0 -Dtco=0 -Ddata_section=0 -DLvVersion='"$(love_base)+bootstrap"' -I. -Isrc/love -Isrc/inle -Iout/lib
 .PHONY: force_love0cc
 force_love0cc: ;
@@ -169,7 +169,7 @@ $(ho)/o/love/main.o $(ho)/o/love/lib/ustar.o $(ho)/o/love/lib/srctree.o: $(S)/lo
 $(ho)/o/love/main.o $(ho)/o/love/lib/srctree.o $(ho)/o/love/lovefs.o $(ho)/o/love/posix.o \
   $(ho)/o/love/src.o: $(S)/love/lib/srctree.h
 # src/love/cb.c rides the src/love/quay sources by unity include -- recompile when they move.
-$(ho)/o/love/cb.o: src/love/quay/quay.c src/love/quay/nif.c src/love/quay/quay.h src/love/quay/cp437.h src/love/quay/cpwidth.h src/love/quay/cpemoji.h src/love/quay/paint.c src/love/quay/cga_8x8.c src/love/quay/cleat_8x16.c
+$(ho)/o/love/cb.o: src/love/quay/quay.c src/love/quay/nif.c src/love/quay/quay.h src/love/quay/cp437.h src/love/quay/paint.c src/love/quay/cga_8x8.c src/love/quay/cleat_8x16.c
 
 moon0 = $(love0) wake out/mooncc0.image mooncc $(GCDBG)
 moon0_dep = out/mooncc0.image
@@ -240,7 +240,7 @@ $$($(1)_host_o) $$($(1)_seat_o): $$($(2))/%.o: $$(S)/%.c $$(love_h) $$(moon0_dep
 	@$$($(3)) -D tco=$$(tco) -I$$(ho) -I. -Isrc/love -Isrc/inle -Iout/lib -c $$< $$@
 $$($(2))/love/main.o: out/lib/distlist.h
 $$($(2))/love/cats.o: out/lib/baked.h
-$$($(2))/love/cb.o: src/love/quay/quay.c src/love/quay/nif.c src/love/quay/quay.h src/love/quay/cp437.h src/love/quay/cpwidth.h src/love/quay/cpemoji.h src/love/quay/paint.c src/love/quay/cga_8x8.c src/love/quay/cleat_8x16.c
+$$($(2))/love/cb.o: src/love/quay/quay.c src/love/quay/nif.c src/love/quay/quay.h src/love/quay/cp437.h src/love/quay/paint.c src/love/quay/cga_8x8.c src/love/quay/cleat_8x16.c
 $$($(1)_math_o): $$($(2))/moonlibc/%.o: src/apps/moon/lib/moonlibc/%.c $$(moon0_dep)
 	@echo 'MOON	'$$@
 	@mkdir -p $$(dir $$@)
@@ -655,7 +655,7 @@ kcc = $(mooncc) $(kcppflags) -t $a
 
 kernel: $(k_elf)
 
-$(k_odir)/love/cb.o: src/love/quay/quay.c src/love/quay/nif.c src/love/quay/quay.h src/love/quay/cp437.h src/love/quay/cpwidth.h src/love/quay/cpemoji.h src/love/quay/paint.c src/love/quay/cga_8x8.c src/love/quay/cleat_8x16.c
+$(k_odir)/love/cb.o: src/love/quay/quay.c src/love/quay/nif.c src/love/quay/quay.h src/love/quay/cp437.h src/love/quay/paint.c src/love/quay/cga_8x8.c src/love/quay/cleat_8x16.c
 $(k_odir)/moonlibc.o: $(rt_a) $(rt_slice) src/tools/mkrt.l $(mdep)
 	@echo 'HOLO	'$@
 	@mkdir -p "$(dir $@)"
