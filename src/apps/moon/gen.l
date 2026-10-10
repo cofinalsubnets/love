@@ -9421,8 +9421,10 @@
            (attempt 1))
        n0 (peep g 'n 0) strs0 (g 'strs) sts0 (g 'statics) fas0 (g 'fasecs)   ; snapshot the accumulators for ubuild's retry
        ; no pool on t32 (r4-r11 callee-saved, r0-r3/r12 scratch); riscv pools t0..t3 then a5..a7, as
-       ; a64 pools x5..x7 -- an arg register is dead once spilled or homed
-       tpool (? (abl? g 'tpool) () (t32? g) () (rv64? g) '(r8 r9 r10 r11 r5 r6 r7) opool)
+       ; a64 pools x5..x7 -- an arg register is dead once spilled or homed. a64 adds x11, x13, x14,
+       ; caller-saved and never an argument (x12 stays the pair and float-word scratch)
+       tpool (? (abl? g 'tpool) () (t32? g) () (rv64? g) '(r8 r9 r10 r11 r5 r6 r7)
+                (a64? g && !(abl? g 'a64pool)) (opool + '(r11 r13 r14)) opool)
        _ (pins g 'pool0 tpool 'pool tpool)
        ; a memory return: the hidden pointer (gp 0) saves to its own slot, params start at gp 1; the ret lane reads g 'sret
        srt (two? sig ? <sig 'long)
