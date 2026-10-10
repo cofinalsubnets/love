@@ -341,6 +341,12 @@
          "b00740d1040240f9" + "10a085d23026a0f23000108b000240f9")
         (holo-hex 'a64 '((ld r0 fp -1000) (st sp 40000 r1) (ldu1 r2 fp -300) (ld r3 r1 -5000000)
                          (ld r4 fp -4096) (ld r0 r1 20000000))))
+   ;; -- ..and the three-register twins, a source apart from the destination: lsl/lsr/asr, mvn, the
+   ;; extends (uxt* as 64-bit ubfx, the same bits). llvm-mc's words --
+   _ (chk-eq "a64.twins"
+        "20dc78d362fc4bd3a4fc7f93e60327aa281d40d36a3d40d3ac7d40d3ee1d4093603e4093b47e4093"
+        (holo-hex 'a64 '((lsl r0 r1 8) (lsr r2 r3 11) (asr r4 r5 63) (mvn r6 r7) (uxtb r8 r9)
+                         (uxth r10 r11) (uxtw r12 r13) (sxtb r14 r15) (sxth r0 r19) (sxtw r20 r21))))
    fscaught {} _ (pin fscaught 0 0)
    _ (hear (a \ b \ a = 'far-base-sp ? (pin fscaught 0 1, ()) (welp a b)))
    _ (holo-bytes 'a64 '((ld r0 sp 20000000)))
