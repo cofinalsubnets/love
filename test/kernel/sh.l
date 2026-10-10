@@ -29,12 +29,13 @@
 
 ; no fork aboard: a compound stage -- a function, a ( ) -- runs as a task on a copy of the
 ; shell's state, so it runs in a pipe and in the background, and what it sets stays its own
-(: _  (sh-line shS "lush_kf() { echo fn; }; lush_kf | kore cat > /tmp/l-sh-fnp")
-   s1 (rd "/tmp/l-sh-fnp")
+(: (lush-krd p) (open p "r" @ q (port? q ? (slurp q @ s (close q, s))))   ; rd is the form above's alone
+   _  (sh-line shS "lush_kf() { echo fn; }; lush_kf | kore cat > /tmp/l-sh-fnp")
+   s1 (lush-krd "/tmp/l-sh-fnp")
    _  (sh-line shS "lush_kv=p; ( lush_kv=s ); echo $lush_kv > /tmp/l-sh-sub")
-   s2 (rd "/tmp/l-sh-sub")
+   s2 (lush-krd "/tmp/l-sh-sub")
    _  (sh-line shS "( lush_kv=bg; echo $lush_kv > /tmp/l-sh-bg ) & wait; echo $lush_kv >> /tmp/l-sh-bg")
-   s3 (rd "/tmp/l-sh-bg")
+   s3 (lush-krd "/tmp/l-sh-bg")
    ; ..and two shells aboard are two states: one's positionals are not the other's
    ka (sh-new 0) kb (sh-new 0)
    _  (sh-line ka "set -- one") _ (sh-line kb "set -- two three")
