@@ -4055,6 +4055,20 @@
                  (ctl? f && d != 0) ()
                  (go >l f F d ((F ? (reb f F d) f) . acc)))))
        (!(a64? g) || abl? g 'a64sp || g 'hasasm ? fs (go fs () () 0 () @ r (two? r ? r fs))))
+   ; a64's three-register twins: a copy the next form only reshapes in place is one form,
+   ; (mov d s) (shl d c) = (lsl d s c), and so for shr, sar, the extends and not. never an sp
+   ; source: ubfm and orn read 31 as xzr. last, with a64sp
+   a64tw {'shl 'lsl 'shr 'lsr 'sar 'asr 'not 'mvn 'zx1 'uxtb 'zx2 'uxth 'zx4 'uxtw 'sx1 'sxtb 'sx2 'sxth 'sx4 'sxtw}
+   (a64mv g fs)
+    (? (!(a64? g) || abl? g 'a64mv) fs
+       (: (go l acc)
+           (? !(two? l) (rev acc)
+              (: f <l h (two? >l ? <>l ())
+                 tw (two? h ? (peep a64tw <h ()) ())
+                 (? (two? f && <f = 'mov && #f = 3 && tw && h 1 = f 1 && atom? (f 2) && !(charm? (f 2)) && f 2 != 'sp)
+                    (go >>l (([tw (h 1) (f 2)] + >>h) . acc))
+                    (go >l (f . acc)))))
+          (go fs ())))
    ; the x64 frame prologue at fs's head (unframe strips it; repack requires it)
    (pro4? fs) (epim? >fs pro4)
    ; riscv's frame: a body that names no sp, fp or lr and makes no call (wasm: may call) keeps nothing in it, so the
@@ -9446,7 +9460,7 @@
                      (cfoldir g irx))))))))))))))))
        ; the copy fold again after repack: a slot copied from a seat repack just minted forwards from it now
        (post irx) (deadst g (deaddef g (copyprop g (stld g (copyprop g (repack g irx))))))
-       (bad? irf ? irf (dp 'final (a64sp g (bprot g (frrec g (swrap g (tailarm g (jmpm g (csdrop g (cskeep g (unhome g (jr0 g (rvunframe g (unframe g (hz4 g (laacse g (coal g (copyprop g (recse g (wpair g (dp 'post (post (dp 'deadlab (deadlabk (cg-refs (g 'fasecs) {}) (swp irf))))))))))))))))))))))))))
+       (bad? irf ? irf (dp 'final (a64sp g (a64mv g (bprot g (frrec g (swrap g (tailarm g (jmpm g (csdrop g (cskeep g (unhome g (jr0 g (rvunframe g (unframe g (hz4 g (laacse g (coal g (copyprop g (recse g (wpair g (dp 'post (post (dp 'deadlab (deadlabk (cg-refs (g 'fasecs) {}) (swp irf)))))))))))))))))))))))))))
 
    ; the data tail -> (dataforms nifforms imgforms extras bssforms rodataforms) | 'bad, extras ((name forms
    ; ro?) ..) per other named section in declaration order. love_nifs packs for the linker's __start_/__stop_

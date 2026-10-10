@@ -192,14 +192,16 @@
    (a64-st1 base off s) (a64-mem-sz 0x38000000 0x39000000 1 s base off)   ; strb/sturb Wt
    (a64-st2 base off s) (a64-mem-sz 0x78000000 0x79000000 2 s base off)   ; strh/sturh Wt
    (a64-st4 base off s) (a64-mem-sz 0xB8000000 0xB9000000 4 s base off)   ; str/stur Wt
-   (a64-sx w d)                                             ; sbfm: sxtb/sxth/sxtw Xd, Wd
-      (: dn (rn d)
+   (a64-sx w d) (a64-sxs w d d)
+   (a64-sxs w d s)                                          ; sbfm: sxtb/sxth/sxtw Xd, Ws
+      (: dn (rn d) sn (rn s)
          base (? (w = 1) 0x93401C00 (w = 2) 0x93403C00 0x93407C00)
-         (le32 (base | (dn << 5 | dn))))
-   (a64-zx w d)                                             ; ubfm: uxtb/uxth Xd, Xd (w=4 clears bits 32..63)
-      (: dn (rn d)
+         (le32 (base | (sn << 5 | dn))))
+   (a64-zx w d) (a64-zxs w d d)
+   (a64-zxs w d s)                                          ; ubfm: uxtb/uxth Xd, Xs (w=4 clears bits 32..63)
+      (: dn (rn d) sn (rn s)
          base (? (w = 1) 0xD3401C00 (w = 2) 0xD3403C00 0xD3407C00)
-         (le32 (base | (dn << 5 | dn))))
+         (le32 (base | (sn << 5 | dn))))
    (a64-shiftv op d c)                                      ; lslv/lsrv/asrv Xd, Xd, Xc -- count pinned to r1 (the IR contract)
       (: _ (reg-eq c 'r1 ? 0 (scare 'shiftv-count-not-r1 [op d c]))
          _ (reg-eq d 'r1 ? (scare 'shiftv-dst-is-r1 [op d c]) 0)
@@ -216,7 +218,8 @@
    a64-frpop  (le32 0xA8C27BFD)                           ; ldp x29, x30, [sp], #32
 
    (a64-neg d) (rn d @ dt (le32 (0xCB0003E0 | (dt << 16 | dt))))   ; sub d, xzr, d
-   (a64-not d) (rn d @ dt (le32 (0xAA2003E0 | (dt << 16 | dt))))   ; orn d, xzr, d (mvn)
+   (a64-not d) (a64-mvn d d)
+   (a64-mvn d s) (: dt (rn d) st (rn s) (le32 (0xAA2003E0 | (st << 16 | dt))))   ; orn d, xzr, s (mvn)
    (a64-inc d) (a64-addsub-imm 'add d d 1)
    (a64-dec d) (a64-addsub-imm 'sub d d 1)
 
@@ -289,11 +292,15 @@
          (le32 (0x9A9F07E0 | ((cc ^ 1) << 12 | dn))))
    ;; shifts/rotates by an immediate (the tag math -- sar/shr by 1; the map hash's rol by 32). LSL/lsr
    ;; are ubfm, asr is sbfm, ror is extr Xd,Xn,Xn,#c; rol #c = ror #(64-c) (a64 has no ROL).
+   ;; lsl/lsr/asr are the three-register twins (d s c): mooncc's fold of a mov into the shift after it
+   (a64-shs op d s c)
+      (: dn (rn d) sn (rn s)
+         (? (op = 'shl) (le32 (0xD3400000 | ((64 - c & 63) << 16 | (63 - c << 10 | (sn << 5 | dn)))))   ; lsl = ubfm immr=(-c)&63, imms=63-c
+            (op = 'shr) (le32 (0xD3400000 | (c << 16 | (63 << 10 | (sn << 5 | dn)))))                        ; lsr = ubfm immr=c, imms=63
+            (le32 (0x93400000 | (c << 16 | (63 << 10 | (sn << 5 | dn)))))))                                 ; asr = sbfm immr=c, imms=63
    (a64-shift op d c)
       (rn d @ dn
-         (? (op = 'shl) (le32 (0xD3400000 | ((64 - c & 63) << 16 | (63 - c << 10 | (dn << 5 | dn)))))   ; lsl = ubfm immr=(-c)&63, imms=63-c
-            (op = 'shr) (le32 (0xD3400000 | (c << 16 | (63 << 10 | (dn << 5 | dn)))))                        ; lsr = ubfm immr=c, imms=63
-            (op = 'sar) (le32 (0x93400000 | (c << 16 | (63 << 10 | (dn << 5 | dn)))))                        ; asr = sbfm immr=c, imms=63
+         (? (elem op '(shl shr sar)) (a64-shs op d d c)
             (op = 'ror) (le32 (0x93C00000 | (dn << 16 | (c << 10 | (dn << 5 | dn)))))                        ; ror = extr Rm=Rn=d, imms=c
             (op = 'rol) (le32 (0x93C00000 | (dn << 16 | ((64 - c & 63) << 10 | (dn << 5 | dn)))))          ; rol #c = ror #(64-c)
             (op = 'ror4) (le32 (0x13800000 | (dn << 16 | (c << 10 | (dn << 5 | dn)))))                       ; the W form (sf=0 N=0): writes zero-extend
@@ -667,6 +674,9 @@
           ('shlv . a64-shiftv 'shlv) ('shrv . a64-shiftv 'shrv) ('sarv . a64-shiftv 'sarv)
           ('rorv . a64-shiftv 'rorv) ('rorv4 . a64-shiftv 'rorv4)
           ('shl . a64-shift 'shl) ('shr . a64-shift 'shr) ('sar . a64-shift 'sar)
+          ('lsl . a64-shs 'shl) ('lsr . a64-shs 'shr) ('asr . a64-shs 'sar) ('mvn . a64-mvn)
+          ('uxtb . a64-zxs 1) ('uxth . a64-zxs 2) ('uxtw . a64-zxs 4)
+          ('sxtb . a64-sxs 1) ('sxth . a64-sxs 2) ('sxtw . a64-sxs 4)
           ('rol . a64-shift 'rol) ('ror . a64-shift 'ror) ('ror4 . a64-shift 'ror4)
           ('lea . a64-lea) ('lean . a64-lea)           ; a consumed lea (x64 tells them apart for the escape gate)
           ('push . a64-push) ('pop . a64-pop) ('frpush . a64-frpush) ('frpop . a64-frpop) ('cbr . a64-cbr) ('tbr . a64-tbr) ('afix . a64-afix)
