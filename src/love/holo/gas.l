@@ -1213,15 +1213,17 @@
                   (: a <l b <>l
                      (? ((b 0 = 61 && !(xa-has? a 61)) || a (#a - 1) = 61) (eqj ((a + b) . >>l))
                         (a . eqj >l))))
+       ; an argument that is one quoted string passes its inside (`"dmb sy"` -> dmb sy)
+       (unq a) (: n #a (n >= 2 && a 0 = 34 && a (n - 1) = 34 && !(xa-has? (snip a 1 (n - 1)) 34) ? (snip a 1 (n - 1)) a))
        (call m rest)
         (: ps <m
-           as (0 = #(xa-trim rest) ? () (margs rest))
+           as (map unq (0 = #(xa-trim rest) ? () (margs rest)))
            kw (filter (a \ xa-has? a 61) as) po (filter (a \ !(xa-has? a 61)) as)
            (kv nm) (filter (a \ xa-trim (snip a 0 (xa-idx a 61)) = nm) kw)
            (bind ps po acc)
             (atom? ps ? acc
                (: p <ps k (kv <p)
-                  (two? k ? (bind >ps po ([<p (xa-trim (snip <k (1 + xa-idx <k 61) #<k))] . acc))
+                  (two? k ? (bind >ps po ([<p (unq (xa-trim (snip <k (1 + xa-idx <k 61) #<k)))] . acc))
                      (bind >ps >po ([<p (two? po && <po != "" ? <po <>p)] . acc)))))
            k (peep cnt 'n 0)
            _ (pin cnt 'n (k + 1))
