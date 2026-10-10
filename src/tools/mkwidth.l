@@ -1,11 +1,12 @@
-; src/tools/mkwidth.l -- the column-width table of post.l's 'text module, off the unicode data.
-;   love src/tools/mkwidth.l UCD-DIR
+; src/tools/mkwidth.l -- the column-width table of the unicode floor (moonlibc's ctype/ucd.c),
+; off the unicode data.
+;   love src/tools/mkwidth.l UCD-DIR > src/apps/moon/lib/moonlibc/ctype/ucdwidth.h
 ; UCD-DIR holds EastAsianWidth.txt UnicodeData.txt HangulSyllableType.txt and
 ; DerivedCoreProperties.txt, as https://www.unicode.org/Public/VERSION/ucd/ serves them.
 ; the rules are glibc's (localedata/unicode-gen/utf8_gen.py),
 ; the ones a host terminal keeps: W and F are 2; Mn, Me, NSM, conjoining jamo V and T and
 ; Default_Ignorable_Code_Point are 0; U+00AD stays 1; U+115F, U+3248..U+324F and
-; U+4DC0..U+4DFF are 2; the rest is 1. prints the tray, each entry cp * 4 + w opening a
+; U+4DC0..U+4DFF are 2; the rest is 1. prints the array, each entry cp * 4 + w opening a
 ; run of width w that lasts to the next entry.
 (borrow 'posix)
 (: (rd p) (uread p @ [1 s] (s + "") (die ("cannot read " + p)))
@@ -41,9 +42,11 @@
           pw1 (gap ? 1 pw)
           (go >ks k w (w = pw1 ? acc1 (k * 4 + w . acc1)))))
    runs (go (sort (keys t)) -1 1 [1])
-   ; a line of entries at a time, ninety-odd columns wide
-   (lay l ln) (atom? l ? (puts (ln + ")\n"))
-                 (show <l @ s
-                    (#ln + #s > 92 ? (puts (ln + "\n"), lay l "     ")
-                       (lay >l (ln + (ln (#ln - 1) = 32 || ln (#ln - 1) = 40 ? "" " ") + s)))))
-   (puts ("; " + show #runs + " runs\n"), lay runs "   @("))
+   ; a C array, ninety-odd columns a line
+   (clay l ln) (atom? l ? (puts (ln + " };\n"))
+                  (show <l + (two? >l ? "," "") @ e
+                     (#ln + #e > 92 ? (puts (ln + "\n"), clay l "  ") (clay >l (ln + " " + e)))))
+   (arr ty nm l) (clay l ("static " + ty + " const " + nm + "[" + show #l + "] = {"))
+   (puts "// ucdwidth.h -- the column widths, each entry cp * 4 + w opening a run of width w. generated\n",
+    puts "//   by src/tools/mkwidth.l off the unicode data, glibc's rules; do not edit\n",
+    arr "uint32_t" "uc_width" runs))
