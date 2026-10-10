@@ -1188,7 +1188,7 @@
                                    (two? a ? (go j (acc + <>a)) (go (i + 1) (acc + string c))))
                                (go (i + 1) (acc + string c)))))
            (go 0 ""))
-       ; a call's lines: keyword arguments by name, the rest in order, a default else
+       ; a call's lines: keyword arguments by name, the rest in order, a default for one empty or left off
        ; a call's arguments: split at commas, and at a space with no operator beside it
        ; (`m x0 8 1f`, but `m (a) | (b)` is one), outside brackets and quotes
        (margs s)
@@ -1208,6 +1208,11 @@
                       (go j j d q (xa-trim (snip s st i) . acc))))
                (go (i + 1) st d q acc))
            (go 0 (sk 0) 0 0 ()))
+       ; a parameter's words, its `=` spaced or not: `regsize = 64` is one, `regsize=64`
+       (eqj l) (? (atom? l || atom? >l) l
+                  (: a <l b <>l
+                     (? ((b 0 = 61 && !(xa-has? a 61)) || a (#a - 1) = 61) (eqj ((a + b) . >>l))
+                        (a . eqj >l))))
        (call m rest)
         (: ps <m
            as (0 = #(xa-trim rest) ? () (margs rest))
@@ -1217,7 +1222,7 @@
             (atom? ps ? acc
                (: p <ps k (kv <p)
                   (two? k ? (bind >ps po ([<p (xa-trim (snip <k (1 + xa-idx <k 61) #<k))] . acc))
-                     (bind >ps >po ([<p (two? po ? <po <>p)] . acc)))))
+                     (bind >ps >po ([<p (two? po && <po != "" ? <po <>p)] . acc)))))
            k (peep cnt 'n 0)
            _ (pin cnt 'n (k + 1))
            args (["@" (show k)] . bind ps po ())
@@ -1227,7 +1232,7 @@
            (: s <l t (xa-trim s) w (dname s) r (xa-rest t)
               (? (w = ".macro")
                   (: b (grab >l '(".macro") ".endm")
-                     ws (filter (x \ 0 < #x) (xa-split (string (map (c \ (c = 44 ? 32 c)) (chars r))) 32))
+                     ws (foldl (\ a f (a + eqj (filter (x \ 0 < #x) (xa-split f 32)))) () (xa-split r 44))
                      specs (map (x \ x @ (a + ":" + _) [a ""] (a + "=" + b) [a b] [x ""]) >ws)
                      (pin mac <ws [specs <b],
                       go <>b acc))
