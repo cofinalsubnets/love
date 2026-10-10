@@ -25,6 +25,7 @@
 #include <sys/ioctl.h>  // ioctl TIOCSCTTY TIOC[GS]WINSZ struct winsize
 #include <termios.h>    // tcgetattr tcsetattr ECHO TCSANOW (ptyecho, raw)
 #include <dirent.h>     // opendir/readdir/closedir
+#include <fnmatch.h>    // fnmatch (glob's pattern law)
 #include <sys/mman.h>       // madvise (the spawn guard)
 #include <sys/resource.h>   // getrusage, RUSAGE_SELF/CHILDREN (the cpu clocks)
 #include <time.h>           // clock_gettime, for love_clock
@@ -991,6 +992,12 @@ static love_inline word host_posix_unlink(struct g *g, word p) { return path1(g,
 
 LvmWord1(posix_unlink)
 
+// (fnmatch pat s) -> 1 | 0: the libc's pattern law, no flags; a nul inside either never matches
+static love_inline word host_fnmatch(struct g *g, word p, word t) {
+ (void) g; char const *a = str_c(p), *b = str_c(t);
+ return putcharm(a && b && !fnmatch(a, b, 0)); }
+LvmWord2(fnmatch)
+
 // (setenv name val) -> () | a nom | 'badarg misuse; a non-string val unsets the name.
 // (environ _)       -> the environment as a list of "name=value" strings (the raw POSIX
 //                      shape -- split at the first '=' in love; no order promised).
@@ -1072,6 +1079,7 @@ LvDef("sigclear", sigclear, 1, "posix");
 LvDef("sigign?", sigignp, 1, "posix");
 LvDef("wait", waitpid, 1, NULL);
 LvDef("chdir", chdir, 1, "posix");
+LvDef("fnmatch", fnmatch, 2, "posix");
 LvDef("cwd", cwd, 1, "posix");
 LvDef("selfpath", selfpath, 1, "posix");
 LvDef("uname", posix_uname, 1, "posix");
