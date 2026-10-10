@@ -1342,7 +1342,16 @@
                                (<f = 'label) (back >l n)
                                'bad)))
            at (back (two? r ? <>>r) 0)
-           (<v || gbad? at || <>>v < at ? (scare 'gas-org e) (raw (map (i \ 0) ^(<>>v - at)))))
+           (? <v (scare 'gas-org e)
+              (gbad? at) (string? s ? (orgx e) (scare 'gas-org e))
+              (<>>v < at) (scare 'gas-org e)
+              (raw (map (i \ 0) ^(<>>v - at)))))
+       ; ..a label behind instructions: a label here, and the pad up to the target once layout holds
+       (orgx e)
+        (: k (peep st 'orgs 0) here (pfx + ".Lorg" + show k)
+           (pin st 'orgs (k + 1),
+            emit [['label (name here)]
+                  ['skipx (['ch 40] . map (t \ (<t = 'lref ? ['sym (rl <>t <>>t)] t)) (gtoks e) + [['ch 41] ['ch 45] ['sym here]]) 0 0 'org]]))
        (dir mn rest)
         (: xs (xa-oplist rest) w (gf-width tgt mn)
            (? (0 < w)
