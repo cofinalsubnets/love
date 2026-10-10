@@ -633,6 +633,17 @@
    ;; a macro call's arguments split at a space as at a comma, unless an operator sits beside it
    _ (chk-eq "gas.macro.space" '("add x0, x1, #8" "add x0, x1, #(1 + 2)" "add x0, x1, #(1) | (2)" "add x0, x1, #3" "add x0, x1, #1 + 2")
         (gf-expand 'a64 (gf-lines 'a64 ".macro m a, b, c\nadd \\a, \\b, \\c\n.endm\nm x0 x1 #8\nm x0, x1, #(1 + 2)\nm x0 x1 #(1) | (2)\nm x0, x1 , #3\nm x0 x1 #1 + 2")))
+   ;; a parameter's default with its `=` spaced or not, taken for an argument left off or empty,
+   ;; as llvm-mc expands them (entry.S's `regsize = 64`)
+   _ (chk-eq "gas.macro.default" '("mov x1, x2" "mov x3, #1" "mov w0, w0" "mov x3, #2" "mov w0, w0" "mov x3, #3" "mov x0, #1" "mov x1, #2" "mov x2, #3" "mov x3, #4" "mov x0, #12" "mov x0, #5" "")
+        (gf-expand 'a64 (gf-lines 'a64 ".macro m, el, regsize = 64\n.if \\regsize == 32\nmov w0, w0\n.else\nmov x1, x2\n.endif\nmov x3, #\\el\n.endm\nm 1\nm 2, 32\nm 3, regsize=32\n.macro n a=1, b =2, c= 3, d\nmov x0, #\\a\nmov x1, #\\b\nmov x2, #\\c\nmov x3, #\\d\n.endm\nn , , , 4\n.macro p a=, b\nmov x0, #1\\a\\b\n.endm\np , 2\n.macro q a = 5\nmov x0, #\\a\n.endm\nq\n")))
+   ;; .org to a label with instructions between (entry.S's `.org .Lventry_start\@ + 128`): zeros
+   ;; up to it once layout holds, as llvm-mc lays them; one behind where it stands refuses
+   _ (chk-eq "gas.a64.org" "((((\".text\" 1 6 ((label a) (nop) (jmp a) (mov r0 r1) (label .Lorg0) (raw (0 0 0 0)) (nop)))) () ()) (((\".text\" 1 6 ((label .Ls0) (nop) (jmp .Ls0) (label .Lorg0) (raw (0 0 0 0 0 0 0 0)) (label .Ls1) (nop) (jmp .Ls1) (label .Lorg1) (raw (0 0 0 0 0 0 0 0))))) () ()) gas-org-back)"
+        (show (map (x \ trap (y \ gas-top 'a64 y) x (\ a b a))
+                   ["a: nop\n b a\n mov x0, x1\n .org a + 16\n nop\n"
+                    ".macro v\n.Ls\\@: nop\n b .Ls\\@\n .org .Ls\\@ + 16\n.endm\n v\n v\n"
+                    "a: nop\n nop\n nop\n .org a + 4\n nop\n"])))
    ;; the bitfield aliases as llvm-mc lays them; a field past the register refuses
    _ (chk-eq "gas.a64.bfa" "21ac68d3201c031320fc40b3201c7cd320000113201470b320140033e00f78b3e3030133"
         (holo-hex 'a64 (gas-text 'a64 "ubfx x1, x1, #40, #4\n sbfx w0, w1, #3, #5\n bfxil x0, x1, #0, #64\n ubfiz x0, x1, #4, #8\n sbfiz w0, w1, #31, #1\n bfi x0, x1, #16, #6\n bfi w0, w1, #0, #6\n bfc x0, #8, #4\n bfc w3, #31, #1")))

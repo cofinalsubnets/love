@@ -1206,6 +1206,14 @@ below, 251 of those 332 re-run so far: **145 compile**, and the rest refuse by n
   cache.S compiles, its 204 words the kernel's object's but one: a `b` to `dcache_clean_poc`, a
   global `.set` to a label in the section, which holo resolves where llvm-mc leaves a JUMP26 --
   the same word once linked. entry-fpsimd compiles too, word for word.
+- **a macro parameter's default with its `=` spaced** (`.macro kernel_entry, el, regsize = 64`):
+  the list had split at every space, so `=` and `64` read as parameters and `\regsize` laid
+  nothing. An argument passed empty (`n , , , 4`) now takes its default as well, where holo laid
+  nothing; both are llvm-mc's expansions.
+- **`.org` to a label with instructions between** (entry.S's `.org .Lventry_start\@ + 128`, each
+  vector padded to its slot): a label where it stands, and zeros up to the target once layout
+  holds, as llvm-mc lays them; a target behind it refuses (`gas-org-back`). It had refused unless
+  only data lay between.
 
 Still open on this side (g-21's probes):
 
@@ -1217,8 +1225,9 @@ Still open on this side (g-21's probes):
 - where the re-run stops now, on this side: a register variable pinned to `x0` (4). Of the 24
   units that stopped on the `.S` extable macro's `\insn`, 19 compile, and the rest stop on: a
   vector lane `v4.d[0]`, a linker script's symbol as a `.long` (`_kernel_size_le_lo32`),
-  `.incbin`, `@note` and a `.set` alias of a function (`__memmove`). Past them, entry.S stops on a
-  macro parameter's default spelled `regsize = 64` and proc.S on a binary literal `0b01`. The exclusive pairs (`ldxp`/`stxp` and kin) have no lane yet.
+  `.incbin`, `@note` and a `.set` alias of a function (`__memmove`). Past them, entry.S stops on
+  a quoted macro argument (`alternative_insn nop, "dmb sy", 90`), and proc.S on a binary literal
+  `0b01`. The exclusive pairs (`ldxp`/`stxp` and kin) have no lane yet.
   The rest is part 1's front end and gen (`linux/skbuff.h`, an undeclared `branch`,
   `__attribute__((mode))`).
 - defconfig, g-21's units once refused on a Q form or a register pinned twice: of a sample of
