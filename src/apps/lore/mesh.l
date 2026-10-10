@@ -5,7 +5,7 @@
 ; the world is lore's: x right, y up, z ahead when 'th is 0, 'th turning toward x.
 (module (mesh mesh mesh-join mesh-move mesh-quad mesh-box mesh-grid mesh-lathe mesh-sheet mesh-normals
          mesh-keep mesh-keep-all mesh-pack mesh-bake mesh-bake-sun mesh-sun-view mesh-sun-map mesh-open
-         mesh-lamp mesh-lamps mesh-shine mesh-glow mesh-pic mesh-tex mesh-rgba
+         mesh-lamp mesh-lamps mesh-lamps! mesh-shine mesh-glow mesh-pic mesh-tex mesh-rgba
          mesh-view mesh-eye mesh-dirs mesh-spot mesh-sky mesh-haze mesh-frame mesh-flat
          mesh-cells mesh-kitty mesh-kitty? mesh-kitty-del)
 (borrow 'view)
@@ -122,15 +122,17 @@
  ; a shadow lights by
  (mesh-open c) [1.0 (0.6 + 0.4 * c 6) ()]
  ; --- lamps, for a scene lit from within: {'at points 'c [r g b] 'r reach}, and 'n a
- ;     facing, 'soft a size and 'keep a mask of places, all optional. its light c at a
- ;     metre, shared among its points, falls off by the square of the distance and to
- ;     none at its reach; a facing lamp's mostly forward. no lamp casts a shadow: (keep X
- ;     Y Z) says where it reaches, 1 or 0, so it does not light the far side of a wall ---
+ ;     facing, 'soft a size, 'wrap and 'keep a mask of places, all optional. its light c
+ ;     at a metre, shared among its points, falls off by the square of the distance and
+ ;     to none at its reach; a facing lamp's mostly forward. 'wrap w lets it round onto a
+ ;     surface it only grazes, for the light a glow scatters and the room throws back.
+ ;     no lamp casts a shadow: (keep X Y Z) says where it reaches, 1 or 0, so it does not
+ ;     light the far side of a wall ---
  ; a lamp's light on each vertex of a packed mesh: [r g b] trays, before the surface's colour
  (mesh-lamp pk lp) (: c (pk 'cols) X (c 0) Y (c 1) Z (c 2) ps (lp 'at) r (lp 'r) fn (peep lp 'n ())
-   s2 (sq (peep lp 'soft 0.1))
+   s2 (sq (peep lp 'soft 0.1)) wr (peep lp 'wrap 0.0)
    (one p) (: lx (p 0 - X) ly (p 1 - Y) lz (p 2 - Z) d2 (lx * lx + ly * ly + lz * lz) d (sqrt (d2 + 1e-9))
-             lam (max 0.0 ((c 5 * lx + c 6 * ly + c 7 * lz) / d))
+             lam (sat (((c 5 * lx + c 6 * ly + c 7 * lz) / d + wr) / (1.0 + wr)))
              em (two? fn ? (sat (0.25 - (fn 0 * lx + fn 1 * ly + fn 2 * lz) / d)) 1.0)
              (lam * em * sq (sat (1.0 - sq (d2 / (r * r)))) / (d2 + s2)))
    k (foldl (\ a p (a + one p)) (X * 0.0) ps / #ps)
@@ -142,6 +144,14 @@
    cols [(c 0) (c 1) (c 2) (c 3) (c 4) (lit 0) (lit 1) (lit 2)]
    i (iota n * 8)
    [(foldl (\ v k (pin v (i + k) (cols k))) (iota (8 * n) * 0.0) ^8) (pk 'tris)])
+ ; ..the same, written into one buffer the packed mesh keeps, its places and texels laid
+ ; once and only its colours each call: what a scene relit every frame draws. the last
+ ; call's answer is the buffer, so a mesh is lit this way once a frame
+ (mesh-lamps! pk amb chs ks gain) (: c (pk 'cols) n (pk 'n) z (c 0 * 0.0)
+   (lit j) (gain * c (8 + j) * foldl (\ a i (a + ks i * chs i j)) (z + amb j) ^#chs)
+   i (iota n * 8)
+   buf (peep pk 'buf () @ () (: v (foldl (\ v k (pin v (i + k) (c k))) (iota (8 * n) * 0.0) ^5) (pin pk 'buf v, v)) v v)
+   [(foldl (\ v k (pin v (i + 5 + k) (lit k))) buf ^3) (pk 'tris)])
  ; ..a mesh that is its own light, its colour times k and nothing on it
  (mesh-shine pk k) (mesh-lamps pk [k k k] () () 1.0)
  ; ..and a scene's triangles made glows, added over what is behind them: a copy

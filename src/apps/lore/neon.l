@@ -86,5 +86,5 @@
               out))
      pts (cats (map (g \ [(at (g 0) lift) (at (g 1) lift)]) segs))
      {'tube (mesh-pack (mesh-join (map tube segs))) 'halo (mesh-pack (mesh-join (map halo segs)))
-      'lamp {'at pts 'c col 'r (6.0 * h + 2.0) 'soft (0.5 * h)} 'w (h * sk 1)}))
+      'lamp {'at pts 'c col 'r (6.0 * h + 2.0) 'soft (0.5 * h) 'wrap 0.6} 'w (h * sk 1)}))
 ) ; module neon
