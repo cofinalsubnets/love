@@ -1200,6 +1200,20 @@ below, 251 of those 332 re-run so far: **145 compile**, and the rest refuse by n
   128-bit `ldr q` at `:lo12:` refuses. With them, a register form naming `xzr` (`mov x0, xzr`,
   `cmp x1, xzr`) is its own word: it had reached the IR, which cannot hold zr (`badreg zr`).
   hyp-stub compiles, its 773 words and every relocation the kernel's object's.
+- **`sys` and `sysl`** by their fields (`sys 3, c7, c12, 1, x0`, the kernel's dc cvap spelled
+  for an assembler without it), the `#` optional, xzr when sys leaves its register off. 300 random
+  lines are llvm-mc's words; a W or sp register, a field past its range and a short form refuse.
+  cache.S compiles, its 204 words the kernel's object's but one: a `b` to `dcache_clean_poc`, a
+  global `.set` to a label in the section, which holo resolves where llvm-mc leaves a JUMP26 --
+  the same word once linked. entry-fpsimd compiles too, word for word.
+- **a macro parameter's default with its `=` spaced** (`.macro kernel_entry, el, regsize = 64`):
+  the list had split at every space, so `=` and `64` read as parameters and `\regsize` laid
+  nothing. An argument passed empty (`n , , , 4`) now takes its default as well, where holo laid
+  nothing; both are llvm-mc's expansions.
+- **`.org` to a label with instructions between** (entry.S's `.org .Lventry_start\@ + 128`, each
+  vector padded to its slot): a label where it stands, and zeros up to the target once layout
+  holds, as llvm-mc lays them; a target behind it refuses (`gas-org-back`). It had refused unless
+  only data lay between.
 
 Still open on this side (g-21's probes):
 
@@ -1209,9 +1223,11 @@ Still open on this side (g-21's probes):
   reads at the element's width, a bitfield or 128-bit member of a packed struct refuses by name,
   and a by-value struct reached as a packed member rides its type's alignment, not the member's.
 - where the re-run stops now, on this side: a register variable pinned to `x0` (4). Of the 24
-  units that stopped on the `.S` extable macro's `\insn`, 18 compile, and the rest stop on: a
-  vector lane `v4.d[0]`, `sys`, a linker script's symbol as a `.long` (`_kernel_size_le_lo32`),
-  `.incbin`, `@note` and a `.set` alias of a function (`__memmove`). The exclusive pairs (`ldxp`/`stxp` and kin) have no lane yet.
+  units that stopped on the `.S` extable macro's `\insn`, 19 compile, and the rest stop on: a
+  vector lane `v4.d[0]`, a linker script's symbol as a `.long` (`_kernel_size_le_lo32`),
+  `.incbin`, `@note` and a `.set` alias of a function (`__memmove`). Past them, entry.S stops on
+  a quoted macro argument (`alternative_insn nop, "dmb sy", 90`), and proc.S on a binary literal
+  `0b01`. The exclusive pairs (`ldxp`/`stxp` and kin) have no lane yet.
   The rest is part 1's front end and gen (`linux/skbuff.h`, an undeclared `branch`,
   `__attribute__((mode))`).
 - defconfig, g-21's units once refused on a Q form or a register pinned twice: of a sample of
