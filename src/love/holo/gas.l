@@ -793,6 +793,16 @@
                                 (#t = 3 && t 0 = 98) (peep ga-cc (name (snip t 1 3)) ())   ; gas's bne, as b.ne
                                 ()))
    (ga-inplace op d s) (d = s ? () [['mov d s]])       ; the IR's unary ops work in place
+   ;; sys and sysl: op1, Cn, Cm, op2 and an X register, xzr when sys leaves it off; sysl reads it first
+   (ga-cr o) (o @ ('sym s) (: t (show s) (filter (n \ t = "c" + show n || t = "C" + show n) ^16 @ (n . _) n _ ())) _ ())
+   (ga-sys-ins m os)
+    (: l (m = 'sysl) k #os bad (_ \ scare 'gas-a64-operand [m os])
+       f (? (l && k = 5) (>os + [<os]) (!l && k = 4) (os + [['reg 'zr 8]]) (!l && k = 5) os ())
+       (f @ (('imm a) c n ('imm b) ('reg r 8))
+          (: cn (ga-cr c) cm (ga-cr n)
+             (? (r = 'sp || !(charm? cn && charm? cm) || !(0 <= a <= 7 && 0 <= b <= 7)) (bad 0)
+                (ga-raw ((l ? 0xD5280000 0xD5080000) | a << 16 | cn << 12 | cm << 8 | b << 5 | ga-hw r))))
+          _ (bad 0)))
    (ga-ins m os)
     (#os @ k
        (? (charm? (peep ga-movw m ())) (ga-movw-ins m os)
@@ -818,6 +828,7 @@
           (elem m '(dsb dmb)) [[m (<>(os 0))]]
           (m = 'mrs) [['mrs (ga-r (os 0)) (<>(os 1))]]
           (m = 'msr) ((os 1) @ ('imm n) [['msri (<>(os 0)) n]] [['msr (<>(os 0)) (ga-r (os 1))]])
+          (elem m '(sys sysl)) (ga-sys-ins m os)
           (elem m ga-sys) [[m (<>(os 0)) (k > 1 ? (ga-r (os 1)) 'zr)]]
           (ghas? ga-exc m) [[(ga-exc m) (k > 0 ? (<>(os 0)) 0)]]
           (m = 'svc) (: n (k > 0 ? (<>(os 0)) 0) (n = 0 ? '((sys)) [['svcn n]]))

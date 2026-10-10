@@ -597,6 +597,14 @@
         (map (l \ trap (x \ holo-hex 'a64 (gas-text 'a64 x)) l (\ a b a))
              ["ccmp sp, x1, #0, eq" "ccmp x1, #32, #0, eq" "ccmp x1, x2, #16, eq" "csel x0, w1, x2, eq" "csel sp, x1, x2, eq"
               "cset x0, al" "ccmp x1, x2, #0, zz"]))
+   ;; sys and sysl by their fields, the `#` optional, xzr when sys leaves rt off; a W or sp
+   ;; register, a field past its range, sysl without its register, and too few operands refuse
+   _ (chk-eq "gas.a64.sys" "207c0bd5257d0bd51f7508d5832329d5ffff0fd51f0028d5"
+        (holo-hex 'a64 (gas-text 'a64 "sys 3, c7, c12, 1, x0\n sys #3, C7, c13, #1, x5\n sys #0, c7, c5, #0\n sysl x3, #1, c2, c3, #4\n sys #7, c15, c15, #7, xzr\n sysl xzr, #0, c0, c0, #0")))
+   _ (chk-eq "gas.a64.sys.refuse" '(gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand)
+        (map (l \ trap (x \ holo-hex 'a64 (gas-text 'a64 x)) l (\ a b a))
+             ["sys 3, c7, c12, 1, w0" "sys #8, c7, c12, #1, x0" "sys #3, c16, c12, #1, x0" "sys #3, c7, c12, #8"
+              "sys #3, c7, c12, #1, sp" "sysl x0, #3, c7, c12" "sys 3, c7, c12"]))
    ;; gas's dotless conditional branches, bne as b.ne, back and by `.`
    _ (chk-eq "gas.a64.bne" "00000054e1ffff54c2ffff54a3ffff5481ffff5441000054"
         (holo-hex 'a64 (gas-text 'a64 "1:\nbeq 1b\nbne 1b\nbcs 1b\nblo 1b\nb.ne 1b\nbne .+8\n")))
