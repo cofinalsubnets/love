@@ -1402,6 +1402,10 @@
       ("i3.ldu1" "0fb67101" ((ldu1 r5 r1 1)))                  ; movzbl 1(%ecx),%esi
       ("i3.ldu2" "0fb77102" ((ldu2 r5 r1 2)))                  ; movzwl 2(%ecx),%esi
       ("i3.st1" "885f03" ((st1 r6 3 r3)))                      ; mov %bl,3(%edi)
+      ("i3.st1.esi" "87f1880887f1" ((st1 r0 0 r5)))            ; xchg %esi,%ecx ; mov %cl,(%eax) ; xchg %esi,%ecx
+      ("i3.set.edi" "970f94c00fb6c097" ((set eq r6)))          ; xchg %edi,%eax ; sete %al ; movzbl %al,%eax ; xchg %edi,%eax
+      ("i3.zx1.esi" "960fb6c096" ((zx1 r5)))                   ; xchg %esi,%eax ; movzbl %al,%eax ; xchg %esi,%eax
+      ("i3.sx1.edi" "970fbec097" ((sx1 r6)))                   ; xchg %edi,%eax ; movsbl %al,%eax ; xchg %edi,%eax
       ("i3.st2" "66897702" ((st2 r6 2 r5)))                    ; mov %si,2(%edi)
       ("i3.st4" "8937" ((st4 r6 0 r5)))                        ; mov %esi,(%edi)
       ("i3.si" "c745f8d2040000" ((si r4 -8 1234)))             ; movl $1234,-8(%ebp)
@@ -1519,13 +1523,11 @@
       ("i3m16.lar" "66e800000000665b6681c30900000090" ((lar r3 L) (label L) (nop))) ; call 1f ; 1: pop %ebx ; add $(L-1b),%ebx
       )
    _ (foldl (_ \ t \ chk2 (t 0) (t 1) 'i386m16 (t 2)) 0 i3m16tests)
-   ;; ..and what has no 32-bit face refuses: a register past r6, a byte from esi
+   ;; ..and what has no 32-bit face refuses: a register past r6
    i3caught {}
-   _ (hear (a \ b \ elem a '(i386-badreg i386-bytereg) ? (pin i3caught 0 a, ()) (welp a b)))
-   (i3refuses name tag be prog) (pin i3caught 0 0, holo-bytes be prog, chk-eq name tag (peep i3caught 0 0))
-   _ (i3refuses "i3.r7.refused" 'i386-badreg 'i386 '((mov r0 r7)))
-   _ (i3refuses "i3.st1.esi.refused" 'i386-bytereg 'i386 '((st1 r0 0 r5)))
-   _ (i3refuses "i3m16.set.edi.refused" 'i386-bytereg 'i386m16 '((set eq r6)))
+   _ (hear (a \ b \ a = 'i386-badreg ? (pin i3caught 0 a, ()) (welp a b)))
+   _ (pin i3caught 0 0, holo-bytes 'i386 '((mov r0 r7)))
+   _ (chk-eq "i3.r7.refused" 'i386-badreg (peep i3caught 0 0))
 
    ;; -- the wasm module writer (src/love/holo/wasm.l): instruction forms -> bytes, each row the
    ;;    bytes binaryen's wasm-as lays for the same text (memory64 on). the whole-module shape is
