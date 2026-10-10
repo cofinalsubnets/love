@@ -4,6 +4,7 @@
 ; tail redirects onto the rung-2 tree and is read back; the tree is restored.
 
 (borrow 'lush) ; the engine parts above just registered module 'lush
+(: shS (sh-new 0))    ; the one shell these laws drive: its state, threaded through
 
 (: (rd p) (open p "r" @ q (port? q ? (slurp q @ s (close q, s))))
    ; wc pads its counts to the byte total's width, so read the number, not the face
@@ -14,12 +15,12 @@
               0 0)
 
    ; the doc's own spelling: kore ls | kore wc -l, the line count = the tree's
-   r1 (sh-line "kore ls src/apps/kore | kore wc -l > /tmp/l-sh-pipe")
+   r1 (sh-line shS "kore ls src/apps/kore | kore wc -l > /tmp/l-sh-pipe")
    s1 (rd "/tmp/l-sh-pipe")
    _  (unlink "/tmp/l-sh-pipe")
 
    ; and a byte-exact tail, where wc's padding is width one
-   r2 (sh-line "kore echo hi | kore wc -c > /tmp/l-sh-wc")
+   r2 (sh-line shS "kore echo hi | kore wc -c > /tmp/l-sh-wc")
    s2 (rd "/tmp/l-sh-wc")
    (unlink "/tmp/l-sh-wc",
 
