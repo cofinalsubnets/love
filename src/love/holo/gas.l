@@ -809,8 +809,13 @@
           (m = 'adrp) (ga-adrp os)
           (m = 'add && k = 3 && ((os 2) @ ('grp _ _) 1 _ 0)) (ga-addlo os)
           (k > 2 && two? (ga-shxof (os (k - 1))) && (two? (peep ga-shop m ()) || two? (peep ga-shal m ()))) (ga-shifted m os)
-          ; a register form naming zr, which the IR's rows cannot hold: the shifted word at lsl #0
-          ((two? (peep ga-shop m ()) || two? (peep ga-shal m ())) && any (o \ o @ ('reg 'zr _) 1 _ 0) os
+          ; a W mov beside wsp is add #0; zr has no place beside it
+          (m = 'mov && k = 2 && any ga-sp? os && all (o \ o @ ('reg _ 4) 1 _ 0) os)
+           (? (any (o \ o @ ('reg 'zr _) 1 _ 0) os) (scare 'gas-a64-operand [m os])
+              (ga-raw (0x11000000 | ga-hw (ga-r (os 1)) << 5 | ga-hw (ga-r (os 0)))))
+          ; a register form naming zr or sp, which the IR's rows cannot hold, or cmn and negs, which have none:
+          ; the shifted word at lsl #0, the extended one beside sp
+          ((two? (peep ga-shop m ()) || two? (peep ga-shal m ())) && (elem m '(cmn negs) || any (o \ o @ ('reg 'zr _) 1 ('reg 'sp _) 1 _ 0) os)
            && ((os (k - 1)) @ ('reg _ _) 1 _ 0))
            (ga-shifted m (os + [['shx 0 0]]))
           (charm? (peep ga-arity m ()) && k != ga-arity m) (scare 'gas-a64-operand [m os])

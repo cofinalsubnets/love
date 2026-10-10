@@ -637,6 +637,14 @@
    ;; as llvm-mc expands them (entry.S's `regsize = 64`)
    _ (chk-eq "gas.macro.default" '("mov x1, x2" "mov x3, #1" "mov w0, w0" "mov x3, #2" "mov w0, w0" "mov x3, #3" "mov x0, #1" "mov x1, #2" "mov x2, #3" "mov x3, #4" "mov x0, #12" "mov x0, #5" "")
         (gf-expand 'a64 (gf-lines 'a64 ".macro m, el, regsize = 64\n.if \\regsize == 32\nmov w0, w0\n.else\nmov x1, x2\n.endif\nmov x3, #\\el\n.endm\nm 1\nm 2, 32\nm 3, regsize=32\n.macro n a=1, b =2, c= 3, d\nmov x0, #\\a\nmov x1, #\\b\nmov x2, #\\c\nmov x3, #\\d\n.endm\nn , , , 4\n.macro p a=, b\nmov x0, #1\\a\\b\n.endm\np , 2\n.macro q a = 5\nmov x0, #\\a\n.endm\nq\n")))
+   ;; a register form beside sp is the extended word at uxtx/uxtw #0 (entry.S's `add sp, sp, x0`), a
+   ;; W mov beside wsp add #0, and cmn/negs by register; sp as rm, a flag-setting sp, a logical on
+   ;; sp, a shift past 4 beside it, a W rm beside sp and zr beside wsp refuse
+   _ (chk-eq "gas.a64.spreg" "ff63208bff6320cbe063218b9f60258be06321abff6321ebff6322abff43200be143224bef0300113f0000113f0002abe903036b"
+        (holo-hex 'a64 (gas-text 'a64 "add sp, sp, x0\n sub sp, sp, x0\n add x0, sp, x1\n add sp, x4, x5\n adds x0, sp, x1\n cmp sp, x1\n cmn sp, x2\n add wsp, wsp, w0\n sub w1, wsp, w2\n mov w15, wsp\n mov wsp, w1\n cmn x1, x2\n negs w9, w3")))
+   _ (chk-eq "gas.a64.spreg.refuse" '(gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand)
+        (map (l \ trap (x \ holo-hex 'a64 (gas-text 'a64 x)) l (\ a b a))
+             ["add sp, sp, x0, lsl #5" "add sp, sp, sp" "adds sp, x0, x1" "and sp, sp, x0" "add sp, sp, w0" "mov wsp, wzr"]))
    ;; an argument that is one quoted string passes its inside, positional or by name, as llvm-mc
    ;; expands it (entry.S's `alternative_insn nop, "dmb sy", 90`)
    _ (chk-eq "gas.macro.quote" '("nop" "dmb sy" ".ascii \"x y\"" "mov x0, x1" "mov x0, x1" "mov x2, x3" "nop" "")
