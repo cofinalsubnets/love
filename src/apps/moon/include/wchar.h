@@ -5,7 +5,7 @@
    ascii, as glibc's is: a byte or a character past 0x7f is EILSEQ. no wide strings or wide
    streams beyond these. */
 typedef unsigned int wint_t;
-typedef struct { int count; } mbstate_t;
+typedef struct { int count; unsigned value; } mbstate_t;
 #define WEOF      ((wint_t) 0xffffffffu)
 #ifdef __WCHAR_MAX__
 #define WCHAR_MIN __WCHAR_MIN__
