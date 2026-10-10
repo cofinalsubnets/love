@@ -33,6 +33,7 @@
              (le32 lk) (le32 inf) (le32 al) (le32 es)])
    elf-machines {'x64 62 'a64 183
                  'thumb1 40 'thumb2 40 'thumb2sp 40 'arm 40    ; EM_ARM
+                 'i386 3 'i386m16 3                            ; EM_386, the 16-bit face's code too
                  'rv64 243}                                  ; em_rv64
 
    ;; one 56-byte program header. p_paddr is p_vaddr's twin on every hosted target -- the
