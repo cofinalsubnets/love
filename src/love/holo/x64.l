@@ -147,7 +147,8 @@
    ;; "no index"), which the abstract file already keeps as `sp`, never a general r0..r14.
    (scale-bits s) (s @ 1 0 2 1 4 2 8 3 (scare 'badscale s))
    (memx regf base index scale disp)
-      (: bn (rn base) ixn (rn index) sc (scale-bits scale)
+      (: _ (charm? disp ? 0 (scare 'mem-disp disp))      ; a missing displacement would lay as 0, in silence
+         bn (rn base) ixn (rn index) sc (scale-bits scale)
          md (disp = 0 && lo bn != 5 ? 0 (fits8 disp ? 1 2))
          dispb (md @ 0 () 1 [(byte disp)] (le32 disp))
          ([(modrm md (lo regf) 4) (sib sc ixn bn)] + dispb))
@@ -173,7 +174,8 @@
    ;; a memory operand [base+disp]: Modrm (+ SIB for an rsp/r12 base) (+ displacement). picks the
    ;; shortest disp form, and forces a 0-disp byte for an rbp/r13 base (its disp-less slot is taken).
    (mem regf base disp)
-    (: bn (rn base) blo (lo bn)
+    (: _ (charm? disp ? 0 (scare 'mem-disp disp))        ; a missing displacement would lay as 0, in silence
+       bn (rn base) blo (lo bn)
        md (disp = 0 && blo != 5 ? 0 (fits8 disp ? 1 2))
        head (blo @ 4 [(modrm md (lo regf) 4) (sib 0 4 blo)] [(modrm md (lo regf) blo)])
        dispb (md @ 0 () 1 [(byte disp)] (le32 disp))

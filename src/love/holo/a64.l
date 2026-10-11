@@ -177,7 +177,8 @@
    ;; else LDUR/STUR unscaled imm9 else the far x16 build. every face -- word, sized,
    ;; fp -- is a spelling of it.
    (a64-mem-raw lbase ubase sc dt bn off)
-      (0 = off % sc && off >= 0 && off // sc <= 4095 ?
+      (charm? off ? 0 (scare 'mem-disp off),             ; a missing offset would lay as 0, in silence
+       0 = off % sc && off >= 0 && off // sc <= 4095 ?
          (le32 (ubase | (off // sc << 10 | (bn << 5 | dt))))
          (off >= -256 && off <= 255 ?
             (le32 (lbase | ((off & 511) << 12 | (bn << 5 | dt))))

@@ -861,6 +861,12 @@
    (asintt g r ty)
     (!(t32? g) && flo? (vty r) && ty = 'ulong ? (vfs r + dtoul g)
        (asint g r))
+   ; the loop splitter's seat for a cell at this statement's tick, or () -- never inside a splice,
+   ; whose statements do not tick
+   (spr g nm) (? (g 'inlining) ()
+                 (: q (peep g 'spq 0)
+                    (go l) (? !(two? l) () (<<l <= q <= <><l) <>><l (go >l))
+                    (go (peep (g 'spov) nm ()))))
    ; -- the environments: locals shadow globals --
    (vent g env name)                                ; -> ('regv rN ty) | ('regw (lo hi) ty) | ('loc off ty) | ('glo lbl ty) | 'bad
     (assoc name env @ e
@@ -869,7 +875,7 @@
               (h @ ('reg x) ['regv x y]     ; a block-scope static's is (glob lbl)
                    ('regw x) ['regw x y]    ; a d128 pair home: (lo hi)
                    ('glob x) ['glo x y]
-                   ['loc h y]))
+                   (spr g name @ r (r ? ['regv r y] ['loc h y]))))   ; a cell the loop splitter seats here
           (peep (g 'gregs) name () @ (s . y . _)
              (gas-regname (gtgt g) s @ r
                 (nom? r ? ['regv r y] 'bad))
@@ -6914,13 +6920,13 @@
                          _ (pins g 'dseq sq
                                    'lrec ([sq off ty <p] . g 'lrec))
                          lht (g 'lhome)
-                         (lht ? (lht sq))))
+                         ((lht ? (lht sq)) || spr g <p)))
               ; a register variable's pin rides the env entry's fourth slot for cgasm
               apin (two? >>>p && <>>>p ? (gas-regname (gtgt g) <>>>p))
               ; a d128's home is a pair (lo hi) off the cs pool -- ulloc packs two seats
               env3 ([<p (? (two? hreg) ['regw hreg] hreg ['reg hreg] off) ty] + (nom? apin ? [apin]) . env2)
               ; a callee-saved home stays off g 'homes: no call wrap, no sib peel, and ezarg must not read its unwritten shadow
-              _ (hreg && !(two? hreg) && nelem hreg (cspool g) && !(fhomable? ty) ?
+              _ (hreg && !(two? hreg) && nelem hreg (cspool g) && !(fhomable? ty) && !(spr g <p) ?
                    (pin g 'homes ([(rp g hreg) off <p] . g 'homes)))
               ; a constant init of a plain slotted scalar is one store-immediate; bool keeps its cvt (0/1)
               si9 (x64t? g && !hreg && <init = 'num && charm? <>init &&
@@ -7462,6 +7468,9 @@
                                bump u)
             (0 < ncc || 0 < nclh ? (bump wc) 0))))
        (rec sq w ncl nclw nclh) (recx sq w w ncl ncl nclw nclh)
+       ; a loop's record for the region splitter: its own tick, its last tick, the weight outside it,
+       ; what is live entering it and leaving it, and the statement itself
+       (lrc sq q0 w9 lin lout s) (pin n9 'loops ([sq q0 w9 lin lout s] . peep n9 'loops ()))
        ; -- an expression's universe reads -> (set ncalls): a var write is no read, sizeof never
        ; evaluates, an unknown head reads everything and counts a call --
        (erd e s2 nc)
@@ -7583,16 +7592,20 @@
               ('while cnd body)
                (: w8 (8 * w9)
                   seed (sun out (ldrop (ust body <(erd cnd () 0)) body))
+                  q0 (peep n9 'q 0)
                   _ (lst body seed out seed w8)
                   r (erd cnd () 0)
                   sq (tick ()) (rec sq seed (<>r * w8) (<>r * w8) (nhc cnd * w8),
+                                lrc sq q0 w9 seed out s,
                                 seed))
               ('do body cnd)
                (: w8 (8 * w9)
                   seed (sun out (ldrop (ust body <(erd cnd () 0)) body))
                   r (erd cnd () 0)
+                  q0 (peep n9 'q 0)
                   _ (lst body seed out seed w8)
                   sq (tick ()) (rec sq seed (<>r * w8) (<>r * w8) (nhc cnd * w8),
+                                lrc sq q0 w9 seed out s,
                                 seed))
               ('for ini cnd stp body)
                (: w8 (8 * w9)
@@ -7600,6 +7613,7 @@
                           u2 (two? stp ? <(erd stp u1 0) u1)
                           (ust body u2))
                   seed (sun out (ldrop useb body))   ; the init's names are loop-carried: they stay
+                  q0 (peep n9 'q 0)
                   _ (lst body seed out seed w8)
                   nc9 ((two? cnd ? <>(erd cnd () 0) 0) +
                        (two? stp ? <>(erd stp () 0) 0))
@@ -7615,6 +7629,7 @@
                                     (nc9 * w8 + (1 < w9 ? (<>ri * w9) 0))
                                     (((two? cnd ? (nhc cnd) 0) + (two? stp ? (nhc stp) 0)) * w8 +
                                      (two? ini && !(elem <ini '(decl sdecl)) ? (nhc <>ini) 0) * w9),
+                                lrc sq q0 w9 in out s,
                                 in))
               ('switch ce items)
                (: r (erd ce () 0)
@@ -7671,14 +7686,14 @@
           [liv crs univ (peep n9 'n 0) (peep n9 'ncw 0) spa
            crh rdc rdt sqm (peep n9 'nx 0)
            (peep n9 'asm 0) (peep n9 'vla 0) (peep n9 'sq 0) tak
-           (pmxl items 1 1) (pq9 ? 1) (wd9 ? 1) (wd9 ? (wpd items) 0)]))
+           (pmxl items 1 1) (pq9 ? 1) (wd9 ? 1) (wd9 ? (wpd items) 0) (peep n9 'loops ())]))
    ; alive's forward twin: cgstmt/cgdecl/cgsdecl entries tick and pin the wrapset off livtab
    ; (a miss pins 'all); a statement expression's statements neither tick nor re-pin
    (stq g)
     (g 'inlining ? (peep g 'stwrap 'all)
        (: q (1 + peep g 'lsq 0)
-          _ (pin g 'lsq q)
-          lt (g 'livtab)
+          _ (pins g 'lsq q 'spq q)          ; spq: the tick whose code is laying (a for's step, a do's
+          lt (g 'livtab)                    ; cond lay after their body and pin it back to their own)
           w (lt ? (peep lt q 'all) 'all)
           (pin g 'stwrap w,
            w)))
@@ -7689,6 +7704,8 @@
      'lhome ()   ; locals-homing map (cgdecl's hook reads it)
      'rgon ()    ; ...and its seat-bearing flag (the splice decl gate)
      'fpar {}    ; double params granted an xmm seat (ubuild fills it, spill reads it)
+     'spov {}    ; the loop splitter's seats: name -> ([lo hi reg]..) (vent and cgdecl read it)
+     'splits {}  ; ..and its transfers: a loop's tick -> [evicted promoted] (cgstmt lays them)
      'homes ())  ; non-leaf home set (call-fixed + sibs read it)
    ; ..and their armed state: lh9 ulloc's map, av9 alive's answer
    (rgset g lh9 av9)
@@ -7720,9 +7737,26 @@
      'sret ()                  ; the memory-return slot (the driver re-pins under sr6f)
      'pcopy ())                ; the by-reference struct params' copies, laid after the spills (spillp)
 
+   ; a split loop's transfers: an evicted name parks its register in its own slot at entry and
+   ; takes it back past the exit label (every break lands there); a seated cell loads at entry and
+   ; stores back -- each only where alive has the name live across that edge, and only for a name
+   ; declared by then (alive's loop seeds can carry one declared later in the body)
+   (spw g env tk fs)
+    (peep (g 'splits) tk () @ sp
+       (? (!(two? sp) || g 'inlining) fs
+          (: (slot nm) (: (go l) (? !(two? l) () (<l 3 = nm) (<l 1) (go >l)) (go (g 'lrec)))
+             ; a cell the loop itself declares (its for-init) is scoped to it: nothing crosses its edges
+             (cell nm) (assoc nm env @ e (two? e && charm? <>e ? [<>e <>>e]))
+             pre (catmap (x \ (<>>x = 1 && charm? (slot <x) ? [['st 'r4 (slot <x) <>x]])) <sp
+                  + catmap (x \ (<>>x = 1 ? (cell <x @ c (two? c ? [[(ldop <>c) <>x 'r4 <c]])))) <>sp)
+             ; the exit mirrors the entry: a seated cell leaves its register before the evicted name takes it back
+             post (catmap (x \ (x 3 = 1 ? (cell <x @ c (two? c ? [[(stop <>c) 'r4 <c <>x]])))) <>sp
+                   + catmap (x \ (x 3 = 1 && charm? (slot <x) ? [['ld <>x 'r4 (slot <x)]])) <sp)
+             (pre + fs + post))))
    (cgstmt g env s)
     (: _ (psreset g)                                 ; a statement never carries a live operand in
        myw (stq g)                                   ; this statement's wrapset (alive's forward twin)
+       tk9 (peep g 'lsq 0)                           ; ..and its tick, the loop splitter's key
        (s @- 'bad                                                        ; the refusal up front, 180 lines of clauses below
           ('ret . rs)
           (: epj (peep g 'epi epi)                                       ; the target's epilogue (cgen-core pins it)
@@ -7829,7 +7863,7 @@
               (pins g 'brk >(g 'brk)
                       'cnt >(g 'cnt),
                bad? c || bad? b ? 'bad
-               ([['jmp lc]] + lalign g + [['label lb]] + b + [['label lc]] + c + [['label ld]])))
+               (spw g env tk9 ([['jmp lc]] + lalign g + [['label lb]] + b + [['label lc]] + c + [['label ld]]))))
           ('for init cnd stp body)
            (: lb (nlab g ".b") lc (nlab g ".c") ls (nlab g ".s") ld (nlab g ".d")
               ir (? !(two? init) [() env]
@@ -7839,22 +7873,24 @@
                        (bad? r ? 'bad [(vdrop g r) env])))
               (bad? ir ? 'bad
                  (: env2 <>ir
-                    _ (pin g 'stwrap myw)            ; a decl init re-pinned; the cond is ours
+                    _ (pins g 'stwrap myw 'spq tk9)  ; a decl init re-pinned; the cond is ours
                     c (two? cnd ? (cbranch g env2 cnd 'ne lb))
                     _ (pins g 'brk (ld . g 'brk)
                               'cnt (ls . g 'cnt))
                     b (cgstmt g env2 body)
                     _ (pins g 'brk >(g 'brk)
                               'cnt >(g 'cnt)
-                              'stwrap myw)           ; the body re-pinned as it went; the step is ours
+                              'stwrap myw            ; the body re-pinned as it went; the step is ours
+                              'spq tk9)
                     _ (pin g 'bndv (bndv g env2 cnd stp body))
                     st2 (two? stp ? (cgexpr g env2 stp ()))
                     (pin g 'bndv (),
                      bad? c || bad? b || bad? st2 ? 'bad
-                       (<ir + (two? cnd ? ([['jmp lc]] + lalign g)) + [['label lb]] +
-                        b + [['label ls]] + (two? st2 ? (vdrop g st2)) +
-                        (two? cnd ? ([['label lc]] + c) [['jmp lb]]) +
-                        [['label ld]])))))
+                       (spw g env tk9
+                         (<ir + (two? cnd ? ([['jmp lc]] + lalign g)) + [['label lb]] +
+                          b + [['label ls]] + (two? st2 ? (vdrop g st2)) +
+                          (two? cnd ? ([['label lc]] + c) [['jmp lb]]) +
+                          [['label ld]]))))))
           ('brk . _)
            (two? (g 'brk) ? [['jmp <(g 'brk)]] 'bad)
           ('cont . _)
@@ -7866,13 +7902,15 @@
               b (cgstmt g env body)
               _ (pins g 'brk >(g 'brk)
                         'cnt >(g 'cnt)
-                        'stwrap myw)                 ; the body re-pinned as it went; the cond is ours
+                        'stwrap myw                  ; the body re-pinned as it went; the cond is ours
+                        'spq tk9)
               c (cbranch g env cnd 'ne lt)
               (bad? b || bad? c ? 'bad
-                 ([['label lt]] +
-                  b +
-                  [['label lc]] +
-                  (c + [['label ld]]))))
+                 (spw g env tk9
+                   ([['label lt]] +
+                    b +
+                    [['label lc]] +
+                    (c + [['label ld]])))))
           ('goto nm) [['jmp (name (g 'fn + "." + nm))]]
           ; goto *e: a table jump whose targets are every label the function takes the address of
           ('igoto e)
@@ -9275,6 +9313,72 @@
                    puts ";; lh ", putx (map (k \ [k (lh k)]) (sort (keys lh))), putc 10)
                   0)),
             [lh (filter (q \ (nelem q pused)) hp9) cu0]))
+       ; the loop-region splitter (rung 1). inside a loop, a register whose seated names the loop never
+       ; mentions is free -- a name live through it parks in its own slot at entry and comes back at
+       ; exit. the cells the loop mentions most take them over the loop's ticks, priced by weighted
+       ; mentions against the transfers an entry costs.
+       ; a loop that calls takes only callee-saved seats, so no call wrap ever meets a split; a body
+       ; with a jump or asm takes none. -> [ov splits cu]: name -> ([lo hi reg]..), tick -> [evs prs]
+       (usplit av9 lh9 cu0 items)
+        (: sqm9 (av9 9) uv <>>av9 tak9 (av9 14) spa9 (av9 5)
+           kp (cspool g)
+           ; every name a subtree mentions or declares, weighted x8 per loop it sits in
+           (mn9 e w t) (? (atom? e) t
+                          (<e == 'var) (pin t <>e (w + peep t <>e 0))
+                          (<e == 'decl) (foldl (t2 \ p \ (two? p ? (pin t2 <p (w + peep t2 <p 0), mn9 >p w t2) t2)) t <>e)
+                          (: w2 (elem <e '(while do for) ? (w * 8) w)
+                             (foldl (t2 \ x \ mn9 x w2 t2) t e)))
+           (has9 ks e) (? (atom? e) () (elem <e ks) 1 (any (x \ has9 ks x) e))
+           ; a local's name -> its type, and -> its gp seat; every seat's register -> its names
+           nty (: (go i t) (sqm9 i @ e2 (? (atom? e2) t (go (i + 1) (pin t <e2 <>e2)))) (go 1 {}))
+           seat (foldl (t \ k \ (: r (lh9 k) e2 (sqm9 k)
+                                  (two? e2 && r ? (pin t <e2 r) t))) {} (keys lh9))
+           held (foldl (t \ k \ (: r (lh9 k) (? (two? r) (foldl (t2 \ x \ pin t2 x 1) t r) (nom? r) (pin t r 1) t))) {} (keys lh9))
+           ; per seat, every name on it (a twice-declared name too: it pins its register, never evicts)
+           occ (foldl (t \ k \ (: r (lh9 k) e2 (sqm9 k)
+                                  (two? e2 && nom? r && lhomable? <>e2 ? (pin t r (<e2 . peep t r ())) t))) {} (sort (keys lh9)))
+           ; a fresh callee-saved seat's save is paid on every call of the fn, and the loop may be the
+           ; coldest part of it (a collector's copy, once per object, lost 8% to one): only a loop whose
+           ; mentions weigh 64 at the fn's entry may take one
+           cs0 (filter (r \ !(peep held r ()) && nelem r cu0) kp)
+           (ovl? a b lo hi) !(hi < a || b < lo)
+           (busy? t k a b) (any (x \ ovl? a b <x <>x) (peep t k ()))
+           rs9 {} ns9 {} ov9 {} sp9 {} cu9 {'cu cu0}
+           (one L)
+            (: a <L b <>L lin (L 3) lout (L 4) s9 (L 5)
+               ms (mn9 s9 1 {})
+               calls (has9 '(call) s9)
+               (in9 nm) (elem nm lin ? 1 0) (out9 nm) (elem nm lout ? 1 0)
+               ; the names seated on r live across these ticks: () when one is mentioned here
+               (idle r) (: ns (filter (nm \ (spa9 nm @ sp (two? sp && ovl? a b <sp <>sp))) (peep occ r ()))
+                           (any (nm \ 0 < peep ms nm 0 || nelem nm uv) ns ? 'no ns))
+               (cost r) (? (elem r cs0) (elem r (cu9 'cu) ? 0 2)
+                           (foldl (c \ nm \ c + in9 nm + out9 nm) 0 (idle r)))
+               (ok? m r) (!(busy? rs9 r a b) && (!calls || elem r kp) &&
+                          (elem r cs0 ? (64 <= (L 2) * peep ms m 0) (idle r != 'no)))
+               cands (sortby (x \ y \ peep ms y 0 < peep ms x 0)
+                        (filter (nm \ elem nm uv && !(tak9 nm) && !(peep seat nm ()) &&
+                                      lhomable? (nty nm) && !(busy? ns9 nm a b))
+                                (sort (keys ms))))
+               (take9 m)
+                (: rs (sortby (x \ y \ cost x < cost y) (filter (r \ ok? m r) (sort (keys occ) + cs0)))
+                   (two? rs &&
+                    (: r <rs c (cost r + in9 m + out9 m)
+                       ; priced at one trip per entry: the mentions an iteration saves pay the transfers
+                       (8 * c + 8 <= peep ms m 0 &&
+                        (: evs (elem r cs0 ? () (filter (nm \ 0 < in9 nm + out9 nm) (idle r)))
+                           o (peep sp9 a [() ()])
+                           (pin rs9 r ([a b] . peep rs9 r ()),
+                            pin ns9 m ([a b] . peep ns9 m ()),
+                            pin ov9 m ([a b r] . peep ov9 m ()),
+                            pin sp9 a [(<o + map (nm \ [nm r (in9 nm) (out9 nm)]) evs)
+                                       ([m r (in9 m) (out9 m)] . <>o)],
+                            (elem r cs0 && nelem r (cu9 'cu) ? (pin cu9 'cu (r . cu9 'cu))),
+                            1))))))
+               (map take9 cands))
+           (? (has9 '(goto igoto lbl asm) items) [{} {} cu0]
+              (: _ (map one (sortby (x \ y \ (? (y 2 < x 2) 1 (x 2 < y 2) () (<>x - <x < <>y - <y))) (av9 19)))
+                 [ov9 sp9 (cu9 'cu)])))
        ; the param verdicts -> (rides homes excl depth): a cold homable param rides its arrival where
        ; sound (a quad pays one mov to its positional seat), a hard-crossing one stays a cell
        (upar av9 qk)
@@ -9369,7 +9473,9 @@
                lr (ok9 ? (ulloc av9 pool2 bl9))
                lh9 (two? lr ? <lr {})
                lp9 (two? lr ? <>lr pool2)
-               cu0 (two? lr ? <>>lr ())
+               cu1 (two? lr ? <>>lr ())
+               sx9 (ok9 && two? lr && !(abl? g 'lsplit) ? (usplit av9 lh9 cu1 <><>>>f) [{} {} cu1])
+               cu0 <>>sx9                     ; the splitter's fresh callee-saved seats owe their saves too
                ; the double params' xmm grants: a read, zero-crossing, once-declared name takes a
                ; seat the locals left, in arrival order
                fgr ({} @ t
@@ -9391,6 +9497,9 @@
                ; reset would re-deal them (ok9 bars VLAs from every path that retries)
                _ (pins g 'pool0 lp9 'pool lp9)
                _ (rgset g lh9 av9)
+               _ (pins g 'spov <sx9 'splits <>sx9)
+               _ (getenv "MOON_DUMP" @ w (string? w && w = <>f && two? (keys <>sx9) ?
+                    (puts (";; splits " + show (map (k \ [k (<>sx9 k)]) (sort (keys <>sx9))) + "\n"))))
                _ (pin g 'fpar fgr)
                ; wasm keeps every register but the answers across a call (a callee's locals are its own), so
                ; its cs seats need no save
