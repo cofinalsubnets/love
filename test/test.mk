@@ -1403,6 +1403,19 @@ test_kernel_wasm: host
 	@echo TEST test/gate/point.mjs "(the page's pointer and clipboard: select, copy, paste, the wheel)"
 	@$(NODE) $(R)/test/gate/point.mjs $(R)/out/love.wasm out/wasm/love.image out/wasm/point.log \
 	   || { echo "FAIL test_kernel_wasm"; exit 1; }
+	@echo TEST test/kernel/winrun.l "(a window on the paper: its pixels shown, keys by place, the pointer, the text)"
+	@rm -f out/wasm/winrun.ppm
+	@printf 'hi\033[A!' | INLE_RAM=256 $(NODE) $(S)/inle/wasm/inle.mjs --fb 640x400 --dump out/wasm/winrun.ppm \
+	   --after "winrun: paper" --press "KeyA ArrowUp KeyQ" --click 100,50 --for 120 \
+	   --image out/wasm/love.image $(R)/out/love.wasm test/kernel/winrun.l > out/wasm/winrun.log 2>&1; \
+	 grep -q "winrun: paper 640x400 shown 400" out/wasm/winrun.log \
+	   && grep -q 'winrun: (text "hi!")' out/wasm/winrun.log \
+	   && grep -q "winrun: (down 30)" out/wasm/winrun.log && grep -q "winrun: (up 30)" out/wasm/winrun.log \
+	   && grep -q "winrun: (down 328)" out/wasm/winrun.log && grep -q "winrun: (up 16)" out/wasm/winrun.log \
+	   && grep -q "winrun: (press 1 100 50)" out/wasm/winrun.log \
+	   && grep -q "winrun: (release 1 100 50)" out/wasm/winrun.log \
+	   && $(NODE) $(R)/test/gate/ppmcolor.mjs out/wasm/winrun.ppm 255,128,0 \
+	   || { tail -12 out/wasm/winrun.log; echo "FAIL test_kernel_wasm (the window)"; exit 1; }
 	@echo TEST test/gate/idle.mjs "(the machine still sleeps once it has been typed at)"
 	@$(NODE) $(R)/test/gate/idle.mjs $(R)/out/love.wasm out/wasm/love.image out/wasm/idle.log \
 	   || { tail -5 out/wasm/idle.log; echo "FAIL test_kernel_wasm"; exit 1; }

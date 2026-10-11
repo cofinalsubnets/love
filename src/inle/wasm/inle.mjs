@@ -15,7 +15,8 @@
 // horn's own rate: the AudioWorklet a page has, headless. --press names keys (machine.js's
 // names, e.code's spelling) pressed and released in turn on the scan lane, --after
 // seconds into the run, or five seconds after a line of the serial output holds that
-// text: a game's keys, which no tty byte can carry. --for ends the run after that many
+// text: a game's keys, which no tty byte can carry. --click X,Y presses the left button at
+// that pixel of the paper and lets it go, after the keys. --for ends the run after that many
 // seconds, with the status timeout(1) gives, for a program that never quits. a kexec
 // aboard (the machine booting a module it built) is reported and the run goes on; the
 // plain reset still ends it.
@@ -29,20 +30,20 @@
 // just happened, and only the signature says so (test/gate/echo.mjs).
 //   usage: node src/inle/wasm/inle.mjs [--fb WxH --scale N --dump screen.ppm --frames f.log]
 //                                  [--lift /in/machine:b/here] [--lifts DIR] [--horn sound.raw]
-//                                  [--press "Escape Enter" --after S] [--for S]
+//                                  [--press "Escape Enter" --click X,Y --after S] [--for S]
 //                                  [--origin DIR] [--host DIR] [--image love.image] love.wasm [boot line ..]
 import { Worker, MessageChannel } from 'node:worker_threads';
 import { openSync, readFileSync, writeFileSync, writeSync } from 'node:fs';
 import { join } from 'node:path';
 import { ctl_n, ring_n, ring_at, lift_n, lift_at, shared_n, scan_at, scan_n, c_sh, c_st,
          horn_at, horn_n, c_rate, c_wrote, c_played, c_live } from './cpu.mjs';
-import { scanlane, codes } from './machine.js';
+import { scanlane, pointlane, codes } from './machine.js';
 import { host_shared_n } from './hostring.mjs';
 
 const args = process.argv.slice(2);
 let fb = null, dump = null, scale = 0, liftReq = null, liftDir = null, image = null, hornFile = null, deaf = false;
 let framesFile = null;
-let press = [], after = 0, forS = 0, origin = null, hostDir = null;
+let press = [], clicks = [], after = 0, forS = 0, origin = null, hostDir = null;
 while (args[0]?.startsWith('--')) {
   const o = args.shift();
   if (o === '--fb') { const [w, h] = args.shift().split('x').map(Number); fb = { w, h }; }
@@ -54,6 +55,7 @@ while (args[0]?.startsWith('--')) {
   else if (o === '--horn') hornFile = args.shift();
   else if (o === '--deaf') deaf = true;
   else if (o === '--press') press = args.shift().split(/\s+/).filter(Boolean);
+  else if (o === '--click') clicks.push(args.shift().split(',').map(Number));
   else if (o === '--after') { const v = args.shift(); after = /^[\d.]+$/.test(v) ? Number(v) : v; }
   else if (o === '--for') forS = Number(args.shift());
   else if (o === '--origin') origin = args.shift();
@@ -62,7 +64,7 @@ while (args[0]?.startsWith('--')) {
   else { console.error('inle.mjs: unknown option ' + o); process.exit(2); } }
 if (fb) fb.dump = dump, fb.scale = scale, fb.post = !!framesFile;
 const [wasm, ...cmd] = args;
-if (!wasm) { console.error('usage: inle.mjs [--fb WxH --scale N --dump screen.ppm --frames f.log] [--lift IN:OUT] [--lifts DIR] [--horn RAW] [--press KEYS --after S] [--for S] [--origin DIR] [--host DIR] [--deaf] [--image IMG] love.wasm [boot line ..]'); process.exit(2); }
+if (!wasm) { console.error('usage: inle.mjs [--fb WxH --scale N --dump screen.ppm --frames f.log] [--lift IN:OUT] [--lifts DIR] [--horn RAW] [--press KEYS --click X,Y --after S] [--for S] [--origin DIR] [--host DIR] [--deaf] [--image IMG] love.wasm [boot line ..]'); process.exit(2); }
 
 const framesOut = framesFile ? openSync(framesFile, 'w') : 0;
 const ring = new SharedArrayBuffer(shared_n);
@@ -166,8 +168,12 @@ const pressAll = (delay) => {
   const send = scanlane(ring, ctl, { scan_at, scan_n, c_sh, c_st });
   press.forEach((k, i) => {
     setTimeout(() => send(k, 0), delay + i * 300).unref();
-    setTimeout(() => send(k, 1), delay + i * 300 + 60).unref(); }); };
-if (press.length) {
+    setTimeout(() => send(k, 1), delay + i * 300 + 60).unref(); });
+  const point = pointlane(ring, ctl), at = delay + press.length * 300;
+  clicks.forEach(([x, y], i) => {
+    setTimeout(() => point(0, 0, y, x), at + i * 300).unref();
+    setTimeout(() => point(1, 0, y, x), at + i * 300 + 60).unref(); }); };
+if (press.length || clicks.length) {
   for (const k of press) if (!(k in codes)) { console.error('inle.mjs: --press: no key ' + k); process.exit(2); }
   if (typeof after === 'number') pressAll(after * 1000); }
 if (forS) setTimeout(() => { process.stderr.write('inle: the machine outran --for\n'); leave(124); }, forS * 1000).unref();

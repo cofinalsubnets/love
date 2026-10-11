@@ -70,11 +70,11 @@ void k_tick_sync(void) {
 // waits in the worker's ring, which is deep, so a pasted line arrives whole. asking is
 // the one way a guest that never idles -- a frame loop the horn paces -- hears a key.
 // the page's pointer and clipboard ride lanes of their own beside the keys: a pointer record
-// is how, the button with its modifiers, a pad, then the row and the column as two
+// is how, the button with its modifiers, a pad, then the paper's pixel, y and x, as two
 // little-endian bytes each, and kmain's k_pointer takes it; a paste is plain bytes, taken
 // as the queue has room (with its bracket's room kept back) and closed once it runs dry
 void k_kb_poll(void);
-void k_pointer(uint32_t how, uint32_t b, uint32_t row, uint32_t col);
+void k_pointer(uint32_t how, uint32_t b, uint32_t y, uint32_t x);
 void k_paste_in(uint8_t const *s, long n);
 void k_paste_end(void);
 static void k_point_sync(void) {
