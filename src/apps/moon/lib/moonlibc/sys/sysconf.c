@@ -63,5 +63,5 @@ long sysconf(int name) {
    { struct lx_sysinfo si;
      if (er(sc1(NR_sysinfo, (long) &si)) < 0) return -1;
      unsigned long u = si.mem_unit ? si.mem_unit : 1;
-     return (long) ((name == _SC_PHYS_PAGES ? si.totalram : si.freeram) * u / page_size()); } }
+     return (long) ((unsigned long long) (name == _SC_PHYS_PAGES ? si.totalram : si.freeram) * u / page_size()); } }
   __errno_v = EINVAL; return -1; }

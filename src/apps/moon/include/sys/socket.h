@@ -80,7 +80,7 @@ struct msghdr {
 };
 struct cmsghdr { unsigned long cmsg_len; int cmsg_level; int cmsg_type; };
 #define SCM_RIGHTS 1
-#define CMSG_ALIGN(n) (((n) + 7) & ~((unsigned long) 7))
+#define CMSG_ALIGN(n) (((n) + sizeof(long) - 1) & ~(sizeof(long) - 1))
 #define CMSG_SPACE(n) (CMSG_ALIGN(n) + CMSG_ALIGN(sizeof(struct cmsghdr)))
 #define CMSG_LEN(n)   (CMSG_ALIGN(sizeof(struct cmsghdr)) + (n))
 #define CMSG_DATA(c)  ((unsigned char*)((struct cmsghdr*)(c) + 1))

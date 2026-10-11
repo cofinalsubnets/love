@@ -19,7 +19,7 @@ static int __sdig(int c, int base) {
 
 /* an integer field of at most w characters: base 0 reads a C prefix. *v holds the magnitude, wrapped
  * past 64 bits as strtoul's callers see it saturated -- *over says it overflowed. 0 for no digits */
-static int __sint(struct __ssrc *r, int base, int w, unsigned long *v, int *neg, int *over) {
+static int __sint(struct __ssrc *r, int base, int w, unsigned long long *v, int *neg, int *over) {
   #define SNext (--w > 0 ? __sget(r) : EOF)            /* the width spent, nothing more is read */
   int c = __sget(r), any = 0;
   *v = 0; *neg = 0; *over = 0;
@@ -31,9 +31,9 @@ static int __sint(struct __ssrc *r, int base, int w, unsigned long *v, int *neg,
     else if (base == 0) base = 8; }
   if (base == 0) base = 10;
   for (; __sdig(c, base) >= 0; c = SNext) {
-    unsigned long d = (unsigned long) __sdig(c, base);
-    if (*v > (~0UL - d) / (unsigned long) base) *over = 1;
-    *v = *v * (unsigned long) base + d; any = 1; }
+    unsigned long long d = (unsigned long long) __sdig(c, base);
+    if (*v > (~0ULL - d) / (unsigned long long) base) *over = 1;
+    *v = *v * (unsigned long long) base + d; any = 1; }
   #undef SNext
   __sunget(r, c);
   return any; }
@@ -86,14 +86,16 @@ static int __vscan(struct __ssrc *r, char const *fmt, va_list ap) {
     if (*fmt == 'h') { len = 'h'; if (*++fmt == 'h') { len = 'H'; fmt++; } }
     else if (*fmt == 'l') { len = 'l'; if (*++fmt == 'l') { len = 'q'; fmt++; } }
     else if (*fmt == 'L' || *fmt == 'q') { len = 'q'; fmt++; }
-    else if (*fmt == 'j' || *fmt == 'z' || *fmt == 't') { len = 'l'; fmt++; }
+    else if (*fmt == 'j') { len = 'q'; fmt++; }
+    else if (*fmt == 'z' || *fmt == 't') { len = 'l'; fmt++; }
     int cv = *fmt;
     if (!cv) break;
     if (cv == 'n') { if (!skip) {
         void *p = va_arg(ap, void *);
         if (len == 'H') *(signed char *) p = (signed char) r->n;
         else if (len == 'h') *(short *) p = (short) r->n;
-        else if (len == 'l' || len == 'q') *(long *) p = r->n;
+        else if (len == 'q') *(long long *) p = r->n;
+        else if (len == 'l') *(long *) p = r->n;
         else *(int *) p = (int) r->n; }
       continue; }
     if (cv != 'c' && cv != '[') {                   /* every other conversion skips white space first */
@@ -133,21 +135,24 @@ static int __vscan(struct __ssrc *r, char const *fmt, va_list ap) {
       continue; }
     if (cv == 'd' || cv == 'i' || cv == 'u' || cv == 'o' || cv == 'x' || cv == 'X' || cv == 'p') {
       int base = cv == 'i' ? 0 : cv == 'o' ? 8 : (cv == 'x' || cv == 'X' || cv == 'p') ? 16 : 10;
-      unsigned long v; int neg, over;
+      unsigned long long v; int neg, over;
       if (!__sint(r, base, w ? w : 1 << 30, &v, &neg, &over)) return got;
       if (skip) continue;
       /* signed conversions take strtol's view (saturating), unsigned strtoul's (negation wraps) */
-      long sv;
+      /* ..at the width it lands in: long long's for ll and j, long's for the rest */
       if (cv == 'd' || cv == 'i') {
-        if (over || v > (neg ? 0x8000000000000000UL : 0x7fffffffffffffffUL)) sv = neg ? LONG_MIN : LONG_MAX;
-        else sv = neg ? (long) (0UL - v) : (long) v;
-        v = (unsigned long) sv; }
-      else { if (over) v = ~0UL; else if (neg) v = 0UL - v; }
+        unsigned long long top = len == 'q' ? 0x7fffffffffffffffULL : (unsigned long long) LONG_MAX;
+        if (over || v > top + neg) v = neg ? 0ULL - top - 1 : top;
+        else if (neg) v = 0ULL - v; }
+      else {
+        unsigned long long top = len == 'q' ? ~0ULL : (unsigned long long) ~0UL;
+        if (over || v > top) v = top; else if (neg) v = 0ULL - v; }
       void *p = va_arg(ap, void *);
-      if (cv == 'p') *(void **) p = (void *) v;
+      if (cv == 'p') *(void **) p = (void *) (unsigned long) v;
       else if (len == 'H') *(char *) p = (char) v;
       else if (len == 'h') *(short *) p = (short) v;
-      else if (len == 'l' || len == 'q') *(long *) p = (long) v;
+      else if (len == 'q') *(long long *) p = (long long) v;
+      else if (len == 'l') *(long *) p = (long) v;
       else *(int *) p = (int) v;
       got++; continue; }
     if (cv == 'f' || cv == 'F' || cv == 'e' || cv == 'E' || cv == 'g' || cv == 'G' || cv == 'a' || cv == 'A') {

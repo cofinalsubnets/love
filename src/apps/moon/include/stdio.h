@@ -46,7 +46,8 @@ size_t fread(void*, size_t, size_t, FILE*);
 size_t fwrite(void const*, size_t, size_t, FILE*);
 int    fseek(FILE*, long, int);
 long   ftell(FILE*);
-typedef struct { long pos; } fpos_t;
+#include <sys/types.h>
+typedef struct { off_t pos; } fpos_t;
 int    fgetpos(FILE*, fpos_t*);
 int    fsetpos(FILE*, fpos_t const*);
 int    fpurge(FILE*);
