@@ -170,6 +170,8 @@ Several sessions gate on one box. Two makes in one `out/` race, and a box short 
 - one make at a time in an `out/`: an exclusive lock named by its path
 - a lane that runs on another box takes that box's slot, not a heavy one. the boxes are bee's host registry, `~/.love/etc/bee/hosts` (`love bee --hosts`; doc/bee.md, HOSTS): each host's reach, caps, slots and facts, each slot an exclusive lock `host-NAME-N`. the a64 kernel lane boots under kvm on a `kvm-a64` host; the a64 lanes' binaries (`test_cca64` `test_cts_a64` `test_raw_a64` `test_softfp`'s a64 leg, the BSD lanes' local half, `test_love_a64`) are built here, run one batch per ssh by `love bee --on a64-exec`, and compared here; `test_kernel_vmx` boots on a `vt-x` host, in `test_extra` only; the BSD lanes find their boxes by `freebsd-x64` and its kin. with no host the kernel lane runs tcg here, and is heavy, and the binaries run under qemu-aarch64
 
+A worktree goes under `.claude/worktrees/NAME`, never beside the tree, and is removed (`git worktree remove`) once its row lands.
+
 ## the merge queue
 
 Take part in a merge queue only through bee's tools: as a bee agent, or from Claude Code through the tree's `.mcp.json`, which loads `love bee --mcp` (`mcp__bee__queue_row`, `queue_lead`, `queue_land`, `queue_landed`, `inbox`). Never edit a queue by hand. The protocol is written once in `doc/bee.md`, THE MERGE QUEUE, and each queue's header states it.
