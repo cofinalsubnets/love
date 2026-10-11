@@ -813,6 +813,7 @@
                  (: w <>>m
                     usz (tsz ps ty) ubits (usz * 8) a (talign ps ty)
                     _ (0 < cap && cap < a && pin ps 'packbf 1)    ; gcc lets these straddle units; refused
+                    _ (w > ubits && pin ps 'widebf 1)             ; wider than its type: C's constraint
                     nmx (mx < a ? a mx)
                     (? (w = 0) (go >l (aup bit ubits) nmx acc)        ; `:0` -- align the cursor to the unit, no field
                        uni (: fld (name ? [name 0 ['bitfield ty 0 w]])
@@ -912,6 +913,7 @@
                              lay (alask (playout ps <mr uni (<pb | <pa)) (max (pb 2) (pa 2)))
                              tu (uni && attrany? <>mr "transparent_union" "__transparent_union__")
                              (? (peep ps 'packbf ()) (pin ps 'packbf (), clblame "a bit-field under #pragma pack is not carried out")
+                                (peep ps 'widebf ()) (pin ps 'widebf (), clblame "the width of a bit-field exceeds its type")
                                 (peep ps 'incmem ()) (ps 'incmem @ n (pin ps 'incmem (), clblame ("field '" + n + "' has incomplete type")))
                                 (tu && !(tuok? ps lay)) (clblame "a transparent union wants members of one word-sized scalar type")
                              (pin (ps 'stag) tag2 lay,

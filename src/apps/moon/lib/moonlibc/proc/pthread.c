@@ -51,8 +51,21 @@ int pthread_create(pthread_t *t, pthread_attr_t const *at, void *(*fn)(void *), 
   memset(d->tsd, 0, sizeof d->tsd);
   void **sp = (void **) (((unsigned long) d - 16) & ~15UL);
   sp[0] = (void *) __pt_start; sp[1] = d;     /* the leaf calls sp[0](sp[1]) */
+#ifdef __i386__
+  /* i386's thread pointer is a segment: one GDT entry, asked for once, based per thread at
+   * sp[1] -- the word holding d, so gs:0 reads the record. the leaf loads gs from sp[2] */
+  struct { unsigned entry, base, limit, flags; } u = { ~0u, 0, 0xfffff, 0x51 };   /* 32-bit, 4K pages, usable */
+  if (!__love_mt.tls) {
+    if (sc1(NR_set_thread_area, (long) &u) < 0) { munmap(m, (long) PtStack); return EAGAIN; }
+    __love_mt.tls = (int) u.entry; }
+  u.entry = (unsigned) __love_mt.tls; u.base = (unsigned) &sp[1];
+  sp[2] = (void *) (long) (__love_mt.tls * 8 + 3);
+  void *tls = &u;
+#else
+  void *tls = d;
+#endif
   __love_mt.threads = 1;                        /* before the child can reach malloc */
-  long r = __love_clone(PtFlags, sp, (int *) &d->tid, (int *) &d->tid, d);
+  long r = __love_clone(PtFlags, sp, (int *) &d->tid, (int *) &d->tid, tls);
   if (r < 0) { munmap(m, (long) PtStack); return EAGAIN; }
   *t = (pthread_t) d;
   return 0; }

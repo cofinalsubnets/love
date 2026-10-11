@@ -1,5 +1,6 @@
 #ifndef _LOVE_FCNTL_H
 #define _LOVE_FCNTL_H
+#include <sys/types.h>   /* off_t, flock's */
 /* Linux x86-64 values (octal in the kernel; spelled decimal here) -- the
  * CANONICAL face on every lane; a freebsd kernel takes them translated
  * (moonlibc's os.c flag rows). */
@@ -28,7 +29,11 @@
 #define O_NOFOLLOW  131072   /* x86-64, rv64, asm-generic 0400000 */
 #endif
 #define O_CLOEXEC   524288
+#ifdef __i386__
+#define O_LARGEFILE 32768  /* 0100000: off_t is 64-bit, so every open asks for it */
+#else
 #define O_LARGEFILE 0      /* glibc's on 64-bit: every open is large already */
+#endif
 #define O_SEARCH   O_RDONLY   /* Linux has no O_SEARCH; gnulib's own fallback (fcntl.in.h) */
 #define O_BINARY         0    /* no text/binary distinction on Linux (a DOS-ism; 0 = no-op) */
 #define O_TEXT           0
@@ -54,8 +59,8 @@
 struct flock {
   short l_type;
   short l_whence;
-  long  l_start;
-  long  l_len;
+  off_t l_start;   /* i386: flock64's record, which fcntl.c asks for by F_*LK64 */
+  off_t l_len;
   int   l_pid;
 };
 int open(char const*, int, ...);

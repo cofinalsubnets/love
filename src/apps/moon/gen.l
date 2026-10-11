@@ -2717,7 +2717,7 @@
                                                      '((subs r0 r2 r0) (sbc r1 r3 r1)))))
                      'bnot
                       (mkv (vty r) 'r0 (tor0 g r + '((not r0) (not r1))))
-                     (mkv 'long 'r0 (tor0 g r + [['ors (v6m? g ? 'r0 'r12) 'r0 'r1] '(set eq r0)])))
+                     (mkv 'long 'r0 (tor0 g r + [['ors (v6m? g || ia32? g ? 'r0 'r12) 'r0 'r1] '(set eq r0)])))
               (d128? (vty r))                       ; unary on the wide pair
                (? !(w128? g) (no128 g)
                   (op = 'neg) (mkv (vty r) 'r0 (tor0 g r + '((n128))))

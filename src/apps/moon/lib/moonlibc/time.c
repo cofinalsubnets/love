@@ -12,8 +12,8 @@ int daylight = 0;
 void tzset(void) { }                               /* the zone is UTC and always was */
 struct tm *gmtime(time_t const *tp) {
   static struct tm tm;
-  long t = *tp;
-  long days = t / 86400, secs = t % 86400;
+  time_t t = *tp;
+  long days = (long) (t / 86400), secs = (long) (t % 86400);
   if (secs < 0) { secs += 86400; days -= 1; }
   tm.tm_hour = (int) (secs / 3600);
   tm.tm_min = (int) (secs % 3600 / 60);
@@ -48,7 +48,7 @@ time_t mktime(struct tm *tm) {                     /* the exact inverse of gmtim
   long doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1;   /* Hinnant days-from-civil */
   long doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
   long days = era * 146097 + doe - 719468;
-  return days * 86400 + tm->tm_hour * 3600L + tm->tm_min * 60L + tm->tm_sec; }
+  return (time_t) days * 86400 + tm->tm_hour * 3600L + tm->tm_min * 60L + tm->tm_sec; }
 char *asctime(struct tm const *tm) {
   static char b[26];
   static char const *wd = "SunMonTueWedThuFriSat";
