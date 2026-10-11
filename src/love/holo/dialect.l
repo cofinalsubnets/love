@@ -95,6 +95,8 @@
    (ghex? c) (hexv c >= 0)
    (gdecv s) (foldl (a \ i \ a * 10 + s i - 48) 0 ^#s)
    (ghexv s) (foldl (a \ i \ a * 16 + hexv (s i)) 0 ^#s)
+   (gbin? c) (c = 48 || c = 49)
+   (gbinv s) (foldl (a \ i \ a * 2 + s i - 48) 0 ^#s)
    (gtoks s) (: n #s
       (span i p) ((: (g j) (j < n && p (s j) ? (g (j + 1)) j)) i)
       (go i acc)
@@ -103,6 +105,8 @@
              (? (blank? c) (go (i + 1) acc)
                 (c = 48 && i + 1 < n && (s (i + 1) = 120 || s (i + 1) = 88))
                  (span (i + 2) ghex? @ j (go j (['num (ghexv (snip s (i + 2) j))] . acc)))
+                (c = 48 && i + 2 < n && (s (i + 1) = 98 || s (i + 1) = 66) && gbin? (s (i + 2)))  ; 0b101, never the label 0b
+                 (span (i + 2) gbin? @ j (go j (['num (gbinv (snip s (i + 2) j))] . acc)))
                 (digit? c)
                  (: j (span i digit?) v (gdecv (snip s i j))
                     (j < n && (s j = 102 || s j = 98) && (j + 1 >= n || !(gidc? (s (j + 1)))) ?

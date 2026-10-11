@@ -1230,9 +1230,18 @@ below, 251 of those 332 re-run so far: **145 compile**, and the rest refuse by n
   xzr's word in silence. Of 245 random lines over generic and named registers, every word and
   refusal is llvm-mc's. entry.S compiles now, its 1504 words and 248 relocations the kernel's
   object's.
+- **a binary literal** (proc.S's `0b01`): `0b` or `0B` and binary digits read as llvm-mc reads
+  them; holo had read the number 0 and a symbol `b01`. A bare `0b` is still the label behind, and
+  a digit or letter glued past the bits refuses.
+- **a branch inside a section without x** (proc.S's `.pushsection ".idmap.text", "a"`): b, bl,
+  b.cond, cbz/cbnz and tbz/tbnz to a label in their own section resolve in place, as llvm-mc
+  lays them; holo had left each a relocation over a zero field (the same word once linked).
+  proc.S compiles now, its .idmap.text, .altinstructions and 8 relocations the kernel's object's.
 
 Still open on this side (g-21's probes):
 
+- **`adr` to a label and `ldr` of a literal** (`adr x0, foo`, `ldr x1, 1b`) refuse; no census
+  unit has reached them.
 - **`lr` and `fp`**, llvm-mc's names for x30 and x29, refuse in every operand (`mov x0, lr`,
   `stp fp, lr, [sp, #-16]!`); no census unit spells them.
 - **x18 is allocated freely**, and `-ffixed-x18` is ignored: the platform register, which the
@@ -1243,8 +1252,7 @@ Still open on this side (g-21's probes):
 - where the re-run stops now, on this side: a register variable pinned to `x0` (4). Of the 24
   units that stopped on the `.S` extable macro's `\insn`, 19 compile, and the rest stop on: a
   vector lane `v4.d[0]`, a linker script's symbol as a `.long` (`_kernel_size_le_lo32`),
-  `.incbin`, `@note` and a `.set` alias of a function (`__memmove`). Past them, proc.S stops on a
-  binary literal `0b01`. The exclusive pairs (`ldxp`/`stxp` and kin) have no lane yet.
+  `.incbin`, `@note` and a `.set` alias of a function (`__memmove`). entry.S and proc.S compile. The exclusive pairs (`ldxp`/`stxp` and kin) have no lane yet.
   The rest is part 1's front end and gen (`linux/skbuff.h`, an undeclared `branch`,
   `__attribute__((mode))`).
 - defconfig, g-21's units once refused on a Q form or a register pinned twice: of a sample of
