@@ -47,8 +47,8 @@
    (gops toks) (: (go l d cur acc)
                    (atom? l ? (rev (two? cur ? (rev cur . acc) acc))
                       (<l @ t
-                         (? (t = '(ch 40) || t = '(ch 91)) (go >l (d + 1) (t . cur) acc)
-                            (t = '(ch 41) || t = '(ch 93)) (go >l (d - 1) (t . cur) acc)
+                         (? (t = '(ch 40) || t = '(ch 91) || t = '(ch 123)) (go >l (d + 1) (t . cur) acc)
+                            (t = '(ch 41) || t = '(ch 93) || t = '(ch 125)) (go >l (d - 1) (t . cur) acc)
                             (t = '(ch 44) && d = 0) (go >l d () (rev cur . acc))
                             (go >l d (t . cur) acc))))
                   (go toks 0 () ()))
@@ -358,9 +358,12 @@
             (('ch 91) ('sym b) ('ch 93)) (ga-reg b @ ('reg x 8) ['mem x 0] _ (scare 'gas-a64-operand toks))
             (('ch 91) ('sym b) ('ch 93) ('ch 33)) (ga-reg b @ r (two? r ? ['wbm <>r <>>r] (scare 'gas-a64-operand toks)))
             (('sym b) ('ch 33)) (ga-reg b @ r (two? r ? ['wbr <>r <>>r] (scare 'gas-a64-operand toks)))
+            (('sym s) ('ch 91) ('num i) ('ch 93)) ['vel (name s) i]     ; vN.<T>[i], one vector lane
+            (('ch 123) . rest) ['vlist rest]                          ; { vA.T, vB.T } or { vA.T - vB.T }
             (('sym s) . rest)                                       ; `lsr #3`, `lsr 3`, `sxtw #2`: a shift or extend
              (peep ga-shx (name s) () @ k (? (charm? k) ['shx k (rest @ (('ch 35) . v) (gimm v) _ (gimm rest))]
                                              (elem <rest '((ch 43) (ch 45))) ['symk (name s) (gimm rest)]   ; sym+k
+                                             (name s = 'msl) ['msl (rest @ (('ch 35) . v) (gimm v) _ (gimm rest))]   ; movi's ones-shift
                                              (scare 'gas-a64-operand toks)))
             (('ch 91) . ('sym b) . ('ch 44) . rest)
              (: wb (two? rest && <(rev rest) = '(ch 33))            ; `]!`, pre-indexed
@@ -755,12 +758,123 @@
                                 (filter (n \ t = <p + show n + <>p) ^32 @ (n . _) n _ ()))
                     _ ())
    ga-simd {'sha256h [0x5E004000 "q" "q" "4s"] 'sha256h2 [0x5E005000 "q" "q" "4s"]
-            'sha256su0 [0x5E282800 "4s" "4s"] 'sha256su1 [0x5E006000 "4s" "4s" "4s"]
-            'add [0x4EA08400 "4s" "4s" "4s"] 'rev32 [0x6E200800 "16b" "16b"] 'mov [0x4EA01C00 "16b" "16b"]}
+            'sha256su0 [0x5E282800 "4s" "4s"] 'sha256su1 [0x5E006000 "4s" "4s" "4s"]}
    (ga-simd-ins m os)
     (: row (ga-simd m) rs (map (i \ ga-vr (os i) (row (i + 1))) ^#os)
        (? (#os != #row - 1 || !(all charm? rs)) (scare 'gas-a64-operand [m os])
-          (ga-raw (<row | (m = 'mov ? <>rs (#rs > 2 ? (rs 2) 0)) << 16 | <>rs << 5 | <rs))))
+          (ga-raw (<row | (#rs > 2 ? (rs 2) 0) << 16 | <>rs << 5 | <rs))))
+   ;; the advanced simd lane: vN.<T> registers, vN.<T>[i] lanes, { vA.T - vB.T } lists and dN
+   ;; scalars, each word as llvm-mc lays it; an arrangement a form does not take refuses
+   ga-varr [["8b" 0 0] ["16b" 1 0] ["4h" 0 1] ["8h" 1 1] ["2s" 0 2] ["4s" 1 2] ["1d" 0 3] ["2d" 1 3]]
+   (ga-vnum t) (0 < #t && #t < 3 && (all (i \ digit? (t i)) ^#t) && xa-num t < 32 ? (xa-num t) ())
+   (ga-vsplit s) (: t (show s) ds (filter (i \ t i = 46) ^#t)
+                    (#ds = 1 && t 0 = 118 ? (: n (ga-vnum (snip t 1 <ds)) (charm? n ? [n (snip t (<ds + 1) #t)] ())) ()))
+   (ga-vt o) (o @ ('sym s) (: r (ga-vsplit s) a (two? r ? (filter (x \ <x = <>r) ga-varr) ())
+                               (two? a ? [<r (a 0 1) (a 0 2) <>r] ()))
+                  _ ())                                       ; -> [n q size arrangement]
+   (ga-vel o) (o @ ('vel s i) (: r (ga-vsplit s) k (two? r ? (filter (j \ ["b" "h" "s" "d"] j = <>r) ^4) ())
+                                 (two? k && charm? i && 0 <= i && i < 16 >> <k ? [<r <k i] ()))
+                   _ ())                                      ; -> [n log2-bytes index]
+   (ga-fr o c) (o @ ('sym s) (: t (show s) (t 0 = c ? (ga-vnum (snip t 1 #t)) ())) _ ())
+   (ga-vls o) (o @ ('vlist ts)                                ; -> [first count q size]
+                (: n #ts
+                   (? (n < 2 || ts (n - 1) != '(ch 125)) ()
+                      (: rs (catmap (g \ (g @ (('sym a)) [(ga-vt ['sym (name a)])]
+                                            (('sym a) ('ch 45) ('sym b))
+                                             (: x (ga-vt ['sym (name a)]) y (ga-vt ['sym (name b)])
+                                                (two? x && two? y && x 3 = y 3 && <x != <y ?
+                                                   (map (j \ [((<x + j) % 32) (x 1) (x 2) (x 3)]) ^((<y - <x + 32) % 32 + 1))
+                                                   [()]))
+                                            _ [()]))
+                                    (gops (take (n - 1) ts)))
+                         (? (#rs < 1 || #rs > 4 || !(all two? rs)) ()
+                            (all (j \ rs j 0 = (rs 0 0 + j) % 32 && rs j 3 = rs 0 3) ^#rs) [(rs 0 0) #rs (rs 0 1) (rs 0 2)]
+                            ()))))
+                _ ())
+   (ga-vec? m os) (!(two? (peep ga-simd m ())) &&
+                   (any (o \ two? (ga-vt o) || (o @ ('vel _ _) 1 ('vlist _) 1 _ 0)) os
+                    || (elem m '(add sub) && #os = 3 && all (o \ charm? (ga-fr o 100)) os)
+                    || (m = 'movi && #os = 2 && charm? (ga-fr (os 0) 100))))
+   ;; three registers of one arrangement: [word sized?], an unsized one bytes only
+   ga-v3 {'add [0x0E208400 1] 'sub [0x2E208400 1] 'and [0x0E201C00 0] 'bic [0x0E601C00 0] 'orr [0x0EA01C00 0]
+          'orn [0x0EE01C00 0] 'eor [0x2E201C00 0] 'bsl [0x2E601C00 0] 'bit [0x2EA01C00 0] 'bif [0x2EE01C00 0]}
+   ;; a shift by an immediate: [word right?], left esize + s (0 <= s < esize), right 2 esize - s (1 <= s <= esize)
+   ga-vsh {'shl [0x0F005400 0] 'sli [0x2F005400 0] 'sshr [0x0F000400 1] 'ushr [0x2F000400 1] 'ssra [0x0F001400 1]
+           'usra [0x2F001400 1] 'sri [0x2F004400 1] 'srshr [0x0F002400 1] 'urshr [0x2F002400 1]}
+   ;; two registers: [word largest-size], size laid only past 0
+   ga-v2 {'rev64 [0x0E200800 2] 'rev32 [0x2E200800 1] 'rev16 [0x0E201800 0] 'not [0x2E205800 0] 'mvn [0x2E205800 0]
+          'cnt [0x0E205800 0] 'neg [0x2E20B800 3] 'abs [0x0E20B800 3]}
+   ga-vperm {'uzp1 0x0E001800 'uzp2 0x0E005800 'zip1 0x0E003800 'zip2 0x0E007800 'trn1 0x0E002800 'trn2 0x0E006800}
+   (ga-neon m os)
+    (: k #os bad (_ \ scare 'gas-a64-operand [m os])
+       v (map ga-vt os) e (map ga-vel os)
+       same (all two? v && all (x \ x 3 = v 0 3) v)
+       (gr o) (o @ ('reg r w) (r = 'sp ? () [(ga-hw r) w]) _ ())
+       (el5 x) (x 2 << (x 1 + 1) | 1 << x 1)                   ; a lane's imm5
+       (? (elem m '(add sub) && k = 3 && all (o \ charm? (ga-fr o 100)) os)
+           (ga-raw ((m = 'add ? 0x5EE08400 0x7EE08400) | ga-fr (os 2) 100 << 16 | ga-fr (os 1) 100 << 5 | ga-fr (os 0) 100))
+          (two? (peep ga-v3 m ()) && k = 3 && same)
+           (: r (ga-v3 m) z (v 0 2)
+              (? (v 0 3 = "1d" || (r 1 = 0 && z > 0)) (bad 0)
+                 (ga-raw (r 0 | v 0 1 << 30 | (r 1 = 1 ? (z << 22) 0) | v 2 0 << 16 | v 1 0 << 5 | v 0 0))))
+          (two? (peep ga-vsh m ()) && k = 3 && two? (v 0) && two? (v 1) && v 1 3 = v 0 3)
+           (: r (ga-vsh m) es (8 << v 0 2) s ((os 2) @ ('imm x) x _ ())
+              (? (v 0 3 = "1d" || !(charm? s) || (r 1 = 0 ? (s < 0 || s >= es) (s < 1 || s > es))) (bad 0)
+                 (ga-raw (r 0 | v 0 1 << 30 | (r 1 = 0 ? (es + s) (2 * es - s)) << 16 | v 1 0 << 5 | v 0 0))))
+          (two? (peep ga-v2 m ()) && k = 2 && same)
+           (: r (ga-v2 m) z (v 0 2)
+              (? (v 0 3 = "1d" || z > r 1) (bad 0)
+                 (ga-raw (r 0 | v 0 1 << 30 | (r 1 = 0 ? 0 (z << 22)) | v 1 0 << 5 | v 0 0))))
+          (charm? (peep ga-vperm m ()) && k = 3 && same)
+           (? (v 0 3 = "1d") (bad 0)
+              (ga-raw (ga-vperm m | v 0 1 << 30 | v 0 2 << 22 | v 2 0 << 16 | v 1 0 << 5 | v 0 0)))
+          (m = 'ext && k = 4)
+           (: s ((os 3) @ ('imm x) x _ ())
+              (? (!(all two? (take 3 v)) || v 1 3 != v 0 3 || v 2 3 != v 0 3 || v 0 2 > 0 || !(charm? s)
+                  || s < 0 || s >= (v 0 1 = 1 ? 16 8))   ; llvm-mc masks a wider index in silence
+                  (bad 0)
+                 (ga-raw (0x2E000000 | v 0 1 << 30 | v 2 0 << 16 | s << 11 | v 1 0 << 5 | v 0 0))))
+          (m = 'mov && k = 2 && same) (ga-raw (0x0EA01C00 | v 0 1 << 30 | v 1 0 << 16 | v 1 0 << 5 | v 0 0))
+          (elem m '(mov ins) && k = 2 && two? (e 0) && two? (gr (os 1)))
+           (: x (e 0) g (gr (os 1))
+              (? (g 1 != (x 1 = 3 ? 8 4)) (bad 0) (ga-raw (0x4E001C00 | el5 x << 16 | g 0 << 5 | x 0))))
+          (elem m '(mov ins) && k = 2 && two? (e 0) && two? (e 1) && e 0 1 = e 1 1)
+           (: x (e 0) y (e 1)
+              (ga-raw (0x6E000400 | el5 x << 16 | y 2 << y 1 << 11 | y 0 << 5 | x 0)))
+          (elem m '(mov umov) && k = 2 && two? (gr (os 0)) && two? (e 1))
+           (: g (gr (os 0)) y (e 1)
+              (? (g 1 != (y 1 = 3 ? 8 4) || (m = 'mov && y 1 < 2)) (bad 0)
+                 (ga-raw (0x0E003C00 | (y 1 = 3 ? 0x40000000 0) | el5 y << 16 | y 0 << 5 | g 0))))
+          (m = 'dup && k = 2 && two? (v 0) && v 0 3 != "1d")
+           (: z (v 0 2) g (gr (os 1)) y (e 1)
+              (? (two? g) (? (g 1 != (z = 3 ? 8 4)) (bad 0) (ga-raw (0x0E000C00 | v 0 1 << 30 | 1 << z << 16 | g 0 << 5 | v 0 0)))
+                 (two? y && y 1 = z) (ga-raw (0x0E000400 | v 0 1 << 30 | el5 y << 16 | y 0 << 5 | v 0 0))
+                 (bad 0)))
+          (m = 'movi && (k = 2 || k = 3))
+           (: x ((os 1) @ ('imm i) i _ ())
+              msl (k = 3 && ((os 2) @ ('msl _) 1 _ 0)) ms (msl ? ((os 2) @ ('msl n) n _ 0) 0)
+              sh (k = 3 && !msl ? ((os 2) @ ('shx 0 s) s _ -1) 0)
+              d0 (ga-fr (os 0) 100) t (two? (v 0) ? (v 0 3) ())
+              (? (x = () || !(charm? sh) || sh < 0) (bad 0)
+                 (charm? d0 || t = "2d")                      ; 64 bits, each byte all zeros or all ones
+                  (: bs (map (j \ (x >> (8 * j)) & 255) ^8) i8 (foldl (\ a j (a | (bs j = 255 ? 1 0) << j)) 0 ^8)
+                     (? (k = 3 || !(all (b \ b = 0 || b = 255) bs)) (bad 0)
+                        (ga-raw (0x2F00E400 | (t = "2d" ? 0x40000000 0) | (i8 >> 5) << 16 | (i8 & 31) << 5 | (charm? d0 ? d0 (v 0 0))))))
+                 (!(two? (v 0)) || x < 0 || x > 255 || t = "1d" || (msl && v 0 2 != 2)) (bad 0)
+                 (: z (v 0 2) c (? (z = 0 && sh = 0) 0xE400 (z = 1 && (sh = 0 || sh = 8)) (0x8400 | (sh // 8) << 13)
+                                   (z = 2 && msl && (ms = 8 || ms = 16)) (0xC400 | (ms = 16 ? 0x1000 0))
+                                   (z = 2 && !msl && elem sh [0 8 16 24]) (0x0400 | (sh // 8) << 13) ())
+                    (charm? c ? (ga-raw (0x0F000000 | c | v 0 1 << 30 | (x >> 5) << 16 | (x & 31) << 5 | v 0 0)) (bad 0)))))
+          (elem m '(ld1 st1) && (k = 2 || k = 3) && two? (ga-vls (os 0)))
+           (: l (ga-vls (os 0)) n (l 1) base (m = 'ld1 ? 0x0C400000 0x0C000000)
+              b ((os 1) @ ('mem x 0) (ga-hw x) _ ())
+              wd (charm? b ? (l 2 << 30 | [0 7 10 6 2] n << 12 | l 3 << 10 | b << 5 | l 0) ())
+              (? (!(charm? b)) (bad 0)
+                 (k = 2) (ga-raw (base | wd))
+                 ((os 2) @ ('imm i) (i = n * (l 2 = 1 ? 16 8)) _ 0) (ga-raw (base | 0x00800000 | 31 << 16 | wd))
+                 ((os 2) @ ('reg r 8) (r != 'sp) _ 0) (ga-raw (base | 0x00800000 | ga-hw ((os 2) 1) << 16 | wd))
+                 (bad 0)))
+          (bad 0)))
    ;; a q register's load and store: imm12 scaled by 16, else imm9, or written back
    (ga-lsq m os)
     (: t (ga-vr (os 0) "q") lb (m = 'str ? 0x3C800000 0x3CC00000) k #os
@@ -808,6 +922,7 @@
    (ga-ins m os)
     (#os @ k
        (? (charm? (peep ga-movw m ())) (ga-movw-ins m os)
+          (ga-vec? m os) (ga-neon m os)
           (m = 'adrp) (ga-adrp os)
           (m = 'add && k = 3 && ((os 2) @ ('grp _ _) 1 _ 0)) (ga-addlo os)
           (k > 2 && two? (ga-shxof (os (k - 1))) && (two? (peep ga-shop m ()) || two? (peep ga-shal m ()))) (ga-shifted m os)
@@ -892,10 +1007,14 @@
           (two? (ga-mops m)) (ga-mops-ins m (ga-mops m) os)
           (two? (peep ga-pair m ())) (ga-pair-ins m os)
           (ga-lse-ins m (ga-lse m) os)))
+   ;; a register a #define named reaches here apart from its arrangement (`v5` `.4s`): one symbol again
+   (ga-glue ts) (ts @ (('sym a) . ('sym b) . r) (b 0 = 46 ? (ga-glue (['sym (a + b)] . r)) (['sym a] . ga-glue (['sym b] . r)))
+                      (t . r) (t . ga-glue r)
+                      _ ts)
    (ga-line toks)
     (gline toks @ l
        (l @ ('label s) [['label s]]
-            ('ins m os) (ga-ins m (map ga-opnd os))
+            ('ins m os) (ga-ins m (map (o \ ga-opnd (ga-glue o)) os))
             ()))
 
    ;; -- rv64: dst first, the ABI register names, off(base) memory, the csr pseudos. --

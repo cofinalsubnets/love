@@ -1237,6 +1237,16 @@ below, 251 of those 332 re-run so far: **145 compile**, and the rest refuse by n
   b.cond, cbz/cbnz and tbz/tbnz to a label in their own section resolve in place, as llvm-mc
   lays them; holo had left each a relocation over a zero field (the same word once linked).
   proc.S compiles now, its .idmap.text, .altinstructions and 8 relocations the kernel's object's.
+- **the advanced simd lane** (vgetrandom-chacha's `mov v4.d[0], x8` and its NEON body): vN.T
+  registers of every arrangement, vN.T[i] lanes, `{ vA.T - vB.T }` lists and dN scalars, through
+  add/sub and the logical ops, the shifts by an immediate (shl sli sshr ushr ssra usra sri srshr
+  urshr), rev64/32/16, not, cnt, neg, abs, the permutes (uzp zip trn), ext, ins/umov/dup and mov's
+  aliases of them, movi (lsl, msl and the 64-bit byte masks) and ld1/st1 of one to four
+  registers, post-indexed too; holo had three rows, one arrangement each. Of 900 random lines
+  over them, every word and refusal is llvm-mc's but ext's index past its arrangement, which
+  llvm-mc masks in silence and holo refuses, as GNU as does. A register a `#define` names, which
+  the .S path spells apart from its arrangement (`v5 .4s`), is glued back. vgetrandom-chacha
+  compiles, its 75 words the kernel's object's.
 
 Still open on this side (g-21's probes):
 
@@ -1250,8 +1260,8 @@ Still open on this side (g-21's probes):
   reads at the element's width, a bitfield or 128-bit member of a packed struct refuses by name,
   and a by-value struct reached as a packed member rides its type's alignment, not the member's.
 - where the re-run stops now, on this side: a register variable pinned to `x0` (4). Of the 24
-  units that stopped on the `.S` extable macro's `\insn`, 19 compile, and the rest stop on: a
-  vector lane `v4.d[0]`, a linker script's symbol as a `.long` (`_kernel_size_le_lo32`),
+  units that stopped on the `.S` extable macro's `\insn`, 20 compile, and the rest stop on: a
+  linker script's symbol as a `.long` (`_kernel_size_le_lo32`),
   `.incbin`, `@note` and a `.set` alias of a function (`__memmove`). entry.S and proc.S compile. The exclusive pairs (`ldxp`/`stxp` and kin) have no lane yet.
   The rest is part 1's front end and gen (`linux/skbuff.h`, an undeclared `branch`,
   `__attribute__((mode))`).
