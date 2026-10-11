@@ -2,19 +2,26 @@
 #define _LOVE_SIGNAL_H
 typedef int sig_atomic_t;
 #include <sys/types.h>
-typedef struct { long __v[16]; } sigset_t;   /* 128 bytes, glibc-sized */
+typedef struct { unsigned long long __v[16]; } sigset_t;   /* 128 bytes, glibc-sized; the kernel's 64 signals in __v[0] */
 /* the canonical (linux) siginfo, 128 bytes: the head, then a union whose lanes
  * are the faulting address and the child that stopped. the BSDs order the head
  * differently -- and netbsd unions the same two lanes where freebsd lays them
  * flat -- so sigaction.c's shim translates into this one shape and a handler
- * reads the same layout on every kernel. the head pads to 16, where every LP64
- * seat here puts the union. */
+ * reads the same layout on every kernel. the head pads to 16 where a pointer is 8;
+ * i386's union follows at 12. */
 typedef struct {
-  int si_signo, si_errno, si_code, __si_pad;
+  int si_signo, si_errno, si_code;
+#ifndef __i386__
+  int __si_pad;
+#endif
   union {
     void *__addr;
     struct { int __pid; unsigned __uid; int __status; } __chld;
+#ifdef __i386__
+    char __pad[116];
+#else
     char __pad[112];
+#endif
   } __sifields;
 } siginfo_t;
 /* the lanes overlap, so a handler reads the one its signal names: an address for

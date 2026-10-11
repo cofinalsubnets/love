@@ -882,8 +882,9 @@
            (foldl (a \ k \ snip k #d #k @ sub
                              (dotc? sub ? (a + [[(dotobj (swap47 sub)) k]]) a))
                   () (sort (filter (k \ starts? k d) (keys vb)))))
-       (map ((a b) \ [a b [inc]]) (nlmems ndir)
-        + (elem tgt '(x64 a64 rv64) ? [["mksys.o" "" ()]] ())))
+       ; i386 has no 64-bit divide: gen.l calls __udivdi3 and kin, rt.c's
+       (map ((a b) \ [a b [inc]]) (nlmems ndir + (tgt = 'i386 ? [["rt.o" (disk ? "\(home)lib/rt.c" "lib/rt.c")]] ()))
+        + (elem tgt '(x64 a64 rv64 i386) ? [["mksys.o" "" ()]] ())))
    ; the members compile under the link's os (impl.h's table opens on it), and the sys
    ; leaf is the os's own -- freebsd rides the x64 machine.
    (rtflags tgt os vb is) (pins (fseed tgt 'moon) 'os os 'is is 'vb vb)

@@ -50,6 +50,14 @@
    (x86-memx regf bn ixn sc disp)
     (: md (x86-md bn disp)
      ([(x86-modrm md regf 4) (x86-sib (x86-scale sc) ixn bn)] + x86-dispb md disp))
+   ;; the xmm binop table: op -> (prefix opcode). prefix 102=66 / 242=F2 / 0=none. modrm.reg=d, rm=s.
+   x86-sse {'movupd '(102 16) 'movsd '(242 16) 'movapd '(102 40) 'movhlps '(0 18) 'unpcklpd '(102 20)   ; movapd: the whole-register copy (no merge)
+            'mulpd '(102 89) 'addpd '(102 88) 'subpd '(102 92) 'divpd '(102 94)
+            'mulsd '(242 89) 'addsd '(242 88) 'subsd '(242 92) 'divsd '(242 94)
+            'minsd '(242 93) 'maxsd '(242 95)                                              ; d <- d < s ? d : s (a NaN takes s)
+            'xorpd '(102 87) 'pcmpeqd '(102 118) 'andpd '(102 84) 'psubq '(102 251)
+            'cvtss2sd '(243 90) 'cvtsd2ss '(242 90)                                    ; f3/F2 0F 5A /r  widen/narrow single<->double (the `float` lane)
+            'ucomisd '(102 46)}                                                        ; 66 0F 2E /r  ucomisd xmm,xmm (sets flags)
    (x86-seg s) (s @ 'fs [100] 'gs [101] 'es [38] 'cs [46] 'ss [54] 'ds [62] (scare 'x86-seg s))      ; the override prefix; the next form is its instruction
    ;; the relocation kinds: rel32 a 32-bit pc-relative field measured from the end of the field
    ;; (branches, la; aux a byte addend, gas's `.long sym - .` riding 4); rel16 its twin in a
@@ -581,14 +589,7 @@
    ;;    was objdump-checked. REX is emitted only when an operand is r>=8/xmm>=8 or REX.W is needed. --
    x64-xregs (fregs 16)                                                             ; f0..f15 -> 0..15
    (xrn r) (look x64-xregs r 'badxreg)
-   ;; the xmm binop table: op -> (prefix opcode). prefix 102=66 / 242=F2 / 0=none. modrm.reg=d, rm=s.
-   x64-sse {'movupd '(102 16) 'movsd '(242 16) 'movapd '(102 40) 'movhlps '(0 18) 'unpcklpd '(102 20)   ; movapd: the whole-register copy (no merge)
-            'mulpd '(102 89) 'addpd '(102 88) 'subpd '(102 92) 'divpd '(102 94)
-            'mulsd '(242 89) 'addsd '(242 88) 'subsd '(242 92) 'divsd '(242 94)
-            'minsd '(242 93) 'maxsd '(242 95)                                              ; d <- d < s ? d : s (a NaN takes s)
-            'xorpd '(102 87) 'pcmpeqd '(102 118) 'andpd '(102 84) 'psubq '(102 251)
-            'cvtss2sd '(243 90) 'cvtsd2ss '(242 90)                                    ; f3/F2 0F 5A /r  widen/narrow single<->double (the `float` lane)
-            'ucomisd '(102 46)}                                                        ; 66 0F 2E /r  ucomisd xmm,xmm (sets flags)
+   x64-sse x86-sse                                                                  ; the xmm binop table, the core's
    (xrex w r b) (mrex w () r 0 b)                                                       ; the xmm faces: no index, no byte source
    (emit-sse op d s)                                                                     ; xmm <- xmm two-address
       (: meta (peep x64-sse op 0) pfx (meta 0) opc (meta 1) dn (xrn d) sn (xrn s)

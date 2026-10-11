@@ -17,10 +17,10 @@ struct signalfd_siginfo {
   unsigned int  ssi_trapno;
   int           ssi_status;
   int           ssi_int;
-  unsigned long ssi_ptr;
-  unsigned long ssi_utime;
-  unsigned long ssi_stime;
-  unsigned long ssi_addr;
+  unsigned long long ssi_ptr;
+  unsigned long long ssi_utime;
+  unsigned long long ssi_stime;
+  unsigned long long ssi_addr;
   unsigned short ssi_addr_lsb;
   char __pad[46];
 };

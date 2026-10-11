@@ -1,9 +1,17 @@
 #ifndef _LOVE_TIME_H
 #define _LOVE_TIME_H
+#ifdef __i386__
+typedef long long time_t;
+#else
 typedef long time_t;
+#endif
 typedef long clock_t;
 #define CLOCKS_PER_SEC 1000000
+#ifdef __i386__                 /* the kernel's time64 record: 16 bytes, the pad is not read */
+struct timespec { time_t tv_sec; long tv_nsec; long __pad; };
+#else
 struct timespec { long tv_sec; long tv_nsec; };
+#endif
 /* glibc layout -- a hosted (cc-built) object links libc's localtime, so the
    field order + the two GNU extensions (tm_gmtoff/tm_zone) must match. */
 struct tm { int tm_sec; int tm_min; int tm_hour; int tm_mday; int tm_mon;

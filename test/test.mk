@@ -9,7 +9,7 @@
   moon-bzip2 moon-bzip2-a64 moon-bzip2-rv64 moon-gzip moon-gzip-a64 moon-gzip-rv64 \
   moon-bison moon-flex moon-lua moon-lua-a64 moon-lua-rv64 moon-m4 moon-m4-a64 moon-m4-rv64 moon-sqlite \
   moon-sqlite-a64 moon-sqlite-rv64 moon-tar moon-tar-a64 moon-tar-rv64 mx nettest test \
-  test_as test_asmops test_bakerep test_big test_boards test_cca64 test_ccrv64 test_ccwasm test_ccthumb1 \
+  test_as test_asmops test_bakerep test_big test_boards test_cca64 test_cci386 test_ccrv64 test_ccwasm test_ccthumb1 \
   test_ccthumb2 test_clay test_cli test_nest test_cookdiff test_cpio test_cts test_cts_a64 test_tfm test_caja test_gpic test_grap test_chem \
   test_cts_rv64 test_cts_wasm test_disk test_dist test_distboot test_doc test_drat test_drv test_dtb \
   test_elf32 test_encver test_extra test_extract test_fat test_fat32 test_filemode test_fixpoint \
@@ -49,7 +49,7 @@ test_extra: test_filemode waits test_front test_proof test_gen test_uugen test_u
 	test_uuhomgen test_uusplgen test_uumx test_uuvallaw \
 	test_fixpoint test_xfixpoint test_raw_bake test_drat test_vec \
 	test_asmops test_dtb test_rvboot test_elf32 test_objcopy test_distboot test_fat \
-	test_cca64 test_ccrv64 test_ccwasm test_ccthumb1 test_ccthumb2 test_cts_a64 test_cts_rv64 test_cts_wasm \
+	test_cca64 test_cci386 test_ccrv64 test_ccwasm test_ccthumb1 test_ccthumb2 test_cts_a64 test_cts_rv64 test_cts_wasm \
 	test_raw_a64 test_raw_rv64 test_love_a64 \
 	test_virt test_thumb1 test_thumb2 test_thumb2sp \
 	test_mps2 test_mps2_t1 test_mps2_wake test_nucleo446_smoke test_links \
@@ -206,7 +206,7 @@ test_front: $(ho)/front $(ho)/frontseat
 # cats.c is the catalog love0 lacks; it is not idempotent and love0 evaluates twice; or its
 # regression is a HANG, wanting a timeout a corpus cannot give -- a wedged gate is worse than
 # a red one. gate = exit 0 and a "<name>: ok"; a cold lane opts in via hostnif_cold.
-hostnif_tests = test/host/gcpause.l test/host/gcroom.l test/host/mop.l test/host/deepeq.l test/host/wharf.l test/host/cb.l test/host/manifest.l test/host/rune.l test/host/pty.l test/host/loader.l test/host/rdiff.l test/host/run.l test/host/luxui.l test/host/sh.l test/host/mitty.l test/host/vi.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/tty.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/web.l test/host/sbhttp.l test/host/salt.l test/host/libra.l test/host/clay.l test/host/tls.l test/host/tlsc.l test/host/ssh.l test/host/sshd.l test/host/gz.l test/host/gzc.l test/host/png.l test/host/imgenc.l test/host/jpeg.l test/host/webp.l test/host/pic.l test/host/grap.l test/host/chem.l test/host/font.l test/host/story.l test/host/evback.l test/host/design.l test/host/slop.l test/host/score.l test/host/grass.l test/host/grass99.l test/host/wade.l test/host/apartment.l test/host/garage.l test/host/roost.l test/host/shaft.l test/host/court.l test/host/stones.l test/host/corridor.l test/host/brush.l test/host/swatch.l test/host/mesh.l test/host/lore.l test/host/synth.l test/host/aplay.l test/host/flac.l test/host/icy.l test/host/ogg.l test/host/mp3.l test/host/opus.l test/host/player.l test/host/lupa.l test/host/seek.l test/host/ptui.l test/host/mc.l test/host/chucho.l test/host/torrent.l test/host/pom.l test/host/saver.l test/host/helm.l test/host/wget.l test/host/www.l test/host/smallweb.l test/host/net.l test/host/ed.l test/host/cook.l test/host/x11.l test/host/pier.l test/host/kitpng.l test/host/bee.l test/host/beeq.l test/host/locks.l test/host/hosts.l test/host/seals.l test/host/qlog.l test/host/broker.l test/host/showbig.l test/host/lovefs.l
+hostnif_tests = test/host/gcpause.l test/host/gcroom.l test/host/mop.l test/host/deepeq.l test/host/wharf.l test/host/cb.l test/host/manifest.l test/host/rune.l test/host/pty.l test/host/loader.l test/host/rdiff.l test/host/run.l test/host/luxui.l test/host/sh.l test/host/mitty.l test/host/vi.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/tty.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/web.l test/host/sbhttp.l test/host/salt.l test/host/libra.l test/host/clay.l test/host/tls.l test/host/tlsc.l test/host/ssh.l test/host/sshd.l test/host/gz.l test/host/gzc.l test/host/png.l test/host/imgenc.l test/host/jpeg.l test/host/webp.l test/host/pic.l test/host/grap.l test/host/chem.l test/host/font.l test/host/story.l test/host/evback.l test/host/design.l test/host/slop.l test/host/score.l test/host/grass.l test/host/grass99.l test/host/wade.l test/host/apartment.l test/host/garage.l test/host/roost.l test/host/shaft.l test/host/court.l test/host/stones.l test/host/corridor.l test/host/brush.l test/host/swatch.l test/host/flicker.l test/host/walk.l test/host/mesh.l test/host/lore.l test/host/synth.l test/host/aplay.l test/host/flac.l test/host/icy.l test/host/ogg.l test/host/mp3.l test/host/opus.l test/host/player.l test/host/lupa.l test/host/seek.l test/host/ptui.l test/host/mc.l test/host/chucho.l test/host/torrent.l test/host/pom.l test/host/saver.l test/host/helm.l test/host/wget.l test/host/www.l test/host/smallweb.l test/host/net.l test/host/ed.l test/host/cook.l test/host/x11.l test/host/pier.l test/host/kitpng.l test/host/bee.l test/host/beeq.l test/host/locks.l test/host/hosts.l test/host/seals.l test/host/qlog.l test/host/broker.l test/host/showbig.l test/host/lovefs.l
 # out/lush: test/host/sh.l drives the built shell end to end, via out/love and
 # never env's PATH love -- the tree's nifs, not the nest's.
 hostnif_cold =                                   # empty: no gate needs the cold lane
@@ -517,6 +517,9 @@ test_forge: host
 # the three programs no cross lane can build must refuse, not skip.
 test_cca64 test_ccrv64: test_cc%: host
 	@$(gsh) test/gate/ccarch.sh $* $(ho) $m
+# test_cci386 -- the battery whole on i386 (moonlibc, our link), run natively against gcc -m32
+test_cci386: host
+	@$(gsh) test/gate/cci386.sh $(ho) $m
 # test_ccwasm -- the same battery on the wasm target, node as the machine (ccwasm.sh)
 test_ccwasm: host
 	@$(gsh) test/gate/ccwasm.sh $(ho) $m
