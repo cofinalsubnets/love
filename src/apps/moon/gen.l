@@ -4323,7 +4323,7 @@
                               (scan >l D vs r3f live)))
                        (xit? f)
                         (scan >l D vs (r3f || !a64 && elem 'r3 >f) ())
-                       (elem <f '(raw push pop)) 'no
+                       (elem <f '(push pop) || (<f = 'raw && !(elem 'fsafe f))) 'no
                        (elem <f '(call callr))                 ; a plain call rides: sp is as call-stable as r4 was, and
                         ; K9 (8 mod 16) + a 16-multiple D hand the ABI what push r4 did
                         (? a64 'no                                ; bl clobbers lr: the link stays
@@ -7036,7 +7036,7 @@
    asmnames (foldl (t \ i \ "r" + show i @ s9 (pin t (name s9) s9)) {} ^11)
    (asmreg? g r9) (elem r9 (asmfile g) || a64? g && r9 = 'r4)
    (asmfile g) (ia32? g ? '(r0 r1 r2 r3 r5 r6) asmregs)      ; i386 has eight registers, esp and ebp aside
-   (asmpk g) (ia32? g ? '(r6 r5 r2 r1 r0) asmpick)
+   (asmpk g) (ia32? g ? '(r2 r1 r0 r6 r5) asmpick)   ; i386's esi edi are callee-saved: taken last, and saved (cgasm1)
    ; an x64 xmm0..15 or an a64 v0..31, by name
    (vclob? g c) (: (num k) (: d (chars (snip c k #c))
                               (? (two? d && foldl (\ a ch (a && 48 <= ch <= 57)) 1 d) (foldl (\ a ch (a * 10 + ch - 48)) 0 d) -1))
@@ -7270,6 +7270,13 @@
    ; one), numbered per reading so an inlined copy lays its own; the other sections ride
    ; 'fasecs out to the object, beside the file-scope asm's. a name the template does not
    ; define (a goto label, a global) stays a fix
+   ; an asm whose spelled text names no stack or frame register and moves no sp (push pop call ret
+   ; enter leave, and their l/w/f/a kin) cannot see the frame: its raw runs wear 'fsafe, and
+   ; unframe drops the link around them as around any form (rawclean takes the mark off)
+   asmsp '("%esp" "%ebp" "%rsp" "%rbp" "%sp" "%bp" "push" "pop" "call" "ret" "enter" "leave")
+   (asmfsafe txt fs)
+    (any (w \ 0 <= findsub txt w) asmsp ? fs (map (f \ (two? f && <f = 'raw ? (f + ['fsafe]) f)) fs))
+   (rawclean fs) (map (f \ (two? f && <f = 'raw && 2 < #f ? [<f <>f] f)) fs)
    (asmbody g tgt neutral? txt)
     ; one blob resolves its labels inside it; an absolute label (pushl's) wants the link, so a
     ; template carrying one takes the runs path, its labels the function's own
@@ -7396,6 +7403,8 @@
                                    (asmsave? g r9) (clobs >l (r9 . acc))
                                    (asmno g ("an asm clobber of \"" + c + "\"")))))))
                    saves (clobs <>>>>s ())
+                   ; i386's esi edi seated as an operand are the caller's: saved around the whole asm
+                   csops (bad? saves || bad? asgn ? () (ia32? g ? (filter (r9 \ elem r9 asgn && nelem r9 saves) '(r5 r6)) ()))
                    ; an asm goto with outputs jumps to a trampoline per label that stores them
                    ; and goes on; a pushed clobber would leave it a frame deeper than the fall-through
                    outs? (any (e2 \ elem <e2 '(o x f)) os)
@@ -7403,6 +7412,7 @@
                    (? (bad? saves) 'bad
                       (bad? asgn) (asmno g "more asm operands than registers to seat them")
                       (two? labs && two? saves) (asmno g "an asm goto with a callee-saved clobber")
+                      (two? labs && two? csops) (asmno g "an asm goto with an esi or edi operand")
                       (: ; the operand printers, one per kind (neutral: a plain register name, "m" as `rN, 0`)
                          (rtext a9 w) (md \ (? (md = 108) 'bad (md = 97 && !neutral?) (gas-mem tgt a9) neutral? (md ? 'bad (peep asmnames a9 "r?")) (gas-reg tgt a9 w md)))
                          (itext v) (md \ (? (md = 108) 'bad neutral? (md || !(charm? v) ? 'bad (show v)) (gas-imm tgt v md)))
@@ -7419,27 +7429,29 @@
                          (? (bad? txt) (asmno g "an asm operand the template spells with a modifier it has no lane for")
                             (!neutral? && nom? (gas-nolong tgt txt))
                              (asmno g ("an asm \"" + show (gas-nolong tgt txt) + "\", which 64-bit mode has no encoding for"))
-                            (: ; inputs (and in-out outputs) evaluate and push..
-                               (loads l acc)
+                            (: ; inputs (and in-out outputs) evaluate and push -- all but the last, which
+                               ; stays in r0 and moves to its register ahead of the pops
+                               nin #(filter (e2 \ elem <e2 '(x i b)) ops9)
+                               (loads l k acc)
                                 (!(two? l) ? acc
                                    (<l @ e2
                                       (elem <e2 '(x i b) ?
                                           (cgexpr g env <>>e2 () @ r
                                              (? (bad? r) 'bad
                                                 (flo? (vty r) || stru? (vty r)) (asmno g "a float or struct asm operand")
-                                                (loads >l (acc + tor0 g r + spush 'r0))))
-                                         (loads >l acc))))
-                               lf (loads ops9 ())
+                                                (loads >l (k + 1) (acc + tor0 g r + (k + 1 = nin ? () (spush 'r0))))))
+                                         (loads >l k acc))))
+                               lf (loads ops9 0 ())
                                (bad? lf ? 'bad
                                   (: ; ..then pop into their registers, reverse order
-                                     (pops l al acc)
+                                     (pops l al k acc)
                                       (!(two? l) ? acc
                                          (elem <<l '(x i b) ?
-                                            (pops >l >al (spop <al + acc))
-                                            (pops >l >al acc)))
+                                            (pops >l >al (k + 1) ((k + 1 = nin ? (<al = 'r0 ? () [['mov <al 'r0]]) (spop <al)) + acc))
+                                            (pops >l >al k acc)))
                                      ; the body, the saved clobbers pushed around it
                                      body (map (r9 \ ['push r9]) saves
-                                           + asmbody g tgt neutral? txt
+                                           + asmfsafe txt (asmbody g tgt neutral? txt)
                                            + map (r9 \ ['pop r9]) (rev saves))
                                      ; flag outputs: each set reads the flags before any push moves them
                                      (fsets l al acc)
@@ -7462,11 +7474,21 @@
                                                            (ostores >l >al
                                                             (vfs lv + spop 'r1 + [[(stop ty) 'r0 0 'r1]] + acc)))))))))
                                      osf (ostores ops9 asgn ())
-                                     (post u9) (fsets ops9 asgn () + opush ops9 asgn () + osf)
+                                     ; one register output into a plain memory lvalue (a local's slot, a home's
+                                     ; face) stores straight from its register: no cell
+                                     oix9 ((: (g9 l j) (? !(two? l) -1 (elem <<l '(o x)) j (g9 >l (j + 1)))) ops9 0)
+                                     one? (1 = #(filter (e2 \ elem <e2 '(o x f)) ops9) && 0 <= oix9)
+                                     olv (one? ? (clval g env <>>(ops9 oix9)))
+                                     oreg (one? ? (asgn oix9))
+                                     direct (one? && vm? olv && !(two? (vfs olv)) && vmb olv != oreg
+                                             && !(vty olv @ ty (flo? ty || stru? ty || arr? ty || bitf? ty)))
+                                     (post u9) (fsets ops9 asgn () + (direct ? [[(stop (vty olv)) (vmb olv) (vmo olv) oreg]]
+                                                                         (opush ops9 asgn () + osf)))
                                      (tramps t9 l9) (!(two? t9) ? ()
                                                        ([['label <t9]] + post 0 + [['jmp <l9]] + tramps >t9 >l9))
                                      (bad? osf ? 'bad
-                                        (lf + pops ops9 asgn () + body + post 0
+                                        (map (r9 \ ['push r9]) csops + lf + pops ops9 asgn 0 () + body + post 0
+                                         + map (r9 \ ['pop r9]) (rev csops)
                                          + (tls = labs ? ()
                                               (: done (nlab g (g 'fn + ".ag"))
                                                  ([['jmp done]] + tramps tls labs + [['label done]]))))))))))))))))
@@ -9787,7 +9809,7 @@
                      (cfoldir g irx))))))))))))))))
        ; the copy fold again after repack: a slot copied from a seat repack just minted forwards from it now
        (post irx) (deadst g (deaddef g (copyprop g (stld g (copyprop g (repack g irx))))))
-       (bad? irf ? irf (dp 'final (a64sp g (a64mv g (bprot g (frrec g (swrap g (tailarm g (jmpm g (csdrop g (cskeep g (unhome g (jr0 g (rvunframe g (unframe g (hz4 g (laacse g (coal g (copyprop g (recse g (wpair g (dp 'post (post (dp 'deadlab (deadlabk (cg-refs (g 'fasecs) {}) (swp irf)))))))))))))))))))))))))))
+       (bad? irf ? irf (dp 'final (rawclean (a64sp g (a64mv g (bprot g (frrec g (swrap g (tailarm g (jmpm g (csdrop g (cskeep g (unhome g (jr0 g (rvunframe g (unframe g (hz4 g (laacse g (coal g (copyprop g (recse g (wpair g (dp 'post (post (dp 'deadlab (deadlabk (cg-refs (g 'fasecs) {}) (swp irf))))))))))))))))))))))))))))
 
    ; the data tail -> (dataforms nifforms imgforms extras bssforms rodataforms) | 'bad, extras ((name forms
    ; ro?) ..) per other named section in declaration order. love_nifs packs for the linker's __start_/__stop_
