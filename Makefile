@@ -140,7 +140,7 @@ $(ho)/liblove.a: $(h_o)
 # src/love/user/main0.c, which host_c holds back because only this link has a use for it.
 love0_o = $(patsubst $(S)/%.c,out/0/%.o,$(filter-out $(S)/love/cats.c,$(host_c)) $(S)/love/user/main0.c $(S)/love/user/nokern.c $(S)/love/noblob.c $(love_c))
 out/0/love/user/main0.o: out/lib/boot0.h
-out/0/love/cb.o: src/love/quay/quay.c src/love/quay/nif.c src/love/quay/quay.h src/love/quay/cp437.h src/love/quay/cpwidth.h src/love/quay/cpemoji.h src/love/quay/paint.c src/love/quay/cga_8x8.c src/love/quay/cleat_8x16.c
+out/0/love/cb.o: src/love/quay/quay.c src/love/quay/nif.c src/love/quay/quay.h src/love/quay/cp437.h src/love/quay/paint.c src/love/quay/cga_8x8.c src/love/quay/cleat_8x16.c
 boot_cc = $(CCACHE) $(CC) $(cflags) -fPIE -DLove0 -Dtco=0 -Ddata_section=0 -DLvVersion='"$(love_base)+bootstrap"' -I. -Isrc/love -Isrc/inle -Iout/lib
 .PHONY: force_love0cc
 force_love0cc: ;
@@ -169,7 +169,7 @@ $(ho)/o/love/main.o $(ho)/o/love/lib/ustar.o $(ho)/o/love/lib/srctree.o: $(S)/lo
 $(ho)/o/love/main.o $(ho)/o/love/lib/srctree.o $(ho)/o/love/lovefs.o $(ho)/o/love/posix.o \
   $(ho)/o/love/src.o: $(S)/love/lib/srctree.h
 # src/love/cb.c rides the src/love/quay sources by unity include -- recompile when they move.
-$(ho)/o/love/cb.o: src/love/quay/quay.c src/love/quay/nif.c src/love/quay/quay.h src/love/quay/cp437.h src/love/quay/cpwidth.h src/love/quay/cpemoji.h src/love/quay/paint.c src/love/quay/cga_8x8.c src/love/quay/cleat_8x16.c
+$(ho)/o/love/cb.o: src/love/quay/quay.c src/love/quay/nif.c src/love/quay/quay.h src/love/quay/cp437.h src/love/quay/paint.c src/love/quay/cga_8x8.c src/love/quay/cleat_8x16.c
 
 moon0 = $(love0) wake out/mooncc0.image mooncc $(GCDBG)
 moon0_dep = out/mooncc0.image
@@ -240,7 +240,7 @@ $$($(1)_host_o) $$($(1)_seat_o): $$($(2))/%.o: $$(S)/%.c $$(love_h) $$(moon0_dep
 	@$$($(3)) -D tco=$$(tco) -I$$(ho) -I. -Isrc/love -Isrc/inle -Iout/lib -c $$< $$@
 $$($(2))/love/main.o: out/lib/distlist.h
 $$($(2))/love/cats.o: out/lib/baked.h
-$$($(2))/love/cb.o: src/love/quay/quay.c src/love/quay/nif.c src/love/quay/quay.h src/love/quay/cp437.h src/love/quay/cpwidth.h src/love/quay/cpemoji.h src/love/quay/paint.c src/love/quay/cga_8x8.c src/love/quay/cleat_8x16.c
+$$($(2))/love/cb.o: src/love/quay/quay.c src/love/quay/nif.c src/love/quay/quay.h src/love/quay/cp437.h src/love/quay/paint.c src/love/quay/cga_8x8.c src/love/quay/cleat_8x16.c
 $$($(1)_math_o): $$($(2))/moonlibc/%.o: src/apps/moon/lib/moonlibc/%.c $$(moon0_dep)
 	@echo 'MOON	'$$@
 	@mkdir -p $$(dir $$@)
@@ -307,7 +307,7 @@ kore_head = src/apps/kore/text.l src/apps/kore/u.l src/apps/kore/core.l src/apps
   src/apps/kore/find.l src/apps/cook.l src/apps/kore/asbook.l src/apps/kore/man.l src/apps/kore/lens.l
 # the backends: one file per ISA, then the text faces they share
 holo_be = src/love/holo/x64.l src/love/holo/a64.l src/love/holo/thumb2.l src/love/holo/rv64.l \
-  src/love/holo/thumb1.l src/love/holo/wasm.l src/love/holo/wasmfn.l src/love/holo/text.l src/love/holo/dialect.l
+  src/love/holo/thumb1.l src/love/holo/i386.l src/love/holo/wasm.l src/love/holo/wasmfn.l src/love/holo/text.l src/love/holo/dialect.l
 # the object floor every reader of a backend goes out through
 holo_obj = src/love/holo/elf.l src/love/holo/obj.l src/love/holo/link.l
 # the compiler over them
@@ -330,7 +330,7 @@ crewfiles = src/apps/json.l src/apps/sb/merge.l src/apps/sb/http.l src/apps/sb/s
   src/apps/libra/salt.l src/apps/libra/libra.l src/apps/vi/hueweb.l src/apps/kiosko/web.l \
   src/apps/harp/harp.l src/apps/harp/play.l src/apps/harp/score.l \
   src/apps/harp/just.l src/apps/harp/drift.l src/apps/harp/tonnetz.l src/apps/harp/phrases.l \
-  src/apps/x11.l src/apps/manifest/manifest.l src/apps/lore/lore.l src/apps/lore/rove.l src/apps/lore/view.l src/apps/lore/vec.l src/apps/lore/starmap.l src/apps/lore/sky.l src/apps/lore/mesh.l src/apps/lore/swatch.l src/apps/lore/neon.l src/apps/lore/brush.l src/apps/lore/grove.l src/apps/lore/meadow.l src/apps/lore/tower.l src/apps/lore/story.l src/apps/lore/design.l src/apps/lore/slop.l src/apps/lore/grass.l src/apps/lore/grass99.l src/apps/lore/wade.l src/apps/lore/apartment.l src/apps/lore/dusk.l src/apps/lore/garage.l src/apps/lore/shaft.l src/apps/lore/court.l src/apps/lore/stones.l src/apps/lore/corridor.l src/apps/lore/roost.l src/apps/harp/synth.l src/apps/harp/live.l src/apps/wav.l src/apps/flac.l src/apps/icy.l src/apps/ogg.l src/apps/mp3.l src/apps/av.l src/apps/player/bus.l src/apps/player/core.l \
+  src/apps/x11.l src/apps/manifest/manifest.l src/apps/lore/lore.l src/apps/lore/rove.l src/apps/lore/view.l src/apps/lore/vec.l src/apps/lore/starmap.l src/apps/lore/sky.l src/apps/lore/mesh.l src/apps/lore/swatch.l src/apps/lore/neon.l src/apps/lore/brush.l src/apps/lore/grove.l src/apps/lore/meadow.l src/apps/lore/tower.l src/apps/lore/story.l src/apps/lore/design.l src/apps/lore/slop.l src/apps/lore/grass.l src/apps/lore/grass99.l src/apps/lore/wade.l src/apps/lore/apartment.l src/apps/lore/dusk.l src/apps/lore/garage.l src/apps/lore/shaft.l src/apps/lore/court.l src/apps/lore/stones.l src/apps/lore/corridor.l src/apps/lore/roost.l src/apps/harp/synth.l src/apps/wav.l src/apps/flac.l src/apps/icy.l src/apps/ogg.l src/apps/mp3.l src/apps/av.l src/apps/player/bus.l src/apps/player/core.l \
   src/apps/seek.l src/apps/player/tui.l src/apps/mitty/wharf.l src/apps/mitty/limn.l src/apps/mitty/mitty.l src/apps/font.l src/apps/lux/wire.l src/apps/mitty/pier.l src/apps/doom.l src/apps/lupa.l src/apps/mc.l src/apps/help.l \
   src/apps/chucho/mime.l src/apps/chucho/box.l src/apps/chucho/smtp.l src/apps/chucho/imap.l src/apps/chucho/chucho.l src/apps/torrent/benc.l src/apps/torrent/metainfo.l src/apps/torrent/tracker.l src/apps/torrent/peerwire.l src/apps/torrent/swarm.l src/apps/torrent/torrent.l src/apps/pom.l src/apps/mitty/saver.l src/apps/mitty/avatar.l src/apps/mitty/chat.l src/apps/locks.l src/apps/hosts.l src/apps/seals.l src/apps/qlog.l src/apps/hive.l src/apps/bee.l
 korefiles = $(kore_head) $(holo_obj) src/love/holo/copy.l $(kore_arc) $(kore_net)
@@ -655,7 +655,7 @@ kcc = $(mooncc) $(kcppflags) -t $a
 
 kernel: $(k_elf)
 
-$(k_odir)/love/cb.o: src/love/quay/quay.c src/love/quay/nif.c src/love/quay/quay.h src/love/quay/cp437.h src/love/quay/cpwidth.h src/love/quay/cpemoji.h src/love/quay/paint.c src/love/quay/cga_8x8.c src/love/quay/cleat_8x16.c
+$(k_odir)/love/cb.o: src/love/quay/quay.c src/love/quay/nif.c src/love/quay/quay.h src/love/quay/cp437.h src/love/quay/paint.c src/love/quay/cga_8x8.c src/love/quay/cleat_8x16.c
 $(k_odir)/moonlibc.o: $(rt_a) $(rt_slice) src/tools/mkrt.l $(mdep)
 	@echo 'HOLO	'$@
 	@mkdir -p "$(dir $@)"

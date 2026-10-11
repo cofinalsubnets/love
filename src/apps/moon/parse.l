@@ -310,7 +310,7 @@
    ; parenthesised constant expression folds (the kernel's `2 * sizeof(unsigned long)`), and one
    ; that will not fold asks nothing
    (palask ps ts)
-    (!(peekp ts "(") ? [(pst32? ps ? 8 16) ts]
+    (!(peekp ts "(") ? [(elem (ps 'tgt) '(thumb2 thumb2sp thumb1) ? 8 16) ts]   ; AAPCS32's 8; i386's SSE asks 16
        (thenw (pexpr ps >ts) ")" @ er
           (atom? er ? [0 ts]
              (cfold (pw64 ps) <er @ v [(charm? v ? v 0) <>er]))))
@@ -430,7 +430,7 @@
    (ptyat? ps ts) (peekp ts "(" && tyat? ps >ts)       ; ..inside a `(`: a cast, a type-name operand
    ; -- the type floor rides src/apps/moon/floor.l (shapes, sizes, the typing door), read from
    ; gen too. ps carries the two things it takes as parameters: the word and the tag table --
-   (pst32? ps) (elem (ps 'tgt) '(thumb2 thumb2sp thumb1))
+   (pst32? ps) (elem (ps 'tgt) '(thumb2 thumb2sp thumb1 i386 i386m16))   ; the 32-bit word: long 4 bytes, long long the pair
    ; char is three types (C11 6.2.5p15): 'schar and 'uchar, and plain char -- 'char where the ABI makes it
    ; signed (x86-64, wasm's C conventions), 'cchar where unsigned (AAPCS64, AAPCS32, RISC-V). each
    ; symbol's sign is its own, so nothing past here asks the target
@@ -439,7 +439,8 @@
    (psword ps) (pst32? ps ? 4 8)
    (szty ps) (pst32? ps ? 'uint 'ulong)          ; size_t: sizeof folds wear this coat
    (tsz ps ty) (tysz (psword ps) (ps 'stag) ty)
-   (talign ps ty) (tyalign (psword ps) (ps 'stag) ty)
+   (talign ps ty) (tyalign (psword ps) (psacap ps) (ps 'stag) ty)
+   (psacap ps) (? (elem (ps 'tgt) '(i386 i386m16)) 4 (pst32? ps) 8 16)   ; the widest scalar alignment
 
    ; -- parse-time expr typer (for sizeof folding): the undecayed type of an lvalue/pointer
    ; expr, () when unknown (the caller keeps a deferred 'szof then, and gen sizes it). arrays
@@ -939,7 +940,7 @@
                                (-32768 <= lo && hi <= 32767) 'short
                                'int)
                      ty0 (? wide wide
-                            (pst32? ps || pk) narrow
+                            (pst32? ps && !(elem (ps 'tgt) '(i386 i386m16)) || pk) narrow   ; AAPCS32's short enums; SysV i386 says int
                             pos 'uint 'int)
                      ; a mode(M) lays the enum at M's width, its signedness kept; gcc refuses
                      ; a width that does not hold every enumerator

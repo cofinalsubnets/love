@@ -1,7 +1,7 @@
 #ifndef _LOVE_LOCALE_H
 #define _LOVE_LOCALE_H
 /* freestanding locale for cc: the LC_* categories, struct lconv, and the two
- * queries. we run one fixed "C" locale, so setlocale answers a constant. */
+ * queries. every category is C, but LC_CTYPE may be utf-8 (num.c's setlocale). */
 #define LC_CTYPE    0
 #define LC_NUMERIC  1
 #define LC_TIME     2
