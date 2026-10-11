@@ -165,16 +165,9 @@
    r (<ws - 2) c <>ws
    g (roost-new c r pl)
    (turn k) (? (g 'ask) (k @ 27 (pins g 'ask () 'sign ()) (roost-turn g (rove-key g k)))
-               (k = 27 && g 'sign) (pin g 'sign ())
-               (k @ (113 || 27 || -7) (pin g 'over 'cancel)
-                (roost-turn g (rove-key g k))))
-   (loop last t0) (g 'over ? ()
-                     (: _ (say out (roost-frame g), flush out)
-                        k (key-wait t0 last (g 'sign ? sign-gap repeat-gap) (_ \ rest 30))
-                        (turn k,
-                         loop k (clock 0))))
+               (rove-press g k 'cancel (g \ pin g 'sign ()) roost-turn))
    (say out (esc + "[2J"),
-    loop 0 0,
+    rove-loop g roost-frame (_ \ rest 30) turn,
     g 'over))
  (roost-run pl)
   (ttytake rove-modes,

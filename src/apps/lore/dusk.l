@@ -18,7 +18,8 @@
          sun-pens sky-ramp mang)
 (borrow 'rove)
 (borrow 'view)                          ; the screen, its rays, the pens
-(borrow 'play)                          ; the voices, the mix
+(borrow 'walk)                          ; the rail
+(borrow 'gamelan)                       ; the song
 (borrow 'posix)    ; close, for the horn
 (:
  eh 1.6                               ; the eye above the bed, standing
@@ -214,48 +215,25 @@
  ; is no walking back -- u n look up and down, and space walks on by itself, the turns
  ; steering it
  facing (pi / 3.0)
- (dusk-step st k) (: turn (k @ 104 -0.08 -1 -0.08 108 0.08 -2 0.08 0.0)
-   mv (k @ 107 0.35 -8 0.35 0.0)
-   h (st 'h) tilt (k @ 117 (h // 16) 110 (0 - h // 16) 0)
-   (? (st 'done) st
-      (turn != 0.0) (pin st 'th (clamp (st 'th + turn) (0.0 - facing) facing))
-      (tilt != 0) (view-hz st (st 'hz + tilt) 4)
-      (mv != 0.0) (dusk-move st mv)
-      (k = 32) (pin st 'walk (st 'walk ? 0 1))
-      st))
+ (dusk-step st k) (walk-rail st k facing dusk-move)
  ; --- the song: a pelog chime now and then, and a gong under it ------------------------
  ; pelog bem, five of its seven uneven steps, in semitones from middle c
  pelog [0.0 1.2 2.7 6.7 7.85]
  song-chunk (song-rate // fps)                          ; a frame's worth
- song-gain 11000.0
- chime-odds 10                                          ; a chime's chance a chunk, in thousandths
- ; the song: its port, a spun die, the frames written, the voices ringing, when the gong
- ; is next due, and how many strikes there have been
- (dusk-song-new h st) {'h h 'sb {st} 'fpos 0 'vs () 'gong 0 'struck 0}
- ; one chunk out the port. a chime by the die, its degree and octave off the die too; a
- ; gong when it is due, the next some seconds on. the port is any jug, so the song gates
- ; headless
- (dusk-song-feed s) (: sb (s 'sb) base (s 'fpos)
-   (strike v) (base + roll sb song-chunk @ at
-                 (pins s 'vs (s 'vs + [[at (mkvoice at v song-rate)]]) 'struck (s 'struck + 1)))
-   (roll sb 1000 < chime-odds ?
-      (strike {'s "chime" 'note (pelog (roll sb 5) - 24 + 12 * (roll sb 3 = 0))
-               'gain (0.5 + roll sb 40 / 100.0) 'pan (0.2 + roll sb 60 / 100.0) 'legato 5.0}),
-    s 'gong <= base ?
-      (strike {'s "tri" 'note -19.3 'gain 0.8 'pan 0.5 'legato 8.0},
-       pin s 'gong (base + song-rate * (9 + roll sb 6))),
-    song-out s song-chunk song-gain))
+ ; ..two octaves down, the high one a time in three; a chime a hundred chunks or so; the
+ ; gong a little under the low c, nine to fourteen seconds apart
+ tune {'scale pelog 'down -24 'high 3 'gain 0.5 'odds 10 'gong -19.3 'gong-gain 0.8 'gong-legato 8.0 'gong-every 9}
+ (dusk-song-new h st) (gamelan-new h st)
+ (dusk-song-feed s) (gamelan-feed s tune)
  ; --- the walk, on view's loop: walking on by itself, or in the hole settling, a frame
  ; at a time, and the garage after it. dusk-walk takes a stage already raised, and
  ; dusk-run raises one ---
  (dusk-walk _) (view-walk {'new dusk-new 'size dusk-size 'frame dusk-frame 'key dusk-step 'fps fps
                            'tick (st \ (? (st 'done) (dusk-settle st) (st 'walk) (dusk-move st 0.25)))
-                           'song (hn \ ((hn ? (dusk-song-new hn (wheel (clock 0)))) @ s
-                                          (s ? (_ \ (dusk-song-feed s)))))
+                           'song (view-song dusk-song-new dusk-song-feed)
                            'linger done-ms 'next ['garage 'garage-walk]})
  (dusk-run _) (view-run dusk-walk)
  dusk-usage "usage: love lore dusk   (h l turn, k walks on, u n look, space walks on to the garage; q or esc leaves)"
- (dusk-main as) (as @ () (dusk-run ())
-                     (say err ("dusk: " + dusk-usage + "\n"), flush err, 2))
+ (dusk-main as) (view-main "dusk" dusk-usage (as \ view-words as []) dusk-run as)
  _ ((cite 'lore 'lore-enlist) 'dusk (udoor 'dusk dusk-main dusk-usage 1 1)))
 ) ; module dusk
