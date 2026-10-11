@@ -7451,7 +7451,8 @@
                                             (pops >l >al k acc)))
                                      ; the body, the saved clobbers pushed around it
                                      body (map (r9 \ ['push r9]) saves
-                                           + asmfsafe txt (asmbody g tgt neutral? txt)
+                                           + (two? labs ? (asmbody g tgt neutral? txt)   ; a goto's edges are not unframe's to see
+                                                 (asmfsafe txt (asmbody g tgt neutral? txt)))
                                            + map (r9 \ ['pop r9]) (rev saves))
                                      ; flag outputs: each set reads the flags before any push moves them
                                      (fsets l al acc)
