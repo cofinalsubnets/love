@@ -102,7 +102,7 @@
    (fix-l x)  (x 3)
    (fix-a x)  (x 4)
    ;; an a64 address fix's aux: the word below bit 32, a signed 32-bit addend above it
-   a64-afix '(adrp21 addlo12 lo12s1 lo12s2 lo12s4 lo12s8 lo12s16)
+   a64-afix '(adrp21 addlo12 lo12s1 lo12s2 lo12s4 lo12s8 lo12s16 ld19)
    (afix-w aux) (aux & 4294967295)
    (afix-ad aux) ((aux >> 32) @ h (h >= 2147483648 ? (h - 4294967296) h))
    ;; a byte is 1; a fixup is its field width; a STRING is a blob -- those bytes verbatim,
