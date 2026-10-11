@@ -30,7 +30,12 @@ enum { O_CHAR, O_ANY, O_SET, O_BOL, O_EOL, O_ASSERT, O_SPLIT, O_JMP, O_SAVE, O_B
 typedef struct { unsigned char b[32]; int neg, nr, cr; unsigned cls; uint32_t *r; } rset;
 typedef struct node { int t, c, n, min, max; struct node *a, *b; rset *set; } node;
 typedef struct { int op, x, y; rset *set; } ins;
-typedef struct { ins *p; int np, nregs, bref, flags, u8; size_t nsub; } prog;
+/* the program, one block that holds no pointer: this, then its np ins, nsets sets and their
+ * ranges -- an O_SET's x is its set, a set's cr where its ranges start */
+typedef struct { int np, nsets, nregs, bref, flags, u8, lead; size_t nsub; } prog;   /* lead: lead() */
+#define INS(g) ((ins const *) ((g) + 1))
+#define SETS(g) ((rset const *) (INS(g) + (g)->np))
+#define RANGES(g) ((uint32_t const *) (SETS(g) + (g)->nsets))
 
 typedef struct {
   char const *s; int ext, icase, nl, grep, err, ngroup, bref, u8; unsigned closed;
@@ -112,11 +117,11 @@ static void add(parser *P, rset *s, uint32_t lo, uint32_t hi) {
     if (lone[i] >= lo && lone[i] <= hi)
       for (int k = folds(lone[i], o); k--; ) if (o[k] < 128) setb(s, (int) o[k]); else addr(P, s, o[k], o[k]); }
 /* is c in s: a byte no character wears never is */
-static int inset(rset const *s, int c, int u8) {
+static int inset(rset const *s, uint32_t const *r, int c, int u8) {
   if (!u8 || c < 128) return c < 256 && getb(s, c);
   if (c > 0x10ffff) return 0;
   int in = 0;
-  for (int k = 0; k < s->nr && !in; k++) in = s->r[2 * k] <= (uint32_t) c && (uint32_t) c <= s->r[2 * k + 1];
+  for (int k = 0; k < s->nr && !in; k++) in = r[2 * k] <= (uint32_t) c && (uint32_t) c <= r[2 * k + 1];
   for (int t = 1; t <= 12 && !in; t++) in = s->cls >> t & 1 && __ctwide(t, (unsigned) c);
   return in != s->neg; }
 /* a bracket member at P->s: a character, by code point in utf-8 mode */
@@ -426,39 +431,45 @@ static void freeparse(parser *P, int keepsets) {
   free(P->all);
   if (!keepsets) { for (int i = 0; i < P->nsets; i++) free(P->sets[i]->r), free(P->sets[i]); free(P->sets); } }
 
+/* the ascii byte every match opens with, -2 when a match opens only at the text's start, else -1 */
+static int lead(ins const *p, int flags) {
+  while (p->op == O_SAVE || p->op == O_MARK) p++;
+  return p->op == O_CHAR && p->x < 128 && !(flags & REG_ICASE) ? p->x : p->op == O_BOL && !(flags & REG_NEWLINE) ? -2 : -1; }
+
 int regcomp(regex_t *re, char const *pat, int flags) {
   parser P = {0};
   P.s = pat; P.ext = flags & REG_EXTENDED; P.icase = flags & REG_ICASE; P.nl = flags & REG_NEWLINE; P.grep = flags & REG_GREP;
   P.u8 = __love_utf8 || flags & REG_UTF8;
-  re->re_prog = 0; re->re_nsub = 0;
+  re->re_prog = 0; re->re_nsub = 0; re->re_size = 0;
   node *root = alt(&P, 0);
   if (P.err) { freeparse(&P, 0); return P.err; }
   emitter E = {0};
   gen(&E, root, P.icase);
   emit(&E, O_MATCH, 0, 0, 0);
   freeparse(&P, 1);
-  prog *g = E.err ? 0 : malloc(sizeof *g);
-  if (!g) {
-    free(E.p);
-    for (int i = 0; i < P.nsets; i++) free(P.sets[i]->r), free(P.sets[i]);
-    free(P.sets);
-    return E.err ? E.err : REG_ESPACE; }
-  *g = (prog) {E.p, E.np, E.nregs, P.bref, flags, P.u8, (size_t) P.ngroup};
-  /* the sets ride at the program's tail, so regfree finds them */
-  rset **keep = realloc(P.sets, (P.nsets + 1) * sizeof *keep);
-  if (!keep) { free(E.p); free(g); for (int i = 0; i < P.nsets; i++) free(P.sets[i]->r), free(P.sets[i]); free(P.sets); return REG_ESPACE; }
-  keep[P.nsets] = 0;
-  re->re_prog = g; re->re_nsub = (size_t) P.ngroup;
-  g->p[g->np - 1].set = (rset *) keep;
+  size_t nr = 0;
+  for (int i = 0; i < P.nsets; i++) nr += 2 * (size_t) P.sets[i]->nr;
+  size_t size = sizeof(prog) + (size_t) E.np * sizeof(ins) + (size_t) P.nsets * sizeof(rset) + nr * sizeof(uint32_t);
+  prog *g = E.err ? 0 : malloc(size);
+  if (g) {
+    *g = (prog) {E.np, P.nsets, E.nregs, P.bref, flags, P.u8, lead(E.p, flags), (size_t) P.ngroup};
+    ins *p = (ins *) (g + 1);
+    rset *t = (rset *) (p + E.np);
+    uint32_t *r = (uint32_t *) (t + P.nsets);
+    for (int i = 0; i < E.np; i++) {
+      p[i] = E.p[i]; p[i].set = 0;
+      for (int j = 0; E.p[i].set && j < P.nsets; j++) if ((void *) P.sets[j] == (void *) E.p[i].set) p[i].x = j; }
+    for (int j = 0, at = 0; j < P.nsets; at += 2 * t[j++].nr) {
+      t[j] = *P.sets[j]; t[j].r = 0; t[j].cr = at;
+      if (t[j].nr) memcpy(r + at, P.sets[j]->r, 2 * (size_t) t[j].nr * sizeof *r); } }
+  free(E.p);
+  for (int i = 0; i < P.nsets; i++) free(P.sets[i]->r), free(P.sets[i]);
+  free(P.sets);
+  if (!g) return E.err ? E.err : REG_ESPACE;
+  re->re_prog = g; re->re_nsub = (size_t) P.ngroup; re->re_size = size;
   return 0; }
 
-void regfree(regex_t *re) {
-  prog *g = re->re_prog;
-  if (!g) return;
-  rset **keep = (rset **) g->p[g->np - 1].set;
-  for (rset **k = keep; *k; k++) free((*k)->r), free(*k);
-  free(keep); free(g->p); free(g);
-  re->re_prog = 0; }
+void regfree(regex_t *re) { free(re->re_prog); re->re_prog = 0; }
 
 /* ---- the search ---- */
 typedef struct { int kind, a, b; } frame;      /* kind 0: branch (pc a, pos b); 1: restore slot a to b */
@@ -510,7 +521,7 @@ static int search(run *R, int at) {
   for (int k = 0; k < R->nslot; k++) R->slot[k] = -1;
   R->nst = 0;
   for (;;) {
-    ins const *p = g->p + pc;
+    ins const *p = INS(g) + pc;
     int ok = 1;
     if (R->seen) {
       size_t b = ((size_t) pc * (size_t) (R->n - R->base + 1) + (size_t) (i - R->base)) * 2 + (R->slot[R->nslot - 1] == i);
@@ -519,7 +530,7 @@ static int search(run *R, int at) {
     if (ok) switch (p->op) {
     case O_CHAR: case O_SET: {
       int n, c = i < R->n ? chat(R, i, &n) : -1;
-      if (c >= 0 && (p->op == O_CHAR ? c == p->x : inset(p->set, c, g->u8))) { i += n; pc++; continue; }
+      if (c >= 0 && (p->op == O_CHAR ? c == p->x : inset(SETS(g) + p->x, RANGES(g) + SETS(g)[p->x].cr, c, g->u8))) { i += n; pc++; continue; }
       ok = 0; break; }
     case O_BOL:
       if ((i == 0 && !(R->eflags & REG_NOTBOL)) || (i > 0 && R->s[i - 1] == '\n' && (nl || (p->x && i > at)))) {
@@ -573,6 +584,7 @@ int regexec(regex_t const *re, char const *str, size_t nm, regmatch_t *pm, int e
   int off = 0, n;   /* REG_STARTEND as glibc reads it: the search starts at rm_so, ^ and \b look behind it */
   if ((eflags & REG_STARTEND) && pm) { off = pm[0].rm_so; n = pm[0].rm_eo; }
   else n = (int) strlen(str);
+  if (g->lead >= 0 && !memchr(str + off, g->lead, (size_t) (n - off))) return REG_NOMATCH;
   run R = {0};
   R.g = g; R.s = str; R.n = n; R.base = off; R.eflags = eflags;
   R.nslot = 2 * ((int) g->nsub + 1) + g->nregs + 1;
@@ -583,8 +595,12 @@ int regexec(regex_t const *re, char const *str, size_t nm, regmatch_t *pm, int e
   if (!g->bref && bits <= ((size_t) 1 << 31)) R.seen = calloc(bits / 8 + 1, 1);
   int hit = 0;
   for (int at = off, k; at <= n && !hit && !R.err; at += at < n ? (chat(&R, at, &k), k) : 1) {
+    char const *q = g->lead >= 0 ? memchr(str + at, g->lead, (size_t) (n - at)) : 0;
+    if (g->lead >= 0 && !q) break;
+    if (q) at = (int) (q - str);
     R.best = -1;
-    hit = search(&R, at); }
+    hit = search(&R, at);
+    if (g->lead == -2) break; }
   int err = R.err;
   free(R.st); free(R.seen);
   if (err) { free(R.slot); return err; }
