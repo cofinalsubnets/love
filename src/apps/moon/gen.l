@@ -300,15 +300,6 @@
                att >l)))
        (att (rev (st 'cd)),
         ()))
-   ; substitute every mint over the assembled prologue+body+epilogue, the innermost build-tail
-   ; link: sibcall and soften read registers, so neither may meet a vreg. the assignment runs first
-   (vrfix g fs)
-    (!(peep g 'vrn 0) ? fs
-       (: _ (rasg g fs)
-          t (g 'vrt)
-          (fix1 x) (two? x ? (map fix1 x) (t x @ p9 (p9 ? p9 x)))
-          (sweep (f . u)) (f @ ('mov x x) (sweep u) (f . sweep u))
-        (sweep (map fix1 fs))))
    (callish? (a . u))                                ; does the AST reach a call? (an inline splice still may)
     ; a statement expression resets the pool per statement: a barrier, like a call
     (a = 'call || a = 'sexpr || callish? a || callish? u)
@@ -5185,7 +5176,12 @@
        (<f @ op
           (? (elem op lvquiet) [() ()]
              (elem op '(call callr sys))
-              (filter (r9 \ !(elem r9 (csregs g) || vmint? g r9)) u @ c [c c])
+              (filter (r9 \ !(elem r9 (csregs g) || vmint? g r9)) u @ c
+                 ; narrow (the allocator's): a call reads its argument file and al, a callr its target too
+                 (peep g 'lvnarrow () && op != 'sys ?
+                    [(filter (r9 \ elem r9 (argr g) || r9 = 'r0 || nelem r9 (lvgp g)) c +
+                      (op = 'callr && nom? <>f ? [<>f])) c]
+                    [c c]))
              (retx? f) [(lvret g + csregs g) ()]   ; a return reads what it owes back
              (op = 'jmpr) [(filter (r9 \ !(vmint? g r9)) u) ()]
              (rdsp g f @ d (d @ 'bar 'bar [<d <>d])))))
@@ -5240,6 +5236,107 @@
               [lin lot]))))
    (lvout g fs) ; index -> the registers live out of it | 'no
     (lvio g fs @ 'no 'no r <>r)
+   ; the allocator core: a mint's register comes from interference, not the pool's order. its
+   ; liveness watches only the mints and the file, one bit each, a call reading its argument file
+   ; (lvnarrow). a def meets what lives past it (a mov not its source) and every operand but its
+   ; first source (either, for a commutative op). a mint meeting a name on its own register is an
+   ; alias selection relied on, so it keeps that register. colours go in first-mention order -- a
+   ; copy partner's first, then the binding, then the file; a mint left without one keeps the
+   ; whole fn's binding
+   (vafile g) (lvun (g 'pool0) (rafile g))
+   vacomm '(add or and xor adds imul)                 ; holo lays d = b as d op= a
+   (valloc g fs)
+    (: t (g 'vrt)
+       file (vafile g)
+       ix {}                                         ; name -> its bit
+       nx {}                                         ; bit -> name
+       (bit x) (: b (peep ix x 0)
+                  (? (b != 0) b
+                     !(nom? x && (vmint? g x || elem x file)) 0
+                     (: k (peep ix 'n9 0)
+                        b2 (1 << k)
+                      (pin ix 'n9 (k + 1), pin ix x b2, pin nx b2 x, b2))))
+       (bits l) (foldl (a \ x \ a | bit x) 0 l)
+       (lows b) (b = 0 ? () (: lb (b & (0 - b)) (nx lb . lows (b - lb))))
+       _ (map bit file)
+       ms (: (mw acc x) (? (two? x) (foldl mw acc x)
+                           (vmint? g x && peep ix x 0 = 0) (bit x, (x . acc))
+                           acc)
+             (rev (foldl mw () fs)))
+       mm (bits ms)
+       labt {}
+       n (foldl (i \ f \ ((two? f && <f = 'label ? (pin labt <>f i)), i + 1)) 0 fs)
+       (succ f i) (: op (two? f ? <f 'x)
+                     (? (op = 'jmp) [(peep labt <>f -1)]
+                        (op = 'br) [(peep labt <>>f -1) (i + 1)]
+                        (op = 'jmpt) (map (L \ (peep labt L -1)) (f 3))
+                        (xit? f) ()
+                        [(i + 1)]))
+       (pos f y) (: (go l k) (? !(two? l) -1 (<l == y) k (go >l (k + 1))) (go >f 1))
+       rr {} dd {} bd {} sr {} sc {}
+       pt {}                                         ; mint -> copy partners, latest first
+       s0 {}                                         ; mint -> its r0 copy is stored straight off
+       (w1 l i)
+        (? !(two? l) 1
+           (: f <l
+              d (? !(two? f) [() ()] (xjmp? f labt) [file ()] (lvtx g f file))
+              (d @ 'bar ()
+                 (: mv (<f = 'mov)
+                  (pin rr i (bits <d),
+                   pin dd i (bits <>d),
+                   pin bd i (mv ? 0 (bits (filter (y \ pos f y != 2 && !(pos f y = 3 && elem <f vacomm)) <d))),
+                   pin sr i (mv ? (bit <>>f) 0),
+                   pin sc i (succ f i),
+                   (mv && vmint? g <>f ? (pin pt <>f (<>>f . peep pt <>f ()))),
+                   (mv && vmint? g <>>f ? (pin pt <>>f (<>f . peep pt <>>f ()))),
+                   (mv && vmint? g <>>f && <>f = 'r0 && two? >l && two? <>l && <<>l = 'st && (<>l 3) == 'r0 ?
+                      (pin s0 <>>f 1)),
+                   w1 >l (i + 1))))))
+       _ (pin g 'lvnarrow 1)
+       ok1 (w1 fs 0)
+       _ (pin g 'lvnarrow ())
+       lin {} lot {}
+       (pass i ch) (? (i < 0) ch
+                      (: lo (foldl (a \ s \ a | peep lin s 0) 0 (sc i))
+                         li (rr i | (lo - (lo & dd i)))
+                       (pin lot i lo,
+                        (li != peep lin i 0 ? (pin lin i li, pass (i - 1) 1) (pass (i - 1) ch)))))
+       (fix9 _) (pass (n - 1) () ? (fix9 ()) 0)
+       nb {}                                         ; mint -> neighbour bits
+       (nbor m b) (pin nb m (peep nb m 0 | (b - (b & ix m))))
+       (w2 i) (? (i >= n) 1
+                 (: db (dd i)
+                    lx (lot i - (lot i & sr i))
+                  (db = 0 ? () (map (x \ nbor x (lx | db | bd i)) (lows (db & mm))),
+                   (db = 0 ? () (map (y \ nbor y db) (lows (lx & mm)))),
+                   w2 (i + 1))))
+       sm (foldl (a \ m \ pin a (t m) (peep a (t m) (peep ix (t m) 0) | ix m)) {} ms)
+       (fixed? m) (: P (t m) (nelem P file || (peep nb m 0 & peep sm P 0) - (peep nb m 0 & ix m) != 0))
+       col {}
+       (cof n9) (vmint? g n9 ? (col n9) n9)
+       (pick m)
+        (: forb (map cof (lows (peep nb m 0)))
+           cs (filter (r \ nelem r forb) file)
+           ; r0 dies fast: a stored value born there leaves stld nothing to forward from
+           pp (filter (r \ elem r cs && !(r = 'r0 && s0 m)) (map cof (peep pt m ())))
+           (? (two? pp) <pp (elem (t m) cs) (t m) (two? cs) <cs))
+       (go l) (? !(two? l) 1
+                 (col <l) (go >l)
+                 (pick <l @ r (r ? (pin col <l r, go >l))))
+       (? !ok1 (rasg g fs)
+          (: _ (fix9 ())
+             _ (w2 0)
+             _ (map (m \ (fixed? m ? (pin col m (t m)))) ms)
+             ((go ms) ? (map (m \ pin t m (col m)) ms) (rasg g fs)))))
+   ; substitute every mint over the assembled prologue+body+epilogue, the innermost build-tail
+   ; link: sibcall and soften read registers, so neither may meet a vreg. the assignment runs first
+   (vrfix g fs)
+    (!(peep g 'vrn 0) ? fs
+       (: _ (x64? g && !(abl? g 'valloc) ? (valloc g fs) (rasg g fs))
+          t (g 'vrt)
+          (fix1 x) (two? x ? (map fix1 x) (t x @ p9 (p9 ? p9 x)))
+          (sweep (f . u)) (f @ ('mov x x) (sweep u) (f . sweep u))
+        (sweep (map fix1 fs))))
 
    ; a recomputed alu value (x64, a64, off liveness): within a straight run, (op h a b) again
    ; with a and b unchanged is (mov h2 h) -- and where h was taken once in between by a def

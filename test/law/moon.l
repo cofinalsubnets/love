@@ -2299,6 +2299,22 @@
       (cspos rl = 5)                             ; ..saved right after the frame's sub
       (csld? (rl (#rl - 5)))))                    ; ..restored at the teardown's head
 
+; --- the allocator core (x64): a mint takes its copy partner's register when the two
+; never meet, keeps its binding when the machine reads that register past it (an argument
+; into a call), and never shares a non-commutative op's second source
+(: v0 (name "%v0") v1 (name "%v1") v2 (name "%v2")
+   (gV9 _) {'tgt 'x64 'pool0 '(r6 r5 r9 r10 r7 r8) 'sigs {}
+            'vrn 3 'vrt {v0 'r9 v1 'r7 v2 'r10}}
+   vC (vrfix (gV9 ()) [['label 'fn] ['and v0 'r6 7] ['mov 'r0 v0] ['ret]])
+   vA (vrfix (gV9 ()) [['label 'fn] ['li v1 5] ['call 'g9] ['ret]])
+   vS (vrfix (gV9 ()) [['label 'fn] ['sub v2 'r6 'r0] ['mov 'r0 v2] ['ret]])
+   vO (vrfix (gV9 ()) [['label 'fn] ['add v2 'r6 'r0] ['mov 'r0 v2] ['ret]])
+   (test
+      (vC = '((label fn) (and r0 r6 7) (ret)))   ; coalesced: the copy swept
+      (elem '(li r7 5) vA)                       ; the call reads r7: the binding stays
+      (elem '(sub r10 r6 r0) vS)                 ; r0 is sub's second source
+      (vO = '((label fn) (add r0 r6 r0) (ret))))) ; ..but add lays d = b as d += a
+
 ; --- the allocator owns locals (moon-ssa rung 4): locals homes are placed by
 ; interval -- lpick's raw-touch rank stands (short call-free ranges promote in
 ; repack anyway) -- and two names whose alive spans are disjoint share one seat.
