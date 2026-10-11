@@ -84,7 +84,7 @@ carry the rest of the userland the census counts: `cc` (mooncc, doc/misc/moon.md
 | fs.l, what they report | stat du df chown chgrp mktemp truncate |
 | expr.l, the little language | expr (arithmetic, the six comparisons, \| and &, and `:` over the BRE engine) |
 | patch.l, the diff read back | patch (unified only; -pN -R -i -o --dry-run, offsets, rejects) |
-| re.l, the matcher | grep (-nvclqhaixwFEo, -e stacking, -m) over the lawed regex engine, BRE or ERE; egrep and fgrep, grep -E and -F by their old names (kore.l) |
+| re.l, the matcher | grep (-nvclqhaixwFEo, -e stacking, -m) over the regex door, BRE or ERE; egrep and fgrep, grep -E and -F by their old names (kore.l) |
 | sed.l, the editor | sed (-n -E -i -e; s///gp, d, p, q; number/$/regex/range addresses) |
 | awk.l, the language | awk (patterns and actions, BEGIN/END, arrays, user functions) |
 | find.l, the walk | find (names, types, times, sizes, modes; -print0 -delete -exec ; and +; ( ) ! -a -o; the depths) |
@@ -201,24 +201,18 @@ is named on err, broken at the first node still standing, and leaves 1. `factor`
 division by 2 and the odd numbers — exact for anything this tree spends, and a twenty-digit
 semiprime will simply sit there, which is what GNU keeps a Pollard rho for.
 
-## the regex engine (src/love/boot/post.l, module 're)
+## the regex door (src/love/boot/post.l, module 're)
 
-BRE and ERE, one parser: the dialects differ only in which sigils wear a backslash. Literals,
-`.`, `*`, `+`, `?`, `{n,m}` intervals, `|` alternation, `^`/`$`, ( ) groups, [..] classes with
-ranges, negation and the twelve POSIX [:name:] classes (first-] and edge-- literal) — with
-GNU's leniency (a repeat with no atom is ink) and one refusal, backrefs, as a parse error.
-It left kore because it is pure; src/apps/kore/re.l is grep over it. `(rebre p)` answers `(1 nodes ngroups)` | `()`; `(rehas
-nodes s)` the boolean; `(refind nodes s i)` the leftmost greedy span as `(1 start end)` — the
-`(1 ..)` shapes because a match ending at 0 is blue by measure. The matcher is greedy
-backtracking in continuation style; the laws hold the dialect by hand AND by a seeded
-differential fuzz against an independent Brzozowski-derivative oracle. grep rides it —
-GNU-byte-identical smokes + the 0/1/2 exit triple (an unreadable file beats a match).
-`refind` carries group SPANS (numbered in \( order, a repeated group reading as its LAST
-iteration, GNU's \1) — sed's food.
+moonlibc's regcomp, through posix's `regex` nif: one engine for love and for the C mooncc
+builds, read by character (REG_UTF8) and in GNU grep's dialect (REG_GREP), BRE or ERE.
+`(rebre p)` / `(reere p)` answer `(1 m ngroups)` | `()`; `(rehas m s)` the boolean; `(refind m s
+i)` the leftmost-longest span at or after i as `(1 start end spans)`, the spans the groups that
+took part as `([k start end]..)` — sed's food; `(refold m)` is m caseless. The engine is held to
+glibc and to GNU grep in test_libc; grep and sed are held to GNU in test_kore and test_refuzz.
 
 ## sed-lite (src/apps/kore/sed.l)
 
-Over the regex engine. `sed [-nEi] [-e SCRIPT].. SCRIPT [FILE..]`: ;/newline-separated commands, each [ADDR[,ADDR]] VERB;
+Over the regex door. `sed [-nEi] [-e SCRIPT].. SCRIPT [FILE..]`: ;/newline-separated commands, each [ADDR[,ADDR]] VERB;
 addresses number/$/(BRE)/re/, ranges open-at-first close-at-later (numeric end at-or-before
 start = one line, like GNU); verbs p, d, q (one address), and s/RE/REPL/[g][p] with any
 delimiter — & and \1..\9 in the replacement, the POSIX empty-match rules exact (step after an

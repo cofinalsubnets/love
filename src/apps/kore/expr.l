@@ -54,14 +54,12 @@
                    (!lt && !eq))))
    ; S : re -- the BRE anchored at the head. a pattern carrying \( \) answers group 1's
    ; text (empty on a miss), a pattern without one answers the match's length ("0" on a
-   ; miss). anchored through refindp's predicate rather than a leading (bol) node: the
-   ; predicate rides inside the backtracker, so a start it refuses cannot be walked past
-   ; with a shorter match still to try at it.
+   ; miss). a match at the head is the leftmost one, so the anchor is a check on its start.
    (ex-match a b)
     (: r (rebre b)
        _ (two? r ? () (ex-die ("invalid regular expression: " + b)))
        nds <>r ng <>>r
-       m (refindp nds a 0 (\ st en (st = 0)))
+       m (refind nds a 0 @ h (two? h && <>h = 0 ? h))
        (ng ? (two? m ? (assoc 1 (m 3) @ e
                           (two? e ? (snip a <>e <>>e) ""))
               "")
