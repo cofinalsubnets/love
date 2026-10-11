@@ -18,6 +18,69 @@
 ; the data tables (registers, the ALU group, the condition codes) come first: the emit functions
 ; read them by mutation-visible reference, the way tele's tape is defined before its users.
 
+; the x86 core: the encoding pieces every x86 mode shares -- the ALU group and the condition
+; codes, ModRM/SIB and the memory operand over register numbers, the segment prefixes, the
+; relocation kinds and the short-branch rewrite. exported, so i386.l lays the same bytes.
+(module 'holo
+(: ;; op -> (rr-opcode imm-/digit commutative?)
+   x86-alu {'add '(1 0 1) 'or '(9 1 1) 'and '(33 4 1)
+            'sub '(41 5 0) 'xor '(49 6 1)
+            'adds '(1 0 1) 'subs '(41 5 0)}     ; flag-setting -- x86 add/sub already set OF; pair with (br vs/vc ..)
+   ;; condition codes: IR name -> the 0F 8x opcode low byte
+   x86-cc {'eq 132 'ne 133 'lt 140 'ge 141
+           'le 142 'gt 143 'below 130 'ae 131
+           'be 134 'above 135 's 136 'ns 137
+           'vs 128 'vc 129                         ; jo / jno (overflow set / clear)
+           'p 138 'np 139}                        ; jp / jnp (parity: ucomisd's UNORDERED bit -- NaN-honest ==/!=)
+   (x86-jcc c) (look x86-cc c 'badcc)
+   (x86-modrm m reg rm) (m << 6 | ((reg & 7) << 3 | rm & 7))
+   (x86-sib sc ix bs)   (sc << 6 | ((ix & 7) << 3 | bs & 7))
+   (x86-scale s) (s @ 1 0 2 1 4 2 8 3 (scare 'badscale s))
+   (x86-shift-ext op) (op @ 'shl 4 'shr 5 'sar 7 'rol 0 'ror 1 (scare 'badshift op))
+   ;; the shortest displacement, and a byte forced for a base whose disp-less slot is taken (ebp/r13)
+   (x86-md bn disp) (? !(charm? disp) (scare 'mem-disp disp)   ; a missing displacement would lay as 0, in silence
+                       (disp = 0 && bn & 7 != 5) 0 (fits8 disp) 1 2)
+   (x86-dispb md disp) (md @ 0 () 1 [(byte disp)] (le32 disp))
+   ;; [base+disp] over register numbers: an esp/r12 base takes a SIB byte
+   (x86-mem regf bn disp)
+    (: md (x86-md bn disp)
+     ((bn & 7 = 4 ? [(x86-modrm md regf 4) (x86-sib 0 4 bn)] [(x86-modrm md regf bn)])
+      + x86-dispb md disp))
+   ;; [base + index*scale + disp], scale in {1,2,4,8}: always a SIB byte
+   (x86-memx regf bn ixn sc disp)
+    (: md (x86-md bn disp)
+     ([(x86-modrm md regf 4) (x86-sib (x86-scale sc) ixn bn)] + x86-dispb md disp))
+   (x86-seg s) (s @ 'fs [100] 'gs [101] 'es [38] 'cs [46] 'ss [54] 'ds [62] (scare 'x86-seg s))      ; the override prefix; the next form is its instruction
+   ;; the relocation kinds: rel32 a 32-bit pc-relative field measured from the end of the field
+   ;; (branches, la; aux a byte addend, gas's `.long sym - .` riding 4); rel16 its twin in a
+   ;; 16-bit code segment; abs64 an 8-byte absolute address of the label (a pointer baked into
+   ;; data -- needs the assembly org set to the load vaddr, which elf64 does).
+   (x86-patch kind target site width aux)
+      (kind @ 'rel32 (le32 (target + aux - (site + width)))
+          'rel64 (le64 (target + aux - (site + width)))    ; a data word's S + A - P, eight bytes wide
+          'rel16 (: d (target + aux - (site + width))
+                    (-32768 <= d <= 32767 ? 0 (scare 'rel16-range d), le16 d))
+          'rel8  (: d (target - (site + width))          ; the relaxer proved the fit at the
+                    (fits8 d ? 0 (scare 'rel8-range d),   ; pessimistic layout; this scare
+                     [(byte d)]))                               ; is the loud net under that proof
+          'abs64 (le64 (target + aux))     ; aux = a byte addend (&arr[i]/&s.field: label + constant offset)
+         ;; abs32: the same absolute address truncated to four bytes. only ever
+         ;; correct where the sum provably fits, and the kernel's boot stub is
+         ;; where it does -- it links flat under 4 GiB, and the PVH note must
+         ;; name that entry in 32 bits. the linker range-checks its own half
+         ;; (link.l, kind 10). i386 lays every address so.
+         'abs32 ((target + aux) % 4294967296 @ v
+                   (le32 (v < 0 ? (v + 4294967296) v)))
+         (scare 'badfix kind))
+   ;; branch relaxation: rel8 measures from the end of the 2-byte short form, so the distance
+   ;; from the instruction itself is two more than the field carries. this RE-LOWERS rather than
+   ;; rewriting its chunk -- an x86 short jump shares no bytes with its long twin.
+   (x86-short ins c rel)
+    (? !(fits8 (rel - 2)) ()
+       (<ins == 'jmp) [235 (fix 1 'rel8 (ins 1) 0)]
+       [(x86-jcc (ins 1) - 16) (fix 1 'rel8 (ins 2) 0)]))
+) ; module 'holo
+
 (module 'holo
 (: ;; -- the register file: abstract name -> x86 encoding number (rsp kept aside as sp). --
    x64-regs {'sp 4 'r0 0 'r1 1 'r2 2 'r3 3 'r4 5
@@ -26,21 +89,15 @@
 
    ;; -- the ALU table: op -> (rr-opcode  imm-/digit  commutative?). the emitter tablet
    ;; below pins the whole group off its keys. --
-   x64-alu {'add '(1 0 1) 'or '(9 1 1) 'and '(33 4 1)
-            'sub '(41 5 0) 'xor '(49 6 1)
-            'adds '(1 0 1) 'subs '(41 5 0)}     ; flag-setting -- x86 add/sub already set OF; pair with (br vs/vc ..)
+   x64-alu x86-alu
 
    ;; -- condition codes: IR name -> the 0F 8x opcode low byte. --
-   x64-cc {'eq 132 'ne 133 'lt 140 'ge 141
-           'le 142 'gt 143 'below 130 'ae 131
-           'be 134 'above 135 's 136 'ns 137
-           'vs 128 'vc 129                         ; jo / jno (overflow set / clear)
-           'p 138 'np 139}                        ; jp / jnp (parity: ucomisd's UNORDERED bit -- NaN-honest ==/!=)
+   x64-cc x86-cc
 
    ;; -- the encoding bytes: REX.wrxb, Modrm(mod,reg,rm), SIB(scale,index,base). --
    (rex w r x b) (64 | (w << 3 | (r << 2 | (x << 1 | b))))    ; 0x40 | wrxb
-   (modrm m reg rm) (m << 6 | ((reg & 7) << 3 | rm & 7))
-   (sib sc ix bs)   (sc << 6 | ((ix & 7) << 3 | bs & 7))
+   modrm x86-modrm
+   sib x86-sib
    (hi n) (n >> 3)                                                  ; the REX extension bit of a reg
    (lo n) (n & 7)                                                   ; its low 3 bits (the ModRM field)
    (rn r) (look x64-regs r 'badreg)
@@ -125,7 +182,7 @@
 
    ;; shift/rotate by an immediate count: C1 /ext ib in general, the 1-byte-shorter D1 /ext for a count
    ;; of 1 (what tag math -- sar/shr by 1 -- mostly wants). ext selects the op (shl/shr/sar/rol/ror).
-   (shift-ext op) (op @ 'shl 4 'shr 5 'sar 7 'rol 0 'ror 1 (scare 'badshift op))
+   shift-ext x86-shift-ext
    (emit-shift op d c)
       (: dn (rn d) ext (shift-ext op)
        (c @ 1 [(rex 1 0 0 (hi dn)) 209 (modrm 3 ext dn)]                        ; D1 /ext        (count 1)
@@ -145,12 +202,7 @@
    ;; an indexed memory operand [base + index*scale + disp], scale in {1,2,4,8}: always a SIB byte. the
    ;; rbp/r13-base 0-disp quirk applies (force a disp byte); rsp can be a base but not an index (enc 4 =
    ;; "no index"), which the abstract file already keeps as `sp`, never a general r0..r14.
-   (scale-bits s) (s @ 1 0 2 1 4 2 8 3 (scare 'badscale s))
-   (memx regf base index scale disp)
-      (: bn (rn base) ixn (rn index) sc (scale-bits scale)
-         md (disp = 0 && lo bn != 5 ? 0 (fits8 disp ? 1 2))
-         dispb (md @ 0 () 1 [(byte disp)] (le32 disp))
-         ([(modrm md (lo regf) 4) (sib sc ixn bn)] + dispb))
+   (memx regf base index scale disp) (x86-memx regf (rn base) (rn index) scale disp)
    ;; the indexed family's shared core, REX.W + opcode per face (as x64-mem below).
    (x64-memx w opc regf base index scale disp)
     (: fn (rn regf) bn (rn base) ixn (rn index)
@@ -172,12 +224,7 @@
 
    ;; a memory operand [base+disp]: Modrm (+ SIB for an rsp/r12 base) (+ displacement). picks the
    ;; shortest disp form, and forces a 0-disp byte for an rbp/r13 base (its disp-less slot is taken).
-   (mem regf base disp)
-    (: bn (rn base) blo (lo bn)
-       md (disp = 0 && blo != 5 ? 0 (fits8 disp ? 1 2))
-       head (blo @ 4 [(modrm md (lo regf) 4) (sib 0 4 blo)] [(modrm md (lo regf) blo)])
-       dispb (md @ 0 () 1 [(byte disp)] (le32 disp))
-     (head + dispb))
+   (mem regf base disp) (x86-mem regf (rn base) disp)
    ;; one core for the whole [base+off] family: prefix bytes, the REX.W bit, the opcode
    ;; bytes -- each face below is a partial spelling of it (mnemonics in the comments).
    (x64-mem pfx w opc regf base off)
@@ -623,7 +670,7 @@
    ;; here means the form you wrote is the form you get (they part company under vm86, where CD
    ;; 03 faults at iopl < 3 and CC does not). so: `trap` for a breakpoint, `int` for a vector.
    (emit-int n) (0 <= n <= 255 ? 0 (scare 'x64-int-vector n), [205 n])
-   (emit-seg s) (s @ 'fs [100] 'gs [101] 'es [38] 'cs [46] 'ss [54] 'ds [62] (scare 'x64-seg s))      ; the override prefix; the next form is its instruction
+   emit-seg x86-seg
    ;; the bit scans and counts, sized: bsr bsf 0F BD/BC, lzcnt tzcnt popcnt F3 0F BD/BC/B8 --
    ;; a 32-bit scan reads only the low half, so the width is the op's own (66 a word, REX.W a quad)
    (emit-bscan op w d s)
@@ -737,25 +784,7 @@
    _ (map (k \ emrow x64-emitters k (emit-sse k)) (keys x64-sse))
    (x64-lower ins) (lower-via @ f (lit? f ? (f x64-emitters ins) (scare 'holo-bake-stale 'lower-via)))
 
-   ;; two relocation kinds: rel32, a 32-bit pc-relative field measured from the end of the field
-   ;; (branches, la; aux a byte addend, gas's `.long sym - .` riding 4); and abs64, an 8-byte
-   ;; absolute address of the label (a pointer baked into data --
-   ;; needs the assembly org set to the load vaddr, which elf64 does).
-   (x64-patch kind target site width aux)
-      (kind @ 'rel32 (le32 (target + aux - (site + width)))
-          'rel64 (le64 (target + aux - (site + width)))    ; a data word's S + A - P, eight bytes wide
-          'rel8  (: d (target - (site + width))          ; the relaxer proved the fit at the
-                    (fits8 d ? 0 (scare 'rel8-range d),   ; pessimistic layout; this scare
-                     [(byte d)]))                               ; is the loud net under that proof
-          'abs64 (le64 (target + aux))     ; aux = a byte addend (&arr[i]/&s.field: label + constant offset)
-         ;; abs32: the same absolute address truncated to four bytes. only ever
-         ;; correct where the sum provably fits, and the kernel's boot stub is
-         ;; where it does -- it links flat under 4 GiB, and the PVH note must
-         ;; name that entry in 32 bits. the linker range-checks its own half
-         ;; (link.l, kind 10).
-         'abs32 ((target + aux) % 4294967296 @ v
-                   (le32 (v < 0 ? (v + 4294967296) v)))
-         (scare 'badfix kind))
+   x64-patch x86-patch
 
    ;; -- register the backend under its target names. --
    x64 {'lower x64-lower
@@ -771,9 +800,6 @@
         ;; branch relaxation: rel8 measures from the end of the 2-byte short form, so the distance
         ;; from the instruction itself is two more than the field carries. this RE-LOWERS rather than
         ;; rewriting its chunk -- an x86 short jump shares no bytes with its long twin.
-        'short (\ ins c rel
-         (? !(fits8 (rel - 2)) ()
-            (<ins == 'jmp) (emit-jmp8 (ins 1))
-            (emit-br8 (ins 1) (ins 2))))}
+        'short x86-short}
    (defbackend 'x64 x64))
 ) ; module 'holo

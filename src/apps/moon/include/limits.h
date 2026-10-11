@@ -20,7 +20,7 @@
 #define INT_MIN    (-2147483647 - 1)
 #define INT_MAX    2147483647
 #define UINT_MAX   4294967295U
-#ifdef __arm__
+#if defined(__arm__) || defined(__i386__)
 /* the 32-bit targets: long is the 4-byte word, long long the 8-byte pair. */
 #define LONG_MIN   (-2147483647L - 1)
 #define LONG_MAX   2147483647L

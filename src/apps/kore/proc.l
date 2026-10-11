@@ -1504,11 +1504,12 @@
        (charm? v && 0 <= v ? (rest ((v + 999) // 1000)) (udie 1 ("usleep: invalid number '" + <as + "'")),
         0))
 
-   ; -- reset: the terminal put back -- the line discipline sane where stdin is one, and
-   ; the full reset (RIS) sent, toybox's pair --
+   ; -- reset: the terminal put back -- the line discipline sane where stdin is one that
+   ; answers termios (inle's ptys keep theirs in the kernel), and the full reset (RIS) sent,
+   ; toybox's pair --
    (reset-main as)
     (uflags "reset" as () "",
-     (two? (tty 0) ? (stty-main ["sane"]) 0, say out "\ec", flush out, 0))
+     (two? (tty 0) && !(nom? (termios in)) ? (stty-main ["sane"]) 0, say out "\ec", flush out, 0))
 
    ; -- ts: each line of the input stamped as it arrives, toybox's: the date and time
    ; ("%b %d %H:%M:%S"), or with -s the time since the start and with -i since the line

@@ -1,7 +1,6 @@
 #include "quay.h"
 #include "cp437.h"
-#include "cpwidth.h"
-#include "cpemoji.h"
+#include "../../apps/moon/lib/moonlibc/ctype/ucd.h"
 
 // *e <- a cell of codepoint cp in the current pen. the blank a clear or scroll
 // leaves behind is cp 0 in the current pen,
@@ -349,16 +348,8 @@ static uint32_t cb_slot(struct cb *c, uint32_t const *v, uint32_t skip) {
   if (k < cb_nclu) for (j = 0; j < cb_clun; j++) c->clu[k][j] = v[j];
   return k; }
 
-// is cp in a table of runs (cpemoji.h), each entry opening or closing one in turn: an odd
-// count of entries at or below it
-static int cb_in(uint32_t const *t, uintptr_t n, uint32_t cp) {
-  uintptr_t lo = 0, hi = n;
-  while (lo < hi) {
-    uintptr_t const m = (lo + hi) / 2;
-    if (t[m] <= cp) lo = m + 1; else hi = m; }
-  return lo & 1; }
-static int cb_vs16(uint32_t cp) { return cb_in(cpvs, sizeof cpvs / sizeof *cpvs, cp); }
-static int cb_xp(uint32_t cp) { return cb_in(cpxp, sizeof cpxp / sizeof *cpxp, cp); }
+static int cb_vs16(uint32_t cp) { return __ucd_in(ucd_vs, cp); }
+static int cb_xp(uint32_t cp) { return __ucd_in(ucd_xp, cp); }
 static int cb_regional(uint32_t cp) { return cp >= 0x1f1e6u && cp <= 0x1f1ffu; }
 
 // under ?2027, VS16 after a narrow character with an emoji style, or any join (any),
@@ -1290,15 +1281,8 @@ uint8_t const *cb_font_rows(uint8_t const *b, uint32_t cp) {
   uint32_t const gi = cb_rd16(b, pg0 + (uintptr_t) p * 512u + 2u * (cp & 255u));
   return gi ? b + pg0 + (uintptr_t) np * 512u + (uintptr_t) (gi - 1u) * 32u : 0; }
 
-// the columns cp takes, off 'text's own runs (cpwidth.h, laid by quay.l): each entry
-// cp << 2 | w opens a run of width w. below U+0300 everything printable is one
-uint8_t cb_width(uint32_t cp) {
-  if (cp < 0x300) return cp ? 1 : 0;
-  uintptr_t lo = 0, hi = sizeof cpwidth / sizeof *cpwidth;
-  while (hi - lo > 1) {
-    uintptr_t m = (lo + hi) / 2;
-    if (cpwidth[m] >> 2 <= cp) lo = m; else hi = m; }
-  return (uint8_t) (cpwidth[lo] & 3u); }
+// the columns cp takes, the unicode floor's: a control, or past unicode, one
+uint8_t cb_width(uint32_t cp) { int w = __ucd_width(cp); return (uint8_t) (w < 0 ? 1 : w); }
 
 // a cp437 glyph byte's codepoint: the page read forward
 uint32_t cb_unfold(uint8_t g) { return cp437[g]; }

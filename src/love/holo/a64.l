@@ -60,12 +60,15 @@
    (a64-li d imm)
       (: _ (constellation? imm ? 0 (scare 'badimm imm))
          dn (rn d) u (u64 imm)
-         l0 (a64-lane u 0) l1 (a64-lane u 1) l2 (a64-lane u 2) l3 (a64-lane u 3)
-         (catall [
-           (le32 (0xD2800000 | (l0 << 5 | dn)))                               ; movz d, l0
-           (l1 = 0 ? () (le32 (0xF2800000 | (1 << 21 | (l1 << 5 | dn)))))   ; movk d, l1, lsl 16
-           (l2 = 0 ? () (le32 (0xF2800000 | (2 << 21 | (l2 << 5 | dn)))))   ; movk d, l2, lsl 32
-           (l3 = 0 ? () (le32 (0xF2800000 | (3 << 21 | (l3 << 5 | dn)))))]))  ; movk d, l3, lsl 48
+         ls (map (k \ a64-lane u k) ^4)
+         ; movn when more lanes are all ones than zero: the lanes it leaves are the ones movk patches
+         neg (#(filter (l \ l != 65535) ls) < #(filter (l \ l != 0) ls))
+         skip (neg ? 65535 0)
+         i0 (: (go k) (? (k = 4) 0 (ls k != skip) k (go (k + 1))) (go 0))
+         (catall ((neg ? (le32 (0x92800000 | (i0 << 21 | ((65535 - ls i0) << 5 | dn))))    ; movn d, ~l, lsl 16i
+                         (le32 (0xD2800000 | (i0 << 21 | (ls i0 << 5 | dn)))))              ; movz d, l, lsl 16i
+                  . map (k \ (k != i0 && ls k != skip ? (le32 (0xF2800000 | (k << 21 | (ls k << 5 | dn)))) ()))
+                        ^4)))                                                                 ; movk d, l, lsl 16k
 
    ;; mov is ORR against XZR -- and encoding 31 in that form reads as the zero register, not the
    ;; stack pointer, so `(mov r9 sp)` would quietly assemble as `orr x9, xzr, xzr` (x9 <- 0). the
@@ -138,8 +141,9 @@
       (rn a @ an
          (reg? b ? (rn b @ bn (le32 (0xEB00001F | (bn << 16 | an << 5))))
             (: pos (b < 0 ? (0 - b) b) base (b < 0 ? 0xB100001F 0xF100001F)
-               (pos <= 4095 ? 0 (scare 'imm12-range b),
-                le32 (base | (pos << 10 | an << 5))))))
+               (? (pos <= 4095) (le32 (base | (pos << 10 | an << 5)))
+                  (pos % 4096 = 0 && pos >> 12 <= 4095) (le32 (base | 0x400000 | (pos >> 12 << 10 | an << 5)))   ; imm12, lsl 12
+                  (scare 'imm12-range b)))))
 
    (a64-mulh d a b) (: dn (rn d) an (rn a) bn (rn b) (le32 (0x9B407C00 | (bn << 16 | (an << 5 | dn)))))   ; smulh d, a, b: the high 64 of the signed product
    (a64-umulh d a b) (: dn (rn d) an (rn a) bn (rn b) (le32 (0x9BC07C00 | (bn << 16 | (an << 5 | dn)))))  ; umulh d, a, b: ..and the unsigned one
@@ -173,7 +177,8 @@
    ;; else LDUR/STUR unscaled imm9 else the far x16 build. every face -- word, sized,
    ;; fp -- is a spelling of it.
    (a64-mem-raw lbase ubase sc dt bn off)
-      (0 = off % sc && off >= 0 && off // sc <= 4095 ?
+      (charm? off ? 0 (scare 'mem-disp off),             ; a missing offset would lay as 0, in silence
+       0 = off % sc && off >= 0 && off // sc <= 4095 ?
          (le32 (ubase | (off // sc << 10 | (bn << 5 | dt))))
          (off >= -256 && off <= 255 ?
             (le32 (lbase | ((off & 511) << 12 | (bn << 5 | dt))))
@@ -192,14 +197,16 @@
    (a64-st1 base off s) (a64-mem-sz 0x38000000 0x39000000 1 s base off)   ; strb/sturb Wt
    (a64-st2 base off s) (a64-mem-sz 0x78000000 0x79000000 2 s base off)   ; strh/sturh Wt
    (a64-st4 base off s) (a64-mem-sz 0xB8000000 0xB9000000 4 s base off)   ; str/stur Wt
-   (a64-sx w d)                                             ; sbfm: sxtb/sxth/sxtw Xd, Wd
-      (: dn (rn d)
+   (a64-sx w d) (a64-sxs w d d)
+   (a64-sxs w d s)                                          ; sbfm: sxtb/sxth/sxtw Xd, Ws
+      (: dn (rn d) sn (rn s)
          base (? (w = 1) 0x93401C00 (w = 2) 0x93403C00 0x93407C00)
-         (le32 (base | (dn << 5 | dn))))
-   (a64-zx w d)                                             ; ubfm: uxtb/uxth Xd, Xd (w=4 clears bits 32..63)
-      (: dn (rn d)
+         (le32 (base | (sn << 5 | dn))))
+   (a64-zx w d) (a64-zxs w d d)
+   (a64-zxs w d s)                                          ; ubfm: uxtb/uxth Xd, Xs (w=4 clears bits 32..63)
+      (: dn (rn d) sn (rn s)
          base (? (w = 1) 0xD3401C00 (w = 2) 0xD3403C00 0xD3407C00)
-         (le32 (base | (dn << 5 | dn))))
+         (le32 (base | (sn << 5 | dn))))
    (a64-shiftv op d c)                                      ; lslv/lsrv/asrv Xd, Xd, Xc -- count pinned to r1 (the IR contract)
       (: _ (reg-eq c 'r1 ? 0 (scare 'shiftv-count-not-r1 [op d c]))
          _ (reg-eq d 'r1 ? (scare 'shiftv-dst-is-r1 [op d c]) 0)
@@ -216,7 +223,8 @@
    a64-frpop  (le32 0xA8C27BFD)                           ; ldp x29, x30, [sp], #32
 
    (a64-neg d) (rn d @ dt (le32 (0xCB0003E0 | (dt << 16 | dt))))   ; sub d, xzr, d
-   (a64-not d) (rn d @ dt (le32 (0xAA2003E0 | (dt << 16 | dt))))   ; orn d, xzr, d (mvn)
+   (a64-not d) (a64-mvn d d)
+   (a64-mvn d s) (: dt (rn d) st (rn s) (le32 (0xAA2003E0 | (st << 16 | dt))))   ; orn d, xzr, s (mvn)
    (a64-inc d) (a64-addsub-imm 'add d d 1)
    (a64-dec d) (a64-addsub-imm 'sub d d 1)
 
@@ -289,11 +297,15 @@
          (le32 (0x9A9F07E0 | ((cc ^ 1) << 12 | dn))))
    ;; shifts/rotates by an immediate (the tag math -- sar/shr by 1; the map hash's rol by 32). LSL/lsr
    ;; are ubfm, asr is sbfm, ror is extr Xd,Xn,Xn,#c; rol #c = ror #(64-c) (a64 has no ROL).
+   ;; lsl/lsr/asr are the three-register twins (d s c): mooncc's fold of a mov into the shift after it
+   (a64-shs op d s c)
+      (: dn (rn d) sn (rn s)
+         (? (op = 'shl) (le32 (0xD3400000 | ((64 - c & 63) << 16 | (63 - c << 10 | (sn << 5 | dn)))))   ; lsl = ubfm immr=(-c)&63, imms=63-c
+            (op = 'shr) (le32 (0xD3400000 | (c << 16 | (63 << 10 | (sn << 5 | dn)))))                        ; lsr = ubfm immr=c, imms=63
+            (le32 (0x93400000 | (c << 16 | (63 << 10 | (sn << 5 | dn)))))))                                 ; asr = sbfm immr=c, imms=63
    (a64-shift op d c)
       (rn d @ dn
-         (? (op = 'shl) (le32 (0xD3400000 | ((64 - c & 63) << 16 | (63 - c << 10 | (dn << 5 | dn)))))   ; lsl = ubfm immr=(-c)&63, imms=63-c
-            (op = 'shr) (le32 (0xD3400000 | (c << 16 | (63 << 10 | (dn << 5 | dn)))))                        ; lsr = ubfm immr=c, imms=63
-            (op = 'sar) (le32 (0x93400000 | (c << 16 | (63 << 10 | (dn << 5 | dn)))))                        ; asr = sbfm immr=c, imms=63
+         (? (elem op '(shl shr sar)) (a64-shs op d d c)
             (op = 'ror) (le32 (0x93C00000 | (dn << 16 | (c << 10 | (dn << 5 | dn)))))                        ; ror = extr Rm=Rn=d, imms=c
             (op = 'rol) (le32 (0x93C00000 | (dn << 16 | ((64 - c & 63) << 10 | (dn << 5 | dn)))))          ; rol #c = ror #(64-c)
             (op = 'ror4) (le32 (0x13800000 | (dn << 16 | (c << 10 | (dn << 5 | dn)))))                       ; the W form (sf=0 N=0): writes zero-extend
@@ -667,6 +679,9 @@
           ('shlv . a64-shiftv 'shlv) ('shrv . a64-shiftv 'shrv) ('sarv . a64-shiftv 'sarv)
           ('rorv . a64-shiftv 'rorv) ('rorv4 . a64-shiftv 'rorv4)
           ('shl . a64-shift 'shl) ('shr . a64-shift 'shr) ('sar . a64-shift 'sar)
+          ('lsl . a64-shs 'shl) ('lsr . a64-shs 'shr) ('asr . a64-shs 'sar) ('mvn . a64-mvn)
+          ('uxtb . a64-zxs 1) ('uxth . a64-zxs 2) ('uxtw . a64-zxs 4)
+          ('sxtb . a64-sxs 1) ('sxth . a64-sxs 2) ('sxtw . a64-sxs 4)
           ('rol . a64-shift 'rol) ('ror . a64-shift 'ror) ('ror4 . a64-shift 'ror4)
           ('lea . a64-lea) ('lean . a64-lea)           ; a consumed lea (x64 tells them apart for the escape gate)
           ('push . a64-push) ('pop . a64-pop) ('frpush . a64-frpush) ('frpop . a64-frpop) ('cbr . a64-cbr) ('tbr . a64-tbr) ('afix . a64-afix)

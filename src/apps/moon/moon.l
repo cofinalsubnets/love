@@ -150,6 +150,7 @@
           'rv64                        '("__riscv" "__CHAR_UNSIGNED__")
           'wasm                        '("__wasm__" "__wasm64__")   ; plain char signed, as wasm's C conventions (emcc)
           ('thumb2 || 'thumb2sp || 'thumb1) '("__arm__" "__arm" "__CHAR_UNSIGNED__")
+          ('i386 || 'i386m16)          '("__i386__" "__i386" "__ILP32__")
                                           '("__x86_64__" "__x86_64" "__amd64__" "__amd64"))
    ; the OS predefines: -os picks, and unnamed is the ground we stand on, never a fixed
    ; kernel. all three spellings gcc gives a linux ELF target -- st.c asks `#if
@@ -190,8 +191,8 @@
    ; always, 0 refused (rv64 has no sub-word read-modify-write, thumb2 no doubleword, thumb1 no
    ; exclusives). the -fshort-wchar fork narrows wchar_t's row
    (atomdefs tgt sw)
-    (: ws (tgt @ 'thumb1 () 'rv64 '(4 8) ('thumb2 || 'thumb2sp) '(1 2 4) '(1 2 4 8))
-       lw (elem tgt '(thumb2 thumb2sp thumb1) ? 4 8)
+    (: ws (tgt @ 'thumb1 () 'rv64 '(4 8) ('thumb2 || 'thumb2sp || 'i386 || 'i386m16) '(1 2 4) '(1 2 4 8))
+       lw (elem tgt '(thumb2 thumb2sp thumb1 i386 i386m16) ? 4 8)
        (lf n) (elem n ws ? "2" "0")
        ('("__ATOMIC_RELAXED=0" "__ATOMIC_CONSUME=1" "__ATOMIC_ACQUIRE=2" "__ATOMIC_RELEASE=3"
           "__ATOMIC_ACQ_REL=4" "__ATOMIC_SEQ_CST=5" "__GCC_ATOMIC_TEST_AND_SET_TRUEVAL=1")
@@ -327,7 +328,20 @@
          "__SIZEOF_WCHAR_T__=4")
        '("__WCHAR_TYPE__=int" "__WCHAR_MAX__=0x7fffffff" "__WCHAR_MIN__=(-__WCHAR_MAX__ - 1)" "__WCHAR_WIDTH__=32"
          "__SIZEOF_WCHAR_T__=4"))
-   (stddefs tgt sw) ((arm32? tgt ? stdt32 stdlp64) + wchdefs tgt sw + stdcommon)
+   ; i386 is the 32-bit table but where SysV i386 parts from AAPCS: the fast-8 types a
+   ; byte, the widest alignment SSE's 16, and wchar_t a long
+   stdi386
+    (: own '("__INT_FAST8_TYPE__=signed char" "__INT_FAST8_MAX__=0x7f" "__INT_FAST8_WIDTH__=8"
+             "__UINT_FAST8_TYPE__=unsigned char" "__UINT_FAST8_MAX__=0xff" "__BIGGEST_ALIGNMENT__=16")
+       (key d) <(usplit 61 d)
+       (filter (d \ !(elem (key d) (map key own))) stdt32 + own))
+   (stddefs tgt sw)
+    (? (i386? tgt)
+       (stdi386 + (sw ? (wchdefs tgt sw)
+                      '("__WCHAR_TYPE__=long int" "__WCHAR_MAX__=0x7fffffffL" "__WCHAR_MIN__=(-__WCHAR_MAX__ - 1)"
+                        "__WCHAR_WIDTH__=32" "__SIZEOF_WCHAR_T__=4"))
+        + stdcommon)
+       ((arm32? tgt ? stdt32 stdlp64) + wchdefs tgt sw + stdcommon))
    ; the diagnostic driver: a stage answered a gripe (a cause it named itself) or a bare bad.
    ; a gripe prints "cc: <file>:<line>:<col>: msg" -- an unknown file takes the source path,
    ; an unknown line/col elides; anything else falls back to <plain>.
@@ -466,7 +480,7 @@
                  (? (tgt = 'wasm)
                     (two? <at ? (udie 1 ("cc: a file-scope asm has no wasm lane, in " + src))
                        (show [tforms dforms fnames gnames nforms iforms lnames xsecs bforms rforms xfns weaks]))
-                    (arm32? tgt)
+                    (elf32? tgt)
                     (objsecs32 tgt (objsec-merge (objsecs3 tgt tforms dforms nforms iforms bforms rforms + xs) <at)
                                fns gns weaks)
                     (objsecs tgt (objsec-merge (objsecs4 tforms dforms nforms iforms bforms rforms + xs) <at)
@@ -546,6 +560,24 @@
           (call main)
           (pop r6)
           (ret))
+   ; the i386 entry (linux): argc at [esp], the vector's address handed to __love_start as a cdecl
+   ; argument with esp 16-aligned at the call, then exit_group 252 (exit 1 if it returns)
+   crt0-i386 '((mov r0 sp)
+               (and sp sp -16)
+               (sub sp sp 12)
+               (push r0)
+               (call __love_start)
+               (mov r3 r0) (li r0 252) (sys)
+               (li r0 1) (sys)
+               (label __love_start)
+               (push r4) (mov r4 sp)
+               (ld r1 r4 8)
+               (ld r0 r1 0)
+               (lea r2 r1 4)
+               (push r2) (push r0)
+               (call main)
+               (mov sp r4) (pop r4)
+               (ret))
    ; the a64 twin, serving both kernels the way x64's does (rung UV1): linux zeroes every
    ; register and lays argc at [sp], freebsd hands the vector base in x0 with sp only near
    ; it, a pad word below argc as often as not -- so a zero x0 says linux and sp is the
@@ -984,7 +1016,7 @@
        runs (charm? dorg ? [['at org 'text 'rodata 'nifs]
                             ['copy dorg 'data 'bss]]
                            [['at org 'text 'rodata 'data 'nifs 'bss]])
-       c9 (tgt @ 'a64 crt0-a64 'rv64 crt0-rv crt0)   ; x64's serves both kernels
+       c9 (tgt @ 'a64 crt0-a64 'rv64 crt0-rv ('i386 || 'i386m16) crt0-i386 crt0)   ; x64's serves both kernels
        all (arm? ? srcs
                    (["crt0" (string (objelf tgt c9 () '("__love_start") () '("__love_start") () () () () ()))] . srcs))
        ; the archives first, then whatever the runtime still owes: a library the
@@ -1194,6 +1226,10 @@
           ; cannot carry, and bti landing pads and pac-ret's signed return address
           ("-mstrict-align" . r) (flags r (pin t 'sal 1))
           ("-mno-strict-align" . r) (flags r (pin t 'sal ()))
+          ; gcc's x86 widths: -m32 the i386 ABI, -m16 its 16-bit face, -m64 x86-64
+          ("-m32" . r) (flags r (pin t 'tgt 'i386))
+          ("-m16" . r) (flags r (pin t 'tgt 'i386m16))
+          ("-m64" . r) (flags r (pin t 'tgt 'x64))
           (("-mbranch-protection=" + w) . r) (flags r (pin t 'bp (bpof w)))
           ((a . r) && tol? a) (flags r t)
           ; ahead of the dash refusal, and the only arg that is: a bare `-` is an

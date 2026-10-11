@@ -793,14 +793,29 @@
                                 (#t = 3 && t 0 = 98) (peep ga-cc (name (snip t 1 3)) ())   ; gas's bne, as b.ne
                                 ()))
    (ga-inplace op d s) (d = s ? () [['mov d s]])       ; the IR's unary ops work in place
+   ;; sys and sysl: op1, Cn, Cm, op2 and an X register, xzr when sys leaves it off; sysl reads it first
+   (ga-cr o) (o @ ('sym s) (: t (show s) (filter (n \ t = "c" + show n || t = "C" + show n) ^16 @ (n . _) n _ ())) _ ())
+   (ga-sys-ins m os)
+    (: l (m = 'sysl) k #os bad (_ \ scare 'gas-a64-operand [m os])
+       f (? (l && k = 5) (>os + [<os]) (!l && k = 4) (os + [['reg 'zr 8]]) (!l && k = 5) os ())
+       (f @ (('imm a) c n ('imm b) ('reg r 8))
+          (: cn (ga-cr c) cm (ga-cr n)
+             (? (r = 'sp || !(charm? cn && charm? cm) || !(0 <= a <= 7 && 0 <= b <= 7)) (bad 0)
+                (ga-raw ((l ? 0xD5280000 0xD5080000) | a << 16 | cn << 12 | cm << 8 | b << 5 | ga-hw r))))
+          _ (bad 0)))
    (ga-ins m os)
     (#os @ k
        (? (charm? (peep ga-movw m ())) (ga-movw-ins m os)
           (m = 'adrp) (ga-adrp os)
           (m = 'add && k = 3 && ((os 2) @ ('grp _ _) 1 _ 0)) (ga-addlo os)
           (k > 2 && two? (ga-shxof (os (k - 1))) && (two? (peep ga-shop m ()) || two? (peep ga-shal m ()))) (ga-shifted m os)
-          ; a register form naming zr, which the IR's rows cannot hold: the shifted word at lsl #0
-          ((two? (peep ga-shop m ()) || two? (peep ga-shal m ())) && any (o \ o @ ('reg 'zr _) 1 _ 0) os
+          ; a W mov beside wsp is add #0; zr has no place beside it
+          (m = 'mov && k = 2 && any ga-sp? os && all (o \ o @ ('reg _ 4) 1 _ 0) os)
+           (? (any (o \ o @ ('reg 'zr _) 1 _ 0) os) (scare 'gas-a64-operand [m os])
+              (ga-raw (0x11000000 | ga-hw (ga-r (os 1)) << 5 | ga-hw (ga-r (os 0)))))
+          ; a register form naming zr or sp, which the IR's rows cannot hold, or cmn and negs, which have none:
+          ; the shifted word at lsl #0, the extended one beside sp
+          ((two? (peep ga-shop m ()) || two? (peep ga-shal m ())) && (elem m '(cmn negs) || any (o \ o @ ('reg 'zr _) 1 ('reg 'sp _) 1 _ 0) os)
            && ((os (k - 1)) @ ('reg _ _) 1 _ 0))
            (ga-shifted m (os + [['shx 0 0]]))
           (charm? (peep ga-arity m ()) && k != ga-arity m) (scare 'gas-a64-operand [m os])
@@ -818,6 +833,7 @@
           (elem m '(dsb dmb)) [[m (<>(os 0))]]
           (m = 'mrs) [['mrs (ga-r (os 0)) (<>(os 1))]]
           (m = 'msr) ((os 1) @ ('imm n) [['msri (<>(os 0)) n]] [['msr (<>(os 0)) (ga-r (os 1))]])
+          (elem m '(sys sysl)) (ga-sys-ins m os)
           (elem m ga-sys) [[m (<>(os 0)) (k > 1 ? (ga-r (os 1)) 'zr)]]
           (ghas? ga-exc m) [[(ga-exc m) (k > 0 ? (<>(os 0)) 0)]]
           (m = 'svc) (: n (k > 0 ? (<>(os 0)) 0) (n = 0 ? '((sys)) [['svcn n]]))
@@ -1177,7 +1193,7 @@
                                    (two? a ? (go j (acc + <>a)) (go (i + 1) (acc + string c))))
                                (go (i + 1) (acc + string c)))))
            (go 0 ""))
-       ; a call's lines: keyword arguments by name, the rest in order, a default else
+       ; a call's lines: keyword arguments by name, the rest in order, a default for one empty or left off
        ; a call's arguments: split at commas, and at a space with no operator beside it
        ; (`m x0 8 1f`, but `m (a) | (b)` is one), outside brackets and quotes
        (margs s)
@@ -1197,16 +1213,23 @@
                       (go j j d q (xa-trim (snip s st i) . acc))))
                (go (i + 1) st d q acc))
            (go 0 (sk 0) 0 0 ()))
+       ; a parameter's words, its `=` spaced or not: `regsize = 64` is one, `regsize=64`
+       (eqj l) (? (atom? l || atom? >l) l
+                  (: a <l b <>l
+                     (? ((b 0 = 61 && !(xa-has? a 61)) || a (#a - 1) = 61) (eqj ((a + b) . >>l))
+                        (a . eqj >l))))
+       ; an argument that is one quoted string passes its inside (`"dmb sy"` -> dmb sy)
+       (unq a) (: n #a (n >= 2 && a 0 = 34 && a (n - 1) = 34 && !(xa-has? (snip a 1 (n - 1)) 34) ? (snip a 1 (n - 1)) a))
        (call m rest)
         (: ps <m
-           as (0 = #(xa-trim rest) ? () (margs rest))
+           as (map unq (0 = #(xa-trim rest) ? () (margs rest)))
            kw (filter (a \ xa-has? a 61) as) po (filter (a \ !(xa-has? a 61)) as)
            (kv nm) (filter (a \ xa-trim (snip a 0 (xa-idx a 61)) = nm) kw)
            (bind ps po acc)
             (atom? ps ? acc
                (: p <ps k (kv <p)
-                  (two? k ? (bind >ps po ([<p (xa-trim (snip <k (1 + xa-idx <k 61) #<k))] . acc))
-                     (bind >ps >po ([<p (two? po ? <po <>p)] . acc)))))
+                  (two? k ? (bind >ps po ([<p (unq (xa-trim (snip <k (1 + xa-idx <k 61) #<k)))] . acc))
+                     (bind >ps >po ([<p (two? po && <po != "" ? <po <>p)] . acc)))))
            k (peep cnt 'n 0)
            _ (pin cnt 'n (k + 1))
            args (["@" (show k)] . bind ps po ())
@@ -1216,7 +1239,7 @@
            (: s <l t (xa-trim s) w (dname s) r (xa-rest t)
               (? (w = ".macro")
                   (: b (grab >l '(".macro") ".endm")
-                     ws (filter (x \ 0 < #x) (xa-split (string (map (c \ (c = 44 ? 32 c)) (chars r))) 32))
+                     ws (foldl (\ a f (a + eqj (filter (x \ 0 < #x) (xa-split f 32)))) () (xa-split r 44))
                      specs (map (x \ x @ (a + ":" + _) [a ""] (a + "=" + b) [a b] [x ""]) >ws)
                      (pin mac <ws [specs <b],
                       go <>b acc))
@@ -1326,7 +1349,16 @@
                                (<f = 'label) (back >l n)
                                'bad)))
            at (back (two? r ? <>>r) 0)
-           (<v || gbad? at || <>>v < at ? (scare 'gas-org e) (raw (map (i \ 0) ^(<>>v - at)))))
+           (? <v (scare 'gas-org e)
+              (gbad? at) (string? s ? (orgx e) (scare 'gas-org e))
+              (<>>v < at) (scare 'gas-org e)
+              (raw (map (i \ 0) ^(<>>v - at)))))
+       ; ..a label behind instructions: a label here, and the pad up to the target once layout holds
+       (orgx e)
+        (: k (peep st 'orgs 0) here (pfx + ".Lorg" + show k)
+           (pin st 'orgs (k + 1),
+            emit [['label (name here)]
+                  ['skipx (['ch 40] . map (t \ (<t = 'lref ? ['sym (rl <>t <>>t)] t)) (gtoks e) + [['ch 41] ['ch 45] ['sym here]]) 0 0 'org]]))
        (dir mn rest)
         (: xs (xa-oplist rest) w (gf-width tgt mn)
            (? (0 < w)

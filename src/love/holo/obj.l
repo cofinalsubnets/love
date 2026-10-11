@@ -133,11 +133,16 @@
    (o-idx ls i0) (: t {} (go es i) (atom? es ? t (pin t <es i, go >es (i + 1))) (go ls i0))
    (o-mapi f ls) (: (go l i acc) (atom? l ? (rev acc) (go >l (i + 1) (f i <l . acc))) (go ls 0 ()))
 
-   ; -- ELF32 / EM_ARM (the thumb backends): the emitter below's shape on another wire --
-   ; a 52-byte header, 16-byte symbols, and rel rather than RELA, ARM's ABI keeping the
-   ; addend in the field, so the .rel tables need no addend column. --
+   ; -- ELF32, EM_ARM (the thumb backends) and EM_386: the emitter below's shape on
+   ; another wire -- a 52-byte header, 16-byte symbols, and rel rather than RELA, both
+   ; ABIs keeping the addend in the field, so the .rel tables need no addend column. --
    arm32-targets '(thumb1 thumb2 thumb2sp arm)
    (arm32? t) (elem t arm32-targets)
+   (i386? t) (elem t '(i386 i386m16))
+   (elf32? t) (arm32? t || i386? t)
+   r-386-32 1                                       ; R_386_32    S + A
+   r-386-pc32 2                                     ; R_386_PC32  S + A - P
+   r-386-pc16 21                                    ; R_386_PC16  S + A - P in two bytes (a 16-bit jump)
    r-thm-call 10                                    ; R_ARM_THM_CALL   ((S+A)|T) - P  (a thumb BL to a symbol)
    r-thm-jump24 30                                  ; R_ARM_THM_JUMP24 same math      (a thumb2 B.W tail-jump)
    r-arm-abs32 2                                     ; R_ARM_ABS32      S + A           (la's pooled address word)
@@ -150,7 +155,9 @@
        machine (elf-machines target)
        _ (!machine ? (scare 'no-elf-machine target))
        be (peep backends target ())
-       rset '(b bcc bl)                              ; thumb internal branches are pc-relative -> resolve in place
+       x86 (i386? target)
+       tb (x86 ? 0 1)                                ; the thumb bit a func symbol's value carries
+       rset (x86 ? '(rel32 rel8 rel16) '(b bcc bl))  ; internal branches are pc-relative -> resolve in place
        wkset (o-names wknames)
        nsec #secs
        _ (0 >= nsec ? (scare 'obj-no-sections target))
@@ -195,7 +202,7 @@
        ; sentinels) branches across one, where rel's in-field addend has no more room for
        ; the offset than movw16's. the fixup would bind symbol 0 -- `link-undef ""`.
        locfns (o-locs (\ si lbl (sec-exec? si && !(o-has? fnset lbl)))
-                      '(movw16 movt16 abs32 b bcc bl))
+                      (x86 ? '(rel32 rel16) '(movw16 movt16 abs32 b bcc bl)))
        locdat (o-locs (\ si lbl (!(sec-exec? si) && !(o-has? gset lbl)))
                       '(movw16 movt16))
        locs (locfns + locdat)
@@ -233,7 +240,16 @@
           (go u (nelem <>r '(movw16 movt16) ? bs
            (mwloc <>>r @ sl
               (<>sl @ 0 bs (o-putbs bs <r (patch-with be <>r <>sl 0 4 <>>>r))))))))
-       lbytes (map (l \ (ln-rl l @ rs (bakemw (bakeabs (ln-bs l) rs) rs))) lanes)
+       ; ..and a pc-relative field's rel addend: S + A - P measures from the field's start, the
+       ; fixup from its end, so A is the aux less the width
+       (bakepc bytes rs)
+        (: (go rs bs) (!(two? rs) ? bs
+                         (<rs @ r
+                            (go >rs (? (<>r == 'rel32) (o-put32 bs <r (<>>>r - 4))
+                                       (<>r == 'rel16) (o-putbs bs <r (le16 (<>>>r - 2)))
+                                       bs))))
+           (go rs bytes))
+       lbytes (map (l \ (ln-rl l @ rs (bakepc (bakemw (bakeabs (ln-bs l) rs) rs) rs))) lanes)
        symnames (map (string * cap) locs + funcnames + globnames + map string exts)
        str (o-strtab symnames)
        strblob <str stroffs <>str
@@ -245,13 +261,13 @@
        symbytes
         (: lsyms (catall (o-mapi (\ i e (: si <>e off <>>e
                                            (sec-exec? si ?
-                                              (elf-sym32 (stroffs i) 0 2 si (off | 1) 0)   ; stb_local stt_func, +thumb bit
+                                              (elf-sym32 (stroffs i) 0 2 si (off | tb) 0)   ; stb_local stt_func, +thumb bit
                                               (elf-sym32 (stroffs i) 0 1 si off 0))))      ; stb_local stt_object
                                  locs))
            fsyms (catall (o-mapi (\ i fs (o-place fs @ w
                                             (elf-sym32 (stroffs (nloc + i))
                                                      (elem fs wknames ? 2 1)         ; stb_weak vs stb_global
-                                                     2 <w (<>w | 1) 0)))                    ; stt_func, +thumb bit
+                                                     2 <w (<>w | tb) 0)))                   ; stt_func, +thumb bit
                                  funcnames))
            gsyms (catall (o-mapi (\ i gs (o-place gs @ w
                                             (elf-sym32 (stroffs (nloc + nfun + i))
@@ -275,9 +291,11 @@
                       (peep extidx lbl 0))
        (o-rels32 rs)
         (catall (map (\ [off k lbl aux _]
-          (k @ 'bl (o-rel32 off (fnsym lbl) r-thm-call)
+          (k @ 'rel32 (o-rel32 off (fnsym lbl) r-386-pc32)
+               'rel16 (o-rel32 off (fnsym lbl) r-386-pc16)
+               'bl (o-rel32 off (fnsym lbl) r-thm-call)
                'b  (o-rel32 off (fnsym lbl) r-thm-jump24)   ; a B.W tail-jump to an external/weak fn
-               'abs32 (a32loc lbl aux @ sl (o-rel32 off <sl r-arm-abs32))
+               'abs32 (a32loc lbl aux @ sl (o-rel32 off <sl (x86 ? r-386-32 r-arm-abs32)))
                ('movw16 || 'movt16)
                 (mwloc lbl @ sl
                    (o-rel32 off <sl $ k == 'movw16 ? r-thm-movw r-thm-movt))
@@ -324,7 +342,7 @@
              '(127 69 76 70 1 1 1 0 0 0 0 0 0 0 0 0)                      ; e_ident: \x7fELF 32-bit LSB
              (le16 1) (le16 machine) (le32 1)                             ; et_rel, EM_ARM, version
              (le32 0) (le32 0) (le32 sht-off)                             ; e_entry=0, e_phoff=0, e_shoff
-             (le32 83886080) (le16 52) (le16 0)                           ; e_flags=eabi_ver5, e_ehsize=52, e_phentsize=0
+             (le32 (x86 ? 0 83886080)) (le16 52) (le16 0)                 ; e_flags=eabi_ver5 on arm, e_ehsize=52, e_phentsize=0
              (le16 0) (le16 40) (le16 nsh)                                ; e_phnum=0, e_shentsize=40, e_shnum
              (le16 i-shs)])                                               ; e_shstrndx
        (catall ([hdr]
@@ -409,18 +427,18 @@
 
    (objsecs3 target textforms dataforms nifforms imgforms bssforms rodataforms)
     (two? imgforms ? (scare 'obj-image-arm32 target) 0,
-     [[".text"   1 6 4 textforms]
+     [[".text"   1 6 (i386? target ? 16 4) textforms]
       [".rodata" 1 2 (o-dalign 4 rodataforms) rodataforms]
       [".data"   1 3 (o-dalign 4 dataforms) dataforms]
       [".bss"    8 3 (o-dalign 4 bssforms) bssforms]
-      ["love_nifs" 1 3 4 nifforms]
-      [".ARM.attributes" 1879048195 0 1 [['raw (armattrs target)]]]])   ; SHT_ARM_ATTRIBUTES
+      ["love_nifs" 1 3 4 nifforms]]
+     + (i386? target ? () [[".ARM.attributes" 1879048195 0 1 [['raw (armattrs target)]]]]))   ; SHT_ARM_ATTRIBUTES
 
    (objelf target0 textforms dataforms funcnames globnames wknames nifforms imgforms locnames bssforms rodataforms)
     (arch-nom target0 @ target
-       (arm32? target ?
+       (elf32? target ?
          (objsecs32 target (objsecs3 target textforms dataforms nifforms imgforms bssforms rodataforms)
-                    funcnames globnames wknames)          ; locnames unrepresented on arm32
+                    funcnames globnames wknames)          ; locnames unrepresented on elf32
          (objsecs target (objsecs4 textforms dataforms nifforms imgforms bssforms rodataforms)
                   funcnames globnames wknames locnames)))
 

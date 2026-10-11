@@ -46,8 +46,10 @@ int  rand(void);
 void srand(unsigned int);
 long random(void);
 void srandom(unsigned int);
-/* the C locale's multibyte face: one byte a character, ascii only (wchar.h says more) */
-#define MB_CUR_MAX ((size_t) 1)
+/* the multibyte face: one byte a character, ascii only, until setlocale names a UTF-8
+ * LC_CTYPE (num.c), when it is utf-8 */
+extern int __love_utf8;
+#define MB_CUR_MAX ((size_t) (__love_utf8 ? 6 : 1))
 int mblen(char const *, size_t);
 int mbtowc(wchar_t *, char const *, size_t);
 int wctomb(char *, wchar_t);
