@@ -659,6 +659,12 @@
    _ (chk-eq "gas.a64.msrzr.refuse" '(gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand)
         (map (l \ trap (x \ holo-hex 'a64 (gas-text 'a64 x)) l (\ a b a))
              ["msr tpidr_el0, sp" "mrs sp, tpidr_el0" "msr tpidr_el0, wzr" "mrs w0, tpidr_el0" "msr tpidr_el0, w3"]))
+   ;; a binary literal, 0b or 0B and binary digits (proc.S's `0b01`), as llvm-mc reads it; a bare
+   ;; 0b is still the label behind, and a digit or letter glued past the bits refuses
+   _ (chk-eq "gas.a64.binlit" "((((\".text\" 1 6 ((raw (1 0 0 0 0 0 0 0 3 0 0 0 0 0 0 0 11 0 0 0 0 0 0 0)) (raw (160 0 128 210)) (raw (255)) (raw (18 0 0 0 0 0 0 0))))) () ()) \"1f2003d5ffffff1701000014\" (gas-data gas-data gas-data gas-data gas-immediate))"
+        (show [(gas-top 'a64 ".quad 0b01, 0B11, 0b1011\nmov x0, #0b101\n.byte 0b11111111\n.quad (0b1 << 4) | 0b10\n")
+               (holo-hex 'a64 (gas-text 'a64 "0:\n nop\n b 0b\n b 0f\n0:\n"))
+               (map (l \ trap (x \ gas-top 'a64 x) l (\ a b a)) [".quad 0b2\n" ".quad 0b1x\n" ".quad 0b_1\n" ".quad 0b1_0\n" "mov x0, #0b12\n"])]))
    ;; an argument that is one quoted string passes its inside, positional or by name, as llvm-mc
    ;; expands it (entry.S's `alternative_insn nop, "dmb sy", 90`)
    _ (chk-eq "gas.macro.quote" '("nop" "dmb sy" ".ascii \"x y\"" "mov x0, x1" "mov x0, x1" "mov x2, x3" "nop" "")
