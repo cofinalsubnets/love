@@ -468,6 +468,14 @@ moonrun -c -t a64 -o "$ho/.dbr.o" "$ho/.dbr.s" > /dev/null 2>&1 || fail "branche
 readelf -rW "$ho/.dbr.o" 2>/dev/null | grep -q R_AARCH64 && fail "a branch inside a data section laid a relocation"
 readelf -x .idmap.text "$ho/.dbr.o" 2>/dev/null | grep -q "1f2003d5 e1ffff35 c1ffff54 a1ff0f36" \
   || fail "branches inside a data section were not resolved in place"
+# .incbin lays a file's bytes, whole or a skip and count of them, found through -I as gas finds
+# it; a `//` inside a string is no comment (vdso-wrap.S's vdso.so)
+mkdir -p "$ho/.incd" && printf 'ABCDEFGHIJ' > "$ho/.incd/.inc.bin"
+printf '\t.section .rodata\n\t.incbin ".inc.bin"\n\t.incbin ".inc.bin", 2, 3\n\t.ascii "a//b"\n' > "$ho/.inc.S"
+moonrun -c -t a64 -I "$ho/.incd" -o "$ho/.inc.o" "$ho/.inc.S" > /dev/null 2>&1 || fail "an .incbin did not assemble"
+readelf -x .rodata "$ho/.inc.o" 2>/dev/null | grep -q "41424344 45464748 494a4344 45612f2f" \
+  || fail "an .incbin's bytes were not laid as llvm-mc lays them"
+moonrun -c -t a64 -o "$ho/.inc.o" "$ho/.inc.S" > /dev/null 2>&1 && fail "an .incbin of a file nowhere on the path was laid"
 
 # the attribute skip on a local/parameter/member takes __attribute__ ALONE: an asm NAME
 # would rename the object, and dropping it renames it in silence. test/cc/145 holds the

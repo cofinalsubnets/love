@@ -30,8 +30,9 @@
    ;; not the immediate marker. GNU's numeric local labels resolve here, before any dialect looks:
    ;; the k-th `N:` becomes the symbol lN.k, `Nf` the next one, `Nb` the last one. --
    (gcut s c) (: i ((: (g j) (? (j >= #s) -1 (s j = c) j (g (j + 1)))) 0) (i < 0 ? s (snip s 0 i)))
-   (gcut2 s c) (: n #s
-      i ((: (g j) (? (j + 1 >= n) -1 (s j = c && s (j + 1) = c) j (g (j + 1)))) 0)
+   (gcut2 s c) (: n #s                              ; a doubled c starts a comment, outside a string
+      i ((: (g j q) (? (j + 1 >= n) -1 (q && s j = 92) (g (j + 2) q) (s j = 34) (g (j + 1) !q)
+                        (!q && s j = c && s (j + 1) = c) j (g (j + 1) q))) 0 0)
       (i < 0 ? s (snip s 0 i)))
    (gsplit s c) (#s @ n
                    ((: (g i st acc) (? (i >= n) (rev (snip s st n . acc))
