@@ -15,7 +15,7 @@
  * under a UTF-8 LC_CTYPE at regcomp, pattern and text read by character, as love's re does:
  * a literal, `.`, a bracket and \w \s take a whole one and never a byte no character wears,
  * which matches only itself; classes and -i past ascii are the unicode floor's, -i gnulib's
- * case_folded_counterparts. REG_GREP reads gnu grep's dialect, where posix refuses: a repeat
+ * case_folded_counterparts; REG_UTF8 reads so whatever the locale. REG_GREP reads gnu grep's dialect, where posix refuses: a repeat
  * with nothing to repeat is skipped (ERE) or ink (BRE), and a brace that opens no interval is ink. */
 
 enum { N_CHAR, N_ANY, N_SET, N_BOL, N_EOL, N_ASSERT, N_CAT, N_ALT, N_REP, N_GROUP, N_BREF, N_EMPTY };
@@ -429,7 +429,7 @@ static void freeparse(parser *P, int keepsets) {
 int regcomp(regex_t *re, char const *pat, int flags) {
   parser P = {0};
   P.s = pat; P.ext = flags & REG_EXTENDED; P.icase = flags & REG_ICASE; P.nl = flags & REG_NEWLINE; P.grep = flags & REG_GREP;
-  P.u8 = __love_utf8;
+  P.u8 = __love_utf8 || flags & REG_UTF8;
   re->re_prog = 0; re->re_nsub = 0;
   node *root = alt(&P, 0);
   if (P.err) { freeparse(&P, 0); return P.err; }
@@ -513,7 +513,7 @@ static int search(run *R, int at) {
     ins const *p = g->p + pc;
     int ok = 1;
     if (R->seen) {
-      size_t b = ((size_t) pc * (size_t) (R->n + 1) + (size_t) i) * 2 + (R->slot[R->nslot - 1] == i);
+      size_t b = ((size_t) pc * (size_t) (R->n - R->base + 1) + (size_t) (i - R->base)) * 2 + (R->slot[R->nslot - 1] == i);
       if (R->seen[b >> 3] >> (b & 7) & 1) ok = 0;
       else R->seen[b >> 3] |= (unsigned char) (1 << (b & 7)); }
     if (ok) switch (p->op) {
@@ -570,19 +570,19 @@ static int search(run *R, int at) {
 int regexec(regex_t const *re, char const *str, size_t nm, regmatch_t *pm, int eflags) {
   prog const *g = re->re_prog;
   if (!g) return REG_BADPAT;
-  int off = 0, n;
-  if ((eflags & REG_STARTEND) && pm) { off = pm[0].rm_so; n = pm[0].rm_eo - pm[0].rm_so; }
+  int off = 0, n;   /* REG_STARTEND as glibc reads it: the search starts at rm_so, ^ and \b look behind it */
+  if ((eflags & REG_STARTEND) && pm) { off = pm[0].rm_so; n = pm[0].rm_eo; }
   else n = (int) strlen(str);
   run R = {0};
-  R.g = g; R.s = str + off; R.n = n; R.eflags = eflags;
+  R.g = g; R.s = str; R.n = n; R.base = off; R.eflags = eflags;
   R.nslot = 2 * ((int) g->nsub + 1) + g->nregs + 1;
   R.slot = malloc((R.nslot + 2 * ((int) g->nsub + 1)) * sizeof *R.slot);
   if (!R.slot) return REG_ESPACE;
   R.bestslot = R.slot + R.nslot;
-  size_t bits = (size_t) g->np * (size_t) (n + 1) * 2;
+  size_t bits = (size_t) g->np * (size_t) (n - off + 1) * 2;
   if (!g->bref && bits <= ((size_t) 1 << 31)) R.seen = calloc(bits / 8 + 1, 1);
   int hit = 0;
-  for (int at = 0, k; at <= n && !hit && !R.err; at += at < n ? (chat(&R, at, &k), k) : 1) {
+  for (int at = off, k; at <= n && !hit && !R.err; at += at < n ? (chat(&R, at, &k), k) : 1) {
     R.best = -1;
     hit = search(&R, at); }
   int err = R.err;
@@ -593,7 +593,7 @@ int regexec(regex_t const *re, char const *str, size_t nm, regmatch_t *pm, int e
     for (size_t k = 0; k < nm; k++) {
       int so = -1, eo = -1;
       if (k <= g->nsub && R.bestslot[2 * k] >= 0 && R.bestslot[2 * k + 1] >= 0) {
-        so = R.bestslot[2 * k] + off; eo = R.bestslot[2 * k + 1] + off; }
+        so = R.bestslot[2 * k]; eo = R.bestslot[2 * k + 1]; }
       pm[k].rm_so = so; pm[k].rm_eo = eo; }
   free(R.slot);
   return 0; }
