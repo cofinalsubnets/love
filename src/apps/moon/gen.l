@@ -2954,7 +2954,7 @@
              (<en = 'loc) [['ezx i] [['ldsd (xmmreg i) 'r4 <>en]]]
              'no)))
    (ezall g env e pty gpc xmmc va)
-    (ia32? g ? 'no                                   ; i386 targets no register: every argument is a stack word
+    (ia32? g ? (gpc < ngp g ? (ezarg g env e pty gpc) 'no)   ; i386: a -mregparm word, never an xmm
        (: z (gpc < ngp g ? (ezarg g env e pty gpc) 'no)
           (z != 'no || va ? z (ezxarg g env e pty xmmc))))
    (ezarg g env e pty i)
