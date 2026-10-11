@@ -12,11 +12,9 @@
 ;
 ; the game is C, linked into this binary by the DOOM=1 lane (src/inle/doom.c's host
 ; doors: doom-start / doom-tick / doom-frame / doom-key); this file is the window.
-; one 640x400 InputOutput window at the root's depth, the frame pushed as four
-; PutImage bands (a band is 100 rows: 256000 bytes, under the 65535-word request
-; ceiling with no BIG-REQUESTS to negotiate), the keyboard read as KeyPress/
-; KeyRelease and respelled from keysyms to doomkeys.h's codes, with XKB's detectable
-; autorepeat on so a held key is not a release every 40 ms. the socket is polled
+; one 640x400 window over the X wire's own requests (x-open, x-window, x-putrows), the
+; keyboard read as KeyPress/KeyRelease and respelled from keysyms to doomkeys.h's codes,
+; with XKB's detectable autorepeat on so a held key is not a release every 40 ms. the socket is polled
 ; between frames (cue?), never waited on: doom's own tick keeps the clock.
 ; sound rides the horn's C face inside the mixer, so `HORN=none love doom` is a
 ; silent game and HORN=/dev/snd/pcmC1D0p names a card (src/love/horn.c).
@@ -25,64 +23,6 @@
 (borrow 'xwire)
 (borrow 'posix)
 (:
-   ; --- the display, as lux reads it: DISPLAY -> the unix socket, the cookie off
-   ;     XAUTHORITY or ~/.Xauthority when the server wants one ---
-   (dispof d) (#d < 2 ? "0" (:- (go 0) b (snip d 1 #d)
-               (go i) (i = #b || b i = 46 ? (snip b 0 i) (go (i + 1)))))
-   (xauth u) (getenv "XAUTHORITY" @ v (0 < #v ? v (getenv "HOME" + "/.Xauthority")))
-
-   ; --- the requests the wire does not carry: a window of ours, a GC, a title,
-   ;     the delete protocol, and PutImage ---
-   (x-create s win parent w h depth visual)                                    ; CreateWindow, event-mask: keys + structure
-    (x-w8 s 1, x-w8 s depth, x-w16 s 9, x-w32 s win, x-w32 s parent,
-     x-w16 s 0, x-w16 s 0, x-w16 s w, x-w16 s h, x-w16 s 0, x-w16 s 1,
-     x-w32 s visual, x-w32 s 2048, x-w32 s 131075)                            ; KeyPress|KeyRelease|StructureNotify
-   (x-gc s gc win) (x-w8 s 55, x-w8 s 0, x-w16 s 4, x-w32 s gc, x-w32 s win, x-w32 s 0)
-   (x-title s win t)                                                           ; ChangeProperty WM_NAME STRING
-    (#t @ n
-       (x-w8 s 18, x-w8 s 0, x-w16 s (6 + (n + x-pad4 n) // 4), x-w32 s win,
-        x-w32 s 39, x-w32 s 31, x-w8 s 8, x-w8 s 0, x-w16 s 0, x-w32 s n, x-wpad s t))
-   (x-protocols s win dl)                                                      ; WM_PROTOCOLS = [WM_DELETE_WINDOW]
-    (x-intern s "WM_PROTOCOLS" @ pr
-       (x-w8 s 18, x-w8 s 0, x-w16 s 7, x-w32 s win, x-w32 s pr, x-w32 s 4,
-        x-w8 s 32, x-w8 s 0, x-w16 s 0, x-w32 s 1, x-w32 s dl))
-   ; a held key, by default, is a release and a press every 40 ms after the server's delay,
-   ; and doom reads every one of those releases as the key going up: the player stops
-   ; walking after half a second. XKB's detectable autorepeat turns a held key into
-   ; presses only. QueryExtension for the opcode, XkbUseExtension, then PerClientFlags
-   ; (UseCoreKbd, change and value both the DetectableAutoRepeat bit). a server without
-   ; XKB answers no opcode, and the keys stay as they were.
-   (x-autorepeat s)
-    (: n #"XKEYBOARD"
-       _ (x-w8 s 98, x-w8 s 0, x-w16 s (2 + (n + x-pad4 n) // 4), x-w16 s n, x-w16 s 0, x-wpad s "XKEYBOARD", x-flush s)
-       hdr (x-reply s)
-       op (<hdr = 1 ? (hdr 9) 0)
-       (op < 1 ? 0
-          (x-w8 s op, x-w8 s 0, x-w16 s 2, x-w16 s 1, x-w16 s 0, x-flush s,
-           x-reply s,
-           x-w8 s op, x-w8 s 21, x-w16 s 7, x-w16 s 256, x-w16 s 0, x-w32 s 1, x-w32 s 1, x-w32 s 0, x-w32 s 0, x-w32 s 0, x-flush s,
-           x-reply s,
-           1)))
-   ; one band of rows out of the frame cask: ZPixmap at the window's depth, 32 bpp
-   (x-putband s win gc depth buf y rows)
-    (rows * 2560 @ n
-       (x-w8 s 72, x-w8 s 2, x-w16 s (6 + n // 4), x-w32 s win, x-w32 s gc,
-        x-w16 s 640, x-w16 s rows, x-w16 s 0, x-w16 s y, x-w8 s 0, x-w8 s depth, x-w16 s 0,
-        say s (snip buf (y * 2560) (y * 2560 + n))))
-   (x-putframe s win gc depth buf)
-    (x-putband s win gc depth buf 0 100, x-putband s win gc depth buf 100 100,
-     x-putband s win gc depth buf 200 100, x-putband s win gc depth buf 300 100, x-flush s)
-
-   ; --- the keyboard: keycode -> its first keysym, the whole table once ---
-   (keysyms s mink maxk)
-    (: nkc (1 + (maxk - mink))
-       _ (x-w8 s 101, x-w8 s 0, x-w16 s 2, x-w8 s mink, x-w8 s nkc, x-w16 s 0, x-flush s)
-       hdr (x-reply s)
-       kpc (<hdr = 1 ? (hdr 1) 0)
-       km (tablet 8)
-       ((:- (go 0) (go i) (i < nkc * kpc ?
-         (x-r32 s @ sym (i % kpc = 0 && pin km (mink + i // kpc) sym, go (i + 1))))),
-        km))
    ; a keysym -> doomkeys.h's code, () for one doom has no name for. letters arrive
    ; lower-case (the unshifted column), which is what doom's menus want.
    doomkeys {65361 172 65362 173 65363 174 65364 175                              ; arrows
@@ -98,7 +38,7 @@
    ; --- the driver ---
    (drive s sc win gc wad frames)
     (: depth (scr-depth sc)
-       km (keysyms s (scr-mink sc) (scr-maxk sc))
+       km (x-keysyms s (scr-mink sc) (scr-maxk sc))
        dl (x-intern s "WM_DELETE_WINDOW")
        buf (cask 1024000)
        ; every event waiting on the wire, none waited for; 1 = the window is gone
@@ -108,14 +48,14 @@
                          (: c (ev-code e)
                             gone (c @ (17 || 33 && u32 (ev-raw e) 12 = dl) 1)
                             ((c = 2 || c = 3 ?
-                                (keyof (peep km (ev-detail e) 0) @ k
+                                (keyof <(peep km (ev-detail e) [0 0]) @ k
                                  (charm? k && doom-key k (c = 2)))),
                              (gone ? 1 (events 0)))))))
        (loop n) (? (events 0) n
                    (frames && n >= frames) n
                    (doom-tick () @ drew ; -1: the game quit itself
                       (drew < 0 ? n
-                         (drew ? (doom-frame buf, x-putframe s win gc depth buf),
+                         (drew ? (doom-frame buf, x-putrows s win gc depth buf 640 0 400),
                           loop (n + drew)))))
        (loop 0))
 
@@ -258,23 +198,21 @@
        (? (inle? 0) (elem 'doom (names ()) ? (doom ()) (doom-nest-inle 0))
           !(elem 'doom-start (names ())) (doom-nest as)
           (atom? (stat wad)) (say err ("doom: no IWAD at " + wad + "\n"), 1)
-          (: dn (dispof (string? disp ? disp ""))
-             s (x-connect ("/tmp/.X11-unix/X" + dn))
-             (!(hot? s) ? (say err ("doom: no display :" + dn + "\n"), 1)
-                (x-setup s (xauth-cookie (xauth 0) dn) @ sc
-                   (atom? sc ? (say err "doom: the display refused us\n", 1)
-                      (: win (scr-idbase sc) gc (scr-idbase sc + 1)
-                         n (x-create s win (scr-root sc) 640 400 (scr-depth sc) (scr-visual sc),
-                            x-gc s gc win,
-                            x-title s win "doom",
-                            x-protocols s win (x-intern s "WM_DELETE_WINDOW"),
-                            x-map s win,
-                            x-flush s,
-                            x-autorepeat s,
-                            doom-start wad ? 0 (say err "doom: would not start\n", quit 1),
-                            drive s sc win gc wad frames)
-                         (puts ("doom: " + show n + " frames\n"),
-                          0))))))))
+          (x-open disp @ o
+             (? (o = 'no-display) (say err ("doom: no display :" + x-dispnum (string? disp ? disp "") + "\n"), 1)
+                !(two? o) (say err "doom: the display refused us\n", 1)
+                (: s <o sc <>o win (scr-idbase sc) gc (scr-idbase sc + 1)
+                   n (x-window s win (scr-root sc) 640 400 131075,      ; KeyPress|KeyRelease|StructureNotify
+                      x-gc s gc win,
+                      x-title s win "doom",
+                      x-protocols s win,
+                      x-map s win,
+                      x-flush s,
+                      x-autorepeat s,
+                      doom-start wad ? 0 (say err "doom: would not start\n", quit 1),
+                      drive s sc win gc wad frames)
+                   (puts ("doom: " + show n + " frames\n"),
+                    0))))))
 
    door (udoor 'doom doom-main doom-usage 1 1)
    _ (pins (cite 'verbs 'tab) 'doom door)

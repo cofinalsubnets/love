@@ -41,7 +41,7 @@
        (bnd st en) ((st = 0 || !(gwbefore ln st)) && (en = n || !(gwat ln en)))
        ; gnu's -w walk: a span inside a word tries the longest shorter one at its start,
        ; the text cut there and no $ at the cut, then the next start
-       (cut m st en) (st < en && refind [<m (m 1 | 512)] (snip ln 0 (en - 1)) st @ [_ a b _] (a = st && a < b ? b))
+       (cut m st en) (st < en && refind [<m (m 1 | 512) (m 2)] (snip ln 0 (en - 1)) st @ [_ a b _] (a = st && a < b ? b))
        (word m st en)
         (? (bnd st en) [1 st en]
            (cut m st en @ b (b ? (word m st b)

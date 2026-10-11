@@ -203,7 +203,7 @@ semiprime will simply sit there, which is what GNU keeps a Pollard rho for.
 
 ## the regex door (src/love/boot/post.l, module 're)
 
-moonlibc's regcomp, through posix's `regex` nif: one engine for love and for the C mooncc
+moonlibc's regcomp, through posix's `regcomp` and `regexec` nifs (the program compiled once and kept as a string): one engine for love and for the C mooncc
 builds, read by character (REG_UTF8) and in GNU grep's dialect (REG_GREP), BRE or ERE.
 `(rebre p)` / `(reere p)` answer `(1 m ngroups)` | `()`; `(rehas m s)` the boolean; `(refind m s
 i)` the leftmost-longest span at or after i as `(1 start end spans)`, the spans the groups that

@@ -3,7 +3,7 @@
 #include <stddef.h>
 
 typedef int regoff_t;
-typedef struct { size_t re_nsub; void *re_prog; } regex_t;
+typedef struct { size_t re_nsub; void *re_prog; size_t re_size; } regex_t;   /* re_prog: re_size bytes holding no pointer */
 typedef struct { regoff_t rm_so, rm_eo; } regmatch_t;
 
 #define REG_EXTENDED 1

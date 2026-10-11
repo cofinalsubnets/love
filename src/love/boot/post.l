@@ -1984,22 +1984,24 @@
 
 ) ; module peg
 
-; re -- posix regular expressions, BRE and ERE: moonlibc's regcomp through posix's regex nif,
-; one engine for love and for the C mooncc builds, read by character and in gnu grep's dialect
+; re -- posix regular expressions, BRE and ERE: moonlibc's regcomp through posix's nifs, one
+; engine for love and for the C mooncc builds, read by character and in gnu grep's dialect
 ; (REG_UTF8 REG_GREP). (rebre p) / (reere p) answer (1 m ngroups), m the matcher, or () for a
 ; malformed p; (refold m) is m caseless. (refind m s i) answers the leftmost-longest match at
 ; or after i as (1 start end spans), spans the groups that took part as ([k start end]..), read
 ; with assoc; what lies before i is still the text, so ^ and \b look behind it. (rehas m s) is
-; the boolean face. a matcher is (pattern flags), flags past 255 regexec's shifted 8 left.
+; the boolean face. a matcher is (pattern flags program), the program compiled once and kept;
+; flags past 255 are regexec's, shifted 8 left.
 (module 're
-(: rx (cite 'posix 'regex)
-   (rex p fl) (rx p fl "" 1 @ n (n < 0 ? () [1 [p fl] n]))
+(: rc (cite 'posix 'regcomp)
+   rx (cite 'posix 'regexec)
+   (rex p fl) (rc p fl @ [b n] [1 [p fl b] n])
    (rebre p) (rex p 48)
    (reere p) (rex p 49)
-   (refold m) [<m (m 1 | 2)]
+   (refold m) <>(rex <m (m 1 | 2))
    (respans l k) (l @ (a . (b . u)) (a < 0 ? (respans u (k + 1)) ([k a b] . (respans u (k + 1)))))
-   (refind m s i) (rx <m (m 1) s i @ (a . (b . u)) [1 a b (respans u 1)])
-   (rehas m s) (two? (rx <m (m 1) s 0)))
+   (refind m s i) (rx (m 2) s i (m 1 >> 8) @ (a . (b . u)) [1 a b (respans u 1)])
+   (rehas m s) (two? (rx (m 2) s 0 0)))
 ) ; module 're
 
 ; grid -- a list of cells laid across a terminal, ls's shape. the columns are ragged, each as
