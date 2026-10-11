@@ -1411,13 +1411,13 @@
    ; does this binary carry the word as a verb? the registry's own answer, PATH aside
    (sh-verbw? w) (cite 'verbs 'word @ f (lit? f ? !!(f w) 0))
    ; --- the mode: autonomous, gregarious or precarious ----------------------
-   ; where this binary's verbs stand to PATH. autonomous (-a, the default): before it, a
-   ; verb word is ours whatever PATH holds. gregarious (-g): after it, ours where PATH
+   ; where this binary's verbs stand to PATH. autonomous (-a): before it, a verb word is
+   ; ours whatever PATH holds. gregarious (-g, the default): after it, ours where PATH
    ; finds nothing. precarious (-p): not at all, ours only when PATH's winner stats as
    ; this binary. `set --autonomous` and its kin, else the flag word, else LUSHFLAGS'
    ; last a, g or p. the entry pins sh-mflag once; an unseated caller (cook, a -e) reads
    ; the environment at the ask and pins nothing, which would bake in its answer.
-   (sh-envflag S _) (: s ("" + (getenv "LUSHFLAGS")) (foldl (\ v k (s k @ 97 0 103 1 112 2 _ v)) 0 ^#s))
+   (sh-envflag S _) (: s ("" + (getenv "LUSHFLAGS")) (foldl (\ v k (s k @ 97 0 103 1 112 2 _ v)) 1 ^#s))
    (sh-mode S _) (peep S 'sh-mflag 'no @ 'no (sh-envflag S 0) v v) ; peep: a pinned 0 is a verdict, not an absence
    sh-modes {"--autonomous" 0 "--gregarious" 1 "--precarious" 2}
    ; a new mode asks each word again: the in-image and fork verdicts were the old one's
@@ -2832,8 +2832,8 @@
 ; run it:
 ;   out/lush                    ; interactive (or cooked when stdin is a pipe)
 ;   out/lush -c "echo hi"       ; one command (multi-line strings fine)
-;   out/lush -a ..              ; autonomous, the default: our verbs run here whatever PATH holds
-;   out/lush -g ..              ; gregarious: our verbs where PATH finds nothing
+;   out/lush -a ..              ; autonomous: our verbs run here whatever PATH holds
+;   out/lush -g ..              ; gregarious, the default: our verbs where PATH finds nothing
 ;   out/lush -p ..              ; precarious: a verb word is ours only when PATH says so
 ;   out/lush script.sh          ; a script file, continuations gathered
 ;   out/lush --login ..         ; a login shell: /etc/profile + ~/.profile first
@@ -2889,8 +2889,8 @@
   -e                leave on a failing command
   -u                an unset name is an error
   -x                trace what runs
-  -a, --autonomous  our verbs before PATH (the default)
-  -g, --gregarious  our verbs after PATH
+  -a, --autonomous  our verbs before PATH
+  -g, --gregarious  our verbs after PATH (the default)
   -p, --precarious  PATH alone, ours never inserted
   --login           a login shell: the profiles are read
 with no mode flag, LUSHFLAGS' last a, g or p sets the mode; `set --autonomous` (and

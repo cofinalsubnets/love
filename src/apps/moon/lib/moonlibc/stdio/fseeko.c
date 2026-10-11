@@ -1,5 +1,5 @@
 #include "../impl.h"
 
-/* ---- fseeko, ftello: fseek and ftell, whose long is an off_t's width here ---- */
-int fseeko(FILE *f, off_t o, int w) { return fseek(f, (long) o, w); }
-off_t ftello(FILE *f) { return (off_t) ftell(f); }
+/* ---- fseek, ftell: fseeko and ftello at a long's width (fflush.c keeps the off_t pair) ---- */
+int fseek(FILE *f, long o, int w) { return fseeko(f, o, w); }
+long ftell(FILE *f) { return (long) ftello(f); }

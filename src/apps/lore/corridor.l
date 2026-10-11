@@ -6,42 +6,14 @@
 ; a subway station (levels/station.l), its walls ribbed with pilasters that slope into
 ; buttresses under the ceiling.
 ;
-; a level is a datum, (level NAME FORM ..), in metres -- x east, y up, z north. every
-; place in it is a point (x y z), in that order, and every colour (rgb r g b); its forms:
-;   (start (x y z) [bearing [pitch]])       where the player stands, facing bearing degrees
-;                                           from north toward east, looking pitch degrees up
-;   (room (x y z) (x y z) SKIN ..)          a box of air between two corners: floor, walls
-;                                           and ceiling. two rooms a wall apart share it
-;   (air SHAPE CUT .. SKIN ..) (solid SHAPE CUT .. SKIN ..)  a brush (brush.l): space starts
-;                                           solid, air carves it and solid fills it again, the
-;                                           later winning; a room is an air box
-;     SHAPE (box (x y z) (x y z))           ..between two corners
-;           (prism height (x y z) (x y z) (x y z) ..)  its floor plan going round, all at
-;                                           the first point's height, standing height tall
-;     CUT   (cut (x y z) (x y z) (x y z))   ..less what lies across the plane through three
-;                                           points from the brush's middle: a slope, a bevel
-;     SKIN  (walls NAME) (floor NAME) (ceiling NAME) (all NAME)  the textures on its faces,
-;                                           a floor any face turned up and a ceiling down;
-;                                           otherwise those named wall, floor and ceiling
-;   (texture NAME width height metres LAYER ..)  a texture, width by height texels and
-;                                           metres wide on a surface, painted by its layers
-;                                           (swatch.l). a wall's sits on its brush's foot; one
-;                                           named door is the doors'. one not given is a grid
-;   (repeat n (dx dy dz) FORM ..)           the forms n times, each that far on from the last
-;   (mirror x c FORM ..) (mirror z c FORM ..) the forms, and again reflected where x or z is c
-;   (door (x y z) width height)             a sliding door in the wall between two rooms, the
-;                                           middle of its foot at x y z
-;   (strip (x y z) [across] [how])          a light strip, its face at y, along z or across
-;   (bulb (x y z) (rgb r g b) [how])        a bare bulb, its light
-;   (poster (x y z) width height [FILE])    on the wall nearest, the middle of its foot at
-;                                           x y z; a png's path from the level's folder
-;   (sign (x y z) height TEXT (rgb r g b) [how])  a neon sign on the wall nearest, the
-;                                           middle of its foot at x y z
-; how a light behaves: steady, stammer, buzz or breathe.
+; a level is a love file, its words scenery.l's (listed at its top): forms run in turn,
+; the last of them (level NAME PART ..). a texture is one by its recipe (swatch.l); a
+; wall's sits on its brush's foot, and a surface no texture names is a grid.
 ;
 ; nothing outside: every light is a lamp (mesh.l's), baked once into a channel and summed
-; each frame by how bright it is just then. corridor-read, corridor-new, corridor-step,
-; corridor-move and corridor-frame are pure, gated by test/host/corridor.l; corridor-watch
+; each frame by how bright it is just then. corridor-read runs a level's text, and
+; corridor-new, corridor-step, corridor-move and corridor-frame are pure, gated by
+; test/host/corridor.l; corridor-watch
 ; reads the disk, and only corridor-walk and corridor-run tie the tty.
 ;
 ; run: love lore corridor [--level FILE] [--kitty|--cells]
@@ -58,6 +30,8 @@
 (borrow 'neon)                          ; the signs, and the poster's letters
 (borrow 'brush)                         ; the world, carved and filled
 (borrow 'swatch)                        ; the textures, from their recipes
+(borrow 'flicker)                       ; how the lights stammer, buzz and breathe
+(borrow 'walk)                          ; the keys, and a step slid along a wall
 (:
  fps 20
  eye-h 1.6 body-r 0.25
@@ -66,95 +40,26 @@
  cell 0.25                                ; how fine the surfaces are cut, for the light
  watch-every 10                           ; frames between looks at the files
  the-level "src/apps/lore/levels/hall.l"
- ; --- the level, read: (corridor-read s) a tablet {'name 'start 'rooms 'doors 'strips
- ;     'bulbs 'posters 'signs 'brushes 'textures}, or a string saying what is wrong ---
- (num? v) (charm? v || gem? v)
- (f v) (1.0 * v)
- (pt q) (two? q && #q = 3 && all num? q ? (map f q))
- (rgb q) (two? q && <q = 'rgb && #q = 4 && all num? >q ? (map f >q))
- (hows l) (filter (w \ elem w ['steady 'stammer 'buzz 'breathe]) l)
- (name? v) (kind v = 'nom)
- ; ..a brush's skin: [class name] each, the later winning
- (opt? q) (two? q && #q = 2 && elem <q ['walls 'floor 'ceiling 'all] && name? (q 1))
- (skin-of l) (cats (map (q \ (<q = 'all ? (map (c \ [c (q 1)]) ['wall 'floor 'ceiling]) [[(<q = 'walls ? 'wall <q) (q 1)]]))
-                       (filter opt? l)))
+ ; --- the level, read: (corridor-read s) runs a level file's text, its last form the
+ ;     level (scenery.l) -- a tablet {'name 'start 'rooms 'doors 'strips 'bulbs 'posters
+ ;     'signs 'brushes 'textures} -- or a string saying what is wrong ---
  (skin-name sk c) (foldl (\ a e (e 0 = c ? e 1 a)) c sk)
- ; ..each form's words, or () where they are not what it takes
- (form k a) (: p (a 0) at (pt p) (n i) (num? (a i)) (v i) (f (a i))
-   (k @ 'start (at != () && (#a = 1 || n 1) && (#a <= 2 || n 2)
-                    ? {'at [(at 0) (at 2)] 'y (at 1) 'deg (#a > 1 ? (v 1) 0.0) 'pitch (#a > 2 ? (v 2) 0.0)})
-       'room (#a >= 2 && at != () && pt (a 1) != () && all opt? (drop 2 a)
-                   ? (: q (pt (a 1)) [(min2 (at 0) (q 0)) (min2 (at 2) (q 2)) (max2 (at 0) (q 0)) (max2 (at 2) (q 2))
-                                     (max2 (at 1) (q 1)) (min2 (at 1) (q 1))]))
-       'door (#a = 3 && at != () && n 1 && n 2 ? [(at 0) (at 2) (v 1) (v 2) (at 1)])
-      'strip (at != () ? {'at [(at 0) (at 2)] 'y (at 1) 'across (elem 'across a) 'how (hows a)})
-       'bulb (at != () && rgb (peep a 1 ()) != () ? {'at at 'c (rgb (a 1)) 'how (hows a)})
-       'poster (#a >= 3 && at != () && n 1 && n 2 ? {'at [(at 0) (at 2) (at 1) (v 1) (v 2)] 'file (peep a 3 ())})
-       'sign (#a >= 4 && at != () && n 1 && string? (a 2) && rgb (peep a 3 ()) != ()
-                   ? {'at [(at 0) (at 2) (at 1) (v 1)] 'text (a 2) 'c (rgb (a 3)) 'how (hows a)})
-      ('air || 'solid)
-       (two? a && shape-of <a != () && all (c \ cut-of c != () || opt? c) >a
-        ? {'air (k = 'air) 'shape (shape-of <a) 'cuts (map cut-of (filter (!= () * cut-of) >a)) 'skin (skin-of >a)})
-       'texture (#a >= 4 && name? (a 0) && charm? (a 1) && charm? (a 2) && 0 < a 1 <= 512 && 0 < a 2 <= 512
-                 && n 3 && v 3 > 0.0 && swatch-fault (drop 4 a) = ()
-                 ? {'name (a 0) 'w (a 1) 'h (a 2) 'm (v 3) 'layers (drop 4 a)})))
- ; ..a brush's shape, and a cut
- (shape-of q) (? (!(two? q)) ()
-                 (<q = 'box && #q = 3 && pt (q 1) != () && pt (q 2) != ())
-                  (: a (pt (q 1)) b (pt (q 2)) {'box [(map (k \ min2 (a k) (b k)) ^3) (map (k \ max2 (a k) (b k)) ^3)]})
-                 (<q = 'prism && #q >= 5 && num? (q 1) && all (p \ pt p != ()) (drop 2 q))
-                  (: ps (map pt (drop 2 q)) y0 (<ps 1) {'prism [y0 (y0 + f (q 1)) (map (p \ [(p 0) (p 2)]) ps)]}))
- (cut-of q) (two? q && <q = 'cut && #q = 4 && all (!= () * pt) >q ? (map pt >q))
- ; ..what each form takes, said back when one is not understood
- usage {'start "(start (x y z) [bearing [pitch]])" 'room "(room (x y z) (x y z) [(walls NAME)] [(floor NAME)] [(ceiling NAME)] [(all NAME)])"
-        'door "(door (x y z) width height)"
-        'strip "(strip (x y z) [across] [how])" 'bulb "(bulb (x y z) (rgb r g b) [how])"
-        'poster "(poster (x y z) width height [FILE])" 'sign "(sign (x y z) height TEXT (rgb r g b) [how])"
-        'air "(air (box (x y z) (x y z)) (cut (x y z) (x y z) (x y z)) .. (walls NAME) ..)"
-        'solid "(solid (box (x y z) (x y z)) (cut (x y z) (x y z) (x y z)) .. (walls NAME) ..)"
-        'texture "(texture NAME width height metres LAYER ..)"}
- ; ..what is wrong with a form not understood: a texture's first bad layer, or what it reads
- (why q) (: u (two? q && <q = 'texture && #q >= 6 ? (swatch-fault (drop 5 q)))
-   (? (two? u) "not understood: \(u 0) in the texture \(q 1)  -- it reads \(u 1)"
-      ("not understood: " + show q + (two? q && usage <q != () ? ("  -- it reads " + usage <q) ""))))
  ; ..a brush with no inside: a box flat in some direction, a prism no height
  (empty? r) (: sh (r 'shape)
    (sh 'box @ () (: p (sh 'prism) (p 1 - p 0 < 1e-6)) b (any (k \ b 1 k - b 0 k < 1e-6) ^3)))
- ; --- repeat and mirror, laid out before the level is read: each a copy of its forms with
- ;     every point (x y z) in them moved, and a start's bearing turned ---
- (re-form q g b) (: (go e) (? (!(two? e)) e (pt e != () ? (g (pt e)) (map go e)))
-   (two? q && <q = 'start && num? (peep q 2 ()) ? ('start . go (q 1) . b (f (q 2)) . drop 3 q) (go q)))
- (expand l) (cats (map (q \ (? (two? q && <q = 'repeat && #q >= 3 && num? (q 1) && pt (q 2) != ())
-                                (: n (int (q 1)) d (pt (q 2)) inner (expand (drop 3 q))
-                                   (cats (map (i \ map (r \ re-form r (p \ [(p 0 + i * d 0) (p 1 + i * d 1) (p 2 + i * d 2)]) (b \ b)) inner) ^n)))
-                                (two? q && <q = 'mirror && #q >= 3 && elem (q 1) ['x 'z] && num? (q 2))
-                                (: inner (expand (drop 3 q)) c (f (q 2)) x? (q 1 = 'x)
-                                   (inner + map (r \ re-form r (p \ x? ? [(2.0 * c - p 0) (p 1) (p 2)] [(p 0) (p 1) (2.0 * c - p 2)])
-                                                              (b \ x? ? (0.0 - b) (180.0 - b))) inner))
-                                [q]))
-                       l))
- forms ['start 'room 'door 'strip 'bulb 'poster 'sign 'air 'solid 'texture]
- (corridor-read s) (: r (sound s)
-   (? (!(two? r) || !(two? <r) || <<r != 'level) "not a level: it should read (level NAME FORM ..)"
-      (: nm (<r 1) fs0 (expand (string? nm ? >><r >(<r)))
-         bad (filter (q \ !(two? q) || !(elem <q forms) || form <q >q = ()) fs0)
-         (of k) (map (q \ form <q >q) (filter (q \ <q = k) fs0))
-         ; ..the brushes in the file's order, a room an air box
-         bq (filter (q \ elem <q ['room 'air 'solid]) fs0)
-         bs (map (q \ (: v (form <q >q) (<q = 'room ? {'air 1 'shape {'box [[(v 0) (v 5) (v 1)] [(v 2) (v 4) (v 3)]]} 'cuts ()
-                                                         'skin (skin-of (drop 2 >q))} v))) bq)
-         hollow (two? bad ? () (filter (i \ empty? (bs i)) ^#bs))
-         ; ..a skin's names each a texture's
-         tn (two? bad ? () (map (t \ t 'name) (of 'texture)))
-         unnamed (two? bad ? () (filter (nm \ !(elem nm tn)) (cats (map (b \ map (e \ e 1) (b 'skin)) bs))))
-         (? (two? bad) (why <bad)
-            (two? hollow) "a brush with no inside: \(bq <hollow)"
-            (two? unnamed) "no texture named \(<unnamed): a level's own are made by (texture NAME width height metres LAYER ..)"
-            (atom? (of 'room)) "a level needs a room"
-            (: lv {'name (string? nm ? nm "") 'rooms (of 'room) 'doors (of 'door) 'strips (of 'strip)
-                   'bulbs (of 'bulb) 'posters (of 'poster) 'signs (of 'sign) 'brushes bs 'textures (of 'texture)
-                   'start (of 'start @ () {'at [0.0 0.0] 'y 0.0 'deg 0.0 'pitch 0.0} l <l)}
-               (doors-of lv @ ds (string? ds ? ds (pin lv 'doors ds))))))))
+ ; ..a scare raised by a word given what it does not take says what it takes; any other is
+ ; love's own
+ (corridor-read s) (: r (trap (_ \ (sounds s @ 'torn ['torn]
+                                       ds (foldl (\ a d (ev 'ev d)) (ev 'ev '(borrow 'scenery)) ds)))
+                             () (\ a b ['scare a b]))
+   (? (tablet? r) (r 'kind = 'level ? (check r) "the file's last form should be (level NAME PART ..)")
+      (two? r && <r = 'scare) (r 1 = 'level ? (r 2) ";; \(r 1) \(r 2)")
+      (two? r && <r = 'torn) "a form is not finished: a ( without its )"
+      "the file's last form should be (level NAME PART ..)"))
+ (check lv) (: bs (lv 'brushes) hollow (filter (i \ empty? (bs i)) ^#bs)
+   (? (two? hollow) "a brush with no inside: \(bs <hollow 'shape)"
+      (atom? (lv 'rooms)) "a level needs a room"
+      (doors-of lv @ ds (string? ds ? ds (pin lv 'doors ds)))))
  ; ..a door's place among the rooms: the two walls it passes, on axis ax -- 'z when it
  ; spans x in a wall across z -- its middle c along them, a and b the walls' places
  (hits r x z) [(? (r 0 <= x <= r 2) (filter (w \ mag (w - z) < 0.5) [(r 1) (r 3)]) ())
@@ -262,12 +167,10 @@
  ; ..how bright a light is at mt seconds, the doors open by ds: steady; a strip failing,
  ; mostly on and now and then stammering off; a tube's buzz; a bulb breathing; a door's
  ; lamp by its door. sd keeps two failing lights out of step
- (stammer mt sd) (: s (int (mt * 12.0)) burst (throw (int (mt / 3.0)) sd 151 5 = 0)
-   (burst && throw s (sd + 2) 157 3 != 0 ? (0.05 * throw s 3 163 4) (throw s (sd + 4) 167 90 = 0 ? 0.3 1.0)))
  (bright how mt sd ds) ((two? how ? <how 'steady) @
-  'stammer (stammer mt sd)
-  'buzz (0.93 + 0.07 * sin (mt * 53.0) * sin (mt * 7.0))
-  'breathe (0.7 + 0.3 * sin (mt * 1.7 + sd))
+  'stammer (flicker-stammer mt sd)
+  'buzz (flicker-buzz mt)
+  'breathe (flicker-pulse mt 0.7 0.3 1.7 sd)
   (a . u) (peep ds <u 0.0 @ d (a @ 'shut (d < 0.02 ? 1.0 0.0) (d < 0.02 ? 0.0 1.0)))
   1.0)
  (corridor-ks sc mt ds) (map (i \ bright (sc 'lights i 'how) mt i ds) ^#(sc 'lights))
@@ -325,9 +228,6 @@
  ; --- the frame: the rooms and doors lit by the lights as bright as they are now, then
  ;     what shines, then the glows; out as half blocks or kitty's pixels ---
  fov 1.5
- kitty-w 640
- kitty-id 7
- kitty-gone (mesh-kitty-del 7 + mesh-kitty-del 8)
  gain 2.0
  (corridor-pens st) (: k (peep st 'kp 1) w (k * st 'w) h (k * st 'h) sc (st 'sc) lv (st 'lvl)
    ds (st 'doors) ks (corridor-ks sc (st 'mt) ds)
@@ -347,20 +247,16 @@
    (mesh-frame v [(map (b \ b 0) all) (map (b \ b 1) all)] (sc 'texs) [0.0 0.0 0.0 30.0 60.0] 8 gain 0))
  ; ..a frame, and under it the bottom row's word: what a reload found wrong, or for a few
  ; seconds that it read the level again
- (corridor-frame st) (: w (st 'w) h (st 'h) k (peep st 'kp 1) f (corridor-pens st) r (h // 2)
+ (corridor-frame st) (: w (st 'w) h (st 'h) f (corridor-pens st) r (h // 2)
    ; ..or, with p pressed, where the player stands and faces, as a level says it
    m (? (st 'err || !(peep st 'pos 0)) (st 'msg) (where st))
    say? (string? m && (st 'err || peep st 'pos 0 || st 'mt < st 'msg-t + 3.0))
    text (say? ? (snip (pad (" " + m) w " ") 0 w) "")
-   (? (st 'kitty)
-      (: n (peep st 'kn 0) _ (pin st 'kn (1 - n))
-         (esc + "[?2026h" + mesh-kitty f (k * w) (k * h) w r (kitty-id + n) + mesh-kitty-del (kitty-id + 1 - n)
-          + (say? ? (esc + "[" + show r + ";1H" + esc + (st 'err ? "[1;37;41m" "[0;37;40m") + text + esc + "[0m") "")
-          + esc + "[?2026l"))
-      (esc + "[?2026h" + mesh-cells f w h (st 'deep) (st 'deep ? 0 (st 'bay)) (say? ? (band st text r) {}) + esc + "[?2026l")))
+   (mesh-show st f (say? ? (esc + "[" + show r + ";1H" + esc + (st 'err ? "[1;37;41m" "[0;37;40m") + text + esc + "[0m") "")
+              (say? ? (band st text r) {})))
  (where st) (: (r v) (show (int (v * 100.0 + (v < 0.0 ? -0.5 0.5)) / 100.0))
    deg (st 'th * 180.0 / pi @ d (d < 0.0 ? (d + 360.0) d))
-   ("(" + r (st 'px) + " " + r (st 'py - eye-h) + " " + r (st 'pz) + ")  facing " + r deg + "  pitch " + r (st 'ph * 180.0 / pi)))
+   "(start [\(r (st 'px)) \(r (st 'py - eye-h)) \(r (st 'pz))] \(r deg) \(r (st 'ph * 180.0 / pi)))")
  ; ..as one of view's bands on row r: its cells, a character each, and its pens
  (band st s r) (: deep (st 'deep)
    (pen v) (deep ? (: (q x) ((x * 63 + 127) // 255) (q (v 0) * 4096 + q (v 1) * 64 + q (v 2))) (v 3))
@@ -373,8 +269,7 @@
                    'lvl lv 'sc (scene lv dir) 'dir dir 'doors (map (_ \ 0.0) (lv 'doors)) 'deep 0 'kitty 0 'kp 1
                    'done 0 'msg () 'msg-t 0.0 'err 0}
                   w (h // 2)))
- (corridor-size st w r) (: h (2 * r)
-   (pins (view! st w h (h // 2)) 'bay (view-bayer w h) 'kp (st 'kitty ? (max2 1 (kitty-w // w)) 1)))
+ (corridor-size st w r) (mesh-size st w r)
  ; --- moving: where the body's round, at its feet and at its head, is all air, and not
  ;     through a door that is not open ---
  (corridor-free? st x z) (: r body-r lv (st 'lvl) bs (st 'sc 'brushes)
@@ -384,20 +279,12 @@
    fl (st 'py - eye-h)
    (all (q \ brush-medium bs [(q 0) (fl + 0.3) (q 1)] = 1 && brush-medium bs [(q 0) (fl + 1.7) (q 1)] = 1) pts
     && !(any shut? ^#(lv 'doors))))
- (put! st x z) (? (corridor-free? st x z) (pins st 'px x 'pz z)
-                  (corridor-free? st x (st 'pz)) (pin st 'px x)
-                  (corridor-free? st (st 'px) z) (pin st 'pz z)
-                  st)
- (corridor-step st k) (: th (st 'th) dt (peep st 'dt (1.0 / fps))
-   (step d) (put! st (st 'px + d * sin th) (st 'pz + d * cos th))
-   (k @ (104 || -1) (pin st 'th (wrap (th - turn-v * dt)))
-        (108 || -2) (pin st 'th (wrap (th + turn-v * dt)))
-        (107 || -8) (step (walk-v * dt))
-        (106 || -9) (step (0.0 - walk-v * dt))
-        117 (pin st 'ph (min2 1.3 (st 'ph + tilt-v * dt)))
-        110 (pin st 'ph (max2 -1.2 (st 'ph - tilt-v * dt)))
-        112 (pin st 'pos (1 - peep st 'pos 0))
-        st))
+ (put! st x z) (walk-slide st x z corridor-free?)
+ ; ..each key as far as the time since the last frame, 'dt, carries it; p where you stand
+ (corridor-step st k) (: dt (peep st 'dt (1.0 / fps))
+   (walk-key st k {'turn (turn-v * dt) 'walk (walk-v * dt) 'tilt (tilt-v * dt) 'up 1.3 'down -1.2} put!
+    @ () (k = 112 ? (pin st 'pos (1 - peep st 'pos 0)) st)
+      s s))
  ; a frame's motion: the clock, and each door toward open while the player is near it
  (corridor-move st) (: dt (peep st 'dt (1.0 / fps)) lv (st 'lvl) x (st 'px) z (st 'pz)
    (go i) (: d (lv 'doors i) o (st 'doors i) p (P (d 'ax) (d 'c) 0.0 (0.5 * (d 'a + d 'b)))
@@ -423,12 +310,11 @@
  (dir-of p) (: (go i) (i < 0 ? "" (p i = 47 ? (snip p 0 (i + 1)) (go (i - 1)))) (go (#p - 1)))
  ; --- the walk, on view's loop; corridor-run raises the stage ---
  (corridor-walk o lv)
-   (view-walk {'new (w \ h \ (: k (o 'md @ 'kitty 1 'cells 0 (mesh-kitty? ())) p (o 'level)
-                               st (pins (corridor-new w h lv (dir-of p)) 'deep (elem (getenv "COLORTERM") ["truecolor" "24bit"])
-                                        'kitty k 'path p)
+   (view-walk {'new (w \ h \ (: p (o 'level)
+                               st (pins (corridor-new w h lv (dir-of p)) 'deep (view-deep? ()) 'kitty (mesh-mode (o 'md)) 'path p)
                                (corridor-watch (corridor-size st w (h // 2)))))
                'size corridor-size 'frame corridor-frame 'key corridor-step
-               'tick (st \ (clock 0 @ now (pins st 'dt (clamp ((now - peep st 'wall now) / 1000.0) 0.02 0.25) 'wall now),
+               'tick (st \ (walk-dt st,
                             corridor-move st,
                             (st 't % watch-every = 0 ? (corridor-watch st))))
                'fps fps 'linger 0 'next () 'song (_ \ ())})
@@ -436,18 +322,11 @@
  (corridor-run o) (: p (o 'level @ () (two? (stat the-level) ? the-level ("/love/" + the-level)) q q)
                      lv (corridor-load p)
    (? (string? lv) (say err ("corridor: " + p + ": " + lv + "\n"), flush err, 1)
-      (view-run (_ \ corridor-walk (pin o 'level p) lv), say out kitty-gone, flush out, 0)))
+      (view-run (_ \ corridor-walk (pin o 'level p) lv), say out mesh-gone, flush out, 0)))
  corridor-usage "usage: love lore corridor [--level FILE] [--kitty|--cells]   (h l turn, k j step, u n look, p where you stand; q or esc leaves; the level is read again when it changes)"
  ; the words, as a tablet for corridor-run, or () where one is wrong or said twice
- (corridor-opts as)
-  (: o {}
-     (once k v r) (v = () || o k != () ? () (pin o k v, go r))
-     (go l) (? (atom? l) o
-               (<l = "--kitty") (once 'md 'kitty >l)
-               (<l = "--cells") (once 'md 'cells >l)
-               (two? >l && <l = "--level") (once 'level <>l >>l))
-     (go as))
- (corridor-main as) (corridor-opts as @ o
-   (tablet? o ? (corridor-run o) (say err ("corridor: " + corridor-usage + "\n"), flush err, 2)))
+ (corridor-opts as) (view-words as [(view-flag "--kitty" 'md 'kitty) (view-flag "--cells" 'md 'cells)
+                                    (view-arg "--level" 'level (w \ w))])
+ (corridor-main as) (view-main "corridor" corridor-usage corridor-opts corridor-run as)
  _ (cite 'lore 'lore-enlist 'corridor (udoor 'corridor corridor-main corridor-usage 1 1)))
 ) ; module corridor

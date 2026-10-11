@@ -40,6 +40,8 @@
 (borrow 'vec)                           ; triples, and the noise
 (borrow 'sky)                           ; the sun, its light, the sky's colour
 (borrow 'grove)                         ; the honey locust
+(borrow 'flicker)                       ; a television's flicker
+(borrow 'walk)                          ; the keys
 (:
  fps 20
  ; --- the yard, in metres: x east, z north, y up, the sump at the origin. the long walls
@@ -134,22 +136,16 @@
                   qx (x2 - bs 0) qz (z2 - bs 2) d (sqrt (qx * qx + qz * qz)) m (0.3 + body-r)
                   (d < m ? (pins st 'px (bs 0 + qx * m / max2 d 0.001) 'pz (bs 2 + qz * m / max2 d 0.001))
                      (pins st 'px x2 'pz z2)))
- (court-step st k) (: th (st 'th)
-   (step d) (put! st (st 'px + d * sin th) (st 'pz + d * cos th))
-   (tell st2) (pin st2 'shown (st 't + 2 * fps))
-   (k @ (104 || -1) (pin st 'th (wrap (th - turn-step)))
-        (108 || -2) (pin st 'th (wrap (th + turn-step)))
-        (107 || -8) (step (walk-v / fps))
-        (106 || -9) (step (0.0 - walk-v / fps))
-        117 (pin st 'ph (min2 1.45 (st 'ph + tilt-step)))
-        110 (pin st 'ph (max2 -1.2 (st 'ph - tilt-step)))
-        91 (tell (pin st 'sim (st 'sim - 3600.0)))
-        93 (tell (pin st 'sim (st 'sim + 3600.0)))
-        116 (tell (pin st 'pace ((st 'pace + 1) % #(st 'paces))))
-        99 (tell (pins st 'wx (wx-of ((st 'wx 'cover + 1) % 4) (st 'wx 'style) (sky-fall (st 'wx))) 'drift 0))
-        118 (tell (pin st 'wx (wx-of (st 'wx 'cover) (st 'wx 'style = 'pixel ? 'smooth 'pixel) (sky-fall (st 'wx)))))
-        112 (tell (pins st 'wx (wx-of (st 'wx 'cover) (st 'wx 'style) ((sky-fall (st 'wx) + 1) % 3)) 'drift 0))
-        st))
+ (court-step st k) (: (tell st2) (pin st2 'shown (st 't + 2 * fps))
+   (walk-key st k {'turn turn-step 'walk (walk-v / fps) 'tilt tilt-step 'up 1.45 'down -1.2} put!
+    @ () (k @ 91 (tell (pin st 'sim (st 'sim - 3600.0)))
+              93 (tell (pin st 'sim (st 'sim + 3600.0)))
+              116 (tell (pin st 'pace ((st 'pace + 1) % #(st 'paces))))
+              99 (tell (pins st 'wx (wx-of ((st 'wx 'cover + 1) % 4) (st 'wx 'style) (sky-fall (st 'wx))) 'drift 0))
+              118 (tell (pin st 'wx (wx-of (st 'wx 'cover) (st 'wx 'style = 'pixel ? 'smooth 'pixel) (sky-fall (st 'wx)))))
+              112 (tell (pins st 'wx (wx-of (st 'wx 'cover) (st 'wx 'style) ((sky-fall (st 'wx) + 1) % 3)) 'drift 0))
+              st)
+      s s))
  ; a frame's motion: the clock, and the leaves -- now and then one lets go of the top of
  ; the crown, drifts down and lies where it lands
  (court-move st) (: t (st 't) tops (st 'litter 'tops) sea (court-season st) ev (sea 'every)
@@ -442,7 +438,7 @@
    i2 (over -1 (dist < peep (buf 't) idx 1e9) idx)
    up (P 'up) face (up * max2 (s 1) 0.0 + (1.0 - up) * 0.5)
    lit (sun-clear X Y Z s * (1.0 - shade sms X Y Z) * lt 'sunk * face * 0.9)
-   irr (c+ (c* 0.42 (lt 'amb)) (c* lit (lt 'sunc)))
+   irr (sky-irr lt 0.42 lit)
    cl (cm (cmix [(P 'r) (P 'g) (P 'b)] snowc (P 'up * sn)) irr)
    (pins buf 't (pin (buf 't) i2 dist) 'r (pin (buf 'r) i2 (cl 0))
              'g (pin (buf 'g) i2 (cl 1)) 'b (pin (buf 'b) i2 (cl 2))))
@@ -543,7 +539,7 @@
              nds (max 0.0 (nx * s 0 + ny * s 1 + nz * s 2))
              lit (nds * sun-clear X Y Z s * (1.0 - shade sms X Y Z) * lt 'sunk)
              base (cmix (c* fur col) snowc (sn * sat (ny * 2.0 - 0.8)))
-             cl (cm base (c+ (c* 0.9 (lt 'amb)) (c* lit (lt 'sunc))))
+             cl (cm base (sky-irr lt 0.9 lit))
              (mix k v) (peep (buf k) ix 0.0 @ o (o + al * (v - o)))
              (pins buf 't (pin (buf 't) (over -1 (0.5 <= al) ix) t)
                        'r (pin (buf 'r) ix (mix 'r (cl 0))) 'g (pin (buf 'g) ix (mix 'g (cl 1)))
@@ -567,7 +563,7 @@
        base (cmix (c* (dirt * (1.0 - 0.3 * edge)) [0.47 0.48 0.44]) snowc (sn * (0.0 < ny)))
        nd (max 0.0 (nx * s 0 + ny * s 1 + nz * s 2))
        lit (nd * sun-clear X Y Z s * (1.0 - shade sms X Y Z) * lt 'sunk * 0.9)
-       cl (cm base (c+ (c* 0.75 (lt 'amb)) (c* lit (lt 'sunc))))
+       cl (cm base (sky-irr lt 0.75 lit))
        (pins buf 't (pin (buf 't) i2 tn) 'r (pin (buf 'r) i2 (cl 0)) 'g (pin (buf 'g) i2 (cl 1)) 'b (pin (buf 'b) i2 (cl 2))))))
  ; --- the shadows the cables and the box lay on the walls, as the share of the sun each
  ; pixel loses: a rod's laid down the sun onto its wall, the box's swept from its face back
@@ -695,13 +691,13 @@
      dir (nd * lit * lt 'sunk * 0.9)
      sv (over (0.45 + 0.5 * min 1.0 (py / hh)) gnd 0.42 * (1.0 + 0.2 * lt 'day * (nx * sx + nz * sz)))
      bounce (c* (lt 'sunk * 0.05) (lt 'sunc))
-     irr (c+ (c+ (c* sv (lt 'amb)) (c* dir (lt 'sunc))) bounce)
+     irr (c+ (sky-irr lt sv dir) bounce)
      ; ..a window: the sky in the pane, and the room behind it when it is lit -- each window
      ; by the hour, the stair's whenever it is dark out, a television flickering
      hr (day-secs (st 'sim) / 3600.0)
      key (peep (wm 'key) wi 0) stw (peep (wm 'night) wi 0) tv (peep (wm 'tv) wi 0)
      on (frac (sin (key * 12.9898 + int hr * 78.233) * 43758.5453) * 100.0 < lit-share hr)
-     flick (1.0 - tv * (0.3 + 0.25 * sin (t0 * 1.7 + key * 2.1) * sin (t0 * 0.61 + key)))
+     flick (flicker-tv t0 key tv)
      lamps (over ((1 - stw) * on * 0.7 * flick) stw ((lt 'day < 0.55) * 0.75))
      panes (c+ (c* 0.25 (lt 'amb)) [0.02 0.025 0.03])
      inglass (c+ panes (c* lamps [(wg 'er) (wg 'eg) (wg 'eb)]))
@@ -742,8 +738,7 @@
  ; ..o says how to start, or () for now and the run's own weather: 'now [local-seconds
  ; dst], 'wx the weather, 'pace seconds of the sky a second (t steps on to the usual ones)
  (court-walk o) (: (opt k) (tablet? o ? (o k) ())
-   (view-walk {'new (w \ h \ (: st (pin (court-new w h (opt 'now @ n (n ? n (court-now ())))) 'deep
-                                         (elem (getenv "COLORTERM") ["truecolor" "24bit"]))
+   (view-walk {'new (w \ h \ (: st (pin (court-new w h (opt 'now @ n (n ? n (court-now ())))) 'deep (view-deep? ()))
                                   wx (opt 'wx) p (opt 'pace)
                                   _ (wx ? (pins st 'wx wx 'drift (opt 'fix ? 0 1)))
                                   (charm? p ? (pins st 'paces (p . paces) 'pace 0) st)))
@@ -766,19 +761,12 @@
                _ ())
    (pnum w) (: cs (chars w) (0 < #w && all (c \ (48 <= c <= 57) || c = 46) cs && #(filter (= 46) cs) < 2
                              && 48 <= w 0 <= 57 ? (1.0 * <(sound w))))
-   o {}
-   (once k v r) (v = () || o k != () ? () (pin o k v, go r))
-   (go l) (? (atom? l) o
-             (two? >l && <l = "--date") (once 'date (date <>l) >>l)
-             (two? >l && <l = "--time") (once 'time (hm <>l) >>l)
-             (two? >l && <l = "--pace") (once 'pace (pnum <>l) >>l)
-             (two? >l && <l = "--weather") (once 'cov (cov <>l) >>l)
-             (two? >l && <l = "--sky") (once 'sty (sty <>l) >>l)
-             (two? >l && <l = "--fall") (once 'fall (fal <>l) >>l)
-             (<l = "rain" || <l = "snow") (once 'fall (fal <l) >l)
-             (charm? (cov <l)) (once 'cov (cov <l) >l)
-             (charm? (sty <l)) (once 'sty (sty <l) >l))
-   r (go as)
+   ; ..rain and snow, a cover and a style, each also a word alone
+   (bare k read ok) (l \ ok <l ? [k (read <l) >l])
+   r (view-words as [(view-arg "--date" 'date date) (view-arg "--time" 'time hm) (view-arg "--pace" 'pace pnum)
+                     (view-arg "--weather" 'cov cov) (view-arg "--sky" 'sty sty) (view-arg "--fall" 'fall fal)
+                     (bare 'fall fal (w \ w = "rain" || w = "snow")) (bare 'cov cov (w \ charm? (cov w)))
+                     (bare 'sty sty (w \ charm? (sty w)))])
    (tablet? r ?
       (: now0 (court-now ()) l0 (int (now0 0)) d (r 'date) t (r 'time)
          now (d = () && t = () ? now0
@@ -791,7 +779,6 @@
          {'now now 'pace (r 'pace) 'fix (c = () && fl = () ? 0 1)
           'wx (c = () && y = () && fl = () ? ()
                  (wx-of c2 sty (fl = () ? (court-fall-pick m c2 (throw sd 9 73 20) (throw sd 11 79 2)) fl)))})))
- (court-main as) (court-opts as @ o
-   (tablet? o ? (court-run o) (say err ("court: " + court-usage + "\n"), flush err, 2)))
+ (court-main as) (view-main "court" court-usage court-opts court-run as)
  _ ((cite 'lore 'lore-enlist) 'court (udoor 'court court-main court-usage 1 1)))
 ) ; module court
