@@ -233,6 +233,17 @@ static void gen_minor(struct g *g) {
 #endif
  }
 
+// the pool a major leaves, and the to-space it copies into: v words surviving, f of them
+// again, and room for a nursery's promotion n, in whole steps -- test/proof/rocq/gcsize.v's
+// target, whose bounds hold only while this is that
+static uintptr_t gc_target(uintptr_t n, uintptr_t v, uintptr_t step) {
+ uintptr_t const w = v + v * gc_fn / gc_fd + n + 16, t = (w + step - 1) / step * step;
+ return t < step ? step : t; }
+// the nursery's ceiling: its floor, or q of the live set -- gcsize.v's ncap
+static uintptr_t gc_ncap(struct g *g) {
+ uintptr_t const c = g->major_live0 * gc_qn / gc_qd;
+ return c < g->minor0 ? g->minor0 : c; }
+
 // a half's share of the budget: the pair and the nursery beside it; 0 is no budget
 static uintptr_t major_share(struct g *g) {
  return g->budget > (uintptr_t) g->len ? (g->budget - (uintptr_t) g->len) / 2 : 0; }
@@ -248,20 +259,18 @@ word *major_pair(uintptr_t n, word **spare) {
  if (a && !b) alloc(a, 0), a = NULL;
  return *spare = b, a; }
 
-// the new spare, once a resizing copy is done: both old halves are dead, so it is taken in the
-// room they leave. short of a block that size, the old size, and then the least that holds
-// the survivors and a nursery's promotion (please's forcing test) -- the major shrinks to
-// the spare it could get, and the active block's tail waits for the next resize. NULL only
-// when not even that fits
-static word *major_spare_after(struct g *g, word *to, uintptr_t to_len, uintptr_t req0) {
- uintptr_t room = (uintptr_t) (g->major_hp - to) + (uintptr_t) g->len + req0 + 16,
-           olen = g->major_len;
- alloc(g->major_base, 0), alloc(g->major_spare, 0);
- word *s = alloc(NULL, to_len * sizeof(word));
- if (s) return g->major_len = to_len, s;
- if (room <= olen && (s = alloc(NULL, olen * sizeof(word)))) return s;
- if (room < to_len && (s = alloc(NULL, room * sizeof(word)))) return g->major_len = room, s;
- return g->major_len = to_len, NULL; }
+// the new spare, once a copy is done and the pool is sized from its survivors: the old active
+// half is dead, and the old spare too when the copy went to a fresh block, so their room is
+// given back first, and the spare taken fresh at the pool's new size -- untouched, so it
+// costs no page until a collection writes it. short of a block that size, the least that
+// holds the survivors and a nursery's promotion (please's forcing test), and the active
+// block's tail waits for the next resize. NULL when not even that fits
+static word *major_spare_after(struct g *g, uintptr_t len, uintptr_t least, bool fresh) {
+ alloc(g->major_base, 0);
+ if (fresh) alloc(g->major_spare, 0);
+ word *s = alloc(NULL, len * sizeof(word));
+ if (s || least >= len) return g->major_len = len, s;
+ return g->major_len = least, alloc(NULL, least * sizeof(word)); }
 
 // the major: one cheney pass from the real roots over both from-spaces into the
 // spare half -- reachability, never a linear sweep, which is why a rem-set overflow
@@ -275,15 +284,10 @@ struct g *gen_major(struct g *g, uintptr_t req0, bool *tight) {
  // size the to-space for the worst case: all of major-active and all of the minor survive
  uintptr_t used = (uintptr_t)(g->major_hp - g->major_base), young = (uintptr_t)(g->hp - (word*) g->end),
            need = used + young,
- // grow/shrink by a whole step (= love_major0): one step at a time prevents thrash, and
- // snapping down reclaims floated dead promotions. headroom is a whole nursery plus the
- // pending request -- please's forcing test verbatim, so the major it just forced is
- // not followed by another -- and 25% on top, the minors' room to promote into: the
- // reserve is spent by the first promotion, so it can't be that room, whatever the nursery
-           slack = (uintptr_t) g->len + req0 + 16, head = need >> 2,
-           step = g->major0, want = need + slack + head + 16,
-           to_len = ((want + step - 1) / step) * step;
- if (to_len < step) to_len = step;
+ // the to-space is the target of the worst case (gcsize.v's to_space), so it holds it; the
+ // pool it leaves is the target of what survives, a nursery's promotion nr past it
+           step = g->major0, nr = (uintptr_t) g->len + req0,
+           to_len = gc_target(nr, need, step);
  uintptr_t free_len = to_len,                                   // the size asked for, before any clamp
            need_step = ((need + step - 1) / step) * step;       // the tight size: smallest step-multiple holding `need`
  if (need_step < step) need_step = step;
@@ -337,9 +341,13 @@ struct g *gen_major(struct g *g, uintptr_t req0, bool *tight) {
  g->symbols = major_symbols_rebuild(g, &X, om);
  major_run_finalizers(g, &X);
  image_drop(X.p0);                                         // the from-space is done with: a lazy image in it sleeps no more
- if (resized) {
-  g->major_spare = major_spare_after(g, to, to_len, req0);
-  if (tight && g->major_len < to_len) *tight = true; }         // denied: the spare it got is smaller
+ // the pool from what survived, never past the to-space it sits in (a budget can clamp that)
+ uintptr_t const kept = (uintptr_t) (g->major_hp - to);
+ uintptr_t nl = gc_target(nr, kept, step);
+ if (nl > to_len) nl = to_len;
+ if (resized || nl != g->major_len) {
+  g->major_spare = major_spare_after(g, nl, kept + nr + 16, resized != 0);
+  if (tight && g->major_len < nl) *tight = true; }            // denied: the spare it got is smaller
  else g->major_spare = g->major_base;
  g->major_base = to;                                           // flip: active = the to-space
  g->hp = g->end;                                             // the minor's young was promoted: reset it
@@ -407,6 +415,10 @@ love_noinline struct g *please(struct g *g, uintptr_t req0) {
   // majors: correct, quadratic, and no gate can see it. (make test_gcheck)
   if (!tight && (uintptr_t)((g->major_base + g->major_len) - g->major_hp) < (uintptr_t) g->len + req0 + 16)
    __builtin_trap();
+  // the pool is the target of its survivors, as gcsize.v sizes it, unless a budget or a
+  // failed allocation denied it -- the bounds are proved for that pool and no other
+  if (!tight && g->major_len != gc_target((uintptr_t) g->len + req0, g->major_live0, g->major0))
+   __builtin_trap();
 #endif
  } else gen_minor(g), g->n_gc += 1, g->n_minor += 1;
  uintptr_t copied = major ? (uintptr_t)(g->major_hp - g->major_base) : (uintptr_t)(g->major_hp - before);
@@ -470,8 +482,19 @@ love_noinline struct g *please(struct g *g, uintptr_t req0) {
   uintptr_t fr = (uintptr_t)((g->major_base + g->major_len) - g->major_hp),
             fit = fr > req0 + 16 ? (fr - req0 - 16) / (at_share(g) ? 2 : 1) : 0;
   if (arena > fit) arena = fit; }
+ // the nursery's ceiling (gcsize.v's minor rule): it grows only to q of the live set,
+ // and only as far as the pool still holds its promotion
+ if (arena > len1) {
+  uintptr_t const c = gc_ncap(g), fr = (uintptr_t) ((g->major_base + g->major_len) - g->major_hp),
+                  fit = fr > req0 + 16 ? fr - req0 - 16 : 0, top = c < fit ? c : fit;
+  arena = top > len1 ? top : len1; }
  if (arena < g->minor0) arena = g->minor0;                     // floor
  if (arena < req) arena = req;                                 // hard floor: hold the pending allocation
+#ifdef LvGcCheck
+ // a nursery grown past its ceiling, other than to hold the request itself: gcsize.v's
+ // bounds are proved for a nursery under max(minor0, q live) alone
+ if (arena > len1 && arena > gc_ncap(g) && arena > req) __builtin_trap();
+#endif
  if (arena == len1) return g;
  struct g *h = gen_grow(g, arena);
  return ok(h) || len1 < req ? h : g; }                      // a denied resize keeps a pool that still holds the request
