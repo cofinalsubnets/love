@@ -353,6 +353,25 @@
           loc (file + (ln ? (":" + show ln) "") + (col ? (":" + show col) ""))
           (udie 1 ("cc: " + loc + ": " + msg)))
        (udie 1 plain))
+   ; `.incbin "path"[, skip[, count]]` in assembly text: the file's bytes, found from the working
+   ; directory then the -I dirs as gas finds them, laid as the .base64 gas-top reads whole
+   b64set "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+   (b64s s) (: n #s
+               (q i) (: b (i + 1 < n ? (s (i + 1)) 0) c (i + 2 < n ? (s (i + 2)) 0) w (s i << 16 | b << 8 | c)
+                        [(b64set ((w >> 18) & 63)) (b64set ((w >> 12) & 63))
+                         (i + 1 < n ? (b64set ((w >> 6) & 63)) 61) (i + 2 < n ? (b64set (w & 63)) 61)])
+               (string (catmap q (filter (i \ i % 3 = 0) ^n))))
+   (incbins txt is src)
+    (: (one ln) (: t (xa-trim ln)
+                   (? (!(starts? t ".incbin") || (7 < #t && !(blank? (t 7)))) ln
+                      (: xs (xa-oplist (snip t 7 #t)) nm (xa-unquote (xa-trim <xs))
+                         r (foldl (\ a d (two? a ? a (uread (d + nm)))) () ("" . is))
+                         _ (two? r || udie 1 ("cc: " + src + ": .incbin: cannot open " + nm))
+                         k (two? >xs ? (gimm (gtoks (xs 1))) 0) n (two? >>xs ? (gimm (gtoks (xs 2))) (#<>r - k))
+                         (? (k < 0 || n < 0 || k + n > #<>r) (udie 1 ("cc: " + src + ": .incbin: past the end of " + nm))
+                            ("\t.base64 \"" + b64s (snip <>r k (k + n)) + "\"")))))
+       ls (gsplit txt 10)
+       (any (ln \ starts? (xa-trim ln) ".incbin") ls ? (xa-join "\n" (map one ls)) txt))
    ; an assembly source as C: one file-scope asm holding its text, which gen hands gas-top
    (asmwrap s) ("__asm__(\"" + string (catmap (c \ (c @ 92 [92 92] 34 [92 34] 10 [92 110] 9 [92 116] 13 () [c])) (chars s))
                 + "\");\n")
@@ -364,7 +383,7 @@
        _ (okv? lx || ccdie lx src ("cc: lex error in " + src))
        pp (cppasm <>lx (name \ sys? \ incload vb is (cdir src) name sys?) src)
        (okv? pp || ccdie pp src ("cc: preprocessor error in " + src),
-        asmwrap (asmspell <>pp)))
+        asmwrap (incbins (asmspell <>pp) is src)))
    ; tokens back to assembly text: an unexpanded token from a later line opens a new one (an
    ; expansion stays where it was invoked); a space where the source had one and between two
    ; words, so `movl $1,%eax`, `0x10(%rsp)`, `foo:` and a macro's `wx\n` come back as written
@@ -428,7 +447,7 @@
                   !vb ()
                   (vb src @ h (string? h && [1 h])))))
        _ (two? r || udie 1 ("cc: cannot open " + src))
-       txt (? (dotS? src) (asmcpp src <>r ds9 is vb) (dots? src) (asmwrap <>r) <>r)
+       txt (? (dotS? src) (asmcpp src <>r ds9 is vb) (dots? src) (asmwrap (incbins <>r is src)) <>r)
        lx (clexw (deftext ds9 + txt) (1 - #ds9))
        _ (okv? lx || ccdie lx src ("cc: lex error in " + src))
        pp (cpp <>lx (name \ sys? \ incload vb is (cdir src) name sys?) src)

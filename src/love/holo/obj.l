@@ -21,9 +21,11 @@
    ; ... and a64. field relocs here patch bits of an instruction word, not a
    ; whole field -- the placeholder bytes carry the base opcode (the fixup's aux).
    ra-abs64  257                                    ; R_AARCH64_ABS64           S + A
+   ra-abs32  258                                    ; R_AARCH64_ABS32           S + A in four bytes (the image header's `.long sym`)
    ra-jump26 282                                    ; R_AARCH64_JUMP26          (S+A-P)>>2 into b's imm26
    ra-call26 283                                    ; R_AARCH64_CALL26          ... into bl's imm26
    ra-condbr19 280                                  ; R_AARCH64_CONDBR19        ... into b.cond's or cbz's imm19
+   ra-ldlo19 273                                    ; R_AARCH64_LD_PREL_LO19    ... into a literal load's imm19
    ra-tstbr14 279                                   ; R_AARCH64_TSTBR14         ... into tbz's imm14
    ra-ldst {'lo12s1 278 'lo12s2 284 'lo12s4 285 'lo12s8 286 'lo12s16 299}   ; R_AARCH64_LDST{8..128}_ABS_LO12_NC
    ra-prel64 260                                    ; R_AARCH64_PREL64          S + A - P in eight bytes (the jump table's key)
@@ -464,7 +466,7 @@
        _ (target = 'x64 || a64 || rv ? 0 (scare 'obj-target target))
        ; the in-place-resolvable kinds. riscv's are pure byte deltas (auipc is byte
        ; pc-relative, no page math), so intra-.text la/call/jmp all resolve inside the .o.
-       rset (? a64 '(b26 b19 b14) rv '(j21 pcrel b13 cj cb) '(rel32 rel8))
+       rset (? a64 '(b26 b19 b14 ld19) rv '(j21 pcrel b13 cj cb) '(rel32 rel8))
        drset (a64 ? rset ())                    ; a branch in a data section resolves there too (proc.S's "a")
        machine (peep elf-machines target 0)
        ; the backend must be registered, not merely named: a frontend bakes holo with the
@@ -568,7 +570,7 @@
                  ; offset a &arr[i] / &s.field baked into the field.
                  'abs64 (o-rela off si rabs (sa + aux))
                  ; ..and its 4-byte twin, the PVH note's 32-bit entry
-                 'abs32 (o-rela off si r-32 (sa + aux))
+                 'abs32 (o-rela off si (a64 ? ra-abs32 r-32) (sa + aux))
                  ; ..and a data word measured from its own start, eight bytes (the field is 8 wide)
                  'rel64 (o-rela off si (a64 ? ra-prel64 r-pc64) ((sa + aux) - 8))
                  ; x64: the field is measured from its own end, so every addend carries
@@ -594,6 +596,7 @@
                  'b26 (o-rela off si (aux = 2483027968 ? ra-call26 ra-jump26) sa)   ; 0x94000000 = bl
                  'b19 (o-rela off si ra-condbr19 sa)
                  'b14 (o-rela off si ra-tstbr14 sa)
+                 'ld19 (o-rela off si ra-ldlo19 (sa + afix-ad aux))
                  ; riscv: a 'pcrel pair (CALL_PLT) or a wide branch's 'j21 (JAL), both S+a-p
                  'pcrel (o-rela off si rr-call sa)
                  'j21 (o-rela off si rr-jal sa)
