@@ -40,6 +40,7 @@
          flash-v0 flash-span done-ms turn-step song-chunk)
 (borrow 'rove)
 (borrow 'view)                          ; the screen, its rays, the pens
+(borrow 'flicker)                       ; the lights' blink
 (borrow 'play)                          ; the voices, the mix
 (borrow 'posix)    ; close, for the horn
 (:
@@ -222,8 +223,7 @@
  flashes (map (i \ tint ((i + 1) / 4.0)) ^4)
  ; a floor's lights' brightness at tick t, 0 to 1: on for light-on of every period, up
  ; and down over light-edge; each floor's period a little longer than the one below
- (blink t f) (: sec (t / (1.0 * fps)) per (light-period + f * light-drift) ph (sec - per * flo (sec / per))
-                (clamp (min2 (ph / light-edge) ((light-on - ph) / light-edge)) 0.0 1.0))
+ (blink t f) (flicker-blink (t / (1.0 * fps)) (light-period + f * light-drift) light-on light-edge)
  ; a row of the background: every column's ray at the row's slope, and what it meets:
  ; the wall it ends on, its plates in seams and a speckle, the lights, the doors and
  ; the ladders on it by where it is hit; or the floor, or the roof

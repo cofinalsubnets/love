@@ -26,6 +26,8 @@
 (borrow 'rove)
 (borrow 'view)                          ; the screen, the pens, the hash, the loop
 (borrow 'vec)                           ; triples, and the noise
+(borrow 'flicker)                       ; the ghost's pulse
+(borrow 'walk)                          ; the keys, and the frame's time
 (borrow 'sky)                           ; the sun, its light, the sky's colour
 (borrow 'mesh)                          ; the triangles, lit and drawn
 (:
@@ -424,12 +426,7 @@
  ; through the eye's gain; out as half blocks, or as kitty's pixels where the terminal
  ; takes them ---
  fov (pi / 2.0)
- kitty-w 640                              ; kitty's picture about this many pixels across
- sky-k 2                                  ; ..and the sky asked every sky-k columns
- ; kitty's pictures go up as ids 7 and 8 by turns, the last taken down only once the next
- ; is over it, the two in one synchronised update: one id put up again would go blank first
- kitty-id 7
- kitty-gone (mesh-kitty-del 7 + mesh-kitty-del 8)
+ sky-k 2                                  ; the sky asked every sky-k columns of kitty's pixels
  ; ..'kp pixels a column, and twice that a row: one, for half blocks
  (stones-pens st) (: lt (stones-light st) k (peep st 'kp 1) w (k * st 'w) h (k * st 'h) b (breath (peep st 'mt 0.0))
    e [(st 'px) (st 'py + b 0) (st 'pz)]
@@ -452,11 +449,7 @@
    ; text over it
    f (? (dl && kit) (dim f0 (k * w) (k * c0) (2 * k * r0) (k * bw) (2 * k * bh))
         (hp && kit) (dim f0 (k * w) 0 (2 * k * (r - 1)) (k * w) (2 * k)) f0)
-   (? kit (: n (peep st 'kn 0) _ (pin st 'kn (1 - n))
-             (esc + "[?2026h" + mesh-kitty f (k * w) (k * h) w (h // 2) (kitty-id + n)
-              + mesh-kitty-del (kitty-id + 1 - n) + menu st r0 c0 bw bh + keys-line st r w + esc + "[?2026l"))
-      (esc + "[?2026h" + mesh-cells f w h (st 'deep) (st 'deep ? 0 (st 'bay)) (menu-bands st r0 c0 bw bh r w)
-       + esc + "[?2026l")))
+   (mesh-show st f (kit ? (menu st r0 c0 bw bh + keys-line st r w) "") (kit ? {} (menu-bands st r0 c0 bw bh r w))))
  ; a part of a frame W wide darkened: x0 y0 its corner, bw by bh its size, in pixels
  (dim f W x0 y0 bw bh) (: i (iota (bw * bh)) ix ((y0 + i // bw) * W + x0 + i % bw) v (peep f ix 0)
    (pin f ix ((((v >> 16 & 255) * 2 // 5) << 16) | (((v >> 8 & 255) * 2 // 5) << 8) | ((v & 255) * 2 // 5))))
@@ -507,8 +500,7 @@
    (stones-size st w (h // 2)))
  ; the screen w cells by r rows, two pixels a row, and its dither; as kitty's, 'kp times
  ; as many pixels each way
- (stones-size st w r) (: h (2 * r)
-   (pins (view! st w h (h // 2)) 'bay (view-bayer w h) 'kp (st 'kitty ? (max2 1 (kitty-w // w)) 1)))
+ (stones-size st w r) (mesh-size st w r)
  ; --- moving: over the sand and up and down the rows, but not up the rock, nor off its
  ; edge where it drops sheer, nor through a block;
  ; sliding along what stops a step. out past the mouth, the run is done ---
@@ -529,20 +521,13 @@
          sx (x0 + dx - k * nx) sz (z0 + dz - k * nz)
          (? (free? st sx sz) (pins st 'px sx 'pz sz) (free? st x z0) (pin st 'px x) (free? st x0 z) (pin st 'pz z) st))))
  ; ..each key as far as the time since the last frame, 'dt, carries it
- (stones-step st k) (: th (st 'th) dt (peep st 'dt (1.0 / fps))
-   (step d) (put! st (st 'px + d * sin th) (st 'pz + d * cos th))
+ (stones-step st k) (: dt (peep st 'dt (1.0 / fps))
    (? (st 'done) st
       (charm? (st 'dlg)) (dialog-key st k)
       (st 'eye = 'kneel) (elem k rise-keys ? (rise! st) st)
       (st 'eye != 'walk) st
       (k = 32) (altar-near? st ? (move! st (kneel-move st)) st)
-      (k @ (104 || -1) (pin st 'th (wrap (th - turn-v * dt)))
-           (108 || -2) (pin st 'th (wrap (th + turn-v * dt)))
-           (107 || -8) (step (walk-v * dt))
-           (106 || -9) (step (0.0 - walk-v * dt))
-           117 (pin st 'ph (min2 1.45 (st 'ph + tilt-v * dt)))
-           110 (pin st 'ph (max2 -1.2 (st 'ph - tilt-v * dt)))
-           st)))
+      (walk-key st k {'turn (turn-v * dt) 'walk (walk-v * dt) 'tilt (tilt-v * dt) 'up 1.45 'down -1.2} put! @ () st s s)))
  ; a frame's motion: the clock at its own pace; the eye on a move of its own, or easing to
  ; the ground's height; and done once out on the plain
  (stones-move st) (: g (stones-ground (st 'px) (st 'pz)) y (st 'py) mt (peep st 'mt 0.0 + peep st 'dt (1.0 / fps))
@@ -661,7 +646,7 @@
             'splats (take 80 (cat (filter (d \ peep d 'splat 0) moved) kept))))
  ; ..as triangles for the frame: a falling drop a small diamond, a fallen one a ragged
  ; patch, both seen from either side, lit by the hour; () for none
- (drop-batch st lt) (: L (c+ (lt 'amb) (c* (0.7 * lt 'sunk) (lt 'sunc))) ds (peep st 'drops ()) sp (peep st 'splats ())
+ (drop-batch st lt) (: L (sky-irr lt 1.0 (0.7 * lt 'sunk)) ds (peep st 'drops ()) sp (peep st 'splats ())
    (vx p c) [(p 0) (p 1) (p 2) 0.0 0.0 (L 0 * c 0) (L 1 * c 1) (L 2 * c 2) 0.0 0.0 0.0]
    (flat l) (foldr cat () l)
    (both n l) (flat (map (t \ [[(n + t 0) (n + t 1) (n + t 2) -1] [(n + t 0) (n + t 2) (n + t 1) -1]]) l))
@@ -684,7 +669,7 @@
     (foldr cat () (map (t \ [[(n + t 0) (n + t 1) (n + t 2) -1] [(n + t 0) (n + t 2) (n + t 1) -1]])
                        [[0 1 2] [0 2 3] [4 6 5] [4 7 6] [0 4 5] [0 5 1] [3 2 6] [3 6 7] [0 3 7] [0 7 4] [1 5 6] [1 6 2]]))])
  (post-batch st lt) (? (peep st 'waited 0)
-   (: L (c+ (lt 'amb) (c* (0.7 * lt 'sunk) (lt 'sunc))) iron (c* 0.07 L) g (stones-ground post-x post-z)
+   (: L (sky-irr lt 1.0 (0.7 * lt 'sunk)) iron (c* 0.07 L) g (stones-ground post-x post-z)
       lamp (lt 'day < 0.15 ? [2.6 1.9 0.9] (c* 0.32 L))
       (at y) [post-x (g + y) post-z]
       parts [[(at 0.3) [0.2 0.3 0.2] iron] [(at 2.6) [0.07 2.1 0.07] iron] [(at 4.45) [0.18 0.28 0.18] lamp]
@@ -702,7 +687,7 @@
                            b (stone (ring-r * cos a) (zc + ring-r * sin a) (pi / 2.0 - a) (1.0 + 0.2 * j)
                                     (2.9 + 0.5 * throw 3 2 37 100 / 100.0) 0.7)
                            q (mesh-pack (block-mesh b)) (pin kept 'ghost q, q)))
-      mt (st 'mt) f (sat ((mt - st 'wait-at - ghost-wait) / 12.0) * (0.8 + 0.2 * sin (mt * 0.9)))
+      mt (st 'mt) f (sat ((mt - st 'wait-at - ghost-wait) / 12.0) * flicker-pulse mt 0.8 0.2 0.9 0.0)
       c (pk 'cols) n (pk 'n) z (c 0 * 0.0) k (f * (0.55 + 0.45 * c 6))
       cols [(c 0) (c 1) (c 2) (c 3) (c 4) (0.22 * k) (0.11 * k) (0.32 * k) z z z]
       i (iota n * 11) ts (pk 'tris)
@@ -722,36 +707,27 @@
  (stones-walk o)
    (view-walk {'new (w \ h \ (: sd (clock 0) now0 (cite 'court 'court-now ()) l0 (int (now0 0)) t (o 'time)
                                now (t @ () now0 (cite 'court 'court-local (86400 * (l0 // 86400) + t)))
-                               k (o 'md @ 'kitty 1 'cells 0 (mesh-kitty? ()))
-                               st (stones-size (pins (stones-new w h now sd) 'deep (elem (getenv "COLORTERM") ["truecolor" "24bit"]) 'kitty k)
+                               st (stones-size (pins (stones-new w h now sd) 'deep (view-deep? ()) 'kitty (mesh-mode (o 'md)))
                                                w (h // 2))
                                ; ..the land built and lit before the first frame, which the song's
                                ; pace would otherwise take for the frames' and run far ahead
                                (scene st, st)))
                'size stones-size 'frame stones-frame 'key stones-step
                ; ..the frame's own time, kept for the next frame's keys: a slow frame steps further
-               'tick (st \ (clock 0 @ now (pins st 'dt (clamp ((now - peep st 'wall now) / 1000.0) 0.02 0.25) 'wall now),
+               'tick (st \ (walk-dt st,
                             stones-move st))
                'fps fps 'linger 800 'next ()
                ; ..to apartment's music box and its drone
-               'song (hn \ ((hn ? (cite 'apartment 'apartment-song-new hn (wheel (clock 0)))) @ s
-                              (s ? (_ \ cite 'apartment 'apartment-song-feed s))))})
+               'song (view-song (cite 'apartment 'apartment-song-new) (cite 'apartment 'apartment-song-feed))})
  ; ..and kitty's picture taken down after, where it was put up
- (stones-run o) (view-run (_ \ stones-walk o), say out kitty-gone, flush out, 0)
+ (stones-run o) (view-run (_ \ stones-walk o), say out mesh-gone, flush out, 0)
  stones-usage "usage: love lore stones [--time HH:MM] [--kitty|--cells]   (h l turn, k j step, u n look, space kneels at the altar, and there 1 to 5 or k j and space choose; a walking key or space stands again; q or esc leaves, or walk back out of the canyon)"
  ; the words, as a tablet for stones-run, or () where one is wrong or said twice
  (stones-opts as)
   (: (num w) (0 < #w && all (c \ 48 <= c <= 57) (chars w) ? <(sound w))
      (hm w) (w @ (h + ":" + m) (: a (num h) b (num m) (charm? a && charm? b && a < 24 && b < 60 ? (3600 * a + 60 * b)))
                  _ ())
-     o {}
-     (once k v r) (v = () || o k != () ? () (pin o k v, go r))
-     (go l) (? (atom? l) o
-               (<l = "--kitty") (once 'md 'kitty >l)
-               (<l = "--cells") (once 'md 'cells >l)
-               (two? >l && <l = "--time") (once 'time (hm <>l) >>l))
-     (go as))
- (stones-main as) (stones-opts as @ o
-   (tablet? o ? (stones-run o) (say err ("stones: " + stones-usage + "\n"), flush err, 2)))
+     (view-words as [(view-flag "--kitty" 'md 'kitty) (view-flag "--cells" 'md 'cells) (view-arg "--time" 'time hm)]))
+ (stones-main as) (view-main "stones" stones-usage stones-opts stones-run as)
  _ (cite 'lore 'lore-enlist 'stones (udoor 'stones stones-main stones-usage 1 1)))
 ) ; module stones

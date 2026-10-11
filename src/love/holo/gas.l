@@ -423,6 +423,8 @@
    (ga-r o) (o @ ('reg x _) x (scare 'gas-a64-register o))
    (ga-rw o) (o @ ('reg x w) [x w] (scare 'gas-a64-register o))
    (ga-v o) (o @ ('imm n) n ('reg x _) x (scare 'gas-a64-operand o))   ; a register or an immediate
+   ;; a system register moves through an x register or xzr, never sp or a w
+   (ga-xt m os i) ((os i) @ ('reg r 8) (r != 'sp ? r (scare 'gas-a64-operand [m os])) _ (scare 'gas-a64-operand [m os]))
    (ga-hw r) (r @ 'sp 31 'zr 31 'fp 29 'lr 30 (xa-num (snip (show r) 1 #(show r))))
    (ga-raw w) [['raw (le32 w)]]
    ;; a branch to `.+k` is its own pc-relative word, no label: k in words, n bits wide
@@ -877,8 +879,8 @@
           (m = 'br) [['jmpr (ga-r (os 0))]]
           (m = 'blr) [['callr (ga-r (os 0))]]
           (elem m '(dsb dmb)) [[m (<>(os 0))]]
-          (m = 'mrs) [['mrs (ga-r (os 0)) (<>(os 1))]]
-          (m = 'msr) ((os 1) @ ('imm n) [['msri (<>(os 0)) n]] [['msr (<>(os 0)) (ga-r (os 1))]])
+          (m = 'mrs) [['mrs (ga-xt m os 0) (<>(os 1))]]
+          (m = 'msr) ((os 1) @ ('imm n) [['msri (<>(os 0)) n]] [['msr (<>(os 0)) (ga-xt m os 1)]])
           (elem m '(sys sysl)) (ga-sys-ins m os)
           (elem m ga-sys) [[m (<>(os 0)) (k > 1 ? (ga-r (os 1)) 'zr)]]
           (ghas? ga-exc m) [[(ga-exc m) (k > 0 ? (<>(os 0)) 0)]]

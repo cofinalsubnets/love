@@ -26,6 +26,7 @@
 #include <termios.h>    // tcgetattr tcsetattr ECHO TCSANOW (ptyecho, raw)
 #include <dirent.h>     // opendir/readdir/closedir
 #include <fnmatch.h>    // fnmatch (glob's pattern law)
+#include <regex.h>      // regcomp regexec (re's engine)
 #include <sys/mman.h>       // madvise (the spawn guard)
 #include <sys/resource.h>   // getrusage, RUSAGE_SELF/CHILDREN (the cpu clocks)
 #include <time.h>           // clock_gettime, for love_clock
@@ -998,6 +999,32 @@ static love_inline word host_fnmatch(struct g *g, word p, word t) {
  return putcharm(a && b && !fnmatch(a, b, 0)); }
 LvmWord2(fnmatch)
 
+// (regex p fl s i) -> the leftmost-longest match in s at or after i, as (so eo ..) for it and
+// its first nine groups, -1 where one took no part | () | -e, regcomp's error e for a bad p.
+// fl: regcomp's flags, regexec's shifted 8 left; what lies before i is still the text, and an
+// i past it answers p's group count
+static love_inline struct g *host_regex(struct g *g) {
+ char const *p = str_c(g->sp[0]);
+ word s = g->sp[2], f = g->sp[1], i = g->sp[3];
+ if (!p || !charmp(f) || !strp(s) || !charmp(i) || getcharm(i) < 0) return g->sp[0] = badarg(g), g;
+ regex_t re;
+ regmatch_t m[10] = {{(regoff_t) getcharm(i), (regoff_t) len(s)}};
+ int rc = regcomp(&re, p, (int) (getcharm(f) & 255)), k = (int) re.re_nsub;
+ if (rc) return g->sp[0] = putcharm(-rc), g;
+ if (getcharm(i) > (intptr_t) len(s)) return regfree(&re), g->sp[0] = putcharm(k), g;
+ k = k < 9 ? k + 1 : 10;
+ rc = regexec(&re, txt(s), (size_t) k, m, (int) (getcharm(f) >> 8) | REG_STARTEND);
+ regfree(&re);
+ if (rc) return g->sp[0] = rc == REG_NOMATCH ? ZeroPoint : putcharm(-rc), g;
+ if (!ok(g = have(g, 2 * (uintptr_t) k * Width(struct chain)))) return g;
+ word l = ZeroPoint;
+ for (int j = 2 * k; j--;)
+  l = word(ini_chain((struct chain*) bump(g, Width(struct chain)),
+                     putcharm(j & 1 ? m[j / 2].rm_eo : m[j / 2].rm_so), l));
+ return g->sp[0] = l, g; }
+static lvm(lvm_regex) {
+ LvmCallp(g, 3, host_regex) }
+
 // (setenv name val) -> () | a nom | 'badarg misuse; a non-string val unsets the name.
 // (environ _)       -> the environment as a list of "name=value" strings (the raw POSIX
 //                      shape -- split at the first '=' in love; no order promised).
@@ -1080,6 +1107,7 @@ LvDef("sigign?", sigignp, 1, "posix");
 LvDef("wait", waitpid, 1, NULL);
 LvDef("chdir", chdir, 1, "posix");
 LvDef("fnmatch", fnmatch, 2, "posix");
+LvDef("regex", regex, 4, "posix");
 LvDef("cwd", cwd, 1, "posix");
 LvDef("selfpath", selfpath, 1, "posix");
 LvDef("uname", posix_uname, 1, "posix");

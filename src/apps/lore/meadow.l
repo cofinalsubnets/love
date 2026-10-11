@@ -219,10 +219,10 @@
    shg (only G shp)
    ; ..lit as it faces: the sky's light most on what looks up, the sun on what turns to it
    nd (max 0.0 (nx * s 0 + ny * s 1 + nz * s 2))
-   irr (c+ (c* (0.95 * (0.55 + 0.45 * ny)) (lt 'amb)) (c* ((1 - shg) * lt 'sunk * nd) (lt 'sunc)))
+   irr (sky-irr lt (0.95 * (0.55 + 0.45 * ny)) ((1 - shg) * lt 'sunk * nd))
    ; ..and the far hills paling into the air
    far (1.0 - exp (0.0 - only G (st 'dist) / 160.0))
-   hazec (c+ (c* 1.05 (lt 'amb)) (c* (0.2 * lt 'sunk) (lt 'sunc)))
+   hazec (sky-irr lt 1.05 (0.2 * lt 'sunk))
    gc (cmix (cm alb irr) hazec far)
 
    z0 (st 'dx * 0.0)
@@ -262,7 +262,7 @@
                             dry (cmix [0.2 0.17 0.07] [0.5 0.45 0.18] u)
                             (cmix tint dry wilt))
    (shade al u mu) (: glow (lt 'sunk * sq (sat ((mu - 0.4) / 0.6)))
-                      irr2 (c+ (c* (0.8 + 0.25 * u) (lt 'amb)) (c* (0.45 * lt 'sunk * (0.4 + 0.6 * u)) (lt 'sunc)))
+                      irr2 (sky-irr lt (0.8 + 0.25 * u) (0.45 * lt 'sunk * (0.4 + 0.6 * u)))
                       (c+ (cm al irr2) (c* glow [0.12 0.3 0.02])))
    (mu-of p) (: qx (p 0 - eye 0) qy (p 1 - eye 1) qz (p 2 - eye 2) d (sqrt (qx * qx + qy * qy + qz * qz))
                 ((qx * s 0 + qy * s 1 + qz * s 2) / d))

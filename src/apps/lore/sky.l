@@ -13,7 +13,7 @@
 ; cover 0 to 3, style 'smooth or 'pixel; and what falls from it, 'fall 0 nothing, 1 rain,
 ; 2 snow (nothing unless said), drawn into a scene by sky-fall!
 (module (sky sky-sun sky-body sky-light sky-maps sky-weather turns lap sky-cover sky-cloud sky-colour-of sky-near sky-tone
-         sky-stars sky-stars! sky-covers sky-styles sky-says sky-falls sky-fall sky-fall! bil cloud-n day-secs rgb)
+         sky-irr sky-stars sky-stars! sky-covers sky-styles sky-says sky-falls sky-fall sky-fall! bil cloud-n day-secs rgb)
 (borrow 'view)
 (borrow 'vec)
 (borrow 'starmap)
@@ -118,6 +118,8 @@
  ; the light of the sun s under the weather: its colour and strength, the share of it
  ; the cloud over it lets through, how much day and twilight there is, the sky's light on
  ; what it sees -- greyer the more cloud -- and the eye's gain against the dark
+ ; ..and what it lights: a times the sky's ambient and b times the sun's colour
+ (sky-irr lt a b) (c+ (c* a (lt 'amb)) (c* b (lt 'sunc)))
  (sky-light s wx sim) (: sy (s 1)
    oc (sky-cover wx sim)
    csun (s 1 <= 0.0 ? 0.0 (sun-cloud wx s sim))
@@ -152,7 +154,7 @@
    ; ..the clouds: lit from under by the sun, darker the thicker, greyer the more of them
    body ((1.0 - 0.3 * cl - 0.35 * oc * sat ((th - 0.45) * 2.0)) * (sky-fall wx = 1 ? 0.8 1.0))
    cloudc (c* body
-              (c+ (c+ (c+ (c* 1.15 (lt 'amb)) (c* (sat ((sy + 0.005) / 0.05) * (1.0 - 0.6 * oc) * (0.55 + 0.4 * sy)) (lt 'sunc)))
+              (c+ (c+ (sky-irr lt 1.15 (sat ((sy + 0.005) / 0.05) * (1.0 - 0.6 * oc) * (0.55 + 0.4 * sy)))
                       (c* (lt 'tw) [0.5 0.22 0.14]))
                   (c* (1.0 - lt 'day) [0.06 0.05 0.045])))
    (cmix sky0 cloudc cl))
@@ -265,7 +267,7 @@
                      i2 (over -1 (dist < peep (buf 't) idx 1e9) idx)
                      a ((f = 1 ? 0.38 0.85) * sat (1.4 - dist / R))
                      tc (f = 1 ? (c* 0.95 (c+ (lt 'amb) [0.08 0.09 0.11]))
-                                 (c+ (c* 1.5 (lt 'amb)) (c* (0.4 * lt 'sunk) (lt 'sunc))))
+                                 (sky-irr lt 1.5 (0.4 * lt 'sunk)))
                      (old k) (peep (buf k) i2 0.0)
                      (pins buf 'r (pin (buf 'r) i2 (old 'r + a * (tc 0 - old 'r)))
                                'g (pin (buf 'g) i2 (old 'g + a * (tc 1 - old 'g)))
