@@ -27,26 +27,16 @@
                  65470 "\eOP" 65471 "\eOQ" 65472 "\eOR" 65473 "\eOS" 65474 "\e[15~"
                  65475 "\e[17~" 65476 "\e[18~" 65477 "\e[19~" 65478 "\e[20~" 65479 "\e[21~"
                  65480 "\e[23~" 65481 "\e[24~"}
-   ; a KeyPress's keysym: shift (or caps lock, on a letter) takes the second column; 0 for none
-   (pier-sym km kc st)
-    (peep km kc () @ p
-       (? !(two? p) 0
-          (: lower <p upper <>p
-             letter (97 <= lower <= 122)
-             (st & 1 != 0 || letter && st & 2 != 0 ? (0 < upper ? upper lower) lower))))
    ; a KeyPress -> what a terminal sends. ctrl folds @..~ onto C0; alt goes ahead as ESC;
    ; latin-1 and unicode keysyms go out as utf-8. a key with nothing to say is ""
    (pier-keybytes km kc st)
-    (pier-sym km kc st @ sym
+    (x-sym km kc st @ sym
        (sym = 0 ? ""
           (: sp (peep pier-special sym ())
              b (? (string? sp) sp
                   (st & 4 && 64 <= sym <= 126) (string (sym & 31))
                   (st & 4 && sym = 32) (string 0)
-                  (32 <= sym <= 126) (string sym)
-                  (160 <= sym <= 255) (utf8 sym)
-                  (16777216 <= sym <= 17891327) (utf8 (sym - 16777216))
-                  "")
+                  (x-text sym 0))
              (st & 8 != 0 && 0 < #b ? ("\e" + b) b))))
 
    ; --- the painter: the rows the screen names dirty (wet reads and clears), the cursor's
@@ -104,7 +94,7 @@
        (peer sc (max 0 (gaze sc 8 + n)),
         pin dirty () 1))
    (pier-key s m km bx dirty kc st raw)
-    (: sym (pier-sym km kc st) sc (peep bx () 0) half (max 1 (gaze sc 1 // 2))
+    (: sym (x-sym km kc st) sc (peep bx () 0) half (max 1 (gaze sc 1 // 2))
        (? (st & 1 != 0 && sym = 65365) (pier-peer bx dirty half)
           (st & 1 != 0 && sym = 65366) (pier-peer bx dirty (0 - half))
           (st & 1 != 0 && sym = 65379) (pier-ask s dirty 1 (peep dirty 'utf8 0))                 ; shift+Insert: the primary
@@ -269,7 +259,7 @@
        (? !(two? o) o
         (: s <o sc <>o win (scr-idbase sc) gc (scr-idbase sc + 1) depth (scr-depth sc)
            r 24 c 80
-           _ (x-window s win (scr-root sc) (c * 8) (r * 16) 4358221)   ; keys + buttons + moves + expose + structure + property
+           _ (x-window s win (scr-root sc) (c * 8) (r * 16) 4358223)   ; keys + buttons + moves + expose + structure + property
            _ (x-gc s gc win)
            _ (x-title s win "pier")
            dl (x-protocols s win)
