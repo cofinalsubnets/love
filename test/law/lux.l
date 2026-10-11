@@ -463,6 +463,20 @@
       !(xauth-parse b "9")                                                       ; no entry -> ()
       !(xauth-parse "" "0")))
 
+; --- a client's own window: the display number, and its requests byte-exact into a jug ---
+(test ("0" = x-dispnum "") ("0" = x-dispnum ":") ("7" = x-dispnum ":7")
+      ("12" = x-dispnum ":12.0"))
+(: j (jug 0) _ (x-window j 9 1 640 400 131075) b (slurp j)                      ; CreateWindow: back pixel + event mask
+   (test (#b = 40) (b 0 = 1) (b 2 = 10) (b 4 = 9) (b 8 = 1) (u16 b 16 = 640) (u16 b 18 = 400)
+         (u32 b 28 = 2050) (u32 b 32 = 0) (u32 b 36 = 131075)))
+(: j (jug 0) _ (x-title j 9 "doom") b (slurp j)                                  ; ChangeProperty WM_NAME, padded
+   (test (#b = 28) (b 0 = 18) (u16 b 2 = 7) (u32 b 8 = 39) (u32 b 20 = 4) ("doom" = snip b 24 28)))
+(: j (jug 0) fb (cask (2000 * 40 * 4))
+   _ (x-putrows j 9 10 24 fb 2000 0 40) b (slurp j)                              ; 8000-byte rows: bands of 32, then 8
+   (test (#b = 24 + 32 * 8000 + 24 + 8 * 8000)
+         (b 0 = 72) (u16 b 2 = 6 + 32 * 8000 // 4) (u16 b 14 = 32) (u16 b 18 = 0)
+         (b (24 + 32 * 8000) = 72) (u16 b (24 + 32 * 8000 + 14) = 8) (u16 b (24 + 32 * 8000 + 18) = 32)))
+
 ; --- the rung-8 wire encodings, byte-exact into a jug ---
 (: j (jug 0) _ (x-borderpix j 5 77) b (slurp j)                                  ; cwa cwborderPixel
    (test (#b = 16) (b 0 = 2) (b 4 = 5) (b 8 = 8) (b 12 = 77)))
