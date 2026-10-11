@@ -12,7 +12,7 @@
          nth-on open-book open? pace! pacer pad page-foot paint paint-live pen pen-gap pen-lum pen-rgb pens repeat-gap rgb-pen roll
          settle settle-slice sign-box sign-flow sign-gap sign-line sign-over sign-pen
          sign-rect sign-top sign-tpen snip-l song-fill song-lead song-lead-max song-lead-of song-rate steer
-         tail? tap-dir tap-key tap-steer rove-key rove-modes toward vlen)
+         tail? tap-dir tap-key tap-steer rove-key rove-modes toward vlen rove-wander rove-turn rove-press rove-loop)
 (borrow 'posix)
 (borrow 'x11)
 (borrow 'text)
@@ -434,5 +434,28 @@
  (note g s) (pin g 'msg (g 'msg ? (g 'msg + "; " + s) s))
  (mob-at g x y) <(filter ({'x ^x 'y ^y} \ 1) (g 'ms))
  ; a mob stirs on the turns its pace divides, so heaven moves at half a climber's rate
- (due? g m) (0 = g 'tn % m 'pc))
+ (due? g m) (0 = g 'tn % m 'pc)
+ ; --- a turn on a floor: the walk's key, the turn it makes, the mobs after it ---
+ ; ..the mobs that move (moves? m) wander a step a turn, sb's dice for each way, to a
+ ; cell (free? x y) holds and no mob stands on
+ (rove-wander ms sb moves? free?) (: (taken? x y) (any (m \ m 'x = x && m 'y = y) ms)
+   (each ms (m \ (moves? m ? (: nx (m 'x + roll sb 3 - 1) ny (m 'y + roll sb 3 - 1)
+                                 (? (free? nx ny && !(taken? nx ny)) (pins m 'x nx 'y ny)))))))
+ ; ..a turn: the note cleared and the turn counted; a standing sign takes the key
+ ; (sign g k), an ended walk takes none, and a steer is a step (step g k)
+ (rove-turn g k sign step) (: _ (pins g 'msg "" 'tn (1 + g 'tn))
+   ((? (g 'sign) (sign g k) (g 'over) () (two? k) (step g k) ()),
+    g))
+ ; ..a key as the walk takes it: escape at a standing sign takes the sign down (down g),
+ ; q or escape ends the walk as how, and any other is a turn (turn g k) on its steer
+ (rove-press g k how down turn) (k = 27 && g 'sign ? (down g)
+   (k @ (113 || 27 || -7) (pin g 'over how) (turn g (rove-key g k))))
+ ; ..and the walk's loop: the frame said, a key waited for, paced -- (idle) while none
+ ; comes -- and handed on (press k), until the walk is over
+ (rove-loop g frame idle press) (: (go last t0) (g 'over ? ()
+                                   (: _ (say out (frame g), flush out)
+                                      k (key-wait t0 last (g 'sign ? sign-gap repeat-gap) idle)
+                                      (press k,
+                                       go k (clock 0))))
+   (go 0 0)))
 ) ; module rove
