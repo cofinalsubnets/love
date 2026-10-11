@@ -87,7 +87,7 @@
         mv-main myers nl-main nice-main nohup-main nproc-main
         od-main paste-main patch-main pgrep-main pidof-main pkill-main printenv-main
         printf-main ps-main pwd-main pwdx-main ranlib-main readlink-main realpath-main rebre refind refold renice-main
-        rem reparse rev-main rmdir-main rm-main sed-main seq-main sha1sum-main sha224sum-main sha256sum-main
+        rem rev-main rmdir-main rm-main sed-main seq-main sha1sum-main sha224sum-main sha256sum-main
         sha384sum-main sha512sum-main b2sum-main sum-main shuf-main size-main sleep-main
         sort-main sparse split-main srun stat-main strip-main stty-main microcom-main sync-main df-main time-main tac-main tail-main
         tee-main test-main top-main

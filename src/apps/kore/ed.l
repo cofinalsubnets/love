@@ -109,11 +109,11 @@
    ; a pattern text -> its matcher, which becomes the last one; "" reuses that
    (ed-re e tx)
     (? (0 < #tx)
-        (rebre tx @ [_ nds _] (recomp (e 'ic ? (refold nds) nds) @ m (pin e 'pat m, m))
+        (rebre tx @ [_ nds _] ((e 'ic ? (refold nds) nds) @ m (pin e 'pat m, m))
           (ed-fail ("invalid pattern: " + tx)))
        (two? (e 'pat)) (e 'pat)
        (ed-fail "no previous pattern"))
-   (ed-hit? m t) (two? (refindpm m t 0 (a \ b \ 1)))
+   (ed-hit? m t) (rehas m t)
    ; the next line from dot matching m, wrapping, forward or back
    (ed-search e m fwd?)
     (: n (e 'n) d (e 'dot) l (ed-all e) d2 (d < 1 ? 1 d)

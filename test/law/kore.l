@@ -397,7 +397,7 @@
       (ubenc ub64set 6 "hello, world" = "aGVsbG8sIHdvcmxk")     ; the coder over the kernel + tail
       (ubenc ub64set 6 "hello" = "aGVsbG8=")))
 
-; --- the regex floor (src/apps/kore/re.l): the BRE faces, held by hand ---
+; --- the regex door (src/love/boot/post.l's re): the BRE faces, held by hand ---
 (: (ok p s) (rebre p @ r (two? r && rehas <>r s))
    (no p s) (rebre p @ r (two? r && !(rehas <>r s)))
    (bad p) !(two? (rebre p))
@@ -462,7 +462,6 @@
       (ok "^\\w*$" "héllo_1") (no "\\w" "—") (ok "\\W" "a b") (no "\\W" "ab")
       (ok "\\s" " ") (no "\\s" "\xc2\xa0") (ok "^\\S*$" "a_é")
       (ok "[\\w]" "\\") (no "[\\w]" "a")
-      (reere "\\w+" = (rebre "\\w\\+"))
       ; GNU's word edges: \b a boundary, \B none, \< a word's start, \> its end
       (ok "\\bba" "foo bar") (no "\\bba" "foobar") (ok "\\Bba" "foobar") (no "\\Bba" "foo bar")
       (ok "\\<b" "foo bar") (no "\\<o" "foo") (ok "o\\>" "foo bar") (no "f\\>" "foo")
@@ -470,29 +469,27 @@
       (ok "\\<本" "日本 本") (ok "a\\Bï" "naïve") (no "\\B" "ö")      ; never inside a character
       (no "x\\b" ("x" + string 255)) (ok "\\Ba" ("x" + string 200 + "a"))   ; latin-1 reading
       (ok "\\b*a" "x*a") (no "\\b*a" "ab")                          ; BRE: a star after an edge is ink
-      (ok "[\\b]" "b") (reere "\\<a+\\>" = (rebre "\\<a\\+\\>"))
+      (ok "[\\b]" "b")
       (refind <>(rebre "b*") "abbc" 0 = '(1 0 0 ()))           ; leftmost, before longest
       (refind <>(rebre "bb") "abbc" 0 = '(1 1 3 ()))
       (refind <>(rebre "b*") "abbc" 1 = '(1 1 3 ()))           ; greedy at its own start
       !(refind <>(rebre "zz") "abbc" 0)
-      ; the group spans (\1's food): numbered in \( order, newest pin first,
-      ; so a repeated group reads as its last iteration -- GNU's \1
+      ; the group spans (\1's food): numbered in \( order, a repeated group its last
+      ; iteration -- GNU's \1
       (refind <>(rebre "\\(b*\\)c") "abbc" 0 = '(1 1 4 ((1 1 3))))
       (refind <>(rebre "\\(a\\(b\\)\\)") "ab" 0 = '(1 0 2 ((1 0 2) (2 1 2))))
-      (refind <>(rebre "\\(ab\\)*x") "ababx" 0 = '(1 0 5 ((1 2 4) (1 0 2))))
+      (refind <>(rebre "\\(ab\\)*x") "ababx" 0 = '(1 0 5 ((1 2 4))))
       ; leftmost-longest, posix's and GNU's: of the matches at the leftmost start the longest,
       ; whichever branch or count reaches it -- not the first path that matches
       (refind <>(reere "a|ab") "abc" 0 = '(1 0 2 ()))
       (refind <>(reere "x*|b") "b" 0 = '(1 0 1 ()))
-      (refind <>(reere "(a|ab)(c|bcd)") "abcd" 0 = '(1 0 4 ((2 1 4) (1 0 1))))
-      (refind <>(reere "(a|ab){1,2}") "aab" 0 = '(1 0 3 ((1 1 3) (1 0 1))))
+      (refind <>(reere "(a|ab)(c|bcd)") "abcd" 0 = '(1 0 4 ((1 0 1) (2 1 4))))
+      (refind <>(reere "(a|ab){1,2}") "aab" 0 = '(1 0 3 ((1 1 3))))
       (refind <>(reere "()*x") "x" 0 = '(1 0 1 ((1 0 0))))         ; an empty iteration reports its group
       (<>>(rebre "\\(a\\)\\(b\\)") = 2)                        ; rebre counts its groups
       (<>>(rebre "ab") = 0)))
 
-; --- the ERE door: the same nodes, the backslashes moved. these laws are the
-; claim that one parser serves two dialects -- each pair here has a BRE twin
-; above wearing different ink, and the two must agree on the tree ---
+; --- the ERE door: the backslashes moved ---
 (: (eok p s) (reere p @ r (two? r && rehas <>r s))
    (eno p s) (reere p @ r (two? r && !(rehas <>r s)))
    (ebad p) !(two? (reere p))
@@ -503,89 +500,16 @@
       (eok "[[:digit:]]{2}" "a12") (eno "[[:digit:]]{2}" "a1b")
       (eok "*r" "r") (eok "+q" "q") (eok "{2}" "anything")     ; ERE drops a loose repeat
       (eok "a{" "a{") (eok "a)" "a)")                          ; ..and takes these as ink
-      (ebad "a{3,2}") (ebad "(a") (ebad "a\\1")
-      ; the two dialects agree on the tree, which is the whole reason for one parser
-      (reere "(a|b)+c" = (rebre "\\(a\\|b\\)\\+c"))
-      (reere "a{2,3}[[:alpha:]]" = (rebre "a\\{2,3\\}[[:alpha:]]"))
-      (reere "^(ab|c)*$" = (rebre "^\\(ab\\|c\\)*$"))))
-
-; --- the regex fuzz: an independent Brzozowski-derivative oracle (alternative
-; sets of node lists, no backtracking anywhere) against the engine's greedy
-; backtracker, over seeded random patterns and subjects. anchors sit out (a
-; derivative has no position); the hand laws above hold them instead ---
-(: (dnul nd) (<nd @ t
-              (? (t = 'grp) (dnulq <>>nd)
-                 (t = 'alt) (any dnulq <>nd)        ; nullable if any branch is
-                 (t = 'rep) (<>>nd < 1 || dnul <>nd)
-                 ()))
-   (dnulq ns) (two? ns ? (dnul <ns && dnulq >ns) 1)
-   (dhit nd c) (any (r \ string? r ? (cite 'text 'cpis r c) (<r <= c <= <>r)) <>>nd @ h
-                (<>nd ? !h h))
-   ; one node's derivative by charm c -> a list of alternative node lists
-   (dn nd c) (<nd @ t
-              (? (t = 'chr) (c = <>nd ? '(()))
-                 (t = 'any) '(())
-                 (t = 'cls) (dhit nd c ? '(()))
-                 (t = 'grp) (dl <>>nd c)
-                 ; the derivative of an alternation is the union of its branches'
-                 ; -- the one place the set-of-alternatives oracle costs nothing,
-                 ; where the backtracker had to order them
-                 (t = 'alt) (catmap (b \ dl b c) <>nd)
-                 (: a <>nd lo <>>nd hi <>>>nd
-                    (hi && hi < 1 ? ()
-                       (: lo2 (0 < lo ? (lo - 1) 0) hi2 (hi ? (hi - 1) ())
-                          (map (u \ u + [['rep a lo2 hi2]]) (dn a c)))))))
-   ; a node list's derivative: the head's, and past a nullable head the tail's
-   (dl ns c) (two? ns ?
-                (map (u \ u + >ns) (dn <ns c) @ d1
-                 (dnul <ns ? (d1 + (dl >ns c)) d1)))
-   (dstep alts c) (: (dd xs acc) (? !(two? xs) acc
-                                    (elem <xs acc) (dd >xs acc)
-                                    (dd >xs (<xs . acc)))
-                     (dd (catmap (u \ dl u c) alts) ()))
-   ; contains-match by derivatives: from every start, hit as soon as some
-   ; alternative goes nullable (the prefix face rehas wears)
-   (dhas ns s)
-    (: n #s
-       (walk alts j) (? (any dnulq alts) 1
-                        (n <= j) ()
-                        (dstep alts (s j) @ a2
-                         (two? a2 ? (walk a2 (j + 1)) ())))
-       (cite i) (? (walk [ns] i) 1 (i < n) (cite (i + 1)) ())
-       (cite 0))
-   ; the draws: 1..4 tokens make a pattern, 0..6 charms of abc a subject
-   ; every token here must parse and the oracle must know its node -- an entry
-   ; the draw cannot build is dead weight, and one the oracle cannot take is a
-   ; false alarm. alternation and the intervals joined when the engine grew them
-   toks '("a" "b" "c" "." "a*" ".*" "[ab]" "[^a]" "[a-c]" "b\\+" "c\\?" "\\(ab\\)*"
-          "\\(a\\|b\\)" "a\\|b" "\\(a\\|bc\\)*" "b\\{2\\}" "a\\{1,2\\}" "[[:alpha:]]")
-   ntok 18
-   (rpat k st acc) (k < 1 ? [acc st]
-                      (random st ntok @ r (rpat (k - 1) >r (acc + toks <r))))
-   (rsub k st acc) (k < 1 ? [acc st]
-                      (random st 3 @ r (rsub (k - 1) >r (acc + (["a" "b" "c"] <r)))))
-   (fzr i st)
-    (i < 1 ? 'ok
-       (: r1 (random st 4) r2 (random >r1 7)
-          pp (rpat (1 + <r1) >r2 "")
-          ss (rsub <r2 <>pp "")
-          r (rebre <pp)
-          (!(two? r) ? (fzr i <>ss)                            ; an out-of-dialect draw redraws
-             (: e (rehas <>r <ss ? 1 0)
-                o (dhas <>r <ss ? 1 0)
-                (e = o ? (fzr (i - 1) <>ss)
-                   ['broke <pp <ss])))))
-   r (fzr 200 (wheel 13))
-   (test (r = 'ok)))
+      (ebad "a{3,2}") (ebad "(a") (ebad "a\\1")))
 
 ; --- the sed floor (src/apps/kore/sed.l): the substitution walk to its GNU face,
 ; and the script parser's shapes -- what parses, what refuses ---
-(: (sub p r s g?) (rebre p @ b <>(usub (recomp <>b) r s g?))
+(: (sub p r s g?) (rebre p @ b <>(usub <>b r s g?))
    (sp s) (sparse s ())                                          ; the BRE door, the default
    (test
       (sub "b" "X" "abc" () = "aXc") (sub "z" "X" "abc" () = "abc")
-      <(usub (recomp <>(rebre "b")) "X" "abc" ())                ; the changed bit ...
-      !<(usub (recomp <>(rebre "z")) "X" "abc" ())               ; ... and its absence
+      <(usub <>(rebre "b") "X" "abc" ())                         ; the changed bit ...
+      !<(usub <>(rebre "z") "X" "abc" ())                        ; ... and its absence
       (sub "b" "X" "abab" 1 = "aXaX")                            ; g takes every match
       (sub "b" "X" "abab" () = "aXab")                           ; bare s takes the first
       (sub "x*" "-" "abc" 1 = "-a-b-c-")                         ; the empty-match step rule
@@ -607,9 +531,7 @@
       ; the dialect reaches the script, in an address and in an s alike -- the
       ; -E flag would be a lie if sparse only passed it to one of the two
       (two? (sp "s/\\(a\\|b\\)/x/")) (two? (sparse "s/(a|b)/x/" 1))
-      (two? (sparse "/a|b/d" 1))
-      (sp "s/a\\{2\\}/x/" = (sparse "s/a{2}/x/" 1))              ; one tree, two inks
-      (sp "/\\(a\\|b\\)c/p" = (sparse "/(a|b)c/p" 1))))
+      (two? (sparse "/a|b/d" 1))))
 
 ; --- the /proc floor (src/apps/kore/proc.l): the stat-line split, the two clocks, the
 ; terminal name and the uptime phrase. the faces over them cannot be lawed and are not
