@@ -810,8 +810,7 @@
                   (pin (g 'dbls) u 1,
                    dbname u))
    (mkflo g d)                                      ; a double constant -> its value tuple
-    (? (ia32? g) (nolane g "no lane for floating point on i386 yet")
-       (t32? g)                                     ; the 64-bit pattern splits over the r0:r1 pair
+    (? (ilp32? g)                                   ; the 64-bit pattern splits over the r0:r1 pair
        (fbits d @ v
           (mkv 'double 'r0 [['li 'r0 (v & 4294967295)] ['li 'r1 ((v >> 32) & 4294967295)]
                             '(movqxr f0 r0)]))
@@ -849,8 +848,8 @@
                    (tor0 g r + (cxb (vty r) = 'float ?
                                 '((ldss f0 r0 0) (cvtss2sd f0 f0))
                                 '((ldsd f0 r0 0))))
-                  (t32? g && llt? (vty r)) (tor0 g r + cvtlld g (usg? (vty r)))
-                  (t32? g && usg? (vty r)) (tor0 g r + '((cvtui2sd f0 r0)))
+                  (ilp32? g && llt? (vty r)) (tor0 g r + cvtlld g (usg? (vty r)))
+                  (ilp32? g && usg? (vty r)) (tor0 g r + '((cvtui2sd f0 r0)))
                   (vty r = 'ulong) (tor0 g r + ul2d)
                   (tor0 g r + '((cvtsi2sd f0 r0))))
    (asint g r) (flo? (vty r) ? (vfs r + '((cvttsd2si r0 f0))) (tor0 g r))        ; result -> r0 as an int
@@ -1279,7 +1278,7 @@
               (? (bad? c) 'bad
                  (flo? (vty c))
                   ; a bare double condition is d != 0.0, NaN-honest: the parity dance rides the branch pair
-                  (: fs (vfs c + (t32? g ?               ; the zero pattern zeroes the r1:r2 pair
+                  (: fs (vfs c + (ilp32? g ?               ; the zero pattern zeroes the r1:r2 pair
                                     '((li r1 0) (li r2 0) (movqxr f1 r1) (ucomisd f0 f1))
                                     '((li r1 0) (movqxr f1 r1) (ucomisd f0 f1))))
                      (rfree g (vreg c),
@@ -1458,7 +1457,7 @@
        (two? fs && !(two? >fs) && (<fs @ f (elem <f '(movapd ldsdl) && <>f = 'f0 && nom? <>>f))) <fs
        ())
    (fshut g af bf)
-    (? (t32? g) (af + '((movqrx r0 f0)) + spush2 + bf + spop2 'r2 'r3 + '((movqxr f1 r2)))
+    (? (ilp32? g) (af + '((movqrx r0 f0)) + spush2 + bf + spop2 'r2 'r3 + '((movqxr f1 r2)))
        (fsel? g && !(fclob? bf 'f1)) (af + '((movapd f1 f0)) + bf)
        (: p (fsel? g ? (fpick bf (fparks g)) ())
           (nom? p ? (af + [['movapd p 'f0]] + bf + [['movapd 'f1 p]])
@@ -1571,8 +1570,7 @@
               (mulsd f0 f1)
               (cvtui2sd f1 r0) (addsd f0 f1))
        (usg ? u2d                                    ; unsigned: straight through
-          (['(cmp r1 0) ['br 'ge lu]
-              '(li r2 0) '(li r3 0) '(subs r0 r2 r0) '(sbc r1 r3 r1)]
+          (['(cmp r1 0) ['br 'ge lu]] + pneg g
            + u2d
            + ['(li r2 0) '(li r3 0) '(movqxr f1 r2)           ; 0.0 - d
               '(subsd f1 f0) '(movsd f0 f1) ['jmp ld] ['label lu]]
@@ -1593,12 +1591,14 @@
            ['label l1]
            '(sub r2 r2 1075) '(cmp r2 0) ['br 'lt lr]]
         + pshiftv g 'shl
-        + [['jmp ls] ['label lr] '(li r3 0) '(sub r2 r3 r2)]
+        + [['jmp ls] ['label lr]] + (ia32? g ? '((neg r2)) '((li r3 0) (sub r2 r3 r2)))
         + pshiftv g 'shr
         + [['label ls] '(ld r2 sp 0) '(add sp sp 16)
-           '(cmp r2 0) ['br 'eq ld]
-           '(li r2 0) '(li r3 0) '(subs r0 r2 r0) '(sbc r1 r3 r1)
-           ['label ld]])))
+           '(cmp r2 0) ['br 'eq ld]]
+        + pneg g + [['label ld]])))
+   ; r0:r1 <- 0 - r0:r1 through r2:r3. x86's two-address borrow chain lands on the left
+   (pneg g) ('((li r2 0) (li r3 0))
+             + (ia32? g ? '((subs r2 r2 r0) (sbc r3 r3 r1) (mov r0 r2) (mov r1 r3)) '((subs r0 r2 r0) (sbc r1 r3 r1))))
 
    ; the wide kit (i128/u128): hi r2 : lo r0, only on the r0 protocol (never the pool, an immediate
    ; lane or a home). a binop's left parks in a 16-byte sp cell that the carrying ops (a128/s128/m128/mw128/c128) read
@@ -1977,10 +1977,10 @@
         (arm? g ? (mkv 'long 'r0 '((trap)))
            (mkv 'long 'r0 '((ud2))))     ; the named op, not raw bytes: a raw bars unframe in every splice site
        (bi = "__builtin_inf")
-        (t32? g ? (mkv 'double 'r0 '((li r0 0) (li r1 2146435072) (movqxr f0 r0)))
+        (ilp32? g ? (mkv 'double 'r0 '((li r0 0) (li r1 2146435072) (movqxr f0 r0)))
            (mkv 'double 'r0 '((li r0 9218868437227405312) (movqxr f0 r0))))
        (bi = "__builtin_nanf" || bi = "__builtin_nan")   ; both take a (ignored) tag string; one quiet-NaN pattern
-        (t32? g ? (mkv 'double 'r0 '((li r0 0) (li r1 2146959360) (movqxr f0 r0)))
+        (ilp32? g ? (mkv 'double 'r0 '((li r0 0) (li r1 2146959360) (movqxr f0 r0)))
            (mkv 'double 'r0 '((li r0 9221120237041090560) (movqxr f0 r0))))
        (bi = "__builtin_expect") (cgexpr g env <args ())
        ; level 0 only. the return address sits one push slot above the frame base, so both answers
@@ -2190,7 +2190,7 @@
         (cgexpr g env <args () @ e1
            (bad? e1 ? 'bad
               (mkv 'long 'r0 (asflo g e1 +
-                        (? (v6m? g)                 ; the r12-free twin: the diffs land in r1 (dead past the set)
+                        (? (v6m? g || ia32? g)      ; the r12-free twin: the diffs land in r1 (dead past the set)
                            '((movqrx r0 f0) (li r2 2147483647) (and r1 r1 r2)
                               (li r2 2146435072) (subs r1 r1 r2)
                               (ors r1 r1 r0) (set eq r0))
@@ -2642,19 +2642,19 @@
                ; (double) of a wide value: a constant expression only, folded exactly (love's + rounds a big correctly);
                ; there is no runtime lane, and the discarded emission r is pure
                (cfold !(ilp32? g) x @ v
-                  (cint? v ? (mkv 'double 'r0 [['li 'r0 (fbits (0.0 + v))] '(movqxr f0 r0)])
+                  (cint? v ? (ilp32? g ? (mkflo g (0.0 + v)) (mkv 'double 'r0 [['li 'r0 (fbits (0.0 + v))] '(movqxr f0 r0)]))
                      'bad))
               (d128? tgt && flo? (vty r))                                 ; double -> wide: not carried
                (nolane g "a double is not converted to a wide integer")
               (flo? tgt && !(flo? (vty r))) (mkv 'double 'r0 (asflo g r))  ; int -> double
               (tgt = 'bool && flo? (vty r))       ; (bool)d is d != 0.0, never a truncation
-               (: z1 (t32? g ? '((li r0 0) (li r1 0) (movqxr f1 r0))
+               (: z1 (ilp32? g ? '((li r0 0) (li r1 0) (movqxr f1 r0))
                         '((li r0 0) (movqxr f1 r0)))
                   (mkv 'bool 'r0 (vfs r + z1 + '((ucomisd f0 f1)) + fsetn)))
               (!(flo? tgt) && flo? (vty r))                              ; double -> int, then narrow
                (? (pair? g tgt)                                               ; double -> llong: the pattern peel
                    (mkv tgt 'r0 (vfs r + cvtdll g (usg? tgt)))
-                  (t32? g && usg? tgt)                                    ; t32 unsigned: the U-converter
+                  (ilp32? g && usg? tgt)                                  ; 32-bit unsigned: the U-converter
                    (mkv tgt 'r0 (vfs r + '((cvttsd2ui r0 f0)) + cvt tgt 'r0))
                   (mkv tgt 'r0 (asintt g r tgt + cvt tgt 'r0)))
               ; (float) of a double rounds: floats ride as doubles and narrow only at a store, so the cast must narrow here
@@ -2683,10 +2683,10 @@
                                   ['li 'r0 0x8000000000000000] '(movqxr f4 r0)
                                   '(subsd f4 f1) '(movsd f1 f4)]))))
               (flo? (vty r))                        ; unary on a double
-               (: z1 (t32? g ? '((li r0 0) (li r1 0) (movqxr f1 r0))             ; 0.0 (the t32 pair)
+               (: z1 (ilp32? g ? '((li r0 0) (li r1 0) (movqxr f1 r0))           ; 0.0 (the 32-bit pair)
                                '((li r0 0) (movqxr f1 r0)))
                   ; -0.0: 0.0 - 0.0 is +0.0, so negation subtracts from minus zero
-                  n0 (t32? g ? ['(li r0 0) ['li 'r1 0x80000000] '(movqxr f1 r0)]
+                  n0 (ilp32? g ? ['(li r0 0) ['li 'r1 0x80000000] '(movqxr f1 r0)]
                         [['li 'r0 0x8000000000000000] '(movqxr f1 r0)])
                   (op @ 'neg                 ; -d = (-0.0) - d
                          (mkv 'double 'r0 (vfs r + (n0 + '((subsd f1 f0) (movsd f0 f1)))))
@@ -2814,7 +2814,8 @@
                        ['label ld]]))
            (? (bad? lv) 'bad
               ; i386: a pair's two words and a struct's bytes lie where the caller laid them, 4-aligned
-              (ia32? g && flo? ty) (nolane g "no lane for floating point on i386 yet")
+              (ia32? g && flo? ty)                  ; a double's 8 bytes (a float arrives promoted)
+               (mkv 'double 'r0 (tor0 g lv + '((ld r2 r0 0) (mov r3 r2) (add r3 r3 8) (st r0 0 r3)) + fldf 'double 'f0 'r2 0))
               (ia32? g && llt? ty)
                (mkv ty 'r0 (tor0 g lv + '((ld r2 r0 0) (mov r3 r2) (add r3 r3 8) (st r0 0 r3) (ld r1 r2 4) (ld r0 r2 0))))
               (ia32? g && stru? ty)
@@ -3086,6 +3087,13 @@
                         (nolane g ("no lane for passing this " + show (tsz g aty) + "-byte struct by value" + ontgt g))
                        (d128? aty)                               ; a wide arg: not carried (love.c passes limbs, never dlimbs)
                         (nolane g "a wide value is not carried as an argument")
+                       ; i386: a double its 8 bytes in the block, a float its 4 where a prototype says float
+                       (ia32? g && flo? aty)
+                        (: fl ((pts i) = 'float)
+                           (kls >as (i + 1) gpc xmmc (ovc + (fl ? 4 8))
+                                (. [['ov ovc (fl ? 4 8)]
+                                    (asflo g a + (fl ? [['cvtsd2ss 'f0 'f0] ['stss 'sp ovc 'f0]] [['stsd 'sp ovc 'f0]]))]
+                                   acc)))
                        (pair? g aty && ia32? g)                  ; i386: the pair's two words where the block stands
                         (kls >as (i + 1) gpc xmmc (ovc + 8)
                              (. [['ov ovc 8] (asll g a + pstw 'sp ovc 'r0 'r1)] acc))
@@ -3281,7 +3289,8 @@
                     (go7 kr ()))
              (dir ?
                  (: ; v6-M base ABI: a double result arrives in r0:r1, a bare float as binary32 in r0 -- either lands on f0
-                    fres (? (t32f? g && ret = 'float) '((cvtss2sd f0 f0))   ; AAPCS-VFP: the result is binary32 in s0
+                    fres (? (ia32? g) (st0in g ret)                       ; i386: st(0) into f0
+                            (t32f? g && ret = 'float) '((cvtss2sd f0 f0))   ; AAPCS-VFP: the result is binary32 in s0
                             !(v6m? g && flo? ret) ()
                             (ret = 'float) '((movqxr f0 r0) (cvtss2sd f0 f0))
                             '((movqxr f0 r0)))
@@ -3291,7 +3300,8 @@
                     (mkv ret 'r0 (pf + spills + ezf + pops + setal + srin + [['call (intern <>hd)]] + fres + rext g ret + pairin g ret + srout + clean + relods)))
                 (: hr (cgexpr g env hd ())                   ; a function-pointer value: park (x64 rbx; a64 x15), callr
                    pk (pkr g)
-                   fres (? (t32f? g && fnret (vty hr) = 'float) '((cvtss2sd f0 f0))
+                   fres (? (ia32? g) (st0in g (fnret (vty hr)))
+                           (t32f? g && fnret (vty hr) = 'float) '((cvtss2sd f0 f0))
                            !(v6m? g && flo? (fnret (vty hr))) ()
                            (fnret (vty hr) = 'float) '((movqxr f0 r0) (cvtss2sd f0 f0))
                            '((movqxr f0 r0)))
@@ -3312,6 +3322,29 @@
    (srpass g off) (ia32? g ? [['lea 'r1 'r4 off] ['st 'sp 0 'r1]] [['lea (srreg g) 'r4 off]])
    ; ..as raw bytes: the callee's pop is no IR form, so the passes' sp model never sees it leave or return
    (srback g off) ((ia32? g ? [['raw (m16b g + [131 236 4])]] ()) + [['lea 'r0 'r4 off]])   ; sub esp,4
+   ; i386's double <-> pair moves as the forms every sweep reads: a 16-byte cell, the two words and
+   ; the double through it. movqxr/movqrx name only the pair's low half, which x64's copy and store
+   ; forwarding would rewrite without its twin
+   (qcell g fs)
+    (!(ia32? g) ? fs
+       (catmap (f \ (? (two? f && <f = 'movqxr)
+                        [['sub 'sp 'sp 16] ['st 'sp 0 <>>f] ['st 'sp 4 <(qtwin <>>f)] ['ldsd <>f 'sp 0] ['add 'sp 'sp 16]]
+                        (two? f && <f = 'movqrx)
+                        [['sub 'sp 'sp 16] ['stsd 'sp 0 <>>f] ['ld <>f 'sp 0] ['ld <(qtwin <>f) 'sp 4] ['add 'sp 'sp 16]]
+                        [f]))
+               fs))
+   ; i386 answers a float on x87's st(0) and gen keeps it in f0 (xmm0): an 8-byte cell under esp
+   ; carries it across, each way, raw so no pass reads the cell (16-bit: 67 on memory, 66 on lea)
+   (x87raw g fl in?)
+    (: a (m16? g ? [103] ()) o (m16? g ? [102] ())
+       lea (\ k (a + o + [141 100 36 k]))                          ; lea esp,[esp+k]
+       (in? ? (lea 248 + a + [(fl ? 217 221) 28 36]                 ; fstp dword|qword [esp]
+               + a + [(fl ? 243 242) 15 16 4 36]                     ; movss|movsd xmm0,[esp]
+               + (fl ? [243 15 90 192] ()) + lea 8)                  ; cvtss2sd xmm0,xmm0
+          ((fl ? [242 15 90 192] ()) + lea 248                       ; cvtsd2ss xmm0,xmm0
+           + a + [(fl ? 243 242) 15 17 4 36]                         ; movss|movsd [esp],xmm0
+           + a + [(fl ? 217 221) 4 36] + lea 8)))                    ; fld dword|qword [esp]
+   (st0in g ty) (ia32? g && flo? ty ? [['raw (x87raw g (ty = 'float) 1)]])
    ; an i386 long long arrives in edx:eax; gen's pair is r0:r1
    (pairin g ty) (ia32? g && pair? g ty ? [['mov 'r1 'r2]])
    ; the C99 complex lane (x64): a complex value is its two-member struct, so it flows as one. arithmetic parks each
@@ -3961,8 +3994,8 @@
           (elem op unops) [[<>f] [<>f] 1]
           ; the 32-bit pair moves (vmov Df, Rlo, Rlo+1) name only the low half, so qtwin spells the high one:
           ; an unspelled read is a live value deaddef takes away, an unspelled def a stale one the forwarders keep
-          (op = 'movqxr) [([<>>f] + (t32? g ? (qtwin <>>f) ())) () ()]
-          (op = 'movqrx) [() ([<>f] + (t32? g ? (qtwin <>f) ())) 1]
+          (op = 'movqxr) [([<>>f] + (ilp32? g ? (qtwin <>>f) ())) () ()]
+          (op = 'movqrx) [() ([<>f] + (ilp32? g ? (qtwin <>f) ())) 1]
           ; the numbered single moves: the s-slot write is a side effect nothing here sees, so movsnxr is never droppable
           (op = 'movsnxr) [[<>>f] () ()]
           (op = 'movsnrx) [() [<>f] 1]
@@ -4569,6 +4602,9 @@
                  (elem op >stops9)                ; the full-word st has its own arm above
                   (<>f = fb || <>f = 'sp ?
                       ((<>f = fb ? (rset sl <>>f ()) (rset ce cur ())),
+                       ; i386's word is 4 bytes: the store's own slot goes, and a double's second word with it
+                       (ia32? g ? (: o <>>f k (<>f = fb ? sl ce) (key x) (<>f = fb ? x (cur - x))
+                                     (rset k (key o) (), op = 'stsd ? (rset k (key (o + 4)) ()))) 0),
                        go r 1 cur rg sl ce ci (f . acc))
                      (go r 1 cur rg (fresh 0) ce ci (f . acc)))
                  (op = 'cmp)                         ; paired with its br/set/cmov consumer
@@ -7839,7 +7875,8 @@
                    (? (bad? r) 'bad
                       (flo? rt)                                        ; a double return leaves f0 (xmm0);
                        (asflo g r                                      ; v6-M base ABI carries a double out on the r0:r1 pair,
-                        + (? (t32f? g && rt = 'float) '((cvtsd2ss f0 f0))   ; AAPCS-VFP: narrow into s0, d0's own low half
+                        + (? (ia32? g) [['raw (x87raw g (rt = 'float) ())]]   ; i386: out on st(0)
+                             (t32f? g && rt = 'float) '((cvtsd2ss f0 f0))   ; AAPCS-VFP: narrow into s0, d0's own low half
                              !(v6m? g) ()                              ; a bare float as one word (binary32 in r0)
                              (rt = 'float) '((cvtsd2ss f0 f0) (movqrx r0 f0))
                              '((movqrx r0 f0)))
@@ -8999,7 +9036,9 @@
                              (acc + pstw 'r4 off (argr g gpe) (argr g (gpe + 1)))))
                   (aup ovi 8 @ ov8
                      (spill hp >ps 4 xmmi (ov8 + 8) ([<p (ovb g + ov8) pty] . env) acc)))
-              (? (v6m? g && sse2? g pty)                ; v6-M: a position-0 16B composite arrives whole in r0-r3
+              (? (ia32? g && flo? pty)                  ; i386: a float or double param is read where the caller laid it
+                  (spill hp >ps gpi xmmi (ovi + (pty = 'float ? 4 8)) ([<p (ovb g + ovi) pty] . env) acc)
+                 (v6m? g && sse2? g pty)                ; v6-M: a position-0 16B composite arrives whole in r0-r3
                   (gpi != 0 ? 'bad                          ;  (the caller's g4 lane); any later start splits -- deferred
                    (nslot g 16 @ off
                       (spill hp >ps 4 xmmi ovi ([<p off pty] . env)
@@ -9204,9 +9243,8 @@
         (: (cls qs ov env)
             (!(two? qs) ? (pins g 'vagp 0 'vaov ov, [() env])
                (: p <qs pty <>p
-                  n (? (llt? pty) 8 (stru? pty) (aup (tsz g pty) 4) 4)
-                  (flo? pty ? (nolane g "no lane for floating point on i386 yet")
-                     (cls >qs (ov + n) ([<p (ovb g + ov) pty] . env)))))
+                  n (? (llt? pty || pty = 'double) 8 (stru? pty) (aup (tsz g pty) 4) 4)
+                  (cls >qs (ov + n) ([<p (ovb g + ov) pty] . env))))
            (cls ps 0 ()))
        ; a variadic fn (riscv): a0..a7 lie in a 64-byte block above the push cells, so a named register param
        ; sits at fp+ovb+8i and an overflow one past it (+64); a named double rides the gp lane too (the caller's va? classifier)
@@ -9275,10 +9313,10 @@
                         (deadcell g
                         (cfoldir g (dp 'built
                          (sibcall g
-                          (vrfix g
+                          (qcell g (vrfix g
                           ([['label (name <>f)]] + pro4 + [['sub 'sp 'sp frame] sav3] +
                            g 'cssv + <sp0 +
-                           body + '((li r0 0)) + peep g 'epi epi)))))))))))))))))))))))))
+                           body + '((li r0 0)) + peep g 'epi epi))))))))))))))))))))))))))
        ; an r4 arrival (a64's 5th gp) is never ridden: gen spells the frame base r4 and a4ize retargets
        ; it to fp by position, so a ridden r4 in a base slot would turn into fp
        (a4rider? A) (fbase g !== 'r4 && A == 'r4)
