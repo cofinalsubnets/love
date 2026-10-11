@@ -5364,7 +5364,7 @@
        K (sf @ ('sub 'sp 'sp k) (charm? k ? k))
        ; a64's spmerge folds an outgoing-arg park into the frame's sub: the excess rides under the slots
        xk (a6 && charm? K ? (K - aup (peep g 'off 0) 16) 0)
-       (!(two? slots) || arm? g && !a6 || g 'hasasm || !pro || !(charm? K) || xk < 0 ? fs
+       (!(two? slots) || arm? g && !a6 || abl? g 'repack || g 'hasasm || !pro || !(charm? K) || xk < 0 ? fs
           (: obs {}                            ; base -> (size lo hi esc wordy? first-src)
              ; wordy? and first-src are promotion's: every touch a full-word ld/st at the base, and
              ; the register the first store took (the preferred seat), () when the first touch was a load
