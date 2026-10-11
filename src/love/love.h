@@ -80,6 +80,18 @@ static love_inline size_t b2w(size_t b) {
 #ifndef love_major0
 # define love_major0 (1u << 16)      // ~512 KB major-pool half; grows much less often than the minor pool
 #endif
+#ifndef gc_qn
+# define gc_qn 2   // q = gc_qn / gc_qd: the nursery's ceiling, q of the live set (gcsize.v's nurse)
+#endif
+#ifndef gc_qd
+# define gc_qd 1
+#endif
+#ifndef gc_fn
+# define gc_fn 2   // f = gc_fn / gc_fd: a major leaves room for f of its survivors (gcsize.v's more)
+#endif
+#ifndef gc_fd
+# define gc_fd 1
+#endif
 // the nursery's copy-overhead setpoint (please): grow while copied/allocated tops
 // 1/ratio. larger ratio = lower overhead, more RAM.
 #ifndef gc_ratio

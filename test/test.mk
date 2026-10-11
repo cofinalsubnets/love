@@ -1080,7 +1080,9 @@ test_proof: $(rocq_kept)
 test_gc:
 	@echo TEST test/proof/rocq/gc.v "(coqc)"
 	@$(COQC) -q test/proof/rocq/gc.v
-	@$(call vclean,gc)
+	@echo TEST test/proof/rocq/gcsize.v "(coqc)"
+	@$(COQC) -q test/proof/rocq/gcsize.v
+	@$(call vclean,gc gcsize)
 # The .l -> .v pipeline: src/tools/spec2coq.l reads test/spec.l and emits gen.v, the spec generating
 # theorems for its own numeral facts. Regenerated every run, so asserts and proofs cannot diverge.
 test_gen: host $(rocq_kept)
