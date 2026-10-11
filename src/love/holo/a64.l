@@ -608,8 +608,8 @@
    ;; the write-only registers by name: an mrs of one refuses (the generic spelling reads anything)
    a64-wo {'oslar_el1 1 'icc_dir_el1 1 'icc_sgi1r_el1 1 'icc_eoir1_el1 1}
    (a64-mrs d nm) (? (peep a64-wo (name (lower (show nm))) ()) (scare 'badsysreg-wo nm)
-                     (le32 (0xD5200000 | (a64-sysreg nm | rn d))))         ; MRS Xd, <reg>
-   (a64-msr nm s) (le32 (0xD5000000 | (a64-sysreg nm | rn s)))         ; MSR <reg>, Xs
+                     (le32 (0xD5200000 | (a64-sysreg nm | a64-sysrt d))))  ; MRS Xd, <reg>
+   (a64-msr nm s) (le32 (0xD5000000 | (a64-sysreg nm | a64-sysrt s)))  ; MSR <reg>, Xs
 
    ;; MSR (immediate): a pstate field, not a register -- op1/op2 name the field and the 4-bit
    ;; immediate rides crm. this is how interrupts mask (daifset/daifclr) and how the stack

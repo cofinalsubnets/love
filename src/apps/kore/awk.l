@@ -934,7 +934,7 @@
        (go 0))
    (aw-re pat)
     (reere (aw-gnu pat) @ p
-       (two? p ? (recomp <>p) (aw-err ("bad regular expression: /" + pat + "/"))))
+       (two? p ? <>p (aw-err ("bad regular expression: /" + pat + "/"))))
 
    ; -- fields ---------------------------------------------------------------
    (aw-splitw t)                                 ; the default fs: runs of blank
@@ -956,7 +956,7 @@
     (: n #t nds (aw-recomp E pat)
        (n = 0 ? ()
         (: (go i acc)
-            (refindm nds t i @ [_ st en _]
+            (refind nds t i @ [_ st en _]
               (en <= st ? (rev (snip t i n . acc))          ; an empty match cannot walk
                  (go en (snip t i st . acc)))
               (rev (snip t i n . acc)))
@@ -1051,7 +1051,7 @@
           'field (aw-anfld <>e)
           ; a bare /re/ in an expression is `$0 ~ /re/`, not a value
           'ere (aw-re <>e @ nds
-                  (E \ (rehasm nds (aw-rec E) ? 1 0)))
+                  (E \ (rehas nds (aw-rec E) ? 1 0)))
           ; mentioning a[i] creates it -- awk's rule, and `if (a[k])` then leaves
           ; k in the array for a later `in`
           'idx (: nm <>e k (aw-ankey <>>e) (E \ (aw-idx E nm (k E))))
@@ -1134,8 +1134,8 @@
             (aw-an pe @ f (E \ (aw-recomp E (aw-sv E (f E))))))
    (aw-anmatch neg a pe)
     (aw-anpat pe @ g
-       (neg ? (E \ (rehasm (g E) (aw-sv E (a E)) ? 0 1))
-          (E \ (rehasm (g E) (aw-sv E (a E)) ? 1 0))))
+       (neg ? (E \ (rehas (g E) (aw-sv E (a E)) ? 0 1))
+          (E \ (rehas (g E) (aw-sv E (a E)) ? 1 0))))
    (aw-anassign op lp rhs)
     (: get <lp put <>lp
        (op = "=" ? (E \ put E (rhs E))
@@ -1188,7 +1188,7 @@
     (:- (go 0 0 -1) n #s o (jug 0)
      ; ban: where the last match ended, and an empty one may not stand
      (go i cnt ban) (n < i ? [(slurp o) cnt]
-       (refindm nds s i @-
+       (refind nds s i @-
         (say o (snip s i n), [(slurp o) cnt])
         [_ st en _]
          (en = st && st = ban ?
@@ -1250,7 +1250,7 @@
           "match"
            (aw-anpat (as 1) @ pf
               (E \ (: s (s0 E) re (pf E)
-                      (refindm re s 0 @ [_ st en _]
+                      (refind re s 0 @ [_ st en _]
                        (: asc (aw-cpn E s = #s)
                           r (asc ? (st + 1) (cplen (snip s 0 st) + 1))
                         (pin (aw-g E) "RSTART" r,

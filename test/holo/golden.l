@@ -652,6 +652,13 @@
    _ (chk-eq "gas.a64.spreg.refuse" '(gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand)
         (map (l \ trap (x \ holo-hex 'a64 (gas-text 'a64 x)) l (\ a b a))
              ["add sp, sp, x0, lsl #5" "add sp, sp, sp" "adds sp, x0, x1" "and sp, sp, x0" "add sp, sp, w0" "mov wsp, wzr"]))
+   ;; msr and mrs move a system register through an x register or xzr (entry.S's
+   ;; `msr tpidrro_el0, xzr`); sp, whose 31 would read as xzr, and a w register refuse
+   _ (chk-eq "gas.a64.msrzr" "7fd01bd55fd03bd51ff218d543d01bd525003bd5df4203d59ed038d51d4118d5"
+        (holo-hex 'a64 (gas-text 'a64 "msr tpidrro_el0, xzr\n mrs xzr, tpidr_el0\n msr s3_0_c15_c2_0, xzr\n msr tpidr_el0, x3\n mrs x5, ctr_el0\n msr daifset, #2\n mrs x30, tpidr_el1\n msr sp_el0, x29\n")))
+   _ (chk-eq "gas.a64.msrzr.refuse" '(gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand)
+        (map (l \ trap (x \ holo-hex 'a64 (gas-text 'a64 x)) l (\ a b a))
+             ["msr tpidr_el0, sp" "mrs sp, tpidr_el0" "msr tpidr_el0, wzr" "mrs w0, tpidr_el0" "msr tpidr_el0, w3"]))
    ;; an argument that is one quoted string passes its inside, positional or by name, as llvm-mc
    ;; expands it (entry.S's `alternative_insn nop, "dmb sy", 90`)
    _ (chk-eq "gas.macro.quote" '("nop" "dmb sy" ".ascii \"x y\"" "mov x0, x1" "mov x0, x1" "mov x2, x3" "nop" "")

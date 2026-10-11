@@ -5,8 +5,8 @@ doubt settles by feeding `vstep` bytes.
 
 ## the shape
 
-Five files, over the seeds the repo already had (bao's port-driven editor discipline, kore's
-re.l regex engine):
+Five files, over the seeds the repo already had (bao's port-driven editor discipline, the
+regex door, post.l's re):
 
 * **src/apps/vi/core.l** — the PURE engine. A state tablet stepped one byte at a time:
   `(vstep st byte) -> st`, `(vfeed st bytes)`, `(vframe st)` -> one full escape-sequence frame
