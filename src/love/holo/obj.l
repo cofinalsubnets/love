@@ -143,6 +143,9 @@
    r-386-32 1                                       ; R_386_32    S + A
    r-386-pc32 2                                     ; R_386_PC32  S + A - P
    r-386-pc16 21                                    ; R_386_PC16  S + A - P in two bytes (a 16-bit jump)
+   r-386-16 20                                      ; R_386_16    S + A in two bytes (a 16-bit segment's address)
+   r-386-8 22                                       ; R_386_8     S + A in one byte
+   r-386-pc8 23                                     ; R_386_PC8   S + A - P in one byte
    r-thm-call 10                                    ; R_ARM_THM_CALL   ((S+A)|T) - P  (a thumb BL to a symbol)
    r-thm-jump24 30                                  ; R_ARM_THM_JUMP24 same math      (a thumb2 B.W tail-jump)
    r-arm-abs32 2                                     ; R_ARM_ABS32      S + A           (la's pooled address word)
@@ -157,7 +160,7 @@
        be (peep backends target ())
        x86 (i386? target)
        tb (x86 ? 0 1)                                ; the thumb bit a func symbol's value carries
-       rset (x86 ? '(rel32 rel8 rel16) '(b bcc bl))  ; internal branches are pc-relative -> resolve in place
+       rset (x86 ? '(rel32 rel8 rel16 pc8) '(b bcc bl))  ; internal branches are pc-relative -> resolve in place
        wkset (o-names wknames)
        nsec #secs
        _ (0 >= nsec ? (scare 'obj-no-sections target))
@@ -202,7 +205,7 @@
        ; sentinels) branches across one, where rel's in-field addend has no more room for
        ; the offset than movw16's. the fixup would bind symbol 0 -- `link-undef ""`.
        locfns (o-locs (\ si lbl (sec-exec? si && !(o-has? fnset lbl)))
-                      (x86 ? '(rel32 rel16) '(movw16 movt16 abs32 b bcc bl)))
+                      (x86 ? '(rel32 rel16 pc8) '(movw16 movt16 abs32 b bcc bl)))
        locdat (o-locs (\ si lbl (!(sec-exec? si) && !(o-has? gset lbl)))
                       '(movw16 movt16))
        locs (locfns + locdat)
@@ -230,7 +233,10 @@
        (bakeabs bytes rs)
         (: (go rs bs) (!(two? rs) ? bs
                          (<rs @ r
-                            (go >rs (<>r !== 'abs32 ? bs (a32loc <>>r <>>>r @ sl (o-put32 bs <r <>sl))))))
+                            (go >rs (? (<>r == 'abs32) (a32loc <>>r <>>>r @ sl (o-put32 bs <r <>sl))
+                                       (<>r == 'abs16) (a32loc <>>r <>>>r @ sl (o-putbs bs <r (le16 <>sl)))
+                                       (<>r == 'abs8) (a32loc <>>r <>>>r @ sl (o-putbs bs <r [(<>sl & 255)]))
+                                       bs))))
            (go rs bytes))
        ; ..and the same for a section-bound movw16/movt16, whose addend rides the imm16
        ; scatter (patch-with does the scatter; the linker adds S on top).
@@ -247,6 +253,7 @@
                          (<rs @ r
                             (go >rs (? (<>r == 'rel32) (o-put32 bs <r (<>>>r - 4))
                                        (<>r == 'rel16) (o-putbs bs <r (le16 (<>>>r - 2)))
+                                       (<>r == 'pc8) (o-putbs bs <r [((<>>>r - 1) & 255)])
                                        bs))))
            (go rs bytes))
        lbytes (map (l \ (ln-rl l @ rs (bakepc (bakemw (bakeabs (ln-bs l) rs) rs) rs))) lanes)
@@ -293,9 +300,12 @@
         (catall (map (\ [off k lbl aux _]
           (k @ 'rel32 (o-rel32 off (fnsym lbl) r-386-pc32)
                'rel16 (o-rel32 off (fnsym lbl) r-386-pc16)
+               'pc8 (o-rel32 off (fnsym lbl) r-386-pc8)
                'bl (o-rel32 off (fnsym lbl) r-thm-call)
                'b  (o-rel32 off (fnsym lbl) r-thm-jump24)   ; a B.W tail-jump to an external/weak fn
                'abs32 (a32loc lbl aux @ sl (o-rel32 off <sl (x86 ? r-386-32 r-arm-abs32)))
+               'abs16 (a32loc lbl aux @ sl (o-rel32 off <sl r-386-16))
+               'abs8 (a32loc lbl aux @ sl (o-rel32 off <sl r-386-8))
                ('movw16 || 'movt16)
                 (mwloc lbl @ sl
                    (o-rel32 off <sl $ k == 'movw16 ? r-thm-movw r-thm-movt))

@@ -91,15 +91,16 @@
                          (284 lo12s2) (285 lo12s4) (286 lo12s8) (299 lo12s16)))
    ldrv-kinds (ld-cls '((17 j21) (19 pcrel)))
    ; EM_386 is rel too, every field whole: R_386_32 and _PC32/_PLT32 four bytes, _16 and
-   ; _PC16 two (a 16-bit segment's jump). its numbers collide with ARM's as with the rest.
-   ld386-kinds (ld-cls '((1 abs32) (2 rel32) (4 rel32) (20 abs16) (21 rel16)))
+   ; _PC16 two (a 16-bit segment's jump), _8 one (a setup header's sector count). its numbers
+   ; collide with ARM's as with the rest.
+   ld386-kinds (ld-cls '((1 abs32) (2 rel32) (4 rel32) (20 abs16) (21 rel16) (22 abs8) (23 pc8)))
    (ld386 s off sv kind site)
     (: r (ld386-kinds kind)
        _ (atom? r ? (scare 'link-reloc kind))
-       k <r w (elem k '(abs16 rel16) ? 2 4)
+       k <r w (k @ 'abs16 2 'rel16 2 'abs8 1 'pc8 1 4)
        sa (sv + rdle s off w)
-       v (elem k '(abs32 abs16) ? sa (sa - site))
-       (w = 4 ? (le32 (ld-u32 v)) (le16 (ld-u32 v))))
+       v (elem k '(abs32 abs16 abs8) ? sa (sa - site))
+       (w @ 4 (le32 (ld-u32 v)) 2 (le16 (ld-u32 v)) [(ld-u32 v & 255)]))
    (ldarm be s off sv kind site)
     (: r (ldarm-kinds kind)
        _ (atom? r ? (scare 'link-reloc kind))
@@ -587,7 +588,7 @@
               ; the two classes part here and nowhere else: an ARM field is 4 bytes wide
               ; whatever the kind, its addend already in it, and `ad` arrives ().
               (? (arm? == 'i386)
-                 (: w (elem kind '(20 21) ? 2 4)
+                 (: w (kind @ 20 2 21 2 22 1 23 1 4)
                     (ro + w <= sz ? 0 (scare 'link-oob (peep ob 'id 0)),
                      relbox ? (scare 'link-i386-pie <sy),
                      go (off0 + ro + w) >es

@@ -92,7 +92,10 @@
                  pin t 'sp 'sp, pin t 'lr 'lr,
                  t))
    (gthumb? tgt) (elem tgt '(thumb2 thumb2sp thumb1))
-   (gx86? tgt) (elem tgt '(x64 i386 i386m16))      ; AT&T's dialect: the x64 lane, i386 through gx-w32
+   (gx86? tgt) (elem tgt '(x64 i386 i386m16))
+   ; a line `name = expr`: an identifier, one `=` (not `==`), something after it
+   (gf-eqset? t) (: e (xa-idx t 61)
+                    (0 < e && e + 1 < #t && t (e + 1) != 61 && gf-ident? (xa-trim (snip t 0 e))))      ; AT&T's dialect: the x64 lane, i386 through gx-w32
    (g32? tgt) (elem tgt '(i386 i386m16))
 
    ;; the dialect's spelling of the neutral file, for operand substitution. `mod` is GNU's
@@ -356,9 +359,15 @@
                        (ghas? gx-ren <f) [((gx-ren <f) . >f)]
                        [f]))
                fs))
-   (gx-exact src)
+   (gx-exact src) (gx-exactm 64 'x64 src)
+   ;; ..in a segment of md bits (.code16/.code32/.code64): as.l at that mode; the template lane
+   ;; takes over only in the object's own mode, whose backend lays it
+   (gx-md tgt) (tgt @ 'i386 32 'i386m16 16 64)
+   (gx-exactm md tgt src)
     ; both refusing, as.l's word stands: it names the instruction, the template lane an operand
-    (catmap (it \ (<it = 'op ? (trap (i \ [['raw (as-instr i)]]) it (\ a b (trap gx-item it (\ _ _ (scare a b)))))
+    (catmap (it \ (<it = 'op ? (trap (i \ [['raw (as-instrm md i)]]) it
+                                (\ a b (md != gx-md tgt ? (scare a b)
+                                         (trap (i \ (g32? tgt ? (gx-w32 (gx-item i)) (gx-item i))) it (\ _ _ (scare a b))))))
                      (gx-item it)))
             (gx-locals (att-read src)))
 
@@ -1128,6 +1137,7 @@
                 (scare 'gas-data-pcrel e))
           (w = 8) [['fix 8 'abs64 (name s) k]]
           (w = 4 && (gx86? tgt || gthumb? tgt)) [['fix 4 'abs32 (name s) k]]
+          (w < 4 && g32? tgt) [['fix w (w = 2 ? 'abs16 'abs8) (name s) k]]   ; i386's narrow fields: R_386_16, R_386_8
           (scare 'gas-data-width e)))
    ; GNU's numeric local labels in an instruction line -> the names gas-top laid them under
    (gf-lsub s rl)
@@ -1283,6 +1293,8 @@
                  (w = ".purgem") (go >l acc)
                  (two? (req t)) (req t @ (nm rg) (pin rq nm (ssub rg), go >l acc))
                  (w = ".unreq") (pin rq (xa-trim r) (), go >l acc)
+                 ; gas's `name = expr` is `.set name, expr`
+                 (gf-eqset? t) (go ((".set " + xa-trim (snip t 0 (xa-idx t 61)) + ", " + snip t (1 + xa-idx t 61) #t) . >l) acc)
                  (elem w '(".set" ".equ"))
                   (: xs (xa-oplist r) v (xa-trim (two? >xs ? <>xs ""))
                      (gf-ident? v && !(charm? (peep sv v ())) ? (go >l (s . acc))   ; an alias: gas-top lays it
@@ -1353,7 +1365,7 @@
    ; ..read from a section of the caller's own, home, wearing [type flags] htd; a numeric label
    ; is named pfx + GNU's own, so two readings never lay one twice
    (gas-top-in tgt src home htd pfx)
-    (: st {'cur home 'prev home 'stk () 'run () 'order () 'globl ()}
+    (: st {'cur home 'prev home 'stk () 'run () 'order () 'globl () 'md (gx-md tgt)}
        secs {}                                      ; name -> [type flags forms-reversed]
        labs {}                                      ; label -> its section
        lc {}                                        ; N -> how many `N:` so far
@@ -1364,7 +1376,7 @@
                     (pin secs nm [<r <>r (revcat fs <>>r)]))
        (flush _) (st 'run @ r
                     (two? r ? (xa-join "\n" (rev r) @ t
-                                 (pin st 'run (), emit (tgt = 'x64 ? (gx-exact t) (gas-text tgt t))))
+                                 (pin st 'run (), emit (gx86? tgt ? (gx-exactm (st 'md) tgt t) (gas-text tgt t))))
                        0))
        (goto nm td) (row nm td, pin st 'prev (st 'cur), pin st 'cur nm)
        (raw bs) (two? bs ? (emit [['raw bs]]) 0)
@@ -1406,7 +1418,9 @@
                                  (map (e \ (gtoks e @ ts
                                               (1 < #(filter (t \ <t = 'lref || (<t = 'sym && <>t != ".")) ts) &&
                                                !(any (t \ t = ['sym "."]) ts) ?
-                                                  ['wordx (map (t \ (<t = 'lref ? ['sym (rl <>t <>>t)] t)) ts) w]
+                                                  (: k (peep st 'wxs 0) here (pfx + ".Lwx" + show k)
+                                                     (pin st 'wxs (k + 1),
+                                                      ['wordx (map (t \ (<t = 'lref ? ['sym (rl <>t <>>t)] t)) ts) w here]))
                                                  ['raw (gf-word tgt w e rl)])))
                                       xs))))
               (mn = ".ascii") (raw (catall (gf-strs rest)))
@@ -1446,6 +1460,7 @@
               (elem mn '(".section" ".pushsection"))
                (gf-sect xs @ d
                   (mn = ".pushsection" ? (pin st 'stk ([(st 'cur) (st 'prev)] . (st 'stk))) 0,
+                   pin st 'named (<d . peep st 'named ()),
                    goto <d >d))
               (mn = ".popsection")
                (st 'stk @ s
@@ -1460,6 +1475,9 @@
               (elem mn '(".type" ".size" ".hidden" ".protected" ".internal" ".file" ".ident") || starts? mn ".cfi_") 0
               ; the ISA a line may use: every one this reader knows, always
               (elem mn '(".arch" ".arch_extension" ".cpu")) 0
+              ; the x86 segment the lines after it run in: their operand and address widths
+              (elem mn '(".code16" ".code16gcc" ".code32" ".code64"))
+               (gx86? tgt ? (pin st 'md (mn @ ".code32" 32 ".code64" 64 16)) (scare 'gas-directive mn))
               (scare 'gas-directive mn)))
        (line s0)
         (xa-trim s0 @ s
@@ -1495,7 +1513,9 @@
        ; label -> its offset, each section's shifted by k times its own large stride
        (offs k) (: t {} si {'i 1}
                    (foldl (\ _ nm (k * 1000003 * si 'i @ b (pin si 'i (si 'i + 1),
-                                                            foldl (\ off f (<f = 'label ? (pin t (show <>f) (b + off)) 0,
+                                                            foldl (\ off f (? (<f = 'label) (pin t (show <>f) (b + off))
+                                                                             (<f = 'wordx && 3 < #f) (pin t (f 3) (b + off))   ; its own site
+                                                                             0,
                                                                             off + fsz f off))
                                                                   0 (rev <>>(secs nm)),
                                                             0)))
@@ -1506,6 +1526,15 @@
        ; ..and a count that moves with where a section lands is no constant (a difference across sections)
        (skv f t) (ev f t @ v (v = ev f (offs 1) ? v (scare 'gas-data (f 1))))
        (skip? f) (two? f && <f = 'skipx)
+       ; a word over two labels: its constant, or -- `sym - 1f` across sections, a hand-laid jump's
+       ; displacement -- a pc-relative fix whose addend is the field's distance from the label
+       (wxlay f t)
+        (trap (\ _ ['raw (gf-le (skv f t) (f 2))]) 0
+              (\ a b (: ts (f 1) w (f 2) site (t (f 3)) t1 (offs 1)
+                         (ts @ [('sym s) ('ch 45) ('sym l)]
+                               (? (!(charm? (t l)) || t1 l - t1 (f 3) != t l - site) (scare a b)   ; l in the field's section
+                                  ['raw [(fix w (w @ 4 'rel32 2 'rel16 'pc8) (name s) (site + w - t l))]])
+                               (scare a b)))))
        (settle n)
         (: t (offs 0) ch {'c 0}
            (foldl (\ _ nm (: r (secs nm)
@@ -1523,7 +1552,7 @@
             (: _ (settle 0)
                t (offs 0)
                (lay f) (<f @ 'skipx ['raw (map (i \ (f 2) & 255) ^(f 3))]
-                             'wordx ['raw (gf-le (skv f t) (f 2))]
+                             'wordx (wxlay f t)
                              f)
                (foldl (\ _ nm (secs nm @ r
                                  (pin secs nm [<r <>r (filter (f \ !(<f = 'raw && atom? <>f))
@@ -1540,7 +1569,8 @@
        (sec nm) (secs nm @ r [nm <r <>r (rev <>>r)])
        (exec? l) (0 < <>(secs (labs l)) & 4)
        def (filter (l \ string? (labs l)) (rev (st 'globl)))
-       [(filter (r \ two? (r 3)) (map sec (rev (st 'order))))
+       ; a section the text named stays though empty: a linker script may lay it (the setup's .bstext)
+       [(filter (r \ two? (r 3) || elem <r (peep st 'named ())) (map sec (rev (st 'order))))
         (filter exec? def) (filter (l \ !(exec? l)) def)])
 
    ;; -- the front door: TEXT -> IR, by target. --
