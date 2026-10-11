@@ -9452,6 +9452,9 @@
            (has9 ks e) (? (atom? e) () (elem <e ks) 1 (any (x \ has9 ks x) e))
            ; a local's name -> its type, and -> its gp seat; every seat's register -> its names
            nty (: (go i t) (sqm9 i @ e2 (? (atom? e2) t (go (i + 1) (pin t <e2 <>e2)))) (go 1 {}))
+           ; ..and its decl's place: the tie-break, never the spelling (an inlined body's names are
+           ; numbered per run, and a generation that numbers them apart must still choose alike)
+           nsq (: (go i t) (sqm9 i @ e2 (? (atom? e2) t (go (i + 1) (peep t <e2 () ? t (pin t <e2 i))))) (go 1 {}))
            seat (foldl (t \ k \ (: r (lh9 k) e2 (sqm9 k)
                                   (two? e2 && r ? (pin t <e2 r) t))) {} (keys lh9))
            held (foldl (t \ k \ (: r (lh9 k) (? (two? r) (foldl (t2 \ x \ pin t2 x 1) t r) (nom? r) (pin t r 1) t))) {} (keys lh9))
@@ -9477,7 +9480,7 @@
                            (foldl (c \ nm \ c + in9 nm + out9 nm) 0 (idle r)))
                (ok? m r) (!(busy? rs9 r a b) && (!calls || elem r kp) &&
                           (elem r cs0 ? (64 <= (L 2) * peep ms m 0) (idle r != 'no)))
-               cands (sortby (x \ y \ peep ms y 0 < peep ms x 0)
+               cands (sortby (x \ y \ (? (peep ms y 0 < peep ms x 0) 1 (peep ms x 0 < peep ms y 0) () (nsq x < nsq y)))
                         (filter (nm \ elem nm uv && !(tak9 nm) && !(peep seat nm ()) &&
                                       lhomable? (nty nm) && !(busy? ns9 nm a b))
                                 (sort (keys ms))))
