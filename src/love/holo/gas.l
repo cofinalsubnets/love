@@ -92,14 +92,16 @@
                  pin t 'sp 'sp, pin t 'lr 'lr,
                  t))
    (gthumb? tgt) (elem tgt '(thumb2 thumb2sp thumb1))
+   (gx86? tgt) (elem tgt '(x64 i386 i386m16))      ; AT&T's dialect: the x64 lane, i386 through gx-w32
+   (g32? tgt) (elem tgt '(i386 i386m16))
 
    ;; the dialect's spelling of the neutral file, for operand substitution. `mod` is GNU's
    ;; modifier letter (x64 b/w/k/q, a64 w/x) or 0.
    (gas-reg tgt r w mod)
-    (? (tgt = 'x64)
+    (? (gx86? tgt)
         (: ns (peep gx-names r ())
            w9 (mod @ 98 1 119 2 107 4 113 8 w)
-           (atom? ns ? (scare 'gas-reg r)
+           (atom? ns || g32? tgt && (w9 = 8 || !(elem r '(r0 r1 r2 r3 sp r4 r5 r6))) ? (scare 'gas-reg r)
               ("%" + ns (w9 @ 1 3 2 2 4 1 0))))
        (tgt = 'a64)
         (: k (r @ 'sp "sp" 'fp "29" 'lr "30" (snip (show r) 1 #(show r)))
@@ -108,13 +110,14 @@
        (tgt = 'rv64) (peep rv-back r () @ s (!s ? (scare 'gas-reg r) (show s)))
        (show r))
    (gas-imm tgt n mod) (: t (charm? n ? (show n) n)             ; n a number, or a "sym+k" text
-                          (? (elem mod '(99 97 80)) t (tgt = 'x64) ("$" + t) (gthumb? tgt) ("#" + t) t))
-   (gas-mem tgt r) (? (tgt = 'x64) ("(" + gas-reg tgt r 8 0 + ")")
+                          (? (elem mod '(99 97 80)) t (gx86? tgt) ("$" + t) (gthumb? tgt) ("#" + t) t))
+   (gas-mem tgt r) (? (gx86? tgt) ("(" + gas-reg tgt r (g32? tgt ? 4 8) 0 + ")")
                       (tgt = 'rv64) ("0(" + gas-reg tgt r 8 0 + ")")
                       ("[" + gas-reg tgt r 8 0 + "]"))
    (gas-regname tgt s)                              ; gas's own `%rdx` names the register too (the kernel's __get_user)
     (name (s @ ("%" + r) r s) @ k
        (? (tgt = 'x64) (peep gx-regs k () @ e (two? e ? <e))
+          (g32? tgt) (peep gx-regs k () @ e (two? e && <>e < 8 && elem <e '(r0 r1 r2 r3 sp r4 r5 r6) ? <e))
           (tgt = 'a64) (peep a64-names k ())
           (tgt = 'rv64) (peep rv-names k ())
           (peep t32-names k ())))
@@ -212,6 +215,18 @@
                  (scare 'gas-x64-operand s)))
           (ghas? gx-cc m) [['br (gx-cc m) <>d]]
           (k = 1 && nom? (gx-setcc m)) [['set1 (gx-setcc m) (gx-r d)]]
+          ; the descriptor tables at a width: lgdtl in a 16-bit segment takes 66, the whole 32-bit base
+          (elem m '(lgdtl lidtl sgdtl sidtl lgdtw lidtw sgdtw sidtw))
+           (: t (show m) st (snip t 0 4)
+              (gx-mem d @ bm [['mdig [15 1] (st @ "sgdt" 0 "sidt" 1 "lgdt" 2 3) (t 4 = 119 ? 2 4) <bm <>bm]]))
+          ; a segment register pushed or popped, at the suffix's width (i386's; the 64-bit map
+          ; keeps fs and gs alone)
+          (elem m '(push pop) && <d = 'sr) [[(m @ 'push 'pushseg 'popseg) <>d (w0 > 0 ? w0 4)]]
+          ; a far call or jump through memory, the segment:offset pointer there (FF /3, FF /5) --
+          ; i386's; the 64-bit map dropped the immediate forms, and gas-nolong refuses those
+          ((elem m '(lcall lcallw lcalll ljmp ljmpw ljmpl)) && <d = 'ind)
+           (gx-mref <>d @ bm [['mdig [255] (elem m '(lcall lcallw lcalll) ? 3 5)
+                                (elem m '(lcallw ljmpw) ? 2 4) <bm <>bm]])
           ; an indirect branch through a register, or through memory (FF /4, FF /2)
           (elem m '(jmp call))
            (? (<d = 'lbl) [[m <>d]]
@@ -319,6 +334,28 @@
    ;; ..and a file-scope run (an assembly source's): encoded exactly by as.l -- the width it says,
    ;; any addressing, the flags a 32-bit op sets -- and lowered as a template only where as.l
    ;; has no row (the system lane)
+   ;; ..i386's: the template lane alone (as.l's bytes are 64-bit encodings), then gx-w32
+   (gx-text32 src)
+    (catmap (it \ (<it = 'op ? (trap gx-item it (\ a b (a = 'gas-x64-op ? (scare 'gas-i386-op b) (scare a b))))
+                     (gx-item it)))
+            (gx-locals (att-read src)))
+   ;; the x64 lane's forms at i386's word: 4 bytes is the whole register, so the 32-bit forms
+   ;; lose their zero-extension and take the plain names; an 8-byte form, a register past edi,
+   ;; and raw bytes (64-bit encodings) have no i386 meaning and refuse
+   gx-w8 '(alum unm btm testm xaddm cmpxchgm xchgm carry bscan movntim)
+   gx-ren (gtab '((ldu4 ld) (st4 st) (si4 si)))
+   (gx-w32 fs)
+    (: (reg? x) (name? x && elem x '(r7 r8 r9 r10 r11 r12 r13 r14))
+       (bad? f) (? (elem <f '(ld st si divq raw)) 1
+                   (elem <f gx-w8) (f (elem <f '(alum unm btm carry bscan) ? 2 1) = 8)
+                   (<f = 'mdig) (f 3 = 8)
+                   (<f = 'rdig) (f 4 = 8)
+                   0)
+       (catmap (f \ (? (<f = 'zx4) ()
+                       (bad? f || any reg? >f) (scare 'gas-i386-form f)
+                       (ghas? gx-ren <f) [((gx-ren <f) . >f)]
+                       [f]))
+               fs))
    (gx-exact src)
     ; both refusing, as.l's word stands: it names the instruction, the template lane an operand
     (catmap (it \ (<it = 'op ? (trap (i \ [['raw (as-instr i)]]) it (\ a b (trap gx-item it (\ _ _ (scare a b)))))
@@ -1017,7 +1054,7 @@
        [nm ty (1 < #xs ? (gf-flags (xa-unquote (xs 1))) <>d)])
    (gf-width tgt mn) (? (mn = ".byte") 1
                         (elem mn '(".short" ".value" ".2byte" ".hword")) 2
-                        (mn = ".word") (tgt = 'x64 ? 2 4)
+                        (mn = ".word") (gx86? tgt ? 2 4)
                         (elem mn '(".long" ".int" ".4byte")) 4
                         (elem mn '(".quad" ".8byte" ".dword")) 8
                         0)
@@ -1090,7 +1127,7 @@
                 (w = 8 && elem tgt '(x64 a64)) [['fix 8 'rel64 (name s) (k + 8)]]     ; the jump table's `key - .`
                 (scare 'gas-data-pcrel e))
           (w = 8) [['fix 8 'abs64 (name s) k]]
-          (w = 4 && (tgt = 'x64 || gthumb? tgt)) [['fix 4 'abs32 (name s) k]]
+          (w = 4 && (gx86? tgt || gthumb? tgt)) [['fix 4 'abs32 (name s) k]]
           (scare 'gas-data-width e)))
    ; GNU's numeric local labels in an instruction line -> the names gas-top laid them under
    (gf-lsub s rl)
@@ -1113,7 +1150,7 @@
                     [(snip s 0 j) (xa-trim (snip s j #s))])
    (gf-base nm) ((: (g j) (? (j >= #nm) nm (nm j = 1) (snip nm 0 j) (g (j + 1)))) 0)   ; a subsection's section
    (gf-lines tgt src)
-    (elem tgt '(x64 rv64) @ hash?
+    (elem tgt '(x64 i386 i386m16 rv64) @ hash?
        (catmap (ln \ xa-lines (hash? ? (xa-decomment ln) (gcut2 ln 47))) (gsplit src 10)))
    ;; gas's macro language, over a text's lines before anything reads them: .macro/.endm and a
    ;; call (positional or name=value arguments), .irp and .rept, .if/.ifc/.ifnc/.ifeq/.ifne/.ifb/.ifnb with
@@ -1405,7 +1442,7 @@
                    mn = ".comm" && !(elem nm (peep st 'local ())) ? (pin st 'globl (nm . st 'globl)) 0))
               (mn = ".balign") (emit [['align (num <xs)]])
               (mn = ".p2align") (emit [['align (1 << num <xs)]])
-              (mn = ".align") (emit [['align (tgt = 'x64 ? (num <xs) (1 << num <xs))]])   ; bytes on x86, a power elsewhere
+              (mn = ".align") (emit [['align (gx86? tgt ? (num <xs) (1 << num <xs))]])   ; bytes on x86, a power elsewhere
               (elem mn '(".section" ".pushsection"))
                (gf-sect xs @ d
                   (mn = ".pushsection" ? (pin st 'stk ([(st 'cur) (st 'prev)] . (st 'stk))) 0,
@@ -1508,7 +1545,8 @@
 
    ;; -- the front door: TEXT -> IR, by target. --
    (gas-text tgt src)
-    (tgt = 'x64 ? (gx-text src)
+    (? (tgt = 'x64) (gx-text src)
+       (g32? tgt) (gx-w32 (gx-text32 src))
        (: lc {}
           f (? (tgt = 'a64) ga-line (tgt = 'rv64) gr-line (gthumb? tgt) gt-line (scare 'gas-target tgt))
           (foldl (\ acc ln (acc + f (glocal (gtoks ln) lc))) () (glines src (tgt = 'rv64))))))

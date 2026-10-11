@@ -74,4 +74,16 @@ for f in test/cc/*.c; do
   cmp -s "$d/$b.gout" "$d/$b.tout" || { diff "$d/$b.gout" "$d/$b.tout" | head -20 >&2; fail "$b: stdout differs from gcc -m32's"; }
   n=$((n + 1))
 done
+# the register arguments across compilers: mooncc's half (test/cc/abi386/host.c) linked with
+# gcc's (peer.c), each calling the other, at every -mregparm the kernel's units might ask for
+for rp in 0 1 2 3; do
+  gcc -m32 -mregparm=$rp -O1 -w -c -o "$d/peer$rp.o" test/cc/abi386/peer.c 2> "$d/peer.log" \
+    || { cat "$d/peer.log" >&2; fail "abi386: gcc could not build peer.c at -mregparm=$rp"; }
+  moonrun -t i386 -mregparm=$rp -c -o "$d/host$rp.o" test/cc/abi386/host.c > "$d/host.log" 2>&1 \
+    || { cat "$d/host.log" >&2; fail "abi386: mooncc could not build host.c at -mregparm=$rp"; }
+  gcc -m32 -no-pie -o "$d/abi$rp" "$d/host$rp.o" "$d/peer$rp.o" 2> "$d/abi.log" \
+    || { cat "$d/abi.log" >&2; fail "abi386: the link at -mregparm=$rp"; }
+  "$d/abi$rp" > "$d/abi$rp.out" 2>&1 || { cat "$d/abi$rp.out" >&2; fail "abi386: mooncc and gcc disagree at -mregparm=$rp"; }
+done
+echo "abi386: $(tail -1 "$d/abi3.out") at each -mregparm, 0 to 3"
 echo "$name: $n programs answer as gcc -m32 does, $nnar narrow ones run to an exit, $nwide wide ones refused by both, $nref refused"

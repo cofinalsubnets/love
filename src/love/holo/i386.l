@@ -202,6 +202,9 @@
    (i3-stseg m n s) (0 <= n <= 5 || scare 'i386-segnum n, [142 (modrm 3 n (i3rn s))])
    (i3-segst m n base off) (i3memd m 1 [140] n base off)
    (i3-segld m n base off) (i3memd m 1 [142] n base off)
+   ; a segment register pushed or popped (es cs ss ds fs gs = 0..5; cs has no pop), at width w
+   (i3-pushseg m n w) (ow m w + (n @ 0 [6] 1 [14] 2 [22] 3 [30] 4 [15 160] 5 [15 168] (scare 'i386-segnum n)))
+   (i3-popseg m n w) (ow m w + (n @ 0 [7] 2 [23] 3 [31] 4 [15 161] 5 [15 169] (scare 'i386-segnum n)))
    (i3-cr m opc n g) (0 <= n <= 7 || scare 'i386-crnum n, [15 opc (modrm 3 n (i3rn g))])
    (i3-m0f m dig opc base off) (i3memd m 1 opc dig base off)
    (i3-mdig m opc dig w base off) (w = 8 ? (scare 'i386-width w) (i3-mw m w opc opc dig base off))
@@ -292,7 +295,7 @@
            ('xchgm . (\ w b o s (i3-mw m w [134] [135] s b o)))
            ('alum . i3-alum m) ('carry . i3-carry m) ('unm . i3-unm m) ('btm . i3-btm m) ('testm . i3-testm m)
            ('movntim . (\ w b o s (i3-mw m w [15 195] [15 195] s b o)))
-           ('ldseg . i3-ldseg m) ('stseg . i3-stseg m) ('segst . i3-segst m) ('segld . i3-segld m)
+           ('ldseg . i3-ldseg m) ('stseg . i3-stseg m) ('segst . i3-segst m) ('segld . i3-segld m) ('pushseg . i3-pushseg m) ('popseg . i3-popseg m)
            ('ldcr . (\ d n (i3-cr m 32 n d))) ('stcr . (\ n s (i3-cr m 34 n s)))
            ('lddr . (\ d n (i3-cr m 33 n d))) ('stdr . (\ n s (i3-cr m 35 n s)))
            ('ltr . (\ s [15 0 (modrm 3 3 (i3rn s))]))
