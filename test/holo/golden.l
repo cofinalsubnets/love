@@ -347,6 +347,13 @@
         "20dc78d362fc4bd3a4fc7f93e60327aa281d40d36a3d40d3ac7d40d3ee1d4093603e4093b47e4093"
         (holo-hex 'a64 '((lsl r0 r1 8) (lsr r2 r3 11) (asr r4 r5 63) (mvn r6 r7) (uxtb r8 r9)
                          (uxth r10 r11) (uxtw r12 r13) (sxtb r14 r15) (sxth r0 r19) (sxtw r20 r21))))
+   ;; -- li starts at the first lane that needs a word, by movz or by movn when more lanes are all ones
+   ;; than zero; cmp takes imm12 lsl 12 as well. llvm-mc's words --
+   _ (chk-eq "a64.li"
+        "0020a0d201008092620c8092e3ffdf9204cf8ad28446c2f2050080d2e630959286b9bdf2"
+        (holo-hex 'a64 '((li r0 16777216) (li r1 -1) (li r2 -100) (li r3 -281470681743361)
+                         (li r4 20014547621496) (li r5 0) (li r6 -305375624))))
+   _ (chk-eq "a64.cmp.lsl12" "7f0640f13f0840b1" (holo-hex 'a64 '((cmp r19 4096) (cmp r1 -8192))))
    fscaught {} _ (pin fscaught 0 0)
    _ (hear (a \ b \ a = 'far-base-sp ? (pin fscaught 0 1, ()) (welp a b)))
    _ (holo-bytes 'a64 '((ld r0 sp 20000000)))

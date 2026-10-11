@@ -60,12 +60,15 @@
    (a64-li d imm)
       (: _ (constellation? imm ? 0 (scare 'badimm imm))
          dn (rn d) u (u64 imm)
-         l0 (a64-lane u 0) l1 (a64-lane u 1) l2 (a64-lane u 2) l3 (a64-lane u 3)
-         (catall [
-           (le32 (0xD2800000 | (l0 << 5 | dn)))                               ; movz d, l0
-           (l1 = 0 ? () (le32 (0xF2800000 | (1 << 21 | (l1 << 5 | dn)))))   ; movk d, l1, lsl 16
-           (l2 = 0 ? () (le32 (0xF2800000 | (2 << 21 | (l2 << 5 | dn)))))   ; movk d, l2, lsl 32
-           (l3 = 0 ? () (le32 (0xF2800000 | (3 << 21 | (l3 << 5 | dn)))))]))  ; movk d, l3, lsl 48
+         ls (map (k \ a64-lane u k) ^4)
+         ; movn when more lanes are all ones than zero: the lanes it leaves are the ones movk patches
+         neg (#(filter (l \ l != 65535) ls) < #(filter (l \ l != 0) ls))
+         skip (neg ? 65535 0)
+         i0 (: (go k) (? (k = 4) 0 (ls k != skip) k (go (k + 1))) (go 0))
+         (catall ((neg ? (le32 (0x92800000 | (i0 << 21 | ((65535 - ls i0) << 5 | dn))))    ; movn d, ~l, lsl 16i
+                         (le32 (0xD2800000 | (i0 << 21 | (ls i0 << 5 | dn)))))              ; movz d, l, lsl 16i
+                  . map (k \ (k != i0 && ls k != skip ? (le32 (0xF2800000 | (k << 21 | (ls k << 5 | dn)))) ()))
+                        ^4)))                                                                 ; movk d, l, lsl 16k
 
    ;; mov is ORR against XZR -- and encoding 31 in that form reads as the zero register, not the
    ;; stack pointer, so `(mov r9 sp)` would quietly assemble as `orr x9, xzr, xzr` (x9 <- 0). the
@@ -138,8 +141,9 @@
       (rn a @ an
          (reg? b ? (rn b @ bn (le32 (0xEB00001F | (bn << 16 | an << 5))))
             (: pos (b < 0 ? (0 - b) b) base (b < 0 ? 0xB100001F 0xF100001F)
-               (pos <= 4095 ? 0 (scare 'imm12-range b),
-                le32 (base | (pos << 10 | an << 5))))))
+               (? (pos <= 4095) (le32 (base | (pos << 10 | an << 5)))
+                  (pos % 4096 = 0 && pos >> 12 <= 4095) (le32 (base | 0x400000 | (pos >> 12 << 10 | an << 5)))   ; imm12, lsl 12
+                  (scare 'imm12-range b)))))
 
    (a64-mulh d a b) (: dn (rn d) an (rn a) bn (rn b) (le32 (0x9B407C00 | (bn << 16 | (an << 5 | dn)))))   ; smulh d, a, b: the high 64 of the signed product
    (a64-umulh d a b) (: dn (rn d) an (rn a) bn (rn b) (le32 (0x9BC07C00 | (bn << 16 | (an << 5 | dn)))))  ; umulh d, a, b: ..and the unsigned one
@@ -173,7 +177,8 @@
    ;; else LDUR/STUR unscaled imm9 else the far x16 build. every face -- word, sized,
    ;; fp -- is a spelling of it.
    (a64-mem-raw lbase ubase sc dt bn off)
-      (0 = off % sc && off >= 0 && off // sc <= 4095 ?
+      (charm? off ? 0 (scare 'mem-disp off),             ; a missing offset would lay as 0, in silence
+       0 = off % sc && off >= 0 && off // sc <= 4095 ?
          (le32 (ubase | (off // sc << 10 | (bn << 5 | dt))))
          (off >= -256 && off <= 255 ?
             (le32 (lbase | ((off & 511) << 12 | (bn << 5 | dt))))
