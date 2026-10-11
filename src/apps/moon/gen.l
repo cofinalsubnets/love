@@ -2112,7 +2112,12 @@
        ; the bswap trio: masked neutral shift/or expansions (no raw, so unframe stays alive).
        ; 16/32 ride every target; 64 refuses on t32 (a pair lane with no taker)
        (elem bi '("__builtin_bswap16" "__builtin_bswap32" "__builtin_bswap64"))
-        (bi = "__builtin_bswap64" && ilp32? g ?
+        (? (bi = "__builtin_bswap64" && ia32? g)   ; i386: the words trade places, each byte-swapped by bswap
+            (cgexpr g env <args () @ e1
+               (bad? e1 ? 'bad
+                  (mkv 'ullong 'r0 (asll g e1 + '((mov r2 r0) (mov r0 r1) (mov r1 r2))
+                                    + [['raw (m16b g + [15 200] + m16b g + [15 201])]]))))   ; bswap eax; bswap ecx
+           (bi = "__builtin_bswap64" && ilp32? g)
             (nolane g ("no lane for __builtin_bswap64" + ontgt g))   ; 'no would emit a call the link cannot bind
            (cgexpr g env <args () @ e1
               (bad? e1 ? 'bad
@@ -2136,7 +2141,13 @@
        ; popcount, the swar fold: masks and adds only, so it rides every target. the 64-bit forms
        ; refuse on t32; the 32-bit form masks first (the word above bit 31 may carry garbage)
        (elem bi '("__builtin_popcount" "__builtin_popcountl" "__builtin_popcountll"))
-        (bi != "__builtin_popcount" && ilp32? g ?
+        (? (bi = "__builtin_popcountll" && ia32? g)   ; i386: each word's count, summed through a cell
+            (cgexpr g env <args () @ e1
+               (bad? e1 ? 'bad
+                  (mkv 'long 'r0 (asll g e1 + '((sub sp sp 16) (st sp 0 r1)) + popops g 1
+                                  + '((st sp 4 r0) (ld r0 sp 0)) + popops g 1
+                                  + '((ld r1 sp 4) (add r0 r0 r1) (add sp sp 16))))))
+           (bi = "__builtin_popcountll" && ilp32? g)   ; a long is the word on the 32-bit targets
             (nolane g ("no lane for " + bi + ontgt g))
            (cgexpr g env <args () @ e1
               (bad? e1 ? 'bad

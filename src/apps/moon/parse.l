@@ -341,7 +341,7 @@
    ; without a word, so psnew/cparse-t keep the arity every caller already spells
    (psnew-d tgt dia) ({} @ t
                 (pin t 'dia dia,                  ; the dialect: what grammar the front reads (moon | c | c23)
-                 pin t 'tgt tgt,                  ; the codegen target: 32-bit widths (thumb1/thumb2) vs 64-bit
+                 pin t 'tgt tgt,                  ; the codegen target: 32-bit widths (thumb, i386) vs 64-bit
                  pin t 'types {},         ; typedef name -> ty
                  pin t 'weaks (),                 ; __attribute__((weak)) function names
                  pin t 'ainl (),                  ; always_inline function names (love.h's love_inline)
@@ -392,7 +392,7 @@
                 ; swapped high bit is real: compare/divide/sizeof read the width)
                  pin (t 'sigs) "__builtin_bswap16" '(ushort (ushort) ()),
                  pin (t 'sigs) "__builtin_bswap32" '(uint (uint) ()),
-                 pin (t 'sigs) "__builtin_bswap64" '(ulong (ulong) ()),
+                 pin (t 'sigs) "__builtin_bswap64" (pst32? t ? '(ullong (ullong) ()) '(ulong (ulong) ())),   ; 8 bytes: long long where long is the word
                 ; the popcount trio. the operand is unsigned (a set high bit is a bit
                 ; like any other); the result is a plain int, gcc's own signature
                  pin (t 'sigs) "__builtin_popcount" '(int (uint) ()),
