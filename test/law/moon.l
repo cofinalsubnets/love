@@ -2266,6 +2266,39 @@
                             (mov r6 r5)
                             (ld r3 r4 -8) (mov sp r4) (pop r4) (jmp far9))))))
 
+; --- the same promotion on a64's frame: fp is the base, the frame's sub sits
+; past the lr/fp link, a cs save lands right after it and its restore heads the
+; teardown at (lea sp fp 0)
+(: gA9 {'tgt 'a64}
+   _ (pin gA9 'slots '((-16 8)))
+   fsP '((label fn) (push lr) (push fp) (lea fp sp 0) (sub sp sp 16)
+         (li r5 7) (st fp -16 r5) (call g9) (ld r6 fp -16) (mov r0 r6)
+         (li r7 9) (st fp -16 r7) (ld r8 fp -16) (add r0 r0 r8)
+         (lea sp fp 0) (pop fp) (pop lr) (ret))
+   fsL '((label fn) (push lr) (push fp) (lea fp sp 0) (sub sp sp 16)
+         (li r5 7)
+         (label .O)
+         (li r9 0)
+         (label .L)
+         (st fp -16 r5) (call g9) (ld r6 fp -16)
+         (add r6 r6 1) (mov r5 r6)
+         (add r9 r9 1) (cmp r9 3) (br lt .L)
+         (cmp r5 99) (br lt .O)
+         (mov r0 r5)
+         (lea sp fp 0) (pop fp) (pop lr) (ret))
+   rp (repack gA9 fsP)
+   rl (repack gA9 fsL)
+   (cssv? f) (two? f && <f = 'st && <>f = 'fp && elem (f 3) (csregs gA9))
+   (csld? f) (two? f && <f = 'ld && (f 2) = 'fp && elem <>f (csregs gA9))
+   (cspos l) (: (go l i) (? !(two? l) -1 (cssv? <l) i (go >l (i + 1))) (go l 0))
+   (test
+      (elem '(ld r6 fp -16) rp)                  ; the crossing chain keeps its cell
+      !(elem '(ld r8 fp -16) rp)                 ; the call-free chain left the frame
+      (elem '(mov r8 r7) rp)
+      !(elem '(ld r6 fp -16) rl)                 ; a compounding crossing takes a cs seat..
+      (cspos rl = 5)                             ; ..saved right after the frame's sub
+      (csld? (rl (#rl - 5)))))                    ; ..restored at the teardown's head
+
 ; --- the allocator owns locals (moon-ssa rung 4): locals homes are placed by
 ; interval -- lpick's raw-touch rank stands (short call-free ranges promote in
 ; repack anyway) -- and two names whose alive spans are disjoint share one seat.

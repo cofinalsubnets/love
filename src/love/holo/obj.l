@@ -455,7 +455,7 @@
    ; -- the general object: a list of sections, each (name type flags align forms). one
    ; section is one lay, which is what a section boundary means -- a branch inside resolves
    ; in place, a reference across becomes a relocation. shf_execinstr (flags & 4) picks the
-   ; internal-resolve lane and the relaxer. a NOBITS section (type 8) still lays its forms,
+   ; relaxer and the internal-resolve lane, which a64's branches take in any section. a NOBITS section (type 8) still lays its forms,
    ; where its labels and its size come from, but writes no file bytes. --
    (objsecs target0 secs funcnames globnames wknames locnames)
     (: target (arch-nom target0)
@@ -465,6 +465,7 @@
        ; the in-place-resolvable kinds. riscv's are pure byte deltas (auipc is byte
        ; pc-relative, no page math), so intra-.text la/call/jmp all resolve inside the .o.
        rset (? a64 '(b26 b19 b14) rv '(j21 pcrel b13 cj cb) '(rel32 rel8))
+       drset (a64 ? rset ())                    ; a branch in a data section resolves there too (proc.S's "a")
        machine (peep elf-machines target 0)
        ; the backend must be registered, not merely named: a frontend bakes holo with the
        ; native backend only, and a cross target joins the cat at runtime. unregistered,
@@ -491,7 +492,7 @@
                            (lit? r ? (r fm be 0 {} wkset)
                               (scare 'holo-bake-stale 'laylax)))   ; assemble each section at org 0
                         (lay (o-dal fm) be 0 () {}))
-                   w (o-walk be <p >p wkset (exec? s ? 1) rset)
+                   w (o-walk be <p >p wkset 1 (exec? s ? rset drset))
                    [(s 0) (s 1) (s 2) (s 3) <w <>w >p]))
               secs)
        (ln i) (lanes i)

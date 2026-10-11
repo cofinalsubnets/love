@@ -7,65 +7,19 @@
 ; painter (src/love/quay/paint.c, the one inle's framebuffer takes), so pier draws what the
 ; console draws -- truecolour, the faces, wide chars, sixel and kitty pictures, and a font
 ; off FONT.hex (src/apps/font.l) for what cp437 lacks. the rows the screen names dirty go out
-; in PutImage bands over lux's wire. keys come back as KeyPress, keysym to terminal bytes,
+; in PutImage bands over lux's wire (x-putrows). keys come back as KeyPress, keysym to terminal bytes,
 ; and the pointer as the reports a program turns on (?1000 and kin, the `mouse` nif); a
 ; paste asks the X selection for its text and sends it, bracketed when ?2004 asks; a
 ; drag or a double or triple click selects (`select`) and a right click or a shift click
 ; stretches it, pier holding the primary for it and the clipboard on ctrl+shift+C;
 ; a ConfigureNotify opens a fresh grid and tells the pty; WM_DELETE or the child's exit
 ; steps away.
-(module '(pier pier pier-keybytes pier-keysyms pier-main)
+(module '(pier pier pier-keybytes pier-main)
 (borrow 'xwire)
 (borrow 'posix)
 (borrow 'mitty)
 (borrow 'font)
 (:
-   ; --- the requests the wire does not carry: a window of ours, a GC, a title, the delete
-   ;     protocol, and PutImage ---
-   (pier-mkwin s win parent w h)                      ; CreateWindow: back pixel, and keys + buttons + moves + expose + structure + property
-    (x-w8 s 1, x-w8 s 0, x-w16 s 10, x-w32 s win, x-w32 s parent,
-     x-w16 s 0, x-w16 s 0, x-w16 s w, x-w16 s h, x-w16 s 0, x-w16 s 1, x-w32 s 0,
-     x-w32 s 2050, x-w32 s 0, x-w32 s 4358221)
-   (pier-gc s gc win) (x-w8 s 55, x-w8 s 0, x-w16 s 4, x-w32 s gc, x-w32 s win, x-w32 s 0)
-   (pier-title s win t)
-    (#t @ n
-       (x-w8 s 18, x-w8 s 0, x-w16 s (6 + (n + x-pad4 n) // 4), x-w32 s win,
-        x-w32 s 39, x-w32 s 31, x-w8 s 8, x-w8 s 0, x-w16 s 0, x-w32 s n, x-wpad s t))
-   (pier-protocols s win)                             ; WM_PROTOCOLS = [WM_DELETE_WINDOW]; answers the atom
-    (: pr (x-intern s "WM_PROTOCOLS") dl (x-intern s "WM_DELETE_WINDOW")
-       ((x-w8 s 18, x-w8 s 0, x-w16 s 7, x-w32 s win, x-w32 s pr, x-w32 s 4,
-         x-w8 s 32, x-w8 s 0, x-w16 s 0, x-w32 s 1, x-w32 s dl),
-        dl))
-   ; PutImage of pixel rows y..y+n. a request's length is 16 bits of words, so a band holds
-   ; at most 262112 bytes whatever the width: a wide window makes fat rows, and one request
-   ; past the limit reads as opcodes to the server
-   (pier-ship s win gc depth fb w y n)
-    (: rb (w * 4)
-       band (262112 // rb @ v (v < 1 ? 1 (min 64 v)))
-       (go y left) (left < 1 ? (x-flush s)
-                      (: k (min band left) bytes (k * rb)
-                         ((x-w8 s 72, x-w8 s 2, x-w16 s (6 + bytes // 4), x-w32 s win, x-w32 s gc,
-                           x-w16 s w, x-w16 s k, x-w16 s 0, x-w16 s y, x-w8 s 0, x-w8 s depth, x-w16 s 0),
-                          x-flush s,
-                          say s (snip fb (y * rb) (y * rb + bytes)),
-                          go (y + k) (left - k))))
-       (go y n))
-
-   ; --- the keyboard: keycode -> (sym shifted-sym), the whole table once ---
-   (pier-keysyms s mink maxk)
-    (: nkc (maxk - mink + 1)
-       _ (x-w8 s 101, x-w8 s 0, x-w16 s 2, x-w8 s mink, x-w8 s nkc, x-w16 s 0, x-flush s)
-       hdr (x-reply s)
-       kpc (<hdr = 1 ? (hdr 1) 0)
-       km (tablet 256)
-       (go k) (k < nkc ?
-                 (: s0 (x-r32 s) s1 (1 < kpc ? (x-r32 s) 0)
-                    (x-skip s (4 * max 0 (kpc - 2)),
-                     pin km (mink + k) [s0 s1],
-                     go (k + 1)))
-                 km)
-       (go 0))
-
    ; the special keys' bytes, by keysym: xterm's
    pier-special {65293 "\r" 65421 "\r" 65288 "\x7f" 65289 "\t" 65056 "\e[Z" 65307 "\e"
                  65361 "\e[D" 65362 "\e[A" 65363 "\e[C" 65364 "\e[B"
@@ -116,9 +70,9 @@
        ; each run of rows one band
        (run a b rest) (two? rest ?
                          (<rest = b + 1 ? (run a <rest >rest)
-                            (pier-ship s win gc depth fb w (a * 16) ((b - a + 1) * 16),
+                            (x-putrows s win gc depth fb w (a * 16) ((b - a + 1) * 16),
                              run <rest <rest >rest))
-                         (pier-ship s win gc depth fb w (a * 16) ((b - a + 1) * 16)))
+                         (x-putrows s win gc depth fb w (a * 16) ((b - a + 1) * 16)))
        (two? ys ? (run <ys <ys >ys) 0,
         cur))
    (pier-paints s win gc depth bx fx font dirty last)
@@ -308,37 +262,35 @@
                  0),
               code = 33 && dl = u32 (ev-raw e) 12 ? () (pier-watch s m km dl bx fx dirty)))))
 
-   ; --- pier: argv tied up at the shore, on display socket path, the font () or a laid one.
+   ; --- pier: argv tied up at the shore, on display disp, the font () or a laid one.
    ;     answers the child's status pair, or a nom naming what refused ---
-   (pier argv path auth font)
-    (x-connect path @ s
-       (? !(hot? s) 'no-display
-          (x-setup s auth @ sc
-             (? !(two? sc) (close s, 'refused)
-                (: win (scr-idbase sc) gc (scr-idbase sc + 1) depth (scr-depth sc)
-                   r 24 c 80
-                   _ (pier-mkwin s win (scr-root sc) (c * 8) (r * 16))
-                   _ (pier-gc s gc win)
-                   _ (pier-title s win "pier")
-                   dl (pier-protocols s win)
-                   ut (x-intern s "UTF8_STRING") cb (x-intern s "CLIPBOARD") pp (x-intern s "PIER_PASTE")
-                   tg (x-intern s "TARGETS") ic (x-intern s "INCR")
-                   _ (x-map s win, x-flush s)
-                   km (pier-keysyms s (scr-mink sc) (scr-maxk sc))
-                   p (hopen argv r c)
-                   (? !(two? p) (close s, p)
-                      (: bx (hbox p) m (hmas p) pid (hpid p)
-                         fx {(cask (c * 8 * (r * 16) * 4))}
-                         dirty {1}                   ; the painter's cue at (), and what the tasks share
-                         _ (pins dirty 'win win 'utf8 ut 'clip cb 'prop pp 'targets tg 'incr ic)
-                         up (twirl (_ \ (moor bx m dirty, seal s 0)) 0)
-                         pnt (twirl (_ \ (pier-paints s win gc depth bx fx font dirty -1)) 0)
-                         (pier-watch s m km dl bx fx dirty,
-                          freeze pnt,
-                          landed? up ? (catch up) (still pid 15, freeze up),
-                          close s,
-                          close m,
-                          waitfor pid))))))))
+   (pier argv disp font)
+    (x-open disp @ o
+       (? !(two? o) o
+        (: s <o sc <>o win (scr-idbase sc) gc (scr-idbase sc + 1) depth (scr-depth sc)
+           r 24 c 80
+           _ (x-window s win (scr-root sc) (c * 8) (r * 16) 4358221)   ; keys + buttons + moves + expose + structure + property
+           _ (x-gc s gc win)
+           _ (x-title s win "pier")
+           dl (x-protocols s win)
+           ut (x-intern s "UTF8_STRING") cb (x-intern s "CLIPBOARD") pp (x-intern s "PIER_PASTE")
+           tg (x-intern s "TARGETS") ic (x-intern s "INCR")
+           _ (x-map s win, x-flush s)
+           km (x-keysyms s (scr-mink sc) (scr-maxk sc))
+           p (hopen argv r c)
+           (? !(two? p) (close s, p)
+              (: bx (hbox p) m (hmas p) pid (hpid p)
+                 fx {(cask (c * 8 * (r * 16) * 4))}
+                 dirty {1}                   ; the painter's cue at (), and what the tasks share
+                 _ (pins dirty 'win win 'utf8 ut 'clip cb 'prop pp 'targets tg 'incr ic)
+                 up (twirl (_ \ (moor bx m dirty, seal s 0)) 0)
+                 pnt (twirl (_ \ (pier-paints s win gc depth bx fx font dirty -1)) 0)
+                 (pier-watch s m km dl bx fx dirty,
+                  freeze pnt,
+                  landed? up ? (catch up) (still pid 15, freeze up),
+                  close s,
+                  close m,
+                  waitfor pid))))))
 
    ; --- the verb ---
    pier-usage "usage: love pier [-f FONT.hex] [-display :N] [CMD ARG..]"
@@ -346,14 +298,10 @@
     (: (opt a k d) (? (one? a) d (<a = k && two? >a) <>a (opt >a k d))
        (rest2 a) (? (one? a) () (elem <a ["-f" "-display"]) (rest2 >>a) a)
        disp (opt as "-display" (getenv "DISPLAY"))
-       dn (: d (string? disp ? disp "") b (1 < #d ? (snip d 1 #d) "0")
-             (: (go i) (i = #b || b i = 46 ? (snip b 0 i) (go (i + 1))) (go 0)))
        fp (opt as "-f" ())
        font (string? fp ? (uread fp @ t (two? t ? (font-hex <>t))))
        argv (rest2 as @ a (two? a ? a [(getenv "SHELL" @ sh (0 < #sh ? sh "sh"))]))
-       home (getenv "HOME")
-       xa (getenv "XAUTHORITY" @ v (0 < #v ? v (home + "/.Xauthority")))
-       st (pier argv ("/tmp/.X11-unix/X" + dn) (xauth-cookie xa dn) font)
+       st (pier argv disp font)
        (two? st ? <st (say err ("pier: " + show st + "\n"), 1)))
 
    door (udoor 'pier pier-main pier-usage 1 1)

@@ -5426,13 +5426,18 @@
              (rn fs () 0))))
 
    ; slot repack: objects whose live windows (touch spans, widened over backedges to a fixpoint)
-   ; never meet share one cell; an address-taken object lives to the last form. x64 only
+   ; never meet share one cell; an address-taken object lives to the last form. x64 and a64
    (repack g fs)
     (: slots (g 'slots)
-       pro (pro4? fs)
-       sf (fs 3)
+       a6 (a64? g)
+       ki (a6 ? 4 3)                           ; the frame's (sub sp sp K)
+       fb (fbase g)
+       pro (a6 ? (epim? >fs pro-a64) (pro4? fs))
+       sf (fs ki)
        K (sf @ ('sub 'sp 'sp k) (charm? k ? k))
-       (!(two? slots) || arm? g || g 'hasasm || !pro || !(charm? K) ? fs
+       ; a64's spmerge folds an outgoing-arg park into the frame's sub: the excess rides under the slots
+       xk (a6 && charm? K ? (K - aup (peep g 'off 0) 16) 0)
+       (!(two? slots) || arm? g && !a6 || abl? g 'repack || g 'hasasm || !pro || !(charm? K) || xk < 0 ? fs
           (: obs {}                            ; base -> (size lo hi esc wordy? first-src)
              ; wordy? and first-src are promotion's: every touch a full-word ld/st at the base, and
              ; the register the first store took (the preferred seat), () when the first touch was a load
@@ -5445,7 +5450,7 @@
                                [n i i e9 (k9 != 'no) (k9 @ 'st s9 ())])))
              labt {}
              (loose? e i bp) (? !(two? e) ()
-                                (<e = 'r4 && !(i = bp)) 1
+                                (<e = fb && !(i = bp)) 1
                                 (loose? >e (i + 1) bp))
              (scan l i sps)                            ; every frame touch noted -> the backward spans | 'no
               (!(two? l) ? sps
@@ -5454,14 +5459,14 @@
                        (<f = 'label) (pin labt <>f i, scan >l (i + 1) sps)
                        (<f = 'raw) 'no
                        (elem <f '(push pop)) (scan >l (i + 1) sps)
-                       (<f = 'mov && (<>f = 'r4 && <>>f = 'sp ||
-                                        <>f = 'sp && <>>f = 'r4))
+                       (elem <f '(mov lea) && (<>f = fb && <>>f = 'sp ||
+                                                <>f = 'sp && <>>f = fb))
                         (scan >l (i + 1) sps)          ; the frame link movs (unframe strips them)
                        (: tg (<f @ 'jmp <>f 'br <>>f ())
                           li9 (tg ? (peep labt tg 'no9) 'no9)
                           sp2 (charm? li9 ? ([li9 i] . sps) sps)
                           bp (peep a4base <f -1)
-                          (? (0 <= bp && f bp == 'r4)
+                          (? (0 <= bp && f bp == fb)
                              ; uoff misses as -1, and a negative index counts from the tail: a miss means the op itself
                              (: X (peep uoff <f -1 @ u9 (u9 < 1 ? <f (f u9)))
                                 o9 (obj9 slots X)
@@ -5546,24 +5551,26 @@
                                                   go >l (i + 1))))
                                   (go fs 0))
                          jrf (vany (f \ (two? f && <f = 'jmpr)) fs)
+                         csf (a6 ? (csregs g) (csx g))
+                         ep9 (a6 ? (peep g 'epi epi-a64) epi)
                          cswr (lot9 @ 'no ()
                                       (: t {}
                                          (each ^n2 (i \ foldl (_ \ r \ elem r (csregs g) ? (pin t r 1) 0) 0 (dft9 i)),
                                           t)))
                          cspool9 (jrf || lot9 = 'no ? ()
-                                    (filter (r \ !(peep cswr r 0)) (csx g)))
+                                    (filter (r \ !(peep cswr r 0)) csf))
                          ; a cs reg the prologue already saves rides free: its dead ranges owe no new pair
                          csprd (jrf || lot9 = 'no ? ()
                                   (: t9 {}
-                                     (go l i) (!(two? l) || 12 < i ? 0
+                                     (go l i) (!(two? l) || (a6 ? 16 12) < i ? 0
                                                  (<l @ f9
                                                     (two? f9 && <f9 = 'st &&
-                                                     (<>f9 = 'sp || <>f9 = 'r4) &&
-                                                     elem (f9 3) (csx g) ?
+                                                     (<>f9 = 'sp || <>f9 = fb) &&
+                                                     elem (f9 3) csf ?
                                                        (pin t9 (f9 3) 1) 0,
                                                      go >l (i + 1))))
                                      (go fs 0,
-                                      filter (r9 \ (peep t9 r9 0)) (csx g))))
+                                      filter (r9 \ (peep t9 r9 0)) csf)))
                          taken {}                    ; index -> the seats promotion already holds
                          (pfree? tk r is9)
                           (!(two? is9) ? 1
@@ -5737,10 +5744,10 @@
                                               (pin t <l (0 - (high2 + 8 * k)),
                                                go >l (k + 1)))
                                   (go csused 1))
-                         csaves (map (r \ ['st 'r4 (peep cslot r 0) r]) csused)
-                         csrests (map (r \ ['ld r 'r4 (peep cslot r 0)]) csused)
-                         K2 (aup high2 16)
-                         K3 (two? csused ? (aup (high2 + 8 * tally csused) 16) K2)
+                         csaves (map (r \ ['st fb (peep cslot r 0) r]) csused)
+                         csrests (map (r \ ['ld r fb (peep cslot r 0)]) csused)
+                         K2 (aup high2 16 + xk)
+                         K3 (two? csused ? (aup (high2 + 8 * tally csused) 16 + xk) K2)
                          ; a jmp off the label table is a sibcall; so is one to the entry label (a self tail call)
                          (exit9? f) (xit? f || xjmp? f labt ||
                                      two? f && <f = 'jmp && 0 = peep labt <>f -1)
@@ -5748,7 +5755,7 @@
                                        (<l @ f
                                           (? (exit9? f) 1
                                              !(two? f) 0
-                                             (elem f (butret epi) ||
+                                             (elem f (butret ep9) ||
                                               <f = 'add && <>f = 'sp && <>>f = 'sp) (tearx? >l)
                                              0)))
                          (radj2 f op9)                       ; a mapped touch -> its packed spelling
@@ -5774,14 +5781,14 @@
                              (: f <l
                                 t9 (two? csused ? (tearx? l) 0)
                                 spl (t9 && !inr ? csrests)
-                                p (two? f && 3 < i && two? prom ? (prw f i) 'no)
+                                p (two? f && ki < i && two? prom ? (prw f i) 'no)
                                 (p @ 'no
                                      (: f2 (? !(two? f) f
-                                              (i = 3) ['sub 'sp 'sp K3]
+                                              (i = ki) ['sub 'sp 'sp K3]
                                               (peep a4base <f -1 @ bp
-                                                 ((0 <= bp && f bp == 'r4) ?
+                                                 ((0 <= bp && f bp == fb) ?
                                                     (radj2 f (peep uoff <f -1)) f)))
-                                        (i = 4 && two? csused ?
+                                        (i = (a6 ? ki 4) && two? csused ?
                                            (vapp spl (f2 . vapp csaves (rw >l (i + 1) t9)))
                                            (vapp spl (f2 . rw >l (i + 1) t9))))
                                      (vapp spl (vapp p (rw >l (i + 1) t9))))))
