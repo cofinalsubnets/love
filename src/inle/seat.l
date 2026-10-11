@@ -101,8 +101,10 @@
    ; the child's stdio is seated in the parent, twirl not switching, so it is laid before the
    ; child's first read; the parent takes its own back on the next line. a group is the pid of
    ; the task that leads it, and fg hands it the terminal on fd 0 (ttyfg).
+   ; argv may be ['thunk f] instead: a shell's own stage, run as (f ()) -- lush's compound
+   ; stages on this forkless seat
    (k-spawn1 argv f0 f1 f2 pg fg)
-     (: pr (k-prog argv)
+     (: pr (? (<argv = 'thunk) [<>argv] (k-prog argv))
         w (worn ())
         kw [(k-port w 0 f0) (k-port w 1 f1) (k-port w 2 f2)]
         own (k-own [f0 f1 f2] kw)              ; the ends duped for it, which a stop closes

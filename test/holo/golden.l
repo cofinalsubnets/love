@@ -347,6 +347,13 @@
         "20dc78d362fc4bd3a4fc7f93e60327aa281d40d36a3d40d3ac7d40d3ee1d4093603e4093b47e4093"
         (holo-hex 'a64 '((lsl r0 r1 8) (lsr r2 r3 11) (asr r4 r5 63) (mvn r6 r7) (uxtb r8 r9)
                          (uxth r10 r11) (uxtw r12 r13) (sxtb r14 r15) (sxth r0 r19) (sxtw r20 r21))))
+   ;; -- li starts at the first lane that needs a word, by movz or by movn when more lanes are all ones
+   ;; than zero; cmp takes imm12 lsl 12 as well. llvm-mc's words --
+   _ (chk-eq "a64.li"
+        "0020a0d201008092620c8092e3ffdf9204cf8ad28446c2f2050080d2e630959286b9bdf2"
+        (holo-hex 'a64 '((li r0 16777216) (li r1 -1) (li r2 -100) (li r3 -281470681743361)
+                         (li r4 20014547621496) (li r5 0) (li r6 -305375624))))
+   _ (chk-eq "a64.cmp.lsl12" "7f0640f13f0840b1" (holo-hex 'a64 '((cmp r19 4096) (cmp r1 -8192))))
    fscaught {} _ (pin fscaught 0 0)
    _ (hear (a \ b \ a = 'far-base-sp ? (pin fscaught 0 1, ()) (welp a b)))
    _ (holo-bytes 'a64 '((ld r0 sp 20000000)))
@@ -637,6 +644,18 @@
    ;; as llvm-mc expands them (entry.S's `regsize = 64`)
    _ (chk-eq "gas.macro.default" '("mov x1, x2" "mov x3, #1" "mov w0, w0" "mov x3, #2" "mov w0, w0" "mov x3, #3" "mov x0, #1" "mov x1, #2" "mov x2, #3" "mov x3, #4" "mov x0, #12" "mov x0, #5" "")
         (gf-expand 'a64 (gf-lines 'a64 ".macro m, el, regsize = 64\n.if \\regsize == 32\nmov w0, w0\n.else\nmov x1, x2\n.endif\nmov x3, #\\el\n.endm\nm 1\nm 2, 32\nm 3, regsize=32\n.macro n a=1, b =2, c= 3, d\nmov x0, #\\a\nmov x1, #\\b\nmov x2, #\\c\nmov x3, #\\d\n.endm\nn , , , 4\n.macro p a=, b\nmov x0, #1\\a\\b\n.endm\np , 2\n.macro q a = 5\nmov x0, #\\a\n.endm\nq\n")))
+   ;; a register form beside sp is the extended word at uxtx/uxtw #0 (entry.S's `add sp, sp, x0`), a
+   ;; W mov beside wsp add #0, and cmn/negs by register; sp as rm, a flag-setting sp, a logical on
+   ;; sp, a shift past 4 beside it, a W rm beside sp and zr beside wsp refuse
+   _ (chk-eq "gas.a64.spreg" "ff63208bff6320cbe063218b9f60258be06321abff6321ebff6322abff43200be143224bef0300113f0000113f0002abe903036b"
+        (holo-hex 'a64 (gas-text 'a64 "add sp, sp, x0\n sub sp, sp, x0\n add x0, sp, x1\n add sp, x4, x5\n adds x0, sp, x1\n cmp sp, x1\n cmn sp, x2\n add wsp, wsp, w0\n sub w1, wsp, w2\n mov w15, wsp\n mov wsp, w1\n cmn x1, x2\n negs w9, w3")))
+   _ (chk-eq "gas.a64.spreg.refuse" '(gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand)
+        (map (l \ trap (x \ holo-hex 'a64 (gas-text 'a64 x)) l (\ a b a))
+             ["add sp, sp, x0, lsl #5" "add sp, sp, sp" "adds sp, x0, x1" "and sp, sp, x0" "add sp, sp, w0" "mov wsp, wzr"]))
+   ;; an argument that is one quoted string passes its inside, positional or by name, as llvm-mc
+   ;; expands it (entry.S's `alternative_insn nop, "dmb sy", 90`)
+   _ (chk-eq "gas.macro.quote" '("nop" "dmb sy" ".ascii \"x y\"" "mov x0, x1" "mov x0, x1" "mov x2, x3" "nop" "")
+        (gf-expand 'a64 (gf-lines 'a64 ".macro alt insn1, insn2, cap, enable = 1\n\\insn1\n\\insn2\n.endm\nalt nop, \"dmb sy\", 90\n.macro s a\n.ascii \"\\a\"\n.endm\ns \"x y\"\n.macro t a, b\nmov \\a, \\b\n.endm\nt \"x0\", \"x1\"\nt x0 \"x1\"\nt a=\"x2\", b=x3\n.macro w a\n.ifc \\a,dmb sy\nnop\n.endif\n.endm\nw \"dmb sy\"\n")))
    ;; .org to a label with instructions between (entry.S's `.org .Lventry_start\@ + 128`): zeros
    ;; up to it once layout holds, as llvm-mc lays them; one behind where it stands refuses
    _ (chk-eq "gas.a64.org" "((((\".text\" 1 6 ((label a) (nop) (jmp a) (mov r0 r1) (label .Lorg0) (raw (0 0 0 0)) (nop)))) () ()) (((\".text\" 1 6 ((label .Ls0) (nop) (jmp .Ls0) (label .Lorg0) (raw (0 0 0 0 0 0 0 0)) (label .Ls1) (nop) (jmp .Ls1) (label .Lorg1) (raw (0 0 0 0 0 0 0 0))))) () ()) gas-org-back)"

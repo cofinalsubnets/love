@@ -331,8 +331,29 @@ int mkstemp(char *tmpl) {
     int fd = open(tmpl, O_RDWR | O_CREAT | O_EXCL, 384);
     if (fd >= 0 || errno != EEXIST) return fd; }
   return -1; }
-/* one fixed "C" locale, so setlocale just answers its name. */
-char *setlocale(int cat, char const *loc) { return (char *) "C"; }
+/* every category is C, but LC_CTYPE may be utf-8: a name ending .UTF-8 or .utf8 (C.UTF-8,
+ * or any language's, which reads the same here). "" names the environment's, LC_ALL then
+ * the category's then LANG; a name of neither kind is refused. each category keeps its name; LC_ALL answers LC_CTYPE's */
+int __love_utf8;
+static int lc_utf8(char const *n) {
+  char const *d = strrchr(n, '.');
+  return d && (!strcasecmp(d + 1, "UTF-8") || !strcasecmp(d + 1, "utf8")); }
+char *setlocale(int cat, char const *loc) {
+  static char names[LC_ALL][32] = {"C", "C", "C", "C", "C", "C"};
+  static char const *const env[LC_ALL] = {"LC_CTYPE", "LC_NUMERIC", "LC_TIME", "LC_COLLATE",
+                                          "LC_MONETARY", "LC_MESSAGES"};
+  if (cat < 0 || cat > LC_ALL) return 0;
+  int lo = cat == LC_ALL ? 0 : cat, hi = cat == LC_ALL ? LC_ALL : cat + 1;
+  if (loc) {
+    char const *want[LC_ALL];
+    for (int k = lo; k < hi; k++) {
+      char const *n = loc;
+      if (!*n && !((n = getenv("LC_ALL")) && *n) && !((n = getenv(env[k])) && *n) && !((n = getenv("LANG")) && *n)) n = "C";
+      if (strlen(n) >= sizeof *names || (strcmp(n, "C") && strcmp(n, "POSIX") && !lc_utf8(n))) return 0;
+      want[k] = n; }
+    for (int k = lo; k < hi; k++) strcpy(names[k], want[k]);
+    __love_utf8 = lc_utf8(names[LC_CTYPE]); }
+  return names[lo]; }
 struct lconv *localeconv(void) {                   /* the C locale's table: "." and empties */
   static struct lconv c = { (char *) ".", (char *) "", (char *) "",
     (char *) "", (char *) "", (char *) "", (char *) "", (char *) "",

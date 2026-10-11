@@ -809,8 +809,13 @@
           (m = 'adrp) (ga-adrp os)
           (m = 'add && k = 3 && ((os 2) @ ('grp _ _) 1 _ 0)) (ga-addlo os)
           (k > 2 && two? (ga-shxof (os (k - 1))) && (two? (peep ga-shop m ()) || two? (peep ga-shal m ()))) (ga-shifted m os)
-          ; a register form naming zr, which the IR's rows cannot hold: the shifted word at lsl #0
-          ((two? (peep ga-shop m ()) || two? (peep ga-shal m ())) && any (o \ o @ ('reg 'zr _) 1 _ 0) os
+          ; a W mov beside wsp is add #0; zr has no place beside it
+          (m = 'mov && k = 2 && any ga-sp? os && all (o \ o @ ('reg _ 4) 1 _ 0) os)
+           (? (any (o \ o @ ('reg 'zr _) 1 _ 0) os) (scare 'gas-a64-operand [m os])
+              (ga-raw (0x11000000 | ga-hw (ga-r (os 1)) << 5 | ga-hw (ga-r (os 0)))))
+          ; a register form naming zr or sp, which the IR's rows cannot hold, or cmn and negs, which have none:
+          ; the shifted word at lsl #0, the extended one beside sp
+          ((two? (peep ga-shop m ()) || two? (peep ga-shal m ())) && (elem m '(cmn negs) || any (o \ o @ ('reg 'zr _) 1 ('reg 'sp _) 1 _ 0) os)
            && ((os (k - 1)) @ ('reg _ _) 1 _ 0))
            (ga-shifted m (os + [['shx 0 0]]))
           (charm? (peep ga-arity m ()) && k != ga-arity m) (scare 'gas-a64-operand [m os])
@@ -1213,15 +1218,17 @@
                   (: a <l b <>l
                      (? ((b 0 = 61 && !(xa-has? a 61)) || a (#a - 1) = 61) (eqj ((a + b) . >>l))
                         (a . eqj >l))))
+       ; an argument that is one quoted string passes its inside (`"dmb sy"` -> dmb sy)
+       (unq a) (: n #a (n >= 2 && a 0 = 34 && a (n - 1) = 34 && !(xa-has? (snip a 1 (n - 1)) 34) ? (snip a 1 (n - 1)) a))
        (call m rest)
         (: ps <m
-           as (0 = #(xa-trim rest) ? () (margs rest))
+           as (map unq (0 = #(xa-trim rest) ? () (margs rest)))
            kw (filter (a \ xa-has? a 61) as) po (filter (a \ !(xa-has? a 61)) as)
            (kv nm) (filter (a \ xa-trim (snip a 0 (xa-idx a 61)) = nm) kw)
            (bind ps po acc)
             (atom? ps ? acc
                (: p <ps k (kv <p)
-                  (two? k ? (bind >ps po ([<p (xa-trim (snip <k (1 + xa-idx <k 61) #<k))] . acc))
+                  (two? k ? (bind >ps po ([<p (unq (xa-trim (snip <k (1 + xa-idx <k 61) #<k)))] . acc))
                      (bind >ps >po ([<p (two? po && <po != "" ? <po <>p)] . acc)))))
            k (peep cnt 'n 0)
            _ (pin cnt 'n (k + 1))

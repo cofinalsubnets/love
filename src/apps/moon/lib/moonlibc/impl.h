@@ -637,6 +637,9 @@ void __pad(void (*put)(void *, int), void *ctx, int n, int ch);
 void __femit(void *ctx, int c);
 void __semit(void *ctx, int c);
 int (*__ctclass(char const *nm, size_t n))(int);
+int __ctname(char const *nm, size_t n);            /* wctype's index for a name not nul-ended */
+int __ctwide(int t, unsigned w);                    /* class t past ascii, whatever the locale */
+int __utf8(char const *s, size_t n, unsigned *w);   /* one whole utf-8 character -> its length | -1 */
 
 /* the three standard streams' storage: core.c's entry wires stdout's buffer, and
  * the stream table is named by whoever opens one. */

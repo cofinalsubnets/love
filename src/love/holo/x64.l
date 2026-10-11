@@ -38,7 +38,8 @@
    (x86-scale s) (s @ 1 0 2 1 4 2 8 3 (scare 'badscale s))
    (x86-shift-ext op) (op @ 'shl 4 'shr 5 'sar 7 'rol 0 'ror 1 (scare 'badshift op))
    ;; the shortest displacement, and a byte forced for a base whose disp-less slot is taken (ebp/r13)
-   (x86-md bn disp) (disp = 0 && bn & 7 != 5 ? 0 (fits8 disp ? 1 2))
+   (x86-md bn disp) (? !(charm? disp) (scare 'mem-disp disp)   ; a missing displacement would lay as 0, in silence
+                       (disp = 0 && bn & 7 != 5) 0 (fits8 disp) 1 2)
    (x86-dispb md disp) (md @ 0 () 1 [(byte disp)] (le32 disp))
    ;; [base+disp] over register numbers: an esp/r12 base takes a SIB byte
    (x86-mem regf bn disp)
