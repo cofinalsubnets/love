@@ -33,12 +33,14 @@
              ('llong || 'ullong || 'double) 8  ; 8-byte on every target (t32's word is 4)
              ('i128 || 'u128) 16
              w))
-   (tyalign w stag ty)
+   ; a scalar aligns to its size, up to cap: the widest a scalar asks on the target (16 on the
+   ; 64-bit ones, 8 under AAPCS32, 4 under SysV i386, whose long long and double sit 4-aligned)
+   (tyalign w cap stag ty)
     (? (ptr? ty) w
-       (arr? ty) (tyalign w stag <>ty)
+       (arr? ty) (tyalign w cap stag <>ty)
        (stru? ty) <>>(stag <>ty)
-       (bitf? ty) (tyalign w stag <>ty)
-       (tysz w stag ty))
+       (bitf? ty) (tyalign w cap stag <>ty)
+       (min (tysz w stag ty) cap))
 
    ; -- the typing door: C's promotion and conversion law spelled once -- integer promotions
    ; (C11 6.3.1.1) and the usual arithmetic conversions (6.3.1.8). parse's arithmetic lanes

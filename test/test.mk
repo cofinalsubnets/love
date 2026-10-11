@@ -979,7 +979,7 @@ test_caja: host
 test_holo: host
 	@echo TEST test/holo/golden.l
 	@cat src/love/holo/holo.l src/love/holo/x64.l src/love/holo/a64.l src/love/holo/thumb2.l \
-	    src/love/holo/rv64.l src/love/holo/thumb1.l src/love/holo/text.l src/love/holo/dialect.l src/love/holo/gas.l src/love/holo/elf.l \
+	    src/love/holo/rv64.l src/love/holo/thumb1.l src/love/holo/i386.l src/love/holo/text.l src/love/holo/dialect.l src/love/holo/gas.l src/love/holo/elf.l \
 	    src/love/holo/wasm.l src/love/holo/wasmfn.l test/holo/golden.l | $(gsh) test/gate/run.sh holo "$m" ", 0 failed"
 # as.l -- the real x86-64 front over holo, either dialect through dialect.l's lens
 # (dialect.sh judges it against gcc's two outputs, skipping without gcc), and decode.l reads

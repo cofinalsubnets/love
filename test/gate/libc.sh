@@ -121,4 +121,28 @@ moonrun -o "$d/decls" "$gen" > "$d/decls.build" 2>&1 || {
   fail "header/library completeness: $nref names declared, at least one has no body"
 }
 
-echo "test_libc: moonlibc agrees with $cc_g's libc over$fams ($n families), and defines all $nref names its headers declare"
+# ---------------------------------------------------------------------------
+# phase 3: REG_GREP, gnu grep's dialect, held to gnu grep itself: each seeded pattern's
+# matching lines, numbered, against grep -n's over the same lines. no gnu grep, no phase.
+gg=
+for x in /usr/bin/grep /bin/grep; do "$x" --version 2>/dev/null | grep -q GNU && { gg=$x; break; }; done
+ng=0
+if [ -n "$gg" ]; then
+  moonrun -o "$d/regrep" test/libc/grep/regrep.c > "$d/regrep.build" 2>&1 \
+    || { cat "$d/regrep.build" >&2; fail "regrep: mooncc could not build it"; }
+  "$d/regrep" lines > "$d/regrep.lines"
+  "$d/regrep" > "$d/regrep.ours" || fail "regrep: it did not run"
+  tab=$(printf '\t')
+  while IFS=$tab read -r fl p want; do
+    # shellcheck disable=SC2086
+    got=$(LC_ALL=C.UTF-8 "$gg" -a -n $fl -e "$p" "$d/regrep.lines" 2>/dev/null; echo "rc=$?")
+    case $got in
+      *rc=2) got=bad ;;
+      *) got=$(printf '%s\n' "$got" | sed -n 's/^\([0-9]*\):.*/\1/p' | tr '\n' ,) ;;
+    esac
+    [ "$got" = "$want" ] || fail "regrep: grep $fl '$p': ours [$want], gnu grep [$got]"
+    ng=$((ng + 1))
+  done < "$d/regrep.ours"
+fi
+
+echo "test_libc: moonlibc agrees with $cc_g's libc over$fams ($n families), defines all $nref names its headers declare, and reads $ng patterns as gnu grep does"
