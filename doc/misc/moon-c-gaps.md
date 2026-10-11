@@ -1214,6 +1214,17 @@ below, 251 of those 332 re-run so far: **145 compile**, and the rest refuse by n
   vector padded to its slot): a label where it stands, and zeros up to the target once layout
   holds, as llvm-mc lays them; a target behind it refuses (`gas-org-back`). It had refused unless
   only data lay between.
+- **a quoted macro argument** (`alternative_insn nop, "dmb sy", 90`): one that is a single quoted
+  string passes its inside, positional or by name, as llvm-mc expands it; holo had laid the quotes
+  into the line. A call with more positional arguments than parameters still drops the rest,
+  where llvm-mc refuses.
+- **a register form beside sp** (entry.S's `add sp, sp, x0`): add/sub/adds/subs and cmp/cmn take
+  sp as rd or rn by the extended word at uxtx (uxtw for wsp) #0, as llvm-mc lays them; they had
+  refused (`a64-alu-sp`), and `cmp sp, x1`, `add wsp, wsp, w0` and `sub w1, wsp, w2` had laid the
+  shifted word, whose 31 is zr -- a compare or add against zero, in silence. A W `mov` beside wsp
+  had laid orr with wzr the same way; it is `add #0` now. cmn and negs take a plain register. Of
+  2500 random register forms over sp, wsp, zr and the shifts and extends, every word and refusal
+  is llvm-mc's.
 
 Still open on this side (g-21's probes):
 
@@ -1226,8 +1237,7 @@ Still open on this side (g-21's probes):
   units that stopped on the `.S` extable macro's `\insn`, 19 compile, and the rest stop on: a
   vector lane `v4.d[0]`, a linker script's symbol as a `.long` (`_kernel_size_le_lo32`),
   `.incbin`, `@note` and a `.set` alias of a function (`__memmove`). Past them, entry.S stops on
-  a quoted macro argument (`alternative_insn nop, "dmb sy", 90`), and proc.S on a binary literal
-  `0b01`. The exclusive pairs (`ldxp`/`stxp` and kin) have no lane yet.
+  `msr tpidrro_el0, xzr` (msr from xzr), and proc.S on a binary literal `0b01`. The exclusive pairs (`ldxp`/`stxp` and kin) have no lane yet.
   The rest is part 1's front end and gen (`linux/skbuff.h`, an undeclared `branch`,
   `__attribute__((mode))`).
 - defconfig, g-21's units once refused on a Q form or a register pinned twice: of a sample of

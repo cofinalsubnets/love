@@ -12,33 +12,31 @@ struct mem {
 static love_inline struct mem *after(struct mem *r) {
   return (struct mem*) ((uintptr_t*) r + r->len); }
 
-// n words off the top of the first block that holds them, NULL when none does. a block with
-// no room left for a header of its own after the carve goes whole, so a freed block is taken
-// back at its own size
+// a request this big comes off the top of the highest block that holds it, anything less off
+// the bottom of the lowest: long-lived small blocks (files, tables, malloc's arenas) pile up
+// low and the high end stays whole for the heap's pools
+#define ff_big ((uintptr_t) (4u << 20) / sizeof(uintptr_t))
+
+// n words, NULL when no block holds them. a block with no room left for a header of its own
+// after the carve goes whole, so a freed block is taken back at its own size
 static love_inline void *ff_alloc(struct mem **fl, uintptr_t n) {
   if (!n) return NULL;
-  void *p = NULL;
-  struct mem *r = NULL, *t;
-  while (*fl && (*fl)->len < n + Width(struct mem))
-    t = *fl,
-    *fl = t->next,
-    t->next = r,
-    r = t;
-  if (*fl && (*fl)->len < n + 2 * Width(struct mem))
-    t = *fl,
-    *fl = t->next,
-    p = t->_;
-  else if (*fl)
-    (*fl)->len -= n + Width(struct mem),
-    t = after(*fl),
-    t->len = Width(struct mem) + n,
-    p = t->_;
-  while (r)
-    t = r,
-    r = t->next,
-    t->next = *fl,
-    *fl = t;
-  return p; }
+  uintptr_t const w = n + Width(struct mem);
+  struct mem **b = NULL;
+  for (struct mem **q = fl; *q; q = &(*q)->next)
+    if ((*q)->len >= w) { b = q; if (n < ff_big) break; }
+  if (!b) return NULL;
+  struct mem *t = *b;
+  if (t->len < w + Width(struct mem)) return *b = t->next, t->_;
+  if (n < ff_big) {                              // the bottom: the rest moves up past the carve
+    struct mem *f = (struct mem*) ((uintptr_t*) t + w);
+    f->len = t->len - w, f->next = t->next, *b = f;
+    t->len = w;
+    return t->_; }
+  t->len -= w;                                   // the top
+  struct mem *u = after(t);
+  u->len = w;
+  return u->_; }
 
 static love_inline void ff_free(struct mem **fl, void *p) {
   if (!p) return;

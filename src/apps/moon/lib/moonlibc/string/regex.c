@@ -1,5 +1,6 @@
 #include "../impl.h"
 #include <regex.h>
+#include "../ctype/ucd.h"
 
 /* ---- regcomp, regexec, regerror, regfree: posix regular expressions, as glibc reads them ----
  * a pattern parses to a tree, the tree compiles to a program, and the program runs as a
@@ -10,7 +11,11 @@
  * depend on how it was reached, and a start that failed reached nothing -- so the search is
  * O(program x text). a back-reference makes the reach depend on the groups, and the search
  * walks it whole. a mid-branch ^ also answers just past a newline the match consumed, and a
- * mid-branch $ just before one the match goes on to consume -- glibc's reading. */
+ * mid-branch $ just before one the match goes on to consume -- glibc's reading.
+ * under a UTF-8 LC_CTYPE at regcomp, pattern and text read by character, as love's re does:
+ * a literal, `.`, a bracket and \w \s take a whole one and never a byte no character wears,
+ * which matches only itself; classes and -i past ascii are the unicode floor's, -i gnulib's
+ * case_folded_counterparts. */
 
 enum { N_CHAR, N_ANY, N_SET, N_BOL, N_EOL, N_ASSERT, N_CAT, N_ALT, N_REP, N_GROUP, N_BREF, N_EMPTY };
 enum { A_WORDB, A_NWORDB, A_WBEG, A_WEND, A_BUFBEG, A_BUFEND };
@@ -19,14 +24,17 @@ enum { O_CHAR, O_ANY, O_SET, O_BOL, O_EOL, O_ASSERT, O_SPLIT, O_JMP, O_SAVE, O_B
 #define DUP_MAX 0x7fff
 #define PROG_MAX (1 << 16)
 
-typedef struct node { int t, c, n, min, max; struct node *a, *b; unsigned char *set; } node;
-typedef struct { int op, x, y; unsigned char *set; } ins;
-typedef struct { ins *p; int np, nregs, bref, flags; size_t nsub; } prog;
+/* a set: a bitmap of bytes -- in utf-8 mode ascii's only -- and past it the code-point ranges
+ * and the classes (wctype's, a bit each) a character falls in, negated or not */
+typedef struct { unsigned char b[32]; int neg, nr, cr; unsigned cls; uint32_t *r; } rset;
+typedef struct node { int t, c, n, min, max; struct node *a, *b; rset *set; } node;
+typedef struct { int op, x, y; rset *set; } ins;
+typedef struct { ins *p; int np, nregs, bref, flags, u8; size_t nsub; } prog;
 
 typedef struct {
-  char const *s; int ext, icase, nl, err, ngroup, bref; unsigned closed;
+  char const *s; int ext, icase, nl, err, ngroup, bref, u8; unsigned closed;
   node **all; int nall, call;
-  unsigned char **sets; int nsets, csets; } parser;
+  rset **sets; int nsets, csets; } parser;
 
 static node *mk(parser *P, int t) {
   if (P->err) return 0;
@@ -41,22 +49,80 @@ static node *mk(parser *P, int t) {
   n->t = t;
   return n; }
 
-static unsigned char *mkset(parser *P) {
-  unsigned char *s = calloc(1, 32);
+static rset *mkset(parser *P) {
+  rset *s = calloc(1, sizeof *s);
   if (!s) { P->err = REG_ESPACE; return 0; }
   if (P->nsets == P->csets) {
     int c = P->csets ? 2 * P->csets : 8;
-    unsigned char **a = realloc(P->sets, c * sizeof *a);
+    rset **a = realloc(P->sets, c * sizeof *a);
     if (!a) { free(s); P->err = REG_ESPACE; return 0; }
     P->sets = a; P->csets = c; }
   P->sets[P->nsets++] = s;
   return s; }
 
-static void setb(unsigned char *s, int c) { s[c >> 3] |= (unsigned char) (1 << (c & 7)); }
-static int getb(unsigned char const *s, int c) { return s[c >> 3] >> (c & 7) & 1; }
-static void setc(parser *P, unsigned char *s, int c) {
+static void setb(rset *s, int c) { s->b[c >> 3] |= (unsigned char) (1 << (c & 7)); }
+static int getb(rset const *s, int c) { return s->b[c >> 3] >> (c & 7) & 1; }
+static void setc(parser *P, rset *s, int c) {
   setb(s, c);
   if (P->icase) { setb(s, tolower(c)); setb(s, toupper(c)); } }
+
+/* ---- utf-8 mode's characters ---- */
+/* gnulib's case_folded_counterparts, as love's cpfold: c's uppercase, that one's lowercase if
+ * it comes back, and the lowercase letters with no way back that share c's uppercase */
+static uint32_t const lone[] = {181, 305, 383, 453, 456, 459, 498, 837, 962, 976, 977, 981, 982,
+                                1008, 1009, 1010, 1013, 7835, 8126};
+static uint32_t up(uint32_t c) { return c < 128 ? (uint32_t) toupper((int) c) : __ucd_map(1, c); }
+static uint32_t dn(uint32_t c) { return c < 128 ? (uint32_t) tolower((int) c) : __ucd_map(0, c); }
+static int folds(uint32_t c, uint32_t *o) {
+  uint32_t u = up(c), l = dn(u);
+  int k = 0;
+  if (u != c) o[k++] = u;
+  if (l != u && l != c && up(l) == u) o[k++] = l;
+  for (unsigned i = 0; i < sizeof lone / sizeof *lone; i++)
+    if (lone[i] != l && lone[i] != u && lone[i] != c && up(lone[i]) == u) o[k++] = lone[i];
+  return k; }
+/* the character at s, its length in *n: a byte no character wears is 0x110000 + itself */
+static int u8at(char const *s, size_t lim, int *n) {
+  unsigned w;
+  *n = __utf8(s, lim, &w);
+  if (*n > 0) return (int) w;
+  *n = 1; return 0x110000 + (unsigned char) *s; }
+static void addr(parser *P, rset *s, uint32_t lo, uint32_t hi) {
+  if (P->err) return;
+  if (s->nr == s->cr) {
+    int c = s->cr ? 2 * s->cr : 8;
+    uint32_t *r = realloc(s->r, 2 * (size_t) c * sizeof *r);
+    if (!r) { P->err = REG_ESPACE; return; }
+    s->r = r; s->cr = c; }
+  s->r[2 * s->nr] = lo; s->r[2 * s->nr + 1] = hi; s->nr++; }
+/* lo..hi into a set, and under -i every fold of them */
+static void add(parser *P, rset *s, uint32_t lo, uint32_t hi) {
+  if (!P->u8) { for (uint32_t i = lo; i <= hi; i++) setc(P, s, (int) i); return; }
+  for (uint32_t i = lo; i <= hi && i < 128; i++) setb(s, (int) i);
+  if (hi >= 128) addr(P, s, lo < 128 ? 128 : lo, hi);
+  if (!P->icase) return;
+  uint32_t o[24];
+  for (uint32_t i = lo; i <= hi && i < 128; i++)
+    for (int k = folds(i, o); k--; ) if (o[k] < 128) setb(s, (int) o[k]); else addr(P, s, o[k], o[k]);
+  if (hi < 128 || hi > 0x10ffff) return;
+  for (uint32_t c = __ucd_moved(lo < 128 ? 128 : lo); c <= hi; c = __ucd_moved(c + 1))
+    for (int k = folds(c, o); k--; ) if (o[k] < 128) setb(s, (int) o[k]); else if (o[k] < lo || o[k] > hi) addr(P, s, o[k], o[k]);
+  for (unsigned i = 0; i < sizeof lone / sizeof *lone; i++)
+    if (lone[i] >= lo && lone[i] <= hi)
+      for (int k = folds(lone[i], o); k--; ) if (o[k] < 128) setb(s, (int) o[k]); else addr(P, s, o[k], o[k]); }
+/* is c in s: a byte no character wears never is */
+static int inset(rset const *s, int c, int u8) {
+  if (!u8 || c < 128) return c < 256 && getb(s, c);
+  if (c > 0x10ffff) return 0;
+  int in = 0;
+  for (int k = 0; k < s->nr && !in; k++) in = s->r[2 * k] <= (uint32_t) c && (uint32_t) c <= s->r[2 * k + 1];
+  for (int t = 1; t <= 12 && !in; t++) in = s->cls >> t & 1 && __ctwide(t, (unsigned) c);
+  return in != s->neg; }
+/* a bracket member at P->s: a character, by code point in utf-8 mode */
+static int bch(parser *P) {
+  int n, c = P->u8 ? u8at(P->s, 6, &n) : (n = 1, (unsigned char) *P->s);
+  P->s += n;
+  return c >= 0x110000 ? c - 0x110000 : c; }
 
 static node *two(parser *P, int t, node *a, node *b) {
   node *n = mk(P, t);
@@ -66,7 +132,7 @@ static node *two(parser *P, int t, node *a, node *b) {
 /* [..] at P->s just past the '[' */
 static node *bracket(parser *P) {
   node *n = mk(P, N_SET);
-  unsigned char *s = mkset(P);
+  rset *s = mkset(P);
   if (!n || !s) return 0;
   n->set = s;
   int neg = 0, first = 1;
@@ -87,14 +153,17 @@ static node *bracket(parser *P) {
       if (k == ':') {
         int (*f)(int) = __ctclass(b, len);
         if (!f) { P->err = REG_ECTYPE; return 0; }
-        for (int i = 1; i < 256; i++) if (f(i)) setc(P, s, i);
-        if (P->icase && (len == 5 && (!strncmp(b, "upper", 5) || !strncmp(b, "lower", 5))))
-          for (int i = 1; i < 256; i++) if (isalpha(i)) setb(s, i);
+        int ul = P->icase && len == 5 && (!strncmp(b, "upper", 5) || !strncmp(b, "lower", 5));
+        for (int i = 1; i < (P->u8 ? 128 : 256); i++) if (f(i) || (ul && isalpha(i))) setc(P, s, i);
+        if (P->u8) s->cls |= 1u << __ctname(ul ? "alpha" : b, ul ? 5 : len);
         continue; }
-      if (len != 1) { P->err = REG_ECOLLATE; return 0; }
-      lo = (unsigned char) *b;
-      if (k == '=') { setc(P, s, lo); continue; } }
-    else { lo = c; P->s++; }
+      char const *t = P->s;
+      P->s = b; lo = bch(P);
+      int one = P->s == e;
+      P->s = t;
+      if (!one) { P->err = REG_ECOLLATE; return 0; }
+      if (k == '=') { add(P, s, (uint32_t) lo, (uint32_t) lo); continue; } }
+    else lo = bch(P);
     if (P->s[0] == '-' && P->s[1] && P->s[1] != ']') {
       int hi;
       P->s++;
@@ -102,17 +171,35 @@ static node *bracket(parser *P) {
         char const *b = P->s + 2, *e = b;
         while (*e && !(e[0] == '.' && e[1] == ']')) e++;
         if (!*e) { P->err = REG_EBRACK; return 0; }
-        if (e - b != 1) { P->err = REG_ECOLLATE; return 0; }
-        hi = (unsigned char) *b; P->s = e + 2; }
+        P->s = b; hi = bch(P);
+        if (P->s != e) { P->err = REG_ECOLLATE; return 0; }
+        P->s = e + 2; }
       else if (P->s[0] == '[' && (P->s[1] == ':' || P->s[1] == '=')) { P->err = REG_ERANGE; return 0; }
-      else hi = (unsigned char) *P->s++;
+      else hi = bch(P);
       if (hi < lo) { P->err = REG_ERANGE; return 0; }
-      for (int i = lo; i <= hi; i++) setc(P, s, i); }
-    else setc(P, s, lo); }
+      add(P, s, (uint32_t) lo, (uint32_t) hi); }
+    else add(P, s, (uint32_t) lo, (uint32_t) lo); }
   if (neg) {
-    for (int i = 0; i < 32; i++) s[i] = (unsigned char) ~s[i];
-    if (P->nl) s['\n' >> 3] &= (unsigned char) ~(1 << ('\n' & 7)); }
-  s[0] &= (unsigned char) ~1;                     /* nul is never in the text */
+    for (int i = 0; i < (P->u8 ? 16 : 32); i++) s->b[i] = (unsigned char) ~s->b[i];
+    if (P->nl) s->b['\n' >> 3] &= (unsigned char) ~(1 << ('\n' & 7));
+    s->neg = 1; }
+  s->b[0] &= (unsigned char) ~1;                  /* nul is never in the text */
+  return n; }
+
+/* a literal, P->s just past its first byte: in utf-8 mode the whole character, and under -i
+ * the set of it and its folds */
+static node *lit(parser *P, int c) {
+  node *n;
+  if (P->u8 && c >= 128) { int k; c = u8at(P->s - 1, 6, &k); P->s += k - 1; }
+  uint32_t o[24];
+  if (P->u8 && P->icase && c < 0x110000 && folds((uint32_t) c, o)) {
+    rset *s = mkset(P);
+    n = mk(P, N_SET);
+    if (!n || !s) return 0;
+    n->set = s;
+    add(P, s, (uint32_t) c, (uint32_t) c);
+    return n; }
+  n = mk(P, N_CHAR); if (n) n->c = c;
   return n; }
 
 static node *alt(parser *P, int depth);
@@ -149,18 +236,19 @@ static node *atom(parser *P, int depth, int *anchor) {
       n = mk(P, N_BREF); if (n) n->n = d - '0';
       P->bref = 1; return n; }
     if (d == 'w' || d == 'W' || d == 's' || d == 'S') {
-      n = mk(P, N_SET); unsigned char *s = mkset(P);
+      n = mk(P, N_SET); rset *s = mkset(P);
       if (!n || !s) return 0;
       n->set = s;
-      for (int i = 1; i < 256; i++) {
-        int in = d == 'w' || d == 'W' ? (isalnum(i) || i == '_') : isspace(i) != 0;
+      int w = d == 'w' || d == 'W';
+      for (int i = 1; i < (P->u8 ? 128 : 256); i++) {
+        int in = w ? (isalnum(i) || i == '_') : isspace(i) != 0;
         if (in == (d == 'w' || d == 's')) setb(s, i); }
+      if (P->u8) s->cls = 1u << __ctname(w ? "alnum" : "space", 5), s->neg = d == 'W' || d == 'S';
       return n; }
     int a = d == 'b' ? A_WORDB : d == 'B' ? A_NWORDB : d == '<' ? A_WBEG : d == '>' ? A_WEND
           : d == '`' ? A_BUFBEG : d == '\'' ? A_BUFEND : -1;
     if (a >= 0) { n = mk(P, N_ASSERT); if (n) n->c = a; *anchor = 1; return n; }
-    n = mk(P, N_CHAR); if (n) n->c = d;
-    return n; }
+    return lit(P, d); }
   if (P->ext && c == '(') {
     P->s++;
   group:;
@@ -174,14 +262,14 @@ static node *atom(parser *P, int depth, int *anchor) {
     return n; }
   P->s++;
   if (c == '.') {
-    n = mk(P, N_SET); unsigned char *s = mkset(P);
+    n = mk(P, N_SET); rset *s = mkset(P);
     if (!n || !s) return 0;
     n->set = s;
-    for (int i = 1; i < 256; i++) if (!(P->nl && i == '\n')) setb(s, i);
+    for (int i = 1; i < (P->u8 ? 128 : 256); i++) if (!(P->nl && i == '\n')) setb(s, i);
+    s->neg = P->u8;
     return n; }
   if (c == '[') return bracket(P);
-  n = mk(P, N_CHAR); if (n) n->c = c;
-  return n; }
+  return lit(P, c); }
 
 /* one branch: atoms and their repetitions, until | ) or the end */
 static node *cat(parser *P, int depth) {
@@ -265,7 +353,7 @@ static void gen(emitter *E, node *n, int icase) {
   switch (n->t) {
   case N_EMPTY: return;
   case N_CHAR:
-    if (icase && isalpha(n->c)) {
+    if (icase && n->c < 128 && isalpha(n->c)) {
       emit(E, O_SPLIT, E->np + 1, E->np + 3, 0);
       emit(E, O_CHAR, tolower(n->c), 0, 0); emit(E, O_JMP, E->np + 2, 0, 0);
       emit(E, O_CHAR, toupper(n->c), 0, 0); }
@@ -315,11 +403,12 @@ static void gen(emitter *E, node *n, int icase) {
 static void freeparse(parser *P, int keepsets) {
   for (int i = 0; i < P->nall; i++) free(P->all[i]);
   free(P->all);
-  if (!keepsets) { for (int i = 0; i < P->nsets; i++) free(P->sets[i]); free(P->sets); } }
+  if (!keepsets) { for (int i = 0; i < P->nsets; i++) free(P->sets[i]->r), free(P->sets[i]); free(P->sets); } }
 
 int regcomp(regex_t *re, char const *pat, int flags) {
   parser P = {0};
   P.s = pat; P.ext = flags & REG_EXTENDED; P.icase = flags & REG_ICASE; P.nl = flags & REG_NEWLINE;
+  P.u8 = __love_utf8;
   re->re_prog = 0; re->re_nsub = 0;
   node *root = alt(&P, 0);
   if (P.err) { freeparse(&P, 0); return P.err; }
@@ -330,23 +419,23 @@ int regcomp(regex_t *re, char const *pat, int flags) {
   prog *g = E.err ? 0 : malloc(sizeof *g);
   if (!g) {
     free(E.p);
-    for (int i = 0; i < P.nsets; i++) free(P.sets[i]);
+    for (int i = 0; i < P.nsets; i++) free(P.sets[i]->r), free(P.sets[i]);
     free(P.sets);
     return E.err ? E.err : REG_ESPACE; }
-  *g = (prog) {E.p, E.np, E.nregs, P.bref, flags, (size_t) P.ngroup};
+  *g = (prog) {E.p, E.np, E.nregs, P.bref, flags, P.u8, (size_t) P.ngroup};
   /* the sets ride at the program's tail, so regfree finds them */
-  unsigned char **keep = realloc(P.sets, (P.nsets + 1) * sizeof *keep);
-  if (!keep) { free(E.p); free(g); for (int i = 0; i < P.nsets; i++) free(P.sets[i]); free(P.sets); return REG_ESPACE; }
+  rset **keep = realloc(P.sets, (P.nsets + 1) * sizeof *keep);
+  if (!keep) { free(E.p); free(g); for (int i = 0; i < P.nsets; i++) free(P.sets[i]->r), free(P.sets[i]); free(P.sets); return REG_ESPACE; }
   keep[P.nsets] = 0;
   re->re_prog = g; re->re_nsub = (size_t) P.ngroup;
-  g->p[g->np - 1].set = (unsigned char *) keep;
+  g->p[g->np - 1].set = (rset *) keep;
   return 0; }
 
 void regfree(regex_t *re) {
   prog *g = re->re_prog;
   if (!g) return;
-  unsigned char **keep = (unsigned char **) g->p[g->np - 1].set;
-  for (unsigned char **k = keep; *k; k++) free(*k);
+  rset **keep = (rset **) g->p[g->np - 1].set;
+  for (rset **k = keep; *k; k++) free((*k)->r), free(*k);
   free(keep); free(g->p); free(g);
   re->re_prog = 0; }
 
@@ -366,13 +455,24 @@ static int push(run *R, int k, int a, int b) {
   R->st[R->nst++] = (frame) {k, a, b};
   return 1; }
 
-static int wordc(run *R, int i) {
-  if (i < 0 || i >= R->n) return 0;
-  int c = (unsigned char) R->s[i];
-  return isalnum(c) || c == '_'; }
+/* the character at i and its length; one byte a character but in utf-8 mode */
+static int chat(run *R, int i, int *n) {
+  if (!R->g->u8) { *n = 1; return (unsigned char) R->s[i]; }
+  return u8at(R->s + i, (size_t) (R->n - i), n); }
+/* is the character at i a word's -- before i when back: _ or alnum. a byte no character
+ * wears reads as the latin-1 character of its value, as glibc's regex reads it */
+static int wordc(run *R, int i, int back) {
+  if (back ? i <= 0 : i >= R->n) return 0;
+  int j = back ? i - 1 : i, n, c;
+  if (back && R->g->u8)
+    for (int k = i - 1; k >= 0 && i - k <= 6; k--)
+      if (((unsigned char) R->s[k] & 0xc0) != 0x80) { if (chat(R, k, &n) < 0x110000 && k + n == i) j = k; break; }
+  c = chat(R, j, &n);
+  if (c >= 0x110000) c -= 0x110000;
+  return c == '_' || (c < 128 ? isalnum(c) != 0 : __ucd_in(ucd_alpha, (uint32_t) c)); }
 
 static int assert1(run *R, int a, int i) {
-  int w0 = wordc(R, i - 1), w1 = wordc(R, i);
+  int w0 = wordc(R, i, 1), w1 = wordc(R, i, 0);
   switch (a) {
   case A_WORDB: return w0 != w1;
   case A_NWORDB: return w0 == w1;
@@ -396,8 +496,10 @@ static int search(run *R, int at) {
       if (R->seen[b >> 3] >> (b & 7) & 1) ok = 0;
       else R->seen[b >> 3] |= (unsigned char) (1 << (b & 7)); }
     if (ok) switch (p->op) {
-    case O_CHAR: if (i < R->n && (unsigned char) R->s[i] == p->x) { i++; pc++; continue; } ok = 0; break;
-    case O_SET: if (i < R->n && getb(p->set, (unsigned char) R->s[i])) { i++; pc++; continue; } ok = 0; break;
+    case O_CHAR: case O_SET: {
+      int n, c = i < R->n ? chat(R, i, &n) : -1;
+      if (c >= 0 && (p->op == O_CHAR ? c == p->x : inset(p->set, c, g->u8))) { i += n; pc++; continue; }
+      ok = 0; break; }
     case O_BOL:
       if ((i == 0 && !(R->eflags & REG_NOTBOL)) || (i > 0 && R->s[i - 1] == '\n' && (nl || (p->x && i > at)))) {
         pc++; continue; }
@@ -422,9 +524,11 @@ static int search(run *R, int at) {
       if (so < 0 || eo < 0) { ok = 0; break; }
       int len = eo - so;
       if (i + len > R->n) { ok = 0; break; }
-      for (int k = 0; k < len && ok; k++) {
-        int a = (unsigned char) R->s[so + k], b = (unsigned char) R->s[i + k];
-        if (icase ? tolower(a) != tolower(b) : a != b) ok = 0; }
+      for (int k = 0; k < len && ok; ) {
+        int na, nb, a = chat(R, so + k, &na), b = chat(R, i + k, &nb);
+        if (icase && a < 0x110000 && b < 0x110000) a = (int) dn(up((uint32_t) a)), b = (int) dn(up((uint32_t) b));
+        if (a != b || na != nb) ok = 0;
+        k += na; }
       if (ok) { i += len; pc++; continue; }
       break; }
     case O_MATCH:
@@ -457,7 +561,7 @@ int regexec(regex_t const *re, char const *str, size_t nm, regmatch_t *pm, int e
   size_t bits = (size_t) g->np * (size_t) (n + 1) * 2;
   if (!g->bref && bits <= ((size_t) 1 << 31)) R.seen = calloc(bits / 8 + 1, 1);
   int hit = 0;
-  for (int at = 0; at <= n && !hit && !R.err; at++) {
+  for (int at = 0, k; at <= n && !hit && !R.err; at += at < n ? (chat(&R, at, &k), k) : 1) {
     R.best = -1;
     hit = search(&R, at); }
   int err = R.err;
