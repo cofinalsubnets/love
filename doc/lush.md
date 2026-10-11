@@ -68,7 +68,7 @@ It is deliberately **not** spelled `love`. A builtin shadows its PATH twin, and 
 
 # MAKING IT YOUR SHELL
 
-Point a terminal emulator at `lush` -- terminal shells are interactive non-login, so *~/.lushrc* is the file to season. **love nest** (and `make install`, which runs it) is the one install: `love` and `lush` on PATH and nothing else, since every other verb is a word lush runs by name: gregarious by default, a verb PATH has is PATH's and one it lacks is ours -- `lush -c 'mooncc -o t t.c'` with no mooncc installed. `lush -ac lux` from an *~/.xinitrc* asks for ours whatever PATH holds. For **chsh**(1), add the absolute path (`~/.local/bin/lush` resolves to the nest) to */etc/shells* and `chsh -s` it; a display manager or **login**(1) then spawns it with a dash `argv[0]` that the shebang drops, so a login-shell entry is best expressed as a two-line wrapper script `exec lush --login "$@"` -- or by sourcing your profile from *~/.lushrc*.
+Point a terminal emulator at `lush` -- terminal shells are interactive non-login, so *~/.lushrc* is the file to season. **love nest** (and `make install`, which runs it) is the one install: `love` and `lush` on PATH and nothing else, since every other verb is a word lush runs by name: gregarious by default, a verb PATH has is PATH's and one it lacks is ours -- `lush -c 'mooncc -o t t.c'` with no mooncc installed. `lush -ac lux` from an *~/.xinitrc* asks for ours whatever PATH holds. For **chsh**(1), add the absolute path (`~/.local/bin/lush` resolves to the nest) to */etc/shells* and `chsh -s` it; **login**(1) or a display manager then spawns it with a dash `argv[0]`, `-lush`, and that alone makes it a login shell that reads the profiles, through the nest's links and with no wrapper.
 
 # EXIT STATUS
 
