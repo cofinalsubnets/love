@@ -1225,9 +1225,16 @@ below, 251 of those 332 re-run so far: **145 compile**, and the rest refuse by n
   had laid orr with wzr the same way; it is `add #0` now. cmn and negs take a plain register. Of
   2500 random register forms over sp, wsp, zr and the shifts and extends, every word and refusal
   is llvm-mc's.
+- **msr from xzr, mrs to it** (entry.S's `msr tpidrro_el0, xzr`): rt 31, as llvm-mc lays them;
+  holo had refused (`badreg`). sp and a W register refuse, where `msr tpidr_el0, sp` had laid
+  xzr's word in silence. Of 245 random lines over generic and named registers, every word and
+  refusal is llvm-mc's. entry.S compiles now, its 1504 words and 248 relocations the kernel's
+  object's.
 
 Still open on this side (g-21's probes):
 
+- **`lr` and `fp`**, llvm-mc's names for x30 and x29, refuse in every operand (`mov x0, lr`,
+  `stp fp, lr, [sp, #-16]!`); no census unit spells them.
 - **x18 is allocated freely**, and `-ffixed-x18` is ignored: the platform register, which the
   kernel's shadow call stack owns.
 - under `-mstrict-align`: an array member of a packed struct indexed through its decayed pointer
@@ -1236,8 +1243,8 @@ Still open on this side (g-21's probes):
 - where the re-run stops now, on this side: a register variable pinned to `x0` (4). Of the 24
   units that stopped on the `.S` extable macro's `\insn`, 19 compile, and the rest stop on: a
   vector lane `v4.d[0]`, a linker script's symbol as a `.long` (`_kernel_size_le_lo32`),
-  `.incbin`, `@note` and a `.set` alias of a function (`__memmove`). Past them, entry.S stops on
-  `msr tpidrro_el0, xzr` (msr from xzr), and proc.S on a binary literal `0b01`. The exclusive pairs (`ldxp`/`stxp` and kin) have no lane yet.
+  `.incbin`, `@note` and a `.set` alias of a function (`__memmove`). Past them, proc.S stops on a
+  binary literal `0b01`. The exclusive pairs (`ldxp`/`stxp` and kin) have no lane yet.
   The rest is part 1's front end and gen (`linux/skbuff.h`, an undeclared `branch`,
   `__attribute__((mode))`).
 - defconfig, g-21's units once refused on a Q form or a register pinned twice: of a sample of
