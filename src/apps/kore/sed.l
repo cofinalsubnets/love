@@ -43,7 +43,7 @@
        ; discarded (the POSIX rule -- s/x*/-/g on "xbz" is "-b-z-", one dash)
        ; k counts the matches met, so the ones before nth keep their own text
        (walk i acc ate hit k)
-        (refindm nodes ln i @ [_ ms me sp]
+        (refind nodes ln i @ [_ ms me sp]
           (ate && me = ms && ms = i ?
              (i < n ? (cpnext ln i @ j (walk j (acc + snip ln i j) () hit k))
               [hit acc])
@@ -106,7 +106,7 @@
             (? (dig? c) (num i 0 @ [v j] [['ln v] j])
                (c = 36) ['(last) (i + 1)]
                (c = 47) (untilre (i + 1) 47 "" @ [txt j]
-                          (rx txt @ [_ nds _] [['re (recomp nds)] j] ())
+                          (rx txt @ [_ nds _] [['re nds] j] ())
                           ())
                [() i])))
        (sepend? j) (n <= j || sep? (sc j) || sc j = 125 || sc j = 35)
@@ -124,7 +124,7 @@
                           (sc k = 103) (fgo (k + 1) 1 p?)
                           (sc k = 112) (fgo (k + 1) g? 1)
                           ())
-                      (fgo j5 () () @ [j6 g? p?] [[(recomp nds) rp g? p?] j6] ()))
+                      (fgo j5 () () @ [j6 g? p?] [[nds rp g? p?] j6] ()))
                    ())
                  ())
                ()))))
@@ -192,7 +192,7 @@
         (? (atom? a) 1
            (<a = 'ln) (no = <>a)
            (<a = 'last) last?
-           (rehasm <>a ln))
+           (rehas <>a ln))
        ; is command c (at index idx) selected on line no with pattern space ln?
        ; a range opens on its first address and closes on a later line's second
        (sel? c idx no ln last?)

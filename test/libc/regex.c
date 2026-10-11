@@ -1,7 +1,7 @@
 /* regcomp, regexec, regerror: the compile's answer and re_nsub, then every match's answer
  * and all of pmatch, over patterns a kconfig search, a grep or a hostprog would write (BRE
  * and ERE, classes, intervals, back-references, the gnu escapes, REG_ICASE REG_NEWLINE
- * REG_NOSUB REG_NOTBOL REG_NOTEOL), every refusal and regerror's words for it, then a seeded
+ * REG_NOSUB REG_NOTBOL REG_NOTEOL REG_STARTEND), every refusal and regerror's words for it, then a seeded
  * sweep. the sweep passes over a pattern holding an empty-matching group in a loop or an
  * empty group -- (a*)* () -- where which iteration a group reports is glibc's own
  * resolution and not posix's; whether and where such a pattern matches agrees. */
@@ -13,7 +13,7 @@
 static void one(char const *pat, int fl, char const *const *txt, int ef) {
   regex_t re;
   int rc = regcomp(&re, pat, fl);
-  say_s("pattern", pat); say_n("  flags", fl); say_n("  regcomp", rc);
+  say_s("pattern", pat); say_n("  flags", fl); say_n("  eflags", ef); say_n("  regcomp", rc);
   if (rc) {
     char buf[80];
     say_n("  regerror.len", (long) regerror(rc, &re, buf, sizeof buf)); say_s("  regerror", buf);
@@ -22,6 +22,7 @@ static void one(char const *pat, int fl, char const *const *txt, int ef) {
   for (; *txt; txt++) {
     regmatch_t m[6];
     say_s("  text", *txt);
+    m[0].rm_so = **txt != 0; m[0].rm_eo = (regoff_t) strlen(*txt);   /* REG_STARTEND: from 1 */
     int r = regexec(&re, *txt, 6, m, ef);
     say_n("    regexec", r);
     if (!r && !(fl & REG_NOSUB))
@@ -80,6 +81,7 @@ int main(void) {
     for (int i = 0; i < np; i++) strcat(pat, ext ? ere[rnd(sizeof ere / sizeof *ere)] : bre[rnd(sizeof bre / sizeof *bre)]);
     static char tx[4][16]; char const *txt[5];
     int ef = rnd(5) ? 0 : REG_NOTBOL;
+    if (!rnd(4)) ef |= REG_STARTEND;
     for (int t = 0; t < 4; t++) {
       int nt = rnd(9);
       for (int i = 0; i < nt; i++) tx[t][i] = "abcAB.x\n1"[rnd(9)];
