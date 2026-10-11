@@ -3,7 +3,8 @@
 ; runs a level, and the small arithmetic the scenes share. a scene that colours every
 ; pixel says its colours as pens here too: 24-bit, or the 256 palette dithered.
 (module (view esc pi clamp flo wrap min2 max2 over throw sgr view! view-hz view-size view-rays
-         view-frame view-walk view-run view-bayer view-deep-pens view-cube-pens view-deep-frame)
+         view-frame view-walk view-run view-bayer view-deep-pens view-cube-pens view-deep-frame
+         view-deep? view-words view-flag view-arg view-main view-song)
 (borrow 'rove)                          ; the pacer, the horn's lead, the keys drained
 (borrow 'posix)    ; close, for the horn
 (:
@@ -141,5 +142,26 @@
                   walk (),
                   drain-keys (),
                   ttygive rove-modes,
-                  0))
+                  0)
+ ; ..a level's 'song: (new h sd) a song into the horn, fed (feed s) a frame; none on a
+ ; seat with no horn
+ (view-song new feed) (hn \ ((hn ? (new hn (wheel (clock 0)))) @ s (s ? (_ \ (feed s)))))
+ ; ..24-bit where COLORTERM says the terminal takes it, else the 256 palette dithered
+ (view-deep? _) (elem (getenv "COLORTERM") ["truecolor" "24bit"])
+ ; --- a level's words: each rule, given the words left, answers [key value rest] for
+ ;     those it reads off the front, or () where they are not its; the words in any order,
+ ;     each key at most once -> a tablet, or () for a word no rule reads, a value read as
+ ;     (), or a key said twice ---
+ (view-words as rules) (: o {}
+   (try l rs) (? (atom? rs) () (<rs l @ () (try l >rs) m m))
+   (go l) (? (atom? l) o
+             (try l rules @ [k v r] (v = () || o k != () ? () (pin o k v, go r))
+                            _ ()))
+   (go as))
+ ; ..a word alone that says v of k, and a word whose next one (read w) reads
+ (view-flag w k v) (l \ <l = w ? [k v >l])
+ (view-arg w k read) (l \ two? >l && <l = w ? [k (read <>l) >>l])
+ ; ..the verb: the words read, or the usage and 2 where they cannot be
+ (view-main name usage opts run as) (opts as @ o
+   (tablet? o ? (run o) (say err (name + ": " + usage + "\n"), flush err, 2))))
 ) ; module view

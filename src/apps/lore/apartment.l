@@ -244,19 +244,10 @@
        (? (t = 8) (pin g 'sign (stone-ttl . stone-lines))
           (t = 5 && dat d ox oy < 4) (note g w-dry)))))
  ; ..and the others wander their cubes a step a turn, over grass alone, while they can
- (apartment-stir g) (: d (g 'd) sb (g 'sb)
-   (taken? x y) (any (m \ m 'x = x && m 'y = y) (g 'ms))
-   (stir m) (: nx (m 'x + roll sb 3 - 1) ny (m 'y + roll sb 3 - 1)
-               (? (1 = dat d nx ny && !(taken? nx ny)) (pins m 'x nx 'y ny)))
-   (each (g 'ms) (m \ (m 'bones ? () (stir m)))))
- (apartment-turn g k) (:
-   _ (pins g 'msg "" 'tn (1 + g 'tn))
-   sg (g 'sign)
-   ((? sg (g 'talk ? (chat-key g k) (pin g 'sign ()))
-       (g 'over) ()
-       (two? k) (apartment-stride g k, apartment-stir g)
-       ()),
-    g))
+ (apartment-stir g) (: d (g 'd)
+   (rove-wander (g 'ms) (g 'sb) (m \ !(m 'bones)) (x \ y \ 1 = dat d x y)))
+ (apartment-turn g k) (rove-turn g k (g \ k \ (g 'talk ? (chat-key g k) (pin g 'sign ())))
+                                     (g \ k \ (apartment-stride g k, apartment-stir g)))
 
  ; --- the frame: the plain's faces, the note, the bar, and a sign over it all ---------
  ; a ground cell is a block in its ramp's pen at the skin's value there, so grass and
@@ -364,9 +355,7 @@
    (idle _) (sng ? (feed! ()) (rest 30))
    ; escape at a standing sign takes the sign down and nothing else; the talk is left,
    ; not ended, and a bump opens it again
-   (turn k) (k = 27 && g 'sign ? (pins g 'sign () 'talk ())
-               (k @ (113 || 27 || -7) (pin g 'over 'fled)
-                (apartment-turn g (rove-key g k))))
+   (turn k) (rove-press g k 'fled (g \ pins g 'sign () 'talk ()) apartment-turn)
    ; a key, or none when the river is due another frame
    (wait t0 last gap due) (? (cue? 0)
                              (edkey in @ k

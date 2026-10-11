@@ -34,7 +34,9 @@
          texts texts-at)
 (borrow 'rove)
 (borrow 'view)                          ; the screen, its rays, the pens
-(borrow 'play)                          ; the voices, the mix
+(borrow 'flicker)                       ; the flame's breath
+(borrow 'walk)                          ; the rail
+(borrow 'gamelan)                       ; the song
 (borrow 'posix)    ; close, for the horn
 (:
  eh 1.2 rw 5.0                        ; the eye above the water, waist deep; the river's half width
@@ -187,7 +189,7 @@
      rimmed (housed ? (over roofed ((x2 <= rwt * rwt) * (ady <= rh)) haze-pen) roofed)
      glass ((x2 <= gwt * gwt) * (ady <= gh))
      glassed (over rimmed glass glass-pen)
-     fh (1.5 * gh * (0.85 + 0.15 * sin (1.3 * t)))    ; the flame's height, off the floor to its tip
+     fh (1.5 * gh * flicker-pulse t 0.85 0.15 1.3 0.0)  ; the flame's height, off the floor to its tip
      p ((0.6 * gh - dy) / fh)                         ; up the flame: 0 at its foot, 1 at its tip
      sx (p * gw * (0.3 * sin (0.5 * t) + 0.15 * sin (1.9 * t)))   ; the sway, all of it at the tip
      fw (max2 0.5 (1.43 * gw * (1.0 - p) * sqrt (max2 0.0 p)))     ; the teardrop, widest a third of the way up
@@ -310,16 +312,7 @@
  ; look up. a tty tells of keys pressed and never of keys let go, and it repeats one key
  ; at a time, so a chord cannot be seen: space walks on by itself, and the turns steer it
  facing (pi / 3.0)
- (wade-step st k) (: th (st 'th)
-   turn (k @ 104 -0.08 -1 -0.08 108 0.08 -2 0.08 0.0)
-   mv (k @ 107 0.35 -8 0.35 0.0)
-   h (st 'h) tilt (k @ 117 (h // 16) 110 (0 - h // 16) 0)
-   (? (st 'done) st                     ; arrived: the view is the level's now
-      (turn != 0.0) (pin st 'th (clamp (th + turn) (0.0 - facing) facing))
-      (tilt != 0) (view-hz st (st 'hz + tilt) 4)
-      (mv != 0.0) (wade-move st mv)
-      (k = 32) (pin st 'walk (st 'walk ? 0 1))
-      st))
+ (wade-step st k) (walk-rail st k facing wade-move)     ; arrived, the view is the level's
  ; --- arrived: the view is the level's. it turns to the lamp and pitches down until the
  ; flame's reflection holds the middle of the screen, eased over settle-ms from where
  ; the player left it, and the level is over done-ms after that. the reflection hangs
@@ -338,26 +331,12 @@
  ; five near-equal steps to the octave, as a gamelan is tuned, in semitones from middle c
  slendro (map (* 2.4) ^5)
  song-chunk (song-rate // fps)                          ; a frame's worth
- song-gain 11000.0
- chime-odds 12                                          ; a chime's chance a chunk, in thousandths: one every three seconds or so
- ; the song: its port, a spun die, the frames written, the voices ringing, when the gong
- ; is next due, and how many strikes there have been
- (wade-song-new h st) {'h h 'sb {st} 'fpos 0 'vs () 'gong 0 'struck 0}
- ; one chunk out the port. a chime by the die, its degree and octave off the die too, the
- ; low octave three times in four, ringing long; a gong when it is due, the next some
- ; seconds on. the port is any jug, so the song gates headless
- (wade-song-feed s) (: sb (s 'sb) base (s 'fpos)
-   (strike v) (base + roll sb song-chunk @ at
-                 (pins s 'vs (s 'vs + [[at (mkvoice at v song-rate)]]) 'struck (s 'struck + 1)))
-   (roll sb 1000 < chime-odds ?
-      (strike {'s "chime" 'note (slendro (roll sb 5) - 36 + 12 * (roll sb 4 = 0))
-               'gain (0.6 + roll sb 40 / 100.0) 'pan (0.2 + roll sb 60 / 100.0) 'legato 5.0}),
-   ; the gong is a triangle, not a sine: its odd harmonics are what a small speaker
-   ; gives of a note this low
-    s 'gong <= base ?
-      (strike {'s "tri" 'note -22.0 'gain 0.9 'pan 0.5 'legato 7.0},
-       pin s 'gong (base + song-rate * (8 + roll sb 6))),
-    song-out s song-chunk song-gain))
+ ; ..three octaves down, the high one a time in four, ringing long; a chime every three
+ ; seconds or so; the gong is a triangle, not a sine: its odd harmonics are what a small
+ ; speaker gives of a note this low, eight to thirteen seconds apart
+ tune {'scale slendro 'down -36 'high 4 'gain 0.6 'odds 12 'gong -22.0 'gong-gain 0.9 'gong-legato 7.0 'gong-every 8}
+ (wade-song-new h st) (gamelan-new h st)
+ (wade-song-feed s) (gamelan-feed s tune)
  ; --- the walk, on view's loop: walking on by itself, or at the lamppost settling on the
  ; lamp over settle-ms, and the apartment after it. wade-walk takes a stage already
  ; raised, and wade-run raises one ---
@@ -365,12 +344,10 @@
                            'tick (st \ (? (st 'done-at) (clock (st 'done-at) / (1.0 * settle-ms) @ s
                                                             (wade-settle st (1.0 < s ? 1.0 s)))
                                           (st 'walk) (wade-move st 0.25)))
-                           'song (hn \ ((hn ? (wade-song-new hn (wheel (clock 0)))) @ s
-                                          (s ? (_ \ (wade-song-feed s)))))
+                           'song (view-song wade-song-new wade-song-feed)
                            'linger (settle-ms + done-ms) 'next ['apartment 'apartment-walk]})
  (wade-run _) (view-run wade-walk)
  wade-usage "usage: love lore wade   (h l turn, k j wade, u n look, space walks on to the lamppost; q or esc leaves)"
- (wade-main as) (as @ () (wade-run ())
-                      (say err ("wade: " + wade-usage + "\n"), flush err, 2))
+ (wade-main as) (view-main "wade" wade-usage (as \ view-words as []) wade-run as)
  _ ((cite 'lore 'lore-enlist) 'wade (udoor 'wade wade-main wade-usage 1 1)))
 ) ; module wade
