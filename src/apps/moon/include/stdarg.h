@@ -28,7 +28,7 @@ typedef struct {
   int __gr_offs;                 /* -(unnamed gp slots)*8, rising by 8 to 0 */
   int __vr_offs;                 /* -(unnamed vr slots)*16, rising by 16 to 0 */
 } __va_list_tag;
-#elif defined(__arm__)
+#elif defined(__arm__) || defined(__i386__)
 typedef struct {                 /* AAPCS32: one running pointer -- the prologue
                                   * pushed r0-r3 contiguous with the caller's
                                   * stack args, so anonymous WORDS just walk */

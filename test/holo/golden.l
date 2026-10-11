@@ -5,7 +5,7 @@
 ; disassembler. the sources are cat'd in rather than `borrow`d because the host bakes its native
 ; backend only -- the other four reach these goldens no other way (test/holo.l is the in-corpus
 ; smoke over the baked module).
-; run: cat src/love/holo/{holo,x64,a64,thumb2,riscv,thumb1,text,gas,elf}.l test/holo/golden.l
+; run: cat src/love/holo/{holo,x64,a64,thumb2,riscv,thumb1,i386,text,gas,elf}.l test/holo/golden.l
 ;      | out/love   (nonzero exit on any miss)
 
 (borrow 'holo) ; the cat's wrapped sources just registered the module
@@ -1371,6 +1371,175 @@
       ("rv.fset.be"  "d39fa5a213b51f00"  ((ucomisd f0 f1) (set be r0)))          ; flt.d ; seqz a0,t6
       ("rv.tp"       "1285"              ((tp r0))))                   ; mv a0, tp (the thread pointer)
    _ (foldl (_ \ t \ chk2 (t 0) (t 1) 'rv64 (t 2)) 0 rvtests)
+
+   ;; -- the i386 backend: the same IR on 32-bit x86, and its 16-bit twin (gcc -m16's
+   ;;    .code16gcc). each row's bytes are gas's for the trailing text (`as --32`), or
+   ;;    disassemble to the same words under objdump where gas picks another encoding. --
+   i3tests '(
+      ("i3.li" "b83c000000" ((li r0 60)))                      ; mov $60,%eax
+      ("i3.li.neg" "bbffffffff" ((li r3 -1)))                  ; mov $-1,%ebx
+      ("i3.li.u32" "bfffffffff" ((li r6 4294967295)))          ; mov $0xffffffff,%edi
+      ("i3.mov" "89d8" ((mov r0 r3)))                          ; mov %ebx,%eax
+      ("i3.mov.sp" "89e5" ((mov r4 sp)))                       ; mov %esp,%ebp
+      ("i3.add" "01d8" ((add r0 r0 r3)))                       ; add %ebx,%eax
+      ("i3.add.i8" "83c105" ((add r1 r1 5)))                   ; add $5,%ecx
+      ("i3.add.i32" "81c1e8030000" ((add r1 r1 1000)))         ; add $1000,%ecx
+      ("i3.add.lea" "8d0411" ((add r0 r1 r2)))                 ; lea (%ecx,%edx),%eax
+      ("i3.add.leai" "8d4108" ((add r0 r1 8)))                 ; lea 8(%ecx),%eax
+      ("i3.sub.lea" "8d41f8" ((sub r0 r1 8)))                  ; lea -8(%ecx),%eax
+      ("i3.sub" "29f2" ((sub r2 r2 r5)))                       ; sub %esi,%edx
+      ("i3.and.i" "83e00f" ((and r0 r0 15)))                   ; and $15,%eax
+      ("i3.or" "09f7" ((or r6 r6 r5)))                         ; or %esi,%edi
+      ("i3.xor.zero" "31d2" ((xor r2 r2 r2)))                  ; xor %edx,%edx
+      ("i3.and.zx1" "0fb6c3" ((and r0 r3 255)))                ; movzbl %bl,%eax
+      ("i3.and.zx2" "0fb7c6" ((and r0 r5 65535)))              ; movzwl %si,%eax
+      ("i3.sub.3" "89c829d0" ((sub r0 r1 r2)))                 ; mov %ecx,%eax ; sub %edx,%eax
+      ("i3.add.comm" "01ca" ((add r2 r1 r2)))                  ; add %ecx,%edx
+      ("i3.imul.rr" "0fafc1" ((imul r0 r0 r1)))                ; imul %ecx,%eax
+      ("i3.imul.ri" "69c10a000000" ((imul r0 r1 10)))          ; imul $10,%ecx,%eax
+      ("i3.imul.3" "89c80fafc2" ((imul r0 r1 r2)))             ; mov %ecx,%eax ; imul %edx,%eax
+      ("i3.cmp" "39c8" ((cmp r0 r1)))                          ; cmp %ecx,%eax
+      ("i3.cmp.0" "85f6" ((cmp r5 0)))                         ; test %esi,%esi
+      ("i3.cmp.i" "83fe07" ((cmp r5 7)))                       ; cmp $7,%esi
+      ("i3.test" "85c8" ((test r0 r1)))                        ; test %ecx,%eax
+      ("i3.test.i" "f7c000010000" ((test r0 256)))             ; test $256,%eax
+      ("i3.ld" "8b03" ((ld r0 r3 0)))                          ; mov (%ebx),%eax
+      ("i3.ld.ebp" "8b4500" ((ld r0 r4 0)))                    ; mov 0(%ebp),%eax
+      ("i3.ld.big" "8b8600100000" ((ld r0 r5 4096)))           ; mov 4096(%esi),%eax
+      ("i3.st" "897c2404" ((st sp 4 r6)))                      ; mov %edi,4(%esp)
+      ("i3.lea" "8d442410" ((lea r0 sp 16)))                   ; lea 16(%esp),%eax
+      ("i3.ld1" "0fbe4101" ((ld1 r0 r1 1)))                    ; movsbl 1(%ecx),%eax
+      ("i3.ld2" "0fbf4102" ((ld2 r0 r1 2)))                    ; movswl 2(%ecx),%eax
+      ("i3.ld4" "8b4104" ((ld4 r0 r1 4)))                      ; mov 4(%ecx),%eax
+      ("i3.ldu1" "0fb67101" ((ldu1 r5 r1 1)))                  ; movzbl 1(%ecx),%esi
+      ("i3.ldu2" "0fb77102" ((ldu2 r5 r1 2)))                  ; movzwl 2(%ecx),%esi
+      ("i3.st1" "885f03" ((st1 r6 3 r3)))                      ; mov %bl,3(%edi)
+      ("i3.st1.esi" "87f1880887f1" ((st1 r0 0 r5)))            ; xchg %esi,%ecx ; mov %cl,(%eax) ; xchg %esi,%ecx
+      ("i3.set.edi" "970f94c00fb6c097" ((set eq r6)))          ; xchg %edi,%eax ; sete %al ; movzbl %al,%eax ; xchg %edi,%eax
+      ("i3.zx1.esi" "960fb6c096" ((zx1 r5)))                   ; xchg %esi,%eax ; movzbl %al,%eax ; xchg %esi,%eax
+      ("i3.sx1.edi" "970fbec097" ((sx1 r6)))                   ; xchg %edi,%eax ; movsbl %al,%eax ; xchg %edi,%eax
+      ("i3.st2" "66897702" ((st2 r6 2 r5)))                    ; mov %si,2(%edi)
+      ("i3.st4" "8937" ((st4 r6 0 r5)))                        ; mov %esi,(%edi)
+      ("i3.si" "c745f8d2040000" ((si r4 -8 1234)))             ; movl $1234,-8(%ebp)
+      ("i3.si1" "c645ff07" ((si1 r4 -1 7)))                    ; movb $7,-1(%ebp)
+      ("i3.si2" "66c745fe2c01" ((si2 r4 -2 300)))              ; movw $300,-2(%ebp)
+      ("i3.ldx" "8b449108" ((ldx r0 r1 r2 4 8)))               ; mov 8(%ecx,%edx,4),%eax
+      ("i3.stx" "890411" ((stx r1 r2 1 0 r0)))                 ; mov %eax,(%ecx,%edx,1)
+      ("i3.leax" "8d44d500" ((leax r0 r4 r2 8 0)))             ; lea 0(%ebp,%edx,8),%eax
+      ("i3.ldxb" "0fb60411" ((ldxb r0 r1 r2 1 0)))             ; movzbl (%ecx,%edx),%eax
+      ("i3.stxb" "880411" ((stxb r1 r2 1 0 r0)))               ; mov %al,(%ecx,%edx)
+      ("i3.ldxsp" "8b0494" ((ldx r0 sp r2 4 0)))               ; mov (%esp,%edx,4),%eax
+      ("i3.andx4" "230491" ((andx4 r0 r1 r2 4 0)))             ; and (%ecx,%edx,4),%eax
+      ("i3.orm4" "0b4104" ((orm4 r0 r1 4)))                    ; or 4(%ecx),%eax
+      ("i3.cmpm.r" "3945fc" ((cmpm r4 -4 r0)))                 ; cmp %eax,-4(%ebp)
+      ("i3.cmpm.i8" "837dfc09" ((cmpm r4 -4 9)))               ; cmpl $9,-4(%ebp)
+      ("i3.cmpm.i32" "817dfc84030000" ((cmpm r4 -4 900)))      ; cmpl $900,-4(%ebp)
+      ("i3.cmprm" "3b45fc" ((cmprm r0 r4 -4)))                 ; cmp -4(%ebp),%eax
+      ("i3.sx1" "0fbec0" ((sx1 r0)))                           ; movsbl %al,%eax
+      ("i3.sx2" "0fbff6" ((sx2 r5)))                           ; movswl %si,%esi
+      ("i3.zx1" "0fb6db" ((zx1 r3)))                           ; movzbl %bl,%ebx
+      ("i3.zx2" "0fb7ff" ((zx2 r6)))                           ; movzwl %di,%edi
+      ("i3.shl" "c1e003" ((shl r0 3)))                         ; shl $3,%eax
+      ("i3.shr1" "d1ea" ((shr r2 1)))                          ; shr %edx
+      ("i3.sar" "c1ff1f" ((sar r6 31)))                        ; sar $31,%edi
+      ("i3.rol" "c1c008" ((rol r0 8)))                         ; rol $8,%eax
+      ("i3.ror4" "c1c808" ((ror4 r0 8)))                       ; ror $8,%eax
+      ("i3.shlv" "d3e0" ((shlv r0 r1)))                        ; shl %cl,%eax
+      ("i3.sarv" "d3fe" ((sarv r5 r1)))                        ; sar %cl,%esi
+      ("i3.push" "53" ((push r3)))                             ; push %ebx
+      ("i3.push.i8" "6a05" ((push 5)))                         ; push $5
+      ("i3.push.i32" "6870110100" ((push 70000)))              ; push $70000
+      ("i3.pop" "5d" ((pop r4)))                               ; pop %ebp
+      ("i3.neg" "f7d8" ((neg r0)))                             ; neg %eax
+      ("i3.not" "f7d1" ((not r1)))                             ; not %ecx
+      ("i3.inc" "ffc2" ((inc r2)))                             ; incl %edx
+      ("i3.dec" "ffce" ((dec r5)))                             ; decl %esi
+      ("i3.set" "0f9cc00fb6c0" ((set lt r0)))                  ; setl %al ; movzbl %al,%eax
+      ("i3.set1" "0f95c1" ((set1 ne r1)))                      ; setne %cl
+      ("i3.cmov" "0f4dc6" ((cmov ge r0 r5)))                   ; cmovge %esi,%eax
+      ("i3.jmpr" "ffe0" ((jmpr r0)))                           ; jmp *%eax
+      ("i3.callr" "ffd2" ((callr r2)))                         ; call *%edx
+      ("i3.jmpm" "ff6008" ((jmpm r0 8)))                       ; jmp *8(%eax)
+      ("i3.div" "5289c899f7fb5a89c1" ((div r1 r1 r3)))         ; push %edx ; mov %ecx,%eax ; cltd ; idiv %ebx ; pop %edx ; mov %eax,%ecx
+      ("i3.udiv.cell" "525289f031d2f7342483c4045a" ((udiv r0 r5 r2))) ; push %edx ; push %edx ; mov %esi,%eax ; xor %edx,%edx ; divl (%esp) ; add $4,%esp ; pop %edx
+      ("i3.rem" "5299f7ff89d05a89c3" ((rem r3 r0 r6 r1)))      ; push %edx ; cltd ; idiv %edi ; mov %edx,%eax ; pop %edx ; mov %eax,%ebx
+      ("i3.umulh" "5289c8f7e389d05a89c1" ((umulh r1 r1 r3)))   ; push %edx ; mov %ecx,%eax ; mul %ebx ; mov %edx,%eax ; pop %edx ; mov %eax,%ecx
+      ("i3.divl" "f7f3" ((divl r3)))                           ; div %ebx
+      ("i3.cas" "f00fb10a" ((cas r0 r1 r2)))                   ; lock cmpxchg %ecx,(%edx)
+      ("i3.tp" "658b0500000000" ((tp r0)))                     ; .byte 0x65,0x8b,0x05,0,0,0,0
+      ("i3.xaddm" "0fc101" ((xaddm 4 r1 0 r0)))                ; xadd %eax,(%ecx)
+      ("i3.xchgm1" "8601" ((xchgm 1 r1 0 r0)))                 ; xchg %al,(%ecx)
+      ("i3.alum" "015108" ((alum add 4 r1 8 r2)))              ; add %edx,8(%ecx)
+      ("i3.alum.i" "66830903" ((alum or 2 r1 0 3)))            ; orw $3,(%ecx)
+      ("i3.alum.b" "802903" ((alum sub 1 r1 0 3)))             ; subb $3,(%ecx)
+      ("i3.carry" "11c8" ((carry adc 4 r0 r1)))                ; adc %ecx,%eax
+      ("i3.carry.i" "83da00" ((carry sbb 4 r2 0)))             ; sbb $0,%edx
+      ("i3.unm" "ff01" ((unm inc 4 r1 0)))                     ; incl (%ecx)
+      ("i3.btm" "0fba2905" ((btm bts 4 r1 0 5)))               ; btsl $5,(%ecx)
+      ("i3.testm" "f60104" ((testm 1 r1 0 4)))                 ; testb $4,(%ecx)
+      ("i3.ldseg" "8cc8" ((ldseg r0 1)))                       ; mov %cs,%eax
+      ("i3.stseg" "8ed8" ((stseg 3 r0)))                       ; mov %eax,%ds
+      ("i3.ldcr" "0f20c0" ((ldcr r0 0)))                       ; mov %cr0,%eax
+      ("i3.stcr" "0f22d9" ((stcr 3 r1)))                       ; mov %ecx,%cr3
+      ("i3.lgdt" "0f0110" ((lgdt r0 0)))                       ; lgdt (%eax)
+      ("i3.invlpg" "0f0139" ((invlpg r1 0)))                   ; invlpg (%ecx)
+      ("i3.str" "a5" ((str movs 4)))                           ; movsl
+      ("i3.strb" "aa" ((str stos 1)))                          ; stosb
+      ("i3.bscan" "0fbdc1" ((bscan bsr 4 r0 r1)))              ; bsr %ecx,%eax
+      ("i3.popcnt" "66f30fb8c1" ((bscan popcnt 2 r0 r1)))      ; popcnt %cx,%ax
+      ("i3.int" "cd80" ((int 128)))                            ; int $0x80
+      ("i3.sys" "cd80" ((sys)))                                ; int $0x80
+      ("i3.ret" "c3" ((ret)))                                  ; ret
+      ("i3.pushf" "9c" ((pushf)))                              ; pushf
+      ("i3.inl" "ed" ((inl)))                                  ; in (%dx),%eax
+      ("i3.outw" "66ef" ((outw)))                              ; out %ax,(%dx)
+      ("i3.iret" "cf" ((iretq)))                               ; iret
+      ("i3.call" "e80000000090" ((call L) (label L) (nop)))    ; call L
+      ("i3.jmp" "e90000000090" ((jmp L) (label L) (nop)))      ; {disp32} jmp L
+      ("i3.br" "0f840000000090" ((br eq L) (label L) (nop)))   ; {disp32} je L
+      ("i3.mulo" "0fafc10f800000000090" ((mulo r0 r0 r1 r2 L) (label L) (nop))) ; imul %ecx,%eax ; {disp32} jo L
+      ("i3.lar" "e8000000005b81c30700000090" ((lar r3 L) (label L) (nop))) ; call 1f ; 1: pop %ebx ; add $(L-1b),%ebx
+      )
+   _ (foldl (_ \ t \ chk2 (t 0) (t 1) 'i386 (t 2)) 0 i3tests)
+   i3m16tests '(
+      ("i3m16.li" "66b83c000000" ((li r0 60)))                 ; mov $60,%eax
+      ("i3m16.ld" "67668b03" ((ld r0 r3 0)))                   ; mov (%ebx),%eax
+      ("i3m16.st" "6766897c2404" ((st sp 4 r6)))               ; mov %edi,4(%esp)
+      ("i3m16.lea" "67668d442410" ((lea r0 sp 16)))            ; lea 16(%esp),%eax
+      ("i3m16.st1" "67885f03" ((st1 r6 3 r3)))                 ; mov %bl,3(%edi)
+      ("i3m16.st2" "67897702" ((st2 r6 2 r5)))                 ; mov %si,2(%edi)
+      ("i3m16.si1" "67c645ff07" ((si1 r4 -1 7)))               ; movb $7,-1(%ebp)
+      ("i3m16.si2" "67c745fe2c01" ((si2 r4 -2 300)))           ; movw $300,-2(%ebp)
+      ("i3m16.ldx" "67668b449108" ((ldx r0 r1 r2 4 8)))        ; mov 8(%ecx,%edx,4),%eax
+      ("i3m16.stx" "6766890411" ((stx r1 r2 1 0 r0)))          ; mov %eax,(%ecx,%edx,1)
+      ("i3m16.push" "6653" ((push r3)))                        ; push %ebx
+      ("i3m16.push.i8" "666a05" ((push 5)))                    ; push $5
+      ("i3m16.pop" "665d" ((pop r4)))                          ; pop %ebp
+      ("i3m16.set" "0f9cc0660fb6c0" ((set lt r0)))             ; setl %al ; movzbl %al,%eax
+      ("i3m16.jmpr" "66ffe0" ((jmpr r0)))                      ; jmp *%eax
+      ("i3m16.callr" "66ffd2" ((callr r2)))                    ; call *%edx
+      ("i3m16.div" "66526689c8669966f7fb665a6689c1" ((div r1 r1 r3))) ; push %edx ; mov %ecx,%eax ; cltd ; idiv %ebx ; pop %edx ; mov %eax,%ecx
+      ("i3m16.udiv.cell" "665266526689f06631d26766f734246683c404665a" ((udiv r0 r5 r2))) ; push %edx ; push %edx ; mov %esi,%eax ; xor %edx,%edx ; divl (%esp) ; add $4,%esp ; pop %edx
+      ("i3m16.cas" "f067660fb10a" ((cas r0 r1 r2)))            ; lock cmpxchg %ecx,(%edx)
+      ("i3m16.alum.i" "67830903" ((alum or 2 r1 0 3)))         ; orw $3,(%ecx)
+      ("i3m16.ldseg" "668cc8" ((ldseg r0 1)))                  ; mov %cs,%eax
+      ("i3m16.str" "66a5" ((str movs 4)))                      ; movsl
+      ("i3m16.strb" "aa" ((str stos 1)))                       ; stosb
+      ("i3m16.ret" "66c3" ((ret)))                             ; ret
+      ("i3m16.pushf" "669c" ((pushf)))                         ; pushf
+      ("i3m16.inl" "66ed" ((inl)))                             ; in (%dx),%eax
+      ("i3m16.outw" "ef" ((outw)))                             ; out %ax,(%dx)
+      ("i3m16.call" "66e80000000090" ((call L) (label L) (nop))) ; call L
+      ("i3m16.jmp" "e9000090" ((jmp L) (label L) (nop)))       ; {disp32} jmp L
+      ("i3m16.br" "0f84000090" ((br eq L) (label L) (nop)))    ; {disp32} je L
+      ("i3m16.lar" "66e800000000665b6681c30900000090" ((lar r3 L) (label L) (nop))) ; call 1f ; 1: pop %ebx ; add $(L-1b),%ebx
+      )
+   _ (foldl (_ \ t \ chk2 (t 0) (t 1) 'i386m16 (t 2)) 0 i3m16tests)
+   ;; ..and what has no 32-bit face refuses: a register past r6
+   i3caught {}
+   _ (hear (a \ b \ a = 'i386-badreg ? (pin i3caught 0 a, ()) (welp a b)))
+   _ (pin i3caught 0 0, holo-bytes 'i386 '((mov r0 r7)))
+   _ (chk-eq "i3.r7.refused" 'i386-badreg (peep i3caught 0 0))
 
    ;; -- the wasm module writer (src/love/holo/wasm.l): instruction forms -> bytes, each row the
    ;;    bytes binaryen's wasm-as lays for the same text (memory64 on). the whole-module shape is

@@ -90,6 +90,16 @@
    lda64-kinds (ld-cls '((275 adrp21) (277 addlo12) (278 addlo12) (279 b14) (280 b19) (282 b26) (283 b26)
                          (284 lo12s2) (285 lo12s4) (286 lo12s8) (299 lo12s16)))
    ldrv-kinds (ld-cls '((17 j21) (19 pcrel)))
+   ; EM_386 is rel too, every field whole: R_386_32 and _PC32/_PLT32 four bytes, _16 and
+   ; _PC16 two (a 16-bit segment's jump). its numbers collide with ARM's as with the rest.
+   ld386-kinds (ld-cls '((1 abs32) (2 rel32) (4 rel32) (20 abs16) (21 rel16)))
+   (ld386 s off sv kind site)
+    (: r (ld386-kinds kind)
+       _ (atom? r ? (scare 'link-reloc kind))
+       k <r w (elem k '(abs16 rel16) ? 2 4)
+       sa (sv + rdle s off w)
+       v (elem k '(abs32 abs16) ? sa (sa - site))
+       (w = 4 ? (le32 (ld-u32 v)) (le16 (ld-u32 v))))
    (ldarm be s off sv kind site)
     (: r (ldarm-kinds kind)
        _ (atom? r ? (scare 'link-reloc kind))
@@ -576,7 +586,14 @@
                     (ldres glo n0 n1 r0 r1 xt <sy))
               ; the two classes part here and nowhere else: an ARM field is 4 bytes wide
               ; whatever the kind, its addend already in it, and `ad` arrives ().
-              (arm? ?
+              (? (arm? == 'i386)
+                 (: w (elem kind '(20 21) ? 2 4)
+                    (ro + w <= sz ? 0 (scare 'link-oob (peep ob 'id 0)),
+                     relbox ? (scare 'link-i386-pie <sy),
+                     go (off0 + ro + w) >es
+                        (ld386 s (off0 + ro) sv kind (base + ro)
+                         . (snip s pos (off0 + ro) . acc))))
+                 arm?
                  (ro + 4 <= sz ? 0 (scare 'link-oob (peep ob 'id 0)),
                   ; the emit-relocs half: an abs32 site holds an address this link wrote,
                   ; so a loader adds its delta here. pc-relative kinds travel with the code.
@@ -724,6 +741,11 @@
        _ (0 < mach ? 0 (scare 'link-target target))
        objs (map (p \ ld-read <p <>p mach) srcs)
        rv (mach = 243)                          ; em_rv64: its own reloc-number namespace (see ldpatch)
+       ; em_386 lays the same image on ELF32's wire: the headers, the symbols, rel fields
+       w32 (mach = 3)
+       _ (w32 && pie ? (scare 'link-i386-pie target))
+       shf (w32 ? elf-shdr32 elf-shdr)
+       phf (w32 ? elf32-phdr elf64-phdr)
        ; the page a segment stands on, not the page the MMU happens to run: a loader maps
        ; each PT_LOAD from p_vaddr rounded down to the kernel's page size, so two segments
        ; sharing one are laid over each other. aarch64 meets 4K, 16K and 64K kernels, so it
@@ -742,7 +764,7 @@
        ; notes). 24 bytes in the header reserve, pt_note plus an alloc section so strip
        ; keeps it, on the ISAs that can meet that kernel.
        nb? (wx? && elem mach '(62 183))
-       hdrsz (64 + 56 * ((wx? ? 3 1) + (img? ? 1 0) + (nb? ? 1 0)) + (nb? ? 24 0))
+       hdrsz ((w32 ? 52 64) + (w32 ? 32 56) * ((wx? ? 3 1) + (img? ? 1 0) + (nb? ? 1 0)) + (nb? ? 24 0))
        nbo (hdrsz - 24)
        nbnote (nb? ? (catall [(le32 7) (le32 4) (le32 1)                 ; namesz descsz netbsd_tag
                               '(78 101 116 66 83 68 0 0) (le32 1000000000)]))   ; "NetBSD\0\0", 10.0
@@ -789,7 +811,7 @@
               o1 <objs
               (two? e ? <e
                  (peep (peep o1 'base 0) <(peep (peep o1 'lanes 0) 'text ()) 0)))
-       cx [glo n0 end r0 r1 relbox rv () (backends target) (ld-extents objs)]
+       cx [glo n0 end r0 r1 relbox rv (w32 ? 'i386 ()) (backends target) (ld-extents objs)]
        et (ldemitn cx 'text objs (ldemit cx 'text (base + hdrsz) objs ()))
        eo (ldemitn cx 'rodata objs (ldemit cx 'rodata o0 objs >et))
        ed (ldemitn cx 'data objs (ldemit cx 'data d0 objs >eo))
@@ -802,7 +824,7 @@
        ; this. every loaded byte gets a covering header (love_rela names the -pie table):
        ; strip rebuilds a file from its sections, and an orphan gap comes back as zeros.
        lanesx {'text 1 'rodata 2 'data 3 'nifs 4 'bss 6 'image 7}
-       st (ldstab objs glo lanesx elf-sym 24)
+       st (ldstab objs glo lanesx (w32 ? elf-sym32 elf-sym) (w32 ? 16 24))
        ; .comment goes last so no index moves: e_shstrndx and .symtab's sh_link are written
        ; down as 10 and 9, and a section spliced in ahead points both at the wrong table.
        ; the object says love_nifs and the binary says .love.nifs -- the split is the rule.
@@ -820,22 +842,22 @@
        rdmo (cmto + cmtz) rdmz #rdm
        nsh ((0 < rdmz ? 13 12) + ?nb?)
        shto (ld-align 8 (rdmo + rdmz))
-       sht (catall [(elf-shdr 0 0 0 0 0 0 0 0 0 0)                                    ; the reserved null header
+       sht (catall [(shf 0 0 0 0 0 0 0 0 0 0)                                    ; the reserved null header
                      ; a lane stops where its bytes stop -- the next one's address may sit a
                      ; page on, but its offset is the very next byte, so no gap is left unowned
-                    (elf-shdr (snm 0) 1 6 (base + hdrsz) hdrsz (t1 - (base + hdrsz)) 0 0 16 0)
-                    (elf-shdr (snm 1) 1 2 o0 (t1 - base) (o1 - o0) 0 0 16 0)
-                    (elf-shdr (snm 2) 1 3 d0 (d0 - base - sk) (<ed - d0) 0 0 16 0)
-                    (elf-shdr (snm 3) 1 3 <ed (<ed - base - sk) (<en - <ed) 0 0 16 0)
-                    (elf-shdr (snm 4) 1 2 r0 (r0 - base - sk) (r1 - r0) 0 0 16 0)     ; love_rela, the -pie table (empty non-pie)
-                    (elf-shdr (snm 5) 8 3 dend (dend - base - sk) (bend - dend) 0 0 16 0)   ; NOBITS: an offset, no bytes
-                    (elf-shdr (snm 6) 1 3 ist isho iszr 0 0 16 0)                     ; .image, the grow slot -- its own segment
-                    (elf-shdr (snm 7) 2 0 0 symo symz 9 (st 2) 8 24)               ; link=.strtab info=first global
-                    (elf-shdr (snm 8) 3 0 0 stro strz 0 0 1 0)
-                    (elf-shdr (snm 9) 3 0 0 ssto sstz 0 0 1 0)
-                    (elf-shdr (snm 10) 1 48 0 cmto cmtz 0 0 1 1)                     ; .comment: merge|strings, no alloc
-                    (0 < rdmz ? (elf-shdr (snm 11) 1 32 0 rdmo rdmz 0 0 1 0) ())    ; .love.readme: strings, no alloc
-                    (nb? ? (elf-shdr (snm 12) 7 2 (base + nbo) nbo 24 0 0 4 0))])   ; sht_note, alloc: strip keeps it
+                    (shf (snm 0) 1 6 (base + hdrsz) hdrsz (t1 - (base + hdrsz)) 0 0 16 0)
+                    (shf (snm 1) 1 2 o0 (t1 - base) (o1 - o0) 0 0 16 0)
+                    (shf (snm 2) 1 3 d0 (d0 - base - sk) (<ed - d0) 0 0 16 0)
+                    (shf (snm 3) 1 3 <ed (<ed - base - sk) (<en - <ed) 0 0 16 0)
+                    (shf (snm 4) 1 2 r0 (r0 - base - sk) (r1 - r0) 0 0 16 0)     ; love_rela, the -pie table (empty non-pie)
+                    (shf (snm 5) 8 3 dend (dend - base - sk) (bend - dend) 0 0 16 0)   ; NOBITS: an offset, no bytes
+                    (shf (snm 6) 1 3 ist isho iszr 0 0 16 0)                     ; .image, the grow slot -- its own segment
+                    (shf (snm 7) 2 0 0 symo symz 9 (st 2) 8 (w32 ? 16 24))         ; link=.strtab info=first global
+                    (shf (snm 8) 3 0 0 stro strz 0 0 1 0)
+                    (shf (snm 9) 3 0 0 ssto sstz 0 0 1 0)
+                    (shf (snm 10) 1 48 0 cmto cmtz 0 0 1 1)                     ; .comment: merge|strings, no alloc
+                    (0 < rdmz ? (shf (snm 11) 1 32 0 rdmo rdmz 0 0 1 0) ())    ; .love.readme: strings, no alloc
+                    (nb? ? (shf (snm 12) 7 2 (base + nbo) nbo 24 0 0 4 0))])   ; sht_note, alloc: strip keeps it
        ; w^x: segment one the header and the code, read+execute; two the literals, read;
        ; three .data through love_rela, running out to bss in memsz alone, read+write; a
        ; fourth carries the image, rw (a heap snapshot is read and rebased, never entered).
@@ -845,13 +867,13 @@
        ; site lands in text or rodata: a lane that ever needs to write code has to say so
        ; with its own segment. bake_tail asks that .image end its segment and that no load
        ; live above it, both by construction here.
-       phs ((wx? ? [(elf64-phdr 1 5 0 base base (t1 - base) (t1 - base) pg)
-                    (elf64-phdr 1 4 (t1 - base) o0 o0 (o1 - o0) (o1 - o0) pg)
-                    (elf64-phdr 1 6 (d0 - base - sk) d0 d0 (dend - d0) (bend - d0) pg)]
-                 [(elf64-phdr 1 7 0 base base (dend - base) (bend - base) pg)])
-            + (img? ? [(elf64-phdr 1 6 isho ist ist iszr iszr pg)])
-            + (nb? ? [(elf64-phdr 4 4 nbo (base + nbo) (base + nbo) 24 24 4)]))
-       hdr (elf64-hdrn (pie ? 3 2) ent mach [shto nsh 10] phs)
+       phs ((wx? ? [(phf 1 5 0 base base (t1 - base) (t1 - base) pg)
+                    (phf 1 4 (t1 - base) o0 o0 (o1 - o0) (o1 - o0) pg)
+                    (phf 1 6 (d0 - base - sk) d0 d0 (dend - d0) (bend - d0) pg)]
+                 [(phf 1 7 0 base base (dend - base) (bend - base) pg)])
+            + (img? ? [(phf 1 6 isho ist ist iszr iszr pg)])
+            + (nb? ? [(phf 4 4 nbo (base + nbo) (base + nbo) 24 24 4)]))
+       hdr (w32 ? (elf32-hdrn 2 ent mach 0 [shto nsh 10] phs) (elf64-hdrn (pie ? 3 2) ent mach [shto nsh 10] phs))
        ; the brand: ei_osabi = 9 in e_ident[7] on every exe this lane writes for an ISA that
        ; can meet freebsd -- linux never reads the byte and freebsd's imgact refuses without
        ; it. made here and not at a caller, so the two doors over one linker agree.
