@@ -462,6 +462,12 @@ moonrun -c -t a64 -o "$ho/.tbz.o" "$ho/.tbz.s" > /dev/null 2>&1 && fail "a tbz p
 printf '\t.globl f\nf:\ttbz x0, #3, ext\n\tret\n' > "$ho/.tbz.s"
 moonrun -c -t a64 -o "$ho/.tbz.o" "$ho/.tbz.s" > /dev/null 2>&1 || fail "a tbz to an outside label did not assemble"
 readelf -rW "$ho/.tbz.o" 2>/dev/null | grep -q "R_AARCH64_TSTBR14.*ext" || fail "a tbz to an outside label laid no TSTBR14"
+# a branch inside a section without x resolves in place, as llvm-mc lays it (proc.S's .idmap.text, "a")
+printf '\t.pushsection .idmap.text, "a"\n1:\tnop\n\tcbnz w1, 1b\n\tb.ne 1b\n\ttbz w1, #1, 1b\n\tb 1b\n\t.popsection\n' > "$ho/.dbr.s"
+moonrun -c -t a64 -o "$ho/.dbr.o" "$ho/.dbr.s" > /dev/null 2>&1 || fail "branches in a data section did not assemble"
+readelf -rW "$ho/.dbr.o" 2>/dev/null | grep -q R_AARCH64 && fail "a branch inside a data section laid a relocation"
+readelf -x .idmap.text "$ho/.dbr.o" 2>/dev/null | grep -q "1f2003d5 e1ffff35 c1ffff54 a1ff0f36" \
+  || fail "branches inside a data section were not resolved in place"
 
 # the attribute skip on a local/parameter/member takes __attribute__ ALONE: an asm NAME
 # would rename the object, and dropping it renames it in silence. test/cc/145 holds the
