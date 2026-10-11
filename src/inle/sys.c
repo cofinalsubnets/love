@@ -257,3 +257,188 @@ long __love_inle(long n, long a, long b, long c, long d, long e, long f) {
 #endif
    return 0; }
   default:       return -38; } }                       // ENOSYS, canonically
+
+// --- processes ----------------------------------------------------------------------------
+// a process is a program in memory of its own -- a wasm instance; on metal, an address space
+// to come -- whose calls arrive at k_proc_call, from the seat that runs it. what the kernel
+// keeps of one: its pid and parent, its cwd, and its fds, each a kernel row it holds. the
+// kernel's own love is not one: its tasks are the threads of the machine, as before.
+extern void k_fs_cwd_swap(char *cwd, uintptr_t *n);
+extern bool k_fd_blocks(int fd);
+extern int k_fd_term(int fd, int set, int *raw, uintptr_t *rows, uintptr_t *cols);
+extern bool k_ready(int fd, int events);
+
+#define k_proc_fds 64
+struct k_proc { int pid, ppid, live, status, exitw; uintptr_t cwd_n; char cwd[256];
+                int fd[k_proc_fds]; };              // the process's fd -> the kernel's, -1 none
+static struct k_proc *k_procs;
+static int k_procs_n, k_pid_next = 2;               // pid 1 is the kernel's own answer
+
+// a call that must wait: the seat holds it and asks again, the process none the wiser
+#define K_RESTART -512
+
+// the seat's door: start pid's program with these words, each NUL-ended. -errno to refuse
+__attribute__((weak)) long k_proc_start(long pid, char const *av, uintptr_t an,
+                                        char const *ev, uintptr_t en) {
+  return (void) pid, (void) av, (void) an, (void) ev, (void) en, -ENOSYS; }
+
+static struct k_proc *k_proc_of(long pid) {
+  for (int i = 0; i < k_procs_n; i++) if (k_procs[i].pid == pid) return &k_procs[i];
+  return NULL; }
+
+// a free slot, the table doubled first when there is none
+static struct k_proc *k_proc_slot(void) {
+  for (int i = 0; i < k_procs_n; i++) if (!k_procs[i].pid) return &k_procs[i];
+  int m = k_procs_n ? 2 * k_procs_n : 8;
+  struct k_proc *t = kmallocw((m * sizeof *t + sizeof(uintptr_t) - 1) / sizeof(uintptr_t));
+  if (!t) return NULL;
+  for (int i = 0; i < m; i++) t[i] = i < k_procs_n ? k_procs[i] : (struct k_proc) {0};
+  if (k_procs) kfree(k_procs);
+  struct k_proc *p = &t[k_procs_n];
+  k_procs = t, k_procs_n = m;
+  return p; }
+
+// kernel row kf at the process's lowest free fd from `at` -> that fd; the row closed, and
+// -EMFILE, where there is none
+static long k_pfd_put(struct k_proc *p, long kf, long at) {
+  if (kf < 0) return kf;
+  for (long i = at < 0 ? 0 : at; i < k_proc_fds; i++)
+    if (p->fd[i] < 0) return p->fd[i] = (int) kf, i;
+  k_fd_close((int) kf);
+  return -EMFILE; }
+
+static long k_pfd(struct k_proc const *p, long fd) {
+  return fd >= 0 && fd < k_proc_fds ? p->fd[fd] : -1; }
+
+// the end: every fd let go, the status kept for the reaper, and the exit pipe closed, which
+// is what wakes the task standing in for the process
+static void k_proc_end(struct k_proc *p, int status) {
+  for (int i = 0; i < k_proc_fds; i++) if (p->fd[i] >= 0) k_fd_close(p->fd[i]), p->fd[i] = -1;
+  p->live = 0, p->status = status;
+  if (p->exitw >= 0) k_fd_close(p->exitw), p->exitw = -1; }
+
+// a new process on these words, its stdio the kernel rows in fds -> its pid, *wr the read
+// end of the pipe that ends when it does; -errno to refuse
+long k_proc_new(char const *av, uintptr_t an, char const *ev, uintptr_t en,
+                int const fds[3], int *wr) {
+  struct k_proc *p = k_proc_slot();
+  if (!p) return -ENOMEM;
+  *p = (struct k_proc) { .pid = k_pid_next, .ppid = 1, .live = 1, .exitw = -1 };
+  for (int i = 0; i < k_proc_fds; i++) p->fd[i] = -1;
+  char b[258];
+  if (k_fs_getcwd(b, sizeof b)) b[0] = '/', b[1] = 0;
+  p->cwd_n = strlen(b + 1), memcpy(p->cwd, b + 1, p->cwd_n);
+  int w[2] = { -1, -1 };
+  long r = k_fd_pipe(w);
+  if (!r) p->exitw = w[1];
+  for (int i = 0; !r && i < 3; i++) {
+    long kf = k_fd_dup(fds[i], 3);
+    if (kf < 0) r = kf;
+    else p->fd[i] = (int) kf; }
+  if (!r) r = k_proc_start(p->pid, av, an, ev, en);
+  if (r) {
+    k_proc_end(p, 0);
+    if (w[0] >= 0) k_fd_close(w[0]);
+    p->pid = 0;
+    return r; }
+  *wr = w[0];
+  return k_pid_next++; }
+
+// pid's status once it has ended, its slot freed -> the status, -EAGAIN while it runs
+long k_proc_reap(long pid) {
+  struct k_proc *p = k_proc_of(pid);
+  if (!p) return -ECHILD;
+  if (p->live) return -EAGAIN;
+  p->pid = 0;
+  return p->status; }
+
+// a terminal's control for a process: the console and a pty answer, keeping no more than
+// raw or cooked and their size; every other row is not a terminal
+static long k_proc_ioctl(struct k_proc const *p, int kf, unsigned long q, void *arg) {
+  int raw;
+  uintptr_t rows, cols;
+  long r = k_fd_term(kf, -1, &raw, &rows, &cols);
+  if (r) return r;
+  if (!arg) return -EFAULT;
+  switch (q) {
+   case 21505: {                                     // TCGETS
+    struct termios *t = arg;
+    *t = (struct termios) { .c_iflag = raw ? 0 : ICRNL, .c_oflag = OPOST, .c_cflag = 0277,
+                            .c_lflag = raw ? 0 : ISIG | ICANON | ECHO | IEXTEN };
+    t->c_cc[0] = 3, t->c_cc[2] = 127, t->c_cc[4] = 4, t->c_cc[VMIN] = 1;   // VINTR VERASE VEOF
+    return 0; }
+   case 21506: case 21507: case 21508:               // TCSETS, TCSETSW, TCSETSF
+    return k_fd_term(kf, !(((struct termios*) arg)->c_lflag & ICANON), &raw, &rows, &cols);
+   case TIOCGWINSZ:
+    *(struct winsize*) arg = (struct winsize) { (unsigned short) rows, (unsigned short) cols, 0, 0 };
+    return 0;
+   case TIOCSWINSZ: return 0;
+   case 21519: *(int*) arg = p->pid; return 0;      // TIOCGPGRP: the process leads its own
+   case 21520: return 0;                             // TIOCSPGRP
+   default: return -EINVAL; } }
+
+// one of a process's calls, its pointers already in kernel memory: its fds translated to the
+// kernel's, its paths read against its own cwd. K_RESTART says the call must wait; the seat
+// asks again later. ppoll's third word is not a timeout here but whether it may wait at all --
+// the seat keeps the clock, and asks with 0 once the deadline has passed.
+long k_proc_call(long pid, long n, long a, long b, long c, long d, long e, long f) {
+  struct k_proc *p = k_proc_of(pid);
+  if (!p || !p->live) return -ESRCH;
+  long kf = k_pfd(p, a), r;
+  switch (n) {
+   case NR_exit: case NR_exit_group: k_proc_end(p, (int) (a & 255)); return 0;
+   case NR_getpid: return p->pid;
+   case NR_mmap: case NR_munmap: case NR_mprotect: return -ENOSYS;   // its memory is its own
+   case NR_read:
+    if (kf < 0) return -EBADF;
+    return k_fd_blocks((int) kf) ? K_RESTART : k_fd_read((int) kf, (void*) b, c);
+   case NR_write:
+    if (kf < 0) return -EBADF;
+    r = k_fd_write((int) kf, (void const*) b, c);
+    return !r && c > 0 ? K_RESTART : r;
+   case NR_close:
+    if (kf < 0) return -EBADF;
+    p->fd[a] = -1;
+    return k_fd_close((int) kf);
+   case NR_lseek: case NR_ftruncate: case NR_fstat: case NR_getdents64:
+    return kf < 0 ? -EBADF : __love_inle(n, kf, b, c, d, e, f);
+   case NR_fcntl:
+    if (kf < 0) return -EBADF;
+    if (b == F_DUPFD || b == F_DUPFD_CLOEXEC) return k_pfd_put(p, k_fd_dup((int) kf, 3), c);
+    return __love_inle(n, kf, b, c, d, e, f);
+   case NR_dup3:
+    if (kf < 0 || b < 0 || b >= k_proc_fds) return -EBADF;
+    if (a == b || c) return -EINVAL;
+    if ((r = k_fd_dup((int) kf, 3)) < 0) return r;
+    if (p->fd[b] >= 0) k_fd_close(p->fd[b]);
+    return p->fd[b] = (int) r, b;
+   case NR_pipe2: {
+    if (!a) return -EFAULT;
+    if (b) return -EINVAL;
+    int k[2];
+    if ((r = k_fd_pipe(k))) return r;
+    long r0 = k_pfd_put(p, k[0], 0), r1 = r0 < 0 ? (k_fd_close(k[1]), r0) : k_pfd_put(p, k[1], 0);
+    if (r1 < 0) { if (r0 >= 0) p->fd[r0] = -1, k_fd_close(k[0]); return r1; }
+    ((int*) a)[0] = (int) r0, ((int*) a)[1] = (int) r1;
+    return 0; }
+   case NR_ioctl: return kf < 0 ? -EBADF : k_proc_ioctl(p, (int) kf, (unsigned long) b, (void*) c);
+   case NR_ppoll: {
+    struct pollfd *q = (struct pollfd*) a;
+    long k = 0;
+    for (long i = 0; i < b; i++) {
+     long qf = k_pfd(p, q[i].fd);
+     short ev = q[i].events, rv = 0;
+     if (q[i].fd < 0) { q[i].revents = 0; continue; }
+     if (qf < 0) rv = POLLNVAL;
+     else {
+      if ((ev & POLLIN) && k_ready((int) qf, POLLIN)) rv |= POLLIN;   // love's wait_in is poll's own 1
+      if (ev & POLLOUT) rv |= POLLOUT; }
+     q[i].revents = rv;
+     k += !!rv; }
+    return !k && c ? K_RESTART : k; }
+   default:                                          // a path's call, under its own cwd
+    k_fs_cwd_swap(p->cwd, &p->cwd_n);
+    r = __love_inle(n, a, b, c, d, e, f);
+    k_fs_cwd_swap(p->cwd, &p->cwd_n);
+    if (n == NR_openat && r >= 0) r = k_pfd_put(p, r, 0);
+    return r; } }

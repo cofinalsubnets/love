@@ -9,8 +9,8 @@
 //
 //   in:  { wasm, ring, ram, cmd, fb,      the module's bytes, the shared ring, RAM in MiB,
 //          image }                        the boot line, { w, h, scale, canvas } or null, and
-//                                         the heap image (`bake PATH` on the boot line) or
-//                                         null. w and h are REAL pixels and scale is how
+//                                         the heap image (hosted love's, `make
+//                                         out/wasm/love.image`) or null. w and h are REAL pixels and scale is how
 //                                         many of them a glyph pixel gets (0 = the console
 //                                         picks); rows and columns are the kernel's answer
 //   out: { serial }                       a run of the serial console's bytes, as text
@@ -24,11 +24,13 @@
 // the five wear linux's numbers; the horn's four are ours -- sound has no call to borrow
 // one from, so the block sits well clear of any syscall table (src/inle/wasm/horn.c).
 import { host_f64, host_at, host_win } from './hostring.mjs';
+import { box_at, box_win, box_n } from './procbox.mjs';
 const NR = { read: 0, write: 1, nanosleep: 35, reboot: 169, clock_gettime: 228,
              horn_open: 0x4000, horn_write: 0x4001, horn_lag: 0x4002, horn_close: 0x4003,
              lift: 0x4010, scan: 0x4011, drew: 0x4012, kexec: 0x4013,
              point: 0x4014, paste: 0x4015, copy: 0x4016,
-             fetch_open: 0x4020, fetch_read: 0x4021, fetch_close: 0x4022, host: 0x4030 };
+             fetch_open: 0x4020, fetch_read: 0x4021, fetch_close: 0x4022, host: 0x4030,
+             proc: 0x4040 };
 const ENOENT = 2, EBADF = 9, EACCES = 13, ENOSYS = 38, ENAMETOOLONG = 36;
 // the ring: Int32 [0] the reader's head, [1] the writer's tail, [2] the wake count, [3] a
 // lift request, [4] a resize request with [5] [6] [7] the width, height and glyph scale it
@@ -316,6 +318,7 @@ const sys1 = (n, a, b, c, d, e) => {
       new BigInt64Array(memory.buffer, Number(b), 2).set([BigInt(sec), BigInt(ns)]);
       return 0n; }
     case NR.nanosleep: {                                // the idle: a tick, or the next key
+      serve();
       const ts = new BigInt64Array(memory.buffer, Number(a), 2),
             ms = Number(ts[0]) * 1000 + Number(ts[1]) / 1e6;
       flush(); resize(); blit(true); lift(1);
@@ -334,6 +337,7 @@ const sys1 = (n, a, b, c, d, e) => {
       sawScan = st;
       if (!keys && !codes) Atomics.wait(ctl, 2, seen, ms);
       seen = Atomics.load(ctl, 2);
+      serve();
       return 0n; }
     case NR.read: {                                     // the keys queued since the last read, never waiting
       const p = Number(b), max = Number(c), h = u8(), tail = Atomics.load(ctl, 1);
@@ -405,6 +409,13 @@ const sys1 = (n, a, b, c, d, e) => {
       hornSink();
       return BigInt((Atomics.load(ctl, c_wrote) - Atomics.load(ctl, c_played)) | 0);
     case NR.horn_close: Atomics.store(ctl, c_rate, 0); return 0n;
+    case NR.proc: {                                     // a process: its mailbox here, its worker the page's
+      const words = (p, n) => n ? dec.decode(u8().slice(Number(p), Number(p) + Number(n) - 1)).split('\0') : [];
+      const pid = Number(a), boxb = new SharedArrayBuffer(box_n);
+      procs.set(pid, { st: new Int32Array(boxb, 0, 4), args: new BigInt64Array(boxb, 16, 9),
+                       win: new Uint8Array(boxb, box_at, box_win) });
+      post({ proc: { pid, argv: words(b, c), env: words(d, e), box: boxb } });
+      return 0n; }
     // the machine asks for a file to be carried out: the path into the lift slot, the
     // request raised, and the next idle reads the file and posts it
     case NR.lift: {
@@ -423,6 +434,30 @@ const sys1 = (n, a, b, c, d, e) => {
       Atomics.store(ctl, 3, 3);
       return 0n; }
     default: return BigInt(-ENOSYS); } };
+
+// the processes' mailboxes (procbox.mjs), served at the idle: each asked call
+// is answered by src/inle/sys.c's k_proc_call, its window carried into kernel memory and
+// back. a call that must wait answers K_RESTART and stays asked, to be tried at the next
+// serve; a ppoll whose deadline has passed is asked once more, not to wait
+const procs = new Map(), K_RESTART = -512n;
+let kwin = 0n;
+const serve = () => {
+  for (let moved = true; moved;) {
+    moved = false;
+    for (const [pid, b] of procs) {
+      if (Atomics.load(b.st, 0) !== 1) continue;
+      if (!kwin) kwin = BigInt(call(ex.kmallocw, BigInt(box_win / 8)));
+      const mask = b.st[1], used = b.st[2], n = b.args[0], v = [];
+      u8().set(b.win.subarray(0, used), Number(kwin));
+      for (let i = 1; i < 7; i++) v.push((mask >> (i - 1)) & 1 ? kwin + b.args[i] : b.args[i]);
+      if (n === 271n && b.args[8] && Date.now() >= Number(b.args[8])) v[2] = 0n;
+      const r = BigInt(call(ex.k_proc_call, BigInt(pid), n, ...v));
+      if (r === K_RESTART) continue;
+      b.win.set(u8().subarray(Number(kwin), Number(kwin) + used), 0);
+      b.args[7] = r;
+      Atomics.store(b.st, 0, 2), Atomics.notify(b.st, 0);
+      if (n === 231n || n === 60n) procs.delete(pid);
+      moved = true; } } };
 
 // moon's convention: 16 params in (8 i64, 8 f64), (i64 i64 f64 f64) out
 const call = (f, ...args) => {
