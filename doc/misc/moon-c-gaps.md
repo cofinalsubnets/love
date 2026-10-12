@@ -1291,8 +1291,9 @@ below, 251 of those 332 re-run so far: **145 compile**, and the rest refuse by n
   same name hid the list of address-fix kinds from the patcher, which dropped the addend and
   laid the label's own offset.
 - **`fp` and `lr` in asm text** (`stp fp, lr, [sp, #-16]!`, `mov x0, lr`): llvm-mc's names for
-  x29 and x30, in every X operand; holo had refused them. Of 800 random lines over them, every
-  word and refusal is what holo lays for x29 and x30.
+  x29 and x30, in every X operand; holo had refused them. Of 800 random lines over them, 747 lay
+  llvm-mc's words and refusals, and the rest part from it as the same lines spelled x29 and x30
+  do (the open list below).
 
 Still open on this side (g-21's probes):
 
