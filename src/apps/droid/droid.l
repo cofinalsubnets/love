@@ -42,11 +42,11 @@
            "exported" 0x01010010 "configChanges" 0x0101001f "value" 0x01010024
            "minSdkVersion" 0x0101020c "versionCode" 0x0101021b "versionName" 0x0101021c
            "targetSdkVersion" 0x01010270 "extractNativeLibs" 0x010104ea}
-   (cat f l) (cats (map f l))
+   (ap-cat f l) (cats (map f l))
    (ax-chunk ty hs body) (wrle ty 2 + wrle hs 2 + wrle (8 + #body) 4 + body)
-   (ax-u16 s) (cat (c \ wrle c 2) (chars s))
+   (ax-u16 s) (ap-cat (c \ wrle c 2) (chars s))
    (ax-uniq l) (foldl (\ a s (elem s a ? a (a + [s]))) () l)
-   (axml root)
+   (ap-axml root)
     (: (walk e) (e @ [t at ks] (map (a \ [<a (a 1)]) at
                                     + map (a \ [0 (a 3)]) (filter (a \ a 2 = 'str) at)
                                     + [[0 t]] + catmap walk ks))
@@ -56,10 +56,10 @@
        ix {} _ (each ^#strs (i \ pin ix (strs i) i))
        (u32 v) (wrle v 4)
        offs (foldl (\ a s (a + [(last a + 4 + 2 * #(chars s))])) [0] strs)
-       data (cat (s \ wrle #(chars s) 2 + ax-u16 s + wrle 0 2) strs)
+       data (ap-cat (s \ wrle #(chars s) 2 + ax-u16 s + wrle 0 2) strs)
        pool (ax-chunk 1 28 (u32 #strs + u32 0 + u32 0 + u32 (28 + 4 * #strs) + u32 0
-                            + cat u32 (rev >(rev offs)) + data + zbytes (padk #data 4)))
-       rmap (ax-chunk 0x180 8 (cat (n \ u32 (ax-rid n)) an))
+                            + ap-cat u32 (rev >(rev offs)) + data + zbytes (padk #data 4)))
+       rmap (ax-chunk 0x180 8 (ap-cat (n \ u32 (ax-rid n)) an))
        (nsc ty) (ax-chunk ty 16 (u32 1 + u32 -1 + u32 (ix "android") + u32 (ix ax-uri)))
        (attr [ns n k v])
         ((? ns (u32 (ix ax-uri)) (u32 -1)) + u32 (ix n) + u32 (? (k = 'str) (ix v) -1) + wrle 8 2 + string [0]
@@ -68,24 +68,24 @@
        (el [t at ks])
         (: so (sort (map (a \ [(? <a (ax-rid (a 1)) -1) a]) at))
            (ax-chunk 0x102 16 (u32 1 + u32 -1 + u32 -1 + u32 (ix t) + wrle 20 2 + wrle 20 2
-                               + wrle #so 2 + zbytes 6 + cat (p \ attr (p 1)) so)
-            + cat el ks
+                               + wrle #so 2 + zbytes 6 + ap-cat (p \ attr (p 1)) so)
+            + ap-cat el ks
             + ax-chunk 0x103 16 (u32 1 + u32 -1 + u32 -1 + u32 (ix t))))
        (ax-chunk 3 8 (pool + rmap + nsc 0x100 + el root + nsc 0x101)))
-   (manifest pkg label)
-    ['manifest [[1 "versionCode" 'int 1] [1 "versionName" 'str "1"] [0 "package" 'str pkg]]
-      [['uses-sdk [[1 "minSdkVersion" 'int 26] [1 "targetSdkVersion" 'int 31]] ()]
-       ['application [[1 "label" 'str label] [1 "hasCode" 'bool 0] [1 "debuggable" 'bool 1]
+   (ap-manifest pkg label)
+    ["manifest" [[1 "versionCode" 'int 1] [1 "versionName" 'str "1"] [0 "package" 'str pkg]]
+      [["uses-sdk" [[1 "minSdkVersion" 'int 26] [1 "targetSdkVersion" 'int 31]] ()]
+       ["application" [[1 "label" 'str label] [1 "hasCode" 'bool 0] [1 "debuggable" 'bool 1]
                       [1 "extractNativeLibs" 'bool 1]]
-         [['activity [[1 "name" 'str "android.app.NativeActivity"] [1 "exported" 'bool 1]
+         [["activity" [[1 "name" 'str "android.app.NativeActivity"] [1 "exported" 'bool 1]
                       [1 "configChanges" 'hex 0x4a0]]                  ; orientation keyboardHidden screenSize
-            [['meta-data [[1 "name" 'str "android.app.lib_name"] [1 "value" 'str "bridge"]] ()]
-             ['intent-filter ()
-               [['action [[1 "name" 'str "android.intent.action.MAIN"]] ()]
-                ['category [[1 "name" 'str "android.intent.category.LAUNCHER"]] ()]]]]]]]]]
+            [["meta-data" [[1 "name" 'str "android.app.lib_name"] [1 "value" 'str "bridge"]] ()]
+             ["intent-filter" ()
+               [["action" [[1 "name" 'str "android.intent.action.MAIN"]] ()]
+                ["category" [[1 "name" 'str "android.intent.category.LAUNCHER"]] ()]]]]]]]]]
 
    ; --- the zip: every entry deflated, dated 1980, so the same inputs lay the same bytes ---
-   (zip es)
+   (ap-zip es)
     (: j (jug 0)
        (u16 v) (wrle v 2) (u32 v) (wrle v 4)
        (one [cd off] [nm d])
@@ -101,17 +101,17 @@
 
    ; --- apk signature scheme v2: the zip's three sections digested in 1 MiB chunks, the
    ; digest signed, the block laid before the central directory ---
-   (sha s) (unhex (sha256 s))
-   (lp s) (wrle #s 4 + s)
+   (ap-sha s) (unhex (sha256 s))
+   (ap-lp s) (wrle #s 4 + s)
    (v2-digest ss)
     (: cs (catmap (s \ map (i \ snip s i (min #s (i + 1048576))) (map (* 1048576) ^((#s + 1048575) // 1048576))) ss)
-       (sha (string [90] + wrle #cs 4 + cat (c \ sha (string [165] + wrle #c 4 + c)) cs)))
+       (ap-sha (string [90] + wrle #cs 4 + ap-cat (c \ ap-sha (string [165] + wrle #c 4 + c)) cs)))
    (v2-sign z key cert)
     (: eo (#z - 22) co (rdle z (eo + 16) 4)
        s0 (snip z 0 co) s1 (snip z co eo) s2 (snip z eo #z)
-       sd (lp (lp (wrle 0x201 4 + lp (v2-digest [s0 s1 s2]))) + lp (lp cert) + lp "")
-       sg (lp sd + lp (lp (wrle 0x201 4 + lp (key-sign key sd))) + lp (key-spki key))
-       v2 (lp (lp sg))
+       sd (ap-lp (ap-lp (wrle 0x201 4 + ap-lp (v2-digest [s0 s1 s2]))) + ap-lp (ap-lp cert) + ap-lp "")
+       sg (ap-lp sd + ap-lp (ap-lp (wrle 0x201 4 + ap-lp (key-sign key sd))) + ap-lp (key-spki key))
+       v2 (ap-lp (ap-lp sg))
        pr (wrle (4 + #v2) 8 + wrle 0x7109871a 4 + v2)
        n (#pr + 24)
        blk (wrle n 8 + pr + wrle n 8 + "APK Sig Block 42")
@@ -130,7 +130,7 @@
 
    ; --- the bridge, compiled out of the source this love carries ---
    (bridge-src _)
-    (: a (tree-tar 0) t (string? a ? tar-unpack a)
+    (: a (tree-tar 0) t (? (string? a) (tar-unpack a))
        (? (two? t) (foldl (\ r e (? (string? r) r (ends? (tar-get e 'nom "") "src/apps/droid/bridge.c") (tar-get e 'body "") ()))
                           () <>t)))
    (bridge-so tmp)
@@ -148,36 +148,36 @@
       (src/apps/droid/droid.l). LOVE is the a64 love it ships, baked; on an a64 machine
       this one. the key signing it lives in ~/.love/etc/apk.pem
     """)
-   (base p) (p @ (_ + "/" + s) (base s) p)
-   (stem p) (base p @ b (b @ (s + ".l") s b))
-   (or s d) (? (string? s) s d)
+   (ap-base p) (p @ (_ + "/" + s) (ap-base s) p)
+   (ap-stem p) (ap-base p @ b (b @ (s + ".l") s b))
+   (ap-or s d) (? (string? s) s d)
+   (apk-opts as t)
+    (as @ ("-o" . v . r) (apk-opts r (pin t 'o v)) ("-p" . v . r) (apk-opts r (pin t 'p v))
+          ("-n" . v . r) (apk-opts r (pin t 'n v)) ("-L" . v . r) (apk-opts r (pin t 'L v))
+          (("-h" || "--help") . _) (apk-usage 0, quit 0)
+          (("-" + _) . _) (apk-usage 0, quit 2)
+          r (pin t 'files r))
    (apk-main as)
-    (: (opt as t)
-        (as @ ("-o" . v . r) (opt r (pin t 'o v)) ("-p" . v . r) (opt r (pin t 'p v))
-              ("-n" . v . r) (opt r (pin t 'n v)) ("-L" . v . r) (opt r (pin t 'L v))
-              (("-h" || "--help") . _) (apk-usage 0, quit 0)
-              (("-" + _) . _) (apk-usage 0, quit 2)
-              r (pin t 'files r)))
-       t (opt as {})
+    (: t (apk-opts as {})
        fs (t 'files)
        _ (two? fs ? 0 (apk-usage 0, quit 2))
-       nm (stem <fs)
-       out (or (t 'o) (nm + ".apk"))
-       pkg (or (t 'p) ("org.love." + nm))
-       lov (or (t 'L) (? (love-arch = 'a64) (selfpath 0)
-                         (udie 1 "apk: name an a64 love with -L (`love seed a64 DIR`, baked once on an a64 machine)")))
+       nm (ap-stem <fs)
+       out (ap-or (t 'o) (nm + ".apk"))
+       pkg (ap-or (t 'p) ("org.love." + nm))
+       lov (? (string? (t 'L)) (t 'L) (love-arch = 'a64) (selfpath 0)
+              (udie 1 "apk: name an a64 love with -L (`love seed a64 DIR`, baked once on an a64 machine)"))
        lb (uread lov @ r (? (two? r) <>r (udie 1 ("apk: cannot read " + lov))))
        ks (apk-keys 0)
        _ (two? ks ? 0 (udie 1 "apk: no key in ~/.love/etc/apk.pem, and none could be made"))
-       tmp ((or (getenv "TMPDIR") "/tmp") + "/love-apk-" + show (getpid 0))
+       tmp ((ap-or (getenv "TMPDIR") "/tmp") + "/love-apk-" + show (getpid 0))
        _ (mkdir tmp 448)
        so (bridge-so tmp)
-       ins (map (f \ [("assets/app/" + base f) (uread f @ r (? (two? r) <>r (udie 1 ("apk: cannot read " + f))))]) fs)
-       z (zip ([["AndroidManifest.xml" (axml (manifest pkg (or (t 'n) nm)))]
+       ins (map (f \ [("assets/app/" + ap-base f) (uread f @ r (? (two? r) <>r (udie 1 ("apk: cannot read " + f))))]) fs)
+       z (ap-zip ([["AndroidManifest.xml" (ap-axml (ap-manifest pkg (ap-or (t 'n) nm)))]
                 ["lib/arm64-v8a/libbridge.so" so] ["lib/arm64-v8a/liblove.so" lb]
-                ["assets/argv" (base <fs + string [0])]] + ins))
+                ["assets/argv" (ap-base <fs + string [0])]] + ins))
        (? (uwrite out (v2-sign z <ks (ks 1))) (puts ("apk: " + out + " (" + pkg + ") -- adb install -r " + out + "\n"), 0)
-          (udie 1 ("apk: cannot write " + out)))
+          (udie 1 ("apk: cannot write " + out))))
 
    door (udoor 'apk apk-main apk-usage 1 1)
    _ (pins (cite 'verbs 'tab) 'apk door)
