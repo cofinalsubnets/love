@@ -328,14 +328,19 @@
    (rdst g rA) (wr? g rA ? rA (ralloc g @ rX (rX || 'r0)))
    ; frame-direct: a constant-indexed frame-array element is a static slot (off + k*elsize), the
    ; address consumed by its own load/store, so escaping arrays too; pair/d128 keep the address lanes
-   (afd g env e)                                    ; -> (off elty) | ()
-    (e @ ('deref ('bin '+ ('var nm) ('num i && 0 <= i)))
+   (afd g env e) (afd2 g env e ())                  ; -> (off elty) | ()
+   (afd2 g env e fl)                                ; ..fl: a double element too (a load: the stores keep the int lanes)
+    (e @ ('deref ('bin '+ ('var nm) ix))
+          (knum g ix @ kc
+           (: i (two? kc ? <kc)
+            (!(charm? i) || i < 0 ? ()
            (vent g env nm @ en
               (!(two? en && <en = 'loc && arr? <>>en) ? ()
                  (<>(<>>en) @ et
-                    ((ptr? et || elem et '(char schar cchar uchar bool short ushort int uint long ulong)) &&
+                    ((ptr? et || elem et '(char schar cchar uchar bool short ushort int uint long ulong) ||
+                      fl && flo? et && !(abl? g 'afdf)) &&
                      !(pair? g et) ?
-                       [(<>en + i * tsz g et) et])))))
+                       [(<>en + i * tsz g et) et]))))))))
    ; may this param alias? only if the body never writes it (the register holds the caller's
    ; live value). a C name is a string, so the compare is `=` -- `==` never matches
    (wrs? nm e)
@@ -1703,7 +1708,7 @@
               (mkv <>>en 'r0 [['la 'r0 <>en]])))
        ('deref X)
         ; frame-direct: a constant-indexed element is a static (r4, off) face
-        (: fdc (afd g env e)
+        (: fdc (afd2 g env e 1)
            ; *p++ on a register-homed pointer: the home steps first and the face reads one step
            ; back, so the old value needs no copy (p's step and any other read of p are unsequenced)
            pp9 (X @ ('post ('var nm) k)
@@ -1762,8 +1767,9 @@
 
    ; the static face of a store target -> (off ty) | (): afd, or a dot chain over a frame local whose
    ; clval face is (r4, off) with no emission. only a var/dot chain over a loc enters clval: any other base could emit
-   (sfd g env e)
-    (? (<e = 'deref) (afd g env e)
+   (sfd g env e) (sfd2 g env e ())
+   (sfd2 g env e fl)                                ; ..fl: a double element too (a plain store's)
+    (? (<e = 'deref) (afd2 g env e fl)
        (<e != 'dot) ()
        (: (dotv? x) (x @ ('var nm) nm  ('dot . b . _) (dotv? b)  ())
           nm (dotv? e)
@@ -2370,7 +2376,7 @@
            dq9 (g 'drop9)           ; a statement drops the answer: an asn on its right still wants its own
            _ (pin g 'drop9 ())
            rv (<dst = 'var ? (vent g env <>dst) 'bad)
-           fd (sfd g env dst)
+           fd (sfd2 g env dst 1)
            (? (two? rv && <rv = 'regv && fhomable? <>>rv)   ; store into an xmm home: off the protocol
                (cgexpr g env rhs () @ r
                   (bad? r ? 'bad (mkv 'double 'r0 (asflo g r + [['movapd <>rv 'f0]]))))
@@ -2407,7 +2413,8 @@
               (two? fd)
                (: off <fd ty <>fd
                   r (cgexpr g env rhs ())
-                  (bad? r ? 'bad
+                  (? (bad? r) 'bad
+                     (flo? ty) (mkv 'double 'r0 (asflo g r + fstf g ty 'r4 off 'f0))
                      ; a register-riding value stores itself (no r0 bridge)
                      (!(flo? (vty r)) && atom? (cvt ty 'r0) && vreg r != 'r0 ?
                         (mkv ty (vreg r) (vfs r + [[(stop ty) 'r4 off (vreg r)]]))
@@ -9385,6 +9392,62 @@
        (atom? (keys sbs) ? f
         (kprop g ([<f <>f <>>f] + (['blk (sub items)] . >>>>f)))))
 
+   ; -- a small counted loop unrolled: for (T k = A; k < B; k++) over a constant count of at most
+   ; 16, its copies small in all, a body that neither writes k, takes its address, nor leaves
+   ; early. each copy reads k as its literal and spells its own locals apart (respell made every
+   ; name the fn's own)
+   (unrl g f)
+    (: w64 !(ilp32? g)
+       (size x) (atom? x ? 1 (foldl (a \ y \ a + size y) 0 x))
+       (kv e) (cfold w64 e @ v (cint? v ? v ()))
+       (nogo? x k)                                  ; something a copy may not repeat, or k may not suffer
+        (? (atom? x) ()
+           (elem <x '(brk cont goto lbl case dflt switch asm sexpr sdecl)) 1
+           (x @ (('asn || 'post || 'rmw) ('var n) . _) (n = k)
+                ('rmw _ ('var n) _) (n = k)
+                ('addr ('var n)) (n = k)
+                ())
+            1
+           (foldl (a \ y \ a || nogo? y k) () x))
+       (dnames x)                                   ; the locals the body declares
+        (? (atom? x) ()
+           (<x = 'decl) (map (p \ <p) <>x)
+           (foldl (a \ y \ a + dnames y) () x))
+       (copy x k kt i ds)
+        (? (atom? x) x
+           (x @ ('var n) (? (n = k) ['cast kt ['num i]]
+                            (elem n ds) ['var (n + "`u" + show i)]
+                            x)
+                ('decl ps) ['decl (map (p \ (elem <p ds ? ((<p + "`u" + show i) . copy >p k kt i ds) (copy p k kt i ds))) ps)]
+                (map (y \ copy y k kt i ds) x)))
+       ; the trip: (k ty lo hi) for a loop in the shape, else ()
+       (trip ini cnd stp)
+        (ini @ ('decl [[k kt e0]])
+           (: lo (kv e0)
+              st (stp @ ('post ('var k2) 1) (k2 = k)
+                        ('asn ('var k2) ('bin '+ ('var k3) e1)) (k2 = k && k3 = k && kv e1 = 1)
+                        ())
+              (? !(charm? lo) () !st () !(elem kt '(char schar uchar short ushort int uint long ulong)) ()
+                 (cnd @ ('bin op ('var k2) e2)
+                    (: hi (kv e2)
+                       (? (k2 != k || !(charm? hi)) ()
+                          (op = 'lt) [k kt lo hi]
+                          (op = 'le) [k kt lo (hi + 1)]
+                          (op = 'ne && lo <= hi) [k kt lo hi]
+                          ()))
+                    ())))
+           ())
+       (walk x)
+        (? (atom? x) x
+           (x @ ('for ini cnd stp body)
+                 (: t (trip ini cnd stp)
+                    n (two? t ? (t 3 - t 2) -1)
+                    b2 (walk body)
+                    (? (n < 0 || 16 < n || 512 < n * size b2 || nogo? b2 <t) ['for ini cnd stp b2]
+                       (: ds (dnames b2)
+                          ['blk (map (i \ copy b2 <t <>t (t 2 + i) ds) ^n)])))
+                (map walk x)))
+       (abl? g 'unroll ? f (walk f)))
    ; an overflow builtin over two constant operands into a local whose address it alone takes
    ; and nothing else writes, answered here: the local's declaration takes the exact value at
    ; its width, the call whether it fit -- so kprop carries the local on (kmalloc_array's
@@ -9432,7 +9495,10 @@
        (res x) (? (atom? x) x (<x = 'bcp) ['num (charm? (cfold w64 <>x) ? 1 0)] (map res x))
        (has? f ? (kprop g (dprune w64 (e \ ()) (res f))) f))
    (cgfn g f)                                       ; ('fn name params ('blk items)) -> forms | 'bad
-    (: f (bcpfin g (: k1 (kprop g (phome g (respell (oalign g (ainl g f))))) (ovfold g k1 @ k2 (two? k2 ? (kprop g k2) k1))))
+    (: f (bcpfin g (: k0 (kprop g (phome g (respell (oalign g (ainl g f)))))
+                      u0 (unrl g k0)
+                      k1 (u0 = k0 ? k0 (kprop g u0))
+                      (ovfold g k1 @ k2 (two? k2 ? (kprop g k2) k1))))
        ; the tree passes probe addresses (kprop's, an asm operand's) before every constant has
        ; arrived; a name such a probe could not resolve is no refusal's cause
        _ (pin g 'undecl ())
