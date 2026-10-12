@@ -62,7 +62,7 @@ enum status fin(struct g *g) {
    // the nursery -- a frontend that exits never misses them, one that fins to make room
    // for the next runtime gets nothing back without this.
    if (g->rem) alloc(g->rem, 0);
-   if (g->major_base) image_drop(g->major_base), alloc(g->major_base, 0), alloc(g->major_spare, 0);
+   if (g->major_base) image_drop(g->major_base), alloc(g->major_base, 0);
    alloc(g, 0); }                       // ..the pool is g, so it goes last
  return s; }
 
@@ -172,7 +172,7 @@ static struct g *ini_0(struct g*g, uintptr_t len0) {
  // the rem set + major pool ride alloc: a seat whose heap cannot supply them cannot run
  g->major_len = love_major0;
  g->rem = alloc(NULL, LvRemCap * sizeof(word));
- g->major_base = g->rem ? major_pair(g->major_len, &g->major_spare) : NULL;
+ g->major_base = g->rem ? alloc(NULL, g->major_len * sizeof(word)) : NULL;
  if (!g->major_base) { if (g->rem) alloc(g->rem, 0); return encode(g, status_scare); }
  g->major_hp = g->major_base, g->budget = love_budget;
  g->minor0 = love_minor0, g->major0 = love_major0, g->ratio = gc_ratio;   // the live knobs; `tune` moves them
@@ -407,7 +407,7 @@ static lvm(lvm_please) {
 //   [9] rem_miss  rem-set entries dropped on overflow since the last collection (a miss forces a major; ~always 0)
 //  [10] rem_hi    peak remembered-set size (distinct old objects with a young field)
 //  [11] n_minor   minor collections so far (majors = n_gc - n_minor)
-//  [12] major_cap the major pool's reserved footprint: 2*major_len words (both halves)
+//  [12] major_cap the major pool's reserved footprint: major_len words
 //  [13] n_resize  pool reallocations so far (the pool-cliff tell)
 //  [14] minor_hi  peak words one minor copied -- the pause gauge (a copying
 //  [15] major_hi  peak words one major copied    collection's pause is its copy volume)
@@ -431,7 +431,7 @@ static lvm(lvm_gauge) {
  Gs(9, g->rem_miss);
  Gs(10, g->rem_hi);
  Gs(11, g->n_minor);
- Gs(12, 2 * g->major_len);                          // major pool capacity (both halves), words
+ Gs(12, g->major_len);                              // major pool capacity, words
  Gs(13, g->n_resize);
  Gs(14, g->minor_hi);
  Gs(15, g->major_hi);
@@ -1062,7 +1062,7 @@ static lvm(lvm_link) {
  if ((vop) == vop_mul) love_musttail return Ap(lvm_bmul_start, g); /* O(n^2): run yieldable */ \
  Pack(g); g = big_binop(g, vop); \
  if (!ok(g)) love_musttail return Ap(_lvm_ghelp, g); \
- love_musttail return Resume(); }
+ Unpack(g); love_musttail return Continue(); }
 #define avm_slowdiv(op, vop, c_op, fexpr, zarm) lvm(lvm_##op##n) { \
  word a = Sp[0], b = Sp[1]; \
  if (trayp(a) || trayp(b)) { g->b = (word) (vop); love_musttail return Ap(lvm_vbin, g); } \
