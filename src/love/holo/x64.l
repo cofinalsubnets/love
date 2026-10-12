@@ -79,6 +79,8 @@
          ;; (link.l, kind 10). i386 lays every address so.
          'abs32 ((target + aux) % 4294967296 @ v
                    (le32 (v < 0 ? (v + 4294967296) v)))
+         ;; abs32s: the address a sign-extended dword carries (pushq $sym): the kernel's at -2 GiB
+         'abs32s ((target + aux) @ v (fits32 v ? (le32 (v < 0 ? (v + 4294967296) v)) (scare 'abs32s-range v)))
          'abs16 ((target + aux) % 65536 @ v (le16 (v < 0 ? (v + 65536) v)))   ; a 16-bit segment's address
          'abs8 ((target + aux) % 256 @ v [(v < 0 ? (v + 256) v)])
          'pc8 (: d (target + aux - (site + width))       ; a hand-laid short jump's displacement
@@ -505,7 +507,7 @@
    (emit-segst n base off) (rn base @ bn ((hi bn != 0 ? [(rex 0 0 0 1)]) + ([140] + mem n base off)))
    (emit-segld n base off) (rn base @ bn ((hi bn != 0 ? [(rex 0 0 0 1)]) + ([142] + mem n base off)))
    ;; pushl: a label's address as the sign-extended dword push takes (68 id), which the link fills
-   (emit-pushl label) [104 (fix 4 'abs32 label 0)]
+   (emit-pushl label) [104 (fix 4 'abs32s label 0)]
    ;; mdig: opcode bytes over memory, the /digit as the register field (the fpu's state doors)
    (emit-mdig opc dig w base off) (x64-mw w opc opc (x64-digit dig) base off 0)
    ;; rdig: the same over a register (mod 3), a legacy prefix ahead of the REX

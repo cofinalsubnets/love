@@ -18,6 +18,7 @@
    r-32    10                                       ; R_X86_64_32     S + A, truncated to 4 bytes -- the
                                                     ; PVH note's 32-bit entry. the kernel links flat
                                                     ; under 4 GiB so it fits; nothing hosted emits it.
+   r-32s   11                                       ; R_X86_64_32S    S + A, sign-extended (pushq $sym)
    ; ... and a64. field relocs here patch bits of an instruction word, not a
    ; whole field -- the placeholder bytes carry the base opcode (the fixup's aux).
    ra-abs64  257                                    ; R_AARCH64_ABS64           S + A
@@ -591,6 +592,7 @@
                  'abs64 (o-rela off si rabs (sa + aux))
                  ; ..and its 4-byte twin, the PVH note's 32-bit entry
                  'abs32 (o-rela off si (a64 ? ra-abs32 r-32) (sa + aux))
+                 'abs32s (o-rela off si r-32s (sa + aux))
                  ; ..and a data word measured from its own start, eight bytes (the field is 8 wide)
                  'rel64 (o-rela off si (a64 ? ra-prel64 r-pc64) ((sa + aux) - 8))
                  ; x64: the field is measured from its own end, so every addend carries

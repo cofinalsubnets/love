@@ -97,11 +97,19 @@ readelf -SW "$ho/.dsz.o" | grep -q '\.init\.data' || fail "a block static lost i
 echo "mooncc: -mno-sse variadics, sized data symbols and a block static's section ok"
 # what the kernel leaves only dead code to call must not be named at all: a stub over a struct
 # it never reads (pmd_is_huge(pmd_t)), a test absorbing its unknown part (dax_mapping's
-# `host && (flags & 0)`), a call under __builtin_expect, and a flag cleared by `&= 0`
+# `host && (flags & 0)`), a call under __builtin_expect, a flag cleared by `&= 0` and read past a
+# label, one only ever assigned false, an empty callee handed linker arrays, a switch on a
+# constant, and a static's parameter every call passes the same
 cat > "$ho/.dead.c" <<'DEAD'
 struct inode { unsigned i_flags; }; struct as { struct inode *host; };
 typedef struct { unsigned long pmd; } pmd_t;
 extern void dax_del(void); extern void huge(void); extern void zdev(void); extern void ia32(void);
+extern void conv(void); extern void reclaim(void); extern void invalid(void); extern int fault(void);
+extern int sites[], sites_end[];
+void __attribute__((noinline)) apply(int *s, int *e) { }
+static int __attribute__((noinline)) rs(int *b, _Bool i32, int n) { if (!i32) return b[0]; conv(); return n; }
+enum st { S_DONE, S_LOCK };
+static inline __attribute__((always_inline)) void next(int *s, enum st t) { switch (t) { case S_DONE: invalid(); return; case S_LOCK: *s = 1; return; } }
 static inline int dax_mapping(struct as *m) { return m->host && (m->host->i_flags & 0); }
 static inline int pmd_is_huge(pmd_t p) { return 0; }
 static inline int zone_device(const struct as *f) { return 0; }
@@ -117,10 +125,28 @@ int f(struct as *m, pmd_t *p, char *a, char *b) {
 out:
   return r;
 }
+int g(int *b, int *c, int n) {
+  _Bool ia = (b != c), can = 0;
+  ia &= 0;
+  apply(sites, sites_end);
+retry:
+  if (fault()) goto retry;
+  if (ia) ia32();
+  do { if (n & 1) can = 0; } while (--n > 0);
+  if (can) reclaim();
+  next(b, S_LOCK);
+  return rs(b, ia, 1) + rs(c, ia, 2);
+}
 DEAD
 moonrun -c "$ho/.dead.c" -o "$ho/.dead.o" || fail "mooncc: the dead-call program"
-! grep -qa 'dax_del\|huge\|zdev\|ia32' "$ho/.dead.o" || fail "a call only dead code makes is still named in the object"
+! grep -qa 'dax_del\|huge\|zdev\|ia32\|conv\|reclaim\|invalid\|sites' "$ho/.dead.o" || fail "a call only dead code makes is still named in the object"
 echo "mooncc: dead stubs, absorbed tests and a cleared flag name nothing ok"
+# pushq $sym: the dword the cpu sign-extends links as R_X86_64_32S (the kernel lives at -2 GiB)
+cat > "$ho/.p32s.c" <<'P32S'
+void f(void) { unsigned long t; asm volatile("pushq $1f\n\tpopq %0\n1:" : "=r"(t)); }
+P32S
+moonrun -c "$ho/.p32s.c" -o "$ho/.p32s.o" || fail "mooncc: pushq \$1f"
+readelf -rW "$ho/.p32s.o" | grep -q R_X86_64_32S || fail "pushq \$sym does not relocate as R_X86_64_32S"
 
 # an asm's other-section words leave with its home: a BUG_ON a late fold proves false loses its brk
 # and label, and its __bug_table row must go too, or the object names a label it never lays

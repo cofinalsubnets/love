@@ -20,6 +20,8 @@
             (ld r1 r0 4) (st sp 4 r1) (ld r1 r0 0) (st sp 0 r1))
    cell2w '((sub sp sp 16) (ld r1 r0 8) (st sp 8 r1) (ld r1 r0 0) (st sp 0 r1))
    push2w '((ld r1 r0 8) (push r1) (ld r1 r0 0) (push r1))
+   ; the calls that return twice: what lives across one lives in memory, not in what a pass assumed
+   twicefns '("setjmp" "_setjmp" "__setjmp" "sigsetjmp" "__sigsetjmp" "savectx" "vfork" "getcontext" "__builtin_setjmp")
    csx64 '(r11 r12 r13 r14)                         ; x64's borrowable callee-saved file (r12..r15): the cs pool and its rosters
    (csx g) (ia32? g ? '(r5 r6) csx64)              ; ..i386's: esi edi
    ; unsigned 64 -> double: cvtsi2sd is signed, so convert the two 32-bit halves (each exact)
@@ -9171,7 +9173,20 @@
              ((bcpopen? w64 c ? () (zfold w64 c)) @ v
                 (!(cint? v) || lbl? th || lbl? el ? (map (dprune w64 ty) x)
                    (: s (v != 0 ? th el) (two? s ? (dprune w64 ty s) '(nop)))))
+            ; a switch on a constant starts at its case: what lies ahead of it no case reaches
+            ; (__scoped_seqlock_next's switch on its target), unless a goto's label is there or a
+            ; case stands deeper than the body's own list (Duff's device)
+            ('switch c items)
+             ((bcpopen? w64 c ? () (zfold w64 c)) @ v
+                (: (hit? it) (it @ ('case . lo . r) (two? r ? (lo <= v && v <= <r) (lo = v)) ())
+                   (at p l i) (? !(two? l) -1 (p <l) i (at p >l (i + 1)))
+                   k (cint? v ? (at hit? items 0 @ i (i < 0 ? (at (it \ it = '(dflt)) items 0) i)) -1)
+                   (glb? l) (any (it \ glbl? it) l)
+                   (? (k < 1 || glb? (take k items) || any (it \ !(elem <it '(case dflt)) && ncase? it) items) (map (dprune w64 ty) x)
+                      ['switch c (map (dprune w64 ty) (drop k items))])))
             (map (dprune w64 ty) x)))
+   (glbl? x) (? !(two? x) () (<x = 'lbl) 1 (glbl? <x || glbl? >x))
+   (ncase? x) (? !(two? x) () (<x = 'switch) () (elem <x '(case dflt)) 1 (ncase? <x || ncase? >x))
    ; -- respell: a name declared twice in one fn conflates in alive and kprop, so each later decl
    ; respells (nm`2 ..) and its scope's mentions follow; a static local keeps its spelling (its label) --
    ; i386: a param read three times or more in a fn that calls copies into a local at entry, so
@@ -9237,11 +9252,57 @@
                 (re s env)))
        env0 (foldl (a2 \ p \ (fresh <p, [<p <p] . a2)) () <>>f)
        [<f <>f <>>f (rs (f 3) env0)])
-   ; the calls that return twice: what lives across one lives in memory, not in what a pass assumed
-   twicefns '("setjmp" "_setjmp" "__setjmp" "sigsetjmp" "__sigsetjmp" "savectx" "vfork" "getcontext" "__builtin_setjmp")
+   ; a body of nothing but `return;` (the kernel's apply_returns when rethunks are off)
+   (empty? b) (b @ ('blk items) (all (it \ it = '(nop) || (<it = 'ret && !(two? >it && two? <>it))) items) ())
+   ; a statement calling such a function, here, is its impure arguments alone: gcc's reading too, so
+   ; the extern arrays such a call passes (__return_sites) need never link
+   (nopcall g f)
+    (: (go x) (? !(two? x) x
+                 (x @ ('expr . ('call . ('var nm) . as . _) . _)
+                       (peep (g 'nopf) nm () ? (filter (a \ !(zpure? a)) as @ es (two? es ? ['blk (map (a \ ['expr a]) es)] '(nop)))
+                          (map go x))
+                      (map go x)))
+       ([<f <>f <>>f (go (f 3))] + >>>>f))
+   ; -- a static function's parameter every call here passes as the one constant, and its body never
+   ; writes, reads as that constant (gcc's ipa-cp: fpu__restore_sig hands __fpu_restore_sig an
+   ; ia32_fxstate it cleared). the calls are read after each caller's own propagation; a name used
+   ; other than as a call's head, or spelled in any asm, is out of reach --
+   (ipcp g sfns fs)
+    (: calls {} esc {} asms {'t ()}
+       (scan x) (? !(two? x) 0
+                   (x @ ('call . ('var nm) . as . _) (: _ (pin calls nm (as . peep calls nm ())) (scan as))
+                        ('var nm) (pin esc nm 1)
+                        (('asm || 'tasm) . t . _) (: _ (pin asms 't (t . asms 't)) (scan >>x))
+                        (scan <x, scan >x)))
+       _ (map (f \ (<f = 'fn ? (scan (lprop g (respell f))) (scan f))) fs)
+       (spelt? nm) (any (t \ string? t && 1 < #(split nm t)) (asms 't))
+       w64 !(ilp32? g)
+       ; the substitution: a parameter the body writes, or one of a type no constant stands for, is left alone
+       (one f)
+        (: nm <>f ps <>>f body (f 3) cs (peep calls nm ())
+           (? (!(peep sfns nm ()) || esc nm || spelt? nm || !(two? cs)) f
+              (: ws (pwrites body () + pdecls body ())   ; ..or a name a block declares again
+                 (kof i) (: vs (map (as \ (i < #as ? (cfold w64 (as i)) ())) cs)
+                            (cint? <vs && all (v \ v = <vs) vs ? <vs ()))
+                 (go l i acc) (? !(two? l) acc
+                                 (: p <l k (kof i)
+                                    (go >l (i + 1) (cint? k && nelem <p ws && elem <>p '(bool char schar cchar uchar short ushort int uint long ulong)
+                                                     ? ([<p ['cast <>p ['num k]]] . acc) acc))))
+                 ks (go ps 0 ())
+                 (two? ks ? ([<f <>f <>>f (psub ks body)] + >>>>f) f))))
+       (map (f \ (<f = 'fn ? (one f) f)) fs))
+   (pwrites x acc) (? !(two? x) acc
+                      (x @ (('asn || 'post) . ('var v) . _) (pwrites >>x (v . acc))
+                           ('rmw . _ . ('var v) . _) (pwrites >>>x (v . acc))
+                           ('addr . ('var v) . _) (v . acc)
+                           ('asm . _) (foldl (a \ o \ <>o @ ('var v) (v . a) a) acc (x 2))
+                           (pwrites >x (pwrites <x acc))))
+   (pdecls x acc) (? !(two? x) acc (x @ (('decl || 'sdecl) . ps . _) (foldl (a \ p \ (<p . a)) acc ps) (pdecls >x (pdecls <x acc))))
+   (psub ks x) (? !(two? x) x (x @ ('var v) (assoc v ks @ e (two? e ? <>e x)) (map (psub ks) x)))
    ; -- straight-line propagation: in a block, past `x = K` -- or an op= whose answer is K whatever x
-   ; held (the kernel's `ia32_fxstate &= IS_ENABLED(..)`) -- x reads as K up to its next write or the
-   ; next label. a scalar local whose address is never taken; not across a call that returns twice --
+   ; held (the kernel's `ia32_fxstate &= IS_ENABLED(..)`) -- x reads as K up to its next write. a label
+   ; keeps it only when every write of x is behind it and no goto came first (copy_fpstate_to_sigframe's
+   ; retry:). a scalar local whose address is never taken; not across a call that returns twice --
    (lprop g f)
     (: w64 !(ilp32? g)
        tak {} tys {}
@@ -9259,6 +9320,15 @@
                            ('asm . _) (foldl (a \ o \ <>o @ ('var v) (v . a) a) acc (x 2))
                            (wrs >x (wrs <x acc))))
        (lab? x) (? !(two? x) () (elem <x '(lbl case dflt)) 1 (lab? <x || lab? >x))
+       (gto? x) (? !(two? x) () (elem <x '(goto igoto)) 1 (<x = 'asm && 5 < #x && two? (x 5)) 1 (gto? <x || gto? >x))
+       ; every write of a name, a declaration's initializer one
+       (nw t x) (? !(two? x) 0
+                   (x @ ('decl . ps . _) (foldl (_ \ p \ ((two? >>p && <>>p != () ? (pin t <p (1 + peep t <p 0)) 0), nw t >>p)) 0 ps)
+                        (: _ (map (v \ pin t v (1 + peep t v 0)) (x @ (('asn || 'post) . ('var v) . _) [v] ('rmw . _ . ('var v) . _) [v]
+                                                                       ('asm . _) (foldl (a \ o \ <>o @ ('var v) (v . a) a) () (x 2)) ()))
+                           (nw t <x, nw t >x))))
+       wtot {} wdone {} gs {'g 0}
+       _ (nw wtot (f 3))
        (sub env x) (? !(two? x) x (x @ ('var v) (assoc v env @ e (two? e ? <>e x)) (map (sub env) x)))
        (vsub nm k x) (? !(two? x) x (x = ['var nm]) ['num k] (map (vsub nm k) x))
        ; x's value past `x = rhs`: one constant whatever x held, in x's own type
@@ -9266,20 +9336,46 @@
                        (at k) (cfold w64 ['cast ty (vsub nm k rhs)])
                        a (at 0)
                        (cint? a && a = at 1 && a = at (0 - 1) ? (cnum g ['cast ty ['num a]] @ cv (two? cv ? ['cast ty ['num <cv]])) ()))
-       (blk items env)
+       ; ..and a name every write of which gives the one K (zap_pte_range's can_reclaim_pt, false at its
+       ; declaration and false where it is cleared) is K at every read
+       kv {}
+       (one nm k) (peep kv nm 'none @ o (pin kv nm (? (o = 'none) k (o = k) k 'no)))
+       (kw x) (? !(two? x) 0
+                 (x @ ('decl . ps . _) (foldl (_ \ p \ ((two? >>p && <>>p != () ? (one <p (ok? <p ? (val <p <>>p @ k (two? k ? k 'no)) 'no)) 0), kw >>p)) 0 ps)
+                      ('asn . ('var v) . rhs . _) (: _ (one v (ok? v ? (val v rhs @ k (two? k ? k 'no)) 'no)) (kw rhs))
+                      (('post || 'rmw) . _) (: _ (map (v \ one v 'no) (wrs x ())) (kw <x, kw >x))
+                      ('asm . _) (: _ (map (v \ one v 'no) (wrs x ())) (kw <x, kw >x))
+                      (kw <x, kw >x)))
+       _ (kw (f 3))
+       kenv (foldl (a \ nm \ (kv nm @ k (two? k ? ([nm k] . a) a))) () (keys kv))
+       ; reads only: the name an assignment writes stays its own
+       (rd x) (? !(two? x) x
+                 (x @ ('var v) (assoc v kenv @ e (two? e ? <>e x))
+                      ('asn . ('var v) . rhs . _) ['asn ['var v] (rd rhs)]
+                      (map rd x)))
+       ; top: the body's own list, where an item's writes are counted (a nested one starts with nothing)
+       (blk items env top)
         (!(two? items) ? ()
            (: it <items
-              e0 (lab? it ? () env)
+              e0 (lab? it ? (gs 'g || !top ? () (filter (e \ peep wtot <e 0 = peep wdone <e 0) env)) env)
+              _ (top ? (nw wdone it) 0)
+              _ (gto? it ? (pin gs 'g 1) 0)
               ws (wrs it ())
               e1 (filter (e \ nelem <e ws) e0)
               it2 (inner (sub e1 it))
               e2 (it2 @ ('expr . ('asn . ('var v) . rhs . _) . _) (ok? v ? (val v rhs @ k (two? k ? ([v k] . e1) e1)) e1)
                         ('decl ps) (foldl (a \ p \ (two? >>p && ok? <p ? (val <p <>>p @ k (two? k ? ([<p k] . a) a)) a)) e1 ps)
                         e1)
-              (it2 . blk >items e2)))
+              (it2 . blk >items e2 top)))
        ; a nested block starts over: the entry it is reached by need not be the one above it
-       (inner x) (? !(two? x) x (<x = 'blk) ['blk (blk <>x ())] (map inner x))
-       (tw? (f 3) ? f ([<f <>f <>>f (inner (f 3))] + >>>>f)))
+       (inner x) (? !(two? x) x (<x = 'blk) ['blk (blk <>x () ())] (map inner x))
+       ; `0 || e` and `1 && e` are e's truth: it evaluates as surely as the test does, where the
+       ; inliner takes it (copy_fpstate_to_sigframe's `ia32_fxstate || !use_fxsr()`)
+       (simp x) (? !(two? x) x
+                   (x @ ('lor . a . b . _) (zfold w64 a = 0 ? ['un 'not ['un 'not (simp b)]] (map simp x))
+                        ('land . a . b . _) (zfold w64 a @ v (cint? v && v != 0 ? ['un 'not ['un 'not (simp b)]] (map simp x)))
+                        (map simp x)))
+       (tw? (f 3) ? f ([<f <>f <>>f (simp ((rd (f 3)) @ ('blk items) ['blk (blk items () 1)] (inner (rd (f 3)))))] + >>>>f)))
    ; -- AST constant propagation: a scalar local declared once from a folding initializer, never
    ; written or &-taken, shadowing nothing, reads as its cast literal and its decl drops. runs to a fixpoint --
    (kprop g f)
@@ -9397,7 +9493,7 @@
        (res x) (? (atom? x) x (<x = 'bcp) ['num (charm? (cfold w64 <>x) ? 1 0)] (map res x))
        (has? f ? (kprop g (dprune w64 (e \ ()) (res f))) (dprune w64 (e \ ()) f)))
    (cgfn g f)                                       ; ('fn name params ('blk items)) -> forms | 'bad
-    (: f (bcpfin g (: k1 (kprop g (lprop g (phome g (respell (oalign g (ainl g f)))))) (ovfold g k1 @ k2 (two? k2 ? (kprop g k2) k1))))
+    (: f (bcpfin g (: k1 (kprop g (lprop g (phome g (respell (oalign g (nopcall g (ainl g (lprop g (respell f))))))))) (ovfold g k1 @ k2 (two? k2 ? (kprop g k2) k1))))
        ; the tree passes probe addresses (kprop's, an asm operand's) before every constant has
        ; arrived; a name such a probe could not resolve is no refusal's cause
        _ (pin g 'undecl ())
@@ -10317,7 +10413,7 @@
     (: g {'n 0 'brk () 'brkm () 'cnt () 'cases () 'glob {} 'globs () 'strs () 'clits () 'clitm {} 'dbls {} 'jtabs () 'statics ()
           'abl (ablenv 0)                           ; the pricing knob, read per unit at run time
           'laid {}                                  ; names already on 'globs (a tentative repeat lays no twin)
-          'fns {} 'inl {} 'ineed {} 'alw {} 'ainlc {} 'cgitems cgitems 'sxpre sxpre 'stag stbl 'sigs sigs
+          'fns {} 'inl {} 'ineed {} 'alw {} 'nopf {} 'ainlc {} 'cgitems cgitems 'sxpre sxpre 'stag stbl 'sigs sigs
           'tgt tgt                                  ; (the epilogue is per fn: cgfn pins g 'epi)
           'sects (two? xtra ? <>>xtra {})
           'alias (two? xtra && 3 < #xtra ? (xtra 3) {})
@@ -10342,6 +10438,8 @@
        (recfns fs) (!(two? fs) ? 1
                       (<fs @ f
                          (elem <f '(fn proto) ? (pin (g 'fns) <>f 1),
+                          ; a body that does nothing: a call to it here is its arguments' effects alone
+                          (<f = 'fn && nelem <>f weaks && empty? (f 3) ? (pin (g 'nopf) <>f 1) 0),
                           <f = 'fn && !nolin &&
                           nelem <>f weaks &&
                           nelem <>f noinls &&
@@ -10389,7 +10487,7 @@
        ; fn an initializer names), then what their laid forms still call, to closure; a spliced static's body ships only if named --
        (glay _)
         (: fnix {}                              ; fn name -> its AST form
-           _ (foldl (_ \ f \ <f = 'fn ? (pin fnix <>f f, 0) 0) 0 <>ast)
+           _ (foldl (_ \ f \ <f = 'fn ? (pin fnix <>f f, 0) 0) 0 (ipcp g (two? xtra ? <xtra {}) <>ast))
            unom {}                              ; the interned nom -> that name
            _ (foldl (_ \ nm \ (pin unom (name nm) nm, 0)) 0 (keys fnix))
            sfns (two? xtra ? <xtra {})
@@ -10499,8 +10597,20 @@
                        txt (foldl (a \ f \ (: u (<f = 'fn ? (lfm <>f))
                                             (two? u ? (revcat u a) a)))
                                   () <>ast)
-                       [g (rev txt) dat (g 'saw)])))))
+                       [g (rev txt) (jtlive g dat txt) (g 'saw)])))))
        (ok ? (glay 0)))
+   ; a jump table whose case labels the text no longer lays -- its switch fell with dead code, or
+   ; with a retried build's first attempt -- leaves the rodata
+   (jtlive g dat txt)
+    (: (key x) (string? x ? x (show x))
+       (lbls x t) (? !(two? x) t (<x = 'label) (pin t (key <>x) 1) (lbls >x (lbls <x t)))
+       have (lbls (map (x \ x 1) (g 'xfns)) (lbls txt {}))
+       jl (foldl (t \ p \ pin t (key <p) 1) {} (g 'jtabs))
+       (ok? es) (all (e \ !(two? e) || <e != 'fix || have (key (e 3))) es)
+       (go l) (? !(two? l) l
+                 ((<l @ ('label . k . _) (jl (key k)) ()) && two? >l) (ok? <>(<>l) ? (<l . <>l . go >>l) (go >>l))
+                 (<l . go >l))
+       (dat @ (a . b . c . d . e . f . _) [a b c d e (go f)] dat))
    (cgen ast stbl sigs weaks xtra tgt)              ; the static executable: _start (crt0) + text + data -> (1 forms) | () -- needs main
     (: crt0 (? (tgt = 'a64)
                '((call main) (li r8 93) (sys))            ; x0 already the exit code; x8 = __nr_exit (93), svc
