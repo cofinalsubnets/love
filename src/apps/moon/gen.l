@@ -584,10 +584,12 @@
    ; a home carries narrow gp scalars too, canonically extended (every def re-narrows through cvt,
    ; a param's entry cvt canonicalizes the arrival), so reads are zero forms; a bool home holds 0/1
    (lhomable? ty) (homable? ty || elem ty '(int uint short ushort char schar cchar uchar bool))
-   ; a double local homes in an xmm seat (x64): caller-saved all, so only a name that crosses no
+   ; a double or float local homes in an xmm seat (x64, a64, rv64; a float binary32 in it, every
+   ; target with the file carries floats native): caller-saved all, so only a name that crosses no
    ; call takes one, and it never joins g 'homes (no wrap, no shadow). the file sits above the
    ; protocol pair, the narrow scratch and the park file
-   (fhomable? ty) (ty = 'double)
+   (fhomable? ty) (ty = 'double || ty = 'float)
+   (fphome? g ty) (ty = 'double || ty = 'float && f32abi? g)        ; a param: a float only where it arrives binary32
    (ffile g) (? (abl? g 'fsel) ()
                  (x64? g) '(f8 f9 f10 f11 f12 f13 f14 f15)
                  (a64? g) '(f24 f25 f26 f27 f28 f29 f30 f31)   ; the pure temps past the parks (v8..v15 owe a save)
@@ -2356,7 +2358,7 @@
                   (mkv ['ptr (fnty g nm)] 'r0 [['la 'r0 (name nm)]])
                   (pin g 'undecl nm, 'bad))   ; undeclared: name it for the gripe (an undeclared call's head lands here too)
               (<en = 'regv)
-               (fhomable? <>>en ? (mkv 'double 'r0 [['movapd 'f0 <>en]])   ; an xmm home lands on the protocol
+               (fhomable? <>>en ? (mkv <>>en 'r0 [['movapd 'f0 <>en]])   ; an xmm home lands on the protocol
                   (mkv <>>en <>en ()))   ; a homed param is its register: zero forms, borrowed (read-only)
               (<en = 'regw)                       ; a pair-homed d128 materializes onto the protocol (hi first)
                (mkv <>>en 'r0 [['mov 'r2 <><>en] ['mov 'r0 <<>en]])
@@ -2410,7 +2412,7 @@
            fd (sfd g env dst)
            (? (two? rv && <rv = 'regv && fhomable? <>>rv)   ; store into an xmm home: off the protocol
                (cgexpr g env rhs () @ r
-                  (bad? r ? 'bad (mkv 'double 'r0 (asflo g r + [['movapd <>rv 'f0]]))))
+                  (bad? r ? 'bad (mkv <>>rv 'r0 (asfty g r <>>rv + [['movapd <>rv 'f0]]))))
               (two? rv && <rv = 'regv)   ; store into a register-homed scalar (param or local)
                (cgexpr g env rhs <>rv @ r   ; the rhs aims straight at the home
                   (? (bad? r) 'bad
@@ -2589,8 +2591,9 @@
             (mkv ty 'r0 ([[(ldop ty) 'r0 'r4 off] ['add 'r1 'r0 (stp * step)]]
                          + (ty @ 'bool (cvt ty 'r1)) + [[(stop ty) 'r4 off 'r1]]))
            (? (two? rv && <rv = 'regv && fhomable? <>>rv)   ; x++ on an xmm home: old in f0, home += step
-               (mkv 'double 'r0 (vfs (mkflo g (0.0 + step)) +
-                                 [['movapd 'f1 'f0] ['movapd 'f0 <>rv] ['addsd <>rv 'f1]]))
+               (: f9 (<>>rv = 'float)
+                  (mkv <>>rv 'r0 (vfs (mkflo g (0.0 + step)) + (f9 ? '((cvtsd2ss f0 f0)) ()) +
+                                  [['movapd 'f1 'f0] ['movapd 'f0 <>rv] [(f9 ? 'addss 'addsd) <>rv 'f1]])))
               (two? rv && <rv = 'regv)   ; p++ on a register-homed scalar: old in r0, home += step
                (: ty <>>rv stp (ptr? ty ? (tsz g <>ty) 1)
                   (mkv ty 'r0 ([['mov 'r0 <>rv]
@@ -7450,7 +7453,7 @@
                  (: w9 (hreg && !(two? hreg) && !(fhomable? ty) ? hreg)   ; the home is the destination (the asn regv arm's shape)
                     r (cgexpr g env3 init w9)               ; a scalar (a pointer = string rides cgexpr -> la)
                     (? (bad? r) 'bad
-                       (flo? ty) (one >ps env3 (acc + (hreg ? (asflo g r + [['movapd hreg 'f0]]) (asfty g r ty + fstv g ty 'r4 off 'f0))))
+                       (flo? ty) (one >ps env3 (acc + asfty g r ty + (hreg ? [['movapd hreg 'f0]] (fstv g ty 'r4 off 'f0))))
                        (pair? g ty) (one >ps env3 (acc + asll g r + pst 'r4 off))
                        (d128? ty)
                         (? !(w128? g) (no128 g)
@@ -8346,7 +8349,8 @@
            (: rv (<pe = 'post && <<>pe = 'var ?
                     (vent g env <><>pe) 'bad)
               (? (two? rv && <rv = 'regv && fhomable? <>>rv)   ; x++; on an xmm home
-                  (vfs (mkflo g (0.0 + <>>pe)) + [['addsd <>rv 'f0]])
+                  (vfs (mkflo g (0.0 + <>>pe))
+                   + (<>>rv = 'float ? [['cvtsd2ss 'f0 'f0] ['addss <>rv 'f0]] [['addsd <>rv 'f0]]))
                  (two? rv && <rv = 'regv)     ; a statement-position x++ on a home: the old value is dead
                   (: ty <>>rv stp (ptr? ty ? (tsz g <>ty) 1)
                      ([['add <>rv <>rv (stp * <>>pe)]] + cvt ty <>rv))
@@ -9587,8 +9591,8 @@
                      (spill hp >ps gpi xmmi (ovi + 4) ([<p (ovb g + ovi) pty] . env) acc))
                  (v6m? g && flo? pty)                   ; v6-M base ABI: a double param is a gp pair (no FPU regs exist)
                   (gpair (aup gpi 2))
-                 ; a double granted an xmm seat rides there off its arrival; the rest take a slot
-                 (fhomable? pty && xmmi < 8 && nom? (peep (g 'fpar) <p ()))
+                 ; a double (a float arriving binary32) granted an xmm seat rides there off its arrival; the rest take a slot
+                 (fphome? g pty && xmmi < 8 && nom? (peep (g 'fpar) <p ()))
                   (peep (g 'fpar) <p () @ fr
                      (spill hp >ps gpi (xmmi + 1) ovi ([<p ['reg fr] pty] . env)
                             (acc + [['movapd fr (xmmreg xmmi)]])))
@@ -10072,7 +10076,7 @@
                              (? !(two? ps) 0
                                 !(two? free) 0
                                 (: nm <<ps pty <><ps
-                                   (fhomable? pty && elem nm uv && peep crs9 nm 0 = 0 &&
+                                   (fphome? g pty && elem nm uv && peep crs9 nm 0 = 0 &&
                                     0 < peep rdc9 nm 0 ?
                                       (pin t nm <free, go >ps >free)
                                       (go >ps free))))
