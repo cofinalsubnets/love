@@ -167,7 +167,7 @@ static struct g *ini_0(struct g*g, uintptr_t len0) {
  memset(g, 0, sizeof(struct g));
  g->len = len0;
  g->scare_a = g->scare_b = zero;        // v0..end is GC-walked: raw 0 is not a value
- g->hot_numap = g->hot_arrange = g->hot_compose = g->hot_opfix = g->hot_show = g->hot_net = g->hot_flow = g->hot_cats = zero;   // unsealed: hot_hook traps until (seal-hook) fills them
+ for (int i = 0; i < hook_n; i++) g->hook[i] = zero;   // unsealed: hot_hook traps until (seal-hook) fills them
  g->hp = g->end, g->sp = (word*) g + len0, g->ip = (union u*) yield_c;
  // the rem set + major pool ride alloc: a seat whose heap cannot supply them cannot run
  g->major_len = love_major0;
@@ -639,7 +639,7 @@ static lvm(lvm_cats) {
   else other++; }
  if (p != ZeroPoint || other || (nstr && nlist)) {               // the general fold, in love
   Have(2);
-  word h = hot_hook(g->hot_cats), l = Sp[0], *dst = Sp - 2;
+  word h = hot_hook(g->hook[hook_cats]), l = Sp[0], *dst = Sp - 2;
   dst[0] = l, dst[1] = h, dst[2] = word(Ip + 1);
   Sp = dst, Ip = (union u*) callout_drive;
   love_musttail return Continue(); }
