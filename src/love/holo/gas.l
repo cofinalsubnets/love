@@ -30,8 +30,9 @@
    ;; not the immediate marker. GNU's numeric local labels resolve here, before any dialect looks:
    ;; the k-th `N:` becomes the symbol lN.k, `Nf` the next one, `Nb` the last one. --
    (gcut s c) (: i ((: (g j) (? (j >= #s) -1 (s j = c) j (g (j + 1)))) 0) (i < 0 ? s (snip s 0 i)))
-   (gcut2 s c) (: n #s
-      i ((: (g j) (? (j + 1 >= n) -1 (s j = c && s (j + 1) = c) j (g (j + 1)))) 0)
+   (gcut2 s c) (: n #s                              ; a doubled c starts a comment, outside a string
+      i ((: (g j q) (? (j + 1 >= n) -1 (q && s j = 92) (g (j + 2) q) (s j = 34) (g (j + 1) !q)
+                        (!q && s j = c && s (j + 1) = c) j (g (j + 1) q))) 0 0)
       (i < 0 ? s (snip s 0 i)))
    (gsplit s c) (#s @ n
                    ((: (g i st acc) (? (i >= n) (rev (snip s st n . acc))
@@ -969,6 +970,10 @@
     (#os @ k
        (? (charm? (peep ga-movw m ())) (ga-movw-ins m os)
           (ga-vec? m os) (ga-neon m os)
+          ; a literal load: the word at a label, pc-relative (gas-top's pools land here too)
+          (elem m '(ldr ldrsw) && k = 2 && ((os 1) @ ('sym _) 1 ('symk _ _) 1 _ 0) && ((os 0) @ ('reg r _) (r != 'sp) _ 0))
+           (: w ((os 0) 2) b (? (m = 'ldrsw) (w = 8 ? 0x98000000 ()) (w = 8) 0x58000000 0x18000000)
+              (charm? b ? (ga-sym (os 1) @ (s a) [['afix 'ld19 (b | ga-hw ((os 0) 1)) s a]]) (scare 'gas-a64-operand [m os])))
           (m = 'adrp) (ga-adrp os)
           (m = 'add && k = 3 && ((os 2) @ ('grp _ _) 1 _ 0)) (ga-addlo os)
           (k > 2 && two? (ga-shxof (os (k - 1))) && (two? (peep ga-shop m ()) || two? (peep ga-shal m ()))) (ga-shifted m os)
@@ -1257,7 +1262,7 @@
                 (w = 8 && elem tgt '(x64 a64)) [['fix 8 'rel64 (name s) (k + 8)]]     ; the jump table's `key - .`
                 (scare 'gas-data-pcrel e))
           (w = 8) [['fix 8 'abs64 (name s) k]]
-          (w = 4 && (gx86? tgt || gthumb? tgt)) [['fix 4 'abs32 (name s) k]]
+          (w = 4 && (gx86? tgt || tgt = 'a64 || gthumb? tgt)) [['fix 4 'abs32 (name s) k]]
           (w < 4 && g32? tgt) [['fix w (w = 2 ? 'abs16 'abs8) (name s) k]]   ; i386's narrow fields: R_386_16, R_386_8
           (scare 'gas-data-width e)))
    ; GNU's numeric local labels in an instruction line -> the names gas-top laid them under
@@ -1290,7 +1295,7 @@
    ;; the kernel's exception-table macro, which finds a register's number by name
    gf-ifs '(".if" ".ifc" ".ifnc" ".ifeq" ".ifne" ".ifb" ".ifnb")
    (gf-expand tgt ls)
-    (: mac {} sv {} rq {} cnt {}
+    (: mac {} sv {} sv0 {} rq {} cnt {}
        (dname s) (xa-trim s @ t (0 < #t && t 0 = 46 ? (xa-mnem t) ""))
        (word s i) ((: (g j) (j < #s && gidc? (s j) ? (g (j + 1)) j)) i)
        ; a block's body up to its closer, nested openers counted -> (body rest)
@@ -1308,15 +1313,16 @@
                                            [(rev acc) (("\t.if " + xa-rest (xa-trim <l)) . >l + ["\t.endif"])]
                                           (go >l (? (elem w gf-ifs) (d + 1) (w = ".endif") (d - 1) d) (<l . acc)))))
                     (go l 0 ()))
-       ; a .set symbol reads as its value
-       (ssub s) (: n #s
-                   (go i acc) (i >= n ? acc
-                                 (s i @ c
-                                    (gidc? c && (i = 0 || !(gidc? (s (i - 1)))) ?
-                                        (: j (word s i) k (snip s i j) v (peep sv k ()) q (peep rq k ())
-                                           (go j (acc + (? (charm? v) (show v) (string? q) q k))))
-                                       (go (i + 1) (acc + string c)))))
-                   (go 0 ""))
+       ; a .set symbol reads as its value, a .req name as its register (vt and rt the names that apply)
+       (ssub s) (rsub s sv rq)
+       (rsub s vt rt) (: n #s
+                      (go i acc) (i >= n ? acc
+                                    (s i @ c
+                                       (gidc? c && (i = 0 || !(gidc? (s (i - 1)))) ?
+                                           (: j (word s i) k (snip s i j) v (peep vt k ()) q (peep rt k ())
+                                              (go j (acc + (? (charm? v) (show v) (string? q) q k))))
+                                          (go (i + 1) (acc + string c)))))
+                      (go 0 ""))
        (val e) (gimm (gtoks (ssub e)))
        ; ..at a point, acc the lines laid so far (latest first): backward local labels (`Nb`)
        ; whose distances the a64 lines between them measure. the latest named is the origin and
@@ -1421,7 +1427,8 @@
                      (gf-ident? v && !(charm? (peep sv v ())) ? (go >l (s . acc))   ; an alias: gas-top lays it
                         ; a value over labels (`.set .L__sym_size_f, .-f`) is layout's, not a constant here
                         (trap val <>xs (\ _ _ 'label) @ k
-                           (k = 'label ? (go >l (s . acc)) (pin sv <xs k, go >l acc)))))
+                           (k = 'label ? (go >l (s . acc))
+                              (pin sv <xs k, charm? (peep sv0 <xs ()) ? 0 (pin sv0 <xs k), go >l acc)))))
                  (w = ".irp")
                   (: b (grab >l '(".irp" ".rept") ".endr") xs (xa-oplist r)
                      (go <>b (foldl (\ a v (go (map (x \ psub x [[<xs v]]) <b) a)) acc >xs)))
@@ -1444,7 +1451,9 @@
                  (lsplit t @ (ns u) (two? ns && two? (mac (xa-mnem u))))
                   (lsplit t @ (ns u) (go (u . >l) ((map (n \ n + ":") ns) + acc)))
                  (go >l (ssub s . acc)))))
-       (rev (go ls ())))
+       out (rev (go ls ()))
+       ; a use before its .set reads the value it is first set to, as llvm-mc reads it
+       (atom? (keys sv0) ? out (map (s \ rsub s sv0 {}) out)))
    ; does gas-text read it whole: instructions, and labels on lines of their own
    ; .base64's text -> its bytes: six bits a character accumulate, a byte out per eight; padding
    ; and anything else outside the alphabet carries no bits
@@ -1489,6 +1498,7 @@
     (: st {'cur home 'prev home 'stk () 'run () 'order () 'globl () 'md (gx-md tgt)}
        secs {}                                      ; name -> [type flags forms-reversed]
        labs {}                                      ; label -> its section
+       lits {}                                      ; section -> its pool waiting, [label width expr] latest first
        lc {}                                        ; N -> how many `N:` so far
        (rl n d) (pfx + show (glabel n (d = 102 ? (1 + peep lc n 0) (peep lc n 0))))
        (row nm td) (two? (secs nm) ? 0
@@ -1501,6 +1511,27 @@
                        0))
        (goto nm td) (row nm td, pin st 'prev (st 'cur), pin st 'cur nm)
        (raw bs) (two? bs ? (emit [['raw bs]]) 0)
+       ; a64's `ldr rt, =expr`: a constant one movz holds is that movz, else a word in the
+       ; section's pool (one per width and expression) and a literal load of it, as llvm-mc lays them
+       (lit s)
+        (: xs (xa-oplist (xa-rest s)) e1 (#xs = 2 ? (xa-trim (xs 1)) "")
+           (? (tgt != 'a64 || xa-mnem s != "ldr" || #xs != 2 || !(starts? e1 "=")) s
+              (: rg (xa-trim <xs) e (xa-trim (snip e1 1 #e1)) w (? (starts? rg "x") 8 (starts? rg "w") 4 0)
+                 ts (gtoks e) c (!(any (t \ <t = 'sym || <t = 'lref) ts))
+                 u (c ? (gimm ts @ v (v < 0 ? (v + (1 << 8 * w)) v)) 0)
+                 sh (c ? (filter (k \ u >> k << k = u && u >> k < 65536) (w = 8 ? [0 16 32 48] [0 16])) ())
+                 (? (w = 0) s
+                    (two? sh) ("movz " + rg + ", #" + show (u >> <sh) + ", lsl #" + show <sh)
+                    (: nm (st 'cur) l (peep lits nm ()) hit (filter (x \ x 1 = w && x 2 = e) l)
+                       lb (two? hit ? (hit 0 0) (pfx + ".Llit" + show (peep st 'nlit 0)))
+                       (two? hit ? 0 (pin st 'nlit (peep st 'nlit 0 + 1), pin lits nm ([lb w e] . l)),
+                        "ldr " + rg + ", " + lb))))))
+       (pool nm)
+        (: es (rev (peep lits nm ())) c (st 'cur)
+           (two? es ? (pin st 'cur nm,
+                       emit (catmap (x \ [['dalign (x 1)] ['label (name (x 0))] ['raw (gf-word tgt (x 1) (x 2) rl)]]) es),
+                       pin st 'cur c, pin lits nm ())
+              0))
        (num e) (gimm (gtoks e))
        ; .org label+k (or k from the section's start): zeros up to it, over data laid since
        (org e)
@@ -1599,6 +1630,7 @@
               ; the x86 segment the lines after it run in: their operand and address widths
               (elem mn '(".code16" ".code16gcc" ".code32" ".code64"))
                (gx86? tgt ? (pin st 'md (mn @ ".code32" 32 ".code64" 64 16)) (scare 'gas-directive mn))
+              (elem mn '(".ltorg" ".pool")) (pool (st 'cur))
               (scare 'gas-directive mn)))
        (line s0)
         (xa-trim s0 @ s
@@ -1613,9 +1645,10 @@
                           (pin labs l (st 'cur), emit [['label (name l)]]),
                         line (snip s (c + 1) #s)))
                     (s 0 = 46) (flush 0, gf-dsplit s @ d (dir <d <>d))
-                    (pin st 'run ((gf-lsub s rl) . (st 'run)))))))
+                    (pin st 'run ((lit (gf-lsub s rl)) . (st 'run)))))))
        _ (foldl (\ _ x (line x)) 0 (gf-expand tgt (gf-lines tgt src)))
        _ (flush 0)
+       _ (foldl (\ _ nm (pool nm)) 0 (rev (st 'order)))      ; each pool still waiting ends its section
        ; each subsection after its section's own forms, in number order; a function's home has no
        ; tail of its own, so its subsections go to .text
        _ (foldl (\ _ nm (: b (gf-base nm) t (b = "" ? ".text" b) r (secs nm)
@@ -1629,7 +1662,7 @@
        ; offsets in place, again until the sizes hold; then it lays its fill
        (width l) (foldl (\ a x (a + (two? x ? (x 1) 1))) 0 l)
        (noms x t) (? (nom? x) (pin t x 1) (atom? x) t (noms >x (noms <x t)))
-       (fsz f off) (<f @ 'raw (width <>f) 'label 0 'align ((<>f - off % <>f) % <>f) 'skipx (f 3) 'wordx (f 2)
+       (fsz f off) (<f @ 'raw (width <>f) 'label 0 ('align || 'dalign) ((<>f - off % <>f) % <>f) 'skipx (f 3) 'wordx (f 2)
                          (width (holo-bytes-open tgt [f] (noms f {}))))
        ; label -> its offset, each section's shifted by k times its own large stride
        (offs k) (: t {} si {'i 1}
