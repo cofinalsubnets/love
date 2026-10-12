@@ -7,7 +7,7 @@
          mesh-keep mesh-keep-all mesh-pack mesh-bake mesh-bake-sun mesh-sun-view mesh-sun-map mesh-open
          mesh-lamp mesh-lamps mesh-lamps! mesh-shine mesh-glow mesh-pic mesh-tex mesh-rgba
          mesh-view mesh-eye mesh-dirs mesh-spot mesh-sky mesh-haze mesh-frame mesh-flat
-         mesh-cells mesh-kitty mesh-kitty? mesh-kitty-del)
+         mesh-cells mesh-kitty mesh-kitty? mesh-kitty-del mesh-mode mesh-size mesh-show mesh-gone)
 (borrow 'view)
 (borrow 'vec)
 (borrow 'sky)
@@ -275,5 +275,26 @@
    (? (0 < #(getenv "MITTY")) 1 (has "TERM" "kitty") 1 (0 < #(getenv "KITTY_WINDOW_ID")) 1
       (has "TERM_PROGRAM" "ghostty") 1 (has "TERM_PROGRAM" "WezTerm") 1 0))
  ; ..and a picture taken down
- (mesh-kitty-del id) "\(esc)_Ga=d,d=I,i=\(id),q=2\(esc)\\")
+ (mesh-kitty-del id) "\(esc)_Ga=d,d=I,i=\(id),q=2\(esc)\\"
+ ; --- the screen a first-person level shows its frames on: 'kitty 1 for kitty's pixels,
+ ;     else half blocks ---
+ ; ..'kitty or 'cells as a level's words said it, or what the terminal says of itself
+ (mesh-mode md) (md @ 'kitty 1 'cells 0 (mesh-kitty? ()))
+ ; ..w cells by r rows, two pixels a row, and its dither; under kitty 'kp pixels a column
+ ; and twice that a row, for a picture about kitty-w pixels across
+ kitty-w 640
+ (mesh-size st w r) (: h (2 * r)
+   (pins (view! st w h r) 'bay (view-bayer w h) 'kp (st 'kitty ? (max2 1 (kitty-w // w)) 1)))
+ ; ..a frame f of the state's 'kp: kitty's pictures go up as ids 7 and 8 by turns, the last
+ ; taken down only once the next is over it, the two in one synchronised update -- one id
+ ; put up again would go blank first -- with text over them; or the cells, with view's
+ ; bands over them
+ (mesh-show st f text bands) (: w (st 'w) h (st 'h) k (peep st 'kp 1)
+   (? (st 'kitty)
+      (: n (peep st 'kn 0) _ (pin st 'kn (1 - n))
+         (esc + "[?2026h" + mesh-kitty f (k * w) (k * h) w (h // 2) (7 + n) + mesh-kitty-del (8 - n)
+          + text + esc + "[?2026l"))
+      (esc + "[?2026h" + mesh-cells f w h (st 'deep) (st 'deep ? 0 (st 'bay)) bands + esc + "[?2026l")))
+ ; ..and both taken down when the level is left
+ mesh-gone (mesh-kitty-del 7 + mesh-kitty-del 8))
 ) ; module mesh

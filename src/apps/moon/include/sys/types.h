@@ -7,14 +7,22 @@ typedef unsigned int uid_t;
 typedef unsigned int gid_t;
 typedef unsigned int id_t;
 typedef unsigned int mode_t;
+#ifdef __i386__                 /* the 64-bit file and time words a 32-bit long cannot hold */
+typedef long long off_t;
+typedef unsigned long long dev_t;
+typedef unsigned long long ino_t;
+typedef long long time_t;
+typedef long long blkcnt_t;
+#else
 typedef long   off_t;
 typedef unsigned long dev_t;
 typedef unsigned long ino_t;
-typedef unsigned long nlink_t;
 typedef long   time_t;
+typedef long   blkcnt_t;
+#endif
+typedef unsigned long nlink_t;
 typedef long   suseconds_t;
 typedef long   blksize_t;
-typedef long   blkcnt_t;
 typedef long   clock_t;
 /* the BSD spellings glibc carries under _DEFAULT_SOURCE -- darkhttpd casts a
  * PF_ constant through (u_char), and a missing type name reads as a parse error

@@ -1,6 +1,6 @@
 #include "../impl.h"
 
-void *mmap(void *a, long n, int prot, int fl, int fd, long off) {
+void *mmap(void *a, long n, int prot, int fl, int fd, off_t off) {
   long r;
 #ifdef LvOsTranslate
   if (__love_osv == 3)
@@ -11,6 +11,12 @@ void *mmap(void *a, long n, int prot, int fl, int fd, long off) {
 #endif
   {
     if (__love_osv == 2) fl = (int) __love_mapfb(fl);
-    r = sc6(NR_mmap, (long) a, n, prot, fl, fd, off); }
+#ifdef __i386__
+    if (off & 4095) { __errno_v = EINVAL; return (void *) -1; }
+    r = sc6(NR_mmap, (long) a, n, prot, fl, fd, (long) (off >> 12));   /* mmap2: the offset in pages */
+#else
+    r = sc6(NR_mmap, (long) a, n, prot, fl, fd, off);
+#endif
+  }
   if ((unsigned long) r > (unsigned long) -4096L) { __errno_v = (int) -r; return (void *) -1; }
   return (void *) r; }

@@ -92,15 +92,15 @@ FILE *stdin = &__stdf[0], *stdout = &__stdf[1], *stderr = &__stdf[2];
  * long-wide read sees garbage -- and linux's u64 types all fit 32 bits, so
  * one narrow read serves every kernel (the AT_NULL stop included). */
 static unsigned long __love_bias(void) {
-  unsigned long phdr = 0; Elf64_Half phnum = 0;
+  unsigned long phdr = 0; ElfW(Half) phnum = 0;
   for (long *a = __auxv; a && (unsigned int) a[0]; a += 2) {
     if ((unsigned int) a[0] == 3) phdr = (unsigned long) a[1];   /* AT_PHDR */
-    if ((unsigned int) a[0] == 5) phnum = (Elf64_Half) a[1]; }   /* AT_PHNUM */
+    if ((unsigned int) a[0] == 5) phnum = (ElfW(Half)) a[1]; }   /* AT_PHNUM */
   if (!phdr) return 0;
-  Elf64_Phdr const *ph = (Elf64_Phdr const *) phdr;
-  for (Elf64_Half i = 0; i < phnum; i++)
+  ElfW(Phdr) const *ph = (ElfW(Phdr) const *) phdr;
+  for (ElfW(Half) i = 0; i < phnum; i++)
     if (ph[i].p_type == PT_LOAD && ph[i].p_offset == 0)
-      return phdr - 64 - (unsigned long) ph[i].p_vaddr;
+      return phdr - sizeof(ElfW(Ehdr)) - (unsigned long) ph[i].p_vaddr;
   return 0; }
 
 /* ---- -pie self-relocation. The linker (src/love/holo/link.l) laid the exe at base 0
@@ -134,8 +134,8 @@ int dl_iterate_phdr(int (*cb)(struct dl_phdr_info *, unsigned long, void *), voi
   memset(&in, 0, sizeof in);
   in.dlpi_addr = __love_bias();
   in.dlpi_name = "";
-  in.dlpi_phdr = (Elf64_Phdr const *) phdr;
-  in.dlpi_phnum = (Elf64_Half) phnum;
+  in.dlpi_phdr = (ElfW(Phdr) const *) phdr;
+  in.dlpi_phnum = (ElfW(Half)) phnum;
   return cb(&in, sizeof in, data); }
 
 /* ---- the entry: crt0 hands us the arg vector base (argc at [sp]); unpack

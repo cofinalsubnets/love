@@ -18,6 +18,7 @@
 (module (grove grove-new grove-sun grove-shade grove-wood! grove-leaves!)
 (borrow 'view)
 (borrow 'vec)
+(borrow 'sky)                           ; the light a sky casts
 (:
  (rr g lo hi) (lo + (hi - lo) * rnd g)
  ; d turned off by ang toward a thrown bearing round it
@@ -151,7 +152,7 @@
          nds (max 0.0 (nx * s 0 + ny * s 1 + nz * s 2))
          lit (nds * clear X Y Z s * (1.0 - grove-shade sm X Y Z) * lt 'sunk)
          bark (c* fur [0.17 0.15 0.13])
-         irr (c+ (c* 0.9 (lt 'amb)) (c* lit (lt 'sunc)))
+         irr (sky-irr lt 0.9 lit)
          cl (cm bark irr)
          (pins buf 't (pin (buf 't) i2 t) 'r (pin (buf 'r) i2 (cl 0))
                    'g (pin (buf 'g) i2 (cl 1)) 'b (pin (buf 'b) i2 (cl 2))))))
@@ -178,7 +179,7 @@
    yel (fk 'yel) gold (sat ((peep tr 'turn 0.0 - 0.4 * (1.0 - yel)) / 0.6))
    leafc (cmix (c+ (c* sh [0.2 0.34 0.09]) (c* yel [0.16 0.14 -0.02])) (c* sh [0.62 0.48 0.1]) gold)
    base (cmix [0.16 0.14 0.12] leafc lf)
-   irr (c+ (c* 0.8 (lt 'amb)) (c* (0.6 * lit) (lt 'sunc)))
+   irr (sky-irr lt 0.8 (0.6 * lit))
    cl (c+ (cm base irr) (c* glow [0.45 0.55 0.12]))
    ; ..and the next frame's k, by how many drawn points fell to a pixel they took, moved
    ; only by a quarter or more so a still view settles

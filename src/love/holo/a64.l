@@ -743,7 +743,7 @@
          rb (target - site)
          rel (rb // 4)
          (? (kind = 'b26) (le32 (aux | rel & 67108863))             ; 26-bit field, bits[25:0]
-            (kind = 'b19) (-262144 <= rel < 262144 ? (le32 (aux | (rel & 524287) << 5))   ; 19-bit field, bits[23:5]
+            (elem kind '(b19 ld19)) (-262144 <= rel < 262144 ? (le32 (aux | (rel & 524287) << 5))   ; 19-bit field, bits[23:5]
                              (scare 'a64-branch-range rel))
             (kind = 'b14) (-8192 <= rel < 8192 ? (le32 (aux | (rel & 16383) << 5))   ; 14-bit field, bits[18:5]
                              (scare 'a64-branch-range rel))

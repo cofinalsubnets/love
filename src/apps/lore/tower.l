@@ -1620,9 +1620,7 @@
              (hold ms) (: t (clock 0) (go _) (clock 0 - t < ms ? (idle (), go ())) (go ()))
              ; ..but escape at a standing sign takes the sign down, and nothing else:
              ; a page of the book or her tree is left, not the tower
-             (turn k) (k = 27 && g 'sign ? (pins g 'sign () 'pages () 'bell () 'talk ())
-                         (k @ (113 || 27 || -7) (pin g 'over 'fled)
-                          (crawl-turn g (rove-key g k))))
+             (turn k) (rove-press g k 'fled (g \ pins g 'sign () 'pages () 'bell () 'talk ()) crawl-turn)
              ; the ground shudders: the view jolts a row either way for half a second,
              ; with whatever sign the turn raised held back until it is still
              ; ..and the song goes on under it
@@ -1631,15 +1629,11 @@
                              each ^6 (k \ (pin d 'jolt (k % 2 = 0 ? 1 -1),
                                            say out (crawl-frame g), flush out, hold 66)),
                              (pin d 'jolt 0, pin g 'sign sg, pin g 'rumble ())))
-             (loop last t0) (g 'over ? ()
-                               (: _ (say out (crawl-frame g), flush out)
-                                  k (key-wait t0 last (g 'sign ? sign-gap repeat-gap) idle)
-                                  (turn k,
-                                   g 'rumble ? (rumble! ()),
-                                   sng ? (song-tier sng g),
-                                   loop k (clock 0))))
+             (press k) (turn k,
+                        g 'rumble ? (rumble! ()),
+                        sng ? (song-tier sng g))
              (ttytake rove-modes,
-              loop 0 0,
+              rove-loop g crawl-frame idle press,
              ; an end shows its frame for a beat, the song still going, before the screen is given back
               (say out (crawl-frame g), flush out, hold 1200),
              ; ..and the card goes back before the walk asks for it

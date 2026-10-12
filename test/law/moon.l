@@ -2266,6 +2266,55 @@
                             (mov r6 r5)
                             (ld r3 r4 -8) (mov sp r4) (pop r4) (jmp far9))))))
 
+; --- the same promotion on a64's frame: fp is the base, the frame's sub sits
+; past the lr/fp link, a cs save lands right after it and its restore heads the
+; teardown at (lea sp fp 0)
+(: gA9 {'tgt 'a64}
+   _ (pin gA9 'slots '((-16 8)))
+   fsP '((label fn) (push lr) (push fp) (lea fp sp 0) (sub sp sp 16)
+         (li r5 7) (st fp -16 r5) (call g9) (ld r6 fp -16) (mov r0 r6)
+         (li r7 9) (st fp -16 r7) (ld r8 fp -16) (add r0 r0 r8)
+         (lea sp fp 0) (pop fp) (pop lr) (ret))
+   fsL '((label fn) (push lr) (push fp) (lea fp sp 0) (sub sp sp 16)
+         (li r5 7)
+         (label .O)
+         (li r9 0)
+         (label .L)
+         (st fp -16 r5) (call g9) (ld r6 fp -16)
+         (add r6 r6 1) (mov r5 r6)
+         (add r9 r9 1) (cmp r9 3) (br lt .L)
+         (cmp r5 99) (br lt .O)
+         (mov r0 r5)
+         (lea sp fp 0) (pop fp) (pop lr) (ret))
+   rp (repack gA9 fsP)
+   rl (repack gA9 fsL)
+   (cssv? f) (two? f && <f = 'st && <>f = 'fp && elem (f 3) (csregs gA9))
+   (csld? f) (two? f && <f = 'ld && (f 2) = 'fp && elem <>f (csregs gA9))
+   (cspos l) (: (go l i) (? !(two? l) -1 (cssv? <l) i (go >l (i + 1))) (go l 0))
+   (test
+      (elem '(ld r6 fp -16) rp)                  ; the crossing chain keeps its cell
+      !(elem '(ld r8 fp -16) rp)                 ; the call-free chain left the frame
+      (elem '(mov r8 r7) rp)
+      !(elem '(ld r6 fp -16) rl)                 ; a compounding crossing takes a cs seat..
+      (cspos rl = 5)                             ; ..saved right after the frame's sub
+      (csld? (rl (#rl - 5)))))                    ; ..restored at the teardown's head
+
+; --- the allocator core (x64): a mint takes its copy partner's register when the two
+; never meet, keeps its binding when the machine reads that register past it (an argument
+; into a call), and never shares a non-commutative op's second source
+(: v0 (name "%v0") v1 (name "%v1") v2 (name "%v2")
+   (gV9 _) {'tgt 'x64 'pool0 '(r6 r5 r9 r10 r7 r8) 'sigs {}
+            'vrn 3 'vrt {v0 'r9 v1 'r7 v2 'r10}}
+   vC (vrfix (gV9 ()) [['label 'fn] ['and v0 'r6 7] ['mov 'r0 v0] ['ret]])
+   vA (vrfix (gV9 ()) [['label 'fn] ['li v1 5] ['call 'g9] ['ret]])
+   vS (vrfix (gV9 ()) [['label 'fn] ['sub v2 'r6 'r0] ['mov 'r0 v2] ['ret]])
+   vO (vrfix (gV9 ()) [['label 'fn] ['add v2 'r6 'r0] ['mov 'r0 v2] ['ret]])
+   (test
+      (vC = '((label fn) (and r0 r6 7) (ret)))   ; coalesced: the copy swept
+      (elem '(li r7 5) vA)                       ; the call reads r7: the binding stays
+      (elem '(sub r10 r6 r0) vS)                 ; r0 is sub's second source
+      (vO = '((label fn) (add r0 r6 r0) (ret))))) ; ..but add lays d = b as d += a
+
 ; --- the allocator owns locals (moon-ssa rung 4): locals homes are placed by
 ; interval -- lpick's raw-touch rank stands (short call-free ranges promote in
 ; repack anyway) -- and two names whose alive spans are disjoint share one seat.

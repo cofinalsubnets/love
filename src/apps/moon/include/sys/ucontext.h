@@ -18,6 +18,20 @@ typedef struct ucontext_t {
   mcontext_t uc_mcontext;
   sigset_t uc_sigmask;
 } ucontext_t;
+#elif defined(__i386__)
+typedef int greg_t;
+#define NGREG 19
+typedef greg_t gregset_t[NGREG];
+enum { REG_GS, REG_FS, REG_ES, REG_DS, REG_EDI, REG_ESI, REG_EBP, REG_ESP, REG_EBX, REG_EDX,
+       REG_ECX, REG_EAX, REG_TRAPNO, REG_ERR, REG_EIP, REG_CS, REG_EFL, REG_UESP, REG_SS };
+typedef struct { gregset_t gregs; void *fpregs; unsigned long oldmask, cr2; } mcontext_t;
+typedef struct ucontext_t {
+  unsigned long uc_flags;
+  struct ucontext_t *uc_link;
+  stack_t uc_stack;
+  mcontext_t uc_mcontext;
+  sigset_t uc_sigmask;
+} ucontext_t;
 #elif defined(__aarch64__)
 typedef struct {
   unsigned long long fault_address;

@@ -462,6 +462,20 @@ moonrun -c -t a64 -o "$ho/.tbz.o" "$ho/.tbz.s" > /dev/null 2>&1 && fail "a tbz p
 printf '\t.globl f\nf:\ttbz x0, #3, ext\n\tret\n' > "$ho/.tbz.s"
 moonrun -c -t a64 -o "$ho/.tbz.o" "$ho/.tbz.s" > /dev/null 2>&1 || fail "a tbz to an outside label did not assemble"
 readelf -rW "$ho/.tbz.o" 2>/dev/null | grep -q "R_AARCH64_TSTBR14.*ext" || fail "a tbz to an outside label laid no TSTBR14"
+# a branch inside a section without x resolves in place, as llvm-mc lays it (proc.S's .idmap.text, "a")
+printf '\t.pushsection .idmap.text, "a"\n1:\tnop\n\tcbnz w1, 1b\n\tb.ne 1b\n\ttbz w1, #1, 1b\n\tb 1b\n\t.popsection\n' > "$ho/.dbr.s"
+moonrun -c -t a64 -o "$ho/.dbr.o" "$ho/.dbr.s" > /dev/null 2>&1 || fail "branches in a data section did not assemble"
+readelf -rW "$ho/.dbr.o" 2>/dev/null | grep -q R_AARCH64 && fail "a branch inside a data section laid a relocation"
+readelf -x .idmap.text "$ho/.dbr.o" 2>/dev/null | grep -q "1f2003d5 e1ffff35 c1ffff54 a1ff0f36" \
+  || fail "branches inside a data section were not resolved in place"
+# .incbin lays a file's bytes, whole or a skip and count of them, found through -I as gas finds
+# it; a `//` inside a string is no comment (vdso-wrap.S's vdso.so)
+mkdir -p "$ho/.incd" && printf 'ABCDEFGHIJ' > "$ho/.incd/.inc.bin"
+printf '\t.section .rodata\n\t.incbin ".inc.bin"\n\t.incbin ".inc.bin", 2, 3\n\t.ascii "a//b"\n' > "$ho/.inc.S"
+moonrun -c -t a64 -I "$ho/.incd" -o "$ho/.inc.o" "$ho/.inc.S" > /dev/null 2>&1 || fail "an .incbin did not assemble"
+readelf -x .rodata "$ho/.inc.o" 2>/dev/null | grep -q "41424344 45464748 494a4344 45612f2f" \
+  || fail "an .incbin's bytes were not laid as llvm-mc lays them"
+moonrun -c -t a64 -o "$ho/.inc.o" "$ho/.inc.S" > /dev/null 2>&1 && fail "an .incbin of a file nowhere on the path was laid"
 
 # the attribute skip on a local/parameter/member takes __attribute__ ALONE: an asm NAME
 # would rename the object, and dropping it renames it in silence. test/cc/145 holds the

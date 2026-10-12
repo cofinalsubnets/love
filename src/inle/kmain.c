@@ -340,6 +340,11 @@ bool k_ready(int fd, int events) {
  struct k_source *s = k_source(fd);
  return s && s->ready && s->ready(fd); }
 
+// a read on fd would wait: a row that can say it is not ready says so. a file always reads
+bool k_fd_blocks(int fd) {
+ struct k_source *s = k_source(fd);
+ return s && s->ready && !s->ready(fd); }
+
 // multi-source wait; ms=0 is infinite, and every answer is recorded in `revents` so the
 // scheduler skips re-asking. a seat with no timer interrupt (wasm) catches kticks up here.
 __attribute__((weak)) void k_tick_sync(void) { }
@@ -528,6 +533,8 @@ __attribute__((weak)) void k_lift_ask(unsigned char const *p, uintptr_t n) { (vo
 static char const k_pmem[] = "proc/meminfo", k_pgauge[] = "proc/gauge";
 // and the boot line, the one row that answers what this machine was asked to run.
 static char const k_pcmd[] = "proc/cmdline";
+// and the heap image the door handed in, read-only, for a process to wake from
+static char const k_pimg[] = "proc/image";
 // /dev/{null,zero}: neither holds bytes -- null is the source table's empty slot, zero that
 // slot with a read door. the entries below exist only so stat and dents can see them.
 static char const k_dnull[] = "dev/null", k_dzero[] = "dev/zero";
@@ -590,11 +597,13 @@ static struct vfs k_fs = { .cwd = "home", .cwd_n = 4, .ro = k_tree, .pins = k_pi
 static bool k_fs_init(void) {
   if (k_fs.ents) return true;
   if (!k_fs.bakes && !vfs_untar(&k_fs, k_tree, srctree, srctree_len, rootfs, rootfs_len)) return false;
-  int xn = k_fs.extra ? 0 : k_baked(NULL, 0);
+  int bn = k_fs.extra ? 0 : k_baked(NULL, 0), xn = bn + (!k_fs.extra && kboot.image_len);
   if (xn > 0) {
     struct vfs_file *xr = kmallocw(b2w((uintptr_t) xn * sizeof *xr));
     if (!xr) return false;
-    k_fs.extra = xr, k_fs.extra_n = k_baked(xr, xn); }
+    int m = bn ? k_baked(xr, bn) : 0;
+    if (kboot.image_len) xr[m++] = (struct vfs_file) { k_pimg, kboot.image, kboot.image_len, 0 };
+    k_fs.extra = xr, k_fs.extra_n = m; }
   // the rows past the baked ones, each laid empty and owned; one with `to` is a link, its
   // target heap because k_ent_gc frees it, and a strdup that refuses leaves a plain directory
   static struct { char const *path, *to; uintptr_t mode; bool dir; } const rows[] = {
@@ -1508,22 +1517,6 @@ static lvm(lvm_kexec) {
   Sp[1] = k_lvm_kexec(Sp[0], Sp[1]);
   love_musttail return Nextp(1, 1); }
 
-// the bake door: the heap as image bytes, written whole to one ramfs file
-static void k_bake(struct g *g, char const *path) {
-  uintptr_t n = 0;
-  struct image_bad bad = {0};
-  void *b = image_save(g, &n, &bad);
-  int fd = b ? k_fs_open(path, strlen(path), 'w') : -1;
-  long w = fd < 0 ? -1 : k_fd_write(fd, b, (long) n);
-  if (fd >= 0) k_fd_close(fd);
-  if (w == (long) n) kputs("; inle -- baked\n");
-  else {                                          // the codec's step and its offending words
-    kputs("; inle -- bake refused: why "); kputn((uintptr_t) bad.why, 10);
-    kputs(" n "); kputn((uintptr_t) bad.n, 10);
-    for (int i = 0; i < 3 * bad.n && i < 6; i++) { kputs(" "); kputn(bad.q[i], 16); }
-    kputs(" fd "); kputn((uintptr_t) fd, 10); kputs(" w "); kputn((uintptr_t) w, 10); kputs("\n"); }
-  k_reset(); }
-
 // --- the SVM spike (x64 only; src/inle/x64/svm.c). (svm ()) is the capability, (svm-run ())
 // runs one guest, answering (exitcode rax rip) or ().
 #if defined(__x86_64__)
@@ -1763,6 +1756,14 @@ int k_fs_getcwd(char *b, uintptr_t n) {
   b[1 + k_fs.cwd_n] = 0;
   return 0; }
 
+// a process's cwd and the fs's own trade places, around one of its calls (src/inle/sys.c)
+void k_fs_cwd_swap(char *cwd, uintptr_t *n) {
+  char t[sizeof k_fs.cwd];
+  uintptr_t tn = k_fs.cwd_n;
+  memcpy(t, k_fs.cwd, tn);
+  memcpy(k_fs.cwd, cwd, *n), k_fs.cwd_n = *n;
+  memcpy(cwd, t, tn), *n = tn; }
+
 // the two attribute writers land on the entry, so a synthesized directory takes either as
 // a no-op: it has no row to keep bits on, and its date is its children's.
 love_noinline int k_fs_chmod(char const *p, uintptr_t pn, uintptr_t mode) {
@@ -1958,6 +1959,46 @@ static lvm(lvm_kraw) {
   Sp[0] = t || k_console_in(fd) ? ZeroPoint : love_err(g, ENOTTY);
   love_musttail return Next(1); }
 
+// a row's terminal, for src/inle/sys.c's ioctl: 0, or -ENOTTY where the row has none. set
+// 1 or 0 makes input raw or cooked first; the console keeps no discipline, only the answer
+static bool k_con_raw;
+int k_fd_term(int fd, int set, int *raw, uintptr_t *rows, uintptr_t *cols) {
+  struct k_source const *s = k_source(fd);
+  struct k_pty *t = k_pty_row(fd);
+  if (!s || !(t || s->putc == serial_putc1 || s->readn == kb_readn)) return -ENOTTY;
+  unsigned const cooked = pt_icanon | pt_echo | pt_isig | pt_icrnl;
+  if (set >= 0 && t) t->flags = set ? t->flags & ~cooked : t->flags | cooked;
+  else if (set >= 0) k_con_raw = set;
+  *raw = t ? !(t->flags & pt_icanon) : k_con_raw;
+  *rows = t ? t->rows : kcb ? kcb->rows : 24;
+  *cols = t ? t->cols : kcb ? kcb->cols : 80;
+  return 0; }
+
+// (kproc argv env) -- a program in memory of its own (src/inle/sys.c's processes): argv and env
+// each its words with a NUL after every one, its stdio this task's own. -> (pid . the read end
+// of a pipe that ends when the process does), or the refusal
+long k_proc_new(char const *av, uintptr_t an, char const *ev, uintptr_t en, int const fds[3], int *wr);
+long k_proc_reap(long pid);
+love_noinline static struct g *k_kproc(struct g *g) {
+  word aw = g->sp[0], ew = g->sp[1];
+  if (!strp(aw) || !strp(ew)) return g->sp[0] = badarg(g), g;
+  int fds[3], wr = -1;
+  for (int i = 0; i < 3; i++) fds[i] = (int) k_ttyfd(g, putcharm(i));
+  struct str *a = (struct str*) aw, *e = (struct str*) ew;
+  long pid = k_proc_new(a->bytes, a->len, e->bytes, e->len, fds, &wr);
+  if (pid < 0) return g->sp[0] = love_err(g, (int) -pid), g;
+  if (!ok(g = have(g, Width(struct chain)))) return g;
+  struct chain *w = ini_chain((struct chain*) bump(g, Width(struct chain)), putcharm(pid), putcharm(wr));
+  return g->sp[0] = word(w), g; }
+static lvm(lvm_kproc) {
+  LvmCallp(g, 1, k_kproc) }
+
+// (kreap pid) -- an ended process's status, its slot freed; () while it runs
+static lvm(lvm_kreap) {
+  long r = charmp(Sp[0]) ? k_proc_reap(getcharm(Sp[0])) : -EINVAL;
+  Sp[0] = r == -EAGAIN ? ZeroPoint : r < 0 ? love_err(g, (int) -r) : putcharm(r);
+  love_musttail return Next(1); }
+
 // (openpty _) -- a fresh pty as its rows: (master slave signal)
 love_noinline static struct g *k_openpty(struct g *g) {
   int fds[3];
@@ -2129,6 +2170,8 @@ static union u
   nif_kttypg[] = {{lvm_kttypg}, {lvm_ret0}},
   nif_kraw[] = {{lvm_kraw}, {lvm_ret0}},
   nif_kopenpty[] = {{lvm_kopenpty}, {lvm_ret0}},
+  nif_kproc[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_kproc}, {lvm_ret0}},
+  nif_kreap[] = {{lvm_kreap}, {lvm_ret0}},
   nif_kpaper[] = {{lvm_kpaper}, {lvm_ret0}},
   nif_kshow[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_kshow}, {lvm_ret0}},
   nif_kscan[] = {{lvm_kscan}, {lvm_ret0}};
@@ -2212,7 +2255,10 @@ static struct def const __attribute__((section("knifs"), used)) defs[] = {
   {"openpty", {.k = nif_kopenpty}},
   {"fetch", {.k = nif_fetch}},
   {"kexec", {.k = nif_kexec}},
-  // a window's paper (src/inle/seat.l's kwindow)
+  // processes: programs in memory of their own, where a seat can run them (src/inle/sys.c)
+  {"kproc", {.k = nif_kproc}},
+  {"kreap", {.k = nif_kreap}},
+  // a window's paper (src/inle/seat.l's kwin-events)
   {"kpaper", {.k = nif_kpaper}},
   {"kshow", {.k = nif_kshow}},
   {"kscan", {.k = nif_kscan}} };
@@ -2348,13 +2394,6 @@ void kmain(void) {
   // the crew hangs off the registry's miss, re-armed on every boot including a woken
   // image's: the load is idempotent, its own `source` row the guard.
   r = evals_(r, "((cite 'verbs 'fills) crewload)");
-  // `bake PATH` on the boot line: the warm heap -- the crew in, the seat text run -- as an
-  // image file on the ramfs, then reset; the wasm lift hands it to the next boot as
-  // kboot.image. the crew is pulled aboard first: left to the filler it is not in the heap
-  // that gets written, and every boot of that image pays the whole load at its first miss.
-  if (!memcmp(kboot.cmdline, "bake ", 5)) {
-    r = evals_(r, "(crewload 0)");
-    k_bake(r, kboot.cmdline + 5); }
   // now the line wears its real shape and the program word dispatches off the registry.
   // an empty line is a mitty on the console, lush in its first pane; when its last pane
   // ends, or it cannot start, the console shell stands in, the toolbox warm.

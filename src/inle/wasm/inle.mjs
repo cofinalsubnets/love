@@ -9,8 +9,8 @@
 // pixels a glyph pixel gets, and without one the console picks from the size. --lift names
 // a ramfs file the machine's program leaves behind, and where to put it on this side, once
 // the program has quit (the reset). a lift the program asks for itself (/proc/lift) lands
-// only under --lifts DIR, by its last name, never over a file already there. --image hands the machine a heap image to wake (the one
-// `bake PATH` on the boot line writes, lifted out: `make out/wasm/love.image`).
+// only under --lifts DIR, by its last name, never over a file already there. --image hands the machine a heap image to wake (hosted
+// love's, which a process on the machine bakes: `make out/wasm/love.image`).
 // --horn names a file to lay what the machine PLAYS in, as raw 16-bit stereo at the
 // horn's own rate: the AudioWorklet a page has, headless. --press names keys (machine.js's
 // names, e.code's spelling) pressed and released in turn on the scan lane, --after
@@ -39,6 +39,7 @@ import { ctl_n, ring_n, ring_at, lift_n, lift_at, shared_n, scan_at, scan_n, c_s
          horn_at, horn_n, c_rate, c_wrote, c_played, c_live } from './cpu.mjs';
 import { scanlane, pointlane, codes } from './machine.js';
 import { host_shared_n } from './hostring.mjs';
+import { procdied } from './procbox.mjs';
 
 const args = process.argv.slice(2);
 let fb = null, dump = null, scale = 0, liftReq = null, liftDir = null, image = null, hornFile = null, deaf = false;
@@ -124,7 +125,18 @@ if (hostDir) {
   hw.postMessage({ ring: hring, port: port2, root: hostDir }, [port2]);
   host = { port: port1, ring: hring }; }
 const leave = (code) => { if (process.stdin.isTTY) process.stdin.setRawMode(false); process.exit(code); };
+// a process the machine started (cpu.mjs's proc): a worker of its own over the module,
+// compiled once for all of them
+let module = null;
+const proc = (p) => {
+  module ??= WebAssembly.compile(readFileSync(wasm));
+  module.then((mod) => {
+    const w = new Worker(new URL('./proc.mjs', import.meta.url));
+    w.unref();
+    w.on('error', (e) => { process.stderr.write(`\ninle: pid ${p.pid}: ${e}\n`); procdied(p.box, ring); });
+    w.postMessage({ module: mod, ring, ...p }); }); };
 cpu.on('message', (m) => {
+  if (m.proc) { proc(m.proc); return; }
   if (m.frame && framesOut) {                             // what a page would paint, weighed
     const px = new Uint32Array(m.frame);
     let sig = 0;                                          // every pixel: one glyph is all a

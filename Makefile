@@ -330,7 +330,7 @@ crewfiles = src/apps/json.l src/apps/sb/merge.l src/apps/sb/http.l src/apps/sb/s
   src/apps/libra/salt.l src/apps/libra/libra.l src/apps/vi/hueweb.l src/apps/kiosko/web.l \
   src/apps/harp/harp.l src/apps/harp/play.l src/apps/harp/score.l \
   src/apps/harp/just.l src/apps/harp/drift.l src/apps/harp/tonnetz.l src/apps/harp/phrases.l \
-  src/apps/x11.l src/apps/manifest/manifest.l src/apps/lore/lore.l src/apps/lore/rove.l src/apps/lore/view.l src/apps/lore/vec.l src/apps/lore/starmap.l src/apps/lore/sky.l src/apps/lore/mesh.l src/apps/lore/swatch.l src/apps/lore/neon.l src/apps/lore/brush.l src/apps/lore/grove.l src/apps/lore/meadow.l src/apps/lore/tower.l src/apps/lore/story.l src/apps/lore/design.l src/apps/lore/slop.l src/apps/lore/grass.l src/apps/lore/grass99.l src/apps/lore/wade.l src/apps/lore/apartment.l src/apps/lore/dusk.l src/apps/lore/garage.l src/apps/lore/shaft.l src/apps/lore/court.l src/apps/lore/stones.l src/apps/lore/corridor.l src/apps/lore/roost.l src/apps/harp/synth.l src/apps/wav.l src/apps/flac.l src/apps/icy.l src/apps/ogg.l src/apps/mp3.l src/apps/av.l src/apps/player/bus.l src/apps/player/core.l \
+  src/apps/x11.l src/apps/manifest/manifest.l src/apps/lore/lore.l src/apps/lore/rove.l src/apps/lore/view.l src/apps/lore/flicker.l src/apps/lore/walk.l src/apps/lore/gamelan.l src/apps/lore/vec.l src/apps/lore/starmap.l src/apps/lore/sky.l src/apps/lore/mesh.l src/apps/lore/swatch.l src/apps/lore/scenery.l src/apps/lore/neon.l src/apps/lore/brush.l src/apps/lore/grove.l src/apps/lore/meadow.l src/apps/lore/tower.l src/apps/lore/story.l src/apps/lore/design.l src/apps/lore/slop.l src/apps/lore/grass.l src/apps/lore/grass99.l src/apps/lore/wade.l src/apps/lore/apartment.l src/apps/lore/dusk.l src/apps/lore/garage.l src/apps/lore/shaft.l src/apps/lore/court.l src/apps/lore/stones.l src/apps/lore/corridor.l src/apps/lore/roost.l src/apps/harp/synth.l src/apps/wav.l src/apps/flac.l src/apps/icy.l src/apps/ogg.l src/apps/mp3.l src/apps/av.l src/apps/player/bus.l src/apps/player/core.l \
   src/apps/seek.l src/apps/player/tui.l src/apps/mitty/wharf.l src/apps/mitty/limn.l src/apps/mitty/mitty.l src/apps/font.l src/apps/lux/wire.l src/apps/mitty/pier.l src/apps/doom.l src/apps/lupa.l src/apps/mc.l src/apps/help.l \
   src/apps/chucho/mime.l src/apps/chucho/box.l src/apps/chucho/smtp.l src/apps/chucho/imap.l src/apps/chucho/chucho.l src/apps/torrent/benc.l src/apps/torrent/metainfo.l src/apps/torrent/tracker.l src/apps/torrent/peerwire.l src/apps/torrent/swarm.l src/apps/torrent/torrent.l src/apps/pom.l src/apps/mitty/saver.l src/apps/mitty/avatar.l src/apps/mitty/chat.l src/apps/locks.l src/apps/hosts.l src/apps/seals.l src/apps/qlog.l src/apps/hive.l src/apps/bee.l
 korefiles = $(kore_head) $(holo_obj) src/love/holo/copy.l $(kore_arc) $(kore_net)
@@ -1172,16 +1172,21 @@ web/wasm/love.wasm: $(ko)/love.wasm
 	@mkdir -p web/wasm; echo '$(t_cp)	'$@; cp $< $@
 web/wasm/love.image: $(ko)/wasm/love.image
 	@echo '$(t_cp)	'$@; cp $< $@
-# the seat's heap image: the kernel booted once under node with `bake PATH` on the boot
-# line -- the egg, the modules and the korecat warm, the seat text run -- written to the
-# ramfs and lifted out at the reset. the page fetches it beside the module and the worker
-# hands it to k_start; a stale one is refused and the egg bakes, the host's own law.
-# the bake's own RAM: the crew warm plus the image being written is more than the
-# terminal's default span, and the fault it takes there is a wild write in gen_major.
-$(ko)/wasm/love.image: $(ko)/love.wasm src/inle/wasm/cpu.mjs src/inle/wasm/inle.mjs
+# the heap image, one for the kernel and every process: hosted love's, baked off the same cat
+# the host's own bake reads. the kernel boots once under node, and a process on it -- the egg,
+# no image to wake -- bakes the cat through the kernel's /mnt/host, which is a directory here.
+# processes wake it as it is; the kernel wakes it and runs its seat text over it. the page
+# fetches it beside the module; a stale one is refused and the egg bakes, the host's own law.
+# the bake's own RAM: the cat warm plus the image being written is more than the terminal's
+# default span.
+$(ko)/wasm/love.image: $(ko)/love.wasm $(ho)/.dist-cat.l src/inle/wasm/cpu.mjs src/inle/wasm/inle.mjs \
+                       src/inle/wasm/proc.mjs src/inle/wasm/procbox.mjs
 	@echo 'BAKE	'$@
-	@INLE_RAM=1024 $(NODE) src/inle/wasm/inle.mjs --lift /love.image:$@ $(ko)/love.wasm bake /love.image < /dev/null > $(ko)/wasm/bake.log 2>&1 \
+	@rm -rf $(ko)/wasm/bake && mkdir -p $(ko)/wasm/bake && cp $(ho)/.dist-cat.l $(ko)/wasm/bake/cat.l
+	@INLE_RAM=1024 $(NODE) src/inle/wasm/inle.mjs --host $(ko)/wasm/bake $(ko)/love.wasm proc bake -l /mnt/host/cat.l /mnt/host/love.image \
+	   < /dev/null > $(ko)/wasm/bake.log 2>&1 && test -s $(ko)/wasm/bake/love.image \
 	   || { cat $(ko)/wasm/bake.log; exit 1; }
+	@mv $(ko)/wasm/bake/love.image $@ && rm -rf $(ko)/wasm/bake
 
 clean:
 	rm -rf out

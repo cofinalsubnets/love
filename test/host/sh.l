@@ -597,14 +597,14 @@
 (: r (hark ["out/love" "out/lush" "-c" "PATH=$PWD/out:$PATH love -e '1 + 2'"])
    (test ("3\n" = >r)))
 
-; the mode. autonomous (the default): a bare verb word is ours whatever PATH holds --
-; the stage forks the warm heap, and a bare word that must spawn spawns this binary
-; under the word (tr with no operands: its own usage, status 2). -p is PATH's rule
-; alone, and an empty PATH finds nothing (127); -g is PATH first, ours in its gaps.
-; lushflags carries the choice into a child shell, and a flag word on its own line
-; overrides it. autonomous is the default.
-(test (0 = (sh-envflag shS) 0))
-(: r (hark ["out/love" "out/lush" "-c" "PATH=/nonexistent; printf abc | tr a-c A-C; echo; tr 2>/dev/null; echo st=$?"])
+; the mode. -a, autonomous: a bare verb word is ours whatever PATH holds -- the stage
+; forks the warm heap, and a bare word that must spawn spawns this binary under the
+; word (tr with no operands: its own usage, status 2). -p is PATH's rule alone, and an
+; empty PATH finds nothing (127); -g is PATH first, ours in its gaps. lushflags carries
+; the choice into a child shell, and a flag word on its own line overrides it.
+; gregarious is the default.
+(test (1 = (sh-envflag shS) 0))
+(: r (hark ["out/love" "out/lush" "-a" "-c" "PATH=/nonexistent; printf abc | tr a-c A-C; echo; tr 2>/dev/null; echo st=$?"])
    (test ("ABC\nst=2\n" = >r)))
 ; (under -p even echo is PATH's, so the status crosses a variable and PATH comes back)
 (: r (hark ["out/love" "out/lush" "-p" "-c" "p=$PATH; PATH=/nonexistent; tr 2>/dev/null; s=$?; PATH=$p; echo st=$s"])
@@ -658,9 +658,8 @@
    (test ("st=1\nst=1\npwd is a shell builtin\nst=1\n" = >r)))
 ; ..and the mode is in the verdict. autonomous: a verb word is ours whatever PATH
 ; holds, so an empty PATH still answers -- with the binary a spawn would exec
-; (sh-spawnv's seat), which is the one path that is true of it. -g hands the
-; question back to PATH, and an empty one finds nothing.
-(: r (hark ["out/love" "out/lush" "-c"
+; (sh-spawnv's seat), which is the one path that is true of it.
+(: r (hark ["out/love" "out/lush" "-a" "-c"
             "PATH=/nonexistent
              a=$(which tr); b=$(ev '(selfpath 0)')
              [ \"$a\" = \"$b\" ] && echo seat || echo other

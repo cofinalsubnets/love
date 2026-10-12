@@ -1,25 +1,18 @@
 #!/bin/sh
-# test/kore/grep.sh -- grep: the BRE and ERE batteries, the clustered flags, the step budget
+# test/kore/grep.sh -- grep: the BRE and ERE batteries, the clustered flags
 . "$(dirname "$0")/common.sh"
 
-# THE BACKTRACKER'S CLIFF, and it is timed on purpose. `(a|aa)+` over a run of a's
-# is exponential in this engine -- it tries every split -- and before the step budget
-# landed this line did not return AT ALL. What is gated is that it comes back, with
-# the status and the sentence: a `grep` that hangs on a pattern a person can type is a
-# different kind of defect from a wrong answer, and only a clock can see it.
+# `(a|aa)+` over a run of a's is exponential to a backtracker that tries every split;
+# the engine walks a (pc, pos) once, so it comes back at once
 awk 'BEGIN { s = ""; for (i = 0; i < 40; i++) s = s "a"; print s }' > "$ho/.rebt"
 t0=$(date +%s)
 korerun grep -E '^(a|aa)+b$' "$ho/.rebt" > /dev/null 2>&1
 rc=$?
 t1=$(date +%s)
-[ "$rc" = 2 ] || fail "kore grep: the backtracker's budget must answer 2, got $rc"
-[ $((t1 - t0)) -lt 20 ] || fail "kore grep: the budget did not bound the backtracking"
-# and the budget must not fire on an ordinary repeat over the same text
-korerun grep -E '^a+$' "$ho/.rebt" > /dev/null || fail "kore grep: a plain repeat must still match"
-korerun grep -E '^(a|b)+$' "$ho/.rebt" > /dev/null \
-  || fail "kore grep: an alternation of single charms must still match"
+[ "$rc" = 1 ] || fail "kore grep: (a|aa)+b over a's must answer 1, got $rc"
+[ $((t1 - t0)) -lt 20 ] || fail "kore grep: (a|aa)+ took $((t1 - t0))s"
 rm -f "$ho/.rebt"
-echo "kore: grep's step budget (the (a|aa)+ cliff answers 2 in seconds, plain repeats untouched) ok"
+echo "kore: grep's (a|aa)+ comes back at once ok"
 printf 'abc\nxbz\nzzz\n+q\n*r\n' > "$ho/.gr1"; printf 'nope\nbc here\n' > "$ho/.gr2"
 both "grep"          grep b "$ho/.gr1"
 both "grep -n multi" grep -n b "$ho/.gr1" "$ho/.gr2"

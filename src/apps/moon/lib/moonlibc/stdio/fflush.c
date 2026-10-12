@@ -84,14 +84,14 @@ FILE *freopen(char const *path, char const *mode, FILE *f) {
   f->rp = f->rl = 0;
   if (wr) f->rcap = 0;
   return f; }
-int fseek(FILE *f, long off, int wh) {
+int fseeko(FILE *f, off_t off, int wh) {
   if (__fdrain(f)) return -1;
   if (wh == SEEK_CUR) off -= __rahead(f);    /* relative to the stream, not the fd's read-ahead */
   f->un = 0;                                 /* ISO: a seek discards the pushback */
   f->rp = f->rl = 0;
   f->eof = 0;                                /* and clears the end-of-file flag */
   return lseek(f->fd, off, wh) < 0 ? -1 : 0; }
-long ftell(FILE *f) {
+off_t ftello(FILE *f) {
   if (__fdrain(f)) return -1;
-  long o = lseek(f->fd, 0, SEEK_CUR);
+  off_t o = lseek(f->fd, 0, SEEK_CUR);
   return o < 0 ? -1 : o - __rahead(f); }

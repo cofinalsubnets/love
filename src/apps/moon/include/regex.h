@@ -3,7 +3,7 @@
 #include <stddef.h>
 
 typedef int regoff_t;
-typedef struct { size_t re_nsub; void *re_prog; } regex_t;
+typedef struct { size_t re_nsub; void *re_prog; size_t re_size; } regex_t;   /* re_prog: re_size bytes holding no pointer */
 typedef struct { regoff_t rm_so, rm_eo; } regmatch_t;
 
 #define REG_EXTENDED 1
@@ -11,6 +11,7 @@ typedef struct { regoff_t rm_so, rm_eo; } regmatch_t;
 #define REG_NEWLINE  4
 #define REG_NOSUB    8
 #define REG_GREP     16  /* gnu grep's reading: a repeat with nothing to repeat is skipped, a bad brace is ink */
+#define REG_UTF8     32  /* by character, whatever the locale */
 
 #define REG_NOTBOL   1
 #define REG_NOTEOL   2

@@ -1,36 +1,36 @@
 #include "../impl.h"
 
-static unsigned long const bd_p10[9] = {
-  1UL, 10UL, 100UL, 1000UL, 10000UL, 100000UL, 1000000UL, 10000000UL, 100000000UL };
+static unsigned long long const bd_p10[9] = {
+  1ULL, 10ULL, 100ULL, 1000ULL, 10000ULL, 100000ULL, 1000000ULL, 10000000ULL, 100000000ULL };
 /* the digit at index k -- BdU is the units place, larger is further right.
  * OUTSIDE the array every digit is a zero, which is what lets an arbitrary
  * precision print with no buffer and no cap. */
-static unsigned bd_dig(unsigned long const *d, int k) {
+static unsigned bd_dig(unsigned long long const *d, int k) {
   if (k < 0 || k >= BdD) return 0;
-  return (unsigned) (d[k / 9] / bd_p10[8 - k % 9] % 10UL); }
+  return (unsigned) (d[k / 9] / bd_p10[8 - k % 9] % 10ULL); }
 /* the live range shrinks toward index 0 as the value grows and toward BdN as
  * it shrinks, so both walks carry their bound rather than sweeping the array:
  * a shift is O(digits that exist), not O(1413). */
-static int bd_mul2(unsigned long *d, int lo, int hi, int s) {
-  unsigned long carry = 0;
+static int bd_mul2(unsigned long long *d, int lo, int hi, int s) {
+  unsigned long long carry = 0;
   int i;
   for (i = hi; i >= 0; i--) {
     if (i < lo && !carry) break;
-    unsigned long cur = (d[i] << s) + carry;
+    unsigned long long cur = (d[i] << s) + carry;
     d[i] = cur % BdB;
     carry = cur / BdB; }
   return i + 1 < lo ? i + 1 : lo; }
-static int bd_div2(unsigned long *d, int lo, int hi, int s) {
-  unsigned long rem = 0, m = 1UL << s;
+static int bd_div2(unsigned long long *d, int lo, int hi, int s) {
+  unsigned long long rem = 0, m = 1ULL << s;
   int i;
   for (i = lo; i < BdN; i++) {
     if (i > hi && !rem) break;
-    unsigned long cur = rem * BdB + d[i];
+    unsigned long long cur = rem * BdB + d[i];
     d[i] = cur / m;
     rem = cur % m; }
   return i - 1 > hi ? i - 1 : hi; }
 /* zero every digit after index k */
-static void bd_trunc(unsigned long *d, int k) {
+static void bd_trunc(unsigned long long *d, int k) {
   int i;
   if (k >= BdD) return;
   if (k < 0) i = 0;
@@ -38,9 +38,9 @@ static void bd_trunc(unsigned long *d, int k) {
   for (; i < BdN; i++) d[i] = 0; }
 /* add one at digit index k, carrying toward index 0. the array has 324 integer
  * digits against a largest double of 309, so the carry always lands. */
-static int bd_inc(unsigned long *d, int k, int lo) {
+static int bd_inc(unsigned long long *d, int k, int lo) {
   int i = k / 9;
-  unsigned long add = bd_p10[8 - k % 9];
+  unsigned long long add = bd_p10[8 - k % 9];
   while (i >= 0) {
     d[i] += add;
     if (d[i] < BdB) break;
@@ -48,7 +48,7 @@ static int bd_inc(unsigned long *d, int k, int lo) {
   return i >= 0 && i < lo ? i : lo; }
 /* round to keep digits through index k. the value is exact, so a TIE is a real
  * tie and breaks to even -- %.0f of 2.5 is 2 and of 3.5 is 4. */
-static int bd_round(unsigned long *d, int k, int lo) {
+static int bd_round(unsigned long long *d, int k, int lo) {
   unsigned n = bd_dig(d, k + 1);
   int up = n > 5;
   if (n == 5) {
@@ -60,20 +60,20 @@ static int bd_round(unsigned long *d, int k, int lo) {
   return up ? bd_inc(d, k, lo) : lo; }
 /* the index of the most significant digit that is not a zero, or the units
  * place when the value is zero (which reads 0 and dates the exponent at 0). */
-static int bd_msd(unsigned long const *d, int lo) {
+static int bd_msd(unsigned long long const *d, int lo) {
   for (int i = lo; i < BdN; i++)
     if (d[i]) { int k = i * 9; while (!bd_dig(d, k)) k++; return k; }
   return BdU; }
 /* the float lanes: %f %e %g %a and their upper-case twins. */
 static void __fmtflo(void (*put)(void *, int), void *ctx, double v, int conv,
                      int prec, int width, int fl) {
-  unsigned long bits;
+  unsigned long long bits;
   memcpy(&bits, &v, sizeof bits);
   int neg = (int) (bits >> 63);            /* from the SIGN BIT, not v < 0:
                                               -0.0 is not less than zero, and
                                               printf must still say -0 */
-  int be = (int) ((bits >> 52) & 0x7ffUL);
-  unsigned long man = bits & 0xfffffffffffffUL;
+  int be = (int) ((bits >> 52) & 0x7ffULL);
+  unsigned long long man = bits & 0xfffffffffffffULL;
   int up = conv == 'E' || conv == 'G' || conv == 'F' || conv == 'A';
   if (up) conv += 32;
   int sgn = __fmtsgn(neg, fl);
@@ -100,15 +100,15 @@ static void __fmtflo(void (*put)(void *, int), void *ctx, double v, int conv,
     int nd = 13;
     if (prec >= 0 && prec < 13) {
       nd = prec;
-      unsigned g = (unsigned) ((man >> (48 - 4 * nd)) & 0xfUL);
-      unsigned long rest = man & ((1UL << (48 - 4 * nd)) - 1);
-      int odd = nd ? (int) ((man >> (52 - 4 * nd)) & 1UL) : lead & 1;
+      unsigned g = (unsigned) ((man >> (48 - 4 * nd)) & 0xfULL);
+      unsigned long long rest = man & ((1ULL << (48 - 4 * nd)) - 1);
+      int odd = nd ? (int) ((man >> (52 - 4 * nd)) & 1ULL) : lead & 1;
       int rup = g > 8 || (g == 8 && (rest || odd));
-      man &= ~((1UL << (52 - 4 * nd)) - 1);
-      if (rup) { man += 1UL << (52 - 4 * nd);
-                 if (man >> 52) { man &= 0xfffffffffffffUL; lead++; } } }
+      man &= ~((1ULL << (52 - 4 * nd)) - 1);
+      if (rup) { man += 1ULL << (52 - 4 * nd);
+                 if (man >> 52) { man &= 0xfffffffffffffULL; lead++; } } }
     else if (prec >= 0) nd = prec;                    /* past 13, all zeros */
-    else while (nd && !((man >> (52 - 4 * nd)) & 0xfUL)) nd--;
+    else while (nd && !((man >> (52 - 4 * nd)) & 0xfULL)) nd--;
     int pt = nd > 0 || (fl & FfAlt);
     int ax = xe < 0 ? -xe : xe;
     int nx = 1; for (int t = ax; t >= 10; t /= 10) nx++;
@@ -122,7 +122,7 @@ static void __fmtflo(void (*put)(void *, int), void *ctx, double v, int conv,
     if (pt) {
       put(ctx, '.');
       for (int j = 0; j < nd; j++) {
-        unsigned h = j < 13 ? (unsigned) ((man >> (48 - 4 * j)) & 0xfUL) : 0;
+        unsigned h = j < 13 ? (unsigned) ((man >> (48 - 4 * j)) & 0xfULL) : 0;
         put(ctx, h < 10 ? '0' + h : (up ? 55 : 87) + h); } }
     put(ctx, up ? 'P' : 'p');
     put(ctx, xe < 0 ? '-' : '+');
@@ -131,9 +131,9 @@ static void __fmtflo(void (*put)(void *, int), void *ctx, double v, int conv,
     return; }
 
   /* --- the decimal lanes, off the exact digits. */
-  unsigned long bd[BdN];
+  unsigned long long bd[BdN];
   for (int i = 0; i < BdN; i++) bd[i] = 0;
-  unsigned long m = be ? man | 0x10000000000000UL : man;
+  unsigned long long m = be ? man | 0x10000000000000ULL : man;
   int e2 = be ? be - 1075 : -1074;               /* the value is m * 2^e2 */
   bd[BdI - 1] = m % BdB;
   bd[BdI - 2] = m / BdB;                       /* m < 2^53, so two limbs */
@@ -185,7 +185,7 @@ static void __fmtflo(void (*put)(void *, int), void *ctx, double v, int conv,
   if (fl & FfLeft) __pad(put, ctx, pad, 32); }
 /* one directive, parsed: its value's place (pos, 0 = the next argument), the width and the
  * precision -- or the argument each comes from (wa/pa: -1 the next, n the n-th) -- the length
- * (H hh, h, l for every word-wide one, L) and the conversion */
+ * (H hh, h, l for every word-wide one, Q for the 64-bit ones, L) and the conversion */
 struct __fsp { int fl, width, prec, wa, pa, pos, len, conv; };
 static char const *__fdigits(char const *f, int *n) {
   *n = 0; while (*f >= '0' && *f <= '9') *n = *n * 10 + (*f++ - 48);
@@ -214,24 +214,27 @@ static char const *__fparse(char const *f, struct __fsp *sp) {
     else f = __fdigits(f, &sp->prec); }
   if (*f == 'h') { f++; sp->len = 'h'; if (*f == 'h') { f++; sp->len = 'H'; } }
   else if (*f == 'L') { f++; sp->len = 'L'; }
-  else while (*f == 'l' || *f == 'z' || *f == 'j' || *f == 't' || *f == 'q') { f++; sp->len = 'l'; }
+  else if (*f == 'j' || *f == 'q') { f++; sp->len = 'Q'; }
+  else if (*f == 'z' || *f == 't') { f++; sp->len = 'l'; }
+  else if (*f == 'l') { f++; sp->len = 'l'; if (*f == 'l') { f++; sp->len = 'Q'; } }
   sp->conv = *f;
   return f; }
-/* what a directive's value is read as: an int, a word (long, a pointer), or a double */
+/* what a directive's value is read as: an int, a word (long, a pointer), a long long, or a double */
 static int __fkind(struct __fsp const *sp) {
   int c = sp->conv;
   if (c == 's' || c == 'p' || c == 'n') return 'l';
   if (c == 'f' || c == 'F' || c == 'e' || c == 'E' || c == 'g' || c == 'G' || c == 'a' || c == 'A') return 'd';
-  return sp->len == 'l' ? 'l' : 'i'; }
+  return sp->len == 'l' || sp->len == 'Q' ? sp->len : 'i'; }
 /* the arguments: off the va_list in order, or -- once a directive names one by number
  * (POSIX's %n$) -- fetched whole first, each by the kind its directives read it as */
 #define FArgMax 64
-union __farg { long i; double d; };
+union __farg { long long i; double d; };
 struct __fargs { va_list ap; union __farg a[FArgMax + 1]; int npos, next; };
 static union __farg __fget(struct __fargs *A, int pos, int kind) {
   union __farg v;
   if (A->npos) { v = pos > 0 && pos <= FArgMax ? A->a[pos] : A->a[0]; return v; }
   if (kind == 'd') v.d = va_arg(A->ap, double);
+  else if (kind == 'Q') v.i = va_arg(A->ap, long long);
   else if (kind == 'l') v.i = va_arg(A->ap, long);
   else v.i = va_arg(A->ap, int);
   return v; }
@@ -267,6 +270,7 @@ static int __fmt(void (*put0)(void *, int), void *ctx0, char const *fmt, va_list
     for (int i = 1; i <= top; i++) {
       if (kd[i] == 'd') A.a[i].d = va_arg(A.ap, double);
       else if (kd[i] == 'i') A.a[i].i = va_arg(A.ap, int);
+      else if (kd[i] == 'Q') A.a[i].i = va_arg(A.ap, long long);
       else A.a[i].i = va_arg(A.ap, long); } }
   for (; *fmt; fmt++) {
     if (*fmt != '%') { put(ctx, *fmt); continue; }
@@ -282,7 +286,7 @@ static int __fmt(void (*put0)(void *, int), void *ctx0, char const *fmt, va_list
     int c = sp.conv;
     union __farg v = __fget(&A, sp.pos, __fkind(&sp));
     if (c == 's' && sp.len == 'l') {       /* a wide string in the C locale: ascii, past it EILSEQ */
-      int const *w = (int const *) v.i;
+      int const *w = (int const *) (long) v.i;
       if (!w) w = (int const *) L"(null)";
       int len = 0;
       while (w[len] && (prec < 0 || len < prec)) { if ((unsigned) w[len] > 127) { k.bad = 1; break; } len++; }
@@ -292,7 +296,7 @@ static int __fmt(void (*put0)(void *, int), void *ctx0, char const *fmt, va_list
       for (int i = 0; i < len; i++) put(ctx, w[i]);
       if (fl & FfLeft) __pad(put, ctx, pad, 32); }
     else if (c == 's') {
-      char const *s = (char const *) v.i;
+      char const *s = (char const *) (long) v.i;
       if (!s) s = "(null)";
       int len = 0;
       while (s[len] && (prec < 0 || len < prec)) len++;
@@ -307,13 +311,15 @@ static int __fmt(void (*put0)(void *, int), void *ctx0, char const *fmt, va_list
       put(ctx, (unsigned char) v.i);
       if (fl & FfLeft) __pad(put, ctx, pad, 32); }
     else if (c == 'd' || c == 'i') {
-      long x = sp.len == 'l' ? v.i : sp.len == 'h' ? (short) v.i : sp.len == 'H' ? (signed char) v.i : (int) v.i;
-      unsigned long u = (unsigned long) x;
+      long long x = sp.len == 'Q' ? v.i : sp.len == 'l' ? (long) v.i : sp.len == 'h' ? (short) v.i
+                  : sp.len == 'H' ? (signed char) v.i : (int) v.i;
+      unsigned long long u = (unsigned long long) x;
       int neg = x < 0;
-      if (neg) u = 0UL - u;
+      if (neg) u = 0ULL - u;
       __fmtnum(put, ctx, u, 10, neg, prec, width, fl, 0); }
     else if (c == 'u' || c == 'x' || c == 'X' || c == 'o') {
-      unsigned long u = sp.len == 'l' ? (unsigned long) v.i : sp.len == 'h' ? (unsigned short) v.i
+      unsigned long long u = sp.len == 'Q' ? (unsigned long long) v.i : sp.len == 'l' ? (unsigned long) v.i
+                           : sp.len == 'h' ? (unsigned short) v.i
                       : sp.len == 'H' ? (unsigned char) v.i : (unsigned int) v.i;
       __fmtnum(put, ctx, u, c == 'u' ? 10 : c == 'o' ? 8 : 16, 0, prec, width, fl & ~(c == 'u' ? FfAlt : 0), c == 'X'); }
     else if (c == 'f' || c == 'F' || c == 'e' || c == 'E' || c == 'g' || c == 'G' || c == 'a' || c == 'A')
@@ -325,9 +331,10 @@ static int __fmt(void (*put0)(void *, int), void *ctx0, char const *fmt, va_list
              for (char const *q = "(nil)"; *q; q++) put(ctx, *q);
              if (fl & FfLeft) __pad(put, ctx, pad, 32); } }
     else if (c == 'n') {
-      void *p = (void *) v.i;
+      void *p = (void *) (long) v.i;
       if (sp.len == 'H') *(signed char *) p = (signed char) k.n;
       else if (sp.len == 'h') *(short *) p = (short) k.n;
+      else if (sp.len == 'Q') *(long long *) p = k.n;
       else if (sp.len == 'l') *(long *) p = k.n;
       else *(int *) p = (int) k.n; }
     else for (; at <= fmt; at++) put(ctx, *at); }   /* not a conversion: the text stands */

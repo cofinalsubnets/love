@@ -209,6 +209,20 @@
    (hark argv) (hark1 argv 0)
    (herald argv) (hark1 argv 1))
 
+; processes: programs in memory of their own, where this machine can run one (src/inle/sys.c).
+; the task that starts one stands in for it -- wait and the job table see that task -- and
+; answers the process's status once the pipe the kernel ends with it reads to its end
+(: k-nul (string 0)
+   (k-words l) (foldl (\ s w (s + (w + k-nul))) "" l)
+   (k-procrun argv)
+     (kproc (k-words argv) (k-words (environ 0)) @ r
+        (!(two? r) ? (say err (<argv + ": " + show r), put err 10, 126)
+           (: q (fdopen >r) _ (slurp q) _ (close q)
+              (kreap <r @ s (charm? s ? s 1)))))
+   ; `proc PROG ARGS ..`: love's PROG as a process, woken from the machine's own image
+   (proc-main args) (k-procrun ((two? (stat "/proc/image") ? ["love" "wake" "/proc/image"] ["love"]) + args))
+   _ (pins (cite 'verbs 'tab) 'proc proc-main))
+
 ; a window here is the whole screen: (kpaper 1) holds the framebuffer and answers (w h),
 ; (kshow paper y0 y1) lays the paper's rows on it, (kpaper 0) gives it back to the console.
 ; kwin-events answers what waits as a window's records, as src/apps/lux/wire.l's x-events

@@ -1,4 +1,4 @@
-; src/apps/kore/re.l -- grep, over the regex engine in src/love/boot/post.l. this half reads
+; src/apps/kore/re.l -- grep, over the regex door in src/love/boot/post.l. this half reads
 ; files (u's uread/udie, text.l's lines). a toolbox file, no seat -- kore.l is its door.
 (borrow 're)
 
@@ -8,46 +8,48 @@
 (borrow 'glob) ; --include and --exclude
 (borrow 'posix) ; readdir, for -r
 (: rebre (cite 're 'rebre) reere (cite 're 'reere)      ; the four engine names grep reads
-   refold (cite 're 'refold) refindp (cite 're 'refindp)
-   recomp (cite 're 'recomp) refindpm (cite 're 'refindpm)
+   refold (cite 're 'refold) refind (cite 're 'refind)
 
    ; -- grep --------------------------------------------------------------------
    ; flags ride a tablet keyed by the option charm (cli's uopt fills it), so a
    ; new one is a row here and not another leg on a tuple every caller re-spells
    (gflag t c) (peep t c 0)
-   ; a pattern text -> its node list, by the dialect and the -F/-i flags. a
-   ; newline splits: GNU reads one pattern per line, which is also how -e stacks
+   ; a pattern text -> its matchers, by the dialect and the -F/-i flags. a
+   ; newline splits: GNU reads one pattern per line, which is also how -e stacks.
+   ; -F is a BRE with every sigil behind a backslash
    (gnodes t txt)
-    ; the parser's shape is (1 nodes ngroups), so -F answers the same three.
-    ; and -F walks by index: `two?` is false for a string, so (map f s) is () --
-    ; which reads as the empty pattern and matches every line
-    (: (one s) (gflag t 70 ? [1 (map (i \ ['chr (s i)]) (jot #s)) 0]
-                ((gflag t 69 ? reere rebre) s))
-       (wrap nds) ((gflag t 120 ? (cat ('(bol) . nds) '((eol))) nds) @ a
-                     (gflag t 105 ? (refold a) a))
+    (: (lit s) (foldl (\ a c (a + (elem c (chars "\\.[*^$") ? "\\" "") + string c)) "" (chars s))
+       (one s) (? (gflag t 70) (rebre (lit s)) (gflag t 69) (reere s) (rebre s))
        (go ls acc)
         (ls @ (l . more)
-           (one l @ [_ nds _] (go more ((wrap nds) . acc)) ())
+           (one l @ [_ m _] (go more ((gflag t 105 ? (refold m) m) . acc)) ())
            [1 (rev acc)])
        ; the empty pattern is one empty pattern, not none: `lines ""` is (), and
        ; a walk over () would answer no patterns at all -- so `grep ''`, which
        ; matches every line in GNU, would match nothing here
        ls (lines txt)
        (go (two? ls ? ls [""]) ()))
-   ; -w: the span must not sit inside a word. checked at the span, not the
-   ; pattern, because a word boundary is not a node this engine can hold
-   ; a word character, 'text's: ascii by the byte, past it by the character
+   ; -w: the span must not sit inside a word. a word character, 'text's: ascii
+   ; by the byte, past it by the character
    (gword? c) (48 <= c <= 57 || 65 <= c <= 90 || 97 <= c <= 122 || c = 95)
    (gwat ln j) (ln j @ b (b < 128 ? (gword? b) (cpword? (cpat ln j))))
    (gwbefore ln j) (ln (j - 1) @ b (b < 128 ? (gword? b) (cpword? (cpat ln (cpback ln j)))))
-   ; the leftmost match of any of ms (compiled) in ln, word-bounded if w? -> (1 st en) | ()
-   (gfind ms ln w? i)
+   ; the leftmost match of any of ms in ln at or after i, the whole line under -x and
+   ; word-bounded under -w -> (1 st en) | ()
+   (gfind t ms ln i)
     (: n #ln
-       (bnd st en) (!w? ? 1
-                      ((st = 0 || !(gwbefore ln st)) && (en = n || !(gwat ln en))))
+       (bnd st en) ((st = 0 || !(gwbefore ln st)) && (en = n || !(gwat ln en)))
+       ; gnu's -w walk: a span inside a word tries the longest shorter one at its start,
+       ; the text cut there and no $ at the cut, then the next start
+       (cut m st en) (st < en && refind [<m (m 1 | 512) (m 2)] (snip ln 0 (en - 1)) st @ [_ a b _] (a = st && a < b ? b))
+       (word m st en)
+        (? (bnd st en) [1 st en]
+           (cut m st en @ b (b ? (word m st b)
+                               (st < n && refind m ln (st + 1) @ [_ a b _] (word m a b)))))
+       (hit m) (refind m ln i @ [_ a b _]
+                 (? (gflag t 120) (a = 0 && b = n ? [1 a b]) (gflag t 119) (word m a b) [1 a b]))
        (best acc m)
-        (refindpm m ln i bnd @ [_ st en _]
-          (? (atom? acc) [1 st en] (st < <>acc) [1 st en] acc)
+        (hit m @ [_ st en] (? (atom? acc) [1 st en] (st < <>acc) [1 st en] acc)
           acc)
        (foldl best () ms))
    ; -e pattern (stacks), -f file, -m count, -A -B -C lines; --include and --exclude
@@ -90,9 +92,9 @@
        fs (r? ? (grep-tree fs0 (gflag t 82) (uoptv t 1001) (uoptv t 1002)) fs0)
        nss (string? pt ? (gnodes t pt) [1 ()])
        _ (two? nss ? () (udie 2 ("grep: invalid pattern: " + pt)))
-       ast (map recomp <>nss)                     ; compiled once, not per line
+       ast <>nss
        n? (gflag t 110) v? (gflag t 118) c? (gflag t 99) l? (gflag t 108)
-       q? (gflag t 113) h? (gflag t 104) o? (gflag t 111) w? (gflag t 119)
+       q? (gflag t 113) h? (gflag t 104) o? (gflag t 111)
        L? (gflag t 76) s? (gflag t 115)
        (count c d) (: v (uoptv t c) n (v ? (unum v) d)
                       (charm? n && 0 <= n ? n (udie 2 ("grep: invalid context length: " + v))))
@@ -100,7 +102,7 @@
        B (count 66 (count 67 0)) A (count 65 (count 67 0))
        ctx? (gflag t 65 || gflag t 66 || gflag t 67)   ; -C0 still marks the gaps
        many (? (gflag t 72) 1 h? 0 (r? || two? fs && two? >fs))
-       (sel ln) ((two? (gfind ast ln w? 0) ? 1 0) @ m (v? ? (m ? 0 1) m))
+       (sel ln) ((two? (gfind t ast ln 0) ? 1 0) @ m (v? ? (m ? 0 1) m))
        (pfx label) (many ? (say out label, put out 58))
        ; one line out, c the separator (: a match, - context); with context a gap since
        ; the last line said, or a new file, is a -- row
@@ -113,7 +115,7 @@
        ; -o: every match on the line, each on its own row. -v has nothing to show
        (emit1 label no ln)
         (: (go i)
-            (gfind ast ln w? i @ [_ st en]
+            (gfind t ast ln i @ [_ st en]
               ; a zero-length match prints nothing (GNU's rule, and `-o '[a-z]*'`
               ; is how you meet it) -- but it still advances, or the walk sits still
               (st < en ? (pfx label, n? ? (say out (show no), put out 58), say out (snip ln st en), put out 10),
@@ -155,19 +157,12 @@
        ; `bad`, not `err`: err is the port, and a shadow here would say into a charm
        st {}
        (pin st 'hit 0, pin st 'bad 0,
-        ; one trap for the whole run. the backtracker scares 'regex-too-costly when a
-        ; repeat over an alternation spends its step budget; any other scare re-raises
-        (trap (_ \ (ureachm (f \ ((s? ? 0 (say err ("grep: " + f + (udirp f ? ": Is a directory"
-                                                                     ": No such file or directory")), put err 10)), pin st 'bad 1, 0))
-                            (\ f first rd
-                               (pin st 'hit (dof (f = "-" ? "(standard input)" f) rd
-                                                      (peep st 'hit 0)), 1))
-                            fs))
-              ()
-              (\ a b (a == 'regex-too-costly ?
-                        (flush out, say err ("grep: the pattern needs more than " + show b
-                                       + " backtracking steps on one line -- it is the"), put err 10, say err "grep: kind an automaton walks in one pass and this engine does not (a repeat over an alternation)", put err 10, flush err, uleave 2)
-                        (scare a b)))),
+        ureachm (f \ ((s? ? 0 (say err ("grep: " + f + (udirp f ? ": Is a directory"
+                                                      ": No such file or directory")), put err 10)), pin st 'bad 1, 0))
+                (\ f first rd
+                   (pin st 'hit (dof (f = "-" ? "(standard input)" f) rd
+                                     (peep st 'hit 0)), 1))
+                fs,
         flush out, flush err,
         (? (peep st 'bad 0) 2 (peep st 'hit 0) 0 1))))
 ) ; module 'kore
