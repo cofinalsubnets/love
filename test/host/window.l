@@ -3,7 +3,8 @@
 ; GetImage, sends keys and the pointer through XTEST and resizes it. asserted: the paper shown,
 ; a key down and up by its set-1 code and the text it types, a move, a press and a release in
 ; the window's pixels, a size and the fresh paper it brings; then `love synth -w`, a key's
-; note lit while it is held. no Xvfb -> a polite skip.
+; note lit while it is held, and `love lore corridor --window`, turning while a key is held.
+; no Xvfb -> a polite skip.
 ; run: cat test/00-init.l test/host/window.l | out/love
 (borrow 'window)
 (borrow 'synth)   ; synth-trows, where its strip sits
@@ -77,16 +78,31 @@
    _ (test (two? kids))
    sw (: (last l) (two? >l ? (last >l) <l) (last kids))
    y (synth-trows * 16 + 20) cq (12 * 20 + 10)                    ; middle c, the 13th of 32
+   ; a pixel as it becomes c, or as it stands after n tries a tenth of a second apart
+   (until w x y c n) (px w x y @ v (v = c || n < 1 ? v (rest 100, until w x y c (n - 1))))
    before (px sw cq y)
-   _ (fake 2 24, rest 600)                                        ; q down
-   held (px sw cq y)
-   _ (fake 3 24, rest 600)
-   after (px sw cq y)
+   _ (fake 2 24)                                                  ; q down
+   held (until sw cq y [255 128 0] 30)
+   _ (fake 3 24)
+   after (until sw cq y [208 208 208] 30)
    _ (fake 2 9, fake 3 9)                                         ; esc
    (wfn p n) (gather p @ g2 (two? g2 ? g2 (n < 1 ? () (rest 2, wfn p (n - 1)))))
    st (wfn <ph 3000)
    _ (test ([208 208 208] = before) ([255 128 0] = held) ([208 208 208] = after)
            (two? st) (0 = <st))
+   ; the corridor in a window of its own: l held turns the view while it is held, so the
+   ; picture moves; q is the end with status 0
+   pc (tether ["env" "HORN=none" ("DISPLAY=:" + show dn) "out/love" "lore" "corridor" "--window"])
+   _ (rest 6000)
+   cw (: kids <>(XW 'x-querytree s (XW 'scr-root sc)) (last l) (two? >l ? (last >l) <l) (last kids))
+   (look _) (map (i \ px cw (40 + i * 70) (60 + i * 35)) ^8)
+   v0 (look ())
+   _ (fake 2 46, rest 1000, fake 3 46)                            ; l, held a second
+   (moved n) (look () @ v (v != v0 || n < 1 ? v (rest 100, moved (n - 1))))
+   v1 (moved 30)
+   _ (fake 2 24, fake 3 24)                                       ; q
+   sc2 (wfn <pc 3000)
+   _ (test (any (c \ c != [0 0 0]) v0) (v0 != v1) (two? sc2) (0 = <sc2))
    _ (close s)
    _ (still <xv 15)
    _ (wfx <xv)

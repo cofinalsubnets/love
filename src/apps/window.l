@@ -13,7 +13,8 @@
 ; text is what it types. a size is a fresh paper, black, for the program to draw again.
 ; on X it is a window of its own over the wire (src/apps/lux/wire.l); on inle it is the
 ; whole screen (src/inle/seat.l's kwin-events over kmain.c's kpaper kshow kscan), and
-; w h are the screen's whatever was asked.
+; w h are the screen's whatever was asked. a tablet of 'w 'h 'paper alone is a window with
+; no screen, a law's: it shows nothing, and its events are what was left in its 'evq.
 (module '(window window-open window-paper window-size window-show window-events window-close)
 (borrow 'xwire)
 (borrow 'posix)
@@ -45,7 +46,8 @@
     (: a (max 0 y0) b (min (win 'h) y1)
        (? (b <= a) 0
           (win 'how = 'x) (x-putrows (win 's) (win 'xw) (win 'gc) (win 'depth) (win 'paper) (win 'w) a (b - a))
-          (kshow (win 'paper) a b)))
+          (win 'how = 'inle) (kshow (win 'paper) a b)
+          0))
 
    ; a size the paper has already is no news: X says one for every move
    (resized win r)
@@ -64,7 +66,8 @@
    (window-events win)
     (: l (? (win 'how = 'x) (x-pending win @ p
                               (p 1 ? (window-show win 0 (win 'h)) 0, <p))
-            (kwin-events 0))
+            (win 'how = 'inle) (kwin-events 0)
+            (peep win 'evq () @ q (pin win 'evq (), q)))
        (foldl (a \ r \ a + resized win r) () l))
 
    (window-close win) (win 'how = 'x ? (close (win 's)) (kpaper 0)))
