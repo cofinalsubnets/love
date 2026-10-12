@@ -157,6 +157,7 @@ static struct g *thrun(struct g *g) {
   intptr_t nc = 0;
   for (word l = sp[3]; chainp(l) && nc <= ThrTwo; l = B(l)) cfgv[nc++] = A(l);
   int r = 0;
+  word ans = 0;
   struct thr t = { g, sp[2], nc > ThrTwo ? cfgv[0] : 0, cfgv, g->sp, ZeroPoint, ZeroPoint, 0, 0, 0, 0, 0 };
   if (evenp(sp[0]) && nc > ThrTwo && tabp(cfgv[0])) {
    word *prev = 0;                                    // the frame's slots, in list order: the head the top
@@ -165,9 +166,10 @@ static struct g *thrun(struct g *g) {
     if (prev) prev[1] = word(c); else t.s = c;
     prev = c; }
    r = thr_run(&t, cell(sp[0]), 0) == 1;
-   if (r) sp[3] = thr_cons(&t, t.node, t.pairs); }
-  if (!t.full) {
-   if (!r) g->hp = hp0, sp[3] = putcharm(0);
+   if (r) ans = thr_cons(&t, t.node, t.pairs); }
+  if (!t.full) {                                       // the operands stay as they were until the run fits
+   if (r) sp[3] = ans;
+   else g->hp = hp0, g->next_serial = sn, sp[3] = putcharm(0);
    return g->sp += 3, g; }
   want = (uintptr_t) (g->hp - hp0);
   g->hp = hp0, g->next_serial = sn; } }
