@@ -154,7 +154,7 @@
                   pin (g 'vrt) v9 r9,
                   v9))
    ; a spare pool register a shuttle borrows for one span, minted so the allocator may move it
-   (vspare g r9) (r9 && x64? g && !(abl? g 'ralloc) && !(abl? g 'vspare) ? (vmint g r9) r9)
+   (vspare g r9) (r9 && (x64? g || a64? g) && !(abl? g 'ralloc) && !(abl? g 'vspare) ? (vmint g r9) r9)
    (rfree g rz) (rp g rz @ r
                   (elem r (g 'pool0) &&
                  nelem r (g 'pool) ?
@@ -5386,7 +5386,7 @@
               [lin lot]))))
    (lvout g fs) ; index -> the registers live out of it | 'no
     (lvio g fs @ 'no 'no r <>r)
-   ; the staging webs (x64): a def of r0 and the reads it reaches, all explicit operands of plain
+   ; the staging webs (x64, a64): a def of r0 and the reads it reaches, all explicit operands of plain
    ; forms inside the body, never live into a join, an exit or an unnamed read, become one mint
    ; bound to r0 that valloc may move. a web nothing reads stays (al before a variadic call)
    (wpos f)                                         ; -> [defs reads both] operand positions | ()
@@ -5419,10 +5419,11 @@
                         (op = 'jmpt) (map (L \ (peep labt L -1)) (f 3))
                         (xit? f) ()
                         [(i + 1)]))
-       ; one form's touch of R, [reads? defs?]: a call reads it only by name (al rides its own li)
+       ; one form's touch of R, [reads? defs?]: a call reads it by name or as an argument
+       ; register (x64's al rides its own li)
        (eff f) (? !(two? f) [() ()]
                   (elem <f lvquiet) [() ()]
-                  (elem <f '(call callr callm)) [(elem R >f) 1]
+                  (elem <f '(call callr callm)) [(elem R >f || elem R (argr g)) 1]
                   (xjmp? f labt) [1 ()]
                   (lvtx g f [R] @ 'bar [1 ()] d [(elem R <d) (elem R <>d)]))
        ef {} sc {}
@@ -5479,8 +5480,10 @@
    ; alias selection relied on, so it keeps that register. colours go in first-mention order -- a
    ; copy partner's first, then the binding, then the file. answers 1, or () when a mint is left
    ; without one (vrfix's rasg then keeps the whole fn's binding)
-   ; x64's rcx and rdx join: liveness already sees an arrival riding them and every op that names them
-   (vafile g) (lvun (lvun (g 'pool0) (rafile g)) (x64? g && !(abl? g 'vrcx) ? '(r0 r1 r2) '(r0)))
+   ; x64's rcx and rdx join, a64's x1-x3 (x4 is a4ize's): liveness already sees an arrival riding
+   ; them and every op that names them
+   (vafile g) (lvun (lvun (g 'pool0) (rafile g))
+                    (? (abl? g 'vrcx) '(r0) (x64? g) '(r0 r1 r2) (a64? g) '(r0 r1 r2 r3) '(r0)))
    ; the ops whose dest may share the second source: x64's holo lays d = b as d op= a when
    ; the op commutes; a64's alu is three-address throughout
    (vacomm g) (a64? g ? '(add sub and or xor adds subs imul) '(add or and xor adds imul))
@@ -5567,7 +5570,7 @@
             (? (!(two? l) || k = 0) ()
                (: nx (filter (x \ nelem x seen) (foldl (a \ y \ a + (vmint? g y && !(col y) ? (peep pt y ()) ())) () l))
                   (map cof l + reach nx (seen + nx) (k - 1))))
-           pp (filter (r \ elem r cs && !(r = 'r0 && s0 m)) (reach (peep pt m ()) [m] (x64? g ? 4 1)))
+           pp (filter (r \ elem r cs && !(r = 'r0 && s0 m)) (reach (peep pt m ()) [m] (x64? g || a64? g ? 4 1)))
            (? (two? pp) <pp (elem (t m) cs) (t m) (two? cs) <cs))
        (go l) (? !(two? l) 1
                  (col <l) (go >l)
@@ -5580,7 +5583,7 @@
    ; the early assignment: valloc where it runs, before the frame is sized
    (vpre g hd body tl)
     (? (!(x64? g || a64? g) || abl? g 'valloc) body
-       (: b2 (x64? g && !(abl? g 'vweb) ? (vweb g hd body tl) body)
+       (: b2 ((x64? g || a64? g) && !(abl? g 'vweb) ? (vweb g hd body tl) body)
         ((peep g 'vrn 0 && valloc g (dp 'vweb (hd + b2 + tl)) ? (pin g 'vdone 1)),
          b2)))
    ; substitute every mint over the assembled prologue+body+epilogue, the innermost build-tail
@@ -5728,7 +5731,7 @@
                 ; the def names S alone, and reads it only where its dest is a pure write
                 ; (S dies at the mov, so (add r0 r0 8) (mov r9 r0) is (add r9 r0 8))
                 (two? dfs && !(two? >dfs) && <dfs = S && p 1 == S &&
-                 (nelem S <d || x64? g && !(abl? g 'coalrd) &&
+                 (nelem S <d || (x64? g || a64? g) && !(abl? g 'coalrd) &&
                   (elem <p aluops || elem <p xops || elem <p ldops9 || elem <p leaops || elem <p '(mov adds subs))) &&
                  ; D a stranger to the def's defs and reads (the emitter refuses an aliased dest),
                  ; except an alu's first source: (mov d a; op d b) lowers, so (add r7 r7 8) fuses
