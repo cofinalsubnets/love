@@ -1923,7 +1923,7 @@
             (movqxr f0 r5) (movqrx r5 f0)
             (cvtsi2sd f0 r5) (cvttsd2si r5 f0)
             (ldsd f0 r9 8) (ldss f0 r9 8) (stsd r9 8 f0) (stss r9 8 f0)
-            (addsd f0 f1) (subsd f0 f1) (mulsd f0 f1) (divsd f0 f1) (movsd f0 f1) (movapd f0 f1)
+            (addsd f0 f1) (subsd f0 f1) (mulsd f0 f1) (divsd f0 f1) (movsd f0 f1) (movapd f0 f1) (movss f0 f1)
             (ucomisd f0 f1) (cvtss2sd f0 f1) (cvtsd2ss f0 f1)
             (addss f0 f1) (subss f0 f1) (mulss f0 f1) (divss f0 f1) (minss f0 f1) (maxss f0 f1) (ucomiss f0 f1)
             (cvtsi2ss f0 r5) (cvttss2si r5 f0) (movdxr f0 r5) (movdrx r5 f0)
@@ -1960,7 +1960,7 @@
    bad2 (catmap bwd shapes)
    (test
       ; the carrier is what it says it is, and every shape is one both halves already accept
-      (107 = #shapes)
+      (108 = #shapes)
       (atom? (filter (f9 \ (rdsp gX f9) = 'bar) shapes))
       (all emits? shapes)
       (atom? (filter (o9 \ nelem o9 heads) rostered))      ; the drift gate
