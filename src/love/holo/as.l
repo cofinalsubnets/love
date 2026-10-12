@@ -202,7 +202,7 @@
             'cbw '(102 152) 'cwde '(152) 'cdqe '(72 152)      ; al -> ax, ax -> eax, eax -> rax
             'cwd '(102 153) 'cdq '(153) 'cqo '(72 153)        ; .. and the dx:ax splits
             'int3 '(204) 'ud2 '(15 11) 'pause '(243 144)
-            'cpuid '(15 162) 'rdtsc '(15 49)
+            'cpuid '(15 162) 'rdtsc '(15 49) 'rdtscp '(15 1 249)
             'cli '(250) 'sti '(251)                  ; the interrupt flag
             'pushf '(156) 'pushfq '(156) 'popf '(157) 'popfq '(157)   ; ... and the whole word, through the stack
             'clc '(248) 'stc '(249) 'cmc '(245)   ; ... the carry flag

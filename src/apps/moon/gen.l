@@ -3105,7 +3105,11 @@
                                    ([['ov ovc n] (tor0 g a + mv (n - 1) ())] . acc))))
                        (stru? aty && !(aone g aty))             ; a mixed 16B by-value struct stays ahead
                         (nolane g ("no lane for passing this " + show (tsz g aty) + "-byte struct by value" + ontgt g))
-                       (d128? aty)                               ; a wide arg: not carried (love.c passes limbs, never dlimbs)
+                       ; a wide arg on x64: two gp registers, lo first (SysV's __int128; the kernel's cmpxchg128)
+                       (d128? aty && x64? g && gpc + 2 <= ngp g)
+                        (kls >as (i + 1) (gpc + 2) xmmc ovc
+                             (. [['p2 'g gpc 'g (gpc + 1)] (as128 g a + '((push r2) (push r0)))] acc))
+                       (d128? aty)                               ; ..elsewhere, or past the registers: not carried
                         (nolane g "a wide value is not carried as an argument")
                        ; i386: a double its 8 bytes in the block, a float its 4 where a prototype says float
                        (ia32? g && flo? aty)
@@ -5040,6 +5044,7 @@
    ; -march= a cpu before the 686: no cmov
    (old86? g) (ia32? g ? (drop 3 (g 'mo) @ r (two? r && <r)) 0)
    (osz? g) (drop 4 (g 'mo) @ r (two? r && <r))   ; -Os: for size
+   (nofp? g) (drop 5 (g 'mo) @ r (two? r && <r))  ; -mno-sse and kin: no float register
    (lowb x) (x & (0 - x))                            ; the alignment an offset keeps (0 for 0)
    ; the chunks of n bytes at an a-aligned address: (pos width) each, widest first
    (alchunks n a)
@@ -7404,7 +7409,8 @@
                           (map sfix x))
               init (sfix (lfix <>>p))
               (pin (g 'glob) lbl [lbl ty init],   ; a local data label (internal linkage): g 'statics,
-               4 < #p ? (pin (g 'aligns) lbl (p 4)) 0,   ; its own aligned ask
+               4 < #p && 0 < p 4 ? (pin (g 'aligns) lbl (p 4)) 0,   ; its own aligned ask
+               5 < #p ? (pin (g 'sects) lbl (p 5)) 0,    ; ..and its section
                pin g 'statics (lbl . g 'statics),      ; not g 'globs -- a static is never an exported symbol
                one >ps ([name ['glob lbl] ty] . env2))))
        (stq g,                                     ; the statement tick (alive numbers sdecls too)
@@ -7514,6 +7520,7 @@
        [['raw (: prog (neutral? ? (asm-text txt) (gas-text tgt txt))                 (asmho tgt prog (cg-refs prog {})))]]
        (: pf (show (nlab g (g 'fn + ".asm")) + ".")
           r (gas-top-in tgt txt "" [1 6] pf)
+          _ (two? (r 4) ? (scare 'gas-alias <>(<(r 4))))      ; a template's alias has no C name to land on
           home (foldl (a \ x \ <x = "" ? (x 3) a) () <r)
           ; the prefix rides along: what dead code removes of the home, the record follows out
           (pin g 'fasecs ([(filter (x \ <x != "") <r) (r 1) (r 2) pf (r 3)] . g 'fasecs),
@@ -8814,7 +8821,10 @@
                                  (tx != 'no)
                                   (<>p = ['ptr tx] && !(wrs? <p bd) && aonly <p bd ?
                                      (pin m <p a, bind >ps >as pre)
-                                     'no)
+                                     ; always_inline, or a body that compiles only spliced: the frame is the price
+                                     (peep (g 'alw) nm () || jl ?
+                                        (m <p @ nn (pin tys nn <>p, bind >ps >as (pre + [['decl [[nn <>p a]]]])))
+                                        'no))
                                  (xo && nocall && pure? a && !(stru? <>p || arr? <>p) &&
                                   (elem <a '(num var) || rdw <p ex 1 <= (dsz a < 13 ? 2 1)))
                                   (pin m <p ['cast <>p a], bind >ps >as pre)
@@ -9087,8 +9097,9 @@
    ; a test that folds (in C's types) prunes its dead arm before anything splices into it (gcc's reading:
    ; `__builtin_constant_p(n) ? f(n) : g(n)` never lays f's "i"(n)). an arm a jump may still
    ; reach -- a label, a case -- stays; a ?: prunes only where ty types both arms alike, and
-   ; keeps that type by a cast
-   (lbl? x) (? (atom? x) () (elem <x '(lbl case dflt)) 1 (lbl? <x || lbl? >x))
+   ; keeps that type by a cast. a splice's own labels (`e0, its returns' target) are reached
+   ; from inside it alone
+   (lbl? x) (? (atom? x) () (<x = 'lbl) !(string? <>x && starts? <>x "`") (elem <x '(case dflt)) 1 (lbl? <x || lbl? >x))
    ; a local asking more alignment than the frame base holds (16, 8 under AAPCS32) lives in a
    ; char block of its size plus the ask, reached through a pointer rounded up to the ask: its
    ; later uses read through that pointer, and an initializer builds in a compound literal and
@@ -9509,6 +9520,10 @@
                  (pair? g pty && ia32? g)              ; i386: the pair's two words where the caller laid them, the rest spent
                   (spill hp >ps (ngp g) xmmi (ovi + 8) ([<p (ovb g + ovi) pty] . env) acc)
                  (pair? g pty) (gpair (aup gpi 2))   ; a pair param: the even-odd register pair
+                 (d128? pty && x64? g && gpi + 2 <= ngp g)   ; a wide param on x64: its two registers, lo first
+                  (nslot g 16 @ off
+                     (spill hp >ps (gpi + 2) xmmi ovi ([<p off pty] . env)
+                            (acc + [['st 'r4 off (argr g gpi)] ['st 'r4 (off + 8) (argr g (gpi + 1))]])))
                  (d128? pty)                            ; a wide param: not carried (mirror of the arg refusal)
                   (nolane g "a wide value is not carried as a parameter")
                  (!(flo? pty) && gpi < ngp g)
@@ -9531,12 +9546,12 @@
                  (ilp32? g) (spill hp >ps gpi xmmi (ovi + 4) ([<p (ovb g + ovi) pty] . env) acc)
                  (spill hp >ps gpi xmmi (ovi + 1) ([<p (ovb g + 8 * ovi) pty] . env) acc))))
        ; a variadic fn (SysV): a 176-byte save area, gp regs at +0 step 8, xmm at +48 step 16, saved
-       ; unconditionally; a pair touching xmm copies into its own slot (the xmm cells step 16, its eightbytes sit 8 apart)
+       ; unconditionally but under -mno-sse; a pair touching xmm copies into its own slot (the xmm cells step 16, its eightbytes sit 8 apart)
        (vaspill ps)
         (: rsa (nslot g 176)
            _ (pin g 'rsa rsa)
            savegp (: (go i acc) (5 < i ? acc (go (i + 1) (acc + [['st 'r4 (rsa + 8 * i) (argregs i)]]))) (go 0 ()))
-           savex  (: (go i acc) (7 < i ? acc (go (i + 1) (acc + [['stsd 'r4 (rsa + 48 + 16 * i) (xmmreg i)]]))) (go 0 ()))
+           savex  (nofp? g ? () (: (go i acc) (7 < i ? acc (go (i + 1) (acc + [['stsd 'r4 (rsa + 48 + 16 * i) (xmmreg i)]]))) (go 0 ())))
            (cls qs gpi xmmi ov env acc)
             (!(two? qs) ? (pins g 'vagp gpi 'vaxmm xmmi, [(savegp + savex + acc) env])
                (: p <qs pty <>p
@@ -10129,7 +10144,13 @@
                                                   (['label (name <l)] . a2) a2)))
                            (go (keys (g 'alias)) ()))   ; a data alias (musl's __stdin_used) names the same bytes
                     (globs >gs want zm (acc + (1 < an ? [['align an]])
-                                           + als + [['label lbl] ['raw bytes]]))))))
+                                           + als + [['label lbl]]
+                                           + (elem want '("love_nifs" ".love.image") ? [['raw bytes]] (exact (tsz g ty) bytes))))))))
+       ; an image as its object's own bytes, and the word's padding past them apart: the object
+       ; writer reads a symbol's size up to the align (modpost holds a device table to it)
+       (exact n bs)
+        (: (go l k acc) (? (k <= 0 || !(two? l)) [(rev acc) l] (go >l (k - item-len <l) (<l . acc)))
+           (go bs n () @ pp ([['raw <pp]] + (two? <>pp ? [['align 1] ['raw <>pp]]))))
        ; equal literals share one block with every label on it (C leaves them unspecified as distinct);
        ; grouped at layout, not at intern -- the codegen retry paths roll 'strs back
        (strs ss acc)
@@ -10161,7 +10182,7 @@
                                    (go >gs (elem s '(".data" ".rodata" "love_nifs" ".love.image") ||
                                             elem s acc ?
                                               acc (s . acc)))))
-                 (go (rev (g 'globs)) ()))
+                 (go (rev (g 'globs) + rev (g 'statics)) ()))   ; a block static may name one too
        (: gb (globs (rev (g 'globs)) ".data" 'd ())     ; exported globals, then block-scope statics
           sb (bad? gb ? 'bad (globs (rev (g 'statics)) ".data" 'd ()))   ; (local data labels)
           zg (bad? gb || bad? sb ? 'bad (globs (rev (g 'globs)) ".data" 'z ()))
@@ -10177,7 +10198,7 @@
           ; a named section's refusal is a refusal of the whole: one entry it cannot lay would
           ; otherwise leave that section empty, the kernel's of_device_id tables among them
           xb (bad? ib ? 'bad
-                (map (nm \ [nm (globs (rev (g 'globs)) nm () ()) (xro? nm)]) xnames @ l
+                (map (nm \ [nm (globs (rev (g 'globs) + rev (g 'statics)) nm () ()) (xro? nm)]) xnames @ l
                    (any (x \ bad? (x 1)) l ? 'bad l)))
           ; each switch's jump table: a label, then 4-byte self-relative entries (label differences, settled at link)
           jt (foldl (a \ p \ a + [['align 4] ['label <p]] + [['raw <>p]])
@@ -10246,7 +10267,7 @@
           'xfns ()                                  ; (secname forms) per fn that named a section, newest first
           'fasecs ()                                ; a function's asm sections, one gas-top reading each
           'romemo {}                                ; a const candidate's image, laid once and read by both walks
-          'mo (two? xtra && 12 < #xtra ? (xtra 12) [() () () () ()])}   ; the -m asks: [strict-align branch-protection regparm pre-686 -Os]
+          'mo (two? xtra && 12 < #xtra ? (xtra 12) [() () () () () ()])}   ; the -m asks: [strict-align branch-protection regparm pre-686 -Os no-float]
        ; pass 0: every fn name (the sig table too: an mproto sibling has a sig but no proto form),
        ; and the inline table -- always_inline at any size, noinline never
        ainls (two? xtra && 5 < #xtra ? (xtra 5))
@@ -10292,6 +10313,12 @@
        _ (pin g 'asecs (0 < #asrc ? (trap (t \ gas-top tgt t) asrc
                                          (a \ b \ (a = 'leave ? (scare a b)
                                                      (pin g 'genfail (gripe () () () ("an assembly line " + asmwhy a b)), ()))))))
+       ; its `.set a, t` onto a name the C defines: an alias of the C's own
+       _ (foldl (_ \ al \ (: t <>al
+                            ((any (f \ <f = 'fn && <>f = t) <>ast) || peep (g 'glob) t () ?
+                               (pin (g 'alias) <al t, 0)
+                               (pin g 'genfail (gripe () () () ("an assembly line .set " + <al + ", " + t + " -- nothing here defines " + t)), 0))))
+                0 (two? (g 'asecs) && 4 < #(g 'asecs) ? (g 'asecs 4) ()))
        ok (rec <>ast)
        ; -- lazy lowering: lay the roots (every exported fn, alias target, section-named fn, and every
        ; fn an initializer names), then what their laid forms still call, to closure; a spliced static's body ships only if named --

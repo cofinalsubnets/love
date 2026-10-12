@@ -120,6 +120,7 @@
           (nm = "memcmp") ['int [vp vp sz] ()]
           (nm = "strlen") [sz [cp] ()]
           (nm = "strcpy") [cp [cp cp] ()]
+          (nm = "strcmp") ['int [cp cp] ()]
           (nm = "alloca") [vp [sz] ()]
           [vp [vp vp sz] ()]))                     ; memcpy and memmove
    ; one qualifier token, and the cursor past it (an attribute id carries its parens)
@@ -983,7 +984,9 @@
                                           pa (two? rest ? (pattpk ps rest) [0 rest])
                                           (two? rest ? (ety pos2 lo2 hi2 <pa (modeat ps rest) @ ty (ty = () ? () [ty <>pa])))))))))
                        (consts >ts3 0 1 0 0))
-                    [(peep (ps 'etag) tag 'int) ts3]))
+                    ; a tag not yet defined (a declaration ahead of its enum, the kernel's apic.h) reads
+                    ; as gcc lays the enum that has no negative enumerator, so its redeclaration agrees
+                    [(peep (ps 'etag) tag 'uint) ts3]))
              (tkk t = 'id && (peep (ps 'types) (tkv t) 0 ? 1))
               [(peep (ps 'types) (tkv t) 0) >ts]
              ; __auto_type NAME = init: the initializer's own type, parsed here with the cursor
@@ -1262,6 +1265,19 @@
                  rb (two? r2 ? (pasn ps r2))
                  rest (two? rb ? (want <>rb ")"))
                  (two? rest ? [['asn ['deref <ra] ['deref <rb]] rest]))
+             ; __builtin_strcmp over two literals answers at parse (the kernel's vruntime_cmp
+             ; picks its operator so); anything else is strcmp's call
+             (tkk t = 'id && bib? (tkv t) && tkv t = "__builtin_strcmp")
+              (: r1 (want >ts "(")
+                 ra (two? r1 ? (pasn ps r1))
+                 r2 (two? ra ? (want <>ra ","))
+                 rb (two? r2 ? (pasn ps r2))
+                 rest (two? rb ? (want <>rb ")"))
+                 a <ra b <rb
+                 (? (atom? rest) ()
+                    (<a = 'str && <b = 'str) [['num (<>a @ x (<>b @ y (? (x = y) 0 (x < y) -1 1)))] rest]
+                    (peep (ps 'sigs) "strcmp" () ? 0 (pin (ps 'sigs) "strcmp" (libsig ps "strcmp")),
+                     [['call ['var "strcmp"] [a b]] rest])))
              ; a library builtin is its plain name: rewrite it, and declare the name if
              ; nothing else has, so the call binds and the link pulls the member by need
              (tkk t = 'id && bib? (tkv t) && elem (tkv t) libbin)
@@ -1899,7 +1915,9 @@
    ; a local's __attribute__((cleanup(f))) comes off its tokens before the declaration reads,
    ; and the block gets ('cln name f id) after it; pcln lays the calls. one declarator only
    (pdecl ps ts)
-    (clstrip ts @ cs
+    (clsplit ps ts @ sp
+     (? sp (pdecl ps sp)
+     (clstrip ts @ cs
        (? !<cs (pdecl0 ps ts)
           (<cs = 'many) (blame ts "more than one cleanup in one declaration")
           (: r (pdecl0 ps <>cs)
@@ -1912,7 +1930,28 @@
                  (blame <>r "a cleanup wants one automatic variable")
                 (1 + peep ps 'clid 0 @ n
                    (pins ps 'clid n 'clfn 1 'clpend ['cln <<(<>d) <cs n],
-                    r))))))
+                    r))))))))
+   ; several declarators with a cleanup among them read as one declaration each, the
+   ; specifiers spelled again (the kernel's `char *a __free(kfree) = NULL, *b __free(kfree) = NULL`)
+   ; -> the tokens so rewritten | ()
+   (clsplit ps ts)
+    (: (cl? l) (? (atom? l) () (tp? <l ";") () (clgrp? l) 1 (cl? >l))
+       ; up to the first depth-0 `,` -> (the tokens before it  the tail past it  the comma) | ()
+       (cut l d acc)
+        (? (atom? l) ()
+           (d = 0 && tp? <l ";") ()
+           (d = 0 && tp? <l ",") [(rev acc) >l <l]
+           (tp? <l "(" || tp? <l "[" || tp? <l "{") (cut >l (d + 1) (<l . acc))
+           (tp? <l ")" || tp? <l "]" || tp? <l "}") (cut >l (d - 1) (<l . acc))
+           (cut >l d (<l . acc)))
+       (? !(cl? ts) ()
+          (cut ts 0 () @ c
+             (? (atom? c) ()
+                (pbty ps ts @ br
+                   (? (atom? br) ()
+                      (take (#ts - #(<>br)) ts @ sp
+                         (any (t \ tp? t "{") sp ? ()
+                            (<c + [(<(c 2) . ";" . >>(c 2))] + sp + <>c)))))))))
    (clat l i) (? (atom? l) () (i = 0) l (clat >l (i - 1)))   ; the tail at token i
    (clp? l i s) (clat l i @ t (two? t && tp? <t s))
    (cli? l i s) (clat l i @ t (two? t && idv? <t s))
@@ -1941,6 +1980,7 @@
           (: base <br ts0 <>br
              bq (qspec ps ts base)   ; the run's const/volatile -- _Generic's, staged below
              lal (specask ps ts)   ; an ask among the specifiers, every declarator's
+             sct (stat ? (secat? ts))   ; a block static's section (the kernel's __initdata quirk records)
              (peekp ts0 ";" ? [['decl ()] >ts0]   ; a bare definition (struct S {..};)
                 (: (one ts2)
                     (pdtor ps ts2 base @ dr
@@ -1962,7 +2002,9 @@
                              pinl0 (two? ap ? [<ap])
                              ; the ask past the type's own rides a fifth slot, the fourth () unless pinned
                              ask (max lal (pattpk ps <>dr 2))
-                             pinl (talign ps ty < ask ? ((two? pinl0 ? pinl0 [()]) + [ask]) pinl0)
+                             pinl1 (talign ps ty < ask ? ((two? pinl0 ? pinl0 [()]) + [ask]) pinl0)
+                             ; ..and a static's section a sixth, the slots before it padded
+                             pinl (sct ? (take 2 (pinl1 + [() 0]) + [sct]) pinl1)
                              ts3 (two? ap ? <>ap ts30)
                              ; stage the marked type for the bind that follows; bindloc
                              ; consumes it, so a mark cannot outlive its declaration
@@ -2076,6 +2118,11 @@
                        (peekp <>re ",") (ops ><>re ([c <re nm] . acc))
                        [(rev ([c <re nm] . acc)) <>re])))
              (opbare e) [<e <>e]                        ; the (constraint expr) pair gen takes
+             ; an input tied to an output by its name ("[sum]") is tied by its number
+             (optie outs e)
+              (: c <e n #c
+                 (idx l k) (? (atom? l) () (<l = snip c 1 (n - 1)) k (idx >l (k + 1)))
+                 (1 < n && c 0 = 91 && c (n - 1) = 93 ? (idx (map opnm outs) 0 @ k (charm? k ? [(show k) <>e] e)) e))
              (opnm e) <>>e
              (clobs ts2 acc)
               (!(strat? ts2) ? [(rev acc) ts2]
@@ -2098,9 +2145,12 @@
                                r9 (want <>s4 ")")
                                semi (two? r9 && peekp r9 ";")      ; the rest may be empty: a file can end here
                                nms (map opnm <s1 + map opnm <s2 + <s4)
-                               tm (anynm? nms ? (asmnm <tr nms) <tr)
+                               ; a basic asm (no `:`) spells its registers bare: every % is literal
+                               tm (? (anynm? nms) (asmnm <tr nms)
+                                     !(peekp <>tr ":") (join "%%" (split "%" <tr))
+                                     <tr)
                                (semi ?
-                                  [['asm tm (map opbare <s1) (map opbare <s2) <s3 <s4] >r9]))))))))))
+                                  [['asm tm (map opbare <s1) (map (e \ opbare (optie <s1 e)) <s2) <s3 <s4] >r9]))))))))))
 
    ; a file-scope asm("..") is gcc's basic form: gas's whole language, sections and data
    ; included, which gen hands to holo's gas-top. operands have nothing to bind to out here

@@ -291,6 +291,10 @@
           (fits8 y) (x64-mw w () '(131) (x64-digit k) base off 1 + [(byte y)])
           (imw (w = 8 ? 4 w) y @ iy (x64-mw w () '(129) (x64-digit k) base off #iy + iy))))
    ;; adc/sbb d, y at width w: 10/11 and 18/19 /r by a register, 80/83/81 /2 /3 by an immediate
+   ;; op d, m: 02+8k/03+8k /r, the word in memory the second operand
+   (emit-alurm op w d base off)
+    (: k (op @ 'add 0 'or 1 'adc 2 'sbb 3 'and 4 'sub 5 'xor 6 'cmp 7 (scare 'x64-alurm op))
+       (x64-mw w [(8 * k + 2)] [(8 * k + 3)] d base off 0))
    (emit-carry op w d y)
     (: k (op @ 'adc 2 'sbb 3 (scare 'x64-carry op)) dn (rn d)
        yn (reg? y ? (rn y) 0)
@@ -508,6 +512,10 @@
    (emit-rdig pfx opc dig w r)
     (rn r @ n
        (pfx + (w = 2 ? [102] ()) + ((w = 8 || n >= 8) ? [(rex (w = 8 ? 1 0) 0 0 (hi n))]) + opc + [(modrm 3 dig (lo n))]))
+   ;; opc d, s over two registers at width w: lar and lsl (0F 02, 0F 03 /r)
+   (emit-rrop opc w d s)
+    (: dn (rn d) sn (rn s)
+       ((w = 2 ? [102] ()) + ((w = 8 || dn >= 8 || sn >= 8) ? [(rex (w = 8 ? 1 0) (hi dn) 0 (hi sn))]) + opc + [(modrm 3 (lo dn) (lo sn))]))
    (emit-invpcid r base off) (x64-mw 2 '(15 56 130) '(15 56 130) r base off 0)   ; 66 0F 38 82 /r  invpcid r, m128
    (emit-movntim w base off s) (x64-mw w '(15 195) '(15 195) s base off 0)   ; 0F C3 /r  movnti m, r
    ;; str: a string op by its stem at width w (A4..AF, 6C..6F); 66 or REX.W widens the odd byte
@@ -754,7 +762,7 @@
          ('outb . '(238)) ('outw . '(102 239)) ('outl . '(239))
          ('cld . '(252))
          ('str . emit-str) ('rep . '(243)) ('repne . '(242))
-         ('mdig . emit-mdig) ('rdig . emit-rdig) ('movntim . emit-movntim) ('invpcid . emit-invpcid) ('rdpmc . '(15 51)) ('fninit . '(219 227)) ('fnclex . '(219 226)) ('fwait . '(155)) ('emms . '(15 119))
+         ('mdig . emit-mdig) ('rdig . emit-rdig) ('rrop . emit-rrop) ('movntim . emit-movntim) ('invpcid . emit-invpcid) ('rdpmc . '(15 51)) ('fninit . '(219 227)) ('fnclex . '(219 226)) ('fwait . '(155)) ('emms . '(15 119))
           ; the system lane. `trap` is already int3 (CC), so `int` covers only the
           ; vectored form; `iretq` is the 64-bit return (the REX.W is what widens it).
          ('cli . '(250)) ('sti . '(251)) ('hlt . '(244)) ('pushf . '(156)) ('popf . '(157))
@@ -780,8 +788,9 @@
          ('xgetbv . '(15 1 208)) ('xsetbv . '(15 1 209))   ; XCR[ecx] <-> edx:eax
          ('wbinvd . '(15 9)) ('invd . '(15 8))              ; the caches, written back or not
          ('monitor . '(15 1 200)) ('mwait . '(15 1 201))    ; rax the line, ecx/edx the hints: the operands spell them
+         ('monitorx . '(15 1 250)) ('mwaitx . '(15 1 251)) ('rdtscp . '(15 1 249))   ; amd's pair; the tsc with its aux in ecx
          ('xaddm . emit-xaddm) ('cmpxchgm . emit-cmpxchgm) ('xchgm . emit-xchgm)
-         ('alum . emit-alum) ('carry . emit-carry) ('unm . emit-unm) ('btm . emit-btm) ('testm . emit-testm)
+         ('alum . emit-alum) ('carry . emit-carry) ('alurm . emit-alurm) ('unm . emit-unm) ('btm . emit-btm) ('testm . emit-testm)
          ('ldcr . emit-ldcr) ('stcr . emit-stcr) ('lddr . emit-lddr) ('stdr . emit-stdr)
          ('lgdt . emit-m0f 2 '(15 1)) ('lidt . emit-m0f 3 '(15 1))
          ('invlpg . emit-m0f 7 '(15 1))])

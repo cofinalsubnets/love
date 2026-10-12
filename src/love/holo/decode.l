@@ -241,6 +241,8 @@
                   202 (fin (k2 + 1) [(op1 'clac 0 ())])
                   200 (fin (k2 + 1) [(op1 'monitor 0 ())])
                   201 (fin (k2 + 1) [(op1 'mwait 0 ())])
+                  250 (fin (k2 + 1) [(op1 'monitorx 0 ())])
+                  251 (fin (k2 + 1) [(op1 'mwaitx 0 ())])
                   203 (fin (k2 + 1) [(op1 'stac 0 ())])
                   238 (fin (k2 + 1) [(op1 'rdpkru 0 ())])
                   239 (fin (k2 + 1) [(op1 'wrpkru 0 ())])

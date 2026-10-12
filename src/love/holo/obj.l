@@ -43,6 +43,22 @@
    (o-has? tab k) (peep tab k 'no !== 'no)    ; is key k bound in the tablet?
    ; a lane's file size. not `tally`: an item may be a blob, one cell holding many bytes.
    (o-blen l) (:- (go l 0) (go l n) (!(two? l) ? n (go >l (n + item-len <l))))
+   ; a data section's objects -> name -> st_size: the bytes after a label, and after the labels
+   ; laid with it (an alias's), up to the next align or the next label past bytes. gen lays each
+   ; global as one: align, labels, its raw image. a form of any other kind leaves its labels unsized
+   (o-dsizes secs)
+    (: t {}
+       (key x) (string? x ? x (show x))
+       (close cur n) (n > 0 ? (map (x \ pin t (key x) n) cur) 0)
+       (go l cur n)
+        (? !(two? l) (close cur n)
+           (<l @ f
+              (<f @ 'label (n > 0 ? (close cur n, go >l [<>f] 0) (go >l (<>f . cur) n))
+                    'align (close cur n, go >l () 0)
+                    'raw (go >l cur (n + o-blen <>f))
+                    (go >l () 0))))
+       _ (map (s \ (0 < s 2 & 4 ? 0 (go (s 4) () 0))) secs)
+       t)
    (o-strbytes s) (: (go i acc) (i < 0 ? acc (go (i - 1) (s i . acc)))
                      (go (#s - 1) ()))         ; a string -> its byte list. a real encode,
                      ; not a bytes-through-text leak: an ELF string table holds text.
@@ -267,6 +283,7 @@
        ; no ARM state at all. data syms stay even. a named symbol's section is wherever its
        ; bytes went, so a global may live in a section the writer never heard of. --
        (o-place nm) (o-where lanes (name nm) @ w (two? w ? w '(1 0)))
+       dsz (o-dsizes secs)
        symbytes
         (: lsyms (catall (o-mapi (\ i e (: si <>e off <>>e
                                            (sec-exec? si ?
@@ -280,7 +297,7 @@
                                  funcnames))
            gsyms (catall (o-mapi (\ i gs (o-place gs @ w
                                             (elf-sym32 (stroffs (nloc + nfun + i))
-                                                     (elem gs wknames ? 2 1) 1 <w <>w 0)))
+                                                     (elem gs wknames ? 2 1) 1 <w <>w (peep dsz (string? gs ? gs (show gs)) 0))))
                                  globnames))
            ; a weak undef resolves to zero at static link, where a strong one is an
            ; error -- the binding is the whole difference
@@ -525,6 +542,8 @@
        ; o-place's fallback is unreachable for a defined name -- it keeps a caller that
        ; names one it never laid pointing at the first section.
        (o-place nm) (o-where lanes (name nm) @ w (two? w ? w '(1 0)))
+       dsz (o-dsizes secs)
+       (o-size nm) (peep dsz (string? nm ? nm (show nm)) 0)
        symbytes
         (: lsyms (catall (o-mapi (\ i ls (: w (o-place ls)                ; stb_local func
                                             (elf-sym (stroffs i) 0 2 <w <>w 0)))
@@ -538,7 +557,7 @@
            ; stdout.c's real one wins, where a strong binding makes the pair a link-dup
            gsyms (catall (o-mapi (\ i gs (o-place gs @ w
                                             (elf-sym (stroffs (nloc + nfun + i))
-                                                   (elem gs wknames ? 2 1) 1 <w <>w 0)))
+                                                   (elem gs wknames ? 2 1) 1 <w <>w (o-size gs))))
                                  globnames))
            ; an external symbol honours wknames too: a weak undefined reference
            ; resolves to zero at static link (musl's _DYNAMIC), where a strong

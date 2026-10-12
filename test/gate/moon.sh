@@ -84,6 +84,18 @@ for f in test/cc/*.c; do
   [ $a -eq $b ] || fail "mooncc battery $f (ours $a gcc $b)"
 done
 
+# the kernel's x86-64 objects: -mno-sse keeps a variadic's prologue off the xmm file (kasprintf
+# saves no float), a data object's symbol carries its size (modpost holds MODULE_DEVICE_TABLE's
+# alias to a whole number of entries), and a block static keeps the section it names
+printf '#include <stdarg.h>\nint f(int n, ...){ va_list a; va_start(a, n); int r = va_arg(a, int); va_end(a); return r + n; }\n' > "$ho/.vns.c"
+moonrun -mno-sse -c "$ho/.vns.c" -o "$ho/.vns.o" || fail "mooncc -mno-sse refused a variadic function"
+printf 'struct t { int a, b, c; };\nstatic const struct t tab[] = {{1,2,3},{4,5,6},{7,8,9}};\nextern __typeof__(tab) tab_alias __attribute__((alias("tab")));\nint big[7] = {1};\nvoid push(void){ static int q __attribute__((section(".init.data"))) = 3; q++; }\n' > "$ho/.dsz.c"
+moonrun -c "$ho/.dsz.c" -o "$ho/.dsz.o" || fail "mooncc: a sized data object"
+[ "$(readelf -sW "$ho/.dsz.o" | awk '$8 == "tab_alias" {print $3}')" = 36 ] || fail "a data alias's symbol does not carry its table's 36 bytes"
+[ "$(readelf -sW "$ho/.dsz.o" | awk '$8 == "big" {print $3}')" = 28 ] || fail "int big[7]'s symbol does not carry its 28 bytes"
+readelf -SW "$ho/.dsz.o" | grep -q '\.init\.data' || fail "a block static lost its section"
+echo "mooncc: -mno-sse variadics, sized data symbols and a block static's section ok"
+
 # an asm's other-section words leave with its home: a BUG_ON a late fold proves false loses its brk
 # and label, and its __bug_table row must go too, or the object names a label it never lays
 bug='asm volatile (".pushsection __bug_table,\"aw\"; .align 2; 14470: .long 14471f - .; .popsection; 14471: brk 0x800");'
