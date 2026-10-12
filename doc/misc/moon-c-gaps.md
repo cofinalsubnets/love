@@ -1277,6 +1277,11 @@ below, 251 of those 332 re-run so far: **145 compile**, and the rest refuse by n
   definition elsewhere was a duplicate, and a word naming it resolved to the local body. The name
   now rides the object weak and a word naming it is a relocation against it. memcpy.S compiles,
   its 147 words the kernel's object's, `memcpy` and `memmove` weak as there.
+- **a register variable named `r0`** (arm-smccc.h's `register unsigned long arg0 asm("r0")`, for
+  arm32 and arm64 alike): gcc's and clang's other names for x0..x30, taken in a register variable
+  and a clobber; asm text keeps llvm-mc's, where `r0` refuses. moon had refused the pin (`no lane
+  for a register variable in r0`). proton-pack, random, kvm_guest and smccc compile; law
+  test/cc/275-asm-regvar-r.c, whose template reads x0 by name.
 
 Still open on this side (g-21's probes):
 
@@ -1288,8 +1293,8 @@ Still open on this side (g-21's probes):
 - under `-mstrict-align`: an array member of a packed struct indexed through its decayed pointer
   reads at the element's width, a bitfield or 128-bit member of a packed struct refuses by name,
   and a by-value struct reached as a packed member rides its type's alignment, not the member's.
-- where the re-run stops now, on this side: a register variable pinned to `x0` (4). Of the 24
-  units that stopped on the `.S` extable macro's `\insn`, all 24 compile. The exclusive pairs
+- where the re-run stops now, on this side: the four units a register variable named `r0`
+  stopped compile, and so do all 24 that stopped on the `.S` extable macro's `\insn`. The exclusive pairs
   (`ldxp`/`stxp` and kin) have no lane yet.
   The rest is part 1's front end and gen (`linux/skbuff.h`, an undeclared `branch`,
   `__attribute__((mode))`).

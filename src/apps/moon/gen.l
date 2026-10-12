@@ -387,7 +387,7 @@
    ; the callee-saved pools residency may borrow: saved by the prologue (g 'cssv), reloaded on every
    ; exit, a target joining once cskeep verifies its prologue. no r4 in any arm pool (a4ize renames
    ; a base-slot r4 to fp) and no r7 in v6m's (fp there); riscv leads with s1 (r15), the rvc window's one cs seat
-   (cspool g) (? (abl? g 'cs) ()
+   (cspool g) (? (abl? g 'cs || g 'twice) ()
                  (a64? g) '(r19 r20 r21 r22 r23 r24 r25 r26 r27 r28)
                  ; wasm's r16..r18 are riscv's gp tp and flag scratch: plain locals there
                  (wasm? g) '(r15 r13 r14 r19 r20 r21 r22 r23 r24 r25 r26 r16 r17 r18)
@@ -8045,6 +8045,7 @@
      'fesc ()                  ; escape flag (the sibcall gate reads it)
      'inlining ()              ; statement-expression depth (stq's conservative wrapset)
      'hasasm ()                ; an asm statement pins it (homing off)
+     'twice ()                 ; a call returning twice pins it (no callee-saved pool)
      'ltaken ()                ; the labels a &&L names (a computed goto's targets)
      'fpin ()                  ; the frame link is asked for by name (unframe stands off)
      'cssv ()                  ; the callee-saved save forms (a cs grant pins)
@@ -9198,11 +9199,15 @@
        ; spill (the decl lane reads 0 = never allocated) --
        _ (pins g 'fn <>f 'vslots {})
        ; the labels whose address the body takes; a computed goto may land on any of them, so
-       ; homing stands off as for an asm (every name is live at the jump)
+       ; homing stands off as for an asm (every name is live at the jump). a call that returns
+       ; twice does the same: the second return restores callee-saved registers, not memory
        _ (: (lt x acc) (? !(two? x) acc
                           (<x == 'laddr) (elem <>x acc ? acc (<>x . acc))
                           (<x == 'igoto) (pin g 'hasasm 1, lt <>x acc)
+                          ((<x == 'call) && (<>x @ ('var n) (elem n twice) ()))
+                           (pins g 'hasasm 1 'twice 1, lt >x (lt <x acc))
                           (lt >x (lt <x acc)))
+            twice '("setjmp" "_setjmp" "__setjmp" "sigsetjmp" "__sigsetjmp" "savectx" "vfork" "getcontext" "__builtin_setjmp")
             (pin g 'ltaken (rev (lt (f 3) ()))))
        vzf (: (dscan prs a2)
                (atom? prs ? a2
@@ -9863,18 +9868,19 @@
                                    (elem A '(r0 r1 r2 r3) ? (A . go >l) (go >l))))
                       (go rides))
                (? (qk && two? qrr && qclob? irU qrr)
-                  (pins (fnreset g) 'n n0 'strs strs0 'statics sts0 'fasecs fas0 'pool0 tpool 'pool tpool,
+                  (pins (fnreset g) 'n n0 'strs strs0 'statics sts0 'fasecs fas0 'pool0 tpool 'pool tpool 'hasasm (pre0 1) 'twice (pre0 3) 'ltaken (pre0 5),
                    attempt ())
                   (bad? irU ||
                    two? av9 && peep g 'lsq 0 != av9 3 ||
                    !(peep g 'dseq 0 = (two? av9 ? (av9 13) (peep g 'dseq 0))))
-                  (: _ (pins (fnreset g) 'n n0 'strs strs0 'statics sts0 'fasecs fas0 'pool0 tpool 'pool tpool)
+                  (: _ (pins (fnreset g) 'n n0 'strs strs0 'statics sts0 'fasecs fas0 'pool0 tpool 'pool tpool 'hasasm (pre0 1) 'twice (pre0 3) 'ltaken (pre0 5))
                      sb (spillp () params 0 ())
                      sb (two? vzf ? [(<sb + vzf) <>sb] sb)
                      (build sb))
                   irU))
            (attempt 1))
        n0 (peep g 'n 0) strs0 (g 'strs) sts0 (g 'statics) fas0 (g 'fasecs)   ; snapshot the accumulators for ubuild's retry
+       pre0 ['hasasm (g 'hasasm) 'twice (g 'twice) 'ltaken (g 'ltaken)]       ; ..and the prescan's pins, which fnreset clears
        ; no pool on t32 (r4-r11 callee-saved, r0-r3/r12 scratch); riscv pools t0..t3 then a5..a7, as
        ; a64 pools x5..x7 -- an arg register is dead once spilled or homed. a64 adds x11, x13, x14,
        ; caller-saved and never an argument (x12 stays the pair and float-word scratch)
