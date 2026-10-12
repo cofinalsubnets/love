@@ -2303,12 +2303,13 @@
 ; never meet, keeps its binding when the machine reads that register past it (an argument
 ; into a call), and never shares a non-commutative op's second source
 (: v0 (name "%v0") v1 (name "%v1") v2 (name "%v2")
+   (vpfix g fs) (vpre g fs, vrfix g fs)                 ; the build's order: assign, then substitute
    (gV9 _) {'tgt 'x64 'pool0 '(r6 r5 r9 r10 r7 r8) 'sigs {}
             'vrn 3 'vrt {v0 'r9 v1 'r7 v2 'r10}}
-   vC (vrfix (gV9 ()) [['label 'fn] ['and v0 'r6 7] ['mov 'r0 v0] ['ret]])
-   vA (vrfix (gV9 ()) [['label 'fn] ['li v1 5] ['call 'g9] ['ret]])
-   vS (vrfix (gV9 ()) [['label 'fn] ['sub v2 'r6 'r0] ['mov 'r0 v2] ['ret]])
-   vO (vrfix (gV9 ()) [['label 'fn] ['add v2 'r6 'r0] ['mov 'r0 v2] ['ret]])
+   vC (vpfix (gV9 ()) [['label 'fn] ['and v0 'r6 7] ['mov 'r0 v0] ['ret]])
+   vA (vpfix (gV9 ()) [['label 'fn] ['li v1 5] ['call 'g9] ['ret]])
+   vS (vpfix (gV9 ()) [['label 'fn] ['sub v2 'r6 'r0] ['mov 'r0 v2] ['ret]])
+   vO (vpfix (gV9 ()) [['label 'fn] ['add v2 'r6 'r0] ['mov 'r0 v2] ['ret]])
    (test
       (vC = '((label fn) (and r0 r6 7) (ret)))   ; coalesced: the copy swept
       (elem '(li r7 5) vA)                       ; the call reads r7: the binding stays
@@ -2317,10 +2318,11 @@
 
 ; --- ..and on a64, whose alu is three-address: sub's dest takes its second source too
 (: v0 (name "%v0") v2 (name "%v2")
+   (vpfix g fs) (vpre g fs, vrfix g fs)
    (gW9 _) {'tgt 'a64 'pool0 '(r6 r5 r9 r10 r7 r8 r11 r13 r14) 'sigs {}
             'vrn 3 'vrt {v0 'r9 v2 'r10}}
-   wC (vrfix (gW9 ()) [['label 'fn] ['and v0 'r6 7] ['mov 'r0 v0] ['ret]])
-   wS (vrfix (gW9 ()) [['label 'fn] ['sub v2 'r6 'r0] ['mov 'r0 v2] ['ret]])
+   wC (vpfix (gW9 ()) [['label 'fn] ['and v0 'r6 7] ['mov 'r0 v0] ['ret]])
+   wS (vpfix (gW9 ()) [['label 'fn] ['sub v2 'r6 'r0] ['mov 'r0 v2] ['ret]])
    (test
       (wC = '((label fn) (and r0 r6 7) (ret)))
       (wS = '((label fn) (sub r0 r6 r0) (ret)))))

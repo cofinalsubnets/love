@@ -5388,8 +5388,8 @@
    ; (lvnarrow). a def meets what lives past it (a mov not its source) and every operand but its
    ; first source (either, where vacomm allows). a mint meeting a name on its own register is an
    ; alias selection relied on, so it keeps that register. colours go in first-mention order -- a
-   ; copy partner's first, then the binding, then the file; a mint left without one keeps the
-   ; whole fn's binding
+   ; copy partner's first, then the binding, then the file. answers 1, or () when a mint is left
+   ; without one (vrfix's rasg then keeps the whole fn's binding)
    (vafile g) (lvun (lvun (g 'pool0) (rafile g)) '(r0))
    ; the ops whose dest may share the second source: x64's holo lays d = b as d op= a when
    ; the op commutes; a64's alu is three-address throughout
@@ -5475,16 +5475,18 @@
        (go l) (? !(two? l) 1
                  (col <l) (go >l)
                  (pick <l @ r (r ? (pin col <l r, go >l))))
-       (? !ok1 (rasg g fs)
+       (ok1 &&
           (: _ (fix9 ())
              _ (w2 0)
              _ (map (m \ (fixed? m ? (pin col m (t m)))) ms)
-             ((go ms) ? (map (m \ pin t m (col m)) ms) (rasg g fs)))))
+             ((go ms) ? (map (m \ pin t m (col m)) ms, 1)))))
+   ; the early assignment: valloc where it runs, before the frame is sized
+   (vpre g fs) ((x64? g || a64? g) && !(abl? g 'valloc) && peep g 'vrn 0 && valloc g fs ? (pin g 'vdone 1))
    ; substitute every mint over the assembled prologue+body+epilogue, the innermost build-tail
    ; link: sibcall and soften read registers, so neither may meet a vreg. the assignment runs first
    (vrfix g fs)
     (!(peep g 'vrn 0) ? fs
-       (: _ ((x64? g || a64? g) && !(abl? g 'valloc) ? (valloc g fs) (rasg g fs))
+       (: _ (g 'vdone ? () (rasg g fs))
           t (g 'vrt)
           (fix1 x) (two? x ? (map fix1 x) (t x @ p9 (p9 ? p9 x)))
           (sweep (f . u)) (f @ ('mov x x) (sweep u) (f . sweep u))
@@ -8156,6 +8158,7 @@
     'lsq 0                     ; the alive statement counter
     'stwrap 'all
     'vrn 0                     ; the vreg mint counter (the shadow: ralloc mints, vrfix resolves)
+    'vdone ()                  ; vpre assigned this build's mints
     'vrt {})           ; ...and its per-build map, mint -> physical
    ; every per-fn pin and its neutral, one roster: a new per-fn pin registers here (the computed
    ; ones -- fn, epi, pool, vslots, fc, sret -- re-pin at their owner)
@@ -9627,6 +9630,10 @@
         (bad? sp0 ? 'bad
            (: body (bldreset g,
                     cgitems g <>sp0 <><>>>f ())
+              ; the assignment runs before the frame is sized, over the fn's own label, the body
+              ; and the tail (no prologue form names a register it watches); vrfix only substitutes
+              _ (bad? body ? () (vpre g ([['label (name <>f)]] + <sp0 + body + '((li r0 0)) +
+                                         (arm? g ? (peep g 'epi epi-a64) (peep g 'epi epi)))))
               (bad? body ? 'bad
                  ; i386 enters with esp 12 past a 16 boundary and pushes ebp: 8 more keeps every call aligned
                  (aup (peep g 'off 0) 16 + (ia32? g ? 8 0) @ frame
