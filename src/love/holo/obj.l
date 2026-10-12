@@ -31,6 +31,7 @@
    ra-prel64 260                                    ; R_AARCH64_PREL64          S + A - P in eight bytes (the jump table's key)
    ra-prel32 261                                    ; R_AARCH64_PREL32          S + A - P in four bytes (a jump table's entry)
    ra-pghi21 275                                    ; R_AARCH64_ADR_PREL_PG_HI21  page(S+A)-page(P) into adrp
+   ra-adrlo21 274                                   ; R_AARCH64_ADR_PREL_LO21   S+A-P into adr
    ra-lo12   277                                    ; R_AARCH64_ADD_ABS_LO12_NC   (S+A) & 0xfff into add
    ; ... and rv64. the backend's 8-byte 'pcrel (one fixup across the auipc pair) maps
    ; whole onto call_plt, and jalr/addi/ld share the I-form imm field, so the one type
@@ -68,7 +69,7 @@
                         bs (patch-with be k tgt off w (fix-a x))
                         (o-walkr be >items labels wkset internal? rset (off + w)
                                  (rev bs + bacc) racc))
-                    (: fill (? (elem k a64-afix) (le32 (afix-w (fix-a x)))
+                    (: fill (? (elem k a64-afixk) (le32 (afix-w (fix-a x)))
                                (elem k '(b26 b19 b14 j21)) (le32 (fix-a x))
                                ; a surviving riscv 'pcrel: the aux packs both base words (auipc low,
                                ; the I-insn high) -- lay them as the 8-byte placeholder call_plt patches
@@ -467,7 +468,7 @@
        _ (target = 'x64 || a64 || rv ? 0 (scare 'obj-target target))
        ; the in-place-resolvable kinds. riscv's are pure byte deltas (auipc is byte
        ; pc-relative, no page math), so intra-.text la/call/jmp all resolve inside the .o.
-       rset (? a64 '(b26 b19 b14 ld19) rv '(j21 pcrel b13 cj cb) '(rel32 rel8))
+       rset (? a64 '(b26 b19 b14 ld19 adr21) rv '(j21 pcrel b13 cj cb) '(rel32 rel8))
        drset (a64 ? rset ())                    ; a branch in a data section resolves there too (proc.S's "a")
        machine (peep elf-machines target 0)
        ; the backend must be registered, not merely named: a frontend bakes holo with the
@@ -598,6 +599,7 @@
                  'b19 (o-rela off si ra-condbr19 sa)
                  'b14 (o-rela off si ra-tstbr14 sa)
                  'ld19 (o-rela off si ra-ldlo19 (sa + afix-ad aux))
+                 'adr21 (o-rela off si ra-adrlo21 (sa + afix-ad aux))
                  ; riscv: a 'pcrel pair (CALL_PLT) or a wide branch's 'j21 (JAL), both S+a-p
                  'pcrel (o-rela off si rr-call sa)
                  'j21 (o-rela off si rr-jal sa)

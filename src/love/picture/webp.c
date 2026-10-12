@@ -1,11 +1,11 @@
-// src/love/lib/webp.c
+// src/love/picture/webp.c
 // (webp-pixels s) -> the w*h*4 rgba of a webp -- an animation's first frame, laid on its
 // canvas -- | why not: 1 not a webp, 2 cut short, 3 a kind it can't read (an interframe),
 // 4 a bad stream, 5 past 2^24 pixels, 6 no room. lossy (vp8, rfc 6386) with or without an
 // ALPH plane, and lossless (vp8l, rfc 9649); the pixels are libwebp's WebPDecodeRGBA's.
 #include "love.h"
 #include "bytes.h"
-#include "inf.h"
+#include "compress/prefix.h"
 #include <stdint.h>
 #include <string.h>
 

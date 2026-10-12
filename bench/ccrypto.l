@@ -3,7 +3,7 @@
 ;   chacha    a 16-word state array indexed in the inner loop -- no register residency in mooncc
 ;   poly1305  five limbs as scalar locals, the shape mooncc already homes
 ; chacha wide and poly narrow says the gap is array slots; they close together, or the diagnosis
-; was wrong. these run the nifs (src/love/lib/tls.c), never src/apps/tls's love ciphers; that
+; was wrong. these run the nifs (src/love/crypto/tls.c), never src/apps/tls's love ciphers; that
 ; meeting is src/apps/tls/bench.l. the binary under test lives in out/bench/cc where the module
 ; walk misses lib/, so everything is built from the core. ccbench.sh cats this file and one driver
 ; call; the reps are fixed, and each row prints a sentinel so a lane that answered nothing cannot

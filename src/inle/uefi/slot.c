@@ -7,7 +7,7 @@
 // says it is well comes back, at its next reset, on the active slot. the kernel's line gets
 // " hearts.slot=X", and " hearts.try=1" on a trial. an arm64 Image does not unpack itself, so
 // a gzipped one is inflated here, its crc checked, and started from memory.
-#include "../../love/inflate.h"
+#include "../../love/compress/inflate.h"
 
 typedef unsigned long long u64;
 typedef unsigned int u32;

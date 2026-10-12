@@ -1,4 +1,4 @@
-// src/love/lib/png.c
+// src/love/picture/png.c
 // (png-unfilter s o rows n bpp) -> one pass's rows from offset o of s with their filters
 // undone and filter bytes dropped, rows*n bytes | () for a bad filter or too few bytes
 #include "love.h"

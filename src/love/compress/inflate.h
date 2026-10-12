@@ -1,10 +1,10 @@
-// src/love/inflate.h -- RFC 1951's DEFLATE, decoded: the code tables, and inf_run over them.
-// lib/gz.c builds love's inflate on it, and src/inle/uefi/slot.c, which has no love, inflates a
+// src/love/compress/inflate.h -- RFC 1951's DEFLATE, decoded: the code tables, and inf_run over them.
+// compress/gz.c builds love's inflate on it, and src/inle/uefi/slot.c, which has no love, inflates a
 // gzipped kernel with it. an includer that has bytes.h gets its one-load ld64; one that has
 // not reads eight bytes by gathering them.
 #ifndef INFLATE_H
 #define INFLATE_H
-#include "inf.h"
+#include "prefix.h"
 #include <stdint.h>
 #include <string.h>
 

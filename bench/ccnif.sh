@@ -1,6 +1,6 @@
 #!/bin/sh
-# ccnif.sh -- mooncc's codegen against gcc's and clang's on src/love/lib/hash.c and
-# src/love/lib/gz.c (sha-256, md5, crc32, cksum, deflate, inflate): the widest C the tree
+# ccnif.sh -- mooncc's codegen against gcc's and clang's on src/love/crypto/hash.c and
+# src/love/compress/gz.c (sha-256, md5, crc32, cksum, deflate, inflate): the widest C the tree
 # owns and the least like love.c -- rotates, eight-register wrapping adds, parallel table
 # lookups, runtime shifts, a hash-chain match finder. a development instrument, not a gate.
 #
@@ -45,7 +45,7 @@ export CCACHE_DISABLE=1
 rm -rf "$W"; mkdir -p "$W"
 inc="-Isrc/love -Isrc/inle -Itest/libc"
 # the two subjects live in two folders now
-srcof() { case $1 in hash) echo src/love/lib/hash.c;; gz) echo src/love/lib/gz.c;; esac; }
+srcof() { case $1 in hash) echo src/love/crypto/hash.c;; gz) echo src/love/compress/gz.c;; esac; }
 
 # the lanes, in report order; mooncc first so it is the numerator everywhere
 lanes="mooncc gcc-O2 clang-O2 gcc-O0"

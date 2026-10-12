@@ -126,17 +126,23 @@ if (hostDir) {
   host = { port: port1, ring: hring }; }
 const leave = (code) => { if (process.stdin.isTTY) process.stdin.setRawMode(false); process.exit(code); };
 // a process the machine started (cpu.mjs's proc): a worker of its own over the module,
-// compiled once for all of them
+// compiled once for all of them, or over a module of its own that the machine sent along
 let module = null;
-const proc = (p) => {
+const workers = new Map();
+const proc = ({ code, ...p }) => {
   module ??= WebAssembly.compile(readFileSync(wasm));
-  module.then((mod) => {
+  (code ? WebAssembly.compile(code) : module).then((mod) => {
     const w = new Worker(new URL('./proc.mjs', import.meta.url));
     w.unref();
+    workers.set(p.pid, w);
+    w.on('exit', () => workers.delete(p.pid));
     w.on('error', (e) => { process.stderr.write(`\ninle: pid ${p.pid}: ${e}\n`); procdied(p.box, ring); });
-    w.postMessage({ module: mod, ring, ...p }); }); };
+    w.postMessage({ module: mod, ring, ...p }); })
+  // a module that does not compile ends its process as a fault would
+  .catch((e) => { process.stderr.write(`\ninle: pid ${p.pid}: ${e}\n`); procdied(p.box, ring); }); };
 cpu.on('message', (m) => {
   if (m.proc) { proc(m.proc); return; }
+  if (m.stop !== undefined) { workers.get(m.stop)?.terminate(); return; }
   if (m.frame && framesOut) {                             // what a page would paint, weighed
     const px = new Uint32Array(m.frame);
     let sig = 0;                                          // every pixel: one glyph is all a

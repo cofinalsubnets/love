@@ -1,4 +1,4 @@
-// src/love/lib/gz.c -- DEFLATE, both directions. one translation unit because the two halves are
+// src/love/compress/gz.c -- DEFLATE, both directions. one translation unit because the two halves are
 // one format: RFC 1951 §3.2.5's code tables are read by the coder and the decoder alike,
 // and a coder and a decoder that disagree there disagree about the format. src/apps/gz.l's
 // gz-lbase/gz-lext/gz-dbase/gz-dext say the same numbers in love.
@@ -342,10 +342,9 @@ LvDef("inflate-feed", inflate_feed, 2, "gz");
 // interpreted DEFLATE churns cells per symbol, and on the love0 egg that runs selfpack
 // the heap grows toward the budget before a collection pays. this is a fixed window
 // and some tables.
-// scratch is not the heap: the off semispace where it is big enough (the major pool's
-// spare half is dead between collections), one alloc block where it is not. the
-// shape is inflate's counting pass twice over -- count, str0 the exact answer,
-// re-derive and emit -- because str0 may collect and a collection flips that half.
+// scratch is not the heap: one alloc block, held across both passes. the shape is
+// inflate's counting pass twice over -- count, str0 the exact answer, re-derive and emit --
+// because str0 may collect, which moves the source.
 #define DF_WSIZE 32768u
 #define DF_WMASK 32767u
 #define DF_HMASK 32767u
@@ -612,19 +611,8 @@ static int64_t df_go(const uint8_t *s, uintptr_t i0, uintptr_t n, uint8_t *out, 
  df_align(&t);
  return t.err ? -2 : (int64_t) t.op; }
 
-// str0 collects, so both the source and the spare half are re-derived after it:
-// a pointer held across the bump is stale, and a major collection flips the halves.
-static uint8_t *df_arena(struct g *g, int *alloced) {
- *alloced = 0;
- if (g->major_len * sizeof(word) >= DF_ARENA) return (uint8_t*) g->major_spare;
- void *p = alloc(NULL, DF_ARENA);
- if (p) *alloced = 1;
- return (uint8_t*) p; }
-
 // the image lane: deflate raw bytes into the caller's buffer, one pass, no love stack.
 // it is no twin: a lazy parse down a 4096 chain, zlib -9's, a bake-time cost for bytes.
-// its arena is always its own -- df_arena may hand back the major pool's spare half, and
-// a dump is walking a compacted heap that owns it.
 intptr_t deflate_raw(struct g *g, unsigned char const *in, uintptr_t n,
                         unsigned char *out, uintptr_t cap) {
  uint8_t *m = alloc(NULL, DF_ARENA);
@@ -645,21 +633,15 @@ intptr_t deflate_dict(struct g *g, unsigned char const *in, uintptr_t n,
 
 love_noinline static struct g *host_deflate(struct g *g) {
  word sw = g->sp[0];
- uint8_t *m;
- int alloced;
+ uint8_t *m = strp(sw) ? alloc(NULL, DF_ARENA) : NULL;
  int64_t want, got;
- if (!strp(sw)) { g->sp[0] = ZeroPoint; return g; }
- m = df_arena(g, &alloced);
  if (!m) { g->sp[0] = ZeroPoint; return g; }
  want = df_go((const uint8_t*) txt(sw), 0, len(sw), 0, (uintptr_t) -1, m, 0);
- if (alloced) alloc(m, 0);
- if (want < 0) { g->sp[0] = ZeroPoint; return g; }
- if (!ok(g = str0(g, (uintptr_t) want))) return g;
- m = df_arena(g, &alloced);
- if (!m) { g->sp[1] = ZeroPoint, g->sp += 1; return g; }
+ if (want < 0) { alloc(m, 0); g->sp[0] = ZeroPoint; return g; }
+ if (!ok(g = str0(g, (uintptr_t) want))) return alloc(m, 0), g;   // the source is re-read off the stack: str0 may move it
  got = df_go((const uint8_t*) txt(g->sp[1]), 0, len(g->sp[1]),
              (uint8_t*) txt(g->sp[0]), (uintptr_t) want, m, 0);
- if (alloced) alloc(m, 0);
+ alloc(m, 0);
  g->sp[1] = got != want ? ZeroPoint : g->sp[0];
  return g->sp++, g; }
 

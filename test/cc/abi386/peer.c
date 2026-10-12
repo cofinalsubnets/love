@@ -8,6 +8,16 @@ struct s3 { int a, b, c; };
 struct s1 { char c; };
 struct s5 { char b[5]; };
 struct s2 { short x; int y; };
+union cfw { _Complex float z; float p[2]; };
+union cdw { _Complex double z; double p[2]; };
+static _Complex float mkcf(float a, float b) { union cfw u; u.p[0] = a; u.p[1] = b; return u.z; }
+static _Complex double mkcd(double a, double b) { union cdw u; u.p[0] = a; u.p[1] = b; return u.z; }
+static int cfint(_Complex float z) { union cfw u; u.z = z; return (int) u.p[0] * 100 + (int) u.p[1]; }
+static int cdint(_Complex double z) { union cdw u; u.z = z; return (int) u.p[0] * 100 + (int) u.p[1]; }
+_Complex float peer_cf(_Complex float z, int k) { union cfw u; u.z = z; return mkcf(u.p[0] * 2 + k, u.p[1] * 2); }
+_Complex double peer_cd(int k, _Complex double z) { union cdw u; u.z = z; return mkcd(u.p[0] * k + 1, u.p[1] * k); }
+int peer_cfa(int k, _Complex float z, _Complex double w) { return k * 10000 + cfint(z) * 100 + cdint(w); }
+int peer_cmix(int a, _Complex float z, int b, _Complex double w, int c) { return a * 1000000 + cfint(z) * 1000 + b * 100 + cdint(w) * 10 + c; }
 int peer_s1(struct s1 a, int k) { return a.c * 10 + k; }
 int peer_s5(int k, struct s5 v) { return k * 100000 + v.b[0] * 10000 + v.b[1] * 1000 + v.b[2] * 100 + v.b[3] * 10 + v.b[4]; }
 int peer_s2(int k, struct s2 v, int m) { return k * 10000 + v.x * 1000 + v.y * 10 + m; }
@@ -40,6 +50,10 @@ long long host_va(int, ...);
 int host_s1(struct s1, int);
 int host_s5(int, struct s5);
 int host_s2(int, struct s2, int);
+_Complex float host_cf(_Complex float, int);
+_Complex double host_cd(int, _Complex double);
+int host_cfa(int, _Complex float, _Complex double);
+int host_cmix(int, _Complex float, int, _Complex double, int);
 int peer_back(void) {
   int bad = 0;
   int (*w4)(int, int, int, int) = host_w4;
@@ -56,4 +70,10 @@ int peer_back(void) {
     bad += host_s1(a, 3) != 73;
     bad += host_s5(6, v) != 612345;
     bad += host_s2(1, w, 2) != 13042; }
+  { _Complex float (*cf)(_Complex float, int) = host_cf;
+    bad += cfint(host_cf(mkcf(3, 4), 5)) != 1108;
+    bad += cfint(cf(mkcf(1, 2), 1)) != 304;
+    bad += cdint(host_cd(3, mkcd(2, 5))) != 715;
+    bad += host_cfa(7, mkcf(1, 2), mkcd(3, 4)) != 80504;
+    bad += host_cmix(1, mkcf(1, 2), 3, mkcd(0, 4), 5) != 1102345; }
   return bad; }
