@@ -366,7 +366,7 @@ struct port_vt const
  to_vt     = { noop_flush, to_writen, NULL,     NULL },       // a string sink: prel's `jug`
  closed_vt = { noop_flush, NULL,      NULL,     NULL },       // what `close` leaves behind
  ci_vt     = { noop_flush, NULL,      ci_readn, ci_athand },  // a charlist: prel's `tap`
- love_horn_vt   = { noop_flush, love_horn_writen, NULL, NULL };      // PCM out: the horn
+ love_horn_vt   = { noop_flush, love_horn_writen, love_horn_readn, NULL };   // PCM out and in: the horn
 
 // (fputc port byte) — write byte to port; return byte. a charm operand is a raw
 // fd and the byte goes straight at the row -- nothing to buffer, nothing to flush.
@@ -599,7 +599,10 @@ lvm(lvm_fgetc) {
   if (!ok(g = zgetc(g))) love_musttail return Ap(_lvm_ghelp, g);
   Unpack(g);
   if (g->b == IoWouldBlock) {          // the refill raced and lost -- park, don't spin
-   g->next_wait_fd = io_fd((struct io*) Sp[0]);   // re-read: the gc may have moved it
+   intptr_t fd = io_fd((struct io*) Sp[0]);   // re-read: the gc may have moved it
+   // a dry door with no fd to wait on (the horn's silence) takes the write residue's poll
+   if (fd < 0) g->next_wake_at = love_clock() + 1;
+   else g->next_wait_fd = (int) fd;
    love_musttail return Ap(lvm_yield_sw, g); }
   Sp[0] = putcharm(g->b); }
  else Sp[0] = putcharm(EOF);

@@ -35,3 +35,29 @@
             (test (quote (5) = sound "5")),
             ; the policy word goes, so the environ laws downstream count what they always did
             (hosted ? (setenv "HORN" ()))))))
+
+; --- the horn turned round: capture is a port that reads. on the host HORN_IN=none is
+; silence heard at the rate, so a quarter second of it takes a quarter second to read,
+; and the reader parks while it waits. a seat's own card does not listen yet: the
+; errno nom, where the host always has the silence.
+(: _ (hosted ? (setenv "HORN_IN" "none"))
+   i (horn-in 48000 1)
+   _ (test ('badarg = horn-in 100 1) ('badarg = horn-in 48000 3) ('badarg = horn-in 48000 "a"))
+   _ (? (nom? i)
+        (test (i = 'enodev) !hosted)
+        (: box {}
+           _ (twirl (_ \ (rest 20, pin box 'ran 1)) ())
+           t0 (clock 0)
+           ; a byte by see, the rest of the gulp by chug: n bytes and their sum
+           (rd p n k z) (n <= k ? [k z] (see p @ c (c = -1 ? [k z] (: s (chug p) (rd p n (k + 1 + #s) (z + c + +s))))))
+           r (rd i 24000 0 0)
+           dt (clock t0)
+           _ (test (r 0 >= 24000) (r 1 = 0) (dt >= 200) (dt < 5000) (box 'ran) (0 <= horn-lag i < 12001))
+           ; stereo is two frames' bytes a frame, and what waits to be read is the lag
+           j (horn-in 44100 2)
+           ((rest 100),
+            (test (0 < horn-lag j <= 11025) (0 = (#(chug j)) % 4)),
+            (: r2 (rd j 4000 0 0) (test (0 = (r2 0) % 4) (r2 1 = 0))),
+            ; a capture port takes no writes, and a closed one has no lag
+            (test !(close i) !(horn-lag i) !(close j) !(horn-lag j)),
+            (hosted ? (setenv "HORN_IN" ()))))))
