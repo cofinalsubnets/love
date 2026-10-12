@@ -261,9 +261,13 @@
    (thumb-mulss d m) (t2-fp3 0xEE20 0xA00 d m)                ; vmul.F32
    (thumb-divss d m) (t2-fp3 0xEE80 0xA00 d m)                ; vdiv.F32
    (thumb-movsd d m) (: dn (frn d) mn (frn m) (t32 (0xEEB0 << 16 | (dn << 12 | (0xB40 | mn)))))
+   (thumb-movss d m) (: dn (frn d) mn (frn m) (t32 (0xEEB0 << 16 | (dn << 12 | (0xA40 | mn)))))   ; VMOV.F32 S[2d], S[2m]
    (thumb-ucomisd a b)                                        ; VCMP.F64 Da, Db ; vmrs apsr_nzcv
       (: an (frn a) bn (frn b)                                ;   (flags land like a64 fcmp: unordered -> V)
          (t32 (0xEEB4 << 16 | (an << 12 | (0xB40 | bn))) + t32 0xEEF1FA10))
+   (thumb-ucomiss a b)                                        ; VCMP.F32 S[2a], S[2b] ; vmrs apsr_nzcv
+      (: an (frn a) bn (frn b)
+         (t32 (0xEEB4 << 16 | (an << 12 | (0xA40 | bn))) + t32 0xEEF1FA10))
    ;; int <-> double through the target's own S view (VMOV S[2f],Rg is one word since 2f>>1 = f).
    (thumb-cvtxsd base f g)                                    ; vmov S[2f], Rg ; vcvt.F64.{S,U}32 Df, S[2f]
       (: fn (frn f) gn (rn g)
@@ -352,7 +356,7 @@
         [('li . thumb-li) ('mov . thumb-mov) ('cmp . thumb-cmp) ('imul . thumb-imul)
           ('umull . thumb-umull) ('smull . thumb-smull) ('mla . thumb-mla)
           ('addsd . thumb-addsd) ('subsd . thumb-subsd) ('mulsd . thumb-mulsd)
-          ('divsd . thumb-divsd) ('movsd . thumb-movsd) ('ucomisd . thumb-ucomisd)
+          ('divsd . thumb-divsd) ('movsd . thumb-movsd) ('movss . thumb-movss) ('ucomisd . thumb-ucomisd) ('ucomiss . thumb-ucomiss)
           ('cvtsi2sd . thumb-cvtsi2sd) ('cvtui2sd . thumb-cvtui2sd)
           ('cvttsd2si . thumb-cvttsd2si) ('cvttsd2ui . thumb-cvttsd2ui)
           ('movqxr . thumb-movqxr) ('movqrx . thumb-movqrx)

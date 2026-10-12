@@ -179,7 +179,7 @@
              'shl 2 'shr 2 'sar 2 'rol 2 'ror 2 'ror4 2
              'lsl 3 'lsr 3 'asr 3 'mvn 2 'uxtb 2 'uxth 2 'uxtw 2 'sxtb 2 'sxth 2 'sxtw 2   ; a64's three-register twins
              'shlv 2 'shrv 2 'sarv 2 'rorv 2 'rorv4 2
-             'movupd 2 'movsd 2 'movapd 2 'movhlps 2 'unpcklpd 2
+             'movupd 2 'movsd 2 'movss 2 'movapd 2 'movhlps 2 'unpcklpd 2
              'mulpd 2 'addpd 2 'subpd 2 'divpd 2
              'mulsd 2 'addsd 2 'subsd 2 'divsd 2
              'mulss 2 'addss 2 'subss 2 'divss 2 'minss 2 'maxss 2 'ucomiss 2

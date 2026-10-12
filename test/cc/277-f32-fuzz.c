@@ -61,8 +61,11 @@ int main(void) {
     mix(fp3(a, b, c));
     { long long v = (long long) ((unsigned long long) rnd() << 32 | rnd()) >> (rnd() & 31);
       mix((float) v); mix((float) (unsigned long long) v); }   /* 64-bit to float, one rounding */
+    { int big = (int) (rnd() | 0x1000000u) >> (rnd() & 7);       /* past 2^24 an int rounds to compare */
+      float fb = (float) big;
+      mixi(big == fb); mixi(fb < big); mixi(big <= fb * 1.0000001f); if (fb != big) mixi(3); }
   }
-  mix(acc);
+  mix(acc); mixi(1);
   for (int i = 0; i < 16; i++) mix(arr[i]);
   return (h ^ h >> 8 ^ h >> 16 ^ h >> 24) & 127;   /* under 128: no exit reads as a signal */
 }

@@ -377,3 +377,9 @@ static uint32_t u64tof(uint32_t s, uint64_t v) {
  return __aeabi_d2f(u64tod(s, v)); }
 uint32_t __aeabi_l2f(int64_t x)   { return x < 0 ? u64tof(1, -(uint64_t) x) : u64tof(0, (uint64_t) x); }
 uint32_t __aeabi_ul2f(uint64_t x) { return u64tof(0, x); }
+int32_t __aeabi_fcmpeq(uint32_t a, uint32_t b) { return __aeabi_dcmpeq(__aeabi_f2d(a), __aeabi_f2d(b)); }
+int32_t __aeabi_fcmplt(uint32_t a, uint32_t b) { return __aeabi_dcmplt(__aeabi_f2d(a), __aeabi_f2d(b)); }
+int32_t __aeabi_fcmple(uint32_t a, uint32_t b) { return __aeabi_dcmple(__aeabi_f2d(a), __aeabi_f2d(b)); }
+int32_t __aeabi_fcmpge(uint32_t a, uint32_t b) { return __aeabi_dcmpge(__aeabi_f2d(a), __aeabi_f2d(b)); }
+int32_t __aeabi_fcmpgt(uint32_t a, uint32_t b) { return __aeabi_dcmpgt(__aeabi_f2d(a), __aeabi_f2d(b)); }
+int32_t __aeabi_fcmpun(uint32_t a, uint32_t b) { return __aeabi_dcmpun(__aeabi_f2d(a), __aeabi_f2d(b)); }

@@ -57,7 +57,7 @@
    qfile '(r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12)   ; the gp file a 32-bit pair move walks
    unops '(neg not sx1 sx2 sx4 zx1 zx2 zx4)         ; one-register rewrites
    xmmops '(addsd subsd mulsd divsd minsd maxsd movsd movapd ucomisd cvtss2sd cvtsd2ss
-            addss subss mulss divss minss maxss ucomiss)   ; xmm-only: no gp effect
+            addss subss mulss divss minss maxss ucomiss movss)   ; xmm-only: no gp effect
    barops '(call callr callm raw sys)                     ; the opaque barriers
    ; the gen state g: 'n the label counter, 'off the frame high-water, 'brk/'cnt the loop label
    ; stacks, 'glob name -> (label ty init), 'globs the emission order, 'strs ((label . text)..);
@@ -79,10 +79,7 @@
        (go 0))
    (vfpm m i n) (m | (((1 << n) - 1) << i))        ; the mask with that run taken
    vfpx 65535                                      ; the full mask
-   ; an even slot is the low half of dK, so the convert lands there; an odd one has no f-register
-   ; name, so the word bounces through r12 and s30 (f15's single view, the narrow scratch)
-   (vfpst k fS) (0 = k & 1 ? [['cvtsd2ss (xmmreg (k // 2)) fS]]        ; the double in fS -> slot k
-                   [['cvtsd2ss 'f15 fS] ['movsnrx 'r12 30] ['movsnxr k 'r12]])
+   ; an even slot is the single view of dK; an odd one has no f-register name, so its word rides r12
    (vfpsv k base off) (0 = k & 1 ? [['stss base off (xmmreg (k // 2))]]   ; slot k -> a 4-byte home
                          [['movsnrx 'r12 k] ['st base off 'r12]])
    (bad? x) (x = 'bad)                             ; the gripe carrier (gripe/gripe?/okv?) lives in lex.l
@@ -862,6 +859,8 @@
    (asint g r) (? (vty r = 'float && f32v? g) (vfs r + '((cvttss2si r0 f0)))
                   (flo? (vty r)) (vfs r + '((cvttsd2si r0 f0)))
                   (tor0 g r))                                                   ; result -> r0 as an int
+   ; C's usual conversions land on float (a float side, no double): the single lane's operands
+   (f32rel? g ta tb) (f32v? g && (ta = 'float || tb = 'float) && !(ta = 'double || tb = 'double))
    ; result -> f0 as binary32: one rounding from any source
    (asf32 g r) (? (vty r = 'float && f32v? g) (vfs r)
                   (flo? (vty r) || gcplx? (vty r)) (asflo g r + '((cvtsd2ss f0 f0)))
@@ -1182,9 +1181,10 @@
                   (: af (asflo g a)
                      b (cgexpr g env rhs ())
                      (bad? b ? 'bad
-                        (: mid (fshut g af (asflo g b))
+                        (: s9 (f32rel? g (vty a) (vty b))     ; C's conversions say float: compare singles
+                           mid (? s9 (fshuts g (asf32 g a) (asf32 g b)) (fshut g af (asflo g b)))
                            swp (elem op '(lt le))
-                           cf [['ucomisd (swp ? 'f0 'f1) (swp ? 'f1 'f0)]]
+                           cf [[(s9 ? 'ucomiss 'ucomisd) (swp ? 'f0 'f1) (swp ? 'f1 'f0)]]
                            ecc (? (arm? g)               ; VCMP/FCMP flags: gt/ge unordered-false native
                                   (: t9 (? (elem op '(lt gt)) 'gt (elem op '(le ge)) 'ge op)
                                      (cc @ 'ne t9 (negrel t9)))
@@ -1505,6 +1505,17 @@
              (: s (r1safe? g bf ? 'r1 (spare g bf))
                 (s ? (af + [['movqrx s 'f0]] + bf + [['movqxr 'f1 s]])
                    (af + '((movqrx r0 f0)) + spush 'r0 + bf + spop 'r1 + '((movqxr f1 r1))))))))
+   ; the ops sp64's soften turns into calls (sf-bin's and the converts), which may clobber s0..s15
+   (sfcall? op) (elem op '(addsd subsd mulsd divsd cvtsi2sd cvtui2sd cvttsd2si cvttsd2ui cvtss2sd cvtsd2ss ucomisd))
+   ; the single lane's park: one word, so a 32-bit target keeps it in a register -- the right
+   ; side's own f1 is free (sp64's softened double ops call out and count as clobbers), else a
+   ; spare gp seat, else one pushed word
+   (fshuts g af bf)
+    (? (fsel? g) (fshut g af bf)
+       !(fclob? bf 'f1 || sp64? g && any (f \ two? f && sfcall? <f) bf) (af + '((movss f1 f0)) + bf)
+       (: s (spare g bf)
+          (s ? (af + [['movdrx s 'f0]] + bf + [['movdxr 'f1 s]])
+             (af + '((movdrx r0 f0)) + spush 'r0 + bf + spop 'r1 + '((movdxr f1 r1))))))
    ; the count park: the value already in r0 holds in a pool register past the count's
    ; forms bf, then value r0 / count r1 (the variable shifts' and rotates' contract)
    (cshut g bf)
@@ -3213,16 +3224,14 @@
                                    (aval + '((push r0))))
                           (? (t32? g && va? && wd2)        ; a t32 variadic call rides the base pcs: no d-reg doubles
                               (nolane g ("no lane for a double in a variadic call" + ontgt g))
-                             ; AAPCS-VFP: a bare float takes one slot (back-filling a double's hole); the cell carries the widened double,
-                             ; the pop narrows it. past the file a 4-byte stack word, and the mask closes behind it (vfpx)
+                             ; AAPCS-VFP: a bare float takes one slot (back-filling a double's hole); the cell carries its
+                             ; binary32 word, the pop moves it in. past the file a 4-byte stack word, and the mask closes behind it (vfpx)
                              (t32f? g && aty = 'float)
                               (vfpn xmmc 1 1 @ k
                                  (0 <= k ? (kls >as (i + 1) gpc (vfpm xmmc k 1) ovc
-                                                ([['s k] rpush] . acc))
+                                                ([['s k] (asf32 g a + '((movdrx r0 f0)) + spush 'r0)] . acc))
                                     (kls >as (i + 1) gpc vfpx (ovc + 4)
-                                         ([['ov ovc 4]
-                                           (asflo g a + [['cvtsd2ss 'f15 (xmmreg 0)]
-                                                         ['stss 'sp ovc 'f15]])] . acc))))
+                                         ([['ov ovc 4] (asf32 g a + [['stss 'sp ovc 'f0]])] . acc))))
                              ; a two-float HFA: two slots aligned to one, so it may straddle a d-register -- the words ride one slot at a time
                              (t32f? g && one = 'sse && hfab g aty = 'float)
                               (vfpn xmmc 2 1 @ k
@@ -3317,8 +3326,8 @@
                                             + '((add sp sp 16)))
                                            ((<>kc @ 'g [['pop (argr g <>>kc)]] ['(pop r0) ['movqxr (xmmreg <>>kc) 'r0]])
                                             + (<>>>kc @ 'g [['pop (argr g <>>>>kc)]] ['(pop r0) ['movqxr (xmmreg <>>>>kc) 'r0]])))
-                                       's    ; a float: the cell holds the widened double, the slot takes it narrowed
-                                        ([['ldsd 'f15 'sp 0]] + vfpst <>kc 'f15 + '((add sp sp 16)))
+                                       's    ; a float: the cell's binary32 word into its slot
+                                        [['ld 'r12 'sp 0] ['movsnxr <>kc 'r12] '(add sp sp 16)]
                                        'sn   ; n float words into n consecutive slots, off the same cell
                                         (catmap (i \ [['ld 'r12 'sp (4 * i)] ['movsnxr (<>kc + i) 'r12]]) ^(<>>kc)
                                          + '((add sp sp 16)))
@@ -3857,12 +3866,19 @@
                               (nolane g "a wide integer is not mixed with a double")
                              ; the native float lane: float meets float or an integer, single ops (f1 = left, f0 = right).
                              ; a compare reads both widened -- exact, and the double lane's flag protocol
-                             (f32v? g && (ta = 'float || tb = 'float) && !(ta = 'double || tb = 'double) && elem op '(+ - * /))
-                              (: mid (fshut g (asf32 g av) (asf32 g b))
+                             (f32rel? g ta tb && elem op '(+ - * / lt le gt ge eq ne))
+                              (: mid (fshuts g (asf32 g av) (asf32 g b))   ; f1 = left, f0 = right; relations as the double lane's
                                  (op @ '+ (mkv 'float 'r0 (mid + '((addss f0 f1))))
                                        '* (mkv 'float 'r0 (mid + '((mulss f0 f1))))
                                        '- (mkv 'float 'r0 (mid + '((subss f1 f0) (movsd f0 f1))))
-                                       (mkv 'float 'r0 (mid + '((divss f1 f0) (movsd f0 f1))))))
+                                       '/ (mkv 'float 'r0 (mid + '((divss f1 f0) (movsd f0 f1))))
+                                       ('lt || 'le || 'gt || 'ge)
+                                        (elem op '(lt le) @ swp
+                                           (mkv 'long 'r0 (mid + [['ucomiss (swp ? 'f0 'f1) (swp ? 'f1 'f0)]
+                                                                  ['set (? (elem op '(lt gt)) (arm? g ? 'gt 'above)
+                                                                            (arm? g) 'ge 'ae) 'r0]])))
+                                       'eq (mkv 'long 'r0 (mid + ('((ucomiss f1 f0)) + fsete)))
+                                       (mkv 'long 'r0 (mid + ('((ucomiss f1 f0)) + fsetn)))))
                              (flo? ta || flo? tb)
                               ; the double lane: both to double. x64 arithmetic over a simple right
                               ; reads it direct, the left on f0; else the shuttle, f1 = left, f0 = right
@@ -3958,6 +3974,7 @@
                     'ne '(__aeabi_dcmpeq eq)
                     'le '(__aeabi_dcmpgt eq)
                     'lt '(__aeabi_dcmpge eq))
+   (sf-ccs h) (h @ '__aeabi_dcmpgt '__aeabi_fcmpgt '__aeabi_dcmpge '__aeabi_fcmpge '__aeabi_fcmpeq)   ; ..a single's twin
    sf-save '((sub sp sp 32) (st sp 0 r0) (st sp 4 r1) (st sp 8 r2) (st sp 12 r3))
    sf-rest '((ld r0 sp 0) (ld r1 sp 4) (ld r2 sp 8) (ld r3 sp 12) (add sp sp 32))
    (sf-slot r) (r @ 'r0 0 'r1 4 'r2 8 'r3 12 -1)
@@ -4028,6 +4045,9 @@
                            (sf-save + gs <>>f + [['call (op = 'cvttss2si ? '__aeabi_f2iz '__aeabi_f2uiz)]]
                             + (sl < 0 ? [['mov <>f 'r0]] [['st 'sp sl 'r0]]) + sf-rest + go r))
                        (w6 && op = 'movdxr) ([['st 'r4 (fcell g <>f) <>>f]] + go r)
+                       (w6 && op = 'movss)
+                        (['(sub sp sp 16) '(st sp 0 r3) ['ld 'r3 'r4 (fcell g <>>f)] ['st 'r4 (fcell g <>f) 'r3]
+                          '(ld r3 sp 0) '(add sp sp 16)] + go r)
                        (w6 && op = 'movdrx) ([['ld <>f 'r4 (fcell g <>>f)]] + go r)
                        (w6 && op = 'ldsd) (m2c g <>f <>>f <>>>f + go r)
                        (w6 && op = 'stsd) (c2m g <>f <>>f <>>>f + go r)
@@ -4052,11 +4072,14 @@
                         (sf-save + gs <>>f + '((call __aeabi_f2d)) + pd <>f + sf-rest + go r)
                        (op = 'cvtsd2ss)               ; (op fD fS): a pair in, the narrowed word home
                         (sf-save + gd <>>f 'r0 + '((call __aeabi_d2f)) + ps <>f + sf-rest + go r)
-                       (op = 'ucomisd)
-                        (: args (sf-save + gd <>f 'r0 + gd <>>f 'r2)
+                       (op = 'ucomisd || w6 && op = 'ucomiss)   ; (sp64 keeps vcmp.f32 native)
+                        (: args (op = 'ucomiss ?
+                                   (sf-save + [['ld 'r0 'r4 (fcell g <>f)] ['ld 'r1 'r4 (fcell g <>>f)]])
+                                   (sf-save + gd <>f 'r0 + gd <>>f 'r2))
+                           cc9 (\ c (sf-cc c @ hs (op = 'ucomiss && two? hs ? [(sf-ccs <hs) <>hs] hs)))
                            n1 (two? r ? <r)
                            (? (two? n1 && <n1 = 'br)
-                               (sf-cc <>n1 @ hs
+                               (cc9 <>n1 @ hs
                                   (two? hs ? 0 (scare scc n1),
                                    args + [['call <hs] '(cmp r0 0)] + sf-rest + [['br <>hs <>>n1]] + go >r))
                               (two? n1 && <n1 = 'set)
@@ -4064,7 +4087,7 @@
                                   n3 (two? >r && two? >>r ? <>>r)
                                   dance (two? n2 && <n2 = 'set && elem <>n2 '(p np) &&
                                          two? n3 && elem <n3 '(and or))
-                                  hs (sf-cc <>n1)
+                                  hs (cc9 <>n1)
                                   (two? hs ? 0 (scare scc n1),
                                    args + [['call <hs] '(cmp r0 0)] + sf-rest + [['set <>hs <>>n1]] + go (dance ? >>>r >r)))
                               (scare suc n1)))

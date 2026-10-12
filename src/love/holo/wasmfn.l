@@ -216,11 +216,14 @@
      'trap '((unreachable))
      ('nop || 'align) ()
      ;; the double lane
-     ('movsd || 'movapd) (w-fval (f 2) + w-fset (f 1))
+     ('movsd || 'movapd || 'movss) (w-fval (f 2) + w-fset (f 1))
      ('addsd || 'subsd || 'mulsd || 'divsd)
            (w-fval (f 1) + w-fval (f 2) + [[(w-fp3 <f)]] + w-fset (f 1))
      'xorpd (w-fval (f 1) + '((i64.reinterpret_f64)) + w-fval (f 2) + '((i64.reinterpret_f64) (i64.xor) (f64.reinterpret_i64)) + w-fset (f 1))
      'ucomisd (pin w-st 'fl 1, w-fval (f 1) + [['local.set w-FA]] + w-fval (f 2) + [['local.set w-FB]])
+     'ucomiss (pin w-st 'fl 1,                                     ; promoted to f64: exact, the same order
+               w-fval (f 1) + w-unss + [['f64.promote_f32] ['local.set w-FA]]
+               + w-fval (f 2) + w-unss + [['f64.promote_f32] ['local.set w-FB]])
      ('addss || 'subss || 'mulss || 'divss)
            (w-fval (f 1) + w-unss + w-fval (f 2) + w-unss + [[(w-fp3 <f)]] + w-pkss + w-fset (f 1))
      'cvtsi2ss  (w-val (f 2) + '((f32.convert_i64_s)) + w-pkss + w-fset (f 1))

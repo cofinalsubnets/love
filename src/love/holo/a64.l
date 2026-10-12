@@ -515,6 +515,7 @@
    (a64-fp3op op d s) (: dn (frn d) sn (frn s) (le32 (peep a64-fp3 op 0 | (sn << 16 | (dn << 5 | dn)))))     ; Dd = Dd OP Ds
    (a64-fmov  d s) (: dn (frn d) sn (frn s) (le32 (0x1E604000 | (sn << 5 | dn))))           ; fmov Dd, Ds
    (a64-fcmp  a b) (: an (frn a) bn (frn b) (le32 (0x1E602000 | (bn << 16 | an << 5))))   ; FCMP Da, Db (sets NZCV; unordered -> VS)
+   (a64-fcmps a b) (: an (frn a) bn (frn b) (le32 (0x1E202000 | (bn << 16 | an << 5))))   ; FCMP Sa, Sb
    (a64-scvtf d g) (: dn (frn d) gn (rn g) (le32 (0x9E620000 | (gn << 5 | dn))))            ; scvtf Dd, Xg  (signed int -> double)
    (a64-fcvtzs g d) (: gn (rn g) dn (frn d) (le32 (0x9E780000 | (dn << 5 | gn))))           ; fcvtzs Xg, Dd  (double -> signed int, toward zero)
    (a64-fmovxr d g) (: dn (frn d) gn (rn g) (le32 (0x9E670000 | (gn << 5 | dn))))           ; fmov Dd, Xg   (gpr bits -> fpr)  == movqxr
@@ -708,10 +709,10 @@
           ('ldsdx . a64-fldx) ('stsdx . a64-fstx) ('ldssx . a64-fldsx) ('stssx . a64-fstsx)
           ('cmov . a64-cmov)
           ('call . a64-call) ('la . a64-la) ('lar . a64-lar) ('lia . a64-lia)
-          ('movsd . a64-fmov) ('movapd . a64-fmov)        ; -- scalar-double FP --
+          ('movsd . a64-fmov) ('movapd . a64-fmov) ('movss . a64-fmov)        ; -- scalar-double FP --
           ('addsd . a64-fp3op 'addsd) ('subsd . a64-fp3op 'subsd)
           ('mulsd . a64-fp3op 'mulsd) ('divsd . a64-fp3op 'divsd)
-          ('ucomisd . a64-fcmp) ('cvtsi2sd . a64-scvtf) ('cvttsd2si . a64-fcvtzs)
+          ('ucomisd . a64-fcmp) ('ucomiss . a64-fcmps) ('cvtsi2sd . a64-scvtf) ('cvttsd2si . a64-fcvtzs)
           ('addss . a64-fp3op 'addss) ('subss . a64-fp3op 'subss)          ; -- the single lane --
           ('mulss . a64-fp3op 'mulss) ('divss . a64-fp3op 'divss)
           ('cvtsi2ss . a64-scvtfs) ('cvttss2si . a64-fcvtzss) ('movdxr . a64-fmovsw) ('movdrx . a64-fmovws)

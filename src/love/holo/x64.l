@@ -51,7 +51,7 @@
     (: md (x86-md bn disp)
      ([(x86-modrm md regf 4) (x86-sib (x86-scale sc) ixn bn)] + x86-dispb md disp))
    ;; the xmm binop table: op -> (prefix opcode). prefix 102=66 / 242=F2 / 0=none. modrm.reg=d, rm=s.
-   x86-sse {'movupd '(102 16) 'movsd '(242 16) 'movapd '(102 40) 'movhlps '(0 18) 'unpcklpd '(102 20)   ; movapd: the whole-register copy (no merge)
+   x86-sse {'movupd '(102 16) 'movsd '(242 16) 'movss '(243 16) 'movapd '(102 40) 'movhlps '(0 18) 'unpcklpd '(102 20)   ; movapd: the whole-register copy (no merge)
             'mulpd '(102 89) 'addpd '(102 88) 'subpd '(102 92) 'divpd '(102 94)
             'mulsd '(242 89) 'addsd '(242 88) 'subsd '(242 92) 'divsd '(242 94)
             'minsd '(242 93) 'maxsd '(242 95)                                              ; d <- d < s ? d : s (a NaN takes s)
