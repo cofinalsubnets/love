@@ -3,11 +3,9 @@
  * twice to binary32. carried in double and narrowed once, the answer differs in the
  * last bit now and then -- an example rarely lands there, a random walk does.
  *
- * a fixed seed, every result's bits folded into one hash, the hash printed: one
- * disagreeing bit in any operation moves the line. operands are finite binary32 with
+ * a fixed seed, every result's bits folded into one hash, the hash's bytes folded into the
+ * exit code (the bare-metal boards have no printf): one disagreeing bit moves it. operands are finite binary32 with
  * moderate exponents, so the chains stay clear of overflow and NaN payloads. */
-
-int printf(const char *, ...);
 
 static unsigned st = 0x9e3779b9u;
 static unsigned rnd(void) { st ^= st << 13; st ^= st >> 17; st ^= st << 5; return st; }
@@ -29,6 +27,7 @@ static float poly(float x, float a, float b, float c) { return (a * x + b) * x +
 static float ratio(float a, float b, float c, float d) { return (a + b) / (c - d); }
 static double widen(float a, float b) { return a * b; }        /* float product, then widened */
 static float back(double d, float f) { return d * f; }         /* double product, narrowed once */
+static float (*volatile fp3)(float, float, float) = fma3;       /* a float answer through a pointer */
 
 int main(void) {
   float acc = 0.0f;
@@ -59,9 +58,11 @@ int main(void) {
     mixi(a < b); mixi(a * b <= c); mixi(a + b == c + d); mixi(a * c != b * d);
     mixi((int) (a * 1000.0f)); mixi((long long) (b * c));
     mixi((unsigned) (a < 0.0f ? -a : a));
+    mix(fp3(a, b, c));
+    { long long v = (long long) ((unsigned long long) rnd() << 32 | rnd()) >> (rnd() & 31);
+      mix((float) v); mix((float) (unsigned long long) v); }   /* 64-bit to float, one rounding */
   }
   mix(acc);
   for (int i = 0; i < 16; i++) mix(arr[i]);
-  printf("%08x\n", h);
-  return 0;
+  return (h ^ h >> 8 ^ h >> 16 ^ h >> 24) & 127;   /* under 128: no exit reads as a signal */
 }

@@ -84,13 +84,11 @@ for f in test/cc/*.c; do
   [ $a -eq $b ] || fail "mooncc battery $f (ours $a gcc $b)"
 done
 
-# a float expression evaluates in float (FLT_EVAL_METHOD 0): a random walk of chains, every result's bits
-# hashed, held to gcc's line plain and -Os. x64 only until every target carries the single lane
-$cc_g -O0 -o "$ho/.f32g" test/cc/f32/fuzz.c && "$ho/.f32g" > "$ho/.f32g.out" || fail "gcc on the float fuzz"
-for o in -O0 -Os; do
-  moonrun $o -o "$ho/.f32" test/cc/f32/fuzz.c > /dev/null 2>&1 || fail "mooncc $o the float fuzz"
-  "$ho/.f32" | cmp -s - "$ho/.f32g.out" || fail "float arithmetic $o: ours $("$ho/.f32") gcc $(cat "$ho/.f32g.out")"
-done
+# the float fuzz (test/cc/277-f32-fuzz.c) at -Os too: its exit code folds every result's bits
+$cc_g -O0 -o "$ho/.f32g" test/cc/277-f32-fuzz.c && { "$ho/.f32g"; b=$?; } || fail "gcc on the float fuzz"
+moonrun -Os -o "$ho/.f32" test/cc/277-f32-fuzz.c > /dev/null 2>&1 || fail "mooncc -Os the float fuzz"
+"$ho/.f32"; a=$?
+[ $a -eq $b ] || fail "float arithmetic -Os: ours $a gcc $b"
 
 # an asm's other-section words leave with its home: a BUG_ON a late fold proves false loses its brk
 # and label, and its __bug_table row must go too, or the object names a label it never lays

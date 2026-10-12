@@ -800,7 +800,7 @@
                  [['stsd base off val]])
    ; the native single lane: a 'float value rides its f-register as binary32 (C's FLT_EVAL_METHOD 0);
    ; elsewhere a float widens on load and every value is a double
-   (f32v? g) (x64? g || a8? g || t32? g)
+   (f32v? g) (x64? g || a8? g || t32? g || ia32? g)
    (n32? g ty) (ty = 'float && f32v? g)
    (fvt g ty) (n32? g ty ? 'float 'double)          ; the value type a ty load answers
    (fldv g ty freg base off) (n32? g ty ? [['ldss freg base off]] (fldf ty freg base off))
@@ -863,10 +863,23 @@
    ; result -> f0 as binary32: one rounding from any source
    (asf32 g r) (? (vty r = 'float && f32v? g) (vfs r)
                   (flo? (vty r) || gcplx? (vty r)) (asflo g r + '((cvtsd2ss f0 f0)))
-                  (ilp32? g && llt? (vty r)) (asflo g r + '((cvtsd2ss f0 f0)))
+                  (ia32? g && llt? (vty r)) (tor0 g r + ll2f g (usg? (vty r)))
+                  (t32? g && llt? (vty r))                 ; rt.c's one rounding, the answer's word in r0
+                   (tor0 g r + [['call (usg? (vty r) ? '__aeabi_ul2f '__aeabi_l2f)] '(movdxr f0 r0)])
                   (ilp32? g && usg? (vty r)) (tor0 g r + '((cvtui2ss f0 r0)))
                   (vty r = 'ulong) (tor0 g r + ul2f g)
                   (tor0 g r + '((cvtsi2ss f0 r0))))
+   ; i386 pair r0:r1 -> float: fild qword is exact, fstp dword the one rounding. unsigned past 2^63
+   ; halves with the low bit sticky first and doubles after, as ul2f
+   (ll2f g usg)
+    (: a (m16? g ? [103] ()) o (m16? g ? [102] ())
+       ld ['raw (o + [81] + o + [80] + a + [223 44 36] + a + [217 28 36]   ; push ecx; push eax; fild; fstp dword
+                 + a + [243 15 16 4 36] + a + o + [141 100 36 8])]         ; movss xmm0,[esp]; lea esp,[esp+8]
+       (!usg ? [ld]
+          (: lb (nlab g ".lf") le (nlab g ".lg")
+             ['(cmp r1 0) ['br 'lt lb] ld ['jmp le]
+              ['label lb] '(mov r2 r0) '(and r2 r2 1) '(shr r0 1) '(mov r3 r1) '(shl r3 31) '(or r0 r0 r3)
+              '(or r0 r0 r2) '(shr r1 1) ld '(addss f0 f0) ['label le]])))
    ; unsigned 64 -> float: past 2^63 halve with the low bit kept sticky, convert, double (gcc's shape)
    (ul2f g)
     (: lb (nlab g ".uf") ld (nlab g ".ug")
@@ -3394,10 +3407,10 @@
                       ; i386: a pointer read straight off a global is called where it lies -- no park
                       (ia32? g && two? (gword (vfs hr)))
                        (mkv (fnret (vty hr)) 'r0 (pf + spills + ezf + pops + setal + (sr6 ? (srpass g sroff srg) ()) +
-                                 [['callm 'rip (gword (vfs hr))]] +
+                                 [['callm 'rip (gword (vfs hr))]] + fres +
                                  rext g (fnret (vty hr)) + pairin g (fnret (vty hr)) + (sr6 ? (srback g sroff srg) ()) + clean + relods))
                       (mkv (fnret (vty hr)) 'r0 (pf + tor0 g hr + [['mov pk 'r0]] +
-                                spills + ezf + pops + setal + (sr6 ? (srpass g sroff srg) ()) + [['callr pk]] +
+                                spills + ezf + pops + setal + (sr6 ? (srpass g sroff srg) ()) + [['callr pk]] + fres +
                                 rext g (fnret (vty hr)) + pairin g (fnret (vty hr)) + (sr6 ? (srback g sroff srg) ()) + clean + relods))))))))
    ; the hidden result pointer, out and back: a register (a64 x8, else the first argument's), or on
    ; i386 the block's first word -- which the callee pops (ret $4), so the caller's block is 4 short
@@ -3421,10 +3434,8 @@
     (: a (m16? g ? [103] ()) o (m16? g ? [102] ())
        lea (\ k (a + o + [141 100 36 k]))                          ; lea esp,[esp+k]
        (in? ? (lea 248 + a + [(fl ? 217 221) 28 36]                 ; fstp dword|qword [esp]
-               + a + [(fl ? 243 242) 15 16 4 36]                     ; movss|movsd xmm0,[esp]
-               + (fl ? [243 15 90 192] ()) + lea 8)                  ; cvtss2sd xmm0,xmm0
-          ((fl ? [242 15 90 192] ()) + lea 248                       ; cvtsd2ss xmm0,xmm0
-           + a + [(fl ? 243 242) 15 17 4 36]                         ; movss|movsd [esp],xmm0
+               + a + [(fl ? 243 242) 15 16 4 36] + lea 8)            ; movss|movsd xmm0,[esp]
+          (lea 248 + a + [(fl ? 243 242) 15 17 4 36]                 ; movss|movsd [esp],xmm0
            + a + [(fl ? 217 221) 4 36] + lea 8)))                    ; fld dword|qword [esp]
    (st0in g ty) (ia32? g && flo? ty ? [['raw (x87raw g (ty = 'float) 1)]])
    ; an i386 long long arrives in edx:eax; gen's pair is r0:r1
@@ -8282,10 +8293,10 @@
                    rt <(peep (g 'sigs) (g 'fn) ['long ()])           ; the function's return type
                    res
                    (? (bad? r) 'bad
-                      (n32? g rt) (asf32 g r + (v6m? g ? '((movdrx r0 f0)) ()) + epj)   ; a native float leaves binary32 in its register (v6-M: r0)
+                      (n32? g rt) (asf32 g r + (? (v6m? g) '((movdrx r0 f0)) (ia32? g) [['raw (x87raw g 1 ())]] ()) + epj)   ; binary32 in its register (v6-M: r0; i386: st(0))
                       (flo? rt)                                        ; a double return leaves f0 (xmm0);
                        (asflo g r                                      ; v6-M base ABI carries a double out on the r0:r1 pair,
-                        + (? (ia32? g) [['raw (x87raw g (rt = 'float) ())]]   ; i386: out on st(0)
+                        + (? (ia32? g) [['raw (x87raw g () ())]]       ; i386: out on st(0)
                              ((t32f? g || f32abi? g) && rt = 'float) '((cvtsd2ss f0 f0))   ; narrow into s0, d0's own low half
                              !(v6m? g) ()                              ; a bare float as one word (binary32 in r0)
                              (rt = 'float) '((cvtsd2ss f0 f0) (movqrx r0 f0))

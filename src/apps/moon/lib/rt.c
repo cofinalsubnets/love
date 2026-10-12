@@ -369,3 +369,11 @@ uint32_t __aeabi_i2f(int32_t x)   { return __aeabi_d2f(__aeabi_i2d(x)); }
 uint32_t __aeabi_ui2f(uint32_t x) { return __aeabi_d2f(__aeabi_ui2d(x)); }
 int32_t __aeabi_f2iz(uint32_t u)   { return __aeabi_d2iz(__aeabi_f2d(u)); }
 uint32_t __aeabi_f2uiz(uint32_t u) { return __aeabi_d2uiz(__aeabi_f2d(u)); }
+/* a 64-bit integer rounds once: past 31 significant bits the rest fold into a sticky bit,
+ * which binary64 holds exactly and binary32 rounds as it would the whole */
+static uint32_t u64tof(uint32_t s, uint64_t v) {
+ int32_t sh = 33 - clz64(v);
+ if (sh > 0) v = sl64(stick(v, sh), sh);
+ return __aeabi_d2f(u64tod(s, v)); }
+uint32_t __aeabi_l2f(int64_t x)   { return x < 0 ? u64tof(1, -(uint64_t) x) : u64tof(0, (uint64_t) x); }
+uint32_t __aeabi_ul2f(uint64_t x) { return u64tof(0, x); }
