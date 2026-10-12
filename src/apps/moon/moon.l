@@ -492,9 +492,10 @@
                          + map ([nm forms al] \ objsec-code nm forms al) xfns   ; ..and the fns that named a section
                          + bpsecs bp)
                  ; the file-scope asm's sections, and the names its .globl exports by where they landed
-                 at (two? asecs ? asecs [() () ()])
+                 at (two? asecs ? asecs [() () () ()])
                  fns (fnames + filter (s \ !(elem s fnames)) (at 1))
                  gns (gnames + filter (s \ !(elem s gnames)) (at 2))
+                 wks (weaks + filter (s \ !(elem s weaks)) (at 3))   ; ..and those its .weak binds weak
                  ; the two writers, one shape: the standard set for the width, plus whatever
                  ; the TU named. arm32 has no .image lane and no local func symbols for
                  ; statics -- objsecs3 refuses the first, and `lnames` does not ride.
@@ -503,9 +504,9 @@
                        (show [tforms dforms fnames gnames nforms iforms lnames xsecs bforms rforms xfns weaks]))
                     (elf32? tgt)
                     (objsecs32 tgt (objsec-merge (objsecs3 tgt tforms dforms nforms iforms bforms rforms + xs) <at)
-                               fns gns weaks)
+                               fns gns wks)
                     (objsecs tgt (objsec-merge (objsecs4 tforms dforms nforms iforms bforms rforms + xs) <at)
-                             fns gns weaks lnames)))
+                             fns gns wks lnames)))
               (udie 1 "cc: the code generator answered an unexpected shape for \(src)"))))
        (udie 1 "cc: the parser answered an unexpected shape for \(src)"))
    ; a wasm object is the gen tuple as TEXT (above), so it goes to the port whole:

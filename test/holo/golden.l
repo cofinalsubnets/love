@@ -676,6 +676,13 @@
    ;; a64's `//` starts a comment outside a string only (vdso-wrap.S's .incbin, laid as .base64)
    _ (chk-eq "gas.a64.cutquote" '(".ascii \"a//b\" " ".ascii \"q\\\"//\" " "nop ")
         (gf-lines 'a64 ".ascii \"a//b\" // c\n.ascii \"q\\\"//\" //x\nnop // d"))
+   ;; a note section (vdso's .note.Linux) is sht_note; an alias of an alias follows the chain to
+   ;; its label, whichever was set first (memcpy.S's __memmove), and a cycle refuses; .weak
+   ;; exports and answers its names, a name .globl also says exported once
+   _ (chk-eq "gas.note.weak" """((((".note.L" 7 2 ((raw (1 0 0 0))))) () () ()) (((".text" 1 6 ((label f) (label h) (label g) (label w) (ret) (raw ((fix 8 abs64 u 0)))))) ("f" "g" "w") () ("w" "u" "f")) gas-alias)"""
+        (show [(gas-top 'a64 ".pushsection .note.L, \"a\", @note\n.long 1\n.popsection\n")
+               (gas-top 'a64 ".globl f\nf: ret\n.globl g\n.set g, h\n.weak w\n.set w, g\n.set h, f\n.weak u\n.quad u\n.weak f\n")
+               (trap (x \ gas-top 'a64 x) ".set a, b\n.set b, a\n.globl a\n" (\ a b a))]))
    ;; a binary literal, 0b or 0B and binary digits (proc.S's `0b01`), as llvm-mc reads it; a bare
    ;; 0b is still the label behind, and a digit or letter glued past the bits refuses
    _ (chk-eq "gas.a64.binlit" "((((\".text\" 1 6 ((raw (1 0 0 0 0 0 0 0 3 0 0 0 0 0 0 0 11 0 0 0 0 0 0 0)) (raw (160 0 128 210)) (raw (255)) (raw (18 0 0 0 0 0 0 0))))) () ()) \"1f2003d5ffffff1701000014\" (gas-data gas-data gas-data gas-data gas-immediate))"
