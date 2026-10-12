@@ -1387,8 +1387,8 @@
       (elem 'r11 pln)
       (#(filter (r \ elem r '(r19 r20 r21 r22 r23 r24 r25 r26 r27 r28)) pln) <= 1))
    _ (test
-      (elem '(lsr r6 r0 11) twf)
-      (elem '(lsl r5 r0 8) twf)
+      (elem '(lsl r5 r10 8) twf)
+      !(elem '(mov r0 r6) twf)                    ; the answer is built on r0, no closing copy
       !(twpair? twf))
    ; -- the riscv frame: a body naming no sp, fp or lr and making no call lays no frame; on wasm a call
    ; leaves every local but its answers, so there a call keeps no frame either, a home off the argument
