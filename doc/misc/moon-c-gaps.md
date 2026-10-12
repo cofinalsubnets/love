@@ -1295,13 +1295,17 @@ below, 251 of those 332 re-run so far: **145 compile**, and the rest refuse by n
   x29 and x30, in every X operand; holo had refused them. Of 800 random lines over them, 747 lay
   llvm-mc's words and refusals, and the rest part from it as the same lines spelled x29 and x30
   do (the open list below).
+- **the multiply-adds and zr in asm text**: `madd`, `msub`, `mneg`, the long `smaddl` family and
+  `smull`/`umull`/`smnegl`/`umnegl`, `smulh`/`umulh`, each with zr; a logical immediate beside
+  `xzr` (`orr x0, xzr, #0xff`); a load or store of `xzr`/`wzr` (`ldr xzr, [x0]`, barrier.h's
+  counter ordering, which stopped two tinyconfig units). holo had refused them (`badreg`). Refused
+  now as llvm-mc refuses them: a writeback onto the register loaded or stored (`str x0, [x0,
+  #-8]!`), sp as a load's or store's data, an X immediate no one word holds (holo had laid two).
+  `adds`/`subs` by `#4096` take the shifted word, where holo had refused. Of 556 lines over these, every word and
+  refusal is llvm-mc's; golden gas.a64.mla, law test/cc/277-asm-mla.c.
 
 Still open on this side (g-21's probes):
 
-- in asm text: `madd` has no row; `orr xN, xzr, #imm` and `ldr xzr, [..]` refuse (`badreg`);
-  `str x0, [x0, #-8]!`, a writeback onto the register stored, lays a word where llvm-mc refuses
-  it as unpredictable. `ldr xzr` stops two tinyconfig units (`arch_counter_enforce_ordering`,
-  barrier.h), the rest no census unit reaches.
 - under `-mstrict-align`: an array member of a packed struct indexed through its decayed pointer
   reads at the element's width, a bitfield or 128-bit member of a packed struct refuses by name,
   and a by-value struct reached as a packed member rides its type's alignment, not the member's.
