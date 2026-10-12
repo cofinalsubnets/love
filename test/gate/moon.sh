@@ -477,6 +477,19 @@ readelf -x .rodata "$ho/.inc.o" 2>/dev/null | grep -q "41424344 45464748 494a434
   || fail "an .incbin's bytes were not laid as llvm-mc lays them"
 moonrun -c -t a64 -o "$ho/.inc.o" "$ho/.inc.S" > /dev/null 2>&1 && fail "an .incbin of a file nowhere on the path was laid"
 
+# an asm's .weak binds weak, through an alias chain: a strong C definition elsewhere wins the
+# link, and alone the weak one is taken (memcpy.S's memmove)
+printf '__asm__(".text\\n.weak pick\\n.weak __pick\\n.set pick, __pick\\n.globl __pick\\n.set __pick, opick\\nopick: mov $1, %%eax\\n ret\\n");\nint pick(void);\nint main(void){ return pick(); }\n' > "$ho/.wka.c"
+printf 'int pick(void){ return 2; }\n' > "$ho/.wkb.c"
+moonrun -c -o "$ho/.wka.o" "$ho/.wka.c" > /dev/null 2>&1 && moonrun -c -o "$ho/.wkb.o" "$ho/.wkb.c" > /dev/null 2>&1 \
+  || fail "an asm .weak alias chain did not compile"
+moonrun -o "$ho/.wk" "$ho/.wka.o" "$ho/.wkb.o" > /dev/null 2>&1 || fail "a strong definition beside an asm .weak did not link"
+"$ho/.wk"; a=$?
+[ $a -eq 2 ] || fail "an asm .weak beat a strong definition (got $a want 2)"
+moonrun -o "$ho/.wk" "$ho/.wka.o" > /dev/null 2>&1 || fail "an asm .weak alone did not link"
+"$ho/.wk"; a=$?
+[ $a -eq 1 ] || fail "an asm .weak alone was not taken (got $a want 1)"
+
 # the attribute skip on a local/parameter/member takes __attribute__ ALONE: an asm NAME
 # would rename the object, and dropping it renames it in silence. test/cc/145 holds the
 # well-formed side; only the refusals live here.
