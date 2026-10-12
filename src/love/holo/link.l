@@ -571,8 +571,8 @@
               _ (pos - off0 <= ro ? 0 (scare 'link-unsorted (peep ob 'id 0)))
               sy (peep (peep ob 'syms 0) (e 2) ())
               ; a shared object's import: its dynsym index, () for anything this link defines
-              dyn (relbox ? peep relbox 'dyn 0 0)
-              ix (dyn = 1 && sy 3 = 0 ? peep (relbox 'imp) <sy ())
+              dyn (? relbox (peep relbox 'dyn 0) 0)
+              ix (? (dyn = 1 && sy 3 = 0) (peep (relbox 'imp) <sy ()) ())
               sv (? (sy 2 = 3)                   ; stt_section: the section's base
                     (two? (peep (peep ob 'secs 0) (sy 3) ()) ? 0
                         (scare 'link-sym-section (peep ob 'id 0)),
@@ -626,7 +626,7 @@
                     _ (? (relbox && abs64? && dyn = 1)
                           (wu ? 0 (pin relbox 0 ([(base + ro) ix (ix ? ad sa)] . relbox 0)))
                          (relbox && abs64?) (pin relbox 0 (base + ro . relbox 0))
-                         (charm? ix && !(elem kind '(282 283))) (scare 'link-import-addr <sy))
+                         (charm? ix && !(elem kind (relbox 'br))) (scare 'link-import-addr <sy))
                     ; ..and an abs32 site cannot be slid: a 32-bit field has nowhere to
                     ; put the 64-bit base the startup relocator adds.
                     _ (relbox && abs32? ? (scare 'link-abs32-pie <sy))
@@ -898,7 +898,7 @@
    ; branches through a got slot the loader fills (glob_dat), and an abs64 site gets a
    ; dynamic relocation in place of -pie's table. every defined global is exported. the
    ; dynamic tables (.dynamic .got .rela.dyn .dynsym .hash .dynstr) ride the data segment
-   ; past the nifs, and bss follows them. a64 only: the stub is a64's.
+   ; past the nifs, and bss follows them. a64 and x64, each row below its own.
    (ld-imports objs)
     (: defs {}
        (walk f) (map (ob \ map (i \ f (peep (peep ob 'syms 0) i ())) ^(peep ob 'nsym 0)) objs)
@@ -941,22 +941,28 @@
                           (pin ch i (peep bk b 0), pin bk b i))))
        (catall ([(le32 nb) (le32 n)] + map (b \ le32 (peep bk b 0)) ^nb
                 + map (i \ le32 (peep ch i 0)) ^n)))
-   ; adrp x16, got; ldr x17, [x16, lo12]; br x17; nop
-   (ld-plt stub got)
+   ; a64: adrp x16, got; ldr x17, [x16, lo12]; br x17; nop
+   (ld-plt-a64 stub got)
     (: pd ((got >> 12) - (stub >> 12)) lo (got & 4095)
        (catall [(le32 (0x90000010 | ((pd & 3) << 29) | ((pd >> 2 & 0x7ffff) << 5)))
                 (le32 (0xf9400211 | ((lo >> 3) << 10)))
                 (le32 0xd61f0220) (le32 0xd503201f)]))
+   ; x64: jmp *got(%rip), then int3 to the slot's end
+   (ld-plt-x64 stub got) (catall [[255 37] (le32 (ld-u32 (got - (stub + 6)))) (map (_ \ 204) ^10)])
+   ; a machine's row: the branch kinds that may reach an import, relative / abs64 / glob_dat, the stub, the page
+   ld-dyn {183 ['(282 283) 1027 257 1025 ld-plt-a64 65536]
+           62 ['(4) 8 1 6 ld-plt-x64 4096]}
    (ldshared target soname needed srcs prod)
     (: mach (peep elf-machines target 0)
-       _ (mach = 183 ? 0 (scare 'link-shared-target target))
+       dm (peep ld-dyn mach ())
+       _ (two? dm ? 0 (scare 'link-shared-target target))
        objs0 (map (p \ ld-read <p <>p mach) srcs)
        _ (0 < foldl (\ a ob (a + ld-lanesz ob 'image)) 0 objs0 ? (scare 'link-shared-image soname))
        imps (ld-imports objs0) ni #imps
        plt {'id "<plt>" 'src "" 'secs {1 ['text 0 (16 * ni) 16 'text]} 'lanes {'text [1]}
             'drops {} 'syms {} 'nsym 0 'relas () 'named () 'base {}}
        objs (objs0 + [plt])
-       pg 65536
+       pg (dm 5)
        nph 5                                    ; three loads, dynamic, gnu_stack
        hdrsz (64 + 56 * nph)
        lay (ldlay objs 0 hdrsz pg 1)
@@ -979,19 +985,18 @@
        st0 (hs0 + #htab)           dend (ld-align 16 (st0 + #<dstr))
        bend (ldlayn 'bss (ldlay1 'bss dend objs) objs)
        (fo a) (a - sk)
-       _ (pin plt 'src (string (catall (map (k \ ld-plt (p0 + 16 * k) (got0 + 8 * k)) ^ni))))
+       _ (pin plt 'src (string (catall (map (k \ (dm 4) (p0 + 16 * k) (got0 + 8 * k)) ^ni))))
        imp ({} @ t (each ^ni (k \ pin t (imps k) (1 + k)), t))
-       relbox {0 () 'dyn 1 'imp imp}
+       relbox {0 () 'dyn 1 'imp imp 'br <dm}
        cx [glo n0 end dy0 dy0 relbox () () (backends target) (ld-extents objs)]
        et (ldemitn cx 'text objs (ldemit cx 'text hdrsz objs ()))
        eo (ldemitn cx 'rodata objs (ldemit cx 'rodata o0 objs >et))
        ed (ldemitn cx 'data objs (ldemit cx 'data d0 objs >eo))
        en (ldemit cx 'nifs <ed objs >ed)
-       ; 1027 relative, 257 abs64, 1025 glob_dat
        (rela off ty sy ad) (catall [(le64 off) (le32 ty) (le32 sy) (le64 (ld-u64 ad))])
-       rels (map (r \ (r 1 @ k (charm? k ? (rela <r 257 k (r 2)) (rela <r 1027 0 (r 2)))))
+       rels (map (r \ (r 1 @ k (charm? k ? (rela <r (dm 2) k (r 2)) (rela <r (dm 1) 0 (r 2)))))
                  (rev (relbox 0))
-             + map (k \ rela (got0 + 8 * k) 1025 (1 + k) 0) ^ni)
+             + map (k \ rela (got0 + 8 * k) (dm 3) (1 + k) 0) ^ni)
        nr #rels
        dyn (catall (map (d \ catall [(le64 <d) (le64 <>d)])
                         (map (k \ [1 (soff (1 + k))]) ^nn

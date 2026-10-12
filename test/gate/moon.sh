@@ -775,6 +775,23 @@ $cc_g -O1 -c -o "$ho/.fmaing.o" "$ho/.fmain.c"
 $cc_g -no-pie -o "$ho/.fexe2" "$ho/.fmaing.o" "$ho/.flibm.o" > /dev/null 2>&1 && "$ho/.fexe2"; a=$?
 [ $a -eq 42 ] || fail "float args and results, gcc calling mooncc (got $a want 42)"
 
+# ---------------------- -shared: a .so glibc's loader takes, importing from its exe
+cat > "$ho/.so.c" <<'EOF'
+int hook(int);
+int twice(int x) { return hook(x) * 2; }
+static int (*tab[2])(int) = {hook, twice};
+int via(int x) { return tab[1](tab[0](x)); }
+EOF
+cat > "$ho/.somain.c" <<'EOF'
+int twice(int), via(int);
+int hook(int x) { return x + 1; }
+int main() { return twice(4) + via(4) + 20; }
+EOF
+moonrun -shared -o "$ho/libmso.so" "$ho/.so.c" > /dev/null 2>&1 || fail "mooncc -shared"
+$cc_g -o "$ho/.soexe" "$ho/.somain.c" -L"$ho" -lmso -rdynamic -Wl,-rpath,"$PWD/$ho" > /dev/null 2>&1 \
+  && "$ho/.soexe"; a=$?
+[ $a -eq 42 ] || fail "a -shared object under ld.so: plt import, abs64 import, relative (got $a want 42)"
+
 # ------------------------------------------------------------- weak overriding
 cat > "$ho/.wklib.c" <<'EOF'
 __attribute__((weak)) int wpick(void){return 7;}
