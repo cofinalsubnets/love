@@ -676,6 +676,12 @@
    ;; a64's `//` starts a comment outside a string only (vdso-wrap.S's .incbin, laid as .base64)
    _ (chk-eq "gas.a64.cutquote" '(".ascii \"a//b\" " ".ascii \"q\\\"//\" " "nop ")
         (gf-lines 'a64 ".ascii \"a//b\" // c\n.ascii \"q\\\"//\" //x\nnop // d"))
+   ;; adr to a label in its section, `.+k` and an addend, and a literal load's addend, as llvm-mc
+   ;; lays them; sp, a W register, a byte past 1MB and a third operand refuse
+   _ (chk-eq "gas.a64.adr" '("1f2003d51f2003d522000010e3ffff58e4ffff103f000010" (gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand))
+        [(holo-hex 'a64 (gas-text 'a64 "f:\n nop\n nop\n adr x2, f+12\n ldr x3, f+8\n adr x4, . - 4\n adr xzr, 1f\n1:\n"))
+         (map (l \ trap (x \ holo-hex 'a64 (gas-text 'a64 x)) l (\ a b a))
+              ["adr sp, f\nf:" "adr w0, f\nf:" "adr x0, . + 1048576" "adr x0, f, f\nf:"])])
    ;; a register variable's or clobber's name takes gcc's r0..r30 for x0..x30 (arm-smccc.h's
    ;; asm("r0")); asm text keeps llvm-mc's names, where r0 refuses
    _ (chk-eq "gas.a64.ccnames" '((r0 r28 fp lr () r0) gas-a64-register)

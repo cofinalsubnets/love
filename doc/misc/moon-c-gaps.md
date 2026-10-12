@@ -1282,10 +1282,17 @@ below, 251 of those 332 re-run so far: **145 compile**, and the rest refuse by n
   and a clobber; asm text keeps llvm-mc's, where `r0` refuses. moon had refused the pin (`no lane
   for a register variable in r0`). proton-pack, random, kvm_guest and smccc compile; law
   test/cc/275-asm-regvar-r.c, whose template reads x0 by name.
+- **`adr` to a label** (`adr x0, foo`, `adr x1, 1f + 4`, `adr x2, .`): resolved inside its
+  section and R_AARCH64_ADR_PREL_LO21 across one, which moon's linker applies; a byte past 1MB
+  refuses where holo had masked it. holo had refused the instruction. Of 200 random files of
+  adr and literal loads to labels with addends, every word is llvm-mc's; law
+  test/cc/276-asm-adr.c, linked across sections.
+- **an address fix's addend inside its section** (`ldr x0, lbl + 8`): a64.l's emitter of the
+  same name hid the list of address-fix kinds from the patcher, which dropped the addend and
+  laid the label's own offset.
 
 Still open on this side (g-21's probes):
 
-- **`adr` to a label** (`adr x0, foo`) refuses; no census unit has reached it.
 - **`lr` and `fp`**, llvm-mc's names for x30 and x29, refuse in every operand (`mov x0, lr`,
   `stp fp, lr, [sp, #-16]!`); no census unit spells them.
 - **x18 is allocated freely**, and `-ffixed-x18` is ignored: the platform register, which the
