@@ -551,20 +551,20 @@
               "b .+2" "cbz x0, .+1048576"]))
    ;; `name .req reg` (the kernel's wx\n per register, from an .irp) and .unreq
    _ (chk-eq "gas.a64.req"
-        '(((".text" 1 6 ((raw (225 3 0 42)) (add r3 r3 1)))) () ())
+        '(((".text" 1 6 ((raw (225 3 0 42)) (add r3 r3 1)))) () () ())
         (gas-top 'a64 "\t.irp n,0,1\nwx\\n .req w\\n\n\t.endr\ntmp .req x3\n\tmov wx1, wx0\n\tadd tmp, tmp, #1\n\t.unreq tmp\n"))
    ;; backward local labels measured at expansion: the alternative's `nops (662b-661b) / 4`
    ;; and an .if over the same distance; a directive between them, or a forward label, refuses
    _ (chk-eq "gas.a64.lbldist"
         '(((".text" 1 6 ((label l661.1) (raw (32 0 128 210)) (add r0 r0 2) (ld r1 r0 0) (label l662.1)
-                          (nop) (nop) (nop) (raw (130 1 128 210))))) () ())
+                          (nop) (nop) (nop) (raw (130 1 128 210))))) () () ())
         (gas-top 'a64 "661:\tmov x0, #1\n\tadd x0, x0, #2\n\tldr x1, [x0]\n662:\n\t.rept (662b-661b) / 4\n\tnop\n\t.endr\n\t.if (662b - 661b) == 12\n\tmov x2, #12\n\t.endif\n"))
    _ (chk-eq "gas.ifb" '("nop" "b x" "")
         (gf-expand 'a64 (gf-lines 'a64 ".macro m f\n.ifb \\f\nnop\n.endif\n.ifnb \\f\nb \\f\n.endif\n.endm\nm\nm x\n")))
    ;; labels then a macro call on one line: the labels, then the call's lines
    _ (chk-eq "gas.macro.lbl" '("g:" "\tmov x0, #4" "1:" "h:" "\tmov x1, #4" "k: ret")
         (gf-expand 'a64 (gf-lines 'a64 "\t.macro m, r\n\tmov \\r, #4\n\t.endm\ng:\tm x0\n1: h: m x1\nk: ret")))
-   _ (chk-eq "gas.macro.at" "(((\".text\" 1 6 ((jmp .Lx0) (label .Lx0) (jmp .Lx1) (label .Lx1)))) () ())"
+   _ (chk-eq "gas.macro.at" "(((\".text\" 1 6 ((jmp .Lx0) (label .Lx0) (jmp .Lx1) (label .Lx1)))) () () ())"
         (show (gas-top 'a64 "\t.macro m\n\tb .Lx\\@\n.Lx\\@:\n\t.endm\n\tm\n\tm\n")))
    _ (chk-eq "gas.a64.lbldist.refuse" '(gas-immediate gas-immediate)
         (map (x \ trap (y \ gas-top 'a64 y) x (\ a b a))
@@ -670,7 +670,7 @@
    ;; a64's `ldr rt, =expr`: a constant one movz holds is that movz, else a word in the section's
    ;; pool, one per width and expression, laid at .ltorg or the section's end, and a literal load
    ;; of it; a .set read before it is made reads its first value (head.S's .Lpe_header_offset)
-   _ (chk-eq "gas.a64.litpool" "((((\".text\" 1 6 ((raw (128 70 130 210)) (afix ld19 1476395009 .Llit0 0) (afix ld19 1476395010 .Llit1 0) (afix ld19 1476395011 .Llit1 0) (afix ld19 402653188 .Llit2 0) (nop) (dalign 8) (label .Llit0) (raw (69 35 1 0 0 0 0 0)) (dalign 8) (label .Llit1) (raw ((fix 8 abs64 foo 0))) (dalign 4) (label .Llit2) (raw ((fix 4 abs32 foo 4))) (afix ld19 1476395013 l1.1 0) (label l1.1) (raw ((fix 4 abs32 bar 0))))) (\".x\" 1 6 ((afix ld19 1476395014 .Llit3 0) (dalign 8) (label .Llit3) (raw (255 255 255 255 255 255 255 255))))) () ()) (((\".text\" 1 6 ((raw (2 0 0 0)) (raw (3 0 0 0))))) () ()))"
+   _ (chk-eq "gas.a64.litpool" "((((\".text\" 1 6 ((raw (128 70 130 210)) (afix ld19 1476395009 .Llit0 0) (afix ld19 1476395010 .Llit1 0) (afix ld19 1476395011 .Llit1 0) (afix ld19 402653188 .Llit2 0) (nop) (dalign 8) (label .Llit0) (raw (69 35 1 0 0 0 0 0)) (dalign 8) (label .Llit1) (raw ((fix 8 abs64 foo 0))) (dalign 4) (label .Llit2) (raw ((fix 4 abs32 foo 4))) (afix ld19 1476395013 l1.1 0) (label l1.1) (raw ((fix 4 abs32 bar 0))))) (\".x\" 1 6 ((afix ld19 1476395014 .Llit3 0) (dalign 8) (label .Llit3) (raw (255 255 255 255 255 255 255 255))))) () () ()) (((\".text\" 1 6 ((raw (2 0 0 0)) (raw (3 0 0 0))))) () () ()))"
         (show [(gas-top 'a64 " ldr x0, =0x1234\n ldr x1, =0x12345\n ldr x2, =foo\n ldr x3, =foo\n ldr w4, =foo + 4\n nop\n .ltorg\n ldr x5, 1f\n1: .long bar\n.section .x, \"ax\"\n ldr x6, =-1\n")
                (gas-top 'a64 ".long .La\n.set .La, 2\n.set .La, 3\n.long .La\n")]))
    ;; a64's `//` starts a comment outside a string only (vdso-wrap.S's .incbin, laid as .base64)
@@ -685,7 +685,7 @@
                (trap (x \ gas-top 'a64 x) ".set a, b\n.set b, a\n.globl a\n" (\ a b a))]))
    ;; a binary literal, 0b or 0B and binary digits (proc.S's `0b01`), as llvm-mc reads it; a bare
    ;; 0b is still the label behind, and a digit or letter glued past the bits refuses
-   _ (chk-eq "gas.a64.binlit" "((((\".text\" 1 6 ((raw (1 0 0 0 0 0 0 0 3 0 0 0 0 0 0 0 11 0 0 0 0 0 0 0)) (raw (160 0 128 210)) (raw (255)) (raw (18 0 0 0 0 0 0 0))))) () ()) \"1f2003d5ffffff1701000014\" (gas-data gas-data gas-data gas-data gas-immediate))"
+   _ (chk-eq "gas.a64.binlit" "((((\".text\" 1 6 ((raw (1 0 0 0 0 0 0 0 3 0 0 0 0 0 0 0 11 0 0 0 0 0 0 0)) (raw (160 0 128 210)) (raw (255)) (raw (18 0 0 0 0 0 0 0))))) () () ()) \"1f2003d5ffffff1701000014\" (gas-data gas-data gas-data gas-data gas-immediate))"
         (show [(gas-top 'a64 ".quad 0b01, 0B11, 0b1011\nmov x0, #0b101\n.byte 0b11111111\n.quad (0b1 << 4) | 0b10\n")
                (holo-hex 'a64 (gas-text 'a64 "0:\n nop\n b 0b\n b 0f\n0:\n"))
                (map (l \ trap (x \ gas-top 'a64 x) l (\ a b a)) [".quad 0b2\n" ".quad 0b1x\n" ".quad 0b_1\n" ".quad 0b1_0\n" "mov x0, #0b12\n"])]))
@@ -695,7 +695,7 @@
         (gf-expand 'a64 (gf-lines 'a64 ".macro alt insn1, insn2, cap, enable = 1\n\\insn1\n\\insn2\n.endm\nalt nop, \"dmb sy\", 90\n.macro s a\n.ascii \"\\a\"\n.endm\ns \"x y\"\n.macro t a, b\nmov \\a, \\b\n.endm\nt \"x0\", \"x1\"\nt x0 \"x1\"\nt a=\"x2\", b=x3\n.macro w a\n.ifc \\a,dmb sy\nnop\n.endif\n.endm\nw \"dmb sy\"\n")))
    ;; .org to a label with instructions between (entry.S's `.org .Lventry_start\@ + 128`): zeros
    ;; up to it once layout holds, as llvm-mc lays them; one behind where it stands refuses
-   _ (chk-eq "gas.a64.org" "((((\".text\" 1 6 ((label a) (nop) (jmp a) (mov r0 r1) (label .Lorg0) (raw (0 0 0 0)) (nop)))) () ()) (((\".text\" 1 6 ((label .Ls0) (nop) (jmp .Ls0) (label .Lorg0) (raw (0 0 0 0 0 0 0 0)) (label .Ls1) (nop) (jmp .Ls1) (label .Lorg1) (raw (0 0 0 0 0 0 0 0))))) () ()) gas-org-back)"
+   _ (chk-eq "gas.a64.org" "((((\".text\" 1 6 ((label a) (nop) (jmp a) (mov r0 r1) (label .Lorg0) (raw (0 0 0 0)) (nop)))) () () ()) (((\".text\" 1 6 ((label .Ls0) (nop) (jmp .Ls0) (label .Lorg0) (raw (0 0 0 0 0 0 0 0)) (label .Ls1) (nop) (jmp .Ls1) (label .Lorg1) (raw (0 0 0 0 0 0 0 0))))) () () ()) gas-org-back)"
         (show (map (x \ trap (y \ gas-top 'a64 y) x (\ a b a))
                    ["a: nop\n b a\n mov x0, x1\n .org a + 16\n nop\n"
                     ".macro v\n.Ls\\@: nop\n b .Ls\\@\n .org .Ls\\@ + 16\n.endm\n v\n v\n"
