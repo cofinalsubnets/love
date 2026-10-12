@@ -114,6 +114,13 @@ for f in test/cc/*.c; do
   progs="$progs $b"
 done
 
+# a64: the packed program again under -mstrict-align, its misaligned members by their chunks
+if [ "$arch" = a64 ]; then
+  moonrun -t a64 -mstrict-align -o "$r/sa278.t" test/cc/278-packed-bitfield.c > "$d/sa278.log" 2>&1 \
+    || { cat "$d/sa278.log" >&2; fail "strict-align: mooncc could not build 278-packed-bitfield.c"; }
+  a64_job sa278.t "timeout 60 \$RUN ./sa278.t"
+fi
+
 # a64: the ABI across compilers -- mooncc's half (test/cc/abi64/host.c) linked with clang's
 # (peer.c), each calling the other with AAPCS64's memory-class composites
 if [ "$arch" = a64 ]; then
@@ -187,6 +194,7 @@ fi
 
 a64_run "$r" || fail "the $pretty batch did not come back"
 if [ "$arch" = a64 ]; then
+  [ "$(cat "$r/res/sa278.t.rc")" -eq 0 ] || { cat "$r/res/sa278.t.out" >&2; fail "strict-align: 278-packed-bitfield.c answers wrong under -mstrict-align"; }
   [ "$(cat "$r/res/abi64.t.rc")" -eq 0 ] || { cat "$r/res/abi64.t.out" >&2; fail "abi64: mooncc and clang disagree on AAPCS64"; }
   tail -1 "$r/res/abi64.t.out"
 fi

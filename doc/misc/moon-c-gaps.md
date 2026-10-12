@@ -1304,12 +1304,24 @@ below, 251 of those 332 re-run so far: **145 compile**, and the rest refuse by n
   refusal is llvm-mc's; golden gas.a64.mla, law test/cc/277-asm-mla.c. One departure, kept: a
   written-back `ldp` of one register twice (`ldp fp, fp, [sp], #16`) refuses: the Arm ARM calls it
   unpredictable, and llvm-mc, which lays it, refuses the offset form and `ldpsw`.
+- **packed bit-fields, on every target**: the bits run on from the last member, crossing what
+  would be a unit's edge, and the struct aligns 1, as gcc lays them; mooncc had laid them as
+  unpacked (`struct { char c; unsigned x : 30; }` packed was 8 bytes aligned 4, gcc's 5 aligned
+  1). A field's unit is the bytes it touches, read and written exactly by its loads and stores,
+  `++`, a local's initializer and a static image. Law test/cc/278-packed-bitfield.c, its answers
+  gcc's at -O0 to -O2, 64-bit and -m32.
+- **the rest of `-mstrict-align` through a packed struct**: a bit-field and a 128-bit member by
+  their chunks (both had refused by name, and the bit-field's struct, aligned 4, was read whole);
+  an array member indexed through its decayed pointer, and a struct member passed or returned by
+  value, by the alignment the member carries, not its type's (both had been read at full width).
+  Held to clang's widths in the landing law (eight more pk_ fns in test/cc/protect/units.c), and
+  278 runs under the flag on an a64 host.
 
 Still open on this side (g-21's probes):
 
-- under `-mstrict-align`: an array member of a packed struct indexed through its decayed pointer
-  reads at the element's width, a bitfield or 128-bit member of a packed struct refuses by name,
-  and a by-value struct reached as a packed member rides its type's alignment, not the member's.
+- a packed bit-field whose bytes outrun a register (five on a 32-bit target, nine anywhere)
+  refuses by name; gcc carries both. On thumb, a struct member of a packed struct is not copied
+  at all (`struct I v = p->in`, `f(p->in)`), refused with no cause named.
 - where the re-run stops now, on this side: the four units a register variable named `r0`
   stopped compile, and so do all 24 that stopped on the `.S` extable macro's `\insn`. The exclusive pairs
   (`ldxp`/`stxp` and kin) have no lane yet.

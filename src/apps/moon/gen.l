@@ -1311,6 +1311,10 @@
    (val9 g v) (ua? v ? (vma v) (tal g (vty v)))
    ; a struct that rides registers by the word, which its alignment cannot carry
    (salw? g ty) (sal? g && tal g ty < 8)
+   ; a pointer's mark from a misaligned array (sal only): the alignment its pointee is short of
+   (pal g ty) (sal? g && two? (drop 2 ty) && (ty 2) < tal g <>ty ? (ty 2) ())
+   ; a struct type as the value v's address aligns it: v's mark, when it carries one
+   (amark ty v) (stru? ty && stru? (vty v) && two? (drop 2 (vty v)) ? [<ty <>ty ((vty v) 2)] ty)
    (ldw2 g ty)                                     ; a 9..16B aggregate at r0 into its 16-byte cell
     (salw? g ty ? (: n (tsz g ty) a (tal g ty)
                      (['(sub sp sp 16)] + ldal 'r1 'r0 8 (n - 8) a + [['st 'sp 8 'r1]] + ldal 'r1 'r0 0 8 a + [['st 'sp 0 'r1]]))
@@ -1647,14 +1651,18 @@
     (: ty (vty r) fs (vfs r)                        ;  the face's base register is freed here
        b (vm? r ? (vmb r) 'r0) o (vm? r ? (vmo r) 0)
        (rfree g b,
-        (? (arr? ty) (mkv ['ptr <>ty] 'r0 (fs + mata b o))
+        ; a misaligned face's array or struct keeps its alignment on the type: ('ptr t a), ('struct tag a)
+        (? (arr? ty) (mkv (ua? r ? ['ptr <>ty (vma r)] ['ptr <>ty]) 'r0 (fs + mata b o))
            (gvarr? ty) (mkv ['ptr (varel ty)] 'r0 (fs + mata b o))   ; a VLA row decays to its address (p[i] a char*)
            (fn? ty) (mkv ['ptr ty] 'r0 (fs + mata b o))
-           (stru? ty) (mkv ty 'r0 (fs + mata b o))    ; a struct value is its address (the pair reps read through it)
+           (stru? ty) (mkv (ua? r ? [<ty <>ty (vma r)] ty) 'r0 (fs + mata b o))    ; a struct value is its address (the pair reps read through it)
            (ua? r)                                    ; a misaligned member: by its chunks
             (? (flo? ty) (ntmp g 'double @ tm
                             (mkv 'double 'r0 (fs + ldal 'r0 b o (tsz g ty) (vma r) + [['st 'r4 tm 'r0]] + fldf ty 'f0 'r4 tm)))
-               (pair? g ty || d128? ty) (uanl g)
+               (pair? g ty) (uanl g)
+               (d128? ty)                             ; the high half gathers in r1 first, off a base that is not r1
+                (: b2 (b = 'r1 ? 'r0 b) a (vma r)
+                   (mkv ty 'r0 (fs + (b = 'r1 ? ['(mov r0 r1)] ()) + ldal 'r1 b2 (o + 8) 8 a + ldal 'r0 b2 o 8 a + ['(mov r2 r1)])))
                (W9 || 'r0 @ W (mkv ty W (fs + ldal W b o (tsz g ty) (vma r) + cvt ty W))))
            (flo? ty) (mkv 'double 'r0 (fs + fldf ty 'f0 b o))
            (pair? g ty) (mkv ty 'r0 (fs + pld b o))
@@ -1665,16 +1673,16 @@
    ; signed, shr unsigned), anything else loads flat
    (lvload g r wnt)
     (vty r @ ty
-       (? (bitf? ty && ua? r) (uanl g)
+       (? (bitf? ty && bfwide? g ty) (bfnl g)
           (bitf? ty)
            (: uty <>ty bitoff <>>ty width <>>>ty
-              usz (tsz g uty) hi (64 - (bitoff + width)) lo (64 - width)
+              hi (64 - (bitoff + width)) lo (64 - width)
               sgn !(usg? uty || uty = 'bool)         ; a bool field holds 0/1: never sign-extend
               b (vm? r ? (vmb r) 'r0) o (vm? r ? (vmo r) 0)
               (rfree g b,
                mkv 'long 'r0
                    (vfs r
-                    + [[(uldop usz) 'r0 b o]]
+                    + bfld g ty 'r0 b o (ua? r ? (vma r) ())
                     + (hi > 0 ? [['shl 'r0 hi]])
                     + (lo > 0 ? [[(sgn ? 'sar 'shr) 'r0 lo]]))))
           (loadval g r wnt)))
@@ -1733,6 +1741,7 @@
                           !(ptr? (vty r)) 'bad
                           ; the face keeps the pointer's own register (a home, a pin, a park --
                           ; the consumer reads through it and frees it); no bridge to r0
+                          (pal g (vty r)) (mkma <>(vty r) (vreg r) 0 (vfs r) (pal g (vty r)))
                           (mkm <>(vty r) (vreg r) 0 (vfs r))))))))
        ('dot base fld)
         (: r (clval g env base @ lv
@@ -2439,12 +2448,14 @@
                              (cxcopy g (vty rv))
                              (sal? g ? (bcopya 0 (tsz g (vty lv)) al) (bcopy g 0 (tsz g (vty lv)) ()))))))
               ; a misaligned member (-mstrict-align): the value lands on the protocol, then by chunks
-              (ua? lv0)
+              (ua? lv0 && !(bitf? (vty lv0)))
                (: ty (vty lv0) n (tsz g ty) a (vma lv0)
-                  (? (bitf? ty || pair? g ty || d128? ty) (uanl g)
+                  (? (pair? g ty || d128? ty && !(w128? g)) (uanl g)
                      (: lv (matv g lv0)
                         r (cgexpr g env rhs ())
                         (? (bad? r) 'bad
+                           (d128? ty)
+                            (mkv ty 'r0 (vfs lv + spush 'r0 + as128 g r + spop 'r1 + stal 'r1 0 8 a 'r0 + stal 'r1 8 8 a 'r2))
                            (flo? ty)
                             (ntmp g 'double @ tm
                                (mkv 'double 'r0 (vfs lv + spush 'r0 + asflo g r + fstf g ty 'r4 tm 'f0
@@ -2464,12 +2475,12 @@
                      (bad? r ? 'bad
                         (mkv 'double 'r0 (vfs lv + spush 'r0 +
                          (asflo g r + spop 'r1 + fstf g (vty lv) 'r1 0 'f0))))))
+              (bitf? (vty lv0) && bfwide? g (vty lv0)) (bfnl g)
               (bitf? (vty lv0))                   ; a bitfield store: unit addr in r1, read-modify-write, result (truncated) in r0
-               (: lv (matv g lv0)
+               (: ua (ua? lv0 ? (vma lv0) ()) lv (matv g lv0)
                   r (cgexpr g env rhs ())
                   (bad? r ? 'bad
                      (: bt (vty lv) uty <>bt bitoff <>>bt width <>>>bt
-                        usz (tsz g uty)
                         mask ((1 << width) - 1) mv (mask << bitoff) cmask (0 - mv - 1)
                         sgn !(usg? uty || uty = 'bool) lo (64 - width)
                         (mkv 'long 'r0
@@ -2477,12 +2488,12 @@
                             + asintt g r uty
                             + (uty @ 'bool (cvt uty 'r0))   ; normalize before the mask ((bool)4 is 1)
                             + spop 'r1
-                            + [[(uldop usz) 'r2 'r1 0]              ; r2 = the unit
-                                ['li 'r3 mask] '(and r0 r0 r3)       ; r0 = v & mask (the truncated value)
+                            + bfld g bt 'r2 'r1 0 ua                ; r2 = the unit
+                            + [['li 'r3 mask] '(and r0 r0 r3)       ; r0 = v & mask (the truncated value)
                                 ['li 'r3 cmask] '(and r2 r2 r3)      ; clear the field's bits
                                 '(mov r3 r0)]
                             + (bitoff > 0 ? [['shl 'r3 bitoff]])   ; r3 = (v & mask) << bitoff
-                            + ['(or r2 r2 r3) [(stop uty) 'r1 0 'r2]]
+                            + ['(or r2 r2 r3)] + bfst g bt 'r1 0 ua 'r2
                             + (sgn ? [['shl 'r0 lo] ['sar 'r0 lo]]))))))
               (pair? g (vty lv0))                 ; a pair store through a computed address
                (: lv (matv g lv0)
@@ -2576,8 +2587,8 @@
               (: ty (vty lv0)
                  stp (ptr? ty ? (tsz g <>ty) 1)
                  (? (arr? ty) 'bad
-                    (ua? lv0)                       ; a misaligned member: old by chunks, the step back by chunks
-                     (? (bitf? ty || flo? ty || pair? g ty || d128? ty) (uanl g)
+                    (ua? lv0 && !(bitf? ty))        ; a misaligned member: old by chunks, the step back by chunks
+                     (? (flo? ty || pair? g ty || d128? ty) (uanl g)
                         (: n (tsz g ty) a (vma lv0)
                            (matv g lv0 @ lv
                               (mkv ty 'r0 (vfs lv + ['(mov r1 r0)] + ldal 'r0 'r1 0 n a + cvt ty 'r0
@@ -2586,18 +2597,18 @@
                     ; unit read-modify-write: the old field answers in r0, and the unit takes
                     ; ((old ^ new) & mask) << bitoff by xor, the mask two shifts
                     (bitf? ty)
-                     (: uty <>ty bitoff <>>ty width <>>>ty usz (tsz g uty)
+                     (: uty <>ty bitoff <>>ty width <>>>ty usz (tsz g ty) ua (ua? lv0 ? (vma lv0) ())
                         hi (64 - (bitoff + width)) lo (64 - width)
                         (uty = 'bool || usz > wsize g ? 'bad   ; a pair unit refuses
                            (matv g lv0 @ lv
                               (mkv 'long 'r0
-                                 (vfs lv + [['mov 'r1 'r0] [(uldop usz) 'r2 'r1 0] '(mov r0 r2)]
+                                 (vfs lv + ['(mov r1 r0)] + bfld g ty 'r2 'r1 0 ua + ['(mov r0 r2)]
                                   + (hi > 0 ? [['shl 'r0 hi]])
                                   + (lo > 0 ? [[(usg? uty ? 'shr 'sar) 'r0 lo]])
                                   + [['add 'r3 'r0 step] '(xor r3 r3 r0)]
                                   + (lo > 0 ? [['shl 'r3 lo] ['shr 'r3 lo]])
                                   + (bitoff > 0 ? [['shl 'r3 bitoff]])
-                                  + ['(xor r2 r2 r3) [(stop uty) 'r1 0 'r2]])))))
+                                  + ['(xor r2 r2 r3)] + bfst g ty 'r1 0 ua 'r2)))))
                     (d128? ty) (nolane g "++/-- is not carried on a wide value (use `x = x + 1`)")
                     (pair? g ty && ia32? g)             ; i386: the old pair out, the step added in memory
                      (matv g lv0 @ lv
@@ -3065,7 +3076,7 @@
                                  xmc1 (f0 @ 'x (xmmc + 1) xmmc)
                                  i1 (f1 @ 'g gpc1 xmc1)
                                  (kls >as (i + 1) (gpc + gpn) (xmmc + xmn) ovc
-                                      (. [['p2 f0 i0 f1 i1] (tor0 g a + (a8? g ? (ldw2 g aty) push2w))]
+                                      (. [['p2 f0 i0 f1 i1] (tor0 g a + (a8? g ? (ldw2 g (amark aty a)) push2w))]
                                             acc)))))
                        ; an i386 struct under -mregparm: its words in registers when that many are left (gcc
                        ; passes an aggregate as it does a long long), laid in a cell the pops read
@@ -3139,7 +3150,7 @@
                        (: one (stru? aty ? (aone g aty))
                           wd2 (wd || one = 'sse)
                           aval (? (t32? g && one = 'sse) (tor0 g a + pld 'r0 0)           ; the t32 8B blob rides the r0:r1 pair
-                                  one (tor0 g a + (salw? g aty ? (ldal 'r0 'r0 0 (tsz g aty) (tal g aty)) '((ld r0 r0 0))))
+                                  one (tor0 g a + (amark aty a @ ma (salw? g ma ? (ldal 'r0 'r0 0 (tsz g ma) (tal g ma)) '((ld r0 r0 0)))))
                                   wd (asflo g a + '((movqrx r0 f0)))
                                   (asintt g a aty))
                           ; a register arg rides a 16-byte cell (sp stays aligned while later args evaluate);
@@ -5051,11 +5062,18 @@
    (ldal d b o n a)                                 ; n bytes at b+o into d, zero-extended
     (foldl (acc \ [p k] \ acc + (p = 0 ? [[(uldop k) 'r2 b (o + p)]]
                                     [[(uldop k) 'r3 b (o + p)] ['shl 'r3 (8 * p)] '(or r2 r2 r3)]))
-           () (alchunks n a) + [['mov d 'r2]])
+           () (alchunks n a) + (d = 'r2 ? () [['mov d 'r2]]))
    (stal b o n a v)                                 ; the low n bytes of v to b+o; v stands
     (foldl (acc \ [p k] \ acc + (p = 0 ? [[(k @ 1 'st1 2 'st2 4 'st4 'st) b o v]]
                                     [['mov 'r3 v] ['shr 'r3 (8 * p)] [(k @ 1 'st1 2 'st2 4 'st4 'st) b (o + p) 'r3]]))
            () (alchunks n a))
+   ; a bitfield's unit, n bytes at b+o: one word as its type says, or by chunks when packed (its
+   ; own n bytes, every one exact) or misaligned (a, the alignment its face carries)
+   (bfpk? bt) (two? (drop 4 bt))
+   (bfld g bt d b o a) (? (bfpk? bt || a) (ldal d b o (tsz g bt) (a ? a 8)) [[(uldop (tsz g bt)) d b o]])
+   (bfst g bt b o a v) (? (bfpk? bt || a) (stal b o (tsz g bt) (a ? a 8) v) [[(stop <>bt) b o v]])
+   (bfwide? g bt) (bfpk? bt && wsize g < tsz g bt)   ; a packed unit past the register
+   (bfnl g) (nolane g "a packed bit-field whose bytes outrun a register")
    ; a member's face, marked where its offset and its base's alignment cannot carry its width
    (sface g r fm v)
     (!(sal? g) ? v
@@ -6903,7 +6921,8 @@
     (cgexpr g env val () @ r
        (? (bad? r) 'bad
           (sal? g && (lowb off @ b (0 < b && b < tsz g ty)))   ; a packed member: by its chunks
-           (? (pair? g ty || d128? ty) (uanl g)
+           (? (pair? g ty || d128? ty && !(w128? g)) (uanl g)
+              (d128? ty) (as128 g r + stal 'r4 off 8 (lowb off) 'r0 + stal 'r4 (off + 8) 8 (lowb (off + 8)) 'r2)
               (flo? ty) (ntmp g 'double @ tm (asflo g r + fstf g ty 'r4 tm 'f0 + [[(uldop (tsz g ty)) 'r0 'r4 tm]]
                                                 + stal 'r4 off (tsz g ty) (lowb off) 'r0))
               (asintt g r ty + cvt ty 'r0 + stal 'r4 off (tsz g ty) (lowb off) 'r0))
@@ -6948,16 +6967,17 @@
    (cgbffill g env off bt val)
     (cgexpr g env val () @ r
        (bad? r ? 'bad
-          (: uty <>bt bitoff <>>bt usz (tsz g uty)
+          (: uty <>bt bitoff <>>bt a (sal? g && lowb off < tsz g bt ? (lowb off) ())
              mask ((1 << <>>>bt) - 1) cmask (0 - (mask << bitoff) - 1)
+             (? (bfwide? g bt) (bfnl g)
              (asintt g r uty
               + (uty @ 'bool (cvt uty 'r0) ())   ; normalize before the mask
-              + [[(uldop usz) 'r2 'r4 off]
-                  ['li 'r3 mask] '(and r0 r0 r3)
+              + bfld g bt 'r2 'r4 off a
+              + [['li 'r3 mask] '(and r0 r0 r3)
                   ['li 'r3 cmask] '(and r2 r2 r3)
                   '(mov r3 r0)]
               + (bitoff > 0 ? [['shl 'r3 bitoff]])
-              + ['(or r2 r2 r3) [(stop uty) 'r4 off 'r2]]))))
+              + ['(or r2 r2 r3)] + bfst g bt 'r4 off a 'r2)))))
    ; a complex width flip, src in r0, dest in r1: componentwise convert
    (cxcopy g sty)
     (cxb sty = 'float ?
@@ -7233,8 +7253,9 @@
        lo ((v9 % m + m) % m)                      ; the low `width` bits, a negative wrapped in
        bits (lo * pw2 <>>bt)
        ; a merged row keeps the wider unit, or a bool/char neighbour truncates the write
-       (go l) (? !(two? l) [[uoff <>bt bits]]
-                 (<<l = uoff) (: u9 (tsz g <><l < tsz g <>bt ? <>bt <><l)
+       ut (bfpk? bt ? bt <>bt)                    ; the type whose size is the unit
+       (go l) (? !(two? l) [[uoff ut bits]]
+                 (<<l = uoff) (: u9 (tsz g <><l < tsz g ut ? ut <><l)
                                  ([uoff u9 (<>><l + bits)] . >l))
                  (<l . go >l))
        (go rows))
@@ -8225,20 +8246,21 @@
                         + bcopy g 0 (tsz g rt) () + epj)
                       (t32nolane? g rt) 'bad
                       (sse2? g rt)                                       ; a two-double struct returns as the xmm pair
-                       (tor0 g r + fldf 'double (xmmreg 0) 'r0 0 +
-                        (fldf 'double (xmmreg 1) 'r0 8 + epj))
+                       (tor0 g r + (amark rt r @ ma (salw? g ma ?
+                                      (: a (tal g ma) (ldal 'r1 'r0 8 8 a + [['movqxr (xmmreg 1) 'r1]] + ldal 'r0 'r0 0 8 a + [['movqxr (xmmreg 0) 'r0]]))
+                                      (fldf 'double (xmmreg 0) 'r0 0 + fldf 'double (xmmreg 1) 'r0 8))) + epj)
                       (ipair? g rt)                                      ; a two-int struct returns as rax:rdx (a64 x0:x1)
-                       (tor0 g r + (salw? g rt ? (ldal (ip2 g) 'r0 8 (tsz g rt - 8) (tal g rt) + ldal 'r0 'r0 0 8 (tal g rt))
-                                      [['ld (ip2 g) 'r0 8] '(ld r0 r0 0)]) + epj)
+                       (tor0 g r + (amark rt r @ ma (salw? g ma ? (ldal (ip2 g) 'r0 8 (tsz g ma - 8) (tal g ma) + ldal 'r0 'r0 0 8 (tal g ma))
+                                      [['ld (ip2 g) 'r0 8] '(ld r0 r0 0)])) + epj)
                       (aone g rt = 'sse)                             ; a small SSE aggregate: its eightbyte in xmm0
-                       (tor0 g r + (salw? g rt ? (ldal 'r0 'r0 0 (tsz g rt) (tal g rt) + [['movqxr (xmmreg 0) 'r0]])
-                                      (fldf 'double (xmmreg 0) 'r0 0)) + epj)
+                       (tor0 g r + (amark rt r @ ma (salw? g ma ? (ldal 'r0 'r0 0 (tsz g ma) (tal g ma) + [['movqxr (xmmreg 0) 'r0]])
+                                      (fldf 'double (xmmreg 0) 'r0 0))) + epj)
                       (aone g rt = 'int)                             ; a small int aggregate (a union rides here): rax
-                       (tor0 g r + (salw? g rt ? (ldal 'r0 'r0 0 (tsz g rt) (tal g rt)) '((ld r0 r0 0))) + epj)
+                       (tor0 g r + (amark rt r @ ma (salw? g ma ? (ldal 'r0 'r0 0 (tsz g ma) (tal g ma)) '((ld r0 r0 0)))) + epj)
                       (amem? g rt || refm? g rt)                         ; a memory return: fill the caller's temp through
                        (tor0 g r                                         ; the saved hidden pointer, and answer it in rax
                         + [['ld 'r1 'r4 (peep g 'sret 0)]]
-                        + (sal? g ? (bcopya 0 (tsz g rt) (tal g rt)) (bcopy g 0 (tsz g rt) ())) + '((mov r0 r1)) + epj)
+                        + (sal? g ? (bcopya 0 (tsz g rt) (tal g (amark rt r))) (bcopy g 0 (tsz g rt) ())) + '((mov r0 r1)) + epj)
                       (stru? rt || stru? (vty r))                        ; a mixed 16-byte pair, and every composite class
                        (nolane g ("no lane for returning this " + show (tsz g (stru? rt ? rt (vty r)))
                                   + "-byte struct by value" + ontgt g))

@@ -814,10 +814,18 @@
                     usz (tsz ps ty) ubits (usz * 8) a (talign ps ty)
                     _ (0 < cap && cap < a && pin ps 'packbf 1)    ; gcc lets these straddle units; refused
                     _ (w > ubits && pin ps 'widebf 1)             ; wider than its type: C's constraint
-                    nmx (mx < a ? a mx)
+                    nmx (pk || a <= mx ? mx a)                    ; packed: the unit asks no alignment
+                    ; packed, the bits run on from the cursor and the field's unit is the n bytes
+                    ; they touch, its fifth element
+                    pn (((& bit 7) + w + 7) >> 3)
+                    _ (pk && pn > 8 && pin ps 'pkwidebf 1)
                     (? (w = 0) (go >l (aup bit ubits) nmx acc)        ; `:0` -- align the cursor to the unit, no field
+                       (uni && pk) (: fld (name ? [name 0 ['bitfield ty 0 w ((w + 7) >> 3)]])
+                                      (go >l (bit < w ? w bit) nmx (name ? (fld . acc) acc)))
                        uni (: fld (name ? [name 0 ['bitfield ty 0 w]])
                               (go >l (bit < ubits ? ubits bit) nmx (name ? (fld . acc) acc)))
+                       pk (: fld (name ? [name (bit >> 3) ['bitfield ty (& bit 7) w pn]])
+                             (go >l (bit + w) nmx (name ? (fld . acc) acc)))
                        (: bit2 ((& bit (ubits - 1)) + w > ubits ? (aup bit ubits) bit)   ; bump to avoid straddling the unit
                           uoff (& (bit2 >> 3) (0 - usz))              ; the declared-type-aligned word holding these bits
                           bitoff (bit2 - uoff * 8)
@@ -914,6 +922,7 @@
                              tu (uni && attrany? <>mr "transparent_union" "__transparent_union__")
                              (? (peep ps 'packbf ()) (pin ps 'packbf (), clblame "a bit-field under #pragma pack is not carried out")
                                 (peep ps 'widebf ()) (pin ps 'widebf (), clblame "the width of a bit-field exceeds its type")
+                                (peep ps 'pkwidebf ()) (pin ps 'pkwidebf (), clblame "a packed bit-field spanning more than 8 bytes is not carried out")
                                 (peep ps 'incmem ()) (ps 'incmem @ n (pin ps 'incmem (), clblame ("field '" + n + "' has incomplete type")))
                                 (tu && !(tuok? ps lay)) (clblame "a transparent union wants members of one word-sized scalar type")
                              (pin (ps 'stag) tag2 lay,
