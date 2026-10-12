@@ -2315,6 +2315,16 @@
       (elem '(sub r10 r6 r0) vS)                 ; r0 is sub's second source
       (vO = '((label fn) (add r0 r6 r0) (ret))))) ; ..but add lays d = b as d += a
 
+; --- ..and on a64, whose alu is three-address: sub's dest takes its second source too
+(: v0 (name "%v0") v2 (name "%v2")
+   (gW9 _) {'tgt 'a64 'pool0 '(r6 r5 r9 r10 r7 r8 r11 r13 r14) 'sigs {}
+            'vrn 3 'vrt {v0 'r9 v2 'r10}}
+   wC (vrfix (gW9 ()) [['label 'fn] ['and v0 'r6 7] ['mov 'r0 v0] ['ret]])
+   wS (vrfix (gW9 ()) [['label 'fn] ['sub v2 'r6 'r0] ['mov 'r0 v2] ['ret]])
+   (test
+      (wC = '((label fn) (and r0 r6 7) (ret)))
+      (wS = '((label fn) (sub r0 r6 r0) (ret)))))
+
 ; --- the allocator owns locals (moon-ssa rung 4): locals homes are placed by
 ; interval -- lpick's raw-touch rank stands (short call-free ranges promote in
 ; repack anyway) -- and two names whose alive spans are disjoint share one seat.

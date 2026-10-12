@@ -387,7 +387,7 @@
    ; the callee-saved pools residency may borrow: saved by the prologue (g 'cssv), reloaded on every
    ; exit, a target joining once cskeep verifies its prologue. no r4 in any arm pool (a4ize renames
    ; a base-slot r4 to fp) and no r7 in v6m's (fp there); riscv leads with s1 (r15), the rvc window's one cs seat
-   (cspool g) (? (abl? g 'cs) ()
+   (cspool g) (? (abl? g 'cs || g 'twice) ()
                  (a64? g) '(r19 r20 r21 r22 r23 r24 r25 r26 r27 r28)
                  ; wasm's r16..r18 are riscv's gp tp and flag scratch: plain locals there
                  (wasm? g) '(r15 r13 r14 r19 r20 r21 r22 r23 r24 r25 r26 r16 r17 r18)
@@ -5324,7 +5324,7 @@
           (? (elem op lvquiet) [() ()]
              (elem op '(call callr callm sys))
               (filter (r9 \ !(elem r9 (csregs g) || vmint? g r9)) u @ c
-                 ; narrow (the allocator's): a call reads its argument file and al, a callr its target too
+                 ; narrow (the allocator's): a call reads its argument file and r0 (x64's al), a callr its target too
                  (peep g 'lvnarrow () && op != 'sys ?
                     [(filter (r9 \ elem r9 (argr g) || r9 = 'r0 || nelem r9 (lvgp g)) c +
                       (op = 'callr && nom? <>f ? [<>f])) c]
@@ -5386,15 +5386,18 @@
    ; the allocator core: a mint's register comes from interference, not the pool's order. its
    ; liveness watches only the mints and the file, one bit each, a call reading its argument file
    ; (lvnarrow). a def meets what lives past it (a mov not its source) and every operand but its
-   ; first source (either, for a commutative op). a mint meeting a name on its own register is an
+   ; first source (either, where vacomm allows). a mint meeting a name on its own register is an
    ; alias selection relied on, so it keeps that register. colours go in first-mention order -- a
    ; copy partner's first, then the binding, then the file; a mint left without one keeps the
    ; whole fn's binding
-   (vafile g) (lvun (g 'pool0) (rafile g))
-   vacomm '(add or and xor adds imul)                 ; holo lays d = b as d op= a
+   (vafile g) (lvun (lvun (g 'pool0) (rafile g)) '(r0))
+   ; the ops whose dest may share the second source: x64's holo lays d = b as d op= a when
+   ; the op commutes; a64's alu is three-address throughout
+   (vacomm g) (a64? g ? '(add sub and or xor adds subs imul) '(add or and xor adds imul))
    (valloc g fs)
     (: t (g 'vrt)
        file (vafile g)
+       cm9 (vacomm g)
        ix {}                                         ; name -> its bit
        nx {}                                         ; bit -> name
        (bit x) (: b (peep ix x 0)
@@ -5422,7 +5425,7 @@
        (pos f y) (: (go l k) (? !(two? l) -1 (<l == y) k (go >l (k + 1))) (go >f 1))
        rr {} dd {} bd {} sr {} sc {}
        pt {}                                         ; mint -> copy partners, latest first
-       s0 {}                                         ; mint -> its r0 copy is stored straight off
+       s0 {}                                         ; mint -> its r0 copy is stored (or parked) straight off
        (w1 l i)
         (? !(two? l) 1
            (: f <l
@@ -5431,12 +5434,14 @@
                  (: mv (<f = 'mov)
                   (pin rr i (bits <d),
                    pin dd i (bits <>d),
-                   pin bd i (mv ? 0 (bits (filter (y \ pos f y != 2 && !(pos f y = 3 && elem <f vacomm)) <d))),
+                   pin bd i (mv ? 0 (bits (filter (y \ pos f y != 2 && !(pos f y = 3 && elem <f cm9)) <d))),
                    pin sr i (mv ? (bit <>>f) 0),
                    pin sc i (succ f i),
                    (mv && vmint? g <>f ? (pin pt <>f (<>>f . peep pt <>f ()))),
                    (mv && vmint? g <>>f ? (pin pt <>>f (<>f . peep pt <>>f ()))),
-                   (mv && vmint? g <>>f && <>f = 'r0 && two? >l && two? <>l && <<>l = 'st && (<>l 3) == 'r0 ?
+                   (mv && vmint? g <>>f && <>f = 'r0 &&
+                    (: nx9 (two? >l && <>l = '(sub sp sp 16) ? >>l >l)   ; a park's store sits past its sp step
+                     (two? nx9 && two? <nx9 && <<nx9 = 'st && (<nx9 3) == 'r0)) ?
                       (pin s0 <>>f 1)),
                    w1 >l (i + 1))))))
        _ (pin g 'lvnarrow 1)
@@ -5464,7 +5469,7 @@
        (pick m)
         (: forb (map cof (lows (peep nb m 0)))
            cs (filter (r \ nelem r forb) file)
-           ; r0 dies fast: a stored value born there leaves stld nothing to forward from
+           ; r0 dies fast: a stored value born there leaves stld and the park fold nothing to forward from
            pp (filter (r \ elem r cs && !(r = 'r0 && s0 m)) (map cof (peep pt m ())))
            (? (two? pp) <pp (elem (t m) cs) (t m) (two? cs) <cs))
        (go l) (? !(two? l) 1
@@ -5479,7 +5484,7 @@
    ; link: sibcall and soften read registers, so neither may meet a vreg. the assignment runs first
    (vrfix g fs)
     (!(peep g 'vrn 0) ? fs
-       (: _ (x64? g && !(abl? g 'valloc) ? (valloc g fs) (rasg g fs))
+       (: _ ((x64? g || a64? g) && !(abl? g 'valloc) ? (valloc g fs) (rasg g fs))
           t (g 'vrt)
           (fix1 x) (two? x ? (map fix1 x) (t x @ p9 (p9 ? p9 x)))
           (sweep (f . u)) (f @ ('mov x x) (sweep u) (f . sweep u))
@@ -8161,6 +8166,7 @@
      'fesc ()                  ; escape flag (the sibcall gate reads it)
      'inlining ()              ; statement-expression depth (stq's conservative wrapset)
      'hasasm ()                ; an asm statement pins it (homing off)
+     'twice ()                 ; a call returning twice pins it (no callee-saved pool)
      'ebx ()                   ; i386: ebx joins the seats (cgfn's second build)
      'ltaken ()                ; the labels a &&L names (a computed goto's targets)
      'fpin ()                  ; the frame link is asked for by name (unframe stands off)
@@ -9330,11 +9336,15 @@
        ; spill (the decl lane reads 0 = never allocated) --
        _ (pins g 'fn <>f 'vslots {})
        ; the labels whose address the body takes; a computed goto may land on any of them, so
-       ; homing stands off as for an asm (every name is live at the jump)
+       ; homing stands off as for an asm (every name is live at the jump). a call that returns
+       ; twice does the same: the second return restores callee-saved registers, not memory
        _ (: (lt x acc) (? !(two? x) acc
                           (<x == 'laddr) (elem <>x acc ? acc (<>x . acc))
                           (<x == 'igoto) (pin g 'hasasm 1, lt <>x acc)
+                          ((<x == 'call) && (<>x @ ('var n) (elem n twice) ()))
+                           (pins g 'hasasm 1 'twice 1, lt >x (lt <x acc))
                           (lt >x (lt <x acc)))
+            twice '("setjmp" "_setjmp" "__setjmp" "sigsetjmp" "__sigsetjmp" "savectx" "vfork" "getcontext" "__builtin_setjmp")
             (pin g 'ltaken (rev (lt (f 3) ()))))
        vzf (: (dscan prs a2)
                (atom? prs ? a2
@@ -9996,18 +10006,19 @@
                                    (elem A '(r0 r1 r2 r3) ? (A . go >l) (go >l))))
                       (go rides))
                (? (qk && two? qrr && qclob? irU qrr)
-                  (pins (fnreset g) 'n n0 'strs strs0 'statics sts0 'fasecs fas0 'pool0 tpool 'pool tpool,
+                  (pins (fnreset g) 'n n0 'strs strs0 'statics sts0 'fasecs fas0 'pool0 tpool 'pool tpool 'hasasm (pre0 1) 'twice (pre0 3) 'ltaken (pre0 5),
                    attempt ())
                   (bad? irU ||
                    two? av9 && peep g 'lsq 0 != av9 3 ||
                    !(peep g 'dseq 0 = (two? av9 ? (av9 13) (peep g 'dseq 0))))
-                  (: _ (pins (fnreset g) 'n n0 'strs strs0 'statics sts0 'fasecs fas0 'pool0 tpool 'pool tpool)
+                  (: _ (pins (fnreset g) 'n n0 'strs strs0 'statics sts0 'fasecs fas0 'pool0 tpool 'pool tpool 'hasasm (pre0 1) 'twice (pre0 3) 'ltaken (pre0 5))
                      sb (spillp () params 0 ())
                      sb (two? vzf ? [(<sb + vzf) <>sb] sb)
                      (build sb))
                   irU))
            (attempt 1))
        n0 (peep g 'n 0) strs0 (g 'strs) sts0 (g 'statics) fas0 (g 'fasecs)   ; snapshot the accumulators for ubuild's retry
+       pre0 ['hasasm (g 'hasasm) 'twice (g 'twice) 'ltaken (g 'ltaken)]       ; ..and the prescan's pins, which fnreset clears
        ; no pool on t32 (r4-r11 callee-saved, r0-r3/r12 scratch); riscv pools t0..t3 then a5..a7, as
        ; a64 pools x5..x7 -- an arg register is dead once spilled or homed. a64 adds x11, x13, x14,
        ; caller-saved and never an argument (x12 stays the pair and float-word scratch)
@@ -10038,9 +10049,8 @@
                     (any r3in? x))
        (rhas? r x) (? (atom? x) (x = r) (any (rhas? r) x))
        irf (? (ia32? g && uni9 && !(bad? irf0) && !(abl? g 'ebx) && rhas? 'r5 irf0 && rhas? 'r6 irf0 && !(r3in? irf0))
-              (: hs (g 'hasasm) lt (g 'ltaken)
-                 _ (pins (fnreset g) 'n n0 'strs strs0 'statics sts0 'fasecs fas0 'pool0 tpool 'pool tpool
-                         'hasasm hs 'ltaken lt 'ebx 1)
+              (: _ (pins (fnreset g) 'n n0 'strs strs0 'statics sts0 'fasecs fas0 'pool0 tpool 'pool tpool
+                         'hasasm (pre0 1) 'twice (pre0 3) 'ltaken (pre0 5) 'ebx 1)
                  (ubuild (alive g f)))
               irf0)
        ; the post-choice chain, typed by stage.l (each pass advances a stage die, so only this order checks):

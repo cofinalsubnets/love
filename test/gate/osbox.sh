@@ -285,6 +285,9 @@ int main(void) {
   ok(uc >= 0 && connect(uc, (struct sockaddr*) &ua, sizeof ua) == 0);
   int ua2 = accept(us, 0, 0);
   ok(ua2 >= 0 && write(uc, "x", 1) == 1 && read(ua2, m, 1) == 1 && m[0] == 'x');
+  int sp[2];
+  ok(socketpair(AF_UNIX, SOCK_STREAM, 0, sp) == 0 && write(sp[0], "y", 1) == 1
+     && read(sp[1], m, 1) == 1 && m[0] == 'y');
 
   /* SCM_RIGHTS through the pair: a pipe's write end crosses the socket and
      still writes -- sendmsg/recvmsg's translated msghdr + cmsg heads */

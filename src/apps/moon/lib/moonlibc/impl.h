@@ -118,6 +118,7 @@ struct _IO_FILE {
 #define NR_fb_sendfile      393   /* another signature (rung 3) */
 #define NR_fb_pselect6      522   /* pselect; the 6th arg is a plain sigset* (rung 3) */
 #define NR_fb_socket         97
+#define NR_fb_socketpair    135
 #define NR_fb_connect        98
 #define NR_fb_accept         30
 #define NR_fb_sendto        133
@@ -259,6 +260,7 @@ struct _IO_FILE {
 #define NR_sendfile        71
 #define NR_pselect6        72
 #define NR_socket         198
+#define NR_socketpair     199
 #define NR_bind           200
 #define NR_getsockname    204
 #define NR_getpeername    205
@@ -327,6 +329,7 @@ struct _IO_FILE {
 #define NR_sendfile       239   /* sendfile64 */
 #define NR_pselect6       413   /* pselect6_time64 */
 #define NR_socket         359
+#define NR_socketpair     360
 #define NR_connect        362
 #define NR_accept         364   /* accept4 */
 #define NR_sendto         369
@@ -433,6 +436,7 @@ struct _IO_FILE {
 #define NR_sendfile        40
 #define NR_pselect6       270
 #define NR_socket          41
+#define NR_socketpair      53
 #define NR_connect         42
 #define NR_accept          43
 #define NR_sendto          44
