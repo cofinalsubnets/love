@@ -747,10 +747,10 @@ lvm(lvm_string) {
  // `string` answers a string: a string is the only identity, every other kind coerces
  // through hook 7. px reaches `string` on chains and noms only, so show cannot recur.
  if (x == ZeroPoint) { Sp[0] = word(EmptyString); love_musttail return Next(1); }   // the empty charlist
- if (strp(x) || !evenp(g->hot_show)) love_musttail return Next(1);   // ..or the boot window, where identity stands
+ if (strp(x) || !evenp(g->hook[hook_show])) love_musttail return Next(1);   // ..or the boot window, where identity stands
  Have(2);                                               // the drive grows Sp by two
  { word *dst = Sp - 2;                                  // [x show ret] -- callout_drive's 1-arg shape
-   dst[0] = Sp[0], dst[1] = g->hot_show, dst[2] = word(Ip + 1);
+   dst[0] = Sp[0], dst[1] = g->hook[hook_show], dst[2] = word(Ip + 1);
    Sp = dst; Ip = (union u*) callout_drive; }
  love_musttail return Continue(); }
 
@@ -923,7 +923,7 @@ static struct g *rd_start(struct g *g) {
   return g->sp[RdSrc] = x, g->sp[RdCur] = putcharm(0), RdGo(RsRead); }
  if (!iop(x) && !rd_lit(x)) return RdGo(RsRead);
  if (!iop(x)) return rd_call(g, x, ZeroPoint, x);
- return rd_call(g, hot_hook(g->hot_flow), x, x); }
+ return rd_call(g, hot_hook(g->hook[hook_flow]), x, x); }
 
 // a text's escapes: n t r e 0, \xhh as two chars hex or not, \u{h..} one to six hex
 // digits naming a code point outside the surrogates (else a plain u), any other char

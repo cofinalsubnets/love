@@ -392,9 +392,10 @@
      [".bss"    8 3 (o-dalign 8 bssforms) bssforms]
      ["love_nifs" 1 3 8 nifforms]
      [".love.image"  1 3 16 imgforms]]
-   ; a named section a compiler emits: progbits on the widest grain its globals ask for,
+   ; a named section a compiler emits: progbits on the widest grain its globals ask for and no
+   ; wider -- objects' pieces tile one array (the kernel's .videocards), so a pad between is a hole --
    ; allocated, writable unless ro says every global in it is const and reloc-free.
-   (objsec-named nm forms ro) [nm 1 (ro ? 2 3) (o-dalign 8 forms) forms]
+   (objsec-named nm forms ro) [nm 1 (ro ? 2 3) (o-dalign 1 forms) forms]
    ; ..and the code twin, for a function that named its own section (love.c's data
    ; sentinels). flags 6 = alloc|execinstr, which also picks objsecs' internal-resolve lane.
    ; the grain is the caller's: a run of one-fn sections at grain N tiles at N, which is how
