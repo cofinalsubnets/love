@@ -281,7 +281,22 @@
       ("cvtss2sd"    "f30f5ac1"               ((cvtss2sd f0 f1)))       ; cvtss2sd xmm0,xmm1 (single->double)
       ("cvtsd2ss"    "f20f5ac8"               ((cvtsd2ss f1 f0)))       ; cvtsd2ss xmm1,xmm0 (double->single)
       ("stss"        "f30f114208"             ((stss r2 8 f0)))         ; movss [rdx+8],xmm0
-      ("ldss"        "f30f100b"               ((ldss f1 r3 0))))        ; movss xmm1,[rbx]
+      ("ldss"        "f30f100b"               ((ldss f1 r3 0)))         ; movss xmm1,[rbx]
+      ;; the single lane's arithmetic (native float): F3 for F2, ucomiss without the 66. gas-verified
+      ("addss"       "f30f58c1"               ((addss f0 f1)))          ; addss xmm0,xmm1
+      ("mulss"       "f30f59c1"               ((mulss f0 f1)))
+      ("subss"       "f30f5cc8"               ((subss f1 f0)))
+      ("divss"       "f30f5ec8"               ((divss f1 f0)))
+      ("minss"       "f30f5dc1"               ((minss f0 f1)))
+      ("maxss"       "f30f5fc1"               ((maxss f0 f1)))
+      ("addss.rex"   "f3440f58c1"             ((addss f8 f1)))          ; addss xmm8,xmm1
+      ("ucomiss"     "0f2ec8"                 ((ucomiss f1 f0)))
+      ("cvtsi2ss"    "f3480f2ac0"             ((cvtsi2ss f0 r0)))       ; cvtsi2ss xmm0,rax
+      ("cvttss2si"   "f3480f2cc0"             ((cvttss2si r0 f0)))      ; cvttss2si rax,xmm0
+      ("movdxr"      "660f6ec0"               ((movdxr f0 r0)))         ; movd xmm0,eax
+      ("movdrx"      "660f7ec0"               ((movdrx r0 f0)))         ; movd eax,xmm0
+      ("movdxr.rex"  "66450f6eca"             ((movdxr f9 r9)))         ; movd xmm9,r10d
+      ("movdrx.rex"  "66450f7eca"             ((movdrx r9 f9))))        ; movd r10d,xmm9
    _ (foldl (_ \ t \ chk (t 0) (t 1) (t 2)) 0 tests)
 
    ;; -- label addresses are exposed on the assemble result, for a loader/linker to read. --
@@ -1558,6 +1573,16 @@
       ("i3.br" "0f840000000090" ((br eq L) (label L) (nop)))   ; {disp32} je L
       ("i3.mulo" "0fafc10f800000000090" ((mulo r0 r0 r1 r2 L) (label L) (nop))) ; imul %ecx,%eax ; {disp32} jo L
       ("i3.lar" "e8000000005b81c30700000090" ((lar r3 L) (label L) (nop))) ; call 1f ; 1: pop %ebx ; add $(L-1b),%ebx
+      ("i3.addss" "f30f58c1" ((addss f0 f1)))                 ; addss %xmm1,%xmm0
+      ("i3.ucomiss" "0f2ec8" ((ucomiss f1 f0)))                ; ucomiss %xmm0,%xmm1
+      ("i3.cvtsi2ss" "f30f2ac0" ((cvtsi2ss f0 r0)))            ; cvtsi2ss %eax,%xmm0
+      ("i3.cvttss2si" "f30f2cc0" ((cvttss2si r0 f0)))          ; cvttss2si %xmm0,%eax
+      ("i3.movdxr" "660f6ec0" ((movdxr f0 r0)))                ; movd %eax,%xmm0
+      ("i3.movdrx" "660f7ec0" ((movdrx r0 f0)))                ; movd %xmm0,%eax
+      ("i3.cvtui2ss" "8d6424f8890424c744240400000000df2c24d91c24f30f1004248d642408"
+        ((cvtui2ss f0 r0)))                                     ; fild qword, fstp dword, movss: one rounding
+      ("i3.cvttss2ui" "8d6424f8f30f110424d90424dd0c248b04248d642408"
+        ((cvttss2ui r0 f0)))                                    ; movss out, fld dword, fisttp qword
       )
    _ (foldl (_ \ t \ chk2 (t 0) (t 1) 'i386 (t 2)) 0 i3tests)
    i3m16tests '(

@@ -56,8 +56,10 @@
             'mulsd '(242 89) 'addsd '(242 88) 'subsd '(242 92) 'divsd '(242 94)
             'minsd '(242 93) 'maxsd '(242 95)                                              ; d <- d < s ? d : s (a NaN takes s)
             'xorpd '(102 87) 'pcmpeqd '(102 118) 'andpd '(102 84) 'psubq '(102 251)
+            'mulss '(243 89) 'addss '(243 88) 'subss '(243 92) 'divss '(243 94)            ; the single lane: F3 for F2
+            'minss '(243 93) 'maxss '(243 95)
             'cvtss2sd '(243 90) 'cvtsd2ss '(242 90)                                    ; f3/F2 0F 5A /r  widen/narrow single<->double (the `float` lane)
-            'ucomisd '(102 46)}                                                        ; 66 0F 2E /r  ucomisd xmm,xmm (sets flags)
+            'ucomisd '(102 46) 'ucomiss '(0 46)}                                                        ; 66 0F 2E /r  ucomisd xmm,xmm (sets flags)
    (x86-seg s) (s @ 'fs [100] 'gs [101] 'es [38] 'cs [46] 'ss [54] 'ds [62] (scare 'x86-seg s))      ; the override prefix; the next form is its instruction
    ;; the relocation kinds: rel32 a 32-bit pc-relative field measured from the end of the field
    ;; (branches, la; aux a byte addend, gas's `.long sym - .` riding 4); rel16 its twin in a
@@ -606,6 +608,14 @@
       (catall ['(242) [(rex 1 (hi xn) 0 (hi gn))] [15 42 (modrm 3 xn gn)]]))
    (emit-cvttsd2si g x) (: gn (rn g) xn (xrn x)                                          ; F2 REX.W 0F 2C /r  gp(reg) <- xmm(rm) (truncate toward zero)
       (catall ['(242) [(rex 1 (hi gn) 0 (hi xn))] [15 44 (modrm 3 gn xn)]]))
+   (emit-cvtsi2ss x g) (: xn (xrn x) gn (rn g)                                           ; F3 REX.W 0F 2A /r  xmm(reg) <- gp(rm), single
+      (catall ['(243) [(rex 1 (hi xn) 0 (hi gn))] [15 42 (modrm 3 xn gn)]]))
+   (emit-cvttss2si g x) (: gn (rn g) xn (xrn x)                                          ; F3 REX.W 0F 2C /r  gp(reg) <- xmm(rm), single
+      (catall ['(243) [(rex 1 (hi gn) 0 (hi xn))] [15 44 (modrm 3 gn xn)]]))
+   (emit-movdxr x g) (: xn (xrn x) gn (rn g)                                             ; 66 0F 6E /r  xmm(reg) <- gp32(rm)
+      (catall ['(102) (xrex 0 xn gn) [15 110 (modrm 3 xn gn)]]))
+   (emit-movdrx g x) (: xn (xrn x) gn (rn g)                                             ; 66 0F 7E /r  gp32(rm) <- xmm(reg)
+      (catall ['(102) (xrex 0 xn gn) [15 126 (modrm 3 xn gn)]]))
    (emit-movqxr x g) (: xn (xrn x) gn (rn g)                                             ; 66 REX.W 0F 6E /r  xmm(reg) <- gp(rm)
       (catall ['(102) [(rex 1 (hi xn) 0 (hi gn))] [15 110 (modrm 3 xn gn)]]))
    (emit-movqrx g x) (: xn (xrn x) gn (rn g)                                             ; 66 REX.W 0F 7E /r  gp(rm) <- xmm(reg)
@@ -743,6 +753,7 @@
          ('lia . emit-lia) ('ldseg . emit-ldseg) ('stseg . emit-stseg) ('pushl . emit-pushl) ('segst . emit-segst) ('segld . emit-segld)
          ('cmppd . emit-cmppd) ('movmskpd . emit-movmskpd)
          ('cvtsi2sd . emit-cvtsi2sd) ('cvttsd2si . emit-cvttsd2si)
+         ('cvtsi2ss . emit-cvtsi2ss) ('cvttss2si . emit-cvttss2si) ('movdxr . emit-movdxr) ('movdrx . emit-movdrx)
          ('movqxr . emit-movqxr) ('movqrx . emit-movqrx)
          ('stsd . emit-stsd) ('ldsd . emit-ldsd) ('stss . emit-stss) ('ldss . emit-ldss)
          ('raw . 1)
@@ -801,7 +812,7 @@
         ;; 0, so neither writes for this purpose, and imul/idiv leave some undefined.
         'zeroxor 1
         'flagr '(br set cmov adc sbb)
-        'flagw '(cmp cmpm cmprm test add sub and or xor andx4 orx4 xorx4 andm4 orm4 xorm4 adds subs neg mulo ucomisd)
+        'flagw '(cmp cmpm cmprm test add sub and or xor andx4 orx4 xorx4 andm4 orm4 xorm4 adds subs neg mulo ucomisd ucomiss)
         ;; branch relaxation: rel8 measures from the end of the 2-byte short form, so the distance
         ;; from the instruction itself is two more than the field carries. this RE-LOWERS rather than
         ;; rewriting its chunk -- an x86 short jump shares no bytes with its long twin.
