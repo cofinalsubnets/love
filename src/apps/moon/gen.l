@@ -147,11 +147,14 @@
    (ralloc g) (!(abl? g 'ralloc) ?
                (g 'pool @ (r9 . u)
                 (pin g 'pool u,
-                 (: k9 (peep g 'vrn 0)
-                    v9 (name ("%v" + show k9))
-                  (pin g 'vrn (k9 + 1),
-                   pin (g 'vrt) v9 r9,
-                   v9)))))
+                 vmint g r9)))
+   (vmint g r9) (: k9 (peep g 'vrn 0)
+                   v9 (name ("%v" + show k9))
+                 (pin g 'vrn (k9 + 1),
+                  pin (g 'vrt) v9 r9,
+                  v9))
+   ; a spare pool register a shuttle borrows for one span, minted so the allocator may move it
+   (vspare g r9) (r9 && x64? g && !(abl? g 'ralloc) && !(abl? g 'vspare) ? (vmint g r9) r9)
    (rfree g rz) (rp g rz @ r
                   (elem r (g 'pool0) &&
                  nelem r (g 'pool) ?
@@ -1419,7 +1422,7 @@
     (vreg av @ rA
        (? (!(two? (vfs av)) && rA != 'r0 && psafe? g bf rA) (bf + [['mov 'r1 rA]])
           (r1safe? g bf) (af + '((mov r1 r0)) + bf)
-          (spare g bf @ s
+          (vspare g (spare g bf) @ s
              (s ? (af + [['mov s 'r0]] + bf + [['mov 'r1 s]])
                 (af + spush 'r0 + bf + spop 'r1)))))
    ; the double twin: left in f1, right in f0. x64 parks the left in an xmm the right never
@@ -1460,13 +1463,13 @@
        (fsel? g && !(fclob? bf 'f1)) (af + '((movapd f1 f0)) + bf)
        (: p (fsel? g ? (fpick bf (fparks g)) ())
           (nom? p ? (af + [['movapd p 'f0]] + bf + [['movapd 'f1 p]])
-             (: s (r1safe? g bf ? 'r1 (spare g bf))
+             (: s (r1safe? g bf ? 'r1 (vspare g (spare g bf)))
                 (s ? (af + [['movqrx s 'f0]] + bf + [['movqxr 'f1 s]])
                    (af + '((movqrx r0 f0)) + spush 'r0 + bf + spop 'r1 + '((movqxr f1 r1))))))))
    ; the count park: the value already in r0 holds in a pool register past the count's
    ; forms bf, then value r0 / count r1 (the variable shifts' and rotates' contract)
    (cshut g bf)
-    (spare g bf @ s
+    (vspare g (spare g bf) @ s
        (s ? ([['mov s 'r0]] + bf + ['(mov r1 r0) ['mov 'r0 s]])
           (spush 'r0 + bf + '((mov r1 r0)) + spop 'r0)))
 
@@ -5476,7 +5479,8 @@
    ; alias selection relied on, so it keeps that register. colours go in first-mention order -- a
    ; copy partner's first, then the binding, then the file. answers 1, or () when a mint is left
    ; without one (vrfix's rasg then keeps the whole fn's binding)
-   (vafile g) (lvun (lvun (g 'pool0) (rafile g)) '(r0))
+   ; x64's rcx and rdx join: liveness already sees an arrival riding them and every op that names them
+   (vafile g) (lvun (lvun (g 'pool0) (rafile g)) (x64? g && !(abl? g 'vrcx) ? '(r0 r1 r2) '(r0)))
    ; the ops whose dest may share the second source: x64's holo lays d = b as d op= a when
    ; the op commutes; a64's alu is three-address throughout
    (vacomm g) (a64? g ? '(add sub and or xor adds subs imul) '(add or and xor adds imul))
@@ -5558,7 +5562,12 @@
         (: forb (map cof (lows (peep nb m 0)))
            cs (filter (r \ nelem r forb) file)
            ; r0 dies fast: a stored value born there leaves stld and the park fold nothing to forward from
-           pp (filter (r \ elem r cs && !(r = 'r0 && s0 m)) (map cof (peep pt m ())))
+           ; the copy chain read through uncoloured mints, nearest first, a few hops deep
+           (reach l seen k)
+            (? (!(two? l) || k = 0) ()
+               (: nx (filter (x \ nelem x seen) (foldl (a \ y \ a + (vmint? g y && !(col y) ? (peep pt y ()) ())) () l))
+                  (map cof l + reach nx (seen + nx) (k - 1))))
+           pp (filter (r \ elem r cs && !(r = 'r0 && s0 m)) (reach (peep pt m ()) [m] (x64? g ? 4 1)))
            (? (two? pp) <pp (elem (t m) cs) (t m) (two? cs) <cs))
        (go l) (? !(two? l) 1
                  (col <l) (go >l)
@@ -5572,7 +5581,7 @@
    (vpre g hd body tl)
     (? (!(x64? g || a64? g) || abl? g 'valloc) body
        (: b2 (x64? g && !(abl? g 'vweb) ? (vweb g hd body tl) body)
-        ((peep g 'vrn 0 && valloc g (hd + b2 + tl) ? (pin g 'vdone 1)),
+        ((peep g 'vrn 0 && valloc g (dp 'vweb (hd + b2 + tl)) ? (pin g 'vdone 1)),
          b2)))
    ; substitute every mint over the assembled prologue+body+epilogue, the innermost build-tail
    ; link: sibcall and soften read registers, so neither may meet a vreg. the assignment runs first
@@ -5719,7 +5728,7 @@
                 ; the def names S alone, and reads it only where its dest is a pure write
                 ; (S dies at the mov, so (add r0 r0 8) (mov r9 r0) is (add r9 r0 8))
                 (two? dfs && !(two? >dfs) && <dfs = S && p 1 == S &&
-                 (nelem S <d || !(abl? g 'coalrd) &&
+                 (nelem S <d || x64? g && !(abl? g 'coalrd) &&
                   (elem <p aluops || elem <p xops || elem <p ldops9 || elem <p leaops || elem <p '(mov adds subs))) &&
                  ; D a stranger to the def's defs and reads (the emitter refuses an aliased dest),
                  ; except an alu's first source: (mov d a; op d b) lowers, so (add r7 r7 8) fuses
