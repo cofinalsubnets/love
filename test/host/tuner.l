@@ -1,5 +1,6 @@
 ; test/host/tuner.l -- the tuner (src/apps/tuner.l): the ear on known tones, the scale's
-; eighth tones and their octaves, the reading's smoothing and the room's floor, a frame
+; eighth tones and their octaves, a frame, the reading's smoothing, range and hold, and
+; the room's floor. the clock is the law's own, so the hold needs no waiting
 ;   cat test/00-init.l test/host/tuner.l | out/love
 (borrow 'tuner)
 (: (cents-off f g) (abs (1200.0 * log (f / g) / log 2.0))
@@ -16,11 +17,14 @@
            (6900.0 = tuner-cents 440.0 440.0) (abs (tuner-cents 442.0 440.0 - 6892.15) < 0.01))
    ; a frame at 445: thirty rows, the marker on the eighth over A4 and A4's semitone under it,
    ; the semitones four rows apart, A4 in octave 4's hue and C5 in 5's, the needle right of centre
-   t (tuner-new 440.0 "law")
+   clk {'now 0}
+   (fresh _) (pin (tuner-new 440.0 "law") 'clock (_ \ clk 'now))
+   t (fresh ())
    _ (tuner-hear t (tuner-sine 445.0))
    fr (tuner-frame t 80 30)
    rs (map tuner-plain fr)
    (has? s n) (0 <= fsub s n 0)
+   (line x i) (tuner-plain (tuner-frame x 80 30 i))     ; row i of x's frame, as the screen shows it
    _ (test (30 = #rs) (has? (rs 14) "◀━━ A4  +20¢  445.0 Hz") (has? (rs 15) "A4   ━━━━━━┫")
            (has? (rs 11) "A♯4") (has? (rs 7) "B4") (has? (rs 3) "C5") (has? (rs 13) "╺━━━┃ ¼")
            (has? (fr 15) "38;5;41") (has? (fr 3) "38;5;45")
@@ -31,13 +35,36 @@
    c1 (t 'c)
    _ (tuner-hear t (tuner-sine 660.0))
    _ (test (c0 < c1) (c1 < tuner-cents 440.0 447.0) (abs (t 'c - tuner-cents 440.0 660.0) < 1.0))
+   ; the range: 440 then 452, under a quarter tone apart, is one note whose raw cents span
+   ; +0..+47 off A4 -- in the marker, solid along the axis over its three eighths, and drawn
+   ; on the needle
+   g (fresh ())
+   _ (tuner-hear g (tuner-sine 440.0))
+   _ (tuner-hear g (tuner-sine 452.0))
+   gs (map tuner-plain (tuner-frame g 80 30))
+   _ (test (has? (gs 14) "+0…+47¢") (has? (gs 13) "█") (has? (gs 14) "█") (has? (gs 15) "█")
+           !(has? (gs 12) "█") !(has? (gs 16) "█") (has? (gs 27) "━"))
+   ; the hold: a silence keeps the reading, faint and held, for 2.5 s, then the scale listens;
+   ; a pitch after that is a new note, its range begun again
+   _ (pin clk 'now 1000)
+   _ (tuner-hear g (tuner-sine 440.0 * 0.0))
+   hs (map tuner-plain (tuner-frame g 80 30))
+   _ (test !(g 'c) (has? (hs 14) "held") (has? (hs 14) "+0…+47¢") !(has? (hs 27) "listening"))
+   _ (pin clk 'now 2400)
+   _ (test (has? (line g 14) "held"))
+   _ (pin clk 'now 2501)
+   _ (test (has? (line g 27) "(listening)")
+           !(has? (line g 14) "◀"))
+   _ (tuner-hear g (tuner-sine 445.0))
+   ns (line g 14)
+   _ (test (g 'lo = g 'hi) (has? ns "◀━━ A4  +20¢  445.0 Hz") !(has? ns "…") !(has? ns "held"))
    ; the room: a hush reads no pitch and sets the floor, a tone under three floors is the
    ; room too (the floor creeping up a percent), and one well over it is heard
-   q (tuner-new 440.0 "law")
+   q (fresh ())
    _ (tuner-hear q (tuner-sine 440.0 * 0.008))
    fl (q 'floor)
    _ (tuner-hear q (tuner-sine 220.0 * 0.015))
-   _ (test !(q 'hz) (0 < fl < 80.0) (fl < q 'floor < 1.02 * fl)
+   _ (test !(q 'c) (0 < fl < 80.0) (fl < q 'floor < 1.02 * fl)
            (has? (tuner-plain (tuner-frame q 60 12 @ r (r 9))) "(listening)"))
    _ (tuner-hear q (tuner-sine 220.0 * 0.5))
    (test (cents-off (q 'hz) 220.0 < 1.0)))

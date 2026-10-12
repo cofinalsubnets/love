@@ -18,6 +18,7 @@
    rate 48000
    win 2048                                         ; the window yin compares, frames
    lo 24 hi 1200                                    ; its lags: 2 kHz down to 40 Hz
+   linger 2500                                      ; ms a reading stands once the sound stops
    tuner-usage "usage: love tuner [-a HZ] [-d DEV] [--demo]
 listen and show the pitch on a scale of eighth tones, A4 at HZ (440); DEV is the capture
 device (HORN_IN's word otherwise), and --demo glides a sine instead. a/A move A4, q quits."
@@ -25,6 +26,7 @@ device (HORN_IN's word otherwise), and --demo glides a sine instead. a/A move A4
    (hue o) (hues (max 0 (min 8 o)))
    (ink o s) (sgr ("38;5;" + show (hue o)) s)
    (bold o s) (sgr ("1;38;5;" + show (hue o)) s)
+   (faint o s) (sgr ("2;38;5;" + show (hue o)) s)
    (pad s n) (edfit s (max 0 n) " ")                ; plain text only: an escape has no width
    (fmod a b) (a - b * floor (a / b))
    ; a frame with its escapes gone, as a terminal would show it
@@ -62,55 +64,72 @@ device (HORN_IN's word otherwise), and --demo glides a sine instead. a/A move A4
    (tuner-cents ref f) (6900.0 + 1200.0 * log (f / ref) / log 2.0)
    (tuner-note k) (floor (k / 4) @ s [(names (fmod s 12)) (s // 12 - 1) (k - 4 * s)])   ; name octave sub
 
-   (tuner-new ref src) {'ref ref 'src src 'hz () 'c () 'last 6900.0 'lvl 0 'floor () 'over 0}
+   ; c is the live reading, () in a silence; last, hz and at the latest one and when it was
+   ; heard; lo and hi the note's raw cents, its range since it began
+   (tuner-new ref src) {'ref ref 'src src 'c () 'last 6900.0 'hz () 'at () 'lo () 'hi ()
+                        'lvl 0 'floor () 'over 0 'clock (_ \ clock 0)}
+   ; a reading stands while it is live and for linger ms after its last window
+   (held? t now) (t 'at @ a (charm? a && now - a < linger))
    ; a window heard: its level, a pitch where it stands clear of the room, the reading
-   ; smoothed in cents (a jump past a quarter tone is taken whole, a new note). the room's
-   ; floor follows the quiet: down at once, up a percent a window, and only while nothing
-   ; is pitched, so a held note never raises it
+   ; smoothed in cents. a jump past a quarter tone, or a pitch after the reading has gone,
+   ; is a new note: taken whole, its range begun again. the room's floor follows the
+   ; quiet: down at once, up a percent a window, and only while nothing is pitched, so a
+   ; held note never raises it
    (tuner-hear t x)
-    (: l (rms x) fl (t 'floor)
+    (: now ((t 'clock) 0) l (rms x) fl (t 'floor)
        f (l > 80.0 && (!fl || l > 3.0 * fl) ? (tuner-yin x) ())
        _ (? f 0 (pin t 'floor (? (!fl || l < fl) l (fl * 1.01))))
        (? f
-          (: c (tuner-cents (t 'ref) f) p (t 'c)
-             s (? (!p || abs (c - p) > 50.0) c (p + 0.4 * (c - p)))
-             (pins t 'lvl l 'c s 'last s 'hz ((t 'ref) * 2.0 ** ((s - 6900.0) / 1200.0))))
-          (pins t 'lvl l 'c () 'hz ())))
+          (: c (tuner-cents (t 'ref) f) p (held? t now ? (t 'last) ())
+             new (!p || abs (c - p) > 50.0)
+             s (new ? c (p + 0.4 * (c - p)))
+             (pins t 'lvl l 'c s 'last s 'at now 'hz ((t 'ref) * 2.0 ** ((s - 6900.0) / 1200.0))
+                     'lo (new ? c (min c (t 'lo))) 'hi (new ? c (max c (t 'hi)))))
+          (pins t 'lvl l 'c ())))
 
    ; --- the scale ---------------------------------------------------------------------
-   ; one row: the label (4), the tick (6) and the axis (1), then the marker or the ¼
-   (row k mark)
+   ; one row: the label (4), the tick (6) and the axis (1), then the marker or the ¼. the
+   ; axis is solid along the note's range
+   (row k mark inr)
     (tuner-note k @ [nm o sub]
      ((sub = 0 ? (bold o (pad (nm + show o) 4)) "    ") + " "
       + (sub @ 0 (ink o "━━━━━━") 2 (ink o "  ╺━━━") (sgr "2" "     ·"))
-      + (ink o (sub = 0 ? "┫" "┃"))
+      + (inr ? (bold o "█") (ink o (sub = 0 ? "┫" "┃")))
       + (? mark mark (sub = 2 ? (sgr "2" " ¼") ""))))
-   ; the marker on the row the pitch falls on: the note, the cents off it, the hz; a narrow
-   ; screen keeps the note and the cents
-   (marker c f w)
+   (signed x) ((x >= 0 ? "+" "−") + show (int (abs x + 0.5)))
+   ; the marker on the row the pitch falls on: the note, the cents off it, the hz, the
+   ; note's range in cents off the same note; faint and saying so once the sound has
+   ; stopped. a narrow screen keeps the note and the cents
+   (marker c f w lo hi gone)
     (: s (floor (c / 100.0 + 0.5)) off (c - 100.0 * s)
-       cs ((off >= 0 ? "+" "−") + show (int (abs off + 0.5)) + "¢")
        (tuner-note (4 * s) @ [nm o _]
-        (bold o ("◀━━ " + nm + show o + "  " + cs
-                 + (w < 48 ? "" ("  " + show (int (f * 10.0 + 0.5) / 10.0) + " Hz"))
-                 + (abs off < 5.0 ? "  ✓" "")))))
-   ; the needle: fifty cents either side of the nearest note, its centre the note itself
-   (needle c w)
-    (: s (floor (c / 100.0 + 0.5)) off (c - 100.0 * s)
-       n (max 11 (w - 4)) mid (n // 2) at (max 0 (min (n - 1) (mid + int (off / 50.0 * mid))))
+        ((gone ? faint bold) o
+         ("◀━━ " + nm + show o + "  " + signed off + "¢"
+          + (w < 48 ? "" ("  " + show (int (f * 10.0 + 0.5) / 10.0) + " Hz"))
+          + (w < 60 || hi - lo < 1.0 ? "" ("  " + signed (lo - 100.0 * s) + "…" + signed (hi - 100.0 * s) + "¢"))
+          + (gone ? "  held" (abs off < 5.0 ? "  ✓" ""))))))
+   ; the needle: fifty cents either side of the nearest note, its centre the note itself,
+   ; the note's range drawn along it
+   (needle c w lo hi gone)
+    (: s (floor (c / 100.0 + 0.5))
+       n (max 11 (w - 4)) mid (n // 2)
+       (at x) (max 0 (min (n - 1) (mid + int ((x - 100.0 * s) / 50.0 * mid))))
+       i0 (at c) a (at lo) b (at hi)
        (tuner-note (4 * s) @ [_ o _]
-        ("  " + cats (map (i \ (? (i = at) (bold o "●") (i = mid) (sgr "2" "┃") (sgr "2" "─"))) ^n))))
+        ("  " + cats (map (i \ (? (i = i0) ((gone ? faint bold) o "●") (a <= i <= b) (ink o "━")
+                                  (i = mid) (sgr "2" "┃") (sgr "2" "─"))) ^n))))
 
    ; the screen w by h, as rows: the title, the scale, the needle, a blank and the keys
    (tuner-frame t w h)
-    (: f (t 'hz) c (? f (t 'c) (t 'last))
+    (: on (held? t ((t 'clock) 0)) gone !(t 'c) c (t 'last) lo (t 'lo) hi (t 'hi)
        body (max 5 (h - 4)) cy (body // 2) k0 (floor (c / 25.0 + 0.5))
-       mk (? f (marker c f w) ())
-       rows (map (y \ row (k0 + cy - y) (y = cy ? mk ())) ^body)
+       klo (on ? (floor (lo / 25.0 + 0.5)) 1) khi (on ? (floor (hi / 25.0 + 0.5)) 0)
+       mk (on ? (marker c (t 'hz) w lo hi gone) ())
+       rows (map (y \ (k0 + cy - y) @ k (row k (y = cy ? mk ()) (klo <= k <= khi))) ^body)
        top (sgr "7" (pad ("  love tuner   A4 = " + show (t 'ref) + " Hz   " + t 'src
                           + "   level " + show (int (t 'lvl))) w))
        bot (sgr "2" (pad "  ━ semitone  ╺━ quarter tone  · eighth tone    a/A A4 ∓1 Hz   q quit" w))
-       ([top] + rows + [(? f (needle c w) (sgr "2" "  (listening)")) "" bot]))
+       ([top] + rows + [(on ? (needle c w lo hi gone) (sgr "2" "  (listening)")) "" bot]))
    (paint t w h) (tuner-frame t w h @ rs ("\e[H" + cats (map (r \ r + "\e[K\r\n") (init rs)) + last rs + "\e[K"))
 
    ; --- the ears that feed it -------------------------------------------------------
