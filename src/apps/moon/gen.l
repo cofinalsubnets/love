@@ -2643,7 +2643,7 @@
                         (: n (n32? g ty)
                            (mkv (fvt g ty) 'r0
                               (vfs lv + '((mov r2 r0)) + vfs (mkflo g (0.0 + step))
-                               + (n ? '((cvtsd2ss f1 f0)) '((movapd f1 f0))) + fldv g ty 'f0 'r2 0
+                               + (n ? '((cvtsd2ss f1 f0)) '((movsd f1 f0))) + fldv g ty 'f0 'r2 0
                                + (n ? '((addss f1 f0)) '((addsd f1 f0))) + fstv g ty 'r2 0 'f1))))
                     ; face-direct: no step rhs runs, so the base survives by construction
                     (vm? lv0 && vmb lv0 != 'r0)
