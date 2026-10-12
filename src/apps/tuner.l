@@ -98,8 +98,8 @@ device (HORN_IN's word otherwise), and --demo glides a sine instead. a/A move A4
       + (? mark mark (sub = 2 ? (sgr "2" " ¼") ""))))
    (signed x) ((x >= 0 ? "+" "−") + show (int (abs x + 0.5)))
    ; the marker on the row the pitch falls on: the note, the cents off it, the hz, the
-   ; note's range in cents off the same note; faint and saying so once the sound has
-   ; stopped. a narrow screen keeps the note and the cents
+   ; note's range in cents off the same note; faint once the sound has stopped. a narrow
+   ; screen keeps the note and the cents
    (marker c f w lo hi gone)
     (: s (floor (c / 100.0 + 0.5)) off (c - 100.0 * s)
        (tuner-note (4 * s) @ [nm o _]
@@ -107,7 +107,7 @@ device (HORN_IN's word otherwise), and --demo glides a sine instead. a/A move A4
          ("◀━━ " + nm + show o + "  " + signed off + "¢"
           + (w < 48 ? "" ("  " + show (int (f * 10.0 + 0.5) / 10.0) + " Hz"))
           + (w < 60 || hi - lo < 1.0 ? "" ("  " + signed (lo - 100.0 * s) + "…" + signed (hi - 100.0 * s) + "¢"))
-          + (gone ? "  held" (abs off < 5.0 ? "  ✓" ""))))))
+          + (abs off < 5.0 ? "  ✓" "")))))
    ; the needle: fifty cents either side of the nearest note, its centre the note itself,
    ; the note's range drawn along it
    (needle c w lo hi gone)

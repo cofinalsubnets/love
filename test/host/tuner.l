@@ -44,20 +44,22 @@
    gs (map tuner-plain (tuner-frame g 80 30))
    _ (test (has? (gs 14) "+0…+47¢") (has? (gs 13) "█") (has? (gs 14) "█") (has? (gs 15) "█")
            !(has? (gs 12) "█") !(has? (gs 16) "█") (has? (gs 27) "━"))
-   ; the hold: a silence keeps the reading, faint and held, for 2.5 s, then the scale listens;
+   ; the hold: a silence keeps the reading, faint, for 2.5 s, then the scale listens;
    ; a pitch after that is a new note, its range begun again
    _ (pin clk 'now 1000)
    _ (tuner-hear g (tuner-sine 440.0 * 0.0))
    hs (map tuner-plain (tuner-frame g 80 30))
-   _ (test !(g 'c) (has? (hs 14) "held") (has? (hs 14) "+0…+47¢") !(has? (hs 27) "listening"))
+   faint? (r \ has? r "\e[2;38;5;")                  ; the hold's pen
+   _ (test !(g 'c) (faint? (tuner-frame g 80 30 14)) (has? (hs 14) "+0…+47¢") !(has? (hs 14) "held")
+           !(has? (hs 27) "listening"))
    _ (pin clk 'now 2400)
-   _ (test (has? (line g 14) "held"))
+   _ (test (has? (line g 14) "◀") (faint? (tuner-frame g 80 30 14)))
    _ (pin clk 'now 2501)
    _ (test (has? (line g 27) "(listening)")
            !(has? (line g 14) "◀"))
    _ (tuner-hear g (tuner-sine 445.0))
    ns (line g 14)
-   _ (test (g 'lo = g 'hi) (has? ns "◀━━ A4  +20¢  445.0 Hz") !(has? ns "…") !(has? ns "held"))
+   _ (test (g 'lo = g 'hi) (has? ns "◀━━ A4  +20¢  445.0 Hz") !(has? ns "…") !(faint? (tuner-frame g 80 30 14)))
    ; the room: a hush reads no pitch and sets the floor, a tone under three floors is the
    ; room too (the floor creeping up a percent), and one well over it is heard
    q (fresh ())
