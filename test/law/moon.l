@@ -1387,8 +1387,8 @@
       (elem 'r11 pln)
       (#(filter (r \ elem r '(r19 r20 r21 r22 r23 r24 r25 r26 r27 r28)) pln) <= 1))
    _ (test
-      (elem '(lsr r6 r0 11) twf)
-      (elem '(lsl r5 r0 8) twf)
+      (elem '(lsl r5 r10 8) twf)
+      !(elem '(mov r0 r6) twf)                    ; the answer is built on r0, no closing copy
       !(twpair? twf))
    ; -- the riscv frame: a body naming no sp, fp or lr and making no call lays no frame; on wasm a call
    ; leaves every local but its answers, so there a call keeps no frame either, a home off the argument
@@ -1512,10 +1512,10 @@
        (two? irV)
        (elem '(mov r11 r0) vf)                    ; c's write lands its lo home...
        (elem '(mov r12 r2) vf)                    ; ...and its hi
-       (elem '(m128r r7 r8) vf)                   ; the mul rides the parked twins -- the
+       (elem '(m128r r10 r7) vf)                  ; the mul rides the parked twins -- the
        (elem '(a128r r11 r12) vf)                 ;   machine-stack cell never opens, and the
                                                       ;   combine reads c's home, the park copied out
-       (4 = (splds vf)))))                           ; full-word sp loads: a's two wd9-spill reloads + the cs restores
+       (2 = (splds vf)))))                           ; full-word sp loads: the cs restores (the k loop unrolls, a spills no more)
 
 ; -- the callee-saved contract (cskeep): every cgn above already compiles under it -- a
 ; breach refuses at emission -- so these laws probe the checker itself. the dirty walk is
@@ -1632,7 +1632,7 @@
    xf (fnf 'run <>irX)
    _ (test
       (two? irX)
-      (elem '(add r11 r6 r5) xf)                  ; a += b is born in a's own seat, off x's ride...
+      (elem '(add r10 r6 r5) xf)                  ; a += b is born in a's own seat, off x's ride...
       !(elem '(add r6 r6 r5) xf))                 ; ...and x's ride never takes the add (b, never
                                                      ;   written, aliases y's ride in the same form)
    ; a callee of statements at a return's ?: arm: the return is an if whose arm holds the body,
@@ -2331,6 +2331,16 @@
       (xB = '((label fn) (ld r0 r6 8) (add r10 r0 8) (ld r0 r6 16) (st r10 0 r0) (li r0 0) (ret)))
       (xR = '((label fn) (ld r0 r6 8) (add r0 r0 8) (ret)))
       (xL = '((label fn) (li r0 1) (call g9) (mov r0 r6) (ret)))))
+
+; --- a small counted loop unrolls, a constant-indexed double element is its frame slot, and
+; an integer literal meeting a double is a double constant: no address, no loop test, no convert
+(: hC (fnf 'h <>(cgn "double h(double *v, int n) { double a[3]; for (int k = 0; k < 3; k++) a[k] = v[k]; double s = 0; for (int i = 0; i < n; i++) { s += a[0] * a[1] - a[2]; for (int k = 0; k < 3; k++) a[k] += 1; } return s >= -1 ? s : 0; } int main() { return 0; }"))
+   (hn op) (#(filter (f \ two? f && <f = op) hC))
+   (test
+      (0 = (hn 'lea))                            ; every a[k] a static slot
+      (0 = (hn 'cvtsi2sd))                       ; += 1 and >= -1 convert at compile time
+      (2 = (hn 'br))                             ; the i loop's test and the ?: -- no k loop left
+      (elem '(stsd sp 16 f0) hC)))
 
 ; --- ..and on a64, whose alu is three-address: sub's dest takes its second source too
 (: v0 (name "%v0") v2 (name "%v2")

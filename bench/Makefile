@@ -113,7 +113,7 @@ txt = $(addprefix $(BDIR)/,$(addsuffix .txt,$(1)))
 # alone (the root does not include it), so it says so itself. see ../Makefile.
 .DELETE_ON_ERROR:
 
-.PHONY: all bench run raw html clean satrace setup ccbench ccsize ccdead ccnif ccwasm korebench $(ALL_LANGS)
+.PHONY: all bench run raw html clean satrace setup ccbench ccsize ccdead ccnif ccwasm ccloops ccraster korebench $(ALL_LANGS)
 .DEFAULT_GOAL := bench
 
 # Build/refresh the host binary via the root Makefile.
@@ -209,6 +209,12 @@ ccloops: $(GL)
 	@./ccloops.sh $(LREPS)
 traybench: $(GL)
 	@$(GL) traybench.l 200
+
+# mooncc against gcc on lore's rasterizer: raster.l's frames under out/love and out/love0, the
+# sums compared, then instructions and ms a frame. an instrument too. `make ccraster FRAMES=9`
+FRAMES ?= 5
+ccraster: $(GL)
+	@./ccraster.sh $(FRAMES)
 
 # the same floors on the WASM target: `mooncc -t wasm` against emcc's wasm64 (clang +
 # musl), every lane under node. ccnif's shape and ccnif's caveats; needs node, and emcc
