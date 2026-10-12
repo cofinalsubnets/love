@@ -9149,7 +9149,25 @@
    (bcpopen? w64 x) (? (atom? x) () (<x = 'bcp) !(cint? (cfold w64 <>x)) (bcpopen? w64 <x || bcpopen? w64 >x))
    ; a test settled whatever its unknown parts hold: `e & 0`, `e * 0`, `e && 0` and `e || 1` over a
    ; pure e (dax_mapping's `host && (i_flags & S_DAX)` where S_DAX is 0) -> its value | ()
-   (zpure? x) (? !(two? x) 1 (elem <x '(call callr sys asn rmw post sexpr clit asm)) () (zpure? <x && zpure? >x))
+   ; a statement expression is pure when what it holds is (the kernel's this_cpu_ptr wrappers)
+   (zpure? x) (? !(two? x) 1 (elem <x '(call callr sys asn rmw post clit asm)) () (zpure? <x && zpure? >x))
+   ; -- a call to a function that is `return E`, E one constant whatever its parameters hold (and its
+   ; own such calls answered first), over pure arguments, is that constant: is_rd_overutilized's
+   ; `!sched_energy_enabled() || ..` where the scheduler has no energy model --
+   (kret g nm d)
+    (peep (g 'kretm) nm 'none @ m
+       (? (m != 'none) m
+          (: e (peep (g 'fnret) nm ())
+             ; the answer in the function's own return type: a bool's `return 5` is 1
+             rt <(peep (g 'sigs) nm [()])
+             k (? (!(two? e) || 4 < d || !(elem rt '(bool char schar cchar uchar short ushort int uint long ulong))) ()
+                  (zfold !(ilp32? g) (kcall1 g e (d + 1)) @ v (cint? v ? (cfold !(ilp32? g) ['cast rt ['num v]] @ c (cint? c ? c ())) ())))
+             (pin (g 'kretm) nm k, k))))
+   (kcall1 g x d) (? !(two? x) x
+                     (x @ ('call . ('var nm) . as . _)
+                           (kret g nm d @ k (cint? k && all zpure? as ? ['num k] (map (y \ kcall1 g y d) x)))
+                          (map (y \ kcall1 g y d) x)))
+   (kcall g f) ([<f <>f <>>f (kcall1 g (f 3) 0)] + >>>>f)
    (zfold w64 x)
     (cfold w64 x @ v
        (? (cint? v) v
@@ -9180,12 +9198,34 @@
              ((bcpopen? w64 c ? () (zfold w64 c)) @ v
                 (: (hit? it) (it @ ('case . lo . r) (two? r ? (lo <= v && v <= <r) (lo = v)) ())
                    (at p l i) (? !(two? l) -1 (p <l) i (at p >l (i + 1)))
-                   k (cint? v ? (at hit? items 0 @ i (i < 0 ? (at (it \ it = '(dflt)) items 0) i)) -1)
+                   ; a label converts to the control's type, which is not known here: every value small
+                   ; and not negative, where no conversion moves one
+                   (sm? n) (cint? n && 0 <= n && n < 2147483648)
+                   ok (sm? v && all (it \ (it @ ('case . lo . r) (sm? lo && (!(two? r) || sm? <r)) 1)) items)
+                   k (ok ? (at hit? items 0 @ i (i < 0 ? (at (it \ it = '(dflt)) items 0) i)) -1)
                    (glb? l) (any (it \ glbl? it) l)
                    (? (k < 1 || glb? (take k items) || any (it \ !(elem <it '(case dflt)) && ncase? it) items) (map (dprune w64 ty) x)
                       ['switch c (map (dprune w64 ty) (drop k items))])))
             (map (dprune w64 ty) x)))
    (glbl? x) (? !(two? x) () (<x = 'lbl) 1 (glbl? <x || glbl? >x))
+   (exits? x) (x @ ('ret . _) 1 ('goto . _) 1 ('blk items) (two? items && exits? (last items)) ())
+   ; -- a block ends at an item that always leaves: what follows is unreachable unless a jump that
+   ; stays names a label in it, or a case stands there. the kept labels grow from the kept jumps,
+   ; to a fixpoint (__fpu_restore_sig past `if (likely(!ia32_fxstate)) return ..`, whose tail's
+   ; Efault labels only its own dead asm gotos reach) --
+   (ucut f)
+    (: (refs x t) (? !(two? x) t
+                     (x @ ('goto . n . _) (pin t n 1)
+                          ('laddr . n . _) (pin t n 1)
+                          ('asm . _) (: _ (5 < #x ? (map (n \ pin t n 1) (x 5)) 0) (refs >x (refs <x t)))
+                          (refs >x (refs <x t))))
+       (defs x acc) (? !(two? x) acc (<x = 'lbl) (<>x . acc) (defs >x (defs <x acc)))
+       (go keep x) (? !(two? x) x (x @ ('blk . items . _) ['blk (cutl keep items)] (map (go keep) x)))
+       (cutl keep l) (? !(two? l) l
+                        (: h (go keep <l)
+                           (exits? h && !(ncase? >l) && !(any keep (defs >l ())) ? [h] (h . cutl keep >l))))
+       (fix keep) (: r (go keep (f 3)) t (refs r {}) (all (n \ keep n) (keys t) ? r (fix (foldl (a \ n \ pin a n 1) keep (keys t)))))
+       ([<f <>f <>>f (fix {})] + >>>>f))
    (ncase? x) (? !(two? x) () (<x = 'switch) () (elem <x '(case dflt)) 1 (ncase? <x || ncase? >x))
    ; -- respell: a name declared twice in one fn conflates in alive and kprop, so each later decl
    ; respells (nm`2 ..) and its scope's mentions follow; a static local keeps its spelling (its label) --
@@ -9274,7 +9314,7 @@
                         ('var nm) (pin esc nm 1)
                         (('asm || 'tasm) . t . _) (: _ (pin asms 't (t . asms 't)) (scan >>x))
                         (scan <x, scan >x)))
-       _ (map (f \ (<f = 'fn ? (scan (lprop g (respell f))) (scan f))) fs)
+       _ (map (f \ (<f = 'fn ? (scan (lprop g (dprune !(ilp32? g) (e \ ()) (lprop g (respell f))))) (scan f))) fs)
        (spelt? nm) (any (t \ string? t && 1 < #(split nm t)) (asms 't))
        w64 !(ilp32? g)
        ; the substitution: a parameter the body writes, or one of a type no constant stands for, is left alone
@@ -9295,7 +9335,7 @@
                       (x @ (('asn || 'post) . ('var v) . _) (pwrites >>x (v . acc))
                            ('rmw . _ . ('var v) . _) (pwrites >>>x (v . acc))
                            ('addr . ('var v) . _) (v . acc)
-                           ('asm . _) (foldl (a \ o \ <>o @ ('var v) (v . a) a) acc (x 2))
+                           ('asm . _) (foldl (a \ o \ <>o @ ('var v) (v . a) a) acc (x 2 + x 3))   ; any asm operand stays a name
                            (pwrites >x (pwrites <x acc))))
    (pdecls x acc) (? !(two? x) acc (x @ (('decl || 'sdecl) . ps . _) (foldl (a \ p \ (<p . a)) acc ps) (pdecls >x (pdecls <x acc))))
    (psub ks x) (? !(two? x) x (x @ ('var v) (assoc v ks @ e (two? e ? <>e x)) (map (psub ks) x)))
@@ -9306,13 +9346,19 @@
    (lprop g f)
     (: w64 !(ilp32? g)
        tak {} tys {}
+       ; an asm's memory operand takes its name's address, as kprop reads it
+       (mem? c) ((: (go i) (? (#c <= i) () (elem (c i) '(109 111)) 1 (go (i + 1)))) 0)
        (cen x) (? !(two? x) 0
                   (x @ ('addr ('var nm)) (pin tak nm 1, 0)
                        ('decl ps) (foldl (_ \ p \ (pin tys <p <>p, cen >>p)) 0 ps)
+                       ('asm . _) (: _ (foldl (_ \ o \ (mem? <o ? (<>o @ ('var v) (pin tak v 1) 0) 0)) 0 (x 2 + x 3)) (cen <x, cen >x))
                        (cen <x, cen >x)))
        _ (cen (f 3))
+       _ (map (p \ pin tys <p <>p) <>>f)            ; a parameter too: fpu__restore_sig's `ia32_frame &= 0`
        (tw? x) (? !(two? x) () (x @ ('call . ('var n) . _) (elem n twicefns) (tw? <x || tw? >x)))
-       (ok? nm) (!(tak nm) && elem (peep tys nm ()) '(bool char schar cchar uchar short ushort int uint long ulong))
+       ; ..and not a name the unit has at file scope: a block's `extern` reads that one, as kprop says
+       (ok? nm) (!(tak nm) && !(two? (peep (g 'glob) nm 0)) && !(g 'fns nm)
+                 && elem (peep tys nm ()) '(bool char schar cchar uchar short ushort int uint long ulong))
        ; the names a statement writes (an asm's outputs among them), and whether it holds a label
        (wrs x acc) (? !(two? x) acc
                       (x @ (('asn || 'post) . ('var v) . _) (wrs >>x (v . acc))
@@ -9346,6 +9392,7 @@
                       (('post || 'rmw) . _) (: _ (map (v \ one v 'no) (wrs x ())) (kw <x, kw >x))
                       ('asm . _) (: _ (map (v \ one v 'no) (wrs x ())) (kw <x, kw >x))
                       (kw <x, kw >x)))
+       _ (map (p \ one <p 'no) <>>f)                ; ..whose arrival is no constant
        _ (kw (f 3))
        kenv (foldl (a \ nm \ (kv nm @ k (two? k ? ([nm k] . a) a))) () (keys kv))
        ; reads only: the name an assignment writes stays its own
@@ -9491,9 +9538,11 @@
     (: w64 !(ilp32? g)
        (has? x) (? (atom? x) () (<x = 'bcp) 1 (has? <x || has? >x))
        (res x) (? (atom? x) x (<x = 'bcp) ['num (charm? (cfold w64 <>x) ? 1 0)] (map res x))
-       (has? f ? (kprop g (dprune w64 (e \ ()) (res f))) (dprune w64 (e \ ()) f)))
+       (ucut (has? f ? (kprop g (dprune w64 (e \ ()) (res f))) (dprune w64 (e \ ()) f))))
    (cgfn g f)                                       ; ('fn name params ('blk items)) -> forms | 'bad
-    (: f (bcpfin g (: k1 (kprop g (lprop g (phome g (respell (oalign g (nopcall g (ainl g (lprop g (respell f))))))))) (ovfold g k1 @ k2 (two? k2 ? (kprop g k2) k1))))
+    ; ..and once more past the prune: an arm it dropped may have been a name's other value
+    (: f (bcpfin g (: k1 (kprop g (lprop g (phome g (respell (oalign g (nopcall g (ainl g (nopcall g (lprop g (kcall g (respell f))))))))))) (ovfold g k1 @ k2 (two? k2 ? (kprop g k2) k1)))
+                @ f1 (kprop g (ucut (dprune !(ilp32? g) (e \ ()) (lprop g f1)))))
        ; the tree passes probe addresses (kprop's, an asm operand's) before every constant has
        ; arrived; a name such a probe could not resolve is no refusal's cause
        _ (pin g 'undecl ())
@@ -9890,7 +9939,9 @@
                           (!(two? e2) ? (go (i + 1) acc)
                              (: nm <e2 ty <>e2
                                 u9 (elem nm uv)
-                                (tak9 nm ? (go (i + 1) acc)   ; an &-taken name stays a cell
+                                ; an &-taken name stays a cell, and every name in a fn a call returns twice
+                                ; into: the second return restores no register, and a volatile looks like any local
+                                (tak9 nm || g 'twice ? (go (i + 1) acc)
                                    (: ns9 (peep sitec nm 1)
                                       tc (peep rdc9 nm 0 @ n (1 < ns9 ? (n // ns9) n))
                                       d1 (d128? ty)
@@ -10413,7 +10464,7 @@
     (: g {'n 0 'brk () 'brkm () 'cnt () 'cases () 'glob {} 'globs () 'strs () 'clits () 'clitm {} 'dbls {} 'jtabs () 'statics ()
           'abl (ablenv 0)                           ; the pricing knob, read per unit at run time
           'laid {}                                  ; names already on 'globs (a tentative repeat lays no twin)
-          'fns {} 'inl {} 'ineed {} 'alw {} 'nopf {} 'ainlc {} 'cgitems cgitems 'sxpre sxpre 'stag stbl 'sigs sigs
+          'fns {} 'inl {} 'ineed {} 'alw {} 'nopf {} 'fnret {} 'kretm {} 'ainlc {} 'cgitems cgitems 'sxpre sxpre 'stag stbl 'sigs sigs
           'tgt tgt                                  ; (the epilogue is per fn: cgfn pins g 'epi)
           'sects (two? xtra ? <>>xtra {})
           'alias (two? xtra && 3 < #xtra ? (xtra 3) {})
@@ -10440,6 +10491,8 @@
                          (elem <f '(fn proto) ? (pin (g 'fns) <>f 1),
                           ; a body that does nothing: a call to it here is its arguments' effects alone
                           (<f = 'fn && nelem <>f weaks && empty? (f 3) ? (pin (g 'nopf) <>f 1) 0),
+                          ; ..and one that is a single `return E`, for kcall to answer where E is one constant
+                          (<f = 'fn && nelem <>f weaks ? ((f 3) @ ('blk . is . _) (two? is && !(two? >is) && <<is = 'ret && two? >(<is) ? (pin (g 'fnret) <>f <>(<is)) 0) 0) 0),
                           <f = 'fn && !nolin &&
                           nelem <>f weaks &&
                           nelem <>f noinls &&

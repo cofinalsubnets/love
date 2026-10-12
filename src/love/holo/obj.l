@@ -402,13 +402,15 @@
    ; linux over p_memsz, the .lds ports their own startup loop. a lay that owns no loader
    ; must not use this lane. .rodata at flags 2 is a promise to whatever linker reads it for
    ; a read-only home: no relocation, ever. holo maps it writable anyway -- one segment.
+   ; love's two own sections ride only an object that fills them: an empty one is an orphan
+   ; another link (the kernel's) must place
    (objsecs4 textforms dataforms nifforms imgforms bssforms rodataforms)
-    [[".text"   1 6 16 textforms]
-     [".rodata" 1 2 (o-dalign 8 rodataforms) rodataforms]
-     [".data"   1 3 (o-dalign 8 dataforms) dataforms]
-     [".bss"    8 3 (o-dalign 8 bssforms) bssforms]
-     ["love_nifs" 1 3 8 nifforms]
-     [".love.image"  1 3 16 imgforms]]
+    ([[".text"   1 6 16 textforms]
+      [".rodata" 1 2 (o-dalign 8 rodataforms) rodataforms]
+      [".data"   1 3 (o-dalign 8 dataforms) dataforms]
+      [".bss"    8 3 (o-dalign 8 bssforms) bssforms]]
+     + (two? nifforms ? [["love_nifs" 1 3 8 nifforms]] ())
+     + (two? imgforms ? [[".love.image"  1 3 16 imgforms]] ()))
    ; a named section a compiler emits: progbits on the widest grain its globals ask for and no
    ; wider -- objects' pieces tile one array (the kernel's .videocards), so a pad between is a hole --
    ; allocated, writable unless ro says every global in it is const and reloc-free.
@@ -461,8 +463,8 @@
      [[".text"   1 6 (i386? target ? 16 4) textforms]
       [".rodata" 1 2 (o-dalign 4 rodataforms) rodataforms]
       [".data"   1 3 (o-dalign 4 dataforms) dataforms]
-      [".bss"    8 3 (o-dalign 4 bssforms) bssforms]
-      ["love_nifs" 1 3 4 nifforms]]
+      [".bss"    8 3 (o-dalign 4 bssforms) bssforms]]
+     + (two? nifforms ? [["love_nifs" 1 3 4 nifforms]] ())
      + (i386? target ? () [[".ARM.attributes" 1879048195 0 1 [['raw (armattrs target)]]]]))   ; SHT_ARM_ATTRIBUTES
 
    (objelf target0 textforms dataforms funcnames globnames wknames nifforms imgforms locnames bssforms rodataforms)

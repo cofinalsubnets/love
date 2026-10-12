@@ -252,14 +252,22 @@ static int crowd(int k) {
   return a + b + c + d + e + f + g == 7 * k + 21 + 70;
 }
 
+/* a store just ahead of the longjmp, read only after the second return */
+static int __attribute__((noinline)) direct(void) {
+  volatile int x = 1;
+  if (setjmp(jb)) return x;
+  x = 2;
+  longjmp(jb, 1);
+}
+
 int main(void) {
-  return here() + callee() + other() + crowd(5);
+  return here() + callee() + other() + crowd(5) + (direct() == 2);
 }
 CEOF
 moonrun "$ho/.sj.c" -o "$ho/.sj" || fail "mooncc the setjmp law"
 "$ho/.sj"; st=$?
-[ $st -eq 4 ] || fail "a volatile local across setjmp lost its value ($st of 4 held)"
-$cc_g -O2 -o "$ho/.sjg" "$ho/.sj.c" && { "$ho/.sjg"; [ $? -eq 4 ] || fail "gcc -O2 disagrees on the setjmp law"; }
+[ $st -eq 5 ] || fail "a volatile local across setjmp lost its value ($st of 5 held)"
+$cc_g -O2 -o "$ho/.sjg" "$ho/.sj.c" && { "$ho/.sjg"; [ $? -eq 5 ] || fail "gcc -O2 disagrees on the setjmp law"; }
 
 # ------------------------------------------- -std=: the dialect rail (struct labels)
 # THE ORACLE IS THE LABEL-FREE TWIN. A struct label is not C -- gcc cannot compile the

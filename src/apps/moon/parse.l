@@ -1886,13 +1886,14 @@
                  (<e = 'land) [(<a != 0 && <b != 0 ? 1 0) 'int]
                  [(<a != 0 || <b != 0 ? 1 0) 'int]))
           ; ('cond c a b): only the selected arm need be constant (C11 6.6: 1 ? 0 : 1/0 is one);
-          ; when the other folds too, the arms meet at their common type
+          ; when the other folds too, the arms meet at their common type. when it does not, its
+          ; type is not known here: a value no conversion moves (0 up to int's top) stands alone
           (<e = 'cond)
            (cfty w64 <>e @ c
               (atom? c ? ()
                  (: r (<c = 0 ? (cfty w64 <>>>e) (cfty w64 <>>e))
                     o (<c = 0 ? (cfty w64 <>>e) (cfty w64 <>>>e))
-                    (? (atom? r) () (atom? o) r (wr (puac w64 <>r <>o) <r)))))
+                    (? (atom? r) () (atom? o) (0 <= <r && <r < 2147483648 ? r ()) (wr (puac w64 <>r <>o) <r)))))
           ()))
    ; _Static_assert ( const-expr [, "message"] ) ; -> (('tdef) rest) | () -- an assertion that
    ; folds to false fails the compile, a non-constant one is let by. the message is optional
@@ -1914,9 +1915,9 @@
    ; decl := type [dtor [= asn] (, dtor [= asn])*] ;
    ; a local's __attribute__((cleanup(f))) comes off its tokens before the declaration reads,
    ; and the block gets ('cln name f id) after it; pcln lays the calls. one declarator only
-   (pdecl ps ts)
-    (clsplit ps ts @ sp
-     (? sp (pdecl ps sp)
+   (pdecl ps ts) (clsplit ps ts @ sp (sp ? (pdecl ps sp) (pdecl1 ps ts)))
+   ; ..one declaration as written: a for's init, which may hold only one
+   (pdecl1 ps ts)
      (clstrip ts @ cs
        (? !<cs (pdecl0 ps ts)
           (<cs = 'many) (blame ts "more than one cleanup in one declaration")
@@ -1930,7 +1931,7 @@
                  (blame <>r "a cleanup wants one automatic variable")
                 (1 + peep ps 'clid 0 @ n
                    (pins ps 'clid n 'clfn 1 'clpend ['cln <<(<>d) <cs n],
-                    r))))))))
+                    r))))))
    ; several declarators with a cleanup among them read as one declaration each, the
    ; specifiers spelled again (the kernel's `char *a __free(kfree) = NULL, *b __free(kfree) = NULL`)
    ; -> the tokens so rewritten | ()
@@ -2248,7 +2249,7 @@
              (tkw? t 'for)
               (want >ts "(" @ r1
                  (atom? r1 ? ()
-                    (: ri (? (tyat? ps r1) (pdecl ps r1)        ; the decl gate skips quals, like a block's (`for (const char *x; ..`)
+                    (: ri (? (tyat? ps r1) (pdecl1 ps r1)        ; the decl gate skips quals, like a block's (`for (const char *x; ..`)
                              (peekp r1 ";") [() >r1]
                              (thenw (pexpr ps r1) ";" @ r
                                 (two? r ? [['expr <r] <>r])))
