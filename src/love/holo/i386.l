@@ -40,8 +40,14 @@
        (o32 m + (fits8 imm ? [131 (modrm 3 ext dn) (byte imm)] ([129 (modrm 3 ext dn)] + le32 imm))))
    (i3step m rr ext d y) (reg? y ? (i3rr m [rr] d y) (i3ri m ext d y))
    ;; [base+off] and [base+index*scale+disp] at width w, the register field regf
-   (i3mem m w opc regf base off) (a32 m + ow m w + opc + mem (i3rn regf) base off)
-   (i3memd m w opc dig base off) (a32 m + ow m w + opc + mem dig base off)
+   ;; base 'rip with off (sym k): that symbol's absolute address -- disp16 in 16-bit code, as the
+   ;; segment's own addresses go, else ModRM's disp32-only face (32-bit mode has no rip)
+   (i3abs m regf off)
+    (m = 1 ? [(modrm 0 regf 6) (fix 2 'abs16 <off <>off)] [(modrm 0 regf 5) (fix 4 'abs32 <off <>off)])
+   (i3mem m w opc regf base off)
+    (base = 'rip ? (ow m w + opc + i3abs m (i3rn regf) off) (a32 m + ow m w + opc + mem (i3rn regf) base off))
+   (i3memd m w opc dig base off)
+    (base = 'rip ? (ow m w + opc + i3abs m dig off) (a32 m + ow m w + opc + mem dig base off))
    (i3memx m w opc regf base ix sc dp) (a32 m + ow m w + opc + memx (i3rn regf) base ix sc dp)
    ;; a byte face's register field must have a low byte
    (i3mw m w opc8 opc regf base off) (i3mem m w (w = 1 ? opc8 opc) (w = 1 ? (i3b regf, regf) regf) base off)
@@ -87,12 +93,11 @@
        (fits8 y) (i3memd m 4 [131] 7 base off + [(byte y)])
        (i3memd m 4 [129] 7 base off + le32 y))
 
-   ;; the sized read-modify-writes, inline asm's: w 1 2 4. base 'rip with off (sym k) is that
-   ;; symbol's absolute address, ModRM's disp32-only face -- 32-bit mode has no rip
+   ;; the sized read-modify-writes, inline asm's: w 1 2 4 (base 'rip as i3abs reads it)
    (i3-mw m w op8 op regf base off)
     (: fn (charm? regf ? regf (w = 1 ? (i3b regf) (i3rn regf)))
      (base = 'rip
-        ? (a32 m + ow m w + (w = 1 ? op8 op) + [(modrm 0 fn 5) (fix 4 'abs32 <off <>off)])
+        ? (ow m w + (w = 1 ? op8 op) + i3abs m fn off)
         (a32 m + ow m w + (w = 1 ? op8 op) + mem fn base off)))
    (i3imw w y) (w @ 1 [(byte y)] 2 (le16 y) (le32 y))
    (i3-alum m op w base off y)
@@ -155,6 +160,7 @@
     (m = 1 ? [15 (jcc-op cond) (fix 2 'rel16 label 0)] [15 (jcc-op cond) (fix 4 'rel32 label 0)])
    (i3-jmpr m d) (o32 m + [255 (modrm 3 4 (i3rn d))])
    (i3-callr m d) (o32 m + [255 (modrm 3 2 (i3rn d))])
+   (i3-callm m base off) (base = 'rip ? (o32 m + [255] + i3abs m 2 off) (a32 m + o32 m + [255] + mem 2 base off))
    (i3-jmpm m base off) (i3memd m 4 [255] 4 base off)
    (i3-jmpt m d tl labs) (i3-jmpr m d)
    ;; a label's address: absolute, as gcc -fno-pic lays it. lar is the translation-invariant
@@ -202,6 +208,9 @@
    (i3-stseg m n s) (0 <= n <= 5 || scare 'i386-segnum n, [142 (modrm 3 n (i3rn s))])
    (i3-segst m n base off) (i3memd m 1 [140] n base off)
    (i3-segld m n base off) (i3memd m 1 [142] n base off)
+   ; a segment register pushed or popped (es cs ss ds fs gs = 0..5; cs has no pop), at width w
+   (i3-pushseg m n w) (ow m w + (n @ 0 [6] 1 [14] 2 [22] 3 [30] 4 [15 160] 5 [15 168] (scare 'i386-segnum n)))
+   (i3-popseg m n w) (ow m w + (n @ 0 [7] 2 [23] 3 [31] 4 [15 161] 5 [15 169] (scare 'i386-segnum n)))
    (i3-cr m opc n g) (0 <= n <= 7 || scare 'i386-crnum n, [15 opc (modrm 3 n (i3rn g))])
    (i3-m0f m dig opc base off) (i3memd m 1 opc dig base off)
    (i3-mdig m opc dig w base off) (w = 8 ? (scare 'i386-width w) (i3-mw m w opc opc dig base off))
@@ -265,7 +274,7 @@
            ('neg . i3-un m 247 3) ('not . i3-un m 247 2) ('inc . i3-un m 255 0) ('dec . i3-un m 255 1)
            ('call . i3-call m) ('jmp . i3-jmp m) ('br . i3-br m)
            ('jmp8 . (\ l [235 (fix 1 'rel8 l 0)])) ('br8 . (\ c l [(jcc-op c - 16) (fix 1 'rel8 l 0)]))
-           ('jmpr . i3-jmpr m) ('jmpm . i3-jmpm m) ('jmpt . i3-jmpt m) ('callr . i3-callr m)
+           ('jmpr . i3-jmpr m) ('jmpm . i3-jmpm m) ('jmpt . i3-jmpt m) ('callr . i3-callr m) ('callm . i3-callm m)
            ('la . i3-la m) ('laa . i3-laa m) ('lia . i3-la m) ('lar . i3-lar m) ('pushl . i3-pushl m)
            ('set . i3-set m) ('set1 . i3-set1 m) ('cmov . i3-cmov m) ('mulo . i3-mulo m)
            ('mulh . i3-mulh m 5) ('umulh . i3-mulh m 4)
@@ -292,7 +301,7 @@
            ('xchgm . (\ w b o s (i3-mw m w [134] [135] s b o)))
            ('alum . i3-alum m) ('carry . i3-carry m) ('unm . i3-unm m) ('btm . i3-btm m) ('testm . i3-testm m)
            ('movntim . (\ w b o s (i3-mw m w [15 195] [15 195] s b o)))
-           ('ldseg . i3-ldseg m) ('stseg . i3-stseg m) ('segst . i3-segst m) ('segld . i3-segld m)
+           ('ldseg . i3-ldseg m) ('stseg . i3-stseg m) ('segst . i3-segst m) ('segld . i3-segld m) ('pushseg . i3-pushseg m) ('popseg . i3-popseg m)
            ('ldcr . (\ d n (i3-cr m 32 n d))) ('stcr . (\ n s (i3-cr m 34 n s)))
            ('lddr . (\ d n (i3-cr m 33 n d))) ('stdr . (\ n s (i3-cr m 35 n s)))
            ('ltr . (\ s [15 0 (modrm 3 3 (i3rn s))]))

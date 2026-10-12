@@ -1247,11 +1247,45 @@ below, 251 of those 332 re-run so far: **145 compile**, and the rest refuse by n
   llvm-mc masks in silence and holo refuses, as GNU as does. A register a `#define` names, which
   the .S path spells apart from its arrangement (`v5 .4s`), is glued back. vgetrandom-chacha
   compiles, its 75 words the kernel's object's.
+- **`.long sym` on a64** (head.S's `le64sym _kernel_size_le`, a linker script's symbol): an
+  R_AARCH64_ABS32, which moon's linker applies too; holo had refused (`gas-data-width`), and
+  wrote x64's number for the 4-byte absolute it laid elsewhere.
+- **a literal load** (head.S's `ldr x8, =__secondary_switched`): `ldr rt, =expr` lays a movz
+  where one holds the constant, else a word in the section's pool, one per width and expression,
+  at `.ltorg`/`.pool` or the section's end, and a load of it, as llvm-mc lays them. `ldr` and
+  `ldrsw` of a label resolve in place inside a section and lay R_AARCH64_LD_PREL_LO19 across one,
+  which moon's linker applies; both had refused.
+- **a `.set` read before it is made** (head.S's `.long .Lpe_header_offset`, set by a macro called
+  later): the value it is first set to, as llvm-mc reads it, where holo had laid a relocation
+  against the undefined name. head.S compiles, every section's bytes the kernel's object's but
+  six `bl`s to global functions in their own section, which holo resolves where llvm-mc leaves a
+  CALL26 (the same word once linked).
+- **`.incbin`** (vdso-wrap.S's `.incbin "arch/arm64/kernel/vdso/vdso.so"`): a file's bytes, whole
+  or a skip and count of them, found from the working directory then the -I dirs as gas finds it;
+  moon's .S path reads it and hands gas-top the bytes as `.base64`. A file nowhere on the path
+  refuses by name. holo had refused the directive.
+- **`//` inside a string on a64** (`.ascii "http://x"`, and the base64 above): no comment, as
+  llvm-mc reads it; holo had cut the line there. vdso-wrap compiles, its .rodata the kernel's
+  object's.
+- **`@note`** (vdso's note.S, `.pushsection .note.Linux, "a", @note`): sht_note, which moon's
+  linker places or drops as it does a C note; holo had refused the type. note.o's `.note.Linux` is
+  the kernel's object's, byte for byte.
+- **an alias of an alias** (memcpy.S's `.set __memmove, __pi_memmove`, itself set to
+  `__pi_memcpy`): followed to the label at the end of the chain, in either order; a cycle refuses.
+  holo had refused it (`gas-alias`).
+- **`.weak` binds weak** (memcpy.S's `.weak memcpy`): holo had exported it global, so a strong
+  definition elsewhere was a duplicate, and a word naming it resolved to the local body. The name
+  now rides the object weak and a word naming it is a relocation against it. memcpy.S compiles,
+  its 147 words the kernel's object's, `memcpy` and `memmove` weak as there.
+- **a register variable named `r0`** (arm-smccc.h's `register unsigned long arg0 asm("r0")`, for
+  arm32 and arm64 alike): gcc's and clang's other names for x0..x30, taken in a register variable
+  and a clobber; asm text keeps llvm-mc's, where `r0` refuses. moon had refused the pin (`no lane
+  for a register variable in r0`). proton-pack, random, kvm_guest and smccc compile; law
+  test/cc/275-asm-regvar-r.c, whose template reads x0 by name.
 
 Still open on this side (g-21's probes):
 
-- **`adr` to a label and `ldr` of a literal** (`adr x0, foo`, `ldr x1, 1b`) refuse; no census
-  unit has reached them.
+- **`adr` to a label** (`adr x0, foo`) refuses; no census unit has reached it.
 - **`lr` and `fp`**, llvm-mc's names for x30 and x29, refuse in every operand (`mov x0, lr`,
   `stp fp, lr, [sp, #-16]!`); no census unit spells them.
 - **x18 is allocated freely**, and `-ffixed-x18` is ignored: the platform register, which the
@@ -1259,10 +1293,9 @@ Still open on this side (g-21's probes):
 - under `-mstrict-align`: an array member of a packed struct indexed through its decayed pointer
   reads at the element's width, a bitfield or 128-bit member of a packed struct refuses by name,
   and a by-value struct reached as a packed member rides its type's alignment, not the member's.
-- where the re-run stops now, on this side: a register variable pinned to `x0` (4). Of the 24
-  units that stopped on the `.S` extable macro's `\insn`, 20 compile, and the rest stop on: a
-  linker script's symbol as a `.long` (`_kernel_size_le_lo32`),
-  `.incbin`, `@note` and a `.set` alias of a function (`__memmove`). entry.S and proc.S compile. The exclusive pairs (`ldxp`/`stxp` and kin) have no lane yet.
+- where the re-run stops now, on this side: the four units a register variable named `r0`
+  stopped compile, and so do all 24 that stopped on the `.S` extable macro's `\insn`. The exclusive pairs
+  (`ldxp`/`stxp` and kin) have no lane yet.
   The rest is part 1's front end and gen (`linux/skbuff.h`, an undeclared `branch`,
   `__attribute__((mode))`).
 - defconfig, g-21's units once refused on a Q form or a register pinned twice: of a sample of

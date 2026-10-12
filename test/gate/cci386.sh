@@ -12,7 +12,8 @@
 #   wide     ..so far that it is not C on ilp32 (a static assert, a bit-field past its type):
 #            both compilers must refuse it, ours naming the file.
 #
-# stdout and the exit code are compared. not set -e: the checks report their own failures.
+# stdout and the exit code are compared, for our build plain and at -Os (one epilogue per fn,
+# the saves on push/pop). not set -e: the checks report their own failures.
 # usage: cci386.sh OUTDIR LOVE
 . test/gate/skip.sh
 set -u
@@ -58,20 +59,38 @@ for f in test/cc/*.c; do
   gcc -m32 -msse2 -mfpmath=sse -w -o "$d/$b.g" "$f" -lm > "$d/$b.glog" 2>&1 \
     || { cat "$d/$b.glog" >&2; fail "$b: gcc -m32 could not build it"; }
   (cd "$d" && timeout 60 "./$b.g" > "$b.gout" 2>&1; echo $? > "$b.grc")
-  moonrun -t i386 -o "$d/$b.t" "$f" > "$d/$b.tlog" 2>&1 \
-    || { cat "$d/$b.tlog" >&2; fail "$b: mooncc -t i386 could not build it"; }
-  (cd "$d" && timeout 60 "./$b.t" > "$b.tout" 2>&1; echo $? > "$b.trc")
-  rg=$(cat "$d/$b.grc"); rt=$(cat "$d/$b.trc")
-  [ "$rt" -ne 124 ] || fail "$b: our binary timed out"
-  case " $narrow " in
-    *" $b "*)
-      [ "$rg" -ne 0 ] || fail "$b: gcc -m32 passes a program listed as narrow -- take it off the list"
-      [ "$rt" -lt 128 ] || fail "$b: our binary died on a signal ($rt)"
-      nnar=$((nnar + 1))
-      continue ;;
-  esac
-  [ "$rt" = "$rg" ] || fail "$b: exit $rt, gcc -m32 answers $rg"
-  cmp -s "$d/$b.gout" "$d/$b.tout" || { diff "$d/$b.gout" "$d/$b.tout" | head -20 >&2; fail "$b: stdout differs from gcc -m32's"; }
+  rg=$(cat "$d/$b.grc")
+  for os in t s; do
+    fl=; [ $os = s ] && fl=-Os
+    moonrun -t i386 $fl -o "$d/$b.$os" "$f" > "$d/$b.${os}log" 2>&1 \
+      || { cat "$d/$b.${os}log" >&2; fail "$b: mooncc -t i386 $fl could not build it"; }
+    (cd "$d" && timeout 60 "./$b.$os" > "$b.${os}out" 2>&1; echo $? > "$b.${os}rc")
+    rt=$(cat "$d/$b.${os}rc")
+    [ "$rt" -ne 124 ] || fail "$b: our binary ($fl) timed out"
+    case " $narrow " in
+      *" $b "*)
+        [ "$rg" -ne 0 ] || fail "$b: gcc -m32 passes a program listed as narrow -- take it off the list"
+        [ "$rt" -lt 128 ] || fail "$b: our binary ($fl) died on a signal ($rt)"
+        continue ;;
+    esac
+    [ "$rt" = "$rg" ] || fail "$b: exit $rt ($fl), gcc -m32 answers $rg"
+    cmp -s "$d/$b.gout" "$d/$b.${os}out" || { diff "$d/$b.gout" "$d/$b.${os}out" | head -20 >&2; fail "$b: stdout ($fl) differs from gcc -m32's"; }
+  done
+  case " $narrow " in *" $b "*) nnar=$((nnar + 1)); continue ;; esac
   n=$((n + 1))
 done
-echo "$name: $n programs answer as gcc -m32 does, $nnar narrow ones run to an exit, $nwide wide ones refused by both, $nref refused"
+# the register arguments across compilers: mooncc's half (test/cc/abi386/host.c) linked with
+# gcc's (peer.c), each calling the other, at every -mregparm the kernel's units might ask for
+for rp in 0 1 2 3; do
+  gcc -m32 -mregparm=$rp -O1 -w -c -o "$d/peer$rp.o" test/cc/abi386/peer.c 2> "$d/peer.log" \
+    || { cat "$d/peer.log" >&2; fail "abi386: gcc could not build peer.c at -mregparm=$rp"; }
+  for fl in -O0 -Os; do
+    moonrun -t i386 -mregparm=$rp $fl -c -o "$d/host$rp.o" test/cc/abi386/host.c > "$d/host.log" 2>&1 \
+      || { cat "$d/host.log" >&2; fail "abi386: mooncc $fl could not build host.c at -mregparm=$rp"; }
+    gcc -m32 -no-pie -o "$d/abi$rp" "$d/host$rp.o" "$d/peer$rp.o" 2> "$d/abi.log" \
+      || { cat "$d/abi.log" >&2; fail "abi386: the link at -mregparm=$rp"; }
+    "$d/abi$rp" > "$d/abi$rp.out" 2>&1 || { cat "$d/abi$rp.out" >&2; fail "abi386: mooncc $fl and gcc disagree at -mregparm=$rp"; }
+  done
+done
+echo "abi386: $(tail -1 "$d/abi3.out") at each -mregparm, 0 to 3, ours plain and -Os"
+echo "$name: $n programs answer as gcc -m32 does, built plain and -Os, $nnar narrow ones run to an exit, $nwide wide ones refused by both, $nref refused"

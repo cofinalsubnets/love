@@ -57,6 +57,7 @@ struct sockaddr_storage { sa_family_t ss_family; char __pad[126]; };
 #define MSG_ERRQUEUE 8192
 #define MSG_CMSG_CLOEXEC 1073741824
 int socket(int, int, int);
+int socketpair(int, int, int, int[2]);
 int bind(int, struct sockaddr const*, socklen_t);
 int listen(int, int);
 int accept(int, struct sockaddr*, socklen_t*);

@@ -353,6 +353,25 @@
           loc (file + (ln ? (":" + show ln) "") + (col ? (":" + show col) ""))
           (udie 1 ("cc: " + loc + ": " + msg)))
        (udie 1 plain))
+   ; `.incbin "path"[, skip[, count]]` in assembly text: the file's bytes, found from the working
+   ; directory then the -I dirs as gas finds them, laid as the .base64 gas-top reads whole
+   b64set "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+   (b64s s) (: n #s
+               (q i) (: b (i + 1 < n ? (s (i + 1)) 0) c (i + 2 < n ? (s (i + 2)) 0) w (s i << 16 | b << 8 | c)
+                        [(b64set ((w >> 18) & 63)) (b64set ((w >> 12) & 63))
+                         (i + 1 < n ? (b64set ((w >> 6) & 63)) 61) (i + 2 < n ? (b64set (w & 63)) 61)])
+               (string (catmap q (filter (i \ i % 3 = 0) ^n))))
+   (incbins txt is src)
+    (: (one ln) (: t (xa-trim ln)
+                   (? (!(starts? t ".incbin") || (7 < #t && !(blank? (t 7)))) ln
+                      (: xs (xa-oplist (snip t 7 #t)) nm (xa-unquote (xa-trim <xs))
+                         r (foldl (\ a d (two? a ? a (uread (d + nm)))) () ("" . is))
+                         _ (two? r || udie 1 ("cc: " + src + ": .incbin: cannot open " + nm))
+                         k (two? >xs ? (gimm (gtoks (xs 1))) 0) n (two? >>xs ? (gimm (gtoks (xs 2))) (#<>r - k))
+                         (? (k < 0 || n < 0 || k + n > #<>r) (udie 1 ("cc: " + src + ": .incbin: past the end of " + nm))
+                            ("\t.base64 \"" + b64s (snip <>r k (k + n)) + "\"")))))
+       ls (gsplit txt 10)
+       (any (ln \ starts? (xa-trim ln) ".incbin") ls ? (xa-join "\n" (map one ls)) txt))
    ; an assembly source as C: one file-scope asm holding its text, which gen hands gas-top
    (asmwrap s) ("__asm__(\"" + string (catmap (c \ (c @ 92 [92 92] 34 [92 34] 10 [92 110] 9 [92 116] 13 () [c])) (chars s))
                 + "\");\n")
@@ -364,7 +383,7 @@
        _ (okv? lx || ccdie lx src ("cc: lex error in " + src))
        pp (cppasm <>lx (name \ sys? \ incload vb is (cdir src) name sys?) src)
        (okv? pp || ccdie pp src ("cc: preprocessor error in " + src),
-        asmwrap (asmspell <>pp)))
+        asmwrap (incbins (asmspell <>pp) is src)))
    ; tokens back to assembly text: an unexpanded token from a later line opens a new one (an
    ; expansion stays where it was invoked); a space where the source had one and between two
    ; words, so `movl $1,%eax`, `0x10(%rsp)`, `foo:` and a macro's `wx\n` come back as written
@@ -428,7 +447,7 @@
                   !vb ()
                   (vb src @ h (string? h && [1 h])))))
        _ (two? r || udie 1 ("cc: cannot open " + src))
-       txt (? (dotS? src) (asmcpp src <>r ds9 is vb) (dots? src) (asmwrap <>r) <>r)
+       txt (? (dotS? src) (asmcpp src <>r ds9 is vb) (dots? src) (asmwrap (incbins <>r is src)) <>r)
        lx (clexw (deftext ds9 + txt) (1 - #ds9))
        _ (okv? lx || ccdie lx src ("cc: lex error in " + src))
        pp (cpp <>lx (name \ sys? \ incload vb is (cdir src) name sys?) src)
@@ -456,7 +475,7 @@
            [".ARM.attributes" 1879048195 0 1                                         ; SHT_AARCH64_ATTRIBUTES
              [['raw ([65] + le32 35 + o-strbytes "aeabi_feature_and_bits"
                      + [0 1 0 0 b 1 p 2 0])]]]]))                              ; optional, uleb; bti pac gcs
-   (cc-objbytes src (t @ {'ni ni 'tgt tgt 'sal sal 'bp bp}))
+   (cc-objbytes src (t @ {'ni ni 'tgt tgt 'sal sal 'bp bp 'rp rp 'old old 'nofp nofp 'osz osz}))
     (@ (cc-parse src t)
        [_ ast stag sigs weaks sfns svars sects alias aligns ainl noinl consts rstrs gregs vol]
        ; wasm rides gen's rv64 lane whole (src/love/holo/wasmfn.l is the machine under it) and
@@ -464,16 +483,19 @@
        ; takes the name itself -- rv64? covers both, and the wide multiply wasm lacks must be
        ; declined.
        (: ob (cgen-obj ast stag sigs weaks
-                       [sfns svars sects alias aligns ainl noinl consts rstrs ni gregs vol [sal bp]] tgt)
+                       [sfns svars sects alias aligns ainl noinl consts rstrs ni gregs vol [sal bp rp old osz]] tgt)
           (okv? ob || ccdie ob src ("cc: codegen error in " + src),
+           ; -mno-sse and kin: a float register anywhere in the code is the refusal, by the file
+           !(nofp && fpuse? (ob 1)) || udie 1 ("cc: " + src + ": floating-point code, and -mno-sse (or its kin) rules it out"),
            (@ ob [_ tforms dforms fnames gnames nforms iforms lnames xsecs bforms rforms xfns asecs]
               (: xs (map ([nm forms ro] \ objsec-named nm forms ro) xsecs
                          + map ([nm forms al] \ objsec-code nm forms al) xfns   ; ..and the fns that named a section
                          + bpsecs bp)
                  ; the file-scope asm's sections, and the names its .globl exports by where they landed
-                 at (two? asecs ? asecs [() () ()])
+                 at (two? asecs ? asecs [() () () ()])
                  fns (fnames + filter (s \ !(elem s fnames)) (at 1))
                  gns (gnames + filter (s \ !(elem s gnames)) (at 2))
+                 wks (weaks + filter (s \ !(elem s weaks)) (at 3))   ; ..and those its .weak binds weak
                  ; the two writers, one shape: the standard set for the width, plus whatever
                  ; the TU named. arm32 has no .image lane and no local func symbols for
                  ; statics -- objsecs3 refuses the first, and `lnames` does not ride.
@@ -482,9 +504,9 @@
                        (show [tforms dforms fnames gnames nforms iforms lnames xsecs bforms rforms xfns weaks]))
                     (elf32? tgt)
                     (objsecs32 tgt (objsec-merge (objsecs3 tgt tforms dforms nforms iforms bforms rforms + xs) <at)
-                               fns gns weaks)
+                               fns gns wks)
                     (objsecs tgt (objsec-merge (objsecs4 tforms dforms nforms iforms bforms rforms + xs) <at)
-                             fns gns weaks lnames)))
+                             fns gns wks lnames)))
               (udie 1 "cc: the code generator answered an unexpected shape for \(src)"))))
        (udie 1 "cc: the parser answered an unexpected shape for \(src)"))
    ; a wasm object is the gen tuple as TEXT (above), so it goes to the port whole:
@@ -1096,6 +1118,10 @@
    ; `none` is gcc's word for "read the suffix again", which for us is the default.
    (xlang? w) (w = "c" || w = "none")
    (xdie w) "cc: -x \(w) -- mooncc reads: c none assembler-with-cpp"
+   ; a float register named anywhere in a function's forms (the xmm file, f0..f15)
+   (fpuse? l) (? (two? l) (any fpuse? l)
+                 (name? l) (show l @ s (#s > 1 && s 0 = 102 && 48 <= s 1 && s 1 <= 57))
+                 0)
    (tol? a) (a = "-pipe" || a = "-static" ||
              starts? a "-g" || starts? a "-O" ||
              starts? a "-f" || glu? a 108 || glu? a 76 ||
@@ -1128,7 +1154,7 @@
    ; so it is spelled once rather than wrapped on `{}`.
    (fseed tgt dia) {'c () 'is () 'ds () 'o () 'ins () 'tgt tgt 'os () 'pie () 'org () 'dorg ()
                     'nostd () 'vb () 'ni () 'rdme () 'relo () 'dia dia 'md () 'mmd () 'mf () 'mt () 'mp () 'E () 'xasm () 'undef ()
-                    'swch () 'mpm () 'fx18 () 'sal () 'bp ()}
+                    'swch () 'mpm () 'fx18 () 'sal () 'bp () 'rp () 'old () 'nofp () 'osz ()}
    ; one arm per flag, matched on the line itself: a flag that takes a word binds it in its
    ; pattern, and one with none after it falls through to the dash refusal below
    (flags as t)
@@ -1232,6 +1258,20 @@
           ("-m16" . r) (flags r (pin t 'tgt 'i386m16))
           ("-m64" . r) (flags r (pin t 'tgt 'x64))
           (("-mbranch-protection=" + w) . r) (flags r (pin t 'bp (bpof w)))
+          ; the x86 cpu named: one before the 686 has no cmov, so a select branches instead
+          (("-march=" + w) . r) (flags r (pin t 'old (elem w ["i386" "i486" "i586" "pentium" "pentium-mmx" "lakemont"])))
+          ; the float file refused: code that would touch an xmm or x87 register is a refusal
+          ((a . r) && elem a ["-mno-sse" "-mno-sse2" "-mno-80387" "-msoft-float"]) (flags r (pin t 'nofp 1))
+          ; no lane of ours would use these, so asking for none of them asks nothing
+          ((a . r) && elem a ["-mno-mmx" "-mno-3dnow" "-mno-avx" "-mno-sse4a"]) (flags r t)
+          ; every call keeps esp 16-aligned, which satisfies any boundary asked for
+          (("-mpreferred-stack-boundary=" + _) . r) (flags r t)
+          ; i386's register arguments: the first n words in eax edx ecx (the kernel's realmode
+          ; and 32-bit units ask for 3)
+          (("-mregparm=" + w) . r) (flags r (pin t 'rp (elem w ["0" "1" "2" "3"] ? (tonum w)
+                                                     (udie 2 ("cc: -mregparm=" + w + " -- 0 to 3")))))
+          ; -Os/-Oz ask for size: returns share one epilogue. any other -O asks it back off
+          ((a . r) && starts? a "-O") (flags r (pin t 'osz (elem a ["-Os" "-Oz"])))
           ((a . r) && tol? a) (flags r t)
           ; ahead of the dash refusal, and the only arg that is: a bare `-` is an
           ; input, the source on stdin, which every configure probe writes before it
@@ -1275,6 +1315,7 @@
        _ (f 'tgt = 'wasm && !(f 'os) && pin f 'os 'linux)
        _ ((f 'sal || two? (f 'bp)) && f 'tgt != 'a64 &&
           udie 2 "cc: -mstrict-align and -mbranch-protection lay on a64 only")
+       _ (f 'rp && !(elem (f 'tgt) '(i386 i386m16)) && udie 2 "cc: -mregparm lays on i386 only")
        ; no nest on disk anywhere: the carried source answers, in memory --
        ; pinned once here so every TU and the runtime share the one inflate.
        _ (!(string? (mhome ())) && pin f 'vb (mblob ()))

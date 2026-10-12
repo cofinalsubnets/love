@@ -1372,8 +1372,8 @@ NODE ?= $(shell command -v node 2>/dev/null)
 # seat's room is a number here, not a policy. 256 (the default) is short of the corpus: the
 # collector's doubling asks 4480156 words and the grow refuses, at the same length whichever
 # member is running, the live set being what crossed the line.
-# test_kernel_wasm -- the wasm inle seat (out/love.wasm) under node: the image baked
-# (the egg lane, `bake PATH` on the boot line), then the kernel corpus off the ramfs on the
+# test_kernel_wasm -- the wasm inle seat (out/love.wasm) under node: the image baked (hosted
+# love's, by a process on the egg lane), then the kernel corpus off the ramfs on the
 # woken image, the serial line captured, the (reset) that ends it read as the exit -- what
 # src/tools/ktest.l reads off qemu, with no qemu and no browser.
 ifeq ($(NODE),)
@@ -1406,6 +1406,19 @@ test_kernel_wasm: host
 	@echo TEST test/gate/point.mjs "(the page's pointer and clipboard: select, copy, paste, the wheel)"
 	@$(NODE) $(R)/test/gate/point.mjs $(R)/out/love.wasm out/wasm/love.image out/wasm/point.log \
 	   || { echo "FAIL test_kernel_wasm"; exit 1; }
+	@echo TEST test/kernel/winrun.l "(a window on the paper: its pixels shown, keys by place, the pointer, the text)"
+	@rm -f out/wasm/winrun.ppm
+	@printf 'hi\033[A!' | INLE_RAM=256 $(NODE) $(S)/inle/wasm/inle.mjs --fb 640x400 --dump out/wasm/winrun.ppm \
+	   --after "winrun: paper" --press "KeyA ArrowUp KeyQ" --click 100,50 --for 120 \
+	   --image out/wasm/love.image $(R)/out/love.wasm test/kernel/winrun.l > out/wasm/winrun.log 2>&1; \
+	 grep -q "winrun: paper 640x400 shown 400" out/wasm/winrun.log \
+	   && grep -q 'winrun: (text "hi!")' out/wasm/winrun.log \
+	   && grep -q "winrun: (down 30)" out/wasm/winrun.log && grep -q "winrun: (up 30)" out/wasm/winrun.log \
+	   && grep -q "winrun: (down 328)" out/wasm/winrun.log && grep -q "winrun: (up 16)" out/wasm/winrun.log \
+	   && grep -q "winrun: (press 1 100 50)" out/wasm/winrun.log \
+	   && grep -q "winrun: (release 1 100 50)" out/wasm/winrun.log \
+	   && $(NODE) $(R)/test/gate/ppmcolor.mjs out/wasm/winrun.ppm 255,128,0 \
+	   || { tail -12 out/wasm/winrun.log; echo "FAIL test_kernel_wasm (the window)"; exit 1; }
 	@echo TEST test/gate/idle.mjs "(the machine still sleeps once it has been typed at)"
 	@$(NODE) $(R)/test/gate/idle.mjs $(R)/out/love.wasm out/wasm/love.image out/wasm/idle.log \
 	   || { tail -5 out/wasm/idle.log; echo "FAIL test_kernel_wasm"; exit 1; }
@@ -1443,6 +1456,11 @@ test_kernel_wasm: host
 	   && grep -q "gain 100       1" out/wasm/pack.log \
 	   || { cat out/wasm/pack.log; echo "FAIL test_kernel_wasm (pack differs on this seat)"; exit 1; }
 	@echo "  pack: ok -- pinv and the byte loop agree where the float-to-int is not the host's"
+	@echo TEST test/kernel/proc.l "(a process: love in memory of its own, its calls through the kernel)"
+	@INLE_RAM=512 $(NODE) $(S)/inle/wasm/inle.mjs --image out/wasm/love.image $(R)/out/love.wasm \
+	   test/kernel/proc.l < /dev/null > out/wasm/proc.log 2>&1; \
+	 grep -qx "proc: ok" out/wasm/proc.log || { tail -5 out/wasm/proc.log; echo "FAIL test_kernel_wasm (proc)"; exit 1; }
+	@echo "  proc: ok -- its own cwd and environment, its stdio, and its status back"
 endif
 
 # doom on the wasm seat (src/inle/doom.c's kernel doors under the module): opt-in for the same

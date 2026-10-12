@@ -32,6 +32,7 @@ extern long __love_sys(long n, long a, long b, long c, long d, long e, long f);
 #define hc_fetch_read 0x4021                // (buf, n) -> bytes copied, on from the last
 #define hc_fetch_close 0x4022
 #define hc_host 0x4030                      // +op: kmain's k_host, the seat's own files
+#define hc_proc 0x4040                      // (pid, argv, n, env, n): a process, its own instance
 #define hc_clock_gettime 228
 
 void archinit(void) { }
@@ -70,11 +71,11 @@ void k_tick_sync(void) {
 // waits in the worker's ring, which is deep, so a pasted line arrives whole. asking is
 // the one way a guest that never idles -- a frame loop the horn paces -- hears a key.
 // the page's pointer and clipboard ride lanes of their own beside the keys: a pointer record
-// is how, the button with its modifiers, a pad, then the row and the column as two
+// is how, the button with its modifiers, a pad, then the paper's pixel, y and x, as two
 // little-endian bytes each, and kmain's k_pointer takes it; a paste is plain bytes, taken
 // as the queue has room (with its bracket's room kept back) and closed once it runs dry
 void k_kb_poll(void);
-void k_pointer(uint32_t how, uint32_t b, uint32_t row, uint32_t col);
+void k_pointer(uint32_t how, uint32_t b, uint32_t y, uint32_t x);
 void k_paste_in(uint8_t const *s, long n);
 void k_paste_end(void);
 static void k_point_sync(void) {
@@ -160,6 +161,11 @@ long k_host(long op, long a, long b, long c, long d, long e) {
 void k_reset(void) { serial_drain(); for (;;) __love_sys(hc_reboot, 0, 0, 0, 0, 0, 0); }
 // ..and into another module: the path and the boot line go into the lift slot, and the
 // worker reads the file at the reset the way it lifts one, then boots those bytes
+// a process is an instance of its own, in a worker of its own: the page starts it, and its
+// calls come back through the worker's mailbox to src/inle/sys.c's k_proc_call
+long k_proc_start(long pid, char const *av, uintptr_t an, char const *ev, uintptr_t en) {
+  return __love_sys(hc_proc, pid, (long) av, (long) an, (long) ev, (long) en, 0); }
+
 long k_kexec(char const *p, uintptr_t pn, char const *cmd, uintptr_t cn) {
   unsigned char b[256];
   if (pn + 1 + cn >= sizeof b) return -ENAMETOOLONG;

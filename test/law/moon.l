@@ -1182,18 +1182,18 @@
       ((tacast "__asm__ volatile (\"a\" \"b\"); int x;") = '(prog ((tasm "ab") (gdecl (("x" int ()))))))
       (refused? (cparse <>(clex "int x; asm(\"\" : : \"r\"(x));")))
       (ex = '(((".export_symbol" 1 2 ((label __export_symbol_x) (raw (0)) (align 8) (raw ((fix 8 abs64 x 0))))))
-              () ()))
-      (tp = '((("__tracepoints_ptrs" 1 2 ((align 4) (raw ((fix 4 rel32 __tracepoint_x 4)))))) () ()))
+              () () ()))
+      (tp = '((("__tracepoints_ptrs" 1 2 ((align 4) (raw ((fix 4 rel32 __tracepoint_x 4)))))) () () ()))
       (sc = [[[".static_call.text" 1 6 [['label 'sc] ['label l9] ['raw [233]] ['raw [['fix 4 'rel32 'it 0]]]]]
               [".discard.annotate_insn" 1 0 [['raw [['fix 4 'rel32 l9 4] 1 0 0 0]]]]]
-             ["sc"] ()])
+             ["sc"] () ()])
       ((map (s \ [<s (s 1) (s 2)]) <st) =
          '((".text" 1 6) (".a" 1 0) (".b" 1 0) (".text.hot" 1 6) (".rodata.k" 1 2) (".bss" 8 3)))
       ((<st 0 3) = '((label x) (raw (1)) (raw (4))))
       ((<st 1 3) = '((raw (3))))
       ((<st 4 3) = '((raw (254 255))))
       (two? ob)
-      ((ob 12) = '(((".tb" 1 2 ((raw ((fix 4 rel32 hidden 4)))))) () ()))
+      ((ob 12) = '(((".tb" 1 2 ((raw ((fix 4 rel32 hidden 4)))))) () () ()))
       (elem '(label hidden) (ob 1))
       ; a function's template: gas-text takes it whole unless it carries a directive or a label
       ; beside an instruction; then gas-top reads it from the function's own place, "", its
@@ -1209,9 +1209,9 @@
       ((gas-top-in 'x64 "671: dec %rax\n.pushsection .smp_locks,\"a\"\n.long 671b - .\n.popsection" "" [1 6] "f.asm.3.") =
          '((("" 1 6 ((label f.asm.3.l671.1) (raw (72 255 200))))   ; dec %rax, laid exactly
             (".smp_locks" 1 2 ((raw ((fix 4 rel32 f.asm.3.l671.1 4))))))
-           () ()))
+           () () ()))
       ; ..and gen keeps that label in the function, where the pushed section's word names it
-      ((fob 12) = '(((".t" 1 2 ((raw ((fix 4 rel32 f.asm.0.l1.1 4)))))) () ()))
+      ((fob 12) = '(((".t" 1 2 ((raw ((fix 4 rel32 f.asm.0.l1.1 4)))))) () () ()))
       (elem '(label f.asm.0.l1.1) (fob 1))))
 
 ; -- the alive pass (per-call wrap filtering): a non-leaf fn's homed params spill/reload
@@ -2298,6 +2298,32 @@
       !(elem '(ld r6 fp -16) rl)                 ; a compounding crossing takes a cs seat..
       (cspos rl = 5)                             ; ..saved right after the frame's sub
       (csld? (rl (#rl - 5)))))                    ; ..restored at the teardown's head
+
+; --- the allocator core (x64): a mint takes its copy partner's register when the two
+; never meet, keeps its binding when the machine reads that register past it (an argument
+; into a call), and never shares a non-commutative op's second source
+(: v0 (name "%v0") v1 (name "%v1") v2 (name "%v2")
+   (gV9 _) {'tgt 'x64 'pool0 '(r6 r5 r9 r10 r7 r8) 'sigs {}
+            'vrn 3 'vrt {v0 'r9 v1 'r7 v2 'r10}}
+   vC (vrfix (gV9 ()) [['label 'fn] ['and v0 'r6 7] ['mov 'r0 v0] ['ret]])
+   vA (vrfix (gV9 ()) [['label 'fn] ['li v1 5] ['call 'g9] ['ret]])
+   vS (vrfix (gV9 ()) [['label 'fn] ['sub v2 'r6 'r0] ['mov 'r0 v2] ['ret]])
+   vO (vrfix (gV9 ()) [['label 'fn] ['add v2 'r6 'r0] ['mov 'r0 v2] ['ret]])
+   (test
+      (vC = '((label fn) (and r0 r6 7) (ret)))   ; coalesced: the copy swept
+      (elem '(li r7 5) vA)                       ; the call reads r7: the binding stays
+      (elem '(sub r10 r6 r0) vS)                 ; r0 is sub's second source
+      (vO = '((label fn) (add r0 r6 r0) (ret))))) ; ..but add lays d = b as d += a
+
+; --- ..and on a64, whose alu is three-address: sub's dest takes its second source too
+(: v0 (name "%v0") v2 (name "%v2")
+   (gW9 _) {'tgt 'a64 'pool0 '(r6 r5 r9 r10 r7 r8 r11 r13 r14) 'sigs {}
+            'vrn 3 'vrt {v0 'r9 v2 'r10}}
+   wC (vrfix (gW9 ()) [['label 'fn] ['and v0 'r6 7] ['mov 'r0 v0] ['ret]])
+   wS (vrfix (gW9 ()) [['label 'fn] ['sub v2 'r6 'r0] ['mov 'r0 v2] ['ret]])
+   (test
+      (wC = '((label fn) (and r0 r6 7) (ret)))
+      (wS = '((label fn) (sub r0 r6 r0) (ret)))))
 
 ; --- the allocator owns locals (moon-ssa rung 4): locals homes are placed by
 ; interval -- lpick's raw-touch rank stands (short call-free ranges promote in

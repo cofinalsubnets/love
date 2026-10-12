@@ -79,6 +79,10 @@
          ;; (link.l, kind 10). i386 lays every address so.
          'abs32 ((target + aux) % 4294967296 @ v
                    (le32 (v < 0 ? (v + 4294967296) v)))
+         'abs16 ((target + aux) % 65536 @ v (le16 (v < 0 ? (v + 65536) v)))   ; a 16-bit segment's address
+         'abs8 ((target + aux) % 256 @ v [(v < 0 ? (v + 256) v)])
+         'pc8 (: d (target + aux - (site + width))       ; a hand-laid short jump's displacement
+                 (fits8 d ? 0 (scare 'pc8-range d), [(byte d)]))
          (scare 'badfix kind))
    ;; branch relaxation: rel8 measures from the end of the 2-byte short form, so the distance
    ;; from the instruction itself is two more than the field carries. this RE-LOWERS rather than
