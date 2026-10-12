@@ -15,7 +15,8 @@
          synth-strike synth-feed synth-frame synth-key synth-timbres synth-shifted synth-digits
          synth-chunk synth-lead synth-octaves synth-send synth-play synth-stop synth-pull
          synth-cps! synth-cps synth-cps-step synth-cps-lo synth-cps-hi synth-text synth-ex
-         synth-just synth-sept synth-jdeg synth-dopts synth-drift synth-lname synth-map synth-kmodes)
+         synth-just synth-sept synth-jdeg synth-dopts synth-drift synth-lname synth-map synth-kmodes
+         synth-qwerty synth-hold synth-free synth-wstep synth-wframe synth-paint synth-window synth-trows)
 (borrow 'rove)                          ; the pacer, the song's rate and its lead's ceiling
 (borrow 'harp)                          ; the patterns: a cycle's events
 (borrow 'play)                          ; the voices, the mix, and harp-read for the text
@@ -23,6 +24,7 @@
 (borrow 'drift)                         ; the walk and its chooser
 (borrow 'phrases)                       ; its books
 (borrow 'posix)    ; close, for the horn
+(borrow 'window)   ; -w: the qwerty rows held, in a window of its own
 (:
  esc (string 27)
  synth-digits "1234567890-="           ; the row, a semitone a key
@@ -48,7 +50,7 @@
  (synth-new _) {'oct 0 'tim 0 'vs () 'due () 'fpos 0 'last () 'lk 0 'lt 0 'dirty 1
                 'pat () 'nextp () 'on 0 'cyc 0 'cstart 0 'cps synth-cps 'lmsg "" 'over 0
                 'dr 0 'dw () 'dnow () 'dprev [() ()] 'dph "" 'trail () 'dbook 3
-                'dlean 1.5 'dsteer 1.0 'dhome 0.1 'km 0}
+                'dlean 1.5 'dsteer 1.0 'dhome 0.1 'km 0 'hv ()}
  synth-kmodes ["fixed" "follow" "just"]
 
  ; --- just intonation: the row's twelve over the center, and the septimal ones alt takes
@@ -164,8 +166,9 @@
                       _ (synth-pull st lim)
                       now (map (p \ p 1) (filter (p \ p 0 < lim) (st 'due)))
                       live (filter (v \ v 0 >= base) (st 'vs + now))
+                      held (map (p \ p 2) (st 'hv))
                       ((pins st 'vs live 'due (filter (p \ p 0 >= lim) (st 'due)) 'fpos lim),
-                       say h (pack (mixdown live base synth-chunk) synth-chunk synth-gain)))
+                       say h (pack (mixdown (live + held) base synth-chunk) synth-chunk synth-gain)))
 
  ; --- a key: a note struck, the timbre or the octave turned, the loop played or
  ; stopped and its cps moved; q or ^c is the end ---
@@ -255,7 +258,88 @@
    (ttytake ['hide],
     mind go () (_ \ (hn ? (flush hn, close hn), drain-keys (), ttygive ['hide])),
     0))
- synth-usage "usage: love synth [LOOP]   (1 .. = play, shift and alt bend, tab the timbre, up and down the octave, p e [ ] the loop, q leaves)"
+ ; --- the window: a note sounds while its key is held and fades when it is let go. the
+ ; keys are places, a tracker's two rows: z to / from c below middle c, q to ] from middle
+ ; c, the row above each its sharps. 'hv holds [key semis voice], a voice whose end
+ ; never comes; its release is a short fade from the next frame, into 'vs to ring out ---
+ synth-qwerty {44 -12 31 -11 45 -10 32 -9 46 -8 47 -7 34 -6 48 -5 35 -4 49 -3 36 -2 50 -1
+               51 0 38 1 52 2 39 3 53 4
+               16 0 3 1 17 2 4 3 18 4 19 5 6 6 20 7 7 8 21 9 8 10 22 11 23 12 10 13 24 14
+               11 15 25 16 26 17 13 18 27 19}
+ (synth-hold st k s)
+  (: tm (synth-timbres (st 'tim)) ins (instr (tm 0)) at (st 'fpos) d (tm 1) sh (ins 2)
+     f (261.6255653005986 * exp (s * ln2-12)) r (1.0 / song-rate)
+     fn (ix \ (: t ((ix - at) * r) tp (t * (t > 0.0))
+                (sh tp ix (vphase tp f 0.0) * (1.0 - exp (tp * -420.0))
+                 * (0.5 + 0.5 * exp (tp / d * -2.6)) * (t >= 0.0))))
+     (pins st 'hv ([k s [(at + 3600 * song-rate) fn 0.4 0.4]] . st 'hv) 'last (synth-name s) 'dirty 1))
+ (fade [e f gl gr] at rl)
+  [(at + rl) (ix \ (: g ((at + rl - ix) * (1.0 / rl)) c (g * (g > 0.0))
+                     (f ix * (c + (1.0 - c) * (c > 1.0))))) gl gr]
+ (synth-free st k)
+  (: at (st 'fpos) rl (song-rate // 12)
+     (pins st 'hv (filter (p \ <p != k) (st 'hv))
+              'vs (st 'vs + map (p \ fade (p 2) at rl) (filter (p \ <p = k) (st 'hv)))
+              'dirty 1))
+ ; a window's record: a key down sounds, or is a knob -- tab the timbre, up and down the
+ ; octave, esc the end; a key up lets its note go; a held key's repeats are nothing
+ (synth-wstep st r)
+  (: e <r k (r 1)
+     (? (e = 'close) (pins st 'over 1)
+        (e = 'up) (synth-free st k)
+        (e = 'size) (pins st 'dirty 1)
+        (e != 'down || any (p \ <p = k) (st 'hv)) st
+        (k = 1) (pins st 'over 1)
+        (k = 15) (pins st 'tim ((st 'tim + 1) % #synth-timbres) 'dirty 1)
+        (k = 328) (pins st 'oct (min (st 'oct + 1) synth-octaves) 'dirty 1)
+        (k = 336) (pins st 'oct (max (st 'oct - 1) (0 - synth-octaves)) 'dirty 1)
+        (peep synth-qwerty k () @ o (charm? o ? (synth-hold st k (12.0 * st 'oct + o)) st))))
+ (synth-wframe st)
+  (esc + "[H" + esc + "[2J"
+   + "synth -- the qwerty rows play while they are held\r\n\r\n"
+   + "  timbre " + synth-timbres (st 'tim) 0 + "   octave " + show (st 'oct)
+   + "   last " + (string? (st 'last) ? (st 'last) "-") + "\r\n"
+   + "  held " + foldl (a \ p \ " " + synth-name (p 1) + a) "" (st 'hv) + "\r\n\r\n"
+   + "  z s x d c v g b h n j m , l . ; /       from c below middle c\r\n"
+   + "  q 2 w 3 e r 5 t 6 y 7 u i 9 o 0 p [ = ]  from middle c\r\n\r\n"
+   + "  tab: timbre   up/down: octave   esc: leave")
+ ; rw x rh pixels of col (0xrrggbb) at x y: one row laid by doubling, poured down
+ (fill p w x y rw rh col)
+  (? (rw < 1 || rh < 1) 0
+     (: n (rw * 4) row (cask n)
+        _ (pin row 0 (col & 255), pin row 1 ((col >> 8) & 255), pin row 2 ((col >> 16) & 255))
+        (dbl k) (k < n ? (pour row k row 0 (min k (n - k)), dbl (2 * k)) 0)
+        (dbl 4, each ^rh (j \ pour p (((y + j) * w + x) * 4) row 0 n))))
+ ; the text in console cells over the top, and under it a strip of the 32 keys' notes,
+ ; z's c to ]'s g, a held one lit
+ synth-trows 12
+ (synth-paint st win)
+  (: wh (window-size win) w <wh h (wh 1) p (window-paper win)
+     c (w // 8) r (min synth-trows (h // 16))
+     sc (screen (cask (screen () r c)) r c)
+     _ (scribe sc (synth-wframe st))
+     _ (each ^r (y \ dye sc p w y -1 0))
+     _ (fill p w 0 (r * 16) w (h - r * 16) 0)
+     cw (w // 32) y0 (r * 16 + 16) kh (min 96 (h - y0 - 8))
+     lit (map (q \ synth-qwerty <q) (st 'hv))
+     (each ^32 (i \ (: s (i - 12) sharp (elem ((s + 24) % 12) [1 3 6 8 10])
+                       (fill p w (i * cw + 1) y0 (cw - 2) (sharp ? (kh * 3 // 5) kh)
+                             (? (elem s lit) 16744448 sharp 3684408 13684944))))))
+ (synth-window _)
+  (: _ (synth-warm ()) st (synth-new ())
+     win (window-open 640 400 "synth")
+     (? !(tablet? win) (say err ("synth: no window (" + show win + ")\n"), flush err, 1)
+        (: hn (horn song-rate 2 @ h (nom? h ? () h))
+           pace (pacer ())
+           (feed _) (lead-of (pace! pace) @ l
+                       (hn ? (song-fill hn l (_ \ (synth-feed st hn))) 0))
+           (go _) (feed (),
+                   each (window-events win) (r \ synth-wstep st r),
+                   st 'dirty ? (synth-paint st win, window-show win 0 (window-size win 1), pin st 'dirty 0),
+                   st 'over ? () (rest 4, go ()))
+           (mind go () (_ \ (hn ? (flush hn, close hn), window-close win)),
+            0))))
+ synth-usage "usage: love synth [LOOP]   (1 .. = play, shift and alt bend, tab the timbre, up and down the octave, p e [ ] the loop, q leaves)\n       love synth -w      (a window: the qwerty rows sound while held)"
  ; --- the mitty: the keys a stage over the buffer, a vi stage on the loop's text.
  ; the keys' tick feeds the card; e sends the buffer; q ends both panes ---
  (synth-mitty br vi f) (: _ (synth-warm ()) st (synth-new ())
@@ -282,7 +366,8 @@
     hn ? (flush hn, close hn),
     0))
  (synth-main as) (: br (cite 'mitty) vi (cite 'vi)
-   (? (1 < #as) (say err ("synth: " + synth-usage + "\n"), flush err, 2)
+   (? (as = ["-w"]) (synth-window ())
+      (1 < #as) (say err ("synth: " + synth-usage + "\n"), flush err, 2)
       (tablet? br && tablet? vi) (synth-mitty br vi (two? as ? <as ""))
       (synth-run ())))
  _ (pins (cite 'verbs 'tab) 'synth (udoor 'synth synth-main synth-usage 1 1)))
