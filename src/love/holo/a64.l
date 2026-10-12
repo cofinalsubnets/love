@@ -738,7 +738,7 @@
 
    ;; a relocation: the offset is (target - site)/4, ored into the base word `aux`.
    (a64-patch kind target0 site width aux0)
-      (: af (elem kind a64-afix)                              ; an address fix carries its addend
+      (: af (elem kind a64-afixk)                              ; an address fix carries its addend
          target (af ? (target0 + afix-ad aux0) target0) aux (af ? (afix-w aux0) aux0)
          rb (target - site)
          rel (rb // 4)
@@ -753,8 +753,9 @@
             ; a load/store's imm12 counts units of its access width: an `ldr x` reads 8s
             (elem kind '(lo12s1 lo12s2 lo12s4 lo12s8 lo12s16))
              (le32 (aux | (target % 4096) // (kind @ 'lo12s1 1 'lo12s2 2 'lo12s4 4 'lo12s8 8 16) << 10))
-            (kind = 'adr21) (: rb (target - site & 2097151)            ; adr: BYTE pc-rel, low 21 bits (two's comp); immlo[30:29] immhi[23:5]
-                               (le32 (aux | ((rb & 3) << 29 | (rb >> 2) << 5))))
+            (kind = 'adr21) (-1048576 <= rb < 1048576 ?               ; adr: BYTE pc-rel, 21 bits (two's comp); immlo[30:29] immhi[23:5]
+                               (rb & 2097151 @ u (le32 (aux | ((u & 3) << 29 | (u >> 2) << 5))))
+                               (scare 'a64-branch-range rb))
             (kind = 'abs64) (le64 (target + aux))                    ; an 8-byte absolute address; aux = the byte addend (&arr[i] = label + offset)
             (scare 'badfix kind)))
 
@@ -765,6 +766,7 @@
        rb (target - site) pg (target // 4096 - site // 4096)
        (? (kind = 'b26 && !(-134217728 <= rb <= 134217727)) ()
           (kind = 'adrp21 && !(-1048576 <= pg <= 1048575)) ()
+          (kind = 'adr21 && !(-1048576 <= rb <= 1048575)) ()
           (a64-patch kind target site width wd)))
 
    a64 {}

@@ -13,6 +13,8 @@ from source with a single command.
 
 - <code>love source</code> extract the bundled source
 - <code>love seed</code> bootstrap a verified identical binary
+- <code>love seed a64 DIR</code> an egg for another machine, baking itself on its first run there
+- <code>love apk MAIN.l</code> an android app running MAIN.l (src/apps/droid)
 
 ## language
 
