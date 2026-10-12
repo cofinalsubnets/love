@@ -21,7 +21,8 @@ const type = (s) => {
   for (const b of new TextEncoder().encode(s)) { kb[tail] = b; tail = (tail + 1) % ring_n; }
   Atomics.store(ctl, 1, tail);
   Atomics.add(ctl, 2, 1); Atomics.notify(ctl, 2); };
-const point = pointlane(ring, ctl), paste = pastelane(ring, ctl);
+const lane = pointlane(ring, ctl), paste = pastelane(ring, ctl);
+const point = (how, b, row, col) => lane(how, b, row * 16, col * 8);    // a cell's corner, 8x16 at scale 1
 
 let said = '';
 const copies = [];
