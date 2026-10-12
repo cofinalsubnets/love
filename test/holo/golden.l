@@ -1506,6 +1506,7 @@
       ("i3.btm" "0fba2905" ((btm bts 4 r1 0 5)))               ; btsl $5,(%ecx)
       ("i3.testm" "f60104" ((testm 1 r1 0 4)))                 ; testb $4,(%ecx)
       ("i3.ldseg" "8cc8" ((ldseg r0 1)))                       ; mov %cs,%eax
+      ("i3.pushseg" "6606660fa01f0fa9" ((pushseg 0 2) (pushseg 4 2) (popseg 3 4) (popseg 5 4)))   ; pushw %es ; pushw %fs ; popl %ds ; popl %gs
       ("i3.stseg" "8ed8" ((stseg 3 r0)))                       ; mov %eax,%ds
       ("i3.ldcr" "0f20c0" ((ldcr r0 0)))                       ; mov %cr0,%eax
       ("i3.stcr" "0f22d9" ((stcr 3 r1)))                       ; mov %ecx,%cr3
@@ -1551,6 +1552,7 @@
       ("i3m16.cas" "f067660fb10a" ((cas r0 r1 r2)))            ; lock cmpxchg %ecx,(%edx)
       ("i3m16.alum.i" "67830903" ((alum or 2 r1 0 3)))         ; orw $3,(%ecx)
       ("i3m16.ldseg" "668cc8" ((ldseg r0 1)))                  ; mov %cs,%eax
+      ("i3m16.pushseg" "060fa0661f660fa9" ((pushseg 0 2) (pushseg 4 2) (popseg 3 4) (popseg 5 4)))   ; pushw %es ; pushw %fs ; popl %ds ; popl %gs
       ("i3m16.str" "66a5" ((str movs 4)))                      ; movsl
       ("i3m16.strb" "aa" ((str stos 1)))                       ; stosb
       ("i3m16.ret" "66c3" ((ret)))                             ; ret

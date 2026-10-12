@@ -300,15 +300,6 @@
                att >l)))
        (att (rev (st 'cd)),
         ()))
-   ; substitute every mint over the assembled prologue+body+epilogue, the innermost build-tail
-   ; link: sibcall and soften read registers, so neither may meet a vreg. the assignment runs first
-   (vrfix g fs)
-    (!(peep g 'vrn 0) ? fs
-       (: _ (rasg g fs)
-          t (g 'vrt)
-          (fix1 x) (two? x ? (map fix1 x) (t x @ p9 (p9 ? p9 x)))
-          (sweep (f . u)) (f @ ('mov x x) (sweep u) (f . sweep u))
-        (sweep (map fix1 fs))))
    (callish? (a . u))                                ; does the AST reach a call? (an inline splice still may)
     ; a statement expression resets the pool per statement: a barrier, like a call
     (a = 'call || a = 'sexpr || callish? a || callish? u)
@@ -377,8 +368,10 @@
    (m16? g) (g 'tgt = 'i386m16)
    (m16b g) (m16? g ? [102] ())                    ; a raw 32-bit operation's operand-size prefix in a 16-bit segment
    (wsize g) (ilp32? g ? 4 8)                       ; the machine word in bytes (a pointer, a gp scalar, a stack cell)
-   (argr g) (? (a8? g) argregs-a64 (t32? g) argregs-t32 (ia32? g) () argregs)   ; riscv a0..a7 map onto the same r0..r7
-   (ngp g) (? (a8? g) 8 (t32? g) 4 (ia32? g) 0 6)
+   (argr g) (? (a8? g) argregs-a64 (t32? g) argregs-t32 (ia32? g) (take (rpn g) '(r0 r2 r1)) argregs)   ; riscv a0..a7 map onto the same r0..r7; i386 -mregparm's eax edx ecx
+   (ngp g) (? (a8? g) 8 (t32? g) 4 (ia32? g) (rpn g) 6)
+   ; i386's hidden result pointer: eax under -mregparm (a variadic call keeps every word on the stack), else the first stack word
+   (srreg? g va) (ia32? g && 0 < rpn g && !va)
    (pkr g) (? (a64? g) 'r15 (t32? g) 'r12 (rv64? g) 'r12 'r3)   ; the callr park (rbx / x15 / IP / t4), clear of the arg registers
    (ip2 g) (a8? g ? 'r1 'r2)                      ; an int-pair aggregate's second register (rax:rdx / x0:x1 / a0:a1); thumb2 unused for M1 scalar
    (ovb g) (? (a8? g) 32 (v6m? g) 12 (ilp32? g) 8 16)   ; overflow params above the push cells: x64 [ret+rbp]=16; a64/riscv 2x16; thumb2 lr+fp=8; v6m lr+fp+r4=12
@@ -1044,7 +1037,7 @@
     (? (relish? cnd && (ea @ ('num 1) 1 ()) && (eb @ ('num 0) 1 ())) (cgexpr g env cnd wnt)
        (relish? cnd && (ea @ ('num 0) 1 ()) && (eb @ ('num 1) 1 ())) (cgexpr g env ['un 'not cnd] wnt)
        (fminmax g env cnd ea eb @ r
-          (? (r != 'no) r (x86? g || a64? g) (icmov g env cnd ea eb) 'no)))   ; rv64 has no cmov
+          (? (r != 'no) r ((x86? g && !(old86? g)) || a64? g) (icmov g env cnd ea eb) 'no)))   ; rv64 has no cmov, nor i386 before the 686
    (fminmax g env cnd ea eb)
     (cnd @ ('bin op a b && x64? g && elem op '(lt gt) && flo9? g env a && flo9? g env b &&   ; minsd/maxsd are x64's (fmin's NaN differs)
             !(wrany? a || callish? a || wrany? b || callish? b) &&
@@ -2952,7 +2945,7 @@
              (<en = 'loc) [['ezx i] [['ldsd (xmmreg i) 'r4 <>en]]]
              'no)))
    (ezall g env e pty gpc xmmc va)
-    (ia32? g ? 'no                                   ; i386 targets no register: every argument is a stack word
+    (ia32? g ? (gpc < ngp g ? (ezarg g env e pty gpc) 'no)   ; i386: a -mregparm word, never an xmm
        (: z (gpc < ngp g ? (ezarg g env e pty gpc) 'no)
           (z != 'no || va ? z (ezxarg g env e pty xmmc))))
    (ezarg g env e pty i)
@@ -3012,7 +3005,7 @@
            ; a direct &x / array / struct-var arg is presumed dead once the callee returns: argpos exempts its lea from fesc.
            ; aim the first cell arg at its seat (it evaluates last, nothing after writes it); dir only, never a home seat
            (: aim (: (psh9 pl) (two? pl ?
-                                  (elem <<<pl '(g g2 g4 x x2 p2 ezd) || psh9 >pl))
+                                  (elem <<<pl '(g g2 g4 gn x x2 p2 ezd) || psh9 >pl))
                      rT (argr g gpc)
                      (dir && gpc < ngp g && !(psh9 acc) &&
                       !(two? (assoc rT (g 'homes))) ? rT))
@@ -3074,10 +3067,20 @@
                                  (kls >as (i + 1) (gpc + gpn) (xmmc + xmn) ovc
                                       (. [['p2 f0 i0 f1 i1] (tor0 g a + (a8? g ? (ldw2 g aty) push2w))]
                                             acc)))))
-                       ; an i386 struct: its bytes into the block at ovc, words then the odd tail
+                       ; an i386 struct under -mregparm: its words in registers when that many are left (gcc
+                       ; passes an aggregate as it does a long long), laid in a cell the pops read
+                       (ia32? g && stru? aty && 0 < tsz g aty && gpc + ((aup (tsz g aty) 4) // 4) <= ngp g)
+                        (: sz (tsz g aty) nw (sz // 4)
+                           (kls >as (i + 1) (gpc + ((aup sz 4) // 4)) xmmc ovc
+                                ([['gn gpc ((aup sz 4) // 4)]
+                                  (tor0 g a + '((sub sp sp 16))
+                                   + catmap (j \ [['ld 'r1 'r0 (4 * j)] ['st 'sp (4 * j) 'r1]]) ^nw
+                                   + catmap (j \ [['ldu1 'r1 'r0 (4 * nw + j)] ['st1 'sp (4 * nw + j) 'r1]]) ^(sz % 4))]
+                                 . acc)))
+                       ; an i386 struct: its bytes into the block at ovc, words then the odd tail; the registers left are spent
                        (ia32? g && stru? aty)
                         (: sz (tsz g aty) nw (sz // 4)
-                           (kls >as (i + 1) gpc xmmc (ovc + aup sz 4)
+                           (kls >as (i + 1) (ngp g) xmmc (ovc + aup sz 4)
                                 ([['ov ovc (aup sz 4)]
                                   (tor0 g a
                                    + catmap (j \ [['ld 'r1 'r0 (4 * j)] ['st 'sp (ovc + 4 * j) 'r1]]) ^nw
@@ -3111,8 +3114,12 @@
                                 (. [['ov ovc (fl ? 4 8)]
                                     (asflo g a + (fl ? [['cvtsd2ss 'f0 'f0] ['stss 'sp ovc 'f0]] [['stsd 'sp ovc 'f0]]))]
                                    acc)))
-                       (pair? g aty && ia32? g)                  ; i386: the pair's two words where the block stands
-                        (kls >as (i + 1) gpc xmmc (ovc + 8)
+                       ; i386: a pair rides two registers when two are left (-mregparm), and spends the rest
+                       ; when not; the stack's pair is its two words where the block stands
+                       (pair? g aty && ia32? g && gpc + 2 <= ngp g)
+                        (kls >as (i + 1) (gpc + 2) xmmc ovc ([['g2 gpc] (asll g a + spush2)] . acc))
+                       (pair? g aty && ia32? g)
+                        (kls >as (i + 1) (ngp g) xmmc (ovc + 8)
                              (. [['ov ovc 8] (asll g a + pstw 'sp ovc 'r0 'r1)] acc))
                        (pair? g aty)                             ; a pair arg: an even-odd register pair (AAPCS32
                         (aup gpc 2 @ gpe                  ;  rounds up), else the stack 8-aligned -- and gp
@@ -3203,8 +3210,11 @@
        ; ezride: every arg a pure leaf, so no sibling evaluation can move a register-resident param (ezarg's ride lane)
        _ (pin g 'ezride (: (pure? l) (!(two? l) ? 1 (elem <<l '(num var) && pure? >l))
                           (pure? ags)))
-       ; i386's hidden pointer is the block's first word, so the arguments start past it
-       kr (kls ags 0 (sr6 && !(a64? g) && !(ia32? g) ? 1 0) 0 (sr6 && ia32? g ? 4 0) ())
+       ; i386's hidden pointer is the block's first word, so the arguments start past it -- or eax under
+       ; -mregparm; a variadic i386 call lays every word on the stack (gp starts spent)
+       srg (sr6 && srreg? g va?)
+       srk (sr6 && ia32? g && !srg ? 4 0)
+       kr (kls ags 0 (? (ia32? g) (? va? (ngp g) srg 1 0) (sr6 && !(a64? g)) 1 0) 0 srk ())
        (pin g 'ezride (),
         bad? kr ? 'bad
           (: ov? (kent \ (<<kent = 'ov))
@@ -3212,7 +3222,7 @@
                                      (go1 >l1 (ov? <l1 ? (<l1 . acc1) acc1)))
                     (go1 kr ()))                          ; overflow entries, reversed (deepest pushes first)
              rgr (: (go2 l2 acc2) (!(two? l2) ? acc2
-                                     (go2 >l2 (elem <<<l2 '(g g2 g4 x x2 p2 ezd s sn) ?
+                                     (go2 >l2 (elem <<<l2 '(g g2 g4 gn x x2 p2 ezd s sn) ?
                                                       (<l2 . acc2) acc2)))
                     (go2 kr ()))                          ; pushing register entries, reversed (pops run forward)
              (pushcat l3 acc3) (!(two? l3) ? acc3 (pushcat >l3 (acc3 + <><l3)))
@@ -3226,6 +3236,9 @@
                                         [['ld (argr g <>kc) 'sp 0]
                                            ['ld (argr g (<>kc + 1)) 'sp 4]
                                            '(add sp sp 16)]
+                                       'gn   ; an i386 struct's n words off one cell, in argument order
+                                        (catmap (j \ [['ld (argr g (<>kc + j)) 'sp (4 * j)]]) ^(<>>kc)
+                                         + '((add sp sp 16)))
                                        'g4   ; the v6-M whole-composite quad: r0-r3 off one cell
                                         '((ld r0 sp 0) (ld r1 sp 4)
                                            (ld r2 sp 8) (ld r3 sp 12)
@@ -3270,7 +3283,7 @@
                                         (: ce <<l9
                                            e9 (<ce @ 'ov (<>ce + (two? >>ce ? <>>ce 4)) 0)
                                            (go9 >l9 (m9 < e9 ? e9 m9))))
-                         (go9 kr (sr6 && ia32? g ? 4 0)))
+                         (go9 kr srk))
                       (8 * nov + padn))
              ; x64 pads then pushes; a64/t32/i386 allocate the block up front and the ov forms store into it
              pad (arm? g || ia32? g ? (0 < ovblk ? [['sub 'sp 'sp ovblk]])
@@ -3312,8 +3325,8 @@
                             (ret = 'float) '((movqxr f0 r0) (cvtss2sd f0 f0))
                             '((movqxr f0 r0)))
                     ; the hidden sret pointer rides the first argument register (a64: x8); the result is the temp's address, fresh in r0
-                    srin (sr6 ? (srpass g sroff))
-                    srout (sr6 ? (srback g sroff))
+                    srin (sr6 ? (srpass g sroff srg))
+                    srout (sr6 ? (srback g sroff srg))
                     (mkv ret 'r0 (pf + spills + ezf + pops + setal + srin + [['call (intern <>hd)]] + fres + rext g ret + pairin g ret + srout + clean + relods)))
                 (: hr (cgexpr g env hd ())                   ; a function-pointer value: park (x64 rbx; a64 x15), callr
                    pk (pkr g)
@@ -3332,13 +3345,13 @@
                           (mkv (fnret (vty hr)) 'r0 (pf + tor0 g hr + [['st 'r4 pko 'r0]] +
                                     spills + ezf + pops + setal + [['ld pk 'r4 pko] ['callr pk]] + fres + clean + relods)))
                       (mkv (fnret (vty hr)) 'r0 (pf + tor0 g hr + [['mov pk 'r0]] +
-                                spills + ezf + pops + setal + (sr6 ? (srpass g sroff) ()) + [['callr pk]] +
-                                rext g (fnret (vty hr)) + pairin g (fnret (vty hr)) + (sr6 ? (srback g sroff) ()) + clean + relods))))))))
+                                spills + ezf + pops + setal + (sr6 ? (srpass g sroff srg) ()) + [['callr pk]] +
+                                rext g (fnret (vty hr)) + pairin g (fnret (vty hr)) + (sr6 ? (srback g sroff srg) ()) + clean + relods))))))))
    ; the hidden result pointer, out and back: a register (a64 x8, else the first argument's), or on
    ; i386 the block's first word -- which the callee pops (ret $4), so the caller's block is 4 short
-   (srpass g off) (ia32? g ? [['lea 'r1 'r4 off] ['st 'sp 0 'r1]] [['lea (srreg g) 'r4 off]])
+   (srpass g off rg) (ia32? g && !rg ? [['lea 'r1 'r4 off] ['st 'sp 0 'r1]] [['lea (srreg g) 'r4 off]])
    ; ..as raw bytes: the callee's pop is no IR form, so the passes' sp model never sees it leave or return
-   (srback g off) ((ia32? g ? [['raw (m16b g + [131 236 4])]] ()) + [['lea 'r0 'r4 off]])   ; sub esp,4
+   (srback g off rg) ((ia32? g && !rg ? [['raw (m16b g + [131 236 4])]] ()) + [['lea 'r0 'r4 off]])   ; sub esp,4: the callee's ret $4
    ; i386's double <-> pair moves as the forms every sweep reads: a 16-byte cell, the two words and
    ; the double through it. movqxr/movqrx name only the pair's low half, which x64's copy and store
    ; forwarding would rewrite without its twin
@@ -4301,7 +4314,7 @@
                               (scan >l D vs r3f live)))
                        (xit? f)
                         (scan >l D vs (r3f || !a64 && elem 'r3 >f) ())
-                       (elem <f '(raw push pop)) 'no
+                       (elem <f '(push pop) || (<f = 'raw && !(elem 'fsafe f))) 'no
                        (elem <f '(call callr))                 ; a plain call rides: sp is as call-stable as r4 was, and
                         ; K9 (8 mod 16) + a 16-multiple D hand the ABI what push r4 did
                         (? a64 'no                                ; bl clobbers lr: the link stays
@@ -4902,6 +4915,10 @@
    ; through a packed struct wears that alignment on its face, and its loads and stores go by
    ; the widest chunk it carries -- r2 gathers and r3 shifts, neither ever a face's base
    (sal? g) (a64? g && <(g 'mo))
+   ; -mregparm=n (i386): the first n argument words ride eax edx ecx
+   (rpn g) (ia32? g ? (drop 2 (g 'mo) @ r (two? r && charm? <r ? <r 0)) 0)
+   ; -march= a cpu before the 686: no cmov
+   (old86? g) (ia32? g ? (drop 3 (g 'mo) @ r (two? r && <r)) 0)
    (lowb x) (x & (0 - x))                            ; the alignment an offset keeps (0 for 0)
    ; the chunks of n bytes at an a-aligned address: (pos width) each, widest first
    (alchunks n a)
@@ -5185,7 +5202,12 @@
        (<f @ op
           (? (elem op lvquiet) [() ()]
              (elem op '(call callr sys))
-              (filter (r9 \ !(elem r9 (csregs g) || vmint? g r9)) u @ c [c c])
+              (filter (r9 \ !(elem r9 (csregs g) || vmint? g r9)) u @ c
+                 ; narrow (the allocator's): a call reads its argument file and al, a callr its target too
+                 (peep g 'lvnarrow () && op != 'sys ?
+                    [(filter (r9 \ elem r9 (argr g) || r9 = 'r0 || nelem r9 (lvgp g)) c +
+                      (op = 'callr && nom? <>f ? [<>f])) c]
+                    [c c]))
              (retx? f) [(lvret g + csregs g) ()]   ; a return reads what it owes back
              (op = 'jmpr) [(filter (r9 \ !(vmint? g r9)) u) ()]
              (rdsp g f @ d (d @ 'bar 'bar [<d <>d])))))
@@ -5240,6 +5262,107 @@
               [lin lot]))))
    (lvout g fs) ; index -> the registers live out of it | 'no
     (lvio g fs @ 'no 'no r <>r)
+   ; the allocator core: a mint's register comes from interference, not the pool's order. its
+   ; liveness watches only the mints and the file, one bit each, a call reading its argument file
+   ; (lvnarrow). a def meets what lives past it (a mov not its source) and every operand but its
+   ; first source (either, for a commutative op). a mint meeting a name on its own register is an
+   ; alias selection relied on, so it keeps that register. colours go in first-mention order -- a
+   ; copy partner's first, then the binding, then the file; a mint left without one keeps the
+   ; whole fn's binding
+   (vafile g) (lvun (g 'pool0) (rafile g))
+   vacomm '(add or and xor adds imul)                 ; holo lays d = b as d op= a
+   (valloc g fs)
+    (: t (g 'vrt)
+       file (vafile g)
+       ix {}                                         ; name -> its bit
+       nx {}                                         ; bit -> name
+       (bit x) (: b (peep ix x 0)
+                  (? (b != 0) b
+                     !(nom? x && (vmint? g x || elem x file)) 0
+                     (: k (peep ix 'n9 0)
+                        b2 (1 << k)
+                      (pin ix 'n9 (k + 1), pin ix x b2, pin nx b2 x, b2))))
+       (bits l) (foldl (a \ x \ a | bit x) 0 l)
+       (lows b) (b = 0 ? () (: lb (b & (0 - b)) (nx lb . lows (b - lb))))
+       _ (map bit file)
+       ms (: (mw acc x) (? (two? x) (foldl mw acc x)
+                           (vmint? g x && peep ix x 0 = 0) (bit x, (x . acc))
+                           acc)
+             (rev (foldl mw () fs)))
+       mm (bits ms)
+       labt {}
+       n (foldl (i \ f \ ((two? f && <f = 'label ? (pin labt <>f i)), i + 1)) 0 fs)
+       (succ f i) (: op (two? f ? <f 'x)
+                     (? (op = 'jmp) [(peep labt <>f -1)]
+                        (op = 'br) [(peep labt <>>f -1) (i + 1)]
+                        (op = 'jmpt) (map (L \ (peep labt L -1)) (f 3))
+                        (xit? f) ()
+                        [(i + 1)]))
+       (pos f y) (: (go l k) (? !(two? l) -1 (<l == y) k (go >l (k + 1))) (go >f 1))
+       rr {} dd {} bd {} sr {} sc {}
+       pt {}                                         ; mint -> copy partners, latest first
+       s0 {}                                         ; mint -> its r0 copy is stored straight off
+       (w1 l i)
+        (? !(two? l) 1
+           (: f <l
+              d (? !(two? f) [() ()] (xjmp? f labt) [file ()] (lvtx g f file))
+              (d @ 'bar ()
+                 (: mv (<f = 'mov)
+                  (pin rr i (bits <d),
+                   pin dd i (bits <>d),
+                   pin bd i (mv ? 0 (bits (filter (y \ pos f y != 2 && !(pos f y = 3 && elem <f vacomm)) <d))),
+                   pin sr i (mv ? (bit <>>f) 0),
+                   pin sc i (succ f i),
+                   (mv && vmint? g <>f ? (pin pt <>f (<>>f . peep pt <>f ()))),
+                   (mv && vmint? g <>>f ? (pin pt <>>f (<>f . peep pt <>>f ()))),
+                   (mv && vmint? g <>>f && <>f = 'r0 && two? >l && two? <>l && <<>l = 'st && (<>l 3) == 'r0 ?
+                      (pin s0 <>>f 1)),
+                   w1 >l (i + 1))))))
+       _ (pin g 'lvnarrow 1)
+       ok1 (w1 fs 0)
+       _ (pin g 'lvnarrow ())
+       lin {} lot {}
+       (pass i ch) (? (i < 0) ch
+                      (: lo (foldl (a \ s \ a | peep lin s 0) 0 (sc i))
+                         li (rr i | (lo - (lo & dd i)))
+                       (pin lot i lo,
+                        (li != peep lin i 0 ? (pin lin i li, pass (i - 1) 1) (pass (i - 1) ch)))))
+       (fix9 _) (pass (n - 1) () ? (fix9 ()) 0)
+       nb {}                                         ; mint -> neighbour bits
+       (nbor m b) (pin nb m (peep nb m 0 | (b - (b & ix m))))
+       (w2 i) (? (i >= n) 1
+                 (: db (dd i)
+                    lx (lot i - (lot i & sr i))
+                  (db = 0 ? () (map (x \ nbor x (lx | db | bd i)) (lows (db & mm))),
+                   (db = 0 ? () (map (y \ nbor y db) (lows (lx & mm)))),
+                   w2 (i + 1))))
+       sm (foldl (a \ m \ pin a (t m) (peep a (t m) (peep ix (t m) 0) | ix m)) {} ms)
+       (fixed? m) (: P (t m) (nelem P file || (peep nb m 0 & peep sm P 0) - (peep nb m 0 & ix m) != 0))
+       col {}
+       (cof n9) (vmint? g n9 ? (col n9) n9)
+       (pick m)
+        (: forb (map cof (lows (peep nb m 0)))
+           cs (filter (r \ nelem r forb) file)
+           ; r0 dies fast: a stored value born there leaves stld nothing to forward from
+           pp (filter (r \ elem r cs && !(r = 'r0 && s0 m)) (map cof (peep pt m ())))
+           (? (two? pp) <pp (elem (t m) cs) (t m) (two? cs) <cs))
+       (go l) (? !(two? l) 1
+                 (col <l) (go >l)
+                 (pick <l @ r (r ? (pin col <l r, go >l))))
+       (? !ok1 (rasg g fs)
+          (: _ (fix9 ())
+             _ (w2 0)
+             _ (map (m \ (fixed? m ? (pin col m (t m)))) ms)
+             ((go ms) ? (map (m \ pin t m (col m)) ms) (rasg g fs)))))
+   ; substitute every mint over the assembled prologue+body+epilogue, the innermost build-tail
+   ; link: sibcall and soften read registers, so neither may meet a vreg. the assignment runs first
+   (vrfix g fs)
+    (!(peep g 'vrn 0) ? fs
+       (: _ (x64? g && !(abl? g 'valloc) ? (valloc g fs) (rasg g fs))
+          t (g 'vrt)
+          (fix1 x) (two? x ? (map fix1 x) (t x @ p9 (p9 ? p9 x)))
+          (sweep (f . u)) (f @ ('mov x x) (sweep u) (f . sweep u))
+        (sweep (map fix1 fs))))
 
    ; a recomputed alu value (x64, a64, off liveness): within a straight run, (op h a b) again
    ; with a and b unchanged is (mov h2 h) -- and where h was taken once in between by a def
@@ -7017,7 +7140,7 @@
    asmnames (foldl (t \ i \ "r" + show i @ s9 (pin t (name s9) s9)) {} ^11)
    (asmreg? g r9) (elem r9 (asmfile g) || a64? g && r9 = 'r4)
    (asmfile g) (ia32? g ? '(r0 r1 r2 r3 r5 r6) asmregs)      ; i386 has eight registers, esp and ebp aside
-   (asmpk g) (ia32? g ? '(r6 r5 r2 r1 r0) asmpick)
+   (asmpk g) (ia32? g ? '(r2 r1 r0 r6 r5) asmpick)   ; i386's esi edi are callee-saved: taken last, and saved (cgasm1)
    ; an x64 xmm0..15 or an a64 v0..31, by name
    (vclob? g c) (: (num k) (: d (chars (snip c k #c))
                               (? (two? d && foldl (\ a ch (a && 48 <= ch <= 57)) 1 d) (foldl (\ a ch (a * 10 + ch - 48)) 0 d) -1))
@@ -7189,6 +7312,9 @@
                       100 (x86 ? 'r2 'bad) 83 (x86 ? 'r5 'bad) 68 (x86 ? 'r6 'bad)
                       (elem c0 asmimm ? 'imm 'bad))
           (c9 = "Nd" || c9 = "dN") (x86 ? 'r2 'bad)
+          ; several register letters ("bdS"): whichever of them is free, ('one r..)
+          (x86 && in? '(97 98 99 100 83 68))
+           ('one . map (c \ c @ 97 'r0 98 'r3 99 'r1 100 'r2 83 'r5 'r6) cs)
           (c9 = "ir" || c9 = "ri" || c9 = "in" || c9 = "ni") 'either
           (in? asmimm) 'imm
           (a64? g && in? '(81 109 111)) 'mem                  ; "Qo": [xN] is offsettable too
@@ -7248,6 +7374,13 @@
    ; one), numbered per reading so an inlined copy lays its own; the other sections ride
    ; 'fasecs out to the object, beside the file-scope asm's. a name the template does not
    ; define (a goto label, a global) stays a fix
+   ; an asm whose spelled text names no stack or frame register and moves no sp (push pop call ret
+   ; enter leave, and their l/w/f/a kin) cannot see the frame: its raw runs wear 'fsafe, and
+   ; unframe drops the link around them as around any form (rawclean takes the mark off)
+   asmsp '("%esp" "%ebp" "%rsp" "%rbp" "%sp" "%bp" "push" "pop" "call" "ret" "enter" "leave")
+   (asmfsafe txt fs)
+    (any (w \ 0 <= findsub txt w) asmsp ? fs (map (f \ (two? f && <f = 'raw ? (f + ['fsafe]) f)) fs))
+   (rawclean fs) (map (f \ (two? f && <f = 'raw && 2 < #f ? [<f <>f] f)) fs)
    (asmbody g tgt neutral? txt)
     ; one blob resolves its labels inside it; an absolute label (pushl's) wants the link, so a
     ; template carrying one takes the runs path, its labels the function's own
@@ -7318,7 +7451,7 @@
                   ; a flag output: a picked register the condition sets right after the body
                   (h = 61 && nom? fc && x64t? g ? (oconv >l (['f 'pick <><l 1 fc] . acc))
                      (asmno g ("an asm flag output \"" + c + "\"" + ontgt g)))
-                 (bad? k || elem k '(imm either) || two? k) (asmno g ("an asm output constrained \"" + c + "\""))
+                 (bad? k || elem k '(imm either) || two? k && <k != 'one) (asmno g ("an asm output constrained \"" + c + "\""))
                  ; a memory output is the asm's own store: its address rides a register, as "m" in
                  (k = 'mem) (oconv >l (['b 'pick ['addr <><l] 0] . acc))
                  (oconv >l ([(h @ 43 'x 'o) (pinof k <><l) <><l (asmw g env <><l)] . acc)))))
@@ -7353,6 +7486,9 @@
                     (!(two? l) ? (rev acc)
                        (: e2 <l k <>e2
                           (? (elem <e2 '(m k)) (assign >l fr (k . acc))
+                             (two? k && <k = 'one)          ; the first free register of the set
+                              (filter (r9 \ elem r9 >k) fr @ c9
+                                 (two? c9 ? (assign >l (filter (r9 \ r9 != <c9) fr) (<c9 . acc)) 'bad))
                              (two? k) (<>k < #acc ? (rev acc <>k @ r9 (assign >l fr (r9 . acc))) 'bad)
                              (k = 'pick)
                               (two? fr ? (assign >l >fr (<fr . acc)) 'bad)
@@ -7371,6 +7507,8 @@
                                    (asmsave? g r9) (clobs >l (r9 . acc))
                                    (asmno g ("an asm clobber of \"" + c + "\"")))))))
                    saves (clobs <>>>>s ())
+                   ; i386's esi edi seated as an operand are the caller's: saved around the whole asm
+                   csops (bad? saves || bad? asgn ? () (ia32? g ? (filter (r9 \ elem r9 asgn && nelem r9 saves) '(r5 r6)) ()))
                    ; an asm goto with outputs jumps to a trampoline per label that stores them
                    ; and goes on; a pushed clobber would leave it a frame deeper than the fall-through
                    outs? (any (e2 \ elem <e2 '(o x f)) os)
@@ -7378,6 +7516,7 @@
                    (? (bad? saves) 'bad
                       (bad? asgn) (asmno g "more asm operands than registers to seat them")
                       (two? labs && two? saves) (asmno g "an asm goto with a callee-saved clobber")
+                      (two? labs && two? csops) (asmno g "an asm goto with an esi or edi operand")
                       (: ; the operand printers, one per kind (neutral: a plain register name, "m" as `rN, 0`)
                          (rtext a9 w) (md \ (? (md = 108) 'bad (md = 97 && !neutral?) (gas-mem tgt a9) neutral? (md ? 'bad (peep asmnames a9 "r?")) (gas-reg tgt a9 w md)))
                          (itext v) (md \ (? (md = 108) 'bad neutral? (md || !(charm? v) ? 'bad (show v)) (gas-imm tgt v md)))
@@ -7394,27 +7533,30 @@
                          (? (bad? txt) (asmno g "an asm operand the template spells with a modifier it has no lane for")
                             (!neutral? && nom? (gas-nolong tgt txt))
                              (asmno g ("an asm \"" + show (gas-nolong tgt txt) + "\", which 64-bit mode has no encoding for"))
-                            (: ; inputs (and in-out outputs) evaluate and push..
-                               (loads l acc)
+                            (: ; inputs (and in-out outputs) evaluate and push -- all but the last, which
+                               ; stays in r0 and moves to its register ahead of the pops
+                               nin #(filter (e2 \ elem <e2 '(x i b)) ops9)
+                               (loads l k acc)
                                 (!(two? l) ? acc
                                    (<l @ e2
                                       (elem <e2 '(x i b) ?
                                           (cgexpr g env <>>e2 () @ r
                                              (? (bad? r) 'bad
                                                 (flo? (vty r) || stru? (vty r)) (asmno g "a float or struct asm operand")
-                                                (loads >l (acc + tor0 g r + spush 'r0))))
-                                         (loads >l acc))))
-                               lf (loads ops9 ())
+                                                (loads >l (k + 1) (acc + tor0 g r + (k + 1 = nin ? () (spush 'r0))))))
+                                         (loads >l k acc))))
+                               lf (loads ops9 0 ())
                                (bad? lf ? 'bad
                                   (: ; ..then pop into their registers, reverse order
-                                     (pops l al acc)
+                                     (pops l al k acc)
                                       (!(two? l) ? acc
                                          (elem <<l '(x i b) ?
-                                            (pops >l >al (spop <al + acc))
-                                            (pops >l >al acc)))
+                                            (pops >l >al (k + 1) ((k + 1 = nin ? (<al = 'r0 ? () [['mov <al 'r0]]) (spop <al)) + acc))
+                                            (pops >l >al k acc)))
                                      ; the body, the saved clobbers pushed around it
                                      body (map (r9 \ ['push r9]) saves
-                                           + asmbody g tgt neutral? txt
+                                           + (two? labs ? (asmbody g tgt neutral? txt)   ; a goto's edges are not unframe's to see
+                                                 (asmfsafe txt (asmbody g tgt neutral? txt)))
                                            + map (r9 \ ['pop r9]) (rev saves))
                                      ; flag outputs: each set reads the flags before any push moves them
                                      (fsets l al acc)
@@ -7437,11 +7579,21 @@
                                                            (ostores >l >al
                                                             (vfs lv + spop 'r1 + [[(stop ty) 'r0 0 'r1]] + acc)))))))))
                                      osf (ostores ops9 asgn ())
-                                     (post u9) (fsets ops9 asgn () + opush ops9 asgn () + osf)
+                                     ; one register output into a plain memory lvalue (a local's slot, a home's
+                                     ; face) stores straight from its register: no cell
+                                     oix9 ((: (g9 l j) (? !(two? l) -1 (elem <<l '(o x)) j (g9 >l (j + 1)))) ops9 0)
+                                     one? (1 = #(filter (e2 \ elem <e2 '(o x f)) ops9) && 0 <= oix9)
+                                     olv (one? ? (clval g env <>>(ops9 oix9)))
+                                     oreg (one? ? (asgn oix9))
+                                     direct (one? && vm? olv && !(two? (vfs olv)) && vmb olv != oreg
+                                             && !(vty olv @ ty (flo? ty || stru? ty || arr? ty || bitf? ty)))
+                                     (post u9) (fsets ops9 asgn () + (direct ? [[(stop (vty olv)) (vmb olv) (vmo olv) oreg]]
+                                                                         (opush ops9 asgn () + osf)))
                                      (tramps t9 l9) (!(two? t9) ? ()
                                                        ([['label <t9]] + post 0 + [['jmp <l9]] + tramps >t9 >l9))
                                      (bad? osf ? 'bad
-                                        (lf + pops ops9 asgn () + body + post 0
+                                        (map (r9 \ ['push r9]) csops + lf + pops ops9 asgn 0 () + body + post 0
+                                         + map (r9 \ ['pop r9]) (rev csops)
                                          + (tls = labs ? ()
                                               (: done (nlab g (g 'fn + ".ag"))
                                                  ([['jmp done]] + tramps tls labs + [['label done]]))))))))))))))))
@@ -9069,7 +9221,7 @@
        ; the epilogue is per-fn: a vararg t32/rv fn drops its push block on the way out
        _ (pin g 'epi (? (vararg && t32? g) (v6m? g ? epi-t16va epi-t32va)
                         ; an i386 struct return pops its hidden pointer: ret $4 (66 ahead of it in a 16-bit segment)
-                        (ia32? g && two? sig && sretm? g <sig)
+                        (ia32? g && two? sig && sretm? g <sig && !(srreg? g vararg))
                          ('((ld r3 r4 -8) (mov sp r4) (pop r4)) + [['raw ((g 'tgt = 'i386m16 ? [102] ()) + [194 4 0])]])
                         (vararg && rv64? g) epi-rv-va
                         (v6m? g) epi-t16 (arm? g) epi-a64 epi))
@@ -9079,7 +9231,7 @@
        ; spill, then the by-reference struct params' copies (a64), which may run only once every arg register is home
        (spillp hp ps gpi acc)
         (: _ (pin g 'pcopy ())
-           ov0 (ia32? g && charm? (peep g 'sret ()) ? 4 0)   ; i386's hidden pointer is the first stack word (its slot a negative offset)
+           ov0 (ia32? g && charm? (peep g 'sret ()) && !(srreg? g ()) ? 4 0)   ; i386's hidden pointer is the first stack word (its slot a negative offset)
            (spill hp ps gpi 0 ov0 () acc @ r (two? r ? [(<r + g 'pcopy) <>r] r)))
        (spill hp ps gpi xmmi ovi env acc)
         (!(two? ps) ? [acc env]
@@ -9171,9 +9323,14 @@
                         _ (pin g 'pcopy (g 'pcopy + [['ld 'r0 'r4 src] ['lea 'r1 'r4 off]] + bcopy g 0 (tsz g pty) ()))
                         (reg ? (spill hp >ps (gpi + 1) xmmi ovi ([<p off pty] . env) (acc + [['st 'r4 src (argr g gpi)]]))
                            (spill hp >ps gpi xmmi (ovi + 1) ([<p off pty] . env) acc))))
+                 ; an i386 struct in registers (-mregparm): its words into a slot of its own
+                 (ia32? g && stru? pty && 0 < tsz g pty && gpi + ((aup (tsz g pty) 4) // 4) <= ngp g)
+                  (: nw ((aup (tsz g pty) 4) // 4) off (nslot g 16)
+                     (spill hp >ps (gpi + nw) xmmi ovi ([<p off pty] . env)
+                            (acc + catmap (j \ [['st 'r4 (off + 4 * j) (argr g (gpi + j))]]) ^nw)))
                  ; a memory-class param binds straight to the caller's overflow block (SysV: that memory is the callee's copy)
                  (ia32? g && stru? pty)
-                  (spill hp >ps gpi xmmi (ovi + aup (tsz g pty) 4) ([<p (ovb g + ovi) pty] . env) acc)
+                  (spill hp >ps (ngp g) xmmi (ovi + aup (tsz g pty) 4) ([<p (ovb g + ovi) pty] . env) acc)
                  (amem? g pty)
                   (pol? hp || 8 < asalign g pty ? 'bad     ; under a policy, or over-aligned: deopt/refuse
                      (spill hp >ps gpi xmmi (ovi + aslots g pty)
@@ -9198,8 +9355,12 @@
                   (nslot g 8 @ off
                      (spill hp >ps gpi (xmmi + 1) ovi ([<p off pty] . env)
                             (acc + fstf g pty 'r4 off (xmmreg xmmi))))
-                 (pair? g pty && ia32? g)              ; i386: the pair's two words where the caller laid them
-                  (spill hp >ps gpi xmmi (ovi + 8) ([<p (ovb g + ovi) pty] . env) acc)
+                 (pair? g pty && ia32? g && gpi + 2 <= ngp g)   ; i386 -mregparm: two registers, when two are left
+                  (nslot g 8 @ off
+                     (spill hp >ps (gpi + 2) xmmi ovi ([<p off pty] . env)
+                            (acc + pstw 'r4 off (argr g gpi) (argr g (gpi + 1)))))
+                 (pair? g pty && ia32? g)              ; i386: the pair's two words where the caller laid them, the rest spent
+                  (spill hp >ps (ngp g) xmmi (ovi + 8) ([<p (ovb g + ovi) pty] . env) acc)
                  (pair? g pty) (gpair (aup gpi 2))   ; a pair param: the even-odd register pair
                  (d128? pty)                            ; a wide param: not carried (mirror of the arg refusal)
                   (nolane g "a wide value is not carried as a parameter")
@@ -9727,7 +9888,7 @@
               (vararg && ia32? g) (vaspill-ia32 params)
               (vararg && rv64? g) (vaspill-rv params)
               vararg (vaspill params)
-              (sr6f && ia32? g) (spillp () params 0 [['ld 'r1 'r4 (ovb g)] ['st 'r4 (peep g 'sret 0) 'r1]])
+              (sr6f && ia32? g && !(srreg? g ())) (spillp () params 0 [['ld 'r1 'r4 (ovb g)] ['st 'r4 (peep g 'sret 0) 'r1]])
               sr6f (spillp () params (a64? g ? 0 1) [['st 'r4 (peep g 'sret 0) (srreg g)]])
               (spillp () params 0 ()))
        sp1 (uni9 || !(two? vzf) ? sp1 [(<sp1 + vzf) <>sp1])   ; the VLA size-slot zeroes ride after the spills
@@ -9753,7 +9914,7 @@
                      (cfoldir g irx))))))))))))))))
        ; the copy fold again after repack: a slot copied from a seat repack just minted forwards from it now
        (post irx) (deadst g (deaddef g (copyprop g (stld g (copyprop g (repack g irx))))))
-       (bad? irf ? irf (dp 'final (a64sp g (a64mv g (bprot g (frrec g (swrap g (tailarm g (jmpm g (csdrop g (cskeep g (unhome g (jr0 g (rvunframe g (unframe g (hz4 g (laacse g (coal g (copyprop g (recse g (wpair g (dp 'post (post (dp 'deadlab (deadlabk (cg-refs (g 'fasecs) {}) (swp irf)))))))))))))))))))))))))))
+       (bad? irf ? irf (dp 'final (rawclean (a64sp g (a64mv g (bprot g (frrec g (swrap g (tailarm g (jmpm g (csdrop g (cskeep g (unhome g (jr0 g (rvunframe g (unframe g (hz4 g (laacse g (coal g (copyprop g (recse g (wpair g (dp 'post (post (dp 'deadlab (deadlabk (cg-refs (g 'fasecs) {}) (swp irf))))))))))))))))))))))))))))
 
    ; the data tail -> (dataforms nifforms imgforms extras bssforms rodataforms) | 'bad, extras ((name forms
    ; ro?) ..) per other named section in declaration order. love_nifs packs for the linker's __start_/__stop_
@@ -9923,7 +10084,7 @@
           'xfns ()                                  ; (secname forms) per fn that named a section, newest first
           'fasecs ()                                ; a function's asm sections, one gas-top reading each
           'romemo {}                                ; a const candidate's image, laid once and read by both walks
-          'mo (two? xtra && 12 < #xtra ? (xtra 12) [() ()])}   ; the -m asks: [strict-align branch-protection]
+          'mo (two? xtra && 12 < #xtra ? (xtra 12) [() () () ()])}   ; the -m asks: [strict-align branch-protection regparm pre-686]
        ; pass 0: every fn name (the sig table too: an mproto sibling has a sig but no proto form),
        ; and the inline table -- always_inline at any size, noinline never
        ainls (two? xtra && 5 < #xtra ? (xtra 5))

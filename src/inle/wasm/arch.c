@@ -32,6 +32,7 @@ extern long __love_sys(long n, long a, long b, long c, long d, long e, long f);
 #define hc_fetch_read 0x4021                // (buf, n) -> bytes copied, on from the last
 #define hc_fetch_close 0x4022
 #define hc_host 0x4030                      // +op: kmain's k_host, the seat's own files
+#define hc_proc 0x4040                      // (pid, argv, n, env, n): a process, its own instance
 #define hc_clock_gettime 228
 
 void archinit(void) { }
@@ -160,6 +161,11 @@ long k_host(long op, long a, long b, long c, long d, long e) {
 void k_reset(void) { serial_drain(); for (;;) __love_sys(hc_reboot, 0, 0, 0, 0, 0, 0); }
 // ..and into another module: the path and the boot line go into the lift slot, and the
 // worker reads the file at the reset the way it lifts one, then boots those bytes
+// a process is an instance of its own, in a worker of its own: the page starts it, and its
+// calls come back through the worker's mailbox to src/inle/sys.c's k_proc_call
+long k_proc_start(long pid, char const *av, uintptr_t an, char const *ev, uintptr_t en) {
+  return __love_sys(hc_proc, pid, (long) av, (long) an, (long) ev, (long) en, 0); }
+
 long k_kexec(char const *p, uintptr_t pn, char const *cmd, uintptr_t cn) {
   unsigned char b[256];
   if (pn + 1 + cn >= sizeof b) return -ENAMETOOLONG;

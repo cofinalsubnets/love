@@ -276,7 +276,9 @@
    ;; ================================================================ at&T
    ;; --- operands: %reg, $imm, $sym, disp(base,index,scale), sym(%rip), sym+4(%rip), *ind, label ---
    (at-reglook nm) (xa-reg nm @ r (two? r ? r (scare 'as-badreg nm)))
-   (at-mreg f) (0 = #f ? -1 <>(at-reglook (snip f 1 #f)))    ; a %reg field, or absent
+   ; a %reg field, or absent; a 16-bit one (bx bp si di, 16-bit addressing) is marked +32
+   (at-mreg f) (0 = #f ? -1 (at-reglook (snip f 1 #f) @ r (<>>r = 2 ? (<>r + 32) <>r)))
+   (xa-mregname n) (n >= 32 ? (xa-names ((n - 32) * 32 + 2)) (xa-names (n * 32 + 8)))
    (at-operand t)
       (? (t 0 = 42) ['ind (at-operand (snip t 1 #t))]
          (t 0 = 37 && xa-has? t 58) (t @ ("%" + s + ":" + r)
@@ -346,8 +348,8 @@
             (: b (o 1) ix (o 2) sc (o 3) d (o 4)
                (b < 0 && ix < 0 ? (show d)
                   ((d = 0 && b >= 0 ? "" (show d))
-                   + "(" + (b < 0 ? "" ("%" + xa-names (b * 32 + 8)))
-                   + (ix < 0 ? "" (",%" + xa-names (ix * 32 + 8) + (sc = 1 ? "" ("," + show sc))))
+                   + "(" + (b < 0 ? "" ("%" + xa-mregname b))
+                   + (ix < 0 ? "" (",%" + xa-mregname ix + (sc = 1 ? "" ("," + show sc))))
                    + ")"))))
    (at-mn mn w ops)
       (? (xa-nil-att mn) (show (xa-nil-att mn))
@@ -440,8 +442,8 @@
    (in-mem-op o)
       (<o @ 'rip ("[rip" + (nom? <>o ? ("+" + show <>o + at-off <>>o) (<>>o < 0 ? show <>>o ("+" + show <>>o))) + "]")
             (: b (o 1) ix (o 2) sc (o 3) d (o 4)
-               bs (b < 0 ? "" (xa-names (b * 32 + 8)))
-               xs (ix < 0 ? "" ((0 = #bs ? "" "+") + xa-names (ix * 32 + 8) + (sc = 1 ? "" ("*" + show sc))))
+               bs (b < 0 ? "" (xa-mregname b))
+               xs (ix < 0 ? "" ((0 = #bs ? "" "+") + xa-mregname ix + (sc = 1 ? "" ("*" + show sc))))
                bare (0 = #bs && 0 = #xs)
                ds (? (d = 0 && !bare) ""
                      (d < 0 || bare) (show d)

@@ -1372,8 +1372,8 @@ NODE ?= $(shell command -v node 2>/dev/null)
 # seat's room is a number here, not a policy. 256 (the default) is short of the corpus: the
 # collector's doubling asks 4480156 words and the grow refuses, at the same length whichever
 # member is running, the live set being what crossed the line.
-# test_kernel_wasm -- the wasm inle seat (out/love.wasm) under node: the image baked
-# (the egg lane, `bake PATH` on the boot line), then the kernel corpus off the ramfs on the
+# test_kernel_wasm -- the wasm inle seat (out/love.wasm) under node: the image baked (hosted
+# love's, by a process on the egg lane), then the kernel corpus off the ramfs on the
 # woken image, the serial line captured, the (reset) that ends it read as the exit -- what
 # src/tools/ktest.l reads off qemu, with no qemu and no browser.
 ifeq ($(NODE),)
@@ -1443,6 +1443,11 @@ test_kernel_wasm: host
 	   && grep -q "gain 100       1" out/wasm/pack.log \
 	   || { cat out/wasm/pack.log; echo "FAIL test_kernel_wasm (pack differs on this seat)"; exit 1; }
 	@echo "  pack: ok -- pinv and the byte loop agree where the float-to-int is not the host's"
+	@echo TEST test/kernel/proc.l "(a process: love in memory of its own, its calls through the kernel)"
+	@INLE_RAM=512 $(NODE) $(S)/inle/wasm/inle.mjs --image out/wasm/love.image $(R)/out/love.wasm \
+	   test/kernel/proc.l < /dev/null > out/wasm/proc.log 2>&1; \
+	 grep -qx "proc: ok" out/wasm/proc.log || { tail -5 out/wasm/proc.log; echo "FAIL test_kernel_wasm (proc)"; exit 1; }
+	@echo "  proc: ok -- its own cwd and environment, its stdio, and its status back"
 endif
 
 # doom on the wasm seat (src/inle/doom.c's kernel doors under the module): opt-in for the same

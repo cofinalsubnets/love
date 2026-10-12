@@ -456,7 +456,7 @@
            [".ARM.attributes" 1879048195 0 1                                         ; SHT_AARCH64_ATTRIBUTES
              [['raw ([65] + le32 35 + o-strbytes "aeabi_feature_and_bits"
                      + [0 1 0 0 b 1 p 2 0])]]]]))                              ; optional, uleb; bti pac gcs
-   (cc-objbytes src (t @ {'ni ni 'tgt tgt 'sal sal 'bp bp}))
+   (cc-objbytes src (t @ {'ni ni 'tgt tgt 'sal sal 'bp bp 'rp rp 'old old 'nofp nofp}))
     (@ (cc-parse src t)
        [_ ast stag sigs weaks sfns svars sects alias aligns ainl noinl consts rstrs gregs vol]
        ; wasm rides gen's rv64 lane whole (src/love/holo/wasmfn.l is the machine under it) and
@@ -464,8 +464,10 @@
        ; takes the name itself -- rv64? covers both, and the wide multiply wasm lacks must be
        ; declined.
        (: ob (cgen-obj ast stag sigs weaks
-                       [sfns svars sects alias aligns ainl noinl consts rstrs ni gregs vol [sal bp]] tgt)
+                       [sfns svars sects alias aligns ainl noinl consts rstrs ni gregs vol [sal bp rp old]] tgt)
           (okv? ob || ccdie ob src ("cc: codegen error in " + src),
+           ; -mno-sse and kin: a float register anywhere in the code is the refusal, by the file
+           !(nofp && fpuse? (ob 1)) || udie 1 ("cc: " + src + ": floating-point code, and -mno-sse (or its kin) rules it out"),
            (@ ob [_ tforms dforms fnames gnames nforms iforms lnames xsecs bforms rforms xfns asecs]
               (: xs (map ([nm forms ro] \ objsec-named nm forms ro) xsecs
                          + map ([nm forms al] \ objsec-code nm forms al) xfns   ; ..and the fns that named a section
@@ -1096,6 +1098,10 @@
    ; `none` is gcc's word for "read the suffix again", which for us is the default.
    (xlang? w) (w = "c" || w = "none")
    (xdie w) "cc: -x \(w) -- mooncc reads: c none assembler-with-cpp"
+   ; a float register named anywhere in a function's forms (the xmm file, f0..f15)
+   (fpuse? l) (? (two? l) (any fpuse? l)
+                 (name? l) (show l @ s (#s > 1 && s 0 = 102 && 48 <= s 1 && s 1 <= 57))
+                 0)
    (tol? a) (a = "-pipe" || a = "-static" ||
              starts? a "-g" || starts? a "-O" ||
              starts? a "-f" || glu? a 108 || glu? a 76 ||
@@ -1128,7 +1134,7 @@
    ; so it is spelled once rather than wrapped on `{}`.
    (fseed tgt dia) {'c () 'is () 'ds () 'o () 'ins () 'tgt tgt 'os () 'pie () 'org () 'dorg ()
                     'nostd () 'vb () 'ni () 'rdme () 'relo () 'dia dia 'md () 'mmd () 'mf () 'mt () 'mp () 'E () 'xasm () 'undef ()
-                    'swch () 'mpm () 'fx18 () 'sal () 'bp ()}
+                    'swch () 'mpm () 'fx18 () 'sal () 'bp () 'rp () 'old () 'nofp ()}
    ; one arm per flag, matched on the line itself: a flag that takes a word binds it in its
    ; pattern, and one with none after it falls through to the dash refusal below
    (flags as t)
@@ -1232,6 +1238,18 @@
           ("-m16" . r) (flags r (pin t 'tgt 'i386m16))
           ("-m64" . r) (flags r (pin t 'tgt 'x64))
           (("-mbranch-protection=" + w) . r) (flags r (pin t 'bp (bpof w)))
+          ; the x86 cpu named: one before the 686 has no cmov, so a select branches instead
+          (("-march=" + w) . r) (flags r (pin t 'old (elem w ["i386" "i486" "i586" "pentium" "pentium-mmx" "lakemont"])))
+          ; the float file refused: code that would touch an xmm or x87 register is a refusal
+          ((a . r) && elem a ["-mno-sse" "-mno-sse2" "-mno-80387" "-msoft-float"]) (flags r (pin t 'nofp 1))
+          ; no lane of ours would use these, so asking for none of them asks nothing
+          ((a . r) && elem a ["-mno-mmx" "-mno-3dnow" "-mno-avx" "-mno-sse4a"]) (flags r t)
+          ; every call keeps esp 16-aligned, which satisfies any boundary asked for
+          (("-mpreferred-stack-boundary=" + _) . r) (flags r t)
+          ; i386's register arguments: the first n words in eax edx ecx (the kernel's realmode
+          ; and 32-bit units ask for 3)
+          (("-mregparm=" + w) . r) (flags r (pin t 'rp (elem w ["0" "1" "2" "3"] ? (tonum w)
+                                                     (udie 2 ("cc: -mregparm=" + w + " -- 0 to 3")))))
           ((a . r) && tol? a) (flags r t)
           ; ahead of the dash refusal, and the only arg that is: a bare `-` is an
           ; input, the source on stdin, which every configure probe writes before it
@@ -1275,6 +1293,7 @@
        _ (f 'tgt = 'wasm && !(f 'os) && pin f 'os 'linux)
        _ ((f 'sal || two? (f 'bp)) && f 'tgt != 'a64 &&
           udie 2 "cc: -mstrict-align and -mbranch-protection lay on a64 only")
+       _ (f 'rp && !(elem (f 'tgt) '(i386 i386m16)) && udie 2 "cc: -mregparm lays on i386 only")
        ; no nest on disk anywhere: the carried source answers, in memory --
        ; pinned once here so every TU and the runtime share the one inflate.
        _ (!(string? (mhome ())) && pin f 'vb (mblob ()))

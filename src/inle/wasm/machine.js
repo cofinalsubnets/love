@@ -30,6 +30,7 @@ import { ctl_n, ring_n, ring_at, shared_n, scan_at, scan_n, c_sh, c_st,
          point_at, point_n, c_ph, c_pt, paste_at, paste_n, c_xh, c_xt,
          horn_at, horn_n, c_rate, c_wrote, c_played, c_live, pageurl } from './cpu.mjs';
 import { host_shared_n } from './hostring.mjs';
+import { procdied } from './procbox.mjs';
 
 // --- the glass: a canvas as REAL pixels ------------------------------------------------
 // the backing store is the element's own box times a ratio settled here, and
@@ -451,6 +452,13 @@ export async function loveMachine(root) {
   // never has one -- its idle is an Atomics.wait inside the boot's own task.
   const ctx = canvas.getContext('2d');
   const cpu = new Worker(url('cpu.mjs'), { type: 'module' });
+  // a process the machine started (cpu.mjs's proc): a worker of its own over the module,
+  // compiled once -- here, before the bytes go to the machine
+  const module = WebAssembly.compile(wasm);
+  const proc = p => module.then(mod => {
+    const w = new Worker(url('proc.mjs'), { type: 'module' });
+    w.onerror = e => { console.warn(`pid ${p.pid}: ${e.message}`); procdied(p.box, ring); };
+    w.postMessage({ module: mod, ring, ...p }); });
   // the serial run is not rendered -- the canvas already shows it -- but its ARRIVAL is
   // the machine's proof of life, and the page owes the reader that: `status` stays up
   // until the machine has spoken once, so a machine that never boots says so instead of
@@ -498,6 +506,7 @@ export async function loveMachine(root) {
     e.preventDefault(); });
   cpu.onmessage = ({ data: m }) => {
     if (m.frame) { latest = m; follow(m); if (!due) due = requestAnimationFrame(draw); }
+    else if (m.proc) proc(m.proc);
     else if (m.copy !== undefined) { copied = m.copy; if (fresh()) copy(); }
     else if (m.lift !== undefined) lifted(m);
     else if (m.fault) halt('the machine faulted: ' + m.fault); };
