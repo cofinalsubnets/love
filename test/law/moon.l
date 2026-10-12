@@ -869,7 +869,7 @@
        (gripe? g && (gmsg g = "no lane for passing this 24-byte struct by value on a64 (in t)")))
       (cgt (v3 + "struct v m(double x){ struct v r; r.a=x; return r; }") 'a64 @ g
        (gripe? g && (gmsg g = "no lane for returning this 24-byte struct by value on a64 (in m)")))
-      ; C99 complex arithmetic is an x64 lane only
+      ; C99 complex arithmetic is an x86 lane only (x64, i386)
       (cgt "double _Complex f(double _Complex a, double _Complex b){ return a*b; }" 'a64 @ g
        (gripe? g && (gmsg g = "no lane for C99 complex arithmetic on a64 (in f)")))
       ; a refusal with no named cause is still one gripe, never a note on one channel and
