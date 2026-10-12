@@ -92,80 +92,22 @@
                         (? (two? g) (k-proga g (h - 1))
                            (string? t) (k-run-text t . as)
                            ()))
-   (k-slot w n) (? !(two? w) () (n = 0) <w (k-slot >w (n - 1)))
-   ; a console-numbered fd is the parent's view of it, so 2>&1 follows what the parent wears;
-   ; anything higher is duped, the port owning the copy from there
-   (k-port w n f) (? !(charm? f) (k-slot w n) (f < 0) (k-slot w n) (f < 3) (k-slot w f) (fdopen (dup f)))
-   ; what a signal needs of a task: its group, its own ends, and the status it leaves
-   k-grp {} k-ends {} k-died {} k-held {}
-   ; the child's stdio is seated in the parent, twirl not switching, so it is laid before the
-   ; child's first read; the parent takes its own back on the next line. a group is the pid of
-   ; the task that leads it, and fg hands it the terminal on fd 0 (ttyfg).
+   (k-slot w n) (task-slot w n)
+   ; a task here is a process (src/inle/tasks.l): the group's leader takes the terminal on fd 0.
    ; argv may be ['thunk f] instead: a shell's own stage, run as (f ()) -- lush's compound
    ; stages on this forkless seat
    (k-spawn1 argv f0 f1 f2 pg fg)
-     (: pr (? (<argv = 'thunk) [<>argv] (k-prog argv))
-        w (worn ())
-        kw [(k-port w 0 f0) (k-port w 1 f1) (k-port w 2 f2)]
-        own (k-own [f0 f1 f2] kw)              ; the ends duped for it, which a stop closes
-        _ (wear kw)
-        ; the help is the exit door too: a kore main leaves deep by scaring 'leave with its
-        ; status, and a plain scare would flatten every usage code to 1
-        p (twirl (_ \ (: _ (hear (a \ b \ (a == 'leave ? (quit b)
-                                             (say err ";; ", print err a, say err " ", print err b,
-                                              put err 10, quit 1))))
-                         r (two? pr ? (<pr >pr) (say err (<argv + ": not found"), put err 10, 127))
-                         (quit (charm? r ? r 0))))
-                 0)
-        (wear w, k-seat p own pg fg, p))
-   (k-own fs ps) (? !(two? fs) ()
-                    (charm? <fs && 2 < <fs) (<ps . k-own >fs >ps)
-                    (k-own >fs >ps))
-   (k-seat p own pg fg)
-     ((? !(charm? pg) () (pg < 0) () (pg = 0) p pg) @ gp
-        (pin k-ends p own,
-         (charm? gp ? (pin k-grp p gp) 0),
-         (charm? gp && charm? fg && 0 < fg ? (ttyfg gp) 0)))
-   (k-members gp) (k-mem gp (keys k-grp))
-   (k-mem gp ks) (? !(two? ks) ()
-                    (gp = k-grp <ks && !(landed? <ks)) (<ks . k-mem gp >ks)
-                    (k-mem gp >ks))
-   ; kill at task granularity: a stop holds the task (pause), wait answering 256+sig for it; a
-   ; cont lets it go on (resume); any other signal ends it where it stands, closing the ends it
-   ; was handed, wait answering 128+sig. each status is laid before the task moves, since the
-   ; waiter wakes the moment the task is held or gone -- and an end closes before it is gone, so
-   ; a waiter that reads it next finds the end, however the closes yield
-   (k-stop t sig)
-     (? (sig = 18) (pull k-held t 0, resume t)
-        (19 <= sig <= 22) (pin k-held t (256 + sig), pause t)
-        (pin k-died t (128 + sig), pull k-held t 0, each (k-ends t) close, pull k-ends t 0, freeze t))
-   (still p sig)
-     (!(charm? p) || !(charm? sig) ? (nom 'badarg)
-        ((? (p < 0) (k-members -p) (landed? p) () [p]) @ ts
-           (? !(two? ts) (nom 'esrch)
-              (sig = 0) 0
-              (each ts (t \ k-stop t sig), 0))))
-   (k-fdw x) (charm? x ? (x < 0 ? -1 x) -1)
+     (task-run (? (<argv = 'thunk) [<>argv] (k-prog argv)) argv f0 f1 f2 pg fg ttyfg)
+   (still p sig) (task-still p sig)
+   (k-fdw x) (task-fdw x)
    (spawn argv) (k-spawn1 argv -1 -1 -1 -1 0)
    ; exec at task granularity: this task becomes the program and never comes back
    (exec argv) (k-prog argv @ pr
                  (two? pr ? (<pr >pr @ r (quit (charm? r ? r 0)))
                     (say err (<argv + ": not found"), put err 10, quit 127)))
    (spawnio argv i o e cl pg fg) (k-spawn1 argv (k-fdw i) (k-fdw o) (k-fdw e) pg fg)
-   (spawnmap argv fdm cl pg fg)
-     ((: (go m a b c)
-          (atom? m ? (k-spawn1 argv a b c pg fg)
-             (: e <m cf <e sf >e
-                v (charm? sf ? (0 <= sf < 3 ? ((? (sf = 0) a (sf = 1) b c) @ w (w < 0 ? sf w)) sf) -2)
-                (? (cf = 0) (go >m v b c)
-                   (cf = 1) (go >m a v c)
-                   (cf = 2) (go >m a b v)
-                   (go >m a b c))))
-        go)
-      fdm -1 -1 -1)
-   (wait p) (: r (catch p) h (k-held p)
-              (charm? h ? h
-                 (k-died p @ d (pull k-died p 0, pull k-grp p 0, pull k-ends p 0, (charm? d ? d r)))))
+   (spawnmap argv fdm cl pg fg) (task-map fdm (\ a b c (k-spawn1 argv a b c pg fg)))
+   (wait p) (task-wait p)
    ; a child on a pty of its own, as the host's tether: it leads its own group, which takes the
    ; terminal, and a watcher answers a key's signal by stilling whichever group holds it then.
    ; the master closed is a hangup, to that group and to the child, and the watcher ends.
@@ -220,5 +162,5 @@
            (: q (fdopen >r) _ (slurp q) _ (close q)
               (kreap <r @ s (charm? s ? s 1)))))
    ; `proc PROG ARGS ..`: love's PROG as a process, woken from the machine's own image
-   (proc-main args) (k-procrun ((two? (stat "/proc/image") ? ["love" "wake" "/proc/image"] ["love"]) + args))
+   (proc-main args) (k-procrun args)
    _ (pins (cite 'verbs 'tab) 'proc proc-main))

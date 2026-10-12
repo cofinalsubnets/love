@@ -33,6 +33,7 @@ extern long __love_sys(long n, long a, long b, long c, long d, long e, long f);
 #define hc_fetch_close 0x4022
 #define hc_host 0x4030                      // +op: kmain's k_host, the seat's own files
 #define hc_proc 0x4040                      // (pid, argv, n, env, n): a process, its own instance
+#define hc_proc_stop 0x4041                 // (pid): its worker ended where it stands
 #define hc_clock_gettime 228
 
 void archinit(void) { }
@@ -165,6 +166,7 @@ void k_reset(void) { serial_drain(); for (;;) __love_sys(hc_reboot, 0, 0, 0, 0, 
 // calls come back through the worker's mailbox to src/inle/sys.c's k_proc_call
 long k_proc_start(long pid, char const *av, uintptr_t an, char const *ev, uintptr_t en) {
   return __love_sys(hc_proc, pid, (long) av, (long) an, (long) ev, (long) en, 0); }
+void k_proc_stop(long pid) { __love_sys(hc_proc_stop, pid, 0, 0, 0, 0, 0); }
 
 long k_kexec(char const *p, uintptr_t pn, char const *cmd, uintptr_t cn) {
   unsigned char b[256];

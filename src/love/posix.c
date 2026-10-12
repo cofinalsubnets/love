@@ -22,6 +22,7 @@
 #include <fcntl.h>      // open, O_*, AT_FDCWD, FD_CLOEXEC
 #include <sys/stat.h>   // mkdir, stat, chmod, umask, utimensat UTIME_NOW
 #include <sys/wait.h>   // waitpid, WIF* (proc_status)
+#include <spawn.h>      // posix_spawnp: a kernel with no fork
 #include <sys/ioctl.h>  // ioctl TIOCSCTTY TIOC[GS]WINSZ struct winsize
 #include <termios.h>    // tcgetattr tcsetattr ECHO TCSANOW (ptyecho, raw)
 #include <dirent.h>     // opendir/readdir/closedir
@@ -283,6 +284,48 @@ static void spawn_open(int cfd, word d) {
  fd_give(fd, cfd);
  if (fd != cfd) close(fd); }
 
+// a map's source fd: a charm, or the fd under a port -- what a task that wears its own stdio
+// hands a child for 0, 1 and 2. -1 for anything else
+static intptr_t map_src(word sw) { return charmp(sw) ? getcharm(sw) : port_fd(sw); }
+
+// a kernel with no fork (a process on inle) spawns instead: the triple and fdmap become
+// posix_spawn's actions, a deferred redirect opened here and handed over. a failed one says
+// its msg and refuses the spawn, where a forked child would have exited 1
+love_noinline static struct g *host_spawnk(struct g *g, char **cav, int const io[3],
+                                           word fdmap, word closes, intptr_t pg) {
+ posix_spawn_file_actions_t fa;
+ posix_spawnattr_t at;
+ posix_spawn_file_actions_init(&fa), posix_spawnattr_init(&at);
+ if (pg >= 0) posix_spawnattr_setflags(&at, POSIX_SPAWN_SETPGROUP), posix_spawnattr_setpgroup(&at, (pid_t) pg);
+ int opened[16], no = 0, e = 0;
+ for (int i = 0; !e && i < 3; i++) if (io[i] >= 0) e = posix_spawn_file_actions_adddup2(&fa, io[i], i);
+ for (word p = fdmap; !e && chainp(p); p = B(p)) {
+  word x = A(p);
+  intptr_t cfd = chainp(x) && charmp(A(x)) ? getcharm(A(x)) : -1;
+  if (cfd < 0) continue;
+  word sw = B(x);
+  if (map_src(sw) >= 0) e = posix_spawn_file_actions_adddup2(&fa, (int) map_src(sw), (int) cfd);
+  else if (!chainp(sw)) e = posix_spawn_file_actions_addclose(&fa, (int) cfd);
+  else {
+   char const *path = str_c(A(sw));
+   word m = chainp(B(sw)) ? A(B(sw)) : ZeroPoint,
+        w = chainp(B(sw)) && chainp(B(B(sw))) ? A(B(B(sw))) : ZeroPoint;
+   int fd = no == 16 ? (errno = EMFILE, -1) : path ? openfd_mode(path, charmp(m) ? getcharm(m) : 0) : (errno = EINVAL, -1);
+   if (fd < 0) {
+    e = errno;
+    char const *t = str_c(w);
+    if (t) (void) !write(2, t, strlen(t));
+    break; }
+   opened[no++] = fd;
+   e = posix_spawn_file_actions_adddup2(&fa, fd, (int) cfd); } }
+ for (word p = closes; !e && chainp(p); p = B(p))
+  if (getcharm(A(p)) > 2) e = posix_spawn_file_actions_addclose(&fa, (int) getcharm(A(p)));
+ pid_t pid = -1;
+ if (!e) e = posix_spawnp(&pid, argv_file(cav), &fa, &at, cav, environ);
+ while (no) close(opened[--no]);
+ posix_spawn_file_actions_destroy(&fa), posix_spawnattr_destroy(&at);
+ return push(g, 1, e ? love_err(g, e) : putcharm(pid)); }
+
 // the one fork + exec. argv rides at sp[0]; in/out/err are spawnio's fixed triple (-1: leave
 // it), applied first; fdmap is a list of (childfd . srcfd) pairs and closes a list of fds,
 // both read off the stack after the marshal (a GC may have moved them), -1 for none.
@@ -297,6 +340,7 @@ love_noinline static struct g *host_spawnx(struct g *g, int in, int out, int err
  fflush(NULL);                                               // flush now, not twice in the child
  stdin_exact(g);
  pid_t pid = fork();
+ if (pid < 0 && errno == ENOSYS) return host_spawnk(g, cav, (int[3]) { in, out, err }, fdmap, closes, pg);
  if (pid < 0) return push(g, 1, love_err(g, errno));
  if (!pid) {
   if (pg >= 0) {
@@ -312,7 +356,7 @@ love_noinline static struct g *host_spawnx(struct g *g, int in, int out, int err
    intptr_t cfd = charmp(A(e)) ? getcharm(A(e)) : -1;
    if (cfd < 0) continue;
    word sw = B(e);
-   if (charmp(sw) && getcharm(sw) >= 0) fd_give((int) getcharm(sw), (int) cfd);
+   if (map_src(sw) >= 0) fd_give((int) map_src(sw), (int) cfd);
    else if (chainp(sw)) spawn_open((int) cfd, sw);
    else close((int) cfd); }                    // () (or a negative) srcfd closes childfd
   for (word p = closes; chainp(p); p = B(p)) {
@@ -642,7 +686,7 @@ static lvm(lvm_fdopen) {
 
 // (spawnmap argv fdmap closes pg fg) -> pid | a nom. spawnio with `fdmap`, a list of
 // (childfd . srcfd) pairs applied in order in the child -- dup2(srcfd, childfd) for a
-// charm srcfd >= 0, spawn_open for a (path mode msg) srcfd, close(childfd) for () --
+// charm srcfd >= 0 or a port's fd, spawn_open for a (path mode msg) srcfd, close(childfd) for () --
 // each srcfd reading the fd table as remapped so far, the POSIX left-to-right redirection
 // law (`>f 2>&1` is ((1 . f) (2 . 1)) and the second entry sees the first's work). pg/fg
 // and closes ride unchanged from spawnio.
