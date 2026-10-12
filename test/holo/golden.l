@@ -676,6 +676,11 @@
    ;; a64's `//` starts a comment outside a string only (vdso-wrap.S's .incbin, laid as .base64)
    _ (chk-eq "gas.a64.cutquote" '(".ascii \"a//b\" " ".ascii \"q\\\"//\" " "nop ")
         (gf-lines 'a64 ".ascii \"a//b\" // c\n.ascii \"q\\\"//\" //x\nnop // d"))
+   ;; a register variable's or clobber's name takes gcc's r0..r30 for x0..x30 (arm-smccc.h's
+   ;; asm("r0")); asm text keeps llvm-mc's names, where r0 refuses
+   _ (chk-eq "gas.a64.ccnames" '((r0 r28 fp lr () r0) gas-a64-register)
+        [(map (s \ gas-regname 'a64 s) ["r0" "r28" "r29" "r30" "r31" "x0"])
+         (trap (x \ gas-text 'a64 x) "mov r0, r1" (\ a b a))])
    ;; a note section (vdso's .note.Linux) is sht_note; an alias of an alias follows the chain to
    ;; its label, whichever was set first (memcpy.S's __memmove), and a cycle refuses; .weak
    ;; exports and answers its names, a name .globl also says exported once

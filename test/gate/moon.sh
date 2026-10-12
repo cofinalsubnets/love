@@ -147,6 +147,56 @@ moonrun "$ho/.jl.c" -o "$ho/.jl" || fail "mooncc a spliced jump label"
 "$ho/.jl" || fail "a spliced jump label's table or target is wrong (exit $?)"
 $cc_g -O2 -o "$ho/.jlg" "$ho/.jl.c" && { "$ho/.jlg" || fail "gcc -O2 disagrees on the jump-label law (exit $?)"; }
 
+# ------------------------------------------- setjmp: a volatile local changed after it keeps its value
+# the second return restores callee-saved registers, not memory, so a fn that calls setjmp keeps
+# none (C11 7.13.2.1). exit = the count of checks that held; gcc is the oracle
+cat > "$ho/.sj.c" <<'CEOF'
+#include <setjmp.h>
+
+static jmp_buf jb;
+static jmp_buf jb2;
+
+static void bounce(int v) { longjmp(jb, v); }
+static void bounce2(int v) { longjmp(jb2, v); }
+
+static int here(void) {
+  volatile int hops = 0;
+  if (setjmp(jb) == 0) { hops++; longjmp(jb, 1); }
+  return hops == 1;
+}
+
+static int callee(void) {
+  volatile int n = 10;
+  volatile unsigned long acc = 0;
+  int r = setjmp(jb);
+  acc += (unsigned long)r;
+  if (r < 3) { n++; bounce(r + 1); }
+  return n == 13 && acc == 6;
+}
+
+static int other(void) {
+  volatile int hops = 0;
+  volatile long big = 1;
+  if (setjmp(jb2) == 0) { hops = 7; big <<= 20; bounce2(2); }
+  return hops == 7 && big == 1L << 20;
+}
+
+/* many live names around the call: more than the registers that survive it */
+static int crowd(int k) {
+  volatile int a = k, b = k + 1, c = k + 2, d = k + 3, e = k + 4, f = k + 5, g = k + 6;
+  if (setjmp(jb) == 0) { a += 10; b += 10; c += 10; d += 10; e += 10; f += 10; g += 10; bounce(1); }
+  return a + b + c + d + e + f + g == 7 * k + 21 + 70;
+}
+
+int main(void) {
+  return here() + callee() + other() + crowd(5);
+}
+CEOF
+moonrun "$ho/.sj.c" -o "$ho/.sj" || fail "mooncc the setjmp law"
+"$ho/.sj"; st=$?
+[ $st -eq 4 ] || fail "a volatile local across setjmp lost its value ($st of 4 held)"
+$cc_g -O2 -o "$ho/.sjg" "$ho/.sj.c" && { "$ho/.sjg"; [ $? -eq 4 ] || fail "gcc -O2 disagrees on the setjmp law"; }
+
 # ------------------------------------------- -std=: the dialect rail (struct labels)
 # THE ORACLE IS THE LABEL-FREE TWIN. A struct label is not C -- gcc cannot compile the
 # labelled source at all -- so the differential is against the SAME struct with the labels

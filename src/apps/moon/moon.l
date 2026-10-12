@@ -475,7 +475,7 @@
            [".ARM.attributes" 1879048195 0 1                                         ; SHT_AARCH64_ATTRIBUTES
              [['raw ([65] + le32 35 + o-strbytes "aeabi_feature_and_bits"
                      + [0 1 0 0 b 1 p 2 0])]]]]))                              ; optional, uleb; bti pac gcs
-   (cc-objbytes src (t @ {'ni ni 'tgt tgt 'sal sal 'bp bp 'rp rp 'old old 'nofp nofp}))
+   (cc-objbytes src (t @ {'ni ni 'tgt tgt 'sal sal 'bp bp 'rp rp 'old old 'nofp nofp 'osz osz}))
     (@ (cc-parse src t)
        [_ ast stag sigs weaks sfns svars sects alias aligns ainl noinl consts rstrs gregs vol]
        ; wasm rides gen's rv64 lane whole (src/love/holo/wasmfn.l is the machine under it) and
@@ -483,7 +483,7 @@
        ; takes the name itself -- rv64? covers both, and the wide multiply wasm lacks must be
        ; declined.
        (: ob (cgen-obj ast stag sigs weaks
-                       [sfns svars sects alias aligns ainl noinl consts rstrs ni gregs vol [sal bp rp old]] tgt)
+                       [sfns svars sects alias aligns ainl noinl consts rstrs ni gregs vol [sal bp rp old osz]] tgt)
           (okv? ob || ccdie ob src ("cc: codegen error in " + src),
            ; -mno-sse and kin: a float register anywhere in the code is the refusal, by the file
            !(nofp && fpuse? (ob 1)) || udie 1 ("cc: " + src + ": floating-point code, and -mno-sse (or its kin) rules it out"),
@@ -1158,7 +1158,7 @@
    ; so it is spelled once rather than wrapped on `{}`.
    (fseed tgt dia) {'c () 'is () 'ds () 'o () 'ins () 'tgt tgt 'os () 'pie () 'org () 'dorg ()
                     'nostd () 'vb () 'ni () 'rdme () 'relo () 'so () 'libs () 'dia dia 'md () 'mmd () 'mf () 'mt () 'mp () 'E () 'xasm () 'undef ()
-                    'swch () 'mpm () 'fx18 () 'sal () 'bp () 'rp () 'old () 'nofp ()}
+                    'swch () 'mpm () 'fx18 () 'sal () 'bp () 'rp () 'old () 'nofp () 'osz ()}
    ; one arm per flag, matched on the line itself: a flag that takes a word binds it in its
    ; pattern, and one with none after it falls through to the dash refusal below
    (flags as t)
@@ -1279,6 +1279,8 @@
           ; and 32-bit units ask for 3)
           (("-mregparm=" + w) . r) (flags r (pin t 'rp (elem w ["0" "1" "2" "3"] ? (tonum w)
                                                      (udie 2 ("cc: -mregparm=" + w + " -- 0 to 3")))))
+          ; -Os/-Oz ask for size: returns share one epilogue. any other -O asks it back off
+          ((a . r) && starts? a "-O") (flags r (pin t 'osz (elem a ["-Os" "-Oz"])))
           ((a . r) && tol? a) (flags r t)
           ; ahead of the dash refusal, and the only arg that is: a bare `-` is an
           ; input, the source on stdin, which every configure probe writes before it

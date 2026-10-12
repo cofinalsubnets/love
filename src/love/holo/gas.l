@@ -80,6 +80,11 @@
                 (foldl (\ _ i (pin t (name ("x" + show i)) (name ("r" + show i)))) 0 ^29,
                  foldl (\ _ p (pin t <p <>p)) 0 '((x29 fp) (x30 lr) (sp sp) (xzr zr)),
                  t))
+   ; gcc's and clang's other names for x0..x30, which a register variable or clobber may
+   ; spell (arm-smccc.h's asm("r0")); asm text keeps llvm-mc's
+   a64-ccnames (tablet 0 @ t
+                  (foldl (\ _ i (pin t (name ("r" + show i)) (a64-names (name ("x" + show i))))) 0 ^31,
+                   t))
    rv-names (gtab '((zero zr) (x0 zr) (ra lr) (sp sp) (s0 fp) (fp fp) (s1 r15)
                     (a0 r0) (a1 r1) (a2 r2) (a3 r3) (a4 r4) (a5 r5) (a6 r6) (a7 r7)
                     (t0 r8) (t1 r9) (t2 r10) (t3 r11) (t4 r12) (s2 r13) (s3 r14)
@@ -122,7 +127,7 @@
     (name (s @ ("%" + r) r s) @ k
        (? (tgt = 'x64) (peep gx-regs k () @ e (two? e ? <e))
           (g32? tgt) (peep gx-regs k () @ e (two? e && <>e < 8 && elem <e '(r0 r1 r2 r3 sp r4 r5 r6) ? <e))
-          (tgt = 'a64) (peep a64-names k ())
+          (tgt = 'a64) (peep a64-names k (peep a64-ccnames k ()))
           (tgt = 'rv64) (peep rv-names k ())
           (peep t32-names k ())))
 

@@ -21,7 +21,7 @@ static dlimb div128by64(love_limb hi, love_limb lo, love_limb d, love_limb *rem)
 static love_limb
  div2by1(love_limb hi, love_limb lo, love_limb d, love_limb *rem),
  rdigit(char c);
-static love_noinline bool vquot_needs_float(word a, word b);
+static love_noinline bool vquot_needs_float(int op, word a, word b);
 static love_noinline int
  mag_add(love_limb *r, love_limb const *a, int na, love_limb const *b, int nb),
  mag_cmp(love_limb const *a, int na, love_limb const *b, int nb),
@@ -1007,7 +1007,7 @@ static lvm(lvm_ascan) {
   if (!leafp(e)) {
    Have(5);                                                      // (a collection re-runs the op from 0)
    word *dst = Sp - 5;
-   dst[0] = e, dst[1] = hot_hook(g->hot_net), dst[2] = word(ascan_land), dst[3] = word(Ip),
+   dst[0] = e, dst[1] = hot_hook(g->hook[hook_net]), dst[2] = word(ascan_land), dst[3] = word(Ip),
    dst[4] = putcharm((intptr_t) (i << 1) | any);
    Sp = dst; Ip = (union u*) callout_drive; love_musttail return Continue(); }
   if (!leaf_nilp(e) == any) love_musttail return Answer(putcharm(any)); }
@@ -1281,7 +1281,7 @@ flo_t net_im(word x) {
 lvm(lvm_measure) {
   Have(2);
   word *dst = Sp - 2;
-  dst[0] = Sp[0], dst[1] = hot_hook(g->hot_net), dst[2] = word(Ip);
+  dst[0] = Sp[0], dst[1] = hot_hook(g->hook[hook_net]), dst[2] = word(Ip);
   Sp = dst; Ip = (union u*) callout_drive;
   love_musttail return Continue(); }
 // the same for a coin whose kind answers for itself: its slot g->b ('int or 'ceil) is called
@@ -1741,10 +1741,11 @@ static love_noinline void vbin_fill(struct tray *r, word a, word b, int op, bool
    else tray_put_int(r, p, vop_int(op, av, bv)); } } }
 
 // `/` over the integer domain: true if some element divides inexactly, so the
-// whole result promotes to f64 (a bignum scalar forces the float lane). called
-// only after conformance is checked.
-static love_noinline bool vquot_needs_float(word a, word b) {
+// whole result promotes to f64 (a bignum scalar forces the float lane); `//` only
+// if some divisor is 0, as the scalar's. called only after conformance is checked.
+static love_noinline bool vquot_needs_float(int op, word a, word b) {
  bool atray = trayp(a), btray = trayp(b);
+ if (op == vop_fquot && !btray) return b == putcharm(0);
  if ((!atray && bigp(a)) || (!btray && bigp(b))) return true;
  struct tray *va = atray ? tray(a) : 0, *vb = btray ? tray(b) : 0;
  uintptr_t R, n = bshape(a, b, &R), shp[maxrank];
@@ -1754,7 +1755,7 @@ static love_noinline bool vquot_needs_float(word a, word b) {
  for (uintptr_t p = 0; p < n; p++, bc_step(&w)) {
   intptr_t oa = w.oa, ob = w.ob;
   intptr_t av = atray ? tray_get_int(va, oa) : ia, bv = btray ? tray_get_int(vb, ob) : ib;
-  if (bv == 0 || av % bv != 0) return true; }
+  if (bv == 0 || (op == vop_quot && av % bv != 0)) return true; }
  return false; }
 
 lvm(lvm_vbin) {
@@ -1785,8 +1786,8 @@ lvm(lvm_vbin) {
  if (n == (uintptr_t) -1) love_musttail return Push(op == vop_eq ? zero : ZeroPoint);   // non-conformant `=` -> 0
  // `/` over an all-integer broadcast promotes the whole result to f64 the moment
  // any element divides inexactly (matching the scalar `/`); `//` (vop_fquot) stays
- // integer. sound only after conformance is known good (offsets are then in range).
- if (op == vop_quot && !fdom && !cmp && vquot_needs_float(a, b)) fdom = true, ct = love_R;
+ // integer unless it divides by 0. sound only after conformance is known good.
+ if ((op == vop_quot || op == vop_fquot) && !fdom && vquot_needs_float(op, a, b)) fdom = true, ct = love_R;
  enum tray_type rt = cmp ? love_Z : (enum tray_type) ct;   // compare -> 0/1 Z mask
  uintptr_t bytes = tray_bytes(rt, R, n);
  Have(b2w(bytes));

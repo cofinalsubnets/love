@@ -91,7 +91,7 @@
  ; flow at one byte per force, where a whole run would read too far ahead. the one door that
  ; reads stdin exactly: `in` holds nothing in hand, though the device may gulp behind it.
  (trickle p) (see p @ c (c != -1 ? (c . once (_ \ trickle p)))))
-(seal-hook 9 flow)   ; the reader's port door
+(seal-hook 6 flow)   ; the reader's port door
 
 (:: '>>= (l \ (. (last l) (init l))))
 (:: '<=< (g \ (nom 0 @ y ['\ y (foldr (\ f x [f x]) y g)])))
@@ -266,12 +266,12 @@
                   (hcur == pick 0 f) (2 = peek 1 f)
                   (hunc == pick 0 f || string? (nifnom f)) 1
                   !(lit? f && !(tablet? f) && !(hot? f)))
-   (hear f) (? !f (seal-hook 5 ())                  ; every nothing uninstalls
-               (binary? f) (seal-hook 5 f)
+   (hear f) (? !f (seal-hook -1 ())                  ; every nothing uninstalls
+               (binary? f) (seal-hook -1 f)
                (scare 'help-arity f)))
 
 ; the stdio door, the help's twin: (wear (i o e)) re-seats in/out/err for this task,
-(: (wear l) (seal-hook 6 l))
+(: (wear l) (seal-hook -2 l))
 
 ; trap -- (f x) under a help that escapes: the value on a clean run, (n a b) when a scare
 ; landed here. all three operands, always: two hand back a closure, which is truthy, and f
@@ -940,7 +940,7 @@
    ; say m on err and leave with code c
    (udie c m) (say err m, put err 10, uleave c))
 
-(seal-hook 7 show)
+(seal-hook 4 show)
 (: (red? x) (+x < 0) (blue? x) (+x = 0) (green? x) (+x > 0))
 
 ; --- the disassembler: a thread read back as data. the bounds are structural -- stem reads
