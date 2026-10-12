@@ -8,7 +8,7 @@
 ;                              at most most of them | why not
 ;   (gif-palette px n room) -> (rgbs index-of key-fn), at most room colours (sixel's too)
 ;
-; decoding is src/love/lib/gif.c's, frame by frame onto the screen; disposal 2 clears a
+; decoding is src/love/picture/gif.c's, frame by frame onto the screen; disposal 2 clears a
 ; frame's box to see-through (as browsers do) and 3 restores what was under it.
 ; a pixel under half alpha is the transparent index. up to 256 colours stay exact; past
 ; that each channel is cut to 5 bits and a median cut over what is left picks the palette.
@@ -143,7 +143,7 @@
         + gif-bytes [33 255 11] + "NETSCAPE2.0" + gif-bytes [3 1 0 0 0]
         + cats (map frame fs) + string 59))
 
-   ; --- decoding, over src/love/lib/gif.c's gif-frame and gif-clear ----------------------------
+   ; --- decoding, over src/love/picture/gif.c's gif-frame and gif-clear ----------------------------
    ; the offset past the sub-blocks that start at p and their empty one
    (gif-skip s p) (? (#s <= p) #s (s p = 0) (p + 1) (gif-skip s (p + 1 + s p)))
    ; the palette's length in bytes by a flags byte

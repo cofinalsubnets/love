@@ -1,4 +1,4 @@
-// src/love/lib/gz.c -- DEFLATE, both directions. one translation unit because the two halves are
+// src/love/compress/gz.c -- DEFLATE, both directions. one translation unit because the two halves are
 // one format: RFC 1951 §3.2.5's code tables are read by the coder and the decoder alike,
 // and a coder and a decoder that disagree there disagree about the format. src/apps/gz.l's
 // gz-lbase/gz-lext/gz-dbase/gz-dext say the same numbers in love.

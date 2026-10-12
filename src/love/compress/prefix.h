@@ -1,5 +1,5 @@
-// src/love/inf.h -- one canonical prefix code read lsb first, rfc 1951's and vp8l's alike:
-// lib/gz.c's inflate and lib/webp.c's lossless decoder build and read it the same way.
+// src/love/compress/prefix.h -- one canonical prefix code read lsb first, rfc 1951's and vp8l's alike:
+// compress/gz.c's inflate and picture/webp.c's lossless decoder build and read it the same way.
 #ifndef INF_H
 #define INF_H
 #include <stdint.h>

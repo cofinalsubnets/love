@@ -1,6 +1,6 @@
 ; src/apps/tls/client.l -- a TLS 1.3 client over the ciphers beside it: x25519 for the key
 ; share, HKDF-SHA256 for the schedule, and the records under chacha20-poly1305 or, when the
-; server picks it, aes-128-gcm (src/love/lib/tls.c's nifs) -- the one suite RFC 8446 makes every
+; server picks it, aes-128-gcm (src/love/crypto/tls.c's nifs) -- the one suite RFC 8446 makes every
 ; server speak. one group, one version, the two suites; a key's length says which cipher
 ; it is for (32 bytes chacha, 16 aes).
 ;

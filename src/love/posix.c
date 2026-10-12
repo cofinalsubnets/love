@@ -11,7 +11,7 @@
 // the argv marshal lives beside the spawns that consume it; main.c wants it, not static.
 #define _GNU_SOURCE     // unshare / CLONE_* (newns), posix_openpt/grantpt/unlockpt/ptsname
 #include "love.h"
-#include "lib/srctree.h"   // the carried tree, under /love (lovefs.c)
+#include "archive/srctree.h"   // the carried tree, under /love (lovefs.c)
 #include "vfs.h"
 #include <unistd.h>     // fork execvp _exit read close getuid/getgid symlink readlink chown
 #include <stdio.h>      // fflush, rename

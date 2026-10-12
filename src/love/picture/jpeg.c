@@ -1,4 +1,4 @@
-// src/love/lib/jpeg.c
+// src/love/picture/jpeg.c
 // (jpeg-encode w h rgba q) -> a baseline jfif of the w*h rgba image at quality 1..100 | ()
 // jpeg's own tables (itu t.81 annex k) scaled by quality as libjpeg scales them, 4:2:0
 // chroma, alpha dropped. the stream is sized by a counting pass, then written.

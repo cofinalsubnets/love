@@ -309,7 +309,7 @@ static struct g *run_program(struct g *g, bool replp) {
 struct g *boot(struct g *g, bool argp, char const *bake, char const *bake_load, char const *bake_out);
 #else
 #ifdef LvBakeSrc
-#include "lib/srctree.h"
+#include "archive/srctree.h"
 static char const src_distlist[] =
 #include "distlist.h"
  ;

@@ -1,4 +1,4 @@
-// src/love/lib/bcrypt.c
+// src/love/crypto/bcrypt.c
 // (bcrypt-hash pi pass salt) -> 32 bytes   | () misuse
 // openbsd's bcrypt_hash, the block bcrypt_pbkdf repeats: an eksblowfish schedule keyed by
 // two 64-byte sha-512 digests, then "OxychromaticBlowfishSwatDynamite" enciphered 64 times.
