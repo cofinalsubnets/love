@@ -1466,6 +1466,13 @@ test_kernel_wasm: host
 	   test/kernel/spawn.l < /dev/null > out/wasm/spawn.log 2>&1; \
 	 grep -qx "spawn: ok" out/wasm/spawn.log || { tail -5 out/wasm/spawn.log; echo "FAIL test_kernel_wasm (spawn)"; exit 1; }
 	@echo "  spawn: ok -- a pipeline of love processes, the shell's own stages, kill and wait"
+	@echo TEST test/kernel/cprog.l "(a C program is a process: mooncc's wasm, by path and on PATH, in a pipeline)"
+	@rm -rf out/wasm/cprog && mkdir -p out/wasm/cprog
+	@for c in hello cat; do $(ho)/love mooncc -t wasm test/kernel/c/$$c.c -o out/wasm/cprog/$$c.wasm || exit 1; done
+	@INLE_RAM=768 $(NODE) $(S)/inle/wasm/inle.mjs --host $(R)/out/wasm/cprog --image out/wasm/love.image $(R)/out/love.wasm \
+	   test/kernel/cprog.l < /dev/null > out/wasm/cprog.log 2>&1; \
+	 grep -qx "cprog: ok" out/wasm/cprog.log || { tail -5 out/wasm/cprog.log; echo "FAIL test_kernel_wasm (cprog)"; exit 1; }
+	@echo "  cprog: ok -- a C hello and a C cat, as the process shell and the kernel's run them"
 endif
 
 # doom on the wasm seat (src/inle/doom.c's kernel doors under the module): opt-in for the same
