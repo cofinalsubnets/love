@@ -28,6 +28,9 @@ static float ratio(float a, float b, float c, float d) { return (a + b) / (c - d
 static double widen(float a, float b) { return a * b; }        /* float product, then widened */
 static float back(double d, float f) { return d * f; }         /* double product, narrowed once */
 static float (*volatile fp3)(float, float, float) = fma3;       /* a float answer through a pointer */
+/* f literals near a float halfway point: decimal -> binary32 must round once (through double it misses) */
+static const float lits[] = { 2207413077354431152343749e-24f, 164422649459672983053271039e-1f,
+                              5627940207878139239464960001e-1f, 8290357515215873718261718749e-29f };
 
 int main(void) {
   float acc = 0.0f;
@@ -66,6 +69,8 @@ int main(void) {
       mixi(big == fb); mixi(fb < big); mixi(big <= fb * 1.0000001f); if (fb != big) mixi(3); }
   }
   mix(acc); mixi(1);
+  for (int i = 0; i < 4; i++) mix(lits[i]);
+  mix(11534749899641763921919e-1f);
   for (int i = 0; i < 16; i++) mix(arr[i]);
   return (h ^ h >> 8 ^ h >> 16 ^ h >> 24) & 127;   /* under 128: no exit reads as a signal */
 }
