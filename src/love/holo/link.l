@@ -87,7 +87,7 @@
    ldarm-kinds (ld-cls '((2 abs32) (3 rel32) (10 bl) (30 b) (47 movw16) (48 movt16)))
    ; the a64 and riscv instruction fields, by relocation number, in the backend's own names.
    ; rela: S+a arrives whole, and the backend ors its field into the word already there
-   lda64-kinds (ld-cls '((273 ld19) (275 adrp21) (277 addlo12) (278 addlo12) (279 b14) (280 b19) (282 b26) (283 b26)
+   lda64-kinds (ld-cls '((273 ld19) (274 adr21) (275 adrp21) (277 addlo12) (278 addlo12) (279 b14) (280 b19) (282 b26) (283 b26)
                          (284 lo12s2) (285 lo12s4) (286 lo12s8) (299 lo12s16)))
    ldrv-kinds (ld-cls '((17 j21) (19 pcrel)))
    ; EM_386 is rel too, every field whole: R_386_32 and _PC32/_PLT32 four bytes, _16 and
@@ -631,7 +631,7 @@
                     ; put the 64-bit base the startup relocator adds.
                     _ (relbox && abs32? ? (scare 'link-abs32-pie <sy))
                     _ ((elem kind $ rv ? '(2 17 19 57)
-                                            '(1 2 4 10 11 24 257 258 260 261 273 275 277 278 280 282 283 284 285 286 299)) ?
+                                            '(1 2 4 10 11 24 257 258 260 261 273 274 275 277 278 280 282 283 284 285 286 299)) ?
                          0 (scare 'link-reloc kind))
                     _ (ro + w <= sz ? 0 (scare 'link-oob (peep ob 'id 0)))
                     bs (? abs64? (le64 sa)                             ; the abs64 three: S + a outright
