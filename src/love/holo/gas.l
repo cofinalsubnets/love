@@ -1184,6 +1184,7 @@
        ty (2 < #xs ?
              (xs 2 @ t (? (elem t '("@progbits" "%progbits")) 1
                           (elem t '("@nobits" "%nobits")) 8
+                          (elem t '("@note" "%note")) 7
                           (scare 'gas-section-type t)))
              <d)
        [nm ty (1 < #xs ? (gf-flags (xa-unquote (xs 1))) <>d)])
@@ -1594,7 +1595,8 @@
               ; what the pre-pass left: an alias, or a value over labels only .size reads
               (elem mn '(".set" ".equ"))
                (gf-ident? (xa-trim <>xs) ? (pin st 'alias ([(xa-unquote <xs) (xa-unquote <>xs)] . peep st 'alias ())) 0)
-              (mn = ".weak") (pin st 'globl (rev (map xa-unquote xs) + st 'globl))   ; a static link: a definition
+              ; exported, and bound weak: a strong definition elsewhere wins
+              (mn = ".weak") (map xa-unquote xs @ ws (pin st 'globl (rev ws + st 'globl), pin st 'weak (ws + peep st 'weak ())))
               (mn = ".local") (pin st 'local (map xa-unquote xs + peep st 'local ()))
               ; a common symbol: its zeros in .bss at its alignment, and exported unless .local said
               (elem mn '(".comm" ".lcomm"))
@@ -1713,8 +1715,11 @@
                                                               (map (f \ (later? f ? (lay f) f)) <>>r))])))
                       0 (st 'order)))
             0)
-       ; an alias lays its label beside its target's, in the target's section
-       _ (foldl (\ _ al (: a <al s <>al nm (labs s)
+       ; an alias lays its label beside its target's, in the target's section; a target
+       ; that is itself an alias is followed to the label at the end of the chain
+       am (foldl (\ t al (pin t <al <>al)) {} (peep st 'alias ()))
+       (aroot s n) (string? (labs s) || n > 16 || !(am s) ? s (aroot (am s) (n + 1)))
+       _ (foldl (\ _ al (: a <al s (aroot <>al 0) nm (labs s)
                           (!(string? nm) ? (scare 'gas-alias s)
                              (secs nm @ r
                                 (pin labs a nm,
@@ -1722,10 +1727,10 @@
                 0 (peep st 'alias ()))
        (sec nm) (secs nm @ r [nm <r <>r (rev <>>r)])
        (exec? l) (0 < <>(secs (labs l)) & 4)
-       def (filter (l \ string? (labs l)) (rev (st 'globl)))
+       def (filter (l \ string? (labs l)) (uniq (rev (st 'globl))))   ; .weak and .globl may both name one
        ; a section the text named stays though empty: a linker script may lay it (the setup's .bstext)
        [(filter (r \ two? (r 3) || elem <r (peep st 'named ())) (map sec (rev (st 'order))))
-        (filter exec? def) (filter (l \ !(exec? l)) def)])
+        (filter exec? def) (filter (l \ !(exec? l)) def) (rev (peep st 'weak ()))])
 
    ;; -- the front door: TEXT -> IR, by target. --
    (gas-text tgt src)
