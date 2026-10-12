@@ -384,6 +384,7 @@
    ;; X op they would spell in two words -- lands as gas's own word; an unread operand scares.
    (ga-reg s) (name s @ k
                  (? (nom? (peep a64-names k ())) ['reg (a64-names k) 8]
+                    (elem k '(fp lr)) ['reg k 8]               ; llvm-mc's names for x29 and x30
                     (k = 'wzr) ['reg 'zr 4]
                     (k = 'wsp) ['reg 'sp 4]
                     (#s > 1 && s 0 = 119 && digit? (s 1)) ['reg (peep a64-names (name ("x" + snip s 1 #s)) ()) 4]

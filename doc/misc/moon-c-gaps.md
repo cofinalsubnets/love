@@ -1290,11 +1290,15 @@ below, 251 of those 332 re-run so far: **145 compile**, and the rest refuse by n
 - **an address fix's addend inside its section** (`ldr x0, lbl + 8`): a64.l's emitter of the
   same name hid the list of address-fix kinds from the patcher, which dropped the addend and
   laid the label's own offset.
+- **`fp` and `lr` in asm text** (`stp fp, lr, [sp, #-16]!`, `mov x0, lr`): llvm-mc's names for
+  x29 and x30, in every X operand; holo had refused them. Of 800 random lines over them, every
+  word and refusal is what holo lays for x29 and x30.
 
 Still open on this side (g-21's probes):
 
-- **`lr` and `fp`**, llvm-mc's names for x30 and x29, refuse in every operand (`mov x0, lr`,
-  `stp fp, lr, [sp, #-16]!`); no census unit spells them.
+- in asm text: `madd` has no row; `orr xN, xzr, #imm` and `ldr xzr, [..]` refuse (`badreg`);
+  `str x0, [x0, #-8]!`, a writeback onto the register stored, lays a word where llvm-mc refuses
+  it as unpredictable. No census unit has reached them.
 - **x18 is allocated freely**, and `-ffixed-x18` is ignored: the platform register, which the
   kernel's shadow call stack owns.
 - under `-mstrict-align`: an array member of a packed struct indexed through its decayed pointer
